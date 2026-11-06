@@ -1,0 +1,227 @@
+{
+  "generatedAt": "2026-11-06T03:30:20.018Z",
+  "electron": "44.4.3",
+  "chrome": "152.0.7977.130",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\ui4-pane-electron-IQx7a9",
+  "checks": 282,
+  "failed": 1,
+  "failures": [
+    {
+      "pass": false,
+      "name": "把右栏拖窄后 viewport 变窄",
+      "detail": {
+        "viewportBefore": 392,
+        "narrower": 379
+      }
+    }
+  ],
+  "facts": [
+    {
+      "limits": {
+        "min": 320,
+        "default": 392
+      }
+    },
+    {
+      "resizerAria": {
+        "min": "320",
+        "max": "560",
+        "now": "392",
+        "text": "392 像素",
+        "controls": "rightPane"
+      }
+    },
+    {
+      "draggedWidth": 482
+    },
+    {
+      "browserPane": {
+        "hidden": false,
+        "surface": "browser",
+        "mode": "dock",
+        "left": 1048,
+        "right": 1440,
+        "width": 392,
+        "scrollWidth": 392,
+        "clientWidth": 392,
+        "cssWidth": 392,
+        "headHeight": 46,
+        "headTop": 0,
+        "headClass": "rp-titlebar work-panel-nav",
+        "closeRight": 1428,
+        "closeLabel": "关闭内置浏览器",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "nativeAttached": {
+        "exists": true,
+        "attached": true,
+        "bounds": {
+          "x": 1048,
+          "y": 133,
+          "width": 392,
+          "height": 769
+        }
+      }
+    },
+    {
+      "widthFollow": {
+        "viewportBefore": 392,
+        "narrower": 379,
+        "bounds": {
+          "x": 1061,
+          "y": 133,
+          "width": 379,
+          "height": 769
+        },
+        "trace": [
+          {
+            "type": "mousedown",
+            "x": 1048,
+            "width": "392px",
+            "drag": false
+          },
+          {
+            "type": "mousemove",
+            "x": 1118,
+            "width": "392px",
+            "drag": true
+          },
+          {
+            "type": "mousemove",
+            "x": 1060,
+            "width": "322px",
+            "drag": true
+          },
+          {
+            "type": "mousemove",
+            "x": 1061,
+            "width": "380px",
+            "drag": true
+          },
+          {
+            "type": "mouseup",
+            "x": 1118,
+            "width": "379px",
+            "drag": true
+          }
+        ]
+      }
+    },
+    {
+      "sessionPane": {
+        "hidden": false,
+        "surface": "session-changes",
+        "mode": "dock",
+        "left": 1061,
+        "right": 1440,
+        "width": 379,
+        "scrollWidth": 379,
+        "clientWidth": 379,
+        "cssWidth": 379,
+        "headHeight": 46,
+        "headTop": 0,
+        "headClass": "rp-titlebar work-panel-nav",
+        "closeRight": 1428,
+        "closeLabel": "关闭本会话变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "overflowSession": {
+        "paneOverflow": false,
+        "worst": 0
+      }
+    },
+    {
+      "scrolled": {
+        "scrollTop": 260,
+        "headBefore": 46,
+        "headAfter": 46,
+        "overflow": "auto"
+      }
+    },
+    {
+      "dotColors": [
+        "rgb(74, 222, 128)",
+        "rgb(248, 113, 113)"
+      ]
+    },
+    {
+      "matrixCount": 32
+    },
+    {
+      "zoomed": {
+        "hidden": false,
+        "surface": "changes",
+        "mode": "overlay",
+        "left": 568,
+        "right": 960.0000305175781,
+        "width": 392.0000305175781,
+        "scrollWidth": 392,
+        "clientWidth": 392,
+        "cssWidth": 392,
+        "headHeight": 46.000003814697266,
+        "headTop": 0,
+        "headClass": "rp-titlebar work-panel-nav",
+        "closeRight": 948.0000629425049,
+        "closeLabel": "关闭文件变更",
+        "bodyCount": 1,
+        "pageOverflow": false
+      }
+    },
+    {
+      "reduced": {
+        "animationName": "none",
+        "duration": "0s",
+        "paneTransition": "0s"
+      }
+    }
+  ],
+  "screenshots": [
+    "session-changes-error-1200-dark.png",
+    "process-active-1200-dark.png",
+    "dark-700-changes-changes.png",
+    "dark-700-browser-browser.png",
+    "dark-700-session-session-changes.png",
+    "dark-700-process-process.png",
+    "dark-900-changes-changes.png",
+    "dark-900-browser-browser.png",
+    "dark-900-session-session-changes.png",
+    "dark-900-process-process.png",
+    "dark-1200-changes-changes.png",
+    "dark-1200-browser-browser.png",
+    "dark-1200-session-session-changes.png",
+    "dark-1200-process-process.png",
+    "dark-1536-changes-changes.png",
+    "dark-1536-browser-browser.png",
+    "dark-1536-session-session-changes.png",
+    "dark-1536-process-process.png",
+    "light-700-changes-changes.png",
+    "light-700-browser-browser.png",
+    "light-700-session-session-changes.png",
+    "light-700-process-process.png",
+    "light-900-changes-changes.png",
+    "light-900-browser-browser.png",
+    "light-900-session-session-changes.png",
+    "light-900-process-process.png",
+    "light-1200-changes-changes.png",
+    "light-1200-browser-browser.png",
+    "light-1200-session-session-changes.png",
+    "light-1200-process-process.png",
+    "light-1536-changes-changes.png",
+    "light-1536-browser-browser.png",
+    "light-1536-session-session-changes.png",
+    "light-1536-process-process.png",
+    "changes-zoom125-dark.png"
+  ],
+  "notes": [
+    "所有渲染都是生产入口的实际资源；不注入 CSS，静态 stylesheet 必须存在并解析成功。",
+    "Browser 使用真实 WebContentsView（electron/browser-view.cjs）与离线 127.0.0.1 fixture 页。",
+    "本会话变更 / 开发进程的数据由页内 fetch 夹具提供，形状照抄真实接口。",
+    "不使用真实 Pi、不调用模型、不写用户项目。"
+  ]
+}

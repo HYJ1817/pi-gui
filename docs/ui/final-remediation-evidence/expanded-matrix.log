@@ -1,0 +1,113 @@
+
+PASS normal sandbox and DPR 1.5
+PASS 275px sidebar / 46px continuous header
+PASS dark canvas/sidebar and native overlay share semantic palette
+PASS titlebar drag / buttons no-drag / native control clearance
+PASS 28px project and session rows
+PASS reference row and toolbar corner aliases are preserved
+PASS 01-dark-expanded native caption captured from exact own window source
+PASS collapsed sidebar consumes zero width; restore uses reference 12px inset
+PASS collapsed restore excludes native titlebar dragging
+PASS restore retains project expansion state
+PASS sidebar owns scrolling without horizontal document overflow
+PASS project right-click opens the existing singleton without switching
+PASS reference menu uses 14px panel / 10px row corners
+PASS Escape closes menu and restores overflow trigger focus
+PASS session right-click preserves rename/archive/delete and permissions
+PASS running dot reflects the production classic activity event
+PASS completion clears running indication without reordering
+PASS light palette also updates real native titlebar
+PASS 07-light-expanded native caption captured from exact own window source
+PASS narrow header controls remain before the native buttons
+PASS topbar search calls the existing search and expands sessions
+PASS long session list scrolls independently with fixed footer and topbar
+PASS linked tasks leave space for title and actions
+PASS A/B settings rail/headings retain geometry and hide conversation chrome
+PASS topbar new conversation delegates to the real command path
+PASS R2 real clipboard restores text and HTML after an interrupted fixture
+PASS D reference 760px band / 20px composer / no shell stroke
+PASS D 14px open prose / 18px-8px user plate / 28px send
+PASS D prose links use reference neutral ink and remain underlined
+PASS D actual Electron clipboard receives the original user text
+PASS D Thinking disclosure retains its real text
+PASS D model search exists with keyboard focus inside the bounded panel
+PASS D context uses actual data and preserves unknown timing
+PASS D Escape closes the real context tip from its trigger
+PASS D streaming preserves stop and Thinking state
+PASS D light context tip closes before returning to the draft
+PASS D slash completion leaves focus in textarea
+PASS D long draft grows within the existing viewport cap
+PASS D narrow composer and thread remain inside the CSS viewport
+PASS D narrow model menu is wholly visible
+PASS D existing attachment tray remains visible without replacing the input
+PASS D measured composer reserve keeps the last message above the floating plate
+PASS D Runtime uses the same composer surface and action scale
+PASS D Runtime picker uses reference radius with keyboard search
+PASS D narrow Runtime composer and controls stay inside their surface
+PASS D Runtime history retains read-only composer and real copy action
+PASS D Runtime history copies its own original text through native clipboard
+PASS E single 46px tool band starts at the window top without a blank title band
+PASS E native caption lane stays beyond header drag and close hit target
+PASS E launcher uses 40px rows, 18px icons and semantic dock
+PASS E launcher entries share the actual capability and disabled states
+PASS e01-launcher-dark native caption captured from exact own window source
+PASS E sidebar collapse preserves the open dock and original draft node
+PASS E branch launcher uses the existing modal and Escape leaves the workbench open
+PASS E Collab launcher uses the existing surface and preserves its real availability state
+PASS E Specs launcher mounts the real tree/document and selects the existing tool
+PASS E document selection reads its own original production transport
+PASS E Specs and Changes retain the existing split layout
+PASS E real return-to-tools action clears the split surface, not the draft
+PASS E Changes retains status rows and real review/refresh controls
+PASS e06-launcher-light native caption captured from exact own window source
+PASS E actual Specs empty state has 38px tile / 18px icon without fake operations
+PASS E narrow workbench uses existing fallback tabs without page overflow
+PASS E fallback switches actual visible panels without remounting the draft
+PASS E Escape closes pane and returns focus to the original topbar trigger
+PASS E existing keyboard width control persists its real value
+PASS R4 app-owned blank displays theme-aware guidance instead of a native black page
+PASS r07-browser-empty-dark native caption captured from exact own window source
+[54092:1106/112217.108:ERROR:mojo\public\cpp\bindings\lib\interface_endpoint_client.cc:748] Message 0 rejected by interface blink.mojom.WidgetHost
+PASS E full app Browser action mounts the real owned WebContentsView
+PASS E full app native Browser matches its actual viewport after header consolidation
+PASS E selected Browser label stays wholly inside the scrollable tool strip
+PASS e14-browser-dark native caption captured from exact own window source
+PASS E returning to tools detaches the native view and preserves the original draft
+PASS F light canvas/sidebar/Composer and send use reference semantic palette
+PASS f01-conversation-light native caption captured from exact own window source
+PASS F slash menu honors outer Composer width instead of obsolete 320px cap
+PASS F slash light surface uses reference ink and keeps textarea focus
+PASS F real slash keyboard navigation preserves draft and source focus
+PASS F real Escape closes slash without submitting or replacing input
+PASS F context light panel uses semantic ink and actual known context
+PASS F real quota warning retains semantic warning ink beside neutral details
+PASS F unknown usage remains unknown instead of a fabricated zero
+PASS F absent file mention capability stays plain draft with no fake menu
+PASS F real attachment tray retains file and remove action
+PASS F attachment removal keeps the same @ draft and input node
+PASS F settings group labels use reference muted ink, not faint text
+PASS F production switch off knob/ring use A tokens despite later stylesheet
+PASS F production switch on inverts and disabled click preserves state
+PASS F appearance error/warning use existing readable semantic colors
+PASS F provider primary action follows the shared light accent inversion
+PASS F narrow slash stays wholly in CSS viewport with usable input width
+PASS F narrow unknown context panel stays inside viewport
+PASS F repeated theme dark keeps source input/draft and native caption
+PASS F repeated theme light keeps source input/draft and native caption
+PASS F repeated theme dark keeps source input/draft and native caption
+PASS F repeated theme light keeps source input/draft and native caption
+PASS F dark slash retains reference surface and full measured width
+PASS F expanded slash stays before the actual attached native Browser
+PASS f15-slash-browser-light native caption captured from exact own window source
+PASS R3 welcome uses the centered reference hero hierarchy
+FAIL R3 empty welcome fits the actual content viewport without phantom thread scroll {"scroll":793,"client":757,"welcome":{"x":355.16668701171875,"y":46,"width":760,"height":631.3333740234375,"top":46,"right":1115.1666870117188,"bottom":677.3333740234375,"left":355.16668701171875}}
+PASS R3 appearance group dissolves into the page without a second card
+PASS R1 appearance completion action is visible in the real stylesheet
+PASS R1 narrow settings keeps the size label readable on one line
+PASS R1 900px dark settings remain readable at 130 percent
+PASS R1 900px light settings remain readable at 130 percent
+PASS R1 700px dark settings remain readable at 130 percent
+PASS R1 700px light settings remain readable at 130 percent
+FAIL Electron scenarios completed "Error: Script failed to execute, this normally means an error was thrown. Check the renderer console for the error.\n    at node:electron/js2c/sandbox_bundle:2:98760\n    at IpcRendererInternal.<anonymous> (node:electron/js2c/sandbox_bundle:2:93587)\n    at IpcRendererInternal.emit (node:electron/js2c/sandbox_bundle:2:36110)\n    at Object.onMessage (node:electron/js2c/sandbox_bundle:2:92801)"
+PASS R2 original clipboard formats restored without persisting payloads
+Shell Electron: 108/110; failed=2; screenshots=71; output=C:\Users\21022\AppData\Local\Temp\pi-gui-final-fix-c41a320354784136ac00435c9373432e\expanded-matrix

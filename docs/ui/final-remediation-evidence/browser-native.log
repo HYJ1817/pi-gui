@@ -1,0 +1,36 @@
+
+Preparing worktree (new branch 'fixture/b')
+PASS app-owned empty page hides the native blank view
+PASS rejected navigation preserves empty guidance and native occlusion
+PASS single Browser has valid native viewport
+PASS Browser and Changes simultaneously visible
+PASS single to split preserves native page and form
+PASS Diff expansion renders actual Git patch without replacing Browser
+PASS Agent Control starts disabled with a real isolated bridge session
+PASS Agent Control fills local native page in split
+PASS explicit disable rejects further Agent page actions
+PASS actual native-page pointer remains interactive in split
+PASS 1536px native view matches visible viewport
+PASS 1536px no horizontal document overflow
+PASS 1200px native view matches visible viewport
+PASS 1200px no horizontal document overflow
+PASS 900px native view matches visible viewport
+PASS 900px no horizontal document overflow
+PASS 720px native view matches visible viewport
+PASS 720px no horizontal document overflow
+PASS Changes fallback really detaches native Browser
+PASS Browser tab restores same native page
+PASS native Browser detaches during actual pointer drag
+PASS pointer drag updates Browser bounds
+PASS repeated actual drags keep one correctly bounded native view
+PASS keyboard resizing updates native bounds and persists shared ratio
+PASS modal excludes native Browser
+PASS 125 percent app zoom converts CSS to native DIP
+PASS short window degrades to tabs
+PASS back forward and reload retain same native page
+PASS preview session is not GUI default session
+PASS twenty layout switches retain exactly one native view
+PASS Specs workbench remains functional and native Browser removed
+Error: Timeout: reopen cycle
+    at until (C:\pi-GUI\tests\browser-workbench-electron.cjs:24:118)
+    at async main (C:\pi-GUI\tests\browser-workbench-electron.cjs:184:45)

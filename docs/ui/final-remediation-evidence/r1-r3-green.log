@@ -1,0 +1,39 @@
+
+PASS normal sandbox and DPR 1.5
+PASS 275px sidebar / 46px continuous header
+PASS dark canvas/sidebar and native overlay share semantic palette
+PASS titlebar drag / buttons no-drag / native control clearance
+PASS 28px project and session rows
+PASS reference row and toolbar corner aliases are preserved
+PASS 01-dark-expanded native caption captured from exact own window source
+PASS collapsed sidebar consumes zero width; restore uses reference 12px inset
+PASS collapsed restore excludes native titlebar dragging
+PASS restore retains project expansion state
+PASS sidebar owns scrolling without horizontal document overflow
+PASS project right-click opens the existing singleton without switching
+PASS reference menu uses 14px panel / 10px row corners
+PASS Escape closes menu and restores overflow trigger focus
+PASS session right-click preserves rename/archive/delete and permissions
+PASS running dot reflects the production classic activity event
+PASS completion clears running indication without reordering
+PASS light palette also updates real native titlebar
+PASS 07-light-expanded native caption captured from exact own window source
+PASS narrow header controls remain before the native buttons
+PASS topbar search calls the existing search and expands sessions
+PASS long session list scrolls independently with fixed footer and topbar
+PASS linked tasks leave space for title and actions
+PASS A/B settings rail/headings retain geometry and hide conversation chrome
+PASS topbar new conversation delegates to the real command path
+FAIL R3 welcome uses the centered reference hero hierarchy undefined
+PASS R3 appearance group dissolves into the page without a second card
+PASS R1 appearance completion action is visible in the real stylesheet
+PASS R1 narrow settings keeps the size label readable on one line
+PASS R1 provider primary entry exposes both Save and Cancel
+PASS R1 missing provider ID never reaches save API
+PASS R1 plaintext provider credentials remain rejected
+PASS R1 provider Save is reachable using the native Tab chain
+PASS R1 valid provider form delegates once to the real API wrapper
+PASS R1 empty and primary Add share the same existing presenter
+PASS R1 cancelling provider form performs no writes
+FAIL Electron scenarios completed "Error: Timed out: document.querySelectorAll('.settings-detail-card > .modal-actions button').length >= 4\n    at waitFor (C:\\pi-GUI\\tests\\app-shell-electron.cjs:38:11)\n    at async module.exports (C:\\pi-GUI\\tests\\fixtures\\final-remediation-scenarios.cjs:49:3)\n    at async run (C:\\pi-GUI\\tests\\app-shell-electron.cjs:231:7)"
+Shell Electron: 35/37; failed=2; screenshots=17; output=C:\Users\21022\AppData\Local\Temp\pi-gui-final-fix-c41a320354784136ac00435c9373432e\r1-r3-green

@@ -1,0 +1,74 @@
+{
+  "baselineImportant": 57,
+  "currentImportant": 45,
+  "files": [
+    {
+      "file": "app-shell.css",
+      "important": 0
+    },
+    {
+      "file": "collab-panel.css",
+      "important": 0
+    },
+    {
+      "file": "collab-productivity.css",
+      "important": 1
+    },
+    {
+      "file": "collab.css",
+      "important": 1
+    },
+    {
+      "file": "process.css",
+      "important": 0
+    },
+    {
+      "file": "runtime-conversation.css",
+      "important": 0
+    },
+    {
+      "file": "specs.css",
+      "important": 0
+    },
+    {
+      "file": "styles.css",
+      "important": 38
+    },
+    {
+      "file": "tokens.css",
+      "important": 0
+    },
+    {
+      "file": "ui3-composer.css",
+      "important": 0
+    },
+    {
+      "file": "ui3-inline-commands.css",
+      "important": 0
+    },
+    {
+      "file": "ui3-model.css",
+      "important": 0
+    },
+    {
+      "file": "ui4-approval.css",
+      "important": 0
+    },
+    {
+      "file": "ui4-feedback.css",
+      "important": 0
+    },
+    {
+      "file": "ui4-pane.css",
+      "important": 2
+    },
+    {
+      "file": "ui5-logs.css",
+      "important": 0
+    },
+    {
+      "file": "viz.css",
+      "important": 3
+    }
+  ]
+}
