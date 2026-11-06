@@ -16,7 +16,7 @@
 
 创建前检查目录/分支，使用指定起点创建独立 worktree。原 A/B/C 在开始及集成后均无未提交修改、HEAD 未变，未复制原工作区未提交文件。原仓库的未跟踪素材/规划文件未处理。只读参考原仓库 AGENTS、机器记忆与 UI-0/1 文档，按离线约束不 fetch、不访问远端、不下载依赖。依赖使用本机已有 node_modules 的忽略目录 junction；这不是新增依赖。
 
-完整分支、源文件、受保护路径差异记录见 [source-audit.json](ui2-integration-evidence/source-audit.json)。集成展示修补提交 `c63175c955666afcd4c77df659e8b084a0979be1`；最终产品/测试版本 HEAD 为 `5f8a7671b8f991729e7d5da9431a26404f327967`（测试整合提交），本报告与证据另作末尾归档提交。归档提交最终SHA见交付对话或本分支 `git log -1`，不写成文档内容的哈希自引用。
+完整分支、源文件、受保护路径差异记录见 [source-audit.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/source-audit.json)。集成展示修补提交 `c63175c955666afcd4c77df659e8b084a0979be1`；最终产品/测试版本 HEAD 为 `5f8a7671b8f991729e7d5da9431a26404f327967`（测试整合提交），本报告与证据另作末尾归档提交。归档提交最终SHA见交付对话或本分支 `git log -1`，不写成文档内容的哈希自引用。
 
 ## 2. 实际产品与测试变化
 
@@ -34,7 +34,7 @@
 
 测试/入口：新增 `tests/ui2-classic.cjs`、`tests/ui2-runtime-display.cjs`、`tests/ui2-visual.cjs`、`tests/ui2-integration-electron.cjs`；修改 `tests/cdp-shot.cjs`、`tests/theme-electron.cjs` 和 `package.json`。Classic/theme 测试仅新增可选证据输出目录，保留原断言；visual 测试另修独立临时浏览器 profile 与关闭清理，防止覆盖源分支证据。新增三套已前置接入 canonical `npm test`，UI-1 完整 128 条链原样保留，共 131 条；同时新增 `test:ui2`。版本和依赖不变。
 
-所有实际变更路径及分支归属见 [change-manifest.json](ui2-integration-evidence/change-manifest.json)、source-audit 和最终 Git diff；A/B/C 的原验收及截图作为继承材料保留，**不代替本轮联合证据**。
+所有实际变更路径及分支归属见 [change-manifest.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/change-manifest.json)、source-audit 和最终 Git diff；A/B/C 的原验收及截图作为继承材料保留，**不代替本轮联合证据**。
 
 ## 3. 组合问题及修复证据
 
@@ -46,7 +46,7 @@
 4. Runtime 纯展示投影将 store 记录消失与关闭后 owner=null 混淆：绑定当前已接受 store 对象身份；新后端/新记录/缺记录使旧展示失效，原记录真正关闭仍可保留本地已观察展示。未修改 owner 或 store 的验收规则。
 5. Token 数值仅接受非负安全整数，费用接受非负有限小数，拒绝负数/小数 token；0 保留。没有使用文字长度替代 token，Thinking 的“字”明确是字符计数。
 
-[review.md](ui2-integration-evidence/review.md) 保留复核与复测。Runtime 新增 8 条回归，74→82，无删减，先红后绿见 runtime-red.log/runtime-after-fixes.log。滚动初轮 40/56：15 条对应上述三个滚动缺陷，另 1 条是夹具误以为关闭/恢复会保留旧文本；修正为真实 fresh-record 语义后再测，未改生产关闭协议。原始 [pre-fix-report.json](ui2-integration-evidence/scroll/pre-fix-report.json) 保留。
+[review.md](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/review.md) 保留复核与复测。Runtime 新增 8 条回归，74→82，无删减，先红后绿见 runtime-red.log/runtime-after-fixes.log。滚动初轮 40/56：15 条对应上述三个滚动缺陷，另 1 条是夹具误以为关闭/恢复会保留旧文本；修正为真实 fresh-record 语义后再测，未改生产关闭协议。原始 [pre-fix-report.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/scroll/pre-fix-report.json) 保留。
 
 ## 4. DOM 与 CSS 的真实匹配
 
@@ -68,10 +68,10 @@
 
 | 实际命令 | 实际结果 | 范围/证据 |
 |---|---|---|
-| `node tests/ui2-classic.cjs --electron` | 65/65，退出0，16截图 | [classic-electron](ui2-integration-evidence/classic-electron/)；生产 Classic 历史+实时、独立usage/缺失/0、工具、Thinking、键盘与四宽度/两主题 |
-| `node tests/theme-electron.cjs` | 489/489，退出0，63有效截图 | [theme-electron/results.json](ui2-integration-evidence/theme-electron/results.json)；dark/light ×700/900/1200/1536 ×左栏开/关 ×右栏关/Changes/Browser，另80/125/150%zoom、System、重建/重载、最大化/还原、焦点/弹窗/reduced-motion |
-| `node tests/ui2-integration-electron.cjs` | 72/72，退出0，24截图 | [scroll/report.json](ui2-integration-evidence/scroll/report.json)；实际连续输出、真实 CDP wheel 和可信 scroll 事件、A/B草稿与位置、迟到帧、历史/停止请求/恢复live |
-| `node tests/runtime-electron.cjs`（dark、light分别执行） | 171/171 ×两主题，各退出0，各43截图 | [runtime-dark](ui2-integration-evidence/runtime-dark/)、[runtime-light](ui2-integration-evidence/runtime-light/)；生产 server/临时Git/真实子进程、owner与关闭/审批/模型/Browser回归；Pi回复仍为fixture |
+| `node tests/ui2-classic.cjs --electron` | 65/65，退出0，16截图 | [classic-electron](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/classic-electron/)；生产 Classic 历史+实时、独立usage/缺失/0、工具、Thinking、键盘与四宽度/两主题 |
+| `node tests/theme-electron.cjs` | 489/489，退出0，63有效截图 | [theme-electron/results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/theme-electron/results.json)；dark/light ×700/900/1200/1536 ×左栏开/关 ×右栏关/Changes/Browser，另80/125/150%zoom、System、重建/重载、最大化/还原、焦点/弹窗/reduced-motion |
+| `node tests/ui2-integration-electron.cjs` | 72/72，退出0，24截图 | [scroll/report.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/scroll/report.json)；实际连续输出、真实 CDP wheel 和可信 scroll 事件、A/B草稿与位置、迟到帧、历史/停止请求/恢复live |
+| `node tests/runtime-electron.cjs`（dark、light分别执行） | 171/171 ×两主题，各退出0，各43截图 | [runtime-dark](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/runtime-dark/)、[runtime-light](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/runtime-light/)；生产 server/临时Git/真实子进程、owner与关闭/审批/模型/Browser回归；Pi回复仍为fixture |
 
 滚动不是纯函数证明：Classic/Runtime 均实际上滚650px，确认 isTrusted scroll；连续六个增量后阅读 top 不变，wheel 回底后新大块内容跟随，最终底部 gap 分别约0.67px/0px。原64条确定性 DOM 几何断言全部保留，新增8条wheel断言。A→B→A、后台合法迟到A、离开/重进、停止请求和历史/实时切换均有实际布局记录。history/stop API 使用 CDP 离线回复，不能据此声称真 Pi stop completion 已验。
 
@@ -81,11 +81,11 @@
 
 ## 6. 测试基线与 cdp 陈旧断言
 
-新增专项实际数量：Classic48/48、Runtime82/82（原74+8）、Visual57/57；无原断言下降。完整 `npm test` 首轮运行490.109秒、退出1：dev-server在127.0.0.1:7791发生listen EACCES，两个服务前置断言失败，后续fetch中止；此前套件完成不能冒充全链通过。保留 npm-test-attempt1.log 与 npm-test-attempt1-exit.json。随后不改任何代码，实际同端口bind探测成功，独立 `node tests/dev-server.cjs` 30/30、退出0；系统当时排除端口范围只有50000–50059，未观察到7791占用，无法追溯瞬时拒绝来源，按环境启动失败记录。第二轮完整 `npm test` **实际退出0**，2026-10-16 22:46:39.125至23:39:55.741（+08:00），**3196.616秒**。131条入口链完成，116条数字摘要，失败0；reliability/interactions/port-owner另有不打印数量的passed结果，不编造断言总数。实际退出记录见 [npm-test-exit.json](ui2-integration-evidence/npm-test-exit.json)，原始 [npm-test.log](ui2-integration-evidence/npm-test.log)，逐套计数 [test-summary.md](ui2-integration-evidence/test-summary.md) / [test-results.json](ui2-integration-evidence/test-results.json)。日志路径重新创建时Windows复用了较早的creation time，文件时窗3779秒不是测试耗时；运行时间以进程记录3196.616秒为准。
+新增专项实际数量：Classic48/48、Runtime82/82（原74+8）、Visual57/57；无原断言下降。完整 `npm test` 首轮运行490.109秒、退出1：dev-server在127.0.0.1:7791发生listen EACCES，两个服务前置断言失败，后续fetch中止；此前套件完成不能冒充全链通过。保留 npm-test-attempt1.log 与 npm-test-attempt1-exit.json。随后不改任何代码，实际同端口bind探测成功，独立 `node tests/dev-server.cjs` 30/30、退出0；系统当时排除端口范围只有50000–50059，未观察到7791占用，无法追溯瞬时拒绝来源，按环境启动失败记录。第二轮完整 `npm test` **实际退出0**，2026-10-16 22:46:39.125至23:39:55.741（+08:00），**3196.616秒**。131条入口链完成，116条数字摘要，失败0；reliability/interactions/port-owner另有不打印数量的passed结果，不编造断言总数。实际退出记录见 [npm-test-exit.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/npm-test-exit.json)，原始 [npm-test.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/npm-test.log)，逐套计数 [test-summary.md](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/test-summary.md) / [test-results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/test-results.json)。日志路径重新创建时Windows复用了较早的creation time，文件时窗3779秒不是测试耗时；运行时间以进程记录3196.616秒为准。
 
-[baseline-comparison.json](ui2-integration-evidence/baseline-comparison.json)：UI-1原113条数字摘要的通过/总计序列完全一致，没有任何既有断言下降；只新增Classic48/48、Runtime82/82、Visual57/57，113→116。**明确跳过19项**（与UI-1一致）：SACL witness8、非空SACL保持2、Object witness8（权限不足），会话符号链接1。两种witness的0/0不是通过；跳过不计通过分子分母，不赋予P33生产资格。
+[baseline-comparison.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/baseline-comparison.json)：UI-1原113条数字摘要的通过/总计序列完全一致，没有任何既有断言下降；只新增Classic48/48、Runtime82/82、Visual57/57，113→116。**明确跳过19项**（与UI-1一致）：SACL witness8、非空SACL保持2、Object witness8（权限不足），会话符号链接1。两种witness的0/0不是通过；跳过不计通过分子分母，不赋予P33生产资格。
 
-`cdp-shot` 的独立原版复现为1750/1761、失败11、退出1；最终严格版本1761/1761、失败0、renderer异常0、退出0，两轮各270张Chrome截图（全部留在本工作区忽略目录 .shots/ui2-before-*.png 与 .shots/ui2-verified-*.png，版本化证据中保留选定截图；不计入Electron截图数），263次shotOf+57次UX调用，194个shotOf静态调用点与14个UX调用点均未减少。见 [cdp-reconciliation.md](ui2-integration-evidence/cdp-reconciliation.md)、[cdp-results.json](ui2-integration-evidence/cdp-results.json)，实际日志cdp-verified.log及退出码cdp-verified-exit.json。已确认原11条失败为：10处顶栏旧#0d0d0d与UI-1 Dark#111111/Light#fbfbf9冲突；1处项目菜单仍期待2项，而共同UI-1代码实际已是“工作区管理→项目设置→分隔→移除项目”。修正以共同基线真实源码/Token为依据，保留尺寸、位置、焦点等全部判据，采用固定主题常量+Token一致性和完整有序菜单校验，不删断言。
+`cdp-shot` 的独立原版复现为1750/1761、失败11、退出1；最终严格版本1761/1761、失败0、renderer异常0、退出0，两轮各270张Chrome截图（全部留在本工作区忽略目录 .shots/ui2-before-*.png 与 .shots/ui2-verified-*.png，版本化证据中保留选定截图；不计入Electron截图数），263次shotOf+57次UX调用，194个shotOf静态调用点与14个UX调用点均未减少。见 [cdp-reconciliation.md](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/cdp-reconciliation.md)、[cdp-results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/cdp-results.json)，实际日志cdp-verified.log及退出码cdp-verified-exit.json。已确认原11条失败为：10处顶栏旧#0d0d0d与UI-1 Dark#111111/Light#fbfbf9冲突；1处项目菜单仍期待2项，而共同UI-1代码实际已是“工作区管理→项目设置→分隔→移除项目”。修正以共同基线真实源码/Token为依据，保留尺寸、位置、焦点等全部判据，采用固定主题常量+Token一致性和完整有序菜单校验，不删断言。
 
 额外审查发现 `shotOf` 将异常描述字符串当truthy通过，改为谓词必须 `=== true`。严格执行由此揭露另外4个潜藏陈旧断言：builtin capability状态/来源真实结构1项、滚动条主题颜色3项；与原11条分开记录。严格首轮1757/1761、退出1，如实保留；最终严格全轮1761/1761、退出0，额外负向对照26/26、退出0：两主题下旧背景/旧滚动条、错误Token、缺菜单/缺来源/多余启用加载字段均必须拒绝。没有靠放宽成任意Token自洽来通过。
 
@@ -104,13 +104,13 @@
 
 实际检查命令为 `node tests/fixtures.mjs`、`node tests/exe-check.cjs --output-root <上述目录>`（CHECK_PORT=32741）、`node tests/app-check.cjs --output-root <上述目录>`（CHECK_PORT=32751，另使用32752）。SEA逐资源校验为PowerShell here-string送入Node的内联程序，独立端口32761，不冒充仓库已有命名测试。TEMP/TMP/TMPDIR均指向构建根/tmp；PI_GUI_ELECTRON_ZIP_DIR指向build-state中的本地缓存。
 
-打包烟测实际命令是 `node <上述构建根>/desktop-smoke.cjs`，四轮输出分别为build-desktop-smoke{,-repeat,-context,-timeline}.log；最终带时间线的夹具源码归档为 [build-desktop-smoke-source.cjs.txt](ui2-integration-evidence/build-desktop-smoke-source.cjs.txt)。其dist-app入口、32771本机CDP、32772后端、全新userdata/data和不存在的Pi路径可审阅；该文本是审计快照，运行时__dirname必须仍在上述隔离构建根。
+打包烟测实际命令是 `node <上述构建根>/desktop-smoke.cjs`，四轮输出分别为build-desktop-smoke{,-repeat,-context,-timeline}.log；最终带时间线的夹具源码归档为 [build-desktop-smoke-source.cjs.txt](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/build-desktop-smoke-source.cjs.txt)。其dist-app入口、32771本机CDP、32772后端、全新userdata/data和不存在的Pi路径可审阅；该文本是审计快照，运行时__dirname必须仍在上述隔离构建根。
 
-证据：[build-state.json](ui2-integration-evidence/build-state.json)、[build-checks.json](ui2-integration-evidence/build-checks.json)、[build-artifacts.json](ui2-integration-evidence/build-artifacts.json) 与 build-*.log。
+证据：[build-state.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/build-state.json)、[build-checks.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/build-checks.json)、[build-artifacts.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/build-artifacts.json) 与 build-*.log。
 
-SEA exe：99,442,176 bytes；SHA256 `2408e60b5143d38abe2b16c54c9942a2dbc397bc0c63fd1537ffac4859646ad5`。Electron入口exe：246,324,736 bytes；SHA256 `4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a`。入口exe哈希不代表整包哈希，public逐文件摘要另存。另实际启动隔离产物的 production main/preload，采集 [build-desktop-dark.png](ui2-integration-evidence/build-desktop-dark.png) / [build-desktop-light.png](ui2-integration-evidence/build-desktop-light.png)：真实主题桥、无renderer Node require、无真实项目、明暗主题一致并持久化均观察到正常。
+SEA exe：99,442,176 bytes；SHA256 `2408e60b5143d38abe2b16c54c9942a2dbc397bc0c63fd1537ffac4859646ad5`。Electron入口exe：246,324,736 bytes；SHA256 `4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a`。入口exe哈希不代表整包哈希，public逐文件摘要另存。另实际启动隔离产物的 production main/preload，采集 [build-desktop-dark.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/build-desktop-dark.png) / [build-desktop-light.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/build-desktop-light.png)：真实主题桥、无renderer Node require、无真实项目、明暗主题一致并持久化均观察到正常。
 
-**初次归档的桌面启动失败记录（后续归因与正常启动验证见第9节）：** 4次有限烟测分别12/12退出0、10/11退出1、11/12退出1、12/12退出0。中间两次各出现2条Electron sandboxed_renderer/preloadScripts内部错误，属于同一主frame的初始空文档`origin=://`隔离上下文；后续本机应用页面default/isolated context及production preload/主题可用。失败试次未记录完整时间戳，最后一次带timeline验证无错误，不能据内部栈就认定环境原因，也未证明一定由CDP导致。见 [build-desktop-summary.json](ui2-integration-evidence/build-desktop-summary.json) 和四份原始report/log。没有扩大范围改Electron沙箱、安全设置或静默忽略console错误。该试次本身仍按失败保留，不能把最后一次12/12覆盖前两次失败；第9节通过新的独立对照解释触发操作，而非删除这段记录。
+**初次归档的桌面启动失败记录（后续归因与正常启动验证见第9节）：** 4次有限烟测分别12/12退出0、10/11退出1、11/12退出1、12/12退出0。中间两次各出现2条Electron sandboxed_renderer/preloadScripts内部错误，属于同一主frame的初始空文档`origin=://`隔离上下文；后续本机应用页面default/isolated context及production preload/主题可用。失败试次未记录完整时间戳，最后一次带timeline验证无错误，不能据内部栈就认定环境原因，也未证明一定由CDP导致。见 [build-desktop-summary.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-integration-evidence/build-desktop-summary.json) 和四份原始report/log。没有扩大范围改Electron沙箱、安全设置或静默忽略console错误。该试次本身仍按失败保留，不能把最后一次12/12覆盖前两次失败；第9节通过新的独立对照解释触发操作，而非删除这段记录。
 
 最初自写桌面夹具误读/api/projects结构（实际items），对照既有app-check修正；错误试次不列产品通过证据。所有桌面试次使用全新userData/data、无真实项目/Pi/model，更新调度通过既有取消导出关闭；未替换用户产物。实际打包桌面只验启动与主题，不代表打包后完整业务矩阵。
 
@@ -132,9 +132,9 @@ SEA exe：99,442,176 bytes；SHA256 `2408e60b5143d38abe2b16c54c9942a2dbc397bc0c6
 
 | 实际命令 | 结果 | 证据 |
 |---|---|---|
-| `node tests/ui2-startup-diagnostic.cjs --repeats=2` | **82/82，退出0**；4次正常启动全程零错误；2次负对照每次严格复现2条已知错误 | [最终结果](ui2-followup-evidence/startup/final-verification.json)、[调查报告](ui2-followup-evidence/startup/diagnosis.md) |
-| `node tests/ui2-native-caption.cjs`（独立输出目录，详其README） | **45/45，退出0**；17场景、34张系统窗口图/裁图 | [最终原生结果](ui2-followup-evidence/native-caption/owner-guard/report.json)、[捕获边界与复现](ui2-followup-evidence/native-caption/owner-guard/README.md) |
-| `node tests/theme-electron.cjs`（UI_THEME_EVIDENCE指向本次独立目录） | **489/489，退出0**；65图；保留原489条断言 | [实际退出码](ui2-followup-evidence/theme-electron-exit.json)、[结果](ui2-followup-evidence/theme-electron/results.json) |
+| `node tests/ui2-startup-diagnostic.cjs --repeats=2` | **82/82，退出0**；4次正常启动全程零错误；2次负对照每次严格复现2条已知错误 | [最终结果](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/startup/final-verification.json)、[调查报告](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/startup/diagnosis.md) |
+| `node tests/ui2-native-caption.cjs`（独立输出目录，详其README） | **45/45，退出0**；17场景、34张系统窗口图/裁图 | [最终原生结果](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/native-caption/owner-guard/report.json)、[捕获边界与复现](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/native-caption/owner-guard/README.md) |
+| `node tests/theme-electron.cjs`（UI_THEME_EVIDENCE指向本次独立目录） | **489/489，退出0**；65图；保留原489条断言 | [实际退出码](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/theme-electron-exit.json)、[结果](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/theme-electron/results.json) |
 | 两个新增脚本的 `node --check` | 均退出0 | 实际执行；新脚本不需要新依赖 |
 
 这里的启动82条与第6节Runtime展示82条是不同套件，不混计。上述是本地桌面/诊断层（`docs/testing.md` 的E层），未加入跨机器的基础测试链；canonical `npm test` 仍保留原131条。本次只新增这些可选验收脚本、修正原主题测试的GUI可见性及文档，未改产品或canonical测试，因此不无故重跑53分钟的全链，也不把之前的全量结果冒称本次重新执行。第6节的实际完整退出0、原断言序列不变、19项环境跳过继续保留。
@@ -159,13 +159,13 @@ CopyFromScreen在前后检查owner/可见/非cloaked状态、Z-order外部相交
 
 场景包括初始Dark、运行中Light/Dark切换、80/100/125/150%应用zoom、两主题最大化/还原和真实Changes/Browser右栏。原生minimize/maximize或restore/close按钮glyph区域与背景匹配；逐点重算的38个网页标题带样本及51个原生控制区域与报告一致。Dark顶带RGB17/17/17、Light251/251/249，stage、rail、可见pane及原生区域没有旧顶部异色色块。所有17场景必须齐全且可用、像素集合非空、四个pane名称与真实surface精确对应，少图不能假绿。
 
-代表证据：[Light Changes整窗](ui2-followup-evidence/native-caption/owner-guard/light-right-pane.png)、[Dark Browser原生按钮](ui2-followup-evidence/native-caption/owner-guard/dark-browser-right-pane-caption.png)、[Dark还原整窗](ui2-followup-evidence/native-caption/owner-guard/dark-restored.png)。实际显示scale为1.5，应用zoom不等于更改OS DPI。Browser空地址视口仍沿用独立WebContentsView的既有空页背景，只验应用顶带/原生接缝，不宣称外部网页内容强制跟随浅色。
+代表证据：[Light Changes整窗](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/native-caption/owner-guard/light-right-pane.png)、[Dark Browser原生按钮](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/native-caption/owner-guard/dark-browser-right-pane-caption.png)、[Dark还原整窗](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/native-caption/owner-guard/dark-restored.png)。实际显示scale为1.5，应用zoom不等于更改OS DPI。Browser空地址视口仍沿用独立WebContentsView的既有空页背景，只验应用顶带/原生接缝，不宣称外部网页内容强制跟随浅色。
 
 新增native/startup夹具保留 `sandbox:true / contextIsolation:true / nodeIntegration:false`，不带`--no-sandbox`、不禁GPU；原theme-electron矩阵仍沿用其既有`--no-sandbox / --in-process-gpu`参数，故只用作既有主题回归，不能借它声称验证了生产沙箱。新增两套的安全证据独立呈现。
 
 ### 9.3 复核、源码与阶段结论
 
-[独立复核](ui2-followup-evidence/followup-review.md) 重新解码PNG验证实际像素、校验图像哈希并重放缺图/未知错误等反例；未发现需要修改产品的缺陷。[补验收源码审计](ui2-followup-evidence/source-audit.json) 验证public/electron/server/lib、canonical package和ABC源分支未变，99个public资产继续与之前离线产物一致。没有安装依赖或覆盖用户安装产物。
+[独立复核](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/followup-review.md) 重新解码PNG验证实际像素、校验图像哈希并重放缺图/未知错误等反例；未发现需要修改产品的缺陷。[补验收源码审计](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2-followup-evidence/source-audit.json) 验证public/electron/server/lib、canonical package和ABC源分支未变，99个public资产继续与之前离线产物一致。没有安装依赖或覆盖用户安装产物。
 
 **UI-2两项桌面验收缺口已关闭，达到本轮完成条件，具备进入UI-3的代码与验收基础。** 第8节其余范围限制不变，不把本次结果扩大成完整OS DPI、真模型、长期稳定性或发布资格。本轮只本地提交，停止于UI-2，不自行进入UI-3。
 

@@ -10,7 +10,7 @@
 
 读取原仓库 AGENTS、机器约定、UI-0/1 设计与验收、UI-3 规划，以及基线已提交的 UI-2 集成验收。部分 UI-0/规划文档只存在于原仓库未跟踪文件，未复制进本分支或覆盖它们。实际代码为准；没有按照过时记忆假定图片能力门禁缺失。离线、零新增依赖，沿用本机已有 node_modules 的忽略目录 junction。没有 fetch、下载素材或安装依赖。
 
-前测实际执行 `node tests/daily-use.cjs` 31/31、`node tests/model-capabilities.cjs` 34/34，退出码均 0。原始日志见 [baseline-daily.log](ui3a-evidence/baseline-daily.log)、[baseline-model.log](ui3a-evidence/baseline-model.log)。按本轮明确分工不运行完整 `npm test`。
+前测实际执行 `node tests/daily-use.cjs` 31/31、`node tests/model-capabilities.cjs` 34/34，退出码均 0。原始日志见 [baseline-daily.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/baseline-daily.log)、[baseline-model.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/baseline-model.log)。按本轮明确分工不运行完整 `npm test`。
 
 参考原目录的 Claude 截图 `Snipaste_2026-10-15_22-32-06.png` 与 `Snipaste_2026-10-15_22-46-48.png`：采用中性输入表面、圆角外壳、正文与底部操作分层、紧凑辅助信息。不复制专有字体/组件，不新增截图中的 Bypass/Manual、终端等能力。截图的原始物理像素不直接视为 CSS 尺寸。
 
@@ -28,7 +28,7 @@
 
 ## 3. 业务和数据边界
 
-`imageInputBlocked()`、`renderModelControls()`、`handleFiles()`、`removeAttachment()`、`FILE_BLOCK_RE`、`buildMessage()`、`attachmentImages()` 与基线对应代码块逐字一致，归一化 CRLF 后 SHA-256 结果见 [source-audit.json](ui3a-evidence/source-audit.json)。发送 guard 条件完整保留，新增代码只在判定后镜像 `button.disabled`；没有引入额外“允许发送”的分支，也没有改变 loading/error 附件原有发送政策。
+`imageInputBlocked()`、`renderModelControls()`、`handleFiles()`、`removeAttachment()`、`FILE_BLOCK_RE`、`buildMessage()`、`attachmentImages()` 与基线对应代码块逐字一致，归一化 CRLF 后 SHA-256 结果见 [source-audit.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/source-audit.json)。发送 guard 条件完整保留，新增代码只在判定后镜像 `button.disabled`；没有引入额外“允许发送”的分支，也没有改变 loading/error 附件原有发送政策。
 
 附件状态由现有数据确定，优先级为 loading → error → 图片能力 blocked/ready → 文本 truncated/ready → unreadable。二进制/未知解析结果继续明确“pi 读不了”，失败内容不显示已就绪；图片能力 unknown 不冒充 false。显示 `size=0`，缺失或非法大小隐藏。真实文件大小集中在独立一行，不在图片/二进制说明里重复。文件名、路径和错误以 textContent/title 展示，未注入 HTML。
 
@@ -51,7 +51,7 @@
 
 ## 5. 自动化结果
 
-最终每个下列命令的退出码均为 **0**，失败 **0**，跳过 **0**。受影响旧套件断言数量没有减少。结果与日志见 [test-results.json](ui3a-evidence/test-results.json)，Electron 完整事实见 [electron.json](ui3a-evidence/electron.json)。
+最终每个下列命令的退出码均为 **0**，失败 **0**，跳过 **0**。受影响旧套件断言数量没有减少。结果与日志见 [test-results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/test-results.json)，Electron 完整事实见 [electron.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/electron.json)。
 
 | 实际命令 | 通过 / 执行 |
 |---|---:|
@@ -69,9 +69,9 @@
 
 实际修复过程保留失败证据：
 
-- 首轮 Electron 124/125：ResizeObserver undelivered notifications；重排移到下一帧修复。[原日志](ui3a-evidence/electron-before-observer-fix.log)。
-- 原 smoke 曾 1336/1338：异步留白影响旧同步契约，恢复即时高度预留；另一次 1337/1338 暴露观察目标必须仅 Composer，恢复单目标，滚动条同步改为复用输入/滚动事件。没有修改旧断言。[同步前日志](ui3a-evidence/smoke-before-sync-fix.log)、[单目标前日志](ui3a-evidence/smoke-before-single-target-fix.log)。最终 1338/1338。
-- 加强短窗口末条消息检查后曾 180/182：400 CSS px 高、150% zoom、侧栏展开、多附件和十行输入下末条文字几乎被顶栏裁掉。收紧托盘并让操作组内部换行，最终同一判据通过。[失败几何](ui3a-evidence/electron-before-short-window-fix.json)。
+- 首轮 Electron 124/125：ResizeObserver undelivered notifications；重排移到下一帧修复。[原日志](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/electron-before-observer-fix.log)。
+- 原 smoke 曾 1336/1338：异步留白影响旧同步契约，恢复即时高度预留；另一次 1337/1338 暴露观察目标必须仅 Composer，恢复单目标，滚动条同步改为复用输入/滚动事件。没有修改旧断言。[同步前日志](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/smoke-before-sync-fix.log)、[单目标前日志](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/smoke-before-single-target-fix.log)。最终 1338/1338。
+- 加强短窗口末条消息检查后曾 180/182：400 CSS px 高、150% zoom、侧栏展开、多附件和十行输入下末条文字几乎被顶栏裁掉。收紧托盘并让操作组内部换行，最终同一判据通过。[失败几何](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/electron-before-short-window-fix.json)。
 
 ## 6. 真实 Electron 截图与视觉结论
 
@@ -82,7 +82,7 @@
 - 5 场补充截图：single-line、ten-lines、stopping-focus、image-unsupported、reduced-motion。
 - 真实连续布局检查：单行→十行、长英文无空格、长中文、正文增长留白；末尾读者输入增高时末条仍在输入框上方，上滚读者不被强拉到底。实际 Shift+Enter 换行；Space 移除附件并保留焦点。reduced-motion 通过媒体仿真核对实际 transition/spinner。
 
-代表图：[700 Dark](ui3a-evidence/dark-700-sidebar-true-closed.png)、[1536 Light + Browser](ui3a-evidence/light-1536-sidebar-false-browser.png)、[150% Light 短窗口](ui3a-evidence/light-zoom-1.5-short-window.png)、[不支持图片](ui3a-evidence/image-unsupported.png)。人工查看窄窗、浅色右栏和 150% 短窗：输入与消息同轴，无横向页面溢出，长名称省略，多附件在托盘内滚动，辅助说明颜色区分真实状态，末条文字与主要操作可见。
+代表图：[700 Dark](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/dark-700-sidebar-true-closed.png)、[1536 Light + Browser](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/light-1536-sidebar-false-browser.png)、[150% Light 短窗口](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/light-zoom-1.5-short-window.png)、[不支持图片](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/image-unsupported.png)。人工查看窄窗、浅色右栏和 150% 短窗：输入与消息同轴，无横向页面溢出，长名称省略，多附件在托盘内滚动，辅助说明颜色区分真实状态，末条文字与主要操作可见。
 
 既有右栏在窄屏会采用 overlay，可能覆盖聊天/输入区；这属于原壳行为，不以隐藏右栏、删除入口或改权限解决。矩阵记录 mode，不能把被 overlay 覆盖的 Composer 算作可点击证明；关闭右栏的对应场景另外验证输入完整可用。原生 Windows 标题栏、OS DPI 与 OS 主题切换不在此次 Composer capturePage 证据范围。没有改变 UI-2 已归档的标题栏结论。
 
@@ -90,9 +90,9 @@
 
 ## 7. 离线构建与产物
 
-实际执行 `node scripts/build-app.mjs --rebuild --output-root <隔离临时目录>`，使用本机已缓存 Electron ZIP 的 PI_GUI_ELECTRON_ZIP_DIR；退出 **0**，没有联网、安装依赖或覆盖用户正在使用的安装目录。具体路径见 [build-root.txt](ui3a-evidence/build-root.txt)，输出见 [build.log](ui3a-evidence/build.log)。日志显示整包约 328.1 MB、入口约 234.9 MB。
+实际执行 `node scripts/build-app.mjs --rebuild --output-root <隔离临时目录>`，使用本机已缓存 Electron ZIP 的 PI_GUI_ELECTRON_ZIP_DIR；退出 **0**，没有联网、安装依赖或覆盖用户正在使用的安装目录。具体路径见 [build-root.txt](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/build-root.txt)，输出见 [build.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/build.log)。日志显示整包约 328.1 MB、入口约 234.9 MB。
 
-先用独立 TEMP/TMP/TMPDIR 运行 `node tests/fixtures.mjs`，生成临时 PNG/PDF/Word 并验证抽取，退出 0；然后 `node tests/app-check.cjs --output-root <同一构建目录>`，退出 **0，26/26，失败0、跳过0**。首次缺少测试 PDF 夹具为 19/21，后续隔离生成夹具后修复环境；未通过修改断言绕过。[初次缺夹具日志](ui3a-evidence/app-check-before-fixtures.log)、[夹具生成](ui3a-evidence/fixtures.log)、[最终 app-check](ui3a-evidence/app-check.log)。
+先用独立 TEMP/TMP/TMPDIR 运行 `node tests/fixtures.mjs`，生成临时 PNG/PDF/Word 并验证抽取，退出 0；然后 `node tests/app-check.cjs --output-root <同一构建目录>`，退出 **0，26/26，失败0、跳过0**。首次缺少测试 PDF 夹具为 19/21，后续隔离生成夹具后修复环境；未通过修改断言绕过。[初次缺夹具日志](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/app-check-before-fixtures.log)、[夹具生成](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/fixtures.log)、[最终 app-check](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3a-evidence/app-check.log)。
 
 最终 `composer.js`、`attachments.js`、`ui3-composer.css` 源码与 resources/app/public 中文件 SHA-256 三项一致，见 source-audit.json。app-check 是桌面包内嵌后端/资源检查，不是打包后的完整 UI 联合验收。CSS 被收进包，但遵守所有权未在 index 引用；实际 UI 渲染证据来自显式注入该 CSS 的 Electron 夹具。
 

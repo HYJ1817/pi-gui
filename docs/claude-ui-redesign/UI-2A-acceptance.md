@@ -22,7 +22,7 @@
 - 测试：`4b96190cdb60d01aa6c25507266b84e39f65d349`，为本报告撰写时的代码HEAD。
 - 本报告与证据另作本地文档提交；最终文档提交SHA在交付回复及本分支git log中，避免在文件中伪造自引用SHA。
 
-范围与产品文件hash见 [scope-verification.json](ui2a-evidence/scope-verification.json)。本轮只是独立分支交付，不修改其他Agent文件。
+范围与产品文件hash见 [scope-verification.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/scope-verification.json)。本轮只是独立分支交付，不修改其他Agent文件。
 
 ## 2. 勘察与真实数据依据
 
@@ -93,17 +93,17 @@ footer是 `.msg.assistant` 内 `.msg-body` 后的兄弟节点，不进入正文�
 
 | 检查 | 起点 | 最终结果及证据 |
 |---|---|---|
-| `npm run test:ui` | 1338/1338，退出0 | **1338/1338，失败0，退出0**；[smoke.log](ui2a-evidence/smoke.log)、[进程结果](ui2a-evidence/smoke-exit.json) |
-| `npm run test:body` | 5/5，退出0 | **5/5，失败0，退出0**；7个分片，2处多字节边界，修复路径替换字符0；[body.log](ui2a-evidence/body.log) |
-| `npm run test:quota` | 229/229，退出0 | **229/229，失败0，退出0**；[quota.log](ui2a-evidence/quota.log) |
-| `node tests/ui2-classic.cjs` | 新需求首次18/39、21个预期失败 | **48/48，失败0、跳过0，退出0**；[classic.log](ui2a-evidence/classic.log) |
-| `node tests/ui2-classic.cjs --electron` | 原生按键夹具修正后运行 | **65/65，失败0，renderer errors 0，退出0；16张截图**；[electron.log](ui2a-evidence/electron.log)、[结构化结果](ui2a-evidence/electron-results.json) |
+| `npm run test:ui` | 1338/1338，退出0 | **1338/1338，失败0，退出0**；[smoke.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/smoke.log)、[进程结果](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/smoke-exit.json) |
+| `npm run test:body` | 5/5，退出0 | **5/5，失败0，退出0**；7个分片，2处多字节边界，修复路径替换字符0；[body.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/body.log) |
+| `npm run test:quota` | 229/229，退出0 | **229/229，失败0，退出0**；[quota.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/quota.log) |
+| `node tests/ui2-classic.cjs` | 新需求首次18/39、21个预期失败 | **48/48，失败0、跳过0，退出0**；[classic.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/classic.log) |
+| `node tests/ui2-classic.cjs --electron` | 原生按键夹具修正后运行 | **65/65，失败0，renderer errors 0，退出0；16张截图**；[electron.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/electron.log)、[结构化结果](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/electron-results.json) |
 
-body/quota/新专项/Electron的实际退出码见 [special-results.json](ui2a-evidence/special-results.json)。保留原smoke/body/quota全部断言，分母未下降。专项覆盖不同助手usage、缺失/零值/畸形值、实时历史一致、单项/多项/跨消息/孤儿工具、运行/失败/取消/中断、折叠状态/焦点/ARIA、Thinking节点复用/异常尾段、tool-only与Thinking-only、错误重试以及HTML/XSS。
+body/quota/新专项/Electron的实际退出码见 [special-results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/special-results.json)。保留原smoke/body/quota全部断言，分母未下降。专项覆盖不同助手usage、缺失/零值/畸形值、实时历史一致、单项/多项/跨消息/孤儿工具、运行/失败/取消/中断、折叠状态/焦点/ARIA、Thinking节点复用/异常尾段、tool-only与Thinking-only、错误重试以及HTML/XSS。
 
-补充的异常尾段回归先得到 **47/48、失败1**，修复后48/48；[pending-thinking-red.log](ui2a-evidence/pending-thinking-red.log)保留复现。Electron夹具先等待真实初始RPC历史完成，再注入本次fixture，避免启动重建覆盖测试；原生按钮的CDP按键必须包含Enter/Space字符序列，不能只用无字符keyDown模拟JS监听。
+补充的异常尾段回归先得到 **47/48、失败1**，修复后48/48；[pending-thinking-red.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/pending-thinking-red.log)保留复现。Electron夹具先等待真实初始RPC历史完成，再注入本次fixture，避免启动重建覆盖测试；原生按钮的CDP按键必须包含Enter/Space字符序列，不能只用无字符keyDown模拟JS监听。
 
-真实Electron为44.4.3。两主题 × 700/900/1200/1536 CSS px × 批次展开/折叠，16张实际capturePage图；每宽验证Enter折叠、Space展开、Tab跳过hidden列表/进入展开列表、Thinking Enter、无页面横向溢出。示例：[dark-1200-expanded.png](ui2a-evidence/dark-1200-expanded.png)、[light-900-collapsed.png](ui2a-evidence/light-900-collapsed.png)。已经目视检查对应场景，但使用的是UI-1 CSS，最终视觉需与Agent C样式合并后再验。
+真实Electron为44.4.3。两主题 × 700/900/1200/1536 CSS px × 批次展开/折叠，16张实际capturePage图；每宽验证Enter折叠、Space展开、Tab跳过hidden列表/进入展开列表、Thinking Enter、无页面横向溢出。示例：[dark-1200-expanded.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/dark-1200-expanded.png)、[light-900-collapsed.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui2a-evidence/light-900-collapsed.png)。已经目视检查对应场景，但使用的是UI-1 CSS，最终视觉需与Agent C样式合并后再验。
 
 依赖通过本机既有node_modules只读解析（本次设置NODE_PATH），没有npm install或新依赖。测试只使用DOM、离线harness与os.tmpdir用户配置，不依赖真Pi或真模型。
 

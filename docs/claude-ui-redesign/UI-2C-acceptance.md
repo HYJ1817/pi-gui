@@ -51,7 +51,7 @@
 | 预留 | `.ui2-tool-summary` / `.ui2-chev` / `.ui2-msg-meta` / `.ui2-runtime-status[running]` / `.ui2-runtime-meta` | 5 条 |
 | C6 A/B 真实 DOM（末轮） | A：summary 按钮重置 / focus-visible / 折叠图标旋转 / tool-state / msg-meta-item / think[data-state]；B：thinking-body 换行不溢出 / usage / tools 纵排 / tool[data-state] 三态 + 未知回落 | 14 条 |
 
-合计 **57/57 通过**（[cdp/report.json](ui-2-c-evidence/cdp/report.json)）。
+合计 **57/57 通过**（[cdp/report.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui-2-c-evidence/cdp/report.json)）。
 
 ## 5. Token 使用（只消费 UI-1 语义 token）
 
@@ -65,9 +65,9 @@
 
 | 套件 | 实际结果 | 证据 |
 |---|---|---|
-| UI-2C 专项自检 | **57/57，失败 0**，CDP 端口 9226，17 张场景截图 | [cdp/report.json](ui-2-c-evidence/cdp/report.json) 及同目录 `c1-…`、`c2-…`、`c4-width-*`、`c5-final.png`、`c6-ab-dom.png` |
-| 主题 Electron（dark/light × 700/900/1200/1536 × 侧栏开/关 × 右栏关闭/Changes/Browser，另 zoom、System、重载/重建、最大化/还原、reduced-motion） | **489/489，失败 0，renderer/harness errors 0，63 张截图**（末轮改样式后重跑） | 我的 CSS 下现跑的矩阵：[ui-2-c-evidence/electron/](ui-2-c-evidence/electron/)（dark/light 各宽度） |
-| Runtime Electron（真实 Electron + 生产 server + 真实临时 Git/进程） | **170/170，43 张截图**（末轮改样式后重跑，证据输出到临时目录） | [ui-2-c-evidence/electron-runtime/](ui-2-c-evidence/electron-runtime/) |
+| UI-2C 专项自检 | **57/57，失败 0**，CDP 端口 9226，17 张场景截图 | [cdp/report.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui-2-c-evidence/cdp/report.json) 及同目录 `c1-…`、`c2-…`、`c4-width-*`、`c5-final.png`、`c6-ab-dom.png` |
+| 主题 Electron（dark/light × 700/900/1200/1536 × 侧栏开/关 × 右栏关闭/Changes/Browser，另 zoom、System、重载/重建、最大化/还原、reduced-motion） | **489/489，失败 0，renderer/harness errors 0，63 张截图**（末轮改样式后重跑） | 我的 CSS 下现跑的矩阵：[ui-2-c-evidence/electron/](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui-2-c-evidence/electron/)（dark/light 各宽度） |
+| Runtime Electron（真实 Electron + 生产 server + 真实临时 Git/进程） | **170/170，43 张截图**（末轮改样式后重跑，证据输出到临时目录） | [ui-2-c-evidence/electron-runtime/](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui-2-c-evidence/electron-runtime/) |
 | smoke | **1338/1338，失败 0**（原数量不变） | 见第 8 节 |
 | dev-server | **30/30，退出 0** | 见第 8 节 |
 | theme | **47/47，失败 0** | 见第 8 节 |

@@ -31,7 +31,7 @@
 
 `server/`、`lib/`、`electron/`、`extensions/`、server.js、RPC、Runtime store/conversation/models/state、model-capabilities、palette-model、styles.css、tokens.css、package-lock.json 与共同基线无差异。没有修改 Pi RPC/SSE、模型回读协议、owner/revision/sequence、安全审批、P33 闸门、Browser 安全配置或附件解析/组装协议。
 
-[source-audit.json](ui3-integration-evidence/source-audit.json) 保存分支、提交链、保护路径、测试链和包内哈希。未增加依赖，版本未变化。所有测试项目、会话、进程与上传为隔离夹具；没有对真实用户会话或项目做写操作。运行时仍保留 Classic 与 Runtime 各自模型权威。
+[source-audit.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/source-audit.json) 保存分支、提交链、保护路径、测试链和包内哈希。未增加依赖，版本未变化。所有测试项目、会话、进程与上传为隔离夹具；没有对真实用户会话或项目做写操作。运行时仍保留 Classic 与 Runtime 各自模型权威。
 
 ## 3. 生产接线
 
@@ -84,13 +84,13 @@ index 静态加载带固定 ID/data 标记的 `ui3-inline-commands.css`，创建
 
 全部为集成后的生产 index/app 渲染，不复用 A/B/C 分支截图。源码目录和最终包内资源各跑一套，sandbox:true、contextIsolation:true、nodeIntegration:false。Browser 使用原 preload/controller/agent host，访问范围限离线夹具。
 
-- [electron/results.json](ui3-integration-evidence/electron/results.json)：源码渲染结果；[packaged-electron/results.json](ui3-integration-evidence/packaged-electron/results.json)：最终包内前端结果。
+- [electron/results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/electron/results.json)：源码渲染结果；[packaged-electron/results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/packaged-electron/results.json)：最终包内前端结果。
 - 各套 **107 张截图**：Dark/Light × 700/900/1200/1536 CSS px × 左栏展开/折叠 × closed/Changes/Browser × Slash/Model = 96；80/125/150% 应用 zoom 的两种菜单 6；Thinking 三种原因 3；失败回读 1；reduced-motion 1。
 - 矩阵含十行中文/英文、6 个附件（长文件名/解析中/失败/截断）、跨 Provider 同名及长模型名。断言覆盖真实几何、菜单可见、横向溢出、与右栏和附件/操作的关系。
 - capturePage 是真实 Electron 网页像素，不包含原生子视图内容。窄屏原有右栏 overlay 仍可能覆盖聊天/输入框；这里没有把关闭/缩窄右栏伪装成验证，菜单边界按真实 paneLeft 检查。
 - 这一轮未改标题栏；UI-2 的原生标题栏实拍结论保持。上述图片不作为 OS 窗口控制、真实 DPI/中文 IME 或实际模型证明。
 
-原 CDP 大回归实际通过 **1761 条检查**，归档 **270 张不同 PNG**，见 [cdp/manifest.json](ui3-integration-evidence/cdp/manifest.json)。4 条旧规格要求单行 ellipsis；根据 B 的明确设计及 Chromium 实测改成“两行/窄屏三行 line-clamp、真实多行高度、overflow-wrap:anywhere、条目/弹层无横向溢出”。只替换同一谓词，四档宽度、取景和其余全部断言保留，数量不减少。原始失败日志、修正后的日志均归档。
+原 CDP 大回归实际通过 **1761 条检查**，归档 **270 张不同 PNG**，见 [cdp/manifest.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/cdp/manifest.json)。4 条旧规格要求单行 ellipsis；根据 B 的明确设计及 Chromium 实测改成“两行/窄屏三行 line-clamp、真实多行高度、overflow-wrap:anywhere、条目/弹层无横向溢出”。只替换同一谓词，四档宽度、取景和其余全部断言保留，数量不减少。原始失败日志、修正后的日志均归档。
 
 ## 6. 测试结果
 
@@ -106,7 +106,7 @@ index 静态加载带固定 ID/data 标记的 `ui3-inline-commands.css`，创建
 | `node tests/ui3-cdp.cjs` | 1761/1761，270 张不同截图 | 0 | 0 | 0 |
 | `node tests/app-check.cjs --output-root <最终目录>` | 26/26 | 0 | 0 | 0 |
 
-最终全量实际运行时间：2026-10-17 **13:48:26.840—14:38:15.597（+08:00）**，**2988.756 秒**。独立进程记录 [npm-test-final-process.json](ui3-integration-evidence/npm-test-final-process.json)，原始 [npm-test-final.log](ui3-integration-evidence/npm-test-final.log)，逐套 [test-summary.md](ui3-integration-evidence/test-summary.md) / [test-results.json](ui3-integration-evidence/test-results.json)。
+最终全量实际运行时间：2026-10-17 **13:48:26.840—14:38:15.597（+08:00）**，**2988.756 秒**。独立进程记录 [npm-test-final-process.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/npm-test-final-process.json)，原始 [npm-test-final.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/npm-test-final.log)，逐套 [test-summary.md](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/test-summary.md) / [test-results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/test-results.json)。
 
 与 UI-2 的 **116 条原有数字摘要通过/总计序列完全一致**，没有既有断言下降；新增四套共 153 条单元/联调断言，数字摘要 116→120。smoke 保持 1338/1338。135 是入口命令数量，不冒称全局断言总数；未打印数字的通过标记及 JSON 结果分别记录，不重复相加。
 
@@ -122,7 +122,7 @@ canonical 从 UI-2 的 131 条命令增加到 135：A/B/C 三套跨机器单元 
 
 ## 7. 隔离离线构建
 
-实际 `node scripts/build-app.mjs --rebuild --output-root <临时独立目录>`，使用已存在的本机 Electron ZIP 离线缓存，退出 0。路径在 [build-root.txt](ui3-integration-evidence/build-root.txt)，构建日志 [build.log](ui3-integration-evidence/build.log)。整包约 328.1 MB，入口约 234.9 MB。未覆盖既有安装产物。
+实际 `node scripts/build-app.mjs --rebuild --output-root <临时独立目录>`，使用已存在的本机 Electron ZIP 离线缓存，退出 0。路径在 [build-root.txt](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/build-root.txt)，构建日志 [build.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/build.log)。整包约 328.1 MB，入口约 234.9 MB。未覆盖既有安装产物。
 
 最终 resources/app/public 的 **104 个文件 SHA-256 均与源码一致**，包括三个新模块与 CSS、app/index 和 popover；静态 stylesheet 正确引用且只加载一次。随后 Electron 通过离线 harness 直接服务这些包内前端文件，运行同一 243 项交互/布局检查，没有运行时注入 CSS。
 
@@ -130,7 +130,7 @@ canonical 从 UI-2 的 131 条命令增加到 135：A/B/C 三套跨机器单元 
 
 ## 8. 提交与回退
 
-集成产品接线提交：`feec781bab71311cf3f1ebce14319f6f977ce983`；测试入口/基础设施提交：`fbda6d6429bfbf17da5e1308fcf7e00dd7e656fa`。报告与证据另行本地归档；包含本文的最终 HEAD 是归档提交（自指哈希无法写入自身内容），见最终交付消息与本分支 `git log -1`。未提交修改在交付前核查为 0。产品/测试完整变更路径见 [integration-files.txt](ui3-integration-evidence/integration-files.txt)，本报告及 `ui3-integration-evidence/` 为本次新增归档。
+集成产品接线提交：`feec781bab71311cf3f1ebce14319f6f977ce983`；测试入口/基础设施提交：`fbda6d6429bfbf17da5e1308fcf7e00dd7e656fa`。报告与证据另行本地归档；包含本文的最终 HEAD 是归档提交（自指哈希无法写入自身内容），见最终交付消息与本分支 `git log -1`。未提交修改在交付前核查为 0。产品/测试完整变更路径见 [integration-files.txt](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui3-integration-evidence/integration-files.txt)，本报告及 `ui3-integration-evidence/` 为本次新增归档。
 
 回退共享接线需协调 revert 测试接线与产品接线两个提交，避免保留依赖新接线的测试入口；回退 Agent 成果可按相反顺序 revert 对应 merge（需保留主线父提交），不 reset/clean 或修改原 A/B/C worktree。不需要迁移 Session Schema 或用户数据。证据可保留。
 

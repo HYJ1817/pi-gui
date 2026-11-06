@@ -181,18 +181,18 @@ node tests/ui4-pane.cjs
 | 响应式 × 主题矩阵 | 194 | 8 主题×宽度组合 × {关闭, 4 个面}：溢出、带高、关闭按钮位置、dock/overlay、宽度复位、说明行 |
 | 收尾 | 7 | 125% 缩放 3 条、reduced-motion、Tab、Escape、renderer 无报错 |
 
-证据：[ui4a-evidence/results.json](ui4a-evidence/results.json)（每条断言与几何事实）、
-[ui4a-evidence/run.log](ui4a-evidence/run.log)（原始输出）、`ui4a-evidence/*.png`（35 张）。
+证据：[ui4a-evidence/results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/results.json)（每条断言与几何事实）、
+[ui4a-evidence/run.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/run.log)（原始输出）、`ui4a-evidence/*.png`（35 张）。
 代表图：
 
-- [dark-1200-session-session-changes.png](ui4a-evidence/dark-1200-session-session-changes.png)（默认宽 420：标题+说明+刷新+×、概览卡、状态胶囊、文件行层级、行内动作）
-- [dark-1200-browser-browser.png](ui4a-evidence/dark-1200-browser-browser.png)（Browser 在 46px 带内）
-- [dark-1200-changes-changes.png](ui4a-evidence/dark-1200-changes-changes.png)（Changes 与上面同一节奏）
-- [dark-1200-process-process.png](ui4a-evidence/dark-1200-process-process.png)（状态点、失败红字、日志盒）
-- [light-1200-session-session-changes.png](ui4a-evidence/light-1200-session-session-changes.png)（浅色主题）
-- [dark-700-process-process.png](ui4a-evidence/dark-700-process-process.png)（700px 覆盖模式）
-- [session-changes-error-1200-dark.png](ui4a-evidence/session-changes-error-1200-dark.png)（错误档）
-- [changes-zoom125-dark.png](ui4a-evidence/changes-zoom125-dark.png)（125% 缩放）
+- [dark-1200-session-session-changes.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/dark-1200-session-session-changes.png)（默认宽 420：标题+说明+刷新+×、概览卡、状态胶囊、文件行层级、行内动作）
+- [dark-1200-browser-browser.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/dark-1200-browser-browser.png)（Browser 在 46px 带内）
+- [dark-1200-changes-changes.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/dark-1200-changes-changes.png)（Changes 与上面同一节奏）
+- [dark-1200-process-process.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/dark-1200-process-process.png)（状态点、失败红字、日志盒）
+- [light-1200-session-session-changes.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/light-1200-session-session-changes.png)（浅色主题）
+- [dark-700-process-process.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/dark-700-process-process.png)（700px 覆盖模式）
+- [session-changes-error-1200-dark.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/session-changes-error-1200-dark.png)（错误档）
+- [changes-zoom125-dark.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4a-evidence/changes-zoom125-dark.png)（125% 缩放）
 
 ### 既有套件复跑（改后，未改任何既有断言）
 

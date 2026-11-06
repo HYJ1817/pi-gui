@@ -25,3 +25,6 @@ dist-release/
 
 # clearDir 在删不掉时把旧目录改名留下的残骸
 *.trash-*
+
+# 历史 UI-1 至 UI-5 验收的可再生截图/日志已归档至 Git 历史
+/docs/claude-ui-redesign/*evidence/

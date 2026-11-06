@@ -97,11 +97,11 @@ CDP 基线对照：`17f855f` 同场景 **1761 条，0 失败**（`baseline-cdp.l
 ### 完整 `npm test`
 
 - 命令：`npm test`（canonical 入口，顶部新增 `npm run test:ui4` 前缀；原字符串后缀逐字保留，程序断言 `suffix-preserved=true`）。
-- 结果：**退出码 0**，**3393.3 秒**（56 分 33 秒），`12:35:19Z–13:31:44Z`；日志 [final.log](ui4-integration-evidence/final.log)，进程记录 [final-process.json](ui4-integration-evidence/final-process.json)。
+- 结果：**退出码 0**，**3393.3 秒**（56 分 33 秒），`12:35:19Z–13:31:44Z`；日志 [final.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/final.log)，进程记录 [final-process.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/final-process.json)。
 - 套件摘要：**85 个**（基线 82 个原有套件 + 3 个新增 UI4 套件）；`failed=0` 行 **0 条**，`FAIL` / `not ok` **0 条**。
 - 跳过：**18**，与基线完全相同（`session-revert-sacl-witness` 8、`session-revert-inplace` 2、`Object witness` 8；均为权限/研究限定，跳过的断言不计入分子分母）。
 - 期间的三次失败与处理保留为证据：`final-attempt1.log`（UI3 Composer 的 jsdom rAF 拆除，已修产品守卫）、`final-attempt2.log`（Bridge 恢复测试的过期按钮引用，已改测试顺序）、`final-attempt3.log`（P33 相对 `SystemRoot` 用例受 Git Bash 大小写环境变量影响；用标准大小写 `SystemRoot` 启动后 23/23，产品未改）。
-- 基线对照：[baseline.log](ui4-integration-evidence/baseline.log) 为 82 个摘要、0 失败、18 跳过；本轮原有 82 个套件全部保持通过，未减少任何既有断言。
+- 基线对照：[baseline.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/baseline.log) 为 82 个摘要、0 失败、18 跳过；本轮原有 82 个套件全部保持通过，未减少任何既有断言。
 
 ### 既有套件（本轮复跑）
 
@@ -125,15 +125,15 @@ CDP 基线对照：`17f855f` 同场景 **1761 条，0 失败**（`baseline-cdp.l
 
 ## 7. 构建与包内验证
 
-- 命令：`PI_GUI_ELECTRON_ZIP_DIR=<本机缓存> node scripts/build-app.mjs --rebuild --output-root <全新绝对 TEMP>`；**退出码 0**，无网络。日志 [build.log](ui4-integration-evidence/build.log)，进程记录 [build-process.json](ui4-integration-evidence/build-process.json)。
+- 命令：`PI_GUI_ELECTRON_ZIP_DIR=<本机缓存> node scripts/build-app.mjs --rebuild --output-root <全新绝对 TEMP>`；**退出码 0**，无网络。日志 [build.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/build.log)，进程记录 [build-process.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/build-process.json)。
 - 输出根：`C:/Users/21022/AppData/Local/Temp/pi-gui-ui4-build-ZLR49f`（全新 TEMP；不是仓库目录）。
 - Electron zip：`electron-v44.4.3-win32-x64.zip`，158,247,567 字节，SHA-256 `790a355b684d5c7cc8dc3cdd8c4cca7c4b2d054685427c7554a956879a82e70b`。
 - 产物：`dist-app/Pi GUI-win32-x64/Pi GUI.exe` 246,324,736 字节；整包 344,184,388 字节（脚本报告 328.2 MB）。
-- **源/包 public 全文件哈希**：107 ↔ 107 个文件，`onlySource=0`、`onlyPackaged=0`、`mismatched=0`；[build-audit.json](ui4-integration-evidence/build-audit.json)。
+- **源/包 public 全文件哈希**：107 ↔ 107 个文件，`onlySource=0`、`onlyPackaged=0`、`mismatched=0`；[build-audit.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/build-audit.json)。
 - **三套 CSS**：`ui4-pane.css` / `ui4-approval.css` / `ui4-feedback.css` 在包内 index.html 各 **1** 个 link，文件均存在（18,415 / 11,350 / 10,932 字节），ID 与模块幂等注入一致。
-- `node tests/app-check.cjs --output-root <root>`：**26/26**，退出 0（[build-app-check.log](ui4-integration-evidence/build-app-check.log)）。
-- `node tests/exe-check.cjs --output-root <root>`：**49/49**，退出 0（[build-exe-check.log](ui4-integration-evidence/build-exe-check.log)）。
-- **包内 UI4 联合 Electron**：`UI4_ASSETS_ROOT=<包内 public> UI4_INTEGRATION=1 node tests/ui4-pane.cjs`：**427/427，0 失败，75 图**，退出 0；[packaged-electron/results.json](ui4-integration-evidence/packaged-electron/results.json)。首次失败 [packaged-electron-attempt1.log](ui4-integration-evidence/packaged-electron-attempt1.log) 是 `VISUAL_PUBLIC_ROOT` 正斜杠路径被 `startsWith` 误判 404；修正夹具路径规范化后通过，产品未改。
+- `node tests/app-check.cjs --output-root <root>`：**26/26**，退出 0（[build-app-check.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/build-app-check.log)）。
+- `node tests/exe-check.cjs --output-root <root>`：**49/49**，退出 0（[build-exe-check.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/build-exe-check.log)）。
+- **包内 UI4 联合 Electron**：`UI4_ASSETS_ROOT=<包内 public> UI4_INTEGRATION=1 node tests/ui4-pane.cjs`：**427/427，0 失败，75 图**，退出 0；[packaged-electron/results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/packaged-electron/results.json)。首次失败 [packaged-electron-attempt1.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4-integration-evidence/packaged-electron-attempt1.log) 是 `VISUAL_PUBLIC_ROOT` 正斜杠路径被 `startsWith` 误判 404；修正夹具路径规范化后通过，产品未改。
 - 包内截图与源码版截图分开存放：`ui4-integration-evidence/packaged-electron/`。
 
 ## 8. 真实截图人工检查
