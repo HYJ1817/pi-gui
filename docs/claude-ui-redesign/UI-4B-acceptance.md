@@ -115,13 +115,13 @@ jsdom 覆盖：允许 / 拒绝 / Esc 取消 / 点遮罩取消；三连击与提�
 | `node tests/modules.cjs` | 117/117 |
 | `node tests/dev-server.cjs` | 30/30 |
 
-全部退出码 0；既有套件断言数未下降。原始输出：[regressions.log](ui4b-evidence/regressions.log)。
+全部退出码 0；既有套件断言数未下降。原始输出：[regressions.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4b-evidence/regressions.log)。
 
 未运行：完整 `npm test`（按任务要求留给集成阶段；`package.json` 测试入口未改）、完整 `tests/cdp-shot.cjs` 270 张矩阵（本轮 700/900/1200/1536 的真实渲染由 Electron 矩阵覆盖）。
 
 ## 8. Electron 渲染证据
 
-- 结果：[electron/results.json](ui4b-evidence/electron/results.json)；Electron 44.4.3 / Chromium 152.0.7977.130；44/44，0 失败，0 跳过，22 张 PNG。
+- 结果：[electron/results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4b-evidence/electron/results.json)；Electron 44.4.3 / Chromium 152.0.7977.130；44/44，0 失败，0 跳过，22 张 PNG。
 - 矩阵：Dark/Light × 700/900/1200/1536 CSS px × 右栏关闭/打开（Changes surface）= 16 张；另有提交中、投递失败、select、input、Runtime、reduced-motion 共 6 张。
 - 断言：卡片在视口内、页面无横向滚动、正文与操作区无横向溢出、按钮 nowrap 且高度 ≥30、初始焦点在「拒绝」、右栏状态正确、提交中按钮禁用、失败卡片不关闭、reduced-motion 下 `animationName === 'none'`、受信 CDP 键盘的 Tab / Shift+Tab / Enter / Esc 行为。
 - 方法：真实 Electron 加载生产 `public/index.html` + `public/`；`tests/visual-harness.cjs` 提供离线静态资源与 SSE 夹具；`capturePage` 只取网页像素。

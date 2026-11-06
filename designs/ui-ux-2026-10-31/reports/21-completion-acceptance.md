@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # Refined 第二轮补齐与最终验收
 
 日期：2026-11-01。用户在首轮推送后要求继续完成剩余界面。本轮基于 `8908ff5` 后的未提交工作树，保留原业务 Owner、API、数据模型和依赖，并完成 Runtime、设置详情、原生截图与输入、模型渲染检查的补齐。
@@ -58,7 +60,7 @@
 
 ## 完整 canonical
 
-最终独立运行 `npm test` **通过，exit 0**。共执行 `package.json` 展开的 231 条 canonical 命令，耗时 4,639.44 秒；开始时和结束后源码/测试摘要均为 `8ef4ec46eb746509b22bf37ab9da3b8820690a33966fc41044d0b8c61de14931`，输入未变化。原始日志：[npm-test.log](../evidence/completion-canonical-final-3/npm-test.log)；机器可读记录：[run.json](../evidence/completion-canonical-final-3/run.json)。
+最终独立运行 `npm test` **通过，exit 0**。共执行 `package.json` 展开的 231 条 canonical 命令，耗时 4,639.44 秒；开始时和结束后源码/测试摘要均为 `8ef4ec46eb746509b22bf37ab9da3b8820690a33966fc41044d0b8c61de14931`，输入未变化。原始日志：[npm-test.log](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/completion-canonical-final-3/npm-test.log)；机器可读记录：[run.json](../evidence/completion-canonical-final-3/run.json)。
 
 前两次完整尝试均保留且未冒充通过：第一次在 `ci-results` 的 kill witness 超时，单测 **10/10**；第二次在 `session-revert-object-assets` 暴露 Windows 环境变量大小写测试注入错误，修复后 **23/23**。最终第三次在修正测试输入后重新从头运行并 exit 0。环境跳过仍为 21 项，未计入通过分子。
 

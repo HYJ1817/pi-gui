@@ -35,7 +35,7 @@
 `visual-harness.cjs` 占用，`tests/git.cjs` 连到了它；随后 `server-security` 也出现同类端口/环境异常。
 这不是产品基线通过，也没有被改写成通过。最终回归使用空闲端口 `GIT_PORT=7939`、`SEC_PORT=7937`，
 基线受影响的 socket/安全套件另在干净端口重跑通过。原始失败日志见
-[baseline-npm-test.log](ui5-evidence/baseline-npm-test.log)，最终全量见第 11 节。
+[baseline-npm-test.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/baseline-npm-test.log)，最终全量见第 11 节。
 
 ## 2. 实际修改文件
 
@@ -131,7 +131,7 @@
 5. 诊断快照的导出投影。
 
 结果：**7 passed，0 failed，1 skipped**。跳过项是当前 Windows 环境不允许创建符号链接（`EPERM`），
-不计为通过；代码仍对 symlink 做 `lstat` 拒绝。原始日志见 [logging-leaks.log](ui5-evidence/logging-leaks.log)。
+不计为通过；代码仍对 symlink 做 `lstat` 拒绝。原始日志见 [logging-leaks.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/logging-leaks.log)。
 
 ## 6. 持久化、轮转、崩溃恢复
 
@@ -197,9 +197,9 @@ pi-gui-bugreport-YYYYMMDD-HHmmss.zip
 
 | 检查 | 实际结果 | 证据 |
 |---|---|---|
-| UI5 日志界面（源码） | **23/23，失败 0，10 张真实网页截图** | [最终日志](ui5-evidence/ui5-logs-electron.log)、[results](ui5-evidence/electron-logs/results.json) |
-| UI5 日志界面（包内 public） | **23/23，失败 0，10 张截图** | [最终日志](ui5-evidence/ui5-logs-packaged-electron.log)、[results](ui5-evidence/electron-logs-packaged/results.json) |
-| CDP 视觉矩阵 | **1775/1775 取景断言，失败 0** | [cdp-ui5.log](ui5-evidence/cdp-ui5.log) |
+| UI5 日志界面（源码） | **23/23，失败 0，10 张真实网页截图** | [最终日志](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/ui5-logs-electron.log)、[results](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs/results.json) |
+| UI5 日志界面（包内 public） | **23/23，失败 0，10 张截图** | [最终日志](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/ui5-logs-packaged-electron.log)、[results](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs-packaged/results.json) |
+| CDP 视觉矩阵 | **1775/1775 取景断言，失败 0** | [cdp-ui5.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/cdp-ui5.log) |
 | UI-1 主题 Electron | **489/489，失败 0，65 图** | 本地回归日志 |
 | UI-3 联合 Electron | **243/243，失败 0，107 图** | 本地回归日志 |
 | UI-4 联合 Electron | **427/427，失败 0，75 图** | 本地回归日志 |
@@ -207,7 +207,7 @@ pi-gui-bugreport-YYYYMMDD-HHmmss.zip
 | UI-4 Approval / Feedback | **44/44、9/9，失败 0** | 本地回归日志 |
 | 既有 Runtime Electron | **170/170，失败 0，43 图** | 本地回归日志 |
 | 日志界面重复开关 | 8 次开关后仍只有 1 个弹层/1 个样式表；无控制台错误 | ui5-logs-electron results |
-| Runtime 短时 soak | **26 轮 / 149 checks / 0 失败**；RSS 77→143 MB 后趋平，约 3 分钟，不据此声称长期无增长 | [运行时日志](ui5-evidence/runtime-soak-180s.log)、[JSON](ui5-evidence/soak/runtime-soak-180s.json) |
+| Runtime 短时 soak | **26 轮 / 149 checks / 0 失败**；RSS 77→143 MB 后趋平，约 3 分钟，不据此声称长期无增长 | [运行时日志](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/runtime-soak-180s.log)、[JSON](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/soak/runtime-soak-180s.json) |
 
 日志界面矩阵覆盖 Dark/Light × 700/900/1200/1536、日志查看/导出预览、700px 窄屏；
 没有用 jsdom 替代真实布局截图。UI-2 的原生标题栏真实 Windows 截图结论沿用既有 UI-2 证据，本轮没有重做
@@ -217,8 +217,8 @@ OS 级标题栏/真实 DPI 像素合成。
 
 `npm test` 在最终冻结后运行。**注意：首次全量在加入 UI-5 测试前因本机遗留端口 7799 的
 `tests/git.cjs` 失败；修复 VM logging 桩后用空闲端口重跑。** 原始完整日志：
-[full-npm-test.log](ui5-evidence/full-npm-test.log)，进程退出码文件
-[full-npm-test.exit](ui5-evidence/full-npm-test.exit)。
+[full-npm-test.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/full-npm-test.log)，进程退出码文件
+[full-npm-test.exit](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/full-npm-test.exit)。
 
 **最终实际结果：退出码 0；约 3076.259 秒（2026-10-18 00:06:01–00:57:17 +08:00）；**
 canonical test 脚本有 **137 个顶层 `&&` 入口**，其中 `test:logging` 展开为 logging / logging-leaks /
@@ -246,14 +246,14 @@ node tests/ui5-logs-electron.cjs
 
 最终隔离构建使用本机缓存 Electron ZIP，未联网安装：
 
-- 输出根：见 [final-build-root.txt](ui5-evidence/final-build-root.txt)。
+- 输出根：见 [final-build-root.txt](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/final-build-root.txt)。
 - `scripts/build-app.mjs --rebuild --output-root <全新绝对目录>`：退出 0；日志
-  [final-build.log](ui5-evidence/final-build.log)。
+  [final-build.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/final-build.log)。
 - 包内 `log-core.cjs`、`log-contract.cjs`、`zip.cjs`、`logging.cjs`、`main.cjs` 均存在；
-  打包后端日志测试 **15/15**：[logging-packaged.log](ui5-evidence/logging-packaged.log)。
-- 包内前端 Electron 日志界面 **23/23**：[ui5-logs-packaged-electron.log](ui5-evidence/ui5-logs-packaged-electron.log)。
-- `tests/app-check.cjs`：**26/26，退出 0**：[final-app-check.log](ui5-evidence/final-app-check.log)。
-- `tests/exe-check.cjs`：**49/49，退出 0**：[final-exe-check.log](ui5-evidence/final-exe-check.log)。
+  打包后端日志测试 **15/15**：[logging-packaged.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/logging-packaged.log)。
+- 包内前端 Electron 日志界面 **23/23**：[ui5-logs-packaged-electron.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/ui5-logs-packaged-electron.log)。
+- `tests/app-check.cjs`：**26/26，退出 0**：[final-app-check.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/final-app-check.log)。
+- `tests/exe-check.cjs`：**49/49，退出 0**：[final-exe-check.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/final-exe-check.log)。
 - 入口 `Pi GUI.exe`：246,324,736 字节，SHA-256 `4277314cc0d4bbd758581055181d770ba8ff024537514e0e70d1e36ad8ec518a`。
 - SEA `build/Pi GUI.exe`：99,742,720 字节，SHA-256 `c434fc5959874562a575621c3509f96b47a48b8ff9d83e45f2e0d1a3ce71d87d`。
 - 整包目录：344,400,981 字节（脚本报告 328.4 MB）；入口 exe hash 不代表整包 hash。
@@ -285,12 +285,12 @@ node tests/ui5-logs-electron.cjs
 
 ## 15. 截图与证据
 
-- [日志概览 Dark 1200](ui5-evidence/electron-logs/logs-dark-1200-overview.png)
-- [日志概览 Light 700](ui5-evidence/electron-logs/logs-light-700-overview.png)
-- [日志查看 Dark 1200](ui5-evidence/electron-logs/logs-dark-1200-viewer.png)
-- [导出预览 Dark 1200](ui5-evidence/electron-logs/logs-dark-1200-export.png)
-- [导出预览 Light 700](ui5-evidence/electron-logs/logs-light-700-export.png)
-- 其余主题/宽度截图与结果见 [results.json](ui5-evidence/electron-logs/results.json)。
-- 包内前端结果与截图说明见 [packaged results](ui5-evidence/electron-logs-packaged/results.json)。
+- [日志概览 Dark 1200](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs/logs-dark-1200-overview.png)
+- [日志概览 Light 700](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs/logs-light-700-overview.png)
+- [日志查看 Dark 1200](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs/logs-dark-1200-viewer.png)
+- [导出预览 Dark 1200](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs/logs-dark-1200-export.png)
+- [导出预览 Light 700](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs/logs-light-700-export.png)
+- 其余主题/宽度截图与结果见 [results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs/results.json)。
+- 包内前端结果与截图说明见 [packaged results](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-evidence/electron-logs-packaged/results.json)。
 
 所有截图均为真实 Electron `capturePage` 网页像素，不包含原生窗口装饰；不冒充 OS 级截图。

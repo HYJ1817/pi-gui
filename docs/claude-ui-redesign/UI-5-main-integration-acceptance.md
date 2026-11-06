@@ -18,7 +18,7 @@
 的实际值。`5454987` 是包含全部 UI-1 至 UI-5 历史的 merge commit。
 
 原始测试日志、截图和构建产物哈希见
-[ui5-main-integration-evidence/README.md](ui5-main-integration-evidence/README.md)。
+[ui5-main-integration-evidence/README.md](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-main-integration-evidence/README.md)。
 
 开始前重新执行了 `git fetch origin --prune`，远端两个参考 SHA 与任务给出的值一致。
 主 checkout 的 `main` 分支仍停在原本地值 `3e8d729`，没有 reset 或切换；原有

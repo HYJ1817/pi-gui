@@ -37,7 +37,7 @@
 | 22-49-27 | 2559×1528 | Windows 桌面和缩小窗口；不等同应用 viewport |
 | 22-54-48 | 1949×1334 | 长对话与底部工具条 |
 
-20 图均通过真实文件读取并逐张单独查看，另建立 [缩略索引](ui5-visual-evidence/reference-contact.png)。主比较使用22-32-06、22-32-46、22-33-06、22-41-26、22-42-35、22-43-12、22-44-26、22-46-48；Slash补充使用22-41-42。缩略索引只用于寻找场景，不作为字体/线宽测量依据。没有参考图不可访问。
+20 图均通过真实文件读取并逐张单独查看，另建立 [缩略索引](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/reference-contact.png)。主比较使用22-32-06、22-32-46、22-33-06、22-41-26、22-42-35、22-43-12、22-44-26、22-46-48；Slash补充使用22-41-42。缩略索引只用于寻找场景，不作为字体/线宽测量依据。没有参考图不可访问。
 
 截图包含 Windows 窗口控制，不能用截图物理尺寸直接当 CSS 尺寸。布局素材指出 1300×889 CSS px、150% DPI；主要比较整体结构与约数，完整窗口装饰另列验收限制。没有任意“相似度百分比”。
 
@@ -47,9 +47,9 @@
 
 全部写盘 fixture 位于 `os.tmpdir()/ui5-final-*`，使用临时 userData、PI_GUI_DATA、日志和上传目录。会话内容经生产消息/工具模块渲染。没有加载或写入真实会话。capturePage 是网页像素，**不含 Windows 装饰，也不保证包含子 WebContentsView 的最终桌面合成像素**。
 
-首批完整矩阵 60/60，补附件矩阵 61/61，Renderer errors 均为0；原始结构化记录保存在 [attempt-history](ui5-visual-evidence/attempt-history/)。前者缺附件，不冒称覆盖。执行器最初试跑存在脚本入口名错误，已按源码修正后全矩阵重跑；它不是产品错误。临时目录清理曾报 EPERM，后续须按本任务路径与进程归属核对，不结束用户进程。
+首批完整矩阵 60/60，补附件矩阵 61/61，Renderer errors 均为0；原始结构化记录保存在 [attempt-history](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/attempt-history/)。前者缺附件，不冒称覆盖。执行器最初试跑存在脚本入口名错误，已按源码修正后全矩阵重跑；它不是产品错误。临时目录清理曾报 EPERM，后续须按本任务路径与进程归属核对，不结束用户进程。
 
-**冻结后的修改前矩阵**：[before-approved/results.json](ui5-visual-evidence/before-approved/results.json)，86项中80通过、6项预期布局差异失败，Renderer errors=0；73张capturePage图及4张独立Win32截图。六项失败分别为欢迎区位置、Composer体量、左栏比例、工具组底色、右栏开启时的标题可读宽度和Slash菜单宽度，未通过的目标不会计为“基线全绿”。原始日志 [before-approved.log](ui5-visual-evidence/before-approved.log)。四张Win32图均通过所有权/遮挡检查，`GetDpiForWindow=144`（150%）；涵盖Browser、Browser+Modal、Dark主窗口和Light主窗口。没有把网页截图冒充Windows截图。
+**冻结后的修改前矩阵**：[before-approved/results.json](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/before-approved/results.json)，86项中80通过、6项预期布局差异失败，Renderer errors=0；73张capturePage图及4张独立Win32截图。六项失败分别为欢迎区位置、Composer体量、左栏比例、工具组底色、右栏开启时的标题可读宽度和Slash菜单宽度，未通过的目标不会计为“基线全绿”。原始日志 [before-approved.log](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/before-approved.log)。四张Win32图均通过所有权/遮挡检查，`GetDpiForWindow=144`（150%）；涵盖Browser、Browser+Modal、Dark主窗口和Light主窗口。没有把网页截图冒充Windows截图。
 
 | 场景 | 当前真实截图（相对 ui5-visual-evidence/before-approved/） |
 |---|---|

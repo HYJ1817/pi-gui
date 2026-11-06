@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # Z3-A：pi-GUI 受控 Gen UI 与交互式可视化 验收报告
 
 **提交/目标**：Z3-A 交互图表 MVP 及最终收口修复（受控 Gen UI、参数联动、Composer 引用、Classic 真实消息 DOM 绑定、流式增量替换失效防护、Runtime 真实渲染链路、消除测试假阳性、精确零基线与会话生命周期隔离）  
@@ -61,17 +63,17 @@
 2. **右栏折线图呈现**：[`02-line-chart-in-right-pane.png`](evidence/z3/02-line-chart-in-right-pane.png)
    - 点击卡片按钮无缝滑出右侧工作区面板（复用 Secondary Surface），主聊天界面不脱卸。
    - 顶部显示标题、数据项概览、重置与引用按钮；中部为参数交互栏；下方为自适应 SVG 折线图与坐标网格。
-3. **切换为柱状图形态**：[`03-bar-chart-switched.png`](evidence/z3/03-bar-chart-switched.png)
+3. **切换为柱状图形态**：[`03-bar-chart-switched.png`](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z3/03-bar-chart-switched.png)
    - 点击形态栏的「柱状图」按钮，即时转换为分组柱状图，SVG 自适应计算零基线与柱条几何。
-4. **阈值告警高亮**：[`04-threshold-highlight.png`](evidence/z3/04-threshold-highlight.png)
+4. **阈值告警高亮**：[`04-threshold-highlight.png`](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z3/04-threshold-highlight.png)
    - 调整阈值滑块为 50%，SVG 自动画出橙红色虚线参考线与数值标签，超过阈值的点与柱条自动获得 `is-alert` 警示样式。
-5. **引用配置与摘要到 Composer**：[`05-quoted-to-composer.png`](evidence/z3/05-quoted-to-composer.png)
+5. **引用配置与摘要到 Composer**：[`05-quoted-to-composer.png`](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z3/05-quoted-to-composer.png)
    - 点击「引用到对话」，当前图表名称、形态、当前激活系列（在显示范围内）的均值/极值、超标统计与参数以紧凑 Markdown 格式追加至输入框，保留原草稿，不自动发送。
-6. **浅色主题自适应**：[`06-light-theme-adaptation.png`](evidence/z3/06-light-theme-adaptation.png)
+6. **浅色主题自适应**：[`06-light-theme-adaptation.png`](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z3/06-light-theme-adaptation.png)
    - 切换到浅色模式，卡片背景、边框、坐标轴文本与网格线完美适配高对比度。
-7. **窄窗口自适应布局**：[`07-narrow-window-responsive.png`](evidence/z3/07-narrow-window-responsive.png)
+7. **窄窗口自适应布局**：[`07-narrow-window-responsive.png`](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z3/07-narrow-window-responsive.png)
    - 窗口缩窄至 760px 时，右栏自动进入受控 Overlay 模式，聊天地板受到保护。
-8. **多图表无冲突切换**：[`08-second-chart-switched.png`](evidence/z3/08-second-chart-switched.png)
+8. **多图表无冲突切换**：[`08-second-chart-switched.png`](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/z3/08-second-chart-switched.png)
    - 点击消息流中第二个图表卡片（编译耗时柱状图），旧图表及参数监听器干净销毁，右栏即时刷新为新图表。
 
 ---

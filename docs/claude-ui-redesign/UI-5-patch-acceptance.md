@@ -16,8 +16,8 @@ Worktree：`C:\pi-GUI-ui5`
 ### 1.1 实际失败复现
 
 用基线提交的 `lib/log-contract.cjs` / `lib/log-core.cjs` 运行
-[`ui5-patch-evidence/repro-baseline.cjs`](ui5-patch-evidence/repro-baseline.cjs)，
-输出保存在 [`ui5-patch-evidence/p1-baseline-repro.log`](ui5-patch-evidence/p1-baseline-repro.log)：
+[`ui5-patch-evidence/repro-baseline.cjs`](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-patch-evidence/repro-baseline.cjs)，
+输出保存在 [`ui5-patch-evidence/p1-baseline-repro.log`](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-patch-evidence/p1-baseline-repro.log)：
 
 ```text
 连续调用 token/code/id（同一 secret）：
@@ -64,7 +64,7 @@ Worktree：`C:\pi-GUI-ui5`
 - 经真实 HTTP `/api/logs/events` 连续/交错提交后，条目 API、状态 API、
   原始文件、崩溃文件和导出 ZIP 均不含 secret。
 
-原始日志：[`ui5-patch-evidence/p1a-after-fix.log`](ui5-patch-evidence/p1a-after-fix.log)。
+原始日志：[`ui5-patch-evidence/p1a-after-fix.log`](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-patch-evidence/p1a-after-fix.log)。
 
 ## 2. P1-B：Renderer 日志断线后永久失效
 
@@ -120,7 +120,7 @@ Worktree：`C:\pi-GUI-ui5`
 8. 真实本地 HTTP 后端重启 → 断线期间批次不重放 → 恢复事件落盘并进入 ZIP，
    且 ZIP 中存在 `logs.client_degraded`。
 
-原始日志：[`ui5-patch-evidence/p1b-after-fix.log`](ui5-patch-evidence/p1b-after-fix.log)。
+原始日志：[`ui5-patch-evidence/p1b-after-fix.log`](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-patch-evidence/p1b-after-fix.log)。
 
 ## 3. P3：重复脱敏辅助函数
 
@@ -182,14 +182,14 @@ docs/claude-ui-redesign/         补丁验收报告与证据
 来自此前被中断的全量运行）占用。停止该进程后单独复跑 `tests/git.cjs` 为
 **161/161**。这是环境假红，不修改任何产品/测试断言；随后重新执行完整
 `npm test`，原始日志见
-[`ui5-patch-evidence/full-npm-test.log`](ui5-patch-evidence/full-npm-test.log)
+[`ui5-patch-evidence/full-npm-test.log`](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-patch-evidence/full-npm-test.log)
 （假红现场）与
-[`ui5-patch-evidence/full-npm-test-rerun.log`](ui5-patch-evidence/full-npm-test-rerun.log)。
+[`ui5-patch-evidence/full-npm-test-rerun.log`](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-patch-evidence/full-npm-test-rerun.log)。
 
 最终完整 `npm test`：**退出码 0**，约 **3020 秒**，`FAIL` / `not ok` 计数 **0**。
 汇总中明确报告的 environment skip 共 **19** 条：logging symlink 1、SACL witness 8、
 inplace research 2、Object witness 8；跳过不计入通过。原始日志：
-[`ui5-patch-evidence/full-npm-test-rerun.log`](ui5-patch-evidence/full-npm-test-rerun.log)。
+[`ui5-patch-evidence/full-npm-test-rerun.log`](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-patch-evidence/full-npm-test-rerun.log)。
 第一次全量运行因中断残留的 7799 端口进程出现一次环境假红；清理后复跑通过，
 没有删改任何断言。
 

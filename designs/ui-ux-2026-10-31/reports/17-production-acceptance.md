@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # Refined 生产实施与验收记录
 
 > 第二轮 Runtime、设置详情与最终验证见 [21-completion-acceptance.md](21-completion-acceptance.md)。本文件保留首轮生产改造和证据历史。
@@ -44,7 +46,7 @@
 | 打包真实窗口 | `tools/verify-production-package.cjs` | 实际新 exe + 随包 renderer/preload + TEMP 离线 fixture；**147 个前端资源摘要相同，5/5 检查，3 张真实截图**。不冒充真实后端或模型 E2E |
 | 打包后端 | `node tests/app-check.cjs --output-root <最终目录>` | **26/26**；缺失的 TEMP PDF fixture 用既有 `npm run fixtures` 离线生成后重跑。源码/打包 UI、打包后端、安装升级分别判断 |
 | 交付摘要复核 | 只读 SHA256 比对 | **699 个冻结输入文件未变化、147 个前端资源一致**；exe、server.cjs、main.cjs 与构建清单一致，见 [最终摘要检查](../evidence/production-final-integrity.json)。这不是重复的窗口或后端测试 |
-| 完整 canonical | `npm test` + 同清单累计续跑 | **累计 231 条命令执行完成；不是单次 npm test 成功**。原始完整运行退出码1、1215.881秒，前106条完成后遇环境阻断；第107–231条按同清单续跑，**125/125 条退出码0、3189.601秒**，2026-11-01 15:35:58 +08:00结束。前后输入摘要相同。见 [续跑记录](../evidence/production-canonical-continuation/run.json)；[原始日志](../evidence/production-canonical-frozen/npm-test.log) 与 [run.json](../evidence/production-canonical-frozen/run.json) 保留初始失败。SACL和符号链接跳过场景不计入成功断言，明细见第14项 |
+| 完整 canonical | `npm test` + 同清单累计续跑 | **累计 231 条命令执行完成；不是单次 npm test 成功**。原始完整运行退出码1、1215.881秒，前106条完成后遇环境阻断；第107–231条按同清单续跑，**125/125 条退出码0、3189.601秒**，2026-11-01 15:35:58 +08:00结束。前后输入摘要相同。见 [续跑记录](../evidence/production-canonical-continuation/run.json)；[原始日志](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/designs/ui-ux-2026-10-31/evidence/production-canonical-frozen/npm-test.log) 与 [run.json](../evidence/production-canonical-frozen/run.json) 保留初始失败。SACL和符号链接跳过场景不计入成功断言，明细见第14项 |
 
 ### 截图与人工视觉检查
 

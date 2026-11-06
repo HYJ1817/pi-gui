@@ -56,13 +56,13 @@
 
 | 场景 | 修改前 | 最终 |
 |---|---|---|
-| 空会话 | [before](ui5-visual-evidence/before-approved/dark-1200-empty.png) | [after](ui5-visual-evidence/current-final/dark-1200-empty.png) |
-| 工具与代码 | [before](ui5-visual-evidence/before-approved/dark-1200-tools.png) | [after](ui5-visual-evidence/current-final/dark-1200-tools.png) |
-| 输入/附件 | [before](ui5-visual-evidence/before-approved/dark-1200-attachment.png) | [after](ui5-visual-evidence/current-final/dark-1200-attachment.png) |
-| Slash | [before](ui5-visual-evidence/before-approved/dark-1200-slash.png) | [after](ui5-visual-evidence/current-final/dark-1200-slash.png) |
-| Changes+标题 | [before](ui5-visual-evidence/before-approved/dark-1200-changes.png) | [after](ui5-visual-evidence/current-final/dark-1200-changes.png) |
-| 长对话底边 | [中间缺陷](ui5-visual-evidence/final-electron/light-900-multiline.png) | [最终](ui5-visual-evidence/current-final/light-900-multiline.png) |
-| 原生Browser | [before](ui5-visual-evidence/before-approved/native-dark-browser.png) | [after](ui5-visual-evidence/current-final/native-dark-browser.png) |
+| 空会话 | [before](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/before-approved/dark-1200-empty.png) | [after](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/current-final/dark-1200-empty.png) |
+| 工具与代码 | [before](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/before-approved/dark-1200-tools.png) | [after](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/current-final/dark-1200-tools.png) |
+| 输入/附件 | [before](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/before-approved/dark-1200-attachment.png) | [after](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/current-final/dark-1200-attachment.png) |
+| Slash | [before](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/before-approved/dark-1200-slash.png) | [after](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/current-final/dark-1200-slash.png) |
+| Changes+标题 | [before](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/before-approved/dark-1200-changes.png) | [after](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/current-final/dark-1200-changes.png) |
+| 长对话底边 | [中间缺陷](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/final-electron/light-900-multiline.png) | [最终](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/current-final/light-900-multiline.png) |
+| 原生Browser | [before](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/before-approved/native-dark-browser.png) | [after](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui5-visual-evidence/current-final/native-dark-browser.png) |
 
 前后同场景使用相同窗口/裁切执行器。参考图另按其原尺寸和150%DPI解释；没有把不同DPI或crop直接当像素误差。最终1300×889 CSS请求下系统会有舍入（实际geometry记录为准），Win32客户区1949×1334，接近参考原图尺寸。截图对照是人工设计判断，不是功能等价声明。
 

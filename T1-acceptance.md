@@ -1,3 +1,5 @@
+> 2026-11-06 第二轮瘦身：本页移除的历史截图/完整日志链接固定到清理前提交 `2e70463183218ddf3a10972789667d6be5c294df`；原始结果和失败记录保留，不能作为当前代码通过证明。
+
 # T1 只读 Specs 项目知识系统验收报告
 
 日期：2026-10-21
@@ -108,7 +110,7 @@ Specs 入口、跨文档链接、标题锚点、未索引路径拒绝、1200/720
 
 ### 1200 宽，文档树与正文
 
-![Specs populated](docs/evidence/t1-specs/specs-populated-1200.png)
+![Specs populated](https://github.com/HYJ1817/pi-gui/blob/2e70463183218ddf3a10972789667d6be5c294df/docs/evidence/t1-specs/specs-populated-1200.png)
 
 ### 720 宽，覆盖式右栏
 

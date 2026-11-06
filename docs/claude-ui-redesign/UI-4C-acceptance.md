@@ -117,12 +117,12 @@ Electron 1440×900，`visual-harness` 离线 fixture，隔离临时 `userData`�
 
 | 截图 | 内容 |
 |---|---|
-| [ui4-toasts-dark.png](ui4c-evidence/ui4-toasts-dark.png) | 四种 Toast、右键关闭、持久错误、避开 Composer |
-| [ui4-toasts-light.png](ui4c-evidence/ui4-toasts-light.png) | 同一组件的浅色主题 |
-| [ui4-notice-dark.png](ui4c-evidence/ui4-notice-dark.png) | `bad` 常驻条、两个既有动作、关闭 |
-| [ui4-notice-light.png](ui4c-evidence/ui4-notice-light.png) | `unknown` 中性态，不画成成功/失败 |
-| [ui4-empty-state-dark.png](ui4c-evidence/ui4-empty-state-dark.png) | 真实 `applyProjectState()` 驱动的无项目空状态 |
-| [ui4-narrow-right-pane.png](ui4c-evidence/ui4-narrow-right-pane.png) | 700×600、右栏打开：Toast 换行且不压 Composer/右栏 |
+| [ui4-toasts-dark.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4c-evidence/ui4-toasts-dark.png) | 四种 Toast、右键关闭、持久错误、避开 Composer |
+| [ui4-toasts-light.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4c-evidence/ui4-toasts-light.png) | 同一组件的浅色主题 |
+| [ui4-notice-dark.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4c-evidence/ui4-notice-dark.png) | `bad` 常驻条、两个既有动作、关闭 |
+| [ui4-notice-light.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4c-evidence/ui4-notice-light.png) | `unknown` 中性态，不画成成功/失败 |
+| [ui4-empty-state-dark.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4c-evidence/ui4-empty-state-dark.png) | 真实 `applyProjectState()` 驱动的无项目空状态 |
+| [ui4-narrow-right-pane.png](https://github.com/HYJ1817/pi-gui/blob/d5494993d8f57072b21528e7a00622d047625fa2/docs/claude-ui-redesign/ui4c-evidence/ui4-narrow-right-pane.png) | 700×600、右栏打开：Toast 换行且不压 Composer/右栏 |
 
 布局断言同时覆盖：页面无横向滚动、Toast 底边在 Composer 顶边之上、右栏打开时 Toast 右边不超过
 右栏左边、Notice actions 不溢出。jsdom 只证明语义与事件，排版结论来自 Electron。
