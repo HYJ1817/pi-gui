@@ -295,8 +295,9 @@ export function renderVizChart(container, {
   // Tooltip 控制逻辑
   function showTip(event, label, sName, val, isOverThreshold) {
     const rect = wrapper.getBoundingClientRect();
-    const clientX = event.clientX || event.touches?.[0]?.clientX || 0;
-    const clientY = event.clientY || event.touches?.[0]?.clientY || 0;
+    const target = event.currentTarget.getBoundingClientRect();
+    const clientX = event.type === 'focus' ? target.left + target.width / 2 : event.clientX ?? event.touches?.[0]?.clientX ?? rect.left;
+    const clientY = event.type === 'focus' ? target.top + target.height / 2 : event.clientY ?? event.touches?.[0]?.clientY ?? rect.top;
     const offsetX = clientX - rect.left;
     const offsetY = clientY - rect.top;
 
@@ -320,9 +321,11 @@ export function renderVizChart(container, {
     tooltip.hidden = false;
 
     // 智能防溢出定位
-    const tipWidth = 140;
-    const left = offsetX + tipWidth > rect.width ? Math.max(10, offsetX - tipWidth - 10) : offsetX + 12;
-    const top = Math.max(10, offsetY - 40);
+    tooltip.style.maxWidth = Math.max(0, rect.width - 16) + 'px';
+    tooltip.style.maxHeight = Math.max(0, rect.height - 16) + 'px';
+    const tip = tooltip.getBoundingClientRect();
+    const left = Math.max(0, Math.min(offsetX + tip.width + 12 > rect.width ? offsetX - tip.width - 12 : offsetX + 12, rect.width - tip.width - 8));
+    const top = Math.max(0, Math.min(offsetY - tip.height - 8, rect.height - tip.height - 8));
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
   }

@@ -162,6 +162,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
   }
   document.addEventListener('pi-gui:workspace-view', sync);
   menu.addEventListener('keydown', event => {
+    if (event.defaultPrevented) return;
     if (event.key === 'Escape' && $('modal').hidden && $('confirmLayer').hidden) {
       event.preventDefault(); event.stopPropagation();
       returnToWorkspace(); trigger.focus();

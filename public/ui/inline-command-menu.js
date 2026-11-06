@@ -177,6 +177,8 @@ export function createInlineCommandMenu(options = {}) {
     emptyEl.hidden = true;
     emptyEl.setAttribute('role', 'status');
     menuEl.append(listEl, emptyEl);
+    const footer = node('div', 'ui3-inline-footer', `↑ ↓ 导航 · Enter${acceptTab ? ' / Tab' : ''} 选择 · Esc 关闭`);
+    menuEl.appendChild(footer);
     host = (preferredHost && preferredHost.isConnected !== false) ? preferredHost : doc.body;
     host.appendChild(menuEl);
     /* 用事件委托处理点击：列表每次重画都换新节点，逐个挂 onclick 会漏。 */
@@ -217,7 +219,14 @@ export function createInlineCommandMenu(options = {}) {
     if (!menuEl) return;
     emptyEl.hidden = items.length > 0;
     listEl.replaceChildren();
+    let group = null;
     items.forEach((cmd, i) => {
+      if (cmd.group && cmd.group !== group) {
+        const heading = node('div', 'ui3-inline-section', cmd.group);
+        heading.setAttribute('role', 'presentation');
+        listEl.appendChild(heading);
+      }
+      group = cmd.group || null;
       const opt = node('div', 'ui3-inline-item' + (i === index ? ' on' : ''));
       opt.setAttribute('role', 'option');
       opt.id = `ui3-inline-opt-${uid}-${i}`;
@@ -225,7 +234,6 @@ export function createInlineCommandMenu(options = {}) {
       opt.dataset.commandId = cmd.id;
       opt.setAttribute('aria-selected', String(i === index));
       opt.append(node('span', 'ui3-inline-title', cmd.title));
-      if (cmd.group) opt.append(node('span', 'ui3-inline-group', cmd.group));
       const hint = hintFor ? hintFor(cmd) : cmd.hint;
       if (hint) opt.append(node('span', 'ui3-inline-hint', hint));
       listEl.appendChild(opt);
@@ -258,8 +266,8 @@ export function createInlineCommandMenu(options = {}) {
     if (!menuEl || menuEl.hidden) return;
     const win = doc.defaultView || (typeof window !== 'undefined' ? window : null);
     if (!win || typeof input.getBoundingClientRect !== 'function') return;
-    const anchor = input.getBoundingClientRect();
-    const composerTop = input.closest?.('.composer-box')?.getBoundingClientRect().top ?? anchor.top;
+    const anchor = input.closest?.('.composer-box')?.getBoundingClientRect() || input.getBoundingClientRect();
+    const composerTop = anchor.top;
     const vw = win.innerWidth || 0;
     const vh = win.innerHeight || 0;
     /* 右栏是**原生 WebContentsView**，z-index 管不着。菜单不假称能盖住它，

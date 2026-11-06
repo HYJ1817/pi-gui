@@ -85,6 +85,14 @@ function buildToolbar(host) {
   const viewport = document.createElement('div');
   viewport.className = 'rp-viewport';
   viewport.id = 'browserViewport';
+  const empty = document.createElement('div');
+  empty.className = 'browser-empty';
+  const emptyTitle = document.createElement('strong');
+  emptyTitle.textContent = '预览网页';
+  const emptyHint = document.createElement('p');
+  emptyHint.textContent = '在上方输入地址，打开 HTTPS 网站或本机开发服务。';
+  empty.append(emptyTitle, emptyHint);
+  viewport.appendChild(empty);
 
   const error = document.createElement('div');
   error.className = 'rp-error';
@@ -97,7 +105,7 @@ function buildToolbar(host) {
   agentBar.hidden = true;
   agentBar.append(agent, agentStatus);
   host.insertBefore(agentBar, viewport);
-  return { bar, back, forward, reload, address, external, split, close, viewport, error, agent, agentStatus, agentBar };
+  return { bar, back, forward, reload, address, external, split, close, viewport, empty, error, agent, agentStatus, agentBar };
 }
 
 /**
@@ -119,9 +127,21 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
   let agentState = { available: false, enabled: false, busy: false };
   let agentRequest = false;
   let agentRevision = 0;
+  let paneOccluded = false;
+  let nativeOccluded = null;
   const unsubs = [];
 
   function render() {
+    // This is only the app-owned empty document, never the contents of a site.
+    // Compose with the existing pane occlusion instead of covering a native view.
+    const blank = !state.url || state.url === 'about:blank';
+    ui.empty.hidden = !blank;
+    const occluded = paneOccluded || blank;
+    if (!disposed && nativeOccluded !== occluded) {
+      nativeOccluded = occluded;
+      bridge.setOccluded(occluded);
+      if (!occluded) pane.refresh?.(); // setOccluded(true) invalidates old bounds
+    }
     const hasAgent = typeof bridge.setAgentControl === 'function' && typeof bridge.agentStatus === 'function';
     ui.agentBar.hidden = !hasAgent;
     ui.agent.hidden = !hasAgent;
@@ -215,7 +235,7 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
       // 量出来的矩形交给主进程，由它 clamp 后再摆 WebContentsView
       unsubs.push(pane.onViewport((rect) => bridge.setBounds(rect)));
       // 有弹层盖上来时把原生 view 摘下去，否则它会压在弹层上面
-      unsubs.push(pane.onOccluded((occluded) => bridge.setOccluded(occluded)));
+      unsubs.push(pane.onOccluded((occluded) => { paneOccluded = occluded; render(); }));
 
       render();
     }
@@ -232,6 +252,8 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
       }
     }
     host.remove();
+    nativeOccluded = null;
+    paneOccluded = false;
     state = { url: '', title: '', loading: false, canGoBack: false, canGoForward: false, error: null };
   }
 

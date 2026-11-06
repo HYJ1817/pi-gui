@@ -41,6 +41,18 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     for (const name of ['模型与账户', 'Agent 能力', '扩展与 MCP', '应用与更新', '诊断']) assert.ok(labels.includes(name), name);
     assert.ok([...$('globalMoreMenu').querySelectorAll('button')].every(b => typeof b.onclick === 'function'));
   });
+  await check('extension subpages project their real current navigation and title', async () => {
+    for (const [id, tab, title] of [['navMcp', 'mcp', 'MCP 配置'], ['navCapabilities', 'capabilities', '能力状态'], ['navExtensions', 'skills', 'Skills 与扩展']]) {
+      $(id).click(); await tick();
+      assert.equal(d.querySelector('.ext-tab[aria-selected="true"]').dataset.tab, tab);
+      assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, id);
+      assert.equal($('workViewTitle').textContent, title);
+    }
+    $('extensionsTabMcp').click();
+    assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, 'navMcp');
+    assert.equal($('workViewTitle').textContent, 'MCP 配置');
+    $('navGlobalMore').click();
+  });
   await check('Settings Escape returns focus to its visible trigger', () => {
     d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert.equal($('globalMoreMenu').hidden, true); assert.equal(d.activeElement, $('navGlobalMore'));

@@ -32,7 +32,7 @@
   padding: 6px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  max-height: min(46vh, 340px);
+  max-height: min(46vh, 380px);
 }
 
 .ui3-inline-item {
@@ -57,14 +57,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ui3-inline-item .ui3-inline-group {
-  flex: 0 0 auto;
-  padding: 1px 6px;
-  border-radius: var(--ui-radius-pill);
-  background: var(--ds-tile);
-  color: var(--ds-text-muted);
-  font-size: var(--ui-font-caption);
-}
+.ui3-inline-section {padding:8px 10px 4px;color:var(--ds-text-muted);font-size:var(--ui-font-caption)}
+.ui3-inline-footer {flex:none;padding:8px 16px;border-top:1px solid var(--ds-border-default);color:var(--ds-text-muted);font-size:var(--ui-font-caption)}
 .ui3-inline-item .ui3-inline-hint {
   flex: 0 0 auto;
   color: var(--ds-text-muted);
@@ -113,9 +107,6 @@
   }
   .ui3-inline-item {
     padding: 9px 8px;
-  }
-  .ui3-inline-item .ui3-inline-group {
-    display: none; /* 很窄时先让位给名称，分组仍由顺序体现 */
   }
 }
 

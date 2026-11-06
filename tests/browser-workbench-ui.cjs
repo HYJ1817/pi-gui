@@ -27,8 +27,16 @@ const tick = async () => { for (let i = 0; i < 6; i++) await new Promise(r => se
   const browser = attachBrowserPane(pane, { openWorkbench: openSplitWorkbench });
   browser.open(); await tick();
   const surface = browser.surface();
+  check('initial app-owned empty page provides guidance and hides the native blank view', () => {
+    assert.equal(surface.ui.empty.hidden, false);
+    assert.match(surface.ui.empty.textContent, /输入地址/);
+    assert.equal(events.filter(e => e[0] === 'occluded').at(-1)[1], true);
+  });
   surface.ui.address.blur();
   for (const f of listeners) f({ url: 'http://localhost:3000/retained' });
+  check('navigation reveals the original native page without changing its contents', () => {
+    assert.equal(surface.ui.empty.hidden, true);
+  });
   check('single Browser opens with one state subscription', () => assert.equal(listeners.size, 1));
   check('Browser offers controlled split entry', () => assert.ok(surface.ui.split));
   browser.openSplit(); await tick();
@@ -38,6 +46,7 @@ const tick = async () => { for (let i = 0; i < 6; i++) await new Promise(r => se
   split.getBoundingClientRect = () => ({ top: 0, height: 700, width: 420 });
   surface.ui.viewport.getBoundingClientRect = () => ({ left: 600, top: 100, width: 420, height: 280 });
   pane.refresh(); await tick();
+  check('a navigated measured viewport releases blank-page occlusion', () => assert.equal(events.filter(e => e[0] === 'occluded').at(-1)[1], false));
   check('right pane delivers Browser viewport rather than whole workbench', () => assert.deepEqual(events.filter(e => e[0] === 'bounds').at(-1)[1], { x: 600, y: 100, width: 420, height: 280 }));
   const occluded = () => events.filter(e => e[0] === 'occluded').at(-1)[1];
   Object.defineProperty(window, 'innerWidth', { value: 720, configurable: true });
