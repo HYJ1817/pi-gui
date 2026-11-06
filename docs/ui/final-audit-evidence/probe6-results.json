@@ -1,0 +1,93 @@
+{
+  "sha": "326cb3284c5bf67398290ca4cd6ea8bfd5ee8496",
+  "sandbox": true,
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-independent-audit-XzNIkl",
+  "scenes": [
+    {
+      "id": "navMcp",
+      "selection": {
+        "current": [
+          {
+            "id": "navExtensions",
+            "current": "page"
+          }
+        ],
+        "selected": "mcp",
+        "title": "Skills 与扩展"
+      }
+    },
+    {
+      "id": "navCapabilities",
+      "selection": {
+        "current": [
+          {
+            "id": "navExtensions",
+            "current": "page"
+          }
+        ],
+        "selected": "capabilities",
+        "title": "Skills 与扩展"
+      }
+    },
+    {
+      "id": "navExtensions",
+      "selection": {
+        "current": [
+          {
+            "id": "navExtensions",
+            "current": "page"
+          }
+        ],
+        "selected": "skills",
+        "title": "Skills 与扩展"
+      }
+    }
+  ],
+  "searchDown": {
+    "focused": "navShortcutHelp",
+    "first": "navAppearance"
+  },
+  "viz": {
+    "visible": true,
+    "background": "rgb(32, 32, 36)",
+    "color": "rgb(36, 36, 36)",
+    "text": "数值: 1",
+    "theme": "light",
+    "rect": {
+      "x": 12,
+      "y": 231.7916717529297,
+      "width": 100,
+      "height": 50.29166793823242,
+      "top": 231.7916717529297,
+      "right": 112,
+      "bottom": 282.0833396911621,
+      "left": 12
+    }
+  },
+  "vizWrapper": {
+    "x": 830,
+    "y": 221.7916717529297,
+    "width": 360,
+    "height": 565.5416870117188,
+    "top": 221.7916717529297,
+    "right": 1190,
+    "bottom": 787.3333587646484,
+    "left": 830
+  },
+  "vizHover": {
+    "rect": {
+      "x": 876,
+      "y": 335.9895935058594,
+      "width": 100,
+      "height": 50.29166793823242,
+      "top": 335.9895935058594,
+      "right": 976,
+      "bottom": 386.2812614440918,
+      "left": 876
+    },
+    "background": "rgb(32, 32, 36)",
+    "color": "rgb(36, 36, 36)",
+    "buttonBackground": "rgb(42, 42, 46)",
+    "buttonColor": "rgb(36, 36, 36)"
+  }
+}

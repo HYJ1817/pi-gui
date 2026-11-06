@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "sha": "326cb3284c5bf67398290ca4cd6ea8bfd5ee8496",
+  "runId": "42138148246",
+  "runAttempt": "1",
+  "event": "push",
+  "planDigest": "617b6ca0abdaf1cc7b1a16e3fcae1b0414b126254bf74fcf02fc514a4f2edf4c",
+  "allPassed": true,
+  "dataComplete": true,
+  "hasUnfinishedRecords": false,
+  "counts": {
+    "pending": 0,
+    "running": 0,
+    "passed": 234,
+    "failed": 0,
+    "cancelled": 0,
+    "interrupted": 0,
+    "skipped": 0
+  },
+  "unexecuted": 0,
+  "groups": [
+    {
+      "group": "core",
+      "status": "passed",
+      "durationMs": 391652,
+      "planned": 158,
+      "completed": 158,
+      "issues": [],
+      "valid": true
+    },
+    {
+      "group": "ui",
+      "status": "passed",
+      "durationMs": 111909,
+      "planned": 24,
+      "completed": 24,
+      "issues": [],
+      "valid": true
+    },
+    {
+      "group": "security",
+      "status": "passed",
+      "durationMs": 893422,
+      "planned": 27,
+      "completed": 27,
+      "issues": [],
+      "valid": true
+    },
+    {
+      "group": "native",
+      "status": "passed",
+      "durationMs": 784517,
+      "planned": 4,
+      "completed": 4,
+      "issues": [],
+      "valid": true
+    },
+    {
+      "group": "faults",
+      "status": "passed",
+      "durationMs": 866638,
+      "planned": 21,
+      "completed": 21,
+      "issues": [],
+      "valid": true
+    }
+  ],
+  "failures": [],
+  "slowest": [
+    {
+      "group": "faults",
+      "command": "node tests/session-revert-object-faults.cjs",
+      "durationMs": 622215.8309
+    },
+    {
+      "group": "native",
+      "command": "node tests/session-revert-object-writer.cjs",
+      "durationMs": 334587.1231
+    },
+    {
+      "group": "native",
+      "command": "node tests/session-revert-object-runtime.cjs",
+      "durationMs": 293244.3214
+    },
+    {
+      "group": "security",
+      "command": "node tests/session-revert-sacl-witness.cjs",
+      "durationMs": 260440.3917
+    },
+    {
+      "group": "security",
+      "command": "node tests/session-revert-object-service.cjs",
+      "durationMs": 229970.5868
+    },
+    {
+      "group": "native",
+      "command": "node tests/candidate-apply.cjs",
+      "durationMs": 149352.7335
+    },
+    {
+      "group": "faults",
+      "command": "node tests/session-change-store.cjs",
+      "durationMs": 124268.0451
+    },
+    {
+      "group": "security",
+      "command": "node tests/session-revert-inplace.cjs",
+      "durationMs": 94400.2882
+    },
+    {
+      "group": "security",
+      "command": "node tests/session-revert-object-confirmation.cjs",
+      "durationMs": 93684.9803
+    },
+    {
+      "group": "core",
+      "command": "node tests/candidate-runs.cjs",
+      "durationMs": 86519.7161
+    }
+  ],
+  "timings": {
+    "testWallTimeMs": 907077,
+    "testExecutionMs": 3047771.8727000016,
+    "observedTestExecutionMs": 3047771.8727000016,
+    "runnerTimeMs": null,
+    "queueWaitMs": null,
+    "retryWaitMs": null
+  }
+}

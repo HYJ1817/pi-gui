@@ -1,0 +1,559 @@
+{
+  "sha": "326cb3284c5bf67398290ca4cd6ea8bfd5ee8496",
+  "sandbox": true,
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-independent-audit-rF27T2",
+  "scenes": [
+    {
+      "id": "navExtensions",
+      "view": "extensions"
+    },
+    {
+      "id": "navMcp",
+      "view": "extensions"
+    },
+    {
+      "id": "navCapabilities",
+      "view": "extensions"
+    },
+    {
+      "id": "navPlanner",
+      "view": "planner"
+    }
+  ],
+  "overviewNarrow": {
+    "viewport": [
+      700,
+      600,
+      1.5
+    ],
+    "rects": [
+      {
+        "s": "#workSurface",
+        "rect": {
+          "x": 275,
+          "y": 46,
+          "width": 425,
+          "height": 600,
+          "top": 46,
+          "right": 700,
+          "bottom": 646,
+          "left": 275
+        },
+        "scrollWidth": 415,
+        "clientWidth": 415,
+        "overflow": "hidden auto",
+        "bg": "rgb(24, 24, 24)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "20px 35px 56px",
+        "font": "13px"
+      },
+      {
+        "s": ".settings-grid",
+        "rect": {
+          "x": 310,
+          "y": 157.75,
+          "width": 345,
+          "height": 1138.135498046875,
+          "top": 157.75,
+          "right": 655,
+          "bottom": 1295.885498046875,
+          "left": 310
+        },
+        "scrollWidth": 360,
+        "clientWidth": 345,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px",
+        "font": "13px"
+      },
+      {
+        "s": ".settings-detail-card"
+      },
+      {
+        "s": ".appearance-body"
+      },
+      {
+        "s": ".ds-settings-row-multiline"
+      },
+      {
+        "s": ".font-size-ctrls"
+      },
+      {
+        "s": ".ds-segmented"
+      },
+      {
+        "s": ".ds-slider-row"
+      }
+    ]
+  },
+  "appearanceNarrow": {
+    "viewport": [
+      700,
+      600,
+      1.5
+    ],
+    "rects": [
+      {
+        "s": "#workSurface",
+        "rect": {
+          "x": 275,
+          "y": 46,
+          "width": 425,
+          "height": 600,
+          "top": 46,
+          "right": 700,
+          "bottom": 646,
+          "left": 275
+        },
+        "scrollWidth": 425,
+        "clientWidth": 425,
+        "overflow": "hidden auto",
+        "bg": "rgb(24, 24, 24)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "20px 35px 56px",
+        "font": "13px"
+      },
+      {
+        "s": ".settings-grid"
+      },
+      {
+        "s": ".settings-detail-card",
+        "rect": {
+          "x": 310,
+          "y": 66,
+          "width": 355,
+          "height": 524,
+          "top": 66,
+          "right": 665,
+          "bottom": 590,
+          "left": 310
+        },
+        "scrollWidth": 355,
+        "clientWidth": 355,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px 0px 40px",
+        "font": "13px"
+      },
+      {
+        "s": ".appearance-body",
+        "rect": {
+          "x": 310,
+          "y": 157.75,
+          "width": 355,
+          "height": 305.04168701171875,
+          "top": 157.75,
+          "right": 665,
+          "bottom": 462.79168701171875,
+          "left": 310
+        },
+        "scrollWidth": 354,
+        "clientWidth": 354,
+        "overflow": "visible",
+        "bg": "rgb(33, 33, 33)",
+        "border": "0.666667px solid oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "padding": "18px 20px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-settings-row-multiline",
+        "rect": {
+          "x": 330.66668701171875,
+          "y": 349.9583435058594,
+          "width": 313.66668701171875,
+          "height": 94.16667175292969,
+          "top": 349.9583435058594,
+          "right": 644.3333740234375,
+          "bottom": 444.12501525878906,
+          "left": 330.66668701171875
+        },
+        "scrollWidth": 314,
+        "clientWidth": 314,
+        "overflow": "visible",
+        "bg": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "12px 16px",
+        "font": "13px"
+      },
+      {
+        "s": ".font-size-ctrls",
+        "rect": {
+          "x": 382.8333435058594,
+          "y": 361.9583435058594,
+          "width": 245.5,
+          "height": 62.145835876464844,
+          "top": 361.9583435058594,
+          "right": 628.3333435058594,
+          "bottom": 424.1041793823242,
+          "left": 382.8333435058594
+        },
+        "scrollWidth": 246,
+        "clientWidth": 246,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-segmented",
+        "rect": {
+          "x": 382.8333435058594,
+          "y": 361.9583435058594,
+          "width": 245.5,
+          "height": 32,
+          "top": 361.9583435058594,
+          "right": 628.3333435058594,
+          "bottom": 393.9583435058594,
+          "left": 382.8333435058594
+        },
+        "scrollWidth": 246,
+        "clientWidth": 246,
+        "overflow": "visible",
+        "bg": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "3px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-slider-row",
+        "rect": {
+          "x": 388.3333435058594,
+          "y": 405.9583435058594,
+          "width": 240,
+          "height": 18.14583396911621,
+          "top": 405.9583435058594,
+          "right": 628.3333435058594,
+          "bottom": 424.1041774749756,
+          "left": 388.3333435058594
+        },
+        "scrollWidth": 240,
+        "clientWidth": 240,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px",
+        "font": "13px"
+      }
+    ]
+  },
+  "largeAppearanceNarrow": {
+    "viewport": [
+      700,
+      600,
+      1.5
+    ],
+    "rects": [
+      {
+        "s": "#workSurface",
+        "rect": {
+          "x": 275,
+          "y": 46,
+          "width": 425,
+          "height": 600,
+          "top": 46,
+          "right": 700,
+          "bottom": 646,
+          "left": 275
+        },
+        "scrollWidth": 425,
+        "clientWidth": 425,
+        "overflow": "hidden auto",
+        "bg": "rgb(24, 24, 24)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "20px 35px 56px",
+        "font": "13px"
+      },
+      {
+        "s": ".settings-grid"
+      },
+      {
+        "s": ".settings-detail-card",
+        "rect": {
+          "x": 310,
+          "y": 66,
+          "width": 355,
+          "height": 524,
+          "top": 66,
+          "right": 665,
+          "bottom": 590,
+          "left": 310
+        },
+        "scrollWidth": 355,
+        "clientWidth": 355,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px 0px 40px",
+        "font": "13px"
+      },
+      {
+        "s": ".appearance-body",
+        "rect": {
+          "x": 310,
+          "y": 157.75,
+          "width": 355,
+          "height": 331.3958435058594,
+          "top": 157.75,
+          "right": 665,
+          "bottom": 489.1458435058594,
+          "left": 310
+        },
+        "scrollWidth": 354,
+        "clientWidth": 354,
+        "overflow": "visible",
+        "bg": "rgb(33, 33, 33)",
+        "border": "0.666667px solid oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "padding": "18px 20px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-settings-row-multiline",
+        "rect": {
+          "x": 330.66668701171875,
+          "y": 355.22918701171875,
+          "width": 313.66668701171875,
+          "height": 115.25,
+          "top": 355.22918701171875,
+          "right": 644.3333740234375,
+          "bottom": 470.47918701171875,
+          "left": 330.66668701171875
+        },
+        "scrollWidth": 314,
+        "clientWidth": 314,
+        "overflow": "visible",
+        "bg": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "12px 16px",
+        "font": "13px"
+      },
+      {
+        "s": ".font-size-ctrls",
+        "rect": {
+          "x": 382.8333435058594,
+          "y": 367.22918701171875,
+          "width": 245.5,
+          "height": 67.59375,
+          "top": 367.22918701171875,
+          "right": 628.3333435058594,
+          "bottom": 434.82293701171875,
+          "left": 382.8333435058594
+        },
+        "scrollWidth": 246,
+        "clientWidth": 246,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-segmented",
+        "rect": {
+          "x": 382.8333435058594,
+          "y": 367.22918701171875,
+          "width": 245.5,
+          "height": 32,
+          "top": 367.22918701171875,
+          "right": 628.3333435058594,
+          "bottom": 399.22918701171875,
+          "left": 382.8333435058594
+        },
+        "scrollWidth": 246,
+        "clientWidth": 246,
+        "overflow": "visible",
+        "bg": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "3px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-slider-row",
+        "rect": {
+          "x": 388.3333435058594,
+          "y": 411.22918701171875,
+          "width": 240,
+          "height": 23.59375,
+          "top": 411.22918701171875,
+          "right": 628.3333435058594,
+          "bottom": 434.82293701171875,
+          "left": 388.3333435058594
+        },
+        "scrollWidth": 240,
+        "clientWidth": 240,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px",
+        "font": "13px"
+      }
+    ]
+  },
+  "appearanceLayout": {
+    "viewport": [
+      1205,
+      803,
+      1.5
+    ],
+    "rects": [
+      {
+        "s": "#workSurface",
+        "rect": {
+          "x": 275,
+          "y": 46,
+          "width": 930.3333740234375,
+          "height": 803.3333740234375,
+          "top": 46,
+          "right": 1205.3333740234375,
+          "bottom": 849.3333740234375,
+          "left": 275
+        },
+        "scrollWidth": 930,
+        "clientWidth": 930,
+        "overflow": "hidden auto",
+        "bg": "rgb(24, 24, 24)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "20px 56px 56px",
+        "font": "13px"
+      },
+      {
+        "s": ".settings-grid"
+      },
+      {
+        "s": ".settings-detail-card",
+        "rect": {
+          "x": 340.16668701171875,
+          "y": 66,
+          "width": 800,
+          "height": 727.3333740234375,
+          "top": 66,
+          "right": 1140.1666870117188,
+          "bottom": 793.3333740234375,
+          "left": 340.16668701171875
+        },
+        "scrollWidth": 800,
+        "clientWidth": 800,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px 0px 40px",
+        "font": "13px"
+      },
+      {
+        "s": ".appearance-body",
+        "rect": {
+          "x": 340.16668701171875,
+          "y": 157.75,
+          "width": 800,
+          "height": 297.0208435058594,
+          "top": 157.75,
+          "right": 1140.1666870117188,
+          "bottom": 454.7708435058594,
+          "left": 340.16668701171875
+        },
+        "scrollWidth": 799,
+        "clientWidth": 799,
+        "overflow": "visible",
+        "bg": "rgb(33, 33, 33)",
+        "border": "0.666667px solid oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "padding": "18px 20px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-settings-row-multiline",
+        "rect": {
+          "x": 360.8333435058594,
+          "y": 349.9583435058594,
+          "width": 758.6666870117188,
+          "height": 86.14583587646484,
+          "top": 349.9583435058594,
+          "right": 1119.5000305175781,
+          "bottom": 436.1041793823242,
+          "left": 360.8333435058594
+        },
+        "scrollWidth": 759,
+        "clientWidth": 759,
+        "overflow": "visible",
+        "bg": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "12px 16px",
+        "font": "13px"
+      },
+      {
+        "s": ".font-size-ctrls",
+        "rect": {
+          "x": 816.7604370117188,
+          "y": 361.9583435058594,
+          "width": 286.7395935058594,
+          "height": 62.145835876464844,
+          "top": 361.9583435058594,
+          "right": 1103.5000305175781,
+          "bottom": 424.1041793823242,
+          "left": 816.7604370117188
+        },
+        "scrollWidth": 287,
+        "clientWidth": 287,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-segmented",
+        "rect": {
+          "x": 816.7604370117188,
+          "y": 361.9583435058594,
+          "width": 286.7395935058594,
+          "height": 32,
+          "top": 361.9583435058594,
+          "right": 1103.5000305175781,
+          "bottom": 393.9583435058594,
+          "left": 816.7604370117188
+        },
+        "scrollWidth": 287,
+        "clientWidth": 287,
+        "overflow": "visible",
+        "bg": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "3px",
+        "font": "13px"
+      },
+      {
+        "s": ".ds-slider-row",
+        "rect": {
+          "x": 863.5,
+          "y": 405.9583435058594,
+          "width": 240,
+          "height": 18.14583396911621,
+          "top": 405.9583435058594,
+          "right": 1103.5,
+          "bottom": 424.1041774749756,
+          "left": 863.5
+        },
+        "scrollWidth": 240,
+        "clientWidth": 240,
+        "overflow": "visible",
+        "bg": "rgba(0, 0, 0, 0)",
+        "border": "0px none rgb(238, 238, 238)",
+        "padding": "0px",
+        "font": "13px"
+      }
+    ]
+  },
+  "emptyProviderActions": {
+    "modalVisible": true,
+    "actions": [
+      {
+        "text": "取消",
+        "visible": true
+      },
+      {
+        "text": "保存",
+        "visible": true
+      }
+    ]
+  }
+}

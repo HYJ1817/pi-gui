@@ -1,0 +1,13 @@
+{
+  "auditedSha": "326cb3284c5bf67398290ca4cd6ea8bfd5ee8496",
+  "referenceSha": "92ae661f1e399e69d514086b46029b4c34ba1a92",
+  "recordedAt": "2026-11-06T02:22:55.550Z",
+  "platform": "win32",
+  "osRelease": "10.0.26200",
+  "arch": "x64",
+  "node": "v24.22.1",
+  "electron": "44.4.3",
+  "normalSandbox": true,
+  "rawEvidenceRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-final-audit-b2626d3cd52a4ee8a4b92a96fd186ecb",
+  "independentAgentReview": false
+}

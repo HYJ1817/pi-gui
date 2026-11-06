@@ -1,0 +1,540 @@
+{
+  "sha": "326cb3284c5bf67398290ca4cd6ea8bfd5ee8496",
+  "sandbox": true,
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-independent-audit-0i2359",
+  "scenes": [
+    {
+      "id": "navAppearance",
+      "viewport": [
+        1206,
+        803,
+        1.5
+      ],
+      "title": "常规",
+      "cards": 1,
+      "overflow": false,
+      "actions": [
+        {
+          "text": "关闭",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        }
+      ],
+      "headings": [
+        {
+          "text": "外观与主题",
+          "font": "30px"
+        },
+        {
+          "text": "外观",
+          "font": "13.5px"
+        }
+      ],
+      "fields": [
+        {
+          "label": "字体缩放滑块",
+          "placeholder": "",
+          "type": "range"
+        }
+      ]
+    },
+    {
+      "id": "navProviders",
+      "viewport": [
+        1206,
+        803,
+        1.5
+      ],
+      "title": "模型供应商1",
+      "cards": 1,
+      "overflow": false,
+      "actions": [
+        {
+          "text": "添加供应商",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "重载 pi 配置",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "关闭",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        }
+      ],
+      "headings": [
+        {
+          "text": "模型配置",
+          "font": "30px"
+        }
+      ],
+      "fields": []
+    },
+    {
+      "id": "navProviderAuth",
+      "viewport": [
+        1206,
+        803,
+        1.5
+      ],
+      "title": "供应商与认证",
+      "cards": 1,
+      "overflow": false,
+      "actions": [
+        {
+          "text": "关闭",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        }
+      ],
+      "headings": [
+        {
+          "text": "供应商与认证",
+          "font": "30px"
+        }
+      ],
+      "fields": []
+    },
+    {
+      "id": "navDiagnostics",
+      "viewport": [
+        1206,
+        803,
+        1.5
+      ],
+      "title": "运行状态与诊断",
+      "cards": 1,
+      "overflow": false,
+      "actions": [
+        {
+          "text": "复制诊断摘要",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "复制诊断 JSON",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "导出 JSON",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "刷新",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "关闭",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        }
+      ],
+      "headings": [
+        {
+          "text": "诊断",
+          "font": "30px"
+        }
+      ],
+      "fields": []
+    },
+    {
+      "id": "navLogs",
+      "viewport": [
+        1206,
+        803,
+        1.5
+      ],
+      "title": "日志与故障报告…",
+      "cards": 1,
+      "overflow": false,
+      "actions": [
+        {
+          "text": "刷新",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "关闭",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        }
+      ],
+      "headings": [
+        {
+          "text": "日志与故障报告",
+          "font": "30px"
+        }
+      ],
+      "fields": [
+        {
+          "label": null,
+          "placeholder": "",
+          "type": "checkbox"
+        }
+      ]
+    },
+    {
+      "id": "navAppUpdates",
+      "viewport": [
+        1206,
+        803,
+        1.5
+      ],
+      "title": "Pi GUI 与 Pi 更新",
+      "cards": 1,
+      "overflow": false,
+      "actions": [
+        {
+          "text": "关闭",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        }
+      ],
+      "headings": [
+        {
+          "text": "应用与更新",
+          "font": "30px"
+        }
+      ],
+      "fields": []
+    },
+    {
+      "id": "navShortcutHelp",
+      "viewport": [
+        1206,
+        803,
+        1.5
+      ],
+      "title": "快捷键",
+      "cards": 1,
+      "overflow": false,
+      "actions": [
+        {
+          "text": "关闭",
+          "display": "none",
+          "visible": false,
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        }
+      ],
+      "headings": [
+        {
+          "text": "键盘快捷键",
+          "font": "30px"
+        }
+      ],
+      "fields": []
+    }
+  ],
+  "providerAdd": {
+    "viewport": [
+      1206,
+      803,
+      1.5
+    ],
+    "title": "模型供应商1",
+    "cards": 1,
+    "overflow": false,
+    "actions": [
+      {
+        "text": "取消",
+        "display": "none",
+        "visible": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      {
+        "text": "保存",
+        "display": "none",
+        "visible": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    ],
+    "headings": [
+      {
+        "text": "添加模型供应商",
+        "font": "30px"
+      }
+    ],
+    "fields": [
+      {
+        "label": null,
+        "placeholder": "my-provider",
+        "type": "text"
+      },
+      {
+        "label": null,
+        "placeholder": "https://api.example.com/v1",
+        "type": "text"
+      },
+      {
+        "label": null,
+        "placeholder": "$MY_API_KEY 或 ${MY_API_KEY}",
+        "type": "text"
+      },
+      {
+        "label": null,
+        "placeholder": "deepseek-chat|DeepSeek Chat\nqwen3-max|Qwen3 Max|contextWindow=262144",
+        "type": "textarea"
+      },
+      {
+        "label": null,
+        "placeholder": "搜索模型…",
+        "type": "search"
+      }
+    ]
+  },
+  "scaleBefore": {
+    "viewport": [
+      1206,
+      803,
+      1.5
+    ],
+    "title": "常规",
+    "cards": 1,
+    "overflow": false,
+    "actions": [
+      {
+        "text": "关闭",
+        "display": "none",
+        "visible": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    ],
+    "headings": [
+      {
+        "text": "外观与主题",
+        "font": "30px"
+      },
+      {
+        "text": "外观",
+        "font": "13.5px"
+      }
+    ],
+    "fields": [
+      {
+        "label": "字体缩放滑块",
+        "placeholder": "",
+        "type": "range"
+      }
+    ]
+  },
+  "scaleAfter": {
+    "viewport": [
+      1206,
+      803,
+      1.5
+    ],
+    "title": "常规",
+    "cards": 1,
+    "overflow": false,
+    "actions": [
+      {
+        "text": "关闭",
+        "display": "none",
+        "visible": false,
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    ],
+    "headings": [
+      {
+        "text": "外观与主题",
+        "font": "30px"
+      },
+      {
+        "text": "外观",
+        "font": "17.55px"
+      }
+    ],
+    "fields": [
+      {
+        "label": "字体缩放滑块",
+        "placeholder": "",
+        "type": "range"
+      }
+    ]
+  },
+  "search": {
+    "nav": 0,
+    "overview": 0
+  }
+}

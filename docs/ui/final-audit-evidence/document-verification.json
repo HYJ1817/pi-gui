@@ -1,0 +1,14 @@
+{
+  "links": 115,
+  "bad": [],
+  "sourceFiles": 692,
+  "sourceMismatches": 0,
+  "findings": 14,
+  "counts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 9,
+    "P3": 4
+  },
+  "matrix": 24
+}

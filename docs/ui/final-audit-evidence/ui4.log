@@ -1,0 +1,11 @@
+
+(electron) 'console-message' arguments are deprecated and will be removed. Please use Event<WebContentsConsoleMessageEventParams> object instead.
+PASS Chromium 页面拿到焦点（后续受信键盘才有意义）
+PASS public/ui4-pane.css 可被真实页面加载且只加载一次
+PASS ui4-pane.css 规则实际生效（样式表解析成功）
+FAIL 右栏宽度边界由 right-pane.js 单点导出 {"min":320,"default":392}
+PASS 启动时右栏是关着的
+FAIL --rp-width 缺省值仍是 420（既有 browser-pane 断言依赖） {"hidden":true,"surface":null,"mode":"dock","left":0,"right":0,"width":0,"scrollWidth":0,"clientWidth":0,"cssWidth":392,"headHeight":0,"headTop":0,"headClass":null,"closeRight":0,"closeLabel":null,"bodyCount":0,"pageOverflow":false}
+Error: timeout: async () => (await paneFacts()).surface === 'changes'
+    at until (C:\pi-GUI\tests\ui4-pane.cjs:73:11)
+    at async run (C:\pi-GUI\tests\ui4-pane.cjs:199:5)
