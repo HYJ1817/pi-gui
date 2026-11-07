@@ -143,6 +143,7 @@ async function main() {
     logging: null,
     sessionChanges: { assertReady: async () => { if (captureError) throw captureError; }, disable: async () => { disabled++; } },
     providerAuth: { snapshot: () => ({ sync: { state: syncing ? 'syncing' : 'idle' } }) },
+    providerManagement: null,
     modelGeneration: {
       guardCommand(command) { if (guardError) throw guardError; guarded.push(command); },
       noteCommandAccepted: (command) => modelAccepted.push(command),

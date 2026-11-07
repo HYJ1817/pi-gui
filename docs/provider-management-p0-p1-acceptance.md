@@ -26,10 +26,11 @@ Windows x64，Node v24.22.1。生产基线的 main push CI（attempt 1）完整�
 | --- | --- |
 | `npm run test:provider-management` | 21/21，退出 0，跳过 0。覆盖双文件中断恢复、恶意事务、重复进程强杀、外改、权限和格式错误、幂等、DTO、应用鉴权、回滚开关、删除时的目标约束和私有 SDK 状态。 |
 | `node tests/models-api.cjs`、`node tests/provider-auth.cjs`、`node tests/provider-auth-runtime.cjs`、`node tests/server-security.cjs` | 依次为 50/50、107/107、36/36、39/39，全部退出 0。 |
+| `node tests/gui-browser-stop.cjs`、`node tests/stop-barrier.cjs` | 分别 12/12、17/17，退出 0。CI 首次故障组复现了路由装配测试缺少新依赖，已在两个隔离 VM 中补齐依赖，保留原有断言。 |
 | 实际公开 Pi SDK 1.5.0 专项 | 在 TEMP 用合成输入验证原生和自定义 ID 的暂存、保存、替换、回读和清除，22/22 断言通过。canonical 测试仍以隔离 SDK fixture 运行。 |
 | `npm run build:app -- --rebuild --output-root <TEMP>` | Windows 离线构建退出 0，Electron 44.4.3。用隔离配置启动打包 SEA 后端，验证默认关闭时旧读接口仍可用，并验证显式开启时的快照、草稿、提交、双文件和待同步状态。后端 SHA-256 为 `6DA1F19B690220DA3B45931A0220F8112C34B6EA33818E7C6E01BC20AA22473D`。 |
 | `node scripts/run-test-group.mjs --validate` | 236 条 canonical 命令，五组覆盖完整。 |
-| 本地完整 `npm test` | 最终行为提交的本地运行已启动，出报告时仍在执行。日志为 `%TEMP%/pi-provider-p01-canonical-135ad7a.log`。 |
+| 本地完整 `npm test` | 最终行为提交的本地运行出报告时仍在执行。日志为 `%TEMP%/pi-provider-p01-canonical-135ad7a.log`。旧行为版本的开发运行在最终版本验证启动后取消，不计入证明。 |
 | 独立复审 | 仓储及凭据各由独立上下文复审。已复测未保护事务日志拒绝、连续中断恢复、同模型扩展保留、路径精确比较、内置身份未知拒绝和临时注册隔离，增量复审无新增阻断。 |
 | UI 视觉、真实账户及真实安装升级 | 本轮无 UI 布局改动，未采集截图。未使用真实密钥、OAuth 凭据、付费推理或真实 Pi 配置。未验证真实安装升级。 |
 
@@ -41,4 +42,4 @@ Windows x64，Node v24.22.1。生产基线的 main push CI（attempt 1）完整�
 - P3 可以接通发现授权、缓存、凭据与配置分阶段保存以及 Runtime 同步。原生暂存凭据的发现和应用依赖 P2 的可信绑定和安全传输。
 - DeepSeek 可以依据合同及 fixture 直接开发 P4 完整布局和状态，运行时根据 `capabilities` 禁用未接通能力。真实发现、原文输入和 Runtime 同步的联调分别等待 P2、P3。
 
-开发交付待用户独立验收，PR CI 与代码验收分别记录。合并和发布均需另行授权。
+开发交付待用户独立验收，PR CI 与代码验收分别记录。合并和发布均需另行授权。[草稿 PR 与当前检查](https://github.com/HYJ1817/pi-gui/pull/59/checks)
