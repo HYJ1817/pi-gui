@@ -31,7 +31,7 @@ async function main() {
     check('legacy mutation cannot move stored keys or hidden headers to a new target', () => { assert.equal(rebound.code, 'credential_target_conflict'); assert.ok(!JSON.stringify(rebound).includes(SECRET)); });
     const savedConfig = await providerRequest('POST', { name: 'example', config: { baseUrl: 'https://example.test/v1', models: [{ id: 'm', name: 'Renamed', capabilities: { streaming: true } }, { id: 'new-model' }] } });
     const savedDisk = JSON.parse(fs.readFileSync(file, 'utf8')).providers.example;
-    check('safe metadata POST preserves existing disk credential', () => { assert.equal(savedConfig.ok, true); assert.equal(savedDisk.apiKey, SECRET); assert.equal(savedDisk.baseUrl, 'https://example.test/v1'); });
+    check('safe metadata POST preserves existing disk credential', () => { assert.equal(savedConfig.ok, true, JSON.stringify(savedConfig)); assert.equal(savedDisk.apiKey, SECRET); assert.equal(savedDisk.baseUrl, 'https://example.test/v1'); });
     check('safe metadata POST preserves provider and same-id model headers only on disk', () => { assert.deepEqual(savedDisk.headers, { Authorization: SECRET }); assert.deepEqual(savedDisk.models.find(m => m.id === 'm').headers, { Authorization: SECRET }); assert.equal(savedDisk.models.find(m => m.id === 'm').name, 'Renamed'); assert.equal(savedDisk.models.find(m => m.id === 'new-model').headers, undefined); });
     check('same-id model capability updates preserve unknown extension fields', () => assert.deepEqual(savedDisk.models.find(m => m.id === 'm').capabilities, { extensionFlag: true, streaming: true }));
     const readSaved = await providerRequest('GET');
