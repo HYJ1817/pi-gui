@@ -52,6 +52,8 @@ import { createSpecs } from './server/specs.js';
 import { createProviders } from './server/providers.js';
 import { createProviderManagement } from './server/provider-management.js';
 import { createProviderCredentialSdk } from './server/provider-credential-sdk.js';
+import { createProviderCredentialBridge } from './server/provider-credential-bridge.js';
+import { createDiscoveryConsentStore } from './server/provider-discovery-consent.js';
 import { createAuthSdk, sanitizeModelEvent } from './server/provider-auth-sdk.js';
 import { createModelGeneration } from './server/model-generation.js';
 import { createProviderAuth } from './server/provider-auth.js';
@@ -486,15 +488,25 @@ const worktrees = createWorktrees({
 });
 worktreesRef = worktrees;
 
+/* P2：供应商凭据私有桥。只在 Electron main 的直属 IPC 子进程里可达（无 HTTP 路由）；
+ * `PI_GUI_PROVIDER_KEY_INPUT=1` 仅供联调，默认关闭——关闭时快照能力恒为 false，
+ * 私桥动作与 SDK 暂存一律 unsupported。授权绑定存储同为内存态，随进程/草稿生命周期失效。 */
+const providerKeyInputEnabled = process.env.PI_GUI_PROVIDER_KEY_INPUT === '1';
 const providerCredentials = createProviderCredentialSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey,
-  authPath: path.join(path.dirname(MODELS_JSON), 'auth.json') });
+  authPath: path.join(path.dirname(MODELS_JSON), 'auth.json'), enabled: providerKeyInputEnabled });
 const providerMutationBlocked = () => providerAuthRef?.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning() || cliInFlight > 0;
 const providers = createProviders({ modelsJson: MODELS_JSON, metadataPath: path.join(DATA_DIR, 'provider-management.json'),
   inspectCredential: providerCredentials.inspect, mutationBlocked: providerMutationBlocked });
 try { providers.store.recoverPending(); } catch { /* Configuration endpoints surface the fixed recovery error. */ }
 const providerManagementEnabled = process.env.PI_GUI_PROVIDER_MANAGEMENT === '1';
+const providerDiscoveryConsents = createDiscoveryConsentStore();
 const providerManagement = createProviderManagement({ store: providers.store, inspectCredential: providerCredentials.inspect,
-  readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled });
+  readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled,
+  desktopCapabilities: () => providerCredentialBridge.desktopCapability() });
+const providerCredentialBridge = createProviderCredentialBridge({ sdk: providerCredentials,
+  draftLookup: providerManagement.draftSnapshot, consentStore: providerDiscoveryConsents,
+  mutationBlocked: providerMutationBlocked, maintenanceLocked: () => updateMaintenance.locked(),
+  enabled: providerKeyInputEnabled });
 const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
 const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig, nativeAdapter: authSdk });
 const uploads = createUploads({ dataDir: DATA_DIR });
@@ -1275,11 +1287,24 @@ if (process.send) process.on('message', async message => {
   process.send?.({type:'app-update',id:message.id,...result});
 });
 
+/* P2：供应商凭据私有通道。只有 Electron main（直属父进程）能走到这里；
+ * 帧校验、epoch、flow/nonce 绑定全部在桥内完成。应答只含固定字段，
+ * 永不回显输入值；id 只用于父子配对。 */
+if (process.send) process.on('message', async message => {
+  if (!message || message.type !== 'provider-credential' || !Number.isSafeInteger(message.id)) return;
+  const { id, ...frame } = message; // 关联 id 不属于冻结合同帧
+  let result = { ok: false, code: 'invalid_request' };
+  try { result = await providerCredentialBridge.handle(frame); }
+  catch { result = { ok: false, code: 'invalid_request' }; }
+  process.send?.({ type: 'provider-credential', id, ...result });
+});
+
 // ---------- 生命周期 ----------
 
 async function shutdown() {
   if(runtime.isShuttingDown())return;
   providerAuth.dispose();
+  providerCredentialBridge.dispose();
   void providerCredentials.dispose();
   runtime.setShuttingDown(true);
   clearInterval(runtimeHealthTimer);
