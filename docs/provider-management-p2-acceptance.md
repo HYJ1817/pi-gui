@@ -102,3 +102,45 @@
 - 正常 Electron 沙箱：**未验证**（如上第 7 节）；不得以 `--no-sandbox` 结果证明正常沙箱安全。
 - 推送：已获授权推送分支；合并需用户审批，不直接合并 main，不发版。`providerKeyInputEnabled` 保持默认关闭。
 - P3 接口可用性：第 8 节接口行为已验证；P3 使用 transport 时**必须传与授权一致的 credentialRevision**，保存编排（persist/sync）未包含在 P2。
+
+## 11. 第二轮独立验收整改（修订 3）
+
+第二轮独立源码审查（针对 `d7b525f`）提出六项问题。逐项**先以可复现探针验证**再修复；六项全部成立（含两项最初仅静态审查的建议——复现证据见下）。修复提交 `aa4dc80`。
+
+| # | 问题 | 复现证据（修复前） | 修复位置 | 新增测试 |
+| --- | --- | --- | --- | --- |
+| FIX-01 | 字符串模型条目绕过密钥过滤 | `pickModelList({data:[ '<SECRET>' ]},[SECRET])` 返回含密钥 id | [provider-network.js](../server/provider-network.js) `sanitizeModelEntry` 字符串分支统一 secrets 检查（完整与子串） | `FIX-01` 用例：完整/子串回显、恶意字符串（空/超长/控制字符）过滤 |
+| FIX-02 | 授权撤销与发包竞态：consent 只在开始读一次 | DNS 钩子内 revoke，伪造慢 DNS 后 `sent===1`（请求照发） | `verifyConsent` 抽出；DNS 后与**每个候选请求前**重查；外部 abort/总超时贯通 DNS（AbortController → lookup signal） | `FIX-02`：DNS 期 revoke/abort 后 `sent===0`；无 sleep 的可控异步 |
+| FIX-03 | 凭据代次校验可选 | staged consent 不传 revision 成功发包 | keyed 授权强制核 `credentialRevision`（缺失/不匹配/缺 key 全拒；无凭据授权收代次也拒） | 轮换/缺代次/缺 key/反无 key 四向负向 + FIX-03 内联进既有用例 |
+| FIX-04 | OAuth 清除被冲突检查阻断且无提示 | 真 P1 worker：`stageClear({confirmed:true})` → `oauth_conflict`；bridge 未传 `confirmOAuthReplacement` | bridge 首次应答固定文案（flow/nonce 保活）→ 受限窗展示影响 → 二次确认带 `confirmOAuthReplacement` 转发，成功后 consume；页面 clear 模式显示该文案（可信 message 优先） | 桥三段（首按拒绝+文案/再按转发/nonce 拒重放）+ 真机 OAuth clear 端到端 |
+| FIX-05 | 异步 open 破坏 single-flight | 静态审查成立：`sheet\|\|flow` 在两个 await 之前，连续 open 双双通过并互相覆盖 flow/窗口（A 窗 closed 回调会清掉 B 的状态） | `opening` 互斥在任何 await 前同步置位、`finally` 释放；prepare 应答核验 handshake/child 一致，epoch 错位拒绝 | 真机：并发第二请求 `busy`（opening/sheet_open）、单窗、打开途中 backend 重启→显式拒绝+新轮握手成功 |
+| FIX-06 | DNS 不计入总时限 | 源码顺序 + 探针：`deadline` 在 `await resolveTargetAddresses` 之后 | deadline 从 discovery 开始；DNS 超时经 AbortController；DNS 后余量不足则不再发请求 | `FIX-06`：慢 DNS 吃满额度 → timeout 且 `requested===false` |
+
+**关联收紧**（复现中顺带发现，一并修复）：per-candidate 重查曾把签发时已批准的候选回退路径（如 `/models`）按「超出 basePath 前缀」误拒——verifyConsent 的路径合法性改为「目标（协议/host/port）一致 + URL 在签发批准的候选集合内」，与授权语义一致；此前 builtin 分支的 `consume` 遗漏（OAuth 确认路径成功后未作废 nonce）补上，并加 fixture 同步真实 worker 的 OAuth 清除纪律。
+
+## 12. 修订 3 验证结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `npm run test:provider-p2` | 网络策略 **19/19**（新增 FIX-01/02/06 + 4 向代次负向）+ 桥 **27 断言** + 桌面真机 **42/42**，exit 0 |
+| `npm run test:provider-management` | 21/0 |
+| `npm run test:auth` | 107/107 |
+| `node tests/models-api.cjs` / `server-security` / `electron-guard` / `modules` / `provider-auth-runtime` / `dev-server` | 50/50、39/39、123/123、120/120、36/36、30/30 |
+| `node --test tests/provider-credential-sdk.cjs` / `provider-management-http` / `provider-management-contract` | 5/0、6/0、3/0 |
+| `node tests/ci-test-plan.cjs` | 238 leaves，coverage exact |
+| assertions 总数变化 | provider-network-policy 16→19（净增 FIX 专测 3，既有 16 项完整保留）；桌面真机 34→42；桥 24→27 |
+
+## 13. 修订 3 后的边界结论
+
+- **凭据泄露**：原文路径仍只有「sheet DOM → sheet preload → main → 私有 IPC → P1 worker」；主窗/SSE/HTTP/日志/诊断零原文（真机真机负向均过）；字符串条目同样过白名单。
+- **授权撤销**：DNS 期间与每个候选发包前都重查 consent；abort 中止解析与网络。撤销即时生效且不发包。
+- **SSRF**：公网 HTTPS-only；私网/链路本地/元数据/CGNAT/文档段/240/4/hex 映射全拒；DNS 钉桩；30s 总时限含 DNS；重定向全拒；候选 ≤8。
+- **Electron 隔离**：opening 互斥覆盖异步打开全程；epoch 错位/后端换代的 stale prepared 拒绝；焦点恢复与 flow TTL 语义不变。
+
+## 14. 未验证项与合并建议
+
+- **正常 Electron 沙箱**：仍未验证（开发机执行器受完整性令牌限制，测试以 `--no-sandbox` 完成）；这不构成正常沙箱通过的证据。CI runner 的标准沙箱将运行网络策略与桥模块套件；窗口隔离项仍待正常桌面环境复核。
+- 完整 canonical（238 leaves）本地未全量运行；由修复提交后的 PR CI 证明（待结果）。
+- persist/sync、真实供应商网络、打包 exe 的端到端输入流程不在 P2 范围。
+- **当前分支/提交**：`codex/provider-management-p2` @ `aa4dc80`（报告修订提交随后），推送后工作区干净。
+- **合并建议：建议合并 PR #60**（在下一轮独立复验确认后由用户决定；`providerKeyInputEnabled` 默认关闭，启用需独立安全验收）。
