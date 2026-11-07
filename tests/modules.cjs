@@ -475,6 +475,9 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     return res;
   };
   const authHeaders = { 'x-pi-gui-token': 'T' };
+  /* 供应商路由在令牌之外还要求 Host 恰为本机回环（auth.denyLocalHost），
+   * 所以这几条断言必须带上与 createAuth 相同端口的 Host。 */
+  const providerHeaders = { ...authHeaders, host: '127.0.0.1:7788' };
 
   check('/api/health 免认证（不带令牌也 200）', () => {
     const res = hit('GET', '/api/health');
@@ -501,17 +504,17 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
    * 而不是被 /api/providers 前缀吞掉当成「保存一个叫 models 的供应商」。 */
   check('/api/providers/models 命中 handleModels（不被前缀吞掉）', () => {
     calls.length = 0;
-    hit('POST', '/api/providers/models', authHeaders);
+    hit('POST', '/api/providers/models', providerHeaders);
     return calls[0] === 'providers.models' || calls.join(',');
   });
   check('/api/providers 命中 providers', () => {
     calls.length = 0;
-    hit('GET', '/api/providers', authHeaders);
+    hit('GET', '/api/providers', providerHeaders);
     return calls[0] === 'providers' || calls.join(',');
   });
   check('/api/providers/foo 命中 providers（前缀）', () => {
     calls.length = 0;
-    hit('DELETE', '/api/providers/foo', authHeaders);
+    hit('DELETE', '/api/providers/foo', providerHeaders);
     return calls[0] === 'providers' || calls.join(',');
   });
   check('/api/projects/activate 命中 projects（前缀）', () => {
@@ -774,7 +777,13 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
      *   - lib/（仓库根的共享库）→ 允许
      *   - server/http-utils.js → **显式放行**：它是被五条链路共用的 HTTP 工具，
      *     不是一个业务模块。和已有的「git-routes → lib/git.js」是同一类例外。
+     *   - public/provider-management/contract.js → **显式放行**：供应商管理的前后端
+     *     共享合同（纯校验与状态枚举，无 IO、无副作用）。浏览器静态资源只服务
+     *     public/（lib/assets.js 的 readPublic），server 与 renderer 必须引用同一份
+     *     文件，放 lib/ 反而会让浏览器 import 不到。它不是业务模块，放行范围
+     *     精确到这一个文件，server 仍不得 import public/ 下的其他内容。
      *   - 其它跨目录 import → 不允许。跨子系统协作一律走 server.js 装配 + 依赖注入。 */
+    const SHARED_PROVIDER_CONTRACT = path.resolve(path.join(ROOT, 'public', 'provider-management', 'contract.js'));
     const bad = [];
     for (const f of files) {
       const rel = relOf(f);
@@ -786,7 +795,7 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
           if (!sameDir && abs !== HTTP_UTILS) bad.push(`${rel} → ${spec}`);
           continue;
         }
-        if (!abs.startsWith(LIB_DIR)) bad.push(`${rel} → ${spec}`);
+        if (!abs.startsWith(LIB_DIR) && abs !== SHARED_PROVIDER_CONTRACT) bad.push(`${rel} → ${spec}`);
       }
     }
     return bad.length === 0 || bad.join(', ');

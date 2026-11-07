@@ -220,6 +220,7 @@ async function main() {
     auth: { denyRequest: () => null },
     sse: {},
     providerAuth: { snapshot: () => ({ sync: { state: syncing ? 'syncing' : 'idle' } }) },
+    providerManagement: null,
     modelGeneration: {
       guardCommand(command) { guarded.push(command); },
       noteCommandAccepted: (command) => modelAccepted.push(command),

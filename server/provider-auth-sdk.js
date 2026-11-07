@@ -339,8 +339,11 @@ export function sanitizeModelEvent(event, config = null) {
   const projectModel = model => {
     const providerId = model?.providerId || model?.provider;
     const modelId = model?.modelId || model?.id;
-    const configured = config?.providers?.[providerId]?.models;
-    const user = Array.isArray(configured) ? configured.find(m => m && typeof m === 'object' && m.id === modelId) : null;
+    const provider = config?.providers && Object.hasOwn(config.providers, providerId) ? config.providers[providerId] : null;
+    const configured = provider?.models;
+    const modelConfig = Array.isArray(configured) ? configured.find(m => m && typeof m === 'object' && m.id === modelId) : null;
+    const override = provider?.modelOverrides && Object.hasOwn(provider.modelOverrides, modelId) ? provider.modelOverrides[modelId] : null;
+    const user = modelConfig || override ? { ...modelConfig, ...override } : null;
     return publicModel(model, user ? { ...user, providerId, modelId } : null);
   };
   if (event?.type === 'bridge_parse_error') return { type: 'bridge_parse_error', reason: 'Pi 返回了非 JSONL 输出；原文未转发' };

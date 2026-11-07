@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "themeCases": [
+    { "theme": "dark", "viewport": { "width": 1280, "height": 800 }, "layout": "two-pane" },
+    { "theme": "light", "viewport": { "width": 1280, "height": 800 }, "layout": "two-pane" },
+    { "theme": "light", "viewport": { "width": 760, "height": 840 }, "layout": "stacked" }
+  ],
+  "requests": {
+    "drafts": {
+      "requestId": "draft-01",
+      "expectedRevision": "config-rev-1",
+      "serviceId": "example-ai",
+      "draft": {
+        "providerId": "example-ai",
+        "serviceId": "example-ai",
+        "catalogId": "custom",
+        "authMode": "environment",
+        "displayName": "示例 AI 服务",
+        "connection": { "baseUrl": "https://example.invalid/v1", "api": "openai-completions" },
+        "modelPatches": [
+          { "modelId": "fast", "operation": "upsert", "set": { "contextWindow": 131072, "maxTokens": 8192, "reasoning": false, "input": ["text"] } },
+          { "modelId": "vision", "operation": "upsert", "set": { "name": "示例视觉模型" }, "unsetFields": ["reasoning"] },
+          { "modelId": "old", "operation": "remove" }
+        ],
+        "selectedModelIds": ["fast", "vision"],
+        "modelOrder": ["vision", "fast"],
+        "enabled": true
+      }
+    },
+    "commit": {
+      "requestId": "commit-01", "expectedRevision": "config-rev-1", "action": "update", "serviceId": "example-ai",
+      "draftId": "draft-example", "draftRevision": 1, "credentialAction": { "type": "env", "reference": "$EXAMPLE_API_KEY" }
+    },
+    "authorize": { "requestId": "consent-01", "draftId": "draft-example", "draftRevision": 1, "confirm": true, "rememberTarget": false },
+    "revoke": { "requestId": "revoke-01", "consentId": "consent-example" },
+    "discover": { "requestId": "discover-01", "draftId": "draft-example", "draftRevision": 1, "consentId": "consent-example", "dialogGeneration": 1, "requestSeq": 1, "force": false },
+    "test": { "requestId": "test-01", "draftId": "draft-example", "draftRevision": 1, "consentId": "consent-example", "dialogGeneration": 1, "requestSeq": 2, "force": true },
+    "cancel": { "requestId": "cancel-01" },
+    "sync": { "requestId": "sync-01", "revision": "config-rev-2" },
+    "oauthLogin": { "providerId": "openai", "authType": "oauth" }
+  },
+  "live": {
+    "snapshot": {
+      "ok": true,
+      "schemaVersion": 1,
+      "revision": "config-rev-1",
+      "capabilities": {
+        "rawKeyInput": false,
+        "keyStaging": false,
+        "nativeCredentialPersistence": false,
+        "privateDesktopBridge": false,
+        "oauthLogin": true,
+        "discoveryModes": [],
+        "modelOverrides": null,
+        "syncMode": "unsupported",
+        "reasons": {
+          "rawKeyInput": "desktop_input_pending",
+          "keyStaging": "private_bridge_pending",
+          "nativeCredentialPersistence": "private_bridge_pending",
+          "privateDesktopBridge": "p2_pending",
+          "discoveryModes": "discovery_transport_pending",
+          "syncMode": "runtime_sync_pending"
+        }
+      },
+      "catalog": [
+        { "id": "custom", "name": "自定义端点", "category": "api-key", "authMode": "none", "connection": null },
+        { "id": "openai", "name": "OpenAI", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://api.openai.com/v1", "api": "openai-responses" }, "suggestedEnvReference": "$OPENAI_API_KEY" },
+        { "id": "anthropic", "name": "Anthropic", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://api.anthropic.com", "api": "anthropic-messages" }, "suggestedEnvReference": "$ANTHROPIC_API_KEY" },
+        { "id": "google", "name": "Google Gemini", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://generativelanguage.googleapis.com/v1beta", "api": "google-generative-ai" }, "suggestedEnvReference": "$GEMINI_API_KEY" },
+        { "id": "deepseek", "name": "DeepSeek", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://api.deepseek.com", "api": "openai-completions" }, "suggestedEnvReference": "$DEEPSEEK_API_KEY" },
+        { "id": "openrouter", "name": "OpenRouter", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://openrouter.ai/api/v1", "api": "openai-completions" }, "suggestedEnvReference": "$OPENROUTER_API_KEY" },
+        { "id": "ollama", "name": "Ollama", "category": "api-key", "authMode": "none", "connection": { "baseUrl": "http://127.0.0.1:11434/v1", "api": "openai-completions" } },
+        { "id": "moonshotai-cn", "name": "Moonshot 中国", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://api.moonshot.cn/v1", "api": "openai-completions" }, "suggestedEnvReference": "$MOONSHOT_API_KEY" },
+        { "id": "siliconflow", "name": "硅基流动", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://api.siliconflow.cn/v1", "api": "openai-completions" }, "suggestedEnvReference": "$SILICONFLOW_API_KEY" },
+        { "id": "zhipu", "name": "智谱 GLM", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://open.bigmodel.cn/api/paas/v4", "api": "openai-completions" }, "suggestedEnvReference": "$ZHIPU_API_KEY" },
+        { "id": "dashscope", "name": "阿里百炼", "category": "api-key", "authMode": "environment", "connection": { "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1", "api": "openai-completions" }, "suggestedEnvReference": "$DASHSCOPE_API_KEY" },
+        { "id": "openai-subscription", "providerId": "openai", "name": "OpenAI", "category": "subscription", "authMode": "oauth", "connection": null, "enabled": true, "disabledReason": null },
+        { "id": "anthropic-subscription", "providerId": "anthropic", "name": "Anthropic", "category": "subscription", "authMode": "oauth", "connection": null, "enabled": false, "disabledReason": "oauth_unavailable" }
+      ],
+      "services": [
+        {
+          "serviceId": "example-ai", "providerId": "example-ai", "catalogId": "custom", "displayName": "示例 AI 服务", "enabled": true,
+          "connection": { "baseUrl": "https://example.invalid/v1", "api": "openai-completions" },
+          "credentialState": { "state": "saved", "source": "env" }, "authMode": "environment", "readOnly": false, "compatibility": "unknown",
+          "models": [
+            {
+              "modelId": "fast", "providerId": "example-ai", "configSource": "configured",
+              "effectiveValues": { "name": "示例高速模型", "contextWindow": 131072, "maxTokens": 8192, "reasoning": false, "input": ["text"], "toolCalling": true, "streaming": null },
+              "editableOverrides": { "name": "示例高速模型", "contextWindow": 131072, "maxTokens": 8192, "reasoning": false, "input": ["text"] }
+            },
+            {
+              "modelId": "vision", "providerId": "example-ai", "configSource": "configured",
+              "effectiveValues": { "name": "示例视觉模型", "input": ["text", "image"], "toolCalling": null, "streaming": null },
+              "editableOverrides": { "name": "示例视觉模型", "input": ["text", "image"] }
+            }
+          ],
+          "selectedModelIds": ["fast", "vision"], "modelOrder": ["vision", "fast"]
+        },
+        {
+          "serviceId": "openai", "providerId": "openai", "catalogId": "openai-subscription", "displayName": "OpenAI 订阅", "enabled": true,
+          "connection": null, "credentialState": { "state": "saved", "source": "pi-credential" }, "authMode": "oauth",
+          "models": [], "selectedModelIds": null, "modelOrder": null, "readOnly": false, "compatibility": "unknown"
+        }
+      ],
+      "auth": {
+        "sdkAvailable": true,
+        "providers": [
+          { "providerId": "openai", "displayName": "OpenAI", "status": "connected", "authType": "oauth", "canLogin": true, "canLogout": true, "methods": [{ "type": "oauth", "canLogin": true, "isSubscription": true }] },
+          { "providerId": "anthropic", "displayName": "Anthropic", "status": "unknown", "authType": null, "canLogin": false, "canLogout": false, "methods": [{ "type": "oauth", "canLogin": false, "isSubscription": true }] }
+        ],
+        "flow": null
+      },
+      "sync": { "state": "idle", "reason": null }
+    },
+    "draft": { "ok": true, "draftId": "draft-example", "draftRevision": 1, "connectionRevision": 1, "targetFingerprint": "fixture-target-1", "credentialState": "none", "consentState": "unapproved", "cachedModels": [], "sourceKind": "none" },
+    "savedPendingSync": { "ok": true, "revision": "config-rev-2", "serviceId": "example-ai", "saved": true, "credentialSaved": null, "credentialState": "none", "operationId": null, "sync": { "state": "pending", "reason": "runtime_sync_pending" } },
+    "conflict": { "ok": false, "code": "config_conflict", "message": "供应商配置已变化，请重读后保存。", "retryable": true },
+    "fieldError": { "ok": false, "code": "invalid_request", "message": "请求字段无效。", "retryable": false, "fieldErrors": { "modelPatches": "invalid" } },
+    "unsupported": { "ok": false, "code": "unsupported", "message": "此能力尚未开放。", "retryable": false },
+    "oauthWaitingBrowser": {
+      "ok": true,
+      "capability": { "sdkAvailable": true, "reason": null, "piVersion": "1.5.0" },
+      "providers": [{
+        "providerId": "openai", "displayName": "OpenAI", "authType": "oauth", "source": "pi", "authenticated": false,
+        "credentialStored": false, "authConfigured": false, "modelAvailable": null, "canLogin": true, "canLogout": false,
+        "canConfigureKey": false, "accountLabel": null, "status": "disconnected", "statusReason": "Pi 未发现已保存的认证或可用的环境认证",
+        "methods": [{ "type": "oauth", "label": "OAuth", "canLogin": true, "isSubscription": true }], "models": []
+      }],
+      "flow": { "id": "oauth-example", "generation": 1, "revision": 2, "providerId": "openai", "operation": "login", "state": "waiting-browser", "url": "https://oauth.invalid/authorize", "userCode": null, "prompt": null, "errorCode": null, "notice": "请在浏览器授权，正在等待 Pi 登录完成" },
+      "sync": { "state": "idle", "reason": null }
+    }
+  },
+  "fixturesOnly": {
+    "credentialDraft": {
+      "ok": true, "draftId": "draft-example", "draftRevision": 2, "connectionRevision": 1, "targetFingerprint": "fixture-target-1",
+      "credentialState": "staged", "credentialGeneration": 1, "consentState": "authorized-idle", "sourceKind": "cache",
+      "cachedModels": [
+        { "modelId": "fast", "providerId": "example-ai", "configSource": "cache", "effectiveValues": { "name": "示例高速模型", "contextWindow": 131072, "toolCalling": true, "streaming": null }, "editableOverrides": {} },
+        { "modelId": "reasoning", "providerId": "example-ai", "configSource": "cache", "effectiveValues": { "name": "示例推理模型", "reasoning": true, "toolCalling": null, "streaming": null }, "editableOverrides": {} }
+      ]
+    },
+    "authorization": { "ok": true, "consentId": "consent-example", "expiresAt": 1893456900000, "targetSummary": { "baseUrl": "https://example.invalid/v1", "api": "openai-completions" }, "requiresDesktopConfirmation": false },
+    "discoveryAccepted": { "ok": true, "operationId": "discover-example" },
+    "discoveryRunning": { "ok": true, "kind": "discover", "state": "running", "revision": "config-rev-1" },
+    "discoveryReady": {
+      "ok": true, "kind": "discover", "state": "success", "revision": "config-rev-1",
+      "result": {
+        "sourceKind": "remote", "stale": false, "count": 1, "dialogGeneration": 1, "requestSeq": 1, "connectionRevision": 1, "targetFingerprint": "fixture-target-1", "credentialGeneration": 1,
+        "models": [{ "modelId": "fast", "providerId": "example-ai", "configSource": "remote", "effectiveValues": { "name": "示例高速模型", "toolCalling": null, "streaming": null }, "editableOverrides": {} }]
+      }
+    },
+    "discoveryEmpty": { "ok": true, "kind": "discover", "state": "success", "revision": "config-rev-1", "result": { "sourceKind": "remote", "stale": false, "count": 0, "models": [], "dialogGeneration": 1, "requestSeq": 1, "connectionRevision": 1, "targetFingerprint": "fixture-target-1", "credentialGeneration": 1 } },
+    "discoveryErrorStale": { "ok": true, "kind": "discover", "state": "failed", "revision": "config-rev-1", "error": { "code": "unavailable", "message": "供应商管理暂不可用。", "retryable": true }, "result": { "sourceKind": "cache", "stale": true, "count": 1, "models": [{ "modelId": "fast", "providerId": "example-ai", "configSource": "cache", "effectiveValues": { "name": "示例高速模型", "toolCalling": null, "streaming": null }, "editableOverrides": {} }] } },
+    "testReady": { "ok": true, "kind": "test", "state": "success", "revision": "config-rev-1", "result": { "reachability": true, "modelListAccess": true, "credentialAccepted": null, "inferenceVerified": false, "evidence": "model-list", "checkedAt": 1893456000000 } },
+    "credentialSaveFailed": { "ok": false, "code": "native_write_failed", "message": "配置已保存，凭据保存失败。", "retryable": true, "revision": "config-rev-2", "serviceId": "example-ai", "saved": true, "credentialSaved": false, "credentialState": "saved-credential-error", "operationId": null, "sync": { "state": "idle", "reason": null } },
+    "credentialUnconfirmed": { "ok": false, "code": "credential_unconfirmed", "message": "配置已保存，凭据结果待确认。", "retryable": false, "revision": "config-rev-2", "serviceId": "example-ai", "saved": true, "credentialSaved": null, "credentialState": "credential-unconfirmed", "operationId": null, "sync": { "state": "idle", "reason": null } },
+    "credentialSavedPendingSync": { "ok": true, "revision": "config-rev-2", "serviceId": "example-ai", "saved": true, "credentialSaved": true, "credentialState": "saved", "operationId": null, "sync": { "state": "pending", "reason": "runtime_sync_pending" } },
+    "dialogCases": [
+      { "dialog": "ready", "credential": "editing", "discovery": "unapproved", "sync": "idle" },
+      { "dialog": "discovering", "credential": "staged", "discovery": "debouncing", "sync": "idle" },
+      { "dialog": "discovering", "credential": "staged", "discovery": "refreshing", "sync": "idle" },
+      { "dialog": "saving", "credential": "persisting", "discovery": "ready", "sync": "idle" },
+      { "dialog": "saved-pending-sync", "credential": "saved", "discovery": "ready", "sync": "pending" },
+      { "dialog": "saved-credential-error", "credential": "none", "discovery": "error-stale", "sync": "idle" },
+      { "dialog": "credential-unconfirmed", "credential": "none", "discovery": "ready", "sync": "idle" },
+      { "dialog": "ready", "credential": "clear-staged", "discovery": "unapproved", "sync": "idle" },
+      { "dialog": "saved-pending-sync", "credential": "cleared", "discovery": "unapproved", "sync": "pending" },
+      { "dialog": "ready", "credential": "expired", "discovery": "unapproved", "sync": "idle" }
+    ]
+  }
+}

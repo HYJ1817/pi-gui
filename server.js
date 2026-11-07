@@ -50,6 +50,8 @@ import { samePath } from './lib/git-worktree.js';
 import { createProjectConfig } from './server/project-config.js';
 import { createSpecs } from './server/specs.js';
 import { createProviders } from './server/providers.js';
+import { createProviderManagement } from './server/provider-management.js';
+import { createProviderCredentialSdk } from './server/provider-credential-sdk.js';
 import { createAuthSdk, sanitizeModelEvent } from './server/provider-auth-sdk.js';
 import { createModelGeneration } from './server/model-generation.js';
 import { createProviderAuth } from './server/provider-auth.js';
@@ -484,7 +486,15 @@ const worktrees = createWorktrees({
 });
 worktreesRef = worktrees;
 
-const providers = createProviders({ modelsJson: MODELS_JSON });
+const providerCredentials = createProviderCredentialSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey,
+  authPath: path.join(path.dirname(MODELS_JSON), 'auth.json') });
+const providerMutationBlocked = () => providerAuthRef?.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning() || cliInFlight > 0;
+const providers = createProviders({ modelsJson: MODELS_JSON, metadataPath: path.join(DATA_DIR, 'provider-management.json'),
+  inspectCredential: providerCredentials.inspect, mutationBlocked: providerMutationBlocked });
+try { providers.store.recoverPending(); } catch { /* Configuration endpoints surface the fixed recovery error. */ }
+const providerManagementEnabled = process.env.PI_GUI_PROVIDER_MANAGEMENT === '1';
+const providerManagement = createProviderManagement({ store: providers.store, inspectCredential: providerCredentials.inspect,
+  readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled });
 const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
 const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig, nativeAdapter: authSdk });
 const uploads = createUploads({ dataDir: DATA_DIR });
@@ -1203,6 +1213,7 @@ const route = createRouter({
   },
   providers,
   providerAuth,
+  providerManagement,
   sessionExport: createSessionExport({ rpc, runtime, resolvePackageDir: piLaunch.packageDir }),
   projects,
   projectConfig,
@@ -1269,6 +1280,7 @@ if (process.send) process.on('message', async message => {
 async function shutdown() {
   if(runtime.isShuttingDown())return;
   providerAuth.dispose();
+  void providerCredentials.dispose();
   runtime.setShuttingDown(true);
   clearInterval(runtimeHealthTimer);
   await sessionChanges.dispose();

@@ -17,7 +17,7 @@ async function main() {
   try {
     const { createProviders } = await importFile('server/providers.js');
     const file = path.join(dir, 'models.json');
-    fs.writeFileSync(file, JSON.stringify({providers:{example:{apiKey:SECRET,headers:{Authorization:SECRET},baseUrl:'https://example.test/v1',models:[{id:'m',headers:{Authorization:SECRET}}]}}}));
+    fs.writeFileSync(file, JSON.stringify({providers:{example:{apiKey:SECRET,headers:{Authorization:SECRET},baseUrl:'https://example.test/v1',models:[{id:'m',headers:{Authorization:SECRET},capabilities:{extensionFlag:true}}]}}}));
     let body;
     createProviders({modelsJson:file}).handle({method:'GET'}, {writeHead(){return this;},end(s){body=JSON.parse(s);}}, new URL('http://local/api/providers'));
     check('models.json GET never returns stored key/header values',()=>assert.ok(!JSON.stringify(body).includes(SECRET)));
@@ -27,10 +27,13 @@ async function main() {
       const req = Readable.from(payload ? [Buffer.from(JSON.stringify(payload))] : []); req.method = method;
       providersService.handle(req, { writeHead(){ return this; }, end(s){ resolve(JSON.parse(s)); } }, new URL('http://local/api/providers'));
     });
-    const savedConfig = await providerRequest('POST', { name: 'example', config: { baseUrl: 'https://example.test/v2', api: 'openai-responses', models: [{ id: 'm', name: 'Renamed' }, { id: 'new-model' }] } });
+    const rebound = await providerRequest('POST', { name: 'example', config: { baseUrl: 'https://example.test/v2', api: 'openai-responses', models: [{ id: 'm' }] } });
+    check('legacy mutation cannot move stored keys or hidden headers to a new target', () => { assert.equal(rebound.code, 'credential_target_conflict'); assert.ok(!JSON.stringify(rebound).includes(SECRET)); });
+    const savedConfig = await providerRequest('POST', { name: 'example', config: { baseUrl: 'https://example.test/v1', models: [{ id: 'm', name: 'Renamed', capabilities: { streaming: true } }, { id: 'new-model' }] } });
     const savedDisk = JSON.parse(fs.readFileSync(file, 'utf8')).providers.example;
-    check('safe metadata POST preserves existing disk credential', () => { assert.equal(savedConfig.ok, true); assert.equal(savedDisk.apiKey, SECRET); assert.equal(savedDisk.baseUrl, 'https://example.test/v2'); });
+    check('safe metadata POST preserves existing disk credential', () => { assert.equal(savedConfig.ok, true, JSON.stringify(savedConfig)); assert.equal(savedDisk.apiKey, SECRET); assert.equal(savedDisk.baseUrl, 'https://example.test/v1'); });
     check('safe metadata POST preserves provider and same-id model headers only on disk', () => { assert.deepEqual(savedDisk.headers, { Authorization: SECRET }); assert.deepEqual(savedDisk.models.find(m => m.id === 'm').headers, { Authorization: SECRET }); assert.equal(savedDisk.models.find(m => m.id === 'm').name, 'Renamed'); assert.equal(savedDisk.models.find(m => m.id === 'new-model').headers, undefined); });
+    check('same-id model capability updates preserve unknown extension fields', () => assert.deepEqual(savedDisk.models.find(m => m.id === 'm').capabilities, { extensionFlag: true, streaming: true }));
     const readSaved = await providerRequest('GET');
     check('POST response and subsequent GET never expose preserved keys or headers', () => { assert.ok(!JSON.stringify(savedConfig).includes(SECRET)); assert.ok(!JSON.stringify(readSaved).includes(SECRET)); assert.equal(readSaved.providers.example.models[0].name, 'Renamed'); });
     const sdk = await importFile('server/provider-auth-sdk.js');
