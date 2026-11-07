@@ -223,6 +223,7 @@ async function persist(message) {
 }
 
 async function handle(message) {
+  if (message.action === 'probe') return { ok: true, sdk: true };
   if (message.action === 'inspect') return publicInspection(await inspect(message.providerId));
   if (message.action === 'stage' || message.action === 'stage-clear') return stage(message);
   if (message.action === 'persist' || message.action === 'clear') return persist(message);

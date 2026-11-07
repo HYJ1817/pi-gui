@@ -120,6 +120,13 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
     stageClear: (binding, options) => stage('stage-clear', binding, null, options),
     persistNative: binding => persist('persist', binding), clearNative: binding => persist('clear', binding),
     disposeDraft: draftId => isOpaqueId(draftId) && worker ? call('dispose-draft', { draftId }) : Promise.resolve({ ok: true }),
+    /* P2 桥的能力探测：worker 是否能按 1.5.0 合同应答。只读、不写盘。
+     * worker 的 probe 应答带 sdk:true；任何降级/失败路径都产不出这个字段。 */
+    qualified: async () => {
+      if (!ensure()) return false;
+      const result = await call('probe', {});
+      return result?.sdk === true;
+    },
     dispose,
   };
 }
