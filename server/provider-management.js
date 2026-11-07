@@ -65,7 +65,7 @@ function projectService(id, config, meta, auth) {
     compatibility: apiSupported ? 'unknown' : 'unsupported' };
 }
 
-export function createProviderManagement({ store, inspectCredential, readAuth = () => null, mutationBlocked = () => false, now = Date.now }) {
+export function createProviderManagement({ store, inspectCredential, readAuth = () => null, mutationBlocked = () => false, now = Date.now, enabled = false }) {
   const drafts = new Map();
   const receipts = new Map();
   function prune() {
@@ -136,6 +136,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     ['/discovery-authorizations/revoke','revoke'], ['/discover','discover'], ['/test','test'], ['/sync','sync']]);
   async function handle(req, res, url) {
     try {
+      if (!enabled) providerFailure('unsupported');
       prune();
       const suffix = url.pathname.slice(routeRoot.length);
       if (!suffix && req.method === 'GET') return json(res, 200, snapshot());

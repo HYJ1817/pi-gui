@@ -5,7 +5,7 @@
  * 安全约束，重构时不许放松：
  *   - apiKey 只回状态（apiKeyState），不回值；
  *   - 模型条目走字段白名单（MODEL_FIELDS），其余键一律丢弃；
- *   - 写配置用原子写（临时文件 + rename）；
+ *   - 双文件写入使用带恢复日志的配置仓储；
  *   - 拉取模型时**不执行** `!command` 形式的 key（那等于给网页界面开了任意命令执行）。
  */
 import fs from 'node:fs';
@@ -14,7 +14,7 @@ import { fetchModels } from '../lib/models-api.js';
 import { normalizeModelCapability } from '../lib/model-capabilities.js';
 import { json, readBody } from './http-utils.js';
 import { createProviderConfigStore } from './provider-config-store.js';
-import { applyLegacyProvider, isBuiltinProvider, own, removeProviderRecord, targetChanged } from './provider-config-records.js';
+import { applyLegacyProvider, own, removeProviderRecord, targetChanged } from './provider-config-records.js';
 import { isModelId, isProviderId, isRecord, providerContractError, providerErrorStatus, providerFailure, validateConnection } from '../public/provider-management/contract.js';
 
 const API_TYPES = new Set([
@@ -162,10 +162,11 @@ export function createProviders({ modelsJson, metadataPath = path.join(path.dirn
         catch { providerFailure('invalid_request'); }
         if (!isProviderId(name)) providerFailure('invalid_request');
         const before = store.read();
+        if (!Object.hasOwn(before.config.providers, name)) providerFailure('not_found');
         const credential = await inspectCredential(name);
         const result = store.transact({ expectedRevision: before.revision, apply(current) {
           if (mutationBlocked()) providerFailure('config_busy');
-          removeProviderRecord(current, name, { builtin: isBuiltinProvider(name, credential) });
+          removeProviderRecord(current, name, { credential });
           return { ok: true, path: modelsJson, removed: name };
         } });
         return json(res, 200, result);

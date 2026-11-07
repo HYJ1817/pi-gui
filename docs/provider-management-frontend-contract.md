@@ -1,6 +1,6 @@
 # 供应商管理前端合同 v1
 
-HTTP 入口为 `/api/provider-management`。请求通过 [public/api.js](../public/api.js)，校验和状态枚举见 [contract.js](../public/provider-management/contract.js)。页面使用应用级鉴权，无须传 Runtime owner。示例包含完整供应商、模型、认证、冲突和降级状态。[非秘密 UI fixture](../tests/fixtures/provider-management-scenarios.json)
+HTTP 入口为 `/api/provider-management`。P0＋P1 默认关闭该入口，开发或联调可在启动后端前设置 `PI_GUI_PROVIDER_MANAGEMENT=1`。关闭时该路由返回 `unsupported`，旧路由继续使用同一仓储。请求通过 [public/api.js](../public/api.js)，校验和状态枚举见 [contract.js](../public/provider-management/contract.js)。页面使用应用级鉴权，无须传 Runtime owner。示例包含完整供应商、模型、认证、冲突和降级状态。[非秘密 UI fixture](../tests/fixtures/provider-management-scenarios.json)
 
 ## 当前可用接口
 

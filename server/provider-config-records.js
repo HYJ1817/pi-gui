@@ -5,6 +5,7 @@ const presetTargets = new Map(PROVIDER_CATALOG.filter(item => item.connection).m
 const fallbackNativeIds = new Set(['openai','anthropic','google','deepseek','openrouter']);
 export const isBuiltinProvider = (id, evidence) => evidence?.builtIn ?? fallbackNativeIds.has(id);
 const safeProviderFields = new Set(['name','baseUrl','api','models','modelOverrides']);
+const targetNeutralProviderFields = new Set(['name','modelOverrides']);
 const safeModelFields = new Set(['id','name','api','reasoning','input','contextWindow','maxTokens','cost','capabilities','thinkingLevelMap']);
 const safeOverrideFields = new Set(EDITABLE_MODEL_FIELDS);
 const unsupportedModelFlags = new Set(['toolCalling','streaming','textInput','imageInput','reasoning']);
@@ -97,11 +98,20 @@ function editableClone(model) {
   return next;
 }
 
-export function removeProviderRecord({ config, metadata }, providerId, { builtin = false } = {}) {
+export function removeProviderRecord({ config, metadata }, providerId, { builtin = false, credential } = {}) {
   if (!isProviderId(providerId) || (!Object.hasOwn(config.providers, providerId) && !Object.hasOwn(metadata.services, providerId))) providerFailure('not_found');
-  if (builtin || own(metadata.services, providerId)?.kind === 'builtin') {
+  if (builtin) {
     metadata.services[providerId] = { ...own(metadata.services, providerId), providerId, kind: 'builtin', enabled: false };
   } else {
+    const previous = own(config.providers, providerId);
+    if (previous !== undefined && credential?.builtIn !== false &&
+        (!onlyKnownFields(previous, targetNeutralProviderFields) ||
+          (Object.hasOwn(previous, 'modelOverrides') && (!isRecord(previous.modelOverrides) ||
+            Object.values(previous.modelOverrides).some(model => !safeModelWithoutAuthentication(model, safeOverrideFields)))))) {
+      // Removing an Endpoint or an unclassified override can restore a
+      // different native target while leaving its credential or env slot live.
+      providerFailure('credential_target_conflict');
+    }
     delete config.providers[providerId];
     delete metadata.services[providerId];
   }
@@ -147,7 +157,7 @@ export function applyProviderCommit(snapshot, request, draft, credential) {
   const exists = previous !== undefined || previousMeta !== undefined;
   const builtin = isBuiltinProvider(id, credential) || previousMeta?.kind === 'builtin';
   if (request.action === 'delete') {
-    removeProviderRecord(snapshot, id, { builtin });
+    removeProviderRecord(snapshot, id, { builtin, credential });
   } else if (request.action === 'disable') {
     if (!exists) providerFailure('not_found');
     metadata.services[id] = { ...previousMeta, providerId: id, enabled: false };

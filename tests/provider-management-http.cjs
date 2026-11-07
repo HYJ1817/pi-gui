@@ -16,7 +16,7 @@ async function setup(t) {
   const native = new Map();
   const inspect = id => Promise.resolve(native.get(id) ?? { present: false, builtIn: false });
   const legacy = createProviders({ modelsJson, metadataPath, inspectCredential: inspect });
-  const make = () => createProviderManagement({ store: legacy.store, inspectCredential: inspect });
+  const make = (enabled = true) => createProviderManagement({ store: legacy.store, inspectCredential: inspect, enabled });
   fs.writeFileSync(modelsJson, JSON.stringify({ misc: { a: true }, providers: { example: {
     baseUrl: 'https://fixture.invalid/v1', api: 'openai-completions', apiKey: key,
     headers: { Authorization: key }, unknown: { value: key },
@@ -106,11 +106,40 @@ test('router authenticates application-scope writes without a Runtime owner and 
   const auth = createAuth({ token: 'fixture-http-token', port: 12345 });
   const route = createRouter({ auth, providers: f.legacy, providerManagement: f.make(), requireLegacyScope: () => true });
   const headers = { 'x-pi-gui-token': 'fixture-http-token' };
+  const off = createRouter({ auth, providers: f.legacy, providerManagement: f.make(false), requireLegacyScope: () => true });
+  assert.equal((await http(off, 'GET', root, undefined, headers)).body.code, 'unsupported');
+  assert.equal((await http(off, 'GET', '/api/providers', undefined, headers)).status, 200);
   assert.equal((await http(route, 'GET', root)).status, 401);
   assert.equal((await http(route, 'GET', root, undefined, { ...headers, host: 'foreign.invalid' })).status, 403);
   assert.equal((await http(route, 'GET', root, undefined, { ...headers, origin: 'https://foreign.invalid' })).status, 403);
   const revision = (await http(route, 'GET', root, undefined, headers)).body.revision;
   assert.equal((await http(route, 'POST', root + '/drafts', { requestId: 'http-auth', expectedRevision: revision, draft: draft('new') }, headers)).status, 200);
+});
+
+test('legacy delete removes a model-only native override but cannot rebind an authenticated endpoint', async t => {
+  const f = await setup(t);
+  f.native.set('example', { present: true, builtIn: true });
+  const before = fs.readFileSync(f.modelsJson);
+  const blocked = await http(f.legacy.handle, 'DELETE', '/api/providers/example');
+  assert.equal(blocked.body.code, 'credential_target_conflict');
+  assert.deepEqual(fs.readFileSync(f.modelsJson), before);
+  f.native.set('example', { present: null, builtIn: null });
+  const { handle } = f.make();
+  const revision = (await http(handle, 'GET', root)).body.revision;
+  const removal = { requestId: 'native-removal', expectedRevision: revision, action: 'delete', serviceId: 'example' };
+  assert.equal((await http(handle, 'POST', root + '/commit', removal)).body.code, 'credential_target_conflict');
+  f.native.set('example', { present: false, builtIn: true });
+  assert.equal((await http(f.legacy.handle, 'DELETE', '/api/providers/example')).body.code, 'credential_target_conflict');
+  assert.equal((await http(handle, 'POST', root + '/commit', removal)).body.saved, true);
+  assert.deepEqual(fs.readFileSync(f.modelsJson), before);
+  assert.equal((await http(handle, 'GET', root)).body.services[0].enabled, false);
+  fs.writeFileSync(f.modelsJson, JSON.stringify({ misc: { a: true }, providers: { example: { modelOverrides: { 'model-a': { name: 'Renamed' } } } } }));
+  const response = await http(f.legacy.handle, 'DELETE', '/api/providers/example');
+  assert.equal(response.status, 200);
+  const after = JSON.parse(fs.readFileSync(f.modelsJson, 'utf8'));
+  assert.equal(after.providers.example, undefined);
+  assert.deepEqual(after.misc, { a: true });
+  assert.equal((await http(f.legacy.handle, 'DELETE', '/api/providers/example')).status, 404);
 });
 
 test('preset labels do not override SDK identity and unknown new registrations fail closed', async t => {

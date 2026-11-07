@@ -492,8 +492,9 @@ const providerMutationBlocked = () => providerAuthRef?.inFlight() || piUpdate.is
 const providers = createProviders({ modelsJson: MODELS_JSON, metadataPath: path.join(DATA_DIR, 'provider-management.json'),
   inspectCredential: providerCredentials.inspect, mutationBlocked: providerMutationBlocked });
 try { providers.store.recoverPending(); } catch { /* Configuration endpoints surface the fixed recovery error. */ }
+const providerManagementEnabled = process.env.PI_GUI_PROVIDER_MANAGEMENT === '1';
 const providerManagement = createProviderManagement({ store: providers.store, inspectCredential: providerCredentials.inspect,
-  readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked });
+  readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled });
 const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
 const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig, nativeAdapter: authSdk });
 const uploads = createUploads({ dataDir: DATA_DIR });
