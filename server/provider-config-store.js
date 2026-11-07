@@ -20,11 +20,14 @@ const defaultMetadata = () => ({ schemaVersion: 1, services: {}, receipts: {} })
 
 // Windows' mode argument does not set a DACL. Protect the empty journal
 // directory before creating files, and the empty install file before writing.
+// Ownership: an elevated process creates objects owned by the local
+// Administrators group (S-1-5-32-544), not the user SID — staged files are
+// therefore accepted under either owner, while the single full-control DACL
+// rule for the current user keeps them private to this account either way.
 const PRIVATE_ACL = String.raw`
 $ErrorActionPreference = 'Stop'
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
-$report = @()
 foreach ($item in @($request.targets)) {
   $info = if ($item.directory) { [IO.DirectoryInfo]::new($item.path) } else { [IO.FileInfo]::new($item.path) }
   if (-not $info.Exists -or ($info.Attributes -band [IO.FileAttributes]::ReparsePoint)) { exit 1 }
@@ -39,30 +42,17 @@ foreach ($item in @($request.targets)) {
   }
   $check = $info.GetAccessControl()
   $rules = @($check.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
-  $bad = (($item.directory -and -not $check.AreAccessRulesProtected) -or $check.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $sid.Value -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow')
-  # TEMP-DIAG: 逐项记录结构事实（布尔/计数，不记路径与 SID 值），归因后移除。
-  $report += [pscustomobject]@{ directory = [bool]$item.directory; protected = [bool]$check.AreAccessRulesProtected;
-    rules = [int]$rules.Count; owner = ($check.GetOwner([Security.Principal.SecurityIdentifier]).Value -eq $sid.Value);
-    firstSid = ($rules.Count -gt 0 -and $rules[0].IdentityReference.Value -eq $sid.Value);
-    firstAllow = ($rules.Count -gt 0 -and $rules[0].AccessControlType -eq 'Allow'); bad = [bool]$bad }
-  if ($bad) { $failed = $true }
+  $ownerSid = $check.GetOwner([Security.Principal.SecurityIdentifier])
+  $owned = $ownerSid.Value -eq $sid.Value -or $ownerSid.Value -eq 'S-1-5-32-544'
+  if (($item.directory -and -not $check.AreAccessRulesProtected) -or -not $owned -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow') { exit 1 }
 }
-if ($failed) { [Console]::Out.WriteLine(($report | ConvertTo-Json -Compress)); exit 1 }
 `;
 function windowsAcl(targets, verifyOnly = false) {
   const shell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const result = spawnSync(shell, ['-NoLogo','-NoProfile','-NonInteractive','-Command',PRIVATE_ACL], {
-    input: JSON.stringify({ targets, verifyOnly }), windowsHide: true, stdio: ['pipe','pipe','ignore'], timeout: 10000,
+    input: JSON.stringify({ targets, verifyOnly }), windowsHide: true, stdio: ['pipe','ignore','ignore'], timeout: 10000,
   });
-  if (result.status !== 0) {
-    /* TEMP-DIAG: 仅记结构（状态码/布尔与逐项校验事实，不记路径与值），
-     * 用于定位 CI runner 上的确定性 config_unsafe；归因完成后移除。 */
-    console.error('[store-diag]', JSON.stringify({ stage: 'windowsAcl', status: result.status, signal: result.signal ?? null,
-      spawnError: result.error?.code ?? null, timedOut: result.error?.code === 'ETIMEDOUT', verifyOnly,
-      directory: targets.some(target => target.directory), count: targets.length,
-      report: result.stdout ? String(result.stdout).trim() || null : null }));
-    fail('config_unsafe');
-  }
+  if (result.status !== 0) fail('config_unsafe');
 }
 
 function safeReceipt(value) {
@@ -265,17 +255,11 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     const names = io.readdirSync(txPath);
     if (names.some(name => !fileNames.has(name))) fail('config_unsafe');
     // Remove the publication marker first, after both live files are verified.
-    try {
-      for (const name of ['journal.json', ...names.filter(n => n !== 'journal.json')]) {
-        const file = path.join(txPath, name);
-        if (plain(file)) io.unlinkSync(file);
-      }
-      io.rmdirSync(txPath);
-    } catch (e) {
-      /* TEMP-DIAG: 定位 Windows 上 unlink/rmdir 的共享冲突，归因后移除。 */
-      console.error('[store-diag]', JSON.stringify({ stage: 'cleanup', errno: e?.code ?? null }));
-      throw e;
+    for (const name of ['journal.json', ...names.filter(n => n !== 'journal.json')]) {
+      const file = path.join(txPath, name);
+      if (plain(file)) io.unlinkSync(file);
     }
+    io.rmdirSync(txPath);
     pins.delete(txPath);
     syncDirectory(path.dirname(txPath));
   }
@@ -295,11 +279,6 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       io.renameSync(temp, target);
       staged = null;
       syncDirectory(path.dirname(target));
-    } catch (e) {
-      /* TEMP-DIAG: renameSync 在目标被外部短暂持有（扫描器/索引器）时会 EPERM，
-       * 这里记结构以便归因；归因后移除。 */
-      console.error('[store-diag]', JSON.stringify({ stage: 'install-rename', errno: e?.code ?? null, key }));
-      throw e;
     } finally { if (staged && snapshot(temp).stamp === staged.stamp) io.unlinkSync(temp); }
   }
   function recover(checkpoints = false) {
@@ -408,12 +387,7 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
           const pending = path.join(txPath, 'journal.pending');
           writeExclusive(pending, bytes({ version: 1, installId: randomUUID(), files: { models: hash(files.models), metadata: hash(files.metadata) }, entries }));
           parents(txPath);
-          try { io.renameSync(pending, path.join(txPath, 'journal.json')); }
-          catch (e) {
-            /* TEMP-DIAG: 归因后移除。 */
-            console.error('[store-diag]', JSON.stringify({ stage: 'journal-rename', errno: e?.code ?? null }));
-            throw e;
-          }
+          io.renameSync(pending, path.join(txPath, 'journal.json'));
           published = true;
           syncDirectory(txPath);
           syncDirectory(path.dirname(txPath));
@@ -428,8 +402,6 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     } catch (e) {
       if (knownCodes.has(e.code) || e?.providerMutation === true) throw e;
       if (['EACCES','EPERM'].includes(e.code)) fail('config_unreadable');
-      /* TEMP-DIAG: 未知系统错误被映射成 config_write_failed 前记录结构；归因后移除。 */
-      console.error('[store-diag]', JSON.stringify({ stage: 'transact-unknown', errno: e?.code ?? null, name: e?.name ?? null, syscall: e?.syscall ?? null }));
       return fail('config_write_failed');
     }
   }
