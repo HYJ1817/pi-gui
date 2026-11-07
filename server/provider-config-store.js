@@ -24,6 +24,7 @@ const PRIVATE_ACL = String.raw`
 $ErrorActionPreference = 'Stop'
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+$report = @()
 foreach ($item in @($request.targets)) {
   $info = if ($item.directory) { [IO.DirectoryInfo]::new($item.path) } else { [IO.FileInfo]::new($item.path) }
   if (-not $info.Exists -or ($info.Attributes -band [IO.FileAttributes]::ReparsePoint)) { exit 1 }
@@ -38,20 +39,28 @@ foreach ($item in @($request.targets)) {
   }
   $check = $info.GetAccessControl()
   $rules = @($check.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
-  if (($item.directory -and -not $check.AreAccessRulesProtected) -or $check.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $sid.Value -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow') { exit 1 }
+  $bad = (($item.directory -and -not $check.AreAccessRulesProtected) -or $check.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $sid.Value -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow')
+  # TEMP-DIAG: 逐项记录结构事实（布尔/计数，不记路径与 SID 值），归因后移除。
+  $report += [pscustomobject]@{ directory = [bool]$item.directory; protected = [bool]$check.AreAccessRulesProtected;
+    rules = [int]$rules.Count; owner = ($check.GetOwner([Security.Principal.SecurityIdentifier]).Value -eq $sid.Value);
+    firstSid = ($rules.Count -gt 0 -and $rules[0].IdentityReference.Value -eq $sid.Value);
+    firstAllow = ($rules.Count -gt 0 -and $rules[0].AccessControlType -eq 'Allow'); bad = [bool]$bad }
+  if ($bad) { $failed = $true }
 }
+if ($failed) { [Console]::Out.WriteLine(($report | ConvertTo-Json -Compress)); exit 1 }
 `;
 function windowsAcl(targets, verifyOnly = false) {
   const shell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const result = spawnSync(shell, ['-NoLogo','-NoProfile','-NonInteractive','-Command',PRIVATE_ACL], {
-    input: JSON.stringify({ targets, verifyOnly }), windowsHide: true, stdio: ['pipe','ignore','ignore'], timeout: 10000,
+    input: JSON.stringify({ targets, verifyOnly }), windowsHide: true, stdio: ['pipe','pipe','ignore'], timeout: 10000,
   });
   if (result.status !== 0) {
-    /* TEMP-DIAG: 仅记结构（状态码/布尔，不记路径与值），用于定位 CI runner 上的
-     * 确定性 config_unsafe；归因完成后移除。 */
+    /* TEMP-DIAG: 仅记结构（状态码/布尔与逐项校验事实，不记路径与值），
+     * 用于定位 CI runner 上的确定性 config_unsafe；归因完成后移除。 */
     console.error('[store-diag]', JSON.stringify({ stage: 'windowsAcl', status: result.status, signal: result.signal ?? null,
       spawnError: result.error?.code ?? null, timedOut: result.error?.code === 'ETIMEDOUT', verifyOnly,
-      directory: targets.some(target => target.directory), count: targets.length }));
+      directory: targets.some(target => target.directory), count: targets.length,
+      report: result.stdout ? String(result.stdout).trim() || null : null }));
     fail('config_unsafe');
   }
 }
