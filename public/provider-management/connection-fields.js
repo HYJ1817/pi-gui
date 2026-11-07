@@ -1,0 +1,266 @@
+/* 服务身份与凭据区。
+ *
+ * 关键边界：**主页面永远没有密钥输入框**。
+ * 这里只展示凭据状态、固定的安全触发器（P2 到位前 disabled），
+ * 以及非秘密的环境变量引用 $NAME。 */
+
+import {
+  catalogEndpointText,
+  credentialSourceLabel,
+  endpointLabel,
+  isSubscription,
+  monogram,
+  serviceCredentialText,
+} from './catalog.js';
+import { button, field, h, icon } from './dom.js';
+
+function credentialCapability(snapshot) {
+  const capabilities = snapshot?.capabilities || {};
+  const pendingReason = capabilities.reasons?.privateDesktopBridge;
+  return {
+    available: capabilities.privateDesktopBridge === true,
+    reason: pendingReason === 'p2_pending' || !pendingReason
+      ? '桌面凭据输入待接通（P2）'
+      : '桌面凭据输入暂不可用',
+  };
+}
+
+function serviceChip({ item, draft, onOpenAuth, onChangeService }) {
+  const cloning = draft.mode === 'clone';
+  const subscription = !cloning && (isSubscription(item) || draft.authMode === 'oauth');
+  const auth = item?.auth;
+  const chip = h('div', { class: 'pm-service-chip' },
+    h('span', { class: 'pm-service-monogram', 'aria-hidden': 'true', text: monogram(item || { id: draft.providerId, name: draft.displayName }) }),
+    h('span', { class: 'pm-service-chip-copy' },
+      h('span', { class: 'pm-service-chip-name', text: draft.displayName || draft.providerId || '未命名服务' }),
+      h('span', { class: 'pm-service-chip-detail', text: cloning
+        ? '复制为新服务 · 不携带凭据'
+        : subscription
+          ? (auth?.status === 'connected' ? '订阅账户 · 已连接' : '订阅账户 · 使用 Pi 登录')
+          : endpointLabel(draft.connection) || catalogEndpointText(item || {}) || '自定义端点' }),
+    ),
+    cloning ? null
+      : subscription
+        ? button('管理登录', 'pm-btn-ghost pm-btn-small', onOpenAuth, { 'data-auth-entry': draft.providerId })
+        : button('更换', 'pm-btn-ghost pm-btn-small pm-change-service', onChangeService),
+  );
+  return chip;
+}
+
+function cloneCredentialRow() {
+  return h('div', { class: 'pm-credential-block pm-clone-credential' },
+    h('div', { class: 'pm-credential-head' },
+      h('div', {},
+        h('div', { class: 'pm-field-label', text: 'API Key' }),
+        h('div', { class: 'pm-credential-status', text: '复制不携带凭据' }),
+      ),
+    ),
+    h('div', { class: 'pm-credential-note' },
+      icon('lock', 14),
+      h('span', { text: '源服务的密钥、环境变量引用与 Pi 本机凭据都不会复制；保存后再为新服务配置。' }),
+    ),
+  );
+}
+
+function credentialRow({ draft, snapshot, onCredentialTrigger, onClearCredential, onEnvReference, error }) {
+  const capability = credentialCapability(snapshot);
+  const hasCredential = draft.credentialState
+    && draft.credentialState.state !== 'none'
+    && draft.credentialState.source !== 'none';
+  const clearing = draft.credentialAction?.type === 'none';
+  const statusText = clearing ? '保存后清除现有凭据' : hasCredential ? serviceCredentialText({ credentialState: draft.credentialState }) : '未配置凭据';
+  const envReference = draft.envReference || '';
+
+  const trigger = h('button', {
+    type: 'button',
+    class: `pm-credential-trigger${capability.available ? '' : ' is-disabled'}`,
+    id: 'pmCredentialTrigger',
+    'data-credential-trigger': 'true',
+    disabled: !capability.available,
+    'aria-describedby': 'pmCredentialNote',
+    title: capability.available ? '打开安全凭据输入' : capability.reason,
+  }, icon('key', 15), h('span', { text: hasCredential ? '更换 API Key' : '配置 API Key' }));
+
+  if (capability.available) trigger.addEventListener('click', () => onCredentialTrigger?.());
+  else trigger.addEventListener('click', event => event.preventDefault());
+
+  const envInput = h('input', {
+    class: 'pm-input pm-env-input',
+    type: 'text',
+    value: envReference,
+    placeholder: hasCredential && !clearing ? '保留现有凭据；输入新的 $NAME 可改用环境变量' : '$OPENAI_API_KEY 或 ${OPENAI_API_KEY}',
+    spellcheck: 'false',
+    autocomplete: 'off',
+    'aria-label': 'API Key 环境变量引用',
+  });
+  envInput.addEventListener('input', () => onEnvReference?.(envInput.value));
+
+  return h('div', { class: 'pm-credential-block' },
+    h('div', { class: 'pm-credential-head' },
+      h('div', {},
+        h('div', { class: 'pm-field-label', text: 'API Key' }),
+        h('div', { class: 'pm-credential-status', text: statusText }),
+      ),
+      h('div', { class: 'pm-credential-actions' },
+        hasCredential && !clearing
+          ? button('清除凭据', 'pm-btn-ghost pm-btn-small pm-clear-credential', () => onClearCredential?.())
+          : null,
+        trigger,
+      ),
+    ),
+    // 环境变量凭据不显示假掩码：它本来就没有密钥值可遮。
+    hasCredential && draft.credentialState?.source !== 'env'
+      ? h('div', { class: 'pm-mask-line', 'aria-hidden': 'true' }, '••••••••••••••••')
+      : null,
+    envInput,
+    error ? h('div', { class: 'pm-field-error', role: 'alert', text: error }) : null,
+    h('div', { class: 'pm-credential-note', id: 'pmCredentialNote' },
+      icon(capability.available ? 'lock' : 'info', 14),
+      h('span', { text: capability.available
+        ? '密钥通过独立的安全桌面窗口输入，不会进入主页面。'
+        : `${capability.reason}；当前只写入 $NAME 环境变量引用。` }),
+    ),
+  );
+}
+
+export function renderConnectionFields({
+  draft,
+  snapshot,
+  item,
+  errors = {},
+  onDispatch = () => {},
+  onChangeService = () => {},
+  onOpenAuth = () => {},
+  onCredentialTrigger = () => {},
+  onClearCredential = () => {},
+}) {
+  const root = h('div', { class: 'pm-connection-fields' });
+  const subscription = draft.mode !== 'clone' && (draft.authMode === 'oauth' || isSubscription(item));
+  if (subscription) {
+    root.appendChild(h('div', { class: 'pm-oauth-panel' },
+      h('div', { class: 'pm-oauth-status' },
+        icon('lock', 16),
+        h('div', {},
+          h('div', { class: 'pm-oauth-title', text: item?.auth?.status === 'connected' ? '订阅账户已连接' : '订阅账户由 Pi 登录管理' }),
+          h('div', { class: 'pm-oauth-detail', text: '账户状态来自 Pi 认证；这里不显示、也不接收令牌。' }),
+        ),
+      ),
+      button('管理登录', 'pm-btn pm-btn-small', onOpenAuth),
+      h('div', { class: 'pm-oauth-pending' },
+        icon('info', 14),
+        h('span', { text: '订阅服务的模型配置需要 P3 自动发现接通后保存；当前不会伪造模型列表。' }),
+      ),
+    ));
+    return root;
+  }
+
+  const editingExisting = draft.mode === 'update';
+  const custom = draft.catalogId === 'custom' || !item;
+
+  // 参考布局把身份和凭据压缩成双栏顶带，模型双栏拿到主要高度；
+  // 已知服务的地址与协议来自目录，不在主界面重复输入。
+  const top = h('div', { class: 'pm-setup-top' },
+    h('div', { class: 'pm-service-column' },
+      h('div', { class: 'pm-connection-label', text: '服务' }),
+      serviceChip({ item, draft, onOpenAuth, onChangeService }),
+    ),
+    h('div', { class: 'pm-credential-column' },
+      draft.mode === 'clone'
+        ? cloneCredentialRow()
+        : credentialRow({
+          draft,
+          snapshot,
+          onCredentialTrigger,
+          onEnvReference: value => onDispatch({ type: 'env-reference', value }),
+          onClearCredential,
+          error: errors.envReference,
+        }),
+    ),
+  );
+  root.appendChild(top);
+
+  // 编辑既有服务时端点与显示名都在高级设置里；主界面只保留身份和凭据。
+  if (!custom || draft.mode === 'update') return root;
+
+  let nameField = null;
+  const nameInput = h('input', {
+    class: 'pm-input',
+    type: 'text',
+    value: draft.displayName,
+    placeholder: '服务名称',
+    'aria-label': '服务名称',
+  });
+  nameInput.addEventListener('input', () => onDispatch({ type: 'field', field: 'displayName', value: nameInput.value }));
+  nameField = field('名称', nameInput, {
+    hint: '显示在服务列表和模型选择器里。',
+    error: errors.displayName,
+  });
+
+  const baseInput = h('input', {
+    class: 'pm-input',
+    type: 'text',
+    value: draft.connection?.baseUrl || '',
+    placeholder: 'https://api.example.com/v1',
+    spellcheck: 'false',
+    autocomplete: 'off',
+    readOnly: editingExisting,
+    'aria-label': 'Base URL',
+    'data-connection-base-url': 'true',
+  });
+  baseInput.addEventListener('input', () => onDispatch({ type: 'connection-field', field: 'baseUrl', value: baseInput.value }));
+
+  const apiSelect = h('select', {
+    class: 'pm-select',
+    'aria-label': 'API 类型',
+    disabled: editingExisting,
+  });
+  for (const api of ['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai']) {
+    apiSelect.appendChild(h('option', { value: api, text: api, selected: (draft.connection?.api || 'openai-completions') === api }));
+  }
+  apiSelect.addEventListener('change', () => onDispatch({ type: 'connection-field', field: 'api', value: apiSelect.value }));
+
+  let idField = null;
+  if (draft.mode === 'create' || draft.mode === 'clone') {
+    const idInput = h('input', {
+      class: 'pm-input pm-provider-id',
+      type: 'text',
+      value: draft.providerId,
+      placeholder: 'provider-id',
+      spellcheck: 'false',
+      autocomplete: 'off',
+      'aria-label': '供应商标识',
+    });
+    idInput.addEventListener('input', () => onDispatch({ type: 'field', field: 'providerId', value: idInput.value }));
+    idField = field('供应商标识', idInput, {
+      hint: '写入 Pi 配置的唯一 ID，保存后不能修改。',
+      error: errors.providerId,
+    });
+  }
+  const identity = h('div', { class: 'pm-identity-grid' });
+  if (nameField) identity.appendChild(nameField);
+  if (idField) identity.appendChild(idField);
+
+  root.appendChild(h('div', { class: 'pm-custom-fields' },
+    identity,
+    h('div', { class: 'pm-connection-grid' },
+      field('Base URL', baseInput, {
+        hint: editingExisting ? '编辑现有服务时端点固定；需要换端点请复制为新服务。' : '只填写协议、主机与路径，不要带凭据或查询参数。',
+        error: errors.connection,
+        className: 'pm-field-wide',
+      }),
+      field('API 类型', apiSelect, { hint: editingExisting ? '随服务身份固定。' : '决定请求与响应协议。', error: errors.connectionApi }),
+    ),
+  ));
+  return root;
+}
+
+export function credentialSummary(draft) {
+  const text = serviceCredentialText({ credentialState: draft.credentialState });
+  if (draft.credentialAction?.type === 'none') return '保存后清除凭据';
+  if (draft.envReference) return `环境变量 ${draft.envReference}`;
+  return text;
+}
+
+export function credentialSourceText(state) {
+  return credentialSourceLabel(state);
+}
