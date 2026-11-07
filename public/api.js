@@ -9,6 +9,7 @@
 
 import { feedbackContext, toast } from './ui/toast.js';
 import { S } from './state.js';
+import { isOpaqueId, providerContractError, validateProviderRequest } from './provider-management/contract.js';
 
 /* 日志模块不直接 import 本文件（会成环）。由装配层注入一个只读报告器，
  * 只传 /api/... 路由与状态码，不传 URL 查询串或错误正文。 */
@@ -63,7 +64,7 @@ export async function getJSON(url, headers) {
 }
 
 /** POST / DELETE 一个 JSON 接口。网络层失败同样返回结构化结果，不抛。 */
-export async function sendJSON(url, { method = 'POST', body, contentType, headers } = {}) {
+export async function sendJSON(url, { method = 'POST', body, contentType, headers, applicationScoped = false } = {}) {
   if (url === '/api/restart' || url === '/api/sessions/switch' || url.includes('/open-session')
     || (url === '/api/command' && ['abort', 'new_session', 'fork', 'switch_session', 'steer', 'follow_up'].includes(body?.type))) S.cancelFallback?.('user-operation');
   const opts = { method };
@@ -74,7 +75,7 @@ export async function sendJSON(url, { method = 'POST', body, contentType, header
     opts.headers = { 'Content-Type': 'application/json' };
     opts.body = JSON.stringify(body || {});
   }
-  if (S.legacyOwner) opts.headers = { ...opts.headers, 'X-Pi-Gui-Owner': JSON.stringify(S.legacyOwner) };
+  if (!applicationScoped && S.legacyOwner) opts.headers = { ...opts.headers, 'X-Pi-Gui-Owner': JSON.stringify(S.legacyOwner) };
   if (headers) opts.headers = { ...opts.headers, ...headers };
   try {
     const r = await fetch(url, opts);
@@ -270,6 +271,24 @@ export const fetchProviders = () => getJSON('/api/providers');
 export const saveProvider = (name, config) => sendJSON('/api/providers', { body: { name, config } });
 export const deleteProvider = (name) => sendJSON('/api/providers/' + encodeURIComponent(name), { method: 'DELETE' });
 export const fetchProviderModels = (payload) => sendJSON('/api/providers/models', { body: payload });
+
+const providerManagementRoot = '/api/provider-management';
+async function providerManagementPost(route, kind, body) {
+  let safe;
+  try { safe = validateProviderRequest(kind, body); }
+  catch (error) { return providerContractError('invalid_request', error.fieldErrors); }
+  return sendJSON(providerManagementRoot + route, { body: safe, applicationScoped: true });
+}
+export const fetchProviderManagement = () => getJSON(providerManagementRoot);
+export const saveProviderDraft = payload => providerManagementPost('/drafts', 'drafts', payload);
+export const commitProviderDraft = payload => providerManagementPost('/commit', 'commit', payload);
+export const authorizeProviderDiscovery = payload => providerManagementPost('/discovery-authorizations', 'authorize', payload);
+export const revokeProviderDiscovery = payload => providerManagementPost('/discovery-authorizations/revoke', 'revoke', payload);
+export const discoverProviderModels = payload => providerManagementPost('/discover', 'discover', payload);
+export const testProviderConnection = payload => providerManagementPost('/test', 'test', payload);
+export const syncProviderConfiguration = payload => providerManagementPost('/sync', 'sync', payload);
+export const fetchProviderOperation = id => isOpaqueId(id) ? getJSON(providerManagementRoot + '/operations/' + id) : Promise.resolve(providerContractError('invalid_request'));
+export const cancelProviderOperation = (id, payload) => isOpaqueId(id) ? providerManagementPost('/operations/' + id + '/cancel', 'cancel', payload) : Promise.resolve(providerContractError('invalid_request'));
 
 /* ---------- Git 变更 ---------- */
 

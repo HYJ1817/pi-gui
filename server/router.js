@@ -86,6 +86,7 @@ export function createRouter({
   rpc,
   providers,
   providerAuth = null,
+  providerManagement = null,
   sessionExport = null,
   projects,
   projectConfig,
@@ -172,6 +173,13 @@ export function createRouter({
     }
 
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
+    if (['/api/provider-management','/api/providers','/api/provider-auth'].some(prefix => url.pathname === prefix || url.pathname.startsWith(prefix + '/'))) {
+      const denied = auth.denyLocalHost?.(req);
+      if (denied) return json(res, denied.code, { ok: false, error: denied.error });
+    }
+    if (url.pathname === '/api/provider-management' || url.pathname.startsWith('/api/provider-management/')) {
+      return providerManagement ? providerManagement.handle(req, res, url) : json(res, 503, { ok: false, code: 'unavailable' });
+    }
     /* 日志是应用级能力：认证已完成，但不能因为并行会话活着就要求经典 owner。 */
     if (url.pathname === '/api/logs' || url.pathname.startsWith('/api/logs/')) {
       return logging ? logging.handle(req, res, url) : json(res, 503, { ok: false, code: 'logs_unavailable' });

@@ -282,6 +282,13 @@ async function waitReady(ms = 20000) {
   console.log('');
   console.log('— 路由层（真实 server.js）');
 
+  const sdkDir = path.join(WORK, 'node_modules', '@earendil-works', 'pi-coding-agent');
+  fs.mkdirSync(sdkDir, { recursive: true });
+  const sdkEntry = path.join(sdkDir, 'sdk.mjs');
+  fs.writeFileSync(path.join(sdkDir, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '1.5.0',
+    bin: { pi: 'sdk.mjs' }, exports: { '.': { import: './sdk.mjs' } } }));
+  fs.writeFileSync(sdkEntry, 'export class ModelRuntime { static async create() { return { getProviders: () => [] }; } }\nexport function readStoredCredential() { return undefined; }\n');
+
   const server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: ROOT,
     env: {
@@ -289,6 +296,7 @@ async function waitReady(ms = 20000) {
       PORT: String(PORT),
       PI_GUI_OPEN: '0',
       PI_GUI_DATA: DATA,
+      PI_BIN: sdkEntry,
       PI_GUI_AUTH_FIXTURE_KEY: FAKE_KEY,
       PI_CODING_AGENT_DIR: path.join(FAKE_HOME, '.pi', 'agent'),
       // 隔离 homedir，别碰用户真实的 ~/.pi/agent/models.json

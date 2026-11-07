@@ -13,6 +13,9 @@ import path from 'node:path';
 import { fetchModels } from '../lib/models-api.js';
 import { normalizeModelCapability } from '../lib/model-capabilities.js';
 import { json, readBody } from './http-utils.js';
+import { createProviderConfigStore } from './provider-config-store.js';
+import { applyLegacyProvider, isBuiltinProvider, own, removeProviderRecord, targetChanged } from './provider-config-records.js';
+import { isModelId, isProviderId, isRecord, providerContractError, providerErrorStatus, providerFailure, validateConnection } from '../public/provider-management/contract.js';
 
 const API_TYPES = new Set([
   'openai-completions',
@@ -27,12 +30,12 @@ const API_TYPES = new Set([
 const MODEL_FIELDS = {
   name: (v) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 200) : undefined),
   contextWindow: (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+    const n = Math.round(Number(v));
+    return Number.isSafeInteger(n) && n > 0 ? n : undefined;
   },
   maxTokens: (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+    const n = Math.round(Number(v));
+    return Number.isSafeInteger(n) && n > 0 ? n : undefined;
   },
   reasoning: (v) => (typeof v === 'boolean' ? v : undefined),
   input: (v) => {
@@ -87,7 +90,7 @@ export function isEnvKeyReference(value) {
 /* pi 的 apiKey 支持三种写法：$ENV_VAR 引用环境变量、!command 执行命令取值、字面量。
  * 实测：$VAR 未设置时 pi 会**静默丢掉整个供应商**——get_available_models 里完全查不到，
  * 也不报错。所以这里主动检查并提示，否则用户根本不知道为什么加完没反应。 */
-function apiKeyState(apiKey) {
+export function apiKeyState(apiKey) {
   const raw = String(apiKey ?? '').trim();
 
   if (!raw) {
@@ -118,133 +121,78 @@ function apiKeyState(apiKey) {
 /**
  * @param modelsJson ~/.pi/agent/models.json 的绝对路径
  */
-export function createProviders({ modelsJson }) {
+export function createProviders({ modelsJson, metadataPath = path.join(path.dirname(modelsJson), 'provider-management.json'), mutationBlocked = () => false,
+  inspectCredential = async () => {
+    try { fs.lstatSync(path.join(path.dirname(modelsJson), 'auth.json')); }
+    catch (error) { if (error.code === 'ENOENT') return { present: false, builtIn: null }; }
+    return { present: null, builtIn: null };
+  } }) {
+  const store = createProviderConfigStore({ modelsJson, metadataPath });
   function readModelsConfig() {
-    try {
-      const raw = fs.readFileSync(modelsJson, 'utf8');
-      const data = JSON.parse(raw);
-      if (data && typeof data === 'object') {
-        if (!data.providers || typeof data.providers !== 'object') data.providers = {};
-        return data;
-      }
-    } catch {
-      /* 文件不存在或损坏，按空配置处理 */
-    }
-    return { providers: {} };
+    try { return store.read().config; }
+    catch { return { providers: {} }; } // Internal capability projection degrades safely.
   }
 
-  function writeModelsConfig(data) {
-    fs.mkdirSync(path.dirname(modelsJson), { recursive: true });
-    // 原子写：先落临时文件再 rename，避免中途失败把用户配置写坏
-    const tmp = `${modelsJson}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmp, modelsJson);
+  function failure(res, error) {
+    const output = providerContractError(error?.code);
+    return json(res, providerErrorStatus(output.code), { ...output, error: output.message });
   }
 
   function handle(req, res, url) {
-    // 读取全部供应商
-    if (req.method === 'GET') {
-      const cfg = readModelsConfig();
-      const keyStates = {};
-      for (const [name, c] of Object.entries(cfg.providers || {})) {
-        keyStates[name] = apiKeyState(c?.apiKey);
+    if (req.method === 'GET' && url.pathname === '/api/providers') {
+      try {
+        const { config, exists, revision } = store.read();
+        const entries = Object.entries(config.providers);
+        return json(res, 200, { ok: true, path: modelsJson, exists, revision,
+          providers: Object.fromEntries(entries.map(([id, cfg]) => [id, publicProviderConfig(cfg, id)])),
+          keyStates: Object.fromEntries(entries.map(([id, cfg]) => [id, apiKeyState(cfg?.apiKey)])),
+        });
+      } catch (error) { return failure(res, error); }
+    }
+    if (req.method === 'POST' || req.method === 'DELETE') return mutate(req, res, url);
+    return failure(res, { code: 'method_not_allowed' });
+  }
+
+  async function mutate(req, res, url) {
+    try {
+      if (mutationBlocked()) providerFailure('config_busy');
+      if (req.method === 'DELETE') {
+        let name;
+        try { name = decodeURIComponent(url.pathname.slice('/api/providers/'.length)); }
+        catch { providerFailure('invalid_request'); }
+        if (!isProviderId(name)) providerFailure('invalid_request');
+        const before = store.read();
+        const credential = await inspectCredential(name);
+        const result = store.transact({ expectedRevision: before.revision, apply(current) {
+          if (mutationBlocked()) providerFailure('config_busy');
+          removeProviderRecord(current, name, { builtin: isBuiltinProvider(name, credential) });
+          return { ok: true, path: modelsJson, removed: name };
+        } });
+        return json(res, 200, result);
       }
-      return json(res, 200, {
-        ok: true,
-        path: modelsJson,
-        exists: fs.existsSync(modelsJson),
-        providers: Object.fromEntries(Object.entries(cfg.providers).map(([id, c]) => [id, publicProviderConfig(c, id)])),
-        keyStates,
-      });
-    }
-
-    // 新增或更新一个供应商
-    if (req.method === 'POST') {
-      readBody(req)
-        .then((raw) => {
-          let payload;
-          try {
-            payload = JSON.parse(raw || '{}');
-          } catch {
-            return json(res, 400, { ok: false, error: '请求体不是合法 JSON' });
-          }
-
-          const name = String(payload.name || '').trim();
-          const config = payload.config || {};
-
-          if (!/^[A-Za-z0-9._-]{1,64}$/.test(name)) {
-            return json(res, 400, {
-              ok: false,
-              error: '供应商 ID 只能包含字母、数字、点、下划线和连字符，长度 1-64',
-            });
-          }
-          if (!config.baseUrl || typeof config.baseUrl !== 'string') {
-            return json(res, 400, { ok: false, error: 'Base URL 必填' });
-          }
-          if (config.api && !API_TYPES.has(config.api)) {
-            return json(res, 400, { ok: false, error: `不支持的 API 类型：${config.api}` });
-          }
-          if (!Array.isArray(config.models)) {
-            return json(res, 400, { ok: false, error: 'models 必须是数组' });
-          }
-          if (config.apiKey && !isEnvKeyReference(config.apiKey)) {
-            return json(res, 400, { ok: false, error: 'GUI 只接受环境变量引用；API Key 原文请通过 Pi 的 /login 配置' });
-          }
-          try {
-            const u = new URL(config.baseUrl);
-            if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password || u.search || u.hash) throw new Error();
-          } catch { return json(res, 400, { ok: false, error: 'Base URL 必须是无凭据、无查询参数的 HTTP(S) 地址' }); }
-
-          const clean = {
-            baseUrl: String(config.baseUrl).trim(),
-            api: config.api || 'openai-completions',
-          };
-          if (config.apiKey && String(config.apiKey).trim()) {
-            clean.apiKey = String(config.apiKey).trim();
-          }
-          clean.models = config.models.map(cleanModelEntry).filter(Boolean);
-
-          const cfg = readModelsConfig();
-          // A safe GET cannot echo the old key back. Empty/absent means preserve,
-          // rather than inadvertently deleting a credential while editing models.
-          const previous = cfg.providers[name];
-          if (!clean.apiKey && previous?.apiKey) clean.apiKey = previous.apiKey;
-          // Hidden credential-bearing headers remain backend-only when a user
-          // edits safe model metadata. A removed model stays removed.
-          if (previous?.headers) clean.headers = previous.headers;
-          for (const model of clean.models) {
-            const old = previous?.models?.find(m => m.id === model.id);
-            if (old?.headers) model.headers = old.headers;
-          }
-          cfg.providers[name] = clean;
-          writeModelsConfig(cfg);
-
-          const key = apiKeyState(clean.apiKey);
-          return json(res, 200, {
-            ok: true,
-            path: modelsJson,
-            provider: name,
-            warning: key.ok ? '' : key.note,
-            keyState: key,
-          });
-        })
-        .catch(() => json(res, 500, { ok: false, error: '保存供应商配置失败' }));
-      return;
-    }
-
-    // 删除一个供应商
-    if (req.method === 'DELETE') {
-      const name = decodeURIComponent(url.pathname.slice('/api/providers/'.length));
-      const cfg = readModelsConfig();
-      if (!cfg.providers[name]) {
-        return json(res, 404, { ok: false, error: `供应商 ${name} 不存在` });
-      }
-      delete cfg.providers[name];
-      writeModelsConfig(cfg);
-      return json(res, 200, { ok: true, path: modelsJson, removed: name });
-    }
-
-    return json(res, 405, { ok: false, error: 'Method not allowed' });
+      if (url.pathname !== '/api/providers') providerFailure('method_not_allowed');
+      let payload;
+      try { payload = JSON.parse(await readBody(req)); } catch { providerFailure('invalid_request'); }
+      const name = typeof payload?.name === 'string' ? payload.name.trim() : null;
+      const config = payload?.config;
+      if (!isProviderId(name) || !isRecord(config) || !Array.isArray(config.models) || config.models.length > 3000) providerFailure('invalid_request');
+      if (config.apiKey && !isEnvKeyReference(config.apiKey)) return json(res, 400, { ok: false, error: 'GUI 只接受环境变量引用；API Key 原文请通过 Pi 的 /login 配置' });
+      const connection = validateConnection({ baseUrl: typeof config.baseUrl === 'string' ? config.baseUrl.trim() : null, api: config.api || 'openai-completions' });
+      if (config.models.some(model => !isModelId(typeof model?.id === 'string' ? model.id.trim() : null))) providerFailure('invalid_request');
+      const models = config.models.map(cleanModelEntry);
+      if (new Set(models.map(model => model.id)).size !== models.length) providerFailure('invalid_request');
+      const next = { ...connection, models, ...(config.apiKey ? { apiKey: config.apiKey.trim() } : {}) };
+      const before = store.read();
+      const previous = own(before.config.providers, name);
+      const credential = !previous || targetChanged(previous, connection) ? await inspectCredential(name) : null;
+      const result = store.transact({ expectedRevision: before.revision, apply(current) {
+        if (mutationBlocked()) providerFailure('config_busy');
+        const saved = applyLegacyProvider(current, name, next, credential);
+        const key = apiKeyState(saved.apiKey);
+        return { ok: true, path: modelsJson, provider: name, warning: key.ok ? '' : key.note, keyState: key };
+      } });
+      return json(res, 200, result);
+    } catch (error) { return failure(res, error); }
   }
 
   /* 从供应商的 /models 接口拉取模型列表。
@@ -295,5 +243,5 @@ export function createProviders({ modelsJson }) {
       .catch(() => json(res, 500, { ok: false, error: '读取供应商模型失败' }));
   }
 
-  return { handle, handleModels, readModelsConfig, writeModelsConfig, apiKeyState, cleanModelEntry };
+  return { handle, handleModels, readModelsConfig, store };
 }

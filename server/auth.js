@@ -72,6 +72,10 @@ export function createAuth({ token, port, appId, protocol, version }) {
 
   return {
     denyRequest,
+    denyLocalHost(req) {
+      if (!SELF_ORIGINS.has('http://' + req.headers.host)) return { code: 403, error: '拒绝不受信任的本机请求目标' };
+      return null;
+    },
     handleHealth,
     /** 开发模式：没有配令牌，只校验来源。启动日志据此选文案。 */
     isDevMode: !AUTH_TOKEN,
