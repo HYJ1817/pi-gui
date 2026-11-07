@@ -106,6 +106,18 @@ async function moduleTests() {
       assert.equal(cap.stagingEnabled, false);
       assert.equal(await disabled.bridge.desktopCapability(), null);
     });
+    const unqualified = make({ sdkState: { qualified: false, native: new Map(), staged: new Map(), calls: [], disposed: [] } });
+    const unqCap = await unqualified.bridge.handle({ type: 'provider-credential', action: 'capability', requestId: 'r4b', backendEpoch: 'handshake' });
+    const unqSnap = await unqualified.bridge.desktopCapability();
+    check('unqualified SDK keeps staging flag false and snapshot null', () => {
+      assert.equal(unqCap.sdkQualified, false);
+      assert.equal(unqSnap, null);
+    });
+    // desktopCapability 是 async：不能吞掉 Promise（未 await 会把假值变成 truthy）。
+    check('snapshot capability resolves to a plain object or null, never a Promise', async () => {
+      const value = await make().bridge.desktopCapability();
+      assert.ok(value === null || (typeof value === 'object' && !(value instanceof Promise)));
+    });
   }
 
   {
@@ -418,6 +430,14 @@ async function electronMain() {
       try { return await target.webContents.executeJavaScript(`document.readyState === 'complete' && typeof window.piGuiCredentialSheet === 'object' && Boolean(document.getElementById('sheet-key'))`, true); }
       catch { return false; }
     });
+    /* info 拉取兜底（send 可能早于页面 listener 注册）：等页面的 applyMode
+     * 已经生效（title 离开默认值 或 purpose-button 文案已就位）。
+     * 用 mode() 无法直接读，改以 status 元素 + title 组合判定不可靠——
+     * 这里等 invoke 拉取完成：页面 bridge 的 info() 返回 purpose 字段。 */
+    await waitFor(async () => {
+      try { return await target.webContents.executeJavaScript(`window.piGuiCredentialSheet.info().then(info => info.ok === true && Boolean(info.purpose))`, true); }
+      catch { return false; }
+    });
     return target;
   };
   async function createDraft(providerId, api = 'openai-completions', baseUrl = 'https://fixture.invalid/v1') {
@@ -544,6 +564,45 @@ async function electronMain() {
     await waitFor(() => !sheetWindow());
     nativeTheme.themeSource = 'dark';
     win.setBounds({ width: 900, height: 700 });
+
+    // 四种操作模式（purpose 由 main/backend 决定，页面不得自报）：
+    // clear —— 不要求新密钥，显式确认清除。
+    fs.writeFileSync(path.join(agentDir, 'auth.json'), JSON.stringify({ 'fixture-clear': { type: 'api_key', key: 'stored-clear-sentinel' } }), { mode: 0o600 });
+    const clearDraft = await createDraft('fixture-clear');
+    const openClear = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(clearDraft.draftId)}, draftRevision: ${clearDraft.draftRevision}, action: 'clear' })`);
+    check('clear opens in its dedicated mode', openClear?.ok === true, openClear);
+    const clearSheet = await waitForSheet();
+    check('clear mode hides the password field', await read(clearSheet, `document.getElementById('sheet-key').classList.contains('hidden')`));
+    check('clear mode shows the clear confirmation', await read(clearSheet, `!document.getElementById('clear-warn').classList.contains('hidden') && document.getElementById('sheet-apply').textContent.includes('清除')`));
+    fs.writeFileSync(path.join(out, 'sheet-clear-mode.png'), (await clearSheet.webContents.capturePage()).toPNG());
+    const clearSubmit = await read(clearSheet, `window.piGuiCredentialSheet.submit({ allowDiscovery: false, rememberTarget: false }).then(v => JSON.stringify(v)).catch(e => 'submit_failed:' + (e && e.message || e))`);
+    check('clear submit without a key completes clear-staged', clearSubmit.includes('"ok":true') && clearSubmit.includes('clear-staged'), clearSubmit);
+    await waitFor(() => !sheetWindow());
+    // renderer 无法把 clear 窗提交成 stage：payload 里带 input 也走 clear-stage。
+    // （由控制器按 flow.purpose 决定 action；真机断言见 openClear 后的模式检查。）
+
+    // authorize-target —— 不要求新密钥，确认目录授权。
+    const oauthAuthorize = await createDraft('fixture-oauth');
+    const openAuthz = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(oauthAuthorize.draftId)}, draftRevision: ${oauthAuthorize.draftRevision}, action: 'authorize-target' })`);
+    check('authorize-target open succeeds', openAuthz?.ok === true, openAuthz);
+    const authzSheet = await waitForSheet();
+    check('authorize mode hides the password field and shows the read-only grant',
+      await read(authzSheet, `document.getElementById('sheet-key').classList.contains('hidden') && !document.getElementById('authorize-warn').classList.contains('hidden')`));
+    check('authorize mode shows the real target',
+      await read(authzSheet, `document.getElementById('sheet-target').textContent.includes('https://fixture.invalid/v1')`));
+    const authzSubmit = await read(authzSheet, `window.piGuiCredentialSheet.submit({ rememberTarget: true }).then(v => JSON.stringify(v)).catch(e => 'submit_failed:' + (e && e.message || e))`);
+    check('authorize submit issues a grant without any key', authzSubmit.includes('"ok":true') && authzSubmit.includes('consentId'), authzSubmit);
+    await waitFor(() => !sheetWindow());
+    // 无凭据的新自定义 provider：authorize-target 同样成立（source 'none'，
+    // P3 的发现编排按无秘密通道执行）。
+    const ghostDraft = await createDraft('ghost-provider');
+    const openGhost = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(ghostDraft.draftId)}, draftRevision: ${ghostDraft.draftRevision}, action: 'authorize-target' })`);
+    check('credential-less provider opens the authorize sheet', openGhost?.ok === true, openGhost);
+    const ghostSheet = await waitForSheet();
+    const ghostSubmit = await read(ghostSheet, `window.piGuiCredentialSheet.submit({ rememberTarget: false }).then(v => JSON.stringify(v)).catch(e => 'submit_failed:' + (e && e.message || e))`);
+    check('credential-less provider authorize issues a no-secret grant', ghostSubmit.includes('"ok":true') && ghostSubmit.includes('consentId'), ghostSubmit);
+    read(ghostSheet, `window.piGuiCredentialSheet.cancel()`).catch(() => {});
+    await waitFor(() => !sheetWindow());
 
     // 后端不可达的降级（open 在握手失败时显式拒绝，页面无需再可用）
     server.kill();

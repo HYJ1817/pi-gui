@@ -47,6 +47,14 @@ __SHEET_CSS__
     该服务当前保存的是 OAuth 登录凭据。应用新密钥会<strong>替换</strong>它，
     且旧 OAuth 登录无法从 GUI 恢复，需要重新登录。
   </div>
+  <div class="clear-warn hidden" id="clear-warn" role="alert">
+    将清除该服务在本机（Pi）已保存的 API 密钥。这是受限窗内的显式确认动作，
+    配置里的环境变量引用与模型列表不受影响。
+  </div>
+  <div class="authorize-warn hidden" id="authorize-warn" role="alert">
+    授权后自动读取模型列表即被允许：仅限对该目标发起<strong>只读</strong>的
+    模型目录请求（GET），不调用推理、不产生对话计费。
+  </div>
   <label class="key-label" for="sheet-key">API 密钥</label>
   <input id="sheet-key" type="password" autocomplete="off" spellcheck="false"
          aria-describedby="key-hint" placeholder="粘贴密钥；应用后立即关闭">
@@ -104,6 +112,10 @@ h1 { font-size: 15px; font-weight: 600; letter-spacing: .2px; }
   background: var(--sheet-warn-bg); color: var(--sheet-warn-ink);
   border-radius: 8px; padding: 8px 10px; font-size: 12px;
 }
+.clear-warn, .authorize-warn {
+  background: var(--sheet-warn-bg); color: var(--sheet-warn-ink);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px;
+}
 .hidden { display: none; }
 .key-label { font-size: 12px; color: var(--sheet-muted); }
 input[type="password"] {
@@ -143,20 +155,56 @@ button:disabled { opacity: .55; cursor: default; }
 
 const js = `'use strict';
 /* 固定输入面脚本。唯一的出口是专属 preload 的具名动作；
- * Esc=取消、Enter=应用，应用/取消后窗口由主进程销毁，DOM 随之销毁。 */
+ * Esc=取消、Enter=应用，应用/取消后窗口由主进程销毁，DOM 随之销毁。
+ * 操作模式（purpose）由可信 main/backend 经 preload 推送，页面不自报：
+ *   set / replace：需要新密钥；
+ *   clear：不要求密钥，显式确认清除已存凭据；
+ *   authorize-target：不要求密钥，展示真实目标并确认只读目录授权。 */
 const state = window.piGuiCredentialSheet.initial;
 document.documentElement.dataset.theme = state.theme;
 const targetEl = document.getElementById('sheet-target');
-const showTarget = () => { if (state.targetSummary) targetEl.textContent = document.getElementById('oauth-warn') ? state.targetSummary : state.targetSummary; };
+const showTarget = () => { targetEl.textContent = window.piGuiCredentialSheet.getTarget?.() || '—'; };
 showTarget();
 window.addEventListener('pi-gui-credential-target', showTarget);
-if (state.oauthConflict) document.getElementById('oauth-warn').classList.remove('hidden');
+
+const KEYS_REQUIRED = new Set(['set', 'replace']);
+const APPLY_LABELS = {
+  set: '应用到草稿', replace: '替换并暂存（覆盖旧凭据）',
+  clear: '确认清除已存密钥', 'authorize-target': '确认模型目录授权',
+};
+const purposes = new Set();
 const key = document.getElementById('sheet-key');
 const allow = document.getElementById('allow-discovery');
 const remember = document.getElementById('remember-target');
 const status = document.getElementById('sheet-status');
 const apply = document.getElementById('sheet-apply');
 const cancel = document.getElementById('sheet-cancel');
+const keyGroup = [key, document.querySelector('.key-label'), document.getElementById('key-hint'),
+  ...(allow ? [allow.closest('.check')] : [])];
+let mode = null;
+function applyMode(purpose) {
+  if (!purpose || purposes.has(purpose)) return;
+  purposes.add(purpose);
+  mode = purpose;
+  if (!KEYS_REQUIRED.has(purpose)) {
+    keyGroup.forEach(el => { if (el) el.classList.add('hidden'); });
+    key.value = '';
+    document.getElementById('sheet-title').textContent = purpose === 'clear' ? '清除已保存的密钥' : '授权模型目录读取';
+    document.getElementById(purpose === 'clear' ? 'clear-warn' : 'authorize-warn').classList.remove('hidden');
+    // clear 不带发现；authorize-target 的确认即是授权本身。
+    if (purpose === 'clear' && allow) allow.closest('.check').classList.add('hidden');
+  }
+  apply.textContent = APPLY_LABELS[purpose] ?? APPLY_LABELS.set;
+}
+applyMode(state.oauthConflict ? undefined : window.piGuiCredentialSheet.getPurpose?.());
+window.addEventListener('pi-gui-credential-purpose', () => applyMode(window.piGuiCredentialSheet.getPurpose?.()));
+if (state.oauthConflict) document.getElementById('oauth-warn').classList.remove('hidden');
+/* 拉取兜底：主进程 send 若早于本脚本注册 listener 已丢失，这里补一次。
+ * info 的 purpose/targetSummary 的权威来源是同一份 flow 状态。 */
+Promise.resolve(window.piGuiCredentialSheet.info?.()).then(info => {
+  if (info?.purpose) applyMode(info.purpose);
+  if (info?.targetSummary) targetEl.textContent = info.targetSummary;
+}).catch(() => { /* 窗口在关 */ });
 function note(text, isError) {
   status.textContent = text || '';
   status.classList.toggle('error', isError === true);
@@ -164,22 +212,26 @@ function note(text, isError) {
 function busy(flag) {
   apply.disabled = flag === true; cancel.disabled = flag === true; key.disabled = flag === true;
 }
-key.focus();
+(key.classList.contains('hidden') ? apply : key).focus();
 apply.addEventListener('click', async () => {
+  const intended = mode ?? 'set';
+  const wantsKey = KEYS_REQUIRED.has(intended);
   const value = key.value;
-  if (!value) { note('请输入密钥，或选择取消。', true); return; }
-  busy(true); note('正在校验并暂存…');
+  if (wantsKey && !value) { note('请输入密钥，或选择取消。', true); return; }
+  busy(true); note(intended === 'authorize-target' ? '正在确认授权…' : intended === 'clear' ? '正在确认清除…' : '正在校验并暂存…');
   const result = await window.piGuiCredentialSheet.submit({
-    input: value, allowDiscovery: allow.checked, rememberTarget: remember.checked,
+    ...(wantsKey ? { input: value } : {}),
+    allowDiscovery: allow.checked, rememberTarget: remember.checked,
   });
-  if (result && result.ok === true) { key.value = ''; note('已应用到草稿。'); return; }
+  if (result && result.ok === true) { key.value = ''; note(intended === 'authorize-target' ? '已确认授权。' : intended === 'clear' ? '待清除状态已记录。' : '已应用到草稿。'); return; }
   const text = result && result.code === 'oauth_conflict'
     ? '该服务当前是 OAuth 登录。请阅读上方提示，仍要替换请再次点击「应用到草稿」。'
+    : result && result.code === 'unknown_provider' ? '该供应商标识在本机 Pi 中不存在，无法授权。'
     : result && result.code === 'expired' ? '暂存已过期，请重新输入。'
     : result && result.code === 'credential_conflict' ? '凭据或草稿状态已变化，请关闭后重试。'
     : '操作失败，请重试或取消。';
   busy(false); note(text, true);
-  key.focus();
+  if (!key.classList.contains('hidden')) key.focus();
 });
 cancel.addEventListener('click', () => window.piGuiCredentialSheet.cancel());
 window.piGuiCredentialSheet.onState(stateUpdate => {

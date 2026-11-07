@@ -179,6 +179,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     }
     const inspection = await sdk.inspect(flow.providerId);
     const credentialSource = inspection.present === true ? 'stored' : inspection.present === false ? 'none' : null;
+    // present=null（文件不可读/冲突/未知类型）不能当作「没有凭据」开授权——宁可多确认一次。
     if (!credentialSource) return fail('credential_conflict');
     const issued = consentStore?.issue({ draftId: flow.draftId, draftRevision: flow.draftRevision,
       connectionRevision: flow.connectionRevision, providerId: flow.providerId, connection: flow.connection,

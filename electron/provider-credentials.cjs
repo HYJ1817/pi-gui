@@ -32,6 +32,7 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
   getMainWindow, getBackend, isDesktopQualified, page, preloadPath, logEvent = () => {}, now = Date.now }) {
   let sheet = null;
   let flow = null; // { flowId, promptId, nonce, purpose, expires, consumed, action }
+  let flowTarget = '';
   let handshake = null; // { epoch, stagingEnabled, sdkQualified, flowTtlMs, child }
   let capabilityPending = null;
   let sessionReady = false;
@@ -195,8 +196,9 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     sheetWindow.webContents.on('will-navigate', event => event.preventDefault());
     sheetWindow.webContents.on('will-attach-webview', event => event.preventDefault());
     sheetWindow.webContents.on('did-finish-load', () => {
-      // 目标摘要经有序消息推给 preload，页面渲染前已可读（initial 是 getter）。
+      // 目标摘要与操作模式经有序消息推给 preload，页面渲染前已可读。
       try { sheetWindow.webContents.send('pi-gui:provider-credential-target', targetSummary ?? ''); } catch { /* closing */ }
+      try { sheetWindow.webContents.send('pi-gui:provider-credential-purpose', prepared.purpose); } catch { /* closing */ }
     });
     sheetWindow.once('ready-to-show', () => sheetWindow.show());
     sheetWindow.on('closed', () => {
@@ -252,8 +254,9 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     const expires = now() + handshakeNow.flowTtlMs;
     flow = { flowId: prepared.flowId, promptId: prepared.promptId, nonce: prepared.nonce,
       purpose, expires, consumed: false, action: request.action };
+    flowTarget = prepared.targetSummary?.baseUrl || prepared.targetSummary?.providerId || '';
     const theme = nativeTheme?.shouldUseDarkColors === false ? 'light' : 'dark';
-    const opened = openSheet({ flow: prepared, theme, targetSummary: prepared.targetSummary?.baseUrl || prepared.targetSummary?.providerId || '' });
+    const opened = openSheet({ flow: prepared, theme, targetSummary: flowTarget });
     if (opened.ok !== true) { flow = null; void backendCall({ action: 'cancel', requestId: `drop-${++sequence}`, backendEpoch: handshakeNow.epoch, flowId: prepared.flowId }); return opened; }
     logEvent('electron.provider_credential_open', { action: request.action, oauthConflict: prepared.oauthConflict === true });
     scheduleExpiry();
@@ -338,7 +341,8 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
 
   function sheetStatusHandler(event) {
     if (!sheetAllowed(event)) return { ok: false, code: 'forbidden' };
-    return { ok: true, state: flow?.consumed ? 'staged' : 'editing', expiresAt: flow?.expires ?? null };
+    return { ok: true, state: flow?.consumed ? 'staged' : 'editing', purpose: flow?.purpose ?? null,
+      targetSummary: flowTarget ?? '', expiresAt: flow?.expires ?? null };
   }
 
   /* ---------- 装配 ---------- */

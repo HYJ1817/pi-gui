@@ -502,6 +502,8 @@ const providerManagementEnabled = process.env.PI_GUI_PROVIDER_MANAGEMENT === '1'
 const providerDiscoveryConsents = createDiscoveryConsentStore();
 const providerManagement = createProviderManagement({ store: providers.store, inspectCredential: providerCredentials.inspect,
   readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled,
+  /* desktopCapability 是 async（含 SDK 资格探测），必须 await——传返回
+   * Promise 的函数，provider-management 在 snapshot() 里等待。 */
   desktopCapabilities: () => providerCredentialBridge.desktopCapability() });
 const providerCredentialBridge = createProviderCredentialBridge({ sdk: providerCredentials,
   draftLookup: providerManagement.draftSnapshot, consentStore: providerDiscoveryConsents,

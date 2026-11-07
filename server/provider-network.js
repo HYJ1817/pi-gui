@@ -76,14 +76,40 @@ export function classifyAddress(address) {
     if (inCidr4(host, 0x0A000000, 8) || inCidr4(host, 0xAC100000, 12) || inCidr4(host, 0xC0A80000, 16)) return 'private';
     if (inCidr4(host, 0xA9FE0000, 16)) return 'linklocal'; // 169.254/16（含云元数据 169.254.169.254）
     if (inCidr4(host, 0x64400000, 10)) return 'private'; // 100.64/10 CGNAT
+    // 其余 IANA 保留/特殊段（RFC 5737 文档、RFC 7526、RFC 2544 基准、
+    // RFC 1112/3188 组播诊断、240/4 未分配、255.255.255.255）不是可达的
+    // 模型目录目标；保守按「本地/保留」拒发，防止可路由误判。
+    if (inCidr4(host, 0xC0000000, 24) || inCidr4(host, 0xC0000200, 24) ||
+        inCidr4(host, 0xC6336400, 26) || inCidr4(host, 0xCB007100, 24) ||
+        inCidr4(host, 0xC0586300, 24) || inCidr4(host, 0xC6120000, 15) ||
+        inCidr4(host, 0xE0000000, 4) || inCidr4(host, 0xF0000000, 5) ||
+        host === '255.255.255.255') return 'private';
     return 'public';
+  }
+  /* IPv4 映射地址的十六进制写法（::ffff:7f00:1 等）：先还原为点分 IPv4
+   * 再按 IPv4 语义分类——不能留给 v6 分支当普通公网 v6 处理。 */
+  if (host.startsWith('::ffff:')) {
+    const tail = host.slice(7);
+    const hex = /^([0-9a-f]{1,4})(?::([0-9a-f]{0,4}))?$/.exec(tail);
+    if (hex) {
+      // 完整形（两组各 4 位）或双组写法：高 16 位 = a.b 段，低 16 位 = c.d 段。
+      const hi = Number.parseInt(hex[1], 16);
+      const lo = hex[2] ? Number.parseInt(hex[2], 16) : null;
+      if (lo !== null) {
+        const dotted = `${hi >>> 8}.${hi & 0xFF}.${lo >>> 8}.${lo & 0xFF}`;
+        return classifyAddress(dotted);
+      }
+      // 单组写法（::ffff:7f00:1 → 组内含 '.' 会被当点分；纯 hex 单组如
+      // ::ffff:a9fe 在严格 RFC 形态里不完整，按不可识别拒绝。
+      return null;
+    }
+    return classifyAddress(tail); // 点分形式或未识别形态
   }
   const groups = v6Groups(host).map(group => group === '' ? 0 : Number.parseInt(group, 16) || 0);
   if (groups.every(group => group === 0)) return 'unspecified';
   if (groups.slice(0, -1).every(group => group === 0) && groups.at(-1) === 1) return 'loopback'; // ::1
   if (host.startsWith('fe8') || host.startsWith('fe9') || host.startsWith('fea') || host.startsWith('feb')) return 'linklocal';
   if (host.startsWith('fc') || host.startsWith('fd')) return 'private'; // fc00::/7
-  if (host.startsWith('::ffff:')) return classifyAddress(host.slice(7));
   return 'public';
 }
 
@@ -207,23 +233,90 @@ export function resolveTargetAddresses({ host, lookup = dns.promises.lookup }) {
   }).catch(() => ({ ok: false, ...fail('dns_failed') }));
 }
 
-/** 解析模型目录响应（复用 models-api 的 pickList/normalize 语义由调用方完成），
- * 这里只做形状与数量护栏。 */
-export function pickModelList(json) {
+/* 模型目录的输出白名单。供应商返回的原始条目可能有 apiKey/headers/token、
+ * 异常类型、超长回显（例如把请求头回显进模型名）；这些一律不进入普通前端。
+ * 有效字段与 lib/models-api.js 的归一化目标保持一致（id/name/contextWindow/
+ * maxTokens/reasoning/input/capabilities 只留 provider-metadata 三值）。 */
+const safeText = (value, max) =>
+  typeof value === 'string' && value.length > 0 && value.length <= max && !/[\u0000-\u001f\u007f]/u.test(value) ? value : undefined;
+const positiveCount = value => (typeof value === 'number' && Number.isFinite(value) && value > 0 && Number.isSafeInteger(Math.round(value)) ? Math.round(value) : undefined);
+
+/* 供应商条目允许出现的键。任何白名单之外的键（apiKey/headers/token/任意
+ * 嵌套对象）都让整条被丢弃——不是静默删字段，而是整条不可信。 */
+const ENTRY_FIELDS = new Set(['id', 'name', 'displayName', 'display_name', 'label',
+  'context_length', 'context_window', 'inputTokenLimit', 'max_tokens', 'max_completion_tokens',
+  'outputTokenLimit', 'reasoning', 'input', 'top_provider', 'limit', 'supported_parameters',
+  'supportedGenerationMethods', 'architecture', 'modalities']);
+
+/** 单条模型 → 白名单投影。返回 null 表示条目被丢弃（不能映射为有效模型）。 */
+export function sanitizeModelEntry(item, secrets = []) {
+  if (typeof item === 'string') {
+    const cleanId = safeText(item.trim(), 300);
+    return cleanId ? { id: cleanId } : null;
+  }
+  if (!isRecord(item)) return null;
+  // 未知键直接整条丢弃：嵌入的凭据/任意对象不再有输出路径，也不留下
+  // 「投影函数漏了一个字段」的隐患。
+  for (const field of Object.keys(item)) {
+    if (!ENTRY_FIELDS.has(field)) return null;
+    if (field === 'top_provider' || field === 'limit' || field === 'architecture' || field === 'modalities') {
+      if (!isRecord(item[field])) return null;
+      for (const sub of Object.keys(item[field])) {
+        if (!ENTRY_FIELDS.has(sub)) return null;
+      }
+    }
+  }
+  const id = safeText(item.id ?? item.name, 300);
+  if (!id) return null;
+  const out = { id };
+  const label = safeText(item.displayName ?? item.display_name ?? item.name ?? item.label, 200);
+  if (label && label !== out.id) out.name = label;
+  const contextWindow = positiveCount(item.context_length ?? item.top_provider?.context_length ?? item.limit?.context ?? item.inputTokenLimit ?? item.context_window);
+  if (contextWindow) out.contextWindow = contextWindow;
+  const maxTokens = positiveCount(item.top_provider?.max_completion_tokens ?? item.max_completion_tokens ?? item.max_tokens ?? item.limit?.output ?? item.outputTokenLimit);
+  if (maxTokens) out.maxTokens = maxTokens;
+  if (typeof item.reasoning === 'boolean') out.reasoning = item.reasoning;
+  if (Array.isArray(item.input) && item.input.length && item.input.every(x => x === 'text' || x === 'image')) {
+    if (item.input.includes('image')) out.input = [...item.input];
+  }
+  const text = JSON.stringify(out);
+  for (const secret of secrets) {
+    if (typeof secret === 'string' && secret.length > 0 &&
+        (text.includes(secret) || out.id.includes(secret) || (out.name ?? '').includes(secret))) return null;
+  }
+  return out;
+}
+
+/** 解析模型目录响应：形状护栏 + 输出白名单。secrets 传当前使用的密钥值，
+ * 出现在 id/name 等字段即整条丢弃（供应商回显请求头是真实发生过的形态）。 */
+export function pickModelList(json, secrets = []) {
   if (!isRecord(json) && !Array.isArray(json)) return { ok: false, ...fail('not_json') };
   const arr = Array.isArray(json) ? json : Array.isArray(json.models) ? json.models : Array.isArray(json.data) ? json.data : null;
   if (!arr) return { ok: false, ...fail('not_json') };
-  return { ok: true, items: arr.slice(0, MAX_MODELS), truncated: arr.length > MAX_MODELS };
+  const safeSecrets = Array.isArray(secrets) ? secrets.filter(secret => typeof secret === 'string' && secret) : [];
+  const cleaned = [];
+  const seen = new Set();
+  const scanned = arr.slice(0, MAX_MODELS);
+  for (const item of scanned) {
+    const model = sanitizeModelEntry(item, safeSecrets);
+    if (model && !seen.has(model.id)) { seen.add(model.id); cleaned.push(model); }
+  }
+  return { ok: true, models: cleaned, truncated: arr.length > MAX_MODELS, dropped: arr.length - cleaned.length };
 }
 
 /** P2 的授权绑定 transport：每个请求必须携带一个未过期 consent，
- * 目标（协议+主机+端口+完整 basePath）与候选路径必须逐字在授权范围内。
+ * 目标（协议+host+port+完整 basePath）与候选路径必须逐字在授权范围内；
+ * credentialRevision 传入时必须与 consent 绑定值一致——换成另一把 key
+ * （代次变化）后旧授权当场失效，不允许旧授权绑定替换后的密钥。
  * 密钥只在 headers 组装时短暂出现，错误出口做哨兵替换。 */
 export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_BYTES, maxTotalMs = MAX_TOTAL_MS, io = {}, lookup } = {}) {
-  return async function discover({ consentId, url, key = null, signal }) {
+  return async function discover({ consentId, url, key = null, credentialRevision, signal }) {
     /* 过期判定由 consent store 自己的时钟负责（测试注入与生产一致）。 */
     const consent = consentStore.get(consentId);
     if (!consent) return fail('invalid_target');
+    if (credentialRevision !== undefined && (consent.credentialRevision ?? null) !== (credentialRevision ?? null)) {
+      return fail('policy_rejected');
+    }
     let target = parseTarget(url);
     if (!target) return fail('invalid_target');
     if (target.protocol !== consent.target.protocol || target.host !== consent.target.host || target.port !== consent.target.port ||
@@ -248,8 +341,11 @@ export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIM
     let lastStatus = null;
     const attempts = consent.candidatePaths.slice(consent.candidatePaths.indexOf(url));
     for (const candidate of attempts) {
-      if (Date.now() > deadline || signal?.aborted) return fail(signal?.aborted ? 'aborted' : 'timeout');
-      const result = await restrictedFetch({ url: candidate, headers, addresses: resolved.addresses, timeoutMs, signal, maxBytes, io });
+      const remaining = deadline - Date.now();
+      if (remaining <= 0 || signal?.aborted) return fail(signal?.aborted ? 'aborted' : 'timeout');
+      /* 严格 30s：单次请求的超时截到总时限剩余，不得靠最后一次请求突破总上限。 */
+      const attemptTimeout = Math.min(timeoutMs, remaining);
+      const result = await restrictedFetch({ url: candidate, headers, addresses: resolved.addresses, timeoutMs: attemptTimeout, signal, maxBytes, io });
       if (!result.ok) {
         if (['aborted', 'timeout', 'too_large', 'redirect_rejected', 'private_address', 'invalid_target'].includes(result.code)) return result;
         lastStatus = result.status ?? null;
@@ -259,9 +355,11 @@ export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIM
       if (result.status < 200 || result.status >= 300) { lastStatus = result.status; continue; }
       let json;
       try { json = JSON.parse(result.body.toString('utf8')); } catch { return fail('not_json'); }
-      const picked = pickModelList(json);
+      /* 密钥（以及原始原始请求头值）传入白名单：出现在任何模型字段里的
+       * 哨兵即整条丢弃，供应商回显头不会进普通前端。 */
+      const picked = pickModelList(json, [...(credentialAttached ? [key] : []), ...Object.values(headers).filter(header => typeof header === 'string' && header.length > 8)]);
       if (!picked.ok) return picked;
-      return { ok: true, source: candidate, models: picked.items, truncated: picked.truncated, status: result.status };
+      return { ok: true, source: candidate, models: picked.models, truncated: picked.truncated, dropped: picked.dropped, status: result.status };
     }
     return fail(lastStatus ? 'http_status' : 'network_failed', lastStatus ?? undefined);
   };

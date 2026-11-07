@@ -22,25 +22,31 @@ try {
     catch { return found.slice((prefix + name + '=').length); }
   };
 
-  /* initial 主题/冲突标记走 argv（固定短值）；目标摘要在页面就绪后由主进程
-   * send 推送（webContents.send 的消息按序到达，preload 落给 listeners）。 */
-  const initial = {
-    theme: argument('theme') === 'light' ? 'light' : 'dark',
-    targetSummary: '',
-    oauthConflict: process.argv.includes(prefix + 'oauth'),
-  };
+  /* 注意：contextBridge 跨界的是**静态值的复制**，getter 不会动态跨桥。
+   * 会随时间变化的字段（target 摘要、purpose）一律走具名函数或事件：
+   * 函数是引用，页面每次调用都回到 preload 侧执行。 */
   let targetReceived = '';
   ipcRenderer.on('pi-gui:provider-credential-target', (_event, value) => {
     if (typeof value === 'string') { targetReceived = value; window.dispatchEvent(new CustomEvent('pi-gui-credential-target')); }
   });
+  let purposeReceived = '';
+  ipcRenderer.on('pi-gui:provider-credential-purpose', (_event, value) => {
+    if (typeof value === 'string' && value) { purposeReceived = value; window.dispatchEvent(new CustomEvent('pi-gui-credential-purpose')); }
+  });
+  const initial = {
+    theme: argument('theme') === 'light' ? 'light' : 'dark',
+    oauthConflict: process.argv.includes(prefix + 'oauth'),
+  };
 
   contextBridge.exposeInMainWorld('piGuiCredentialSheet', {
-    initial: {
-      get theme() { return initial.theme; },
-      get oauthConflict() { return initial.oauthConflict; },
-      get targetSummary() { return targetReceived || initial.targetSummary; },
-    },
-    /** 应用到草稿。payload 只允许三个字段；多给的字段在这里就被丢弃，
+    /* 只读静态初始值（argv 已含的固定事实）。 */
+    initial,
+    /** 目标摘要：did-finish-load 后由主进程推送，页面每次调用重取。 */
+    getTarget: () => targetReceived,
+    /** 操作模式：可信 main/backend 决定；页面不自报。 */
+    getPurpose: () => purposeReceived,
+    /** 应用到草稿。payload 只允许三个字段（set/replace 必带 input；
+     * clear/authorize-target 可不带）；多给的字段在这里就被丢弃。
      * 防止页面构造超出冻结合同的帧。 */
     submit: payload => ipcRenderer.invoke('pi-gui:provider-credential-submit', {
       input: typeof payload?.input === 'string' ? payload.input : '',
@@ -49,6 +55,9 @@ try {
     }),
     cancel: () => ipcRenderer.invoke('pi-gui:provider-credential-cancel-sheet'),
     status: () => ipcRenderer.invoke('pi-gui:provider-credential-sheet-status'),
+    /** 主动拉取一次（purpose/target 的兜底通道：主进程 send 若早于页面
+     * listener 注册完成就丢了；invoke 是页面发起的，没有这个时序）。 */
+    info: () => ipcRenderer.invoke('pi-gui:provider-credential-sheet-status'),
     onState: callback => {
       if (typeof callback !== 'function') return () => {};
       const listener = (_event, value) => callback(value);

@@ -70,6 +70,46 @@ test('address classification covers loopback, private, link-local, metadata, map
   for (const [address, expected] of cases) assert.equal(net.classifyAddress(address), expected, address);
 });
 
+test('IPv4-mapped IPv6 in hex notation is decoded and reclassified under IPv4 semantics', async () => {
+  const { net } = await modules();
+  const cases = [
+    // 高 16 位 = 前两个 v4 段，低 16 位 = 后两个 v4 段。
+    ['::ffff:7f00:1', 'loopback'],       // 127.0.0.1
+    ['::ffff:7f00:0001', 'loopback'],   // 127.0.0.1（补零位宽）
+    ['::ffff:A9FE:A9FE', 'linklocal'],  // 169.254.169.254（大写不绕过）
+    ['::ffff:a9fe:01', 'linklocal'],    // 169.254.0.1
+    ['::ffff:c0a8:101', 'private'],     // 192.168.1.1
+    ['::ffff:0a01:0203', 'private'],    // 10.1.2.3
+    ['::ffff:ac10:01', 'private'],      // 172.16.0.1
+    ['::ffff:6440:9', 'private'],       // 100.64.0.9（CGNAT）
+    ['::ffff:6440:0901', 'private'],    // 100.64.9.1
+    ['::ffff:5db8:d001', 'public'],     // 93.184.208.1
+    ['::ffff:df8e:1107', 'public'],     // 223.142.17.7
+  ];
+  for (const [address, expected] of cases) assert.equal(net.classifyAddress(address), expected, address);
+});
+
+test('other reserved v4/v6 ranges never classify as public', async () => {
+  const { net } = await modules();
+  // RFC 5737 文档段、RFC 7526、RFC 2544、组播/保留/240/4 与全广播 ——
+  // 模型目录的可达公网目标里都不该出现；策略防线是「DNS 解析出任何
+  // 非 public/loopback 地址即整体拒发」。
+  const reserved = [
+    ['192.0.0.9', 'private'], ['192.0.2.1', 'private'], ['198.51.100.7', 'private'],
+    ['203.0.113.5', 'private'], ['192.88.99.1', 'private'], ['198.18.0.4', 'private'],
+    ['240.0.0.1', 'private'], ['255.255.255.255', 'private'],
+  ];
+  for (const [address, expected] of reserved) assert.equal(net.classifyAddress(address), expected, address);
+  // 可路由公网不误伤。
+  assert.equal(net.classifyAddress('8.8.8.8'), 'public');
+  assert.equal(net.classifyAddress('93.184.216.34'), 'public');
+  // DNS 层联动：解析表既有 public 又有保留段地址时整体拒发。
+  const lookup = async () => [{ address: '8.8.8.8', family: 4 }, { address: '203.0.113.5', family: 4 }];
+  const resolved = await net.resolveTargetAddresses({ host: 'mixed-reserved.example.invalid', lookup });
+  assert.equal(resolved.ok, false);
+  assert.equal(resolved.code, 'private_address');
+});
+
 test('target parsing rejects userinfo, query, hash and bad ports; normalizes base path', async () => {
   const { net } = await modules();
   assert.equal(net.parseTarget('https://u:p@api.fixture.invalid/v1'), null);
@@ -151,7 +191,10 @@ test('transport refuses unconsented targets, expired grants and secret attachmen
   const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
   t.after(() => store.dispose());
   const issued = await consentFor(store);
-  const transport = net.createDiscoveryTransport({ consentStore: store,
+  /* 确定 DNS fixture：不依赖执行环境对 .invalid 域名的解析行为
+   * （CI NXDOMAIN → dns_failed 会把 happy-path 变成环境敏感断言）。 */
+  const publicLookup = async () => [{ address: '93.184.216.34', family: 4 }];
+  const transport = net.createDiscoveryTransport({ consentStore: store, lookup: publicLookup,
     io: { requester: fakeRequester([req => req.emit('response', fakeRes({ status: 200, body: '{"data":[]}' }))]) } });
   assert.equal((await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models' })).ok, true);
   const offBase = await transport({ consentId: issued.consentId, url: 'https://evil.fixture.invalid/v1/models' });
@@ -255,12 +298,102 @@ test('real loopback socket path: actual http server serves a bounded model list'
   assert.equal(transport && true, true);
 });
 
+test('model list output whitelist drops credentials, secrets echo, bad types and overlong strings', async () => {
+  const { net } = await modules();
+  const SECRET = 'sentinel-key-FIXTURE';
+  const malicious = { data: [
+    { id: 'good-model', name: 'Good', context_length: 4096 },
+    { id: 'leaky-model', apiKey: SECRET, headers: { Authorization: `Bearer ${SECRET}` } },
+    { id: 'echo-id-' + SECRET.slice(0, 12), name: SECRET },
+    { id: 'echo-name', name: `prefix ${SECRET} suffix` },
+    { id: { nested: 'object-id' } },
+    { id: 'x'.repeat(400) },
+    { id: 'long-name', name: 'n'.repeat(400), context_length: 128 },
+    { id: 'control\u0000id' },
+    { id: 'token-model', token: SECRET, access_token: SECRET },
+    { id: 'deep-model', metadata: { apiKey: SECRET }, pricing: { prompt: SECRET } },
+    42, null, [], true,
+    'plain-string-model',
+  ] };
+  const picked = net.pickModelList(malicious, [SECRET]);
+  assert.equal(picked.ok, true);
+  const ids = picked.models.map(model => model.id);
+  assert.deepEqual(ids, ['good-model', 'long-name', 'plain-string-model']);
+  // 白名单字段：无 apiKey/headers/token/嵌套对象字段。
+  for (const model of picked.models) {
+    const text = JSON.stringify(model);
+    assert.equal(text.includes(SECRET), false, model.id);
+    assert.ok(!('apiKey' in model) && !('headers' in model) && !('token' in model) && !('metadata' in model), model.id);
+  }
+  assert.equal(picked.models[0].contextWindow, 4096);
+  assert.equal(typeof picked.models[1].name, 'undefined', 'overlong name is dropped');
+  assert.equal(picked.models[2].contextWindow, undefined, 'string entries carry id only');
+});
+
+test('transport strips credentials from discovery results and respects the total deadline', async t => {
+  const { net, consent } = await modules();
+  const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
+  t.after(() => store.dispose());
+  const SECRET = 'sentinel-key-LIVE';
+  const issued = await consentFor(store);
+  const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+  // 供应商把鉴权头回显进第一个模型名，然后第二个候选成功。
+  const transport = net.createDiscoveryTransport({ consentStore: store, lookup,
+    io: { requester: fakeRequester([
+      req => req.emit('response', fakeRes({ status: 500, body: 'boom' })),
+      req => req.emit('response', fakeRes({ status: 200, body: JSON.stringify({ data: [
+        { id: 'echo', name: `Echo Bearer ${SECRET}` },
+        { id: 'clean', name: 'Clean Model' },
+      ] }) })),
+    ]) } });
+  const result = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', key: SECRET });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.models.map(model => model.id), ['clean']);
+  assert.equal(JSON.stringify(result.models).includes(SECRET), false);
+  assert.equal(JSON.stringify(result).includes('boom'), false, 'raw upstream error body never escapes');
+});
+
+test('credential revision mismatch after staged replacement invalidates the old grant', async t => {
+  const { net, consent } = await modules();
+  const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
+  t.after(() => store.dispose());
+  const issued = await consentFor(store); // credentialRevision 'cred-rev-1'
+  const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+  const transport = net.createDiscoveryTransport({ consentStore: store, lookup,
+    io: { requester: fakeRequester([req => req.emit('response', fakeRes({ status: 200, body: '{"data":[]}' }))]) } });
+  const same = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', credentialRevision: 'cred-rev-1' });
+  assert.equal(same.ok, true);
+  const rotated = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', credentialRevision: 'cred-rev-2' });
+  assert.equal(rotated.code, 'policy_rejected', 'rotating the key invalidates the previous grant');
+  const missing = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', credentialRevision: null });
+  assert.equal(missing.code, 'policy_rejected', 'a grant bound to evidence cannot be used without it');
+});
+
+test('total deadline bounds every attempt, including the last one', async t => {
+  const { net, consent } = await modules();
+  const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
+  t.after(() => store.dispose());
+  const issued = await consentFor(store);
+  const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+  // 全部候选都不响应：每个 attempt 的单次超时都被截到 maxTotalMs 剩余，
+  // 完成 N 次尝试的总耗时必须 <= maxTotalMs + 少量调度余量。
+  const timeouts = net.createDiscoveryTransport({ consentStore: store, lookup,
+    timeoutMs: 60_000, maxTotalMs: 2_000,
+    io: { requester: fakeRequester([() => { /* hangs */ }, () => { /* hangs */ }]) } });
+  const started = Date.now();
+  const result = await timeouts({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models' });
+  const elapsed = Date.now() - started;
+  assert.equal(result.code, 'timeout');
+  assert.ok(elapsed <= 3_000, `total ${elapsed}ms must stay within maxTotalMs(2000) + slack`);
+});
+
 test('model list shape guard truncates beyond the cap and rejects non-list JSON', async () => {
   const { net } = await modules();
   const truncated = net.pickModelList({ data: Array.from({ length: 3200 }, (_, index) => ({ id: `m${index}` })) });
   assert.equal(truncated.ok, true);
-  assert.equal(truncated.items.length, 3000);
+  assert.equal(truncated.models.length, 3000);
   assert.equal(truncated.truncated, true);
   assert.equal(net.pickModelList({ error: 'nope' }).code, 'not_json');
   assert.equal(net.pickModelList('["str"]').code, 'not_json');
+  assert.equal(net.pickModelList({ data: [] }).models.length, 0);
 });
