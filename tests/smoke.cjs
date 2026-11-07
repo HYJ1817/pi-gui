@@ -24,6 +24,108 @@ const commands = [];
 const gitCalls = [];
 const authCalls = [];
 const providerConfigCalls = [];
+/* P4 供应商管理：页面走 management 快照，旧 /api/providers 只保留兼容列表所需的凭据告警。
+ * 这里的 capabilities 与 P0 合同一致：没有私密桥、没有自动发现、没有 Runtime 同步。 */
+const providerManagementCalls = [];
+const providerManagementSnapshot = {
+  ok: true,
+  schemaVersion: 1,
+  revision: 'config-rev-smoke',
+  capabilities: {
+    rawKeyInput: false,
+    keyStaging: false,
+    nativeCredentialPersistence: false,
+    privateDesktopBridge: false,
+    oauthLogin: true,
+    discoveryModes: [],
+    modelOverrides: null,
+    syncMode: 'unsupported',
+    reasons: {
+      rawKeyInput: 'desktop_input_pending',
+      keyStaging: 'private_bridge_pending',
+      nativeCredentialPersistence: 'private_bridge_pending',
+      privateDesktopBridge: 'p2_pending',
+      discoveryModes: 'discovery_transport_pending',
+      syncMode: 'runtime_sync_pending',
+    },
+  },
+  catalog: [
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null },
+    {
+      id: 'deepseek',
+      name: 'DeepSeek',
+      category: 'api-key',
+      authMode: 'environment',
+      connection: { baseUrl: 'https://api.deepseek.com', api: 'openai-completions' },
+      suggestedEnvReference: '$DEEPSEEK_API_KEY',
+    },
+    {
+      id: 'openai-subscription',
+      providerId: 'openai',
+      name: 'OpenAI',
+      category: 'subscription',
+      authMode: 'oauth',
+      connection: null,
+      enabled: true,
+      disabledReason: null,
+    },
+  ],
+  services: [
+    {
+      serviceId: 'deepseek',
+      providerId: 'deepseek',
+      catalogId: 'deepseek',
+      displayName: 'DeepSeek',
+      enabled: true,
+      connection: { baseUrl: 'https://api.deepseek.com', api: 'openai-completions' },
+      credentialState: { state: 'saved', source: 'env' },
+      authMode: 'environment',
+      models: [
+        {
+          modelId: 'deepseek-chat',
+          providerId: 'deepseek',
+          configSource: 'configured',
+          effectiveValues: {
+            name: 'DeepSeek Chat',
+            contextWindow: 65536,
+            maxTokens: 8192,
+            reasoning: false,
+            input: ['text'],
+            toolCalling: true,
+            streaming: null,
+          },
+          editableOverrides: {
+            name: 'DeepSeek Chat',
+            contextWindow: 65536,
+            maxTokens: 8192,
+            reasoning: false,
+            input: ['text'],
+          },
+        },
+      ],
+      selectedModelIds: ['deepseek-chat'],
+      modelOrder: ['deepseek-chat'],
+      readOnly: false,
+      compatibility: 'unknown',
+    },
+  ],
+  auth: {
+    sdkAvailable: true,
+    providers: [
+      {
+        providerId: 'openai',
+        displayName: 'OpenAI',
+        status: 'disconnected',
+        authType: 'oauth',
+        canLogin: true,
+        canLogout: false,
+        methods: [{ type: 'oauth', canLogin: true, isSubscription: true }],
+      },
+    ],
+    flow: null,
+  },
+  sync: { state: 'idle', reason: null },
+};
 let authStub = { ok: true, capability: { sdkAvailable: true, reason: null, piVersion: 'fixture' }, providers: [
   { providerId: 'openai', displayName: 'OpenAI', status: 'unknown', authenticated: null, source: 'pi', canLogin: true, canLogout: false, models: [{ id: 'test', name: 'Test' }], methods: [{ type: 'oauth', label: 'ChatGPT 订阅', canLogin: true, isSubscription: true }, { type: 'api-key', label: 'API Key', canLogin: false }] },
   { providerId: 'key-only', displayName: 'Key Only', status: 'disconnected', source: 'pi', canLogin: false, canLogout: false, methods: [{ type: 'api-key', label: 'API Key', canLogin: false }], models: [] },
@@ -1044,6 +1146,28 @@ window.fetch = async (url, opts) => {
         ],
       }),
     };
+  }
+  if (u.includes('/api/provider-management')) {
+    const method = opts?.method || 'GET';
+    const body = opts?.body ? JSON.parse(opts.body) : null;
+    providerManagementCalls.push({ method, url: u, body });
+    if (method === 'POST' && u.includes('/drafts')) {
+      return { json: async () => ({ ok: true, draftId: 'smoke-draft', draftRevision: 2, revision: providerManagementSnapshot.revision }) };
+    }
+    if (method === 'POST' && u.includes('/commit')) {
+      return {
+        json: async () => ({
+          ok: true,
+          serviceId: body?.serviceId || 'deepseek',
+          saved: true,
+          credentialSaved: null,
+          credentialState: 'saved',
+          sync: { state: 'pending', reason: 'runtime_sync_pending' },
+          revision: 'config-rev-smoke-next',
+        }),
+      };
+    }
+    return { json: async () => JSON.parse(JSON.stringify(providerManagementSnapshot)) };
   }
   if (u.includes('/api/provider-auth')) {
     authCalls.push({ url: u, body: opts?.body ? JSON.parse(opts.body) : null });
@@ -2655,28 +2779,47 @@ staticCheck();
   });
   $('settingsReturn').click();
 
-  // --- 添加供应商：保存后提示告警 ---
+  // --- 添加服：服务选择器 → 双栏配置 → 保存（P4 主界面） ---
   $('navProviders').click();
   await new Promise((r) => setTimeout(r, 20));
-  [...providerPage().querySelectorAll('.btn')].find((b) => b.textContent === '添加供应商').click();
-  check('添加表单打开', () => providerPage().querySelectorAll('.preset').length === 9);
-  const fields = providerPage().querySelectorAll('.field input, .field textarea');
-  fields[0].value = 'newprov';
-  fields[1].value = 'https://api.example.com/v1';
-  fields[2].value = '$NEW_KEY';
-  fields[3].value = 'model-a|Model A';
-  const beforeRawKey = providerConfigCalls.length;
-  fields[2].value = 'raw-fixture-key';
-  [...providerPage().querySelectorAll('button')].find((b) => b.textContent === '保存').click();
+  providerPage().querySelector('.prov-btn-main').click();
+  let dialog = $('modalCard');
+  check('添加服务选择器打开', () => dialog.querySelectorAll('.pm-service-tile').length === 3 && dialog.querySelector('.pm-chooser-group-title').textContent === '订阅账户');
+  check('订阅账户只提供官方登录入口，主页面没有密钥框', () => dialog.textContent.includes('订阅') && dialog.querySelectorAll('input[type="password"]').length === 0);
+  const chooserSearch = dialog.querySelector('.pm-chooser-search');
+  const setInput = (node, value) => {
+    node.value = value;
+    node.dispatchEvent(new window.Event('input', { bubbles: true }));
+  };
+  setInput(chooserSearch, 'deepseek');
+  check('选择器搜索只显示匹配服务', () => dialog.querySelectorAll('.pm-service-tile').length === 1 && dialog.querySelector('.pm-service-tile').dataset.serviceId === 'deepseek');
+  dialog.querySelector('.pm-service-tile[data-service-id="deepseek"]').click();
+  dialog = $('modalCard');
+  const env = dialog.querySelector('.pm-env-input');
+  check('DeepSeek 配置页带入端点与环境变量引用', () => dialog.querySelector('.pm-service-chip-detail').textContent.includes('api.deepseek.com') && env.value === '$DEEPSEEK_API_KEY');
+  check('P25 主页面没有原文密钥输入，凭据触发器待 P2', () => dialog.querySelectorAll('input[type="password"]').length === 0 && dialog.querySelector('[data-credential-trigger]').disabled);
+  const customInput = dialog.querySelector('[data-custom-model-input]');
+  setInput(customInput, 'smoke-model');
+  dialog.querySelector('[data-add-custom-model]').click();
+  const beforeRawKey = providerManagementCalls.length;
+  const beforeLegacyWrites = providerConfigCalls.length;
+  setInput(env, 'raw-fixture-key');
+  dialog.querySelector('.pm-dialog-actions .pm-primary').click();
   await new Promise((r) => setTimeout(r, 10));
-  check('P25 原文密钥被表单拦截，不发送配置写请求', () => providerConfigCalls.length === beforeRawKey);
-  check('P25 表单只提示环境变量引用与官方登录', () => fields[2].placeholder === '$MY_API_KEY 或 ${MY_API_KEY}' && providerPage().textContent.includes('/login <provider>'));
-  fields[2].value = '$NEW_KEY';
-  [...providerPage().querySelectorAll('.btn')].find((b) => b.textContent === '保存').click();
-  await new Promise((r) => setTimeout(r, 30));
-  check('保存后弹出 key 告警', () => {
+  check('P25 原文密钥被表单拦截，不发送配置写请求', () => providerManagementCalls.length === beforeRawKey && providerConfigCalls.length === beforeLegacyWrites);
+  check('P25 表单只提示环境变量引用与官方登录', () => env.placeholder.includes('${') && dialog.querySelector('.pm-status-banner').textContent.includes('环境变量引用') && !dialog.textContent.includes('API Key 已保存'));
+  // 校验失败会重画连接字段，必须重新取当前输入节点再输入。
+  setInput(dialog.querySelector('.pm-env-input'), '$NEW_KEY');
+  dialog.querySelector('.pm-dialog-actions .pm-primary').click();
+  await new Promise((r) => setTimeout(r, 40));
+  check('保存只发送环境变量引用，请求体不含原文密钥', () => {
+    const posts = providerManagementCalls.slice(beforeRawKey).filter((c) => c.method === 'POST');
+    const commit = posts.find((c) => c.url.includes('/commit'));
+    return posts.length === 2 && commit?.body?.credentialAction?.type === 'env' && commit.body.credentialAction.reference === '$NEW_KEY' && !JSON.stringify(posts).includes('raw-fixture-key');
+  });
+  check('保存后明确提示 Runtime 同步尚未接通', () => {
     const t = [...window.document.querySelectorAll('.toast')].map((x) => x.textContent).join(' | ');
-    return t.includes('NEW_KEY') ? true : '未提示：' + t;
+    return t.includes('等待 Runtime 同步') ? true : '未提示：' + t;
   });
   $('settingsReturn').click();
 
@@ -3364,24 +3507,26 @@ staticCheck();
     });
   }
 
-  /* --- 添加供应商弹层里的拉取入口 --- */
-  check('弹层有「拉取」按钮，且拉取面板默认收起', () => {
+  /* --- 添加服务弹层：P3 自动发现尚未接通时不摆假入口 --- */
+  {
     window.openAddProvider();
     const card = $('modalCard');
-    if (!card) return '弹层没打开';
-
-    const btn = [...card.querySelectorAll('.field-head .btn')].find((b) => b.textContent === '拉取');
-    const panel = card.querySelector('.fetch-panel');
+    await new Promise((r) => setTimeout(r, 10));
+    check('添加弹层先展示服务选择器，没有旧的「拉取」面板', () => Boolean(card?.querySelector('.pm-chooser')) && !card?.querySelector('.fetch-panel'));
+    card?.querySelector('.pm-service-tile[data-service-id="deepseek"]')?.click();
+    const beforeDiscover = providerManagementCalls.length;
+    check('自动发现未接通时明确禁用刷新，而不是假装成功', () => {
+      const status = card?.querySelector('[data-discovery-status]');
+      const refresh = card?.querySelector('[data-refresh-models]');
+      return status?.dataset.discoveryStatus === 'unsupported' && refresh?.disabled === true;
+    });
+    card?.querySelector('[data-refresh-models]')?.click();
+    check('未接通的自动发现不会发出 /discover 请求', () => providerManagementCalls.length === beforeDiscover && !providerManagementCalls.some((c) => c.url.includes('/discover')));
 
     // 收拾干净，别影响后面的检查
     $('modal').hidden = true;
     card.innerHTML = '';
-
-    if (!btn) return '没有拉取按钮';
-    if (!panel) return '没有拉取面板';
-    if (panel.hidden !== true) return '拉取面板默认应该藏着';
-    return true;
-  });
+  }
 
   /* --- 项目配置：偏好恢复 ---
    *

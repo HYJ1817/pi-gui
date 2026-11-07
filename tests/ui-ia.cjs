@@ -134,13 +134,45 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   });
   await check('Late provider save cannot reopen its page after newer navigation', async () => {
     const before = w.fetch; let release;
+    const snapshot = {
+      ok: true, schemaVersion: 1, revision: 'ui-ia-revision',
+      capabilities: { rawKeyInput: false, keyStaging: false, nativeCredentialPersistence: false, privateDesktopBridge: false, oauthLogin: false, discoveryModes: [], modelOverrides: null, syncMode: 'unsupported', reasons: {} },
+      catalog: [{ id: 'custom', name: '自定义服务', category: 'api-key', connection: null, authMode: 'environment' }],
+      services: [], auth: { sdkAvailable: false, providers: [] }, sync: { state: 'idle' },
+    };
+    const input = (node, value) => {
+      node.value = value;
+      node.dispatchEvent(new w.Event('input', { bubbles: true }));
+    };
     try {
-      w.fetch = (url, options) => String(url) === '/api/providers' && options?.body
-        ? new Promise(resolve => { release = () => resolve({ ok: true, json: async () => ({ ok: true }) }); }) : before(url, options);
+      w.fetch = (url, options) => {
+        const target = String(url);
+        const method = options?.method || 'GET';
+        if (target === '/api/provider-management' && method === 'GET') {
+          return Promise.resolve({ ok: true, json: async () => snapshot });
+        }
+        if (target === '/api/provider-management/drafts' && method === 'POST') {
+          return Promise.resolve({ ok: true, json: async () => ({ ok: true, draftId: 'late-draft', draftRevision: 2, revision: snapshot.revision }) });
+        }
+        if (target === '/api/provider-management/commit' && method === 'POST') {
+          return new Promise(resolve => {
+            release = () => resolve({
+              ok: true,
+              json: async () => ({ ok: true, serviceId: 'fixture-ui', saved: true, credentialSaved: null, credentialState: 'saved', sync: { state: 'pending', reason: 'runtime_sync_pending' }, revision: 'ui-ia-next' }),
+            });
+          });
+        }
+        return before(url, options);
+      };
       $('navGlobalMore').click(); $('navProviders').click(); await tick();
-      [...d.querySelectorAll('.settings-detail-card button')].find(b => b.textContent === '添加供应商').click();
-      const inputs = d.querySelectorAll('.settings-detail-card input'); inputs[0].value = 'fixture-ui'; inputs[1].value = 'http://127.0.0.1:7788';
-      [...d.querySelectorAll('.settings-detail-card button')].find(b => b.textContent === '保存').click(); await tick();
+      [...d.querySelectorAll('.settings-detail-card button')].find(b => b.textContent === '添加服务').click(); await tick();
+      const modalCard = $('modalCard');
+      [...modalCard.querySelectorAll('.pm-service-tile')].find(tile => tile.dataset.serviceId === 'custom').click(); await tick();
+      input(modalCard.querySelector('[aria-label="服务名称"]'), 'Fixture UI');
+      input(modalCard.querySelector('.pm-provider-id'), 'fixture-ui');
+      input(modalCard.querySelector('[data-connection-base-url]'), 'http://127.0.0.1:7788');
+      input(modalCard.querySelector('.pm-env-input'), '$FIXTURE_KEY');
+      modalCard.querySelector('.pm-dialog-actions .pm-primary').click(); await tick();
       assert.equal(typeof release, 'function');
       $('navAppearance').click(); const current = d.querySelector('.settings-detail-card');
       release(); await tick(); await tick();
