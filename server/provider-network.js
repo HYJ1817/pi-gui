@@ -222,15 +222,22 @@ function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxB
 }
 
 /** 解析并校验目标的全部地址。任何一段解析到非授权类别即整体拒绝。 */
-export function resolveTargetAddresses({ host, lookup = dns.promises.lookup }) {
-  return lookup(host, { all: true, verbatim: true }).then(entries => {
+export function resolveTargetAddresses({ host, lookup = dns.promises.lookup, signal }) {
+  if (signal?.aborted) return Promise.resolve({ ok: false, ...fail('aborted') });
+  const lookupSignal = signal;
+  return Promise.resolve(lookup(host, { all: true, verbatim: true }, lookupSignal)).then(entries => {
+    signal?.throwIfAborted?.();
     const list = (Array.isArray(entries) ? entries : []).map(entry => entry?.address).filter(address => typeof address === 'string' && address);
     if (!list.length) return { ok: false, ...fail('dns_failed') };
     const classes = list.map(address => classifyAddress(address));
     const loopback = classes.every(classOf => classOf === 'loopback');
     if (!loopback && classes.some(classOf => classOf !== 'public')) return { ok: false, ...fail('private_address') };
     return { ok: true, addresses: list, addressClass: loopback ? 'loopback' : 'public' };
-  }).catch(() => ({ ok: false, ...fail('dns_failed') }));
+  }).catch(error => {
+    /* 外部/超时 abort 转成 aborted；其余解析失败仍是 dns_failed。 */
+    if (signal?.aborted || error?.name === 'AbortError') return { ok: false, ...fail('aborted') };
+    return { ok: false, ...fail('dns_failed') };
+  });
 }
 
 /* 模型目录的输出白名单。供应商返回的原始条目可能有 apiKey/headers/token、
@@ -251,8 +258,14 @@ const ENTRY_FIELDS = new Set(['id', 'name', 'displayName', 'display_name', 'labe
 /** 单条模型 → 白名单投影。返回 null 表示条目被丢弃（不能映射为有效模型）。 */
 export function sanitizeModelEntry(item, secrets = []) {
   if (typeof item === 'string') {
+    // 字符串条目与对象条目同一密钥纪律：供应商把密钥整条回显成模型 ID
+    // 时同样不进普通前端。
     const cleanId = safeText(item.trim(), 300);
-    return cleanId ? { id: cleanId } : null;
+    if (!cleanId) return null;
+    for (const secret of secrets) {
+      if (typeof secret === 'string' && secret.length > 0 && cleanId.includes(secret)) return null;
+    }
+    return { id: cleanId };
   }
   if (!isRecord(item)) return null;
   // 未知键直接整条丢弃：嵌入的凭据/任意对象不再有输出路径，也不留下
@@ -309,25 +322,72 @@ export function pickModelList(json, secrets = []) {
  * credentialRevision 传入时必须与 consent 绑定值一致——换成另一把 key
  * （代次变化）后旧授权当场失效，不允许旧授权绑定替换后的密钥。
  * 密钥只在 headers 组装时短暂出现，错误出口做哨兵替换。 */
+/** startInfo 返回包内复用的校验产物；verifyConsent 每次发包前重查
+ * （授权撤销/过期/目标变化立即生效，响应不再适用旧授权）。 */
+function verifyConsent(consentStore, consentId, url, credentialRevision) {
+  /* 过期判定由 consent store 自己的时钟负责（测试注入与生产一致）。 */
+  const consent = consentStore.get(consentId);
+  if (!consent) return { error: fail('invalid_target') };
+  if (consent.credentialAttached) {
+    /* FIX-03：需要凭据的授权必须核准凭据代次——缺失/不匹配一律拒绝，
+     * 不允许旧 consent 绑定替换后的新 key。 */
+    if (typeof credentialRevision !== 'string') return { error: fail('policy_rejected') };
+    if (consent.credentialRevision !== credentialRevision) return { error: fail('policy_rejected') };
+  } else if (credentialRevision !== undefined && credentialRevision !== null) {
+    // 无凭据授权保持独立语义：PI_GUI none 源不收代次。
+    return { error: fail('policy_rejected') };
+  }
+  const target = parseTarget(url);
+  if (!target) return { error: fail('invalid_target') };
+  /* 目标身份（协议/host/port/basePath 根）必须与授权一致，防止把 A 目标的
+   * consent 用到 B 目标；具体路径的合法性由授权的候选路径集合决定——
+   * planCandidates 的逐级回退路径（如 /models）在签发时已整组批准。 */
+  if (target.protocol !== consent.target.protocol || target.host !== consent.target.host || target.port !== consent.target.port) {
+    return { error: fail('policy_rejected') };
+  }
+  if (!consent.candidatePaths.includes(url)) return { error: fail('policy_rejected') };
+  return { consent, target };
+}
+
 export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_BYTES, maxTotalMs = MAX_TOTAL_MS, io = {}, lookup } = {}) {
   return async function discover({ consentId, url, key = null, credentialRevision, signal }) {
-    /* 过期判定由 consent store 自己的时钟负责（测试注入与生产一致）。 */
-    const consent = consentStore.get(consentId);
-    if (!consent) return fail('invalid_target');
-    if (credentialRevision !== undefined && (consent.credentialRevision ?? null) !== (credentialRevision ?? null)) {
-      return fail('policy_rejected');
-    }
-    let target = parseTarget(url);
-    if (!target) return fail('invalid_target');
-    if (target.protocol !== consent.target.protocol || target.host !== consent.target.host || target.port !== consent.target.port ||
-        !(target.basePath === consent.target.basePath || target.basePath.startsWith(`${consent.target.basePath}/`))) {
-      return fail('policy_rejected');
-    }
-    if (!consent.candidatePaths.includes(url)) return fail('policy_rejected');
+    /* 总时限从发现操作开始计算（FIX-06）：DNS 解析与请求同池。 */
+    const deadline = Date.now() + maxTotalMs;
+    const abortIf = () => {
+      if (signal?.aborted) return fail('aborted');
+      if (Date.now() >= deadline) return fail('timeout');
+      return null;
+    };
+    const initial = verifyConsent(consentStore, consentId, url, credentialRevision);
+    if (initial.error) return initial.error;
+    const { consent, target } = initial;
     const credentialAttached = typeof key === 'string' && key.length > 0;
     if (credentialAttached && !consent.credentialAttached) return fail('policy_rejected');
-    const resolved = await resolveTargetAddresses({ host: target.host, ...(lookup ? { lookup } : {}) });
-    if (!resolved.ok) return resolved;
+    if (consent.credentialAttached && !credentialAttached) return fail('policy_rejected');
+    /* FIX-02：外部 abort 必须能中止解析与之后的任何网络动作；
+     * 超时同样作用于 DNS。 */
+    const dnsDeadline = Math.min(deadline, Date.now() + maxTotalMs);
+    const dnsController = new AbortController();
+    const onOuterAbort = () => dnsController.abort();
+    if (signal) {
+      if (signal.aborted) return fail('aborted');
+      signal.addEventListener('abort', onOuterAbort, { once: true });
+    }
+    const dnsTimer = setTimeout(() => dnsController.abort(), Math.max(0, dnsDeadline - Date.now()));
+    let resolved;
+    try {
+      resolved = await resolveTargetAddresses({ host: target.host,
+        ...(lookup ? { lookup } : { ...(io.lookup ? { lookup: io.lookup } : {}) }),
+        signal: dnsController.signal });
+    } finally {
+      clearTimeout(dnsTimer);
+      signal?.removeEventListener('abort', onOuterAbort);
+      if (signal) signal.addEventListener('abort', onOuterAbort, { once: true });
+    }
+    if (!resolved.ok) return signal?.aborted ? fail('aborted') : resolved;
+    /* DNS 期间授权可能被撤销/过期/目标变化：发包前重查。 */
+    const afterDns = verifyConsent(consentStore, consentId, url, credentialRevision);
+    if (afterDns.error) return afterDns.error;
     const policy = targetPolicy({ target: { ...target, protocol: target.protocol }, addressClass: resolved.addressClass,
       credentialAttached, loopbackAuthorized: consent.loopback === true });
     if (policy) return fail(policy);
@@ -337,12 +397,15 @@ export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIM
       else if (consent.api === 'google-generative-ai') headers['x-goog-api-key'] = key;
       else headers.authorization = `Bearer ${key}`;
     }
-    const deadline = Date.now() + maxTotalMs;
     let lastStatus = null;
     const attempts = consent.candidatePaths.slice(consent.candidatePaths.indexOf(url));
     for (const candidate of attempts) {
+      /* 每个候选请求前都重新验证授权与 abort/时限（FIX-02：撤销即时生效）。 */
+      const aborted = abortIf();
+      if (aborted) return aborted;
+      const pre = verifyConsent(consentStore, consentId, candidate, credentialRevision);
+      if (pre.error) return pre.error;
       const remaining = deadline - Date.now();
-      if (remaining <= 0 || signal?.aborted) return fail(signal?.aborted ? 'aborted' : 'timeout');
       /* 严格 30s：单次请求的超时截到总时限剩余，不得靠最后一次请求突破总上限。 */
       const attemptTimeout = Math.min(timeoutMs, remaining);
       const result = await restrictedFetch({ url: candidate, headers, addresses: resolved.addresses, timeoutMs: attemptTimeout, signal, maxBytes, io });
@@ -355,7 +418,7 @@ export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIM
       if (result.status < 200 || result.status >= 300) { lastStatus = result.status; continue; }
       let json;
       try { json = JSON.parse(result.body.toString('utf8')); } catch { return fail('not_json'); }
-      /* 密钥（以及原始原始请求头值）传入白名单：出现在任何模型字段里的
+      /* 密钥（以及原始请求头值）传入白名单：出现在任何模型字段里的
        * 哨兵即整条丢弃，供应商回显头不会进普通前端。 */
       const picked = pickModelList(json, [...(credentialAttached ? [key] : []), ...Object.values(headers).filter(header => typeof header === 'string' && header.length > 8)]);
       if (!picked.ok) return picked;

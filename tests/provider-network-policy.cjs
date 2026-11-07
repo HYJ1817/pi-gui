@@ -49,9 +49,12 @@ function fakeRes({ status = 200, body = '', headers = {} } = {}) {
 }
 
 async function consentFor(consent, overrides = {}) {
+  /* 默认签发**无凭据**授权：本文件的多数用例验证网络策略与 transport
+   * 行为本身（不涉及代次）。需要 keyed 授权的用例显式传
+   * { credentialSource: 'staged', credentialRevision } 覆盖。 */
   const issued = consent.issue({ draftId: 'draft-a', draftRevision: 1, connectionRevision: 1, providerId: 'fixture',
-    connection: httpsConnection, api: 'openai-completions', credentialSource: 'staged',
-    credentialRevision: 'cred-rev-1', rememberTarget: false, loopback: false, ...overrides });
+    connection: httpsConnection, api: 'openai-completions', credentialSource: 'none',
+    credentialRevision: null, rememberTarget: false, loopback: false, ...overrides });
   assert.equal(issued.ok, true, JSON.stringify(issued));
   return issued;
 }
@@ -171,9 +174,9 @@ test('consent store binds draft/connection/credential revision and honors revoke
   assert.equal(store.get(third.consentId), null, 'connection bump revokes the old grant');
   const loopbackAttached = store.issue({ draftId: 'draft-a', draftRevision: 1, connectionRevision: 1, providerId: 'ollama',
     connection: { baseUrl: 'http://127.0.0.1:11434/v1', api: 'openai-completions' }, api: 'openai-completions',
-    credentialSource: 'staged', credentialRevision: null, rememberTarget: false, loopback: true });
+    credentialSource: 'staged', credentialRevision: 'cred-rev-1', rememberTarget: false, loopback: true });
   assert.equal(loopbackAttached.ok, false, 'loopback discovery never carries a credential');
-  const remembered = await consentFor(store, { rememberTarget: true, credentialSource: 'stored' });
+  const remembered = await consentFor(store, { rememberTarget: true, credentialSource: 'stored', credentialRevision: 'cred-rev-1' });
   const match = store.matchRemembered({ providerId: 'fixture', connection: httpsConnection, api: 'openai-completions',
     credentialSource: 'stored', credentialRevision: 'cred-rev-1' });
   assert.ok(match, 'remembered target matches with identical credential revision');
@@ -335,7 +338,7 @@ test('transport strips credentials from discovery results and respects the total
   const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
   t.after(() => store.dispose());
   const SECRET = 'sentinel-key-LIVE';
-  const issued = await consentFor(store);
+  const issued = await consentFor(store, { credentialSource: 'staged', credentialRevision: 'cred-rev-1' });
   const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
   // 供应商把鉴权头回显进第一个模型名，然后第二个候选成功。
   const transport = net.createDiscoveryTransport({ consentStore: store, lookup,
@@ -346,7 +349,7 @@ test('transport strips credentials from discovery results and respects the total
         { id: 'clean', name: 'Clean Model' },
       ] }) })),
     ]) } });
-  const result = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', key: SECRET });
+  const result = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', key: SECRET, credentialRevision: 'cred-rev-1' });
   assert.equal(result.ok, true);
   assert.deepEqual(result.models.map(model => model.id), ['clean']);
   assert.equal(JSON.stringify(result.models).includes(SECRET), false);
@@ -357,16 +360,20 @@ test('credential revision mismatch after staged replacement invalidates the old 
   const { net, consent } = await modules();
   const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
   t.after(() => store.dispose());
-  const issued = await consentFor(store); // credentialRevision 'cred-rev-1'
+  const issued = await consentFor(store, { credentialSource: 'staged', credentialRevision: 'cred-rev-1' });
   const lookup = async () => [{ address: '93.184.216.34', family: 4 }];
   const transport = net.createDiscoveryTransport({ consentStore: store, lookup,
     io: { requester: fakeRequester([req => req.emit('response', fakeRes({ status: 200, body: '{"data":[]}' }))]) } });
-  const same = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', credentialRevision: 'cred-rev-1' });
+  const same = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', key: 'k', credentialRevision: 'cred-rev-1' });
   assert.equal(same.ok, true);
-  const rotated = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', credentialRevision: 'cred-rev-2' });
+  const rotated = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', key: 'k', credentialRevision: 'cred-rev-2' });
   assert.equal(rotated.code, 'policy_rejected', 'rotating the key invalidates the previous grant');
-  const missing = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', credentialRevision: null });
+  const missing = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', key: 'k', credentialRevision: null });
   assert.equal(missing.code, 'policy_rejected', 'a grant bound to evidence cannot be used without it');
+  const absent = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', key: 'k' });
+  assert.equal(absent.code, 'policy_rejected', 'omitting the revision entirely is also refused');
+  const keyless = await transport({ consentId: issued.consentId, url: 'https://api.fixture.invalid/v1/models', credentialRevision: 'cred-rev-1' });
+  assert.equal(keyless.code, 'policy_rejected', 'a keyed grant requires the key itself, not just a revision');
 });
 
 test('total deadline bounds every attempt, including the last one', async t => {
@@ -396,4 +403,87 @@ test('model list shape guard truncates beyond the cap and rejects non-list JSON'
   assert.equal(net.pickModelList({ error: 'nope' }).code, 'not_json');
   assert.equal(net.pickModelList('["str"]').code, 'not_json');
   assert.equal(net.pickModelList({ data: [] }).models.length, 0);
+});
+
+/* ---------- 第二轮独立验收回归（FIX-01/02/03/06） ---------- */
+
+test('FIX-01: string entries are subject to the same secret filter as objects', async () => {
+  const { net } = await modules();
+  const SECRET = 'sentinel-key-FULL';
+  const picked = net.pickModelList({ data: [
+    'plain-model',
+    `${SECRET}`,
+    `pre-${SECRET}-post`,
+    `len-${SECRET.length}`,
+    { id: `also-${SECRET}` },
+  ] }, [SECRET]);
+  assert.equal(picked.ok, true);
+  assert.deepEqual(picked.models.map(model => model.id), ['plain-model', 'len-17']);
+  // 完整密钥子串也拒（防有序拼接绕过）。
+  const half = net.pickModelList({ data: ['x-y-' + SECRET.slice(0, 8) + '-tail'] }, [SECRET.slice(0, 8)]);
+  assert.equal(half.models.length, 0, 'partial secrets never leak either');
+  // 恶意字符串条目（控制字符/超长/空）过滤。
+  const junk = net.pickModelList({ data: ['', '   ', 'a'.repeat(400), 'bad\u0000id', 'ok-id'] });
+  assert.deepEqual(junk.models.map(model => model.id), ['ok-id']);
+});
+
+test('FIX-02: a consent revoked or aborted during DNS never produces a request', async t => {
+  const { net, consent } = await modules();
+  const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
+  t.after(() => store.dispose());
+  const issued = await consentFor(store);
+  let sent = 0;
+  const requester = () => {
+    sent += 1;
+    const req = new EventEmitter();
+    req.end = () => req.emit('response', fakeRes({ status: 200, body: '[]' }));
+    return req;
+  };
+  const lookup = async (host, opts, dnsSignal) => {
+    store.revoke(issued.consentId);
+    if (dnsSignal?.aborted) { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }
+    return [{ address: '93.184.216.34', family: 4 }];
+  };
+  const transport = net.createDiscoveryTransport({ consentStore: store, lookup, io: { requester } });
+  const revoked = await transport({ consentId: issued.consentId, url: issued.candidatePaths[0] });
+  assert.equal(revoked.code, 'invalid_target');
+  assert.equal(sent, 0, 'no socket work after revocation');
+
+  // 外部 Abort 期间 DNS 挂起：解析与请求都必须终止。
+  const store2 = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
+  t.after(() => store2.dispose());
+  const issued2 = await consentFor(store2);
+  const lookup2 = (host, opts, dnsSignal) => new Promise((resolve, reject) => { dnsSignal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true }); });
+  const transport2 = net.createDiscoveryTransport({ consentStore: store2, lookup: lookup2, io: { requester } });
+  const controller = new AbortController();
+  const pending = transport2({ consentId: issued2.consentId, url: issued2.candidatePaths[0], signal: controller.signal });
+  setTimeout(() => controller.abort(), 30);
+  const aborted = await pending;
+  assert.equal(aborted.code, 'aborted');
+  assert.equal(sent, 0, 'abort during DNS also prevents any request');
+});
+
+test('FIX-06: DNS resolution time is charged to the total deadline', async t => {
+  const { net, consent } = await modules();
+  const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
+  t.after(() => store.dispose());
+  const issued = await consentFor(store);
+  let requested = false;
+  const requester = () => {
+    requested = true;
+    const req = new EventEmitter();
+    req.end = () => req.emit('response', fakeRes({ status: 200, body: '[]' }));
+    return req;
+  };
+  // 慢 DNS（吃掉几乎全部总时限）+ 不响应的请求：总结果必须 timeout，
+  // 且不得再发起网络请求（DNS 之后的余量不足以支撑新 attempt）。
+  const lookup = () => new Promise(resolve => setTimeout(() => resolve([{ address: '93.184.216.34', family: 4 }]), 400));
+  const transport = net.createDiscoveryTransport({ consentStore: store, lookup, maxTotalMs: 450,
+    io: { requester: fakeRequester([() => { /* hangs */ }]) } });
+  const started = Date.now();
+  const result = await transport({ consentId: issued.consentId, url: issued.candidatePaths[0] });
+  const elapsed = Date.now() - started;
+  assert.equal(result.code, 'timeout');
+  assert.ok(elapsed < 1_500, `elapsed ${elapsed}ms stays bounded`);
+  assert.equal(requested, false, 'DNS already consumed the deadline; no request is sent');
 });

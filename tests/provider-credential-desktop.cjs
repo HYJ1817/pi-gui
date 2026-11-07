@@ -45,6 +45,10 @@ function fakeBridgeSdk(state) {
     stageClear: async (binding, options) => {
       state.calls.push({ kind: 'stage-clear', binding: { ...binding }, options: { ...options } });
       if (!state.native.has(binding.providerId)) return { ok: false, code: 'credential_conflict', credentialState: 'none', credentialSaved: false };
+      // 与真 worker 的 OAuth 同槽纪律一致：清除在受限窗内要先看一次影响说明。
+      if (state.native.get(binding.providerId).type === 'oauth' && options?.confirmOAuthReplacement !== true) {
+        return { ok: false, code: 'oauth_conflict', credentialState: 'none', credentialSaved: false };
+      }
       return { ok: true, credentialState: 'clear-staged', credentialSaved: null };
     },
     disposeDraft: async draftId => { state.disposed.push(draftId); state.staged.delete(draftId); return { ok: true }; },
@@ -241,6 +245,35 @@ async function moduleTests() {
   }
 
   {
+    // FIX-04：OAuth 凭据的清除也要受限窗内二次确认——worker 层拒绝非确认
+    // 调用，bridge 首次应答固定文案让页面提示影响，确认后再带 confirmOAuth
+    // 替换标志重试。落盘清除仍属于 P3 保存编排。
+    const { bridge, state } = make({ sdkState: { qualified: true, native: new Map([['fixture', { type: 'oauth', key: 'oauth-sentinel' }]]), staged: new Map(), calls: [], disposed: [] } });
+    const prepared = await bridge.handle({ type: 'provider-credential', action: 'prepare', requestId: 'r16a',
+      backendEpoch: bridge.epoch, draftId: 'draft-a', draftRevision: 1, purpose: 'clear' });
+    const first = await bridge.handle({ type: 'provider-credential', action: 'clear-stage', requestId: 'r16b',
+      backendEpoch: bridge.epoch, flowId: prepared.flowId, promptId: prepared.promptId, nonce: prepared.nonce, confirmed: true });
+    check('OAuth clear first press explains impact and stays in the sheet', () => {
+      assert.equal(first.ok, false);
+      assert.equal(first.code, 'oauth_conflict');
+      assert.match(first.message, /清除/);
+      assert.ok(first.message.length > 10);
+    });
+    const second = await bridge.handle({ type: 'provider-credential', action: 'clear-stage', requestId: 'r16c',
+      backendEpoch: bridge.epoch, flowId: prepared.flowId, promptId: prepared.promptId, nonce: prepared.nonce, confirmed: true });
+    check('second press inside the sheet forwards explicit OAuth confirmation', () => {
+      assert.equal(second.ok, true);
+      assert.equal(second.credentialState, 'clear-staged');
+      assert.equal(state.calls.at(-1).kind, 'stage-clear');
+      assert.equal(state.calls.at(-1).options.confirmOAuthReplacement, true);
+    });
+    // 过期 flow：nonce 已 consumed，重放同一帧返回 invalid_request。
+    const replay = await bridge.handle({ type: 'provider-credential', action: 'clear-stage', requestId: 'r16d',
+      backendEpoch: bridge.epoch, flowId: prepared.flowId, promptId: prepared.promptId, nonce: prepared.nonce, confirmed: true });
+    check('consumed clear nonce cannot replay', () => assert.equal(replay.code, 'invalid_request'));
+  }
+
+  {
     const { bridge, consents, state } = make();
     const prepared = await bridge.handle({ type: 'provider-credential', action: 'prepare', requestId: 'r17',
       backendEpoch: bridge.epoch, draftId: 'draft-a', draftRevision: 1, purpose: 'set' });
@@ -360,7 +393,7 @@ async function electronMain() {
   const TOKEN_HEADER = 'X-Pi-Gui-Token';
 
   // 真实后端子进程（与 main.cjs 同一 spawn 形状，含 ipc）
-  const server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+  let server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: world,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_GUI_TOKEN: TOKEN, PI_GUI_OPEN: '0',
       PI_GUI_DATA: path.join(world, 'data'), PI_CODING_AGENT_DIR: agentDir,
@@ -580,6 +613,66 @@ async function electronMain() {
     await waitFor(() => !sheetWindow());
     // renderer 无法把 clear 窗提交成 stage：payload 里带 input 也走 clear-stage。
     // （由控制器按 flow.purpose 决定 action；真机断言见 openClear 后的模式检查。）
+
+    // FIX-04 真机端到端：OAuth 凭据的清除在受限窗内二次确认。
+    fs.writeFileSync(path.join(agentDir, 'auth.json'), JSON.stringify({ 'fixture-oauth-clear': { type: 'oauth', key: 'oauth-clear-sentinel' } }), { mode: 0o600 });
+    const oauthClearDraft = await createDraft('fixture-oauth-clear');
+    const openOauthClear = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(oauthClearDraft.draftId)}, draftRevision: ${oauthClearDraft.draftRevision}, action: 'clear' })`);
+    check('OAuth clear open succeeds', openOauthClear?.ok === true, openOauthClear);
+    const oauthClearSheet = await waitForSheet();
+    read(oauthClearSheet, `(document.getElementById('sheet-apply').click(), 'first')`).catch(() => {});
+    await sleep(500);
+    check('first clear press explains the OAuth impact inside the sheet',
+      await read(oauthClearSheet, `document.getElementById('sheet-status').textContent.includes('OAuth')`));
+    read(oauthClearSheet, `(document.getElementById('sheet-apply').click(), 'second')`).catch(() => {});
+    await waitFor(() => !sheetWindow());
+    check('second clear press inside the sheet completes clear-staged', states.filter(s => s.state === 'staged').length >= 3, { stagedCount: states.length });
+
+    // FIX-05：并发 open——第二个请求在 opening/流程占用时必须 busy，
+    // 不得开出第二个 sheet 或覆盖 flow。
+    const concurrencyA = await createDraft('fixture-provider');
+    const openPromise = read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(concurrencyA.draftId)}, draftRevision: ${concurrencyA.draftRevision}, action: 'set' })`);
+    const openB = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(concurrencyA.draftId)}, draftRevision: ${concurrencyA.draftRevision}, action: 'set' })`);
+    const openA = await openPromise;
+    check('second concurrent open is refused during the async open', openB?.ok === false && ['sheet_open', 'opening'].includes(openB?.reason), { openB });
+    const openedSheet = await waitForSheet();
+    check('first concurrent open wins and opens exactly one sheet', openA?.ok === true &&
+      BrowserWindow.getAllWindows().filter(w => String(w.webContents?.getURL() ?? '').startsWith('pi-gui-credential:')).length === 1, { openA });
+    read(openedSheet, `(window.piGuiCredentialSheet.cancel(), 'cancelled')`).catch(() => {});
+    await waitFor(() => !sheetWindow());
+
+    // FIX-05：打开途中 backend 重启——opening 释放，open 返回显式失败。
+    server.kill();
+    await sleep(250);
+    server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+      cwd: world,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_GUI_TOKEN: TOKEN, PI_GUI_OPEN: '0',
+        PI_GUI_DATA: path.join(world, 'data'), PI_CODING_AGENT_DIR: agentDir,
+        PI_BIN: path.join(pkg, 'sdk.mjs'),
+        PI_GUI_PROVIDER_MANAGEMENT: '1', PI_GUI_PROVIDER_KEY_INPUT: '1' },
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      windowsHide: true,
+    });
+    await new Promise((resolve, reject) => {
+      const deadline = Date.now() + 25_000;
+      const timer = setInterval(async () => {
+        try {
+          const res = await fetch(`${ORIGIN}/api/health`, { headers: { [TOKEN_HEADER]: TOKEN } });
+          if (res.ok) { clearInterval(timer); resolve(); }
+        } catch { /* not up yet */ }
+        if (Date.now() > deadline) { clearInterval(timer); reject(new Error('backend restart timeout')); }
+      }, 200);
+    });
+    const interimFailure = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(concurrencyA.draftId)}, draftRevision: ${concurrencyA.draftRevision}, action: 'set' })`);
+    check('restart invalidates the old backend flow (explicit refusal, no stale sheet)',
+      interimFailure?.ok === false && Boolean(interimFailure?.code), interimFailure);
+    const restartDraft = await createDraft('fixture-provider');
+    const reopenAfterRestart = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(restartDraft.draftId)}, draftRevision: ${restartDraft.draftRevision}, action: 'set' })`);
+    check('open works across a backend restart (new epoch handshake)', reopenAfterRestart?.ok === true, reopenAfterRestart);
+    const reopeningSheet = await waitForSheet();
+    check('sheet after backend restart uses a fresh flow', Boolean(sheetWindow()));
+    read(reopeningSheet, `(window.piGuiCredentialSheet.cancel(), 'closed')`).catch(() => {});
+    await waitFor(() => !sheetWindow());
 
     // authorize-target —— 不要求新密钥，确认目录授权。
     const oauthAuthorize = await createDraft('fixture-oauth');

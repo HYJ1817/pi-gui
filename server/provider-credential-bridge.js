@@ -87,7 +87,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
       serviceId: draft.serviceId ?? null, api: draft.connection?.api ?? 'openai-completions',
       expectedCredentialRevision: inspection.credentialRevision ?? null,
       oauthConflict: ['set', 'replace'].includes(purpose) && inspection.present === true && inspection.type === 'oauth',
-      oauthConfirmOffered: false, expires: now() + flowTtlMs, lastCredentialState: 'none' };
+      oauthConfirmOffered: false, clearConfirmOffered: false, expires: now() + flowTtlMs, lastCredentialState: 'none' };
     flows.set(flowId, flow);
     return { ok: true, flowId, promptId: flow.promptId, nonce, expiresAt: flow.expires,
       targetSummary: { providerId: flow.providerId, baseUrl: draft.connection?.baseUrl ?? null, api: flow.api },
@@ -157,7 +157,24 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     if (inFlight) return fail('config_busy', { message: '凭据操作进行中，请稍后重试。' });
     inFlight = true;
     try {
+      /* OAuth 凭据与替换共用同一原生槽：清除同样需要在受限窗内显式
+       * 二次确认（worker 层拒绝非确认调用）。首次尝试不带确认；遇到
+       * oauth_conflict 时保持 flow 与 nonce 可用，让输入窗按要求展示
+       * 影响说明后带确认重试（与替换同一交互纪律）。 */
       const result = await sdk.stageClear(bindingOf(flow), { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true });
+      if (result?.ok !== true && result?.code === 'oauth_conflict' && !flow.clearConfirmOffered) {
+        flow.clearConfirmOffered = true;
+        return { ok: false, code: 'oauth_conflict', message: '待清除的是 OAuth 登录凭据。确认后同槽的原生登录将被清除，且旧登录无法从 GUI 恢复。' };
+      }
+      if (result?.ok !== true && result?.code === 'oauth_conflict' && flow.clearConfirmOffered) {
+        const confirmedResult = await sdk.stageClear(bindingOf(flow), { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true, confirmOAuthReplacement: true });
+        if (confirmedResult?.ok !== true) {
+          return { ...fail(confirmedResult?.code ?? 'credential_conflict'), credentialState: confirmedResult?.credentialState ?? 'none' };
+        }
+        consume(flow);
+        flow.lastCredentialState = confirmedResult.credentialState ?? 'clear-staged';
+        return { ok: true, credentialState: flow.lastCredentialState, credentialSaved: null };
+      }
       if (result?.ok !== true) return { ...fail(result?.code ?? 'credential_conflict'), credentialState: result?.credentialState ?? 'none' };
       consume(flow);
       flow.lastCredentialState = result.credentialState ?? 'clear-staged';

@@ -33,6 +33,7 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
   let sheet = null;
   let flow = null; // { flowId, promptId, nonce, purpose, expires, consumed, action }
   let flowTarget = '';
+  let opening = false; // FIX-05：覆盖异步打开全程的 single-flight 互斥
   let handshake = null; // { epoch, stagingEnabled, sdkQualified, flowTtlMs, child }
   let capabilityPending = null;
   let sessionReady = false;
@@ -234,7 +235,21 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     const valid = request && typeof request === 'object' && opaqueId(request.draftId)
       && Number.isSafeInteger(request.draftRevision) && request.draftRevision >= 1 && ACTIONS.has(request.action);
     if (!valid) return { ok: false, code: 'invalid_request' };
-    if (sheet || flow) return { ok: false, code: 'busy', reason: 'sheet_open' };
+    /* FIX-05：single-flight 覆盖整个异步打开过程。握手与 prepare 都是
+     * IPC 往返，若只检查 sheet/flow，快速连续 open 会双双通过检查、
+     * 各自 prepare 成功并互相覆盖 flow/窗口。opening 在任何 await 之前
+     * 同步置位，失败路径finally 释放；排除「死流程被复用」——旧请求迟到
+     * 时 opening 已被新的请求持有，同样返回 busy。 */
+    if (sheet || flow || opening) return { ok: false, code: 'busy', reason: sheet || flow ? 'sheet_open' : 'opening' };
+    opening = true;
+    try {
+      return await openFlow(trusted, request);
+    } finally {
+      opening = false;
+    }
+  }
+
+  async function openFlow(_trusted, request) {
     /* 竞态兜底：上一窗口可能还在 250ms 延迟销毁窗口内（staged 路径）。
      * open 是显式用户动作，先完成销毁再开新窗。 */
     for (const window of BrowserWindow.getAllWindows()) {
@@ -243,14 +258,22 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
       }
     }
     const handshakeNow = await ensureHandshake();
+    if (!handshakeNow) return { ok: false, code: 'unsupported', reason: 'bridge_unavailable' };
     if (!handshakeNow?.stagingEnabled && request.action !== 'authorize-target') {
       return { ok: false, code: 'unsupported', reason: 'key_input_disabled' };
     }
-    if (!handshakeNow) return { ok: false, code: 'unsupported', reason: 'bridge_unavailable' };
+    if (!qualified()) return { ok: false, code: 'unsupported', reason: 'desktop_unqualified' };
     const purpose = request.action;
     const prepared = await backendCall({ action: 'prepare', requestId: `open-${++sequence}`, backendEpoch: handshakeNow.epoch,
       draftId: request.draftId, draftRevision: request.draftRevision, purpose });
     if (prepared?.ok !== true) return { ok: false, code: prepared?.code ?? 'unavailable', reason: prepared?.message };
+    /* 异步窗口内格式可能已经变化（后端退出重置了 flow/sheet）；prepared
+     * 属于 epoch 错位的应答时不得继续开窗。 */
+    if (handshake !== handshakeNow || handshakeNow.child !== getBackend() || !(handshakeNow.child && handshakeNow.child.connected)) {
+      void backendCall({ action: 'cancel', requestId: `drop-${++sequence}`, backendEpoch: handshakeNow.epoch, flowId: prepared.flowId });
+      return { ok: false, code: 'unavailable' };
+    }
+    if (sheet || flow) return { ok: false, code: 'busy', reason: 'sheet_open' };
     const expires = now() + handshakeNow.flowTtlMs;
     flow = { flowId: prepared.flowId, promptId: prepared.promptId, nonce: prepared.nonce,
       purpose, expires, consumed: false, action: request.action };
@@ -318,10 +341,11 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     }
     const reply = await backendCall(frame);
     if (reply?.ok !== true) {
-      // 失败时 nonce 保持可用：OAuth 同槽替换要在同一受限窗内读提示后二次确认。
+      /* 失败时 nonce 保持可用：OAuth 同槽的替换/清除都需要在同一受限窗内
+       * 读提示后二次确认；backend 的固定文案随应答带给页面。 */
       const code = reply?.code ?? 'unavailable';
       logEvent('electron.provider_credential_stage_failed', { action: actionName, code });
-      return { ok: false, code };
+      return { ok: false, code, ...(reply?.message ? { message: reply.message } : {}) };
     }
     flow.consumed = true; // 成功即作废：这一帧不能被重放
     const result = { ok: true, credentialState: reply.credentialState ?? null, consent: reply.consent ?? null };

@@ -224,14 +224,18 @@ apply.addEventListener('click', async () => {
     allowDiscovery: allow.checked, rememberTarget: remember.checked,
   });
   if (result && result.ok === true) { key.value = ''; note(intended === 'authorize-target' ? '已确认授权。' : intended === 'clear' ? '待清除状态已记录。' : '已应用到草稿。'); return; }
-  const text = result && result.code === 'oauth_conflict'
-    ? '该服务当前是 OAuth 登录。请阅读上方提示，仍要替换请再次点击「应用到草稿」。'
+  /* 可信文案优先（backend 随应答回传固定句子）；没有再用页面闭集。 */
+  const text = (result && result.message) || (result && result.code === 'oauth_conflict'
+    ? intended === 'clear'
+      ? '待清除的是 OAuth 登录凭据。确认后同槽的原生登录将被清除，且旧登录无法从 GUI 恢复。请再次点击确认。'
+      : '该服务当前是 OAuth 登录。请阅读上方提示，仍要替换请再次点击「应用到草稿」。'
     : result && result.code === 'unknown_provider' ? '该供应商标识在本机 Pi 中不存在，无法授权。'
     : result && result.code === 'expired' ? '暂存已过期，请重新输入。'
     : result && result.code === 'credential_conflict' ? '凭据或草稿状态已变化，请关闭后重试。'
-    : '操作失败，请重试或取消。';
+    : '操作失败，请重试或取消。');
   busy(false); note(text, true);
   if (!key.classList.contains('hidden')) key.focus();
+  else apply.focus();
 });
 cancel.addEventListener('click', () => window.piGuiCredentialSheet.cancel());
 window.piGuiCredentialSheet.onState(stateUpdate => {
