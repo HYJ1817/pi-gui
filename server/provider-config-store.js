@@ -46,7 +46,14 @@ function windowsAcl(targets, verifyOnly = false) {
   const result = spawnSync(shell, ['-NoLogo','-NoProfile','-NonInteractive','-Command',PRIVATE_ACL], {
     input: JSON.stringify({ targets, verifyOnly }), windowsHide: true, stdio: ['pipe','ignore','ignore'], timeout: 10000,
   });
-  if (result.status !== 0) fail('config_unsafe');
+  if (result.status !== 0) {
+    /* TEMP-DIAG: 仅记结构（状态码/布尔，不记路径与值），用于定位 CI runner 上的
+     * 确定性 config_unsafe；归因完成后移除。 */
+    console.error('[store-diag]', JSON.stringify({ stage: 'windowsAcl', status: result.status, signal: result.signal ?? null,
+      spawnError: result.error?.code ?? null, timedOut: result.error?.code === 'ETIMEDOUT', verifyOnly,
+      directory: targets.some(target => target.directory), count: targets.length }));
+    fail('config_unsafe');
+  }
 }
 
 function safeReceipt(value) {
@@ -249,11 +256,17 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     const names = io.readdirSync(txPath);
     if (names.some(name => !fileNames.has(name))) fail('config_unsafe');
     // Remove the publication marker first, after both live files are verified.
-    for (const name of ['journal.json', ...names.filter(n => n !== 'journal.json')]) {
-      const file = path.join(txPath, name);
-      if (plain(file)) io.unlinkSync(file);
+    try {
+      for (const name of ['journal.json', ...names.filter(n => n !== 'journal.json')]) {
+        const file = path.join(txPath, name);
+        if (plain(file)) io.unlinkSync(file);
+      }
+      io.rmdirSync(txPath);
+    } catch (e) {
+      /* TEMP-DIAG: 定位 Windows 上 unlink/rmdir 的共享冲突，归因后移除。 */
+      console.error('[store-diag]', JSON.stringify({ stage: 'cleanup', errno: e?.code ?? null }));
+      throw e;
     }
-    io.rmdirSync(txPath);
     pins.delete(txPath);
     syncDirectory(path.dirname(txPath));
   }
@@ -273,6 +286,11 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       io.renameSync(temp, target);
       staged = null;
       syncDirectory(path.dirname(target));
+    } catch (e) {
+      /* TEMP-DIAG: renameSync 在目标被外部短暂持有（扫描器/索引器）时会 EPERM，
+       * 这里记结构以便归因；归因后移除。 */
+      console.error('[store-diag]', JSON.stringify({ stage: 'install-rename', errno: e?.code ?? null, key }));
+      throw e;
     } finally { if (staged && snapshot(temp).stamp === staged.stamp) io.unlinkSync(temp); }
   }
   function recover(checkpoints = false) {
@@ -381,7 +399,12 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
           const pending = path.join(txPath, 'journal.pending');
           writeExclusive(pending, bytes({ version: 1, installId: randomUUID(), files: { models: hash(files.models), metadata: hash(files.metadata) }, entries }));
           parents(txPath);
-          io.renameSync(pending, path.join(txPath, 'journal.json'));
+          try { io.renameSync(pending, path.join(txPath, 'journal.json')); }
+          catch (e) {
+            /* TEMP-DIAG: 归因后移除。 */
+            console.error('[store-diag]', JSON.stringify({ stage: 'journal-rename', errno: e?.code ?? null }));
+            throw e;
+          }
           published = true;
           syncDirectory(txPath);
           syncDirectory(path.dirname(txPath));
@@ -396,6 +419,8 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     } catch (e) {
       if (knownCodes.has(e.code) || e?.providerMutation === true) throw e;
       if (['EACCES','EPERM'].includes(e.code)) fail('config_unreadable');
+      /* TEMP-DIAG: 未知系统错误被映射成 config_write_failed 前记录结构；归因后移除。 */
+      console.error('[store-diag]', JSON.stringify({ stage: 'transact-unknown', errno: e?.code ?? null, name: e?.name ?? null, syscall: e?.syscall ?? null }));
       return fail('config_write_failed');
     }
   }
