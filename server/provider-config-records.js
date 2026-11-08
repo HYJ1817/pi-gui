@@ -36,6 +36,20 @@ export function guardExistingTarget(providerId, previous, next, credential) {
   }
 }
 
+export function guardNativeCredentialTarget({ config, metadata }, draft, credential, action) {
+  const previous = own(config.providers, draft.providerId);
+  if (credential?.builtIn !== false || own(metadata.services, draft.providerId)?.kind === 'builtin') providerFailure('unsupported');
+  if (action === 'clear-native') return;
+  if (!draft.connection.baseUrl.startsWith('https://') || (previous && (
+      !onlyKnownFields(previous, safeProviderFields) ||
+      (Object.hasOwn(previous, 'models') && (!Array.isArray(previous.models) || previous.models.some(model =>
+        !safeModelWithoutAuthentication(model, safeModelFields) || (model.api && model.api !== draft.connection.api)))) ||
+      (Object.hasOwn(previous, 'modelOverrides') && (!isRecord(previous.modelOverrides) ||
+        Object.values(previous.modelOverrides).some(model => !safeModelWithoutAuthentication(model, safeOverrideFields))))))) {
+    providerFailure('credential_target_conflict');
+  }
+}
+
 function checkNewId(providerId, credential) {
   if (credential?.present !== false) providerFailure('credential_conflict');
   if (credential.builtIn === true) providerFailure('credential_target_conflict');

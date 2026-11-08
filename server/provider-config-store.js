@@ -6,6 +6,9 @@ import { isModelId, isOpaqueId, isProviderId, validateModelValues } from '../pub
 
 const LIMIT = 16 * 1024 * 1024;
 const RECEIPT_LIMIT = 128;
+const OPERATIONS_LIMIT = 128 * 1024;
+const credentialActions = new Set(['apply-staged', 'clear-native']);
+const credentialOutcomes = new Set(['saved', 'cleared', 'saved-credential-error', 'credential-unconfirmed', 'credential-unconfirmed-stopped']);
 const keys = ['models', 'metadata'];
 const fileNames = new Set(['journal.json', 'journal.pending', 'models.install', 'models.before', 'models.after', 'metadata.before', 'metadata.after']);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -26,6 +29,7 @@ const defaultMetadata = () => ({ schemaVersion: 1, services: {}, receipts: {} })
 // rule for the current user keeps them private to this account either way.
 const PRIVATE_ACL = String.raw`
 $ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
 foreach ($item in @($request.targets)) {
@@ -44,7 +48,24 @@ foreach ($item in @($request.targets)) {
   $rules = @($check.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
   $ownerSid = $check.GetOwner([Security.Principal.SecurityIdentifier])
   $owned = $ownerSid.Value -eq $sid.Value -or $ownerSid.Value -eq 'S-1-5-32-544'
-  if (($item.directory -and -not $check.AreAccessRulesProtected) -or -not $owned -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow') { exit 1 }
+  if ($item.ancestor) {
+    if ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($item.path)).DriveType -ne 'Fixed') { exit 1 }
+    $trusted = @($sid.Value, 'S-1-5-18', 'S-1-5-32-544', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+    if ($ownerSid.Value -notin $trusted) { exit 1 }
+    $danger = [Security.AccessControl.FileSystemRights]'DeleteSubdirectoriesAndFiles, Delete, ChangePermissions, TakeOwnership'
+    foreach ($rule in $rules) {
+      if ($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Value -notin $trusted -and
+          -not ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and
+          ($rule.FileSystemRights -band $danger)) { exit 1 }
+    }
+    continue
+  }
+  if ((($item.directory -or $item.requireProtected) -and -not $check.AreAccessRulesProtected) -or -not $owned -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow') { exit 1 }
+  if ($item.nativeStorage) {
+    if (($rules[0].FileSystemRights -band [Security.AccessControl.FileSystemRights]::FullControl) -ne [Security.AccessControl.FileSystemRights]::FullControl -or
+        $rules[0].PropagationFlags -ne 'None' -or
+        ($item.directory -and -not ($rules[0].InheritanceFlags -band [Security.AccessControl.InheritanceFlags]::ObjectInherit))) { exit 1 }
+  }
 }
 `;
 function windowsAcl(targets, verifyOnly = false) {
@@ -99,6 +120,8 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
   const files = { models: path.resolve(modelsJson), metadata: path.resolve(metadataPath) };
   const lockPath = files.models + '.pi-gui-lock';
   const txPath = files.models + '.pi-gui-transaction';
+  const operationsPath = files.models + '.pi-gui-operations.json';
+  const authority = hash(JSON.stringify(files));
   const revisionKey = randomBytes(32);
   const pins = new Map();
 
@@ -149,7 +172,7 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       parents(path.dirname(file));
       const after = plain(file);
       if (!after || stamp(after) !== stamp(before) || stamp(io.fstatSync(fd, { bigint: true })) !== stamp(before)) fail('config_conflict');
-      return { data, digest: hash(data), stamp: stamp(before), mode: before.mode };
+      return { data, digest: hash(data), stamp: stamp(before), mode: before.mode, uid: before.uid };
     } finally { io.closeSync(fd); }
   }
   function parse(data) {
@@ -198,7 +221,7 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       }
     }
   }
-  function withLock(task) {
+  function acquireLock() {
     parents(path.dirname(lockPath), true);
     function claim(file) {
       try { writeExclusive(file, bytes({ pid: process.pid, token: randomUUID() })); }
@@ -248,7 +271,154 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       lock = prior.data ? reclaim(prior) : claim(lockPath);
       if (!lock) fail('config_busy');
     }
-    try { return task(); } finally { remove(lockPath, lock); }
+    return () => remove(lockPath, lock);
+  }
+  function withLock(task) {
+    const release = acquireLock();
+    try { return task(); } finally { release(); }
+  }
+
+  function validateOperations(value) {
+    if (!record(value) || Object.keys(value).length !== 3 || value.version !== 1 || value.authority !== authority ||
+        !Array.isArray(value.operations) || value.operations.length > RECEIPT_LIMIT) fail('config_recovery_required');
+    const ids = new Set();
+    for (const operation of value.operations) {
+      if (!record(operation) || !isOpaqueId(operation.requestId) || ids.has(operation.requestId) ||
+          !/^[a-f0-9]{64}$/.test(operation.fingerprint) || !isProviderId(operation.providerId) ||
+          !(operation.phase === 'oauth-writing' ? operation.action === 'oauth' :
+            credentialActions.has(operation.action) && ['prepared', 'dispatching', 'finished'].includes(operation.phase)) ||
+          Object.keys(operation).length !== (operation.phase === 'finished' ? 7 : 5)) fail('config_recovery_required');
+      if (operation.phase === 'finished' && (!credentialOutcomes.has(operation.outcome) ||
+          !/^[a-f0-9]{64}$/.test(operation.revision))) fail('config_recovery_required');
+      ids.add(operation.requestId);
+    }
+  }
+  function readOperations() {
+    const prior = snapshot(operationsPath, OPERATIONS_LIMIT);
+    if (!prior.data) return { prior, value: { version: 1, authority, operations: [] } };
+    if (process.platform === 'win32') windowsAcl([{ path: operationsPath, directory: false, requireProtected: true }], true);
+    else if (prior.uid !== BigInt(process.getuid()) || (prior.mode & 0o077n) !== 0n) fail('config_unsafe');
+    const value = parse(prior.data);
+    validateOperations(value);
+    if (snapshot(operationsPath, OPERATIONS_LIMIT).stamp !== prior.stamp) fail('config_conflict');
+    return { prior, value };
+  }
+  function updateOperations(change) {
+    const { prior, value } = readOperations();
+    change(value.operations);
+    validateOperations(value);
+    if (value.operations.length === 0) {
+      if (snapshot(operationsPath, OPERATIONS_LIMIT).stamp !== prior.stamp) fail('config_conflict');
+      if (prior.data) {
+        io.unlinkSync(operationsPath);
+        syncDirectory(path.dirname(operationsPath));
+      }
+      return;
+    }
+    const data = bytes(value);
+    if (data.length > OPERATIONS_LIMIT) fail('config_busy');
+    const temporary = `${operationsPath}.${randomUUID()}.pending`;
+    writeExclusive(temporary, data, true);
+    const created = snapshot(temporary, OPERATIONS_LIMIT).stamp;
+    try {
+      if (snapshot(operationsPath, OPERATIONS_LIMIT).stamp !== prior.stamp ||
+          snapshot(temporary, OPERATIONS_LIMIT).stamp !== created) fail('config_conflict');
+      io.renameSync(temporary, operationsPath);
+      syncDirectory(path.dirname(operationsPath));
+    } finally {
+      if (snapshot(temporary, OPERATIONS_LIMIT).stamp === created) io.unlinkSync(temporary);
+    }
+  }
+  function unresolved(operation) {
+    return operation.phase !== 'finished' || operation.outcome === 'credential-unconfirmed';
+  }
+  function reserveOperation(operations, operation) {
+    if (operations.some(item => item.providerId === operation.providerId && unresolved(item))) fail('config_busy');
+    if (operations.length === RECEIPT_LIMIT) {
+      const index = operations.findIndex(item => !unresolved(item));
+      if (index < 0) fail('config_busy');
+      operations.splice(index, 1);
+    }
+    operations.push(operation);
+  }
+  function acquireOAuthWrite(providerId) {
+    if (!isProviderId(providerId)) fail('config_busy');
+    const release = acquireLock();
+    const requestId = randomUUID();
+    try {
+      recover();
+      recoverPreparedOperations();
+      updateOperations(operations => reserveOperation(operations, {
+        requestId, fingerprint: hash(requestId), providerId, action: 'oauth', phase: 'oauth-writing',
+      }));
+    } catch (error) {
+      release();
+      throw error;
+    }
+    let active = true;
+    return stopped => {
+      if (!active) return;
+      active = false;
+      try {
+        if (stopped === true) updateOperations(operations => {
+          const index = operations.findIndex(item => item.requestId === requestId && item.phase === 'oauth-writing');
+          if (index < 0) fail('config_recovery_required');
+          operations.splice(index, 1);
+        });
+      } finally { release(); }
+    };
+  }
+  function authorizeCredentialStorage({ authPath }) {
+    const directory = path.dirname(files.models);
+    if (path.resolve(authPath) !== path.join(directory, 'auth.json')) return false;
+    try {
+      if (!parents(directory)) return false;
+      const parent = stat(directory);
+      const auth = plain(authPath);
+      if (auth?.size > 8n * 1024n * 1024n) return false;
+      const ancestors = [];
+      for (let p = path.dirname(directory); p !== directory; p = path.dirname(p)) {
+        ancestors.push(p);
+        if (p === path.dirname(p)) break;
+      }
+      if (process.platform === 'win32') {
+        windowsAcl([...ancestors.map(p => ({ path: p, directory: true, ancestor: true })),
+          { path: directory, directory: true, nativeStorage: true },
+          ...(auth ? [{ path: authPath, directory: false, nativeStorage: true }] : [])], true);
+      } else {
+        // Linux ACL masks participate in the mode bits. Other platforms need
+        // an ACL-specific witness before the Unix-mode check can qualify them.
+        if (process.platform !== 'linux') return false;
+        const uid = BigInt(process.getuid());
+        if (parent.uid !== uid || (parent.mode & 0o777n) !== 0o700n ||
+            (auth && (auth.uid !== uid || (auth.mode & 0o777n) !== 0o600n))) return false;
+        for (const p of ancestors) {
+          const ancestor = stat(p);
+          if (!ancestor || (ancestor.uid !== 0n && ancestor.uid !== uid) ||
+              ((ancestor.mode & 0o022n) && !(ancestor.uid === 0n && (ancestor.mode & 0o1000n)))) return false;
+        }
+      }
+      const after = plain(authPath);
+      return Boolean(parents(directory)) && stamp(stat(directory)) === stamp(parent) &&
+        (after ? stamp(after) : null) === (auth ? stamp(auth) : null);
+    } catch { return false; }
+  }
+  function recoverPreparedOperations() {
+    if (!readOperations().value.operations.some(item => item.phase === 'prepared')) return;
+    const { metadata: { receipts } } = readPair();
+    updateOperations(operations => {
+      for (let index = operations.length - 1; index >= 0; index--) {
+        const operation = operations[index];
+        if (operation.phase !== 'prepared') continue;
+        if (!Object.hasOwn(receipts, operation.requestId)) {
+          operations.splice(index, 1);
+          continue;
+        }
+        const { fingerprint, result } = receipts[operation.requestId];
+        if (fingerprint !== operation.fingerprint || result.serviceId !== operation.providerId) fail('config_recovery_required');
+        operations[index] = { ...operation, phase: 'finished', outcome: 'saved-credential-error', revision: result.revision };
+      }
+    });
   }
   function cleanup() {
     parents(txPath);
@@ -338,76 +508,178 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       return result;
     } catch (e) { if (knownCodes.has(e.code)) throw e; return fail('config_unreadable'); }
   }
-  function transact({ expectedRevision, requestId, fingerprint, apply }) {
+  function transactUnderLock({ expectedRevision, requestId, fingerprint, apply }, credentialOperation = false) {
     try {
-      return withLock(() => {
-        recover();
-        parents(path.dirname(files.metadata), true);
-        const { states, ...current } = readPair();
-        const receipts = current.metadata.receipts;
-        if (requestId && Object.hasOwn(receipts, requestId)) {
-          const receipt = receipts[requestId];
-          if (receipt?.fingerprint !== fingerprint) fail('request_id_conflict');
-          return safeReceipt(receipt.result);
+      recover();
+      parents(path.dirname(files.metadata), true);
+      const { states, ...current } = readPair();
+      const receipts = current.metadata.receipts;
+      const { value: { operations } } = readOperations();
+      const operation = operations.find(item => item.requestId === requestId);
+      if (operation && (!credentialOperation || operation.fingerprint !== fingerprint)) fail('request_id_conflict');
+      if (credentialOperation && operation?.phase !== 'prepared') fail('config_recovery_required');
+      if (requestId && Object.hasOwn(receipts, requestId)) {
+        const receipt = receipts[requestId];
+        if (receipt?.fingerprint !== fingerprint) fail('request_id_conflict');
+        return safeReceipt(receipt.result);
+      }
+      if (expectedRevision !== undefined && expectedRevision !== current.revision) fail('config_conflict');
+      const configBefore = JSON.stringify(current.config);
+      const heldProviders = new Map(operations.filter(item => item !== operation && unresolved(item))
+        .map(item => [item.providerId, JSON.stringify(current.config.providers[item.providerId])]));
+      const fields = apply(current);
+      for (const [id, before] of heldProviders) {
+        if (JSON.stringify(current.config.providers[id]) !== before) fail('config_busy');
+      }
+      const models = JSON.stringify(current.config) === configBefore ? states.models.data : bytes(current.config);
+      const revision = revisionFor(models === null ? null : hash(models), current.metadata);
+      const result = { ...fields, revision };
+      if (requestId) {
+        Object.defineProperty(receipts, requestId, { value: { fingerprint, result: safeReceipt(result) }, enumerable: true, configurable: true });
+        const protectedReceipts = new Map(operations.filter(item => item.phase === 'prepared' || item.phase === 'dispatching')
+          .map(item => [item.requestId, item.fingerprint]));
+        const ids = Object.keys(receipts);
+        let remaining = ids.length - RECEIPT_LIMIT;
+        for (const id of ids) {
+          if (remaining <= 0) break;
+          if (id === requestId || protectedReceipts.get(id) === receipts[id].fingerprint) continue;
+          delete receipts[id];
+          remaining--;
         }
-        if (expectedRevision !== undefined && expectedRevision !== current.revision) fail('config_conflict');
-        const configBefore = JSON.stringify(current.config);
-        const fields = apply(current);
-        const models = JSON.stringify(current.config) === configBefore ? states.models.data : bytes(current.config);
-        const revision = revisionFor(models === null ? null : hash(models), current.metadata);
-        const result = { ...fields, revision };
-        if (requestId) {
-          Object.defineProperty(receipts, requestId, { value: { fingerprint, result: safeReceipt(result) }, enumerable: true, configurable: true });
-          for (const id of Object.keys(receipts).slice(0, Math.max(0, Object.keys(receipts).length - RECEIPT_LIMIT))) delete receipts[id];
-        }
-        validateMetadata(current.metadata);
-        const next = { models, metadata: bytes(current.metadata) };
+        if (remaining > 0) fail('config_busy');
+      }
+      validateMetadata(current.metadata);
+      const next = { models, metadata: bytes(current.metadata) };
+      for (const key of keys) {
+        if (next[key]?.length > LIMIT) fail('config_invalid');
+        if (!states[key].data || states[key].digest === (next[key] === null ? null : hash(next[key]))) continue;
+        if ((states[key].mode & 0o200n) === 0n) fail('config_write_failed');
+        const fd = io.openSync(files[key], io.constants.O_RDWR | (io.constants.O_NOFOLLOW || 0));
+        try { if (stamp(io.fstatSync(fd, { bigint: true })) !== states[key].stamp) fail('config_conflict'); }
+        finally { io.closeSync(fd); }
+      }
+      io.mkdirSync(txPath, { mode: 0o700 });
+      parents(txPath);
+      if (process.platform === 'win32') windowsAcl([{ path: txPath, directory: true }]);
+      let published = false;
+      try {
+        const entries = {};
         for (const key of keys) {
-          if (next[key]?.length > LIMIT) fail('config_invalid');
-          if (!states[key].data || states[key].digest === (next[key] === null ? null : hash(next[key]))) continue;
-          if ((states[key].mode & 0o200n) === 0n) fail('config_write_failed');
-          const fd = io.openSync(files[key], io.constants.O_RDWR | (io.constants.O_NOFOLLOW || 0));
-          try { if (stamp(io.fstatSync(fd, { bigint: true })) !== states[key].stamp) fail('config_conflict'); }
-          finally { io.closeSync(fd); }
+          const before = states[key];
+          if (before.data) writeExclusive(path.join(txPath, `${key}.before`), before.data);
+          if (next[key]) writeExclusive(path.join(txPath, `${key}.after`), next[key]);
+          entries[key] = { directory: parents(path.dirname(files[key])), before: before.digest, stamp: before.stamp, after: next[key] === null ? null : hash(next[key]) };
         }
-        io.mkdirSync(txPath, { mode: 0o700 });
+        fault('before-publish');
+        for (const key of keys) if (snapshot(files[key]).stamp !== states[key].stamp) fail('config_conflict');
+        const pending = path.join(txPath, 'journal.pending');
+        writeExclusive(pending, bytes({ version: 1, installId: randomUUID(), files: { models: hash(files.models), metadata: hash(files.metadata) }, entries }));
         parents(txPath);
-        if (process.platform === 'win32') windowsAcl([{ path: txPath, directory: true }]);
-        let published = false;
-        try {
-          const entries = {};
-          for (const key of keys) {
-            const before = states[key];
-            if (before.data) writeExclusive(path.join(txPath, `${key}.before`), before.data);
-            if (next[key]) writeExclusive(path.join(txPath, `${key}.after`), next[key]);
-            entries[key] = { directory: parents(path.dirname(files[key])), before: before.digest, stamp: before.stamp, after: next[key] === null ? null : hash(next[key]) };
-          }
-          fault('before-publish');
-          for (const key of keys) if (snapshot(files[key]).stamp !== states[key].stamp) fail('config_conflict');
-          const pending = path.join(txPath, 'journal.pending');
-          writeExclusive(pending, bytes({ version: 1, installId: randomUUID(), files: { models: hash(files.models), metadata: hash(files.metadata) }, entries }));
-          parents(txPath);
-          io.renameSync(pending, path.join(txPath, 'journal.json'));
-          published = true;
-          syncDirectory(txPath);
-          syncDirectory(path.dirname(txPath));
-          recover(true);
-        } catch (e) {
-          if (published) fail('config_recovery_required');
-          cleanup();
-          throw e;
-        }
-        return result;
-      });
+        io.renameSync(pending, path.join(txPath, 'journal.json'));
+        published = true;
+        syncDirectory(txPath);
+        syncDirectory(path.dirname(txPath));
+        recover(true);
+      } catch (e) {
+        if (published) fail('config_recovery_required');
+        cleanup();
+        throw e;
+      }
+      return result;
     } catch (e) {
       if (knownCodes.has(e.code) || e?.providerMutation === true) throw e;
       if (['EACCES','EPERM'].includes(e.code)) fail('config_unreadable');
       return fail('config_write_failed');
     }
   }
+  function transact(options) {
+    try { return withLock(() => transactUnderLock(options)); }
+    catch (e) {
+      if (knownCodes.has(e.code) || e?.providerMutation === true) throw e;
+      if (['EACCES','EPERM'].includes(e.code)) fail('config_unreadable');
+      return fail('config_write_failed');
+    }
+  }
+  async function withCredentialOperation(run) {
+    const release = acquireLock();
+    let active = true;
+    function guard() { if (!active) fail('config_busy'); }
+    function lookup(requestId, fingerprint) {
+      guard();
+      const { metadata } = readPair();
+      const operation = readOperations().value.operations.find(item => item.requestId === requestId);
+      const stored = Object.hasOwn(metadata.receipts, requestId) ? metadata.receipts[requestId] : null;
+      if ((operation && operation.fingerprint !== fingerprint) || (stored && stored.fingerprint !== fingerprint)) fail('request_id_conflict');
+      if (operation && stored && stored.result.serviceId !== operation.providerId) fail('config_recovery_required');
+      return { operation, receipt: stored && safeReceipt(stored.result) };
+    }
+    function prepare({ requestId, fingerprint, providerId, action }) {
+      const prior = lookup(requestId, fingerprint);
+      if (prior.operation || prior.receipt) fail('request_id_conflict');
+      updateOperations(operations => reserveOperation(operations, { requestId, fingerprint, providerId, action, phase: 'prepared' }));
+    }
+    function update(requestId, change) {
+      guard();
+      updateOperations(operations => {
+        const index = operations.findIndex(item => item.requestId === requestId);
+        if (index < 0) fail('config_recovery_required');
+        const operation = operations[index];
+        const { receipt } = lookup(requestId, operation.fingerprint);
+        const next = change(operation, receipt);
+        if (next) operations[index] = next;
+        else operations.splice(index, 1);
+      });
+    }
+    try {
+      recover();
+      recoverPreparedOperations();
+      return await run({ lookup, prepare,
+        transact(options) { guard(); return transactUnderLock(options, true); },
+        isCurrent(revision) {
+          guard();
+          const current = readPair();
+          return current.revision === revision && keys.every(key => snapshot(files[key]).stamp === current.states[key].stamp);
+        },
+        dispatch(requestId) {
+          update(requestId, (operation, receipt) => {
+            if (!receipt || operation.phase !== 'prepared') fail('config_recovery_required');
+            fault('before-credential-dispatch');
+            return { ...operation, phase: 'dispatching' };
+          });
+        },
+        finish(requestId, outcome) {
+          update(requestId, (operation, receipt) => {
+            if (!receipt || operation.phase === 'finished' || !credentialOutcomes.has(outcome) ||
+                (operation.phase === 'prepared' && outcome !== 'saved-credential-error') ||
+                (outcome === 'saved' && operation.action !== 'apply-staged') ||
+                (outcome === 'cleared' && operation.action !== 'clear-native')) fail('config_recovery_required');
+            fault('before-credential-finish');
+            return { ...operation, phase: 'finished', outcome, revision: receipt.revision };
+          });
+        },
+        confirmStopped(requestId) {
+          update(requestId, (operation, receipt) => {
+            if (operation.phase !== 'dispatching' && operation.outcome !== 'credential-unconfirmed') fail('config_recovery_required');
+            const revision = operation.revision ?? receipt?.revision;
+            if (!revision) fail('config_recovery_required');
+            return { ...operation, phase: 'finished', outcome: 'credential-unconfirmed-stopped', revision };
+          });
+        },
+        abandon(requestId) {
+          update(requestId, (operation, receipt) => {
+            if (receipt || operation.phase !== 'prepared') fail('config_recovery_required');
+            return null;
+          });
+        },
+      });
+    } finally {
+      active = false;
+      release();
+    }
+  }
   function recoverPending() {
     if (!stat(txPath)) return;
     return withLock(() => recover());
   }
-  return { read, transact, recoverPending };
+  return { read, transact, recoverPending, withCredentialOperation, acquireOAuthWrite, authorizeCredentialStorage };
 }

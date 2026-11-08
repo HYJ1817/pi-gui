@@ -9,6 +9,7 @@ const { createHmac, randomBytes, randomUUID } = require('node:crypto');
 const { authPath, entry, ttlMs } = workerData;
 const stages = new Map();
 const active = new Map();
+const nativeActive = new Map();
 const queued = new Map();
 const expired = new Set();
 const revisionKey = randomBytes(32);
@@ -109,22 +110,32 @@ function literalDecode(value) {
   }
   return result;
 }
-function disposeStage(id) {
-  const stage = stages.get(id);
-  if (!stage) return;
-  clearTimeout(stage.timer);
-  stages.delete(id);
+function disposeStage(id, revision) {
+  const items = stages.get(id);
+  if (!items) return;
+  for (const [key, stage] of items) {
+    if (revision !== undefined && key !== revision) continue;
+    clearTimeout(stage.timer);
+    items.delete(key);
+  }
+  if (items.size === 0) stages.delete(id);
 }
-function stageFor(binding, value) {
-  disposeStage(binding.draftId);
+function stageFor(binding, value, retain) {
+  for (const revision of stages.get(binding.draftId)?.keys() ?? []) {
+    if (revision !== retain) disposeStage(binding.draftId, revision);
+  }
   expired.delete(binding.draftId);
+  const stagedRevision = randomUUID();
+  const expires = Date.now() + ttlMs;
   const timer = setTimeout(() => {
-    disposeStage(binding.draftId);
-    expired.add(binding.draftId);
+    disposeStage(binding.draftId, stagedRevision);
+    if (!stages.has(binding.draftId)) expired.add(binding.draftId);
     if (expired.size > 32) expired.delete(expired.values().next().value);
   }, ttlMs);
   timer.unref();
-  stages.set(binding.draftId, { ...value, binding, expires: Date.now() + ttlMs, timer });
+  if (!stages.has(binding.draftId)) stages.set(binding.draftId, new Map());
+  stages.get(binding.draftId).set(stagedRevision, { ...value, binding, expires, timer });
+  return { stagedRevision, expires };
 }
 
 async function login(rt, binding, value, signal, memory = false) {
@@ -151,7 +162,7 @@ async function login(rt, binding, value, signal, memory = false) {
 }
 
 async function stage(message) {
-  const { binding, input, expectedCredentialRevision, confirmOAuthReplacement } = message;
+  const { binding, input, expectedCredentialRevision, confirmOAuthReplacement, retain } = message;
   if (message.cancelled) return failure('cancelled');
   if (!stages.has(binding.draftId) && stages.size >= 16) return failure('busy');
   const controller = new AbortController();
@@ -164,16 +175,16 @@ async function stage(message) {
     if (before.type === 'oauth' && !confirmOAuthReplacement) return failure('oauth_conflict');
     if (message.action === 'stage-clear') {
       if (!before.present) return failure('credential_conflict');
-      stageFor(binding, { kind: 'clear', expectedCredentialRevision });
-      return { ok: true, credentialState: 'clear-staged', credentialSaved: null };
+      return { ok: true, credentialState: 'clear-staged', credentialSaved: null,
+        ...stageFor(binding, { kind: 'clear', expectedCredentialRevision }, retain) };
     }
     const memory = memoryStore();
     await login(await runtime({ credentials: memory, signal }), binding, input, signal, true);
     const raw = await memory.read(binding.providerId, { signal });
     if (raw?.type !== 'api_key' || raw.key !== input) return failure('unsupported');
-    const stagedRevision = randomUUID();
-    stageFor(binding, { kind: 'set', memory, expectedCredentialRevision, stagedRevision });
-    return { ok: true, credentialState: 'staged', credentialSaved: null, stagedRevision };
+    cancelled(signal);
+    return { ok: true, credentialState: 'staged', credentialSaved: null,
+      ...stageFor(binding, { kind: 'set', memory, expectedCredentialRevision }, retain) };
   } catch { return failure(signal.aborted ? 'cancelled' : 'unsupported'); }
   finally { active.delete(binding.draftId); }
 }
@@ -193,15 +204,23 @@ async function withNativeRuntime(binding, signal, run) {
   }
 }
 
-async function persist(message) {
-  const { binding } = message;
-  const pending = stages.get(binding.draftId);
-  if (!pending && expired.has(binding.draftId)) return failure('expired', 'expired');
-  if (!pending || !unchanged(pending.binding, binding) || pending.kind !== (message.action === 'clear' ? 'clear' : 'set')) return failure('credential_conflict');
+function matchingStage(binding, stagedRevision, kind) {
+  const items = stages.get(binding.draftId);
+  const revision = stagedRevision ?? (items?.size === 1 ? items.keys().next().value : null);
+  const pending = items?.get(revision);
+  if (pending?.kind !== kind || !unchanged(pending.binding, binding)) return null;
+  return pending;
+}
+
+async function persist(message, signal) {
+  const { binding, stagedRevision } = message;
+  if (message.cancelled || signal.aborted) return failure('cancelled');
+  const pending = matchingStage(binding, stagedRevision, message.action === 'clear' ? 'clear' : 'set');
+  if (!pending) return expired.has(binding.draftId) ? failure('expired', 'expired') : failure('credential_conflict');
   disposeStage(binding.draftId);
   if (pending.expires <= Date.now()) return failure('expired', 'expired');
-  const signal = new AbortController().signal;
   const before = await inspect(binding.providerId, signal);
+  if (signal.aborted) return failure('cancelled');
   if (!before.revision || before.revision !== pending.expectedCredentialRevision) return failure('credential_conflict');
   const key = (await pending.memory?.read(binding.providerId, { signal }))?.key;
   if (pending.kind === 'set' && typeof key !== 'string') return failure('credential_conflict');
@@ -209,7 +228,10 @@ async function persist(message) {
   try {
     const api = await sdk();
     try {
-      await withNativeRuntime(binding, signal, rt => pending.kind === 'clear' ? rt.logout(binding.providerId, { signal }) : login(rt, binding, literalEncode(key), signal));
+      await withNativeRuntime(binding, signal, rt => {
+        cancelled(signal);
+        return pending.kind === 'clear' ? rt.logout(binding.providerId, { signal }) : login(rt, binding, literalEncode(key), signal);
+      });
     } catch (error) {
       threw = true;
       sdkSyncFailed = typeof api.CredentialSynchronizationError === 'function' && error instanceof api.CredentialSynchronizationError;
@@ -223,14 +245,35 @@ async function persist(message) {
   return failure('credential_unconfirmed', 'credential-unconfirmed', null);
 }
 
-async function handle(message) {
-  if (message.action === 'probe') return { ok: true, sdk: true };
+async function handle(message, signal) {
+  if (message.action === 'probe') {
+    await sdk();
+    return { ok: true, sdk: true };
+  }
   if (message.action === 'inspect') return publicInspection(await inspect(message.providerId));
   if (message.action === 'stage' || message.action === 'stage-clear') return stage(message);
-  if (message.action === 'persist' || message.action === 'clear') return persist(message);
+  if (message.action === 'inspect-stage') {
+    const pending = matchingStage(message.binding, message.stagedRevision, message.kind);
+    if (!pending || pending.expires <= Date.now()) return failure('credential_conflict');
+    const before = await inspect(message.binding.providerId);
+    return before.revision && before.revision === pending.expectedCredentialRevision && pending.expires > Date.now() ?
+      { ok: true, expires: pending.expires } : failure('credential_conflict');
+  }
+  if (message.action === 'persist' || message.action === 'clear') return persist(message, signal);
   return failure('unsupported');
 }
 parentPort.on('message', message => {
+  if (message.action === 'cancel-native') {
+    const queuedAttempt = queued.get(message.id);
+    if (queuedAttempt) queuedAttempt.cancelled = true;
+    nativeActive.get(message.id)?.abort();
+    return;
+  }
+  if (message.action === 'discard-stage') {
+    disposeStage(message.draftId, message.stagedRevision);
+    parentPort.postMessage({ id: message.id, result: { ok: true } });
+    return;
+  }
   if (message.action === 'dispose-draft') {
     active.get(message.draftId)?.abort();
     disposeStage(message.draftId);
@@ -240,12 +283,16 @@ parentPort.on('message', message => {
     tail = tail.then(() => { disposeStage(message.draftId); parentPort.postMessage({ id: message.id, result: { ok: true } }); });
     return;
   }
-  if (['stage','stage-clear'].includes(message.action)) queued.set(message.id, message);
+  const mutation = message.action === 'persist' || message.action === 'clear';
+  if (mutation || ['stage','stage-clear'].includes(message.action)) queued.set(message.id, message);
   tail = tail.then(async () => {
     queued.delete(message.id);
+    const controller = mutation ? new AbortController() : null;
+    if (controller) nativeActive.set(message.id, controller);
     let result;
-    try { result = await handle(message); } catch { result = failure('credential_unconfirmed', 'credential-unconfirmed', null); }
-    parentPort.postMessage({ id: message.id, result });
+    try { result = await handle(message, controller?.signal); } catch { result = failure('credential_unconfirmed', 'credential-unconfirmed', null); }
+    finally { if (controller) nativeActive.delete(message.id); }
+    parentPort.postMessage({ id: message.id, result, nativeQuiesced: mutation });
   });
 });
 `;

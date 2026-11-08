@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
+const { Readable } = require('node:stream');
 
 const fakeSdk = String.raw`
 import fs from 'node:fs';
@@ -44,6 +45,11 @@ export class ModelRuntime {
     if (this.credentials) await this.credentials.modify(id, () => credential, { signal: interaction.signal });
     else {
       if (key === 'fixture-write-fails') throw new Error(key);
+      if (key === 'fixture-cooperative-stop') {
+        fs.writeFileSync(this.authPath + '.entered', 'fixture');
+        await new Promise(resolve => interaction.signal.addEventListener('abort', resolve, { once: true }));
+        interaction.signal.throwIfAborted();
+      }
       const data = this.read(); data[id] = credential;
       fs.writeFileSync(this.authPath, JSON.stringify(data), { mode: 0o600 });
       if (key === 'fixture-saved-sync-error') throw new CredentialSynchronizationError(credential);
@@ -76,6 +82,120 @@ async function stage(sdk, key, context = binding, confirmOAuthReplacement = fals
   const state = await sdk.inspect(context.providerId);
   return sdk.stageNativeLogin(context, key, { expectedCredentialRevision: state.credentialRevision, confirmOAuthReplacement });
 }
+
+test('commit can use only the exact private stage generation, including clear', async t => {
+  const { sdk, authPath } = await setup(t);
+  const first = await stage(sdk, 'first-fixture');
+  const latest = await stage(sdk, 'second-fixture');
+  assert.equal((await sdk.persistNative(binding, first.stagedRevision)).code, 'credential_conflict');
+  assert.equal(fs.existsSync(authPath), false);
+  assert.equal((await sdk.persistNative(binding, latest.stagedRevision)).credentialSaved, true);
+  const observed = await sdk.inspect(binding.providerId);
+  const cleared = await sdk.stageClear(binding, { confirmed: true, expectedCredentialRevision: observed.credentialRevision });
+  assert.match(cleared.stagedRevision, /^[a-f0-9-]{36}$/);
+  assert.equal((await sdk.clearNative(binding, latest.stagedRevision)).code, 'credential_conflict');
+  assert.equal((await sdk.clearNative(binding, cleared.stagedRevision)).credentialState, 'cleared');
+});
+
+test('a cancelled native worker reports uncertainty before its matching stop proof', async t => {
+  const { sdk, authPath } = await setup(t);
+  const staged = await stage(sdk, 'fixture-cooperative-stop');
+  const cancellation = new AbortController();
+  let acknowledge;
+  const quiesced = new Promise(resolve => { acknowledge = resolve; });
+  const result = sdk.persistNative(binding, staged.stagedRevision, { signal: cancellation.signal, onQuiesced: acknowledge });
+  const deadline = Date.now() + 3000;
+  while (!fs.existsSync(authPath + '.entered') && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(fs.existsSync(authPath + '.entered'), true);
+  cancellation.abort();
+  assert.equal((await result).credentialSaved, null);
+  let timer;
+  try {
+    await Promise.race([quiesced, new Promise((_, reject) => { timer = setTimeout(() => reject(Error('missing stop proof')), 3000); })]);
+  } finally { clearTimeout(timer); }
+  assert.equal(fs.existsSync(authPath), false);
+});
+
+test('private bridge staging reaches config-first save and clear through the real SDK worker fixture', async t => {
+  const { sdk, authPath } = await setup(t);
+  const { createProviderCredentialBridge } = await import('../server/provider-credential-bridge.js');
+  const { createProviderManagement } = await import('../server/provider-management.js');
+  const { createProviderConfigStore } = await import('../server/provider-config-store.js');
+  const folder = path.dirname(authPath);
+  const modelsJson = path.join(folder, 'models.json');
+  const metadataPath = path.join(folder, 'provider-management.json');
+  const store = createProviderConfigStore({ modelsJson, metadataPath });
+  const management = createProviderManagement({ store, enabled: true, inspectCredential: sdk.inspect,
+    nativeCredentials: { authorize: (...args) => bridge.authorizeNative(...args), persist: (...args) => bridge.persistApproved(...args) } });
+  const bridge = createProviderCredentialBridge({ sdk, draftLookup: management.draftSnapshot, draftFrozen: management.draftFrozen, enabled: true });
+  const frame = { type: 'provider-credential', backendEpoch: bridge.epoch, requestId: 'fixture' };
+  const post = (route, value) => new Promise((resolve, reject) => {
+    const req = Readable.from([Buffer.from(JSON.stringify(value))]);
+    req.method = 'POST';
+    management.handle(req, { writeHead() {}, end(body) { resolve(JSON.parse(body)); } },
+      new URL(`/api/provider-management/${route}`, 'http://localhost')).catch(reject);
+  });
+  const createDraft = (id, serviceId) => post('drafts', { requestId: id, expectedRevision: store.read().revision, serviceId,
+    draft: { providerId: 'fixture', authMode: 'pi-credential', displayName: 'Fixture', connection: binding.connection,
+      modelPatches: [], selectedModelIds: [], modelOrder: [], enabled: true } });
+  const prepare = (draft, purpose) => bridge.handle({ ...frame, action: 'prepare', purpose, draftId: draft.draftId, draftRevision: draft.draftRevision });
+  const submit = (response, payload) => bridge.handle({ ...frame, flowId: response.flowId, promptId: response.promptId, nonce: response.nonce, ...payload });
+  const commit = (draft, action, type, serviceId) => post('commit', { requestId: `commit-${type}`, action, serviceId,
+    expectedRevision: store.read().revision, draftId: draft.draftId, draftRevision: draft.draftRevision, credentialAction: { type } });
+
+  const created = await createDraft('create-draft');
+  const secret = 'only-the-fake-sdk-stores-this-fixture';
+  const staged = await submit(await prepare(created, 'set'), { action: 'stage', input: secret, allowDiscovery: false, rememberTarget: false });
+  assert.equal(staged.credentialState, 'staged');
+  assert.equal(fs.existsSync(authPath), false);
+  const saved = await commit(created, 'create', 'apply-staged');
+  assert.equal(saved.credentialSaved, true);
+  assert.equal(saved.sync.state, 'pending');
+  assert.equal(JSON.parse(fs.readFileSync(authPath)).fixture.key, secret);
+  assert.ok(!JSON.stringify(saved).includes(secret));
+  for (const file of [modelsJson, metadataPath, modelsJson + '.pi-gui-operations.json']) assert.ok(!fs.readFileSync(file, 'utf8').includes(secret));
+
+  const clearDraft = await createDraft('clear-draft', 'fixture');
+  assert.equal((await submit(await prepare(clearDraft, 'clear'), { action: 'clear-stage', confirmed: true })).credentialState, 'clear-staged');
+  assert.equal(JSON.parse(fs.readFileSync(authPath)).fixture.key, secret);
+  const cleared = await commit(clearDraft, 'update', 'clear-native', 'fixture');
+  assert.equal(cleared.credentialState, 'cleared');
+  assert.equal(Object.hasOwn(JSON.parse(fs.readFileSync(authPath)), 'fixture'), false);
+});
+
+test('a cancelled replacement cannot take over the last accepted private stage', async t => {
+  const { sdk, authPath } = await setup(t);
+  const { createProviderCredentialBridge } = await import('../server/provider-credential-bridge.js');
+  let release, arrived;
+  const atBoundary = new Promise(resolve => { arrived = resolve; });
+  const pendingReply = new Promise(resolve => { release = resolve; });
+  const staging = { ...sdk, async stageNativeLogin(...args) {
+    const result = await sdk.stageNativeLogin(...args);
+    if (args[1] === 'cancelled-replacement') { arrived(); await pendingReply; }
+    return result;
+  } };
+  const draft = { ...binding, draftRevision: 1, expires: Infinity };
+  const bridge = createProviderCredentialBridge({ sdk: staging, draftLookup: () => draft, enabled: true });
+  const base = { type: 'provider-credential', backendEpoch: bridge.epoch, requestId: 'fixture' };
+  const prepare = () => bridge.handle({ ...base, action: 'prepare', draftId: binding.draftId, draftRevision: 1, purpose: 'replace' });
+  const submit = ({ flowId, promptId, nonce }, input) => bridge.handle({ ...base, action: 'stage', flowId, promptId, nonce, input,
+    allowDiscovery: false, rememberTarget: false });
+  assert.equal((await submit(await prepare(), 'last-accepted')).ok, true);
+  const replacement = await prepare();
+  const late = submit(replacement, 'cancelled-replacement');
+  await atBoundary;
+  await bridge.handle({ ...base, action: 'cancel', flowId: replacement.flowId });
+  release();
+  assert.equal((await late).ok, false);
+  const staleFlow = await prepare();
+  draft.draftRevision = 2;
+  assert.equal((await submit(staleFlow, 'old-form-fixture')).ok, false);
+  const approval = await bridge.authorizeNative({ ...binding, action: 'apply-staged' });
+  assert.ok(approval);
+  assert.equal((await bridge.persistApproved(approval)).credentialSaved, true);
+  assert.match(fs.readFileSync(authPath, 'utf8'), /last-accepted/);
+  assert.equal((await bridge.persistApproved(approval)).credentialSaved, false);
+});
 
 test('FIX-08: replacing a staged key revokes the old grant even when native revision stays the same', async t => {
   const { sdk, authPath } = await setup(t);

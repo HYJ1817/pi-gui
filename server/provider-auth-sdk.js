@@ -148,7 +148,7 @@ async function initialize() {
   const M = sdk.ModelRuntime;
   const required = ['getProviders', 'listCredentials', 'checkAuth', 'login', 'logout'];
   if (!M || typeof M.create !== 'function' || required.some(k => typeof M.prototype[k] !== 'function')) throw Error('unsupported');
-  runtime = await M.create({ allowModelNetwork:false, refreshOnCreate:false });
+  runtime = await M.create({ allowModelNetwork:false, refreshOnCreate:false, ...(workerData.authPath ? { authPath:workerData.authPath } : {}) });
 }
 function ready() { return initialization || (initialization = initialize()); }
 function methods(p) {
@@ -234,19 +234,20 @@ parentPort.on('message', async m => {
 });
 `;
 
-export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env = process.env, workerFactory = null, quotaTimeoutMs = 15_000 } = {}) {
+export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env = process.env, authPath, workerFactory = null, quotaTimeoutMs = 15_000 } = {}) {
   let worker = null, workerKey = null, sequence = 0, capability = { sdkAvailable: false, reason: '当前 Pi 不支持 GUI 登录；请在 Pi 交互终端使用 /login、/logout', piVersion: null };
   const pending = new Map();
   function dispose() {
     const old = worker; worker = null; workerKey = null;
-    for (const p of pending.values()) { p.finish({ ok: false, code: 'cancelled' }); }
-    if (old) void old.terminate();
+    for (const p of pending.values()) { p.finish({ ok: false, code: 'cancelled', nativeUnconfirmed: p.mutation }); }
+    if (old) void old.terminate().catch(() => {});
   }
   function ensure() {
     const key = identityKey();
     if (worker && workerKey === key) return true;
     dispose();
-    const entry = resolveAuthSdk(resolvePackageDir?.());
+    const resolved = resolveAuthSdk(resolvePackageDir?.());
+    const entry = resolved && { ...resolved, ...(authPath ? { authPath } : {}) };
     capability = { sdkAvailable: false, reason: '当前 Pi 不支持 GUI 登录；请在 Pi 交互终端使用 /login、/logout', piVersion: entry?.version || null };
     if (!entry) return false;
     // Workers do not get Electron's HTTP token. SDK diagnostics are private,
@@ -283,9 +284,12 @@ export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env =
         timer = setTimeout(() => dispose(), 2000); timer.unref?.();
       };
       const finish = result => { clearTimeout(timer); signal?.removeEventListener('abort', abort); pending.delete(id); resolve(result); };
-      pending.set(id, { finish, abortedPrompts: new Set(), ...callbacks });
+      const mutation = type === 'login' || type === 'logout';
+      pending.set(id, { finish, abortedPrompts: new Set(), ...callbacks, mutation });
       if (type === 'list' || type === 'quota') { timer = setTimeout(() => { worker?.postMessage({ type: 'abort', id }); finish({ ok: false, code: 'unavailable' }); }, type === 'quota' ? quotaTimeoutMs : 15_000); timer.unref?.(); }
-      worker.postMessage({ id, type, ...args });
+      if (signal?.aborted) { finish({ ok: false, code: 'cancelled' }); return; }
+      try { worker.postMessage({ id, type, ...args }); }
+      catch { finish({ ok: false, code: 'unavailable' }); return; }
       if (signal) { signal.addEventListener('abort', abort, { once: true }); if (signal.aborted) abort(); }
     });
   }
@@ -306,11 +310,11 @@ export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env =
     },
     async login(providerId, type, callbacks) {
       const result = await call('login', { providerId }, callbacks);
-      if (!result.ok) { const error = new Error('Pi 原生认证未完成'); error.code = result.code; throw error; }
+      if (!result.ok) throw Object.assign(Error('Pi 原生认证未完成'), { code: result.code, nativeUnconfirmed: result.nativeUnconfirmed === true });
     },
     async logout(providerId, { signal } = {}) {
       const result = await call('logout', { providerId }, { signal });
-      if (!result.ok) { const error = new Error('Pi 原生退出未完成'); error.code = result.code; throw error; }
+      if (!result.ok) throw Object.assign(Error('Pi 原生退出未完成'), { code: result.code, nativeUnconfirmed: result.nativeUnconfirmed === true });
     },
     dispose,
   };

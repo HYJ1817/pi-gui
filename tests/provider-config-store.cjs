@@ -25,6 +25,96 @@ function write(store, fields = {}) {
   } });
 }
 
+test('OAuth shares the config lock and missing stop evidence persists across stores', async t => {
+  const f = await fixture(t);
+  const done = f.store.acquireOAuthWrite('fixture');
+  assert.throws(() => f.open().acquireOAuthWrite('fixture'), { code: 'config_busy' });
+  await assert.rejects(f.open().withCredentialOperation(() => assert.fail('lease was bypassed')), { code: 'config_busy' });
+  done(false);
+  const reopened = f.open();
+  assert.throws(() => reopened.acquireOAuthWrite('fixture'), { code: 'config_busy' });
+  assert.throws(() => write(reopened), { code: 'config_busy' });
+  const other = reopened.acquireOAuthWrite('unrelated');
+  other(true);
+  reopened.acquireOAuthWrite('unrelated')(true);
+  await assert.rejects(reopened.withCredentialOperation(tx => tx.prepare({ requestId: 'native', fingerprint: 'a'.repeat(64),
+    providerId: 'fixture', action: 'apply-staged' })), { code: 'config_busy' });
+});
+
+test('a confirmed standalone OAuth operation leaves no empty authority marker', async t => {
+  const f = await fixture(t);
+  f.store.acquireOAuthWrite('fixture')(true);
+  assert.equal(fs.existsSync(f.modelsJson + '.pi-gui-operations.json'), false);
+  const { createProviderConfigStore } = await import(entry);
+  const second = createProviderConfigStore({ ...f.options, metadataPath: path.join(path.dirname(f.metadataPath), 'other.json') });
+  second.acquireOAuthWrite('fixture')(true);
+});
+
+test('the auth storage qualifier rejects wrong authorities and hard-linked files without reading credentials', async t => {
+  const io = Object.create(fs);
+  const f = await fixture(t, { io });
+  const authPath = path.join(path.dirname(f.modelsJson), 'auth.json');
+  io.openSync = (file, ...args) => {
+    assert.notEqual(file, authPath, 'storage qualification must not open auth data');
+    return fs.openSync(file, ...args);
+  };
+  assert.equal(f.store.authorizeCredentialStorage({ authPath: path.join(path.dirname(authPath), 'elsewhere.json') }), false);
+  fs.writeFileSync(authPath, 'fixture-only', { mode: 0o600 });
+  fs.linkSync(authPath, authPath + '.linked');
+  assert.equal(f.store.authorizeCredentialStorage({ authPath }), false);
+  assert.equal(fs.readFileSync(authPath, 'utf8'), 'fixture-only');
+});
+
+test('credential dispatch holds the existing config lock and survives reopening', async t => {
+  const f = await fixture(t);
+  const request = { requestId: 'native-dispatch', fingerprint: 'a'.repeat(64) };
+  let receipt;
+  await f.store.withCredentialOperation(async tx => {
+    tx.prepare({ ...request, providerId: 'fixture', action: 'apply-staged' });
+    assert.throws(() => tx.dispatch(request.requestId), { code: 'config_recovery_required' });
+    receipt = write(tx, request);
+    tx.dispatch(request.requestId);
+    await Promise.resolve();
+    assert.throws(() => write(f.open()), { code: 'config_busy' });
+  });
+  await f.open().withCredentialOperation(tx => {
+    assert.equal(tx.lookup(request.requestId, request.fingerprint).operation.phase, 'dispatching');
+    assert.deepEqual(tx.lookup(request.requestId, request.fingerprint).receipt, receipt);
+    assert.throws(() => tx.dispatch(request.requestId), { code: 'config_recovery_required' });
+    assert.throws(() => tx.lookup(request.requestId, 'b'.repeat(64)), { code: 'request_id_conflict' });
+  });
+});
+
+test('an unresolved native operation protects its exact P1 receipt from legacy eviction', async t => {
+  const f = await fixture(t);
+  const request = { requestId: 'protected-receipt', fingerprint: 'a'.repeat(64) };
+  await f.store.withCredentialOperation(tx => {
+    tx.prepare({ ...request, providerId: 'fixture', action: 'clear-native' });
+    write(tx, request);
+  });
+  const metadata = JSON.parse(fs.readFileSync(f.metadataPath, 'utf8'));
+  for (let i = 0; i < 127; i++) metadata.receipts[`historical-${i}`] = metadata.receipts[request.requestId];
+  fs.writeFileSync(f.metadataPath, JSON.stringify(metadata));
+  const reopened = f.open();
+  write(reopened, { requestId: 'unrelated-request', fingerprint: 'b'.repeat(64) });
+  const receipts = reopened.read().metadata.receipts;
+  assert.equal(Object.keys(receipts).length, 128);
+  assert.equal(receipts[request.requestId].fingerprint, request.fingerprint);
+  assert.equal(Object.hasOwn(receipts, 'historical-0'), false);
+});
+
+test('a prepared operation abandoned before P1 publication cannot pin its provider indefinitely', async t => {
+  const f = await fixture(t);
+  const first = { requestId: 'abandoned-request', fingerprint: 'a'.repeat(64), providerId: 'fixture', action: 'apply-staged' };
+  const next = { ...first, requestId: 'new-request' };
+  await f.store.withCredentialOperation(tx => tx.prepare(first));
+  await f.open().withCredentialOperation(tx => {
+    tx.prepare(next);
+    assert.equal(tx.lookup(first.requestId, first.fingerprint).operation, undefined);
+    assert.equal(tx.lookup(next.requestId, next.fingerprint).operation.phase, 'prepared');
+  });
+});
+
 test('missing files initialize lazily; external edits conflict and durable request replay stays idempotent', async t => {
   const f = await fixture(t);
   const before = f.store.read();

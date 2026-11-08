@@ -132,6 +132,28 @@ async function controllerEdgeCases(flow, sdk, meta, descriptor) {
     return { controller: flow.createProviderAuth({ adapter, timeoutMs: 1000, ...options }), reads: () => reads };
   };
   {
+    const releases = [];
+    let calls = 0;
+    let blocked = true;
+    const fx = make(async () => {
+      calls++;
+      throw Object.assign(Error('fixture worker stopped acknowledging'), { nativeUnconfirmed: true });
+    }, async () => {}, { acquireMutation(id) {
+      assert.equal(id, 'openai');
+      if (blocked) throw Error('lease busy');
+      return stopped => releases.push(stopped);
+    } });
+    try {
+      await fx.controller.start('openai', 'oauth');
+      await until(() => !fx.controller.inFlight());
+      check('OAuth never dispatches while the shared write authority is held', () => { assert.equal(calls, 0); assert.equal(fx.controller.snapshot().flow.errorCode, 'busy'); });
+      blocked = false;
+      await fx.controller.start('openai', 'oauth');
+      await until(() => !fx.controller.inFlight());
+      check('OAuth without a worker acknowledgement does not release its isolation record', () => { assert.equal(calls, 1); assert.deepEqual(releases, [false]); });
+    } finally { fx.controller.dispose(); }
+  }
+  {
     let maintenance = true; let nativeCalls = 0;
     const fx = make(async () => { nativeCalls++; }, async () => { nativeCalls++; }, { startBlocked: () => maintenance, busyReason: () => 'chat task' });
     try {
