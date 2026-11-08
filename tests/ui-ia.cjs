@@ -21,6 +21,9 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     if (String(url) === '/api/git/status') return { ok: true, isRepo: true, files: [{ path: 'a.txt', status: 'M', working: 'M' }] };
     if (String(url).startsWith('/api/git/diff')) return { ok: true, working: '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new', staged: '' };
     if (String(url) === '/api/sessions') return { ok: true, sessions: [] };
+    // 默认装配关闭管理接口；真实服务回 422 unsupported。旧列表是兼容路径，
+    // 不能让一个缺少管理合同字段的 200 被误判成可用或合同异常。
+    if (String(url) === '/api/provider-management') return { ok: false, code: 'unsupported', message: '管理能力未开放' };
     return { ok: true, providers: [], counts: {}, plans: [], agents: [] };
   } });
   let nativeCloses = 0;
@@ -199,6 +202,10 @@ const tick = () => new Promise(r => setTimeout(r, 40));
       w.openShortcutHelp(); w.closeModal();
       assert.equal(w.panels.providers, box);
       box.querySelector('.prov-del').click(); await tick();
+      const confirm = d.getElementById('confirmCard');
+      assert.equal(d.getElementById('confirmLayer').hidden, false);
+      [...confirm.querySelectorAll('button')].find(button => button.textContent === '删除').click();
+      await tick();
       assert.equal(removed, true); assert.equal(box.querySelectorAll('.prov').length, 0);
     } finally { w.fetch = before; $('settingsReturn').click(); }
   });

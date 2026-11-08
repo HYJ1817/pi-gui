@@ -16,7 +16,14 @@ const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/provid
 const appBundle = bundle(path.join(pub, 'providers.js'));
 const clone = value => JSON.parse(JSON.stringify(value));
 
-function boot({ fetchImpl, snapshot: snapshotOverride = null, legacyData: legacyOverride = null } = {}) {
+function boot({
+  fetchImpl,
+  snapshot: snapshotOverride = null,
+  legacyData: legacyOverride = null,
+  managementReply: managementOverride = null,
+  legacyDelete: legacyDeleteOverride = null,
+  restart: restartOverride = null,
+} = {}) {
   const html = fs.readFileSync(path.join(pub, 'index.html'), 'utf8');
   const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
   const { window } = dom;
@@ -28,7 +35,11 @@ function boot({ fetchImpl, snapshot: snapshotOverride = null, legacyData: legacy
     providers: { example: { models: [{ id: 'fast' }] } },
     keyStates: { 'example-ai': { ok: false, note: '环境变量 EXAMPLE_KEY 没有设置' } },
   });
-  const calls = { drafts: [], commits: [], discovery: [], authorize: [], test: [], legacy: [], legacyPosts: [], auth: [] };
+  // 每个字段都可变：竞态用例要在同一个页面里让下一次探测换结果。
+  const managementReply = managementOverride || { status: 200, body: snapshot, network: false, malformed: false };
+  const legacyDeleteReply = legacyDeleteOverride || { status: 200, body: { ok: true } };
+  const restartReply = restartOverride || { status: 200, body: { ok: true } };
+  const calls = { drafts: [], commits: [], discovery: [], authorize: [], test: [], legacy: [], legacyPosts: [], legacyDeletes: [], managementGets: [], restart: [], auth: [] };
   const api = {
     fetchProviderManagement: async () => snapshot,
     saveProviderDraft: async request => {
@@ -56,11 +67,21 @@ function boot({ fetchImpl, snapshot: snapshotOverride = null, legacyData: legacy
         calls.commits.push(clone(body));
         return { status: 200, json: async () => ({ ok: true, serviceId: body?.serviceId || 'new-service', saved: true, credentialSaved: null, credentialState: 'saved', sync: { state: 'pending' }, revision: 'config-rev-next' }) };
       }
-      return { status: 200, json: async () => snapshot };
+      calls.managementGets.push(target);
+      if (managementReply.network) throw new Error('fixture management network down');
+      return { status: managementReply.status ?? 200, json: async () => {
+        if (managementReply.malformed) throw new SyntaxError('fixture invalid management response');
+        return clone(managementReply.body);
+      } };
     }
     if (target.includes('/api/providers')) {
       calls.legacy.push(target);
-      if (options?.method === 'POST') {
+      const method = options?.method || 'GET';
+      if (method === 'DELETE') {
+        calls.legacyDeletes.push(target);
+        return { status: legacyDeleteReply.status ?? 200, json: async () => clone(legacyDeleteReply.body) };
+      }
+      if (method === 'POST') {
         const body = options.body ? JSON.parse(options.body) : null;
         calls.legacyPosts.push(clone(body));
         return { status: 200, json: async () => ({ ok: true, provider: body?.name || '', keyState: { kind: 'none', ok: true, note: '' } }) };
@@ -71,10 +92,14 @@ function boot({ fetchImpl, snapshot: snapshotOverride = null, legacyData: legacy
       calls.auth.push(target);
       return { status: 200, json: async () => ({ ok: true, capability: { sdkAvailable: true }, providers: [], flow: null, sync: { state: 'idle' } }) };
     }
+    if (target.includes('/api/restart')) {
+      calls.restart.push(target);
+      return { status: restartReply.status ?? 200, json: async () => clone(restartReply.body) };
+    }
     return { status: 200, json: async () => (fetchImpl ? fetchImpl(target, options) : { ok: true }) };
   };
   window.eval(appBundle.code);
-  return { dom, window, snapshot, api, calls };
+  return { dom, window, snapshot, managementReply, legacyDeleteReply, restartReply, api, calls };
 }
 
 const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
@@ -651,6 +676,110 @@ test('management-off edit reuses the same model panes and preserves an existing 
   assert.deepEqual(calls.legacyPosts[0].config.models, [{ id: 'm1', name: 'M1' }]);
 });
 
+test('legacy delete asks first and cancel never sends DELETE', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { baseUrl: 'https://example.invalid/v1', api: 'openai-completions', models: [{ id: 'm1' }] } },
+    keyStates: { example: { kind: 'env', ok: true, note: '' } },
+  };
+  const { window, calls } = boot({ snapshot: { ok: false, code: 'unsupported' }, legacyData });
+  window.openProvidersPanel();
+  await tick(20);
+  const row = window.document.querySelector('.prov[data-service-name="example"]');
+  assert.ok(row, 'legacy row must render');
+  row.querySelector('.prov-del').click();
+  await tick(0);
+  const confirm = window.document.getElementById('confirmCard');
+  assert.equal(window.document.getElementById('confirmLayer').hidden, false, 'delete must ask before writing');
+  assert.ok(confirm.textContent.includes('Pi 模型配置'), 'confirmation must say what is removed');
+  assert.ok(confirm.textContent.includes('Pi 本机认证'), 'confirmation must distinguish native auth');
+  assert.ok(confirm.textContent.includes('环境变量'), 'confirmation must distinguish environment variables');
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '取消').click();
+  await tick(20);
+  assert.equal(calls.legacyDeletes.length, 0, 'cancel must not send DELETE');
+  assert.ok(window.document.querySelector('.prov[data-service-name="example"]'), 'row must remain after cancel');
+});
+
+test('legacy delete supports keyboard confirmation and sends exactly one DELETE', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { baseUrl: 'https://example.invalid/v1', api: 'openai-completions', models: [{ id: 'm1' }] } },
+    keyStates: { example: { kind: 'env', ok: true, note: '' } },
+  };
+  const { window, calls } = boot({ snapshot: { ok: false, code: 'unsupported' }, legacyData });
+  window.openProvidersPanel();
+  await tick(20);
+  const row = window.document.querySelector('.prov[data-service-name="example"]');
+  const del = row.querySelector('.prov-del');
+  del.focus();
+  del.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  await tick(0);
+  assert.equal(window.document.getElementById('confirmLayer').hidden, false, 'keyboard activation must ask');
+  [...window.document.getElementById('confirmCard').querySelectorAll('button')].find(button => button.textContent === '删除').click();
+  await tick(30);
+  assert.equal(calls.legacyDeletes.length, 1, 'confirm must send one DELETE');
+  assert.ok(calls.legacyDeletes[0].endsWith('/api/providers/example'));
+  assert.equal(window.document.getElementById('confirmLayer').hidden, true);
+});
+
+test('legacy delete failure keeps the row and shows the real error', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { baseUrl: 'https://example.invalid/v1', api: 'openai-completions', models: [{ id: 'm1' }] } },
+    keyStates: { example: { kind: 'env', ok: true, note: '' } },
+  };
+  const { window, calls } = boot({
+    snapshot: { ok: false, code: 'unsupported' },
+    legacyData,
+    legacyDelete: { status: 423, body: { ok: false, error: '供应商配置正在被其他进程使用' } },
+  });
+  window.openProvidersPanel();
+  await tick(20);
+  const row = window.document.querySelector('.prov[data-service-name="example"]');
+  row.querySelector('.prov-del').click();
+  await tick(0);
+  [...window.document.getElementById('confirmCard').querySelectorAll('button')].find(button => button.textContent === '删除').click();
+  await tick(30);
+  assert.equal(calls.legacyDeletes.length, 1);
+  assert.ok(window.document.querySelector('.prov[data-service-name="example"]'), 'failed delete must keep the list');
+  assert.ok(window.document.getElementById('toasts').textContent.includes('供应商配置正在被其他进程使用'));
+});
+
+test('reload keeps the current conversation thread', async () => {
+  const { window, calls } = boot();
+  const thread = window.document.createElement('div');
+  thread.className = 'thread';
+  thread.innerHTML = '<article class="msg">fixture conversation must stay</article>';
+  window.document.getElementById('stream').appendChild(thread);
+  window.S.thread = thread;
+  const result = await window.reloadPi();
+  await tick(0);
+  assert.equal(result, true);
+  assert.equal(calls.restart.length, 1);
+  assert.ok(thread.textContent.includes('fixture conversation must stay'), 'reload must not clear the visible thread');
+});
+
+test('failed reload keeps the thread and shows the real error', async () => {
+  const { window, calls } = boot({ restart: { status: 500, body: { ok: false, error: 'fixture restart failed' } } });
+  const thread = window.document.createElement('div');
+  thread.className = 'thread';
+  thread.innerHTML = '<article class="msg">fixture conversation survives failure</article>';
+  window.document.getElementById('stream').appendChild(thread);
+  window.S.thread = thread;
+  const result = await window.reloadPi();
+  await tick(0);
+  assert.equal(result, false);
+  assert.equal(calls.restart.length, 1);
+  assert.ok(thread.textContent.includes('fixture conversation survives failure'));
+  assert.ok(window.document.getElementById('toasts').textContent.includes('fixture restart failed'));
+});
+
 test('clone setup shows a neutral credential state and no credential controls', async () => {
   const { window, snapshot, api } = boot();
   const { card } = openCreate(window, snapshot, api, 'clone', snapshot.services[0]);
@@ -866,6 +995,163 @@ test('management unsupported still renders the legacy provider list', async () =
   assert.equal(card.querySelectorAll('.prov').length, 1);
   assert.ok(card.textContent.includes('example'));
   assert.ok(!card.textContent.includes('管理能力未开放'));
+});
+
+test('management 500 is not treated as disabled and never falls back to legacy writes', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { baseUrl: 'https://example.invalid/v1', api: 'openai-completions', models: [{ id: 'm1' }] } },
+    keyStates: { example: { kind: 'env', ok: true, note: '' } },
+  };
+  const { window, calls } = boot({
+    snapshot: { ok: false, error: 'fixture failure' },
+    managementReply: { status: 500, body: { ok: false, error: 'fixture internal failure' } },
+    legacyData,
+  });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  assert.equal(card.querySelectorAll('.prov[data-service-name]').length, 0, '500 must not render the legacy list');
+  assert.ok(card.querySelector('.pm-management-error'), '500 must render a retryable error state');
+  assert.ok(card.textContent.includes('500'));
+  card.querySelector('.prov-btn-main').click();
+  await tick(30);
+  assert.equal(calls.legacyPosts.length, 0, 'an API error must not become a legacy write');
+  assert.equal(card.querySelector('.pm-dialog-title'), null, 'an API error must not open the legacy editor');
+});
+
+test('management network failure and 403 do not enable the legacy editor', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { models: [{ id: 'm1' }] } },
+    keyStates: {},
+  };
+  const network = boot({
+    snapshot: { ok: false, error: 'fixture failure' },
+    managementReply: { status: 0, body: null, network: true },
+    legacyData,
+  });
+  network.window.openProvidersPanel();
+  await tick(20);
+  const networkCard = network.window.document.getElementById('modalCard');
+  assert.equal(networkCard.querySelectorAll('.prov[data-service-name]').length, 0);
+  assert.ok(networkCard.textContent.includes('无法连接'));
+  networkCard.querySelector('.prov-btn-main').click();
+  await tick(30);
+  assert.equal(network.calls.legacyPosts.length, 0);
+
+  const forbidden = boot({
+    snapshot: { ok: false, error: 'fixture failure' },
+    managementReply: { status: 403, body: { ok: false, error: 'fixture forbidden' } },
+    legacyData,
+  });
+  forbidden.window.openProvidersPanel();
+  await tick(20);
+  const forbiddenCard = forbidden.window.document.getElementById('modalCard');
+  assert.equal(forbiddenCard.querySelectorAll('.prov[data-service-name]').length, 0);
+  assert.ok(forbiddenCard.textContent.includes('403'));
+  forbiddenCard.querySelector('.prov-btn-main').click();
+  await tick(30);
+  assert.equal(forbidden.calls.legacyPosts.length, 0);
+});
+
+test('malformed management response is a contract error, not feature-off', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { models: [{ id: 'm1' }] } },
+    keyStates: {},
+  };
+  const { window, calls } = boot({
+    snapshot: { ok: false, error: 'fixture failure' },
+    managementReply: { status: 200, body: null, malformed: true },
+    legacyData,
+  });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  assert.equal(card.querySelectorAll('.prov[data-service-name]').length, 0);
+  assert.ok(card.textContent.includes('无法识别'));
+  card.querySelector('.prov-btn-main').click();
+  await tick(30);
+  assert.equal(calls.legacyPosts.length, 0);
+  assert.equal(card.querySelector('.pm-dialog-title'), null);
+});
+
+test('legacy mode rechecks management before adding after an API failure', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { models: [{ id: 'm1' }] } },
+    keyStates: {},
+  };
+  const { window, calls, managementReply } = boot({ snapshot: { ok: false, code: 'unsupported' }, legacyData });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  assert.ok(card.querySelector('.prov[data-service-name="example"]'));
+  managementReply.status = 500;
+  managementReply.body = { ok: false, error: 'fixture internal failure' };
+  card.querySelector('.prov-btn-main').click();
+  await tick(30);
+  assert.equal(calls.legacyPosts.length, 0, 'a stale compatibility flag must not write after management errors');
+  assert.equal(card.querySelector('.pm-dialog-title'), null);
+  assert.ok(card.querySelector('.pm-management-error') || window.document.getElementById('toasts').textContent.includes('500'));
+});
+
+test('legacy editor refuses to save if management stops being explicitly disabled', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { baseUrl: 'https://example.invalid/v1', api: 'openai-completions', models: [{ id: 'm1' }] } },
+    keyStates: { example: { kind: 'env', ok: true, note: '' } },
+  };
+  const { window, calls, managementReply } = boot({ snapshot: { ok: false, code: 'unsupported' }, legacyData });
+  window.openProvidersPanel();
+  await tick(20);
+  window.document.querySelector('.prov[data-service-name="example"]').click();
+  await tick(30);
+  const card = window.document.getElementById('modalCard');
+  assert.ok(card.querySelector('.pm-dialog-title'));
+  managementReply.status = 500;
+  managementReply.body = { ok: false, error: 'fixture internal failure' };
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(40);
+  assert.equal(calls.legacyPosts.length, 0, 'legacy commit must revalidate management eligibility');
+  assert.ok(card.querySelector('.pm-status-banner').textContent.includes('管理接口'));
+});
+
+test('management error retry re-reads the management snapshot', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { models: [{ id: 'm1' }] } },
+    keyStates: {},
+  };
+  const { window, calls, managementReply } = boot({
+    snapshot: { ok: false, error: 'fixture failure' },
+    managementReply: { status: 500, body: { ok: false, error: 'fixture internal failure' } },
+    legacyData,
+  });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  const retry = [...card.querySelectorAll('button')].find(button => button.textContent === '重试');
+  assert.ok(retry, 'error state must provide a retry entry');
+  managementReply.status = 200;
+  managementReply.body = clone(fixture.live.snapshot);
+  retry.click();
+  await tick(40);
+  assert.equal(calls.managementGets.length >= 2, true);
+  assert.equal(card.querySelectorAll('.prov.pm-service-row').length, 2, 'retry must render the management list');
 });
 
 test('provider row menu marks connection test pending and disables only after confirmation', async () => {
