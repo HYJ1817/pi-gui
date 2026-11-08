@@ -36,7 +36,9 @@ function boot({
     keyStates: { 'example-ai': { ok: false, note: '环境变量 EXAMPLE_KEY 没有设置' } },
   });
   // 每个字段都可变：竞态用例要在同一个页面里让下一次探测换结果。
-  const managementReply = managementOverride || { status: 200, body: snapshot, network: false, malformed: false };
+  // 默认管理关闭按真实后端形状返回 422，而不是把 unsupported 包在 200 里。
+  const disabledShape = snapshot && snapshot.ok === false && snapshot.code === 'unsupported';
+  const managementReply = managementOverride || { status: disabledShape ? 422 : 200, body: snapshot, network: false, malformed: false };
   const legacyDeleteReply = legacyDeleteOverride || { status: 200, body: { ok: true } };
   const restartReply = restartOverride || { status: 200, body: { ok: true } };
   const calls = { drafts: [], commits: [], discovery: [], authorize: [], test: [], legacy: [], legacyPosts: [], legacyDeletes: [], managementGets: [], restart: [], auth: [] };

@@ -15,17 +15,22 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   w.ResizeObserver = class { observe() {} disconnect() {} };
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.EventSource = class { constructor() { w.fixtureEvents = this; } close() {} };
-  w.fetch = async url => ({ ok: true, json: async () => {
-    if (String(url) === '/api/status') return { ok: true, cwd: 'C:\\fixture', hasProject: true };
-    if (String(url) === '/api/projects') return { ok: true, active: 'C:\\fixture', items: [{ name: 'Fixture', path: 'C:\\fixture' }] };
-    if (String(url) === '/api/git/status') return { ok: true, isRepo: true, files: [{ path: 'a.txt', status: 'M', working: 'M' }] };
-    if (String(url).startsWith('/api/git/diff')) return { ok: true, working: '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new', staged: '' };
-    if (String(url) === '/api/sessions') return { ok: true, sessions: [] };
+  w.fetch = async url => {
+    const target = String(url);
     // 默认装配关闭管理接口；真实服务回 422 unsupported。旧列表是兼容路径，
     // 不能让一个缺少管理合同字段的 200 被误判成可用或合同异常。
-    if (String(url) === '/api/provider-management') return { ok: false, code: 'unsupported', message: '管理能力未开放' };
-    return { ok: true, providers: [], counts: {}, plans: [], agents: [] };
-  } });
+    if (target === '/api/provider-management') {
+      return { status: 422, ok: false, json: async () => ({ ok: false, code: 'unsupported', message: '管理能力未开放' }) };
+    }
+    return { ok: true, json: async () => {
+      if (target === '/api/status') return { ok: true, cwd: 'C:\\fixture', hasProject: true };
+      if (target === '/api/projects') return { ok: true, active: 'C:\\fixture', items: [{ name: 'Fixture', path: 'C:\\fixture' }] };
+      if (target === '/api/git/status') return { ok: true, isRepo: true, files: [{ path: 'a.txt', status: 'M', working: 'M' }] };
+      if (target.startsWith('/api/git/diff')) return { ok: true, working: '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new', staged: '' };
+      if (target === '/api/sessions') return { ok: true, sessions: [] };
+      return { ok: true, providers: [], counts: {}, plans: [], agents: [] };
+    } };
+  };
   let nativeCloses = 0;
   w.piGuiDesktop = { browser: { open: async () => ({ ok: true }), close: () => nativeCloses++,
     back() {}, forward() {}, stop() {}, reload() {}, openExternal() {}, setBounds() {}, setOccluded() {},
