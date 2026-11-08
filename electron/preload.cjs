@@ -114,6 +114,28 @@ try {
      */
     openPath: (relPath, conversationId = null) => ipcRenderer.invoke('pi-gui:open-path', String(relPath ?? ''), conversationId),
 
+    /* ---------- 供应商凭据受限输入面（P2） ----------
+     *
+     * 这里只有「打开 / 取消 / 查状态」三个具名入口和状态订阅——**没有** submit，
+     * 没有任何能携带密钥的字段。真实输入发生在主进程拉起的独立受限窗口里
+     * （见 provider-credentials.cjs / provider-credential-preload.cjs），
+     * 主页面永远只能收到状态与原因码。 */
+    providerCredentials: {
+      open: (request) => ipcRenderer.invoke('pi-gui:provider-credential-open', {
+        draftId: typeof request?.draftId === 'string' ? request.draftId : '',
+        draftRevision: typeof request?.draftRevision === 'number' ? request.draftRevision : 0,
+        action: typeof request?.action === 'string' ? request.action : '',
+      }),
+      cancel: () => ipcRenderer.invoke('pi-gui:provider-credential-cancel'),
+      status: () => ipcRenderer.invoke('pi-gui:provider-credential-status'),
+      onState: (cb) => {
+        if (typeof cb !== 'function') return () => {};
+        const listener = (_event, state) => cb(state);
+        ipcRenderer.on('pi-gui:provider-credential-state', listener);
+        return () => ipcRenderer.removeListener('pi-gui:provider-credential-state', listener);
+      },
+    },
+
     /**
      * 用系统浏览器打开一个链接（版本检查的「查看 Release」/「下载」）。
      *
