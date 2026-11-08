@@ -338,6 +338,19 @@ test('chooser filters, keeps subscription disabled, and opens setup without secr
   assert.equal(card.querySelector('[data-refresh-models]').disabled, true);
 });
 
+test('P2 desktop capability stays behind an honest P5 gate in P4', () => {
+  const granted = clone(fixture.live.snapshot);
+  granted.capabilities.privateDesktopBridge = true;
+  granted.capabilities.reasons = { ...granted.capabilities.reasons, privateDesktopBridge: null };
+  const { window, api } = boot();
+  const { card } = openCreate(window, granted, api);
+  pick(window, card, 'deepseek');
+  const trigger = card.querySelector('[data-credential-trigger]');
+  assert.equal(trigger.disabled, true, 'P4 must not expose a dead credential trigger just because P2 capability is on');
+  assert.equal(trigger.title, '桌面凭据输入待 P5 集成');
+  assert.equal(card.querySelectorAll('input[type=password]').length, 0);
+});
+
 test('chooser keyboard navigation and IME composition do not fire fake picks', async () => {
   const { window, snapshot, api } = boot();
   const { card } = openCreate(window, snapshot, api);
@@ -1077,6 +1090,30 @@ test('malformed management response is a contract error, not feature-off', async
   const card = window.document.getElementById('modalCard');
   assert.equal(card.querySelectorAll('.prov[data-service-name]').length, 0);
   assert.ok(card.textContent.includes('无法识别'));
+  card.querySelector('.prov-btn-main').click();
+  await tick(30);
+  assert.equal(calls.legacyPosts.length, 0);
+  assert.equal(card.querySelector('.pm-dialog-title'), null);
+});
+
+test('management 200 with a foreign body is a contract error, not feature-off', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { models: [{ id: 'm1' }] } },
+    keyStates: {},
+  };
+  const { window, calls } = boot({
+    snapshot: { ok: false, error: 'fixture failure' },
+    managementReply: { status: 200, body: { ok: true, providers: {} } },
+    legacyData,
+  });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  assert.equal(card.querySelectorAll('.prov[data-service-name]').length, 0);
+  assert.ok(card.textContent.includes('无法识别的数据'));
   card.querySelector('.prov-btn-main').click();
   await tick(30);
   assert.equal(calls.legacyPosts.length, 0);

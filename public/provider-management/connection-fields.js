@@ -1,7 +1,7 @@
 /* 服务身份与凭据区。
  *
  * 关键边界：**主页面永远没有密钥输入框**。
- * 这里只展示凭据状态、固定的安全触发器（P2 到位前 disabled），
+ * 这里只展示凭据状态、固定的安全触发器（P5 接入前 disabled），
  * 以及非秘密的环境变量引用 $NAME。 */
 
 import {
@@ -18,8 +18,13 @@ import { button, field, h, icon } from './dom.js';
 function credentialCapability(snapshot) {
   const capabilities = snapshot?.capabilities || {};
   const pendingReason = capabilities.reasons?.privateDesktopBridge;
+  // P2 已在 main 提供私有桥，但 P4 不接入凭据窗口的生命周期与状态机（P5）。
+  // 能力为 true 时也必须保持触发器禁用：否则会打开一个只显示占位说明的死入口。
+  if (capabilities.privateDesktopBridge === true) {
+    return { available: false, reason: '桌面凭据输入待 P5 集成' };
+  }
   return {
-    available: capabilities.privateDesktopBridge === true,
+    available: false,
     reason: pendingReason === 'p2_pending' || !pendingReason
       ? '桌面凭据输入待接通（P2）'
       : '桌面凭据输入暂不可用',
