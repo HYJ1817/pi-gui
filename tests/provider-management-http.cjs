@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { Readable } = require('node:stream');
+const { EventEmitter } = require('node:events');
 const { test } = require('node:test');
 
 const key = 'fixture-key-must-not-be-projected';
@@ -17,9 +18,9 @@ async function setup(t) {
   const native = new Map();
   const inspect = id => Promise.resolve(native.get(id) ?? { present: false, builtIn: false });
   const legacy = createProviders({ modelsJson, metadataPath, inspectCredential: inspect });
-  const make = (enabled = true, nativeCredentials, fault) => createProviderManagement({
+  const make = (enabled = true, nativeCredentials, fault, discovery) => createProviderManagement({
     store: fault ? createProviderConfigStore({ modelsJson, metadataPath, fault }) : legacy.store,
-    inspectCredential: inspect, enabled, nativeCredentials });
+    inspectCredential: inspect, enabled, nativeCredentials, discovery, now: discovery?.now });
   fs.writeFileSync(modelsJson, JSON.stringify({ misc: { a: true }, providers: { example: {
     baseUrl: 'https://fixture.invalid/v1', api: 'openai-completions', apiKey: key,
     headers: { Authorization: key }, unknown: { value: key },
@@ -41,6 +42,233 @@ const root = '/api/provider-management';
 const draft = (providerId = 'example', baseUrl = 'https://fixture.invalid/v1') => ({ providerId,
   displayName: 'Example', authMode: 'none', connection: { baseUrl, api: 'openai-completions' }, enabled: true,
   selectedModelIds: ['model-a'], modelOrder: ['model-a'], modelPatches: [{ modelId: 'model-a', operation: 'upsert', set: { name: 'After' } }] });
+
+test('discovery requires exact authorization and limits the real transport to the consented base path', async t => {
+  const f = await setup(t);
+  const sockets = [];
+  let time = Date.now();
+  const lookup = t.mock.fn(async () => [{ address: '93.184.216.34' }]);
+  const requester = options => {
+    sockets.push(options);
+    const req = new EventEmitter();
+    req.end = () => queueMicrotask(() => {
+      const response = new EventEmitter();
+      Object.assign(response, { statusCode: 200, headers: {}, destroy() {} });
+      req.emit('response', response);
+      response.emit('data', Buffer.from(JSON.stringify({ data: [{ id: 'fixture-model', name: 'Fixture model' }] })));
+      response.emit('end');
+    });
+    return req;
+  };
+  const { handle } = f.make(true, null, null, { now: () => time, io: { requester, lookup } });
+  const expectedRevision = (await http(handle, 'GET', root)).body.revision;
+  const form = (await http(handle, 'POST', root + '/drafts', { requestId: 'discovery-draft', expectedRevision,
+    draft: draft('no-key-fixture', 'https://fixture.invalid/tenant-a/v1') })).body;
+  const body = { requestId: 'discover-no-grant', draftId: form.draftId, draftRevision: form.draftRevision,
+    consentId: 'unknown', dialogGeneration: 1, requestSeq: 1, force: false };
+  const denied = await http(handle, 'POST', root + '/discover', body);
+  assert.equal(denied.body.code, 'invalid_target');
+  assert.equal(lookup.mock.callCount(), 0);
+  assert.equal(sockets.length, 0);
+  const grant = (await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'authorize-fixture',
+    draftId: form.draftId, draftRevision: form.draftRevision, confirm: true, rememberTarget: true })).body;
+  assert.equal(grant.ok, true);
+  assert.equal(sockets.length, 0);
+  const start = async (requestId, force = false, requestSeq = 1) => http(handle, 'POST', root + '/discover',
+    { ...body, requestId, force, requestSeq, consentId: grant.consentId });
+  const result = accepted => http(handle, 'GET', `${root}/operations/${accepted.body.operationId}`);
+  const accepted = await start('discover-with-grant');
+  assert.equal(accepted.status, 202);
+  await new Promise(resolve => setImmediate(resolve));
+  const first = await result(accepted);
+  assert.equal(first.body.result.sourceKind, 'remote');
+  assert.equal(first.body.result.models[0].modelId, 'fixture-model');
+  assert.deepEqual(sockets.map(o => o.path), ['/tenant-a/v1/models']);
+  assert.equal(sockets[0].headers.authorization, undefined);
+  assert.deepEqual(await start('discover-with-grant'), accepted);
+  const fromCache = await start('discover-cache', false, 2);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal((await result(fromCache)).body.result.sourceKind, 'cache');
+  assert.equal(sockets.length, 1);
+  assert.equal((await start('old-discover', true, 1)).body.code, 'config_conflict');
+  await start('discover-forced', true, 3);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(sockets.length, 2);
+  time += 60_000;
+  await start('discover-cache-expired', false, 4);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(sockets.length, 3);
+  assert.equal((await http(handle, 'POST', root + '/discovery-authorizations/revoke', { requestId: 'revoke-fixture', consentId: grant.consentId })).body.revoked, true);
+  assert.equal((await result(accepted)).body.result, undefined);
+  assert.equal((await start('discover-revoked')).body.code, 'invalid_target');
+  assert.equal(sockets.length, 3);
+});
+
+test('explicit cancel aborts the requester, rejects conflicting cancel IDs and drops late models', async t => {
+  const f = await setup(t);
+  const started = Promise.withResolvers();
+  let complete;
+  let transportSignal;
+  const requester = t.mock.fn(options => {
+    transportSignal = options.signal;
+    const req = new EventEmitter();
+    req.end = () => {
+      complete = () => {
+        const response = new EventEmitter();
+        Object.assign(response, { statusCode: 200, headers: {}, destroy() {} });
+        req.emit('response', response);
+        response.emit('data', Buffer.from('{"data":[{"id":"late-model"}]}'));
+        response.emit('end');
+      };
+      started.resolve();
+    };
+    return req;
+  });
+  const { handle } = f.make(true, null, null, { io: { requester, lookup: async () => [{ address: '93.184.216.34' }] } });
+  const expectedRevision = (await http(handle, 'GET', root)).body.revision;
+  const { body: form } = await http(handle, 'POST', root + '/drafts', { requestId: 'cancel-draft', expectedRevision, draft: draft('cancel-provider') });
+  const { draftId, draftRevision } = form;
+  const { body: grant } = await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'cancel-auth', draftId,
+    draftRevision, confirm: true, rememberTarget: false });
+  const { body: accepted } = await http(handle, 'POST', root + '/discover', { requestId: 'cancel-discover', draftId, draftRevision,
+    consentId: grant.consentId, dialogGeneration: 1, requestSeq: 1, force: false });
+  await started.promise;
+  const operation = `${root}/operations/${accepted.operationId}`;
+  const cancel = { requestId: 'cancel-operation' };
+  const stopped = await http(handle, 'POST', `${operation}/cancel`, cancel);
+  assert.deepEqual(stopped.body, { ok: true, state: 'cancelled' });
+  assert.equal(transportSignal.aborted, true);
+  complete();
+  assert.deepEqual(await http(handle, 'POST', `${operation}/cancel`, cancel), stopped);
+  assert.equal((await http(handle, 'POST', `${root}/operations/another/cancel`, cancel)).body.code, 'request_id_conflict');
+  const after = await http(handle, 'GET', operation);
+  assert.equal(after.body.state, 'cancelled');
+  assert.equal(after.body.result, undefined);
+  assert.equal(requester.mock.callCount(), 1);
+});
+
+test('closing a draft and changing its endpoint both revoke an in-flight discovery', async t => {
+  const f = await setup(t);
+  for (const action of ['close', 'rebind']) {
+    const entered = Promise.withResolvers();
+    const dns = Promise.withResolvers();
+    const requester = t.mock.fn(() => { throw new Error('unexpected socket'); });
+    const { handle, forgetDraft } = f.make(true, null, null, { io: { requester, lookup: () => { entered.resolve(); return dns.promise; } } });
+    const expectedRevision = (await http(handle, 'GET', root)).body.revision;
+    const { body: form } = await http(handle, 'POST', root + '/drafts', { requestId: `draft-${action}`, expectedRevision, draft: draft('rotating-provider') });
+    const { draftId, draftRevision } = form;
+    const { body: grant } = await http(handle, 'POST', root + '/discovery-authorizations', { requestId: `grant-${action}`, draftId,
+      draftRevision, confirm: true, rememberTarget: false });
+    const { body: accepted } = await http(handle, 'POST', root + '/discover', { requestId: `discover-${action}`, draftId,
+      draftRevision, consentId: grant.consentId, dialogGeneration: 1, requestSeq: 1, force: false });
+    await entered.promise;
+    if (action === 'close') forgetDraft(draftId);
+    else {
+      const edit = await http(handle, 'POST', root + '/drafts', { requestId: 'new-endpoint', expectedRevision, draftId,
+        expectedDraftRevision: draftRevision, draft: draft('rotating-provider', 'https://fixture.invalid/rebound/v1') });
+      assert.equal(edit.body.consentState, 'unapproved');
+      assert.deepEqual(edit.body.cachedModels, []);
+    }
+    dns.resolve([{ address: '93.184.216.34' }]);
+    await new Promise(resolve => setImmediate(resolve));
+    const old = (await http(handle, 'GET', `${root}/operations/${accepted.operationId}`)).body;
+    assert.equal(old.error.code, 'invalid_target');
+    assert.equal(old.result, undefined);
+    assert.equal(requester.mock.callCount(), 0);
+  }
+});
+
+test('native cancellation times out without a stop acknowledgement and leaves the provider reserved', async t => {
+  const f = await setup(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { createDiscoveryConsentStore } = await import('../server/provider-discovery-consent.js');
+  const consentStore = createDiscoveryConsentStore({ strict: true });
+  t.after(() => consentStore.dispose());
+  const start = Promise.withResolvers();
+  const acknowledgement = Promise.withResolvers();
+  let signal;
+  const executeNative = t.mock.fn((_grant, _draft, options) => {
+    signal = options.signal;
+    start.resolve();
+    return acknowledgement.promise;
+  });
+  const { handle, draftSnapshot } = f.make(true, null, null, { consentStore, executeNative, nativeCurrent: () => true, verifyNative: async () => true });
+  const expectedRevision = (await http(handle, 'GET', root)).body.revision;
+  const { body: form } = await http(handle, 'POST', root + '/drafts', { requestId: 'native-cancel-draft', expectedRevision,
+    draft: { ...draft('native-discovery'), authMode: 'pi-credential' } });
+  const { draftId, draftRevision } = form;
+  const bound = draftSnapshot(draftId);
+  const grant = consentStore.issue({ ...bound, api: bound.connection.api, credentialSource: 'staged', credentialRevision: 'stage-epoch', workerEpoch: 'worker-epoch' });
+  const body = { requestId: 'native-cancel-discover', draftId, draftRevision, consentId: grant.consentId,
+    dialogGeneration: 1, requestSeq: 1, force: false };
+  const { body: accepted } = await http(handle, 'POST', root + '/discover', body);
+  await start.promise;
+  const operation = `${root}/operations/${accepted.operationId}`;
+  const cancel = http(handle, 'POST', `${operation}/cancel`, { requestId: 'native-cancel-op' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(signal.aborted, true);
+  t.mock.timers.tick(2000);
+  assert.equal((await cancel).body.code, 'timeout');
+  assert.equal((await http(handle, 'POST', root + '/discover', { ...body, requestId: 'new-before-ack' })).body.code, 'config_busy');
+  acknowledgement.resolve({ ok: true, models: [{ id: 'must-not-publish' }] });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal((await http(handle, 'GET', operation)).body.result, undefined);
+  assert.equal(executeNative.mock.callCount(), 1);
+});
+
+test('connection evidence distinguishes HTTP outcomes without proving authentication or inference', async t => {
+  const f = await setup(t);
+  let statusCode = 200;
+  let payload = '{"data":[]}';
+  const requester = t.mock.fn(options => {
+    assert.equal(options.method, 'GET');
+    assert.match(options.path, /\/models$/);
+    const req = new EventEmitter();
+    req.end = () => queueMicrotask(() => {
+      const response = new EventEmitter();
+      Object.assign(response, { statusCode, headers: { 'retry-after': '20' }, destroy() {} });
+      req.emit('response', response);
+      response.emit('data', Buffer.from(payload));
+      response.emit('end');
+    });
+    return req;
+  });
+  const env = { OPENAI_API_KEY: 'fixture-env-only', PI_GUI_TOKEN: 'must-not-use-renderer-token' };
+  const { handle } = f.make(true, null, null, { env, io: { requester, lookup: async () => [{ address: '93.184.216.34' }] } });
+  const expectedRevision = (await http(handle, 'GET', root)).body.revision;
+  const custom = (await http(handle, 'POST', root + '/drafts', { requestId: 'test-custom', expectedRevision,
+    draft: { ...draft('custom-env'), authMode: 'environment' } })).body;
+  assert.equal((await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'test-custom-auth', draftId: custom.draftId,
+    draftRevision: custom.draftRevision, confirm: true, rememberTarget: false })).body.code, 'unsupported');
+  assert.equal(requester.mock.callCount(), 0);
+  const { body: form } = await http(handle, 'POST', root + '/drafts', { requestId: 'test-preset', expectedRevision,
+    draft: { ...draft('openai', 'https://api.openai.com/v1'), authMode: 'environment',
+      connection: { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' } } });
+  const { draftId, draftRevision } = form;
+  const { body: grant } = await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'test-preset-auth',
+    draftId, draftRevision, confirm: true, rememberTarget: false });
+  let seq = 0;
+  for (const [status, code] of [[200, undefined], [401, 'http_401'], [403, 'http_403'], [404, 'http_404'], [429, 'http_429'], [200, 'not_json']]) {
+    statusCode = status;
+    payload = code ? 'untrusted raw response fixture-env-only' : '{"data":[]}';
+    const { body: accepted } = await http(handle, 'POST', root + '/test', { requestId: `test-${++seq}`, draftId,
+      draftRevision, consentId: grant.consentId, dialogGeneration: 1, requestSeq: seq, force: false });
+    await new Promise(resolve => setImmediate(resolve));
+    const { body: result } = await http(handle, 'GET', `${root}/operations/${accepted.operationId}`);
+    assert.equal(result.error?.code, code);
+    assert.equal(result.result.reachability, true);
+    assert.equal(result.result.modelListAccess, !code);
+    assert.equal(result.result.credentialAccepted, null);
+    assert.equal(result.result.inferenceVerified, false);
+    assert.equal(Number.isFinite(result.result.retryAt), status === 429);
+    assert.ok(!JSON.stringify(result).includes('fixture-env-only'));
+  }
+  assert.equal(requester.mock.calls[0].arguments[0].headers.authorization, 'Bearer fixture-env-only');
+  env.OPENAI_API_KEY = 'rotated-fixture';
+  const stale = await http(handle, 'POST', root + '/test', { requestId: 'test-rotated', draftId, draftRevision,
+    consentId: grant.consentId, dialogGeneration: 1, requestSeq: seq + 1, force: true });
+  assert.equal(stale.body.code, 'invalid_target');
+});
 
 test('duplicate native commits share one config-first dispatch and a durable partial failure', async t => {
   const f = await setup(t);

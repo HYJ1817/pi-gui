@@ -53,7 +53,8 @@ const step = (n, msg) => console.log(`\n[${n}] ${msg}`);
  * 这类「参数指向不存在的文件但静默通过」的问题，只能靠顺序约束 + 断言挡住。 */
 step(1, '构建后端产物');
 const serverCjs = path.join(BUILD, 'server.cjs');
-if (process.argv.includes('--rebuild') || !fs.existsSync(serverCjs)) {
+const credentialWorker = path.join(BUILD, 'provider-credentials.cjs');
+if (process.argv.includes('--rebuild') || !fs.existsSync(serverCjs) || !fs.existsSync(credentialWorker)) {
   execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-exe.mjs'), ...(outputAt >= 0 ? ['--output-root', OUTPUT_ROOT] : [])], { stdio: 'inherit', cwd: ROOT });
 } else {
   console.log('  复用已有的 build/server.cjs（要重建加 --rebuild）');
@@ -84,6 +85,8 @@ for (const f of fs.readdirSync(path.join(ROOT, 'electron')).filter((n) => n.ends
   fs.copyFileSync(path.join(ROOT, 'electron', f), path.join(STAGE, f));
 }
 fs.copyFileSync(serverCjs, path.join(STAGE, 'server.cjs'));
+fs.mkdirSync(path.join(STAGE, 'private'), { recursive: true });
+fs.copyFileSync(credentialWorker, path.join(STAGE, 'private/provider-credentials.cjs'));
 /* 主进程日志核心与后端共用同一份实现；打包后平铺在 resources/app/ 下，
  * 与 electron/logging.cjs 的候选路径一致。 */
 for (const f of ['log-core.cjs', 'log-contract.cjs', 'zip.cjs']) {

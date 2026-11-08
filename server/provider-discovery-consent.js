@@ -10,16 +10,16 @@
  * 重授权状态机与磁盘持久化由 P3 接线。P2 不持久化任何 consentId。
  */
 import { randomUUID } from 'node:crypto';
-import { parseTarget, planCandidates } from './provider-network.js';
+import { classifyAddress, parseTarget, planCandidates, planScopedCandidates } from './provider-network.js';
 import { isOpaqueId, isProviderId, validateConnection } from '../public/provider-management/contract.js';
 
 const MAX_ACTIVE = 32;
 const MAX_REMEMBERED = 64;
 const DEFAULT_TTL_MS = 15 * 60_000;
 
-const sameTarget = (a, b) => a.protocol === b.protocol && a.host === b.host && a.port === b.port && a.basePath === b.basePath;
+const rememberKey = (id, target) => `${id}\n${target.protocol}\n${target.host}\n${target.port}\n${target.basePath}`;
 
-export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date.now } = {}) {
+export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date.now, strict = false, identityKey = () => null } = {}) {
   const active = new Map();
   const remembered = new Map();
 
@@ -44,36 +44,46 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
     const credentialAttached = credentialSource !== 'none';
     const loopback = request.loopback === true;
     if (loopback && credentialAttached) return { ok: false, code: 'policy_rejected', message: '该目标不允许携带凭据或不在已授权的路径策略内。' };
-    const candidatePaths = planCandidates(connection, request.api).slice(0, 8);
+    if (strict && (request.api !== connection.api || !isOpaqueId(request.draftId) || !isProviderId(request.providerId) ||
+        (credentialAttached ? !isOpaqueId(request.credentialRevision) : request.credentialRevision != null) ||
+        (['staged', 'stored'].includes(credentialSource) && !isOpaqueId(request.workerEpoch)) ||
+        (loopback && !target.isLoopbackName && classifyAddress(target.host) !== 'loopback') ||
+        (target.protocol !== 'https' && !loopback))) return { ok: false, code: 'policy_rejected' };
+    const candidatePaths = (strict ? planScopedCandidates(connection) : planCandidates(connection, request.api)).slice(0, 8);
     if (!candidatePaths.length) return { ok: false, code: 'invalid_request', message: '请求字段无效。' };
+    if (strict) revokeDraft(request.draftId);
     const consentId = randomUUID();
     const expires = now() + ttlMs;
     const record = {
       consentId, draftId: request.draftId, draftRevision: request.draftRevision,
       connectionRevision: request.connectionRevision, providerId: request.providerId,
-      api: request.api, target, candidatePaths, credentialSource, credentialAttached, loopback,
+      api: request.api, target: Object.freeze(target), candidatePaths: Object.freeze(candidatePaths), credentialSource, credentialAttached, loopback,
       credentialRevision: request.credentialRevision ?? null, expires, rememberTarget: request.rememberTarget === true,
+      workerEpoch: request.workerEpoch ?? null,
+      launchIdentity: identityKey(),
+      scoped: strict,
     };
     const controller = new AbortController();
     const timer = setTimeout(() => revoke(consentId), ttlMs);
     timer.unref?.();
-    active.set(consentId, { record, controller, timer });
+    active.set(consentId, { record: Object.freeze(record), controller, timer });
     if (record.rememberTarget && !loopback && credentialSource !== 'staged') {
       // 只记非秘密批准描述：目标、API、凭据来源与代次。凭据代次变化后重开必须重确认。
-      remembered.set(`${request.providerId}\n${target.protocol}\n${target.host}\n${target.port}\n${target.basePath}`, {
-        providerId: request.providerId, api: request.api, target, credentialSource,
+      remembered.set(rememberKey(request.providerId, target), {
+        consentId, providerId: request.providerId, api: request.api, target, credentialSource,
         credentialRevision: record.credentialRevision, createdAt: now(),
       });
     }
     return { ok: true, consentId, expiresAt: expires,
       targetSummary: { providerId: request.providerId, baseUrl: connection.baseUrl, api: request.api },
-      candidatePaths, credentialAttached, loopback };
+      candidatePaths: [...candidatePaths], credentialAttached, loopback };
   }
 
   function get(consentId, { now: at = now } = {}) {
     if (!isOpaqueId(consentId)) return null;
     const record = active.get(consentId)?.record;
-    if (!record || record.expires <= at()) return null;
+    if (!record) return null;
+    if (record.expires <= at() || record.launchIdentity !== identityKey()) { revoke(consentId); return null; }
     return record;
   }
 
@@ -88,6 +98,18 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
 
   function signalFor(consentId) {
     return active.get(consentId)?.controller.signal;
+  }
+
+  function revokeAndForget(consentId) {
+    const record = active.get(consentId)?.record;
+    const key = record ? rememberKey(record.providerId, record.target) : [...remembered].find(([, item]) => item.consentId === consentId)?.[0];
+    const forgotten = key && remembered.get(key)?.consentId === consentId ? remembered.delete(key) : false;
+    return revoke(consentId) || forgotten;
+  }
+
+  function forDraft(draftId) {
+    for (const [id, { record }] of active) if (record.draftId === draftId) return get(id);
+    return null;
   }
 
   function revokeDraft(draftId) {
@@ -110,7 +132,7 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
     prune();
     const target = parseTarget(connection?.baseUrl);
     if (!target) return null;
-    const record = remembered.get(`${providerId}\n${target.protocol}\n${target.host}\n${target.port}\n${target.basePath}`);
+    const record = remembered.get(rememberKey(providerId, target));
     if (!record || record.api !== api || record.credentialSource !== credentialSource ||
         (record.credentialRevision ?? null) !== (credentialRevision ?? null)) return null;
     return { ...record, remembered: true };
@@ -125,6 +147,6 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
     remembered.clear();
   }
 
-  return { issue, get, signalFor, revoke, revokeDraft, revokeDraftConnection, matchRemembered, forgetDraft, dispose,
+  return { issue, get, forDraft, signalFor, revoke, revokeAndForget, revokeDraft, revokeDraftConnection, matchRemembered, forgetDraft, dispose,
     get size() { prune(); return active.size; } };
 }

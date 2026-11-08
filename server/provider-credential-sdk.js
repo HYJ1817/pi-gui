@@ -1,9 +1,10 @@
 import fs from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { resolveAuthSdk } from './provider-auth-sdk.js';
-import { credentialWorkerSource } from './provider-credentials.js';
+import { hasBundledAssets, readAsset } from '../lib/assets.js';
 import { isLiteralKeyInput, isOpaqueId, isProviderId, isRecord, validateConnection } from '../public/provider-management/contract.js';
 
 export const providerKeyInputEnabled = false;
@@ -32,19 +33,27 @@ function normalizeBinding(binding) {
 }
 
 export function createProviderCredentialSdk({ resolvePackageDir, identityKey, authPath, env = process.env, enabled = providerKeyInputEnabled,
-  authorizeStorage = () => false, ttlMs = 15 * 60_000, timeoutMs = 15000 } = {}) {
+  authorizeStorage = () => false, ttlMs = 15 * 60_000, timeoutMs = 15000, workerFactory = (entry, options) => new Worker(entry, options) } = {}) {
   const location = path.resolve(authPath);
-  let worker, workerIdentity, sequence = 0;
+  let worker, workerIdentity, workerEpoch, sequence = 0;
   const pending = new Map();
   let draining = null;
   function dispose() {
     const retired = worker;
     worker = null;
     workerIdentity = null;
+    workerEpoch = null;
     if (draining) clearTimeout(draining.timer);
     draining = null;
-    for (const item of pending.values()) item.finish(fail('unavailable', item.mutation ? null : false));
-    return retired?.terminate();
+    const discoveries = [];
+    for (const item of pending.values()) {
+      if (item.discovery) {
+        if (item.worker === retired) { item.revoke(); discoveries.push(item); }
+      } else item.finish(fail('unavailable', item.mutation ? null : false));
+    }
+    const stopped = retired?.terminate();
+    void stopped?.then(() => { for (const item of discoveries) item.finish(fail('aborted')); }).catch(() => {});
+    return stopped;
   }
   function ensure() {
     try {
@@ -61,9 +70,12 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
       if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return false;
       const workerEnv = Object.fromEntries(['SystemRoot','SYSTEMROOT','WINDIR','PATH','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','TEMP','TMP'].filter(key => typeof env[key] === 'string').map(key => [key, env[key]]));
       workerEnv.PI_OFFLINE = '1';
-      const current = worker = new Worker(credentialWorkerSource, { eval: true, execArgv: [], env: workerEnv, stdout: true, stderr: true,
+      const bundled = hasBundledAssets();
+      const workerEntry = bundled ? readAsset('private/provider-credentials.cjs').toString('utf8') : new URL('./provider-credentials.js', import.meta.url);
+      const current = worker = workerFactory(workerEntry, { eval: bundled, execArgv: [], env: workerEnv, stdout: true, stderr: true,
         workerData: { entry: resolved.entry, authPath: location, ttlMs } });
       workerIdentity = identity;
+      workerEpoch = randomUUID();
       current.stdout.resume();
       current.stderr.resume();
       current.on('message', message => {
@@ -78,7 +90,9 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
         }
         const item = pending.get(message?.id);
         if (!item) return;
-        item.finish(message.result);
+        if (item.discovery && message.discoveryStopped !== true) return;
+        const result = item.identify && message.result ? { ...message.result, workerEpoch } : message.result;
+        item.finish(result);
         if (item.mutation && message.nativeQuiesced === true && message.result?.credentialSaved === null) {
           void Promise.resolve().then(() => item.onQuiesced?.()).catch(() => {});
         }
@@ -116,7 +130,7 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
         if (pending.size === 0 && !draining) current.unref();
         resolve(result);
       }
-      pending.set(id, { finish, mutation, onQuiesced });
+      pending.set(id, { finish, mutation, onQuiesced, identify: ['stage', 'stage-clear', 'inspect-discovery'].includes(action) });
       signal?.addEventListener('abort', abort, { once: true });
       try { current.postMessage({ id, action, ...payload }); } catch { finish(fail('unavailable', mutation ? null : false)); }
     });
@@ -127,6 +141,34 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
     if (typeof result?.ok === 'boolean' && [true,false,null].includes(result.present)) return result;
     if (authPathAbsent(location)) return { ...unknown(), ok: true, present: false };
     return unknown();
+  }
+  function discoverNative(inputBinding, grant, { deadline, signal }) {
+    const binding = normalizeBinding(inputBinding);
+    if (!enabled || !binding || !grant?.credentialAttached || signal?.aborted) return Promise.resolve(fail('invalid_target'));
+    if (pending.size >= 32 || !ensure()) return Promise.resolve(fail('unsupported'));
+    const current = worker;
+    if (grant.workerEpoch !== workerEpoch) return Promise.resolve(fail('invalid_target'));
+    if ([...pending.values()].some(item => item.discovery && item.worker === current && item.revoked())) return Promise.resolve(fail('config_busy'));
+    const id = ++sequence;
+    const permit = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+    const revoke = () => { Atomics.store(permit, 0, 2); };
+    current.ref();
+    return new Promise(resolve => {
+      function finish(result) {
+        signal?.removeEventListener('abort', abort);
+        pending.delete(id);
+        if (pending.size === 0 && !draining) current.unref();
+        resolve(result);
+      }
+      function abort() {
+        revoke();
+        try { current.postMessage({ action: 'cancel-discovery', id }); } catch { /* Worker exit confirms cleanup. */ }
+      }
+      pending.set(id, { worker: current, discovery: true, finish, revoke, revoked: () => Atomics.load(permit, 0) === 2 });
+      signal?.addEventListener('abort', abort, { once: true });
+      try { current.postMessage({ id, action: 'discover', binding, grant, permit, deadline }); }
+      catch { finish(fail('unavailable')); }
+    });
   }
   function stage(action, inputBinding, input, options) {
     if (!enabled) return Promise.resolve(fail('unsupported'));
@@ -152,7 +194,9 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
     return call(action, { binding, stagedRevision }, true, signal, onQuiesced);
   }
   return {
-    inspect, readback: inspect, canPersist,
+    inspect, readback: inspect, canPersist, discoverNative,
+    currentWorkerEpoch: () => { try { return worker && workerIdentity === identityKey() ? workerEpoch : null; } catch { return null; } },
+    inspectDiscovery: providerId => isProviderId(providerId) ? call('inspect-discovery', { providerId }) : Promise.resolve(unknown()),
     stageNativeLogin: (binding, input, options) => stage('stage', binding, input, options),
     stageClear: (binding, options) => stage('stage-clear', binding, null, options),
     persistNative: (binding, revision, options) => persist('persist', binding, revision, options),

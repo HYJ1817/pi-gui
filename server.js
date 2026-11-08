@@ -51,6 +51,7 @@ import { createProjectConfig } from './server/project-config.js';
 import { createSpecs } from './server/specs.js';
 import { createProviders } from './server/providers.js';
 import { createProviderManagement } from './server/provider-management.js';
+import { guardNativeCredentialTarget, own, targetChanged } from './server/provider-config-records.js';
 import { createProviderCredentialSdk } from './server/provider-credential-sdk.js';
 import { createProviderCredentialBridge } from './server/provider-credential-bridge.js';
 import { createDiscoveryConsentStore } from './server/provider-discovery-consent.js';
@@ -503,10 +504,25 @@ const providers = createProviders({ modelsJson: MODELS_JSON, metadataPath: path.
   inspectCredential: providerCredentials.inspect, mutationBlocked: providerMutationBlocked });
 try { providers.store.recoverPending(); } catch { /* Configuration endpoints surface the fixed recovery error. */ }
 const providerManagementEnabled = process.env.PI_GUI_PROVIDER_MANAGEMENT === '1';
-const providerDiscoveryConsents = createDiscoveryConsentStore();
+const providerDiscoveryConsents = createDiscoveryConsentStore({ strict: true, identityKey: piLaunch.identityKey });
+const storedDiscoveryTarget = draft => {
+  if (!draft || draft.authMode !== 'pi-credential') return false;
+  try {
+    const current = providers.store.read();
+    const previous = own(current.config.providers, draft.providerId);
+    if (!previous || targetChanged(previous, draft.connection)) return false;
+    guardNativeCredentialTarget(current, draft, { builtIn: false }, 'apply-staged');
+    return true;
+  } catch { return false; }
+};
 const providerManagement = createProviderManagement({ store: providers.store, inspectCredential: providerCredentials.inspect,
   readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled,
   invalidateDraft: id => providerCredentialBridge.invalidateDraft(id),
+  discovery: providerManagementEnabled ? { consentStore: providerDiscoveryConsents, launchIdentity: piLaunch.identityKey,
+    nativeCurrent: (grant, draft) => providerCredentialBridge.currentDiscovery(grant, draft),
+    verifyNative: (grant, draft) => providerCredentialBridge.verifyDiscovery(grant, draft),
+    executeNative: (grant, draft, options) => providerCredentialBridge.runDiscovery(grant, draft, options),
+  } : null,
   nativeCredentials: process.send && providerKeyInputEnabled ? {
     authorize: (binding, options) => providerCredentialBridge.authorizeNative(binding, options),
     persist: (approval, options) => providerCredentialBridge.persistApproved(approval, options),
@@ -517,6 +533,7 @@ const providerManagement = createProviderManagement({ store: providers.store, in
   desktopCapabilities: () => providerCredentialBridge.desktopCapability() });
 const providerCredentialBridge = createProviderCredentialBridge({ sdk: providerCredentials,
   draftLookup: providerManagement.draftSnapshot, consentStore: providerDiscoveryConsents,
+  storedDiscoveryTarget,
   draftFrozen: providerManagement.draftFrozen, forgetDraft: providerManagement.forgetDraft,
   nativePersistence: () => providerManagementEnabled && providerStorageQualified(),
   mutationBlocked: providerMutationBlocked, maintenanceLocked: () => updateMaintenance.locked(),
@@ -872,6 +889,7 @@ function runPiCliCommand(args, opts = {}) {
 /** 清掉所有与 Pi 包 identity 绑定的缓存。**顺序即语义**：identity 先失效。 */
 function invalidatePiCaches() {
   piLaunch.reset();
+  providerDiscoveryConsents.dispose();
   piVersion.reset();
   piBuiltins.reset();
   probes.reset();

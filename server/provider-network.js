@@ -44,6 +44,13 @@ const FAILURES = Object.freeze({
 const fail = (code, status) => ({ ok: false, code: FAILURES[code][0], message: FAILURES[code][1], ...(status ? { status } : {}) });
 
 const isRecord = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+const retryAt = value => {
+  if (typeof value !== 'string' || value.length > 40) return undefined;
+  const now = Date.now();
+  const at = /^\d{1,4}$/.test(value) ? now + Number(value) * 1000 :
+    /^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/.test(value) ? Date.parse(value) : NaN;
+  return at >= now && at <= now + 30 * 60_000 ? at : undefined;
+};
 
 /* ---------- 地址分类 ---------- */
 
@@ -116,12 +123,27 @@ export function planCandidates(connection, api) {
   return buildCandidates(connection.baseUrl, api).slice(0, MAX_CANDIDATES).map(url => new URL(url).href);
 }
 
+export function planScopedCandidates(connection) {
+  const root = parseTarget(connection.baseUrl);
+  if (!root || /%(?:2f|5c|2e|25|00)/i.test(root.basePath) || /\/\//.test(root.basePath)) return [];
+  return planCandidates(connection, connection.api).filter(candidate => {
+    const target = parseTarget(candidate);
+    return target && target.protocol === root.protocol && target.host === root.host && target.port === root.port &&
+      insideBasePath(target, root);
+  });
+}
+
+function insideBasePath(target, root) {
+  return target.basePath.startsWith(`${root.basePath}/`) && !/%(?:2f|5c|2e|25|00)|\/\//i.test(target.basePath);
+}
+
 /** 目标是否允许本次凭据来源。核心策略：
  *  - 公共地址：必须 HTTPS；http 一律拒绝（旧 LAN 配置不自动发现）。
  *  - loopback（名字或解析地址）：必须显式 loopback 授权且无秘密。
  *  - 其他私网 / 链路本地 / 元数据 / 未指定地址：一律拒绝。 */
 export function targetPolicy({ target, addressClass, credentialAttached, loopbackAuthorized }) {
   if (!isRecord(target) || typeof addressClass !== 'string') return 'invalid_target';
+  if (target.isLoopbackName && addressClass !== 'loopback') return 'private_address';
   if (addressClass === 'loopback' || target.isLoopbackName) {
     return loopbackAuthorized === true && credentialAttached === false ? null : 'loopback_requires_consent';
   }
@@ -139,7 +161,7 @@ function pickRequester(protocol) { return protocol === 'https:' ? https.request 
  * - 重定向一律拒绝（不跟随、不跨源携带任何头）。
  * - signal 贯穿到 socket destroy；超时同样走 abort。
  * - 响应体边读边计数，超限即断。 */
-function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxBytes = MAX_BYTES, io = {} }) {
+function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxBytes = MAX_BYTES, io = {}, admit }) {
   const target = parseTarget(url);
   if (!target || !Array.isArray(addresses) || addresses.length === 0) return Promise.resolve(fail('invalid_target'));
   const controller = new AbortController();
@@ -182,8 +204,14 @@ function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxB
       },
     };
     let req;
-    try { req = (io.requester ?? pickRequester(`${target.protocol}:`))(options); }
+    let release;
+    try {
+      release = admit?.();
+      if (admit && !release) return finish(fail('aborted'));
+      req = (io.requester ?? pickRequester(`${target.protocol}:`))(options);
+    }
     catch { return finish(fail('network_failed')); }
+    finally { release?.(); }
     let received = 0;
     const chunks = [];
     req.on('error', () => finish(controller.signal.aborted ? fail(controller.signal.reason === 'timeout' ? 'timeout' : 'aborted') : fail('network_failed')));
@@ -194,20 +222,21 @@ function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxB
         return;
       }
       if (res.statusCode >= 300 && res.statusCode < 400) {
-        finish(fail('redirect_rejected'));
+        finish(fail('redirect_rejected', res.statusCode));
         res.destroy();
         return;
       }
       const declared = Number(res.headers['content-length'] ?? 0);
-      if (declared > maxBytes) { finish(fail('too_large')); res.destroy(); return; }
+      if (declared > maxBytes) { finish(fail('too_large', res.statusCode)); res.destroy(); return; }
       res.on('data', chunk => {
         if (settled) return;
         received += chunk.length;
-        if (received > maxBytes) { finish(fail('too_large')); res.destroy(); return; }
+        if (received > maxBytes) { finish(fail('too_large', res.statusCode)); res.destroy(); return; }
         chunks.push(chunk);
       });
       res.on('end', () => {
-        if (!settled) finish({ ok: true, status: res.statusCode, body: Buffer.concat(chunks) });
+        if (!settled) finish({ ok: true, status: res.statusCode, body: Buffer.concat(chunks),
+          ...(res.statusCode === 429 ? { retryAt: retryAt(res.headers['retry-after']) } : {}) });
       });
     });
     try { req.end(); }
@@ -303,7 +332,7 @@ export function sanitizeModelEntry(item, secrets = []) {
 
 /** 解析模型目录响应：形状护栏 + 输出白名单。secrets 传当前使用的密钥值，
  * 出现在 id/name 等字段即整条丢弃（供应商回显请求头是真实发生过的形态）。 */
-export function pickModelList(json, secrets = []) {
+export function pickModelList(json, secrets = [], api) {
   if (!isRecord(json) && !Array.isArray(json)) return { ok: false, ...fail('not_json') };
   const arr = Array.isArray(json) ? json : Array.isArray(json.models) ? json.models : Array.isArray(json.data) ? json.data : null;
   if (!arr) return { ok: false, ...fail('not_json') };
@@ -311,10 +340,39 @@ export function pickModelList(json, secrets = []) {
   const cleaned = [];
   const seen = new Set();
   const scanned = arr.slice(0, MAX_MODELS);
+  let invalid = 0;
   for (const item of scanned) {
-    const model = sanitizeModelEntry(item, safeSecrets);
+    let entry = item;
+    let ignored = false;
+    if (api && isRecord(item)) {
+      entry = { ...item };
+      const scalarMetadata = api === 'anthropic-messages' ? ['type','created_at'] :
+        api.startsWith('openai-') ? ['object','created','owned_by'] : ['version','description','temperature','maxTemperature','topP','topK','thinking'];
+      for (const field of scalarMetadata) {
+        if (!Object.hasOwn(entry, field)) continue;
+        const value = entry[field];
+        if ((typeof value === 'string' && safeText(value, 2048)) || (typeof value === 'number' && Number.isFinite(value)) ||
+            (field === 'thinking' && typeof value === 'boolean')) delete entry[field];
+      }
+      if (api === 'google-generative-ai') {
+        const methods = entry.supportedGenerationMethods;
+        if (methods !== undefined && (!Array.isArray(methods) || methods.length > 32 || !methods.every(value => safeText(value, 64)))) {
+          invalid++;
+          continue;
+        }
+        ignored = Boolean(methods?.length && !methods.includes('generateContent'));
+        if (typeof (entry.name ?? entry.id) === 'string') {
+          entry.id = (entry.name ?? entry.id).replace(/^models\//u, '');
+          delete entry.name;
+        }
+      }
+    }
+    const model = sanitizeModelEntry(entry, safeSecrets);
+    if (!model) { invalid++; continue; }
+    if (ignored) continue;
     if (model && !seen.has(model.id)) { seen.add(model.id); cleaned.push(model); }
   }
+  if (api && !cleaned.length && invalid) return fail('not_json');
   return { ok: true, models: cleaned, truncated: arr.length > MAX_MODELS, dropped: arr.length - cleaned.length };
 }
 
@@ -339,10 +397,8 @@ function verifyConsent(consentStore, consentId, url, credentialRevision) {
   }
   const target = parseTarget(url);
   if (!target) return { error: fail('invalid_target') };
-  /* 目标身份（协议/host/port/basePath 根）必须与授权一致，防止把 A 目标的
-   * consent 用到 B 目标；具体路径的合法性由授权的候选路径集合决定——
-   * planCandidates 的逐级回退路径（如 /models）在签发时已整组批准。 */
-  if (target.protocol !== consent.target.protocol || target.host !== consent.target.host || target.port !== consent.target.port) {
+  if (target.protocol !== consent.target.protocol || target.host !== consent.target.host || target.port !== consent.target.port ||
+      (consent.scoped && !insideBasePath(target, consent.target))) {
     return { error: fail('policy_rejected') };
   }
   if (!consent.candidatePaths.includes(url)) return { error: fail('policy_rejected') };
@@ -351,8 +407,8 @@ function verifyConsent(consentStore, consentId, url, credentialRevision) {
 
 export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_BYTES,
   maxTotalMs = MAX_TOTAL_MS, io = {}, lookup, now = () => performance.now() } = {}) {
-  return async function discover({ consentId, url, key = null, credentialRevision, signal }) {
-    const deadline = now() + maxTotalMs;
+  return async function discover({ consentId, url, key = null, credentialRevision, signal, deadline: acceptedDeadline, admit }) {
+    const deadline = Number.isFinite(acceptedDeadline) ? Math.min(acceptedDeadline, now() + maxTotalMs) : now() + maxTotalMs;
     if (signal?.aborted) return fail('aborted');
     const initial = verifyConsent(consentStore, consentId, url, credentialRevision);
     if (initial.error) return initial.error;
@@ -374,7 +430,13 @@ export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIM
     try {
       const stopped = check(url);
       if (stopped) return stopped;
-      const resolved = await resolveTargetAddresses({ host: target.host, lookup: lookup ?? io.lookup, signal: operationSignal });
+      const resolve = lookup ?? io.lookup ?? dns.promises.lookup;
+      const authorizedLookup = admit ? (...args) => {
+        const release = admit();
+        if (!release) throw new DOMException('Discovery revoked', 'AbortError');
+        try { return resolve(...args); } finally { release(); }
+      } : resolve;
+      const resolved = await resolveTargetAddresses({ host: target.host, lookup: authorizedLookup, signal: operationSignal });
       const afterDns = check(url);
       if (afterDns) return afterDns;
       if (!resolved.ok) return resolved;
@@ -397,7 +459,7 @@ export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIM
         /* 严格 30s：单次请求的超时截到总时限剩余，不得靠最后一次请求突破总上限。 */
         const attemptTimeout = Math.min(timeoutMs, Math.ceil(remaining));
         const result = await restrictedFetch({ url: candidate, headers, addresses: resolved.addresses,
-          timeoutMs: attemptTimeout, signal: operationSignal, maxBytes, io });
+          timeoutMs: attemptTimeout, signal: operationSignal, maxBytes, io, admit });
         const afterRequest = check(candidate);
         if (afterRequest) return afterRequest;
         if (!result.ok) {
@@ -405,16 +467,19 @@ export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIM
           lastStatus = result.status ?? null;
           continue;
         }
-        if (result.status === 401 || result.status === 403 || result.status === 429) return fail('http_status', result.status);
+        if (result.status === 401 || result.status === 403 || result.status === 429) {
+          return { ...fail('http_status', result.status), ...(result.retryAt === undefined ? {} : { retryAt: result.retryAt }) };
+        }
         if (result.status < 200 || result.status >= 300) { lastStatus = result.status; continue; }
         let json;
-        try { json = JSON.parse(result.body.toString('utf8')); } catch { return check(candidate) ?? fail('not_json'); }
+        try { json = JSON.parse(result.body.toString('utf8')); } catch { return check(candidate) ?? fail('not_json', result.status); }
         /* 密钥（以及原始请求头值）传入白名单：出现在任何模型字段里的
          * 哨兵即整条丢弃，供应商回显头不会进普通前端。 */
-        const picked = pickModelList(json, [...(credentialAttached ? [key] : []), ...Object.values(headers).filter(header => typeof header === 'string' && header.length > 8)]);
+        const picked = pickModelList(json, [...(credentialAttached ? [key] : []), ...Object.values(headers).filter(header => typeof header === 'string' && header.length > 8)],
+          consent.scoped ? consent.api : undefined);
         const beforeReturn = check(candidate);
         if (beforeReturn) return beforeReturn;
-        if (!picked.ok) return picked;
+        if (!picked.ok) return { ...picked, status: result.status };
         return { ok: true, source: candidate, models: picked.models, truncated: picked.truncated, dropped: picked.dropped, status: result.status };
       }
       return fail(lastStatus ? 'http_status' : 'network_failed', lastStatus ?? undefined);

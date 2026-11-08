@@ -59,6 +59,11 @@ function main() {
   add('revert-object/observe.ps1', path.join(ROOT, 'server/session-revert-object-native.ps1'));
   add('revert-object/write.ps1', path.join(ROOT, 'server/session-revert-object-write-native.ps1'));
   add('candidate/write.ps1', path.join(ROOT, 'server/candidate-write-native.ps1'));
+  const credentialWorker = path.join(BUILD, 'provider-credentials.cjs');
+  const credentialBundle = esbuild.buildSync({ entryPoints: [path.join(ROOT, 'server/provider-credentials.js')],
+    bundle: true, platform: 'node', format: 'cjs', target: 'node22', write: false });
+  fs.writeFileSync(credentialWorker, credentialBundle.outputFiles[0].contents);
+  add('private/provider-credentials.cjs', credentialWorker);
 
   for (const [key, sub] of [
     ['pdfjs/standard_fonts', 'standard_fonts'],

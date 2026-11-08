@@ -3,6 +3,7 @@ import { json, readBody } from './http-utils.js';
 import { apiKeyState, publicProviderConfig } from './providers.js';
 import { applyProviderCommit, guardNativeCredentialTarget, own } from './provider-config-records.js';
 import { createNativeCommit } from './provider-management-commit.js';
+import { createProviderManagementDiscovery } from './provider-management-discovery.js';
 import { EDITABLE_MODEL_FIELDS, PROVIDER_API_TYPES, PROVIDER_CATALOG, PROVIDER_MANAGEMENT_SCHEMA_VERSION, isModelId, isOpaqueId, isProviderId, isRecord,
   providerContractError, providerErrorStatus, providerFailure, providerManagementCapabilities, validateModelValues, validateProviderRequest } from '../public/provider-management/contract.js';
 
@@ -67,15 +68,21 @@ function projectService(id, config, meta, auth) {
 }
 
 export function createProviderManagement({ store, inspectCredential, readAuth = () => null, mutationBlocked = () => false, now = Date.now,
-  enabled = false, desktopCapabilities = null, nativeCredentials = null, invalidateDraft = () => {} }) {
+  enabled = false, desktopCapabilities = null, nativeCredentials = null, invalidateDraft = () => {}, discovery = null }) {
   const drafts = new Map();
   const receipts = new Map();
   const nativeCommit = nativeCredentials && createNativeCommit({ store, credentials: nativeCredentials, mutationBlocked });
+  const discoveryService = discovery && createProviderManagementDiscovery({ ...discovery, draftLookup: draftSnapshot,
+    draftFrozen: id => nativeCommit?.hasDraft(id), now });
+  function invalidate(id) {
+    discoveryService?.invalidate(id);
+    invalidateDraft(id);
+  }
   function prune() {
     const time = now();
     for (const [id, item] of drafts) if (item.expires <= time) {
       drafts.delete(id);
-      invalidateDraft(id);
+      invalidate(id);
     }
     for (const [id, item] of receipts) if (item.expires <= time) receipts.delete(id);
   }
@@ -107,7 +114,8 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     const item = drafts.get(draftId);
     if (!item) return null;
     return { draftId, draftRevision: item.draftRevision, connectionRevision: item.connectionRevision,
-      serviceId: item.serviceId, providerId: item.draft.providerId, connection: item.draft.connection, expires: item.expires };
+      serviceId: item.serviceId, providerId: item.draft.providerId, connection: item.draft.connection, expires: item.expires,
+      authMode: item.draft.authMode, revision: item.revision, targetFingerprint: item.targetFingerprint };
   }
 
   function saveDraft(request) {
@@ -119,7 +127,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     }
     const current = store.read();
     if (nativeCommit?.hasDraft(request.draftId)) providerFailure('config_busy');
-    if (own(current.metadata.receipts, request.requestId)) providerFailure('request_id_conflict');
+    if (own(current.metadata.receipts, request.requestId) || discoveryService?.hasRequest(request.requestId)) providerFailure('request_id_conflict');
     if (current.revision !== request.expectedRevision) providerFailure('config_conflict');
     const prior = request.draftId ? drafts.get(request.draftId) : null;
     if (request.draftId && (!prior || prior.draftRevision !== request.expectedDraftRevision || prior.serviceId !== request.serviceId || prior.revision !== request.expectedRevision)) providerFailure('draft_conflict');
@@ -132,7 +140,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     const connectionRevision = prior ? prior.connectionRevision + Number(prior.targetFingerprint !== targetFingerprint) : 1;
     const expires = now() + draftTtlMs;
     drafts.set(draftId, { draft, draftRevision, connectionRevision, targetFingerprint, expires, serviceId: request.serviceId, revision: request.expectedRevision });
-    if (prior && prior.connectionRevision !== connectionRevision) invalidateDraft(draftId);
+    if (prior && prior.connectionRevision !== connectionRevision) invalidate(draftId);
     const result = { ok: true, draftId, draftRevision, connectionRevision, targetFingerprint,
       credentialState: 'none', consentState: 'unapproved', cachedModels: [], sourceKind: 'none' };
     receipts.set(request.requestId, { result, fingerprint, expires });
@@ -144,7 +152,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     const action = request.credentialAction?.type;
     const native = action === 'apply-staged' || action === 'clear-native';
     if (native && !nativeCommit) providerFailure('unsupported');
-    if (receipts.has(request.requestId)) providerFailure('request_id_conflict');
+    if (receipts.has(request.requestId) || discoveryService?.hasRequest(request.requestId)) providerFailure('request_id_conflict');
     const staged = drafts.get(request.draftId);
     const fingerprint = digest(request);
     function assertDraft() {
@@ -157,6 +165,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
         assertDraft();
         const { draft, connectionRevision } = staged;
         if (request.action === 'clone' || (action === 'apply-staged' && draft.authMode !== 'pi-credential')) providerFailure('unsupported');
+        discoveryService?.invalidate(request.draftId);
         return { draftId: request.draftId, providerId: draft.providerId, connection: draft.connection, connectionRevision, action };
       },
       apply(current, credential) {
@@ -167,10 +176,12 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     if (mutationBlocked() || nativeCommit?.hasDraft(request.draftId)) providerFailure('config_busy');
     const providerId = staged?.draft.providerId ?? request.serviceId;
     const credential = providerId ? await inspectCredential(providerId) : null;
-    return store.transact({ expectedRevision: request.expectedRevision, requestId: request.requestId, fingerprint, apply(current) {
+    const saved = store.transact({ expectedRevision: request.expectedRevision, requestId: request.requestId, fingerprint, apply(current) {
       assertDraft();
       return applyProviderCommit(current, request, staged?.draft, credential);
     } });
+    if (request.draftId) discoveryService?.invalidate(request.draftId);
+    return saved;
   }
 
   const post = new Map([['/drafts','drafts'], ['/commit','commit'], ['/discovery-authorizations','authorize'],
@@ -183,15 +194,28 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       if (!suffix && req.method === 'GET') return json(res, 200, await snapshot());
       const operation = /^\/operations\/([^/]+)(\/cancel)?$/.exec(suffix);
       if (operation && !isOpaqueId(operation[1])) providerFailure('invalid_request');
-      if (operation && !operation[2] && req.method === 'GET') providerFailure('unsupported');
+      if (operation && !operation[2] && req.method === 'GET') {
+        if (!discoveryService) providerFailure('unsupported');
+        return json(res, 200, await discoveryService.get(operation[1]));
+      }
       const kind = operation?.[2] ? 'cancel' : post.get(suffix);
       if (!kind) providerFailure(!suffix || operation ? 'method_not_allowed' : 'not_found');
       if (req.method !== 'POST') providerFailure('method_not_allowed');
       let value;
       try { value = JSON.parse(await readBody(req)); } catch { providerFailure('invalid_request'); }
       const request = validateProviderRequest(kind, value);
-      if (kind === 'drafts') return json(res, 200, saveDraft(request));
+      if (kind === 'drafts') {
+        const result = saveDraft(request);
+        return json(res, 200, discoveryService ? await discoveryService.projectDraft(result) : result);
+      }
       if (kind === 'commit') return json(res, 200, await commit(request));
+      if (discoveryService && kind !== 'sync') {
+        let persisted;
+        try { persisted = own(store.read().metadata.receipts, request.requestId); }
+        catch (error) { if (kind !== 'cancel' && kind !== 'revoke') throw error; }
+        if (receipts.has(request.requestId) || persisted) providerFailure('request_id_conflict');
+        return json(res, kind === 'discover' || kind === 'test' ? 202 : 200, await discoveryService.post(kind, operation?.[1], request));
+      }
       providerFailure('unsupported');
     } catch (error) {
       const result = providerContractError(error?.code, error?.providerMutation === true ? error.fieldErrors : undefined);
@@ -201,6 +225,6 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
   return { handle, draftSnapshot,
     nativeInFlight: () => nativeCommit?.inFlight() === true,
     draftFrozen: id => nativeCommit?.hasDraft(id) === true,
-    forgetDraft: id => drafts.delete(id),
+    forgetDraft(id) { drafts.delete(id); discoveryService?.invalidate(id); },
   };
 }

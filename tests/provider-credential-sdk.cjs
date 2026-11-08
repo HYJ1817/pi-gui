@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 const { Readable } = require('node:stream');
+const { Worker } = require('node:worker_threads');
 
 const fakeSdk = String.raw`
 import fs from 'node:fs';
@@ -82,6 +83,93 @@ async function stage(sdk, key, context = binding, confirmOAuthReplacement = fals
   const state = await sdk.inspect(context.providerId);
   return sdk.stageNativeLogin(context, key, { expectedCredentialRevision: state.credentialRevision, confirmOAuthReplacement });
 }
+
+test('the private discovery worker admits no requester after revocation even if its cancel frame is delayed', async t => {
+  const counts = new Int32Array(new SharedArrayBuffer(4 * Int32Array.BYTES_PER_ELEMENT));
+  const testModule = String.raw`
+import dns from 'node:dns';
+import https from 'node:https';
+import { EventEmitter } from 'node:events';
+import { workerData } from 'node:worker_threads';
+const { counts, workerEntry } = workerData;
+dns.promises.lookup = async () => {
+  Atomics.add(counts, 0, 1);
+  Atomics.notify(counts, 0);
+  await Atomics.waitAsync(counts, 2, 0).value;
+  return [{ address: '93.184.216.34' }];
+};
+https.request = options => {
+  Atomics.add(counts, 1, 1);
+  if (options.headers.authorization === 'Bearer synthetic-private-discovery') Atomics.store(counts, 3, 1);
+  const req = new EventEmitter();
+  req.end = () => queueMicrotask(() => {
+    const res = new EventEmitter();
+    Object.assign(res, { statusCode: 200, headers: {}, destroy() {} });
+    req.emit('response', res);
+    res.emit('data', Buffer.from(JSON.stringify({data:[{id:'fixture-model',object:'model',created:1,owned_by:'fixture'}]})));
+    res.emit('end');
+  });
+  return req;
+};
+await import(workerEntry);
+`;
+  const { sdk, authPath } = await setup(t, { workerFactory(entry, options) {
+    const worker = new Worker(new URL(`data:text/javascript;base64,${Buffer.from(testModule).toString('base64')}`),
+      { ...options, workerData: { ...options.workerData, counts, workerEntry: entry.href } });
+    const send = worker.postMessage.bind(worker);
+    worker.postMessage = message => { if (message.action !== 'cancel-discovery') send(message); };
+    return worker;
+  } });
+  const { createDiscoveryConsentStore } = await import('../server/provider-discovery-consent.js');
+  const consents = createDiscoveryConsentStore({ strict: true });
+  t.after(() => consents.dispose());
+  const staged = await stage(sdk, 'synthetic-private-discovery');
+  const issued = consents.issue({ ...binding, draftRevision: 1, api: binding.connection.api, credentialSource: 'staged',
+    credentialRevision: staged.stagedRevision, workerEpoch: staged.workerEpoch });
+  assert.equal(issued.ok, true);
+  const grant = consents.get(issued.consentId);
+  Atomics.store(counts, 2, 1);
+  const first = await sdk.discoverNative(binding, grant, { deadline: performance.now() + 5000 });
+  assert.deepEqual(first.models, [{ id: 'fixture-model' }]);
+  assert.equal(Atomics.load(counts, 3), 1);
+  assert.ok(!JSON.stringify(first).includes('synthetic-private-discovery'));
+  Atomics.store(counts, 2, 0);
+  const abort = new AbortController();
+  const pending = sdk.discoverNative(binding, grant, { deadline: performance.now() + 5000, signal: abort.signal });
+  await Atomics.waitAsync(counts, 0, 1, 3000).value;
+  assert.equal(Atomics.load(counts, 0), 2);
+  abort.abort();
+  Atomics.store(counts, 2, 1);
+  Atomics.notify(counts, 2);
+  assert.equal((await pending).code, 'invalid_target');
+  assert.equal(Atomics.load(counts, 1), 1);
+
+  const writeFixture = key => fs.writeFileSync(authPath, JSON.stringify({ fixture: { type: 'api_key', key } }), { mode: 0o600 });
+  for (const expression of ['$FAKE_KEY', '!fixture-command']) {
+    writeFixture(expression);
+    const observed = await sdk.inspectDiscovery(binding.providerId);
+    assert.equal(observed.present, true);
+    assert.equal(observed.literal, false);
+    assert.equal(Object.hasOwn(observed, 'key'), false);
+  }
+  writeFixture('synthetic-private-discovery');
+  const stored = await sdk.inspectDiscovery(binding.providerId);
+  assert.equal(stored.literal, true);
+  const storedGrant = consents.get(consents.issue({ ...binding, draftRevision: 1, api: binding.connection.api, credentialSource: 'stored',
+    credentialRevision: stored.credentialRevision, workerEpoch: stored.workerEpoch }).consentId);
+  assert.deepEqual((await sdk.discoverNative(binding, storedGrant, { deadline: performance.now() + 5000 })).models, first.models);
+  Atomics.store(counts, 2, 0);
+  const beforeRotation = sdk.discoverNative(binding, storedGrant, { deadline: performance.now() + 5000 });
+  await Atomics.waitAsync(counts, 0, 3, 3000).value;
+  assert.equal(Atomics.load(counts, 0), 4);
+  writeFixture('synthetic-replacement-after-dns');
+  Atomics.store(counts, 2, 1);
+  Atomics.notify(counts, 2);
+  assert.equal((await beforeRotation).code, 'invalid_target');
+  await sdk.dispose();
+  assert.equal((await sdk.discoverNative(binding, storedGrant, { deadline: performance.now() + 5000 })).code, 'invalid_target');
+  assert.equal(Atomics.load(counts, 1), 2);
+});
 
 test('commit can use only the exact private stage generation, including clear', async t => {
   const { sdk, authPath } = await setup(t);
