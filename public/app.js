@@ -1222,7 +1222,7 @@ export async function restartPi() {
     title: '重启 pi？',
     message: busy
       ? '正在生成回答，重启会中断这一轮。\n\n磁盘上的会话与文件不受影响，重启后仍在。'
-      : '重启会重新加载配置；当前对话会在 pi 重连后从磁盘恢复。\n\n磁盘上的会话与文件不受影响。',
+      : '重启会重新加载配置；当前对话视图会保留，pi 重连后按现有配置恢复会话。\n\n磁盘上的会话与文件不受影响。',
     okText: '重启 pi',
   });
   if (ok !== true) return false;

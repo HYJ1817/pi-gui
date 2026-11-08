@@ -1055,13 +1055,14 @@ export async function removeProvider(name, { confirmed = false } = {}) {
 }
 
 export async function reloadPi() {
-  // 重载只重启 Pi 并让它在就绪后从磁盘恢复会话；不要主动清空当前对话视图。
-  // 若请求本身失败，保留视图并报告真实错误；完整 Runtime 同步留给 P3。
+  // 重载只重启 Pi，不主动清空当前对话视图；pi 重连时按现有启动配置
+  //（--continue / --session / PI_NO_CONTINUE）恢复会话。完整 Runtime 同步留给 P3。
+  // 若请求本身失败，保留视图并报告真实错误。
   const result = await restartBackend().catch(() => ({ ok: false, error: '重载请求没有完成，请重试。' }));
   if (!result || result.ok !== true) {
     toast(result?.error || '无法重载 pi 配置，请重试。', 'error', { important: true });
     return false;
   }
-  toast('正在重载 pi 配置；当前对话会在 pi 重连后从磁盘恢复。', 'info', { important: true });
+  toast('正在重载 pi 配置；当前对话视图会保留，pi 重连后按现有配置恢复会话。', 'info', { important: true });
   return true;
 }
