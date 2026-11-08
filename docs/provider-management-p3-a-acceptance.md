@@ -21,9 +21,13 @@ Pi 1.5.0 的原生 `AuthStorage.read` 会解码 API Key 的字面转义，公开
 | 桌面持久化成功 | 以进程级 `TMP`/`TEMP` 选择权限合格的系统临时目录，worker 使用隔离 fixture 自己的临时目录。`npm run test:provider-p2` 的网络 37/37、开窗 5/5、私桥 28/28、真实 Electron 47/47。真实后台子进程和假 Pi 包完成暂存、保存、回执重传与清除。 |
 | 沙箱 | 两组桌面运行的正常沙箱启动失败，均使用现有 `--no-sandbox` 回退。正常沙箱验收待验证。 |
 | 打包 | `npm run build:app -- --rebuild --output-root <临时目录>` 以本机 Electron ZIP 离线重建 SEA 和桌面包。打包后端的 OAuth 专项 119/119。打包 `resources/app/server.cjs` 的 SHA-256 为 `500d9248966a9a5cc3168f69aa4837f127af60c890129e32192cdab7a597ae6b`。 |
-| canonical | `tests/ci-test-plan.cjs` 确认 240 条命令、5 组精确覆盖。P3-A 全量结果待验证。 |
+| canonical 累计验证 | 行为提交 `e3a867f555ecff5a2f54bafae958c8646a0f68dd` 的 240 条命令均取得退出码 0。core 164/164、UI 24/24、安全 27/27、native 4/4、故障 21/21。逐组记录已与 `package.json` 展开的有序清单和同一计划摘要比对。这组证据来自本机分组和续跑。 |
 
 修复前的定向回归显示，缺少共享租约时 OAuth 在锁冲突下仍会调用适配器，缺少可信停止回执时不能正确恢复写入权限。修复后，未决记录跨实例保留，旧结果无法重放。第一次 Electron 持久化成功路径因低完整性测试 worker 不能在系统临时目录根创建注册文件而失败，收据正确记录配置部分成功。随后将测试子进程的临时路径设到已隔离 fixture，成功路径通过。
+
+本机 PowerShell 执行策略拒绝原工作区的既有未签名测试脚本，首次安全组、故障组和 native 组分别在 `session-revert-sacl-witness`、`session-revert-inplace-safety` 和 `session-revert-object-writer` 失败。复跑使用同一行为提交的干净工作树，安全和故障两组完整通过，native 组最后一条命令续跑为 19/19，前三条沿用首次通过记录。保留首次与复跑日志于 `%TEMP%/pi-gui-p3a-e3a867f-canonical` 和 `%TEMP%/pi-gui-p3a-e3a867f-qualified`。计划摘要为 `308984a0269d875c6a0c8746e71718abcb9e1be7bfe90419a8d8554831c98c60`。
+
+环境跳过按套件分别记录。SACL 见证 8 项、原地写入 2 项和对象见证 8 项缺少 `SeSecurityPrivilege`。协作存储与候选采纳另各有 1 项环境跳过。退出码证明未触发断言失败，跳过的断言仍未验证。
 
 Claude Code 使用 DeepSeek V4.1 Flash 独立核对 OAuth worker 的提前结束路径和凭据迟到回执。结果验证了按 worker 实例与请求 ID 配对的边界。复核限定在这两类竞态，完整安全验收仍需独立审查。
 
