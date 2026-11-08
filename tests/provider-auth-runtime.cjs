@@ -91,6 +91,21 @@ async function main() {
   }
   await bridgeCases(createAuthRuntimeSync);
   await singleFlightCases();
+  const { createProviderConfigSync } = await load('server/provider-config-sync.js');
+  let live = false, active = false;
+  let intent = { generation: null, unconfirmed: false };
+  const coordinator = createProviderConfigSync({ store: { readAuthSyncIntent: () => intent, read: () => ({ metadata: {} }) },
+    hasLiveRuntime: () => live, authMutationActive: () => active });
+  check('a fresh coordinator with no committed change is idle', () => assert.deepEqual(coordinator.snapshot(), { state: 'idle', reason: null }));
+  check('a saved configuration awaits a normal Runtime lifecycle', () => assert.deepEqual(coordinator.snapshot({ syncRequired: true }), { state: 'pending', reason: 'no_live_runtime' }));
+  intent = { generation: 'fixture-generation', unconfirmed: false };
+  live = true;
+  check('an existing Runtime cannot prove it loaded the new auth generation', () => assert.deepEqual(coordinator.snapshot(), { state: 'pending', reason: 'runtime_sync_pending' }));
+  intent.unconfirmed = true;
+  active = true;
+  check('active OAuth write remains pending', () => assert.equal(coordinator.oauthSnapshot().state, 'pending'));
+  active = false;
+  check('orphaned OAuth write evidence cannot report success', () => assert.deepEqual(coordinator.snapshot(), { state: 'error', reason: 'credential_unconfirmed' }));
   console.log(`\n${passed}/${passed} 通过`);
 }
 

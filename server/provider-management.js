@@ -68,7 +68,7 @@ function projectService(id, config, meta, auth) {
 }
 
 export function createProviderManagement({ store, inspectCredential, readAuth = () => null, mutationBlocked = () => false, now = Date.now,
-  enabled = false, desktopCapabilities = null, nativeCredentials = null, invalidateDraft = () => {}, discovery = null }) {
+  enabled = false, desktopCapabilities = null, nativeCredentials = null, invalidateDraft = () => {}, discovery = null, runtimeSync = null }) {
   const drafts = new Map();
   const receipts = new Map();
   const nativeCommit = nativeCredentials && createNativeCommit({ store, credentials: nativeCredentials, mutationBlocked });
@@ -104,7 +104,8 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     const desktop = desktopSource && typeof desktopSource === 'object' ? desktopSource : null;
     return { ok: true, schemaVersion: PROVIDER_MANAGEMENT_SCHEMA_VERSION, revision,
       capabilities: providerManagementCapabilities({ oauthLogin: auth.sdkAvailable ? true : null, modelOverrides: auth.sdkAvailable && auth.piVersion === '1.5.0' ? true : null, desktop }),
-      catalog: [...PROVIDER_CATALOG, ...subscriptions], services, auth, sync: metadata.syncRequired === true ? pendingSync : { state: 'idle', reason: null } };
+      catalog: [...PROVIDER_CATALOG, ...subscriptions], services, auth,
+      sync: runtimeSync ? runtimeSync(metadata) : metadata.syncRequired === true ? pendingSync : { state: 'idle', reason: null } };
   }
 
   /* P2 私有桥用：读取草稿的非秘密绑定（不含任何凭据值）。

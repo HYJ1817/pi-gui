@@ -279,7 +279,8 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
   }
 
   function validateOperations(value) {
-    if (!record(value) || Object.keys(value).length !== 3 || value.version !== 1 || value.authority !== authority ||
+    if (!record(value) || Object.keys(value).some(key => !['version','authority','operations','authGeneration'].includes(key)) ||
+        (Object.hasOwn(value, 'authGeneration') && !isOpaqueId(value.authGeneration)) || value.version !== 1 || value.authority !== authority ||
         !Array.isArray(value.operations) || value.operations.length > RECEIPT_LIMIT) fail('config_recovery_required');
     const ids = new Set();
     for (const operation of value.operations) {
@@ -303,11 +304,12 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     if (snapshot(operationsPath, OPERATIONS_LIMIT).stamp !== prior.stamp) fail('config_conflict');
     return { prior, value };
   }
-  function updateOperations(change) {
+  function updateOperations(change, authGeneration) {
     const { prior, value } = readOperations();
     change(value.operations);
+    if (authGeneration) value.authGeneration = authGeneration;
     validateOperations(value);
-    if (value.operations.length === 0) {
+    if (value.operations.length === 0 && !value.authGeneration) {
       if (snapshot(operationsPath, OPERATIONS_LIMIT).stamp !== prior.stamp) fail('config_conflict');
       if (prior.data) {
         io.unlinkSync(operationsPath);
@@ -356,7 +358,7 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       throw error;
     }
     let active = true;
-    return stopped => {
+    return (stopped, attempted) => {
       if (!active) return;
       active = false;
       try {
@@ -364,9 +366,13 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
           const index = operations.findIndex(item => item.requestId === requestId && item.phase === 'oauth-writing');
           if (index < 0) fail('config_recovery_required');
           operations.splice(index, 1);
-        });
+        }, attempted === true ? randomUUID() : null);
       } finally { release(); }
     };
+  }
+  function readAuthSyncIntent() {
+    const { value } = readOperations();
+    return { generation: value.authGeneration ?? null, unconfirmed: value.operations.some(item => item.phase === 'oauth-writing') };
   }
   function authorizeCredentialStorage({ authPath }) {
     const directory = path.dirname(files.models);
@@ -681,5 +687,5 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     if (!stat(txPath)) return;
     return withLock(() => recover());
   }
-  return { read, transact, recoverPending, withCredentialOperation, acquireOAuthWrite, authorizeCredentialStorage };
+  return { read, transact, recoverPending, withCredentialOperation, acquireOAuthWrite, readAuthSyncIntent, authorizeCredentialStorage };
 }

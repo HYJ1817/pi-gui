@@ -58,7 +58,7 @@ import { createDiscoveryConsentStore } from './server/provider-discovery-consent
 import { createAuthSdk, sanitizeModelEvent } from './server/provider-auth-sdk.js';
 import { createModelGeneration } from './server/model-generation.js';
 import { createProviderAuth } from './server/provider-auth.js';
-import { createAuthRuntimeSync } from './server/provider-auth-runtime.js';
+import { createProviderConfigSync } from './server/provider-config-sync.js';
 import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
 import { createReviewCommentStore } from './server/review-comment-store.js';
@@ -330,7 +330,6 @@ let providerAuthRef = null;
 /* Z4-3：Agent 建议来源的事件 tap 与生成通道。collab 区块在后面才创建实例，
  * 这里先声明、运行期回填（与 probesRef 同一模式）。 */
 let collabProposalsRef = null;
-const authRuntimeListeners = new Set();
 /* Pi 更新的后端闸门要用的两个「后端自己的」忙信号（不信前端的 disabled）：
  *   - piActivity：主会话有没有在干活（规则在 server/pi-activity.js —— 按 Pi 1.0.0
  *     的真实事件语义：agent_start → agent_settled，agent_end **不算结束**；
@@ -423,7 +422,6 @@ const rpc = createRpcBridge({
      * 这里只转发，规则只有一份（可测）。 */
     piActivity.observe(event);
     primaryToolGuard.observe(event);
-    for (const listener of authRuntimeListeners) listener(event);
     providerAuthRef?.observeRuntime(event);
     sse.publish({ ...modelGeneration.observe(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
@@ -503,6 +501,9 @@ const providerMutationBlocked = () => providerAuthRef?.inFlight() || updateMaint
 const providers = createProviders({ modelsJson: MODELS_JSON, metadataPath: path.join(DATA_DIR, 'provider-management.json'),
   inspectCredential: providerCredentials.inspect, mutationBlocked: providerMutationBlocked });
 try { providers.store.recoverPending(); } catch { /* Configuration endpoints surface the fixed recovery error. */ }
+const providerConfigSync = createProviderConfigSync({ store: providers.store,
+  hasLiveRuntime: () => rpc.getState().piRunning || (runtimeRegistryRef?.liveCount() ?? 0) > 0,
+  authMutationActive: () => providerAuthRef?.inFlight() === true });
 const providerManagementEnabled = process.env.PI_GUI_PROVIDER_MANAGEMENT === '1';
 const providerDiscoveryConsents = createDiscoveryConsentStore({ strict: true, identityKey: piLaunch.identityKey });
 const storedDiscoveryTarget = draft => {
@@ -517,6 +518,7 @@ const storedDiscoveryTarget = draft => {
 };
 const providerManagement = createProviderManagement({ store: providers.store, inspectCredential: providerCredentials.inspect,
   readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled,
+  runtimeSync: providerConfigSync.snapshot,
   invalidateDraft: id => providerCredentialBridge.invalidateDraft(id),
   discovery: providerManagementEnabled ? { consentStore: providerDiscoveryConsents, launchIdentity: piLaunch.identityKey,
     nativeCurrent: (grant, draft) => providerCredentialBridge.currentDiscovery(grant, draft),
@@ -979,13 +981,7 @@ const providerAuth = providerAuthRef = createProviderAuth({
     const result = await rpc.request({ type: 'get_available_models' });
     return Array.isArray(result?.models) ? result.models : null;
   },
-  synchronize: async (...args) => {
-    await runtimeRegistryRef?.closeAll();
-    return createAuthRuntimeSync({
-    rpc, getCwd: () => runtime.getCurrentCwd(), busyReason: () => piBusyReason(false),
-    subscribe: listener => { authRuntimeListeners.add(listener); return () => authRuntimeListeners.delete(listener); },
-    })(...args);
-  },
+  runtimeSync: providerConfigSync.oauthSnapshot,
 });
 
 const runtimeBrowser = createRuntimeBrowserGateway();
@@ -1002,9 +998,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   externalCount: () => Number(Boolean(runtime.getCurrentCwd())) + cliInFlight + Number(Boolean(plannerRef?.projectSwitchBlockReason())),
   beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
     || rpc.maintenanceState() || plannerRef?.projectSwitchBlockReason() || cliInFlight ? 'maintenance' : null,
-  beforeCommand: (cmd,live) => ['prompt','steer','follow_up'].includes(cmd.type) && candidateRunsRef?.busy() && !candidateRunsRef.owns(runtimeRegistryRef.getOwner(live.record.conversationId)) ? 'runtime_busy'
-    : providerAuth.snapshot().sync.state === 'syncing' ? 'auth_syncing'
-    : null,
+  beforeCommand: (cmd,live) => ['prompt','steer','follow_up'].includes(cmd.type) && candidateRunsRef?.busy() && !candidateRunsRef.owns(runtimeRegistryRef.getOwner(live.record.conversationId)) ? 'runtime_busy' : null,
   admission: (args, action) => worktrees.withWorkspace(args, workspace => {
     const current = runtime.getCurrentCwd(), relative = current ? path.relative(workspace.root, fs.realpathSync(current)) : null;
     if (relative !== null && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) {
@@ -1239,7 +1233,6 @@ const route = createRouter({
     send: (cmd) => {
       if (['new_session', 'switch_session', 'fork'].includes(cmd.type) && (piActivity.busy() || rpc.stopState()?.pending || cmd.type==='switch_session'&&runtimeRegistry.liveCount())) throw new Error('session_running');
       if (['prompt', 'steer', 'follow_up'].includes(cmd.type) && runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
-      if (providerAuth.snapshot().sync.state === 'syncing') throw new Error('认证后的模型状态正在同步，请稍后再试');
       modelGeneration.guardCommand(cmd);
       const { __fallbackOwner, ...wire } = cmd;
       const result = rpc.send(wire);
@@ -1249,9 +1242,6 @@ const route = createRouter({
       return result;
     },
     abortAndWait: (cmd) => {
-      if (providerAuth.snapshot().sync.state === 'syncing') {
-        return Promise.resolve({ ok: false, code: 'auth-syncing', error: '认证后的模型状态正在同步，请稍后再试' });
-      }
       modelGeneration.guardCommand(cmd);
       const { __fallbackOwner, ...wire } = cmd;
       modelGeneration.noteCommandAccepted(cmd);

@@ -50,6 +50,20 @@ test('a confirmed standalone OAuth operation leaves no empty authority marker', 
   second.acquireOAuthWrite('fixture')(true);
 });
 
+test('a completed OAuth mutation records a durable sync generation without changing the configuration revision', async t => {
+  const f = await fixture(t);
+  const before = f.store.read().revision;
+  f.store.acquireOAuthWrite('fixture')(true, true);
+  assert.equal(f.store.read().revision, before);
+  const intent = f.open().readAuthSyncIntent();
+  assert.match(intent.generation, /^[a-f0-9-]{36}$/);
+  assert.equal(intent.unconfirmed, false);
+  f.open().acquireOAuthWrite('fixture')(true, false);
+  assert.deepEqual(f.open().readAuthSyncIntent(), intent);
+  f.open().acquireOAuthWrite('fixture')(false, true);
+  assert.deepEqual(f.open().readAuthSyncIntent(), { ...intent, unconfirmed: true });
+});
+
 test('the auth storage qualifier rejects wrong authorities and hard-linked files without reading credentials', async t => {
   const io = Object.create(fs);
   const f = await fixture(t, { io });
