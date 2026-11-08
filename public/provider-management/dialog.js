@@ -27,12 +27,14 @@ import {
 import {
   commitCredentialAction,
   createDraftStore,
+  credentialClearSupport,
   draftFromCatalog,
   draftFromClone,
   draftFromService,
   effectiveAuthMode,
   ensureRequestId,
   needsBuiltinOverride,
+  needsInheritedSelectionConfirmation,
   toDraftPayload,
   validateDraft,
 } from './state.js';
@@ -96,6 +98,7 @@ export function openProviderDialog({
   mode = 'create',
   service = null,
   item = null,
+  legacy = false,
   onSaved = null,
   onClosed = null,
   api = DEFAULT_API,
@@ -267,11 +270,18 @@ export function openProviderDialog({
         message: '该服务由 Pi 内置配置管理，当前只能查看；不会写入配置。',
       }));
     }
-    if (draft?.inheritedSelection && !draft.touchedSelection && draft.mode === 'update') {
+    if (legacy) {
+      statusHost.appendChild(renderBanner({
+        tone: 'info',
+        title: '管理接口未启用 · 兼容模式',
+        message: '当前直接写入 Pi 模型配置，保存后需要重载 pi。旧接口没有模型选择元数据：勾选与排序不会保存，请用移除/添加模型修改列表。',
+      }));
+    }
+    if (needsInheritedSelectionConfirmation(draft)) {
       statusHost.appendChild(renderBanner({
         tone: 'info',
         title: '当前模型集是继承的',
-        message: '这个服务还没有固定已选模型。保存会把当前模型集固定为上方选择；零选择也是有效状态。',
+        message: '现有保存合同不能表达“继续继承”。保存前会请你确认，确认后才会把上方列表固定为显式选择；零选择也是有效状态。',
       }));
     }
   };
@@ -317,6 +327,7 @@ export function openProviderDialog({
       draft,
       snapshot: snapshotState,
       item,
+      legacy,
       errors: currentErrors.errors || {},
       onDispatch: action => draftStore.dispatch(action),
       onChangeService: () => changeService(),
@@ -362,6 +373,14 @@ export function openProviderDialog({
     return controller;
   }
 
+  function dispatchFromPane(action) {
+    if (legacy && ['toggle-model', 'select-visible', 'move-model', 'move-before', 'move-to-index'].includes(action.type)) {
+      toast('兼容模式不会保存勾选或排序；请用“移除模型配置”或添加模型修改列表。', 'warn', { important: true });
+      return draftStore.get();
+    }
+    return draftStore.dispatch(action);
+  }
+
   function renderSetup(nextDraft = draft) {
     if (!nextDraft) return;
     view = 'setup';
@@ -381,7 +400,7 @@ export function openProviderDialog({
     const item = catalogForDraft(snapshotState, draft);
     panes = renderModelPanes({
       draft,
-      dispatch: action => draftStore.dispatch(action),
+      dispatch: dispatchFromPane,
       errors: currentErrors.modelErrors,
       capabilities: snapshotState?.capabilities || {},
       discovery: discovery?.getState(),
@@ -444,6 +463,7 @@ export function openProviderDialog({
     bodyHost.appendChild(renderAdvanced({
       draft,
       snapshot: snapshotState,
+      legacy,
       errors: currentErrors.errors || {},
       onDispatch: action => draftStore.dispatch(action),
       onBack: () => renderSetup(draftStore.get()),
@@ -470,7 +490,9 @@ export function openProviderDialog({
           return;
         }
         const existingIds = (snapshotState.services || []).map(service => service.providerId);
-        const next = draftFromCatalog(snapshotState, picked, { existingIds });
+        // 兼容接口没有独立显示名；用供应商标识作为名称，避免界面承诺一个不会落盘的字段。
+        const chosen = legacy ? { ...picked, name: picked.providerId || picked.id } : picked;
+        const next = draftFromCatalog(snapshotState, chosen, { existingIds });
         openDraft(next);
       },
       onUnavailable: picked => {
@@ -546,10 +568,19 @@ export function openProviderDialog({
 
   function clearCredential() {
     if (!draft || draft.readOnly) return;
+    if (legacy) {
+      toast('兼容模式不会写入清除操作；请开启管理接口或在 Pi 配置中处理该凭据。', 'warn', { important: true });
+      return;
+    }
+    const support = credentialClearSupport(draft);
+    if (!support.supported) {
+      toast(support.reason, 'warn', { important: true });
+      return;
+    }
     confirmModal({
-      title: '清除凭据？',
-      message: '保存后 Pi 配置里的 apiKey 会被删除。若凭据来自环境变量或 Pi 本机认证，服务可能立即不可用。',
-      okText: '保存时清除',
+      title: `清除配置中的${support.label}？`,
+      message: support.message,
+      okText: '保存时清除配置凭据',
       cancelText: '保留',
       danger: true,
     }).then(ok => {
@@ -624,6 +655,20 @@ export function openProviderDialog({
         }
         draftStore.dispatch({ type: 'builtin-override' });
         draft = draftStore.get();
+      }
+      if (!legacy && needsInheritedSelectionConfirmation(draft)) {
+        const ok = await confirmModal({
+          title: '固定当前模型选择？',
+          message: '这个服务当前继承 Pi 的模型列表。现有保存合同不能表达“继续继承”，保存会把上方当前列表固定为显式选择。只想修改名称、启用状态或其它无关字段时，可以取消并保持原状。',
+          okText: '固定并保存',
+          cancelText: '返回检查',
+        });
+        if (!ok) {
+          saving = false;
+          dialogCard?.removeAttribute('aria-busy');
+          refreshHeader();
+          return;
+        }
       }
       let payload;
       try {
@@ -703,7 +748,8 @@ export function openProviderDialog({
         return;
       }
       // 保存结果必须可见：info/success 默认不弹 toast，这里显式标成 important。
-      if (result.sync?.state === 'pending') toast('服务已保存，等待 Runtime 同步。', 'info', { important: true });
+      if (result.legacy) toast('服务已保存；重载 pi 配置后生效。', 'info', { important: true });
+      else if (result.sync?.state === 'pending') toast('服务已保存，等待 Runtime 同步。', 'info', { important: true });
       else toast('服务已保存。', 'success', { important: true });
       close();
     } catch {
@@ -998,7 +1044,8 @@ export function openProviderDialog({
     }
     if (mode === 'create' && item) {
       if (isSubscription(item)) { showAuth(item.providerId); return; }
-      openDraft(draftFromCatalog(snapshotState, item, { existingIds }));
+      const chosen = legacy ? { ...item, name: item.providerId || item.id } : item;
+      openDraft(draftFromCatalog(snapshotState, chosen, { existingIds }));
       return;
     }
     if (mode === 'edit' && service) {

@@ -194,7 +194,9 @@ export function credentialSourceLabel(state) {
   if (!state || state.source === 'none' || state.state === 'none') return '未配置凭据';
   if (state.source === 'env') return '环境变量引用';
   if (state.source === 'pi-credential') return 'Pi 本机凭据';
-  if (state.source === 'literal' || state.source === 'command') return 'Pi 本机凭据';
+  // literal/command 仍在 models.json 的 apiKey 字段里，不是 Pi 原生槽；
+  // 混称“本机凭据”会让用户以为清除操作会调用 Pi logout。
+  if (state.source === 'literal' || state.source === 'command') return '配置内凭据';
   if (state.state === 'unknown') return '凭据状态未知';
   return '凭据状态未知';
 }

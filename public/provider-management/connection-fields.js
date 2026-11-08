@@ -12,6 +12,7 @@ import {
   monogram,
   serviceCredentialText,
 } from './catalog.js';
+import { credentialClearSupport } from './state.js';
 import { button, field, h, icon } from './dom.js';
 
 function credentialCapability(snapshot) {
@@ -62,13 +63,24 @@ function cloneCredentialRow() {
   );
 }
 
-function credentialRow({ draft, snapshot, onCredentialTrigger, onClearCredential, onEnvReference, error }) {
+function credentialRow({ draft, snapshot, legacy = false, onCredentialTrigger, onClearCredential, onEnvReference, error }) {
   const capability = credentialCapability(snapshot);
+  const clear = credentialClearSupport(draft);
   const hasCredential = draft.credentialState
     && draft.credentialState.state !== 'none'
     && draft.credentialState.source !== 'none';
   const clearing = draft.credentialAction?.type === 'none';
-  const statusText = clearing ? '保存后清除现有凭据' : hasCredential ? serviceCredentialText({ credentialState: draft.credentialState }) : '未配置凭据';
+  const canClear = clear.supported && !legacy;
+  // 只有 Pi 本机凭据才用“本机”二字；未知来源或兼容模式不能借用这个说法。
+  const clearLabel = canClear ? '清除配置凭据' : clear.source === 'pi-credential' ? '清除本机凭据' : '清除凭据';
+  const clearReason = legacy
+    ? clear.supported
+      ? '兼容模式不会写入清除操作；如需移除配置凭据，请开启管理接口或直接检查 Pi 配置。'
+      : clear.reason
+    : clear.reason;
+  const statusText = clearing
+    ? `保存后移除配置中的${clear.label || '凭据'}`
+    : hasCredential ? serviceCredentialText({ credentialState: draft.credentialState }) : '未配置凭据';
   const envReference = draft.envReference || '';
 
   const trigger = h('button', {
@@ -103,7 +115,10 @@ function credentialRow({ draft, snapshot, onCredentialTrigger, onClearCredential
       ),
       h('div', { class: 'pm-credential-actions' },
         hasCredential && !clearing
-          ? button('清除凭据', 'pm-btn-ghost pm-btn-small pm-clear-credential', () => onClearCredential?.())
+          ? button(clearLabel, 'pm-btn-ghost pm-btn-small pm-clear-credential', () => onClearCredential?.(), {
+            disabled: !canClear,
+            title: clearReason,
+          })
           : null,
         trigger,
       ),
@@ -114,6 +129,12 @@ function credentialRow({ draft, snapshot, onCredentialTrigger, onClearCredential
       : null,
     envInput,
     error ? h('div', { class: 'pm-field-error', role: 'alert', text: error }) : null,
+    hasCredential && !canClear
+      ? h('div', { class: 'pm-credential-note pm-clear-note' },
+        icon('info', 14),
+        h('span', { text: clearReason }),
+      )
+      : null,
     h('div', { class: 'pm-credential-note', id: 'pmCredentialNote' },
       icon(capability.available ? 'lock' : 'info', 14),
       h('span', { text: capability.available
@@ -127,6 +148,7 @@ export function renderConnectionFields({
   draft,
   snapshot,
   item,
+  legacy = false,
   errors = {},
   onDispatch = () => {},
   onChangeService = () => {},
@@ -170,6 +192,7 @@ export function renderConnectionFields({
         : credentialRow({
           draft,
           snapshot,
+          legacy,
           onCredentialTrigger,
           onEnvReference: value => onDispatch({ type: 'env-reference', value }),
           onClearCredential,
@@ -183,18 +206,20 @@ export function renderConnectionFields({
   if (!custom || draft.mode === 'update') return root;
 
   let nameField = null;
-  const nameInput = h('input', {
-    class: 'pm-input',
-    type: 'text',
-    value: draft.displayName,
-    placeholder: '服务名称',
-    'aria-label': '服务名称',
-  });
-  nameInput.addEventListener('input', () => onDispatch({ type: 'field', field: 'displayName', value: nameInput.value }));
-  nameField = field('名称', nameInput, {
-    hint: '显示在服务列表和模型选择器里。',
-    error: errors.displayName,
-  });
+  if (!legacy) {
+    const nameInput = h('input', {
+      class: 'pm-input',
+      type: 'text',
+      value: draft.displayName,
+      placeholder: '服务名称',
+      'aria-label': '服务名称',
+    });
+    nameInput.addEventListener('input', () => onDispatch({ type: 'field', field: 'displayName', value: nameInput.value }));
+    nameField = field('名称', nameInput, {
+      hint: '显示在服务列表和模型选择器里。',
+      error: errors.displayName,
+    });
+  }
 
   const baseInput = h('input', {
     class: 'pm-input',
@@ -232,7 +257,7 @@ export function renderConnectionFields({
     });
     idInput.addEventListener('input', () => onDispatch({ type: 'field', field: 'providerId', value: idInput.value }));
     idField = field('供应商标识', idInput, {
-      hint: '写入 Pi 配置的唯一 ID，保存后不能修改。',
+      hint: legacy ? '写入 Pi 模型配置的唯一 ID，也是列表里显示的名称。' : '写入 Pi 配置的唯一 ID，保存后不能修改。',
       error: errors.providerId,
     });
   }

@@ -251,11 +251,65 @@ export function effectiveAuthMode(draft) {
   return draft.authMode || 'none';
 }
 
+/* 配置里的凭据引用与 Pi 原生凭据是两种东西：
+ * `none` 只删除 models.json 中的 apiKey 字段，不会调用 Pi logout，
+ * 因此绝不能把它当成“本机凭据已清除”。 */
+export function credentialClearSupport(draft) {
+  const credential = draft?.credentialState;
+  const source = credential?.source;
+  if (source === 'env') {
+    return {
+      supported: true,
+      source,
+      label: '环境变量引用',
+      message: '保存后会移除 Pi 模型配置中的环境变量引用；环境变量本身和 Pi 本机登录都不会被删除。',
+    };
+  }
+  if (source === 'literal') {
+    return {
+      supported: true,
+      source,
+      label: '配置内字面量密钥',
+      message: '保存后会删除 Pi 模型配置中的字面量 apiKey；Pi 本机登录不会被删除。',
+    };
+  }
+  if (source === 'command') {
+    return {
+      supported: true,
+      source,
+      label: '配置内命令引用',
+      message: '保存后会删除 Pi 模型配置中的命令取值引用；命令本身和 Pi 本机登录都不会被删除。',
+    };
+  }
+  if (source === 'pi-credential') {
+    return {
+      supported: false,
+      source,
+      reason: 'Pi 本机凭据需要在 P2 安全桌面窗口中清除；当前不会写 auth.json，也不会用“删除配置引用”冒充已清除。',
+    };
+  }
+  return {
+    supported: false,
+    source: source || 'unknown',
+    reason: '凭据来源未知，无法安全判断清除范围；请先确认该服务在 Pi 中的认证来源。',
+  };
+}
+
+export function needsInheritedSelectionConfirmation(draft) {
+  // P0 的 commit 只能提交显式 selectedModelIds，无法表达“继续继承”。
+  // 因此无关编辑也必须先让用户确认固定，不能静默改变选择策略。
+  return draft?.mode === 'update'
+    && draft.inheritedSelection === true
+    && draft.touchedSelection !== true;
+}
+
 export function commitCredentialAction(draft) {
   if (draft.mode === 'clone') return { type: 'keep' };
   const reference = String(draft.envReference || '').trim();
   if (reference) return { type: 'env', reference };
-  if (draft.credentialAction?.type === 'none') return { type: 'none', confirmed: true };
+  if (draft.credentialAction?.type === 'none' && credentialClearSupport(draft).supported) {
+    return { type: 'none', confirmed: true };
+  }
   return { type: 'keep' };
 }
 
