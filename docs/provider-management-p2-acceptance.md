@@ -4,6 +4,8 @@
 
 **修订 2（独立验收修复后）**：首轮交付（`ed47000`…`011c7e0`，PR #60 CI run 42389222994）经独立验收发现 6 类问题，全部在本分支修复；修复内容见第 9 节。
 
+**最终安全收尾**见第 10 节。第 1–9 节保留先前各轮验证的环境与结论。
+
 ## 1. 完成功能及源码位置
 
 | 功能 | 位置 |
@@ -141,6 +143,43 @@
 
 - **正常 Electron 沙箱**：仍未验证（开发机执行器受完整性令牌限制，测试以 `--no-sandbox` 完成）；这不构成正常沙箱通过的证据。CI runner 的标准沙箱将运行网络策略与桥模块套件；窗口隔离项仍待正常桌面环境复核。
 - 完整 canonical（238 leaves）本地未全量运行；由修复提交后的 PR CI 证明（待结果）。
+
+## 10. 最终安全收尾（FIX-07、FIX-08、FIX-09）
+
+以远端 `codex/provider-management-p2` 与 PR #60 一致的 `5a94e706d12b5aa176c690448cab9869cb398ec8` 为基线。[基线 CI](https://github.com/HYJ1817/pi-gui/actions/runs/42399611396) 为 `pull_request`、第 1 次尝试，8 项均通过，包含 238 条 canonical 命令、Electron 构建检查与 CI gate。本轮风险级别为高，涉及外部网络、授权撤销及隔离凭据窗口。
+
+| 编号 | 修复前失败证据 | 修复位置及修复后证据 |
+| --- | --- | --- |
+| FIX-07 | 注入不响应 AbortSignal 的 DNS 时，4 个用例在 deadline 或外部取消后仍观察到 pending。旧 FIX-06 检查的计数器未接入 transport。独立复核另外复现了 302 响应体未结束时连接持续存活，以及 Node 全局代理收到以域名为目标的 CONNECT。 | [provider-network.js](../server/provider-network.js) 的 `resolveTargetAddresses` 竞争 DNS 与取消，`createDiscoveryTransport` 用操作起点计算单调 deadline，贯穿 DNS、候选请求及响应处理。迟到 resolve/reject 都不会发包。实际 requester 计数为 0，DNS 使用 90/100 ms 时只剩 10 ms 给请求。`restrictedFetch` 拒绝重定向后销毁连接，使用独立直连 agent 并维持已校验地址的 socket 钉桩。对应 [网络测试](../tests/provider-network-policy.cjs) 的 FIX-06/07、未结束 302 真 loopback 以及 agent 用例。独立复核的全局代理探针观测到 2 次直连尝试、0 次代理 CONNECT。 |
+| FIX-08 | 5 种撤销路径下的迟到响应及一次响应结束竞态仍返回旧模型。用真实 staging worker 和假 SDK 复现了暂存替换不改变原生凭据修订号，旧授权仍可调用 requester。关闭草稿期间的迟到授权也曾重新签发 consent 和记忆记录。 | [provider-discovery-consent.js](../server/provider-discovery-consent.js) 的 `revoke` 统一终止授权生命周期，覆盖单授权、关闭草稿、连接换代、到期和 dispose。[provider-network.js](../server/provider-network.js) 在请求后及发布模型前再次校验授权。五种路径均中止进行中请求，迟到结果无 models，重新签发的授权可独立发现。P2 transport 没有发现缓存。[provider-credentials.js](../server/provider-credentials.js) 生成独立暂存代次，[provider-credential-bridge.js](../server/provider-credential-bridge.js) 替换和清除后撤销旧授权，签发前复核当前 flow、nonce 及草稿。对应 [网络测试](../tests/provider-network-policy.cjs)、[SDK 与桥联测](../tests/provider-credential-sdk.cjs) 及 [桌面桥阶段 A](../tests/provider-credential-desktop.cjs)。 |
+| FIX-09 | 生产桌面控制器和真实后端桥的可控 IPC 测试复现 4 项失败，包括取消后仍发送 prepare 或打开窗口、换 backend 后旧握手仍挂起，以及 prepare 超时后留下 1 个有效 nonce。父窗口销毁的原有防护用例通过。 | [provider-credentials.cjs](../electron/provider-credentials.cjs) 的 `openHandler`、`openFlow`、`backendCall` 分别绑定打开身份、原窗口和原后端。旧 finally 只释放自己的占位。[私有帧校验](../public/provider-management/contract.js) 接受 prepare 的可选随机 flow ID，[后端桥](../server/provider-credential-bridge.js) 可在 prepare 前后通过同一个 ID 取消，并保留原 prepare 帧兼容性。[竞态集成测试](../tests/provider-credential-opening.cjs) 5/5，覆盖握手取消、prepare 迟到、立即重开、后端重启交错、超时、窗口销毁与单窗上限。真实 Electron 保留提交、OAuth 二次确认、焦点恢复路径和隔离检查，导航断言实际触发并验证 `will-navigate` 被取消。 |
+
+### 验证结果
+
+Windows x64、Node 24.22.1、Electron 44.4.3。用例仅使用 fixture 和临时目录。
+
+| 命令 | 实测结果 |
+| --- | --- |
+| `npm run test:provider-p2` | 网络 31/31，开窗竞态 5/5，桥接 28 项，正常沙箱真窗口 42/42，exit 0 |
+| `npm run test:provider-management` | 22/22，exit 0 |
+| `npm run test:auth` | 107/107，exit 0 |
+| `node tests/provider-auth-runtime.cjs` | 36/36，exit 0 |
+| `node tests/models-api.cjs` | 50/50，exit 0 |
+| `node tests/server-security.cjs` | 39/39，exit 0 |
+| `node tests/electron-guard.cjs` | 123/123，exit 0 |
+| `node tests/ci-test-plan.cjs` | 239 条 canonical 命令与五组精确覆盖，exit 0 |
+| `npm run build:app -- --rebuild --output-root <TEMP>` | 本机缓存 Electron ZIP 离线构建成功，内含重建的 98.5 MB SEA 产物及 329.5 MB Electron 应用包 |
+
+原 Electron 路径曾无法启动正常沙箱，回退运行先遇到 `UnknownVizError`，重跑以 `--no-sandbox` 通过 42 项。最终验证显式使用 `ELECTRON_OVERRIDE_DIST_PATH` 指向临时副本，前后 `electron.exe` SHA-256 均为 `BF0FE749904CA9F713CCFB2427C519FA39D0BBD0337BA411BA08785802E8D548`。本次没有进入无沙箱回退，真实打开、取消、提交及隔离共 42/42。截图 `sheet-dark.png`、`sheet-light-narrow.png`、`sheet-clear-mode.png` 分别为 37,972、37,304、38,653 字节，位于该次运行的临时证据目录。
+
+canonical 从 238 增至 239。对比基线展开的命令，原 238 条及顺序全部保留，唯一新增 `node --test tests/provider-credential-opening.cjs`，workflow、五组划分和最终 gate 未修改。当前提交完整证明以 [PR #60 Checks](https://github.com/HYJ1817/pi-gui/pull/60/checks) 对应 HEAD 为准，本地未取得完整单次 `npm test` 的精确提交证明。
+
+### 审查与剩余验证
+
+- 独立增量安全与功能复核通过，定向复跑 42/42。FIX-07/08/09 范围内未发现可证实的 Blocker 或 Important。
+- 基线已有保留地址分类差异。独立探针确认 `198.51.100.64`、`248.0.0.1` 等仍分类为 public，部分 IPv6 特殊地址也存在同类差异。该分类逻辑未纳入本轮三项修复，未验证在目标环境的实际可达性，由独立验收单列评估。
+- 本轮未验证打包应用中的凭据端到端流程、安装器、真实供应商或 P3 发现编排。
+- 可按提交顺序反向回退本轮提交。合并须等当前 HEAD 的完整 CI 和独立验收，具体决定由维护者作出。
 - persist/sync、真实供应商网络、打包 exe 的端到端输入流程不在 P2 范围。
 - **当前分支/提交**：`codex/provider-management-p2` @ `aa4dc80`（报告修订提交随后），推送后工作区干净。
 - **合并建议：建议合并 PR #60**（在下一轮独立复验确认后由用户决定；`providerKeyInputEnabled` 默认关闭，启用需独立安全验收）。
