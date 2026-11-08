@@ -21,7 +21,6 @@ import {
 import { PROVIDER_CATALOG, isEnvReference, providerManagementCapabilities } from './provider-management/contract.js';
 import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
-import { clearThread } from './messages.js';
 import { mountProviderAuth } from './provider-auth.js';
 import { openProviderDialog } from './provider-management/dialog.js';
 import {
@@ -110,8 +109,59 @@ let providerError = '';
 let providerRequest = 0;
 let managementSnapshot = null;
 let legacyMode = false;
+let managementAvailability = 'unknown'; // unknown | available | disabled | error
+let managementError = '';
 let menuCloser = null;
 let pageStatusHost = null;
+
+/* 只有「明确未启用」才允许旧接口写入。
+ * 后端关闭管理接口时回 422 {code:'unsupported'}；404/405/400 也属于同一类
+ * 明确答复。网络失败、401/403、5xx、200 但合同形状不对，都必须停在错误态，
+ * 不能把异常当成功能开关。 */
+function classifyManagement(result) {
+  if (!result || result.network) {
+    return { state: 'error', message: '无法连接供应商管理接口；为避免误用旧接口写入，已停止自动降级。请重试。' };
+  }
+  if (result.ok === true) {
+    if (result.status >= 500 || result.status === 401 || result.status === 403) {
+      // 代理/网关可能带着旧的成功正文回 5xx；状态码优先，不能因此进入写入界面。
+      return { state: 'error', message: `供应商管理接口返回异常（HTTP ${result.status}）；为避免误用旧接口写入，已停止自动降级。` };
+    }
+    if (result.schemaVersion === 1 && Array.isArray(result.services)
+      && Array.isArray(result.catalog) && result.capabilities && typeof result.capabilities === 'object') {
+      return { state: 'available', snapshot: result };
+    }
+    return { state: 'error', message: '供应商管理接口返回了无法识别的数据；为避免错误写入，未切换到旧接口。' };
+  }
+  const explicitDisabled = result.code === 'unsupported'
+    && (result.status === undefined || [200, 400, 404, 405, 422].includes(result.status));
+  if (explicitDisabled) return { state: 'disabled' };
+  if (result.code === 'invalid_response') {
+    return { state: 'error', message: '供应商管理接口返回了无法识别的响应；为避免错误写入，未切换到旧接口。' };
+  }
+  const status = Number.isInteger(result.status) && result.status > 0 ? `（HTTP ${result.status}）` : '';
+  if (result.status === 401 || result.status === 403) {
+    return { state: 'error', message: `没有权限访问供应商管理接口${status}；为避免误用旧接口写入，已停止自动降级。` };
+  }
+  if (result.status >= 500) {
+    return { state: 'error', message: `供应商管理接口暂时不可用${status}；为避免误用旧接口写入，已停止自动降级。请重试。` };
+  }
+  return { state: 'error', message: `供应商管理接口返回异常${status}；为避免误用旧接口写入，已停止自动降级。请重试。` };
+}
+
+function managementErrorCard(target) {
+  return h('div', { class: 'hint-empty pm-management-error' },
+    h('h4', { class: 'prov-empty-title', text: '供应商管理暂时不可用' }),
+    h('p', { class: 'prov-empty-desc', text: managementError }),
+    h('p', { class: 'prov-empty-desc', text: '管理接口出错时不会自动切换旧接口写入；旧接口只在明确未启用时使用。' }),
+    h('button', {
+      type: 'button',
+      class: 'btn primary',
+      text: '重试',
+      on: { click: () => loadProviders(target) },
+    }),
+  );
+}
 
 /* ---------- 管理接口关闭时的兼容适配 ----------
  *
@@ -221,11 +271,18 @@ function legacyFailure(code, message) {
   return { ok: false, code, message, error: message, retryable: false };
 }
 
-export function createLegacyProviderApi({ read = fetchProviders, write = apiSaveProvider } = {}) {
+export function createLegacyProviderApi({ read = fetchProviders, write = apiSaveProvider, probe = fetchProviderManagement } = {}) {
   const pending = new Map();
   async function readData() {
     const data = await read().catch(() => null);
     return data && data.ok !== false ? data : null;
+  }
+  async function eligibilityFailure() {
+    // 页面打开后管理接口可能恢复或出错；写盘前必须重新确认它仍是「明确未启用」。
+    // 只读草稿不算写入，但一起拦住可以避免用户以为兼容保存仍然可用。
+    const result = await probe().catch(() => null);
+    if (classifyManagement(result).state === 'disabled') return null;
+    return legacyFailure('unavailable', '管理接口状态已变化，已停止使用旧接口写入；请关闭后刷新重试。');
   }
   return {
     async fetchProviderManagement() {
@@ -234,6 +291,8 @@ export function createLegacyProviderApi({ read = fetchProviders, write = apiSave
       return legacySnapshot(data);
     },
     async saveProviderDraft(request) {
+      const blocked = await eligibilityFailure();
+      if (blocked) return blocked;
       const draft = request?.draft;
       if (!draft) return legacyFailure('invalid_request', '草稿不完整。');
       if (draft.authMode === 'oauth') return legacyFailure('unsupported', '兼容模式不接受订阅认证草稿。');
@@ -251,6 +310,8 @@ export function createLegacyProviderApi({ read = fetchProviders, write = apiSave
         credentialState: 'none', consentState: 'unapproved', cachedModels: [], sourceKind: 'none' };
     },
     async commitProviderDraft(request) {
+      const blocked = await eligibilityFailure();
+      if (blocked) return blocked;
       const staged = pending.get(request.draftId);
       if (!staged) return legacyFailure('draft_conflict', '兼容草稿已过期，请重新保存。');
       if (request.action !== 'create' && request.action !== 'update') {
@@ -539,7 +600,30 @@ function openClone(service) {
   });
 }
 
+async function requireLegacyEligibility() {
+  const result = await fetchProviderManagement().catch(() => null);
+  const probe = classifyManagement(result);
+  if (probe.state === 'disabled') return true;
+  if (probe.state === 'available') {
+    managementSnapshot = probe.snapshot;
+    legacyMode = false;
+    managementAvailability = 'available';
+    managementError = '';
+    toast('供应商管理接口已恢复，已停止使用旧接口；请刷新后重试。', 'error', { important: true });
+    await loadProviders(panels.providers || document.querySelector('.providers'));
+    return false;
+  }
+  managementSnapshot = null;
+  legacyMode = false;
+  managementAvailability = 'error';
+  managementError = probe.message;
+  renderProviders(panels.providers || document.querySelector('.providers'));
+  toast(`${probe.message} 本次没有使用旧接口写入。`, 'error', { important: true });
+  return false;
+}
+
 async function openLegacyEdit(name) {
+  if (!await requireLegacyEligibility()) return;
   const data = await fetchProviders().catch(() => null);
   if (!data || data.ok === false) {
     toast(data?.error || '无法读取供应商配置', 'error', { important: true });
@@ -653,10 +737,20 @@ function legacyRow(name) {
     class: 'prov-del',
     title: '删除该供应商',
     'aria-label': `删除供应商 ${name}`,
-    on: { click: async event => {
-      event.stopPropagation();
-      await removeProvider(name);
-    } },
+    on: {
+      click: async event => {
+        event.stopPropagation();
+        await removeProvider(name);
+      },
+      // button 在真实浏览器里会由键盘激活产生 click；这里显式处理并阻止默认，
+      // 保证键盘与鼠标走同一个确认入口，且不会因为原生 click 再开一次。
+      keydown: event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) void removeProvider(name);
+      },
+    },
   }, icon('close', 15));
   row.appendChild(del);
   row.addEventListener('click', event => {
@@ -691,25 +785,42 @@ function emptyCard(box) {
 
 export async function loadProviders(container) {
   const request = ++providerRequest;
-  const [management, legacy] = await Promise.all([
-    fetchProviderManagement().catch(() => null),
-    fetchProviders().catch(() => null),
-  ]);
+  // 先单独判定管理接口：只有明确 unsupported 才读取旧路由。
+  // 旧路由的读取本身仍然保留（管理可用时用于密钥状态提示；关闭时用于兼容列表）。
+  const management = await fetchProviderManagement().catch(() => null);
   if (request !== providerRequest) return;
-  if (legacy && legacy.ok !== false) {
-    providerData = { path: legacy.path || '', providers: legacy.providers || {}, keyStates: legacy.keyStates || {} };
-  }
-  providerError = '';
-  if (management && management.ok === true && Array.isArray(management.services)) {
-    managementSnapshot = management;
+  const probe = classifyManagement(management);
+  if (probe.state === 'available') {
+    managementSnapshot = probe.snapshot;
     legacyMode = false;
-  } else {
+    managementAvailability = 'available';
+    managementError = '';
+    const legacy = await fetchProviders().catch(() => null);
+    if (request !== providerRequest) return;
+    if (legacy && legacy.ok !== false) {
+      providerData = { path: legacy.path || '', providers: legacy.providers || {}, keyStates: legacy.keyStates || {} };
+    }
+    providerError = '';
+  } else if (probe.state === 'disabled') {
     managementSnapshot = null;
     legacyMode = true;
-    // 管理能力默认关闭时旧路由仍然可用；只有旧路由也失败才显示错误，
-    // 否则会把整页旧供应商列表吞掉。
-    if (legacy && legacy.ok !== false) providerError = '';
-    else providerError = legacy?.error || management?.message || management?.error || '供应商配置暂时无法读取，请稍后重试。';
+    managementAvailability = 'disabled';
+    managementError = '';
+    const legacy = await fetchProviders().catch(() => null);
+    if (request !== providerRequest) return;
+    if (legacy && legacy.ok !== false) {
+      providerData = { path: legacy.path || '', providers: legacy.providers || {}, keyStates: legacy.keyStates || {} };
+      providerError = '';
+    } else {
+      providerError = legacy?.error || '供应商配置暂时无法读取，请稍后重试。';
+    }
+  } else {
+    // 服务器错误、网络失败、权限异常、合同异常都不是「功能关闭」。
+    managementSnapshot = null;
+    legacyMode = false;
+    managementAvailability = 'error';
+    managementError = probe.message;
+    providerError = '';
   }
   renderProviders(container || panels.providers || document.querySelector('.providers'));
 }
@@ -720,6 +831,12 @@ export function renderProviders(box) {
   if (target) {
     target.innerHTML = '';
     target.classList.add('pm-service-list');
+  }
+  if (managementAvailability === 'error') {
+    updateProviderCount('');
+    pageStatus('', 'info');
+    if (target) target.appendChild(managementErrorCard(target));
+    return;
   }
   if (legacyMode) {
     const names = Object.keys(providerData.providers || {});
@@ -753,6 +870,8 @@ export function setProvidersData(data) {
   providerRequest += 1;
   managementSnapshot = null;
   legacyMode = true;
+  managementAvailability = 'disabled';
+  managementError = '';
   providerData = {
     path: data?.path || '',
     providers: data?.providers || {},
@@ -841,44 +960,51 @@ export function openProvidersPanel({ present = openModal } = {}) {
 export async function openAddProvider({ present = openModal, snapshot = managementSnapshot } = {}) {
   let active = snapshot;
   if (!active) {
-    // 页面加载与管理接口探测存在时间差；不要因为 snapshot 尚未写入就误判为兼容模式。
+    // 页面加载与管理接口探测存在时间差；每次都重新判定，不看可能过期的 legacyMode。
     const management = await fetchProviderManagement().catch(() => null);
-    if (management?.ok === true && Array.isArray(management.services)) {
-      managementSnapshot = management;
+    const probe = classifyManagement(management);
+    if (probe.state === 'available') {
+      managementSnapshot = probe.snapshot;
       legacyMode = false;
-      active = management;
-    } else if (!legacyMode) {
-      // 还没确认管理接口不可用就探测失败：不能静默退回旧写入路径。
-      toast('尚未确认供应商管理能力，请等待页面加载后重试。', 'error', { important: true });
+      managementAvailability = 'available';
+      managementError = '';
+      active = probe.snapshot;
+    } else if (probe.state === 'disabled') {
+      // 只有明确 unsupported 才读取旧路由；读取失败则不打开编辑器，更不写入。
+      const data = await fetchProviders().catch(() => null);
+      if (!data || data.ok === false) {
+        toast(data?.error || '无法读取供应商配置', 'error', { important: true });
+        return;
+      }
+      openProviderDialog({
+        present,
+        snapshot: legacySnapshot(data),
+        mode: 'create',
+        legacy: true,
+        api: createLegacyProviderApi(),
+        onSaved: () => {
+          pageStatus('服务已保存；重载 pi 配置后生效。', 'info');
+          refreshManagement();
+        },
+        onClosed: refreshManagement,
+      });
+      return;
+    } else {
+      managementSnapshot = null;
+      legacyMode = false;
+      managementAvailability = 'error';
+      managementError = probe.message;
+      renderProviders(panels.providers || document.querySelector('.providers'));
+      toast(`${probe.message} 未打开旧接口编辑器。`, 'error', { important: true });
       return;
     }
   }
-  if (active) {
-    openProviderDialog({
-      present,
-      snapshot: active,
-      mode: 'create',
-      onSaved: result => {
-        if (result?.sync?.state === 'pending') pageStatus('服务已保存，等待 Runtime 同步（P3 尚未接通）。', 'info');
-        refreshManagement();
-      },
-      onClosed: refreshManagement,
-    });
-    return;
-  }
-  const data = await fetchProviders().catch(() => null);
-  if (!data || data.ok === false) {
-    toast(data?.error || '无法读取供应商配置', 'error', { important: true });
-    return;
-  }
   openProviderDialog({
     present,
-    snapshot: legacySnapshot(data),
+    snapshot: active,
     mode: 'create',
-    legacy: true,
-    api: createLegacyProviderApi(),
-    onSaved: () => {
-      pageStatus('服务已保存；重载 pi 配置后生效。', 'info');
+    onSaved: result => {
+      if (result?.sync?.state === 'pending') pageStatus('服务已保存，等待 Runtime 同步（P3 尚未接通）。', 'info');
       refreshManagement();
     },
     onClosed: refreshManagement,
@@ -905,15 +1031,37 @@ export function openProviderAuthPanel({ present = openModal } = {}) {
   }, () => dispose());
 }
 
-export async function removeProvider(name) {
-  const j = await apiDeleteProvider(name);
-  if (!j.ok) return toast(j.error || '删除失败', 'error');
+export async function removeProvider(name, { confirmed = false } = {}) {
+  if (!confirmed) {
+    const ok = await confirmModal({
+      title: `删除供应商 ${name}？`,
+      message: `将从 Pi 模型配置中移除 ${name} 及其模型设置；不会删除 Pi 本机认证（auth.json）或系统环境变量。如果配置指向需要认证的端点，后端安全检查仍可能拒绝删除。重载 pi 后生效。`,
+      okText: '删除',
+      cancelText: '取消',
+      danger: true,
+    });
+    if (!ok) return { ok: false, cancelled: true };
+  }
+  if (!await requireLegacyEligibility()) return { ok: false, code: 'unavailable' };
+  const j = await apiDeleteProvider(name).catch(() => ({ ok: false, error: '删除请求没有完成，请重试。' }));
+  if (!j || j.ok !== true) {
+    // 失败时保留当前列表；不重新加载，避免把未变的配置画成“已删除”。
+    toast(j?.error || '删除失败', 'error', { important: true });
+    return j || { ok: false, error: '删除失败' };
+  }
   toast(`已移除供应商 ${name} 的 Pi 配置；Pi 本机认证与环境变量未改动。重载 pi 后生效。`, 'info', { important: true });
   await loadProviders();
+  return j;
 }
 
 export async function reloadPi() {
-  await restartBackend();
-  toast('正在重载 pi 配置…', 'info');
-  clearThread();
+  // 重载只重启 Pi 并让它在就绪后从磁盘恢复会话；不要主动清空当前对话视图。
+  // 若请求本身失败，保留视图并报告真实错误；完整 Runtime 同步留给 P3。
+  const result = await restartBackend().catch(() => ({ ok: false, error: '重载请求没有完成，请重试。' }));
+  if (!result || result.ok !== true) {
+    toast(result?.error || '无法重载 pi 配置，请重试。', 'error', { important: true });
+    return false;
+  }
+  toast('正在重载 pi 配置；当前对话会在 pi 重连后从磁盘恢复。', 'info', { important: true });
+  return true;
 }
