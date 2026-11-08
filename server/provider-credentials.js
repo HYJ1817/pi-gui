@@ -9,6 +9,7 @@ const { createHmac, randomBytes, randomUUID } = require('node:crypto');
 const { authPath, entry, ttlMs } = workerData;
 const stages = new Map();
 const active = new Map();
+const nativeActive = new Map();
 const queued = new Map();
 const expired = new Set();
 const revisionKey = randomBytes(32);
@@ -211,14 +212,15 @@ function matchingStage(binding, stagedRevision, kind) {
   return pending;
 }
 
-async function persist(message) {
+async function persist(message, signal) {
   const { binding, stagedRevision } = message;
+  if (message.cancelled || signal.aborted) return failure('cancelled');
   const pending = matchingStage(binding, stagedRevision, message.action === 'clear' ? 'clear' : 'set');
   if (!pending) return expired.has(binding.draftId) ? failure('expired', 'expired') : failure('credential_conflict');
   disposeStage(binding.draftId);
   if (pending.expires <= Date.now()) return failure('expired', 'expired');
-  const signal = new AbortController().signal;
   const before = await inspect(binding.providerId, signal);
+  if (signal.aborted) return failure('cancelled');
   if (!before.revision || before.revision !== pending.expectedCredentialRevision) return failure('credential_conflict');
   const key = (await pending.memory?.read(binding.providerId, { signal }))?.key;
   if (pending.kind === 'set' && typeof key !== 'string') return failure('credential_conflict');
@@ -226,7 +228,10 @@ async function persist(message) {
   try {
     const api = await sdk();
     try {
-      await withNativeRuntime(binding, signal, rt => pending.kind === 'clear' ? rt.logout(binding.providerId, { signal }) : login(rt, binding, literalEncode(key), signal));
+      await withNativeRuntime(binding, signal, rt => {
+        cancelled(signal);
+        return pending.kind === 'clear' ? rt.logout(binding.providerId, { signal }) : login(rt, binding, literalEncode(key), signal);
+      });
     } catch (error) {
       threw = true;
       sdkSyncFailed = typeof api.CredentialSynchronizationError === 'function' && error instanceof api.CredentialSynchronizationError;
@@ -240,7 +245,7 @@ async function persist(message) {
   return failure('credential_unconfirmed', 'credential-unconfirmed', null);
 }
 
-async function handle(message) {
+async function handle(message, signal) {
   if (message.action === 'probe') {
     await sdk();
     return { ok: true, sdk: true };
@@ -254,10 +259,16 @@ async function handle(message) {
     return before.revision && before.revision === pending.expectedCredentialRevision && pending.expires > Date.now() ?
       { ok: true, expires: pending.expires } : failure('credential_conflict');
   }
-  if (message.action === 'persist' || message.action === 'clear') return persist(message);
+  if (message.action === 'persist' || message.action === 'clear') return persist(message, signal);
   return failure('unsupported');
 }
 parentPort.on('message', message => {
+  if (message.action === 'cancel-native') {
+    const queuedAttempt = queued.get(message.id);
+    if (queuedAttempt) queuedAttempt.cancelled = true;
+    nativeActive.get(message.id)?.abort();
+    return;
+  }
   if (message.action === 'discard-stage') {
     disposeStage(message.draftId, message.stagedRevision);
     parentPort.postMessage({ id: message.id, result: { ok: true } });
@@ -272,12 +283,16 @@ parentPort.on('message', message => {
     tail = tail.then(() => { disposeStage(message.draftId); parentPort.postMessage({ id: message.id, result: { ok: true } }); });
     return;
   }
-  if (['stage','stage-clear'].includes(message.action)) queued.set(message.id, message);
+  const mutation = message.action === 'persist' || message.action === 'clear';
+  if (mutation || ['stage','stage-clear'].includes(message.action)) queued.set(message.id, message);
   tail = tail.then(async () => {
     queued.delete(message.id);
+    const controller = mutation ? new AbortController() : null;
+    if (controller) nativeActive.set(message.id, controller);
     let result;
-    try { result = await handle(message); } catch { result = failure('credential_unconfirmed', 'credential-unconfirmed', null); }
-    parentPort.postMessage({ id: message.id, result });
+    try { result = await handle(message, controller?.signal); } catch { result = failure('credential_unconfirmed', 'credential-unconfirmed', null); }
+    finally { if (controller) nativeActive.delete(message.id); }
+    parentPort.postMessage({ id: message.id, result, nativeQuiesced: mutation });
   });
 });
 `;

@@ -114,11 +114,12 @@ for (const [checkpoint, callsExpected, credentialState] of [
 test('a native call that ignores cancellation releases the config lock but remains isolated', async t => {
   const f = await setup(t);
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  let sent, finish, signal;
+  let sent, finish, signal, onQuiesced;
   const started = new Promise(resolve => { sent = resolve; });
   const native = new Promise(resolve => { finish = resolve; });
-  const nativeCredentials = { authorize: binding => binding, persist(_approval, options) {
+  const nativeCredentials = { authorize: binding => binding, qualifyAfter: () => true, persist(_approval, options) {
     signal = options?.signal;
+    onQuiesced = options?.onQuiesced;
     sent();
     return native;
   } };
@@ -141,6 +142,11 @@ test('a native call that ignores cancellation releases the config lock but remai
     config: { baseUrl: 'https://elsewhere.invalid', api: 'openai-completions', models: [{ id: 'model-a' }] } });
   assert.equal(other.status, 200);
   finish({ ok: true, credentialSaved: true, credentialState: 'saved' });
+  assert.deepEqual(await http(handle, 'POST', root + '/commit', request), result);
+  await onQuiesced();
+  const recovered = await http(f.legacy.handle, 'POST', '/api/providers', { name: 'timeout-fixture',
+    config: { baseUrl: 'https://elsewhere.invalid', api: 'openai-completions', models: [{ id: 'model-a' }] } });
+  assert.equal(recovered.status, 200);
   assert.deepEqual(await http(handle, 'POST', root + '/commit', request), result);
 });
 

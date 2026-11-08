@@ -25,6 +25,46 @@ function write(store, fields = {}) {
   } });
 }
 
+test('OAuth shares the config lock and missing stop evidence persists across stores', async t => {
+  const f = await fixture(t);
+  const done = f.store.acquireOAuthWrite('fixture');
+  assert.throws(() => f.open().acquireOAuthWrite('fixture'), { code: 'config_busy' });
+  await assert.rejects(f.open().withCredentialOperation(() => assert.fail('lease was bypassed')), { code: 'config_busy' });
+  done(false);
+  const reopened = f.open();
+  assert.throws(() => reopened.acquireOAuthWrite('fixture'), { code: 'config_busy' });
+  assert.throws(() => write(reopened), { code: 'config_busy' });
+  const other = reopened.acquireOAuthWrite('unrelated');
+  other(true);
+  reopened.acquireOAuthWrite('unrelated')(true);
+  await assert.rejects(reopened.withCredentialOperation(tx => tx.prepare({ requestId: 'native', fingerprint: 'a'.repeat(64),
+    providerId: 'fixture', action: 'apply-staged' })), { code: 'config_busy' });
+});
+
+test('a confirmed standalone OAuth operation leaves no empty authority marker', async t => {
+  const f = await fixture(t);
+  f.store.acquireOAuthWrite('fixture')(true);
+  assert.equal(fs.existsSync(f.modelsJson + '.pi-gui-operations.json'), false);
+  const { createProviderConfigStore } = await import(entry);
+  const second = createProviderConfigStore({ ...f.options, metadataPath: path.join(path.dirname(f.metadataPath), 'other.json') });
+  second.acquireOAuthWrite('fixture')(true);
+});
+
+test('the auth storage qualifier rejects wrong authorities and hard-linked files without reading credentials', async t => {
+  const io = Object.create(fs);
+  const f = await fixture(t, { io });
+  const authPath = path.join(path.dirname(f.modelsJson), 'auth.json');
+  io.openSync = (file, ...args) => {
+    assert.notEqual(file, authPath, 'storage qualification must not open auth data');
+    return fs.openSync(file, ...args);
+  };
+  assert.equal(f.store.authorizeCredentialStorage({ authPath: path.join(path.dirname(authPath), 'elsewhere.json') }), false);
+  fs.writeFileSync(authPath, 'fixture-only', { mode: 0o600 });
+  fs.linkSync(authPath, authPath + '.linked');
+  assert.equal(f.store.authorizeCredentialStorage({ authPath }), false);
+  assert.equal(fs.readFileSync(authPath, 'utf8'), 'fixture-only');
+});
+
 test('credential dispatch holds the existing config lock and survives reopening', async t => {
   const f = await fixture(t);
   const request = { requestId: 'native-dispatch', fingerprint: 'a'.repeat(64) };

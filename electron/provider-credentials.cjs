@@ -100,7 +100,8 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
       { child, signal });
     if (signal.aborted || child !== getBackend() || !child?.connected ||
         reply?.ok !== true || typeof reply.epoch !== 'string') return null;
-    handshake = { epoch: reply.epoch, stagingEnabled: reply.stagingEnabled === true, child };
+    if (handshake?.child === child && handshake.epoch === reply.epoch) return handshake;
+    handshake = { epoch: reply.epoch, stagingEnabled: reply.stagingEnabled === true, nativePersistence: reply.nativePersistence === true, child };
     return handshake;
   }
 
@@ -332,10 +333,12 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     return { ok: true };
   }
 
-  function statusHandler(event) {
+  async function statusHandler(event) {
+    if (!mainWindowAllowed(event)) return { ok: false, code: 'forbidden' };
+    const current = qualified() ? await ensureHandshake(new AbortController().signal) : null;
     if (!mainWindowAllowed(event)) return { ok: false, code: 'forbidden' };
     return { ok: true, open: Boolean(sheet), hasFlow: Boolean(flow),
-      action: flow?.purpose ?? null, expiresAt: flow?.expires ?? null };
+      action: flow?.purpose ?? null, expiresAt: flow?.expires ?? null, nativeCredentialPersistence: current?.nativePersistence === true && qualified() };
   }
 
   /* ---------- 输入窗 preload 入口（submit/cancel/status） ---------- */

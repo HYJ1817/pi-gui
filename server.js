@@ -492,9 +492,13 @@ worktreesRef = worktrees;
  * `PI_GUI_PROVIDER_KEY_INPUT=1` 仅供联调，默认关闭——关闭时快照能力恒为 false，
  * 私桥动作与 SDK 暂存一律 unsupported。授权绑定存储同为内存态，随进程/草稿生命周期失效。 */
 const providerKeyInputEnabled = process.env.PI_GUI_PROVIDER_KEY_INPUT === '1';
+const providerAuthPath = path.join(path.dirname(MODELS_JSON), 'auth.json');
+const providerStorageQualified = () => Boolean(process.send && process.connected && providerKeyInputEnabled &&
+  providers.store.authorizeCredentialStorage({ authPath: providerAuthPath }));
 const providerCredentials = createProviderCredentialSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey,
-  authPath: path.join(path.dirname(MODELS_JSON), 'auth.json'), enabled: providerKeyInputEnabled });
-const providerMutationBlocked = () => providerAuthRef?.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning() || cliInFlight > 0;
+  authPath: providerAuthPath, enabled: providerKeyInputEnabled, authorizeStorage: providerStorageQualified });
+const providerMutationBlocked = () => providerAuthRef?.inFlight() || updateMaintenance.locked() ||
+  piUpdate.isRunning() || capabilityInstall.isRunning() || cliInFlight > 0;
 const providers = createProviders({ modelsJson: MODELS_JSON, metadataPath: path.join(DATA_DIR, 'provider-management.json'),
   inspectCredential: providerCredentials.inspect, mutationBlocked: providerMutationBlocked });
 try { providers.store.recoverPending(); } catch { /* Configuration endpoints surface the fixed recovery error. */ }
@@ -502,14 +506,22 @@ const providerManagementEnabled = process.env.PI_GUI_PROVIDER_MANAGEMENT === '1'
 const providerDiscoveryConsents = createDiscoveryConsentStore();
 const providerManagement = createProviderManagement({ store: providers.store, inspectCredential: providerCredentials.inspect,
   readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled,
+  invalidateDraft: id => providerCredentialBridge.invalidateDraft(id),
+  nativeCredentials: process.send && providerKeyInputEnabled ? {
+    authorize: (binding, options) => providerCredentialBridge.authorizeNative(binding, options),
+    persist: (approval, options) => providerCredentialBridge.persistApproved(approval, options),
+    qualifyAfter: (approval, options) => providerCredentialBridge.qualifyAfterNative(approval, options),
+  } : null,
   /* desktopCapability 是 async（含 SDK 资格探测），必须 await——传返回
    * Promise 的函数，provider-management 在 snapshot() 里等待。 */
   desktopCapabilities: () => providerCredentialBridge.desktopCapability() });
 const providerCredentialBridge = createProviderCredentialBridge({ sdk: providerCredentials,
   draftLookup: providerManagement.draftSnapshot, consentStore: providerDiscoveryConsents,
+  draftFrozen: providerManagement.draftFrozen, forgetDraft: providerManagement.forgetDraft,
+  nativePersistence: () => providerManagementEnabled && providerStorageQualified(),
   mutationBlocked: providerMutationBlocked, maintenanceLocked: () => updateMaintenance.locked(),
   enabled: providerKeyInputEnabled });
-const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey });
+const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey, authPath: providerAuthPath });
 const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig, nativeAdapter: authSdk });
 const uploads = createUploads({ dataDir: DATA_DIR });
 const gitRoutes = createGitRoutes({
@@ -582,6 +594,7 @@ const mcpNative = createMcpNative({
   rpc,
   runCli: async (entry, args, opts) => {
     if (runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
+    if (providerManagement.nativeInFlight()) return { ok: false, spawnFailed: true, error: '供应商凭据正在保存，请稍后重试。' };
     if (runtimeRegistryRef?.liveCount()) return { ok: false, spawnFailed: true, error: '请先关闭独立会话，再执行 Pi CLI 管理操作。' };
     /* 记在飞的 CLI 动作数：Pi 更新前要确认没有别的 pi 进程正在跑
      * （MCP login/logout 这类动作与替换 runtime 文件互斥）。 */
@@ -834,6 +847,7 @@ function resolvePiCliEntry() {
 }
 
 function runPiCliCommand(args, opts = {}) {
+  if (providerManagement.nativeInFlight()) return Promise.resolve({ ok: false, spawnFailed: true, error: '供应商凭据正在保存，请稍后重试。' });
   if (runtimeRegistryRef?.liveCount()) return Promise.resolve({ ok: false, spawnFailed: true, error: '请先关闭独立会话，再执行 Pi CLI 管理操作。' });
   const entry = (opts && opts.entry) || (() => {
     const r = resolvePiCliEntry();
@@ -879,6 +893,7 @@ function invalidatePiCaches() {
  * 闸门只在请求时被调用，那时它们已经就位。
  */
 function piBusyReason(includeAuth = true) {
+  if (providerManagement.nativeInFlight()) return { code: 'busy-auth', error: '供应商凭据正在保存，请稍后重试。' };
   if (includeAuth && providerAuthRef?.inFlight()) return { code: 'busy-auth', error: '供应商认证或模型同步正在进行，请稍后再试' };
   const turn = piActivity.busy();
   if (turn) return turn;
@@ -937,7 +952,8 @@ const capabilityInstall = createCapabilityInstall({
 
 const providerAuth = providerAuthRef = createProviderAuth({
   adapter: authSdk,
-  startBlocked: () => cliInFlight > 0 || piUpdate.isRunning() || capabilityInstall.isRunning(),
+  startBlocked: () => providerManagement.nativeInFlight() || updateMaintenance.locked() || cliInFlight > 0 || piUpdate.isRunning() || capabilityInstall.isRunning(),
+  acquireMutation: providers.store.acquireOAuthWrite,
   busyReason: () => piBusyReason(false),
   customProviders: () => Object.keys(providers.readModelsConfig().providers || {}),
   readModels: async () => {

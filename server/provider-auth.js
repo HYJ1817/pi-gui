@@ -18,7 +18,8 @@ const ERRORS = {
 };
 
 export function createProviderAuth({ adapter, busyReason = () => null, synchronize = async () => ({ ok: true }),
-  readModels = async () => null, customProviders = () => [], startBlocked = () => false, timeoutMs = 5 * 60 * 1000 } = {}) {
+  readModels = async () => null, customProviders = () => [], startBlocked = () => false,
+  acquireMutation = () => null, timeoutMs = 5 * 60 * 1000 } = {}) {
   let generation = 0, active = null, current = null, revision = 0, readSequence = 0, disposed = false;
   let data = { capability: { sdkAvailable: false, reason: '正在读取 Pi 认证能力', piVersion: null }, providers: [] };
   let synchronization = { state: 'idle', reason: null }; let needsSync = false, syncPromise = null;
@@ -107,16 +108,22 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
   async function execute(op) {
     const { flow, controller } = op;
     let errorCode = null;
+    let release, stopped = true;
     try {
       await refresh();
       if (!owns(flow)) return;
       const provider = data.providers.find(p => p.providerId === flow.providerId);
       if (!data.capability.sdkAvailable || !provider || (flow.operation === 'login' ? !provider.canLogin : !provider.canLogout)) { errorCode = 'unsupported'; return; }
+      if (startBlocked()) { errorCode = 'busy'; return; }
+      try { release = acquireMutation(flow.providerId); }
+      catch { errorCode = 'busy'; return; }
       if (flow.operation === 'login') await adapter.login(flow.providerId, 'oauth', { signal: controller.signal, notify: e => notify(flow, e), prompt: p => prompt(flow, p), abortPrompt: id => abortPrompt(flow, id) });
       else await adapter.logout(flow.providerId, { signal: controller.signal });
     } catch (error) {
-      errorCode = Object.hasOwn(ERRORS, error?.code) ? error.code : 'native-auth-failed';
+      stopped = error?.nativeUnconfirmed !== true;
+      errorCode = !stopped ? 'unconfirmed' : Object.hasOwn(ERRORS, error?.code) ? error.code : 'native-auth-failed';
     } finally {
+      try { release?.(stopped); } catch { stopped = false; errorCode = 'unconfirmed'; }
       clearTimeout(op.timer);
       if (op.answer) { op.answer.reject(new Error('auth ended')); op.answer = null; }
       if (active === op && !disposed) {
@@ -131,8 +138,8 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
         active = null;
         // A native operation may commit and then fail to synchronize. Even
         // cancellation is read back; exit code/Promise alone is not evidence.
-        needsSync = true; synchronization = { state: 'pending', reason: null };
-        await sync();
+        if (!stopped) { needsSync = false; synchronization = { state: 'error', reason: ERRORS.unconfirmed }; }
+        else if (errorCode !== 'busy') { needsSync = true; synchronization = { state: 'pending', reason: null }; await sync(); }
       }
     }
   }

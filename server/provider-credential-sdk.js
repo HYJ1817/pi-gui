@@ -36,10 +36,13 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
   const location = path.resolve(authPath);
   let worker, workerIdentity, sequence = 0;
   const pending = new Map();
+  let draining = null;
   function dispose() {
     const retired = worker;
     worker = null;
     workerIdentity = null;
+    if (draining) clearTimeout(draining.timer);
+    draining = null;
     for (const item of pending.values()) item.finish(fail('unavailable', item.mutation ? null : false));
     return retired?.terminate();
   }
@@ -63,30 +66,57 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
       workerIdentity = identity;
       current.stdout.resume();
       current.stderr.resume();
-      current.on('message', message => { if (worker === current) pending.get(message?.id)?.finish(message.result); });
+      current.on('message', message => {
+        if (worker !== current) return;
+        if (draining && draining.id === message?.id && message.nativeQuiesced === true) {
+          const stopped = draining;
+          clearTimeout(stopped.timer);
+          draining = null;
+          if (pending.size === 0) current.unref();
+          void Promise.resolve().then(() => stopped.onQuiesced?.()).catch(() => {});
+          return;
+        }
+        const item = pending.get(message?.id);
+        if (!item) return;
+        item.finish(message.result);
+        if (item.mutation && message.nativeQuiesced === true && message.result?.credentialSaved === null) {
+          void Promise.resolve().then(() => item.onQuiesced?.()).catch(() => {});
+        }
+      });
       current.on('error', () => { if (worker === current) void dispose(); });
       current.on('exit', () => { if (worker === current) void dispose(); });
       current.unref();
       return true;
     } catch { return false; }
   }
-  function call(action, payload, mutation = false, signal) {
+  function call(action, payload, mutation = false, signal, onQuiesced) {
     if (signal?.aborted) return Promise.resolve(fail('cancelled'));
     if (pending.size >= 32 || !ensure()) return Promise.resolve(fail('unsupported'));
+    if (mutation && (draining || [...pending.values()].some(item => item.mutation))) return Promise.resolve(fail('config_busy'));
     const id = ++sequence;
     const current = worker;
     current.ref();
     return new Promise(resolve => {
-      const abort = () => { if (worker === current) void dispose(); };
+      const abort = () => {
+        if (worker !== current) return;
+        if (!mutation) { void dispose(); return; }
+        try { current.postMessage({ id, action: 'cancel-native' }); }
+        catch { void dispose(); return; }
+        draining = { id, onQuiesced, timer: setTimeout(() => {
+          if (worker === current && draining?.id === id) void dispose();
+        }, 2_000) };
+        draining.timer.unref();
+        finish(fail('unavailable', null));
+      };
       const timer = setTimeout(abort, timeoutMs);
       function finish(result) {
         clearTimeout(timer);
         signal?.removeEventListener('abort', abort);
         pending.delete(id);
-        if (pending.size === 0) current.unref();
+        if (pending.size === 0 && !draining) current.unref();
         resolve(result);
       }
-      pending.set(id, { finish, mutation });
+      pending.set(id, { finish, mutation, onQuiesced });
       signal?.addEventListener('abort', abort, { once: true });
       try { current.postMessage({ id, action, ...payload }); } catch { finish(fail('unavailable', mutation ? null : false)); }
     });
@@ -111,7 +141,7 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
     try { return await authorizeStorage({ binding, authPath: location, action: kind === 'set' ? 'persist' : 'clear' }) === true; }
     catch { return false; }
   }
-  async function persist(action, inputBinding, stagedRevision, signal) {
+  async function persist(action, inputBinding, stagedRevision, { signal, onQuiesced } = {}) {
     if (!enabled) return fail('unsupported');
     const binding = normalizeBinding(inputBinding);
     if (!binding || (stagedRevision !== undefined && !isOpaqueId(stagedRevision))) return fail('invalid_request');
@@ -119,14 +149,14 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
       await call('dispose-draft', { draftId: binding.draftId });
       return fail('storage_unqualified');
     }
-    return call(action, { binding, stagedRevision }, true, signal);
+    return call(action, { binding, stagedRevision }, true, signal, onQuiesced);
   }
   return {
     inspect, readback: inspect, canPersist,
     stageNativeLogin: (binding, input, options) => stage('stage', binding, input, options),
     stageClear: (binding, options) => stage('stage-clear', binding, null, options),
-    persistNative: (binding, revision, { signal } = {}) => persist('persist', binding, revision, signal),
-    clearNative: (binding, revision, { signal } = {}) => persist('clear', binding, revision, signal),
+    persistNative: (binding, revision, options) => persist('persist', binding, revision, options),
+    clearNative: (binding, revision, options) => persist('clear', binding, revision, options),
     inspectStage: (inputBinding, stagedRevision, kind) => {
       const binding = normalizeBinding(inputBinding);
       return binding && isOpaqueId(stagedRevision) && ['set', 'clear'].includes(kind) ?

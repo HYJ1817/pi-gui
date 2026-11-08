@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { json, readBody } from './http-utils.js';
 import { apiKeyState, publicProviderConfig } from './providers.js';
-import { applyProviderCommit, own } from './provider-config-records.js';
+import { applyProviderCommit, guardNativeCredentialTarget, own } from './provider-config-records.js';
 import { createNativeCommit } from './provider-management-commit.js';
 import { EDITABLE_MODEL_FIELDS, PROVIDER_API_TYPES, PROVIDER_CATALOG, PROVIDER_MANAGEMENT_SCHEMA_VERSION, isModelId, isOpaqueId, isProviderId, isRecord,
   providerContractError, providerErrorStatus, providerFailure, providerManagementCapabilities, validateModelValues, validateProviderRequest } from '../public/provider-management/contract.js';
@@ -67,13 +67,16 @@ function projectService(id, config, meta, auth) {
 }
 
 export function createProviderManagement({ store, inspectCredential, readAuth = () => null, mutationBlocked = () => false, now = Date.now,
-  enabled = false, desktopCapabilities = null, nativeCredentials = null }) {
+  enabled = false, desktopCapabilities = null, nativeCredentials = null, invalidateDraft = () => {} }) {
   const drafts = new Map();
   const receipts = new Map();
   const nativeCommit = nativeCredentials && createNativeCommit({ store, credentials: nativeCredentials, mutationBlocked });
   function prune() {
     const time = now();
-    for (const [id, item] of drafts) if (item.expires <= time) drafts.delete(id);
+    for (const [id, item] of drafts) if (item.expires <= time) {
+      drafts.delete(id);
+      invalidateDraft(id);
+    }
     for (const [id, item] of receipts) if (item.expires <= time) receipts.delete(id);
   }
 
@@ -129,6 +132,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     const connectionRevision = prior ? prior.connectionRevision + Number(prior.targetFingerprint !== targetFingerprint) : 1;
     const expires = now() + draftTtlMs;
     drafts.set(draftId, { draft, draftRevision, connectionRevision, targetFingerprint, expires, serviceId: request.serviceId, revision: request.expectedRevision });
+    if (prior && prior.connectionRevision !== connectionRevision) invalidateDraft(draftId);
     const result = { ok: true, draftId, draftRevision, connectionRevision, targetFingerprint,
       credentialState: 'none', consentState: 'unapproved', cachedModels: [], sourceKind: 'none' };
     receipts.set(request.requestId, { result, fingerprint, expires });
@@ -157,6 +161,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       },
       apply(current, credential) {
         assertDraft();
+        guardNativeCredentialTarget(current, staged.draft, credential, action);
         return applyProviderCommit(current, { ...request, credentialAction: { type: 'keep' } }, staged.draft, credential);
       } });
     if (mutationBlocked() || nativeCommit?.hasDraft(request.draftId)) providerFailure('config_busy');
@@ -193,5 +198,9 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       return json(res, providerErrorStatus(result.code), result);
     }
   }
-  return { handle, draftSnapshot };
+  return { handle, draftSnapshot,
+    nativeInFlight: () => nativeCommit?.inFlight() === true,
+    draftFrozen: id => nativeCommit?.hasDraft(id) === true,
+    forgetDraft: id => drafts.delete(id),
+  };
 }

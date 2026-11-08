@@ -13,7 +13,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 
 if (!process.versions.electron) {
@@ -416,7 +416,7 @@ async function electronMain() {
   // 真实后端子进程（与 main.cjs 同一 spawn 形状，含 ipc）
   let server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
     cwd: world,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_GUI_TOKEN: TOKEN, PI_GUI_OPEN: '0',
+    env: { ...process.env, TMP: world, TEMP: world, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_GUI_TOKEN: TOKEN, PI_GUI_OPEN: '0',
       PI_GUI_DATA: path.join(world, 'data'), PI_CODING_AGENT_DIR: agentDir,
       PI_BIN: path.join(pkg, 'sdk.mjs'),
       PI_GUI_PROVIDER_MANAGEMENT: '1', PI_GUI_PROVIDER_KEY_INPUT: '1' },
@@ -494,17 +494,23 @@ async function electronMain() {
     });
     return target;
   };
-  async function createDraft(providerId, api = 'openai-completions', baseUrl = 'https://fixture.invalid/v1') {
+  async function createDraft(providerId, api = 'openai-completions', baseUrl = 'https://fixture.invalid/v1', serviceId) {
     return read(win, `(async()=>{
       const snapshot = await (await fetch('/api/provider-management')).json();
       const response = await (await fetch('/api/provider-management/drafts', { method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ requestId: 'e2e-' + Math.random(), expectedRevision: snapshot.revision,
+        body: JSON.stringify({ requestId: 'e2e-' + Math.random(), expectedRevision: snapshot.revision, serviceId: ${JSON.stringify(serviceId)},
           draft: { providerId: ${JSON.stringify(providerId)}, authMode: 'pi-credential', displayName: 'E2E',
             connection: { baseUrl: ${JSON.stringify(baseUrl)}, api: ${JSON.stringify(api)} },
             modelPatches: [], selectedModelIds: [], modelOrder: [], enabled: true } }) })).json();
-      return response;
+      return { ...response, expectedRevision: snapshot.revision };
     })()`);
+  }
+  async function nativeCommit(draft, requestId, action, serviceId) {
+    const body = { requestId, action: serviceId ? 'update' : 'create', serviceId, expectedRevision: draft.expectedRevision,
+      draftId: draft.draftId, draftRevision: draft.draftRevision, credentialAction: { type: action } };
+    return read(win, `fetch('/api/provider-management/commit', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(${JSON.stringify(body)}) }).then(r => r.json())`);
   }
 
   try {
@@ -550,6 +556,40 @@ async function electronMain() {
      * 验证 sheet 已销毁且主窗口可用，原生 focus 行为在视觉验收里另行核对。 */
     const focusAfterClose = await win.isFocused();
     check('sheet closed and main window interactive after apply', !sheetWindow() && !win.isDestroyed() && !win.isMinimized(), { focusAfterClose });
+
+    const desktopStatus = await read(win, 'window.piGuiDesktop.providerCredentials.status()');
+    const { createProviderConfigStore } = await import('../server/provider-config-store.js');
+    const modelsJson = path.join(agentDir, 'models.json');
+    const qualifiedFixture = createProviderConfigStore({ modelsJson, metadataPath: path.join(world, 'data', 'provider-management.json') })
+      .authorizeCredentialStorage({ authPath: authFile });
+    check('private desktop status reports the fixture storage qualification', desktopStatus.nativeCredentialPersistence === qualifiedFixture, desktopStatus);
+    const saved = await nativeCommit(draft, 'desktop-native-set', 'apply-staged');
+    const native = () => fs.existsSync(authFile) ? JSON.parse(fs.readFileSync(authFile, 'utf8')) : {};
+    if (!qualifiedFixture) {
+      check('P3-A refuses unqualified native storage before saving either file',
+        saved.code === 'credential_conflict' && !fs.existsSync(authFile) && !fs.existsSync(modelsJson), saved);
+      console.log('UNVERIFIED P3-A successful Electron persistence: fixture ancestors do not meet storage policy');
+    } else {
+      check('P3-A stores the staged key through the native SDK and confirms it',
+        saved.saved === true && saved.credentialSaved === true && saved.credentialState === 'saved' &&
+        saved.sync?.state === 'pending' && native()['fixture-provider']?.key === 'sentinel-key-E2E-1', saved);
+      const repeated = await nativeCommit(draft, 'desktop-native-set', 'apply-staged');
+      const persisted = ['models.json','models.json.pi-gui-operations.json'].map(name => path.join(agentDir, name));
+      check('P3-A replays the safe receipt without leaking the staged key', JSON.stringify(saved) === JSON.stringify(repeated) &&
+        !JSON.stringify(repeated).includes('sentinel-key-E2E-1') && persisted.every(file => fs.existsSync(file) &&
+          !fs.readFileSync(file, 'utf8').includes('sentinel-key-E2E-1')));
+
+      const removeDraft = await createDraft('fixture-provider', undefined, undefined, 'fixture-provider');
+      const openRemove = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(removeDraft.draftId)}, draftRevision: ${removeDraft.draftRevision}, action: 'clear' })`);
+      check('P3-A can reopen the same saved service to confirm native clear', openRemove.ok === true, openRemove);
+      const removeSheet = await waitForSheet();
+      await read(removeSheet, `window.piGuiCredentialSheet.submit({ allowDiscovery: false, rememberTarget: false })`).catch(() => {});
+      await waitFor(() => !sheetWindow());
+      const cleared = await nativeCommit(removeDraft, 'desktop-native-clear', 'clear-native', 'fixture-provider');
+      check('P3-A clears the native slot after configuration commit and readback',
+        cleared.saved === true && cleared.credentialSaved === true && cleared.credentialState === 'cleared' &&
+        !Object.hasOwn(native(), 'fixture-provider'), cleared);
+    }
 
     // 被攻陷的渲染进程：直接持有 ipcRenderer 的外部窗口
     const evilPreload = path.join(world, 'evil-preload.cjs');
@@ -667,7 +707,7 @@ async function electronMain() {
     await sleep(250);
     server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
       cwd: world,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_GUI_TOKEN: TOKEN, PI_GUI_OPEN: '0',
+      env: { ...process.env, TMP: world, TEMP: world, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_GUI_TOKEN: TOKEN, PI_GUI_OPEN: '0',
         PI_GUI_DATA: path.join(world, 'data'), PI_CODING_AGENT_DIR: agentDir,
         PI_BIN: path.join(pkg, 'sdk.mjs'),
         PI_GUI_PROVIDER_MANAGEMENT: '1', PI_GUI_PROVIDER_KEY_INPUT: '1' },
@@ -745,10 +785,14 @@ async function electronPhase() {
   fs.mkdirSync(pkg, { recursive: true });
   fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '1.5.0', exports: { '.': { import: './sdk.mjs' } } }));
   fs.writeFileSync(path.join(pkg, 'sdk.mjs'), FAKE_SDK);
-  fs.mkdirSync(path.join(world, 'agent'), { recursive: true });
+  const agentDir = path.join(world, 'agent');
+  fs.mkdirSync(agentDir, { recursive: true, mode: 0o700 });
   fs.mkdirSync(path.join(world, 'evidence'), { recursive: true });
   // 桌面运行器受限令牌只能写低完整性目录（同 tests/app-update-electron.cjs）。
   if (process.platform === 'win32') {
+    const sid = execFileSync('whoami.exe', ['/user', '/fo', 'csv', '/nh'], { encoding: 'utf8', windowsHide: true }).match(/S-1-[\d-]+/u)?.[0];
+    if (!sid) throw Error('Missing fixture identity');
+    execFileSync('icacls.exe', [agentDir, '/inheritance:r', '/grant:r', `*${sid}:(OI)(CI)F`], { stdio: 'ignore', windowsHide: true });
     try {
       require('node:child_process').execFileSync('icacls', [world, '/setintegritylevel', '(OI)(CI)L'], { stdio: 'ignore', windowsHide: true });
     } catch { /* 环境若不允许降标签，目录 ACL 维持原样 */ }

@@ -8,7 +8,7 @@ const LIMIT = 16 * 1024 * 1024;
 const RECEIPT_LIMIT = 128;
 const OPERATIONS_LIMIT = 128 * 1024;
 const credentialActions = new Set(['apply-staged', 'clear-native']);
-const credentialOutcomes = new Set(['saved', 'cleared', 'saved-credential-error', 'credential-unconfirmed']);
+const credentialOutcomes = new Set(['saved', 'cleared', 'saved-credential-error', 'credential-unconfirmed', 'credential-unconfirmed-stopped']);
 const keys = ['models', 'metadata'];
 const fileNames = new Set(['journal.json', 'journal.pending', 'models.install', 'models.before', 'models.after', 'metadata.before', 'metadata.after']);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -29,6 +29,7 @@ const defaultMetadata = () => ({ schemaVersion: 1, services: {}, receipts: {} })
 // rule for the current user keeps them private to this account either way.
 const PRIVATE_ACL = String.raw`
 $ErrorActionPreference = 'Stop'
+[Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
 foreach ($item in @($request.targets)) {
@@ -47,7 +48,24 @@ foreach ($item in @($request.targets)) {
   $rules = @($check.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
   $ownerSid = $check.GetOwner([Security.Principal.SecurityIdentifier])
   $owned = $ownerSid.Value -eq $sid.Value -or $ownerSid.Value -eq 'S-1-5-32-544'
+  if ($item.ancestor) {
+    if ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($item.path)).DriveType -ne 'Fixed') { exit 1 }
+    $trusted = @($sid.Value, 'S-1-5-18', 'S-1-5-32-544', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+    if ($ownerSid.Value -notin $trusted) { exit 1 }
+    $danger = [Security.AccessControl.FileSystemRights]'DeleteSubdirectoriesAndFiles, Delete, ChangePermissions, TakeOwnership'
+    foreach ($rule in $rules) {
+      if ($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Value -notin $trusted -and
+          -not ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and
+          ($rule.FileSystemRights -band $danger)) { exit 1 }
+    }
+    continue
+  }
   if ((($item.directory -or $item.requireProtected) -and -not $check.AreAccessRulesProtected) -or -not $owned -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow') { exit 1 }
+  if ($item.nativeStorage) {
+    if (($rules[0].FileSystemRights -band [Security.AccessControl.FileSystemRights]::FullControl) -ne [Security.AccessControl.FileSystemRights]::FullControl -or
+        $rules[0].PropagationFlags -ne 'None' -or
+        ($item.directory -and -not ($rules[0].InheritanceFlags -band [Security.AccessControl.InheritanceFlags]::ObjectInherit))) { exit 1 }
+  }
 }
 `;
 function windowsAcl(targets, verifyOnly = false) {
@@ -267,7 +285,8 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     for (const operation of value.operations) {
       if (!record(operation) || !isOpaqueId(operation.requestId) || ids.has(operation.requestId) ||
           !/^[a-f0-9]{64}$/.test(operation.fingerprint) || !isProviderId(operation.providerId) ||
-          !credentialActions.has(operation.action) || !['prepared', 'dispatching', 'finished'].includes(operation.phase) ||
+          !(operation.phase === 'oauth-writing' ? operation.action === 'oauth' :
+            credentialActions.has(operation.action) && ['prepared', 'dispatching', 'finished'].includes(operation.phase)) ||
           Object.keys(operation).length !== (operation.phase === 'finished' ? 7 : 5)) fail('config_recovery_required');
       if (operation.phase === 'finished' && (!credentialOutcomes.has(operation.outcome) ||
           !/^[a-f0-9]{64}$/.test(operation.revision))) fail('config_recovery_required');
@@ -288,6 +307,14 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     const { prior, value } = readOperations();
     change(value.operations);
     validateOperations(value);
+    if (value.operations.length === 0) {
+      if (snapshot(operationsPath, OPERATIONS_LIMIT).stamp !== prior.stamp) fail('config_conflict');
+      if (prior.data) {
+        io.unlinkSync(operationsPath);
+        syncDirectory(path.dirname(operationsPath));
+      }
+      return;
+    }
     const data = bytes(value);
     if (data.length > OPERATIONS_LIMIT) fail('config_busy');
     const temporary = `${operationsPath}.${randomUUID()}.pending`;
@@ -304,6 +331,77 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
   }
   function unresolved(operation) {
     return operation.phase !== 'finished' || operation.outcome === 'credential-unconfirmed';
+  }
+  function reserveOperation(operations, operation) {
+    if (operations.some(item => item.providerId === operation.providerId && unresolved(item))) fail('config_busy');
+    if (operations.length === RECEIPT_LIMIT) {
+      const index = operations.findIndex(item => !unresolved(item));
+      if (index < 0) fail('config_busy');
+      operations.splice(index, 1);
+    }
+    operations.push(operation);
+  }
+  function acquireOAuthWrite(providerId) {
+    if (!isProviderId(providerId)) fail('config_busy');
+    const release = acquireLock();
+    const requestId = randomUUID();
+    try {
+      recover();
+      recoverPreparedOperations();
+      updateOperations(operations => reserveOperation(operations, {
+        requestId, fingerprint: hash(requestId), providerId, action: 'oauth', phase: 'oauth-writing',
+      }));
+    } catch (error) {
+      release();
+      throw error;
+    }
+    let active = true;
+    return stopped => {
+      if (!active) return;
+      active = false;
+      try {
+        if (stopped === true) updateOperations(operations => {
+          const index = operations.findIndex(item => item.requestId === requestId && item.phase === 'oauth-writing');
+          if (index < 0) fail('config_recovery_required');
+          operations.splice(index, 1);
+        });
+      } finally { release(); }
+    };
+  }
+  function authorizeCredentialStorage({ authPath }) {
+    const directory = path.dirname(files.models);
+    if (path.resolve(authPath) !== path.join(directory, 'auth.json')) return false;
+    try {
+      if (!parents(directory)) return false;
+      const parent = stat(directory);
+      const auth = plain(authPath);
+      if (auth?.size > 8n * 1024n * 1024n) return false;
+      const ancestors = [];
+      for (let p = path.dirname(directory); p !== directory; p = path.dirname(p)) {
+        ancestors.push(p);
+        if (p === path.dirname(p)) break;
+      }
+      if (process.platform === 'win32') {
+        windowsAcl([...ancestors.map(p => ({ path: p, directory: true, ancestor: true })),
+          { path: directory, directory: true, nativeStorage: true },
+          ...(auth ? [{ path: authPath, directory: false, nativeStorage: true }] : [])], true);
+      } else {
+        // Linux ACL masks participate in the mode bits. Other platforms need
+        // an ACL-specific witness before the Unix-mode check can qualify them.
+        if (process.platform !== 'linux') return false;
+        const uid = BigInt(process.getuid());
+        if (parent.uid !== uid || (parent.mode & 0o777n) !== 0o700n ||
+            (auth && (auth.uid !== uid || (auth.mode & 0o777n) !== 0o600n))) return false;
+        for (const p of ancestors) {
+          const ancestor = stat(p);
+          if (!ancestor || (ancestor.uid !== 0n && ancestor.uid !== uid) ||
+              ((ancestor.mode & 0o022n) && !(ancestor.uid === 0n && (ancestor.mode & 0o1000n)))) return false;
+        }
+      }
+      const after = plain(authPath);
+      return Boolean(parents(directory)) && stamp(stat(directory)) === stamp(parent) &&
+        (after ? stamp(after) : null) === (auth ? stamp(auth) : null);
+    } catch { return false; }
   }
   function recoverPreparedOperations() {
     if (!readOperations().value.operations.some(item => item.phase === 'prepared')) return;
@@ -438,7 +536,8 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       const result = { ...fields, revision };
       if (requestId) {
         Object.defineProperty(receipts, requestId, { value: { fingerprint, result: safeReceipt(result) }, enumerable: true, configurable: true });
-        const protectedReceipts = new Map(operations.filter(item => item.phase !== 'finished').map(item => [item.requestId, item.fingerprint]));
+        const protectedReceipts = new Map(operations.filter(item => item.phase === 'prepared' || item.phase === 'dispatching')
+          .map(item => [item.requestId, item.fingerprint]));
         const ids = Object.keys(receipts);
         let remaining = ids.length - RECEIPT_LIMIT;
         for (const id of ids) {
@@ -517,15 +616,7 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     function prepare({ requestId, fingerprint, providerId, action }) {
       const prior = lookup(requestId, fingerprint);
       if (prior.operation || prior.receipt) fail('request_id_conflict');
-      updateOperations(operations => {
-        if (operations.some(item => item.providerId === providerId && unresolved(item))) fail('config_busy');
-        if (operations.length === RECEIPT_LIMIT) {
-          const index = operations.findIndex(item => !unresolved(item));
-          if (index < 0) fail('config_busy');
-          operations.splice(index, 1);
-        }
-        operations.push({ requestId, fingerprint, providerId, action, phase: 'prepared' });
-      });
+      updateOperations(operations => reserveOperation(operations, { requestId, fingerprint, providerId, action, phase: 'prepared' }));
     }
     function update(requestId, change) {
       guard();
@@ -566,6 +657,14 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
             return { ...operation, phase: 'finished', outcome, revision: receipt.revision };
           });
         },
+        confirmStopped(requestId) {
+          update(requestId, (operation, receipt) => {
+            if (operation.phase !== 'dispatching' && operation.outcome !== 'credential-unconfirmed') fail('config_recovery_required');
+            const revision = operation.revision ?? receipt?.revision;
+            if (!revision) fail('config_recovery_required');
+            return { ...operation, phase: 'finished', outcome: 'credential-unconfirmed-stopped', revision };
+          });
+        },
         abandon(requestId) {
           update(requestId, (operation, receipt) => {
             if (receipt || operation.phase !== 'prepared') fail('config_recovery_required');
@@ -582,5 +681,5 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     if (!stat(txPath)) return;
     return withLock(() => recover());
   }
-  return { read, transact, recoverPending, withCredentialOperation };
+  return { read, transact, recoverPending, withCredentialOperation, acquireOAuthWrite, authorizeCredentialStorage };
 }

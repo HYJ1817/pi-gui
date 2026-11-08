@@ -22,7 +22,8 @@ const MAX_FLOWS = 8;
 const fail = (code, extra = {}) => ({ ok: false, code, ...extra });
 
 export function createProviderCredentialBridge({ sdk, draftLookup, consentStore, mutationBlocked = () => false,
-  maintenanceLocked = () => false, draftFrozen = () => false, enabled = false, flowTtlMs = NONCE_TTL_MS, now = Date.now } = {}) {
+  maintenanceLocked = () => false, draftFrozen = () => false, forgetDraft = () => {}, nativePersistence = () => false,
+  enabled = false, flowTtlMs = NONCE_TTL_MS, now = Date.now } = {}) {
   const epoch = randomUUID();
   const flows = new Map();
   const preparing = new Map();
@@ -42,7 +43,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     handshakeSeen = true;
     const stagingEnabled = enabled === true;
     const sdkQualified = stagingEnabled ? await sdk.qualified().catch(() => false) : false;
-    return { ok: true, epoch, stagingEnabled, sdkQualified, flowTtlMs, nonceTtlMs: flowTtlMs };
+    return { ok: true, epoch, stagingEnabled, sdkQualified, nativePersistence: sdkQualified && nativePersistence(), flowTtlMs, nonceTtlMs: flowTtlMs };
   }
 
   /* 给 /api/provider-management 快照的后端侧能力：私桥握手 + 联调开关 + SDK 资格
@@ -93,12 +94,19 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     return !signal?.aborted && !guardBusy() && !inFlight && currentApproval(approval) ? approval : null;
   }
 
-  function persistApproved(approval, { signal } = {}) {
+  function persistApproved(approval, { signal, onQuiesced } = {}) {
     if (signal?.aborted || enabled !== true || guardBusy() || inFlight || !currentApproval(approval)) return fail('credential_conflict', { credentialSaved: false });
     approved.delete(approval.binding.draftId);
     consentStore?.revokeDraft(approval.binding.draftId);
-    return approval.kind === 'set' ? sdk.persistNative(approval.binding, approval.revision, { signal }) :
-      sdk.clearNative(approval.binding, approval.revision, { signal });
+    return approval.kind === 'set' ? sdk.persistNative(approval.binding, approval.revision, { signal, onQuiesced }) :
+      sdk.clearNative(approval.binding, approval.revision, { signal, onQuiesced });
+  }
+
+  async function qualifyAfterNative(approval, { signal } = {}) {
+    if (signal?.aborted || !await sdk.canPersist(approval.binding, approval.kind)) return false;
+    const evidence = await sdk.readback(approval.binding.providerId);
+    return !signal?.aborted && evidence?.ok === true && isOpaqueId(evidence.credentialRevision) &&
+      await sdk.canPersist(approval.binding, approval.kind);
   }
 
   function draftCurrent(flow) {
@@ -299,6 +307,12 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     return { ok: true };
   }
 
+  function closeForm(frame) {
+    if (draftFrozen(frame.draftId)) return fail('config_busy');
+    forgetDraft(frame.draftId);
+    return closeDraft(frame);
+  }
+
   const actions = new Map([
     ['capability', frame => capability()],
     ['prepare', frame => prepare(frame)],
@@ -307,7 +321,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     ['authorize-target', frame => authorizeTarget(frame)],
     ['status', frame => status(frame)],
     ['cancel', frame => cancel(frame)],
-    ['close-draft', frame => closeDraft(frame)],
+    ['close-draft', frame => closeForm(frame)],
   ]);
 
   /** server.js 的 IPC 入口：先按冻结合同校验帧形，再验 epoch，再分发。 */
@@ -331,6 +345,6 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     consentStore?.dispose();
   }
 
-  return { handle, dispose, epoch, desktopCapability, authorizeNative, persistApproved,
+  return { handle, dispose, epoch, desktopCapability, authorizeNative, persistApproved, qualifyAfterNative,
     invalidateDraft: draftId => closeDraft({ draftId }), get activeFlows() { prune(); return flows.size; } };
 }

@@ -22,8 +22,8 @@ async function beforeDeadline(deadline, run) {
 
 function project(receipt, outcome) {
   if (outcome === 'saved' || outcome === 'cleared') return { ...receipt, credentialSaved: true, credentialState: outcome };
-  const uncertain = outcome === 'credential-unconfirmed';
-  return { ...receipt, ok: false, credentialSaved: uncertain ? null : false, credentialState: outcome,
+  const uncertain = outcome === 'credential-unconfirmed' || outcome === 'credential-unconfirmed-stopped';
+  return { ...receipt, ok: false, credentialSaved: uncertain ? null : false, credentialState: uncertain ? 'credential-unconfirmed' : outcome,
     code: uncertain ? 'credential_unconfirmed' : 'native_write_failed',
     message: uncertain ? '配置已保存，凭据结果待确认。' : '配置已保存，凭据保存失败。',
     retryable: !uncertain, sync: { state: 'idle', reason: null } };
@@ -78,8 +78,16 @@ export function createNativeCommit({ store, credentials, mutationBlocked }) {
       let outcome = 'saved-credential-error';
       if (ready()) {
         outcome = 'credential-unconfirmed';
+        const onQuiesced = () => promise.catch(() => {}).then(() => store.withCredentialOperation(async recovery => {
+          if (mutationBlocked()) return;
+          const { operation: prior } = recovery.lookup(request.requestId, fingerprint);
+          if (!prior || (prior.phase !== 'dispatching' && prior.outcome !== 'credential-unconfirmed')) return;
+          const qualified = await beforeDeadline(performance.now() + COMMIT_TIMEOUT_MS,
+            signal => credentials.qualifyAfter?.(approval, { signal }));
+          if (qualified === true && !mutationBlocked()) recovery.confirmStopped(request.requestId);
+        })).catch(() => { /* Keep isolation if proof cannot be validated and committed. */ });
         try {
-          const result = await beforeDeadline(deadline, signal => credentials.persist(approval, { signal }));
+          const result = await beforeDeadline(deadline, signal => credentials.persist(approval, { signal, onQuiesced }));
           const expected = bound.action === 'clear-native' ? 'cleared' : 'saved';
           if (result?.ok === true && result.credentialSaved === true && result.credentialState === expected) outcome = expected;
           else if (result?.ok === false && result.credentialSaved === false) outcome = 'saved-credential-error';
@@ -96,5 +104,5 @@ export function createNativeCommit({ store, credentials, mutationBlocked }) {
     return promise;
   }
 
-  return { commit, hasDraft: draftId => drafts.has(draftId) };
+  return { commit, hasDraft: draftId => drafts.has(draftId), inFlight: () => active.size !== 0 };
 }
