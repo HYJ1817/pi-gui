@@ -222,18 +222,23 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
       sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set(), approvals: new Map() };
     if (!leases.has(key)) leases.set(key, new Set());
-    leases.get(key).add(live); lives.set(record.conversationId, live); changed(live);
-    try {
+    leases.get(key).add(live); lives.set(record.conversationId, live);
+    live.adapterReady = Promise.resolve().then(async () => {
+      if (!belongs(live)) throw fail('stale_runtime');
       live.adapter = await factory({ cwd: record.workspace.cwd, workspace: { ...record.workspace }, owner: owner(live),
         sessionId: record.sessionId, sessionLocator: record.sessionLocator, isCurrent: () => belongs(live), getOwner: () => owner(live) }, event => emit(live, event));
+    });
+    changed(live);
+    try {
+      await live.adapterReady;
       if (!belongs(live)) throw fail('stale_runtime');
       live.adapter.start();
       return { ok: true, conversationId: record.conversationId, owner: owner(live), item: summary(record) };
     } catch (e) {
       live.lifecycle = 'error'; live.error = 'runtime_start_failed';
       safeLog('runtime.start_failed', { phase: 'factory', code: e && e.code ? e.code : 'runtime_start_failed' });
-      if (!live.adapter) { lives.delete(record.conversationId); leases.get(key)?.delete(live); if (!leases.get(key)?.size) leases.delete(key); }
-      else await retire(live).catch(() => {});
+      if (live.adapter || live.retirePromise) await retire(live).catch(() => {});
+      else { lives.delete(record.conversationId); leases.get(key)?.delete(live); if (!leases.get(key)?.size) leases.delete(key); }
       throw fail(e.code || 'runtime_start_failed');
     }
   }
@@ -366,7 +371,12 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (!live.retired) { live.retired = true; live.generation = randomUUID(); }
     live.lifecycle = 'disposing';
     live.retirePromise = (async () => {
-      const cleanup = await Promise.allSettled([invalidateResources(live), Promise.resolve().then(() => live.adapter?.dispose())]);
+      // Invalidation can arrive while the factory is still acquiring resources.
+      const disposeAdapter = async () => {
+        await live.adapterReady.catch(() => {});
+        await live.adapter?.dispose();
+      };
+      const cleanup = await Promise.allSettled([invalidateResources(live), disposeAdapter()]);
       if (cleanup.some(result => result.status === 'rejected')) throw fail('cleanup_pending');
       if (live.adapter?.cleanupConfirmed && !live.adapter.cleanupConfirmed()) throw fail('cleanup_pending');
       leases.get(live.key)?.delete(live); if (!leases.get(live.key)?.size) leases.delete(live.key);

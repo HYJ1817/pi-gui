@@ -28,7 +28,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
   let registry = createRuntimeRegistry(options);
   const reject = (fn, code) => assert.rejects(fn, e => e.code === code);
   const start = (id, extra = {}) => registry.start({ id, epoch: 'epoch-' + id, ...extra });
-  function controlled(name, { locator = () => null, cleanup = async () => {}, admission } = {}) {
+  function controlled(name, { locator = () => null, cleanup = async () => {}, beforeAdapter = async () => {}, admission } = {}) {
     const scopedEvents = [], children = [];
     const w = { ...workspaces.get('A') };
     const instance = createRuntimeRegistry({ dataDir: path.join(dir, name), resolveWorkspace: async () => ({ ...w }),
@@ -42,7 +42,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
           sessionLocator: () => locator(index),
           async dispose() { adapter.disposeCalls++; await cleanup(index); disposed = true; },
           cleanupConfirmed: () => disposed };
-        children.push(adapter); return adapter;
+        children.push(adapter); await beforeAdapter(index); return adapter;
       } });
     return { instance, children, events: scopedEvents, workspace: w };
   }
@@ -181,6 +181,23 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         const before = f.events.length;f.children[0].emit({ type: 'stop_state', pending: false });assert.equal(f.events.length, before);
         await f.instance.command(newOwner, { type: 'prompt', message: 'new owner remains usable' });
       } finally { releaseCleanup();await pending?.catch(() => {});await f.instance.dispose(); }
+    });
+    await check('工作区失效等待迟到的 factory 并释放未启动的 adapter', async () => {
+      const entered = Promise.withResolvers(), release = Promise.withResolvers();
+      const f = controlled('launch-invalidate-race', { beforeAdapter: () => { entered.resolve(); return release.promise; } });
+      const started = reject(() => f.instance.start({ id: 'A', epoch: 'epoch-A' }), 'stale_runtime');
+      let invalidated;
+      try {
+        await entered.promise;
+        invalidated = f.instance.invalidateWorkspace('A');
+        await tick();
+        assert.equal(f.instance.inUse(f.workspace.root), true);
+        release.resolve();
+        await Promise.all([started, invalidated]);
+        assert.equal(f.children[0].disposeCalls, 1);
+        assert.equal(f.events.some(event => event.type === 'runtime_event' && event.event.state === 'ready'), false);
+        assert.equal(f.instance.inUse(f.workspace.root), false);
+      } finally { release.resolve(); await Promise.allSettled([started, invalidated]); await f.instance.dispose(); }
     });
     await check('持久化恢复核对 admission 全部不可变 workspace 字段', async () => {
       let admitted = { ...workspaces.get('A') };
