@@ -1,8 +1,10 @@
 # 供应商管理 P3 技术实施方案
 
-状态为待独立方案验收。基线为 `origin/main@c78dc8cf8bab9e238a1045df7a114d8b0195b571`，包含 [PR #60](https://github.com/HYJ1817/pi-gui/pull/60) 的 FIX-01 至 FIX-10。基线 [main CI](https://github.com/HYJ1817/pi-gui/actions/runs/42449139416) 为 push、第 1 次尝试、结论 success。本轮只交付规划文档。
+状态为三条功能链的独立定向复核已完成，待维护者批准开工。后端审计锚点为 P2 合并提交 `c78dc8cf8bab9e238a1045df7a114d8b0195b571`，包含 [PR #60](https://github.com/HYJ1817/pi-gui/pull/60) 的 FIX-01 至 FIX-10。[该提交 main CI](https://github.com/HYJ1817/pi-gui/actions/runs/42449139416) 8/8 通过。本轮只交付规划文档。
 
-**目标**　将 P0 HTTP 合同、P1 配置仓储和 Pi 原生 SDK、P2 私有输入面和受限网络接成三条可独立验收的生产链。保留 JavaScript ESM、Electron 私有父子 IPC、Node worker 与 Pi stdio RPC。P4 独立开发，P5 才进行界面接线。
+当前 `origin/main` 为 `0e636ff3fd676b8ae81bc566cb75cf2e5fae140b`，已合并 [P4 PR #61](https://github.com/HYJ1817/pi-gui/pull/61)。对比确认 `server.js`、`server/`、`electron/` 和共享请求校验器与 P2 锚点一致。以下 UI 差异以这个合并提交为准。该提交的 [main CI 第 2 次尝试](https://github.com/HYJ1817/pi-gui/actions/runs/42464352158/attempts/2) 未取得完整通过，core 凭据桌面测试和 Electron 构建均遇到 Electron ZIP 下载 504，最终 gate 失败。它是独立的基线验证缺口，实施启动前应核对所选基线的完整 CI 或补完整基线测试。
+
+**目标**　将 P0 HTTP 合同、P1 配置仓储和 Pi 原生 SDK、P2 私有输入面和受限网络接成三条可独立验收的生产链。保留 JavaScript ESM、Electron 私有父子 IPC、Node worker 与 Pi stdio RPC。P4 界面已经合并，实际生产接线留给 P5。
 
 ## 1. 当前源码审计
 
@@ -15,9 +17,9 @@
 | 5. 授权失效 | P2 consent 为内存 Map，15 分钟 TTL 和 AbortSignal，具有 revoke/revokeDraft/revokeDraftConnection/dispose。桥在成功替换/清除后撤销旧授权，草稿更新、管理路由、worker 换代和外部观察到的凭据变化尚未统一接线。记忆记录当前仅内存，显式 revoke 仍可能被 matchRemembered 重新匹配。空槽授权目前还可能带 inspect revision，违反 none 的无代次语义。 [授权存储](../server/provider-discovery-consent.js#L22) · [桥签发](../server/provider-credential-bridge.js#L196) · [草稿](../server/provider-management.js#L97) |
 | 6. 缓存与发现 | P0 的 authorize/revoke/discover/test/operation/cancel/sync 客户端和校验存在，服务端目前只执行 snapshot/drafts/commit。P2 transport 没有缓存或 HTTP 接线，worker 没有 `discover` 方法。旧 fetchModels 允许 env 引用并按旧规则联网，不能替代 P2 transport。 [HTTP facade](../server/provider-management.js#L150) · [公开客户端](../public/api.js#L275) · [旧发现](../server/providers.js#L204) · [P2 transport](../server/provider-network.js#L352) |
 | 7. 保留上下文刷新 | 本机已安装 Pi `@earendil-works/pi-coding-agent@1.5.0` 的公开 stdio RPC 命令和处理器有 `get_state/get_available_models/get_available_thinking_levels/switch_session`，缺少专用的配置热刷新。前两项是读取当前快照。进程内 `ModelRuntime` 更新方法和扩展 context 的 reload 无法从公开 RPC 调用。相同文件的 `switch_session` 会销毁并重建会话服务。Pi 恢复可能改选模型，未持久化的树叶选择也可能丢失。具体证据见 §5。 |
-| 8. 延后生效 | 当前 OAuth 装配先 `closeAll()`，再由 P25 同步器仅按 cwd/bridgeRun 做 Classic 重启与回读。它不够证明会话身份和模型档位保持。旧供应商面板的 `reloadPi` 还会清线程。P3 改成单个 coordinator 跟踪每个 runtime，活跃进程保持现状，在经证明的安全生命周期边界采纳。 [装配](../server.js#L938) · [Classic 同步](../server/provider-auth-runtime.js#L4) · [旧 UI](../public/providers.js#L638) |
+| 8. 延后生效 | 当前 OAuth 装配先 `closeAll()`，再由 P25 同步器仅按 cwd/bridgeRun 做 Classic 重启与回读。它不够证明会话身份和模型档位保持。P4 已移除手动 `reloadPi` 的主动清线程，仍按旧启动参数重启，不能充当自动逐 Runtime 同步。P3 改成单个 coordinator 跟踪每个 runtime，活跃进程在经证明的安全生命周期边界采纳。 [装配](../server.js#L938) · [Classic 同步](../server/provider-auth-runtime.js#L4) · [P4 手动重载](https://github.com/HYJ1817/pi-gui/blob/0e636ff3fd676b8ae81bc566cb75cf2e5fae140b/public/providers.js#L1057) |
 | 9. 新旧运行版本 | Registry 已持有 backendInstance、workspaceEpoch、runtimeId/generation、sessionId、可信 locator 和会话文件身份。独立 Runtime 与 Classic 分别 launch。当前没有每次启动所载入的配置/认证版本，也没有逐运行时 sync 状态。GUI 模型投影可合并最新磁盘覆盖，不能替代原生回读。 [Registry owner](../server/runtime-registry.js#L63) · [绑定与启动](../server/runtime-registry.js#L182) · [Adapter](../server/session-runtime.js#L70) · [模型清洗](../server/provider-auth-sdk.js#L338) |
-| 10. P4/P5 合同 | 保留 P0 v1 输入、fixture、状态闭集。读取本地未合并 P4 `44a76d2` 仅作差异核查，其 discovery controller 从 POST 直接读列表，尚未轮询 202 operation；草稿同步和真实取消也要在 P5 对接。P3 以 main 的合同和真实 HTTP fixture 验收。 [合同](provider-management-frontend-contract.md) · [P0 校验](../public/provider-management/contract.js#L153) · [fixture](../tests/fixtures/provider-management-scenarios.json) |
+| 10. P4/P5 合同 | 保留 P0 v1 输入、fixture、状态闭集。已合并的 P4 discovery controller 仍从 POST 直接读列表，尚未轮询 202 operation，草稿同步和真实取消也要在 P5 对接。P4 对明确禁用和故障使用不同处理，保留 422 unsupported 才兼容降级的语义。P3 以冻结合同和真实 HTTP fixture 验收。 [合同](provider-management-frontend-contract.md) · [P0 校验](../public/provider-management/contract.js#L153) · [P4 controller](https://github.com/HYJ1817/pi-gui/blob/0e636ff3fd676b8ae81bc566cb75cf2e5fae140b/public/provider-management/discovery.js#L99) |
 
 两个 feature flag 仍取显式环境值，默认关闭。管理路由在 token、Host、Origin 后进入应用级分支，OAuth 分发仍可能落到旧 owner 检查后，C 按精确前缀调整并补权限回归。现有 [OAuth 合同](provider-auth.md) 的授权交互、流程单飞和进度仍由 P25 持有。[路由](../server/router.js#L170) · [开关装配](../server.js#L494)
 
@@ -54,7 +56,7 @@ flowchart LR
 | --- | --- |
 | 草稿与凭据桥 → A/B | `reserveStage(draftBinding, kind)` 返回私有代次与占位，`closeDraft(draftId, draftRevision)` 与 `invalidateConnection(draftId, connectionRevision)` 切断旧授权和暂存。不存在的槽位保持明确 unknown/absent 区别。 |
 | A → P1/worker | P1 增加锁内 `lookupReceipt(requestId, fingerprint)` 和受租约保护的事务入口。原生 `persistNative/clearNative` 增加精确 stage/worker 见证。终态只返回本机已确认、明确失败或未知及固定原因。 |
-| B → worker/transport | 私有 `discover(binding, grantSnapshot, operationId, deadline)` 和 `cancelDiscovery(operationId)`。回包仅规范化模型、事实、闭集状态和终止确认。主进程内 env/none 调用同一 transport。 |
+| B → worker/transport | 私有 `discover(binding, grantSnapshot, operationId, deadline, admissionWord)` 和 `cancelDiscovery(operationId)`，消息均绑定 workerEpoch。后端拥有实时授权，worker 使用每操作只读授权视图与本地 AbortSignal。回包仅规范化模型、事实、闭集状态和终止确认。后端内 env/none 调用同一 transport。 |
 | A/B/P25 → C | `recordDesired(confirmedChange)` 接收已确认阶段和配置见证，`invalidate(providerId, cause)` 撤销受阻的旧同步资格。C 的 `captureStart(owner, launchEvidence)` / `observeReady(owner, launchEvidence)` 由真正的 runtime 生命周期调用。 |
 
 ## 3. A 凭据与保存的生命周期
@@ -109,8 +111,10 @@ SDK 超时释放短期租约后，持久未决标记仍阻断同一 auth authori
 2. 原生 `staged/stored` 只通过可信 CredentialSheet 确认。HTTP authorize 返回 `requiresDesktopConfirmation:true` 时无 consentId、零网络。stored 只支持经单次公开 SDK 快照证明的 literal API key，拒 command、未转义 env、opaque headers、OAuth 或来源不明。staged 使用确切 worker 代次。none 的代次缺省或 null，显式授权且实际地址均为回环时才允许无秘密 HTTP。`localhost` 解析到公网直接拒绝。
 3. env 只由服务器从可信绑定解析。首版接受审核过的目录 preset 精确目标和指定引用，或同一策略证明的已保存服务。现有 `credentialAction.env.reference` 写配置合同保留。草稿没有 env 引用字段，未保存自定义 env 及不可证明的旧引用降级为配置/手动模式。`piRegistrationReference` 只是无密钥回环注册占位。页面不能用任意变量名取 GUI token、系统凭据或将其发往自填目标。P3/P5 禁止回退到旧 `/api/providers/models`，旧手动路由的环境变量限制单列安全决策。
 4. 只在规范 basePath 的段边界内拼接受支持的目录后缀，拒歧义编码及上级回退。现有 helper 对 `/tenant-a/v1` 可产生 `/tenant-a/models`、`/models`、`/v1/models`，超出精确目标。需独立目录地址的服务先降级。未来固定映射须显示并明确授权。旧兼容 helper 保持语义。候选列表服务端生成并复制，最多 8 项，API 取规范 connection，keyed grant 拒空代次。
-5. 让原生 key 留在 worker 中，调用唯一的 P2 transport。将现有 eval worker 整理为真实私有模块，源码直接运行入口，既有 esbuild 编译 CJS worker 载荷，Electron 和 SEA 随私有资源携带，通过 `readAsset` 读取。worker 接授权快照、操作 ID 和私有绑定，不接页面任意 URL。取消帧绕过 native 写队列，终止传输并清理后确认，发现超时不默认杀掉正在执行其他原生写入的 worker。排队、凭据解析、DNS、候选和响应共用 30 秒预算。DNS 后、每次发包前和返回前复核授权及私有快照证据，观察到凭据变化就中止，绝不调默认 `getAuth` 换成新值。 [构建](../scripts/build-exe.mjs#L90) · [私有资源](../lib/assets.js#L74)
+5. 让原生 key 留在 worker 中，复用 P2 transport 的现有校验、socket 和投影逻辑。它现在从 `consentStore.get/signalFor` 读取授权。后端保留该权威 store 和 AbortSignal，worker 为同一 transport 注入最小 `get/signalFor` 视图，按 ID 提供服务端签发的不可变快照和 worker 本地信号。快照绑定完整目标、候选、凭据代次、workerEpoch 和有效期。排队、取凭据、DNS、候选和响应沿用自操作受理开始的单个 30 秒单调 deadline，并截断于授权到期。使用跨线程同源单调时钟，不重算起点。观察到凭据变化立即终止，禁止默认 `getAuth` 替换成新值。将 eval worker 整理成真实私有模块，由 esbuild 打包 CJS 载荷，Electron 和 SEA 通过 `readAsset` 读取。 [当前 transport](../server/provider-network.js#L352) · [构建](../scripts/build-exe.mjs#L90) · [私有资源](../lib/assets.js#L74)
 6. 记忆只存非秘密描述和策略版本。可持久化无凭据目标的批准，重开重算绑定并确认仍无凭据，再签发新 consentId。stored/env 的同实例重开也须证明同来源同代次。worker/backend 重启时旧 HMAC 或凭据存在性不足以证明连续性，重新确认。staged 永不记忆。显式撤销同时删除精确目标的记忆记录并停止匹配作业；普通过期和关闭只取消活跃授权。
+
+每个 worker 操作分配一个无秘密的共享原子准入字，状态为 `open/in-flight/revoked`。后端同步订阅原授权 signal，任何撤销、取消或连接失效先原子写 `revoked`，同时封闭发布与缓存资格，再发送绕过原生写队列的取消帧。worker 在实际 DNS lookup 和每次实际 requester 调用前以原子 `open → in-flight` 作为准入点。每次重新检查期限，结尾只允许 `in-flight → open`，使迟到完成不能复活撤销。撤销先于准入时不得调用 DNS 或 requester。先获准的尝试属于在途，worker 收取消帧后终止本地 AbortController，销毁请求并释放操作引用。响应、候选切换及回包前也读取共享状态，后端收件再次复核权威 store。已发送的字节无法收回。测试需阻塞取消消息投递，证明撤销仍可阻止新 DNS/候选，也需覆盖 revoke 与已准入请求的竞态。[P2 授权生命周期](../server/provider-discovery-consent.js#L22)
 
 ### 操作状态与缓存提交点
 
@@ -120,7 +124,8 @@ operation  pending → running → success | failed | cancelled
 授权过期、关闭、换目标 → 中止排队与传输 → 等清理确认后 cancelled
 ```
 
-- `discover/test` POST 202 返回 `operationId`。GET 只读。拟限制每服务单飞、全局 8 个在途操作、128 个终态且保留 15 分钟。相同 requestId 和规范请求返回同一操作，fingerprint 包含路由和相应 operationId，复用异内容返回 409。先同步占位再异步执行。较新请求实停旧请求。活跃项不能被 TTL/LRU 驱逐，已经成功的终态不能改写成 cancelled。
+- `discover/test` POST 202 生成并返回服务端 `operationId`，请求体只带原合同字段。POST `/operations/:id/cancel` 以路径 `id` 唯一定位目标，body `requestId` 是独立取消命令的幂等键。服务端先检查操作归属再取消。幂等 fingerprint 由方法、规范路径和规范请求体构成。重复同一命令回原操作或同一取消事实，复用 ID 发不同命令返回 409。GET 只读。已成功的操作不能改写成 cancelled。 [P0 路由合同](provider-management-frontend-contract.md#L40)
+- 先同步占位再异步执行。拟限制每服务单飞、全局 8 个在途操作、128 个终态且保留 15 分钟。新请求须等待旧操作清理或返回 `config_busy`。`cancelled` 只在匹配 workerEpoch 的清理确认或 worker 退出证明后发布。拟定 2 秒取消确认预算，届满把操作置为终态 failed/timeout，取消请求返回闭集 `timeout`，旧结果仍不可读或写缓存。超时 worker 进入有界发现隔离，最多保留每个未确认操作一项隔离记录，停接该 worker 的发现，直到清理确认或确认退出；该隔离不杀正在处理其他原生写入的 worker。活动项不能被 TTL/LRU 驱逐，超时不得隐瞒为成功取消。
 - 后端内存缓存 60 秒 fresh，按 `providerId+完整目标+API+策略版本+credentialSource+privateGeneration+launchIdentity+approvalEpoch` 分区，拟上限 64 条且合计 8 MiB。显式 revoke 失效匹配缓存和旧结果，并提升批准代次。所有缓存出口（包括草稿的 `cachedModels` 和 operation 轮询）须核对当前授权与批准代次。无授权时编辑先呈现已配置/手工项，合法同绑定授权可呈现缓存。GET、草稿编辑和普通选择不触发网络。P5 在授权且凭据就绪时安排 600 ms debounce，fresh 命中无发包。手刷 `force:true` 只绕过 TTL 和防抖。连接测试走显式实时只读探测，不把缓存当新证据。
 - 每次异步返回及发布和写 cache 前，核对 `operationId/dialogGeneration/requestSeq/connectionRevision/targetFingerprint/credentialGeneration`、当前草稿、授权、worker 和 launch。换目标、轮换、撤销、保存冻结和关闭会使旧结果不可采纳，已完成旧结果也不得再经轮询返回模型。旧 cache 仅限仍匹配的绑定作 stale 显示。结果只更新候选模型，失败、取消和空结果均保留选择、排序和手工模型。缓存和操作重启即丢。
 - 补齐协议适配。现有 [协议 fixture](../tests/models-api.cjs#L89) 包含 OpenAI `object/created/owned_by`、Anthropic `type/created_at`、Google `models/` 前缀及生成方法。P2 会把部分合法条目丢弃并当空目录。按协议允许已验证的标量元数据参与形状校验，输出仍走模型字段白名单及秘密回显过滤。Google 沿用去前缀、去重和合格生成模型语义。分别处理有效空列表、合法但无适用模型、畸形或全部不安全，最后一类不得用空列表覆盖旧缓存。 [P2 投影](../server/provider-network.js#L260)
@@ -156,7 +161,8 @@ operation  pending → running → success | failed | cancelled
 - 只有同一目标的原生 `get_state/get_available_models/get_available_thinking_levels` 成功且形状可信，身份和版本见证相符，才记 applied。使用 private RPC 原始成功数据，不以 UI sanitize 后的空列表或叠加最新磁盘覆盖作证明。重开的现有会话还需比对 sessionId/file、必要的 get_tree leaf、模型与档位。Pi 自行回退时记 error 并提示用户选择。Classic ready 要避免 `applyProjectPreferences` 再选模型。 [RPC request](../server/rpc-bridge.js#L606) · [模型投影](../server/provider-auth-sdk.js#L338) · [项目偏好](../public/project-config.js#L70)
 - 将配置变化分成原生目录变化、仅 GUI 投影变化和仅认证变化。原生目录变化要求稳定的 spawn→ready 配置/agentDir 证据，以及受影响模型 ID/字段的可观测预期差异或等价的正面加载证据。因认证未就绪导致模型缺失时保持未应用。仅 GUI 元数据变化可在既有 native 版本证据仍匹配时应用投影。仅认证变化要求确证的新实例、稳定的已回读凭据和配置证据、可用目录回读，结论是本机已采纳对应版本，远端认证与推理仍未知。只能观测到健康 RPC 或 PID 时保持 pending/error。
 - 后端重启废弃旧 live owner，先恢复 A 未决阶段和持久目标代次，再按当前 Registry/Classic 重建 pending/readback。禁止为同步启动休眠会话。失败的重试只重新准入和回读。持久状态只记期望版本和固定原因，路径、session locator 和原始回包不进入公开结果。
-- OAuth 登录/退出沿用 P25 worker/flow 和事后安全回读，区分已变更、无变化和未知。确认变更后走同一 coordinator，保留旧 `/api/provider-auth/sync` 形状及 `synced` 对已确认 applied 的映射。移除 provider 同步装配的 `closeAll`，维护专用停机行为独立保留。GET 不调度重启，事件和 POST 才调度。旧 provider 写入也登记已提交变更，旧面板换线留 P5。
+- OAuth 登录/退出沿用 P25 worker/flow 和事后安全回读，区分已变更、无变化和未知。将 `server.js` 的 `synchronize` 回调及 `/api/provider-auth/sync` 全部改接同一 coordinator。替换现有包含 `closeAll` 和 `createAuthRuntimeSync` 的整个同步装配，移除旧 helper 直接调用 `rpc.restart` 的 provider 路径。复用其只读探测和监听清理经验，任何逐目标重开走统一资格闸门。维护专用停机行为独立保留。GET 不调度重启，事件和 POST 才调度。旧 provider 写入也登记已提交变更，旧面板换线留 P5。[当前 OAuth 接线](../server.js#L938) · [旧 helper](../server/provider-auth-runtime.js#L4)
+- 保留 P25 快照和 `/sync` 响应形状，替换旧 helper 的成功口径。目标集合为空但仍有待应用代次时，管理同步和 OAuth 投影均为 `pending`，内部固定原因为 `no_live_runtime`，P25 的 `reason` 保持安全展示文案，等待下一次正常启动。既无目标又无待应用事实时为 `idle`。只有至少一个当前目标且该代次的全部适用目标均确认 applied，OAuth 才映射为 `synced`。请求开始及回读结束重验 `desiredGeneration`、owner、agentDir 和配置见证，旧 cwd/bridgeRun 的成功不能代用。
 
 ```text
 可生效版本 → 每目标 pending → syncing → applied
@@ -214,6 +220,7 @@ P3-A 先冻结私有暂存/收据/同步资格接口。B 的 operation/cache/协
 - [ ] 以 fixture 独立实现申请、operation ID、取消/撤销、60 秒缓存和三值连接测试。受理前验当前草稿版本，启动和发布复查连接身份。演练 600 ms 授权后自动路径使用同一 POST 合同。
 - [ ] 接 worker 内的 staged/stored transport、env/none 受限来源与打包载荷。按 §4 关闭路径扩权，补协议形状及安全回显。识别并修正目前空槽授权带 revision 的路径。
 - [ ] 扩展 `tests/provider-network-policy.cjs`、`tests/provider-management-http.cjs`、`tests/provider-credential-sdk.cjs`、`tests/models-api.cjs`，新增 `tests/provider-management-discovery.cjs`。用 DNS/socket/时间/IPC barrier 验证未授权及失效 requester=0，已发请求实停，迟到不入 cache，已关闭的旧 operation 不返模型。确认 60 秒边界、手刷、合法空目录/畸形以及所有 HTTP/网络分级，推理路径调用数为 0。用 OpenAI/Anthropic/Google fixture 确认合法条目、选择保留和敏感哨兵过滤。
+- [ ] 用真实 worker 通道和受控 transport I/O 验证挂起的取消帧、撤销前后准入顺序、无确认超时与发现隔离恢复。HTTP fixture 覆盖独立取消 requestId、异内容冲突、跨 owner 拒绝、旧 ACK 误入、成功结果不可改写和重复取消幂等。
 - [ ] 运行 `npm run test:provider-p2`、`npm run test:provider-management`、`node tests/models-api.cjs`、`node tests/server-security.cjs`、`node tests/ci-test-plan.cjs`。验收源码、Electron 包和 SEA 私有 worker 加载，全部只用隔离目录与受控 fixture。
 
 **回滚**　关闭发现能力时撤销、终止 operation，清空内存缓存，旧路由继续原有显式用途。已写配置、原生凭据和已选模型不由发现回滚修改。
@@ -225,8 +232,8 @@ P3-A 先冻结私有暂存/收据/同步资格接口。B 的 operation/cache/协
 **预计修改**　新增 `server/provider-config-sync.js`。修改 `server.js`、`server/provider-management.js`、`server/provider-operation-state.js`、`server/provider-auth.js`、`server/provider-auth-runtime.js`、`server/router.js`、`server/rpc-bridge.js`、`server/runtime-registry.js`、`server/session-runtime.js`。若需要区分 Classic bootstrap 的应用原因，仅对 `public/app.js` 和 `public/project-config.js` 增加兼容守卫。同步输出投影更新 `public/provider-management/contract.js` 和 P0 fixture。两 picker 的候选过滤和 P4 接线留 P5。
 
 - [ ] 接真实 spawn/ready/lifecycle 及 per-owner 版本，发布逐实例 pending/syncing/applied/error，恢复后从当前权威对象重建。明确 no-project/no-session 与没有活跃目标的状态，不能用空集合证明所有 Runtime 已应用。
-- [ ] 用同一 coordinator 替换 P25 的 provider closeAll 接线。守住 Classic/Runtime owner 和 mutation admission。实现普通安全生命周期的应用及显式同步重试。自动重开分支按 §5 资格独立验收，未达到门槛保持延后。
-- [ ] 新增 `tests/provider-config-sync.cjs`，扩展 `tests/provider-auth-runtime.cjs`、`tests/provider-auth.cjs`、`tests/runtime-registry.cjs`、`tests/session-runtime.cjs`、`tests/runtime-models.cjs`、`tests/runtime-draft.cjs` 和 `tests/provider-management-http.cjs`。覆盖 Classic 与多 Runtime 忙闲交错、后台任务继续、A→B→A、失效 owner/epoch、错误 session 文件对象、无持久树叶、启动中换代、无可用模型/档位、旧回读迟到、OAuth 已存后报错、重启恢复。要求无全局 closeAll、无自动模型/档位命令、无草稿或上下文清理。
+- [ ] 用同一 coordinator 替换 P25 的 provider closeAll 和直接 Classic restart 接线。守住 Classic/Runtime owner 和 mutation admission。实现普通安全生命周期的应用及显式同步重试。自动重开分支按 §5 资格独立验收，未达到门槛保持延后。
+- [ ] 新增 `tests/provider-config-sync.cjs`，扩展 `tests/provider-auth-runtime.cjs`、`tests/provider-auth.cjs`、`tests/runtime-registry.cjs`、`tests/session-runtime.cjs`、`tests/runtime-models.cjs`、`tests/runtime-draft.cjs` 和 `tests/provider-management-http.cjs`。覆盖 Classic 与多 Runtime 忙闲交错、后台任务继续、A→B→A、失效 owner/epoch、错误 session 文件对象、无持久树叶、启动中或回读中换代、无可用模型/档位、旧回读迟到、OAuth 已存后报错及重启恢复。无项目、无 live owner 的 OAuth 成功必须保留原生凭据事实和 pending，Classic restart 与全局 closeAll 调用均为 0。自动模型/档位命令和草稿/上下文清理均为 0。
 - [ ] 运行 `npm run test:auth`、`node tests/provider-auth-runtime.cjs`、`node tests/runtime-registry.cjs`、`node tests/session-runtime.cjs`、`node tests/runtime-models.cjs`、`npm run test:provider-management`、`npm run test:provider-p2`。完成完整 canonical、重建 `npm run build:app -- --rebuild` 与包内 smoke、正常沙箱隔离和独立功能/安全审查。
 
 **回滚**　停止新调度，回收 per-owner 排队并保留已存配置/凭据和待同步标记。受阻结果按待同步呈现。任何会恢复旧的 provider 全局停机行为的二进制回退，须由维护者在可控停机窗口决定。
@@ -235,13 +242,15 @@ P3-A 先冻结私有暂存/收据/同步资格接口。B 的 operation/cache/协
 
 以 [前端合同 v1](provider-management-frontend-contract.md)、[校验器](../public/provider-management/contract.js) 和 [现有 fixture](../tests/fixtures/provider-management-scenarios.json) 为准。保留旧 endpoint、方法、输入字段名、HTTP 形状和枚举。内部新增接口只服务阶段交接。实际冻结 DTO 通过与真实 router 共用的 fixture 验收，浏览器不依赖私有数据。
 
+P4 以 `capabilities.discoveryModes` 判定按钮可用，旧 controller 会把 202 误解为模型列表。P3 的后端专项以显式 fixture 装配验证完整能力，随应用交付时先保留 P4 的真实禁用反馈。只有 P5 换成 operation-aware controller 并通过验收后，才开放相应应用入口。保留 P4 的凭据入口闸门及管理快照故障时停止写入。P4 的继承选择表示仍有已知合同限制，作为 P5 的可选独立合同提案处理。[P4 能力判断](https://github.com/HYJ1817/pi-gui/blob/0e636ff3fd676b8ae81bc566cb75cf2e5fae140b/public/provider-management/discovery.js#L32) · [P4 验收](https://github.com/HYJ1817/pi-gui/blob/0e636ff3fd676b8ae81bc566cb75cf2e5fae140b/docs/provider-management-p4-acceptance.md)
+
 | 入口 | P3 定义和 P5 消费规则 |
 | --- | --- |
 | GET `/api/provider-management` | `Snapshot` 的原字段。capabilities 按 backend 真实资格和可信桌面能力决定，保持 Web、旧 SDK 与关闭开关的降级。GET 不发供应商请求。 `revision` 只用于当前 backend 的 CAS。 |
 | POST `/drafts` | 原输入。返回权威 `draftId,draftRevision,connectionRevision,targetFingerprint,credentialState,consentState,cachedModels,sourceKind`。在已冻结的 fixture 位置返回非秘密 `credentialGeneration`，用于 UI 判旧，不是 worker UUID/HMAC。更新先用 `expectedDraftRevision`。 |
 | POST `/discovery-authorizations` 与 `/revoke` | 原字段。返回 `consentId/expiresAt/targetSummary/requiresDesktopConfirmation`。HTTP 请求不产生原生密钥授权。桌面可信动作返回已签授权。撤销后旧 grant、记忆授权和作业不能复用。 |
 | POST `/discover`、`/test` | HTTP 202 `{ok:true,operationId}`。提交最新草稿版本和原有 generation/seq/force。用户已选与模型 patch 只由草稿管理。 |
-| GET `/operations/:id`，POST `/operations/:id/cancel` | `{ok:true,kind,state,revision,result?,error?}`。结果带绑定字段，模型遵守 fixture 的 `modelId/providerId/configSource/effectiveValues/editableOverrides`。过期/跨 owner 返回闭集错误。取消清理确认后终态 cancelled，GET 不调度。 |
+| GET `/operations/:id`，POST `/operations/:id/cancel` | GET 返回 `{ok:true,kind,state,revision,result?,error?}`。结果带绑定字段，模型遵守 fixture 的 `modelId/providerId/configSource/effectiveValues/editableOverrides`。POST 请求体 `{requestId}`，目标取路径 ID，独立命令按 §4 幂等。匹配的清理确认后返回 `{ok:true,state:'cancelled'}`，清理超时返回固定错误。过期、跨 owner 或已完成不可取消使用闭集错误。GET 不调度。 |
 | POST `/commit` | 保留原动作和 `credentialAction`。按 fixture 返回 `saved/credentialSaved/credentialState/revision/serviceId/operationId/sync`。配置成功而 native 失败时必须先读 `saved:true`，不能只判断 `ok`。请求失联以同 ID 和原请求重传查收据。 |
 | POST `/sync` | 原 `{requestId,revision}`，返回 operationId 及 sync 摘要。按 `pending/syncing/applied/error` 提供逐实例项。拟冻结 `sync.items[]` 为 `{kind, runtimeId?, conversationId?, state, reason, desiredGeneration, appliedGeneration}`，仅含 GUI 不透明身份和闭集原因；客户端不提交路径或 owner 作为同步权限。 |
 | 关闭草稿的最小增补 | 建议新增 `POST /drafts/:id/close {requestId,draftRevision}`。使用原应用级鉴权和当前草稿版本，返回 `{ok:true,closed:true}`，已关闭可幂等重传。避免已丢失 202 回执时只靠 operationId 取消。需独立方案验收确认；旧端仍用 revoke/cancel 和 TTL。该动作与既有私有 `close-draft` 进入同一后台清理，不扩大秘密 IPC。 |
@@ -266,7 +275,9 @@ P3-A 先冻结私有暂存/收据/同步资格接口。B 的 operation/cache/协
 
 ## 10. 本次规划验证
 
-- 基线 main CI 8/8 通过。当前 `node tests/ci-test-plan.cjs` 复核 239 条 canonical 命令和五组精确覆盖。
+- P2 审计锚点的 main CI 8/8 通过。规划分支 `node tests/ci-test-plan.cjs` 复核 239 条 canonical 命令和五组精确覆盖。P4 合并后的基线验证状态见文首。
 - 本地 `node --test tests/provider-network-policy.cjs tests/provider-credential-opening.cjs tests/provider-credential-sdk.cjs` 48/48、零跳过，`node tests/provider-auth-runtime.cjs` 36/36。均为当前实现的离线基线，使用假 SDK、假 Pi、临时目录和受控网络 fixture。
-- 源码审计与读者复核已完成。此文档尚待独立方案验收。本轮是纯文档变更，完整本地 `npm test`、构建、真实凭据读写和供应商调用均未运行。
-- Claude Code 对 P3-A 持久派发和恢复的独立复核指出两项缺口。计划补充了未决 P1 收据保护，以及按 attempt 和 worker 证明写入停止的隔离解除判据。对这两项的独立增量复核通过，结论限于设计。发现和 Runtime 链仍待独立方案验收。
+- 源码审计与独立定向复核已完成，结论限于下列设计缺口。后续生产实现仍需相应测试及安全验收。本轮是纯文档变更，完整本地 `npm test`、构建、真实凭据读写和供应商调用均未运行。
+- Claude Code 对 P3-A 持久派发和恢复的独立复核指出两项缺口。计划补充了未决 P1 收据保护，以及按 attempt 和 worker 证明写入停止的隔离解除判据。对这两项的独立增量复核通过。
+- Claude Code 对 P3-B 指出 transport 的授权存储依赖及取消合同歧义。已明确 worker 授权视图、跨线程准入与终止确认，以及 202 和取消 requestId 的职责。对这两项的独立增量复核通过。
+- Claude Code 对 P3-C 指出旧 OAuth 同步仍直接重启 Classic，以及无项目时旧 helper 返回成功。方案要求以统一 coordinator 替换 provider 路径的两种停机调用，保持无活跃目标的待应用代次，并按当前 owner 和版本回读。对应假 Runtime 用例要同时证明原生保存事实和待同步状态。对这两项的独立增量复核通过。
