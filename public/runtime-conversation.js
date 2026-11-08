@@ -50,7 +50,7 @@ import { openModal } from './ui/modal.js';
 import { md, renderVizCardHtml } from './markdown.js';
 import { createRuntimePicker } from './runtime-picker.js';
 import { thinkingAvailability } from './thinking-availability.js';
-import { thinkingDots } from './thinking-dots.js';
+import { setThinkingDotsPhase, thinkingDots } from './thinking-dots.js';
 import {
   extractStableLocator,
   sameStableLocator,
@@ -238,7 +238,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const state = el('div', 'rtc-state');
   state.setAttribute('role', 'status');
   /* 状态行 = 动画 + 文本。点组是**稳定子节点**，不能每次 draw 用 textContent
-   * 重写整行 —— 那会把动画元素一起删掉，每来一个 delta 动画就从头开始。 */
+   * 重写整行 —— 那会把动画元素一起删掉，每来一个 delta 动画就从头开始。
+   * 形态（四点方阵/三点轨道）随这条会话自己的工具状态切换。 */
   const stateDots = thinkingDots();
   stateDots.hidden = true;
   const stateText = document.createTextNode('');
@@ -532,9 +533,19 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       || (item.lifecycle === 'ready' && item.activity === 'running');
   }
 
-  function setState(text, showDots) {
+  /* 工具在跑 = 三点轨道；只是模型在流式输出 = 四点方阵。waiting 也算「还在
+   * 执行」，和 store 里 tool_wait_state 的语义一致。 */
+  function toolsActive(record) {
+    return !!record?.tools?.some(t => t.state === 'running' || t.state === 'waiting');
+  }
+
+  function setState(text, showDots, toolActive = false, immediate = false) {
+    const wasHidden = stateDots.hidden;
     stateText.nodeValue = text;
     stateDots.hidden = !showDots;
+    /* 切到另一条会话时不要接着播上一条会话的形态：旧画面已经不属于当前上下文，
+     * 直接落到这条会话自己的相位，不用等循环边界。 */
+    if (showDots) setThinkingDotsPhase(stateDots, toolActive ? 'triangle' : 'square', { immediate: immediate || wasHidden });
   }
 
   function saveScroll() { if (id && !current().history) scrollTops.set(id, output.scrollTop); }
@@ -615,7 +626,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     else {
       /* 正文流被截断时说出来 —— 不声不响地少显示一段，用户会以为那就是全部。 */
       const lifecycle = statusLine(r?.item) || (r ? '' : '这条会话还没有记录');
-      setState(lifecycle + (r?.truncated ? `${lifecycle ? ' · ' : ''}仅显示最近输出` : ''), showsWorkingDots(r?.item, r, view));
+      setState(lifecycle + (r?.truncated ? `${lifecycle ? ' · ' : ''}仅显示最近输出` : ''),
+        showsWorkingDots(r?.item, r, view), toolsActive(r), entered);
     }
 
     if (view.history) {
