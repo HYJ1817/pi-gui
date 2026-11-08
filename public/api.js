@@ -279,7 +279,31 @@ async function providerManagementPost(route, kind, body) {
   catch (error) { return providerContractError('invalid_request', error.fieldErrors); }
   return sendJSON(providerManagementRoot + route, { body: safe, applicationScoped: true });
 }
-export const fetchProviderManagement = () => getJSON(providerManagementRoot);
+/** 供应商管理快照。
+ *
+ * 这里不能复用 getJSON：调用方必须拿到 HTTP 状态，才能区分
+ * 「管理功能明确未启用（422 unsupported）」与「服务器/权限/合同异常」。
+ * 后者绝不能降级到旧 /api/providers 写入。失败原因只保留固定结构，
+ * 不把响应正文或网络异常文本当成能力判断依据。 */
+export async function fetchProviderManagement() {
+  try {
+    const response = await fetch(providerManagementRoot);
+    if (response.status >= 500) reportRequestFailure(providerManagementRoot, response.status);
+    let body;
+    try {
+      body = await response.json();
+    } catch {
+      return { ok: false, code: 'invalid_response', message: '供应商管理接口返回了无法识别的响应。', status: response.status };
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return { ok: false, code: 'invalid_response', message: '供应商管理接口返回了无法识别的响应。', status: response.status };
+    }
+    return { ...body, status: response.status };
+  } catch (err) {
+    reportRequestFailure(providerManagementRoot, 0);
+    return { ok: false, code: 'unavailable', message: '无法连接供应商管理接口。', error: err.message, network: true, status: 0 };
+  }
+}
 export const saveProviderDraft = payload => providerManagementPost('/drafts', 'drafts', payload);
 export const commitProviderDraft = payload => providerManagementPost('/commit', 'commit', payload);
 export const authorizeProviderDiscovery = payload => providerManagementPost('/discovery-authorizations', 'authorize', payload);

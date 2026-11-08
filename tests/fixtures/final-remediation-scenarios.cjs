@@ -22,40 +22,88 @@ module.exports = async ({ read, click, key, shot, paint, check, win, waitFor }) 
   await read(`(()=>{const e=document.querySelector('.font-size-ctrls input[type="range"]');e.value='100';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}))})()`);
   await win.setContentSize(1205, 803); await paint();
   await read(`TH.setThemePreference('dark')`);
-  await click('#navProviders'); await click('.prov-btn-main');
-  const providerActions = await read(`[...document.querySelectorAll('.settings-detail-card > .modal-actions button')].map(e=>({text:e.textContent,visible:e.checkVisibility()}))`);
-  check('R1 provider primary entry exposes both Save and Cancel', providerActions.length === 2 && providerActions.every(e => e.visible), providerActions);
+  // P4：供应商页面走 management 合同；所有写请求仍被内存 fixture 拦截。
+  await read(`(()=>{
+    const original=window.fetch;
+    window.rProviderWrites=[];
+    window.rManagementCalls=[];
+    const json=data=>new Response(JSON.stringify(data),{headers:{'content-type':'application/json'}});
+    window.rProviderSnapshot={ok:true,schemaVersion:1,revision:'r-provider-rev',capabilities:{rawKeyInput:false,keyStaging:false,nativeCredentialPersistence:false,privateDesktopBridge:false,oauthLogin:true,discoveryModes:[],modelOverrides:null,syncMode:'unsupported',reasons:{rawKeyInput:'desktop_input_pending',privateDesktopBridge:'p2_pending',discoveryModes:'discovery_transport_pending',syncMode:'runtime_sync_pending'}},catalog:[{id:'custom',name:'自定义端点',category:'api-key',authMode:'none',connection:null}],services:[],auth:{sdkAvailable:true,providers:[],flow:null},sync:{state:'idle',reason:null}};
+    window.fetch=async(url,options={})=>{
+      const u=new URL(String(url),location.href);
+      if(u.pathname==='/api/providers'){
+        if(options.method&&options.method!=='GET'){window.rProviderWrites.push(JSON.parse(options.body));}
+        return json({ok:true,path:'fixture/models.json',providers:{},keyStates:{}});
+      }
+      if(u.pathname.startsWith('/api/provider-management')){
+        const body=options.body?JSON.parse(options.body):null;
+        rManagementCalls.push({path:u.pathname,method:options.method||'GET',body});
+        if(body&&u.pathname.endsWith('/drafts')){
+          window.rProviderDraft=body.draft||null;
+          return json({ok:true,draftId:'r-draft',draftRevision:2,revision:rProviderSnapshot.revision});
+        }
+        if(body&&u.pathname.endsWith('/commit')){
+          const d=window.rProviderDraft||{};
+          rProviderSnapshot={...rProviderSnapshot,revision:'r-provider-next',services:[{serviceId:d.providerId,providerId:d.providerId,catalogId:d.catalogId||'custom',displayName:d.displayName,enabled:true,connection:d.connection,credentialState:{state:'saved',source:'env'},authMode:d.authMode,models:(d.modelPatches||[]).filter(p=>p.operation==='upsert').map(p=>({modelId:p.modelId,providerId:d.providerId,configSource:'configured',effectiveValues:{},editableOverrides:{}})),selectedModelIds:d.selectedModelIds,modelOrder:d.modelOrder,readOnly:false,compatibility:'unknown'}]};
+          return json({ok:true,serviceId:d.providerId,saved:true,credentialSaved:null,credentialState:'saved',sync:{state:'pending',reason:'runtime_sync_pending'},revision:'r-provider-next'});
+        }
+        return json(rProviderSnapshot);
+      }
+      return original(url,options);
+    };
+  })()`);
+  await click('#navProviders');
+  await waitFor(`!!document.querySelector('.prov-btn-main') && !!document.querySelector('.prov-empty-btn')`);
+  await click('.prov-btn-main');
+  await waitFor(`!!document.querySelector('.pm-chooser')`);
+  const providerActions = await read(`(()=>{const b=[...document.querySelectorAll('.pm-dialog-actions button')];return {items:b.map(e=>({text:e.textContent,visible:e.checkVisibility()})),save:b.some(e=>e.textContent==='保存服务'&&e.checkVisibility()),cancel:b.some(e=>e.textContent==='取消'&&e.checkVisibility())}})()`);
+  check('R1 provider primary entry exposes both Save and Cancel', providerActions.save && providerActions.cancel, providerActions);
   await shot('r02-provider-add-dark');
-  if (providerActions.every(e => e.visible)) {
-    await read(`(()=>{const original=window.fetch;window.rProviderWrites=[];window.rProviders={};window.fetch=async(url,options={})=>{let u=new URL(String(url),location.href);if(u.pathname!=='/api/providers')return original(url,options);if(options.method&&options.method!=='GET'){let payload=JSON.parse(options.body);rProviderWrites.push(payload);rProviders[payload.name]=payload.config;}return new Response(JSON.stringify({ok:true,path:'fixture/models.json',providers:rProviders,keyStates:{}}),{headers:{'content-type':'application/json'}})}})()`);
-    await read(`document.querySelector('.settings-detail-card input[placeholder="my-provider"]').value=''`);
-    await click('.settings-detail-card > .modal-actions button:last-child');
-    check('R1 missing provider ID never reaches save API', await read('rProviderWrites.length===0'));
-    await read(`document.querySelector('.settings-detail-card input[placeholder="my-provider"]').value='fixture-provider';document.querySelector('.settings-detail-card input[placeholder="https://api.example.com/v1"]').value='https://example.invalid/v1';document.querySelector('.settings-detail-card textarea').value='fixture-model|Fixture Model';document.querySelector('.settings-detail-card input[placeholder^="$MY"]').value='fixture-plaintext-rejected'`);
-    await click('.settings-detail-card > .modal-actions button:last-child');
-    check('R1 plaintext provider credentials remain rejected', await read('rProviderWrites.length===0'));
-    await read(`document.querySelector('.settings-detail-card input[placeholder^="$MY"]').value='$FIXTURE_KEY'`);
-    // Walk the real tab chain from the last text field to Save.
-    await read(`document.querySelector('.settings-detail-card textarea').focus()`);
-    let tabReachedSave = false;
-    for (let i = 0; i < 12; i++) {
-      await key('Tab');
-      if (await read(`document.activeElement===document.querySelector('.settings-detail-card > .modal-actions button:last-child')`)) { tabReachedSave = true; break; }
-    }
-    check('R1 provider Save is reachable using the native Tab chain', tabReachedSave);
-    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-    win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
-    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-    await paint();
-    await waitFor('rProviderWrites.length===1');
-    await waitFor(`!!document.querySelector('.prov-btn-main')`);
-    check('R1 valid provider form delegates once to the real API wrapper', await read(`rProviderWrites.length===1&&rProviderWrites[0].name==='fixture-provider'&&rProviderWrites[0].config.apiKey==='$FIXTURE_KEY'`));
-    await read(`(async()=>{rProviders={};const p=await import('/providers.js');await p.loadProviders()})()`);
-    await click('.prov-empty-btn');
-    check('R1 empty and primary Add share the same existing presenter', await read(`!!document.querySelector('.settings-detail-card > .modal-actions')&&document.querySelector('#modal').hidden`));
-    await click('.settings-detail-card > .modal-actions button:first-child');
-    check('R1 cancelling provider form performs no writes', await read('rProviderWrites.length===1'));
+  check('R1 cancelling provider chooser performs no writes', await read(`rManagementCalls.filter(c=>c.method==='POST').length===0&&rProviderWrites.length===0`));
+  await click('.pm-dialog-actions button:nth-child(2)');
+  await waitFor(`document.querySelector('#modal').hidden`);
+  await click('.prov-empty-btn');
+  await waitFor(`!!document.querySelector('.pm-chooser')`);
+  check('R1 empty and primary Add share the same existing presenter', await read(`!!document.querySelector('.pm-dialog-actions')&&document.querySelector('#modal').hidden===false`));
+  await click('.pm-dialog-actions button:nth-child(2)');
+  await waitFor(`document.querySelector('#modal').hidden`);
+  await click('.prov-btn-main');
+  await waitFor(`!!document.querySelector('.pm-service-tile[data-service-id="custom"]')`);
+  await click('.pm-service-tile[data-service-id="custom"]');
+  await waitFor(`!!document.querySelector('.pm-provider-id')`);
+  const fillProvider = values => read(`(()=>{const values=${JSON.stringify(values)};for(const [selector,value] of Object.entries(values)){const e=document.querySelector(selector);if(!e)throw Error('missing '+selector);e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));}})()`);
+  await fillProvider({
+    'input[aria-label="服务名称"]': 'Fixture Provider',
+    '[data-connection-base-url]': 'https://example.invalid/v1',
+    '.pm-provider-id': '',
+    '.pm-env-input': '$FIXTURE_KEY',
+  });
+  await read(`(()=>{const e=document.querySelector('[data-custom-model-input]');e.value='fixture-model';e.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  await click('[data-add-custom-model]');
+  await click('.pm-dialog-actions .pm-primary');
+  await paint();
+  check('R1 missing provider ID never reaches save API', await read('rManagementCalls.filter(c=>c.method==="POST").length===0'));
+  await fillProvider({ '.pm-provider-id': 'fixture-provider', '.pm-env-input': 'fixture-plaintext-rejected' });
+  await click('.pm-dialog-actions .pm-primary');
+  await paint();
+  check('R1 plaintext provider credentials remain rejected', await read(`rManagementCalls.filter(c=>c.method==='POST').length===0&&!JSON.stringify(rManagementCalls).includes('fixture-plaintext-rejected')`));
+  await fillProvider({ '.pm-env-input': '$FIXTURE_KEY' });
+  // Walk the real tab chain from the credential field to Save.
+  await read(`document.querySelector('.pm-env-input').focus()`);
+  let tabReachedSave = false;
+  for (let i = 0; i < 30; i++) {
+    await key('Tab');
+    if (await read(`document.activeElement===document.querySelector('.pm-dialog-actions .pm-primary')`)) { tabReachedSave = true; break; }
   }
+  check('R1 provider Save is reachable using the native Tab chain', tabReachedSave);
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+  win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+  await waitFor(`rManagementCalls.filter(c=>c.method==='POST').length>=2`);
+  await waitFor(`document.querySelector('#modal').hidden`);
+  check('R1 valid provider form delegates once to the real API wrapper', await read(`(()=>{const posts=rManagementCalls.filter(c=>c.method==='POST');const draft=posts.find(c=>c.path.endsWith('/drafts'));const commit=posts.find(c=>c.path.endsWith('/commit'));return posts.length===2&&draft.body.draft.providerId==='fixture-provider'&&commit.body.credentialAction.reference==='$FIXTURE_KEY'&&!JSON.stringify(posts).includes('fixture-plaintext-rejected')&&rProviderWrites.length===0})()`));
+  await waitFor(`!!document.querySelector('.prov')`);
+  check('R1 saved provider appears in the final service list', await read(`document.querySelector('.prov').textContent.includes('Fixture Provider')`));
   await read(`document.querySelector('#navDiagnostics').scrollIntoView({block:'nearest'})`);
   await click('#navDiagnostics');
   await waitFor(`document.querySelectorAll('.settings-detail-card > .modal-actions button').length >= 4`);

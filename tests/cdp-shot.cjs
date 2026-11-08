@@ -405,8 +405,8 @@ async function main() {
       await verify('reload restores A without replayed toasts', `document.querySelectorAll('#toasts .toast').length===0&&document.querySelector('#stream').textContent.includes('Memory search failed')`);
       await mouse(`document.querySelector('#navGlobalMore')`);
       await mouse(`document.querySelector('#navProviders')`); await sleep(200);
-      await mouse(`[...document.querySelectorAll('#modalCard button')].find(e=>e.textContent==='添加供应商')`); await sleep(200);
-      await verify('add opens custom form without native auth catalog', `document.querySelector('#modalCard').textContent.includes('供应商 ID')&&!document.querySelector('.auth-provider')&&!document.querySelector('#modalCard').textContent.includes('Amazon Bedrock')`);
+      await mouse(`[...document.querySelectorAll('#modalCard button')].find(e=>e.textContent==='添加服务')`); await sleep(200);
+      await verify('add opens the final service chooser without native auth catalog', `!!document.querySelector('#modalCard .pm-chooser')&&!document.querySelector('.auth-provider')&&!document.querySelector('#modalCard').textContent.includes('Amazon Bedrock')`);
       await shot('UX-B-add-custom-provider');
       await evalJs(`document.querySelector('#modal').click()`);
       await mouse(`document.querySelector('#navGlobalMore')`);

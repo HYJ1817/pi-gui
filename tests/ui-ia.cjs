@@ -15,14 +15,22 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   w.ResizeObserver = class { observe() {} disconnect() {} };
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.EventSource = class { constructor() { w.fixtureEvents = this; } close() {} };
-  w.fetch = async url => ({ ok: true, json: async () => {
-    if (String(url) === '/api/status') return { ok: true, cwd: 'C:\\fixture', hasProject: true };
-    if (String(url) === '/api/projects') return { ok: true, active: 'C:\\fixture', items: [{ name: 'Fixture', path: 'C:\\fixture' }] };
-    if (String(url) === '/api/git/status') return { ok: true, isRepo: true, files: [{ path: 'a.txt', status: 'M', working: 'M' }] };
-    if (String(url).startsWith('/api/git/diff')) return { ok: true, working: '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new', staged: '' };
-    if (String(url) === '/api/sessions') return { ok: true, sessions: [] };
-    return { ok: true, providers: [], counts: {}, plans: [], agents: [] };
-  } });
+  w.fetch = async url => {
+    const target = String(url);
+    // 默认装配关闭管理接口；真实服务回 422 unsupported。旧列表是兼容路径，
+    // 不能让一个缺少管理合同字段的 200 被误判成可用或合同异常。
+    if (target === '/api/provider-management') {
+      return { status: 422, ok: false, json: async () => ({ ok: false, code: 'unsupported', message: '管理能力未开放' }) };
+    }
+    return { ok: true, json: async () => {
+      if (target === '/api/status') return { ok: true, cwd: 'C:\\fixture', hasProject: true };
+      if (target === '/api/projects') return { ok: true, active: 'C:\\fixture', items: [{ name: 'Fixture', path: 'C:\\fixture' }] };
+      if (target === '/api/git/status') return { ok: true, isRepo: true, files: [{ path: 'a.txt', status: 'M', working: 'M' }] };
+      if (target.startsWith('/api/git/diff')) return { ok: true, working: '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new', staged: '' };
+      if (target === '/api/sessions') return { ok: true, sessions: [] };
+      return { ok: true, providers: [], counts: {}, plans: [], agents: [] };
+    } };
+  };
   let nativeCloses = 0;
   w.piGuiDesktop = { browser: { open: async () => ({ ok: true }), close: () => nativeCloses++,
     back() {}, forward() {}, stop() {}, reload() {}, openExternal() {}, setBounds() {}, setOccluded() {},
@@ -134,13 +142,45 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   });
   await check('Late provider save cannot reopen its page after newer navigation', async () => {
     const before = w.fetch; let release;
+    const snapshot = {
+      ok: true, schemaVersion: 1, revision: 'ui-ia-revision',
+      capabilities: { rawKeyInput: false, keyStaging: false, nativeCredentialPersistence: false, privateDesktopBridge: false, oauthLogin: false, discoveryModes: [], modelOverrides: null, syncMode: 'unsupported', reasons: {} },
+      catalog: [{ id: 'custom', name: '自定义服务', category: 'api-key', connection: null, authMode: 'environment' }],
+      services: [], auth: { sdkAvailable: false, providers: [] }, sync: { state: 'idle' },
+    };
+    const input = (node, value) => {
+      node.value = value;
+      node.dispatchEvent(new w.Event('input', { bubbles: true }));
+    };
     try {
-      w.fetch = (url, options) => String(url) === '/api/providers' && options?.body
-        ? new Promise(resolve => { release = () => resolve({ ok: true, json: async () => ({ ok: true }) }); }) : before(url, options);
+      w.fetch = (url, options) => {
+        const target = String(url);
+        const method = options?.method || 'GET';
+        if (target === '/api/provider-management' && method === 'GET') {
+          return Promise.resolve({ ok: true, json: async () => snapshot });
+        }
+        if (target === '/api/provider-management/drafts' && method === 'POST') {
+          return Promise.resolve({ ok: true, json: async () => ({ ok: true, draftId: 'late-draft', draftRevision: 2, revision: snapshot.revision }) });
+        }
+        if (target === '/api/provider-management/commit' && method === 'POST') {
+          return new Promise(resolve => {
+            release = () => resolve({
+              ok: true,
+              json: async () => ({ ok: true, serviceId: 'fixture-ui', saved: true, credentialSaved: null, credentialState: 'saved', sync: { state: 'pending', reason: 'runtime_sync_pending' }, revision: 'ui-ia-next' }),
+            });
+          });
+        }
+        return before(url, options);
+      };
       $('navGlobalMore').click(); $('navProviders').click(); await tick();
-      [...d.querySelectorAll('.settings-detail-card button')].find(b => b.textContent === '添加供应商').click();
-      const inputs = d.querySelectorAll('.settings-detail-card input'); inputs[0].value = 'fixture-ui'; inputs[1].value = 'http://127.0.0.1:7788';
-      [...d.querySelectorAll('.settings-detail-card button')].find(b => b.textContent === '保存').click(); await tick();
+      [...d.querySelectorAll('.settings-detail-card button')].find(b => b.textContent === '添加服务').click(); await tick();
+      const modalCard = $('modalCard');
+      [...modalCard.querySelectorAll('.pm-service-tile')].find(tile => tile.dataset.serviceId === 'custom').click(); await tick();
+      input(modalCard.querySelector('[aria-label="服务名称"]'), 'Fixture UI');
+      input(modalCard.querySelector('.pm-provider-id'), 'fixture-ui');
+      input(modalCard.querySelector('[data-connection-base-url]'), 'http://127.0.0.1:7788');
+      input(modalCard.querySelector('.pm-env-input'), '$FIXTURE_KEY');
+      modalCard.querySelector('.pm-dialog-actions .pm-primary').click(); await tick();
       assert.equal(typeof release, 'function');
       $('navAppearance').click(); const current = d.querySelector('.settings-detail-card');
       release(); await tick(); await tick();
@@ -167,6 +207,10 @@ const tick = () => new Promise(r => setTimeout(r, 40));
       w.openShortcutHelp(); w.closeModal();
       assert.equal(w.panels.providers, box);
       box.querySelector('.prov-del').click(); await tick();
+      const confirm = d.getElementById('confirmCard');
+      assert.equal(d.getElementById('confirmLayer').hidden, false);
+      [...confirm.querySelectorAll('button')].find(button => button.textContent === '删除').click();
+      await tick();
       assert.equal(removed, true); assert.equal(box.querySelectorAll('.prov').length, 0);
     } finally { w.fetch = before; $('settingsReturn').click(); }
   });

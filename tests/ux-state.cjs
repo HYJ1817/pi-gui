@@ -27,6 +27,12 @@ async function main() {
     { providerId: 'current', status: 'unknown', models: [], methods: [] },
     { providerId: 'models', status: 'unknown', models: [{ id: 'fixture' }], methods: [] },
   ] };
+  const management = {
+    ok: true, schemaVersion: 1, revision: 'fixture-revision',
+    capabilities: { rawKeyInput: false, keyStaging: false, nativeCredentialPersistence: false, privateDesktopBridge: false, oauthLogin: false, discoveryModes: [], modelOverrides: null, syncMode: 'unsupported', reasons: {} },
+    catalog: [{ id: 'custom', name: '自定义服务', category: 'api-key', connection: null, authMode: 'environment' }],
+    services: [], auth: { sdkAvailable: false, providers: [] }, sync: { state: 'idle' },
+  };
   w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   w.ResizeObserver = class { observe() {} disconnect() {} };
   w.HTMLElement.prototype.scrollIntoView = () => {};
@@ -40,6 +46,7 @@ async function main() {
     else if (u === '/api/sessions') j = { ok: true, hasProject: true, sessions: sessions.map(s => ({ ...s, current: s.id === active })) };
     else if (u.startsWith('/api/sessions/search')) j = { ok: true, results: [{ ...sessions[0], matches: [{ userIndex: 0, role: 'user', text: 'historical warning', snippet: 'historical warning' }] }], scanned: {} };
     else if (u === '/api/sessions/switch') active = JSON.parse(opts.body).id;
+    else if (u === '/api/provider-management') j = management;
     else if (u === '/api/providers') j = { ok: true, providers: {}, keyStates: {} };
     else if (u === '/api/provider-auth') j = auth;
     else if (u === '/api/command') {
@@ -96,15 +103,22 @@ async function main() {
   clear();
   await check('live extension error still produces exactly one toast', () => { sources[0].emit({ type: 'extension_error', error: 'live unique error' }); assert.equal(toasts().length, 1); });
   await check('custom provider management contains no Pi auth catalog', async () => { w.document.querySelector('#navProviders').click(); await wait(); assert.equal(w.document.querySelector('.provider-auth'), null); });
-  await check('add provider opens existing creation form in central settings only', async () => {
+  await check('add provider opens the final service chooser without the Pi auth catalog', async () => {
     const page = w.document.querySelector('#workSurface .settings-detail-card');
-    [...page.querySelectorAll('button')].find(b => b.textContent === '添加供应商').click(); await wait();
-    const card = w.document.querySelector('#workSurface .settings-detail-card');
-    assert.equal(w.document.querySelector('#modal').hidden, true);
-    assert.ok(card.textContent.includes('供应商 ID') && card.textContent.includes('Base URL'));
+    [...page.querySelectorAll('button')].find(b => b.textContent === '添加服务').click(); await wait();
+    const modal = w.document.querySelector('#modal');
+    const card = w.document.querySelector('#modalCard');
+    assert.equal(modal.hidden, false);
+    assert.ok(card.querySelector('.pm-chooser'));
     assert.equal(card.querySelector('.auth-provider'), null);
     assert.ok(!card.textContent.includes('Amazon Bedrock'));
     assert.ok(!card.textContent.includes('/login anthropic'));
+    const custom = [...card.querySelectorAll('.pm-service-tile')].find(tile => tile.dataset.serviceId === 'custom');
+    assert.ok(custom, 'custom service tile must exist');
+    custom.click(); await wait();
+    assert.ok(card.textContent.includes('供应商标识') && card.textContent.includes('Base URL'));
+    [...card.querySelectorAll('.pm-dialog-actions .pm-btn')].find(button => button.textContent === '取消').click(); await wait();
+    assert.equal(modal.hidden, true);
   });
   await check('independent auth entry opens Pi authentication UI', async () => { w.document.querySelector('#navProviderAuth').click(); await wait(); assert.ok(w.document.querySelector('.provider-auth')); assert.equal(w.document.querySelector('.providers'), null); });
   await check('configured authenticated current and model providers precede others', () => {
