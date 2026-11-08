@@ -123,8 +123,9 @@ function classifyManagement(result) {
     return { state: 'error', message: '无法连接供应商管理接口；为避免误用旧接口写入，已停止自动降级。请重试。' };
   }
   if (result.ok === true) {
-    if (result.status >= 500 || result.status === 401 || result.status === 403) {
-      // 代理/网关可能带着旧的成功正文回 5xx；状态码优先，不能因此进入写入界面。
+    // 代理/网关可能带着旧的成功正文回 4xx/5xx；状态码优先，不能因此进入写入界面。
+    if (result.status !== undefined
+      && (!Number.isInteger(result.status) || result.status < 200 || result.status >= 300)) {
       return { state: 'error', message: `供应商管理接口返回异常（HTTP ${result.status}）；为避免误用旧接口写入，已停止自动降级。` };
     }
     if (result.schemaVersion === 1 && Array.isArray(result.services)
