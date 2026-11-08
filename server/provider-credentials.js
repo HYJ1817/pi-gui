@@ -1,15 +1,15 @@
-// Kept self-contained so the bundled backend can start this private worker
-// without loading a second application bundle or exposing a public IPC route.
-export const credentialWorkerSource = String.raw`
-const { parentPort, workerData } = require('node:worker_threads');
-const fs = require('node:fs');
-const path = require('node:path');
-const os = require('node:os');
-const { createHmac, randomBytes, randomUUID } = require('node:crypto');
+import { parentPort, workerData } from 'node:worker_threads';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { createDiscoveryTransport } from './provider-network.js';
+import { isLiteralKeyInput } from '../public/provider-management/contract.js';
 const { authPath, entry, ttlMs } = workerData;
 const stages = new Map();
 const active = new Map();
 const nativeActive = new Map();
+const discovering = new Map();
 const queued = new Map();
 const expired = new Set();
 const revisionKey = randomBytes(32);
@@ -212,6 +212,47 @@ function matchingStage(binding, stagedRevision, kind) {
   return pending;
 }
 
+async function inspectDiscovery(providerId, signal) {
+  const evidence = await inspect(providerId, signal);
+  const literal = evidence.type === 'api_key' && literalDecode(evidence.raw?.key);
+  return { ...publicInspection(evidence), literal: isLiteralKeyInput(literal) && evidence.builtIn === false };
+}
+
+async function discoverWithCredential(message, signal) {
+  const { binding, grant, permit, deadline } = message;
+  const refused = () => ({ ok: false, code: 'invalid_target' });
+  if (!(permit instanceof Int32Array) || !(permit.buffer instanceof SharedArrayBuffer) || permit.length !== 1 ||
+      !Number.isFinite(deadline) || binding.draftId !== grant.draftId || binding.providerId !== grant.providerId ||
+      binding.connectionRevision !== grant.connectionRevision || !['staged', 'stored'].includes(grant.credentialSource)) return refused();
+  let key, witness;
+  if (grant.credentialSource === 'staged') {
+    const stage = matchingStage(binding, grant.credentialRevision, 'set');
+    if (!stage) return refused();
+    key = (await stage.memory.read(binding.providerId, { signal }))?.key;
+    witness = () => matchingStage(binding, grant.credentialRevision, 'set') === stage && stage.expires > Date.now();
+  } else {
+    const before = pathState();
+    const evidence = await inspect(binding.providerId, signal);
+    if (evidence.revision !== grant.credentialRevision || evidence.type !== 'api_key' || evidence.builtIn !== false ||
+        !unchanged(before, pathState())) return refused();
+    key = literalDecode(evidence.raw?.key);
+    witness = () => unchanged(before, pathState());
+  }
+  if (!isLiteralKeyInput(key)) return refused();
+  const current = () => {
+    if (signal.aborted || Atomics.load(permit, 0) === 2 || Date.now() >= grant.expires) return false;
+    try { return witness(); } catch { return false; }
+  };
+  const view = { get: id => id === grant.consentId && current() ? grant : null, signalFor: () => signal };
+  const admit = () => {
+    if (performance.now() >= deadline || !current() || Atomics.compareExchange(permit, 0, 0, 1) !== 0) return null;
+    return () => Atomics.compareExchange(permit, 0, 1, 0);
+  };
+  const result = await createDiscoveryTransport({ consentStore: view })({ consentId: grant.consentId,
+    url: grant.candidatePaths[0], key, credentialRevision: grant.credentialRevision, signal, deadline, admit });
+  return !current() ? refused() : performance.now() >= deadline ? { ok: false, code: 'timeout' } : result;
+}
+
 async function persist(message, signal) {
   const { binding, stagedRevision } = message;
   if (message.cancelled || signal.aborted) return failure('cancelled');
@@ -251,6 +292,7 @@ async function handle(message, signal) {
     return { ok: true, sdk: true };
   }
   if (message.action === 'inspect') return publicInspection(await inspect(message.providerId));
+  if (message.action === 'inspect-discovery') return inspectDiscovery(message.providerId);
   if (message.action === 'stage' || message.action === 'stage-clear') return stage(message);
   if (message.action === 'inspect-stage') {
     const pending = matchingStage(message.binding, message.stagedRevision, message.kind);
@@ -263,6 +305,19 @@ async function handle(message, signal) {
   return failure('unsupported');
 }
 parentPort.on('message', message => {
+  if (message.action === 'cancel-discovery') {
+    discovering.get(message.id)?.abort();
+    return;
+  }
+  if (message.action === 'discover') {
+    const controller = new AbortController();
+    discovering.set(message.id, controller);
+    void discoverWithCredential(message, controller.signal).catch(() => ({ ok: false, code: 'unavailable' })).then(result => {
+      discovering.delete(message.id);
+      parentPort.postMessage({ id: message.id, result, discoveryStopped: true });
+    });
+    return;
+  }
   if (message.action === 'cancel-native') {
     const queuedAttempt = queued.get(message.id);
     if (queuedAttempt) queuedAttempt.cancelled = true;
@@ -295,4 +350,3 @@ parentPort.on('message', message => {
     parentPort.postMessage({ id: message.id, result, nativeQuiesced: mutation });
   });
 });
-`;

@@ -15,6 +15,7 @@
  * 目标是跨窗口/跨 flow 重放与成功后的复用，不是阻止用户在同一窗内重新提交。
  */
 import { randomUUID } from 'node:crypto';
+import { classifyAddress, parseTarget } from './provider-network.js';
 import { isOpaqueId, validateCredentialFrame } from '../public/provider-management/contract.js';
 
 const NONCE_TTL_MS = 2 * 60_000;
@@ -23,7 +24,7 @@ const fail = (code, extra = {}) => ({ ok: false, code, ...extra });
 
 export function createProviderCredentialBridge({ sdk, draftLookup, consentStore, mutationBlocked = () => false,
   maintenanceLocked = () => false, draftFrozen = () => false, forgetDraft = () => {}, nativePersistence = () => false,
-  enabled = false, flowTtlMs = NONCE_TTL_MS, now = Date.now } = {}) {
+  enabled = false, flowTtlMs = NONCE_TTL_MS, now = Date.now, storedDiscoveryTarget = null } = {}) {
   const epoch = randomUUID();
   const flows = new Map();
   const preparing = new Map();
@@ -62,7 +63,8 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
   function acceptStage(flow, result, kind) {
     if (!isOpaqueId(result.stagedRevision) || !Number.isFinite(result.expires)) return;
     const prior = approved.get(flow.draftId);
-    approved.set(flow.draftId, { binding: bindingOf(flow), revision: result.stagedRevision, kind, expires: result.expires });
+    approved.set(flow.draftId, { binding: bindingOf(flow), revision: result.stagedRevision, kind, expires: result.expires,
+      workerEpoch: result.workerEpoch });
     if (prior) void sdk.discardStage?.(flow.draftId, prior.revision);
   }
 
@@ -107,6 +109,29 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     const evidence = await sdk.readback(approval.binding.providerId);
     return !signal?.aborted && evidence?.ok === true && isOpaqueId(evidence.credentialRevision) &&
       await sdk.canPersist(approval.binding, approval.kind);
+  }
+
+  function currentDiscovery(grant, draft) {
+    if (enabled !== true || !isOpaqueId(grant.workerEpoch) || grant.workerEpoch !== sdk.currentWorkerEpoch?.()) return false;
+    if (grant.credentialSource === 'none') return true;
+    if (grant.credentialSource === 'stored') return storedDiscoveryTarget?.(draft) === true;
+    const stage = approved.get(grant.draftId);
+    return stage?.kind === 'set' && stage.revision === grant.credentialRevision && stage.workerEpoch === grant.workerEpoch && currentApproval(stage);
+  }
+
+  async function verifyDiscovery(grant, draft) {
+    if (!currentDiscovery(grant, draft)) return false;
+    if (grant.credentialSource === 'staged') return (await sdk.inspectStage(bindingOf(draft), grant.credentialRevision, 'set'))?.ok === true && currentDiscovery(grant, draft);
+    const evidence = await sdk.inspectDiscovery(grant.providerId);
+    const matches = grant.credentialSource === 'none' ? evidence.present === false :
+      evidence.literal === true && evidence.credentialRevision === grant.credentialRevision;
+    return matches && evidence.workerEpoch === grant.workerEpoch &&
+      currentDiscovery(grant, draft);
+  }
+
+  function runDiscovery(grant, draft, options) {
+    if (!currentDiscovery(grant, draft)) return Promise.resolve(fail('invalid_target'));
+    return sdk.discoverNative(bindingOf(draft), grant, options);
   }
 
   function draftCurrent(flow) {
@@ -207,6 +232,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
         const issued = consentStore?.issue({ draftId: flow.draftId, draftRevision: flow.draftRevision,
           connectionRevision: flow.connectionRevision, providerId: flow.providerId, connection: flow.connection,
           api: flow.api, credentialSource: 'staged', credentialRevision: result.stagedRevision,
+          workerEpoch: result.workerEpoch,
           rememberTarget: frame.rememberTarget === true, loopback: false });
         if (issued?.ok === true) consent = { consentId: issued.consentId, expiresAt: issued.expiresAt, targetSummary: issued.targetSummary };
       }
@@ -271,15 +297,20 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
       flows.delete(flow.flowId);
       return fail('credential_conflict');
     }
-    const inspection = await sdk.inspect(flow.providerId);
+    const inspection = await (storedDiscoveryTarget ? sdk.inspectDiscovery(flow.providerId) : sdk.inspect(flow.providerId));
     if (flowFor(frame) !== flow || !draftCurrent(flow)) return fail('credential_conflict');
     const credentialSource = inspection.present === true ? 'stored' : inspection.present === false ? 'none' : null;
     // present=null（文件不可读/冲突/未知类型）不能当作「没有凭据」开授权——宁可多确认一次。
     if (!credentialSource) return fail('credential_conflict');
+    const draft = draftLookup(flow.draftId);
+    if (storedDiscoveryTarget && credentialSource === 'stored' && (inspection.literal !== true || !storedDiscoveryTarget(draft))) return fail('policy_rejected');
+    const target = parseTarget(flow.connection.baseUrl);
     const issued = consentStore?.issue({ draftId: flow.draftId, draftRevision: flow.draftRevision,
       connectionRevision: flow.connectionRevision, providerId: flow.providerId, connection: flow.connection,
-      api: flow.api, credentialSource, credentialRevision: inspection.credentialRevision,
-      rememberTarget: frame.rememberTarget === true, loopback: false });
+      api: flow.api, credentialSource, credentialRevision: credentialSource === 'stored' ? inspection.credentialRevision : null,
+      workerEpoch: inspection.workerEpoch,
+      rememberTarget: frame.rememberTarget === true, loopback: credentialSource === 'none' &&
+        (target?.isLoopbackName === true || classifyAddress(target?.host) === 'loopback') });
     if (issued?.ok !== true) return fail(issued?.code ?? 'policy_rejected');
     consume(flow);
     return { ok: true, consent: { consentId: issued.consentId, expiresAt: issued.expiresAt, targetSummary: issued.targetSummary } };
@@ -346,5 +377,6 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
   }
 
   return { handle, dispose, epoch, desktopCapability, authorizeNative, persistApproved, qualifyAfterNative,
+    currentDiscovery, verifyDiscovery, runDiscovery,
     invalidateDraft: draftId => closeDraft({ draftId }), get activeFlows() { prune(); return flows.size; } };
 }

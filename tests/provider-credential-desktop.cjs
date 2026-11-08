@@ -414,7 +414,9 @@ async function electronMain() {
   const TOKEN_HEADER = 'X-Pi-Gui-Token';
 
   // 真实后端子进程（与 main.cjs 同一 spawn 形状，含 ipc）
-  let server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+  const backendEntry = process.env.PI_GUI_CREDENTIAL_TEST_BACKEND || path.join(ROOT, 'server.js');
+  const standalone = path.extname(backendEntry).toLowerCase() === '.exe';
+  const spawnBackend = () => spawn(standalone ? backendEntry : process.execPath, standalone ? [] : [backendEntry], {
     cwd: world,
     env: { ...process.env, TMP: world, TEMP: world, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_GUI_TOKEN: TOKEN, PI_GUI_OPEN: '0',
       PI_GUI_DATA: path.join(world, 'data'), PI_CODING_AGENT_DIR: agentDir,
@@ -423,6 +425,7 @@ async function electronMain() {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     windowsHide: true,
   });
+  let server = spawnBackend();
   const serverLog = [];
   server.stdout.on('data', b => serverLog.push(b.toString()));
   server.stderr.on('data', b => serverLog.push(b.toString()));
@@ -705,15 +708,7 @@ async function electronMain() {
     // FIX-05：打开途中 backend 重启——opening 释放，open 返回显式失败。
     server.kill();
     await sleep(250);
-    server = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
-      cwd: world,
-      env: { ...process.env, TMP: world, TEMP: world, ELECTRON_RUN_AS_NODE: '1', PORT: String(port), PI_GUI_TOKEN: TOKEN, PI_GUI_OPEN: '0',
-        PI_GUI_DATA: path.join(world, 'data'), PI_CODING_AGENT_DIR: agentDir,
-        PI_BIN: path.join(pkg, 'sdk.mjs'),
-        PI_GUI_PROVIDER_MANAGEMENT: '1', PI_GUI_PROVIDER_KEY_INPUT: '1' },
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      windowsHide: true,
-    });
+    server = spawnBackend();
     await new Promise((resolve, reject) => {
       const deadline = Date.now() + 25_000;
       const timer = setInterval(async () => {
@@ -749,7 +744,14 @@ async function electronMain() {
     await waitFor(() => !sheetWindow());
     // 无凭据的新自定义 provider：authorize-target 同样成立（source 'none'，
     // P3 的发现编排按无秘密通道执行）。
-    const ghostDraft = await createDraft('ghost-provider');
+    const requests = [];
+    const directory = require('node:http').createServer((req, res) => {
+      requests.push({ method: req.method, url: req.url, hasAuth: Object.hasOwn(req.headers, 'authorization') });
+      res.setHeader('Content-Type', 'application/json');
+      res.end('{"data":[{"id":"local-directory-fixture"}]}');
+    });
+    await new Promise(resolve => directory.listen(0, '127.0.0.1', resolve));
+    const ghostDraft = await createDraft('ghost-provider', 'openai-completions', `http://127.0.0.1:${directory.address().port}/tenant/v1`);
     const openGhost = await read(win, `window.piGuiDesktop.providerCredentials.open({ draftId: ${JSON.stringify(ghostDraft.draftId)}, draftRevision: ${ghostDraft.draftRevision}, action: 'authorize-target' })`);
     check('credential-less provider opens the authorize sheet', openGhost?.ok === true, openGhost);
     const ghostSheet = await waitForSheet();
@@ -757,6 +759,25 @@ async function electronMain() {
     check('credential-less provider authorize issues a no-secret grant', ghostSubmit.includes('"ok":true') && ghostSubmit.includes('consentId'), ghostSubmit);
     read(ghostSheet, `window.piGuiCredentialSheet.cancel()`).catch(() => {});
     await waitFor(() => !sheetWindow());
+    try {
+      check('confirming a target alone does not open a socket', requests.length === 0);
+      const { consentId } = JSON.parse(ghostSubmit).consent;
+      const body = { requestId: 'desktop-loopback-discover', draftId: ghostDraft.draftId, draftRevision: ghostDraft.draftRevision,
+        consentId, dialogGeneration: 1, requestSeq: 1, force: false };
+      const accepted = await read(win, `fetch('/api/provider-management/discover', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(${JSON.stringify(body)}) }).then(async r => ({ status: r.status, ...await r.json() }))`);
+      check('desktop grant starts a directory operation', accepted.status === 202 && Boolean(accepted.operationId), accepted);
+      const operationUrl = JSON.stringify(`/api/provider-management/operations/${accepted.operationId}`);
+      const completed = await waitFor(async () => {
+        const result = await read(win, `fetch(${operationUrl}).then(r => r.json())`);
+        return !['pending', 'running'].includes(result.state) && result;
+      });
+      check('desktop operation uses the exact path, no secret, and returns the fixture directory', completed.state === 'success' &&
+        completed.result?.models[0]?.modelId === 'local-directory-fixture' &&
+        JSON.stringify(requests) === JSON.stringify([{ method: 'GET', url: '/tenant/v1/models', hasAuth: false }]), completed);
+    } finally {
+      await new Promise(resolve => directory.close(resolve));
+    }
 
     // 后端不可达的降级（open 在握手失败时显式拒绝，页面无需再可用）
     server.kill();

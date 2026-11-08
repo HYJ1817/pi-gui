@@ -685,3 +685,36 @@ test('FIX-07: pinned requests bypass the global agent and its proxy or pooled so
   assert.equal(result.ok, true);
   assert.equal(requester.requests[0].agent, false);
 });
+test('P3 scopes known directory suffixes and rejects ambiguous path escapes', async () => {
+  const { net, consent } = await modules();
+  assert.deepEqual(net.planScopedCandidates({ baseUrl: 'https://fixture.invalid/tenant-a/v1', api: 'openai-completions' }),
+    ['https://fixture.invalid/tenant-a/v1/models']);
+  assert.deepEqual(net.planScopedCandidates({ baseUrl: 'https://fixture.invalid/tenant%252fescape/v1', api: 'openai-completions' }), []);
+  assert.equal(net.targetPolicy({ target: net.parseTarget('http://localhost:5000'), addressClass: 'public',
+    credentialAttached: false, loopbackAuthorized: true }), 'private_address');
+  const store = consent.createDiscoveryConsentStore({ strict: true });
+  const { consentId } = await consentFor(store);
+  const url = 'https://api.fixture.invalid/v10/models';
+  const requester = fakeRequester([req => req.emit('response', fakeRes({ body: '{"data":[]}' }))]);
+  const lookup = async () => [{ address: '93.184.216.34' }];
+  const forgedView = { get: id => ({ ...store.get(id), candidatePaths: [url] }) };
+  for (const consentStore of [store, forgedView]) {
+    const transport = net.createDiscoveryTransport({ consentStore, io: { requester, lookup } });
+    assert.equal((await transport({ consentId, url })).code, 'policy_rejected');
+  }
+  assert.equal(requester.requests.length, 0);
+});
+
+test('P3 accepts standard Anthropic and Google directory metadata while keeping the output closed', async () => {
+  const net = await import('../server/provider-network.js');
+  const anthropic = net.pickModelList({ data: [{ id: 'claude-fixture', type: 'model', display_name: 'Fixture', created_at: '2026-01-01T00:00:00Z' }] }, [], 'anthropic-messages');
+  assert.deepEqual(anthropic.models, [{ id: 'claude-fixture', name: 'Fixture' }]);
+  const google = net.pickModelList({ models: [
+    { name: 'models/embed-fixture', supportedGenerationMethods: ['embedContent'] },
+    { name: 'models/gemini-fixture', description: 'ignored', displayName: 'Fixture', supportedGenerationMethods: ['generateContent'], inputTokenLimit: 100 },
+    { name: 'models/gemini-fixture', supportedGenerationMethods: ['generateContent'] },
+  ] }, [], 'google-generative-ai');
+  assert.deepEqual(google.models, [{ id: 'gemini-fixture', name: 'Fixture', contextWindow: 100 }]);
+  assert.deepEqual(net.pickModelList({ models: [{ name: 'models/embed', supportedGenerationMethods: ['embedContent'] }] }, [], 'google-generative-ai').models, []);
+  assert.equal(net.pickModelList({ data: [{ id: 'sentinel-fixture', object: 'model' }] }, ['sentinel-fixture'], 'openai-completions').code, 'not_json');
+});
