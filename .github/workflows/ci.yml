@@ -16,6 +16,10 @@ permissions:
 
 env:
   NODE_VERSION: '24.22.1'
+  # GitHub release CDN 偶发 504（v44.4.3 的 zip/SHASUMS 曾持续超时）。
+  # prepare-electron-ci.mjs 先按退避重试 GitHub；全部失败后才用这个只读镜像。
+  # install.js 仍用 electron 包内 checksums.json 做 SHA256 校验，镜像不能换包。
+  PI_GUI_ELECTRON_MIRROR: 'https://npmmirror.com/mirrors/electron/'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -77,6 +81,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 只有 core 组会启动真 Electron；先装好运行时并重试下载，
+      # 避免测试进行到 provider-credential-desktop 才因 CDN 504 失败。
+      - name: Prepare Electron runtime
+        if: ${{ matrix.group == 'core' }}
+        shell: pwsh
+        run: node scripts/prepare-electron-ci.mjs
+
       - name: Prepare isolated test directories
         shell: pwsh
         run: |
@@ -132,6 +143,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # packager 默认会自行下载 Electron zip 和远端 SHASUMS；先重试安装并
+      # 通过 PI_GUI_ELECTRON_ZIP_DIR 固定本地 zip，打包阶段不再依赖 CDN。
+      - name: Prepare Electron runtime
+        shell: pwsh
+        run: node scripts/prepare-electron-ci.mjs
 
       - name: Generate test fixtures
         run: npm run fixtures
