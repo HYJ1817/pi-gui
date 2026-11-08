@@ -1,0 +1,348 @@
+/* Claude 风格执行指示：四点折叠 / 三点轨道（复刻自参考录屏）。
+ *
+ * ---------- 录屏里是两套形态，不是一个 loader ----------
+ *
+ * 把 47.6s 的录屏按 60fps 拆开看，指示器在两个形态之间交替：
+ *
+ *   0 - 5.5s      三个点在小范围里绕圈；有时只看得见一两个 —— 背面的点会缩小、
+ *                 变暗到几乎消失。一圈 2s（2.0s / 4.0s / 6.0s 的帧完全重合）。
+ *   5.5s 前后     三个点收成一个很小的点，停一拍，再让四个点从中心绽开
+ *                 （录屏里这段过渡约 0.3-0.9s，这里实现成 0.75s）。
+ *   5.6 - 21.1s   四点方阵折叠（1.25s 一圈，见下面的时间轴）。
+ *   21.1s 前后    方阵收成一个点，停一拍，三个点从中心转出来。
+ *   22 - 47.6s    又是三点轨道，直到录屏结束。
+ *
+ * 两个形态切换时都不是「三个点原地变成四个点」，而是**先收成一个点再展开**。
+ * 这个中间态是复刻的重点：观众看到的是同一个指示器在换姿势，不是两个 loader
+ * 在互相淡入淡出。
+ *
+ * ---------- 四点方阵的时间轴（1.25s）----------
+ *
+ *   0%    - 7%    方阵（静止）
+ *   7%    - 49%   第一对：左上 -> 左下 -> 右下；右下 -> 右上 -> 左上
+ *   49%   - 57%   方阵（静止）
+ *   57%   - 100%  第二对：右上 -> 右下 -> 左下；左下 -> 左上 -> 右上
+ *
+ * 每个移动的点走的是一条**圆角 L 形**：竖着加速冲向拐角，过弯时带一点向内的
+ * 鼓包，横着冲出去时先过冲约 1px 再软着陆。四组 keyframes 按测量出的时间轴
+ * 逐段采样，四个点各自一条时间线，不是共用一个 loader 关键帧。
+ *
+ * ---------- 三点轨道（2s）----------
+ *
+ * 三个点在一个略微倾斜、且竖直方向周期性压扁的椭圆轨道上绕圈；离观众近的点
+ * 更大更亮，背面的点缩小、变暗。这样同一时刻可能只看到一两个点，和录屏里
+ * 「点会突然出现/消失」的观感一致。第四点停在中心并完全透明，只是在等下一次
+ * 展开成方阵。
+ *
+ * ---------- 两套形态怎么切换 ----------
+ *
+ * JS（thinking-dots.js）让两套形态按录屏节奏自动交替：三点约 5.5s（开场），
+ * 之后方阵约 15s、三点约 26s，循环往复。工具起停只决定指示器显不显示，不决定
+ * 当前形态 —— 录屏里同一个「Checking pull request」既出现过三点也出现过方阵。
+ * 每个点组有自己的状态、计时器和动画，互不干扰。
+ *
+ * CSS 动画不能从「随便一个中间帧」平滑接到另一条时间线上 —— 强行切会跳。所以
+ * 相位切换只在**循环边界**发生：JS 监听 animationiteration，等当前形态走完一圈
+ * （方阵最多 1.25s、三点最多 2s），此时的画面正好是这一形态的 0% 静止姿态；
+ * 再换上过渡关键帧，过渡的 0% 就是这个姿态，肉眼看不到接缝。过渡 0.75s：
+ *
+ *   0%    - 25%   所有点收拢到中心，缩成一个小点
+ *   25%   - 55%   停一拍（录屏里约 0.25s）
+ *   55%   - 100%  从中心绽开成目标形态
+ *
+ * 如果状态在边界到来之前又变回去，这次切换直接作废 —— 短暂的工具调用不会让
+ * 指示器闪一下。
+ *
+ * ---------- 约束 ----------
+ *
+ * - 容器固定 14x14px（和原来的 spinner 占位基本一致），所有运动只用 transform
+ *   和 opacity，不触发回流；
+ * - 点本身保持正圆（不套 3D 透视，否则会变成椭圆 —— 录屏里始终是圆的）；
+ * - prefers-reduced-motion 下不播放动画，按当前形态停在静态方阵/静态三角；
+ * - 深色主题用 Claude 珊瑚色 #d97757，浅色主题压深一档保证对比度。 */
+
+.thinking-dots {
+  /* 录屏实测：圆点直径约 4px、中心间距约 10px。 */
+  --td-dot: 4px;
+  --td-step: 10px;
+  --td-color: #d97757;
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: calc(var(--td-step) + var(--td-dot));
+  height: calc(var(--td-step) + var(--td-dot));
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .thinking-dots {
+  --td-color: #c15f3c;
+}
+
+.thinking-dots > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--td-dot);
+  height: var(--td-dot);
+  border-radius: 50%;
+  background: var(--td-color);
+  will-change: transform, opacity;
+  animation-duration: 1.25s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.thinking-dots > span:nth-child(2) { left: var(--td-step); }
+.thinking-dots > span:nth-child(3) { top: var(--td-step); }
+.thinking-dots > span:nth-child(4) { left: var(--td-step); top: var(--td-step); }
+
+/* 默认相位：四点方阵。 */
+.thinking-dots > span:nth-child(1) { animation-name: thinking-dots-a; }
+.thinking-dots > span:nth-child(2) { animation-name: thinking-dots-b; }
+.thinking-dots > span:nth-child(3) { animation-name: thinking-dots-c; }
+.thinking-dots > span:nth-child(4) { animation-name: thinking-dots-d; }
+
+/* 左上 -> 左下 -> 右下（第一段）。竖着加速下冲，过左下角时向右鼓一点，
+ * 横着冲向右侧时先略低于底边、再回到原位。 */
+@keyframes thinking-dots-a {
+  0%, 7% { transform: translate(0, 0); }
+  13% { transform: translate(calc(var(--td-step) * 0.06), calc(var(--td-step) * 0.19)); }
+  19% { transform: translate(calc(var(--td-step) * 0.14), calc(var(--td-step) * 0.50)); }
+  24% { transform: translate(calc(var(--td-step) * 0.21), calc(var(--td-step) * 0.86)); }
+  27% { transform: translate(calc(var(--td-step) * 0.24), calc(var(--td-step) * 1.02)); }
+  31% { transform: translate(calc(var(--td-step) * 0.55), calc(var(--td-step) * 1.11)); }
+  37% { transform: translate(calc(var(--td-step) * 0.83), calc(var(--td-step) * 1.08)); }
+  43% { transform: translate(calc(var(--td-step) * 0.96), calc(var(--td-step) * 1.02)); }
+  49%, 100% { transform: translate(var(--td-step), var(--td-step)); }
+}
+
+/* 右上 -> 右下 -> 左下（第二段），与 a 镜像：向内的鼓包在左侧。 */
+@keyframes thinking-dots-b {
+  0%, 57% { transform: translate(0, 0); }
+  63% { transform: translate(calc(var(--td-step) * -0.06), calc(var(--td-step) * 0.19)); }
+  69% { transform: translate(calc(var(--td-step) * -0.14), calc(var(--td-step) * 0.50)); }
+  74% { transform: translate(calc(var(--td-step) * -0.21), calc(var(--td-step) * 0.86)); }
+  77% { transform: translate(calc(var(--td-step) * -0.24), calc(var(--td-step) * 1.02)); }
+  81% { transform: translate(calc(var(--td-step) * -0.55), calc(var(--td-step) * 1.11)); }
+  87% { transform: translate(calc(var(--td-step) * -0.83), calc(var(--td-step) * 1.08)); }
+  93% { transform: translate(calc(var(--td-step) * -0.96), calc(var(--td-step) * 1.02)); }
+  100% { transform: translate(calc(var(--td-step) * -1), var(--td-step)); }
+}
+
+/* 左下 -> 左上 -> 右上（第二段），与 b 同拍。 */
+@keyframes thinking-dots-c {
+  0%, 57% { transform: translate(0, 0); }
+  63% { transform: translate(calc(var(--td-step) * 0.06), calc(var(--td-step) * -0.19)); }
+  69% { transform: translate(calc(var(--td-step) * 0.14), calc(var(--td-step) * -0.50)); }
+  74% { transform: translate(calc(var(--td-step) * 0.21), calc(var(--td-step) * -0.86)); }
+  77% { transform: translate(calc(var(--td-step) * 0.24), calc(var(--td-step) * -1.02)); }
+  81% { transform: translate(calc(var(--td-step) * 0.55), calc(var(--td-step) * -1.11)); }
+  87% { transform: translate(calc(var(--td-step) * 0.83), calc(var(--td-step) * -1.08)); }
+  93% { transform: translate(calc(var(--td-step) * 0.96), calc(var(--td-step) * -1.02)); }
+  100% { transform: translate(var(--td-step), calc(var(--td-step) * -1)); }
+}
+
+/* 右下 -> 右上 -> 左上（第一段），与 a 同拍、镜像。 */
+@keyframes thinking-dots-d {
+  0%, 7% { transform: translate(0, 0); }
+  13% { transform: translate(calc(var(--td-step) * -0.06), calc(var(--td-step) * -0.19)); }
+  19% { transform: translate(calc(var(--td-step) * -0.14), calc(var(--td-step) * -0.50)); }
+  24% { transform: translate(calc(var(--td-step) * -0.21), calc(var(--td-step) * -0.86)); }
+  27% { transform: translate(calc(var(--td-step) * -0.24), calc(var(--td-step) * -1.02)); }
+  31% { transform: translate(calc(var(--td-step) * -0.55), calc(var(--td-step) * -1.11)); }
+  37% { transform: translate(calc(var(--td-step) * -0.83), calc(var(--td-step) * -1.08)); }
+  43% { transform: translate(calc(var(--td-step) * -0.96), calc(var(--td-step) * -1.02)); }
+  49%, 100% { transform: translate(calc(var(--td-step) * -1), calc(var(--td-step) * -1)); }
+}
+
+/* ---------- 三点轨道 ---------- */
+
+.thinking-dots[data-phase="triangle"] > span {
+  animation-duration: 2s;
+}
+
+.thinking-dots[data-phase="triangle"] > span:nth-child(1) { animation-name: thinking-dots-tri-1; }
+.thinking-dots[data-phase="triangle"] > span:nth-child(2) { animation-name: thinking-dots-tri-2; }
+.thinking-dots[data-phase="triangle"] > span:nth-child(3) { animation-name: thinking-dots-tri-3; }
+.thinking-dots[data-phase="triangle"] > span:nth-child(4) { animation-name: thinking-dots-tri-4; }
+
+/* 第四点在三点相位里不参与画面。正常规则给 reduced-motion 的静态形态兜底；
+ * 播放动画时会被关键帧里的 opacity 覆盖，不会把过渡打断。 */
+.thinking-dots[data-phase="triangle"] > span:nth-child(4) { opacity: 0; }
+
+/* @generated:triangle */
+/* 三点轨道：2s 一圈，13 个采样点。0% 与 100% 必须完全一致，循环才无缝。 */
+@keyframes thinking-dots-tri-1 {
+  0% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.16)) scale(0.62); opacity: 0.18; }
+  8.33% { transform: translate(calc(var(--td-step) * 0.7), calc(var(--td-step) * 0.253)) scale(0.645); opacity: 0.235; }
+  16.67% { transform: translate(calc(var(--td-step) * 0.846), calc(var(--td-step) * 0.413)) scale(0.715); opacity: 0.385; }
+  25% { transform: translate(calc(var(--td-step) * 0.9), calc(var(--td-step) * 0.5)) scale(0.81); opacity: 0.59; }
+  33.33% { transform: translate(calc(var(--td-step) * 0.846), calc(var(--td-step) * 0.587)) scale(0.905); opacity: 0.795; }
+  41.67% { transform: translate(calc(var(--td-step) * 0.7), calc(var(--td-step) * 0.747)) scale(0.975); opacity: 0.945; }
+  50% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.84)) scale(1); opacity: 1; }
+  58.33% { transform: translate(calc(var(--td-step) * 0.3), calc(var(--td-step) * 0.747)) scale(0.975); opacity: 0.945; }
+  66.67% { transform: translate(calc(var(--td-step) * 0.154), calc(var(--td-step) * 0.587)) scale(0.905); opacity: 0.795; }
+  75% { transform: translate(calc(var(--td-step) * 0.1), calc(var(--td-step) * 0.5)) scale(0.81); opacity: 0.59; }
+  83.33% { transform: translate(calc(var(--td-step) * 0.154), calc(var(--td-step) * 0.413)) scale(0.715); opacity: 0.385; }
+  91.67% { transform: translate(calc(var(--td-step) * 0.3), calc(var(--td-step) * 0.253)) scale(0.645); opacity: 0.235; }
+  100% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.16)) scale(0.62); opacity: 0.18; }
+}
+
+@keyframes thinking-dots-tri-2 {
+  0% { transform: translate(calc(var(--td-step) * -0.154), calc(var(--td-step) * 0.67)) scale(0.905); opacity: 0.795; }
+  8.33% { transform: translate(calc(var(--td-step) * -0.3), calc(var(--td-step) * 0.747)) scale(0.975); opacity: 0.945; }
+  16.67% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * 0.674)) scale(1); opacity: 1; }
+  25% { transform: translate(calc(var(--td-step) * -0.7), calc(var(--td-step) * 0.603)) scale(0.975); opacity: 0.945; }
+  33.33% { transform: translate(calc(var(--td-step) * -0.846), calc(var(--td-step) * 0.587)) scale(0.905); opacity: 0.795; }
+  41.67% { transform: translate(calc(var(--td-step) * -0.9), calc(var(--td-step) * 0.5)) scale(0.81); opacity: 0.59; }
+  50% { transform: translate(calc(var(--td-step) * -0.846), calc(var(--td-step) * 0.33)) scale(0.715); opacity: 0.385; }
+  58.33% { transform: translate(calc(var(--td-step) * -0.7), calc(var(--td-step) * 0.253)) scale(0.645); opacity: 0.235; }
+  66.67% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * 0.326)) scale(0.62); opacity: 0.18; }
+  75% { transform: translate(calc(var(--td-step) * -0.3), calc(var(--td-step) * 0.397)) scale(0.645); opacity: 0.235; }
+  83.33% { transform: translate(calc(var(--td-step) * -0.154), calc(var(--td-step) * 0.413)) scale(0.715); opacity: 0.385; }
+  91.67% { transform: translate(calc(var(--td-step) * -0.1), calc(var(--td-step) * 0.5)) scale(0.81); opacity: 0.59; }
+  100% { transform: translate(calc(var(--td-step) * -0.154), calc(var(--td-step) * 0.67)) scale(0.905); opacity: 0.795; }
+}
+
+@keyframes thinking-dots-tri-3 {
+  0% { transform: translate(calc(var(--td-step) * 0.154), calc(var(--td-step) * -0.33)) scale(0.905); opacity: 0.795; }
+  8.33% { transform: translate(calc(var(--td-step) * 0.1), calc(var(--td-step) * -0.5)) scale(0.81); opacity: 0.59; }
+  16.67% { transform: translate(calc(var(--td-step) * 0.154), calc(var(--td-step) * -0.587)) scale(0.715); opacity: 0.385; }
+  25% { transform: translate(calc(var(--td-step) * 0.3), calc(var(--td-step) * -0.603)) scale(0.645); opacity: 0.235; }
+  33.33% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * -0.674)) scale(0.62); opacity: 0.18; }
+  41.67% { transform: translate(calc(var(--td-step) * 0.7), calc(var(--td-step) * -0.747)) scale(0.645); opacity: 0.235; }
+  50% { transform: translate(calc(var(--td-step) * 0.846), calc(var(--td-step) * -0.67)) scale(0.715); opacity: 0.385; }
+  58.33% { transform: translate(calc(var(--td-step) * 0.9), calc(var(--td-step) * -0.5)) scale(0.81); opacity: 0.59; }
+  66.67% { transform: translate(calc(var(--td-step) * 0.846), calc(var(--td-step) * -0.413)) scale(0.905); opacity: 0.795; }
+  75% { transform: translate(calc(var(--td-step) * 0.7), calc(var(--td-step) * -0.397)) scale(0.975); opacity: 0.945; }
+  83.33% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * -0.326)) scale(1); opacity: 1; }
+  91.67% { transform: translate(calc(var(--td-step) * 0.3), calc(var(--td-step) * -0.253)) scale(0.975); opacity: 0.945; }
+  100% { transform: translate(calc(var(--td-step) * 0.154), calc(var(--td-step) * -0.33)) scale(0.905); opacity: 0.795; }
+}
+
+/* 第四点在三点的相位里停在中心、完全透明；它只是在等下一次展成方阵。 */
+@keyframes thinking-dots-tri-4 {
+  0%, 100% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 0; }
+}
+/* @generated:end */
+
+/* ---------- 两套形态之间的过渡（0.75s） ---------- */
+
+.thinking-dots[data-transition] > span {
+  animation-duration: 0.75s;
+  animation-iteration-count: 1;
+  animation-fill-mode: both;
+}
+
+.thinking-dots[data-transition="to-square"] > span:nth-child(1) { animation-name: thinking-dots-to-square-1; }
+.thinking-dots[data-transition="to-square"] > span:nth-child(2) { animation-name: thinking-dots-to-square-2; }
+.thinking-dots[data-transition="to-square"] > span:nth-child(3) { animation-name: thinking-dots-to-square-3; }
+.thinking-dots[data-transition="to-square"] > span:nth-child(4) { animation-name: thinking-dots-to-square-4; }
+
+.thinking-dots[data-transition="to-triangle"] > span:nth-child(1) { animation-name: thinking-dots-to-triangle-1; }
+.thinking-dots[data-transition="to-triangle"] > span:nth-child(2) { animation-name: thinking-dots-to-triangle-2; }
+.thinking-dots[data-transition="to-triangle"] > span:nth-child(3) { animation-name: thinking-dots-to-triangle-3; }
+.thinking-dots[data-transition="to-triangle"] > span:nth-child(4) { animation-name: thinking-dots-to-triangle-4; }
+
+/* @generated:transition */
+/* 三点 -> 方阵：先收拢成一个点，停一拍，再让四个点从中心绽开。 */
+@keyframes thinking-dots-to-square-1 {
+  0% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.16)) scale(0.62); opacity: 0.18; }
+  12% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.347)) scale(0.582); opacity: 0.85; }
+  25% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.5)) scale(0.55); opacity: 1; }
+  55% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.5)) scale(0.55); opacity: 1; }
+  68% { transform: translate(calc(var(--td-step) * 0.325), calc(var(--td-step) * 0.325)) scale(0.708); opacity: 1; }
+  82% { transform: translate(calc(var(--td-step) * 0.125), calc(var(--td-step) * 0.125)) scale(0.888); opacity: 1; }
+  100% { transform: translate(0, 0) scale(1); opacity: 1; }
+}
+
+@keyframes thinking-dots-to-square-2 {
+  0% { transform: translate(calc(var(--td-step) * -0.154), calc(var(--td-step) * 0.67)) scale(0.905); opacity: 0.795; }
+  12% { transform: translate(calc(var(--td-step) * -0.344), calc(var(--td-step) * 0.577)) scale(0.71); opacity: 0.85; }
+  25% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * 0.5)) scale(0.55); opacity: 1; }
+  55% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * 0.5)) scale(0.55); opacity: 1; }
+  68% { transform: translate(calc(var(--td-step) * -0.325), calc(var(--td-step) * 0.325)) scale(0.708); opacity: 1; }
+  82% { transform: translate(calc(var(--td-step) * -0.125), calc(var(--td-step) * 0.125)) scale(0.888); opacity: 1; }
+  100% { transform: translate(0, 0) scale(1); opacity: 1; }
+}
+
+@keyframes thinking-dots-to-square-3 {
+  0% { transform: translate(calc(var(--td-step) * 0.154), calc(var(--td-step) * -0.33)) scale(0.905); opacity: 0.795; }
+  12% { transform: translate(calc(var(--td-step) * 0.344), calc(var(--td-step) * -0.423)) scale(0.71); opacity: 0.85; }
+  25% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 1; }
+  55% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 1; }
+  68% { transform: translate(calc(var(--td-step) * 0.325), calc(var(--td-step) * -0.325)) scale(0.708); opacity: 1; }
+  82% { transform: translate(calc(var(--td-step) * 0.125), calc(var(--td-step) * -0.125)) scale(0.888); opacity: 1; }
+  100% { transform: translate(0, 0) scale(1); opacity: 1; }
+}
+
+@keyframes thinking-dots-to-square-4 {
+  0% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 0; }
+  12% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 0; }
+  25% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 0; }
+  55% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 0; }
+  68% { transform: translate(calc(var(--td-step) * -0.325), calc(var(--td-step) * -0.325)) scale(0.708); opacity: 0.7; }
+  82% { transform: translate(calc(var(--td-step) * -0.125), calc(var(--td-step) * -0.125)) scale(0.888); opacity: 1; }
+  100% { transform: translate(0, 0) scale(1); opacity: 1; }
+}
+
+/* 方阵 -> 三点：方阵收成一个点，停一拍，三个点从中心转出来，第四点留在中心淡出。 */
+@keyframes thinking-dots-to-triangle-1 {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  12% { transform: translate(calc(var(--td-step) * 0.275), calc(var(--td-step) * 0.275)) scale(0.753); opacity: 1; }
+  25% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.5)) scale(0.55); opacity: 1; }
+  55% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.5)) scale(0.55); opacity: 1; }
+  68% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.381)) scale(0.575); opacity: 1; }
+  82% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.245)) scale(0.603); opacity: 1; }
+  100% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * 0.16)) scale(0.62); opacity: 0.18; }
+}
+
+@keyframes thinking-dots-to-triangle-2 {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  12% { transform: translate(calc(var(--td-step) * -0.275), calc(var(--td-step) * 0.275)) scale(0.753); opacity: 1; }
+  25% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * 0.5)) scale(0.55); opacity: 1; }
+  55% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * 0.5)) scale(0.55); opacity: 1; }
+  68% { transform: translate(calc(var(--td-step) * -0.379), calc(var(--td-step) * 0.56)) scale(0.674); opacity: 1; }
+  82% { transform: translate(calc(var(--td-step) * -0.24), calc(var(--td-step) * 0.628)) scale(0.816); opacity: 1; }
+  100% { transform: translate(calc(var(--td-step) * -0.154), calc(var(--td-step) * 0.67)) scale(0.905); opacity: 0.795; }
+}
+
+@keyframes thinking-dots-to-triangle-3 {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  12% { transform: translate(calc(var(--td-step) * 0.275), calc(var(--td-step) * -0.275)) scale(0.753); opacity: 1; }
+  25% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 1; }
+  55% { transform: translate(calc(var(--td-step) * 0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 1; }
+  68% { transform: translate(calc(var(--td-step) * 0.379), calc(var(--td-step) * -0.44)) scale(0.674); opacity: 1; }
+  82% { transform: translate(calc(var(--td-step) * 0.24), calc(var(--td-step) * -0.372)) scale(0.816); opacity: 1; }
+  100% { transform: translate(calc(var(--td-step) * 0.154), calc(var(--td-step) * -0.33)) scale(0.905); opacity: 0.795; }
+}
+
+@keyframes thinking-dots-to-triangle-4 {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  12% { transform: translate(calc(var(--td-step) * -0.275), calc(var(--td-step) * -0.275)) scale(0.753); opacity: 1; }
+  25% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 1; }
+  55% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 1; }
+  68% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 0.35; }
+  82% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 0.08; }
+  100% { transform: translate(calc(var(--td-step) * -0.5), calc(var(--td-step) * -0.5)) scale(0.55); opacity: 0; }
+}
+/* @generated:end */
+
+.thinking-dots[hidden] { display: none !important; }
+
+/* ---------- 接入点 ---------- */
+
+/* 聊天流：工具执行时保留动画，只收起会与工具行重复的文案。 */
+.working.is-tool-active .working-label { display: none; }
+
+/* 并行会话头：状态行是 11px 文本，点组向下对齐到文字中段。 */
+.runtime-conversation .rtc-head > .rtc-state .thinking-dots {
+  margin-right: 7px;
+  vertical-align: -2px;
+}
+
+/* 尊重系统设置：不播放动画，按当前形态停在静态方阵 / 静态三角。 */
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dots > span { animation: none !important; }
+}
