@@ -22,10 +22,11 @@ const MAX_FLOWS = 8;
 const fail = (code, extra = {}) => ({ ok: false, code, ...extra });
 
 export function createProviderCredentialBridge({ sdk, draftLookup, consentStore, mutationBlocked = () => false,
-  maintenanceLocked = () => false, enabled = false, flowTtlMs = NONCE_TTL_MS, now = Date.now } = {}) {
+  maintenanceLocked = () => false, draftFrozen = () => false, enabled = false, flowTtlMs = NONCE_TTL_MS, now = Date.now } = {}) {
   const epoch = randomUUID();
   const flows = new Map();
   const preparing = new Map();
+  const approved = new Map();
   let inFlight = false;
   // 只有 Electron main 经私有 IPC 握手后才置位；HTTP/Web 侧的快照因此永远
   // 看不到开启的桌面能力（open 时 main 还会再做一次自己的环境资格检查）。
@@ -34,6 +35,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
   function prune() {
     const time = now();
     for (const [id, flow] of flows) if (flow.expires <= time) flows.delete(id);
+    for (const [id, stage] of approved) if (stage.expires <= time) approved.delete(id);
   }
 
   async function capability() {
@@ -56,6 +58,49 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     return { draftId: flow.draftId, providerId: flow.providerId, connectionRevision: flow.connectionRevision, connection: flow.connection };
   }
 
+  function acceptStage(flow, result, kind) {
+    if (!isOpaqueId(result.stagedRevision) || !Number.isFinite(result.expires)) return;
+    const prior = approved.get(flow.draftId);
+    approved.set(flow.draftId, { binding: bindingOf(flow), revision: result.stagedRevision, kind, expires: result.expires });
+    if (prior) void sdk.discardStage?.(flow.draftId, prior.revision);
+  }
+
+  function currentApproval(approval) {
+    const { binding } = approval;
+    const draft = draftLookup?.(binding.draftId);
+    return approved.get(binding.draftId) === approval && approval.expires > now() && draft?.expires > now() &&
+      draft.connectionRevision === binding.connectionRevision && draft.providerId === binding.providerId &&
+      draft.connection.baseUrl === binding.connection.baseUrl && draft.connection.api === binding.connection.api;
+  }
+
+  async function invalidateStaleFlow(flow) {
+    flows.delete(flow.flowId);
+    const approval = approved.get(flow.draftId);
+    if (approval && currentApproval(approval)) return;
+    approved.delete(flow.draftId);
+    consentStore?.revokeDraft(flow.draftId);
+    await sdk.disposeDraft(flow.draftId);
+  }
+
+  async function authorizeNative({ draftId, providerId, connectionRevision, connection, action }, { signal } = {}) {
+    if (signal?.aborted || enabled !== true || guardBusy() || inFlight) return null;
+    const approval = approved.get(draftId);
+    const kind = action === 'apply-staged' ? 'set' : action === 'clear-native' ? 'clear' : null;
+    if (!approval || approval.kind !== kind || !currentApproval(approval) || approval.binding.providerId !== providerId ||
+        approval.binding.connectionRevision !== connectionRevision || approval.binding.connection.baseUrl !== connection.baseUrl ||
+        approval.binding.connection.api !== connection.api) return null;
+    if (!await sdk.canPersist?.(approval.binding, kind) || signal?.aborted || !(await sdk.inspectStage(approval.binding, approval.revision, kind))?.ok) return null;
+    return !signal?.aborted && !guardBusy() && !inFlight && currentApproval(approval) ? approval : null;
+  }
+
+  function persistApproved(approval, { signal } = {}) {
+    if (signal?.aborted || enabled !== true || guardBusy() || inFlight || !currentApproval(approval)) return fail('credential_conflict', { credentialSaved: false });
+    approved.delete(approval.binding.draftId);
+    consentStore?.revokeDraft(approval.binding.draftId);
+    return approval.kind === 'set' ? sdk.persistNative(approval.binding, approval.revision, { signal }) :
+      sdk.clearNative(approval.binding, approval.revision, { signal });
+  }
+
   function draftCurrent(flow) {
     const draft = draftLookup?.(flow.draftId);
     return Boolean(draft && draft.draftRevision === flow.draftRevision && draft.connectionRevision === flow.connectionRevision && draft.expires > now());
@@ -74,6 +119,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     prune();
     if (flows.size + preparing.size >= MAX_FLOWS) return fail('config_busy', { message: '凭据输入会话数量已达上限。' });
     const draft = typeof draftLookup === 'function' ? draftLookup(frame.draftId) : null;
+    if (draftFrozen(frame.draftId)) return fail('config_busy');
     if (!draft || draft.draftRevision !== frame.draftRevision || draft.expires <= now()) {
       return fail('draft_conflict', { message: '草稿已变化，请重读后保存。' });
     }
@@ -124,27 +170,32 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     const flow = flowFor(frame);
     if (!flow || flow.purpose !== 'set' && flow.purpose !== 'replace') return fail('invalid_request');
     if (!draftCurrent(flow)) {
-      flows.delete(flow.flowId);
-      await sdk.disposeDraft(flow.draftId);
+      await invalidateStaleFlow(flow);
       return fail('credential_conflict', { message: '无法证明目标没有存量凭据，请检查 Pi 认证或换用新标识。' });
     }
-    if (inFlight) return fail('config_busy', { message: '凭据操作进行中，请稍后重试。' });
+    if (inFlight || draftFrozen(flow.draftId)) return fail('config_busy', { message: '凭据操作进行中，请稍后重试。' });
     inFlight = true;
     try {
       const result = await sdk.stageNativeLogin(bindingOf(flow), frame.input,
-        { expectedCredentialRevision: flow.expectedCredentialRevision, confirmOAuthReplacement: flow.oauthConfirmOffered });
+        { expectedCredentialRevision: flow.expectedCredentialRevision, confirmOAuthReplacement: flow.oauthConfirmOffered,
+          retain: approved.get(flow.draftId)?.revision });
       if (result?.ok !== true) {
         if (result?.code === 'oauth_conflict') flow.oauthConfirmOffered = true;
         if (result?.code === 'expired') flow.lastCredentialState = 'expired';
         return { ...fail(result?.code ?? 'credential_conflict'), credentialState: result?.credentialState ?? 'none' };
       }
-      const current = flowFor(frame) === flow && draftCurrent(flow);
+      const current = flowFor(frame) === flow && draftCurrent(flow) && !draftFrozen(flow.draftId) && !guardBusy();
+      if (!current) {
+        void sdk.discardStage?.(flow.draftId, result.stagedRevision);
+        return fail('credential_conflict');
+      }
       consume(flow);
+      acceptStage(flow, result, 'set');
       flow.lastCredentialState = result.credentialState ?? 'staged';
       // 暂存替换不改变原生凭据修订号。使用 worker 的新代次并使此前授权失效。
       consentStore?.revokeDraft(flow.draftId);
       let consent = null;
-      if (current && frame.allowDiscovery === true && isOpaqueId(result.stagedRevision)) {
+      if (frame.allowDiscovery === true && isOpaqueId(result.stagedRevision)) {
         const issued = consentStore?.issue({ draftId: flow.draftId, draftRevision: flow.draftRevision,
           connectionRevision: flow.connectionRevision, providerId: flow.providerId, connection: flow.connection,
           api: flow.api, credentialSource: 'staged', credentialRevision: result.stagedRevision,
@@ -164,27 +215,36 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     const flow = flowFor(frame);
     if (!flow || flow.purpose !== 'clear' || frame.confirmed !== true) return fail('invalid_request');
     if (!draftCurrent(flow)) {
-      flows.delete(flow.flowId);
-      await sdk.disposeDraft(flow.draftId);
+      await invalidateStaleFlow(flow);
       return fail('credential_conflict');
     }
-    if (inFlight) return fail('config_busy', { message: '凭据操作进行中，请稍后重试。' });
+    if (inFlight || draftFrozen(flow.draftId)) return fail('config_busy', { message: '凭据操作进行中，请稍后重试。' });
     inFlight = true;
     try {
       /* OAuth 凭据与替换共用同一原生槽：清除同样需要在受限窗内显式
        * 二次确认（worker 层拒绝非确认调用）。首次尝试不带确认；遇到
        * oauth_conflict 时保持 flow 与 nonce 可用，让输入窗按要求展示
        * 影响说明后带确认重试（与替换同一交互纪律）。 */
-      let result = await sdk.stageClear(bindingOf(flow), { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true });
+      const options = { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true, retain: approved.get(flow.draftId)?.revision };
+      let result = await sdk.stageClear(bindingOf(flow), options);
+      if (flowFor(frame) !== flow || !draftCurrent(flow) || draftFrozen(flow.draftId) || guardBusy()) {
+        void sdk.discardStage?.(flow.draftId, result?.stagedRevision);
+        return fail('credential_conflict');
+      }
       if (result?.ok !== true && result?.code === 'oauth_conflict' && !flow.clearConfirmOffered) {
         flow.clearConfirmOffered = true;
         return { ok: false, code: 'oauth_conflict', message: '待清除的是 OAuth 登录凭据。确认后同槽的原生登录将被清除，且旧登录无法从 GUI 恢复。' };
       }
       if (result?.ok !== true && result?.code === 'oauth_conflict' && flow.clearConfirmOffered) {
-        result = await sdk.stageClear(bindingOf(flow), { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true, confirmOAuthReplacement: true });
+        result = await sdk.stageClear(bindingOf(flow), { ...options, confirmOAuthReplacement: true });
       }
       if (result?.ok !== true) return { ...fail(result?.code ?? 'credential_conflict'), credentialState: result?.credentialState ?? 'none' };
+      if (flowFor(frame) !== flow || !draftCurrent(flow) || draftFrozen(flow.draftId) || guardBusy()) {
+        void sdk.discardStage?.(flow.draftId, result.stagedRevision);
+        return fail('credential_conflict');
+      }
       consume(flow);
+      acceptStage(flow, result, 'clear');
       flow.lastCredentialState = result.credentialState ?? 'clear-staged';
       consentStore?.revokeDraft(flow.draftId);
       return { ok: true, credentialState: flow.lastCredentialState, credentialSaved: null };
@@ -234,6 +294,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     for (const [id, binding] of preparing) if (binding.draftId === frame.draftId) preparing.delete(id);
     for (const [id, flow] of flows) if (flow.draftId === frame.draftId) flows.delete(id);
     consentStore?.revokeDraft(frame.draftId);
+    approved.delete(frame.draftId);
     void sdk.disposeDraft(frame.draftId);
     return { ok: true };
   }
@@ -264,10 +325,12 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
 
   function dispose() {
     preparing.clear();
-    for (const flow of flows.values()) void sdk.disposeDraft(flow.draftId);
+    for (const id of new Set([...approved.keys(), ...[...flows.values()].map(flow => flow.draftId)])) void sdk.disposeDraft(id);
+    approved.clear();
     flows.clear();
     consentStore?.dispose();
   }
 
-  return { handle, dispose, epoch, desktopCapability, get activeFlows() { prune(); return flows.size; } };
+  return { handle, dispose, epoch, desktopCapability, authorizeNative, persistApproved,
+    invalidateDraft: draftId => closeDraft({ draftId }), get activeFlows() { prune(); return flows.size; } };
 }

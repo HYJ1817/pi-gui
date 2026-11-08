@@ -12,11 +12,14 @@ async function setup(t) {
   const modelsJson = path.join(root, 'models.json');
   const metadataPath = path.join(root, 'provider-management.json');
   const { createProviders } = await import('../server/providers.js');
+  const { createProviderConfigStore } = await import('../server/provider-config-store.js');
   const { createProviderManagement } = await import('../server/provider-management.js');
   const native = new Map();
   const inspect = id => Promise.resolve(native.get(id) ?? { present: false, builtIn: false });
   const legacy = createProviders({ modelsJson, metadataPath, inspectCredential: inspect });
-  const make = (enabled = true) => createProviderManagement({ store: legacy.store, inspectCredential: inspect, enabled });
+  const make = (enabled = true, nativeCredentials, fault) => createProviderManagement({
+    store: fault ? createProviderConfigStore({ modelsJson, metadataPath, fault }) : legacy.store,
+    inspectCredential: inspect, enabled, nativeCredentials });
   fs.writeFileSync(modelsJson, JSON.stringify({ misc: { a: true }, providers: { example: {
     baseUrl: 'https://fixture.invalid/v1', api: 'openai-completions', apiKey: key,
     headers: { Authorization: key }, unknown: { value: key },
@@ -38,6 +41,108 @@ const root = '/api/provider-management';
 const draft = (providerId = 'example', baseUrl = 'https://fixture.invalid/v1') => ({ providerId,
   displayName: 'Example', authMode: 'none', connection: { baseUrl, api: 'openai-completions' }, enabled: true,
   selectedModelIds: ['model-a'], modelOrder: ['model-a'], modelPatches: [{ modelId: 'model-a', operation: 'upsert', set: { name: 'After' } }] });
+
+test('duplicate native commits share one config-first dispatch and a durable partial failure', async t => {
+  const f = await setup(t);
+  let calls = 0;
+  const nativeCredentials = {
+    authorize: binding => binding,
+    async persist(approval) {
+      calls++;
+      assert.equal(approval.providerId, 'native-fixture');
+      const config = JSON.parse(fs.readFileSync(f.modelsJson, 'utf8'));
+      assert.equal(config.providers['native-fixture'].baseUrl, 'https://fixture.invalid/v1');
+      assert.equal(config.misc.a, true);
+      return { ok: false, credentialSaved: false, code: 'native_write_failed', message: key };
+    },
+  };
+  const { handle } = f.make(true, nativeCredentials);
+  const expectedRevision = (await http(handle, 'GET', root)).body.revision;
+  const d = await http(handle, 'POST', root + '/drafts', { requestId: 'native-draft', expectedRevision,
+    draft: { ...draft('native-fixture'), authMode: 'pi-credential' } });
+  const request = { requestId: 'native-commit', action: 'create', expectedRevision, draftId: d.body.draftId,
+    draftRevision: d.body.draftRevision, credentialAction: { type: 'apply-staged' } };
+  const [first, second] = await Promise.all([http(handle, 'POST', root + '/commit', request), http(handle, 'POST', root + '/commit', request)]);
+  assert.equal(first.status, 200);
+  assert.equal(first.body.saved, true);
+  assert.equal(first.body.credentialSaved, false);
+  assert.equal(first.body.credentialState, 'saved-credential-error');
+  assert.ok(!JSON.stringify(first).includes(key));
+  assert.deepEqual(second, first);
+  assert.deepEqual(await http(f.make(true, nativeCredentials).handle, 'POST', root + '/commit', request), first);
+  const conflict = await http(handle, 'POST', root + '/commit', { ...request, credentialAction: { type: 'clear-native' } });
+  assert.equal(conflict.body.code, 'request_id_conflict');
+  assert.equal(calls, 1);
+});
+
+for (const [checkpoint, callsExpected, credentialState] of [
+  ['before-credential-dispatch', 0, 'saved-credential-error'],
+  ['before-credential-finish', 1, 'credential-unconfirmed'],
+]) {
+  test(`a restart at ${checkpoint} recovers config and never replays a credential write`, async t => {
+    const f = await setup(t);
+    let calls = 0;
+    const nativeCredentials = { authorize: binding => binding, persist() {
+      calls++;
+      return { ok: true, credentialSaved: true, credentialState: 'saved' };
+    } };
+    const { handle } = f.make(true, nativeCredentials, stage => {
+      if (stage === checkpoint) throw new Error('simulated crash');
+    });
+    const expectedRevision = (await http(handle, 'GET', root)).body.revision;
+    const d = await http(handle, 'POST', root + '/drafts', { requestId: 'crash-draft', expectedRevision,
+      draft: { ...draft('crash-fixture'), authMode: 'pi-credential' } });
+    const request = { requestId: 'crash-commit', action: 'create', expectedRevision, draftId: d.body.draftId,
+      draftRevision: d.body.draftRevision, credentialAction: { type: 'apply-staged' } };
+    const interrupted = await http(handle, 'POST', root + '/commit', request);
+    assert.notEqual(interrupted.body.credentialSaved, true);
+    assert.equal(calls, callsExpected);
+    const config = fs.readFileSync(f.modelsJson);
+    assert.ok(JSON.parse(config).providers['crash-fixture']);
+    const { handle: reopened } = f.make(true, nativeCredentials);
+    const recovered = await http(reopened, 'POST', root + '/commit', request);
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.body.saved, true);
+    assert.equal(recovered.body.credentialState, credentialState);
+    assert.equal(recovered.body.credentialSaved, callsExpected ? null : false);
+    assert.deepEqual(await http(reopened, 'POST', root + '/commit', request), recovered);
+    assert.deepEqual(fs.readFileSync(f.modelsJson), config);
+    assert.equal(calls, callsExpected);
+  });
+}
+
+test('a native call that ignores cancellation releases the config lock but remains isolated', async t => {
+  const f = await setup(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let sent, finish, signal;
+  const started = new Promise(resolve => { sent = resolve; });
+  const native = new Promise(resolve => { finish = resolve; });
+  const nativeCredentials = { authorize: binding => binding, persist(_approval, options) {
+    signal = options?.signal;
+    sent();
+    return native;
+  } };
+  const { handle } = f.make(true, nativeCredentials);
+  const expectedRevision = (await http(handle, 'GET', root)).body.revision;
+  const d = await http(handle, 'POST', root + '/drafts', { requestId: 'timeout-draft', expectedRevision,
+    draft: { ...draft('timeout-fixture'), authMode: 'pi-credential' } });
+  const request = { requestId: 'timeout-commit', action: 'create', expectedRevision, draftId: d.body.draftId,
+    draftRevision: d.body.draftRevision, credentialAction: { type: 'apply-staged' } };
+  const pending = http(handle, 'POST', root + '/commit', request);
+  await started;
+  t.mock.timers.tick(30_000);
+  assert.equal(signal?.aborted, true);
+  const result = await pending;
+  assert.equal(result.body.credentialState, 'credential-unconfirmed');
+  const change = await http(f.legacy.handle, 'POST', '/api/providers', { name: 'timeout-fixture',
+    config: { baseUrl: 'https://elsewhere.invalid', api: 'openai-completions', models: [{ id: 'model-a' }] } });
+  assert.equal(change.body.code, 'config_busy');
+  const other = await http(f.legacy.handle, 'POST', '/api/providers', { name: 'unrelated-fixture',
+    config: { baseUrl: 'https://elsewhere.invalid', api: 'openai-completions', models: [{ id: 'model-a' }] } });
+  assert.equal(other.status, 200);
+  finish({ ok: true, credentialSaved: true, credentialState: 'saved' });
+  assert.deepEqual(await http(handle, 'POST', root + '/commit', request), result);
+});
 
 test('draft edit commits losslessly with durable receipt and protects the live credential target', async t => {
   const f = await setup(t);

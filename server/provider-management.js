@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { json, readBody } from './http-utils.js';
 import { apiKeyState, publicProviderConfig } from './providers.js';
 import { applyProviderCommit, own } from './provider-config-records.js';
+import { createNativeCommit } from './provider-management-commit.js';
 import { EDITABLE_MODEL_FIELDS, PROVIDER_API_TYPES, PROVIDER_CATALOG, PROVIDER_MANAGEMENT_SCHEMA_VERSION, isModelId, isOpaqueId, isProviderId, isRecord,
   providerContractError, providerErrorStatus, providerFailure, providerManagementCapabilities, validateModelValues, validateProviderRequest } from '../public/provider-management/contract.js';
 
@@ -65,9 +66,11 @@ function projectService(id, config, meta, auth) {
     compatibility: apiSupported ? 'unknown' : 'unsupported' };
 }
 
-export function createProviderManagement({ store, inspectCredential, readAuth = () => null, mutationBlocked = () => false, now = Date.now, enabled = false, desktopCapabilities = null }) {
+export function createProviderManagement({ store, inspectCredential, readAuth = () => null, mutationBlocked = () => false, now = Date.now,
+  enabled = false, desktopCapabilities = null, nativeCredentials = null }) {
   const drafts = new Map();
   const receipts = new Map();
+  const nativeCommit = nativeCredentials && createNativeCommit({ store, credentials: nativeCredentials, mutationBlocked });
   function prune() {
     const time = now();
     for (const [id, item] of drafts) if (item.expires <= time) drafts.delete(id);
@@ -112,6 +115,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       return priorReceipt.result;
     }
     const current = store.read();
+    if (nativeCommit?.hasDraft(request.draftId)) providerFailure('config_busy');
     if (own(current.metadata.receipts, request.requestId)) providerFailure('request_id_conflict');
     if (current.revision !== request.expectedRevision) providerFailure('config_conflict');
     const prior = request.draftId ? drafts.get(request.draftId) : null;
@@ -133,16 +137,33 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
   }
 
   async function commit(request) {
-    if (['apply-staged','clear-native'].includes(request.credentialAction?.type)) providerFailure('unsupported');
+    const action = request.credentialAction?.type;
+    const native = action === 'apply-staged' || action === 'clear-native';
+    if (native && !nativeCommit) providerFailure('unsupported');
     if (receipts.has(request.requestId)) providerFailure('request_id_conflict');
-    if (mutationBlocked()) providerFailure('config_busy');
     const staged = drafts.get(request.draftId);
-    const providerId = staged?.draft.providerId ?? request.serviceId;
-    const credential = providerId ? await inspectCredential(providerId) : null;
-    return store.transact({ expectedRevision: request.expectedRevision, requestId: request.requestId, fingerprint: digest(request), apply(current) {
+    const fingerprint = digest(request);
+    function assertDraft() {
       if (mutationBlocked()) providerFailure('config_busy');
       if (request.draftId && (!staged || drafts.get(request.draftId) !== staged || staged.expires <= now() || staged.draftRevision !== request.draftRevision ||
         staged.serviceId !== request.serviceId || staged.revision !== request.expectedRevision)) providerFailure('draft_conflict');
+    }
+    if (native) return nativeCommit.commit({ request, fingerprint, inspect: inspectCredential,
+      binding() {
+        assertDraft();
+        const { draft, connectionRevision } = staged;
+        if (request.action === 'clone' || (action === 'apply-staged' && draft.authMode !== 'pi-credential')) providerFailure('unsupported');
+        return { draftId: request.draftId, providerId: draft.providerId, connection: draft.connection, connectionRevision, action };
+      },
+      apply(current, credential) {
+        assertDraft();
+        return applyProviderCommit(current, { ...request, credentialAction: { type: 'keep' } }, staged.draft, credential);
+      } });
+    if (mutationBlocked() || nativeCommit?.hasDraft(request.draftId)) providerFailure('config_busy');
+    const providerId = staged?.draft.providerId ?? request.serviceId;
+    const credential = providerId ? await inspectCredential(providerId) : null;
+    return store.transact({ expectedRevision: request.expectedRevision, requestId: request.requestId, fingerprint, apply(current) {
+      assertDraft();
       return applyProviderCommit(current, request, staged?.draft, credential);
     } });
   }

@@ -70,20 +70,24 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
       return true;
     } catch { return false; }
   }
-  function call(action, payload, mutation = false) {
+  function call(action, payload, mutation = false, signal) {
+    if (signal?.aborted) return Promise.resolve(fail('cancelled'));
     if (pending.size >= 32 || !ensure()) return Promise.resolve(fail('unsupported'));
     const id = ++sequence;
     const current = worker;
     current.ref();
     return new Promise(resolve => {
-      const timer = setTimeout(() => { if (worker === current) void dispose(); }, timeoutMs);
+      const abort = () => { if (worker === current) void dispose(); };
+      const timer = setTimeout(abort, timeoutMs);
       function finish(result) {
         clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
         pending.delete(id);
         if (pending.size === 0) current.unref();
         resolve(result);
       }
       pending.set(id, { finish, mutation });
+      signal?.addEventListener('abort', abort, { once: true });
       try { current.postMessage({ id, action, ...payload }); } catch { finish(fail('unavailable', mutation ? null : false)); }
     });
   }
@@ -100,25 +104,36 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
     if (!binding || !isOpaqueId(options?.expectedCredentialRevision) ||
         (action === 'stage' ? !isLiteralKeyInput(input) : options.confirmed !== true)) return Promise.resolve(fail('invalid_request'));
     return call(action, { binding, ...(action === 'stage' ? { input } : {}), expectedCredentialRevision: options.expectedCredentialRevision,
-      confirmOAuthReplacement: options.confirmOAuthReplacement === true });
+      confirmOAuthReplacement: options.confirmOAuthReplacement === true, retain: isOpaqueId(options.retain) ? options.retain : undefined });
   }
-  async function persist(action, inputBinding) {
+  async function canPersist(binding, kind) {
+    if (!enabled || !binding || !['set', 'clear'].includes(kind)) return false;
+    try { return await authorizeStorage({ binding, authPath: location, action: kind === 'set' ? 'persist' : 'clear' }) === true; }
+    catch { return false; }
+  }
+  async function persist(action, inputBinding, stagedRevision, signal) {
     if (!enabled) return fail('unsupported');
     const binding = normalizeBinding(inputBinding);
-    if (!binding) return fail('invalid_request');
-    try {
-      if (await authorizeStorage({ binding, authPath: location, action }) !== true) {
-        await call('dispose-draft', { draftId: binding.draftId });
-        return fail('storage_unqualified');
-      }
-    } catch { return fail('storage_unqualified'); }
-    return call(action, { binding }, true);
+    if (!binding || (stagedRevision !== undefined && !isOpaqueId(stagedRevision))) return fail('invalid_request');
+    if (!await canPersist(binding, action === 'persist' ? 'set' : 'clear')) {
+      await call('dispose-draft', { draftId: binding.draftId });
+      return fail('storage_unqualified');
+    }
+    return call(action, { binding, stagedRevision }, true, signal);
   }
   return {
-    inspect, readback: inspect,
+    inspect, readback: inspect, canPersist,
     stageNativeLogin: (binding, input, options) => stage('stage', binding, input, options),
     stageClear: (binding, options) => stage('stage-clear', binding, null, options),
-    persistNative: binding => persist('persist', binding), clearNative: binding => persist('clear', binding),
+    persistNative: (binding, revision, { signal } = {}) => persist('persist', binding, revision, signal),
+    clearNative: (binding, revision, { signal } = {}) => persist('clear', binding, revision, signal),
+    inspectStage: (inputBinding, stagedRevision, kind) => {
+      const binding = normalizeBinding(inputBinding);
+      return binding && isOpaqueId(stagedRevision) && ['set', 'clear'].includes(kind) ?
+        call('inspect-stage', { binding, stagedRevision, kind }) : Promise.resolve(fail('invalid_request'));
+    },
+    discardStage: (draftId, stagedRevision) => isOpaqueId(draftId) && isOpaqueId(stagedRevision) && worker ?
+      call('discard-stage', { draftId, stagedRevision }) : Promise.resolve({ ok: true }),
     disposeDraft: draftId => isOpaqueId(draftId) && worker ? call('dispose-draft', { draftId }) : Promise.resolve({ ok: true }),
     /* P2 桥的能力探测：worker 是否能按 1.5.0 合同应答。只读、不写盘。
      * worker 的 probe 应答带 sdk:true；任何降级/失败路径都产不出这个字段。 */
