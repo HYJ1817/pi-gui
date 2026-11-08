@@ -28,7 +28,7 @@ import { sendCommand } from './api.js';
 import { updateSendState } from './composer.js';
 import { FILE_BLOCK_RE } from './attachments.js';
 import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
-import { setThinkingDotsPhase, thinkingDots } from './thinking-dots.js';
+import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { planHistory } from './tool-history.js';
 import { addToGroup, createGroup, renderEntry } from './tool-view.js';
 import { renderMessageMeta } from './message-meta.js';
@@ -97,15 +97,19 @@ export function showWorking() {
   const label = document.createElement('span');
   label.className = 'working-label';
   label.textContent = 'Pi 正在处理…';
-  /* 工具已经在跑时，新行直接以三点轨道出生，不要先闪一下方阵。 */
-  w.append(thinkingDots('', hasRunning() ? 'triangle' : 'square'), label);
+  /* 录屏从三点轨道的尾段开始，这里也一样：先露三点，之后自己交替到方阵。 */
+  const dots = thinkingDots('', 'triangle');
+  w.append(dots, label);
   t.appendChild(w);
   S.working = w;
+  startThinkingDotsCycle(dots, { immediate: true });
   syncToolWorking();
 }
 
 export function hideWorking() {
   if (S.working) {
+    const dots = S.working.querySelector('.thinking-dots');
+    if (dots) stopThinkingDotsCycle(dots);
     S.working.remove();
     S.working = null;
   }
@@ -122,20 +126,16 @@ export function moveWorkingToEnd() {
  * 看起来像状态在横跳。
  *
  * 但等待指示器不能整个消失：调用工具本来就是 Agent 执行的一部分，动画应该
- * 一直保持。所以这里只给 working 行加 `is-tool-active`，由 CSS 隐藏文案；
- * 动画本身从四点方阵切到三点轨道（见 thinking-dots.css）。
+ * 一直保持。所以这里只给 working 行加 `is-tool-active`，由 CSS 隐藏文案。
+ * 形态由 thinking-dots.js 按录屏节奏自己交替，工具起停不打断它 —— 录屏里
+ * 同一个「Checking pull request」既出现过三点也出现过方阵。
  *
  * 不碰 streaming 状态机 —— setStreaming / showWorking / hideWorking 的时序
  * 一行没改。用 class 而不是 remove：working 元素会被 moveWorkingToEnd 反复
  * 搬位置，删掉它就得在每条路径上判断「要不要重建」，反而更容易漏。 */
 export function syncToolWorking() {
   if (!S.working) return;
-  const toolActive = hasRunning();
-  S.working.classList.toggle('is-tool-active', toolActive);
-  /* 动画形态跟着工具状态走：思考 = 四点方阵，工具执行 = 三点轨道。
-   * setThinkingDotsPhase 自己会等循环边界，不会在工具起停的瞬间硬切。 */
-  const dots = S.working.querySelector('.thinking-dots');
-  if (dots) setThinkingDotsPhase(dots, toolActive ? 'triangle' : 'square');
+  S.working.classList.toggle('is-tool-active', hasRunning());
 }
 
 export function setStreaming(on) {
