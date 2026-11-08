@@ -1031,17 +1031,16 @@ export function openProviderAuthPanel({ present = openModal } = {}) {
   }, () => dispose());
 }
 
-export async function removeProvider(name, { confirmed = false } = {}) {
-  if (!confirmed) {
-    const ok = await confirmModal({
-      title: `删除供应商 ${name}？`,
-      message: `将从 Pi 模型配置中移除 ${name} 及其模型设置；不会删除 Pi 本机认证（auth.json）或系统环境变量。如果配置指向需要认证的端点，后端安全检查仍可能拒绝删除。重载 pi 后生效。`,
-      okText: '删除',
-      cancelText: '取消',
-      danger: true,
-    });
-    if (!ok) return { ok: false, cancelled: true };
-  }
+export async function removeProvider(name) {
+  // 确认不可由调用方跳过：兼容模式删除必须始终经过用户明确同意。
+  const ok = await confirmModal({
+    title: `删除供应商 ${name}？`,
+    message: `将从 Pi 模型配置中移除 ${name} 及其模型设置；不会删除 Pi 本机认证（auth.json）或系统环境变量。如果配置指向需要认证的端点，后端安全检查仍可能拒绝删除。重载 pi 后生效。`,
+    okText: '删除',
+    cancelText: '取消',
+    danger: true,
+  });
+  if (!ok) return { ok: false, cancelled: true };
   if (!await requireLegacyEligibility()) return { ok: false, code: 'unavailable' };
   const j = await apiDeleteProvider(name).catch(() => ({ ok: false, error: '删除请求没有完成，请重试。' }));
   if (!j || j.ok !== true) {
