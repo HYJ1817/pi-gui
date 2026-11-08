@@ -17,6 +17,7 @@
 import dns from 'node:dns';
 import http from 'node:http';
 import https from 'node:https';
+import { isIP } from 'node:net';
 import { buildCandidates } from '../lib/models-api.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -54,23 +55,13 @@ const inCidr4 = (value, prefix, bits) => {
   const mask = bits === 0 ? 0 : (0xFFFFFFFF << (32 - bits)) >>> 0;
   return (addr & mask) === (prefix & mask);
 };
-const v6Groups = value => String(value).split(':');
-
-
-/* IPv4 映射地址（::ffff:a.b.c.d）先解包再按 IPv4 分类，防止用 v6 语法绕过私网检查。 */
-function unwrapMapped(host) {
-  const lower = String(host).toLowerCase();
-  if (lower.startsWith('::ffff:')) {
-    const tail = lower.slice(7);
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(tail)) return { host: tail, version: 4 };
-  }
-  return { host: lower, version: lower.includes(':') ? 6 : 4 };
-}
-
 /** 地址归类。返回 'loopback' | 'private' | 'linklocal' | 'unspecified' | 'public' | null(不识别)。 */
 export function classifyAddress(address) {
-  const { host, version } = unwrapMapped(address);
+  if (typeof address !== 'string' || address.includes('%')) return null;
+  const version = isIP(address);
+  if (!version) return null;
   if (version === 4) {
+    const host = address;
     if (inCidr4(host, 0, 8)) return 'unspecified'; // 0.0.0.0/8
     if (inCidr4(host, 0x7F000000, 8)) return 'loopback'; // 127/8
     if (inCidr4(host, 0x0A000000, 8) || inCidr4(host, 0xAC100000, 12) || inCidr4(host, 0xC0A80000, 16)) return 'private';
@@ -80,36 +71,27 @@ export function classifyAddress(address) {
     // RFC 1112/3188 组播诊断、240/4 未分配、255.255.255.255）不是可达的
     // 模型目录目标；保守按「本地/保留」拒发，防止可路由误判。
     if (inCidr4(host, 0xC0000000, 24) || inCidr4(host, 0xC0000200, 24) ||
-        inCidr4(host, 0xC6336400, 26) || inCidr4(host, 0xCB007100, 24) ||
+        inCidr4(host, 0xC6336400, 24) || inCidr4(host, 0xCB007100, 24) ||
         inCidr4(host, 0xC0586300, 24) || inCidr4(host, 0xC6120000, 15) ||
-        inCidr4(host, 0xE0000000, 4) || inCidr4(host, 0xF0000000, 5) ||
-        host === '255.255.255.255') return 'private';
+        inCidr4(host, 0xE0000000, 4) || inCidr4(host, 0xF0000000, 4)) return 'private';
     return 'public';
   }
-  /* IPv4 映射地址的十六进制写法（::ffff:7f00:1 等）：先还原为点分 IPv4
-   * 再按 IPv4 语义分类——不能留给 v6 分支当普通公网 v6 处理。 */
+  // URL 规范化 IPv6 的压缩、大小写和点分写法。映射地址统一按内嵌 IPv4 分类。
+  const host = new URL(`http://[${address}]`).hostname.slice(1, -1);
   if (host.startsWith('::ffff:')) {
-    const tail = host.slice(7);
-    const hex = /^([0-9a-f]{1,4})(?::([0-9a-f]{0,4}))?$/.exec(tail);
-    if (hex) {
-      // 完整形（两组各 4 位）或双组写法：高 16 位 = a.b 段，低 16 位 = c.d 段。
-      const hi = Number.parseInt(hex[1], 16);
-      const lo = hex[2] ? Number.parseInt(hex[2], 16) : null;
-      if (lo !== null) {
-        const dotted = `${hi >>> 8}.${hi & 0xFF}.${lo >>> 8}.${lo & 0xFF}`;
-        return classifyAddress(dotted);
-      }
-      // 单组写法（::ffff:7f00:1 → 组内含 '.' 会被当点分；纯 hex 单组如
-      // ::ffff:a9fe 在严格 RFC 形态里不完整，按不可识别拒绝。
-      return null;
-    }
-    return classifyAddress(tail); // 点分形式或未识别形态
+    const [hi, lo] = host.slice(7).split(':').map(group => Number.parseInt(group, 16));
+    return classifyAddress(`${hi >>> 8}.${hi & 0xFF}.${lo >>> 8}.${lo & 0xFF}`);
   }
-  const groups = v6Groups(host).map(group => group === '' ? 0 : Number.parseInt(group, 16) || 0);
-  if (groups.every(group => group === 0)) return 'unspecified';
-  if (groups.slice(0, -1).every(group => group === 0) && groups.at(-1) === 1) return 'loopback'; // ::1
-  if (host.startsWith('fe8') || host.startsWith('fe9') || host.startsWith('fea') || host.startsWith('feb')) return 'linklocal';
-  if (host.startsWith('fc') || host.startsWith('fd')) return 'private'; // fc00::/7
+  if (host === '::') return 'unspecified';
+  if (host === '::1') return 'loopback';
+  const [first, second] = host.split(':', 2).map(group => Number.parseInt(group || '0', 16));
+  if ((first & 0xffc0) === 0xfe80) return 'linklocal'; // fe80::/10
+  // 仅接受当前全球单播分配空间 2000::/3，并排除其中的特殊用途前缀。
+  // 组播、旧 site-local、NAT64 特殊前缀等均在该空间之外。
+  if ((first & 0xe000) !== 0x2000 ||
+      (first === 0x2001 && (second < 0x0200 || second === 0x0db8)) || // 2001::/23、2001:db8::/32
+      first === 0x2002 || first === 0x3ffe || // 6to4、旧 6bone
+      (first === 0x3fff && second < 0x1000)) return 'private'; // 3fff::/20
   return 'public';
 }
 
@@ -240,10 +222,12 @@ export async function resolveTargetAddresses({ host, lookup = dns.promises.looku
   try {
     if (signal?.aborted) return fail('aborted');
     signal?.addEventListener('abort', onAbort, { once: true });
-    // 系统 DNS lookup 不保证响应 AbortSignal。竞争负责终止等待，并消费迟到的 rejection。
-    const entries = await Promise.race([lookup(host, { all: true, verbatim: true }, signal), cancelled.promise]);
+    // Node 对 IP 字面量直接连接，必须校验字面量本身。
+    // 域名的系统 lookup 不保证响应 AbortSignal，竞争负责终止等待并消费迟到 rejection。
+    const entries = isIP(host) ? [{ address: host }]
+      : await Promise.race([lookup(host, { all: true, verbatim: true }, signal), cancelled.promise]);
     if (signal?.aborted) return fail('aborted');
-    const list = (Array.isArray(entries) ? entries : []).map(entry => entry?.address).filter(address => typeof address === 'string' && address);
+    const list = Array.isArray(entries) ? Array.from(entries, entry => entry?.address) : [];
     if (!list.length) return { ok: false, ...fail('dns_failed') };
     const classes = list.map(address => classifyAddress(address));
     const loopback = classes.every(classOf => classOf === 'loopback');

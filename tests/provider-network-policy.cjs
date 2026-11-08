@@ -114,6 +114,73 @@ test('other reserved v4/v6 ranges never classify as public', async () => {
   assert.equal(resolved.code, 'private_address');
 });
 
+const reportedReserved = [
+  ['198.51.100.64', 4], ['248.0.0.1', 4], ['2001:db8::1', 6], ['ff02::1', 6],
+];
+
+for (const [address, family] of reportedReserved) {
+  test(`FIX-10: discovery never sends a request to ${address}`, async t => {
+    const { net, consent } = await modules();
+    const store = consent.createDiscoveryConsentStore();
+    t.after(() => store.dispose());
+    const requester = fakeRequester([req => req.emit('response', fakeRes({ body: '[]' }))]);
+    const publicAddress = { address: '93.184.216.34', family: 4 };
+    const reservedAddress = { address, family };
+    const literal = family === 6 ? `[${address}]` : address;
+    const grant = { credentialSource: 'stored', credentialRevision: 'fixture-rev' };
+    const hostnameConsent = await consentFor(store, grant);
+    const literalConsent = await consentFor(store, { ...grant,
+      connection: { ...httpsConnection, baseUrl: `https://${literal}/v1` } });
+    for (const [issued, entries] of [
+      [hostnameConsent, [reservedAddress]],
+      [hostnameConsent, [publicAddress, reservedAddress]],
+      // Node can bypass lookup when options.host is already a numeric address.
+      [literalConsent, [publicAddress]],
+    ]) {
+      const transport = net.createDiscoveryTransport({ consentStore: store, lookup: async () => entries,
+        io: { requester } });
+      const result = await transport({ consentId: issued.consentId, url: issued.candidatePaths[0],
+        key: 'fixture-secret', credentialRevision: grant.credentialRevision });
+      assert.equal(requester.requests.length, 0, 'no credential-bearing request reaches the requester');
+      assert.equal(result.code, 'private_address');
+    }
+    assert.equal(net.classifyAddress(address), 'private');
+  });
+}
+
+test('FIX-10: reserved prefixes cover their endpoints and alternate IPv6 notation', async () => {
+  const { net } = await modules();
+  for (const address of [
+    '198.51.100.0', '198.51.100.255', '240.0.0.0', '255.255.255.254',
+    '0:0:0:0:0:FFFF:198.51.100.64', '::ffff:f800:1',
+    '2001:0DB8:0000:0000:0000:0000:0000:0001', '2001:db8:ffff:ffff:ffff:ffff:ffff:ffff',
+    'ff00::', 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff',
+    '3fff:fff:ffff:ffff:ffff:ffff:ffff:ffff', '3ffe::1', 'fec0::1',
+    '64:ff9b::a9fe:a9fe', '64:ff9b:1::1', '2002:a9fe:a9fe::1', '2001::1',
+  ]) assert.equal(net.classifyAddress(address), 'private', address);
+
+  assert.equal(net.classifyAddress('0:0:0:0:0:ffff:127.0.0.1'), 'loopback');
+  assert.equal(net.classifyAddress('0:0:0:0:0:ffff:93.184.216.34'), 'public');
+  for (const address of ['198.51.99.255', '198.51.101.0', '2001:4860::8888', '2606:4700::1111']) {
+    assert.equal(net.classifyAddress(address), 'public', address);
+  }
+});
+
+test('FIX-10: unrecognized or scoped DNS answers fail closed', async () => {
+  const { net } = await modules();
+  const publicEntry = { address: '93.184.216.34', family: 4 };
+  for (const address of ['not-an-ip', '2606:4700::1111%fixture', null, [publicEntry.address], Buffer.from(publicEntry.address)]) {
+    assert.equal(net.classifyAddress(address), null);
+    const result = await net.resolveTargetAddresses({ host: 'fixture.invalid',
+      lookup: async () => [publicEntry, { address }] });
+    assert.equal(result.code, 'private_address');
+  }
+  const incomplete = [publicEntry];
+  incomplete.length = 2;
+  const result = await net.resolveTargetAddresses({ host: 'fixture.invalid', lookup: async () => incomplete });
+  assert.equal(result.code, 'private_address');
+});
+
 test('target parsing rejects userinfo, query, hash and bad ports; normalizes base path', async () => {
   const { net } = await modules();
   assert.equal(net.parseTarget('https://u:p@api.fixture.invalid/v1'), null);
