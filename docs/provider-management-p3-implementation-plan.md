@@ -79,12 +79,15 @@ saved / cleared → 独立 sync.pending → applied | error
 - 新建 `server/provider-management-commit.js` 编排，配置 apply 继续走 P1。跨 Endpoint/API 的既有认证或未知认证一律走无凭据新 ID 复制，并复查注册目标和 native 槽。内置 provider 的真实目标由已验证 SDK 和可信有效配置确定，草稿/静态目录不能替代。仅在目标、原生方法和槽位均可证明时给内置 set/clear 放行，配置 apply 只改可编辑覆盖和 GUI 偏好。原生清除仅删 Pi 目标槽，保留 env 与配置引用。删除/停用服务也不隐式 logout。
 - **复用现有锁路径**，将同步锁的 claim/release 抽成受控租约，令配置及收据事务可在已持有同一租约时运行。租约保护 GUI 提交期间的配置、凭据与阶段记录更新。进程内在任何 await 前保留准入，统一拦截 P3/旧配置写入、同槽 OAuth、输入替换及更新/安装/受控 CLI 的冲突动作；OAuth 使用相同 mutation admission。读回和 native 调用有硬超时，租约必须释放，不能以正在等待 SDK 无限占锁。合作 GUI 使用同一模型配置锁，外部 Pi 或手工编辑不遵守此锁。
 - 保留 P1 严格 metadata v1 及其收据形状。新增受保护的私有 `models.json.pi-gui-operations.json`，与 P1 锁同作用域，绑定相同权威配置对。复用 P1 排他临时文件、权限检查、flush、身份复核、rename 和可恢复锁原语。该文件只存 `requestId`、规范非秘密请求 fingerprint、providerId、动作、阶段、闭集结果、目标生效代次及非秘密文件身份见证。拒绝 schema、owner、权限或配置对不匹配。未决记录不得因历史收据满额被驱逐；容量不足先拒绝新写入。它与 P1 两文件分别落盘，通过以下顺序恢复：
-  1. 查询 P1 收据和 P3 记录，再看草稿或 revision。相同 ID、同请求在途共享结果，内容或路由不同返回 `request_id_conflict`。检查当前草稿、有效目标、暂存代次与资格。先持久化 `prepared`，再调用 `store.transact`。P1 收据为配置已提交的证据。
+  1. 查询 P1 收据和 P3 记录，再看草稿或 revision。相同 ID、同请求在途共享结果，内容或路由不同返回 `request_id_conflict`。检查当前草稿、有效目标、暂存代次与资格。先持久化 `prepared`，再调用 `store.transact`。P1 收据为配置已提交的证据。修改 P1 的收据裁剪，锁内从 P3 未决记录重建精确 `requestId+fingerprint` 的保护集合。保护范围从 prepared 开始，到包含配置事实的 P3 终态持久化后结束，覆盖重启及其他服务的写入。达到 128 条上限时只驱逐未保护的历史条目，无法为新收据腾出位置则在发布 journal 前返回 `config_busy`。不会扩大 P1 v1 文件形状。[当前收据裁剪](../server/provider-config-store.js#L341)
   2. 确认配置事务、当前配置见证和暂存仍有效后，先持久化 `dispatching`，再派发一次 `persistNative/clearNative`。内部调用增加预期 worker epoch、精确 stageGeneration/kind 及提交占位，密钥留在 worker。固定先保存配置的规则不能被 native 重试绕过。
   3. worker 使用原生 SDK 写入、重新安全回读。literal 编码沿用 `$$/$!`，以等值或明确空槽作本地确认。先持久化终态，再返回 HTTP 与发布 sync eligibility。P1 记录中的原始 revision 属于签发进程，重传返回原收据事实，下一次写前刷新快照。
   4. 若进程在 `prepared` 阶段退出，先恢复 P1 journal，再查精确收据。无收据且能证明配置未提交则无 native 副作用；有收据则配置已保存、旧暂存已丢失。若无法证明配置阶段，返回配置待恢复并停写。遇 `dispatching`、worker 超时或 SDK 结果不明，默认 `credential-unconfirmed`，只做安全回读，不自动重放 native 写入。
 
-SDK 超时释放短期租约后，持久未决标记仍阻断同一 auth authority/槽位的 P3 写入、OAuth 及旧配置改绑。新 requestId 和二次确认也不能越过。只有确认旧 worker/原生写入已停止、SDK 锁和路径证据可复核且新快照稳定时，才允许解除写入隔离，仍保留历史不确定收据。无法确认停止则进入人工恢复，避免迟到写入覆盖刚确认的新值。
+SDK 超时释放短期租约后，持久未决标记仍阻断同一 auth authority/槽位的 P3 写入、OAuth 及旧配置改绑。新 requestId 和二次确认也不能越过。将写入结果与停止证据分别处理。
+
+- 每次派发使用绑定 worker epoch 的私有 attemptId 与 AbortController。超时发出对应取消并封禁该 attempt 的重新派发。仅同一 worker 在 SDK 写调用及其清理已经结束、并移除该 attempt 的所有待执行写入后，才能返回匹配的 `native-quiesced`。其后在租约内重新检查路径与 SDK 槽的稳定安全快照，才能持久化解除写入隔离。即使可以解除，缺少等值见证的旧请求仍是 `credential-unconfirmed`。
+- 当前 worker 超时会先结束等待，再异步 `terminate()`，`persist` 的 signal 也未绑定请求取消。新实现须区分这些信号。超时、abort 已发送、调用 `terminate()`、重启或读到相同值都不能单独充当停止证明。失去匹配确认时保持持久隔离，并由维护者走停写恢复。停写恢复须停止该存储权威下的 Pi/GUI 写入者，验证旧 worker/进程已结束和 SDK 存储无活跃锁，再由只读资格检查重验路径、权限与槽状态。仅显式记录恢复结论才能解除隔离，无法确认时继续隔离。禁止自动删除 SDK 锁或自动重放旧请求。[适配器超时](../server/provider-credential-sdk.js#L39) · [原生写入](../server/provider-credentials.js#L196)
 
 | 观测到的事实 | 用户可见结果及恢复 |
 | --- | --- |
@@ -197,7 +200,7 @@ P3-A 先冻结私有暂存/收据/同步资格接口。B 的 operation/cache/协
 
 - [ ] 固定 §3 的收据版本、锁租约、可写资格和 stage 代次。不启动真实凭据输入，先在测试中证明配置对及旧收据兼容。实现资格检查、共享互斥、无权限降级和不暴露异常。
 - [ ] 完成可信暂存提升、准确消费、准备/派发/终态恢复和安全回读。检查关闭、轮换、超时、跨 endpoint、OAuth 确认和两个 backend 争用。
-- [ ] 扩展 `tests/provider-config-store.cjs`、`tests/provider-credential-sdk.cjs`、`tests/provider-management-http.cjs`、`tests/provider-credential-desktop.cjs`、`tests/provider-credential-opening.cjs`。在 before journal、两次安装、配置落盘后派发前、派发后崩溃、已写但收据失败、响应丢失点故障注入。并发同 ID 最多一次 native 调用，旧 ID 跨重启返回阶段事实，不确定时 native 重放数为 0。校验现存文件权限、继承、reparse、硬链接和其它 provider 凭据不受影响。
+- [ ] 扩展 `tests/provider-config-store.cjs`、`tests/provider-credential-sdk.cjs`、`tests/provider-management-http.cjs`、`tests/provider-credential-desktop.cjs`、`tests/provider-credential-opening.cjs`。在 before journal、两次安装、配置落盘后派发前、派发后崩溃、已写但收据失败、响应丢失点故障注入。用超过 128 条无关请求测试跨重启保护收据及满额拒写。模拟 SDK 忽略 abort 或迟到提交，验证同槽新 ID、OAuth 和改绑均被隔离，错误 epoch 的停止确认无法解锁。并发同 ID 最多一次 native 调用，不确定时 native 重放数为 0。校验现存文件权限、继承、reparse、硬链接和其它 provider 凭据不受影响。
 - [ ] 运行 `npm run test:provider-management`、`npm run test:provider-p2`、`npm run test:auth`、`node tests/server-security.cjs`，重建并验证正常沙箱与打包私桥。验收配置后凭据失败、已存待同步、能力关闭及部分事实投影，检查完整 canonical。独立安全复审通过方可交下一阶段。
 
 **回滚**　先停新 native 写入并处理未决收据。代码可关闭开关，恢复 v1 读取兼容。旧程序忽略新增阶段文件前，必须先解决不确定记录并冻结并发写入。撤回配置只在当前文件身份和版本相符时使用 P1 受保护恢复。原生凭据由 Pi 重新确认或重新登录，禁止通过 GUI 回写 auth.json。
@@ -266,3 +269,4 @@ P3-A 先冻结私有暂存/收据/同步资格接口。B 的 operation/cache/协
 - 基线 main CI 8/8 通过。当前 `node tests/ci-test-plan.cjs` 复核 239 条 canonical 命令和五组精确覆盖。
 - 本地 `node --test tests/provider-network-policy.cjs tests/provider-credential-opening.cjs tests/provider-credential-sdk.cjs` 48/48、零跳过，`node tests/provider-auth-runtime.cjs` 36/36。均为当前实现的离线基线，使用假 SDK、假 Pi、临时目录和受控网络 fixture。
 - 源码审计与读者复核已完成。此文档尚待独立方案验收。本轮是纯文档变更，完整本地 `npm test`、构建、真实凭据读写和供应商调用均未运行。
+- Claude Code 对 P3-A 持久派发和恢复的独立复核指出两项缺口。计划补充了未决 P1 收据保护，以及按 attempt 和 worker 证明写入停止的隔离解除判据。对这两项的独立增量复核通过，结论限于设计。发现和 Runtime 链仍待独立方案验收。
