@@ -25,7 +25,7 @@ if (process.env.ELECTRON_RUN_AS_NODE && process.versions.electron) {
   return;
 }
 
-const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain, nativeTheme, protocol } = require('electron');
 
 if (!app || typeof app.whenReady !== 'function') {
   console.error(
@@ -62,6 +62,11 @@ const { createDesktopTheme } = require('./theme.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 const { installAppUpdate } = require('./app-update-desktop.cjs');
+/* P2：供应商凭据受限输入窗（CredentialSheet）。协议必须在 app ready 前注册。 */
+const { createProviderCredentialDesktop, registerCredentialScheme } = require('./provider-credentials.cjs');
+const { credentialSheetPage } = require('./provider-credential-page.cjs');
+
+registerCredentialScheme(protocol);
 
 const PORT = Number(process.env.PORT || 7788);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -85,6 +90,7 @@ let runtimeBrowserHost = null;
 let quitting = false;
 let mainLog = null;
 let appUpdate = null;
+let credentialDesktop = null;
 let serverStartedAt = 0;
 const bootAt = Date.now();
 const log = [];
@@ -229,6 +235,8 @@ async function ensureServer() {
     // even while the desktop window remains open to show the failure.
     browserAgent?.stop().catch(() => {});
     runtimeBrowserHost?.stop().catch(() => {});
+    // 后端 epoch 变了：输入窗、flow 与握手全部作废（设计 §5.2）。
+    if (!quitting) credentialDesktop?.resetHandshake('backend_exit');
   });
 
   if (!(await waitForServer())) {
@@ -880,6 +888,25 @@ if (!app.requestSingleInstanceLock()) {
       dialog.showErrorBox('Pi GUI 启动失败', '主窗口创建失败。请重新启动应用；若反复出现，请导出故障报告。');
       app.exit(1);
     }
+    /* P2：凭据受限输入窗。主窗口建好后再挂，handler 才有 parent 可言。
+     * 资格判定在 main 侧完成：只认本实例直属的后端子进程，且拒绝远程调试 /
+     * 显式关闭沙箱的异常环境（Web、reused backend 在这里自然不满足）。 */
+    try {
+      credentialDesktop = createProviderCredentialDesktop({
+        app, BrowserWindow, ipcMain, protocol, session, nativeTheme,
+        getMainWindow: () => win,
+        getBackend: () => server,
+        isDesktopQualified: () => Boolean(server && server.connected)
+          && !app.commandLine.hasSwitch('remote-debugging-port')
+          && !process.argv.includes('--no-sandbox')
+          && !app.commandLine.hasSwitch('no-sandbox'),
+        page: credentialSheetPage,
+        preloadPath: path.join(__dirname, 'provider-credential-preload.cjs'),
+        logEvent: (event, details) => mlog('electron', event, details),
+      });
+    } catch {
+      mlog('electron', 'electron.provider_credential_unavailable', { code: 'ATTACH_FAILED' });
+    }
   });
 
   // 关掉窗口就是退出程序 —— 桌面应用不该留个后台进程偷偷活着
@@ -903,6 +930,7 @@ if (!app.requestSingleInstanceLock()) {
     if (browser) browser.destroy();
     browserAgent?.stop();
     runtimeBrowserHost?.stop();
+    credentialDesktop?.dispose();
     killServer();
   });
 

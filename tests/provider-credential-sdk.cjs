@@ -77,6 +77,47 @@ async function stage(sdk, key, context = binding, confirmOAuthReplacement = fals
   return sdk.stageNativeLogin(context, key, { expectedCredentialRevision: state.credentialRevision, confirmOAuthReplacement });
 }
 
+test('FIX-08: replacing a staged key revokes the old grant even when native revision stays the same', async t => {
+  const { sdk, authPath } = await setup(t);
+  const { createProviderCredentialBridge } = await import('../server/provider-credential-bridge.js');
+  const { createDiscoveryConsentStore } = await import('../server/provider-discovery-consent.js');
+  const { createDiscoveryTransport } = await import('../server/provider-network.js');
+  const store = createDiscoveryConsentStore();
+  const draft = { ...binding, draftRevision: 1, expires: Infinity };
+  const bridge = createProviderCredentialBridge({ sdk, consentStore: store, draftLookup: () => draft, enabled: true });
+  t.after(() => bridge.dispose());
+  const frame = { type: 'provider-credential', backendEpoch: bridge.epoch, requestId: 'fixture' };
+  const stageThroughBridge = async (input, allowDiscovery) => {
+    const prepared = await bridge.handle({ ...frame, action: 'prepare', draftId: draft.draftId, draftRevision: 1, purpose: 'set' });
+    assert.equal(prepared.ok, true);
+    const { flowId, promptId, nonce } = prepared;
+    const result = await bridge.handle({ ...frame, action: 'stage', flowId, promptId, nonce, input, allowDiscovery, rememberTarget: false });
+    assert.equal(result.ok, true);
+    return result;
+  };
+
+  const native = await sdk.inspect(binding.providerId);
+  const first = await stageThroughBridge('fixture-first', true);
+  const grant = store.get(first.consent.consentId);
+  assert.ok(grant);
+  const replacement = await stageThroughBridge('fixture-replacement', false);
+  assert.equal(replacement.consent, null);
+  assert.equal((await sdk.inspect(binding.providerId)).credentialRevision, native.credentialRevision);
+  const requester = t.mock.fn(() => { throw new Error('unexpected socket'); });
+  const transport = createDiscoveryTransport({ consentStore: store, lookup: async () => [{ address: '93.184.216.34' }],
+    io: { requester } });
+  const rejected = await transport({ consentId: grant.consentId, url: grant.candidatePaths[0], key: 'fixture-replacement',
+    credentialRevision: grant.credentialRevision });
+  assert.equal(rejected.code, 'invalid_target');
+  assert.equal(requester.mock.callCount(), 0);
+  const next = await stageThroughBridge('fixture-third', true);
+  const nextGrant = store.get(next.consent.consentId);
+  assert.notEqual(grant.credentialRevision, native.credentialRevision);
+  assert.notEqual(nextGrant.credentialRevision, grant.credentialRevision);
+  assert.equal(next.stagedRevision, undefined, 'the private generation stays inside backend');
+  assert.equal(fs.existsSync(authPath), false);
+});
+
 test('private stage never writes; target binding, cancellation and literal persistence round trip', async t => {
   const { sdk, authPath } = await setup(t);
   const key = '!must-not-run-$ENV-${VALUE}-$$-$!';

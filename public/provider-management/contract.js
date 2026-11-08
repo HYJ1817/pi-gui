@@ -54,11 +54,23 @@ export function providerFailure(code, field) {
   const details = providerContractError(code, field ? { [field]: 'invalid' } : undefined);
   throw Object.assign(Error(details.message), details, { providerMutation: true });
 }
-export function providerManagementCapabilities({ oauthLogin = null, modelOverrides = null } = {}) {
-  return { rawKeyInput: false, keyStaging: false, nativeCredentialPersistence: false, privateDesktopBridge: false,
+export function providerManagementCapabilities({ oauthLogin = null, modelOverrides = null, desktop = null } = {}) {
+  const desktopPart = desktop && typeof desktop === 'object'
+    ? {
+      rawKeyInput: desktop.rawKeyInput === true,
+      keyStaging: desktop.keyStaging === true,
+      nativeCredentialPersistence: desktop.nativeCredentialPersistence === true,
+      privateDesktopBridge: desktop.privateDesktopBridge === true,
+    }
+    : { rawKeyInput: false, keyStaging: false, nativeCredentialPersistence: false, privateDesktopBridge: false };
+  const reason = (granted, pending) => granted ? null : pending;
+  return { ...desktopPart,
     oauthLogin, discoveryModes: [], modelOverrides, syncMode: 'unsupported', reasons: {
-      rawKeyInput: 'desktop_input_pending', keyStaging: 'private_bridge_pending', nativeCredentialPersistence: 'private_bridge_pending',
-      privateDesktopBridge: 'p2_pending', discoveryModes: 'discovery_transport_pending', syncMode: 'runtime_sync_pending',
+      rawKeyInput: reason(desktopPart.rawKeyInput, 'desktop_input_pending'),
+      keyStaging: reason(desktopPart.keyStaging, 'private_bridge_pending'),
+      nativeCredentialPersistence: reason(desktopPart.nativeCredentialPersistence, 'private_bridge_pending'),
+      privateDesktopBridge: reason(desktopPart.privateDesktopBridge, 'p2_pending'),
+      discoveryModes: 'discovery_transport_pending', syncMode: 'runtime_sync_pending',
     } };
 }
 
@@ -183,7 +195,7 @@ const frames = Object.freeze({
 });
 export function validateCredentialFrame(value) {
   need(isRecord(value) && value.type === 'provider-credential' && Object.hasOwn(frames, value.action), 'frame');
-  fields(value, ['type','action','requestId','backendEpoch', ...frames[value.action]], [], 'frame');
+  fields(value, ['type','action','requestId','backendEpoch', ...frames[value.action]], value.action === 'prepare' ? ['flowId'] : [], 'frame');
   for (const key of ['requestId','backendEpoch','draftId', ...flowFields]) if (has(value,key)) need(isOpaqueId(value[key]), 'frame');
   if (value.action === 'prepare') need(positive(value.draftRevision) && ['set','replace','clear','authorize-target'].includes(value.purpose), 'frame');
   if (value.action === 'stage') need(isLiteralKeyInput(value.input) && bool(value.allowDiscovery), 'frame');
