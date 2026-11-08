@@ -16,12 +16,19 @@ const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/provid
 const appBundle = bundle(path.join(pub, 'providers.js'));
 const clone = value => JSON.parse(JSON.stringify(value));
 
-function boot({ fetchImpl, snapshot: snapshotOverride = null } = {}) {
+function boot({ fetchImpl, snapshot: snapshotOverride = null, legacyData: legacyOverride = null } = {}) {
   const html = fs.readFileSync(path.join(pub, 'index.html'), 'utf8');
   const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
   const { window } = dom;
   const snapshot = clone(snapshotOverride || fixture.live.snapshot);
-  const calls = { drafts: [], commits: [], discovery: [], authorize: [], test: [], legacy: [], auth: [] };
+  const legacyData = clone(legacyOverride || {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { models: [{ id: 'fast' }] } },
+    keyStates: { 'example-ai': { ok: false, note: '环境变量 EXAMPLE_KEY 没有设置' } },
+  });
+  const calls = { drafts: [], commits: [], discovery: [], authorize: [], test: [], legacy: [], legacyPosts: [], auth: [] };
   const api = {
     fetchProviderManagement: async () => snapshot,
     saveProviderDraft: async request => {
@@ -53,7 +60,12 @@ function boot({ fetchImpl, snapshot: snapshotOverride = null } = {}) {
     }
     if (target.includes('/api/providers')) {
       calls.legacy.push(target);
-      return { status: 200, json: async () => ({ ok: true, path: 'C:\\fixture\\models.json', providers: { example: { models: [{ id: 'fast' }] } }, keyStates: { 'example-ai': { ok: false, note: '环境变量 EXAMPLE_KEY 没有设置' } } }) };
+      if (options?.method === 'POST') {
+        const body = options.body ? JSON.parse(options.body) : null;
+        calls.legacyPosts.push(clone(body));
+        return { status: 200, json: async () => ({ ok: true, provider: body?.name || '', keyState: { kind: 'none', ok: true, note: '' } }) };
+      }
+      return { status: 200, json: async () => legacyData };
     }
     if (target.includes('/api/provider-auth')) {
       calls.auth.push(target);
@@ -193,6 +205,61 @@ test('inherited selection uses modelOrder as ordering hint, not as the selected 
   service.modelOrder = ['fast'];
   const draft = s.draftFromService(service, snapshot);
   assert.deepEqual(draft.order, ['fast', 'vision']);
+});
+
+test('credential clear support distinguishes config references from Pi native credentials', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const { credentialSourceLabel } = await import('../public/provider-management/catalog.js');
+  const base = s.draftFromService(clone(fixture.live.snapshot.services[0]), clone(fixture.live.snapshot));
+  for (const source of ['env', 'literal', 'command']) {
+    const draft = { ...base, credentialState: { state: 'saved', source } };
+    assert.equal(s.credentialClearSupport(draft).supported, true, `${source} is a config-owned reference`);
+    assert.deepEqual(s.commitCredentialAction({ ...draft, credentialAction: { type: 'none', confirmed: true } }), { type: 'none', confirmed: true });
+  }
+  const native = { ...base, credentialState: { state: 'saved', source: 'pi-credential' }, credentialAction: { type: 'none', confirmed: true } };
+  const nativeSupport = s.credentialClearSupport(native);
+  assert.equal(nativeSupport.supported, false);
+  assert.ok(nativeSupport.reason.includes('P2'));
+  assert.deepEqual(s.commitCredentialAction(native), { type: 'keep' }, 'none must never be sent as a native credential clear');
+  assert.equal(s.credentialClearSupport({ ...base, credentialState: { state: 'none', source: 'unknown' } }).supported, false);
+  assert.equal(credentialSourceLabel({ state: 'saved', source: 'literal' }), '配置内凭据');
+  assert.equal(credentialSourceLabel({ state: 'saved', source: 'pi-credential' }), 'Pi 本机凭据');
+});
+
+test('inherited selection requires explicit confirmation for unrelated edits', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const snapshot = clone(fixture.live.snapshot);
+  const service = clone(snapshot.services[0]);
+  service.selectedModelIds = null;
+  service.modelOrder = null;
+  let draft = s.draftFromService(service, snapshot);
+  assert.equal(s.needsInheritedSelectionConfirmation(draft), true);
+  draft = s.reduceDraft(draft, { type: 'field', field: 'displayName', value: '只改名称' });
+  assert.equal(s.needsInheritedSelectionConfirmation(draft), true, 'name-only edit must not silently pin inheritance');
+  assert.deepEqual(s.toDraftPayload(draft).selectedModelIds, ['fast', 'vision']);
+  draft = s.reduceDraft(draft, { type: 'toggle-model', modelId: 'fast', selected: false });
+  assert.equal(s.needsInheritedSelectionConfirmation(draft), false, 'an explicit selection change is the user’s own decision');
+});
+
+test('explicit selection, zero selection and model order keep their own semantics', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const snapshot = clone(fixture.live.snapshot);
+  const explicit = clone(snapshot.services[0]);
+  explicit.selectedModelIds = ['vision', 'fast'];
+  explicit.modelOrder = ['fast', 'vision'];
+  const explicitDraft = s.draftFromService(explicit, snapshot);
+  assert.equal(explicitDraft.inheritedSelection, false);
+  assert.deepEqual(explicitDraft.order, ['fast', 'vision']);
+  assert.equal(s.needsInheritedSelectionConfirmation(explicitDraft), false);
+
+  const zero = clone(snapshot.services[0]);
+  zero.selectedModelIds = [];
+  zero.modelOrder = [];
+  const zeroDraft = s.draftFromService(zero, snapshot);
+  assert.equal(zeroDraft.inheritedSelection, false);
+  assert.deepEqual(zeroDraft.order, []);
+  assert.equal(s.needsInheritedSelectionConfirmation(zeroDraft), false);
+  assert.deepEqual(s.toDraftPayload(zeroDraft).selectedModelIds, []);
 });
 
 test('removing then re-adding a model clears the remove patch', async () => {
@@ -358,6 +425,230 @@ test('custom service chip follows the typed name and endpoint', async () => {
   base.value = 'https://relay.example.test/v1';
   base.dispatchEvent(new window.Event('input', { bubbles: true }));
   assert.equal(chipDetail.textContent, 'relay.example.test/v1');
+});
+
+test('Pi native credential clear is disabled with an accurate reason and never sends none', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  const service = clone(snapshot.services[0]);
+  service.authMode = 'pi-credential';
+  service.credentialState = { state: 'saved', source: 'pi-credential' };
+  const { window, api, calls } = boot();
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  const clear = card.querySelector('.pm-clear-credential');
+  assert.ok(clear);
+  assert.equal(clear.disabled, true);
+  assert.equal(clear.textContent, '清除本机凭据');
+  assert.ok(clear.title.includes('P2'));
+  assert.ok(card.querySelector('.pm-clear-note').textContent.includes('P2'));
+  clear.click();
+  await tick(10);
+  assert.equal(window.document.getElementById('confirmLayer').hidden, true, 'disabled clear must not open a confirmation');
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(30);
+  assert.equal(calls.commits.length, 1);
+  assert.deepEqual(calls.commits[0].credentialAction, { type: 'keep' });
+  assert.ok(!JSON.stringify(calls).includes('"type":"none"'));
+});
+
+test('config-owned credential clear states exactly what will and will not be removed', async () => {
+  const { window, snapshot, api, calls } = boot();
+  const { card } = openCreate(window, snapshot, api, 'edit', snapshot.services[0]);
+  const clear = card.querySelector('.pm-clear-credential');
+  assert.ok(clear);
+  assert.equal(clear.disabled, false);
+  assert.equal(clear.textContent, '清除配置凭据');
+  clear.click();
+  await tick(10);
+  const confirm = window.document.getElementById('confirmCard');
+  assert.equal(window.document.getElementById('confirmLayer').hidden, false);
+  assert.ok(confirm.textContent.includes('环境变量本身和 Pi 本机登录都不会被删除'));
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '保存时清除配置凭据').click();
+  await tick(10);
+  assert.ok(card.querySelector('.pm-credential-status').textContent.includes('移除配置中的环境变量引用'));
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(30);
+  assert.equal(calls.commits.length, 1);
+  assert.deepEqual(calls.commits[0].credentialAction, { type: 'none', confirmed: true });
+  assert.ok(!card.textContent.includes('Pi 本机凭据已清除'));
+});
+
+test('delete confirmation distinguishes config removal from native authentication', async () => {
+  const { window } = boot();
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  const row = card.querySelector('.prov.pm-service-row');
+  row.querySelector('.pm-row-more').click();
+  await tick(0);
+  row.querySelector('[data-service-action="删除"]').click();
+  await tick(0);
+  const confirm = window.document.getElementById('confirmCard');
+  assert.equal(window.document.getElementById('confirmLayer').hidden, false);
+  assert.ok(confirm.textContent.includes('Pi 本机认证'));
+  assert.ok(confirm.textContent.includes('内置服务只会停用'));
+  assert.ok(confirm.textContent.includes('安全检查会拒绝'));
+  assert.ok(!confirm.textContent.includes('模型与凭据会随配置一起移除'));
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '取消').click();
+});
+
+test('more menu toggles, closes other rows, and keeps aria-expanded in sync', async () => {
+  const { window } = boot();
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  const rows = [...card.querySelectorAll('.prov.pm-service-row')];
+  assert.equal(rows.length, 2);
+  const firstMore = rows[0].querySelector('.pm-row-more');
+  const secondMore = rows[1].querySelector('.pm-row-more');
+  const firstMenu = rows[0].querySelector('.pm-row-menu');
+  const secondMenu = rows[1].querySelector('.pm-row-menu');
+
+  firstMore.click();
+  await tick(0);
+  assert.equal(firstMenu.hidden, false);
+  assert.equal(firstMore.getAttribute('aria-expanded'), 'true');
+  firstMore.click();
+  await tick(0);
+  assert.equal(firstMenu.hidden, true);
+  assert.equal(firstMore.getAttribute('aria-expanded'), 'false');
+
+  firstMore.click();
+  await tick(0);
+  secondMore.click();
+  await tick(0);
+  assert.equal(firstMenu.hidden, true);
+  assert.equal(firstMore.getAttribute('aria-expanded'), 'false');
+  assert.equal(secondMenu.hidden, false);
+  assert.equal(secondMore.getAttribute('aria-expanded'), 'true');
+
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await tick(0);
+  assert.equal(secondMenu.hidden, true);
+  assert.equal(secondMore.getAttribute('aria-expanded'), 'false');
+  assert.equal(window.document.activeElement, secondMore);
+
+  firstMore.click();
+  await tick(0);
+  window.document.body.click();
+  await tick(0);
+  assert.equal(firstMenu.hidden, true);
+  assert.equal(firstMore.getAttribute('aria-expanded'), 'false');
+});
+
+test('inherited model selection asks before an unrelated edit pins it', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  const service = clone(snapshot.services[0]);
+  service.selectedModelIds = null;
+  service.modelOrder = null;
+  const { window, api, calls } = boot();
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  assert.ok(card.querySelector('.pm-status-banner').textContent.includes('当前模型集是继承的'));
+  card.querySelector('.pm-advanced-entry').click();
+  const name = card.querySelector('[data-advanced-field="displayName"]');
+  name.value = '只改名称';
+  name.dispatchEvent(new window.Event('input', { bubbles: true }));
+  card.querySelector('.pm-advanced-foot button').click();
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(20);
+  assert.equal(calls.drafts.length, 0, 'no write before the inheritance decision');
+  const confirm = window.document.getElementById('confirmCard');
+  assert.equal(window.document.getElementById('confirmLayer').hidden, false);
+  assert.ok(confirm.textContent.includes('继承'));
+  assert.ok(confirm.textContent.includes('固定为显式选择'));
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '返回检查').click();
+  await tick(10);
+  assert.equal(calls.drafts.length, 0);
+  assert.equal(window.document.getElementById('modal').hidden, false);
+
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(20);
+  [...window.document.getElementById('confirmCard').querySelectorAll('button')].find(button => button.textContent === '固定并保存').click();
+  await tick(30);
+  assert.equal(calls.drafts.length, 1);
+  assert.deepEqual(calls.drafts[0].draft.selectedModelIds, ['fast', 'vision']);
+});
+
+test('management-off add uses the P4 UI over the legacy API without fake fields', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { baseUrl: 'https://example.invalid/v1', api: 'openai-completions', models: [{ id: 'm1', name: 'M1' }] } },
+    keyStates: { example: { kind: 'env', ok: true, note: '' } },
+  };
+  const { window, calls } = boot({ snapshot: { ok: false, code: 'unsupported', message: '管理能力未开放' }, legacyData });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  assert.ok(card.querySelector('.pm-page-status').textContent.includes('兼容编辑器'));
+  card.querySelector('.prov-btn-main').click();
+  await tick(30);
+  assert.ok(card.querySelector('.pm-chooser'), 'compatibility path must keep the P4 chooser');
+  const tile = [...card.querySelectorAll('.pm-service-tile')].find(node => node.dataset.serviceId === 'custom');
+  tile.click();
+  await tick(10);
+  assert.equal(card.querySelector('[aria-label="服务名称"]'), null, 'legacy API has no display-name field to persist');
+  const id = card.querySelector('.pm-provider-id');
+  id.value = 'legacy-new';
+  id.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const base = card.querySelector('[data-connection-base-url]');
+  base.value = 'https://legacy.example.test/v1';
+  base.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const env = card.querySelector('.pm-env-input');
+  env.value = '$LEGACY_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  addCustom(card, 'legacy-model');
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(40);
+  assert.equal(calls.drafts.length, 0, 'management API is off; no draft may be sent');
+  assert.equal(calls.legacyPosts.length, 1);
+  assert.equal(calls.legacyPosts[0].name, 'legacy-new');
+  assert.equal(calls.legacyPosts[0].config.baseUrl, 'https://legacy.example.test/v1');
+  assert.equal(calls.legacyPosts[0].config.apiKey, '$LEGACY_KEY');
+  assert.deepEqual(calls.legacyPosts[0].config.models, [{ id: 'legacy-model' }]);
+});
+
+test('management-off edit reuses the same model panes and preserves an existing key', async () => {
+  const legacyData = {
+    ok: true,
+    path: 'C:\\fixture\\models.json',
+    revision: 7,
+    providers: { example: { baseUrl: 'https://example.invalid/v1', api: 'openai-completions', models: [{ id: 'm1', name: 'M1' }] } },
+    keyStates: { example: { kind: 'env', ok: true, note: '' } },
+  };
+  const { window, calls } = boot({ snapshot: { ok: false, code: 'unsupported', message: '管理能力未开放' }, legacyData });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  const row = card.querySelector('[data-service-name="example"]');
+  assert.ok(row);
+  assert.equal(row.getAttribute('role'), 'button');
+  row.click();
+  await tick(30);
+  assert.equal(card.querySelector('.pm-dialog-title').textContent, '编辑 AI 服务');
+  assert.ok(card.querySelector('.pm-model-panes'));
+  assert.ok(card.querySelector('.pm-status-banner').textContent.includes('勾选与排序不会保存'));
+  const check = card.querySelector('[data-model-check="m1"]');
+  check.checked = false;
+  check.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await tick(0);
+  assert.equal(card.querySelector('[data-model-check="m1"]').checked, true, 'legacy selection toggles must not fake a persisted change');
+  const clear = card.querySelector('.pm-clear-credential');
+  assert.ok(clear);
+  assert.equal(clear.disabled, true, 'legacy API cannot clear a config reference either');
+  assert.equal(clear.textContent, '清除凭据', 'legacy config references must not be labeled as Pi native credentials');
+  card.querySelector('.pm-advanced-entry').click();
+  assert.equal(card.querySelector('[data-advanced-field="displayName"]'), null);
+  assert.equal(card.querySelector('[data-advanced-field="enabled"]'), null);
+  assert.equal(card.querySelector('[data-advanced-field="piRegistrationReference"]').disabled, true);
+  assert.ok(card.querySelector('[data-advanced-view]').textContent.includes('兼容模式直接写入 Pi 模型配置'));
+  card.querySelector('.pm-advanced-foot button').click();
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(40);
+  assert.equal(calls.legacyPosts.length, 1);
+  assert.equal(calls.legacyPosts[0].name, 'example');
+  assert.equal(calls.legacyPosts[0].config.apiKey, undefined, 'omitting apiKey preserves the existing value in the legacy merge');
+  assert.deepEqual(calls.legacyPosts[0].config.models, [{ id: 'm1', name: 'M1' }]);
 });
 
 test('clone setup shows a neutral credential state and no credential controls', async () => {

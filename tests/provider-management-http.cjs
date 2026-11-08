@@ -65,6 +65,38 @@ test('draft edit commits losslessly with durable receipt and protects the live c
   assert.equal(JSON.parse(fs.readFileSync(f.modelsJson)).providers.example.baseUrl, 'https://fixture.invalid/v1');
 });
 
+test('legacy route still supports update and create while management is disabled', async t => {
+  const f = await setup(t);
+  const listed = await http(f.legacy.handle, 'GET', '/api/providers');
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.providers.example.apiKey, undefined);
+  const updated = await http(f.legacy.handle, 'POST', '/api/providers', {
+    name: 'example',
+    config: {
+      baseUrl: 'https://fixture.invalid/v1',
+      api: 'openai-completions',
+      models: [{ id: 'model-a', name: 'After' }, { id: 'model-b' }],
+    },
+  });
+  assert.equal(updated.status, 200);
+  const afterUpdate = JSON.parse(fs.readFileSync(f.modelsJson));
+  assert.equal(afterUpdate.providers.example.apiKey, key, 'omitting apiKey must preserve the existing value');
+  assert.equal(afterUpdate.providers.example.headers.Authorization, key);
+  assert.equal(afterUpdate.providers.example.models[0].name, 'After');
+  assert.equal(afterUpdate.providers.example.models[0].unknown.value, key);
+  assert.ok(afterUpdate.providers.example.models.some(model => model.id === 'model-b'));
+
+  const created = await http(f.legacy.handle, 'POST', '/api/providers', {
+    name: 'legacy-custom',
+    config: { baseUrl: 'https://legacy.invalid/v1', api: 'openai-completions', apiKey: '$LEGACY_KEY', models: [{ id: 'legacy-model' }] },
+  });
+  assert.equal(created.status, 200);
+  assert.equal(created.body.keyState.kind, 'env');
+  const afterCreate = JSON.parse(fs.readFileSync(f.modelsJson));
+  assert.equal(afterCreate.providers['legacy-custom'].apiKey, '$LEGACY_KEY');
+  assert.equal(afterCreate.misc.a, true);
+});
+
 test('clone strips credentials; deleting the copy preserves source and rejects stale revision', async t => {
   const f = await setup(t);
   const { handle } = f.make();
