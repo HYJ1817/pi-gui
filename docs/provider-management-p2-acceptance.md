@@ -4,7 +4,7 @@
 
 **修订 2（独立验收修复后）**：首轮交付（`ed47000`…`011c7e0`，PR #60 CI run 42389222994）经独立验收发现 6 类问题，全部在本分支修复；修复内容见第 9 节。
 
-**最终安全收尾**见第 10 节。第 1–9 节保留先前各轮验证的环境与结论。
+**最终安全收尾**见第 15–16 节。第 1–14 节保留先前各轮验证的环境与结论。
 
 ## 1. 完成功能及源码位置
 
@@ -143,8 +143,11 @@
 
 - **正常 Electron 沙箱**：仍未验证（开发机执行器受完整性令牌限制，测试以 `--no-sandbox` 完成）；这不构成正常沙箱通过的证据。CI runner 的标准沙箱将运行网络策略与桥模块套件；窗口隔离项仍待正常桌面环境复核。
 - 完整 canonical（238 leaves）本地未全量运行；由修复提交后的 PR CI 证明（待结果）。
+- persist/sync、真实供应商网络、打包 exe 的端到端输入流程不在 P2 范围。
+- **当前分支/提交**：`codex/provider-management-p2` @ `aa4dc80`（报告修订提交随后），推送后工作区干净。
+- **合并建议：建议合并 PR #60**（在下一轮独立复验确认后由用户决定；`providerKeyInputEnabled` 默认关闭，启用需独立安全验收）。
 
-## 10. 最终安全收尾（FIX-07、FIX-08、FIX-09）
+## 15. 最终安全收尾（FIX-07、FIX-08、FIX-09）
 
 以远端 `codex/provider-management-p2` 与 PR #60 一致的 `5a94e706d12b5aa176c690448cab9869cb398ec8` 为基线。[基线 CI](https://github.com/HYJ1817/pi-gui/actions/runs/42399611396) 为 `pull_request`、第 1 次尝试，8 项均通过，包含 238 条 canonical 命令、Electron 构建检查与 CI gate。本轮风险级别为高，涉及外部网络、授权撤销及隔离凭据窗口。
 
@@ -177,9 +180,20 @@ canonical 从 238 增至 239。对比基线展开的命令，原 238 条及顺�
 ### 审查与剩余验证
 
 - 独立增量安全与功能复核通过，定向复跑 42/42。FIX-07/08/09 范围内未发现可证实的 Blocker 或 Important。
-- 基线已有保留地址分类差异。独立探针确认 `198.51.100.64`、`248.0.0.1` 等仍分类为 public，部分 IPv6 特殊地址也存在同类差异。该分类逻辑未纳入本轮三项修复，未验证在目标环境的实际可达性，由独立验收单列评估。
+- 当时的独立探针确认 `198.51.100.64`、`248.0.0.1` 等被分类为 public，部分 IPv6 特殊地址也存在同类差异。处置见第 16 节。
 - 本轮未验证打包应用中的凭据端到端流程、安装器、真实供应商或 P3 发现编排。
 - 可按提交顺序反向回退本轮提交。合并须等当前 HEAD 的完整 CI 和独立验收，具体决定由维护者作出。
-- persist/sync、真实供应商网络、打包 exe 的端到端输入流程不在 P2 范围。
-- **当前分支/提交**：`codex/provider-management-p2` @ `aa4dc80`（报告修订提交随后），推送后工作区干净。
-- **合并建议：建议合并 PR #60**（在下一轮独立复验确认后由用户决定；`providerKeyInputEnabled` 默认关闭，启用需独立安全验收）。
+
+## 16. 保留地址分类收尾（FIX-10）
+
+基线 `e84346c7792c7be4e45f599d0084f0bedc370204` 对应 [PR #60 CI](https://github.com/HYJ1817/pi-gui/actions/runs/42445087797)，`pull_request` 第 1 次尝试 8/8 通过。基线网络专项 31/31 通过。加入回归后，6 个新增用例全部失败，报告中的 `198.51.100.64`、`248.0.0.1`、`2001:db8::1`、`ff02::1` 分别触发 1 次携带测试凭据的 requester 调用。复现使用 transport 注入桩，没有连接这些地址。
+
+[provider-network.js](../server/provider-network.js) 的 `classifyAddress` 补齐 `198.51.100.0/24` 和 `240.0.0.0/4`，统一规范化 IPv6 及 IPv4 映射写法。原生 IPv6 公网发现限制在 `2000::/3`，其中排除文档、协议保留、6to4 及旧 6bone 前缀。组播、旧站点本地及已知 NAT64 前缀因此被拒绝，依赖这些 NAT64 前缀访问模型端点的部署也会被拒绝。此策略基于前缀分类，未验证运营商自定义转换前缀或真实端点路由。[IANA IPv4 特殊用途地址](https://www.iana.org/assignments/iana-ipv4-special-registry/) · [IANA IPv6 特殊用途地址](https://www.iana.org/assignments/iana-ipv6-special-registry/) · [IANA IPv6 地址空间](https://www.iana.org/assignments/ipv6-address-space/)
+
+`resolveTargetAddresses` 直接校验连接使用的 IP 字面量，DNS 列表里任一地址无法识别或属于拒绝范围时整体拒发。[FIX-10 回归](../tests/provider-network-policy.cjs) 复测上述四个地址，每个覆盖单一 DNS、混合 DNS 和字面量，12 个场景均返回 `private_address`，实际注入的 requester 调用均为 0。原有公网、显式无密钥 loopback 及 DNS 钉桩测试保留。
+
+Windows x64，Node 24.22.1。 `npm run test:provider-p2` 通过网络 37/37、开窗竞态 5/5、桥接 28 项和正常沙箱真 Electron 42/42。 `npm run test:provider-management` 22/22，`npm run test:auth` 107/107，`node tests/models-api.cjs` 50/50，`node tests/server-security.cjs` 39/39，`node tests/electron-guard.cjs` 123/123。复用第 15 节同摘要的 Electron 临时副本，未进入无沙箱回退。
+
+`npm run build:app -- --rebuild --output-root <TEMP>` 离线重建通过。 `node tests/ci-test-plan.cjs` 确认 canonical 仍为 239 条，五组覆盖精确，未改动测试计划和 CI 门槛。当前完整验证以 [PR #60 Checks](https://github.com/HYJ1817/pi-gui/pull/60/checks) 对应 HEAD 为准。打包后的凭据端到端及真实供应商未验证。
+
+独立安全复核发现 Node 会将部分非字符串地址隐式转换成 IP，稀疏数组也可能漏过检查。补上类型校验及稀疏项检查后，独立复跑 37/37，并确认数组、Buffer、全空槽和混合空槽四种异常 DNS 回包均在 requester 前拒绝。复核未发现 FIX-10 范围内剩余的 Blocker 或 Important。按提交顺序反向回退可撤销本轮变更。
