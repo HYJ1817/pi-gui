@@ -5,7 +5,7 @@
  *      过渡两端与相位 0% 对齐、固定尺寸、reduced-motion、深浅色）；
  *   2. 对相位控制器做单元断言（等循环边界、过渡结束落相位、边界前取消）；
  *   3. 对真实模块（messages.js / runtime-conversation.js）跑 DOM 断言，
- *      确认形态跟着各自会话的执行状态走，切换会话不会串相位。
+ *      确认形态按自己的节奏自动交替、工具起停不覆盖它，切换会话不串相位。
  * 像素级还原另由真实浏览器截图核对，不在这个套件里假装能测。 */
 'use strict';
 const assert = require('node:assert/strict');
@@ -149,7 +149,7 @@ function transformOf(decl) {
   global.fetch = fetchStub;
 
   console.log('thinking-dots 结构、相位控制器与聊天流接入');
-  const { thinkingDots, THINKING_DOT_COUNT, setThinkingDotsPhase } =
+  const { thinkingDots, THINKING_DOT_COUNT, setThinkingDotsPhase, startThinkingDotsCycle, stopThinkingDotsCycle } =
     await import(pathToFileURL(path.join(PUB, 'thinking-dots.js')).href);
   const dots = thinkingDots();
   ok('四个点、纯装饰、无文本', THINKING_DOT_COUNT === 4 && dots.classList.contains('thinking-dots')
@@ -196,6 +196,36 @@ function transformOf(decl) {
   setThinkingDotsPhase(phaseNode, 'square', { immediate: true });
   ok('immediate 跳过等待（切换会话/刚显示时用）', phaseNode.dataset.phase === 'square' && !phaseNode.dataset.transition);
 
+  /* jsdom 不会自己跑 CSS 动画，但计时器会跑；用很短的注入节奏验证自动交替。
+   * 三个形态 100ms 一段，检查点留足 40ms 余量。 */
+  console.log('thinking-dots 自动交替');
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const cycleNode = thinkingDots('', 'square');
+  d.body.appendChild(cycleNode);
+  const shortCycle = [
+    { phase: 'triangle', hold: 100 },
+    { phase: 'square', hold: 100 },
+    { phase: 'triangle', hold: 100 },
+  ];
+  startThinkingDotsCycle(cycleNode, { immediate: true, cycle: shortCycle });
+  ok('自动交替从开场三点开始', cycleNode.dataset.phase === 'triangle');
+  await sleep(40);
+  ok('第一段内保持三点', cycleNode.dataset.phase === 'triangle');
+  await sleep(100);
+  ok('过一段后自己切到四点方阵', cycleNode.dataset.phase === 'square');
+  await sleep(100);
+  ok('再下一段切回三点，不需要任何外部状态变化', cycleNode.dataset.phase === 'triangle');
+  startThinkingDotsCycle(cycleNode, { immediate: true, cycle: shortCycle });
+  await sleep(40);
+  ok('重复 start 不重置正在进行的那一段', cycleNode.dataset.phase === 'triangle');
+  stopThinkingDotsCycle(cycleNode);
+  await sleep(140);
+  ok('stop 之后不再改相位', cycleNode.dataset.phase === 'triangle');
+  setThinkingDotsPhase(cycleNode, 'square', { immediate: true });
+  startThinkingDotsCycle(cycleNode, { immediate: true, restart: true, cycle: shortCycle });
+  ok('restart 从开场形态重新开始', cycleNode.dataset.phase === 'triangle');
+  stopThinkingDotsCycle(cycleNode);
+
   const M = await import(pathToFileURL(path.join(PUB, 'messages.js')).href);
   const row = () => d.querySelector('#stream .working');
   M.showWorking();
@@ -204,36 +234,43 @@ function transformOf(decl) {
   ok('聊天流出现 working 行', Boolean(workRow));
   ok('working 行内是四点组件 + 文案', workRow.querySelectorAll('.thinking-dots > span').length === 4
     && workRow.querySelector('.working-label')?.textContent === 'Pi 正在处理…');
-  ok('默认方阵、不隐藏、不带工具态', chatDots().dataset.phase === 'square' && workRow.hidden === false && !workRow.classList.contains('is-tool-active'));
+  ok('开场是三点轨道、不隐藏、不带工具态', chatDots().dataset.phase === 'triangle' && workRow.hidden === false && !workRow.classList.contains('is-tool-active'));
 
   const TM = await import(pathToFileURL(path.join(PUB, 'tool-model.js')).href);
   TM.registerEntry({ id: 'fixture-running', status: 'running' });
   M.syncToolWorking();
-  ok('工具运行中：保留动画，加 is-tool-active，切到三点轨道',
+  ok('工具运行中：保留动画、只收文案，形态不被工具起停打断',
     workRow.hidden === false && workRow.classList.contains('is-tool-active') && chatDots().dataset.phase === 'triangle');
   TM.clearLiveEntries();
   M.syncToolWorking();
-  ok('工具结束：去掉 is-tool-active，回到四点方阵',
-    !workRow.classList.contains('is-tool-active') && chatDots().dataset.phase === 'square');
+  ok('工具结束：去掉 is-tool-active，形态仍按自己的节奏',
+    !workRow.classList.contains('is-tool-active') && chatDots().dataset.phase === 'triangle');
+
+  /* 把当前形态切成方阵，再起停工具：工具不能把它改回去。 */
+  setThinkingDotsPhase(chatDots(), 'square', { immediate: true });
+  TM.registerEntry({ id: 'fixture-no-override', status: 'running' });
+  M.syncToolWorking();
+  TM.clearLiveEntries();
+  M.syncToolWorking();
+  ok('工具起停不会覆盖自动交替的当前形态', chatDots().dataset.phase === 'square');
 
   TM.registerEntry({ id: 'fixture-born', status: 'running' });
   M.showWorking();
-  ok('工具已运行时新指示器直接以三点出生，不先闪方阵',
-    row().querySelector('.thinking-dots').dataset.phase === 'triangle');
+  ok('工具已运行时新指示器同样从开场三点出生', row().querySelector('.thinking-dots').dataset.phase === 'triangle');
   TM.clearLiveEntries();
   M.syncToolWorking();
-  ok('工具结束后新指示器回到方阵', row().querySelector('.thinking-dots').dataset.phase === 'square');
+  ok('新指示器同样不因工具结束而改形态', row().querySelector('.thinking-dots').dataset.phase === 'triangle');
 
   M.setStreaming(false);
   ok('setStreaming(false) 收起指示器', row() === null);
   M.setStreaming(true);
-  ok('setStreaming(true) 重新出现指示器（方阵）', row() !== null
-    && row().querySelector('.thinking-dots').dataset.phase === 'square');
+  ok('setStreaming(true) 重新出现指示器（开场三点）', row() !== null
+    && row().querySelector('.thinking-dots').dataset.phase === 'triangle');
   M.interruptActive();
   ok('interruptActive（取消/中断）收起指示器', row() === null);
   M.hideWorking();
 
-  /* ---------- 3. 并行会话：状态行按各自 activity / 工具态显隐与选相位 ---------- */
+  /* ---------- 3. 并行会话：状态行按各自 activity 显隐，形态自动交替 ---------- */
   console.log('并行会话状态行');
   const { runtimeStore, seedRuntimeSnapshot, observeRuntimeFrame } = await import(pathToFileURL(path.join(PUB, 'runtime-state.js')).href);
   const { createRuntimeConversation } = await import(pathToFileURL(path.join(PUB, 'runtime-conversation.js')).href);
@@ -258,24 +295,27 @@ function transformOf(decl) {
   const show = id => view.show(id);
 
   show('A');
-  ok('运行中显示动画，状态文案不变，初始为方阵', stateDots().hidden === false
-    && stateDots().dataset.phase === 'square' && stateLine().textContent === '就绪 · 运行中');
+  ok('运行中显示动画，状态文案不变，开场为三点', stateDots().hidden === false
+    && stateDots().dataset.phase === 'triangle' && stateLine().textContent === '就绪 · 运行中');
   observeRuntimeFrame({ type: 'runtime_event', owner: owner('A'), eventSequence: 1,
     event: { type: 'tool_execution_start', toolCallId: 't1', toolName: 'read' } });
-  ok('工具调用期间动画保持，并切到三点轨道', stateDots().hidden === false
+  ok('工具调用期间动画保持，形态不被工具打断', stateDots().hidden === false
     && stateDots().dataset.phase === 'triangle' && host.querySelectorAll('.ui2-runtime-tool').length === 1);
   observeRuntimeFrame({ type: 'runtime_event', owner: owner('A'), eventSequence: 2,
     event: { type: 'tool_execution_end', toolCallId: 't1', isError: false } });
-  ok('工具结束：回到四点方阵', stateDots().dataset.phase === 'square');
+  ok('工具结束：形态同样不改', stateDots().dataset.phase === 'triangle');
   observeRuntimeFrame({ type: 'runtime_event', owner: owner('A'), eventSequence: 3,
     event: { type: 'tool_execution_start', toolCallId: 't2', toolName: 'bash' } });
-  ok('又起一个工具：再次切到三点轨道', stateDots().dataset.phase === 'triangle');
+  ok('又起一个工具：动画与形态都保持', stateDots().dataset.phase === 'triangle');
 
+  /* 手动把 A 的当前形态设成方阵（模拟自动交替走到方阵那一段），再切走；
+   * 共享节点在切换时必须从 G 自己的开场形态重新开始。 */
+  setThinkingDotsPhase(stateDots(), 'square', { immediate: true });
   show('G');
-  ok('切到另一条运行中的会话 G：立即落到 G 自己的方阵，不继承 A 的三点',
-    stateDots().hidden === false && stateDots().dataset.phase === 'square');
+  ok('切到另一条运行中的会话 G：从 G 自己的开场三点重新开始，不继承 A 的方阵',
+    stateDots().hidden === false && stateDots().dataset.phase === 'triangle');
   show('A');
-  ok('切回 A：恢复 A 自己的三点', stateDots().hidden === false && stateDots().dataset.phase === 'triangle');
+  ok('切回 A：同样从开场形态重新开始', stateDots().hidden === false && stateDots().dataset.phase === 'triangle');
 
   show('B');
   ok('切到空闲会话：隐藏动画，文案是 B 自己的', stateDots().hidden === true && stateLine().textContent === '就绪 · 空闲');
