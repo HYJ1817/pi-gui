@@ -26,8 +26,12 @@ P5 按现有合同调度授权后的 600 ms 防抖、轮询、取消及展示。
 | P2 专项 | `npm run test:provider-p2` 网络 39/39、开窗 5/5。源码 Electron 在用户临时目录的权限拒绝路径 47/47，在权限合格的系统临时目录成功路径 50/50。网络套件保留 FIX-01 至 FIX-10 回归，并检查 OpenAI、Anthropic、Google 目录投影和段边界。 [网络测试](../tests/provider-network-policy.cjs) · [桌面测试](../tests/provider-credential-desktop.cjs) |
 | OAuth、模型与安全 | `npm run test:auth` 109/109；`tests/provider-auth-runtime.cjs` 36/36；`tests/models-api.cjs` 50/50；`tests/server-security.cjs` 39/39；`tests/electron-guard.cjs` 123/123。 |
 | 产物 | 从本机 Electron ZIP 离线重建。`npm run test:app -- --output-root …` 26/26，`npm run test:exe -- --output-root …` 49/49。桌面夹具分别驱动打包的 Electron 后端和 SEA，各 50/50，完成原生暂存、提交、清除及实际 loopback 目录请求。Electron 私有 worker SHA-256 为 `979da90155e12b71354e87e49cb5fc233439af64becdab4ad6cff2060204216f`，SEA SHA-256 为 `5bc26519b84af14887e283fae7bcfdfde77211d5285b0de6950cbc1203a96880`。 |
-| canonical | `node tests/ci-test-plan.cjs` 从 `package.json` 核对五组 241 条叶命令。行为提交的完整本地分组验证进行中。 |
+| canonical | 行为提交的五组本地回归共 241/241 条命令退出码为 0。core 165/165、UI 24/24、安全 27/27、native 4/4、故障 21/21。逐组记录已核对 SHA、状态和 `package.json` 展开的有序命令。计划摘要为 `17203f3fb0d3ffa839168ccbbe7ed2bacb02545d2542a3e33215c54346a21524`，日志在 `%TEMP%/pi-gui-p3b-313ec07-canonical`。 |
 
 源码与两种产物的桌面夹具均先尝试正常 Chromium 沙箱，本机启动失败后使用既有 `--no-sandbox` 回退。正常沙箱仍待验证。真实供应商与真实用户凭据不在本轮测试范围。外部 Pi 或手工编辑仍存在文件见证与实际发包之间的竞争窗口。实际运行路径在发包及发布前核对凭据证据，不能把它解释为跨进程原子性。
+
+完整回归的环境跳过包含 18 项缺少 `SeSecurityPrivilege` 的 SACL 场景，以及协作存储、候选采纳和日志各 1 项需要 symlink 权限的场景。这些断言仍待相应环境验证。
+
+Claude Code 的第二轮定向只读复核覆盖 transport、发现服务及三个凭据模块，结论为通过，未发现可复现的 Blocker 或 Important。随后核对了生产装配的严格授权开关、撤销信号、私有桥的校验接线。输入窗取消清理的是窗口 flow，已签发的发现授权由发现撤销或草稿关闭管理。正常沙箱和独立完整验收仍待完成。
 
 回滚可关闭既有 `PI_GUI_PROVIDER_MANAGEMENT` 开关并重启后端，内存授权、操作与缓存随进程释放。也可单独回退行为提交，保留 P3-A 已存配置与原生凭据。P5 开放入口前须验收 202 控制器、正常沙箱和恢复后重新授权。
