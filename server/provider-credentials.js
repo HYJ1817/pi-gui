@@ -5,7 +5,7 @@ const { parentPort, workerData } = require('node:worker_threads');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { createHmac, randomBytes } = require('node:crypto');
+const { createHmac, randomBytes, randomUUID } = require('node:crypto');
 const { authPath, entry, ttlMs } = workerData;
 const stages = new Map();
 const active = new Map();
@@ -171,8 +171,9 @@ async function stage(message) {
     await login(await runtime({ credentials: memory, signal }), binding, input, signal, true);
     const raw = await memory.read(binding.providerId, { signal });
     if (raw?.type !== 'api_key' || raw.key !== input) return failure('unsupported');
-    stageFor(binding, { kind: 'set', memory, expectedCredentialRevision });
-    return { ok: true, credentialState: 'staged', credentialSaved: null };
+    const stagedRevision = randomUUID();
+    stageFor(binding, { kind: 'set', memory, expectedCredentialRevision, stagedRevision });
+    return { ok: true, credentialState: 'staged', credentialSaved: null, stagedRevision };
   } catch { return failure(signal.aborted ? 'cancelled' : 'unsupported'); }
   finally { active.delete(binding.draftId); }
 }

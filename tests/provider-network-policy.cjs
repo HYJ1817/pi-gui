@@ -5,7 +5,8 @@
  */
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { EventEmitter } = require('node:events');
+const { EventEmitter, getEventListeners, once } = require('node:events');
+const { setImmediate: nextTurn } = require('node:timers/promises');
 const { test } = require('node:test');
 
 const entry = require('node:path').resolve(__dirname, '../server/provider-network.js');
@@ -23,9 +24,9 @@ function fakeRequester(script) {
   const requests = [];
   const fn = options => {
     const index = call++;
+    requests.push(options);
     const req = new EventEmitter();
     req.end = () => {
-      requests.push(options);
       const step = script[Math.min(index, script.length - 1)];
       step(req, options);
     };
@@ -463,27 +464,157 @@ test('FIX-02: a consent revoked or aborted during DNS never produces a request',
   assert.equal(sent, 0, 'abort during DNS also prevents any request');
 });
 
-test('FIX-06: DNS resolution time is charged to the total deadline', async t => {
+const publicAddresses = [{ address: '93.184.216.34', family: 4 }];
+const byNextTurn = pending => Promise.race([pending, nextTurn('pending')]);
+
+test('FIX-06/07: a candidate gets only the total deadline left after DNS', async t => {
   const { net, consent } = await modules();
-  const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+  const store = consent.createDiscoveryConsentStore();
   t.after(() => store.dispose());
   const issued = await consentFor(store);
-  let requested = false;
-  const requester = () => {
-    requested = true;
-    const req = new EventEmitter();
-    req.end = () => req.emit('response', fakeRes({ status: 200, body: '[]' }));
-    return req;
-  };
-  // 慢 DNS（吃掉几乎全部总时限）+ 不响应的请求：总结果必须 timeout，
-  // 且不得再发起网络请求（DNS 之后的余量不足以支撑新 attempt）。
-  const lookup = () => new Promise(resolve => setTimeout(() => resolve([{ address: '93.184.216.34', family: 4 }]), 400));
-  const transport = net.createDiscoveryTransport({ consentStore: store, lookup, maxTotalMs: 450,
-    io: { requester: fakeRequester([() => { /* hangs */ }]) } });
-  const started = Date.now();
+  const dns = Promise.withResolvers();
+  const requester = fakeRequester([() => { /* response stays pending */ }]);
+  const transport = net.createDiscoveryTransport({ consentStore: store, lookup: () => dns.promise,
+    maxTotalMs: 100, now: Date.now, io: { requester } });
+  const pending = transport({ consentId: issued.consentId, url: issued.candidatePaths[0] });
+  t.mock.timers.tick(90);
+  dns.resolve(publicAddresses);
+  await nextTurn();
+  assert.equal(requester.requests.length, 1, 'one pinned request may use the remaining budget');
+  t.mock.timers.tick(9);
+  assert.equal(await byNextTurn(pending), 'pending');
+  t.mock.timers.tick(1);
+  assert.equal((await byNextTurn(pending))?.code, 'timeout');
+  assert.equal(requester.requests[0].signal.aborted, true);
+  assert.equal(requester.requests.length, 1, 'no retry after the total deadline');
+});
+
+for (const [name, cancel, finishDns, expected] of [
+  ['hung DNS', ({ timers }) => timers.tick(100), () => {}, 'timeout'],
+  ['external abort during hung DNS', ({ controller }) => controller.abort(), dns => dns.resolve(publicAddresses), 'aborted'],
+  ['DNS resolves after timeout', ({ timers }) => timers.tick(100), dns => dns.resolve(publicAddresses), 'timeout'],
+  ['DNS rejects after timeout', ({ timers }) => timers.tick(100), dns => dns.reject(new Error('late lookup')), 'timeout'],
+]) {
+  test(`FIX-07: ${name} cannot send a request`, async t => {
+    const { net, consent } = await modules();
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+    const store = consent.createDiscoveryConsentStore();
+    t.after(() => store.dispose());
+    const issued = await consentFor(store);
+    const dns = Promise.withResolvers();
+    const controller = new AbortController();
+    const requester = fakeRequester([() => {}]);
+    let lookupSignal;
+    const lookup = (_host, _options, signal) => { lookupSignal = signal; return dns.promise; };
+    const transport = net.createDiscoveryTransport({ consentStore: store, lookup, maxTotalMs: 100,
+      now: Date.now, io: { requester } });
+    const pending = transport({ consentId: issued.consentId, url: issued.candidatePaths[0], signal: controller.signal });
+    await nextTurn();
+    assert.ok(lookupSignal);
+    cancel({ timers: t.mock.timers, controller });
+    const result = await byNextTurn(pending);
+    finishDns(dns);
+    await nextTurn();
+    assert.equal(result?.code, expected, 'discover must settle while DNS is still pending');
+    assert.equal(lookupSignal.aborted, true);
+    assert.equal(requester.requests.length, 0);
+    assert.equal(getEventListeners(lookupSignal, 'abort').length, 0);
+    assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+  });
+}
+
+for (const [name, invalidate] of [
+  ['revoke', (store, issued) => assert.equal(store.revoke(issued.consentId), true)],
+  ['close draft', store => assert.equal(store.revokeDraft('draft-a'), 1)],
+  ['change connection', store => assert.equal(store.revokeDraftConnection('draft-a', 2), 1)],
+  ['expire', (_store, _issued, timers) => timers.tick(50)],
+  ['dispose', store => store.dispose()],
+]) {
+  test(`FIX-08: ${name} aborts an active request and discards its late models`, async t => {
+    const { net, consent } = await modules();
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+    const store = consent.createDiscoveryConsentStore({ ttlMs: 50 });
+    t.after(() => store.dispose());
+    const issued = await consentFor(store);
+    const sent = Promise.withResolvers();
+    const requester = fakeRequester([
+      (req, options) => sent.resolve({ req, options }),
+      req => req.emit('response', fakeRes({ body: '{"data":["new-model"]}' })),
+    ]);
+    const transport = net.createDiscoveryTransport({ consentStore: store, lookup: async () => publicAddresses,
+      now: Date.now, io: { requester } });
+    const pending = transport({ consentId: issued.consentId, url: issued.candidatePaths[0] });
+    const { req, options } = await sent.promise;
+    invalidate(store, issued, t.mock.timers);
+    const result = await byNextTurn(pending);
+    req.emit('response', fakeRes({ body: '{"data":["old-model"]}' }));
+    const completed = await pending;
+    assert.equal(completed.code, 'invalid_target', 'the old response must not return models');
+    assert.equal(completed.models, undefined);
+    assert.equal(result, completed, 'invalidation must settle before the requester responds');
+    assert.equal(options.signal.aborted, true);
+    assert.equal(requester.requests.length, 1);
+
+    if (name !== 'dispose') {
+      const fresh = await consentFor(store, { connectionRevision: 2 });
+      const response = await transport({ consentId: fresh.consentId, url: fresh.candidatePaths[0] });
+      assert.deepEqual(response.models, [{ id: 'new-model' }]);
+    }
+  });
+}
+
+test('FIX-08: revocation after response end but before discovery returns wins', async t => {
+  const { net, consent } = await modules();
+  const store = consent.createDiscoveryConsentStore();
+  t.after(() => store.dispose());
+  const issued = await consentFor(store);
+  const requester = fakeRequester([req => {
+    const res = fakeRes({ body: '{"data":["racing-model"]}' });
+    req.emit('response', res);
+    res.on('end', () => store.revoke(issued.consentId));
+  }]);
+  const transport = net.createDiscoveryTransport({ consentStore: store, lookup: async () => publicAddresses,
+    io: { requester } });
   const result = await transport({ consentId: issued.consentId, url: issued.candidatePaths[0] });
-  const elapsed = Date.now() - started;
-  assert.equal(result.code, 'timeout');
-  assert.ok(elapsed < 1_500, `elapsed ${elapsed}ms stays bounded`);
-  assert.equal(requested, false, 'DNS already consumed the deadline; no request is sent');
+  assert.equal(result.code, 'invalid_target');
+  assert.equal(result.models, undefined);
+});
+
+test('FIX-07: redirect rejection closes a socket with an unfinished response', async t => {
+  const { net, consent } = await modules();
+  const store = consent.createDiscoveryConsentStore();
+  t.after(() => store.dispose());
+  const closed = Promise.withResolvers();
+  const server = http.createServer((_req, res) => {
+    res.once('close', closed.resolve);
+    res.writeHead(302, { location: 'https://fixture.invalid/models' });
+    res.write('unfinished');
+  });
+  server.listen(0, '127.0.0.1');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  await once(server, 'listening');
+  const issued = await consentFor(store, { loopback: true,
+    connection: { ...httpsConnection, baseUrl: `http://127.0.0.1:${server.address().port}/v1` } });
+  const transport = net.createDiscoveryTransport({ consentStore: store });
+  const result = await transport({ consentId: issued.consentId, url: issued.candidatePaths[0] });
+  assert.equal(result.code, 'redirect_rejected');
+  const deadline = AbortSignal.timeout(1000);
+  const onTimeout = () => closed.reject(new Error('redirect response stayed open'));
+  deadline.addEventListener('abort', onTimeout, { once: true });
+  try { await closed.promise; }
+  finally { deadline.removeEventListener('abort', onTimeout); }
+});
+
+test('FIX-07: pinned requests bypass the global agent and its proxy or pooled sockets', async t => {
+  const { net, consent } = await modules();
+  const store = consent.createDiscoveryConsentStore();
+  t.after(() => store.dispose());
+  const issued = await consentFor(store);
+  const requester = fakeRequester([req => req.emit('response', fakeRes({ body: '[]' }))]);
+  const transport = net.createDiscoveryTransport({ consentStore: store, lookup: async () => publicAddresses,
+    io: { requester } });
+  const result = await transport({ consentId: issued.consentId, url: issued.candidatePaths[0] });
+  assert.equal(result.ok, true);
+  assert.equal(requester.requests[0].agent, false);
 });

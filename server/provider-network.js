@@ -188,6 +188,7 @@ function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxB
       port: target.port,
       path: `${parsed.pathname}${parsed.search || ''}`,
       method: 'GET',
+      agent: false, // 独立直连，避免全局代理或已有 socket 绕过本次 lookup 钉桩。
       servername: target.protocol === 'https:' && !/^\d/.test(target.host) && !target.host.includes(':') ? target.host : undefined,
       headers: { accept: 'application/json', connection: 'close', ...headers },
       signal: controller.signal,
@@ -198,46 +199,62 @@ function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxB
         callback(null, list[0].address, list[0].family);
       },
     };
-    const req = (io.requester ?? pickRequester(`${target.protocol}:`))(options);
+    let req;
+    try { req = (io.requester ?? pickRequester(`${target.protocol}:`))(options); }
+    catch { return finish(fail('network_failed')); }
     let received = 0;
     const chunks = [];
     req.on('error', () => finish(controller.signal.aborted ? fail(controller.signal.reason === 'timeout' ? 'timeout' : 'aborted') : fail('network_failed')));
     req.on('response', res => {
+      res.on('error', () => finish(fail('network_failed')));
+      if (settled) {
+        res.destroy();
+        return;
+      }
       if (res.statusCode >= 300 && res.statusCode < 400) {
-        res.resume();
-        return finish(fail('redirect_rejected'));
+        finish(fail('redirect_rejected'));
+        res.destroy();
+        return;
       }
       const declared = Number(res.headers['content-length'] ?? 0);
       if (declared > maxBytes) { finish(fail('too_large')); res.destroy(); return; }
       res.on('data', chunk => {
+        if (settled) return;
         received += chunk.length;
         if (received > maxBytes) { finish(fail('too_large')); res.destroy(); return; }
         chunks.push(chunk);
       });
-      res.on('end', () => finish({ ok: true, status: res.statusCode, body: Buffer.concat(chunks) }));
-      res.on('error', () => finish(fail('network_failed')));
+      res.on('end', () => {
+        if (!settled) finish({ ok: true, status: res.statusCode, body: Buffer.concat(chunks) });
+      });
     });
-    req.end();
+    try { req.end(); }
+    catch { finish(fail('network_failed')); }
   });
 }
 
 /** 解析并校验目标的全部地址。任何一段解析到非授权类别即整体拒绝。 */
-export function resolveTargetAddresses({ host, lookup = dns.promises.lookup, signal }) {
-  if (signal?.aborted) return Promise.resolve({ ok: false, ...fail('aborted') });
-  const lookupSignal = signal;
-  return Promise.resolve(lookup(host, { all: true, verbatim: true }, lookupSignal)).then(entries => {
-    signal?.throwIfAborted?.();
+export async function resolveTargetAddresses({ host, lookup = dns.promises.lookup, signal }) {
+  const cancelled = Promise.withResolvers();
+  const onAbort = () => cancelled.resolve(null);
+  try {
+    if (signal?.aborted) return fail('aborted');
+    signal?.addEventListener('abort', onAbort, { once: true });
+    // 系统 DNS lookup 不保证响应 AbortSignal。竞争负责终止等待，并消费迟到的 rejection。
+    const entries = await Promise.race([lookup(host, { all: true, verbatim: true }, signal), cancelled.promise]);
+    if (signal?.aborted) return fail('aborted');
     const list = (Array.isArray(entries) ? entries : []).map(entry => entry?.address).filter(address => typeof address === 'string' && address);
     if (!list.length) return { ok: false, ...fail('dns_failed') };
     const classes = list.map(address => classifyAddress(address));
     const loopback = classes.every(classOf => classOf === 'loopback');
     if (!loopback && classes.some(classOf => classOf !== 'public')) return { ok: false, ...fail('private_address') };
     return { ok: true, addresses: list, addressClass: loopback ? 'loopback' : 'public' };
-  }).catch(error => {
-    /* 外部/超时 abort 转成 aborted；其余解析失败仍是 dns_failed。 */
+  } catch (error) {
     if (signal?.aborted || error?.name === 'AbortError') return { ok: false, ...fail('aborted') };
     return { ok: false, ...fail('dns_failed') };
-  });
+  } finally {
+    signal?.removeEventListener('abort', onAbort);
+  }
 }
 
 /* 模型目录的输出白名单。供应商返回的原始条目可能有 apiKey/headers/token、
@@ -322,8 +339,7 @@ export function pickModelList(json, secrets = []) {
  * credentialRevision 传入时必须与 consent 绑定值一致——换成另一把 key
  * （代次变化）后旧授权当场失效，不允许旧授权绑定替换后的密钥。
  * 密钥只在 headers 组装时短暂出现，错误出口做哨兵替换。 */
-/** startInfo 返回包内复用的校验产物；verifyConsent 每次发包前重查
- * （授权撤销/过期/目标变化立即生效，响应不再适用旧授权）。 */
+/** 发包与发布结果前都核对授权、凭据代次与候选路径。 */
 function verifyConsent(consentStore, consentId, url, credentialRevision) {
   /* 过期判定由 consent store 自己的时钟负责（测试注入与生产一致）。 */
   const consent = consentStore.get(consentId);
@@ -349,81 +365,77 @@ function verifyConsent(consentStore, consentId, url, credentialRevision) {
   return { consent, target };
 }
 
-export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_BYTES, maxTotalMs = MAX_TOTAL_MS, io = {}, lookup } = {}) {
+export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIMEOUT_MS, maxBytes = MAX_BYTES,
+  maxTotalMs = MAX_TOTAL_MS, io = {}, lookup, now = () => performance.now() } = {}) {
   return async function discover({ consentId, url, key = null, credentialRevision, signal }) {
-    /* 总时限从发现操作开始计算（FIX-06）：DNS 解析与请求同池。 */
-    const deadline = Date.now() + maxTotalMs;
-    const abortIf = () => {
-      if (signal?.aborted) return fail('aborted');
-      if (Date.now() >= deadline) return fail('timeout');
-      return null;
-    };
+    const deadline = now() + maxTotalMs;
+    if (signal?.aborted) return fail('aborted');
     const initial = verifyConsent(consentStore, consentId, url, credentialRevision);
     if (initial.error) return initial.error;
     const { consent, target } = initial;
     const credentialAttached = typeof key === 'string' && key.length > 0;
     if (credentialAttached && !consent.credentialAttached) return fail('policy_rejected');
     if (consent.credentialAttached && !credentialAttached) return fail('policy_rejected');
-    /* FIX-02：外部 abort 必须能中止解析与之后的任何网络动作；
-     * 超时同样作用于 DNS。 */
-    const dnsDeadline = Math.min(deadline, Date.now() + maxTotalMs);
-    const dnsController = new AbortController();
-    const onOuterAbort = () => dnsController.abort();
-    if (signal) {
-      if (signal.aborted) return fail('aborted');
-      signal.addEventListener('abort', onOuterAbort, { once: true });
-    }
-    const dnsTimer = setTimeout(() => dnsController.abort(), Math.max(0, dnsDeadline - Date.now()));
-    let resolved;
+    const consentSignal = consentStore.signalFor?.(consentId);
+    const deadlineController = new AbortController();
+    const operationSignal = AbortSignal.any([deadlineController.signal, ...(signal ? [signal] : []),
+      ...(consentSignal ? [consentSignal] : [])]);
+    const check = candidate => {
+      if (signal?.aborted) return fail('aborted');
+      if (consentSignal?.aborted) return fail('invalid_target');
+      if (deadlineController.signal.aborted || now() >= deadline) return fail('timeout');
+      return verifyConsent(consentStore, consentId, candidate, credentialRevision).error ?? null;
+    };
+    const timer = setTimeout(() => deadlineController.abort(), Math.max(0, Math.ceil(deadline - now())));
     try {
-      resolved = await resolveTargetAddresses({ host: target.host,
-        ...(lookup ? { lookup } : { ...(io.lookup ? { lookup: io.lookup } : {}) }),
-        signal: dnsController.signal });
-    } finally {
-      clearTimeout(dnsTimer);
-      signal?.removeEventListener('abort', onOuterAbort);
-      if (signal) signal.addEventListener('abort', onOuterAbort, { once: true });
-    }
-    if (!resolved.ok) return signal?.aborted ? fail('aborted') : resolved;
-    /* DNS 期间授权可能被撤销/过期/目标变化：发包前重查。 */
-    const afterDns = verifyConsent(consentStore, consentId, url, credentialRevision);
-    if (afterDns.error) return afterDns.error;
-    const policy = targetPolicy({ target: { ...target, protocol: target.protocol }, addressClass: resolved.addressClass,
-      credentialAttached, loopbackAuthorized: consent.loopback === true });
-    if (policy) return fail(policy);
-    const headers = {};
-    if (credentialAttached) {
-      if (consent.api === 'anthropic-messages') { headers['anthropic-version'] = '2023-06-01'; headers['x-api-key'] = key; }
-      else if (consent.api === 'google-generative-ai') headers['x-goog-api-key'] = key;
-      else headers.authorization = `Bearer ${key}`;
-    }
-    let lastStatus = null;
-    const attempts = consent.candidatePaths.slice(consent.candidatePaths.indexOf(url));
-    for (const candidate of attempts) {
-      /* 每个候选请求前都重新验证授权与 abort/时限（FIX-02：撤销即时生效）。 */
-      const aborted = abortIf();
-      if (aborted) return aborted;
-      const pre = verifyConsent(consentStore, consentId, candidate, credentialRevision);
-      if (pre.error) return pre.error;
-      const remaining = deadline - Date.now();
-      /* 严格 30s：单次请求的超时截到总时限剩余，不得靠最后一次请求突破总上限。 */
-      const attemptTimeout = Math.min(timeoutMs, remaining);
-      const result = await restrictedFetch({ url: candidate, headers, addresses: resolved.addresses, timeoutMs: attemptTimeout, signal, maxBytes, io });
-      if (!result.ok) {
-        if (['aborted', 'timeout', 'too_large', 'redirect_rejected', 'private_address', 'invalid_target'].includes(result.code)) return result;
-        lastStatus = result.status ?? null;
-        continue;
+      const stopped = check(url);
+      if (stopped) return stopped;
+      const resolved = await resolveTargetAddresses({ host: target.host, lookup: lookup ?? io.lookup, signal: operationSignal });
+      const afterDns = check(url);
+      if (afterDns) return afterDns;
+      if (!resolved.ok) return resolved;
+      const policy = targetPolicy({ target: { ...target, protocol: target.protocol }, addressClass: resolved.addressClass,
+        credentialAttached, loopbackAuthorized: consent.loopback === true });
+      if (policy) return fail(policy);
+      const headers = {};
+      if (credentialAttached) {
+        if (consent.api === 'anthropic-messages') { headers['anthropic-version'] = '2023-06-01'; headers['x-api-key'] = key; }
+        else if (consent.api === 'google-generative-ai') headers['x-goog-api-key'] = key;
+        else headers.authorization = `Bearer ${key}`;
       }
-      if (result.status === 401 || result.status === 403 || result.status === 429) return fail('http_status', result.status);
-      if (result.status < 200 || result.status >= 300) { lastStatus = result.status; continue; }
-      let json;
-      try { json = JSON.parse(result.body.toString('utf8')); } catch { return fail('not_json'); }
-      /* 密钥（以及原始请求头值）传入白名单：出现在任何模型字段里的
-       * 哨兵即整条丢弃，供应商回显头不会进普通前端。 */
-      const picked = pickModelList(json, [...(credentialAttached ? [key] : []), ...Object.values(headers).filter(header => typeof header === 'string' && header.length > 8)]);
-      if (!picked.ok) return picked;
-      return { ok: true, source: candidate, models: picked.models, truncated: picked.truncated, dropped: picked.dropped, status: result.status };
+      let lastStatus = null;
+      const attempts = consent.candidatePaths.slice(consent.candidatePaths.indexOf(url));
+      for (const candidate of attempts) {
+        const pre = check(candidate);
+        if (pre) return pre;
+        const remaining = deadline - now();
+        if (remaining <= 0) return fail('timeout');
+        /* 严格 30s：单次请求的超时截到总时限剩余，不得靠最后一次请求突破总上限。 */
+        const attemptTimeout = Math.min(timeoutMs, Math.ceil(remaining));
+        const result = await restrictedFetch({ url: candidate, headers, addresses: resolved.addresses,
+          timeoutMs: attemptTimeout, signal: operationSignal, maxBytes, io });
+        const afterRequest = check(candidate);
+        if (afterRequest) return afterRequest;
+        if (!result.ok) {
+          if (['aborted', 'timeout', 'too_large', 'redirect_rejected', 'private_address', 'invalid_target'].includes(result.code)) return result;
+          lastStatus = result.status ?? null;
+          continue;
+        }
+        if (result.status === 401 || result.status === 403 || result.status === 429) return fail('http_status', result.status);
+        if (result.status < 200 || result.status >= 300) { lastStatus = result.status; continue; }
+        let json;
+        try { json = JSON.parse(result.body.toString('utf8')); } catch { return check(candidate) ?? fail('not_json'); }
+        /* 密钥（以及原始请求头值）传入白名单：出现在任何模型字段里的
+         * 哨兵即整条丢弃，供应商回显头不会进普通前端。 */
+        const picked = pickModelList(json, [...(credentialAttached ? [key] : []), ...Object.values(headers).filter(header => typeof header === 'string' && header.length > 8)]);
+        const beforeReturn = check(candidate);
+        if (beforeReturn) return beforeReturn;
+        if (!picked.ok) return picked;
+        return { ok: true, source: candidate, models: picked.models, truncated: picked.truncated, dropped: picked.dropped, status: result.status };
+      }
+      return fail(lastStatus ? 'http_status' : 'network_failed', lastStatus ?? undefined);
+    } finally {
+      clearTimeout(timer);
     }
-    return fail(lastStatus ? 'http_status' : 'network_failed', lastStatus ?? undefined);
   };
 }

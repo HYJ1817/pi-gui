@@ -195,7 +195,7 @@ const frames = Object.freeze({
 });
 export function validateCredentialFrame(value) {
   need(isRecord(value) && value.type === 'provider-credential' && Object.hasOwn(frames, value.action), 'frame');
-  fields(value, ['type','action','requestId','backendEpoch', ...frames[value.action]], [], 'frame');
+  fields(value, ['type','action','requestId','backendEpoch', ...frames[value.action]], value.action === 'prepare' ? ['flowId'] : [], 'frame');
   for (const key of ['requestId','backendEpoch','draftId', ...flowFields]) if (has(value,key)) need(isOpaqueId(value[key]), 'frame');
   if (value.action === 'prepare') need(positive(value.draftRevision) && ['set','replace','clear','authorize-target'].includes(value.purpose), 'frame');
   if (value.action === 'stage') need(isLiteralKeyInput(value.input) && bool(value.allowDiscovery), 'frame');

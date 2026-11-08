@@ -40,7 +40,7 @@ function fakeBridgeSdk(state) {
       }
       if (input.includes('fail-stage')) return { ok: false, code: 'unsupported', credentialState: 'none', credentialSaved: false };
       state.staged.set(binding.draftId, { providerId: binding.providerId, key: input, connectionRevision: binding.connectionRevision });
-      return { ok: true, credentialState: 'staged', credentialSaved: null };
+      return { ok: true, credentialState: 'staged', credentialSaved: null, stagedRevision: `stage-${state.calls.length}` };
     },
     stageClear: async (binding, options) => {
       state.calls.push({ kind: 'stage-clear', binding: { ...binding }, options: { ...options } });
@@ -76,12 +76,13 @@ async function moduleTests() {
     const state = sdkState ?? { qualified: true, native: new Map(), staged: new Map(), calls: [], disposed: [] };
     const draftMap = new Map(drafts.map(draft => [draft.draftId, draft]));
     const consents = createDiscoveryConsentStore({ now: () => 1_000_000 });
-    const bridge = createProviderCredentialBridge({ sdk: fakeBridgeSdk(state), consentStore: consents,
+    const sdk = fakeBridgeSdk(state);
+    const bridge = createProviderCredentialBridge({ sdk, consentStore: consents,
       /* 动态读数组：测试在 prepare 之后改写 draft 以模拟连接变化。 */
       draftLookup: id => drafts.find(item => item.draftId === id) ?? draftMap.get(id) ?? null,
       mutationBlocked: () => state.blocked === true, maintenanceLocked: () => state.maintenance === true,
       enabled, flowTtlMs: 120_000, now: () => state.clock ?? 1_000_000 });
-    return { bridge, consents, state };
+    return { bridge, consents, sdk, state };
   }
 
   const capability = await (async () => {
@@ -305,6 +306,26 @@ async function moduleTests() {
     check('flow TTL expiry refuses stage', () => assert.equal(expired.ok, false));
   }
 
+  {
+    const { bridge, consents, sdk } = make();
+    const frame = { type: 'provider-credential', backendEpoch: bridge.epoch, requestId: 'close-race' };
+    const prepared = await bridge.handle({ ...frame, action: 'prepare', draftId: DRAFT.draftId,
+      draftRevision: 1, purpose: 'authorize-target' });
+    const inspection = Promise.withResolvers();
+    sdk.inspect = () => inspection.promise;
+    const pending = bridge.handle({ ...frame, action: 'authorize-target', flowId: prepared.flowId, promptId: prepared.promptId,
+      nonce: prepared.nonce, confirmed: true, rememberTarget: true });
+    await bridge.handle({ ...frame, action: 'close-draft', draftId: DRAFT.draftId });
+    inspection.resolve({ present: true, credentialRevision: 'fixture-native' });
+    const late = await pending;
+    check('closing a draft during authorization cannot recreate consent or a remembered target', () => {
+      assert.equal(late.ok, false);
+      assert.equal(consents.size, 0);
+      assert.equal(consents.matchRemembered({ ...DRAFT, api: DRAFT.connection.api, credentialSource: 'stored',
+        credentialRevision: 'fixture-native' }), null);
+    });
+  }
+
   console.log(`provider-credential-bridge: ${passed} assertions passed`);
 }
 
@@ -506,12 +527,12 @@ async function electronMain() {
     check('sheet CSP forbids remote fetch', await read(sheet, `fetch('https://fixture.invalid/models').then(() => 'allowed').catch(error => 'blocked')`) === 'blocked');
     check('sheet page world has no node/process bridges',
       await read(sheet, `typeof window.require === 'undefined' && typeof window.process === 'undefined' && typeof window.piGuiCredentialSheet?.submit === 'function'`));
-    check('sheet navigation to app origin is prevented', async () => {
-      // will-navigate preventDefault 后，location 赋值不会改变 URL，也不应抛出。
-      await read(sheet, `try { location.href = ${JSON.stringify(ORIGIN)}; } catch { /* assignment refused is fine */ } 'assigned'`);
-      await sleep(400);
-      return String(sheet.webContents.getURL()).startsWith('pi-gui-credential:');
-    });
+    const [[navigationEvent]] = await Promise.all([
+      require('node:events').once(sheet.webContents, 'will-navigate', { signal: AbortSignal.timeout(5000) }),
+      read(sheet, `(location.href = ${JSON.stringify(ORIGIN)}, 'assigned')`),
+    ]);
+    check('sheet navigation to app origin is prevented',
+      navigationEvent.defaultPrevented && sheet.webContents.getURL() === SHEET_URL);
     fs.writeFileSync(path.join(out, 'sheet-dark.png'), (await sheet.webContents.capturePage()).toPNG());
     // 绕过页面 DOM：直接经桥提交（同一生产链路 submit → IPC → backend stage）。
     await read(sheet, `window.piGuiCredentialSheet.submit({ input: 'sentinel-key-E2E-1', allowDiscovery: false, rememberTarget: false }).then(v => JSON.stringify(v)).catch(e => 'submit_failed:' + (e && e.message || e))`);

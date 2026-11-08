@@ -25,7 +25,7 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
 
   function prune() {
     const time = now();
-    for (const [id, item] of active) if (item.expires <= time) active.delete(id);
+    for (const [id, { record }] of active) if (record.expires <= time) revoke(id);
     if (remembered.size > MAX_REMEMBERED) {
       for (const id of remembered.keys()) { remembered.delete(id); if (remembered.size <= MAX_REMEMBERED) break; }
     }
@@ -54,7 +54,10 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
       api: request.api, target, candidatePaths, credentialSource, credentialAttached, loopback,
       credentialRevision: request.credentialRevision ?? null, expires, rememberTarget: request.rememberTarget === true,
     };
-    active.set(consentId, record);
+    const controller = new AbortController();
+    const timer = setTimeout(() => revoke(consentId), ttlMs);
+    timer.unref?.();
+    active.set(consentId, { record, controller, timer });
     if (record.rememberTarget && !loopback && credentialSource !== 'staged') {
       // 只记非秘密批准描述：目标、API、凭据来源与代次。凭据代次变化后重开必须重确认。
       remembered.set(`${request.providerId}\n${target.protocol}\n${target.host}\n${target.port}\n${target.basePath}`, {
@@ -69,25 +72,36 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
 
   function get(consentId, { now: at = now } = {}) {
     if (!isOpaqueId(consentId)) return null;
-    const record = active.get(consentId);
+    const record = active.get(consentId)?.record;
     if (!record || record.expires <= at()) return null;
     return record;
   }
 
   function revoke(consentId) {
-    return active.delete(consentId);
+    const entry = active.get(consentId);
+    if (!entry) return false;
+    active.delete(consentId);
+    clearTimeout(entry.timer);
+    entry.controller.abort();
+    return true;
+  }
+
+  function signalFor(consentId) {
+    return active.get(consentId)?.controller.signal;
   }
 
   function revokeDraft(draftId) {
     let removed = 0;
-    for (const [id, record] of active) if (record.draftId === draftId) { active.delete(id); removed += 1; }
+    for (const [id, { record }] of active) if (record.draftId === draftId && revoke(id)) removed += 1;
     return removed;
   }
 
   /** 目标或连接代次变化：撤掉该草稿在旧绑定上的全部授权。 */
   function revokeDraftConnection(draftId, connectionRevision) {
     let removed = 0;
-    for (const [id, record] of active) if (record.draftId === draftId && record.connectionRevision !== connectionRevision) { active.delete(id); removed += 1; }
+    for (const [id, { record }] of active) {
+      if (record.draftId === draftId && record.connectionRevision !== connectionRevision && revoke(id)) removed += 1;
+    }
     return removed;
   }
 
@@ -107,10 +121,10 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
   }
 
   function dispose() {
-    active.clear();
+    for (const id of active.keys()) revoke(id);
     remembered.clear();
   }
 
-  return { issue, get, revoke, revokeDraft, revokeDraftConnection, matchRemembered, forgetDraft, dispose,
+  return { issue, get, signalFor, revoke, revokeDraft, revokeDraftConnection, matchRemembered, forgetDraft, dispose,
     get size() { prune(); return active.size; } };
 }

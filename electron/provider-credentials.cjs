@@ -1,4 +1,5 @@
 'use strict';
+const { randomUUID } = require('node:crypto');
 /* 供应商管理 P2：CredentialSheet 受限输入窗的桌面控制器。
  *
  * 调用链（设计 §5.2）：主窗口普通 preload（open/cancel/status）→ 这里 →
@@ -33,9 +34,9 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
   let sheet = null;
   let flow = null; // { flowId, promptId, nonce, purpose, expires, consumed, action }
   let flowTarget = '';
-  let opening = false; // FIX-05：覆盖异步打开全程的 single-flight 互斥
-  let handshake = null; // { epoch, stagingEnabled, sdkQualified, flowTtlMs, child }
-  let capabilityPending = null;
+  let opening = null; // 当前 open 独占的取消控制器
+  let handshake = null; // { epoch, stagingEnabled, child }
+  let disposed = false;
   let sessionReady = false;
   let sequence = 0;
   const stateListeners = new Set();
@@ -54,15 +55,20 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
 
   /* ---------- backend 私有通道 ---------- */
 
-  function backendCall(frame, timeoutMs = OPEN_TIMEOUT_MS) {
-    const child = getBackend();
+  function backendCall(frame, { child = getBackend(), signal } = {}) {
+    if (signal?.aborted) return Promise.resolve({ ok: false, code: signal.reason });
     if (!child || child.connected !== true) return Promise.resolve({ ok: false, code: 'backend_unavailable' });
     const id = ++sequence;
     return new Promise(resolve => {
+      let done = false;
       const finish = value => {
+        if (done) return;
+        done = true;
         clearTimeout(timer);
         child.removeListener('message', onMessage);
         child.removeListener('exit', onExit);
+        child.removeListener('disconnect', onExit);
+        signal?.removeEventListener('abort', onAbort);
         resolve(value);
       };
       const onMessage = message => {
@@ -72,34 +78,46 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
         }
       };
       const onExit = () => finish({ ok: false, code: 'backend_unavailable' });
-      const timer = setTimeout(() => finish({ ok: false, code: 'backend_timeout' }), timeoutMs);
+      const onAbort = () => finish({ ok: false, code: signal.reason });
+      const timer = setTimeout(() => finish({ ok: false, code: 'backend_timeout' }), OPEN_TIMEOUT_MS);
       child.on('message', onMessage);
       child.once('exit', onExit);
-      child.send({ type: 'provider-credential', id, ...frame }, error => {
-        if (error) finish({ ok: false, code: 'backend_unavailable' });
-      });
+      child.once('disconnect', onExit);
+      signal?.addEventListener('abort', onAbort, { once: true });
+      try {
+        child.send({ type: 'provider-credential', id, ...frame }, error => {
+          if (error) onExit();
+        });
+      } catch { onExit(); }
     });
   }
 
-  async function ensureHandshake() {
+  async function ensureHandshake(signal) {
     const child = getBackend();
     if (handshake && handshake.child === child && child && child.connected) return handshake;
     handshake = null;
-    capabilityPending ??= (async () => {
-      const reply = await backendCall({ action: 'capability', requestId: `cap-${++sequence}`, backendEpoch: 'handshake' });
-      if (reply?.ok !== true || typeof reply.epoch !== 'string') return null;
-      return { epoch: reply.epoch, stagingEnabled: reply.stagingEnabled === true, sdkQualified: reply.sdkQualified === true,
-        flowTtlMs: Number.isFinite(reply.flowTtlMs) ? reply.flowTtlMs : 120_000, child: getBackend() };
-    })();
-    handshake = await capabilityPending;
-    capabilityPending = null;
+    const reply = await backendCall({ action: 'capability', requestId: `cap-${++sequence}`, backendEpoch: 'handshake' },
+      { child, signal });
+    if (signal.aborted || child !== getBackend() || !child?.connected ||
+        reply?.ok !== true || typeof reply.epoch !== 'string') return null;
+    handshake = { epoch: reply.epoch, stagingEnabled: reply.stagingEnabled === true, child };
     return handshake;
   }
 
+  function cancelOpening(reason) {
+    const operation = opening;
+    opening = null;
+    operation?.abort(reason);
+  }
+
+  function dropFlow(flowId, owner) {
+    void backendCall({ action: 'cancel', requestId: `drop-${++sequence}`, backendEpoch: owner.epoch, flowId },
+      { child: owner.child });
+  }
+
   function resetHandshake(reason) {
+    cancelOpening('backend_unavailable');
     handshake = null;
-    capabilityPending = null;
-    flow = null;
     closeSheet('backend_unavailable');
     if (reason) logEvent('electron.provider_credential_reset', { reason });
     publish({ state: 'unavailable' });
@@ -138,13 +156,17 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
   function closeSheet(reason) {
     if (!sheet) return;
     const target = sheet;
+    const previous = flow;
     sheet = null;
     flow = null;
+    clearTimeout(expiryTimer);
+    expiryTimer = null;
+    if (previous && !previous.consumed) dropFlow(previous.flowId, previous.owner);
     /* staged 路径延迟销毁：页面的 invoke 应答要先送到（同步 destroy 会让
      * renderer 的 promise 以「Script failed to execute」失败，而且用户暂时
      * 看不到「已应用到草稿」的反馈）。其他路径立即销毁。 */
     const delayed = reason === 'staged';
-    const destroy = () => { try { target.destroy(); } catch { /* already gone */ } };
+    const destroy = () => { try { if (!target.isDestroyed()) target.destroy(); } catch { /* already gone */ } };
     if (delayed) setTimeout(destroy, 250); else destroy();
     if (reason) logEvent('electron.provider_credential_sheet_closed', { reason });
     /* 关闭后焦点一律回到主窗口（设计 §4：关闭回到触发器）。staged 路径的
@@ -203,15 +225,11 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     });
     sheetWindow.once('ready-to-show', () => sheetWindow.show());
     sheetWindow.on('closed', () => {
-      if (sheet === sheetWindow) {
-        sheet = null;
-        flow = null;
-        const parent2 = getMainWindow();
-        if (parent2 && !parent2.isDestroyed()) parent2.focus();
-        publish({ state: 'closed' });
-      }
+      if (sheet === sheetWindow) closeSheet('closed');
     });
-    sheetWindow.webContents.loadURL(SHEET_URL).catch(() => closeSheet('load_failed'));
+    sheetWindow.webContents.loadURL(SHEET_URL).catch(() => {
+      if (sheet === sheetWindow) closeSheet('load_failed');
+    });
     return { ok: true };
   }
 
@@ -231,25 +249,28 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
      * 调用仍必须通过 mainWindowAllowed 的 sender/frame/origin 校验。 */
     const trusted = event && event.testBypass === true ? true : mainWindowAllowed(event);
     if (!trusted) return { ok: false, code: 'forbidden' };
+    if (disposed) return { ok: false, code: 'unavailable' };
     if (!qualified()) return { ok: false, code: 'unsupported', reason: 'desktop_unqualified' };
     const valid = request && typeof request === 'object' && opaqueId(request.draftId)
       && Number.isSafeInteger(request.draftRevision) && request.draftRevision >= 1 && ACTIONS.has(request.action);
     if (!valid) return { ok: false, code: 'invalid_request' };
-    /* FIX-05：single-flight 覆盖整个异步打开过程。握手与 prepare 都是
-     * IPC 往返，若只检查 sheet/flow，快速连续 open 会双双通过检查、
-     * 各自 prepare 成功并互相覆盖 flow/窗口。opening 在任何 await 之前
-     * 同步置位，失败路径finally 释放；排除「死流程被复用」——旧请求迟到
-     * 时 opening 已被新的请求持有，同样返回 busy。 */
+    // 同步占位，取消后允许重开。旧操作只能释放自己持有的位置。
     if (sheet || flow || opening) return { ok: false, code: 'busy', reason: sheet || flow ? 'sheet_open' : 'opening' };
-    opening = true;
+    const parent = getMainWindow();
+    if (!parent || parent.isDestroyed()) return { ok: false, code: 'no_main_window' };
+    const operation = new AbortController();
+    opening = operation;
+    const onClosed = () => operation.abort('no_main_window');
+    parent.once('closed', onClosed);
     try {
-      return await openFlow(trusted, request);
+      return await openFlow(request, parent, operation.signal);
     } finally {
-      opening = false;
+      parent.removeListener('closed', onClosed);
+      if (opening === operation) opening = null;
     }
   }
 
-  async function openFlow(_trusted, request) {
+  async function openFlow(request, parent, signal) {
     /* 竞态兜底：上一窗口可能还在 250ms 延迟销毁窗口内（staged 路径）。
      * open 是显式用户动作，先完成销毁再开新窗。 */
     for (const window of BrowserWindow.getAllWindows()) {
@@ -257,30 +278,35 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
         try { window.destroy(); } catch { /* already gone */ }
       }
     }
-    const handshakeNow = await ensureHandshake();
+    const handshakeNow = await ensureHandshake(signal);
+    if (signal.aborted) return { ok: false, code: signal.reason };
     if (!handshakeNow) return { ok: false, code: 'unsupported', reason: 'bridge_unavailable' };
     if (!handshakeNow?.stagingEnabled && request.action !== 'authorize-target') {
       return { ok: false, code: 'unsupported', reason: 'key_input_disabled' };
     }
     if (!qualified()) return { ok: false, code: 'unsupported', reason: 'desktop_unqualified' };
     const purpose = request.action;
+    const flowId = randomUUID();
     const prepared = await backendCall({ action: 'prepare', requestId: `open-${++sequence}`, backendEpoch: handshakeNow.epoch,
-      draftId: request.draftId, draftRevision: request.draftRevision, purpose });
-    if (prepared?.ok !== true) return { ok: false, code: prepared?.code ?? 'unavailable', reason: prepared?.message };
-    /* 异步窗口内格式可能已经变化（后端退出重置了 flow/sheet）；prepared
-     * 属于 epoch 错位的应答时不得继续开窗。 */
-    if (handshake !== handshakeNow || handshakeNow.child !== getBackend() || !(handshakeNow.child && handshakeNow.child.connected)) {
-      void backendCall({ action: 'cancel', requestId: `drop-${++sequence}`, backendEpoch: handshakeNow.epoch, flowId: prepared.flowId });
+      draftId: request.draftId, draftRevision: request.draftRevision, purpose, flowId }, { child: handshakeNow.child, signal });
+    if (signal.aborted || prepared?.ok !== true || handshake !== handshakeNow ||
+        handshakeNow.child !== getBackend() || !handshakeNow.child.connected) {
+      dropFlow(flowId, handshakeNow);
+      return { ok: false, code: signal.aborted ? signal.reason : prepared?.code ?? 'unavailable', reason: prepared?.message };
+    }
+    const expires = prepared.expiresAt;
+    if (getMainWindow() !== parent || prepared.flowId !== flowId || !Number.isFinite(expires) || expires <= now()) {
+      dropFlow(flowId, handshakeNow);
       return { ok: false, code: 'unavailable' };
     }
-    if (sheet || flow) return { ok: false, code: 'busy', reason: 'sheet_open' };
-    const expires = now() + handshakeNow.flowTtlMs;
-    flow = { flowId: prepared.flowId, promptId: prepared.promptId, nonce: prepared.nonce,
-      purpose, expires, consumed: false, action: request.action };
     flowTarget = prepared.targetSummary?.baseUrl || prepared.targetSummary?.providerId || '';
     const theme = nativeTheme?.shouldUseDarkColors === false ? 'light' : 'dark';
-    const opened = openSheet({ flow: prepared, theme, targetSummary: flowTarget });
-    if (opened.ok !== true) { flow = null; void backendCall({ action: 'cancel', requestId: `drop-${++sequence}`, backendEpoch: handshakeNow.epoch, flowId: prepared.flowId }); return opened; }
+    let opened;
+    try { opened = openSheet({ flow: prepared, theme, targetSummary: flowTarget }); }
+    catch { closeSheet('load_failed'); opened = { ok: false, code: 'unavailable' }; }
+    if (opened.ok !== true) { dropFlow(flowId, handshakeNow); return opened; }
+    flow = { flowId, promptId: prepared.promptId, nonce: prepared.nonce,
+      purpose, expires, consumed: false, owner: handshakeNow };
     logEvent('electron.provider_credential_open', { action: request.action, oauthConflict: prepared.oauthConflict === true });
     scheduleExpiry();
     publish({ state: 'open', action: request.action });
@@ -301,8 +327,7 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
 
   function cancelHandler(event) {
     if (!mainWindowAllowed(event)) return { ok: false, code: 'forbidden' };
-    const handshakeNow = handshake;
-    if (flow && handshakeNow) void backendCall({ action: 'cancel', requestId: `drop-${++sequence}`, backendEpoch: handshakeNow.epoch, flowId: flow.flowId });
+    cancelOpening('cancelled');
     closeSheet('cancelled');
     return { ok: true };
   }
@@ -325,10 +350,11 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
   async function submitHandler(event, payload) {
     if (!sheetAllowed(event)) return { ok: false, code: 'forbidden' };
     if (!flow || flow.consumed) return { ok: false, code: 'stale' };
-    if (now() > flow.expires) { closeSheet('expired'); return { ok: false, code: 'expired' }; }
+    if (now() >= flow.expires) { closeSheet('expired'); return { ok: false, code: 'expired' }; }
+    const submitting = flow;
     const input = typeof payload?.input === 'string' ? payload.input : '';
-    const handshakeNow = handshake;
-    if (!handshakeNow) return { ok: false, code: 'unavailable' };
+    const handshakeNow = submitting.owner;
+    if (handshake !== handshakeNow || getBackend() !== handshakeNow.child) return { ok: false, code: 'unavailable' };
     const actionName = flow.purpose === 'clear' ? 'clear-stage' : flow.purpose === 'authorize-target' ? 'authorize-target' : 'stage';
     const frame = { action: actionName, requestId: `submit-${++sequence}`, backendEpoch: handshakeNow.epoch, flowId: flow.flowId, promptId: flow.promptId, nonce: flow.nonce };
     if (actionName === 'stage') {
@@ -339,7 +365,8 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
       frame.confirmed = true;
       if (actionName === 'authorize-target') frame.rememberTarget = payload?.rememberTarget === true;
     }
-    const reply = await backendCall(frame);
+    const reply = await backendCall(frame, { child: handshakeNow.child });
+    if (flow !== submitting) return { ok: false, code: 'stale' };
     if (reply?.ok !== true) {
       /* 失败时 nonce 保持可用：OAuth 同槽的替换/清除都需要在同一受限窗内
        * 读提示后二次确认；backend 的固定文案随应答带给页面。 */
@@ -357,8 +384,6 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
   function sheetCancelHandler(event) {
     if (!sheetAllowed(event)) return { ok: false, code: 'forbidden' };
     // 输入窗取消：保留已存在的暂存值（backend 侧 flow 作废即可），不销毁 worker 暂存。
-    const handshakeNow = handshake;
-    if (flow && handshakeNow) void backendCall({ action: 'cancel', requestId: `drop-${++sequence}`, backendEpoch: handshakeNow.epoch, flowId: flow.flowId });
     closeSheet('cancelled');
     return { ok: true };
   }
@@ -386,13 +411,13 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
   }
 
   function dispose() {
-    clearTimeout(expiryTimer);
-    expiryTimer = null;
+    disposed = true;
+    cancelOpening('unavailable');
     for (const channel of handlers.keys()) ipcMain.removeHandler(channel);
     handlers.clear();
     stateListeners.clear();
-    flow = null;
     closeSheet('disposed');
+    handshake = null;
   }
 
   register();

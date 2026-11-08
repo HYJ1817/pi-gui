@@ -15,7 +15,7 @@
  * 目标是跨窗口/跨 flow 重放与成功后的复用，不是阻止用户在同一窗内重新提交。
  */
 import { randomUUID } from 'node:crypto';
-import { validateCredentialFrame } from '../public/provider-management/contract.js';
+import { isOpaqueId, validateCredentialFrame } from '../public/provider-management/contract.js';
 
 const NONCE_TTL_MS = 2 * 60_000;
 const MAX_FLOWS = 8;
@@ -25,6 +25,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
   maintenanceLocked = () => false, enabled = false, flowTtlMs = NONCE_TTL_MS, now = Date.now } = {}) {
   const epoch = randomUUID();
   const flows = new Map();
+  const preparing = new Map();
   let inFlight = false;
   // 只有 Electron main 经私有 IPC 握手后才置位；HTTP/Web 侧的快照因此永远
   // 看不到开启的桌面能力（open 时 main 还会再做一次自己的环境资格检查）。
@@ -71,28 +72,38 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     const busy = guardBusy();
     if (busy) return busy;
     prune();
-    if (flows.size >= MAX_FLOWS) return fail('config_busy', { message: '凭据输入会话数量已达上限。' });
+    if (flows.size + preparing.size >= MAX_FLOWS) return fail('config_busy', { message: '凭据输入会话数量已达上限。' });
     const draft = typeof draftLookup === 'function' ? draftLookup(frame.draftId) : null;
     if (!draft || draft.draftRevision !== frame.draftRevision || draft.expires <= now()) {
       return fail('draft_conflict', { message: '草稿已变化，请重读后保存。' });
     }
-    const purpose = frame.purpose;
-    const inspection = await sdk.inspect(draft.providerId);
-    const expectsCredential = ['set', 'replace', 'clear'].includes(purpose);
-    if (expectsCredential && !(await sdk.qualified().catch(() => false))) return fail('unsupported');
-    const flowId = randomUUID();
-    const nonce = randomUUID();
-    const flow = { flowId, promptId: randomUUID(), nonce, purpose, draftId: draft.draftId, draftRevision: draft.draftRevision,
-      connectionRevision: draft.connectionRevision, connection: draft.connection, providerId: draft.providerId,
-      serviceId: draft.serviceId ?? null, api: draft.connection?.api ?? 'openai-completions',
-      expectedCredentialRevision: inspection.credentialRevision ?? null,
-      oauthConflict: ['set', 'replace'].includes(purpose) && inspection.present === true && inspection.type === 'oauth',
-      oauthConfirmOffered: false, clearConfirmOffered: false, expires: now() + flowTtlMs, lastCredentialState: 'none' };
-    flows.set(flowId, flow);
-    return { ok: true, flowId, promptId: flow.promptId, nonce, expiresAt: flow.expires,
-      targetSummary: { providerId: flow.providerId, baseUrl: draft.connection?.baseUrl ?? null, api: flow.api },
-      oauthConflict: flow.oauthConflict,
-      credential: { present: inspection.present, type: inspection.type } };
+    // 桌面预分配 ID，允许 cancel 在 prepare 应答前到达。旧帧仍由后端分配 ID。
+    const flowId = frame.flowId ?? randomUUID();
+    if (preparing.has(flowId) || flows.has(flowId)) return fail('invalid_request');
+    const binding = { draftId: draft.draftId, draftRevision: draft.draftRevision, connectionRevision: draft.connectionRevision };
+    preparing.set(flowId, binding);
+    try {
+      const purpose = frame.purpose;
+      const inspection = await sdk.inspect(draft.providerId);
+      if (preparing.get(flowId) !== binding) return fail('invalid_request');
+      const expectsCredential = ['set', 'replace', 'clear'].includes(purpose);
+      if (expectsCredential && !(await sdk.qualified().catch(() => false))) return fail('unsupported');
+      if (preparing.get(flowId) !== binding) return fail('invalid_request');
+      if (!draftCurrent(binding)) return fail('draft_conflict', { message: '草稿已变化，请重读后保存。' });
+      const nonce = randomUUID();
+      const flow = { ...binding, flowId, promptId: randomUUID(), nonce, purpose,
+        connection: draft.connection, providerId: draft.providerId, serviceId: draft.serviceId ?? null,
+        api: draft.connection?.api ?? 'openai-completions', expectedCredentialRevision: inspection.credentialRevision ?? null,
+        oauthConflict: ['set', 'replace'].includes(purpose) && inspection.present === true && inspection.type === 'oauth',
+        oauthConfirmOffered: false, clearConfirmOffered: false, expires: now() + flowTtlMs, lastCredentialState: 'none' };
+      flows.set(flowId, flow);
+      return { ok: true, flowId, promptId: flow.promptId, nonce, expiresAt: flow.expires,
+        targetSummary: { providerId: flow.providerId, baseUrl: draft.connection?.baseUrl ?? null, api: flow.api },
+        oauthConflict: flow.oauthConflict,
+        credential: { present: inspection.present, type: inspection.type } };
+    } finally {
+      if (preparing.get(flowId) === binding) preparing.delete(flowId);
+    }
   }
 
   function flowFor(frame) {
@@ -127,13 +138,16 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
         if (result?.code === 'expired') flow.lastCredentialState = 'expired';
         return { ...fail(result?.code ?? 'credential_conflict'), credentialState: result?.credentialState ?? 'none' };
       }
+      const current = flowFor(frame) === flow && draftCurrent(flow);
       consume(flow);
       flow.lastCredentialState = result.credentialState ?? 'staged';
+      // 暂存替换不改变原生凭据修订号。使用 worker 的新代次并使此前授权失效。
+      consentStore?.revokeDraft(flow.draftId);
       let consent = null;
-      if (frame.allowDiscovery === true) {
+      if (current && frame.allowDiscovery === true && isOpaqueId(result.stagedRevision)) {
         const issued = consentStore?.issue({ draftId: flow.draftId, draftRevision: flow.draftRevision,
           connectionRevision: flow.connectionRevision, providerId: flow.providerId, connection: flow.connection,
-          api: flow.api, credentialSource: 'staged', credentialRevision: flow.expectedCredentialRevision,
+          api: flow.api, credentialSource: 'staged', credentialRevision: result.stagedRevision,
           rememberTarget: frame.rememberTarget === true, loopback: false });
         if (issued?.ok === true) consent = { consentId: issued.consentId, expiresAt: issued.expiresAt, targetSummary: issued.targetSummary };
       }
@@ -161,23 +175,18 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
        * 二次确认（worker 层拒绝非确认调用）。首次尝试不带确认；遇到
        * oauth_conflict 时保持 flow 与 nonce 可用，让输入窗按要求展示
        * 影响说明后带确认重试（与替换同一交互纪律）。 */
-      const result = await sdk.stageClear(bindingOf(flow), { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true });
+      let result = await sdk.stageClear(bindingOf(flow), { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true });
       if (result?.ok !== true && result?.code === 'oauth_conflict' && !flow.clearConfirmOffered) {
         flow.clearConfirmOffered = true;
         return { ok: false, code: 'oauth_conflict', message: '待清除的是 OAuth 登录凭据。确认后同槽的原生登录将被清除，且旧登录无法从 GUI 恢复。' };
       }
       if (result?.ok !== true && result?.code === 'oauth_conflict' && flow.clearConfirmOffered) {
-        const confirmedResult = await sdk.stageClear(bindingOf(flow), { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true, confirmOAuthReplacement: true });
-        if (confirmedResult?.ok !== true) {
-          return { ...fail(confirmedResult?.code ?? 'credential_conflict'), credentialState: confirmedResult?.credentialState ?? 'none' };
-        }
-        consume(flow);
-        flow.lastCredentialState = confirmedResult.credentialState ?? 'clear-staged';
-        return { ok: true, credentialState: flow.lastCredentialState, credentialSaved: null };
+        result = await sdk.stageClear(bindingOf(flow), { expectedCredentialRevision: flow.expectedCredentialRevision, confirmed: true, confirmOAuthReplacement: true });
       }
       if (result?.ok !== true) return { ...fail(result?.code ?? 'credential_conflict'), credentialState: result?.credentialState ?? 'none' };
       consume(flow);
       flow.lastCredentialState = result.credentialState ?? 'clear-staged';
+      consentStore?.revokeDraft(flow.draftId);
       return { ok: true, credentialState: flow.lastCredentialState, credentialSaved: null };
     } finally {
       inFlight = false;
@@ -195,6 +204,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
       return fail('credential_conflict');
     }
     const inspection = await sdk.inspect(flow.providerId);
+    if (flowFor(frame) !== flow || !draftCurrent(flow)) return fail('credential_conflict');
     const credentialSource = inspection.present === true ? 'stored' : inspection.present === false ? 'none' : null;
     // present=null（文件不可读/冲突/未知类型）不能当作「没有凭据」开授权——宁可多确认一次。
     if (!credentialSource) return fail('credential_conflict');
@@ -215,12 +225,13 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
   }
 
   function cancel(frame) {
-    const flow = flows.get(frame.flowId);
-    if (flow) flows.delete(flow.flowId);
+    preparing.delete(frame.flowId);
+    flows.delete(frame.flowId);
     return { ok: true };
   }
 
   function closeDraft(frame) {
+    for (const [id, binding] of preparing) if (binding.draftId === frame.draftId) preparing.delete(id);
     for (const [id, flow] of flows) if (flow.draftId === frame.draftId) flows.delete(id);
     consentStore?.revokeDraft(frame.draftId);
     void sdk.disposeDraft(frame.draftId);
@@ -252,6 +263,7 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
   }
 
   function dispose() {
+    preparing.clear();
     for (const flow of flows.values()) void sdk.disposeDraft(flow.draftId);
     flows.clear();
     consentStore?.dispose();
