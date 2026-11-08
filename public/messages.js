@@ -28,6 +28,7 @@ import { sendCommand } from './api.js';
 import { updateSendState } from './composer.js';
 import { FILE_BLOCK_RE } from './attachments.js';
 import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
+import { thinkingDots } from './thinking-dots.js';
 import { planHistory } from './tool-history.js';
 import { addToGroup, createGroup, renderEntry } from './tool-view.js';
 import { renderMessageMeta } from './message-meta.js';
@@ -93,7 +94,10 @@ export function showWorking() {
   const t = ensureThread();
   const w = document.createElement('div');
   w.className = 'working';
-  w.innerHTML = '<span class="spinner"></span><span>Pi 正在处理…</span>';
+  const label = document.createElement('span');
+  label.className = 'working-label';
+  label.textContent = 'Pi 正在处理…';
+  w.append(thinkingDots(), label);
   t.appendChild(w);
   S.working = w;
   syncToolWorking();
@@ -110,20 +114,22 @@ export function moveWorkingToEnd() {
   if (S.working && S.thread) S.thread.appendChild(S.working);
 }
 
-/* 有工具在跑时把「Pi 正在处理…」收起来（§14）。
+/* 有工具在跑时收起「Pi 正在处理…」的**文案**（§14）。
  *
  * 时间线上的 running 条目本身已经把「正在工作」说清楚了，再挂一句
  * 「Pi 正在处理…」就是同一句话说两遍；更糟的是它会夹在工具条目之间反复出现，
  * 看起来像状态在横跳。
  *
- * 这里只做**弱化**（把指示器藏起来），不碰 streaming 状态机 ——
- * setStreaming / showWorking / hideWorking 的时序一行没改。
+ * 但等待指示器不能整个消失：调用工具本来就是 Agent 执行的一部分，动画应该
+ * 一直保持。所以这里只给 working 行加 `is-tool-active`，由 CSS 隐藏文案、
+ * 保留四点动画（见 thinking-dots.css）。
  *
- * 用 hidden 而不是 remove：working 元素会被 moveWorkingToEnd 反复搬位置，
- * 删掉它就得在每条路径上判断「要不要重建」，反而更容易漏。 */
+ * 不碰 streaming 状态机 —— setStreaming / showWorking / hideWorking 的时序
+ * 一行没改。用 class 而不是 remove：working 元素会被 moveWorkingToEnd 反复
+ * 搬位置，删掉它就得在每条路径上判断「要不要重建」，反而更容易漏。 */
 export function syncToolWorking() {
   if (!S.working) return;
-  S.working.hidden = hasRunning();
+  S.working.classList.toggle('is-tool-active', hasRunning());
 }
 
 export function setStreaming(on) {

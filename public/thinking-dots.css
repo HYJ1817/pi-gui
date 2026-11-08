@@ -1,0 +1,148 @@
+/* Claude Code / Claude Desktop 的「四点折叠」等待动画（复刻自参考录屏）。
+ *
+ * ---------- 录屏里到底发生了什么 ----------
+ *
+ * 不是三个点上下跳。录屏逐帧（60fps，75 帧 = 1.25s 一个循环）显示：
+ *
+ *   1. 四点静止成 2x2 方阵（约 10px 间距、4px 圆点）；
+ *   2. 左列两点向下收拢到左下角、右列两点向上收拢到右上角（竖着「合上」）；
+ *   3. 两对点各自沿水平方向摊开，回到方阵；
+ *   4. 短暂静止；
+ *   5. 换成另一条对角线：右上点向下收拢到右下、左下点向上收拢到左上；
+ *   6. 两对点再次水平摊开，回到方阵，循环。
+ *
+ * 每个移动的点走的是一条**圆角 L 形**：竖着加速冲向拐角，过弯时带一点向内的
+ * 鼓包，横着冲出去时先过冲约 1px 再软着陆。不是「竖一步、横一步」两段生硬的
+ * 位移。下面四组 keyframes 按测量出的时间轴逐段采样，线性插值足够密，肉眼看
+ * 是连续的；四个点各自一条时间线，不是共用一个 loader 关键帧。
+ *
+ * ---------- 时间轴（1.25s）----------
+ *
+ *   0%    - 7%    方阵（静止）
+ *   7%    - 49%   第一对：左上 -> 左下 -> 右下；右下 -> 右上 -> 左上
+ *   49%   - 57%   方阵（静止）
+ *   57%   - 100%  第二对：右上 -> 右下 -> 左下；左下 -> 左上 -> 右上
+ *
+ * 循环接缝在两段行程都结束后的方阵上：四个点完全相同，所以即使循环重启时
+ * 元素的身份发生轮换，画面上也看不出跳变。
+ *
+ * ---------- 约束 ----------
+ *
+ * - 容器固定 14x14px（原来的 spinner 是 13x13px，占位基本不变），只用
+ *   transform，不触发回流；
+ * - 点本身保持正圆（不套 3D 透视，否则会变成椭圆 —— 录屏里始终是圆的）；
+ * - 不缩放、不变色，重叠处自然变亮就是录屏里的效果；
+ * - prefers-reduced-motion 下停在 2x2 方阵，仍能表达「正在等待」；
+ * - 深色主题用 Claude 珊瑚色 #d97757，浅色主题压深一档保证对比度。 */
+
+.thinking-dots {
+  /* 录屏实测：圆点直径约 4px、中心间距约 10px。 */
+  --td-dot: 4px;
+  --td-step: 10px;
+  --td-color: #d97757;
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: calc(var(--td-step) + var(--td-dot));
+  height: calc(var(--td-step) + var(--td-dot));
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .thinking-dots {
+  --td-color: #c15f3c;
+}
+
+.thinking-dots > span {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--td-dot);
+  height: var(--td-dot);
+  border-radius: 50%;
+  background: var(--td-color);
+  will-change: transform;
+  animation-duration: 1.25s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.thinking-dots > span:nth-child(2) { left: var(--td-step); }
+.thinking-dots > span:nth-child(3) { top: var(--td-step); }
+.thinking-dots > span:nth-child(4) { left: var(--td-step); top: var(--td-step); }
+
+.thinking-dots > span:nth-child(1) { animation-name: thinking-dots-a; }
+.thinking-dots > span:nth-child(2) { animation-name: thinking-dots-b; }
+.thinking-dots > span:nth-child(3) { animation-name: thinking-dots-c; }
+.thinking-dots > span:nth-child(4) { animation-name: thinking-dots-d; }
+
+/* 左上 -> 左下 -> 右下（第一段）。竖着加速下冲，过左下角时向右鼓一点，
+ * 横着冲向右侧时先略低于底边、再回到原位。 */
+@keyframes thinking-dots-a {
+  0%, 7% { transform: translate(0, 0); }
+  13% { transform: translate(calc(var(--td-step) * 0.06), calc(var(--td-step) * 0.19)); }
+  19% { transform: translate(calc(var(--td-step) * 0.14), calc(var(--td-step) * 0.50)); }
+  24% { transform: translate(calc(var(--td-step) * 0.21), calc(var(--td-step) * 0.86)); }
+  27% { transform: translate(calc(var(--td-step) * 0.24), calc(var(--td-step) * 1.02)); }
+  31% { transform: translate(calc(var(--td-step) * 0.55), calc(var(--td-step) * 1.11)); }
+  37% { transform: translate(calc(var(--td-step) * 0.83), calc(var(--td-step) * 1.08)); }
+  43% { transform: translate(calc(var(--td-step) * 0.96), calc(var(--td-step) * 1.02)); }
+  49%, 100% { transform: translate(var(--td-step), var(--td-step)); }
+}
+
+/* 右上 -> 右下 -> 左下（第二段），与 a 镜像：向内的鼓包在左侧。 */
+@keyframes thinking-dots-b {
+  0%, 57% { transform: translate(0, 0); }
+  63% { transform: translate(calc(var(--td-step) * -0.06), calc(var(--td-step) * 0.19)); }
+  69% { transform: translate(calc(var(--td-step) * -0.14), calc(var(--td-step) * 0.50)); }
+  74% { transform: translate(calc(var(--td-step) * -0.21), calc(var(--td-step) * 0.86)); }
+  77% { transform: translate(calc(var(--td-step) * -0.24), calc(var(--td-step) * 1.02)); }
+  81% { transform: translate(calc(var(--td-step) * -0.55), calc(var(--td-step) * 1.11)); }
+  87% { transform: translate(calc(var(--td-step) * -0.83), calc(var(--td-step) * 1.08)); }
+  93% { transform: translate(calc(var(--td-step) * -0.96), calc(var(--td-step) * 1.02)); }
+  100% { transform: translate(calc(var(--td-step) * -1), var(--td-step)); }
+}
+
+/* 左下 -> 左上 -> 右上（第二段），与 b 同拍。 */
+@keyframes thinking-dots-c {
+  0%, 57% { transform: translate(0, 0); }
+  63% { transform: translate(calc(var(--td-step) * 0.06), calc(var(--td-step) * -0.19)); }
+  69% { transform: translate(calc(var(--td-step) * 0.14), calc(var(--td-step) * -0.50)); }
+  74% { transform: translate(calc(var(--td-step) * 0.21), calc(var(--td-step) * -0.86)); }
+  77% { transform: translate(calc(var(--td-step) * 0.24), calc(var(--td-step) * -1.02)); }
+  81% { transform: translate(calc(var(--td-step) * 0.55), calc(var(--td-step) * -1.11)); }
+  87% { transform: translate(calc(var(--td-step) * 0.83), calc(var(--td-step) * -1.08)); }
+  93% { transform: translate(calc(var(--td-step) * 0.96), calc(var(--td-step) * -1.02)); }
+  100% { transform: translate(var(--td-step), calc(var(--td-step) * -1)); }
+}
+
+/* 右下 -> 右上 -> 左上（第一段），与 a 同拍、镜像。 */
+@keyframes thinking-dots-d {
+  0%, 7% { transform: translate(0, 0); }
+  13% { transform: translate(calc(var(--td-step) * -0.06), calc(var(--td-step) * -0.19)); }
+  19% { transform: translate(calc(var(--td-step) * -0.14), calc(var(--td-step) * -0.50)); }
+  24% { transform: translate(calc(var(--td-step) * -0.21), calc(var(--td-step) * -0.86)); }
+  27% { transform: translate(calc(var(--td-step) * -0.24), calc(var(--td-step) * -1.02)); }
+  31% { transform: translate(calc(var(--td-step) * -0.55), calc(var(--td-step) * -1.11)); }
+  37% { transform: translate(calc(var(--td-step) * -0.83), calc(var(--td-step) * -1.08)); }
+  43% { transform: translate(calc(var(--td-step) * -0.96), calc(var(--td-step) * -1.02)); }
+  49%, 100% { transform: translate(calc(var(--td-step) * -1), calc(var(--td-step) * -1)); }
+}
+
+.thinking-dots[hidden] { display: none !important; }
+
+/* ---------- 接入点 ---------- */
+
+/* 聊天流：工具执行时保留动画，只收起会与工具行重复的文案。 */
+.working.is-tool-active .working-label { display: none; }
+
+/* 并行会话头：状态行是 11px 文本，点组向下对齐到文字中段。 */
+.runtime-conversation .rtc-head > .rtc-state .thinking-dots {
+  margin-right: 7px;
+  vertical-align: -2px;
+}
+
+/* 尊重系统设置：不播放折叠，留在完整的 2x2 方阵。 */
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dots > span { animation: none !important; }
+}

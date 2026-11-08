@@ -50,6 +50,7 @@ import { openModal } from './ui/modal.js';
 import { md, renderVizCardHtml } from './markdown.js';
 import { createRuntimePicker } from './runtime-picker.js';
 import { thinkingAvailability } from './thinking-availability.js';
+import { thinkingDots } from './thinking-dots.js';
 import {
   extractStableLocator,
   sameStableLocator,
@@ -236,6 +237,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   title.setAttribute('role', 'heading'); title.setAttribute('aria-level', '2');
   const state = el('div', 'rtc-state');
   state.setAttribute('role', 'status');
+  /* 状态行 = 动画 + 文本。点组是**稳定子节点**，不能每次 draw 用 textContent
+   * 重写整行 —— 那会把动画元素一起删掉，每来一个 delta 动画就从头开始。 */
+  const stateDots = thinkingDots();
+  stateDots.hidden = true;
+  const stateText = document.createTextNode('');
+  state.append(stateDots, stateText);
   const resources = el('div', 'runtime-resource-count'); resources.setAttribute('role', 'status');
   const controls = el('div', 'rtc-controls');
   head.append(title, state, resources, controls); root.append(head);
@@ -515,6 +522,21 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     return `${life}${act ? ' · ' + act : ''}${reason}`;
   }
 
+  /* 只有「真的在执行」才让四点动：空闲、正在停止、报错、待审批、历史视图都停。
+   * 判定每次都从 store 现读当前会话，不存模块级开关 —— 切换会话时另一条会话
+   * 的状态不会被覆盖，切回来时动画仍由它自己的 activity 决定。 */
+  function showsWorkingDots(item, record, view) {
+    if (view.history || view.pendingHistory || !item || item.error) return false;
+    if (record?.approvals?.length) return false;
+    return item.lifecycle === 'starting'
+      || (item.lifecycle === 'ready' && item.activity === 'running');
+  }
+
+  function setState(text, showDots) {
+    stateText.nodeValue = text;
+    stateDots.hidden = !showDots;
+  }
+
   function saveScroll() { if (id && !current().history) scrollTops.set(id, output.scrollTop); }
   function matchesLocator(item, locator) {
     return item?.conversationId === locator.conversationId && item.nativeSessionId === locator.nativeSessionId
@@ -588,12 +610,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     drawModels(r, view);
     resources.textContent = resourceText();
     notice.textContent = view.notice;
-    if (view.history) state.textContent = formatHistoryState(view.history, r?.owner);
-    else if (view.pendingHistory) state.textContent = '读取历史…';
+    if (view.history) setState(formatHistoryState(view.history, r?.owner), false);
+    else if (view.pendingHistory) setState('读取历史…', false);
     else {
       /* 正文流被截断时说出来 —— 不声不响地少显示一段，用户会以为那就是全部。 */
       const lifecycle = statusLine(r?.item) || (r ? '' : '这条会话还没有记录');
-      state.textContent = lifecycle + (r?.truncated ? `${lifecycle ? ' · ' : ''}仅显示最近输出` : '');
+      setState(lifecycle + (r?.truncated ? `${lifecycle ? ' · ' : ''}仅显示最近输出` : ''), showsWorkingDots(r?.item, r, view));
     }
 
     if (view.history) {
