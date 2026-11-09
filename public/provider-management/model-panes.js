@@ -54,6 +54,22 @@ function capabilityBadges(model) {
   return chips;
 }
 
+/* 显示回退：发现/缓存候选的 name/容量等元数据是服务端白名单化后的只读值，
+ * 只用于展示（行标题、容量徽标），不参与编辑与持久化比较。 */
+function displayOf(model) {
+  const fallback = model.displayValues || {};
+  return {
+    ...model,
+    name: model.name || fallback.name || null,
+    contextWindow: model.contextWindow || fallback.contextWindow || null,
+    maxTokens: model.maxTokens || fallback.maxTokens || null,
+    reasoning: model.reasoning ?? fallback.reasoning ?? null,
+    input: Array.isArray(model.input) && model.input.length
+      ? model.input
+      : Array.isArray(fallback.input) && fallback.input.length ? fallback.input : null,
+  };
+}
+
 function sourceBadge(model) {
   return h('span', { class: `pm-model-source is-${model.source}`, text: SOURCE_LABEL[model.source] || '模型' });
 }
@@ -141,16 +157,17 @@ function discoveryNote(state, { onRefresh, onAuthorize, onTest, onCancel }) {
 
 function candidateRow(model, draft, dispatch, errors) {
   const selected = draft.order.includes(model.modelId);
+  const shown = displayOf(model);
   const checkbox = h('input', {
     type: 'checkbox',
     class: 'pm-checkbox',
     checked: selected,
     'data-model-check': model.modelId,
     'data-focus-key': `candidate:${model.modelId}`,
-    'aria-label': `${selected ? '取消选择' : '选择'}模型 ${model.name || model.modelId}`,
+    'aria-label': `${selected ? '取消选择' : '选择'}模型 ${shown.name || model.modelId}`,
   });
   checkbox.addEventListener('change', () => dispatch({ type: 'toggle-model', modelId: model.modelId, selected: checkbox.checked }));
-  const badges = capabilityBadges(model);
+  const badges = capabilityBadges(shown);
   const modelError = errors?.[model.modelId];
   return h('label', {
     class: `pm-model-row pm-candidate-row${selected ? ' is-selected' : ''}${modelError ? ' has-error' : ''}`,
@@ -159,12 +176,12 @@ function candidateRow(model, draft, dispatch, errors) {
   checkbox,
   h('span', { class: 'pm-model-row-copy' },
     h('span', { class: 'pm-model-row-title' },
-      h('span', { class: 'pm-model-name', text: model.name || model.modelId }),
+      h('span', { class: 'pm-model-name', text: shown.name || model.modelId }),
       sourceBadge(model),
       modelError ? h('span', { class: 'pm-model-error-dot', title: '该模型参数有误', text: '!' }) : null,
     ),
     h('span', { class: 'pm-model-row-sub' },
-      h('span', { class: 'pm-model-id', text: model.name ? model.modelId : '' }),
+      h('span', { class: 'pm-model-id', text: shown.name ? model.modelId : '' }),
       ...badges.map(text => h('span', { class: 'pm-model-chip', text })),
     ),
     modelError ? h('span', { class: 'pm-model-inline-error', text: Object.values(modelError)[0] }) : null,
@@ -278,8 +295,9 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
 }
 
 function chosenRow(model, index, total, draft, dispatch, errors, expanded, reorderLocked, actions) {
-  const badges = capabilityBadges(model);
-  const remove = iconButton(`从已选模型移除 ${model.name || model.modelId}`, 'close', () => actions.onRemove(model), 'pm-remove-model');
+  const shown = displayOf(model);
+  const badges = capabilityBadges(shown);
+  const remove = iconButton(`从已选模型移除 ${shown.name || model.modelId}`, 'close', () => actions.onRemove(model), 'pm-remove-model');
   remove.dataset.modelRemove = model.modelId;
   const advancedToggle = h('button', {
     type: 'button',
@@ -294,7 +312,7 @@ function chosenRow(model, index, total, draft, dispatch, errors, expanded, reord
     type: 'button',
     class: 'pm-drag-handle',
     draggable: !reorderLocked,
-    'aria-label': `拖动排序 ${model.name || model.modelId}；或用上下方向键移动`,
+    'aria-label': `拖动排序 ${shown.name || model.modelId}；或用上下方向键移动`,
     'data-model-handle': model.modelId,
     'data-focus-key': `chosen:${model.modelId}`,
     title: reorderLocked ? '清空右侧搜索后可排序' : '拖动排序，或用方向键移动',
@@ -309,7 +327,7 @@ function chosenRow(model, index, total, draft, dispatch, errors, expanded, reord
       modelId: model.modelId,
       offset: event.key === 'Home' ? -total : event.key === 'End' ? total : event.key === 'ArrowUp' ? -1 : 1,
     });
-    actions.announce(`模型 ${model.name || model.modelId} 已移动到第 ${event.key === 'Home' ? 1 : event.key === 'End' ? total : Math.max(1, Math.min(total, index + (event.key === 'ArrowUp' ? 0 : 2)))} 位`);
+    actions.announce(`模型 ${shown.name || model.modelId} 已移动到第 ${event.key === 'Home' ? 1 : event.key === 'End' ? total : Math.max(1, Math.min(total, index + (event.key === 'ArrowUp' ? 0 : 2)))} 位`);
   });
   const row = h('div', {
     class: `pm-chosen-row${expanded ? ' is-expanded' : ''}${errors?.[model.modelId] ? ' has-error' : ''}`,
@@ -320,11 +338,11 @@ function chosenRow(model, index, total, draft, dispatch, errors, expanded, reord
   h('span', { class: 'pm-chosen-index', 'aria-hidden': 'true', text: String(index + 1) }),
   h('div', { class: 'pm-chosen-copy' },
     h('div', { class: 'pm-chosen-title' },
-      h('span', { class: 'pm-model-name', text: model.name || model.modelId }),
+      h('span', { class: 'pm-model-name', text: shown.name || model.modelId }),
       sourceBadge(model),
     ),
     h('div', { class: 'pm-chosen-sub' },
-      h('span', { class: 'pm-model-id', text: model.name ? model.modelId : '' }),
+      h('span', { class: 'pm-model-id', text: shown.name ? model.modelId : '' }),
       ...badges.map(text => h('span', { class: 'pm-model-chip', text })),
     ),
     errors?.[model.modelId] ? h('div', { class: 'pm-model-inline-error', text: Object.values(errors[model.modelId])[0] }) : null,

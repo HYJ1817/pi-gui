@@ -55,11 +55,23 @@ export function createModelRecord(raw = {}, { manual = false } = {}) {
     : raw.configSource === 'builtin-override' ? 'builtin-override'
       : raw.configSource === 'remote' ? 'remote'
         : raw.configSource === 'cache' ? 'cache' : 'configured';
+  /* P6：发现/缓存候选带着服务端白名单化后的显示元数据（name/容量/推理/输入）。
+   * 它们只用于展示回退，不进入 baseline/editableOverrides，也不会因为没有
+   * 用户编辑而变成持久化覆盖。 */
+  const displayValues = {
+    name: typeof effective.name === 'string' && effective.name.length > 0 && effective.name.length <= 200
+      && !/[\u0000-\u001f\u007f]/u.test(effective.name) ? effective.name : null,
+    contextWindow: positiveOrNull(effective.contextWindow),
+    maxTokens: positiveOrNull(effective.maxTokens),
+    reasoning: tri(effective.reasoning),
+    input: copyInput(effective.input),
+  };
   return {
     modelId: String(raw.modelId || '').trim(),
     source,
     persisted: (!manual && source === 'configured') || source === 'builtin-override',
     baseline,
+    displayValues,
     name: baseline.name,
     contextWindow: baseline.contextWindow,
     maxTokens: baseline.maxTokens,
@@ -595,6 +607,16 @@ export function mergeFetchedModels(draft, incoming) {
   return finish({ ...draft, models, requestIds: {} });
 }
 
+/* 用户重新勾选（包括刷新后重新出现的候选）时撤销待删除记录。 */
+function withoutPendingRemoval(draft, ids) {
+  if (!draft?.removed?.length || !Array.isArray(ids) || !ids.length) return draft;
+  const drop = new Set(ids.filter(id => draft.removed.includes(id)));
+  if (!drop.size) return draft;
+  const removedModels = { ...(draft.removedModels || {}) };
+  for (const id of drop) delete removedModels[id];
+  return { ...draft, removed: draft.removed.filter(id => !drop.has(id)), removedModels };
+}
+
 function reduce(draft, action) {
   switch (action.type) {
     case 'field': {
@@ -635,17 +657,24 @@ function reduce(draft, action) {
       return finish({ ...draft, nativeStage: null, requestIds: {} });
     }
     case 'toggle-model': {
+      /* P6：重新勾选一个曾经移除、又被刷新重新带回候选的模型时，必须撤销
+       * 待删除补丁；否则同一 ID 同时出现在 remove 补丁与 selectedModelIds 里，
+       * 服务端会以 invalid_request 拒绝保存。 */
+      const base = action.selected === true ? withoutPendingRemoval(draft, [action.modelId]) : draft;
       return finish({
-        ...draft,
-        order: toggleSelection(draft.order, action.modelId, action.selected),
+        ...base,
+        order: toggleSelection(base.order, action.modelId, action.selected),
         touchedSelection: true,
         requestIds: {},
       });
     }
     case 'select-visible': {
+      const base = action.selected === true
+        ? withoutPendingRemoval(draft, action.visibleIds.filter(id => !draft.order.includes(id)))
+        : draft;
       return finish({
-        ...draft,
-        order: setVisibleSelection(draft.order, action.visibleIds, action.selected, draft.models.map(model => model.modelId)),
+        ...base,
+        order: setVisibleSelection(base.order, action.visibleIds, action.selected, base.models.map(model => model.modelId)),
         touchedSelection: true,
         requestIds: {},
       });
