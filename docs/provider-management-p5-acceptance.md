@@ -88,8 +88,8 @@ P5 从 `68b57c4d2ae46dba11d6b842217ccae43377886e`（`main`，P0–P4 与 P3-C �
 
 | 套件 | 结果 | 说明 |
 | --- | --- | --- |
-| `tests/provider-management-p5.cjs` | 24/24 | 新增：发现 202 轮询/迟到结果、同步事实与迟到守卫、暂存与关闭、未确认/失败凭据的真实文案、存储资格、目标变化、冲突后撤销旧暂存、OAuth 视图与菜单、页面同步横幅、管理关闭、生产 API 接线、草稿 consent 投影边界、发现模式能力过滤、load_failed 终态 |
-| `npm run test:provider-management` | 124/124 | 合同/store/HTTP/SDK/P4 UI/P5 六份套件 |
+| `tests/provider-management-p5.cjs` | 43/43 | 原有 24 条 + 本轮 19 条异步竞态回归（FIX-01/02/03，见第七节）：发现 202 轮询/迟到结果、同步事实与迟到守卫、暂存与关闭、未确认/失败凭据的真实文案、存储资格、目标变化、冲突后撤销旧暂存、OAuth 视图与菜单、页面同步横幅、管理关闭、生产 API 接线、草稿 consent 投影边界、发现模式能力过滤、load_failed 终态、旧页面关闭回调隔离 |
+| `npm run test:provider-management` | 143/143 | 合同/store/HTTP/SDK/P4 UI/P5 六份套件 |
 | `npm run test:provider-p2` | 39/39 + 5/5 + 47/47 | 网络策略、凭据开窗、真实 Electron 桌面；桌面含 1 条 UNVERIFIED 持久化检查，正常沙箱启动失败后回退 `--no-sandbox` |
 | `tests/smoke.cjs` | 1345/1345 | 保存提示改为「Runtime 生效状态待核验」后同步更新断言 |
 | `tests/provider-auth.cjs` | 109/109 | OAuth 路径未改 |
@@ -102,30 +102,33 @@ P5 从 `68b57c4d2ae46dba11d6b842217ccae43377886e`（`main`，P0–P4 与 P3-C �
 ### 完整 canonical
 
 本地 canonical 计划为 241 个叶子（`core 165 / ui 24 / security 27 / native 4 / faults 21`，
-`node scripts/run-test-group.mjs --validate`）。完整 `npm test` 在冻结工作区上运行，**退出码 1**。
+`node scripts/run-test-group.mjs --validate`）。完整 `npm test` 在本次整改工作区上运行
+（日志 `.shots/npm-test-p5-fix.log`），**退出码 1**。
 `pretest` 通过（`file-size-report 11/11`，`test:ci` 校验计划 241 个叶子、覆盖精确）；`test` 链在
 `session-revert-sacl-witness` 之前的 36 条命令全部通过（含 `theme 47/47`、`object confirmation 45/45`），
 随后停在 `node tests/session-revert-sacl-witness.cjs`，输出 `witness_unavailable` 并以 1 退出。
 
 失败原因是**本机环境**，不是 P5 代码：该套件经 `h.one()` 启动
 `powershell.exe -File tests/fixtures/session-revert-inplace-native.ps1`，而本机 PowerShell 执行策略
-拒绝加载仓库内未签名的脚本（`NotSigned`，`UnauthorizedAccess`）。把同一脚本复制到 `%TEMP%` 后可以
+拒绝加载仓库内未签名的脚本（`UnauthorizedAccess`；此前同一环境也记录过 `NotSigned`）。把同一
+脚本复制到 `%TEMP%` 后可以
 运行并返回 `{"phase":"privilege","auditEnabled":false,"auditError":1300}`，即本应进入
 `audit_privilege_unavailable` 的跳过分支。P5 未修改该套件、fixture 或执行策略；没有为了变绿而修改
 断言或放宽系统安全策略。
 
 为区分环境与产品，按 `package.json` 的同一链顺序补跑 `sacl-witness` 之后的 125 条命令（逐条记录
-退出码，日志 `.shots/npm-test-p5-tail.log`）：**124 条退出 0，1 条退出 1**。唯一失败是
-`tests/session-revert-object-profile.cjs` 的 `54/55`，失败项同样调用上述未签名 fixture，属于同一
-环境阻塞。依赖该 fixture 的另外 5 条命令（`session-revert-inplace.cjs`、
+退出码，日志 `.shots/npm-test-p5-tail.log`，15:53–16:31）：**124 条退出 0，1 条退出 1**。唯一失败
+是 `tests/session-revert-object-profile.cjs` 的 `54/55`，失败项同样调用上述未签名 fixture 的
+`setup`，属于同一环境阻塞。依赖该 fixture 的另外 5 条命令（`session-revert-inplace.cjs`、
 `session-revert-inplace-safety.cjs`、`object-writer`、`object-faults`、`object-witness`）未纳入补跑；
 其中 `session-revert-inplace.cjs` 单独运行的结果为 `2/28; failed=26`，26 条失败均因原生脚本无法
 启动。这些套件与 P5 的文件和功能无交集。
 
-补跑中的关键数字：`test:provider-management 124/124`、`test:provider-p2 39/39 + 5/5 + 47/47`
-（1 条 `UNVERIFIED`）、`smoke 1345/1345`、`runtime-models 52/52`、`model-fallback 74/74`、
-`ui-ia 27/27`、`ux-state 15/15`、`theme 47/47`，其余套件见日志。跳过断言不计入分子分母；这些是
-各套件自身的输出，未把补跑结果冒充一次完整 `npm test`。
+该补跑早于本轮最后几处前端改动；其中与本轮改动直接相关的命令已在最终代码上复跑：
+`test:provider-management 143/143`（补跑日志中为 124/124）、`smoke 1345/1345`。其余关键数字：
+`test:provider-p2 39/39 + 5/5 + 47/47`（1 条 `UNVERIFIED`）、`runtime-models 52/52`、
+`model-fallback 74/74`、`ui-ia 27/27`、`ux-state 15/15`、`theme 47/47`，其余套件见日志。
+跳过断言不计入分子分母；这些是各套件自身的输出，未把补跑结果冒充一次完整 `npm test`。
 
 ## 五、真实渲染证据
 
@@ -169,25 +172,23 @@ OAuth 同槽二次确认、主题跟随与窄窗在**真实 Electron（`--no-san
 **正常沙箱未验证**。按任务要求，`--no-sandbox` 的运行结果不能当作正常沙箱验收；本报告不据此
 声称正常沙箱通过。Chromium 截图同样不是 Electron 证据。
 
-构建产物已按 AGENTS.md 重建（`npm run build:app -- --rebuild`，内含 `build-exe.mjs`，退出 0）：
+构建产物已按 AGENTS.md 重建：`PI_GUI_ELECTRON_ZIP_DIR=... npm run build:app -- --rebuild` 与
+`npm run build:exe` 均退出 0（最终日志 `.shots/build-p5-fix2.log`）：
 
 | 产物 | 大小 | 核对 |
 | --- | --- | --- |
-| `dist-app/Pi GUI-win32-x64` | 345,925,804 bytes（416 files） | `resources/app/public/provider-management/` 含新增的 `credentials.js`、`sync.js` |
-| `build/Pi GUI.exe` | 103,722,496 bytes，SHA-256 `00673dd939e13dec697add2a945546444a33a814dd36c7f1a91d547c9f928015` | — |
+| `dist-app/Pi GUI-win32-x64` | 345,937,869 bytes（416 files） | `resources/app/public/` 下 4 个本轮变更前端文件与源码逐字节相同 |
+| `build/Pi GUI.exe` | 103,734,272 bytes，SHA-256 `4715a49eeafc7c4b32a5976e0dd4a642f0cc63a3fc19e182790b229d72e25950` | 含本轮 `openAttempt`、`liveDraftOwners`、`cancel_unconfirmed`、`providersPageEpoch` |
 
-打包核对：10 个变更的前端文件在 `resources/app/` 下与源码**逐字节相同**；`electron/preload.cjs`、
-`electron/provider-credentials.cjs` 同样逐字节相同；后端已打包进 `resources/app/server.cjs`，
-其中可见 P3-B/P3-C 的接线与 `nativeCredentialPersistence`。打包后的前端文件也包含本轮文案：
-`providers.js` 含「Runtime 待生效」「配置已保存，Runtime 生效状态见下方同步状态」；
-`connection-fields.js` 含「新密钥已暂存」；`sync.js` 含「核验完成，仍有目标待生效」；`state.js` 含
-`apply-staged`/`clear-native`；`preload.cjs` 与 `provider-credentials.cjs` 含
-`provider-credential-close-draft`。本轮**没有启动打包后的应用**做交互验收，构建日志为
-`.shots/build-p5.log`。
+打包核对：`credentials.js`、`dialog.js`、`discovery.js`、`providers.js` 在 `resources/app/` 下与源码
+**逐字节相同**；`electron/preload.cjs`、`electron/provider-credentials.cjs` 与上一轮一致；后端打包在
+`resources/app/server.cjs`。打包后的前端文件与 SEA 可执行文件都包含本轮竞态守卫标记。本轮
+**没有启动打包后的应用**做交互验收。
 
 首次重打包在下载 Electron 44.4.3 时遇到 GitHub HTTP 504；随后使用仓库既有的离线开关
 `PI_GUI_ELECTRON_ZIP_DIR`，指向本机 Electron 缓存中由先前 `npm install` 校验并解压过的
-`electron-v44.4.3-win32-x64.zip` 完成打包，没有新增依赖或新的网络行为。
+`electron-v44.4.3-win32-x64.zip` 完成打包，没有新增依赖或新的网络行为。本轮整改后的两次重建
+继续使用同一离线开关与已验证 zip，没有新的网络下载。
 
 本轮明确未验证或不能作为通过证据的项：
 
@@ -199,12 +200,155 @@ OAuth 同槽二次确认、主题跟随与窄窗在**真实 Electron（`--no-san
 - 真实 OAuth 登录流程；P5 未改登录路径，只用回归确认订阅视图不出现密钥入口。
 - 继承选择（`selectedModelIds === null`）的已知限制仍由 P4 的确认流程处理，P5 没有改变该行为。
 
-## 七、文件与回滚
+## 七、独立验收后的异步竞态整改（FIX-01/02/03）
 
-按回滚边界分成三个提交：
+独立验收以 `8aa69fcba8fca1dece36eec1717f36110cb22fcb` 为基线，确认 P5 主集成完成，同时指出两组
+Important 异步竞态和一处同步控制器复核项。本轮直接在同一 `codex/provider-management-p5` 分支修复，
+不改变 P4 视觉与交互基线、不新增阶段、不修改版本号、不发版；P2 私有桥与 P3 的授权、单飞、撤销、
+存储安全条件没有放宽。
 
-- 生产代码：`9b7763472166acde5d97837539e5902559e667af`
-- 测试与测试入口：`707352a2cc74dcd6f1f7cd436fd82f295bc16180`
+### FIX-01：关闭/换目标后，迟到的凭据与草稿响应
+
+**可复现行为**
+
+- 点「配置 API Key」后草稿请求迟迟不返回，关闭弹窗；旧响应回来时仍会继续打开受限输入窗。
+- 草稿请求在途时修改认证来源（`$NAME` 引用）；旧响应仍把服务端 `draftId` 写回当前弹窗，下一次
+  保存复用旧目标句柄。
+- 旧弹窗的迟到清理会把新弹窗正在使用的同名草稿 `closeDraft` 掉，连暂存凭据一起删除。
+- 连点两次「配置 API Key」，在 `bridge.open()` 返回前会开出两个受限窗。
+- 提交请求在途时换目标，旧提交的成功回执会关闭弹窗并显示为当前目标已保存。
+- 目标变化时仅调用控制器 `cancel()` 时，仍在 `bridge.open()` 里的旧请求会在返回后重新挂起等待，
+  占住凭据单飞槽直到 180 秒超时。
+
+**根因**
+
+- `ensureDraftHandle()` 在 `await saveProviderDraft()` 返回后直接改写 `draftHandle`，没有核对
+  关闭/换目标/换草稿代次；`openCredentialSheet()` 与 `authorizeDesktopDiscovery()` 在关键 await
+  之后也没有复核身份。
+- 凭据控制器只有 `waiter` 单飞，没有覆盖 `bridge.open()` 尚未返回的窗口；`dispose()` 也没有兑现
+  等待者；`cancel()` 不会让在途的 `open()` 失效。
+- 迟到的服务端草稿没有统一清理入口，也无法区分「旧响应创建的草稿」与「新流程正在使用的草稿」。
+- 提交回执没有代次校验，旧结果可以关闭/改写新草稿的状态。
+
+**修复**
+
+- 弹窗级 `lifecycleEpoch` 与目标签名：撤销草稿、换目标、关闭弹窗都递增代次；`ensureDraftHandle`
+  在 await 前后核对代次与目标，过期响应只清理自己的服务端草稿，不写回当前界面。
+- 草稿写请求通过 `draftSaveChain` 串行化，避免两个在途请求互相覆盖句柄与 revision。
+- 模块级 `liveDraftOwners` 登记：草稿句柄被当前流程持有时，迟到的 `closeLateDraft()` 不撤销它；
+  新流程接管同名草稿后，旧响应不会再删除新流程的暂存。
+- 凭据控制器增加 `opening`、`openAttempt`、`disposed`：`open()` 单飞；`dispose()` 取消并兑现
+  等待者；`cancel()` 使在途 `open()` 立即过期，不再重新进入等待。
+- 提交回执在关闭后直接丢弃；目标/认证来源在提交期间变化时只显示「保存结果未应用到当前草稿」，
+  不关闭弹窗、不宣称新目标已保存。
+
+### FIX-02：取消/关闭后迟到的 discover/test 202
+
+**可复现行为**
+
+- `/discover` 或 `/test` 已发出、202 尚未返回时取消、关窗、切服务、改端点、改认证来源或撤销授权；
+  202 迟到后本地丢弃结果，但服务端操作继续运行并占用该 provider 的单飞槽。
+- 迟到结果仍可能被轮询或覆盖新的候选/测试事实；旧测试操作在状态里留下无 `operationId` 的
+  「正在测试」。
+- 取消请求失败（`not_found`、`config_conflict`、网络）可能抛到调用方，或把「已请求取消」
+  直接说成「已停止」。
+
+**根因**
+
+- 两处「结果返回后 `isCurrent()` 不成立」的路径只 `return state`，没有取消刚拿到的 `operationId`。
+- `abortActiveOperation()` 只处理 discover 槽；`configure()` 只在发现状态为 refreshing/debouncing
+  时取消；`revoke()` 与测试流程没有统一撤销测试槽。
+- 取消结果被丢弃，无法区分「已请求」与「后端已确认停止」。
+
+**修复**
+
+- `cancelOperation()` 每次使用新的 `newRequestId('cancel')`，返回结果且绝不抛异常。
+- discover/test 的迟到 202 立即取消；取消失败时保留保守文案。
+- `abortActiveOperations()` 同时撤掉 discover 与 test 两个槽；`configure()` 在目标/认证/能力变化时
+  取消两个槽；`revoke()`、`poll()` 身份失效、目标句柄变化也取消；被顶掉的测试状态立即退出 running。
+- `cancel()` 先显示「已请求取消，等待后端确认停止」；只有明确 `ok:true`、`not_found` 或
+  `config_conflict` 才收敛为「已取消」，网络失败保留「后端未确认停止」。
+- 没有缩短后端取消等待、没有放宽单飞或跳过服务端校验。前端只能确认「发出了取消请求」；
+  没有停止证明时资源是否释放仍标为未确认。
+
+### FIX-03：Runtime 同步控制器的旧回调
+
+**复核结论与修复**
+
+- 控制器本身已有 `generation` 守卫与 `state.saving` 单飞；页面层缺少生命周期代次：关闭设置页后，
+  旧 `/sync` 续体仍可能清掉新页面的 `syncController`、刷新页面、对旧 revision 弹错误 toast，
+  或继续写已销毁的标题/原因节点。
+- 修复：`providersPageEpoch` 在每次打开/关闭时递增；订阅回调只在当前页且节点仍 `isConnected`
+  时写 DOM；核验结束后先确认页面代次，再重读快照；若快照 revision 已变化，旧结果不再触发通知；
+  关闭回调只在仍是当前页时才关闭菜单、停止全局控制器并清空列表/状态节点，避免旧页面
+  关闭回调停掉或污染新页面。
+- 重复点击仍由既有 `syncController` 单飞与 `state.saving` 双重保证；本轮没有改成并行请求。
+
+### 新增回归与结果
+
+全部竞态回归使用可控 Promise（`deferred()`）在任意时刻放行响应，不用固定 sleep 等待竞态；
+`waitFor` 只等待可观察状态。新增 19 条：
+
+| 类别 | 测试 |
+| --- | --- |
+| FIX-01（7） | `closing the dialog while the draft request is pending never opens the credential window`；`changing the authentication target while the draft request is pending cannot revive the old handle`；`a late draft cleanup never revokes the draft a newer dialog is using`；`rapid credential trigger clicks open only one restricted window`；`a save response that arrives after the target changed is not shown as the new draft success`；`disposing the credential controller settles a pending open and refuses a new window`；`cancelling the controller while the window open request is pending settles as cancelled` |
+| FIX-02（8） | `a discover 202 that arrives after cancel is cancelled with a fresh request id`；`a test 202 that arrives after the discovery controller is disposed is cancelled`；`closing the dialog while a connection test is pending cancels the late 202`；`revoking discovery authorization while a test request is pending cancels the late 202`；`changing the authentication source while a test request is pending cancels the late 202`；`a new discovery during a pending connection test cancels the test and clears its running state`；`cancel followed immediately by a new discovery isolates the old late operation`；`cancelling after the 202 cancels the running operation and drops its late result` |
+| FIX-03（4） | `a sync verification that finishes after the page closes cannot touch the reopened page`；`a sync result for an older revision is not shown as applied on the new configuration`；`a sync failure from an older revision is not reported on the new configuration`；`an old page close callback cannot stop the reopened page sync controller` |
+
+执行结果：
+
+| 命令 | 结果 |
+| --- | --- |
+| `node tests/provider-management-p5.cjs` | 43/43 |
+| `npm run test:provider-management` | 143/143 |
+| `node --test tests/provider-management-http.cjs` | 18/18（P3-B 管理路由、发现与连接测试专项，已含于 143/143） |
+| `npm run test:provider-p2` | 39/39 + 5/5 + 47/47；桌面 1 条 UNVERIFIED，正常沙箱启动失败后按既有惯例回退 `--no-sandbox` |
+| `node tests/smoke.cjs` | 1345/1345 |
+| `node tests/provider-auth-runtime.cjs` | 50/50 |
+| `node scripts/run-test-group.mjs --validate` | `241 canonical leaves; groups core, ui, security, native, faults` |
+
+`npm run test:provider-p2` 第一次在本会话的 Git Bash 环境中因 PATH 先解析到 MSYS 的 `whoami`
+而失败（`whoami: extra operand '/user'`），在测试进程 PATH 前置 `C:\Windows\System32` 后
+39/39 + 5/5 + 47/47 通过；这是宿主 shell 的工具解析问题，不是产品代码或测试断言变化。最终代码上的
+P2、auth-runtime、smoke 日志分别为 `.shots/test-provider-p2-final.log`、
+`.shots/test-provider-auth-runtime-final.log`、`.shots/smoke-p5-final.log`。
+
+### 复跑完整 `npm test`
+
+完整链在本次整改工作区上运行（日志 `.shots/npm-test-p5-fix.log`），前置套件全部通过后停在
+`node tests/session-revert-sacl-witness.cjs`：该命令退出码 1，输出只有 `witness_unavailable`，
+因此 `npm test` 的最终退出码为 1。该命令单独复跑退出码同为 1；直接运行它使用的 PowerShell
+fixture 助手时，本机执行策略拒绝加载仓库内未签名脚本：
+`无法加载文件 C:\pi-GUI\tests\fixtures\session-revert-inplace-native.ps1 ... 因为在此系统上禁止运行脚本`，
+`FullyQualifiedErrorId : UnauthorizedAccess`。这是宿主环境限制；没有修改系统安全策略、没有删除
+测试、没有放宽断言。
+
+失败点之后的 125 条链命令此前已在同一机器逐条补跑（`.shots/npm-test-p5-tail.log`，15:53–16:31），
+124 条退出 0；唯一失败是 `node tests/session-revert-object-profile.cjs` 54/55，失败在共用同一
+PowerShell fixture 的 `setup`（`bounded native fixture completes`），与主失败同因。该补跑早于
+本轮最后几处前端改动；其中与本轮改动直接相关的 `test:provider-management`（143/143）与
+`node tests/smoke.cjs`（1345/1345）已在最终代码上重新执行。完整链因 `&&` 在 sacl-witness 处
+短路，没有继续执行后续命令；该次完整链在最后几处前端改动完成前启动，但短路点之后才有加载这些
+文件的 P5 套件，相关套件已在最终代码上单独复跑。
+
+### 残余风险与未验证项
+
+- 取消是**请求**而非停止证明：后端 `not_found/config_conflict` 或网络失败时，界面保持
+  「未确认停止」，不假定单飞槽已释放。迟到 202 到达前前端没有 `operationId` 可取消，此时立即
+  发起的新操作仍可能被后端单飞拒绝；本轮没有为此放宽服务端单飞或缩短取消等待。
+- 真实供应商网络、真实 `auth.json` 成功写入、正常沙箱 Electron、打包安装后的交互仍未验证；
+  定向测试使用离线夹具和假私有桥，不能替代真实供应商或正常沙箱验收。
+- 删除/覆盖暂存的安全语义不变：迟到清理只在没有活动流程持有该草稿时执行；安全凭据仍只经
+  Electron 私有桥，主页面没有新增明文密钥路径。
+
+## 八、文件与回滚
+
+按回滚边界分成以下提交：
+
+- P5 主集成生产代码：`9b7763472166acde5d97837539e5902559e667af`
+- P5 主集成测试与测试入口：`707352a2cc74dcd6f1f7cd436fd82f295bc16180`
+- 本轮 FIX-01/02/03 生产代码：`f0536d08095932ce84d432bb4925cda705872e81`
+- 本轮异步竞态回归测试：`650e152d88e72d67b9158bdc63ed62f1f762a743`
 - 文档与本报告：本节所在的提交（其 SHA 见分支历史）
 
 生产代码：
@@ -213,6 +357,9 @@ OAuth 同槽二次确认、主题跟随与窄窗在**真实 Electron（`--no-san
 - `public/provider-management/{credentials.js,sync.js,dialog.js,discovery.js,state.js,connection-fields.js,model-panes.js,contract.js,provider-management.css}`
 - `public/providers.js`
 - `server/provider-credential-bridge.js`、`server/provider-management-discovery.js`、`server/provider-management.js`
+
+本轮 FIX-01/02/03 实际只改 4 个生产文件：
+`public/provider-management/{credentials.js,dialog.js,discovery.js}`、`public/providers.js`。
 
 测试与文档：
 
@@ -225,26 +372,31 @@ OAuth 同槽二次确认、主题跟随与窄窗在**真实 Electron（`--no-san
 `closeDraft`；P2/P3 的后端合同与既有数据格式不需要迁移。保留 P3 对新增内部元数据的读取
 兼容，避免旧版本把新 sidecar 误判为不可读。
 
-## 八、证据范围与验收状态
+## 九、证据范围与验收状态
 
-- before HEAD：`68b57c4d2ae46dba11d6b842217ccae43377886e`；分支：`codex/provider-management-p5`。
+- P5 主集成 before HEAD：`68b57c4d2ae46dba11d6b842217ccae43377886e`；本轮整改基线：
+  `8aa69fcba8fca1dece36eec1717f36110cb22fcb`；分支：`codex/provider-management-p5`。
 - 定向测试与 canonical 链补跑均在上述基线加本分支工作区差异上运行；行为提交与仅补报告的提交
-  分别列在第七节，不把旧运行称作新提交的 CI。
+  分别列在第八节，不把旧运行称作新提交的 CI。
 - PR CI、main CI、真实安装升级、真实供应商调用：本轮未运行，未验证。
-- 开发完成（本地）：实现、定向测试、构建产物核对完成；完整 `npm test` 因第四节所述本机
-  PowerShell 执行策略阻塞未取得绿色退出，其余链命令已逐条补跑并如实记录。
+- 开发完成（本地）：实现、FIX-01/02/03 异步竞态整改、定向测试、构建产物核对完成；完整
+  `npm test` 因第四节所述本机 PowerShell 执行策略阻塞未取得绿色退出，失败点之后的链命令补跑
+  与最终代码上的 P5 定向复跑均已如实记录。
 - 代码验收：**待独立验收**；按任务要求推送后停止，不自行判定通过。
 - 合并许可：**未授予**；不合并 `main`。
 - 发布许可：**未授予**；不打 tag、不发布。
 
-## 九、结论
+## 十、结论
 
 P5 已把 P4 的供应商管理界面接到 P2/P3-A/B/C 的真实边界：安全凭据窗的暂存、替换、清除与撤销，
 配置优先提交与独立凭据结果，授权后的发现与连接测试 202 轮询，以及 Classic/多 Runtime 的只读
-同步核验。P5 定向套件 24/24、`test:provider-management` 124/124、P2 相关 39/39＋5/5＋47/47、
-smoke 1345/1345 等通过，构建产物已重建并核对。
+同步核验。独立验收后的 FIX-01/02/03 已修复关闭/换目标后的迟到草稿与凭据窗口、取消后迟到的
+discover/test 202，以及关闭/换页后的同步旧回调；P5 定向套件 43/43、
+`test:provider-management` 143/143、P2 相关 39/39＋5/5＋47/47、smoke 1345/1345 等通过，
+构建产物已重建并核对。
 
 不能宣称完整 canonical 通过：本机 PowerShell 执行策略拒绝加载仓库内未签名的 fixture，完整
 `npm test` 停在 `session-revert-sacl-witness`；按同一链补跑的 125 条命令中 124 条通过，唯一失败
-是同因的 `object-profile` 54/55。正常沙箱 Electron 与打包应用交互未验证。按任务要求已推送独立
-分支，等待独立代码验收；未合并 `main`，未发版。
+是同因的 `object-profile` 54/55（补跑早于本轮最后几处前端改动，P5 相关命令已在最终代码上复跑）。
+正常沙箱 Electron 与打包应用交互未验证。按任务要求已推送独立分支，等待独立代码验收；未合并
+`main`，未发版。
