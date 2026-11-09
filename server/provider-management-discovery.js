@@ -299,7 +299,11 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
     const cached = cache.get(grant.consentId);
     const entry = cached?.expires > now() ? cached : null;
     const cachedModels = entry?.models.map(model => ({ ...model, configSource: 'cache' })) ?? [];
+    /* P5：主页面用 consentId 发起 /discover 与 /test。授权本身仍由服务端持有，
+     * 这里只把与当前草稿/目标绑定的不透明句柄投影给同源管理 API 的调用方；
+     * 原生凭据的值始终只在私有桥与输入窗里。 */
     return { ...result, credentialGeneration: generations.get(grant), consentState: 'authorized-idle',
+      consentId: grant.consentId, consentExpiresAt: grant.expires,
       sourceKind: entry ? 'cache' : 'none', cachedModels };
   }
 

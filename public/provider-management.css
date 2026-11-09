@@ -550,6 +550,36 @@
 .pm-discovery-note.is-error { color: var(--ui-danger); }
 .pm-discovery-note.is-busy svg { animation: pm-spin 1s linear infinite; }
 .pm-refresh-models { flex: 0 0 auto; height: 24px; padding: 0 7px; font-size: 10.5px; }
+.pm-test-connection, .pm-cancel-discovery { flex: 0 0 auto; height: 24px; padding: 0 7px; font-size: 10.5px; }
+.pm-test-connection:disabled { opacity: .55; }
+.pm-model-source.is-remote { color: var(--ds-text-secondary); background: var(--ui-info-surface); }
+.pm-model-source.is-cache { color: var(--ds-text-muted); border: 1px dashed var(--ds-border-default); background: transparent; }
+/* Runtime 同步状态：展示 P3-C 的逐目标事实，只提供只读核验入口。 */
+.pm-sync-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-2xs);
+  background: var(--ds-tile);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.pm-sync-banner > svg { flex: 0 0 auto; margin-top: 1px; color: var(--ds-text-muted); }
+.pm-sync-banner.is-error { border-color: var(--ui-danger-border); background: var(--ui-danger-surface); color: var(--ui-danger); }
+.pm-sync-banner.is-success { border-color: var(--ui-success-border); background: var(--ui-success-surface); color: var(--ui-success); }
+.pm-sync-copy { flex: 1; min-width: 0; }
+.pm-sync-title { font-weight: 600; }
+.pm-sync-reason { margin-top: 2px; opacity: .9; }
+.pm-sync-targets { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; }
+.pm-sync-target { font-size: 10.5px; color: var(--ds-text-secondary); }
+.pm-sync-target.is-applied { color: var(--ui-success); }
+.pm-sync-target.is-error { color: var(--ui-danger); }
+.pm-sync-actions { flex: 0 0 auto; }
+.pm-sync-retry { height: 24px; padding: 0 8px; font-size: 10.5px; }
+.pm-sync-retry:disabled { opacity: .55; cursor: default; }
 .pm-model-panes { position: relative; }
 .pm-model-panes .pm-discovery-note { position: absolute; top: 0; left: 0; right: 0; }
 .pm-model-panes { padding-top: 30px; }

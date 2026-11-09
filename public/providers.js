@@ -12,11 +12,13 @@ import { fmtTokens } from './util.js';
 import {
   deleteProvider as apiDeleteProvider,
   fetchProviderManagement,
+  fetchProviderOperation,
   fetchProviders,
   restartBackend,
   saveProvider as apiSaveProvider,
   saveProviderDraft,
   commitProviderDraft,
+  syncProviderConfiguration,
 } from './api.js';
 import { PROVIDER_CATALOG, isEnvReference, providerManagementCapabilities } from './provider-management/contract.js';
 import { openModal, confirmModal } from './ui/modal.js';
@@ -33,6 +35,14 @@ import {
   subscriptionAvailability,
 } from './provider-management/catalog.js';
 import { draftFromService, newRequestId, toDraftPayload } from './provider-management/state.js';
+import { connectionTestSupported, discoveryUnavailableReason } from './provider-management/discovery.js';
+import {
+  createSyncController,
+  syncLabel,
+  syncReasonLabel,
+  syncSupported,
+  syncTargetLabel,
+} from './provider-management/sync.js';
 import { button, h, icon } from './provider-management/dom.js';
 
 /* ---------- 旧版模型行语法（保留导出，供模型快捷键与既有测试使用） ---------- */
@@ -113,6 +123,8 @@ let managementAvailability = 'unknown'; // unknown | available | disabled | erro
 let managementError = '';
 let menuCloser = null;
 let pageStatusHost = null;
+let syncController = null;
+let lastSaveNotice = null;
 
 /* 只有「明确未启用」才允许旧接口写入。
  * 后端关闭管理接口时回 422 {code:'unsupported'}；404/405/400 也属于同一类
@@ -382,6 +394,85 @@ function pageStatus(text, tone = 'info') {
   }
 }
 
+function saveNoticeFor(result) {
+  if (!result) return null;
+  if (result.legacy) return { text: '服务已保存；重载 pi 配置后生效。', tone: 'info' };
+  if (result.credentialSaved === false) return { text: '配置已保存，但 Pi 本机凭据操作失败。', tone: 'error' };
+  if (result.credentialState === 'credential-unconfirmed') return { text: '配置已保存；Pi 本机凭据结果待确认，GUI 不会自动重试。', tone: 'error' };
+  if (result.credentialSaved === true) {
+    return { text: result.credentialState === 'cleared' ? '配置已保存，Pi 本机凭据已清除。' : '配置与 Pi 本机凭据均已保存。', tone: 'success' };
+  }
+  if (result.saved === true || result.sync?.state === 'pending') {
+    if (syncSupported(managementSnapshot)) return { text: '配置已保存，Runtime 生效状态见下方同步状态。', tone: 'info' };
+    return { text: result.sync?.state === 'pending'
+      ? '配置已保存；Runtime 待生效，当前后端不提供同步核验。'
+      : '配置已保存；当前后端不提供 Runtime 同步核验。', tone: 'info' };
+  }
+  return { text: '服务已保存。', tone: 'success' };
+}
+
+function syncBanner(snapshot) {
+  if (!snapshot || !syncSupported(snapshot)) return null;
+  const sync = snapshot.sync;
+  if (!sync || sync.state === 'idle' || sync.state === 'unsupported') return null;
+  const tone = sync.state === 'error' ? 'error' : sync.state === 'applied' ? 'success' : 'info';
+  const title = sync.state === 'applied' ? '配置已在所有 Runtime 生效'
+    : sync.state === 'error' ? 'Runtime 同步失败'
+      : sync.state === 'syncing' ? '正在核验 Runtime 同步…'
+        : '配置已保存，Runtime 生效状态待确认';
+  const reason = syncReasonLabel(sync.reason);
+  const targets = Array.isArray(sync.runtimes) ? sync.runtimes : [];
+  return h('div', {
+    class: `pm-sync-banner is-${tone}`,
+    role: 'status',
+    'data-sync-state': sync.state,
+    'data-sync-reason': sync.reason || '',
+  },
+  icon(tone === 'error' ? 'alert' : tone === 'success' ? 'check' : 'info', 15),
+  h('div', { class: 'pm-sync-copy' },
+    h('div', { class: 'pm-sync-title', text: title }),
+    reason ? h('div', { class: 'pm-sync-reason', text: reason }) : null,
+    targets.length
+      ? h('div', { class: 'pm-sync-targets' }, ...targets.map(target => h('span', {
+        class: `pm-sync-target is-${target.state || 'pending'}`,
+        'data-sync-target': `${target.kind || 'runtime'}:${target.id || ''}`,
+        text: `${syncTargetLabel(target)} · ${syncLabel(target)}${target.reason ? `（${syncReasonLabel(target.reason)}）` : ''}`,
+      })))
+      : null,
+  ),
+  h('div', { class: 'pm-sync-actions' },
+    button('重新核验', 'pm-btn pm-btn-small pm-sync-retry', () => verifySync(), {
+      title: '只重新读取 Runtime 是否加载了新配置；不会重启 Classic/Runtime、不会结束会话、不会切换当前模型。',
+    }),
+  ));
+}
+
+/* 只读核验：POST /sync → 202 → 轮询操作结果；绝不重启进程或结束会话。 */
+async function verifySync() {
+  if (!managementSnapshot || syncController) return;
+  const controller = createSyncController({
+    api: { syncProviderConfiguration, fetchProviderOperation },
+  });
+  syncController = controller;
+  const host = document.querySelector('.pm-sync-banner');
+  const buttonNode = host?.querySelector('.pm-sync-retry');
+  if (buttonNode) buttonNode.disabled = true;
+  const title = host?.querySelector('.pm-sync-title');
+  const reason = host?.querySelector('.pm-sync-reason');
+  const off = controller.subscribe(state => {
+    if (title) title.textContent = state.state === 'syncing' ? '正在核验 Runtime 同步…' : 'Runtime 同步状态';
+    if (reason) reason.textContent = state.reason || '';
+  });
+  let final = null;
+  try { final = await controller.verify({ revision: managementSnapshot.revision }); }
+  catch { final = controller.getState(); }
+  off();
+  controller.dispose();
+  syncController = null;
+  if (final?.state === 'error') toast(final.reason || 'Runtime 同步核验失败。', 'error', { important: true });
+  await refreshManagement();
+}
+
 function serviceBadges(service) {
   const badges = [];
   if (service.enabled === false) badges.push({ text: '已停用', tone: 'muted' });
@@ -402,7 +493,7 @@ function serviceMeta(service) {
   return `${endpoint} · ${count}`;
 }
 
-function serviceMenu(service, { onEdit, onClone, onToggle, onDelete, onAuth }) {
+function serviceMenu(service, { onEdit, onClone, onToggle, onDelete, onAuth, onTest, canTest = false, testReason = '' }) {
   const menu = h('div', { class: 'pm-row-menu', role: 'menu', hidden: true });
   const item = (label, action, { disabled = false, reason = '', danger = false } = {}) => {
     const b = h('button', {
@@ -425,7 +516,7 @@ function serviceMenu(service, { onEdit, onClone, onToggle, onDelete, onAuth }) {
     service.authMode === 'oauth'
       ? item('管理登录', onAuth)
       : item('复制', onClone, { disabled: service.readOnly || !serviceSelectable(service), reason: service.readOnly ? '只读服务不能复制' : '' }),
-    item('测试连接', () => {}, { disabled: true, reason: '连接测试随 P3 网络授权接通' }),
+    item('测试连接', onTest, { disabled: !canTest, reason: canTest ? '' : testReason }),
     item(service.enabled === false ? '启用' : '停用', onToggle, {
       disabled: service.readOnly || (service.authMode === 'oauth' && service.enabled === false),
       reason: service.readOnly ? '只读服务不能停用'
@@ -569,7 +660,7 @@ async function removeService(service) {
   await refreshManagement();
 }
 
-function openEdit(service) {
+function openEdit(service, { intent = null } = {}) {
   if (service.authMode === 'oauth') {
     openProviderDialog({ present: openModal, snapshot: managementSnapshot, mode: 'auth', service, onSaved: refreshManagement, onClosed: refreshManagement });
     return;
@@ -579,8 +670,9 @@ function openEdit(service) {
     snapshot: managementSnapshot,
     mode: 'edit',
     service,
+    intent,
     onSaved: result => {
-      if (result?.sync?.state === 'pending') pageStatus('服务已保存，等待 Runtime 同步（P3 尚未接通）。', 'info');
+      lastSaveNotice = saveNoticeFor(result);
       refreshManagement();
     },
     onClosed: refreshManagement,
@@ -594,7 +686,7 @@ function openClone(service) {
     mode: 'clone',
     service,
     onSaved: result => {
-      if (result?.sync?.state === 'pending') pageStatus('服务已保存，等待 Runtime 同步（P3 尚未接通）。', 'info');
+      lastSaveNotice = saveNoticeFor(result);
       refreshManagement();
     },
     onClosed: refreshManagement,
@@ -660,12 +752,18 @@ function managementRow(service) {
     tabindex: '0',
     'aria-label': `编辑服务 ${serviceDisplayName(service, managementSnapshot)}`,
   });
+  const canTest = connectionTestSupported(managementSnapshot) && service.authMode !== 'oauth';
   const menu = serviceMenu(service, {
     onEdit: () => openEdit(service),
     onClone: () => openClone(service),
     onToggle: () => toggleService(service),
     onDelete: () => removeService(service),
     onAuth: () => openProviderDialog({ present: openModal, snapshot: managementSnapshot, mode: 'auth', service, onSaved: refreshManagement, onClosed: refreshManagement }),
+    onTest: () => openEdit(service, { intent: 'test' }),
+    canTest,
+    testReason: service.authMode === 'oauth'
+      ? '订阅账户的模型由 Pi 登录提供；连接测试不适用于 OAuth 服务。'
+      : canTest ? '' : discoveryUnavailableReason(managementSnapshot),
   });
   const more = h('button', {
     type: 'button',
@@ -858,12 +956,12 @@ export function renderProviders(box) {
   updateProviderCount(services.length);
   updateCatalogFooter(services.length);
   if (!target) return;
-  if (!services.length) { target.appendChild(emptyCard(target)); return; }
-  for (const service of services) target.appendChild(managementRow(service));
-
-  const sync = managementSnapshot?.sync;
-  if (sync?.state === 'pending') pageStatus('配置已保存，等待 Runtime 同步（P3 尚未接通）。', 'info');
-  else if (sync?.state === 'error') pageStatus('Runtime 同步失败；配置已保存，可以稍后重试。', 'error');
+  // 同步事实来自 P3-C 协调器；这里只展示与手动触发只读核验，不重启任何 Runtime。
+  const banner = syncBanner(managementSnapshot);
+  if (banner) target.appendChild(banner);
+  if (!services.length) target.appendChild(emptyCard(target));
+  else for (const service of services) target.appendChild(managementRow(service));
+  if (lastSaveNotice) pageStatus(lastSaveNotice.text, lastSaveNotice.tone);
   else pageStatus('');
 }
 
@@ -884,6 +982,7 @@ export function setProvidersData(data) {
 
 export function openProvidersPanel({ present = openModal } = {}) {
   let ownedBox = null;
+  lastSaveNotice = null;
   present((card, close) => {
     card.classList.add('wide', 'prov-settings-page', 'pm-settings-page');
 
@@ -953,6 +1052,7 @@ export function openProvidersPanel({ present = openModal } = {}) {
     loadProviders(box);
   }, () => {
     closeMenu();
+    if (syncController) { syncController.dispose(); syncController = null; }
     if (panels.providers === ownedBox) panels.providers = null;
     if (pageStatusHost === document.querySelector('.pm-page-status')) pageStatusHost = null;
   });
@@ -1005,7 +1105,7 @@ export async function openAddProvider({ present = openModal, snapshot = manageme
     snapshot: active,
     mode: 'create',
     onSaved: result => {
-      if (result?.sync?.state === 'pending') pageStatus('服务已保存，等待 Runtime 同步（P3 尚未接通）。', 'info');
+      lastSaveNotice = saveNoticeFor(result);
       refreshManagement();
     },
     onClosed: refreshManagement,
@@ -1056,7 +1156,8 @@ export async function removeProvider(name) {
 
 export async function reloadPi() {
   // 重载只重启 Pi，不主动清空当前对话视图；pi 重连时按现有启动配置
-  //（--continue / --session / PI_NO_CONTINUE）恢复会话。完整 Runtime 同步留给 P3。
+  //（--continue / --session / PI_NO_CONTINUE）恢复会话。Runtime 同步由 P3-C
+  // 协调器负责，不通过重启实现；这里也不得替用户结束会话。
   // 若请求本身失败，保留视图并报告真实错误。
   const result = await restartBackend().catch(() => ({ ok: false, error: '重载请求没有完成，请重试。' }));
   if (!result || result.ok !== true) {
