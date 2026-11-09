@@ -73,6 +73,26 @@ const MODE_LABEL = Object.freeze({
   clone: '复制为新服务',
 });
 
+/* 跨弹窗实例的活跃草稿登记。
+ *
+ * 迟到的草稿响应只能撤销它自己创建的服务端草稿。新弹窗可能正在使用同一个
+ * 标识（测试夹具或幂等重放都可能复用），所以清理前必须确认没有任何活动
+ * 流程仍持有它；否则旧响应会把新流程的暂存凭据一起删掉。 */
+const liveDraftOwners = new Map();
+function retainLiveDraft(draftId) {
+  if (!draftId) return;
+  liveDraftOwners.set(draftId, (liveDraftOwners.get(draftId) || 0) + 1);
+}
+function releaseLiveDraft(draftId) {
+  if (!draftId) return;
+  const count = (liveDraftOwners.get(draftId) || 0) - 1;
+  if (count > 0) liveDraftOwners.set(draftId, count);
+  else liveDraftOwners.delete(draftId);
+}
+function liveDraftInUse(draftId) {
+  return Boolean(draftId) && (liveDraftOwners.get(draftId) || 0) > 0;
+}
+
 function messageOf(result, fallback = '操作失败，请重试') {
   return (result && (result.message || result.error)) || fallback;
 }
@@ -140,8 +160,14 @@ export function openProviderDialog({
   // P5：受限窗控制器与目标指纹。任何目标/认证来源变化都要撤销服务端暂存与授权。
   const credentials = legacy ? null : createCredentialController();
   let credentialBusy = false;
+  // 草稿写请求串行化：同一时刻只能有一个在途保存，避免两个调用互相覆盖
+  // draftHandle、用旧 revision 写同一个草稿。
+  let draftSaveChain = Promise.resolve();
   let targetSignature = draftTargetSignature(null);
   let authSignature = '';
+  // 每次撤销草稿/换目标/关闭弹窗都递增。所有跨 await 的旧响应必须核对
+  // 这个代次，不能把旧目标的服务端句柄或凭据暂存写回当前界面。
+  let lifecycleEpoch = 0;
   // 从服务列表菜单进入「测试连接」时，打开弹窗后自动走一次授权 + 测试。
   let pendingTestIntent = intent === 'test';
 
@@ -152,24 +178,18 @@ export function openProviderDialog({
   let saveButton = null;
 
   const cleanup = () => {
+    if (disposed) return;
     disposed = true;
+    // 关闭弹窗后，所有在途的草稿保存、凭据窗口与发现请求都失效。
+    revokeDraftArtifacts();
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (discovery) {
       const controller = discovery;
       discovery = null;
-      // 撤销服务端授权，再停止本地轮询；关闭弹窗不应留下可用授权。
-      try { void controller.revoke(); } catch { /* 已失效的授权无需再撤 */ }
+      // revokeDraftArtifacts 已发起服务端撤销；这里只停止本地轮询。
       controller.dispose();
     }
-    if (credentials) {
-      // 关闭弹窗即撤销草稿的暂存凭据与授权（后端 close-draft）。草稿句柄可能
-      // 因冲突被重置，而暂存仍挂在旧草稿上；两个标识都要撤销。
-      const stagedDraftId = draft?.nativeStage?.draftId;
-      for (const id of new Set([draftHandle?.draftId, stagedDraftId].filter(Boolean))) {
-        try { void credentials.closeDraft(id); } catch { /* 后端会按 TTL 清理 */ }
-      }
-      credentials.dispose();
-    }
+    credentials?.dispose();
     if (authDispose) { authDispose(); authDispose = null; }
   };
 
@@ -179,15 +199,26 @@ export function openProviderDialog({
       String(value.piRegistrationReference || '').trim()]);
   }
 
+  /* 只清理迟到的服务端草稿；新流程（本弹窗或另一个弹窗）仍持有该标识时
+   * 绝不撤销，否则会把用户刚暂存的凭据一起删掉。 */
+  function closeLateDraft(draftId) {
+    if (!draftId || liveDraftInUse(draftId)) return;
+    try { void credentials?.closeDraft(draftId); } catch { /* best effort */ }
+  }
+
   /* 目标（标识/端点/认证来源/本机注册引用）变化后，旧草稿句柄、暂存批准与
    * 发现授权都不再适用。这里同时通知后端撤销，避免只清本地状态而服务端仍可
    * 用旧批准写入。 */
   function revokeDraftArtifacts() {
+    // 先让所有跨 await 的旧流程过期，再取消可能正在等待输入的受限窗。
+    lifecycleEpoch += 1;
     // 句柄可能先被重置，而暂存仍绑定在旧草稿上；两个标识都要撤销。
     const ids = new Set([draftHandle?.draftId, draft?.nativeStage?.draftId].filter(Boolean));
     draftHandle = null;
+    try { credentials?.cancel(); } catch { /* 主进程会自行清理 */ }
     for (const id of ids) {
-      try { void credentials?.closeDraft(id); } catch { /* best effort */ }
+      releaseLiveDraft(id);
+      closeLateDraft(id);
     }
     if (discovery) { try { void discovery.revoke(); } catch { /* best effort */ } }
     if (draft) { draft.requestIds = {}; draft.requestIdKeys = {}; }
@@ -381,7 +412,10 @@ export function openProviderDialog({
   /* 保存/发现/凭据窗口都需要同一个草稿句柄。内容没变时复用，内容变化时
    * 在同一草稿上递增 revision；force 用于授权后重新读取服务器投影的
    * consentId —— 必须换新 requestId，否则服务端会回放旧收据。 */
-  async function ensureDraftHandle({ force = false } = {}) {
+  async function saveDraftHandle({ force, epoch, target }) {
+    if (disposed || lifecycleEpoch !== epoch || targetSignature !== target) {
+      return { ok: false, code: 'stale', stale: true, message: '草稿准备期间目标已变化，请重试。' };
+    }
     if (!draft) return { ok: false, code: 'invalid_request', message: '没有正在编辑的服务草稿。' };
     if (!snapshotState) return { ok: false, code: 'unavailable', message: '还没有读取到供应商配置。' };
     let payload;
@@ -401,8 +435,15 @@ export function openProviderDialog({
     draftRequest.requestId = force ? newRequestId('draft') : ensureRequestId(draft, 'draft', key);
     let result;
     try { result = await managementApi.saveProviderDraft(draftRequest); }
-    catch { return { ok: false, network: true, code: 'network_failed', message: '网络请求失败，草稿没有保存。' }; }
-    if (!result || result.ok !== true) return result || { ok: false, code: 'failed', message: '草稿保存失败。' };
+    catch { result = null; }
+    // await 返回后再次核对身份：关闭弹窗、换目标或换草稿都会让这次响应过期。
+    if (disposed || lifecycleEpoch !== epoch || targetSignature !== target) {
+      if (result?.ok === true && result.draftId) closeLateDraft(result.draftId);
+      return { ok: false, code: 'stale', stale: true, message: '草稿响应已过期，未应用到当前目标。' };
+    }
+    if (!result) return { ok: false, network: true, code: 'network_failed', message: '网络请求失败，草稿没有保存。' };
+    if (result.ok !== true) return result || { ok: false, code: 'failed', message: '草稿保存失败。' };
+    const previousId = draftHandle?.draftId;
     draftHandle = {
       draftId: result.draftId,
       draftRevision: result.draftRevision,
@@ -414,16 +455,44 @@ export function openProviderDialog({
       cachedModels: Array.isArray(result.cachedModels) ? result.cachedModels : [],
       payloadSignature,
     };
+    if (previousId !== draftHandle.draftId) {
+      if (previousId) {
+        releaseLiveDraft(previousId);
+        closeLateDraft(previousId);
+      }
+      retainLiveDraft(draftHandle.draftId);
+    }
     configureDiscovery(discovery);
     return { ok: true, ...draftHandle };
   }
 
+  function ensureDraftHandle({ force = false } = {}) {
+    const epoch = lifecycleEpoch;
+    const target = targetSignature;
+    const run = () => saveDraftHandle({ force, epoch, target });
+    const next = draftSaveChain.then(run, run);
+    draftSaveChain = next.then(() => {}, () => {});
+    return next;
+  }
+
   async function authorizeDesktopDiscovery({ draftId, draftRevision, rememberTarget = false } = {}) {
     if (!credentials) return { ok: false, code: 'unsupported', reason: '当前环境没有可用的安全凭据窗口。' };
+    if (disposed) return { ok: false, code: 'stale', reason: '供应商设置已经关闭。' };
+    const epoch = lifecycleEpoch;
+    const target = targetSignature;
     const opened = await credentials.open({ draftId, draftRevision, action: 'authorize-target' });
+    // 授权窗等待期间关闭弹窗或换目标：授权可能已经落到旧草稿上，必须撤销。
+    if (disposed || lifecycleEpoch !== epoch || targetSignature !== target) {
+      if (opened.ok) closeLateDraft(draftId);
+      return { ok: false, code: 'stale', reason: '授权期间目标已变化，本次授权已作废。', cancelled: true };
+    }
     if (!opened.ok) return { ok: false, code: opened.code, reason: opened.reason, cancelled: opened.cancelled };
     // 授权由私有桥写入服务端；重存同一草稿以读取与当前绑定匹配的 consentId。
     const handle = await ensureDraftHandle({ force: true });
+    if (disposed || lifecycleEpoch !== epoch || targetSignature !== target) {
+      if (handle.ok) closeLateDraft(handle.draftId);
+      return { ok: false, code: 'stale', reason: '授权期间目标已变化，本次授权已作废。', cancelled: true };
+    }
     if (!handle.ok) return { ok: false, code: handle.code || 'failed', message: handle.message || '草稿没有保存成功。' };
     if (!handle.consentId) {
       return { ok: false, code: 'invalid_target', reason: '授权已确认，但没能在草稿上读取到有效授权句柄；请重试。' };
@@ -490,7 +559,7 @@ export function openProviderDialog({
   }
 
   async function openCredentialSheet({ action = 'set' } = {}) {
-    if (!draft || draft.readOnly || credentialBusy || saving) return;
+    if (disposed || !draft || draft.readOnly || credentialBusy || saving) return;
     if (legacy || !credentials || !desktopCredentialBridge()) {
       errorState = { title: '安全凭据窗口不可用', message: '网页版或兼容模式没有 Electron 安全凭据窗口；这里只写入 $NAME 环境变量引用。' };
       renderStatus();
@@ -522,7 +591,11 @@ export function openProviderDialog({
         draftStore.dispatch({ type: 'auth-mode', authMode: 'pi-credential' });
       }
       draft = draftStore.get();
+      // auth-mode 切换本身可能改变目标并撤销旧句柄；代次必须在切换之后取。
+      const epoch = lifecycleEpoch;
+      const target = targetSignature;
       const handle = await ensureDraftHandle();
+      if (disposed || lifecycleEpoch !== epoch || targetSignature !== target) return;
       if (!handle.ok) {
         errorState = { title: action === 'clear' ? '无法准备清除凭据' : '无法准备凭据输入', message: handle.message || '草稿没有保存成功。' };
         if (isConflict(handle) || handle.code === 'draft_conflict') await handleConflict(handle);
@@ -530,6 +603,12 @@ export function openProviderDialog({
         return;
       }
       const opened = await credentials.open({ draftId: handle.draftId, draftRevision: handle.draftRevision, action });
+      // 凭据窗等待期间关闭弹窗或换目标：即使窗口刚刚暂存成功，也不能把
+      // 这份暂存挂到新目标上；服务端草稿由 closeLateDraft 撤销（若仍无人持有）。
+      if (disposed || lifecycleEpoch !== epoch || targetSignature !== target) {
+        if (opened.ok) closeLateDraft(handle.draftId);
+        return;
+      }
       if (!opened.ok) {
         if (!opened.cancelled) {
           errorState = { title: '安全凭据窗口没有完成', message: opened.reason || '凭据输入已取消。' };
@@ -921,7 +1000,7 @@ export function openProviderDialog({
   }
 
   async function save() {
-    if (!draft || saving) return;
+    if (disposed || !draft || saving) return;
     if (draft.readOnly) return;
     saving = true;
     errorState = null;
@@ -1011,10 +1090,23 @@ export function openProviderDialog({
       const action = draft.mode === 'update' ? 'update' : draft.mode === 'clone' ? 'clone' : 'create';
       // 同一内容重试时复用草稿；内容变化时在同一草稿上递增 revision。
       const handle = await ensureDraftHandle();
+      if (disposed) return;
+      if (handle.stale) {
+        saving = false;
+        dialogCard?.removeAttribute('aria-busy');
+        refreshHeader();
+        errorState = { title: '保存目标已变化', message: '准备草稿期间目标或认证来源发生变化，旧草稿没有复用；请检查当前配置后重新保存。' };
+        renderStatus();
+        return;
+      }
       if (!handle.ok) {
         await handleFailure(handle, 'draft');
         return;
       }
+      // 从提交请求发出到响应返回期间，目标/认证来源仍可能变化。旧回调不能
+      // 把结果标到新目标上，也不能关闭用户正在编辑的新草稿。
+      const commitEpoch = lifecycleEpoch;
+      const commitTarget = targetSignature;
       const commitBody = {
         action,
         expectedRevision: snapshotState.revision,
@@ -1028,6 +1120,18 @@ export function openProviderDialog({
         ...commitBody,
       };
       const result = await managementApi.commitProviderDraft(request);
+      if (disposed) return;
+      if (lifecycleEpoch !== commitEpoch || targetSignature !== commitTarget) {
+        saving = false;
+        dialogCard?.removeAttribute('aria-busy');
+        refreshHeader();
+        errorState = {
+          title: '保存结果未应用到当前草稿',
+          message: '提交期间目标或认证来源发生了变化；刚才的请求可能已经落盘。请重新读取配置，确认当前服务状态后再操作。',
+        };
+        renderStatus();
+        return;
+      }
       // 配置已落盘但凭据失败/未确认：不能当成“保存失败”，也不能自动重发。
       if (!result?.ok && result?.saved === true
         && (result.credentialSaved === false || result.credentialSaved === null)) {
@@ -1067,6 +1171,7 @@ export function openProviderDialog({
    * 凭据是否成功只认提交回执的 credentialSaved/credentialState；服务快照
    * 里的 credentialState 可能仍是操作前的旧凭据，不能拿来把失败说成成功。 */
   async function handleCredentialAfterSave(result, credentialAction = null) {
+    if (disposed) return;
     saving = false;
     dialogCard?.removeAttribute('aria-busy');
     successState = null; // 「已暂存」不再成立：暂存批准已被本次提交消费
@@ -1076,8 +1181,11 @@ export function openProviderDialog({
     // 配置已经是新版本：把草稿转成对该服务的更新，但保留当前编辑内容。
     draftStore.dispatch({ type: 'mark-saved', state: unconfirmed ? 'credential-unconfirmed' : 'saved-credential-error', serviceId });
     draft = draftStore.get();
+    // 提交已经消费了服务端草稿；本地句柄不能再被关闭或复用。
+    if (draftHandle?.draftId) releaseLiveDraft(draftHandle.draftId);
     draftHandle = null;
     await readLatestSnapshot();
+    if (disposed) return;
     const savedService = serviceId ? serviceFromSnapshot(snapshotState, serviceId) : null;
     const observed = savedService?.credentialState?.state === 'saved'
       ? clearing
@@ -1110,8 +1218,10 @@ export function openProviderDialog({
   }
 
   async function refreshCredentialOutcome(serviceId, unconfirmed, clearing = false) {
+    if (disposed) return;
     successState = null;
     const latest = await readLatestSnapshot();
+    if (disposed) return;
     const service = latest && serviceId ? serviceFromSnapshot(latest, serviceId) : null;
     const state = service?.credentialState?.state;
     // 快照只能说明「当前是否有凭据」，不能证明这次写入/清除已经生效：
@@ -1172,6 +1282,7 @@ export function openProviderDialog({
   async function readLatestSnapshot() {
     try {
       const result = await managementApi.fetchProviderManagement();
+      if (disposed) return null;
       if (result?.ok && typeof result.revision === 'string' && result.revision) {
         snapshotState = result;
         lastSnapshotRead += 1;

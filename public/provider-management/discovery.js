@@ -35,6 +35,8 @@ export const DISCOVERY_REASON = Object.freeze({
   network: '网络请求失败，保留上次结果',
   stale: '结果已过期，已丢弃',
   cancelled: '已取消本次发现',
+  cancel_requested: '已请求取消本次发现；等待后端确认停止',
+  cancel_unconfirmed: '取消已请求，但后端未确认停止；新操作可能仍被占用',
   authorize_required: '请先保存草稿并授权目标',
 });
 
@@ -206,17 +208,28 @@ export function createDiscoveryController({
     return true;
   }
 
-  async function abortActiveOperation() {
-    const id = state.operationId;
+  /* 新操作开始前同时撤掉发现与测试两个单飞槽。旧操作没有后端停止证明时
+   * 也不能假定它已释放；这里只发取消并等既有取消预算，不缩短超时。 */
+  async function abortActiveOperations() {
+    const ids = [...new Set([state.operationId, state.test.operationId].filter(Boolean))];
+    const testWasActive = state.test.status === 'running' || Boolean(state.test.operationId);
     state.operationId = null;
+    // 被新操作顶掉的测试也必须立刻退出 running，不能留下一个没有
+    // operationId 的“正在测试”状态。202 尚未返回时没有 id 可取消，
+    // 但代次递增会让迟到的 202 自行取消。
+    state.test = testWasActive
+      ? { ...state.test, status: 'idle', facts: null, error: '', reason: DISCOVERY_REASON.cancelled, operationId: null }
+      : { ...state.test, operationId: null };
     wakePoll();
-    if (!id || typeof api.cancelProviderOperation !== 'function') return;
-    try { await api.cancelProviderOperation(id, { requestId: newRequestId('cancel') }); } catch { /* 取消失败也要停止本地等待 */ }
+    await Promise.all(ids.map(id => cancelOperation(id)));
   }
 
+  /* 取消是幂等请求；失败（not_found/config_conflict/网络）只表示没有得到
+   * 停止证明，不影响本地丢弃旧结果，也绝不抛到调用方。 */
   async function cancelOperation(id) {
-    if (!id || typeof api.cancelProviderOperation !== 'function') return;
-    try { await api.cancelProviderOperation(id, { requestId: newRequestId('cancel') }); } catch { /* best effort */ }
+    if (!id || typeof api.cancelProviderOperation !== 'function') return null;
+    try { return await api.cancelProviderOperation(id, { requestId: newRequestId('cancel') }); }
+    catch { return null; }
   }
 
   function applyHandle(handle) {
@@ -235,9 +248,11 @@ export function createDiscoveryController({
       ...(handle.targetFingerprint ? { targetFingerprint: handle.targetFingerprint } : {}),
     };
     if (targetChanged) {
+      const oldOperationId = state.operationId;
       activeRequest += 1;
       clearTimer();
       wakePoll();
+      if (oldOperationId) void cancelOperation(oldOperationId);
       Object.assign(patch, {
         consentId: null,
         consentExpiresAt: null,
@@ -373,10 +388,10 @@ export function createDiscoveryController({
           : notify(failurePatch({ code: 'timeout' }));
       }
       await delay(pollIntervalMs);
-      if (!isCurrent(snapshot)) return state;
+      if (!isCurrent(snapshot)) { void cancelOperation(operationId); return state; }
       let operation = null;
       try { operation = await api.fetchProviderOperation(operationId); } catch { operation = { ok: false, network: true }; }
-      if (!isCurrent(snapshot)) return state;
+      if (!isCurrent(snapshot)) { void cancelOperation(operationId); return state; }
       if (!operation || operation.ok !== true) {
         if (operation?.network) continue; // 单次轮询网络抖动不结束操作，等下一次或超时
         const error = operation?.code ? { code: operation.code, message: operation.message } : { code: 'network_failed' };
@@ -405,7 +420,7 @@ export function createDiscoveryController({
     const modeError = modeReason(state.authMode);
     if (modeError) return notify({ status: DISCOVERY_STATUS.UNSUPPORTED, reason: modeError });
     if (!state.consentId) return notify({ status: DISCOVERY_STATUS.UNAPPROVED, reason: DISCOVERY_REASON.network_not_approved });
-    await abortActiveOperation();
+    await abortActiveOperations();
     if (disposed || seq !== activeRequest) return state;
     const snapshot = snapshotOf(seq);
     notify({ status: DISCOVERY_STATUS.REFRESHING, reason: '', requestSeq: seq, operationId: null, lastError: '' });
@@ -423,7 +438,12 @@ export function createDiscoveryController({
     } catch {
       result = { ok: false, network: true, code: 'network_failed' };
     }
-    if (!isCurrent(snapshot)) return state;
+    if (!isCurrent(snapshot)) {
+      // 202 在取消/换目标/关窗之后才返回：本地已经丢弃结果，但服务端操作
+      // 可能仍在占用单飞槽，必须用新 requestId 明确取消。
+      if (result?.ok === true && result.operationId) void cancelOperation(result.operationId);
+      return state;
+    }
     if (!result || result.ok !== true) {
       const error = result?.network ? { code: 'network_failed', message: DISCOVERY_REASON.network } : result || { code: 'failed' };
       return notify(failurePatch(error));
@@ -468,14 +488,16 @@ export function createDiscoveryController({
         || JSON.stringify(modes) !== JSON.stringify(state.modes);
       supported = nextSupported;
       if (!changed) return state;
-      const wasBusy = state.status === DISCOVERY_STATUS.DEBOUNCING || state.status === DISCOVERY_STATUS.REFRESHING;
-      if (wasBusy && !firstBinding && (identityChanged || authChanged || supportedChanged)) {
-        const id = state.operationId;
+      // 目标或认证来源变化时，发现与测试两个槽都要撤；不能只因为发现状态
+      // 不在 refreshing 就放过仍在运行的测试操作。
+      if (!firstBinding && (identityChanged || authChanged || supportedChanged)) {
+        const ids = [...new Set([state.operationId, state.test.operationId].filter(Boolean))];
         activeRequest += 1;
         clearTimer();
         wakePoll();
         state.operationId = null;
-        if (id) void cancelOperation(id);
+        state.test = { ...state.test, operationId: null };
+        for (const id of ids) void cancelOperation(id);
       }
       if (identityChanged || authChanged) {
         return notify({
@@ -512,6 +534,7 @@ export function createDiscoveryController({
         modes,
         models: Array.isArray(models) ? models : [],
         source: source || 'none',
+        ...(supportedChanged ? { test: { status: 'idle', facts: null, error: '', reason: '', operationId: null } } : {}),
       });
     },
     async authorize({ rememberTarget = false } = {}) {
@@ -578,10 +601,11 @@ export function createDiscoveryController({
       activeRequest += 1;
       wakePoll();
       const consentId = state.consentId;
-      const operationId = state.operationId;
+      const operationIds = [...new Set([state.operationId, state.test.operationId].filter(Boolean))];
       state.consentId = null;
       state.operationId = null;
-      if (operationId) void cancelOperation(operationId);
+      state.test = { status: 'idle', facts: null, error: '', reason: '', operationId: null };
+      for (const id of operationIds) void cancelOperation(id);
       if (consentId && supported && typeof api.revokeProviderDiscovery === 'function') {
         try {
           await api.revokeProviderDiscovery({ requestId: newRequestId('revoke'), consentId });
@@ -621,7 +645,7 @@ export function createDiscoveryController({
       const modeError = modeReason(state.authMode);
       if (modeError) return notify({ test: { ...state.test, status: 'failed', error: 'unsupported', reason: modeError } });
       if (!state.consentId) return notify({ test: { ...state.test, status: 'failed', error: 'invalid_target', reason: '请先授权目标，再测试连接' } });
-      await abortActiveOperation();
+      await abortActiveOperations();
       if (disposed || seq !== activeRequest) return state;
       const snapshot = snapshotOf(seq);
       notify({ operationId: null, test: { status: 'running', facts: null, error: '', reason: '正在测试连接…', operationId: null } });
@@ -639,7 +663,11 @@ export function createDiscoveryController({
       } catch {
         result = { ok: false, network: true, code: 'network_failed' };
       }
-      if (!isCurrent(snapshot)) return state;
+      if (!isCurrent(snapshot)) {
+        // 与发现相同：迟到的测试 202 也必须取消，不能留下后台单飞槽。
+        if (result?.ok === true && result.operationId) void cancelOperation(result.operationId);
+        return state;
+      }
       if (!result || result.ok !== true) {
         const error = result?.network ? { code: 'network_failed' } : result || { code: 'failed' };
         return notify({ test: { status: 'failed', facts: null, error: error.code || 'failed', reason: discoveryFailureReason(error), operationId: null } });
@@ -652,21 +680,32 @@ export function createDiscoveryController({
     },
     cancel() {
       clearTimer();
-      activeRequest += 1;
-      const operationId = state.operationId;
-      const testOperationId = state.test.operationId;
+      const cancelSeq = ++activeRequest;
+      const ids = [...new Set([state.operationId, state.test.operationId].filter(Boolean))];
       state.operationId = null;
       wakePoll();
-      if (operationId) void cancelOperation(operationId);
-      if (testOperationId) void cancelOperation(testOperationId);
       if (disposed) return state;
-      const wasTesting = state.test.status === 'running';
-      return notify({
+      const wasTesting = state.test.status === 'running' || Boolean(state.test.operationId);
+      const wasBusy = wasTesting || ids.length > 0
+        || state.status === DISCOVERY_STATUS.DEBOUNCING || state.status === DISCOVERY_STATUS.REFRESHING;
+      const localReason = wasBusy ? DISCOVERY_REASON.cancel_requested : '';
+      const current = notify({
         status: state.consentId ? DISCOVERY_STATUS.AUTHORIZED_IDLE : initialStatus(supported),
-        reason: operationId || testOperationId ? DISCOVERY_REASON.cancelled : '',
+        reason: localReason,
         operationId: null,
-        ...(wasTesting ? { test: { ...state.test, status: 'idle', reason: DISCOVERY_REASON.cancelled, operationId: null } } : {}),
+        ...(wasTesting ? { test: { ...state.test, status: 'idle', reason: localReason, operationId: null } } : {}),
       });
+      if (ids.length) {
+        // 「已请求取消」不等于后端已停止。只有取消请求得到明确结果（已取消，
+        // 或操作已不存在/已被替换）才把文案收敛为已取消；网络失败保持保守。
+        void Promise.all(ids.map(id => cancelOperation(id))).then(results => {
+          if (disposed || activeRequest !== cancelSeq) return;
+          const confirmed = results.every(result => result
+            && (result.ok === true || result.code === 'not_found' || result.code === 'config_conflict'));
+          notify({ reason: confirmed ? DISCOVERY_REASON.cancelled : DISCOVERY_REASON.cancel_unconfirmed });
+        });
+      }
+      return current;
     },
     dispose() {
       disposed = true;

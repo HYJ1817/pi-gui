@@ -69,6 +69,13 @@ export function createCredentialController({
   let waitTimer = null;
   let unsubscribe = null;
   let lastTerminal = null;
+  // 窗口打开请求本身也是单飞资源：bridge.open() 尚未返回时 waiter 还是 null，
+  // 只靠 waiter 会让第二次点击再开一个受限窗。
+  let opening = false;
+  // 取消/关闭必须能让仍在 bridge.open() 里的旧请求失效；否则它返回后还会
+  // 进入 180 秒的等待，把弹窗的 credentialBusy 一直占住。
+  let openAttempt = 0;
+  let disposed = false;
 
   const notify = patch => {
     state = { ...state, ...patch };
@@ -122,18 +129,35 @@ export function createCredentialController({
   }
 
   async function open({ draftId, draftRevision, action = 'set' } = {}) {
+    if (disposed) return { ok: false, code: 'closed', reason: CREDENTIAL_REASON.stale };
     if (!bridge) {
       return { ok: false, code: 'unsupported', reason: CREDENTIAL_REASON.web };
     }
-    if (waiter) return { ok: false, code: 'busy', reason: CREDENTIAL_REASON.busy };
+    if (opening || waiter) return { ok: false, code: 'busy', reason: CREDENTIAL_REASON.busy };
     if (!draftId || !Number.isSafeInteger(draftRevision) || draftRevision < 1) {
       return { ok: false, code: 'invalid_request', reason: '草稿尚未保存，无法打开凭据窗口' };
     }
     lastTerminal = null;
+    const attempt = ++openAttempt;
+    opening = true;
     notify({ phase: 'opening', action, reason: '', lastError: '', expiresAt: null });
     let opened;
     try { opened = await bridge.open({ draftId, draftRevision, action }); }
     catch { opened = { ok: false, code: 'unavailable' }; }
+    opening = false;
+    // 弹窗关闭/换目标可能发生在 bridge.open() 返回之前。此时受限窗可能
+    // 已经在主进程里创建，必须再取消一次，不能让它继续接收输入。
+    if (disposed) {
+      try { bridge?.cancel?.(); } catch { /* 主进程会按 TTL 清理 */ }
+      notify({ phase: 'cancelled', reason: CREDENTIAL_REASON.stale, lastError: 'closed' });
+      return { ok: false, code: 'closed', reason: CREDENTIAL_REASON.stale, cancelled: true };
+    }
+    // cancel()/dispose()/新的 open() 已让这次打开过期；即使 bridge.open()
+    // 仍返回成功，也不能再进入等待，否则旧流程会占住弹窗的凭据单飞槽直到
+    // 超时。状态由取消者或新一次 open() 负责，这里不能覆盖它。
+    if (attempt !== openAttempt) {
+      return { ok: false, code: 'cancelled', reason: CREDENTIAL_REASON.cancelled, cancelled: true };
+    }
     if (!opened || opened.ok !== true) {
       const reason = credentialOpenReason(opened);
       notify({ phase: opened?.cancelled ? 'cancelled' : 'error', lastError: opened?.code || 'unavailable', reason });
@@ -147,6 +171,12 @@ export function createCredentialController({
       waitTimer = setTimeoutFn(() => settle('expired'), waitTimeoutMs);
       if (lastTerminal) settle(lastTerminal);
     });
+    if (disposed) {
+      return { ok: false, code: 'closed', reason: CREDENTIAL_REASON.stale, cancelled: true };
+    }
+    if (attempt !== openAttempt) {
+      return { ok: false, code: 'cancelled', reason: CREDENTIAL_REASON.cancelled, cancelled: true };
+    }
     if (outcome === 'staged') {
       notify({ phase: 'staged', reason: '', lastError: '' });
       return { ok: true, staged: true, action };
@@ -167,6 +197,9 @@ export function createCredentialController({
   }
 
   function cancel() {
+    if (disposed) return state;
+    // 同时使 bridge.open() 尚未返回的请求过期；否则它返回后会重新挂起等待。
+    openAttempt += 1;
     try { bridge?.cancel?.(); } catch { /* 主进程会自行清理 */ }
     settle('cancelled');
     return notify({ phase: 'cancelled', reason: CREDENTIAL_REASON.cancelled });
@@ -183,10 +216,17 @@ export function createCredentialController({
     closeDraft,
     cancel,
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      // 关闭弹窗时受限窗可能还在等待输入。取消并兑现等待者，避免旧流程
+      // 永远悬挂，或在 dispose 之后又调用 bridge.open 开出一个新窗口。
+      if (opening || waiter) {
+        try { bridge?.cancel?.(); } catch { /* 主进程会自行清理 */ }
+      }
+      settle('closed');
       if (unsubscribe) { unsubscribe(); unsubscribe = null; }
       if (waitTimer !== null) clearTimeoutFn(waitTimer);
       waitTimer = null;
-      waiter = null;
       listeners.clear();
     },
   };

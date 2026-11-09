@@ -125,6 +125,9 @@ let menuCloser = null;
 let pageStatusHost = null;
 let syncController = null;
 let lastSaveNotice = null;
+// 每次打开/关闭供应商设置页都换一代。旧页面的核验回调只能丢弃自己的结果，
+// 不能改写新页面的横幅、状态条或全局 syncController。
+let providersPageEpoch = 0;
 
 /* 只有「明确未启用」才允许旧接口写入。
  * 后端关闭管理接口时回 422 {code:'unsupported'}；404/405/400 也属于同一类
@@ -450,6 +453,8 @@ function syncBanner(snapshot) {
 /* 只读核验：POST /sync → 202 → 轮询操作结果；绝不重启进程或结束会话。 */
 async function verifySync() {
   if (!managementSnapshot || syncController) return;
+  const pageEpoch = providersPageEpoch;
+  const revision = managementSnapshot.revision;
   const controller = createSyncController({
     api: { syncProviderConfiguration, fetchProviderOperation },
   });
@@ -460,17 +465,25 @@ async function verifySync() {
   const title = host?.querySelector('.pm-sync-title');
   const reason = host?.querySelector('.pm-sync-reason');
   const off = controller.subscribe(state => {
-    if (title) title.textContent = state.state === 'syncing' ? '正在核验 Runtime 同步…' : 'Runtime 同步状态';
-    if (reason) reason.textContent = state.reason || '';
+    // 页面已经关闭或换了新页面：旧节点可能已销毁，不能继续写 DOM。
+    if (providersPageEpoch !== pageEpoch || !title?.isConnected) return;
+    title.textContent = state.state === 'syncing' ? '正在核验 Runtime 同步…' : 'Runtime 同步状态';
+    if (reason?.isConnected) reason.textContent = state.reason || '';
   });
   let final = null;
-  try { final = await controller.verify({ revision: managementSnapshot.revision }); }
+  try { final = await controller.verify({ revision }); }
   catch { final = controller.getState(); }
   off();
   controller.dispose();
-  syncController = null;
-  if (final?.state === 'error') toast(final.reason || 'Runtime 同步核验失败。', 'error', { important: true });
+  // 旧页面的回调不能把新页面刚创建的控制器清掉。
+  if (syncController === controller) syncController = null;
+  if (providersPageEpoch !== pageEpoch) return;
+  // 先重读权威快照；若核验期间 revision 已变化，旧操作结果不属于当前配置，
+  // 不能拿它显示「新配置已生效」。
   await refreshManagement();
+  if (providersPageEpoch !== pageEpoch) return;
+  if (managementSnapshot?.revision !== revision) return;
+  if (final?.state === 'error') toast(final.reason || 'Runtime 同步核验失败。', 'error', { important: true });
 }
 
 function serviceBadges(service) {
@@ -982,6 +995,7 @@ export function setProvidersData(data) {
 
 export function openProvidersPanel({ present = openModal } = {}) {
   let ownedBox = null;
+  const pageEpoch = ++providersPageEpoch;
   lastSaveNotice = null;
   present((card, close) => {
     card.classList.add('wide', 'prov-settings-page', 'pm-settings-page');
@@ -1051,10 +1065,17 @@ export function openProvidersPanel({ present = openModal } = {}) {
 
     loadProviders(box);
   }, () => {
-    closeMenu();
-    if (syncController) { syncController.dispose(); syncController = null; }
-    if (panels.providers === ownedBox) panels.providers = null;
-    if (pageStatusHost === document.querySelector('.pm-page-status')) pageStatusHost = null;
+    // 先换页代次，再停控制器；在途的 /sync 回调醒来后只能看到已失效的页面。
+    const currentPage = providersPageEpoch === pageEpoch;
+    // 旧页面的关闭回调不能停掉新页面的控制器、关掉新页面的菜单，也不能把
+    // 新页面刚登记的列表/状态节点当成自己的清空。只有仍是当前页才执行。
+    if (currentPage) {
+      providersPageEpoch += 1;
+      closeMenu();
+      if (syncController) { syncController.dispose(); syncController = null; }
+      if (panels.providers === ownedBox) panels.providers = null;
+      if (pageStatusHost === document.querySelector('.pm-page-status')) pageStatusHost = null;
+    }
   });
 }
 
