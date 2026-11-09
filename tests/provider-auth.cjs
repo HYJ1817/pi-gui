@@ -418,12 +418,16 @@ async function packagedServerCases(dir) {
     check('packaged worker forwards native callback as safe manual prompt', () => { assert.equal(waiting.flow.prompt.type, 'manual_code'); assert.deepEqual(waiting.flow.prompt.options, []); });
     const answered = await request('/api/provider-auth/respond', { flowId: waiting.flow.id, promptId: waiting.flow.prompt.id, value: 'fixture-code' });
     check('packaged native callback route accepts matching reply', () => assert.equal(answered.status, 200));
-    const loggedIn = await poll(j => j.flow?.state === 'success' && j.sync?.state === 'synced');
+    const loggedIn = await poll(j => j.flow?.state === 'success' && ['pending', 'synced', 'error'].includes(j.sync?.state));
     check('packaged native login readback confirms locally stored OAuth', () => { const p = loggedIn.providers.find(p => p.providerId === 'manual'); assert.equal(p.credentialStored, true); assert.equal(p.authenticated, true); });
+    check('confirmed OAuth stays pending when there is no live Runtime', () => assert.equal(loggedIn.sync.state, 'pending'));
+    const retried = await request('/api/provider-auth/sync', {});
+    check('explicit retry does not claim no-project synchronization succeeded', () => { assert.equal(retried.status, 200); assert.equal(retried.body.sync.state, 'pending'); });
     const loggedOut = await request('/api/provider-auth/logout', { providerId: 'manual' });
     check('packaged native logout route accepts stored credential removal', () => assert.equal(loggedOut.status, 200));
-    const removed = await poll(j => j.flow?.operation === 'logout' && j.flow.state === 'success' && j.sync?.state === 'synced');
+    const removed = await poll(j => j.flow?.operation === 'logout' && j.flow.state === 'success' && ['pending', 'synced', 'error'].includes(j.sync?.state));
     check('packaged native logout re-enumerates removed local credential', () => assert.equal(removed.providers.find(p => p.providerId === 'manual').credentialStored, false));
+    check('confirmed logout remains pending without a live Runtime', () => assert.equal(removed.sync.state, 'pending'));
     check('packaged worker stdout stderr and HTTP never expose credential sentinel', () => assert.ok(!output.includes(SECRET)));
     check('packaged fixture never activates a project or spawns real Pi', () => assert.equal(fs.existsSync(path.join(data, 'projects.json')), false));
   } finally {

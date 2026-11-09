@@ -19,12 +19,13 @@ const ERRORS = {
 
 export function createProviderAuth({ adapter, busyReason = () => null, synchronize = async () => ({ ok: true }),
   readModels = async () => null, customProviders = () => [], startBlocked = () => false,
-  acquireMutation = () => null, timeoutMs = 5 * 60 * 1000 } = {}) {
+  acquireMutation = () => null, runtimeSync = null, retryRuntimeSync = null, observeRuntimeSync = null, timeoutMs = 5 * 60 * 1000 } = {}) {
   let generation = 0, active = null, current = null, revision = 0, readSequence = 0, disposed = false;
   let data = { capability: { sdkAvailable: false, reason: '正在读取 Pi 认证能力', piVersion: null }, providers: [] };
   let synchronization = { state: 'idle', reason: null }; let needsSync = false, syncPromise = null;
   let readQueue = Promise.resolve();
-  const snapshot = () => structuredClone({ ok: true, ...data, flow: current, sync: synchronization });
+  const snapshot = () => structuredClone({ ok: true, ...data, flow: current,
+    sync: !active && synchronization.state !== 'error' && runtimeSync ? runtimeSync() : synchronization });
   const fail = code => ({ ok: false, code, error: ERRORS[code] || ERRORS['native-auth-failed'] });
   function update(flow, patch) {
     if (current !== flow || disposed) return;
@@ -62,7 +63,7 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
     data = { capability: result.capability, providers: [...providers.values()] };
     return snapshot();
   }
-  function read() { return refresh().then(() => { void sync(); return snapshot(); }); }
+  function read() { return refresh().then(() => { if (!runtimeSync) void sync(); return snapshot(); }); }
   function notify(flow, event) {
     if (!owns(flow)) return;
     if (event?.type === 'auth_url' || event?.type === 'device_code') {
@@ -108,7 +109,7 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
   async function execute(op) {
     const { flow, controller } = op;
     let errorCode = null;
-    let release, stopped = true;
+    let release, stopped = true, attempted = false;
     try {
       await refresh();
       if (!owns(flow)) return;
@@ -117,13 +118,14 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
       if (startBlocked()) { errorCode = 'busy'; return; }
       try { release = acquireMutation(flow.providerId); }
       catch { errorCode = 'busy'; return; }
+      attempted = true;
       if (flow.operation === 'login') await adapter.login(flow.providerId, 'oauth', { signal: controller.signal, notify: e => notify(flow, e), prompt: p => prompt(flow, p), abortPrompt: id => abortPrompt(flow, id) });
       else await adapter.logout(flow.providerId, { signal: controller.signal });
     } catch (error) {
       stopped = error?.nativeUnconfirmed !== true;
       errorCode = !stopped ? 'unconfirmed' : Object.hasOwn(ERRORS, error?.code) ? error.code : 'native-auth-failed';
     } finally {
-      try { release?.(stopped); } catch { stopped = false; errorCode = 'unconfirmed'; }
+      try { release?.(stopped, attempted); } catch { stopped = false; errorCode = 'unconfirmed'; }
       clearTimeout(op.timer);
       if (op.answer) { op.answer.reject(new Error('auth ended')); op.answer = null; }
       if (active === op && !disposed) {
@@ -139,6 +141,10 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
         // A native operation may commit and then fail to synchronize. Even
         // cancellation is read back; exit code/Promise alone is not evidence.
         if (!stopped) { needsSync = false; synchronization = { state: 'error', reason: ERRORS.unconfirmed }; }
+        else if (runtimeSync) {
+          synchronization = { state: 'idle', reason: null };
+          if (attempted) observeRuntimeSync?.();
+        }
         else if (errorCode !== 'busy') { needsSync = true; synchronization = { state: 'pending', reason: null }; await sync(); }
       }
     }
@@ -162,7 +168,9 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
   }
   function cancel(flowId) { if (!current || current.id !== flowId) return fail('stale'); return terminate(current, 'cancelled'); }
   async function sync() {
-    if (disposed || !needsSync || active) return snapshot();
+    if (disposed || active) return snapshot();
+    if (runtimeSync) { await retryRuntimeSync?.(); return snapshot(); }
+    if (!needsSync) return snapshot();
     if (syncPromise) { await syncPromise; return snapshot(); }
     if (busyReason()) { synchronization = { state: 'pending', reason: '当前 Pi 正在运行任务，空闲后同步认证和模型' }; return snapshot(); }
     const gen = generation;
@@ -181,7 +189,7 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
   }
   function observeRuntime() {
     if (active && active.identity !== identity()) terminate(active.flow, 'cancelled');
-    void sync();
+    if (!runtimeSync) void sync();
   }
   async function handle(req, res, url) {
     if (req.method === 'GET' && url.pathname === '/api/provider-auth') return json(res, 200, await read());

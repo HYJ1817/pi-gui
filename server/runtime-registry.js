@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { runtimeWitnessCurrent } from './provider-config-sync.js';
 
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 const COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'get_state', 'get_messages', 'get_tree', 'get_session_stats', 'get_available_models', 'get_commands', 'set_model', 'cycle_model', 'set_thinking_level', 'cycle_thinking_level', 'set_session_name', 'extension_ui_response', 'compact']);
@@ -16,7 +17,7 @@ const projectWorkspace = w => typeof w?.workspaceId === 'string' && w.workspaceI
 export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, validateWorkspace = async () => {},
   publish = () => {}, externalCount = () => 0, beforeStart = () => null, beforeCommand = () => null,
   admission = (_args, action) => action(), onFocus = async () => {}, maxEvents = 200, maxBytes = 1024 * 1024,
-  logEvent = null, sharedAdmission = async () => { throw fail('tool_guard_unavailable'); } } = {}) {
+  logEvent = null, providerLifecycle = () => {}, sharedAdmission = async () => { throw fail('tool_guard_unavailable'); } } = {}) {
   const diagLog = typeof logEvent === 'function' ? logEvent : () => {};
   const safeLog = (event, details = {}) => { try { diagLog(event, details); } catch { /* observation only */ } };
   const backendInstance = randomUUID(), records = new Map(), lives = new Map(), leases = new Map(), revisions = new Map();
@@ -201,9 +202,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live.record.sessionId = state.sessionId; live.record.sessionLocator = locator;
     live.record.sessionIdentity = null;
     if (locator) try { const st = fs.statSync(locator); live.record.sessionIdentity = { dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs }; } catch {}
+    live.providerSessionIdentity ??= live.record.sessionIdentity;
     if (typeof state.sessionName === 'string' && (state.sessionName.trim() || !projectWorkspace(live.record.workspace))) live.record.sessionName = state.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
     try { save(); } catch { live.error = 'metadata_write_failed'; }
     changed(live);
+    providerLifecycle();
   }
   async function launchRecord(record, options = {}) {
     guardStore(); const blocked = beforeStart(); if (blocked) throw fail(blocked);
@@ -220,20 +223,26 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const total = lives.size + externalCount();
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
+      providerSessionIdentity: record.sessionIdentity,
       sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set(), approvals: new Map() };
     if (!leases.has(key)) leases.set(key, new Set());
-    leases.get(key).add(live); lives.set(record.conversationId, live); changed(live);
-    try {
+    leases.get(key).add(live); lives.set(record.conversationId, live);
+    live.adapterReady = Promise.resolve().then(async () => {
+      if (!belongs(live)) throw fail('stale_runtime');
       live.adapter = await factory({ cwd: record.workspace.cwd, workspace: { ...record.workspace }, owner: owner(live),
         sessionId: record.sessionId, sessionLocator: record.sessionLocator, isCurrent: () => belongs(live), getOwner: () => owner(live) }, event => emit(live, event));
+    });
+    changed(live);
+    try {
+      await live.adapterReady;
       if (!belongs(live)) throw fail('stale_runtime');
       live.adapter.start();
       return { ok: true, conversationId: record.conversationId, owner: owner(live), item: summary(record) };
     } catch (e) {
       live.lifecycle = 'error'; live.error = 'runtime_start_failed';
       safeLog('runtime.start_failed', { phase: 'factory', code: e && e.code ? e.code : 'runtime_start_failed' });
-      if (!live.adapter) { lives.delete(record.conversationId); leases.get(key)?.delete(live); if (!leases.get(key)?.size) leases.delete(key); }
-      else await retire(live).catch(() => {});
+      if (live.adapter || live.retirePromise) await retire(live).catch(() => {});
+      else { lives.delete(record.conversationId); leases.get(key)?.delete(live); if (!leases.get(key)?.size) leases.delete(key); }
       throw fail(e.code || 'runtime_start_failed');
     }
   }
@@ -366,7 +375,12 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (!live.retired) { live.retired = true; live.generation = randomUUID(); }
     live.lifecycle = 'disposing';
     live.retirePromise = (async () => {
-      const cleanup = await Promise.allSettled([invalidateResources(live), Promise.resolve().then(() => live.adapter?.dispose())]);
+      // Invalidation can arrive while the factory is still acquiring resources.
+      const disposeAdapter = async () => {
+        await live.adapterReady.catch(() => {});
+        await live.adapter?.dispose();
+      };
+      const cleanup = await Promise.allSettled([invalidateResources(live), disposeAdapter()]);
       if (cleanup.some(result => result.status === 'rejected')) throw fail('cleanup_pending');
       if (live.adapter?.cleanupConfirmed && !live.adapter.cleanupConfirmed()) throw fail('cleanup_pending');
       leases.get(live.key)?.delete(live); if (!leases.get(live.key)?.size) leases.delete(live.key);
@@ -374,6 +388,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       if (focused === live.record.conversationId && !lives.has(live.record.conversationId)) { focused = null; contextRevision++; }
       touch(live);
       publish({ type: 'runtime_closed', backendInstance, owner: live.closedOwner, conversationId: live.record.conversationId, item: summary(live.record) });
+      providerLifecycle();
     })().catch(e => { live.retirePromise = null; live.error = 'cleanup_pending';
       safeLog('runtime.cleanup_failed', { phase: 'retire', reason: 'cleanup_pending' });
       touch(live);
@@ -385,7 +400,28 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   async function invalidateWorkspace(id) { const results = await Promise.allSettled([...lives.values()].filter(l => l.record.workspace.workspaceId === id).map(l => retire(l))); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); }
   async function healthCheck() { for (const live of [...lives.values()]) { try { await validateWorkspace(live.record.workspace); } catch { await retire(live).catch(() => {}); } } }
   async function dispose() { disposed = true; await queue.catch(() => {}); const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); }
+  function providerSyncTargets() {
+    return [...lives.values()].filter(belongs).map(live => {
+      const adapter = live.adapter;
+      const expected = owner(live);
+      const key = JSON.stringify(expected);
+      const launch = adapter?.providerLaunch?.();
+      const witness = state => state.sessionId === expected.sessionId && live.providerSessionIdentity
+        ? adapter.providerSession(state, live.providerSessionIdentity) : null;
+      return { id: expected.conversationId, kind: 'runtime', key, launch,
+        ready: Boolean(expected.sessionId && live.lifecycle === 'ready' && launch),
+        current: () => belongs(live) && key === JSON.stringify(owner(live)) && live.lifecycle === 'ready' &&
+          adapter.providerLaunch() === launch && adapter.providerLaunchCurrent(launch),
+        busy: () => live.activity !== 'idle' || live.approvals.size > 0 || adapter.updateBusy() || Boolean(adapter.getState().stop?.pending) ||
+          adapter.managed.manager.snapshot().processes.some(process => !process.cleanupConfirmed),
+        request: type => adapter.providerRead(type),
+        async session(state) { await validateWorkspace(live.record.workspace); return witness(state); },
+        witnessCurrent: runtimeWitnessCurrent,
+      };
+    });
+  }
   return { start, openProjectSession, resume, close, restart, command, read, focus, blur, events, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
+    providerSyncTargets,
     ownsNativeSession: id => Boolean(id) && [...lives.values()].some(l => l.sessionId === id || l.record.sessionId === id),
     contextRevision: () => contextRevision,
     inUse: root => leases.has(rootKey(root)), liveCount: () => lives.size, runningCount: () => [...lives.values()].filter(l => l.activity !== 'idle').length,

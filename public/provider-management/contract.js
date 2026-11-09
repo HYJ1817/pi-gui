@@ -68,7 +68,7 @@ export function providerFailure(code, field) {
   const details = providerContractError(code, field ? { [field]: 'invalid' } : undefined);
   throw Object.assign(Error(details.message), details, { providerMutation: true });
 }
-export function providerManagementCapabilities({ oauthLogin = null, modelOverrides = null, desktop = null } = {}) {
+export function providerManagementCapabilities({ oauthLogin = null, modelOverrides = null, desktop = null, runtimeSync = false } = {}) {
   const desktopPart = desktop && typeof desktop === 'object'
     ? {
       rawKeyInput: desktop.rawKeyInput === true,
@@ -79,12 +79,12 @@ export function providerManagementCapabilities({ oauthLogin = null, modelOverrid
     : { rawKeyInput: false, keyStaging: false, nativeCredentialPersistence: false, privateDesktopBridge: false };
   const reason = (granted, pending) => granted ? null : pending;
   return { ...desktopPart,
-    oauthLogin, discoveryModes: [], modelOverrides, syncMode: 'unsupported', reasons: {
+    oauthLogin, discoveryModes: [], modelOverrides, syncMode: runtimeSync ? 'deferred' : 'unsupported', reasons: {
       rawKeyInput: reason(desktopPart.rawKeyInput, 'desktop_input_pending'),
       keyStaging: reason(desktopPart.keyStaging, 'private_bridge_pending'),
       nativeCredentialPersistence: reason(desktopPart.nativeCredentialPersistence, 'private_bridge_pending'),
       privateDesktopBridge: reason(desktopPart.privateDesktopBridge, 'p2_pending'),
-      discoveryModes: 'discovery_transport_pending', syncMode: 'runtime_sync_pending',
+      discoveryModes: 'discovery_transport_pending', syncMode: reason(runtimeSync, 'runtime_sync_pending'),
     } };
 }
 

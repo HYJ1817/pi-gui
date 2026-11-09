@@ -121,7 +121,7 @@ export function apiKeyState(apiKey) {
 /**
  * @param modelsJson ~/.pi/agent/models.json 的绝对路径
  */
-export function createProviders({ modelsJson, metadataPath = path.join(path.dirname(modelsJson), 'provider-management.json'), mutationBlocked = () => false,
+export function createProviders({ modelsJson, metadataPath = path.join(path.dirname(modelsJson), 'provider-management.json'), mutationBlocked = () => false, onChanged = () => {},
   inspectCredential = async () => {
     try { fs.lstatSync(path.join(path.dirname(modelsJson), 'auth.json')); }
     catch (error) { if (error.code === 'ENOENT') return { present: false, builtIn: null }; }
@@ -169,6 +169,7 @@ export function createProviders({ modelsJson, metadataPath = path.join(path.dirn
           removeProviderRecord(current, name, { credential });
           return { ok: true, path: modelsJson, removed: name };
         } });
+        onChanged();
         return json(res, 200, result);
       }
       if (url.pathname !== '/api/providers') providerFailure('method_not_allowed');
@@ -192,6 +193,7 @@ export function createProviders({ modelsJson, metadataPath = path.join(path.dirn
         const key = apiKeyState(saved.apiKey);
         return { ok: true, path: modelsJson, provider: name, warning: key.ok ? '' : key.note, keyState: key };
       } });
+      onChanged();
       return json(res, 200, result);
     } catch (error) { return failure(res, error); }
   }
