@@ -7,10 +7,10 @@ HTTP 入口为 `/api/provider-management`。P0＋P1 默认关闭该入口，开�
 | 方法 / 相对路径 | API 方法 | 请求 | HTTP 200 结果 |
 | --- | --- | --- | --- |
 | GET `/`（根路径无尾斜杠） | `fetchProviderManagement()` | 无 | `Snapshot` |
-| POST `/drafts` | `saveProviderDraft(body)` | `{requestId,expectedRevision,serviceId?,draftId?,expectedDraftRevision?,draft}` | `{ok:true,draftId,draftRevision,connectionRevision,targetFingerprint,credentialState,consentState,cachedModels,sourceKind}` |
+| POST `/drafts` | `saveProviderDraft(body)` | `{requestId,expectedRevision,serviceId?,draftId?,expectedDraftRevision?,draft}` | `{ok:true,draftId,draftRevision,connectionRevision,targetFingerprint,credentialState,consentState,consentId?,consentExpiresAt?,cachedModels,sourceKind}` |
 | POST `/commit` | `commitProviderDraft(body)` | `{requestId,expectedRevision,action,serviceId?,draftId?,draftRevision?,credentialAction?}` | `{ok:true,revision,serviceId,saved:true,credentialSaved:null,credentialState:'none',operationId:null,sync}` |
 
-`Snapshot` 为 `{ok:true,schemaVersion:1,revision,capabilities,catalog,services,auth,sync}`。`revision` 和 `targetFingerprint` 为不透明字符串，`draftRevision` 和 `connectionRevision` 为正整数。当前同步状态为 `{state:'idle',reason:null}` 或 `{state:'pending',reason:'runtime_sync_pending'}`。配置落盘成功可以显示“已保存，待同步”。独立同步入口由 P3 接通。
+`Snapshot` 为 `{ok:true,schemaVersion:1,revision,capabilities,catalog,services,auth,sync}`。`revision` 和 `targetFingerprint` 为不透明字符串，`draftRevision` 和 `connectionRevision` 为正整数。P3-C 接通后，`sync` 为 `{state:'idle'|'pending'|'applied'|'error',reason,runtimes}`，逐目标事实为 `{id,kind,state,reason}`；只有协调器回读确认后才出现 `applied`。配置落盘成功只说明配置已保存，Runtime 是否生效另看 `sync`。
 
 | 快照字段 | 结构和读法 |
 | --- | --- |
@@ -18,20 +18,20 @@ HTTP 入口为 `/api/provider-management`。P0＋P1 默认关闭该入口，开�
 | `services[]` | `{serviceId,providerId,catalogId,displayName,enabled,connection,credentialState,authMode,models,selectedModelIds,modelOrder,readOnly,compatibility}`。`catalogId`、`connection` 可以为 null。`selectedModelIds:null` 表示继承现有可用列表，空数组表示没有选择。`modelOrder` 是右栏次序。服务状态中的 `credentialState` 为 `{state,source}`，`source` 取 `env/literal/command/pi-credential/unknown`。 |
 | `models[]` | `{modelId,providerId,configSource,effectiveValues,editableOverrides}`。`configSource` 为 `configured/builtin-override`。两种值结构包含可编辑字段，`effectiveValues` 另有只读三值 `toolCalling` 和 `streaming`。缺少字段表示未知或继承。 |
 | `auth` | `{sdkAvailable,piVersion,providers,flow:null}`。`piVersion` 为版本字符串或 null。每个供应商为 `{providerId,displayName,status,authType,canLogin,canLogout,methods}`。`status` 为 `connected/disconnected/unknown/unsupported`，`authType` 为 `oauth/api-key/environment/null`。方法为 `{type,canLogin,isSubscription}`，`type` 为 `oauth/api-key/environment`。活跃流程另从既有 OAuth API 读取。 |
-| `capabilities` | `{rawKeyInput,keyStaging,nativeCredentialPersistence,privateDesktopBridge,oauthLogin,discoveryModes,modelOverrides,syncMode,reasons}`。原文输入和私有通道当前为 false，`discoveryModes:[]`，`syncMode:'unsupported'`。`oauthLogin/modelOverrides` 保留未知 `null`。以快照能力和 `reasons` 渲染对应禁用说明。 |
+| `capabilities` | `{rawKeyInput,keyStaging,nativeCredentialPersistence,privateDesktopBridge,oauthLogin,discoveryModes,modelOverrides,syncMode,reasons}`。桌面能力要求私有桥完成握手且 SDK 资格成立；`nativeCredentialPersistence` 还要求 `auth.json` 的所有者/权限见证成立。`discoveryModes` 由后端按 P3-B 接线与私有桥状态给出，只允许 `none/environment/pi-credential`。`syncMode:'deferred'` 表示 P3-C 已提供只读同步核验。`oauthLogin/modelOverrides` 保留未知 `null`。以快照能力和 `reasons` 渲染对应禁用说明，不得由前端自行放宽。 |
 
 ### 草稿与提交
 
 - `Draft` 包含 `{providerId,authMode,displayName,connection,modelPatches,selectedModelIds,modelOrder,enabled,serviceId?,catalogId?,piRegistrationReference?,confirmBuiltinOverride?}`。`authMode` 为 `environment/pi-credential/oauth/none`。`connection` 为 `{baseUrl,api}`，API 枚举为 `openai-completions/openai-responses/anthropic-messages/google-generative-ai`。连接为无用户信息、查询或片段的 HTTP(S) URL。`piRegistrationReference` 仅用于 `none` 的回环注册占位，值为 `$NAME` 或 `${NAME}`。
 - 每个模型 patch 为 `{modelId,operation:'upsert',set?,unsetFields?}` 或 `{modelId,operation:'remove'}`。允许 `name/contextWindow/maxTokens/reasoning/input`，两个 token 参数为正安全整数，输出上限不得超过上下文，`input` 为由 `text/image` 组成的非空去重数组。`unsetFields` 移除覆盖并恢复继承。未提交的字段原样保留。模型 ID 唯一且最长 300 字符，最多 3000 项。`selectedModelIds` 和 `modelOrder` 包含相同 ID，顺序由后者决定。首次建立内置覆盖需 `confirmBuiltinOverride:true`，且以后端确认的能力为准。
-- 创建草稿省略 `draftId/expectedDraftRevision`。编辑草稿同时提交两者。更新与复制传外层 `serviceId` 作为来源，复制的 `draft.providerId` 填新 ID。若草稿内含 `serviceId`，须与外层一致。仅连接身份或认证来源改变时递增 `connectionRevision`。当前草稿响应是 `credentialState:'none'`、`consentState:'unapproved'`、`cachedModels:[]`、`sourceKind:'none'`。它们描述这份草稿，服务的已有凭据状态仍从快照读取。
+- 创建草稿省略 `draftId/expectedDraftRevision`。编辑草稿同时提交两者。更新与复制传外层 `serviceId` 作为来源，复制的 `draft.providerId` 填新 ID。若草稿内含 `serviceId`，须与外层一致。仅连接身份或认证来源改变时递增 `connectionRevision`。草稿响应中的 `credentialState/consentState/cachedModels/sourceKind` 描述这份草稿，服务的已有凭据状态仍从快照读取。授权完成后，同一草稿的投影会带上与当前草稿、目标和认证代次绑定的 `consentId/consentExpiresAt`；它只是不透明句柄，不含凭据。`close-draft` 或换目标后该句柄失效。
 - `commit.action` 为 `create/update/clone/delete/disable`。前三种携带 `draftId/draftRevision`，除 create 外均需 `serviceId`。删除和停用省略草稿和凭据操作。`credentialAction` 可省略或为 `{type:'keep'}`、`{type:'env',reference}`、`{type:'none',confirmed:true}`。复制使用 `authMode:'none'`、新 provider ID 和 keep，复制结果只保留允许的模型字段。已有认证或认证不明的服务换端点时走复制。内置服务删除表现为停用。
-- 草稿保留 15 分钟。写操作用独立 `requestId`，重传同一请求时保持 ID 和请求内容，内容变化时换 ID。commit 结果收据持久化，草稿收据在内存中。`config_conflict` 先重读快照并比较编辑内容，`draft_conflict` 用新草稿重新提交。原生凭据 `{type:'apply-staged'}` 和 `{type:'clear-native'}` 的形状已冻结，当前提交返回 422 `unsupported`。
+- 草稿保留 15 分钟。写操作用独立 `requestId`，重传同一请求时保持 ID 和请求内容，内容变化时换 ID。commit 结果收据持久化，草稿收据在内存中。`config_conflict` 先重读快照并比较编辑内容，`draft_conflict` 用新草稿重新提交。P3-A 已实现原生凭据 `{type:'apply-staged'}` 与 `{type:'clear-native'}`：配置先落盘，凭据结果再以 `saved/cleared/saved-credential-error/credential-unconfirmed` 独立返回。
 - revision 只在签发它的后端实例中有效。重启后应先刷新快照；若在重试已完成的 commit，仍使用原请求和 ID，保留中的收据会返回原结果。新自定义 ID 必须有 SDK 对内置身份和凭据槽的明确证据；证据不足时提交可能返回 `unsupported` 或 `credential_conflict`。
 
-## 已冻结的后续接口
+## P3 已接通的接口
 
-P0＋P1 对以下有效请求返回 HTTP 422 `{ok:false,code:'unsupported',message,retryable:false}`。成功形状供 P2／P3 实现与 P4 fixture 使用。
+P0＋P1 曾对以下有效请求返回 HTTP 422 `{ok:false,code:'unsupported',message,retryable:false}`。P3-A/B/C 已按下列冻结形状接通；能力仍由快照的 `capabilities` 与 `reasons` 逐项门控，不能仅凭接口存在就显示可用。
 
 | 方法 / 相对路径 | API 方法 | 请求 | 后续结果 |
 | --- | --- | --- | --- |
@@ -51,7 +51,7 @@ P0＋P1 对以下有效请求返回 HTTP 422 `{ok:false,code:'unsupported',messa
 
 沿用 `/api/provider-auth` 和 [现有 OAuth 合同](provider-auth.md)。GET 返回 `{ok,capability,providers,flow,sync}`。POST `/login` 用 `{providerId,authType:'oauth'}`，`/logout` 用 `{providerId}`，`/respond` 用 `{flowId,promptId,value}`，`/cancel` 用 `{flowId}`，`/sync` 用 `{}`。成功返回同一快照，失败返回 `{ok:false,code,error}`。`value` 仅为当前受支持的 OAuth 授权交互值。普通应用页面的 API Key 区域只展示状态与入口。
 
-P2 的普通 preload 入口为 `providerCredentials.open({draftId,draftRevision,action})`、`cancel`、`status`，其中 `action` 为 `set/replace/clear/authorize-target`。页面只接收状态与能力，开放需通过主窗身份校验。独立输入窗的 `submit/cancel/status` 由 Codex 接线，普通页面无须构建其输入负载。私有帧的公共字段为 `{type:'provider-credential',action,requestId,backendEpoch}`，附加字段如下。[私有帧校验](../public/provider-management/contract.js)
+P2/P5 的普通 preload 入口为 `providerCredentials.open({draftId,draftRevision,action})`、`cancel`、`status`、`closeDraft({draftId})`，其中 `action` 为 `set/replace/clear/authorize-target`。页面只接收状态与能力，开放需通过主窗身份校验。`closeDraft` 只携带草稿标识，用于管理弹窗关闭或换目标时撤销该草稿的暂存与发现授权。独立输入窗的 `submit/cancel/status` 由受限预加载接线，普通页面无须构建其输入负载。私有帧的公共字段为 `{type:'provider-credential',action,requestId,backendEpoch}`，附加字段如下。[私有帧校验](../public/provider-management/contract.js)
 
 | 私有 action | 附加字段 |
 | --- | --- |
@@ -63,10 +63,12 @@ P2 的普通 preload 入口为 `providerCredentials.open({draftId,draftRevision,
 | `status` / `cancel` | `flowId` |
 | `close-draft` | `draftId` |
 
-P1 私有 SDK 适配可在测试中验证暂存、保存和清除，生产默认 `providerKeyInputEnabled=false`。后续成功保存区分 `saved` 和 `credentialSaved`，后者允许 `true/false/null`。配置已保存但凭据失败时保持草稿与右栏，显示 `saved-credential-error`。凭据结果不确定时显示 `credential-unconfirmed`，先回读，凭据已保存但待同步时展示 `saved-pending-sync`。[安全边界与绑定规则](provider-management-rebuild-plan.md#52-electron-专用秘密链路与生命周期)
+私有 SDK 适配可在测试中验证暂存、保存和清除，生产默认 `providerKeyInputEnabled=false`，未开启时相关按钮禁用并说明原因。成功保存区分 `saved` 和 `credentialSaved`，后者允许 `true/false/null`。配置已保存但凭据失败时保持草稿与右栏，显示 `saved-credential-error`。凭据结果不确定时显示 `credential-unconfirmed`：回读只描述 Pi 的当前状态，不能证明本次写入或清除成功，只有提交回执的 `credentialSaved/credentialState` 才是本轮结果的依据；GUI 不自动重发；凭据已保存但待同步时展示 `saved-pending-sync`。[安全边界与绑定规则](provider-management-rebuild-plan.md#52-electron-专用秘密链路与生命周期)
 
-## P4 试做与验收状态
+## P4 界面与 P5 集成状态
 
 用 fixture 的 `live` 作为当前合同示例，用 `fixturesOnly` 试做尚未开放的交互。固定布局包含网格、连接与凭据区、左候选和右已选栏，CSS 使用既有 `--ds-*` tokens。主题由根节点 `data-theme` 控制，两种主题使用同一 DTO。`modelOrder` 只改变 GUI 顺序，模型能力和 Pi 默认值保持原有语义。
 
 采用 [合同状态枚举](../public/provider-management/contract.js) 区分对话框、凭据、发现、操作和同步状态。授权之后的效果绑定 `connectionRevision/targetFingerprint/dialogGeneration/requestSeq`，过期响应不得覆盖草稿。失败保留右栏、已编辑参数和选择，旧缓存标 stale。示例 `fixturesOnly` 中的已保存、自动发现和受限输入只用于练习状态切换，运行页面通过 `capabilities` 判断实际可用性。
+
+P5 已把 P4 的界面入口接到真实实现：受限输入窗暂存后由 `/commit` 映射 `apply-staged`/`clear-native`；授权句柄随草稿投影返回，`/discover` 与 `/test` 走 202 ＋ 操作轮询，迟到或换目标的结果丢弃；`/sync` 只读核验并展示逐目标事实；关闭弹窗、换服务或改认证来源调用 `closeDraft`。主页面始终只持有草稿标识和不透明句柄，不持有密钥，也不直接读写 `auth.json`。
