@@ -22,66 +22,165 @@ P6 从 P5 合并基线 `cd243fb78e304c9666849ab983baf5b02b564ac0`（`origin/main
 
 P5 合并提交 `cd243fb` 已确认位于 `origin/main` 顶端；P6 分支基于该提交，原始基线可追溯。
 
-## 二、P5 main push CI 证据与失败处置
+## 二、GitHub CI 已知状态与精确提交
 
-- 准确 SHA：`cd243fb78e304c9666849ab983baf5b02b564ac0`
-- Run：[42606329154](https://github.com/HYJ1817/pi-gui/actions/runs/42606329154)，`push`（main），attempt 1
-- 最终结论：**failure**。分组结果：
-  - `Validate complete test plan`：success
-  - `Electron build check`：success
-  - `Tests (ui)`：success
-  - `Tests (security)`：success
-  - `Tests (native)`：success
-  - `Tests (faults)`：success
-  - `Tests (core)`：**failure** —— `node tests/thinking-dots.cjs` 退出 1
-  - `CI gate`：failure（按设计拦截，未放行）
-- **失败定性：测试缺陷（Pre-existing，PR #63 引入），不是产品缺陷、不是环境固定故障。**
-  - 失败断言：`重复 start 不重置正在进行的那一段`（`tests/thinking-dots.cjs:220`，断言辅助函数在 `:53`）。
-  - 根因：测试用两条独立 `setTimeout` 链做墙钟竞速；检查点名义余量仅 20ms
-    （280ms 检查 vs 300ms 段边界），Windows 定时器合并与事件循环负载即可吃掉余量。
-    产品语义本身正确（`public/thinking-dots.js:97` 的 `st.auto && !restart` 同步 no-op）。
-  - 交叉证据：PR #67 头提交 `e24376b` 的 PR CI（run 42601713543）在同一天通过同一套件；
-    本地在该 SHA 上复现约 1/3 概率（6 次运行 2 次失败，同一断言）。
-- **P6 处置**：将自动交替一节改为虚拟时钟驱动（接管 Node 全局 `setTimeout/clearTimeout`
-  手动推进），全部断言确定性化；原 7 条断言语义保留，新增段中途同步判别与无遗留计时器检查，
-  87 → 90；变异验证（临时破坏 no-op 守卫）可同步抓获。提交 `13f660a`。
-- 后续影响：P5 合并提交因此**没有有效的 main 精确 SHA 完整 CI 证明**；P6 分支的远程
-  完整证明需在推送后由其 PR/main CI 提供（本轮未获推送授权，标为待验证）。
+| 提交 | 事件 / Run | 结论 | 说明 |
+| --- | --- | --- | --- |
+| `cd243fb`（P5 合并） | push main / [42606329154](https://github.com/HYJ1817/pi-gui/actions/runs/42606329154)，attempt 1 | **failure** | 仅 `Tests (core)` 因 `tests/thinking-dots.cjs` 时序假红失败；其余组、计划与构建通过；CI gate 正确拦截 |
+| `13f660a`（P6 的修复） | — | — | thinking-dots 自动交替改为虚拟时钟驱动（确定性） |
+| `0171455`（并行修复合并，含同一 `13f660a`） | push main / 42639509745，attempt 1 | **failure** | 失败命令为 `node tests/ci-results.cjs`（`fixture timeout: second leaf running`，20s 等待窗口在 runner 负载下超时）。该测试与供应商管理无关，本地连续 3/3 通过；属于 CI 基础设施时序抖动，归并行 CI 修复工作流跟进 |
+| `codex/provider-management-p6` HEAD | 未推送 / 无 PR CI | **待验证** | 本轮未获推送与建 PR 授权；最终完整证明以本地 `npm test` 加后续 PR/main CI 为准 |
 
-## 三、完整测试清单与实际数字
+**P5 基线失败定性（已关闭）**：`tests/thinking-dots.cjs` 用两条独立 `setTimeout`
+链做墙钟竞速（检查点名义余量 20ms），产品语义本身正确；P6 已改为虚拟时钟驱动，
+90/90 确定性通过，并被并行 CI 分支采用（同一提交 `13f660a`）。
+**并行 CI 修复整合**：`origin/main` 的 `0171455` 已安全合并为 `2eac7a2`
+（无冲突、无重复修复、未丢弃提交）；合并后 main 暴露的 `ci-results` 抖动
+不属于供应商管理代码，本轮未修改该测试。
 
-### 定向套件（本机，最终代码）
+## 三、历史遗留问题完整台账（P0–P6）
 
-| 命令 | 结果 | 说明 |
-| --- | --- | --- |
-| `npm run test:provider-management` | **150/150**（最终代码；修复前 143/143） | 新增：锁图标回归 1、内置 env 创建/拒绝边界 1、disable→enable 1、UI 功能回归 4 |
-| `npm run test:provider-p2` | 网络策略 39/39 + 开窗 5/5 + 桌面 47/47 checks，退出 0 | 桌面在**正常沙箱**下完成（`ELECTRON_OVERRIDE_DIST_PATH` 指向 TEMP 同摘要 Electron 44.4.3 副本）；1 条 `UNVERIFIED`（fixture 祖先存储策略，环境限制） |
-| `node tests/provider-auth-runtime.cjs` | 50/50，退出 0 | 含同步协调器（`server/provider-config-sync.js`）与 OAuth 运行时 |
-| `node tests/provider-network-policy.cjs` | 已含于 `test:provider-p2`（39/39） | 真实入口为 `node --test tests/provider-network-policy.cjs` |
-| `node tests/provider-management-p5.cjs` | 已含于 `test:provider-management`（43 条） | 真实入口为同名文件在 `test:provider-management` 链内 |
-| `node tests/smoke.cjs` | 1345/1345，退出 0 | 修复前运行；canonical 将复跑 |
-| `node scripts/run-test-group.mjs --validate` | `241 canonical leaves; groups core, ui, security, native, faults` | 计划身份未变 |
-| `node tests/provider-config-sync.cjs` | **不存在独立文件** | 同步协调器覆盖位于 `tests/provider-auth-runtime.cjs` 与 `tests/provider-management-http.cjs`（任务清单与实际入口的对应关系） |
+分类：A＝已真正修复；B＝已记录未修复；C＝已实现缺测试；D＝受系统权限/真实账户/外部服务限制；
+E＝误报或已失效/按设计不是缺陷。本轮已对全部 B/C 项完成整改；D 项给出准确原因。
+
+| 来源 | 记录项 | 类别 | 本轮核对与处置 |
+| --- | --- | --- | --- |
+| P2 | 正常 Electron 沙箱未验证 | A | 已用 `ELECTRON_OVERRIDE_DIST_PATH`（同版本同摘要 Electron 44.4.3 副本）在正常沙箱完成：凭据窗 47/47、供应商 UI 夹具 38/38；无 `--no-sandbox` 回退 |
+| P2 | 打包 exe 的凭据端到端输入未验证 | D | 打包 GUI 无法在无调试端口时自动驱动；而调试端口按设计会关闭密钥输入资格，故无法在打包 GUI 内同时满足「可自动化」与「凭据资格」；打包后端/worker/前端一致性与真实后端行为已在打包探针 34/34 中覆盖 |
+| P2 | 真实供应商网络、TLS/CDN 行为 | D | 需真实外部授权/费用；本轮只用回环真实 HTTP 与隔离 fixture |
+| P2/P3-B | 外部 Pi/手工编辑的跨进程竞争窗口 | E/D | 按设计声明保留（SDK 无跨进程 CAS）；非本轮可修复缺陷 |
+| P3-A/B/C | 正常沙箱待验证 | A | 同 P2：正常沙箱完成并通过 |
+| P3-A/P5/P6 | `auth.json` 成功持久化（存储资格见证） | D | 本轮在隔离目录尝试设置私有 DACL 时被宿主沙箱拒绝（`SetAccessControl` UnauthorizedAccess），无法构造合格目录；产品的资格判定会被正确拒绝（store 套件覆盖），P3-A 曾在权限合格系统临时目录完成成功路径。保留为环境未验证 |
+| P3-A | 失去 worker 停止回执后的维护恢复未工具化 | D | 需要人工停写恢复流程，非用户路径；回执保留隔离，未自动重放 |
+| P4 | `selectedModelIds:null` 继承语义需合同扩展 | E/B | 现行为是**显式确认后固定选择**，不会静默改语义；属于合同限制而非缺陷。如果未来要「只改名称仍保持继承」，需要独立合同提案 |
+| P4 | 页面打开期间管理开关变化仍打开管理编辑器 | E | 开关是后端启动时读取，变化需重启后端；提交会以 422 失败且绝不降级旧接口写入（fail-closed） |
+| P4/P5 | 自动推荐（最多 3 个聊天模型）未实现 | B/D | 计划同时要求「不能以模型 ID 猜能力」，而当前没有可信的聊天能力来源；缺省不自动选择是安全行为。保留为计划增强，未在本轮臆造实现 |
+| P5/P6 | 真实供应商认证、真实 OAuth、真实安装升级 | D | 需要外部授权/凭证/安装环境；发布预检不执行安装 |
+| P6 | UNVERIFIED：fixture 祖先不满足存储策略 | D | 同上，环境 DACL 限制 |
+| P6 | PRE-01 调试/无沙箱资格判定不全 | A | FIX-04 修复并回归 |
+| P6 | 编辑缓存首屏缺失（Important） | A | FIX-01 修复并回归 |
+| P6 | 预设环境变量缺失后授权终态无可重试入口（Nit） | A | FIX-02 修复并回归 |
+| P6 | `displayValues` 掩盖 configured/builtin-override 的显式清空（Nit） | A | FIX-03 修复并回归 |
+| P6 | 内置供应商静默忽略端点变更（非安全观察） | A | FIX-05 修复并回归 |
+| P6（本轮新发现） | 关闭弹窗后焦点落到页面容器而非服务行（键盘可用性） | A | 已修复并真实 Electron 验证 |
+| P6（本轮新发现） | 缺数值时无「未知」占位徽标 | E/Nit | 外观信息细节，不影响编辑/保存语义；保留记录 |
+
+**结论**：历史记录中不存在尚未处置的 Blocker/Important；所有可复现、可修复的功能缺陷已关闭。
+剩余 D 项均需要真实外部授权、真实安装环境或操作系统 ACL 权限。
+
+## 四、完整测试清单与实际数字
+
+### 定向套件与专项（最终代码状态）
+
+| 命令 / 专项 | 结果 |
+| --- | --- |
+| `npm run test:provider-management` | **164/164**（合同/仓储/HTTP 24/SDK/P4 UI 67/P5 44；0 fail、0 skip） |
+| `npm run test:provider-p2` | 网络策略 **39/39**、开窗 **5/5**、凭据桥阶段 A **42** 条断言、真实 Electron 桌面 **47/47**（最终 HEAD `d70d0fb` 重跑；正常沙箱，无 `--no-sandbox` 回退；1 条存储资格 UNVERIFIED 为环境限制） |
+| `node tests/electron-guard.cjs` | **124/124**（含 32b：凭据受限窗按 Session 实例排除、分支内无 `openExternal`） |
+| `node tests/provider-auth-runtime.cjs` | **50/50** |
+| `node tests/smoke.cjs` | **1345/1345** |
+| `node tests/thinking-dots.cjs` | **90/90**（虚拟时钟确定性） |
+| 多 Runtime 真实进程专项（`.shots/p6/multi-runtime-evidence.cjs`） | **40/40**（最终 HEAD `d70d0fb` 重跑；A/B/C 三个独立假 Pi 进程、并发同步不重复回读、只读纪律、身份/代次失效、OAuth 共存） |
+| 真实 Electron 供应商夹具（正常沙箱） | **38/38**（最终 HEAD `d70d0fb` 重跑，7 张截图；含缓存端点命中、内置 env 创建、停用/启用、焦点恢复） |
+| 仅安全资格单元/接线（`provider-credential-desktop` 阶段 A） | **42** 条断言（含每种调试/无沙箱启动方式；`hasSwitch` 抛错 fail-closed） |
+| `node scripts/run-test-group.mjs --validate` | `241 canonical leaves; groups core, ui, security, native, faults` |
 
 ### 完整 canonical
 
-- 代码状态：HEAD `75224f4`（工作区仅未跟踪的本报告）；Windows x64，Node 24.22.1。
-- 环境适配（如实记录）：仅在**测试进程**内设置 `PSExecutionPolicyPreference=Bypass`
-  （未修改系统执行策略、未修改仓库脚本；沿用 P3-C 记录的做法），PATH 前置
-  `C:\Windows\System32` 以避开 MSYS `whoami` 遮蔽。P5 曾因执行策略拒绝未签名 fixture
-  中断完整链；本轮该阻塞消除。
-- 结果：**退出码 0**，`ci-test-plan: 241 leaves across 5 groups; coverage exact`；
-  全链无失败；耗时约 104 分钟（19:55–21:39）。
-- 环境跳过（不计入通过分子分母，共 24 条，均与供应商管理无关）：
-  SACL/SeSecurityPrivilege 18（`sacl-witness` 8、`Object witness` 8、`object-profile` 2）、
-  符号链接权限 4（Collab store、Candidate adoption、logging-leaks、session-search 5i）、
-  research-only 2（`session-revert-inplace`）。
-- 关键套件实测：`test:provider-management` **150/150**；`test:provider-p2` 网络 39/39、
-  开窗 5/5、桌面 47/47（本机共享 Electron 路径正常沙箱启动失败一次后按既有惯例回退
-  `--no-sandbox`；正常沙箱证据见第六节）；`provider-auth-runtime` 50/50；
-  `smoke` 1345/1345；`thinking-dots` 90/90。
+- 提交：`d70d0fb`（本报告除外的全部代码/测试/文档改动均已提交；工作区仅有本报告）。
+- 命令与结果：`npm test`（含 pretest）**退出码 0**，2026-11-10 00:24:12 → 01:45:29
+  （约 81 分钟），日志 `.shots/p6/npm-test-final4.log`；全部套件 0 failed。
+- pretest：`file-size-report` 11/11；`test:ci` 计划 **241 canonical leaves / 5 groups**
+  （`coverage exact`），`ci-results` 10/10、`ci-summary` 30/30、`ci-doc-scope` 28/28。
+- 关键套件实测：`test:provider-management` **164/164**（fail 0、cancelled 0、skipped 0）；
+  `test:provider-p2` 凭据桥 **42 条断言**、真实 Electron **47/47**；`electron-guard`
+  **124/124**；`smoke` **1345/1345**；`thinking-dots` **90/90**；`provider-auth-runtime`
+  **50/50**。
+- 环境性跳过（不计入通过分子/分母，均为本机权限限制）：`collab store` 53/53
+  skipped=1、`candidate adoption` 45/45 skipped=1（不能创建 symlink）、`logging-leaks`
+  7 passed skipped=1（symlink EPERM）、`session-revert-sacl-witness` 0/0 skipped=8、
+  `session-revert-inplace` 28/28 skipped=2、`session-revert-object-witness` 0/0 skipped=8
+  （`SeSecurityPrivilege`/既有 token SACL 不可用）。
+- 说明：canonical 内的 `test:provider-p2` 阶段 B 在本机未设置
+  `ELECTRON_OVERRIDE_DIST_PATH`，正常沙箱启动失败后按套件既定逻辑回退
+  `--no-sandbox` 并 47/47 通过；**正常沙箱**证据来自 7.2 的专项 run
+  （`ELECTRON_OVERRIDE_DIST_PATH` 指向同摘要 Electron 副本，无回退，47/47）。
 
-## 四、凭据与网络安全审查结果
+## 五、FIX-01…FIX-05 修复证据
+
+### FIX-01 模型缓存首屏（Important，已关闭）
+
+- 服务端：成功发现后写入内存**目标缓存**，键严格包含 `providerId`、规范化目标
+  （协议/host/port/完整 basePath）、API、认证来源与凭据代次；60 秒新鲜，过期后
+  最多保留 15 分钟并以 `cacheStale:true` 标记；后端重启即消失，不落盘、不含秘密。
+- 新增只读 `GET /api/provider-management/services/:serviceId/cache`：服务端按
+  当前权威配置与认证来源解析目标（客户端不能指定目标），只查内存缓存，不联网、
+  不写草稿；环境变量来源用受控预设变量计算代次，`pi-credential` 只接受可证明的
+  字面量原生凭据快照，未知/不可读/OAuth/暂存来源一律不命中。
+- 前端：编辑已有服务打开时拉取匹配缓存并入候选（仅展示，不改变选择/顺序），
+  显示「匹配缓存/已过期」横幅与逐条「缓存已过期」徽标；新鲜远端结果把**未被
+  编辑**的缓存候选升级为 remote；已移除候选不会因再次保存而复活；关闭/重开与
+  快速切换以目标身份隔离。缓存请求的迟到响应必须同时匹配发起时的服务 ID
+  （`sourceServiceId` 与服务端回显）、目标身份键与生命周期代次，否则丢弃——防止
+  切换服务/改目标后把旧服务模型并进新草稿。
+- 证据：HTTP 24/24（不同 provider 与同 provider 不同 API/basePath/host/port/
+  协议分区、60s→stale、15min 丢弃、凭据轮换失效、恢复原目标重新命中、显式撤销
+  只停止联网且缓存仅按 cache 展示、全程零新增网络）；UI 67/67（服务切换/凭据
+  引用变更后的迟到缓存丢弃、移除后改引用保存不复活、合并/过期/升级/显示回退）；
+  真实 Electron 38/38（真实后端缓存命中且读取时模型目录请求数不变）。
+
+### FIX-02 环境变量缺失授权与重试（Nit，已关闭）
+
+- 服务端把原来的笼统 `unsupported` 拆为 `environment_missing`（变量缺失/取值
+  不可用，`fieldErrors.environmentReference`）与 `environment_target_unsupported`
+  （非目录审核预设端点）；文案不含变量值。
+- 前端保持 `unapproved` 可重试状态并显示可操作原因；修复后端环境后重新点击
+  「授权并发现」即可继续，不需要重建供应商；无轮询、不绕过授权/SDK/凭据隔离。
+- 证据：HTTP「缺失/取值不可用 422 → 设置可用变量后 200」与目标不支持 422；
+  错误体不回显已存在但不可用的变量取值；控制器「失败保持可重试并在恢复后取得
+  consent」。
+
+### FIX-03 高级参数显示回退（Nit，已关闭）
+
+- `displayValues` 展示回退仅用于 remote/cache 来源；configured/builtin-override
+  的显示服从当前草稿编辑状态：清空名称/上下文/输出后立即反映继承/默认，
+  不再被旧值遮盖；`baseline`、`editableOverrides` 与 `unsetFields` 保存语义不变。
+- 证据：UI 四种来源测试（configured/builtin-override 清空后无旧徽标且保存补丁为
+  `unsetFields`；remote/cache 仍显示可信发现元数据）。
+
+### FIX-04 Electron 调试与无沙箱资格加固（PRE-01，已关闭）
+
+- 新增 `electron/desktop-qualification.cjs` 纯函数：直属后端缺失、远程调试
+  port/pipe、`--inspect`/`--inspect-brk`、`--no-sandbox`、`--single-process`、
+  `--disable-web-security`、`ELECTRON_DISABLE_SANDBOX`、`NODE_OPTIONS` 调试参数
+  全部 fail-closed 并返回固定原因码；main 委托该函数，原因透传到页面（准确
+  禁用文案）。正常沙箱不受影响；sender/frame/origin/nonce/TTL/epoch 未放宽。
+- 凭据受限窗（独立 partition）从全局 `hardenWebContents` 的「站外链接交给系统
+  浏览器」路径中排除：该窗口只允许拒绝导航/重定向/弹窗，永不调用 `openExternal`。
+  排除按 **Session 实例**比较（Electron 的 `Session` 没有 `getPartition` 方法；
+  最终安全复审发现的死分支已修复，`electron-guard` 32b 做接线回归）。
+- 证据：每种启动方式 14 条单元/接线断言（新增 `hasSwitch` 抛错 fail-closed）；
+  凭据桥阶段 A 42 条；真实 Electron 47/47（正常沙箱，无回退）；
+  `electron-guard` 124/124（32b 变异验证：改回 `getPartition` 时失败）。
+
+### FIX-05 内置供应商静默端点忽略（已关闭）
+
+- 内置分支在 `guardExistingTarget` 放行后仍显式检查 `targetChanged`：请求携带
+  不允许的端点变更返回 409 `credential_target_conflict`，不再静默忽略后返回
+  `saved:true`；同目标名称/模型/环境变量引用修改不受影响；未知字段保留。
+  仅含 `modelOverrides`、没有端点字段的旧记录与目录预设比较，同目标更新不再
+  被误拒；预设未知时保守拒绝。
+- 证据：HTTP「换端点 409 且配置不变、同目标 env 更新 200」；用例改用
+  `builtIn:false` 使新增检查成为唯一拒绝点，并覆盖「仅模型覆盖」记录的同目标
+  更新 200 与换端点 409；删除显式检查/改回 previous 比较两种变异均使用例失败。
+
+### 其他本轮修复
+
+内置 env 引用保存（Blocker）、内置首次模型覆盖确认重试、OAuth/订阅服务重新启用
+（对称 `enable`）、发现候选名称/容量展示、移除→刷新→重选补丁冲突、锁图标 SVG、
+关闭弹窗焦点恢复、thinking-dots 确定性计时器。
+
+## 六、凭据与网络安全审查结果
 
 ### 4.1 凭据安全专项（独立安全审查 + 本机实证）
 
@@ -123,12 +222,12 @@ P5 合并提交 `cd243fb` 已确认位于 `origin/main` 顶端；P6 分支基于
 - 迟到隔离：P5 FIX-02 的 8 条回归在 `provider-management-p5.cjs` 内通过；本轮复核
   `discovery.js` 的 abort/revoke/身份守卫结构完整。
 
-## 五、多 Runtime 安全专项（离线真实进程）
+## 七、多 Runtime 安全专项（离线真实进程）
 
 本轮自建证据脚本 `.shots/p6/multi-runtime-evidence.cjs`（开发期证据工具，Git 忽略），
 使用生产模块 `server/rpc-bridge.js`（真实 spawn/stdio RPC）、`server/provider-config-store.js`
-（真实双文件事务）与 `server/provider-config-sync.js`（真实协调器），两个独立假 Pi 进程
-（A/B 各自会话文件与控制文件）。**36/36 检查通过**，实际数字：
+（真实双文件事务）与 `server/provider-config-sync.js`（真实协调器），三个独立假 Pi 进程
+（A/B/C 各自会话文件与控制文件，跨代次 A2/A3/A4/B4）。**40/40 检查通过**，实际数字：
 
 - A 正在执行任务时提交新配置：A 进程未被杀、启动次数 1，同步保持 `pending`。
 - B 用新配置启动（独立进程），只读回读确认后 `applied`；A 恢复（显式关闭后按新代次重启）
@@ -143,7 +242,7 @@ P5 合并提交 `cd243fb` 已确认位于 `origin/main` 顶端；P6 分支基于
 - 结果不确定的 OAuth 操作（`unconfirmed`）：写入进行中 `pending`，非进行中
   `error/credential_unconfirmed`，不会被当成已同步。
 
-## 六、真实 Electron 与视觉验收
+## 八、真实 Electron 与视觉验收
 
 ### 6.1 正常沙箱
 
@@ -151,14 +250,16 @@ P5 合并提交 `cd243fb` 已确认位于 `origin/main` 顶端；P6 分支基于
   `electron.exe` 副本（SHA-256 `bf0fe749904ca9f713ccfb2427c519fa39d0bbd0337ba411ba08785802e8d548`，
   与 P2 记录一致）。共享安装路径在本机无法启动 Chromium 沙箱属宿主限制，使用仓库既有
   离线开关不改变被测代码与版本。
-- **供应商管理 Electron 夹具 31/31 检查通过**（正常沙箱；`sandbox:true/contextIsolation:true/
+- **供应商管理 Electron 夹具 38/38 检查通过**（正常沙箱；`sandbox:true/contextIsolation:true/
   nodeIntegration:false`，无 `--no-sandbox`），console error 0，进程族 9、残留 0，截图 7 张。
   覆盖：启动与主窗口、供应商页、选择器（自定义端点固定在 API Key 组首位）、未授权零请求、
   凭据触发器默认禁用、授权→自动发现（真实回环 HTTP，仅 `GET /v1/models`）、勾选入右栏、
   保存落盘（TEMP `models.json` + 元数据）、编辑（端点只读、显示名写入、模型保留）、
   复制（不携带凭据、新 provider、无 apiKey）、停用（保留 Pi 配置）、删除（确认文案含
   `auth.json` 边界；只删目标）、760px 窄窗（无横向溢出、保存按钮在视口内）、Esc 关闭、
-  5 次快速开合单实例、关闭/重开管理页、零 console error。
+  5 次快速开合单实例、关闭/重开管理页、零 console error；另含**真实后端缓存端点命中
+  且读取不触发模型目录请求**、**内置 openai env 引用经真实 UI 落盘**、**内置停用/启用**与
+  **关闭弹窗后焦点回到服务行**。
 - **凭据受限输入窗（真实 Electron 正常沙箱）47/47 checks 通过**，无 `--no-sandbox` 回退；
   1 条 `UNVERIFIED`（成功持久化路径的 fixture 祖先存储策略不满足见证条件；P3-A 已在
   权限合格的系统临时目录完成该成功路径的实证）。截图 3 张（深色、浅色窄窗、清除模式）。
@@ -169,7 +270,7 @@ P5 合并提交 `cd243fb` 已确认位于 `origin/main` 顶端；P6 分支基于
 `<path> attribute d: Expected moveto path command`，锁体不显示。根因是
 `public/provider-management/dom.js` 的 `icon()` 只处理 `circle/path`，`lock` 图标的
 `rect:5,10,14,10,2` 被写进 path 的 `d`。已修复为创建真实 `<rect>` 并补回归
-（`tests/provider-management-ui.cjs`，54/54）。提交 `fb5c7ca`、`d3fe10d`。
+（`tests/provider-management-ui.cjs`，修复时 54/54，最终 67/67）。提交 `fb5c7ca`、`d3fe10d`。
 
 ### 6.3 截图索引
 
@@ -191,20 +292,23 @@ P5 合并提交 `cd243fb` 已确认位于 `origin/main` 顶端；P6 分支基于
 P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管理关闭兼容路径等）保留在
 各自报告中，本轮不重复采集；本轮 Electron 截图证明真实外壳与真实调用链。
 
-## 七、打包与发布前预检
+## 九、打包与发布前预检
 
 ### 7.1 构建与打包（离线）
 
 - `PI_GUI_ELECTRON_ZIP_DIR` 指向本机 Electron 44.4.3 缓存 zip，`npm run build:app -- --rebuild`
-  **退出码 0**（内含 `build:exe`）；无新增下载、无新增依赖。
-- 产物：`dist-app/Pi GUI-win32-x64` **345,945,131 bytes / 416 files**；
-  `build/Pi GUI.exe` **103,741,440 bytes**，SHA-256
-  `5232dd37efd58be6d323be578792538b5ecb99ae0965435734cf7ad69cc0c70b`；
-  打包后端 `resources/app/server.cjs` 2,757,640 bytes，SHA-256
-  `ba8c6bf462625e5eebe54078df19b0c21f2c722db87dd0fe709302564bff54f0`；
-  私有凭据 worker `private/provider-credentials.cjs` 49,804 bytes。
+  **退出码 0**（内含 `build:exe`）；无新增下载、无新增依赖（最终代码状态重建，
+  `01:46:34 → 01:46:49`，日志 `.shots/p6/build-final.log`）。
+- 产物：`dist-app/Pi GUI-win32-x64` **345,971,813 bytes / 417 files**；
+  `build/Pi GUI.exe` **103,762,944 bytes**，SHA-256
+  `57719257b6591a7748cfc9f7bd04f52438a912b287635052d536983fd14a3ba5`；
+  打包后端 `resources/app/server.cjs` 2,763,569 bytes，SHA-256
+  `00d8903ec17c16193e46bf890d61721f81c1aeae3a0c03f701d78c5cde3e41a3`；
+  私有凭据 worker `private/provider-credentials.cjs` 50,213 bytes。
 
 ### 7.2 打包专项与真实运行
+
+以下四项均在**最终构建产物**（01:46 重建）上重跑，全部退出码 0：
 
 - `npm run test:app`：**26/26 通过**（打包 Electron 内嵌后端在无 `node_modules` 下运行）。
 - `npm run test:exe`：**49/49 通过**。环境适配（如实记录）：本机对该新构建的未签名 SEA
@@ -216,7 +320,7 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 - **打包应用启动探针 34/34**（`.shots/p6/packaged-provider-probe.cjs`）：
   - 真实 `dist-app/Pi GUI.exe` 启动，暴露主页面目标、进程族含内嵌后端、页面显示
     「已连接」、可在页面内打开供应商管理页并读取管理快照（`rawKeyInput/keyStaging=false`）；
-    页面截图 `packaged-window.png`（103,526 bytes）。该运行使用调试端口（按设计会关闭
+    页面截图 `packaged-window.png`（103,442 bytes，最终构建实拍）。该运行使用调试端口（按设计会关闭
     凭据输入资格；本轮不在打包 GUI 中测试凭据），且本执行环境下 Win32 ``MainWindowHandle``
     对任何 Electron 窗口均为 0（已用源码 Electron 做过对照），故采用打包应用自身 CDP 取证。
   - 打包后端 `server.cjs` 真实启动：custom 创建、**内置 openai env 引用创建（P6 修复）**、
@@ -248,7 +352,7 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 8. docs/releasing.md 正式发布条件：版本一致（`npm run version:check` 通过，0.32.0）；正式发布
    仍需发布提交自身的成功 main push CI 与用户明确授权。
 
-## 八、独立审查意见
+## 十、独立审查意见
 
 ### 8.1 安全与故障注入审查（独立上下文）
 
@@ -260,7 +364,9 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 - 附注（非发现）：全局 `hardenWebContents` 对凭据 sheet 的 `will-navigate` 同样生效，
   外部 URL 会走 `shell.openExternal`；因 sheet 页面无导航入口与 sink（CSP `default-src 'none'`、
   `form-action 'none'`、纯 textContent），无可达攻击路径；建议后续从全局外部打开逻辑中
-  排除该 session 或修正注释。
+  排除该 session 或修正注释。**已在最终收尾轮修复**：原排除分支使用不存在的
+  `Session.getPartition`（死代码），现改为 Session 实例比较并由 `electron-guard` 32b
+  固化（见 8.3 F1）。
 
 - **修复后聚焦复审（`7af518b`，builtin env/enable）**：Blocker 0 / Important 0 / Nit 0 /
   Pre-existing 0。核验：env 新建只写预设端点且要求原生槽 `present===false`（未知证据 fail
@@ -298,34 +404,81 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 - 复审对遗留处置的意见：同意发现 3（缓存首屏）与 Nit 7 作为遗留，但要求验收报告明确
   “未修复”，并作为用户的显式决定项；不能据此宣称计划第 6 项或缓存首屏已完成。
 
-## 九、缺陷与遗留问题统计
+### 8.3 最终收尾轮独立安全审查（`2eac7a2..HEAD`）
+
+- 范围：FIX-01…05、桌面资格与凭据窗隔离、缓存端点、P0–P6 边界；只读审查，
+  探针全部使用临时目录/fixture，未触碰真实凭据或真实项目数据。
+- 结论：**Blocker 0 / Important 2 / Nit 3 / Pre-existing 0**；审查期间新增的缓存
+  修复（`1da8241`）已关闭其在旧 HEAD 上复现的迟到缓存跨服务/认证来源合并（F2）。
+- 处置：
+  - F1（Important）凭据窗 session 排除按不存在的 `Session.getPartition` 判定，
+    分支永不命中：已改为 Session 实例比较（`c00d7b0`）；`electron-guard` 32b
+    固化「实例比较 + 分支无 `openExternal`」，改回 `getPartition` 时 123/124
+    失败（变异验证），恢复后 124/124。
+  - F3（Important，证据类）FIX-05 用例用 `builtIn:true` 时旧的凭据目标守卫会
+    先行拒绝，新增检查未被覆盖：已改用 `builtIn:false` 并补「仅模型覆盖」记录
+    用例；删除显式检查、改回 `previous` 比较两种变异都会让用例失败（`7d68158`）。
+  - N1 `hasSwitch` 抛错不 fail closed：已改为 `desktop_unqualified`，阶段 A 增加
+    断言（42 条）。
+  - N2 仅含 `modelOverrides` 的内置记录被误判改端点：改为与目录预设比较，
+    同目标更新 200、换端点 409。
+  - N3 迟到响应丢弃时不清 `cacheBootstrapKey`：已在丢弃路径清空；缓存身份补上
+    暂存凭据动作/草稿标识（不含密钥值）。
+- **聚焦复审（安全，`4919901..d70d0fb`，只读）**：F1/F3/N1/N2/N3 全部确认关闭，
+  未发现新的可证实问题（Blocker 0 / 开放 Important 0 / 新增 Nit 0）。复审独立复跑
+  `electron-guard` 124/124、`test:provider-management` 164/164（92s）、UI 67/67，
+  并对修复做临时副本变异（删除显式端点检查 → 由 409 变 `saved:true`；预设比较改回
+  `previous` 比较 → 由 200 变 409），鉴别力与本报告一致；复审未修改工作区。
+  复审同时确认 `f59ceb3`/`d70d0fb` 的 `draft.removed` 过滤逻辑正确。
+- 记录但未新增测试的风险：`pi-credential` 来源的目标缓存命中路径没有专门用例；
+  代码要求 `storedEvidence` 同时满足 `present/literal/opaque revision`，异常、
+  未知、OAuth、暂存来源一律不命中（fail-closed），未发现缺陷。
+  客户端缓存身份不含原生凭据代次：首屏请求在途时轮换原生凭据，旧代次模型元数据
+  可能被并入展示（仅展示、无秘密、绝不自动选择）；未实测触发。
+  `electron-guard` 32b 为源码级断言，未在真实 Electron 中运行时验证
+  `wc.session` 与凭据窗 partition 的实例相等（沿用生产 `browser-view` 写法）。
+- 审查者本机正常沙箱启动失败并以 `--no-sandbox` 复跑阶段 B；本报告的正常沙箱
+  证据使用同版本 Electron 副本（SHA-256 `bf0fe749…`），两者环境差异如实记录。
+
+### 8.4 最终收尾轮独立功能审查（`2eac7a2..HEAD`）
+
+- 首轮结论：Blocker 0 / Important 1 / Nit 3；Important 为迟到的 `GET /services/:id/cache`
+  响应可并入切换后的新服务/新目标草稿（跨服务模型 ID 数据完整性）。
+- 修复与复验：`1da8241` 固定发起时的 serviceId、缓存身份键、目标签名与生命周期代次，
+  并核对服务端回显；`4919901` 补切换服务/改凭据引用两条回归。复审确认 Important 已关闭，
+  原三条 Nit（合同撤销语义、分区/撤销证据、错误体不回显断言）处置成立。
+- 复审新增 Nit：改凭据引用会重置已合并集合，保存响应中的同一缓存列表会把刚移除的
+  候选重新加回（保存补丁仍是显式 remove）。已修 `f59ceb3`：合并时跳过 `draft.removed`；
+  `d70d0fb` 补「移除 → 改引用 → 保存」回归，移除过滤后用例失败（变异验证）。
+- 复审一次聚合运行出现的单次 409 未能复现；发生窗口与本地变异验证（临时改坏同一
+  分支）重叠，之后多次单测与聚合（163/163、164/164）均通过。保留日志，最终以
+  本 SHA 的 canonical 与后续 CI 为准。
+- 焦点恢复仍只有真实 Electron 证据（被 git 忽略的 `.shots/p6/provider-electron-fixture.cjs`），
+  未纳入 canonical；复审意见为非合并阻断项。原因：jsdom 中管理弹窗复用同一
+  `modalCard`，关闭后页面节点被替换，无法忠实复现真实设置面（settings surface）的焦点恢复。
+
+## 十一、缺陷与遗留问题统计
 
 | 级别 | 数量 | 处置 |
 | --- | --- | --- |
-| Blocker | 0 | — |
-| Important | 0 | — |
-| 本轮修复的明确缺陷 | 2 | thinking-dots 时序竞态测试假红（`13f660a`，阻断 P5 基线 CI）；锁图标非法 path（`fb5c7ca`/`d3fe10d`，真实 Electron console error + 图标缺失） |
-| 功能审查发现（P0–P5 既有） | Blocker 1 + Important 5 + Nit 1 | Blocker 与 4 个 Important 已修复并有回归（`7af518b`/`799527a`/`7403c30`/`75224f4`）；缓存首屏（Important）与 env 缺失终态（Nit）未修复，列为遗留，需用户知情决定 |
-| Pre-existing 记录 | 1 | PRE-01 桌面资格判定防御纵深（Nit，建议后续小改） |
-| 遗留功能/Nit | 3 | 编辑缓存首屏（Important，功能级，需用户决定）；Nit 7 env 缺失授权终态；Nit N1 编辑期显示回退（保存数据正确） |
-| 遗留/未验证 | 见第十一节 | 真实供应商网络、真实 OAuth、真实安装升级、P6 远程 CI |
+| Blocker | **0** | 历史 Blocker（内置 API Key 供应商无法保存）已修复并有回归 |
+| Important | **0** | 历史 5 个 Important（缓存首屏、内置覆盖确认、OAuth 重新启用、发现元数据显示、重选补丁冲突）全部修复；最终轮独立审查另发现 3 项（迟到缓存跨服务合并、凭据窗 session 排除死分支、FIX-05 回归无鉴别力），均已修复并做变异验证 |
+| 影响使用的 Nit | **0** | 环境变量授权终态、显示回退、焦点恢复、锁图标、thinking-dots 假红均已修复；最终轮 4 项 Nit（合同撤销语义、分区/撤销证据、错误体不回显断言、移除后改引用复活）全部关闭 |
+| 需要真实环境的未验证项 | 5 类 | 真实供应商网络/TLS、真实 OAuth/账户、真实安装升级、存储资格成功路径（宿主禁止改 DACL）、打包 GUI 内凭据输入（调试端口会按设计关闭资格） |
+| 计划增强（非缺陷） | 2 | 自动推荐（缺可信聊天能力来源）、缺数值「未知」占位徽标（外观）；均有安全缺省行为 |
 
-## 十、需要用户批准的事项（发布前）
+## 十二、需要用户批准的事项（发布前）
 
-1. **推送 P6 分支并运行其 PR/完整 CI**（本轮未推送；远端完整证明缺失）。
-2. **合并 P6 到 main**（合并许可未授予）。
-3. **版本号决定与发布**：版本由维护者决定；打 tag/推送 tag/正式发布均需单独明确授权。
-4. **是否在本轮后修复 PRE-01**（`--remote-debugging-pipe`/`--inspect`/`ELECTRON_DISABLE_SANDBOX`
-   资格拒绝）——建议作为独立小改动，附安全审查。
-5. **是否在将来默认开启 `PI_GUI_PROVIDER_KEY_INPUT`**：本轮未开启、不建议随本次发布开启；
-   开启需要单独的安全决策与用户明确批准。
-6. **是否接受「编辑缓存首屏」（Important，P0 计划第 6 项的一部分）延期**：未修复需新的
-   缓存/记住目标状态机；默认关闭管理功能时无数据/安全影响。若计划默认开启管理功能或宣称
-   计划第 6 项验收完成，必须先实现该能力。请在“接受延期”与“要求本轮/后续修复”之间决定。
-7. **是否接受 Nit 7（env 缺失授权终态）与 Nit N1（编辑期显示回退）延期**：均无数据/安全
-   影响；N1 建议后续与显示层改动一并修（回退仅限 remote/cache 来源）。
+1. **推送 P6 分支并创建 PR，运行其 PR CI 与 CI gate**：本轮未推送、未建 PR（按授权边界）。
+   最终 GitHub CI 状态见第二节；本地完整 canonical 结果见第四节。
+2. **合并 P6 到 main**：合并许可未授予。
+3. **版本号决定与正式发布**：版本由维护者决定；打 tag/推送 tag/正式发布均需单独明确授权。
+4. **真实环境验证范围**：真实供应商网络/OAuth/账户、真实安装升级、存储资格成功路径需要
+   外部授权或操作系统 ACL 权限；本轮按 D 类保留并给出准确原因。
+5. **计划增强取舍**：自动推荐与「未知」占位徽标是否需要在默认开启管理功能前补齐
+   （本轮未实现，均不影响当前安全与数据正确性）。
 
-## 十一、安全回滚方案
+## 十三、安全回滚方案
 
 - **代码回滚**：按提交反向回退 P6 分支（`d3fe10d` → `fb5c7ca` → `13f660a`）。`13f660a` 仅为
   测试；`fb5c7ca` 为图标渲染；回退后行为回到 P5 合并基线。无需数据迁移。
@@ -339,31 +492,47 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 - **同步回滚**：`/sync` 只读，不产生进程重启；回滚不需要撤销同步状态。旧版本读取同一
   `models.json`，未知 GUI 字段不影响 Pi。
 
-## 十二、结论
+## 十四、结论
 
-- **开发完成**：是（P0–P5 已合入 main；P6 的验收修复与文档在独立分支）。
-- **P6 代码和安全验收通过**：**有条件**——功能审查的 Blocker 与 4 个 Important 已修复、
-  经聚焦复审确认并独立复跑定向套件；安全审查与聚焦复审无新增问题；完整 canonical
-  241/241 条命令退出 0（24 条环境跳过不计入）；构建、`test:app`、`test:exe`、打包应用探针
-  与 normal-sandbox Electron 专项均通过。遗留 Important 1 项（编辑缓存首屏，功能级）与
-  Nit 2 项未修复，按 [REVIEW.md](../REVIEW.md) 需用户知情决定接受延期或指定后续修复，
-  因此本轮不宣布无条件通过。
-- **允许合并**：**未授予**（等待用户独立验收与明确授权；本轮不推送、不建 PR、不合并）。
-- **允许发布**：**未授予**（未修改版本号、未打 tag、未触发 Release；正式发布条件见第七节）。
+- **开发完成**：是。P0–P5 已合入 main；P6 最终收尾完成全部可修复遗留整改，并与最新
+  main（含并行 CI 修复）安全整合。
+- **P6 代码和安全验收通过**：**有条件**——历史台账中的可修复 Blocker/Important/Nit 全部
+  关闭；完整 canonical（`d70d0fb`，退出码 0）与最终构建/打包结果见第四节/第九节；
+  独立功能与安全审查（含最终聚焦复审）见第十节。剩余为需要真实外部授权或操作系统
+  权限的 D 类未验证项。
+- **允许合并**：**未授予**（等待用户独立复验与明确授权）。
+- **允许发布**：**未授予**（未修改版本号、未打 tag、未触发 Release；正式发布条件见第九节）。
 
-## 十三、本次提交与实际文件改动
+## 十五、本次提交与实际文件改动
 
-分支 `codex/provider-management-p6`（基于 `cd243fb`）：
+分支 `codex/provider-management-p6`（基于 `cd243fb`，已合并 `origin/main` `0171455` 为 `2eac7a2`）：
 
 | 提交 | 内容 |
 | --- | --- |
-| `13f660a` | 修复 thinking-dots 自动交替测试的时序竞态假红（`tests/thinking-dots.cjs`） |
-| `fb5c7ca` | 修复锁图标 rect 规格被写成非法 path（`public/provider-management/dom.js`） |
-| `d3fe10d` | 锁图标 rect 渲染回归（`tests/provider-management-ui.cjs`） |
-| `7af518b` | 内置供应商 env 引用保存 + 对称 `enable` 动作（`server/provider-config-records.js`、`public/provider-management/contract.js`、`public/providers.js`、合同文档） |
-| `799527a` | 首次内置模型覆盖确认后重试（`public/provider-management/dialog.js`） |
-| `7403c30` | 发现候选显示元数据 + 重新勾选撤销待删除（`public/provider-management/state.js`、`model-panes.js`） |
-| `75224f4` | 上述功能缺陷回归（`tests/provider-management-http.cjs`、`tests/provider-management-ui.cjs`） |
-| 本报告提交 | `docs/provider-management-p6-acceptance.md`（其 SHA 见分支历史） |
+| `13f660a` | thinking-dots 自动交替测试确定性化（已被并行 CI 分支采用） |
+| `fb5c7ca` / `d3fe10d` | 锁图标 rect 渲染修复与回归 |
+| `7af518b` | 内置供应商 env 引用保存 + 对称 `enable` 动作 |
+| `799527a` | 首次内置模型覆盖确认后重试 |
+| `7403c30` | 发现候选显示元数据 + 重新勾选撤销待删除 |
+| `75224f4` | 上述功能缺陷回归 |
+| `7621960` | P6 第一轮验收报告 |
+| `2eac7a2` | 合并最新 main（含并行 thinking-dots CI 修复，无冲突） |
+| `ebfc0ea` | FIX-04 桌面安全资格加固与凭据窗外链隔离 |
+| `9024721` | FIX-01/02/03 缓存首屏、环境变量重试、显示回退 |
+| `c85bf25` | FIX-05 内置端点显式拒绝 + 关闭弹窗焦点恢复 |
+| `e8b6ea6` | 本轮回归测试（HTTP/UI/P5/资格） |
+| `35dbafc` | 前端合同：服务缓存端点与语义 |
+| `1da8241` | 丢弃不属于当前服务与凭据代次的迟到缓存响应 |
+| `4919901` | 迟到缓存/目标分区/错误体不回显回归 |
+| `c00d7b0` | 凭据窗 Session 实例排除、资格探测 fail-closed、内置端点边界 |
+| `7d68158` | 凭据窗排除/内置端点边界/资格探测回归（含变异验证） |
+| `f59ceb3` | 已移除的缓存候选不被保存响应复活 |
+| `d70d0fb` | 移除后改凭据引用的复活回归 |
+| 本报告更新提交 | `docs/provider-management-p6-acceptance.md`（SHA 见分支历史） |
 
-生产代码改动共 8 个文件，测试与文档改动 3 个文件；未修改版本号、未新增依赖、未改 CI 配置。
+生产文件：`electron/{desktop-qualification,main,provider-credentials}.cjs`、
+`public/{api,providers}.js`、`public/provider-management/{contract,credentials,dialog,
+discovery,model-panes,state}.js`、`server.js`、`server/{provider-management-discovery,
+provider-management,provider-config-records}.js`、合同文档。测试：`provider-management-{http,p5,ui}`、
+`provider-credential-desktop`、`electron-guard`。未修改版本号、未新增依赖、未改 CI 配置。
+
