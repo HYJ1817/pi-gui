@@ -239,11 +239,14 @@ export function openProviderDialog({
     if (!list.length) return;
     const key = cacheIdentity();
     if (cacheKey !== key) { cacheKey = key; cacheMergedIds = new Set(); cacheNote = null; }
-    const known = new Set(draftStore.get().models.map(model => model.modelId));
+    const current = draftStore.get();
+    const known = new Set(current.models.map(model => model.modelId));
+    // 已移除的候选不能被任何缓存响应复活，即使身份键变化导致 merged 集合重置。
+    const removed = new Set(Array.isArray(current.removed) ? current.removed : []);
     const incoming = [];
     for (const model of list) {
       const id = String(model?.modelId || '').trim();
-      if (!id || known.has(id) || cacheMergedIds.has(id)) continue;
+      if (!id || known.has(id) || removed.has(id) || cacheMergedIds.has(id)) continue;
       cacheMergedIds.add(id);
       incoming.push(model);
     }
