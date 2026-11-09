@@ -215,8 +215,11 @@ export function openProviderDialog({
   }
 
   function cacheIdentity() {
+    /* 凭据引用与清除意图也算身份：服务端缓存按当前权威凭据代次查询，
+     * 草稿改了引用/清除后，迟到的旧代次响应不得再并入。 */
     return JSON.stringify([draft?.providerId || '', draft?.connection?.baseUrl || '',
-      draft?.connection?.api || '', effectiveAuthMode(draft)]);
+      draft?.connection?.api || '', effectiveAuthMode(draft),
+      String(draft?.envReference || '').trim(), draft?.credentialAction?.type || 'keep']);
   }
 
   function resetCacheState() {
@@ -228,7 +231,9 @@ export function openProviderDialog({
   /* 把草稿响应的匹配缓存并入候选列表：只增候选，不改 order/高级参数；
    * 同一目标同一 ID 只合并一次，因此关闭重开不会重复，也不会复活已移除项。 */
   function applyCachedCandidates(handle) {
-    if (disposed || view !== 'setup' || !draftStore) return;
+    if (disposed || view !== 'setup' || !draftStore || !draft) return;
+    // 编辑场景下响应必须属于当前服务；防止调用方漏检时跨服务合并。
+    if (handle?.serviceId && draft.mode === 'update' && handle.serviceId !== draft.sourceServiceId) return;
     const list = Array.isArray(handle?.cachedModels) ? handle.cachedModels : [];
     if (!list.length) return;
     const key = cacheIdentity();
@@ -827,21 +832,29 @@ export function openProviderDialog({
     maybeRunIntent();
     focusAfterSetup();
     /* FIX-01：编辑既有服务时用只读缓存端点取与当前权威目标严格绑定的首屏
-     * 候选（不写草稿、不联网）。失败不阻塞编辑；用户动作会走正常授权流程。 */
+     * 候选（不写草稿、不联网）。失败不阻塞编辑；用户动作会走正常授权流程。
+     * 迟到响应必须仍属于发起请求时的服务与目标，否则丢弃——切换服务或改
+     * 目标后把旧服务的缓存并进新草稿，会把旧模型 ID 写进新供应商配置。 */
     if (!legacy && snapshotState && draft?.mode === 'update' && typeof managementApi.fetchProviderServiceCache === 'function') {
       const key = cacheIdentity();
       const serviceId = draft.sourceServiceId;
+      const epoch = lifecycleEpoch;
+      const target = targetSignature;
+      const stillCurrent = () => !disposed && view === 'setup' && lifecycleEpoch === epoch &&
+        targetSignature === target && draft?.mode === 'update' && draft?.sourceServiceId === serviceId &&
+        cacheIdentity() === key;
       if (cacheBootstrapKey !== key && serviceId) {
         cacheBootstrapKey = key;
         setTimeout(() => {
-          if (disposed || view !== 'setup') return;
+          if (!stillCurrent()) return;
           Promise.resolve(managementApi.fetchProviderServiceCache(serviceId))
             .then(result => {
-              if (disposed || view !== 'setup') return;
-              if (result?.ok === true) applyCachedCandidates(result);
-              else cacheBootstrapKey = '';
+              if (!stillCurrent()) return;
+              // 服务端回显的 serviceId 也必须一致；不一致说明响应已属另一目标。
+              if (result?.ok === true && result.serviceId === serviceId) applyCachedCandidates(result);
+              else if (result?.ok !== true) cacheBootstrapKey = '';
             })
-            .catch(() => { cacheBootstrapKey = ''; });
+            .catch(() => { if (stillCurrent()) cacheBootstrapKey = ''; });
         }, 0);
       }
     }
