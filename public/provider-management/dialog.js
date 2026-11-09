@@ -1250,6 +1250,28 @@ export function openProviderDialog({
     saving = false;
     dialogCard?.removeAttribute('aria-busy');
     refreshHeader();
+    if (phase === 'commit' && result?.code === 'invalid_request' && result?.fieldErrors?.confirmBuiltinOverride
+        && draft && draft.confirmBuiltinOverride !== true) {
+      /* P6：内置供应商首次写模型覆盖时服务端强制确认。快照没有可靠的
+       * builtin 标识（旧入口写入的 provider 没有 GUI 元数据），因此由服务端的
+       * 明确字段错误触发确认；确认后只重试一次（draft 已带 confirm 标记）。 */
+      const ok = await confirmModal({
+        title: '覆盖内置模型配置？',
+        message: '该供应商的模型由 Pi 内置配置提供。保存会把当前模型的字段写入 GUI 覆盖层：只影响你改过的字段，内置默认值仍保留。',
+        okText: '覆盖并保存',
+        cancelText: '取消',
+      });
+      if (disposed) return;
+      if (!ok) {
+        errorState = { title: '已取消保存', message: '未确认覆盖内置模型配置，本次没有写入任何更改。' };
+        renderStatus();
+        return;
+      }
+      draftStore.dispatch({ type: 'builtin-override' });
+      draft = draftStore.get();
+      await save();
+      return;
+    }
     if (phase === 'draft' && result?.code === 'draft_conflict') {
       // 草稿已被服务端替换：旧句柄上的暂存与发现授权都不能继续使用。
       revokeDraftArtifacts();
