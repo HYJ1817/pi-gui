@@ -1227,7 +1227,7 @@ test('provider row menu disables connection test with the real discovery reason'
   assert.equal(calls.commits[0].serviceId, 'example-ai');
 });
 
-test('disabled service re-enables through an update draft', async () => {
+test('disabled service re-enables through the metadata-only enable action', async () => {
   const snapshot = clone(fixture.live.snapshot);
   snapshot.services[0].enabled = false;
   const { window, calls } = boot({ snapshot });
@@ -1239,10 +1239,11 @@ test('disabled service re-enables through an update draft', async () => {
   await tick(0);
   row.querySelector('[data-service-action="启用"]').click();
   await tick(30);
-  assert.equal(calls.drafts.length, 1);
-  assert.equal(calls.drafts[0].draft.enabled, true);
+  // P6：与停用对称，不再构造草稿（部分服务的 connection 为空，draft 合同无法表达）。
+  assert.equal(calls.drafts.length, 0);
   assert.equal(calls.commits.length, 1);
-  assert.equal(calls.commits[0].action, 'update');
+  assert.equal(calls.commits[0].action, 'enable');
+  assert.equal(calls.commits[0].serviceId, 'example-ai');
 });
 
 test('service menu clones without copying credentials and deletes only after confirmation', async () => {
@@ -1318,4 +1319,89 @@ test('lock icon renders a real rect body instead of an invalid path', async () =
   } finally {
     if (previous === undefined) delete global.document; else global.document = previous;
   }
+});
+
+test('re-selecting a model after refresh clears its pending remove patch', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const store = s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'refresh-model', configSource: 'remote', effectiveValues: { name: 'Refresh Model' } }] });
+  store.dispatch({ type: 'toggle-model', modelId: 'refresh-model', selected: true });
+  store.dispatch({ type: 'remove-model', modelId: 'refresh-model' });
+  assert.deepEqual(store.get().removed, ['refresh-model']);
+  // 刷新把同一 ID 重新带回候选；再次勾选必须撤销待删除补丁（P6 回归）。
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'refresh-model', configSource: 'remote', effectiveValues: { name: 'Refresh Model' } }] });
+  store.dispatch({ type: 'toggle-model', modelId: 'refresh-model', selected: true });
+  const draft = store.get();
+  assert.deepEqual(draft.removed, []);
+  assert.deepEqual(draft.order, ['refresh-model']);
+  assert.deepEqual(s.draftPatches(draft), [{ modelId: 'refresh-model', operation: 'upsert' }]);
+  assert.ok(!s.draftPatches(draft).some(patch => patch.operation === 'remove'));
+});
+
+test('discovered metadata is display-only and never enters model patches', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const record = s.createModelRecord({ modelId: 'meta-model', providerId: 'fixture', configSource: 'remote',
+    effectiveValues: { name: 'Meta Model', contextWindow: 12345, maxTokens: 4096, reasoning: true, input: ['text', 'image'] },
+    editableOverrides: {} });
+  assert.equal(record.name, null, 'discovered name is not an editable override');
+  assert.equal(record.contextWindow, null);
+  assert.deepEqual(record.displayValues, { name: 'Meta Model', contextWindow: 12345, maxTokens: 4096, reasoning: true, input: ['text', 'image'] });
+  const store = s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'meta-model', configSource: 'remote',
+    effectiveValues: { name: 'Meta Model', contextWindow: 12345 } }] });
+  store.dispatch({ type: 'toggle-model', modelId: 'meta-model', selected: true });
+  assert.deepEqual(s.draftPatches(store.get()), [{ modelId: 'meta-model', operation: 'upsert' }],
+    'selection alone must not persist discovered metadata as an override');
+});
+
+test('a disabled OAuth service can be enabled again from the row menu', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.services.push({ serviceId: 'oauth-fixture', providerId: 'fixture-oauth', catalogId: null, displayName: '订阅账户 Fixture',
+    enabled: false, connection: null, credentialState: { state: 'saved', source: 'pi-credential' }, authMode: 'oauth',
+    models: [], selectedModelIds: [], modelOrder: [], readOnly: false, compatibility: 'unknown' });
+  const { window, calls } = boot({ snapshot });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  const row = [...card.querySelectorAll('.prov.pm-service-row')].find(node => node.textContent.includes('订阅账户 Fixture'));
+  assert.ok(row, 'disabled OAuth row rendered');
+  row.querySelector('.pm-row-more').click();
+  await tick(0);
+  const enable = row.querySelector('[data-service-action="启用"]');
+  assert.ok(enable, 'enable action exists');
+  assert.equal(enable.disabled, false, 'enable must not be disabled for OAuth services');
+  enable.click();
+  await tick(40);
+  const commit = calls.commits[calls.commits.length - 1];
+  assert.ok(commit, 'enable commits a metadata-only action');
+  assert.equal(commit.action, 'enable');
+  assert.equal(commit.serviceId, 'oauth-fixture');
+  assert.equal(calls.drafts.length, 0, 'enable must not need a draft (subscription services have no connection)');
+});
+
+test('first builtin model override asks for confirmation and retries once', async () => {
+  const { window, snapshot, api, calls } = boot();
+  let attempts = 0;
+  api.commitProviderDraft = async request => {
+    calls.commits.push(clone(request));
+    attempts += 1;
+    if (attempts === 1) return { ok: false, code: 'invalid_request', message: '请求字段无效。', fieldErrors: { confirmBuiltinOverride: 'invalid' } };
+    return { ok: true, serviceId: request.serviceId || 'example-ai', saved: true, credentialSaved: null, credentialState: 'none',
+      sync: { state: 'pending', reason: 'runtime_sync_pending' }, revision: 'next' };
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', snapshot.services[0]);
+  addCustom(card, 'override-model');
+  await tick(10);
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(30);
+  assert.equal(calls.commits.length, 1);
+  const confirm = window.document.getElementById('confirmCard');
+  assert.equal(window.document.getElementById('confirmLayer').hidden, false, 'override confirmation appears');
+  assert.ok(confirm.textContent.includes('覆盖内置模型配置'));
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '覆盖并保存').click();
+  await tick(50);
+  assert.equal(calls.commits.length, 2, 'confirm retries exactly once');
+  assert.equal(calls.drafts.at(-1).draft.confirmBuiltinOverride, true);
 });

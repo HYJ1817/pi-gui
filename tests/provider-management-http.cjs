@@ -570,3 +570,79 @@ test('preset labels do not override SDK identity and unknown new registrations f
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(fs.readFileSync(f.modelsJson)).providers.siliconflow.apiKey, '$SILICONFLOW_FIXTURE');
 });
+
+test('builtin API-key provider accepts an environment reference with the legacy guards', async t => {
+  const f = await setup(t);
+  f.native.set('openai', { present: false, builtIn: true });
+  f.native.set('deepseek', { present: false, builtIn: true });
+  f.native.set('anthropic', { present: true, builtIn: true, type: 'oauth' });
+  const { handle } = f.make(true);
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const connection = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
+  const draftFor = providerId => ({ providerId, displayName: providerId, authMode: 'environment', connection,
+    enabled: true, modelPatches: [], selectedModelIds: [], modelOrder: [] });
+  const create = (requestId, providerId, over = {}) => http(handle, 'POST', root + '/drafts', { requestId, expectedRevision: snapshot.revision,
+    draft: { ...draftFor(providerId), ...over } });
+
+  // 预设端点 + 无原生凭据：创建成功并写入 env 引用（与旧入口同一语义）。
+  const form = (await create('builtin-env-draft', 'openai')).body;
+  assert.equal(form.ok, true);
+  const commit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-env-commit', expectedRevision: snapshot.revision,
+    action: 'create', draftId: form.draftId, draftRevision: form.draftRevision, credentialAction: { type: 'env', reference: '$OPENAI_API_KEY' } });
+  assert.equal(commit.status, 200, JSON.stringify(commit.body));
+  assert.equal(commit.body.saved, true);
+  const saved = JSON.parse(fs.readFileSync(f.modelsJson, 'utf8'));
+  assert.deepEqual(saved.providers.openai, { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses', models: [], apiKey: '$OPENAI_API_KEY' });
+  assert.deepEqual(saved.misc, { a: true }, 'unknown top-level fields stay untouched');
+
+  // 非预设端点：拒绝（换端点必须复制为新标识）。
+  const proxy = await http(handle, 'POST', root + '/drafts', { requestId: 'builtin-proxy-draft', expectedRevision: commit.body.revision,
+    draft: { ...draftFor('deepseek'), connection: { baseUrl: 'https://proxy.invalid/v1', api: 'openai-completions' } } });
+  assert.equal(proxy.status, 200);
+  const proxyCommit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-proxy-commit', expectedRevision: commit.body.revision,
+    action: 'create', draftId: proxy.body.draftId, draftRevision: proxy.body.draftRevision, credentialAction: { type: 'env', reference: '$DEEPSEEK_API_KEY' } });
+  assert.equal(proxyCommit.status, 409);
+  assert.equal(proxyCommit.body.code, 'credential_target_conflict');
+
+  // 原生凭据不可证明为空：拒绝（与旧入口一致）。
+  const occupied = await http(handle, 'POST', root + '/drafts', { requestId: 'builtin-oauth-draft', expectedRevision: commit.body.revision,
+    draft: { ...draftFor('anthropic'), connection: { baseUrl: 'https://api.anthropic.com', api: 'anthropic-messages' } } });
+  assert.equal(occupied.status, 200);
+  const occupiedCommit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-oauth-commit', expectedRevision: commit.body.revision,
+    action: 'create', draftId: occupied.body.draftId, draftRevision: occupied.body.draftRevision, credentialAction: { type: 'env', reference: '$ANTHROPIC_API_KEY' } });
+  assert.equal(occupiedCommit.status, 409);
+  assert.equal(occupiedCommit.body.code, 'credential_conflict');
+
+  // 原生化对内置仍不开放（没有精确的 Endpoint 证据）。
+  const nativeCommit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-native-commit', expectedRevision: commit.body.revision,
+    action: 'create', draftId: form.draftId, draftRevision: form.draftRevision, credentialAction: { type: 'apply-staged' } });
+  assert.equal(nativeCommit.status, 422);
+  assert.equal(nativeCommit.body.code, 'unsupported');
+});
+
+test('disable and enable are symmetric metadata-only actions for services without drafts', async t => {
+  const f = await setup(t);
+  const { handle } = f.make(true);
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const disable = await http(handle, 'POST', root + '/commit', { requestId: 'disable-fixture', expectedRevision: snapshot.revision,
+    action: 'disable', serviceId: 'example' });
+  assert.equal(disable.status, 200, JSON.stringify(disable.body));
+  assert.equal(disable.body.saved, true);
+  let metadata = JSON.parse(fs.readFileSync(f.metadataPath, 'utf8'));
+  assert.equal(metadata.services.example.enabled, false);
+  const before = JSON.parse(fs.readFileSync(f.modelsJson, 'utf8'));
+  const enable = await http(handle, 'POST', root + '/commit', { requestId: 'enable-fixture', expectedRevision: disable.body.revision,
+    action: 'enable', serviceId: 'example' });
+  assert.equal(enable.status, 200, JSON.stringify(enable.body));
+  metadata = JSON.parse(fs.readFileSync(f.metadataPath, 'utf8'));
+  assert.equal(metadata.services.example.enabled, true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(f.modelsJson, 'utf8')), before, 'enable/disable never touch Pi configuration');
+  // 不存在的服务：404；带草稿字段的 enable：400（合同拒绝混用）。
+  const missing = await http(handle, 'POST', root + '/commit', { requestId: 'enable-missing', expectedRevision: enable.body.revision,
+    action: 'enable', serviceId: 'never-existed' });
+  assert.equal(missing.status, 404);
+  assert.equal(missing.body.code, 'not_found');
+  const malformed = await http(handle, 'POST', root + '/commit', { requestId: 'enable-draft', expectedRevision: enable.body.revision,
+    action: 'enable', serviceId: 'example', draftId: 'opaque-draft', draftRevision: 1 });
+  assert.equal(malformed.status, 400);
+});
