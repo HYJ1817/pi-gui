@@ -1575,6 +1575,44 @@ test('removing a cache candidate does not resurrect it on the next draft save', 
   assert.equal(card.querySelector('[data-model-row=gone-a]'), null, 'removed candidate must not be resurrected');
 });
 
+test('changing the credential reference after removal does not resurrect the cache candidate on save', async () => {
+  const { window, snapshot, api, calls } = boot();
+  const service = snapshot.services[0];
+  const repeatedCache = [{ modelId: 'gone-b', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+    effectiveValues: { name: 'Gone B', contextWindow: 8000 }, editableOverrides: {} }];
+  api.fetchProviderServiceCache = async () => ({ ok: true, serviceId: service.serviceId, sourceKind: 'cache',
+    cacheStale: false, cachedAt: Date.now(), cachedModels: clone(repeatedCache) });
+  api.saveProviderDraft = async request => {
+    calls.drafts.push(clone(request));
+    return { ok: true, draftId: 'identity-draft', draftRevision: 2, connectionRevision: 1, targetFingerprint: 'fp-identity',
+      sourceKind: 'cache', cacheStale: false, cachedAt: Date.now(), cachedModels: clone(repeatedCache) };
+  };
+  // 让 commit 失败，弹窗留在原地，检查保存响应合并后的可见状态。
+  api.commitProviderDraft = async () => ({ ok: false, code: 'config_busy', message: 'fixture commit failure' });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await uiWaitFor(() => card.querySelector('[data-model-row=gone-b]'));
+  card.querySelector('[data-model-check=gone-b]').click();
+  await tick(5);
+  card.querySelector('[data-model-remove=gone-b]').click();
+  await tick(5);
+  const confirm = window.document.getElementById('confirmCard');
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '移除').click();
+  await tick(10);
+  assert.equal(card.querySelector('[data-model-row=gone-b]'), null);
+  // 改凭据引用会让缓存身份键变化；保存响应里的同一缓存列表不得复活已移除候选。
+  const env = card.querySelector('.pm-env-input');
+  env.value = '$OTHER_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(5);
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(60);
+  assert.equal(card.querySelector('[data-model-row=gone-b]'), null, 'identity change must not resurrect a removed candidate');
+  assert.ok(!card.textContent.includes('Gone B'));
+  const patches = calls.drafts.at(-1)?.draft?.modelPatches || [];
+  assert.ok(patches.some(patch => patch.modelId === 'gone-b' && patch.operation === 'remove'),
+    'the saved draft still carries the explicit removal');
+});
+
 for (const configSource of ['configured', 'builtin-override']) {
   test(`clearing an override on a ${configSource} model never shows the stale display fallback`, async () => {
     const { snapshot, service } = snapshotWithModel(configSource);
