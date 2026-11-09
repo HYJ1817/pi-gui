@@ -674,9 +674,35 @@ async function removeService(service) {
   await refreshManagement();
 }
 
+/* 关闭管理弹窗后列表会重绘：把焦点还给对应服务行（或“添加服务”），
+ * 而不是落在设置页容器上。键盘用户不会丢失当前位置。 */
+function refocusAfterClose(target = {}) {
+  return () => {
+    const restore = () => {
+      const scope = document.querySelector('.providers');
+      if (!scope) return;
+      if (target.serviceId) {
+        const row = [...scope.querySelectorAll('.pm-service-row')].find(node => node.dataset.serviceId === target.serviceId);
+        if (row) { row.focus(); return; }
+      }
+      if (target.legacyName) {
+        const row = [...scope.querySelectorAll('[data-service-name]')].find(node => node.dataset.serviceName === target.legacyName);
+        if (row) { row.focus(); return; }
+      }
+      const add = [...scope.querySelectorAll('button')].find(node => node.textContent.trim() === '添加服务');
+      add?.focus();
+    };
+    try {
+      const pending = refreshManagement();
+      if (pending && typeof pending.then === 'function') pending.then(restore, restore);
+      else restore();
+    } catch { restore(); }
+  };
+}
+
 function openEdit(service, { intent = null } = {}) {
   if (service.authMode === 'oauth') {
-    openProviderDialog({ present: openModal, snapshot: managementSnapshot, mode: 'auth', service, onSaved: refreshManagement, onClosed: refreshManagement });
+    openProviderDialog({ present: openModal, snapshot: managementSnapshot, mode: 'auth', service, onSaved: refreshManagement, onClosed: refocusAfterClose({ serviceId: service.serviceId }) });
     return;
   }
   openProviderDialog({
@@ -689,7 +715,7 @@ function openEdit(service, { intent = null } = {}) {
       lastSaveNotice = saveNoticeFor(result);
       refreshManagement();
     },
-    onClosed: refreshManagement,
+    onClosed: refocusAfterClose({ serviceId: service.serviceId }),
   });
 }
 
@@ -703,7 +729,7 @@ function openClone(service) {
       lastSaveNotice = saveNoticeFor(result);
       refreshManagement();
     },
-    onClosed: refreshManagement,
+    onClosed: refocusAfterClose({ serviceId: service.serviceId }),
   });
 }
 
@@ -753,7 +779,7 @@ async function openLegacyEdit(name) {
       pageStatus('服务已保存；重载 pi 配置后生效。', 'info');
       refreshManagement();
     },
-    onClosed: refreshManagement,
+    onClosed: refocusAfterClose({ serviceId: name, legacyName: name }),
   });
 }
 
@@ -772,7 +798,7 @@ function managementRow(service) {
     onClone: () => openClone(service),
     onToggle: () => toggleService(service),
     onDelete: () => removeService(service),
-    onAuth: () => openProviderDialog({ present: openModal, snapshot: managementSnapshot, mode: 'auth', service, onSaved: refreshManagement, onClosed: refreshManagement }),
+    onAuth: () => openProviderDialog({ present: openModal, snapshot: managementSnapshot, mode: 'auth', service, onSaved: refreshManagement, onClosed: refocusAfterClose({ serviceId: service.serviceId }) }),
     onTest: () => openEdit(service, { intent: 'test' }),
     canTest,
     testReason: service.authMode === 'oauth'
@@ -1109,7 +1135,7 @@ export async function openAddProvider({ present = openModal, snapshot = manageme
           pageStatus('服务已保存；重载 pi 配置后生效。', 'info');
           refreshManagement();
         },
-        onClosed: refreshManagement,
+        onClosed: refocusAfterClose({}),
       });
       return;
     } else {
@@ -1130,7 +1156,7 @@ export async function openAddProvider({ present = openModal, snapshot = manageme
       lastSaveNotice = saveNoticeFor(result);
       refreshManagement();
     },
-    onClosed: refreshManagement,
+    onClosed: refocusAfterClose({}),
   });
 }
 
