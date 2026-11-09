@@ -9,15 +9,17 @@ const oauthReasons = Object.freeze({
   runtime_readback_failed: 'Pi 未能确认当前会话的模型同步，请重试',
 });
 
-export function runtimeSessionWitness(state, resolveSession) {
+export function runtimeSessionWitness(state, resolveSession, expectedIdentity) {
   if (typeof state?.sessionId !== 'string' || typeof state.sessionFile !== 'string' || !path.isAbsolute(state.sessionFile)) return null;
   const target = resolveSession(state.sessionId);
   if (!target?.file) return null;
   const normalize = value => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
   if (normalize(target.file) !== normalize(state.sessionFile)) return null;
-  const file = fs.lstatSync(target.file, { bigint: true });
+  const file = fs.lstatSync(target.file);
   if (!file.isFile() || file.isSymbolicLink()) return null;
-  return `${normalize(target.file)}:${file.dev}:${file.ino}:${file.birthtimeNs}`;
+  if (expectedIdentity && (file.dev !== expectedIdentity.dev || file.ino !== expectedIdentity.ino ||
+      file.birthtimeMs !== expectedIdentity.birthtimeMs)) return null;
+  return `${normalize(target.file)}:${file.dev}:${file.ino}:${file.birthtimeMs}`;
 }
 
 export function runtimeWitnessCurrent(evidence) {
@@ -60,10 +62,11 @@ export function createProviderConfigSync({ store, hasLiveRuntime = () => false, 
     });
   }
 
-  function snapshot(metadata) {
+  function snapshot(metadata, revision) {
     try {
       const source = evidence();
       if (source) {
+        if (revision !== undefined && source.revision !== revision) return status('pending', 'runtime_sync_pending');
         if (source.unconfirmed) return authMutationActive() ? status('pending', 'runtime_sync_pending') : status('error', 'credential_unconfirmed');
         if (!source.required) return status('idle');
         const runtimes = collect(source, targets());

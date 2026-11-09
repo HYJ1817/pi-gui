@@ -19,7 +19,7 @@ const ERRORS = {
 
 export function createProviderAuth({ adapter, busyReason = () => null, synchronize = async () => ({ ok: true }),
   readModels = async () => null, customProviders = () => [], startBlocked = () => false,
-  acquireMutation = () => null, runtimeSync = null, retryRuntimeSync = null, timeoutMs = 5 * 60 * 1000 } = {}) {
+  acquireMutation = () => null, runtimeSync = null, retryRuntimeSync = null, observeRuntimeSync = null, timeoutMs = 5 * 60 * 1000 } = {}) {
   let generation = 0, active = null, current = null, revision = 0, readSequence = 0, disposed = false;
   let data = { capability: { sdkAvailable: false, reason: '正在读取 Pi 认证能力', piVersion: null }, providers: [] };
   let synchronization = { state: 'idle', reason: null }; let needsSync = false, syncPromise = null;
@@ -141,7 +141,10 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
         // A native operation may commit and then fail to synchronize. Even
         // cancellation is read back; exit code/Promise alone is not evidence.
         if (!stopped) { needsSync = false; synchronization = { state: 'error', reason: ERRORS.unconfirmed }; }
-        else if (runtimeSync) synchronization = { state: 'idle', reason: null };
+        else if (runtimeSync) {
+          synchronization = { state: 'idle', reason: null };
+          if (attempted) observeRuntimeSync?.();
+        }
         else if (errorCode !== 'busy') { needsSync = true; synchronization = { state: 'pending', reason: null }; await sync(); }
       }
     }

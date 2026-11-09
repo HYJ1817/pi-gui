@@ -171,6 +171,9 @@ async function bridgeCases(createAuthRuntimeSync) {
     bridge.start(); await tick();
     const unqualified = await bridge.request({ type: 'fixture_unqualified' }, { strict: true });
     check('strict private RPC refuses a missing native success marker', () => assert.equal(unqualified, null));
+    const priorEpoch = bridge.providerSessionEpoch();
+    await bridge.request({ type: 'switch_session', sessionPath: 'fixture-next-session.jsonl' });
+    check('private session switch dispatch and completion both invalidate the Classic owner epoch', () => assert.equal(bridge.providerSessionEpoch(), priorEpoch + 2));
     launchRevision = 'revision-two';
     check('launch witness remains bound to the actual spawned run', () => assert.deepEqual(bridge.providerLaunch(), { cwd: 'fixture-A', revision: 'revision-one' }));
     const sync = createAuthRuntimeSync({ rpc: bridge, getCwd: runtime.getCurrentCwd, busyReason: () => null, subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, timeoutMs: 1000 });

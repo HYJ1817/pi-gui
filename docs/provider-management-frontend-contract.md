@@ -41,7 +41,9 @@ P0＋P1 对以下有效请求返回 HTTP 422 `{ok:false,code:'unsupported',messa
 | POST `/test` | `testProviderConnection(body)` | 同 `/discover` | HTTP 202 `{ok:true,operationId}`，结果含 `reachability/modelListAccess/credentialAccepted` 三值、`inferenceVerified:false`、`evidence/checkedAt` |
 | GET `/operations/:id` | `fetchProviderOperation(id)` | 无 | `{ok:true,kind,state,revision,result?,error?}`。发现结果含归一化 `models/sourceKind/stale/count` 和请求绑定版本 |
 | POST `/operations/:id/cancel` | `cancelProviderOperation(id,body)` | `{requestId}` | `{ok:true,state:'cancelled'}` |
-| POST `/sync` | `syncProviderConfiguration(body)` | `{requestId,revision}` | `{ok:true,operationId,sync}`，含逐 Runtime 状态 |
+| POST `/sync` | `syncProviderConfiguration(body)` | `{requestId,revision}` | HTTP 202 `{ok:true,operationId,sync}`。同一请求标识可重取受理回执；在 `/operations/:id` 读取 `kind:'sync'` 和 `result.sync`。重试仅核验已运行进程。 |
+
+`capabilities.syncMode:'deferred'` 表示可以读取同步状态和发起只读重试。`sync.runtimes` 只包含活动目标的 `{id,kind,state,reason}`，其中 `kind` 为 `classic` 或 `runtime`。操作完成后 `sync.state` 仍可能是 `pending`，例如进程启动时尚未加载本次变更。旧配置 revision 的新重试返回 409。
 
 管理接口错误为 `{ok:false,code,message,retryable,fieldErrors?}`。400 `invalid_request` 的 `fieldErrors` 只含字段名和 `invalid`。409 包含 `config_conflict/draft_conflict/request_id_conflict/provider_exists/credential_target_conflict/credential_conflict`。423 为 `config_busy`。422 还包含 `config_invalid/config_unsupported/config_unsafe`。503 覆盖不可读、写入失败和待恢复。管理 API 客户端沿用 `{ok:false,network:true,error}` 的传输错误形状。
 

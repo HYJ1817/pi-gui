@@ -339,7 +339,7 @@ let collabProposalsRef = null;
 const piActivity = createPiActivity();
 const modelGeneration = createModelGeneration();
 let primaryNativeSession = null;
-let classicProviderSessionEpoch = 0;
+let primarySessionWitnessEpoch = null;
 let cliInFlight = 0;
 const processManagers = new Set();
 const mutationAdmission = createSessionRevertAdmission();
@@ -395,6 +395,7 @@ function observeForStructuredLog(event) {
 const rpc = createRpcBridge({
   runtime,
   captureProviderLaunch: scope => captureProviderLaunch(scope, piLaunch, piLaunch.cliEntry()),
+  providerSessionChanged: () => providerConfigSync.observe(),
   browserLaunch: guiBrowserLaunch,
   processLaunch: managedProcesses,
   sessionChangeLaunch: sessionChanges,
@@ -409,7 +410,10 @@ const rpc = createRpcBridge({
      * 无进行中生成时是 O(1) 快速返回，不影响普通聊天路径。 */
     try { collabProposalsRef?.observeClassic(event); } catch { /* observation only */ }
     if (event.type === 'bridge_status' && event.state !== 'ready') primaryNativeSession = null;
-    if (event.type === 'response' && event.command === 'get_state' && typeof event.data?.sessionId === 'string') primaryNativeSession = event.data.sessionId;
+    if (event.type === 'response' && event.command === 'get_state' && typeof event.data?.sessionId === 'string') {
+      primaryNativeSession = event.data.sessionId;
+      primarySessionWitnessEpoch = rpc.providerSessionEpoch();
+    }
     event = projectProcessEvent(event);
     managedProcesses.observe(event);
     extensionRegistryRef?.observe(event);
@@ -425,7 +429,8 @@ const rpc = createRpcBridge({
     piActivity.observe(event);
     primaryToolGuard.observe(event);
     providerAuthRef?.observeRuntime(event);
-    if (event.type === 'bridge_status' || event.type === 'agent_settled' || event.type === 'response' && event.command === 'get_state') providerConfigSync.observe();
+    if (event.type === 'bridge_status' || event.type === 'agent_settled' ||
+        event.type === 'response' && ['get_state','new_session','switch_session','fork'].includes(event.command)) providerConfigSync.observe();
     sse.publish({ ...modelGeneration.observe(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
       : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null)), legacyOwner: primaryOwner() });
@@ -502,7 +507,7 @@ const providerCredentials = createProviderCredentialSdk({ resolvePackageDir: piL
 const providerMutationBlocked = () => providerAuthRef?.inFlight() || updateMaintenance.locked() ||
   piUpdate.isRunning() || capabilityInstall.isRunning() || cliInFlight > 0;
 const providers = createProviders({ modelsJson: MODELS_JSON, metadataPath: path.join(DATA_DIR, 'provider-management.json'),
-  inspectCredential: providerCredentials.inspect, mutationBlocked: providerMutationBlocked });
+  inspectCredential: providerCredentials.inspect, mutationBlocked: providerMutationBlocked, onChanged: () => providerConfigSync.observe() });
 try { providers.store.recoverPending(); } catch { /* Configuration endpoints surface the fixed recovery error. */ }
 const providerConfigSync = createProviderConfigSync({ store: providers.store,
   targets: () => [...classicProviderTargets(), ...(runtimeRegistryRef?.providerSyncTargets() ?? [])],
@@ -993,7 +998,7 @@ const providerAuth = providerAuthRef = createProviderAuth({
     return Array.isArray(result?.models) ? result.models : null;
   },
   runtimeSync: providerConfigSync.oauthSnapshot,
-  retryRuntimeSync: providerConfigSync.retry,
+  retryRuntimeSync: providerConfigSync.retry, observeRuntimeSync: providerConfigSync.observe,
 });
 
 const runtimeBrowser = createRuntimeBrowserGateway();
@@ -1090,18 +1095,21 @@ function primaryOwner() {
 function classicProviderTargets() {
   const state = rpc.getState();
   if (!state.piRunning && state.bridgeState !== 'starting') return [];
-  const owner = primaryOwner();
-  const epoch = classicProviderSessionEpoch;
-  const key = JSON.stringify([owner, epoch]);
+  const identity = () => {
+    const epoch = rpc.providerSessionEpoch();
+    return { owner: { ...primaryOwner(), sessionId: primarySessionWitnessEpoch === epoch ? primaryNativeSession : null }, epoch };
+  };
+  const currentIdentity = identity();
+  const key = JSON.stringify(currentIdentity);
   const launch = rpc.providerLaunch();
   const cwd = runtime.getCurrentCwd();
   return [{ id: 'classic', kind: 'classic', key, launch, ready: state.bridgeState === 'ready' && Boolean(launch),
-    current: () => cwd === runtime.getCurrentCwd() && key === JSON.stringify([primaryOwner(), classicProviderSessionEpoch]) && rpc.getState().bridgeState === 'ready' &&
+    current: () => cwd === runtime.getCurrentCwd() && key === JSON.stringify(identity()) && rpc.getState().bridgeState === 'ready' &&
       rpc.providerLaunch() === launch && launch.binding.identity === piLaunch.identityKey(),
     busy: () => Boolean(piActivity.busy() || rpc.getState().stop?.pending || rpc.updateBusy() ||
       managedProcesses.manager.snapshot().processes.some(process => !process.cleanupConfirmed)),
     request: type => rpc.request({ type }, { timeoutMs: 3000, strict: true }),
-    session: value => owner.sessionId && value.sessionId !== owner.sessionId ? null : runtimeSessionWitness(value, sessions.resolveByUuid),
+    session: value => currentIdentity.owner.sessionId && value.sessionId !== currentIdentity.owner.sessionId ? null : runtimeSessionWitness(value, sessions.resolveByUuid),
     witnessCurrent: runtimeWitnessCurrent,
   }];
 }
@@ -1269,7 +1277,6 @@ const route = createRouter({
       modelGeneration.guardCommand(cmd);
       const { __fallbackOwner, ...wire } = cmd;
       const result = rpc.send(wire);
-      if (['new_session', 'switch_session', 'fork'].includes(cmd.type)) classicProviderSessionEpoch++;
       modelGeneration.noteCommandAccepted(cmd);
       piActivity.noteCommandAccepted(cmd);
       if (['prompt','steer','follow_up'].includes(cmd.type)) primaryToolGuard.resume();

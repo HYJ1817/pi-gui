@@ -202,6 +202,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live.record.sessionId = state.sessionId; live.record.sessionLocator = locator;
     live.record.sessionIdentity = null;
     if (locator) try { const st = fs.statSync(locator); live.record.sessionIdentity = { dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs }; } catch {}
+    live.providerSessionIdentity ??= live.record.sessionIdentity;
     if (typeof state.sessionName === 'string' && (state.sessionName.trim() || !projectWorkspace(live.record.workspace))) live.record.sessionName = state.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
     try { save(); } catch { live.error = 'metadata_write_failed'; }
     changed(live);
@@ -222,6 +223,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const total = lives.size + externalCount();
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
+      providerSessionIdentity: record.sessionIdentity,
       sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set(), approvals: new Map() };
     if (!leases.has(key)) leases.set(key, new Set());
     leases.get(key).add(live); lives.set(record.conversationId, live);
@@ -404,7 +406,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       const expected = owner(live);
       const key = JSON.stringify(expected);
       const launch = adapter?.providerLaunch?.();
-      const witness = state => state.sessionId === expected.sessionId ? adapter.providerSession(state) : null;
+      const witness = state => state.sessionId === expected.sessionId && live.providerSessionIdentity
+        ? adapter.providerSession(state, live.providerSessionIdentity) : null;
       return { id: expected.conversationId, kind: 'runtime', key, launch,
         ready: Boolean(expected.sessionId && live.lifecycle === 'ready' && launch),
         current: () => belongs(live) && key === JSON.stringify(owner(live)) && live.lifecycle === 'ready' &&

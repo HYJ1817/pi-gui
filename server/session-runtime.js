@@ -103,7 +103,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     providerLaunch: rpc.providerLaunch,
     providerLaunchCurrent: witness => witness?.binding.identity === launch.identityKey(),
     providerRead: type => rpc.request({ type }, { timeoutMs: 3000, strict: true }),
-    providerSession: state => runtimeSessionWitness(state, sessions.resolveByUuid),
+    providerSession: (state, identity) => runtimeSessionWitness(state, sessions.resolveByUuid, identity),
     start: () => resumeFile ? rpc.restart({ sessionPath: resumeFile }) : rpc.start(),
     getState: rpc.getState, request: async cmd => {
       if (disposed || !context.isCurrent()) throw fail('stale_runtime');

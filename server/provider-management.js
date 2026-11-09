@@ -90,6 +90,9 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
   }
 
   async function snapshot() {
+    /* Desktop qualification can yield to a concurrent configuration commit. */
+    const desktopSource = typeof desktopCapabilities === 'function' ? await Promise.resolve(desktopCapabilities()).catch(() => null) : desktopCapabilities ?? null;
+    const desktop = desktopSource && typeof desktopSource === 'object' ? desktopSource : null;
     const { config, metadata, revision } = store.read();
     const auth = projectAuth(readAuth());
     const byProvider = new Map(auth.providers.map(p => [p.providerId, p]));
@@ -99,15 +102,10 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       id: `${p.providerId}-subscription`, providerId: p.providerId, name: p.displayName, category: 'subscription', authMode: 'oauth',
       connection: null, enabled: p.canLogin, disabledReason: p.canLogin ? null : 'oauth_unavailable',
     }));
-    /* desktopCapabilities 供给方可能是 async（桥内部要做一次只读 SDK
-     * 资格探测）；直接吞 Promise 会把「能力恒关」错写成 truthy Promise。
-     * 这里必须等待，任何探测异常按无桌面能力处理。 */
-    const desktopSource = typeof desktopCapabilities === 'function' ? await Promise.resolve(desktopCapabilities()).catch(() => null) : desktopCapabilities ?? null;
-    const desktop = desktopSource && typeof desktopSource === 'object' ? desktopSource : null;
     return { ok: true, schemaVersion: PROVIDER_MANAGEMENT_SCHEMA_VERSION, revision,
       capabilities: providerManagementCapabilities({ oauthLogin: auth.sdkAvailable ? true : null, modelOverrides: auth.sdkAvailable && auth.piVersion === '1.5.0' ? true : null, desktop, runtimeSync: Boolean(runtimeSync) }),
       catalog: [...PROVIDER_CATALOG, ...subscriptions], services, auth,
-      sync: runtimeSync ? runtimeSync.snapshot(metadata) : metadata.syncRequired === true ? pendingSync : { state: 'idle', reason: null } };
+      sync: runtimeSync ? runtimeSync.snapshot(metadata, revision) : metadata.syncRequired === true ? pendingSync : { state: 'idle', reason: null } };
   }
 
   /* P2 私有桥用：读取草稿的非秘密绑定（不含任何凭据值）。
@@ -202,20 +200,19 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     const operationId = randomUUID();
     const operation = { revision, state: 'running', expires: now() + draftTtlMs };
     syncOperations.set(operationId, operation);
-    const result = Promise.resolve().then(async () => {
+    const result = { ok: true, operationId, sync: runtimeSync.snapshot(current.metadata, revision) };
+    receipts.set(requestId, { fingerprint, result, expires: operation.expires, sync: true });
+    void Promise.resolve().then(async () => {
       try {
         const sync = await runtimeSync.retry({ revision });
         if (store.read().revision !== revision) providerFailure('config_conflict');
         operation.state = 'success';
         operation.result = { sync };
-        return { ok: true, operationId, sync };
       } catch (error) {
         operation.state = 'failed';
         operation.error = providerContractError(error?.code);
-        throw error;
       }
     });
-    receipts.set(requestId, { fingerprint, result, expires: operation.expires, sync: true });
     return result;
   }
 
@@ -246,8 +243,12 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
         const result = saveDraft(request);
         return json(res, 200, discoveryService ? await discoveryService.projectDraft(result) : result);
       }
-      if (kind === 'commit') return json(res, 200, await commit(request));
-      if (kind === 'sync' && runtimeSync) return json(res, 200, await retrySync(request));
+      if (kind === 'commit') {
+        const saved = await commit(request);
+        if (saved.saved) runtimeSync?.observe?.();
+        return json(res, 200, saved);
+      }
+      if (kind === 'sync' && runtimeSync) return json(res, 202, retrySync(request));
       if (discoveryService && kind !== 'sync') {
         let persisted;
         try { persisted = own(store.read().metadata.receipts, request.requestId); }

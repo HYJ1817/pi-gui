@@ -100,6 +100,7 @@ export function createRpcBridge({
   toolLaunch = null,
   compat = null,
   captureProviderLaunch = null,
+  providerSessionChanged = null,
   spawnProcess = spawn,
   /* 进程树终止原语（**注入**，见文件头的说明）。Windows 上 `child.kill()`
    * 只杀得掉外层 cmd/npm 包装，pi 本体（以及它拉起的 shell 工具）会活下来，
@@ -248,6 +249,8 @@ export function createRpcBridge({
    * （args 只拼接不转义），每次启动刷两行弃用警告，双击启动时看着像报错。
    * 所以成形交给 `formatLaunch()`（Node 文档认可的方式），见文件头第 2 条。 */
   let providerLaunch = null;
+  let providerSessionEpoch = 0;
+  const sessionMutation = type => ['new_session', 'switch_session', 'fork'].includes(type);
   function spawnPi(bin, args, browser = null) {
     /* 把访问令牌从 pi 的环境里摘掉。
      *
@@ -452,6 +455,10 @@ export function createRpcBridge({
         if (msg?.type === 'response') {
           const key=updateKey(msg),count=updateCommands.get(key)||0;
           if(count<=1)updateCommands.delete(key);else updateCommands.set(key,count-1);
+          if (sessionMutation(msg.command) && msg.success === true) {
+            providerSessionEpoch++;
+            providerSessionChanged?.();
+          }
         }
         if (msg?.type === 'response' && msg.id === readinessId && msg.command === 'get_state' && msg.success === true && !maintenance) {
           readinessId = null;
@@ -594,6 +601,7 @@ export function createRpcBridge({
     /* 停止屏障：会开新 run 的命令在停止期间**写不进 stdin**（后端保护，
      * 不依赖前端 disabled）。 */
     stopGuard(wireCommand);
+    if (sessionMutation(wireCommand.type)) providerSessionEpoch++;
     if(wireCommand.type==='extension_ui_response') {
       pi.stdin.write(JSON.stringify(wireCommand) + '\n');updateApprovals.delete(wireCommand.id);
     } else {
@@ -638,8 +646,10 @@ export function createRpcBridge({
       }, timeoutMs);
       // timer.unref() 让一个挂起的请求不会拖住进程退出
       if (typeof timer.unref === 'function') timer.unref();
+      const changesSession = sessionMutation(cmd.type);
       pending.set(id, { resolve, timer, strictCommand: strict ? cmd.type : null });
       try {
+        if (changesSession) providerSessionEpoch++;
         pi.stdin.write(JSON.stringify({ ...cmd, id }) + '\n', (err) => {
           if (!err || !pending.has(id)) return;
           clearTimeout(timer);
@@ -1135,5 +1145,6 @@ export function createRpcBridge({
 
   return { start, send, request, abortAndWait, stopState, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState,
     providerLaunch: () => pi && pi !== retiringChild && providerLaunch?.bridgeRun === bridgeRun ? providerLaunch.witness : null,
+    providerSessionEpoch: () => providerSessionEpoch,
     updateBusy: () => Boolean(pending.size || updateApprovals.size || updateCommands.size) };
 }
