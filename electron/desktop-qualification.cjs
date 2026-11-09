@@ -32,7 +32,9 @@ function desktopQualification({ argv = [], execArgv = [], hasSwitch = () => fals
   const strings = [...(Array.isArray(argv) ? argv : []), ...(Array.isArray(execArgv) ? execArgv : [])].map(String);
   for (const [name, reason] of DEBUG_SWITCHES) {
     if (flagPresent(strings, name)) return { ok: false, reason };
-    try { if (hasSwitch(name) === true) return { ok: false, reason }; } catch { /* fail closed below */ }
+    // 探测失败不能当作「没有这个开关」继续放行；不确定一律不开放。
+    try { if (hasSwitch(name) === true) return { ok: false, reason }; }
+    catch { return { ok: false, reason: 'desktop_unqualified' }; }
   }
   const disabled = env && env.ELECTRON_DISABLE_SANDBOX;
   if (typeof disabled === 'string' ? disabled !== '' : Boolean(disabled)) return { ok: false, reason: 'sandbox_disabled' };

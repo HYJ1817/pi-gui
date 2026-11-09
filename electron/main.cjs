@@ -586,9 +586,11 @@ function hardenWebContents(wc) {
   if (isBrowserWebContents(wc)) return;
 
   /* 凭据受限输入窗使用独立 session：它永远不参与「站外链接交给系统浏览器」
-   * 这一层（FIX-04）。导航与弹窗一律拒绝，且不会调用 shell.openExternal。 */
+   * 这一层（FIX-04）。导航与弹窗一律拒绝，且不会调用 shell.openExternal。
+   * Electron 的 Session 没有 getPartition 实例方法，只能按 Session 实例比较
+   * （与 browser-view.cjs 同一写法）；写成 getPartition 会让这个分支永不命中。 */
   let credentialSheet = false;
-  try { credentialSheet = wc.session?.getPartition?.() === CREDENTIAL_SHEET_PARTITION; } catch { credentialSheet = false; }
+  try { credentialSheet = wc.session === session.fromPartition(CREDENTIAL_SHEET_PARTITION); } catch { credentialSheet = false; }
   if (credentialSheet) {
     wc.setWindowOpenHandler(() => ({ action: 'deny' }));
     const deny = event => event.preventDefault();

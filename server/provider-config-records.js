@@ -195,11 +195,19 @@ export function applyProviderCommit(snapshot, request, draft, credential) {
        * 在管理界面里无法保存。原生化（apply-staged/clear-native）仍不开放：
        * 内置 Endpoint 没有 SDK 证据能精确证明目标。 */
       if (!['keep', 'env', 'none'].includes(action)) providerFailure('unsupported');
-      if (previous?.baseUrl) guardExistingTarget(id, previous, draft.connection, credential);
-      /* FIX-05：内置服务不能在原地改端点（换端点必须复制为新标识）。即使旧记录
-       * 干净、guardExistingTarget 放行，也必须显式拒绝，不能静默忽略请求后
-       * 返回 saved:true。名称/模型/环境变量引用在同一目标上不受影响。 */
-      if (previous && targetChanged(previous, draft.connection)) providerFailure('credential_target_conflict');
+      if (previous?.baseUrl) {
+        guardExistingTarget(id, previous, draft.connection, credential);
+        /* FIX-05：内置服务不能在原地改端点（换端点必须复制为新标识）。即使旧记录
+         * 干净、guardExistingTarget 放行，也必须显式拒绝，不能静默忽略请求后
+         * 返回 saved:true。名称/模型/环境变量引用在同一目标上不受影响。 */
+        if (targetChanged(previous, draft.connection)) providerFailure('credential_target_conflict');
+      } else if (previous) {
+        /* 只有模型覆盖、没有端点字段的内置记录：它的有效目标就是目录预设。
+         * 与预设比较，避免把「同目标改名/换环境变量引用」误判为改端点；
+         * 预设未知时保守拒绝。 */
+        const preset = presetTargets.get(id);
+        if (!preset || targetChanged(preset, draft.connection)) providerFailure('credential_target_conflict');
+      }
       if (action === 'env') {
         /* 新建：与旧入口 applyLegacyProvider 的预设分支同一约束——只允许目录
          * 预设端点，且原生凭据槽必须可证明为空（避免 env 引用与已存登录混用）。

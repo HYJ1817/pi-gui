@@ -219,7 +219,8 @@ export function openProviderDialog({
      * 草稿改了引用/清除后，迟到的旧代次响应不得再并入。 */
     return JSON.stringify([draft?.providerId || '', draft?.connection?.baseUrl || '',
       draft?.connection?.api || '', effectiveAuthMode(draft),
-      String(draft?.envReference || '').trim(), draft?.credentialAction?.type || 'keep']);
+      String(draft?.envReference || '').trim(), draft?.credentialAction?.type || 'keep',
+      draft?.nativeStage ? [draft.nativeStage.action || '', draft.nativeStage.draftId || ''] : '']);
   }
 
   function resetCacheState() {
@@ -849,12 +850,13 @@ export function openProviderDialog({
           if (!stillCurrent()) return;
           Promise.resolve(managementApi.fetchProviderServiceCache(serviceId))
             .then(result => {
-              if (!stillCurrent()) return;
+              // 丢弃迟到结果时清掉标记：切回同一服务/目标后仍可重新取首屏缓存。
+              if (!stillCurrent()) { cacheBootstrapKey = ''; return; }
               // 服务端回显的 serviceId 也必须一致；不一致说明响应已属另一目标。
               if (result?.ok === true && result.serviceId === serviceId) applyCachedCandidates(result);
               else if (result?.ok !== true) cacheBootstrapKey = '';
             })
-            .catch(() => { if (stillCurrent()) cacheBootstrapKey = ''; });
+            .catch(() => { cacheBootstrapKey = ''; });
         }, 0);
       }
     }
