@@ -57,7 +57,9 @@ function capabilityBadges(model) {
 /* 显示回退：发现/缓存候选的 name/容量等元数据是服务端白名单化后的只读值，
  * 只用于展示（行标题、容量徽标），不参与编辑与持久化比较。 */
 function displayOf(model) {
-  const fallback = model.displayValues || {};
+  /* 只有发现/缓存候选使用展示回退；configured/builtin-override 的显示必须
+   * 服从当前草稿的编辑状态（清空字段即恢复继承/默认，不被旧值遮盖）。 */
+  const fallback = model.source === 'remote' || model.source === 'cache' ? (model.displayValues || {}) : {};
   return {
     ...model,
     name: model.name || fallback.name || null,
@@ -71,7 +73,8 @@ function displayOf(model) {
 }
 
 function sourceBadge(model) {
-  return h('span', { class: `pm-model-source is-${model.source}`, text: SOURCE_LABEL[model.source] || '模型' });
+  const label = model.source === 'cache' && model.cachedStale ? '缓存已过期' : SOURCE_LABEL[model.source] || '模型';
+  return h('span', { class: `pm-model-source is-${model.source}`, text: label });
 }
 
 function errorText(errors, modelId, fieldName) {

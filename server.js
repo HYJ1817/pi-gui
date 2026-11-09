@@ -540,6 +540,8 @@ const providerManagement = createProviderManagement({ store: providers.store, in
     nativeCurrent: (grant, draft) => providerCredentialBridge.currentDiscovery(grant, draft),
     verifyNative: (grant, draft) => providerCredentialBridge.verifyDiscovery(grant, draft),
     executeNative: (grant, draft, options) => providerCredentialBridge.runDiscovery(grant, draft, options),
+    /* 缓存首屏的凭据代次证据：只读快照（literal/revision/workerEpoch），无秘密。 */
+    storedEvidence: providerId => providerCredentials.inspectDiscovery(providerId),
   } : null,
   nativeCredentials: process.send && providerKeyInputEnabled ? {
     authorize: (binding, options) => providerCredentialBridge.authorizeNative(binding, options),

@@ -6,6 +6,7 @@
 
 import {
   fetchProviderManagement,
+  fetchProviderServiceCache,
   saveProviderDraft,
   commitProviderDraft,
   authorizeProviderDiscovery,
@@ -57,6 +58,7 @@ import { button, field, h, icon } from './dom.js';
 
 const DEFAULT_API = Object.freeze({
   fetchProviderManagement,
+  fetchProviderServiceCache,
   saveProviderDraft,
   commitProviderDraft,
   authorizeProviderDiscovery,
@@ -154,6 +156,12 @@ export function openProviderDialog({
   let conflictState = null;
   let conflictLoading = false;
   let successState = null;
+  /* 缓存首屏（FIX-01）：草稿保存响应里的匹配缓存候选只做展示合并；
+   * 不改变选择/顺序，且同一目标只合并一次（避免刷新后复活已移除项）。 */
+  let cacheNote = null;
+  let cacheMergedIds = new Set();
+  let cacheKey = '';
+  let cacheBootstrapKey = '';
   let currentErrors = { errors: {}, modelErrors: {} };
   let authDispose = null;
   let lastSnapshotRead = 0;
@@ -204,6 +212,42 @@ export function openProviderDialog({
   function closeLateDraft(draftId) {
     if (!draftId || liveDraftInUse(draftId)) return;
     try { void credentials?.closeDraft(draftId); } catch { /* best effort */ }
+  }
+
+  function cacheIdentity() {
+    return JSON.stringify([draft?.providerId || '', draft?.connection?.baseUrl || '',
+      draft?.connection?.api || '', effectiveAuthMode(draft)]);
+  }
+
+  function resetCacheState() {
+    cacheNote = null;
+    cacheMergedIds = new Set();
+    cacheKey = '';
+  }
+
+  /* 把草稿响应的匹配缓存并入候选列表：只增候选，不改 order/高级参数；
+   * 同一目标同一 ID 只合并一次，因此关闭重开不会重复，也不会复活已移除项。 */
+  function applyCachedCandidates(handle) {
+    if (disposed || view !== 'setup' || !draftStore) return;
+    const list = Array.isArray(handle?.cachedModels) ? handle.cachedModels : [];
+    if (!list.length) return;
+    const key = cacheIdentity();
+    if (cacheKey !== key) { cacheKey = key; cacheMergedIds = new Set(); cacheNote = null; }
+    const known = new Set(draftStore.get().models.map(model => model.modelId));
+    const incoming = [];
+    for (const model of list) {
+      const id = String(model?.modelId || '').trim();
+      if (!id || known.has(id) || cacheMergedIds.has(id)) continue;
+      cacheMergedIds.add(id);
+      incoming.push(model);
+    }
+    if (!incoming.length) return;
+    const stale = handle.cacheStale === true || incoming.some(model => model.cacheStale === true);
+    draftStore.dispatch({ type: 'merge-models', models: incoming });
+    draft = draftStore.get();
+    panes?.update(draft, { errors: currentErrors.modelErrors, discovery: discovery?.getState() });
+    cacheNote = { count: incoming.length, stale, at: Number.isFinite(handle.cachedAt) ? handle.cachedAt : null };
+    renderStatus();
   }
 
   /* 目标（标识/端点/认证来源/本机注册引用）变化后，旧草稿句柄、暂存批准与
@@ -347,6 +391,15 @@ export function openProviderDialog({
         actions: Array.isArray(successState.actions) ? successState.actions : [],
       }));
     }
+    if (cacheNote) {
+      statusHost.appendChild(renderBanner({
+        tone: 'info',
+        title: cacheNote.stale ? '显示已过期的匹配缓存' : '显示匹配缓存',
+        message: `${cacheNote.count} 个候选来自该目标的最近一次发现${cacheNote.stale
+          ? '（已超过 60 秒，仅作历史参考；不会自动选择或改变顺序）'
+          : '（60 秒内，仅作参考；不会自动选择或改变顺序）'}。授权或刷新可获取最新目录。`,
+      }));
+    }
     if (draft?.readOnly) {
       statusHost.appendChild(renderBanner({
         tone: 'info',
@@ -463,6 +516,7 @@ export function openProviderDialog({
       retainLiveDraft(draftHandle.draftId);
     }
     configureDiscovery(discovery);
+    applyCachedCandidates(draftHandle);
     return { ok: true, ...draftHandle };
   }
 
@@ -688,6 +742,7 @@ export function openProviderDialog({
         draft = draftStore.get();
         // 远端候选只进入候选列表；选择与顺序保持不变。
         panes?.update(draft, { errors: currentErrors.modelErrors, discovery: controller.getState() });
+        if (meta?.sourceKind === 'remote' && cacheNote) { cacheNote = null; renderStatus(); }
         if (meta?.stale) {
           successState = {
             tone: 'info',
@@ -771,6 +826,25 @@ export function openProviderDialog({
     renderStatus();
     maybeRunIntent();
     focusAfterSetup();
+    /* FIX-01：编辑既有服务时用只读缓存端点取与当前权威目标严格绑定的首屏
+     * 候选（不写草稿、不联网）。失败不阻塞编辑；用户动作会走正常授权流程。 */
+    if (!legacy && snapshotState && draft?.mode === 'update' && typeof managementApi.fetchProviderServiceCache === 'function') {
+      const key = cacheIdentity();
+      const serviceId = draft.sourceServiceId;
+      if (cacheBootstrapKey !== key && serviceId) {
+        cacheBootstrapKey = key;
+        setTimeout(() => {
+          if (disposed || view !== 'setup') return;
+          Promise.resolve(managementApi.fetchProviderServiceCache(serviceId))
+            .then(result => {
+              if (disposed || view !== 'setup') return;
+              if (result?.ok === true) applyCachedCandidates(result);
+              else cacheBootstrapKey = '';
+            })
+            .catch(() => { cacheBootstrapKey = ''; });
+        }, 0);
+      }
+    }
   }
 
   function focusAfterSetup() {
@@ -798,7 +872,8 @@ export function openProviderDialog({
       if (nextTarget !== targetSignature || nextAuth !== authSignature) {
         targetSignature = nextTarget;
         authSignature = nextAuth;
-        // 目标/认证来源变化：旧句柄、暂存批准、发现授权全部作废。
+        // 目标/认证来源变化：旧句柄、暂存批准、发现授权与首屏缓存全部作废。
+        resetCacheState();
         const hadStage = Boolean(previous?.nativeStage);
         revokeDraftArtifacts();
         if (hadStage && !state.nativeStage && view === 'setup') {

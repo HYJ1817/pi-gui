@@ -43,6 +43,8 @@ const errors = Object.freeze({
   config_write_failed: [503, '无法保存供应商配置。'],
   config_recovery_required: [503, '配置事务需要恢复，请重读状态。'],
   invalid_target: [422, '发现目标或授权已失效。'],
+  environment_missing: [422, '后端进程缺少该供应商所需的环境变量（或取值不可用）。'],
+  environment_target_unsupported: [422, '该目标不是目录审核过的预设端点，不能使用环境变量引用发现。'],
   policy_rejected: [422, '发现目标不符合已授权的网络策略。'],
   private_address: [422, '发现目标解析到不允许访问的地址。'],
   loopback_requires_consent: [422, '回环发现需要单独授权，且不允许附带凭据。'],

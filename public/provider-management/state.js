@@ -69,6 +69,7 @@ export function createModelRecord(raw = {}, { manual = false } = {}) {
   return {
     modelId: String(raw.modelId || '').trim(),
     source,
+    cachedStale: source === 'cache' && raw.cacheStale === true,
     persisted: (!manual && source === 'configured') || source === 'builtin-override',
     baseline,
     displayValues,
@@ -593,13 +594,40 @@ export function removeModel(draft, modelId) {
   });
 }
 
+/* 缓存候选在拿到新鲜远端结果时升级为远端记录（仅当用户没有编辑过它）。
+ * 编辑过的记录保留用户输入，避免刷新覆盖手动参数。 */
+function untouchedRecord(model) {
+  return EDITABLE_MODEL_FIELDS.every(field => {
+    const value = model[field];
+    const baseline = model.baseline?.[field];
+    if (field === 'input') return JSON.stringify(copyInput(value)) === JSON.stringify(copyInput(baseline));
+    if (field === 'reasoning') return tri(value) === tri(baseline);
+    if (field === 'name') return (typeof value === 'string' ? value.trim() : '') === (typeof baseline === 'string' ? baseline : '');
+    return positiveOrNull(value) === positiveOrNull(baseline);
+  });
+}
+
 export function mergeFetchedModels(draft, incoming) {
   // 只增不减：迟到的发现结果不能把用户已经选中的模型或编辑中的值冲掉。
   const byId = new Map(draft.models.map(model => [model.modelId, model]));
   const models = [...draft.models];
   for (const raw of Array.isArray(incoming) ? incoming : []) {
     const id = String(raw?.modelId || raw?.id || '').trim();
-    if (!id || byId.has(id)) continue;
+    if (!id) continue;
+    const existing = byId.get(id);
+    if (existing) {
+      /* 缓存首屏 -> 新鲜远端结果：升级来源与显示信息；选择 order 不受影响。 */
+      const incomingKind = raw.configSource === 'remote' ? 'remote' : raw.configSource === 'cache' ? 'cache' : null;
+      if (existing.source === 'cache' && incomingKind === 'remote' && untouchedRecord(existing)) {
+        const index = models.findIndex(model => model.modelId === id);
+        if (index >= 0) {
+          const record = createModelRecord({ ...raw, modelId: id, cacheStale: false });
+          models[index] = record;
+          byId.set(id, record);
+        }
+      }
+      continue;
+    }
     const record = createModelRecord({ ...raw, modelId: id });
     byId.set(id, record);
     models.push(record);

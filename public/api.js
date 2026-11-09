@@ -304,6 +304,24 @@ export async function fetchProviderManagement() {
     return { ok: false, code: 'unavailable', message: '无法连接供应商管理接口。', error: err.message, network: true, status: 0 };
   }
 }
+export async function fetchProviderServiceCache(serviceId) {
+  const route = `${providerManagementRoot}/services/${encodeURIComponent(serviceId)}/cache`;
+  try {
+    const response = await fetch(route);
+    if (response.status >= 500) reportRequestFailure(route, response.status);
+    let body;
+    try { body = await response.json(); } catch {
+      return { ok: false, code: 'invalid_response', message: '供应商缓存接口返回了无法识别的响应。', status: response.status };
+    }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return { ok: false, code: 'invalid_response', message: '供应商缓存接口返回了无法识别的响应。', status: response.status };
+    }
+    return { ...body, status: response.status };
+  } catch (err) {
+    reportRequestFailure(route, 0);
+    return { ok: false, code: 'unavailable', message: '无法连接供应商缓存接口。', error: err.message, network: true, status: 0 };
+  }
+}
 export const saveProviderDraft = payload => providerManagementPost('/drafts', 'drafts', payload);
 export const commitProviderDraft = payload => providerManagementPost('/commit', 'commit', payload);
 export const authorizeProviderDiscovery = payload => providerManagementPost('/discovery-authorizations', 'authorize', payload);

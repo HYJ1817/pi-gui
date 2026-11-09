@@ -1,10 +1,15 @@
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
-import { PROVIDER_CATALOG, isLiteralKeyInput, isModelId, providerContractError, providerFailure } from '../public/provider-management/contract.js';
+import { PROVIDER_CATALOG, isLiteralKeyInput, isModelId, isOpaqueId, providerContractError, providerFailure } from '../public/provider-management/contract.js';
 import { createDiscoveryConsentStore } from './provider-discovery-consent.js';
 import { classifyAddress, createDiscoveryTransport, parseTarget } from './provider-network.js';
 
 const operationTtl = 15 * 60_000;
 const cacheTtl = 60_000;
+/* 目标缓存：跨草稿/跨弹窗复用同一个已发现目标，只用于展示候选。
+ * 新鲜期沿用 60s TTL；过期后最多保留 15 分钟并明确标记 stale，
+ * 到期即删除。内存态，后端重启即消失，不落盘、不含秘密。 */
+const cacheKeepTtl = 15 * 60_000;
+const maxTargetCacheEntries = 64;
 const maxActive = 8;
 const maxCacheBytes = 8 * 1024 * 1024;
 const maxTerminals = 128;
@@ -27,7 +32,8 @@ function modelsFrom(models, providerId) {
 
 export function createProviderManagementDiscovery({ draftLookup, draftFrozen = () => false, now = Date.now,
   monotonicNow = () => performance.now(), consentStore = createDiscoveryConsentStore({ strict: true, now }),
-  env = process.env, io, executeNative, nativeCurrent, verifyNative, launchIdentity = () => 'default' }) {
+  env = process.env, io, executeNative, nativeCurrent, verifyNative, launchIdentity = () => 'default',
+  storedEvidence = null }) {
   const discover = createDiscoveryTransport({ consentStore: {
     get(id) {
       const grant = consentStore.get(id);
@@ -40,6 +46,10 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
   const commands = new Map();
   const active = new Map();
   const cache = new Map();
+  /* targetKey -> { models, discoveredAt, freshUntil, keepUntil }。键包含
+   * providerId、规范化目标（协议/host/port/basePath）、API、认证来源与
+   * 凭据代次；不同服务、端点、协议、认证或凭据代次不会命中同一缓存。 */
+  const targetCache = new Map();
   const generations = new WeakMap();
   const latest = new WeakMap();
   let sequence = 0;
@@ -100,6 +110,60 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
     }
     for (const [id, entry] of cache) if (!consentStore.get(id)) removeCache(id);
     for (const [id, entry] of commands) if (!entry.pending && entry.expires <= time) commands.delete(id);
+    for (const [key, entry] of targetCache) if (entry.keepUntil <= time) targetCache.delete(key);
+  }
+
+  function targetKeyFor({ providerId, target, api, credentialSource, credentialRevision }) {
+    if (!target) return null;
+    return JSON.stringify([providerId || '', target.protocol, target.host, target.port, target.basePath,
+      api || '', credentialSource || '', credentialRevision ?? null]);
+  }
+
+  function cacheTarget(grant, models) {
+    const key = targetKeyFor(grant);
+    if (!key || !Array.isArray(models) || !models.length) return;
+    const bytes = Buffer.byteLength(JSON.stringify(models));
+    if (bytes > maxCacheBytes) return;
+    const time = now();
+    while (targetCache.size >= maxTargetCacheEntries) targetCache.delete(targetCache.keys().next().value);
+    targetCache.set(key, { models, discoveredAt: time, freshUntil: time + cacheTtl, keepUntil: time + cacheKeepTtl });
+  }
+
+  /* 当前草稿的凭据来源与代次：env 由受控预设变量计算；none 无代次；
+   * pi-credential 只接受可证明的字面量原生凭据（通过私有 worker 只读快照），
+   * 未知/不可读/OAuth/暂存来源一律不匹配（宁可不显示缓存）。 */
+  async function credentialContext(draft) {
+    if (!draft) return null;
+    if (draft.authMode === 'environment') {
+      const secret = environment(draft);
+      return secret ? { source: 'environment', revision: secret.revision } : null;
+    }
+    if (draft.authMode === 'none') return { source: 'none', revision: null };
+    if (draft.authMode === 'pi-credential' && typeof storedEvidence === 'function') {
+      try {
+        const evidence = await storedEvidence(draft.providerId);
+        if (evidence?.ok !== true || evidence.present !== true || evidence.literal !== true
+            || !isOpaqueId(evidence.credentialRevision)) return null;
+        return { source: 'stored', revision: evidence.credentialRevision };
+      } catch { return null; }
+    }
+    return null;
+  }
+
+  async function cachedForDraft(draft) {
+    try {
+      const target = parseTarget(draft?.connection?.baseUrl);
+      const context = await credentialContext(draft);
+      if (!target || !context) return null;
+      const key = targetKeyFor({ providerId: draft.providerId, target, api: draft.connection.api,
+        credentialSource: context.source, credentialRevision: context.revision });
+      const entry = key ? targetCache.get(key) : null;
+      if (!entry) return null;
+      const time = now();
+      if (entry.keepUntil <= time) { targetCache.delete(key); return null; }
+      return { models: entry.models.map(model => ({ ...model, configSource: 'cache', cacheStale: time >= entry.freshUntil })),
+        discoveredAt: entry.discoveredAt, stale: time >= entry.freshUntil };
+    } catch { return null; }
   }
 
   function once(kind, id, request, run) {
@@ -133,7 +197,14 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
     if (!['none', 'environment'].includes(draft.authMode)) providerFailure('unsupported');
     const credentialSource = draft.authMode;
     const secret = credentialSource === 'environment' ? environment(draft) : null;
-    if (credentialSource === 'environment' && !secret) providerFailure('unsupported');
+    if (credentialSource === 'environment' && !secret) {
+      /* FIX-02：区分「目标不是审核过的预设端点」与「变量缺失/取值不可用」，
+       * 让界面给出可操作的原因并允许在修复后重试（不要求重建供应商）。 */
+      const preset = PROVIDER_CATALOG.find(item => item.id === draft.providerId
+        && item.connection?.baseUrl === draft.connection.baseUrl && item.connection.api === draft.connection.api);
+      if (!preset || !preset.suggestedEnvReference) providerFailure('environment_target_unsupported');
+      providerFailure('environment_missing', 'environmentReference');
+    }
     const loopback = target.isLoopbackName || classifyAddress(target.host) === 'loopback';
     const result = consentStore.issue({ ...draft, api: draft.connection.api, credentialSource, credentialRevision: secret?.revision,
       rememberTarget: request.rememberTarget, loopback });
@@ -142,6 +213,8 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
   }
 
   function revoke(request) {
+    /* 撤销的是「联网读取授权」；目标缓存只是按身份展示的候选，会在恢复授权前
+     * 继续以 cache 标记展示（不会作为可信/最新结果，也永不触发请求）。 */
     if (!consentStore.revokeAndForget(request.consentId)) providerFailure('not_found');
     removeCache(request.consentId);
     return { ok: true, revoked: true };
@@ -212,6 +285,7 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
     }
     const models = modelsFrom(result.models, grant.providerId);
     cacheResult(grant, models);
+    cacheTarget(grant, models);
     closeOperation(operation, 'success', { result: projectModels(operation, models, 'remote') });
   }
 
@@ -292,7 +366,16 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
 
   async function projectDraft(result) {
     const grant = consentStore.forDraft(result.draftId);
-    if (!grant || !await confirmed(grant, draftLookup(result.draftId))) return result;
+    if (!grant || !await confirmed(grant, draftLookup(result.draftId))) {
+      /* 没有当前草稿的授权：只做内存目标缓存展示（不联网、不改变选择）。
+       * 身份（provider/目标/API/认证来源/凭据代次）不匹配时返回空。 */
+      const draft = draftLookup(result.draftId);
+      if (!draft) return result;
+      const cached = await cachedForDraft(draft);
+      if (!cached) return result;
+      return { ...result, credentialGeneration: null, consentState: 'unapproved',
+        sourceKind: 'cache', cachedModels: cached.models, cacheStale: cached.stale, cachedAt: cached.discoveredAt };
+    }
     const draft = draftLookup(result.draftId);
     if (draft?.draftRevision !== result.draftRevision || !current(grant, draft)) return result;
     if (!generations.has(grant)) generations.set(grant, ++sequence);
@@ -307,7 +390,7 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
       sourceKind: entry ? 'cache' : 'none', cachedModels };
   }
 
-  return { get, invalidate, projectDraft, hasRequest(id) { prune(); return commands.has(id); },
+  return { get, invalidate, projectDraft, cachedForDraft, hasRequest(id) { prune(); return commands.has(id); },
     post(kind, id, request) {
       return once(kind, id, request, () => kind === 'authorize' ? authorize(request) : kind === 'revoke' ? revoke(request) :
         kind === 'cancel' ? cancel(id) : start(kind, request));

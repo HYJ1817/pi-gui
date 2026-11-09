@@ -222,6 +222,23 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     return result;
   }
 
+  /* FIX-01：只读的首屏缓存查询。服务端按当前权威配置解析目标与认证来源，
+   * 客户端不传目标；只查内存目标缓存，绝不触发网络。 */
+  async function serviceCache(serviceId) {
+    if (!discoveryService) providerFailure('unsupported');
+    const current = store.read();
+    const meta = own(current.metadata.services, serviceId);
+    const config = own(current.config.providers, serviceId);
+    if (!config && !meta) providerFailure('not_found');
+    const auth = projectAuth(readAuth());
+    const service = projectService(serviceId, config, meta, auth.providers.find(item => item.providerId === serviceId));
+    if (!service.connection) providerFailure('unsupported');
+    const cached = await discoveryService.cachedForDraft({ providerId: serviceId, connection: service.connection, authMode: service.authMode });
+    return { ok: true, serviceId, ...(cached
+      ? { sourceKind: 'cache', cachedModels: cached.models, cacheStale: cached.stale, cachedAt: cached.discoveredAt }
+      : { sourceKind: 'none', cachedModels: [] }) };
+  }
+
   const post = new Map([['/drafts','drafts'], ['/commit','commit'], ['/discovery-authorizations','authorize'],
     ['/discovery-authorizations/revoke','revoke'], ['/discover','discover'], ['/test','test'], ['/sync','sync']]);
   async function handle(req, res, url) {
@@ -230,6 +247,14 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       prune();
       const suffix = url.pathname.slice(routeRoot.length);
       if (!suffix && req.method === 'GET') return json(res, 200, await snapshot());
+      const serviceRoute = /^\/services\/([^/]+)\/cache$/.exec(suffix);
+      if (serviceRoute) {
+        let serviceId;
+        try { serviceId = decodeURIComponent(serviceRoute[1]); } catch { providerFailure('invalid_request'); }
+        if (!isProviderId(serviceId)) providerFailure('invalid_request');
+        if (req.method !== 'GET') providerFailure('method_not_allowed');
+        return json(res, 200, await serviceCache(serviceId));
+      }
       const operation = /^\/operations\/([^/]+)(\/cancel)?$/.exec(suffix);
       if (operation && !isOpaqueId(operation[1])) providerFailure('invalid_request');
       if (operation && !operation[2] && req.method === 'GET') {
