@@ -196,10 +196,13 @@ function transformOf(decl) {
   setThinkingDotsPhase(phaseNode, 'square', { immediate: true });
   ok('immediate 跳过等待（切换会话/刚显示时用）', phaseNode.dataset.phase === 'square' && !phaseNode.dataset.transition);
 
-  /* jsdom 不会自己跑 CSS 动画，但计时器会跑；用很短的注入节奏验证自动交替。
-   * 三个形态 100ms 一段，检查点留足 40ms 余量。 */
+  /* jsdom 不会自己跑 CSS 动画，但计时器会跑。这里不再用真实 sleep 与控制器的
+   * setTimeout 赛跑：段边界与检查点分属两条独立计时链，名义余量只有 20ms，
+   * Windows 定时器合并与负载漂移足以吃掉它（P5 合并 main 的 CI 就这样假红过
+   * 一次，本地复现约 1/3 概率）。改为接管 Node 全局计时器（jsdom 的 window
+   * 计时器不受影响），用虚拟时钟手动推进：控制器与断言共用同一把尺子，
+   * 段边界不再依赖真实墙钟。 */
   console.log('thinking-dots 自动交替');
-  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const cycleNode = thinkingDots('', 'square');
   d.body.appendChild(cycleNode);
   const shortCycle = [
@@ -207,24 +210,57 @@ function transformOf(decl) {
     { phase: 'square', hold: 100 },
     { phase: 'triangle', hold: 100 },
   ];
-  startThinkingDotsCycle(cycleNode, { immediate: true, cycle: shortCycle });
-  ok('自动交替从开场三点开始', cycleNode.dataset.phase === 'triangle');
-  await sleep(40);
-  ok('第一段内保持三点', cycleNode.dataset.phase === 'triangle');
-  await sleep(100);
-  ok('过一段后自己切到四点方阵', cycleNode.dataset.phase === 'square');
-  await sleep(100);
-  ok('再下一段切回三点，不需要任何外部状态变化', cycleNode.dataset.phase === 'triangle');
-  startThinkingDotsCycle(cycleNode, { immediate: true, cycle: shortCycle });
-  await sleep(40);
-  ok('重复 start 不重置正在进行的那一段', cycleNode.dataset.phase === 'triangle');
-  stopThinkingDotsCycle(cycleNode);
-  await sleep(140);
-  ok('stop 之后不再改相位', cycleNode.dataset.phase === 'triangle');
-  setThinkingDotsPhase(cycleNode, 'square', { immediate: true });
-  startThinkingDotsCycle(cycleNode, { immediate: true, restart: true, cycle: shortCycle });
-  ok('restart 从开场形态重新开始', cycleNode.dataset.phase === 'triangle');
-  stopThinkingDotsCycle(cycleNode);
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  let fakeNow = 0;
+  let nextTimerId = 1;
+  const fakeTimers = new Map(); // id -> { at, fn }
+  globalThis.setTimeout = (fn, ms) => {
+    const id = nextTimerId++;
+    fakeTimers.set(id, { at: fakeNow + (ms || 0), fn });
+    return id;
+  };
+  globalThis.clearTimeout = id => { fakeTimers.delete(id); };
+  const advance = ms => {
+    fakeNow += ms;
+    for (;;) {
+      const due = [...fakeTimers.entries()].filter(([, t]) => t.at <= fakeNow)
+        .sort((a, b) => a[1].at - b[1].at);
+      if (!due.length) break;
+      for (const [id, t] of due) { fakeTimers.delete(id); t.fn(); }
+    }
+  };
+  try {
+    /* 虚拟时钟 0ms：开场三点 [0,100)，100ms 切方阵 [100,200)，200ms 切回三点。 */
+    startThinkingDotsCycle(cycleNode, { immediate: true, cycle: shortCycle });
+    ok('自动交替从开场三点开始', cycleNode.dataset.phase === 'triangle');
+    advance(40);
+    ok('第一段内保持三点', cycleNode.dataset.phase === 'triangle');
+    advance(60);
+    ok('过一段后自己切到四点方阵', cycleNode.dataset.phase === 'square');
+    /* 100ms 处重复 start（不带 restart）：此刻在方阵段而开场是三点，
+     * 若实现重置进度会把开场形态直接落回去 —— 同步即可判别，无需计时。 */
+    startThinkingDotsCycle(cycleNode, { immediate: true, cycle: shortCycle });
+    ok('重复 start 不重置正在进行的那一段（当前方阵段不被开场三点覆盖）',
+      cycleNode.dataset.phase === 'square');
+    advance(40);
+    ok('重复 start 后当前段继续按原节奏走', cycleNode.dataset.phase === 'square');
+    advance(60);
+    ok('再下一段切回三点，不需要任何外部状态变化（若被重置，此处会提前回到方阵）',
+      cycleNode.dataset.phase === 'triangle');
+    stopThinkingDotsCycle(cycleNode);
+    advance(140);
+    ok('stop 之后不再改相位', cycleNode.dataset.phase === 'triangle');
+    ok('stop 之后没有遗留计时器', fakeTimers.size === 0);
+    setThinkingDotsPhase(cycleNode, 'square', { immediate: true });
+    startThinkingDotsCycle(cycleNode, { immediate: true, restart: true, cycle: shortCycle });
+    ok('restart 从开场形态重新开始', cycleNode.dataset.phase === 'triangle');
+    stopThinkingDotsCycle(cycleNode);
+    ok('restart 后 stop 也没有遗留计时器', fakeTimers.size === 0);
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+    globalThis.clearTimeout = realClearTimeout;
+  }
 
   const M = await import(pathToFileURL(path.join(PUB, 'messages.js')).href);
   const row = () => d.querySelector('#stream .working');
