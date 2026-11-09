@@ -1296,3 +1296,26 @@ test('CSS carries the 1040x720 shell, four-column chooser, dual panes, and break
   assert.ok(!dialogSource.includes("type: 'password'"));
   assert.ok(!dialogSource.includes('type="password"'));
 });
+
+test('lock icon renders a real rect body instead of an invalid path', async () => {
+  /* P6 回归：icon() 曾把 'rect:...' 规格写进 path 的 d（"5,10,14,10,2"），
+   * 真实 Chromium 报非法 path 且锁体不显示。 */
+  const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://127.0.0.1:7788/' });
+  const previous = global.document;
+  global.document = dom.window.document;
+  try {
+    const { icon } = await import('../public/provider-management/dom.js');
+    const svg = icon('lock', 16);
+    const rect = svg.querySelector('rect');
+    assert.ok(rect, 'lock body rect exists');
+    assert.equal(rect.getAttribute('x'), '5');
+    assert.equal(rect.getAttribute('y'), '10');
+    assert.equal(rect.getAttribute('width'), '14');
+    assert.equal(rect.getAttribute('height'), '10');
+    assert.equal(rect.getAttribute('rx'), '2');
+    assert.equal(svg.querySelectorAll('path').length, 1);
+    assert.equal(svg.querySelector('path').getAttribute('d'), 'M8 10V7a4 4 0 0 1 8 0v3');
+  } finally {
+    if (previous === undefined) delete global.document; else global.document = previous;
+  }
+});
