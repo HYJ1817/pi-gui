@@ -26,6 +26,12 @@ const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/provid
 const appBundle = bundle(path.join(pub, 'providers.js'));
 const clone = value => JSON.parse(JSON.stringify(value));
 const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+};
 
 async function waitFor(check, timeoutMs = 4000) {
   const started = Date.now();
@@ -199,7 +205,7 @@ function confirmButton(window, text) {
     .find(button => button.textContent === text) || null;
 }
 
-function openPage({ snapshot, management = null, legacyData = null } = {}) {
+function openPage({ snapshot, management = null, legacyData = null, fetchImpl = null } = {}) {
   const html = fs.readFileSync(path.join(pub, 'index.html'), 'utf8');
   const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
   const { window } = dom;
@@ -211,7 +217,7 @@ function openPage({ snapshot, management = null, legacyData = null } = {}) {
     providers: { example: { models: [{ id: 'fast' }] } },
     keyStates: {},
   });
-  window.fetch = async (url, options = {}) => {
+  const defaultFetch = async (url, options = {}) => {
     const target = String(url);
     if (target.includes('/api/provider-management')) {
       if (target.endsWith('/sync')) {
@@ -243,6 +249,7 @@ function openPage({ snapshot, management = null, legacyData = null } = {}) {
     }
     assert.fail(`unexpected fetch ${target}`);
   };
+  window.fetch = fetchImpl || defaultFetch;
   window.eval(appBundle.code);
   window.openProvidersPanel();
   return { dom, window, calls };
@@ -363,6 +370,305 @@ test('a desktop authorization handle without revision fields does not reset disc
   assert.equal(controller.getState().consentId, 'consent-desktop');
   assert.deepEqual(controller.getState().models.map(model => model.modelId), ['keep-me'],
     'a missing revision on the desktop handle must not be treated as a target change');
+  controller.dispose();
+});
+
+/* ---------- 控制器：迟到的 202 必须被取消（FIX-02） ---------- */
+
+test('a discover 202 that arrives after cancel is cancelled with a fresh request id', async () => {
+  const { createDiscoveryController } = await import('../public/provider-management/discovery.js');
+  const late = deferred();
+  const calls = { discover: [], cancels: [], operations: [] };
+  const api = {
+    authorizeProviderDiscovery: async () => ({ ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 }),
+    discoverProviderModels: request => { calls.discover.push(request); return late.promise; },
+    fetchProviderOperation: async id => { calls.operations.push(id); return { ok: false, code: 'not_found' }; },
+    cancelProviderOperation: async (id, body) => { calls.cancels.push({ id, body: clone(body) }); return { ok: true, state: 'cancelled' }; },
+  };
+  const controller = createDiscoveryController({
+    api, supported: true, debounceMs: 1, pollIntervalMs: 1, operationTimeoutMs: 1000,
+    ensureDraft: async () => ({ ok: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1, targetFingerprint: 'fp-1' }),
+  });
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'environment', modes: ['none', 'environment'] });
+  const pending = controller.authorize({ rememberTarget: false });
+  await waitFor(() => calls.discover.length === 1);
+  controller.cancel();
+  // 取消时还没有 operationId；202 在取消之后才返回。
+  late.resolve({ ok: true, operationId: 'op-late-discover' });
+  await pending;
+  await waitFor(() => calls.cancels.some(call => call.id === 'op-late-discover'));
+  const cancel = calls.cancels.find(call => call.id === 'op-late-discover');
+  assert.ok(cancel.body.requestId, 'cancel must carry its own request id');
+  assert.notEqual(cancel.body.requestId, calls.discover[0].requestId,
+    'cancel must not replay the discover request id');
+  assert.equal(controller.getState().models.length, 0);
+  assert.equal(calls.operations.length, 0, 'a cancelled late 202 must never be polled');
+  controller.dispose();
+});
+
+test('a test 202 that arrives after the discovery controller is disposed is cancelled', async () => {
+  const { createDiscoveryController } = await import('../public/provider-management/discovery.js');
+  const late = deferred();
+  const calls = { test: [], cancels: [], operations: [] };
+  const api = {
+    authorizeProviderDiscovery: async () => ({ ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 }),
+    discoverProviderModels: async () => ({ ok: true, operationId: 'op-discover' }),
+    testProviderConnection: request => { calls.test.push(request); return late.promise; },
+    fetchProviderOperation: async id => {
+      calls.operations.push(id);
+      return id === 'op-discover'
+        ? { ok: true, state: 'success', result: { models: [], sourceKind: 'remote' } }
+        : { ok: false, code: 'not_found' };
+    },
+    cancelProviderOperation: async (id, body) => { calls.cancels.push({ id, body: clone(body) }); return { ok: true, state: 'cancelled' }; },
+  };
+  const controller = createDiscoveryController({
+    api, supported: true, debounceMs: 1, pollIntervalMs: 1, operationTimeoutMs: 1000,
+    ensureDraft: async () => ({ ok: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1, targetFingerprint: 'fp-1' }),
+  });
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'environment', modes: ['none', 'environment'] });
+  await controller.authorize({ rememberTarget: false });
+  const pending = controller.test();
+  await waitFor(() => calls.test.length === 1);
+  controller.dispose();
+  late.resolve({ ok: true, operationId: 'op-late-test' });
+  await pending;
+  await waitFor(() => calls.cancels.some(call => call.id === 'op-late-test'));
+  assert.ok(calls.cancels.find(call => call.id === 'op-late-test').body.requestId);
+  controller.dispose();
+});
+
+test('closing the dialog while a connection test is pending cancels the late 202', async () => {
+  const snapshot = p5Snapshot();
+  const api = dialogApi({
+    snapshot,
+    authorize: async () => ({ ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 }),
+    operation: async () => ({ ok: true, state: 'success', result: { models: [], sourceKind: 'remote' } }),
+  });
+  const late = deferred();
+  api.testProviderConnection = request => {
+    api.calls.test.push(clone(request));
+    return late.promise;
+  };
+  const { window, card } = openDialog({ snapshot, api });
+  await waitFor(() => card.querySelector('[data-authorize-discovery]'));
+  card.querySelector('[data-authorize-discovery]').click();
+  const test = await waitFor(() => {
+    const node = card.querySelector('[data-test-connection]');
+    return node && node.disabled === false ? node : null;
+  }, 6000);
+  test.click();
+  await waitFor(() => api.calls.test.length === 1);
+  // 测试操作已提交、202 未返回时关闭弹窗。
+  [...card.querySelectorAll('.pm-dialog-actions button')]
+    .find(node => node.textContent === '取消').click();
+  await tick(20);
+  if (!window.document.getElementById('confirmLayer').hidden) confirmButton(window, '放弃更改').click();
+  await waitFor(() => window.document.getElementById('modal').hidden === true);
+  late.resolve({ ok: true, operationId: 'test-op-after-close' });
+  await waitFor(() => api.calls.cancels.some(call => call.id === 'test-op-after-close'));
+  const cancel = api.calls.cancels.find(call => call.id === 'test-op-after-close');
+  assert.ok(cancel.body.requestId, 'the late test 202 cancel must carry its own request id');
+  assert.notEqual(cancel.body.requestId, api.calls.test[0].requestId);
+  assert.ok(!api.calls.operations.includes('test-op-after-close'),
+    'a cancelled late test 202 must never be polled after the dialog closes');
+});
+
+test('revoking discovery authorization while a test request is pending cancels the late 202', async () => {
+  const { createDiscoveryController } = await import('../public/provider-management/discovery.js');
+  const late = deferred();
+  const calls = { test: [], cancels: [], revokes: [] };
+  const api = {
+    authorizeProviderDiscovery: async () => ({ ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 }),
+    discoverProviderModels: async () => ({ ok: true, operationId: 'op-discover' }),
+    testProviderConnection: request => { calls.test.push(request); return late.promise; },
+    fetchProviderOperation: async id => (id === 'op-discover'
+      ? { ok: true, state: 'success', result: { models: [], sourceKind: 'remote' } }
+      : { ok: false, code: 'not_found' }),
+    revokeProviderDiscovery: async request => { calls.revokes.push(clone(request)); return { ok: true, revoked: true }; },
+    cancelProviderOperation: async (id, body) => { calls.cancels.push({ id, body: clone(body) }); return { ok: true, state: 'cancelled' }; },
+  };
+  const controller = createDiscoveryController({
+    api, supported: true, debounceMs: 1, pollIntervalMs: 1, operationTimeoutMs: 1000,
+    ensureDraft: async () => ({ ok: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1, targetFingerprint: 'fp-1' }),
+  });
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'environment', modes: ['none', 'environment'] });
+  await controller.authorize({ rememberTarget: false });
+  const pending = controller.test();
+  await waitFor(() => calls.test.length === 1);
+  await controller.revoke();
+  assert.equal(calls.revokes.length, 1, 'the user-facing revoke must reach the backend');
+  assert.equal(controller.getState().test.status, 'idle', 'revoking must not leave a stale running test state');
+  late.resolve({ ok: true, operationId: 'op-late-test-after-revoke' });
+  await pending;
+  await waitFor(() => calls.cancels.some(call => call.id === 'op-late-test-after-revoke'));
+  const cancel = calls.cancels.find(call => call.id === 'op-late-test-after-revoke');
+  assert.ok(cancel.body.requestId, 'the late 202 cancel must carry a fresh request id');
+  assert.notEqual(cancel.body.requestId, calls.test[0].requestId);
+  controller.dispose();
+});
+
+test('changing the authentication source while a test request is pending cancels the late 202', async () => {
+  const { createDiscoveryController } = await import('../public/provider-management/discovery.js');
+  const late = deferred();
+  const calls = { test: [], cancels: [] };
+  const api = {
+    authorizeProviderDiscovery: async () => ({ ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 }),
+    discoverProviderModels: async () => ({ ok: true, operationId: 'op-discover' }),
+    testProviderConnection: request => { calls.test.push(request); return late.promise; },
+    fetchProviderOperation: async id => (id === 'op-discover'
+      ? { ok: true, state: 'success', result: { models: [], sourceKind: 'remote' } }
+      : { ok: false, code: 'not_found' }),
+    cancelProviderOperation: async (id, body) => { calls.cancels.push({ id, body: clone(body) }); return { ok: true, state: 'cancelled' }; },
+  };
+  const controller = createDiscoveryController({
+    api, supported: true, debounceMs: 1, pollIntervalMs: 1, operationTimeoutMs: 1000,
+    ensureDraft: async () => ({ ok: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1, targetFingerprint: 'fp-1' }),
+  });
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'environment', modes: ['none', 'environment'] });
+  await controller.authorize({ rememberTarget: false });
+  const pending = controller.test();
+  await waitFor(() => calls.test.length === 1);
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'none', modes: ['none', 'environment'] });
+  late.resolve({ ok: true, operationId: 'op-late-test-after-auth-change' });
+  await pending;
+  await waitFor(() => calls.cancels.some(call => call.id === 'op-late-test-after-auth-change'));
+  assert.equal(controller.getState().test.status, 'idle');
+  controller.dispose();
+});
+
+test('a new discovery during a pending connection test cancels the test and clears its running state', async () => {
+  const { createDiscoveryController } = await import('../public/provider-management/discovery.js');
+  const lateTest = deferred();
+  let discoverCount = 0;
+  let merged = null;
+  const calls = { discovers: [], tests: [], operations: [], cancels: [] };
+  const api = {
+    authorizeProviderDiscovery: async () => ({ ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 }),
+    discoverProviderModels: async request => {
+      calls.discovers.push(request);
+      discoverCount += 1;
+      return { ok: true, operationId: discoverCount === 1 ? 'op-discover-initial' : 'op-discover-new' };
+    },
+    testProviderConnection: request => { calls.tests.push(request); return lateTest.promise; },
+    fetchProviderOperation: async id => {
+      calls.operations.push(id);
+      const request = calls.discovers.at(-1);
+      return { ok: true, state: 'success', result: {
+        models: id === 'op-discover-new' ? [{ modelId: 'fresh-after-test', configSource: 'remote' }] : [],
+        sourceKind: 'remote', dialogGeneration: request.dialogGeneration,
+        requestSeq: request.requestSeq, connectionRevision: request.connectionRevision,
+      } };
+    },
+    cancelProviderOperation: async (id, body) => { calls.cancels.push({ id, body: clone(body) }); return { ok: true, state: 'cancelled' }; },
+  };
+  const controller = createDiscoveryController({
+    api, supported: true, debounceMs: 1, pollIntervalMs: 1, operationTimeoutMs: 1000,
+    ensureDraft: async () => ({ ok: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1, targetFingerprint: 'fp-1' }),
+    onModels: models => { merged = models; },
+  });
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'environment', modes: ['none', 'environment'] });
+  await controller.authorize({ rememberTarget: false });
+  const pendingTest = controller.test();
+  await waitFor(() => calls.tests.length === 1);
+  assert.equal(controller.getState().test.status, 'running');
+  await controller.refresh({ force: true, immediate: true });
+  assert.equal(controller.getState().test.status, 'idle', 'the superseded test must not stay running');
+  lateTest.resolve({ ok: true, operationId: 'op-late-test-after-discover' });
+  await pendingTest;
+  await waitFor(() => calls.cancels.some(call => call.id === 'op-late-test-after-discover'));
+  assert.deepEqual(calls.operations.filter(id => id === 'op-late-test-after-discover'), [],
+    'the late test 202 must never be polled');
+  assert.deepEqual(merged.map(model => model.modelId), ['fresh-after-test'],
+    'the new discovery result must remain authoritative');
+  controller.dispose();
+});
+
+test('cancel followed immediately by a new discovery isolates the old late operation', async () => {
+  const { createDiscoveryController } = await import('../public/provider-management/discovery.js');
+  const first = deferred();
+  let discoverCount = 0;
+  let merged = null;
+  const calls = { cancels: [], operations: [], discovers: [] };
+  const api = {
+    authorizeProviderDiscovery: async () => ({ ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 }),
+    discoverProviderModels: request => {
+      calls.discovers.push(request);
+      discoverCount += 1;
+      return discoverCount === 1 ? first.promise : Promise.resolve({ ok: true, operationId: 'op-new' });
+    },
+    fetchProviderOperation: async id => {
+      calls.operations.push(id);
+      const request = calls.discovers.at(-1);
+      return { ok: true, state: 'success', result: {
+        models: [{ modelId: 'new-model', configSource: 'remote' }], sourceKind: 'remote',
+        dialogGeneration: request.dialogGeneration, requestSeq: request.requestSeq,
+        connectionRevision: request.connectionRevision,
+      } };
+    },
+    cancelProviderOperation: async (id, body) => { calls.cancels.push({ id, body: clone(body) }); return { ok: true, state: 'cancelled' }; },
+  };
+  const controller = createDiscoveryController({
+    api, supported: true, debounceMs: 1, pollIntervalMs: 1, operationTimeoutMs: 1000,
+    ensureDraft: async () => ({ ok: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1, targetFingerprint: 'fp-1' }),
+    onModels: models => { merged = models; },
+  });
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'environment', modes: ['none', 'environment'] });
+  const firstRun = controller.authorize({ rememberTarget: false });
+  await waitFor(() => calls.discovers.length === 1);
+  controller.cancel();
+  const secondRun = controller.refresh({ force: true, immediate: true });
+  first.resolve({ ok: true, operationId: 'op-late-old' });
+  await firstRun;
+  await secondRun;
+  await waitFor(() => calls.cancels.some(call => call.id === 'op-late-old'));
+  assert.ok(!calls.cancels.some(call => call.id === 'op-new'), 'the new operation must not be cancelled');
+  assert.deepEqual(calls.operations, ['op-new'], 'only the new operation may be polled');
+  assert.deepEqual(merged.map(model => model.modelId), ['new-model'],
+    'the late old operation must not overwrite the new candidate list');
+  controller.dispose();
+});
+
+test('cancelling after the 202 cancels the running operation and drops its late result', async () => {
+  const { createDiscoveryController } = await import('../public/provider-management/discovery.js');
+  let releasePoll = null;
+  let pollStarted = null;
+  const started = new Promise(resolve => { pollStarted = resolve; });
+  const calls = { cancels: [], operations: [] };
+  let merged = null;
+  const api = {
+    authorizeProviderDiscovery: async () => ({ ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 }),
+    discoverProviderModels: async () => ({ ok: true, operationId: 'op-running' }),
+    fetchProviderOperation: async id => {
+      calls.operations.push(id);
+      pollStarted();
+      await new Promise(resolve => { releasePoll = resolve; });
+      return { ok: true, state: 'success', result: { models: [{ modelId: 'late-model', configSource: 'remote' }], sourceKind: 'remote' } };
+    },
+    cancelProviderOperation: async (id, body) => { calls.cancels.push({ id, body: clone(body) }); return { ok: true, state: 'cancelled' }; },
+  };
+  const controller = createDiscoveryController({
+    api, supported: true, debounceMs: 1, pollIntervalMs: 1, operationTimeoutMs: 2000,
+    ensureDraft: async () => ({ ok: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1, targetFingerprint: 'fp-1' }),
+    onModels: models => { merged = models; },
+  });
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'environment', modes: ['none', 'environment'] });
+  const pending = controller.authorize({ rememberTarget: false });
+  await started;
+  controller.cancel();
+  releasePoll();
+  await pending;
+  await waitFor(() => calls.cancels.some(call => call.id === 'op-running'));
+  assert.equal(merged, null, 'a cancelled operation result must not be merged');
+  assert.equal(controller.getState().models.length, 0);
   controller.dispose();
 });
 
@@ -711,6 +1017,230 @@ test('a commit conflict revokes the stale staged draft before retry', async () =
   assert.ok(banner && banner.textContent.includes('配置'), 'the conflict must stay visible after discarding the stale stage');
 });
 
+/* ---------- 弹窗：凭据窗口的异步生命周期（FIX-01） ---------- */
+
+test('closing the dialog while the draft request is pending never opens the credential window', async () => {
+  const snapshot = p5Snapshot();
+  const service = plainService(snapshot);
+  const bridge = fakeCredentialBridge();
+  const api = dialogApi({ snapshot });
+  const late = deferred();
+  api.saveProviderDraft = request => {
+    api.calls.drafts.push(clone(request));
+    return late.promise;
+  };
+  const { window, card } = openDialog({ snapshot, api, bridge, service });
+  const trigger = await waitFor(() => {
+    const node = card.querySelector('[data-credential-trigger]');
+    return node && node.disabled === false ? node : null;
+  });
+  trigger.click();
+  await waitFor(() => api.calls.drafts.length === 1);
+  findButton(card, '取消').click();
+  await waitFor(() => window.document.getElementById('confirmLayer').hidden === false);
+  confirmButton(window, '放弃更改').click();
+  await waitFor(() => window.document.getElementById('modal').hidden === true);
+  // 草稿保存请求在弹窗关闭之后才返回：它只能被清理，不能打开受限窗。
+  late.resolve({ ok: true, draftId: 'late-after-close', draftRevision: 2, connectionRevision: 1,
+    targetFingerprint: 'p5-target', credentialState: 'none', consentState: 'unapproved',
+    cachedModels: [], sourceKind: 'none' });
+  await waitFor(() => bridge.calls.closeDraft.some(call => call.draftId === 'late-after-close'));
+  await tick(30);
+  assert.equal(bridge.calls.open.length, 0, 'a closed dialog must never open the restricted window');
+  assert.equal(api.calls.commits.length, 0);
+});
+
+test('changing the authentication target while the draft request is pending cannot revive the old handle', async () => {
+  const snapshot = p5Snapshot();
+  const service = plainService(snapshot);
+  const bridge = fakeCredentialBridge();
+  const api = dialogApi({ snapshot });
+  const saveDraft = api.saveProviderDraft;
+  const late = deferred();
+  let first = true;
+  api.saveProviderDraft = request => {
+    if (!first) return saveDraft(request);
+    first = false;
+    api.calls.drafts.push(clone(request));
+    return late.promise;
+  };
+  const { card } = openDialog({ snapshot, api, bridge, service });
+  const trigger = await waitFor(() => {
+    const node = card.querySelector('[data-credential-trigger]');
+    return node && node.disabled === false ? node : null;
+  });
+  trigger.click();
+  await waitFor(() => api.calls.drafts.length === 1);
+  // 认证来源属于凭据目标的一部分；修改它必须让旧草稿响应过期。
+  const env = await waitFor(() => card.querySelector('.pm-env-input'));
+  env.value = '$OTHER_KEY';
+  env.dispatchEvent(new card.ownerDocument.defaultView.Event('input', { bubbles: true }));
+  late.resolve({ ok: true, draftId: 'late-old-target', draftRevision: 2, connectionRevision: 1,
+    targetFingerprint: 'p5-target', credentialState: 'none', consentState: 'unapproved',
+    cachedModels: [], sourceKind: 'none' });
+  await waitFor(() => bridge.calls.closeDraft.some(call => call.draftId === 'late-old-target'));
+  await tick(30);
+  assert.equal(bridge.calls.open.length, 0, 'the old target must not open a credential window');
+  // 下一次保存必须创建新草稿，不能把迟到的旧 draftId 复活。
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await waitFor(() => api.calls.drafts.length === 2);
+  assert.equal(api.calls.drafts[1].draftId, undefined,
+    'the stale server draft must not be reused after the target changed');
+  await waitFor(() => api.calls.commits.length === 1);
+});
+
+test('a late draft cleanup never revokes the draft a newer dialog is using', async () => {
+  const snapshot = p5Snapshot();
+  const service = plainService(snapshot);
+  const bridge = fakeCredentialBridge();
+  const { window } = dialogDom();
+  window.piGuiDesktop = { providerCredentials: bridge };
+  const apiA = dialogApi({ snapshot });
+  const late = deferred();
+  apiA.saveProviderDraft = request => {
+    apiA.calls.drafts.push(clone(request));
+    return late.promise;
+  };
+  window.openProviderDialog({ snapshot, api: apiA, mode: 'edit', service });
+  const cardA = window.document.getElementById('modalCard');
+  const triggerA = await waitFor(() => {
+    const node = cardA.querySelector('[data-credential-trigger]');
+    return node && node.disabled === false ? node : null;
+  });
+  triggerA.click();
+  await waitFor(() => apiA.calls.drafts.length === 1);
+  findButton(cardA, '取消').click();
+  await waitFor(() => window.document.getElementById('confirmLayer').hidden === false);
+  confirmButton(window, '放弃更改').click();
+  await waitFor(() => window.document.getElementById('modal').hidden === true);
+
+  // 新弹窗先拿到同名的草稿标识并处于可用状态；旧响应不能撤销它。
+  const apiB = dialogApi({ snapshot });
+  window.openProviderDialog({ snapshot, api: apiB, mode: 'edit', service });
+  const cardB = window.document.getElementById('modalCard');
+  const triggerB = await waitFor(() => {
+    const node = cardB.querySelector('[data-credential-trigger]');
+    return node && node.disabled === false ? node : null;
+  });
+  triggerB.click();
+  await waitFor(() => apiB.calls.drafts.length === 1 && bridge.calls.open.length === 1);
+  await waitFor(() => cardB.querySelector('.pm-credential-status')?.textContent.includes('新密钥已暂存'));
+  const before = bridge.calls.closeDraft.filter(call => call.draftId === 'p5-draft').length;
+  late.resolve({ ok: true, draftId: 'p5-draft', draftRevision: 2, connectionRevision: 1,
+    targetFingerprint: 'p5-target', credentialState: 'none', consentState: 'unapproved',
+    cachedModels: [], sourceKind: 'none' });
+  await tick(50);
+  assert.equal(bridge.calls.closeDraft.filter(call => call.draftId === 'p5-draft').length, before,
+    'the old dialog must not close the draft the new dialog is using');
+  // 关闭新弹窗时该草稿才应被撤销，证明确实是新流程持有它。
+  findButton(cardB, '取消').click();
+  await waitFor(() => window.document.getElementById('confirmLayer').hidden === false);
+  confirmButton(window, '放弃更改').click();
+  await waitFor(() => bridge.calls.closeDraft.filter(call => call.draftId === 'p5-draft').length > before);
+});
+
+test('rapid credential trigger clicks open only one restricted window', async () => {
+  const snapshot = p5Snapshot();
+  const service = plainService(snapshot);
+  const bridge = fakeCredentialBridge();
+  const api = dialogApi({ snapshot });
+  const { card } = openDialog({ snapshot, api, bridge, service });
+  const trigger = await waitFor(() => {
+    const node = card.querySelector('[data-credential-trigger]');
+    return node && node.disabled === false ? node : null;
+  });
+  trigger.click();
+  trigger.click();
+  await waitFor(() => card.querySelector('.pm-credential-status')?.textContent.includes('新密钥已暂存'));
+  await tick(30);
+  assert.equal(bridge.calls.open.length, 1, 'the controller and dialog share a single-flight gate');
+});
+
+test('a save response that arrives after the target changed is not shown as the new draft success', async () => {
+  const snapshot = p5Snapshot();
+  const service = plainService(snapshot);
+  const bridge = fakeCredentialBridge();
+  const commit = deferred();
+  const api = dialogApi({ snapshot, commit: () => commit.promise });
+  const { window, card } = openDialog({ snapshot, api, bridge, service });
+  // 等弹窗完成初始化（草稿就绪）再点保存；否则点击落在 loading 壳上会被忽略。
+  await waitFor(() => {
+    const node = card.querySelector('[data-credential-trigger]');
+    return node && node.disabled === false ? node : null;
+  });
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await waitFor(() => api.calls.commits.length === 1);
+  const env = await waitFor(() => card.querySelector('.pm-env-input'));
+  env.value = '$OTHER_KEY';
+  env.dispatchEvent(new card.ownerDocument.defaultView.Event('input', { bubbles: true }));
+  commit.resolve({ ok: true, serviceId: 'example-ai', saved: true, credentialSaved: null,
+    credentialState: 'saved', sync: { state: 'pending', reason: 'runtime_sync_pending' }, revision: 'config-rev-2' });
+  await waitFor(() => card.querySelector('.pm-status-banner')?.textContent.includes('保存结果未应用到当前草稿'));
+  assert.equal(window.document.getElementById('modal').hidden, false,
+    'the stale success must not close the dialog as if the new target was saved');
+  assert.ok(!card.textContent.includes('服务已保存'), 'the old commit must not be reported as the current success');
+});
+
+test('disposing the credential controller settles a pending open and refuses a new window', async () => {
+  const { createCredentialController } = await import('../public/provider-management/credentials.js');
+  const listeners = new Set();
+  let resolveOpen = null;
+  let cancelled = 0;
+  const bridge = {
+    async status() { return { ok: true, hasFlow: false }; },
+    open() { return new Promise(resolve => { resolveOpen = resolve; }); },
+    cancel() { cancelled += 1; },
+    async closeDraft() { return { ok: true }; },
+    onState(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+  };
+  const controller = createCredentialController({ bridge, waitTimeoutMs: 5000 });
+  const first = controller.open({ draftId: 'draft-1', draftRevision: 1 });
+  const second = await controller.open({ draftId: 'draft-1', draftRevision: 1 });
+  assert.equal(second.code, 'busy', 'a window open request must be single-flight before bridge.open resolves');
+  controller.dispose();
+  resolveOpen({ ok: true, state: { action: 'set' } });
+  const result = await first;
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'closed');
+  assert.ok(cancelled >= 1, 'dispose must cancel a restricted window that was still opening');
+  const after = await controller.open({ draftId: 'draft-1', draftRevision: 1 });
+  assert.equal(after.code, 'closed', 'a disposed controller must never open another window');
+});
+
+test('cancelling the controller while the window open request is pending settles as cancelled', async () => {
+  const { createCredentialController } = await import('../public/provider-management/credentials.js');
+  const listeners = new Set();
+  let resolveOpen = null;
+  let cancelCalls = 0;
+  let opens = 0;
+  const bridge = {
+    async status() { return { ok: true, hasFlow: false }; },
+    open() {
+      opens += 1;
+      if (opens === 1) return new Promise(resolve => { resolveOpen = resolve; });
+      setTimeout(() => { for (const listener of listeners) listener({ state: 'staged', action: 'set' }); }, 0);
+      return Promise.resolve({ ok: true, state: { action: 'set' } });
+    },
+    cancel() { cancelCalls += 1; },
+    async closeDraft() { return { ok: true }; },
+    onState(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+  };
+  const controller = createCredentialController({ bridge, waitTimeoutMs: 5000 });
+  const first = controller.open({ draftId: 'draft-1', draftRevision: 1 });
+  assert.equal((await controller.open({ draftId: 'draft-1', draftRevision: 1 })).code, 'busy');
+  controller.cancel();
+  resolveOpen({ ok: true, state: { action: 'set' } });
+  const result = await first;
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'cancelled');
+  assert.equal(result.cancelled, true);
+  assert.ok(cancelCalls >= 1);
+  // 取消不能让控制器永久卡在旧打开请求上；下一次打开仍须能完成。
+  const next = await controller.open({ draftId: 'draft-2', draftRevision: 1 });
+  assert.equal(next.ok, true);
+  assert.equal(opens, 2);
+});
+
 /* ---------- 弹窗：发现 ---------- */
 
 test('authorized discovery merges remote candidates and saves only the selected candidate', async () => {
@@ -904,6 +1434,215 @@ test('provider page shows per-runtime sync facts and re-verifies through a read-
   assert.ok(calls.sync[0].requestId);
   assert.ok(calls.operations.length >= 1);
   assert.equal(window.document.getElementById('modal').hidden, false);
+});
+
+test('a sync verification that finishes after the page closes cannot touch the reopened page', async () => {
+  const snapshot = p5Snapshot(value => {
+    value.sync = { state: 'pending', reason: 'runtime_sync_pending', runtimes: [
+      { id: 'runtime-a', kind: 'runtime', state: 'pending', reason: 'runtime_sync_pending' },
+    ] };
+  });
+  const reply = value => ({ status: 200, json: async () => value });
+  const firstSync = deferred();
+  let syncCalls = 0;
+  let mode = 'first';
+  const applied = { state: 'applied', reason: null,
+    runtimes: [{ id: 'runtime-a', kind: 'runtime', state: 'applied', reason: null }] };
+  const fetchImpl = async (url, options = {}) => {
+    const target = String(url);
+    if (target.includes('/api/provider-management')) {
+      if (target.endsWith('/sync')) {
+        syncCalls += 1;
+        if (mode === 'first') return firstSync.promise;
+        snapshot.sync = clone(applied);
+        return { status: 202, json: async () => ({ ok: true, operationId: 'sync-new',
+          sync: { state: 'pending', reason: 'runtime_sync_pending', runtimes: applied.runtimes } }) };
+      }
+      if (target.includes('/operations/')) {
+        return reply({ ok: true, state: 'success', result: { sync: clone(applied) } });
+      }
+      return reply(clone(snapshot));
+    }
+    if (target.includes('/api/providers')) return reply({ ok: true, path: 'fixture', revision: 7, providers: {}, keyStates: {} });
+    if (target.includes('/api/provider-auth')) return reply({ ok: true, capability: { sdkAvailable: false }, providers: [], flow: null, sync: { state: 'idle' } });
+    assert.fail(`unexpected fetch ${target}`);
+  };
+  const { window } = openPage({ snapshot, fetchImpl });
+  const banner = await waitFor(() => window.document.querySelector('.pm-sync-banner[data-sync-state="pending"]'));
+  banner.querySelector('.pm-sync-retry').click();
+  await waitFor(() => syncCalls === 1);
+  // 关闭设置页，再重新打开；旧请求此时仍未返回。
+  [...window.document.querySelectorAll('.modal-actions button')]
+    .find(node => node.textContent === '关闭').click();
+  await waitFor(() => window.document.getElementById('modal').hidden === true);
+  mode = 'second';
+  window.openProvidersPanel();
+  await waitFor(() => window.document.querySelector('.pm-sync-banner[data-sync-state="pending"]'));
+  firstSync.resolve({ status: 202, json: async () => ({ ok: true, operationId: 'sync-old',
+    sync: { state: 'pending', reason: 'runtime_sync_pending' } }) });
+  await tick(80);
+  const reopened = window.document.querySelector('.pm-sync-banner');
+  assert.equal(reopened.dataset.syncState, 'pending',
+    'the old controller must not paint applied facts onto the reopened page');
+  assert.ok(!reopened.textContent.includes('已生效'));
+  // 新页面自己的「重新核验」必须还能发起，且只发一次。
+  reopened.querySelector('.pm-sync-retry').click();
+  await waitFor(() => window.document.querySelector('.pm-sync-banner[data-sync-state="applied"]'));
+  assert.equal(syncCalls, 2, 'the reopened page must start a fresh verification');
+});
+
+test('a sync result for an older revision is not shown as applied on the new configuration', async () => {
+  const snapshot = p5Snapshot(value => {
+    value.sync = { state: 'pending', reason: 'runtime_sync_pending', runtimes: [
+      { id: 'runtime-a', kind: 'runtime', state: 'pending', reason: 'runtime_sync_pending' },
+    ] };
+  });
+  const reply = value => ({ status: 200, json: async () => value });
+  const syncResult = deferred();
+  let operationResult = null;
+  let revision = 'config-rev-1';
+  let syncCalls = 0;
+  let operationCalls = 0;
+  let managementGets = 0;
+  const applied = { state: 'applied', reason: null,
+    runtimes: [{ id: 'runtime-a', kind: 'runtime', state: 'applied', reason: null }] };
+  const fetchImpl = async (url, options = {}) => {
+    const target = String(url);
+    if (target.includes('/api/provider-management')) {
+      if (target.endsWith('/sync')) {
+        syncCalls += 1;
+        return syncResult.promise;
+      }
+      if (target.includes('/operations/')) {
+        operationCalls += 1;
+        return new Promise(resolve => { operationResult = () => resolve(reply({ ok: true, state: 'success', result: { sync: clone(applied) } })); });
+      }
+      managementGets += 1;
+      return reply({ ...clone(snapshot), revision });
+    }
+    if (target.includes('/api/providers')) return reply({ ok: true, path: 'fixture', revision: 7, providers: {}, keyStates: {} });
+    if (target.includes('/api/provider-auth')) return reply({ ok: true, capability: { sdkAvailable: false }, providers: [], flow: null, sync: { state: 'idle' } });
+    assert.fail(`unexpected fetch ${target}`);
+  };
+  const { window } = openPage({ snapshot, fetchImpl });
+  const banner = await waitFor(() => window.document.querySelector('.pm-sync-banner[data-sync-state="pending"]'));
+  banner.querySelector('.pm-sync-retry').click();
+  await waitFor(() => syncCalls === 1);
+  // 核验期间配置被另一个保存推进到新 revision；旧操作的 202 仍会返回并轮询。
+  revision = 'config-rev-2';
+  syncResult.resolve({ status: 202, json: async () => ({ ok: true, operationId: 'sync-old',
+    sync: { state: 'pending', reason: 'runtime_sync_pending' } }) });
+  assert.ok(await waitFor(() => operationCalls === 1 && operationResult, 6000),
+    'the old operation must reach its poll before the revision assertion');
+  const getsBefore = managementGets;
+  operationResult();
+  await waitFor(() => managementGets > getsBefore, 6000);
+  await tick(20);
+  const current = window.document.querySelector('.pm-sync-banner');
+  assert.equal(current.dataset.syncState, 'pending',
+    'applied facts from the old revision must not be attributed to the new configuration');
+  assert.ok(!current.textContent.includes('已生效'));
+});
+
+test('a sync failure from an older revision is not reported on the new configuration', async () => {
+  const snapshot = p5Snapshot(value => {
+    value.sync = { state: 'pending', reason: 'runtime_sync_pending', runtimes: [
+      { id: 'runtime-a', kind: 'runtime', state: 'pending', reason: 'runtime_sync_pending' },
+    ] };
+  });
+  const reply = value => ({ status: 200, json: async () => value });
+  const syncResult = deferred();
+  let revision = 'config-rev-1';
+  let syncCalls = 0;
+  let managementGets = 0;
+  const fetchImpl = async (url, options = {}) => {
+    const target = String(url);
+    if (target.includes('/api/provider-management')) {
+      if (target.endsWith('/sync')) {
+        syncCalls += 1;
+        return syncResult.promise;
+      }
+      if (target.includes('/operations/')) return reply({ ok: false, code: 'not_found' });
+      managementGets += 1;
+      return reply({ ...clone(snapshot), revision });
+    }
+    if (target.includes('/api/providers')) return reply({ ok: true, path: 'fixture', revision: 7, providers: {}, keyStates: {} });
+    if (target.includes('/api/provider-auth')) return reply({ ok: true, capability: { sdkAvailable: false }, providers: [], flow: null, sync: { state: 'idle' } });
+    assert.fail(`unexpected fetch ${target}`);
+  };
+  const { window } = openPage({ snapshot, fetchImpl });
+  const banner = await waitFor(() => window.document.querySelector('.pm-sync-banner[data-sync-state="pending"]'));
+  banner.querySelector('.pm-sync-retry').click();
+  await waitFor(() => syncCalls === 1);
+  const getsBefore = managementGets;
+  // 核验期间配置推进到新 revision；旧请求随后以网络失败结束。
+  revision = 'config-rev-2';
+  syncResult.resolve(reply({ ok: false, network: true, code: 'network_failed', message: '网络请求失败' }));
+  // verifySync 无论是否误报，都会先重读快照；等这次读取发生后，旧结果的通知
+  // 已经有机会出现，再断言新页面没有被旧 revision 的错误污染。
+  assert.ok(await waitFor(() => managementGets > getsBefore, 6000),
+    'the old verification must finish its snapshot refresh');
+  await tick(20);
+  assert.ok(!window.document.getElementById('toasts').textContent.includes('网络请求失败'),
+    'an old revision failure must not be toasted against the new configuration');
+  assert.equal(window.document.querySelector('.pm-sync-banner').dataset.syncState, 'pending');
+});
+
+test('an old page close callback cannot stop the reopened page sync controller', async () => {
+  const snapshot = p5Snapshot(value => {
+    value.sync = { state: 'pending', reason: 'runtime_sync_pending', runtimes: [
+      { id: 'runtime-a', kind: 'runtime', state: 'pending', reason: 'runtime_sync_pending' },
+    ] };
+  });
+  const reply = value => ({ status: 200, json: async () => value });
+  const syncResult = deferred();
+  let syncCalls = 0;
+  const applied = { state: 'applied', reason: null,
+    runtimes: [{ id: 'runtime-a', kind: 'runtime', state: 'applied', reason: null }] };
+  const fetchImpl = async (url, options = {}) => {
+    const target = String(url);
+    if (target.includes('/api/provider-management')) {
+      if (target.endsWith('/sync')) {
+        syncCalls += 1;
+        // 服务端只读核验后，下一次快照会带上 applied 事实。
+        snapshot.sync = clone(applied);
+        return syncResult.promise;
+      }
+      if (target.includes('/operations/')) {
+        return reply({ ok: true, state: 'success', result: { sync: clone(applied) } });
+      }
+      return reply(clone(snapshot));
+    }
+    if (target.includes('/api/providers')) return reply({ ok: true, path: 'fixture', revision: 7, providers: {}, keyStates: {} });
+    if (target.includes('/api/provider-auth')) return reply({ ok: true, capability: { sdkAvailable: false }, providers: [], flow: null, sync: { state: 'idle' } });
+    assert.fail(`unexpected fetch ${target}`);
+  };
+  const { window } = openPage({ snapshot, fetchImpl });
+  // 第一页用默认模态打开；等它加载完成，确保第二页打开时它仍是「旧页面」。
+  await waitFor(() => window.document.querySelector('#modal .pm-service-row[data-service-id="example-ai"]'));
+  const present = (render, onClose) => {
+    const card = window.document.createElement('div');
+    card.className = 'pm-settings-page reopened-page';
+    window.document.body.appendChild(card);
+    const close = () => { card.remove(); onClose(); };
+    render(card, close);
+  };
+  window.openProvidersPanel({ present });
+  const banner = await waitFor(() => window.document.querySelector('.reopened-page .pm-sync-banner[data-sync-state="pending"]'));
+  banner.querySelector('.pm-sync-retry').click();
+  await waitFor(() => syncCalls === 1);
+  // 新页面已经发起核验后，旧页面才真正关闭：旧关闭回调不能停掉新控制器。
+  const closeOld = [...window.document.querySelectorAll('#modal .modal-actions button')]
+    .find(node => node.textContent === '关闭');
+  assert.ok(closeOld);
+  closeOld.click();
+  await waitFor(() => window.document.getElementById('modal').hidden === true);
+  syncResult.resolve({ status: 202, json: async () => ({ ok: true, operationId: 'sync-reopened',
+    sync: { state: 'pending', reason: 'runtime_sync_pending' } }) });
+  const appliedBanner = await waitFor(
+    () => window.document.querySelector('.reopened-page .pm-sync-banner[data-sync-state="applied"]'), 6000);
+  assert.ok(appliedBanner, 'the reopened page controller must survive the old page close callback');
+  assert.equal(syncCalls, 1, 'the reopened page must keep its single verification request');
 });
 
 test('OAuth services do not offer the discovery connection test', async () => {
