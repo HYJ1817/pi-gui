@@ -11,7 +11,15 @@
 
 export const CREDENTIAL_REASON = Object.freeze({
   web: '网页版没有 Electron 安全凭据窗口；API Key 只能在桌面版的受限输入窗中录入。',
-  unqualified: '当前桌面环境未通过安全资格检查（例如使用了 --no-sandbox 或远程调试端口），安全凭据窗口已禁用。',
+  unqualified: '当前桌面环境未通过安全资格检查，安全凭据窗口已禁用。',
+  debug_port: '检测到远程调试端口（--remote-debugging-port），安全凭据窗口已禁用。',
+  debug_pipe: '检测到远程调试管道（--remote-debugging-pipe），安全凭据窗口已禁用。',
+  debug_inspector: '检测到主进程调试器（--inspect / --inspect-brk / NODE_OPTIONS），安全凭据窗口已禁用。',
+  sandbox_disabled: '检测到 ELECTRON_DISABLE_SANDBOX，沙箱不可证明，安全凭据窗口已禁用。',
+  single_process: '检测到 --single-process（失去进程隔离），安全凭据窗口已禁用。',
+  web_security_disabled: '检测到 --disable-web-security，安全凭据窗口已禁用。',
+  backend_unavailable: '后端未以直属子进程连接，安全凭据窗口已禁用。',
+  no_sandbox: '检测到 --no-sandbox（沙箱已关闭），安全凭据窗口已禁用。',
   key_input_disabled: '后端未开启密钥输入功能（PI_GUI_PROVIDER_KEY_INPUT=1），安全凭据窗口已禁用。',
   bridge_unavailable: '后端私有凭据桥不可用；请确认桌面应用已连接后端，然后重试。',
   busy: '已有凭据窗口或操作正在进行，请稍后重试。',
@@ -36,6 +44,7 @@ export function credentialOpenReason(result) {
   if (!result) return CREDENTIAL_REASON.bridge_unavailable;
   if (result.reason && CREDENTIAL_REASON[result.reason]) return CREDENTIAL_REASON[result.reason];
   if (result.reason === 'desktop_unqualified') return CREDENTIAL_REASON.unqualified;
+  if (typeof result.reason === 'string' && CREDENTIAL_REASON[result.reason]) return CREDENTIAL_REASON[result.reason];
   if (result.reason === 'key_input_disabled') return CREDENTIAL_REASON.key_input_disabled;
   if (result.reason === 'bridge_unavailable') return CREDENTIAL_REASON.bridge_unavailable;
   if (result.code === 'busy') return CREDENTIAL_REASON.busy;

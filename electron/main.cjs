@@ -63,8 +63,9 @@ const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 const { installAppUpdate } = require('./app-update-desktop.cjs');
 /* P2：供应商凭据受限输入窗（CredentialSheet）。协议必须在 app ready 前注册。 */
-const { createProviderCredentialDesktop, registerCredentialScheme } = require('./provider-credentials.cjs');
+const { createProviderCredentialDesktop, registerCredentialScheme, PARTITION: CREDENTIAL_SHEET_PARTITION } = require('./provider-credentials.cjs');
 const { credentialSheetPage } = require('./provider-credential-page.cjs');
+const { desktopQualification } = require('./desktop-qualification.cjs');
 
 registerCredentialScheme(protocol);
 
@@ -584,6 +585,18 @@ function hardenWebContents(wc) {
    * 两套规则是**并列**的，不是一严一松 —— 别把这条判断删了当优化。 */
   if (isBrowserWebContents(wc)) return;
 
+  /* 凭据受限输入窗使用独立 session：它永远不参与「站外链接交给系统浏览器」
+   * 这一层（FIX-04）。导航与弹窗一律拒绝，且不会调用 shell.openExternal。 */
+  let credentialSheet = false;
+  try { credentialSheet = wc.session?.getPartition?.() === CREDENTIAL_SHEET_PARTITION; } catch { credentialSheet = false; }
+  if (credentialSheet) {
+    wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+    const deny = event => event.preventDefault();
+    wc.on('will-navigate', deny);
+    wc.on('will-redirect', deny);
+    return;
+  }
+
   wc.setWindowOpenHandler(({ url }) => {
     if (isSafeExternal(url)) shell.openExternal(url);
     return { action: 'deny' };
@@ -896,10 +909,18 @@ if (!app.requestSingleInstanceLock()) {
         app, BrowserWindow, ipcMain, protocol, session, nativeTheme,
         getMainWindow: () => win,
         getBackend: () => server,
-        isDesktopQualified: () => Boolean(server && server.connected)
-          && !app.commandLine.hasSwitch('remote-debugging-port')
-          && !process.argv.includes('--no-sandbox')
-          && !app.commandLine.hasSwitch('no-sandbox'),
+        /* FIX-04：保守资格判定（含 remote-debugging-pipe / inspect / 单进程 /
+         * ELECTRON_DISABLE_SANDBOX 等）。true 或固定 reason 码。 */
+        isDesktopQualified: () => {
+          const verdict = desktopQualification({
+            argv: process.argv,
+            execArgv: process.execArgv,
+            hasSwitch: name => app.commandLine.hasSwitch(name),
+            env: process.env,
+            backendConnected: Boolean(server && server.connected),
+          });
+          return verdict.ok === true ? true : verdict.reason;
+        },
         page: credentialSheetPage,
         preloadPath: path.join(__dirname, 'provider-credential-preload.cjs'),
         logEvent: (event, details) => mlog('electron', event, details),

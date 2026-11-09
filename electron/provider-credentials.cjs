@@ -42,8 +42,14 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
   const stateListeners = new Set();
   const handlers = new Map();
 
-  const qualified = () => {
-    try { return isDesktopQualified() === true; } catch { return false; }
+  /* isDesktopQualified 返回 true 或固定原因码（FIX-04）。 */
+  const qualification = () => {
+    try { return isDesktopQualified(); } catch { return false; }
+  };
+  const qualified = () => qualification() === true;
+  const qualificationReason = () => {
+    const value = qualification();
+    return typeof value === 'string' && value ? value : 'desktop_unqualified';
   };
 
   function publish(update) {
@@ -251,7 +257,7 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     const trusted = event && event.testBypass === true ? true : mainWindowAllowed(event);
     if (!trusted) return { ok: false, code: 'forbidden' };
     if (disposed) return { ok: false, code: 'unavailable' };
-    if (!qualified()) return { ok: false, code: 'unsupported', reason: 'desktop_unqualified' };
+    if (!qualified()) return { ok: false, code: 'unsupported', reason: qualificationReason() };
     const valid = request && typeof request === 'object' && opaqueId(request.draftId)
       && Number.isSafeInteger(request.draftRevision) && request.draftRevision >= 1 && ACTIONS.has(request.action);
     if (!valid) return { ok: false, code: 'invalid_request' };
@@ -285,7 +291,7 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     if (!handshakeNow?.stagingEnabled && request.action !== 'authorize-target') {
       return { ok: false, code: 'unsupported', reason: 'key_input_disabled' };
     }
-    if (!qualified()) return { ok: false, code: 'unsupported', reason: 'desktop_unqualified' };
+    if (!qualified()) return { ok: false, code: 'unsupported', reason: qualificationReason() };
     const purpose = request.action;
     const flowId = randomUUID();
     const prepared = await backendCall({ action: 'prepare', requestId: `open-${++sequence}`, backendEpoch: handshakeNow.epoch,
