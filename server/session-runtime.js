@@ -16,6 +16,7 @@ import { resolveExecutable } from './process-runner.js';
 import { isSea } from '../lib/assets.js';
 import { randomUUID } from 'node:crypto';
 import { createSessionToolBridge } from './session-tool-bridge.js';
+import { runtimeSessionWitness } from './provider-config-sync.js';
 
 const fail = code => Object.assign(Error(code), { code });
 // This narrow surface projects tool activity. Raw args/result/worker diagnostics
@@ -46,7 +47,8 @@ export function projectRuntimeEvent(event) {
 
 export async function createSessionRuntime({ context, emit, piBin = 'pi', env = process.env, dataDir,
   guiPort = () => null, browser = null, processAdmission = () => true, readModelsConfig = () => null,
-  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null, toolScheduler = null, candidateAudit = null } = {}) {
+  sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null, toolScheduler = null, candidateAudit = null,
+  captureProviderLaunch = null } = {}) {
   const runtime = createRuntime({ initialCwd: context.cwd });
   const launch = createPiLaunch({ piBin, env, getCwd: () => context.cwd });
   const entry = launch.cliEntry();
@@ -83,6 +85,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     browserLaunch: browser, processLaunch: managed, sessionChangeLaunch: changes, toolLaunch: toolGuard,
     spawnProcess: (_command, args, opts) => supervisor.spawnProcess(node, [...entry.baseArgs, ...args], { ...opts, shell: false }),
     killProcessTree: supervisor.killProcessTree,
+    captureProviderLaunch: captureProviderLaunch && (scope => captureProviderLaunch(scope, launch, entry)),
     publish(event) {
       if (disposed || !context.isCurrent()) return;
       managed.observe(event); changes?.observe(event); activity.observe(event);
@@ -97,6 +100,10 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     },
   });
   return {
+    providerLaunch: rpc.providerLaunch,
+    providerLaunchCurrent: witness => witness?.binding.identity === launch.identityKey(),
+    providerRead: type => rpc.request({ type }, { timeoutMs: 3000, strict: true }),
+    providerSession: state => runtimeSessionWitness(state, sessions.resolveByUuid),
     start: () => resumeFile ? rpc.restart({ sessionPath: resumeFile }) : rpc.start(),
     getState: rpc.getState, request: async cmd => {
       if (disposed || !context.isCurrent()) throw fail('stale_runtime');

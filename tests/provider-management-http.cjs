@@ -18,9 +18,9 @@ async function setup(t) {
   const native = new Map();
   const inspect = id => Promise.resolve(native.get(id) ?? { present: false, builtIn: false });
   const legacy = createProviders({ modelsJson, metadataPath, inspectCredential: inspect });
-  const make = (enabled = true, nativeCredentials, fault, discovery) => createProviderManagement({
+  const make = (enabled = true, nativeCredentials, fault, discovery, runtimeSync) => createProviderManagement({
     store: fault ? createProviderConfigStore({ modelsJson, metadataPath, fault }) : legacy.store,
-    inspectCredential: inspect, enabled, nativeCredentials, discovery, now: discovery?.now });
+    inspectCredential: inspect, enabled, nativeCredentials, discovery, now: discovery?.now, runtimeSync });
   fs.writeFileSync(modelsJson, JSON.stringify({ misc: { a: true }, providers: { example: {
     baseUrl: 'https://fixture.invalid/v1', api: 'openai-completions', apiKey: key,
     headers: { Authorization: key }, unknown: { value: key },
@@ -42,6 +42,29 @@ const root = '/api/provider-management';
 const draft = (providerId = 'example', baseUrl = 'https://fixture.invalid/v1') => ({ providerId,
   displayName: 'Example', authMode: 'none', connection: { baseUrl, api: 'openai-completions' }, enabled: true,
   selectedModelIds: ['model-a'], modelOrder: ['model-a'], modelPatches: [{ modelId: 'model-a', operation: 'upsert', set: { name: 'After' } }] });
+
+test('management sync is revision-bound, idempotent and exposes a read-only operation receipt', async t => {
+  const f = await setup(t);
+  const pending = { state: 'pending', reason: 'no_live_runtime', runtimes: [] };
+  const retry = t.mock.fn(async () => pending);
+  const { handle } = f.make(true, null, null, null, { retry, snapshot: () => pending });
+  const snapshot = (await http(handle, 'GET', root)).body;
+  assert.equal(snapshot.capabilities?.syncMode, 'deferred');
+  assert.equal(retry.mock.callCount(), 0);
+  const request = { requestId: 'sync-fixture', revision: snapshot.revision };
+  const stale = await http(handle, 'POST', `${root}/sync`, { ...request, revision: 'stale' });
+  assert.equal(stale.status, 409);
+  assert.equal(retry.mock.callCount(), 0);
+  const results = await Promise.all([http(handle, 'POST', `${root}/sync`, request), http(handle, 'POST', `${root}/sync`, request)]);
+  assert.equal(results[0].status, 200);
+  assert.deepEqual(results[0], results[1]);
+  assert.equal(retry.mock.callCount(), 1);
+  const { operationId } = results[0].body;
+  assert.deepEqual((await http(handle, 'GET', `${root}/operations/${operationId}`)).body,
+    { ok: true, kind: 'sync', state: 'success', revision: request.revision, result: { sync: pending } });
+  const reuse = await http(handle, 'POST', `${root}/drafts`, { requestId: request.requestId, expectedRevision: snapshot.revision, draft: draft() });
+  assert.equal(reuse.body.code, 'request_id_conflict');
+});
 
 test('discovery requires exact authorization and limits the real transport to the consented base path', async t => {
   const f = await setup(t);

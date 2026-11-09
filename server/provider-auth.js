@@ -19,7 +19,7 @@ const ERRORS = {
 
 export function createProviderAuth({ adapter, busyReason = () => null, synchronize = async () => ({ ok: true }),
   readModels = async () => null, customProviders = () => [], startBlocked = () => false,
-  acquireMutation = () => null, runtimeSync = null, timeoutMs = 5 * 60 * 1000 } = {}) {
+  acquireMutation = () => null, runtimeSync = null, retryRuntimeSync = null, timeoutMs = 5 * 60 * 1000 } = {}) {
   let generation = 0, active = null, current = null, revision = 0, readSequence = 0, disposed = false;
   let data = { capability: { sdkAvailable: false, reason: '正在读取 Pi 认证能力', piVersion: null }, providers: [] };
   let synchronization = { state: 'idle', reason: null }; let needsSync = false, syncPromise = null;
@@ -165,7 +165,9 @@ export function createProviderAuth({ adapter, busyReason = () => null, synchroni
   }
   function cancel(flowId) { if (!current || current.id !== flowId) return fail('stale'); return terminate(current, 'cancelled'); }
   async function sync() {
-    if (runtimeSync || disposed || !needsSync || active) return snapshot();
+    if (disposed || active) return snapshot();
+    if (runtimeSync) { await retryRuntimeSync?.(); return snapshot(); }
+    if (!needsSync) return snapshot();
     if (syncPromise) { await syncPromise; return snapshot(); }
     if (busyReason()) { synchronization = { state: 'pending', reason: '当前 Pi 正在运行任务，空闲后同步认证和模型' }; return snapshot(); }
     const gen = generation;

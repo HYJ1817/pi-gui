@@ -64,6 +64,31 @@ test('a completed OAuth mutation records a durable sync generation without chang
   assert.deepEqual(f.open().readAuthSyncIntent(), { ...intent, unconfirmed: true });
 });
 
+test('sync evidence keeps removed custom models across reopening and never reads credential contents', async t => {
+  const io = Object.create(fs);
+  const f = await fixture(t, { io });
+  const auth = path.join(path.dirname(f.modelsJson), 'auth.json');
+  io.openSync = (file, ...args) => {
+    assert.notEqual(file, auth);
+    return fs.openSync(file, ...args);
+  };
+  fs.writeFileSync(auth, 'secret-fixture', { mode: 0o600 });
+  f.store.transact({ apply({ config, metadata }) {
+    config.providers.fixture = { models: [{ id: 'retired', name: 'Old' }] };
+    metadata.services.fixture = { kind: 'custom' };
+    metadata.syncRequired = true;
+  } });
+  const launch = f.store.readSyncEvidence();
+  assert.deepEqual(launch.expected, [{ provider: 'fixture', id: 'retired', fields: { name: 'Old' } }]);
+  assert.ok(!JSON.stringify(launch).includes('secret-fixture'));
+  const first = f.store.read().metadata.syncGeneration;
+  f.store.transact({ apply({ config, metadata }) { delete config.providers.fixture; delete metadata.services.fixture; } });
+  const reopened = f.open();
+  assert.notEqual(reopened.read().metadata.syncGeneration, first);
+  assert.deepEqual(reopened.readSyncEvidence().removed, [['fixture', 'retired']]);
+  assert.notEqual(reopened.readSyncEvidence().native, launch.native);
+});
+
 test('the auth storage qualifier rejects wrong authorities and hard-linked files without reading credentials', async t => {
   const io = Object.create(fs);
   const f = await fixture(t, { io });

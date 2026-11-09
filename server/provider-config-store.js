@@ -87,8 +87,11 @@ function safeReceipt(value) {
 
 function validateMetadata(value) {
   if (!record(value) || !record(value.services) || !record(value.receipts)) fail('config_invalid');
-  if (value.schemaVersion !== 1 || Object.keys(value).some(key => !['schemaVersion','services','receipts','syncRequired'].includes(key))) fail('config_unsupported');
+  if (value.schemaVersion !== 1 || Object.keys(value).some(key => !['schemaVersion','services','receipts','syncRequired','syncGeneration','syncRemoved'].includes(key))) fail('config_unsupported');
   if (Object.hasOwn(value, 'syncRequired') && typeof value.syncRequired !== 'boolean') fail('config_invalid');
+  if (Object.hasOwn(value, 'syncGeneration') && !isOpaqueId(value.syncGeneration)) fail('config_invalid');
+  if (Object.hasOwn(value, 'syncRemoved') && (!Array.isArray(value.syncRemoved) || value.syncRemoved.length > 3000 ||
+      !value.syncRemoved.every(item => Array.isArray(item) && item.length === 2 && isProviderId(item[0]) && isModelId(item[1])))) fail('config_invalid');
   for (const [id, service] of Object.entries(value.services)) {
     if (!isProviderId(id) || !record(service) || Object.keys(service).some(key => !['providerId','catalogId','displayName','enabled','selectedModelIds','modelOrder','kind','ownedOverrides'].includes(key))) fail('config_invalid');
     if (Object.hasOwn(service,'providerId') && service.providerId !== id) fail('config_invalid');
@@ -374,6 +377,37 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     const { value } = readOperations();
     return { generation: value.authGeneration ?? null, unconfirmed: value.operations.some(item => item.phase === 'oauth-writing') };
   }
+  function readSyncEvidence() {
+    const auth = path.join(path.dirname(files.models), 'auth.json');
+    if (stat(lockPath) || stat(txPath)) fail('config_busy');
+    const { states, config, metadata, revision } = readPair();
+    const { prior, value } = readOperations();
+    const authFile = plain(auth);
+    const authStamp = authFile ? stamp(authFile) : null;
+    const expected = [];
+    const fields = (model, provider) => Object.fromEntries([
+      'name','contextWindow','maxTokens','reasoning','input','api','baseUrl',
+    ].flatMap(key => {
+      const value = model[key] ?? (['api','baseUrl'].includes(key) ? provider[key] : undefined);
+      return value === undefined ? [] : [[key, value]];
+    }));
+    for (const [provider, entry] of Object.entries(config.providers)) {
+      if (!record(entry)) fail('config_invalid');
+      const overrides = record(entry.modelOverrides) ? entry.modelOverrides : {};
+      const models = new Map((Array.isArray(entry.models) ? entry.models : []).map(model => [model?.id, model]));
+      for (const id of new Set([...models.keys(), ...Object.keys(overrides)])) {
+        if (!isModelId(id) || expected.length >= 3000) fail('config_invalid');
+        expected.push({ provider, id, fields: fields({ ...models.get(id), ...(Object.hasOwn(overrides, id) ? overrides[id] : null) }, entry) });
+      }
+    }
+    const currentAuth = plain(auth);
+    if (keys.some(key => snapshot(files[key]).stamp !== states[key].stamp) ||
+        snapshot(operationsPath, OPERATIONS_LIMIT).stamp !== prior.stamp ||
+        (currentAuth ? stamp(currentAuth) : null) !== authStamp || stat(lockPath) || stat(txPath)) fail('config_conflict');
+    return { revision, required: metadata.syncRequired === true || Boolean(value.authGeneration),
+      unconfirmed: value.operations.some(unresolved), expected, removed: metadata.syncRemoved ?? [],
+      native: hash(JSON.stringify([states.models.stamp, states.models.digest, authStamp, value.authGeneration])) };
+  }
   function authorizeCredentialStorage({ authPath }) {
     const directory = path.dirname(files.models);
     if (path.resolve(authPath) !== path.join(directory, 'auth.json')) return false;
@@ -531,6 +565,9 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       }
       if (expectedRevision !== undefined && expectedRevision !== current.revision) fail('config_conflict');
       const configBefore = JSON.stringify(current.config);
+      const logicalBefore = revisionFor(states.models.digest, current.metadata);
+      const customBefore = new Map(Object.entries(current.metadata.services).filter(([, service]) => service.kind === 'custom').map(([id]) =>
+        [id, Object.hasOwn(current.config.providers, id) ? current.config.providers[id]?.models ?? [] : []]));
       const heldProviders = new Map(operations.filter(item => item !== operation && unresolved(item))
         .map(item => [item.providerId, JSON.stringify(current.config.providers[item.providerId])]));
       const fields = apply(current);
@@ -538,7 +575,19 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
         if (JSON.stringify(current.config.providers[id]) !== before) fail('config_busy');
       }
       const models = JSON.stringify(current.config) === configBefore ? states.models.data : bytes(current.config);
-      const revision = revisionFor(models === null ? null : hash(models), current.metadata);
+      const modelsDigest = models === null ? null : hash(models);
+      if (current.metadata.syncRequired && (revisionFor(modelsDigest, current.metadata) !== logicalBefore || !current.metadata.syncGeneration)) {
+        current.metadata.syncGeneration = randomUUID();
+        const configured = (provider, id) => Object.hasOwn(current.config.providers, provider) &&
+          Array.isArray(current.config.providers[provider]?.models) && current.config.providers[provider].models.some(model => model?.id === id);
+        const removed = new Map();
+        for (const pair of [...(current.metadata.syncRemoved ?? []), ...[...customBefore].flatMap(([provider, list]) =>
+          Array.isArray(list) ? list.filter(model => isModelId(model?.id)).map(model => [provider, model.id]) : [])]) {
+          if (!configured(...pair)) removed.set(JSON.stringify(pair), pair);
+        }
+        if (removed.size || current.metadata.syncRemoved) current.metadata.syncRemoved = [...removed.values()].slice(-3000);
+      }
+      const revision = revisionFor(modelsDigest, current.metadata);
       const result = { ...fields, revision };
       if (requestId) {
         Object.defineProperty(receipts, requestId, { value: { fingerprint, result: safeReceipt(result) }, enumerable: true, configurable: true });
@@ -687,5 +736,5 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     if (!stat(txPath)) return;
     return withLock(() => recover());
   }
-  return { read, transact, recoverPending, withCredentialOperation, acquireOAuthWrite, readAuthSyncIntent, authorizeCredentialStorage };
+  return { read, transact, recoverPending, withCredentialOperation, acquireOAuthWrite, readAuthSyncIntent, readSyncEvidence, authorizeCredentialStorage };
 }

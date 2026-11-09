@@ -71,6 +71,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
   enabled = false, desktopCapabilities = null, nativeCredentials = null, invalidateDraft = () => {}, discovery = null, runtimeSync = null }) {
   const drafts = new Map();
   const receipts = new Map();
+  const syncOperations = new Map();
   const nativeCommit = nativeCredentials && createNativeCommit({ store, credentials: nativeCredentials, mutationBlocked });
   const discoveryService = discovery && createProviderManagementDiscovery({ ...discovery, draftLookup: draftSnapshot,
     draftFrozen: id => nativeCommit?.hasDraft(id), now });
@@ -85,6 +86,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       invalidate(id);
     }
     for (const [id, item] of receipts) if (item.expires <= time) receipts.delete(id);
+    for (const [id, item] of syncOperations) if (item.expires <= time) syncOperations.delete(id);
   }
 
   async function snapshot() {
@@ -103,9 +105,9 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     const desktopSource = typeof desktopCapabilities === 'function' ? await Promise.resolve(desktopCapabilities()).catch(() => null) : desktopCapabilities ?? null;
     const desktop = desktopSource && typeof desktopSource === 'object' ? desktopSource : null;
     return { ok: true, schemaVersion: PROVIDER_MANAGEMENT_SCHEMA_VERSION, revision,
-      capabilities: providerManagementCapabilities({ oauthLogin: auth.sdkAvailable ? true : null, modelOverrides: auth.sdkAvailable && auth.piVersion === '1.5.0' ? true : null, desktop }),
+      capabilities: providerManagementCapabilities({ oauthLogin: auth.sdkAvailable ? true : null, modelOverrides: auth.sdkAvailable && auth.piVersion === '1.5.0' ? true : null, desktop, runtimeSync: Boolean(runtimeSync) }),
       catalog: [...PROVIDER_CATALOG, ...subscriptions], services, auth,
-      sync: runtimeSync ? runtimeSync(metadata) : metadata.syncRequired === true ? pendingSync : { state: 'idle', reason: null } };
+      sync: runtimeSync ? runtimeSync.snapshot(metadata) : metadata.syncRequired === true ? pendingSync : { state: 'idle', reason: null } };
   }
 
   /* P2 私有桥用：读取草稿的非秘密绑定（不含任何凭据值）。
@@ -145,7 +147,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     const result = { ok: true, draftId, draftRevision, connectionRevision, targetFingerprint,
       credentialState: 'none', consentState: 'unapproved', cachedModels: [], sourceKind: 'none' };
     receipts.set(request.requestId, { result, fingerprint, expires });
-    if (receipts.size > 128) receipts.delete(receipts.keys().next().value);
+    if (receipts.size > 128) receipts.delete([...receipts].find(([, receipt]) => !receipt.sync)[0]);
     return result;
   }
 
@@ -185,6 +187,38 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     return saved;
   }
 
+  function retrySync(request) {
+    const { requestId, revision } = request;
+    const fingerprint = digest(['sync', request]);
+    const prior = receipts.get(requestId);
+    if (prior) {
+      if (prior.fingerprint !== fingerprint) providerFailure('request_id_conflict');
+      return prior.result;
+    }
+    const current = store.read();
+    if (own(current.metadata.receipts, requestId) || discoveryService?.hasRequest(requestId)) providerFailure('request_id_conflict');
+    if (current.revision !== revision) providerFailure('config_conflict');
+    if (syncOperations.size >= 64 || receipts.size >= 128) providerFailure('config_busy');
+    const operationId = randomUUID();
+    const operation = { revision, state: 'running', expires: now() + draftTtlMs };
+    syncOperations.set(operationId, operation);
+    const result = Promise.resolve().then(async () => {
+      try {
+        const sync = await runtimeSync.retry({ revision });
+        if (store.read().revision !== revision) providerFailure('config_conflict');
+        operation.state = 'success';
+        operation.result = { sync };
+        return { ok: true, operationId, sync };
+      } catch (error) {
+        operation.state = 'failed';
+        operation.error = providerContractError(error?.code);
+        throw error;
+      }
+    });
+    receipts.set(requestId, { fingerprint, result, expires: operation.expires, sync: true });
+    return result;
+  }
+
   const post = new Map([['/drafts','drafts'], ['/commit','commit'], ['/discovery-authorizations','authorize'],
     ['/discovery-authorizations/revoke','revoke'], ['/discover','discover'], ['/test','test'], ['/sync','sync']]);
   async function handle(req, res, url) {
@@ -196,6 +230,9 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       const operation = /^\/operations\/([^/]+)(\/cancel)?$/.exec(suffix);
       if (operation && !isOpaqueId(operation[1])) providerFailure('invalid_request');
       if (operation && !operation[2] && req.method === 'GET') {
+        const sync = syncOperations.get(operation[1]);
+        if (sync) return json(res, 200, { ok: true, kind: 'sync', state: sync.state, revision: sync.revision,
+          ...(sync.result ? { result: sync.result } : {}), ...(sync.error ? { error: sync.error } : {}) });
         if (!discoveryService) providerFailure('unsupported');
         return json(res, 200, await discoveryService.get(operation[1]));
       }
@@ -210,6 +247,7 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
         return json(res, 200, discoveryService ? await discoveryService.projectDraft(result) : result);
       }
       if (kind === 'commit') return json(res, 200, await commit(request));
+      if (kind === 'sync' && runtimeSync) return json(res, 200, await retrySync(request));
       if (discoveryService && kind !== 'sync') {
         let persisted;
         try { persisted = own(store.read().metadata.receipts, request.requestId); }

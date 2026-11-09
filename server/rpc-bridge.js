@@ -99,6 +99,7 @@ export function createRpcBridge({
   sessionChangeLaunch = null,
   toolLaunch = null,
   compat = null,
+  captureProviderLaunch = null,
   spawnProcess = spawn,
   /* 进程树终止原语（**注入**，见文件头的说明）。Windows 上 `child.kill()`
    * 只杀得掉外层 cmd/npm 包装，pi 本体（以及它拉起的 shell 工具）会活下来，
@@ -246,6 +247,7 @@ export function createRpcBridge({
    * 但 spawn(bin, argsArray, {shell:true}) 会触发 DEP0190
    * （args 只拼接不转义），每次启动刷两行弃用警告，双击启动时看着像报错。
    * 所以成形交给 `formatLaunch()`（Node 文档认可的方式），见文件头第 2 条。 */
+  let providerLaunch = null;
   function spawnPi(bin, args, browser = null) {
     /* 把访问令牌从 pi 的环境里摘掉。
      *
@@ -267,6 +269,11 @@ export function createRpcBridge({
     };
 
     const spec = formatLaunch(bin, args, isWin);
+    providerLaunch = null;
+    if (captureProviderLaunch) try {
+      const witness = captureProviderLaunch({ cwd: opts.cwd, agentDir: childEnv.PI_CODING_AGENT_DIR, args });
+      if (witness) providerLaunch = { bridgeRun, witness };
+    } catch { /* Unqualified provider launch does not affect Pi startup. */ }
     return spawnProcess(spec.command, spec.spawnArgs, { ...opts, shell: spec.shell });
   }
 
@@ -458,7 +465,8 @@ export function createRpcBridge({
           const entry = pending.get(msg.id);
           pending.delete(msg.id);
           clearTimeout(entry.timer);
-          entry.resolve(msg.success === false ? { __error: msg.error || '命令失败' } : (msg.data ?? {}));
+          entry.resolve(entry.strictCommand && (msg.success !== true || msg.command !== entry.strictCommand) ? null
+            : msg.success === false ? { __error: msg.error || '命令失败' } : (msg.data ?? {}));
           continue; // Backend requests close here; compatibility already observed them.
         }
         /* 停止等待期间盯两条权威信号：
@@ -603,7 +611,7 @@ export function createRpcBridge({
    *       超时 / 子进程没起来 / 进程退出 → null。
    *
    * 注意这里**不**校验 cmd.id —— 由本模块发号，调用方传的 id 会被覆盖。 */
-  function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, onId = null } = {}) {
+  function request(cmd, { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, onId = null, strict = false } = {}) {
     return new Promise((resolve) => {
       /* 停止屏障对内部调用同样成立 —— 没有哪条内部路径需要绕开它。
        * （clear_queue / abort / get_state 回读都不在阻断名单里。） */
@@ -630,7 +638,7 @@ export function createRpcBridge({
       }, timeoutMs);
       // timer.unref() 让一个挂起的请求不会拖住进程退出
       if (typeof timer.unref === 'function') timer.unref();
-      pending.set(id, { resolve, timer });
+      pending.set(id, { resolve, timer, strictCommand: strict ? cmd.type : null });
       try {
         pi.stdin.write(JSON.stringify({ ...cmd, id }) + '\n', (err) => {
           if (!err || !pending.has(id)) return;
@@ -1126,5 +1134,6 @@ export function createRpcBridge({
   }
 
   return { start, send, request, abortAndWait, stopState, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState,
+    providerLaunch: () => pi && pi !== retiringChild && providerLaunch?.bridgeRun === bridgeRun ? providerLaunch.witness : null,
     updateBusy: () => Boolean(pending.size || updateApprovals.size || updateCommands.size) };
 }

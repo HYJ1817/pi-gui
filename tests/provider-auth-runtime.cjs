@@ -106,6 +106,47 @@ async function main() {
   check('active OAuth write remains pending', () => assert.equal(coordinator.oauthSnapshot().state, 'pending'));
   active = false;
   check('orphaned OAuth write evidence cannot report success', () => assert.deepEqual(coordinator.snapshot(), { state: 'error', reason: 'credential_unconfirmed' }));
+  let version = 'before', busy = false, targets = [];
+  const expected = [{ provider: 'fixture', id: 'model-a', fields: { maxTokens: 100 } }];
+  const sync = createProviderConfigSync({ store: { readSyncEvidence: () => ({ revision: version, native: version, required: true, expected }) }, targets: () => targets });
+  const first = sync.capture({ identity: 'pi', version: '1.5.0', agent: 'fixture' });
+  version = 'after';
+  const current = sync.capture({ identity: 'pi', version: '1.5.0', agent: 'fixture' });
+  let reads = 0, token = 'owner-file', modelGate = null, modelFailure = false;
+  function target(id, launch) {
+    return { id, kind: id === 'classic' ? 'classic' : 'runtime', key: id + '-1', launch, ready: true, busy: () => busy,
+      current: () => targets.some(item => item.id === id && item.launch === launch), session: async () => token,
+      request: async type => { reads++;
+        if (type === 'get_state') return { sessionId: 'fixture', sessionFile: 'fixture-private.jsonl', model: { provider: 'fixture', id: 'model-a' }, thinkingLevel: 'low',
+          isStreaming: false, isCompacting: false, pendingMessageCount: 0 };
+        if (type === 'get_available_thinking_levels') return { levels: ['off', 'low'] };
+        return modelGate ?? (modelFailure ? { __error: 'private fixture error' } : { models: [{ provider: 'fixture', id: 'model-a', maxTokens: 100 }] });
+      } };
+  }
+  targets = [target('classic', first), target('second', current)];
+  await sync.retry();
+  check('only the Runtime born under the desired configuration may become applied', () => {
+    assert.equal(reads, 4);
+    assert.deepEqual(sync.snapshot().runtimes.map(item => item.state), ['pending', 'applied']);
+    assert.equal(sync.oauthSnapshot().state, 'pending');
+  });
+  targets = [target('classic', current)];
+  busy = true;
+  await sync.retry();
+  check('busy Runtime receives zero background readback commands', () => { assert.equal(reads, 4); assert.equal(sync.snapshot().state, 'pending'); });
+  busy = false; modelFailure = true;
+  await sync.retry();
+  check('native RPC error is projected as a fixed failure', () => { assert.equal(sync.snapshot().state, 'error'); assert.ok(!JSON.stringify(sync.snapshot()).includes('private fixture error')); });
+  modelFailure = false;
+  const entered = Promise.withResolvers(), release = Promise.withResolvers();
+  modelGate = { then(resolve, reject) { entered.resolve(); return release.promise.then(resolve, reject); } };
+  const late = sync.retry(); await entered.promise;
+  token = 'replaced-file'; release.resolve({ models: [{ provider: 'fixture', id: 'model-a', maxTokens: 100 }] });
+  await late;
+  check('file replacement invalidates an in-flight Runtime readback', () => assert.equal(sync.snapshot().state, 'pending'));
+  modelGate = null;
+  await sync.retry();
+  check('explicit retry can confirm the current stable native instance', () => { assert.equal(sync.snapshot().state, 'applied'); assert.equal(sync.oauthSnapshot().state, 'synced'); });
   console.log(`\n${passed}/${passed} 通过`);
 }
 
@@ -114,23 +155,30 @@ async function bridgeCases(createAuthRuntimeSync) {
   const { createRuntime } = await load('server/runtime.js');
   const runtime = createRuntime({ initialCwd: 'fixture-A' });
   const children = [], launches = [], listeners = new Set(), responses = [];
+  let launchRevision = 'revision-one';
   const bridge = createRpcBridge({ runtime, isWin: false, piBin: 'fixture-pi', env: { PI_NO_CONTINUE: '1' }, publish: event => { if (event.type === 'response') responses.push(event); for (const fn of [...listeners]) fn(event); },
+    captureProviderLaunch: ({ cwd }) => ({ cwd, revision: launchRevision }),
     spawnProcess: (_bin, args) => {
       launches.push(args);
       const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
       child.stdout.setEncoding = child.stderr.setEncoding = () => {};
       child.stdin = new EventEmitter(); child.stdin.end = () => {};
-      child.stdin.write = line => { const cmd = JSON.parse(line); queueMicrotask(() => child.stdout.emit('data', JSON.stringify({ id: cmd.id, type: 'response', command: cmd.type, success: true, data: cmd.type === 'get_state' ? { sessionFile: 'fixture-current-session.jsonl' } : {} }) + '\n')); };
+      child.stdin.write = line => { const cmd = JSON.parse(line); queueMicrotask(() => child.stdout.emit('data', JSON.stringify({ id: cmd.id, type: 'response', command: cmd.type, success: cmd.type === 'fixture_unqualified' ? undefined : true, data: cmd.type === 'get_state' ? { sessionFile: 'fixture-current-session.jsonl' } : {} }) + '\n')); };
       child.kill = () => { queueMicrotask(() => child.emit('exit', 0, null)); return true; };
       children.push(child); queueMicrotask(() => child.emit('spawn')); return child;
     } });
   try {
     bridge.start(); await tick();
+    const unqualified = await bridge.request({ type: 'fixture_unqualified' }, { strict: true });
+    check('strict private RPC refuses a missing native success marker', () => assert.equal(unqualified, null));
+    launchRevision = 'revision-two';
+    check('launch witness remains bound to the actual spawned run', () => assert.deepEqual(bridge.providerLaunch(), { cwd: 'fixture-A', revision: 'revision-one' }));
     const sync = createAuthRuntimeSync({ rpc: bridge, getCwd: runtime.getCurrentCwd, busyReason: () => null, subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, timeoutMs: 1000 });
     const result = await sync();
     check('actual bridge fake RPC session reload succeeds', () => assert.equal(result.ok, true));
     check('auth readback uses Promise results without broadcasting SSE responses', () => assert.equal(responses.length, 0));
     check('actual bridge passes exact current session launch argv', () => assert.deepEqual(launches[1], ['--mode', 'rpc', '--session', 'fixture-current-session.jsonl']));
+    check('new bridge run captures its own launch witness', () => assert.deepEqual(bridge.providerLaunch(), { cwd: 'fixture-A', revision: 'revision-two' }));
     runtime.setCurrentCwd('fixture-B'); bridge.restart(); await new Promise(resolve => setTimeout(resolve, 15));
     check('session override consumed once and never leaks to next cwd', () => assert.deepEqual(launches[2], ['--mode', 'rpc']));
     check('fake bridge spawned exactly three runs', () => assert.equal(children.length, 3));
