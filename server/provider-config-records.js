@@ -172,9 +172,11 @@ export function applyProviderCommit(snapshot, request, draft, credential) {
   const builtin = isBuiltinProvider(id, credential) || previousMeta?.kind === 'builtin';
   if (request.action === 'delete') {
     removeProviderRecord(snapshot, id, { builtin, credential });
-  } else if (request.action === 'disable') {
+  } else if (request.action === 'disable' || request.action === 'enable') {
+    /* P6：enable 与 disable 对称——OAuth/订阅服务没有可写端点草稿，停用后必须
+     * 有恢复入口；两者都只改 GUI 元数据，不触碰 Pi 配置与认证。 */
     if (!exists) providerFailure('not_found');
-    metadata.services[id] = { ...previousMeta, providerId: id, enabled: false };
+    metadata.services[id] = { ...previousMeta, providerId: id, enabled: request.action === 'enable' };
     metadata.syncRequired = true;
   } else {
     const cloning = request.action === 'clone';
@@ -187,8 +189,29 @@ export function applyProviderCommit(snapshot, request, draft, credential) {
       ...(draft.catalogId ? { catalogId: draft.catalogId } : {}), enabled: draft.enabled,
       selectedModelIds: draft.selectedModelIds, modelOrder: draft.modelOrder, kind: builtin ? 'builtin' : 'custom' };
     if (builtin) {
-      if (cloning || action !== 'keep' || draft.piRegistrationReference) providerFailure('unsupported');
+      if (cloning || draft.piRegistrationReference) providerFailure('unsupported');
+      /* P6：内置供应商的环境变量引用与旧入口一致地允许写入——目录卡片预填的
+       * $NAME 引用必须有落盘路径，否则「添加内置 API Key 供应商」的主流程
+       * 在管理界面里无法保存。原生化（apply-staged/clear-native）仍不开放：
+       * 内置 Endpoint 没有 SDK 证据能精确证明目标。 */
+      if (!['keep', 'env', 'none'].includes(action)) providerFailure('unsupported');
       if (previous?.baseUrl) guardExistingTarget(id, previous, draft.connection, credential);
+      if (action === 'env') {
+        /* 新建：与旧入口 applyLegacyProvider 的预设分支同一约束——只允许目录
+         * 预设端点，且原生凭据槽必须可证明为空（避免 env 引用与已存登录混用）。
+         * 更新：目标不变已由 guardExistingTarget 保证，只替换配置内引用。 */
+        if (!previous) {
+          const preset = presetTargets.get(id);
+          if (!preset || targetChanged(preset, draft.connection)) providerFailure('credential_target_conflict');
+          if (credential?.present !== false) providerFailure('credential_conflict');
+          config.providers[id] = { baseUrl: preset.baseUrl, api: preset.api, models: [] };
+        }
+        config.providers[id] = { ...config.providers[id], apiKey: request.credentialAction.reference };
+      } else if (action === 'none' && previous) {
+        const next = { ...previous };
+        delete next.apiKey;
+        config.providers[id] = next;
+      }
       if (draft.modelPatches.length && credential?.builtIn !== true) providerFailure('unsupported');
       applyBuiltin(config, service, draft);
     } else {

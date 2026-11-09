@@ -189,7 +189,7 @@ export function validateProviderRequest(kind, value) {
   }
   if (kind === 'commit') {
     const action = value.action;
-    need(['create','update','clone','delete','disable'].includes(action), 'action');
+    need(['create','update','clone','delete','disable','enable'].includes(action), 'action');
     const needsDraft = ['create','update','clone'].includes(action);
     need(has(value,'draftId') === needsDraft && has(value,'draftRevision') === needsDraft && has(value,'serviceId') === (action !== 'create'), 'action');
     if (has(value,'credentialAction')) {

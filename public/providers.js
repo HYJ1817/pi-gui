@@ -531,9 +531,10 @@ function serviceMenu(service, { onEdit, onClone, onToggle, onDelete, onAuth, onT
       : item('复制', onClone, { disabled: service.readOnly || !serviceSelectable(service), reason: service.readOnly ? '只读服务不能复制' : '' }),
     item('测试连接', onTest, { disabled: !canTest, reason: canTest ? '' : testReason }),
     item(service.enabled === false ? '启用' : '停用', onToggle, {
-      disabled: service.readOnly || (service.authMode === 'oauth' && service.enabled === false),
-      reason: service.readOnly ? '只读服务不能停用'
-        : service.authMode === 'oauth' && service.enabled === false ? '订阅账户需在 Pi 官方登录中启用' : '',
+      /* P6：OAuth 服务的 enabled 只是 GUI 元数据，与 Pi 登录状态相互独立；
+       * 停用可逆，启用同样必须提供入口（之前只禁用了启用，导致停用后无法恢复）。 */
+      disabled: service.readOnly,
+      reason: service.readOnly ? '只读服务不能停用或启用' : '',
     }),
     item('删除', onDelete, { danger: true, disabled: service.readOnly, reason: service.readOnly ? '只读服务不能删除' : '' }),
   );
@@ -638,9 +639,9 @@ async function toggleService(service) {
     await refreshManagement();
     return;
   }
-  const draft = draftFromService(service, managementSnapshot, 'edit');
-  draft.enabled = true;
-  const result = await commitServiceAction('update', service, draft);
+  /* 只改 GUI 元数据：与 disable 对称，不再构造没有端点的订阅草稿
+   * （订阅服务没有 connection，无法通过 draft 合同校验）。 */
+  const result = await commitServiceAction('enable', service);
   if (!result?.ok) {
     toast(result?.message || '启用失败', 'error');
     await refreshManagement();
