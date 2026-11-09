@@ -341,6 +341,23 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
       action: flow?.purpose ?? null, expiresAt: flow?.expires ?? null, nativeCredentialPersistence: current?.nativePersistence === true && qualified() };
   }
 
+  /* P5：管理弹窗关闭/换目标时撤销该草稿的暂存凭据与授权。
+   * 只接受主窗口直属帧；backend 的 close-draft 还会再验草稿是否处于写入中。 */
+  async function closeDraftHandler(event, payload) {
+    if (!mainWindowAllowed(event)) return { ok: false, code: 'forbidden' };
+    if (disposed) return { ok: false, code: 'unavailable' };
+    const draftId = payload?.draftId;
+    if (!opaqueId(draftId)) return { ok: false, code: 'invalid_request' };
+    if (!qualified()) return { ok: false, code: 'unsupported', reason: 'desktop_unqualified' };
+    const current = await ensureHandshake(new AbortController().signal);
+    if (!current || current.child !== getBackend() || !current.child?.connected) {
+      return { ok: false, code: 'unsupported', reason: 'bridge_unavailable' };
+    }
+    const reply = await backendCall({ action: 'close-draft', requestId: `close-${++sequence}`,
+      backendEpoch: current.epoch, draftId }, { child: current.child });
+    return reply?.ok === true ? { ok: true } : { ok: false, code: reply?.code ?? 'unavailable' };
+  }
+
   /* ---------- 输入窗 preload 入口（submit/cancel/status） ---------- */
 
   function sheetAllowed(event) {
@@ -408,6 +425,7 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     install('pi-gui:provider-credential-open', openHandler);
     install('pi-gui:provider-credential-cancel', cancelHandler);
     install('pi-gui:provider-credential-status', statusHandler);
+    install('pi-gui:provider-credential-close-draft', closeDraftHandler);
     install('pi-gui:provider-credential-submit', submitHandler);
     install('pi-gui:provider-credential-cancel-sheet', sheetCancelHandler);
     install('pi-gui:provider-credential-sheet-status', sheetStatusHandler);

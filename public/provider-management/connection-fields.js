@@ -13,21 +13,33 @@ import {
   serviceCredentialText,
 } from './catalog.js';
 import { credentialClearSupport } from './state.js';
+import { CREDENTIAL_REASON } from './credentials.js';
 import { button, field, h, icon } from './dom.js';
 
-function credentialCapability(snapshot) {
-  const capabilities = snapshot?.capabilities || {};
-  const pendingReason = capabilities.reasons?.privateDesktopBridge;
-  // P2 已在 main 提供私有桥，但 P4 不接入凭据窗口的生命周期与状态机（P5）。
-  // 能力为 true 时也必须保持触发器禁用：否则会打开一个只显示占位说明的死入口。
-  if (capabilities.privateDesktopBridge === true) {
-    return { available: false, reason: '桌面凭据输入待 P5 集成' };
+/* 凭据入口的真实可用性 = 私有桥 API 存在 + 快照能力（握手/SDK/密钥输入）
+ * 都成立。网页版、未握手、未开启输入或存储资格不足都必须禁用并说明原因，
+ * 不能为了「按钮看起来能用」而放宽 P2/P3 的安全条件。 */
+function credentialCapability(snapshot, { legacy = false } = {}) {
+  if (legacy) {
+    return { available: false, reason: '兼容模式不提供安全凭据窗口；这里只写 $NAME 环境变量引用。' };
   }
+  const capabilities = snapshot?.capabilities || {};
+  const bridge = globalThis.window?.piGuiDesktop?.providerCredentials;
+  if (!bridge || typeof bridge.open !== 'function') {
+    return { available: false, reason: CREDENTIAL_REASON.web };
+  }
+  if (capabilities.privateDesktopBridge !== true || capabilities.keyStaging !== true) {
+    return {
+      available: false,
+      nativePersistence: false,
+      reason: '桌面安全凭据窗口尚未就绪：需要后端已连接、启用密钥输入（PI_GUI_PROVIDER_KEY_INPUT=1）且 SDK 通过资格检查。',
+    };
+  }
+  const nativePersistence = capabilities.nativeCredentialPersistence === true;
   return {
-    available: false,
-    reason: pendingReason === 'p2_pending' || !pendingReason
-      ? '桌面凭据输入待接通（P2）'
-      : '桌面凭据输入暂不可用',
+    available: true,
+    nativePersistence,
+    storageReason: nativePersistence ? '' : '本机凭据存储未通过安全资格检查：可以暂存用于本次发现/测试，但保存时不会写入 auth.json。',
   };
 }
 
@@ -68,37 +80,60 @@ function cloneCredentialRow() {
   );
 }
 
-function credentialRow({ draft, snapshot, legacy = false, onCredentialTrigger, onClearCredential, onEnvReference, error }) {
-  const capability = credentialCapability(snapshot);
-  const clear = credentialClearSupport(draft);
+function credentialRow({ draft, snapshot, legacy = false, onCredentialTrigger, onClearCredential, onDiscardStage, onEnvReference, error }) {
+  const capability = credentialCapability(snapshot, { legacy });
+  const source = draft.credentialState?.source || 'none';
+  const configOwned = ['env', 'literal', 'command'].includes(source);
+  const unknownSource = !configOwned && source !== 'pi-credential' && source !== 'none';
+  // 本机凭据的清除同样要经过私有桥与存储安全资格；资格不足时不能假装已清除。
+  const persistenceReady = capability.available && capability.nativePersistence === true;
+  const clear = credentialClearSupport(draft, { native: persistenceReady && source === 'pi-credential' });
+  const storageBlocksNativeClear = source === 'pi-credential' && capability.available && !persistenceReady;
   const hasCredential = draft.credentialState
     && draft.credentialState.state !== 'none'
     && draft.credentialState.source !== 'none';
-  const clearing = draft.credentialAction?.type === 'none';
-  const canClear = clear.supported && !legacy;
+  const nativeClearing = draft.nativeStage?.action === 'clear';
+  const clearing = draft.credentialAction?.type === 'none' || nativeClearing;
+  const canClear = clear.supported && !legacy && !storageBlocksNativeClear;
   // 只有 Pi 本机凭据才用“本机”二字；未知来源或兼容模式不能借用这个说法。
-  const clearLabel = canClear ? '清除配置凭据' : clear.source === 'pi-credential' ? '清除本机凭据' : '清除凭据';
+  const clearLabel = clear.native ? '清除本机凭据' : canClear ? '清除配置凭据' : clear.source === 'pi-credential' ? '清除本机凭据' : '清除凭据';
   const clearReason = legacy
     ? clear.supported
       ? '兼容模式不会写入清除操作；如需移除配置凭据，请开启管理接口或直接检查 Pi 配置。'
       : clear.reason
-    : clear.reason;
-  const statusText = clearing
-    ? `保存后移除配置中的${clear.label || '凭据'}`
-    : hasCredential ? serviceCredentialText({ credentialState: draft.credentialState }) : '未配置凭据';
+    : storageBlocksNativeClear
+      ? capability.storageReason || '本机凭据存储未通过安全资格检查，无法在 GUI 中清除。'
+      : clear.reason;
+  const staged = draft.nativeStage?.action === 'set';
+  const statusText = nativeClearing
+    ? '已暂存清除；保存时从 Pi 本机凭据槽移除'
+    : staged
+      ? capability.nativePersistence
+        ? '新密钥已暂存；保存时写入 Pi 本机凭据槽'
+        : '新密钥已暂存；本机凭据存储未通过安全资格检查，保存时不会写入 auth.json（仅用于发现/测试）'
+      : clearing
+        ? `保存后移除配置中的${clear.label || '凭据'}`
+        : hasCredential ? serviceCredentialText({ credentialState: draft.credentialState }) : '未配置凭据';
   const envReference = draft.envReference || '';
+  // 配置内的 env/literal/command 凭据不能由本机凭据窗口替换；否则保存会
+  // 被后端以 credential_target_conflict 拒绝，界面必须先把原因说清楚。
+  const triggerBlockedReason = !capability.available ? capability.reason
+    : configOwned ? '该服务的凭据来自模型配置；请在上方环境变量引用中修改，或先清除配置凭据。'
+      : unknownSource ? '凭据来源未知，无法安全判断要替换哪个槽位；请先确认 Pi 中的认证来源。'
+        : '';
+  const triggerDisabled = Boolean(triggerBlockedReason);
 
   const trigger = h('button', {
     type: 'button',
-    class: `pm-credential-trigger${capability.available ? '' : ' is-disabled'}`,
+    class: `pm-credential-trigger${triggerDisabled ? ' is-disabled' : ''}`,
     id: 'pmCredentialTrigger',
     'data-credential-trigger': 'true',
-    disabled: !capability.available,
+    disabled: triggerDisabled,
     'aria-describedby': 'pmCredentialNote',
-    title: capability.available ? '打开安全凭据输入' : capability.reason,
+    title: triggerDisabled ? triggerBlockedReason : '打开安全凭据输入',
   }, icon('key', 15), h('span', { text: hasCredential ? '更换 API Key' : '配置 API Key' }));
 
-  if (capability.available) trigger.addEventListener('click', () => onCredentialTrigger?.());
+  if (!triggerDisabled) trigger.addEventListener('click', () => onCredentialTrigger?.());
   else trigger.addEventListener('click', event => event.preventDefault());
 
   const envInput = h('input', {
@@ -119,8 +154,11 @@ function credentialRow({ draft, snapshot, legacy = false, onCredentialTrigger, o
         h('div', { class: 'pm-credential-status', text: statusText }),
       ),
       h('div', { class: 'pm-credential-actions' },
+        draft.nativeStage && !legacy
+          ? button('放弃暂存', 'pm-btn-ghost pm-btn-small pm-discard-stage', () => onDiscardStage?.())
+          : null,
         hasCredential && !clearing
-          ? button(clearLabel, 'pm-btn-ghost pm-btn-small pm-clear-credential', () => onClearCredential?.(), {
+          ? button(clearLabel, 'pm-btn-ghost pm-btn-small pm-clear-credential', () => onClearCredential?.({ native: clear.native === true }), {
             disabled: !canClear,
             title: clearReason,
           })
@@ -143,8 +181,8 @@ function credentialRow({ draft, snapshot, legacy = false, onCredentialTrigger, o
     h('div', { class: 'pm-credential-note', id: 'pmCredentialNote' },
       icon(capability.available ? 'lock' : 'info', 14),
       h('span', { text: capability.available
-        ? '密钥通过独立的安全桌面窗口输入，不会进入主页面。'
-        : `${capability.reason}；当前只写入 $NAME 环境变量引用。` }),
+        ? `密钥通过独立的安全桌面窗口输入，不会进入主页面。${capability.storageReason || ''}`
+        : `${capability.reason}` }),
     ),
   );
 }
@@ -160,6 +198,7 @@ export function renderConnectionFields({
   onOpenAuth = () => {},
   onCredentialTrigger = () => {},
   onClearCredential = () => {},
+  onDiscardStage = () => {},
 }) {
   const root = h('div', { class: 'pm-connection-fields' });
   const subscription = draft.mode !== 'clone' && (draft.authMode === 'oauth' || isSubscription(item));
@@ -175,7 +214,7 @@ export function renderConnectionFields({
       button('管理登录', 'pm-btn pm-btn-small', onOpenAuth),
       h('div', { class: 'pm-oauth-pending' },
         icon('info', 14),
-        h('span', { text: '订阅服务的模型配置需要 P3 自动发现接通后保存；当前不会伪造模型列表。' }),
+        h('span', { text: '订阅账户的模型配置由 Pi 登录状态提供；这里不写入 API Key，也不会伪造模型列表。' }),
       ),
     ));
     return root;
@@ -201,6 +240,7 @@ export function renderConnectionFields({
           onCredentialTrigger,
           onEnvReference: value => onDispatch({ type: 'env-reference', value }),
           onClearCredential,
+          onDiscardStage,
           error: errors.envReference,
         }),
     ),
@@ -285,6 +325,8 @@ export function renderConnectionFields({
 }
 
 export function credentialSummary(draft) {
+  if (draft.nativeStage?.action === 'set') return '已暂存 Pi 本机凭据';
+  if (draft.nativeStage?.action === 'clear') return '保存后清除 Pi 本机凭据';
   const text = serviceCredentialText({ credentialState: draft.credentialState });
   if (draft.credentialAction?.type === 'none') return '保存后清除凭据';
   if (draft.envReference) return `环境变量 ${draft.envReference}`;

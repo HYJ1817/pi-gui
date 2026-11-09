@@ -20,6 +20,8 @@ const SOURCE_LABEL = Object.freeze({
   configured: '已配置',
   'builtin-override': '内置覆盖',
   manual: '手动添加',
+  remote: '远端候选',
+  cache: '缓存候选',
 });
 
 function escapeSelector(value) {
@@ -60,11 +62,29 @@ function errorText(errors, modelId, fieldName) {
   return errors?.[modelId]?.[fieldName] || '';
 }
 
-function discoveryNote(state, { onRefresh, onAuthorize }) {
+function testSummary(test) {
+  if (!test || test.status === 'idle') return '';
+  if (test.status === 'running') return '连接测试进行中…';
+  if (test.status === 'failed') return `连接测试失败：${test.reason || test.error || '未知原因'}`;
+  const facts = test.facts || {};
+  const parts = [];
+  if (facts.reachability === true) parts.push('端点可达');
+  else if (facts.reachability === false) parts.push('端点不可达');
+  if (facts.modelListAccess === true) parts.push('模型目录可读');
+  else if (facts.modelListAccess === false) parts.push('模型目录不可读');
+  // 合同只能证明目录访问；认证是否被接受与推理调用都不可由这里断言。
+  parts.push('认证是否被接受：未知');
+  parts.push('未验证推理调用');
+  if (Number.isFinite(facts.retryAt)) parts.push(`可重试时间 ${new Date(facts.retryAt).toLocaleTimeString('zh-CN', { hour12: false })}`);
+  return `连接测试：${parts.join(' · ')}`;
+}
+
+function discoveryNote(state, { onRefresh, onAuthorize, onTest, onCancel }) {
   const status = state?.status || DISCOVERY_STATUS.UNSUPPORTED;
   const unsupported = status === DISCOVERY_STATUS.UNSUPPORTED;
   const busy = status === DISCOVERY_STATUS.DEBOUNCING || status === DISCOVERY_STATUS.REFRESHING;
   const error = status === DISCOVERY_STATUS.ERROR_STALE;
+  const testing = state?.test?.status === 'running';
   let text = '';
   if (unsupported) text = state?.reason || DISCOVERY_REASON.discovery_transport_pending;
   else if (status === DISCOVERY_STATUS.UNAPPROVED) text = state?.reason || DISCOVERY_REASON.network_not_approved;
@@ -73,6 +93,8 @@ function discoveryNote(state, { onRefresh, onAuthorize }) {
   else if (status === DISCOVERY_STATUS.READY) text = `${state.models.length} 个候选 · ${state.source === 'cache' ? '缓存' : '远端'}`;
   else if (status === DISCOVERY_STATUS.EMPTY) text = state?.reason || '没有发现模型';
   else text = '已授权，等待刷新';
+  const testText = testSummary(state?.test);
+  if (testText) text = `${text} · ${testText}`;
   const actions = [];
   if (status === DISCOVERY_STATUS.UNAPPROVED) {
     actions.push(h('button', {
@@ -91,10 +113,29 @@ function discoveryNote(state, { onRefresh, onAuthorize }) {
       on: { click: () => onRefresh?.({ force: true }) },
     }, icon('refresh', 14), busy ? '发现中…' : '刷新');
     actions.push(refresh);
+    if (state?.consentId) {
+      actions.push(h('button', {
+        type: 'button',
+        class: 'pm-btn pm-btn-small pm-test-connection',
+        'data-test-connection': 'true',
+        disabled: testing || busy,
+        title: '只检查授权目标的模型目录访问；不会把目录访问说成推理已验证',
+        on: { click: () => onTest?.() },
+      }, testing ? '测试中…' : '测试连接'));
+    }
+  }
+  if (busy || testing) {
+    actions.push(h('button', {
+      type: 'button',
+      class: 'pm-btn-ghost pm-btn-small pm-cancel-discovery',
+      'data-cancel-discovery': 'true',
+      on: { click: () => onCancel?.() },
+    }, '取消'));
   }
   return h('div', {
     class: `pm-discovery-note${unsupported ? ' is-unsupported' : ''}${error ? ' is-error' : ''}${busy ? ' is-busy' : ''}`,
     'data-discovery-status': status,
+    'data-test-status': state?.test?.status || 'idle',
   }, icon(unsupported ? 'info' : busy ? 'refresh' : error ? 'alert' : 'spark', 14), h('span', { class: 'pm-discovery-text', text }), ...actions);
 }
 
@@ -223,7 +264,9 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
     h('div', { class: 'pm-model-advanced-foot' },
       h('span', { class: 'pm-model-foot-note', text: model.source === 'builtin-override'
         ? '这是 Pi 内置模型的覆盖配置；保存时需要确认。'
-        : model.source === 'manual' ? '手动添加的模型会写入 Pi 配置。' : '移除只影响 Pi 配置里的这一条模型。' }),
+        : model.source === 'manual' ? '手动添加的模型会写入 Pi 配置。'
+          : model.source === 'remote' || model.source === 'cache' ? '远端/缓存候选只有被选中后才会写入 Pi 配置。'
+            : '移除只影响 Pi 配置里的这一条模型。' }),
       h('button', {
         type: 'button',
         class: 'pm-btn pm-btn-danger-ghost pm-btn-small',
@@ -325,6 +368,8 @@ export function renderModelPanes({
   discovery,
   onRefresh = () => {},
   onAuthorize = () => {},
+  onTest = () => {},
+  onCancel = () => {},
   onRemove = () => {},
   onCustomError = () => {},
   onDraftChange = () => {},
@@ -460,7 +505,9 @@ export function renderModelPanes({
       container.appendChild(h('div', { class: 'pm-pane-empty' },
         h('div', { class: 'pm-empty-title', text: container.dataset.modelList === 'candidates' ? '没有候选模型' : '还没有选择模型' }),
         h('div', { class: 'pm-empty-text', text: container.dataset.modelList === 'candidates'
-          ? '可以手动添加模型 ID，或等待自动发现接通。'
+          ? currentDiscovery?.status === DISCOVERY_STATUS.UNSUPPORTED
+            ? '可以手动添加模型 ID；当前环境不支持自动发现。'
+            : '可以手动添加模型 ID，或用“授权并发现”读取供应商目录。'
           : '不选也可以保存；保存后该服务不会出现在模型选择器。' }),
       ));
       return;
@@ -537,7 +584,7 @@ export function renderModelPanes({
       const index = currentDraft.order.indexOf(model.modelId);
       return chosenRow(model, index, currentDraft.order.length, currentDraft, fineDispatch, currentErrors, expanded.has(model.modelId), reorderLocked, actions);
     });
-    const note = discoveryNote(currentDiscovery, { onRefresh, onAuthorize });
+    const note = discoveryNote(currentDiscovery, { onRefresh, onAuthorize, onTest, onCancel });
     const existing = root.querySelector('.pm-discovery-note');
     if (existing) existing.replaceWith(note);
     else root.insertBefore(note, left);
@@ -586,7 +633,7 @@ export function renderModelPanes({
     },
     setDiscovery(nextDiscovery) {
       currentDiscovery = nextDiscovery;
-      const note = discoveryNote(currentDiscovery, { onRefresh, onAuthorize });
+      const note = discoveryNote(currentDiscovery, { onRefresh, onAuthorize, onTest, onCancel });
       const existing = root.querySelector('.pm-discovery-note');
       if (existing) existing.replaceWith(note);
     },

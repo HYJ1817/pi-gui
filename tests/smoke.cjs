@@ -2817,9 +2817,9 @@ staticCheck();
     const commit = posts.find((c) => c.url.includes('/commit'));
     return posts.length === 2 && commit?.body?.credentialAction?.type === 'env' && commit.body.credentialAction.reference === '$NEW_KEY' && !JSON.stringify(posts).includes('raw-fixture-key');
   });
-  check('保存后明确提示 Runtime 同步尚未接通', () => {
+  check('保存后明确提示 Runtime 生效状态待核验', () => {
     const t = [...window.document.querySelectorAll('.toast')].map((x) => x.textContent).join(' | ');
-    return t.includes('等待 Runtime 同步') ? true : '未提示：' + t;
+    return t.includes('Runtime 生效状态待核验') ? true : '未提示：' + t;
   });
   $('settingsReturn').click();
 

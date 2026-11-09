@@ -48,12 +48,13 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
   }
 
   /* 给 /api/provider-management 快照的后端侧能力：私桥握手 + 联调开关 + SDK 资格
-   * 全部满足才开启输入面相关位；原生持久化编排仍属 P3，恒为 false。 */
+   * 全部满足才开启输入面相关位。原生持久化还要求存储安全资格（auth.json 的
+   * 所有者/权限见证）；不满足时界面必须据实禁用保存，而不是等到写盘才失败。 */
   async function desktopCapability() {
     if (enabled !== true || !handshakeSeen) return null;
     const sdkQualified = await sdk.qualified().catch(() => false);
     if (!sdkQualified) return null;
-    return { rawKeyInput: true, keyStaging: true, nativeCredentialPersistence: false, privateDesktopBridge: true };
+    return { rawKeyInput: true, keyStaging: true, nativeCredentialPersistence: nativePersistence() === true, privateDesktopBridge: true };
   }
 
   function bindingOf(flow) {
@@ -297,18 +298,24 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
       flows.delete(flow.flowId);
       return fail('credential_conflict');
     }
-    const inspection = await (storedDiscoveryTarget ? sdk.inspectDiscovery(flow.providerId) : sdk.inspect(flow.providerId));
+    /* P5：刚在受限窗里暂存、尚未写盘的密钥也应能授权发现。此时 auth.json
+     * 还是旧状态，inspectDiscovery 看不到它；授权必须绑定到 approved 暂存
+     * 代次，否则会用一个「无凭据」授权去访问需要认证的目录。 */
+    const stage = approved.get(flow.draftId);
+    const staged = stage?.kind === 'set' && currentApproval(stage) ? stage : null;
+    const inspection = staged ? null : await (storedDiscoveryTarget ? sdk.inspectDiscovery(flow.providerId) : sdk.inspect(flow.providerId));
     if (flowFor(frame) !== flow || !draftCurrent(flow)) return fail('credential_conflict');
-    const credentialSource = inspection.present === true ? 'stored' : inspection.present === false ? 'none' : null;
+    const credentialSource = staged ? 'staged' : inspection.present === true ? 'stored' : inspection.present === false ? 'none' : null;
     // present=null（文件不可读/冲突/未知类型）不能当作「没有凭据」开授权——宁可多确认一次。
     if (!credentialSource) return fail('credential_conflict');
     const draft = draftLookup(flow.draftId);
-    if (storedDiscoveryTarget && credentialSource === 'stored' && (inspection.literal !== true || !storedDiscoveryTarget(draft))) return fail('policy_rejected');
+    if (storedDiscoveryTarget && !staged && credentialSource === 'stored' && (inspection.literal !== true || !storedDiscoveryTarget(draft))) return fail('policy_rejected');
     const target = parseTarget(flow.connection.baseUrl);
     const issued = consentStore?.issue({ draftId: flow.draftId, draftRevision: flow.draftRevision,
       connectionRevision: flow.connectionRevision, providerId: flow.providerId, connection: flow.connection,
-      api: flow.api, credentialSource, credentialRevision: credentialSource === 'stored' ? inspection.credentialRevision : null,
-      workerEpoch: inspection.workerEpoch,
+      api: flow.api, credentialSource,
+      credentialRevision: staged ? staged.revision : credentialSource === 'stored' ? inspection.credentialRevision : null,
+      workerEpoch: staged ? staged.workerEpoch : inspection.workerEpoch,
       rememberTarget: frame.rememberTarget === true, loopback: credentialSource === 'none' &&
         (target?.isLoopbackName === true || classifyAddress(target?.host) === 'loopback') });
     if (issued?.ok !== true) return fail(issued?.code ?? 'policy_rejected');

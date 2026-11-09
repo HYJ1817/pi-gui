@@ -114,12 +114,13 @@ try {
      */
     openPath: (relPath, conversationId = null) => ipcRenderer.invoke('pi-gui:open-path', String(relPath ?? ''), conversationId),
 
-    /* ---------- 供应商凭据受限输入面（P2） ----------
+    /* ---------- 供应商凭据受限输入面（P2/P5） ----------
      *
-     * 这里只有「打开 / 取消 / 查状态」三个具名入口和状态订阅——**没有** submit，
-     * 没有任何能携带密钥的字段。真实输入发生在主进程拉起的独立受限窗口里
-     * （见 provider-credentials.cjs / provider-credential-preload.cjs），
-     * 主页面永远只能收到状态与原因码。 */
+     * 这里只有「打开 / 取消 / 查状态 / 关闭草稿」四个具名入口和状态订阅——
+     * **没有** submit，没有任何能携带密钥的字段。真实输入发生在主进程拉起的
+     * 独立受限窗口里（见 provider-credentials.cjs / provider-credential-preload.cjs），
+     * 主页面永远只能收到状态与原因码。closeDraft 只携带草稿标识，用于关闭
+     * 管理弹窗/换目标时撤销该草稿的暂存凭据与发现授权。 */
     providerCredentials: {
       open: (request) => ipcRenderer.invoke('pi-gui:provider-credential-open', {
         draftId: typeof request?.draftId === 'string' ? request.draftId : '',
@@ -128,6 +129,9 @@ try {
       }),
       cancel: () => ipcRenderer.invoke('pi-gui:provider-credential-cancel'),
       status: () => ipcRenderer.invoke('pi-gui:provider-credential-status'),
+      closeDraft: (request) => ipcRenderer.invoke('pi-gui:provider-credential-close-draft', {
+        draftId: typeof request?.draftId === 'string' ? request.draftId : '',
+      }),
       onState: (cb) => {
         if (typeof cb !== 'function') return () => {};
         const listener = (_event, state) => cb(state);

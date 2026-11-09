@@ -49,10 +49,16 @@ export function createModelRecord(raw = {}, { manual = false } = {}) {
     reasoning: tri(overrides.reasoning),
     input: copyInput(overrides.input),
   };
+  // 远端/缓存候选与配置里已有、手动添加的模型必须可区分；只有真正写进
+  // models.json 的记录才算 persisted。
+  const source = manual ? 'manual'
+    : raw.configSource === 'builtin-override' ? 'builtin-override'
+      : raw.configSource === 'remote' ? 'remote'
+        : raw.configSource === 'cache' ? 'cache' : 'configured';
   return {
     modelId: String(raw.modelId || '').trim(),
-    source: manual ? 'manual' : raw.configSource === 'builtin-override' ? 'builtin-override' : 'configured',
-    persisted: !manual,
+    source,
+    persisted: (!manual && source === 'configured') || source === 'builtin-override',
     baseline,
     name: baseline.name,
     contextWindow: baseline.contextWindow,
@@ -143,6 +149,8 @@ function baseDraft(fields) {
     envReference: '',
     piRegistrationReference: '',
     credentialAction: { type: 'keep' },
+    // P5：受限窗暂存结果。只描述「哪个草稿代次暂存了什么」，不含任何密钥值。
+    nativeStage: null,
     confirmBuiltinOverride: false,
     inheritedSelection: false,
     touchedSelection: false,
@@ -254,7 +262,7 @@ export function effectiveAuthMode(draft) {
 /* 配置里的凭据引用与 Pi 原生凭据是两种东西：
  * `none` 只删除 models.json 中的 apiKey 字段，不会调用 Pi logout，
  * 因此绝不能把它当成“本机凭据已清除”。 */
-export function credentialClearSupport(draft) {
+export function credentialClearSupport(draft, { native = false } = {}) {
   const credential = draft?.credentialState;
   const source = credential?.source;
   if (source === 'env') {
@@ -282,10 +290,19 @@ export function credentialClearSupport(draft) {
     };
   }
   if (source === 'pi-credential') {
+    if (native === true) {
+      return {
+        supported: true,
+        native: true,
+        source,
+        label: 'Pi 本机凭据',
+        message: '将通过受限制的安全桌面窗口确认清除；清除后旧的本机登录/密钥无法从 GUI 恢复，模型配置与环境变量不受影响。',
+      };
+    }
     return {
       supported: false,
       source,
-      reason: 'Pi 本机凭据需要在 P2 安全桌面窗口中清除；当前不会写 auth.json，也不会用“删除配置引用”冒充已清除。',
+      reason: 'Pi 本机凭据需要在桌面版的安全凭据窗口中清除；网页版或私有桥不可用时不会用“删除配置引用”冒充已清除。',
     };
   }
   return {
@@ -305,6 +322,8 @@ export function needsInheritedSelectionConfirmation(draft) {
 
 export function commitCredentialAction(draft) {
   if (draft.mode === 'clone') return { type: 'keep' };
+  if (draft.nativeStage?.action === 'set') return { type: 'apply-staged' };
+  if (draft.nativeStage?.action === 'clear') return { type: 'clear-native' };
   const reference = String(draft.envReference || '').trim();
   if (reference) return { type: 'env', reference };
   if (draft.credentialAction?.type === 'none' && credentialClearSupport(draft).supported) {
@@ -352,7 +371,13 @@ export function modelPatchFor(draft, model) {
       if (before !== null) unsetFields.push(field);
     } else if (next !== before) set[field] = next;
   }
+  const remoteCandidate = model.source === 'remote' || model.source === 'cache';
   if (model.source === 'manual' && model.persisted === false) {
+    return { modelId: model.modelId, operation: 'upsert', ...(Object.keys(set).length ? { set } : {}), ...(unsetFields.length ? { unsetFields } : {}) };
+  }
+  // 远端发现只提供候选；只有被用户选中的候选才写入 Pi 配置。
+  if (remoteCandidate) {
+    if (!draft.order.includes(model.modelId)) return null;
     return { modelId: model.modelId, operation: 'upsert', ...(Object.keys(set).length ? { set } : {}), ...(unsetFields.length ? { unsetFields } : {}) };
   }
   if (!Object.keys(set).length && !unsetFields.length) return null;
@@ -482,6 +507,8 @@ export function setEnvReference(draft, value) {
   return finish({
     ...draft,
     envReference: reference,
+    // 配置里的环境变量引用与 Pi 本机凭据是不同槽位；改引用即放弃暂存。
+    nativeStage: null,
     credentialAction: reference.trim() ? { type: 'env', reference: reference.trim() } : { type: 'keep' },
     authMode: reference.trim() ? 'environment' : draft.mode === 'create' && draft.authMode === 'environment' ? 'none' : draft.authMode,
     requestIds: {},
@@ -493,6 +520,7 @@ export function clearCredential(draft) {
     ...draft,
     envReference: '',
     authMode: 'none',
+    nativeStage: null,
     credentialAction: { type: 'none', confirmed: true },
     requestIds: {},
   });
@@ -572,15 +600,18 @@ function reduce(draft, action) {
     case 'field': {
       const allowed = ['displayName', 'enabled', 'providerId', 'piRegistrationReference'];
       if (!allowed.includes(action.field)) return draft;
-      return finish({ ...draft, [action.field]: action.value, requestIds: {} });
+      // 换供应商标识/本机注册引用等于换凭据目标，暂存批准不再适用。
+      const dropStage = action.field === 'providerId' || action.field === 'piRegistrationReference';
+      return finish({ ...draft, [action.field]: action.value, ...(dropStage ? { nativeStage: null } : {}), requestIds: {} });
     }
     case 'connection': {
-      return finish({ ...draft, connection: copyConnection(action.connection), requestIds: {} });
+      return finish({ ...draft, connection: copyConnection(action.connection), nativeStage: null, requestIds: {} });
     }
     case 'connection-field': {
       return finish({
         ...draft,
         connection: { ...(draft.connection || { baseUrl: '', api: 'openai-completions' }), [action.field]: action.value },
+        nativeStage: null,
         requestIds: {},
       });
     }
@@ -588,7 +619,20 @@ function reduce(draft, action) {
     case 'clear-credential': return clearCredential(draft);
     case 'auth-mode': {
       if (!['environment', 'none', 'pi-credential'].includes(action.authMode)) return draft;
-      return finish({ ...draft, authMode: action.authMode, requestIds: {} });
+      return finish({ ...draft, authMode: action.authMode, ...(action.authMode === 'pi-credential' ? {} : { nativeStage: null }), requestIds: {} });
+    }
+    case 'native-stage': {
+      const stage = action.stage;
+      if (!stage || !['set', 'clear'].includes(stage.action) || typeof stage.draftId !== 'string') return draft;
+      return finish({ ...draft, nativeStage: {
+        action: stage.action,
+        draftId: stage.draftId,
+        connectionRevision: Number.isSafeInteger(stage.connectionRevision) ? stage.connectionRevision : null,
+      }, requestIds: {} });
+    }
+    case 'native-stage-clear': {
+      if (!draft.nativeStage) return draft;
+      return finish({ ...draft, nativeStage: null, requestIds: {} });
     }
     case 'toggle-model': {
       return finish({
@@ -621,7 +665,19 @@ function reduce(draft, action) {
     case 'merge-models': return mergeFetchedModels(draft, action.models);
     case 'builtin-override': return finish({ ...draft, confirmBuiltinOverride: true, requestIds: {} });
     case 'mark-saved': {
-      const saved = { ...draft, savedState: action.state || 'saved', requestIds: {}, initialSignature: '' };
+      // 保存收据落地后暂存批准已被消费（成功）或已失效（失败）；不再保留。
+      // action.serviceId 用于「配置已保存、凭据失败」：草稿转为对已存在服务的更新，
+      // 用户重试时不会再走一次 create。
+      const saved = {
+        ...draft,
+        savedState: action.state || 'saved',
+        ...(typeof action.serviceId === 'string' && action.serviceId
+          ? { mode: 'update', serviceId: action.serviceId, sourceServiceId: action.serviceId }
+          : {}),
+        nativeStage: null,
+        requestIds: {},
+        initialSignature: '',
+      };
       saved.initialSignature = signatureOf(saved);
       return { ...saved, dirty: false, revision: (draft.revision || 0) + 1 };
     }

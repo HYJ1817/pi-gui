@@ -102,8 +102,14 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       id: `${p.providerId}-subscription`, providerId: p.providerId, name: p.displayName, category: 'subscription', authMode: 'oauth',
       connection: null, enabled: p.canLogin, disabledReason: p.canLogin ? null : 'oauth_unavailable',
     }));
+    /* P5：发现传输已由 P3-B 接通。无凭据与环境变量模式总是可用；
+     * pi-credential 需要私有桌面桥完成了握手（在快照生成前已 await）。 */
+    const discoveryModes = discoveryService
+      ? ['none', 'environment', ...(desktop?.privateDesktopBridge === true ? ['pi-credential'] : [])]
+      : [];
     return { ok: true, schemaVersion: PROVIDER_MANAGEMENT_SCHEMA_VERSION, revision,
-      capabilities: providerManagementCapabilities({ oauthLogin: auth.sdkAvailable ? true : null, modelOverrides: auth.sdkAvailable && auth.piVersion === '1.5.0' ? true : null, desktop, runtimeSync: Boolean(runtimeSync) }),
+      capabilities: providerManagementCapabilities({ oauthLogin: auth.sdkAvailable ? true : null, modelOverrides: auth.sdkAvailable && auth.piVersion === '1.5.0' ? true : null, desktop,
+        runtimeSync: Boolean(runtimeSync), discoveryModes }),
       catalog: [...PROVIDER_CATALOG, ...subscriptions], services, auth,
       sync: runtimeSync ? runtimeSync.snapshot(metadata, revision) : metadata.syncRequired === true ? pendingSync : { state: 'idle', reason: null } };
   }

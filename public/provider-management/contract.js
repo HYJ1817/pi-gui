@@ -68,7 +68,7 @@ export function providerFailure(code, field) {
   const details = providerContractError(code, field ? { [field]: 'invalid' } : undefined);
   throw Object.assign(Error(details.message), details, { providerMutation: true });
 }
-export function providerManagementCapabilities({ oauthLogin = null, modelOverrides = null, desktop = null, runtimeSync = false } = {}) {
+export function providerManagementCapabilities({ oauthLogin = null, modelOverrides = null, desktop = null, runtimeSync = false, discoveryModes = [] } = {}) {
   const desktopPart = desktop && typeof desktop === 'object'
     ? {
       rawKeyInput: desktop.rawKeyInput === true,
@@ -78,13 +78,16 @@ export function providerManagementCapabilities({ oauthLogin = null, modelOverrid
     }
     : { rawKeyInput: false, keyStaging: false, nativeCredentialPersistence: false, privateDesktopBridge: false };
   const reason = (granted, pending) => granted ? null : pending;
+  // 发现模式是后端真实接线的能力，不在前端硬编码。未知值不冒领。
+  const modes = [...new Set((Array.isArray(discoveryModes) ? discoveryModes : []).filter(mode => ['none','environment','pi-credential'].includes(mode)))];
   return { ...desktopPart,
-    oauthLogin, discoveryModes: [], modelOverrides, syncMode: runtimeSync ? 'deferred' : 'unsupported', reasons: {
+    oauthLogin, discoveryModes: modes, modelOverrides, syncMode: runtimeSync ? 'deferred' : 'unsupported', reasons: {
       rawKeyInput: reason(desktopPart.rawKeyInput, 'desktop_input_pending'),
       keyStaging: reason(desktopPart.keyStaging, 'private_bridge_pending'),
       nativeCredentialPersistence: reason(desktopPart.nativeCredentialPersistence, 'private_bridge_pending'),
       privateDesktopBridge: reason(desktopPart.privateDesktopBridge, 'p2_pending'),
-      discoveryModes: 'discovery_transport_pending', syncMode: reason(runtimeSync, 'runtime_sync_pending'),
+      discoveryModes: reason(modes.length > 0, 'discovery_transport_pending'),
+      syncMode: reason(runtimeSync, 'runtime_sync_pending'),
     } };
 }
 
