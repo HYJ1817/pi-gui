@@ -75,6 +75,15 @@ export function icon(name, size = 16) {
       circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
       if (name === 'drag' || name === 'more') circle.setAttribute('fill', 'currentColor');
       svg.appendChild(circle);
+    } else if (kind === 'rect') {
+      /* lock 的锁体：x,y,width,height[,rx]。曾经的实现把 rect 规格当 path 的 d
+       * 写出（"5,10,14,10,2"），浏览器报非法 path 且锁体不显示。 */
+      const [x, y, width, height, rx] = raw.split(',');
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', x); rect.setAttribute('y', y);
+      rect.setAttribute('width', width); rect.setAttribute('height', height);
+      if (rx) rect.setAttribute('rx', rx);
+      svg.appendChild(rect);
     } else {
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', raw);
