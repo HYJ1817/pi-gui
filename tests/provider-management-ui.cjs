@@ -246,7 +246,14 @@ test('credential clear support distinguishes config references from Pi native cr
   const native = { ...base, credentialState: { state: 'saved', source: 'pi-credential' }, credentialAction: { type: 'none', confirmed: true } };
   const nativeSupport = s.credentialClearSupport(native);
   assert.equal(nativeSupport.supported, false);
-  assert.ok(nativeSupport.reason.includes('P2'));
+  assert.ok(nativeSupport.reason.includes('安全凭据窗口'));
+  const approved = s.credentialClearSupport(native, { native: true });
+  assert.equal(approved.supported, true);
+  assert.equal(approved.native, true);
+  assert.deepEqual(s.commitCredentialAction({ ...native, nativeStage: { action: 'clear', draftId: 'draft-1', connectionRevision: 1 } }),
+    { type: 'clear-native' }, 'an approved native clear uses the P3 clear-native contract');
+  assert.deepEqual(s.commitCredentialAction({ ...native, nativeStage: { action: 'set', draftId: 'draft-1', connectionRevision: 1 } }),
+    { type: 'apply-staged' }, 'a staged key uses the P3 apply-staged contract');
   assert.deepEqual(s.commitCredentialAction(native), { type: 'keep' }, 'none must never be sent as a native credential clear');
   assert.equal(s.credentialClearSupport({ ...base, credentialState: { state: 'none', source: 'unknown' } }).supported, false);
   assert.equal(credentialSourceLabel({ state: 'saved', source: 'literal' }), '配置内凭据');
@@ -340,16 +347,17 @@ test('chooser filters, keeps subscription disabled, and opens setup without secr
   assert.equal(card.querySelector('[data-refresh-models]').disabled, true);
 });
 
-test('P2 desktop capability stays behind an honest P5 gate in P4', () => {
+test('credential trigger stays disabled without the private preload bridge API', () => {
   const granted = clone(fixture.live.snapshot);
   granted.capabilities.privateDesktopBridge = true;
+  granted.capabilities.keyStaging = true;
   granted.capabilities.reasons = { ...granted.capabilities.reasons, privateDesktopBridge: null };
   const { window, api } = boot();
   const { card } = openCreate(window, granted, api);
   pick(window, card, 'deepseek');
   const trigger = card.querySelector('[data-credential-trigger]');
-  assert.equal(trigger.disabled, true, 'P4 must not expose a dead credential trigger just because P2 capability is on');
-  assert.equal(trigger.title, '桌面凭据输入待 P5 集成');
+  assert.equal(trigger.disabled, true, 'snapshot capability alone must not expose a dead credential trigger');
+  assert.ok(trigger.title.includes('网页版没有 Electron 安全凭据窗口'), 'the reason must name the missing bridge, not a pending phase');
   assert.equal(card.querySelectorAll('input[type=password]').length, 0);
 });
 
@@ -478,8 +486,8 @@ test('Pi native credential clear is disabled with an accurate reason and never s
   assert.ok(clear);
   assert.equal(clear.disabled, true);
   assert.equal(clear.textContent, '清除本机凭据');
-  assert.ok(clear.title.includes('P2'));
-  assert.ok(card.querySelector('.pm-clear-note').textContent.includes('P2'));
+  assert.ok(clear.title.includes('安全凭据窗口'));
+  assert.ok(card.querySelector('.pm-clear-note').textContent.includes('安全凭据窗口'));
   clear.click();
   await tick(10);
   assert.equal(window.document.getElementById('confirmLayer').hidden, true, 'disabled clear must not open a confirmation');
@@ -1193,7 +1201,7 @@ test('management error retry re-reads the management snapshot', async () => {
   assert.equal(card.querySelectorAll('.prov.pm-service-row').length, 2, 'retry must render the management list');
 });
 
-test('provider row menu marks connection test pending and disables only after confirmation', async () => {
+test('provider row menu disables connection test with the real discovery reason', async () => {
   const { window, calls } = boot();
   window.openProvidersPanel();
   await tick(20);
@@ -1208,7 +1216,7 @@ test('provider row menu marks connection test pending and disables only after co
   assert.deepEqual([...row.querySelectorAll('[data-service-action]')].map(item => item.textContent), ['编辑', '复制', '测试连接', '停用', '删除']);
   const testItem = row.querySelector('[data-service-action="测试连接"]');
   assert.equal(testItem.disabled, true);
-  assert.ok(testItem.title.includes('P3'));
+  assert.equal(testItem.title, '当前后端未提供自动发现能力');
   row.querySelector('[data-service-action="停用"]').click();
   await tick(0);
   assert.equal(window.document.getElementById('confirmLayer').hidden, false);
