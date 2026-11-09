@@ -739,9 +739,81 @@ test('service cache endpoint is target/credential bound and never triggers netwo
   assert.equal((await http(handle, 'POST', `${root}/services/openai/cache`, { requestId: 'cache-post' })).status, 405);
 });
 
+test('service cache partitions on provider target api host port and protocol; explicit revoke keeps cache display-only', async t => {
+  const f = await setup(t);
+  let time = Date.now();
+  let sockets = 0;
+  const requester = () => {
+    sockets += 1;
+    const req = new EventEmitter();
+    req.end = () => queueMicrotask(() => {
+      const response = new EventEmitter();
+      Object.assign(response, { statusCode: 200, headers: {}, destroy() {} });
+      req.emit('response', response);
+      response.emit('data', Buffer.from(JSON.stringify({ data: [{ id: 'partition-model', name: 'Partition', context_length: 32000 }] })));
+      response.emit('end');
+    });
+    return req;
+  };
+  const base = { baseUrl: 'https://fixture.invalid/tenant-a/v1', api: 'openai-completions' };
+  f.legacy.store.transact({ apply: current => {
+    current.config.providers['no-key-fixture'] = { ...base, models: [] };
+    current.metadata.services['no-key-fixture'] = { providerId: 'no-key-fixture', displayName: 'No key', enabled: true, kind: 'custom' };
+  } });
+  const { handle } = f.make(true, null, null, { now: () => time, io: { requester, lookup: async () => [{ address: '93.184.216.34' }] } });
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const cache = serviceId => http(handle, 'GET', `${root}/services/${serviceId}/cache`);
+  // 无凭据自定义供应商：认证来源恒为 none，可单独观测目标分区维度。
+  const form = (await http(handle, 'POST', root + '/drafts', { requestId: 'partition-draft', expectedRevision: snapshot.revision,
+    draft: { providerId: 'no-key-fixture', displayName: 'No key', authMode: 'none', connection: base, enabled: true,
+      modelPatches: [], selectedModelIds: [], modelOrder: [] } })).body;
+  const grant = (await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'partition-auth', draftId: form.draftId,
+    draftRevision: form.draftRevision, confirm: true, rememberTarget: false })).body;
+  const accepted = await http(handle, 'POST', root + '/discover', { requestId: 'partition-discover', draftId: form.draftId,
+    draftRevision: form.draftRevision, consentId: grant.consentId, dialogGeneration: 1, requestSeq: 1, force: false });
+  assert.equal((await terminal(handle, accepted.body.operationId)).result.sourceKind, 'remote');
+  assert.equal(sockets, 1);
+  assert.deepEqual((await cache('no-key-fixture')).body.cachedModels.map(model => model.modelId), ['partition-model']);
+
+  const patch = connection => f.legacy.store.transact({ apply: current => {
+    current.config.providers['no-key-fixture'] = { ...current.config.providers['no-key-fixture'], ...connection };
+  } });
+  // 同 provider 下每个维度都必须单独分区；恢复原值后必须重新命中。
+  patch({ api: 'openai-responses' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different API never shares cache');
+  patch({ api: base.api });
+  patch({ baseUrl: 'https://fixture.invalid/tenant-b/v1' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different base path never shares cache');
+  patch({ baseUrl: base.baseUrl });
+  patch({ baseUrl: 'https://other.invalid/tenant-a/v1' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different host never shares cache');
+  patch({ baseUrl: base.baseUrl });
+  patch({ baseUrl: 'https://fixture.invalid:8443/tenant-a/v1' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different port never shares cache');
+  patch({ baseUrl: base.baseUrl });
+  patch({ baseUrl: 'http://fixture.invalid/tenant-a/v1' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different protocol never shares cache');
+  patch({ baseUrl: base.baseUrl });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'cache', 'restoring the exact target hits the original entry');
+  assert.equal(sockets, 1, 'partition checks never request the provider');
+
+  // 显式撤销只停止联网授权；已写入的目标级元数据仍只能按 cache 展示，且不触发请求。
+  const revoked = await http(handle, 'POST', root + '/discovery-authorizations/revoke', { requestId: 'partition-revoke', consentId: grant.consentId });
+  assert.equal(revoked.status, 200);
+  const afterRevoke = await cache('no-key-fixture');
+  assert.equal(afterRevoke.body.sourceKind, 'cache');
+  assert.equal(afterRevoke.body.cachedModels[0].configSource, 'cache');
+  assert.equal(sockets, 1);
+  const denied = await http(handle, 'POST', root + '/discover', { requestId: 'partition-after-revoke', draftId: form.draftId,
+    draftRevision: form.draftRevision, consentId: grant.consentId, dialogGeneration: 1, requestSeq: 2, force: true });
+  assert.equal(denied.body.code, 'invalid_target', 'revoked authorization cannot authorize a new request');
+  assert.equal(sockets, 1);
+});
+
 test('environment authorization distinguishes missing variables and unsupported targets and recovers after retry', async t => {
   const f = await setup(t);
-  const env = {};
+  // 变量存在但取值不能作为字面量（含换行）：用于证明错误体不会回显真实取值。
+  const env = { OPENAI_API_KEY: 'secret-value\nwith-newline-7f3a' };
   const { handle } = f.make(true, null, null, { env, io: { requester: () => { throw new Error('unexpected socket'); }, lookup: async () => [{ address: '93.184.216.34' }] } });
   const snapshot = (await http(handle, 'GET', root)).body;
   const openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
@@ -757,7 +829,7 @@ test('environment authorization distinguishes missing variables and unsupported 
   assert.equal(missing.status, 422);
   assert.equal(missing.body.code, 'environment_missing');
   assert.deepEqual(missing.body.fieldErrors, { environmentReference: 'invalid' });
-  assert.ok(!JSON.stringify(missing.body).includes('fixture-env-key'));
+  assert.ok(!JSON.stringify(missing.body).includes('with-newline-7f3a'), 'the present-but-unusable env value is never echoed');
 
   env.OPENAI_API_KEY = 'fixture-env-key';
   const recovered = await authorize('env-recovered-auth');

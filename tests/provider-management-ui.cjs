@@ -1493,6 +1493,60 @@ test('stale cache is explicitly marked and can be re-authorized', async () => {
   assert.ok(card.querySelector('[data-authorize-discovery]'), 're-authorize entry remains available');
 });
 
+test('a late cache response after switching services never merges into the new draft', async () => {
+  const { window, snapshot, api } = boot();
+  const service = snapshot.services[0];
+  let resolveCache = null;
+  let requests = 0;
+  api.fetchProviderServiceCache = () => {
+    requests += 1;
+    return new Promise(resolve => { resolveCache = resolve; });
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await uiWaitFor(() => requests === 1, 2000);
+  assert.equal(requests, 1, 'edit setup requests the service cache once');
+  // 更换服务 → 开始新草稿 → 选择另一个服务；旧请求仍挂在服务 A 上。
+  card.querySelector('.pm-change-service').click();
+  await tick(5);
+  const confirm = window.document.getElementById('confirmCard');
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '开始新草稿').click();
+  await tick(10);
+  pick(window, card, 'deepseek');
+  await tick(10);
+  assert.ok(card.querySelector('.pm-service-chip-name')?.textContent.includes('DeepSeek'), 'new setup rendered');
+  resolveCache({ ok: true, serviceId: service.serviceId, sourceKind: 'cache', cacheStale: false, cachedAt: Date.now(),
+    cachedModels: [{ modelId: 'leaked-cache', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+      effectiveValues: { name: 'Leaked Model', contextWindow: 32000 }, editableOverrides: {} }] });
+  await tick(50);
+  assert.equal(card.querySelector('[data-model-row=leaked-cache]'), null, 'late cache from the previous service must be dropped');
+  assert.ok(!card.textContent.includes('Leaked Model'));
+  assert.ok(!card.textContent.includes('显示匹配缓存'));
+});
+
+test('a late cache response after changing the credential reference never merges into the same draft', async () => {
+  const { window, snapshot, api } = boot();
+  const service = snapshot.services[0];
+  let resolveCache = null;
+  let requests = 0;
+  api.fetchProviderServiceCache = () => {
+    requests += 1;
+    return new Promise(resolve => { resolveCache = resolve; });
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await uiWaitFor(() => requests === 1, 2000);
+  const env = card.querySelector('.pm-env-input');
+  assert.ok(env, 'edit setup exposes the env reference field');
+  env.value = '$OTHER_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(10);
+  resolveCache({ ok: true, serviceId: service.serviceId, sourceKind: 'cache', cacheStale: false, cachedAt: Date.now(),
+    cachedModels: [{ modelId: 'target-leak', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+      effectiveValues: { name: 'Target Leak', contextWindow: 16000 }, editableOverrides: {} }] });
+  await tick(50);
+  assert.equal(card.querySelector('[data-model-row=target-leak]'), null, 'cache bound to the old credential generation must be dropped');
+  assert.ok(!card.textContent.includes('Target Leak'));
+});
+
 test('removing a cache candidate does not resurrect it on the next draft save', async () => {
   const { window, snapshot, api, calls } = boot();
   const service = snapshot.services[0];
