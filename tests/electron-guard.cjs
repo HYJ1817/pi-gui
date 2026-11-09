@@ -428,6 +428,23 @@ async function main() {
   check('32a. 主进程把浏览器 webContents 从通用导航收口里排除', () =>
     /isBrowserWebContents\(wc\)\)\s*return;/.test(mainSrc) || 'hardenWebContents 没跳过内置浏览器');
 
+  /* Electron 的 Session 没有 getPartition 实例方法：凭据窗只能按 Session
+   * 实例比较排除。写成 getPartition 时分支恒为 false，凭据窗会落进通用
+   * 处理器，安全外部 URL 仍会走 shell.openExternal（FIX-04 复审发现）。 */
+  check('32b. 凭据受限窗按 Session 实例排除，且不调用 openExternal', () => {
+    if (!/wc\.session === session\.fromPartition\(CREDENTIAL_SHEET_PARTITION\)/.test(mainSrc)) {
+      return '凭据窗没有按 Session 实例比较（getPartition 不存在）';
+    }
+    if (/\.getPartition\s*\??\.?/.test(mainSrc)) return 'main.cjs 仍在使用不存在的 Session.getPartition';
+    const block = mainSrc.match(/if \(credentialSheet\) \{([\s\S]*?)\n  \}/);
+    if (!block) return '找不到凭据窗专用收口分支';
+    const body = block[1];
+    if (/openExternal/.test(body)) return '凭据窗分支调用了 openExternal';
+    return (/setWindowOpenHandler\([\s\S]*?action:\s*'deny'/.test(body) &&
+      /on\('will-navigate', deny\)/.test(body) && /on\('will-redirect', deny\)/.test(body)) ||
+      '凭据窗分支没有同时拒绝弹窗/导航/重定向';
+  });
+
   /* 值断言：直接拿真值验规则本身（与上面 net-probe 那批同一个做法）。 */
   const B_ORIGIN = `http://127.0.0.1:${PORT}`;
   const browserDeny = [

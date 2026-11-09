@@ -359,6 +359,10 @@ async function moduleTests() {
     assert.equal(qualify({ hasSwitch: name => name === 'remote-debugging-pipe' }).reason, 'debug_pipe');
     assert.equal(qualify({ hasSwitch: name => name === 'inspect' }).reason, 'debug_inspector');
   });
+  check('qualification fails closed when switch probing throws', () => {
+    assert.deepEqual(qualify({ hasSwitch: () => { throw new Error('fixture switch probe'); } }),
+      { ok: false, reason: 'desktop_unqualified' });
+  });
   check('main.cjs delegates qualification to the pure module', () => {
     const source = fs.readFileSync(path.join(ROOT, 'electron/main.cjs'), 'utf8');
     assert.match(source, /desktopQualification\(\{/);

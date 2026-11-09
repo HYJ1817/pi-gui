@@ -846,25 +846,25 @@ test('environment authorization distinguishes missing variables and unsupported 
 
 test('builtin updates reject endpoint changes explicitly and keep same-target edits working', async t => {
   const f = await setup(t);
-  f.native.set('openai', { present: false, builtIn: true });
+  // builtIn:false + present:false：guardExistingTarget 会放行端点变化，必须由
+  // FIX-05 的显式目标检查拦住；若这里用 builtIn:true，旧的 credential_target_conflict
+  // 守卫会先拒绝，测试就失去鉴别力。
+  f.native.set('openai', { present: false, builtIn: false });
   const { handle } = f.make(true);
   const legacy = f.legacy;
   const snapshot = (await http(handle, 'GET', root)).body;
-  // 干净的内置配置记录 + GUI 元数据 kind=builtin：guardExistingTarget 会放行端点变化，
-  // 必须由显式的目标拒绝拦住（FIX-05）。
   legacy.store.transact({ apply: current => {
     current.config.providers.openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses', models: [] };
     current.metadata.services.openai = { providerId: 'openai', displayName: 'OpenAI', enabled: true, kind: 'builtin' };
   } });
-  const revision = legacy.store.read().revision;
   const openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
-  const draftFor = async (connection, requestId) => (await http(handle, 'POST', root + '/drafts', {
-    requestId, serviceId: 'openai', expectedRevision: revision,
-    draft: { providerId: 'openai', displayName: 'OpenAI', catalogId: 'openai', authMode: 'environment', connection,
+  const draftFor = async (connection, requestId, providerId = 'openai', displayName = 'OpenAI') => (await http(handle, 'POST', root + '/drafts', {
+    requestId, serviceId: providerId, expectedRevision: legacy.store.read().revision,
+    draft: { providerId, displayName, catalogId: providerId, authMode: 'environment', connection,
       enabled: true, modelPatches: [], selectedModelIds: [], modelOrder: [] },
   })).body;
   const changed = await draftFor({ baseUrl: 'https://proxy.invalid/v1', api: 'openai-responses' }, 'builtin-target-draft');
-  const rejected = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-target-commit', expectedRevision: revision,
+  const rejected = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-target-commit', expectedRevision: legacy.store.read().revision,
     action: 'update', serviceId: 'openai', draftId: changed.draftId, draftRevision: changed.draftRevision,
     credentialAction: { type: 'env', reference: '$OPENAI_API_KEY' } });
   assert.equal(rejected.status, 409);
@@ -872,9 +872,41 @@ test('builtin updates reject endpoint changes explicitly and keep same-target ed
   assert.equal(legacy.store.read().config.providers.openai.baseUrl, 'https://api.openai.com/v1');
 
   const same = await draftFor(openai, 'builtin-same-draft');
-  const accepted = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-same-commit', expectedRevision: revision,
+  const accepted = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-same-commit', expectedRevision: legacy.store.read().revision,
     action: 'update', serviceId: 'openai', draftId: same.draftId, draftRevision: same.draftRevision,
     credentialAction: { type: 'env', reference: '$OPENAI_API_KEY' } });
   assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
   assert.equal(legacy.store.read().config.providers.openai.apiKey, '$OPENAI_API_KEY');
+
+  // 只有模型覆盖、没有端点字段的内置记录：有效目标等于目录预设，
+  // 同目标改名/换环境变量引用必须放行，换端点必须显式拒绝。
+  f.native.set('anthropic', { present: false, builtIn: true });
+  legacy.store.transact({ apply: current => {
+    current.metadata.services.anthropic = { providerId: 'anthropic', displayName: 'Anthropic', enabled: true, kind: 'builtin' };
+  } });
+  const overrideDraft = (await http(handle, 'POST', root + '/drafts', { requestId: 'builtin-override-draft',
+    serviceId: 'anthropic', expectedRevision: legacy.store.read().revision,
+    draft: { providerId: 'anthropic', displayName: 'Anthropic', catalogId: 'anthropic', authMode: 'environment',
+      connection: { baseUrl: 'https://api.anthropic.com', api: 'anthropic-messages' }, enabled: true,
+      modelPatches: [{ modelId: 'claude-x', operation: 'upsert', set: { name: 'Claude X' } }],
+      selectedModelIds: [], modelOrder: [], confirmBuiltinOverride: true } })).body;
+  const overrideCommit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-override-commit',
+    expectedRevision: legacy.store.read().revision, action: 'update', serviceId: 'anthropic', draftId: overrideDraft.draftId,
+    draftRevision: overrideDraft.draftRevision, credentialAction: { type: 'keep' } });
+  assert.equal(overrideCommit.status, 200, JSON.stringify(overrideCommit.body));
+  assert.equal(legacy.store.read().config.providers.anthropic.baseUrl, undefined, '覆盖记录不写端点字段');
+  f.native.set('anthropic', { present: false, builtIn: false });
+  const renamed = await draftFor({ baseUrl: 'https://api.anthropic.com', api: 'anthropic-messages' }, 'override-same-draft', 'anthropic', 'Anthropic Renamed');
+  const renamedCommit = await http(handle, 'POST', root + '/commit', { requestId: 'override-same-commit',
+    expectedRevision: legacy.store.read().revision, action: 'update', serviceId: 'anthropic', draftId: renamed.draftId,
+    draftRevision: renamed.draftRevision, credentialAction: { type: 'env', reference: '$ANTHROPIC_API_KEY' } });
+  assert.equal(renamedCommit.status, 200, JSON.stringify(renamedCommit.body));
+  assert.equal(legacy.store.read().config.providers.anthropic.modelOverrides['claude-x'].name, 'Claude X', '同目标更新保留覆盖');
+  assert.equal(legacy.store.read().config.providers.anthropic.apiKey, '$ANTHROPIC_API_KEY');
+  const overrideChanged = await draftFor({ baseUrl: 'https://proxy.invalid/anth', api: 'anthropic-messages' }, 'override-target-draft', 'anthropic');
+  const overrideRejected = await http(handle, 'POST', root + '/commit', { requestId: 'override-target-commit',
+    expectedRevision: legacy.store.read().revision, action: 'update', serviceId: 'anthropic', draftId: overrideChanged.draftId,
+    draftRevision: overrideChanged.draftRevision, credentialAction: { type: 'env', reference: '$ANTHROPIC_API_KEY' } });
+  assert.equal(overrideRejected.status, 409);
+  assert.equal(overrideRejected.body.code, 'credential_target_conflict');
 });
