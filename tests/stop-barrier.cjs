@@ -422,18 +422,23 @@ async function main() {
       await waitFor('第二轮屏障正常解除', () => !raw.stopState());
     });
 
-    await check('8. 认证同步中不绕过后端闸门，且不会留下屏障', async () => {
+    await check('8. 供应商只读同步期间仍能完成权威停止屏障', async () => {
       resetLog();
+      const before = [guarded.length, modelAccepted.length, activityAccepted.length];
       syncing = true;
       try {
-        const result = await post({ type: 'abort' });
-        assert.equal(result.body.code, 'auth-syncing');
+        pi.state.abortMode = 'manual';
+        const stopping = post({ type: 'abort' });
+        await waitFor('同步期间的 abort 到达 Pi', () => has(c => c.type === 'abort'));
+        assert.equal(raw.stopState()?.pending, true);
+        pi.respondAbort();
+        const result = await stopping;
+        assert.equal(result.status, 200);
+        assert.equal(result.body.stop.evidence, 'abort-response');
       } finally { syncing = false; }
-      assert.equal(raw.stopState(), null, '闸门拒掉的停止不该立起屏障');
-      assert.equal(pi.writes.length, 0, '被闸门拒掉的停止不该写任何命令');
-      assert.equal(guarded.length > 0, true, 'abortAndWait 也必须过 modelGeneration 守卫');
-      assert.equal(modelAccepted.length > 0, true, 'abortAndWait 也必须记账');
-      assert.equal(activityAccepted.length > 0, true, 'abortAndWait 也必须记账（piActivity）');
+      assert.equal(raw.stopState(), null, 'Pi 确认后应解除屏障');
+      assert.deepEqual(pi.writes.map(command => command.type), ['clear_queue', 'abort']);
+      assert.deepEqual([guarded.length, modelAccepted.length, activityAccepted.length], before.map(count => count + 1));
     });
 
     /* 放在最后：它真的会把 bridge 打换代，之后的用例不再依赖这颗 child。 */

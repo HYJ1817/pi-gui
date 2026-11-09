@@ -247,11 +247,13 @@ async function main() {
       wrapped.send({ type: 'prompt', message: 'released' });
       assert.equal(writes.length, before[0] + 1);
     });
-    await check('C provider 与模型守卫仍然同步生效，且不写不记账', () => {
-      const before = [writes.length, modelAccepted.length, activityAccepted.length];
+    await check('C 供应商只读同步不阻断 prompt，模型守卫拒绝时仍不写不记账', () => {
+      const initial = [writes.length, modelAccepted.length, activityAccepted.length];
       syncing = true;
-      try { assert.throws(() => wrapped.send({ type: 'prompt' }), /正在同步/); }
+      try { assert.equal(wrapped.send({ type: 'prompt', message: 'sync is read only' }), undefined); }
       finally { syncing = false; }
+      const before = initial.map(count => count + 1);
+      assert.deepEqual([writes.length, modelAccepted.length, activityAccepted.length], before);
       guardError = new Error('fixture guard');
       try { assert.throws(() => wrapped.send({ type: 'steer' }), error => error === guardError); }
       finally { guardError = null; }
