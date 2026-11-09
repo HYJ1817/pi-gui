@@ -281,7 +281,7 @@ test('connection evidence distinguishes HTTP outcomes without proving authentica
   const custom = (await http(handle, 'POST', root + '/drafts', { requestId: 'test-custom', expectedRevision,
     draft: { ...draft('custom-env'), authMode: 'environment' } })).body;
   assert.equal((await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'test-custom-auth', draftId: custom.draftId,
-    draftRevision: custom.draftRevision, confirm: true, rememberTarget: false })).body.code, 'unsupported');
+    draftRevision: custom.draftRevision, confirm: true, rememberTarget: false })).body.code, 'environment_target_unsupported');
   assert.equal(requester.mock.callCount(), 0);
   const { body: form } = await http(handle, 'POST', root + '/drafts', { requestId: 'test-preset', expectedRevision,
     draft: { ...draft('openai', 'https://api.openai.com/v1'), authMode: 'environment',
@@ -645,4 +645,164 @@ test('disable and enable are symmetric metadata-only actions for services withou
   const malformed = await http(handle, 'POST', root + '/commit', { requestId: 'enable-draft', expectedRevision: enable.body.revision,
     action: 'enable', serviceId: 'example', draftId: 'opaque-draft', draftRevision: 1 });
   assert.equal(malformed.status, 400);
+});
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+const terminal = async (handle, operationId, tries = 40) => {
+  for (let index = 0; index < tries; index++) {
+    const body = (await http(handle, 'GET', `${root}/operations/${operationId}`)).body;
+    if (['success', 'failed', 'cancelled'].includes(body.state)) return body;
+    await settle();
+  }
+  throw new Error('operation did not settle');
+};
+
+test('service cache endpoint is target/credential bound and never triggers network', async t => {
+  const f = await setup(t);
+  let time = Date.now();
+  let sockets = 0;
+  const requester = t.mock.fn(options => {
+    sockets += 1;
+    const req = new EventEmitter();
+    req.end = () => queueMicrotask(() => {
+      const response = new EventEmitter();
+      Object.assign(response, { statusCode: 200, headers: {}, destroy() {} });
+      req.emit('response', response);
+      response.emit('data', Buffer.from(JSON.stringify({ data: [{ id: 'model-a', name: 'A', context_length: 32000 }] })));
+      response.emit('end');
+    });
+    return req;
+  });
+  const env = { OPENAI_API_KEY: 'fixture-env-key', DEEPSEEK_API_KEY: 'fixture-env-key-2' };
+  f.legacy.store.transact({ apply: current => {
+    current.config.providers.openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses', apiKey: '$OPENAI_API_KEY', models: [] };
+    current.config.providers.deepseek = { baseUrl: 'https://api.deepseek.com', api: 'openai-completions', apiKey: '$DEEPSEEK_API_KEY', models: [] };
+    current.metadata.services.openai = { providerId: 'openai', displayName: 'OpenAI', enabled: true, kind: 'builtin' };
+    current.metadata.services.deepseek = { providerId: 'deepseek', displayName: 'DeepSeek', enabled: true, kind: 'builtin' };
+  } });
+  const { handle } = f.make(true, null, null, { now: () => time, io: { requester, lookup: async () => [{ address: '93.184.216.34' }] }, env });
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
+  const draft = (await http(handle, 'POST', root + '/drafts', { requestId: 'cache-draft', expectedRevision: snapshot.revision,
+    draft: { providerId: 'openai', displayName: 'OpenAI', authMode: 'environment', connection: openai, enabled: true,
+      modelPatches: [], selectedModelIds: [], modelOrder: [] } })).body;
+  const grant = (await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'cache-auth', draftId: draft.draftId,
+    draftRevision: draft.draftRevision, confirm: true, rememberTarget: false })).body;
+  const accepted = await http(handle, 'POST', root + '/discover', { requestId: 'cache-discover', draftId: draft.draftId,
+    draftRevision: draft.draftRevision, consentId: grant.consentId, dialogGeneration: 1, requestSeq: 1, force: false });
+  assert.equal((await terminal(handle, accepted.body.operationId)).result.sourceKind, 'remote');
+  assert.equal(sockets, 1);
+  const cache = async serviceId => http(handle, 'GET', `${root}/services/${serviceId}/cache`);
+
+  const fresh = await cache('openai');
+  assert.equal(fresh.status, 200);
+  assert.equal(fresh.body.sourceKind, 'cache');
+  assert.deepEqual(fresh.body.cachedModels.map(model => model.modelId), ['model-a']);
+  assert.equal(fresh.body.cachedModels[0].configSource, 'cache');
+  assert.equal(fresh.body.cachedModels[0].effectiveValues.contextWindow, 32000);
+  assert.equal(fresh.body.cacheStale, false);
+  assert.equal(typeof fresh.body.cachedAt, 'number');
+  assert.equal(sockets, 1, 'cache read never requests the provider');
+
+  const otherProvider = await cache('deepseek');
+  assert.equal(otherProvider.body.cachedModels.length, 0, 'different provider never shares cache');
+  assert.equal(otherProvider.body.sourceKind, 'none');
+
+  time += 61_000;
+  const stale = await cache('openai');
+  assert.equal(stale.body.sourceKind, 'cache');
+  assert.equal(stale.body.cacheStale, true, 'cache beyond 60s is explicitly marked stale');
+  assert.equal(stale.body.cachedModels[0].cacheStale, true);
+
+  time += 15 * 60_000;
+  assert.equal((await cache('openai')).body.cachedModels.length, 0, 'cache beyond retention is dropped');
+
+  time += 1_000;
+  const freshDraft = (await http(handle, 'POST', root + '/drafts', { requestId: 'cache-draft-2', expectedRevision: snapshot.revision,
+    draft: { providerId: 'openai', displayName: 'OpenAI', authMode: 'environment', connection: openai, enabled: true,
+      modelPatches: [], selectedModelIds: [], modelOrder: [] } })).body;
+  const grant2 = (await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'cache-auth-2', draftId: freshDraft.draftId,
+    draftRevision: freshDraft.draftRevision, confirm: true, rememberTarget: false })).body;
+  assert.equal(grant2.ok, true);
+  const rediscovered = await http(handle, 'POST', root + '/discover', { requestId: 'cache-rediscover', draftId: freshDraft.draftId,
+    draftRevision: freshDraft.draftRevision, consentId: grant2.consentId, dialogGeneration: 1, requestSeq: 1, force: true });
+  await terminal(handle, rediscovered.body.operationId);
+  assert.equal(sockets, 2);
+  assert.equal((await cache('openai')).body.sourceKind, 'cache');
+  env.OPENAI_API_KEY = 'rotated-env-key';
+  const rotated = await cache('openai');
+  assert.equal(rotated.body.cachedModels.length, 0, 'credential generation change invalidates the display cache');
+  assert.equal(sockets, 2);
+
+  const unknown = await cache('never-existed');
+  assert.equal(unknown.status, 404);
+  assert.equal((await http(handle, 'POST', `${root}/services/openai/cache`, { requestId: 'cache-post' })).status, 405);
+});
+
+test('environment authorization distinguishes missing variables and unsupported targets and recovers after retry', async t => {
+  const f = await setup(t);
+  const env = {};
+  const { handle } = f.make(true, null, null, { env, io: { requester: () => { throw new Error('unexpected socket'); }, lookup: async () => [{ address: '93.184.216.34' }] } });
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
+  const draftForm = async (providerId, connection, requestId) => (await http(handle, 'POST', root + '/drafts', {
+    requestId, expectedRevision: snapshot.revision,
+    draft: { providerId, displayName: providerId, authMode: 'environment', connection, enabled: true,
+      modelPatches: [], selectedModelIds: [], modelOrder: [] },
+  })).body;
+  const form = await draftForm('openai', openai, 'env-missing-draft');
+  const authorize = requestId => http(handle, 'POST', root + '/discovery-authorizations', { requestId, draftId: form.draftId,
+    draftRevision: form.draftRevision, confirm: true, rememberTarget: false });
+  const missing = await authorize('env-missing-auth');
+  assert.equal(missing.status, 422);
+  assert.equal(missing.body.code, 'environment_missing');
+  assert.deepEqual(missing.body.fieldErrors, { environmentReference: 'invalid' });
+  assert.ok(!JSON.stringify(missing.body).includes('fixture-env-key'));
+
+  env.OPENAI_API_KEY = 'fixture-env-key';
+  const recovered = await authorize('env-recovered-auth');
+  assert.equal(recovered.status, 200, JSON.stringify(recovered.body));
+  assert.equal(recovered.body.ok, true);
+  assert.equal(typeof recovered.body.consentId, 'string');
+
+  const custom = await draftForm('example', { baseUrl: 'https://fixture.invalid/v1', api: 'openai-completions' }, 'env-target-draft');
+  const unsupported = await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'env-target-auth', draftId: custom.draftId,
+    draftRevision: custom.draftRevision, confirm: true, rememberTarget: false });
+  assert.equal(unsupported.status, 422);
+  assert.equal(unsupported.body.code, 'environment_target_unsupported');
+});
+
+test('builtin updates reject endpoint changes explicitly and keep same-target edits working', async t => {
+  const f = await setup(t);
+  f.native.set('openai', { present: false, builtIn: true });
+  const { handle } = f.make(true);
+  const legacy = f.legacy;
+  const snapshot = (await http(handle, 'GET', root)).body;
+  // 干净的内置配置记录 + GUI 元数据 kind=builtin：guardExistingTarget 会放行端点变化，
+  // 必须由显式的目标拒绝拦住（FIX-05）。
+  legacy.store.transact({ apply: current => {
+    current.config.providers.openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses', models: [] };
+    current.metadata.services.openai = { providerId: 'openai', displayName: 'OpenAI', enabled: true, kind: 'builtin' };
+  } });
+  const revision = legacy.store.read().revision;
+  const openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
+  const draftFor = async (connection, requestId) => (await http(handle, 'POST', root + '/drafts', {
+    requestId, serviceId: 'openai', expectedRevision: revision,
+    draft: { providerId: 'openai', displayName: 'OpenAI', catalogId: 'openai', authMode: 'environment', connection,
+      enabled: true, modelPatches: [], selectedModelIds: [], modelOrder: [] },
+  })).body;
+  const changed = await draftFor({ baseUrl: 'https://proxy.invalid/v1', api: 'openai-responses' }, 'builtin-target-draft');
+  const rejected = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-target-commit', expectedRevision: revision,
+    action: 'update', serviceId: 'openai', draftId: changed.draftId, draftRevision: changed.draftRevision,
+    credentialAction: { type: 'env', reference: '$OPENAI_API_KEY' } });
+  assert.equal(rejected.status, 409);
+  assert.equal(rejected.body.code, 'credential_target_conflict');
+  assert.equal(legacy.store.read().config.providers.openai.baseUrl, 'https://api.openai.com/v1');
+
+  const same = await draftFor(openai, 'builtin-same-draft');
+  const accepted = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-same-commit', expectedRevision: revision,
+    action: 'update', serviceId: 'openai', draftId: same.draftId, draftRevision: same.draftRevision,
+    credentialAction: { type: 'env', reference: '$OPENAI_API_KEY' } });
+  assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+  assert.equal(legacy.store.read().config.providers.openai.apiKey, '$OPENAI_API_KEY');
 });

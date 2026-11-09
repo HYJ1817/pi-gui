@@ -44,6 +44,7 @@ function boot({
   const calls = { drafts: [], commits: [], discovery: [], authorize: [], test: [], legacy: [], legacyPosts: [], legacyDeletes: [], managementGets: [], restart: [], auth: [] };
   const api = {
     fetchProviderManagement: async () => snapshot,
+    fetchProviderServiceCache: async () => ({ ok: true, sourceKind: 'none', cachedModels: [] }),
     saveProviderDraft: async request => {
       calls.drafts.push(clone(request));
       return { ok: true, draftId: 'fixture-draft', draftRevision: 2, revision: snapshot.revision };
@@ -1405,3 +1406,149 @@ test('first builtin model override asks for confirmation and retries once', asyn
   assert.equal(calls.commits.length, 2, 'confirm retries exactly once');
   assert.equal(calls.drafts.at(-1).draft.confirmBuiltinOverride, true);
 });
+
+/* ---------- P6 FIX-01/03：缓存首屏与显示回退 ---------- */
+
+const uiWaitFor = async (check, timeoutMs = 3000) => {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const value = check();
+    if (value) return value;
+    await tick(10);
+  }
+  return null;
+};
+
+function snapshotWithModel(configSource) {
+  const snapshot = clone(fixture.live.snapshot);
+  const service = snapshot.services[0];
+  service.models = [{ modelId: 'cfg-model', providerId: service.providerId, configSource,
+    effectiveValues: { name: 'Config Model', contextWindow: 32000, maxTokens: 4096, toolCalling: null, streaming: null },
+    editableOverrides: { name: 'Config Model', contextWindow: 32000, maxTokens: 4096 } }];
+  service.selectedModelIds = ['cfg-model'];
+  service.modelOrder = ['cfg-model'];
+  return { snapshot, service };
+}
+
+test('fresh remote results upgrade untouched cache candidates only', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const makeDraft = () => s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  const store = makeDraft();
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'c1', configSource: 'cache', cacheStale: true, effectiveValues: { name: 'Cached' } }] });
+  assert.equal(store.get().models.find(model => model.modelId === 'c1').source, 'cache');
+  assert.equal(store.get().models.find(model => model.modelId === 'c1').cachedStale, true);
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'c1', configSource: 'remote', effectiveValues: { name: 'Remote' } }] });
+  assert.equal(store.get().models.find(model => model.modelId === 'c1').source, 'remote');
+  assert.equal(store.get().models.find(model => model.modelId === 'c1').cachedStale, false);
+
+  const edited = makeDraft();
+  edited.dispatch({ type: 'merge-models', models: [{ modelId: 'c2', configSource: 'cache', effectiveValues: { name: 'Cached 2' } }] });
+  edited.dispatch({ type: 'toggle-model', modelId: 'c2', selected: true });
+  edited.dispatch({ type: 'model-field', modelId: 'c2', field: 'contextWindow', value: 1000 });
+  edited.dispatch({ type: 'merge-models', models: [{ modelId: 'c2', configSource: 'remote', effectiveValues: { name: 'Remote 2' } }] });
+  const kept = edited.get().models.find(model => model.modelId === 'c2');
+  assert.equal(kept.source, 'cache', 'edited cache candidate is not overwritten by refresh');
+  assert.equal(kept.contextWindow, 1000);
+});
+
+test('edit dialog shows matching cache candidates without network or selection changes', async () => {
+  const { window, snapshot, api, calls } = boot();
+  const service = snapshot.services[0];
+  const originalSelection = Array.isArray(service.selectedModelIds)
+    ? clone(Array.isArray(service.modelOrder) ? service.modelOrder : service.selectedModelIds) : null;
+  api.fetchProviderServiceCache = async () => ({ ok: true, serviceId: service.serviceId, sourceKind: 'cache',
+    cacheStale: false, cachedAt: Date.now(),
+    cachedModels: [{ modelId: 'cached-a', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+      effectiveValues: { name: 'Cached A', contextWindow: 32000, maxTokens: 4096, toolCalling: null, streaming: null },
+      editableOverrides: {} }] });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  const row = await uiWaitFor(() => card.querySelector('[data-model-row=cached-a]'));
+  assert.ok(row, 'cached candidate rendered on open');
+  assert.ok(row.textContent.includes('Cached A'));
+  assert.ok(row.textContent.includes('缓存候选'));
+  assert.ok(row.textContent.includes('上下文'), 'cache display metadata is shown');
+  assert.ok(card.textContent.includes('显示匹配缓存'));
+  assert.equal(calls.discovery.length, 0, 'cache display never triggers discovery');
+  if (originalSelection) {
+    assert.deepEqual([...card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel), originalSelection,
+      'cache must not change the existing selection');
+  }
+});
+
+test('stale cache is explicitly marked and can be re-authorized', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  const service = snapshot.services[0];
+  api.fetchProviderServiceCache = async () => ({ ok: true, serviceId: service.serviceId, sourceKind: 'cache',
+    cacheStale: true, cachedAt: Date.now() - 120000,
+    cachedModels: [{ modelId: 'stale-a', providerId: service.providerId, configSource: 'cache', cacheStale: true,
+      effectiveValues: { name: 'Stale A', contextWindow: 64000 }, editableOverrides: {} }] });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  const row = await uiWaitFor(() => card.querySelector('[data-model-row=stale-a]'));
+  assert.ok(row);
+  assert.ok(row.textContent.includes('缓存已过期'));
+  assert.ok(card.textContent.includes('显示已过期的匹配缓存'));
+  assert.ok(card.querySelector('[data-authorize-discovery]'), 're-authorize entry remains available');
+});
+
+test('removing a cache candidate does not resurrect it on the next draft save', async () => {
+  const { window, snapshot, api, calls } = boot();
+  const service = snapshot.services[0];
+  const repeatedCache = [{ modelId: 'gone-a', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+    effectiveValues: { name: 'Gone A', contextWindow: 8000 }, editableOverrides: {} }];
+  api.fetchProviderServiceCache = async () => ({ ok: true, serviceId: service.serviceId, sourceKind: 'cache',
+    cacheStale: false, cachedAt: Date.now(), cachedModels: clone(repeatedCache) });
+  api.saveProviderDraft = async request => {
+    calls.drafts.push(clone(request));
+    return { ok: true, draftId: 'resurrect-draft', draftRevision: 2, connectionRevision: 1, targetFingerprint: 'fp-resurrect',
+      sourceKind: 'cache', cacheStale: false, cachedAt: Date.now(), cachedModels: clone(repeatedCache) };
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await uiWaitFor(() => card.querySelector('[data-model-row=gone-a]'));
+  card.querySelector('[data-model-check=gone-a]').click();
+  await tick(5);
+  card.querySelector('[data-model-remove=gone-a]').click();
+  await tick(5);
+  const confirm = window.document.getElementById('confirmCard');
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '移除').click();
+  await tick(10);
+  assert.equal(card.querySelector('[data-model-row=gone-a]'), null);
+  // 触发下一次草稿保存（保存按钮 → ensureDraftHandle），服务端再次返回同一缓存列表。
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(40);
+  assert.equal(card.querySelector('[data-model-row=gone-a]'), null, 'removed candidate must not be resurrected');
+});
+
+for (const configSource of ['configured', 'builtin-override']) {
+  test(`clearing an override on a ${configSource} model never shows the stale display fallback`, async () => {
+    const { snapshot, service } = snapshotWithModel(configSource);
+    const { window, api, calls } = boot({ snapshot });
+    const { card } = openCreate(window, snapshot, api, 'edit', service);
+    await tick(10);
+    const row = () => card.querySelector('[data-model-row=cfg-model]');
+    assert.ok(row(), 'configured model row rendered');
+    assert.ok(row().textContent.includes('上下文'), 'override value is shown');
+    card.querySelector('[data-model-advanced-toggle=cfg-model]').click();
+    await tick(5);
+    const input = card.querySelector('[data-model-field="cfg-model:contextWindow"]');
+    assert.ok(input);
+    input.value = '';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await tick(5);
+    assert.equal(input.value, '');
+    assert.ok(!row().textContent.includes('上下文'), 'cleared field must fall back to inherit/default, not the old display value');
+    card.querySelector('.pm-dialog-actions .pm-primary').click();
+    await tick(10);
+    // builtin-override 来源会先弹「覆盖内置模型配置？」确认。
+    const confirm = window.document.getElementById('confirmCard');
+    const continueButton = [...confirm.querySelectorAll('button')].find(button => button.textContent === '继续保存');
+    if (continueButton) continueButton.click();
+    await tick(40);
+    const payload = calls.drafts.at(-1)?.draft;
+    const patch = payload?.modelPatches.find(item => item.modelId === 'cfg-model');
+    assert.deepEqual(patch?.unsetFields, ['contextWindow'], 'save semantics stay an explicit unset');
+  });
+}
+

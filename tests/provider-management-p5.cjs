@@ -1671,3 +1671,39 @@ test('management-disabled pages keep the legacy provider list without sync or cr
   assert.equal(calls.sync.length, 0);
   assert.ok(calls.legacy.length >= 1);
 });
+
+test('environment authorization failure stays retryable and recovers after the variable is provided', async () => {
+  const { createDiscoveryController } = await import('../public/provider-management/discovery.js');
+  let missing = true;
+  let authorizations = 0;
+  const api = {
+    authorizeProviderDiscovery: async () => {
+      authorizations += 1;
+      if (missing) return { ok: false, code: 'environment_missing', message: '后端进程缺少该供应商所需的环境变量（或取值不可用）。', fieldErrors: { environmentReference: 'invalid' } };
+      return { ok: true, consentId: 'consent-1', expiresAt: Date.now() + 60_000 };
+    },
+    discoverProviderModels: async () => ({ ok: true, operationId: 'op-1' }),
+    fetchProviderOperation: async () => ({ ok: true, state: 'success', kind: 'discover', result: {
+      models: [{ modelId: 'm1', configSource: 'remote', effectiveValues: {} }], sourceKind: 'remote',
+      dialogGeneration: 1, requestSeq: 1, connectionRevision: 1 } }),
+    cancelProviderOperation: async () => ({ ok: true }),
+  };
+  const controller = createDiscoveryController({
+    api, supported: true, debounceMs: 1, pollIntervalMs: 1, operationTimeoutMs: 2000,
+    ensureDraft: async () => ({ ok: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1, targetFingerprint: 'fp-1' }),
+  });
+  controller.configure({ supported: true, draftId: 'draft-1', draftRevision: 1, connectionRevision: 1,
+    targetFingerprint: 'fp-1', authMode: 'environment', modes: ['none', 'environment'] });
+  await controller.authorize({ rememberTarget: false });
+  let state = controller.getState();
+  assert.equal(state.status, 'unapproved', 'missing environment stays retryable, not a terminal unsupported state');
+  assert.match(state.reason, /环境变量/);
+  assert.equal(authorizations, 1);
+  missing = false;
+  await controller.authorize({ rememberTarget: false });
+  state = controller.getState();
+  assert.equal(authorizations, 2);
+  assert.equal(state.consentId, 'consent-1');
+  assert.notEqual(state.status, 'unsupported');
+  controller.dispose();
+});

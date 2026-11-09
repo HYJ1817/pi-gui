@@ -326,6 +326,45 @@ async function moduleTests() {
     });
   }
 
+  /* ---------- FIX-04：桌面安全资格判定（纯函数 + 源码接线） ---------- */
+  const { desktopQualification } = require(path.join(ROOT, 'electron/desktop-qualification.cjs'));
+  const qualify = (over = {}) => desktopQualification({ backendConnected: true, hasSwitch: () => false,
+    env: {}, argv: [], execArgv: [], ...over });
+  check('qualification allows the normal sandboxed desktop', () => {
+    assert.deepEqual(qualify(), { ok: true, reason: null });
+  });
+  check('qualification rejects a missing direct backend', () => {
+    assert.equal(qualify({ backendConnected: false }).reason, 'backend_unavailable');
+  });
+  for (const [flag, reason] of [['--remote-debugging-port=9222', 'debug_port'], ['--remote-debugging-pipe', 'debug_pipe'],
+    ['--inspect=9229', 'debug_inspector'], ['--inspect-brk', 'debug_inspector'],
+    ['--single-process', 'single_process'], ['--disable-web-security', 'web_security_disabled']]) {
+    check(`qualification rejects ${flag}`, () => {
+      const verdict = qualify({ argv: ['electron', flag] });
+      assert.deepEqual(verdict, { ok: false, reason });
+    });
+  }
+  check('qualification rejects --no-sandbox via argv or app switch', () => {
+    assert.deepEqual(qualify({ argv: ['electron', '--no-sandbox'] }), { ok: false, reason: 'no_sandbox' });
+    assert.deepEqual(qualify({ hasSwitch: name => name === 'no-sandbox' }), { ok: false, reason: 'no_sandbox' });
+  });
+  check('qualification rejects ELECTRON_DISABLE_SANDBOX', () => {
+    assert.equal(qualify({ env: { ELECTRON_DISABLE_SANDBOX: '1' } }).reason, 'sandbox_disabled');
+  });
+  check('qualification rejects NODE_OPTIONS inspector flags', () => {
+    assert.equal(qualify({ env: { NODE_OPTIONS: '--inspect=9229' } }).reason, 'debug_inspector');
+    assert.equal(qualify({ env: { NODE_OPTIONS: '--inspect-brk' } }).reason, 'debug_inspector');
+  });
+  check('qualification rejects debug switches from app command line', () => {
+    assert.equal(qualify({ hasSwitch: name => name === 'remote-debugging-pipe' }).reason, 'debug_pipe');
+    assert.equal(qualify({ hasSwitch: name => name === 'inspect' }).reason, 'debug_inspector');
+  });
+  check('main.cjs delegates qualification to the pure module', () => {
+    const source = fs.readFileSync(path.join(ROOT, 'electron/main.cjs'), 'utf8');
+    assert.match(source, /desktopQualification\(\{/);
+    assert.match(source, /verdict\.ok === true \? true : verdict\.reason/);
+  });
+
   console.log(`provider-credential-bridge: ${passed} assertions passed`);
 }
 
