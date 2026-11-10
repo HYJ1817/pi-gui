@@ -40,21 +40,27 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
     for (const [id, stage] of approved) if (stage.expires <= time) approved.delete(id);
   }
 
+  function persistentStorage() {
+    try { return nativePersistence() === true; } catch { return false; }
+  }
+
   async function capability() {
     handshakeSeen = true;
     const stagingEnabled = enabled === true;
     const sdkQualified = stagingEnabled ? await sdk.qualified().catch(() => false) : false;
-    return { ok: true, epoch, stagingEnabled, sdkQualified, nativePersistence: sdkQualified && nativePersistence(), flowTtlMs, nonceTtlMs: flowTtlMs };
+    return { ok: true, epoch, stagingEnabled, sdkQualified, nativePersistence: sdkQualified && persistentStorage(), flowTtlMs, nonceTtlMs: flowTtlMs };
   }
 
   /* 给 /api/provider-management 快照的后端侧能力：私桥握手 + 联调开关 + SDK 资格
-   * 全部满足才开启输入面相关位。原生持久化还要求存储安全资格（auth.json 的
-   * 所有者/权限见证）；不满足时界面必须据实禁用保存，而不是等到写盘才失败。 */
+   * 全部满足才开启输入面相关位。存储安全资格（auth.json 的所有者/权限见证）
+   * 是输入面的硬前提：不合格时连暂存都不开启，界面与主进程都不能把密钥带进
+   * 受限窗，而不是先收下密钥、到保存时才失败。 */
   async function desktopCapability() {
     if (enabled !== true || !handshakeSeen) return null;
     const sdkQualified = await sdk.qualified().catch(() => false);
     if (!sdkQualified) return null;
-    return { rawKeyInput: true, keyStaging: true, nativeCredentialPersistence: nativePersistence() === true, privateDesktopBridge: true };
+    const persistent = persistentStorage();
+    return { rawKeyInput: persistent, keyStaging: persistent, nativeCredentialPersistence: persistent, privateDesktopBridge: true };
   }
 
   function bindingOf(flow) {
@@ -167,7 +173,9 @@ export function createProviderCredentialBridge({ sdk, draftLookup, consentStore,
       const inspection = await sdk.inspect(draft.providerId);
       if (preparing.get(flowId) !== binding) return fail('invalid_request');
       const expectsCredential = ['set', 'replace', 'clear'].includes(purpose);
-      if (expectsCredential && !(await sdk.qualified().catch(() => false))) return fail('unsupported');
+      // 存储资格不合格时拒绝一切原生密钥操作（含暂存），与快照能力保持一致；
+      // 不能靠前端自愿遵守，否则被攻陷的渲染进程仍能把密钥送进暂存槽。
+      if (expectsCredential && (!(await sdk.qualified().catch(() => false)) || !persistentStorage())) return fail('unsupported');
       if (preparing.get(flowId) !== binding) return fail('invalid_request');
       if (!draftCurrent(binding)) return fail('draft_conflict', { message: '草稿已变化，请重读后保存。' });
       const nonce = randomUUID();

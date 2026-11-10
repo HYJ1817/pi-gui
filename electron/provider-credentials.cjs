@@ -291,6 +291,11 @@ function createProviderCredentialDesktop({ app, BrowserWindow, ipcMain, protocol
     if (!handshakeNow?.stagingEnabled && request.action !== 'authorize-target') {
       return { ok: false, code: 'unsupported', reason: 'key_input_disabled' };
     }
+    // 存储资格不合格 = 不允许任何原生密钥输入/清除；主进程在开窗前就拒绝，
+    // 后端 prepare 还会再验一次，避免陈旧握手把密钥带进受限窗。
+    if (request.action !== 'authorize-target' && handshakeNow?.nativePersistence !== true) {
+      return { ok: false, code: 'unsupported', reason: 'key_input_unqualified' };
+    }
     if (!qualified()) return { ok: false, code: 'unsupported', reason: qualificationReason() };
     const purpose = request.action;
     const flowId = randomUUID();

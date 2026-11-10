@@ -46,6 +46,7 @@ const fs = require('node:fs');
 const {
   getJson,
   probe: probeExistingServer,
+  waitForBackend,
   isSelfUrl: isSelfUrlOf,
   isSafeExternal,
   isSafeReleaseUrl,
@@ -147,16 +148,16 @@ async function verifyAccess(timeout = 1500) {
 }
 
 async function waitForServer(ms = 25000) {
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    const probe = await probePort(500);
-    if (probe.state === 'pi-gui') return true;
-    // 端口被别的程序抢了，再等也不会变好
-    if (probe.state === 'foreign-service') return false;
-    if (server && server.exitCode !== null) return false; // 子进程已经挂了，再等也没用
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  return false;
+  /* 只认「子进程退出」这一个失败信号。刚 spawn 的后端在 bind 之后、事件循环
+   * 空出来之前可能暂时答不上健康检查（上一实例的端口也还可能处于半关闭），
+   * 一次 foreign-service 就放弃会让用户看到「端口被占用」的错误框 —— 重启
+   * 必现。真正被别的程序占着时，后端会因 EADDRINUSE 自行退出，这里照样
+   * 立即结束等待，不会白等满 25 秒。详见 net-probe 的 waitForBackend。 */
+  return waitForBackend({
+    probe: () => probePort(500),
+    isChildAlive: () => Boolean(server),
+    timeoutMs: ms,
+  });
 }
 
 /** 端口被别的程序占用时的统一提示。

@@ -80,6 +80,8 @@ export function createModelRecord(raw = {}, { manual = false } = {}) {
     input: baseline.input,
     toolCalling: tri(effective.toolCalling),
     streaming: tri(effective.streaming),
+    // 供应商目录是否明确声明该模型可用于聊天生成；null = 未声明（未知）。
+    chatCapable: tri(effective.chatCapable),
     // 高级编辑器的「更多参数」折叠状态不进屋，展开状态由视图持有。
   };
 }
@@ -197,6 +199,11 @@ export function draftFromService(service, snapshot, mode = 'edit') {
     catalogId: service?.catalogId || null,
     displayName: service?.displayName || service?.providerId || '',
     authMode: service?.authMode || (service?.credentialState?.source === 'env' ? 'environment' : 'none'),
+    // 服务端只投影环境变量引用名；编辑既有服务时必须原样带回，否则界面显示为空，
+    // 保存时也无法确认原引用仍被保留。
+    envReference: typeof service?.envReference === 'string' ? service.envReference : '',
+    credentialAction: typeof service?.envReference === 'string' && service.envReference
+      ? { type: 'env', reference: service.envReference } : { type: 'keep' },
     connection: serviceConnection,
     enabled: service?.enabled !== false,
     models,
@@ -275,7 +282,7 @@ export function effectiveAuthMode(draft) {
 /* 配置里的凭据引用与 Pi 原生凭据是两种东西：
  * `none` 只删除 models.json 中的 apiKey 字段，不会调用 Pi logout，
  * 因此绝不能把它当成“本机凭据已清除”。 */
-export function credentialClearSupport(draft, { native = false } = {}) {
+export function credentialClearSupport(draft, { native = false, unavailableReason = '' } = {}) {
   const credential = draft?.credentialState;
   const source = credential?.source;
   if (source === 'env') {
@@ -315,7 +322,8 @@ export function credentialClearSupport(draft, { native = false } = {}) {
     return {
       supported: false,
       source,
-      reason: 'Pi 本机凭据需要在桌面版的安全凭据窗口中清除；网页版或私有桥不可用时不会用“删除配置引用”冒充已清除。',
+      reason: unavailableReason
+        || 'Pi 本机凭据需要在桌面版的安全凭据窗口中清除；网页版或私有桥不可用时不会用“删除配置引用”冒充已清除。',
     };
   }
   return {
@@ -548,7 +556,7 @@ export function setModelField(draft, modelId, field, value) {
     if (field === 'name') return { ...model, name: value === null ? null : String(value) };
     return { ...model, [field]: value === '' || value === null ? null : Number(value) };
   });
-  return finish({ ...draft, models, requestIds: {} });
+  return finish({ ...draft, models, touchedSelection: true, requestIds: {} });
 }
 
 export function addModel(draft, modelId) {
@@ -708,18 +716,33 @@ function reduce(draft, action) {
       });
     }
     case 'move-model': {
-      return finish({ ...draft, order: moveByOffset(draft.order, action.modelId, action.offset), requestIds: {} });
+      return finish({ ...draft, order: moveByOffset(draft.order, action.modelId, action.offset), touchedSelection: true, requestIds: {} });
     }
     case 'move-before': {
-      return finish({ ...draft, order: moveBefore(draft.order, action.modelId, action.targetId), requestIds: {} });
+      return finish({ ...draft, order: moveBefore(draft.order, action.modelId, action.targetId), touchedSelection: true, requestIds: {} });
     }
     case 'move-to-index': {
-      return finish({ ...draft, order: moveToIndex(draft.order, action.modelId, action.index), requestIds: {} });
+      return finish({ ...draft, order: moveToIndex(draft.order, action.modelId, action.index), touchedSelection: true, requestIds: {} });
     }
     case 'model-field': return setModelField(draft, action.modelId, action.field, action.value);
     case 'add-model': return addModel(draft, action.modelId);
     case 'remove-model': return removeModel(draft, action.modelId);
     case 'merge-models': return mergeFetchedModels(draft, action.models);
+    /* FIX-A：端点/供应商标识变化后，上一目标发现/缓存的候选不能继续留在
+     * 新目标的草稿里，否则会被重新推荐或随保存写入新目标。手动添加/配置
+     * 里已有的记录保留；它们不是这次发现带来的。 */
+    case 'drop-target-discovery': {
+      const models = draft.models.filter(model => model.source !== 'remote' && model.source !== 'cache');
+      const known = new Set(models.map(model => model.modelId));
+      return finish({ ...draft, models, order: draft.order.filter(id => known.has(id)), requestIds: {} });
+    }
+    /* FIX-A：首次推荐只改选择，不把这次自动选择当成“用户改过选择”。
+     * 用户之后的任何勾选/移除/排序都会把 touchedSelection 置为 true。 */
+    case 'auto-select-models': {
+      const known = new Set(draft.models.map(model => model.modelId));
+      const order = (Array.isArray(action.modelIds) ? action.modelIds : []).filter(id => known.has(id));
+      return finish({ ...draft, order: [...new Set(order)], requestIds: {} });
+    }
     case 'builtin-override': return finish({ ...draft, confirmBuiltinOverride: true, requestIds: {} });
     case 'mark-saved': {
       // 保存收据落地后暂存批准已被消费（成功）或已失效（失败）；不再保留。

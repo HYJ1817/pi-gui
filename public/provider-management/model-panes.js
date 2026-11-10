@@ -48,7 +48,9 @@ function capabilityBadges(model) {
   if (model.reasoning === true) chips.push('推理');
   if (Array.isArray(model.input) && model.input.includes('image')) chips.push('图像');
   if (model.contextWindow) chips.push(`${formatCompact(model.contextWindow)} 上下文`);
+  else if (model.source === 'remote' || model.source === 'cache') chips.push('上下文未知');
   if (model.maxTokens) chips.push(`${formatCompact(model.maxTokens)} 输出`);
+  else if (model.source === 'remote' || model.source === 'cache') chips.push('输出未知');
   if (model.toolCalling === true) chips.push('工具');
   if (model.streaming === true) chips.push('流式');
   return chips;
@@ -193,6 +195,13 @@ function candidateRow(model, draft, dispatch, errors) {
 
 function advancedPanel(model, draft, dispatch, errors, onRemove) {
   const setField = (fieldName, value) => dispatch({ type: 'model-field', modelId: model.modelId, field: fieldName, value });
+  /* 未知 ≠ 继承：发现/缓存候选若目录没给容量，输入框必须说“未知”；配置里
+   * 留空才是“继承 Pi 默认”。两者都不写入补丁，也不在界面上显示成 0。 */
+  const shown = displayOf(model);
+  const discovered = model.source === 'remote' || model.source === 'cache';
+  const sizePlaceholder = (value) => discovered
+    ? (value ? `目录 ${formatCompact(value)} · 留空继承` : '未知 · 留空继承')
+    : '继承';
   const nameInput = h('input', {
     type: 'text',
     class: 'pm-input pm-input-small',
@@ -209,7 +218,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
     step: '1',
     class: 'pm-input pm-input-small',
     value: model.contextWindow || '',
-    placeholder: '继承',
+    placeholder: sizePlaceholder(shown.contextWindow),
     'aria-label': '上下文窗口',
     'data-model-field': `${model.modelId}:contextWindow`,
     'data-focus-key': `advanced:${model.modelId}:contextWindow`,
@@ -221,7 +230,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
     step: '1',
     class: 'pm-input pm-input-small',
     value: model.maxTokens || '',
-    placeholder: '继承',
+    placeholder: sizePlaceholder(shown.maxTokens),
     'aria-label': '最大输出',
     'data-model-field': `${model.modelId}:maxTokens`,
     'data-focus-key': `advanced:${model.modelId}:maxTokens`,
@@ -279,6 +288,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
       h('div', { class: 'pm-capability-readout' },
         h('span', { class: 'pm-capability-label', text: '工具调用' }), h('span', { text: triLabel(model.toolCalling) }),
         h('span', { class: 'pm-capability-label', text: '流式输出' }), h('span', { text: triLabel(model.streaming) }),
+        h('span', { class: 'pm-capability-hint', text: '未知表示目录未声明该能力，不代表不支持；容量留空表示继承 Pi 默认，不写入补丁。' }),
       ),
     ),
     h('div', { class: 'pm-model-advanced-foot' },
@@ -387,6 +397,7 @@ export function renderModelPanes({
   errors = {},
   capabilities = {},
   discovery,
+  recommendation = null,
   onRefresh = () => {},
   onAuthorize = () => {},
   onTest = () => {},
@@ -399,6 +410,7 @@ export function renderModelPanes({
   let currentDraft = draft;
   let currentErrors = errors;
   let currentDiscovery = discovery;
+  let currentRecommendation = recommendation;
   const candidateQuery = { value: '' };
   const chosenQuery = { value: '' };
   const expanded = new Set();
@@ -438,6 +450,9 @@ export function renderModelPanes({
   const leftList = h('div', { class: 'pm-model-list pm-candidate-list', 'data-model-list': 'candidates' });
   const rightList = h('div', { class: 'pm-model-list pm-chosen-list', 'data-model-list': 'chosen' });
   const rightFoot = h('div', { class: 'pm-custom-model-foot' });
+  /* FIX-A：推荐依据就放在已选栏底部，和选择本身在同一视野里；用户改过选择
+   * 后立刻收起，不留下“系统还会继续替你改”的暗示。 */
+  const recommendationHost = h('div', { class: 'pm-recommendation', 'data-recommendation': 'idle', role: 'status' });
   left.append(leftHead, leftSearch, leftList);
   right.append(rightHead, rightSearch, rightList, rightFoot);
   root.append(left, right, statusLine);
@@ -584,10 +599,31 @@ export function renderModelPanes({
       if (event.key === 'Enter') { event.preventDefault(); submit(); }
     });
     rightFoot.append(
+      recommendationHost,
       h('div', { class: 'pm-custom-model-row' }, input, add),
       h('div', { class: 'pm-field-hint', text: '手动添加的 ID 会写入 Pi 配置；重复 ID 不会被覆盖。' }),
       error,
     );
+  }
+
+  function renderRecommendation() {
+    recommendationHost.innerHTML = '';
+    const rec = currentRecommendation;
+    const picked = rec?.autoPicked === true && rec.picks?.length > 0 && currentDraft.touchedSelection !== true;
+    if (picked) {
+      recommendationHost.dataset.recommendation = 'picked';
+      const basis = rec.picks.map(id => `${id}（${rec.reasons?.[id] || '目录声明可用'}）`).join('、');
+      recommendationHost.append(icon('spark', 14),
+        h('span', { class: 'pm-recommendation-text', text: `已按目录能力信息推荐 ${rec.picks.length} 个模型：${basis}。修改选择后不再自动改选。` }));
+      return;
+    }
+    if (rec?.insufficient === true && currentDraft.touchedSelection !== true) {
+      recommendationHost.dataset.recommendation = 'insufficient';
+      recommendationHost.append(icon('info', 14),
+        h('span', { class: 'pm-recommendation-text', text: '模型目录没有声明聊天或工具能力，无法可靠推荐；请手动选择（不会按模型名称猜测）。' }));
+      return;
+    }
+    recommendationHost.dataset.recommendation = 'idle';
   }
 
   function renderLists() {
@@ -609,7 +645,7 @@ export function renderModelPanes({
     const existing = root.querySelector('.pm-discovery-note');
     if (existing) existing.replaceWith(note);
     else root.insertBefore(note, left);
-    if (statusLine.textContent) statusLine.textContent = statusLine.textContent;
+    renderRecommendation();
     restoreFocus(savedFocus);
   }
 
@@ -636,10 +672,12 @@ export function renderModelPanes({
     renderLists();
   });
 
-  function update(nextDraft, { errors: nextErrors = currentErrors, discovery: nextDiscovery = currentDiscovery } = {}) {
+  function update(nextDraft, { errors: nextErrors = currentErrors, discovery: nextDiscovery = currentDiscovery,
+    recommendation: nextRecommendation = currentRecommendation } = {}) {
     currentDraft = nextDraft;
     currentErrors = nextErrors || {};
     currentDiscovery = nextDiscovery || currentDiscovery;
+    currentRecommendation = nextRecommendation;
     renderLists();
   }
 

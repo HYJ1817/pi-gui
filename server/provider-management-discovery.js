@@ -26,7 +26,7 @@ function targetMatches(grant, draft) {
 
 function modelsFrom(models, providerId) {
   return models.filter(model => isModelId(model.id)).map(({ id, ...values }) => ({
-    modelId: id, providerId, configSource: 'remote', effectiveValues: { ...values, toolCalling: null, streaming: null }, editableOverrides: {},
+    modelId: id, providerId, configSource: 'remote', effectiveValues: { ...values }, editableOverrides: {},
   }));
 }
 

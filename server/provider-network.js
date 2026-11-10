@@ -283,7 +283,9 @@ const positiveCount = value => (typeof value === 'number' && Number.isFinite(val
 const ENTRY_FIELDS = new Set(['id', 'name', 'displayName', 'display_name', 'label',
   'context_length', 'context_window', 'inputTokenLimit', 'max_tokens', 'max_completion_tokens',
   'outputTokenLimit', 'reasoning', 'input', 'top_provider', 'limit', 'supported_parameters',
-  'supportedGenerationMethods', 'architecture', 'modalities']);
+  'supportedGenerationMethods', 'architecture', 'modalities', 'output_modalities', 'output',
+  // 显式能力布尔值（部分聚合服务会返回）；只接受 boolean，绝不影响密钥纪律。
+  'toolCalling', 'streaming']);
 
 /** 单条模型 → 白名单投影。返回 null 表示条目被丢弃（不能映射为有效模型）。 */
 export function sanitizeModelEntry(item, secrets = []) {
@@ -322,6 +324,30 @@ export function sanitizeModelEntry(item, secrets = []) {
   if (Array.isArray(item.input) && item.input.length && item.input.every(x => x === 'text' || x === 'image')) {
     if (item.input.includes('image')) out.input = [...item.input];
   }
+  /* 能力证据只从供应商自己声明的字段推导，不按模型名/ID 猜测：
+   *   - toolCalling：显式 boolean，或 supported_parameters 包含 tools；
+   *   - streaming：只认显式 boolean；
+   *   - chatCapable：Google 的 generateContent、显式输出模态含 text、或
+   *     参数表声明 tools。缺失一律 null（未知），不是 false。 */
+  const parameters = Array.isArray(item.supported_parameters)
+    ? item.supported_parameters.filter(value => typeof value === 'string') : null;
+  const methods = Array.isArray(item.supportedGenerationMethods)
+    ? item.supportedGenerationMethods.filter(value => typeof value === 'string') : null;
+  const rawOutputModalities = Array.isArray(item.architecture?.output_modalities) ? item.architecture.output_modalities
+    : Array.isArray(item.modalities?.output) ? item.modalities.output : null;
+  // 畸形元素/空数组不构成“明确不支持聊天”的证据；只有非空字符串列表才可判定。
+  const outputModalities = rawOutputModalities
+    ? rawOutputModalities.filter(value => typeof value === 'string') : null;
+  const toolCalling = typeof item.toolCalling === 'boolean' ? item.toolCalling
+    : parameters?.includes('tools') ? true : null;
+  const streaming = typeof item.streaming === 'boolean' ? item.streaming : null;
+  let chatCapable = null;
+  if (methods) chatCapable = methods.includes('generateContent');
+  else if (outputModalities?.length) chatCapable = outputModalities.includes('text');
+  else if (parameters?.includes('tools')) chatCapable = true;
+  if (toolCalling !== null) out.toolCalling = toolCalling;
+  if (streaming !== null) out.streaming = streaming;
+  if (chatCapable !== null) out.chatCapable = chatCapable;
   const text = JSON.stringify(out);
   for (const secret of secrets) {
     if (typeof secret === 'string' && secret.length > 0 &&

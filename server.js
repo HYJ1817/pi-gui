@@ -495,15 +495,31 @@ const worktrees = createWorktrees({
 });
 worktreesRef = worktrees;
 
-/* P2：供应商凭据私有桥。只在 Electron main 的直属 IPC 子进程里可达（无 HTTP 路由）；
- * `PI_GUI_PROVIDER_KEY_INPUT=1` 仅供联调，默认关闭——关闭时快照能力恒为 false，
- * 私桥动作与 SDK 暂存一律 unsupported。授权绑定存储同为内存态，随进程/草稿生命周期失效。 */
-const providerKeyInputEnabled = process.env.PI_GUI_PROVIDER_KEY_INPUT === '1';
+/* P2：供应商凭据私有桥。只在 Electron main 的直属 IPC 子进程里可达（无 HTTP 路由）。
+ * 供应商管理与密钥输入自 P6 起默认开启；管理员可用 `PI_GUI_PROVIDER_MANAGEMENT=0`
+ * 或 `PI_GUI_PROVIDER_KEY_INPUT=0` 显式关闭（兼容回滚）。关闭时管理路由返回
+ * unsupported / 快照能力恒为 false，私桥动作与 SDK 暂存一律 unsupported。
+ * 授权绑定存储同为内存态，随进程/草稿生命周期失效。 */
+const enabledByDefault = value => !/^(?:0|false|off|no)$/i.test(String(value ?? '').trim());
+const providerKeyInputEnabled = enabledByDefault(process.env.PI_GUI_PROVIDER_KEY_INPUT);
+const providerManagementEnabled = enabledByDefault(process.env.PI_GUI_PROVIDER_MANAGEMENT);
+// 管理关闭时也不保留秘密输入面：没有管理草稿，密钥输入本身不可用，桥不必可达。
+const providerNativeCredentialEnabled = Boolean(process.send && process.connected && providerKeyInputEnabled && providerManagementEnabled);
 const providerAuthPath = path.join(path.dirname(MODELS_JSON), 'auth.json');
-const providerStorageQualified = () => Boolean(process.send && process.connected && providerKeyInputEnabled &&
-  providers.store.authorizeCredentialStorage({ authPath: providerAuthPath }));
+/* 存储资格检查要起 PowerShell 做 ACL 见证。这里不做正向缓存：能力快照、
+ * 开窗和暂存都必须基于**当前**文件/父目录见证；否则存储在这几秒内变成
+ * 不合格（DACL 被改、文件被替换）时，仍可能把密钥送进受限窗和暂存区。
+ * 真正写入路径（authorizeStorage）也会再次 fresh 复核。首次使用时由
+ * prepareCredentialStorage 创建/加固 auth.json 的 protected 单用户 DACL。 */
+const providerStorageQualified = () => {
+  if (!(process.send && process.connected) || !providerKeyInputEnabled || !providerManagementEnabled) return false;
+  try { return providers.store.prepareCredentialStorage({ authPath: providerAuthPath }) === true; }
+  catch { return false; }
+};
 const providerCredentials = createProviderCredentialSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey,
-  authPath: providerAuthPath, enabled: providerKeyInputEnabled, authorizeStorage: providerStorageQualified });
+  authPath: providerAuthPath, enabled: providerKeyInputEnabled,
+  // 实际写入/清除前必须重新见证，并把准备阶段创建的私有 auth.json 复核一遍。
+  authorizeStorage: () => providerStorageQualified({ fresh: true }) });
 const providerMutationBlocked = () => providerAuthRef?.inFlight() || updateMaintenance.locked() ||
   piUpdate.isRunning() || capabilityInstall.isRunning() || cliInFlight > 0;
 const providers = createProviders({ modelsJson: MODELS_JSON, metadataPath: path.join(DATA_DIR, 'provider-management.json'),
@@ -520,7 +536,6 @@ function captureProviderLaunch({ cwd, agentDir, args }, launch, entry) {
   if (path.relative(path.dirname(MODELS_JSON), agent)) return null;
   return providerConfigSync.capture({ identity: launch.identityKey(), version: entry.version, agent });
 }
-const providerManagementEnabled = process.env.PI_GUI_PROVIDER_MANAGEMENT === '1';
 const providerDiscoveryConsents = createDiscoveryConsentStore({ strict: true, identityKey: piLaunch.identityKey });
 const storedDiscoveryTarget = draft => {
   if (!draft || draft.authMode !== 'pi-credential') return false;
@@ -533,7 +548,8 @@ const storedDiscoveryTarget = draft => {
   } catch { return false; }
 };
 const providerManagement = createProviderManagement({ store: providers.store, inspectCredential: providerCredentials.inspect,
-  readAuth: () => providerAuthRef?.snapshot(), mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled,
+  readAuth: () => providerAuthRef?.snapshot(), refreshAuth: () => providerAuthRef?.read(),
+  mutationBlocked: providerMutationBlocked, enabled: providerManagementEnabled,
   runtimeSync: providerConfigSync,
   invalidateDraft: id => providerCredentialBridge.invalidateDraft(id),
   discovery: providerManagementEnabled ? { consentStore: providerDiscoveryConsents, launchIdentity: piLaunch.identityKey,
@@ -543,7 +559,7 @@ const providerManagement = createProviderManagement({ store: providers.store, in
     /* 缓存首屏的凭据代次证据：只读快照（literal/revision/workerEpoch），无秘密。 */
     storedEvidence: providerId => providerCredentials.inspectDiscovery(providerId),
   } : null,
-  nativeCredentials: process.send && providerKeyInputEnabled ? {
+  nativeCredentials: providerNativeCredentialEnabled ? {
     authorize: (binding, options) => providerCredentialBridge.authorizeNative(binding, options),
     persist: (approval, options) => providerCredentialBridge.persistApproved(approval, options),
     qualifyAfter: (approval, options) => providerCredentialBridge.qualifyAfterNative(approval, options),
@@ -557,8 +573,8 @@ const providerCredentialBridge = createProviderCredentialBridge({ sdk: providerC
   draftFrozen: providerManagement.draftFrozen, forgetDraft: providerManagement.forgetDraft,
   nativePersistence: () => providerManagementEnabled && providerStorageQualified(),
   mutationBlocked: providerMutationBlocked, maintenanceLocked: () => updateMaintenance.locked(),
-  enabled: providerKeyInputEnabled });
-const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey, authPath: providerAuthPath });
+  enabled: providerKeyInputEnabled && providerManagementEnabled });
+const authSdk = createAuthSdk({ resolvePackageDir: piLaunch.packageDir, identityKey: piLaunch.identityKey, authPath: providerAuthPath, modelsPath: MODELS_JSON });
 const quota = createQuotaManager({ readModelsConfig: providers.readModelsConfig, nativeAdapter: authSdk });
 const uploads = createUploads({ dataDir: DATA_DIR });
 const gitRoutes = createGitRoutes({

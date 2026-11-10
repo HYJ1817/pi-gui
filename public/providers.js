@@ -118,6 +118,9 @@ let providerData = { path: '', providers: {}, keyStates: {} };
 let providerError = '';
 let providerRequest = 0;
 let managementSnapshot = null;
+/* 保存后的列表刷新是异步的。立刻用旧 snapshot.revision 打开编辑/复制/停用，
+ * 会在 draft 创建时被后端以 config_conflict 拒绝；列表操作先等这一轮刷新。 */
+let managementRefresh = null;
 let legacyMode = false;
 let managementAvailability = 'unknown'; // unknown | available | disabled | error
 let managementError = '';
@@ -181,8 +184,8 @@ function managementErrorCard(target) {
 
 /* ---------- 管理接口关闭时的兼容适配 ----------
  *
- * 默认配置下 PI_GUI_PROVIDER_MANAGEMENT 是关闭的，旧 /api/providers 仍然
- * 访问同一个 P1 仓储。这里把旧 DTO 投影成 P4 快照，并实现草稿/提交适配，
+ * 管理接口自 P6 起默认开启；管理员设置 PI_GUI_PROVIDER_MANAGEMENT=0 回滚时，
+ * 旧 /api/providers 仍然访问同一个 P1 仓储。这里把旧 DTO 投影成 P4 快照，并实现草稿/提交适配，
  * 让 P4 的同一套选择器、双栏模型和高级设置继续可用；不复制第二套状态机。
  * 旧接口没有 displayName/enabled/目录/本机注册引用，兼容界面不展示或禁用
  * 这些字段，避免报告一个不会落盘的“成功”。 */
@@ -595,7 +598,18 @@ function openMenu(row, menu, trigger) {
 }
 
 async function refreshManagement() {
-  await loadProviders(panels.providers || document.querySelector('.providers'));
+  const run = loadProviders(panels.providers || document.querySelector('.providers'));
+  managementRefresh = run;
+  try { await run; } finally { if (managementRefresh === run) managementRefresh = null; }
+}
+
+async function settleManagement() {
+  const pending = managementRefresh;
+  if (pending) { try { await pending; } catch { /* keep the last readable snapshot */ } }
+}
+
+function latestService(service) {
+  return managementSnapshot?.services?.find(item => item.serviceId === service?.serviceId) || service;
 }
 
 async function commitServiceAction(action, service, draft = null) {
@@ -620,7 +634,9 @@ async function commitServiceAction(action, service, draft = null) {
 }
 
 async function toggleService(service) {
+  if (managementRefresh) await settleManagement();
   if (!managementSnapshot) return;
+  service = latestService(service);
   if (service.enabled !== false) {
     const ok = await confirmModal({
       title: '停用服务？',
@@ -652,6 +668,9 @@ async function toggleService(service) {
 }
 
 async function removeService(service) {
+  if (managementRefresh) await settleManagement();
+  if (!managementSnapshot) return;
+  service = latestService(service);
   const name = service.displayName || service.serviceId;
   const ok = await confirmModal({
     title: service.readOnly ? '停用只读服务？' : '删除服务？',
@@ -700,7 +719,10 @@ function refocusAfterClose(target = {}) {
   };
 }
 
-function openEdit(service, { intent = null } = {}) {
+async function openEdit(service, { intent = null } = {}) {
+  if (managementRefresh) await settleManagement();
+  if (!managementSnapshot) return;
+  service = latestService(service);
   if (service.authMode === 'oauth') {
     openProviderDialog({ present: openModal, snapshot: managementSnapshot, mode: 'auth', service, onSaved: refreshManagement, onClosed: refocusAfterClose({ serviceId: service.serviceId }) });
     return;
@@ -719,7 +741,10 @@ function openEdit(service, { intent = null } = {}) {
   });
 }
 
-function openClone(service) {
+async function openClone(service) {
+  if (managementRefresh) await settleManagement();
+  if (!managementSnapshot) return;
+  service = latestService(service);
   openProviderDialog({
     present: openModal,
     snapshot: managementSnapshot,
@@ -916,13 +941,21 @@ function emptyCard(box) {
     type: 'button',
     class: 'btn primary prov-empty-btn',
     text: '添加服务',
-    on: { click: () => openAddProvider({ snapshot: managementSnapshot }) },
+    on: { click: () => openAddProvider() },
   });
   card.appendChild(add);
   return card;
 }
 
 export async function loadProviders(container) {
+  /* 任何一次管理快照加载都要登记，openAddProvider/openEdit 等入口才能
+   * 在“首屏还在加载”时等待最新 revision，而不是拿旧快照去建草稿。 */
+  const run = loadProvidersNow(container);
+  managementRefresh = run;
+  try { return await run; } finally { if (managementRefresh === run) managementRefresh = null; }
+}
+
+async function loadProvidersNow(container) {
   const request = ++providerRequest;
   // 先单独判定管理接口：只有明确 unsupported 才读取旧路由。
   // 旧路由的读取本身仍然保留（管理可用时用于密钥状态提示；关闭时用于兼容列表）。
@@ -1045,7 +1078,7 @@ export function openProvidersPanel({ present = openModal } = {}) {
     const addTopBtn = h('button', {
       type: 'button',
       class: 'btn primary prov-btn-main',
-      on: { click: () => openAddProvider({ snapshot: managementSnapshot }) },
+      on: { click: () => openAddProvider() },
     }, '+ 添加服务');
     actionCol.append(addTopBtn);
     topHeader.append(titleCol, actionCol);
@@ -1084,7 +1117,7 @@ export function openProvidersPanel({ present = openModal } = {}) {
 
     const actions = document.createElement('div');
     actions.className = 'modal-actions';
-    const add = h('button', { type: 'button', class: 'btn primary', text: '添加服务', on: { click: () => openAddProvider({ snapshot: managementSnapshot }) } });
+    const add = h('button', { type: 'button', class: 'btn primary', text: '添加服务', on: { click: () => openAddProvider() } });
     const reload = h('button', { type: 'button', class: 'btn', text: '重载 pi 配置', on: { click: () => { close(); reloadPi(); } } });
     const done = h('button', { type: 'button', class: 'btn', text: '关闭', on: { click: close } });
     actions.append(add, reload, done);
@@ -1106,8 +1139,9 @@ export function openProvidersPanel({ present = openModal } = {}) {
   });
 }
 
-export async function openAddProvider({ present = openModal, snapshot = managementSnapshot } = {}) {
-  let active = snapshot;
+export async function openAddProvider({ present = openModal, snapshot = null } = {}) {
+  if (managementRefresh) await settleManagement();
+  let active = snapshot || managementSnapshot;
   if (!active) {
     // 页面加载与管理接口探测存在时间差；每次都重新判定，不看可能过期的 legacyMode。
     const management = await fetchProviderManagement().catch(() => null);

@@ -44,15 +44,18 @@ function pathState() {
   for (const parent of parents) {
     let stat;
     try { stat = fs.lstatSync(parent, { bigint: true }); }
-    catch (error) { if (error.code === 'ENOENT') return { stamp: null, parents: identity }; throw error; }
+    catch (error) { if (error.code === 'ENOENT') return { stamp: null, file: null, parents: identity }; throw error; }
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('unsafe');
     identity.push([String(stat.dev), String(stat.ino), String(stat.birthtimeNs)]);
   }
   try {
     const stat = fs.lstatSync(authPath, { bigint: true });
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1n || stat.size > 8n * 1024n * 1024n) throw new Error('unsafe');
-    return { stamp: [stat.dev,stat.ino,stat.birthtimeNs,stat.size,stat.mtimeNs,stat.ctimeNs,stat.mode].map(String).join(':'), parents: identity };
-  } catch (error) { if (error.code === 'ENOENT') return { stamp: null, parents: identity }; throw error; }
+    // `file` 只含身份（卷/文件号/创建时间），用于写入前后确认仍是同一个文件；
+    // 内容大小与时间戳属于 stamp，不参与身份比较。
+    const file = [stat.dev, stat.ino, stat.birthtimeNs].map(String).join(':');
+    return { stamp: [stat.dev,stat.ino,stat.birthtimeNs,stat.size,stat.mtimeNs,stat.ctimeNs,stat.mode].map(String).join(':'), file, parents: identity };
+  } catch (error) { if (error.code === 'ENOENT') return { stamp: null, file: null, parents: identity }; throw error; }
 }
 
 async function sdk() {
@@ -81,7 +84,8 @@ async function inspect(id, signal = new AbortController().signal) {
   try { known = await builtIn(id); } catch { /* Method proof is independent of file absence. */ }
   try {
     const before = pathState();
-    if (before.stamp === null) return { present: false, type: null, builtIn: known, revision: fingerprint([id,before,null]), raw: null };
+    if (before.stamp === null) return { present: false, type: null, builtIn: known, revision: fingerprint([id,before,null]), raw: null,
+      identity: null, parents: before.parents };
     const { readStoredCredential } = await sdk();
     const rt = await runtime({ signal });
     const listed = await rt.listCredentials({ signal });
@@ -90,7 +94,8 @@ async function inspect(id, signal = new AbortController().signal) {
     const raw = readStoredCredential(id, authPath);
     if (!unchanged(before, pathState()) || matches.length > 1 || (matches.length === 0) !== (raw === undefined)) throw new Error('unknown');
     if (raw && (!['api_key','oauth'].includes(raw.type) || raw.type !== matches[0]?.type)) throw new Error('unknown');
-    return { present: Boolean(raw), type: raw?.type ?? null, builtIn: known, revision: fingerprint([id,before,raw ?? null]), raw: raw ?? null };
+    return { present: Boolean(raw), type: raw?.type ?? null, builtIn: known, revision: fingerprint([id,before,raw ?? null]), raw: raw ?? null,
+      identity: before.file, parents: before.parents };
   } catch { return { present: null, type: null, builtIn: known, revision: null, raw: null }; }
 }
 const publicInspection = data => ({ ok: data.present !== null, present: data.present, type: data.type, builtIn: data.builtIn, credentialRevision: data.revision });
@@ -279,7 +284,15 @@ async function persist(message, signal) {
     }
   } catch { threw = true; }
   const after = await inspect(binding.providerId, signal);
-  const confirmed = pending.kind === 'clear' ? after.present === false : after.type === 'api_key' && literalDecode(after.raw?.key) === key;
+  // 写入前后必须是同一个文件、同一组祖先目录。父目录若在写入期间被替换，
+  // 读到的“成功”可能来自另一个文件；此时不得把结果报告为已保存。
+  // 文件原本不存在时允许它被首次创建（Linux 下由 Pi 以 0600 建立）；已有
+  // 文件则必须还是同一个身份。
+  const sameFile = after.identity === before.identity ||
+    (before.identity === null && after.identity !== null);
+  const sameParents = JSON.stringify(after.parents) === JSON.stringify(before.parents);
+  const confirmed = sameFile && sameParents &&
+    (pending.kind === 'clear' ? after.present === false : after.type === 'api_key' && literalDecode(after.raw?.key) === key);
   if (confirmed) return { ok: true, credentialSaved: true, credentialState: pending.kind === 'clear' ? 'cleared' : 'saved', sync,
     ...(sdkSyncFailed ? { code: 'sdk_sync_pending' } : {}) };
   if (threw && !sdkSyncFailed && after.present !== null && fingerprint(before.raw) === fingerprint(after.raw)) return failure('native_write_failed', 'saved-credential-error');

@@ -20,7 +20,7 @@ export const CREDENTIAL_REASON = Object.freeze({
   web_security_disabled: '检测到 --disable-web-security，安全凭据窗口已禁用。',
   backend_unavailable: '后端未以直属子进程连接，安全凭据窗口已禁用。',
   no_sandbox: '检测到 --no-sandbox（沙箱已关闭），安全凭据窗口已禁用。',
-  key_input_disabled: '后端未开启密钥输入功能（PI_GUI_PROVIDER_KEY_INPUT=1），安全凭据窗口已禁用。',
+  key_input_disabled: '后端已禁用密钥输入功能（管理员设置了 PI_GUI_PROVIDER_KEY_INPUT=0），安全凭据窗口已禁用。',
   bridge_unavailable: '后端私有凭据桥不可用；请确认桌面应用已连接后端，然后重试。',
   busy: '已有凭据窗口或操作正在进行，请稍后重试。',
   stale: '凭据输入会话已失效，请重新打开。',
