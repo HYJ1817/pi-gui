@@ -6,6 +6,7 @@
 
 import {
   fetchProviderManagement,
+  fetchProviderServiceCache,
   saveProviderDraft,
   commitProviderDraft,
   authorizeProviderDiscovery,
@@ -53,10 +54,12 @@ import {
   discoveryUnavailableReason,
 } from './discovery.js';
 import { createCredentialController, desktopCredentialBridge } from './credentials.js';
+import { recommendModels } from './recommend.js';
 import { button, field, h, icon } from './dom.js';
 
 const DEFAULT_API = Object.freeze({
   fetchProviderManagement,
+  fetchProviderServiceCache,
   saveProviderDraft,
   commitProviderDraft,
   authorizeProviderDiscovery,
@@ -154,6 +157,18 @@ export function openProviderDialog({
   let conflictState = null;
   let conflictLoading = false;
   let successState = null;
+  /* 缓存首屏（FIX-01）：草稿保存响应里的匹配缓存候选只做展示合并；
+   * 不改变选择/顺序，且同一目标只合并一次（避免刷新后复活已移除项）。 */
+  let cacheNote = null;
+  let cacheMergedIds = new Set();
+  let cacheKey = '';
+  let cacheBootstrapKey = '';
+  /* FIX-A：首次推荐只在「新建草稿 + 用户未改过选择 + 首次新鲜远端结果」时
+   * 发生一次。recommendedKey 绑定服务目标，换端点/协议后旧推荐作废。 */
+  let recommendation = null;
+  let recommendedKey = '';
+  let recommendedHandled = false;
+  let autoPickedIds = new Set();
   let currentErrors = { errors: {}, modelErrors: {} };
   let authDispose = null;
   let lastSnapshotRead = 0;
@@ -196,7 +211,14 @@ export function openProviderDialog({
   function draftTargetSignature(value) {
     if (!value) return '';
     return JSON.stringify([value.providerId, value.connection || null, effectiveAuthMode(value),
-      String(value.piRegistrationReference || '').trim()]);
+      String(value.envReference || '').trim(), String(value.piRegistrationReference || '').trim()]);
+  }
+
+  /* 模型目录跟着端点/供应商标识走；认证来源变化不改变目录，只影响推荐是否
+   * 还成立（由 recommendationKeyFor 处理）。 */
+  function modelTargetSignature(value) {
+    if (!value) return '';
+    return JSON.stringify([value.providerId || '', value.connection || null]);
   }
 
   /* 只清理迟到的服务端草稿；新流程（本弹窗或另一个弹窗）仍持有该标识时
@@ -204,6 +226,105 @@ export function openProviderDialog({
   function closeLateDraft(draftId) {
     if (!draftId || liveDraftInUse(draftId)) return;
     try { void credentials?.closeDraft(draftId); } catch { /* best effort */ }
+  }
+
+  function cacheIdentity() {
+    /* 凭据引用与清除意图也算身份：服务端缓存按当前权威凭据代次查询，
+     * 草稿改了引用/清除后，迟到的旧代次响应不得再并入。 */
+    return JSON.stringify([draft?.providerId || '', draft?.connection?.baseUrl || '',
+      draft?.connection?.api || '', effectiveAuthMode(draft),
+      String(draft?.envReference || '').trim(), draft?.credentialAction?.type || 'keep',
+      draft?.nativeStage ? [draft.nativeStage.action || '', draft.nativeStage.draftId || ''] : '']);
+  }
+
+  function resetCacheState() {
+    cacheNote = null;
+    cacheMergedIds = new Set();
+    cacheKey = '';
+  }
+
+  function recommendationKeyFor(value) {
+    if (!value) return '';
+    /* 认证来源也是推荐上下文：换 env 引用/本机注册引用会改变 Pi 实际读取的
+     * 凭据，同一端点的目录结果不再能代表新目标。 */
+    return JSON.stringify([value.providerId || '', value.connection?.baseUrl || '', value.connection?.api || '',
+      effectiveAuthMode(value), String(value.envReference || '').trim(), String(value.piRegistrationReference || '').trim()]);
+  }
+
+  function resetRecommendation() {
+    recommendation = null;
+    recommendedKey = '';
+    recommendedHandled = false;
+    autoPickedIds = new Set();
+  }
+
+  /* 首次推荐：只消费每个服务目标的**第一次新鲜远端结果**。缓存首屏、失败
+   * 降级、编辑既有服务、用户已经改过选择，以及之后的刷新都不改选择。
+   * 证据不足时不动选择，只把“无法可靠推荐”的原因交给界面。 */
+  function recommendFromFirstTrustedResult(meta, incoming = []) {
+    if (!draft || draft.mode !== 'create' || draft.touchedSelection === true) return;
+    if (meta?.sourceKind !== 'remote' || meta?.stale === true) return;
+    const key = recommendationKeyFor(draft);
+    if (recommendedHandled && recommendedKey === key) return;
+    // 已经不是本流程自动选择的内容（用户或别的流程选过/排过序），绝不覆盖。
+    const autoPickedOrder = [...autoPickedIds];
+    const onlyAutoPicked = autoPickedIds.size > 0 && draft.order.length === autoPickedOrder.length &&
+      draft.order.every((id, index) => id === autoPickedOrder[index]);
+    if (draft.order.length > 0 && !onlyAutoPicked) return;
+    recommendedKey = key;
+    recommendedHandled = true;
+    // 只对**本次**远端结果排序。草稿里可能还留有上一目标的候选（例如同一
+    // 实例里换回旧端点），它们不能参与新目标的推荐，更不能被自动选中。
+    const batch = (Array.isArray(incoming) ? incoming : []).map(raw => {
+      const values = raw?.effectiveValues && typeof raw.effectiveValues === 'object' ? raw.effectiveValues : {};
+      return {
+        modelId: String(raw?.modelId || raw?.id || '').trim(),
+        source: 'remote',
+        toolCalling: values.toolCalling ?? raw?.toolCalling,
+        chatCapable: values.chatCapable ?? raw?.chatCapable,
+      };
+    });
+    const result = recommendModels(batch, { limit: 3 });
+    if (!result.picks.length) {
+      autoPickedIds = new Set();
+      recommendation = { autoPicked: false, picks: [], reasons: {}, insufficient: result.insufficient === true,
+        candidates: result.candidates, unknown: result.unknown };
+      return;
+    }
+    autoPickedIds = new Set(result.picks);
+    draftStore.dispatch({ type: 'auto-select-models', modelIds: result.picks });
+    draft = draftStore.get();
+    recommendation = { autoPicked: true, picks: result.picks, reasons: result.reasons, insufficient: false };
+  }
+
+  /* 把草稿响应的匹配缓存并入候选列表：只增候选，不改 order/高级参数；
+   * 同一目标同一 ID 只合并一次，因此关闭重开不会重复，也不会复活已移除项。 */
+  function applyCachedCandidates(handle) {
+    if (disposed || view !== 'setup' || !draftStore || !draft) return;
+    // 编辑场景下响应必须属于当前服务；防止调用方漏检时跨服务合并。
+    if (handle?.serviceId && draft.mode === 'update' && handle.serviceId !== draft.sourceServiceId) return;
+    const list = Array.isArray(handle?.cachedModels) ? handle.cachedModels : [];
+    if (!list.length) return;
+    const key = cacheIdentity();
+    if (cacheKey !== key) { cacheKey = key; cacheMergedIds = new Set(); cacheNote = null; }
+    const current = draftStore.get();
+    const known = new Set(current.models.map(model => model.modelId));
+    // 已移除的候选不能被任何缓存响应复活，即使身份键变化导致 merged 集合重置。
+    const removed = new Set(Array.isArray(current.removed) ? current.removed : []);
+    const incoming = [];
+    for (const model of list) {
+      const id = String(model?.modelId || '').trim();
+      if (!id || known.has(id) || removed.has(id) || cacheMergedIds.has(id)) continue;
+      cacheMergedIds.add(id);
+      incoming.push(model);
+    }
+    if (!incoming.length) return;
+    const stale = handle.cacheStale === true || incoming.some(model => model.cacheStale === true);
+    draftStore.dispatch({ type: 'merge-models', models: incoming });
+    draft = draftStore.get();
+    panes?.update(draft, { errors: currentErrors.modelErrors, discovery: discovery?.getState() });
+    cacheNote = { count: incoming.length, stale, at: Number.isFinite(handle.cachedAt) ? handle.cachedAt : null };
+    renderStatus();
   }
 
   /* 目标（标识/端点/认证来源/本机注册引用）变化后，旧草稿句柄、暂存批准与
@@ -347,6 +468,15 @@ export function openProviderDialog({
         actions: Array.isArray(successState.actions) ? successState.actions : [],
       }));
     }
+    if (cacheNote) {
+      statusHost.appendChild(renderBanner({
+        tone: 'info',
+        title: cacheNote.stale ? '显示已过期的匹配缓存' : '显示匹配缓存',
+        message: `${cacheNote.count} 个候选来自该目标的最近一次发现${cacheNote.stale
+          ? '（已超过 60 秒，仅作历史参考；不会自动选择或改变顺序）'
+          : '（60 秒内，仅作参考；不会自动选择或改变顺序）'}。授权或刷新可获取最新目录。`,
+      }));
+    }
     if (draft?.readOnly) {
       statusHost.appendChild(renderBanner({
         tone: 'info',
@@ -463,6 +593,7 @@ export function openProviderDialog({
       retainLiveDraft(draftHandle.draftId);
     }
     configureDiscovery(discovery);
+    applyCachedCandidates(draftHandle);
     return { ok: true, ...draftHandle };
   }
 
@@ -566,21 +697,14 @@ export function openProviderDialog({
       return;
     }
     const capabilities = snapshotState?.capabilities || {};
-    if (capabilities.privateDesktopBridge !== true || capabilities.keyStaging !== true) {
+    if (capabilities.privateDesktopBridge !== true || capabilities.keyStaging !== true ||
+        capabilities.nativeCredentialPersistence !== true) {
       errorState = {
-        title: '安全凭据窗口尚未就绪',
-        message: '需要桌面应用已连接后端、启用密钥输入（PI_GUI_PROVIDER_KEY_INPUT=1）并通过 SDK 资格检查。',
+        title: '安全凭据窗口尚未开放',
+        message: '需要桌面应用已连接后端、未被 PI_GUI_PROVIDER_KEY_INPUT=0 关闭、通过 SDK 资格检查，且本机凭据存储通过安全资格检查。',
       };
       renderStatus();
       return;
-    }
-    if (action !== 'clear' && capabilities.nativeCredentialPersistence !== true) {
-      // 暂存可以用于发现/测试，但后端在保存时会以存储资格不足拒绝；先讲清楚。
-      successState = {
-        tone: 'info',
-        title: '只能暂存用于发现/测试',
-        message: '本机凭据存储未通过安全资格检查：暂存的密钥不会写入 auth.json，也不能用于保存服务。',
-      };
     }
     credentialBusy = true;
     errorState = null;
@@ -623,9 +747,7 @@ export function openProviderDialog({
         title: action === 'clear' ? '已暂存清除' : '密钥已暂存',
         message: action === 'clear'
           ? '保存服务时会从 Pi 本机凭据槽移除；模型配置与环境变量不受影响。'
-          : capabilities.nativeCredentialPersistence === true
-            ? '保存服务时会写入 Pi 本机凭据；密钥值没有进入主页面。'
-            : '暂存只用于发现/测试：本机凭据存储未通过安全资格检查，保存时不会写入 auth.json。',
+          : '保存服务时会写入 Pi 本机凭据；密钥值没有进入主页面。',
       };
       renderStatus();
       refreshHeader();
@@ -686,8 +808,10 @@ export function openProviderDialog({
         if (!draft || disposed) return;
         draftStore.dispatch({ type: 'merge-models', models });
         draft = draftStore.get();
-        // 远端候选只进入候选列表；选择与顺序保持不变。
-        panes?.update(draft, { errors: currentErrors.modelErrors, discovery: controller.getState() });
+        // 首次可信结果可以自动推荐；其余情况候选只进入候选列表，选择不变。
+        recommendFromFirstTrustedResult(meta, models);
+        panes?.update(draft, { errors: currentErrors.modelErrors, discovery: controller.getState(), recommendation });
+        if (meta?.sourceKind === 'remote' && cacheNote) { cacheNote = null; renderStatus(); }
         if (meta?.stale) {
           successState = {
             tone: 'info',
@@ -753,6 +877,7 @@ export function openProviderDialog({
       errors: currentErrors.modelErrors,
       capabilities: snapshotState?.capabilities || {},
       discovery: discovery?.getState(),
+      recommendation,
       onRefresh: payload => {
         if (!discovery) return;
         if (!discoverySupported(snapshotState)) return;
@@ -771,6 +896,34 @@ export function openProviderDialog({
     renderStatus();
     maybeRunIntent();
     focusAfterSetup();
+    /* FIX-01：编辑既有服务时用只读缓存端点取与当前权威目标严格绑定的首屏
+     * 候选（不写草稿、不联网）。失败不阻塞编辑；用户动作会走正常授权流程。
+     * 迟到响应必须仍属于发起请求时的服务与目标，否则丢弃——切换服务或改
+     * 目标后把旧服务的缓存并进新草稿，会把旧模型 ID 写进新供应商配置。 */
+    if (!legacy && snapshotState && draft?.mode === 'update' && typeof managementApi.fetchProviderServiceCache === 'function') {
+      const key = cacheIdentity();
+      const serviceId = draft.sourceServiceId;
+      const epoch = lifecycleEpoch;
+      const target = targetSignature;
+      const stillCurrent = () => !disposed && view === 'setup' && lifecycleEpoch === epoch &&
+        targetSignature === target && draft?.mode === 'update' && draft?.sourceServiceId === serviceId &&
+        cacheIdentity() === key;
+      if (cacheBootstrapKey !== key && serviceId) {
+        cacheBootstrapKey = key;
+        setTimeout(() => {
+          if (!stillCurrent()) return;
+          Promise.resolve(managementApi.fetchProviderServiceCache(serviceId))
+            .then(result => {
+              // 丢弃迟到结果时清掉标记：切回同一服务/目标后仍可重新取首屏缓存。
+              if (!stillCurrent()) { cacheBootstrapKey = ''; return; }
+              // 服务端回显的 serviceId 也必须一致；不一致说明响应已属另一目标。
+              if (result?.ok === true && result.serviceId === serviceId) applyCachedCandidates(result);
+              else if (result?.ok !== true) cacheBootstrapKey = '';
+            })
+            .catch(() => { cacheBootstrapKey = ''; });
+        }, 0);
+      }
+    }
   }
 
   function focusAfterSetup() {
@@ -789,16 +942,38 @@ export function openProviderDialog({
     draftHandle = null;
     targetSignature = draftTargetSignature(nextDraft);
     authSignature = effectiveAuthMode(nextDraft);
+    resetRecommendation();
     draftStore = createDraftStore(nextDraft);
     unsubscribe = draftStore.subscribe((state, action) => {
       const previous = draft;
       draft = state;
       const nextTarget = draftTargetSignature(state);
       const nextAuth = effectiveAuthMode(state);
-      if (nextTarget !== targetSignature || nextAuth !== authSignature) {
+      const targetContextChanged = nextTarget !== targetSignature || nextAuth !== authSignature;
+      if (targetContextChanged) {
         targetSignature = nextTarget;
         authSignature = nextAuth;
-        // 目标/认证来源变化：旧句柄、暂存批准、发现授权全部作废。
+        /* 端点/供应商标识变化：上一目标的发现/缓存候选不属于新目标，先从
+         * 草稿里移除，避免被重新推荐或随保存写入新端点。认证来源变化只
+         * 改变凭据读取方式，目录候选仍保留。 */
+        if (modelTargetSignature(previous) !== modelTargetSignature(state)) {
+          draftStore.dispatch({ type: 'drop-target-discovery' });
+          state = draftStore.get();
+          draft = state;
+        }
+        /* 换端点/协议后，上一目标的自动推荐不再适用；只在用户还没碰过
+         * 选择时撤销，并且不把这次撤销算成用户操作。 */
+        const nextRecommendationKey = recommendationKeyFor(state);
+        if (recommendedKey && nextRecommendationKey !== recommendedKey) {
+          if (autoPickedIds.size && state.touchedSelection !== true) {
+            draftStore.dispatch({ type: 'auto-select-models', modelIds: [] });
+            state = draftStore.get();
+            draft = state;
+          }
+          resetRecommendation();
+        }
+        // 目标/认证来源变化：旧句柄、暂存批准、发现授权与首屏缓存全部作废。
+        resetCacheState();
         const hadStage = Boolean(previous?.nativeStage);
         revokeDraftArtifacts();
         if (hadStage && !state.nativeStage && view === 'setup') {
@@ -816,6 +991,16 @@ export function openProviderDialog({
       refreshHeader();
       syncServiceChip();
       if (discovery && view === 'setup') configureDiscovery(discovery);
+      /* 端点/认证来源变化可能已经撤销自动选择（或让推荐失去意义），
+       * 但模型栏不订阅 draftStore；必须显式同步，否则界面仍显示旧的
+       * 已选行，用户保存时却提交了空选择。 */
+      if (targetContextChanged && panes && view === 'setup') {
+        panes.update(state, {
+          errors: currentErrors.modelErrors,
+          discovery: discovery?.getState(),
+          recommendation,
+        });
+      }
       if (['native-stage', 'native-stage-clear', 'clear-credential'].includes(action?.type) && view === 'setup') {
         rebuildConnection();
         renderStatus();
@@ -1250,6 +1435,28 @@ export function openProviderDialog({
     saving = false;
     dialogCard?.removeAttribute('aria-busy');
     refreshHeader();
+    if (phase === 'commit' && result?.code === 'invalid_request' && result?.fieldErrors?.confirmBuiltinOverride
+        && draft && draft.confirmBuiltinOverride !== true) {
+      /* P6：内置供应商首次写模型覆盖时服务端强制确认。快照没有可靠的
+       * builtin 标识（旧入口写入的 provider 没有 GUI 元数据），因此由服务端的
+       * 明确字段错误触发确认；确认后只重试一次（draft 已带 confirm 标记）。 */
+      const ok = await confirmModal({
+        title: '覆盖内置模型配置？',
+        message: '该供应商的模型由 Pi 内置配置提供。保存会把当前模型的字段写入 GUI 覆盖层：只影响你改过的字段，内置默认值仍保留。',
+        okText: '覆盖并保存',
+        cancelText: '取消',
+      });
+      if (disposed) return;
+      if (!ok) {
+        errorState = { title: '已取消保存', message: '未确认覆盖内置模型配置，本次没有写入任何更改。' };
+        renderStatus();
+        return;
+      }
+      draftStore.dispatch({ type: 'builtin-override' });
+      draft = draftStore.get();
+      await save();
+      return;
+    }
     if (phase === 'draft' && result?.code === 'draft_conflict') {
       // 草稿已被服务端替换：旧句柄上的暂存与发现授权都不能继续使用。
       revokeDraftArtifacts();

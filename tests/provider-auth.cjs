@@ -254,11 +254,20 @@ async function actualWorkerCases(dir, flow, sdk) {
   const packageDir = path.join(dir, 'fake-public-sdk'); fs.mkdirSync(packageDir);
   fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '1.0.0', type: 'module', exports: { '.': './index.js' } }));
   fs.writeFileSync(path.join(packageDir, 'index.js'), `
+import fs from 'node:fs';
 const secret=${JSON.stringify(SECRET)};
 const providerIds=['browser','device','manual','select','native-abort','failure','secret-input','unsafe'];
 const stored=new Set(['browser']);
 export class ModelRuntime {
- static async create(options) { if(options.allowModelNetwork!==false||options.refreshOnCreate!==false) throw Error('unexpected network policy'); if(process.env.PI_GUI_TOKEN) throw Error('renderer token leaked into worker'); console.log(secret); console.error(secret); return new ModelRuntime(); }
+ static async create(options) {
+  if(options.allowModelNetwork!==false||options.refreshOnCreate!==false) throw Error('unexpected network policy');
+  if(process.env.PI_GUI_TOKEN) throw Error('renderer token leaked into worker');
+  // 认证 SDK 的 list/quota 会另建只读 runtime；漏传 authPath 时真实 Pi
+  // 会去读默认 agent 目录，自定义 PI_CODING_AGENT_DIR 下就看不到已存凭据。
+  fs.appendFileSync(new URL('./authpaths.log', import.meta.url), String(options.authPath) + '|' + String(options.modelsPath) + '\\n');
+  if(typeof options.authPath!=='string'||typeof options.modelsPath!=='string') throw Error('missing native storage path');
+  console.log(secret); console.error(secret); return new ModelRuntime();
+ }
  constructor(){this.stored=stored;}
  getProviders(){return [...providerIds.map(id=>({id,name:id,auth:{oauth:{name:'Subscription',isSubscription:true,login(){}}}})),{id:'key-only',name:'API Key',auth:{apiKey:{name:'API Key',login(){}}}},{id:'env-only',name:'Environment',auth:{apiKey:{name:'Environment'}}}];}
  async listCredentials(){return [...this.stored].map(providerId=>({providerId,type:'oauth',access:secret,refresh:secret,account:secret})).concat([{providerId:'key-only',type:'api_key',key:secret}]);}
@@ -280,7 +289,9 @@ export class ModelRuntime {
 }
 `);
   const privateStreams = []; const wireMessages = []; let workerEnv;
-  const adapter = sdk.createAuthSdk({ resolvePackageDir: () => packageDir, identityKey: () => 'actual-worker-fixture', env: { ...process.env, PI_GUI_TOKEN: SECRET }, workerFactory(source, entry, env) {
+  const expectedAuthPath = path.join(dir, 'native-auth.json');
+  const expectedModelsPath = path.join(dir, 'native-models.json');
+  const adapter = sdk.createAuthSdk({ resolvePackageDir: () => packageDir, identityKey: () => 'actual-worker-fixture', authPath: expectedAuthPath, modelsPath: expectedModelsPath, env: { ...process.env, PI_GUI_TOKEN: SECRET }, workerFactory(source, entry, env) {
     workerEnv = env;
     const worker = new Worker(source, { eval: true, workerData: entry, env, stdout: true, stderr: true });
     worker.on('message', m => wireMessages.push(m));
@@ -294,6 +305,11 @@ export class ModelRuntime {
     process.stdout.write = function(chunk, ...args) { parentOutput.push(String(chunk)); return stdoutWrite.call(this, chunk, ...args); };
     process.stderr.write = function(chunk, ...args) { parentOutput.push(String(chunk)); return stderrWrite.call(this, chunk, ...args); };
     listed = await adapter.list();
+    const seenAuthPaths = fs.readFileSync(path.join(packageDir, 'authpaths.log'), 'utf8').trim().split('\n');
+    check('actual worker passes the configured auth and models paths to every native runtime', () => {
+      assert.ok(seenAuthPaths.length >= 2, 'primary and list runtimes both created');
+      assert.ok(seenAuthPaths.every(item => item === expectedAuthPath + '|' + expectedModelsPath));
+    });
     const events = [];
     await adapter.login('browser', 'oauth', { notify: e => events.push(e), prompt: async () => 'unused' });
     await tick();

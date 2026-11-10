@@ -27,15 +27,32 @@ const defaultMetadata = () => ({ schemaVersion: 1, services: {}, receipts: {} })
 // Administrators group (S-1-5-32-544), not the user SID — staged files are
 // therefore accepted under either owner, while the single full-control DACL
 // rule for the current user keeps them private to this account either way.
+//
+// 凭据文件的机密性由**文件自身**的 protected DACL 保证；但父目录的
+// DeleteChild / ChangePermissions / TakeOwnership 能让另一个本地用户删掉
+// 并替换整个文件或 agent 目录，因此祖先与目录还必须检查「非继承的危险
+// Allow ACE」。正常用户目录只含当前用户/SYSTEM/Administrators；不把
+// S-1-15-* 整体当成可信——ALL APPLICATION PACKAGES 不是单包隔离，任何
+// 打包应用都可能落入该组。凭据目录还额外拒绝不可信的写/建文件权限，
+// 避免他人在暂存与发布之间抢占文件名。不要求目录自身是 protected（那会
+// 让普通 profile 目录永远不合格）。
 const PRIVATE_ACL = String.raw`
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+$trusted = @($sid.Value, 'S-1-5-18', 'S-1-5-32-544', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+function Trusted([string]$value) {
+  return ($value -in $trusted)
+}
+function Deny([string]$reason) {
+  if ($env:PI_GUI_ACL_DEBUG) { [Console]::Error.WriteLine("acl: $reason") }
+  exit 1
+}
 foreach ($item in @($request.targets)) {
   $info = if ($item.directory) { [IO.DirectoryInfo]::new($item.path) } else { [IO.FileInfo]::new($item.path) }
-  if (-not $info.Exists -or ($info.Attributes -band [IO.FileAttributes]::ReparsePoint)) { exit 1 }
-  if (-not $request.verifyOnly) {
+  if (-not $info.Exists -or ($info.Attributes -band [IO.FileAttributes]::ReparsePoint)) { Deny "missing-or-reparse $($item.path)" }
+  if (-not $request.verifyOnly -and $item.prepare) {
     $acl = $info.GetAccessControl()
     $acl.SetOwner($sid)
     $acl.SetAccessRuleProtection($true, $false)
@@ -48,32 +65,46 @@ foreach ($item in @($request.targets)) {
   $rules = @($check.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
   $ownerSid = $check.GetOwner([Security.Principal.SecurityIdentifier])
   $owned = $ownerSid.Value -eq $sid.Value -or $ownerSid.Value -eq 'S-1-5-32-544'
-  if ($item.ancestor) {
-    if ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($item.path)).DriveType -ne 'Fixed') { exit 1 }
-    $trusted = @($sid.Value, 'S-1-5-18', 'S-1-5-32-544', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
-    if ($ownerSid.Value -notin $trusted) { exit 1 }
+  if ($item.ancestor -or $item.credentialDirectory) {
+    if ([IO.DriveInfo]::new([IO.Path]::GetPathRoot($item.path)).DriveType -ne 'Fixed') { Deny "not-fixed $($item.path)" }
+    if (-not (Trusted $ownerSid.Value)) { Deny "owner $($item.path) $($ownerSid.Value)" }
+    # 文件自身的 protected DACL 挡住读取/改写；但父目录的 DeleteChild /
+    # ChangePermissions / TakeOwnership 仍能让另一个本地用户删掉并替换
+    # 整个 auth.json（或 agent 目录）。正常用户目录只有当前用户/SYSTEM/
+    # Administrators；AppContainer（S-1-15-*）是系统包沙箱，不授予其他
+    # 本地用户访问。其余非继承的危险 ACE 一律 fail-closed。
     $danger = [Security.AccessControl.FileSystemRights]'DeleteSubdirectoriesAndFiles, Delete, ChangePermissions, TakeOwnership'
+    if ($item.credentialDirectory) {
+      $danger = $danger -bor [Security.AccessControl.FileSystemRights]'Write, AppendData, CreateDirectories'
+    }
     foreach ($rule in $rules) {
-      if ($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Value -notin $trusted -and
+      if ($rule.AccessControlType -eq 'Allow' -and -not (Trusted $rule.IdentityReference.Value) -and
           -not ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) -and
-          ($rule.FileSystemRights -band $danger)) { exit 1 }
+          ($rule.FileSystemRights -band $danger)) {
+        Deny "ancestor-danger $($item.path) $($rule.IdentityReference.Value) $($rule.FileSystemRights)"
+      }
     }
     continue
   }
-  if ((($item.directory -or $item.requireProtected) -and -not $check.AreAccessRulesProtected) -or -not $owned -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow') { exit 1 }
+  if ((($item.directory -or $item.requireProtected) -and -not $check.AreAccessRulesProtected) -or -not $owned -or $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $sid.Value -or $rules[0].AccessControlType -ne 'Allow') {
+    Deny "strict $($item.path) protected=$($check.AreAccessRulesProtected) owned=$owned rules=$($rules.Count)"
+  }
   if ($item.nativeStorage) {
     if (($rules[0].FileSystemRights -band [Security.AccessControl.FileSystemRights]::FullControl) -ne [Security.AccessControl.FileSystemRights]::FullControl -or
         $rules[0].PropagationFlags -ne 'None' -or
-        ($item.directory -and -not ($rules[0].InheritanceFlags -band [Security.AccessControl.InheritanceFlags]::ObjectInherit))) { exit 1 }
+        ($item.directory -and -not ($rules[0].InheritanceFlags -band [Security.AccessControl.InheritanceFlags]::ObjectInherit))) { Deny "native-storage $($item.path) rights=$($rules[0].FileSystemRights)" }
   }
 }
 `;
 function windowsAcl(targets, verifyOnly = false) {
   const shell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const result = spawnSync(shell, ['-NoLogo','-NoProfile','-NonInteractive','-Command',PRIVATE_ACL], {
-    input: JSON.stringify({ targets, verifyOnly }), windowsHide: true, stdio: ['pipe','ignore','ignore'], timeout: 10000,
+    input: JSON.stringify({ targets, verifyOnly }), windowsHide: true, stdio: ['pipe','ignore','pipe'], timeout: 10000,
   });
-  if (result.status !== 0) fail('config_unsafe');
+  if (result.status !== 0) {
+    if (process.env.PI_GUI_ACL_DEBUG) console.error('acl check failed:', String(result.stderr || result.error || ''));
+    fail('config_unsafe');
+  }
 }
 
 function safeReceipt(value) {
@@ -208,7 +239,7 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     const id = identity(io.fstatSync(fd, { bigint: true }));
     let ok = false;
     try {
-      if (privateFile && process.platform === 'win32') windowsAcl([{ path: file, directory: false }]);
+      if (privateFile && process.platform === 'win32') windowsAcl([{ path: file, directory: false, prepare: true }]);
       parents(path.dirname(file));
       const s = plain(file);
       if (!s || identity(s) !== id) fail('config_unsafe');
@@ -408,6 +439,14 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       unconfirmed: value.operations.some(unresolved), expected, removed: metadata.syncRemoved ?? [],
       native: hash(JSON.stringify([states.models.stamp, states.models.digest, authStamp, value.authGeneration])) };
   }
+  function storageAncestors(directory) {
+    const ancestors = [];
+    for (let p = path.dirname(directory); p !== directory; p = path.dirname(p)) {
+      ancestors.push(p);
+      if (p === path.dirname(p)) break;
+    }
+    return ancestors;
+  }
   function authorizeCredentialStorage({ authPath }) {
     const directory = path.dirname(files.models);
     if (path.resolve(authPath) !== path.join(directory, 'auth.json')) return false;
@@ -415,16 +454,15 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       if (!parents(directory)) return false;
       const parent = stat(directory);
       const auth = plain(authPath);
+      // Windows 没有「创建即 0600」：文件缺失时不能假设 Pi 会把它建成私有
+      // DACL。prepareCredentialStorage 负责先创建，再按同一见证复核。
+      if (process.platform === 'win32' && !auth) return false;
       if (auth?.size > 8n * 1024n * 1024n) return false;
-      const ancestors = [];
-      for (let p = path.dirname(directory); p !== directory; p = path.dirname(p)) {
-        ancestors.push(p);
-        if (p === path.dirname(p)) break;
-      }
+      const ancestors = storageAncestors(directory);
       if (process.platform === 'win32') {
         windowsAcl([...ancestors.map(p => ({ path: p, directory: true, ancestor: true })),
-          { path: directory, directory: true, nativeStorage: true },
-          ...(auth ? [{ path: authPath, directory: false, nativeStorage: true }] : [])], true);
+          { path: directory, directory: true, credentialDirectory: true },
+          ...(auth ? [{ path: authPath, directory: false, nativeStorage: true, requireProtected: true }] : [])], true);
       } else {
         // Linux ACL masks participate in the mode bits. Other platforms need
         // an ACL-specific witness before the Unix-mode check can qualify them.
@@ -442,6 +480,102 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       return Boolean(parents(directory)) && stamp(stat(directory)) === stamp(parent) &&
         (after ? stamp(after) : null) === (auth ? stamp(auth) : null);
     } catch { return false; }
+  }
+  /* 正常 Windows 上 Pi 只用 mode 0600 写 auth.json —— 该参数在 Windows 上
+   * 不设置 DACL，文件继承用户目录的规则，因此「只校验既有 ACL」会让每一台
+   * 普通机器都拒绝原生保存。这里补齐缺失的安全存储步骤：在凭据文件第一次
+   * 使用前，由 GUI 以当前用户为所有者建立 **受保护的** 单用户 DACL；不修改
+   * 父目录（它可能是用户沙箱工具正常写入的位置，且目录权限不授予文件读取）。
+   * 已存在的文件只改 ACL、不改内容；新建文件先在随机暂存目录里完成加固，
+   * 再用同卷 rename 落到 auth.json，避免出现「文件已存在但 ACL 尚未收紧」的
+   * 窗口。任何一步失败都返回 false，调用方继续 fail-closed。 */
+  /* 暂存目录必须先收紧 DACL，再写入任何文件。否则另一本地用户可以在
+   * 目录仍继承父级权限时打开 staged auth.json 的句柄；之后 Pi 的 login
+   * 以原位 writeFileSync 写入同一 inode，旧句柄就能读到新密钥。 */
+  function privateStaging(directory) {
+    const staging = path.join(directory, `.pi-gui-credential-${randomUUID()}`);
+    io.mkdirSync(staging, { mode: 0o700 });
+    try {
+      windowsAcl([{ path: staging, directory: true, nativeStorage: true, requireProtected: true, prepare: true }]);
+    } catch (error) {
+      try { io.rmSync(staging, { recursive: true, force: true }); } catch { /* best effort */ }
+      throw error;
+    }
+    return staging;
+  }
+
+  /* 既有 auth.json 若不合格，不能原位改 ACL 后直接放行：另一个本地用户
+   * 可能已经持有旧文件的读句柄，DACL 收紧不会撤销它。这里把内容复制到
+   * 新 inode（先加固目录/文件），再原子替换路径；旧句柄只能看到旧内容。
+   * 复制前后核对源文件身份，写入竞态时 fail-closed。 */
+  function publishPrivateCopy(source, directory) {
+    const staging = privateStaging(directory);
+    try {
+      const staged = path.join(staging, 'auth.json');
+      const before = plain(source);
+      if (!before || before.size > 8n * 1024n * 1024n) return false;
+      io.copyFileSync(source, staged, fs.constants.COPYFILE_EXCL);
+      const after = plain(source);
+      if (!after || stamp(after) !== stamp(before)) return false;
+      windowsAcl([{ path: staged, directory: false, nativeStorage: true, requireProtected: true, prepare: true }]);
+      io.renameSync(staged, source);
+      return true;
+    } finally {
+      try { io.rmSync(staging, { recursive: true, force: true }); } catch { /* 已原子移走 */ }
+    }
+  }
+
+  function prepareCredentialStorage({ authPath } = {}) {
+    const directory = path.dirname(files.models);
+    if (path.resolve(String(authPath)) !== path.join(directory, 'auth.json')) return false;
+    // 非 Windows 平台由 Pi 自己的 mkdir(0700)/mode(0600) 保证；只做复核。
+    if (process.platform !== 'win32') return authorizeCredentialStorage({ authPath });
+    try {
+      if (!parents(directory)) {
+        try { io.mkdirSync(directory, { recursive: true, mode: 0o700 }); }
+        catch (error) { if (error.code !== 'EEXIST') throw error; }
+        if (!parents(directory)) return false;
+      }
+      // 先确认祖先/目录本身不会被不可信主体改写安全描述符，再动凭据文件。
+      windowsAcl([...storageAncestors(directory).map(p => ({ path: p, directory: true, ancestor: true })),
+        { path: directory, directory: true, credentialDirectory: true }], true);
+      const auth = plain(authPath);
+      if (auth?.size > 8n * 1024n * 1024n) return false;
+      if (!auth) {
+        const staging = privateStaging(directory);
+        try {
+          const staged = path.join(staging, 'auth.json');
+          // 与 Pi 的初始形状一致：合法 JSON、无任何秘密。
+          io.writeFileSync(staged, '{}\n', { flag: 'wx', mode: 0o600 });
+          windowsAcl([{ path: staged, directory: false, nativeStorage: true, requireProtected: true, prepare: true }]);
+          try {
+            /* 不能 rename 覆盖：Pi 可能在这几毫秒里刚创建并写入真实凭据。
+             * 硬链接是原子“仅当目标不存在”的发布，且沿用已加固文件的同一
+             * DACL；随后的 staged 链接由 finally 删除，nlink 回到 1。 */
+            io.linkSync(staged, authPath);
+          } catch (error) {
+            if (error.code !== 'EEXIST') throw error;
+            // 并发创建者赢了：复制到新 inode 后替换，绝不改写其内容。
+            if (!publishPrivateCopy(authPath, directory)) return false;
+          }
+        } finally {
+          try { io.rmSync(staging, { recursive: true, force: true }); } catch { /* 已原子移走 */ }
+        }
+      } else {
+        // 已经合格就不要再 Set-AccessControl：重复写 ACL 会改 ctime，使 worker
+        // 在同一保存流程里的 inspect 误判为“文件在读取期间变化”。
+        let qualified = false;
+        try {
+          windowsAcl([{ path: authPath, directory: false, nativeStorage: true, requireProtected: true }], true);
+          qualified = true;
+        } catch { /* 需要迁移到新 inode */ }
+        if (!qualified && !publishPrivateCopy(authPath, directory)) return false;
+      }
+      return authorizeCredentialStorage({ authPath });
+    } catch (error) {
+      if (process.env.PI_GUI_ACL_DEBUG) console.error('prepareCredentialStorage:', error);
+      return false;
+    }
   }
   function recoverPreparedOperations() {
     if (!readOperations().value.operations.some(item => item.phase === 'prepared')) return;
@@ -615,7 +749,7 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
       }
       io.mkdirSync(txPath, { mode: 0o700 });
       parents(txPath);
-      if (process.platform === 'win32') windowsAcl([{ path: txPath, directory: true }]);
+      if (process.platform === 'win32') windowsAcl([{ path: txPath, directory: true, prepare: true }]);
       let published = false;
       try {
         const entries = {};
@@ -736,5 +870,5 @@ export function createProviderConfigStore({ modelsJson, metadataPath, fault = ()
     if (!stat(txPath)) return;
     return withLock(() => recover());
   }
-  return { read, transact, recoverPending, withCredentialOperation, acquireOAuthWrite, readAuthSyncIntent, readSyncEvidence, authorizeCredentialStorage };
+  return { read, transact, recoverPending, withCredentialOperation, acquireOAuthWrite, readAuthSyncIntent, readSyncEvidence, authorizeCredentialStorage, prepareCredentialStorage };
 }

@@ -167,6 +167,32 @@ function isSafeReleaseUrl(url) {
   return host.endsWith(GITHUBUSERCONTENT_SUFFIX);
 }
 
+/** 等**本实例刚 spawn 的**后端开始应答。
+ *
+ * 为什么不能把一次 `foreign-service` 当成终局：后端进程起来后，监听 socket 和
+ * 事件循环不是同一时刻就绪的 —— 刚 bind 完还在做启动工作（读配置、起 Pi、
+ * 加载扩展）时，500ms 的健康检查会超时；上一实例退出时端口也可能短暂处于
+ * 半关闭状态。此时直接放弃，用户看到的是「端口被占用」的错误框，重启必现。
+ *
+ * 判据只认**子进程是否还活着**：还活着就等到总超时，真的退出了才立即返回。
+ * 这样既不会把瞬态当永久，也不会在子进程已死时白等 25 秒。探测本身仍是
+ * 严格的 `state === 'pi-gui'` —— 只是不把「这一次没答上来」升级成「永远不是」。
+ *
+ * 依赖注入成纯逻辑，才能在普通 Node 下用假时钟/假探测验证这个竞态。
+ */
+async function waitForBackend({ probe: probeOnce, isChildAlive, timeoutMs = 25000,
+  intervalMs = 150, now = Date.now, sleep } = {}) {
+  const deadline = now() + timeoutMs;
+  const pause = sleep || (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  while (now() < deadline) {
+    const result = await probeOnce();
+    if (result?.state === 'pi-gui') return true;
+    if (typeof isChildAlive === 'function' && !isChildAlive()) return false;
+    await pause(intervalMs);
+  }
+  return false;
+}
+
 module.exports = {
   APP_ID,
   PROTOCOL,
@@ -174,6 +200,7 @@ module.exports = {
   getJson,
   classifyHealth,
   probe,
+  waitForBackend,
   isSelfUrl,
   isSafeExternal,
   isSafeWebUrl,

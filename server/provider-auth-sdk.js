@@ -108,12 +108,23 @@ const { createHash } = require('node:crypto');
 let sdk, runtime, initialization;
 const operations = new Map(); const answers = new Map(); let promptSequence = 0;
 const quotaCache = new Map(), quotaInFlight = new Map();
+function createRuntime(){
+  // 自定义供应商只存在于 models.json；只传 authPath 时 SDK 的 getProviders
+  // 看不到它们，已保存的原生 Key 就会被误报成未配置。modelsStore 把 SDK
+  // 可能产生的模型写入留在内存里，避免绕过 GUI 的事务性配置存储。
+  const models=new Map();
+  return sdk.ModelRuntime.create({allowModelNetwork:false,refreshOnCreate:false,
+    ...(workerData.authPath?{authPath:workerData.authPath}:{}),
+    ...(workerData.modelsPath?{modelsPath:workerData.modelsPath,modelsStore:{
+      async read(id){return models.get(id);},async write(id,item){models.set(id,item);},async delete(id){models.delete(id);},
+    }}:{})});
+}
 function emptyQuota(providerId,status,message,credentialAvailable=null,quotaSupported=false) {
   const facts={providerExists:true,quotaSupported,credentialAvailable,quotaQuerySucceeded:false};
   return {ok:true,...facts,cached:false,quota:{providerId,status,balance:null,balances:null,windows:null,rateLimit:null,resetAt:null,source:'none',updatedAt:new Date().toISOString(),message,...facts}};
 }
 async function quota(providerId, options, signal) {
-  const snapshot=await sdk.ModelRuntime.create({allowModelNetwork:false,refreshOnCreate:false});
+  const snapshot=await createRuntime();
   const p=snapshot.getProviders().find(p=>p.id===providerId);
   if(!p)return {ok:false,error:'供应商不存在',quota:null,providerExists:false,quotaSupported:false,credentialAvailable:null,quotaQuerySucceeded:false};
   const adapter=nativeAdapters.resolve(providerId,{baseUrl:p.baseUrl});
@@ -148,7 +159,7 @@ async function initialize() {
   const M = sdk.ModelRuntime;
   const required = ['getProviders', 'listCredentials', 'checkAuth', 'login', 'logout'];
   if (!M || typeof M.create !== 'function' || required.some(k => typeof M.prototype[k] !== 'function')) throw Error('unsupported');
-  runtime = await M.create({ allowModelNetwork:false, refreshOnCreate:false, ...(workerData.authPath ? { authPath:workerData.authPath } : {}) });
+  runtime = await createRuntime();
 }
 function ready() { return initialization || (initialization = initialize()); }
 function methods(p) {
@@ -161,7 +172,7 @@ async function list(signal) {
   // Refresh composition without catalog network calls. Pi performs its own
   // auth checks and key resolution; those values never leave this worker.
   // Stored key enumeration skips resolution in the descriptor pass.
-  const snapshot = await sdk.ModelRuntime.create({ allowModelNetwork:false, refreshOnCreate:false });
+  const snapshot = await createRuntime();
   const credentials = await snapshot.listCredentials({signal});
   const stored = new Map(credentials.map(c=>[c.providerId,c.type]));
   const providers=[];
@@ -234,7 +245,7 @@ parentPort.on('message', async m => {
 });
 `;
 
-export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env = process.env, authPath, workerFactory = null, quotaTimeoutMs = 15_000 } = {}) {
+export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env = process.env, authPath, modelsPath = null, workerFactory = null, quotaTimeoutMs = 15_000 } = {}) {
   let worker = null, workerKey = null, sequence = 0, capability = { sdkAvailable: false, reason: '当前 Pi 不支持 GUI 登录；请在 Pi 交互终端使用 /login、/logout', piVersion: null };
   const pending = new Map();
   function dispose() {
@@ -247,7 +258,7 @@ export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env =
     if (worker && workerKey === key) return true;
     dispose();
     const resolved = resolveAuthSdk(resolvePackageDir?.());
-    const entry = resolved && { ...resolved, ...(authPath ? { authPath } : {}) };
+    const entry = resolved && { ...resolved, ...(authPath ? { authPath } : {}), ...(modelsPath ? { modelsPath } : {}) };
     capability = { sdkAvailable: false, reason: '当前 Pi 不支持 GUI 登录；请在 Pi 交互终端使用 /login、/logout', piVersion: entry?.version || null };
     if (!entry) return false;
     // Workers do not get Electron's HTTP token. SDK diagnostics are private,

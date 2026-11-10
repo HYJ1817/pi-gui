@@ -48,14 +48,35 @@ function capabilityBadges(model) {
   if (model.reasoning === true) chips.push('推理');
   if (Array.isArray(model.input) && model.input.includes('image')) chips.push('图像');
   if (model.contextWindow) chips.push(`${formatCompact(model.contextWindow)} 上下文`);
+  else if (model.source === 'remote' || model.source === 'cache') chips.push('上下文未知');
   if (model.maxTokens) chips.push(`${formatCompact(model.maxTokens)} 输出`);
+  else if (model.source === 'remote' || model.source === 'cache') chips.push('输出未知');
   if (model.toolCalling === true) chips.push('工具');
   if (model.streaming === true) chips.push('流式');
   return chips;
 }
 
+/* 显示回退：发现/缓存候选的 name/容量等元数据是服务端白名单化后的只读值，
+ * 只用于展示（行标题、容量徽标），不参与编辑与持久化比较。 */
+function displayOf(model) {
+  /* 只有发现/缓存候选使用展示回退；configured/builtin-override 的显示必须
+   * 服从当前草稿的编辑状态（清空字段即恢复继承/默认，不被旧值遮盖）。 */
+  const fallback = model.source === 'remote' || model.source === 'cache' ? (model.displayValues || {}) : {};
+  return {
+    ...model,
+    name: model.name || fallback.name || null,
+    contextWindow: model.contextWindow || fallback.contextWindow || null,
+    maxTokens: model.maxTokens || fallback.maxTokens || null,
+    reasoning: model.reasoning ?? fallback.reasoning ?? null,
+    input: Array.isArray(model.input) && model.input.length
+      ? model.input
+      : Array.isArray(fallback.input) && fallback.input.length ? fallback.input : null,
+  };
+}
+
 function sourceBadge(model) {
-  return h('span', { class: `pm-model-source is-${model.source}`, text: SOURCE_LABEL[model.source] || '模型' });
+  const label = model.source === 'cache' && model.cachedStale ? '缓存已过期' : SOURCE_LABEL[model.source] || '模型';
+  return h('span', { class: `pm-model-source is-${model.source}`, text: label });
 }
 
 function errorText(errors, modelId, fieldName) {
@@ -141,16 +162,17 @@ function discoveryNote(state, { onRefresh, onAuthorize, onTest, onCancel }) {
 
 function candidateRow(model, draft, dispatch, errors) {
   const selected = draft.order.includes(model.modelId);
+  const shown = displayOf(model);
   const checkbox = h('input', {
     type: 'checkbox',
     class: 'pm-checkbox',
     checked: selected,
     'data-model-check': model.modelId,
     'data-focus-key': `candidate:${model.modelId}`,
-    'aria-label': `${selected ? '取消选择' : '选择'}模型 ${model.name || model.modelId}`,
+    'aria-label': `${selected ? '取消选择' : '选择'}模型 ${shown.name || model.modelId}`,
   });
   checkbox.addEventListener('change', () => dispatch({ type: 'toggle-model', modelId: model.modelId, selected: checkbox.checked }));
-  const badges = capabilityBadges(model);
+  const badges = capabilityBadges(shown);
   const modelError = errors?.[model.modelId];
   return h('label', {
     class: `pm-model-row pm-candidate-row${selected ? ' is-selected' : ''}${modelError ? ' has-error' : ''}`,
@@ -159,12 +181,12 @@ function candidateRow(model, draft, dispatch, errors) {
   checkbox,
   h('span', { class: 'pm-model-row-copy' },
     h('span', { class: 'pm-model-row-title' },
-      h('span', { class: 'pm-model-name', text: model.name || model.modelId }),
+      h('span', { class: 'pm-model-name', text: shown.name || model.modelId }),
       sourceBadge(model),
       modelError ? h('span', { class: 'pm-model-error-dot', title: '该模型参数有误', text: '!' }) : null,
     ),
     h('span', { class: 'pm-model-row-sub' },
-      h('span', { class: 'pm-model-id', text: model.name ? model.modelId : '' }),
+      h('span', { class: 'pm-model-id', text: shown.name ? model.modelId : '' }),
       ...badges.map(text => h('span', { class: 'pm-model-chip', text })),
     ),
     modelError ? h('span', { class: 'pm-model-inline-error', text: Object.values(modelError)[0] }) : null,
@@ -173,6 +195,13 @@ function candidateRow(model, draft, dispatch, errors) {
 
 function advancedPanel(model, draft, dispatch, errors, onRemove) {
   const setField = (fieldName, value) => dispatch({ type: 'model-field', modelId: model.modelId, field: fieldName, value });
+  /* 未知 ≠ 继承：发现/缓存候选若目录没给容量，输入框必须说“未知”；配置里
+   * 留空才是“继承 Pi 默认”。两者都不写入补丁，也不在界面上显示成 0。 */
+  const shown = displayOf(model);
+  const discovered = model.source === 'remote' || model.source === 'cache';
+  const sizePlaceholder = (value) => discovered
+    ? (value ? `目录 ${formatCompact(value)} · 留空继承` : '未知 · 留空继承')
+    : '继承';
   const nameInput = h('input', {
     type: 'text',
     class: 'pm-input pm-input-small',
@@ -189,7 +218,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
     step: '1',
     class: 'pm-input pm-input-small',
     value: model.contextWindow || '',
-    placeholder: '继承',
+    placeholder: sizePlaceholder(shown.contextWindow),
     'aria-label': '上下文窗口',
     'data-model-field': `${model.modelId}:contextWindow`,
     'data-focus-key': `advanced:${model.modelId}:contextWindow`,
@@ -201,7 +230,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
     step: '1',
     class: 'pm-input pm-input-small',
     value: model.maxTokens || '',
-    placeholder: '继承',
+    placeholder: sizePlaceholder(shown.maxTokens),
     'aria-label': '最大输出',
     'data-model-field': `${model.modelId}:maxTokens`,
     'data-focus-key': `advanced:${model.modelId}:maxTokens`,
@@ -259,6 +288,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
       h('div', { class: 'pm-capability-readout' },
         h('span', { class: 'pm-capability-label', text: '工具调用' }), h('span', { text: triLabel(model.toolCalling) }),
         h('span', { class: 'pm-capability-label', text: '流式输出' }), h('span', { text: triLabel(model.streaming) }),
+        h('span', { class: 'pm-capability-hint', text: '未知表示目录未声明该能力，不代表不支持；容量留空表示继承 Pi 默认，不写入补丁。' }),
       ),
     ),
     h('div', { class: 'pm-model-advanced-foot' },
@@ -278,8 +308,9 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
 }
 
 function chosenRow(model, index, total, draft, dispatch, errors, expanded, reorderLocked, actions) {
-  const badges = capabilityBadges(model);
-  const remove = iconButton(`从已选模型移除 ${model.name || model.modelId}`, 'close', () => actions.onRemove(model), 'pm-remove-model');
+  const shown = displayOf(model);
+  const badges = capabilityBadges(shown);
+  const remove = iconButton(`从已选模型移除 ${shown.name || model.modelId}`, 'close', () => actions.onRemove(model), 'pm-remove-model');
   remove.dataset.modelRemove = model.modelId;
   const advancedToggle = h('button', {
     type: 'button',
@@ -294,7 +325,7 @@ function chosenRow(model, index, total, draft, dispatch, errors, expanded, reord
     type: 'button',
     class: 'pm-drag-handle',
     draggable: !reorderLocked,
-    'aria-label': `拖动排序 ${model.name || model.modelId}；或用上下方向键移动`,
+    'aria-label': `拖动排序 ${shown.name || model.modelId}；或用上下方向键移动`,
     'data-model-handle': model.modelId,
     'data-focus-key': `chosen:${model.modelId}`,
     title: reorderLocked ? '清空右侧搜索后可排序' : '拖动排序，或用方向键移动',
@@ -309,7 +340,7 @@ function chosenRow(model, index, total, draft, dispatch, errors, expanded, reord
       modelId: model.modelId,
       offset: event.key === 'Home' ? -total : event.key === 'End' ? total : event.key === 'ArrowUp' ? -1 : 1,
     });
-    actions.announce(`模型 ${model.name || model.modelId} 已移动到第 ${event.key === 'Home' ? 1 : event.key === 'End' ? total : Math.max(1, Math.min(total, index + (event.key === 'ArrowUp' ? 0 : 2)))} 位`);
+    actions.announce(`模型 ${shown.name || model.modelId} 已移动到第 ${event.key === 'Home' ? 1 : event.key === 'End' ? total : Math.max(1, Math.min(total, index + (event.key === 'ArrowUp' ? 0 : 2)))} 位`);
   });
   const row = h('div', {
     class: `pm-chosen-row${expanded ? ' is-expanded' : ''}${errors?.[model.modelId] ? ' has-error' : ''}`,
@@ -320,11 +351,11 @@ function chosenRow(model, index, total, draft, dispatch, errors, expanded, reord
   h('span', { class: 'pm-chosen-index', 'aria-hidden': 'true', text: String(index + 1) }),
   h('div', { class: 'pm-chosen-copy' },
     h('div', { class: 'pm-chosen-title' },
-      h('span', { class: 'pm-model-name', text: model.name || model.modelId }),
+      h('span', { class: 'pm-model-name', text: shown.name || model.modelId }),
       sourceBadge(model),
     ),
     h('div', { class: 'pm-chosen-sub' },
-      h('span', { class: 'pm-model-id', text: model.name ? model.modelId : '' }),
+      h('span', { class: 'pm-model-id', text: shown.name ? model.modelId : '' }),
       ...badges.map(text => h('span', { class: 'pm-model-chip', text })),
     ),
     errors?.[model.modelId] ? h('div', { class: 'pm-model-inline-error', text: Object.values(errors[model.modelId])[0] }) : null,
@@ -366,6 +397,7 @@ export function renderModelPanes({
   errors = {},
   capabilities = {},
   discovery,
+  recommendation = null,
   onRefresh = () => {},
   onAuthorize = () => {},
   onTest = () => {},
@@ -378,6 +410,7 @@ export function renderModelPanes({
   let currentDraft = draft;
   let currentErrors = errors;
   let currentDiscovery = discovery;
+  let currentRecommendation = recommendation;
   const candidateQuery = { value: '' };
   const chosenQuery = { value: '' };
   const expanded = new Set();
@@ -417,6 +450,9 @@ export function renderModelPanes({
   const leftList = h('div', { class: 'pm-model-list pm-candidate-list', 'data-model-list': 'candidates' });
   const rightList = h('div', { class: 'pm-model-list pm-chosen-list', 'data-model-list': 'chosen' });
   const rightFoot = h('div', { class: 'pm-custom-model-foot' });
+  /* FIX-A：推荐依据就放在已选栏底部，和选择本身在同一视野里；用户改过选择
+   * 后立刻收起，不留下“系统还会继续替你改”的暗示。 */
+  const recommendationHost = h('div', { class: 'pm-recommendation', 'data-recommendation': 'idle', role: 'status' });
   left.append(leftHead, leftSearch, leftList);
   right.append(rightHead, rightSearch, rightList, rightFoot);
   root.append(left, right, statusLine);
@@ -563,10 +599,31 @@ export function renderModelPanes({
       if (event.key === 'Enter') { event.preventDefault(); submit(); }
     });
     rightFoot.append(
+      recommendationHost,
       h('div', { class: 'pm-custom-model-row' }, input, add),
       h('div', { class: 'pm-field-hint', text: '手动添加的 ID 会写入 Pi 配置；重复 ID 不会被覆盖。' }),
       error,
     );
+  }
+
+  function renderRecommendation() {
+    recommendationHost.innerHTML = '';
+    const rec = currentRecommendation;
+    const picked = rec?.autoPicked === true && rec.picks?.length > 0 && currentDraft.touchedSelection !== true;
+    if (picked) {
+      recommendationHost.dataset.recommendation = 'picked';
+      const basis = rec.picks.map(id => `${id}（${rec.reasons?.[id] || '目录声明可用'}）`).join('、');
+      recommendationHost.append(icon('spark', 14),
+        h('span', { class: 'pm-recommendation-text', text: `已按目录能力信息推荐 ${rec.picks.length} 个模型：${basis}。修改选择后不再自动改选。` }));
+      return;
+    }
+    if (rec?.insufficient === true && currentDraft.touchedSelection !== true) {
+      recommendationHost.dataset.recommendation = 'insufficient';
+      recommendationHost.append(icon('info', 14),
+        h('span', { class: 'pm-recommendation-text', text: '模型目录没有声明聊天或工具能力，无法可靠推荐；请手动选择（不会按模型名称猜测）。' }));
+      return;
+    }
+    recommendationHost.dataset.recommendation = 'idle';
   }
 
   function renderLists() {
@@ -588,7 +645,7 @@ export function renderModelPanes({
     const existing = root.querySelector('.pm-discovery-note');
     if (existing) existing.replaceWith(note);
     else root.insertBefore(note, left);
-    if (statusLine.textContent) statusLine.textContent = statusLine.textContent;
+    renderRecommendation();
     restoreFocus(savedFocus);
   }
 
@@ -615,10 +672,12 @@ export function renderModelPanes({
     renderLists();
   });
 
-  function update(nextDraft, { errors: nextErrors = currentErrors, discovery: nextDiscovery = currentDiscovery } = {}) {
+  function update(nextDraft, { errors: nextErrors = currentErrors, discovery: nextDiscovery = currentDiscovery,
+    recommendation: nextRecommendation = currentRecommendation } = {}) {
     currentDraft = nextDraft;
     currentErrors = nextErrors || {};
     currentDiscovery = nextDiscovery || currentDiscovery;
+    currentRecommendation = nextRecommendation;
     renderLists();
   }
 

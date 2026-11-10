@@ -16,9 +16,10 @@ import { credentialClearSupport } from './state.js';
 import { CREDENTIAL_REASON } from './credentials.js';
 import { button, field, h, icon } from './dom.js';
 
-/* 凭据入口的真实可用性 = 私有桥 API 存在 + 快照能力（握手/SDK/密钥输入）
+/* 凭据入口的真实可用性 = 私有桥 API 存在 + 快照能力（握手/SDK/存储资格）
  * 都成立。网页版、未握手、未开启输入或存储资格不足都必须禁用并说明原因，
- * 不能为了「按钮看起来能用」而放宽 P2/P3 的安全条件。 */
+ * 不能为了「按钮看起来能用」而放宽 P2/P3 的安全条件。存储不合格时连暂存
+ * 都不允许——密钥不能先进入受限窗，再指望保存阶段拒绝。 */
 function credentialCapability(snapshot, { legacy = false } = {}) {
   if (legacy) {
     return { available: false, reason: '兼容模式不提供安全凭据窗口；这里只写 $NAME 环境变量引用。' };
@@ -28,19 +29,15 @@ function credentialCapability(snapshot, { legacy = false } = {}) {
   if (!bridge || typeof bridge.open !== 'function') {
     return { available: false, reason: CREDENTIAL_REASON.web };
   }
-  if (capabilities.privateDesktopBridge !== true || capabilities.keyStaging !== true) {
+  if (capabilities.privateDesktopBridge !== true || capabilities.keyStaging !== true ||
+      capabilities.nativeCredentialPersistence !== true) {
     return {
       available: false,
       nativePersistence: false,
-      reason: '桌面安全凭据窗口尚未就绪：需要后端已连接、启用密钥输入（PI_GUI_PROVIDER_KEY_INPUT=1）且 SDK 通过资格检查。',
+      reason: '桌面安全凭据窗口尚未开放：需要后端已连接、未被 PI_GUI_PROVIDER_KEY_INPUT=0 关闭、SDK 通过资格检查，且本机凭据存储通过安全资格检查。',
     };
   }
-  const nativePersistence = capabilities.nativeCredentialPersistence === true;
-  return {
-    available: true,
-    nativePersistence,
-    storageReason: nativePersistence ? '' : '本机凭据存储未通过安全资格检查：可以暂存用于本次发现/测试，但保存时不会写入 auth.json。',
-  };
+  return { available: true, nativePersistence: true, storageReason: '' };
 }
 
 function serviceChip({ item, draft, onOpenAuth, onChangeService }) {
@@ -87,30 +84,29 @@ function credentialRow({ draft, snapshot, legacy = false, onCredentialTrigger, o
   const unknownSource = !configOwned && source !== 'pi-credential' && source !== 'none';
   // 本机凭据的清除同样要经过私有桥与存储安全资格；资格不足时不能假装已清除。
   const persistenceReady = capability.available && capability.nativePersistence === true;
-  const clear = credentialClearSupport(draft, { native: persistenceReady && source === 'pi-credential' });
-  const storageBlocksNativeClear = source === 'pi-credential' && capability.available && !persistenceReady;
+  const clear = credentialClearSupport(draft, {
+    native: persistenceReady && source === 'pi-credential',
+    // 桌面端存储资格不足时，不能把原因说成“网页版或私有桥不可用”。
+    unavailableReason: source === 'pi-credential' && !capability.available ? capability.reason : '',
+  });
   const hasCredential = draft.credentialState
     && draft.credentialState.state !== 'none'
     && draft.credentialState.source !== 'none';
   const nativeClearing = draft.nativeStage?.action === 'clear';
   const clearing = draft.credentialAction?.type === 'none' || nativeClearing;
-  const canClear = clear.supported && !legacy && !storageBlocksNativeClear;
+  const canClear = clear.supported && !legacy;
   // 只有 Pi 本机凭据才用“本机”二字；未知来源或兼容模式不能借用这个说法。
   const clearLabel = clear.native ? '清除本机凭据' : canClear ? '清除配置凭据' : clear.source === 'pi-credential' ? '清除本机凭据' : '清除凭据';
   const clearReason = legacy
     ? clear.supported
       ? '兼容模式不会写入清除操作；如需移除配置凭据，请开启管理接口或直接检查 Pi 配置。'
       : clear.reason
-    : storageBlocksNativeClear
-      ? capability.storageReason || '本机凭据存储未通过安全资格检查，无法在 GUI 中清除。'
-      : clear.reason;
+    : clear.reason;
   const staged = draft.nativeStage?.action === 'set';
   const statusText = nativeClearing
     ? '已暂存清除；保存时从 Pi 本机凭据槽移除'
     : staged
-      ? capability.nativePersistence
-        ? '新密钥已暂存；保存时写入 Pi 本机凭据槽'
-        : '新密钥已暂存；本机凭据存储未通过安全资格检查，保存时不会写入 auth.json（仅用于发现/测试）'
+      ? '新密钥已暂存；保存时写入 Pi 本机凭据槽'
       : clearing
         ? `保存后移除配置中的${clear.label || '凭据'}`
         : hasCredential ? serviceCredentialText({ credentialState: draft.credentialState }) : '未配置凭据';

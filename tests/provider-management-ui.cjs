@@ -44,6 +44,7 @@ function boot({
   const calls = { drafts: [], commits: [], discovery: [], authorize: [], test: [], legacy: [], legacyPosts: [], legacyDeletes: [], managementGets: [], restart: [], auth: [] };
   const api = {
     fetchProviderManagement: async () => snapshot,
+    fetchProviderServiceCache: async () => ({ ok: true, sourceKind: 'none', cachedModels: [] }),
     saveProviderDraft: async request => {
       calls.drafts.push(clone(request));
       return { ok: true, draftId: 'fixture-draft', draftRevision: 2, revision: snapshot.revision };
@@ -204,6 +205,19 @@ test('inherited selection expands for display and pins only on save', async () =
   assert.equal(draft.inheritedSelection, true);
   assert.equal(draft.dirty, false);
   assert.deepEqual(s.toDraftPayload(draft).selectedModelIds, ['fast', 'vision']);
+});
+
+test('editing an existing environment reference preserves its name', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const snapshot = clone(fixture.live.snapshot);
+  const service = clone(snapshot.services[0]);
+  service.authMode = 'environment';
+  service.credentialState = { state: 'none', source: 'env' };
+  service.envReference = '$FIXTURE_KEY';
+  const draft = s.draftFromService(service, snapshot);
+  assert.equal(draft.envReference, '$FIXTURE_KEY');
+  assert.equal(draft.dirty, false);
+  assert.deepEqual(s.commitCredentialAction(draft), { type: 'env', reference: '$FIXTURE_KEY' });
 });
 
 test('clone strips credentials and always uses a new provider id', async () => {
@@ -1006,6 +1020,7 @@ test('page list renders management services, badges, and opens the new chooser',
   assert.ok(card.querySelector('.pm-badge'));
   assert.ok(card.querySelector('.prov-catalog-info span').textContent.includes('2 个自定义服务'));
   card.querySelector('.prov-btn-main').click();
+  await tick(0);
   assert.ok(card.querySelector('.pm-chooser'));
   assert.equal(calls.legacy.length > 0, true);
 });
@@ -1227,7 +1242,7 @@ test('provider row menu disables connection test with the real discovery reason'
   assert.equal(calls.commits[0].serviceId, 'example-ai');
 });
 
-test('disabled service re-enables through an update draft', async () => {
+test('disabled service re-enables through the metadata-only enable action', async () => {
   const snapshot = clone(fixture.live.snapshot);
   snapshot.services[0].enabled = false;
   const { window, calls } = boot({ snapshot });
@@ -1239,10 +1254,11 @@ test('disabled service re-enables through an update draft', async () => {
   await tick(0);
   row.querySelector('[data-service-action="启用"]').click();
   await tick(30);
-  assert.equal(calls.drafts.length, 1);
-  assert.equal(calls.drafts[0].draft.enabled, true);
+  // P6：与停用对称，不再构造草稿（部分服务的 connection 为空，draft 合同无法表达）。
+  assert.equal(calls.drafts.length, 0);
   assert.equal(calls.commits.length, 1);
-  assert.equal(calls.commits[0].action, 'update');
+  assert.equal(calls.commits[0].action, 'enable');
+  assert.equal(calls.commits[0].serviceId, 'example-ai');
 });
 
 test('service menu clones without copying credentials and deletes only after confirmation', async () => {
@@ -1295,4 +1311,672 @@ test('CSS carries the 1040x720 shell, four-column chooser, dual panes, and break
   const dialogSource = fs.readFileSync(path.join(pub, 'provider-management/dialog.js'), 'utf8');
   assert.ok(!dialogSource.includes("type: 'password'"));
   assert.ok(!dialogSource.includes('type="password"'));
+});
+
+test('lock icon renders a real rect body instead of an invalid path', async () => {
+  /* P6 回归：icon() 曾把 'rect:...' 规格写进 path 的 d（"5,10,14,10,2"），
+   * 真实 Chromium 报非法 path 且锁体不显示。 */
+  const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://127.0.0.1:7788/' });
+  const previous = global.document;
+  global.document = dom.window.document;
+  try {
+    const { icon } = await import('../public/provider-management/dom.js');
+    const svg = icon('lock', 16);
+    const rect = svg.querySelector('rect');
+    assert.ok(rect, 'lock body rect exists');
+    assert.equal(rect.getAttribute('x'), '5');
+    assert.equal(rect.getAttribute('y'), '10');
+    assert.equal(rect.getAttribute('width'), '14');
+    assert.equal(rect.getAttribute('height'), '10');
+    assert.equal(rect.getAttribute('rx'), '2');
+    assert.equal(svg.querySelectorAll('path').length, 1);
+    assert.equal(svg.querySelector('path').getAttribute('d'), 'M8 10V7a4 4 0 0 1 8 0v3');
+  } finally {
+    if (previous === undefined) delete global.document; else global.document = previous;
+  }
+});
+
+test('re-selecting a model after refresh clears its pending remove patch', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const store = s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'refresh-model', configSource: 'remote', effectiveValues: { name: 'Refresh Model' } }] });
+  store.dispatch({ type: 'toggle-model', modelId: 'refresh-model', selected: true });
+  store.dispatch({ type: 'remove-model', modelId: 'refresh-model' });
+  assert.deepEqual(store.get().removed, ['refresh-model']);
+  // 刷新把同一 ID 重新带回候选；再次勾选必须撤销待删除补丁（P6 回归）。
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'refresh-model', configSource: 'remote', effectiveValues: { name: 'Refresh Model' } }] });
+  store.dispatch({ type: 'toggle-model', modelId: 'refresh-model', selected: true });
+  const draft = store.get();
+  assert.deepEqual(draft.removed, []);
+  assert.deepEqual(draft.order, ['refresh-model']);
+  assert.deepEqual(s.draftPatches(draft), [{ modelId: 'refresh-model', operation: 'upsert' }]);
+  assert.ok(!s.draftPatches(draft).some(patch => patch.operation === 'remove'));
+});
+
+test('discovered metadata is display-only and never enters model patches', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const record = s.createModelRecord({ modelId: 'meta-model', providerId: 'fixture', configSource: 'remote',
+    effectiveValues: { name: 'Meta Model', contextWindow: 12345, maxTokens: 4096, reasoning: true, input: ['text', 'image'] },
+    editableOverrides: {} });
+  assert.equal(record.name, null, 'discovered name is not an editable override');
+  assert.equal(record.contextWindow, null);
+  assert.deepEqual(record.displayValues, { name: 'Meta Model', contextWindow: 12345, maxTokens: 4096, reasoning: true, input: ['text', 'image'] });
+  const store = s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'meta-model', configSource: 'remote',
+    effectiveValues: { name: 'Meta Model', contextWindow: 12345 } }] });
+  store.dispatch({ type: 'toggle-model', modelId: 'meta-model', selected: true });
+  assert.deepEqual(s.draftPatches(store.get()), [{ modelId: 'meta-model', operation: 'upsert' }],
+    'selection alone must not persist discovered metadata as an override');
+});
+
+test('a disabled OAuth service can be enabled again from the row menu', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.services.push({ serviceId: 'oauth-fixture', providerId: 'fixture-oauth', catalogId: null, displayName: '订阅账户 Fixture',
+    enabled: false, connection: null, credentialState: { state: 'saved', source: 'pi-credential' }, authMode: 'oauth',
+    models: [], selectedModelIds: [], modelOrder: [], readOnly: false, compatibility: 'unknown' });
+  const { window, calls } = boot({ snapshot });
+  window.openProvidersPanel();
+  await tick(20);
+  const card = window.document.getElementById('modalCard');
+  const row = [...card.querySelectorAll('.prov.pm-service-row')].find(node => node.textContent.includes('订阅账户 Fixture'));
+  assert.ok(row, 'disabled OAuth row rendered');
+  row.querySelector('.pm-row-more').click();
+  await tick(0);
+  const enable = row.querySelector('[data-service-action="启用"]');
+  assert.ok(enable, 'enable action exists');
+  assert.equal(enable.disabled, false, 'enable must not be disabled for OAuth services');
+  enable.click();
+  await tick(40);
+  const commit = calls.commits[calls.commits.length - 1];
+  assert.ok(commit, 'enable commits a metadata-only action');
+  assert.equal(commit.action, 'enable');
+  assert.equal(commit.serviceId, 'oauth-fixture');
+  assert.equal(calls.drafts.length, 0, 'enable must not need a draft (subscription services have no connection)');
+});
+
+test('first builtin model override asks for confirmation and retries once', async () => {
+  const { window, snapshot, api, calls } = boot();
+  let attempts = 0;
+  api.commitProviderDraft = async request => {
+    calls.commits.push(clone(request));
+    attempts += 1;
+    if (attempts === 1) return { ok: false, code: 'invalid_request', message: '请求字段无效。', fieldErrors: { confirmBuiltinOverride: 'invalid' } };
+    return { ok: true, serviceId: request.serviceId || 'example-ai', saved: true, credentialSaved: null, credentialState: 'none',
+      sync: { state: 'pending', reason: 'runtime_sync_pending' }, revision: 'next' };
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', snapshot.services[0]);
+  addCustom(card, 'override-model');
+  await tick(10);
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(30);
+  assert.equal(calls.commits.length, 1);
+  const confirm = window.document.getElementById('confirmCard');
+  assert.equal(window.document.getElementById('confirmLayer').hidden, false, 'override confirmation appears');
+  assert.ok(confirm.textContent.includes('覆盖内置模型配置'));
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '覆盖并保存').click();
+  await tick(50);
+  assert.equal(calls.commits.length, 2, 'confirm retries exactly once');
+  assert.equal(calls.drafts.at(-1).draft.confirmBuiltinOverride, true);
+});
+
+/* ---------- P6 FIX-01/03：缓存首屏与显示回退 ---------- */
+
+const uiWaitFor = async (check, timeoutMs = 3000) => {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const value = check();
+    if (value) return value;
+    await tick(10);
+  }
+  return null;
+};
+
+function snapshotWithModel(configSource) {
+  const snapshot = clone(fixture.live.snapshot);
+  const service = snapshot.services[0];
+  service.models = [{ modelId: 'cfg-model', providerId: service.providerId, configSource,
+    effectiveValues: { name: 'Config Model', contextWindow: 32000, maxTokens: 4096, toolCalling: null, streaming: null },
+    editableOverrides: { name: 'Config Model', contextWindow: 32000, maxTokens: 4096 } }];
+  service.selectedModelIds = ['cfg-model'];
+  service.modelOrder = ['cfg-model'];
+  return { snapshot, service };
+}
+
+test('fresh remote results upgrade untouched cache candidates only', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const makeDraft = () => s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  const store = makeDraft();
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'c1', configSource: 'cache', cacheStale: true, effectiveValues: { name: 'Cached' } }] });
+  assert.equal(store.get().models.find(model => model.modelId === 'c1').source, 'cache');
+  assert.equal(store.get().models.find(model => model.modelId === 'c1').cachedStale, true);
+  store.dispatch({ type: 'merge-models', models: [{ modelId: 'c1', configSource: 'remote', effectiveValues: { name: 'Remote' } }] });
+  assert.equal(store.get().models.find(model => model.modelId === 'c1').source, 'remote');
+  assert.equal(store.get().models.find(model => model.modelId === 'c1').cachedStale, false);
+
+  const edited = makeDraft();
+  edited.dispatch({ type: 'merge-models', models: [{ modelId: 'c2', configSource: 'cache', effectiveValues: { name: 'Cached 2' } }] });
+  edited.dispatch({ type: 'toggle-model', modelId: 'c2', selected: true });
+  edited.dispatch({ type: 'model-field', modelId: 'c2', field: 'contextWindow', value: 1000 });
+  edited.dispatch({ type: 'merge-models', models: [{ modelId: 'c2', configSource: 'remote', effectiveValues: { name: 'Remote 2' } }] });
+  const kept = edited.get().models.find(model => model.modelId === 'c2');
+  assert.equal(kept.source, 'cache', 'edited cache candidate is not overwritten by refresh');
+  assert.equal(kept.contextWindow, 1000);
+});
+
+test('edit dialog shows matching cache candidates without network or selection changes', async () => {
+  const { window, snapshot, api, calls } = boot();
+  const service = snapshot.services[0];
+  const originalSelection = Array.isArray(service.selectedModelIds)
+    ? clone(Array.isArray(service.modelOrder) ? service.modelOrder : service.selectedModelIds) : null;
+  api.fetchProviderServiceCache = async () => ({ ok: true, serviceId: service.serviceId, sourceKind: 'cache',
+    cacheStale: false, cachedAt: Date.now(),
+    cachedModels: [{ modelId: 'cached-a', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+      effectiveValues: { name: 'Cached A', contextWindow: 32000, maxTokens: 4096, toolCalling: null, streaming: null },
+      editableOverrides: {} }] });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  const row = await uiWaitFor(() => card.querySelector('[data-model-row=cached-a]'));
+  assert.ok(row, 'cached candidate rendered on open');
+  assert.ok(row.textContent.includes('Cached A'));
+  assert.ok(row.textContent.includes('缓存候选'));
+  assert.ok(row.textContent.includes('上下文'), 'cache display metadata is shown');
+  assert.ok(card.textContent.includes('显示匹配缓存'));
+  assert.equal(calls.discovery.length, 0, 'cache display never triggers discovery');
+  if (originalSelection) {
+    assert.deepEqual([...card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel), originalSelection,
+      'cache must not change the existing selection');
+  }
+});
+
+test('stale cache is explicitly marked and can be re-authorized', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  const service = snapshot.services[0];
+  api.fetchProviderServiceCache = async () => ({ ok: true, serviceId: service.serviceId, sourceKind: 'cache',
+    cacheStale: true, cachedAt: Date.now() - 120000,
+    cachedModels: [{ modelId: 'stale-a', providerId: service.providerId, configSource: 'cache', cacheStale: true,
+      effectiveValues: { name: 'Stale A', contextWindow: 64000 }, editableOverrides: {} }] });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  const row = await uiWaitFor(() => card.querySelector('[data-model-row=stale-a]'));
+  assert.ok(row);
+  assert.ok(row.textContent.includes('缓存已过期'));
+  assert.ok(card.textContent.includes('显示已过期的匹配缓存'));
+  assert.ok(card.querySelector('[data-authorize-discovery]'), 're-authorize entry remains available');
+});
+
+test('a late cache response after switching services never merges into the new draft', async () => {
+  const { window, snapshot, api } = boot();
+  const service = snapshot.services[0];
+  let resolveCache = null;
+  let requests = 0;
+  api.fetchProviderServiceCache = () => {
+    requests += 1;
+    return new Promise(resolve => { resolveCache = resolve; });
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await uiWaitFor(() => requests === 1, 2000);
+  assert.equal(requests, 1, 'edit setup requests the service cache once');
+  // 更换服务 → 开始新草稿 → 选择另一个服务；旧请求仍挂在服务 A 上。
+  card.querySelector('.pm-change-service').click();
+  await tick(5);
+  const confirm = window.document.getElementById('confirmCard');
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '开始新草稿').click();
+  await tick(10);
+  pick(window, card, 'deepseek');
+  await tick(10);
+  assert.ok(card.querySelector('.pm-service-chip-name')?.textContent.includes('DeepSeek'), 'new setup rendered');
+  resolveCache({ ok: true, serviceId: service.serviceId, sourceKind: 'cache', cacheStale: false, cachedAt: Date.now(),
+    cachedModels: [{ modelId: 'leaked-cache', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+      effectiveValues: { name: 'Leaked Model', contextWindow: 32000 }, editableOverrides: {} }] });
+  await tick(50);
+  assert.equal(card.querySelector('[data-model-row=leaked-cache]'), null, 'late cache from the previous service must be dropped');
+  assert.ok(!card.textContent.includes('Leaked Model'));
+  assert.ok(!card.textContent.includes('显示匹配缓存'));
+});
+
+test('a late cache response after changing the credential reference never merges into the same draft', async () => {
+  const { window, snapshot, api } = boot();
+  const service = snapshot.services[0];
+  let resolveCache = null;
+  let requests = 0;
+  api.fetchProviderServiceCache = () => {
+    requests += 1;
+    return new Promise(resolve => { resolveCache = resolve; });
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await uiWaitFor(() => requests === 1, 2000);
+  const env = card.querySelector('.pm-env-input');
+  assert.ok(env, 'edit setup exposes the env reference field');
+  env.value = '$OTHER_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(10);
+  resolveCache({ ok: true, serviceId: service.serviceId, sourceKind: 'cache', cacheStale: false, cachedAt: Date.now(),
+    cachedModels: [{ modelId: 'target-leak', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+      effectiveValues: { name: 'Target Leak', contextWindow: 16000 }, editableOverrides: {} }] });
+  await tick(50);
+  assert.equal(card.querySelector('[data-model-row=target-leak]'), null, 'cache bound to the old credential generation must be dropped');
+  assert.ok(!card.textContent.includes('Target Leak'));
+});
+
+test('removing a cache candidate does not resurrect it on the next draft save', async () => {
+  const { window, snapshot, api, calls } = boot();
+  const service = snapshot.services[0];
+  const repeatedCache = [{ modelId: 'gone-a', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+    effectiveValues: { name: 'Gone A', contextWindow: 8000 }, editableOverrides: {} }];
+  api.fetchProviderServiceCache = async () => ({ ok: true, serviceId: service.serviceId, sourceKind: 'cache',
+    cacheStale: false, cachedAt: Date.now(), cachedModels: clone(repeatedCache) });
+  api.saveProviderDraft = async request => {
+    calls.drafts.push(clone(request));
+    return { ok: true, draftId: 'resurrect-draft', draftRevision: 2, connectionRevision: 1, targetFingerprint: 'fp-resurrect',
+      sourceKind: 'cache', cacheStale: false, cachedAt: Date.now(), cachedModels: clone(repeatedCache) };
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await uiWaitFor(() => card.querySelector('[data-model-row=gone-a]'));
+  card.querySelector('[data-model-check=gone-a]').click();
+  await tick(5);
+  card.querySelector('[data-model-remove=gone-a]').click();
+  await tick(5);
+  const confirm = window.document.getElementById('confirmCard');
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '移除').click();
+  await tick(10);
+  assert.equal(card.querySelector('[data-model-row=gone-a]'), null);
+  // 触发下一次草稿保存（保存按钮 → ensureDraftHandle），服务端再次返回同一缓存列表。
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(40);
+  assert.equal(card.querySelector('[data-model-row=gone-a]'), null, 'removed candidate must not be resurrected');
+});
+
+test('changing the credential reference after removal does not resurrect the cache candidate on save', async () => {
+  const { window, snapshot, api, calls } = boot();
+  const service = snapshot.services[0];
+  const repeatedCache = [{ modelId: 'gone-b', providerId: service.providerId, configSource: 'cache', cacheStale: false,
+    effectiveValues: { name: 'Gone B', contextWindow: 8000 }, editableOverrides: {} }];
+  api.fetchProviderServiceCache = async () => ({ ok: true, serviceId: service.serviceId, sourceKind: 'cache',
+    cacheStale: false, cachedAt: Date.now(), cachedModels: clone(repeatedCache) });
+  api.saveProviderDraft = async request => {
+    calls.drafts.push(clone(request));
+    return { ok: true, draftId: 'identity-draft', draftRevision: 2, connectionRevision: 1, targetFingerprint: 'fp-identity',
+      sourceKind: 'cache', cacheStale: false, cachedAt: Date.now(), cachedModels: clone(repeatedCache) };
+  };
+  // 让 commit 失败，弹窗留在原地，检查保存响应合并后的可见状态。
+  api.commitProviderDraft = async () => ({ ok: false, code: 'config_busy', message: 'fixture commit failure' });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await uiWaitFor(() => card.querySelector('[data-model-row=gone-b]'));
+  card.querySelector('[data-model-check=gone-b]').click();
+  await tick(5);
+  card.querySelector('[data-model-remove=gone-b]').click();
+  await tick(5);
+  const confirm = window.document.getElementById('confirmCard');
+  [...confirm.querySelectorAll('button')].find(button => button.textContent === '移除').click();
+  await tick(10);
+  assert.equal(card.querySelector('[data-model-row=gone-b]'), null);
+  // 改凭据引用会让缓存身份键变化；保存响应里的同一缓存列表不得复活已移除候选。
+  const env = card.querySelector('.pm-env-input');
+  env.value = '$OTHER_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(5);
+  card.querySelector('.pm-dialog-actions .pm-primary').click();
+  await tick(60);
+  assert.equal(card.querySelector('[data-model-row=gone-b]'), null, 'identity change must not resurrect a removed candidate');
+  assert.ok(!card.textContent.includes('Gone B'));
+  const patches = calls.drafts.at(-1)?.draft?.modelPatches || [];
+  assert.ok(patches.some(patch => patch.modelId === 'gone-b' && patch.operation === 'remove'),
+    'the saved draft still carries the explicit removal');
+});
+
+for (const configSource of ['configured', 'builtin-override']) {
+  test(`clearing an override on a ${configSource} model never shows the stale display fallback`, async () => {
+    const { snapshot, service } = snapshotWithModel(configSource);
+    const { window, api, calls } = boot({ snapshot });
+    const { card } = openCreate(window, snapshot, api, 'edit', service);
+    await tick(10);
+    const row = () => card.querySelector('[data-model-row=cfg-model]');
+    assert.ok(row(), 'configured model row rendered');
+    assert.ok(row().textContent.includes('上下文'), 'override value is shown');
+    card.querySelector('[data-model-advanced-toggle=cfg-model]').click();
+    await tick(5);
+    const input = card.querySelector('[data-model-field="cfg-model:contextWindow"]');
+    assert.ok(input);
+    input.value = '';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await tick(5);
+    assert.equal(input.value, '');
+    assert.ok(!row().textContent.includes('上下文'), 'cleared field must fall back to inherit/default, not the old display value');
+    card.querySelector('.pm-dialog-actions .pm-primary').click();
+    await tick(10);
+    // builtin-override 来源会先弹「覆盖内置模型配置？」确认。
+    const confirm = window.document.getElementById('confirmCard');
+    const continueButton = [...confirm.querySelectorAll('button')].find(button => button.textContent === '继续保存');
+    if (continueButton) continueButton.click();
+    await tick(40);
+    const payload = calls.drafts.at(-1)?.draft;
+    const patch = payload?.modelPatches.find(item => item.modelId === 'cfg-model');
+    assert.deepEqual(patch?.unsetFields, ['contextWindow'], 'save semantics stay an explicit unset');
+  });
+}
+
+
+/* ---------- FIX-A/B：首次推荐与未知能力显示 ---------- */
+
+test('recommendModels only picks remote models with explicit chat/tool evidence', async () => {
+  const { recommendModels } = await import('../public/provider-management/recommend.js');
+  const models = [
+    { modelId: 'tools-a', source: 'remote', toolCalling: true },
+    { modelId: 'chat-a', source: 'remote', chatCapable: true, toolCalling: null },
+    { modelId: 'unknown-a', source: 'remote' },
+    { modelId: 'no-tools', source: 'remote', toolCalling: false },
+    { modelId: 'cached', source: 'cache', toolCalling: true },
+    { modelId: 'tools-b', source: 'remote', toolCalling: true },
+    { modelId: 'tools-c', source: 'remote', toolCalling: true },
+  ];
+  const result = recommendModels(models);
+  assert.deepEqual(result.picks, ['tools-a', 'tools-b', 'tools-c'], 'tool evidence ranks first and the limit is three');
+  assert.equal(result.reasons['tools-a'], '目录声明支持工具调用');
+  assert.equal(result.unknown, 1, 'models without evidence are counted, never guessed by id');
+  assert.equal(result.insufficient, false);
+
+  const small = recommendModels(models, { limit: 1 });
+  assert.deepEqual(small.picks, ['tools-a']);
+
+  const none = recommendModels([
+    { modelId: 'u', source: 'remote' },
+    { modelId: 'negative', source: 'remote', toolCalling: false },
+    { modelId: 'non-text', source: 'remote', chatCapable: false },
+    { modelId: 'c', source: 'cache', toolCalling: true },
+  ]);
+  assert.deepEqual(none.picks, [], 'cache and non-chat models are never recommended');
+  assert.equal(none.candidates, 0);
+  assert.equal(none.insufficient, true, 'no evidence must be reported as "cannot reliably recommend"');
+});
+
+test('auto-select-models only reorders known models and keeps the draft untouched-flag clean', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const store = s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  store.dispatch({ type: 'merge-models', models: [
+    { modelId: 'a', configSource: 'remote', effectiveValues: { toolCalling: true } },
+    { modelId: 'b', configSource: 'remote', effectiveValues: { chatCapable: true } },
+  ] });
+  store.dispatch({ type: 'auto-select-models', modelIds: ['b', 'ghost', 'a', 'b'] });
+  assert.deepEqual(store.get().order, ['b', 'a'], 'unknown ids are dropped and order is de-duplicated');
+  assert.equal(store.get().touchedSelection, false, 'automatic selection is not a user edit');
+  assert.equal(s.reduceDraft(store.get(), { type: 'move-model', modelId: 'a', offset: -1 }).touchedSelection, true,
+    'reordering is a user edit and stops recommendation');
+  assert.equal(s.reduceDraft(store.get(), { type: 'model-field', modelId: 'a', field: 'contextWindow', value: 1000 }).touchedSelection, true,
+    'advanced edits are user edits and stop recommendation');
+  const patches = s.draftPatches(store.get());
+  assert.deepEqual(patches.map(patch => [patch.modelId, patch.operation]),
+    [['a', 'upsert'], ['b', 'upsert']], 'recommendation persists only as selected upserts');
+  assert.ok(patches.every(patch => !patch.contextWindow && !patch.maxTokens && !patch.toolCalling),
+    'recommended metadata is never written as an override');
+  store.dispatch({ type: 'toggle-model', modelId: 'b', selected: false });
+  assert.equal(store.get().touchedSelection, true, 'a later user action permanently marks the selection as touched');
+});
+
+test('drop-target-discovery removes only the previous target discovery candidates', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const store = s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  store.dispatch({ type: 'merge-models', models: [
+    { modelId: 'remote', configSource: 'remote', effectiveValues: { toolCalling: true } },
+    { modelId: 'cache', configSource: 'cache', effectiveValues: {} },
+    { modelId: 'configured', effectiveValues: {} },
+  ] });
+  store.dispatch({ type: 'add-model', modelId: 'manual' });
+  store.dispatch({ type: 'auto-select-models', modelIds: ['remote', 'cache', 'configured', 'manual'] });
+  const before = store.get();
+  const dropped = s.reduceDraft(before, { type: 'drop-target-discovery' });
+  assert.deepEqual(dropped.models.map(model => model.modelId).sort(), ['configured', 'manual'],
+    'remote/cache candidates belong to the previous target; configured/manual records do not');
+  assert.deepEqual(dropped.order, ['configured', 'manual'],
+    'selection must not keep ids that no longer exist in the draft');
+  assert.equal(dropped.touchedSelection, before.touchedSelection,
+    'dropping target candidates does not itself change the user-touched flag');
+});
+
+test('unknown capacities stay unknown instead of zero or inheritance', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  const service = snapshot.services[0];
+  service.models = [{
+    modelId: 'unknown-model', providerId: service.providerId, configSource: 'remote',
+    effectiveValues: { name: 'Unknown Model', toolCalling: null, streaming: null, chatCapable: true },
+    editableOverrides: {},
+  }];
+  service.selectedModelIds = ['unknown-model'];
+  service.modelOrder = ['unknown-model'];
+  const { window, api } = boot({ snapshot });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await tick(10);
+  const row = card.querySelector('[data-model-row=unknown-model]');
+  assert.ok(row.textContent.includes('上下文未知'));
+  assert.ok(row.textContent.includes('输出未知'));
+  assert.ok(!/\b0\b/.test(row.querySelector('.pm-model-row-sub').textContent), 'missing sizes must not render as 0');
+  card.querySelector('[data-model-advanced-toggle=unknown-model]').click();
+  await tick(5);
+  const contextInput = card.querySelector('[data-model-field="unknown-model:contextWindow"]');
+  const maxInput = card.querySelector('[data-model-field="unknown-model:maxTokens"]');
+  assert.equal(contextInput.value, '');
+  assert.equal(contextInput.placeholder, '未知 · 留空继承');
+  assert.equal(maxInput.placeholder, '未知 · 留空继承');
+  const advanced = card.querySelector('[data-model-advanced=unknown-model]');
+  assert.ok(advanced.textContent.includes('工具调用'));
+  assert.ok(advanced.textContent.includes('未知表示目录未声明该能力，不代表不支持'));
+  // 输入仍然可用；未知只是展示状态，不影响高级编辑。
+  contextInput.value = '64000';
+  contextInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(card.querySelector('[data-model-field="unknown-model:contextWindow"]').value, '64000');
+});
+
+test('discovered sizes are labelled as directory values and configured sizes as inheritance', async () => {
+  const base = snapshotWithModel('configured');
+  const snapshot = base.snapshot;
+  const service = base.service;
+  service.models.push({
+    modelId: 'sized-remote', providerId: service.providerId, configSource: 'remote',
+    effectiveValues: { name: 'Sized Remote', contextWindow: 32000, maxTokens: 4096 },
+    editableOverrides: {},
+  });
+  service.selectedModelIds = ['cfg-model', 'sized-remote'];
+  service.modelOrder = ['cfg-model', 'sized-remote'];
+  const { window, api } = boot({ snapshot });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await tick(10);
+  card.querySelector('[data-model-advanced-toggle=sized-remote]').click();
+  await tick(5);
+  assert.equal(card.querySelector('[data-model-field="sized-remote:contextWindow"]').placeholder, '目录 32K · 留空继承');
+  card.querySelector('[data-model-advanced-toggle=cfg-model]').click();
+  await tick(5);
+  assert.equal(card.querySelector('[data-model-field="cfg-model:contextWindow"]').placeholder, '继承',
+    'configured models keep the plain inherit placeholder');
+});
+
+test('first fresh remote discovery auto-selects at most three capable models once', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  const batches = [
+    { models: [
+      { modelId: 'tools-a', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Tools A', toolCalling: true }, editableOverrides: {} },
+      { modelId: 'chat-a', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Chat A', chatCapable: true }, editableOverrides: {} },
+      { modelId: 'unknown-a', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Unknown A' }, editableOverrides: {} },
+      { modelId: 'no-tools', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'No Tools', toolCalling: false }, editableOverrides: {} },
+      { modelId: 'tools-b', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Tools B', toolCalling: true }, editableOverrides: {} },
+      { modelId: 'tools-c', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Tools C', toolCalling: true }, editableOverrides: {} },
+    ], sourceKind: 'remote' },
+    { models: [
+      { modelId: 'late-model', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Late Model', toolCalling: true }, editableOverrides: {} },
+    ], sourceKind: 'remote' },
+  ];
+  let batch = 0;
+  api.authorizeProviderDiscovery = async request => {
+    calls.authorize.push(clone(request));
+    return { ok: true, consentId: 'consent-fix-a', expiresAt: Date.now() + 60000 };
+  };
+  api.discoverProviderModels = async request => {
+    calls.discovery.push(clone(request));
+    const next = batches[Math.min(batch, batches.length - 1)];
+    batch += 1;
+    return { ok: true, models: clone(next.models), sourceKind: next.sourceKind };
+  };
+  const { card } = openCreate(window, snapshot, api);
+  pick(window, card, 'deepseek');
+  const authorize = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  assert.ok(authorize, 'discovery authorization entry rendered');
+  authorize.click();
+  const chosen = await uiWaitFor(() => card.querySelectorAll('[data-chosen-model]').length === 3);
+  assert.ok(chosen, 'first fresh remote result selected candidates');
+  assert.deepEqual([...card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel),
+    ['tools-a', 'tools-b', 'tools-c'], 'only explicit tool-capable models, in directory order, capped at three');
+  const banner = card.querySelector('[data-recommendation]');
+  assert.equal(banner.dataset.recommendation, 'picked');
+  assert.ok(banner.textContent.includes('已按目录能力信息推荐 3 个模型'));
+  assert.ok(banner.textContent.includes('目录声明支持工具调用'));
+  assert.equal(calls.discovery.length, 1);
+
+  // 之后的刷新是“再次结果”，绝不覆盖用户已看到的自动选择。
+  card.querySelector('[data-refresh-models]').click();
+  const refreshed = await uiWaitFor(() => calls.discovery.length === 2, 5000);
+  assert.ok(refreshed, 'refresh issued a second discovery');
+  await tick(30);
+  assert.deepEqual([...card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel),
+    ['tools-a', 'tools-b', 'tools-c'], 'refresh must not reselect');
+  assert.ok(card.querySelector('[data-model-row=late-model]'), 'late candidate is still offered');
+  assert.equal(card.querySelector('[data-model-check=late-model]').checked, false);
+});
+
+test('discovery never auto-selects in an edit draft or after the user touched the selection', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  api.authorizeProviderDiscovery = async () => ({ ok: true, consentId: 'consent-fix-a', expiresAt: Date.now() + 60000 });
+  api.discoverProviderModels = async request => {
+    calls.discovery.push(clone(request));
+    return { ok: true, sourceKind: 'remote', models: [
+      { modelId: 'edit-new', providerId: 'example', configSource: 'remote', effectiveValues: { name: 'Edit New', toolCalling: true }, editableOverrides: {} },
+    ] };
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', snapshot.services[0]);
+  const editAuthorize = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  assert.ok(editAuthorize);
+  editAuthorize.click();
+  await uiWaitFor(() => calls.discovery.length === 1, 5000);
+  await tick(20);
+  assert.deepEqual([...card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel), ['vision', 'fast'],
+    'editing an existing service must never change its selection');
+  assert.equal(card.querySelector('[data-recommendation]').dataset.recommendation, 'idle');
+  await tick(100);
+  // 关闭编辑弹窗，换一个新建草稿：用户先手动添加模型，之后的首个远端结果也不得改选。
+  card.querySelector('.pm-dialog-actions .pm-btn-ghost')?.click();
+  const created = openCreate(window, snapshot, api);
+  pick(window, created.card, 'deepseek');
+  addCustom(created.card, 'mine-first');
+  await tick(10);
+  const createAuthorize = await uiWaitFor(() => created.card.querySelector('[data-authorize-discovery]'));
+  assert.ok(createAuthorize);
+  createAuthorize.click();
+  await uiWaitFor(() => calls.discovery.length === 2, 5000);
+  await tick(30);
+  assert.deepEqual([...created.card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel), ['mine-first'],
+    'a user-touched selection is never replaced by the recommendation');
+  assert.equal(created.card.querySelector('[data-recommendation]').dataset.recommendation, 'idle');
+});
+
+test('insufficient capability evidence keeps the selection empty and says so', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  api.authorizeProviderDiscovery = async request => {
+    calls.authorize.push(clone(request));
+    return { ok: true, consentId: 'consent-fix-a', expiresAt: Date.now() + 60000 };
+  };
+  api.discoverProviderModels = async request => {
+    calls.discovery.push(clone(request));
+    return { ok: true, sourceKind: 'remote', models: [
+      { modelId: 'mystery-1', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Mystery One' }, editableOverrides: {} },
+      { modelId: 'mystery-2', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Mystery Two' }, editableOverrides: {} },
+    ] };
+  };
+  const { card } = openCreate(window, snapshot, api);
+  pick(window, card, 'deepseek');
+  const authorize = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  assert.ok(authorize);
+  authorize.click();
+  await uiWaitFor(() => calls.discovery.length === 1, 5000);
+  const mysteryRow = await uiWaitFor(() => card.querySelector('[data-model-row=mystery-1]'), 5000);
+  await tick(20);
+  assert.equal(card.querySelectorAll('[data-chosen-model]').length, 0, 'no name/id guessing');
+  const banner = card.querySelector('[data-recommendation]');
+  assert.equal(banner.dataset.recommendation, 'insufficient');
+  assert.ok(banner.textContent.includes('无法可靠推荐'));
+  assert.ok(banner.textContent.includes('不会按模型名称猜测'));
+});
+
+test('changing the discovery target drops old candidates and recommends only the new batch', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  api.authorizeProviderDiscovery = async request => {
+    calls.authorize.push(clone(request));
+    return { ok: true, consentId: 'consent-target-change', expiresAt: Date.now() + 60000 };
+  };
+  let round = 0;
+  api.discoverProviderModels = async request => {
+    calls.discovery.push(clone(request));
+    round += 1;
+    const id = round === 2 ? 'second-1' : 'auto-1';
+    return { ok: true, sourceKind: 'remote', models: [
+      { modelId: id, providerId: 'custom', configSource: 'remote', effectiveValues: { toolCalling: true }, editableOverrides: {} },
+    ] };
+  };
+  const { card } = openCreate(window, snapshot, api);
+  pick(window, card, 'custom');
+  await tick(10);
+  const env = card.querySelector('.pm-env-input');
+  env.value = '$CUSTOM_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const base = card.querySelector('[data-connection-base-url]');
+  base.value = 'https://first.example.test/v1';
+  base.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const authorize = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  assert.ok(authorize, 'custom draft can authorize discovery');
+  authorize.click();
+  await uiWaitFor(() => card.querySelectorAll('[data-chosen-model]').length === 1, 5000);
+  assert.equal(card.querySelector('[data-recommendation]').dataset.recommendation, 'picked');
+  assert.ok(card.querySelector('[data-chosen-model="auto-1"]'));
+
+  base.value = 'https://second.example.test/v1';
+  base.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(30);
+  assert.equal(card.querySelectorAll('[data-chosen-model]').length, 0,
+    'an auto-picked selection must leave the view when the target changes');
+  assert.equal(card.querySelector('[data-model-row="auto-1"]'), null,
+    'the previous target candidates must not remain in the new target draft');
+  assert.equal(card.querySelector('[data-recommendation]').dataset.recommendation, 'idle');
+
+  const authorizeSecond = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  authorizeSecond.click();
+  await uiWaitFor(() => card.querySelectorAll('[data-chosen-model]').length === 1, 5000);
+  assert.ok(card.querySelector('[data-chosen-model="second-1"]'),
+    'the first recommendation for the new target must only use its own batch');
+  assert.equal(card.querySelector('[data-model-row="auto-1"]'), null,
+    'the old target model must not be re-recommended or saved into the new target');
+
+  // 认证来源同样是推荐上下文：换 env 引用后，旧目标的自动选择必须撤销。
+  base.value = 'https://first.example.test/v1';
+  base.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const authorizeAgain = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  authorizeAgain.click();
+  await uiWaitFor(() => card.querySelectorAll('[data-chosen-model]').length === 1, 5000);
+  assert.ok(card.querySelector('[data-chosen-model="auto-1"]'));
+  env.value = '$OTHER_CUSTOM_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(30);
+  assert.equal(card.querySelectorAll('[data-chosen-model]').length, 0,
+    'an auto-picked selection must leave the view when the credential reference changes');
+  assert.ok(card.querySelector('[data-model-row="auto-1"]'),
+    'changing only the credential reference must not discard the model directory');
+  assert.equal(card.querySelector('[data-recommendation]').dataset.recommendation, 'idle');
 });

@@ -280,7 +280,7 @@ Settings 模型配置：服务列表 + 添加服务 + 全局同步状态
 - 不自动修改用户真实配置；首次显式保存才创建 metadata。已有 provider ID、模型 ID、key/header/command、未知扩展和其他 provider 保留；不从 GET 安全投影重建整份磁盘配置。未支持的旧协议标只读，不默默改成 openai-completions 后保存。
 - 数据 feature flag 为后端装配时的 `providerManagementEnabled`（默认切换须完成验收）；关闭后旧入口仍读取同一兼容 Pi 配置。metadata 只增加独立 GUI 文件，不写 Pi session schema。旧客户端写入也走新仓储；若无 revision，则锁内基于最新数据执行其受限操作并保守拒绝危险编辑，不能绕过 Endpoint 凭据绑定。
 - 代码回滚：关闭开关/回退行为提交；metadata 保留但旧版忽略。数据回滚：先停止所有写入及同步，核对当前文件与对应事务版本；仅在一致时恢复受保护备份，否则展示冲突并保留双方。撤销 GUI 选择不回滚 OAuth token，logout 后不能靠配置备份恢复 token；必须重新登录。
-- 增设 `providerKeyInputEnabled` 独立默认关闭开关；关闭/回滚立即撤销秘密窗口/flow/暂存并中止发现，不能删除用户已保存的原生凭据。不得为回滚回写auth.json。原生API key替换OAuth后无法靠GUI配置备份恢复登录，需重新OAuth登录。
+- 增设 `providerKeyInputEnabled` 独立开关（P6 起默认开启；显式 `=0` 回滚）；关闭/回滚立即撤销秘密窗口/flow/暂存并中止发现，不能删除用户已保存的原生凭据。不得为回滚回写auth.json。存储资格（auth.json 所有者/受保护 DACL/可信祖先）不合格时同样整体关闭原生密钥输入（含暂存），快照、主进程与后端 `prepare` 三处 fail-closed。原生API key替换OAuth后无法靠GUI配置备份恢复登录，需重新OAuth登录。
 - 无模型列表端点、订阅缺失公开协议、SDK 缺失时，保留离线目录/手动模型/官方登录说明，明确 unsupported。参考供应商不在当前 Pi descriptor 中时不实现私有 OAuth、额度、订阅计费或 host API。
 - 高级客户端证书、任意 headers、定制 reasoning wire 参数、代理/证书跳过、自建 secret store、跨账号 OAuth 克隆、删除 Pi 内置目录、自动付费推理测试均不纳入本次范围。已有磁盘字段保留；只有经 Pi 公开配置支持并验证的字段可后续扩展，不以 UI 开关假装支持。
 - 参考的多 OAuth 账户管理不移植：本项目按 Pi 每 provider 的原生凭据身份管理，不自建账户 UUID/secret namespace；plugin-owned provider/Jev classifier 不作为可编辑服务移植，缺少本项目相应 owner/运行时合同。参考的 availableForSubagents、nativeWebSearch、fastModeAllowed、图像生成绑定、document input、自定义 thinkingProtocol/defaultThinkingLevel 也不设假开关：它们依赖参考 sidecar/wire/计费能力，当前白名单或已验证 Pi 接口不能保证生效；保留既有磁盘扩展，界面显示兼容性说明。

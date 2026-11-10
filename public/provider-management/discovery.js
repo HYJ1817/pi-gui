@@ -58,6 +58,8 @@ const FAILURE_REASON = Object.freeze({
   dns_failed: '目标 DNS 解析失败',
   network_failed: '网络请求失败',
   unsupported: '当前认证来源不支持自动发现（授权/目标限制）',
+  environment_missing: '后端进程缺少该供应商所需的环境变量（或取值不可用）；设置环境变量并重启后端后，点击“授权并发现”可重试，不需要重建供应商',
+  environment_target_unsupported: '该目标不是目录审核过的预设端点，不能使用环境变量引用发现；请改用自定义端点或授权安全凭据',
 });
 
 export function discoverySupported(snapshot) {

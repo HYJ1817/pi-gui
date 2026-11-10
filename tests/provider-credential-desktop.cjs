@@ -72,7 +72,7 @@ async function moduleTests() {
   let passed = 0;
   const check = (name, fn) => { fn(); passed++; console.log(`  ok  ${name}`); };
 
-  function make({ enabled = true, drafts = [DRAFT], sdkState } = {}) {
+  function make({ enabled = true, drafts = [DRAFT], sdkState, nativePersistence = () => true } = {}) {
     const state = sdkState ?? { qualified: true, native: new Map(), staged: new Map(), calls: [], disposed: [] };
     const draftMap = new Map(drafts.map(draft => [draft.draftId, draft]));
     const consents = createDiscoveryConsentStore({ now: () => 1_000_000 });
@@ -81,6 +81,7 @@ async function moduleTests() {
       /* 动态读数组：测试在 prepare 之后改写 draft 以模拟连接变化。 */
       draftLookup: id => drafts.find(item => item.draftId === id) ?? draftMap.get(id) ?? null,
       mutationBlocked: () => state.blocked === true, maintenanceLocked: () => state.maintenance === true,
+      nativePersistence,
       enabled, flowTtlMs: 120_000, now: () => state.clock ?? 1_000_000 });
     return { bridge, consents, sdk, state };
   }
@@ -137,7 +138,7 @@ async function moduleTests() {
       assert.equal(afterHandshake?.rawKeyInput, true);
       assert.equal(afterHandshake?.keyStaging, true);
       assert.equal(afterHandshake?.privateDesktopBridge, true);
-      assert.equal(afterHandshake?.nativeCredentialPersistence, false, 'persist orchestration stays P3');
+      assert.equal(afterHandshake?.nativeCredentialPersistence, true);
     });
     check('prepare binds flow to draft and target summary', () => {
       assert.equal(prepared.ok, true);
@@ -146,6 +147,21 @@ async function moduleTests() {
       assert.equal(prepared.targetSummary.baseUrl, 'https://fixture.invalid/v1');
       assert.equal(prepared.oauthConflict, false);
       assert.equal(prepared.credential.present, false);
+    });
+    const unqualifiedStorage = make({ nativePersistence: () => false });
+    const storageHandshake = await unqualifiedStorage.bridge.handle({ type: 'provider-credential', action: 'capability',
+      requestId: 'r5b', backendEpoch: 'handshake' });
+    const storageSnapshot = await unqualifiedStorage.bridge.desktopCapability();
+    const storagePrepare = await unqualifiedStorage.bridge.handle({ type: 'provider-credential', action: 'prepare',
+      requestId: 'r5c', backendEpoch: unqualifiedStorage.bridge.epoch, draftId: 'draft-a', draftRevision: 1, purpose: 'set' });
+    check('unqualified storage refuses native key input before any sheet opens', () => {
+      assert.equal(storageHandshake.nativePersistence, false);
+      assert.equal(storageSnapshot?.rawKeyInput, false);
+      assert.equal(storageSnapshot?.keyStaging, false);
+      assert.equal(storageSnapshot?.nativeCredentialPersistence, false);
+      assert.equal(storageSnapshot?.privateDesktopBridge, true, 'non-secret management must stay available');
+      assert.equal(storagePrepare.code, 'unsupported');
+      assert.equal(unqualifiedStorage.state.calls.length, 0, 'no key may reach the native staging adapter');
     });
     const missing = await bridge.handle({ type: 'provider-credential', action: 'prepare', requestId: 'r6',
       backendEpoch: bridge.epoch, draftId: 'draft-missing', draftRevision: 1, purpose: 'set' });
@@ -325,6 +341,49 @@ async function moduleTests() {
         credentialRevision: 'fixture-native' }), null);
     });
   }
+
+  /* ---------- FIX-04：桌面安全资格判定（纯函数 + 源码接线） ---------- */
+  const { desktopQualification } = require(path.join(ROOT, 'electron/desktop-qualification.cjs'));
+  const qualify = (over = {}) => desktopQualification({ backendConnected: true, hasSwitch: () => false,
+    env: {}, argv: [], execArgv: [], ...over });
+  check('qualification allows the normal sandboxed desktop', () => {
+    assert.deepEqual(qualify(), { ok: true, reason: null });
+  });
+  check('qualification rejects a missing direct backend', () => {
+    assert.equal(qualify({ backendConnected: false }).reason, 'backend_unavailable');
+  });
+  for (const [flag, reason] of [['--remote-debugging-port=9222', 'debug_port'], ['--remote-debugging-pipe', 'debug_pipe'],
+    ['--inspect=9229', 'debug_inspector'], ['--inspect-brk', 'debug_inspector'],
+    ['--single-process', 'single_process'], ['--disable-web-security', 'web_security_disabled']]) {
+    check(`qualification rejects ${flag}`, () => {
+      const verdict = qualify({ argv: ['electron', flag] });
+      assert.deepEqual(verdict, { ok: false, reason });
+    });
+  }
+  check('qualification rejects --no-sandbox via argv or app switch', () => {
+    assert.deepEqual(qualify({ argv: ['electron', '--no-sandbox'] }), { ok: false, reason: 'no_sandbox' });
+    assert.deepEqual(qualify({ hasSwitch: name => name === 'no-sandbox' }), { ok: false, reason: 'no_sandbox' });
+  });
+  check('qualification rejects ELECTRON_DISABLE_SANDBOX', () => {
+    assert.equal(qualify({ env: { ELECTRON_DISABLE_SANDBOX: '1' } }).reason, 'sandbox_disabled');
+  });
+  check('qualification rejects NODE_OPTIONS inspector flags', () => {
+    assert.equal(qualify({ env: { NODE_OPTIONS: '--inspect=9229' } }).reason, 'debug_inspector');
+    assert.equal(qualify({ env: { NODE_OPTIONS: '--inspect-brk' } }).reason, 'debug_inspector');
+  });
+  check('qualification rejects debug switches from app command line', () => {
+    assert.equal(qualify({ hasSwitch: name => name === 'remote-debugging-pipe' }).reason, 'debug_pipe');
+    assert.equal(qualify({ hasSwitch: name => name === 'inspect' }).reason, 'debug_inspector');
+  });
+  check('qualification fails closed when switch probing throws', () => {
+    assert.deepEqual(qualify({ hasSwitch: () => { throw new Error('fixture switch probe'); } }),
+      { ok: false, reason: 'desktop_unqualified' });
+  });
+  check('main.cjs delegates qualification to the pure module', () => {
+    const source = fs.readFileSync(path.join(ROOT, 'electron/main.cjs'), 'utf8');
+    assert.match(source, /desktopQualification\(\{/);
+    assert.match(source, /verdict\.ok === true \? true : verdict\.reason/);
+  });
 
   console.log(`provider-credential-bridge: ${passed} assertions passed`);
 }
@@ -551,7 +610,11 @@ async function electronMain() {
     });
     check('stage E2E: apply closes sheet and publishes staged state', Boolean(stagedState));
     const authFile = path.join(agentDir, 'auth.json');
-    check('staging never writes the native credential file', !fs.existsSync(authFile), fs.existsSync(authFile) ? fs.readFileSync(authFile, 'utf8') : null);
+    /* P6：桌面桥握手时会先准备一个私有的空 auth.json（{}），这样 Pi 之后的
+     * 原生写入不会继承宽松 ACL。暂存阶段仍不得把 secret 写进这个文件。 */
+    const stagedNative = fs.existsSync(authFile) ? fs.readFileSync(authFile, 'utf8') : null;
+    check('staging never writes the staged secret into the native credential file',
+      stagedNative === null || (stagedNative.trim() === '{}' && !stagedNative.includes('sentinel-key-E2E-1')), stagedNative);
     const mainWindowText = await read(win, `document.documentElement.innerHTML`);
     check('main window never contains the staged secret', !mainWindowText.includes('sentinel-key-E2E-1'));
     await win.focus();

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { json, readBody } from './http-utils.js';
-import { apiKeyState, publicProviderConfig } from './providers.js';
+import { apiKeyState, isEnvKeyReference, publicProviderConfig } from './providers.js';
 import { applyProviderCommit, guardNativeCredentialTarget, own } from './provider-config-records.js';
 import { createNativeCommit } from './provider-management-commit.js';
 import { createProviderManagementDiscovery } from './provider-management-discovery.js';
@@ -28,6 +28,8 @@ function projectAuth(snapshot) {
     displayName: safeText(item.displayName, 200) ?? item.providerId,
     status: ['connected','disconnected','unknown','unsupported'].includes(item.status) ? item.status : 'unknown',
     authType: ['oauth','api-key','environment'].includes(item.authType) ? item.authType : null,
+    credentialStored: item.credentialStored === true,
+    authConfigured: item.authConfigured === true,
     canLogin: item.canLogin === true,
     canLogout: item.canLogout === true,
     methods: (Array.isArray(item.methods) ? item.methods : []).filter(method => ['oauth','api-key','environment'].includes(method?.type)).slice(0, 8).map(method => ({
@@ -56,18 +58,28 @@ function projectService(id, config, meta, auth) {
   const selected = Array.isArray(meta?.selectedModelIds) ? [...new Set(meta.selectedModelIds.filter(isModelId))].slice(0, 3000) : null;
   const ordered = Array.isArray(meta?.modelOrder) ? [...new Set(meta.modelOrder.filter(isModelId))].slice(0, 3000) : selected;
   const key = apiKeyState(config?.apiKey);
+  /* 只回传环境变量**引用名**（$NAME / ${NAME}），用于编辑既有服务时原样显示。
+   * 字面量 Key、!command 以及其他 apiKey 写法一律不进入投影。 */
+  const envReference = key.kind === 'env' && isEnvKeyReference(config?.apiKey) ? String(config.apiKey).trim() : null;
+  /* `status: connected` 只表示 Pi 已经**验证**了远端登录（OAuth）；已保存的
+   * API Key 在 Pi 的认证描述里是 `credentialStored:true` + `status:'unknown'`
+   * ——远端有效性未经检查，但槽位里确实有凭据。只认 connected 会把重启后
+   * 的已保存 Key 误报成「未配置凭据」，并禁用更换入口，形成“重启就再也
+   * 改不了 Key”的死角。来源仍只报 Pi 本机槽；环境变量等未落槽的认证保
+   * 持 unknown，避免误替换。 */
+  const stored = auth?.credentialStored === true || auth?.status === 'connected';
   const credentialState = ['env','literal','command'].includes(key.kind) ? { state: key.ok ? 'saved' : 'none', source: key.kind } :
-    { state: auth?.status === 'connected' ? 'saved' : 'none', source: auth?.status === 'connected' ? 'pi-credential' : 'unknown' };
+    { state: stored ? 'saved' : 'none', source: stored ? 'pi-credential' : 'unknown' };
   return { serviceId: id, providerId: id, catalogId: isOpaqueId(meta?.catalogId) ? meta.catalogId : null,
     displayName: safeText(meta?.displayName, 200) ?? auth?.displayName ?? id, enabled: meta?.enabled !== false,
-    connection: safe.baseUrl && apiSupported ? { baseUrl: safe.baseUrl, api: safe.api } : null, credentialState,
+    connection: safe.baseUrl && apiSupported ? { baseUrl: safe.baseUrl, api: safe.api } : null, credentialState, envReference,
     authMode: auth?.authType === 'oauth' ? 'oauth' : key.kind === 'env' ? 'environment' : key.kind !== 'none' || credentialState.state === 'saved' ? 'pi-credential' : 'none',
     models, selectedModelIds: selected, modelOrder: ordered,
     readOnly: Boolean(config && (!isRecord(config) || !apiSupported || (config.baseUrl && !safe.baseUrl))),
     compatibility: apiSupported ? 'unknown' : 'unsupported' };
 }
 
-export function createProviderManagement({ store, inspectCredential, readAuth = () => null, mutationBlocked = () => false, now = Date.now,
+export function createProviderManagement({ store, inspectCredential, readAuth = () => null, refreshAuth = null, mutationBlocked = () => false, now = Date.now,
   enabled = false, desktopCapabilities = null, nativeCredentials = null, invalidateDraft = () => {}, discovery = null, runtimeSync = null }) {
   const drafts = new Map();
   const receipts = new Map();
@@ -89,14 +101,27 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     for (const [id, item] of syncOperations) if (item.expires <= time) syncOperations.delete(id);
   }
 
+  /* Pi 的认证快照是**按需**读取的（/api/provider-auth）。管理页重启后先打开
+   * 编辑弹窗时，快照可能还没读过，已保存的本机凭据就会被报成 unknown 并禁用
+   * 更换入口。只在快照缺少当前服务时才补读一次，避免每次 GET 都重建 worker；
+   * 补读失败保留上一份快照（fail-closed，不凭空声称凭据存在）。 */
+  async function authProjection(ids = []) {
+    let auth = projectAuth(readAuth());
+    if (typeof refreshAuth !== 'function') return auth;
+    const missing = ids.filter(isProviderId).some(id => !auth.providers.some(item => item.providerId === id));
+    if (!missing) return auth;
+    try { auth = projectAuth(await refreshAuth()); } catch { /* 保留上一份只读快照 */ }
+    return auth;
+  }
+
   async function snapshot() {
     /* Desktop qualification can yield to a concurrent configuration commit. */
     const desktopSource = typeof desktopCapabilities === 'function' ? await Promise.resolve(desktopCapabilities()).catch(() => null) : desktopCapabilities ?? null;
     const desktop = desktopSource && typeof desktopSource === 'object' ? desktopSource : null;
     const { config, metadata, revision } = store.read();
-    const auth = projectAuth(readAuth());
-    const byProvider = new Map(auth.providers.map(p => [p.providerId, p]));
     const ids = new Set([...Object.keys(config.providers), ...Object.keys(metadata.services)]);
+    const auth = await authProjection([...ids]);
+    const byProvider = new Map(auth.providers.map(p => [p.providerId, p]));
     const services = [...ids].filter(isProviderId).slice(0, 300).map(id => projectService(id, own(config.providers, id), own(metadata.services, id), byProvider.get(id)));
     const subscriptions = auth.providers.filter(p => p.methods.some(method => method.type === 'oauth' && method.isSubscription)).map(p => ({
       id: `${p.providerId}-subscription`, providerId: p.providerId, name: p.displayName, category: 'subscription', authMode: 'oauth',
@@ -222,6 +247,23 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
     return result;
   }
 
+  /* FIX-01：只读的首屏缓存查询。服务端按当前权威配置解析目标与认证来源，
+   * 客户端不传目标；只查内存目标缓存，绝不触发网络。 */
+  async function serviceCache(serviceId) {
+    if (!discoveryService) providerFailure('unsupported');
+    const current = store.read();
+    const meta = own(current.metadata.services, serviceId);
+    const config = own(current.config.providers, serviceId);
+    if (!config && !meta) providerFailure('not_found');
+    const auth = await authProjection([serviceId]);
+    const service = projectService(serviceId, config, meta, auth.providers.find(item => item.providerId === serviceId));
+    if (!service.connection) providerFailure('unsupported');
+    const cached = await discoveryService.cachedForDraft({ providerId: serviceId, connection: service.connection, authMode: service.authMode });
+    return { ok: true, serviceId, ...(cached
+      ? { sourceKind: 'cache', cachedModels: cached.models, cacheStale: cached.stale, cachedAt: cached.discoveredAt }
+      : { sourceKind: 'none', cachedModels: [] }) };
+  }
+
   const post = new Map([['/drafts','drafts'], ['/commit','commit'], ['/discovery-authorizations','authorize'],
     ['/discovery-authorizations/revoke','revoke'], ['/discover','discover'], ['/test','test'], ['/sync','sync']]);
   async function handle(req, res, url) {
@@ -230,6 +272,14 @@ export function createProviderManagement({ store, inspectCredential, readAuth = 
       prune();
       const suffix = url.pathname.slice(routeRoot.length);
       if (!suffix && req.method === 'GET') return json(res, 200, await snapshot());
+      const serviceRoute = /^\/services\/([^/]+)\/cache$/.exec(suffix);
+      if (serviceRoute) {
+        let serviceId;
+        try { serviceId = decodeURIComponent(serviceRoute[1]); } catch { providerFailure('invalid_request'); }
+        if (!isProviderId(serviceId)) providerFailure('invalid_request');
+        if (req.method !== 'GET') providerFailure('method_not_allowed');
+        return json(res, 200, await serviceCache(serviceId));
+      }
       const operation = /^\/operations\/([^/]+)(\/cancel)?$/.exec(suffix);
       if (operation && !isOpaqueId(operation[1])) providerFailure('invalid_request');
       if (operation && !operation[2] && req.method === 'GET') {

@@ -281,7 +281,7 @@ test('connection evidence distinguishes HTTP outcomes without proving authentica
   const custom = (await http(handle, 'POST', root + '/drafts', { requestId: 'test-custom', expectedRevision,
     draft: { ...draft('custom-env'), authMode: 'environment' } })).body;
   assert.equal((await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'test-custom-auth', draftId: custom.draftId,
-    draftRevision: custom.draftRevision, confirm: true, rememberTarget: false })).body.code, 'unsupported');
+    draftRevision: custom.draftRevision, confirm: true, rememberTarget: false })).body.code, 'environment_target_unsupported');
   assert.equal(requester.mock.callCount(), 0);
   const { body: form } = await http(handle, 'POST', root + '/drafts', { requestId: 'test-preset', expectedRevision,
     draft: { ...draft('openai', 'https://api.openai.com/v1'), authMode: 'environment',
@@ -569,4 +569,388 @@ test('preset labels do not override SDK identity and unknown new registrations f
     draftRevision: custom.draftRevision, credentialAction: { type: 'env', reference: '$SILICONFLOW_FIXTURE' } });
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(fs.readFileSync(f.modelsJson)).providers.siliconflow.apiKey, '$SILICONFLOW_FIXTURE');
+});
+
+test('builtin API-key provider accepts an environment reference with the legacy guards', async t => {
+  const f = await setup(t);
+  f.native.set('openai', { present: false, builtIn: true });
+  f.native.set('deepseek', { present: false, builtIn: true });
+  f.native.set('anthropic', { present: true, builtIn: true, type: 'oauth' });
+  const { handle } = f.make(true);
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const connection = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
+  const draftFor = providerId => ({ providerId, displayName: providerId, authMode: 'environment', connection,
+    enabled: true, modelPatches: [], selectedModelIds: [], modelOrder: [] });
+  const create = (requestId, providerId, over = {}) => http(handle, 'POST', root + '/drafts', { requestId, expectedRevision: snapshot.revision,
+    draft: { ...draftFor(providerId), ...over } });
+
+  // 预设端点 + 无原生凭据：创建成功并写入 env 引用（与旧入口同一语义）。
+  const form = (await create('builtin-env-draft', 'openai')).body;
+  assert.equal(form.ok, true);
+  const commit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-env-commit', expectedRevision: snapshot.revision,
+    action: 'create', draftId: form.draftId, draftRevision: form.draftRevision, credentialAction: { type: 'env', reference: '$OPENAI_API_KEY' } });
+  assert.equal(commit.status, 200, JSON.stringify(commit.body));
+  assert.equal(commit.body.saved, true);
+  const saved = JSON.parse(fs.readFileSync(f.modelsJson, 'utf8'));
+  assert.deepEqual(saved.providers.openai, { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses', models: [], apiKey: '$OPENAI_API_KEY' });
+  assert.deepEqual(saved.misc, { a: true }, 'unknown top-level fields stay untouched');
+
+  // 非预设端点：拒绝（换端点必须复制为新标识）。
+  const proxy = await http(handle, 'POST', root + '/drafts', { requestId: 'builtin-proxy-draft', expectedRevision: commit.body.revision,
+    draft: { ...draftFor('deepseek'), connection: { baseUrl: 'https://proxy.invalid/v1', api: 'openai-completions' } } });
+  assert.equal(proxy.status, 200);
+  const proxyCommit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-proxy-commit', expectedRevision: commit.body.revision,
+    action: 'create', draftId: proxy.body.draftId, draftRevision: proxy.body.draftRevision, credentialAction: { type: 'env', reference: '$DEEPSEEK_API_KEY' } });
+  assert.equal(proxyCommit.status, 409);
+  assert.equal(proxyCommit.body.code, 'credential_target_conflict');
+
+  // 原生凭据不可证明为空：拒绝（与旧入口一致）。
+  const occupied = await http(handle, 'POST', root + '/drafts', { requestId: 'builtin-oauth-draft', expectedRevision: commit.body.revision,
+    draft: { ...draftFor('anthropic'), connection: { baseUrl: 'https://api.anthropic.com', api: 'anthropic-messages' } } });
+  assert.equal(occupied.status, 200);
+  const occupiedCommit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-oauth-commit', expectedRevision: commit.body.revision,
+    action: 'create', draftId: occupied.body.draftId, draftRevision: occupied.body.draftRevision, credentialAction: { type: 'env', reference: '$ANTHROPIC_API_KEY' } });
+  assert.equal(occupiedCommit.status, 409);
+  assert.equal(occupiedCommit.body.code, 'credential_conflict');
+
+  // 原生化对内置仍不开放（没有精确的 Endpoint 证据）。
+  const nativeCommit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-native-commit', expectedRevision: commit.body.revision,
+    action: 'create', draftId: form.draftId, draftRevision: form.draftRevision, credentialAction: { type: 'apply-staged' } });
+  assert.equal(nativeCommit.status, 422);
+  assert.equal(nativeCommit.body.code, 'unsupported');
+});
+
+test('disable and enable are symmetric metadata-only actions for services without drafts', async t => {
+  const f = await setup(t);
+  const { handle } = f.make(true);
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const disable = await http(handle, 'POST', root + '/commit', { requestId: 'disable-fixture', expectedRevision: snapshot.revision,
+    action: 'disable', serviceId: 'example' });
+  assert.equal(disable.status, 200, JSON.stringify(disable.body));
+  assert.equal(disable.body.saved, true);
+  let metadata = JSON.parse(fs.readFileSync(f.metadataPath, 'utf8'));
+  assert.equal(metadata.services.example.enabled, false);
+  const before = JSON.parse(fs.readFileSync(f.modelsJson, 'utf8'));
+  const enable = await http(handle, 'POST', root + '/commit', { requestId: 'enable-fixture', expectedRevision: disable.body.revision,
+    action: 'enable', serviceId: 'example' });
+  assert.equal(enable.status, 200, JSON.stringify(enable.body));
+  metadata = JSON.parse(fs.readFileSync(f.metadataPath, 'utf8'));
+  assert.equal(metadata.services.example.enabled, true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(f.modelsJson, 'utf8')), before, 'enable/disable never touch Pi configuration');
+  // 不存在的服务：404；带草稿字段的 enable：400（合同拒绝混用）。
+  const missing = await http(handle, 'POST', root + '/commit', { requestId: 'enable-missing', expectedRevision: enable.body.revision,
+    action: 'enable', serviceId: 'never-existed' });
+  assert.equal(missing.status, 404);
+  assert.equal(missing.body.code, 'not_found');
+  const malformed = await http(handle, 'POST', root + '/commit', { requestId: 'enable-draft', expectedRevision: enable.body.revision,
+    action: 'enable', serviceId: 'example', draftId: 'opaque-draft', draftRevision: 1 });
+  assert.equal(malformed.status, 400);
+});
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+const terminal = async (handle, operationId, tries = 40) => {
+  for (let index = 0; index < tries; index++) {
+    const body = (await http(handle, 'GET', `${root}/operations/${operationId}`)).body;
+    if (['success', 'failed', 'cancelled'].includes(body.state)) return body;
+    await settle();
+  }
+  throw new Error('operation did not settle');
+};
+
+test('service cache endpoint is target/credential bound and never triggers network', async t => {
+  const f = await setup(t);
+  let time = Date.now();
+  let sockets = 0;
+  const requester = t.mock.fn(options => {
+    sockets += 1;
+    const req = new EventEmitter();
+    req.end = () => queueMicrotask(() => {
+      const response = new EventEmitter();
+      Object.assign(response, { statusCode: 200, headers: {}, destroy() {} });
+      req.emit('response', response);
+      response.emit('data', Buffer.from(JSON.stringify({ data: [{ id: 'model-a', name: 'A', context_length: 32000 }] })));
+      response.emit('end');
+    });
+    return req;
+  });
+  const env = { OPENAI_API_KEY: 'fixture-env-key', DEEPSEEK_API_KEY: 'fixture-env-key-2' };
+  f.legacy.store.transact({ apply: current => {
+    current.config.providers.openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses', apiKey: '$OPENAI_API_KEY', models: [] };
+    current.config.providers.deepseek = { baseUrl: 'https://api.deepseek.com', api: 'openai-completions', apiKey: '$DEEPSEEK_API_KEY', models: [] };
+    current.metadata.services.openai = { providerId: 'openai', displayName: 'OpenAI', enabled: true, kind: 'builtin' };
+    current.metadata.services.deepseek = { providerId: 'deepseek', displayName: 'DeepSeek', enabled: true, kind: 'builtin' };
+  } });
+  const { handle } = f.make(true, null, null, { now: () => time, io: { requester, lookup: async () => [{ address: '93.184.216.34' }] }, env });
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
+  const draft = (await http(handle, 'POST', root + '/drafts', { requestId: 'cache-draft', expectedRevision: snapshot.revision,
+    draft: { providerId: 'openai', displayName: 'OpenAI', authMode: 'environment', connection: openai, enabled: true,
+      modelPatches: [], selectedModelIds: [], modelOrder: [] } })).body;
+  const grant = (await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'cache-auth', draftId: draft.draftId,
+    draftRevision: draft.draftRevision, confirm: true, rememberTarget: false })).body;
+  const accepted = await http(handle, 'POST', root + '/discover', { requestId: 'cache-discover', draftId: draft.draftId,
+    draftRevision: draft.draftRevision, consentId: grant.consentId, dialogGeneration: 1, requestSeq: 1, force: false });
+  assert.equal((await terminal(handle, accepted.body.operationId)).result.sourceKind, 'remote');
+  assert.equal(sockets, 1);
+  const cache = async serviceId => http(handle, 'GET', `${root}/services/${serviceId}/cache`);
+
+  const fresh = await cache('openai');
+  assert.equal(fresh.status, 200);
+  assert.equal(fresh.body.sourceKind, 'cache');
+  assert.deepEqual(fresh.body.cachedModels.map(model => model.modelId), ['model-a']);
+  assert.equal(fresh.body.cachedModels[0].configSource, 'cache');
+  assert.equal(fresh.body.cachedModels[0].effectiveValues.contextWindow, 32000);
+  assert.equal(fresh.body.cacheStale, false);
+  assert.equal(typeof fresh.body.cachedAt, 'number');
+  assert.equal(sockets, 1, 'cache read never requests the provider');
+
+  const otherProvider = await cache('deepseek');
+  assert.equal(otherProvider.body.cachedModels.length, 0, 'different provider never shares cache');
+  assert.equal(otherProvider.body.sourceKind, 'none');
+
+  time += 61_000;
+  const stale = await cache('openai');
+  assert.equal(stale.body.sourceKind, 'cache');
+  assert.equal(stale.body.cacheStale, true, 'cache beyond 60s is explicitly marked stale');
+  assert.equal(stale.body.cachedModels[0].cacheStale, true);
+
+  time += 15 * 60_000;
+  assert.equal((await cache('openai')).body.cachedModels.length, 0, 'cache beyond retention is dropped');
+
+  time += 1_000;
+  const freshDraft = (await http(handle, 'POST', root + '/drafts', { requestId: 'cache-draft-2', expectedRevision: snapshot.revision,
+    draft: { providerId: 'openai', displayName: 'OpenAI', authMode: 'environment', connection: openai, enabled: true,
+      modelPatches: [], selectedModelIds: [], modelOrder: [] } })).body;
+  const grant2 = (await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'cache-auth-2', draftId: freshDraft.draftId,
+    draftRevision: freshDraft.draftRevision, confirm: true, rememberTarget: false })).body;
+  assert.equal(grant2.ok, true);
+  const rediscovered = await http(handle, 'POST', root + '/discover', { requestId: 'cache-rediscover', draftId: freshDraft.draftId,
+    draftRevision: freshDraft.draftRevision, consentId: grant2.consentId, dialogGeneration: 1, requestSeq: 1, force: true });
+  await terminal(handle, rediscovered.body.operationId);
+  assert.equal(sockets, 2);
+  assert.equal((await cache('openai')).body.sourceKind, 'cache');
+  env.OPENAI_API_KEY = 'rotated-env-key';
+  const rotated = await cache('openai');
+  assert.equal(rotated.body.cachedModels.length, 0, 'credential generation change invalidates the display cache');
+  assert.equal(sockets, 2);
+
+  const unknown = await cache('never-existed');
+  assert.equal(unknown.status, 404);
+  assert.equal((await http(handle, 'POST', `${root}/services/openai/cache`, { requestId: 'cache-post' })).status, 405);
+});
+
+test('service cache partitions on provider target api host port and protocol; explicit revoke keeps cache display-only', async t => {
+  const f = await setup(t);
+  let time = Date.now();
+  let sockets = 0;
+  const requester = () => {
+    sockets += 1;
+    const req = new EventEmitter();
+    req.end = () => queueMicrotask(() => {
+      const response = new EventEmitter();
+      Object.assign(response, { statusCode: 200, headers: {}, destroy() {} });
+      req.emit('response', response);
+      response.emit('data', Buffer.from(JSON.stringify({ data: [{ id: 'partition-model', name: 'Partition', context_length: 32000 }] })));
+      response.emit('end');
+    });
+    return req;
+  };
+  const base = { baseUrl: 'https://fixture.invalid/tenant-a/v1', api: 'openai-completions' };
+  f.legacy.store.transact({ apply: current => {
+    current.config.providers['no-key-fixture'] = { ...base, models: [] };
+    current.metadata.services['no-key-fixture'] = { providerId: 'no-key-fixture', displayName: 'No key', enabled: true, kind: 'custom' };
+  } });
+  const { handle } = f.make(true, null, null, { now: () => time, io: { requester, lookup: async () => [{ address: '93.184.216.34' }] } });
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const cache = serviceId => http(handle, 'GET', `${root}/services/${serviceId}/cache`);
+  // 无凭据自定义供应商：认证来源恒为 none，可单独观测目标分区维度。
+  const form = (await http(handle, 'POST', root + '/drafts', { requestId: 'partition-draft', expectedRevision: snapshot.revision,
+    draft: { providerId: 'no-key-fixture', displayName: 'No key', authMode: 'none', connection: base, enabled: true,
+      modelPatches: [], selectedModelIds: [], modelOrder: [] } })).body;
+  const grant = (await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'partition-auth', draftId: form.draftId,
+    draftRevision: form.draftRevision, confirm: true, rememberTarget: false })).body;
+  const accepted = await http(handle, 'POST', root + '/discover', { requestId: 'partition-discover', draftId: form.draftId,
+    draftRevision: form.draftRevision, consentId: grant.consentId, dialogGeneration: 1, requestSeq: 1, force: false });
+  assert.equal((await terminal(handle, accepted.body.operationId)).result.sourceKind, 'remote');
+  assert.equal(sockets, 1);
+  assert.deepEqual((await cache('no-key-fixture')).body.cachedModels.map(model => model.modelId), ['partition-model']);
+
+  const patch = connection => f.legacy.store.transact({ apply: current => {
+    current.config.providers['no-key-fixture'] = { ...current.config.providers['no-key-fixture'], ...connection };
+  } });
+  // 同 provider 下每个维度都必须单独分区；恢复原值后必须重新命中。
+  patch({ api: 'openai-responses' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different API never shares cache');
+  patch({ api: base.api });
+  patch({ baseUrl: 'https://fixture.invalid/tenant-b/v1' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different base path never shares cache');
+  patch({ baseUrl: base.baseUrl });
+  patch({ baseUrl: 'https://other.invalid/tenant-a/v1' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different host never shares cache');
+  patch({ baseUrl: base.baseUrl });
+  patch({ baseUrl: 'https://fixture.invalid:8443/tenant-a/v1' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different port never shares cache');
+  patch({ baseUrl: base.baseUrl });
+  patch({ baseUrl: 'http://fixture.invalid/tenant-a/v1' });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'none', 'different protocol never shares cache');
+  patch({ baseUrl: base.baseUrl });
+  assert.equal((await cache('no-key-fixture')).body.sourceKind, 'cache', 'restoring the exact target hits the original entry');
+  assert.equal(sockets, 1, 'partition checks never request the provider');
+
+  // 显式撤销只停止联网授权；已写入的目标级元数据仍只能按 cache 展示，且不触发请求。
+  const revoked = await http(handle, 'POST', root + '/discovery-authorizations/revoke', { requestId: 'partition-revoke', consentId: grant.consentId });
+  assert.equal(revoked.status, 200);
+  const afterRevoke = await cache('no-key-fixture');
+  assert.equal(afterRevoke.body.sourceKind, 'cache');
+  assert.equal(afterRevoke.body.cachedModels[0].configSource, 'cache');
+  assert.equal(sockets, 1);
+  const denied = await http(handle, 'POST', root + '/discover', { requestId: 'partition-after-revoke', draftId: form.draftId,
+    draftRevision: form.draftRevision, consentId: grant.consentId, dialogGeneration: 1, requestSeq: 2, force: true });
+  assert.equal(denied.body.code, 'invalid_target', 'revoked authorization cannot authorize a new request');
+  assert.equal(sockets, 1);
+});
+
+test('environment authorization distinguishes missing variables and unsupported targets and recovers after retry', async t => {
+  const f = await setup(t);
+  // 变量存在但取值不能作为字面量（含换行）：用于证明错误体不会回显真实取值。
+  const env = { OPENAI_API_KEY: 'secret-value\nwith-newline-7f3a' };
+  const { handle } = f.make(true, null, null, { env, io: { requester: () => { throw new Error('unexpected socket'); }, lookup: async () => [{ address: '93.184.216.34' }] } });
+  const snapshot = (await http(handle, 'GET', root)).body;
+  const openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
+  const draftForm = async (providerId, connection, requestId) => (await http(handle, 'POST', root + '/drafts', {
+    requestId, expectedRevision: snapshot.revision,
+    draft: { providerId, displayName: providerId, authMode: 'environment', connection, enabled: true,
+      modelPatches: [], selectedModelIds: [], modelOrder: [] },
+  })).body;
+  const form = await draftForm('openai', openai, 'env-missing-draft');
+  const authorize = requestId => http(handle, 'POST', root + '/discovery-authorizations', { requestId, draftId: form.draftId,
+    draftRevision: form.draftRevision, confirm: true, rememberTarget: false });
+  const missing = await authorize('env-missing-auth');
+  assert.equal(missing.status, 422);
+  assert.equal(missing.body.code, 'environment_missing');
+  assert.deepEqual(missing.body.fieldErrors, { environmentReference: 'invalid' });
+  assert.ok(!JSON.stringify(missing.body).includes('with-newline-7f3a'), 'the present-but-unusable env value is never echoed');
+
+  env.OPENAI_API_KEY = 'fixture-env-key';
+  const recovered = await authorize('env-recovered-auth');
+  assert.equal(recovered.status, 200, JSON.stringify(recovered.body));
+  assert.equal(recovered.body.ok, true);
+  assert.equal(typeof recovered.body.consentId, 'string');
+
+  const custom = await draftForm('example', { baseUrl: 'https://fixture.invalid/v1', api: 'openai-completions' }, 'env-target-draft');
+  const unsupported = await http(handle, 'POST', root + '/discovery-authorizations', { requestId: 'env-target-auth', draftId: custom.draftId,
+    draftRevision: custom.draftRevision, confirm: true, rememberTarget: false });
+  assert.equal(unsupported.status, 422);
+  assert.equal(unsupported.body.code, 'environment_target_unsupported');
+});
+
+test('builtin updates reject endpoint changes explicitly and keep same-target edits working', async t => {
+  const f = await setup(t);
+  // builtIn:false + present:false：guardExistingTarget 会放行端点变化，必须由
+  // FIX-05 的显式目标检查拦住；若这里用 builtIn:true，旧的 credential_target_conflict
+  // 守卫会先拒绝，测试就失去鉴别力。
+  f.native.set('openai', { present: false, builtIn: false });
+  const { handle } = f.make(true);
+  const legacy = f.legacy;
+  const snapshot = (await http(handle, 'GET', root)).body;
+  legacy.store.transact({ apply: current => {
+    current.config.providers.openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses', models: [] };
+    current.metadata.services.openai = { providerId: 'openai', displayName: 'OpenAI', enabled: true, kind: 'builtin' };
+  } });
+  const openai = { baseUrl: 'https://api.openai.com/v1', api: 'openai-responses' };
+  const draftFor = async (connection, requestId, providerId = 'openai', displayName = 'OpenAI') => (await http(handle, 'POST', root + '/drafts', {
+    requestId, serviceId: providerId, expectedRevision: legacy.store.read().revision,
+    draft: { providerId, displayName, catalogId: providerId, authMode: 'environment', connection,
+      enabled: true, modelPatches: [], selectedModelIds: [], modelOrder: [] },
+  })).body;
+  const changed = await draftFor({ baseUrl: 'https://proxy.invalid/v1', api: 'openai-responses' }, 'builtin-target-draft');
+  const rejected = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-target-commit', expectedRevision: legacy.store.read().revision,
+    action: 'update', serviceId: 'openai', draftId: changed.draftId, draftRevision: changed.draftRevision,
+    credentialAction: { type: 'env', reference: '$OPENAI_API_KEY' } });
+  assert.equal(rejected.status, 409);
+  assert.equal(rejected.body.code, 'credential_target_conflict');
+  assert.equal(legacy.store.read().config.providers.openai.baseUrl, 'https://api.openai.com/v1');
+
+  const same = await draftFor(openai, 'builtin-same-draft');
+  const accepted = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-same-commit', expectedRevision: legacy.store.read().revision,
+    action: 'update', serviceId: 'openai', draftId: same.draftId, draftRevision: same.draftRevision,
+    credentialAction: { type: 'env', reference: '$OPENAI_API_KEY' } });
+  assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
+  assert.equal(legacy.store.read().config.providers.openai.apiKey, '$OPENAI_API_KEY');
+
+  // 只有模型覆盖、没有端点字段的内置记录：有效目标等于目录预设，
+  // 同目标改名/换环境变量引用必须放行，换端点必须显式拒绝。
+  f.native.set('anthropic', { present: false, builtIn: true });
+  legacy.store.transact({ apply: current => {
+    current.metadata.services.anthropic = { providerId: 'anthropic', displayName: 'Anthropic', enabled: true, kind: 'builtin' };
+  } });
+  const overrideDraft = (await http(handle, 'POST', root + '/drafts', { requestId: 'builtin-override-draft',
+    serviceId: 'anthropic', expectedRevision: legacy.store.read().revision,
+    draft: { providerId: 'anthropic', displayName: 'Anthropic', catalogId: 'anthropic', authMode: 'environment',
+      connection: { baseUrl: 'https://api.anthropic.com', api: 'anthropic-messages' }, enabled: true,
+      modelPatches: [{ modelId: 'claude-x', operation: 'upsert', set: { name: 'Claude X' } }],
+      selectedModelIds: [], modelOrder: [], confirmBuiltinOverride: true } })).body;
+  const overrideCommit = await http(handle, 'POST', root + '/commit', { requestId: 'builtin-override-commit',
+    expectedRevision: legacy.store.read().revision, action: 'update', serviceId: 'anthropic', draftId: overrideDraft.draftId,
+    draftRevision: overrideDraft.draftRevision, credentialAction: { type: 'keep' } });
+  assert.equal(overrideCommit.status, 200, JSON.stringify(overrideCommit.body));
+  assert.equal(legacy.store.read().config.providers.anthropic.baseUrl, undefined, '覆盖记录不写端点字段');
+  f.native.set('anthropic', { present: false, builtIn: false });
+  const renamed = await draftFor({ baseUrl: 'https://api.anthropic.com', api: 'anthropic-messages' }, 'override-same-draft', 'anthropic', 'Anthropic Renamed');
+  const renamedCommit = await http(handle, 'POST', root + '/commit', { requestId: 'override-same-commit',
+    expectedRevision: legacy.store.read().revision, action: 'update', serviceId: 'anthropic', draftId: renamed.draftId,
+    draftRevision: renamed.draftRevision, credentialAction: { type: 'env', reference: '$ANTHROPIC_API_KEY' } });
+  assert.equal(renamedCommit.status, 200, JSON.stringify(renamedCommit.body));
+  assert.equal(legacy.store.read().config.providers.anthropic.modelOverrides['claude-x'].name, 'Claude X', '同目标更新保留覆盖');
+  assert.equal(legacy.store.read().config.providers.anthropic.apiKey, '$ANTHROPIC_API_KEY');
+  const overrideChanged = await draftFor({ baseUrl: 'https://proxy.invalid/anth', api: 'anthropic-messages' }, 'override-target-draft', 'anthropic');
+  const overrideRejected = await http(handle, 'POST', root + '/commit', { requestId: 'override-target-commit',
+    expectedRevision: legacy.store.read().revision, action: 'update', serviceId: 'anthropic', draftId: overrideChanged.draftId,
+    draftRevision: overrideChanged.draftRevision, credentialAction: { type: 'env', reference: '$ANTHROPIC_API_KEY' } });
+  assert.equal(overrideRejected.status, 409);
+  assert.equal(overrideRejected.body.code, 'credential_target_conflict');
+});
+
+test('management resolves a stored native API key before the auth page has ever been read', async t => {
+  const f = await setup(t);
+  const { createProviderManagement } = await import('../server/provider-management.js');
+  f.legacy.store.transact({ apply: current => { delete current.config.providers.example.apiKey; } });
+  let refreshes = 0;
+  let current = { capability: { sdkAvailable: true, piVersion: '1.5.0' }, providers: [] };
+  const management = createProviderManagement({
+    store: f.legacy.store, inspectCredential: () => Promise.resolve({ present: false }), enabled: true,
+    readAuth: () => current,
+    refreshAuth: async () => {
+      refreshes += 1;
+      current = { capability: { sdkAvailable: true, piVersion: '1.5.0' }, providers: [{
+        providerId: 'example', displayName: 'Example', status: 'unknown', authType: 'api-key',
+        credentialStored: true, authConfigured: true, methods: [],
+      }] };
+      return current;
+    },
+  });
+  const first = (await http(management.handle, 'GET', root)).body;
+  const service = first.services.find(item => item.serviceId === 'example');
+  assert.deepEqual(service.credentialState, { state: 'saved', source: 'pi-credential' });
+  assert.equal(service.authMode, 'pi-credential');
+  assert.equal(refreshes, 1);
+  await http(management.handle, 'GET', root);
+  assert.equal(refreshes, 1, '已有该服务的认证快照时不再重读');
+});
+
+test('management projects environment references but never literal API keys', async t => {
+  const f = await setup(t);
+  f.legacy.store.transact({ apply: current => {
+    current.config.providers['env-service'] = {
+      baseUrl: 'https://env.invalid/v1', api: 'openai-completions', apiKey: '$FIXTURE_ENV_KEY', models: [],
+    };
+  } });
+  const { handle } = f.make(true);
+  const body = (await http(handle, 'GET', root)).body;
+  const env = body.services.find(item => item.serviceId === 'env-service');
+  const literal = body.services.find(item => item.serviceId === 'example');
+  assert.equal(env.envReference, '$FIXTURE_ENV_KEY');
+  assert.equal(env.credentialState.source, 'env');
+  assert.equal(literal.envReference, null, '字面量 Key 不进入投影');
+  assert.ok(!JSON.stringify(body).includes(key));
 });

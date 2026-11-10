@@ -43,7 +43,7 @@ async function fixture(t) {
     const sdk = { qualified: async () => true,
       inspect: async () => ({ present: false, type: null }),
       disposeDraft: async () => {} };
-    const bridge = createProviderCredentialBridge({ sdk, draftLookup: () => draft, enabled: true });
+    const bridge = createProviderCredentialBridge({ sdk, draftLookup: () => draft, nativePersistence: () => true, enabled: true });
     const child = new EventEmitter();
     child.connected = true;
     t.after(() => { child.connected = false; child.emit('disconnect'); });

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { createHash, randomUUID } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const { test } = require('node:test');
@@ -102,6 +102,140 @@ test('the auth storage qualifier rejects wrong authorities and hard-linked files
   fs.linkSync(authPath, authPath + '.linked');
   assert.equal(f.store.authorizeCredentialStorage({ authPath }), false);
   assert.equal(fs.readFileSync(authPath, 'utf8'), 'fixture-only');
+});
+
+/* P6 上线阻断修复：Windows 上 Pi 只用 mode 0600 写 auth.json，不设 DACL。
+ * prepareCredentialStorage 必须在首次原生保存前建立受保护的单用户 DACL，
+ * 否则正常机器上的密钥输入会一直被资格检查拒绝。 */
+function readDacl(target) {
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    "$acl=Get-Acl -LiteralPath $env:PI_GUI_ACL_TEST_TARGET",
+    "$sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value",
+    "$rules=@($acl.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))",
+    "[ordered]@{protected=$acl.AreAccessRulesProtected;owner=$acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value;sid=$sid;rules=@($rules|ForEach-Object{[ordered]@{identity=$_.IdentityReference.Value;type=$_.AccessControlType.ToString();rights=$_.FileSystemRights.ToString();inherited=$_.IsInherited}})}|ConvertTo-Json -Compress -Depth 5",
+  ].join('\n');
+  /* CI 在 pwsh 下启动测试进程，PATH 与 PSModulePath 都可能先命中 PowerShell 7。
+   * powershell.exe 必须按绝对路径启动 Windows PowerShell，并把模块路径限定到它
+   * 自己的 Modules：否则 PS7 的 Microsoft.PowerShell.Security 会抢先匹配而加载
+   * 失败（Get-Acl 是 Windows PowerShell 专有命令），测试判据就变成了宿主 PATH
+   * 的形状。这里只修测试取证方式，不改产品 ACL 实现。 */
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  const shell = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const modulePath = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'Modules');
+  const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', script], {
+    encoding: 'utf8', windowsHide: true,
+    env: { ...process.env, PSModulePath: modulePath, PI_GUI_ACL_TEST_TARGET: target },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout.trim());
+}
+
+test('prepareCredentialStorage creates a protected single-user native credential file', { skip: process.platform !== 'win32' }, async t => {
+  const f = await fixture(t);
+  const directory = path.dirname(f.modelsJson);
+  const authPath = path.join(directory, 'auth.json');
+  assert.equal(fs.existsSync(authPath), false);
+  assert.equal(f.store.prepareCredentialStorage({ authPath }), true, 'normal machine must qualify for native key input');
+  assert.equal(fs.readFileSync(authPath, 'utf8'), '{}\n', 'Pi-compatible empty credential file, never a secret');
+  assert.deepEqual(fs.readdirSync(directory).filter(name => name.startsWith('.pi-gui-credential-')), [],
+    'the staging directory is removed after the atomic publication');
+  const acl = readDacl(authPath);
+  assert.equal(acl.protected, true, 'inherited permissive rules must be removed');
+  assert.equal(acl.owner, acl.sid, 'the current user must own the credential file');
+  assert.equal(acl.rules.length, 1, 'exactly one explicit rule is allowed');
+  assert.equal(acl.rules[0].identity, acl.sid);
+  assert.equal(acl.rules[0].type, 'Allow');
+  assert.equal(acl.rules[0].rights, 'FullControl');
+  assert.equal(acl.rules[0].inherited, false);
+  // 第二次准备必须幂等，且不改内容；已合格时不应重写 ACL（ctime 抖动会让
+  // 同一保存流程里的 worker inspect 误判文件变化）。
+  const before = fs.statSync(authPath, { bigint: true });
+  assert.equal(f.store.prepareCredentialStorage({ authPath }), true);
+  assert.equal(fs.readFileSync(authPath, 'utf8'), '{}\n');
+  assert.equal(fs.statSync(authPath, { bigint: true }).ctimeNs, before.ctimeNs, 'a qualified file is verified, not re-ACLed');
+});
+
+test('prepareCredentialStorage replaces an existing permissive file with a private copy on a new inode', { skip: process.platform !== 'win32' }, async t => {
+  const f = await fixture(t);
+  const authPath = path.join(path.dirname(f.modelsJson), 'auth.json');
+  const original = '{"fixture":"not-a-real-secret"}\n';
+  fs.writeFileSync(authPath, original);
+  const { execFileSync } = require('node:child_process');
+  execFileSync('icacls', [authPath, '/grant', '*S-1-1-0:R'], { stdio: 'ignore', windowsHide: true });
+  const permissive = readDacl(authPath);
+  assert.ok(permissive.rules.length > 1, 'fixture starts with a foreign allow rule');
+  /* 原位改 ACL 不能撤销已经打开的旧句柄。准备阶段必须把内容复制到新
+   * inode 再替换路径，后续写入才不会出现在旧句柄里。 */
+  const oldIdentity = fs.statSync(authPath, { bigint: true }).ino;
+  assert.equal(f.store.prepareCredentialStorage({ authPath }), true);
+  assert.equal(fs.readFileSync(authPath, 'utf8'), original, 'migration preserves credential data');
+  assert.notEqual(fs.statSync(authPath, { bigint: true }).ino, oldIdentity,
+    'the qualified file must be published on a new inode');
+  const next = '{"fixture":"new-secret-after-hardening"}\n';
+  fs.writeFileSync(authPath, next, { mode: 0o600 });
+  assert.equal(fs.readFileSync(authPath, 'utf8'), next);
+  const acl = readDacl(authPath);
+  assert.equal(acl.protected, true);
+  assert.equal(acl.rules.length, 1);
+  assert.equal(acl.rules[0].identity, acl.sid);
+  assert.ok(!acl.rules.some(rule => rule.identity === 'S-1-1-0'), 'the world-readable rule is removed');
+});
+
+test('prepareCredentialStorage fails closed when an existing file cannot be replaced atomically', { skip: process.platform !== 'win32' }, async t => {
+  const f = await fixture(t);
+  const authPath = path.join(path.dirname(f.modelsJson), 'auth.json');
+  const original = '{"fixture":"not-a-real-secret"}\n';
+  fs.writeFileSync(authPath, original);
+  const { execFileSync } = require('node:child_process');
+  execFileSync('icacls', [authPath, '/grant', '*S-1-1-0:R'], { stdio: 'ignore', windowsHide: true });
+  // 不共享删除的旧句柄会阻止原子替换；此时必须 fail-closed，而不是退回
+  // 原位改 ACL（旧句柄仍能读到之后写入的密钥）。
+  const handle = fs.openSync(authPath, 'r');
+  try {
+    assert.equal(f.store.prepareCredentialStorage({ authPath }), false);
+  } finally {
+    fs.closeSync(handle);
+  }
+  assert.equal(fs.readFileSync(authPath, 'utf8'), original);
+  assert.ok(readDacl(authPath).rules.some(rule => rule.identity === 'S-1-1-0'),
+    'the unqualified DACL must not be presented as repaired');
+});
+
+test('prepareCredentialStorage never overwrites a credential file created concurrently', { skip: process.platform !== 'win32' }, async t => {
+  const f = await fixture(t);
+  const directory = path.dirname(f.modelsJson);
+  const authPath = path.join(directory, 'auth.json');
+  const sentinel = '{"fixture-provider":{"type":"api_key","key":"concurrent"}}\n';
+  let armed = true;
+  const io = Object.create(fs);
+  io.writeFileSync = function writeFileSync(file, data, options) {
+    const result = fs.writeFileSync(file, data, options);
+    if (armed && String(file).includes('.pi-gui-credential-') && path.basename(String(file)) === 'auth.json') {
+      armed = false;
+      // Simulate Pi creating the real file while the GUI staged its empty one.
+      fs.writeFileSync(authPath, sentinel, { mode: 0o600 });
+    }
+    return result;
+  };
+  const { createProviderConfigStore } = await import(entry);
+  const store = createProviderConfigStore({ ...f.options, io });
+  assert.equal(store.prepareCredentialStorage({ authPath }), true);
+  assert.equal(fs.readFileSync(authPath, 'utf8'), sentinel, 'a concurrent native credential write must survive');
+  assert.deepEqual(fs.readdirSync(directory).filter(name => name.startsWith('.pi-gui-credential-')), []);
+});
+
+test('prepareCredentialStorage rejects foreign paths and hard-linked credential files', async t => {
+  const f = await fixture(t);
+  const directory = path.dirname(f.modelsJson);
+  const authPath = path.join(directory, 'auth.json');
+  assert.equal(f.store.prepareCredentialStorage({ authPath: path.join(directory, 'elsewhere.json') }), false,
+    'only the exact Pi credential path may be prepared');
+  assert.equal(fs.existsSync(path.join(directory, 'elsewhere.json')), false);
+  fs.writeFileSync(authPath, '{"fixture":"keep"}\n');
+  fs.linkSync(authPath, authPath + '.linked');
+  assert.equal(f.store.prepareCredentialStorage({ authPath }), false, 'hard-linked files are never qualified');
+  assert.equal(fs.readFileSync(authPath, 'utf8'), '{"fixture":"keep"}\n');
 });
 
 test('credential dispatch holds the existing config lock and survives reopening', async t => {

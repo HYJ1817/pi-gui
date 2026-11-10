@@ -55,11 +55,24 @@ export function createModelRecord(raw = {}, { manual = false } = {}) {
     : raw.configSource === 'builtin-override' ? 'builtin-override'
       : raw.configSource === 'remote' ? 'remote'
         : raw.configSource === 'cache' ? 'cache' : 'configured';
+  /* P6：发现/缓存候选带着服务端白名单化后的显示元数据（name/容量/推理/输入）。
+   * 它们只用于展示回退，不进入 baseline/editableOverrides，也不会因为没有
+   * 用户编辑而变成持久化覆盖。 */
+  const displayValues = {
+    name: typeof effective.name === 'string' && effective.name.length > 0 && effective.name.length <= 200
+      && !/[\u0000-\u001f\u007f]/u.test(effective.name) ? effective.name : null,
+    contextWindow: positiveOrNull(effective.contextWindow),
+    maxTokens: positiveOrNull(effective.maxTokens),
+    reasoning: tri(effective.reasoning),
+    input: copyInput(effective.input),
+  };
   return {
     modelId: String(raw.modelId || '').trim(),
     source,
+    cachedStale: source === 'cache' && raw.cacheStale === true,
     persisted: (!manual && source === 'configured') || source === 'builtin-override',
     baseline,
+    displayValues,
     name: baseline.name,
     contextWindow: baseline.contextWindow,
     maxTokens: baseline.maxTokens,
@@ -67,6 +80,8 @@ export function createModelRecord(raw = {}, { manual = false } = {}) {
     input: baseline.input,
     toolCalling: tri(effective.toolCalling),
     streaming: tri(effective.streaming),
+    // 供应商目录是否明确声明该模型可用于聊天生成；null = 未声明（未知）。
+    chatCapable: tri(effective.chatCapable),
     // 高级编辑器的「更多参数」折叠状态不进屋，展开状态由视图持有。
   };
 }
@@ -184,6 +199,11 @@ export function draftFromService(service, snapshot, mode = 'edit') {
     catalogId: service?.catalogId || null,
     displayName: service?.displayName || service?.providerId || '',
     authMode: service?.authMode || (service?.credentialState?.source === 'env' ? 'environment' : 'none'),
+    // 服务端只投影环境变量引用名；编辑既有服务时必须原样带回，否则界面显示为空，
+    // 保存时也无法确认原引用仍被保留。
+    envReference: typeof service?.envReference === 'string' ? service.envReference : '',
+    credentialAction: typeof service?.envReference === 'string' && service.envReference
+      ? { type: 'env', reference: service.envReference } : { type: 'keep' },
     connection: serviceConnection,
     enabled: service?.enabled !== false,
     models,
@@ -262,7 +282,7 @@ export function effectiveAuthMode(draft) {
 /* 配置里的凭据引用与 Pi 原生凭据是两种东西：
  * `none` 只删除 models.json 中的 apiKey 字段，不会调用 Pi logout，
  * 因此绝不能把它当成“本机凭据已清除”。 */
-export function credentialClearSupport(draft, { native = false } = {}) {
+export function credentialClearSupport(draft, { native = false, unavailableReason = '' } = {}) {
   const credential = draft?.credentialState;
   const source = credential?.source;
   if (source === 'env') {
@@ -302,7 +322,8 @@ export function credentialClearSupport(draft, { native = false } = {}) {
     return {
       supported: false,
       source,
-      reason: 'Pi 本机凭据需要在桌面版的安全凭据窗口中清除；网页版或私有桥不可用时不会用“删除配置引用”冒充已清除。',
+      reason: unavailableReason
+        || 'Pi 本机凭据需要在桌面版的安全凭据窗口中清除；网页版或私有桥不可用时不会用“删除配置引用”冒充已清除。',
     };
   }
   return {
@@ -535,7 +556,7 @@ export function setModelField(draft, modelId, field, value) {
     if (field === 'name') return { ...model, name: value === null ? null : String(value) };
     return { ...model, [field]: value === '' || value === null ? null : Number(value) };
   });
-  return finish({ ...draft, models, requestIds: {} });
+  return finish({ ...draft, models, touchedSelection: true, requestIds: {} });
 }
 
 export function addModel(draft, modelId) {
@@ -581,18 +602,55 @@ export function removeModel(draft, modelId) {
   });
 }
 
+/* 缓存候选在拿到新鲜远端结果时升级为远端记录（仅当用户没有编辑过它）。
+ * 编辑过的记录保留用户输入，避免刷新覆盖手动参数。 */
+function untouchedRecord(model) {
+  return EDITABLE_MODEL_FIELDS.every(field => {
+    const value = model[field];
+    const baseline = model.baseline?.[field];
+    if (field === 'input') return JSON.stringify(copyInput(value)) === JSON.stringify(copyInput(baseline));
+    if (field === 'reasoning') return tri(value) === tri(baseline);
+    if (field === 'name') return (typeof value === 'string' ? value.trim() : '') === (typeof baseline === 'string' ? baseline : '');
+    return positiveOrNull(value) === positiveOrNull(baseline);
+  });
+}
+
 export function mergeFetchedModels(draft, incoming) {
   // 只增不减：迟到的发现结果不能把用户已经选中的模型或编辑中的值冲掉。
   const byId = new Map(draft.models.map(model => [model.modelId, model]));
   const models = [...draft.models];
   for (const raw of Array.isArray(incoming) ? incoming : []) {
     const id = String(raw?.modelId || raw?.id || '').trim();
-    if (!id || byId.has(id)) continue;
+    if (!id) continue;
+    const existing = byId.get(id);
+    if (existing) {
+      /* 缓存首屏 -> 新鲜远端结果：升级来源与显示信息；选择 order 不受影响。 */
+      const incomingKind = raw.configSource === 'remote' ? 'remote' : raw.configSource === 'cache' ? 'cache' : null;
+      if (existing.source === 'cache' && incomingKind === 'remote' && untouchedRecord(existing)) {
+        const index = models.findIndex(model => model.modelId === id);
+        if (index >= 0) {
+          const record = createModelRecord({ ...raw, modelId: id, cacheStale: false });
+          models[index] = record;
+          byId.set(id, record);
+        }
+      }
+      continue;
+    }
     const record = createModelRecord({ ...raw, modelId: id });
     byId.set(id, record);
     models.push(record);
   }
   return finish({ ...draft, models, requestIds: {} });
+}
+
+/* 用户重新勾选（包括刷新后重新出现的候选）时撤销待删除记录。 */
+function withoutPendingRemoval(draft, ids) {
+  if (!draft?.removed?.length || !Array.isArray(ids) || !ids.length) return draft;
+  const drop = new Set(ids.filter(id => draft.removed.includes(id)));
+  if (!drop.size) return draft;
+  const removedModels = { ...(draft.removedModels || {}) };
+  for (const id of drop) delete removedModels[id];
+  return { ...draft, removed: draft.removed.filter(id => !drop.has(id)), removedModels };
 }
 
 function reduce(draft, action) {
@@ -635,34 +693,56 @@ function reduce(draft, action) {
       return finish({ ...draft, nativeStage: null, requestIds: {} });
     }
     case 'toggle-model': {
+      /* P6：重新勾选一个曾经移除、又被刷新重新带回候选的模型时，必须撤销
+       * 待删除补丁；否则同一 ID 同时出现在 remove 补丁与 selectedModelIds 里，
+       * 服务端会以 invalid_request 拒绝保存。 */
+      const base = action.selected === true ? withoutPendingRemoval(draft, [action.modelId]) : draft;
       return finish({
-        ...draft,
-        order: toggleSelection(draft.order, action.modelId, action.selected),
+        ...base,
+        order: toggleSelection(base.order, action.modelId, action.selected),
         touchedSelection: true,
         requestIds: {},
       });
     }
     case 'select-visible': {
+      const base = action.selected === true
+        ? withoutPendingRemoval(draft, action.visibleIds.filter(id => !draft.order.includes(id)))
+        : draft;
       return finish({
-        ...draft,
-        order: setVisibleSelection(draft.order, action.visibleIds, action.selected, draft.models.map(model => model.modelId)),
+        ...base,
+        order: setVisibleSelection(base.order, action.visibleIds, action.selected, base.models.map(model => model.modelId)),
         touchedSelection: true,
         requestIds: {},
       });
     }
     case 'move-model': {
-      return finish({ ...draft, order: moveByOffset(draft.order, action.modelId, action.offset), requestIds: {} });
+      return finish({ ...draft, order: moveByOffset(draft.order, action.modelId, action.offset), touchedSelection: true, requestIds: {} });
     }
     case 'move-before': {
-      return finish({ ...draft, order: moveBefore(draft.order, action.modelId, action.targetId), requestIds: {} });
+      return finish({ ...draft, order: moveBefore(draft.order, action.modelId, action.targetId), touchedSelection: true, requestIds: {} });
     }
     case 'move-to-index': {
-      return finish({ ...draft, order: moveToIndex(draft.order, action.modelId, action.index), requestIds: {} });
+      return finish({ ...draft, order: moveToIndex(draft.order, action.modelId, action.index), touchedSelection: true, requestIds: {} });
     }
     case 'model-field': return setModelField(draft, action.modelId, action.field, action.value);
     case 'add-model': return addModel(draft, action.modelId);
     case 'remove-model': return removeModel(draft, action.modelId);
     case 'merge-models': return mergeFetchedModels(draft, action.models);
+    /* FIX-A：端点/供应商标识变化后，上一目标发现/缓存的候选不能继续留在
+     * 新目标的草稿里，否则会被重新推荐或随保存写入新目标。手动添加/配置
+     * 里已有的记录保留；它们不是这次发现带来的。 */
+    case 'drop-target-discovery': {
+      const models = draft.models.filter(model => model.source !== 'remote' && model.source !== 'cache');
+      const known = new Set(models.map(model => model.modelId));
+      return finish({ ...draft, models, order: draft.order.filter(id => known.has(id)), requestIds: {} });
+    }
+    /* FIX-A：首次推荐只改选择，不把这次自动选择当成“用户改过选择”。
+     * 用户之后的任何勾选/移除/排序都会把 touchedSelection 置为 true。 */
+    case 'auto-select-models': {
+      const known = new Set(draft.models.map(model => model.modelId));
+      const order = (Array.isArray(action.modelIds) ? action.modelIds : []).filter(id => known.has(id));
+      return finish({ ...draft, order: [...new Set(order)], requestIds: {} });
+    }
     case 'builtin-override': return finish({ ...draft, confirmBuiltinOverride: true, requestIds: {} });
     case 'mark-saved': {
       // 保存收据落地后暂存批准已被消费（成功）或已失效（失败）；不再保留。

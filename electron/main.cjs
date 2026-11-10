@@ -46,6 +46,7 @@ const fs = require('node:fs');
 const {
   getJson,
   probe: probeExistingServer,
+  waitForBackend,
   isSelfUrl: isSelfUrlOf,
   isSafeExternal,
   isSafeReleaseUrl,
@@ -63,8 +64,9 @@ const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 const { installAppUpdate } = require('./app-update-desktop.cjs');
 /* P2：供应商凭据受限输入窗（CredentialSheet）。协议必须在 app ready 前注册。 */
-const { createProviderCredentialDesktop, registerCredentialScheme } = require('./provider-credentials.cjs');
+const { createProviderCredentialDesktop, registerCredentialScheme, PARTITION: CREDENTIAL_SHEET_PARTITION } = require('./provider-credentials.cjs');
 const { credentialSheetPage } = require('./provider-credential-page.cjs');
+const { desktopQualification } = require('./desktop-qualification.cjs');
 
 registerCredentialScheme(protocol);
 
@@ -146,16 +148,16 @@ async function verifyAccess(timeout = 1500) {
 }
 
 async function waitForServer(ms = 25000) {
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    const probe = await probePort(500);
-    if (probe.state === 'pi-gui') return true;
-    // 端口被别的程序抢了，再等也不会变好
-    if (probe.state === 'foreign-service') return false;
-    if (server && server.exitCode !== null) return false; // 子进程已经挂了，再等也没用
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  return false;
+  /* 只认「子进程退出」这一个失败信号。刚 spawn 的后端在 bind 之后、事件循环
+   * 空出来之前可能暂时答不上健康检查（上一实例的端口也还可能处于半关闭），
+   * 一次 foreign-service 就放弃会让用户看到「端口被占用」的错误框 —— 重启
+   * 必现。真正被别的程序占着时，后端会因 EADDRINUSE 自行退出，这里照样
+   * 立即结束等待，不会白等满 25 秒。详见 net-probe 的 waitForBackend。 */
+  return waitForBackend({
+    probe: () => probePort(500),
+    isChildAlive: () => Boolean(server),
+    timeoutMs: ms,
+  });
 }
 
 /** 端口被别的程序占用时的统一提示。
@@ -584,6 +586,20 @@ function hardenWebContents(wc) {
    * 两套规则是**并列**的，不是一严一松 —— 别把这条判断删了当优化。 */
   if (isBrowserWebContents(wc)) return;
 
+  /* 凭据受限输入窗使用独立 session：它永远不参与「站外链接交给系统浏览器」
+   * 这一层（FIX-04）。导航与弹窗一律拒绝，且不会调用 shell.openExternal。
+   * Electron 的 Session 没有 getPartition 实例方法，只能按 Session 实例比较
+   * （与 browser-view.cjs 同一写法）；写成 getPartition 会让这个分支永不命中。 */
+  let credentialSheet = false;
+  try { credentialSheet = wc.session === session.fromPartition(CREDENTIAL_SHEET_PARTITION); } catch { credentialSheet = false; }
+  if (credentialSheet) {
+    wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+    const deny = event => event.preventDefault();
+    wc.on('will-navigate', deny);
+    wc.on('will-redirect', deny);
+    return;
+  }
+
   wc.setWindowOpenHandler(({ url }) => {
     if (isSafeExternal(url)) shell.openExternal(url);
     return { action: 'deny' };
@@ -896,10 +912,18 @@ if (!app.requestSingleInstanceLock()) {
         app, BrowserWindow, ipcMain, protocol, session, nativeTheme,
         getMainWindow: () => win,
         getBackend: () => server,
-        isDesktopQualified: () => Boolean(server && server.connected)
-          && !app.commandLine.hasSwitch('remote-debugging-port')
-          && !process.argv.includes('--no-sandbox')
-          && !app.commandLine.hasSwitch('no-sandbox'),
+        /* FIX-04：保守资格判定（含 remote-debugging-pipe / inspect / 单进程 /
+         * ELECTRON_DISABLE_SANDBOX 等）。true 或固定 reason 码。 */
+        isDesktopQualified: () => {
+          const verdict = desktopQualification({
+            argv: process.argv,
+            execArgv: process.execArgv,
+            hasSwitch: name => app.commandLine.hasSwitch(name),
+            env: process.env,
+            backendConnected: Boolean(server && server.connected),
+          });
+          return verdict.ok === true ? true : verdict.reason;
+        },
         page: credentialSheetPage,
         preloadPath: path.join(__dirname, 'provider-credential-preload.cjs'),
         logEvent: (event, details) => mlog('electron', event, details),

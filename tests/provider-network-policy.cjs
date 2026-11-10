@@ -401,6 +401,46 @@ test('model list output whitelist drops credentials, secrets echo, bad types and
   assert.equal(picked.models[2].contextWindow, undefined, 'string entries carry id only');
 });
 
+test('model capability evidence comes only from declared fields, never from model ids', async () => {
+  const { net } = await modules();
+  const SECRET = 'sentinel-key-CAPABILITY';
+  const picked = net.pickModelList({ data: [
+    { id: 'tools-model', supported_parameters: ['tools', 'temperature'] },
+    { id: 'explicit-false', toolCalling: false, streaming: true },
+    { id: 'explicit-true', toolCalling: true, streaming: false },
+    { id: 'text-out', architecture: { output_modalities: ['text'] } },
+    { id: 'image-out', architecture: { output_modalities: ['image'] } },
+    { id: 'malformed-out', architecture: { output_modalities: [1, null, {}] } },
+    { id: 'empty-out', architecture: { output_modalities: [] } },
+    { id: 'mixed-out', modalities: { output: [1, 'text'] } },
+    { id: 'unknown-model' },
+    { id: 'secret-tools', name: SECRET, supported_parameters: ['tools'] },
+  ] }, [SECRET]);
+  const byId = Object.fromEntries(picked.models.map(model => [model.id, model]));
+  assert.equal(byId['tools-model'].toolCalling, true, 'a tools parameter is explicit tool evidence');
+  assert.equal(byId['tools-model'].chatCapable, true);
+  assert.equal(byId['tools-model'].streaming, undefined, 'missing streaming is unknown, not false');
+  assert.equal(byId['explicit-false'].toolCalling, false, 'an explicit boolean is preserved');
+  assert.equal(byId['explicit-false'].streaming, true);
+  assert.equal(byId['explicit-true'].streaming, false);
+  assert.equal(byId['text-out'].chatCapable, true);
+  assert.equal(byId['text-out'].toolCalling, undefined);
+  assert.equal(byId['image-out'].chatCapable, false, 'non-text output is negative chat evidence');
+  assert.ok(!('chatCapable' in byId['malformed-out']), 'malformed output modalities are unknown, not false');
+  assert.ok(!('chatCapable' in byId['empty-out']), 'an empty output list is not negative chat evidence');
+  assert.equal(byId['mixed-out'].chatCapable, true, 'valid string entries still count when malformed ones are present');
+  assert.ok(!('toolCalling' in byId['unknown-model']) && !('chatCapable' in byId['unknown-model']),
+    'models without declarations stay unknown');
+  assert.equal(byId['secret-tools'], undefined, 'capability parsing never bypasses the secret filter');
+
+  const google = net.pickModelList({ models: [
+    { name: 'models/gemini-chat', supportedGenerationMethods: ['generateContent', 'countTokens'] },
+    { name: 'models/embed-only', supportedGenerationMethods: ['embedContent'] },
+  ] }, [], 'google-generative-ai');
+  assert.deepEqual(google.models.map(model => [model.id, model.chatCapable]), [['gemini-chat', true]],
+    'generateContent is the only Google chat capability witness');
+});
+
 test('transport strips credentials from discovery results and respects the total deadline', async t => {
   const { net, consent } = await modules();
   const store = consent.createDiscoveryConsentStore({ now: () => 1_000_000 });
@@ -714,7 +754,7 @@ test('P3 accepts standard Anthropic and Google directory metadata while keeping 
     { name: 'models/gemini-fixture', description: 'ignored', displayName: 'Fixture', supportedGenerationMethods: ['generateContent'], inputTokenLimit: 100 },
     { name: 'models/gemini-fixture', supportedGenerationMethods: ['generateContent'] },
   ] }, [], 'google-generative-ai');
-  assert.deepEqual(google.models, [{ id: 'gemini-fixture', name: 'Fixture', contextWindow: 100 }]);
+  assert.deepEqual(google.models, [{ id: 'gemini-fixture', name: 'Fixture', contextWindow: 100, chatCapable: true }]);
   assert.deepEqual(net.pickModelList({ models: [{ name: 'models/embed', supportedGenerationMethods: ['embedContent'] }] }, [], 'google-generative-ai').models, []);
   assert.equal(net.pickModelList({ data: [{ id: 'sentinel-fixture', object: 'model' }] }, ['sentinel-fixture'], 'openai-completions').code, 'not_json');
 });

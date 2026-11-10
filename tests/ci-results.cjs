@@ -14,13 +14,30 @@ async function check(name, action) {
   checks++;
   console.log(`ok ${name}`);
 }
-async function until(read, label) {
+async function until(read, label, child = null, tail = () => '') {
   for (let index = 0; index < 800; index++) {
     const value = read();
     if (value) return value;
+    // 轮询超时必须能区分「产品/夹具没写证据」和「子进程早就退出了」。
+    // 只报 fixture timeout 会把子进程的真实 stderr 藏起来（CI 上踩过）。
+    if (child && child.exitCode !== null) {
+      const output = tail();
+      throw new Error(`fixture child exited (${child.exitCode}) before ${label}${output ? `\n${output}` : ''}`);
+    }
     await sleep(25);
   }
-  throw new Error(`fixture timeout: ${label}`);
+  const output = tail();
+  throw new Error(`fixture timeout: ${label}${output ? `\n${output}` : ''}`);
+}
+function capture(child) {
+  const chunks = [];
+  const read = data => {
+    chunks.push(String(data));
+    while (chunks.join('').length > 4000) chunks.shift();
+  };
+  child.stdout.on('data', read);
+  child.stderr.on('data', read);
+  return () => chunks.join('').trim();
 }
 function stop(child) {
   if (child.exitCode !== null) return;
@@ -92,10 +109,11 @@ async function main() {
     fs.writeFileSync(path.join(world, 'tests/fail.cjs'), 'process.exitCode = 17;');
     fs.writeFileSync(path.join(world, 'tests/not-run.cjs'), "require('node:fs').writeFileSync('must-not-exist','bad')");
     const resultFile = path.join(world, 'results.json');
-    const child = spawn(process.execPath, [runner, '--group', 'core', '--results', resultFile], { cwd: world, windowsHide: true, stdio: 'ignore' });
+    const child = spawn(process.execPath, [runner, '--group', 'core', '--results', resultFile], { cwd: world, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const childTail = capture(child);
     const exited = new Promise(resolve => child.once('exit', resolve));
     try {
-      await until(() => fs.existsSync(resultFile) && JSON.parse(fs.readFileSync(resultFile)).results?.[1]?.status === 'running', 'second leaf running');
+      await until(() => fs.existsSync(resultFile) && JSON.parse(fs.readFileSync(resultFile)).results?.[1]?.status === 'running', 'second leaf running', child, childTail);
       await check('first success is durable while second command is still running', () => {
         const partial = readRecord(resultFile);
         assert.equal(partial.status, 'running');
@@ -118,10 +136,11 @@ async function main() {
       });
     } finally { stop(child); }
     fs.unlinkSync(path.join(world, 'release'));
-    const killed = spawn(process.execPath, [runner, '--group', 'core', '--results', resultFile], { cwd: world, windowsHide: true, stdio: 'ignore' });
+    const killed = spawn(process.execPath, [runner, '--group', 'core', '--results', resultFile], { cwd: world, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const killedTail = capture(killed);
     const killedExit = new Promise(resolve => killed.once('exit', resolve));
     try {
-      await until(() => readRecord(resultFile).status === 'running' && readRecord(resultFile).results[1].status === 'running', 'kill witness');
+      await until(() => readRecord(resultFile).status === 'running' && readRecord(resultFile).results[1].status === 'running', 'kill witness', killed, killedTail);
       stop(killed); await killedExit;
       await check('forced termination retains valid incomplete evidence without promoting it on read', () => {
         const snapshot = fs.readFileSync(resultFile);
