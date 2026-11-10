@@ -319,6 +319,19 @@ get_messages ─┘
 | `agent_settled` 时还有条目在 running | 收成「未完成」 |
 | 只有 `toolCall` 的助手消息 | 整条外壳（含「Pi」角色行）收掉，不留空白 |
 
+### 任务列表：一条真实事件，两侧共用同一份契约
+
+`gui_plan` 是 GUI 自带扩展注册的 Pi 工具（`extensions/pi-gui-plan/index.js`）。
+它每次返回完整任务列表与状态，`details` 随 toolResult 落进会话。Classic 直接消费
+原始 SSE 的 args / details；Runtime 的 `projectRuntimeEvent` 只对 `gui_plan`
+放行一份**窄白名单投影**（`server/plan-projection.js`：id / title / status /
+retained），其它工具的 args/result 仍然不出后端。两条链路在渲染前都再走一次
+`public/plan-model.js` 的契约校验，失败就不画卡。
+
+`public/plan-view.js` 按稳定 id 复用行，不整表重建；`public/plan-live.js` 只负责
+Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每会话记录。
+历史按用户回合归并（`collectPlanTurns`），不用工具调用数推断进度。
+
 ### 几条 pi 协议事实（实测得出，代码里没有一处靠猜）
 
 - `tool_execution_update.partialResult` 是**累积值**不是增量 → 整体替换；
@@ -360,6 +373,10 @@ get_messages ─┘
     「探测读的那份 pi」不可能分叉（P20.5 Blocker A）。纯 fs，不执行 shell。
   - `rpc-bridge.js` — pi 子进程：spawn / stdout JSONL 解析（**只按 LF 切分**）/
     stdin 写入 / 崩溃重启 / `request()` 配对。**令牌在这里从 pi 的环境里摘掉**
+  - `plan-bridge.js` — `gui_plan` 扩展的 launch provider：两条 pi 启动路径都通过
+    `--extension` 注入同一份扩展；不持有会话状态
+  - `plan-projection.js` — Runtime 出站边界：只把 `gui_plan` 的 version 1 契约
+    收窄成 id / title / status / retained，数量与长度有硬上限
   - `pi-compat.js` — **pi 兼容层**：能力探测、response 形状规范化、协议异常记录。
     **只观察、不参与判断**，也不联网 / 不发请求 / 不碰磁盘 —— 证据全部来自
     bridge 与 sessions 已有的链路。见 [pi-compatibility.md](pi-compatibility.md)

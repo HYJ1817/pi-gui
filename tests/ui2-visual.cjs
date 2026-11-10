@@ -428,7 +428,7 @@ async function suite(send) {
     probe.style.cssText = 'position:fixed;top:8px;left:400px;right:8px;display:flex;flex-direction:column;gap:8px;background:var(--main);border:1px solid var(--line);border-radius:8px;padding:10px;z-index:99';
     probe.innerHTML = [
       '<section class="tl-group">',
-        '<button type="button" class="tl-group-head ui2-tool-summary" id="u2c-sum" aria-expanded="true" aria-controls="u2c-l" aria-describedby="u2c-st">操作 3 项</button>',
+        '<button type="button" class="tl-group-head ui2-tool-summary" id="u2c-sum" aria-expanded="true" aria-controls="u2c-l" aria-describedby="u2c-st">工具调用 · 3 次</button>',
         '<span class="ui2-tool-state" id="u2c-st" role="status">运行中 1 · 成功 1 · 失败 1</span>',
         '<div class="tl-list" id="u2c-l">',
           '<div class="tl-item" data-status="running"><span class="tl-dot"></span></div>',

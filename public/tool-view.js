@@ -324,7 +324,7 @@ function syncGroup(group) {
   }
   g.head.hidden = !multiple;
   g.state.hidden = !multiple;
-  setText(g.head, multiple ? `操作 ${g.count} 项` : '');
+  setText(g.head, multiple ? `工具调用 · ${g.count} 次` : '');
   const counts = new Map();
   for (const node of g.list.children) {
     const status = Object.hasOwn(STATUS_TEXT, node.dataset.status) ? node.dataset.status : 'unknown';
@@ -341,7 +341,7 @@ function syncGroup(group) {
 export function createGroup() {
   const g = document.createElement('section');
   g.className = 'tl-group';
-  g.setAttribute('aria-label', '工具操作');
+  g.setAttribute('aria-label', '工具调用');
 
   const head = document.createElement('button');
   head.type = 'button';
@@ -387,6 +387,40 @@ export function addToGroup(group, node) {
 
 export function groupCount(group) {
   return group?._tlGroup?.count ?? 0;
+}
+
+/* 展开状态由使用者按会话保存时，需要能从外部恢复。这两个函数只操作
+ * 视图自身已有的 hidden/aria 状态，不改变分组规则（例如多项默认折叠）。 */
+export function setGroupExpanded(group, expanded) {
+  const g = group?._tlGroup;
+  if (!g) return false;
+  g.userToggled = true;
+  g.list.hidden = !expanded;
+  g.head.setAttribute('aria-expanded', String(expanded));
+  group.classList.toggle('is-collapsed', !expanded);
+  return true;
+}
+
+export function isGroupExpanded(group) {
+  const g = group?._tlGroup;
+  return Boolean(g && !g.list.hidden);
+}
+
+/* 单条工具详情的展开状态同理；没有可展开内容时返回 false。 */
+export function setEntryExpanded(node, expanded) {
+  const p = node?._tl;
+  if (!p || !p.hasMore) return false;
+  p.more.hidden = !expanded;
+  node.classList.toggle('open', expanded);
+  p.toggle.setAttribute('aria-expanded', String(expanded));
+  syncToggle(p);
+  syncTitle(node, p);
+  return true;
+}
+
+export function isEntryExpanded(node) {
+  const p = node?._tl;
+  return Boolean(p?.hasMore && !p.more.hidden);
 }
 
 /* ---------- 输出预览 ---------- */

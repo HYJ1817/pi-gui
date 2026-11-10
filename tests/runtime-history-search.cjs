@@ -48,7 +48,15 @@ const { execFileSync } = require('node:child_process');
     check('readback title persists without reorder', registry.snapshot().items.find(i => i.conversationId === a.id).sessionName === 'Renamed native' && registry.snapshot().items.find(i => i.conversationId === a.id).createdAt === created);
     names.set(a.workspace.id, ''); await registry.read(ai.owner, { type: 'get_state' });
     check('empty native title has branch fallback', registry.snapshot().items.find(i => i.conversationId === a.id).title === 'fixture/a');
-    check('history reads nested native text only', read(a.id).messages.length === 2 && !JSON.stringify(read(a.id)).includes('SECRET'));
+    /* 历史正文仍只含 user/assistant 文本；执行时间线额外恢复**可见思考**，
+     * 但绝不恢复工具原始 args / result（fixture 的 SECRET_TOOL 就是判据）。 */
+    const historyRead = read(a.id);
+    const historyTimeline = historyRead.execution?.timeline || [];
+    check('history reads nested native text plus bounded execution projection', historyRead.messages.length === 2
+      && !JSON.stringify(historyRead.messages).includes('SECRET')
+      && !JSON.stringify(historyTimeline).includes('SECRET_TOOL')
+      && historyTimeline.some(block => block.kind === 'thinking' && block.text.includes('SECRET_THINK'))
+      && !JSON.stringify(historyTimeline).includes('"secret"'));
     const classicFile = path.join(nativeRoot, 'classic.jsonl'); write(classicFile, 'classic-native', repo, 'classic needle');
     const result = await search.search('needle');
     check('classic and runtime search coexist', result.results.some(r => !r.locator && r.sessionId === 'classic-native') && result.results.some(r => r.locator?.conversationId === a.id));

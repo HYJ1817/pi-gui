@@ -12,7 +12,31 @@ Conversation 使用工作区内居中的阅读列。PI-Desktop 阶段 D 将内�
 
 Thinking 默认折叠，摘要只显示已有文本的字数。按钮用 `aria-expanded` / `aria-controls` 指向保留在 DOM 的内容；Enter、Space 可操作。流式 `thinking_end` 不覆盖用户手动展开状态，`message_end` 复用原节点，避免结束时整条消息被替换。历史重建也用同一个 Thinking 构造函数，默认折叠；状态不写入会话文件。
 
-Tool Timeline 仍以一条 Assistant 消息中的连续 tool calls 为组。实时事件和历史结果都转成既有 `ToolEntry`，共用 `tool-view.js`；只调整行、状态文字、图标与详情按钮。运行中、成功、失败和未完成都有文字与形状，不只靠颜色。没有结构化区分的取消或中断结果继续如实标「未完成」，不推断状态或退出码。已有详情在当前行下方展开；未知工具、孤儿结果和无结果的降级规则不变。
+Tool Timeline 仍以一条 Assistant 消息中的连续 tool calls 为组。实时事件和历史结果都转成既有 `ToolEntry`，共用 `tool-view.js`；只调整行、状态文字、图标与详情按钮。运行中、成功、失败和未完成都有文字与形状，不只靠颜色。没有结构化区分的取消或中断结果继续如实标「未完成」，不推断状态或退出码。已有详情在当前行下方展开；未知工具、孤儿结果和无结果的降级规则不变。两项以上时组头写「工具调用 · N 次」，默认折叠；状态汇总（运行中 / 失败 / 未完成…）留在组头上，折叠时错误仍然可见。单条调用不摆冗余组头。
+
+## 任务列表（gui_plan）
+
+计划来自 Pi 扩展 `extensions/pi-gui-plan` 注册的 `gui_plan` 工具，不从工具调用次数、时长或正文推断。每次调用提交**完整**任务列表：id 稳定，状态只有 `pending` / `in_progress` / `completed` / `failed` / `cancelled`；扩展拒绝重复 id、空列表和未知状态。同一轮重新规划时，模型漏掉的已完成 / 失败 / 已取消任务会由扩展保留并标 `retained`；新一轮用户任务不继承上一轮完成项。工具结果 `details` 随会话持久化。计划工具不进入 Tool Timeline，避免同一件事出现两次。
+
+**回合边界只认 Pi 的真实事件。** `agent_settled` 在整个 session 级 run 收尾时发出，自动重试、压缩、steering/follow-up 都在它之前跑完；运行中追加用户消息不会发新的 `agent_start`。因此「上一轮已 settled 后的 `agent_start`」才是新任务边界：此时切换当前计划指针，旧计划卡仍留在时间线里；运行中的 steer / follow-up、自动重试和压缩都不清空当前计划。Runtime store 与 Classic 的 `plan-live.js` 共用这条判据，不用「看到一条 user 消息」猜新回合。
+
+`gui_plan` 的 `details` 带可选的 `turnId`：扩展在 settled 之后的新用户回合生成一次，运行中的 steer / follow-up 复用同一个 id。历史恢复按同一 `turnId` 归并计划更新，不同 `turnId` 即使复用相同任务 id 也保持两张卡；旧记录没有 `turnId` 时只能按用户消息分组，历史状态行会明确标注「计划归属不确定」，不按时间间隔或消息数量推断新运行。
+
+## Runtime 执行时间线
+
+Runtime 的计划、思考、工具与正文不再分散在输出区外的固定槽位，而是进入同一个 `.rtc-output` 滚动容器，按真实事件/消息顺序排列。实时顺序来自 store 收到事件的先后（不按类别重排）；历史顺序来自原生 JSONL 的 message/content 顺序。视图只按投影出的有界 block 列表放置节点，节点按 block id 复用，流式更新不重建整条时间线。
+
+`public/runtime-timeline.js` 是实时与历史共用的纯投影：只保留用户/助手文本、真实 thinking 文本、工具名/状态/耗时、计划白名单字段和扩展写入的 `turnId`；工具原始 args、result 正文、环境变量与凭据不进入投影。历史读取用同一个投影，因此恢复的计划、思考、工具与最终回答都来自真实记录；缺字段就省略，记录被截断时状态行明确说明，不伪造内容。运行边界要么来自 `gui_plan` 的 `turnId`（`verified`），要么只能退回用户消息分组（`unknown`）；`mixed` 表示新旧记录混用，状态行同样会说明部分计划归属不确定。展开状态按会话保存：Thinking 和多项工具组默认折叠，用户展开后，新工具、流式增量和切换会话都不会把它收回。
+
+实时 `message_end` 的 `content` 是这条 assistant 消息的权威内容：缺少流式增量时，正文与 Thinking 按真实 `content` 顺序补建 block；已有流式 block 复用原节点并覆盖为权威文本，用户已展开的 Thinking 不会因结束事件被收回。同一条消息内正文与 Thinking 多次交错时，每一段保持自己的位置，不把后面的内容并回前面；连续补建的多个缺失段按 `content` 顺序依次接在前一段之后（前一段可能也是刚补建的节点），不会堆到同一个已有锚点的一侧。工具调用是真实的 `content` 分段边界，工具两侧的同类文本不会合并；但工具节点只由真实 `tool_execution_*` 事件创建和定位，`message_end` 不创建尚未执行的工具，也不移动已经出现的工具组；两者信息冲突时，工具保留先发生的真实事件位置，正文/Thinking 围绕已存在的段补齐。
+
+回到底部按钮只操作当前会话自己的 `.rtc-output`，不共享滚动位置，也不强制把正在阅读历史的用户拉回底部；点击后才恢复 follow-latest。任务列表、工具组、Thinking 与正文的视觉 token 与 Classic 一致。
+
+`public/plan-model.js` 只做契约校验与按回合归并，`public/plan-view.js` 只认归一后的 plan；按稳定 id 复用行，只改变化的文字/状态/顺序。默认展开，用户折叠后流式更新不改变折叠状态；头部显示真实的 `已完成/总数`。执行结束但仍有 `in_progress` 时，数据状态不变，展示文案改为「未完成」并停止呼吸动画，不伪造 `completed`。
+
+## 回到底部
+
+`public/scroll-button.js` 给 Classic 的 `#stream` 与 Runtime 的 `.rtc-output` 各建一个按钮，只对传入的滚动容器写 `scrollTop`，从不调用 `document` / `window` 的通用滚动。离底超过 160px 出现，回到 8px 以内消失（两段阈值防抖）。运行中复用 `thinking-dots` 的四点/三点动画，悬停或键盘聚焦时换成下箭头，两个图标叠在同一网格，按钮尺寸不变；闲置时直接显示下箭头。点击后平滑回到底部，并在短 follow 窗口结束时再补一次到底，覆盖流式连续追加；用户滚轮 / 触摸 / 方向键会立即退出 follow。`prefers-reduced-motion` 下改为瞬时滚动并关闭过渡。Runtime 切会话时按钮跟随该会话自己的 `scrollTops`，不共享其他会话的位置。
 
 ## 附件与 Minimap
 

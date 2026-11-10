@@ -68,6 +68,7 @@ import {
   setStreaming,
   syncWelcome,
 } from './messages.js';
+import { beginPlanTaskBoundary } from './plan-live.js';
 import { onToolEnd, onToolStart, onToolUpdate, onToolWait } from './tools.js';
 import { openBranchPanel, setForkHandler } from './tree.js';
 import { openCtxTip, renderCtxChip, onTurnUsage } from './usage.js';
@@ -83,6 +84,7 @@ import { mountSessionPlans } from './session-plans.js';
 import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
 import { createSessionNavigation } from './session-navigation.js';
 import { initConversationNav } from './conversation-nav.js';
+import { createScrollButton } from './scroll-button.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
 import { openLogs } from './logs.js';
 import { initUpdateAuto } from './update.js';
@@ -248,6 +250,8 @@ setSessionListRefresh(refreshSidebarSessions);
 /* 会话内提问导航：只装配一次（挂 scroll / resize / ResizeObserver）。
  * 标记本身由 messages.js 在渲染消息时注册。 */
 initConversationNav();
+/* Classic 滚动容器是 #stream。按钮只认它 —— 不碰 document / window。 */
+createScrollButton({ host: el.composerBox, scroller: el.stream, running: () => S.streaming === true, label: '回到最新消息' });
 
 /* P7：会话标题旁的「关联任务」窄条。这里只把容器交给它 —— 拉数据与显隐
  * 由 session-plans.js 自己决定（没有关联时整块 hidden，不占位）。 */
@@ -443,6 +447,11 @@ function handleEvent(evt) {
       }
       return;
     case 'agent_start':
+      /* 与 Runtime store 同一条协议判据（见 pi agent-session.js）：
+       * 上一轮已收尾（S.streaming=false）时到来的 agent_start 是新 session 级
+       * run = 真正的新任务；运行中重试/压缩也会重发 agent_start，但此时
+       * S.streaming 仍为 true，不得重置计划。回放事件不参与。 */
+      if (!evt._replay && !S.streaming) beginPlanTaskBoundary();
       return setStreaming(true);
     case 'agent_end':
       return;

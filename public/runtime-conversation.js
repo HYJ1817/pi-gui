@@ -30,16 +30,17 @@
  *
  * 本模块**不发**focus —— focus 是侧栏/组合根的职责（见 runtime-nav.js）。
  *
- * ---------- UI-2B：thinking / usage 从哪来，为什么不是第二份真相 ----------
+ * ---------- 执行时间线与只读投影 ----------
  *
- * 本模块读 store 拿生命周期、正文、工具、审批；**thinking 文本与单轮 usage** 不在
- * store 里（store 刻意只持有那三类有界记录），改从 runtime-display.js 的**只读展示
- * 投影**读。那份投影只订阅 store 已经接受并广播的帧，所以它不可能接受一条 store
- * 拒掉的帧，也不复制 lifecycle/tools/approvals —— 不构成第二个事实源。
+ * 本模块读 store 拿生命周期、有界执行时间线（计划/思考/工具/正文）与审批。
+ * thinking 的展示上限仍经过 runtime-display.js 的只读投影，usage 也从那里读；
+ * 那份投影只订阅 store 已经接受并广播的帧，不可能接受一条 store 拒掉的帧，
+ * 也不复制 lifecycle/tools/approvals —— 不构成第二个事实源。
  *
- * 历史接口（`server/session-history.js`）**只取正文**，没有 thinking / 工具 / usage。
- * 因此历史视图里这些块一律**隐藏**，并在状态行里说明「只含正文」—— 不做一个点不动
- * 的假展开按钮，也不从正文文本里猜。
+ * 历史接口（`server/session-history.js`）现在返回正文与同一条纯投影生成的有界
+ * `execution.timeline`：计划、thinking 可见文本、工具名/状态/耗时、最终回答。
+ * 工具原始 args/result、环境变量与凭据不进入历史。旧响应没有 `execution` 时
+ * 退回原来的「只含正文」路径，状态行如实说明缺了什么。
  */
 import { runtimeSessionAction, fetchRuntimeHistory } from './api.js';
 import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval } from './runtime-state.js';
@@ -51,6 +52,19 @@ import { md, renderVizCardHtml } from './markdown.js';
 import { createRuntimePicker } from './runtime-picker.js';
 import { thinkingAvailability } from './thinking-availability.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
+import { normalizePlan } from './plan-model.js';
+import { renderPlan, setPlanStalled, updatePlan } from './plan-view.js';
+import { labelFor } from './tool-model.js';
+import {
+  createGroup,
+  addToGroup,
+  renderEntry,
+  setGroupExpanded,
+  isGroupExpanded,
+  setEntryExpanded,
+  isEntryExpanded,
+} from './tool-view.js';
+import { createScrollButton } from './scroll-button.js';
 import {
   extractStableLocator,
   sameStableLocator,
@@ -118,11 +132,12 @@ function appendRuntimeContent(container, text, { isBlock = false } = {}) {
 
 const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中' };
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
-/* 工具状态只映射 store 真实记过的状态；别的取值原样显示，不猜。 */
-const TOOL_STATE = { running: '运行中', waiting: '等待写入', done: '完成', error: '失败', interrupted: '未完成' };
 /* 历史状态提示与文案映射 */
 const HISTORY_NOTE_LEGACY = '历史只含正文（无工具、思考、用量）';
 const HISTORY_NOTE_WITH_TOOLS = '历史正文与只读工具摘要；不含思考及用量';
+const HISTORY_NOTE_WITH_TIMELINE = '历史按真实记录恢复计划、思考、工具与正文；不含原始参数/输出及用量';
+const HISTORY_NOTE_PLAN_UNKNOWN = '计划按用户消息分组，历史缺少运行边界，归属不确定';
+const HISTORY_NOTE_PLAN_MIXED = '部分计划缺少运行边界，归属不确定';
 const TOOL_UNAVAILABLE_REASONS = {
   invalid_records: '工具记录格式无法解析',
   unmatched_results: '工具结果关联不完整',
@@ -138,9 +153,16 @@ const TOOL_HISTORY_STATUS = {
 
 function formatHistoryState(history, owner) {
   const count = Array.isArray(history?.messages) ? history.messages.length : 0;
-  const truncatedMsg = history?.truncated ? '（仅显示最近部分）' : '';
+  const executionTruncated = history?.execution?.truncated === true;
+  const truncatedMsg = history?.truncated || executionTruncated ? '（仅显示最近部分）' : '';
   let note = '';
-  if (!history?.toolSummary) {
+  const hasTimeline = Array.isArray(history?.execution?.timeline) && history.execution.timeline.length > 0;
+  if (hasTimeline) {
+    const boundary = history?.execution?.planBoundary;
+    const boundaryNote = boundary === 'unknown' ? `；${HISTORY_NOTE_PLAN_UNKNOWN}`
+      : boundary === 'mixed' ? `；${HISTORY_NOTE_PLAN_MIXED}` : '';
+    note = HISTORY_NOTE_WITH_TIMELINE + boundaryNote + (executionTruncated ? '；更早的执行记录已截断' : '');
+  } else if (!history?.toolSummary) {
     note = HISTORY_NOTE_LEGACY;
   } else {
     const ts = history.toolSummary;
@@ -177,6 +199,15 @@ function el(tag, cls, text) {
 }
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
 const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false, historyToken: 0, draftRestored: false };
+/* 执行时间线的 DOM 节点与展开状态是**每个会话自己的视图态**。节点缓存让流式
+ * 更新只改变化的块；展开状态在切换会话后重建时按会话恢复。 */
+const EMPTY_TIMELINE_VIEW = () => ({
+  nodes: new Map(),
+  mode: null,
+  thinkingOpen: new Map(),
+  groupOpen: new Map(),
+  entryOpen: new Map(),
+});
 
 export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, openSessionChanges = null, models = null, display = null }) {
   const scrollTops = new Map();       // conversationId -> scrollTop
@@ -190,7 +221,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
 
   function viewOf(conversationId) {
     let view = views.get(conversationId);
-    if (!view) { view = { ...EMPTY }; views.set(conversationId, view); }
+    if (!view) { view = { ...EMPTY, timeline: EMPTY_TIMELINE_VIEW() }; views.set(conversationId, view); }
     return view;
   }
   /* 当前会话的视图态；没有选中会话时给一个不会被写回的占位对象。 */
@@ -266,24 +297,17 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const notice = el('p', 'rtc-notice'); notice.setAttribute('role', 'status'); root.append(notice);
   /* 类名**故意与 modal 的 `.runtime-output` 不同**：官方 modal 用的是全局选择器
    * （测试也这么取），中央再挂一个同名元素会让 `document.querySelector('.runtime-output')`
-   * 命中中央那个（它在 DOM 里更靠前），看起来像「modal 的输出不更新」。 */
-  /* UI-2B：思考过程。用原生 details/summary —— 键盘可达、展开状态由元素自己持有，
-   * 流式更新只改文本，**不碰 open**，所以用户手动展开后不会被新块收回去。
-   * 数据来自 runtime-display.js 的只读投影；没有真实思考文本时整块隐藏。 */
-  const thinking = el('details', 'ui2-runtime-thinking'); thinking.hidden = true;
-  const thinkingHead = el('summary', 'ui2-runtime-thinking-head');
-  const thinkingBody = el('pre', 'ui2-runtime-thinking-body');
-  thinking.append(thinkingHead, thinkingBody); root.append(thinking);
-
+   * 命中中央那个（它在 DOM 里更靠前），看起来像「modal 的输出不更新」。
+   *
+   * 执行过程（用户任务 → 计划 → 思考 → 工具 → 正文）全部进入**同一个**
+   * `.rtc-output` 滚动容器，按 store/历史投影的真实 block 顺序渲染。没有
+   * 任何「按类别摆位置」的 DOM 重排。 */
   const output = el('div', 'rtc-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前会话输出'); root.append(output);
 
   /* 本轮用量：只显示 Pi 报过的数字（见 runtime-display.js）。刻意**不加** aria-live ——
    * 它每帧都在变，做成 live region 会不停打断读屏。 */
   const usage = el('p', 'ui2-runtime-usage'); usage.hidden = true; root.append(usage);
 
-  /* 工具状态：与上面的生命周期状态行分开的元素（同一个 `.rtc-state` 基类保留旧样式），
-   * 每个工具一项、带 `data-state`，Agent C 可以按状态着色而不必解析文本。 */
-  const tools = el('div', 'rtc-state ui2-runtime-tools'); root.append(tools);
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
   let composing = false;
   const input = el('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前会话的任务'); root.append(input);
@@ -392,6 +416,17 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const composerNote = el('div', 'rtc-composer-note', 'Enter 发送 · Shift+Enter 换行');
   composerActions.append(stop, send); composerBar.append(modelRow, composerActions);
   composer.append(input, composerBar, modelNotice, draftNotice, composerNote); root.append(composer);
+  /* 只绑 .rtc-output。按钮放在 composer 内（绝对定位到它上方），因此不会
+   * 挡住发送键，也不会因为输出区滚动而移动。 */
+  /* 运行态回调必须和 draw 共用同一个判据。只靠 draw 里显式 setRunning 不够：
+   * 按钮自己的 sync() 会在 MutationObserver / scroll / resize 后再次调用
+   * running()，默认的 false 会把刚点亮的四点动画又关掉。 */
+  const scrollButton = createScrollButton({
+    host: composer,
+    scroller: output,
+    running: () => showsWorkingDots(store.get(id)?.item, store.get(id), current()),
+    label: '回到最新输出',
+  });
   const browserBtn = el('button', 'btn', 'Browser'), processBtn = el('button', 'btn', '开发进程');
   browserBtn.type = processBtn.type = 'button';
   browserBtn.hidden = !openBrowser || !window.piGuiDesktop?.runtimeBrowser;
@@ -504,7 +539,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         view.notice = result.code === 'history_unavailable' ? '这条会话没有可读的历史（原生记录已失效），只能新建会话。' : '读取历史失败。';
         return;
       }
-      const payload = { messages: result.messages || [], truncated: result.truncated === true, toolSummary: result.toolSummary || null, match };
+      const payload = { messages: result.messages || [], truncated: result.truncated === true,
+        toolSummary: result.toolSummary || null, execution: result.execution || null, match };
       /* 只写 **target** 的历史：中央已经切到别的会话时，B 的 DOM 一个字都不动。 */
       view.history = payload;
     } catch { if (alive && view.historyToken === token) view.notice = '读取历史失败。'; }
@@ -580,25 +616,201 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     modelPicker.sync(); thinkingPicker.sync();
   }
 
-  /* 工具行：每项一个 span，`data-state` 用 store 的原值（running/done/error）。
-   * 状态文案只映射 store 真实记过的那三种；遇到没见过的值原样显示，不猜。
+  /* ---------- 执行时间线渲染 ----------
    *
-   * 项之间插的是**只有空白**的文本节点，不是 ' / ' 之类的分隔符：`.rtc-state` 已经
-   * 是 `white-space:pre-wrap`，所以现在一个工具一行；将来 Agent C 若把它改成
-   * flex + gap，纯空白文本节点按规范不会生成 flex item，自然消失，不必再改 DOM。 */
-  function drawTools(record, view) {
-    const items = record && !view.history ? record.tools : [];
-    const signature = items.map(t => `${t.id}\u0000${t.name}\u0000${t.state}`).join('\u0001');
-    if (tools.dataset.tools === signature) return;
-    tools.dataset.tools = signature;
-    tools.replaceChildren();
-    items.forEach((tool, index) => {
-      if (index) tools.append(document.createTextNode('\n'));
-      const row = el('span', 'ui2-runtime-tool');
-      row.dataset.state = String(tool.state);
-      row.textContent = `${tool.name} · ${TOOL_STATE[tool.state] || tool.state}`;
-      tools.append(row);
-    });
+   * block 顺序来自 runtime-store（实时）或 server 的历史投影；本模块只按这个
+   * 顺序放节点，不按「计划/思考/工具」类别重新排序。节点按 block.id 缓存，
+   * 流式更新只改变化的块；展开状态按会话存，切换回来时恢复。
+   */
+  const TOOL_STATUS = { running: 'running', waiting: 'running', success: 'success', error: 'error', incomplete: 'incomplete', interrupted: 'interrupted' };
+  const LEGACY_STATE = { running: 'running', waiting: 'waiting', success: 'done', error: 'error', incomplete: 'interrupted', interrupted: 'interrupted' };
+  const THINKING_LABEL = { streaming: '生成中', returned: '已返回', complete: '已完成', error: '发生错误', interrupted: '已中断' };
+
+  function toolEntryOf(tool) {
+    const name = typeof tool?.name === 'string' ? tool.name : '';
+    const { label, known } = labelFor(name);
+    return {
+      id: String(tool?.id || ''),
+      name,
+      label,
+      known,
+      summary: '',
+      args: null,
+      details: null,
+      output: '',
+      resultLine: '',
+      status: TOOL_STATUS[tool?.state] || 'unknown',
+      waiting: tool?.waiting === true,
+      durationMs: Number.isFinite(tool?.durationMs) ? tool.durationMs : null,
+      diffStat: null,
+      gitStat: null,
+      truncated: null,
+    };
+  }
+
+  function createTimelineBlockNode(block, view, record, history) {
+    /* 展开状态按「模式 + block/tool id」存：历史与实时各有一份，互不覆盖；
+     * 切换会话、切换模式后都能恢复用户自己的选择。 */
+    const openKey = key => (history ? 'history:' : 'live:') + key;
+    if (block.kind === 'user' || block.kind === 'assistant') {
+      const row = el('div', 'rtc-history-message rtc-timeline-message');
+      row.dataset.role = block.kind === 'user' ? 'user' : 'assistant';
+      row.setAttribute('aria-label', block.kind === 'user' ? '你' : '助手');
+      row.dataset.roleLabel = block.kind === 'user' ? '你' : 'Pi';
+      if (block.kind === 'user') {
+        row.append(el('div', 'rtc-history-user-text', block.text));
+        row.append(messageActions(block.text));
+        if (block.messageId) row.dataset.historyMessageId = block.messageId;
+        if (Number.isInteger(block.userIndex)) row.dataset.historyUserIndex = String(block.userIndex);
+      } else {
+        const body = el('div', 'rtc-assistant-text');
+        appendRuntimeContent(body, block.text);
+        row.append(body);
+        row.dataset.state = block.state || '';
+      }
+      /* 正文文本本身就是 output.textContent 的主体：角色标签用 CSS 伪元素，
+       * 不额外插入文本节点，避免把「助手」混进正文复制/断言。 */
+      return { node: row, update(next) { if (row.dataset.role === 'user') row.querySelector('.rtc-history-user-text').textContent = next.text; else { const body = row.querySelector('.rtc-assistant-text'); body.replaceChildren(); appendRuntimeContent(body, next.text); } row.dataset.state = next.state || ''; } };
+    }
+
+    if (block.kind === 'thinking') {
+      const details = el('details', 'ui2-runtime-thinking');
+      const head = el('summary', 'ui2-runtime-thinking-head');
+      const body = el('pre', 'ui2-runtime-thinking-body');
+      details.append(head, body);
+      details.open = view.timeline.thinkingOpen.get(openKey(block.id)) === true;
+      details.addEventListener('toggle', () => { view.timeline.thinkingOpen.set(openKey(block.id), details.open); });
+      return {
+        node: details,
+        update(next) {
+          /* 当前 assistant 消息的思考仍经过展示投影的 maxThinkingBytes 上限；
+           * 更早的消息已由 store / 历史投影各自按 64KiB 有界，不再二次裁剪。 */
+          const viewed = record && record.thinkingBlock === next ? projection.thinkingOf(id) : null;
+          const text = viewed ? viewed.text : next.text;
+          const state = viewed ? viewed.state : next.state;
+          const truncated = viewed ? viewed.truncated : next.truncated === true;
+          const stateLabel = THINKING_LABEL[state] || '';
+          details.dataset.state = state || '';
+          body.textContent = text;
+          head.textContent = `思考过程 · ${text.length} 字${truncated ? '（已截断）' : ''}${stateLabel ? ' · ' + stateLabel : ''}`;
+        },
+      };
+    }
+
+    if (block.kind === 'tools') {
+      const wrapper = el('div', 'ui2-runtime-tools');
+      let group = null;
+      let signature = '';
+      return {
+        node: wrapper,
+        update(next) {
+          const nextSignature = JSON.stringify(next.tools);
+          if (nextSignature === signature) return;
+          signature = nextSignature;
+          wrapper.replaceChildren();
+          group = createGroup();
+          group.dataset.blockId = next.id;
+          wrapper.append(group);
+          for (const tool of next.tools) {
+            const entry = toolEntryOf(tool);
+            const node = renderEntry(entry);
+            node.classList.add('ui2-runtime-tool');
+            node.dataset.state = LEGACY_STATE[tool.state] || String(tool.state || 'unknown');
+            node.dataset.toolName = entry.name;
+            /* tool-view 的头/按钮自己处理折叠；这里在捕获阶段记录点击后的状态。 */
+            node.addEventListener('click', () => setTimeout(() => {
+              view.timeline.entryOpen.set(openKey(tool.id), isEntryExpanded(node));
+            }, 0), true);
+            if (view.timeline.entryOpen.get(openKey(tool.id)) === true) setEntryExpanded(node, true);
+            addToGroup(group, node);
+          }
+          group.addEventListener('click', event => {
+            if (!event.target?.closest?.('.tl-group-head')) return;
+            view.timeline.groupOpen.set(openKey(next.id), isGroupExpanded(group));
+          });
+          /* 只有用户真的点过组头才恢复展开；否则交给 tool-view 的默认规则：
+           * 多项自动折叠、单项不摆组头。不能把「单项时列表可见」误判成
+           * 用户展开过，否则第二个工具一到就永远展开。 */
+          if (view.timeline.groupOpen.has(openKey(next.id))) setGroupExpanded(group, view.timeline.groupOpen.get(openKey(next.id)));
+        },
+      };
+    }
+
+    if (block.kind === 'plan') {
+      const host = el('div', 'ui2-runtime-plan');
+      let card = null;
+      let signature = '';
+      return {
+        node: host,
+        update(next) {
+          const plan = normalizePlan(next.plan);
+          if (!plan) { host.replaceChildren(); host.hidden = true; return; }
+          host.hidden = false;
+          if (!card) { card = renderPlan(plan); host.append(card); }
+          const nextSignature = JSON.stringify([plan.tasks, plan.explanation, plan.completed, plan.total]);
+          if (nextSignature !== signature) { signature = nextSignature; updatePlan(card, plan); }
+          const activeRun = record?.item?.lifecycle === 'starting'
+            || (record?.item?.lifecycle === 'ready' && (record.item.activity === 'running' || (record?.approvals?.length || 0) > 0));
+          /* 旧回合的计划不再呼吸；当前回合按真实运行态决定。 */
+          const currentPlan = record?.planBlock?.id === next.id;
+          setPlanStalled(card, !currentPlan || !activeRun);
+        },
+      };
+    }
+    return null;
+  }
+
+  function renderTimeline(blocks, view, record, history) {
+    if (!view.timeline) view.timeline = EMPTY_TIMELINE_VIEW();
+    const mode = history ? 'history' : 'live';
+    if (view.timeline.mode !== mode) {
+      output.replaceChildren();
+      view.timeline.nodes.clear();
+      view.timeline.mode = mode;
+    }
+    const wanted = [];
+    for (const block of blocks) {
+      if (!block || typeof block.id !== 'string') continue;
+      let info = view.timeline.nodes.get(block.id);
+      if (!info) {
+        info = createTimelineBlockNode(block, view, record, history);
+        if (!info) continue;
+        info.kind = block.kind;
+        info.signature = '';
+        view.timeline.nodes.set(block.id, info);
+      }
+      const signature = JSON.stringify(block) + (block.kind === 'plan'
+        ? `|${record?.item?.lifecycle || ''}|${record?.item?.activity || ''}|${record?.approvals?.length || 0}|${record?.planBlock?.id || ''}`
+        : '');
+      if (info.signature !== signature) {
+        info.signature = signature;
+        info.update(block);
+      }
+      wanted.push(info.node);
+    }
+    for (const [key, info] of [...view.timeline.nodes]) {
+      if (!wanted.includes(info.node)) { info.node.remove(); view.timeline.nodes.delete(key); }
+    }
+    /* 有界视图态：清理当前模式下已经被截断的 block/tool 展开记录，
+     * 另一模式（历史/实时）的记录保留，切回时仍能恢复。 */
+    const prefix = mode + ':';
+    const blockIds = new Set(blocks.map(block => block.id));
+    const toolIds = new Set();
+    for (const block of blocks) if (block.kind === 'tools') for (const tool of block.tools) toolIds.add(String(tool.id));
+    for (const key of view.timeline.thinkingOpen.keys()) if (key.startsWith(prefix) && !blockIds.has(key.slice(prefix.length))) view.timeline.thinkingOpen.delete(key);
+    for (const key of view.timeline.groupOpen.keys()) if (key.startsWith(prefix) && !blockIds.has(key.slice(prefix.length))) view.timeline.groupOpen.delete(key);
+    for (const key of view.timeline.entryOpen.keys()) if (key.startsWith(prefix) && !toolIds.has(key.slice(prefix.length))) view.timeline.entryOpen.delete(key);
+    /* 顺序由数据决定；这里只是把 DOM 对齐到数据，不猜测事件先后。 */
+    let cursor = output.firstChild;
+    for (const node of wanted) {
+      if (node === cursor) cursor = cursor.nextSibling;
+      else output.insertBefore(node, cursor);
+    }
+    while (cursor) {
+      const next = cursor.nextSibling;
+      if (!wanted.includes(cursor)) cursor.remove();
+      cursor = next;
+    }
   }
 
   function draw() {
@@ -620,14 +832,24 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     if (view.history) setState(formatHistoryState(view.history, r?.owner), false);
     else if (view.pendingHistory) setState('读取历史…', false);
     else {
-      /* 正文流被截断时说出来 —— 不声不响地少显示一段，用户会以为那就是全部。 */
+      /* 正文/执行记录被截断时说出来 —— 不声不响地少显示一段，用户会以为那就是全部。 */
       const lifecycle = statusLine(r?.item) || (r ? '' : '这条会话还没有记录');
-      setState(lifecycle + (r?.truncated ? `${lifecycle ? ' · ' : ''}仅显示最近输出` : ''),
-        showsWorkingDots(r?.item, r, view), entered);
+      const truncated = r?.truncated || r?.timelineTruncated;
+      const notice = truncated ? `${lifecycle ? ' · ' : ''}仅显示最近输出${r?.timelineTruncated ? '与执行记录' : ''}` : '';
+      setState(lifecycle + notice, showsWorkingDots(r?.item, r, view), entered);
     }
 
     if (view.history) {
-      if (renderedHistory !== view.history || renderedId !== id) {
+      const executionBlocks = Array.isArray(view.history.execution?.timeline) ? view.history.execution.timeline : [];
+      if (executionBlocks.length) {
+        if (renderedHistory !== view.history || renderedId !== id) {
+          delete output.dataset.renderedText;
+          renderedHistory = view.history; delete output.dataset.historyMatch;
+        }
+        renderTimeline(executionBlocks, view, r, true);
+      } else if (renderedHistory !== view.history || renderedId !== id || view.timeline.mode !== null) {
+        view.timeline.mode = null;
+        view.timeline.nodes.clear();
         output.replaceChildren(); let userIndex = 0;
         delete output.dataset.renderedText;
         const messages = Array.isArray(view.history.messages) ? view.history.messages : [];
@@ -692,27 +914,25 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       }
     } else {
       renderedHistory = null;
-      const curText = r?.text || '';
-      if (output.dataset.renderedText !== curText || renderedId !== id) {
-        output.dataset.renderedText = curText;
-        if (!curText) {
-          output.textContent = '等待任务';
-        } else {
-          output.replaceChildren();
-          appendRuntimeContent(output, curText, { isBlock: true });
+      const blocks = Array.isArray(r?.timeline) ? r.timeline : [];
+      if (blocks.length) {
+        delete output.dataset.renderedText;
+        renderTimeline(blocks, view, r, false);
+      } else {
+        view.timeline.mode = null;
+        view.timeline.nodes.clear();
+        const curText = r?.text || '';
+        if (output.dataset.renderedText !== curText || renderedId !== id) {
+          output.dataset.renderedText = curText;
+          if (!curText) {
+            output.textContent = '等待任务';
+          } else {
+            output.replaceChildren();
+            appendRuntimeContent(output, curText, { isBlock: true });
+          }
         }
       }
     }
-    drawTools(r, view);
-
-    /* 思考过程：只在**实时**视图、且有真实思考文本时出现。历史没有这个数据，
-     * 所以历史视图里它一律隐藏（不做一个点不动的假展开）。 */
-    const thought = view.history ? null : projection.thinkingOf(id);
-    thinking.hidden = !thought;
-    if (thought) {
-      thinkingBody.textContent = thought.text;
-      thinkingHead.textContent = `思考过程 · ${thought.text.length} 字${thought.truncated ? '（已截断）' : ''}`;
-    } else { thinkingBody.textContent = ''; thinking.open = false; }
 
     const usageLine = view.history ? '' : usageText(projection.usageOf(id));
     usage.hidden = !usageLine; usage.textContent = usageLine;
@@ -807,6 +1027,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     } else if (follow) {
       output.scrollTop = output.scrollHeight;
     }
+    /* 回到底部按钮：滚的是 output 自己；运行态复用四点动画。切会话后
+     * 可见性/位置都由当前会话的 scrollTop 重新算。 */
+    scrollButton.setRunning(showsWorkingDots(r?.item, r, view));
+    scrollButton.update();
   }
 
   return {
@@ -851,6 +1075,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       composing = false;
       flushCurrentDraft(id);
       draftCoordinator.dispose();
+      scrollButton.dispose();
       if (typeof window !== 'undefined' && unloadHandler) {
         window.removeEventListener('beforeunload', unloadHandler);
       }

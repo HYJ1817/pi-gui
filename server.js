@@ -81,6 +81,7 @@ import { createSessionRevertRoutes } from './server/session-revert-routes.js';
 import { createSessionEvidenceAdmission } from './server/session-evidence-admission.js';
 import { createSessionToolScheduler } from './server/session-tool-scheduler.js';
 import { createSessionToolBridge } from './server/session-tool-bridge.js';
+import { createPlanBridge } from './server/plan-bridge.js';
 import { createOrdinarySessions, isProjectWorkspace, rootsOverlap, toolWorkspaceRoot } from './server/ordinary-sessions.js';
 import { createSessionRevertAuthority, createSessionRevertMutationAuthority } from './server/session-revert-authority.js';
 import { createSessionRevertAdmission } from './server/session-revert-admission.js';
@@ -349,6 +350,7 @@ const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch
   onEvent:event=>sse.publish({...event,legacyOwner:primaryOwner()})});
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
+const planBridge = createPlanBridge();
 const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port,processAdmission,mutationAdmission});
 let evidenceStore = null;
 const getEvidenceStore = () => evidenceStore ||= createSessionChangeStore({ dataDir: DATA_DIR });
@@ -441,6 +443,7 @@ const rpc = createRpcBridge({
   projectLaunch: projectConfig,
   compat: piCompat,
   toolLaunch: primaryToolGuard,
+  planLaunch: planBridge,
 });
 
 /* 依赖方向：projects → rpc 通过**注入回调**表达，而不是 import ——
