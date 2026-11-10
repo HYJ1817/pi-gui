@@ -9,7 +9,7 @@ import {
   blockChars,
   boundText,
   contentText,
-  contentThinking,
+  contentSegments,
   timelineFromMessages,
 } from './runtime-timeline.js';
 
@@ -169,20 +169,87 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     return assistant.tools;
   }
 
-  /* message_end 的 content 是这条 assistant 消息的权威全文。流式期间如果
-   * 正文/思考被工具或彼此分隔成多段，结束时把它们收回该类型的第一个 block，
-   * 由权威文本覆盖；不能把权威全文重复写进每一段，也不能留下旧 delta 残片。 */
-  function collapseAssistantBlocks(r, assistant, blocks, pointer) {
-    if (!blocks.length) return null;
-    const first = blocks[0];
-    for (const block of blocks.slice(1)) {
-      removeBlock(r, block);
-      if (r.thinkingBlock === block) r.thinkingBlock = first;
+  /* message_end 的 content 是这条 assistant 消息的权威全文。流式期间可能
+   * 已经创建了部分 block；这里按 content 的真实顺序补齐缺失段，并复用已有
+   * 节点覆盖权威文本。已有节点不移动（保留真实到达位置与展开状态），缺失
+   * 节点插到它在 content 中相邻的已存在段之前/之后。工具 block 的位置只由
+   * tool_execution_* 事件决定，message_end 不创建也不移动工具节点。 */
+  function contentBlock(kind) {
+    return { kind, text: '', state: 'streaming', truncated: false };
+  }
+
+  function insertBlockAt(r, block, anchor, afterAnchor = false) {
+    block.id = 'b' + (++r.timelineSeq);
+    const index = anchor ? r.timeline.indexOf(anchor) : -1;
+    if (index >= 0) r.timeline.splice(index + (afterAnchor ? 1 : 0), 0, block);
+    else r.timeline.push(block);
+    r.timelineChars += blockChars(block);
+    trimTimeline(r, block);
+  }
+
+  function setContentText(r, block, text, limit) {
+    const bounded = boundText(text, limit);
+    block.text = bounded.text;
+    block.truncated = block.truncated || bounded.truncated;
+  }
+
+  function reconcileAssistantContent(r, assistant, message, textState, thinkingState) {
+    const segments = contentSegments(message.content);
+    const existing = { assistant: [...assistant.texts], thinking: [...assistant.thinkings] };
+    const used = new Set();
+    const plans = segments.map(segment => {
+      let block = existing[segment.kind].find(candidate => !used.has(candidate));
+      const created = !block;
+      if (block) used.add(block);
+      else {
+        block = contentBlock(segment.kind);
+        /* 先挂到本轮消息的数组里，trimTimeline 会把它们当作当前消息保护。 */
+        (segment.kind === 'thinking' ? assistant.thinkings : assistant.texts).push(block);
+      }
+      return { segment, block, created };
+    });
+    const limitOf = kind => kind === 'thinking' ? MAX_THINKING_TEXT : MAX_BLOCK_TEXT;
+
+    for (let i = 0; i < plans.length; i++) {
+      const plan = plans[i];
+      if (!plan.created) continue;
+      const next = plans.slice(i + 1).find(candidate => !candidate.created);
+      const previous = plans.slice(0, i).reverse().find(candidate => !candidate.created);
+      setContentText(r, plan.block, plan.segment.text, limitOf(plan.segment.kind));
+      if (next) insertBlockAt(r, plan.block, next.block, false);
+      else if (previous) insertBlockAt(r, plan.block, previous.block, true);
+      else insertBlockAt(r, plan.block, null);
     }
-    blocks.length = 1;
-    assistant[pointer] = first;
-    if (!r.timeline.includes(assistant.tail)) assistant.tail = first;
-    return first;
+    for (const plan of plans) {
+      if (plan.created) continue;
+      const limit = limitOf(plan.segment.kind);
+      setTimelineText(r, plan.block, plan.segment.text, limit);
+    }
+
+    /* 权威 content 覆盖了某类内容时，该类型的多余流式残片必须移除，避免
+     * 同一段正文/思考显示两次；权威 content 完全没有该类型时保留流式输出
+     * （中断或空正文场景下，已经真实出现过的内容不能凭空消失）。 */
+    const keep = { assistant: new Set(), thinking: new Set() };
+    for (const plan of plans) keep[plan.segment.kind].add(plan.block);
+    for (const kind of ['assistant', 'thinking']) {
+      if (!plans.some(plan => plan.segment.kind === kind)) continue;
+      for (const block of existing[kind]) {
+        if (keep[kind].has(block)) continue;
+        removeBlock(r, block);
+        if (r.thinkingBlock === block) r.thinkingBlock = null;
+      }
+    }
+
+    const ownedTexts = new Set([...assistant.texts, ...plans.filter(p => p.segment.kind === 'assistant').map(p => p.block)]);
+    const ownedThinkings = new Set([...assistant.thinkings, ...plans.filter(p => p.segment.kind === 'thinking').map(p => p.block)]);
+    assistant.texts = r.timeline.filter(block => block.kind === 'assistant' && ownedTexts.has(block));
+    assistant.thinkings = r.timeline.filter(block => block.kind === 'thinking' && ownedThinkings.has(block));
+    assistant.text = assistant.texts.at(-1) || null;
+    assistant.thinking = assistant.thinkings.at(-1) || null;
+    r.thinkingBlock = assistant.thinking;
+    if (plans.length) assistant.tail = plans.at(-1).block;
+    for (const block of assistant.texts) block.state = textState;
+    for (const block of assistant.thinkings) block.state = thinkingState;
   }
 
   function findTimelineTool(r, id) {
@@ -402,32 +469,10 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       const message = e.message;
       const state = message.stopReason === 'aborted' ? 'interrupted'
         : message.stopReason === 'error' || message.errorMessage ? 'error' : 'complete';
-      const assistant = r.assistant;
+      const assistant = ensureAssistant(r);
       const textState = state;
       const thinkingState = state === 'interrupted' ? 'interrupted' : state === 'error' ? 'error' : 'complete';
-      const authoritativeText = contentText(message.content);
-      if (authoritativeText) {
-        const existing = assistant?.texts || [];
-        const block = existing.length
-          ? (existing.length > 1 ? collapseAssistantBlocks(r, assistant, existing, 'text') : existing[0])
-          : assistantTextBlock(r);
-        block.state = textState;
-        setTimelineText(r, block, authoritativeText, MAX_BLOCK_TEXT);
-      } else if (assistant?.texts.length) {
-        for (const block of assistant.texts) block.state = textState;
-      }
-      const authoritativeThinking = contentThinking(message.content);
-      if (authoritativeThinking) {
-        const existing = assistant?.thinkings || [];
-        const block = existing.length
-          ? (existing.length > 1 ? collapseAssistantBlocks(r, assistant, existing, 'thinking') : existing[0])
-          : assistantThinkingBlock(r);
-        block.state = thinkingState;
-        r.thinkingBlock = block;
-        setTimelineText(r, block, authoritativeThinking, MAX_THINKING_TEXT);
-      } else if (assistant?.thinkings.length) {
-        for (const block of assistant.thinkings) block.state = thinkingState;
-      }
+      reconcileAssistantContent(r, assistant, message, textState, thinkingState);
     }
     /* ---------- 计划：同一回合只有一张卡；拒绝时回到上一张 ---------- */
     if (e.type === 'tool_execution_start' && (e.toolName === PLAN_TOOL_NAME || e.plan)) {

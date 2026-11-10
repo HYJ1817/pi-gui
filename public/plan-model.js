@@ -33,6 +33,9 @@ const STATUS_ALIASES = new Map([
 
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
+/* 扩展生成的真实运行 id；只接受窄字符集，避免把任意 details 文本带进历史。 */
+const TURN_ID = /^[A-Za-z0-9._:-]{1,64}$/;
+const turnIdOf = value => typeof value === 'string' && TURN_ID.test(value) ? value : null;
 
 export function isPlanTool(name) {
   return name === PLAN_TOOL_NAME;
@@ -69,6 +72,7 @@ export function normalizePlan(payload) {
     completed,
     explanation: text(payload.explanation, MAX_EXPLANATION) || null,
     revision: Number.isInteger(payload.revision) && payload.revision >= 0 ? payload.revision : null,
+    turnId: turnIdOf(payload.turnId),
   };
 }
 

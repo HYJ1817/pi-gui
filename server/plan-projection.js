@@ -18,12 +18,16 @@ const MAX_TASKS = 100;
 const MAX_TITLE = 300;
 const MAX_EXPLANATION = 2000;
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+/* 扩展在真实新回合写入的运行 id；与 plan-model.js 同一窄字符集。 */
+const TURN_ID = /^[A-Za-z0-9._:-]{1,64}$/;
 
 function text(value, max) {
   if (typeof value !== 'string') return '';
   const out = value.trim();
   return out.length > max ? out.slice(0, max) : out;
 }
+
+const turnIdOf = value => typeof value === 'string' && TURN_ID.test(value) ? value : null;
 
 function projectTasks(raw) {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_TASKS) return null;
@@ -43,7 +47,7 @@ function projectTasks(raw) {
   return tasks;
 }
 
-function finish(tasks, explanation, revision, updatedAt) {
+function finish(tasks, explanation, revision, updatedAt, turnId = null) {
   return {
     version: PLAN_VERSION,
     tasks,
@@ -51,6 +55,7 @@ function finish(tasks, explanation, revision, updatedAt) {
     explanation: text(explanation, MAX_EXPLANATION) || null,
     revision: Number.isInteger(revision) && revision >= 0 ? revision : null,
     updatedAt: Number.isInteger(updatedAt) && updatedAt > 0 ? updatedAt : null,
+    turnId: turnIdOf(turnId),
   };
 }
 
@@ -74,5 +79,5 @@ export function projectPlanResult(result) {
   if (!plain(details) || details.tool !== PLAN_TOOL_NAME || details.version !== PLAN_VERSION) return null;
   const tasks = projectTasks(details.tasks);
   if (!tasks) return null;
-  return finish(tasks, details.explanation, details.revision, details.updatedAt);
+  return finish(tasks, details.explanation, details.revision, details.updatedAt, details.turnId);
 }

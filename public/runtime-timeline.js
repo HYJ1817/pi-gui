@@ -22,6 +22,7 @@ export const MAX_BLOCK_TEXT = 48 * 1024;
 export const MAX_THINKING_TEXT = 64 * 1024;
 export const MAX_USER_TEXT = 16 * 1024;
 export const MAX_TOOLS_PER_GROUP = 100;
+export const MAX_CONTENT_SEGMENTS = 100;
 
 const SAFE_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_.:-]{0,63}$/;
 
@@ -40,6 +41,38 @@ export function contentThinking(content) {
   if (!Array.isArray(content)) return '';
   return content.filter(part => part?.type === 'thinking' && typeof part.thinking === 'string')
     .map(part => part.thinking).join('\n\n');
+}
+
+/**
+ * 把 Pi 的权威 content 展开成按真实顺序排列的正文/Thinking 段。
+ * 连续的同类 part 合并；中间夹了别的类型就另起一段。工具调用不在这里
+ * 生成 block —— 它的可视位置由真实 tool_execution_* 事件决定，message_end
+ * 不能替尚未执行的工具伪造时间线节点。
+ *
+ * 上限与有界时间线一致：content 再长也最多保留 100 段。
+ */
+export function contentSegments(content) {
+  const out = [];
+  const push = (kind, value) => {
+    if (typeof value !== 'string' || !value) return;
+    const last = out[out.length - 1];
+    if (last && last.kind === kind) {
+      last.text += (kind === 'thinking' ? '\n\n' : '\n') + value;
+    } else if (out.length < MAX_CONTENT_SEGMENTS) {
+      out.push({ kind, text: value });
+    }
+  };
+  if (typeof content === 'string') {
+    if (content) out.push({ kind: 'assistant', text: content });
+    return out;
+  }
+  if (!Array.isArray(content)) return out;
+  for (const part of content) {
+    if (!part || typeof part !== 'object') continue;
+    if (part.type === 'thinking') push('thinking', part.thinking);
+    else if (part.type === 'text') push('assistant', part.text);
+  }
+  return out;
 }
 
 /** 与 runtime-store 的正文上限同一条策略：按字节留末尾，不切出半个字符。 */
@@ -113,7 +146,11 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
   const blocks = [];
   let id = 0;
   let userSequence = 0;
-  let turnPlan = null;
+  /* V1 记录没有运行边界，只能按用户消息归并（legacyTurnPlan）。带 turnId 的
+   * 计划来自扩展在真实新回合写入的 details，可跨 steer 的用户消息归并到同一张
+   * 卡，同时不会把两个真实任务合并。两种记录可以同时存在。 */
+  let legacyTurnPlan = null;
+  const planByTurnId = new Map();
   const add = block => {
     block.id = 'h' + (++id);
     blocks.push(block);
@@ -137,7 +174,7 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
         messageId: typeof meta.messageId === 'string' ? meta.messageId : null,
         userIndex,
       });
-      turnPlan = null;
+      legacyTurnPlan = null;
       continue;
     }
 
@@ -183,9 +220,24 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
       if (name === PLAN_TOOL_NAME) {
         const plan = planFromToolEntry({ name: PLAN_TOOL_NAME, args: part.arguments, details: result?.details });
         if (!plan) continue;
-        /* 一个用户回合一张计划卡；卡的位置取本回合第一次真实调用。 */
-        if (turnPlan) turnPlan.plan = plan;
-        else { turnPlan = add({ kind: 'plan', plan }); owned.push(turnPlan); }
+        /* 有 turnId 时按真实运行归并；没有时退回用户回合，并明确标记该段
+         * 归属无法确认。计划卡的位置取该任务第一次真实调用。 */
+        if (plan.turnId) {
+          let block = planByTurnId.get(plan.turnId);
+          if (!block && legacyTurnPlan) {
+            /* 同一用户回合内从旧记录升级到带 turnId 的更新，沿用原卡。 */
+            block = legacyTurnPlan;
+            legacyTurnPlan = null;
+            planByTurnId.set(plan.turnId, block);
+          }
+          if (block) block.plan = plan;
+          else { block = add({ kind: 'plan', plan }); planByTurnId.set(plan.turnId, block); owned.push(block); }
+        } else if (legacyTurnPlan) {
+          legacyTurnPlan.plan = plan;
+        } else {
+          legacyTurnPlan = add({ kind: 'plan', plan });
+          owned.push(legacyTurnPlan);
+        }
         kind = 'plan';
         continue;
       }
@@ -213,7 +265,13 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
     }
   }
 
-  return boundTimeline(blocks);
+  const bounded = boundTimeline(blocks);
+  /* 给历史 UI 一个可解释的边界状态：verified 表示这张卡的更新都带真实
+   * turnId；unknown 表示只有旧记录，按用户消息分组；mixed 表示两者混用。 */
+  const plans = bounded.blocks.filter(block => block.kind === 'plan');
+  const verified = plans.filter(block => typeof block.plan?.turnId === 'string' && block.plan.turnId).length;
+  const planBoundary = !plans.length ? null : verified === plans.length ? 'verified' : verified ? 'mixed' : 'unknown';
+  return { ...bounded, planBoundary };
 }
 
 /** 实时 store 用的小工具：把一个 block 的文本改掉并同步 truncated 标记。 */

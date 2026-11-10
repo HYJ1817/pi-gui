@@ -14,8 +14,13 @@
  *     counts: { total, completed },
  *     explanation: string | null,
  *     revision: number,
- *     updatedAt: number
+ *     updatedAt: number,
+ *     turnId?: string
  *   }
+ *
+ *   turnId 是真实运行边界：settled 之后的第一次用户消息开启新 turn 时生成，
+ *   运行中的 steer / follow-up 沿用同一个 id。历史恢复据此把同一任务的
+ *   计划更新归并到一张卡；没有该字段的旧记录只能退回「按用户消息分组」。
  *
  * 关键规则：
  *   - 每次调用提交的是**完整列表**，不是增量。id 必须稳定；重复 id 直接拒绝，
@@ -52,6 +57,15 @@ const STATUS_ALIASES = new Map([
 
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const trimmed = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
+
+/* 真实运行 id：只在 settled 之后的新用户消息上生成一次，steer 复用。
+ * 不是安全令牌，只用于历史归并；只用窄字符集，避免把任意文本带出扩展。 */
+function makeTurnId() {
+  try {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  } catch { /* 环境没有 Web Crypto 时退回时间 + 随机后缀 */ }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 /** 归一一条任务；非法返回 { error }，绝不静默修成另一个状态。 */
 function normalizeTask(raw, index) {
@@ -132,6 +146,7 @@ export default function piGuiPlan(pi) {
    * 运行中的 steer 不开新列表，避免把同一轮已完成的任务清掉。 */
   let settled = true;
   let freshTurn = false;
+  let currentTurnId = null;
 
   function reconstruct(ctx) {
     tasks = [];
@@ -165,6 +180,9 @@ export default function piGuiPlan(pi) {
     if (event?.messageType !== 'user') return;
     freshTurn = settled;
     settled = false;
+    /* 只有真正的新任务才换 turnId；运行中的 steer 保持同一个 id，
+     * 历史恢复据此不会给同一任务开两张计划卡。 */
+    if (freshTurn) currentTurnId = makeTurnId();
   });
 
   pi.registerTool({
@@ -228,6 +246,7 @@ export default function piGuiPlan(pi) {
         explanation,
         revision,
         updatedAt: Date.now(),
+        ...(currentTurnId ? { turnId: currentTurnId } : {}),
       };
       return {
         content: [{ type: 'text', text: summarize(tasks, explanation) }],

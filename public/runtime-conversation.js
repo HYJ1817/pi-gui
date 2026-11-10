@@ -136,6 +136,8 @@ const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止
 const HISTORY_NOTE_LEGACY = '历史只含正文（无工具、思考、用量）';
 const HISTORY_NOTE_WITH_TOOLS = '历史正文与只读工具摘要；不含思考及用量';
 const HISTORY_NOTE_WITH_TIMELINE = '历史按真实记录恢复计划、思考、工具与正文；不含原始参数/输出及用量';
+const HISTORY_NOTE_PLAN_UNKNOWN = '计划按用户消息分组，历史缺少运行边界，归属不确定';
+const HISTORY_NOTE_PLAN_MIXED = '部分计划缺少运行边界，归属不确定';
 const TOOL_UNAVAILABLE_REASONS = {
   invalid_records: '工具记录格式无法解析',
   unmatched_results: '工具结果关联不完整',
@@ -156,7 +158,10 @@ function formatHistoryState(history, owner) {
   let note = '';
   const hasTimeline = Array.isArray(history?.execution?.timeline) && history.execution.timeline.length > 0;
   if (hasTimeline) {
-    note = HISTORY_NOTE_WITH_TIMELINE + (executionTruncated ? '；更早的执行记录已截断' : '');
+    const boundary = history?.execution?.planBoundary;
+    const boundaryNote = boundary === 'unknown' ? `；${HISTORY_NOTE_PLAN_UNKNOWN}`
+      : boundary === 'mixed' ? `；${HISTORY_NOTE_PLAN_MIXED}` : '';
+    note = HISTORY_NOTE_WITH_TIMELINE + boundaryNote + (executionTruncated ? '；更早的执行记录已截断' : '');
   } else if (!history?.toolSummary) {
     note = HISTORY_NOTE_LEGACY;
   } else {

@@ -119,7 +119,8 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
   const discardedMessages = messages.length - retainedMessages.length;
   const execution = timelineFromMessages(nativeMessages, { messageMeta: nativeMeta });
   return { ok: true, messages: retainedMessages, truncated,
-    execution: { timeline: execution.blocks, truncated: truncated || execution.truncated },
+    execution: { timeline: execution.blocks, truncated: truncated || execution.truncated,
+      planBoundary: execution.planBoundary },
     toolSummary: projectHistoryTools(lines, { historyTruncated: truncated,
       messageLines: messageLines.slice(discardedMessages), discardedMessages }) };
 }
