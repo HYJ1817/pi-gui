@@ -29,7 +29,8 @@ P5 合并提交 `cd243fb` 已确认位于 `origin/main` 顶端；P6 分支基于
 | `cd243fb`（P5 合并） | push main / [42606329154](https://github.com/HYJ1817/pi-gui/actions/runs/42606329154)，attempt 1 | **failure** | 仅 `Tests (core)` 因 `tests/thinking-dots.cjs` 时序假红失败；其余组、计划与构建通过；CI gate 正确拦截 |
 | `13f660a`（P6 的修复） | — | — | thinking-dots 自动交替改为虚拟时钟驱动（确定性） |
 | `0171455`（并行修复合并，含同一 `13f660a`） | push main / 42639509745，attempt 1 | **failure** | 失败命令为 `node tests/ci-results.cjs`（`fixture timeout: second leaf running`，20s 等待窗口在 runner 负载下超时）。该测试与供应商管理无关，本地连续 3/3 通过；属于 CI 基础设施时序抖动，归并行 CI 修复工作流跟进 |
-| `codex/provider-management-p6` HEAD | 未推送 / 无 PR CI | **待验证** | 本轮未获推送与建 PR 授权；最终完整证明以本地 `npm test` 加后续 PR/main CI 为准 |
+| `df02b56`（首轮 PR head） | PR #69 / [42768437511](https://github.com/HYJ1817/pi-gui/actions/runs/42768437511)，attempt 1 | **failure** | `Tests (core)` 中 3 条 ACL 取证用例在 pwsh 宿主下解析到 PowerShell 7 的 `Microsoft.PowerShell.Security`，`Get-Acl` 无法加载；已由 `6728f1e` 修复（仅测试取证，不改产品 ACL） |
+| `6728f1e`（ACL 取证修复后的 PR head） | PR #69 / [42771641872](https://github.com/HYJ1817/pi-gui/actions/runs/42771641872)，attempt 1 | **success** | 8/8 checks 通过；CI gate 证据 **241/241**、failed/skipped/unexecuted 均为 0；PR 检查使用合并提交 `717a936` |
 
 **P5 基线失败定性（已关闭）**：`tests/thinking-dots.cjs` 用两条独立 `setTimeout`
 链做墙钟竞速（检查点名义余量 20ms），产品语义本身正确；P6 已改为虚拟时钟驱动，
@@ -467,6 +468,8 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 
 ## 十一、缺陷与遗留问题统计
 
+> 本章保留任务开始时点的统计口径；最终缺陷关闭、真机验证与上线资格以第十七章为准。
+
 | 级别 | 数量 | 处置 |
 | --- | --- | --- |
 | Blocker | **0** | 历史 Blocker（内置 API Key 供应商无法保存）已修复并有回归 |
@@ -477,14 +480,15 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 
 ## 十二、需要用户批准的事项（发布前）
 
-1. **推送 P6 分支并创建 PR，运行其 PR CI 与 CI gate**：本轮未推送、未建 PR（按授权边界）。
-   最终 GitHub CI 状态见第二节；本地完整 canonical 结果见第四节。
-2. **合并 P6 到 main**：合并许可未授予。
+1. **推送 P6 分支并创建 PR，运行其 PR CI 与 CI gate**：已推送并创建 PR #69，
+   最终 CI 状态见第二节与 17.13。
+2. **合并 P6 到 main**：用户已明确指示在 CI 全绿后合并；最终 head 的 CI 与 gate
+   全绿后执行，合并本身不代表发布授权。
 3. **版本号决定与正式发布**：版本由维护者决定；打 tag/推送 tag/正式发布均需单独明确授权。
 4. **真实环境验证范围**：真实供应商网络/OAuth/账户、真实安装升级、存储资格成功路径需要
    外部授权或操作系统 ACL 权限；本轮按 D 类保留并给出准确原因。
-5. **计划增强取舍**：自动推荐与「未知」占位徽标是否需要在默认开启管理功能前补齐
-   （本轮未实现，均不影响当前安全与数据正确性）。
+5. **计划增强取舍**：自动推荐（FIX-A）与未知/继承/实际值三态显示（FIX-B）已在本轮
+   实现并有回归，见 17.5；剩余外观增强不影响当前安全与数据正确性。
 
 ## 十三、安全回滚方案
 
@@ -743,17 +747,27 @@ Windows 存储资格、首次推荐、未知能力显示、ci-results 竞态。�
   未删除测试、未降低断言。
 - 完整 canonical：按用户指示本轮不在本地重跑完整 `npm test`；以最终 P6 PR 的
   Windows GitHub Runner 完整 CI 与 gate 为门禁，结果在 17.13 回填。
-- PR CI：最终 P6 PR 的 Windows GitHub Runner CI 与 gate 必须全绿后才能合并；
-  本节在 PR 创建后回填 run ID / attempt / gate 结果。
+- PR CI 首轮（`df02b56`，run 42768437511，attempt 1）：`Tests (core)` 的 3 条 ACL
+  取证用例失败。根因是测试用 PATH 解析 `powershell.exe`；GitHub Actions 在 pwsh 下
+  运行时先命中 PowerShell 7 的 `Microsoft.PowerShell.Security`，`Get-Acl` 无法加载。
+  修复 `6728f1e` 改为绝对路径启动 Windows PowerShell，并把 `PSModulePath` 限定到
+  其自身 `Modules`；断言、产品 ACL 实现与安全边界均未变。修复后同一六套件命令
+  本地复跑 **183/183**。
+- 最终 PR CI（`6728f1e`，run [42771641872](https://github.com/HYJ1817/pi-gui/actions/runs/42771641872)，
+  attempt 1）：8/8 checks 通过，CI gate **241/241**，failed/skipped/unexecuted
+  均为 0，gate success。本报告提交仅为文档变更，推送后同样需通过该 PR CI 与 gate
+  才能合并。
 
 ### 17.9 可发布状态
 
 - 本轮开始时存在发布阻断（正常 Windows 存储资格）；修复后已在正常沙箱隔离环境取得
   API Key 保存/回读/清除证据，打包 EXE 主流程连续两轮 13/13、旧用户升级 8/8，
   `test:app` 26/26、`test:exe` 49/49。
-- 当前仍**不得**宣称可发布：还差最终 P6 PR 的完整 Windows CI 与 gate 全绿。
-  在 CI 全绿前，验收状态是「功能验证通过、发布门禁待 CI」。
-- 未修改正式版本号、未创建 tag、未触发 Release、未合并 main。
+- 代码 head `6728f1e` 的最终 P6 PR CI 与 gate 已全绿（run 42771641872：
+  8/8 checks、241/241 证据）；合并门禁已满足。本报告提交仅为文档，推送后
+  仍需其自身的 PR CI 与 gate 全绿才执行合并。
+- 未修改正式版本号、未创建 tag、未触发 Release。合并 main 按用户明确指示在
+  CI 全绿后执行；发布仍需单独授权。
 
 ### 17.10 源码与打包对应
 
@@ -797,7 +811,12 @@ Windows 存储资格、首次推荐、未知能力显示、ci-results 竞态。�
 
 - 代码最终提交：产品 `3ed0fad5325641275b9e78324fbf18482da8ad75`（19 文件，
   +625/−127）；测试与 CI 基建 `df1853f56c4e8ed60f3d927a56dac3165628ce71`
-  （13 文件，+825/−45）。本报告连同文档更新提交紧随其后。
+  （13 文件，+825/−45）；ACL 取证修复
+  `6728f1eea02cfd9f5e3a0711278df07bde80bdce`（1 文件，+11/−2）。
+  本报告连同文档更新提交紧随其后，不改变产品与测试行为。
 - 构建产物 SHA-256：见 17.10（`5C12E1E8…F0E3` 等），对应上述产品提交的同一组源码。
 - PR：<https://github.com/HYJ1817/pi-gui/pull/69>（`codex/provider-management-p6` → `main`）。
-- PR CI run ID / attempt / gate：创建时 6 项 pending；`<待回填，CI 完成后更新>`。
+- PR CI run ID / attempt / gate：`42771641872` / attempt 1 / **success**
+  （8/8 checks；gate 证据 241/241，failed/skipped/unexecuted 均为 0；
+  PR 检查使用合并提交 `717a936a58d7b3d775b264cba75e111bb25b23bf`）。
+  本报告提交推送后，最终 head 的 CI 与 gate 需再次全绿才合并。
