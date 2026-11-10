@@ -16,7 +16,17 @@ Tool Timeline 仍以一条 Assistant 消息中的连续 tool calls 为组。实�
 
 ## 任务列表（gui_plan）
 
-计划来自 Pi 扩展 `extensions/pi-gui-plan` 注册的 `gui_plan` 工具，不从工具调用次数、时长或正文推断。每次调用提交**完整**任务列表：id 稳定，状态只有 `pending` / `in_progress` / `completed` / `failed` / `cancelled`；扩展拒绝重复 id、空列表和未知状态。同一轮重新规划时，模型漏掉的已完成 / 失败 / 已取消任务会由扩展保留并标 `retained`；新一轮用户任务不继承上一轮完成项。工具结果 `details` 随会话持久化，Classic 历史据此按用户回合归并最后一张有效计划；Runtime 历史接口只含正文，所以历史视图不显示计划。计划工具不进入 Tool Timeline，避免同一件事出现两次。
+计划来自 Pi 扩展 `extensions/pi-gui-plan` 注册的 `gui_plan` 工具，不从工具调用次数、时长或正文推断。每次调用提交**完整**任务列表：id 稳定，状态只有 `pending` / `in_progress` / `completed` / `failed` / `cancelled`；扩展拒绝重复 id、空列表和未知状态。同一轮重新规划时，模型漏掉的已完成 / 失败 / 已取消任务会由扩展保留并标 `retained`；新一轮用户任务不继承上一轮完成项。工具结果 `details` 随会话持久化。计划工具不进入 Tool Timeline，避免同一件事出现两次。
+
+**回合边界只认 Pi 的真实事件。** `agent_settled` 在整个 session 级 run 收尾时发出，自动重试、压缩、steering/follow-up 都在它之前跑完；运行中追加用户消息不会发新的 `agent_start`。因此「上一轮已 settled 后的 `agent_start`」才是新任务边界：此时切换当前计划指针，旧计划卡仍留在时间线里；运行中的 steer / follow-up、自动重试和压缩都不清空当前计划。Runtime store 与 Classic 的 `plan-live.js` 共用这条判据，不用「看到一条 user 消息」猜新回合。
+
+## Runtime 执行时间线
+
+Runtime 的计划、思考、工具与正文不再分散在输出区外的固定槽位，而是进入同一个 `.rtc-output` 滚动容器，按真实事件/消息顺序排列。实时顺序来自 store 收到事件的先后（不按类别重排）；历史顺序来自原生 JSONL 的 message/content 顺序。视图只按投影出的有界 block 列表放置节点，节点按 block id 复用，流式更新不重建整条时间线。
+
+`public/runtime-timeline.js` 是实时与历史共用的纯投影：只保留用户/助手文本、真实 thinking 文本、工具名/状态/耗时和 `gui_plan` 白名单字段；工具原始 args、result 正文、环境变量与凭据不进入投影。历史读取用同一个投影，因此恢复的计划、思考、工具与最终回答都来自真实记录；缺字段就省略，记录被截断时状态行明确说明，不伪造内容。展开状态按会话保存：Thinking 和多项工具组默认折叠，用户展开后，新工具、流式增量和切换会话都不会把它收回。
+
+回到底部按钮只操作当前会话自己的 `.rtc-output`，不共享滚动位置，也不强制把正在阅读历史的用户拉回底部；点击后才恢复 follow-latest。任务列表、工具组、Thinking 与正文的视觉 token 与 Classic 一致。
 
 `public/plan-model.js` 只做契约校验与按回合归并，`public/plan-view.js` 只认归一后的 plan；按稳定 id 复用行，只改变化的文字/状态/顺序。默认展开，用户折叠后流式更新不改变折叠状态；头部显示真实的 `已完成/总数`。执行结束但仍有 `in_progress` 时，数据状态不变，展示文案改为「未完成」并停止呼吸动画，不伪造 `completed`。
 
