@@ -993,7 +993,7 @@ export async function loadExtensionsBadge() {
  *   Capabilities   —— 只留已知 feature 与 Native MCP（「能不能用」这一问的答案）
  *   Extensions     —— 通用 Registry（**包括完全不认识的**，保持可浏览可诊断）
  *   Skills         —— pi 原生 Skills 的清单与启停（原有实现，未改语义）
- *   MCP            —— pi 原生 MCP 管理面（原有实现，未改语义） */
+ *   MCP            —— pi 原生 MCP 能力报告（原有实现；管理面在 navMcp） */
 const TABS = [
   { id: 'all', label: 'All', domId: 'extensionsTabAll' },
   { id: 'capabilities', label: 'Capabilities', domId: 'extensionsTabCapabilities' },
@@ -1039,7 +1039,9 @@ export function openExtensions(options = {}) {
         btn.setAttribute('aria-selected', String(btn.dataset.tab === active));
       }
       const current = TABS.find((tab) => tab.id === active) || TABS[0];
-      const destination = active === 'mcp' ? ['navMcp', 'MCP 配置']
+      /* MCP 管理页已独立到 navMcp；这个标签保留原生 MCP 能力报告，
+       * 不能再把左侧导航投影成 navMcp —— 否则点的是报告，亮的是管理页。 */
+      const destination = active === 'mcp' ? ['navExtensions', 'MCP 能力报告']
         : active === 'capabilities' ? ['navCapabilities', '能力状态'] : ['navExtensions', 'Skills 与扩展'];
       projectWorkSurface('extensions', { navigation: destination[0], title: destination[1] });
       h.textContent = active === 'all' || active === 'extensions' ? '扩展与能力' : destination[1];

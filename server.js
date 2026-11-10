@@ -101,6 +101,10 @@ import { createDiagnostics } from './server/diagnostics.js';
 import { createLogService } from './server/logging.js';
 import { createMcp } from './server/mcp.js';
 import { createMcpNative, buildPiEntry } from './server/mcp-native.js';
+import { createMcpConfigStore } from './server/mcp-config.js';
+import { createMcpMarket } from './server/mcp-market.js';
+import { createMcpImporter } from './server/mcp-import.js';
+import { createMcpManager } from './server/mcp-manager.js';
 import { createPiBuiltins } from './server/pi-builtins.js';
 import { createPiLaunch } from './server/pi-launch.js';
 import { createPiVersion, createPiVersionProbe } from './server/pi-version.js';
@@ -685,6 +689,35 @@ const mcp = createMcp({
   piBuiltins: (cwd) => piBuiltins.read({ cwd }),
   // 原生摘要（上次算出的，不触发 spawn；没算过就是 null）
   nativeSummary: () => mcpNative.peekSummary(),
+});
+/* MCP 管理（P20.7）：配置编辑 / 启停 / 测试 / 市场 / 外部导入。
+ *
+ * 状态真值仍然只有 mcpNative 一条链；这些模块只改 Pi 自己会读的
+ * `mcp.json`（原子写 + 备份 + 信任闸门），不建立第二套 runtime。
+ * 项目信任源与 Skills / extension-registry 完全相同，避免三个地方各判一次。 */
+const mcpConfigStore = createMcpConfigStore({
+  runtime,
+  env: process.env,
+  readTrust: async () => (await skills.readIndex()).trust,
+});
+const mcpMarket = createMcpMarket({
+  dataDir: DATA_DIR,
+  configStore: mcpConfigStore,
+  env: process.env,
+});
+const mcpImporter = createMcpImporter({
+  runtime,
+  env: process.env,
+  configStore: mcpConfigStore,
+  listServers: async () => (await mcpNative.summary()).servers,
+  readTrust: async () => (await skills.readIndex()).trust,
+});
+const mcpManager = createMcpManager({
+  runtime,
+  mcpNative,
+  configStore: mcpConfigStore,
+  market: mcpMarket,
+  importer: mcpImporter,
 });
 /* P19：approval 能力报告（只读本机 pi 包，不执行它的代码）。 */
 const approvalProbe = createApprovalProbe({ env: process.env, piBin: PI_BIN, resolvePackageDir: piLaunch.packageDir });
@@ -1321,6 +1354,7 @@ const route = createRouter({
   skills,
   mcp,
   mcpNative,
+  mcpManager,
   approvalProbe,
   extensions,
   sessions,

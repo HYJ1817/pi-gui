@@ -68,6 +68,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param skills        Skills（handle）
  * @param mcp           MCP 能力报告（handle）
  * @param mcpNative     P20.6 原生 MCP 状态与受控动作（handleServers / handleStatus）
+ * @param mcpManager    P20.7 配置编辑 / 市场 / 外部导入（config / market / import）
  * @param extensions    Extension 只读注册表（handle）
  * @param sessions      会话列表与切换（handle）
  * @param sessionSearch 会话全文搜索（handle）
@@ -94,6 +95,7 @@ export function createRouter({
   skills,
   mcp,
   mcpNative = null,
+  mcpManager = null,
   approvalProbe,
   extensions,
   sessions,
@@ -296,6 +298,14 @@ export function createRouter({
     if (url.pathname === '/api/mcp/status') {
       if (mcpNative) return mcpNative.handleStatus(req, res);
       return json(res, 503, { ok: false, code: 'not-wired', error: 'MCP 原生模块未装配' });
+    }
+    /* P20.7 MCP 管理：配置详情/保存/删除/启停/测试、市场、外部工具导入。
+     * 独立顶层路径；GET 与 POST 都有，必须排在 405 兜底之前。 */
+    if (url.pathname === '/api/mcp/config'
+      || url.pathname === '/api/mcp/market' || url.pathname === '/api/mcp/market/sources'
+      || url.pathname === '/api/mcp/import') {
+      if (mcpManager) return mcpManager.handle(req, res, url);
+      return json(res, 503, { ok: false, code: 'not-wired', error: 'MCP 管理模块未装配' });
     }
     /* P19：approval 能力报告（只读本机 pi 包）。GET，必须排在 405 兜底之前。 */
     if (url.pathname === '/api/approvals/capability') {

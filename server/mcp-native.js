@@ -201,6 +201,9 @@ function sanitizeMcpRawToolName(v) {
 
 /** 上游 `SERVER_NAME`：**只限字符集，不限长度**（`/^[A-Za-z0-9_-]+$/`）。 */
 const UPSTREAM_SERVER_NAME_RE = /^[A-Za-z0-9_-]+$/;
+/* Pi 1.5.x 的项目覆盖条目：没有 command / url / type，只允许改这三个键。
+ * 语义见上游 `isMcpServerOverride` 与 `readConfigFile`。 */
+const MCP_OVERRIDE_KEYS = new Set(['enabled', 'exposure', 'toolExposure']);
 /** GUI 侧的**动作入参**长度上限（上游没有；这是输入侧防御，不是配置判定规则）。 */
 const ACTION_NAME_MAX = 64;
 /** 上游 `LOOPBACK_HOSTS`。 */
@@ -311,6 +314,15 @@ function redactPaths(text, { cwd = null, agentDir = null, homeDir = null } = {})
   if (agentDir) out = out.split(agentDir).join('<agent-dir>');
   if (homeDir) out = out.split(homeDir).join('<home>');
   return out;
+}
+
+/** 展示用路径：主目录折成 `~`，反斜杠统一成正斜杠。 */
+function displayPath(file, homeDir) {
+  let out = String(file || '');
+  if (homeDir && out.toLowerCase().startsWith(String(homeDir).toLowerCase())) {
+    out = '~' + out.slice(String(homeDir).length);
+  }
+  return out.replace(/\\/g, '/');
 }
 
 /**
@@ -445,6 +457,40 @@ export function parseMcpServers(data, { scope = null, takenNames = null } = {}) 
       continue;
     }
 
+    /* 8.5 项目覆盖条目（Pi 1.5.x）。上游判据：`command` / `url` / `type`
+     * 三者都不存在。它不是一台新 server，只能继承全局同名条目的
+     * enabled / exposure / toolExposure；全局没有 base 时上游会报错并跳过。
+     * 这里必须单独识别，否则会被下面的「needs command or url」拒掉，
+     * 界面就会把一条 Pi 明明会加载的配置显示成无效。 */
+    if (scope === 'project'
+      && raw.command === undefined && raw.url === undefined && raw.type === undefined) {
+      const baseNames = new Set([...prior, ...accepted]);
+      const extra = Object.keys(raw).filter((key) => !MCP_OVERRIDE_KEYS.has(key));
+      if (!baseNames.has(name)) {
+        invalid.push(`invalid server "${name}": needs "command" or "url", or a global server to override`);
+        continue;
+      }
+      if (extra.length > 0) {
+        invalid.push(`invalid server "${name}": an override can only set ${[...MCP_OVERRIDE_KEYS].join(', ')}`);
+        continue;
+      }
+      accepted.push(name);
+      servers.push({
+        name,
+        // null = 继承 base 的值，不能在这里写成默认值（base 可能 enabled:false）。
+        enabled: raw.enabled === undefined ? null : raw.enabled,
+        exposure: raw.exposure === undefined ? null : exposure,
+        description: '',
+        transportType: 'inherited',
+        argsCount: 0,
+        overrideOnly: true,
+        hasSecrets: false,
+        toolExposure,
+        toolExposureNote: '',
+      });
+      continue;
+    }
+
     const isHttpType = raw.type === undefined || raw.type === 'http' || raw.type === 'streamable-http';
     const isStdioType = raw.type === undefined || raw.type === 'stdio';
     let transportType = null;
@@ -517,6 +563,9 @@ export function parseMcpServers(data, { scope = null, takenNames = null } = {}) 
       exposure,
       description,
       transportType,
+      /* 列表摘要只留结构：参数个数是计数，不带 argv 原文；命令与 URL
+       * 属于配置原文，进详情接口按凭据规则单独脱敏，不进摘要。 */
+      argsCount: transportType === 'stdio' && Array.isArray(raw.args) ? raw.args.length : 0,
       // secret 面：只记「有没有」，值一个字节都不留。
       hasSecrets: Boolean(
         (raw.env && typeof raw.env === 'object') ||
@@ -683,7 +732,27 @@ export function createMcpNative({
       ? parseMcpServers(p.data, { scope: 'project', takenNames: up.servers.map((s) => s.name) })
       : { servers: [], invalid: [], error: p.error || '' };
     const userServers = up.servers.map((s) => ({ ...s, scope: 'user' }));
-    const projectServers = pp.servers.map((s) => ({ ...s, scope: 'project' }));
+    const projectFull = new Map(pp.servers.filter((s) => !s.overrideOnly).map((s) => [s.name, s]));
+    const userByName = new Map(userServers.map((s) => [s.name, s]));
+    const projectServers = pp.servers.map((s) => {
+      if (!s.overrideOnly) return { ...s, scope: 'project' };
+      /* 覆盖条目本身没有 transport / 凭据 / 描述，展示与 effective 判定
+       * 都要用 base 的值补齐；否则界面会把一台继承来的 server 显示成
+       * 「未知传输、无凭据」，甚至把 enabled 继承错。 */
+      const base = projectFull.get(s.name) || userByName.get(s.name) || null;
+      return {
+        ...s,
+        scope: 'project',
+        enabled: s.enabled === null ? (base ? base.enabled : true) : s.enabled,
+        exposure: s.exposure === null ? (base ? base.exposure : DEFAULT_EXPOSURE) : s.exposure,
+        toolExposure: s.toolExposure === null ? (base ? base.toolExposure : null) : s.toolExposure,
+        description: base ? base.description : '',
+        transportType: base ? base.transportType : 'inherited',
+        argsCount: base ? base.argsCount : 0,
+        hasSecrets: base ? base.hasSecrets : false,
+        inheritedFrom: base ? base.scope : null,
+      };
+    });
     return {
       user: { exists: u.exists, error: u.error, invalid: up.invalid, parseError: up.error },
       project: { exists: p.exists, error: p.error, invalid: pp.invalid, parseError: pp.error },
@@ -961,6 +1030,7 @@ export function createMcpNative({
    * 拿的是上一次的结果，那个必须绑定 workspace（见 peekSummary）。 */
   async function summary() {
     const key = workspaceKey();
+    const f = files();
     const cfg = readConfigs();
     const tr = await trust();
     const nat = await nativeState(tr);
@@ -1015,6 +1085,12 @@ export function createMcpNative({
         servers,
         configInvalid: [...cfg.user.invalid, ...cfg.project.invalid],
         configError: { user: cfg.user.parseError || cfg.user.error, project: cfg.project.parseError || cfg.project.error },
+        /* 展示用路径：主目录折成 `~`，不把用户名交给 renderer。
+         * 项目路径本身就是用户选的工作区，保留原样。 */
+        files: {
+          user: { exists: cfg.user.exists, path: displayPath(f.user, homeDir) },
+          project: f.project ? { exists: cfg.project.exists, path: displayPath(f.project, homeDir) } : null,
+        },
       },
     };
     return summaryCache.data;
@@ -1027,11 +1103,13 @@ export function createMcpNative({
     return summaryCache.data;
   }
 
-  /** 显式刷新：跑 list --json 并进 60s 缓存（缓存绑定 workspace + launch identity）。 */
-  async function refresh() {
+  /** 显式刷新：跑 list --json 并进 60s 缓存（缓存绑定 workspace + launch identity）。
+   *  `force` 只给「测试连接」用：用户刚点按钮时，60s 内的旧结论不能冒充新测试。 */
+  async function refresh(opts = {}) {
     const t = now();
     const key = workspaceKey();
-    if (cacheHit(statusCache, key, t)) return { ...statusCache.data, cached: true };
+    const force = opts === true || opts.force === true;
+    if (!force && cacheHit(statusCache, key, t)) return { ...statusCache.data, cached: true };
     const cfg = readConfigs();
     const byKey = new Map(cfg.servers.map((s) => [`${s.scope}:${s.name}`, s]));
     const r = await runListJson();
