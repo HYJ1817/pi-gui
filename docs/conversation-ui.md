@@ -20,11 +20,15 @@ Tool Timeline 仍以一条 Assistant 消息中的连续 tool calls 为组。实�
 
 **回合边界只认 Pi 的真实事件。** `agent_settled` 在整个 session 级 run 收尾时发出，自动重试、压缩、steering/follow-up 都在它之前跑完；运行中追加用户消息不会发新的 `agent_start`。因此「上一轮已 settled 后的 `agent_start`」才是新任务边界：此时切换当前计划指针，旧计划卡仍留在时间线里；运行中的 steer / follow-up、自动重试和压缩都不清空当前计划。Runtime store 与 Classic 的 `plan-live.js` 共用这条判据，不用「看到一条 user 消息」猜新回合。
 
+`gui_plan` 的 `details` 带可选的 `turnId`：扩展在 settled 之后的新用户回合生成一次，运行中的 steer / follow-up 复用同一个 id。历史恢复按同一 `turnId` 归并计划更新，不同 `turnId` 即使复用相同任务 id 也保持两张卡；旧记录没有 `turnId` 时只能按用户消息分组，历史状态行会明确标注「计划归属不确定」，不按时间间隔或消息数量推断新运行。
+
 ## Runtime 执行时间线
 
 Runtime 的计划、思考、工具与正文不再分散在输出区外的固定槽位，而是进入同一个 `.rtc-output` 滚动容器，按真实事件/消息顺序排列。实时顺序来自 store 收到事件的先后（不按类别重排）；历史顺序来自原生 JSONL 的 message/content 顺序。视图只按投影出的有界 block 列表放置节点，节点按 block id 复用，流式更新不重建整条时间线。
 
-`public/runtime-timeline.js` 是实时与历史共用的纯投影：只保留用户/助手文本、真实 thinking 文本、工具名/状态/耗时和 `gui_plan` 白名单字段；工具原始 args、result 正文、环境变量与凭据不进入投影。历史读取用同一个投影，因此恢复的计划、思考、工具与最终回答都来自真实记录；缺字段就省略，记录被截断时状态行明确说明，不伪造内容。展开状态按会话保存：Thinking 和多项工具组默认折叠，用户展开后，新工具、流式增量和切换会话都不会把它收回。
+`public/runtime-timeline.js` 是实时与历史共用的纯投影：只保留用户/助手文本、真实 thinking 文本、工具名/状态/耗时、计划白名单字段和扩展写入的 `turnId`；工具原始 args、result 正文、环境变量与凭据不进入投影。历史读取用同一个投影，因此恢复的计划、思考、工具与最终回答都来自真实记录；缺字段就省略，记录被截断时状态行明确说明，不伪造内容。运行边界要么来自 `gui_plan` 的 `turnId`（`verified`），要么只能退回用户消息分组（`unknown`）；`mixed` 表示新旧记录混用，状态行同样会说明部分计划归属不确定。展开状态按会话保存：Thinking 和多项工具组默认折叠，用户展开后，新工具、流式增量和切换会话都不会把它收回。
+
+实时 `message_end` 的 `content` 是这条 assistant 消息的权威内容：缺少流式增量时，正文与 Thinking 按真实 `content` 顺序补建 block；已有流式 block 复用原节点并覆盖为权威文本，用户已展开的 Thinking 不会因结束事件被收回。同一条消息内正文与 Thinking 多次交错时，每一段保持自己的位置，不把后面的内容并回前面。工具节点只由真实 `tool_execution_*` 事件创建和定位，`message_end` 不创建尚未执行的工具，也不移动已经出现的工具组；两者信息冲突时，工具保留先发生的真实事件位置，正文/Thinking 围绕已存在的段补齐。
 
 回到底部按钮只操作当前会话自己的 `.rtc-output`，不共享滚动位置，也不强制把正在阅读历史的用户拉回底部；点击后才恢复 follow-latest。任务列表、工具组、Thinking 与正文的视觉 token 与 Classic 一致。
 
