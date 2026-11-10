@@ -108,13 +108,37 @@
 .plan-card[data-stalled="true"] .plan-pulse-dot { animation: none; opacity: .55; }
 .plan-card[data-stalled="true"] .plan-item[data-status="in_progress"] .plan-state { color: var(--warn); }
 
-.runtime-conversation > .ui2-runtime-plan {
-  flex-shrink: 0;
-  max-height: 32vh;
-  overflow: auto;
-  scrollbar-width: thin;
+/* 计划、思考、工具、正文现在都在同一个 .rtc-output 滚动容器里，按真实事件
+ * 顺序排列；不要再给计划卡一个独立滚动区，否则同一段阅读流会被切成两块。 */
+.runtime-conversation .rtc-output .ui2-runtime-plan {
+  margin: 10px 0 14px;
 }
-.runtime-conversation > .ui2-runtime-plan .plan-card { margin: 0; }
+.runtime-conversation .rtc-output .ui2-runtime-plan .plan-card { margin: 0; }
+.runtime-conversation .rtc-output .ui2-runtime-thinking { margin: 8px 0 10px; }
+.runtime-conversation .rtc-output .ui2-runtime-tools { margin: 8px 0 14px; }
+.runtime-conversation .rtc-output .rtc-history-message { display: block; margin: 0 0 14px; }
+.runtime-conversation .rtc-output .rtc-timeline-message::before {
+  content: attr(data-role-label);
+  display: block;
+  font-size: 10.5px;
+  color: var(--t3);
+  margin-bottom: 3px;
+}
+.runtime-conversation .rtc-output .rtc-history-message[data-role="user"] {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-hover, rgba(0, 0, 0, .03));
+}
+.runtime-conversation .rtc-output .rtc-history-role {
+  font-size: 10.5px;
+  color: var(--t3);
+  margin-bottom: 3px;
+}
+.runtime-conversation .rtc-output .rtc-history-user-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 /* Runtime 思考标题与 Classic 使用同一组状态文案；只有错误 / 中断着色。 */
 .ui2-runtime-thinking[data-state="error"] summary { color: var(--err); }

@@ -68,6 +68,7 @@ import {
   setStreaming,
   syncWelcome,
 } from './messages.js';
+import { beginPlanTaskBoundary } from './plan-live.js';
 import { onToolEnd, onToolStart, onToolUpdate, onToolWait } from './tools.js';
 import { openBranchPanel, setForkHandler } from './tree.js';
 import { openCtxTip, renderCtxChip, onTurnUsage } from './usage.js';
@@ -446,6 +447,11 @@ function handleEvent(evt) {
       }
       return;
     case 'agent_start':
+      /* 与 Runtime store 同一条协议判据（见 pi agent-session.js）：
+       * 上一轮已收尾（S.streaming=false）时到来的 agent_start 是新 session 级
+       * run = 真正的新任务；运行中重试/压缩也会重发 agent_start，但此时
+       * S.streaming 仍为 true，不得重置计划。回放事件不参与。 */
+      if (!evt._replay && !S.streaming) beginPlanTaskBoundary();
       return setStreaming(true);
     case 'agent_end':
       return;

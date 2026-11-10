@@ -20,15 +20,19 @@
  *
  * ---------- 有意不做的 ----------
  *
- * 只取 user / assistant 的 text 片段。toolResult 的大块输出、图片 base64、附件、
- * thinking、toolCall 参数一概不进 —— 与 `session-search.js` 同一条取舍：
- * 这些要么噪声大、要么根本不是「面向用户显示的正文」。Z5-3 的 toolSummary
- * 仅从同一有界窗口投影安全工具名/记录结果；不暴露原参数/输出，也不改变正文。
+ * 只取 user / assistant 的 text 片段作为 `messages` 正文。toolResult 的大块输出、
+ * 图片 base64、附件、toolCall 参数一概不进 `messages` —— 与 `session-search.js`
+ * 同一条取舍：这些要么噪声大、要么根本不是「面向用户显示的正文」。
+ *
+ * Z5-3 的 toolSummary 仅从同一有界窗口投影安全工具名/记录结果；不暴露原参数/输出。
+ * 新增的 execution.timeline 只投影用户可见的计划字段、thinking 文本、工具名/状态/
+ * 时长与真实顺序；工具 args/result 正文、环境变量、凭据一律不进入返回值。
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { sessionMessageBody } from './pi-compat.js';
 import { projectHistoryTools } from './history-tool-summary.js';
+import { timelineFromMessages } from '../public/runtime-timeline.js';
 
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_MESSAGES = 800;
@@ -85,6 +89,8 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
   const start = 1;
   const messages = [];
   const messageLines = [];
+  const nativeMessages = [];
+  const nativeMeta = [];
   let userCount = 0;
   for (let i = start; i < lines.length; i++) {
     const line = lines[i];
@@ -93,8 +99,15 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
     try { entry = JSON.parse(line); } catch { continue; }
     if (!entry || entry.type !== 'message') continue;
     const body = sessionMessageBody(entry);
-    if (!body || !['user', 'assistant'].includes(body.role)) continue;
+    if (!body) continue;
+    if (!['user', 'assistant'].includes(body.role) && body.role !== 'toolResult') continue;
     const userIndex = body.role === 'user' ? userCount++ : Math.max(0, userCount - 1);
+    nativeMessages.push(body);
+    nativeMeta.push({
+      messageId: typeof entry.id === 'string' ? entry.id : null,
+      userIndex: truncatedBySize ? null : userIndex,
+    });
+    if (!['user', 'assistant'].includes(body.role)) continue;
     const value = parts(body.content);
     if (!value) continue;
     messages.push({ role: body.role, text: value, timestamp: entry.timestamp || null,
@@ -104,7 +117,9 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
   const truncated = truncatedBySize || messages.length > maxMessages;
   const retainedMessages = messages.slice(-maxMessages);
   const discardedMessages = messages.length - retainedMessages.length;
+  const execution = timelineFromMessages(nativeMessages, { messageMeta: nativeMeta });
   return { ok: true, messages: retainedMessages, truncated,
+    execution: { timeline: execution.blocks, truncated: truncated || execution.truncated },
     toolSummary: projectHistoryTools(lines, { historyTruncated: truncated,
       messageLines: messageLines.slice(discardedMessages), discardedMessages }) };
 }

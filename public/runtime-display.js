@@ -2,38 +2,37 @@
  *
  * ---------- 它为什么存在 ----------
  *
- * `runtime-store.js` 是 runtime 真相的唯一事实源，它刻意只留三类**有界**记录：
- * 正文流、工具状态、审批。逐消息的 thinking 与单轮 usage 不在其中 —— 所以中央
- * 视图此前看不到它们，而 server 侧其实一直在转发（证据见下）。
+ * `runtime-store.js` 是 runtime 真相的唯一事实源；它保存有界执行时间线
+ * （计划、思考、工具、正文）与生命周期/审批。本模块只做两件展示层的事：
+ *   1. 从 store 已接受的时间线里取当前 assistant 消息的 thinking 文本，
+ *      并按展示上限再截断一次；
+ *   2. 从 `message_update` / `message_end` 里读 Pi 报过的单轮 usage。
  *
  * ---------- 它不是第二个事实源 ----------
  *
  *   1. 只订阅 `onRuntimeChange`，也就是 store **接受并广播**的那些帧。store 拒掉的
  *      帧（owner 不符 / eventSequence 不前进 / 旧 generation / `_replay`）根本不会
  *      到达这里，所以本模块不可能接受一条 store 不认的帧。
- *   2. 只记 store **不持有**的字段。lifecycle / activity / tools / approvals / 正文
- *      一律仍从 store 读 —— 本模块不复制、不缓存它们。
+ *   2. thinking 文本不在这里另存一份：`thinkingOf()` 直接读 store 时间线里
+ *      `agent` 当前 thinking block。这里只做「展示上限」这一层裁剪。
  *   3. 不写 store 的任何字段，不发任何请求，不碰 DOM，不碰 pi。
  *
  * ---------- 数据从哪来（上游证据）----------
  *
- *   - `server/session-runtime.js:39-40` 只把 `toolcall_*` 收窄成 `{type,contentIndex}`；
+ *   - `server/session-runtime.js` 只把 `toolcall_*` 收窄成 `{type,contentIndex}`；
  *     `thinking_start/delta/end` 原样转发，`delta` / `content` 都在。
- *   - `server/model-generation.js:49` 只替换 `partial` / `error`，`delta` 保留。
+ *   - `server/model-generation.js` 只替换 `partial` / `error`，`delta` 保留。
  *   - Pi `docs/json.md`：`message_update.usage` 是**该条回复的累计** usage，供应商
  *     流式期间可能一直报 0；`message_end.message` 是权威终值，其 `content` 里
- *     thinking 块的形状是 `{type:'thinking', thinking:string}`（与 Classic 的
- *     `messages.js:606-609` 消费的是同一形状）。
- *   - 反过来：工具的 **args / result 正文**在 `projectRuntimeEvent` 里已被剥掉，
- *     本模块**不去恢复**它们，也不解析正文去猜。
+ *     thinking 块的形状是 `{type:'thinking', thinking:string}`。
+ *   - 工具的 args / result 正文在 `projectRuntimeEvent` 里已被剥掉，本模块
+ *     **不去恢复**它们，也不解析正文去猜。
  *
- * ---------- 两条取舍（都写在验收文档里）----------
+ * ---------- usage 的两条取舍 ----------
  *
- *   - `message_end` 的 content 里**没有** thinking 块时，保留流式收到的那份，而不是
- *     清空。理由：清空等于把「已经观察到的真实输出」当成不存在；保留不构成编造
- *     （它来自同一条受信帧流），且 `message_start` 会让下一条消息从头开始。
- *   - usage 只显示 Pi 报过的数字。缺字段就是缺字段，**不补 0**；`cost` 不带货币
+ *   - 只显示 Pi 报过的数字。缺字段就是缺字段，**不补 0**；`cost` 不带货币
  *     符号 —— 线上没有货币单位，凭空补 `$` 是编造单位（见 docs/usage-quota.md）。
+ *   - `message_end` 的终值缺失时清掉临时值，不继续声称「仍在累计」。
  */
 
 import { runtimeStore, onRuntimeChange } from './runtime-state.js';
@@ -92,12 +91,12 @@ export function shouldFollow(node) { return node.scrollHeight - node.scrollTop -
 
 export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRuntimeChange,
   maxThinkingBytes = DEFAULT_MAX_THINKING_BYTES, maxConversations = DEFAULT_MAX_CONVERSATIONS } = {}) {
-  const records = new Map();          // conversationId -> 有界展示记录
+  const records = new Map();          // conversationId -> usage 投影记录
   const conversationLimit = Math.max(1, maxConversations);
   let alive = true;
 
   const ownerKeyOf = owner => owner ? JSON.stringify(owner) : null;
-  function blank(ownerKey, storeRecord) { return { ownerKey, storeRecord, cursor: 0, thinking: '', thinkingState: null, truncated: false, usage: null, usageSource: null }; }
+  function blank(ownerKey, storeRecord) { return { ownerKey, storeRecord, cursor: 0, usage: null, usageSource: null }; }
 
   function recordFor(id, owner) {
     const ownerKey = ownerKeyOf(owner);
@@ -114,16 +113,10 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
     return record;
   }
 
-  function setThinking(record, text) {
-    const bounded = boundText(text, maxThinkingBytes);
-    record.thinking = bounded.text; record.truncated = bounded.truncated;
-  }
-  function appendThinking(record, delta) { setThinking(record, record.thinking + delta); }
-
   /* 与 store 对齐：**权威快照**（seedRuntimeSnapshot 广播时不带帧）可能换了 owner，
-   * 而 store 在那种情况下会用 fresh() 清掉 text/tools。投影收不到帧，只能主动核对：
+   * 而 store 在那种情况下会用 fresh() 清掉时间线。投影收不到帧，只能主动核对：
    * 会话当前的 owner 非空且与本记录的 owner 不同 → 这条记录属于上一个 runtime，丢掉。
-   * owner 为空（关闭）时**保留** —— store 也保留 text/tools（见 runtime-store.js:47）。 */
+   * owner 为空（关闭）时**保留** —— store 也保留时间线。 */
   function reconcile() {
     for (const [id, record] of [...records]) {
       const key = ownerKeyOf(store.get(id)?.owner);
@@ -134,7 +127,7 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
   function apply(frame) {
     if (!alive) return;
     if (!frame) { reconcile(); return; }
-    if (frame.type === 'runtime_closed') return;   // 保留：store 也保留 text/tools
+    if (frame.type === 'runtime_closed') return;   // 保留：store 也保留时间线
     if (frame.type !== 'runtime_event') return;
     const id = frame.owner?.conversationId;
     if (!id) return;
@@ -147,47 +140,26 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
     if (!event || typeof event.type !== 'string') return;
 
     if (event.type === 'message_start') {
-      /* 新的一条助手消息 = 新的 thinking / 新的本轮 usage；用户消息不清。 */
+      /* 新的一条助手消息 = 新的本轮 usage；用户消息不清。 */
       if (event.message?.role === 'assistant') {
-        record.thinking = ''; record.thinkingState = null; record.truncated = false;
         record.usage = null; record.usageSource = null;
       }
       return;
     }
     if (event.type === 'message_update') {
-      const update = event.assistantMessageEvent;
-      if (update?.type === 'thinking_delta' && typeof update.delta === 'string' && update.delta) {
-        appendThinking(record, update.delta);
-        record.thinkingState = 'streaming';
-      } else if (update?.type === 'thinking_end' && typeof update.content === 'string') {
-        setThinking(record, update.content);
-        record.thinkingState = 'returned';
-      }
       const usage = readUsage(event.usage);
       if (usage) { record.usage = usage; record.usageSource = 'message_update'; }
       return;
     }
-    /* agent 收尾时还在 streaming，说明这条思考没有收到 thinking_end / message_end。
-     * 只把已经观察到的文本标成「已中断」，不补任何内容。 */
-    if (event.type === 'agent_settled' && record.thinkingState === 'streaming') {
-      record.thinkingState = 'interrupted';
-      return;
-    }
     if (event.type === 'message_end' && event.message?.role === 'assistant') {
-      const authoritative = thinkingText(event.message.content);
-      if (authoritative !== null) setThinking(record, authoritative);
-      const message = event.message;
-      record.thinkingState = message.stopReason === 'aborted' ? 'interrupted'
-        : message.stopReason === 'error' || message.errorMessage ? 'error' : 'complete';
-      const usage = readUsage(message.usage);
+      const usage = readUsage(event.message.usage);
       record.usage = usage; record.usageSource = usage ? 'message_end' : null;
     }
   }
 
   /* 读之前再核对一次 runtime 身份：换代（重启/恢复）之后 store 里 owner 已经变了，
-   * 不该继续把旧 runtime 的 thinking/usage 显示成新 runtime 的。
-   * owner 为空（关闭）时**照常返回** —— store 关掉后也还留着 text/tools，
-   * 只对「换了 runtime」这一种情况作废。 */
+   * 不该继续把旧 runtime 的 usage 显示成新 runtime 的。
+   * owner 为空（关闭）时**照常返回** —— store 关掉后也还留着时间线。 */
   function live(id) {
     if (!alive) return null;
     const record = records.get(id);
@@ -196,9 +168,23 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
     return store.get(id) !== record.storeRecord || key !== null && key !== record.ownerKey ? null : record;
   }
 
+  function thinkingBlockOf(id) {
+    const current = store.get(id);
+    if (!current) return null;
+    /* store 在 message_start assistant 时清空当前指针；用户消息不会清掉上一条
+     * 已观察到的思考，直到新的 assistant 消息真的开始。这样展示语义与旧投影一致。 */
+    return current.thinkingBlock || null;
+  }
+
   const unsubscribe = subscribe(apply);
   return {
-    thinkingOf(id) { const record = live(id); return record?.thinking ? { text: record.thinking, truncated: record.truncated, state: record.thinkingState } : null; },
+    thinkingOf(id) {
+      if (!live(id)) return null;
+      const block = thinkingBlockOf(id);
+      if (!block || typeof block.text !== 'string' || !block.text) return null;
+      const bounded = boundText(block.text, maxThinkingBytes);
+      return { text: bounded.text, truncated: block.truncated === true || bounded.truncated, state: block.state || null };
+    },
     usageOf(id) { const record = live(id); return record?.usage ? { ...record.usage, source: record.usageSource } : null; },
     dispose() { alive = false; unsubscribe(); records.clear(); },
   };

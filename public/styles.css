@@ -3568,8 +3568,10 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .ui2-runtime-tool{font-size:12px;line-height:1.5;color:var(--t2);overflow-wrap:anywhere}
 /* B 真实使用的工具状态只有 running / done / error 三种，只给这三种着色 */
 .ui2-runtime-tool[data-state=running]{color:var(--run)}
+.ui2-runtime-tool[data-state=waiting]{color:var(--warn)}
 .ui2-runtime-tool[data-state=done]{color:var(--ok)}
 .ui2-runtime-tool[data-state=error]{color:var(--err)}
+.ui2-runtime-tool[data-state=interrupted]{color:var(--warn)}
 
 /* Z5-3B: 只读历史工具摘要紧凑行与未确认区域 */
 .rtc-history-message{display:inline}

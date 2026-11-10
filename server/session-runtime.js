@@ -35,6 +35,11 @@ export function projectRuntimeEvent(event) {
   if (event?.type?.startsWith('tool_execution_')) {
     const out = { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName,
       isError: event.isError === true, bridgeRun: event.bridgeRun };
+    /* Pi 的 tool_execution_end 带真实 durationMs；只转发非负有限数，
+     * 不补 0，也不从时间戳猜。 */
+    if (event.type === 'tool_execution_end' && Number.isFinite(event.durationMs) && event.durationMs >= 0) {
+      out.durationMs = Math.min(event.durationMs, 24 * 60 * 60 * 1000);
+    }
     /* 唯一放行的工具 payload：gui_plan 的窄字段投影（见 plan-projection.js）。
      * 其它工具仍然只有名字与状态，args / result 一律不出后端。 */
     const plan = event.type === 'tool_execution_start'

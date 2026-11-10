@@ -24,7 +24,8 @@ export function createRuntimeRoutes({ registry, validateWorkspace = async () => 
         if (!current || current.sessionLocator !== target.sessionLocator || JSON.stringify(current.locator) !== JSON.stringify(target.locator)
           || JSON.stringify(current.sessionIdentity) !== JSON.stringify(target.sessionIdentity)) return json(res, 409, { ok: false, code: 'history_unavailable' });
         return json(res, 200, { ok: true, sessionId: target.sessionId, locator: target.locator, messages: history.messages,
-          truncated: history.truncated === true, ...(history.toolSummary ? { toolSummary: history.toolSummary } : {}) });
+          truncated: history.truncated === true, ...(history.toolSummary ? { toolSummary: history.toolSummary } : {}),
+          ...(history.execution ? { execution: history.execution } : {}) });
       }
       if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'invalid_request' });
       const body = JSON.parse((await readRawBody(req, 96 * 1024 * 1024)).toString('utf8'));

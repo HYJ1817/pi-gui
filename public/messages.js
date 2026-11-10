@@ -33,7 +33,7 @@ import { planHistory } from './tool-history.js';
 import { addToGroup, createGroup, renderEntry } from './tool-view.js';
 import { collectPlanTurns, isPlanTool } from './plan-model.js';
 import { renderPlan } from './plan-view.js';
-import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn } from './plan-live.js';
+import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
 
@@ -165,6 +165,8 @@ export function onSettled() {
 
 export function interruptActive() {
   setStreaming(false);
+  /* 本次 run 已收尾：未消费的新任务边界到此失效，不能留给下一轮 steer。 */
+  settlePlanTaskBoundary();
   /* 计划数据不被改写；只是不再把残留的 in_progress 显示成「还在跑」。 */
   markLivePlanStalled();
   for (const block of S.blocks.values()) {

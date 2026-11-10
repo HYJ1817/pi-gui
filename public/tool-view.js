@@ -389,6 +389,40 @@ export function groupCount(group) {
   return group?._tlGroup?.count ?? 0;
 }
 
+/* 展开状态由使用者按会话保存时，需要能从外部恢复。这两个函数只操作
+ * 视图自身已有的 hidden/aria 状态，不改变分组规则（例如多项默认折叠）。 */
+export function setGroupExpanded(group, expanded) {
+  const g = group?._tlGroup;
+  if (!g) return false;
+  g.userToggled = true;
+  g.list.hidden = !expanded;
+  g.head.setAttribute('aria-expanded', String(expanded));
+  group.classList.toggle('is-collapsed', !expanded);
+  return true;
+}
+
+export function isGroupExpanded(group) {
+  const g = group?._tlGroup;
+  return Boolean(g && !g.list.hidden);
+}
+
+/* 单条工具详情的展开状态同理；没有可展开内容时返回 false。 */
+export function setEntryExpanded(node, expanded) {
+  const p = node?._tl;
+  if (!p || !p.hasMore) return false;
+  p.more.hidden = !expanded;
+  node.classList.toggle('open', expanded);
+  p.toggle.setAttribute('aria-expanded', String(expanded));
+  syncToggle(p);
+  syncTitle(node, p);
+  return true;
+}
+
+export function isEntryExpanded(node) {
+  const p = node?._tl;
+  return Boolean(p?.hasMore && !p.more.hidden);
+}
+
 /* ---------- 输出预览 ---------- */
 
 /* 给测试和别处复用：折叠状态下的多行预览。当前 UI 用的是 resultLine（一行），
