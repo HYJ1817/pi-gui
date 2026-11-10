@@ -910,3 +910,47 @@ test('builtin updates reject endpoint changes explicitly and keep same-target ed
   assert.equal(overrideRejected.status, 409);
   assert.equal(overrideRejected.body.code, 'credential_target_conflict');
 });
+
+test('management resolves a stored native API key before the auth page has ever been read', async t => {
+  const f = await setup(t);
+  const { createProviderManagement } = await import('../server/provider-management.js');
+  f.legacy.store.transact({ apply: current => { delete current.config.providers.example.apiKey; } });
+  let refreshes = 0;
+  let current = { capability: { sdkAvailable: true, piVersion: '1.5.0' }, providers: [] };
+  const management = createProviderManagement({
+    store: f.legacy.store, inspectCredential: () => Promise.resolve({ present: false }), enabled: true,
+    readAuth: () => current,
+    refreshAuth: async () => {
+      refreshes += 1;
+      current = { capability: { sdkAvailable: true, piVersion: '1.5.0' }, providers: [{
+        providerId: 'example', displayName: 'Example', status: 'unknown', authType: 'api-key',
+        credentialStored: true, authConfigured: true, methods: [],
+      }] };
+      return current;
+    },
+  });
+  const first = (await http(management.handle, 'GET', root)).body;
+  const service = first.services.find(item => item.serviceId === 'example');
+  assert.deepEqual(service.credentialState, { state: 'saved', source: 'pi-credential' });
+  assert.equal(service.authMode, 'pi-credential');
+  assert.equal(refreshes, 1);
+  await http(management.handle, 'GET', root);
+  assert.equal(refreshes, 1, '已有该服务的认证快照时不再重读');
+});
+
+test('management projects environment references but never literal API keys', async t => {
+  const f = await setup(t);
+  f.legacy.store.transact({ apply: current => {
+    current.config.providers['env-service'] = {
+      baseUrl: 'https://env.invalid/v1', api: 'openai-completions', apiKey: '$FIXTURE_ENV_KEY', models: [],
+    };
+  } });
+  const { handle } = f.make(true);
+  const body = (await http(handle, 'GET', root)).body;
+  const env = body.services.find(item => item.serviceId === 'env-service');
+  const literal = body.services.find(item => item.serviceId === 'example');
+  assert.equal(env.envReference, '$FIXTURE_ENV_KEY');
+  assert.equal(env.credentialState.source, 'env');
+  assert.equal(literal.envReference, null, '字面量 Key 不进入投影');
+  assert.ok(!JSON.stringify(body).includes(key));
+});

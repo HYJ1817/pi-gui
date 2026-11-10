@@ -207,6 +207,19 @@ test('inherited selection expands for display and pins only on save', async () =
   assert.deepEqual(s.toDraftPayload(draft).selectedModelIds, ['fast', 'vision']);
 });
 
+test('editing an existing environment reference preserves its name', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const snapshot = clone(fixture.live.snapshot);
+  const service = clone(snapshot.services[0]);
+  service.authMode = 'environment';
+  service.credentialState = { state: 'none', source: 'env' };
+  service.envReference = '$FIXTURE_KEY';
+  const draft = s.draftFromService(service, snapshot);
+  assert.equal(draft.envReference, '$FIXTURE_KEY');
+  assert.equal(draft.dirty, false);
+  assert.deepEqual(s.commitCredentialAction(draft), { type: 'env', reference: '$FIXTURE_KEY' });
+});
+
 test('clone strips credentials and always uses a new provider id', async () => {
   const s = await import('../public/provider-management/state.js');
   const snapshot = clone(fixture.live.snapshot);
@@ -1007,6 +1020,7 @@ test('page list renders management services, badges, and opens the new chooser',
   assert.ok(card.querySelector('.pm-badge'));
   assert.ok(card.querySelector('.prov-catalog-info span').textContent.includes('2 个自定义服务'));
   card.querySelector('.prov-btn-main').click();
+  await tick(0);
   assert.ok(card.querySelector('.pm-chooser'));
   assert.equal(calls.legacy.length > 0, true);
 });
@@ -1644,3 +1658,325 @@ for (const configSource of ['configured', 'builtin-override']) {
   });
 }
 
+
+/* ---------- FIX-A/B：首次推荐与未知能力显示 ---------- */
+
+test('recommendModels only picks remote models with explicit chat/tool evidence', async () => {
+  const { recommendModels } = await import('../public/provider-management/recommend.js');
+  const models = [
+    { modelId: 'tools-a', source: 'remote', toolCalling: true },
+    { modelId: 'chat-a', source: 'remote', chatCapable: true, toolCalling: null },
+    { modelId: 'unknown-a', source: 'remote' },
+    { modelId: 'no-tools', source: 'remote', toolCalling: false },
+    { modelId: 'cached', source: 'cache', toolCalling: true },
+    { modelId: 'tools-b', source: 'remote', toolCalling: true },
+    { modelId: 'tools-c', source: 'remote', toolCalling: true },
+  ];
+  const result = recommendModels(models);
+  assert.deepEqual(result.picks, ['tools-a', 'tools-b', 'tools-c'], 'tool evidence ranks first and the limit is three');
+  assert.equal(result.reasons['tools-a'], '目录声明支持工具调用');
+  assert.equal(result.unknown, 1, 'models without evidence are counted, never guessed by id');
+  assert.equal(result.insufficient, false);
+
+  const small = recommendModels(models, { limit: 1 });
+  assert.deepEqual(small.picks, ['tools-a']);
+
+  const none = recommendModels([
+    { modelId: 'u', source: 'remote' },
+    { modelId: 'negative', source: 'remote', toolCalling: false },
+    { modelId: 'non-text', source: 'remote', chatCapable: false },
+    { modelId: 'c', source: 'cache', toolCalling: true },
+  ]);
+  assert.deepEqual(none.picks, [], 'cache and non-chat models are never recommended');
+  assert.equal(none.candidates, 0);
+  assert.equal(none.insufficient, true, 'no evidence must be reported as "cannot reliably recommend"');
+});
+
+test('auto-select-models only reorders known models and keeps the draft untouched-flag clean', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const store = s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  store.dispatch({ type: 'merge-models', models: [
+    { modelId: 'a', configSource: 'remote', effectiveValues: { toolCalling: true } },
+    { modelId: 'b', configSource: 'remote', effectiveValues: { chatCapable: true } },
+  ] });
+  store.dispatch({ type: 'auto-select-models', modelIds: ['b', 'ghost', 'a', 'b'] });
+  assert.deepEqual(store.get().order, ['b', 'a'], 'unknown ids are dropped and order is de-duplicated');
+  assert.equal(store.get().touchedSelection, false, 'automatic selection is not a user edit');
+  assert.equal(s.reduceDraft(store.get(), { type: 'move-model', modelId: 'a', offset: -1 }).touchedSelection, true,
+    'reordering is a user edit and stops recommendation');
+  assert.equal(s.reduceDraft(store.get(), { type: 'model-field', modelId: 'a', field: 'contextWindow', value: 1000 }).touchedSelection, true,
+    'advanced edits are user edits and stop recommendation');
+  const patches = s.draftPatches(store.get());
+  assert.deepEqual(patches.map(patch => [patch.modelId, patch.operation]),
+    [['a', 'upsert'], ['b', 'upsert']], 'recommendation persists only as selected upserts');
+  assert.ok(patches.every(patch => !patch.contextWindow && !patch.maxTokens && !patch.toolCalling),
+    'recommended metadata is never written as an override');
+  store.dispatch({ type: 'toggle-model', modelId: 'b', selected: false });
+  assert.equal(store.get().touchedSelection, true, 'a later user action permanently marks the selection as touched');
+});
+
+test('drop-target-discovery removes only the previous target discovery candidates', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const store = s.createDraftStore(s.draftFromCatalog(clone(fixture.live.snapshot),
+    { id: 'custom', name: '自定义端点', category: 'api-key', authMode: 'none', connection: null }));
+  store.dispatch({ type: 'merge-models', models: [
+    { modelId: 'remote', configSource: 'remote', effectiveValues: { toolCalling: true } },
+    { modelId: 'cache', configSource: 'cache', effectiveValues: {} },
+    { modelId: 'configured', effectiveValues: {} },
+  ] });
+  store.dispatch({ type: 'add-model', modelId: 'manual' });
+  store.dispatch({ type: 'auto-select-models', modelIds: ['remote', 'cache', 'configured', 'manual'] });
+  const before = store.get();
+  const dropped = s.reduceDraft(before, { type: 'drop-target-discovery' });
+  assert.deepEqual(dropped.models.map(model => model.modelId).sort(), ['configured', 'manual'],
+    'remote/cache candidates belong to the previous target; configured/manual records do not');
+  assert.deepEqual(dropped.order, ['configured', 'manual'],
+    'selection must not keep ids that no longer exist in the draft');
+  assert.equal(dropped.touchedSelection, before.touchedSelection,
+    'dropping target candidates does not itself change the user-touched flag');
+});
+
+test('unknown capacities stay unknown instead of zero or inheritance', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  const service = snapshot.services[0];
+  service.models = [{
+    modelId: 'unknown-model', providerId: service.providerId, configSource: 'remote',
+    effectiveValues: { name: 'Unknown Model', toolCalling: null, streaming: null, chatCapable: true },
+    editableOverrides: {},
+  }];
+  service.selectedModelIds = ['unknown-model'];
+  service.modelOrder = ['unknown-model'];
+  const { window, api } = boot({ snapshot });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await tick(10);
+  const row = card.querySelector('[data-model-row=unknown-model]');
+  assert.ok(row.textContent.includes('上下文未知'));
+  assert.ok(row.textContent.includes('输出未知'));
+  assert.ok(!/\b0\b/.test(row.querySelector('.pm-model-row-sub').textContent), 'missing sizes must not render as 0');
+  card.querySelector('[data-model-advanced-toggle=unknown-model]').click();
+  await tick(5);
+  const contextInput = card.querySelector('[data-model-field="unknown-model:contextWindow"]');
+  const maxInput = card.querySelector('[data-model-field="unknown-model:maxTokens"]');
+  assert.equal(contextInput.value, '');
+  assert.equal(contextInput.placeholder, '未知 · 留空继承');
+  assert.equal(maxInput.placeholder, '未知 · 留空继承');
+  const advanced = card.querySelector('[data-model-advanced=unknown-model]');
+  assert.ok(advanced.textContent.includes('工具调用'));
+  assert.ok(advanced.textContent.includes('未知表示目录未声明该能力，不代表不支持'));
+  // 输入仍然可用；未知只是展示状态，不影响高级编辑。
+  contextInput.value = '64000';
+  contextInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(card.querySelector('[data-model-field="unknown-model:contextWindow"]').value, '64000');
+});
+
+test('discovered sizes are labelled as directory values and configured sizes as inheritance', async () => {
+  const base = snapshotWithModel('configured');
+  const snapshot = base.snapshot;
+  const service = base.service;
+  service.models.push({
+    modelId: 'sized-remote', providerId: service.providerId, configSource: 'remote',
+    effectiveValues: { name: 'Sized Remote', contextWindow: 32000, maxTokens: 4096 },
+    editableOverrides: {},
+  });
+  service.selectedModelIds = ['cfg-model', 'sized-remote'];
+  service.modelOrder = ['cfg-model', 'sized-remote'];
+  const { window, api } = boot({ snapshot });
+  const { card } = openCreate(window, snapshot, api, 'edit', service);
+  await tick(10);
+  card.querySelector('[data-model-advanced-toggle=sized-remote]').click();
+  await tick(5);
+  assert.equal(card.querySelector('[data-model-field="sized-remote:contextWindow"]').placeholder, '目录 32K · 留空继承');
+  card.querySelector('[data-model-advanced-toggle=cfg-model]').click();
+  await tick(5);
+  assert.equal(card.querySelector('[data-model-field="cfg-model:contextWindow"]').placeholder, '继承',
+    'configured models keep the plain inherit placeholder');
+});
+
+test('first fresh remote discovery auto-selects at most three capable models once', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  const batches = [
+    { models: [
+      { modelId: 'tools-a', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Tools A', toolCalling: true }, editableOverrides: {} },
+      { modelId: 'chat-a', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Chat A', chatCapable: true }, editableOverrides: {} },
+      { modelId: 'unknown-a', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Unknown A' }, editableOverrides: {} },
+      { modelId: 'no-tools', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'No Tools', toolCalling: false }, editableOverrides: {} },
+      { modelId: 'tools-b', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Tools B', toolCalling: true }, editableOverrides: {} },
+      { modelId: 'tools-c', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Tools C', toolCalling: true }, editableOverrides: {} },
+    ], sourceKind: 'remote' },
+    { models: [
+      { modelId: 'late-model', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Late Model', toolCalling: true }, editableOverrides: {} },
+    ], sourceKind: 'remote' },
+  ];
+  let batch = 0;
+  api.authorizeProviderDiscovery = async request => {
+    calls.authorize.push(clone(request));
+    return { ok: true, consentId: 'consent-fix-a', expiresAt: Date.now() + 60000 };
+  };
+  api.discoverProviderModels = async request => {
+    calls.discovery.push(clone(request));
+    const next = batches[Math.min(batch, batches.length - 1)];
+    batch += 1;
+    return { ok: true, models: clone(next.models), sourceKind: next.sourceKind };
+  };
+  const { card } = openCreate(window, snapshot, api);
+  pick(window, card, 'deepseek');
+  const authorize = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  assert.ok(authorize, 'discovery authorization entry rendered');
+  authorize.click();
+  const chosen = await uiWaitFor(() => card.querySelectorAll('[data-chosen-model]').length === 3);
+  assert.ok(chosen, 'first fresh remote result selected candidates');
+  assert.deepEqual([...card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel),
+    ['tools-a', 'tools-b', 'tools-c'], 'only explicit tool-capable models, in directory order, capped at three');
+  const banner = card.querySelector('[data-recommendation]');
+  assert.equal(banner.dataset.recommendation, 'picked');
+  assert.ok(banner.textContent.includes('已按目录能力信息推荐 3 个模型'));
+  assert.ok(banner.textContent.includes('目录声明支持工具调用'));
+  assert.equal(calls.discovery.length, 1);
+
+  // 之后的刷新是“再次结果”，绝不覆盖用户已看到的自动选择。
+  card.querySelector('[data-refresh-models]').click();
+  const refreshed = await uiWaitFor(() => calls.discovery.length === 2, 5000);
+  assert.ok(refreshed, 'refresh issued a second discovery');
+  await tick(30);
+  assert.deepEqual([...card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel),
+    ['tools-a', 'tools-b', 'tools-c'], 'refresh must not reselect');
+  assert.ok(card.querySelector('[data-model-row=late-model]'), 'late candidate is still offered');
+  assert.equal(card.querySelector('[data-model-check=late-model]').checked, false);
+});
+
+test('discovery never auto-selects in an edit draft or after the user touched the selection', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  api.authorizeProviderDiscovery = async () => ({ ok: true, consentId: 'consent-fix-a', expiresAt: Date.now() + 60000 });
+  api.discoverProviderModels = async request => {
+    calls.discovery.push(clone(request));
+    return { ok: true, sourceKind: 'remote', models: [
+      { modelId: 'edit-new', providerId: 'example', configSource: 'remote', effectiveValues: { name: 'Edit New', toolCalling: true }, editableOverrides: {} },
+    ] };
+  };
+  const { card } = openCreate(window, snapshot, api, 'edit', snapshot.services[0]);
+  const editAuthorize = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  assert.ok(editAuthorize);
+  editAuthorize.click();
+  await uiWaitFor(() => calls.discovery.length === 1, 5000);
+  await tick(20);
+  assert.deepEqual([...card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel), ['vision', 'fast'],
+    'editing an existing service must never change its selection');
+  assert.equal(card.querySelector('[data-recommendation]').dataset.recommendation, 'idle');
+  await tick(100);
+  // 关闭编辑弹窗，换一个新建草稿：用户先手动添加模型，之后的首个远端结果也不得改选。
+  card.querySelector('.pm-dialog-actions .pm-btn-ghost')?.click();
+  const created = openCreate(window, snapshot, api);
+  pick(window, created.card, 'deepseek');
+  addCustom(created.card, 'mine-first');
+  await tick(10);
+  const createAuthorize = await uiWaitFor(() => created.card.querySelector('[data-authorize-discovery]'));
+  assert.ok(createAuthorize);
+  createAuthorize.click();
+  await uiWaitFor(() => calls.discovery.length === 2, 5000);
+  await tick(30);
+  assert.deepEqual([...created.card.querySelectorAll('[data-chosen-model]')].map(node => node.dataset.chosenModel), ['mine-first'],
+    'a user-touched selection is never replaced by the recommendation');
+  assert.equal(created.card.querySelector('[data-recommendation]').dataset.recommendation, 'idle');
+});
+
+test('insufficient capability evidence keeps the selection empty and says so', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  api.authorizeProviderDiscovery = async request => {
+    calls.authorize.push(clone(request));
+    return { ok: true, consentId: 'consent-fix-a', expiresAt: Date.now() + 60000 };
+  };
+  api.discoverProviderModels = async request => {
+    calls.discovery.push(clone(request));
+    return { ok: true, sourceKind: 'remote', models: [
+      { modelId: 'mystery-1', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Mystery One' }, editableOverrides: {} },
+      { modelId: 'mystery-2', providerId: 'deepseek', configSource: 'remote', effectiveValues: { name: 'Mystery Two' }, editableOverrides: {} },
+    ] };
+  };
+  const { card } = openCreate(window, snapshot, api);
+  pick(window, card, 'deepseek');
+  const authorize = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  assert.ok(authorize);
+  authorize.click();
+  await uiWaitFor(() => calls.discovery.length === 1, 5000);
+  const mysteryRow = await uiWaitFor(() => card.querySelector('[data-model-row=mystery-1]'), 5000);
+  await tick(20);
+  assert.equal(card.querySelectorAll('[data-chosen-model]').length, 0, 'no name/id guessing');
+  const banner = card.querySelector('[data-recommendation]');
+  assert.equal(banner.dataset.recommendation, 'insufficient');
+  assert.ok(banner.textContent.includes('无法可靠推荐'));
+  assert.ok(banner.textContent.includes('不会按模型名称猜测'));
+});
+
+test('changing the discovery target drops old candidates and recommends only the new batch', async () => {
+  const snapshot = clone(fixture.live.snapshot);
+  snapshot.capabilities.discoveryModes = ['none', 'environment'];
+  const { window, api, calls } = boot({ snapshot });
+  api.authorizeProviderDiscovery = async request => {
+    calls.authorize.push(clone(request));
+    return { ok: true, consentId: 'consent-target-change', expiresAt: Date.now() + 60000 };
+  };
+  let round = 0;
+  api.discoverProviderModels = async request => {
+    calls.discovery.push(clone(request));
+    round += 1;
+    const id = round === 2 ? 'second-1' : 'auto-1';
+    return { ok: true, sourceKind: 'remote', models: [
+      { modelId: id, providerId: 'custom', configSource: 'remote', effectiveValues: { toolCalling: true }, editableOverrides: {} },
+    ] };
+  };
+  const { card } = openCreate(window, snapshot, api);
+  pick(window, card, 'custom');
+  await tick(10);
+  const env = card.querySelector('.pm-env-input');
+  env.value = '$CUSTOM_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const base = card.querySelector('[data-connection-base-url]');
+  base.value = 'https://first.example.test/v1';
+  base.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const authorize = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  assert.ok(authorize, 'custom draft can authorize discovery');
+  authorize.click();
+  await uiWaitFor(() => card.querySelectorAll('[data-chosen-model]').length === 1, 5000);
+  assert.equal(card.querySelector('[data-recommendation]').dataset.recommendation, 'picked');
+  assert.ok(card.querySelector('[data-chosen-model="auto-1"]'));
+
+  base.value = 'https://second.example.test/v1';
+  base.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(30);
+  assert.equal(card.querySelectorAll('[data-chosen-model]').length, 0,
+    'an auto-picked selection must leave the view when the target changes');
+  assert.equal(card.querySelector('[data-model-row="auto-1"]'), null,
+    'the previous target candidates must not remain in the new target draft');
+  assert.equal(card.querySelector('[data-recommendation]').dataset.recommendation, 'idle');
+
+  const authorizeSecond = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  authorizeSecond.click();
+  await uiWaitFor(() => card.querySelectorAll('[data-chosen-model]').length === 1, 5000);
+  assert.ok(card.querySelector('[data-chosen-model="second-1"]'),
+    'the first recommendation for the new target must only use its own batch');
+  assert.equal(card.querySelector('[data-model-row="auto-1"]'), null,
+    'the old target model must not be re-recommended or saved into the new target');
+
+  // 认证来源同样是推荐上下文：换 env 引用后，旧目标的自动选择必须撤销。
+  base.value = 'https://first.example.test/v1';
+  base.dispatchEvent(new window.Event('input', { bubbles: true }));
+  const authorizeAgain = await uiWaitFor(() => card.querySelector('[data-authorize-discovery]'));
+  authorizeAgain.click();
+  await uiWaitFor(() => card.querySelectorAll('[data-chosen-model]').length === 1, 5000);
+  assert.ok(card.querySelector('[data-chosen-model="auto-1"]'));
+  env.value = '$OTHER_CUSTOM_KEY';
+  env.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick(30);
+  assert.equal(card.querySelectorAll('[data-chosen-model]').length, 0,
+    'an auto-picked selection must leave the view when the credential reference changes');
+  assert.ok(card.querySelector('[data-model-row="auto-1"]'),
+    'changing only the credential reference must not discard the model directory');
+  assert.equal(card.querySelector('[data-recommendation]').dataset.recommendation, 'idle');
+});

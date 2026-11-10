@@ -249,7 +249,7 @@ function openPage({ snapshot, management = null, legacyData = null, fetchImpl = 
     }
     assert.fail(`unexpected fetch ${target}`);
   };
-  window.fetch = fetchImpl || defaultFetch;
+  window.fetch = fetchImpl ? (url, options) => fetchImpl(url, options, defaultFetch) : defaultFetch;
   window.eval(appBundle.code);
   window.openProvidersPanel();
   return { dom, window, calls };
@@ -825,6 +825,28 @@ test('config saved with an unconfirmed credential keeps the draft, blocks auto r
   assert.equal(api.calls.drafts.at(-1).serviceId, 'example-ai');
 });
 
+test('storage-unqualified desktop explains native clear as a storage reason, not a web/bridge limitation', async () => {
+  const snapshot = p5Snapshot();
+  snapshot.capabilities.keyStaging = false;
+  snapshot.capabilities.nativeCredentialPersistence = false;
+  const service = plainService(snapshot);
+  for (const target of [service, snapshot.services[0]]) {
+    Object.assign(target, {
+      credentialState: { state: 'saved', source: 'pi-credential' },
+      authMode: 'pi-credential',
+    });
+  }
+  const bridge = fakeCredentialBridge();
+  const api = dialogApi({ snapshot });
+  const { card } = openDialog({ snapshot, api, bridge, service });
+  const clear = await waitFor(() => card.querySelector('.pm-clear-credential'));
+  assert.ok(clear);
+  assert.equal(clear.disabled, true);
+  assert.ok(clear.title.includes('存储'), clear.title);
+  assert.ok(!clear.title.includes('网页版'), 'the private bridge is connected; the real reason is storage qualification');
+  assert.ok(card.querySelector('.pm-clear-note')?.textContent.includes('存储'));
+});
+
 test('a failed native clear is not reported as a successful save just because old credentials remain', async () => {
   const snapshot = p5Snapshot();
   const service = plainService(snapshot);
@@ -871,34 +893,25 @@ test('a failed native clear is not reported as a successful save just because ol
   assert.equal(bridge.calls.open[1].action, 'clear', 'the retry must reopen the native clear flow');
 });
 
-test('storage qualification blocks native persistence, and discarding revokes the staged draft', async () => {
-  const snapshot = p5Snapshot(value => { value.capabilities.nativeCredentialPersistence = false; });
+test('unqualified storage disables native key input without blocking ordinary config save', async () => {
+  const snapshot = p5Snapshot(value => {
+    value.capabilities.keyStaging = false;
+    value.capabilities.nativeCredentialPersistence = false;
+  });
   const service = plainService(snapshot);
   const bridge = fakeCredentialBridge();
   const api = dialogApi({ snapshot });
-  const { window, card } = openDialog({ snapshot, api, bridge, service });
-  const trigger = await waitFor(() => {
-    const node = card.querySelector('[data-credential-trigger]');
-    return node && node.disabled === false ? node : null;
-  });
-  trigger.click();
-  await waitFor(() => card.querySelector('.pm-credential-status')?.textContent.includes('新密钥已暂存'));
-  assert.ok(card.querySelector('#pmCredentialNote').textContent.includes('不会写入 auth.json'));
-  assert.ok(card.querySelector('.pm-credential-status').textContent.includes('保存时不会写入 auth.json'),
-    'the staged status must not promise a write that save will refuse');
-  card.querySelector('.pm-dialog-actions .pm-primary').click();
-  await waitFor(() => card.querySelector('.pm-status-banner')?.textContent.includes('无法保存本机凭据'));
-  assert.equal(api.calls.commits.length, 0, 'an unqualified native store must never commit config with apply-staged');
-  findButton(card, '放弃暂存').click();
-  await waitFor(() => window.document.getElementById('confirmLayer').hidden === false);
-  confirmButton(window, '放弃暂存').click();
-  await waitFor(() => bridge.calls.closeDraft.length === 1);
-  assert.equal(bridge.calls.closeDraft[0].draftId, 'p5-draft');
-  await waitFor(() => !card.querySelector('.pm-discard-stage'));
-  assert.equal(card.querySelector('.pm-credential-status').textContent, '未配置凭据');
+  const { card } = openDialog({ snapshot, api, bridge, service });
+  const trigger = await waitFor(() => card.querySelector('[data-credential-trigger]'));
+  assert.ok(trigger, 'the credential row must stay visible so the reason is discoverable');
+  assert.equal(trigger.disabled, true, 'an unqualified store must not expose key input');
+  assert.ok(trigger.title.includes('本机凭据存储通过安全资格检查'), trigger.title);
+  assert.equal(card.querySelectorAll('input[type=password]').length, 0);
+  assert.equal(bridge.calls.open.length, 0);
   card.querySelector('.pm-dialog-actions .pm-primary').click();
   await waitFor(() => api.calls.commits.length === 1);
-  assert.deepEqual(api.calls.commits[0].credentialAction, { type: 'keep' });
+  assert.deepEqual(api.calls.commits[0].credentialAction, { type: 'keep' },
+    'non-secret configuration must remain editable when native storage is unqualified');
 });
 
 test('discarding a staged key forgets the deleted draft before the next save', async () => {
@@ -1643,6 +1656,30 @@ test('an old page close callback cannot stop the reopened page sync controller',
     () => window.document.querySelector('.reopened-page .pm-sync-banner[data-sync-state="applied"]'), 6000);
   assert.ok(appliedBanner, 'the reopened page controller must survive the old page close callback');
   assert.equal(syncCalls, 1, 'the reopened page must keep its single verification request');
+});
+
+test('adding a service waits for the panel first load instead of reusing an older snapshot', async () => {
+  const snapshot = p5Snapshot();
+  const gate = deferred();
+  let opened = false;
+  let held = true;
+  const { window, calls } = openPage({ snapshot, fetchImpl: async (url, options, fallback) => {
+    const target = String(url);
+    if (held && target.includes('/api/provider-management') && !target.endsWith('/sync')) {
+      await gate.promise;
+    }
+    return fallback(url, options);
+  } });
+  // 首屏快照仍在等待；此刻点“添加服务”必须等它完成，不能自己再拉一份旧快照。
+  window.openAddProvider({ present: () => { opened = true; } });
+  await tick(50);
+  assert.equal(opened, false, 'the add dialog must wait for the in-flight snapshot');
+  assert.equal(calls.managementGets.length, 0, 'the pending snapshot is still the only request');
+  held = false;
+  gate.resolve();
+  await waitFor(() => opened);
+  assert.equal(opened, true);
+  assert.equal(calls.managementGets.length, 1, 'openAddProvider must reuse the settled snapshot');
 });
 
 test('OAuth services do not offer the discovery connection test', async () => {

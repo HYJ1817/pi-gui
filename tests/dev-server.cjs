@@ -48,11 +48,11 @@ function check(name, cond, extra) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function waitReady(ms = 20000) {
+async function waitReady(ms = 20000, base = BASE) {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     try {
-      const r = await fetch(BASE + '/');
+      const r = await fetch(base + '/');
       if (r.status) return true;
     } catch {
       /* 还没起来 */
@@ -106,6 +106,20 @@ async function waitReady(ms = 20000) {
       const body = await r.text();
       return { status: r.status, body, type: r.headers.get('content-type') || '' };
     };
+
+    /* P6：供应商管理与密钥输入默认开启；但 Web/普通后端没有直属私桥，
+     * 管理快照必须仍报告密钥输入不可用。 */
+    const management = await get('/api/provider-management');
+    check('供应商管理默认开启且 Web 不获得密钥输入', () => {
+      try {
+        const body = JSON.parse(management.body);
+        if (management.status !== 200 || body.ok !== true) return `状态 ${management.status} ${management.body.slice(0, 120)}`;
+        if (body.capabilities?.rawKeyInput !== false || body.capabilities?.keyStaging !== false) {
+          return `密钥能力未关闭: ${JSON.stringify(body.capabilities)}`;
+        }
+        return true;
+      } catch { return `非 JSON: ${management.body.slice(0, 120)}`; }
+    });
 
     const index = await get('/');
     check('根路径 200', () => index.status === 200 || '状态 ' + index.status);
@@ -292,6 +306,74 @@ async function waitReady(ms = 20000) {
     } catch {
       /* Windows 偶发占用，留在 tmp 里不影响 */
     }
+  }
+
+  /* P6 回滚：只关闭密钥输入（PI_GUI_PROVIDER_KEY_INPUT=0）不能连管理页
+   * 一起关掉。非秘密的供应商管理必须继续可用，能力快照保持 false。 */
+  const KEY_OFF_PORT = PORT + 2;
+  const KEY_OFF_BASE = `http://127.0.0.1:${KEY_OFF_PORT}`;
+  const KEY_OFF_DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-devserver-keyoff-'));
+  const keyOff = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+    cwd: ROOT,
+    env: { ...process.env, PORT: String(KEY_OFF_PORT), PI_GUI_OPEN: '0', PI_GUI_DATA: KEY_OFF_DATA,
+      PI_CWD: '', PI_BIN: 'pi-gui-test-nonexistent-bin', PI_GUI_PROVIDER_KEY_INPUT: '0' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let keyOffOut = '';
+  keyOff.stdout.on('data', d => (keyOffOut += d));
+  keyOff.stderr.on('data', d => (keyOffOut += d));
+  try {
+    check('只关闭密钥输入时服务仍能起来', await waitReady(20000, KEY_OFF_BASE), keyOffOut.slice(0, 300));
+    const keyOffPm = await fetch(KEY_OFF_BASE + '/api/provider-management');
+    const keyOffBody = await keyOffPm.json().catch(() => null);
+    check('只关闭密钥输入时管理接口仍可用', () => keyOffPm.status === 200 || `状态 ${keyOffPm.status}`);
+    check('只关闭密钥输入时能力快照不授予秘密输入', () => {
+      const capabilities = keyOffBody?.capabilities || {};
+      return (capabilities.keyStaging !== true && capabilities.nativeCredentialPersistence !== true
+        && capabilities.privateDesktopBridge !== true) || JSON.stringify(capabilities);
+    });
+    const keyOffLegacy = await fetch(KEY_OFF_BASE + '/api/providers');
+    check('只关闭密钥输入时旧供应商路由仍可用', () => keyOffLegacy.status === 200 || `状态 ${keyOffLegacy.status}`);
+  } finally {
+    try {
+      if (process.platform === 'win32') spawn('taskkill', ['/pid', String(keyOff.pid), '/T', '/F'], { stdio: 'ignore' });
+      else keyOff.kill();
+    } catch { /* noop */ }
+    try { fs.rmSync(KEY_OFF_DATA, { recursive: true, force: true, maxRetries: 3 }); } catch { /* Windows 偶发占用 */ }
+  }
+
+  /* P6 回滚：显式 PI_GUI_PROVIDER_MANAGEMENT=0 必须关闭管理路由，而旧
+   * /api/providers 兼容入口继续可用。用独立的临时数据目录与端口。 */
+  const OFF_PORT = PORT + 1;
+  const OFF_BASE = `http://127.0.0.1:${OFF_PORT}`;
+  const OFF_DATA = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-devserver-off-'));
+  const off = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+    cwd: ROOT,
+    env: { ...process.env, PORT: String(OFF_PORT), PI_GUI_OPEN: '0', PI_GUI_DATA: OFF_DATA,
+      PI_CWD: '', PI_BIN: 'pi-gui-test-nonexistent-bin', PI_GUI_PROVIDER_MANAGEMENT: '0' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let offOut = '';
+  off.stdout.on('data', d => (offOut += d));
+  off.stderr.on('data', d => (offOut += d));
+  try {
+    check('显式关闭后服务仍能起来', await waitReady(20000, OFF_BASE), offOut.slice(0, 300));
+    const offPm = await fetch(OFF_BASE + '/api/provider-management');
+    const offPmBody = await offPm.text();
+    check('显式关闭供应商管理回滚生效', () => {
+      try {
+        const body = JSON.parse(offPmBody);
+        return (offPm.status === 422 && body.code === 'unsupported') || `状态 ${offPm.status} ${offPmBody.slice(0, 120)}`;
+      } catch { return `非 JSON: ${offPmBody.slice(0, 120)}`; }
+    });
+    const offLegacy = await fetch(OFF_BASE + '/api/providers');
+    check('显式关闭后旧供应商路由仍可用', () => offLegacy.status === 200 || `状态 ${offLegacy.status}`);
+  } finally {
+    try {
+      if (process.platform === 'win32') spawn('taskkill', ['/pid', String(off.pid), '/T', '/F'], { stdio: 'ignore' });
+      else off.kill();
+    } catch { /* noop */ }
+    try { fs.rmSync(OFF_DATA, { recursive: true, force: true, maxRetries: 3 }); } catch { /* Windows 偶发占用 */ }
   }
 
   console.log('');

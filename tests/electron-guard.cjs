@@ -15,7 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 
-const { probe, classifyHealth, isSelfUrl, isSafeExternal, isSafeReleaseUrl, APP_ID, PROTOCOL } = require('../electron/net-probe.cjs');
+const { probe, waitForBackend, classifyHealth, isSelfUrl, isSafeExternal, isSafeReleaseUrl, APP_ID, PROTOCOL } = require('../electron/net-probe.cjs');
 /* 只 require **纯模块**：browser-view.cjs 顶部就 require('electron')，
  * 在这份跑在普通 Node 下的测试里拿不到真 API（见 browser-policy.cjs 的 PARTITION 说明）。 */
 const {
@@ -153,6 +153,50 @@ async function main() {
     } catch {
       /* 已退出 */
     }
+  }
+
+  /* ---------- 3b. 等待自己 spawn 的后端（纯逻辑 + 假时钟） ----------
+   * 回归：重启应用时端口可能短暂半关闭，后端刚 bind 时健康检查也可能超时。
+   * 一次 foreign-service 就放弃会让用户看到「端口被占用」的错误框。 */
+  {
+    let tick = 0;
+    let calls = 0;
+    const states = ['foreign-service', 'not-running', 'pi-gui'];
+    const ok = await waitForBackend({
+      probe: async () => ({ state: states[Math.min(calls++, states.length - 1)] }),
+      isChildAlive: () => true,
+      timeoutMs: 1000,
+      intervalMs: 100,
+      now: () => tick,
+      sleep: async (ms) => { tick += ms; },
+    });
+    check('后端启动探测：瞬时失败不会终止等待', () => (ok === true && calls === 3) || `ok=${ok} calls=${calls}`);
+  }
+  {
+    let tick = 0;
+    let calls = 0;
+    const ok = await waitForBackend({
+      probe: async () => { calls++; return { state: 'foreign-service' }; },
+      isChildAlive: () => false,
+      timeoutMs: 10000,
+      intervalMs: 100,
+      now: () => tick,
+      sleep: async (ms) => { tick += ms; },
+    });
+    check('后端启动探测：子进程已退出时立即失败', () => (ok === false && calls === 1) || `ok=${ok} calls=${calls}`);
+  }
+  {
+    let tick = 0;
+    let calls = 0;
+    const ok = await waitForBackend({
+      probe: async () => { calls++; return { state: 'not-running' }; },
+      isChildAlive: () => true,
+      timeoutMs: 500,
+      intervalMs: 100,
+      now: () => tick,
+      sleep: async (ms) => { tick += ms; },
+    });
+    check('后端启动探测：总超时仍然失败（不会无限等）', () => (ok === false && calls === 5) || `ok=${ok} calls=${calls}`);
   }
 
   /* ---------- 4. URL 判定（纯函数） ---------- */

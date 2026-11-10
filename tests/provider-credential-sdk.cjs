@@ -215,7 +215,8 @@ test('private bridge staging reaches config-first save and clear through the rea
   const store = createProviderConfigStore({ modelsJson, metadataPath });
   const management = createProviderManagement({ store, enabled: true, inspectCredential: sdk.inspect,
     nativeCredentials: { authorize: (...args) => bridge.authorizeNative(...args), persist: (...args) => bridge.persistApproved(...args) } });
-  const bridge = createProviderCredentialBridge({ sdk, draftLookup: management.draftSnapshot, draftFrozen: management.draftFrozen, enabled: true });
+  const bridge = createProviderCredentialBridge({ sdk, draftLookup: management.draftSnapshot, draftFrozen: management.draftFrozen,
+    nativePersistence: () => true, enabled: true });
   const frame = { type: 'provider-credential', backendEpoch: bridge.epoch, requestId: 'fixture' };
   const post = (route, value) => new Promise((resolve, reject) => {
     const req = Readable.from([Buffer.from(JSON.stringify(value))]);
@@ -263,7 +264,7 @@ test('a cancelled replacement cannot take over the last accepted private stage',
     return result;
   } };
   const draft = { ...binding, draftRevision: 1, expires: Infinity };
-  const bridge = createProviderCredentialBridge({ sdk: staging, draftLookup: () => draft, enabled: true });
+  const bridge = createProviderCredentialBridge({ sdk: staging, draftLookup: () => draft, nativePersistence: () => true, enabled: true });
   const base = { type: 'provider-credential', backendEpoch: bridge.epoch, requestId: 'fixture' };
   const prepare = () => bridge.handle({ ...base, action: 'prepare', draftId: binding.draftId, draftRevision: 1, purpose: 'replace' });
   const submit = ({ flowId, promptId, nonce }, input) => bridge.handle({ ...base, action: 'stage', flowId, promptId, nonce, input,
@@ -292,7 +293,7 @@ test('FIX-08: replacing a staged key revokes the old grant even when native revi
   const { createDiscoveryTransport } = await import('../server/provider-network.js');
   const store = createDiscoveryConsentStore();
   const draft = { ...binding, draftRevision: 1, expires: Infinity };
-  const bridge = createProviderCredentialBridge({ sdk, consentStore: store, draftLookup: () => draft, enabled: true });
+  const bridge = createProviderCredentialBridge({ sdk, consentStore: store, draftLookup: () => draft, nativePersistence: () => true, enabled: true });
   t.after(() => bridge.dispose());
   const frame = { type: 'provider-credential', backendEpoch: bridge.epoch, requestId: 'fixture' };
   const stageThroughBridge = async (input, allowDiscovery) => {

@@ -40,6 +40,15 @@ export function createGroupRecord(group, plan, env = process.env) {
 
 // Never unlink the previous evidence first: a locked Windows destination must
 // fail while preserving the last valid JSON. Temporary files share its volume.
+// Windows 上杀毒/索引器/并发读者会短暂持有目标文件，rename 可能瞬时返回
+// EPERM/EACCES/EBUSY。证据写入重试同一个临时文件即可，仍是原子替换；重试
+// 耗尽后照常抛出，不能把真实失败吞成“成功”。（GitHub Windows runner 上
+// ci-results 夹具曾因此整个子进程退出，而测试只看到 20 秒轮询超时。）
+const RENAME_RETRY_DELAYS = Object.freeze([10, 25, 50, 100, 200]);
+const TRANSIENT_RENAME = new Set(['EPERM', 'EACCES', 'EBUSY']);
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
 export function atomicWriteJson(file, value, io = fs) {
   io.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
   const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
@@ -49,7 +58,14 @@ export function atomicWriteJson(file, value, io = fs) {
     io.writeFileSync(fd, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
     io.fsyncSync(fd);
     io.closeSync(fd); fd = undefined;
-    io.renameSync(temporary, file);
+    for (let attempt = 0; ; attempt += 1) {
+      try { io.renameSync(temporary, file); break; }
+      catch (error) {
+        if (process.platform !== 'win32' || !TRANSIENT_RENAME.has(error.code) ||
+            attempt >= RENAME_RETRY_DELAYS.length) throw error;
+        sleepSync(RENAME_RETRY_DELAYS[attempt]);
+      }
+    }
   } finally {
     if (fd !== undefined) io.closeSync(fd);
     try { io.unlinkSync(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; }

@@ -72,7 +72,7 @@ async function moduleTests() {
   let passed = 0;
   const check = (name, fn) => { fn(); passed++; console.log(`  ok  ${name}`); };
 
-  function make({ enabled = true, drafts = [DRAFT], sdkState } = {}) {
+  function make({ enabled = true, drafts = [DRAFT], sdkState, nativePersistence = () => true } = {}) {
     const state = sdkState ?? { qualified: true, native: new Map(), staged: new Map(), calls: [], disposed: [] };
     const draftMap = new Map(drafts.map(draft => [draft.draftId, draft]));
     const consents = createDiscoveryConsentStore({ now: () => 1_000_000 });
@@ -81,6 +81,7 @@ async function moduleTests() {
       /* 动态读数组：测试在 prepare 之后改写 draft 以模拟连接变化。 */
       draftLookup: id => drafts.find(item => item.draftId === id) ?? draftMap.get(id) ?? null,
       mutationBlocked: () => state.blocked === true, maintenanceLocked: () => state.maintenance === true,
+      nativePersistence,
       enabled, flowTtlMs: 120_000, now: () => state.clock ?? 1_000_000 });
     return { bridge, consents, sdk, state };
   }
@@ -137,7 +138,7 @@ async function moduleTests() {
       assert.equal(afterHandshake?.rawKeyInput, true);
       assert.equal(afterHandshake?.keyStaging, true);
       assert.equal(afterHandshake?.privateDesktopBridge, true);
-      assert.equal(afterHandshake?.nativeCredentialPersistence, false, 'persist orchestration stays P3');
+      assert.equal(afterHandshake?.nativeCredentialPersistence, true);
     });
     check('prepare binds flow to draft and target summary', () => {
       assert.equal(prepared.ok, true);
@@ -146,6 +147,21 @@ async function moduleTests() {
       assert.equal(prepared.targetSummary.baseUrl, 'https://fixture.invalid/v1');
       assert.equal(prepared.oauthConflict, false);
       assert.equal(prepared.credential.present, false);
+    });
+    const unqualifiedStorage = make({ nativePersistence: () => false });
+    const storageHandshake = await unqualifiedStorage.bridge.handle({ type: 'provider-credential', action: 'capability',
+      requestId: 'r5b', backendEpoch: 'handshake' });
+    const storageSnapshot = await unqualifiedStorage.bridge.desktopCapability();
+    const storagePrepare = await unqualifiedStorage.bridge.handle({ type: 'provider-credential', action: 'prepare',
+      requestId: 'r5c', backendEpoch: unqualifiedStorage.bridge.epoch, draftId: 'draft-a', draftRevision: 1, purpose: 'set' });
+    check('unqualified storage refuses native key input before any sheet opens', () => {
+      assert.equal(storageHandshake.nativePersistence, false);
+      assert.equal(storageSnapshot?.rawKeyInput, false);
+      assert.equal(storageSnapshot?.keyStaging, false);
+      assert.equal(storageSnapshot?.nativeCredentialPersistence, false);
+      assert.equal(storageSnapshot?.privateDesktopBridge, true, 'non-secret management must stay available');
+      assert.equal(storagePrepare.code, 'unsupported');
+      assert.equal(unqualifiedStorage.state.calls.length, 0, 'no key may reach the native staging adapter');
     });
     const missing = await bridge.handle({ type: 'provider-credential', action: 'prepare', requestId: 'r6',
       backendEpoch: bridge.epoch, draftId: 'draft-missing', draftRevision: 1, purpose: 'set' });
@@ -594,7 +610,11 @@ async function electronMain() {
     });
     check('stage E2E: apply closes sheet and publishes staged state', Boolean(stagedState));
     const authFile = path.join(agentDir, 'auth.json');
-    check('staging never writes the native credential file', !fs.existsSync(authFile), fs.existsSync(authFile) ? fs.readFileSync(authFile, 'utf8') : null);
+    /* P6：桌面桥握手时会先准备一个私有的空 auth.json（{}），这样 Pi 之后的
+     * 原生写入不会继承宽松 ACL。暂存阶段仍不得把 secret 写进这个文件。 */
+    const stagedNative = fs.existsSync(authFile) ? fs.readFileSync(authFile, 'utf8') : null;
+    check('staging never writes the staged secret into the native credential file',
+      stagedNative === null || (stagedNative.trim() === '{}' && !stagedNative.includes('sentinel-key-E2E-1')), stagedNative);
     const mainWindowText = await read(win, `document.documentElement.innerHTML`);
     check('main window never contains the staged secret', !mainWindowText.includes('sentinel-key-E2E-1'));
     await win.focus();
