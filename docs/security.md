@@ -41,11 +41,14 @@ GUI 仅接受 OAuth 的非秘密授权回复和方法选择；需要秘密输入
 flow/prompt ID 与 revision 防止旧交互覆盖当前阶段，取消与超时传到 Pi 原生流程。
 「本机凭据已确认」不等于远端有效性。详见 [provider-auth.md](provider-auth.md)。
 
-供应商管理 P0＋P1 保留上述页面和 HTTP 限制。后端私有适配器仅接受受信任调用，且
-`providerKeyInputEnabled` 默认关闭。将来启用的唯一新增收集面是 Electron 专用输入窗，
-须先通过主进程窗口身份校验、直属后端私有 IPC、一次性草稿绑定与原生存储权限验收。
-普通 renderer、Web、OAuth `respond` 和 HTTP 没有该权限。SDK 受信任存储会使用
-Pi 自己的本机明文凭据文件，因此仍受该文件权限和同一系统用户的信任边界约束。
+供应商管理 P0＋P1 保留上述页面和 HTTP 限制。后端私有适配器仅接受受信任调用；自 P6 起
+`providerKeyInputEnabled` 默认开启，管理员可显式设 `PI_GUI_PROVIDER_KEY_INPUT=0` 关闭。
+唯一新增收集面是 Electron 专用输入窗，须通过主进程窗口身份校验、直属后端私有 IPC、
+一次性草稿绑定与原生存储权限验收；Web、普通 renderer、调试/无沙箱桌面与 OAuth `respond`
+均无该权限。存储资格不合格时输入面整体关闭（快照能力、主进程开窗与后端 `prepare`
+三处 fail-closed），不接受“先暂存、保存时再拒绝”的密钥。SDK 受信任存储使用 Pi 自己的
+本机明文凭据文件，因此仍受该文件权限和同一系统用户的信任边界约束；Windows 上由 GUI
+在首次使用前建立受保护的单用户 DACL。
 [供应商管理设计](provider-management-rebuild-plan.md#5-api-key-与-oauth-安全方案)
 
 ## P23 升级安全与 schema 漂移边界

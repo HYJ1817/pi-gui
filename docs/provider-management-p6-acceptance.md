@@ -63,7 +63,7 @@ E＝误报或已失效/按设计不是缺陷。本轮已对全部 B/C 项完成�
 | P6 | `displayValues` 掩盖 configured/builtin-override 的显式清空（Nit） | A | FIX-03 修复并回归 |
 | P6 | 内置供应商静默忽略端点变更（非安全观察） | A | FIX-05 修复并回归 |
 | P6（本轮新发现） | 关闭弹窗后焦点落到页面容器而非服务行（键盘可用性） | A | 已修复并真实 Electron 验证 |
-| P6（本轮新发现） | 缺数值时无「未知」占位徽标 | E/Nit | 外观信息细节，不影响编辑/保存语义；保留记录 |
+| P6（本轮新发现） | 缺数值时无「未知」占位徽标 | E/Nit | FIX-B 已修复并回归（见 17.5） |
 
 **结论**：历史记录中不存在尚未处置的 Blocker/Important；所有可复现、可修复的功能缺陷已关闭。
 剩余 D 项均需要真实外部授权、真实安装环境或操作系统 ACL 权限。
@@ -74,15 +74,16 @@ E＝误报或已失效/按设计不是缺陷。本轮已对全部 B/C 项完成�
 
 | 命令 / 专项 | 结果 |
 | --- | --- |
-| `npm run test:provider-management` | **164/164**（合同/仓储/HTTP 24/SDK/P4 UI 67/P5 44；0 fail、0 skip） |
-| `npm run test:provider-p2` | 网络策略 **39/39**、开窗 **5/5**、凭据桥阶段 A **42** 条断言、真实 Electron 桌面 **47/47**（最终 HEAD `d70d0fb` 重跑；正常沙箱，无 `--no-sandbox` 回退；1 条存储资格 UNVERIFIED 为环境限制） |
+| `npm run test:provider-management` | **176/176**（合同/仓储 19/19/HTTP 24/SDK/P4 UI 75/P5 44；0 fail、0 skip） |
+| `npm run test:provider-p2` | 网络策略 **40/40**、开窗 **5/5**、凭据桥阶段 A **43** 条断言、真实 Electron 桌面 **50/50**（本轮工作树重跑；正常沙箱，无 `--no-sandbox` 回退；严格祖先 ACE 策略；P3-A 原生保存/回读/清除全部取得证据） |
+| `node tests/dev-server.cjs` | **34/34**（默认启用管理且 Web 无密钥输入；显式 `PI_GUI_PROVIDER_MANAGEMENT=0` 回滚后旧路由仍可用） |
 | `node tests/electron-guard.cjs` | **124/124**（含 32b：凭据受限窗按 Session 实例排除、分支内无 `openExternal`） |
 | `node tests/provider-auth-runtime.cjs` | **50/50** |
 | `node tests/smoke.cjs` | **1345/1345** |
 | `node tests/thinking-dots.cjs` | **90/90**（虚拟时钟确定性） |
 | 多 Runtime 真实进程专项（`.shots/p6/multi-runtime-evidence.cjs`） | **40/40**（最终 HEAD `d70d0fb` 重跑；A/B/C 三个独立假 Pi 进程、并发同步不重复回读、只读纪律、身份/代次失效、OAuth 共存） |
-| 真实 Electron 供应商夹具（正常沙箱） | **38/38**（最终 HEAD `d70d0fb` 重跑，7 张截图；含缓存端点命中、内置 env 创建、停用/启用、焦点恢复） |
-| 仅安全资格单元/接线（`provider-credential-desktop` 阶段 A） | **42** 条断言（含每种调试/无沙箱启动方式；`hasSwitch` 抛错 fail-closed） |
+| 真实 Electron 供应商夹具（正常沙箱，不设置 `PI_GUI_PROVIDER_*`） | **45/45**（本轮工作树，11 张截图；含默认管理页、凭据触发器默认可用、缓存端点命中、停用/启用、FIX-A/FIX-B、760px 与深浅色） |
+| 仅安全资格单元/接线（`provider-credential-desktop` 阶段 A） | **43** 条断言（含每种调试/无沙箱启动方式；`hasSwitch` 抛错 fail-closed；存储不合格拒绝原生密钥输入） |
 | `node scripts/run-test-group.mjs --validate` | `241 canonical leaves; groups core, ui, security, native, faults` |
 
 ### 完整 canonical
@@ -160,8 +161,9 @@ E＝误报或已失效/按设计不是缺陷。本轮已对全部 B/C 项完成�
   排除按 **Session 实例**比较（Electron 的 `Session` 没有 `getPartition` 方法；
   最终安全复审发现的死分支已修复，`electron-guard` 32b 做接线回归）。
 - 证据：每种启动方式 14 条单元/接线断言（新增 `hasSwitch` 抛错 fail-closed）；
-  凭据桥阶段 A 42 条；真实 Electron 47/47（正常沙箱，无回退）；
-  `electron-guard` 124/124（32b 变异验证：改回 `getPartition` 时失败）。
+  凭据桥阶段 A 42 条；真实 Electron **50/50**（正常沙箱，无回退；本轮存储资格合格后
+  含 P3-A 原生写入/回读/清除）；`electron-guard` 124/124（32b 变异验证：改回
+  `getPartition` 时失败）。
 
 ### FIX-05 内置供应商静默端点忽略（已关闭）
 
@@ -201,8 +203,9 @@ E＝误报或已失效/按设计不是缺陷。本轮已对全部 B/C 项完成�
 - **文件安全**：`auth.json` 所有权/权限/文件身份见证（Windows ACL / Linux uid+mode；其他平台关闭）；
   worker 路径 lstat（拒链接/非普通文件/nlink≠1/超大），前后身份一致；journal 恢复校验
   before/after digest；backend 重启 epoch 变化撤销握手/flow。
-- **降级**：Web/reused backend/远程调试/`--no-sandbox` 时资格拒绝；`PI_GUI_PROVIDER_KEY_INPUT`
-  默认关闭（真实 Electron 中凭据触发器禁用并说明原因，已断言）。
+- **降级**：Web/reused backend/远程调试/`--no-sandbox` 时资格拒绝；两个开关自 P6 起
+  **默认开启**，管理员显式 `=0` 才关闭（真实 Electron 中不合格环境仍禁用凭据触发器
+  并说明原因，已断言；矩阵见 17.2）。
 - **独立安全审查结论**：Blocker 0 / Important 0 / Nit 0 / Pre-existing 1。唯一 Pre-existing
   Nit 为 `electron/main.cjs:899-902` 的资格判定未覆盖 `--remote-debugging-pipe`、`--inspect`、
   `ELECTRON_DISABLE_SANDBOX`（防御纵深建议；威胁主体与设计声明的同用户调试器例外重合，
@@ -260,7 +263,7 @@ E＝误报或已失效/按设计不是缺陷。本轮已对全部 B/C 项完成�
   5 次快速开合单实例、关闭/重开管理页、零 console error；另含**真实后端缓存端点命中
   且读取不触发模型目录请求**、**内置 openai env 引用经真实 UI 落盘**、**内置停用/启用**与
   **关闭弹窗后焦点回到服务行**。
-- **凭据受限输入窗（真实 Electron 正常沙箱）47/47 checks 通过**，无 `--no-sandbox` 回退；
+- **凭据受限输入窗（真实 Electron 正常沙箱）50/50 checks 通过**，无 `--no-sandbox` 回退；
   1 条 `UNVERIFIED`（成功持久化路径的 fixture 祖先存储策略不满足见证条件；P3-A 已在
   权限合格的系统临时目录完成该成功路径的实证）。截图 3 张（深色、浅色窄窗、清除模式）。
 
@@ -345,10 +348,11 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 5. 回滚与 P3/P5 元数据：GUI 元数据只存在于 `DATA_DIR/provider-management.json`（不含秘密），
    旧版本忽略该文件；`models.json` 中的 `modelOverrides` 与模型配置是 Pi 原生格式，回滚
    无需迁移；`auth.json` 由 Pi 管理，GUI 不写回。回滚步骤见第九节。
-6. 管理功能关闭：`PI_GUI_PROVIDER_MANAGEMENT` 默认关闭；关闭时旧 `/api/providers` 兼容路径
-   由既有测试覆盖（P4 兼容编辑器、真实 HTTP 旧路由、FIX-07 错误不降级），本轮未改动该路径。
-7. 高风险凭据输入：`PI_GUI_PROVIDER_KEY_INPUT` 默认关闭（未在本轮默认开启）；真实 Electron
-   断言触发器禁用并给出原因。
+6. 管理功能关闭：`PI_GUI_PROVIDER_MANAGEMENT` 自 P6 起**默认开启**；管理员显式设为
+   `0/false/off/no` 时回滚到旧 `/api/providers` 兼容路径，由既有测试覆盖（P4 兼容编辑器、
+   真实 HTTP 旧路由、FIX-07 错误不降级）。默认行为与回滚见第十七章。
+7. 高风险凭据输入：`PI_GUI_PROVIDER_KEY_INPUT` 自 P6 起**默认开启**；正常可信桌面且存储
+   资格合格时可输入，Web、调试、无沙箱、私桥失效等仍拒绝。真实 Electron 证据见 17.4。
 8. docs/releasing.md 正式发布条件：版本一致（`npm run version:check` 通过，0.32.0）；正式发布
    仍需发布提交自身的成功 main push CI 与用户明确授权。
 
@@ -388,11 +392,15 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 | --- | --- | --- | --- |
 | 1 | Blocker | 目录卡片预填 `$NAME` 的内置 API Key 供应商在管理界面保存被 422 `unsupported`（builtin 分支只收 keep），而旧 `/api/providers` 同一写入可用 | 已修复 `7af518b`：builtin 接受 keep/env/none；env 新建沿用旧入口「预设端点 + 原生凭据槽为空」两条守卫；更新只换引用；apply-staged/clear-native 仍拒绝。回归：`provider-management-http` 内置 env 用例（含非预设 409、有凭据 409、原生 422） |
 | 2 | Important | 内置 provider 已有 models、无 overrides 时首次模型编辑不发送 `confirmBuiltinOverride`，保存 400 且无补确认入口 | 已修复 `799527a`：commit 返回该字段错误时弹出「覆盖内置模型配置？」确认，确认后只重试一次。回归：UI 用例断言第二次草稿带确认标记 |
-| 3 | Important | 「编辑先显示匹配缓存」未实现（`cachedModels` 无读取方；新草稿无 consent；`matchRemembered` 无生产调用方） | **未修复（遗留）**：需要新的缓存/记住目标状态机（跨弹窗缓存分区、凭据代次失效、撤销语义），属功能级工作；管理功能默认关闭且无数据/安全影响。列入遗留并需用户决定 |
+| 3 | Important | 「编辑先显示匹配缓存」未实现（`cachedModels` 无读取方；新草稿无 consent；`matchRemembered` 无生产调用方） | **未修复（遗留）**：需要新的缓存/记住目标状态机（跨弹窗缓存分区、凭据代次失效、撤销语义），属功能级工作；审查当时管理功能默认关闭且无数据/安全影响（P6 已改为默认启用，并由 FIX-01 补齐缓存首屏）。列入遗留并需用户决定 |
 | 4 | Important | OAuth/订阅服务停用后无法从 GUI 重新启用（菜单禁用启用；订阅服务无 connection，无法走 update 草稿） | 已修复 `7af518b`：新增与 `disable` 对称的无草稿 `enable` 动作（只改 GUI 元数据）；菜单不再禁用启用。回归：HTTP disable→enable 对称（不触碰 Pi 配置、缺失 404、混用草稿 400）与 UI 启用用例 |
 | 5 | Important | 发现/缓存候选的 name/contextWindow/maxTokens/reasoning/input 被丢弃，候选行只剩 ID | 已修复 `7403c30`：新增 `displayValues` 仅作展示回退（不进入 baseline/覆盖/补丁）；候选与已选行统一渲染。回归：UI「发现元数据只展示不落盘」 |
 | 6 | Important | 移除模型 → 刷新带回 → 重新勾选后，同一 ID 同时出现在 `selectedModelIds` 与 remove 补丁，保存 400 | 已修复 `7403c30`：选中时撤销待删除记录。回归：UI「刷新后重新勾选撤销 remove」（含后端可接受的 upsert 补丁） |
 | 7 | Nit | 预设环境变量缺失时授权进入无重试入口的终态 UNSUPPORTED | **未修复（遗留）**：需要区分「缺少环境变量」的固定原因码/文案并允许重试，属小 UI 状态改进；记录为后续项 |
+
+- **后续关闭说明（本章保留当时结论）**：表中第 3 项“编辑缓存首屏”随后由 FIX-01
+  （`9024721`）实现并回归，第 7 项环境变量重试由 FIX-02 关闭，N1 `displayValues`
+  回退范围由 FIX-03 关闭。三项均已在第三章复核，不再作为遗留。
 
 - **修复后聚焦复审（HEAD `75224f4`）**：原 5 项可修发现全部确认修复，未发现阻断问题
   （新增 Blocker 0 / Important 0 / Nit 1）；复审独立复跑 `test:provider-management` 150/150、
@@ -482,8 +490,9 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 
 - **代码回滚**：按提交反向回退 P6 分支（`d3fe10d` → `fb5c7ca` → `13f660a`）。`13f660a` 仅为
   测试；`fb5c7ca` 为图标渲染；回退后行为回到 P5 合并基线。无需数据迁移。
-- **功能回滚（运行期）**：关闭 `PI_GUI_PROVIDER_MANAGEMENT`（管理路由返回 `unsupported`，
-  旧入口继续使用同一配置仓储）；`PI_GUI_PROVIDER_KEY_INPUT` 默认本关闭，关闭即禁用受限
+- **功能回滚（运行期）**：设置 `PI_GUI_PROVIDER_MANAGEMENT=0`（管理路由返回 `unsupported`，
+  旧入口继续使用同一配置仓储）；`PI_GUI_PROVIDER_KEY_INPUT` 自 P6 起默认开启，显式
+  `=0` 即禁用受限
   窗/SDK 暂存与原生持久化。不得回滚写 `auth.json`。
 - **数据回滚**：GUI 元数据在 `DATA_DIR/provider-management.json`，不含秘密，旧版本忽略；
   `models.json` 仍是 Pi 原生格式。若存在未完成的配置事务，先停止 GUI 写入并保留现场，
@@ -496,10 +505,10 @@ P4/P5 的 Chromium 真实渲染截图（选择器四列、双栏、主题、管�
 
 - **开发完成**：是。P0–P5 已合入 main；P6 最终收尾完成全部可修复遗留整改，并与最新
   main（含并行 CI 修复）安全整合。
-- **P6 代码和安全验收通过**：**有条件**——历史台账中的可修复 Blocker/Important/Nit 全部
-  关闭；完整 canonical（`d70d0fb`，退出码 0）与最终构建/打包结果见第四节/第九节；
-  独立功能与安全审查（含最终聚焦复审）见第十节。剩余为需要真实外部授权或操作系统
-  权限的 D 类未验证项。
+- **P6 代码和安全验收通过**：**有条件**——默认启用、FIX-A/FIX-B、Windows 存储资格与本轮
+  历史遗留均已完成；PI-Desktop 源码对照见第十六章，正式启用与上线资格见第十七章。
+  最终 canonical、构建、打包与 PR CI 结果以第十七章回填为准；本轮独立复审见第十节与
+  17.8。未取得 PR CI 全绿前不宣布可发布。
 - **允许合并**：**未授予**（等待用户独立复验与明确授权）。
 - **允许发布**：**未授予**（未修改版本号、未打 tag、未触发 Release；正式发布条件见第九节）。
 
@@ -536,3 +545,258 @@ discovery,model-panes,state}.js`、`server.js`、`server/{provider-management-di
 provider-management,provider-config-records}.js`、合同文档。测试：`provider-management-{http,p5,ui}`、
 `provider-credential-desktop`、`electron-guard`。未修改版本号、未新增依赖、未改 CI 配置。
 
+
+## 十六、PI-Desktop 源码对照与功能差距验收
+
+### 16.1 对照基线
+
+- 固定参考提交：`92ae661f1e399e69d514086b46029b4c34ba1a92`（PI-Desktop v0.21.0，
+  <https://github.com/vastsa/PI-Desktop/tree/92ae661f1e399e69d514086b46029b4c34ba1a92>）。
+- 当前 `main`：`4ad0094e87b3c9ab75653a770f67f0d09abd63a4`（2026-11-10 读取）。
+- 逐个下载并比对 12 个供应商设置相关文件：`ProviderSetupDialog.tsx`、`ServiceChooser.tsx`、
+  `ModelSelectionPanes.tsx`、`ProviderConnectionFields.tsx`、`ProviderHeadersEditor.tsx`、
+  `ModelConfigPage.tsx`、`recommended-models.ts`、`useRecommendedModelSelection.ts`、
+  `useProviderModels.ts`、`useModelReorder.ts`、`useProviderReorder.ts`、`model-fetch-error.ts`。
+  其中 **11 个文件与固定提交逐字节相同**；`ModelSelectionPanes.tsx` 在 `main` 上只改了
+  图像模型徽标/复选框组件，与供应商选择、发现、推荐、保存逻辑无关。
+- 对照原则：只比较用户行为与安全目标。PI-Desktop 的 OS Keychain、Rust Host、IPC 与
+  Runtime 实现不照搬；pi-GUI 继续使用 P0–P6 已建立的私有 IPC + Pi 原生 `auth.json` 架构。
+
+### 16.2 13 项功能对照矩阵
+
+| # | 功能 | PI-Desktop 源码位置与行为 | pi-GUI 行为 | 差距与本轮处置 |
+|---|---|---|---|---|
+| 1 | 服务选择器 | `components/settings/ServiceChooser.tsx`：搜索框（L193-202）、分类分组（L104-108）、订阅置顶、键盘 Up/Down/Enter（L156-182） | `public/provider-management/service-chooser.js` + `dialog.js`；四列网格、订阅组优先、自定义端点置顶、搜索/键盘/IME 防误触 | 无功能缺口。P4 已实现并有 jsdom 回归 |
+| 2 | 内置 / 自定义 / 本地 | `ServiceChooser.tsx` 的 `customServiceOption`/`namedServiceOptions`；`ModelConfigPage.tsx` 列出已保存供应商 | `contract.js` 的 `PROVIDER_CATALOG` 覆盖内置端点；`catalog.js` 的 `normalizeCatalog/groupCatalog` 支持自定义与本地（ollama 关键词）；`connection-fields.js` 编辑端点 | 无缺口；内置端点不能被重定向由服务端校验，本轮未放宽 |
+| 3 | 增删改、复制、启停 | `ModelConfigPage.tsx` 行操作菜单（L497-501）、`toggleEnabled`（L296）、`removeProvider`（L314） | `public/providers.js` 行菜单：复制（不带凭据）、停用/启用、删除确认；内置删除降级为停用并保留 Pi 配置 | 无缺口。P6 修复了“停用后无法启用”，现有回归 `a disabled OAuth service can be enabled again...` |
+| 4 | API Key / OAuth | `ProviderSetupDialog.tsx` + `ProviderConnectionFields.tsx`；OS Keychain / Rust Host 保存，OAuth 走宿主流程 | `credentials.js` 受限凭据窗 + `electron/provider-credential-preload.cjs` + 后端私有 IPC；密钥只写 Pi 原生 `auth.json`；OAuth 继续由 Pi 管理 | 安全目标一致、实现不照搬。P6 修复 Windows DACL 资格，正常沙箱 50/50（见 17.4） |
+| 5 | 发现 / 缓存 / 刷新 / 测试 | `useProviderModels.ts`：600ms 防抖、缓存先画、远端覆盖；`model-fetch-error.ts` 分类错误 | `discovery.js`：600ms 防抖、缓存首屏、真实 Abort、迟到 202 丢弃、失败保留 stale 候选；`provider-management-discovery.js` 目标/凭据代次绑定缓存 | 无缺口。pi-GUI 额外要求显式网络授权与逐 Runtime 隔离 |
+| 6 | 搜索、筛选、批量 | `ModelSelectionPanes.tsx`：候选/已选双搜索（L571/L594）、`applyVisibleModelSelection` 批量选择 | `model-panes.js` 双搜索 + `model-visibility.js` 的可见选择/移动投影；批量勾选只作用于过滤结果 | 无缺口。P4/P5 已有回归 |
+| 7 | 首次自动推荐 | `recommended-models.ts`：`canRecommendFrom`（L33-42）、`isCandidate`（L55-61）、最多 3 个（L22）、models.dev 元数据按日期/价格/家族排序（L88-146）；`useRecommendedModelSelection.ts` 用户首次修改后永久停止（L42-55） | 新增 `public/provider-management/recommend.js`：只消费**新鲜远端**结果；仅按目录声明的 `toolCalling/chatCapable` 排序；最多 3 个；`touchedSelection` 后永久停止；刷新/换目标/编辑既有服务不覆盖 | 有意的行为差异：PI-Desktop 无元数据时按名称正则挑第一个，pi-GUI 按任务要求**不按名称/ID 猜测**，证据不足显示“无法可靠推荐”。本轮新增 8 条 UI/单元回归 |
+| 8 | 拖动、键盘、高级参数 | `useModelReorder.ts` → `hooks/use-list-reorder.ts`：拖拽预览 + ArrowUp/Down 键盘移动；`ModelSelectionPanes.tsx` 高级区（别名、上下文/输出预设与输入、思考等级） | `model-panes.js`：拖拽 + ArrowUp/Down/Home/End、`move-before` 补丁；高级区支持显示名、上下文/最大输出、推理、输入类型；`state.js` 的 `unsetFields` 保持“清空=继承” | 无缺口；pi-GUI 额外区分“目录值 / 用户固定 / 未知” |
+| 9 | 能力与未知显示 | `ModelSelectionPanes.tsx`：`publishedModelLimit`（L77-91）区分目录发布值与运行时安全预算；`contextWindowSource` 跟踪 catalog/user；缺失不显示为 0（L626-640） | 服务端 `provider-network.js` 只白名单化显式能力证据；`state.js` 记录 `toolCalling/streaming/chatCapable`；`model-panes.js` 显示“上下文未知/输出未知”、高级输入 `未知 · 留空继承`，并说明“未知≠不支持、留空=继承” | 本轮补齐（FIX-B）。新增 2 条 UI 回归 + 1 条服务端能力推导回归 |
+| 10 | 保存、取消、失败、冲突 | `ProviderSetupDialog.tsx`：Escape 分层关闭（L257-271）、保存中禁用取消（L481）、失败 toast；配置冲突由宿主 API 返回 | `dialog.js`：保存串行化、`config_conflict` 保留草稿并提供“重读并继续”、凭据失败与配置成功分开反馈、重复提交复用 requestId、关闭前脏草稿确认 | 无缺口。P5/P6 回归覆盖冲突、网络失败、迟到响应 |
+| 11 | 深浅色、窄窗 | `styles/providers.css` 断点 980/680/460；`styles/model-config.css` 断点 940/720；设计令牌驱动两套主题 | `provider-management.css` 断点 940/720/480，全部颜色走 `--ds-*`；760px 窄窗真实 Electron 截图验收 | 无缺口。P6 报告 6.3 有真实截图 |
+| 12 | 焦点、键盘、弹窗滚动 | `ProviderSetupDialog.tsx`：Escape 返回上一层、服务切换后聚焦名称/密钥（L275-278）；`ServiceChooser.tsx` 搜索框自动聚焦（L182） | `dialog.js`：打开后聚焦首个可操作元素、校验失败聚焦字段、Escape 分层、关闭后焦点回服务行；弹窗内容区独立滚动，窄窗操作栏不越界 | 无缺口。P6 修复锁图标后补了焦点恢复回归 |
+| 13 | Runtime 同步 | PI-Desktop 由 Rust Host 在配置变更后推送；具体协议不适用于 pi-GUI | `public/provider-management/sync.js` + 服务端 `sync` 合同：逐 Runtime 核验（POST /sync → 202 → GET），不误标其他 Runtime 状态；旧回调按 launch identity 丢弃 | 安全目标一致、实现按 pi-GUI 架构；P5 已有迟到的 202/多 Runtime 回归 |
+
+### 16.3 对照结论
+
+- 13 项中 11 项在 P0–P6 已实现，无本轮新增缺口；2 项在本轮补齐/明确：
+  - **FIX-A 首次推荐**：实现“仅新建 + 首次新鲜远端 + 最多 3 个 + 展示依据 + 用户操作后停止 + 刷新不覆盖”；
+  - **FIX-B 未知能力显示**：实现“未知 / 继承 / 实际值”三分，不把缺失显示为 0，不按 ID 猜容量。
+- 与 PI-Desktop 的两处有意差异必须保留：
+  1. **推荐证据**：没有目录声明时不按名称/ID 猜测，明确“无法可靠推荐”；
+  2. **凭据存储**：不使用 OS Keychain，继续写 Pi 原生 `auth.json`，由 GUI 在 Windows 上建立
+     受保护的单用户 DACL；祖先/目录若把删除或改权限授予非可信主体，则拒绝原生输入。
+- 上述差异均不降低现有安全边界，也不改变 Pi 外部程序、配置兼容或多 Runtime 并发语义。
+
+## 十七、正式功能启用与上线资格
+
+### 17.1 默认行为与回滚
+
+- `PI_GUI_PROVIDER_MANAGEMENT`、`PI_GUI_PROVIDER_KEY_INPUT` 自 P6 起**默认启用**：
+  未设置、空字符串、`1`/`true`/`on`/任意非 `0|false|off|no` 值均视为启用；
+  显式 `0`/`false`/`off`/`no` 才关闭。实现见 `server.js` 的 `enabledByDefault`。
+- 管理员回滚：设置 `PI_GUI_PROVIDER_MANAGEMENT=0` 关闭管理页与私桥；或单独设置
+  `PI_GUI_PROVIDER_KEY_INPUT=0` 关闭密钥输入。两者都不需要改代码、配置或数据。
+- Web 模式即使默认开启也不会获得秘密输入：私桥只在 Electron main 的直属 IPC 子进程
+  （`process.send && process.connected`）中可达；Web 只有非秘密的管理操作。
+
+### 17.2 安全资格矩阵
+
+| 环境 | 管理页 | 非秘密操作 | API Key 输入/保存 | 依据 |
+|---|---|---|---|---|
+| 正常可信 Electron 桌面（默认开关） | 可用 | 可用 | 可用（存储资格合格时） | 本轮正常沙箱 50/50；P3-A 保存/回读/清除通过；默认开关夹具 45/45 |
+| Web / 普通 renderer | 可用 | 可用 | **拒绝** | 无直属私桥；快照 `rawKeyInput=false` |
+| 调试端口 / `--inspect` | 可用 | 可用 | **拒绝** | `desktopQualification` 拒绝 remote-debugging/inspect |
+| `--no-sandbox` / `--single-process` / 关闭 web 安全 | 可用 | 可用 | **拒绝** | 资格模块拒绝；本轮未通过降级绕过 |
+| 私有桥失效 / 复用后端 | 视快照 | 可用 | **拒绝** | 需直属 IPC 握手；失败时能力位为 false |
+| 存储资格不合格（非固定卷、不可信 owner、受保护 DACL 失败、链接文件、祖先危险 ACE） | 可用 | 可用 | **拒绝（含暂存）** | 快照、主进程开窗与后端 `prepare` 三处 fail-closed；`authorizeCredentialStorage` / `prepareCredentialStorage` 复核 |
+
+### 17.3 本轮上线阻断与修复
+
+- 阻断根因：正常 Windows 上 Pi 只用 `mode 0600` 写 `auth.json`，Windows 不据此设置 DACL；
+  原资格检查只读取既有 ACL，导致普通机器的密钥输入永远不合格。
+- 修复：新增 `prepareCredentialStorage`——
+  - 文件缺失时，在 agent 目录内创建随机暂存目录，写入与 Pi 兼容的空 `{}`，
+    以当前用户为 owner 建立**受保护的、单条 FullControl** DACL，再以同卷硬链接
+    **仅当目标不存在**地发布为 `auth.json`（绝不覆盖 Pi 并发写入的真实凭据）；
+  - 文件已存在时只修 ACL、不改内容；已合格时只复核、不重复写 ACL（避免 ctime 抖动）；
+  - 祖先与 agent 目录要求固定卷 + 可信 owner，并拒绝非继承的危险 ACE
+    （DeleteChild/Delete/ChangePermissions/TakeOwnership 授予非可信主体）；
+    凭据机密性由**文件自身**的 protected DACL 保证；
+  - 写入/清除前后由 worker 校验文件身份与祖先身份，父目录被替换时拒绝把结果报成已保存。
+- 存储资格不合格时**拒绝原生密钥输入本身**，而不是先收下密钥再在保存阶段失败：
+  `/api/provider-management` 快照只在资格合格时返回 `rawKeyInput/keyStaging=true`；
+  Electron 主进程在 `openFlow` 里再次检查握手 `nativePersistence`；后端 `prepare`
+  对 `set/replace/clear` 再验一次。三处都失败关闭，前端按钮、主页面与受限输入窗
+  都不会获得秘密输入能力。非秘密的管理、发现、编辑与保存继续可用。
+- 未采用：跳过权限检查、开放明文 HTTP、关闭沙箱、降低 IPC 隔离、写真实用户 `auth.json` 做试验。
+
+### 17.4 真实 Electron 与 API Key 流程证据
+
+- 环境：Windows 11 x64；Node `v24.22.1`；Electron `44.4.3`；使用命令局部
+  `ELECTRON_OVERRIDE_DIST_PATH` 指向 TEMP 中的同版本 `electron.exe` 副本
+  （SHA-256 `bf0fe749904ca9f713ccfb2427c519fa39d0bbd0337ba411ba08785802e8d548`，
+  与仓库既有记录一致；未下载、未改共享安装）。**正常 Chromium 沙箱启动，未回退 `--no-sandbox`。**
+- 本机默认 profile/TEMP 的祖先目录存在其他本地用户的 DeleteChild/ChangePermissions
+  ACE，不能作为“权限合格”样本；本轮把 `TEMP/TMP` 指向预先建立并加固的单用户目录
+  `C:\pi-gui-qualified-temp`（owner=当前用户，protected DACL，仅当前用户/SYSTEM/
+  Administrators FullControl），所有 fixture 与 `auth.json` 都在其下创建，未读取真实用户
+  `auth.json`。这是隔离的合格数据根，不代表本机默认 profile 一定合格。
+- `tests/provider-credential-desktop.cjs` 阶段 A：**43 assertions passed**；
+  阶段 B：**50/50 checks passed**（严格祖先 ACE 策略恢复后重跑），截图 3 张
+  （`sheet-dark.png` 37,937；`sheet-light-narrow.png` 37,279；`sheet-clear-mode.png` 38,653 字节）。
+- 默认开关真实 Electron 夹具（`.shots/p6/provider-electron.cjs`，不设置任何
+  `PI_GUI_PROVIDER_*`）：**45/45**，正常沙箱、residual 0；覆盖默认管理页、凭据触发器
+  默认可用、授权发现、保存/编辑/复制/停用/启用、缓存首屏、FIX-A 自动推荐与 FIX-B
+  未知容量、760px 窄窗、深浅色与全程无 console error（11 张截图，见 17.10 目录）。
+- 打包 EXE 真实 UIA 流程（`dist-app/Pi GUI-win32-x64/Pi GUI.exe`，未设置
+  `PI_GUI_PROVIDER_*`，无调试端口，正常 Chromium 沙箱，隔离数据目录）：**13/13
+  连续两次通过**（`packaged-uia-main-final10`、`final11`）。覆盖新建服务 → 受限输入窗
+  → 合成 Key → 保存 → Pi 原生 `auth.json` 落盘 → 关闭重启后仍在 → 替换为新 Key →
+  旧 Key 不再出现 → 清除 → 原生槽为空 → 取消不写入。每次保存后扫描 `data/home/profile`，
+  除 `auth.json` 外没有合成密钥明文。旧用户升级流程 **8/8**：旧服务可见、旧原生凭据
+  默认可管理、环境变量引用原样显示、打开管理页不改写 `models.json`/`auth.json`、
+  未知扩展字段保留（`packaged-uia-legacy-final2`）。
+- 该打包流程在本机单次保存约 **13–16 秒**，耗时主要在提交事务内多次 fresh DACL
+  见证（PowerShell ACL 检查，每次约 1.7 秒）和 UIA 驱动本身；未出现超时、凭据结果
+  不确定或需要重复提交的情况。没有用缓存/跳过 DACL 检查来换速度。
+- 与任务 15 步的对应（同一份真实后端、真实 preload、隔离 `PI_CODING_AGENT_DIR`、合成 Key）：
+  1. 新建 / 打开草稿 → `draft created via real HTTP API`；
+  2. 凭据窗 → `open returns ok through real preload bridge`、`sheet window uses the fixed local protocol URL`；
+  3. 输入 → `stage E2E: apply closes sheet and publishes staged state`；
+  4. 保存 → `P3-A stores the staged key through the native SDK and confirms it`；
+  5. 写入 Pi 原生凭据 → `native()['fixture-provider'].key === 'sentinel-key-E2E-1'`；
+  6. 重启仍在 → `open works across a backend restart (new epoch handshake)`；
+  7. 替换生效 / 旧键不误用 → P3-A 重放与凭据 revision 断言、阶段 A 的替换/代次用例；
+  8. 清除 → `P3-A clears the native slot after configuration commit and readback`；
+  9. 原生已清 → `!Object.hasOwn(native(), 'fixture-provider')`；
+  10. 取消不影响 → `cancel closes the sheet and keeps the main window usable`；
+  11. OAuth 同槽冲突 → `first submit... oauth_conflict` + `second submit... confirms OAuth replacement`；
+  12. 配置成功、凭据失败反馈 → `credentialSaved`/`saved-credential-error` 合同回归（P3/P5）；
+  13. 多 Runtime 不误写 → P5 逐 Runtime 隔离与迟到响应回归；
+  14. 阶段中不得出现明文 → `staging never writes the staged secret...`、`main window never contains the staged secret`；
+  15. 受限窗攻击面 → 伪造 renderer/错误 frame/错误 URL 均拒绝。
+- 说明：该测试宿主的 `isDesktopQualified` 固定为真以驱动 UI 链路；生产资格判定由同一套件
+  阶段 A 的 43 条断言（调试端口、`--no-sandbox`、`--inspect`、`--disable-web-security`、
+  `ELECTRON_DISABLE_SANDBOX`、`NODE_OPTIONS` 等）覆盖。未把这 50 条 UI 检查冒充为
+  “生产资格检查已通过”。
+
+### 17.5 首次推荐与未知能力
+
+- FIX-A 新增 `public/provider-management/recommend.js`；只接受 `source === 'remote'`，
+  排除 `toolCalling === false` / `chatCapable === false`，按“工具能力 → 聊天能力 → 目录顺序”
+  排序，最多 3 个；无证据时不猜名称/ID，返回 `insufficient`。
+- 触发条件：新建草稿、用户未改过选择、不同服务目标的第一次新鲜远端结果；编辑既有服务、
+  缓存首屏、失败降级、刷新、换目标后的旧结果都不触发；换端点会撤销自动选择但不算用户操作。
+- FIX-B：服务端新增 `toolCalling`/`streaming`/`chatCapable` 白名单推导；UI 增加
+  “上下文未知/输出未知”徽标、`未知 · 留空继承` / `目录 32K · 留空继承` / `继承` 三种占位，
+  并在能力读数下明确“未知≠不支持、留空=继承、不写入补丁”。
+- 回归：`tests/provider-management-ui.cjs` 新增 8 条（推荐单元、reducer、未知显示、
+  目录值/继承、首次自动选择与刷新不覆盖、编辑/用户已改选择不推荐、证据不足、
+  换端点或凭据引用后同一视图撤销自动选择）；`tests/provider-network-policy.cjs` 新增 1 条能力推导；
+  `tests/provider-config-store.cjs` 新增并发创建不覆盖回归。`npm run test:provider-management`
+  最终 **183/183** 通过（合同、配置存储、HTTP、凭据 SDK、UI、P5 合计）。
+
+### 17.6 新用户与旧用户
+
+- 新用户：无 `provider-management.json` / 无 `auth.json` 时，管理页正常打开；
+  首次进行存储资格探测时，`prepareCredentialStorage` 会创建只含 `{}`、不含任何秘密的
+  `auth.json` 并加固，使 API Key 输入默认具备资格；随后由 Pi/worker 写入真实凭据。
+  若 Pi 在准备期间并发创建了真实凭据，GUI 只复核/加固该文件，不覆盖其内容
+  （`provider-config-store` 新增并发创建回归）。
+- 旧用户：保留既有 `models.json` 与 `auth.json`；已有合格凭据不改内容，只复核 ACL；
+  旧 `/api/providers` 兼容编辑器在管理接口显式 `=0` 时仍可用；停用/删除不删除 Pi 原生凭据。
+- 验证均在隔离数据目录进行，未读取真实用户 `auth.json`。
+
+### 17.7 历史遗留关闭情况
+
+P6 报告第三章的 14 项历史遗留均已逐项复核：已正确修复的不重写；本轮新发现并修复
+Windows 存储资格、首次推荐、未知能力显示、ci-results 竞态。逐项证据见本报告
+第三章与第五章；本轮新增证据见 16.2、17.3–17.5。
+
+### 17.8 测试与 CI
+
+- 定向（最终工作树，Windows 口径的 `whoami.exe` 与合格 TEMP）：
+  - `npm run test:auth` **110/110**；
+  - `npm run test:provider-management` **183/183**（含并发创建不覆盖、HTTP 投影与 UI 回归）；
+  - `npm run test:provider-p2`：网络策略 **40/40**、受限窗 **5/5**、Electron 凭据桌面板 **50/50**；
+  - `npm run test:guard` **127/127**；`tests/dev-server.cjs` **38/38**；
+  - `tests/native-provider-quota.cjs` **53/53**；`tests/ci-results.cjs` **10/10**；
+  - 打包 `npm run test:app` **26/26**、`npm run test:exe` **49/49**；
+  - 打包 UIA：主流程 **13/13 × 2**、旧用户升级 **8/8**（见 17.4）。
+- 环境说明：在 Git Bash 里直接跑 `npm run test:provider-p2` 会把 PATH 里的
+  `/usr/bin/whoami.exe` 当成 Windows `whoami`，`tests/provider-config-store.cjs`
+  的并发创建/ACL 用例也需要合格 TEMP；上述数字是先把 `C:\Windows\System32` 放到
+  PATH 首位、`TEMP/TMP=C:\pi-gui-qualified-temp` 后得到的。原始失败是测试宿主
+  口径问题，不是产品断言减少。
+- `npm run test:electron-smoke` 在当前宿主上**环境阻断**：dev `node_modules` 里的
+  Electron 44.4.3 即使 `--version` 也以退出码 3/0x80000003 结束，只有加
+  `--no-sandbox` 才能启动；打包 EXE 在同机正常沙箱可启动并完成 13/13 UIA 流程。
+  该套件不在 canonical `npm test` 链内，不能用 `--no-sandbox` 结果冒充正常沙箱证据。
+- `tests/ci-results.cjs` 竞态：根因是 Windows 上证据文件被并发读取/杀毒索引时 `rename`
+  瞬时 `EPERM`，子进程在写入前退出，而测试只看到 20 秒轮询超时。修复为
+  **有界重试同一临时文件的原子 rename**（仍原子、重试耗尽照常失败），并让测试
+  **捕获子进程 stderr、子进程提前退出时立即失败并打印真实原因**；未单纯增加超时、
+  未删除测试、未降低断言。
+- 完整 canonical：按用户指示本轮不在本地重跑完整 `npm test`；以最终 P6 PR 的
+  Windows GitHub Runner 完整 CI 与 gate 为门禁，结果在 17.13 回填。
+- PR CI：最终 P6 PR 的 Windows GitHub Runner CI 与 gate 必须全绿后才能合并；
+  本节在 PR 创建后回填 run ID / attempt / gate 结果。
+
+### 17.9 可发布状态
+
+- 本轮开始时存在发布阻断（正常 Windows 存储资格）；修复后已在正常沙箱隔离环境取得
+  API Key 保存/回读/清除证据，打包 EXE 主流程连续两轮 13/13、旧用户升级 8/8，
+  `test:app` 26/26、`test:exe` 49/49。
+- 当前仍**不得**宣称可发布：还差最终 P6 PR 的完整 Windows CI 与 gate 全绿。
+  在 CI 全绿前，验收状态是「功能验证通过、发布门禁待 CI」。
+- 未修改正式版本号、未创建 tag、未触发 Release、未合并 main。
+
+### 17.10 源码与打包对应
+
+- 构建：`npm run build:app -- --rebuild`，退出码 **0**（2026-11-10 13:39，
+  日志 `.shots/p6/build-p6-envref.log`）。构建时产品源码文件（`server.js`、
+  `server/*`、`public/*`、`electron/*`）的 mtime 均早于产物，之后未再修改产品代码。
+- 产物与 SHA-256（本轮打包 UIA 使用的就是这一份）：
+  - `dist-app/Pi GUI-win32-x64/Pi GUI.exe`：246,324,736 字节，
+    `5C12E1E8CB9584046D54AFDE94C6BB4AA1BC826CE3D7EB3CD5C80FD6E682F0E3`；
+  - `build/Pi GUI.exe`：103,786,496 字节，
+    `0279ED1955E9BA490184EA83D48187B7C9CAB418253E3AD05013C9643A5A866A`；
+  - `resources/app/server.cjs`：2,771,966 字节，
+    `9AFB39F1F86D3EFE04E63148DB8046509787271B5C7B16208329413535A6BD76`；
+  - `resources/app/private/provider-credentials.cjs`：52,136 字节，
+    `ADAF9C9B8E463E77FCC77D982D067A3060CEA04552CB1C7551BB51D738560B43`；
+  - `resources/app/main.cjs`：47,699 字节，
+    `78E32A9EFF4FA8DA4306E3363CC54A294D34367F8DB3845FF8A6C0331600F891`。
+- 源码/打包对应：提交后这些产物仍对应提交中的同一组产品文件；源码 SHA 见 17.13。
+- 打包应用验证优先使用正常沙箱与隔离数据目录；调试端口运行的结果不作为安全密钥输入的证明。
+
+### 17.11 保留的安全限制
+
+- Web 永远没有秘密输入；普通 renderer 不能调用受限窗提交通道。
+- 调试端口、`--no-sandbox`、`--inspect`、`--disable-web-security`、`ELECTRON_DISABLE_SANDBOX`、
+  `NODE_OPTIONS` inspector 一律拒绝密钥输入。
+- 非固定卷、不可信 owner、reparse point、hardlink、超限文件、不可信父目录身份一律拒绝。
+- OAuth 凭据始终由 Pi 管理；GUI 不读、不迁移、不复制 OAuth token。
+- 不 fork/monkey patch Pi，不修改 session schema，不写用户全局 npm。
+
+### 17.12 回滚方案
+
+1. 立即回滚功能：设置 `PI_GUI_PROVIDER_MANAGEMENT=0`（或仅
+   `PI_GUI_PROVIDER_KEY_INPUT=0`），重启应用；管理页回到兼容视图/密钥输入禁用。
+2. 代码回滚：回退到 P6 基线 `017652e96bd97e00046409fc74266977222179f5`；
+   已写入的 `auth.json`/`models.json` 保持原格式，不需要迁移。
+3. 数据回滚：P0/P1 的双文件事务保留上一版本；不自动删除用户凭据；如需恢复配置，
+   按 `docs/releasing.md` 的备份/恢复流程人工处理。
+4. ACL 修复是幂等的：回滚代码不会撤销已加固的文件 DACL，Pi 仍可正常读写。
+
+### 17.13 最终 SHA
+
+- 代码最终提交：产品 `3ed0fad5325641275b9e78324fbf18482da8ad75`（19 文件，
+  +625/−127）；测试与 CI 基建 `df1853f56c4e8ed60f3d927a56dac3165628ce71`
+  （13 文件，+825/−45）。本报告连同文档更新提交紧随其后。
+- 构建产物 SHA-256：见 17.10（`5C12E1E8…F0E3` 等），对应上述产品提交的同一组源码。
+- PR CI run ID / attempt / gate：`<待回填，PR 创建后更新>`。

@@ -1,6 +1,6 @@
 # 供应商管理前端合同 v1
 
-HTTP 入口为 `/api/provider-management`。P0＋P1 默认关闭该入口，开发或联调可在启动后端前设置 `PI_GUI_PROVIDER_MANAGEMENT=1`。关闭时该路由返回 `unsupported`，旧路由继续使用同一仓储。请求通过 [public/api.js](../public/api.js)，校验和状态枚举见 [contract.js](../public/provider-management/contract.js)。页面使用应用级鉴权，无须传 Runtime owner。示例包含完整供应商、模型、认证、冲突和降级状态。[非秘密 UI fixture](../tests/fixtures/provider-management-scenarios.json)
+HTTP 入口为 `/api/provider-management`。自 P6 起该入口默认开启；管理员可在启动后端前设置 `PI_GUI_PROVIDER_MANAGEMENT=0` 显式关闭。关闭时该路由返回 `unsupported`，旧路由继续使用同一仓储。请求通过 [public/api.js](../public/api.js)，校验和状态枚举见 [contract.js](../public/provider-management/contract.js)。页面使用应用级鉴权，无须传 Runtime owner。示例包含完整供应商、模型、认证、冲突和降级状态。[非秘密 UI fixture](../tests/fixtures/provider-management-scenarios.json)
 
 ## 当前可用接口
 
@@ -16,10 +16,10 @@ HTTP 入口为 `/api/provider-management`。P0＋P1 默认关闭该入口，开�
 | 快照字段 | 结构和读法 |
 | --- | --- |
 | `catalog[]` | `{id,name,category,authMode,connection,suggestedEnvReference?,providerId?,enabled?,disabledReason?}`。`category` 为 `api-key` 或 `subscription`。自定义端点与订阅卡可以没有连接，表现为 `connection:null`。`enabled` 缺省可选择。按 `category` 分组，搜索使用 `name`、`id` 和 `connection.baseUrl`。 |
-| `services[]` | `{serviceId,providerId,catalogId,displayName,enabled,connection,credentialState,authMode,models,selectedModelIds,modelOrder,readOnly,compatibility}`。`catalogId`、`connection` 可以为 null。`selectedModelIds:null` 表示继承现有可用列表，空数组表示没有选择。`modelOrder` 是右栏次序。服务状态中的 `credentialState` 为 `{state,source}`，`source` 取 `env/literal/command/pi-credential/unknown`。 |
+| `services[]` | `{serviceId,providerId,catalogId,displayName,enabled,connection,credentialState,envReference,authMode,models,selectedModelIds,modelOrder,readOnly,compatibility}`。`catalogId`、`connection` 可以为 null。`selectedModelIds:null` 表示继承现有可用列表，空数组表示没有选择。`modelOrder` 是右栏次序。服务状态中的 `credentialState` 为 `{state,source}`，`source` 取 `env/literal/command/pi-credential/unknown`；`credentialState.state` 对 `pi-credential` 只在 Pi 报告 `credentialStored:true` 或 `status:'connected'` 时为 `saved`。`envReference` 只在 `apiKey` 是 `$NAME`/`${NAME}` 时回传引用名；字面量 Key、`!command` 和其他写法恒为 `null`。编辑既有环境变量引用时前端把该引用放回草稿，保存提交 `{type:'env',reference}`，不会把引用名当密钥。 |
 | `models[]` | `{modelId,providerId,configSource,effectiveValues,editableOverrides}`。`configSource` 为 `configured/builtin-override`。两种值结构包含可编辑字段，`effectiveValues` 另有只读三值 `toolCalling` 和 `streaming`。缺少字段表示未知或继承。 |
-| `auth` | `{sdkAvailable,piVersion,providers,flow:null}`。`piVersion` 为版本字符串或 null。每个供应商为 `{providerId,displayName,status,authType,canLogin,canLogout,methods}`。`status` 为 `connected/disconnected/unknown/unsupported`，`authType` 为 `oauth/api-key/environment/null`。方法为 `{type,canLogin,isSubscription}`，`type` 为 `oauth/api-key/environment`。活跃流程另从既有 OAuth API 读取。 |
-| `capabilities` | `{rawKeyInput,keyStaging,nativeCredentialPersistence,privateDesktopBridge,oauthLogin,discoveryModes,modelOverrides,syncMode,reasons}`。桌面能力要求私有桥完成握手且 SDK 资格成立；`nativeCredentialPersistence` 还要求 `auth.json` 的所有者/权限见证成立。`discoveryModes` 由后端按 P3-B 接线与私有桥状态给出，只允许 `none/environment/pi-credential`。`syncMode:'deferred'` 表示 P3-C 已提供只读同步核验。`oauthLogin/modelOverrides` 保留未知 `null`。以快照能力和 `reasons` 渲染对应禁用说明，不得由前端自行放宽。 |
+| `auth` | `{sdkAvailable,piVersion,providers,flow:null}`。`piVersion` 为版本字符串或 null。每个供应商为 `{providerId,displayName,status,authType,credentialStored,authConfigured,canLogin,canLogout,methods}`。`status` 为 `connected/disconnected/unknown/unsupported`，`authType` 为 `oauth/api-key/environment/null`。`credentialStored` 表示 Pi 本机槽里已有凭据；已保存的 API Key 常见组合是 `credentialStored:true` + `status:'unknown'`（远端有效性未验证）。`authConfigured` 表示 Pi 认为该供应商已有可用认证。重启后判断“已配置”必须认这两个字段，不能只看 `connected`；`connected` 只代表 Pi 已验证过的远端登录（OAuth）。方法为 `{type,canLogin,isSubscription}`，`type` 为 `oauth/api-key/environment`。活跃流程另从既有 OAuth API 读取。 |
+| `capabilities` | `{rawKeyInput,keyStaging,nativeCredentialPersistence,privateDesktopBridge,oauthLogin,discoveryModes,modelOverrides,syncMode,reasons}`。桌面能力要求私有桥完成握手、SDK 资格成立，**且 `auth.json` 的所有者/权限/祖先见证成立**；三项任一不成立时 `rawKeyInput/keyStaging/nativeCredentialPersistence` 全为 false（含暂存），非秘密管理操作仍可用。`discoveryModes` 由后端按 P3-B 接线与私有桥状态给出，只允许 `none/environment/pi-credential`。`syncMode:'deferred'` 表示 P3-C 已提供只读同步核验。`oauthLogin/modelOverrides` 保留未知 `null`。以快照能力和 `reasons` 渲染对应禁用说明，不得由前端自行放宽。 |
 
 ### 草稿与提交
 
@@ -64,7 +64,7 @@ P2/P5 的普通 preload 入口为 `providerCredentials.open({draftId,draftRevisi
 | `status` / `cancel` | `flowId` |
 | `close-draft` | `draftId` |
 
-私有 SDK 适配可在测试中验证暂存、保存和清除，生产默认 `providerKeyInputEnabled=false`，未开启时相关按钮禁用并说明原因。成功保存区分 `saved` 和 `credentialSaved`，后者允许 `true/false/null`。配置已保存但凭据失败时保持草稿与右栏，显示 `saved-credential-error`。凭据结果不确定时显示 `credential-unconfirmed`：回读只描述 Pi 的当前状态，不能证明本次写入或清除成功，只有提交回执的 `credentialSaved/credentialState` 才是本轮结果的依据；GUI 不自动重发；凭据已保存但待同步时展示 `saved-pending-sync`。[安全边界与绑定规则](provider-management-rebuild-plan.md#52-electron-专用秘密链路与生命周期)
+私有 SDK 适配可在测试中验证暂存、保存和清除。`providerKeyInputEnabled` 自 P6 起默认开启；存储资格不合格或管理员显式设为 `0` 时，快照能力、主进程开窗与后端 `prepare` 都会关闭原生密钥输入（含暂存），相关按钮禁用并说明原因。成功保存区分 `saved` 和 `credentialSaved`，后者允许 `true/false/null`。配置已保存但凭据失败时保持草稿与右栏，显示 `saved-credential-error`。凭据结果不确定时显示 `credential-unconfirmed`：回读只描述 Pi 的当前状态，不能证明本次写入或清除成功，只有提交回执的 `credentialSaved/credentialState` 才是本轮结果的依据；GUI 不自动重发；凭据已保存但待同步时展示 `saved-pending-sync`。[安全边界与绑定规则](provider-management-rebuild-plan.md#52-electron-专用秘密链路与生命周期)
 
 ## P4 界面与 P5 集成状态
 
