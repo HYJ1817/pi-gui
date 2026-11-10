@@ -51,6 +51,9 @@ import { md, renderVizCardHtml } from './markdown.js';
 import { createRuntimePicker } from './runtime-picker.js';
 import { thinkingAvailability } from './thinking-availability.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
+import { normalizePlan } from './plan-model.js';
+import { renderPlan, setPlanStalled, updatePlan } from './plan-view.js';
+import { createScrollButton } from './scroll-button.js';
 import {
   extractStableLocator,
   sameStableLocator,
@@ -275,6 +278,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const thinkingBody = el('pre', 'ui2-runtime-thinking-body');
   thinking.append(thinkingHead, thinkingBody); root.append(thinking);
 
+  /* 任务列表：只显示实时视图里 store 真实收到的 gui_plan 投影。历史接口
+   * 只含正文，没有计划数据 —— 历史视图隐藏整块，不做一个点不动的假卡。 */
+  const planHost = el('div', 'ui2-runtime-plan'); planHost.hidden = true; root.append(planHost);
+  let planCard = null, planId = null, planSignature = null, planStalledState = null;
+
   const output = el('div', 'rtc-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前会话输出'); root.append(output);
 
   /* 本轮用量：只显示 Pi 报过的数字（见 runtime-display.js）。刻意**不加** aria-live ——
@@ -392,6 +400,17 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const composerNote = el('div', 'rtc-composer-note', 'Enter 发送 · Shift+Enter 换行');
   composerActions.append(stop, send); composerBar.append(modelRow, composerActions);
   composer.append(input, composerBar, modelNotice, draftNotice, composerNote); root.append(composer);
+  /* 只绑 .rtc-output。按钮放在 composer 内（绝对定位到它上方），因此不会
+   * 挡住发送键，也不会因为输出区滚动而移动。 */
+  /* 运行态回调必须和 draw 共用同一个判据。只靠 draw 里显式 setRunning 不够：
+   * 按钮自己的 sync() 会在 MutationObserver / scroll / resize 后再次调用
+   * running()，默认的 false 会把刚点亮的四点动画又关掉。 */
+  const scrollButton = createScrollButton({
+    host: composer,
+    scroller: output,
+    running: () => showsWorkingDots(store.get(id)?.item, store.get(id), current()),
+    label: '回到最新输出',
+  });
   const browserBtn = el('button', 'btn', 'Browser'), processBtn = el('button', 'btn', '开发进程');
   browserBtn.type = processBtn.type = 'button';
   browserBtn.hidden = !openBrowser || !window.piGuiDesktop?.runtimeBrowser;
@@ -710,9 +729,39 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const thought = view.history ? null : projection.thinkingOf(id);
     thinking.hidden = !thought;
     if (thought) {
+      const stateLabel = { streaming: '生成中', returned: '已返回', complete: '已完成', error: '发生错误', interrupted: '已中断' }[thought.state] || '';
+      thinking.dataset.state = thought.state || '';
       thinkingBody.textContent = thought.text;
-      thinkingHead.textContent = `思考过程 · ${thought.text.length} 字${thought.truncated ? '（已截断）' : ''}`;
-    } else { thinkingBody.textContent = ''; thinking.open = false; }
+      thinkingHead.textContent = `思考过程 · ${thought.text.length} 字${thought.truncated ? '（已截断）' : ''}${stateLabel ? ' · ' + stateLabel : ''}`;
+    } else { thinkingBody.textContent = ''; thinking.open = false; delete thinking.dataset.state; }
+
+    /* 任务列表：数据只在实时视图里存在（server/session-history.js 只返回正文）。 */
+    const plan = view.history ? null : normalizePlan(r?.plan);
+    if (!plan) {
+      if (planCard || !planHost.hidden) planHost.replaceChildren();
+      planHost.hidden = true;
+      planCard = null; planId = null; planSignature = null; planStalledState = null;
+    } else {
+      if (!planCard || planId !== id) {
+        planHost.replaceChildren();
+        planCard = renderPlan(plan);
+        planHost.append(planCard);
+        planId = id; planSignature = null; planStalledState = null;
+      }
+      const signature = JSON.stringify([plan.tasks, plan.explanation, plan.completed, plan.total]);
+      if (signature !== planSignature) {
+        planSignature = signature;
+        updatePlan(planCard, plan);
+      }
+      const activeRun = r?.item?.lifecycle === 'starting'
+        || (r?.item?.lifecycle === 'ready' && (r.item.activity === 'running' || (r?.approvals?.length || 0) > 0));
+      const stalled = !activeRun;
+      if (stalled !== planStalledState) {
+        planStalledState = stalled;
+        setPlanStalled(planCard, stalled);
+      }
+      planHost.hidden = false;
+    }
 
     const usageLine = view.history ? '' : usageText(projection.usageOf(id));
     usage.hidden = !usageLine; usage.textContent = usageLine;
@@ -807,6 +856,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     } else if (follow) {
       output.scrollTop = output.scrollHeight;
     }
+    /* 回到底部按钮：滚的是 output 自己；运行态复用四点动画。切会话后
+     * 可见性/位置都由当前会话的 scrollTop 重新算。 */
+    scrollButton.setRunning(showsWorkingDots(r?.item, r, view));
+    scrollButton.update();
   }
 
   return {
@@ -851,6 +904,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       composing = false;
       flushCurrentDraft(id);
       draftCoordinator.dispose();
+      scrollButton.dispose();
       if (typeof window !== 'undefined' && unloadHandler) {
         window.removeEventListener('beforeunload', unloadHandler);
       }

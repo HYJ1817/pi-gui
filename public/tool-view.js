@@ -324,7 +324,7 @@ function syncGroup(group) {
   }
   g.head.hidden = !multiple;
   g.state.hidden = !multiple;
-  setText(g.head, multiple ? `操作 ${g.count} 项` : '');
+  setText(g.head, multiple ? `工具调用 · ${g.count} 次` : '');
   const counts = new Map();
   for (const node of g.list.children) {
     const status = Object.hasOwn(STATUS_TEXT, node.dataset.status) ? node.dataset.status : 'unknown';
@@ -341,7 +341,7 @@ function syncGroup(group) {
 export function createGroup() {
   const g = document.createElement('section');
   g.className = 'tl-group';
-  g.setAttribute('aria-label', '工具操作');
+  g.setAttribute('aria-label', '工具调用');
 
   const head = document.createElement('button');
   head.type = 'button';

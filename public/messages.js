@@ -31,6 +31,9 @@ import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { planHistory } from './tool-history.js';
 import { addToGroup, createGroup, renderEntry } from './tool-view.js';
+import { collectPlanTurns, isPlanTool } from './plan-model.js';
+import { renderPlan } from './plan-view.js';
+import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
 
@@ -64,6 +67,7 @@ export function syncWelcome() {
 
 export function clearThread() {
   if (S.thread) S.thread.innerHTML = '';
+  clearPlanLive();
   S.current = null;
   S.blocks.clear();
   S.tools.clear();
@@ -161,6 +165,8 @@ export function onSettled() {
 
 export function interruptActive() {
   setStreaming(false);
+  /* 计划数据不被改写；只是不再把残留的 in_progress 显示成「还在跑」。 */
+  markLivePlanStalled();
   for (const block of S.blocks.values()) {
     if (block.kind === 'think' && block.node) setThinkingState(block.node, 'interrupted');
   }
@@ -338,6 +344,8 @@ function renderUser(msg) {
   /* 用户消息是工具分组的硬边界：上一条 assistant 那批工具已经彻底结束了。
    * 放在这里而不是靠时间判断 —— §12 明确禁止「超过几秒算新组」那种猜测。 */
   S.tlGroup = null;
+  /* 新回合：上一张计划卡留在时间线里，但下一批 gui_plan 更新要开新卡。 */
+  resetPlanLiveForUserTurn();
 
   const wrap = document.createElement('article');
   wrap.className = 'msg user';
@@ -686,8 +694,14 @@ export function rebuildFromMessages(data) {
   /* 配对规则全部在 tool-history.js 里（纯函数，可单独测）：
    * toolCall + 对应 toolResult → 一条完整的时间线条目；
    * 缺 result → 「未完成」；孤儿 result → 就地降级显示，不丢也不崩。 */
-  for (const item of planHistory(msgs)) {
+  const items = planHistory(msgs);
+  /* 每个用户回合最多一张计划卡，内容取该回合最后一次有效更新。 */
+  const planTurns = collectPlanTurns(items);
+  let planTurn = 0;
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
     if (item.kind === 'user') {
+      planTurn += 1;
       const wrap = document.createElement('article');
       wrap.className = 'msg user';
       wrap.innerHTML = '<div class="msg-role">你</div>';
@@ -713,10 +727,16 @@ export function rebuildFromMessages(data) {
       continue;
     }
 
-    if (item.kind === 'tools' && item.entries.length) {
-      const g = createGroup();
-      for (const entry of item.entries) addToGroup(g, renderEntry(entry));
-      frag.appendChild(g);
+    if (item.kind === 'tools') {
+      const turnPlan = planTurns.get(planTurn);
+      if (turnPlan && turnPlan.firstIndex === index) frag.appendChild(renderPlan(turnPlan.plan));
+      /* gui_plan 的调用行由上面的任务列表承担，不再重复画成工具记录。 */
+      const entries = item.entries.filter(entry => !isPlanTool(entry.name));
+      if (entries.length) {
+        const g = createGroup();
+        for (const entry of entries) addToGroup(g, renderEntry(entry));
+        frag.appendChild(g);
+      }
     }
   }
 

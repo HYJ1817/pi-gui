@@ -44,6 +44,7 @@ import {
 } from './tool-model.js';
 import { addToGroup, createGroup, renderEntry, updateEntry } from './tool-view.js';
 import { subagentNeedsGitRefresh } from './subagent-activity.js';
+import { handlePlanToolEnd, handlePlanToolStart } from './plan-live.js';
 
 /* 会改动磁盘、因而值得重读 Git 状态的工具。
  *
@@ -123,6 +124,8 @@ export function resetTimeline() {
 /* ---------- 事件 ---------- */
 
 export function onToolStart(evt) {
+  /* 计划工具被消费成任务列表，不进入 Tool Timeline（否则同一件事出现两次）。 */
+  if (handlePlanToolStart(evt)) { scrollBottom(); return; }
   const entry = registerEntry(makeEntry(evt));
   const node = renderEntry(entry);
 
@@ -158,6 +161,8 @@ export function onToolWait(evt) {
 }
 
 export function onToolEnd(evt) {
+  /* end 事件不带 toolName，按 start 时记下的 callId 认领（见 plan-live.js）。 */
+  if (handlePlanToolEnd(evt)) { scrollBottom(); return; }
   const rec = S.tools.get(evt.toolCallId);
   if (!rec) return;
 

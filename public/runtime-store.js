@@ -1,3 +1,5 @@
+import { PLAN_TOOL_NAME } from './plan-model.js';
+
 const same = (a, b) => a && b && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => a[k] === b[k]);
 function stableIdentity(item, owner) {
   const conversationId = item?.conversationId || owner?.conversationId;
@@ -40,7 +42,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (bytes.length <= limit) return text;
     return new TextDecoder().decode(bytes.slice(-limit)).replace(/^\uFFFD+/, '');
   };
-  function fresh(item, baseRevision = 0) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], draft: '', draftRevision: baseRevision, approvals: [], truncated: false }; }
+  function fresh(item, baseRevision = 0) { return { item, owner: item.owner, cursor: 0, text: '', tools: [], plan: null, planCalls: new Map(), draft: '', draftRevision: baseRevision, approvals: [], truncated: false }; }
   function seed(snapshot) {
     if (!snapshot || snapshot.ok === false || typeof snapshot.backendInstance !== 'string' || !Array.isArray(snapshot.items)) return false;
     const sequence = snapshot._runtimeReadSequence;
@@ -125,7 +127,26 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     r.cursor = frame.eventSequence; const e = frame.event;
     if (e.type === 'message_start' && e.message?.role === 'assistant') r.text += '\n';
     if (e.type === 'message_update' && e.assistantMessageEvent?.type === 'text_delta') r.text += e.assistantMessageEvent.delta || '';
-    if (e.type === 'tool_execution_start') { r.tools.push({ id: e.toolCallId, name: e.toolName, state: 'running' }); if (r.tools.length > 100) r.tools.shift(); }
+    /* 新的用户消息 = 上一轮任务列表到此为止。用 message_start 而不是
+     * agent_start：自动重试也会再次发 agent_start，那样会把同一轮的计划清掉。 */
+    if (e.type === 'message_start' && e.message?.role === 'user') { r.plan = null; r.planCalls.clear(); }
+    /* 服务端已按 plan-projection.js 的白名单收窄；store 只做有界展示。
+     * 计划工具本身不进工具行，否则同一件事会出现两次。
+     *
+     * start 时先记住上一张计划；如果 end 没有 plan（扩展明确拒绝 invalid_plan，
+     * 服务端不会放行 details.error），就退回上一张，和 Classic 的 plan-live
+     * 语义一致。不能把一次被拒绝的乐观列表留在界面上。 */
+    if (e.type === 'tool_execution_start' && (e.toolName === PLAN_TOOL_NAME || e.plan)) {
+      r.planCalls.set(e.toolCallId, r.plan);
+      if (r.planCalls.size > 16) r.planCalls.delete(r.planCalls.keys().next().value);
+      if (e.plan) r.plan = e.plan;
+    }
+    if (e.type === 'tool_execution_end') {
+      if (e.plan) r.plan = e.plan;
+      else if (r.planCalls.has(e.toolCallId)) r.plan = r.planCalls.get(e.toolCallId);
+      r.planCalls.delete(e.toolCallId);
+    }
+    if (e.type === 'tool_execution_start' && e.toolName !== PLAN_TOOL_NAME) { r.tools.push({ id: e.toolCallId, name: e.toolName, state: 'running' }); if (r.tools.length > 100) r.tools.shift(); }
     if (e.type === 'tool_execution_end') { const t = r.tools.find(t => t.id === e.toolCallId); if (t) t.state = e.isError ? 'error' : 'done'; }
     if (e.type === 'tool_wait_state') { const t=r.tools.find(t=>t.id===e.toolCallId); if(t&&['running','waiting'].includes(t.state))t.state=e.waiting?'waiting':'running'; }
     if (e.type === 'extension_ui_request' && ['select', 'confirm', 'input', 'editor'].includes(e.method)) {

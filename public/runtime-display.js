@@ -97,7 +97,7 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
   let alive = true;
 
   const ownerKeyOf = owner => owner ? JSON.stringify(owner) : null;
-  function blank(ownerKey, storeRecord) { return { ownerKey, storeRecord, cursor: 0, thinking: '', truncated: false, usage: null, usageSource: null }; }
+  function blank(ownerKey, storeRecord) { return { ownerKey, storeRecord, cursor: 0, thinking: '', thinkingState: null, truncated: false, usage: null, usageSource: null }; }
 
   function recordFor(id, owner) {
     const ownerKey = ownerKeyOf(owner);
@@ -148,21 +148,38 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
 
     if (event.type === 'message_start') {
       /* 新的一条助手消息 = 新的 thinking / 新的本轮 usage；用户消息不清。 */
-      if (event.message?.role === 'assistant') { record.thinking = ''; record.truncated = false; record.usage = null; record.usageSource = null; }
+      if (event.message?.role === 'assistant') {
+        record.thinking = ''; record.thinkingState = null; record.truncated = false;
+        record.usage = null; record.usageSource = null;
+      }
       return;
     }
     if (event.type === 'message_update') {
       const update = event.assistantMessageEvent;
-      if (update?.type === 'thinking_delta' && typeof update.delta === 'string' && update.delta) appendThinking(record, update.delta);
-      else if (update?.type === 'thinking_end' && typeof update.content === 'string') setThinking(record, update.content);
+      if (update?.type === 'thinking_delta' && typeof update.delta === 'string' && update.delta) {
+        appendThinking(record, update.delta);
+        record.thinkingState = 'streaming';
+      } else if (update?.type === 'thinking_end' && typeof update.content === 'string') {
+        setThinking(record, update.content);
+        record.thinkingState = 'returned';
+      }
       const usage = readUsage(event.usage);
       if (usage) { record.usage = usage; record.usageSource = 'message_update'; }
+      return;
+    }
+    /* agent 收尾时还在 streaming，说明这条思考没有收到 thinking_end / message_end。
+     * 只把已经观察到的文本标成「已中断」，不补任何内容。 */
+    if (event.type === 'agent_settled' && record.thinkingState === 'streaming') {
+      record.thinkingState = 'interrupted';
       return;
     }
     if (event.type === 'message_end' && event.message?.role === 'assistant') {
       const authoritative = thinkingText(event.message.content);
       if (authoritative !== null) setThinking(record, authoritative);
-      const usage = readUsage(event.message.usage);
+      const message = event.message;
+      record.thinkingState = message.stopReason === 'aborted' ? 'interrupted'
+        : message.stopReason === 'error' || message.errorMessage ? 'error' : 'complete';
+      const usage = readUsage(message.usage);
       record.usage = usage; record.usageSource = usage ? 'message_end' : null;
     }
   }
@@ -181,7 +198,7 @@ export function createRuntimeDisplay({ store = runtimeStore, subscribe = onRunti
 
   const unsubscribe = subscribe(apply);
   return {
-    thinkingOf(id) { const record = live(id); return record?.thinking ? { text: record.thinking, truncated: record.truncated } : null; },
+    thinkingOf(id) { const record = live(id); return record?.thinking ? { text: record.thinking, truncated: record.truncated, state: record.thinkingState } : null; },
     usageOf(id) { const record = live(id); return record?.usage ? { ...record.usage, source: record.usageSource } : null; },
     dispose() { alive = false; unsubscribe(); records.clear(); },
   };

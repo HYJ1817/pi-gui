@@ -4,6 +4,8 @@ import os from 'node:os';
 import { createRuntime } from './runtime.js';
 import { createPiLaunch } from './pi-launch.js';
 import { createRpcBridge } from './rpc-bridge.js';
+import { createPlanBridge } from './plan-bridge.js';
+import { projectPlanArgs, projectPlanResult } from './plan-projection.js';
 import { createPiSupervisor } from './pi-supervisor.js';
 import { createProjectConfig } from './project-config.js';
 import { createProcessBridge } from './process-bridge.js';
@@ -30,8 +32,17 @@ export function projectRuntimeEvent(event) {
   }
   if (['bridge_stderr', 'bridge_parse_error'].includes(event?.type)) return { type: event.type, bridgeRun: event.bridgeRun };
   if (event?.type === 'extension_error') return { type: event.type, error: '扩展执行或加载失败', bridgeRun: event.bridgeRun };
-  if (event?.type?.startsWith('tool_execution_')) return { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName,
-    isError: event.isError === true, bridgeRun: event.bridgeRun };
+  if (event?.type?.startsWith('tool_execution_')) {
+    const out = { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName,
+      isError: event.isError === true, bridgeRun: event.bridgeRun };
+    /* 唯一放行的工具 payload：gui_plan 的窄字段投影（见 plan-projection.js）。
+     * 其它工具仍然只有名字与状态，args / result 一律不出后端。 */
+    const plan = event.type === 'tool_execution_start'
+      ? projectPlanArgs(event.toolName, event.args)
+      : event.type === 'tool_execution_end' ? projectPlanResult(event.result) : null;
+    if (plan) out.plan = plan;
+    return out;
+  }
   function message(m) {
     if (!m || typeof m !== 'object') return m;
     if (m.role === 'toolResult') return { role: m.role, toolCallId: m.toolCallId, toolName: m.toolName, isError: m.isError === true, content: [] };
@@ -61,6 +72,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   let rpc, disposed = false, cleanup = false, disposal = null;
   const toolGuard = toolScheduler ? createSessionToolBridge({scheduler:toolScheduler,launch,getCwd:()=>context.cwd,getRoot:()=>context.workspace.root,
     readState:()=>rpc.request({type:'get_state'}),onEvent:emit,audit:candidateAudit}) : null;
+  const planBridge = createPlanBridge();
   const managed = createProcessBridge({ runtime, launch, getRpcState: () => rpc?.getState() || {}, guiPort, processAdmission, mutationAdmission });
   const changes = createChanges?.({ runtime, launch, context, requestState: () => rpc.request({ type: 'get_state' }) }) || null;
   // Another session may be writing this same project. Its launch must not
@@ -82,7 +94,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   rpc = createRpcBridge({ runtime, launch: { ...launch, bin: node }, piBin: node, isWin: false,
     autoRestart: false,
     env: { ...env, ELECTRON_RUN_AS_NODE: '1', PI_NO_CONTINUE: '1' }, projectLaunch: launchOptions,
-    browserLaunch: browser, processLaunch: managed, sessionChangeLaunch: changes, toolLaunch: toolGuard,
+    browserLaunch: browser, processLaunch: managed, sessionChangeLaunch: changes, toolLaunch: toolGuard, planLaunch: planBridge,
     spawnProcess: (_command, args, opts) => supervisor.spawnProcess(node, [...entry.baseArgs, ...args], { ...opts, shell: false }),
     killProcessTree: supervisor.killProcessTree,
     captureProviderLaunch: captureProviderLaunch && (scope => captureProviderLaunch(scope, launch, entry)),
