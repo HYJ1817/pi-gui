@@ -597,6 +597,173 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   deep(endKinds(), ['assistant'], 'message_end 不创建尚未执行的工具节点');
   equal(endHost.querySelectorAll('.ui2-runtime-tool').length, 0, '没有 tool_execution_start 就不显示工具行');
 
+  console.log('Runtime message_end 补建顺序');
+  const endBlocks = id => runtimeStore.get(id).timeline;
+  const endDataKinds = id => endBlocks(id).map(block => block.kind);
+  const endDataTexts = id => endBlocks(id).map(block => block.text ?? '');
+  const { contentSegments: segmentsOf, MAX_CONTENT_SEGMENTS } = await import(url('runtime-timeline.js'));
+  deep(segmentsOf([{ type: 'thinking', thinking: '甲' }, { type: 'thinking', thinking: '乙' }]).map(segment => [segment.kind, segment.text]),
+    [['thinking', '甲\n\n乙']], '连续同类型 Thinking 合并为一段');
+  deep(segmentsOf([{ type: 'text', text: '甲' }, { type: 'thinking', thinking: '乙' }, { type: 'text', text: '丙' }]).map(segment => segment.text),
+    ['甲', '乙', '丙'], '正文与 Thinking 交错时按真实顺序分段');
+  deep(segmentsOf([{ type: 'text', text: '甲' }, { type: 'toolCall', id: 'c1', name: 'read' }, { type: 'text', text: '乙' }]).map(segment => segment.text),
+    ['甲', '乙'], '工具调用是 content 分段边界，两侧正文不合并');
+  deep(segmentsOf([]), [], '空 content 不产生分段');
+  deep(segmentsOf([null, 'bad', { type: 'image' }, { type: 'text', text: '' }]), [], '未知 content 类型与空文本被安全忽略');
+  const manySegments = [];
+  for (let i = 0; i < MAX_CONTENT_SEGMENTS + 20; i++) {
+    manySegments.push(i % 2 ? { type: 'text', text: 't' + i } : { type: 'thinking', thinking: 'k' + i });
+  }
+  equal(segmentsOf(manySegments).length, MAX_CONTENT_SEGMENTS, 'content 分段数受 MAX_CONTENT_SEGMENTS 限制');
+
+  /* 9. 用户报告的倒序场景：已有第一段 Thinking，最终补建正文与第二段 Thinking。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Z1')] });
+  endFrame('Z1', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Z1', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '思考一' } });
+  await showEnd('Z1');
+  const z1FirstId = endBlocks('Z1')[0].id;
+  const z1ThinkingNode = endHost.querySelector('.ui2-runtime-thinking');
+  z1ThinkingNode.open = true;
+  z1ThinkingNode.dispatchEvent(new w.Event('toggle'));
+  const z1End = { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'thinking', thinking: '思考一' },
+    { type: 'text', text: '正文一' },
+    { type: 'thinking', thinking: '思考二' },
+  ] } };
+  endFrame('Z1', z1End);
+  await tick();
+  deep(endDataKinds('Z1'), ['thinking', 'assistant', 'thinking'], '已有第一段 Thinking 时补建两段仍保持 content 顺序');
+  deep(endDataTexts('Z1'), ['思考一', '正文一', '思考二'], '补建节点按 content 顺序携带权威文本');
+  equal(endBlocks('Z1')[0].id, z1FirstId, '第一段 Thinking 复用流式节点，id 稳定');
+  deep(endKinds(), endDataKinds('Z1'), '补建后的 DOM 顺序与数据层时间线顺序一致');
+  ok(endHost.querySelector('.ui2-runtime-thinking') === z1ThinkingNode, '补建后续段时复用同一个 Thinking DOM 节点');
+  equal(z1ThinkingNode.open, true, '补建后续段不收起用户已展开的 Thinking');
+  const z1Ids = endBlocks('Z1').map(block => block.id);
+  endFrame('Z1', z1End);
+  await tick();
+  deep(endBlocks('Z1').map(block => block.id), z1Ids, '重复/迟到的 message_end 不制造重复节点');
+  deep(endDataTexts('Z1'), ['思考一', '正文一', '思考二'], '重复 message_end 不改变权威文本与顺序');
+
+  /* 10. 已有第一段正文，最终补建 Thinking 与第二段正文。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Z2')] });
+  endFrame('Z2', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Z2', { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '正文一' } });
+  await showEnd('Z2');
+  const z2FirstId = endBlocks('Z2')[0].id;
+  endFrame('Z2', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'text', text: '正文一' },
+    { type: 'thinking', thinking: '思考一' },
+    { type: 'text', text: '正文二' },
+  ] } });
+  await tick();
+  deep(endDataKinds('Z2'), ['assistant', 'thinking', 'assistant'], '已有第一段正文时补建的 Thinking 与正文按 content 顺序定位');
+  deep(endDataTexts('Z2'), ['正文一', '思考一', '正文二'], '补建节点文本正确');
+  equal(endBlocks('Z2')[0].id, z2FirstId, '第一段正文复用流式节点，id 稳定');
+  deep(endKinds(), endDataKinds('Z2'), 'DOM 与数据层顺序一致（正文 → Thinking → 正文）');
+
+  /* 11. 两个已有节点之间补建多个缺失节点：插入后的前驱参与后续定位。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Z3')] });
+  endFrame('Z3', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Z3', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '思考一' } });
+  endFrame('Z3', { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '正文二' } });
+  await showEnd('Z3');
+  const z3Ids = endBlocks('Z3').map(block => block.id);
+  equal(z3Ids.length, 2, '补建前已有 Thinking 与正文两个节点');
+  endFrame('Z3', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'thinking', thinking: '思考一' },
+    { type: 'text', text: '正文一' },
+    { type: 'thinking', thinking: '思考二' },
+    { type: 'text', text: '正文二' },
+  ] } });
+  await tick();
+  deep(endDataKinds('Z3'), ['thinking', 'assistant', 'thinking', 'assistant'], '两个已有节点之间补建多段仍按 content 顺序');
+  deep(endDataTexts('Z3'), ['思考一', '正文一', '思考二', '正文二'], '中间补建段的文本与权威 content 一致');
+  equal(endBlocks('Z3')[0].id, z3Ids[0], '首段 Thinking 的 id 保持不变');
+  equal(endBlocks('Z3')[1].id, z3Ids[1], '第二个已有节点（正文）的 id 保持不变');
+  deep(endKinds(), endDataKinds('Z3'), 'DOM 与数据层顺序一致（四段交错）');
+
+  /* 12. 多个缺失节点全部排在最后一个已有节点之后（连续补建的链式定位）。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Z4')] });
+  endFrame('Z4', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Z4', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '思考一' } });
+  await showEnd('Z4');
+  const z4FirstId = endBlocks('Z4')[0].id;
+  endFrame('Z4', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'thinking', thinking: '思考一' },
+    { type: 'text', text: '正文一' },
+    { type: 'thinking', thinking: '思考二' },
+    { type: 'text', text: '正文二' },
+  ] } });
+  await tick();
+  deep(endDataKinds('Z4'), ['thinking', 'assistant', 'thinking', 'assistant'], '全部缺失段接在已有节点之后时仍保持 content 顺序');
+  deep(endDataTexts('Z4'), ['思考一', '正文一', '思考二', '正文二'], '三连补建不出现思考一 → 思考二 → 正文一的倒序');
+  equal(endBlocks('Z4')[0].id, z4FirstId, '被复用的首段 Thinking id 稳定');
+  deep(endKinds(), endDataKinds('Z4'), 'DOM 与数据层顺序一致（链式补建）');
+
+  /* 13. 已有工具节点夹在正文与 Thinking 之间：不移动工具、不新建工具节点。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Z5')] });
+  endFrame('Z5', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Z5', { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '正文一' } });
+  endFrame('Z5', { type: 'tool_execution_start', toolCallId: 'z5t', toolName: 'read' });
+  await showEnd('Z5');
+  const z5Text = endBlocks('Z5').find(block => block.kind === 'assistant');
+  const z5Tool = endBlocks('Z5').find(block => block.kind === 'tools');
+  endFrame('Z5', { type: 'message_end', message: { role: 'assistant', stopReason: 'toolUse', content: [
+    { type: 'text', text: '正文一' },
+    { type: 'thinking', thinking: '思考一' },
+  ] } });
+  await tick();
+  deep(endDataKinds('Z5'), ['assistant', 'thinking', 'tools'], '工具之前的正文与其后的 Thinking 按 content 顺序补齐');
+  equal(endBlocks('Z5').filter(block => block.kind === 'tools').length, 1, 'message_end 不新建工具组');
+  equal(endBlocks('Z5').find(block => block.kind === 'tools').id, z5Tool.id, '已有工具组的 block id 不变');
+  ok(endBlocks('Z5').indexOf(z5Text) < endBlocks('Z5').indexOf(z5Tool), '正文仍然在工具组之前（不移动真实工具事件位置）');
+  deep(endKinds(), endDataKinds('Z5'), 'DOM 与数据层顺序一致（含工具组）');
+
+  /* 14. 流式已有 Thinking 与正文，最终内容再次交错：全部复用已有节点。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Z6')] });
+  endFrame('Z6', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Z6', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '思考一' } });
+  endFrame('Z6', { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '正文一' } });
+  await showEnd('Z6');
+  const z6Ids = endBlocks('Z6').map(block => block.id);
+  endFrame('Z6', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'thinking', thinking: '思考一' },
+    { type: 'text', text: '正文一' },
+    { type: 'thinking', thinking: '思考二' },
+    { type: 'text', text: '正文二' },
+  ] } });
+  await tick();
+  deep(endDataKinds('Z6'), ['thinking', 'assistant', 'thinking', 'assistant'], '部分内容已流式出现时补齐剩余段保持顺序');
+  deep(endBlocks('Z6').slice(0, 2).map(block => block.id), z6Ids, '已流式的 Thinking 与正文节点 id 保持不变');
+  deep(endDataTexts('Z6'), ['思考一', '正文一', '思考二', '正文二'], '复用节点被权威文本覆盖，新增段文本正确');
+  deep(endKinds(), endDataKinds('Z6'), 'DOM 与数据层顺序一致（部分流式）');
+
+  /* 15. 错误消息携带不完整 content：保留真实流式 Thinking，正文补在其后。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Z7')] });
+  endFrame('Z7', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Z7', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '思考一' } });
+  await showEnd('Z7');
+  endFrame('Z7', { type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'boom', content: [
+    { type: 'text', text: '部分正文' },
+  ] } });
+  await tick();
+  deep(endDataKinds('Z7'), ['thinking', 'assistant'], '错误消息的流式 Thinking 保留，缺失正文补在其后');
+  deep(endDataTexts('Z7'), ['思考一', '部分正文'], '错误消息的权威正文正确');
+  equal(endBlocks('Z7')[0].state, 'error', '错误消息的 Thinking 标 error');
+  equal(endBlocks('Z7')[1].state, 'error', '错误消息补建的正文标 error');
+
+  /* 16. content 为空或只含未知类型：不补造空节点，已出现的流式内容保留。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Z8')] });
+  endFrame('Z8', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Z8', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '思考一' } });
+  await showEnd('Z8');
+  endFrame('Z8', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop',
+    content: [null, { type: 'image' }, { type: 'text', text: '' }] } });
+  await tick();
+  deep(endDataKinds('Z8'), ['thinking'], '空/未知 content 不产生空 block');
+  deep(endDataTexts('Z8'), ['思考一'], '空/未知 content 不删除已出现的流式内容');
+  equal(endBlocks('Z8')[0].state, 'complete', '丢弃未知 content 后仍按真实 stopReason 收尾');
+
   endView.dispose(); endHost.remove();
 
   console.log('历史执行时间线');
