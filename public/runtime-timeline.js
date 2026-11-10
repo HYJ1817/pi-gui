@@ -45,22 +45,26 @@ export function contentThinking(content) {
 
 /**
  * 把 Pi 的权威 content 展开成按真实顺序排列的正文/Thinking 段。
- * 连续的同类 part 合并；中间夹了别的类型就另起一段。工具调用不在这里
- * 生成 block —— 它的可视位置由真实 tool_execution_* 事件决定，message_end
- * 不能替尚未执行的工具伪造时间线节点。
+ * 连续的同类 part 合并；中间夹了别的类型、或夹了一次工具调用，就另起一段。
+ * 工具调用本身不在这里生成 block —— 它的可视位置由真实 tool_execution_*
+ * 事件决定，message_end 不能替尚未执行的工具伪造时间线节点；但它是一条
+ * 真实的 content 边界，不能把工具两侧的同类文本合并成一段。
  *
  * 上限与有界时间线一致：content 再长也最多保留 100 段。
  */
 export function contentSegments(content) {
   const out = [];
+  /* 与上一段之间是否隔着一次工具调用；初始化 true，保证第一段一定新建。 */
+  let boundary = true;
   const push = (kind, value) => {
     if (typeof value !== 'string' || !value) return;
     const last = out[out.length - 1];
-    if (last && last.kind === kind) {
+    if (!boundary && last && last.kind === kind) {
       last.text += (kind === 'thinking' ? '\n\n' : '\n') + value;
     } else if (out.length < MAX_CONTENT_SEGMENTS) {
       out.push({ kind, text: value });
     }
+    boundary = false;
   };
   if (typeof content === 'string') {
     if (content) out.push({ kind: 'assistant', text: content });
@@ -71,6 +75,7 @@ export function contentSegments(content) {
     if (!part || typeof part !== 'object') continue;
     if (part.type === 'thinking') push('thinking', part.thinking);
     else if (part.type === 'text') push('assistant', part.text);
+    else if (part.type === 'toolCall') boundary = true;
   }
   return out;
 }

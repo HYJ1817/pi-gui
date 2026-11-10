@@ -172,7 +172,8 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   /* message_end 的 content 是这条 assistant 消息的权威全文。流式期间可能
    * 已经创建了部分 block；这里按 content 的真实顺序补齐缺失段，并复用已有
    * 节点覆盖权威文本。已有节点不移动（保留真实到达位置与展开状态），缺失
-   * 节点插到它在 content 中相邻的已存在段之前/之后。工具 block 的位置只由
+   * 节点按 content 顺序依次接在前一段之后（前一段可能是本轮刚补建的节点），
+   * 只有第一段缺前驱时才向前找最近的已有段。工具 block 的位置只由
    * tool_execution_* 事件决定，message_end 不创建也不移动工具节点。 */
   function contentBlock(kind) {
     return { kind, text: '', state: 'streaming', truncated: false };
@@ -213,12 +214,18 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     for (let i = 0; i < plans.length; i++) {
       const plan = plans[i];
       if (!plan.created) continue;
-      const next = plans.slice(i + 1).find(candidate => !candidate.created);
-      const previous = plans.slice(0, i).reverse().find(candidate => !candidate.created);
       setContentText(r, plan.block, plan.segment.text, limitOf(plan.segment.kind));
-      if (next) insertBlockAt(r, plan.block, next.block, false);
-      else if (previous) insertBlockAt(r, plan.block, previous.block, true);
-      else insertBlockAt(r, plan.block, null);
+      /* 链式锚点：每一段接在前一段之后。前一段要么是已有节点，要么是上一轮
+       * 刚插入、已经在 timeline 里的节点；这样连续补建多段时顺序不会倒置。
+       * 若改用「最近的已有前驱」或「后面的已有节点」当锚点，多段会堆在同一
+       * 锚点一侧（思考一 → 思考二 → 正文一）。 */
+      const previous = i > 0 && r.timeline.includes(plans[i - 1].block) ? plans[i - 1].block : null;
+      if (previous) {
+        insertBlockAt(r, plan.block, previous, true);
+        continue;
+      }
+      const next = plans.slice(i + 1).find(candidate => !candidate.created && r.timeline.includes(candidate.block));
+      insertBlockAt(r, plan.block, next ? next.block : null, false);
     }
     for (const plan of plans) {
       if (plan.created) continue;
