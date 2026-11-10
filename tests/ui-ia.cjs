@@ -49,16 +49,23 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     for (const name of ['模型与账户', 'Agent 能力', '扩展与 MCP', '应用与更新', '诊断']) assert.ok(labels.includes(name), name);
     assert.ok([...$('globalMoreMenu').querySelectorAll('button')].every(b => typeof b.onclick === 'function'));
   });
+  await check('MCP management has its own settings surface, not the extensions tab', async () => {
+    $('navMcp').click(); await tick();
+    assert.equal(d.querySelector('.ext-tab[aria-selected="true"]'), null);
+    assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, 'navMcp');
+    assert.equal($('workViewTitle').textContent, 'MCP 服务器');
+  });
   await check('extension subpages project their real current navigation and title', async () => {
-    for (const [id, tab, title] of [['navMcp', 'mcp', 'MCP 配置'], ['navCapabilities', 'capabilities', '能力状态'], ['navExtensions', 'skills', 'Skills 与扩展']]) {
+    for (const [id, tab, title] of [['navCapabilities', 'capabilities', '能力状态'], ['navExtensions', 'skills', 'Skills 与扩展']]) {
       $(id).click(); await tick();
       assert.equal(d.querySelector('.ext-tab[aria-selected="true"]').dataset.tab, tab);
       assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, id);
       assert.equal($('workViewTitle').textContent, title);
     }
+    /* 旧 MCP 标签还在，但它是能力报告，不再冒充管理页的导航。 */
     $('extensionsTabMcp').click();
-    assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, 'navMcp');
-    assert.equal($('workViewTitle').textContent, 'MCP 配置');
+    assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, 'navExtensions');
+    assert.equal($('workViewTitle').textContent, 'MCP 能力报告');
     $('navGlobalMore').click();
   });
   await check('Settings Escape returns focus to its visible trigger', () => {
