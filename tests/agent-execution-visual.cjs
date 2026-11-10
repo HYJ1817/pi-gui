@@ -116,6 +116,17 @@ if (!process.versions.electron) {
     })()`);
     await sleep(180);
   }
+  async function bringRuntimeIntoView(selector) {
+    await read(`(() => {
+      const e = document.querySelector(${JSON.stringify(selector)});
+      const s = document.querySelector('.rtc-output');
+      if (!e || !s) return false;
+      const er = e.getBoundingClientRect(), sr = s.getBoundingClientRect();
+      s.scrollTop += er.top - sr.top - 140;
+      return true;
+    })()`);
+    await sleep(180);
+  }
 
   const CLASSIC_SETUP = `(async () => {
     document.documentElement.dataset.theme = 'light';
@@ -216,10 +227,28 @@ if (!process.versions.electron) {
       await click('.scroll-bottom');           // 回到底部
       await sleep(1500);
 
-      /* Runtime：切到 B 再切回 A，最后用同一颗按钮回到 A 的底部。
+      /* Runtime：工具折叠 / Thinking 展开，再演示多会话切换与回到底部。
        * 仅当 Runtime 视图仍在（本套件前面已创建）才录制这一段。 */
       if (await read(`!!window.__V`)) {
-        await read(`__surface.showRuntimeConversation(); __V.show('B'); document.querySelector('.rtc-output').scrollTop = 0`);
+        await read(`__surface.showRuntimeConversation(); __V.show('A'); document.querySelector('.rtc-output').scrollTop = 0`);
+        await sleep(500);
+        /* 录制从「默认折叠」开始：先把验收阶段展开的状态收回。 */
+        await read(`(() => {
+          const g = document.querySelector('.ui2-runtime-tools .tl-group-head');
+          if (g?.getAttribute('aria-expanded') === 'true') g.click();
+          const t = document.querySelector('.ui2-runtime-thinking');
+          if (t?.open) t.querySelector('summary').click();
+        })()`);
+        await sleep(700);
+        await bringRuntimeIntoView('.ui2-runtime-plan');
+        await sleep(600);
+        await bringRuntimeIntoView('.ui2-runtime-tools .tl-group-head');
+        await click('.ui2-runtime-tools .tl-group-head');
+        await sleep(900);
+        await bringRuntimeIntoView('.ui2-runtime-thinking-head');
+        await click('.ui2-runtime-thinking-head');
+        await sleep(900);
+        await read(`__V.show('B'); document.querySelector('.rtc-output').scrollTop = 0`);
         await sleep(900);
         await read(`__V.show('A'); document.querySelector('.rtc-output').scrollTop = 0`);
         await sleep(900);
@@ -583,7 +612,9 @@ if (!process.versions.electron) {
           { id: 'a3', title: 'A：补真实浏览器验收', status: 'in_progress' }
         ], counts: { total: 3, completed: 2 } } });
       __frame('A', { type: 'tool_execution_start', toolCallId: 'a-read', toolName: 'read' });
-      __frame('A', { type: 'tool_execution_end', toolCallId: 'a-read', isError: false });
+      __frame('A', { type: 'tool_execution_end', toolCallId: 'a-read', isError: false, durationMs: 420 });
+      __frame('A', { type: 'tool_execution_start', toolCallId: 'a-bash', toolName: 'bash' });
+      __frame('A', { type: 'tool_execution_end', toolCallId: 'a-bash', isError: true, durationMs: 980 });
       for (let i = 0; i < 36; i++) __text('A', 'A 会话第 ' + (i + 1) + ' 段真实输出，只用于验证滚动容器与多会话隔离。\\n\\n');`);
     await sleep(300);
 
@@ -593,16 +624,55 @@ if (!process.versions.electron) {
         count: document.querySelector('.ui2-runtime-plan .plan-count')?.textContent || '',
         thinking: document.querySelector('.ui2-runtime-thinking')?.hidden,
         thinkingText: document.querySelector('.ui2-runtime-thinking-body')?.textContent || '',
-        tools: [...document.querySelectorAll('.ui2-runtime-tool')].map(e => e.textContent)
+        tools: [...document.querySelectorAll('.ui2-runtime-tool')].map(e => e.dataset.toolName),
+        labels: [...document.querySelectorAll('.ui2-runtime-tool .tl-label')].map(e => e.textContent),
+        order: [...document.querySelectorAll('.rtc-output > *')].map(e => e.dataset?.role
+          || (e.classList.contains('ui2-runtime-thinking') ? 'thinking'
+            : e.classList.contains('ui2-runtime-tools') ? 'tools'
+              : e.classList.contains('ui2-runtime-plan') ? 'plan' : e.className))
       }))()`);
       must(f.plan.includes('A：接入任务列表数据'), 'A 的计划没有出现在 Runtime');
       must(f.count === '2/3', 'Runtime 计划计数不是 2/3');
       must(f.thinking === false && f.thinkingText.includes('A 会话'), 'Runtime 思考内容缺失');
-      must(f.tools.some(t => t.includes('read')), 'Runtime 工具状态缺失');
+      must(f.tools.join(',') === 'read,bash', 'Runtime 工具顺序/身份不是真实 read,bash');
+      must(f.labels.join(',') === '读取文件,执行命令', 'Runtime 工具没有使用可读语义名');
+      must(f.order.join(',') === 'thinking,plan,tools,assistant', 'Runtime 时间线没有按真实事件顺序排列');
       return f;
     });
 
-    await read(`document.querySelector('.ui2-runtime-thinking').open = true`);
+    await check('Runtime 工具组默认折叠，标题显示真实次数与失败摘要', async () => {
+      const f = await read(`(() => {
+        const group = document.querySelector('.ui2-runtime-tools .tl-group');
+        return { head: group.querySelector('.tl-group-head').textContent,
+          state: group.querySelector('.ui2-tool-state').textContent,
+          hidden: group.querySelector('.tl-list').hidden,
+          expanded: group.querySelector('.tl-group-head').getAttribute('aria-expanded') };
+      })()`);
+      must(f.head === '工具调用 · 2 次', 'Runtime 工具组标题不是「工具调用 · 2 次」');
+      must(f.state.includes('失败 1') && f.state.includes('成功 1'), 'Runtime 组摘要没有真实失败/成功数');
+      must(f.hidden === true && f.expanded === 'false', 'Runtime 工具组没有默认折叠');
+      return f;
+    });
+
+    await bringRuntimeIntoView('.ui2-runtime-tools .tl-group-head');
+    await click('.ui2-runtime-tools .tl-group-head');
+    await read(`__frame('A', { type: 'tool_execution_start', toolCallId: 'a-grep', toolName: 'grep' })`);
+    await sleep(200);
+    await check('Runtime 展开后，新工具到达不打断展开', async () => {
+      const f = await read(`(() => {
+        const group = document.querySelector('.ui2-runtime-tools .tl-group');
+        return { hidden: group.querySelector('.tl-list').hidden,
+          head: group.querySelector('.tl-group-head').textContent,
+          rows: group.querySelectorAll('.tl-item').length };
+      })()`);
+      must(f.hidden === false, '新工具到达把用户展开的组收回了');
+      must(f.head === '工具调用 · 3 次' && f.rows === 3, '新工具没有按真实次数进入组');
+      return f;
+    });
+    await shot('07-runtime-a-plan-thinking');
+
+    await bringRuntimeIntoView('.ui2-runtime-thinking-head');
+    await click('.ui2-runtime-thinking-head');
     await read(`__frame('A', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '继续追加已经真实返回的思考内容。' } })`);
     await sleep(160);
     await check('Runtime 用户展开后，思考增量不改变 open', async () => {
@@ -614,7 +684,7 @@ if (!process.versions.electron) {
       must(f.text.includes('继续追加'), 'Runtime 思考没有收到增量');
       return f;
     });
-    await shot('07-runtime-a-plan-thinking');
+    await shot('07b-runtime-tools-thinking-expanded');
 
     /* B 会话：自己的计划、自己的滚动位置 */
     await read(`document.querySelector('.rtc-output').scrollTop = 0`);
@@ -688,6 +758,45 @@ if (!process.versions.electron) {
     await shot('11-runtime-dark');
     await read(`document.documentElement.dataset.theme = 'light'`);
 
+    /* 真实 Pi Agent 证据（tests/agent-execution-real-pi.cjs 产出）：
+     * 把真实 gui_plan 事件经过服务端窄投影后的 plan 喂给同一套 Runtime UI，
+     * 证明计划状态不是合成的。没有证据文件时跳过并记一条明确说明。 */
+    const realPiFile = path.join(OUT, 'real-pi-plan.json');
+    if (fs.existsSync(realPiFile)) {
+      const realPi = JSON.parse(fs.readFileSync(realPiFile, 'utf8'));
+      const realStart = realPi.planStart, realEnd = realPi.planEnd;
+      must(realStart?.tasks?.length && realEnd?.tasks?.length, '真实 Pi 证据缺少计划');
+      await read(`(() => {
+        __seq.REAL = 0;
+        const realItem = { ...__item('REAL'), activity: 'running' };
+        __R.seedRuntimeSnapshot({ backendInstance: 'agent-visual-backend', items: [__item('A'), __item('B'), realItem] });
+        __V.show('REAL');
+        __frame('REAL', { type: 'agent_start' });
+        __frame('REAL', { type: 'tool_execution_start', toolCallId: 'real-pi-plan', toolName: 'gui_plan', plan: ${JSON.stringify(realStart)} });
+        __frame('REAL', { type: 'tool_execution_end', toolCallId: 'real-pi-plan', toolName: 'gui_plan', plan: ${JSON.stringify(realEnd)} });
+        return true;
+      })()`);
+      await sleep(300);
+      await check('真实 Pi 的 gui_plan 计划进入 Electron Runtime UI', async () => {
+        const f = await read(`(() => ({
+          plan: document.querySelector('.ui2-runtime-plan .plan-card')?.textContent || '',
+          count: document.querySelector('.ui2-runtime-plan .plan-count')?.textContent || '',
+          guiPlanRows: document.querySelectorAll('.ui2-runtime-tool[data-tool-name="gui_plan"]').length,
+          statuses: [...document.querySelectorAll('.ui2-runtime-plan .plan-item')].map(e => e.dataset.status)
+        }))()`);
+        must(f.plan.includes('读取 README') && f.plan.includes('运行检查'), '真实 Pi 任务没有进入 UI');
+        must(f.count === '0/2', '真实 Pi 计划计数不是 0/2：' + f.count);
+        must(f.guiPlanRows === 0, '真实 gui_plan 重复进入工具行');
+        must(f.statuses.includes('in_progress') && f.statuses.includes('pending'), '真实任务状态没有如实显示');
+        return f;
+      });
+      await shot('12-runtime-real-pi-plan');
+      await read(`__V.show('A')`);
+    } else {
+      /* 不计入通过数：证据缺失就是缺失，不用一条「跳过」把分母做漂亮。 */
+      console.log('SKIP 真实 Pi 证据文件未提供；运行 tests/agent-execution-real-pi.cjs 后重跑可获得截图');
+    }
+
     /* 交互录制：折叠/展开任务列表、工具与 Thinking，再演示回到底部按钮。 */
     await read(`__surface.showChat()`);
     await sleep(220);
@@ -710,7 +819,7 @@ if (!process.versions.electron) {
       errors,
       durationMs: Date.now() - started,
       versions: { electron: process.versions.electron, chrome: process.versions.chrome },
-      coverage: 'Actual Electron + real Chromium production ESM/CSS. Classic plan/thinking/tools/scroll; Runtime A/B plan/thinking/tool isolation, idle/running scroll button; dark/light/narrow 700; real input hover/click; no real Pi/model/session data.',
+      coverage: 'Actual Electron + real Chromium production ESM/CSS. Classic plan/thinking/tools/scroll; Runtime A/B plan/thinking/tool folding and order, idle/running scroll button; dark/light/narrow 700; real input hover/click. The REAL session replays the gui_plan plan captured from an actual Pi Agent run by tests/agent-execution-real-pi.cjs; all other sessions are fixtures, no user session data.',
     }, null, 2));
     console.log(`Agent execution visual ${checks.length - checks.filter(c => !c.pass).length}/${checks.length}`);
     console.log('截图目录：' + OUT);

@@ -164,6 +164,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
 
   const M = await import(url('messages.js'));
   const T = await import(url('tools.js'));
+  const P = await import(url('plan-live.js'));
   const { S } = await import(url('state.js'));
   const tick = async (n = 10) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
 
@@ -242,9 +243,25 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   equal(d.querySelector('#stream .plan-count').textContent, '2/2', 'tool end 后按权威 details 更新');
   ok('完成后不留下 in_progress 文案', !d.querySelector('#stream .plan-state') || d.querySelector('#stream .plan-state').textContent === '');
 
+  /* 运行中的补充指令是 steer：Pi 不会发新的 agent_start，所以它**不是**新任务。
+   * 同一张卡继续更新，不能被误清空或另开一张。 */
+  M.onMessageStart({ message: userMsg('运行中的补充指令') });
+  T.onToolStart({ toolCallId: 'live-p2', toolName: 'gui_plan', args: { tasks: [{ id: 'n', title: '补充后的步骤', status: 'in_progress' }] } });
+  equal(d.querySelectorAll('#stream .plan-card').length, 1, '运行中 steer 不新开卡');
+  equal([...d.querySelectorAll('#stream .plan-card')].at(-1).querySelector('.plan-title')?.textContent || '',
+    '任务列表', 'steer 后仍更新同一张当前卡');
+  ok('steer 后当前卡显示补充后的真实任务', d.querySelector('#stream .plan-list')?.textContent.includes('补充后的步骤') === true);
+
+  /* 真正的新任务：上一轮已经 settled，app.js 在随后的 agent_start 上打边界，
+   * 再由用户消息消费。这里直接调用同一个边界钩子，避免把 app.js 的整棵
+   * DOM 初始化搬进单测；顺序与真实事件一致：settled → agent_start → user。 */
+  P.beginPlanTaskBoundary();
   M.onMessageStart({ message: userMsg('第二个实时任务') });
-  T.onToolStart({ toolCallId: 'live-p2', toolName: 'gui_plan', args: { tasks: [{ id: 'n', title: '新步骤', status: 'in_progress' }] } });
-  equal(d.querySelectorAll('#stream .plan-card').length, 2, '新用户回合开新卡，旧卡保留');
+  T.onToolStart({ toolCallId: 'live-p3', toolName: 'gui_plan', args: { tasks: [{ id: 'n2', title: '新回合步骤', status: 'in_progress' }] } });
+  equal(d.querySelectorAll('#stream .plan-card').length, 2, '真实新回合开新卡，旧卡保留');
+  ok('旧卡保留的是上一轮真实任务，不被新回合覆盖',
+    d.querySelectorAll('#stream .plan-card')[0].textContent.includes('补充后的步骤'));
+  ok('新卡显示新回合的真实任务', d.querySelectorAll('#stream .plan-card')[1].textContent.includes('新回合步骤'));
   M.interruptActive();
   equal([...d.querySelectorAll('#stream .plan-card')].at(-1).querySelector('.plan-state').textContent,
     '未完成', '中断后 in_progress 显示「未完成」而不是继续转');
@@ -257,70 +274,281 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
 
   console.log('Runtime store');
   const { runtimeStore, seedRuntimeSnapshot, observeRuntimeFrame } = await import(url('runtime-state.js'));
-  const owner = id => ({ backendInstance: 'backend', projectId: 'project', repoId: 'repo', workspaceId: 'ws-' + id,
-    workspaceEpoch: 'epoch', conversationId: id, runtimeId: 'rt-' + id, runtimeGeneration: 'one', sessionId: 's-' + id });
+  const owner = (id, gen = 'one') => ({ backendInstance: 'backend', projectId: 'project', repoId: 'repo', workspaceId: 'ws-' + id,
+    workspaceEpoch: 'epoch', conversationId: id, runtimeId: 'rt-' + id, runtimeGeneration: gen, sessionId: 's-' + id });
   const item = (id, over = {}) => ({ conversationId: id, createdAt: '2026-01-01T00:00:00.000Z',
     workspace: { branch: 'branch-' + id, projectId: 'project' }, owner: owner(id), lifecycle: 'ready',
     activity: 'idle', attention: false, error: null, stop: null, revision: 1, ...over });
   runtimeStore.seed({ backendInstance: 'backend', items: [item('A'), item('B')] });
   const frame = (id, seq, event) => observeRuntimeFrame({ type: 'runtime_event', owner: owner(id), eventSequence: seq, event });
 
-  frame('A', 1, { type: 'tool_execution_start', toolCallId: 'p', toolName: 'gui_plan', plan: { version: 1, tasks: [
+  /* 一个完整 run：agent_start → plan → 运行中 steer → 自动重试 → settled →
+   * 新的 agent_start（真正的新任务）→ 新 plan。回合边界只由 Pi 的协议事件决定。 */
+  frame('A', 1, { type: 'agent_start' });
+  frame('A', 2, { type: 'tool_execution_start', toolCallId: 'p', toolName: 'gui_plan', plan: { version: 1, tasks: [
     { id: 'a', title: 'A 步骤', status: 'in_progress' },
   ], counts: { total: 1, completed: 0 } } });
   equal(runtimeStore.get('A').plan.tasks[0].id, 'a', 'Runtime store 接收按白名单投影的计划');
   equal(runtimeStore.get('A').tools.length, 0, 'Runtime 工具行不收录 gui_plan');
-  frame('A', 2, { type: 'tool_execution_end', toolCallId: 'p', toolName: 'gui_plan', plan: { version: 1, tasks: [
+  frame('A', 3, { type: 'tool_execution_end', toolCallId: 'p', toolName: 'gui_plan', plan: { version: 1, tasks: [
     { id: 'a', title: 'A 步骤', status: 'completed' },
   ], counts: { total: 1, completed: 1 } } });
   equal(runtimeStore.get('A').plan.tasks[0].status, 'completed', 'Runtime end 用权威 details 覆盖');
-  frame('A', 3, { type: 'agent_settled' });
+  frame('A', 4, { type: 'message_start', message: { role: 'user', content: [{ type: 'text', text: '运行中补充' }] } });
+  equal(runtimeStore.get('A').plan.tasks[0].status, 'completed', '运行中 steer 的用户消息不清当前计划');
+  frame('A', 5, { type: 'agent_start' });
+  equal(runtimeStore.get('A').plan.tasks[0].status, 'completed', '自动重试/压缩的 agent_start 不清当前计划');
+  frame('A', 6, { type: 'agent_settled' });
   equal(runtimeStore.get('A').plan.tasks[0].status, 'completed', 'settled 不清掉真实计划');
-  frame('A', 4, { type: 'message_start', message: { role: 'user' } });
-  equal(runtimeStore.get('A').plan, null, '新用户消息清掉上一轮计划');
-  frame('A', 5, { type: 'tool_execution_start', toolCallId: 'p2', toolName: 'gui_plan', plan: { version: 1, tasks: [
+  frame('A', 7, { type: 'agent_start' });
+  equal(runtimeStore.get('A').plan, null, '已 settled 后的 agent_start 才是新任务边界');
+  equal(runtimeStore.get('A').timeline.filter(block => block.kind === 'plan').length, 1,
+    '切换新任务时上一轮计划块仍留在时间线里');
+  frame('A', 8, { type: 'message_start', message: { role: 'user', content: [{ type: 'text', text: '第二个任务' }] } });
+  frame('A', 9, { type: 'tool_execution_start', toolCallId: 'p2', toolName: 'gui_plan', plan: { version: 1, tasks: [
     { id: 'b', title: 'A 新计划', status: 'pending' },
   ], counts: { total: 1, completed: 0 } } });
-  frame('B', 5, { type: 'tool_execution_start', toolCallId: 'q', toolName: 'gui_plan', plan: { version: 1, tasks: [
+  frame('B', 1, { type: 'tool_execution_start', toolCallId: 'q', toolName: 'gui_plan', plan: { version: 1, tasks: [
     { id: 'c', title: 'B 计划', status: 'pending' },
   ], counts: { total: 1, completed: 0 } } });
   equal(runtimeStore.get('A').plan.tasks[0].title, 'A 新计划', 'A 的计划不被 B 覆盖');
   equal(runtimeStore.get('B').plan.tasks[0].title, 'B 计划', 'B 的计划独立保存');
+  equal(runtimeStore.get('A').timeline.filter(block => block.kind === 'plan').length, 2,
+    '新回合的新计划是第二张卡，不是覆盖旧卡');
 
   const { createRuntimeConversation } = await import(url('runtime-conversation.js'));
   const host = d.createElement('div'); host.id = 'agent-plan-runtime'; d.body.appendChild(host);
   const view = createRuntimeConversation({ host });
   view.show('A'); await tick();
-  equal(host.querySelectorAll('.ui2-runtime-plan .plan-card').length, 1, 'Runtime 实时视图显示任务列表');
-  ok('Runtime 计划卡显示当前会话自己的任务', host.textContent.includes('A 新计划') && !host.textContent.includes('B 计划'));
+  equal(host.querySelectorAll('.ui2-runtime-plan .plan-card').length, 2, 'Runtime 时间线保留两轮各自的计划卡');
+  ok('Runtime 计划卡显示当前会话自己的任务', host.textContent.includes('A 步骤')
+    && host.textContent.includes('A 新计划') && !host.textContent.includes('B 计划'));
   view.show('B'); await tick();
   ok('切到 B 只显示 B 的计划', host.textContent.includes('B 计划') && !host.textContent.includes('A 新计划'));
   view.show('A'); await tick();
-  ok('切回 A 恢复 A 的计划', host.textContent.includes('A 新计划') && !host.textContent.includes('B 计划'));
+  ok('切回 A 恢复 A 的两轮计划', host.textContent.includes('A 步骤') && host.textContent.includes('A 新计划')
+    && !host.textContent.includes('B 计划'));
   /* 扩展明确拒绝的更新（end 不带 plan）：start 时乐观显示的列表必须退回，
    * 不能留在界面上冒充「已被接受的计划」。与 Classic plan-live 同一语义。 */
-  frame('A', 6, { type: 'tool_execution_start', toolCallId: 'rejected', toolName: 'gui_plan', plan: { version: 1, tasks: [
+  frame('A', 10, { type: 'tool_execution_start', toolCallId: 'rejected', toolName: 'gui_plan', plan: { version: 1, tasks: [
     { id: 'c', title: 'A 被拒绝的新计划', status: 'pending' },
   ], counts: { total: 1, completed: 0 } } });
   equal(runtimeStore.get('A').plan.tasks[0].title, 'A 被拒绝的新计划', 'Runtime start 先乐观显示提交的列表');
-  frame('A', 7, { type: 'tool_execution_end', toolCallId: 'rejected', isError: true });
+  frame('A', 11, { type: 'tool_execution_end', toolCallId: 'rejected', isError: true });
   equal(runtimeStore.get('A').plan.tasks[0].title, 'A 新计划', '被拒绝的 Runtime 计划更新回退到上一张');
   await tick();
   ok('被拒绝的列表没有留在 Runtime 视图', host.textContent.includes('A 新计划') && !host.textContent.includes('A 被拒绝的新计划'));
-  frame('A', 8, { type: 'message_start', message: { role: 'user' } });
+  equal(host.querySelectorAll('.ui2-runtime-plan .plan-card').length, 2, '被拒绝的更新不新增也不删除计划卡');
+
+  /* 运行中的 steer 用户消息：同一回合，计划块必须保持可见，不能被隐藏。 */
+  frame('A', 12, { type: 'message_start', message: { role: 'user', content: [{ type: 'text', text: '运行中补充' }] } });
   await tick();
-  ok('新用户消息后 Runtime 计划块隐藏', host.querySelector('.ui2-runtime-plan').hidden === true);
-  frame('A', 9, { type: 'message_start', message: { role: 'assistant' } });
-  frame('A', 10, { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '可显示的思考' } });
+  ok('运行中 steer 后 Runtime 计划块保持可见', host.querySelector('.ui2-runtime-plan')?.hidden === false
+    && host.querySelectorAll('.ui2-runtime-plan .plan-card').length === 2
+    && [...host.querySelectorAll('.ui2-runtime-plan')].at(-1).textContent.includes('A 新计划'));
+  equal(runtimeStore.get('A').plan.tasks[0].title, 'A 新计划', 'steer 不切换当前计划');
+
+  frame('A', 13, { type: 'message_start', message: { role: 'assistant' } });
+  frame('A', 14, { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '可显示的思考' } });
   await tick();
   ok('Runtime 思考标题在流式中标「生成中」', host.querySelector('.ui2-runtime-thinking-head')?.textContent.includes('生成中') === true);
-  frame('A', 11, { type: 'message_end', message: { role: 'assistant', stopReason: 'aborted',
+  frame('A', 15, { type: 'message_end', message: { role: 'assistant', stopReason: 'aborted',
     content: [{ type: 'thinking', thinking: '可显示的思考' }] } });
   await tick();
   ok('Runtime 思考被真实中断后标「已中断」，内容保留',
     host.querySelector('.ui2-runtime-thinking-head')?.textContent.includes('已中断') === true
     && host.querySelector('.ui2-runtime-thinking-body')?.textContent === '可显示的思考');
+  ok('思考结束不挤掉计划块', host.querySelectorAll('.ui2-runtime-plan .plan-card').length === 2);
+
+  /* 旧 Runtime 代次的迟到计划事件必须被挡住，不能覆盖新计划。 */
+  const stalePlan = observeRuntimeFrame({ type: 'runtime_event', owner: owner('A', 'old'), eventSequence: 99,
+    event: { type: 'tool_execution_start', toolCallId: 'stale', toolName: 'gui_plan', plan: { version: 1, tasks: [
+      { id: 'stale', title: '旧代次计划', status: 'pending' },
+    ], counts: { total: 1, completed: 0 } } } });
+  await tick();
+  ok('旧代次计划事件被拒绝且不进入视图', stalePlan === false
+    && runtimeStore.get('A').plan.tasks[0].title === 'A 新计划'
+    && !host.textContent.includes('旧代次计划')
+    && host.querySelectorAll('.ui2-runtime-plan .plan-card').length === 2);
+
+  /* 再来一次真正的新任务：settled → agent_start → user → plan。
+   * 两张旧卡必须都还在，第三张卡承载新计划。 */
+  frame('A', 16, { type: 'agent_settled' });
+  frame('A', 17, { type: 'agent_start' });
+  equal(runtimeStore.get('A').plan, null, '新任务边界清掉当前计划指针');
+  await tick();
+  equal(host.querySelectorAll('.ui2-runtime-plan .plan-card').length, 2, '新任务边界不删除历史计划卡');
+  frame('A', 18, { type: 'message_start', message: { role: 'user', content: [{ type: 'text', text: '第三个任务' }] } });
+  frame('A', 19, { type: 'tool_execution_start', toolCallId: 'p3', toolName: 'gui_plan', plan: { version: 1, tasks: [
+    { id: 'd', title: 'A 第三计划', status: 'in_progress' },
+  ], counts: { total: 1, completed: 0 } } });
+  await tick();
+  const planCards = [...host.querySelectorAll('.ui2-runtime-plan .plan-card')];
+  ok('第三轮新计划开第三张卡，前两轮真实计划都保留', planCards.length === 3
+    && planCards[0].textContent.includes('A 步骤') && planCards[1].textContent.includes('A 新计划')
+    && planCards[2].textContent.includes('A 第三计划'));
   view.dispose();
+
+  console.log('Runtime 工具折叠与真实顺序');
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('T', { activity: 'running' }), item('U')] });
+  const toolsHost = d.createElement('div'); d.body.appendChild(toolsHost);
+  const toolsView = createRuntimeConversation({ host: toolsHost });
+  const startTool = (id, name) => frame('T', ++toolSeq, { type: 'tool_execution_start', toolCallId: id, toolName: name });
+  const endTool = (id, name, isError, durationMs) => frame('T', ++toolSeq, { type: 'tool_execution_end', toolCallId: id, toolName: name, isError, durationMs });
+  let toolSeq = 0;
+  frame('T', ++toolSeq, { type: 'agent_start' });
+  frame('T', ++toolSeq, { type: 'message_start', message: { role: 'user', content: [{ type: 'text', text: '执行任务' }] } });
+  frame('T', ++toolSeq, { type: 'message_start', message: { role: 'assistant' } });
+  frame('T', ++toolSeq, { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '先想想' } });
+  startTool('t1', 'bash'); startTool('t2', 'read');
+  toolsView.show('T'); await tick();
+  const toolGroup = () => toolsHost.querySelector('.ui2-runtime-tools .tl-group');
+  const toolRows = () => [...toolsHost.querySelectorAll('.ui2-runtime-tool')];
+  deep(toolRows().slice(0, 2).map(node => node.dataset.toolName), ['bash', 'read'], '组内工具保持真实调用顺序');
+  equal(toolGroup().querySelector('.tl-group-head').textContent, '工具调用 · 2 次', '工具组标题显示真实次数');
+  equal(toolGroup().querySelector('.ui2-tool-state').textContent, '运行中 2', '运行中的组摘要来自真实状态');
+  equal(toolGroup().querySelector('.tl-list').hidden, true, '多项工具组默认折叠');
+  equal(toolGroup().querySelector('.tl-group-head').getAttribute('aria-expanded'), 'false', '默认折叠时 aria-expanded=false');
+  equal(toolGroup().querySelectorAll('.ui2-runtime-tool[data-tool-name="gui_plan"]').length, 0, 'gui_plan 不进入工具行');
+  endTool('t2', 'read', false, 1200); endTool('t1', 'bash', true, 300);
+  await tick();
+  equal(toolGroup().querySelector('.ui2-tool-state').textContent, '失败 1 · 成功 1', '组摘要区分失败与成功，不靠工具调用数猜进度');
+
+  toolGroup().querySelector('.tl-group-head').click();
+  await tick();
+  equal(toolGroup().querySelector('.tl-list').hidden, false, '点击组标题展开真实工具明细');
+  equal(toolGroup().querySelector('.tl-group-head').getAttribute('aria-expanded'), 'true', '展开后 aria-expanded=true');
+  startTool('t3', 'write');
+  await tick();
+  equal(toolGroup().querySelector('.tl-group-head').textContent, '工具调用 · 3 次', '新工具到达后组标题按真实次数更新');
+  equal(toolGroup().querySelector('.tl-list').hidden, false, '新工具到达不打断用户已展开的组');
+  equal(toolRows().at(-1).querySelector('.tl-more').hidden, true, '单条工具详情默认折叠（不伪造参数）');
+  /* 正文在工具之后到达时另起一段，不能并回更早的位置而改变真实顺序。 */
+  frame('T', ++toolSeq, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '阶段结论' } });
+  await tick();
+  const outputNodes = [...toolsHost.querySelectorAll('.rtc-output > *')];
+  const kindOf = node => node.dataset?.role || (node.classList.contains('ui2-runtime-thinking') ? 'thinking'
+    : node.classList.contains('ui2-runtime-tools') ? 'tools' : node.className);
+  deep(outputNodes.map(kindOf), ['user', 'thinking', 'tools', 'assistant'],
+    'Runtime 时间线按真实到达顺序排列 user → thinking → 工具 → 正文');
+
+  /* 单工具组不摆「1 次」标题；详细信息仍默认收起。 */
+  frame('T', ++toolSeq, { type: 'message_start', message: { role: 'assistant' } });
+  startTool('s1', 'grep');
+  await tick();
+  const singleGroup = [...toolsHost.querySelectorAll('.ui2-runtime-tools .tl-group')].at(-1);
+  equal(singleGroup.querySelector('.tl-group-head').hidden, true, '只有一项工具时不显示「工具调用 · 1 次」');
+  equal(singleGroup.querySelector('.tl-list').hidden, false, '单工具行本身可见，详情默认折叠');
+  equal(singleGroup.querySelector('.ui2-runtime-tool .tl-more').hidden, true, '单工具详情默认折叠');
+
+  /* gui_plan 只呈现为计划卡，不重复出现在工具组。 */
+  frame('T', ++toolSeq, { type: 'tool_execution_start', toolCallId: 'plan-t', toolName: 'gui_plan', plan: { version: 1, tasks: [
+    { id: 'pt', title: '工具折叠验证', status: 'in_progress' },
+  ], counts: { total: 1, completed: 0 } } });
+  await tick();
+  equal(toolsHost.querySelectorAll('.ui2-runtime-tool[data-tool-name="gui_plan"]').length, 0, 'gui_plan 不重复进入 Runtime 工具折叠');
+  equal(toolsHost.querySelectorAll('.ui2-runtime-plan .plan-card').length, 1, 'gui_plan 只以计划卡出现一次');
+
+  /* 展开状态按会话保存：切到 U 再切回 T，T 的组仍展开。 */
+  frame('U', 1, { type: 'message_start', message: { role: 'assistant' } });
+  frame('U', 2, { type: 'tool_execution_start', toolCallId: 'u1', toolName: 'bash' });
+  frame('U', 3, { type: 'tool_execution_start', toolCallId: 'u2', toolName: 'read' });
+  toolsView.show('U'); await tick();
+  const uGroup = toolsHost.querySelector('.ui2-runtime-tools .tl-group');
+  equal(uGroup.querySelector('.tl-list').hidden, true, '切到另一会话时该会话自己的组默认折叠');
+  toolsView.show('T'); await tick();
+  equal(toolGroup().querySelector('.tl-list').hidden, false, '切回原会话恢复用户自己的展开状态');
+  toolsView.dispose();
+
+  console.log('历史执行时间线');
+  const { timelineFromMessages, boundTimeline, MAX_BLOCKS } = await import(url('runtime-timeline.js'));
+  const nativeHistory = [
+    { role: 'user', timestamp: 1000, content: [{ type: 'text', text: '检查并修复' }] },
+    { role: 'assistant', timestamp: 1100, stopReason: 'toolUse', content: [
+      { type: 'thinking', thinking: '先看代码' },
+      { type: 'text', text: '我先检查' },
+      { type: 'toolCall', id: 'c1', name: 'read', arguments: { path: 'SECRET_PATH', apiKey: 'SECRET_KEY' } },
+      { type: 'toolCall', id: 'c2', name: 'bash', arguments: { command: 'SECRET_CMD' } },
+      { type: 'toolCall', id: 'p1', name: 'gui_plan', arguments: { tasks: [{ id: 'x', title: '修复', status: 'in_progress' }] } },
+    ] },
+    { role: 'toolResult', toolCallId: 'c1', toolName: 'read', timestamp: 2300, isError: false,
+      content: [{ type: 'text', text: 'SECRET_RESULT' + 'LONG_RAW_'.repeat(5000) }] },
+    { role: 'toolResult', toolCallId: 'c2', toolName: 'bash', timestamp: 1400, isError: true, content: [{ type: 'text', text: 'SECRET_OUTPUT' }] },
+    { role: 'toolResult', toolCallId: 'p1', toolName: 'gui_plan', content: [{ type: 'text', text: 'ok' }],
+      details: { version: 1, tool: 'gui_plan', tasks: [{ id: 'x', title: '修复', status: 'completed' }] } },
+    { role: 'assistant', timestamp: 2500, stopReason: 'stop', content: [{ type: 'text', text: '最终回答' }] },
+  ];
+  const recovered = timelineFromMessages(nativeHistory);
+  deep(recovered.blocks.map(block => block.kind), ['user', 'thinking', 'assistant', 'tools', 'plan', 'assistant'],
+    '历史按原生 message/content 顺序恢复，不按类别重排');
+  deep(recovered.blocks[3].tools.map(tool => [tool.name, tool.state, tool.durationMs]),
+    [['read', 'success', 1200], ['bash', 'error', 300]], '历史工具状态与耗时来自真实 toolResult');
+  equal(recovered.blocks[4].plan.tasks[0].status, 'completed', '历史计划取最终 toolResult details 的真实状态');
+  equal(recovered.blocks[2].text, '我先检查', '历史正文保留真实 assistant 文本');
+  equal(recovered.blocks[5].text, '最终回答', '历史最终回答按真实位置恢复');
+  /* content part 的真实交错顺序：工具之后的正文不能被并回工具之前。 */
+  const interleaved = timelineFromMessages([
+    { role: 'assistant', timestamp: 3100, stopReason: 'toolUse', content: [
+      { type: 'text', text: '先说明' },
+      { type: 'toolCall', id: 'i1', name: 'read', arguments: { path: 'SECRET_I1' } },
+      { type: 'text', text: '工具之后' },
+      { type: 'toolCall', id: 'i2', name: 'bash', arguments: { command: 'SECRET_I2' } },
+    ] },
+  ]);
+  deep(interleaved.blocks.map(block => block.kind), ['assistant', 'tools', 'assistant', 'tools'],
+    '历史保留一条 assistant 消息内 content 的真实交错顺序');
+  deep(interleaved.blocks.filter(block => block.kind === 'assistant').map(block => block.text),
+    ['先说明', '工具之后'], '后到的正文另起一段，不并回工具之前');
+  ok('历史投影不包含工具原始参数/输出/凭据（含超长输出）', !JSON.stringify(recovered.blocks).includes('SECRET')
+    && !JSON.stringify(recovered.blocks).includes('SECRET_RESULT')
+    && !JSON.stringify(recovered.blocks).includes('LONG_RAW_'));
+  const manyBlocks = Array.from({ length: MAX_BLOCKS + 12 }, (_, index) => ({
+    kind: 'assistant', text: 'block-' + index, state: 'complete', truncated: false,
+  }));
+  const boundedHistory = boundTimeline(manyBlocks);
+  ok('超长历史时间线有界并标记截断，保留最近记录', boundedHistory.blocks.length <= MAX_BLOCKS
+    && boundedHistory.truncated === true
+    && boundedHistory.blocks.at(-1).text === 'block-' + (MAX_BLOCKS + 11)
+    && !boundedHistory.blocks.some(block => block.text === 'block-0'));
+
+  /* 历史接口的 execution 走同一条投影；截断时必须明确说明，不能静默少显示。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [
+    item('H', { owner: null, lifecycle: 'dormant', activity: 'idle' }),
+    item('K', { owner: null, lifecycle: 'dormant', activity: 'idle' }),
+  ] });
+  global.fetch = async (requestUrl) => ({ ok: true, json: async () => {
+    const isK = String(requestUrl).includes('conversationId=K');
+    return isK
+      ? { ok: true, messages: [{ role: 'user', text: 'K 的历史' }], truncated: false,
+        execution: { timeline: [{ id: 'k1', kind: 'user', text: 'K 的历史', truncated: false }], truncated: false } }
+      : { ok: true, messages: [{ role: 'user', text: '检查并修复' }, { role: 'assistant', text: '最终回答' }], truncated: true,
+        execution: { timeline: recovered.blocks, truncated: true } };
+  } });
+  const historyHost = d.createElement('div'); d.body.appendChild(historyHost);
+  const historyView = createRuntimeConversation({ host: historyHost });
+  historyView.show('H'); await tick();
+  [...historyHost.querySelectorAll('button')].find(button => button.textContent === '打开历史')?.click();
+  await tick(20);
+  const historyKinds = [...historyHost.querySelectorAll('.rtc-output > *')].map(node => node.dataset?.role
+    || (node.classList.contains('ui2-runtime-thinking') ? 'thinking'
+      : node.classList.contains('ui2-runtime-tools') ? 'tools'
+        : node.classList.contains('ui2-runtime-plan') ? 'plan' : node.className));
+  deep(historyKinds, ['user', 'thinking', 'assistant', 'tools', 'plan', 'assistant'],
+    '历史视图按恢复的时间线渲染真实顺序');
+  ok('历史恢复 Thinking 可见内容', historyHost.querySelector('.ui2-runtime-thinking-body')?.textContent === '先看代码');
+  ok('历史恢复工具名/状态摘要', [...historyHost.querySelectorAll('.ui2-runtime-tool')].map(node => node.dataset.toolName).join(',') === 'read,bash');
+  ok('历史恢复计划与最终回答', historyHost.textContent.includes('修复') && historyHost.textContent.includes('最终回答'));
+  ok('历史记录截断时明确说明', historyHost.querySelector('.rtc-state').textContent.includes('仅显示最近部分')
+    && historyHost.querySelector('.rtc-state').textContent.includes('更早的执行记录已截断'));
+  ok('历史视图不展示工具原始输出或参数', !historyHost.textContent.includes('SECRET'));
+
+  historyView.show('K'); await tick(20);
+  [...historyHost.querySelectorAll('button')].find(button => button.textContent === '打开历史')?.click();
+  await tick(20);
+  ok('切换会话后只显示 K 自己的历史，不串 H 的内容', historyHost.textContent.includes('K 的历史')
+    && !historyHost.textContent.includes('最终回答') && !historyHost.textContent.includes('先看代码'));
+  historyView.dispose();
+  global.fetch = w.fetch;
 
   /* 运行态按钮不能只在 draw 里点亮一次：MutationObserver / resize 触发的 sync()
    * 会再次问 running()。Runtime 必须把「当前会话是否在运行」作为回调传进去，
