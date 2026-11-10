@@ -567,6 +567,10 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     const thinkingBlocks = r.timeline.filter(block => block.kind === 'thinking');
     r.thinkingBlock = thinkingBlocks.length ? thinkingBlocks[thinkingBlocks.length - 1] : null;
     r.planCalls.clear();
+    /* 历史里的工具是权威摘要；但事件重放可能已经记录了历史窗口里没有的真实
+     * 工具（例如 get_messages 只返回正文、或工具调用已被截断）。恢复时合并
+     * 两者，避免把正在运行/已中断的工具状态从会话摘要里抹掉。同 id 以历史
+     * 状态为准。 */
     const tools = [];
     for (const block of r.timeline) {
       if (block.kind !== 'tools') continue;
@@ -574,7 +578,8 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         tools.push({ id: tool.id, name: tool.name, state: tool.state === 'success' ? 'done' : tool.state === 'incomplete' ? 'interrupted' : tool.state });
       }
     }
-    r.tools = tools.slice(-100);
+    const knownTools = new Set(tools.map(tool => String(tool.id)));
+    r.tools = [...tools, ...r.tools.filter(tool => !knownTools.has(String(tool.id)))].slice(-100);
     r.settled = true;
     trimTimeline(r, null);
   }
