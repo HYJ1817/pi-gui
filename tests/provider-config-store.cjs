@@ -115,8 +115,17 @@ function readDacl(target) {
     "$rules=@($acl.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))",
     "[ordered]@{protected=$acl.AreAccessRulesProtected;owner=$acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value;sid=$sid;rules=@($rules|ForEach-Object{[ordered]@{identity=$_.IdentityReference.Value;type=$_.AccessControlType.ToString();rights=$_.FileSystemRights.ToString();inherited=$_.IsInherited}})}|ConvertTo-Json -Compress -Depth 5",
   ].join('\n');
-  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
-    encoding: 'utf8', windowsHide: true, env: { ...process.env, PI_GUI_ACL_TEST_TARGET: target },
+  /* CI 在 pwsh 下启动测试进程，PATH 与 PSModulePath 都可能先命中 PowerShell 7。
+   * powershell.exe 必须按绝对路径启动 Windows PowerShell，并把模块路径限定到它
+   * 自己的 Modules：否则 PS7 的 Microsoft.PowerShell.Security 会抢先匹配而加载
+   * 失败（Get-Acl 是 Windows PowerShell 专有命令），测试判据就变成了宿主 PATH
+   * 的形状。这里只修测试取证方式，不改产品 ACL 实现。 */
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  const shell = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const modulePath = path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'Modules');
+  const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-Command', script], {
+    encoding: 'utf8', windowsHide: true,
+    env: { ...process.env, PSModulePath: modulePath, PI_GUI_ACL_TEST_TARGET: target },
   });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout.trim());
