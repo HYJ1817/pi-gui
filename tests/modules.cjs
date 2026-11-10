@@ -754,6 +754,9 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
   const LIB_DIR = path.join(ROOT, 'lib') + path.sep;
   const HTTP_UTILS = path.resolve(path.join(SERVER_DIR, 'http-utils.js'));
   const SERVER_JS = path.resolve(path.join(ROOT, 'server.js'));
+  /* 唯一允许 server 直接 import 的两个 public/ 纯模块（理由见下方依赖规则）。 */
+  const SHARED_PROVIDER_CONTRACT = path.resolve(path.join(ROOT, 'public', 'provider-management', 'contract.js'));
+  const SHARED_RUNTIME_TIMELINE = path.resolve(path.join(ROOT, 'public', 'runtime-timeline.js'));
 
   const rawImports = new Map();
   const deps = new Map();
@@ -782,8 +785,13 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
      *     public/（lib/assets.js 的 readPublic），server 与 renderer 必须引用同一份
      *     文件，放 lib/ 反而会让浏览器 import 不到。它不是业务模块，放行范围
      *     精确到这一个文件，server 仍不得 import public/ 下的其他内容。
+     *   - public/runtime-timeline.js → **显式放行**：Runtime 执行时间线的纯数据投影
+     *     （无 DOM、无 I/O，只 import 同样纯的 public/plan-model.js）。历史恢复必须
+     *     在 server 侧完成窄投影后才把 block 发给 renderer（不能回传原始工具 args/
+     *     result），而实时与 get_messages 恢复又必须使用同一份纯函数；浏览器静态
+     *     资源只服务 public/，放 lib/ 反而会让浏览器 import 不到。放行范围精确到
+     *     这一个文件，server 仍不得 import public/ 下的其他内容。
      *   - 其它跨目录 import → 不允许。跨子系统协作一律走 server.js 装配 + 依赖注入。 */
-    const SHARED_PROVIDER_CONTRACT = path.resolve(path.join(ROOT, 'public', 'provider-management', 'contract.js'));
     const bad = [];
     for (const f of files) {
       const rel = relOf(f);
@@ -795,10 +803,21 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
           if (!sameDir && abs !== HTTP_UTILS) bad.push(`${rel} → ${spec}`);
           continue;
         }
-        if (!abs.startsWith(LIB_DIR) && abs !== SHARED_PROVIDER_CONTRACT) bad.push(`${rel} → ${spec}`);
+        if (!abs.startsWith(LIB_DIR) && abs !== SHARED_PROVIDER_CONTRACT && abs !== SHARED_RUNTIME_TIMELINE) bad.push(`${rel} → ${spec}`);
       }
     }
     return bad.length === 0 || bad.join(', ');
+  });
+
+  /* 放行 public/runtime-timeline.js 的前提是它始终是纯投影：一旦它开始碰
+   * DOM、I/O 或引入其他 renderer 模块，server 侧的历史投影就不再安全，这里
+   * 必须变红，而不是继续静默共享。 */
+  check('共享给 server 的 runtime-timeline 保持纯投影（无 DOM/IO，只依赖 plan-model）', () => {
+    const src = fs.readFileSync(SHARED_RUNTIME_TIMELINE, 'utf8');
+    const foreign = [...src.matchAll(/from\s+['"]([^'"]+)['"]/g)]
+      .map((m) => m[1]).filter((spec) => spec !== './plan-model.js');
+    const io = /\b(document|window|localStorage|node:fs|node:http|node:child_process|process\.)\b/.test(src);
+    return (foreign.length === 0 && !io) || `imports=${foreign.join(',') || 'ok'} io=${io}`;
   });
 
   check('没有任何模块 import server.js（否则成环）', () => {
