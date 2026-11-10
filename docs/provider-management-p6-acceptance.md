@@ -799,4 +799,5 @@ Windows 存储资格、首次推荐、未知能力显示、ci-results 竞态。�
   +625/−127）；测试与 CI 基建 `df1853f56c4e8ed60f3d927a56dac3165628ce71`
   （13 文件，+825/−45）。本报告连同文档更新提交紧随其后。
 - 构建产物 SHA-256：见 17.10（`5C12E1E8…F0E3` 等），对应上述产品提交的同一组源码。
-- PR CI run ID / attempt / gate：`<待回填，PR 创建后更新>`。
+- PR：<https://github.com/HYJ1817/pi-gui/pull/69>（`codex/provider-management-p6` → `main`）。
+- PR CI run ID / attempt / gate：创建时 6 项 pending；`<待回填，CI 完成后更新>`。
