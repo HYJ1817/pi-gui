@@ -69,7 +69,9 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     const first = await h.exec('c1', tasks(['a', 'in_progress'], ['b', 'pending']));
     equal(first.details.counts.total, 2, '首次调用建立完整任务列表');
     equal(first.details.counts.completed, 0, '首次调用不伪造完成数');
-    await h.exec('c2', tasks(['a', 'completed'], ['b', 'in_progress']));
+    ok('首次调用带真实运行 id', typeof first.details.turnId === 'string' && first.details.turnId.length > 0);
+    const second = await h.exec('c2', tasks(['a', 'completed'], ['b', 'in_progress']));
+    equal(second.details.turnId, first.details.turnId, '同一 run 内的计划更新复用 turnId');
     const replanned = await h.exec('c3', tasks(['b', 'pending'], ['c', 'pending']));
     deep(replanned.details.tasks.map(t => [t.id, t.status, t.retained === true]),
       [['b', 'pending', false], ['c', 'pending', false], ['a', 'completed', true]],
@@ -78,6 +80,8 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     await h.fire('before_agent_start', { messageType: 'user' });
     const nextTurn = await h.exec('c4', tasks(['d', 'pending']));
     deep(nextTurn.details.tasks.map(t => t.id), ['d'], '新一轮不复用上一轮完成记录');
+    ok('真正的新任务生成新的 turnId',
+      typeof nextTurn.details.turnId === 'string' && nextTurn.details.turnId !== first.details.turnId);
     const bad = await h.exec('c5', tasks(['x', 'pending'], ['x', 'pending']));
     ok('非法更新返回 isError，而不是静默修数据', bad.isError === true && bad.details.error === 'invalid_plan');
   }
@@ -113,6 +117,10 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     && projection.projectPlanResult({ details: { tool: 'gui_plan', version: 2, tasks: planArgs.tasks } }) === null);
   equal(projection.projectPlanResult({ details: { tool: 'gui_plan', version: 1, tasks: planArgs.tasks, revision: 7 } }).revision,
     7, '合法结果投影保留真实 revision');
+  equal(projection.projectPlanResult({ details: { tool: 'gui_plan', version: 1, tasks: planArgs.tasks, turnId: 'run-1' } }).turnId,
+    'run-1', '结果投影保留真实 turnId');
+  equal(projection.projectPlanResult({ details: { tool: 'gui_plan', version: 1, tasks: planArgs.tasks, turnId: 'not valid!' } }).turnId,
+    null, '非法 turnId 不进入 Runtime 投影');
 
   /* ================= 3. Runtime 出站边界 ================= */
   console.log('Runtime 事件出站边界');
@@ -141,6 +149,12 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     version: 1, tool: 'gui_plan', tasks: [{ id: 'a', title: 'A', status: 'completed' }],
   } };
   equal(PM.planFromToolEntry(entryDetails).tasks[0].status, 'completed', 'details 优先于 args（结束后的权威状态）');
+  equal(PM.planFromToolEntry({ name: 'gui_plan', details: {
+    version: 1, tool: 'gui_plan', tasks: [{ id: 'a', title: 'A', status: 'completed' }], turnId: 'run-1',
+  } }).turnId, 'run-1', '计划 details 的真实 turnId 被保留');
+  equal(PM.planFromToolEntry({ name: 'gui_plan', details: {
+    version: 1, tool: 'gui_plan', tasks: [{ id: 'a', title: 'A', status: 'completed' }], turnId: 'not valid!',
+  } }).turnId, null, '非法 turnId 不进入计划模型');
   equal(PM.planFromToolEntry({ name: 'gui_plan', args: tasks(['a', 'in_progress']), details: null }).tasks[0].status,
     'in_progress', '未完成调用退回 args（模型确实提交过）');
   ok('非计划 entry 不产生计划', PM.planFromToolEntry({ name: 'read', args: planArgs }) === null);
@@ -460,6 +474,131 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   equal(toolGroup().querySelector('.tl-list').hidden, false, '切回原会话恢复用户自己的展开状态');
   toolsView.dispose();
 
+  console.log('Runtime message_end 权威顺序');
+  const endHost = d.createElement('div'); d.body.appendChild(endHost);
+  const endView = createRuntimeConversation({ host: endHost });
+  const endSeqs = new Map();
+  const endFrame = (id, event) => {
+    const seq = (endSeqs.get(id) || 0) + 1;
+    endSeqs.set(id, seq);
+    return frame(id, seq, event);
+  };
+  const endKinds = () => [...endHost.querySelectorAll('.rtc-output > *')].map(node => node.dataset?.role
+    || (node.classList.contains('ui2-runtime-thinking') ? 'thinking'
+      : node.classList.contains('ui2-runtime-tools') ? 'tools'
+        : node.classList.contains('ui2-runtime-plan') ? 'plan' : node.className));
+  const endText = () => [...endHost.querySelectorAll('.rtc-assistant-text')].map(node => node.textContent).join('\n');
+  const endThinking = () => [...endHost.querySelectorAll('.ui2-runtime-thinking-body')].map(node => node.textContent);
+  const showEnd = async id => { endView.show(id); await tick(); };
+
+  /* 1. 只有 message_end：content 顺序就是最终 DOM 顺序，不能先补正文。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('M')] });
+  endFrame('M', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('M', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'thinking', thinking: '分析过程' },
+    { type: 'text', text: '最终回答' },
+  ] } });
+  await showEnd('M');
+  deep(endKinds(), ['thinking', 'assistant'], 'message_end 只有完整内容时按 content 顺序创建 Thinking → 正文');
+  equal(endText(), '最终回答', 'message_end 的正文来自权威 content');
+  deep(endThinking(), ['分析过程'], 'message_end 的 Thinking 来自权威 content');
+
+  /* 2. 正文在 Thinking 之前，同样按 content 顺序。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('N')] });
+  endFrame('N', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('N', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'text', text: '先回答' },
+    { type: 'thinking', thinking: '后思考' },
+  ] } });
+  await showEnd('N');
+  deep(endKinds(), ['assistant', 'thinking'], '正文在 Thinking 之前时保持 content 顺序');
+  equal(endText(), '先回答', '正文在 Thinking 之前的正文内容正确');
+  deep(endThinking(), ['后思考'], '正文在 Thinking 之前的 Thinking 内容正确');
+
+  /* 3. 多次交错：每个真实段各自成块，顺序不合并、不前移。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('O')] });
+  endFrame('O', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('O', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'thinking', thinking: '思考一' },
+    { type: 'text', text: '正文一' },
+    { type: 'thinking', thinking: '思考二' },
+    { type: 'text', text: '正文二' },
+  ] } });
+  await showEnd('O');
+  deep(endKinds(), ['thinking', 'assistant', 'thinking', 'assistant'], 'Thinking 与正文多次交错时保持真实 content 顺序');
+  deep(endThinking(), ['思考一', '思考二'], '交错场景的两个 Thinking 段都保留且不合并');
+  equal(endText(), '正文一\n正文二', '交错场景的两个正文段都保留且不合并');
+
+  /* 4. 已有流式正文：message_end 覆盖权威文本，不重复显示旧 delta。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Q')] });
+  endFrame('Q', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Q', { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '流式草稿' } });
+  await showEnd('Q');
+  endFrame('Q', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: '权威正文' }] } });
+  await tick();
+  equal(endHost.querySelectorAll('.rtc-assistant-text').length, 1, 'message_end 不重复创建流式正文');
+  equal(endText(), '权威正文', 'message_end 用权威正文覆盖流式草稿');
+
+  /* 5. 用户展开 Thinking 后收到权威内容：复用原节点，展开状态不丢。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('R')] });
+  endFrame('R', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('R', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '流式思考' } });
+  await showEnd('R');
+  const thinkingNode = endHost.querySelector('.ui2-runtime-thinking');
+  thinkingNode.open = true;
+  thinkingNode.dispatchEvent(new w.Event('toggle'));
+  endFrame('R', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'thinking', thinking: '权威思考' },
+    { type: 'text', text: '答案' },
+  ] } });
+  await tick();
+  ok('message_end 复用已展开的 Thinking 节点', endHost.querySelector('.ui2-runtime-thinking') === thinkingNode);
+  equal(thinkingNode.open, true, 'message_end 不收回用户已展开的 Thinking');
+  equal(thinkingNode.querySelector('.ui2-runtime-thinking-body').textContent, '权威思考', '复用的 Thinking 被权威文本覆盖');
+  deep(endKinds(), ['thinking', 'assistant'], '流式 Thinking 之后补正文时保持 Thinking 在前');
+
+  /* 6. 中断与空正文：保留真实流式内容，只标真实状态。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('S')] });
+  endFrame('S', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('S', { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '已输出' } });
+  await showEnd('S');
+  endFrame('S', { type: 'message_end', message: { role: 'assistant', stopReason: 'aborted', content: [] } });
+  await tick();
+  equal(endText(), '已输出', '中断且 content 为空时保留真实流式正文');
+  equal(endHost.querySelector('.rtc-timeline-message[data-role="assistant"]')?.dataset.state, 'interrupted', '中断正文标 interrupted');
+
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('W')] });
+  endFrame('W', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('W', { type: 'tool_execution_start', toolCallId: 'w1', toolName: 'read' });
+  endFrame('W', { type: 'message_end', message: { role: 'assistant', stopReason: 'aborted', content: [
+    { type: 'thinking', thinking: '中断前的思考' },
+  ] } });
+  await showEnd('W');
+  deep(endKinds(), ['tools', 'thinking'], '已发生的工具事件位置不被 message_end 内容移动到后面');
+  equal(endHost.querySelector('.ui2-runtime-thinking')?.dataset.state, 'interrupted', '仅 Thinking 的中断消息标 interrupted');
+
+  /* 7. 没有 message_start，只有 message_end：仍按权威 content 建块。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('X')] });
+  endFrame('X', { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [
+    { type: 'thinking', thinking: '无流式思考' },
+    { type: 'text', text: '无流式正文' },
+  ] } });
+  await showEnd('X');
+  deep(endKinds(), ['thinking', 'assistant'], '没有 message_start 时仍按 message_end 顺序建块');
+
+  /* 8. message_end 里的 toolCall 不伪造成已执行的工具节点。 */
+  runtimeStore.seed({ backendInstance: 'backend', items: [item('Y')] });
+  endFrame('Y', { type: 'message_start', message: { role: 'assistant' } });
+  endFrame('Y', { type: 'message_end', message: { role: 'assistant', stopReason: 'toolUse', content: [
+    { type: 'text', text: '准备调用' },
+    { type: 'toolCall', id: 'y1', name: 'read', arguments: { path: 'SECRET' } },
+  ] } });
+  await showEnd('Y');
+  deep(endKinds(), ['assistant'], 'message_end 不创建尚未执行的工具节点');
+  equal(endHost.querySelectorAll('.ui2-runtime-tool').length, 0, '没有 tool_execution_start 就不显示工具行');
+
+  endView.dispose(); endHost.remove();
+
   console.log('历史执行时间线');
   const { timelineFromMessages, boundTimeline, MAX_BLOCKS } = await import(url('runtime-timeline.js'));
   const nativeHistory = [
@@ -499,6 +638,55 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     '历史保留一条 assistant 消息内 content 的真实交错顺序');
   deep(interleaved.blocks.filter(block => block.kind === 'assistant').map(block => block.text),
     ['先说明', '工具之后'], '后到的正文另起一段，不并回工具之前');
+
+  /* 真实运行边界：扩展写入 details.turnId。同一 turnId 内跨 steer 的更新归并，
+   * 不同 turnId 即使复用相同任务 id 也必须分开。 */
+  const historyPlanResult = (id, turnId, tasks) => ({ role: 'toolResult', toolCallId: id, toolName: 'gui_plan', content: [{ type: 'text', text: 'ok' }],
+    details: { version: 1, tool: 'gui_plan', tasks, counts: { total: tasks.length, completed: tasks.filter(t => t.status === 'completed').length },
+      revision: 1, updatedAt: 1, ...(turnId ? { turnId } : {}) } });
+  const historyPlanCall = (id, tasks) => ({ role: 'assistant', stopReason: 'toolUse', content: [
+    { type: 'toolCall', id, name: 'gui_plan', arguments: { tasks } },
+  ] });
+  const runHistory = timelineFromMessages([
+    { role: 'user', content: [{ type: 'text', text: '任务一' }] },
+    historyPlanCall('e1', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+    historyPlanResult('e1', 'run-1', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+    { role: 'user', content: [{ type: 'text', text: '执行中补充指令' }] },
+    historyPlanCall('e2', [{ id: 'a', title: 'A', status: 'completed' }, { id: 'b', title: 'B', status: 'in_progress' }]),
+    historyPlanResult('e2', 'run-1', [{ id: 'a', title: 'A', status: 'completed' }, { id: 'b', title: 'B', status: 'in_progress' }]),
+    { role: 'user', content: [{ type: 'text', text: '新任务' }] },
+    historyPlanCall('e3', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+    historyPlanResult('e3', 'run-2', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+  ]);
+  const runPlans = runHistory.blocks.filter(block => block.kind === 'plan');
+  equal(runPlans.length, 2, '同一 turnId 的 steer 更新归并，新 turnId 另开卡');
+  equal(runPlans[0].plan.tasks.find(task => task.id === 'a').status, 'completed', '归并卡保留同一任务的最新真实状态');
+  equal(runPlans[1].plan.tasks[0].id, 'a', '不同真实任务可以复用相同任务 id');
+  equal(runPlans[1].plan.tasks[0].status, 'in_progress', '新任务的相同 id 不继承上一任务状态');
+  equal(runHistory.planBoundary, 'verified', '带 turnId 的历史标记为已验证运行边界');
+
+  const legacyPlans = timelineFromMessages([
+    { role: 'user', content: [{ type: 'text', text: '任务一' }] },
+    historyPlanCall('l1', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+    historyPlanResult('l1', null, [{ id: 'a', title: 'A', status: 'in_progress' }]),
+    { role: 'user', content: [{ type: 'text', text: '执行中补充指令' }] },
+    historyPlanCall('l2', [{ id: 'a', title: 'A', status: 'completed' }]),
+    historyPlanResult('l2', null, [{ id: 'a', title: 'A', status: 'completed' }]),
+  ]);
+  equal(legacyPlans.blocks.filter(block => block.kind === 'plan').length, 2,
+    '缺少 turnId 时保守地按用户消息保留两张真实卡');
+  equal(legacyPlans.planBoundary, 'unknown', '缺少 turnId 时明确标记计划归属未知');
+
+  const mixed = timelineFromMessages([
+    { role: 'user', content: [{ type: 'text', text: '任务一' }] },
+    historyPlanCall('m1', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+    historyPlanResult('m1', 'run-1', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+    { role: 'user', content: [{ type: 'text', text: '补充' }] },
+    historyPlanCall('m2', [{ id: 'a', title: 'A', status: 'completed' }]),
+    historyPlanResult('m2', null, [{ id: 'a', title: 'A', status: 'completed' }]),
+  ]);
+  equal(mixed.planBoundary, 'mixed', '新旧边界记录混用时标记为部分未知');
+  equal(mixed.blocks.filter(block => block.kind === 'plan').length, 2, '旧记录不强行并入新运行');
   ok('历史投影不包含工具原始参数/输出/凭据（含超长输出）', !JSON.stringify(recovered.blocks).includes('SECRET')
     && !JSON.stringify(recovered.blocks).includes('SECRET_RESULT')
     && !JSON.stringify(recovered.blocks).includes('LONG_RAW_'));
@@ -522,7 +710,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
       ? { ok: true, messages: [{ role: 'user', text: 'K 的历史' }], truncated: false,
         execution: { timeline: [{ id: 'k1', kind: 'user', text: 'K 的历史', truncated: false }], truncated: false } }
       : { ok: true, messages: [{ role: 'user', text: '检查并修复' }, { role: 'assistant', text: '最终回答' }], truncated: true,
-        execution: { timeline: recovered.blocks, truncated: true } };
+        execution: { timeline: recovered.blocks, truncated: true, planBoundary: 'unknown' } };
   } });
   const historyHost = d.createElement('div'); d.body.appendChild(historyHost);
   const historyView = createRuntimeConversation({ host: historyHost });
@@ -538,6 +726,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   ok('历史恢复 Thinking 可见内容', historyHost.querySelector('.ui2-runtime-thinking-body')?.textContent === '先看代码');
   ok('历史恢复工具名/状态摘要', [...historyHost.querySelectorAll('.ui2-runtime-tool')].map(node => node.dataset.toolName).join(',') === 'read,bash');
   ok('历史恢复计划与最终回答', historyHost.textContent.includes('修复') && historyHost.textContent.includes('最终回答'));
+  ok('历史缺少运行边界时明确说明计划归属不确定', historyHost.querySelector('.rtc-state').textContent.includes('归属不确定'));
   ok('历史记录截断时明确说明', historyHost.querySelector('.rtc-state').textContent.includes('仅显示最近部分')
     && historyHost.querySelector('.rtc-state').textContent.includes('更早的执行记录已截断'));
   ok('历史视图不展示工具原始输出或参数', !historyHost.textContent.includes('SECRET'));

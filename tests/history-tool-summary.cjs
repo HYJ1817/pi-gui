@@ -29,6 +29,41 @@ const path = require('node:path');
   const expected = (toolName, status, messagePosition = 0) => ({ toolName, status,
     source: status === 'unknown' ? 'unconfirmed' : 'confirmed', messagePosition });
   try {
+    check('history execution groups plan updates by real turnId across steer', () => {
+      const planCall = (id, node, parent, tasks) => entry(node, parent,
+        { role: 'assistant', content: [{ type: 'toolCall', id, name: 'gui_plan', arguments: { tasks } }] });
+      const planResult = (id, node, parent, turnId, tasks) => entry(node, parent,
+        { role: 'toolResult', toolCallId: id, toolName: 'gui_plan', content: [{ type: 'text', text: 'ok' }],
+          details: { version: 1, tool: 'gui_plan', tasks, counts: { total: tasks.length, completed: tasks.filter(t => t.status === 'completed').length },
+            revision: 1, updatedAt: 1, ...(turnId ? { turnId } : {}) } });
+      const value = read([
+        entry('u1', null, { role: 'user', content: '任务一' }),
+        planCall('p1', 'a1', 'u1', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+        planResult('p1', 'r1', 'a1', 'run-1', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+        entry('u2', 'r1', { role: 'user', content: '执行中补充指令' }),
+        planCall('p2', 'a2', 'u2', [{ id: 'a', title: 'A', status: 'completed' }, { id: 'b', title: 'B', status: 'in_progress' }]),
+        planResult('p2', 'r2', 'a2', 'run-1', [{ id: 'a', title: 'A', status: 'completed' }, { id: 'b', title: 'B', status: 'in_progress' }]),
+        entry('u3', 'r2', { role: 'user', content: '新任务' }),
+        planCall('p3', 'a3', 'u3', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+        planResult('p3', 'r3', 'a3', 'run-2', [{ id: 'a', title: 'A', status: 'in_progress' }]),
+      ]);
+      const plans = value.execution.timeline.filter(block => block.kind === 'plan');
+      assert.equal(plans.length, 2);
+      assert.equal(plans[0].plan.tasks.find(task => task.id === 'a').status, 'completed');
+      assert.equal(plans[1].plan.tasks[0].status, 'in_progress');
+      assert.equal(value.execution.planBoundary, 'verified');
+      assert.equal(value.messages.length, 3);
+    });
+
+    check('history execution preserves legacy plans without a fabricated boundary', () => {
+      const call = entry('a1', 'u1', { role: 'assistant', content: [{ type: 'toolCall', id: 'p1', name: 'gui_plan', arguments: { tasks: [{ id: 'a', title: 'A', status: 'pending' }] } }] });
+      const result = entry('r1', 'a1', { role: 'toolResult', toolCallId: 'p1', toolName: 'gui_plan', content: [{ type: 'text', text: 'ok' }],
+        details: { version: 1, tool: 'gui_plan', tasks: [{ id: 'a', title: 'A', status: 'pending' }], counts: { total: 1, completed: 0 } } });
+      const value = read([entry('u1', null, { role: 'user', content: '任务' }), call, result]);
+      assert.equal(value.execution.planBoundary, 'unknown');
+      assert.equal(value.execution.timeline.filter(block => block.kind === 'plan')[0].plan.turnId, null);
+    });
+
     check('tool positions identify insertion boundaries without exposing native IDs', () => {
       const a = call(); a.message.content.unshift({ type: 'text', text: 'before tools' });
       a.message.content.push({ type: 'toolCall', id: 'c2', name: 'write', arguments: {} });

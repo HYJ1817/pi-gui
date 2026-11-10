@@ -171,6 +171,7 @@ function planFrom(events, type) {
     if (!tasks.some(task => task.status === 'in_progress' && task.title.includes('读取 README'))) throw Error('Runtime UI 缺少真实 in_progress 任务');
     if (!tasks.some(task => task.status === 'pending' && task.title.includes('运行检查'))) throw Error('Runtime UI 缺少真实 pending 任务');
     if (host.querySelectorAll('.ui2-runtime-tool[data-tool-name="gui_plan"]').length) throw Error('gui_plan 重复进入工具行');
+    if (typeof projectedEnd.plan.turnId !== 'string' || !projectedEnd.plan.turnId) throw Error('真实计划结果缺少运行边界 turnId');
     view.dispose();
     dom.window.close();
 
