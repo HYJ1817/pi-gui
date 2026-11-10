@@ -1778,7 +1778,7 @@ staticCheck();
   check('一组超过一项时显示「操作 N 项」', () => {
     const n = firstGroup.querySelectorAll('.tl-item').length;
     const head = firstGroup.querySelector('.tl-group-head');
-    return (n >= 2 && head.hidden === false && head.textContent === `操作 ${n} 项`) || `${head.hidden} ${head.textContent}`;
+    return (n >= 2 && head.hidden === false && head.textContent === `工具调用 · ${n} 次`) || `${head.hidden} ${head.textContent}`;
   });
 
   es.emit({ type: 'message_start', message: { role: 'assistant', content: [] } });
@@ -1786,7 +1786,7 @@ staticCheck();
   es.emit({ type: 'tool_execution_start', toolCallId: 'g1', toolName: 'read', args: { path: 'a.txt' } });
   es.emit({ type: 'tool_execution_end', toolCallId: 'g1', isError: false, result: { content: [{ type: 'text', text: 'x' }] } });
   check('新的 assistant 消息开启新的一组', () => window.document.querySelectorAll('.tl-group').length === 2 || window.document.querySelectorAll('.tl-group').length);
-  check('只有一项的组不摆「操作 1 项」的废话标题', () => {
+  check('只有一项的组不摆「工具调用 · 1 次」的废话标题', () => {
     const g = window.document.querySelectorAll('.tl-group')[1];
     const head = g.querySelector('.tl-group-head');
     return (head.hidden === true && head.textContent === '') || `${head.hidden} ${head.textContent}`;

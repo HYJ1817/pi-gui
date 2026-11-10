@@ -65,7 +65,7 @@ async function unit() {
     w.onToolStart({ toolCallId: 'a', toolName: 'read', args: { path: 'fixture.txt' } });
     w.onToolStart({ toolCallId: 'b', toolName: 'read', args: { path: 'fixture.txt' } });
     const group = one('.tl-group'), head = group.querySelector('.tl-group-head'), list = group.querySelector('.tl-list');
-    check('real message boundary groups both tools once', () => { equal(all('.tl-group').length, 1); equal(list.children.length, 2); equal(head.textContent, '操作 2 项'); });
+    check('real message boundary groups both tools once', () => { equal(all('.tl-group').length, 1); equal(list.children.length, 2); equal(head.textContent, '工具调用 · 2 次'); });
     check('batch summary is native keyboard button', () => { equal(head.tagName, 'BUTTON'); equal(head.type, 'button'); assert.ok(head.classList.contains('ui2-tool-summary')); });
     check('multiple tools start collapsed without hiding their status summary', () => { equal(list.hidden, true); equal(head.getAttribute('aria-expanded'), 'false'); });
     head.click();
@@ -86,7 +86,7 @@ async function unit() {
     const liveStatuses = [...list.children].map(n => n.dataset.status);
     w.rebuildFromMessages([{ role: 'assistant', content: [call('a'), call('b')] }, result('a', true, 'provider cancelled request')]);
     check('history uses same grouped status semantics', () => assert.deepEqual(all('.tl-item').map(n => n.dataset.status), liveStatuses));
-    check('history uses same interactive batch summary', () => equal(one('.ui2-tool-summary')?.textContent, '操作 2 项'));
+    check('history uses same interactive batch summary', () => equal(one('.ui2-tool-summary')?.textContent, '工具调用 · 2 次'));
     w.rebuildFromMessages([{ role: 'assistant', content: [call('a')] }, result('a'), assistant('between'), { role: 'assistant', content: [call('b'), call('c')] }, result('b'), result('c'), result('orphan', true, 'orphan failed')]);
     check('separate assistant and orphan boundaries are retained', () => { equal(all('.tl-group').length, 3); equal(all('.tl-group')[0].querySelectorAll('.tl-item').length, 1); equal(all('.tl-group')[1].querySelectorAll('.tl-item').length, 2); });
     check('orphan toolResult remains visible at its own position', () => { equal(all('.tl-group')[2].querySelector('.tl-item').dataset.id, 'orphan'); assert.match(all('.tl-group')[2].textContent, /orphan failed/); });
@@ -97,7 +97,7 @@ async function unit() {
     check('explicit cancelled and interrupted presentation states survive collapse', () => assert.match(direct.querySelector('.ui2-tool-state')?.textContent || '', /已中断 1.*已取消 1/));
     const extra = w.makeEntry({ toolCallId: 'later', toolName: 'read', args: {} });
     w.addToGroup(direct, w.renderEntry(extra));
-    check('late tool keeps chosen collapse state and increments real count', () => { equal(direct.querySelector('.ui2-tool-summary').textContent, '操作 3 项'); equal(direct.querySelector('.tl-list').hidden, true); });
+    check('late tool keeps chosen collapse state and increments real count', () => { equal(direct.querySelector('.ui2-tool-summary').textContent, '工具调用 · 3 次'); equal(direct.querySelector('.tl-list').hidden, true); });
     reset();
     w.onMessageStart({ message: { role: 'assistant' } });
     w.onMessageUpdate({ assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta: 'checking' } }); await pause();

@@ -235,9 +235,9 @@ const { JSDOM } = require('jsdom');
   frame('X', 4, { type: 'extension_ui_request', id: 'a-x', method: 'confirm', title: evil });
   frame('X', 5, { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'thinking', thinking: evil }, { type: 'text', text: evil }] } });
   await tick();
-  const staticIcons = host.querySelectorAll('.rtc-composer-actions > .rtc-send > svg[aria-hidden="true"], .rtc-composer-actions > .rtc-stop > svg[aria-hidden="true"]');
+  const staticIcons = host.querySelectorAll('.rtc-composer-actions > .rtc-send > svg[aria-hidden="true"], .rtc-composer-actions > .rtc-stop > svg[aria-hidden="true"], .scroll-bottom .scroll-arrow > svg[aria-hidden="true"]');
   ok('不可信文本不产生任何注入节点，静态动作图标保留', host.querySelectorAll('img, script, iframe, object, embed').length === 0
-    && staticIcons.length === 2 && host.querySelectorAll('svg').length === staticIcons.length
+    && staticIcons.length === 3 && host.querySelectorAll('svg').length === staticIcons.length
     && [...staticIcons].every(node => !node.hasAttribute('onload')));
   ok('SVG 载荷与事件属性仍作为原文显示', output().textContent.includes('<svg onload=alert(3)>')
     && thinkingBlock().querySelector('.ui2-runtime-thinking-body').textContent.includes('<svg onload=alert(3)>'));
