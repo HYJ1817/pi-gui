@@ -849,6 +849,10 @@ CI 上这些坑大多不会触发（干净检出里没有 `projects.json`、runn
 
 启动 `npm run harness` 后运行 `npm run shots:harness`，CDP 在真实 Chrome 中对 69–85 场景截图并运行 `mustTrue` 结构判据：Bubble 的实际右对齐和最大宽度、Assistant 透明背景、Thinking 内容高度、Tool 状态、附件数量与高度、Minimap 定位、长代码的内部滚动，以及 700/900/1200/1536px 的无页面横向溢出。场景 57–68 仍先在原对话夹具上运行。截图保存在被忽略的 `.shots/`。
 
+### Agent 执行过程视觉验收
+
+`npm run test:agent-execution:visual` 用真实 Electron + Chromium 加载生产 `public/` ESM/CSS，由 `tests/visual-harness.cjs` 提供离线脚本事件；不启动真 pi、不调用模型、不写用户会话。它检查任务列表的默认展开、真实计数、长标题换行与折叠保持，Thinking 的默认折叠和增量不收回，工具组的真实次数/状态/默认折叠/单条详情，回到底部按钮的 44px 尺寸、运行四点、悬停箭头、点击只滚当前容器，以及深浅色、700px 和 Runtime A/B 会话隔离。截图、`report.json` 与交互录制写入 `.shots/agent-execution/`；该专项不属于无桌面 canonical，视觉证据仍以真实截图为准。
+
 ## 十、P14-C Composer 视觉验证
 
 `shots:harness` 的 86–104 场景覆盖空态、单行、三行、textarea 达到高度上限、单/多/解析中附件、拖入态、Model/Thinking/Context 弹层、运行态 Stop、无项目锁定视觉夹具、700/900/1200/1536px、700×600，以及长 URL/路径/中文。`mustTrue` 检查真实矩形：Composer 与 `#stream` 同轴且在视口内；CSS 留白变量与实测高度相符；末条消息能滚到 Composer 上方；达到上限时 textarea 内滚；弹层在 Composer 上方且不被裁切；窄屏控件都在容器内且页面无横向溢出。锁定场景只在浏览器测试夹具中模拟已有的禁用状态，不修改项目选择逻辑。
