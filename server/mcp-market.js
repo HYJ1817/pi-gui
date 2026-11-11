@@ -43,6 +43,32 @@ const ARG_NAME_RE = /^--?[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const ENV_REFERENCE_RE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 const SETTING_REFERENCE_RE = /^(?:[!#$%&'*+.^_`|~0-9A-Za-z-]+[ \t]+)?\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 const REMOTE_COMMANDS = new Set(['npx', 'uvx']);
+/* runtimeArguments 会直接交给 npx / uvx，必须挡住能改写包来源或执行
+ * 任意命令的参数；packageArguments 是传给 server 自己的，不受此限。 */
+const UNSAFE_RUNTIME_FLAGS = new Set([
+  '-c', '--call', '--package', '-p',
+  '--registry', '--registry-url', '--userconfig', '--globalconfig',
+  '--node-options',
+  '--index-url', '--extra-index-url', '--default-index', '--find-links',
+  '--from', '--with',
+]);
+
+function unsafeRuntimeArg(text) {
+  const s = String(text || '');
+  for (const flag of UNSAFE_RUNTIME_FLAGS) {
+    if (s === flag || s.startsWith(`${flag}=`)) return flag;
+  }
+  return '';
+}
+
+function unsafeRuntimeToken(token) {
+  for (const part of token.parts) {
+    if (typeof part !== 'string') continue;
+    const flag = unsafeRuntimeArg(part);
+    if (flag) return flag;
+  }
+  return '';
+}
 const NPM_REGISTRY_BASE_RE = /^https:\/\/registry\.npmjs\.org\/?$/i;
 const PYPI_REGISTRY_BASE_RE = /^https:\/\/(?:pypi\.org|pypi\.python\.org)\/?$/i;
 const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'];
@@ -1197,6 +1223,10 @@ function planPackage(pkg, server) {
   const packageSpec = registryType === 'npm' ? `${id}@${version}` : `${id}==${version}`;
   const runtimePlan = planArguments(pkg.runtimeArguments, { prefix: 'rt' });
   if (!runtimePlan.ok) return runtimePlan;
+  const badRuntime = runtimePlan.tokens.map(unsafeRuntimeToken).find(Boolean);
+  if (badRuntime) {
+    return { ok: false, reason: `runtimeArguments 使用了会改写包来源或执行命令的参数 ${badRuntime}，暂不支持安全转换` };
+  }
   const packagePlan = planArguments(pkg.packageArguments, { prefix: 'arg' });
   if (!packagePlan.ok) return packagePlan;
 
@@ -1256,6 +1286,7 @@ function planPackage(pkg, server) {
       staticEnv: envPlan.staticEnv,
       envInputs: envPlan.envInputs,
       requires: registryType === 'npm' ? ['node', 'npx'] : ['python', 'uv', 'uvx'],
+      runtimeArgCount: runtimeDefaults.length + runtimePlan.tokens.length,
       packageSpec,
     },
   };
@@ -1559,6 +1590,12 @@ function buildRegistryConfig(server, values = {}) {
       args.push(r.text);
     }
     if (args.length > 32) return codeError('bad-args', '参数量超过 Pi 的 32 项上限');
+    /* 用户填写的 runtime 参数也要再查一次：字段值可能是 `--registry=…`
+     * 或 `-c`，不能靠模板阶段的静态检查。 */
+    const badRuntime = args.slice(0, plan.runtimeArgCount || 0).map(unsafeRuntimeArg).find(Boolean);
+    if (badRuntime) {
+      return codeError('unsupported', `运行时参数 ${badRuntime} 会改写包来源或执行命令，已拒绝`);
+    }
     if (argsContainSecret(args)) {
       return codeError('secret-value-unsupported', '启动参数疑似包含明文凭据；请改用环境变量，Pi GUI 不接收明文凭据');
     }

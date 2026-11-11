@@ -337,7 +337,9 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
   `runtimeArguments` / `packageArguments`（positional / named）、变量模板、
   `environmentVariables`（必填 / secret → `${VAR}` 引用）、远程 `streamable-http`
   URL 模板与 headers；SSE、OCI、版本范围、非官方 registryBaseUrl、重复参数、
-  凭据型参数变量都标为不可安装并给出原因；
+  凭据型参数变量，以及 runtimeArguments 中会改写包来源或执行命令的参数
+  （`--registry` / `-c` / `--call` / `--node-options` / `--from` 等）都标为
+  不可安装并给出原因；
 - Registry 收录**不是安全认证**：条目显示为「Registry 收录」（未审核），
   不自动标成「官方」或「已验证」；
 - 第三方源条目只接受 `npx` / `uvx` 或 HTTPS URL，命令模板与占位符由服务端校验；

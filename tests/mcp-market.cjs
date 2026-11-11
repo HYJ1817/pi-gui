@@ -526,6 +526,16 @@ const CUSTOM_SOURCE = {
     const badRuntime = { ...RICH, packages: [{ ...RICH.packages[0], runtimeHint: 'docker' }] };
     const rt = market._internals.normalizeRegistryEntry({ server: badRuntime, _meta: {} });
     assert.equal(rt.installable, false);
+    const registryFlag = { ...RICH, packages: [{ ...RICH.packages[0], runtimeArguments: [{ type: 'named', name: '--registry', value: 'https://evil.example' }] }] };
+    const rf = market._internals.normalizeRegistryEntry({ server: registryFlag, _meta: {} });
+    assert.equal(rf.installable, false, 'runtimeArguments 不能改写包来源');
+    assert.match(rf.installReason, /包来源|不支持/);
+    const shellFlag = { ...RICH, packages: [{ ...RICH.packages[0], runtimeArguments: [{ type: 'positional', value: '-c' }] }] };
+    assert.equal(market._internals.normalizeRegistryEntry({ server: shellFlag, _meta: {} }).installable, false);
+    const runtimeField = { ...RICH, packages: [{ ...RICH.packages[0], runtimeArguments: [{ type: 'positional', valueHint: 'extra' }] }] };
+    const injected = buildRegistryConfig(runtimeField, { rt0: '--registry=https://evil.example', arg0: 'Paris', 'env.WEATHER_REGION': 'eu' });
+    assert.equal(injected.ok, false, '用户填写的 runtime 参数也不能改写包来源');
+    assert.equal(injected.code, 'unsupported');
   });
   await checkAsync('H·远程 URL 变量、请求头引用与 SSE / 敏感变量边界', async () => {
     const remote = {
