@@ -985,15 +985,18 @@ function guessCategory(text) {
  * 校验官方 Registry 的 cursor，合法值原样返回。
  *
  * cursor 是不透明令牌：这里只检查类型、长度和字符边界，**绝不截断或改写**。
- * 返回空串表示没有 cursor；非法值抛带 marketCode 的错误，由调用方转成明确
- * 的失败结果。控制字符与孤立代理项（lone surrogate）都会被 URL 编码改写，
- * 因此一并拒绝；合法 Unicode / 保留字符经 URLSearchParams 往返后必须与
- * 原值完全一致。
+ * 空串表示没有 cursor；非空但只含空白字符的值不是合法的分页令牌，明确失败，
+ * 不能当成“没有下一页”而把不完整目录缓存下来。控制字符与孤立代理项
+ * （lone surrogate）都会被 URL 编码改写，因此一并拒绝；合法 Unicode /
+ * 保留字符经 URLSearchParams 往返后必须与原值完全一致。
  */
 function registryCursorValue(cursor) {
   if (cursor === undefined || cursor === null || cursor === '') return '';
   if (typeof cursor !== 'string') {
     throw Object.assign(new Error('Registry 分页游标不是字符串'), { marketCode: 'invalid-response' });
+  }
+  if (!cursor.trim()) {
+    throw Object.assign(new Error('Registry 分页游标只包含空白字符'), { marketCode: 'invalid-response' });
   }
   if (cursor.length > REGISTRY_MAX_CURSOR_LENGTH) {
     throw Object.assign(
@@ -1014,8 +1017,8 @@ function registryCursorValue(cursor) {
 
 function setRegistryCursor(u, cursor) {
   const value = registryCursorValue(cursor);
-  /* 空白 cursor 与上游“没有下一页”的语义一致；不往 URL 里塞一个空令牌。 */
-  if (!value || !value.trim()) return;
+  /* 空串表示没有下一页；非空但只含空白字符的值已在校验阶段拒绝。 */
+  if (!value) return;
   u.searchParams.set('cursor', value);
   /* 防御性回读：URL 编码 / 解码不能改变合法 cursor。这里解析的是最终
    * 序列化出来的 URL，而不是 searchParams 的内部值。 */
@@ -2269,11 +2272,12 @@ export function createMcpMarket({
         }
         const metadata = isRecord(data.metadata) ? data.metadata : {};
         const next = metadata.nextCursor;
-        if (next === undefined || next === null) break;
+        /* 只有 null / undefined / 明确的空串表示分页结束。非空但只含空白
+         * 的 cursor 是异常响应，必须失败，不能当成完整目录缓存。 */
+        if (next === undefined || next === null || next === '') break;
         if (typeof next !== 'string') {
           return { ...codeError('invalid-response', 'Registry 分页游标不是字符串'), items: [], pages, network: lastNetwork };
         }
-        if (!next.trim()) break;
         let nextCursor;
         try {
           nextCursor = registryCursorValue(next);
