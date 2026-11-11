@@ -39,6 +39,7 @@ const REGISTRY_ROW = {
       version: '1.2.3',
       runtimeHint: 'npx',
       transport: { type: 'stdio' },
+      packageArguments: [{ type: 'positional', valueHint: 'root', isRequired: true, description: 'Root directory' }],
       environmentVariables: [{ name: 'TEST_TOKEN', isRequired: true, isSecret: true }],
     }],
   },
@@ -67,7 +68,7 @@ const CUSTOM_SOURCE = {
     now: () => 1700000000000,
   });
   const calls = [];
-  const fetchImpl = async (url) => {
+  const requestImpl = async (url) => {
     calls.push(url);
     if (url.startsWith('https://registry.modelcontextprotocol.io/')) {
       const u = new URL(url);
@@ -78,14 +79,14 @@ const CUSTOM_SOURCE = {
     }
     if (url === 'https://market.example/servers.json') return jsonResponse(CUSTOM_SOURCE);
     if (url === 'https://market.example/bad.json') return jsonResponse({ nope: true });
-    if (url === 'https://market.example/redirect') throw Object.assign(new Error('redirect'), { name: 'TypeError' });
+    if (url === 'https://market.example/redirect') return new Response(null, { status: 302, headers: { location: 'https://evil.example/' } });
     if (url === 'https://market.example/big') return jsonResponse({ servers: [] }, 200, { 'content-length': String(3 * 1024 * 1024) });
     if (url === 'https://market.example/text') return new Response('not json', { status: 200, headers: { 'content-type': 'text/plain' } });
     return jsonResponse({ servers: [], metadata: {} });
   };
   const lookupImpl = async () => [{ address: '93.184.216.34', family: 4 }];
   const market = createMcpMarket({
-    dataDir: DATA, configStore: store, env, fetchImpl, lookupImpl, now: () => 1700000000000,
+    dataDir: DATA, configStore: store, env, requestImpl, lookupImpl, now: () => 1700000000000,
   });
 
   section('A. 内置精选目录（离线）');
@@ -180,13 +181,13 @@ const CUSTOM_SOURCE = {
   await checkAsync('C·分类筛选会跨 Registry 页继续查找', async () => {
     const rows = {
       'cursor-doc': {
-        servers: [{ server: { name: 'io.example/memory', title: 'Memory', description: 'Long term memory and knowledge', version: '1.0.0', packages: [{ registryType: 'npm', identifier: 'memory-mcp', version: '1.0.0', runtimeHint: 'npx' }] }, _meta: { 'io.modelcontextprotocol.registry/official': { status: 'active', isLatest: true } } }],
+        servers: [{ server: { name: 'io.example/memory', title: 'Memory', description: 'Long term memory and knowledge', version: '1.0.0', packages: [{ registryType: 'npm', identifier: 'memory-mcp', version: '1.0.0', runtimeHint: 'npx', transport: { type: 'stdio' } }] }, _meta: { 'io.modelcontextprotocol.registry/official': { status: 'active', isLatest: true } } }],
         metadata: {},
       },
     };
     const paged = createMcpMarket({
       dataDir: DATA, configStore: store, env,
-      fetchImpl: async (url) => {
+      requestImpl: async (url) => {
         const u = new URL(url);
         if (u.searchParams.get('cursor') === 'cursor-doc') return jsonResponse(rows['cursor-doc']);
         return jsonResponse({ servers: [REGISTRY_ROW], metadata: { nextCursor: 'cursor-doc' } });
@@ -205,19 +206,21 @@ const CUSTOM_SOURCE = {
     const r = await market.install({
       source: 'registry', catalogId: item.catalogId, scope: 'user',
       expectedRevision: store.revisions().user,
-      command: 'evil', url: 'https://evil.example', values: {},
+      command: 'evil', url: 'https://evil.example', values: { arg0: ALLOWED },
     });
     assert.equal(r.ok, true, JSON.stringify(r));
     const saved = JSON.parse(fs.readFileSync(userFile, 'utf8')).mcpServers['Test-Server'];
     assert.equal(saved.command, 'npx');
-    assert.deepEqual(saved.args, ['-y', 'test-mcp@1.2.3']);
+    assert.deepEqual(saved.args, ['-y', 'test-mcp@1.2.3', ALLOWED]);
     assert.equal(saved.env.TEST_TOKEN, '${TEST_TOKEN}');
     assert.notEqual(saved.url, 'https://evil.example');
+    assert.ok(r.commandPreview.includes(ALLOWED));
+    assert.deepEqual(r.requiredEnvKeys, ['TEST_TOKEN']);
   });
   await checkAsync('C·Registry 失败返回明确 code，内置目录仍可用', async () => {
     const bad = createMcpMarket({
       dataDir: DATA, configStore: store, env,
-      fetchImpl: async () => { throw Object.assign(new Error('timeout'), { name: 'TimeoutError' }); },
+      requestImpl: async () => { throw Object.assign(new Error('timeout'), { name: 'TimeoutError', marketCode: 'timeout' }); },
       lookupImpl,
     });
     const r = await bad.list({ source: 'registry', q: 'x' });
@@ -227,18 +230,39 @@ const CUSTOM_SOURCE = {
     assert.equal(builtin.ok, true);
     assert.equal(builtin.items.length, 10);
   });
-  await checkAsync('C·非 npm / 非 streamable-http 条目标记为不可安装', async () => {
+  await checkAsync('C·PyPI 包用 uvx 与具体版本转换', async () => {
+    const py = createMcpMarket({
+      dataDir: DATA, configStore: store, env,
+      requestImpl: async () => jsonResponse({
+        servers: [{ server: { name: 'io.example/py', title: 'Py', version: '1.0.0', packages: [{ registryType: 'pypi', identifier: 'py-mcp', version: '1.0.0', runtimeHint: 'uvx', transport: { type: 'stdio' } }] }, _meta: { 'io.modelcontextprotocol.registry/official': { status: 'active', isLatest: true } } }],
+      }),
+      lookupImpl,
+    });
+    const r = await py.list({ source: 'registry' });
+    assert.equal(r.items.length, 1);
+    assert.equal(r.items[0].installable, true, JSON.stringify(r.items[0]));
+    assert.equal(r.items[0].commandSummary, 'uvx py-mcp==1.0.0');
+  });
+  await checkAsync('C·不支持的包类型 / SSE / 版本范围标记为不可安装', async () => {
     const odd = createMcpMarket({
       dataDir: DATA, configStore: store, env,
-      fetchImpl: async () => jsonResponse({
-        servers: [{ server: { name: 'io.example/py', title: 'Py', version: '1.0.0', packages: [{ registryType: 'pypi', identifier: 'py-mcp', version: '1.0.0', runtimeHint: 'uvx' }] }, _meta: { 'io.modelcontextprotocol.registry/official': { status: 'active', isLatest: true } } }],
+      requestImpl: async () => jsonResponse({
+        servers: [
+          { server: { name: 'io.example/oci', title: 'OCI', version: '1.0.0', packages: [{ registryType: 'oci', identifier: 'docker.io/x', version: '1.0.0', transport: { type: 'stdio' } }] }, _meta: {} },
+          { server: { name: 'io.example/sse', title: 'SSE', version: '1.0.0', remotes: [{ type: 'sse', url: 'https://x.example/sse' }] }, _meta: {} },
+          { server: { name: 'io.example/range', title: 'Range', version: '1.0.0', packages: [{ registryType: 'npm', identifier: 'range-mcp', version: '^1.0.0', runtimeHint: 'npx', transport: { type: 'stdio' } }] }, _meta: {} },
+        ],
       }),
       lookupImpl,
     });
     const r = await odd.list({ source: 'registry' });
-    assert.equal(r.items.length, 1);
-    assert.equal(r.items[0].installable, false);
-    assert.ok(r.items[0].installReason);
+    assert.equal(r.items.length, 3);
+    for (const item of r.items) {
+      assert.equal(item.installable, false, item.name);
+      assert.ok(item.installReason, item.name);
+    }
+    assert.match(r.items.find((i) => i.name === 'SSE').installReason, /SSE/);
+    assert.match(r.items.find((i) => i.name === 'Range').installReason, /版本/);
   });
 
   section('D. 第三方市场源');
@@ -304,7 +328,7 @@ const CUSTOM_SOURCE = {
   await checkAsync('E·DNS 解析到内网被拒', async () => {
     const m = createMcpMarket({
       dataDir: DATA, configStore: store, env,
-      fetchImpl, lookupImpl: async () => [{ address: '192.168.1.9', family: 4 }],
+      requestImpl, lookupImpl: async () => [{ address: '192.168.1.9', family: 4 }],
     });
     const r = await m.addSource({ url: 'https://market.example/servers.json' });
     assert.equal(r.ok, false);
@@ -316,7 +340,7 @@ const CUSTOM_SOURCE = {
     assert.equal(big.code, 'too-large');
     const redir = await market.addSource({ url: 'https://market.example/redirect' });
     assert.equal(redir.ok, false);
-    assert.equal(redir.code, 'network');
+    assert.equal(redir.code, 'redirect-blocked');
   });
   check('E·isPrivateIp 覆盖 IPv4 / IPv6 边界', () => {
     const { isPrivateIp } = market._internals;
@@ -331,6 +355,210 @@ const CUSTOM_SOURCE = {
     for (const ip of ['93.184.216.34', '8.8.8.8', '2606:4700::1111', '2002:0808:0808::1']) {
       assert.equal(isPrivateIp(ip), false, ip);
     }
+  });
+
+  section('G. DNS 固定 / 代理 / 重定向边界');
+  const fetchJson = market._internals.fetchJson;
+  await checkAsync('G·DNS 只解析一次，连接目标使用已校验地址', async () => {
+    let lookups = 0;
+    const seen = [];
+    const r = await fetchJson('https://market.example/x', {
+      env: {},
+      lookupImpl: async () => {
+        lookups += 1;
+        return lookups === 1
+          ? [{ address: '93.184.216.34', family: 4 }]
+          : [{ address: '127.0.0.1', family: 4 }];
+      },
+      requestImpl: async (url, opts) => {
+        seen.push(opts);
+        return jsonResponse({ ok: true });
+      },
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(lookups, 1, '只允许解析一次；第二次解析就是 rebinding 窗口');
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].address, '93.184.216.34');
+    assert.equal(seen[0].hostname, 'market.example', 'TLS 仍按原域名校验');
+  });
+  await checkAsync('G·双栈地址逐个尝试，全部来自已校验列表', async () => {
+    const attempts = [];
+    const r = await fetchJson('https://market.example/x', {
+      env: {},
+      lookupImpl: async () => [
+        { address: '2606:4700::1111', family: 6 },
+        { address: '93.184.216.34', family: 4 },
+      ],
+      requestImpl: async (url, opts) => {
+        attempts.push(opts);
+        if (opts.family === 6) throw Object.assign(new Error('unreachable'), { code: 'ENETUNREACH' });
+        return jsonResponse({ ok: 1 });
+      },
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(attempts.length, 2);
+    assert.deepEqual(attempts.map((a) => a.address), ['2606:4700::1111', '93.184.216.34']);
+  });
+  await checkAsync('G·重定向被拒绝且不发起第二次请求', async () => {
+    let calls = 0;
+    const r = await fetchJson('https://market.example/x', {
+      env: {},
+      lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+      requestImpl: async () => {
+        calls += 1;
+        return new Response(null, { status: 302, headers: { location: 'https://evil.example/' } });
+      },
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'redirect-blocked');
+    assert.equal(calls, 1);
+  });
+  await checkAsync('G·代理环境明确拒绝，不假装已完成地址校验', async () => {
+    let calls = 0;
+    const r = await fetchJson('https://market.example/x', {
+      env: { HTTPS_PROXY: 'http://127.0.0.1:7890' },
+      lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+      requestImpl: async () => { calls += 1; return jsonResponse({}); },
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'proxy-blocked');
+    assert.equal(calls, 0);
+  });
+  await checkAsync('G·NO_PROXY 命中目标域名时走直连并固定 IP', async () => {
+    const seen = [];
+    const r = await fetchJson('https://market.example/x', {
+      env: { HTTPS_PROXY: 'http://127.0.0.1:7890', NO_PROXY: '.example' },
+      lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+      requestImpl: async (url, opts) => { seen.push(opts); return jsonResponse({ ok: 1 }); },
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(seen[0].address, '93.184.216.34');
+  });
+  await checkAsync('G·fake-IP 代理网段明确拒绝', async () => {
+    let calls = 0;
+    const r = await fetchJson('https://market.example/x', {
+      env: {},
+      lookupImpl: async () => [{ address: '198.18.4.17', family: 4 }],
+      requestImpl: async () => { calls += 1; return jsonResponse({}); },
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'proxy-blocked');
+    assert.match(r.error, /fake-IP/);
+    assert.equal(calls, 0);
+  });
+  check('G·连接参数保留 hostname / SNI，lookup 只返回固定 IP', () => {
+    const opts = market._internals.pinnedRequestOptions(
+      new URL('https://market.example:443/path?q=1'), '93.184.216.34', 4, { accept: 'application/json' },
+    );
+    assert.equal(opts.hostname, 'market.example');
+    assert.equal(opts.servername, 'market.example');
+    assert.equal(opts.agent, false);
+    assert.equal(opts.rejectUnauthorized, true);
+    assert.equal(opts.path, '/path?q=1');
+    assert.equal(opts.headers.host, 'market.example');
+    let all;
+    opts.lookup('market.example', { all: true }, (err, rows) => { assert.equal(err, null); all = rows; });
+    assert.deepEqual(all, [{ address: '93.184.216.34', family: 4 }]);
+    let one;
+    opts.lookup('market.example', {}, (err, address, family) => { assert.equal(err, null); one = { address, family }; });
+    assert.deepEqual(one, { address: '93.184.216.34', family: 4 });
+    const v6 = market._internals.pinnedRequestOptions(new URL('https://[2606:4700::1111]/x'), '2606:4700::1111', 6);
+    assert.equal(v6.hostname, '2606:4700::1111');
+    assert.equal(v6.servername, undefined, 'IP 字面量不能作为 TLS ServerName');
+  });
+
+  section('H. Registry schema 适配（参数 / 环境变量 / 远程模板）');
+  const { buildRegistryConfig } = market._internals;
+  const RICH = {
+    name: 'io.example/weather', title: 'Weather', description: 'Weather tools', version: '1.2.3',
+    packages: [{
+      registryType: 'npm', identifier: '@acme/weather-mcp', version: '1.2.3', runtimeHint: 'npx',
+      transport: { type: 'stdio' },
+      runtimeArguments: [{ type: 'named', name: '--yes' }],
+      packageArguments: [
+        { type: 'positional', valueHint: 'city', isRequired: true, description: 'City name' },
+        { type: 'named', name: '--units', value: '{unit}', variables: { unit: { default: 'metric', choices: ['metric', 'imperial'] } } },
+        { type: 'named', name: '--region', valueHint: 'region' },
+      ],
+      environmentVariables: [
+        { name: 'WEATHER_KEY', isRequired: true, isSecret: true, description: 'API key' },
+        { name: 'WEATHER_REGION', isRequired: true, description: 'Region' },
+        { name: 'WEATHER_HOME', default: 'C:/data' },
+      ],
+    }],
+  };
+  await checkAsync('H·npm 参数模板、必填值、环境变量与命令预览', async () => {
+    const item = market._internals.normalizeRegistryEntry({ server: RICH, _meta: {} });
+    assert.equal(item.installable, true, JSON.stringify(item));
+    assert.match(item.commandSummary, /--yes/);
+    assert.match(item.commandSummary, /--units=metric/);
+    assert.match(item.commandSummary, /<City name>/);
+    assert.deepEqual(item.fields.map((f) => f.key), ['arg0', 'arg2']);
+    assert.ok(item.envFields.some((f) => f.key === 'env.WEATHER_KEY' && f.secret === true && f.default === 'WEATHER_KEY'));
+    assert.deepEqual(item.requiredEnvKeys, ['WEATHER_KEY']);
+    const built = buildRegistryConfig(RICH, { arg0: 'Paris', arg2: 'eu', 'env.WEATHER_REGION': 'eu' });
+    assert.equal(built.ok, true, JSON.stringify(built));
+    assert.deepEqual(built.config.args, ['--yes', '@acme/weather-mcp@1.2.3', 'Paris', '--units=metric', '--region=eu']);
+    assert.deepEqual(built.config.env, {
+      WEATHER_HOME: 'C:/data', WEATHER_KEY: '${WEATHER_KEY}', WEATHER_REGION: 'eu',
+    });
+    assert.ok(built.commandPreview.includes('Paris'));
+  });
+  await checkAsync('H·可选 named 参数留空时整项省略，不生成空值开关', async () => {
+    for (const values of [
+      { arg0: 'Paris', 'env.WEATHER_REGION': 'eu' },
+      { arg0: 'Paris', arg2: '   ', 'env.WEATHER_REGION': 'eu' },
+    ]) {
+      const built = buildRegistryConfig(RICH, values);
+      assert.equal(built.ok, true, JSON.stringify(built));
+      assert.deepEqual(built.config.args, ['--yes', '@acme/weather-mcp@1.2.3', 'Paris', '--units=metric']);
+      assert.ok(!built.commandPreview.includes('--region='), built.commandPreview);
+    }
+  });
+  await checkAsync('H·缺少必填参数 / 凭据型参数 / 不支持的 runtime 被拒', async () => {
+    const missing = buildRegistryConfig(RICH, {});
+    assert.equal(missing.ok, false);
+    assert.equal(missing.code, 'missing-field');
+    const secretArg = { ...RICH, packages: [{ ...RICH.packages[0], packageArguments: [{ type: 'named', name: '--api-key', valueHint: 'key', isRequired: true }] }] };
+    const sec = market._internals.normalizeRegistryEntry({ server: secretArg, _meta: {} });
+    assert.equal(sec.installable, false);
+    assert.match(sec.installReason, /凭据/);
+    const badRuntime = { ...RICH, packages: [{ ...RICH.packages[0], runtimeHint: 'docker' }] };
+    const rt = market._internals.normalizeRegistryEntry({ server: badRuntime, _meta: {} });
+    assert.equal(rt.installable, false);
+  });
+  await checkAsync('H·远程 URL 变量、请求头引用与 SSE / 敏感变量边界', async () => {
+    const remote = {
+      name: 'io.example/remote', title: 'Remote', description: 'r', version: '2.0.0',
+      remotes: [{
+        type: 'streamable-http',
+        url: 'https://api.example.com/{tenant}/mcp?region={region}',
+        variables: { tenant: { isRequired: true, description: 'Tenant' }, region: { default: 'eu', choices: ['eu', 'us'] } },
+        headers: [
+          { name: 'Authorization', isRequired: true, isSecret: true },
+          { name: 'X-Tenant', value: '{tenant}', variables: { tenant: { value: 'fixed' } } },
+        ],
+      }],
+    };
+    const item = market._internals.normalizeRegistryEntry({ server: remote, _meta: {} });
+    assert.equal(item.installable, true, JSON.stringify(item));
+    assert.match(item.urlPreview, /<Tenant>/);
+    assert.equal(item.headerFields[0].secret, true);
+    const built = buildRegistryConfig(remote, { 'url.tenant': 'acme', 'header.Authorization': 'REMOTE_TOKEN' });
+    assert.equal(built.ok, true, JSON.stringify(built));
+    assert.equal(built.config.url, 'https://api.example.com/acme/mcp?region=eu');
+    assert.deepEqual(built.config.headers, { 'X-Tenant': 'fixed', Authorization: '${REMOTE_TOKEN}' });
+    const sse = { ...remote, remotes: [{ type: 'sse', url: 'https://api.example.com/sse' }] };
+    assert.equal(market._internals.normalizeRegistryEntry({ server: sse, _meta: {} }).installable, false);
+    const secretUrlVar = { ...remote, remotes: [{ ...remote.remotes[0], variables: { tenant: { isRequired: true, isSecret: true } } }] };
+    assert.equal(market._internals.normalizeRegistryEntry({ server: secretUrlVar, _meta: {} }).installable, false);
+    const secretQuery = { ...remote, remotes: [{ type: 'streamable-http', url: 'https://api.example.com/mcp?api_key=sk-live-123456' }] };
+    const q = market._internals.normalizeRegistryEntry({ server: secretQuery, _meta: {} });
+    assert.equal(q.installable, false, '静态 URL 里的凭据必须标为不可安装');
+    assert.match(q.installReason, /凭据/);
+    const dynamicSecret = buildRegistryConfig(remote, { 'url.tenant': 'sk-live-1234567890', 'header.Authorization': 'REMOTE_TOKEN' });
+    assert.equal(dynamicSecret.ok, false);
+    assert.equal(dynamicSecret.code, 'bad-url', '用户填进 URL 的凭据形态值也必须拒绝');
   });
 
   section('F. 目录数据校验');

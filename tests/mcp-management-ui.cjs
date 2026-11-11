@@ -63,7 +63,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   let marketInstalls = [];
 
   const builtinItems = [
-    { id: 'builtin:filesystem', source: 'builtin', sourceLabel: '内置精选', catalogId: 'filesystem', name: 'Filesystem', installName: 'filesystem', identifier: 'modelcontextprotocol/server-filesystem', version: '', category: '开发工具', trust: 'official', trustEvidence: 'Anthropic 官方仓库', description: '在明确授权的目录内读写文件。', transport: 'stdio', commandSummary: 'npx -y @modelcontextprotocol/server-filesystem {path}', urlPreview: '', homepage: 'https://github.com/modelcontextprotocol/servers', requires: ['node', 'npx'], fields: [{ key: 'path', label: '允许访问的目录', type: 'path', required: true, placeholder: 'C:/workspace' }], envFields: [], headerFields: [], warning: '只授予必要目录。', installable: true, installReason: '' },
+    { id: 'builtin:filesystem', source: 'builtin', sourceLabel: '内置精选', catalogId: 'filesystem', name: 'Filesystem', installName: 'filesystem', identifier: 'modelcontextprotocol/server-filesystem', version: '', category: '开发工具', trust: 'official', trustEvidence: 'Anthropic 官方仓库', description: '在明确授权的目录内读写文件。', transport: 'stdio', commandSummary: 'npx -y @modelcontextprotocol/server-filesystem <允许访问的目录>', commandTemplate: 'npx -y @modelcontextprotocol/server-filesystem {path}', urlPreview: '', homepage: 'https://github.com/modelcontextprotocol/servers', requires: ['node', 'npx'], fields: [{ key: 'path', label: '允许访问的目录', type: 'path', required: true, placeholder: 'C:/workspace' }], envFields: [{ key: 'env.FS_TOKEN', label: '访问令牌（环境变量名）', secret: true, required: false, help: '可选。' }], headerFields: [], warning: '只授予必要目录。', installable: true, installReason: '' },
     { id: 'builtin:memory', source: 'builtin', sourceLabel: '内置精选', catalogId: 'memory', name: 'Memory', installName: 'memory', identifier: 'modelcontextprotocol/server-memory', version: '', category: '效率', trust: 'official', trustEvidence: 'Anthropic 官方仓库', description: '长期记忆。', transport: 'stdio', commandSummary: 'npx -y @modelcontextprotocol/server-memory', urlPreview: '', homepage: '', requires: ['node', 'npx'], fields: [], envFields: [], headerFields: [], warning: '', installable: true, installReason: '' },
     { id: 'builtin:playwright', source: 'builtin', sourceLabel: '内置精选', catalogId: 'playwright', name: 'Playwright', installName: 'playwright', identifier: 'microsoft/playwright-mcp', version: '', category: '开发工具', trust: 'official', trustEvidence: 'Microsoft 官方仓库', description: '浏览器自动化。', transport: 'stdio', commandSummary: 'npx -y @playwright/mcp', urlPreview: '', homepage: '', requires: ['node', 'npx'], fields: [], envFields: [], headerFields: [], warning: '', installable: true, installReason: '' },
   ];
@@ -167,7 +167,11 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     if (pathOnly === '/api/mcp/market' && method === 'POST') {
       if (body?.action === 'install') {
         marketInstalls.push(body);
-        return ok({ ok: true, configured: true, connected: null, loaded: null, name: body.name, scope: body.scope, dependencyProbe: [{ name: 'node', found: true }, { name: 'npx', found: true }], message: '配置已保存。' });
+        return ok({
+          ok: true, configured: true, connected: null, loaded: null, name: body.name, scope: body.scope,
+          commandPreview: body.catalogId === 'filesystem' ? 'npx -y @modelcontextprotocol/server-filesystem C:/workspace' : '',
+          dependencyProbe: [{ name: 'node', found: true }, { name: 'npx', found: true }], message: '配置已保存。',
+        });
       }
       if (body?.action === 'add-source') {
         const source = { id: 'custom-1', name: 'Fixture Market', url: body.url };
@@ -321,6 +325,12 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     };
     set('name', 'demo');
     set('description', 'Demo server');
+    const exposure = form.querySelector('[data-field="exposure"]');
+    assert.ok(exposure, '新增表单必须有 exposure 选择');
+    assert.deepEqual([...exposure.options].map((o) => o.value), ['', 'codemode', 'deferred', 'direct', 'hidden']);
+    assert.equal(exposure.value, 'codemode', '新条目默认 codemode');
+    exposure.value = 'hidden';
+    exposure.dispatchEvent(new w.Event('change', { bubbles: true }));
     form.querySelector('[data-field="add-arg"]').click();
     await tick(15);
     d.querySelector('.mcp-form-modal [data-field="args-0"]').value = '-y';
@@ -343,10 +353,34 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(body.command, 'npx');
     assert.deepEqual(body.args, ['-y']);
     assert.deepEqual(body.env, [{ key: 'DEMO_PATH', value: 'C:/demo' }]);
+    assert.equal(body.exposure, 'hidden');
     assert.equal(body.expectedRevision, 'rev-user');
     assert.equal(body.__expectedCwd, 'C:\\workspace');
     assert.equal(d.querySelector('.mcp-form-modal'), null);
     assert.ok(page().textContent.includes('配置已保存到'));
+  });
+
+  await check('新增弹窗：头部/正文/底部三段，正文独立滚动，窄窗口不溢出', async () => {
+    const add = [...page().querySelectorAll('button')].find((b) => b.textContent.trim() === '新增');
+    add.click();
+    await tick(30);
+    const form = d.querySelector('.mcp-form-modal');
+    assert.ok(form.querySelector('.mcp-modal-head'));
+    const body = form.querySelector('.mcp-modal-body');
+    assert.ok(body, '正文必须是独立的滚动容器');
+    const foot = form.querySelector('.mcp-modal-foot');
+    assert.ok(foot, '保存 / 取消按钮在固定底部');
+    assert.ok(foot.querySelector('[data-field="save"]'));
+    assert.ok(body.contains(form.querySelector('[data-field="name"]')));
+    assert.equal(foot.contains(form.querySelector('[data-field="name"]')), false);
+    const css = fs.readFileSync(path.join(pub, 'mcp.css'), 'utf8');
+    const bodyRule = css.match(/\.mcp-modal-body\s*\{[^}]*\}/);
+    assert.ok(bodyRule && /overflow:\s*auto/.test(bodyRule[0]), '正文需要 overflow:auto');
+    assert.ok(/\.modal-card\.mcp-form-modal[\s\S]*?max-height:\s*min\(88vh,\s*900px\)/.test(css));
+    assert.ok(/width:\s*min\(640px,\s*calc\(100vw - 40px\)\)/.test(css), '窄窗口要按视口收缩');
+    form.querySelector('.mcp-modal-head button')?.click();
+    await tick(30);
+    assert.equal(d.querySelector('.mcp-form-modal'), null);
   });
 
   await check('编辑回填非敏感值，敏感值只以 keep 回传', async () => {
@@ -362,6 +396,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(form.querySelector('[data-field="env-key-1"]').value, 'API_TOKEN');
     assert.equal(form.querySelector('[data-field="env-value-1"]').value, '');
     assert.ok(form.querySelector('[data-field="env-value-1"]').placeholder.includes('已设置'));
+    assert.equal(form.querySelector('[data-field="exposure"]').value, 'deferred', '编辑时必须回填原 exposure');
     const desc = form.querySelector('[data-field="description"]');
     desc.value = '更新后的记忆';
     desc.dispatchEvent(new w.Event('input', { bubbles: true }));
@@ -370,6 +405,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     const body = postBodies('/api/mcp/config').filter((b) => b.action === 'save').at(-1);
     assert.equal(body.originalName, 'memory');
     assert.equal(body.description, '更新后的记忆');
+    assert.equal(body.exposure, 'deferred', '普通编辑不能把未改动的 exposure 冲掉');
     assert.deepEqual(body.env, [
       { key: 'MEMORY_FILE_PATH', value: 'C:/data/memory.json' },
       { key: 'API_TOKEN', keep: true },
@@ -481,6 +517,13 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal((d.querySelector('.mcp-market-page .settings-page-title') || {}).textContent, 'MCP 市场');
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
     assert.ok(d.querySelector('.mcp-market-page').textContent.includes('2 个市场源'));
+    const marketCard = (name) => [...d.querySelectorAll('.mcp-market-card')]
+      .find((c) => c.querySelector('h4')?.textContent === name);
+    const memoryInstall = marketCard('Memory').querySelector('button.mcp-market-install');
+    assert.ok(memoryInstall.textContent.includes('已配置'), '已在 mcp.json 里的 server 必须显示已配置');
+    assert.equal(memoryInstall.disabled, true);
+    assert.ok(marketCard('Memory').textContent.includes('已配置'));
+    assert.equal(marketCard('Filesystem').querySelector('button.mcp-market-install').disabled, false);
 
     const search = d.querySelector('#mcpMarketSearch');
     search.focus();
@@ -519,6 +562,31 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
   });
 
+  await check('市场安装继承当前 scope 筛选：项目筛选 → 默认项目级', async () => {
+    clickText(d.querySelector('.mcp-market-page'), 'button', '我的服务');
+    await tick(100);
+    d.querySelector('[data-focus-key="filter:project"]').click();
+    await tick(40);
+    assert.deepEqual(cards().map((c) => c.dataset.name), ['proj']);
+    clickText(page(), 'button', '市场');
+    await tick(120);
+    const card = [...d.querySelectorAll('.mcp-market-card')].find((c) => c.querySelector('h4')?.textContent === 'Filesystem');
+    card.querySelector('button.mcp-market-install').click();
+    await tick(40);
+    const scope = d.querySelector('.mcp-install-modal [data-field="install-scope"]');
+    assert.equal(scope.value, 'project', '从项目筛选进入市场时默认安装到项目');
+    assert.equal(scope.querySelector('option[value="project"]').disabled, false);
+    clickText(d.querySelector('.mcp-install-modal'), '.mcp-modal-foot-actions button', '取消');
+    await tick(30);
+    clickText(d.querySelector('.mcp-market-page'), 'button', '我的服务');
+    await tick(100);
+    d.querySelector('[data-focus-key="filter:all"]').click();
+    await tick(40);
+    assert.equal(cards().length, 3, '回到全部筛选');
+    clickText(page(), 'button', '市场');
+    await tick(120);
+  });
+
   await check('安装只送 catalogId，成功页区分保存 / 连接 / 会话加载', async () => {
     const card = [...d.querySelectorAll('.mcp-market-card')].find((c) => c.querySelector('h4')?.textContent === 'Filesystem');
     card.querySelector('button.mcp-market-install').click();
@@ -527,9 +595,20 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.ok(modal);
     assert.ok(modal.textContent.includes('Anthropic 官方仓库'));
     assert.ok(modal.textContent.includes('npx -y @modelcontextprotocol/server-filesystem'));
+    const preview = modal.querySelector('[data-market-preview]');
+    assert.ok(preview, '安装确认必须显示实际命令预览');
+    assert.ok(preview.textContent.includes('<允许访问的目录>'), preview.textContent);
+    assert.ok(modal.textContent.includes('敏感值不会显示'));
+    assert.ok(modal.textContent.includes('不会在安装时执行命令'));
+    assert.ok(modal.textContent.includes('填写系统环境变量名'));
+    assert.ok(modal.querySelector('[data-field="install-env-env.FS_TOKEN"]'));
     const pathField = modal.querySelector('[data-field="install-field-path"]');
+    pathField.value = 'C:/my docs';
+    pathField.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.ok(preview.textContent.includes('"C:/my docs"'), '含空格的值必须加引号显示');
     pathField.value = 'C:/workspace';
     pathField.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.ok(preview.textContent.includes('npx -y @modelcontextprotocol/server-filesystem C:/workspace'));
     modal.querySelector('[data-field="install-submit"]').click();
     await tick(120);
     const posted = marketInstalls.at(-1);
@@ -543,6 +622,8 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.ok(success.textContent.includes('配置已写入'));
     assert.ok(success.textContent.includes('连接未测试'));
     assert.ok(success.textContent.includes('尚未加载'));
+    assert.ok(success.textContent.includes('已写入的实际启动命令 / 端点'));
+    assert.ok(success.textContent.includes('npx -y @modelcontextprotocol/server-filesystem C:/workspace'));
     clickText(success, '.mcp-modal-foot-actions button', '完成');
     await tick(30);
   });
@@ -620,6 +701,21 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(scope.querySelector('option[value="project"]').disabled, true);
     d.querySelector('.mcp-form-modal button').click();
     await tick(30);
+
+    /* 市场也必须遵守同一信任边界：从项目筛选进来时不能偷偷回退成可写。 */
+    d.querySelector('[data-focus-key="filter:project"]').click();
+    await tick(40);
+    clickText(page(), 'button', '市场');
+    await tick(120);
+    const card = [...d.querySelectorAll('.mcp-market-card')].find((c) => c.querySelector('h4')?.textContent === 'Filesystem');
+    card.querySelector('button.mcp-market-install').click();
+    await tick(40);
+    const install = d.querySelector('.mcp-install-modal');
+    const installScope = install.querySelector('[data-field="install-scope"]');
+    assert.equal(installScope.value, 'user', '未信任时必须回退到全局，而不是默认项目');
+    assert.equal(installScope.querySelector('option[value="project"]').disabled, true);
+    assert.ok(install.textContent.includes('当前项目未信任'));
+    assert.ok(install.textContent.includes('已回退到全局'));
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

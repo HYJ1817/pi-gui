@@ -170,6 +170,17 @@ async function main() {
     await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '市场卡片');
     await shot('03-market');
 
+    /* 安装确认：必须看得见实际会写入的命令、scope 与“敏感值不会显示”边界。 */
+    await evalJs(`(() => {
+      const btn = [...document.querySelectorAll('.mcp-market-card .mcp-market-install')].find((b) => !b.disabled);
+      if (!btn) throw new Error('没有可安装的卡片');
+      btn.click();
+      return true;
+    })()`);
+    await waitFor(`!!document.querySelector('.mcp-install-modal [data-market-preview]')`, '安装确认弹层');
+    await evalJs(`(() => { const b = document.querySelector('#modalCard .mcp-modal-body'); if (b) b.scrollTop = 0; return true; })()`);
+    await shot('04-install-preview');
+
     if (pageErrors.length) throw new Error('页面运行期异常：' + pageErrors.join(' | '));
     console.log('PASS MCP 视觉取证完成');
   } finally {

@@ -31,7 +31,16 @@ function res() {
   const calls = { save: [], remove: [], setEnabled: [], reset: 0, install: [], scan: 0, apply: [], addSource: [], removeSource: [] };
   const configStore = {
     revisions: () => ({ user: 'rev-u', project: 'rev-p' }),
-    getDetail: async ({ scope, name }) => ({ ok: true, scope, name, entry: { type: 'stdio', command: 'npx' } }),
+    getDetail: async ({ scope, name }) => {
+      if (name === 'never-saved') return { ok: false, code: 'not-found' };
+      if (name === 'broken-config') throw new Error('config store unavailable');
+      /* 项目文件里只有 fixture 明确列出的条目；其余只在用户级存在。
+       * 否则“没指定 scope”会先命中项目级，把运行时行也按项目 scope 去找。 */
+      if (scope === 'project' && !['proj', 'dup', 'off'].includes(name)) {
+        return { ok: false, code: 'not-found' };
+      }
+      return { ok: true, scope, name, entry: { type: 'stdio', command: 'npx' } };
+    },
     save: async (input) => { calls.save.push(input); return { ok: true, name: input.name, scope: input.scope }; },
     remove: async (input) => { calls.remove.push(input); return { ok: true }; },
     setEnabled: async (input) => { calls.setEnabled.push(input); return { ok: true }; },
@@ -122,12 +131,92 @@ function res() {
     assert.equal(project.state, 'failed');
     assert.equal(project.server.scope, 'project');
   });
-  await checkAsync('B·config 有、runtime 没有 → configured 但未加载', async () => {
+  await checkAsync('B·未指定 scope 时按配置实际所在 scope 取运行时行，不串到同名项目行', async () => {
+    const scoped = createMcpManager({
+      runtime: { getCurrentCwd: () => CWD },
+      configStore, market, importer,
+      mcpNative: {
+        reset() {},
+        refresh: async () => ({
+          ok: true, at: '2026-01-01T00:00:00.000Z',
+          servers: [
+            { name: 'only-global', scope: 'user', state: 'connected', tools: ['a'] },
+            { name: 'only-global', scope: 'project', state: 'failed', tools: [], error: 'project down' },
+          ],
+        }),
+      },
+    });
+    const r = await scoped._internals.testConnection({ name: 'only-global' });
+    assert.equal(r.configured, true);
+    assert.equal(r.connected, true);
+    assert.equal(r.server.scope, 'user', '用户级配置不能被同名项目行覆盖成失败');
+  });
+  await checkAsync('B·config 有、runtime 没有 → configured，connected/loaded 均未知', async () => {
     const r = await manager._internals.testConnection({ name: 'ghost' });
     assert.equal(r.ok, false);
     assert.equal(r.configured, true);
-    assert.equal(r.connected, false);
+    assert.equal(r.connected, null, '列表里没有不等于连接失败');
+    assert.equal(r.loaded, null, '不得用 CLI 列表缺失推断当前 Agent 会话未加载');
     assert.equal(r.code, 'not-loaded');
+  });
+  await checkAsync('B·config 明确没有、runtime 也没有 → not-configured，不谎称已配置', async () => {
+    const r = await manager._internals.testConnection({ name: 'never-saved' });
+    assert.equal(r.ok, false);
+    assert.equal(r.configured, false);
+    assert.equal(r.connected, null);
+    assert.equal(r.loaded, null);
+    assert.equal(r.code, 'not-configured');
+  });
+  await checkAsync('B·配置读取失败 → configured=null，保持未知而不是未配置', async () => {
+    const r = await manager._internals.testConnection({ name: 'broken-config' });
+    assert.equal(r.configured, null);
+    assert.equal(r.connected, null);
+    assert.equal(r.loaded, null);
+    assert.equal(r.code, 'not-loaded');
+  });
+  await checkAsync('B·runtime 有行、config 明确没有 → configured 仍为 false，不被 CLI 列表带跑', async () => {
+    const stale = createMcpManager({
+      runtime: { getCurrentCwd: () => CWD },
+      configStore, market, importer,
+      mcpNative: {
+        reset() {},
+        refresh: async () => ({
+          ok: true, at: '2026-01-01T00:00:00.000Z',
+          servers: [{ name: 'never-saved', scope: 'global', state: 'connected', tools: ['a'] }],
+        }),
+      },
+    });
+    const r = await stale._internals.testConnection({ name: 'never-saved' });
+    assert.equal(r.configured, false, 'configured 只来自真实 mcp.json');
+    assert.equal(r.connected, true, '连接状态只来自本次 runtime 投影');
+    assert.equal(r.loaded, null);
+  });
+  await checkAsync('B·显式失败状态才算 connected=false，未知状态保持 null', async () => {
+    const states = createMcpManager({
+      runtime: { getCurrentCwd: () => CWD },
+      configStore, market, importer,
+      mcpNative: {
+        reset() {},
+        refresh: async () => ({
+          ok: true, at: '2026-01-01T00:00:00.000Z',
+          servers: [
+            { name: 'down', scope: 'global', state: 'failed', error: 'crash' },
+            { name: 'off', scope: 'project', state: 'disabled' },
+            { name: 'weird', scope: 'global', state: 'starting-up' },
+          ],
+        }),
+      },
+    });
+    const down = await states._internals.testConnection({ name: 'down' });
+    assert.equal(down.connected, false);
+    assert.equal(down.code, 'connect-failed');
+    const off = await states._internals.testConnection({ name: 'off', scope: 'project' });
+    assert.equal(off.connected, false);
+    assert.equal(off.code, 'state-disabled');
+    const weird = await states._internals.testConnection({ name: 'weird' });
+    assert.equal(weird.connected, null, '未知状态不能当成连接失败');
+    assert.equal(weird.loaded, null);
+    assert.equal(weird.code, 'state-starting-up');
   });
   await checkAsync('B·refresh 抛错 → connected=null（不是 false）', async () => {
     const bad = createMcpManager({

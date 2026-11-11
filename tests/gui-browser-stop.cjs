@@ -152,7 +152,7 @@ async function main() {
     primaryToolGuard: { resume() {} },
     createSessionExport: () => null, runtime: { getCurrentCwd: () => os.tmpdir() }, piLaunch: { packageDir: () => null },
   };
-  for (const name of ['providers', 'projects', 'projectConfig', 'skills', 'mcp', 'mcpNative',
+  for (const name of ['providers', 'projects', 'projectConfig', 'skills', 'mcp', 'mcpNative', 'mcpManager',
     'approvalProbe', 'extensions', 'sessions', 'sessionSearch', 'planner', 'gitRoutes',
     'uploads', 'diagnostics', 'updateCheck', 'piUpdate', 'capabilityInstall', 'quota', 'piCompat']) context[name] = {};
   Object.assign(context, { runtimeRoutes: null, primaryOwner: () => null, runtimeRegistry: { liveCount: () => 0 } });
