@@ -315,8 +315,15 @@ function isPrivateIp(ip) {
     if ((parts[0] & 0xfe00) === 0xfc00) return true;
     if ((parts[0] & 0xffc0) === 0xfe80) return true;
     if ((parts[0] & 0xff00) === 0xff00) return true;
+    /* 2001::/23 IETF 协议分配段（含 Teredo 2001::/32、benchmarking
+     * 2001:2::/48、ORCHID 2001:10::/28），不是全局单播。 */
+    if (parts[0] === 0x2001 && parts[1] <= 0x01ff) return true;
     /* 2001:db8::/32 documentation. */
     if (parts[0] === 0x2001 && parts[1] === 0x0db8) return true;
+    /* 3fff::/20 documentation. */
+    if ((parts[0] & 0xfff0) === 0x3ff0) return true;
+    /* 100::/64 discard-only. */
+    if (parts[0] === 0x0100 && parts.slice(1, 4).every((v) => v === 0)) return true;
     /* ::ffff:a.b.c.d (IPv4-mapped) and ::ffff:0:a.b.c.d (IPv4-translated). */
     if (parts.slice(0, 5).every((v) => v === 0) && parts[5] === 0xffff) {
       return isPrivateIp(embeddedIpv4(parts));
@@ -354,6 +361,9 @@ async function assertPublicHttps(rawUrl, lookupImpl) {
   try { u = new URL(rawUrl); } catch { return codeError('blocked-url', 'URL 不是合法地址'); }
   if (u.protocol !== 'https:') return codeError('blocked-url', '市场源只允许 HTTPS');
   if (u.username || u.password) return codeError('blocked-url', 'URL 不能包含用户名或密码');
+  /* 查询串 / 路径里的凭据形态值同样会明文落盘并回显到前端，必须和
+   * server URL 用同一条判据拒绝。 */
+  if (queryLooksSensitive(u)) return codeError('blocked-url', 'URL 查询串或路径中疑似包含凭据');
   if (u.port && u.port !== '443') return codeError('blocked-url', '市场源只允许 443 端口');
   const hostname = hostnameOf(u);
   if (blockedHostname(hostname)) return codeError('blocked-host', '不允许访问本机或内网主机');
@@ -480,6 +490,19 @@ function responseHeaders(raw) {
 }
 
 /**
+ * 构造 Response 不能让远端状态码把异常抛出回调：undici 对 204/205
+ * 携带 body、对 600–999 都会抛错，而这里运行在 https.request 的异步
+ * 回调里，Promise executor 的 try/catch 包不住，异常会直接终止后端。
+ * 统一收敛状态码，并对禁止 body 的状态显式传 null。
+ */
+function pinnedResponse(status, body, headers) {
+  let code = Number(status) || 0;
+  if (code < 200 || code > 599) code = 502;
+  const bodyForbidden = code === 204 || code === 205 || code === 304;
+  return new Response(bodyForbidden ? null : body, { status: code, headers });
+}
+
+/**
  * 一次 HTTPS GET：不跟随重定向、整体超时、响应体上限。连接由
  * pinnedRequestOptions 固定到已经校验过的 IP。
  */
@@ -501,18 +524,24 @@ function httpsGetPinned(rawUrl, { address, family, timeoutMs, maxBytes, headers 
         const status = Number(res.statusCode) || 0;
         /* 3xx 与错误状态不读 body：既避免下载无关内容，也让 fetchJson 能
          * 先给出明确的 redirect-blocked / http-xxx。 */
+        /* Response 构造仍可能因未预见的状态/头部组合抛错；必须接住，
+         * 否则会从 res 的事件回调冒成 uncaughtException。 */
+        const send = (body, statusCode, headers) => {
+          try {
+            finish(resolve, pinnedResponse(statusCode, body, headers));
+          } catch (err) {
+            fail(err);
+          }
+        };
         if (status < 200 || status >= 300) {
           res.resume();
-          finish(resolve, new Response(null, { status: status >= 200 ? status : 502, headers: responseHeaders(res.headers) }));
+          send(null, status, responseHeaders(res.headers));
           return;
         }
         const declared = Number(res.headers['content-length']);
         if (Number.isFinite(declared) && declared > maxBytes) {
           res.resume();
-          finish(resolve, new Response(null, {
-            status,
-            headers: { ...responseHeaders(res.headers), 'content-length': String(declared) },
-          }));
+          send(null, status, { ...responseHeaders(res.headers), 'content-length': String(declared) });
           return;
         }
         const chunks = [];
@@ -532,7 +561,7 @@ function httpsGetPinned(rawUrl, { address, family, timeoutMs, maxBytes, headers 
         res.on('aborted', () => fail(Object.assign(new Error('响应被中断'), { marketCode: 'network' })));
         res.on('error', fail);
         res.on('end', () => {
-          finish(resolve, new Response(Buffer.concat(chunks), { status, headers: responseHeaders(res.headers) }));
+          send(Buffer.concat(chunks), status, responseHeaders(res.headers));
         });
       });
     } catch (err) {
@@ -2016,8 +2045,9 @@ export function createMcpMarket({
     }
 
     const requestedName = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : built.name;
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(requestedName)) {
-      return codeError('bad-name', 'server 名只允许字母、数字、_ 和 -（1–64 字符）', { field: 'name' });
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(requestedName)
+      || ['__proto__', 'prototype', 'constructor'].includes(requestedName)) {
+      return codeError('bad-name', 'server 名只允许字母、数字、_ 和 -（1–64 字符，且不能是保留键）', { field: 'name' });
     }
     const entry = built.entry;
     const cfg = built.config;
@@ -2027,6 +2057,8 @@ export function createMcpMarket({
       expectedRevision: input.expectedRevision,
       allowReplace: input.allowReplace === true,
       confirmOverride: input.confirmOverride === true,
+      /* 覆盖安装是完整替换：不得把旧条目的 env / headers 带到新端点。 */
+      replaceExisting: true,
       transport: cfg.transport,
       command: cfg.command,
       args: cfg.args,
@@ -2089,7 +2121,15 @@ export function createMcpMarket({
     };
     const probe = await loadCustomSource(source);
     if (!probe.ok) return probe;
-    const write = writeSources([...read.sources, source]);
+    /* 上面读列表与这里写列表之间隔着网络请求。两个并发 add-source 都
+     * 基于旧的 sources 写回会静默丢掉其中一条；写前重新读一次，并重新
+     * 检查重复与上限。readSources→writeSources 之间没有 await，Node
+     * 单线程下不会再被另一个请求插入。 */
+    const latest = readSources();
+    if (!latest.ok) return codeError(latest.code, '现有市场源列表无法读取，为避免覆盖已拒绝写入');
+    if (latest.sources.some((s) => s.url === rawUrl)) return codeError('source-exists', '这个市场源已经添加过了');
+    if (latest.sources.length >= MAX_SOURCES) return codeError('too-many-sources', `最多只能添加 ${MAX_SOURCES} 个第三方市场源`);
+    const write = writeSources([...latest.sources, source]);
     if (!write.ok) return write;
     cache.delete(`custom:${source.id}`);
     return { ok: true, source: { id: source.id, name: source.name, url: source.url, addedAt: source.addedAt }, count: probe.items.length };
@@ -2132,6 +2172,7 @@ export function createMcpMarket({
       analyzeRegistryServer,
       buildRegistryConfig,
       pinnedRequestOptions,
+      pinnedResponse,
       httpsGetPinned,
       noProxyMatches,
       blockingProxy,

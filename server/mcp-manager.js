@@ -36,11 +36,16 @@ function countOf(value) {
 
 function sanitizeRuntimeServer(s) {
   if (!s || typeof s !== 'object') return null;
+  /* mcpNative 的运行时投影字段是 transportType；`transport` 是旧夹具
+   * 形状。两种都接受，避免真实响应里 transport 恒为空。 */
+  const transport = s.transport === 'http' || s.transport === 'stdio'
+    ? s.transport
+    : s.transportType === 'http' || s.transportType === 'stdio' ? s.transportType : '';
   return {
     name: typeof s.name === 'string' ? s.name : '',
     scope: typeof s.scope === 'string' ? s.scope : '',
     enabled: s.enabled !== false,
-    transport: s.transport === 'http' ? 'http' : s.transport === 'stdio' ? 'stdio' : '',
+    transport,
     state: typeof s.state === 'string' ? s.state : 'unknown',
     error: typeof s.error === 'string' ? s.error.slice(0, 300) : '',
     tools: countOf(s.tools),
@@ -239,6 +244,7 @@ export function createMcpManager({ runtime, mcpNative, configStore, market, impo
         cwd: body.cwd,
         env: body.env,
         url: body.url,
+        keepUrl: body.keepUrl === true,
         headers: body.headers,
         description: body.description,
         timeout: body.timeout,
@@ -327,11 +333,38 @@ export function createMcpManager({ runtime, mcpNative, configStore, market, impo
     return json(res, 200, { ...result, revisions });
   }
 
-  function handle(req, res, url) {
+  /* 这些 handler 是 async，且 router / server.js 不会替我们 catch。
+   * readJsonBody 在超过 512 KiB 或流中断时 reject；一旦冒成 unhandled
+   * rejection，Node 会直接终止整个后端。这里统一收口成 JSON 错误。 */
+  function failRequest(res, err) {
+    if (res.headersSent || res.writableEnded || res.finished) {
+      try { res.destroy?.(); } catch { /* 连接已不可写 */ }
+      return;
+    }
+    const tooLarge = Boolean(err && /超过上限/.test(String(err.message || '')));
+    json(res, tooLarge ? 413 : 500, {
+      ok: false,
+      code: tooLarge ? 'body-too-large' : 'internal-error',
+      error: tooLarge ? '请求体超过大小上限' : 'MCP 请求处理失败',
+    });
+  }
+
+  function dispatch(req, res, url) {
     if (url.pathname === '/api/mcp/config') return handleConfig(req, res, url);
     if (url.pathname === '/api/mcp/market' || url.pathname === '/api/mcp/market/sources') return handleMarket(req, res, url);
     if (url.pathname === '/api/mcp/import') return handleImport(req, res);
     return json(res, 404, { ok: false, code: 'not-found', error: 'Not found' });
+  }
+
+  function handle(req, res, url) {
+    try {
+      const pending = dispatch(req, res, url);
+      return pending && typeof pending.catch === 'function'
+        ? pending.catch((err) => failRequest(res, err))
+        : pending;
+    } catch (err) {
+      return failRequest(res, err);
+    }
   }
 
   return { handle, _internals: { testConnection, sanitizeRuntimeServer, staleGuard } };

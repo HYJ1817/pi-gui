@@ -5,7 +5,9 @@
  * 也不把任何上游字符串直接塞进 DOM。
  */
 
-export const MCP_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/* 服务端还会拒绝 `__proto__` 等保留键；前端提前用同一条判据，
+ * 避免用户填完表单才在请求里拿到 bad-name。 */
+export const MCP_NAME_RE = /^(?!__proto__$|prototype$|constructor$)[A-Za-z0-9_-]{1,64}$/;
 
 /* 运行时状态闭集（与 Pi 的 ServerState 对齐）。后端已经把未知值折成
  * `unknown`；这里仍保留兜底，未知值不原样显示。 */

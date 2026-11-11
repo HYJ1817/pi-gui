@@ -375,9 +375,13 @@ function displayPath(file, homeDir) {
  * @param data       解析后的 mcp.json 对象
  * @param scope      `'global' | 'project' | null`（null = 不做 scope 专属规则，独立调用时用）
  * @param takenNames 前一个配置文件里**已被接受**的名字（跨文件 namespace 冲突判定）
+ * @param knownBases 额外认可的 base 名字（只用于识别 override，**不参与**
+ *                   namespace 冲突判定）。整份文件复核时用：项目文件里的
+ *                   override 应该按全局 base 识别，但既有的其它跨文件冲突
+ *                   不应因此阻塞无关编辑。
  * @returns {{servers: Array, invalid: string[], error: string}}
  */
-export function parseMcpServers(data, { scope = null, takenNames = null } = {}) {
+export function parseMcpServers(data, { scope = null, takenNames = null, knownBases = null } = {}) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return { servers: [], invalid: [], error: 'not-an-object' };
   }
@@ -387,6 +391,7 @@ export function parseMcpServers(data, { scope = null, takenNames = null } = {}) 
     return { servers: [], invalid: [], error: 'mcpServers-not-an-object' };
   }
   const prior = Array.isArray(takenNames) ? takenNames : [];
+  const known = Array.isArray(knownBases) ? knownBases : [];
   const accepted = []; // 本文件内已接受的名字（供同文件冲突判定）
   const servers = [];
   const invalid = [];
@@ -464,7 +469,7 @@ export function parseMcpServers(data, { scope = null, takenNames = null } = {}) 
      * 界面就会把一条 Pi 明明会加载的配置显示成无效。 */
     if (scope === 'project'
       && raw.command === undefined && raw.url === undefined && raw.type === undefined) {
-      const baseNames = new Set([...prior, ...accepted]);
+      const baseNames = new Set([...prior, ...accepted, ...known]);
       const extra = Object.keys(raw).filter((key) => !MCP_OVERRIDE_KEYS.has(key));
       if (!baseNames.has(name)) {
         invalid.push(`invalid server "${name}": needs "command" or "url", or a global server to override`);

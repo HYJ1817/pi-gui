@@ -27,6 +27,17 @@ import { parseMcpServers } from './mcp-native.js';
 const MAX_CONFIG_BYTES = 512 * 1024;
 const MAX_BACKUPS = 5;
 const MAX_NAME = 64;
+/* 名字会作为 `mcpServers` 普通对象的键。`__proto__` 命中的是原型访问器：
+ * 读取时返回 Object.prototype、赋值时改的是原型而不是条目，既会静默丢写，
+ * 也会污染整个进程。`constructor` / `prototype` 一并拒绝，避免同类歧义。 */
+const RESERVED_SERVER_NAMES = new Set(['__proto__', 'prototype', 'constructor']);
+
+function validServerName(name) {
+  return typeof name === 'string'
+    && name.length <= MAX_NAME
+    && SERVER_NAME_RE.test(name)
+    && !RESERVED_SERVER_NAMES.has(name);
+}
 const MAX_COMMAND = 512;
 const MAX_ARGS = 32;
 const MAX_ARG = 1024;
@@ -81,6 +92,9 @@ function sensitiveFlag(arg) {
 
 function argLooksSecret(arg, previousWasSensitiveFlag = false) {
   const s = String(arg);
+  /* 纯 `${VAR}` 引用不是明文凭据，即使它跟在 `--token` 这类敏感开关后面
+   * 也应放行；否则一条合法配置会让整批导入被拒。 */
+  if (REFERENCE_RE.test(s)) return false;
   if (previousWasSensitiveFlag) return true;
   if (valuesLikeSecret(s)) return true;
   if (/^authorization\s*:/i.test(s)) return true;
@@ -435,23 +449,37 @@ function normalizeInput(input, { scope, existingEntry = null } = {}) {
     if (!envResult.ok) return envResult;
     if (input.env !== undefined) config.env = envResult.record;
   } else {
-    const url = typeof input.url === 'string' ? input.url.trim() : '';
-    if (!url) return resultError('bad-url', 'HTTP server 需要 server URL', 'url');
-    if (url.length > MAX_URL || /[\u0000-\u001f\u007f]/.test(url)) {
-      return resultError('bad-url', 'URL 不合法或过长', 'url');
+    /* 含凭据的 URL 不会回填到表单（详情接口只给 origin 预览）。此时前端
+     * 用 keepUrl 表示“这次不改地址”；服务端从原条目取回，不重新做敏感
+     * 检查（值本来就是用户配置里已有的），但仍校验可解析与协议。 */
+    const keepUrl = input.keepUrl === true && input.url === undefined;
+    if (keepUrl) {
+      const kept = existingEntry && typeof existingEntry.url === 'string' ? existingEntry.url : '';
+      let parsedKept;
+      try { parsedKept = new URL(kept); } catch { return resultError('bad-url', '没有可保留的 server URL', 'url'); }
+      if (parsedKept.protocol !== 'http:' && parsedKept.protocol !== 'https:') {
+        return resultError('bad-url', '原 server URL 不是 http / https', 'url');
+      }
+      config.url = kept;
+    } else {
+      const url = typeof input.url === 'string' ? input.url.trim() : '';
+      if (!url) return resultError('bad-url', 'HTTP server 需要 server URL', 'url');
+      if (url.length > MAX_URL || /[\u0000-\u001f\u007f]/.test(url)) {
+        return resultError('bad-url', 'URL 不合法或过长', 'url');
+      }
+      let parsed;
+      try { parsed = new URL(url); } catch { return resultError('bad-url', 'URL 不是合法地址', 'url'); }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return resultError('bad-url', 'URL 只支持 http / https', 'url');
+      }
+      if (parsed.username || parsed.password) {
+        return resultError('bad-url', 'URL 不能包含用户名或密码，请改用 header 的 ${VAR} 引用', 'url');
+      }
+      if (queryLooksSensitive(parsed)) {
+        return resultError('bad-url', 'URL 查询串或路径中疑似包含凭据，请改用 header 的 ${VAR} 引用', 'url');
+      }
+      config.url = parsed.toString();
     }
-    let parsed;
-    try { parsed = new URL(url); } catch { return resultError('bad-url', 'URL 不是合法地址', 'url'); }
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return resultError('bad-url', 'URL 只支持 http / https', 'url');
-    }
-    if (parsed.username || parsed.password) {
-      return resultError('bad-url', 'URL 不能包含用户名或密码，请改用 header 的 ${VAR} 引用', 'url');
-    }
-    if (queryLooksSensitive(parsed)) {
-      return resultError('bad-url', 'URL 查询串或路径中疑似包含凭据，请改用 header 的 ${VAR} 引用', 'url');
-    }
-    config.url = parsed.toString();
     const headerResult = buildStringRecord(input.headers, existingEntry && existingEntry.headers, {
       kind: 'header', keyRe: HEADER_NAME_RE, valueAllowed: isHeaderReference, field: 'headers', max: MAX_HEADERS,
       needsReference: (key, value) => valueNeedsReference(key, value, { headers: true }),
@@ -591,8 +619,11 @@ function validateOverride(name, patch, userTable) {
       if (!EXPOSURES.has(v)) return resultError('bad-exposure', 'toolExposure 含有非法值', 'toolExposure');
     }
   }
-  /* 对齐上游：用 base + override 跑一次 validateMcpServerConfig。 */
-  const merged = validateAgainstParser(name, { ...base, ...patch }, 'project');
+  /* 对齐上游：用 base + override 跑一次 validateMcpServerConfig。
+   * 这里校验的是**合并后的有效配置**，不是项目文件里的完整条目：base 的
+   * `auth` 来自全局 mcp.json，是合法的；若按 project scope 再校验一次，
+   * 会把所有带 auth 的全局 server 的项目覆盖全部拒掉。 */
+  const merged = validateAgainstParser(name, { ...base, ...patch }, null);
   if (!merged.ok) return merged;
   return { ok: true, patch: { ...patch } };
 }
@@ -729,8 +760,8 @@ export function createMcpConfigStore({
     if (scopeError) return scopeError;
     const parentError = unsafeParent(scope);
     if (parentError) return parentError;
-    if (typeof name !== 'string' || !SERVER_NAME_RE.test(name) || name.length > MAX_NAME) {
-      return resultError('bad-name', 'server 名只允许字母、数字、_ 和 -（1–64 字符）', 'name');
+    if (!validServerName(name)) {
+      return resultError('bad-name', 'server 名只允许字母、数字、_ 和 -（1–64 字符，且不能是 __proto__ / prototype / constructor）', 'name');
     }
     const file = fileFor(scope);
     const state = readFileState(file);
@@ -753,7 +784,9 @@ export function createMcpConfigStore({
         entry: {
           type: 'override',
           enabled: raw.enabled === undefined ? (base ? base.enabled : true) : raw.enabled,
-          exposure: raw.exposure === undefined ? '' : raw.exposure,
+          /* 与普通条目用同一套归一：历史别名 `codemode-deferred` 在编辑
+           * 表单里没有对应选项，原样回填会被保存逻辑当成空值删掉。 */
+          exposure: raw.exposure === undefined ? '' : (raw.exposure === 'codemode-deferred' ? 'codemode' : raw.exposure),
           toolExposure: isRecord(raw.toolExposure) ? raw.toolExposure : null,
           description: '',
           inherited: base,
@@ -813,13 +846,16 @@ export function createMcpConfigStore({
    * `overrideOnly:true`；普通条目不会被静默改成 override。
    */
   async function save(input = {}) {
-    const { scope, name, originalName = null, expectedRevision, allowReplace = false, overrideOnly = false } = input;
+    const {
+      scope, name, originalName = null, expectedRevision,
+      allowReplace = false, overrideOnly = false, replaceExisting = false,
+    } = input;
     const scopeError = checkScope(scope);
     if (scopeError) return scopeError;
-    if (typeof name !== 'string' || !SERVER_NAME_RE.test(name) || name.length > MAX_NAME) {
-      return resultError('bad-name', 'server 名只允许字母、数字、_ 和 -（1–64 字符）', 'name');
+    if (!validServerName(name)) {
+      return resultError('bad-name', 'server 名只允许字母、数字、_ 和 -（1–64 字符，且不能是 __proto__ / prototype / constructor）', 'name');
     }
-    if (originalName !== null && (typeof originalName !== 'string' || !SERVER_NAME_RE.test(originalName))) {
+    if (originalName !== null && !validServerName(originalName)) {
       return resultError('bad-name', '原 server 名不合法', 'originalName');
     }
     const parentError = unsafeParent(scope);
@@ -874,9 +910,11 @@ export function createMcpConfigStore({
       if (isRecord(existing)) {
         for (const key of OVERRIDE_KEYS) {
           if (existing[key] !== undefined) {
+            /* 历史别名在写回前归一，否则“只改 enabled、不动 exposure”
+             * 也会因为 alias 不在闭集里被 validateOverride 拒绝。 */
             patch[key] = key === 'toolExposure' && isRecord(existing[key])
               ? { ...existing[key] }
-              : existing[key];
+              : key === 'exposure' && existing[key] === 'codemode-deferred' ? 'codemode' : existing[key];
           }
         }
       }
@@ -906,7 +944,12 @@ export function createMcpConfigStore({
     } else {
       const normalized = normalizeInput(input, { scope, existingEntry: existing });
       if (!normalized.ok) return normalized;
-      normalized.config = preserveExistingConfig(normalized.config, existing, input, { scope });
+      /* 市场“覆盖安装”是一次完整替换：新端点 / 新命令不能顺手继承旧条目
+       * 的 env / headers / args / cwd，否则旧凭据会被发给新目标。编辑表单
+       * 走 keep 语义，不依赖这里的隐式继承。 */
+      if (!replaceExisting) {
+        normalized.config = preserveExistingConfig(normalized.config, existing, input, { scope });
+      }
       /* 项目里的普通条目如果再与全局同名，上游会用完整条目覆盖全局；
        * 这是允许的，但必须让 UI 明确确认（不是创建，也不是编辑同名）。 */
       if (scope === 'project' && !existing) {
@@ -938,7 +981,14 @@ export function createMcpConfigStore({
       /* 同 namespace（- / _）冲突：上游对普通条目会拒绝。这里在写入前
        * 用同一份 parser 对整张表再跑一遍，避免“单条合法、整份文件非法”。
        * 跨文件部分已在上面对本次写入条目单独检查。 */
-      const whole = parseMcpServers({ mcpServers: table }, { scope });
+      /* 整份复核：项目文件里的 override 要按全局 base 识别，否则一条
+       * 合法的 `{enabled}` 覆盖会被当成“缺少 command/url”，从此所有
+       * 项目级保存都被它挡住。knownBases 只用于识别，不参与 namespace
+       * 冲突判定（跨文件冲突已对本次写入条目单独检查）。 */
+      const whole = parseMcpServers(
+        { mcpServers: table },
+        { scope, knownBases: scope === 'project' ? acceptedNamesOfGlobal() : null },
+      );
       if (whole.error || whole.invalid.length) {
         return resultError('config-conflict', whole.invalid[0] || `整份 mcp.json 未通过 Pi 的校验（${whole.error}）`);
       }
@@ -973,7 +1023,7 @@ export function createMcpConfigStore({
   async function remove({ scope, name, expectedRevision } = {}) {
     const scopeError = checkScope(scope);
     if (scopeError) return scopeError;
-    if (typeof name !== 'string' || !SERVER_NAME_RE.test(name) || name.length > MAX_NAME) {
+    if (!validServerName(name)) {
       return resultError('bad-name', 'server 名不合法', 'name');
     }
     const parentError = unsafeParent(scope);
@@ -1009,7 +1059,7 @@ export function createMcpConfigStore({
   async function setEnabled({ scope, name, enabled, expectedRevision } = {}) {
     const scopeError = checkScope(scope);
     if (scopeError) return scopeError;
-    if (typeof name !== 'string' || !SERVER_NAME_RE.test(name) || name.length > MAX_NAME) {
+    if (!validServerName(name)) {
       return resultError('bad-name', 'server 名不合法', 'name');
     }
     if (typeof enabled !== 'boolean') return resultError('bad-enabled', 'enabled 必须是布尔值', 'enabled');
@@ -1106,7 +1156,7 @@ export function createMcpConfigStore({
     for (const entry of entries) {
       if (!isRecord(entry)) return resultError('bad-import', '导入条目必须是对象');
       const name = entry.name;
-      if (typeof name !== 'string' || !SERVER_NAME_RE.test(name) || name.length > MAX_NAME) {
+      if (!validServerName(name)) {
         return resultError('bad-name', `导入条目名不合法：${clip(name, 80)}`);
       }
       if (isRecord(table[name]) && !allowReplace) {
@@ -1147,7 +1197,10 @@ export function createMcpConfigStore({
       prepared.push([name, normalized.config]);
     }
     for (const [name, config] of prepared) table[name] = config;
-    const whole = parseMcpServers({ mcpServers: table }, { scope });
+    const whole = parseMcpServers(
+      { mcpServers: table },
+      { scope, knownBases: scope === 'project' ? globalNames : null },
+    );
     if (whole.error || whole.invalid.length) {
       return resultError('config-conflict', whole.invalid[0] || '整份 mcp.json 未通过 Pi 的校验');
     }

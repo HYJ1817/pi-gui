@@ -422,22 +422,25 @@ function openInstallModal(item, {
       if (typeof rev === 'string') payload.expectedRevision = rev;
       let result = await mcpMarketAction(payload);
       if (disposed) return;
-      if (result && result.ok !== true && (result.code === 'name-conflict' || result.code === 'scope-conflict')) {
+      /* 以服务端的 canReplace / canOverride 为准：不是所有 name-conflict
+       * 都允许覆盖，盲目重试只会把用户困在同一个错误里。 */
+      const canReplace = result && result.ok !== true && result.canReplace === true;
+      const canOverride = result && result.ok !== true && result.canOverride === true;
+      if (canReplace || canOverride) {
         busy = false;
         render();
-        const override = result.code === 'scope-conflict';
         const go = await confirmModal({
-          title: override ? '项目条目会覆盖全局配置' : '同名配置已存在',
-          message: override
+          title: canOverride ? '项目条目会覆盖全局配置' : '同名配置已存在',
+          message: canOverride
             ? `${result.error || ''}\n确认后继续安装，项目条目会覆盖全局同名配置。`
             : `${result.error || ''}\n确认后覆盖原配置；写入前会保留备份。`,
-          okText: override ? '确认覆盖' : '覆盖安装',
+          okText: canOverride ? '确认覆盖' : '覆盖安装',
           danger: true,
         });
         if (!go || disposed) return;
         busy = true;
         render();
-        result = await mcpMarketAction({ ...payload, allowReplace: true, confirmOverride: override || true });
+        result = await mcpMarketAction({ ...payload, allowReplace: true, confirmOverride: canOverride });
         if (disposed) return;
       }
       busy = false;
@@ -447,6 +450,12 @@ function openInstallModal(item, {
         return;
       }
       success = result;
+      /* 同一市场页可以连续安装多台 server。服务端每次写入都会返回最新
+       * revision；不把它写回父页面，第二次安装仍会用第一次安装前的旧
+       * revision，被 stale-config 拒绝。 */
+      if (typeof state.onRevisions === 'function' && result.revisions) {
+        state.onRevisions(result.revisions);
+      }
       state.installedNames.add(name);
       state.configuredNames.add(name);
       state.render?.();
@@ -610,7 +619,7 @@ function openSourceManager(state, { onChange } = {}) {
 
 export function openMcpMarket({
   present, onBack, projectPath = '', projectName = '', trust = null,
-  configuredNames = [], revisionFor = () => undefined, defaultScope = 'user',
+  configuredNames = [], revisionFor = () => undefined, onRevisions = null, defaultScope = 'user',
 } = {}) {
   if (typeof present !== 'function') return null;
   let active = null;
@@ -618,7 +627,7 @@ export function openMcpMarket({
   const build = (card, close) => {
     card.classList.add('mcp-market-page');
     active = createMarketPage(card, {
-      onBack, projectPath, projectName, trust, configuredNames, revisionFor, defaultScope,
+      onBack, projectPath, projectName, trust, configuredNames, revisionFor, onRevisions, defaultScope,
       onDispose: () => { active = null; },
     });
   };
@@ -632,7 +641,7 @@ export function openMcpMarket({
 
 function createMarketPage(card, {
   onBack, projectPath, projectName, trust, configuredNames = [], revisionFor = () => undefined,
-  defaultScope = 'user', onDispose,
+  onRevisions = null, defaultScope = 'user', onDispose,
 }) {
   const state = {
     source: 'builtin',
@@ -648,6 +657,7 @@ function createMarketPage(card, {
     sourcesError: '',
     configuredNames: new Set(configuredNames),
     installedNames: new Set(),
+    onRevisions,
     categories: DEFAULT_CATEGORIES,
     onBack,
     render: null,

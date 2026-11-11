@@ -291,15 +291,22 @@ function buildSavePayload(draft, revision) {
     if (!draft.argsProtected) payload.args = draft.args.map((a) => String(a));
     payload.env = env.rows;
   } else {
-    let parsed;
-    try { parsed = new URL(String(draft.url || '').trim()); } catch {
-      return { ok: false, error: '服务器地址不是合法 URL', field: 'url' };
+    const rawUrl = String(draft.url || '').trim();
+    /* 含凭据的 URL 不会回填；留空表示原样保留，由服务端从原条目取回。
+     * 一旦用户填了新地址，就按普通 URL 的完整校验处理。 */
+    if (draft.urlProtected && !rawUrl) {
+      payload.keepUrl = true;
+    } else {
+      let parsed;
+      try { parsed = new URL(rawUrl); } catch {
+        return { ok: false, error: '服务器地址不是合法 URL', field: 'url' };
+      }
+      if (!/^https?:$/.test(parsed.protocol)) return { ok: false, error: 'URL 只支持 http / https', field: 'url' };
+      if (parsed.username || parsed.password) return { ok: false, error: 'URL 不能包含用户名或密码；请改用请求头引用', field: 'url' };
+      payload.url = parsed.toString();
     }
-    if (!/^https?:$/.test(parsed.protocol)) return { ok: false, error: 'URL 只支持 http / https', field: 'url' };
-    if (parsed.username || parsed.password) return { ok: false, error: 'URL 不能包含用户名或密码；请改用请求头引用', field: 'url' };
     const headers = settingRowsPayload(draft.headers, true);
     if (!headers.ok) return headers;
-    payload.url = parsed.toString();
     payload.headers = headers.rows;
   }
   return { ok: true, payload };
@@ -416,16 +423,21 @@ function openServerForm({
         save.textContent = '正在保存…';
         let result = await mcpConfigAction(built.payload);
         if (!isCurrent()) return;
-        if (result && result.ok !== true && (result.code === 'name-conflict' || result.code === 'scope-conflict')) {
+        /* 只有服务端明确说“可以覆盖”（canReplace）或“需要确认跨 scope
+         * 覆盖”（canOverride）时才弹确认。重命名撞到已有名字也返回
+         * name-conflict，但服务端不会允许覆盖，重试 allowReplace 只会
+         * 再次失败，不能把用户带进确认循环。 */
+        const canReplace = result && result.ok !== true && result.canReplace === true;
+        const canOverride = result && result.ok !== true && result.canOverride === true;
+        if (canReplace || canOverride) {
           save.disabled = false;
           save.textContent = old;
-          const override = result.code === 'scope-conflict';
           const go = await confirmModal({
-            title: override ? '项目条目会覆盖全局同名配置' : '同名配置已存在',
-            message: override
+            title: canOverride ? '项目条目会覆盖全局同名配置' : '同名配置已存在',
+            message: canOverride
               ? `用户级已有 “${draft.name}”。项目级完整条目会覆盖它（包括凭据来源）。确认继续？`
               : `“${draft.name}” 已经存在：${result.error || ''}。确认后会用当前表单覆盖它。`,
-            okText: override ? '确认覆盖' : '覆盖保存',
+            okText: canOverride ? '确认覆盖' : '覆盖保存',
             danger: true,
           });
           if (!go || !isCurrent()) return;
@@ -434,7 +446,7 @@ function openServerForm({
           result = await mcpConfigAction({
             ...built.payload,
             allowReplace: true,
-            confirmOverride: override || built.payload.confirmOverride === true,
+            confirmOverride: canOverride,
           });
           if (!isCurrent()) return;
         }
@@ -633,7 +645,9 @@ function openServerForm({
       url.inputMode = 'url';
       url.oninput = () => { draft.url = url.value; };
       sec.appendChild(labeledField('服务器 URL', url,
-        draft.urlProtected ? '原 URL 含凭据参数，未回填；请填写不含凭据的地址，凭据改用请求头引用。' : '支持 http / https。URL 内不能带用户名、密码或凭据查询参数。'));
+        draft.urlProtected
+          ? '原 URL 含凭据参数，未回填；留空表示保留原地址，填写新地址则替换。凭据请改用请求头引用。'
+          : '支持 http / https。URL 内不能带用户名、密码或凭据查询参数。'));
       if (draft.oauth || draft.auth) {
         const note = node('div', 'mcp-form-note');
         note.textContent = draft.oauth || draft.auth
@@ -1609,6 +1623,16 @@ function createPage(card, { reopen, present }) {
       defaultScope: state.filter === 'project' ? 'project' : 'user',
       configuredNames: currentServers().map((s) => s.name),
       revisionFor,
+      /* 市场页连续安装时，把服务端返回的最新 revision 写回父页面状态，
+       * 下一次安装才不会拿旧 revision 触发 stale-config。 */
+      onRevisions: (revisions) => {
+        if (!revisions || typeof revisions !== 'object') return;
+        state.revisions = {
+          user: String(revisions.user || ''),
+          project: String(revisions.project || ''),
+        };
+        state.revisionsKnown = true;
+      },
     });
   }
 
