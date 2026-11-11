@@ -75,7 +75,10 @@ function unsafeRuntimeToken(token) {
 }
 const NPM_REGISTRY_BASE_RE = /^https:\/\/registry\.npmjs\.org\/?$/i;
 const PYPI_REGISTRY_BASE_RE = /^https:\/\/(?:pypi\.org|pypi\.python\.org)\/?$/i;
-const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'];
+/* 市场只允许 HTTPS。不同工具对 HTTP_PROXY / HTTPS_PROXY 的语义并不完全
+ * 一致；为避免“环境里有代理、系统却 DIRECT”时静默直连，任一代理变量都
+ * 视为代理意图，必须由代理桥确认 proxied。NO_PROXY 是唯一明确的排除。 */
+const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy', 'HTTP_PROXY', 'http_proxy'];
 const MAX_PINNED_ADDRESSES = 4;
 
 function isRecord(v) { return Boolean(v) && typeof v === 'object' && !Array.isArray(v); }
@@ -376,17 +379,29 @@ function proxyEnvKeys(env) {
   return PROXY_ENV_KEYS.filter((key) => typeof safeEnv[key] === 'string' && safeEnv[key].trim());
 }
 
+function usableNetworkBridge(network) {
+  return Boolean(network
+    && typeof network.resolveRoute === 'function'
+    && typeof network.fetchProxied === 'function');
+}
+
 /**
  * 判断这条 URL 会走哪条线路。
  *
- * - `NO_PROXY` 命中 → 直连（仍走完整的地址校验）。
- * - 桌面版有 Electron 主进程的代理桥 → 以 `Session.resolveProxy` 对该 URL
- *   的判定为准：`direct` / `proxied` / `unknown`。**不因为环境里有代理变量
- *   就拒绝** —— 代理变量本身不证明请求会走代理，也不证明它不会。
- * - 没有代理桥（网页版 / 独立后端）但环境里有代理变量 → `unsupported`：
- *   应用没有可信的代理网络栈，不能假装已经验证过，也不能让 Node 直连
- *   悄悄绕过代理。
- * - 其它情况 → 直连。
+ * 优先级（从高到低）：
+ *   1. `NO_PROXY` 命中 → 直连（仍走完整地址校验）。
+ *   2. 任一环境变量代理（HTTPS_PROXY / https_proxy / ALL_PROXY /
+ *      all_proxy / HTTP_PROXY / http_proxy）→ 必须由 Electron 代理桥给出
+ *      `proxied`。桥给出 `direct` 或 `unknown` 都拒绝，不能静默绕过环境
+ *      变量代理；没有桥则 `unsupported`，也不偷偷直连。市场只允许 HTTPS，
+ *      这里保守地把所有代理变量都当作代理意图，避免工具间语义差异造成
+ *      静默直连。
+ *   3. 没有环境变量代理 → 以 Electron 代理桥的 `resolveProxy` 为准：
+ *      `direct` / `proxied` / `unknown`。
+ *   4. 没有桥且没有环境变量代理 → 直连（独立后端没有代理配置）。
+ *
+ * 任何解析超时、异常、非法值都收敛为 `unknown`；调用方必须在发起 DNS
+ * 或 HTTP 之前拒绝，不能把 unknown 当成 direct。
  */
 async function resolveMarketRoute(parsed, { network = null, env = process.env } = {}) {
   const host = hostnameOf(parsed);
@@ -395,15 +410,45 @@ async function resolveMarketRoute(parsed, { network = null, env = process.env } 
   if (noProxyMatches(host, port, safeEnv.NO_PROXY || safeEnv.no_proxy)) {
     return { route: 'direct', source: 'no-proxy' };
   }
-  if (network && typeof network.resolveRoute === 'function') {
-    let route = 'unknown';
-    try { route = await network.resolveRoute(parsed.toString()); } catch { route = 'unknown'; }
-    if (route !== 'direct' && route !== 'proxied') route = 'unknown';
-    return { route, source: 'system-proxy' };
+  const envKeys = proxyEnvKeys(safeEnv);
+  const bridge = usableNetworkBridge(network) ? network : null;
+  if (!bridge) {
+    if (network) {
+      return {
+        route: 'unsupported',
+        source: envKeys.length ? 'env-proxy' : 'system-proxy',
+        reason: 'bridge-incomplete',
+        ...(envKeys.length ? { proxyKey: envKeys[0] } : {}),
+      };
+    }
+    if (envKeys.length) return { route: 'unsupported', source: 'env-proxy', proxyKey: envKeys[0] };
+    return { route: 'direct', source: 'no-proxy-stack' };
   }
-  const keys = proxyEnvKeys(safeEnv);
-  if (keys.length) return { route: 'unsupported', source: 'env-proxy', proxyKey: keys[0] };
-  return { route: 'direct', source: 'no-proxy-stack' };
+
+  let route = 'unknown';
+  let reason = '';
+  try {
+    route = await bridge.resolveRoute(parsed.toString());
+  } catch {
+    route = 'unknown';
+    reason = 'resolve-failed';
+  }
+  if (route !== 'direct' && route !== 'proxied') {
+    route = 'unknown';
+    reason = reason || 'invalid-route';
+  }
+  if (envKeys.length) {
+    if (route === 'proxied') {
+      return { route, source: 'system-proxy', proxyKey: envKeys[0] };
+    }
+    return {
+      route: 'unknown',
+      source: 'env-proxy',
+      reason: route === 'direct' ? 'env-proxy-bypassed' : 'env-proxy-route-unknown',
+      proxyKey: envKeys[0],
+    };
+  }
+  return { route, source: 'system-proxy', ...(reason ? { reason } : {}) };
 }
 
 function networkMeta(routeInfo, { fakeIp = false, resolution = null } = {}) {
@@ -411,10 +456,11 @@ function networkMeta(routeInfo, { fakeIp = false, resolution = null } = {}) {
   return {
     route,
     source: routeInfo && routeInfo.source ? routeInfo.source : 'unknown',
-    /* 代理线路由可信代理网络栈连接，最终对端不可见；绝不能声称做过固定 IP
-     * 校验。unsupported 根本没有发起连接，也不能算已验证。 */
-    addressVerified: route === 'direct' || route === 'unknown',
-    dns: route === 'proxied' ? 'proxy' : 'local',
+    /* 只有真正固定了已校验 IP 的直连才算 addressVerified。代理线路由
+     * 可信代理栈连接但应用看不到最终对端；unknown / unsupported 根本没有
+     * 发起连接，更不能标记为已验证。 */
+    addressVerified: route === 'direct',
+    dns: route === 'proxied' ? 'proxy' : (route === 'direct' ? 'local' : 'none'),
     fakeIp: fakeIp === true,
     ...(resolution ? { resolution } : {}),
   };
@@ -648,19 +694,32 @@ async function fetchJson(rawUrl, {
   const parsed = checked.url;
   const routeInfo = await resolveMarketRoute(parsed, { network, env });
   if (routeInfo.route === 'unsupported') {
+    const detected = routeInfo.proxyKey ? `检测到代理环境变量 ${routeInfo.proxyKey}。` : '';
+    const reason = routeInfo.reason === 'bridge-incomplete'
+      ? '代理网络桥能力不完整。'
+      : '当前运行方式没有可信的代理网络栈。';
     return codeError(
       'proxy-unsupported',
-      `检测到代理环境变量 ${routeInfo.proxyKey}。当前运行方式没有可信的代理网络栈，不能确认实际连接地址，也不会绕过代理直连。请在桌面版中通过系统代理访问，或把目标域名加入 NO_PROXY 后重试。`,
+      `${detected}${reason}不能确认实际连接地址，也不会绕过代理直连。请在桌面版中通过系统代理访问，或把目标域名加入 NO_PROXY 后重试。`,
       { network: networkMeta(routeInfo) },
     );
+  }
+  /* unknown 不是 direct：线路无法确认时必须在这里拒绝，不能进入下面的
+   * DNS 解析或 Node 直连。这样 PAC 混合线路、代理解析超时 / 异常 / 非法
+   * 返回值都不会意外绕过代理。 */
+  if (routeInfo.route === 'unknown') {
+    const envConflict = routeInfo.reason === 'env-proxy-bypassed'
+      || routeInfo.reason === 'env-proxy-route-unknown';
+    const error = envConflict
+      ? `检测到代理环境变量 ${routeInfo.proxyKey}，但系统代理线路为${routeInfo.reason === 'env-proxy-bypassed' ? '直连' : '未知'}；不能确认请求会走代理，已拒绝。请关闭环境变量代理，或让系统代理使用同一代理后重试。`
+      : '无法确认系统代理线路（解析超时、异常或结果非法）；为避免绕过代理，市场请求已拒绝，且不会回退到直连。';
+    return codeError('proxy-blocked', error, { network: networkMeta(routeInfo) });
   }
   /* 桌面版有主进程代理桥时，允许 TUN fake-IP 的直连路径：地址仍被固定，
    * TLS 仍按原域名校验。独立后端没有这条路径，fake-IP 继续 fail closed。
    * 只有两侧能力都在（判定线路 + 代理取数）才算可信桥，避免半截对象
    * 让直连 fake-IP 被误放行。 */
-  const networkUsable = Boolean(network
-    && typeof network.resolveRoute === 'function'
-    && typeof network.fetchProxied === 'function');
+  const networkUsable = usableNetworkBridge(network);
   const fakeIpAllowed = allowFakeIp === true || (allowFakeIp === undefined && networkUsable);
   const safe = await inspectMarketTarget(parsed, {
     route: routeInfo.route,

@@ -805,7 +805,7 @@ function createMarketPage(card, {
       const banner = node('div', 'mcp-banner is-warn');
       banner.appendChild(icon('warning', 'mcp-icon'));
       banner.appendChild(node('div', 'mcp-banner-copy',
-        '无法确认系统代理线路，已按直连的严格地址校验处理；解析到 fake-IP 或内网地址的请求会被拒绝。'));
+        '无法确认系统代理线路，已拒绝市场请求；不会回退到直连，也不会发起 DNS 或 HTTP 请求。'));
       wrap.appendChild(banner);
       return wrap;
     }
