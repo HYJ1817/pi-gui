@@ -639,9 +639,18 @@ const CUSTOM_SOURCE = {
     }
     const max = 'x'.repeat(4096);
     assert.equal(new URL(registryCatalogUrl({ cursor: max })).searchParams.get('cursor'), max);
+    /* 首尾空格是合法内容的一部分，只能校验，不能 trim 后回传。 */
+    const spaced = '  tok  ';
+    for (const url of [registryCatalogUrl({ cursor: spaced }), registryQueryUrl({ cursor: spaced })]) {
+      assert.equal(new URL(url).searchParams.get('cursor'), spaced);
+    }
     assert.throws(
       () => registryCatalogUrl({ cursor: 'x'.repeat(4097) }),
       (err) => err.marketCode === 'invalid-response' && /4096/.test(err.message),
+    );
+    assert.throws(
+      () => registryCatalogUrl({ cursor: '   ' }),
+      (err) => err.marketCode === 'invalid-response' && /空白/.test(err.message),
     );
     assert.throws(() => registryQueryUrl({ cursor: 42 }), (err) => err.marketCode === 'invalid-response');
     assert.throws(() => registryCatalogUrl({ cursor: 'bad\u0000cursor' }), (err) => err.marketCode === 'invalid-response');
@@ -685,6 +694,43 @@ const CUSTOM_SOURCE = {
     const second = await m.list({ source: 'registry' });
     assert.equal(second.ok, false);
     assert.equal(calls, 2, '失败不能留下半份目录缓存');
+  });
+
+  await checkAsync('C2·只含空白的上游 cursor 明确失败且不缓存半份目录', async () => {
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => {
+        calls += 1;
+        return jsonResponse({ servers: [REGISTRY_ROW], metadata: { nextCursor: '   ' } });
+      },
+    });
+    const first = await m.list({ source: 'registry' });
+    assert.equal(first.ok, false);
+    assert.equal(first.code, 'invalid-response');
+    assert.match(first.error, /空白/);
+    assert.deepEqual(first.items, []);
+    const second = await m.list({ source: 'registry' });
+    assert.equal(second.ok, false);
+    assert.equal(calls, 2, '空白 cursor 不能当成正常结束并缓存目录');
+  });
+
+  await checkAsync('C2·空串 nextCursor 表示正常结束并缓存完整目录', async () => {
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => {
+        calls += 1;
+        return jsonResponse({ servers: [REGISTRY_ROW], metadata: { nextCursor: '' } });
+      },
+    });
+    const first = await m.list({ source: 'registry' });
+    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.equal(first.total, 1);
+    assert.equal(calls, 1);
+    const second = await m.list({ source: 'registry' });
+    assert.equal(second.ok, true);
+    assert.equal(calls, 1, '完整目录应缓存，不能重复抓取');
   });
 
   await checkAsync('C2·过期目录先返回旧缓存并后台刷新，失败后退避', async () => {
