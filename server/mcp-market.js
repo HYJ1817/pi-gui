@@ -18,6 +18,8 @@ import fs from 'node:fs';
 import https from 'node:https';
 import net from 'node:net';
 import path from 'node:path';
+import { promisify } from 'node:util';
+import zlib from 'node:zlib';
 import {
   argsContainSecret, queryLooksSensitive, settingNeedsReference, writeJsonAtomic,
 } from './mcp-config.js';
@@ -38,12 +40,23 @@ const MAX_SOURCES = 10;
 const REGISTRY_PAGE_LIMIT = 100;
 const REGISTRY_DEFAULT_PAGE_SIZE = 24;
 const REGISTRY_MAX_PAGE_SIZE = 100;
-/* 防止上游异常游标把进程拖进无限翻页。当前完整目录约 1100 条 / 11 页，
- * 这些上限只用来兜底；触发时明确报错，不缓存半份目录。 */
-const REGISTRY_MAX_PAGES = 200;
-const REGISTRY_MAX_ENTRIES = 20_000;
-const REGISTRY_CATALOG_TIMEOUT_MS = 60_000;
+/* 防止上游异常游标把进程拖进无限翻页。2026-11 实测 618 页 / 61,758 条；
+ * 这些上限只用来兜底，触发时明确报错，不缓存半份目录。 */
+const REGISTRY_MAX_PAGES = 1_200;
+const REGISTRY_MAX_ENTRIES = 100_000;
+/* 官方 Registry 已增长到数万条、数百页。单页上限仍是 100（101 直接 422），
+ * 只能按 cursor 顺序拉；实测 618 页 / 61,758 条约 4.5 分钟。总时限给足，
+ * 单页仍是 8s —— 网络真断时第一页就会失败，不会干等十分钟。 */
+const REGISTRY_CATALOG_TIMEOUT_MS = 600_000;
+/* 完整目录落盘缓存：官方聚合器指南建议本地持久化并低频刷新。
+ * 一小时内直接复用；过期时先返回旧目录，再在后台刷新。 */
+const REGISTRY_CATALOG_TTL_MS = 60 * 60 * 1000;
+const REGISTRY_CACHE_FILE = 'mcp-registry-catalog.json.gz';
+const REGISTRY_CACHE_MAX_BYTES = 128 * 1024 * 1024;
+const REGISTRY_CACHE_MAX_SKEW_MS = 5 * 60 * 1000;
 const REGISTRY_STALE_RETRY_MS = 30_000;
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 const CATEGORIES = ['全部', '开发工具', '网络', '文档', '数据', '效率'];
 const NPM_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i;
 const PYPI_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -486,7 +499,7 @@ function pinnedLookupFor(address, family) {
 }
 
 /** 真实连接参数：hostname 保持原域名（SNI / 证书校验），lookup 只回已校验 IP。 */
-function pinnedRequestOptions(url, address, family, headers = {}) {
+function pinnedRequestOptions(url, address, family, headers = {}, agent = null) {
   const hostname = hostnameOf(url);
   const port = url.port ? Number(url.port) : 443;
   const options = {
@@ -496,7 +509,10 @@ function pinnedRequestOptions(url, address, family, headers = {}) {
     port,
     path: `${url.pathname || '/'}${url.search || ''}`,
     headers: { ...headers, host: url.host },
-    agent: false,
+    /* 默认 agent:false：每个市场请求单独建连，不复用别的请求留下的连接。
+     * 只有整份 Registry 目录抓取会传入自己的 keep-alive agent（见
+     * fetchRegistryCatalog）；它仍走同一条固定 IP / 证书校验路径。 */
+    agent: agent || false,
     rejectUnauthorized: true,
     lookup: pinnedLookupFor(address, family),
   };
@@ -532,7 +548,7 @@ function pinnedResponse(status, body, headers) {
  * 一次 HTTPS GET：不跟随重定向、整体超时、响应体上限。连接由
  * pinnedRequestOptions 固定到已经校验过的 IP。
  */
-function httpsGetPinned(rawUrl, { address, family, timeoutMs, maxBytes, headers = {} } = {}) {
+function httpsGetPinned(rawUrl, { address, family, timeoutMs, maxBytes, headers = {}, agent = null } = {}) {
   const u = new URL(rawUrl);
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -546,7 +562,7 @@ function httpsGetPinned(rawUrl, { address, family, timeoutMs, maxBytes, headers 
     const fail = (err) => finish(reject, err);
     let req;
     try {
-      req = https.request(pinnedRequestOptions(u, address, family, headers), (res) => {
+      req = https.request(pinnedRequestOptions(u, address, family, headers, agent), (res) => {
         const status = Number(res.statusCode) || 0;
         /* 3xx 与错误状态不读 body：既避免下载无关内容，也让 fetchJson 能
          * 先给出明确的 redirect-blocked / http-xxx。 */
@@ -699,6 +715,7 @@ async function fetchJson(rawUrl, {
   accept = 'application/json',
   network = null,
   allowFakeIp,
+  agent = null,
 } = {}) {
   const checked = checkMarketUrl(rawUrl);
   if (!checked.ok) return checked;
@@ -773,6 +790,7 @@ async function fetchJson(rawUrl, {
           timeoutMs: remaining,
           maxBytes,
           headers: { accept, 'user-agent': 'pi-gui-mcp-market/1' },
+          ...(agent ? { agent } : {}),
         });
         break;
       } catch (err) {
@@ -1956,6 +1974,8 @@ export function createMcpMarket({
   network = null,
   allowFakeIp,
   now = () => Date.now(),
+  /* 磁盘缓存默认开启；测试 / 只读嵌入可关闭，避免多个实例共享同一目录。 */
+  registryCache = true,
 } = {}) {
   const cache = new Map();
   /* 完整 Registry 目录（已去重、只含 latest）。`cache` 仍只管第三方源；
@@ -1964,7 +1984,11 @@ export function createMcpMarket({
   let registryCatalogPromise = null;
   let registryRetryAt = 0;
   let registryLastError = null;
+  let registryProgress = {
+    active: false, done: false, pages: 0, items: 0, startedAt: 0, finishedAt: 0,
+  };
   const sourcesFile = path.join(dataDir, SOURCES_FILE);
+  const registryCacheFile = path.join(dataDir, REGISTRY_CACHE_FILE);
 
   function cacheGet(key) {
     const hit = cache.get(key);
@@ -2036,6 +2060,88 @@ export function createMcpMarket({
     return current;
   }
 
+  /** 磁盘缓存里的条目必须仍是 normalizeRegistryEntry 产出的形状。 */
+  function isCachedRegistryItem(item) {
+    if (!isRecord(item)) return false;
+    if (item.source !== 'registry') return false;
+    if (typeof item.id !== 'string' || !item.id || item.id.length > 500) return false;
+    if (typeof item.identifier !== 'string' || !item.identifier || item.identifier.length > 200) return false;
+    if (typeof item.name !== 'string' || item.name.length > 200) return false;
+    if (typeof item.description !== 'string' || item.description.length > 400) return false;
+    if (typeof item.category !== 'string' || typeof item.installable !== 'boolean') return false;
+    return ['fields', 'envFields', 'headerFields', 'requires', 'requiredEnvKeys']
+      .every((key) => Array.isArray(item[key]));
+  }
+
+  /**
+   * 读取上次成功抓取的完整目录。缓存是自生成、可再生的数据：任何解析 /
+   * 形状 / 时钟异常都按“没有缓存”处理，重新走网络，绝不让坏文件拖垮市场。
+   */
+  async function readRegistryCatalogFile() {
+    if (registryCache !== true) return null;
+    try {
+      const st = await fs.promises.stat(registryCacheFile);
+      if (!st.isFile() || st.size <= 0 || st.size > REGISTRY_CACHE_MAX_BYTES) return null;
+      const packed = await fs.promises.readFile(registryCacheFile);
+      const data = JSON.parse((await gunzip(packed)).toString('utf8'));
+      if (!isRecord(data) || data.version !== 1) return null;
+      if (!Number.isFinite(data.at) || !Array.isArray(data.items)) return null;
+      if (data.items.length > REGISTRY_MAX_ENTRIES) return null;
+      if (data.at - now() > REGISTRY_CACHE_MAX_SKEW_MS) return null;
+      if (!data.items.every(isCachedRegistryItem)) return null;
+      return {
+        at: data.at,
+        items: data.items,
+        pages: Number.isFinite(data.pages) ? data.pages : 0,
+        network: isRecord(data.network) ? data.network : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** 紧凑 JSON + gzip + 临时文件 rename；缓存可再生，不保留备份。 */
+  async function writeRegistryCatalogFile(catalog) {
+    if (registryCache !== true) return false;
+    try {
+      const text = JSON.stringify({
+        version: 1,
+        at: catalog.at,
+        pages: catalog.pages,
+        network: catalog.network,
+        items: catalog.items,
+      });
+      const packed = await gzip(Buffer.from(text, 'utf8'), { level: zlib.constants.Z_BEST_SPEED });
+      if (packed.length > REGISTRY_CACHE_MAX_BYTES) return false;
+      const dir = path.dirname(registryCacheFile);
+      await fs.promises.mkdir(dir, { recursive: true, mode: 0o700 });
+      const tmp = path.join(dir, `.${path.basename(registryCacheFile)}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`);
+      try {
+        await fs.promises.writeFile(tmp, packed, { mode: 0o600 });
+        await fs.promises.rename(tmp, registryCacheFile);
+      } catch {
+        try { await fs.promises.rm(tmp, { force: true }); } catch { /* ignore */ }
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 给前端轮询用的加载进度：只有页数 / 条目数，不含任何远端内容。 */
+  function registryStatus() {
+    return {
+      ok: true,
+      active: registryProgress.active === true,
+      done: registryProgress.done === true,
+      pages: registryProgress.pages,
+      items: registryProgress.items,
+      startedAt: registryProgress.startedAt || null,
+      finishedAt: registryProgress.finishedAt || null,
+    };
+  }
+
   /**
    * 按 cursor 拉完整 Registry 目录。任何一页失败都不返回半份数据：
    * 调用方要么拿到完整目录，要么拿到明确错误（旧缓存由调用方保留）。
@@ -2047,78 +2153,87 @@ export function createMcpMarket({
     let pages = 0;
     let lastNetwork = null;
     const deadline = now() + REGISTRY_CATALOG_TIMEOUT_MS;
-    for (;;) {
-      /* 60s 是整份目录的总时限，不只是“两页之间的检查点”：把剩余时间
-       * 传给单页请求，避免最后一页在 deadline 前 1ms 起步再跑 8s。 */
-      const remaining = deadline - now();
-      if (remaining <= 0) {
-        return { ...codeError('timeout', '完整加载 Registry 目录超时'), items: [], pages, network: lastNetwork };
+    /* 完整目录动辄数百页。默认的 agent:false 让每一页都重新做 TCP + TLS
+     * 握手，数百页累计下来会先撞上总时限；这里只给“这一次目录抓取”配一个
+     * 单连接 keep-alive agent。安全语义不变：每页仍由 fetchJson 重新解析
+     * 并校验线路与 DNS，连接只可能复用同一 host:port 上已建立的那一条；
+     * 抓完立即销毁，其它市场请求仍保持 agent:false。 */
+    const agent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+    registryProgress = {
+      active: true, done: false, pages: 0, items: 0, startedAt: now(), finishedAt: 0,
+    };
+    try {
+      for (;;) {
+        /* 总时限是整份目录的，不只是“两页之间的检查点”：把剩余时间
+         * 传给单页请求，避免最后一页在 deadline 前 1ms 起步再跑 8s。 */
+        const remaining = deadline - now();
+        if (remaining <= 0) {
+          return { ...codeError('timeout', '完整加载 Registry 目录超时'), items: [], pages, network: lastNetwork };
+        }
+        const fetched = await fetchJson(registryCatalogUrl({ cursor }), {
+          requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp, agent,
+          timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, remaining)),
+        });
+        if (!fetched.ok) return { ...fetched, items: [], pages };
+        lastNetwork = fetched.network || lastNetwork;
+        const data = fetched.data;
+        if (!isRecord(data) || !Array.isArray(data.servers)) {
+          return { ...codeError('invalid-response', 'Registry 响应缺少 servers 数组'), items: [], pages, network: lastNetwork };
+        }
+        pages += 1;
+        let shapedRows = 0;
+        for (const row of data.servers) {
+          if (isRecord(row) && isRecord(row.server)) shapedRows += 1;
+          const item = normalizeRegistryEntry(row);
+          if (!item) continue;
+          byName.set(item.identifier, preferRegistryItem(byName.get(item.identifier), item));
+        }
+        registryProgress.pages = pages;
+        registryProgress.items = byName.size;
+        /* 非空页却没有任何 {server} 形状：多半是上游改了外层结构。
+         * 不能把它当成“合法空目录”缓存一小时，否则整页市场静默变空。 */
+        if (data.servers.length > 0 && shapedRows === 0) {
+          return {
+            ...codeError('invalid-response', 'Registry 返回的 servers 条目缺少 server 对象'),
+            items: [], pages, network: lastNetwork,
+          };
+        }
+        if (byName.size > REGISTRY_MAX_ENTRIES) {
+          return {
+            ...codeError('registry-too-large', `Registry 目录超过 ${REGISTRY_MAX_ENTRIES} 条，已停止加载`),
+            items: [], pages, network: lastNetwork,
+          };
+        }
+        const metadata = isRecord(data.metadata) ? data.metadata : {};
+        const next = metadata.nextCursor;
+        if (next === undefined || next === null) break;
+        if (typeof next !== 'string') {
+          return { ...codeError('invalid-response', 'Registry 分页游标不是字符串'), items: [], pages, network: lastNetwork };
+        }
+        if (!next.trim()) break;
+        if (next === cursor || seenCursors.has(next)) {
+          return { ...codeError('registry-cursor-loop', 'Registry 分页游标重复；已停止加载'), items: [], pages, network: lastNetwork };
+        }
+        if (pages >= REGISTRY_MAX_PAGES) {
+          return {
+            ...codeError('registry-too-large', `Registry 目录超过 ${REGISTRY_MAX_PAGES} 页，已停止加载`),
+            items: [], pages, network: lastNetwork,
+          };
+        }
+        seenCursors.add(next);
+        cursor = next;
       }
-      const fetched = await fetchJson(registryCatalogUrl({ cursor }), {
-        requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp,
-        timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, remaining)),
-      });
-      if (!fetched.ok) return { ...fetched, items: [], pages };
-      lastNetwork = fetched.network || lastNetwork;
-      const data = fetched.data;
-      if (!isRecord(data) || !Array.isArray(data.servers)) {
-        return { ...codeError('invalid-response', 'Registry 响应缺少 servers 数组'), items: [], pages, network: lastNetwork };
-      }
-      pages += 1;
-      let shapedRows = 0;
-      for (const row of data.servers) {
-        if (isRecord(row) && isRecord(row.server)) shapedRows += 1;
-        const item = normalizeRegistryEntry(row);
-        if (!item) continue;
-        byName.set(item.identifier, preferRegistryItem(byName.get(item.identifier), item));
-      }
-      /* 非空页却没有任何 {server} 形状：多半是上游改了外层结构。
-       * 不能把它当成“合法空目录”缓存 5 分钟，否则整页市场静默变空。 */
-      if (data.servers.length > 0 && shapedRows === 0) {
-        return {
-          ...codeError('invalid-response', 'Registry 返回的 servers 条目缺少 server 对象'),
-          items: [], pages, network: lastNetwork,
-        };
-      }
-      if (byName.size > REGISTRY_MAX_ENTRIES) {
-        return {
-          ...codeError('registry-too-large', `Registry 目录超过 ${REGISTRY_MAX_ENTRIES} 条，已停止加载`),
-          items: [], pages, network: lastNetwork,
-        };
-      }
-      const metadata = isRecord(data.metadata) ? data.metadata : {};
-      const next = metadata.nextCursor;
-      if (next === undefined || next === null) break;
-      if (typeof next !== 'string') {
-        return { ...codeError('invalid-response', 'Registry 分页游标不是字符串'), items: [], pages, network: lastNetwork };
-      }
-      if (!next.trim()) break;
-      if (next === cursor || seenCursors.has(next)) {
-        return { ...codeError('registry-cursor-loop', 'Registry 分页游标重复；已停止加载'), items: [], pages, network: lastNetwork };
-      }
-      if (pages >= REGISTRY_MAX_PAGES) {
-        return {
-          ...codeError('registry-too-large', `Registry 目录超过 ${REGISTRY_MAX_PAGES} 页，已停止加载`),
-          items: [], pages, network: lastNetwork,
-        };
-      }
-      seenCursors.add(next);
-      cursor = next;
-    }
-    return { ok: true, items: [...byName.values()], pages, network: lastNetwork };
-  }
-
-  async function ensureRegistryCatalog() {
-    if (registryCatalog && now() - registryCatalog.at <= CACHE_TTL_MS) {
-      return { ok: true, catalog: registryCatalog, cached: true, stale: false };
-    }
-    if (registryCatalogPromise) return registryCatalogPromise;
-    if (registryCatalog && now() < registryRetryAt) {
-      return {
-        ok: true, catalog: registryCatalog, cached: true, stale: true,
-        refreshError: registryLastError,
+      return { ok: true, items: [...byName.values()], pages, network: lastNetwork };
+    } finally {
+      agent.destroy();
+      registryProgress = {
+        ...registryProgress, active: false, done: true, finishedAt: now(),
       };
     }
+  }
+
+  function startRegistryRefresh() {
+    if (registryCatalogPromise) return registryCatalogPromise;
     registryCatalogPromise = (async () => {
       try {
         const loaded = await fetchRegistryCatalog();
@@ -2135,12 +2250,44 @@ export function createMcpMarket({
         };
         registryLastError = null;
         registryRetryAt = 0;
+        await writeRegistryCatalogFile(registryCatalog);
         return { ok: true, catalog: registryCatalog, cached: false, stale: false };
+      } catch {
+        const failed = codeError('registry-error', 'Registry 目录加载失败');
+        registryLastError = failed;
+        if (registryCatalog) {
+          registryRetryAt = now() + REGISTRY_STALE_RETRY_MS;
+          return { ok: true, catalog: registryCatalog, cached: true, stale: true, refreshError: failed };
+        }
+        return { ...failed, catalog: null };
       } finally {
         registryCatalogPromise = null;
       }
     })();
     return registryCatalogPromise;
+  }
+
+  async function ensureRegistryCatalog() {
+    if (!registryCatalog) {
+      const disk = await readRegistryCatalogFile();
+      if (disk) registryCatalog = disk;
+    }
+    if (registryCatalog && now() - registryCatalog.at <= REGISTRY_CATALOG_TTL_MS) {
+      return { ok: true, catalog: registryCatalog, cached: true, stale: false };
+    }
+    if (registryCatalog) {
+      /* 过期目录立即返回，刷新放到后台：完整抓取要数分钟，不能让每次
+       * 打开市场都卡在这里。刷新失败时下一次请求会带上 refreshError。 */
+      if (!registryCatalogPromise && now() >= registryRetryAt) {
+        startRegistryRefresh().catch(() => {});
+      }
+      return {
+        ok: true, catalog: registryCatalog, cached: true, stale: true,
+        ...(registryCatalogPromise ? { refreshing: true } : {}),
+        ...(registryLastError ? { refreshError: registryLastError } : {}),
+      };
+    }
+    return startRegistryRefresh();
   }
 
   /**
@@ -2193,6 +2340,7 @@ export function createMcpMarket({
       cached: ensured.cached === true,
       catalogPages: ensured.catalog.pages,
       ...(ensured.stale ? { stale: true } : {}),
+      ...(ensured.refreshing ? { refreshing: true } : {}),
       ...(ensured.refreshError ? { refreshError: ensured.refreshError } : {}),
     };
   }
@@ -2474,6 +2622,7 @@ export function createMcpMarket({
     addSource,
     removeSource,
     sources,
+    registryStatus,
     _internals: {
       BUILTIN,
       CATEGORIES,
