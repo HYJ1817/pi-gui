@@ -3,14 +3,28 @@
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const https = require('node:https');
 const os = require('node:os');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const { classifyProxyRoute } = require('../lib/market-network-policy.cjs');
 
 let count = 0;
 const check = (name, fn) => { fn(); count++; console.log('  ok  ' + name); };
 const checkAsync = async (name, fn) => { await fn(); count++; console.log('  ok  ' + name); };
 const section = (t) => console.log('\n--- ' + t + ' ---');
+
+/** 等后台刷新真正收尾（不是按墙钟时间猜）。 */
+const waitForRegistryRefresh = async (market) => {
+  for (let i = 0; i < 500; i += 1) {
+    if (market.registryStatus().active !== true) {
+      await new Promise((resolve) => setImmediate(resolve));
+      return;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  throw new Error('Registry 后台刷新没有在预期内结束');
+};
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-mcp-mkt-'));
 const AGENT = path.join(TMP, 'agent');
@@ -93,7 +107,10 @@ const CUSTOM_SOURCE = {
 };
 
 (async () => {
-  const { createMcpMarket } = await import('../server/mcp-market.js');
+  const { createMcpMarket: createMcpMarketRaw } = await import('../server/mcp-market.js');
+  /* 绝大多数用例只关心内存行为；默认关掉磁盘缓存，避免共享 DATA 目录
+   * 让上一条用例的目录泄漏到下一条。缓存专项用例直接用 Raw 版本。 */
+  const createMcpMarket = (opts = {}) => createMcpMarketRaw({ registryCache: false, ...opts });
   const { createMcpConfigStore } = await import('../server/mcp-config.js');
   const state = { trust: { trusted: true, requiresTrust: false } };
   const store = createMcpConfigStore({
@@ -437,6 +454,66 @@ const CUSTOM_SOURCE = {
     assert.equal(r.items.find((item) => item.identifier === 'io.example/other').version, '1.0.0');
   });
 
+  await checkAsync('C2·完整目录复用同一个 keep-alive agent，其它请求仍逐请求建连', async () => {
+    const seenAgents = [];
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url, opts) => {
+        seenAgents.push(opts.agent);
+        return jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || ''));
+      },
+    });
+    const r = await m.list({ source: 'registry' });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(seenAgents.length, 3, '209 条完整目录应请求 3 页');
+    assert.ok(seenAgents[0] instanceof https.Agent, '目录抓取必须使用专用 agent');
+    assert.equal(seenAgents[0].keepAlive, true);
+    assert.equal(seenAgents[0].maxSockets, 1);
+    assert.equal(new Set(seenAgents).size, 1, '同一轮目录抓取必须复用同一个 agent');
+
+    const seen = [];
+    const plain = await market._internals.fetchJson('https://market.example/x', {
+      env: {},
+      lookupImpl,
+      requestImpl: async (url, opts) => { seen.push(opts); return jsonResponse({ ok: 1 }); },
+    });
+    assert.equal(plain.ok, true, JSON.stringify(plain));
+    assert.equal('agent' in seen[0], false, '普通市场请求不携带 agent，保持逐请求建连');
+
+    const custom = new https.Agent({ keepAlive: true, maxSockets: 1 });
+    seen.length = 0;
+    const passed = await market._internals.fetchJson('https://market.example/x', {
+      env: {},
+      lookupImpl,
+      requestImpl: async (url, opts) => { seen.push(opts); return jsonResponse({ ok: 1 }); },
+      agent: custom,
+    });
+    assert.equal(passed.ok, true, JSON.stringify(passed));
+    assert.equal(seen[0].agent, custom, '显式 agent 必须原样传给直连请求');
+    custom.destroy();
+  });
+
+  await checkAsync('C2·目录抓取失败也销毁专用 agent，不留空闲连接', async () => {
+    const originalDestroy = https.Agent.prototype.destroy;
+    let destroys = 0;
+    https.Agent.prototype.destroy = function patchedDestroy(...args) {
+      destroys += 1;
+      return originalDestroy.apply(this, args);
+    };
+    try {
+      const m = createMcpMarket({
+        dataDir: DATA, configStore: store, env, lookupImpl,
+        requestImpl: async () => { throw Object.assign(new Error('down'), { marketCode: 'network' }); },
+      });
+      const r = await m.list({ source: 'registry' });
+      assert.equal(r.ok, false);
+      assert.equal(r.code, 'network');
+    } finally {
+      https.Agent.prototype.destroy = originalDestroy;
+    }
+    assert.equal(destroys, 1, '失败路径也必须销毁目录专用 agent');
+  });
+
   await checkAsync('C2·搜索 / 分类在完整目录本地组合，短词不触发 422', async () => {
     const catalogCalls = [];
     const m = createMcpMarket({
@@ -554,7 +631,7 @@ const CUSTOM_SOURCE = {
     assert.deepEqual(failedFirst.items, []);
   });
 
-  await checkAsync('C2·刷新失败保留上次缓存，退避窗口内不反复请求', async () => {
+  await checkAsync('C2·过期目录先返回旧缓存并后台刷新，失败后退避', async () => {
     let nowMs = 1700000000000;
     let fail = false;
     let calls = 0;
@@ -572,34 +649,171 @@ const CUSTOM_SOURCE = {
     assert.equal(first.ok, true, JSON.stringify(first));
     assert.equal(first.total, 209);
     assert.equal(first.stale, undefined);
+    assert.equal(first.cached, false);
     assert.equal(calls, 3);
-    nowMs += 6 * 60_000;
+    nowMs += 61 * 60_000;
     fail = true;
     const stale = await m.list({ source: 'registry', page: 2, pageSize: 24 });
     assert.equal(stale.ok, true, JSON.stringify(stale));
     assert.equal(stale.stale, true);
+    assert.equal(stale.refreshing, true, '过期后先返回旧目录，刷新在后台');
     assert.equal(stale.cached, true);
     assert.equal(stale.total, 209);
     assert.equal(stale.items.length, 24);
     assert.equal(stale.page, 2);
-    assert.equal(stale.refreshError.code, 'network');
-    assert.equal(calls, 4, '刷新失败只尝试一页就停');
-    const again = await m.list({ source: 'registry', page: 3, pageSize: 24 });
-    assert.equal(again.ok, true);
-    assert.equal(again.stale, true);
+    assert.equal(stale.refreshError, undefined, '后台刷新还没结束');
+    assert.equal(calls, 4, '过期后只发起一轮后台刷新');
+    await waitForRegistryRefresh(m);
+    const failed = await m.list({ source: 'registry', page: 3, pageSize: 24 });
+    assert.equal(failed.ok, true);
+    assert.equal(failed.stale, true);
+    assert.equal(failed.refreshing, undefined);
+    assert.equal(failed.refreshError.code, 'network');
     assert.equal(calls, 4, '退避窗口内不能每次翻页都重试');
     fail = false;
     nowMs += 31_000;
+    const again = await m.list({ source: 'registry', page: 4, pageSize: 24 });
+    assert.equal(again.ok, true, JSON.stringify(again));
+    assert.equal(again.stale, true, '刷新完成前仍先返回旧目录');
+    assert.equal(again.refreshing, true);
+    assert.equal(again.total, 209);
+    await waitForRegistryRefresh(m);
     const refreshed = await m.list({ source: 'registry', page: 4, pageSize: 24 });
     assert.equal(refreshed.ok, true, JSON.stringify(refreshed));
     assert.equal(refreshed.stale, undefined);
-    assert.equal(refreshed.cached, false);
+    assert.equal(refreshed.cached, true);
     assert.equal(refreshed.total, 209);
     assert.equal(refreshed.page, 4);
     assert.equal(calls, 7, '退避结束后重新完整拉取三页');
   });
 
-  await checkAsync('C2·完整目录守卫：200 页 / 20000 条 / 60 秒明确报错', async () => {
+  await checkAsync('C2·完整目录落盘缓存：新实例一小时内不再请求 Registry', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-reg-cache-'));
+    const fetchPages = async (url) => jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || ''));
+    const first = createMcpMarketRaw({
+      dataDir: dir, configStore: store, env, lookupImpl, registryCache: true,
+      requestImpl: fetchPages,
+    });
+    const r1 = await first.list({ source: 'registry' });
+    assert.equal(r1.ok, true, JSON.stringify(r1));
+    assert.equal(r1.total, 209);
+    assert.equal(r1.cached, false);
+    const cacheFile = path.join(dir, 'mcp-registry-catalog.json.gz');
+    assert.ok(fs.existsSync(cacheFile), '成功抓取后必须写磁盘缓存');
+    assert.ok(fs.statSync(cacheFile).size > 0);
+
+    let calls = 0;
+    const second = createMcpMarketRaw({
+      dataDir: dir, configStore: store, env, lookupImpl, registryCache: true,
+      requestImpl: async () => { calls += 1; throw new Error('must not fetch'); },
+    });
+    const r2 = await second.list({ source: 'registry', page: 9 });
+    assert.equal(r2.ok, true, JSON.stringify(r2));
+    assert.equal(r2.total, 209);
+    assert.equal(r2.page, 9);
+    assert.equal(r2.items.length, 17);
+    assert.equal(r2.cached, true);
+    assert.equal(calls, 0, '一小时内命中磁盘缓存，不再请求 Registry');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  await checkAsync('C2·损坏 / 未来时间 / 非法条目的磁盘缓存被忽略并重新抓取', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-reg-cache-bad-'));
+    const cacheFile = path.join(dir, 'mcp-registry-catalog.json.gz');
+    fs.writeFileSync(cacheFile, 'not a gzip file');
+    let calls = 0;
+    const fetchPages = async (url) => {
+      calls += 1;
+      return jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || ''));
+    };
+    const m = createMcpMarketRaw({
+      dataDir: dir, configStore: store, env, lookupImpl, registryCache: true, requestImpl: fetchPages,
+    });
+    const r = await m.list({ source: 'registry' });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.total, 209);
+    assert.equal(calls, 3, '损坏缓存必须重新走网络');
+
+    fs.writeFileSync(cacheFile, zlib.gzipSync(JSON.stringify({
+      version: 1, at: Date.now() + 3_600_000, pages: 1, items: [{ id: 'x' }],
+    })));
+    calls = 0;
+    const m2 = createMcpMarketRaw({
+      dataDir: dir, configStore: store, env, lookupImpl, registryCache: true, requestImpl: fetchPages,
+    });
+    const r2 = await m2.list({ source: 'registry' });
+    assert.equal(r2.ok, true, JSON.stringify(r2));
+    assert.equal(calls, 3, '未来时间 / 非法条目的缓存不可信');
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  await checkAsync('C2·过期磁盘缓存先返回，后台刷新完成后替换', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-reg-cache-swr-'));
+    const t0 = 1700000000000;
+    const fetchPages = async (url) => jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || ''));
+    const first = createMcpMarketRaw({
+      dataDir: dir, configStore: store, env, lookupImpl, registryCache: true,
+      now: () => t0, requestImpl: fetchPages,
+    });
+    const r0 = await first.list({ source: 'registry' });
+    assert.equal(r0.ok, true, JSON.stringify(r0));
+    assert.equal(r0.total, 209);
+
+    let calls = 0;
+    const nowMs = t0 + 61 * 60_000;
+    const second = createMcpMarketRaw({
+      dataDir: dir, configStore: store, env, lookupImpl, registryCache: true,
+      now: () => nowMs,
+      requestImpl: async () => {
+        calls += 1;
+        return jsonResponse({ servers: [makeRegistryRow('io.example/fresh')], metadata: {} });
+      },
+    });
+    const stale = await second.list({ source: 'registry' });
+    assert.equal(stale.ok, true, JSON.stringify(stale));
+    assert.equal(stale.stale, true);
+    assert.equal(stale.refreshing, true);
+    assert.equal(stale.total, 209, '先返回磁盘里的旧目录');
+    await waitForRegistryRefresh(second);
+    const fresh = await second.list({ source: 'registry' });
+    assert.equal(fresh.ok, true, JSON.stringify(fresh));
+    assert.equal(fresh.stale, undefined);
+    assert.equal(fresh.cached, true);
+    assert.equal(fresh.total, 1);
+    assert.equal(calls, 1);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  await checkAsync('C2·加载进度只暴露页数 / 条目数，结束后标记 done', async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url) => {
+        calls += 1;
+        if (calls === 1) await gate;
+        return jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || ''));
+      },
+    });
+    const pending = m.list({ source: 'registry' });
+    await new Promise((resolve) => setImmediate(resolve));
+    const during = m.registryStatus();
+    assert.equal(during.active, true);
+    assert.equal(during.done, false);
+    assert.equal(during.pages, 0);
+    assert.equal(during.items, 0);
+    release();
+    const r = await pending;
+    assert.equal(r.ok, true, JSON.stringify(r));
+    const after = m.registryStatus();
+    assert.equal(after.active, false);
+    assert.equal(after.done, true);
+    assert.equal(after.pages, 3);
+    assert.equal(after.items, 209);
+  });
+
+  await checkAsync('C2·完整目录守卫：1200 页 / 100000 条 / 600 秒明确报错', async () => {
     let pageCalls = 0;
     const tooManyPages = createMcpMarket({
       dataDir: DATA, configStore: store, env, lookupImpl,
@@ -614,24 +828,24 @@ const CUSTOM_SOURCE = {
     const pagesResult = await tooManyPages.list({ source: 'registry' });
     assert.equal(pagesResult.ok, false);
     assert.equal(pagesResult.code, 'registry-too-large');
-    assert.equal(pageCalls, 200, '超过 200 页必须停止请求');
+    assert.equal(pageCalls, 1_200, '超过 1200 页必须停止请求');
 
-    /* 单页 20001 条，但每条只保留最小形状，避免先撞上 2MB 响应上限。 */
-    const rows = Array.from({ length: 20_001 }, (_, i) => ({
-      server: { name: `io.example/e${i}`, version: '1.0.0' },
-    }));
+    /* 每页 1000 条最小形状（约 50KB），101 页后越过 100000 条上限。 */
     let entryCalls = 0;
     const tooManyEntries = createMcpMarket({
       dataDir: DATA, configStore: store, env, lookupImpl,
       requestImpl: async () => {
         entryCalls += 1;
-        return jsonResponse({ servers: rows, metadata: { count: rows.length } });
+        const rows = Array.from({ length: 1_000 }, (_, i) => ({
+          server: { name: `io.example/e${entryCalls}-${i}`, version: '1.0.0' },
+        }));
+        return jsonResponse({ servers: rows, metadata: { count: rows.length, nextCursor: `cursor-${entryCalls}` } });
       },
     });
     const entriesResult = await tooManyEntries.list({ source: 'registry' });
     assert.equal(entriesResult.ok, false);
     assert.equal(entriesResult.code, 'registry-too-large');
-    assert.equal(entryCalls, 1, '超过 20000 条必须在当前页停止');
+    assert.equal(entryCalls, 101, '超过 100000 条必须在当前页停止');
 
     let nowMs = 1_700_000_000_000;
     let timeoutCalls = 0;
@@ -640,7 +854,7 @@ const CUSTOM_SOURCE = {
       now: () => nowMs,
       requestImpl: async () => {
         timeoutCalls += 1;
-        nowMs += 60_001;
+        nowMs += 600_001;
         return jsonResponse({ servers: [makeRegistryRow('io.example/slow')], metadata: { nextCursor: 'next-page' } });
       },
     });

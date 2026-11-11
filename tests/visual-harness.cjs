@@ -26,6 +26,7 @@ const marketProxyMode = process.env.MCP_MARKET_PROXY === '1';
 /* 视觉取证专用：用 209 条固定条目模拟完整 Registry 目录，按真实后端的
  * page / pageSize 语义切片，用于截取分页导航的排版。 */
 const marketPaginationMode = process.env.MCP_MARKET_PAGINATION === '1';
+const marketProgressMode = process.env.MCP_MARKET_PROGRESS === '1';
 let uxSwitchCount = 0;
 const uxWarnings = [
   { type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: 'memory_search requires qmd historical warning', _replay: true },
@@ -1185,6 +1186,12 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/mcp/market' && req.method === 'GET') {
     const fixture = await mcpMarketFixture();
     const params = Object.fromEntries(url.searchParams.entries());
+    if (marketProgressMode && params.progress === '1') {
+      return json(res, 200, {
+        ok: true, active: true, done: false, pages: 2, items: 144,
+        startedAt: Date.now(), finishedAt: null,
+      });
+    }
     if (marketProxyMode && params.source === 'registry') {
       const base = await fixture.list({ source: 'builtin', limit: 1 });
       return json(res, 200, {
@@ -1195,6 +1202,8 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (marketPaginationMode && params.source === 'registry') {
+      /* 只用于加载进度截图：把完整目录响应拖慢，让前端有机会显示进度文案。 */
+      if (marketProgressMode) await new Promise((resolve) => setTimeout(resolve, 2500));
       const base = await fixture.list({ source: 'builtin', limit: 1 });
       const all = Array.from({ length: 209 }, (_, i) => {
         const index = String(i).padStart(3, '0');

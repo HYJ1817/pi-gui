@@ -87,8 +87,9 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     };
   });
   const marketDelay = { ms: () => 0 };
-  const marketStale = { on: false };
+  const marketStale = { on: false, refreshing: false };
   const marketFail = { match: () => false };
+  const marketProgress = { active: false, pages: 0, items: 0 };
   const marketPayload = (target) => {
     const u = new URL(target, 'http://fixture');
     const source = u.searchParams.get('source') || 'builtin';
@@ -116,7 +117,9 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
         network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
         ...(marketStale.on ? {
           stale: true,
-          refreshError: { code: 'network', error: 'Registry 暂时不可达（fixture）' },
+          ...(marketStale.refreshing
+            ? { refreshing: true }
+            : { refreshError: { code: 'network', error: 'Registry 暂时不可达（fixture）' } }),
         } : {}),
       };
     }
@@ -201,6 +204,9 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     }
     if (pathOnly === '/api/mcp/market/sources') {
       return ok({ ok: true, builtin: { count: 10 }, registry: {}, custom: customSources, categories: ['全部', '开发工具', '效率'] });
+    }
+    if (pathOnly === '/api/mcp/market' && method === 'GET' && target.includes('progress=1')) {
+      return ok({ ok: true, ...marketProgress });
     }
     if (pathOnly === '/api/mcp/market' && method === 'GET') {
       const delay = marketDelay.ms(target);
@@ -704,8 +710,25 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
     assert.ok(calls.some((c) => c.target.includes('source=registry') && c.target.includes('page=3')));
 
-    /* 刷新失败时显示旧缓存横幅；恢复成功后横幅消失。 */
+    /* 过期目录后台刷新时是信息横幅，不冒充失败。 */
     marketStale.on = true;
+    marketStale.refreshing = true;
+    pageBtn(2).click();
+    await tick(120);
+    const refreshingBanner = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+      .find((b) => b.textContent.includes('正在后台刷新'));
+    assert.ok(refreshingBanner, '后台刷新必须说明当前显示的是旧缓存');
+    assert.equal(
+      [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+        .some((b) => b.textContent.includes('刷新失败')),
+      false,
+      '后台刷新不是失败，不能用失败横幅',
+    );
+    marketStale.refreshing = false;
+
+    /* 刷新失败时显示旧缓存横幅；恢复成功后横幅消失。 */
+    pageBtn(1).click();
+    await tick(120);
     pageBtn(2).click();
     await tick(120);
     const staleBanner = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
@@ -727,6 +750,35 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
     assert.equal(d.querySelector('.mcp-market-page .mcp-banner.is-info'), null, '离线精选不显示代理说明');
     assert.equal(d.querySelector('.mcp-market-page .mcp-pagination'), null, '精选目录保持加载更多，不显示页码');
+  });
+
+  await check('完整目录首次加载显示进度，完成后收起', async () => {
+    /* 全新市场页实例：catalogLoaded 只有在成功加载过 Registry 后才为 true。 */
+    d.querySelector('[data-focus-key="market-back"]').click();
+    await tick(120);
+    clickText(page(), 'button', '市场');
+    await tick(120);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
+    marketProgress.active = true;
+    marketProgress.pages = 2;
+    marketProgress.items = 200;
+    marketDelay.ms = (target) => (target.includes('source=registry') ? 700 : 0);
+    d.querySelector('[data-focus-key="source:registry"]').click();
+    await tick(420);
+    const note = d.querySelector('.mcp-market-loading-note');
+    assert.ok(note, '首次加载完整目录必须显示进度文案');
+    assert.ok(note.textContent.includes('已获取 200 条'));
+    assert.ok(note.textContent.includes('第 2 页'));
+    await tick(500);
+    assert.equal(d.querySelector('.mcp-market-loading-note'), null, '加载完成后进度文案必须收起');
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
+    marketDelay.ms = () => 0;
+    marketProgress.active = false;
+    marketProgress.pages = 0;
+    marketProgress.items = 0;
+    d.querySelector('[data-focus-key="source:builtin"]').click();
+    await tick(120);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
   });
 
   await check('快速切换搜索词时旧响应不能覆盖新结果', async () => {

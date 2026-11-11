@@ -6,8 +6,11 @@
  *
  * 用法：node tests/mcp-visual.cjs
  *       MCP_MARKET_PAGINATION=1 node tests/mcp-visual.cjs   # 额外截 Registry 分页
+ *       MCP_MARKET_PAGINATION=1 MCP_MARKET_PROGRESS=1 node tests/mcp-visual.cjs
+ *                                                           # 额外截首次加载进度
  * 产物：.shots/mcp/{01-management,02-add-modal,03-market}.png
  *       MCP_MARKET_PAGINATION=1 时另有 05-market-page{1,2,9}.png
+ *       MCP_MARKET_PROGRESS=1 时另有 06-market-loading.png / 06b-market-loaded.png
  * 只用于验收取证，不属于 npm test 的 canonical 链。
  */
 'use strict';
@@ -175,6 +178,26 @@ async function main() {
       await click('[data-focus-key="source:registry"]');
       await waitFor(`!!document.querySelector('.mcp-market-page .mcp-banner.is-info')`, '代理线路说明');
       await shot('03b-market-proxy');
+      await click('[data-focus-key="source:builtin"]');
+      await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
+    }
+    if (process.env.MCP_MARKET_PROGRESS === '1') {
+      await click('[data-focus-key="source:registry"]');
+      await waitFor(
+        `document.querySelector('.mcp-market-loading-note')?.textContent.includes('已获取 144 条')`,
+        '完整目录加载进度',
+      );
+      const note = await evalJs(`document.querySelector('.mcp-market-loading-note')?.textContent || ''`);
+      if (!note.includes('第 2 页')) throw new Error('加载进度缺少页数：' + note);
+      await shot('06-market-loading');
+      await waitFor(
+        `document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length === 24`,
+        '完整目录加载完成',
+      );
+      if (await evalJs(`!!document.querySelector('.mcp-market-loading-note')`)) {
+        throw new Error('加载完成后进度文案没有收起');
+      }
+      await shot('06b-market-loaded');
       await click('[data-focus-key="source:builtin"]');
       await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
     }
