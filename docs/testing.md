@@ -1027,7 +1027,7 @@ RPC 事实、配置只报存在性）—— 1023 → 1043。
 
 ## P20.6 Native MCP 集成验证
 
-`npm run test:mcp`（已纳入 `npm test`，**370 条**，含新增的市场网络策略 / 代理桥 19 条）—— 完全离线：
+`npm run test:mcp`（已纳入 `npm test`，**374 条**，含市场网络策略 / 代理桥 19 条）—— 完全离线：
 不启动 pi、不起真实 MCP server、不联网、不 OAuth、不读用户真实目录。
 `pi mcp list --json` 与各动作的执行一律注入假 runCli；配置文件全在
 `os.tmpdir()`。契约基线 **pi 0.99.2**。`npm run test:ui`（smoke，1051 → **1062**）
