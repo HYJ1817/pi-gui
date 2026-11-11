@@ -21,6 +21,10 @@ import path from 'node:path';
 import {
   argsContainSecret, queryLooksSensitive, settingNeedsReference, writeJsonAtomic,
 } from './mcp-config.js';
+import {
+  blockedHostname, classifyAddress, classifyProxyRoute, hostnameOf,
+  isAcceptableResolvedAddress, isFakeIpAddress, isPrivateIp,
+} from '../lib/market-network-policy.cjs';
 
 const REGISTRY_BASE = 'https://registry.modelcontextprotocol.io/v0/servers';
 const SOURCES_FILE = 'mcp-market-sources.json';
@@ -71,7 +75,10 @@ function unsafeRuntimeToken(token) {
 }
 const NPM_REGISTRY_BASE_RE = /^https:\/\/registry\.npmjs\.org\/?$/i;
 const PYPI_REGISTRY_BASE_RE = /^https:\/\/(?:pypi\.org|pypi\.python\.org)\/?$/i;
-const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'];
+/* 市场只允许 HTTPS。不同工具对 HTTP_PROXY / HTTPS_PROXY 的语义并不完全
+ * 一致；为避免“环境里有代理、系统却 DIRECT”时静默直连，任一代理变量都
+ * 视为代理意图，必须由代理桥确认 proxied。NO_PROXY 是唯一明确的排除。 */
+const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy', 'HTTP_PROXY', 'http_proxy'];
 const MAX_PINNED_ADDRESSES = 4;
 
 function isRecord(v) { return Boolean(v) && typeof v === 'object' && !Array.isArray(v); }
@@ -241,122 +248,12 @@ function builtinItems() {
 
 /* ---------------- 通用安全网络读取 ---------------- */
 
-function hostnameOf(u) {
-  return String(u.hostname || '').replace(/^\[|\]$/g, '').toLowerCase();
-}
-
-/* IPv6 必须按 8 个 hextet 解析后再判私网；字符串前缀判断会漏掉
- * `::ffff:7f00:1`（IPv4-mapped 十六进制）和 `::ffff:0:7f00:1`
- * （IPv4-translated），它们都能把服务端请求带到 127.0.0.1。 */
-function ipv6Hextets(ip) {
-  let s = String(ip || '').toLowerCase();
-  const zone = s.indexOf('%');
-  if (zone >= 0) s = s.slice(0, zone);
-  s = s.replace(/^\[|\]$/g, '');
-  if (!net.isIPv6(s)) return null;
-  const parse = (part) => {
-    if (!/^[0-9a-f]{1,4}$/.test(part)) return null;
-    return parseInt(part, 16);
-  };
-  if (s.includes('::')) {
-    const [left, right] = s.split('::');
-    const l = left ? left.split(':') : [];
-    const r = right ? right.split(':') : [];
-    if (l.length + r.length > 7) return null;
-    const values = [...l, ...new Array(8 - l.length - r.length).fill('0'), ...r].map(parse);
-    return values.some((v) => v === null) ? null : values;
-  }
-  const parts = s.split(':');
-  if (parts.length !== 8) return null;
-  const values = parts.map(parse);
-  return values.some((v) => v === null) ? null : values;
-}
-
-function embeddedIpv4(parts) {
-  const hi = parts[6];
-  const lo = parts[7];
-  return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
-}
-
-/* 198.18.0.0/15 是 RFC 2544 的基准测试网段；Clash / Surge 等 TUN 代理
- * 常用它做 fake-IP。它不是公网地址，但也不是“内网服务” —— 单独区分出来，
- * 才能给出“代理无法确认实际连接地址”的准确提示，而不是误报内网。 */
-function isFakeIpAddress(ip) {
-  if (typeof ip !== 'string' || !net.isIPv4(ip)) return false;
-  const p = ip.split('.').map(Number);
-  return p[0] === 198 && (p[1] === 18 || p[1] === 19);
-}
-
-function isPrivateIp(ip) {
-  if (typeof ip !== 'string') return true;
-  if (net.isIPv4(ip)) {
-    const p = ip.split('.').map(Number);
-    if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
-    const [a, b, c] = p;
-    if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;
-    if (a === 192 && b === 0 && c === 0) return true;
-    if (a === 192 && b === 0 && c === 2) return true;
-    if (a === 198 && (b === 18 || b === 19)) return true;
-    if (a === 198 && b === 51 && c === 100) return true;
-    if (a === 203 && b === 0 && c === 113) return true;
-    if (a >= 224) return true;
-    return false;
-  }
-  if (net.isIPv6(ip)) {
-    const parts = ipv6Hextets(ip);
-    if (!parts) return true;
-    if (parts.every((v) => v === 0)) return true;
-    if (parts.slice(0, 7).every((v) => v === 0) && parts[7] === 1) return true;
-    /* fc00::/7 unique-local, fe80::/10 link-local, ff00::/8 multicast. */
-    if ((parts[0] & 0xfe00) === 0xfc00) return true;
-    if ((parts[0] & 0xffc0) === 0xfe80) return true;
-    if ((parts[0] & 0xff00) === 0xff00) return true;
-    /* 2001::/23 IETF 协议分配段（含 Teredo 2001::/32、benchmarking
-     * 2001:2::/48、ORCHID 2001:10::/28），不是全局单播。 */
-    if (parts[0] === 0x2001 && parts[1] <= 0x01ff) return true;
-    /* 2001:db8::/32 documentation. */
-    if (parts[0] === 0x2001 && parts[1] === 0x0db8) return true;
-    /* 3fff::/20 documentation. */
-    if ((parts[0] & 0xfff0) === 0x3ff0) return true;
-    /* 100::/64 discard-only. */
-    if (parts[0] === 0x0100 && parts.slice(1, 4).every((v) => v === 0)) return true;
-    /* ::ffff:a.b.c.d (IPv4-mapped) and ::ffff:0:a.b.c.d (IPv4-translated). */
-    if (parts.slice(0, 5).every((v) => v === 0) && parts[5] === 0xffff) {
-      return isPrivateIp(embeddedIpv4(parts));
-    }
-    if (parts.slice(0, 4).every((v) => v === 0) && parts[4] === 0xffff && parts[5] === 0) {
-      return isPrivateIp(embeddedIpv4(parts));
-    }
-    /* IPv4-compatible ::a.b.c.d (deprecated but still parseable). */
-    if (parts.slice(0, 6).every((v) => v === 0)) return isPrivateIp(embeddedIpv4(parts));
-    /* 64:ff9b::/96 NAT64 embeds IPv4 in the last 32 bits; 2002::/16 6to4
-     * embeds it in hextets 1–2. */
-    if (parts[0] === 0x0064 && parts[1] === 0xff9b) return isPrivateIp(embeddedIpv4(parts));
-    if (parts[0] === 0x2002) {
-      const hi = parts[1];
-      const lo = parts[2];
-      return isPrivateIp(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
-    }
-    return false;
-  }
-  return true;
-}
-
-function blockedHostname(host) {
-  const h = String(host || '').toLowerCase().replace(/^\[|\]$/g, '');
-  return !h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal');
-}
-
 /**
- * 把 DNS 结果收敛成一组**已经过校验的 IP**。真正的 HTTPS 连接随后只允许
- * 连到这里的地址（自定义 lookup），域名只用于 TLS SNI 与证书校验。
- * 这样“先查一次、再让 fetch 自己查一次”的 DNS rebinding 窗口就不存在了。
+ * 只做 URL 语法边界：HTTPS、443、无凭据、查询串无凭据形态、非本机主机名。
+ * DNS / 线路判定在 `inspectMarketTarget` 里，因为同一条 URL 在直连与代理
+ * 线路上的地址规则不同。
  */
-async function assertPublicHttps(rawUrl, lookupImpl) {
+function checkMarketUrl(rawUrl) {
   let u;
   try { u = new URL(rawUrl); } catch { return codeError('blocked-url', 'URL 不是合法地址'); }
   if (u.protocol !== 'https:') return codeError('blocked-url', '市场源只允许 HTTPS');
@@ -367,48 +264,89 @@ async function assertPublicHttps(rawUrl, lookupImpl) {
   if (u.port && u.port !== '443') return codeError('blocked-url', '市场源只允许 443 端口');
   const hostname = hostnameOf(u);
   if (blockedHostname(hostname)) return codeError('blocked-host', '不允许访问本机或内网主机');
+  return { ok: true, url: u, hostname };
+}
 
+/**
+ * 把目标地址收敛成一组**已经过校验的 IP**。直连时真正的 HTTPS 连接随后
+ * 只允许连到这里的地址（自定义 lookup），域名只用于 TLS SNI 与证书校验。
+ * 这样“先查一次、再让 fetch 自己查一次”的 DNS rebinding 窗口就不存在了。
+ *
+ * 代理线路上本地 DNS 结果仍要过同一套地址类别判定：
+ *   - 公网地址：可以（代理会重新解析域名）
+ *   - fake-IP（benchmark）：仅在代理线路、或桌面端明确允许 TUN fake-IP
+ *     的直连线路上可以
+ *   - 其它非公网地址：一律拒绝（本地解析器给出真实内网目标时，应用看不到
+ *     代理会把它解析到哪里）
+ */
+async function inspectMarketTarget(parsed, {
+  route = 'direct', allowFakeIp = false, lookupImpl = dns.promises.lookup,
+} = {}) {
+  const hostname = hostnameOf(parsed);
   const addresses = [];
+  let fakeIp = false;
+  /* 这里的判定都基于**本地**解析结果；连接若走代理，实际 DNS 在代理侧。
+   * 错误元数据必须说清楚是哪一侧失败，不能让 dns:'proxy' 掩盖本地 DNS 失败。 */
+  const localMeta = (fake = false) => ({ network: { route, addressVerified: false, dns: 'local', fakeIp: fake } });
   if (net.isIP(hostname)) {
+    const family = net.isIP(hostname);
     if (isFakeIpAddress(hostname)) {
-      return codeError('proxy-blocked', '目标地址属于代理的 fake-IP 网段（198.18.0.0/15），无法确认实际连接地址；已拒绝。');
+      return codeError(
+        'proxy-blocked',
+        '市场源 URL 直接使用了代理的 fake-IP 网段地址（198.18.0.0/15），无法确认实际连接目标；已拒绝。',
+        localMeta(true),
+      );
     }
-    if (isPrivateIp(hostname)) return codeError('blocked-host', '不允许访问本机或内网地址');
-    addresses.push({ address: hostname, family: net.isIP(hostname) });
+    const kind = classifyAddress(hostname);
+    if (kind !== 'public') return codeError('blocked-host', '不允许访问本机或内网地址', localMeta());
+    addresses.push({ address: hostname, family });
   } else {
     let rows;
     try {
       rows = await lookupImpl(hostname, { all: true, verbatim: true });
     } catch {
-      return codeError('dns-failed', '无法解析市场源域名');
+      return codeError('dns-failed', '无法解析市场源域名', localMeta());
     }
     const list = Array.isArray(rows) ? rows : [rows];
-    if (!list.length) return codeError('dns-failed', '市场源域名没有解析结果');
+    if (!list.length) return codeError('dns-failed', '市场源域名没有解析结果', localMeta());
     for (const row of list) {
       const address = String((row && row.address) || '');
       const family = net.isIP(address);
-      if (isFakeIpAddress(address)) {
-        return codeError(
-          'proxy-blocked',
-          '该域名解析到了代理的 fake-IP 网段（198.18.0.0/15），无法确认实际连接地址；已拒绝请求。请改用直连 DNS 或关闭 TUN / fake-IP 后重试。',
-        );
-      }
-      /* 无法判定族、或命中私网 / 环回 / 链路本地 / 保留地址，整台主机拒绝。
-       * 不做“跳过坏地址、继续用另一个”的降级 —— 同一域名同时解析出公网与
-       * 私网地址时，那本身就是可疑输入。 */
-      if (!family || isPrivateIp(address)) {
-        return codeError('blocked-host', '该域名解析到了本机或内网地址');
+      const kind = family ? classifyAddress(address) : 'invalid';
+      if (kind === 'benchmark') fakeIp = true;
+      if (!isAcceptableResolvedAddress(kind, route, { allowFakeIp })) {
+        if (kind === 'benchmark') {
+          return codeError(
+            'proxy-blocked',
+            route === 'unknown'
+              ? '该域名解析到代理的 fake-IP 网段（198.18.0.0/15），但无法确认系统代理线路；已拒绝请求。请启用系统代理后重试。'
+              : '该域名解析到代理的 fake-IP 网段（198.18.0.0/15），但当前无法确认 TUN / 代理线路；已拒绝请求。请在桌面版中启用系统代理或改用直连 DNS 后重试。',
+            localMeta(true),
+          );
+        }
+        return codeError('blocked-host', '该域名解析到了本机或内网地址', localMeta());
       }
       addresses.push({ address, family: row.family === 4 || row.family === 6 ? row.family : family });
     }
   }
-  if (!addresses.length) return codeError('dns-failed', '市场源域名没有解析结果');
+  if (!addresses.length) return codeError('dns-failed', '市场源域名没有解析结果', localMeta());
   return {
     ok: true,
-    url: u,
+    url: parsed,
     hostname,
+    fakeIp,
     addresses: addresses.slice(0, MAX_PINNED_ADDRESSES),
   };
+}
+
+/**
+ * 兼容旧调用点：严格直连判定（fake-IP 一律拒绝）。
+ * 新代码请用 `checkMarketUrl` + `inspectMarketTarget`，把线路传进来。
+ */
+async function assertPublicHttps(rawUrl, lookupImpl, options = {}) {
+  const checked = checkMarketUrl(rawUrl);
+  if (!checked.ok) return checked;
+  return inspectMarketTarget(checked.url, { lookupImpl, ...options });
 }
 
 function noProxyMatches(host, port, raw) {
@@ -436,19 +374,96 @@ function noProxyMatches(host, port, raw) {
   return false;
 }
 
-/**
- * 市场只做“直连 + 固定已校验 IP”。代理会在代理侧重新解析域名，客户端
- * 无法证明它连到的就是刚才校验的地址；因此检测到代理时明确拒绝，而不是
- * 把一次未经校验的连接说成已防护。NO_PROXY 排除目标域名后可以直连。
- */
-function blockingProxy(env, url) {
+function proxyEnvKeys(env) {
   const safeEnv = env || {};
-  const keys = PROXY_ENV_KEYS.filter((key) => typeof safeEnv[key] === 'string' && safeEnv[key].trim());
-  if (!keys.length) return null;
-  const host = hostnameOf(url);
-  const port = url.port || '443';
-  if (noProxyMatches(host, port, safeEnv.NO_PROXY || safeEnv.no_proxy)) return null;
-  return { key: keys[0] };
+  return PROXY_ENV_KEYS.filter((key) => typeof safeEnv[key] === 'string' && safeEnv[key].trim());
+}
+
+function usableNetworkBridge(network) {
+  return Boolean(network
+    && typeof network.resolveRoute === 'function'
+    && typeof network.fetchProxied === 'function');
+}
+
+/**
+ * 判断这条 URL 会走哪条线路。
+ *
+ * 优先级（从高到低）：
+ *   1. `NO_PROXY` 命中 → 直连（仍走完整地址校验）。
+ *   2. 任一环境变量代理（HTTPS_PROXY / https_proxy / ALL_PROXY /
+ *      all_proxy / HTTP_PROXY / http_proxy）→ 必须由 Electron 代理桥给出
+ *      `proxied`。桥给出 `direct` 或 `unknown` 都拒绝，不能静默绕过环境
+ *      变量代理；没有桥则 `unsupported`，也不偷偷直连。市场只允许 HTTPS，
+ *      这里保守地把所有代理变量都当作代理意图，避免工具间语义差异造成
+ *      静默直连。
+ *   3. 没有环境变量代理 → 以 Electron 代理桥的 `resolveProxy` 为准：
+ *      `direct` / `proxied` / `unknown`。
+ *   4. 没有桥且没有环境变量代理 → 直连（独立后端没有代理配置）。
+ *
+ * 任何解析超时、异常、非法值都收敛为 `unknown`；调用方必须在发起 DNS
+ * 或 HTTP 之前拒绝，不能把 unknown 当成 direct。
+ */
+async function resolveMarketRoute(parsed, { network = null, env = process.env } = {}) {
+  const host = hostnameOf(parsed);
+  const port = parsed.port || '443';
+  const safeEnv = env || {};
+  if (noProxyMatches(host, port, safeEnv.NO_PROXY || safeEnv.no_proxy)) {
+    return { route: 'direct', source: 'no-proxy' };
+  }
+  const envKeys = proxyEnvKeys(safeEnv);
+  const bridge = usableNetworkBridge(network) ? network : null;
+  if (!bridge) {
+    if (network) {
+      return {
+        route: 'unsupported',
+        source: envKeys.length ? 'env-proxy' : 'system-proxy',
+        reason: 'bridge-incomplete',
+        ...(envKeys.length ? { proxyKey: envKeys[0] } : {}),
+      };
+    }
+    if (envKeys.length) return { route: 'unsupported', source: 'env-proxy', proxyKey: envKeys[0] };
+    return { route: 'direct', source: 'no-proxy-stack' };
+  }
+
+  let route = 'unknown';
+  let reason = '';
+  try {
+    route = await bridge.resolveRoute(parsed.toString());
+  } catch {
+    route = 'unknown';
+    reason = 'resolve-failed';
+  }
+  if (route !== 'direct' && route !== 'proxied') {
+    route = 'unknown';
+    reason = reason || 'invalid-route';
+  }
+  if (envKeys.length) {
+    if (route === 'proxied') {
+      return { route, source: 'system-proxy', proxyKey: envKeys[0] };
+    }
+    return {
+      route: 'unknown',
+      source: 'env-proxy',
+      reason: route === 'direct' ? 'env-proxy-bypassed' : 'env-proxy-route-unknown',
+      proxyKey: envKeys[0],
+    };
+  }
+  return { route, source: 'system-proxy', ...(reason ? { reason } : {}) };
+}
+
+function networkMeta(routeInfo, { fakeIp = false, resolution = null } = {}) {
+  const route = routeInfo && routeInfo.route ? routeInfo.route : 'unknown';
+  return {
+    route,
+    source: routeInfo && routeInfo.source ? routeInfo.source : 'unknown',
+    /* 只有真正固定了已校验 IP 的直连才算 addressVerified。代理线路由
+     * 可信代理栈连接但应用看不到最终对端；unknown / unsupported 根本没有
+     * 发起连接，更不能标记为已验证。 */
+    addressVerified: route === 'direct',
+    dns: route === 'proxied' ? 'proxy' : (route === 'direct' ? 'local' : 'none'),
+    fakeIp: fakeIp === true,
+    ...(resolution ? { resolution } : {}),
+  };
 }
 
 function pinnedLookupFor(address, family) {
@@ -605,75 +620,191 @@ async function readCapped(response, maxBytes) {
   }
 }
 
+/**
+ * 代理桥返回的是 `{ ok, status, headers, body }`，不是真正的 `Response`。
+ * 这里统一收敛状态码与 body 上限；`pinnedResponse` 负责挡住 204/205/304
+ * 带 body 与 600–999 这类会让 Response 构造抛错的状态。
+ */
+function bridgeResponse(raw, maxBytes) {
+  if (!raw || raw.ok !== true) {
+    const err = new Error('market network bridge failed');
+    err.marketCode = (raw && raw.code) || 'network';
+    throw err;
+  }
+  const body = typeof raw.body === 'string' ? raw.body : '';
+  if (Buffer.byteLength(body, 'utf8') > maxBytes) {
+    throw Object.assign(new Error('远端响应超过大小上限'), { marketCode: 'too-large' });
+  }
+  const status = Number(raw.status) || 0;
+  const headers = {};
+  for (const key of ['content-type', 'content-length', 'location']) {
+    const value = raw.headers && raw.headers[key];
+    if (typeof value === 'string' && value) headers[key] = value;
+  }
+  const bodyForbidden = status < 200 || status >= 300;
+  return pinnedResponse(status, bodyForbidden ? null : body, headers);
+}
+
+/**
+ * 代理线路的失败收口：固定文案 + 稳定 code，**不把代理地址、认证信息或
+ * Chromium 原始错误回显给调用方**。代理凭据只属于系统/代理自身。
+ */
+function proxyFailureResult(err, routeInfo, fakeIp) {
+  const code = err && err.marketCode;
+  const network = networkMeta(routeInfo, { fakeIp });
+  if (code === 'too-large') return codeError('too-large', '远端响应超过大小上限', { network });
+  if (code === 'timeout' || (err && (err.name === 'TimeoutError' || err.name === 'AbortError'))) {
+    return codeError('timeout', '市场源响应超时', { network });
+  }
+  if (code === 'proxy-auth-required') {
+    return codeError(
+      'proxy-auth-required',
+      '系统代理要求认证或认证失败。Pi GUI 不接收代理凭据；请在操作系统或代理工具中完成认证后重试。',
+      { network },
+    );
+  }
+  if (code === 'proxy-unreachable') {
+    return codeError('proxy-unreachable', '无法连接系统代理；请确认代理正在运行，或把目标域名加入 NO_PROXY 后重试。', { network });
+  }
+  if (code === 'tls-failed') {
+    return codeError('tls-failed', 'HTTPS 证书校验失败；已拒绝连接。', { network });
+  }
+  if (code === 'dns-failed') {
+    return codeError('dns-failed', '代理侧无法解析市场源域名。', { network });
+  }
+  if (code === 'blocked-route') {
+    return codeError('proxy-blocked', '系统代理线路在请求前发生变化，无法确认实际连接路径；已拒绝请求。', { network });
+  }
+  return codeError('network', '无法通过系统代理连接市场源。', { network });
+}
+
 async function fetchJson(rawUrl, {
   requestImpl = httpsGetPinned,
-  lookupImpl,
+  proxiedRequestImpl = null,
+  lookupImpl = dns.promises.lookup,
   env = process.env,
   timeoutMs = FETCH_TIMEOUT_MS,
   maxBytes = MAX_RESPONSE_BYTES,
   accept = 'application/json',
+  network = null,
+  allowFakeIp,
 } = {}) {
-  let parsed;
-  try { parsed = new URL(rawUrl); } catch { return codeError('blocked-url', 'URL 不是合法地址'); }
-  const proxy = blockingProxy(env, parsed);
-  if (proxy) {
+  const checked = checkMarketUrl(rawUrl);
+  if (!checked.ok) return checked;
+  const parsed = checked.url;
+  const routeInfo = await resolveMarketRoute(parsed, { network, env });
+  if (routeInfo.route === 'unsupported') {
+    const detected = routeInfo.proxyKey ? `检测到代理环境变量 ${routeInfo.proxyKey}。` : '';
+    const reason = routeInfo.reason === 'bridge-incomplete'
+      ? '代理网络桥能力不完整。'
+      : '当前运行方式没有可信的代理网络栈。';
     return codeError(
-      'proxy-blocked',
-      `检测到代理环境变量 ${proxy.key}。代理会在代理侧重新解析域名，无法确认实际连接地址；为防止绕过 DNS 校验，市场请求已拒绝。请把目标域名加入 NO_PROXY 后重试，或手动配置该 server。`,
+      'proxy-unsupported',
+      `${detected}${reason}不能确认实际连接地址，也不会绕过代理直连。请在桌面版中通过系统代理访问，或把目标域名加入 NO_PROXY 后重试。`,
+      { network: networkMeta(routeInfo) },
     );
   }
-  const safe = await assertPublicHttps(rawUrl, lookupImpl);
-  if (!safe.ok) return safe;
+  /* unknown 不是 direct：线路无法确认时必须在这里拒绝，不能进入下面的
+   * DNS 解析或 Node 直连。这样 PAC 混合线路、代理解析超时 / 异常 / 非法
+   * 返回值都不会意外绕过代理。 */
+  if (routeInfo.route === 'unknown') {
+    const envConflict = routeInfo.reason === 'env-proxy-bypassed'
+      || routeInfo.reason === 'env-proxy-route-unknown';
+    const error = envConflict
+      ? `检测到代理环境变量 ${routeInfo.proxyKey}，但系统代理线路为${routeInfo.reason === 'env-proxy-bypassed' ? '直连' : '未知'}；不能确认请求会走代理，已拒绝。请关闭环境变量代理，或让系统代理使用同一代理后重试。`
+      : '无法确认系统代理线路（解析超时、异常或结果非法）；为避免绕过代理，市场请求已拒绝，且不会回退到直连。';
+    return codeError('proxy-blocked', error, { network: networkMeta(routeInfo) });
+  }
+  /* 桌面版有主进程代理桥时，允许 TUN fake-IP 的直连路径：地址仍被固定，
+   * TLS 仍按原域名校验。独立后端没有这条路径，fake-IP 继续 fail closed。
+   * 只有两侧能力都在（判定线路 + 代理取数）才算可信桥，避免半截对象
+   * 让直连 fake-IP 被误放行。 */
+  const networkUsable = usableNetworkBridge(network);
+  const fakeIpAllowed = allowFakeIp === true || (allowFakeIp === undefined && networkUsable);
+  const safe = await inspectMarketTarget(parsed, {
+    route: routeInfo.route,
+    allowFakeIp: fakeIpAllowed,
+    lookupImpl,
+  });
+  if (!safe.ok) return { ...safe, network: safe.network || networkMeta(routeInfo) };
+  const meta = () => networkMeta(routeInfo, { fakeIp: safe.fakeIp });
 
   const deadline = Date.now() + timeoutMs;
   let response = null;
-  let lastError = null;
-  let sawTimeout = false;
-  for (const target of safe.addresses) {
-    const remaining = Math.max(1, deadline - Date.now());
+  if (routeInfo.route === 'proxied') {
+    const proxyFetch = proxiedRequestImpl
+      || (network && typeof network.fetchProxied === 'function'
+        ? (url, opts) => network.fetchProxied(url, opts)
+        : null);
+    if (!proxyFetch) {
+      return codeError('proxy-unsupported', '系统代理线路已确认，但代理网络桥不可用；市场请求已拒绝。', { network: meta() });
+    }
     try {
-      response = await requestImpl(safe.url.toString(), {
-        hostname: safe.hostname,
-        address: target.address,
-        family: target.family,
-        timeoutMs: remaining,
+      const raw = await proxyFetch(parsed.toString(), {
+        timeoutMs: Math.max(1, deadline - Date.now()),
         maxBytes,
         headers: { accept, 'user-agent': 'pi-gui-mcp-market/1' },
       });
-      break;
+      response = bridgeResponse(raw, maxBytes);
     } catch (err) {
-      if (err && err.marketCode === 'too-large') return codeError('too-large', '远端响应超过大小上限');
-      if (err && (err.marketCode === 'timeout' || err.name === 'TimeoutError' || err.name === 'AbortError')) sawTimeout = true;
-      lastError = err;
-      if (Date.now() >= deadline) break;
+      return proxyFailureResult(err, routeInfo, safe.fakeIp);
     }
-  }
-  if (!response) {
-    if (sawTimeout) return codeError('timeout', '市场源响应超时');
-    return codeError('network', `无法连接市场源（${clip(lastError && lastError.message, 120)}）`);
+  } else {
+    let lastError = null;
+    let sawTimeout = false;
+    for (const target of safe.addresses) {
+      const remaining = Math.max(1, deadline - Date.now());
+      try {
+        response = await requestImpl(safe.url.toString(), {
+          hostname: safe.hostname,
+          address: target.address,
+          family: target.family,
+          timeoutMs: remaining,
+          maxBytes,
+          headers: { accept, 'user-agent': 'pi-gui-mcp-market/1' },
+        });
+        break;
+      } catch (err) {
+        if (err && err.marketCode === 'too-large') return codeError('too-large', '远端响应超过大小上限', { network: meta() });
+        if (err && (err.marketCode === 'timeout' || err.name === 'TimeoutError' || err.name === 'AbortError')) sawTimeout = true;
+        lastError = err;
+        if (Date.now() >= deadline) break;
+      }
+    }
+    if (!response) {
+      if (sawTimeout) return codeError('timeout', '市场源响应超时', { network: meta() });
+      return codeError('network', `无法连接市场源（${clip(lastError && lastError.message, 120)}）`, { network: meta() });
+    }
   }
   const status = Number(response.status) || 0;
   if (status >= 300 && status < 400) {
-    return codeError('redirect-blocked', '市场源返回重定向；为防绕过地址校验，已拒绝跟随');
+    return codeError('redirect-blocked', '市场源返回重定向；为防绕过地址校验，已拒绝跟随', { network: meta() });
+  }
+  if (routeInfo.route === 'proxied' && status === 407) {
+    return codeError(
+      'proxy-auth-required',
+      '系统代理要求认证或认证失败。Pi GUI 不接收代理凭据；请在操作系统或代理工具中完成认证后重试。',
+      { network: meta() },
+    );
   }
   if (!response.ok) {
-    return codeError(`http-${status}`, `市场源返回 HTTP ${status || '未知'}`);
+    return codeError(`http-${status}`, `市场源返回 HTTP ${status || '未知'}`, { network: meta() });
   }
   const type = String(response.headers.get('content-type') || '').toLowerCase();
-  if (type && !type.includes('json')) return codeError('invalid-content-type', '市场源没有返回 JSON');
+  if (type && !type.includes('json')) return codeError('invalid-content-type', '市场源没有返回 JSON', { network: meta() });
   let text;
   try {
     text = await readCapped(response, maxBytes);
   } catch (err) {
-    if (err && err.code) return err;
-    return codeError('read-failed', '读取市场源响应失败');
+    if (err && err.code) return { ...err, network: meta() };
+    return codeError('read-failed', '读取市场源响应失败', { network: meta() });
   }
   try {
     const data = JSON.parse(text);
-    if (!isRecord(data) && !Array.isArray(data)) return codeError('invalid-response', '市场源返回的 JSON 形状不认识');
-    return { ok: true, data };
+    if (!isRecord(data) && !Array.isArray(data)) return codeError('invalid-response', '市场源返回的 JSON 形状不认识', { network: meta() });
+    return { ok: true, data, network: meta() };
   } catch {
-    return codeError('invalid-response', '市场源返回的不是合法 JSON');
+    return codeError('invalid-response', '市场源返回的不是合法 JSON', { network: meta() });
   }
 }
 
@@ -1798,7 +1929,10 @@ export function createMcpMarket({
   configStore,
   env = process.env,
   requestImpl = httpsGetPinned,
+  proxiedRequestImpl = null,
   lookupImpl = dns.promises.lookup,
+  network = null,
+  allowFakeIp,
   now = () => Date.now(),
 } = {}) {
   const cache = new Map();
@@ -1874,12 +2008,16 @@ export function createMcpMarket({
     const byIdentifier = new Map();
     let pageCursor = cursor;
     let nextCursor = null;
+    let lastNetwork = null;
     /* Registry 的分类是我们从名称 / 描述推出来的，服务端没有 category 参数。
      * 只取当前页会在“第一页全是别的分类”时显示空分类；最多再追两页，
      * 找到匹配条目就停，避免为了一个筛选把 Registry 翻个底朝天。 */
     for (let page = 0; page < 3; page += 1) {
-      const fetched = await fetchJson(registryQueryUrl({ q, cursor: pageCursor, limit }), { requestImpl, lookupImpl, env });
+      const fetched = await fetchJson(registryQueryUrl({ q, cursor: pageCursor, limit }), {
+        requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp,
+      });
       if (!fetched.ok) return { ...fetched, items: [] };
+      lastNetwork = fetched.network || lastNetwork;
       const data = fetched.data;
       if (!isRecord(data) || !Array.isArray(data.servers)) return { ...codeError('invalid-response', 'Registry 响应缺少 servers 数组'), items: [] };
       for (const row of data.servers.slice(0, MAX_REGISTRY_ENTRIES)) {
@@ -1894,13 +2032,18 @@ export function createMcpMarket({
       if ([...byIdentifier.values()].some((item) => item.category === cat)) break;
     }
     const items = [...byIdentifier.values()].filter((item) => cat === '全部' || item.category === cat);
-    const out = { ok: true, source: 'registry', items, total: null, hasMore: Boolean(nextCursor), nextCursor, categories: CATEGORIES };
+    const out = {
+      ok: true, source: 'registry', items, total: null, hasMore: Boolean(nextCursor), nextCursor,
+      categories: CATEGORIES, network: lastNetwork,
+    };
     cacheSet(key, out);
     return out;
   }
 
   async function loadCustomSource(source) {
-    const fetched = await fetchJson(source.url, { requestImpl, lookupImpl, env });
+    const fetched = await fetchJson(source.url, {
+      requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp,
+    });
     if (!fetched.ok) return fetched;
     const data = fetched.data;
     const rows = Array.isArray(data) ? data : (isRecord(data) && Array.isArray(data.servers) ? data.servers : null);
@@ -1911,7 +2054,10 @@ export function createMcpMarket({
       if (item) items.push(item);
     }
     if (!items.length) return codeError('invalid-source', '第三方源里没有可用的 MCP server 条目');
-    return { ok: true, items, catalogName: cleanText(data.name || source.name, 80) || source.name };
+    return {
+      ok: true, items, network: fetched.network,
+      catalogName: cleanText(data.name || source.name, 80) || source.name,
+    };
   }
 
   async function customList(sourceId, { q = '', category = '全部', offset = 0, limit = 12 } = {}) {
@@ -1944,6 +2090,7 @@ export function createMcpMarket({
       nextCursor: null,
       categories: CATEGORIES,
       sourceLabel: source.name,
+      network: loaded.network,
     };
   }
 
@@ -1970,7 +2117,9 @@ export function createMcpMarket({
     if (!isRecord(decoded) || typeof decoded.name !== 'string' || typeof decoded.version !== 'string') {
       return codeError('bad-id', 'Registry 条目 ID 不合法');
     }
-    const fetched = await fetchJson(registryQueryUrl({ q: decoded.name, limit: 50 }), { requestImpl, lookupImpl, env });
+    const fetched = await fetchJson(registryQueryUrl({ q: decoded.name, limit: 50 }), {
+      requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp,
+    });
     if (!fetched.ok) return fetched;
     const rows = isRecord(fetched.data) && Array.isArray(fetched.data.servers) ? fetched.data.servers : [];
     let unsupported = null;
@@ -1987,6 +2136,7 @@ export function createMcpMarket({
         urlPreview: built.urlPreview || '',
         requires: built.requires || [],
         requiredEnvKeys: built.requiredEnvKeys || [],
+        network: fetched.network,
       };
     }
     if (unsupported) return unsupported;
@@ -2034,7 +2184,7 @@ export function createMcpMarket({
       built = {
         ok: true, config: r.config, name: r.entry.installName, entry: r.entry,
         commandPreview: r.commandPreview, urlPreview: r.urlPreview,
-        requires: r.requires, requiredEnvKeys: r.requiredEnvKeys,
+        requires: r.requires, requiredEnvKeys: r.requiredEnvKeys, network: r.network,
       };
     } else if (source.startsWith('custom:')) {
       const r = await resolveCustom(catalogId);
@@ -2096,6 +2246,7 @@ export function createMcpMarket({
       urlPreview: built.urlPreview || (cfg.transport === 'http' ? (cfg.url || '') : ''),
       requiredEnvKeys: built.requiredEnvKeys || entry.requiredEnvKeys || [],
       dependencyProbe: probeDependencies(requires, env),
+      network: built.network || null,
       message: '配置已保存。它还没有被运行中的 Pi 会话加载，也没有验证连接；保存 ≠ 已连接 ≠ 可调用。',
     };
   }
@@ -2108,7 +2259,9 @@ export function createMcpMarket({
     if (!read.ok) return codeError(read.code, '现有市场源列表无法读取，为避免覆盖已拒绝写入');
     if (read.sources.length >= MAX_SOURCES) return codeError('too-many-sources', `最多只能添加 ${MAX_SOURCES} 个第三方市场源`);
     if (read.sources.some((s) => s.url === rawUrl)) return codeError('source-exists', '这个市场源已经添加过了');
-    const fetched = await fetchJson(rawUrl, { requestImpl, lookupImpl, env });
+    const fetched = await fetchJson(rawUrl, {
+      requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp,
+    });
     if (!fetched.ok) return fetched;
     const rows = Array.isArray(fetched.data) ? fetched.data : (isRecord(fetched.data) && Array.isArray(fetched.data.servers) ? fetched.data.servers : null);
     if (!rows) return codeError('invalid-source', '第三方源必须返回 servers 数组');
@@ -2132,7 +2285,12 @@ export function createMcpMarket({
     const write = writeSources([...latest.sources, source]);
     if (!write.ok) return write;
     cache.delete(`custom:${source.id}`);
-    return { ok: true, source: { id: source.id, name: source.name, url: source.url, addedAt: source.addedAt }, count: probe.items.length };
+    return {
+      ok: true,
+      source: { id: source.id, name: source.name, url: source.url, addedAt: source.addedAt },
+      count: probe.items.length,
+      network: probe.network || fetched.network,
+    };
   }
 
   async function removeSource(input = {}) {
@@ -2162,7 +2320,12 @@ export function createMcpMarket({
       CATEGORIES,
       isPrivateIp,
       isFakeIpAddress,
+      classifyAddress,
       assertPublicHttps,
+      checkMarketUrl,
+      inspectMarketTarget,
+      resolveMarketRoute,
+      networkMeta,
       normalizeRegistryEntry,
       normalizeCustomEntry,
       buildBuiltinConfig,
@@ -2175,7 +2338,7 @@ export function createMcpMarket({
       pinnedResponse,
       httpsGetPinned,
       noProxyMatches,
-      blockingProxy,
+      proxyEnvKeys,
       commandPreviewOf,
     },
   };

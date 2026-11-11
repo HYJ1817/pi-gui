@@ -20,6 +20,9 @@ const PUB = path.resolve(process.env.VISUAL_PUBLIC_ROOT || path.join(__dirname, 
 const UPLOAD_DIR = process.env.VISUAL_UPLOAD_DIR || path.join(__dirname, '..', '.uploads');
 const PORT = Number(process.env.HARNESS_PORT || 7789);
 const uxMode = process.env.UX_STATE_HARNESS === '1';
+/* 视觉取证专用：让 Registry 源返回一条“系统代理线路”的固定结果，
+ * 用来截取代理状态说明；不影响默认离线夹具。 */
+const marketProxyMode = process.env.MCP_MARKET_PROXY === '1';
 let uxSwitchCount = 0;
 const uxWarnings = [
   { type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: 'memory_search requires qmd historical warning', _replay: true },
@@ -1179,6 +1182,15 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/mcp/market' && req.method === 'GET') {
     const fixture = await mcpMarketFixture();
     const params = Object.fromEntries(url.searchParams.entries());
+    if (marketProxyMode && params.source === 'registry') {
+      const base = await fixture.list({ source: 'builtin', limit: 1 });
+      return json(res, 200, {
+        ok: true, source: 'registry', total: 1, hasMore: false, nextCursor: null,
+        categories: ['全部', '开发工具'], sources: fixture.sources(),
+        items: [{ ...base.items[0], id: 'registry:io.example/proxy', source: 'registry', sourceLabel: '官方 Registry', trust: 'unverified' }],
+        network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
+      });
+    }
     const result = await fixture.list(params);
     return json(res, 200, { ...result, sources: fixture.sources() });
   }

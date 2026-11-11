@@ -126,7 +126,7 @@
     "test:browser": "node tests/browser.cjs",
     "test:browser-live": "node tests/browser-live.cjs",
     "test:pi-version": "node tests/pi-version.cjs",
-    "test:mcp": "node tests/mcp-config.cjs && node tests/mcp-manager.cjs && node tests/mcp-market.cjs && node tests/mcp-import.cjs && node tests/mcp-management-ui.cjs && node tests/mcp-native.cjs",
+    "test:mcp": "node tests/mcp-config.cjs && node tests/mcp-manager.cjs && node tests/mcp-market.cjs && node tests/mcp-market-network.cjs && node tests/mcp-import.cjs && node tests/mcp-management-ui.cjs && node tests/mcp-native.cjs",
     "test:pi-update": "node tests/pi-update.cjs",
     "test:stop": "node tests/stop-barrier.cjs && node tests/gui-browser-stop.cjs && node tests/bug8-real-pi-fixture.cjs",
     "test:stop-live": "node tests/stop-live.cjs",

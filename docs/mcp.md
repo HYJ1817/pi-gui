@@ -326,13 +326,39 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
   IPv4-mapped IPv6、NAT64、6to4 里嵌的内网地址）、本机 / 内网 DNS、重定向、
   非 JSON content-type、超大响应；公网 IP 字面量允许，但证书仍按 IP SAN 校验；
   8s 超时；第三方源条目里的 HTTP 地址也按同一套规则检查；
-- **DNS 校验约束实际连接目标**：解析一次后把已校验 IP 交给 `https.request`
-  的 `lookup` 固定，`hostname` / SNI / 证书仍按原域名校验；双栈地址逐个尝试，
-  不会再次解析。出现 3xx 直接拒绝，不跟随；
-- 检测到 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 等代理环境时**默认拒绝**
-  （代理会重新解析域名，GUI 无法确认实际连接地址）。`NO_PROXY` 命中目标域名时
-  走直连并同样固定 IP。解析结果落在 fake-IP 网段 `198.18.0.0/15` 时返回
-  `proxy-blocked`，明确说明是代理环境导致，而不是冒充 `blocked-host`；
+- **市场网络按线路分流**（`lib/market-network-policy.cjs` 是后端 / Electron
+  主进程 / 测试共用的唯一策略）：
+  - `direct`：**只有明确解析为 `DIRECT`** 才进入这条。Node 解析一次并把已校验
+    IP 交给 `https.request` 的 `lookup` 固定，`hostname` / SNI / 证书仍按原域名
+    校验；双栈地址逐个尝试，不会再次解析。`NO_PROXY` 命中目标域名时走这条，
+    **地址安全检查一步不少**。
+  - `proxied`：桌面版经后端 ↔ Electron 主进程的私有 IPC 调用
+    `Session.resolveProxy` 确认线路后，把请求交给 Chromium 网络栈（系统代理 /
+    PAC / HTTP / HTTPS / SOCKS5 / TUN）。代理侧负责 DNS 与连接；应用仍校验
+    目标 URL、HTTPS、响应格式、超时 / 大小与重定向，但**不声称最终连接地址
+    通过了固定 IP 校验**（返回 `network.addressVerified=false`、`dns:'proxy'`）。
+  - `unknown`：线路无法确认（空结果、解析超时 / 异常、非法返回值，或 PAC
+    返回 `PROXY ...; DIRECT` 这类混合线路）。**直接返回 `proxy-blocked`，不发起
+    DNS 或 HTTP，也不回退直连**；`network.addressVerified=false`、`dns:'none'`。
+  - **环境变量代理优先于“系统代理是 DIRECT”**：`NO_PROXY` 命中优先直连；否则
+    任一 `HTTPS_PROXY` / `https_proxy` / `ALL_PROXY` / `all_proxy` /
+    `HTTP_PROXY` / `http_proxy` 存在时，必须由代理桥确认 `proxied`。桥返回
+    `direct` / `unknown` 时返回 `proxy-blocked`，不允许静默绕过；没有代理桥
+    （网页版 / SEA 独立后端）时返回 `proxy-unsupported`，也不偷偷直连。市场
+    只允许 HTTPS，这里保守地把所有代理变量都视为代理意图，避免工具间语义
+    差异造成静默直连。
+- **fake-IP 按网络路径判断，不按地址段一刀切**：`198.18.0.0/15`（以及
+  `2001:2::/48`）是 Clash / Mihomo / Surge 等 TUN 代理常用的 fake-IP 网段。
+  只有 `proxied` 线路，或桌面版主进程代理桥存在且明确线路为 `direct`（Clash
+  TUN）时才接受；独立后端 / 线路未知时仍返回 `proxy-blocked`。URL 里直接写
+  fake-IP 字面量永远拒绝。直连接受时地址仍被固定；代理线路由代理栈连接，
+  应用看不到最终地址。两条路径的 TLS 都仍按原域名校验。
+- **代理失败有稳定错误码**：`proxy-unsupported` / `proxy-unreachable` /
+  `proxy-auth-required` / `tls-failed` / `dns-failed` / `proxy-blocked`。
+  代理地址、认证信息与 Chromium 原始错误不回显；代理要求认证时不接收凭据，
+  提示用户在操作系统或代理工具中完成认证。代理桥只做固定 `GET`、固定请求头、
+  `redirect:'manual'`，请求前会再次判定线路，线路变成 direct / unknown 就拒绝；
+  响应仍是 8s 超时、2MB 上限、只接受 JSON、3xx 一律拒绝；
 - 官方 Registry schema（2025-12-11）适配：`packages` 的 npm/npx、PyPI/uvx，
   `runtimeArguments` / `packageArguments`（positional / named）、变量模板、
   `environmentVariables`（必填 / secret → `${VAR}` 引用）、远程 `streamable-http`
@@ -432,7 +458,8 @@ CLI 实际只产两个」）。
 npm run test:mcp
 # tests/mcp-config.cjs     44 条（配置读写 / 原子写 / 备份 / trust / override / 保留上游键 / args 凭据 / cwd / 父链接 / revision / 保留键 / auth 覆盖 / keepUrl）
 # tests/mcp-manager.cjs    24 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配 / transportType / 超大请求体）
-# tests/mcp-market.cjs     36 条（内置目录 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 代理与重定向 / 非法状态码 / 覆盖安装凭据）
+# tests/mcp-market.cjs     48 条（内置目录 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 直连与代理线路 / unknown 失败关闭 / 环境变量代理冲突 / fake-IP / NO_PROXY / 重定向 / 非法状态码 / 覆盖安装凭据）
+# tests/mcp-market-network.cjs 19 条（代理线路分类 / 地址分类 / 主进程代理桥 / 后端 IPC 客户端 / 凭据脱敏）
 # tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
 # tests/mcp-management-ui.cjs 23 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
 # tests/mcp-native.cjs     202 条（Pi 契约 / 运行时投影 / 状态机 / 缓存）
@@ -447,7 +474,9 @@ unknown 三态 + 非法条目 + 坏文件）、**raw MCP tool name 安全投影*
 scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsupported、
 语义投影与运行观察；管理面另有原子写 / revision / 备份 / 上游键保留、
 市场目录与 Registry 分页分类、Registry 参数 / 环境变量 / URL 模板适配、
-来源扫描脱敏、安装只传 catalogId、DNS 固定与代理 / 重定向拒绝、
+来源扫描脱敏、安装只传 catalogId、DNS 固定、直连 / 代理线路分流与 fake-IP
+路径判断、unknown 失败关闭与环境变量代理冲突、代理桥的固定请求头与错误码
+收敛、代理凭据脱敏、重定向拒绝、
 关键 UI 交互（exposure 回填、安装 scope 继承、实际命令预览）与项目未信任降级。
 
 `test:ui`（smoke）另有旧 MCP 能力标签页的界面行为（状态横幅、server 行、

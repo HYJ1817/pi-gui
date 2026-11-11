@@ -398,6 +398,12 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
      绑定的**那份 pi 包、给出「支不支持」的结论与原文证据，并列出官方替代路径
      extension 下已有哪些东西。**只读名字，不读内容、不执行**。
      原生摘要只读 `mcp-native` 的缓存视图（同步、不 spawn）
+   - `mcp-market.js` — 内置离线目录 + 官方 Registry + 受控第三方源；市场请求
+     按线路分流：直连固定已校验 IP，代理线路交给 Electron 主进程的 Chromium
+     网络栈。`lib/market-network-policy.cjs` 是两侧共用的地址 / 线路判定。
+     见 [mcp.md](mcp.md)
+   - `market-network.js` — 后端侧的私有 IPC 客户端（仅 Electron 直属子进程
+     存在）；只发 URL / 上限，不带 method / headers / 代理凭据
    - `mcp-native.js` — P20.6 **原生 MCP 状态与受控动作**。状态真相只有两条官方路：
      `pi mcp list --json`（显式刷新才跑，60s 缓存，不轮询）与两处 `mcp.json`
      的安全结构解析（secret 值不进报告）；动作只代理官方 CLI
@@ -513,6 +519,9 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
 - `electron/preload.cjs` — 渲染进程与主进程之间**唯一的桥**
   （只暴露「用系统默认程序打开文件」）
 - `electron/net-probe.cjs` — 端口探测与 URL 判定（纯逻辑，不依赖 electron，可单测）
+- `electron/market-network.cjs` — MCP 市场系统代理桥：`Session.resolveProxy` +
+  `Session.fetch`，固定 GET / 请求头 / 不跟随重定向 / 有界响应；代理地址与
+  认证信息不出主进程（纯逻辑，可注入 session 单测）
 - `installer/pi-gui.nsi` — 安装程序脚本（NSIS）
 - `assets/icon-src.png` — 图标母图；`scripts/make-icon.mjs` 读它、切圆角、
   编码成 `build/icon.ico`（不在就退回程序化绘制的 π）
