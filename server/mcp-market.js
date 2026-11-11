@@ -1987,6 +1987,9 @@ export function createMcpMarket({
   let registryProgress = {
     active: false, done: false, pages: 0, items: 0, startedAt: 0, finishedAt: 0,
   };
+  /* 正在抓取时已获取的条目（live Map）。只用于“边加载边显示”的只读快照；
+   * 抓取结束（成功或失败）立即清空，绝不把它当成完整目录缓存。 */
+  let registryPartial = null;
   const sourcesFile = path.join(dataDir, SOURCES_FILE);
   const registryCacheFile = path.join(dataDir, REGISTRY_CACHE_FILE);
 
@@ -2148,6 +2151,9 @@ export function createMcpMarket({
    */
   async function fetchRegistryCatalog() {
     const byName = new Map();
+    /* 边加载边显示的数据源：列表请求可以随时读走当前快照，抓取本身
+     * 不受影响。快照引用的是同一个 Map，不复制、不额外占内存。 */
+    registryPartial = byName;
     const seenCursors = new Set();
     let cursor = '';
     let pages = 0;
@@ -2226,6 +2232,7 @@ export function createMcpMarket({
       return { ok: true, items: [...byName.values()], pages, network: lastNetwork };
     } finally {
       agent.destroy();
+      registryPartial = null;
       registryProgress = {
         ...registryProgress, active: false, done: true, finishedAt: now(),
       };
@@ -2267,7 +2274,7 @@ export function createMcpMarket({
     return registryCatalogPromise;
   }
 
-  async function ensureRegistryCatalog() {
+  async function ensureRegistryCatalog({ partial = false, retry = false } = {}) {
     if (!registryCatalog) {
       const disk = await readRegistryCatalogFile();
       if (disk) registryCatalog = disk;
@@ -2285,6 +2292,33 @@ export function createMcpMarket({
         ok: true, catalog: registryCatalog, cached: true, stale: true,
         ...(registryCatalogPromise ? { refreshing: true } : {}),
         ...(registryLastError ? { refreshError: registryLastError } : {}),
+      };
+    }
+    if (partial) {
+      /* 边加载边显示：不等待完整抓取，直接返回当前快照。显式重试会清掉
+       * 上次失败状态；没有重试时，失败状态原样返回，避免前端轮询把一次
+       * 失败的抓取反复重启。 */
+      if (retry) {
+        registryLastError = null;
+        registryRetryAt = 0;
+      }
+      if (!registryCatalogPromise && !registryLastError && now() >= registryRetryAt) {
+        startRegistryRefresh().catch(() => {});
+      }
+      if (registryLastError && !registryCatalogPromise) {
+        return { ...registryLastError, catalog: null, partial: true };
+      }
+      return {
+        ok: true,
+        catalog: {
+          items: registryPartial ? [...registryPartial.values()] : [],
+          pages: registryProgress.pages,
+          at: now(),
+        },
+        cached: false,
+        stale: false,
+        partial: true,
+        loading: registryCatalogPromise !== null,
       };
     }
     return startRegistryRefresh();
@@ -2305,9 +2339,13 @@ export function createMcpMarket({
    * 分页也只切缓存，不会因为翻页重新抓一遍完整 Registry。
    */
   async function registryList({
-    q = '', category = '全部', page, pageSize, limit, offset,
+    q = '', category = '全部', page, pageSize, limit, offset, partial = false, retry = false,
   } = {}) {
-    const ensured = await ensureRegistryCatalog();
+    /* partial=1 只用于“边加载边显示”：返回当前已获取的快照，不等待完整
+     * 抓取；retry=1 表示用户显式重试，清掉上次失败状态重新开始。 */
+    const wantPartial = partial === true || partial === '1';
+    const wantRetry = retry === true || retry === '1';
+    const ensured = await ensureRegistryCatalog({ partial: wantPartial, retry: wantRetry });
     if (!ensured.ok) return { ...ensured, items: [] };
     const cat = CATEGORIES.includes(category) ? category : '全部';
     const query = String(q || '').trim().toLowerCase();
@@ -2334,16 +2372,12 @@ export function createMcpMarket({
     }
     currentPage = totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
     const start = (currentPage - 1) * size;
-    return {
+    const base = {
       ok: true,
       source: 'registry',
       items: all.slice(start, start + size),
-      total,
       page: currentPage,
       pageSize: size,
-      totalPages,
-      hasMore: currentPage < totalPages,
-      nextCursor: null,
       categories: CATEGORIES,
       network: ensured.catalog.network,
       cached: ensured.cached === true,
@@ -2351,6 +2385,25 @@ export function createMcpMarket({
       ...(ensured.stale ? { stale: true } : {}),
       ...(ensured.refreshing ? { refreshing: true } : {}),
       ...(ensured.refreshError ? { refreshError: ensured.refreshError } : {}),
+    };
+    if (ensured.partial) {
+      /* 不把已加载条数叫 total：它不是完整目录的总数，前端必须显示成
+       * “已加载 N 条”，完整抓取结束后再换成真正的 total。 */
+      return {
+        ...base,
+        partial: true,
+        loading: ensured.loading === true,
+        loaded: total,
+        loadedPages: totalPages,
+        progress: { pages: registryProgress.pages, items: registryProgress.items },
+      };
+    }
+    return {
+      ...base,
+      total,
+      totalPages,
+      hasMore: currentPage < totalPages,
+      nextCursor: null,
     };
   }
 

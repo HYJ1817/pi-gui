@@ -694,6 +694,10 @@ function createMarketPage(card, {
     error: null,
     stale: null,
     progress: null,
+    /* 完整目录抓取中：显示已获取的条目，但绝不把 loaded 当成 total。 */
+    partial: false,
+    loaded: 0,
+    loadedPages: 0,
     /* Registry 完整目录是否至少成功加载过一次；搜索 / 分类 reset 不能把它清掉。 */
     catalogLoaded: false,
     sources: null,
@@ -709,7 +713,7 @@ function createMarketPage(card, {
   let disposed = false;
   let loadToken = 0;
   let searchTimer = null;
-  let progressTimer = null;
+  let partialTimer = null;
   /* 失败重试要回到刚才请求的那一页，而不是把用户扔回第 1 页。 */
   let retryPage = null;
   /* 本次 render 开始前焦点在哪个控件上；渲染中保留它可用，避免焦点丢失。 */
@@ -721,7 +725,7 @@ function createMarketPage(card, {
   function dispose() {
     if (disposed) return;
     disposed = true;
-    stopProgressPolling();
+    stopPartialPolling();
     loadToken++;
     if (searchTimer) clearTimeout(searchTimer);
     try { onDispose?.(); } catch { /* ignore */ }
@@ -887,34 +891,48 @@ function createMarketPage(card, {
     return '正在加载官方 Registry 完整目录…首次加载可能需要数分钟。';
   }
 
-  function stopProgressPolling() {
-    if (progressTimer) {
-      clearTimeout(progressTimer);
-      progressTimer = null;
+  /* 有已加载条目时不再叫“总数”：loaded 只是当前快照里的条数。 */
+  function partialNoteText() {
+    const p = state.progress;
+    const pages = p && p.pages > 0 ? `，已获取第 ${p.pages} 页` : '';
+    return `正在加载官方 Registry 完整目录：已显示 ${state.loaded} 条${pages}…完成后会显示完整总数与页码。`;
+  }
+
+  function stopPartialPolling() {
+    if (partialTimer) {
+      clearTimeout(partialTimer);
+      partialTimer = null;
     }
   }
 
-  async function pollProgress() {
-    progressTimer = null;
-    if (disposed || !state.loading || state.source !== 'registry') return;
-    const p = await fetchMcpMarket({ progress: 1 });
-    if (disposed || !state.loading || state.source !== 'registry') return;
-    if (p && p.ok === true) {
-      state.progress = {
-        pages: Number(p.pages) || 0,
-        items: Number(p.items) || 0,
-        active: p.active === true,
-      };
-      /* 只改进度文案，不整页重绘：用户可能正在搜索框里输入。 */
-      const note = card.querySelector('.mcp-market-loading-note');
-      if (note) note.textContent = loadingNoteText();
-    }
-    progressTimer = setTimeout(pollProgress, 2000);
+  function schedulePartialPoll() {
+    if (partialTimer || disposed) return;
+    partialTimer = setTimeout(pollPartial, 2000);
   }
 
-  function startProgressPolling() {
-    if (progressTimer || disposed) return;
-    progressTimer = setTimeout(pollProgress, 300);
+  /* 抓取期间每 2s 取一次当前快照。只替换结果区与总数标签，不重建整页，
+   * 否则用户正在搜索框里输入时会被抢走焦点。 */
+  async function pollPartial() {
+    partialTimer = null;
+    if (disposed || !state.partial || state.source !== 'registry') return;
+    const my = loadToken;
+    const result = await fetchMcpMarket({
+      source: 'registry',
+      q: state.q,
+      category: state.category,
+      page: state.page,
+      pageSize: state.pageSize,
+      partial: 1,
+    });
+    if (disposed || my !== loadToken || state.source !== 'registry') return;
+    if (!result || result.ok !== true) {
+      state.partial = false;
+      state.error = result || { error: '请求失败' };
+      if (result && result.network) state.network = result.network;
+      render();
+      return;
+    }
+    applyRegistryList(result, { quiet: true });
   }
 
   function renderToolbar() {
@@ -935,10 +953,37 @@ function createMarketPage(card, {
     search.appendChild(input);
     bar.appendChild(search);
     bar.appendChild(node('span', 'mcp-toolbar-spacer'));
-    if (state.total !== null) {
-      bar.appendChild(node('span', 'mcp-market-total', `共 ${state.total} 个结果`));
-    }
+    const totalText = state.partial
+      ? (state.loaded > 0 ? `已加载 ${state.loaded} 条` : '正在加载…')
+      : (state.total !== null ? `共 ${state.total} 个结果` : '');
+    if (totalText) bar.appendChild(node('span', 'mcp-market-total', totalText));
     return bar;
+  }
+
+  /** 只更新工具栏右侧的计数，不重建搜索框。 */
+  function updateToolbarTotal() {
+    const bar = card.querySelector('.mcp-market-toolbar');
+    if (!bar) return;
+    let el = bar.querySelector('.mcp-market-total');
+    const text = state.partial
+      ? (state.loaded > 0 ? `已加载 ${state.loaded} 条` : '正在加载…')
+      : (state.total !== null ? `共 ${state.total} 个结果` : '');
+    if (!text) {
+      if (el) el.remove();
+      return;
+    }
+    if (!el) {
+      el = node('span', 'mcp-market-total');
+      bar.appendChild(el);
+    }
+    el.textContent = text;
+  }
+
+  /** 只替换结果区：抓取轮询不会打断搜索框焦点。 */
+  function refreshResults() {
+    const host = card.querySelector('.mcp-market-results');
+    if (host) host.replaceWith(renderResults());
+    updateToolbarTotal();
   }
 
   function renderCategories() {
@@ -962,7 +1007,10 @@ function createMarketPage(card, {
   function renderResults() {
     const wrap = node('div', 'mcp-market-results');
     wrap.appendChild(renderCategories());
-    if (state.loading) {
+    /* 还在抓取且一条都还没拿到时才显示骨架；一旦有快照就显示真实条目。 */
+    const partialEmpty = state.partial && state.loaded === 0
+      && !(state.progress && state.progress.items > 0);
+    if (state.loading || partialEmpty) {
       if (state.source === 'registry' && !state.catalogLoaded) {
         wrap.appendChild(node('p', 'mcp-market-loading-note', loadingNoteText()));
       }
@@ -998,7 +1046,7 @@ function createMarketPage(card, {
       }
       const retry = button('btn', '重试');
       retry.onclick = () => {
-        if (state.source === 'registry' && Number.isFinite(retryPage)) loadList({ page: retryPage });
+        if (state.source === 'registry' && Number.isFinite(retryPage)) loadList({ page: retryPage, retry: true });
         else loadListNow();
       };
       acts.appendChild(retry);
@@ -1007,6 +1055,7 @@ function createMarketPage(card, {
       return wrap;
     }
     if (!state.items.length) {
+      if (state.partial) wrap.appendChild(node('p', 'mcp-market-loading-note', partialNoteText()));
       const box = node('div', 'mcp-empty');
       box.appendChild(icon('search', 'mcp-empty-icon'));
       box.appendChild(node('h4', '', '没有匹配的服务器'));
@@ -1017,6 +1066,7 @@ function createMarketPage(card, {
       wrap.appendChild(box);
       return wrap;
     }
+    if (state.partial) wrap.appendChild(node('p', 'mcp-market-loading-note', partialNoteText()));
     const grid = node('div', 'mcp-market-grid');
     for (const item of state.items) grid.appendChild(renderCard(item));
     wrap.appendChild(grid);
@@ -1070,7 +1120,9 @@ function createMarketPage(card, {
     nav.appendChild(node(
       'span',
       'mcp-pagination-summary',
-      `第 ${state.page} / ${state.totalPages} 页 · 共 ${state.total} 条`,
+      state.partial
+        ? `第 ${state.page} / ${state.totalPages} 页 · 已加载 ${state.loaded} 条（加载中）`
+        : `第 ${state.page} / ${state.totalPages} 页 · 共 ${state.total} 条`,
     ));
     return nav;
   }
@@ -1169,34 +1221,95 @@ function createMarketPage(card, {
 
   function loadListNow() {
     if (searchTimer) clearTimeout(searchTimer);
-    return loadList({ reset: true });
+    /* 失败后用户改搜索 / 分类，应当视为显式重试，而不是再次拿回同一个错误。 */
+    return loadList({ reset: true, retry: state.error !== null });
   }
 
-  async function loadList({ reset = false, page = null } = {}) {
+  function applyRegistryList(result, { quiet = false } = {}) {
+    if (result.network) state.network = result.network;
+    if (result.partial === true) {
+      state.partial = true;
+      state.catalogLoaded = false;
+      state.items = Array.isArray(result.items) ? result.items : [];
+      state.loaded = typeof result.loaded === 'number' ? result.loaded : 0;
+      state.loadedPages = typeof result.loadedPages === 'number' ? result.loadedPages : 0;
+      state.page = typeof result.page === 'number' ? result.page : state.page;
+      state.pageSize = typeof result.pageSize === 'number' ? result.pageSize : state.pageSize;
+      state.total = null;
+      state.totalPages = state.loadedPages;
+      state.hasMore = false;
+      state.nextCursor = null;
+      state.stale = null;
+      if (result.progress && typeof result.progress === 'object') {
+        state.progress = {
+          pages: Number(result.progress.pages) || 0,
+          items: Number(result.progress.items) || 0,
+        };
+      }
+      if (result.categories?.length) state.categories = result.categories;
+      if (result.sources && result.sources.ok !== false) state.sources = result.sources;
+      refreshResults();
+      if (result.loading === true) schedulePartialPoll();
+      else stopPartialPolling();
+      return;
+    }
+    /* 完整目录到手：这里才出现真正的 total / totalPages。 */
+    state.partial = false;
+    state.loaded = 0;
+    state.loadedPages = 0;
+    state.catalogLoaded = true;
+    state.progress = null;
+    stopPartialPolling();
+    state.items = Array.isArray(result.items) ? result.items : [];
+    state.total = typeof result.total === 'number' ? result.total : null;
+    state.page = typeof result.page === 'number' ? result.page : state.page;
+    state.pageSize = typeof result.pageSize === 'number' ? result.pageSize : state.pageSize;
+    state.totalPages = typeof result.totalPages === 'number'
+      ? result.totalPages
+      : (state.total ? Math.ceil(state.total / state.pageSize) : 0);
+    state.hasMore = result.hasMore === true;
+    state.nextCursor = null;
+    state.stale = result.stale === true ? result : null;
+    if (result.categories?.length) state.categories = result.categories;
+    if (result.sources && result.sources.ok !== false) state.sources = result.sources;
+    if (quiet) refreshResults();
+    else render();
+  }
+
+  async function loadList({ reset = false, page = null, quiet = false, retry = false } = {}) {
     const my = ++loadToken;
     const registry = state.source === 'registry';
     if (reset) {
       state.items = [];
       state.total = null;
       state.totalPages = 0;
+      state.partial = false;
+      state.loaded = 0;
+      state.loadedPages = 0;
       state.hasMore = false;
       state.nextCursor = null;
       state.stale = null;
       if (registry) state.page = 1;
     }
-    state.loading = true;
-    state.error = null;
-    render();
-    if (registry && !state.catalogLoaded) startProgressPolling();
+    if (!quiet) {
+      state.loading = true;
+      state.error = null;
+      render();
+    } else {
+      state.error = null;
+    }
     const params = {
       source: state.source,
       q: state.q,
       category: state.category,
     };
     if (registry) {
-      /* Registry 的完整目录由服务端缓存；这里只请求目标页，不传 cursor。 */
+      /* 完整目录还没到手时用 partial=1：服务端返回当前快照，前端边加载
+       * 边显示；完整目录到手后不再带这个参数。 */
       params.page = page === null || page === undefined ? state.page : page;
       params.pageSize = state.pageSize;
+      if (!state.catalogLoaded) params.partial = 1;
+      if (retry) params.retry = 1;
       retryPage = params.page;
     } else {
       params.limit = 12;
@@ -1206,38 +1319,29 @@ function createMarketPage(card, {
     const result = await fetchMcpMarket(params);
     if (disposed || my !== loadToken) return;
     state.loading = false;
-    state.progress = null;
-    stopProgressPolling();
     if (!result || result.ok !== true) {
+      state.partial = false;
+      state.progress = null;
+      stopPartialPolling();
       state.error = result || { error: '请求失败' };
       if (result && result.network) state.network = result.network;
       if (result && Array.isArray(result.items)) state.items = result.items;
       render();
       return;
     }
-    if (result.network) state.network = result.network;
-    if (registry) {
-      state.catalogLoaded = true;
-      state.items = Array.isArray(result.items) ? result.items : [];
-      state.total = typeof result.total === 'number' ? result.total : null;
-      state.page = typeof result.page === 'number' ? result.page : params.page;
-      state.pageSize = typeof result.pageSize === 'number' ? result.pageSize : state.pageSize;
-      state.totalPages = typeof result.totalPages === 'number'
-        ? result.totalPages
-        : (state.total ? Math.ceil(state.total / state.pageSize) : 0);
-      state.hasMore = result.hasMore === true;
-      state.nextCursor = null;
-      state.stale = result.stale === true ? result : null;
-    } else {
+    if (!registry) {
+      if (result.network) state.network = result.network;
       state.items = reset ? (result.items || []) : [...state.items, ...(result.items || [])];
       state.total = typeof result.total === 'number' ? result.total : null;
       state.hasMore = result.hasMore === true;
       state.nextCursor = result.nextCursor || null;
       state.stale = null;
+      if (result.categories?.length) state.categories = result.categories;
+      if (result.sources && result.sources.ok !== false) state.sources = result.sources;
+      render();
+      return;
     }
-    if (result.categories?.length) state.categories = result.categories;
-    if (result.sources && result.sources.ok !== false) state.sources = result.sources;
-    render();
+    applyRegistryList(result, { quiet });
   }
 
   /* 先画骨架，再同时拉来源列表与第一页。 */

@@ -280,7 +280,7 @@ export function createMcpManager({ runtime, mcpNative, configStore, market, impo
         const sources = market.sources();
         return json(res, 200, sources);
       }
-      /* 完整目录首次抓取要数分钟；列表请求在等，进度走这个只读旁路。 */
+      /* 只读进度旁路：给诊断 / 外部观察用；列表本身走 partial 快照。 */
       if (url.searchParams.get('progress') === '1') {
         return json(res, 200, market.registryStatus());
       }
