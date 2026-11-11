@@ -140,6 +140,11 @@ const jsonResponse = (data, status = 200, headers = {}) => new Response(JSON.str
     const bridge = createMarketNetworkBridge({ session });
     const r = await bridge.handle({ type: 'mcp-market-network', id: 1, action: 'resolve-route', url: 'https://market.example/x' });
     assert.deepEqual(r, { type: 'mcp-market-network-result', id: 1, ok: true, route: 'proxied' });
+    for (const raw of ['PROXY 127.0.0.1:7890; DIRECT', 'DIRECT; PROXY 127.0.0.1:7890', '', 'QUIC 127.0.0.1:7890']) {
+      session.resolveProxy = async () => raw;
+      const mixed = await bridge.handle({ type: 'mcp-market-network', id: 2, action: 'resolve-route', url: 'https://market.example/x' });
+      assert.equal(mixed.route, 'unknown', raw);
+    }
     session.resolveProxy = async () => { throw new Error('boom'); };
     const unknown = await bridge.handle({ type: 'mcp-market-network', id: 2, action: 'resolve-route', url: 'https://market.example/x' });
     assert.equal(unknown.route, 'unknown');

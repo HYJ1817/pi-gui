@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { classifyProxyRoute } = require('../lib/market-network-policy.cjs');
 
 let count = 0;
 const check = (name, fn) => { fn(); count++; console.log('  ok  ' + name); };
@@ -521,26 +522,136 @@ const CUSTOM_SOURCE = {
       route: 'direct', source: 'system-proxy', addressVerified: true, dns: 'local', fakeIp: true,
     });
   });
-  await checkAsync('G·线路未知时 fake-IP 不被放行', async () => {
+  await checkAsync('G·线路 unknown 一律 fail closed：不解析 DNS、不直连、不放行 fake-IP', async () => {
     let calls = 0;
+    let lookups = 0;
     const r = await fetchJson('https://market.example/x', {
       env: {},
       network: { resolveRoute: async () => 'unknown', fetchProxied: async () => { calls += 1; } },
-      lookupImpl: async () => [{ address: '198.18.4.17', family: 4 }],
+      lookupImpl: async () => { lookups += 1; return [{ address: '198.18.4.17', family: 4 }]; },
       requestImpl: async () => { calls += 1; return jsonResponse({}); },
     });
     assert.equal(r.ok, false);
     assert.equal(r.code, 'proxy-blocked');
     assert.equal(r.network.route, 'unknown');
+    assert.equal(r.network.addressVerified, false, 'unknown 不能标记为已验证');
+    assert.equal(r.network.dns, 'none', 'unknown 不应发起 DNS');
+    assert.equal(lookups, 0, 'unknown 必须在 DNS 之前拒绝');
     assert.equal(calls, 0);
     const halfBridge = await fetchJson('https://market.example/x', {
       env: {},
       network: { resolveRoute: async () => 'direct' },
-      lookupImpl: async () => [{ address: '198.18.4.17', family: 4 }],
+      lookupImpl: async () => { lookups += 1; return [{ address: '198.18.4.17', family: 4 }]; },
       requestImpl: async () => { calls += 1; return jsonResponse({}); },
     });
-    assert.equal(halfBridge.code, 'proxy-blocked', '缺少代理取数能力时不能借 fake-IP 放行');
+    assert.equal(halfBridge.code, 'proxy-unsupported', '缺少代理取数能力时不能回退直连');
+    assert.equal(halfBridge.network.route, 'unsupported');
+    assert.equal(halfBridge.network.addressVerified, false);
+    assert.equal(lookups, 0);
     assert.equal(calls, 0);
+  });
+  await checkAsync('G·空 / 非法 / 异常代理解析结果统一按 unknown 拒绝', async () => {
+    for (const value of ['', 'DIRECT', 'weird', null, undefined]) {
+      let lookups = 0;
+      let requests = 0;
+      const r = await fetchJson('https://market.example/x', {
+        env: {},
+        network: { resolveRoute: async () => value, fetchProxied: async () => { requests += 1; } },
+        lookupImpl: async () => { lookups += 1; return [{ address: '93.184.216.34', family: 4 }]; },
+        requestImpl: async () => { requests += 1; return jsonResponse({}); },
+      });
+      assert.equal(r.ok, false, String(value));
+      assert.equal(r.code, 'proxy-blocked', String(value));
+      assert.equal(r.network.route, 'unknown', String(value));
+      assert.equal(r.network.addressVerified, false, String(value));
+      assert.equal(r.network.dns, 'none', String(value));
+      assert.equal(lookups, 0, String(value));
+      assert.equal(requests, 0, String(value));
+    }
+    let lookups = 0;
+    let requests = 0;
+    const thrown = await fetchJson('https://market.example/x', {
+      env: {},
+      network: {
+        resolveRoute: async () => { throw Object.assign(new Error('resolve timeout'), { marketCode: 'timeout' }); },
+        fetchProxied: async () => { requests += 1; },
+      },
+      lookupImpl: async () => { lookups += 1; return [{ address: '93.184.216.34', family: 4 }]; },
+      requestImpl: async () => { requests += 1; return jsonResponse({}); },
+    });
+    assert.equal(thrown.code, 'proxy-blocked');
+    assert.equal(thrown.network.route, 'unknown');
+    assert.equal(thrown.network.addressVerified, false);
+    assert.equal(lookups, 0);
+    assert.equal(requests, 0);
+  });
+  await checkAsync('G·混合代理线路 PROXY; DIRECT / DIRECT; PROXY 不降级直连', async () => {
+    for (const raw of ['PROXY proxy:7890; DIRECT', 'DIRECT; PROXY proxy:7890']) {
+      let lookups = 0;
+      let requests = 0;
+      const r = await fetchJson('https://market.example/x', {
+        env: {},
+        network: {
+          resolveRoute: async () => classifyProxyRoute(raw),
+          fetchProxied: async () => { requests += 1; },
+        },
+        lookupImpl: async () => { lookups += 1; return [{ address: '93.184.216.34', family: 4 }]; },
+        requestImpl: async () => { requests += 1; return jsonResponse({}); },
+      });
+      assert.equal(r.ok, false, raw);
+      assert.equal(r.code, 'proxy-blocked', raw);
+      assert.equal(r.network.route, 'unknown', raw);
+      assert.equal(r.network.addressVerified, false, raw);
+      assert.equal(lookups, 0, raw);
+      assert.equal(requests, 0, raw);
+    }
+  });
+  await checkAsync('G·环境变量代理与系统 DIRECT 冲突时拒绝，不解析 DNS / 不直连', async () => {
+    const secret = 'http://user:pass@127.0.0.1:7890';
+    for (const key of ['HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy', 'HTTP_PROXY', 'http_proxy']) {
+      let lookups = 0;
+      let requests = 0;
+      const r = await fetchJson('https://market.example/x', {
+        env: { [key]: secret },
+        network: { resolveRoute: async () => 'direct', fetchProxied: async () => { requests += 1; } },
+        lookupImpl: async () => { lookups += 1; return [{ address: '93.184.216.34', family: 4 }]; },
+        requestImpl: async () => { requests += 1; return jsonResponse({}); },
+      });
+      assert.equal(r.ok, false, key);
+      assert.equal(r.code, 'proxy-blocked', key);
+      assert.equal(r.network.route, 'unknown', key);
+      assert.equal(r.network.source, 'env-proxy', key);
+      assert.equal(r.network.addressVerified, false, key);
+      assert.equal(r.network.dns, 'none', key);
+      assert.equal(lookups, 0, key);
+      assert.equal(requests, 0, key);
+      const serialized = JSON.stringify(r);
+      assert.ok(!serialized.includes('127.0.0.1'), key);
+      assert.ok(!serialized.includes('user'), key);
+      assert.ok(!serialized.includes('pass'), key);
+    }
+  });
+  await checkAsync('G·环境变量代理 + 已验证系统代理线路时仍走桥', async () => {
+    let proxied = 0;
+    let requests = 0;
+    const r = await fetchJson('https://market.example/x', {
+      env: { HTTPS_PROXY: 'http://user:pass@127.0.0.1:7890' },
+      network: {
+        resolveRoute: async () => 'proxied',
+        fetchProxied: async () => {
+          proxied += 1;
+          return { ok: true, status: 200, headers: { 'content-type': 'application/json' }, body: '{"ok":1}' };
+        },
+      },
+      lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+      requestImpl: async () => { requests += 1; return jsonResponse({}); },
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(proxied, 1);
+    assert.equal(requests, 0, '有环境变量代理时不能偷偷直连');
+    assert.equal(r.network.route, 'proxied');
+    assert.equal(r.network.addressVerified, false);
+    assert.equal(r.network.dns, 'proxy');
   });
   await checkAsync('G·NO_PROXY 优先于系统代理判定，但仍做完整地址校验', async () => {
     const seen = [];
