@@ -430,11 +430,11 @@ CLI 实际只产两个」）。
 
 ```bash
 npm run test:mcp
-# tests/mcp-config.cjs     38 条（配置读写 / 原子写 / 备份 / trust / override / 保留上游键 / args 凭据 / cwd / 父链接 / revision）
-# tests/mcp-manager.cjs    22 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配）
-# tests/mcp-market.cjs     33 条（内置目录 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 代理与重定向）
+# tests/mcp-config.cjs     44 条（配置读写 / 原子写 / 备份 / trust / override / 保留上游键 / args 凭据 / cwd / 父链接 / revision / 保留键 / auth 覆盖 / keepUrl）
+# tests/mcp-manager.cjs    24 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配 / transportType / 超大请求体）
+# tests/mcp-market.cjs     36 条（内置目录 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 代理与重定向 / 非法状态码 / 覆盖安装凭据）
 # tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
-# tests/mcp-management-ui.cjs 21 条（管理页 / 表单 / exposure / 详情 / 市场 scope / 已配置状态 / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
+# tests/mcp-management-ui.cjs 23 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
 # tests/mcp-native.cjs     202 条（Pi 契约 / 运行时投影 / 状态机 / 缓存）
 ```
 
