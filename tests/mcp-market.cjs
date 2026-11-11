@@ -707,6 +707,9 @@ const CUSTOM_SOURCE = {
       dataDir: dir, configStore: store, env, lookupImpl, registryCache: true,
       requestImpl: async () => { calls += 1; throw new Error('must not fetch'); },
     });
+    await second.warmRegistryCatalog();
+    assert.equal(calls, 0, '启动预取命中新鲜磁盘缓存时只读盘');
+    assert.equal(second.registryStatus().active, false);
     const r2 = await second.list({ source: 'registry', page: 9 });
     assert.equal(r2.ok, true, JSON.stringify(r2));
     assert.equal(r2.total, 209);
@@ -811,6 +814,50 @@ const CUSTOM_SOURCE = {
     assert.equal(after.done, true);
     assert.equal(after.pages, 3);
     assert.equal(after.items, 209);
+  });
+
+  await checkAsync('C2·启动预取在后台拉完整目录，不阻塞打开市场', async () => {
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url) => {
+        calls += 1;
+        return jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || ''));
+      },
+    });
+    const warmed = m.warmRegistryCatalog();
+    assert.equal(calls, 0, '预取必须异步开始，不能阻塞调用方');
+    await warmed;
+    assert.equal(calls, 3);
+    const status = m.registryStatus();
+    assert.equal(status.done, true);
+    assert.equal(status.items, 209);
+    const r = await m.list({ source: 'registry', page: 9 });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.total, 209);
+    assert.equal(r.items.length, 17);
+    assert.equal(calls, 3, '预取完成后打开市场不再请求 Registry');
+  });
+
+  await checkAsync('C2·启动预取失败不抛错，打开市场时重试', async () => {
+    let calls = 0;
+    let fail = true;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url) => {
+        calls += 1;
+        if (fail) throw Object.assign(new Error('down'), { marketCode: 'network' });
+        return jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || ''));
+      },
+    });
+    await m.warmRegistryCatalog();
+    assert.equal(calls, 1);
+    assert.equal(m.registryStatus().done, true);
+    fail = false;
+    const r = await m.list({ source: 'registry' });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.total, 209);
+    assert.equal(calls, 4, '预取失败不能进入退避，打开市场必须重试');
   });
 
   await checkAsync('C2·完整目录守卫：1200 页 / 100000 条 / 600 秒明确报错', async () => {

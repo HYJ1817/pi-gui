@@ -710,6 +710,12 @@ const mcpMarket = createMcpMarket({
   env: process.env,
   network: marketNetwork,
 });
+/* 桌面版主进程会打开这个开关：启动后就在后台预取完整 Registry 目录，
+ * 第一次打开市场不必等数分钟。不阻塞启动；失败静默，打开市场时会重试
+ * 并显示明确错误。网页版 / 测试不设置这个变量，保持原有按需加载。 */
+if (process.env.PI_GUI_PREFETCH_REGISTRY === '1') {
+  mcpMarket.warmRegistryCatalog();
+}
 const mcpImporter = createMcpImporter({
   runtime,
   env: process.env,

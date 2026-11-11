@@ -219,6 +219,9 @@ async function ensureServer() {
       // 装在 Program Files 下会写不进去，所以指到用户数据目录。
       // 允许外部用 PI_GUI_DATA 覆盖 —— 自动化测试靠它把数据隔离到临时目录。
       PI_GUI_DATA: process.env.PI_GUI_DATA || app.getPath('userData'),
+      // 启动后后台预取官方 Registry 完整目录：第一次打开市场不用等数分钟。
+      // 预取不阻塞后端启动，失败也不影响其它功能；网页版不设置这个变量。
+      PI_GUI_PREFETCH_REGISTRY: '1',
       // 主进程与后端共享同一固定日志目录；目录本身不受项目/会话切换影响。
       ...(mainLog && mainLog.dir ? { PI_GUI_LOG_DIR: mainLog.dir } : {}),
     },

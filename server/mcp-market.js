@@ -2291,6 +2291,15 @@ export function createMcpMarket({
   }
 
   /**
+   * 启动后台预取：桌面版主进程会打开这个开关。调用立即返回，不阻塞启动，
+   * 也不会抛错；已有新鲜缓存时只读盘，过期时走后台刷新，没有缓存才发起
+   * 完整抓取。失败只记录状态 —— 用户打开市场时会重试并看到明确错误。
+   */
+  function warmRegistryCatalog() {
+    return ensureRegistryCatalog().then(() => undefined, () => undefined);
+  }
+
+  /**
    * Registry 列表完全基于缓存目录做本地搜索 / 分类 / 分页。
    * 不用上游 search：官方要求至少 3 个 Unicode 字符，短词会直接 422；
    * 分页也只切缓存，不会因为翻页重新抓一遍完整 Registry。
@@ -2623,6 +2632,7 @@ export function createMcpMarket({
     removeSource,
     sources,
     registryStatus,
+    warmRegistryCatalog,
     _internals: {
       BUILTIN,
       CATEGORIES,
