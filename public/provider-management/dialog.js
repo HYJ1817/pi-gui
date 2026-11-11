@@ -1001,7 +1001,9 @@ export function openProviderDialog({
           recommendation,
         });
       }
-      if (['native-stage', 'native-stage-clear', 'clear-credential'].includes(action?.type) && view === 'setup') {
+      // mark-saved 也会清掉 nativeStage：配置已保存但凭据失败/未确认时，
+      // 必须立刻收回「已暂存」的状态文案，否则页面会继续声称暂存仍有效。
+      if (['native-stage', 'native-stage-clear', 'clear-credential', 'mark-saved'].includes(action?.type) && view === 'setup') {
         rebuildConnection();
         renderStatus();
       }

@@ -805,6 +805,9 @@ test('config saved with an unconfirmed credential keeps the draft, blocks auto r
   card.querySelector('.pm-dialog-actions .pm-primary').click();
   await waitFor(() => card.querySelector('.pm-status-banner')?.textContent.includes('配置已保存，凭据结果待确认'));
   assert.equal(window.document.getElementById('modal').hidden, false, 'the dialog must stay open');
+  // 提交已经消费了暂存批准；状态文案不能继续声称「已暂存」。
+  assert.ok(!card.querySelector('.pm-credential-status')?.textContent.includes('新密钥已暂存'),
+    'a consumed stage must not remain advertised as staged');
   assert.equal(api.calls.commits.length, 1);
   // 不做任何操作，确认不会自动重发。
   await tick(80);
@@ -816,7 +819,11 @@ test('config saved with an unconfirmed credential keeps the draft, blocks auto r
   // 明确重新配置并再次保存：commit 必须变成 update，并重新走 apply-staged。
   findButton(card, '重新配置凭据').click();
   await waitFor(() => bridge.calls.open.length === 2);
-  await waitFor(() => card.querySelector('.pm-credential-status')?.textContent.includes('新密钥已暂存'));
+  const restaged = await waitFor(() => {
+    const text = card.querySelector('.pm-credential-status')?.textContent || '';
+    return text.includes('新密钥已暂存') ? text : null;
+  });
+  assert.ok(restaged, 'the reopened credential sheet must stage a new key before saving');
   card.querySelector('.pm-dialog-actions .pm-primary').click();
   await waitFor(() => api.calls.commits.length === 2);
   assert.equal(api.calls.commits[1].action, 'update');
