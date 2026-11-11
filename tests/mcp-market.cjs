@@ -161,6 +161,25 @@ const CUSTOM_SOURCE = {
     assert.equal(replaced.ok, true, JSON.stringify(replaced));
   });
 
+  await checkAsync('B·覆盖安装不把旧条目的 env 带到新配置', async () => {
+    const seeded = await store.save({
+      scope: 'user', name: 'filesystem', originalName: 'filesystem',
+      expectedRevision: store.revisions().user,
+      transport: 'stdio', command: 'npx', args: ['-y', 'old-package'],
+      env: [{ key: 'OLD_TOKEN', value: '${OLD_TOKEN}' }],
+    });
+    assert.equal(seeded.ok, true, JSON.stringify(seeded));
+    const files = (await market.list({ source: 'builtin' })).items.find((i) => i.catalogId === 'filesystem');
+    const replaced = await market.install({
+      source: 'builtin', catalogId: files.catalogId, scope: 'user',
+      expectedRevision: store.revisions().user, values: { path: ALLOWED }, allowReplace: true,
+    });
+    assert.equal(replaced.ok, true, JSON.stringify(replaced));
+    const saved = JSON.parse(fs.readFileSync(userFile, 'utf8')).mcpServers.filesystem;
+    assert.equal(saved.env, undefined, '旧凭据不应被新安装继承');
+    assert.deepEqual(saved.args, ['-y', '@modelcontextprotocol/server-filesystem', ALLOWED]);
+  });
+
   section('C. 官方 Registry');
   await checkAsync('C·真实查询参数 + 分页 cursor', async () => {
     calls.length = 0;
@@ -347,6 +366,7 @@ const CUSTOM_SOURCE = {
     for (const ip of [
       '127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.1.1', '100.64.0.1', '224.0.0.1',
       '::1', 'fc00::1', 'fe80::1', 'ff02::1', '2001:db8::1',
+      '2001:1::1', '3fff::1', '100::1',
       '::ffff:192.168.0.1', '::ffff:7f00:1', '::ffff:0:7f00:1',
       '64:ff9b::7f00:1', '2002:7f00:1::',
     ]) {
@@ -355,6 +375,21 @@ const CUSTOM_SOURCE = {
     for (const ip of ['93.184.216.34', '8.8.8.8', '2606:4700::1111', '2002:0808:0808::1']) {
       assert.equal(isPrivateIp(ip), false, ip);
     }
+  });
+  check('E·远端非法状态码不会让 Response 构造抛穿', () => {
+    const { pinnedResponse } = market._internals;
+    assert.equal(pinnedResponse(600, null, {}).status, 502);
+    assert.equal(pinnedResponse(0, null, {}).status, 502);
+    assert.equal(pinnedResponse(204, Buffer.from('x'), {}).status, 204);
+    assert.equal(pinnedResponse(205, Buffer.from('x'), {}).status, 205);
+    assert.equal(pinnedResponse(200, 'ok', {}).status, 200);
+  });
+  await checkAsync('E·市场源 URL 查询串里的凭据被拒绝且不落盘', async () => {
+    const before = fs.existsSync(sourcesFile) ? fs.readFileSync(sourcesFile, 'utf8') : null;
+    const r = await market.addSource({ url: 'https://market.example/servers.json?token=abc' });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'blocked-url');
+    assert.equal(fs.existsSync(sourcesFile) ? fs.readFileSync(sourcesFile, 'utf8') : null, before);
   });
 
   section('G. DNS 固定 / 代理 / 重定向边界');

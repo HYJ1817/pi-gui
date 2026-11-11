@@ -57,6 +57,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   };
   const calls = [];
   let forceArgsProtected = false;
+  let forceUrlProtected = false;
   let testResponse = null;
   const postBodies = (target) => calls.filter((c) => c.target === target && c.method === 'POST').map((c) => c.body);
   let customSources = [];
@@ -139,7 +140,9 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
         return ok({
           ok: true, scope: 'user', name: 'remote', revision: 'rev-user', trust: null, overrideOnly: false,
           entry: {
-            type: 'http', command: null, args: [], url: 'https://example.com/mcp',
+            type: 'http', command: null, args: [],
+            url: forceUrlProtected ? null : 'https://example.com/mcp',
+            urlPreview: 'https://example.com', urlProtected: forceUrlProtected,
             env: [], headers: [{ key: 'Authorization', value: null, reference: false, secret: true }],
             description: '远端服务', timeout: null, exposure: 'deferred', enabled: true, oauth: true, auth: false,
           },
@@ -169,6 +172,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
         marketInstalls.push(body);
         return ok({
           ok: true, configured: true, connected: null, loaded: null, name: body.name, scope: body.scope,
+          revisions: { user: 'rev-market-1', project: 'rev-project' },
           commandPreview: body.catalogId === 'filesystem' ? 'npx -y @modelcontextprotocol/server-filesystem C:/workspace' : '',
           dependencyProbe: [{ name: 'node', found: true }, { name: 'npx', found: true }], message: '配置已保存。',
         });
@@ -433,6 +437,27 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     forceArgsProtected = false;
   });
 
+  await check('含凭据的 URL 留空保存时发送 keepUrl，不改写原地址', async () => {
+    forceUrlProtected = true;
+    d.querySelector('[data-focus-key="edit:user:remote"]').click();
+    await tick(80);
+    const form = d.querySelector('.mcp-form-modal');
+    assert.ok(form, '编辑表单应已打开');
+    const urlInput = form.querySelector('[data-field="url"]');
+    assert.equal(urlInput.value, '', '敏感 URL 不应回填');
+    assert.ok(form.textContent.includes('留空表示保留原地址'), form.textContent.slice(0, 300));
+    const desc = form.querySelector('[data-field="description"]');
+    desc.value = '只改描述';
+    desc.dispatchEvent(new w.Event('input', { bubbles: true }));
+    form.querySelector('[data-field="save"]').click();
+    await tick(100);
+    const body = postBodies('/api/mcp/config').filter((b) => b.action === 'save').at(-1);
+    assert.equal(body.keepUrl, true);
+    assert.equal(Object.prototype.hasOwnProperty.call(body, 'url'), false, '受保护时不能发送空 URL');
+    assert.equal(body.description, '只改描述');
+    forceUrlProtected = false;
+  });
+
   await check('测试连接真的调用 test 动作并区分“已连接”', async () => {
     const before = postBodies('/api/mcp/config').filter((b) => b.action === 'test').length;
     d.querySelector('[data-focus-key="test:user:memory"]').click();
@@ -641,6 +666,23 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.ok(success.textContent.includes('已写入的实际启动命令 / 端点'));
     assert.ok(success.textContent.includes('npx -y @modelcontextprotocol/server-filesystem C:/workspace'));
     clickText(success, '.mcp-modal-foot-actions button', '完成');
+    await tick(30);
+  });
+
+  await check('连续安装使用上一次安装返回的 revision', async () => {
+    const more = d.querySelector('[data-focus-key="load-more"]');
+    if (more) { more.click(); await tick(100); }
+    const card = [...d.querySelectorAll('.mcp-market-card')]
+      .find((c) => c.querySelector('h4')?.textContent === 'Playwright');
+    assert.ok(card, '加载更多后应出现 Playwright');
+    card.querySelector('button.mcp-market-install').click();
+    await tick(40);
+    d.querySelector('.mcp-install-modal [data-field="install-submit"]').click();
+    await tick(120);
+    const posted = marketInstalls.at(-1);
+    assert.equal(posted.catalogId, 'playwright');
+    assert.equal(posted.expectedRevision, 'rev-market-1', '第二次安装必须使用第一次安装返回的 revision');
+    clickText(d.querySelector('.mcp-install-modal'), '.mcp-modal-foot-actions button', '完成');
     await tick(30);
   });
 

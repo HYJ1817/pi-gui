@@ -49,7 +49,7 @@ function res() {
     reset: () => { calls.reset++; },
     refresh: async () => ({
       ok: true, at: '2026-01-01T00:00:00.000Z', servers: [
-        { name: 'memory', scope: 'global', state: 'connected', tools: ['a', 'b'], resources: 2, resourceTemplates: 1, transport: 'stdio' },
+        { name: 'memory', scope: 'global', state: 'connected', tools: ['a', 'b'], resources: 2, resourceTemplates: 1, transportType: 'stdio' },
         { name: 'remote', scope: 'global', state: 'needs-auth', tools: [], error: 'login required' },
         { name: 'proj', scope: 'project', state: 'connected', tools: 1, resources: 0 },
       ],
@@ -90,6 +90,20 @@ function res() {
     assert.equal(t.tools, 5);
     assert.equal(t.resources, 1);
     assert.equal(t.resourceTemplates, 0);
+  });
+  check('A·transport 读取 mcpNative 真实投影字段 transportType', () => {
+    assert.equal(sanitizeRuntimeServer({ name: 'x', transportType: 'stdio' }).transport, 'stdio');
+    assert.equal(sanitizeRuntimeServer({ name: 'x', transportType: 'http' }).transport, 'http');
+    assert.equal(sanitizeRuntimeServer({ name: 'x', transport: 'stdio' }).transport, 'stdio');
+    assert.equal(sanitizeRuntimeServer({ name: 'x' }).transport, '');
+  });
+  await checkAsync('A·超大请求体被收成 413，不产生未处理拒绝', async () => {
+    const req = Readable.from([Buffer.alloc(600 * 1024, 0x61)]);
+    req.method = 'POST';
+    const r = res();
+    await manager.handle(req, r, new URL('http://x/api/mcp/config'));
+    assert.equal(r.code, 413);
+    assert.equal(r.body.code, 'body-too-large');
   });
 
   section('B. 测试连接三态');

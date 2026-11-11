@@ -553,6 +553,100 @@ const resetFiles = () => {
     assert.equal(fs.readFileSync(userFile, 'utf8'), before);
   });
 
+  section('J. 复审回归：原型键 / override / URL 保留');
+  await checkAsync('J·__proto__ / prototype / constructor 被拒绝，不污染原型', async () => {
+    resetFiles();
+    for (const name of ['__proto__', 'prototype', 'constructor']) {
+      const r = await store.save({
+        scope: 'user', name, expectedRevision: store.revisions().user,
+        transport: 'stdio', command: 'npx',
+      });
+      assert.equal(r.ok, false, name);
+      assert.equal(r.code, 'bad-name', name);
+    }
+    const detail = await store.getDetail({ scope: 'user', name: '__proto__' });
+    assert.equal(detail.ok, false);
+    assert.equal(detail.code, 'bad-name');
+    assert.equal({}.enabled, undefined, 'Object.prototype 不应被写入');
+  });
+
+  await checkAsync('J·--token 后的 ${VAR} 引用不被当成明文凭据', async () => {
+    resetFiles();
+    const saved = await store.save({
+      scope: 'user', name: 'refargs', expectedRevision: store.revisions().user,
+      transport: 'stdio', command: 'npx',
+      args: ['-y', 'pkg', '--token', '${GITHUB_TOKEN}'],
+    });
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+    assert.deepEqual(read(userFile).mcpServers.refargs.args, ['-y', 'pkg', '--token', '${GITHUB_TOKEN}']);
+  });
+
+  await checkAsync('J·全局 auth server 可以做项目级覆盖', async () => {
+    resetFiles();
+    write(userFile, {
+      mcpServers: {
+        authbase: { type: 'http', url: 'https://example.com/mcp', auth: { provider: 'github' } },
+      },
+    });
+    const r = await store.save({
+      scope: 'project', name: 'authbase', originalName: null,
+      expectedRevision: '', overrideOnly: true, enabled: false,
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.deepEqual(read(projectFile).mcpServers.authbase, { enabled: false });
+  });
+
+  await checkAsync('J·已有合法 override 不再阻塞其它项目级保存', async () => {
+    state.trust = { trusted: true, requiresTrust: false };
+    resetFiles();
+    write(userFile, { mcpServers: { global1: { command: 'npx' } } });
+    const first = await store.save({
+      scope: 'project', name: 'global1', expectedRevision: '', overrideOnly: true, enabled: false,
+    });
+    assert.equal(first.ok, true, JSON.stringify(first));
+    const second = await store.save({
+      scope: 'project', name: 'local1', expectedRevision: store.revisions().project,
+      transport: 'stdio', command: 'npx',
+    });
+    assert.equal(second.ok, true, JSON.stringify(second));
+    assert.equal(read(projectFile).mcpServers.local1.command, 'npx');
+    assert.deepEqual(read(projectFile).mcpServers.global1, { enabled: false });
+  });
+
+  await checkAsync('J·override 的历史 exposure 别名在详情里归一', async () => {
+    resetFiles();
+    write(userFile, { mcpServers: { aliasbase: { command: 'npx' } } });
+    write(projectFile, { mcpServers: { aliasbase: { enabled: true, exposure: 'codemode-deferred' } } });
+    const detail = await store.getDetail({ scope: 'project', name: 'aliasbase' });
+    assert.equal(detail.ok, true, JSON.stringify(detail));
+    assert.equal(detail.entry.exposure, 'codemode');
+    const saved = await store.save({
+      scope: 'project', name: 'aliasbase', originalName: 'aliasbase',
+      overrideOnly: true, enabled: true, expectedRevision: store.revisions().project,
+    });
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+    assert.equal(read(projectFile).mcpServers.aliasbase.exposure, 'codemode');
+  });
+
+  await checkAsync('J·含凭据 URL 留空时按 keepUrl 原样保留，仍可编辑其它字段', async () => {
+    resetFiles();
+    write(userFile, {
+      mcpServers: { urlsecret: { type: 'http', url: 'https://example.com/mcp?sid=ghp_abcdefghijklmnop' } },
+    });
+    const before = read(userFile);
+    const detail = await store.getDetail({ scope: 'user', name: 'urlsecret' });
+    assert.equal(detail.entry.urlProtected, true);
+    assert.equal(detail.entry.url, null);
+    const saved = await store.save({
+      scope: 'user', name: 'urlsecret', originalName: 'urlsecret',
+      expectedRevision: store.revisions().user,
+      transport: 'http', keepUrl: true, description: '只改描述',
+    });
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+    assert.equal(read(userFile).mcpServers.urlsecret.url, before.mcpServers.urlsecret.url);
+    assert.equal(read(userFile).mcpServers.urlsecret.description, '只改描述');
+  });
+
   /* junction 不需要管理员权限，正好覆盖“父目录是链接”的路径。
    * 没有创建权限的环境只打印 skip，不把平台差异当成产品失败。 */
   let linkedProject = null;
