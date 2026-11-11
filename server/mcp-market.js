@@ -44,6 +44,11 @@ const REGISTRY_MAX_PAGE_SIZE = 100;
  * 这些上限只用来兜底，触发时明确报错，不缓存半份目录。 */
 const REGISTRY_MAX_PAGES = 1_200;
 const REGISTRY_MAX_ENTRIES = 100_000;
+/* 官方 Registry 的 cursor 是不透明分页令牌，必须原样回传；任何截断都可能
+ * 改变其含义。实测 cursor 通常只有几十到几百字符，4096 只是防止异常响应
+ * 把 URL 撑爆的上限（按 UTF-16 码元计；最坏的多字节编码仍是有界的几十 KB）。
+ * 超过上限说明上游行为异常，明确失败而不是截断后重试。 */
+const REGISTRY_MAX_CURSOR_LENGTH = 4_096;
 /* 官方 Registry 已增长到数万条、数百页。单页上限仍是 100（101 直接 422），
  * 只能按 cursor 顺序拉；实测 618 页 / 61,758 条约 4.5 分钟。总时限给足，
  * 单页仍是 8s —— 网络真断时第一页就会失败，不会干等十分钟。 */
@@ -976,12 +981,55 @@ function guessCategory(text) {
 
 /* ---------------- Registry 适配 ---------------- */
 
+/**
+ * 校验官方 Registry 的 cursor，合法值原样返回。
+ *
+ * cursor 是不透明令牌：这里只检查类型、长度和字符边界，**绝不截断或改写**。
+ * 返回空串表示没有 cursor；非法值抛带 marketCode 的错误，由调用方转成明确
+ * 的失败结果。控制字符与孤立代理项（lone surrogate）都会被 URL 编码改写，
+ * 因此一并拒绝；合法 Unicode / 保留字符经 URLSearchParams 往返后必须与
+ * 原值完全一致。
+ */
+function registryCursorValue(cursor) {
+  if (cursor === undefined || cursor === null || cursor === '') return '';
+  if (typeof cursor !== 'string') {
+    throw Object.assign(new Error('Registry 分页游标不是字符串'), { marketCode: 'invalid-response' });
+  }
+  if (cursor.length > REGISTRY_MAX_CURSOR_LENGTH) {
+    throw Object.assign(
+      new Error(`Registry 分页游标超过 ${REGISTRY_MAX_CURSOR_LENGTH} 字符`),
+      { marketCode: 'invalid-response' },
+    );
+  }
+  if (/[\u0000-\u001f\u007f]/.test(cursor)) {
+    throw Object.assign(new Error('Registry 分页游标包含控制字符'), { marketCode: 'invalid-response' });
+  }
+  try {
+    if (decodeURIComponent(encodeURIComponent(cursor)) !== cursor) throw new Error('not round-trip');
+  } catch {
+    throw Object.assign(new Error('Registry 分页游标包含无法编码的字符'), { marketCode: 'invalid-response' });
+  }
+  return cursor;
+}
+
+function setRegistryCursor(u, cursor) {
+  const value = registryCursorValue(cursor);
+  /* 空白 cursor 与上游“没有下一页”的语义一致；不往 URL 里塞一个空令牌。 */
+  if (!value || !value.trim()) return;
+  u.searchParams.set('cursor', value);
+  /* 防御性回读：URL 编码 / 解码不能改变合法 cursor。这里解析的是最终
+   * 序列化出来的 URL，而不是 searchParams 的内部值。 */
+  if (new URL(u.toString()).searchParams.get('cursor') !== value) {
+    throw Object.assign(new Error('Registry 分页游标在 URL 编码中被改写'), { marketCode: 'invalid-response' });
+  }
+}
+
 function registryQueryUrl({ q, cursor, limit, version }) {
   const u = new URL(REGISTRY_BASE);
   if (q) u.searchParams.set('search', q.slice(0, 120));
   if (version) u.searchParams.set('version', String(version).slice(0, 200));
   u.searchParams.set('limit', String(Math.min(REGISTRY_PAGE_LIMIT, Math.max(1, Number(limit) || 20))));
-  if (cursor) u.searchParams.set('cursor', String(cursor).slice(0, 500));
+  setRegistryCursor(u, cursor);
   return u.toString();
 }
 
@@ -991,7 +1039,7 @@ function registryCatalogUrl({ cursor, limit = REGISTRY_PAGE_LIMIT } = {}) {
   const u = new URL(REGISTRY_BASE);
   u.searchParams.set('version', 'latest');
   u.searchParams.set('limit', String(Math.min(REGISTRY_PAGE_LIMIT, Math.max(1, Number(limit) || REGISTRY_PAGE_LIMIT))));
-  if (cursor) u.searchParams.set('cursor', String(cursor).slice(0, 500));
+  setRegistryCursor(u, cursor);
   return u.toString();
 }
 
@@ -2176,7 +2224,16 @@ export function createMcpMarket({
         if (remaining <= 0) {
           return { ...codeError('timeout', '完整加载 Registry 目录超时'), items: [], pages, network: lastNetwork };
         }
-        const fetched = await fetchJson(registryCatalogUrl({ cursor }), {
+        let pageUrl;
+        try {
+          pageUrl = registryCatalogUrl({ cursor });
+        } catch (err) {
+          return {
+            ...codeError((err && err.marketCode) || 'invalid-response', (err && err.message) || 'Registry 分页游标不合法'),
+            items: [], pages, network: lastNetwork,
+          };
+        }
+        const fetched = await fetchJson(pageUrl, {
           requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp, agent,
           timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, remaining)),
         });
@@ -2217,7 +2274,16 @@ export function createMcpMarket({
           return { ...codeError('invalid-response', 'Registry 分页游标不是字符串'), items: [], pages, network: lastNetwork };
         }
         if (!next.trim()) break;
-        if (next === cursor || seenCursors.has(next)) {
+        let nextCursor;
+        try {
+          nextCursor = registryCursorValue(next);
+        } catch (err) {
+          return {
+            ...codeError((err && err.marketCode) || 'invalid-response', (err && err.message) || 'Registry 分页游标不合法'),
+            items: [], pages, network: lastNetwork,
+          };
+        }
+        if (nextCursor === cursor || seenCursors.has(nextCursor)) {
           return { ...codeError('registry-cursor-loop', 'Registry 分页游标重复；已停止加载'), items: [], pages, network: lastNetwork };
         }
         if (pages >= REGISTRY_MAX_PAGES) {
@@ -2226,8 +2292,8 @@ export function createMcpMarket({
             items: [], pages, network: lastNetwork,
           };
         }
-        seenCursors.add(next);
-        cursor = next;
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
       }
       return { ok: true, items: [...byName.values()], pages, network: lastNetwork };
     } finally {
