@@ -347,8 +347,9 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
     热缓存。网页版 / 测试不设置这个变量，保持按需加载；
   - 分页 / 搜索 / 分类都切缓存，翻页不重新请求 Registry；并发首次加载共享同一个
     Promise；cursor 是不透明令牌，**原样回传、绝不截断**：类型、控制字符、
-    4096 字符上限与 URL 编解码往返都会校验，异常游标明确报错；重复 / 非法游标
-    与中途分页失败明确报错，且不缓存半份目录；
+    4096 字符上限与 URL 编解码往返都会校验；只有 null / undefined / 空串表示
+    分页结束，非空但只含空白的 cursor 明确报错；重复 / 非法游标与中途分页
+    失败明确报错，且不缓存半份目录；
   - 磁盘缓存**只服务列表展示**；安装时 `resolveRegistry` 仍按 catalogId 重新请求
     官方 Registry，并用原始 `server` 对象重新校验 / 生成配置，不信任缓存里的
     command / URL 模板；
@@ -491,7 +492,7 @@ CLI 实际只产两个」）。
 npm run test:mcp
 # tests/mcp-config.cjs     44 条（配置读写 / 原子写 / 备份 / trust / override / 保留上游键 / args 凭据 / cwd / 父链接 / revision / 保留键 / auth 覆盖 / keepUrl）
 # tests/mcp-manager.cjs    24 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配 / transportType / 超大请求体）
-# tests/mcp-market.cjs     70 条（内置目录 / Registry 完整目录与游标分页 / cursor 特殊字符与 4096 上限 / 去重与 latest / 搜索分类本地筛选 / 内存与磁盘缓存 / 过期后台刷新与退避 / 启动预取 / 边加载边显示（partial 快照与失败重试）/ 加载进度 / 页码与每页大小边界 / 页数 / 条数 / 总时限守卫 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 直连与代理线路 / unknown 失败关闭 / 环境变量代理冲突 / fake-IP / NO_PROXY / 重定向 / 非法状态码 / 覆盖安装凭据）
+# tests/mcp-market.cjs     72 条（内置目录 / Registry 完整目录与游标分页 / cursor 特殊字符、4096 上限与空白 cursor 语义 / 去重与 latest / 搜索分类本地筛选 / 内存与磁盘缓存 / 过期后台刷新与退避 / 启动预取 / 边加载边显示（partial 快照与失败重试）/ 加载进度 / 页码与每页大小边界 / 页数 / 条数 / 总时限守卫 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 直连与代理线路 / unknown 失败关闭 / 环境变量代理冲突 / fake-IP / NO_PROXY / 重定向 / 非法状态码 / 覆盖安装凭据）
 # tests/mcp-market-network.cjs 19 条（代理线路分类 / 地址分类 / 主进程代理桥 / 后端 IPC 客户端 / 凭据脱敏）
 # tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
 # tests/mcp-management-ui.cjs 31 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场分页与筛选重置 / 页码窗口边界（1/2/7/8/9/20 页）/ 完整目录加载进度 / 后台刷新横幅 / 刷新完成自动更新 / 刷新失败保留旧列表 / 本地请求失败不误报 Registry / 缩页后焦点回退 / 翻页与切源竞态 / 销毁清理轮询 / 搜索竞态 / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
