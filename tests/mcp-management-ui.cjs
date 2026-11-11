@@ -587,6 +587,22 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     await tick(120);
   });
 
+  await check('市场安装确认支持 Escape 关闭并把焦点还给触发按钮', async () => {
+    const card = [...d.querySelectorAll('.mcp-market-card')].find((c) => c.querySelector('h4')?.textContent === 'Filesystem');
+    const trigger = card.querySelector('button.mcp-market-install');
+    assert.equal(trigger.disabled, false);
+    trigger.focus();
+    trigger.click();
+    await tick(40);
+    assert.equal($('modal').hidden, false);
+    const active = d.activeElement;
+    assert.ok(active && $('modal').contains(active), '打开后焦点必须进入弹层');
+    active.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await tick(40);
+    assert.equal($('modal').hidden, true);
+    assert.equal(d.activeElement, trigger, '关闭后焦点回到安装按钮');
+  });
+
   await check('安装只送 catalogId，成功页区分保存 / 连接 / 会话加载', async () => {
     const card = [...d.querySelectorAll('.mcp-market-card')].find((c) => c.querySelector('h4')?.textContent === 'Filesystem');
     card.querySelector('button.mcp-market-install').click();

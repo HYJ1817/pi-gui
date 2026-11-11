@@ -432,7 +432,7 @@ npm run test:mcp
 # tests/mcp-manager.cjs    22 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配）
 # tests/mcp-market.cjs     33 条（内置目录 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 代理与重定向）
 # tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
-# tests/mcp-management-ui.cjs 20 条（管理页 / 表单 / exposure / 详情 / 市场 scope / 命令预览 / 导入 / 项目信任 / 连接未知态）
+# tests/mcp-management-ui.cjs 21 条（管理页 / 表单 / exposure / 详情 / 市场 scope / 已配置状态 / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
 # tests/mcp-native.cjs     202 条（Pi 契约 / 运行时投影 / 状态机 / 缓存）
 ```
 
