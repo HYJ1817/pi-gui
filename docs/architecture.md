@@ -400,7 +400,8 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
      原生摘要只读 `mcp-native` 的缓存视图（同步、不 spawn）
    - `mcp-market.js` — 内置离线目录 + 官方 Registry 完整目录（cursor 全量拉取、
      按 server name 去重、latest 版本、本地搜索 / 分类 / 分页 / 内存与磁盘缓存、
-     过期后台刷新、桌面版启动后台预取）+ 受控第三方源；
+     过期后台刷新（前端轮询刷新状态并自动更新当前页）、桌面版启动后台预取）+
+     受控第三方源；
      市场请求按线路分流：直连固定已校验 IP，代理线路交给 Electron 主进程的
      Chromium 网络栈。`lib/market-network-policy.cjs` 是两侧共用的地址 / 线路判定。
      见 [mcp.md](mcp.md)

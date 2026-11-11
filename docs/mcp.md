@@ -333,7 +333,11 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
     原子 rename；60k 条约 9 MB），**缓存 1 小时**；进程重启后第一个请求直接读盘
     （实测约 0.4 秒），不再抓 60k 条；
   - 缓存过期时**先返回旧目录**，后台刷新（`stale:true` + `refreshing:true`）；
-    刷新失败继续返回旧目录并给出 `refreshError`，30 秒退避；
+    前端在 `refreshing:true` 时每 2s 重新请求当前列表（保留搜索词、分类、页码与
+    每页数量）；刷新中只探测状态，不重绘结果区；刷新成功后自动换成新总数并移除
+    旧缓存提示；刷新失败则停止轮询、保留旧列表并显示失败横幅（本地接口失败与
+    Registry 刷新失败分开提示），等服务端 30 秒退避，不会清空已有结果；
+  - 刷新失败继续返回旧目录并给出 `refreshError`，30 秒退避；
   - 没有旧目录时**边加载边显示**：列表请求带 `partial=1` 拿当前快照，先渲染已
     获取的条目（「已加载 N 条」），前端每 2s 轮询一次；完整目录到手后换成真实
     `total` / 页码。`partial` 响应**不带 `total`**，已加载条数绝不冒充总数；
@@ -342,7 +346,9 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
     不阻塞启动，失败静默；命中新鲜缓存时只读盘，所以第一次打开市场通常已是
     热缓存。网页版 / 测试不设置这个变量，保持按需加载；
   - 分页 / 搜索 / 分类都切缓存，翻页不重新请求 Registry；并发首次加载共享同一个
-    Promise；重复 / 非法游标与中途分页失败明确报错，且不缓存半份目录；
+    Promise；cursor 是不透明令牌，**原样回传、绝不截断**：类型、控制字符、
+    4096 字符上限与 URL 编解码往返都会校验，异常游标明确报错；重复 / 非法游标
+    与中途分页失败明确报错，且不缓存半份目录；
   - 磁盘缓存**只服务列表展示**；安装时 `resolveRegistry` 仍按 catalogId 重新请求
     官方 Registry，并用原始 `server` 对象重新校验 / 生成配置，不信任缓存里的
     command / URL 模板；
@@ -485,10 +491,10 @@ CLI 实际只产两个」）。
 npm run test:mcp
 # tests/mcp-config.cjs     44 条（配置读写 / 原子写 / 备份 / trust / override / 保留上游键 / args 凭据 / cwd / 父链接 / revision / 保留键 / auth 覆盖 / keepUrl）
 # tests/mcp-manager.cjs    24 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配 / transportType / 超大请求体）
-# tests/mcp-market.cjs     67 条（内置目录 / Registry 完整目录与游标分页 / 去重与 latest / 搜索分类本地筛选 / 内存与磁盘缓存 / 过期后台刷新与退避 / 启动预取 / 边加载边显示（partial 快照与失败重试）/ 加载进度 / 页码与每页大小边界 / 页数 / 条数 / 总时限守卫 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 直连与代理线路 / unknown 失败关闭 / 环境变量代理冲突 / fake-IP / NO_PROXY / 重定向 / 非法状态码 / 覆盖安装凭据）
+# tests/mcp-market.cjs     70 条（内置目录 / Registry 完整目录与游标分页 / cursor 特殊字符与 4096 上限 / 去重与 latest / 搜索分类本地筛选 / 内存与磁盘缓存 / 过期后台刷新与退避 / 启动预取 / 边加载边显示（partial 快照与失败重试）/ 加载进度 / 页码与每页大小边界 / 页数 / 条数 / 总时限守卫 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 直连与代理线路 / unknown 失败关闭 / 环境变量代理冲突 / fake-IP / NO_PROXY / 重定向 / 非法状态码 / 覆盖安装凭据）
 # tests/mcp-market-network.cjs 19 条（代理线路分类 / 地址分类 / 主进程代理桥 / 后端 IPC 客户端 / 凭据脱敏）
 # tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
-# tests/mcp-management-ui.cjs 25 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场分页与筛选重置 / 完整目录加载进度 / 后台刷新横幅 / 搜索竞态 / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
+# tests/mcp-management-ui.cjs 31 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场分页与筛选重置 / 页码窗口边界（1/2/7/8/9/20 页）/ 完整目录加载进度 / 后台刷新横幅 / 刷新完成自动更新 / 刷新失败保留旧列表 / 本地请求失败不误报 Registry / 缩页后焦点回退 / 翻页与切源竞态 / 销毁清理轮询 / 搜索竞态 / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
 # tests/mcp-native.cjs     202 条（Pi 契约 / 运行时投影 / 状态机 / 缓存）
 ```
 
