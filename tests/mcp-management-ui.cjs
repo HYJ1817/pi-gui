@@ -82,6 +82,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
         ok: true, source, total: 2, hasMore: !cursor, nextCursor: cursor ? null : 'reg-next',
         categories: ['全部', '开发工具'], sources: { ok: true, builtin: { count: 10 }, registry: {}, custom: customSources },
         items: cursor ? [second] : [first],
+        network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
       };
     }
     if (source.startsWith('custom:')) {
@@ -578,6 +579,10 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     d.querySelector('[data-focus-key="source:registry"]').click();
     await tick(100);
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 1);
+    const proxyNotice = d.querySelector('.mcp-market-page .mcp-banner.is-info');
+    assert.ok(proxyNotice, '代理线路必须给用户可见的说明');
+    assert.ok(proxyNotice.textContent.includes('代理侧解析'));
+    assert.ok(proxyNotice.textContent.includes('固定校验'));
     d.querySelector('[data-focus-key="load-more"]').click();
     await tick(100);
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
@@ -585,6 +590,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     d.querySelector('[data-focus-key="source:builtin"]').click();
     await tick(100);
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
+    assert.equal(d.querySelector('.mcp-market-page .mcp-banner.is-info'), null, '离线精选不显示代理说明');
   });
 
   await check('市场安装继承当前 scope 筛选：项目筛选 → 默认项目级', async () => {

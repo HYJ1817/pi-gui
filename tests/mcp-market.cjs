@@ -448,7 +448,7 @@ const CUSTOM_SOURCE = {
     assert.equal(r.code, 'redirect-blocked');
     assert.equal(calls, 1);
   });
-  await checkAsync('G·代理环境明确拒绝，不假装已完成地址校验', async () => {
+  await checkAsync('G·无代理桥时环境代理 fail closed，不假装已完成地址校验', async () => {
     let calls = 0;
     const r = await fetchJson('https://market.example/x', {
       env: { HTTPS_PROXY: 'http://127.0.0.1:7890' },
@@ -456,7 +456,8 @@ const CUSTOM_SOURCE = {
       requestImpl: async () => { calls += 1; return jsonResponse({}); },
     });
     assert.equal(r.ok, false);
-    assert.equal(r.code, 'proxy-blocked');
+    assert.equal(r.code, 'proxy-unsupported');
+    assert.equal(r.network.route, 'unsupported');
     assert.equal(calls, 0);
   });
   await checkAsync('G·NO_PROXY 命中目标域名时走直连并固定 IP', async () => {
@@ -469,7 +470,7 @@ const CUSTOM_SOURCE = {
     assert.equal(r.ok, true, JSON.stringify(r));
     assert.equal(seen[0].address, '93.184.216.34');
   });
-  await checkAsync('G·fake-IP 代理网段明确拒绝', async () => {
+  await checkAsync('G·无代理桥时 fake-IP 代理网段明确拒绝', async () => {
     let calls = 0;
     const r = await fetchJson('https://market.example/x', {
       env: {},
@@ -480,6 +481,194 @@ const CUSTOM_SOURCE = {
     assert.equal(r.code, 'proxy-blocked');
     assert.match(r.error, /fake-IP/);
     assert.equal(calls, 0);
+  });
+  await checkAsync('G·系统代理线路交给可信代理栈，不冒充固定 IP 校验', async () => {
+    const proxied = [];
+    let directCalls = 0;
+    const r = await fetchJson('https://market.example/x', {
+      env: {},
+      network: {
+        resolveRoute: async () => 'proxied',
+        fetchProxied: async (url, opts) => {
+          proxied.push({ url, opts });
+          return { ok: true, status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ok: 1 }) };
+        },
+      },
+      lookupImpl: async () => [{ address: '198.18.4.17', family: 4 }],
+      requestImpl: async () => { directCalls += 1; return jsonResponse({}); },
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(directCalls, 0, '代理线路不能偷偷走直连');
+    assert.equal(proxied.length, 1);
+    assert.equal(proxied[0].url, 'https://market.example/x');
+    assert.deepEqual(r.network, {
+      route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true,
+    });
+  });
+  await checkAsync('G·桌面直连 + TUN fake-IP 仍固定地址并按原域名校验证书', async () => {
+    const seen = [];
+    const r = await fetchJson('https://market.example/x', {
+      env: {},
+      network: { resolveRoute: async () => 'direct', fetchProxied: async () => { throw new Error('must not proxy'); } },
+      lookupImpl: async () => [{ address: '198.18.4.17', family: 4 }],
+      requestImpl: async (url, opts) => { seen.push(opts); return jsonResponse({ ok: 1 }); },
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].address, '198.18.4.17', 'TUN fake-IP 仍必须被固定');
+    assert.equal(seen[0].hostname, 'market.example', 'TLS / Host 仍使用原域名');
+    assert.deepEqual(r.network, {
+      route: 'direct', source: 'system-proxy', addressVerified: true, dns: 'local', fakeIp: true,
+    });
+  });
+  await checkAsync('G·线路未知时 fake-IP 不被放行', async () => {
+    let calls = 0;
+    const r = await fetchJson('https://market.example/x', {
+      env: {},
+      network: { resolveRoute: async () => 'unknown', fetchProxied: async () => { calls += 1; } },
+      lookupImpl: async () => [{ address: '198.18.4.17', family: 4 }],
+      requestImpl: async () => { calls += 1; return jsonResponse({}); },
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'proxy-blocked');
+    assert.equal(r.network.route, 'unknown');
+    assert.equal(calls, 0);
+    const halfBridge = await fetchJson('https://market.example/x', {
+      env: {},
+      network: { resolveRoute: async () => 'direct' },
+      lookupImpl: async () => [{ address: '198.18.4.17', family: 4 }],
+      requestImpl: async () => { calls += 1; return jsonResponse({}); },
+    });
+    assert.equal(halfBridge.code, 'proxy-blocked', '缺少代理取数能力时不能借 fake-IP 放行');
+    assert.equal(calls, 0);
+  });
+  await checkAsync('G·NO_PROXY 优先于系统代理判定，但仍做完整地址校验', async () => {
+    const seen = [];
+    const network = { resolveRoute: async () => 'proxied', fetchProxied: async () => { throw new Error('must not proxy'); } };
+    const r = await fetchJson('https://market.example/x', {
+      env: { HTTPS_PROXY: 'http://127.0.0.1:7890', NO_PROXY: '.example' },
+      network,
+      lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+      requestImpl: async (url, opts) => { seen.push(opts); return jsonResponse({ ok: 1 }); },
+    });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(seen[0].address, '93.184.216.34');
+    assert.equal(r.network.route, 'direct');
+    assert.equal(r.network.source, 'no-proxy');
+    const privateR = await fetchJson('https://market.example/x', {
+      env: { HTTPS_PROXY: 'http://127.0.0.1:7890', NO_PROXY: '.example' },
+      network,
+      lookupImpl: async () => [{ address: '192.168.1.9', family: 4 }],
+      requestImpl: async () => jsonResponse({}),
+    });
+    assert.equal(privateR.ok, false);
+    assert.equal(privateR.code, 'blocked-host', 'NO_PROXY 不能绕过地址安全检查');
+  });
+  await checkAsync('G·代理线路仍拒绝内网 URL 字面量', async () => {
+    let calls = 0;
+    const r = await fetchJson('https://10.0.0.5/x', {
+      env: {},
+      network: { resolveRoute: async () => 'proxied', fetchProxied: async () => { calls += 1; } },
+      lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'blocked-host');
+    assert.equal(calls, 0);
+  });
+  await checkAsync('G·代理失败映射为稳定错误且不回显代理地址 / 凭据', async () => {
+    const cases = [
+      ['proxy-auth-required', 'proxy-auth-required'],
+      ['proxy-unreachable', 'proxy-unreachable'],
+      ['tls-failed', 'tls-failed'],
+      ['dns-failed', 'dns-failed'],
+      ['timeout', 'timeout'],
+      ['network', 'network'],
+      ['blocked-route', 'proxy-blocked'],
+    ];
+    for (const [marketCode, expected] of cases) {
+      const secret = 'http://user:pass@127.0.0.1:7890';
+      const r = await fetchJson('https://market.example/x', {
+        env: {},
+        network: {
+          resolveRoute: async () => 'proxied',
+          fetchProxied: async () => { throw Object.assign(new Error(`failed via ${secret}`), { marketCode }); },
+        },
+        lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+      });
+      assert.equal(r.ok, false, marketCode);
+      assert.equal(r.code, expected, marketCode);
+      assert.equal(r.network.route, 'proxied');
+      assert.equal(r.network.addressVerified, false);
+      assert.ok(!r.error.includes('127.0.0.1'), marketCode);
+      assert.ok(!r.error.includes('user'), marketCode);
+      assert.ok(!r.error.includes('pass'), marketCode);
+    }
+  });
+  await checkAsync('G·代理响应的重定向 / 大小 / content-type 边界仍然生效', async () => {
+    const base = {
+      env: {},
+      network: { resolveRoute: async () => 'proxied' },
+      lookupImpl: async () => [{ address: '93.184.216.34', family: 4 }],
+    };
+    const redir = await fetchJson('https://market.example/x', {
+      ...base,
+      network: { resolveRoute: async () => 'proxied', fetchProxied: async () => ({ ok: true, status: 302, headers: { location: 'https://evil.example/' }, body: '' }) },
+    });
+    assert.equal(redir.code, 'redirect-blocked');
+    const text = await fetchJson('https://market.example/x', {
+      ...base,
+      network: { resolveRoute: async () => 'proxied', fetchProxied: async () => ({ ok: true, status: 200, headers: { 'content-type': 'text/plain' }, body: 'x' }) },
+    });
+    assert.equal(text.code, 'invalid-content-type');
+    const big = await fetchJson('https://market.example/x', {
+      ...base,
+      maxBytes: 8,
+      network: { resolveRoute: async () => 'proxied', fetchProxied: async () => ({ ok: true, status: 200, headers: { 'content-type': 'application/json' }, body: '{"long":"body"}' }) },
+    });
+    assert.equal(big.code, 'too-large');
+    const auth = await fetchJson('https://market.example/x', {
+      ...base,
+      network: { resolveRoute: async () => 'proxied', fetchProxied: async () => ({ ok: true, status: 407, headers: {}, body: '' }) },
+    });
+    assert.equal(auth.code, 'proxy-auth-required');
+  });
+  await checkAsync('G·Registry 分页与第三方源也能走代理线路', async () => {
+    const proxied = createMcpMarket({
+      dataDir: DATA,
+      configStore: store,
+      env: {},
+      lookupImpl: async () => [{ address: '198.18.4.17', family: 4 }],
+      network: {
+        resolveRoute: async () => 'proxied',
+        fetchProxied: async (url) => {
+          const u = new URL(url);
+          if (u.hostname === 'registry.modelcontextprotocol.io') {
+            return {
+              ok: true, status: 200, headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                servers: [REGISTRY_ROW],
+                metadata: u.searchParams.get('search') ? {} : { nextCursor: 'cursor-2' },
+              }),
+            };
+          }
+          return { ok: true, status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify(CUSTOM_SOURCE) };
+        },
+      },
+    });
+    const registry = await proxied.list({ source: 'registry', q: 'test', limit: 12 });
+    assert.equal(registry.ok, true, JSON.stringify(registry));
+    assert.equal(registry.items.length, 1);
+    assert.equal(registry.items[0].identifier, 'io.example/test-server');
+    assert.equal(registry.network.route, 'proxied');
+    const added = await proxied.addSource({ url: 'https://market.example/servers.json' });
+    assert.equal(added.ok, true, JSON.stringify(added));
+    assert.equal(added.network.route, 'proxied');
+    const custom = await proxied.list({ source: `custom:${added.source.id}`, limit: 12 });
+    assert.equal(custom.ok, true, JSON.stringify(custom));
+    assert.ok(custom.items.length >= 1);
+    assert.equal(custom.network.route, 'proxied');
+    const removed = await proxied.removeSource({ id: added.source.id });
+    assert.equal(removed.ok, true);
   });
   check('G·连接参数保留 hostname / SNI，lookup 只返回固定 IP', () => {
     const opts = market._internals.pinnedRequestOptions(

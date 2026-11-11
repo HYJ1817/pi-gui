@@ -169,6 +169,13 @@ async function main() {
     await waitFor(`!!document.querySelector('.mcp-market-page .mcp-market-card:not(.is-skeleton)')`, 'MCP 市场');
     await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '市场卡片');
     await shot('03-market');
+    if (process.env.MCP_MARKET_PROXY === '1') {
+      await click('[data-focus-key="source:registry"]');
+      await waitFor(`!!document.querySelector('.mcp-market-page .mcp-banner.is-info')`, '代理线路说明');
+      await shot('03b-market-proxy');
+      await click('[data-focus-key="source:builtin"]');
+      await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
+    }
 
     /* 安装确认：必须看得见实际会写入的命令、scope 与“敏感值不会显示”边界。 */
     await evalJs(`(() => {
