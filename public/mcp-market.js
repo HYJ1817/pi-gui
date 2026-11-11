@@ -2,7 +2,8 @@
  *
  * 数据来源有三类：
  *   - 内置精选：随应用离线可用，服务端只接受 catalogId，命令模板由目录决定；
- *   - 官方 MCP Registry：真实 HTTPS 查询 + cursor 分页，失败时明确报错；
+ *   - 官方 MCP Registry：真实 HTTPS 查询完整目录（cursor 全量拉取），
+ *     服务端缓存后本地搜索 / 分类 / 分页，失败时明确报错并保留旧缓存；
  *   - 第三方市场源：用户添加的 HTTPS JSON 源，服务端校验后才持久化。
  *
  * 安装只发送 source / catalogId / scope / values，**从不发送 command 或 URL**。
@@ -19,6 +20,49 @@ import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 
 const DEFAULT_CATEGORIES = ['全部', '开发工具', '网络', '文档', '数据', '效率'];
+const REGISTRY_PAGE_SIZE = 24;
+const PAGE_ELLIPSIS = '…';
+/* 过期缓存的后台刷新检测间隔。与 partial 轮询同为 2s，但两者状态互斥、
+ * 定时器独立；请求仍走同一条列表接口，不新增端点。 */
+const STALE_POLL_MS = 2000;
+
+/**
+ * 页码窗口：总页数较少时全部显示；较多时保留首页、末页与当前页附近。
+ * 参考 pi-desktop 的窗口（首尾各两页 + 当前页 ±2），并在靠近两端时补到
+ * 4 个连续页码，避免 9 页首页只剩 `1 2 3 … 8 9`。
+ * 返回值里的 `PAGE_ELLIPSIS` 由渲染层画成不可点击的省略号。
+ */
+function paginationWindow(current, totalPages) {
+  const total = Math.max(0, Math.floor(Number(totalPages) || 0));
+  const page = Math.min(Math.max(1, Math.floor(Number(current) || 1)), Math.max(1, total));
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const wanted = new Set([1, 2, total - 1, total]);
+  for (let p = page - 2; p <= page + 2; p += 1) {
+    if (p >= 1 && p <= total) wanted.add(p);
+  }
+  if (page <= 3) {
+    for (let p = 1; p <= 4 && p <= total; p += 1) wanted.add(p);
+  }
+  if (page >= total - 2) {
+    for (let p = Math.max(1, total - 3); p <= total; p += 1) wanted.add(p);
+  }
+  const pages = [...wanted].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+  const out = [];
+  for (const p of pages) {
+    if (out.length) {
+      const prev = out[out.length - 1];
+      if (typeof prev === 'number' && p - prev > 1) out.push(PAGE_ELLIPSIS);
+    }
+    out.push(p);
+  }
+  return out;
+}
+
+function scrollMarketToTop(card) {
+  const host = card.closest?.('.settings-detail') || card.closest?.('.work-surface');
+  if (host) host.scrollTop = 0;
+  try { card.scrollIntoView?.({ block: 'start' }); } catch { /* 非浏览器环境 */ }
+}
 
 const TRUST_META = {
   official: { label: '官方', tone: 'ok', title: '来自官方仓库或官方端点' },
@@ -655,10 +699,21 @@ function createMarketPage(card, {
     category: '全部',
     items: [],
     total: null,
+    totalPages: 0,
+    page: 1,
+    pageSize: REGISTRY_PAGE_SIZE,
     hasMore: false,
     nextCursor: null,
     loading: true,
     error: null,
+    stale: null,
+    progress: null,
+    /* 完整目录抓取中：显示已获取的条目，但绝不把 loaded 当成 total。 */
+    partial: false,
+    loaded: 0,
+    loadedPages: 0,
+    /* Registry 完整目录是否至少成功加载过一次；搜索 / 分类 reset 不能把它清掉。 */
+    catalogLoaded: false,
     sources: null,
     sourcesError: '',
     network: null,
@@ -672,6 +727,13 @@ function createMarketPage(card, {
   let disposed = false;
   let loadToken = 0;
   let searchTimer = null;
+  let partialTimer = null;
+  /* 后台刷新完成检测：与 partialTimer 独立，二者状态互斥。 */
+  let staleTimer = null;
+  /* 失败重试要回到刚才请求的那一页，而不是把用户扔回第 1 页。 */
+  let retryPage = null;
+  /* 本次 render 开始前焦点在哪个控件上；渲染中保留它可用，避免焦点丢失。 */
+  let renderFocusKey = null;
   projectWorkSurface('settings', { navigation: 'navMcp', title: 'MCP 市场' });
 
   const configured = () => state.configuredNames;
@@ -679,8 +741,10 @@ function createMarketPage(card, {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    stopPartialPolling();
+    stopStalePolling();
     loadToken++;
-    if (searchTimer) clearTimeout(searchTimer);
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
     try { onDispose?.(); } catch { /* ignore */ }
   }
 
@@ -704,13 +768,23 @@ function createMarketPage(card, {
       }
       return;
     }
-    if (snapshot.key) card.querySelector(`[data-focus-key="${snapshot.key}"]`)?.focus();
+    if (snapshot.key) {
+      const target = card.querySelector(`[data-focus-key="${snapshot.key}"]`);
+      if (target) { target.focus(); return; }
+      /* 后台刷新后总页数变少 / 条目消失时，原来的焦点目标可能已经不在了。
+       * 页码焦点落到当前页，其余落到搜索框，别把键盘用户扔回 body。 */
+      const fallback = snapshot.key.startsWith('page:')
+        ? card.querySelector('.mcp-pagination [aria-current="page"]')
+        : card.querySelector('#mcpMarketSearch');
+      fallback?.focus();
+    }
   }
 
   function render() {
     if (disposed) return;
     state.render = render;
     const focus = captureFocus();
+    renderFocusKey = focus?.key || null;
     card.replaceChildren();
     const page = node('div', 'mcp-market-inner');
     card.appendChild(page);
@@ -718,6 +792,8 @@ function createMarketPage(card, {
     page.appendChild(renderSourceBar());
     const networkNotice = renderNetworkNotice();
     if (networkNotice) page.appendChild(networkNotice);
+    const staleNotice = renderStaleNotice();
+    if (staleNotice) page.appendChild(staleNotice);
     page.appendChild(renderToolbar());
     page.appendChild(renderResults());
     restoreFocus(focus);
@@ -812,6 +888,145 @@ function createMarketPage(card, {
     return null;
   }
 
+  /* 完整目录刷新失败时，服务端会继续返回上一次成功缓存。这里把
+   * “看到的是旧数据”明确告诉用户，而不是假装刚刷新成功。 */
+  function renderStaleNotice() {
+    if (state.source !== 'registry' || !state.stale) return null;
+    /* 单独标记，后台刷新完成时只替换这一块，不重建整页。 */
+    const wrap = node('div', 'mcp-banners mcp-stale-banners');
+    const refreshing = state.stale.refreshing === true && !state.stale.refreshError;
+    const banner = node('div', `mcp-banner ${refreshing ? 'is-info' : 'is-warn'}`);
+    banner.appendChild(icon(refreshing ? 'clock' : 'warning', 'mcp-icon'));
+    const copy = node('div', 'mcp-banner-copy');
+    if (refreshing) {
+      copy.appendChild(node('strong', '', '正在后台刷新官方 Registry 目录，当前显示的是上次加载的缓存。'));
+    } else {
+      /* renderer 到本地服务的一次请求失败（network:true）不等于 Registry
+       * 刷新失败，不能把本地故障说成上游故障。 */
+      const local = state.stale.refreshError?.network === true;
+      copy.appendChild(node('strong', '', local
+        ? '暂时无法确认后台刷新状态，正在显示上次成功加载的缓存。'
+        : 'Registry 刷新失败，正在显示上次成功加载的缓存。'));
+      const detail = marketErrorText(state.stale.refreshError);
+      if (detail) copy.appendChild(node('span', '', ` ${detail}`));
+    }
+    banner.appendChild(copy);
+    wrap.appendChild(banner);
+    return wrap;
+  }
+
+  function loadingNoteText() {
+    const p = state.progress;
+    if (p && p.items > 0) {
+      return `正在加载官方 Registry 完整目录：已获取 ${p.items} 条（第 ${p.pages} 页）…首次加载可能需要数分钟。`;
+    }
+    return '正在加载官方 Registry 完整目录…首次加载可能需要数分钟。';
+  }
+
+  /* 有已加载条目时不再叫“总数”：loaded 只是当前快照里的条数。 */
+  function partialNoteText() {
+    const p = state.progress;
+    const pages = p && p.pages > 0 ? `，已获取第 ${p.pages} 页` : '';
+    return `正在加载官方 Registry 完整目录：已显示 ${state.loaded} 条${pages}…完成后会显示完整总数与页码。`;
+  }
+
+  function stopPartialPolling() {
+    if (partialTimer) {
+      clearTimeout(partialTimer);
+      partialTimer = null;
+    }
+  }
+
+  function schedulePartialPoll() {
+    if (partialTimer || disposed) return;
+    partialTimer = setTimeout(pollPartial, 2000);
+  }
+
+  /* 抓取期间每 2s 取一次当前快照。只替换结果区与总数标签，不重建整页，
+   * 否则用户正在搜索框里输入时会被抢走焦点。 */
+  async function pollPartial() {
+    partialTimer = null;
+    if (disposed || !state.partial || state.source !== 'registry') return;
+    const my = loadToken;
+    const result = await fetchMcpMarket({
+      source: 'registry',
+      q: state.q,
+      category: state.category,
+      page: state.page,
+      pageSize: state.pageSize,
+      partial: 1,
+    });
+    if (disposed || my !== loadToken || state.source !== 'registry') return;
+    if (!result || result.ok !== true) {
+      state.partial = false;
+      state.error = result || { error: '请求失败' };
+      if (result && result.network) state.network = result.network;
+      render();
+      return;
+    }
+    applyRegistryList(result, { quiet: true });
+  }
+
+  /* 过期缓存的后台刷新检测：与 partial 轮询完全独立。partial 只在“还没有
+   * 完整目录”时跑；stale 只在“已有旧目录、服务端正在后台刷新”时跑，两者
+   * 状态互斥。这里同样只替换结果区与横幅，不重建整页。 */
+  function stopStalePolling() {
+    if (staleTimer) {
+      clearTimeout(staleTimer);
+      staleTimer = null;
+    }
+  }
+
+  function scheduleStalePoll() {
+    if (staleTimer || disposed) return;
+    if (state.partial || state.source !== 'registry') return;
+    if (!state.stale || state.stale.refreshing !== true) return;
+    staleTimer = setTimeout(pollStale, STALE_POLL_MS);
+  }
+
+  async function pollStale() {
+    staleTimer = null;
+    if (disposed || state.source !== 'registry' || state.partial) return;
+    if (!state.stale || state.stale.refreshing !== true) return;
+    /* 用户正在搜索 / 翻页 / 重试时先让位；那次请求结束后会重新调度。
+     * searchTimer 非空表示输入还在防抖，不能抢在用户那次请求之前用半截
+     * 搜索词再发一次。 */
+    if (state.loading || searchTimer) {
+      scheduleStalePoll();
+      return;
+    }
+    const my = loadToken;
+    const result = await fetchMcpMarket({
+      source: 'registry',
+      q: state.q,
+      category: state.category,
+      page: state.page,
+      pageSize: state.pageSize,
+    });
+    if (disposed || my !== loadToken || state.source !== 'registry') return;
+    if (!result || result.ok !== true) {
+      /* 轮询请求本身失败：保留已有列表，只把横幅改成失败提示。服务端在
+       * 刷新失败后有自己的 30s 退避，这里也停止轮询，等下一次用户操作。 */
+      state.stale = {
+        stale: true,
+        refreshing: false,
+        refreshError: result || { error: '请求失败' },
+      };
+      if (result && result.network) state.network = result.network;
+      refreshStaleNotice();
+      return;
+    }
+    if (result.stale === true && result.refreshing === true) {
+      /* 服务端还在刷新：这次响应仍是同一份旧目录，只续上下一次检测，
+       * 不重绘结果区，避免每 2s 替换一次 DOM 打断点击 / 悬停。服务端
+       * 抓取有 600s 总时限，refreshing 不会永久为 true。 */
+      state.stale = result;
+      scheduleStalePoll();
+      return;
+    }
+    applyRegistryList(result, { quiet: true });
+  }
+
   function renderToolbar() {
     const bar = node('div', 'mcp-market-toolbar');
     const search = node('label', 'mcp-search');
@@ -825,15 +1040,63 @@ function createMarketPage(card, {
     input.oninput = () => {
       state.q = input.value;
       if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => { if (!disposed) loadListNow(); }, 320);
+      searchTimer = setTimeout(() => {
+        searchTimer = null;
+        if (!disposed) loadListNow();
+      }, 320);
     };
     search.appendChild(input);
     bar.appendChild(search);
     bar.appendChild(node('span', 'mcp-toolbar-spacer'));
-    if (state.total !== null) {
-      bar.appendChild(node('span', 'mcp-market-total', `共 ${state.total} 个结果`));
-    }
+    const totalText = state.partial
+      ? (state.loaded > 0 ? `已加载 ${state.loaded} 条` : '正在加载…')
+      : (state.total !== null ? `共 ${state.total} 个结果` : '');
+    if (totalText) bar.appendChild(node('span', 'mcp-market-total', totalText));
     return bar;
+  }
+
+  /** 只更新工具栏右侧的计数，不重建搜索框。 */
+  function updateToolbarTotal() {
+    const bar = card.querySelector('.mcp-market-toolbar');
+    if (!bar) return;
+    let totalEl = bar.querySelector('.mcp-market-total');
+    const text = state.partial
+      ? (state.loaded > 0 ? `已加载 ${state.loaded} 条` : '正在加载…')
+      : (state.total !== null ? `共 ${state.total} 个结果` : '');
+    if (!text) {
+      if (totalEl) totalEl.remove();
+      return;
+    }
+    if (!totalEl) {
+      totalEl = node('span', 'mcp-market-total');
+      bar.appendChild(totalEl);
+    }
+    totalEl.textContent = text;
+  }
+
+  /** 只替换结果区：抓取轮询不会打断搜索框焦点。 */
+  function refreshResults() {
+    const host = card.querySelector('.mcp-market-results');
+    if (!host) return;
+    const focus = captureFocus();
+    host.replaceWith(renderResults());
+    updateToolbarTotal();
+    restoreFocus(focus);
+  }
+
+  /** 只替换旧缓存横幅；后台刷新完成时不必重建整页。 */
+  function refreshStaleNotice() {
+    const current = card.querySelector('.mcp-stale-banners');
+    const next = renderStaleNotice();
+    if (current) {
+      if (next) current.replaceWith(next);
+      else current.remove();
+      return;
+    }
+    if (!next) return;
+    const toolbar = card.querySelector('.mcp-market-toolbar');
+    if (toolbar && toolbar.parentNode) toolbar.parentNode.insertBefore(next, toolbar);
+    else render();
   }
 
   function renderCategories() {
@@ -857,7 +1120,13 @@ function createMarketPage(card, {
   function renderResults() {
     const wrap = node('div', 'mcp-market-results');
     wrap.appendChild(renderCategories());
-    if (state.loading) {
+    /* 还在抓取且一条都还没拿到时才显示骨架；一旦有快照就显示真实条目。 */
+    const partialEmpty = state.partial && state.loaded === 0
+      && !(state.progress && state.progress.items > 0);
+    if (state.loading || partialEmpty) {
+      if (state.source === 'registry' && !state.catalogLoaded) {
+        wrap.appendChild(node('p', 'mcp-market-loading-note', loadingNoteText()));
+      }
       const grid = node('div', 'mcp-market-grid');
       for (let i = 0; i < 4; i++) {
         const sk = node('div', 'mcp-market-card is-skeleton');
@@ -867,6 +1136,9 @@ function createMarketPage(card, {
         grid.appendChild(sk);
       }
       wrap.appendChild(grid);
+      if (state.source === 'registry' && state.totalPages > 0) {
+        wrap.appendChild(renderPagination({ loading: true }));
+      }
       return wrap;
     }
     if (state.error) {
@@ -886,13 +1158,17 @@ function createMarketPage(card, {
         acts.appendChild(fallback);
       }
       const retry = button('btn', '重试');
-      retry.onclick = () => loadListNow();
+      retry.onclick = () => {
+        if (state.source === 'registry' && Number.isFinite(retryPage)) loadList({ page: retryPage, retry: true });
+        else loadListNow();
+      };
       acts.appendChild(retry);
       box.appendChild(acts);
       wrap.appendChild(box);
       return wrap;
     }
     if (!state.items.length) {
+      if (state.partial) wrap.appendChild(node('p', 'mcp-market-loading-note', partialNoteText()));
       const box = node('div', 'mcp-empty');
       box.appendChild(icon('search', 'mcp-empty-icon'));
       box.appendChild(node('h4', '', '没有匹配的服务器'));
@@ -903,10 +1179,14 @@ function createMarketPage(card, {
       wrap.appendChild(box);
       return wrap;
     }
+    if (state.partial) wrap.appendChild(node('p', 'mcp-market-loading-note', partialNoteText()));
     const grid = node('div', 'mcp-market-grid');
     for (const item of state.items) grid.appendChild(renderCard(item));
     wrap.appendChild(grid);
-    if (state.hasMore) {
+    if (state.source === 'registry') {
+      /* 精选 / 第三方源保持原来的“加载更多”；Registry 用底部页码导航。 */
+      if (state.totalPages > 0) wrap.appendChild(renderPagination());
+    } else if (state.hasMore) {
       const more = button('btn primary mcp-load-more', '加载更多');
       more.dataset.focusKey = 'load-more';
       more.onclick = () => loadList({ reset: false });
@@ -915,6 +1195,58 @@ function createMarketPage(card, {
       wrap.appendChild(node('p', 'mcp-market-end', '已经到底了'));
     }
     return wrap;
+  }
+
+  function renderPagination({ loading = false } = {}) {
+    const nav = node('nav', 'mcp-pagination');
+    nav.setAttribute('aria-label', 'Registry 分页');
+    const busy = loading || state.loading;
+    /* 加载中禁用翻页按钮，但保留用户刚操作的那一个：否则焦点会掉到
+     * body，键盘用户每次翻页都得从页首重新 Tab。 */
+    const busyUnlessFocused = (key) => busy && renderFocusKey !== key;
+    const prev = button('mcp-page-btn mcp-page-nav', '上一页');
+    prev.dataset.focusKey = 'page:prev';
+    prev.disabled = busyUnlessFocused('page:prev') || state.page <= 1;
+    prev.onclick = () => goToPage(state.page - 1);
+    nav.appendChild(prev);
+    for (const entry of paginationWindow(state.page, state.totalPages)) {
+      if (entry === PAGE_ELLIPSIS) {
+        const gap = node('span', 'mcp-page-ellipsis', PAGE_ELLIPSIS);
+        gap.setAttribute('aria-hidden', 'true');
+        nav.appendChild(gap);
+        continue;
+      }
+      const on = entry === state.page;
+      const b = button('mcp-page-btn' + (on ? ' on' : ''), String(entry));
+      b.dataset.focusKey = `page:${entry}`;
+      b.setAttribute('aria-label', `第 ${entry} 页`);
+      if (on) b.setAttribute('aria-current', 'page');
+      b.disabled = busyUnlessFocused(`page:${entry}`);
+      b.onclick = () => { if (!on) goToPage(entry); };
+      nav.appendChild(b);
+    }
+    const next = button('mcp-page-btn mcp-page-nav', '下一页');
+    next.dataset.focusKey = 'page:next';
+    next.disabled = busyUnlessFocused('page:next') || state.page >= state.totalPages;
+    next.onclick = () => goToPage(state.page + 1);
+    nav.appendChild(next);
+    nav.appendChild(node(
+      'span',
+      'mcp-pagination-summary',
+      state.partial
+        ? `第 ${state.page} / ${state.totalPages} 页 · 已加载 ${state.loaded} 条（加载中）`
+        : `第 ${state.page} / ${state.totalPages} 页 · 共 ${state.total} 条`,
+    ));
+    return nav;
+  }
+
+  async function goToPage(target) {
+    if (disposed || state.loading) return;
+    const page = Math.trunc(Number(target));
+    if (!Number.isFinite(page) || page < 1 || page > state.totalPages || page === state.page) return;
+    state.page = page;
+    scrollMarketToTop(card);
+    await loadList({ page });
   }
 
   function renderCard(item) {
@@ -1001,47 +1333,140 @@ function createMarketPage(card, {
   }
 
   function loadListNow() {
-    if (searchTimer) clearTimeout(searchTimer);
-    return loadList({ reset: true });
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
+    /* 失败后用户改搜索 / 分类，应当视为显式重试，而不是再次拿回同一个错误。 */
+    return loadList({ reset: true, retry: state.error !== null });
   }
 
-  async function loadList({ reset = false } = {}) {
+  function applyRegistryList(result, { quiet = false } = {}) {
+    if (result.network) state.network = result.network;
+    if (result.partial === true) {
+      state.partial = true;
+      state.catalogLoaded = false;
+      state.items = Array.isArray(result.items) ? result.items : [];
+      state.loaded = typeof result.loaded === 'number' ? result.loaded : 0;
+      state.loadedPages = typeof result.loadedPages === 'number' ? result.loadedPages : 0;
+      state.page = typeof result.page === 'number' ? result.page : state.page;
+      state.pageSize = typeof result.pageSize === 'number' ? result.pageSize : state.pageSize;
+      state.total = null;
+      state.totalPages = state.loadedPages;
+      state.hasMore = false;
+      state.nextCursor = null;
+      state.stale = null;
+      stopStalePolling();
+      if (result.progress && typeof result.progress === 'object') {
+        state.progress = {
+          pages: Number(result.progress.pages) || 0,
+          items: Number(result.progress.items) || 0,
+        };
+      }
+      if (result.categories?.length) state.categories = result.categories;
+      if (result.sources && result.sources.ok !== false) state.sources = result.sources;
+      refreshResults();
+      refreshStaleNotice();
+      if (result.loading === true) schedulePartialPoll();
+      else stopPartialPolling();
+      return;
+    }
+    /* 完整目录到手：这里才出现真正的 total / totalPages。 */
+    state.partial = false;
+    state.loaded = 0;
+    state.loadedPages = 0;
+    state.catalogLoaded = true;
+    state.progress = null;
+    stopPartialPolling();
+    state.items = Array.isArray(result.items) ? result.items : [];
+    state.total = typeof result.total === 'number' ? result.total : null;
+    state.page = typeof result.page === 'number' ? result.page : state.page;
+    state.pageSize = typeof result.pageSize === 'number' ? result.pageSize : state.pageSize;
+    state.totalPages = typeof result.totalPages === 'number'
+      ? result.totalPages
+      : (state.total ? Math.ceil(state.total / state.pageSize) : 0);
+    state.hasMore = result.hasMore === true;
+    state.nextCursor = null;
+    state.stale = result.stale === true ? result : null;
+    if (result.categories?.length) state.categories = result.categories;
+    if (result.sources && result.sources.ok !== false) state.sources = result.sources;
+    if (quiet) {
+      refreshResults();
+      refreshStaleNotice();
+    } else {
+      render();
+    }
+    /* 服务端还在后台刷新时继续检测；完成或失败后停止，遵守服务端退避。 */
+    if (state.stale && state.stale.refreshing === true) scheduleStalePoll();
+    else stopStalePolling();
+  }
+
+  async function loadList({ reset = false, page = null, quiet = false, retry = false } = {}) {
     const my = ++loadToken;
+    /* 用户操作优先：先停掉后台刷新轮询；这次响应若仍 refreshing 会重新调度。 */
+    stopStalePolling();
+    const registry = state.source === 'registry';
     if (reset) {
       state.items = [];
       state.total = null;
+      state.totalPages = 0;
+      state.partial = false;
+      state.loaded = 0;
+      state.loadedPages = 0;
       state.hasMore = false;
       state.nextCursor = null;
+      state.stale = null;
+      if (registry) state.page = 1;
     }
-    state.loading = true;
-    state.error = null;
-    render();
+    if (!quiet) {
+      state.loading = true;
+      state.error = null;
+      render();
+    } else {
+      state.error = null;
+    }
     const params = {
       source: state.source,
       q: state.q,
       category: state.category,
-      limit: 12,
     };
-    if (!reset && state.source === 'registry' && state.nextCursor) params.cursor = state.nextCursor;
-    else if (!reset) params.offset = state.items.length;
+    if (registry) {
+      /* 完整目录还没到手时用 partial=1：服务端返回当前快照，前端边加载
+       * 边显示；完整目录到手后不再带这个参数。 */
+      params.page = page === null || page === undefined ? state.page : page;
+      params.pageSize = state.pageSize;
+      if (!state.catalogLoaded) params.partial = 1;
+      if (retry) params.retry = 1;
+      retryPage = params.page;
+    } else {
+      params.limit = 12;
+      if (!reset) params.offset = state.items.length;
+      retryPage = null;
+    }
     const result = await fetchMcpMarket(params);
     if (disposed || my !== loadToken) return;
     state.loading = false;
     if (!result || result.ok !== true) {
+      state.partial = false;
+      state.progress = null;
+      stopPartialPolling();
+      stopStalePolling();
       state.error = result || { error: '请求失败' };
       if (result && result.network) state.network = result.network;
-      if (result && result.items) state.items = result.items;
+      if (result && Array.isArray(result.items)) state.items = result.items;
       render();
       return;
     }
-    if (result.network) state.network = result.network;
-    state.items = reset ? (result.items || []) : [...state.items, ...(result.items || [])];
-    state.total = typeof result.total === 'number' ? result.total : null;
-    state.hasMore = result.hasMore === true;
-    state.nextCursor = result.nextCursor || null;
-    if (result.categories?.length) state.categories = result.categories;
-    if (result.sources && result.sources.ok !== false) state.sources = result.sources;
-    render();
+    if (!registry) {
+      if (result.network) state.network = result.network;
+      state.items = reset ? (result.items || []) : [...state.items, ...(result.items || [])];
+      state.total = typeof result.total === 'number' ? result.total : null;
+      state.hasMore = result.hasMore === true;
+      state.nextCursor = result.nextCursor || null;
+      state.stale = null;
+      if (result.categories?.length) state.categories = result.categories;
+      if (result.sources && result.sources.ok !== false) state.sources = result.sources;
+      render();
+      return;
+    }
+    applyRegistryList(result, { quiet });
   }
 
   /* 先画骨架，再同时拉来源列表与第一页。 */
@@ -1058,4 +1483,5 @@ export const mcpMarketInternals = {
   categoryIcon,
   installState,
   marketErrorText,
+  paginationWindow,
 };

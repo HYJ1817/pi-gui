@@ -944,6 +944,13 @@
 .mcp-category:hover { background: var(--ds-tile-hover); color: var(--ds-text-primary); }
 .mcp-category.on { background: var(--ds-bg-tertiary); border-color: var(--ds-border-subtle); color: var(--ds-text-primary); }
 
+.mcp-market-loading-note {
+  margin: 0 0 12px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .mcp-market-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1040,6 +1047,64 @@
 .mcp-load-more { align-self: center; margin: 18px auto 0; display: flex; }
 .mcp-market-end { text-align: center; color: var(--ds-text-faint); font-size: 10.5px; margin: 18px 0 0; }
 
+/* Registry 完整目录的底部页码导航。精选 / 第三方源仍用上面的“加载更多”。 */
+.mcp-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 20px auto 0;
+  /* 底部留出滚动余量：设置页的滚动容器被 46px 顶栏压住一截，
+   * 页码贴着内容末尾时会被裁掉，滚到底也看不见。 */
+  padding: 16px 0 56px;
+  border-top: 1px solid var(--ds-border-subtle);
+}
+.mcp-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: 7px;
+  background: var(--ds-bg-secondary);
+  color: var(--ds-text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.mcp-page-btn:hover:not(:disabled) {
+  background: var(--ds-tile-hover);
+  border-color: var(--ds-border-strong);
+  color: var(--ds-text-primary);
+}
+.mcp-page-btn.on {
+  background: var(--ds-bg-tertiary);
+  border-color: var(--ds-border-strong);
+  color: var(--ds-text-primary);
+  font-weight: 650;
+  cursor: default;
+}
+.mcp-page-btn:disabled { opacity: .42; cursor: not-allowed; }
+.mcp-page-nav { padding: 0 10px; }
+.mcp-page-ellipsis {
+  min-width: 18px;
+  text-align: center;
+  color: var(--ds-text-faint);
+  font-size: 11.5px;
+}
+.mcp-pagination-summary {
+  margin-left: 7px;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .mcp-install-source { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
 .mcp-install-source-name { font-size: 11px; color: var(--ds-text-muted); }
 .mcp-install-version { font-size: 10px; color: var(--ds-text-faint); font-family: var(--ui-font-mono); }
@@ -1110,6 +1175,7 @@
   .mcp-server-ops { padding-left: 0; }
   .mcp-market-card-foot { flex-wrap: wrap; }
   .mcp-trust-evidence { flex-basis: 100%; white-space: normal; }
+  .mcp-pagination-summary { flex-basis: 100%; margin-left: 0; text-align: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {
