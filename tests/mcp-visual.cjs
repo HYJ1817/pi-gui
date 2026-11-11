@@ -9,7 +9,7 @@
  *       MCP_MARKET_PAGINATION=1 MCP_MARKET_PROGRESS=1 node tests/mcp-visual.cjs
  *                                                           # 额外截首次加载进度
  * 产物：.shots/mcp/{01-management,02-add-modal,03-market}.png
- *       MCP_MARKET_PAGINATION=1 时另有 05-market-page{1,2,9}.png
+ *       MCP_MARKET_PAGINATION=1 时另有 05-market-page{1,2,9}.png 与 05d-market-narrow.png
  *       MCP_MARKET_PROGRESS=1 时另有 06-market-loading.png / 06b-market-loaded.png
  * 只用于验收取证，不属于 npm test 的 canonical 链。
  */
@@ -271,6 +271,42 @@ async function main() {
       }
       await scrollToPager();
       await shot('05c-market-page9');
+
+      /* 小屏：页码按钮必须换行，不能把分页区撑出横向滚动。jsdom 不做布局，
+       * 这条只能在真实 Chromium 里量；只量分页区自身，避免把应用外壳的
+       * 响应式问题算到分页头上。700×600 是 Electron 窗口的最小尺寸
+       * （electron/main.cjs 的 MIN_W / MIN_H），比这更窄不是受支持的窗口。 */
+      await send('Emulation.setDeviceMetricsOverride', {
+        width: 700, height: 600, deviceScaleFactor: 1, mobile: false,
+      });
+      await sleep(300);
+      const pagerFit = await evalJs(`(() => {
+        const nav = document.querySelector('.mcp-pagination');
+        if (!nav) return null;
+        const rect = nav.getBoundingClientRect();
+        return {
+          scrollWidth: nav.scrollWidth,
+          clientWidth: nav.clientWidth,
+          width: Math.round(rect.width),
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          viewport: innerWidth,
+          buttons: nav.querySelectorAll('.mcp-page-btn').length,
+        };
+      })()`);
+      if (!pagerFit) throw new Error('小屏下找不到分页区');
+      if (pagerFit.scrollWidth > pagerFit.clientWidth + 1) {
+        throw new Error('小屏下分页区出现横向溢出：' + JSON.stringify(pagerFit));
+      }
+      if (pagerFit.left < -1 || pagerFit.right > pagerFit.viewport + 1) {
+        throw new Error('小屏下分页区超出视口：' + JSON.stringify(pagerFit));
+      }
+      await scrollToPager();
+      await shot('05d-market-narrow');
+      await send('Emulation.setDeviceMetricsOverride', {
+        width: 1440, height: 960, deviceScaleFactor: 1, mobile: false,
+      });
+      await sleep(300);
       await click('[data-focus-key="source:builtin"]');
       await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
     }

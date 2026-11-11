@@ -631,6 +631,62 @@ const CUSTOM_SOURCE = {
     assert.deepEqual(failedFirst.items, []);
   });
 
+  check('C2·cursor 原样传递：特殊字符 / 4096 上限 / 非法值明确失败', () => {
+    const { registryCatalogUrl, registryQueryUrl } = market._internals;
+    const special = 'tok+/=&%? 空格/中文/😀';
+    for (const url of [registryCatalogUrl({ cursor: special }), registryQueryUrl({ cursor: special })]) {
+      assert.equal(new URL(url).searchParams.get('cursor'), special);
+    }
+    const max = 'x'.repeat(4096);
+    assert.equal(new URL(registryCatalogUrl({ cursor: max })).searchParams.get('cursor'), max);
+    assert.throws(
+      () => registryCatalogUrl({ cursor: 'x'.repeat(4097) }),
+      (err) => err.marketCode === 'invalid-response' && /4096/.test(err.message),
+    );
+    assert.throws(() => registryQueryUrl({ cursor: 42 }), (err) => err.marketCode === 'invalid-response');
+    assert.throws(() => registryCatalogUrl({ cursor: 'bad\u0000cursor' }), (err) => err.marketCode === 'invalid-response');
+    assert.throws(() => registryCatalogUrl({ cursor: 'bad\uD800cursor' }), (err) => err.marketCode === 'invalid-response');
+  });
+
+  await checkAsync('C2·上游 cursor 含特殊字符时原样用于下一页', async () => {
+    const special = 'tok+/=&%? 空格/中文/😀';
+    const seen = [];
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url) => {
+        const cursor = new URL(url).searchParams.get('cursor') || '';
+        seen.push(cursor);
+        if (!cursor) {
+          return jsonResponse({ servers: [makeRegistryRow('io.example/special-a')], metadata: { nextCursor: special } });
+        }
+        return jsonResponse({ servers: [makeRegistryRow('io.example/special-b')], metadata: {} });
+      },
+    });
+    const r = await m.list({ source: 'registry' });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.deepEqual(seen, ['', special], '下一页必须收到未改写的原始 cursor');
+    assert.equal(r.total, 2);
+  });
+
+  await checkAsync('C2·超长上游 cursor 明确失败且不缓存半份目录', async () => {
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => {
+        calls += 1;
+        return jsonResponse({ servers: [REGISTRY_ROW], metadata: { nextCursor: 'x'.repeat(4097) } });
+      },
+    });
+    const first = await m.list({ source: 'registry' });
+    assert.equal(first.ok, false);
+    assert.equal(first.code, 'invalid-response');
+    assert.match(first.error, /4096/);
+    assert.deepEqual(first.items, []);
+    const second = await m.list({ source: 'registry' });
+    assert.equal(second.ok, false);
+    assert.equal(calls, 2, '失败不能留下半份目录缓存');
+  });
+
   await checkAsync('C2·过期目录先返回旧缓存并后台刷新，失败后退避', async () => {
     let nowMs = 1700000000000;
     let fail = false;

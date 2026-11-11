@@ -86,9 +86,11 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
       description: `Fixture registry server ${index}`,
     };
   });
+  /* 后台刷新完成时用不同的目录规模证明“自动换成新总数”，测试结束后恢复。 */
+  let registryPool = registryItems;
   const marketDelay = { ms: () => 0 };
   const marketStale = { on: false, refreshing: false };
-  const marketFail = { match: () => false };
+  const marketFail = { match: () => false, throw: false };
   const marketProgress = { active: false, pages: 0, items: 0 };
   /* 边加载边显示的 fixture：只暴露 registryItems 的前 loaded 条。 */
   const marketPartial = { on: false, loaded: 0, loadedPages: 0, pages: 0, items: 0 };
@@ -102,7 +104,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
       const pageSize = Math.max(1, Number(u.searchParams.get('pageSize') || 24));
       const requestedPage = Math.max(1, Number(u.searchParams.get('page') || 1));
       const partial = marketPartial.on && u.searchParams.get('partial') === '1';
-      const pool = partial ? registryItems.slice(0, marketPartial.loaded) : registryItems;
+      const pool = partial ? registryPool.slice(0, marketPartial.loaded) : registryPool;
       const filtered = pool.filter((item) => {
         if (category !== '全部' && item.category !== category) return false;
         if (!q) return true;
@@ -227,7 +229,10 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     if (pathOnly === '/api/mcp/market' && method === 'GET') {
       const delay = marketDelay.ms(target);
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-      if (marketFail.match(target)) return ok({ ok: false, code: 'network', error: 'Registry 暂时不可达（fixture）', items: [] });
+      if (marketFail.match(target)) {
+        if (marketFail.throw) throw new Error('本地连接失败（fixture）');
+        return ok({ ok: false, code: 'network', error: 'Registry 暂时不可达（fixture）', items: [] });
+      }
       return ok(marketPayload(target));
     }
     if (pathOnly === '/api/mcp/market' && method === 'POST') {
@@ -274,6 +279,29 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   w.eval(bundle(path.join(pub, 'app.js')).code);
   await tick(80);
   w.S.hasProject = true; w.S.bridgeState = 'ready'; w.S.restoring = false; w.applyProjectState();
+
+  await check('页码窗口边界：1 / 2 / 7 / 8 / 9 / 20 页与首中末位置', () => {
+    const window = (current, total) => w.mcpMarketInternals.paginationWindow(current, total).join(' ');
+    assert.equal(window(1, 1), '1');
+    assert.equal(window(1, 2), '1 2');
+    assert.equal(window(4, 7), '1 2 3 4 5 6 7');
+    assert.equal(window(1, 8), '1 2 3 4 … 7 8');
+    assert.equal(window(1, 9), '1 2 3 4 … 8 9');
+    assert.equal(window(5, 9), '1 2 3 4 5 6 7 8 9');
+    assert.equal(window(9, 9), '1 2 … 6 7 8 9');
+    assert.equal(window(1, 20), '1 2 3 4 … 19 20');
+    assert.equal(window(10, 20), '1 2 … 8 9 10 11 12 … 19 20');
+    assert.equal(window(20, 20), '1 2 … 17 18 19 20');
+    for (const [current, total] of [[1, 9], [5, 9], [9, 9], [10, 20], [20, 20]]) {
+      const items = w.mcpMarketInternals.paginationWindow(current, total);
+      const numbers = items.filter((x) => typeof x === 'number');
+      assert.equal(new Set(numbers).size, numbers.length, '不能有重复页码');
+      assert.ok(numbers.every((p) => p >= 1 && p <= total), '不能越界');
+      assert.equal(numbers[0], 1, '首页必须可访问');
+      assert.equal(numbers[numbers.length - 1], total, '末页必须可访问');
+      assert.ok(items.filter((x) => x === '…').length <= 2, '省略号不能滥用');
+    }
+  });
 
   const page = () => d.querySelector('.mcp-page');
   const cards = () => [...d.querySelectorAll('.mcp-server')];
@@ -766,6 +794,195 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
     assert.equal(d.querySelector('.mcp-market-page .mcp-banner.is-info'), null, '离线精选不显示代理说明');
     assert.equal(d.querySelector('.mcp-market-page .mcp-pagination'), null, '精选目录保持加载更多，不显示页码');
+  });
+
+  await check('过期缓存的后台刷新完成后自动更新当前页', async () => {
+    const pagination = () => d.querySelector('.mcp-market-page .mcp-pagination');
+    const pageBtn = (n) => pagination().querySelector(`[data-focus-key="page:${n}"]`);
+    const registryGets = () => calls.filter((c) => c.target.startsWith('/api/mcp/market?')
+      && c.target.includes('source=registry') && !c.target.includes('partial=1'));
+
+    d.querySelector('[data-focus-key="source:registry"]').click();
+    await tick(120);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
+    assert.ok(pagination().textContent.includes('第 1 / 9 页'));
+
+    marketStale.on = true;
+    marketStale.refreshing = true;
+    pageBtn(2).click();
+    await tick(120);
+    assert.ok(pagination().textContent.includes('第 2 / 9 页'));
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+      .some((b) => b.textContent.includes('正在后台刷新')), '后台刷新期间必须显示提示');
+
+    /* 用户焦点停在搜索框；后台轮询更新不能把它抢走。 */
+    const search = d.querySelector('#mcpMarketSearch');
+    search.focus();
+    const resultsHost = d.querySelector('.mcp-market-results');
+    const before = registryGets().length;
+
+    /* 刷新还没完成：轮询只探测状态，不能每 2s 重绘结果区。 */
+    await tick(2300);
+    assert.equal(registryGets().length - before, 1, '刷新中每轮只发一次列表请求');
+    assert.equal(d.activeElement?.id, 'mcpMarketSearch', '刷新中的轮询不能打断搜索框焦点');
+    assert.equal(d.querySelector('.mcp-market-results'), resultsHost, '刷新中的轮询不能重建结果区');
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+      .some((b) => b.textContent.includes('正在后台刷新')), '刷新中提示应保留');
+
+    /* 后台刷新完成：新目录只有 100 条（5 页），页面应自动换成新总数。 */
+    registryPool = registryItems.slice(0, 100);
+    marketStale.on = false;
+    await tick(2300);
+
+    assert.equal(registryGets().length - before, 2, '完成检测每轮只发一次列表请求');
+    assert.equal(
+      [...d.querySelectorAll('.mcp-market-page .mcp-banner')].some((b) => b.textContent.includes('后台刷新')),
+      false,
+      '刷新完成后旧缓存提示必须消失',
+    );
+    assert.equal(d.querySelector('.mcp-market-total').textContent, '共 100 个结果');
+    assert.ok(pagination().textContent.includes('第 2 / 5 页'));
+    assert.ok(pagination().textContent.includes('共 100 条'));
+    assert.equal(pagination().querySelector('[aria-current="page"]').textContent, '2', '保留当前页码');
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
+    assert.equal(d.activeElement?.id, 'mcpMarketSearch', '轮询不能打断搜索框焦点');
+
+    registryPool = registryItems;
+    pageBtn(1).click();
+    await tick(120);
+  });
+
+  await check('过期缓存：后台刷新失败保留旧列表并停止轮询', async () => {
+    const pagination = () => d.querySelector('.mcp-market-page .mcp-pagination');
+    const pageBtn = (n) => pagination().querySelector(`[data-focus-key="page:${n}"]`);
+    const registryGets = () => calls.filter((c) => c.target.startsWith('/api/mcp/market?')
+      && c.target.includes('source=registry') && !c.target.includes('partial=1'));
+
+    marketStale.on = true;
+    marketStale.refreshing = true;
+    pageBtn(2).click();
+    await tick(120);
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+      .some((b) => b.textContent.includes('正在后台刷新')));
+
+    /* 轮询还没到点时切到第 3 页：旧定时器必须作废，只对当前页轮询。 */
+    pageBtn(3).click();
+    await tick(120);
+    assert.ok(pagination().textContent.includes('第 3 / 9 页'));
+
+    const before = registryGets().length;
+    marketStale.refreshing = false; // 下一次轮询返回 refreshError
+    await tick(2300);
+    const after = registryGets().length;
+    assert.equal(after - before, 1, '翻页后每轮也只请求一次');
+    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+      .find((b) => b.textContent.includes('上次成功加载的缓存'));
+    assert.ok(warn, '刷新失败必须明确提示');
+    assert.ok(warn.textContent.includes('Registry 暂时不可达'));
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24, '失败不能清空已有列表');
+    assert.ok(pagination().textContent.includes('第 3 / 9 页'), '轮询不能把用户翻回旧页');
+    assert.equal(pagination().querySelector('[aria-current="page"]').textContent, '3');
+    assert.ok(pagination().textContent.includes('共 209 条'));
+
+    await tick(2300);
+    assert.equal(registryGets().length, after, '刷新失败后必须停止轮询（服务端退避）');
+
+    marketStale.on = false;
+    pageBtn(1).click();
+    await tick(120);
+  });
+
+  await check('过期缓存：本地请求失败不误报 Registry 故障', async () => {
+    const pagination = () => d.querySelector('.mcp-market-page .mcp-pagination');
+    const pageBtn = (n) => pagination().querySelector(`[data-focus-key="page:${n}"]`);
+    const registryGets = () => calls.filter((c) => c.target.startsWith('/api/mcp/market?')
+      && c.target.includes('source=registry') && !c.target.includes('partial=1'));
+
+    marketStale.on = true;
+    marketStale.refreshing = true;
+    pageBtn(2).click();
+    await tick(120);
+    const before = registryGets().length;
+    /* 只让后台轮询这一发在 renderer 侧失败：本地接口故障不是 Registry 故障。 */
+    marketFail.match = (target) => target.includes('source=registry') && target.includes('page=2');
+    marketFail.throw = true;
+    await tick(2300);
+
+    assert.equal(registryGets().length - before, 1, '本地失败也只发一次轮询');
+    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+      .find((b) => b.textContent.includes('暂时无法确认后台刷新状态'));
+    assert.ok(warn, '本地请求失败不能误报成 Registry 刷新失败');
+    assert.ok(warn.textContent.includes('本地连接失败'));
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24, '失败不能清空已有列表');
+    await tick(2300);
+    assert.equal(registryGets().length - before, 1, '本地失败后必须停止轮询');
+
+    marketFail.match = () => false;
+    marketFail.throw = false;
+    marketStale.on = false;
+    pageBtn(1).click();
+    await tick(120);
+  });
+
+  await check('后台刷新缩页时焦点落到当前页而不是 body', async () => {
+    const pagination = () => d.querySelector('.mcp-market-page .mcp-pagination');
+    const pageBtn = (n) => pagination().querySelector(`[data-focus-key="page:${n}"]`);
+
+    marketStale.on = true;
+    marketStale.refreshing = true;
+    pageBtn(9).click();
+    await tick(120);
+    assert.ok(pagination().textContent.includes('第 9 / 9 页'));
+    pagination().querySelector('[data-focus-key="page:9"]').focus();
+    assert.equal(d.activeElement?.dataset.focusKey, 'page:9');
+
+    /* 新目录只剩 5 页：page:9 节点会消失，焦点应落到新的当前页。 */
+    registryPool = registryItems.slice(0, 100);
+    marketStale.on = false;
+    await tick(2300);
+
+    assert.ok(pagination().textContent.includes('第 5 / 5 页'));
+    assert.equal(d.activeElement?.dataset.focusKey, 'page:5', '焦点不能掉到 body');
+    assert.equal(d.activeElement?.getAttribute('aria-current'), 'page');
+
+    registryPool = registryItems;
+    pageBtn(1).click();
+    await tick(120);
+  });
+
+  await check('过期缓存：切换来源 / 销毁市场页会停止轮询', async () => {
+    const registryGets = () => calls.filter((c) => c.target.startsWith('/api/mcp/market?')
+      && c.target.includes('source=registry') && !c.target.includes('partial=1'));
+
+    d.querySelector('[data-focus-key="source:builtin"]').click();
+    await tick(120);
+    marketStale.on = true;
+    marketStale.refreshing = true;
+    d.querySelector('[data-focus-key="source:registry"]').click();
+    await tick(120);
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+      .some((b) => b.textContent.includes('正在后台刷新')));
+
+    const beforeSwitch = registryGets().length;
+    d.querySelector('[data-focus-key="source:builtin"]').click();
+    await tick(120);
+    await tick(2300);
+    assert.equal(registryGets().length, beforeSwitch, '切到精选后不能再轮询 Registry');
+
+    d.querySelector('[data-focus-key="source:registry"]').click();
+    await tick(120);
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+      .some((b) => b.textContent.includes('正在后台刷新')));
+    const beforeDispose = registryGets().length;
+    d.querySelector('[data-focus-key="market-back"]').click();
+    await tick(120);
+    await tick(2300);
+    assert.equal(registryGets().length, beforeDispose, '销毁市场页后不能再轮询');
+
+    marketStale.on = false;
+    clickText(page(), 'button', '市场');
+    await tick(120);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 2, '重新打开市场回到精选');
   });
 
   await check('完整目录边加载边显示，完成后换成真实总数', async () => {
