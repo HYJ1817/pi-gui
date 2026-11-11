@@ -944,6 +944,13 @@
 .mcp-category:hover { background: var(--ds-tile-hover); color: var(--ds-text-primary); }
 .mcp-category.on { background: var(--ds-bg-tertiary); border-color: var(--ds-border-subtle); color: var(--ds-text-primary); }
 
+.mcp-market-loading-note {
+  margin: 0 0 12px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .mcp-market-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

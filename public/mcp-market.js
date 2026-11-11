@@ -693,6 +693,9 @@ function createMarketPage(card, {
     loading: true,
     error: null,
     stale: null,
+    progress: null,
+    /* Registry 完整目录是否至少成功加载过一次；搜索 / 分类 reset 不能把它清掉。 */
+    catalogLoaded: false,
     sources: null,
     sourcesError: '',
     network: null,
@@ -706,6 +709,7 @@ function createMarketPage(card, {
   let disposed = false;
   let loadToken = 0;
   let searchTimer = null;
+  let progressTimer = null;
   /* 失败重试要回到刚才请求的那一页，而不是把用户扔回第 1 页。 */
   let retryPage = null;
   /* 本次 render 开始前焦点在哪个控件上；渲染中保留它可用，避免焦点丢失。 */
@@ -717,6 +721,7 @@ function createMarketPage(card, {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    stopProgressPolling();
     loadToken++;
     if (searchTimer) clearTimeout(searchTimer);
     try { onDispose?.(); } catch { /* ignore */ }
@@ -858,15 +863,58 @@ function createMarketPage(card, {
   function renderStaleNotice() {
     if (state.source !== 'registry' || !state.stale) return null;
     const wrap = node('div', 'mcp-banners');
-    const banner = node('div', 'mcp-banner is-warn');
-    banner.appendChild(icon('warning', 'mcp-icon'));
+    const refreshing = state.stale.refreshing === true && !state.stale.refreshError;
+    const banner = node('div', `mcp-banner ${refreshing ? 'is-info' : 'is-warn'}`);
+    banner.appendChild(icon(refreshing ? 'clock' : 'warning', 'mcp-icon'));
     const copy = node('div', 'mcp-banner-copy');
-    copy.appendChild(node('strong', '', 'Registry 刷新失败，正在显示上次成功加载的缓存。'));
-    const detail = marketErrorText(state.stale.refreshError);
-    if (detail) copy.appendChild(node('span', '', ` ${detail}`));
+    if (refreshing) {
+      copy.appendChild(node('strong', '', '正在后台刷新官方 Registry 目录，当前显示的是上次加载的缓存。'));
+    } else {
+      copy.appendChild(node('strong', '', 'Registry 刷新失败，正在显示上次成功加载的缓存。'));
+      const detail = marketErrorText(state.stale.refreshError);
+      if (detail) copy.appendChild(node('span', '', ` ${detail}`));
+    }
     banner.appendChild(copy);
     wrap.appendChild(banner);
     return wrap;
+  }
+
+  function loadingNoteText() {
+    const p = state.progress;
+    if (p && p.items > 0) {
+      return `正在加载官方 Registry 完整目录：已获取 ${p.items} 条（第 ${p.pages} 页）…首次加载可能需要数分钟。`;
+    }
+    return '正在加载官方 Registry 完整目录…首次加载可能需要数分钟。';
+  }
+
+  function stopProgressPolling() {
+    if (progressTimer) {
+      clearTimeout(progressTimer);
+      progressTimer = null;
+    }
+  }
+
+  async function pollProgress() {
+    progressTimer = null;
+    if (disposed || !state.loading || state.source !== 'registry') return;
+    const p = await fetchMcpMarket({ progress: 1 });
+    if (disposed || !state.loading || state.source !== 'registry') return;
+    if (p && p.ok === true) {
+      state.progress = {
+        pages: Number(p.pages) || 0,
+        items: Number(p.items) || 0,
+        active: p.active === true,
+      };
+      /* 只改进度文案，不整页重绘：用户可能正在搜索框里输入。 */
+      const note = card.querySelector('.mcp-market-loading-note');
+      if (note) note.textContent = loadingNoteText();
+    }
+    progressTimer = setTimeout(pollProgress, 2000);
+  }
+
+  function startProgressPolling() {
+    if (progressTimer || disposed) return;
+    progressTimer = setTimeout(pollProgress, 300);
   }
 
   function renderToolbar() {
@@ -915,6 +963,9 @@ function createMarketPage(card, {
     const wrap = node('div', 'mcp-market-results');
     wrap.appendChild(renderCategories());
     if (state.loading) {
+      if (state.source === 'registry' && !state.catalogLoaded) {
+        wrap.appendChild(node('p', 'mcp-market-loading-note', loadingNoteText()));
+      }
       const grid = node('div', 'mcp-market-grid');
       for (let i = 0; i < 4; i++) {
         const sk = node('div', 'mcp-market-card is-skeleton');
@@ -1136,6 +1187,7 @@ function createMarketPage(card, {
     state.loading = true;
     state.error = null;
     render();
+    if (registry && !state.catalogLoaded) startProgressPolling();
     const params = {
       source: state.source,
       q: state.q,
@@ -1154,6 +1206,8 @@ function createMarketPage(card, {
     const result = await fetchMcpMarket(params);
     if (disposed || my !== loadToken) return;
     state.loading = false;
+    state.progress = null;
+    stopProgressPolling();
     if (!result || result.ok !== true) {
       state.error = result || { error: '请求失败' };
       if (result && result.network) state.network = result.network;
@@ -1163,6 +1217,7 @@ function createMarketPage(card, {
     }
     if (result.network) state.network = result.network;
     if (registry) {
+      state.catalogLoaded = true;
       state.items = Array.isArray(result.items) ? result.items : [];
       state.total = typeof result.total === 'number' ? result.total : null;
       state.page = typeof result.page === 'number' ? result.page : params.page;
