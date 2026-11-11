@@ -103,6 +103,7 @@ import { createMcp } from './server/mcp.js';
 import { createMcpNative, buildPiEntry } from './server/mcp-native.js';
 import { createMcpConfigStore } from './server/mcp-config.js';
 import { createMcpMarket } from './server/mcp-market.js';
+import { createParentMarketNetwork } from './server/market-network.js';
 import { createMcpImporter } from './server/mcp-import.js';
 import { createMcpManager } from './server/mcp-manager.js';
 import { createPiBuiltins } from './server/pi-builtins.js';
@@ -700,10 +701,14 @@ const mcpConfigStore = createMcpConfigStore({
   env: process.env,
   readTrust: async () => (await skills.readIndex()).trust,
 });
+/* 只有 Electron 直属子进程才有这条 IPC 通道；网页版 / SEA 独立运行时为 null，
+ * 市场网络层会据此退回「没有可信代理栈」的 fail-closed 行为。 */
+const marketNetwork = createParentMarketNetwork();
 const mcpMarket = createMcpMarket({
   dataDir: DATA_DIR,
   configStore: mcpConfigStore,
   env: process.env,
+  network: marketNetwork,
 });
 const mcpImporter = createMcpImporter({
   runtime,
@@ -1425,6 +1430,7 @@ if (process.send) process.on('message', async message => {
 
 async function shutdown() {
   if(runtime.isShuttingDown())return;
+  marketNetwork?.dispose();
   providerAuth.dispose();
   providerCredentialBridge.dispose();
   void providerCredentials.dispose();

@@ -67,6 +67,10 @@ const { installAppUpdate } = require('./app-update-desktop.cjs');
 const { createProviderCredentialDesktop, registerCredentialScheme, PARTITION: CREDENTIAL_SHEET_PARTITION } = require('./provider-credentials.cjs');
 const { credentialSheetPage } = require('./provider-credential-page.cjs');
 const { desktopQualification } = require('./desktop-qualification.cjs');
+/* MCP 市场的系统代理桥。市场请求由后端 Node 进程发起，但系统代理 / PAC /
+ * SOCKS5 / TUN 只有 Chromium 网络栈知道怎么判定与连接，所以后端经私有 IPC
+ * 把「这条 URL 走哪条线路」和「代理线路上的 GET」交给这里。 */
+const { createMarketNetworkBridge } = require('./market-network.cjs');
 
 registerCredentialScheme(protocol);
 
@@ -86,6 +90,7 @@ const TOKEN_HEADER = 'X-Pi-Gui-Token';
 let win = null;
 let desktopTheme = null;
 let server = null;
+let marketNetwork = null;
 let browser = null;
 let browserAgent = null;
 let runtimeBrowserHost = null;
@@ -227,11 +232,33 @@ async function ensureServer() {
   };
   server.stdout.on('data', collect);
   server.stderr.on('data', collect);
+  /* 只把桥挂在本实例直属的子进程上：reused backend 的消息不会到这里，
+   * renderer 也拿不到这个通道。应答固定字段，代理地址与认证信息不出主进程。 */
+  try {
+    marketNetwork = createMarketNetworkBridge({
+      session: session.defaultSession,
+      log: (event, details) => mlog('electron', event, details),
+    });
+  } catch {
+    marketNetwork = null;
+    mlog('electron', 'electron.market_network_unavailable', { code: 'ATTACH_FAILED' });
+  }
+  if (marketNetwork) {
+    server.on('message', async (message) => {
+      let reply = null;
+      try { reply = await marketNetwork?.handle(message); }
+      catch { reply = { type: 'mcp-market-network-result', id: message?.id, ok: false, code: 'network' }; }
+      if (!reply || !server || server.connected !== true) return;
+      try { server.send(reply); } catch { /* child gone */ }
+    });
+  }
   server.on('exit', (code, signal) => {
     const expected = quitting;
     mlog('electron', expected ? 'electron.backend_exited' : 'electron.backend_crashed', expected
       ? { expected: true, exitCode: Number.isFinite(code) ? code : undefined, durationMs: serverStartedAt ? Date.now() - serverStartedAt : undefined }
       : { exitCode: Number.isFinite(code) ? code : undefined, signal: signal ? String(signal) : undefined, durationMs: serverStartedAt ? Date.now() - serverStartedAt : undefined });
+    marketNetwork?.dispose();
+    marketNetwork = null;
     server = null;
     // A dead backend cannot own a Browser scope. Revoke its private gateways
     // even while the desktop window remains open to show the failure.
@@ -363,6 +390,8 @@ function installOpenExternalHandler() {
 
 /** 连同 pi 子进程一起收掉。只 kill 父进程会把 pi 留成孤儿。 */
 function killServer() {
+  marketNetwork?.dispose();
+  marketNetwork = null;
   if (!server || server.exitCode !== null) return;
   const pid = server.pid;
   try {

@@ -40,6 +40,12 @@ function marketErrorText(result) {
   if (!result) return '请求失败（没有响应）';
   const code = result.code ? `（${result.code}）` : '';
   if (result.code === 'proxy-blocked') return `${result.error || '代理网络无法确认实际连接地址，市场请求已拒绝。'}${code}`;
+  if (result.code === 'proxy-unsupported') return `${result.error || '当前运行方式没有可信的代理网络栈，市场请求已拒绝。'}${code}`;
+  if (result.code === 'proxy-unreachable') return `${result.error || '无法连接系统代理。'}${code}`;
+  if (result.code === 'proxy-auth-required') return `${result.error || '系统代理要求认证。'}${code}`;
+  if (result.code === 'tls-failed') return `${result.error || 'HTTPS 证书校验失败，已拒绝连接。'}${code}`;
+  if (result.code === 'dns-failed') return `${result.error || '无法解析市场源域名。'}${code}`;
+  if (result.code === 'network') return `${result.error || '无法连接市场源。'}${code}`;
   if (result.code === 'redirect-blocked') return `${result.error || '市场源返回重定向，已拒绝跟随。'}${code}`;
   if (result.code === 'unsupported') return `${result.error || '这个条目无法安全转换成 Pi 配置。'}${code}`;
   if (result.error) return `${result.error}${code}`;
@@ -655,6 +661,7 @@ function createMarketPage(card, {
     error: null,
     sources: null,
     sourcesError: '',
+    network: null,
     configuredNames: new Set(configuredNames),
     installedNames: new Set(),
     onRevisions,
@@ -709,6 +716,8 @@ function createMarketPage(card, {
     card.appendChild(page);
     page.appendChild(renderHeader());
     page.appendChild(renderSourceBar());
+    const networkNotice = renderNetworkNotice();
+    if (networkNotice) page.appendChild(networkNotice);
     page.appendChild(renderToolbar());
     page.appendChild(renderResults());
     restoreFocus(focus);
@@ -774,6 +783,33 @@ function createMarketPage(card, {
     }
     if (state.sources?.error) bar.appendChild(node('span', 'mcp-source-error', '来源列表读取失败'));
     return bar;
+  }
+
+  /* 代理线路说明：只解释「这条线路由谁负责连接与 DNS」，不改变页面结构。
+   * 代理模式下应用无法声称最终连接地址已通过固定 IP 校验，这一点必须
+   * 对用户可见，而不是藏在日志里。 */
+  function renderNetworkNotice() {
+    const network = state.network;
+    if (!network || state.source === 'builtin') return null;
+    if (network.route === 'proxied') {
+      const wrap = node('div', 'mcp-banners');
+      const banner = node('div', 'mcp-banner is-info');
+      banner.appendChild(icon('globe', 'mcp-icon'));
+      banner.appendChild(node('div', 'mcp-banner-copy',
+        '当前通过系统代理访问市场源：域名由代理侧解析并连接，实际连接地址不由本应用固定校验；目标 URL、HTTPS 证书与响应格式仍会校验。'));
+      wrap.appendChild(banner);
+      return wrap;
+    }
+    if (network.route === 'unknown') {
+      const wrap = node('div', 'mcp-banners');
+      const banner = node('div', 'mcp-banner is-warn');
+      banner.appendChild(icon('warning', 'mcp-icon'));
+      banner.appendChild(node('div', 'mcp-banner-copy',
+        '无法确认系统代理线路，已按直连的严格地址校验处理；解析到 fake-IP 或内网地址的请求会被拒绝。'));
+      wrap.appendChild(banner);
+      return wrap;
+    }
+    return null;
   }
 
   function renderToolbar() {
@@ -993,10 +1029,12 @@ function createMarketPage(card, {
     state.loading = false;
     if (!result || result.ok !== true) {
       state.error = result || { error: '请求失败' };
+      if (result && result.network) state.network = result.network;
       if (result && result.items) state.items = result.items;
       render();
       return;
     }
+    if (result.network) state.network = result.network;
     state.items = reset ? (result.items || []) : [...state.items, ...(result.items || [])];
     state.total = typeof result.total === 'number' ? result.total : null;
     state.hasMore = result.hasMore === true;
