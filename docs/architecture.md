@@ -398,9 +398,10 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
      绑定的**那份 pi 包、给出「支不支持」的结论与原文证据，并列出官方替代路径
      extension 下已有哪些东西。**只读名字，不读内容、不执行**。
      原生摘要只读 `mcp-native` 的缓存视图（同步、不 spawn）
-   - `mcp-market.js` — 内置离线目录 + 官方 Registry + 受控第三方源；市场请求
-     按线路分流：直连固定已校验 IP，代理线路交给 Electron 主进程的 Chromium
-     网络栈。`lib/market-network-policy.cjs` 是两侧共用的地址 / 线路判定。
+   - `mcp-market.js` — 内置离线目录 + 官方 Registry 完整目录（cursor 全量拉取、
+     按 server name 去重、latest 版本、本地搜索 / 分类 / 分页 / 缓存）+ 受控第三方源；
+     市场请求按线路分流：直连固定已校验 IP，代理线路交给 Electron 主进程的
+     Chromium 网络栈。`lib/market-network-policy.cjs` 是两侧共用的地址 / 线路判定。
      见 [mcp.md](mcp.md)
    - `market-network.js` — 后端侧的私有 IPC 客户端（仅 Electron 直属子进程
      存在）；只发 URL / 上限，不带 method / headers / 代理凭据

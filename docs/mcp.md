@@ -322,10 +322,18 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
 ## 市场与外部导入的额外边界
 
 - 内置目录完全离线；官方 Registry 失败时保留内置目录并给出明确错误码；
+- **官方 Registry 完整目录**：按 `metadata.nextCursor` 逐页读取（`version=latest`、
+  每页 100 条），按 server name 去重并优先 `isLatest`。`metadata.count` 只是当前页
+  数量，总数必须由合并、去重后的完整目录计算。完整目录缓存 5 分钟，分页 / 搜索 /
+  分类都切缓存，翻页不重新请求 Registry；并发首次加载共享同一个 Promise。刷新失败
+  继续返回上次成功缓存（`stale:true` + `refreshError`，30 秒退避），重复 / 非法
+  游标与中途分页失败明确报错，且不缓存半份目录。市场页 Registry 默认每页 24 条，
+  页码导航只在 Registry 出现；精选与第三方源保持原有“加载更多”。
 - Registry / 第三方源只允许 **HTTPS + 443**，拒绝**本机 / 内网 IP 字面量**（含
   IPv4-mapped IPv6、NAT64、6to4 里嵌的内网地址）、本机 / 内网 DNS、重定向、
   非 JSON content-type、超大响应；公网 IP 字面量允许，但证书仍按 IP SAN 校验；
-  8s 超时；第三方源条目里的 HTTP 地址也按同一套规则检查；
+  单页 8s 超时，完整 Registry 目录总时限 60s；第三方源条目里的 HTTP 地址也按
+  同一套规则检查；
 - **市场网络按线路分流**（`lib/market-network-policy.cjs` 是后端 / Electron
   主进程 / 测试共用的唯一策略）：
   - `direct`：**只有明确解析为 `DIRECT`** 才进入这条。Node 解析一次并把已校验
@@ -458,10 +466,10 @@ CLI 实际只产两个」）。
 npm run test:mcp
 # tests/mcp-config.cjs     44 条（配置读写 / 原子写 / 备份 / trust / override / 保留上游键 / args 凭据 / cwd / 父链接 / revision / 保留键 / auth 覆盖 / keepUrl）
 # tests/mcp-manager.cjs    24 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配 / transportType / 超大请求体）
-# tests/mcp-market.cjs     48 条（内置目录 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 直连与代理线路 / unknown 失败关闭 / 环境变量代理冲突 / fake-IP / NO_PROXY / 重定向 / 非法状态码 / 覆盖安装凭据）
+# tests/mcp-market.cjs     57 条（内置目录 / Registry 完整目录与游标分页 / 去重与 latest / 搜索分类本地筛选 / 缓存并发与失败保留 / 页码与每页大小边界 / 页数 / 条数 / 总时限守卫 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 直连与代理线路 / unknown 失败关闭 / 环境变量代理冲突 / fake-IP / NO_PROXY / 重定向 / 非法状态码 / 覆盖安装凭据）
 # tests/mcp-market-network.cjs 19 条（代理线路分类 / 地址分类 / 主进程代理桥 / 后端 IPC 客户端 / 凭据脱敏）
 # tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
-# tests/mcp-management-ui.cjs 23 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
+# tests/mcp-management-ui.cjs 24 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场分页与筛选重置 / 搜索竞态 / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
 # tests/mcp-native.cjs     202 条（Pi 契约 / 运行时投影 / 状态机 / 缓存）
 ```
 

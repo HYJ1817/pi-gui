@@ -26,13 +26,24 @@ import {
   isAcceptableResolvedAddress, isFakeIpAddress, isPrivateIp,
 } from '../lib/market-network-policy.cjs';
 
-const REGISTRY_BASE = 'https://registry.modelcontextprotocol.io/v0/servers';
+/* 官方现行文档的列表端点是 /v0.1/servers（旧 /v0 当前仍作为兼容别名返回
+ * 同一份数据）。完整目录靠 metadata.nextCursor 逐页读取，单页 limit 上限
+ * 为 100；超限时上游返回 422，所以这里不把上限交给调用方猜。 */
+const REGISTRY_BASE = 'https://registry.modelcontextprotocol.io/v0.1/servers';
 const SOURCES_FILE = 'mcp-market-sources.json';
 const CACHE_TTL_MS = 5 * 60_000;
 const FETCH_TIMEOUT_MS = 8_000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_SOURCES = 10;
-const MAX_REGISTRY_ENTRIES = 50;
+const REGISTRY_PAGE_LIMIT = 100;
+const REGISTRY_DEFAULT_PAGE_SIZE = 24;
+const REGISTRY_MAX_PAGE_SIZE = 100;
+/* 防止上游异常游标把进程拖进无限翻页。当前完整目录约 1100 条 / 11 页，
+ * 这些上限只用来兜底；触发时明确报错，不缓存半份目录。 */
+const REGISTRY_MAX_PAGES = 200;
+const REGISTRY_MAX_ENTRIES = 20_000;
+const REGISTRY_CATALOG_TIMEOUT_MS = 60_000;
+const REGISTRY_STALE_RETRY_MS = 30_000;
 const CATEGORIES = ['全部', '开发工具', '网络', '文档', '数据', '效率'];
 const NPM_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i;
 const PYPI_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -947,10 +958,21 @@ function guessCategory(text) {
 
 /* ---------------- Registry 适配 ---------------- */
 
-function registryQueryUrl({ q, cursor, limit }) {
+function registryQueryUrl({ q, cursor, limit, version }) {
   const u = new URL(REGISTRY_BASE);
   if (q) u.searchParams.set('search', q.slice(0, 120));
-  u.searchParams.set('limit', String(Math.min(50, Math.max(1, Number(limit) || 20))));
+  if (version) u.searchParams.set('version', String(version).slice(0, 200));
+  u.searchParams.set('limit', String(Math.min(REGISTRY_PAGE_LIMIT, Math.max(1, Number(limit) || 20))));
+  if (cursor) u.searchParams.set('cursor', String(cursor).slice(0, 500));
+  return u.toString();
+}
+
+/* 完整目录只拉每个 server 的最新版本。不能把 `metadata.count` 当总数 ——
+ * 它是**当前页**数量；总数必须在全部页合并、按 server name 去重后自己算。 */
+function registryCatalogUrl({ cursor, limit = REGISTRY_PAGE_LIMIT } = {}) {
+  const u = new URL(REGISTRY_BASE);
+  u.searchParams.set('version', 'latest');
+  u.searchParams.set('limit', String(Math.min(REGISTRY_PAGE_LIMIT, Math.max(1, Number(limit) || REGISTRY_PAGE_LIMIT))));
   if (cursor) u.searchParams.set('cursor', String(cursor).slice(0, 500));
   return u.toString();
 }
@@ -1936,6 +1958,12 @@ export function createMcpMarket({
   now = () => Date.now(),
 } = {}) {
   const cache = new Map();
+  /* 完整 Registry 目录（已去重、只含 latest）。`cache` 仍只管第三方源；
+   * 这里单独保留 at / 上次成功结果，刷新失败时可以继续服务旧目录。 */
+  let registryCatalog = null;
+  let registryCatalogPromise = null;
+  let registryRetryAt = 0;
+  let registryLastError = null;
   const sourcesFile = path.join(dataDir, SOURCES_FILE);
 
   function cacheGet(key) {
@@ -2000,44 +2028,173 @@ export function createMcpMarket({
     };
   }
 
-  async function registryList({ q = '', category = '全部', cursor = '', limit = 20 } = {}) {
-    const cat = CATEGORIES.includes(category) ? category : '全部';
-    const key = `registry:${q}:${cat}:${cursor}:${limit}`;
-    const cached = cacheGet(key);
-    if (cached) return { ...cached, cached: true };
-    const byIdentifier = new Map();
-    let pageCursor = cursor;
-    let nextCursor = null;
+  function preferRegistryItem(current, next) {
+    if (!current) return next;
+    if (current.isLatest !== next.isLatest) return next.isLatest ? next : current;
+    /* version=latest 理论上每个 name 只出现一次；这里仍按 isLatest 收敛，
+     * 避免上游忽略筛选时把历史版本重复塞进完整目录。 */
+    return current;
+  }
+
+  /**
+   * 按 cursor 拉完整 Registry 目录。任何一页失败都不返回半份数据：
+   * 调用方要么拿到完整目录，要么拿到明确错误（旧缓存由调用方保留）。
+   */
+  async function fetchRegistryCatalog() {
+    const byName = new Map();
+    const seenCursors = new Set();
+    let cursor = '';
+    let pages = 0;
     let lastNetwork = null;
-    /* Registry 的分类是我们从名称 / 描述推出来的，服务端没有 category 参数。
-     * 只取当前页会在“第一页全是别的分类”时显示空分类；最多再追两页，
-     * 找到匹配条目就停，避免为了一个筛选把 Registry 翻个底朝天。 */
-    for (let page = 0; page < 3; page += 1) {
-      const fetched = await fetchJson(registryQueryUrl({ q, cursor: pageCursor, limit }), {
+    const deadline = now() + REGISTRY_CATALOG_TIMEOUT_MS;
+    for (;;) {
+      /* 60s 是整份目录的总时限，不只是“两页之间的检查点”：把剩余时间
+       * 传给单页请求，避免最后一页在 deadline 前 1ms 起步再跑 8s。 */
+      const remaining = deadline - now();
+      if (remaining <= 0) {
+        return { ...codeError('timeout', '完整加载 Registry 目录超时'), items: [], pages, network: lastNetwork };
+      }
+      const fetched = await fetchJson(registryCatalogUrl({ cursor }), {
         requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp,
+        timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, remaining)),
       });
-      if (!fetched.ok) return { ...fetched, items: [] };
+      if (!fetched.ok) return { ...fetched, items: [], pages };
       lastNetwork = fetched.network || lastNetwork;
       const data = fetched.data;
-      if (!isRecord(data) || !Array.isArray(data.servers)) return { ...codeError('invalid-response', 'Registry 响应缺少 servers 数组'), items: [] };
-      for (const row of data.servers.slice(0, MAX_REGISTRY_ENTRIES)) {
+      if (!isRecord(data) || !Array.isArray(data.servers)) {
+        return { ...codeError('invalid-response', 'Registry 响应缺少 servers 数组'), items: [], pages, network: lastNetwork };
+      }
+      pages += 1;
+      let shapedRows = 0;
+      for (const row of data.servers) {
+        if (isRecord(row) && isRecord(row.server)) shapedRows += 1;
         const item = normalizeRegistryEntry(row);
         if (!item) continue;
-        const prev = byIdentifier.get(item.identifier);
-        if (!prev || (!prev.isLatest && item.isLatest)) byIdentifier.set(item.identifier, item);
+        byName.set(item.identifier, preferRegistryItem(byName.get(item.identifier), item));
       }
-      nextCursor = isRecord(data.metadata) && typeof data.metadata.nextCursor === 'string' ? data.metadata.nextCursor : null;
-      pageCursor = nextCursor;
-      if (cat === '全部' || !pageCursor) break;
-      if ([...byIdentifier.values()].some((item) => item.category === cat)) break;
+      /* 非空页却没有任何 {server} 形状：多半是上游改了外层结构。
+       * 不能把它当成“合法空目录”缓存 5 分钟，否则整页市场静默变空。 */
+      if (data.servers.length > 0 && shapedRows === 0) {
+        return {
+          ...codeError('invalid-response', 'Registry 返回的 servers 条目缺少 server 对象'),
+          items: [], pages, network: lastNetwork,
+        };
+      }
+      if (byName.size > REGISTRY_MAX_ENTRIES) {
+        return {
+          ...codeError('registry-too-large', `Registry 目录超过 ${REGISTRY_MAX_ENTRIES} 条，已停止加载`),
+          items: [], pages, network: lastNetwork,
+        };
+      }
+      const metadata = isRecord(data.metadata) ? data.metadata : {};
+      const next = metadata.nextCursor;
+      if (next === undefined || next === null) break;
+      if (typeof next !== 'string') {
+        return { ...codeError('invalid-response', 'Registry 分页游标不是字符串'), items: [], pages, network: lastNetwork };
+      }
+      if (!next.trim()) break;
+      if (next === cursor || seenCursors.has(next)) {
+        return { ...codeError('registry-cursor-loop', 'Registry 分页游标重复；已停止加载'), items: [], pages, network: lastNetwork };
+      }
+      if (pages >= REGISTRY_MAX_PAGES) {
+        return {
+          ...codeError('registry-too-large', `Registry 目录超过 ${REGISTRY_MAX_PAGES} 页，已停止加载`),
+          items: [], pages, network: lastNetwork,
+        };
+      }
+      seenCursors.add(next);
+      cursor = next;
     }
-    const items = [...byIdentifier.values()].filter((item) => cat === '全部' || item.category === cat);
-    const out = {
-      ok: true, source: 'registry', items, total: null, hasMore: Boolean(nextCursor), nextCursor,
-      categories: CATEGORIES, network: lastNetwork,
+    return { ok: true, items: [...byName.values()], pages, network: lastNetwork };
+  }
+
+  async function ensureRegistryCatalog() {
+    if (registryCatalog && now() - registryCatalog.at <= CACHE_TTL_MS) {
+      return { ok: true, catalog: registryCatalog, cached: true, stale: false };
+    }
+    if (registryCatalogPromise) return registryCatalogPromise;
+    if (registryCatalog && now() < registryRetryAt) {
+      return {
+        ok: true, catalog: registryCatalog, cached: true, stale: true,
+        refreshError: registryLastError,
+      };
+    }
+    registryCatalogPromise = (async () => {
+      try {
+        const loaded = await fetchRegistryCatalog();
+        if (!loaded.ok) {
+          registryLastError = loaded;
+          if (registryCatalog) {
+            registryRetryAt = now() + REGISTRY_STALE_RETRY_MS;
+            return { ok: true, catalog: registryCatalog, cached: true, stale: true, refreshError: loaded };
+          }
+          return { ...loaded, catalog: null };
+        }
+        registryCatalog = {
+          at: now(), items: loaded.items, network: loaded.network, pages: loaded.pages,
+        };
+        registryLastError = null;
+        registryRetryAt = 0;
+        return { ok: true, catalog: registryCatalog, cached: false, stale: false };
+      } finally {
+        registryCatalogPromise = null;
+      }
+    })();
+    return registryCatalogPromise;
+  }
+
+  /**
+   * Registry 列表完全基于缓存目录做本地搜索 / 分类 / 分页。
+   * 不用上游 search：官方要求至少 3 个 Unicode 字符，短词会直接 422；
+   * 分页也只切缓存，不会因为翻页重新抓一遍完整 Registry。
+   */
+  async function registryList({
+    q = '', category = '全部', page, pageSize, limit, offset,
+  } = {}) {
+    const ensured = await ensureRegistryCatalog();
+    if (!ensured.ok) return { ...ensured, items: [] };
+    const cat = CATEGORIES.includes(category) ? category : '全部';
+    const query = String(q || '').trim().toLowerCase();
+    /* 空串 / 0 / 非数字都按“没传”处理，回落到默认 24；合法值再夹到 1..100。 */
+    const rawSize = pageSize !== undefined ? pageSize : limit;
+    const requestedSize = rawSize === '' || rawSize === null ? NaN : Number(rawSize);
+    const size = Number.isFinite(requestedSize) && requestedSize > 0
+      ? Math.min(REGISTRY_MAX_PAGE_SIZE, Math.max(1, Math.floor(requestedSize)))
+      : REGISTRY_DEFAULT_PAGE_SIZE;
+    const all = ensured.catalog.items.filter((item) => {
+      if (cat !== '全部' && item.category !== cat) return false;
+      if (!query) return true;
+      return `${item.name} ${item.identifier} ${item.description}`.toLowerCase().includes(query);
+    });
+    const total = all.length;
+    const totalPages = total ? Math.ceil(total / size) : 0;
+    const requestedPage = Number(page);
+    let currentPage = Number.isFinite(requestedPage) && requestedPage >= 1
+      ? Math.floor(requestedPage) : 0;
+    if (!currentPage) {
+      const requestedOffset = Number(offset);
+      currentPage = Number.isFinite(requestedOffset) && requestedOffset > 0
+        ? Math.floor(requestedOffset / size) + 1 : 1;
+    }
+    currentPage = totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
+    const start = (currentPage - 1) * size;
+    return {
+      ok: true,
+      source: 'registry',
+      items: all.slice(start, start + size),
+      total,
+      page: currentPage,
+      pageSize: size,
+      totalPages,
+      hasMore: currentPage < totalPages,
+      nextCursor: null,
+      categories: CATEGORIES,
+      network: ensured.catalog.network,
+      cached: ensured.cached === true,
+      catalogPages: ensured.catalog.pages,
+      ...(ensured.stale ? { stale: true } : {}),
+      ...(ensured.refreshError ? { refreshError: ensured.refreshError } : {}),
     };
-    cacheSet(key, out);
-    return out;
   }
 
   async function loadCustomSource(source) {
@@ -2117,7 +2274,9 @@ export function createMcpMarket({
     if (!isRecord(decoded) || typeof decoded.name !== 'string' || typeof decoded.version !== 'string') {
       return codeError('bad-id', 'Registry 条目 ID 不合法');
     }
-    const fetched = await fetchJson(registryQueryUrl({ q: decoded.name, limit: 50 }), {
+    const fetched = await fetchJson(registryQueryUrl({
+      q: decoded.name, version: decoded.version, limit: REGISTRY_PAGE_LIMIT,
+    }), {
       requestImpl, proxiedRequestImpl, lookupImpl, env, network, allowFakeIp,
     });
     if (!fetched.ok) return fetched;
@@ -2332,6 +2491,8 @@ export function createMcpMarket({
       probeDependencies,
       fetchJson,
       builtinItems,
+      registryCatalogUrl,
+      registryQueryUrl,
       analyzeRegistryServer,
       buildRegistryConfig,
       pinnedRequestOptions,

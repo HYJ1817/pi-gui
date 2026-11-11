@@ -2,7 +2,8 @@
  *
  * 数据来源有三类：
  *   - 内置精选：随应用离线可用，服务端只接受 catalogId，命令模板由目录决定；
- *   - 官方 MCP Registry：真实 HTTPS 查询 + cursor 分页，失败时明确报错；
+ *   - 官方 MCP Registry：真实 HTTPS 查询完整目录（cursor 全量拉取），
+ *     服务端缓存后本地搜索 / 分类 / 分页，失败时明确报错并保留旧缓存；
  *   - 第三方市场源：用户添加的 HTTPS JSON 源，服务端校验后才持久化。
  *
  * 安装只发送 source / catalogId / scope / values，**从不发送 command 或 URL**。
@@ -19,6 +20,35 @@ import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 
 const DEFAULT_CATEGORIES = ['全部', '开发工具', '网络', '文档', '数据', '效率'];
+const REGISTRY_PAGE_SIZE = 24;
+const PAGE_ELLIPSIS = '…';
+
+/**
+ * 页码窗口：总页数较少时全部显示；较多时保留首页、末页与当前页附近。
+ * 返回值里的 `PAGE_ELLIPSIS` 由渲染层画成不可点击的省略号。
+ */
+function paginationWindow(current, totalPages) {
+  const total = Math.max(0, Math.floor(Number(totalPages) || 0));
+  const page = Math.min(Math.max(1, Math.floor(Number(current) || 1)), Math.max(1, total));
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const wanted = new Set([1, total, page - 1, page, page + 1]);
+  const pages = [...wanted].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+  const out = [];
+  for (const p of pages) {
+    if (out.length) {
+      const prev = out[out.length - 1];
+      if (typeof prev === 'number' && p - prev > 1) out.push(PAGE_ELLIPSIS);
+    }
+    out.push(p);
+  }
+  return out;
+}
+
+function scrollMarketToTop(card) {
+  const host = card.closest?.('.settings-detail') || card.closest?.('.work-surface');
+  if (host) host.scrollTop = 0;
+  try { card.scrollIntoView?.({ block: 'start' }); } catch { /* 非浏览器环境 */ }
+}
 
 const TRUST_META = {
   official: { label: '官方', tone: 'ok', title: '来自官方仓库或官方端点' },
@@ -655,10 +685,14 @@ function createMarketPage(card, {
     category: '全部',
     items: [],
     total: null,
+    totalPages: 0,
+    page: 1,
+    pageSize: REGISTRY_PAGE_SIZE,
     hasMore: false,
     nextCursor: null,
     loading: true,
     error: null,
+    stale: null,
     sources: null,
     sourcesError: '',
     network: null,
@@ -672,6 +706,10 @@ function createMarketPage(card, {
   let disposed = false;
   let loadToken = 0;
   let searchTimer = null;
+  /* 失败重试要回到刚才请求的那一页，而不是把用户扔回第 1 页。 */
+  let retryPage = null;
+  /* 本次 render 开始前焦点在哪个控件上；渲染中保留它可用，避免焦点丢失。 */
+  let renderFocusKey = null;
   projectWorkSurface('settings', { navigation: 'navMcp', title: 'MCP 市场' });
 
   const configured = () => state.configuredNames;
@@ -711,6 +749,7 @@ function createMarketPage(card, {
     if (disposed) return;
     state.render = render;
     const focus = captureFocus();
+    renderFocusKey = focus?.key || null;
     card.replaceChildren();
     const page = node('div', 'mcp-market-inner');
     card.appendChild(page);
@@ -718,6 +757,8 @@ function createMarketPage(card, {
     page.appendChild(renderSourceBar());
     const networkNotice = renderNetworkNotice();
     if (networkNotice) page.appendChild(networkNotice);
+    const staleNotice = renderStaleNotice();
+    if (staleNotice) page.appendChild(staleNotice);
     page.appendChild(renderToolbar());
     page.appendChild(renderResults());
     restoreFocus(focus);
@@ -812,6 +853,22 @@ function createMarketPage(card, {
     return null;
   }
 
+  /* 完整目录刷新失败时，服务端会继续返回上一次成功缓存。这里把
+   * “看到的是旧数据”明确告诉用户，而不是假装刚刷新成功。 */
+  function renderStaleNotice() {
+    if (state.source !== 'registry' || !state.stale) return null;
+    const wrap = node('div', 'mcp-banners');
+    const banner = node('div', 'mcp-banner is-warn');
+    banner.appendChild(icon('warning', 'mcp-icon'));
+    const copy = node('div', 'mcp-banner-copy');
+    copy.appendChild(node('strong', '', 'Registry 刷新失败，正在显示上次成功加载的缓存。'));
+    const detail = marketErrorText(state.stale.refreshError);
+    if (detail) copy.appendChild(node('span', '', ` ${detail}`));
+    banner.appendChild(copy);
+    wrap.appendChild(banner);
+    return wrap;
+  }
+
   function renderToolbar() {
     const bar = node('div', 'mcp-market-toolbar');
     const search = node('label', 'mcp-search');
@@ -867,6 +924,9 @@ function createMarketPage(card, {
         grid.appendChild(sk);
       }
       wrap.appendChild(grid);
+      if (state.source === 'registry' && state.totalPages > 0) {
+        wrap.appendChild(renderPagination({ loading: true }));
+      }
       return wrap;
     }
     if (state.error) {
@@ -886,7 +946,10 @@ function createMarketPage(card, {
         acts.appendChild(fallback);
       }
       const retry = button('btn', '重试');
-      retry.onclick = () => loadListNow();
+      retry.onclick = () => {
+        if (state.source === 'registry' && Number.isFinite(retryPage)) loadList({ page: retryPage });
+        else loadListNow();
+      };
       acts.appendChild(retry);
       box.appendChild(acts);
       wrap.appendChild(box);
@@ -906,7 +969,10 @@ function createMarketPage(card, {
     const grid = node('div', 'mcp-market-grid');
     for (const item of state.items) grid.appendChild(renderCard(item));
     wrap.appendChild(grid);
-    if (state.hasMore) {
+    if (state.source === 'registry') {
+      /* 精选 / 第三方源保持原来的“加载更多”；Registry 用底部页码导航。 */
+      if (state.totalPages > 0) wrap.appendChild(renderPagination());
+    } else if (state.hasMore) {
       const more = button('btn primary mcp-load-more', '加载更多');
       more.dataset.focusKey = 'load-more';
       more.onclick = () => loadList({ reset: false });
@@ -915,6 +981,56 @@ function createMarketPage(card, {
       wrap.appendChild(node('p', 'mcp-market-end', '已经到底了'));
     }
     return wrap;
+  }
+
+  function renderPagination({ loading = false } = {}) {
+    const nav = node('nav', 'mcp-pagination');
+    nav.setAttribute('aria-label', 'Registry 分页');
+    const busy = loading || state.loading;
+    /* 加载中禁用翻页按钮，但保留用户刚操作的那一个：否则焦点会掉到
+     * body，键盘用户每次翻页都得从页首重新 Tab。 */
+    const busyUnlessFocused = (key) => busy && renderFocusKey !== key;
+    const prev = button('mcp-page-btn mcp-page-nav', '上一页');
+    prev.dataset.focusKey = 'page:prev';
+    prev.disabled = busyUnlessFocused('page:prev') || state.page <= 1;
+    prev.onclick = () => goToPage(state.page - 1);
+    nav.appendChild(prev);
+    for (const entry of paginationWindow(state.page, state.totalPages)) {
+      if (entry === PAGE_ELLIPSIS) {
+        const gap = node('span', 'mcp-page-ellipsis', PAGE_ELLIPSIS);
+        gap.setAttribute('aria-hidden', 'true');
+        nav.appendChild(gap);
+        continue;
+      }
+      const on = entry === state.page;
+      const b = button('mcp-page-btn' + (on ? ' on' : ''), String(entry));
+      b.dataset.focusKey = `page:${entry}`;
+      b.setAttribute('aria-label', `第 ${entry} 页`);
+      if (on) b.setAttribute('aria-current', 'page');
+      b.disabled = busyUnlessFocused(`page:${entry}`);
+      b.onclick = () => { if (!on) goToPage(entry); };
+      nav.appendChild(b);
+    }
+    const next = button('mcp-page-btn mcp-page-nav', '下一页');
+    next.dataset.focusKey = 'page:next';
+    next.disabled = busyUnlessFocused('page:next') || state.page >= state.totalPages;
+    next.onclick = () => goToPage(state.page + 1);
+    nav.appendChild(next);
+    nav.appendChild(node(
+      'span',
+      'mcp-pagination-summary',
+      `第 ${state.page} / ${state.totalPages} 页 · 共 ${state.total} 条`,
+    ));
+    return nav;
+  }
+
+  async function goToPage(target) {
+    if (disposed || state.loading) return;
+    const page = Math.trunc(Number(target));
+    if (!Number.isFinite(page) || page < 1 || page > state.totalPages || page === state.page) return;
+    state.page = page;
+    scrollMarketToTop(card);
+    await loadList({ page });
   }
 
   function renderCard(item) {
@@ -1005,13 +1121,17 @@ function createMarketPage(card, {
     return loadList({ reset: true });
   }
 
-  async function loadList({ reset = false } = {}) {
+  async function loadList({ reset = false, page = null } = {}) {
     const my = ++loadToken;
+    const registry = state.source === 'registry';
     if (reset) {
       state.items = [];
       state.total = null;
+      state.totalPages = 0;
       state.hasMore = false;
       state.nextCursor = null;
+      state.stale = null;
+      if (registry) state.page = 1;
     }
     state.loading = true;
     state.error = null;
@@ -1020,25 +1140,46 @@ function createMarketPage(card, {
       source: state.source,
       q: state.q,
       category: state.category,
-      limit: 12,
     };
-    if (!reset && state.source === 'registry' && state.nextCursor) params.cursor = state.nextCursor;
-    else if (!reset) params.offset = state.items.length;
+    if (registry) {
+      /* Registry 的完整目录由服务端缓存；这里只请求目标页，不传 cursor。 */
+      params.page = page === null || page === undefined ? state.page : page;
+      params.pageSize = state.pageSize;
+      retryPage = params.page;
+    } else {
+      params.limit = 12;
+      if (!reset) params.offset = state.items.length;
+      retryPage = null;
+    }
     const result = await fetchMcpMarket(params);
     if (disposed || my !== loadToken) return;
     state.loading = false;
     if (!result || result.ok !== true) {
       state.error = result || { error: '请求失败' };
       if (result && result.network) state.network = result.network;
-      if (result && result.items) state.items = result.items;
+      if (result && Array.isArray(result.items)) state.items = result.items;
       render();
       return;
     }
     if (result.network) state.network = result.network;
-    state.items = reset ? (result.items || []) : [...state.items, ...(result.items || [])];
-    state.total = typeof result.total === 'number' ? result.total : null;
-    state.hasMore = result.hasMore === true;
-    state.nextCursor = result.nextCursor || null;
+    if (registry) {
+      state.items = Array.isArray(result.items) ? result.items : [];
+      state.total = typeof result.total === 'number' ? result.total : null;
+      state.page = typeof result.page === 'number' ? result.page : params.page;
+      state.pageSize = typeof result.pageSize === 'number' ? result.pageSize : state.pageSize;
+      state.totalPages = typeof result.totalPages === 'number'
+        ? result.totalPages
+        : (state.total ? Math.ceil(state.total / state.pageSize) : 0);
+      state.hasMore = result.hasMore === true;
+      state.nextCursor = null;
+      state.stale = result.stale === true ? result : null;
+    } else {
+      state.items = reset ? (result.items || []) : [...state.items, ...(result.items || [])];
+      state.total = typeof result.total === 'number' ? result.total : null;
+      state.hasMore = result.hasMore === true;
+      state.nextCursor = result.nextCursor || null;
+      state.stale = null;
+    }
     if (result.categories?.length) state.categories = result.categories;
     if (result.sources && result.sources.ok !== false) state.sources = result.sources;
     render();
