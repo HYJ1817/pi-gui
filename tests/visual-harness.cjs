@@ -27,6 +27,8 @@ const marketProxyMode = process.env.MCP_MARKET_PROXY === '1';
  * page / pageSize 语义切片，用于截取分页导航的排版。 */
 const marketPaginationMode = process.env.MCP_MARKET_PAGINATION === '1';
 const marketProgressMode = process.env.MCP_MARKET_PROGRESS === '1';
+/* 边加载边显示的夹具：第一次 partial 请求返回快照，之后模拟完整目录到手。 */
+let marketPartialServed = false;
 let uxSwitchCount = 0;
 const uxWarnings = [
   { type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: 'memory_search requires qmd historical warning', _replay: true },
@@ -1202,8 +1204,6 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (marketPaginationMode && params.source === 'registry') {
-      /* 只用于加载进度截图：把完整目录响应拖慢，让前端有机会显示进度文案。 */
-      if (marketProgressMode) await new Promise((resolve) => setTimeout(resolve, 2500));
       const base = await fixture.list({ source: 'builtin', limit: 1 });
       const all = Array.from({ length: 209 }, (_, i) => {
         const index = String(i).padStart(3, '0');
@@ -1222,6 +1222,25 @@ const server = http.createServer(async (req, res) => {
         return !q || `${item.name} ${item.identifier} ${item.description}`.toLowerCase().includes(q);
       });
       const pageSize = Math.max(1, Number(params.pageSize || 24));
+      /* 边加载边显示截图：先只返回前 144 条（6 页），不拖慢；等前端轮询
+       * 到下一次（非 partial）时再拖 2.5s 返回完整 209 条。 */
+      if (marketProgressMode && params.partial === '1' && !marketPartialServed) {
+        marketPartialServed = true;
+        const loaded = all.slice(0, 144);
+        const loadedPages = Math.ceil(loaded.length / pageSize);
+        const page = loadedPages ? Math.min(Math.max(1, Number(params.page || 1)), loadedPages) : 1;
+        const start = (page - 1) * pageSize;
+        return json(res, 200, {
+          ok: true, source: 'registry', partial: true, loading: true,
+          loaded: loaded.length, loadedPages,
+          progress: { pages: 2, items: 144 },
+          page, pageSize,
+          categories: ['全部', '开发工具', '效率'], sources: fixture.sources(),
+          items: loaded.slice(start, start + pageSize),
+          network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
+        });
+      }
+      if (marketProgressMode) await new Promise((resolve) => setTimeout(resolve, 2500));
       const total = all.length;
       const totalPages = total ? Math.ceil(total / pageSize) : 0;
       const page = totalPages ? Math.min(Math.max(1, Number(params.page || 1)), totalPages) : 1;

@@ -90,6 +90,8 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   const marketStale = { on: false, refreshing: false };
   const marketFail = { match: () => false };
   const marketProgress = { active: false, pages: 0, items: 0 };
+  /* 边加载边显示的 fixture：只暴露 registryItems 的前 loaded 条。 */
+  const marketPartial = { on: false, loaded: 0, loadedPages: 0, pages: 0, items: 0 };
   const marketPayload = (target) => {
     const u = new URL(target, 'http://fixture');
     const source = u.searchParams.get('source') || 'builtin';
@@ -99,7 +101,9 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     if (source === 'registry') {
       const pageSize = Math.max(1, Number(u.searchParams.get('pageSize') || 24));
       const requestedPage = Math.max(1, Number(u.searchParams.get('page') || 1));
-      const filtered = registryItems.filter((item) => {
+      const partial = marketPartial.on && u.searchParams.get('partial') === '1';
+      const pool = partial ? registryItems.slice(0, marketPartial.loaded) : registryItems;
+      const filtered = pool.filter((item) => {
         if (category !== '全部' && item.category !== category) return false;
         if (!q) return true;
         return `${item.name} ${item.identifier} ${item.description}`.toLowerCase().includes(q);
@@ -108,6 +112,18 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
       const totalPages = total ? Math.ceil(total / pageSize) : 0;
       const page = totalPages ? Math.min(requestedPage, totalPages) : 1;
       const start = (page - 1) * pageSize;
+      if (partial) {
+        return {
+          ok: true, source, partial: true, loading: true,
+          loaded: total, loadedPages: totalPages,
+          progress: { pages: marketPartial.pages, items: marketPartial.items },
+          page, pageSize,
+          categories: ['全部', '开发工具', '效率'],
+          sources: { ok: true, builtin: { count: 10 }, registry: {}, custom: customSources },
+          items: filtered.slice(start, start + pageSize),
+          network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
+        };
+      }
       return {
         ok: true, source, total, page, pageSize, totalPages,
         hasMore: page < totalPages, nextCursor: null,
@@ -752,26 +768,44 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(d.querySelector('.mcp-market-page .mcp-pagination'), null, '精选目录保持加载更多，不显示页码');
   });
 
-  await check('完整目录首次加载显示进度，完成后收起', async () => {
+  await check('完整目录边加载边显示，完成后换成真实总数', async () => {
     /* 全新市场页实例：catalogLoaded 只有在成功加载过 Registry 后才为 true。 */
     d.querySelector('[data-focus-key="market-back"]').click();
     await tick(120);
     clickText(page(), 'button', '市场');
     await tick(120);
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
-    marketProgress.active = true;
-    marketProgress.pages = 2;
-    marketProgress.items = 200;
-    marketDelay.ms = (target) => (target.includes('source=registry') ? 700 : 0);
+
+    /* 只加载了前 48 条：页面必须先显示这 48 条，而不是干等完整目录。 */
+    marketPartial.on = true;
+    marketPartial.loaded = 48;
+    marketPartial.pages = 2;
+    marketPartial.items = 200;
     d.querySelector('[data-focus-key="source:registry"]').click();
-    await tick(420);
-    const note = d.querySelector('.mcp-market-loading-note');
-    assert.ok(note, '首次加载完整目录必须显示进度文案');
-    assert.ok(note.textContent.includes('已获取 200 条'));
-    assert.ok(note.textContent.includes('第 2 页'));
-    await tick(500);
-    assert.equal(d.querySelector('.mcp-market-loading-note'), null, '加载完成后进度文案必须收起');
+    await tick(160);
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
+    const note = d.querySelector('.mcp-market-loading-note');
+    assert.ok(note, '加载中必须显示“已显示”提示');
+    assert.ok(note.textContent.includes('已显示 48 条'));
+    assert.ok(note.textContent.includes('第 2 页'));
+    assert.equal(d.querySelector('.mcp-market-total').textContent, '已加载 48 条');
+    const partialSummary = d.querySelector('.mcp-pagination-summary').textContent;
+    assert.ok(partialSummary.includes('已加载 48 条（加载中）'));
+    assert.ok(!partialSummary.includes('共 48 条'), '不能把已加载条数当成总数');
+
+    /* 完整目录到手后：提示收起，总数 / 页码换成真实值。 */
+    marketPartial.on = false;
+    await tick(2300);
+    assert.equal(d.querySelector('.mcp-market-loading-note'), null, '加载完成后提示必须收起');
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
+    assert.equal(d.querySelector('.mcp-market-total').textContent, '共 209 个结果');
+    const fullSummary = d.querySelector('.mcp-pagination-summary').textContent;
+    assert.ok(fullSummary.includes('第 1 / 9 页'));
+    assert.ok(fullSummary.includes('共 209 条'));
+
+    marketPartial.loaded = 0;
+    marketPartial.pages = 0;
+    marketPartial.items = 0;
     marketDelay.ms = () => 0;
     marketProgress.active = false;
     marketProgress.pages = 0;

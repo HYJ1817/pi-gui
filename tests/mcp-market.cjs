@@ -860,6 +860,81 @@ const CUSTOM_SOURCE = {
     assert.equal(calls, 4, '预取失败不能进入退避，打开市场必须重试');
   });
 
+  await checkAsync('C2·边加载边显示：partial 返回已获取条目，完成后换成真实总数', async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url) => {
+        calls += 1;
+        const cursor = new URL(url).searchParams.get('cursor') || '';
+        /* 卡住第二页：第一页已经进快照，但完整目录还没到手。 */
+        if (cursor === 'cursor-2') await gate;
+        return jsonResponse(BIG_REGISTRY_PAGES(cursor));
+      },
+    });
+    const initial = await m.list({ source: 'registry', partial: '1' });
+    assert.equal(initial.ok, true, JSON.stringify(initial));
+    assert.equal(initial.partial, true);
+    assert.equal(initial.loading, true);
+    assert.equal(initial.items.length, 0);
+    assert.equal(initial.total, undefined, 'partial 响应不能带 total');
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    const midway = await m.list({ source: 'registry', partial: '1', pageSize: 24 });
+    assert.equal(midway.ok, true, JSON.stringify(midway));
+    assert.equal(midway.partial, true);
+    assert.equal(midway.loading, true);
+    assert.equal(midway.loaded, 100, '第一页的 100 条应先显示');
+    assert.equal(midway.loadedPages, 5);
+    assert.equal(midway.items.length, 24);
+    assert.equal(midway.total, undefined);
+    const searched = await m.list({ source: 'registry', partial: '1', q: 'server-00' });
+    assert.equal(searched.partial, true);
+    assert.equal(searched.loaded, 10, '搜索也要能在已加载快照上工作');
+    assert.equal(searched.items.length, 10);
+    release();
+    await waitForRegistryRefresh(m);
+    const done = await m.list({ source: 'registry', partial: '1', pageSize: 24 });
+    assert.equal(done.ok, true, JSON.stringify(done));
+    assert.equal(done.partial, undefined, '完整目录到手后不再返回 partial');
+    assert.equal(done.total, 209);
+    assert.equal(done.totalPages, 9);
+    assert.equal(calls, 3);
+  });
+
+  await checkAsync('C2·partial 失败后明确报错，retry=1 重新开始抓取', async () => {
+    let calls = 0;
+    let fail = true;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url) => {
+        calls += 1;
+        if (fail) throw Object.assign(new Error('down'), { marketCode: 'network' });
+        return jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || ''));
+      },
+    });
+    const started = await m.list({ source: 'registry', partial: '1' });
+    assert.equal(started.ok, true, '第一次请求只是启动抓取');
+    assert.equal(started.partial, true);
+    await waitForRegistryRefresh(m);
+    const failed = await m.list({ source: 'registry', partial: '1' });
+    assert.equal(failed.ok, false);
+    assert.equal(failed.code, 'network');
+    assert.equal(calls, 1, '失败后轮询不能反复重启抓取');
+    fail = false;
+    const retried = await m.list({ source: 'registry', partial: '1', retry: '1' });
+    assert.equal(retried.ok, true, JSON.stringify(retried));
+    assert.equal(retried.partial, true);
+    assert.equal(retried.loading, true);
+    await waitForRegistryRefresh(m);
+    const full = await m.list({ source: 'registry' });
+    assert.equal(full.ok, true, JSON.stringify(full));
+    assert.equal(full.total, 209);
+    assert.equal(calls, 4);
+  });
+
   await checkAsync('C2·完整目录守卫：1200 页 / 100000 条 / 600 秒明确报错', async () => {
     let pageCalls = 0;
     const tooManyPages = createMcpMarket({

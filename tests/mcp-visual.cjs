@@ -184,18 +184,22 @@ async function main() {
     if (process.env.MCP_MARKET_PROGRESS === '1') {
       await click('[data-focus-key="source:registry"]');
       await waitFor(
-        `document.querySelector('.mcp-market-loading-note')?.textContent.includes('已获取 144 条')`,
-        '完整目录加载进度',
+        `document.querySelector('.mcp-market-loading-note')?.textContent.includes('已显示 144 条')`,
+        '完整目录边加载边显示',
       );
       const note = await evalJs(`document.querySelector('.mcp-market-loading-note')?.textContent || ''`);
-      if (!note.includes('第 2 页')) throw new Error('加载进度缺少页数：' + note);
+      if (!note.includes('第 2 页')) throw new Error('加载提示缺少页数：' + note);
+      if (await evalJs(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length !== 24`)) {
+        throw new Error('边加载边显示时没有先渲染已获取的 24 条');
+      }
       await shot('06-market-loading');
       await waitFor(
-        `document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length === 24`,
+        `!document.querySelector('.mcp-market-loading-note')`,
         '完整目录加载完成',
       );
-      if (await evalJs(`!!document.querySelector('.mcp-market-loading-note')`)) {
-        throw new Error('加载完成后进度文案没有收起');
+      const summary = await evalJs(`document.querySelector('.mcp-pagination-summary')?.textContent || ''`);
+      if (!summary.includes('第 1 / 9 页') || !summary.includes('共 209 条')) {
+        throw new Error('加载完成后没有换成真实总数：' + summary);
       }
       await shot('06b-market-loaded');
       await click('[data-focus-key="source:builtin"]');
