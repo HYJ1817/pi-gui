@@ -410,6 +410,22 @@ MCP server 是**用户自己配置的可执行命令与远端 URL**（stdio 跑�
   类型、`timeout` 正数、URL http(s)、`oauth` / `auth` 规则）与 `readConfigFile()`
   的 namespace 冲突规则。只要 GUI 比上游**宽**，就会把上游跳过的条目算进覆盖集合，
   重新制造「两条都不生效」
+- **市场网络按线路分流，直连与代理不互相冒充**（P20.7）：桌面版通过后端 ↔
+  Electron 主进程的私有 IPC 调 `Session.resolveProxy`。`direct` 由 Node 固定
+  已校验 IP 连接，TLS SNI / Host 仍按原域名；`proxied` 交给 Chromium 网络栈
+  （系统代理 / PAC / HTTP / HTTPS / SOCKS5 / TUN），代理侧负责 DNS 与连接，
+  应用仍校验目标 URL、HTTPS、响应体与重定向，但响应里明确
+  `addressVerified:false`、`dns:'proxy'`，**不声称最终连接地址通过了固定 IP
+  校验**；`unknown` 按直连严格规则 fail closed。没有代理桥的独立后端遇到代理
+  环境变量返回 `proxy-unsupported`，既不假装校验过，也不绕过代理直连
+- **fake-IP 按路径判断**：`198.18.0.0/15` / `2001:2::/48` 只在 `proxied` 线路，
+  或桌面版代理桥存在且线路为 `direct`（Clash TUN）时接受；URL 字面量永不接受。
+  直连接受时地址仍被固定，代理线路由代理栈连接；TLS 都仍按原域名校验。
+  独立后端 / 线路未知继续 `proxy-blocked`
+- **代理桥最小权限**：只接受后端直属子进程的帧；只做 HTTPS:443、无凭据、
+  非本机主机名的固定 `GET`；不接收调用方请求头 / method / 代理凭据；不跟随
+  重定向；请求前重新判定线路；响应 2MB / 15s 上限；代理地址、认证信息与
+  Chromium 原始错误不出主进程。`NO_PROXY` 只决定直连，不跳过地址安全检查
 - OAuth 全程 pi 负责（开浏览器、存 token、自动刷新）；in-session 的 select /
   input 经 P19 管道承接，不新增凭据经手的代码
 - Tool Timeline 的 MCP 语义行**不展示完整 args / result**，不猜 annotations；
