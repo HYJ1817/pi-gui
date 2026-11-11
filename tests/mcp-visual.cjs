@@ -5,7 +5,9 @@
  * 前端渲染路径截图 —— jsdom 不做布局，不能替代这一步。
  *
  * 用法：node tests/mcp-visual.cjs
+ *       MCP_MARKET_PAGINATION=1 node tests/mcp-visual.cjs   # 额外截 Registry 分页
  * 产物：.shots/mcp/{01-management,02-add-modal,03-market}.png
+ *       MCP_MARKET_PAGINATION=1 时另有 05-market-page{1,2,9}.png
  * 只用于验收取证，不属于 npm test 的 canonical 链。
  */
 'use strict';
@@ -173,6 +175,75 @@ async function main() {
       await click('[data-focus-key="source:registry"]');
       await waitFor(`!!document.querySelector('.mcp-market-page .mcp-banner.is-info')`, '代理线路说明');
       await shot('03b-market-proxy');
+      await click('[data-focus-key="source:builtin"]');
+      await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
+    }
+    if (process.env.MCP_MARKET_PAGINATION === '1') {
+      const pageState = async (label, page, cards) => {
+        try {
+          await waitFor(
+            `(() => {
+              const s = document.querySelector('.mcp-pagination-summary')?.textContent || '';
+              return s.includes('第 ${page} / 9 页') && s.includes('共 209 条')
+                && document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length === ${cards}
+                && document.querySelector('.mcp-pagination [aria-current="page"]')?.textContent === '${page}';
+            })()`,
+            label,
+          );
+        } catch (err) {
+          const seen = await evalJs(`(() => ({
+            summary: document.querySelector('.mcp-pagination-summary')?.textContent || '',
+            cards: document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length,
+            current: document.querySelector('.mcp-pagination [aria-current="page"]')?.textContent || '',
+            message: document.querySelector('.mcp-empty p, .mcp-banner')?.textContent || '',
+          }))()`);
+          throw new Error(`${label} 失败，当前：${JSON.stringify(seen)}`);
+        }
+      };
+      /* 页码在列表底部，截图前把滚动容器推到底，才能同时看到末行卡片和分页。 */
+      const scrollToPager = async () => {
+        await evalJs(`(() => {
+          let el = document.querySelector('.mcp-pagination');
+          while (el && el !== document.body) {
+            if (/(auto|scroll)/.test(getComputedStyle(el).overflowY)
+              && el.scrollHeight > el.clientHeight + 10) { el.scrollTop = el.scrollHeight; return true; }
+            el = el.parentElement;
+          }
+          window.scrollTo(0, document.body.scrollHeight);
+          return true;
+        })()`);
+        await sleep(300);
+        /* 页码贴着滚动区末尾，必须确认按钮真的落在视口内，而不是被
+         * 46px 顶栏造成的溢出裁掉。 */
+        const visible = await evalJs(`(() => {
+          const nav = document.querySelector('.mcp-pagination');
+          if (!nav) return false;
+          const btns = [...nav.querySelectorAll('.mcp-page-btn')];
+          return btns.length > 0 && btns.every((b) => {
+            const r = b.getBoundingClientRect();
+            return r.top >= 0 && r.bottom <= innerHeight;
+          });
+        })()`);
+        if (!visible) throw new Error('页码按钮不在可视区域内');
+      };
+      await click('[data-focus-key="source:registry"]');
+      await pageState('Registry 第 1 页', 1, 24);
+      if (await evalJs(`document.querySelector('[data-focus-key="page:prev"]')?.disabled`) !== true) {
+        throw new Error('第 1 页的“上一页”没有禁用');
+      }
+      await scrollToPager();
+      await shot('05-market-page1');
+      await click('[data-focus-key="page:2"]');
+      await pageState('Registry 第 2 页', 2, 24);
+      await scrollToPager();
+      await shot('05b-market-page2');
+      await click('[data-focus-key="page:9"]');
+      await pageState('Registry 第 9 页', 9, 17);
+      if (await evalJs(`document.querySelector('[data-focus-key="page:next"]')?.disabled`) !== true) {
+        throw new Error('最后一页的“下一页”没有禁用');
+      }
+      await scrollToPager();
+      await shot('05c-market-page9');
       await click('[data-focus-key="source:builtin"]');
       await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
     }

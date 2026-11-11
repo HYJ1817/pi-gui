@@ -23,6 +23,9 @@ const uxMode = process.env.UX_STATE_HARNESS === '1';
 /* 视觉取证专用：让 Registry 源返回一条“系统代理线路”的固定结果，
  * 用来截取代理状态说明；不影响默认离线夹具。 */
 const marketProxyMode = process.env.MCP_MARKET_PROXY === '1';
+/* 视觉取证专用：用 209 条固定条目模拟完整 Registry 目录，按真实后端的
+ * page / pageSize 语义切片，用于截取分页导航的排版。 */
+const marketPaginationMode = process.env.MCP_MARKET_PAGINATION === '1';
 let uxSwitchCount = 0;
 const uxWarnings = [
   { type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: 'memory_search requires qmd historical warning', _replay: true },
@@ -1188,6 +1191,37 @@ const server = http.createServer(async (req, res) => {
         ok: true, source: 'registry', total: 1, hasMore: false, nextCursor: null,
         categories: ['全部', '开发工具'], sources: fixture.sources(),
         items: [{ ...base.items[0], id: 'registry:io.example/proxy', source: 'registry', sourceLabel: '官方 Registry', trust: 'unverified' }],
+        network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
+      });
+    }
+    if (marketPaginationMode && params.source === 'registry') {
+      const base = await fixture.list({ source: 'builtin', limit: 1 });
+      const all = Array.from({ length: 209 }, (_, i) => {
+        const index = String(i).padStart(3, '0');
+        const id = `registry:io.example/server-${index}`;
+        return {
+          ...base.items[0], id, source: 'registry', sourceLabel: '官方 Registry',
+          catalogId: id, name: `Registry ${index}`, installName: `registry-${index}`,
+          identifier: `io.example/server-${index}`, version: '1.0.0',
+          category: i % 2 === 0 ? '开发工具' : '效率',
+          trust: 'registry', trustEvidence: 'MCP 官方 Registry 收录；收录不代表安全性审核',
+          description: `Fixture registry server ${index}`,
+        };
+      }).filter((item) => {
+        if (params.category && params.category !== '全部' && item.category !== params.category) return false;
+        const q = String(params.q || '').trim().toLowerCase();
+        return !q || `${item.name} ${item.identifier} ${item.description}`.toLowerCase().includes(q);
+      });
+      const pageSize = Math.max(1, Number(params.pageSize || 24));
+      const total = all.length;
+      const totalPages = total ? Math.ceil(total / pageSize) : 0;
+      const page = totalPages ? Math.min(Math.max(1, Number(params.page || 1)), totalPages) : 1;
+      const start = (page - 1) * pageSize;
+      return json(res, 200, {
+        ok: true, source: 'registry', total, page, pageSize, totalPages,
+        hasMore: page < totalPages, nextCursor: null,
+        categories: ['全部', '开发工具', '效率'], sources: fixture.sources(),
+        items: all.slice(start, start + pageSize),
         network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
       });
     }

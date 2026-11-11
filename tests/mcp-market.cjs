@@ -46,6 +46,40 @@ const REGISTRY_ROW = {
   },
   _meta: { 'io.modelcontextprotocol.registry/official': { status: 'active', isLatest: true } },
 };
+function makeRegistryRow(name, {
+  version = '1.0.0', title = '', description = '', isLatest = true, status = 'active',
+} = {}) {
+  return {
+    server: {
+      name,
+      title: title || name.split('/').pop(),
+      description: description || `Fixture MCP server ${name}`,
+      version,
+      packages: [{
+        registryType: 'npm',
+        identifier: 'fixture-mcp',
+        version,
+        runtimeHint: 'npx',
+        transport: { type: 'stdio' },
+      }],
+    },
+    _meta: { 'io.modelcontextprotocol.registry/official': { status, isLatest } },
+  };
+}
+/* 100 + 100 + 9 条最新版本；分类由描述驱动，用来验证完整目录上的本地筛选。 */
+const BIG_REGISTRY_ROWS = Array.from({ length: 209 }, (_, i) => {
+  const index = String(i).padStart(3, '0');
+  const description = i % 3 === 0
+    ? 'developer code repository tools'
+    : i % 3 === 1 ? 'database sql data tools' : 'knowledge documentation wiki';
+  return makeRegistryRow(`io.example/server-${index}`, { description });
+});
+const BIG_REGISTRY_PAGES = (cursor) => {
+  if (!cursor) return { servers: BIG_REGISTRY_ROWS.slice(0, 100), metadata: { count: 100, nextCursor: 'cursor-2' } };
+  if (cursor === 'cursor-2') return { servers: BIG_REGISTRY_ROWS.slice(100, 200), metadata: { count: 100, nextCursor: 'cursor-3' } };
+  if (cursor === 'cursor-3') return { servers: BIG_REGISTRY_ROWS.slice(200, 209), metadata: { count: 9 } };
+  return { servers: [], metadata: {} };
+};
 const CUSTOM_SOURCE = {
   name: 'Example Market',
   servers: [
@@ -72,11 +106,8 @@ const CUSTOM_SOURCE = {
   const requestImpl = async (url) => {
     calls.push(url);
     if (url.startsWith('https://registry.modelcontextprotocol.io/')) {
-      const u = new URL(url);
-      return jsonResponse({
-        servers: [REGISTRY_ROW],
-        metadata: u.searchParams.get('search') ? {} : { nextCursor: 'cursor-2' },
-      });
+      /* 完整目录夹具：单页一条；分页/去重另用专门夹具验证。 */
+      return jsonResponse({ servers: [REGISTRY_ROW], metadata: { count: 1 } });
     }
     if (url === 'https://market.example/servers.json') return jsonResponse(CUSTOM_SOURCE);
     if (url === 'https://market.example/bad.json') return jsonResponse({ nope: true });
@@ -182,32 +213,42 @@ const CUSTOM_SOURCE = {
   });
 
   section('C. 官方 Registry');
-  await checkAsync('C·真实查询参数 + 分页 cursor', async () => {
+  await checkAsync('C·完整目录请求使用 latest + limit=100，搜索在本地完成', async () => {
     calls.length = 0;
-    const r = await market.list({ source: 'registry', q: 'test', limit: 5 });
+    const r = await market.list({ source: 'registry', q: 'test', pageSize: 5 });
     assert.equal(r.ok, true, JSON.stringify(r));
     assert.equal(r.items.length, 1);
     assert.equal(r.items[0].name, 'Test Server');
     assert.equal(r.items[0].version, '1.2.3');
     assert.equal(r.items[0].trust, 'registry');
     assert.equal(r.items[0].installable, true);
+    assert.equal(r.total, 1, '总数来自完整目录，不是 metadata.count');
+    assert.equal(r.page, 1);
+    assert.equal(r.pageSize, 5);
+    assert.equal(r.totalPages, 1);
+    assert.equal(r.hasMore, false);
     assert.equal(r.nextCursor, null);
-    assert.ok(calls[0].includes('search=test'));
-    assert.ok(calls[0].includes('limit=5'));
-    const paged = await market.list({ source: 'registry', limit: 5 });
-    assert.equal(paged.nextCursor, 'cursor-2');
-    assert.equal(paged.hasMore, true);
+    assert.ok(calls[0].includes('version=latest'));
+    assert.ok(calls[0].includes('limit=100'), '单页请求必须用官方上限 100');
+    assert.ok(!calls[0].includes('search='), '短搜索词不能发到会 422 的上游 search');
+    assert.equal(r.cached, false, '首次加载不能冒充缓存命中');
+    const cached = await market.list({ source: 'registry', q: 'test', pageSize: 5 });
+    assert.equal(cached.ok, true);
+    assert.equal(cached.cached, true);
+    assert.equal(calls.length, 1, '缓存命中和翻页都不能重新请求完整 Registry');
   });
-  await checkAsync('C·分类筛选会跨 Registry 页继续查找', async () => {
+  await checkAsync('C·分类筛选会基于完整 Registry 目录', async () => {
     const rows = {
       'cursor-doc': {
         servers: [{ server: { name: 'io.example/memory', title: 'Memory', description: 'Long term memory and knowledge', version: '1.0.0', packages: [{ registryType: 'npm', identifier: 'memory-mcp', version: '1.0.0', runtimeHint: 'npx', transport: { type: 'stdio' } }] }, _meta: { 'io.modelcontextprotocol.registry/official': { status: 'active', isLatest: true } } }],
         metadata: {},
       },
     };
+    const docCalls = [];
     const paged = createMcpMarket({
       dataDir: DATA, configStore: store, env,
       requestImpl: async (url) => {
+        docCalls.push(url);
         const u = new URL(url);
         if (u.searchParams.get('cursor') === 'cursor-doc') return jsonResponse(rows['cursor-doc']);
         return jsonResponse({ servers: [REGISTRY_ROW], metadata: { nextCursor: 'cursor-doc' } });
@@ -218,6 +259,8 @@ const CUSTOM_SOURCE = {
     assert.equal(r.ok, true, JSON.stringify(r));
     assert.deepEqual(r.items.map((i) => i.name), ['Memory']);
     assert.ok(r.items.every((i) => i.category === '文档'));
+    assert.equal(r.total, 1);
+    assert.ok(docCalls.some((c) => c.includes('cursor=cursor-doc')), '分类筛选必须基于完整目录');
   });
 
   await checkAsync('C·Registry 安装重新查询并写入配置（忽略客户端配置）', async () => {
@@ -283,6 +326,328 @@ const CUSTOM_SOURCE = {
     }
     assert.match(r.items.find((i) => i.name === 'SSE').installReason, /SSE/);
     assert.match(r.items.find((i) => i.name === 'Range').installReason, /版本/);
+  });
+
+  section('C2. Registry 完整目录 / 分页 / 缓存');
+
+  await checkAsync('C2·100+100+9 三页游标合并，209 条 = 9 页', async () => {
+    const catalogCalls = [];
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env,
+      requestImpl: async (url) => {
+        catalogCalls.push(url);
+        const u = new URL(url);
+        return jsonResponse(BIG_REGISTRY_PAGES(u.searchParams.get('cursor') || ''));
+      },
+      lookupImpl,
+    });
+    const p1 = await m.list({ source: 'registry', page: 1, pageSize: 24 });
+    assert.equal(p1.ok, true, JSON.stringify(p1));
+    assert.equal(p1.total, 209);
+    assert.equal(p1.totalPages, 9);
+    assert.equal(p1.page, 1);
+    assert.equal(p1.pageSize, 24);
+    assert.equal(p1.items.length, 24);
+    assert.equal(p1.hasMore, true);
+    assert.equal(p1.cached, false);
+    assert.equal(catalogCalls.length, 3);
+    assert.ok(catalogCalls.every((url) => url.includes('version=latest') && url.includes('limit=100')));
+    assert.ok(!catalogCalls[0].includes('cursor='), '第一页不能带 cursor');
+    assert.ok(catalogCalls[1].includes('cursor=cursor-2'), '必须沿用上一页 nextCursor');
+    assert.ok(catalogCalls[2].includes('cursor=cursor-3'));
+    assert.ok(!catalogCalls.some((url) => url.includes('search=')));
+
+    const p2 = await m.list({ source: 'registry', page: 2, pageSize: 24 });
+    assert.equal(p2.page, 2);
+    assert.equal(p2.items.length, 24);
+    assert.equal(p2.cached, true);
+    assert.equal(p2.items[0].identifier, 'io.example/server-024');
+    const p9 = await m.list({ source: 'registry', page: 9, pageSize: 24 });
+    assert.equal(p9.page, 9);
+    assert.equal(p9.items.length, 17, '最后一页不足 24 条');
+    assert.equal(p9.hasMore, false);
+    assert.equal(p9.items[0].identifier, 'io.example/server-192');
+    assert.equal(p9.items.at(-1).identifier, 'io.example/server-208');
+    assert.equal(catalogCalls.length, 3, '翻页不能重新请求完整 Registry');
+
+    const all = [];
+    for (const page of [1, 2, 3]) {
+      const r = await m.list({ source: 'registry', page, pageSize: 100 });
+      all.push(...r.items);
+    }
+    assert.equal(all.length, 209);
+    assert.equal(new Set(all.map((item) => item.identifier)).size, 209);
+  });
+
+  await checkAsync('C2·页码 / 每页大小边界收敛到缓存目录', async () => {
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url) => jsonResponse(BIG_REGISTRY_PAGES(new URL(url).searchParams.get('cursor') || '')),
+    });
+    const beyond = await m.list({ source: 'registry', page: 999, pageSize: 24 });
+    assert.equal(beyond.page, 9, '超出末页必须夹到最后一页');
+    assert.equal(beyond.items.length, 17);
+    assert.equal(beyond.hasMore, false);
+    for (const value of [0, '', '  ', -5, 'nope']) {
+      const r = await m.list({ source: 'registry', pageSize: value });
+      assert.equal(r.pageSize, 24, `pageSize=${JSON.stringify(value)} 应回落到 24`);
+      assert.equal(r.totalPages, 9);
+    }
+    const huge = await m.list({ source: 'registry', pageSize: 1000 });
+    assert.equal(huge.pageSize, 100, 'pageSize 上限是 100');
+    assert.equal(huge.totalPages, 3);
+  });
+
+  await checkAsync('C2·非空页全无 server 形状 → invalid-response，不缓存空目录', async () => {
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => {
+        calls += 1;
+        return jsonResponse({ servers: [{}, { name: 'io.example/not-wrapped' }], metadata: { count: 2 } });
+      },
+    });
+    const r = await m.list({ source: 'registry' });
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'invalid-response');
+    assert.deepEqual(r.items, []);
+    const again = await m.list({ source: 'registry' });
+    assert.equal(again.ok, false);
+    assert.equal(calls, 2, '非法页不能留下 5 分钟空缓存');
+  });
+
+  await checkAsync('C2·按 server name 去重并优先 isLatest，count 不当总数', async () => {
+    const rows = [
+      makeRegistryRow('io.example/dup', { version: '1.0.0', isLatest: false }),
+      makeRegistryRow('io.example/dup', { version: '2.0.0', isLatest: true }),
+      makeRegistryRow('io.example/dup', { version: '2.0.0', isLatest: true }),
+      makeRegistryRow('io.example/other', { version: '1.0.0' }),
+    ];
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => jsonResponse({ servers: rows, metadata: { count: 100 } }),
+    });
+    const r = await m.list({ source: 'registry' });
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.total, 2, '总数必须是去重后的完整目录，不是 metadata.count');
+    assert.equal(r.items.length, 2);
+    const dup = r.items.find((item) => item.identifier === 'io.example/dup');
+    assert.equal(dup.version, '2.0.0');
+    assert.equal(dup.isLatest, true);
+    assert.equal(r.items.find((item) => item.identifier === 'io.example/other').version, '1.0.0');
+  });
+
+  await checkAsync('C2·搜索 / 分类在完整目录本地组合，短词不触发 422', async () => {
+    const catalogCalls = [];
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env,
+      requestImpl: async (url) => {
+        catalogCalls.push(url);
+        const u = new URL(url);
+        return jsonResponse(BIG_REGISTRY_PAGES(u.searchParams.get('cursor') || ''));
+      },
+      lookupImpl,
+    });
+    const q0 = await m.list({ source: 'registry', q: 'server-0', pageSize: 24 });
+    assert.equal(q0.ok, true, JSON.stringify(q0));
+    assert.equal(q0.total, 100);
+    assert.equal(q0.totalPages, 5);
+    const combo = await m.list({ source: 'registry', q: 'server-0', category: '数据', pageSize: 24 });
+    assert.equal(combo.total, 33);
+    assert.equal(combo.totalPages, 2);
+    assert.equal(combo.items.length, 24);
+    assert.ok(combo.items.every((item) => item.category === '数据'));
+    const short = await m.list({ source: 'registry', q: 'io' });
+    assert.equal(short.total, 209, '两字符搜索也在本地完成，不发上游 search');
+    const none = await m.list({ source: 'registry', q: 'no-such-server' });
+    assert.equal(none.ok, true);
+    assert.equal(none.total, 0);
+    assert.equal(none.totalPages, 0);
+    assert.equal(none.page, 1);
+    assert.deepEqual(none.items, []);
+    assert.equal(none.hasMore, false);
+    assert.ok(!catalogCalls.some((url) => url.includes('search=')));
+  });
+
+  await checkAsync('C2·并发请求共享同一次完整目录加载', async () => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let calls = 0;
+    const rows = [makeRegistryRow('io.example/a'), makeRegistryRow('io.example/b')];
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => {
+        calls += 1;
+        await gate;
+        return jsonResponse({ servers: rows, metadata: { count: 2 } });
+      },
+    });
+    const p1 = m.list({ source: 'registry', page: 1, pageSize: 1 });
+    const p2 = m.list({ source: 'registry', page: 2, pageSize: 1 });
+    release();
+    const [r1, r2] = await Promise.all([p1, p2]);
+    assert.equal(calls, 1, '并发列表请求只能触发一次完整目录加载');
+    assert.equal(r1.ok, true, JSON.stringify(r1));
+    assert.equal(r2.ok, true, JSON.stringify(r2));
+    assert.equal(r1.total, 2);
+    assert.equal(r1.page, 1);
+    assert.equal(r1.items.length, 1);
+    assert.equal(r2.page, 2);
+    assert.equal(r2.items.length, 1);
+  });
+
+  await checkAsync('C2·中途分页失败不缓存半份目录；重复 / 非法游标明确报错', async () => {
+    let failSecond = true;
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async (url) => {
+        calls += 1;
+        const u = new URL(url);
+        if (u.searchParams.get('cursor') === 'p2') {
+          if (failSecond) throw Object.assign(new Error('page 2 down'), { marketCode: 'network' });
+          return jsonResponse({ servers: [makeRegistryRow('io.example/second')], metadata: {} });
+        }
+        return jsonResponse({ servers: [makeRegistryRow('io.example/first')], metadata: { nextCursor: 'p2' } });
+      },
+    });
+    const failed = await m.list({ source: 'registry' });
+    assert.equal(failed.ok, false);
+    assert.equal(failed.code, 'network');
+    assert.deepEqual(failed.items, []);
+    assert.equal(calls, 2);
+    failSecond = false;
+    const recovered = await m.list({ source: 'registry' });
+    assert.equal(recovered.ok, true, JSON.stringify(recovered));
+    assert.equal(recovered.total, 2);
+    assert.equal(recovered.cached, false, '失败请求不能留下半份缓存');
+    assert.equal(calls, 4);
+
+    let loopCalls = 0;
+    const loop = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => {
+        loopCalls += 1;
+        return jsonResponse({ servers: [REGISTRY_ROW], metadata: { nextCursor: 'same-cursor' } });
+      },
+    });
+    const looped = await loop.list({ source: 'registry' });
+    assert.equal(looped.ok, false);
+    assert.equal(looped.code, 'registry-cursor-loop');
+    assert.equal(loopCalls, 2, '重复游标必须在第二次出现时停止');
+
+    const invalid = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => jsonResponse({ servers: [REGISTRY_ROW], metadata: { nextCursor: 42 } }),
+    });
+    const bad = await invalid.list({ source: 'registry' });
+    assert.equal(bad.ok, false);
+    assert.equal(bad.code, 'invalid-response');
+
+    const down = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => { throw Object.assign(new Error('down'), { marketCode: 'network' }); },
+    });
+    const failedFirst = await down.list({ source: 'registry' });
+    assert.equal(failedFirst.ok, false);
+    assert.equal(failedFirst.code, 'network');
+    assert.deepEqual(failedFirst.items, []);
+  });
+
+  await checkAsync('C2·刷新失败保留上次缓存，退避窗口内不反复请求', async () => {
+    let nowMs = 1700000000000;
+    let fail = false;
+    let calls = 0;
+    const m = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      now: () => nowMs,
+      requestImpl: async (url) => {
+        calls += 1;
+        if (fail) throw Object.assign(new Error('registry down'), { marketCode: 'network' });
+        const u = new URL(url);
+        return jsonResponse(BIG_REGISTRY_PAGES(u.searchParams.get('cursor') || ''));
+      },
+    });
+    const first = await m.list({ source: 'registry', page: 1, pageSize: 24 });
+    assert.equal(first.ok, true, JSON.stringify(first));
+    assert.equal(first.total, 209);
+    assert.equal(first.stale, undefined);
+    assert.equal(calls, 3);
+    nowMs += 6 * 60_000;
+    fail = true;
+    const stale = await m.list({ source: 'registry', page: 2, pageSize: 24 });
+    assert.equal(stale.ok, true, JSON.stringify(stale));
+    assert.equal(stale.stale, true);
+    assert.equal(stale.cached, true);
+    assert.equal(stale.total, 209);
+    assert.equal(stale.items.length, 24);
+    assert.equal(stale.page, 2);
+    assert.equal(stale.refreshError.code, 'network');
+    assert.equal(calls, 4, '刷新失败只尝试一页就停');
+    const again = await m.list({ source: 'registry', page: 3, pageSize: 24 });
+    assert.equal(again.ok, true);
+    assert.equal(again.stale, true);
+    assert.equal(calls, 4, '退避窗口内不能每次翻页都重试');
+    fail = false;
+    nowMs += 31_000;
+    const refreshed = await m.list({ source: 'registry', page: 4, pageSize: 24 });
+    assert.equal(refreshed.ok, true, JSON.stringify(refreshed));
+    assert.equal(refreshed.stale, undefined);
+    assert.equal(refreshed.cached, false);
+    assert.equal(refreshed.total, 209);
+    assert.equal(refreshed.page, 4);
+    assert.equal(calls, 7, '退避结束后重新完整拉取三页');
+  });
+
+  await checkAsync('C2·完整目录守卫：200 页 / 20000 条 / 60 秒明确报错', async () => {
+    let pageCalls = 0;
+    const tooManyPages = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => {
+        pageCalls += 1;
+        return jsonResponse({
+          servers: [makeRegistryRow(`io.example/page-${pageCalls}`)],
+          metadata: { nextCursor: `cursor-${pageCalls}` },
+        });
+      },
+    });
+    const pagesResult = await tooManyPages.list({ source: 'registry' });
+    assert.equal(pagesResult.ok, false);
+    assert.equal(pagesResult.code, 'registry-too-large');
+    assert.equal(pageCalls, 200, '超过 200 页必须停止请求');
+
+    /* 单页 20001 条，但每条只保留最小形状，避免先撞上 2MB 响应上限。 */
+    const rows = Array.from({ length: 20_001 }, (_, i) => ({
+      server: { name: `io.example/e${i}`, version: '1.0.0' },
+    }));
+    let entryCalls = 0;
+    const tooManyEntries = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      requestImpl: async () => {
+        entryCalls += 1;
+        return jsonResponse({ servers: rows, metadata: { count: rows.length } });
+      },
+    });
+    const entriesResult = await tooManyEntries.list({ source: 'registry' });
+    assert.equal(entriesResult.ok, false);
+    assert.equal(entriesResult.code, 'registry-too-large');
+    assert.equal(entryCalls, 1, '超过 20000 条必须在当前页停止');
+
+    let nowMs = 1_700_000_000_000;
+    let timeoutCalls = 0;
+    const timedOut = createMcpMarket({
+      dataDir: DATA, configStore: store, env, lookupImpl,
+      now: () => nowMs,
+      requestImpl: async () => {
+        timeoutCalls += 1;
+        nowMs += 60_001;
+        return jsonResponse({ servers: [makeRegistryRow('io.example/slow')], metadata: { nextCursor: 'next-page' } });
+      },
+    });
+    const timeoutResult = await timedOut.list({ source: 'registry' });
+    assert.equal(timeoutResult.ok, false);
+    assert.equal(timeoutResult.code, 'timeout');
+    assert.equal(timeoutCalls, 1, '总时限耗尽后不能再请求下一页');
   });
 
   section('D. 第三方市场源');
@@ -743,7 +1108,7 @@ const CUSTOM_SOURCE = {
     });
     assert.equal(auth.code, 'proxy-auth-required');
   });
-  await checkAsync('G·Registry 分页与第三方源也能走代理线路', async () => {
+  await checkAsync('G·Registry 完整目录与第三方源也能走代理线路', async () => {
     const proxied = createMcpMarket({
       dataDir: DATA,
       configStore: store,
@@ -756,10 +1121,7 @@ const CUSTOM_SOURCE = {
           if (u.hostname === 'registry.modelcontextprotocol.io') {
             return {
               ok: true, status: 200, headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                servers: [REGISTRY_ROW],
-                metadata: u.searchParams.get('search') ? {} : { nextCursor: 'cursor-2' },
-              }),
+              body: JSON.stringify({ servers: [REGISTRY_ROW], metadata: { count: 1 } }),
             };
           }
           return { ok: true, status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify(CUSTOM_SOURCE) };

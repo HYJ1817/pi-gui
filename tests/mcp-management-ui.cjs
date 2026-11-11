@@ -68,21 +68,56 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     { id: 'builtin:memory', source: 'builtin', sourceLabel: '内置精选', catalogId: 'memory', name: 'Memory', installName: 'memory', identifier: 'modelcontextprotocol/server-memory', version: '', category: '效率', trust: 'official', trustEvidence: 'Anthropic 官方仓库', description: '长期记忆。', transport: 'stdio', commandSummary: 'npx -y @modelcontextprotocol/server-memory', urlPreview: '', homepage: '', requires: ['node', 'npx'], fields: [], envFields: [], headerFields: [], warning: '', installable: true, installReason: '' },
     { id: 'builtin:playwright', source: 'builtin', sourceLabel: '内置精选', catalogId: 'playwright', name: 'Playwright', installName: 'playwright', identifier: 'microsoft/playwright-mcp', version: '', category: '开发工具', trust: 'official', trustEvidence: 'Microsoft 官方仓库', description: '浏览器自动化。', transport: 'stdio', commandSummary: 'npx -y @playwright/mcp', urlPreview: '', homepage: '', requires: ['node', 'npx'], fields: [], envFields: [], headerFields: [], warning: '', installable: true, installReason: '' },
   ];
+  const registryItems = Array.from({ length: 209 }, (_, i) => {
+    const index = String(i).padStart(3, '0');
+    return {
+      ...builtinItems[1],
+      id: `registry:io.example/server-${index}`,
+      source: 'registry',
+      sourceLabel: '官方 Registry',
+      catalogId: `registry:io.example/server-${index}`,
+      name: `Registry ${index}`,
+      installName: `registry-${index}`,
+      identifier: `io.example/server-${index}`,
+      version: '1.0.0',
+      category: i % 2 === 0 ? '开发工具' : '效率',
+      trust: 'registry',
+      trustEvidence: 'MCP 官方 Registry 收录；收录不代表安全性审核',
+      description: `Fixture registry server ${index}`,
+    };
+  });
+  const marketDelay = { ms: () => 0 };
+  const marketStale = { on: false };
+  const marketFail = { match: () => false };
   const marketPayload = (target) => {
     const u = new URL(target, 'http://fixture');
     const source = u.searchParams.get('source') || 'builtin';
     const q = (u.searchParams.get('q') || '').toLowerCase();
     const category = u.searchParams.get('category') || '全部';
-    const cursor = u.searchParams.get('cursor') || '';
     const offset = Number(u.searchParams.get('offset') || 0);
     if (source === 'registry') {
-      const first = { ...builtinItems[1], id: 'registry:io.example/memory', source: 'registry', sourceLabel: '官方 Registry', trust: 'unverified', trustEvidence: '' };
-      const second = { ...builtinItems[0], id: 'registry:io.example/filesystem', source: 'registry', sourceLabel: '官方 Registry', trust: 'unverified', trustEvidence: '' };
+      const pageSize = Math.max(1, Number(u.searchParams.get('pageSize') || 24));
+      const requestedPage = Math.max(1, Number(u.searchParams.get('page') || 1));
+      const filtered = registryItems.filter((item) => {
+        if (category !== '全部' && item.category !== category) return false;
+        if (!q) return true;
+        return `${item.name} ${item.identifier} ${item.description}`.toLowerCase().includes(q);
+      });
+      const total = filtered.length;
+      const totalPages = total ? Math.ceil(total / pageSize) : 0;
+      const page = totalPages ? Math.min(requestedPage, totalPages) : 1;
+      const start = (page - 1) * pageSize;
       return {
-        ok: true, source, total: 2, hasMore: !cursor, nextCursor: cursor ? null : 'reg-next',
-        categories: ['全部', '开发工具'], sources: { ok: true, builtin: { count: 10 }, registry: {}, custom: customSources },
-        items: cursor ? [second] : [first],
+        ok: true, source, total, page, pageSize, totalPages,
+        hasMore: page < totalPages, nextCursor: null,
+        categories: ['全部', '开发工具', '效率'],
+        sources: { ok: true, builtin: { count: 10 }, registry: {}, custom: customSources },
+        items: filtered.slice(start, start + pageSize),
         network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
+        ...(marketStale.on ? {
+          stale: true,
+          refreshError: { code: 'network', error: 'Registry 暂时不可达（fixture）' },
+        } : {}),
       };
     }
     if (source.startsWith('custom:')) {
@@ -167,7 +202,12 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     if (pathOnly === '/api/mcp/market/sources') {
       return ok({ ok: true, builtin: { count: 10 }, registry: {}, custom: customSources, categories: ['全部', '开发工具', '效率'] });
     }
-    if (pathOnly === '/api/mcp/market' && method === 'GET') return ok(marketPayload(target));
+    if (pathOnly === '/api/mcp/market' && method === 'GET') {
+      const delay = marketDelay.ms(target);
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+      if (marketFail.match(target)) return ok({ ok: false, code: 'network', error: 'Registry 暂时不可达（fixture）', items: [] });
+      return ok(marketPayload(target));
+    }
     if (pathOnly === '/api/mcp/market' && method === 'POST') {
       if (body?.action === 'install') {
         marketInstalls.push(body);
@@ -577,20 +617,142 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.ok(marketGets.some((c) => c.target.includes('offset=2')));
 
     d.querySelector('[data-focus-key="source:registry"]').click();
-    await tick(100);
-    assert.equal(d.querySelectorAll('.mcp-market-card').length, 1);
+    await tick(120);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24, 'Registry 默认每页 24 条');
     const proxyNotice = d.querySelector('.mcp-market-page .mcp-banner.is-info');
     assert.ok(proxyNotice, '代理线路必须给用户可见的说明');
     assert.ok(proxyNotice.textContent.includes('代理侧解析'));
     assert.ok(proxyNotice.textContent.includes('固定校验'));
-    d.querySelector('[data-focus-key="load-more"]').click();
-    await tick(100);
-    assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
-    assert.ok(calls.some((c) => c.target.includes('source=registry') && c.target.includes('cursor=reg-next')));
+    const pagination = () => d.querySelector('.mcp-market-page .mcp-pagination');
+    assert.ok(pagination(), 'Registry 必须在列表底部显示页码导航');
+    assert.ok(pagination().textContent.includes('第 1 / 9 页'));
+    assert.ok(pagination().textContent.includes('共 209 条'));
+    const pageBtn = (n) => pagination().querySelector(`[data-focus-key="page:${n}"]`);
+    assert.equal(pagination().querySelector('[data-focus-key="page:prev"]').disabled, true, '第一页的上一页必须禁用');
+    assert.equal(pagination().querySelector('[data-focus-key="page:next"]').disabled, false);
+    assert.equal(pageBtn(1).classList.contains('on'), true);
+    assert.equal(pageBtn(1).getAttribute('aria-current'), 'page');
+
+    const scrollHost = d.querySelector('.work-surface.settings-detail') || d.querySelector('.settings-detail');
+    scrollHost.scrollTop = 480;
+    pageBtn(2).click();
+    await tick(120);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
+    assert.equal(pageBtn(2).classList.contains('on'), true, '当前页码必须突出');
+    assert.equal(scrollHost.scrollTop, 0, '翻页后列表回到顶部');
+    assert.ok(calls.some((c) => c.target.includes('source=registry') && c.target.includes('page=2') && c.target.includes('pageSize=24')));
+    assert.ok(!calls.some((c) => c.target.includes('source=registry') && c.target.includes('cursor=')), '翻页不能继续走 cursor');
+
+    pagination().querySelector('[data-focus-key="page:9"]').click();
+    await tick(120);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 17, '最后一页不足 24 条');
+    assert.equal(pageBtn(9).classList.contains('on'), true);
+    assert.ok(pagination().textContent.includes('第 9 / 9 页'));
+    assert.equal(pagination().querySelector('[data-focus-key="page:next"]').disabled, true);
+    assert.equal(pagination().querySelector('[data-focus-key="page:prev"]').disabled, false);
+
+    /* 搜索 / 分类变化必须回到第一页，且筛选基于完整目录（服务端本地筛选）。 */
+    const registrySearch = d.querySelector('#mcpMarketSearch');
+    registrySearch.value = 'server-1';
+    registrySearch.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(420);
+    assert.equal(pagination().querySelector('[aria-current="page"]').textContent, '1');
+    assert.ok(pagination().textContent.includes('共 100 条'));
+    assert.ok(pagination().textContent.includes('/ 5 页'));
+    assert.ok(calls.some((c) => c.target.includes('source=registry') && c.target.includes('q=server-1') && c.target.includes('page=1')));
+    registrySearch.value = '';
+    registrySearch.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(420);
+
+    pageBtn(2).click();
+    await tick(120);
+    d.querySelector('[data-focus-key="category:效率"]').click();
+    await tick(120);
+    assert.equal(pagination().querySelector('[aria-current="page"]').textContent, '1');
+    assert.ok(pagination().textContent.includes('共 104 条'));
+    assert.ok(calls.some((c) => c.target.includes('source=registry') && c.target.includes('category=%E6%95%88%E7%8E%87') && c.target.includes('page=1')));
+    d.querySelector('[data-focus-key="category:全部"]').click();
+    await tick(120);
+
+    registrySearch.value = 'no-such-server';
+    registrySearch.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(420);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 0);
+    assert.ok(d.querySelector('.mcp-market-page .mcp-empty')?.textContent.includes('没有匹配'));
+    assert.equal(pagination(), null, '空结果不显示页码');
+    registrySearch.value = '';
+    registrySearch.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(420);
+
+    /* 键盘焦点：翻页后仍停在同一页码按钮上，而不是掉回 body。 */
+    const focusedPage = pageBtn(2);
+    focusedPage.focus();
+    focusedPage.click();
+    await tick(120);
+    assert.equal(d.activeElement?.dataset?.focusKey, 'page:2', '翻页后焦点保留在当前页码');
+    assert.equal(pagination().querySelector('[aria-current="page"]').textContent, '2');
+
+    /* 页码请求失败：重试必须回到刚才请求的那一页。 */
+    marketFail.match = (target) => target.includes('source=registry') && target.includes('page=3');
+    pageBtn(3).click();
+    await tick(120);
+    assert.ok(d.querySelector('.mcp-market-page .mcp-empty')?.textContent.includes('暂时不可用'));
+    marketFail.match = () => false;
+    clickText(d.querySelector('.mcp-market-page .mcp-empty-actions'), 'button', '重试');
+    await tick(120);
+    assert.equal(pagination().querySelector('[aria-current="page"]').textContent, '3', '重试不能把用户扔回第 1 页');
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
+    assert.ok(calls.some((c) => c.target.includes('source=registry') && c.target.includes('page=3')));
+
+    /* 刷新失败时显示旧缓存横幅；恢复成功后横幅消失。 */
+    marketStale.on = true;
+    pageBtn(2).click();
+    await tick(120);
+    const staleBanner = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+      .find((b) => b.textContent.includes('上次成功加载的缓存'));
+    assert.ok(staleBanner, '刷新失败必须明确提示正在显示旧缓存');
+    assert.ok(staleBanner.textContent.includes('Registry 暂时不可达'));
+    marketStale.on = false;
+    pageBtn(1).click();
+    await tick(120);
+    assert.equal(
+      [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+        .some((b) => b.textContent.includes('上次成功加载的缓存')),
+      false,
+      '刷新成功后旧缓存横幅必须消失',
+    );
+
     d.querySelector('[data-focus-key="source:builtin"]').click();
-    await tick(100);
+    await tick(120);
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
     assert.equal(d.querySelector('.mcp-market-page .mcp-banner.is-info'), null, '离线精选不显示代理说明');
+    assert.equal(d.querySelector('.mcp-market-page .mcp-pagination'), null, '精选目录保持加载更多，不显示页码');
+  });
+
+  await check('快速切换搜索词时旧响应不能覆盖新结果', async () => {
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
+    marketDelay.ms = (target) => {
+      const u = new URL(target, 'http://fixture');
+      return u.searchParams.get('q') === 'memory' ? 700 : 0;
+    };
+    const search = d.querySelector('#mcpMarketSearch');
+    search.value = 'memory';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(340);
+    search.value = 'filesystem';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(680);
+    await tick(500);
+    assert.deepEqual(
+      [...d.querySelectorAll('.mcp-market-card h4')].map((h) => h.textContent),
+      ['Filesystem'],
+      '较慢的旧搜索响应不能覆盖新结果',
+    );
+    marketDelay.ms = () => 0;
+    search.value = '';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(420);
+    assert.equal(d.querySelectorAll('.mcp-market-card').length, 2);
   });
 
   await check('市场安装继承当前 scope 筛选：项目筛选 → 默认项目级', async () => {
