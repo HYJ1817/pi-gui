@@ -1059,19 +1059,19 @@ function createMarketPage(card, {
   function updateToolbarTotal() {
     const bar = card.querySelector('.mcp-market-toolbar');
     if (!bar) return;
-    let el = bar.querySelector('.mcp-market-total');
+    let totalEl = bar.querySelector('.mcp-market-total');
     const text = state.partial
       ? (state.loaded > 0 ? `已加载 ${state.loaded} 条` : '正在加载…')
       : (state.total !== null ? `共 ${state.total} 个结果` : '');
     if (!text) {
-      if (el) el.remove();
+      if (totalEl) totalEl.remove();
       return;
     }
-    if (!el) {
-      el = node('span', 'mcp-market-total');
-      bar.appendChild(el);
+    if (!totalEl) {
+      totalEl = node('span', 'mcp-market-total');
+      bar.appendChild(totalEl);
     }
-    el.textContent = text;
+    totalEl.textContent = text;
   }
 
   /** 只替换结果区：抓取轮询不会打断搜索框焦点。 */
