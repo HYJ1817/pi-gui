@@ -4,6 +4,11 @@ Pi GUI **使用 pi 原生的 MCP，不内置独立 MCP runtime**：不自己实�
 不管理连接、不存 token。所有状态与动作都走 pi 官方的路，拿不到证据就保持
 unknown，不猜。
 
+管理面（新增 / 编辑 / 启停 / 删除）写的是 **Pi 原生 `mcp.json`**，不是另一套
+`.agents/servers` 或 GUI 私有存储。CLI 没有 shell 接口的动作由受控配置写入完成；
+运行时状态仍然只认 `pi mcp list --json`，**「配置已保存」「连接成功」「Agent
+会话已加载」是三个独立状态**，界面不合并。
+
 核对对象：pi **0.99.2** 发布包（`docs/mcp.md`、`docs/cli.md` 的 MCP commands、
 `dist/core/mcp-servers.d.ts`、`dist/extensions/mcp/{cli,config,runtime,tools}.d.ts`）。
 历史验证基线 0.87.0 没有原生 MCP；上一轮基线 0.99.1 的差异见
@@ -251,51 +256,98 @@ GUI 侧的判定因此不用「原始 JSON key 是否存在」，而用 `parseMc
 信任真值来源仍然只有一处：注入的 `readTrust`（`server/skills.js` 的
 `readTrustState`，与 Skills / extension-registry 同一个），本模块不复制第二套。
 
-## 安全：凭据值不进 Pi GUI（P20.6-Fix）
+## 管理面与配置写入（P20.7）
 
-- `env` / `headers` / `oauth` / `auth` 的**值一个字节都不进报告**，只记「有没有」
-- transport 原文（命令路径 / URL）、配置文件的绝对路径不进 renderer
-- `mcp-auth.json` 的 token **绝不读**；错误文本截断 500 字符并脱敏已知路径
-- **MCP 添加接口只接受「不含 secret value」的配置**，后端防御式校验：
+`server/mcp-config.js` 是唯一配置写入口，直接读写 Pi 原生的两处 `mcp.json`：
 
-| 被拒字段 | 结果 |
-|---|---|
-| `headers[].value` / `headers[].key` | `secret-input-unsupported`（`field: "headers[].value"`） |
-| `env[].value` / `env[].key`、裸 `env` 对象 | `secret-input-unsupported` |
-| `oauth`（整块：`clientSecret` / `clientId` / `callbackPort` / …） | `secret-input-unsupported` |
-| `auth`（0.99.2 的 provider token 引用） | `secret-input-unsupported` |
-| `token` / `accessToken` / `refreshToken` / `bearerToken` / `apiKey` / `secret` / `password` / `authorization` | `secret-input-unsupported` |
+- 校验复用 `server/mcp-native.js` 的 `parseMcpServers()` / 上游
+  `validateMcpServerConfig` 判定，不另写一套宽松规则；
+- **原子写**：同目录临时文件 + fsync + rename；写前备份（最多 5 份），
+  失败不覆盖原文件；拒绝符号链接，并拒绝 `.pi` 父目录是目录链接/junction
+  （否则项目级保存可能写进链接目标）；
+- 每次读/写计算内容哈希作为 `revision`，写请求必须带 `expectedRevision`
+  （缺失即拒绝，不再把“没传”当成跳过并发检查），
+  工作区切换用 `__expectedCwd` 守卫，避免用旧页面覆盖新配置；
+- 编辑已有条目时保留 GUI 不管理的上游键（`oauth` / `auth` / `toolExposure`
+  及未来新增键）与 `cwd`；项目 override 编辑从原有 patch 出发，不会因为
+  表单只改 `enabled` 而静默删掉 `exposure` / `toolExposure`；改名会删除旧名字条目，
+  不产生两份配置；
+- 项目条目遵循 Pi 1.5 的 override 语义：只有 `enabled` / `exposure` /
+  `toolExposure` 的条目是覆盖，必须存在同名全局 base；启停优先改已有项目条目，
+  没有才创建最小 override，**不复制全局凭据**；
+- project scope 的写入在 GUI 侧再过一次 trust 闸门（`trusted === true`，
+  `false` / `null` 一律 fail closed）。
 
-被拒时：**不调用 `runCli`**，错误文案只带**字段名**、绝不回显值，并指引用户
-改用官方 `pi mcp add` 或手工编辑 pi 的 `mcp.json`。
+项目文件里出现 `auth` 会被 Pi 上游拒绝；GUI 不“修复”它，按上游 parser
+给出 invalid 原因。
 
-为什么必须堵在源头：`runCli` 的 `pi-error` 分支会把 pi 的 stderr 尾巴回显进
-错误文案。我们无法假设 pi 永远不会回显敏感 argv —— 既然 GUI 不再传 secret
-argv，这条风险就不存在了，而不是靠「响应里不打印」。
+## 安全：凭据值不进入 renderer / 报告
 
-**唯一保留的引用字段**是 `bearerTokenEnvVar`：只传**变量名**，
-argv 里是 `--bearer-token-env-var GITHUB_TOKEN`，pi 把它写成
-`Authorization: Bearer ${GITHUB_TOKEN}`，值由 pi 在运行时从环境里取，
-从不经过 renderer / HTTP / GUI 进程。
+- `env` / `headers` / `oauth` / `auth` 的**值一个字节都不进摘要**，只记「有没有」；
+  详情接口只返回值回填非敏感字面值，敏感值一律 `value: null, secret: true`；
+- transport 原文（命令路径 / URL）与配置绝对路径**不进摘要**；详情接口只在
+  用户打开单条配置时返回脱敏后的 URL / 命令；
+- `mcp-auth.json` 的 token **绝不读**；错误文本截断 500 字符并脱敏已知路径；
+- 新增 / 编辑配置时，**非敏感 env / header 字面值可以直接填写**；
+  敏感键名或敏感形态的值必须写成 `${VAR}` 引用（`Authorization` 可写
+  `Bearer ${TOKEN}`）。URL 中的用户名 / 密码 / 凭据查询参数一律拒绝；
+- 已有明文凭据编辑时只以 `keep: true` 回传，值不回到 renderer；用户不改就原样保留；
+- `args` 里的敏感开关值、`--key=value`、Authorization 字面值、带凭据的 URL
+  同样按凭据处理：详情只回数量并标记 `argsProtected`，不回填原文；保存时省略
+  `args` 表示原样保留，新填写的凭据形态参数会被拒绝；项目 override 继承的
+  全局 args / URL 走同一套边界；
+- URL 查询串不只看参数名：参数值是 `sk-` / `ghp_` / JWT 等凭据形态、或路径
+  含凭据形态值时，详情只回 origin，保存直接拒绝；
+- 旧的 CLI `pi mcp add` 动作仍只接受不含 secret value 的 argv；`bearerTokenEnvVar`
+  只传变量名，值由 pi 在运行时读取；
+- 外部工具扫描**只读**来源配置，不修改来源文件；含明文凭据 / shell 命令 /
+  未解析占位符 / 敏感 argv 的条目直接标为不可导入，扫描结果里不出现凭据值。
 
-页内「添加」表单**只有无凭据字段**；含凭据的配置请走终端 `pi mcp add`
-（支持 `${VAR}` 与 `!command` 引用）或直接编辑文件。
+## 动作与接口
 
-## 动作（只代理官方 CLI）
-
-| 动作 | 路径 | 说明 |
+| 动作 | 实现 | 说明 |
 |---|---|---|
-| 刷新状态 | `pi mcp list --json` | 显式手势，60s 缓存（按 workspace 分键） |
-| 添加 | `pi mcp add`（stdio / http，`--exposure` / `--description` 可选） | 显式确认 + workspace stale 守卫 + **project trust 闸门**；同名替换（pi 原语） |
-| 移除 | `pi mcp remove` | 显式确认 + **project trust 闸门**；**OAuth 凭据保留**（pi 原语），清凭据走 logout |
-| 登录 | `pi mcp login --timeout`（默认 120s，上限 180s） | OAuth 全程 pi 负责；超时给终端指引 |
-| 退出登录 | `pi mcp logout` | 删掉 pi 存的 OAuth 凭据 |
+| 刷新状态 | `pi mcp list --json` | 显式手势，60s 缓存（按 workspace + launch identity 分键） |
+| 新增 / 编辑 | 受控写入 `mcp.json` | 原子写 + 备份 + revision + trust 闸门 |
+| 启停 | 受控写入 `enabled` | CLI 没有 shell 接口；不是视觉假开关，Agent 会话需 `/reload` 或重启 |
+| 删除 | 受控删除条目 | 显式确认；OAuth 凭据保留，清凭据走 logout |
+| 测试连接 | 独立运行 `pi mcp list --json` | `configured` 只来自 `mcp.json`；`connected` 只认本次运行时状态，同名跨 scope 时只取同一 scope 的行；`loaded` 恒为 `null`，不从 CLI 列表推断 Agent 会话加载 |
+| 登录 / 退出 | `pi mcp login` / `logout` | OAuth 全程 pi 负责；超时给终端指引 |
+| 从其他工具导入 | `server/mcp-import.js` | 只读扫描 → 服务端按 ID 重新扫描并校验 → 原子批量写入 |
+| 市场 | `server/mcp-market.js` | 内置离线目录 + 官方 Registry + 受控第三方源；安装只接收 catalogId |
 
-enable / disable / reconnect / 改 exposure **没有** shell 接口，只能在 pi 的
-`/mcp` 管理器（TUI）里做 —— 界面如实说明，不伪造这些开关。
-
-所有动作都经 `server/agents/cli.js` 的 `runCli`（`shell:false` + args 数组，
+CLI 动作都经 `server/agents/cli.js` 的 `runCli`（`shell:false` + args 数组，
 server 名严格校验），入口从 launch identity 派生（与 bridge 同一份包）。
+
+## 市场与外部导入的额外边界
+
+- 内置目录完全离线；官方 Registry 失败时保留内置目录并给出明确错误码；
+- Registry / 第三方源只允许 **HTTPS + 443**，拒绝**本机 / 内网 IP 字面量**（含
+  IPv4-mapped IPv6、NAT64、6to4 里嵌的内网地址）、本机 / 内网 DNS、重定向、
+  非 JSON content-type、超大响应；公网 IP 字面量允许，但证书仍按 IP SAN 校验；
+  8s 超时；第三方源条目里的 HTTP 地址也按同一套规则检查；
+- **DNS 校验约束实际连接目标**：解析一次后把已校验 IP 交给 `https.request`
+  的 `lookup` 固定，`hostname` / SNI / 证书仍按原域名校验；双栈地址逐个尝试，
+  不会再次解析。出现 3xx 直接拒绝，不跟随；
+- 检测到 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 等代理环境时**默认拒绝**
+  （代理会重新解析域名，GUI 无法确认实际连接地址）。`NO_PROXY` 命中目标域名时
+  走直连并同样固定 IP。解析结果落在 fake-IP 网段 `198.18.0.0/15` 时返回
+  `proxy-blocked`，明确说明是代理环境导致，而不是冒充 `blocked-host`；
+- 官方 Registry schema（2025-12-11）适配：`packages` 的 npm/npx、PyPI/uvx，
+  `runtimeArguments` / `packageArguments`（positional / named）、变量模板、
+  `environmentVariables`（必填 / secret → `${VAR}` 引用）、远程 `streamable-http`
+  URL 模板与 headers；SSE、OCI、版本范围、非官方 registryBaseUrl、重复参数、
+  凭据型参数变量，以及 runtimeArguments 中会改写包来源或执行命令的参数
+  （`--registry` / `-c` / `--call` / `--node-options` / `--from` 等）都标为
+  不可安装并给出原因；
+- Registry 收录**不是安全认证**：条目显示为「Registry 收录」（未审核），
+  不自动标成「官方」或「已验证」；
+- 第三方源条目只接受 `npx` / `uvx` 或 HTTPS URL，命令模板与占位符由服务端校验；
+  安装请求只传 `catalogId` + 表单字段，**客户端不能注入 command / url**；
+  确认弹窗显示按当前输入生成的完整命令 / 端点预览（含引号与占位符），
+  敏感值只显示 `${VAR}` 或 `***`，安装成功后显示服务端实际写入的命令；
+- 来源文件扫描读取 Claude Desktop / Cursor / VS Code，只读；真正导入时服务端
+  重新扫描并重新校验，renderer 只提交条目 ID 与重命名 / scope。
 
 ## OAuth 边界
 
@@ -377,7 +429,13 @@ CLI 实际只产两个」）。
 ## 相关测试
 
 ```bash
-npm run test:mcp    # tests/mcp-native.cjs（187 条，纯 fixture，完全离线）
+npm run test:mcp
+# tests/mcp-config.cjs     44 条（配置读写 / 原子写 / 备份 / trust / override / 保留上游键 / args 凭据 / cwd / 父链接 / revision / 保留键 / auth 覆盖 / keepUrl）
+# tests/mcp-manager.cjs    24 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配 / transportType / 超大请求体）
+# tests/mcp-market.cjs     36 条（内置目录 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 代理与重定向 / 非法状态码 / 覆盖安装凭据）
+# tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
+# tests/mcp-management-ui.cjs 23 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态）
+# tests/mcp-native.cjs     202 条（Pi 契约 / 运行时投影 / 状态机 / 缓存）
 ```
 
 覆盖：**上游 validateMcpServerConfig 逐条对拍**（接受集合 ⊆ Pi 接受集合）、
@@ -387,10 +445,20 @@ unknown 三态 + 非法条目 + 坏文件）、**raw MCP tool name 安全投影*
 **两层命名边界**（CLI raw vs Timeline registered）、secret API contract、
 0.99.2 fixture/schema、unknown enum fallback，以及安全解析、入口派生、
 scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsupported、
-语义投影与运行观察。
-`test:ui`（smoke）另有 MCP 标签页的界面行为（状态横幅、server 行、刷新/移除/
-添加 wiring、trust 提示、workspace 隔离文案、unsupported 声明、无凭据字段）。
+语义投影与运行观察；管理面另有原子写 / revision / 备份 / 上游键保留、
+市场目录与 Registry 分页分类、Registry 参数 / 环境变量 / URL 模板适配、
+来源扫描脱敏、安装只传 catalogId、DNS 固定与代理 / 重定向拒绝、
+关键 UI 交互（exposure 回填、安装 scope 继承、实际命令预览）与项目未信任降级。
 
-**live MCP 测试本轮未执行**（不进 CI）。真机流程（手工）：配一个本地 stdio
-fixture server → 打开 MCP 页 → 刷新状态见 connected + 工具数 → 调一次工具见
-Timeline 语义行 → logout 清理。不要用真实远端 server，不要 OAuth 真登录。
+`test:ui`（smoke）另有旧 MCP 能力标签页的界面行为（状态横幅、server 行、
+刷新/移除/添加 wiring、trust 提示、workspace 隔离文案、无凭据字段）。
+
+**live MCP 测试不进自动化 CI**（不能在测试里依赖真实网络 / 用户 pi 配置）。
+受控验证使用临时 `PI_CODING_AGENT_DIR` + 本地 stdio fixture server：
+`pi mcp list --json` 应看到 connected + 工具数；再用同一个 agent 目录启动
+一次真实 Agent 会话，确认工具可调用。不要用真实远端 server，不要 OAuth 真登录。
+
+本轮已在 **pi 1.5.2** 上完成一次受控验证：GUI 配置层写入的 `fixture`
+被 `pi mcp list --json` 识别为 `scope: "global"`、`state: "connected"`、
+`tools: ["echo"]`；真实 Agent 会话调用到 `mcp__fixture__echo` 并拿到
+`ECHO:hello-from-agent`。上面的契约条目仍以 0.99.2 发布包为逐条核对基线。

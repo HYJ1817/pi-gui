@@ -78,6 +78,7 @@ import { loadProviders, openProvidersPanel, openProviderAuthPanel, reloadPi } fr
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel, refreshGitNow } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
+import { openMcpSettings } from './mcp-settings.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner, setTaskSessionViewer } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
@@ -1113,7 +1114,14 @@ document.addEventListener('pi-gui:right-pane', (event) => {
   $('navChanges').classList.toggle('is-active', open);
 });
 $('navCapabilities').onclick = () => openExtensions({ tab: 'capabilities' });
-$('navMcp').onclick = () => openExtensions({ tab: 'mcp' });
+/* MCP 现在是完整的设置页（管理 + 市场），不再借用扩展面板的旧标签页。
+ * 旧标签页仍保留在扩展页里，供只读诊断使用。 */
+function openMcpPage() {
+  return openMcpSettings({
+    present: (build, dispose, options) => settingsSurface.presentDetail('navMcp', build, dispose, options),
+  });
+}
+$('navMcp').onclick = openMcpPage;
 $('navRestartPi').onclick = restartPi;
 /* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
 $('navPalette').onclick = () => {
@@ -1290,7 +1298,7 @@ defineCommands([
   { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.open() },
   { id: 'view.capabilities', title: '能力视图（Capabilities）', group: '视图', keywords: 'capability 能力 状态 可用', run: () => openExtensions({ tab: 'capabilities' }) },
   { id: 'view.skills', title: 'Skills', group: '视图', keywords: 'skill 技能', run: () => openExtensions({ tab: 'skills' }) },
-  { id: 'view.mcp', title: 'MCP', group: '视图', keywords: 'mcp server 原生', run: () => openExtensions({ tab: 'mcp' }) },
+  { id: 'view.mcp', title: 'MCP 服务器', group: '视图', keywords: 'mcp server 原生 市场 配置', run: () => openMcpPage() },
   { id: 'view.usage', title: '用量与额度', group: '视图', keywords: 'usage quota 用量 额度 token 上下文', run: () => openCtxTip() },
   { id: 'session.new', title: '新对话', group: '会话', keywords: 'new session 新会话', when: canPrompt, run: () => newSession() },
   { id: 'session.search', title: '搜索会话', group: '会话', keywords: 'search session 查找 历史', run: openSessionSearch },

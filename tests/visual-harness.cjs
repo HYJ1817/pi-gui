@@ -9,6 +9,7 @@
  * 只用于开发期，不属于产品代码。 */
 const http = require('node:http');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -803,6 +804,49 @@ function providerAuthSnapshot() {
   return { ok: true, capability: { sdkAvailable: !unknown, reason: unknown ? '无法读取 Pi 认证状态（未知）' : null, piVersion: '1.0.0' }, providers, flow, sync: { state: 'idle', reason: null } };
 }
 
+/* P20.7 配置详情夹具：形状照抄 mcp-config.getDetail()。
+ * 敏感值只以引用或 `secret:true` 出现，绝不写明文。 */
+const MCP_CONFIG_DETAILS = {
+  filesystem: {
+    type: 'stdio', command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-filesystem', 'C:\\projects\\demo'],
+    cwd: null, env: [], headers: [], oauth: false, auth: false,
+    description: '在授权目录内读写文件，权限边界由你填写的目录决定。',
+    timeout: null, exposure: 'direct', toolExposure: null, enabled: true,
+  },
+  github: {
+    type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'],
+    cwd: null, oauth: false, auth: false,
+    env: [{ key: 'GITHUB_PERSONAL_ACCESS_TOKEN', value: '${GITHUB_TOKEN}', reference: true, secret: false }],
+    headers: [], description: '浏览仓库、Issue 与 Pull Request；写操作仍由你明确发起。',
+    timeout: 30, exposure: 'codemode', toolExposure: null, enabled: true,
+  },
+  linear: {
+    type: 'http', command: null, args: [], cwd: null, env: [], headers: [],
+    url: 'https://mcp.linear.app/mcp', urlPreview: 'https://mcp.linear.app/mcp', urlProtected: false,
+    oauth: true, auth: false, description: '查询团队 Issue 与项目进度。',
+    timeout: null, exposure: 'direct', toolExposure: null, enabled: false,
+  },
+  sentry: {
+    type: 'http', command: null, args: [], cwd: null, env: [],
+    headers: [{ key: 'Authorization', value: null, reference: false, secret: true }],
+    url: 'https://mcp.sentry.dev/mcp', urlPreview: 'https://mcp.sentry.dev/mcp', urlProtected: false,
+    oauth: true, auth: false, description: '检索错误事件与版本发布记录。',
+    timeout: null, exposure: 'codemode', toolExposure: { search_issues: 'direct' }, enabled: true,
+  },
+};
+
+let marketFixturePromise = null;
+function mcpMarketFixture() {
+  if (!marketFixturePromise) {
+    marketFixturePromise = import('../server/mcp-market.js').then(({ createMcpMarket }) => createMcpMarket({
+      dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-mcp-visual-')),
+      configStore: null,
+    }));
+  }
+  return marketFixturePromise;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   const p = url.pathname;
@@ -1097,9 +1141,15 @@ const server = http.createServer(async (req, res) => {
     at: '2026-10-01T06:00:00.000Z',
     native: { state: 'active', replaced: false, disabled: false, builtinPresent: true, reason: 'builtin:mcp 在包里、未被禁用、未被接管' },
     trust: { trusted: true, requiresTrust: true },
+    files: {
+      user: { exists: true, path: '~/.pi/agent/mcp.json' },
+      project: { exists: true, path: '.pi/mcp.json' },
+    },
     servers: [
-      { name: 'filesystem', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', hasSecrets: false, toolExposure: null, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
-      { name: 'sentry', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', hasSecrets: false, toolExposure: { search_issues: 'direct' }, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+      { name: 'filesystem', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', description: '在授权目录内读写文件，权限边界由你填写的目录决定。', argsCount: 3, hasSecrets: false, toolExposure: null, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+      { name: 'github', scope: 'user', enabled: true, exposure: 'codemode', transportType: 'stdio', description: '浏览仓库、Issue 与 Pull Request；写操作仍由你明确发起。', argsCount: 2, hasSecrets: true, toolExposure: null, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
+      { name: 'linear', scope: 'user', enabled: false, exposure: 'direct', transportType: 'http', description: '查询团队 Issue 与项目进度。', argsCount: 0, hasSecrets: true, toolExposure: null, toolExposureNote: '', overridden: false, effective: { active: false, reason: 'disabled' } },
+      { name: 'sentry', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', description: '检索错误事件与版本发布记录。', argsCount: 0, hasSecrets: false, toolExposure: { search_issues: 'direct' }, toolExposureNote: '', overridden: false, effective: { active: true, reason: '' } },
     ],
     configInvalid: [],
     configError: { user: '', project: '' },
@@ -1107,11 +1157,36 @@ const server = http.createServer(async (req, res) => {
       at: '2026-10-01T06:00:00.000Z', cached: false, ok: true, code: '', error: '', errors: [], exitCode: 0,
       servers: [
         { name: 'filesystem', scope: 'user', enabled: true, exposure: 'direct', transportType: 'stdio', state: 'connected', toolCount: 12, tools: [], error: '', hasSecrets: false, toolExposure: null, configured: true },
+        { name: 'github', scope: 'user', enabled: true, exposure: 'codemode', transportType: 'stdio', state: 'failed', toolCount: 0, tools: [], error: 'connection closed during initialize', hasSecrets: true, toolExposure: null, configured: true },
         { name: 'sentry', scope: 'project', enabled: true, exposure: 'codemode', transportType: 'http', state: 'needs-auth', toolCount: 0, tools: [], error: '', hasSecrets: false, toolExposure: { search_issues: 'direct' }, configured: true },
       ],
     },
   });
   if (p === '/api/mcp/status') return json(res, 200, { ok: true, at: '2026-10-01T06:00:00.000Z', cached: false, servers: [], errors: [] });
+
+  /* P20.7 配置管理夹具：GET /api/mcp/config 与详情。只用于视觉核对，
+   * 不写任何 mcp.json。 */
+  if (p === '/api/mcp/config' && req.method === 'GET') {
+    const scope = url.searchParams.get('scope') || 'user';
+    const name = url.searchParams.get('name') || '';
+    const revisions = { user: 'sha256-visual-user', project: 'sha256-visual-project' };
+    const limits = { nameMax: 64, commandMax: 512, argsMax: 32, argMax: 1024, descriptionMax: 200, timeoutMax: 3600, envMax: 64, headersMax: 32 };
+    if (!name) return json(res, 200, { ok: true, revisions, limits });
+    const entry = MCP_CONFIG_DETAILS[name];
+    if (!entry) return json(res, 200, { ok: false, code: 'not-found', error: `mcp.json 里没有 “${name}”`, revisions });
+    return json(res, 200, { ok: true, scope, name, revision: revisions[scope] || revisions.user, trust: { trusted: true, requiresTrust: true }, overrideOnly: false, entry, revisions });
+  }
+  if (p === '/api/mcp/market' && req.method === 'GET') {
+    const fixture = await mcpMarketFixture();
+    const params = Object.fromEntries(url.searchParams.entries());
+    const result = await fixture.list(params);
+    return json(res, 200, { ...result, sources: fixture.sources() });
+  }
+  if (p === '/api/mcp/market/sources' && req.method === 'GET') {
+    const fixture = await mcpMarketFixture();
+    return json(res, 200, fixture.sources());
+  }
+
 
   /* P23：诊断面板的夹具（形状照抄 GET /api/diagnostics 的真实返回）。
    * 这里刻意让**三种核对状态**同时出现：已核对的 pi、未核对的 Extension、

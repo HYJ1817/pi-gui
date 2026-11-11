@@ -418,6 +418,25 @@ export const refreshMcpStatus = () => sendJSON('/api/mcp/status', { body: { __ex
 /** 受控动作：add / remove / login / logout（enable 等走 /mcp TUI，不在此）。 */
 export const mcpServerAction = (payload) =>
   sendJSON('/api/mcp/servers', { body: { ...payload, __expectedCwd: S.cwd } });
+
+/* P20.7 MCP 管理：配置编辑 / 启停 / 测试 / 市场 / 外部导入。
+ *
+ * 这些接口**不传凭据值以外的东西**给 renderer：读取详情时 env/header 的
+ * 敏感字面值只回 `secret:true`，UI 用 `keep` 语义保留；市场安装只传
+ * catalogId，command / url 由服务端目录模板决定。 */
+export const fetchMcpConfig = () => getJSON('/api/mcp/config');
+export const fetchMcpConfigDetail = (scope, name) =>
+  getJSON('/api/mcp/config?' + new URLSearchParams({ scope, name }));
+export const mcpConfigAction = (payload) =>
+  sendJSON('/api/mcp/config', { body: { ...payload, __expectedCwd: S.cwd } });
+export const fetchMcpMarket = (params = {}) =>
+  getJSON('/api/mcp/market?' + new URLSearchParams(params));
+export const fetchMcpMarketSources = () => getJSON('/api/mcp/market/sources');
+export const mcpMarketAction = (payload) =>
+  sendJSON('/api/mcp/market', { body: { ...payload, __expectedCwd: S.cwd } });
+export const fetchMcpImport = () => getJSON('/api/mcp/import');
+export const mcpImportApply = (payload) =>
+  sendJSON('/api/mcp/import', { body: { ...payload, __expectedCwd: S.cwd } });
 /* P19：approval 能力报告（后端只读本机 pi 包，renderer 拿不到路径）。 */
 export const fetchApprovalCapability = () => getJSON('/api/approvals/capability');
 export const fetchExtensions = () => getJSON('/api/extensions');

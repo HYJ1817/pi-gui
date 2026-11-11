@@ -8941,9 +8941,10 @@ staticCheck();
     mcpItem.onclick();
     await sleep(60);
     check('P24 面板：执行后立刻关闭（不留面板挡结果）', () => layer().hidden);
-    check('P24 面板：MCP 命令打开扩展页并停在 MCP 过滤器', () =>
-      $('workspace').dataset.workspaceView === 'extensions'
-      && $('workSurface').querySelector('#extensionsTabMcp')?.getAttribute('aria-selected') === 'true');
+    check('P24 面板：MCP 命令打开独立的 MCP 管理页', () =>
+      $('workspace').dataset.workspaceView === 'settings'
+      && $('workViewTitle').textContent === 'MCP 服务器'
+      && Boolean($('workSurface').querySelector('.mcp-page')));
 
     /* Esc 关闭 + 焦点恢复 */
     window.S.hasProject = true;
