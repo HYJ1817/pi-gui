@@ -36,6 +36,13 @@ const REFERENCE_RE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 const SCHEMED_REFERENCE_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+[ \t]+\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const EXPOSURES = new Set(['codemode', 'deferred', 'direct', 'hidden']);
+const EXPOSURE_OPTIONS = [
+  ['codemode', 'codemode（默认：按需代码模式）'],
+  ['deferred', 'deferred（延迟暴露工具）'],
+  ['direct', 'direct（工具直接暴露给 Agent）'],
+  ['hidden', 'hidden（对 Agent 隐藏）'],
+];
 
 export function settingNeedsReference(key, value, isHeader = false) {
   if (SENSITIVE_NAME_RE.test(String(key)) || /authorization|credential/i.test(String(key))) return true;
@@ -91,6 +98,22 @@ function iconButton(name, label, title, className = 'mcp-icon-btn') {
   return b;
 }
 
+function exposureSelect(value, onChange, { inherit = false } = {}) {
+  const select = node('select', 'mcp-input mcp-select');
+  select.dataset.field = 'exposure';
+  const blank = node('option', '', inherit ? '继承全局（不覆盖）' : '不显式设置（Pi 默认 codemode）');
+  blank.value = '';
+  select.appendChild(blank);
+  for (const [key, label] of EXPOSURE_OPTIONS) {
+    const option = node('option', '', label);
+    option.value = key;
+    select.appendChild(option);
+  }
+  select.value = EXPOSURES.has(value) ? value : '';
+  select.onchange = () => onChange(select.value);
+  return select;
+}
+
 function makeSwitch(checked, label, { disabled = false, title = '' } = {}) {
   const b = button('ds-switch' + (checked ? ' is-on' : ''), '', { label, title });
   b.setAttribute('role', 'switch');
@@ -144,6 +167,7 @@ function emptyDraft(defaultScope) {
     headers: [],
     description: '',
     timeout: '',
+    exposure: 'codemode',
     enabled: true,
     oauth: false,
     auth: false,
@@ -182,6 +206,9 @@ function draftFromDetail(detail, server) {
     : [];
   draft.description = entry.description || '';
   draft.timeout = typeof entry.timeout === 'number' ? String(entry.timeout) : '';
+  /* 编辑时回填原始 exposure；没有显式设置就保持空，避免一次普通编辑
+   * 把“未设置（Pi 默认）”改写成显式的 codemode。 */
+  draft.exposure = EXPOSURES.has(entry.exposure) ? entry.exposure : '';
   draft.enabled = entry.enabled !== false;
   draft.oauth = entry.oauth === true;
   draft.auth = entry.auth === true;
@@ -243,6 +270,7 @@ function buildSavePayload(draft, revision) {
     transport: draft.transport,
     description,
     timeout,
+    exposure: EXPOSURES.has(draft.exposure) ? draft.exposure : '',
     enabled: Boolean(draft.enabled),
   };
   if (typeof revision === 'string') payload.expectedRevision = revision;
@@ -435,7 +463,7 @@ function openServerForm({
     const renderOverrideSection = () => {
       const sec = formSection('项目覆盖');
       sec.appendChild(node('p', 'mcp-form-note',
-        '这是项目级覆盖条目：只保存“启用 / 停用”，transport、命令、URL 与凭据都继承全局配置。为避免意外复制凭据，名称与范围不可改。'));
+        '这是项目级覆盖条目：只保存“启用 / 停用”与可选的 exposure 覆盖，transport、命令、URL 与凭据都继承全局配置。为避免意外复制凭据，名称与范围不可改。'));
       const name = textInput({ value: draft.name, field: 'name', ariaLabel: '服务器名称' });
       name.disabled = true;
       sec.appendChild(labeledField('名称 / 标识符', name));
@@ -452,6 +480,9 @@ function openServerForm({
       };
       enabledRow.append(text, sw);
       sec.appendChild(enabledRow);
+      const exposure = exposureSelect(draft.exposure, (value) => { draft.exposure = value; }, { inherit: true });
+      sec.appendChild(labeledField('工具暴露方式（exposure）', exposure,
+        '留空表示继承全局配置；选择具体值会在这个项目里覆盖全局 exposure。'));
       if (draft.inherited) {
         const box = node('div', 'mcp-inherit-box');
         box.appendChild(node('div', 'mcp-inherit-title', '继承自全局配置'));
@@ -656,6 +687,10 @@ function openServerForm({
 
     const renderAdvanced = () => {
       const sec = formSection('高级');
+      const exposure = exposureSelect(draft.exposure, (value) => { draft.exposure = value; });
+      sec.appendChild(labeledField('工具暴露方式（exposure）', exposure,
+        'Pi 默认 codemode；direct 会把工具直接暴露给 Agent，hidden 会隐藏。保存后需要 /reload 或重启 Pi 才会应用到运行中的会话。'));
+
       const timeout = textInput({ value: String(draft.timeout ?? ''), field: 'timeout', ariaLabel: '超时秒数', type: 'number', placeholder: '留空使用 Pi 默认值' });
       timeout.min = '1'; timeout.max = '3600';
       timeout.oninput = () => { draft.timeout = timeout.value; };
@@ -1569,6 +1604,9 @@ function createPage(card, { reopen, present }) {
       projectPath: state.projectPath,
       projectName: state.projectName,
       trust: trust(),
+      /* 市场安装继承用户当前看到的范围筛选；项目未信任时安装弹层会
+       * 回退到全局，并把原因写在作用域选择器下方。 */
+      defaultScope: state.filter === 'project' ? 'project' : 'user',
       configuredNames: currentServers().map((s) => s.name),
       revisionFor,
     });

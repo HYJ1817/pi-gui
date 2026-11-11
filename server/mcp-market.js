@@ -15,9 +15,12 @@
 import crypto from 'node:crypto';
 import dns from 'node:dns';
 import fs from 'node:fs';
+import https from 'node:https';
 import net from 'node:net';
 import path from 'node:path';
-import { settingNeedsReference, writeJsonAtomic } from './mcp-config.js';
+import {
+  argsContainSecret, queryLooksSensitive, settingNeedsReference, writeJsonAtomic,
+} from './mcp-config.js';
 
 const REGISTRY_BASE = 'https://registry.modelcontextprotocol.io/v0/servers';
 const SOURCES_FILE = 'mcp-market-sources.json';
@@ -28,11 +31,22 @@ const MAX_SOURCES = 10;
 const MAX_REGISTRY_ENTRIES = 50;
 const CATEGORIES = ['全部', '开发工具', '网络', '文档', '数据', '效率'];
 const NPM_RE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i;
+const PYPI_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const VERSION_RE = /^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$/;
+/* Registry 的 Package.version 必须是**具体版本**：`latest`、`^1.2.3`、
+ * `~1.2.3`、`>=1.2.3`、`1.x`、`1.*` 都会被上游拒绝。这里再用更窄的
+ * semver 形态挡一次，避免把范围写进 npx / uvx 的包规格。 */
+const EXACT_VERSION_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/;
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const ARG_NAME_RE = /^--?[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const ENV_REFERENCE_RE = /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 const SETTING_REFERENCE_RE = /^(?:[!#$%&'*+.^_`|~0-9A-Za-z-]+[ \t]+)?\$\{[A-Za-z_][A-Za-z0-9_]*\}$/;
 const REMOTE_COMMANDS = new Set(['npx', 'uvx']);
+const NPM_REGISTRY_BASE_RE = /^https:\/\/registry\.npmjs\.org\/?$/i;
+const PYPI_REGISTRY_BASE_RE = /^https:\/\/(?:pypi\.org|pypi\.python\.org)\/?$/i;
+const PROXY_ENV_KEYS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'];
+const MAX_PINNED_ADDRESSES = 4;
 
 function isRecord(v) { return Boolean(v) && typeof v === 'object' && !Array.isArray(v); }
 function clip(s, max = 300) { const t = String(s ?? ''); return t.length > max ? t.slice(0, max) + '…' : t; }
@@ -163,7 +177,13 @@ const BUILTIN = [
 ];
 
 function builtinItems() {
-  return BUILTIN.map((e) => ({
+  return BUILTIN.map((e) => {
+    const fields = (e.fields || []).map(({ key, label, type, required, placeholder }) => ({
+      key, label, type, required: Boolean(required), placeholder: placeholder || '',
+      default: '', choices: [], help: '',
+    }));
+    const commandTemplate = e.transport === 'stdio' ? [e.command, ...e.args].join(' ') : '';
+    return {
     id: `builtin:${e.id}`,
     source: 'builtin',
     sourceLabel: '内置精选',
@@ -177,17 +197,20 @@ function builtinItems() {
     trustEvidence: e.trustEvidence,
     description: e.description,
     transport: e.transport,
-    commandSummary: e.transport === 'stdio' ? [e.command, ...e.args].join(' ') : '',
+    commandSummary: e.transport === 'stdio' ? templateWithLabels(commandTemplate, fields) : '',
+    commandTemplate,
     urlPreview: e.url || '',
+    urlTemplate: e.transport === 'http' ? e.url : '',
     homepage: e.homepage || '',
     requires: e.requires || [],
-    fields: (e.fields || []).map(({ key, label, type, required, placeholder }) => ({ key, label, type, required: Boolean(required), placeholder: placeholder || '' })),
+    fields,
     envFields: (e.envFields || []).map(({ key, label, required, placeholder }) => ({ key, label, required: Boolean(required), placeholder: placeholder || '', secret: false })),
     headerFields: (e.headerFields || []).map(({ key, label, required, placeholder, help }) => ({ key, label, required: Boolean(required), placeholder: placeholder || '', help: help || '' })),
     warning: e.warning || '',
     installable: true,
     installReason: '',
-  }));
+    };
+  });
 }
 
 /* ---------------- 通用安全网络读取 ---------------- */
@@ -227,6 +250,15 @@ function embeddedIpv4(parts) {
   const hi = parts[6];
   const lo = parts[7];
   return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+}
+
+/* 198.18.0.0/15 是 RFC 2544 的基准测试网段；Clash / Surge 等 TUN 代理
+ * 常用它做 fake-IP。它不是公网地址，但也不是“内网服务” —— 单独区分出来，
+ * 才能给出“代理无法确认实际连接地址”的准确提示，而不是误报内网。 */
+function isFakeIpAddress(ip) {
+  if (typeof ip !== 'string' || !net.isIPv4(ip)) return false;
+  const p = ip.split('.').map(Number);
+  return p[0] === 198 && (p[1] === 18 || p[1] === 19);
 }
 
 function isPrivateIp(ip) {
@@ -286,6 +318,11 @@ function blockedHostname(host) {
   return !h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal');
 }
 
+/**
+ * 把 DNS 结果收敛成一组**已经过校验的 IP**。真正的 HTTPS 连接随后只允许
+ * 连到这里的地址（自定义 lookup），域名只用于 TLS SNI 与证书校验。
+ * 这样“先查一次、再让 fetch 自己查一次”的 DNS rebinding 窗口就不存在了。
+ */
 async function assertPublicHttps(rawUrl, lookupImpl) {
   let u;
   try { u = new URL(rawUrl); } catch { return codeError('blocked-url', 'URL 不是合法地址'); }
@@ -294,17 +331,197 @@ async function assertPublicHttps(rawUrl, lookupImpl) {
   if (u.port && u.port !== '443') return codeError('blocked-url', '市场源只允许 443 端口');
   const hostname = hostnameOf(u);
   if (blockedHostname(hostname)) return codeError('blocked-host', '不允许访问本机或内网主机');
-  if (net.isIP(hostname) && isPrivateIp(hostname)) return codeError('blocked-host', '不允许访问本机或内网地址');
-  try {
-    const rows = await lookupImpl(hostname, { all: true });
-    const list = Array.isArray(rows) ? rows : [rows];
-    if (!list.length || list.some((r) => !r || isPrivateIp(String(r.address || '')))) {
-      return codeError('blocked-host', '该域名解析到了本机或内网地址');
+
+  const addresses = [];
+  if (net.isIP(hostname)) {
+    if (isFakeIpAddress(hostname)) {
+      return codeError('proxy-blocked', '目标地址属于代理的 fake-IP 网段（198.18.0.0/15），无法确认实际连接地址；已拒绝。');
     }
-  } catch {
-    return codeError('dns-failed', '无法解析市场源域名');
+    if (isPrivateIp(hostname)) return codeError('blocked-host', '不允许访问本机或内网地址');
+    addresses.push({ address: hostname, family: net.isIP(hostname) });
+  } else {
+    let rows;
+    try {
+      rows = await lookupImpl(hostname, { all: true, verbatim: true });
+    } catch {
+      return codeError('dns-failed', '无法解析市场源域名');
+    }
+    const list = Array.isArray(rows) ? rows : [rows];
+    if (!list.length) return codeError('dns-failed', '市场源域名没有解析结果');
+    for (const row of list) {
+      const address = String((row && row.address) || '');
+      const family = net.isIP(address);
+      if (isFakeIpAddress(address)) {
+        return codeError(
+          'proxy-blocked',
+          '该域名解析到了代理的 fake-IP 网段（198.18.0.0/15），无法确认实际连接地址；已拒绝请求。请改用直连 DNS 或关闭 TUN / fake-IP 后重试。',
+        );
+      }
+      /* 无法判定族、或命中私网 / 环回 / 链路本地 / 保留地址，整台主机拒绝。
+       * 不做“跳过坏地址、继续用另一个”的降级 —— 同一域名同时解析出公网与
+       * 私网地址时，那本身就是可疑输入。 */
+      if (!family || isPrivateIp(address)) {
+        return codeError('blocked-host', '该域名解析到了本机或内网地址');
+      }
+      addresses.push({ address, family: row.family === 4 || row.family === 6 ? row.family : family });
+    }
   }
-  return { ok: true, url: u };
+  if (!addresses.length) return codeError('dns-failed', '市场源域名没有解析结果');
+  return {
+    ok: true,
+    url: u,
+    hostname,
+    addresses: addresses.slice(0, MAX_PINNED_ADDRESSES),
+  };
+}
+
+function noProxyMatches(host, port, raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return false;
+  const h = String(host || '').toLowerCase().replace(/^\[|\]$/g, '');
+  for (const part of raw.split(',')) {
+    let entry = part.trim();
+    if (!entry) continue;
+    if (entry === '*') return true;
+    let entryHost = entry;
+    let entryPort = '';
+    const bracket = /^\[([^\]]+)\](?::(\d+))?$/.exec(entry);
+    if (bracket) {
+      entryHost = bracket[1];
+      entryPort = bracket[2] || '';
+    } else {
+      const plain = /^([^:]+)(?::(\d+))?$/.exec(entry);
+      if (plain) { entryHost = plain[1]; entryPort = plain[2] || ''; }
+    }
+    if (entryPort && entryPort !== String(port || '443')) continue;
+    entryHost = entryHost.replace(/^\*?\./, '').toLowerCase();
+    if (!entryHost) continue;
+    if (h === entryHost || h.endsWith(`.${entryHost}`)) return true;
+  }
+  return false;
+}
+
+/**
+ * 市场只做“直连 + 固定已校验 IP”。代理会在代理侧重新解析域名，客户端
+ * 无法证明它连到的就是刚才校验的地址；因此检测到代理时明确拒绝，而不是
+ * 把一次未经校验的连接说成已防护。NO_PROXY 排除目标域名后可以直连。
+ */
+function blockingProxy(env, url) {
+  const safeEnv = env || {};
+  const keys = PROXY_ENV_KEYS.filter((key) => typeof safeEnv[key] === 'string' && safeEnv[key].trim());
+  if (!keys.length) return null;
+  const host = hostnameOf(url);
+  const port = url.port || '443';
+  if (noProxyMatches(host, port, safeEnv.NO_PROXY || safeEnv.no_proxy)) return null;
+  return { key: keys[0] };
+}
+
+function pinnedLookupFor(address, family) {
+  const fam = family === 4 || family === 6 ? family : (net.isIPv6(address) ? 6 : 4);
+  return (hostname, options, callback) => {
+    if (options && options.all) return callback(null, [{ address, family: fam }]);
+    return callback(null, address, fam);
+  };
+}
+
+/** 真实连接参数：hostname 保持原域名（SNI / 证书校验），lookup 只回已校验 IP。 */
+function pinnedRequestOptions(url, address, family, headers = {}) {
+  const hostname = hostnameOf(url);
+  const port = url.port ? Number(url.port) : 443;
+  const options = {
+    method: 'GET',
+    protocol: 'https:',
+    hostname,
+    port,
+    path: `${url.pathname || '/'}${url.search || ''}`,
+    headers: { ...headers, host: url.host },
+    agent: false,
+    rejectUnauthorized: true,
+    lookup: pinnedLookupFor(address, family),
+  };
+  /* IP 字面量不能作为 TLS ServerName（Node 会直接拒绝）；此时证书按
+   * IP SAN 校验。域名则显式保留 SNI，证书仍按域名校验。 */
+  if (!net.isIP(hostname)) options.servername = hostname;
+  return options;
+}
+
+function responseHeaders(raw) {
+  const out = {};
+  for (const key of ['content-type', 'content-length', 'location']) {
+    const value = raw && raw[key];
+    if (typeof value === 'string' && value) out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * 一次 HTTPS GET：不跟随重定向、整体超时、响应体上限。连接由
+ * pinnedRequestOptions 固定到已经校验过的 IP。
+ */
+function httpsGetPinned(rawUrl, { address, family, timeoutMs, maxBytes, headers = {} } = {}) {
+  const u = new URL(rawUrl);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      fn(value);
+    };
+    const fail = (err) => finish(reject, err);
+    let req;
+    try {
+      req = https.request(pinnedRequestOptions(u, address, family, headers), (res) => {
+        const status = Number(res.statusCode) || 0;
+        /* 3xx 与错误状态不读 body：既避免下载无关内容，也让 fetchJson 能
+         * 先给出明确的 redirect-blocked / http-xxx。 */
+        if (status < 200 || status >= 300) {
+          res.resume();
+          finish(resolve, new Response(null, { status: status >= 200 ? status : 502, headers: responseHeaders(res.headers) }));
+          return;
+        }
+        const declared = Number(res.headers['content-length']);
+        if (Number.isFinite(declared) && declared > maxBytes) {
+          res.resume();
+          finish(resolve, new Response(null, {
+            status,
+            headers: { ...responseHeaders(res.headers), 'content-length': String(declared) },
+          }));
+          return;
+        }
+        const chunks = [];
+        let total = 0;
+        res.on('data', (chunk) => {
+          total += chunk.length;
+          if (total > maxBytes) {
+            const err = new Error('远端响应超过大小上限');
+            err.marketCode = 'too-large';
+            res.destroy();
+            req.destroy();
+            fail(err);
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.on('aborted', () => fail(Object.assign(new Error('响应被中断'), { marketCode: 'network' })));
+        res.on('error', fail);
+        res.on('end', () => {
+          finish(resolve, new Response(Buffer.concat(chunks), { status, headers: responseHeaders(res.headers) }));
+        });
+      });
+    } catch (err) {
+      fail(err);
+      return;
+    }
+    timer = setTimeout(() => {
+      const err = new Error('市场源响应超时');
+      err.name = 'TimeoutError';
+      err.marketCode = 'timeout';
+      req.destroy(err);
+    }, Math.max(1, timeoutMs));
+    req.on('error', fail);
+    req.end();
+  });
 }
 
 async function readCapped(response, maxBytes) {
@@ -333,24 +550,59 @@ async function readCapped(response, maxBytes) {
   }
 }
 
-async function fetchJson(rawUrl, { fetchImpl, lookupImpl, timeoutMs = FETCH_TIMEOUT_MS, maxBytes = MAX_RESPONSE_BYTES, accept = 'application/json' } = {}) {
+async function fetchJson(rawUrl, {
+  requestImpl = httpsGetPinned,
+  lookupImpl,
+  env = process.env,
+  timeoutMs = FETCH_TIMEOUT_MS,
+  maxBytes = MAX_RESPONSE_BYTES,
+  accept = 'application/json',
+} = {}) {
+  let parsed;
+  try { parsed = new URL(rawUrl); } catch { return codeError('blocked-url', 'URL 不是合法地址'); }
+  const proxy = blockingProxy(env, parsed);
+  if (proxy) {
+    return codeError(
+      'proxy-blocked',
+      `检测到代理环境变量 ${proxy.key}。代理会在代理侧重新解析域名，无法确认实际连接地址；为防止绕过 DNS 校验，市场请求已拒绝。请把目标域名加入 NO_PROXY 后重试，或手动配置该 server。`,
+    );
+  }
   const safe = await assertPublicHttps(rawUrl, lookupImpl);
   if (!safe.ok) return safe;
-  let response;
-  try {
-    response = await fetchImpl(safe.url.toString(), {
-      method: 'GET',
-      redirect: 'error',
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: { accept, 'user-agent': 'pi-gui-mcp-market/1' },
-    });
-  } catch (err) {
-    const name = err && err.name;
-    if (name === 'TimeoutError' || name === 'AbortError') return codeError('timeout', '市场源响应超时');
-    return codeError('network', `无法连接市场源（${clip(err && err.message, 120)}）`);
+
+  const deadline = Date.now() + timeoutMs;
+  let response = null;
+  let lastError = null;
+  let sawTimeout = false;
+  for (const target of safe.addresses) {
+    const remaining = Math.max(1, deadline - Date.now());
+    try {
+      response = await requestImpl(safe.url.toString(), {
+        hostname: safe.hostname,
+        address: target.address,
+        family: target.family,
+        timeoutMs: remaining,
+        maxBytes,
+        headers: { accept, 'user-agent': 'pi-gui-mcp-market/1' },
+      });
+      break;
+    } catch (err) {
+      if (err && err.marketCode === 'too-large') return codeError('too-large', '远端响应超过大小上限');
+      if (err && (err.marketCode === 'timeout' || err.name === 'TimeoutError' || err.name === 'AbortError')) sawTimeout = true;
+      lastError = err;
+      if (Date.now() >= deadline) break;
+    }
   }
-  if (!response || !response.ok) {
-    return codeError(`http-${response ? response.status : 0}`, `市场源返回 HTTP ${response ? response.status : '未知'}`);
+  if (!response) {
+    if (sawTimeout) return codeError('timeout', '市场源响应超时');
+    return codeError('network', `无法连接市场源（${clip(lastError && lastError.message, 120)}）`);
+  }
+  const status = Number(response.status) || 0;
+  if (status >= 300 && status < 400) {
+    return codeError('redirect-blocked', '市场源返回重定向；为防绕过地址校验，已拒绝跟随');
+  }
+  if (!response.ok) {
+    return codeError(`http-${status}`, `市场源返回 HTTP ${status || '未知'}`);
   }
   const type = String(response.headers.get('content-type') || '').toLowerCase();
   if (type && !type.includes('json')) return codeError('invalid-content-type', '市场源没有返回 JSON');
@@ -517,40 +769,837 @@ function registryQueryUrl({ q, cursor, limit }) {
   return u.toString();
 }
 
-function npmPackageConfig(pkg) {
-  if (!isRecord(pkg) || pkg.registryType !== 'npm') return null;
-  const id = typeof pkg.identifier === 'string' ? pkg.identifier : '';
-  const version = typeof pkg.version === 'string' && VERSION_RE.test(pkg.version) ? pkg.version : '';
-  if (!NPM_RE.test(id) || !version) return null;
-  const runtime = typeof pkg.runtimeHint === 'string' ? pkg.runtimeHint : 'npx';
-  if (runtime !== 'npx') return null;
-  const env = {};
-  for (const v of Array.isArray(pkg.environmentVariables) ? pkg.environmentVariables : []) {
-    if (!isRecord(v) || v.isRequired !== true || typeof v.name !== 'string' || !ENV_NAME_RE.test(v.name)) continue;
-    env[v.name] = `\${${v.name}}`;
+function exactVersion(value) {
+  return typeof value === 'string' && EXACT_VERSION_RE.test(value) ? value : '';
+}
+
+function inputLabel(input, fallback) {
+  const text = cleanText(
+    (isRecord(input) && (input.description || input.placeholder || input.valueHint)) || fallback,
+    80,
+  );
+  return text || fallback;
+}
+
+function inputFieldType(format) {
+  if (format === 'filepath') return 'path';
+  if (format === 'number') return 'number';
+  if (format === 'boolean') return 'boolean';
+  return 'text';
+}
+
+function checkInputValue(input, value) {
+  if (typeof value !== 'string' || value.length > 1024 || /[\u0000-\u001f\u007f]/.test(value)) {
+    return codeError('bad-field', '参数值不合法或过长');
   }
+  const choices = isRecord(input) && Array.isArray(input.choices)
+    ? input.choices.filter((c) => typeof c === 'string') : [];
+  if (choices.length && !choices.includes(value)) {
+    return codeError('bad-field', '参数值不在 Registry 声明的可选项内');
+  }
+  const format = isRecord(input) ? input.format : '';
+  if (format === 'number' && !/^-?\d+(?:\.\d+)?$/.test(value)) {
+    return codeError('bad-field', '参数值必须是数字');
+  }
+  if (format === 'boolean' && value !== 'true' && value !== 'false') {
+    return codeError('bad-field', '参数值必须是 true 或 false');
+  }
+  if (format === 'filepath' && !SETTING_REFERENCE_RE.test(value) && !path.isAbsolute(value)) {
+    return codeError('bad-field', '参数值必须是绝对路径');
+  }
+  return { ok: true, value };
+}
+
+function publicField(field) {
   return {
-    transport: 'stdio', command: 'npx', args: ['-y', `${id}@${version}`],
-    ...(Object.keys(env).length ? { env } : {}),
-    requires: ['node', 'npx'],
-    requiredEnvKeys: Object.keys(env),
+    key: field.key,
+    label: field.label,
+    type: inputFieldType(field.format),
+    required: field.required === true,
+    placeholder: field.placeholder || '',
+    default: field.default || '',
+    choices: Array.isArray(field.choices) ? field.choices.slice(0, 30) : [],
+    help: field.help || '',
   };
 }
 
-function remoteConfig(remotes) {
-  for (const r of Array.isArray(remotes) ? remotes : []) {
-    if (!isRecord(r) || r.type !== 'streamable-http' || typeof r.url !== 'string') continue;
-    try {
-      const u = new URL(r.url);
-      if (u.protocol !== 'https:' || u.username || u.password) continue;
-      if (u.port && u.port !== '443') continue;
-      const host = hostnameOf(u);
-      if (net.isIP(host) && isPrivateIp(host)) continue;
-      if (blockedHostname(host)) continue;
-      return { transport: 'http', url: u.toString(), requires: [] };
-    } catch { /* skip */ }
+function publicEnvField(field) {
+  return {
+    ...publicField(field),
+    envKey: field.envKey,
+    secret: field.secret === true,
+  };
+}
+
+function publicHeaderField(field) {
+  return {
+    ...publicField(field),
+    header: field.header,
+    secret: field.secret === true,
+    literal: field.literal === true,
+    prefix: field.prefix || '',
+  };
+}
+
+/* `{curly}` 是 Registry 的变量模板。静态值在这里直接替换；没有静态值的
+ * 变量变成一个待填字段，安装时才取值。安全关键点：
+ *   - 参数里的敏感变量一律拒绝（凭据不能进 args）；
+ *   - 未定义的 `{name}` 按上游语义保留为字面量，但不允许它出现在 URL
+ *     的 host / 端口等位置后被当成“已校验”。 */
+function resolveTemplateParts(template, variables, keyPrefix, { label, allowSecret = false } = {}) {
+  if (typeof template !== 'string') return { ok: false, reason: '模板不是字符串' };
+  if (template.length > 2048 || /[\u0000\u007f]/.test(template)) {
+    return { ok: false, reason: '模板过长或包含控制字符' };
   }
-  return null;
+  const vars = isRecord(variables) ? variables : {};
+  const parts = [];
+  const fields = [];
+  const re = /\{([A-Za-z0-9_.-]+)\}/g;
+  let last = 0;
+  let match;
+  while ((match = re.exec(template))) {
+    if (match.index > last) parts.push(template.slice(last, match.index));
+    const name = match[1];
+    const def = isRecord(vars[name]) ? vars[name] : null;
+    if (!def) {
+      parts.push(match[0]);
+      last = re.lastIndex;
+      continue;
+    }
+    const staticValue = def.value !== undefined ? def.value : def.default;
+    if (staticValue !== undefined) {
+      const checked = checkInputValue(def, staticValue);
+      if (!checked.ok) return { ok: false, reason: checked.error };
+      parts.push(checked.value);
+    } else {
+      if (def.isSecret === true && !allowSecret) {
+        return { ok: false, reason: '该参数需要明文凭据，凭据不能写入 args' };
+      }
+      const field = {
+        key: `${keyPrefix}.${name}`,
+        label: inputLabel(def, name),
+        required: def.isRequired === true,
+        format: typeof def.format === 'string' ? def.format : 'string',
+        choices: Array.isArray(def.choices) ? def.choices.filter((c) => typeof c === 'string') : [],
+        placeholder: typeof def.placeholder === 'string' ? def.placeholder : '',
+        default: '',
+        help: cleanText(def.description, 160),
+        secret: def.isSecret === true,
+      };
+      fields.push(field);
+      parts.push({ field });
+    }
+    last = re.lastIndex;
+  }
+  if (last < template.length) parts.push(template.slice(last));
+  if (!parts.length) parts.push('');
+  return { ok: true, parts, fields, label };
+}
+
+function tokenTemplate(token) {
+  return token.parts.map((part) => (typeof part === 'string' ? part : `{${part.field.key}}`)).join('');
+}
+
+function templateWithLabels(template, fields) {
+  let out = String(template || '');
+  for (const field of Array.isArray(fields) ? fields : []) {
+    out = out.split(`{${field.key}}`).join(`<${field.label}>`);
+  }
+  return out;
+}
+
+function planArgument(arg, index, { prefix = 'arg' } = {}) {
+  if (!isRecord(arg)) return { ok: false, reason: '参数条目不是对象' };
+  if (arg.isRepeated === true) return { ok: false, reason: '重复参数（isRepeated）暂不支持安全转换' };
+  const type = arg.type === 'named' || arg.type === 'positional'
+    ? arg.type
+    : (typeof arg.name === 'string' ? 'named' : 'positional');
+  const keyPrefix = `${prefix}${index}`;
+  const label = inputLabel(arg, arg.valueHint || arg.name || `参数 ${index + 1}`);
+  const format = typeof arg.format === 'string' ? arg.format : 'string';
+  const choices = Array.isArray(arg.choices) ? arg.choices.filter((c) => typeof c === 'string') : [];
+
+  if (type === 'named') {
+    const name = typeof arg.name === 'string' ? arg.name : '';
+    if (!ARG_NAME_RE.test(name)) return { ok: false, reason: '参数名不是合法的命令行开关' };
+    /* `--api-key <value>` 这种开关必然把凭据写进 args；Pi GUI 的配置层
+     * 会拒绝，市场也不应该把它伪装成可安装。 */
+    if (argsContainSecret([name, 'x'])) {
+      return { ok: false, reason: '该参数要求把凭据写入启动参数，Pi GUI 不支持' };
+    }
+    const template = typeof arg.value === 'string'
+      ? arg.value
+      : (typeof arg.default === 'string' ? arg.default : null);
+    if (template !== null) {
+      const resolved = resolveTemplateParts(template, arg.variables, keyPrefix, { label });
+      if (!resolved.ok) return resolved;
+      if (!resolved.fields.length) {
+        const checked = checkInputValue(arg, template);
+        if (!checked.ok) return { ok: false, reason: checked.error };
+      }
+      const parts = [`${name}=`, ...resolved.parts];
+      return {
+        ok: true,
+        token: {
+          kind: 'value',
+          parts,
+          fields: resolved.fields,
+          skipIfEmpty: resolved.fields.length > 0 && arg.isRequired !== true,
+          template: tokenTemplate({ parts }),
+        },
+        fields: resolved.fields,
+      };
+    }
+    if (typeof arg.valueHint === 'string' || arg.isRequired === true) {
+      const field = {
+        key: keyPrefix, label, required: arg.isRequired === true, format, choices,
+        placeholder: typeof arg.placeholder === 'string' ? arg.placeholder : (arg.valueHint || ''),
+        default: '', help: cleanText(arg.description, 160), secret: false,
+      };
+      const parts = [`${name}=`, { field }];
+      return {
+        ok: true,
+        token: { kind: 'value', parts, fields: [field], skipIfEmpty: arg.isRequired !== true, template: tokenTemplate({ parts }) },
+        fields: [field],
+      };
+    }
+    return { ok: true, token: { kind: 'literal', parts: [name], fields: [], template: name }, fields: [] };
+  }
+
+  const template = typeof arg.value === 'string'
+    ? arg.value
+    : (typeof arg.default === 'string' ? arg.default : null);
+  if (template !== null) {
+    const resolved = resolveTemplateParts(template, arg.variables, keyPrefix, { label });
+    if (!resolved.ok) return resolved;
+    if (!resolved.fields.length) {
+      const checked = checkInputValue(arg, template);
+      if (!checked.ok) return { ok: false, reason: checked.error };
+    }
+    return {
+      ok: true,
+      token: {
+        kind: 'value', parts: resolved.parts, fields: resolved.fields,
+        skipIfEmpty: resolved.fields.length > 0 && arg.isRequired !== true,
+        template: tokenTemplate({ parts: resolved.parts }),
+      },
+      fields: resolved.fields,
+    };
+  }
+  if (typeof arg.valueHint === 'string' || arg.isRequired === true) {
+    const field = {
+      key: keyPrefix, label, required: arg.isRequired === true, format, choices,
+      placeholder: typeof arg.placeholder === 'string' ? arg.placeholder : (arg.valueHint || ''),
+      default: '', help: cleanText(arg.description, 160), secret: false,
+    };
+    const parts = [{ field }];
+    return {
+      ok: true,
+      token: { kind: 'value', parts, fields: [field], skipIfEmpty: arg.isRequired !== true, template: tokenTemplate({ parts }) },
+      fields: [field],
+    };
+  }
+  return { ok: false, reason: '位置参数既没有固定值也没有 valueHint' };
+}
+
+function planArguments(list, { prefix = 'arg' } = {}) {
+  if (list === undefined) return { ok: true, tokens: [], fields: [] };
+  if (!Array.isArray(list)) return { ok: false, reason: '参数列表不是数组' };
+  if (list.length > 24) return { ok: false, reason: '参数过多，无法安全转换' };
+  const tokens = [];
+  const fields = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const item = planArgument(list[i], i, { prefix });
+    if (!item.ok) return item;
+    tokens.push(item.token);
+    fields.push(...item.fields);
+  }
+  return { ok: true, tokens, fields };
+}
+
+function secretRefOf(value) {
+  const m = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/.exec(String(value || ''));
+  return m ? m[1] : '';
+}
+
+function envReference(raw) {
+  const value = String(raw || '').trim();
+  if (ENV_REFERENCE_RE.test(value)) return value;
+  if (ENV_NAME_RE.test(value)) return `\${${value}}`;
+  return '';
+}
+
+function headerReference(raw, prefix = '') {
+  const value = String(raw || '').trim();
+  if (SETTING_REFERENCE_RE.test(value)) return value;
+  if (ENV_NAME_RE.test(value)) return `${prefix || ''}\${${value}}`;
+  return '';
+}
+
+function planEnvEntry(entry) {
+  if (!isRecord(entry)) return { ok: false, reason: '环境变量条目不是对象' };
+  const name = typeof entry.name === 'string' ? entry.name : '';
+  if (!ENV_NAME_RE.test(name) || name.length > 128) {
+    return { ok: false, reason: '环境变量名不合法' };
+  }
+  const label = inputLabel(entry, name);
+  const required = entry.isRequired === true;
+  const secret = entry.isSecret === true;
+  const staticValue = entry.value !== undefined ? entry.value : (entry.default !== undefined ? entry.default : null);
+
+  if (secret) {
+    if (typeof staticValue === 'string') {
+      if (ENV_REFERENCE_RE.test(staticValue)) {
+        return { ok: true, staticEnv: { name, value: staticValue }, requiredEnvKeys: [secretRefOf(staticValue)] };
+      }
+      if (/\{[A-Za-z0-9_.-]+\}/.test(staticValue)) {
+        return { ok: false, reason: '敏感环境变量使用模板时无法安全转换' };
+      }
+    }
+    const field = {
+      key: `env.${name}`, label, envKey: name, required, secret: true, standalone: true,
+      format: 'string', choices: [], placeholder: name, default: required ? name : '',
+      help: '填写系统环境变量名；配置里只写 ${环境变量名}，值不会经过 Pi GUI。',
+    };
+    return {
+      ok: true, envFields: [field],
+      requiredEnvKeys: required ? [name] : [],
+    };
+  }
+
+  if (typeof staticValue === 'string') {
+    const resolved = resolveTemplateParts(staticValue, entry.variables, `env.${name}`, { label });
+    if (!resolved.ok) return resolved;
+    if (!resolved.fields.length) {
+      const resolvedText = resolved.parts.join('');
+      const checked = checkInputValue(entry, resolvedText);
+      if (!checked.ok) return { ok: false, reason: checked.error };
+      if (settingNeedsReference(name, resolvedText) && !ENV_REFERENCE_RE.test(resolvedText)) {
+        const field = {
+          key: `env.${name}`, label, envKey: name, required, secret: true, standalone: true,
+          format: 'string', choices: [], placeholder: name, default: required ? name : '',
+          help: '这个环境变量看起来是凭据。填写系统环境变量名，配置里只写 ${环境变量名}。',
+        };
+        return { ok: true, envFields: [field], requiredEnvKeys: required ? [name] : [] };
+      }
+      return { ok: true, staticEnv: { name, value: resolvedText } };
+    }
+    return {
+      ok: true,
+      envFields: resolved.fields,
+      envInputs: [{ name, parts: resolved.parts, required, label }],
+    };
+  }
+
+  if (!required) return { ok: true };
+  const field = {
+    key: `env.${name}`, label, envKey: name, required: true, secret: false, standalone: true,
+    format: typeof entry.format === 'string' ? entry.format : 'string',
+    choices: Array.isArray(entry.choices) ? entry.choices.filter((c) => typeof c === 'string') : [],
+    placeholder: typeof entry.placeholder === 'string' ? entry.placeholder : '',
+    default: '', help: cleanText(entry.description, 160),
+  };
+  return { ok: true, envFields: [field] };
+}
+
+function planHeaderEntry(entry) {
+  if (!isRecord(entry)) return { ok: false, reason: '请求头条目不是对象' };
+  const name = typeof entry.name === 'string' ? entry.name : '';
+  if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) || name.length > 128) {
+    return { ok: false, reason: '请求头名不合法' };
+  }
+  const label = inputLabel(entry, name);
+  const required = entry.isRequired === true;
+  const secret = entry.isSecret === true;
+  const staticValue = entry.value !== undefined ? entry.value : (entry.default !== undefined ? entry.default : null);
+
+  if (secret) {
+    if (typeof staticValue === 'string') {
+      if (SETTING_REFERENCE_RE.test(staticValue)) {
+        return { ok: true, staticHeader: { name, value: staticValue }, requiredEnvKeys: [secretRefOf(staticValue)] };
+      }
+      if (/\{[A-Za-z0-9_.-]+\}/.test(staticValue)) {
+        return { ok: false, reason: '敏感请求头使用模板时无法安全转换' };
+      }
+    }
+    const field = {
+      key: `header.${name}`, label, header: name, required, secret: true, literal: false, standalone: true,
+      format: 'string', choices: [], placeholder: name, default: required ? name : '',
+      help: '填写系统环境变量名；配置里只写 ${环境变量名}，值不会经过 Pi GUI。',
+    };
+    return {
+      ok: true, headerFields: [field],
+      requiredEnvKeys: required ? [name] : [],
+    };
+  }
+
+  if (typeof staticValue === 'string') {
+    const resolved = resolveTemplateParts(staticValue, entry.variables, `header.${name}`, { label });
+    if (!resolved.ok) return resolved;
+    if (!resolved.fields.length) {
+      const resolvedText = resolved.parts.join('');
+      const checked = checkInputValue(entry, resolvedText);
+      if (!checked.ok) return { ok: false, reason: checked.error };
+      if (settingNeedsReference(name, resolvedText, { headers: true }) && !SETTING_REFERENCE_RE.test(resolvedText)) {
+        const field = {
+          key: `header.${name}`, label, header: name, required, secret: true, literal: false, standalone: true,
+          format: 'string', choices: [], placeholder: name, default: required ? name : '',
+          help: '这个请求头看起来是凭据。填写系统环境变量名，配置里只写 ${环境变量名}。',
+        };
+        return { ok: true, headerFields: [field], requiredEnvKeys: required ? [name] : [] };
+      }
+      return { ok: true, staticHeader: { name, value: resolvedText } };
+    }
+    /* 请求头模板里只允许非敏感变量；secret 变量已经在 resolveTemplateParts
+     * 里被拒（allowSecret=false）。字段值拼进头值，安装时再校验一次。 */
+    return {
+      ok: true,
+      headerFields: resolved.fields,
+      headerInputs: [{ name, parts: resolved.parts, required, label }],
+    };
+  }
+
+  if (!required) return { ok: true };
+  const field = {
+    key: `header.${name}`, label, header: name, required: true, secret: false, literal: true, standalone: true,
+    format: 'string', choices: [], placeholder: typeof entry.placeholder === 'string' ? entry.placeholder : '',
+    default: '', help: cleanText(entry.description, 160),
+  };
+  return { ok: true, headerFields: [field] };
+}
+
+function planPackage(pkg, server) {
+  if (!isRecord(pkg)) return { ok: false, reason: '包条目不是对象' };
+  const transport = isRecord(pkg.transport) ? pkg.transport.type : '';
+  if (transport !== 'stdio') {
+    return { ok: false, reason: '包的 transport 不是 stdio，暂不支持安全转换' };
+  }
+  const registryType = pkg.registryType;
+  if (registryType !== 'npm' && registryType !== 'pypi') {
+    return { ok: false, reason: `不支持的包类型 ${clip(registryType || '未知', 40)}` };
+  }
+  const id = typeof pkg.identifier === 'string' ? pkg.identifier : '';
+  if (registryType === 'npm' ? !NPM_RE.test(id) : !PYPI_RE.test(id)) {
+    return { ok: false, reason: '包标识符不合法' };
+  }
+  const declaredVersion = typeof pkg.version === 'string' && pkg.version ? pkg.version : '';
+  const version = declaredVersion ? exactVersion(declaredVersion) : exactVersion(server.version);
+  if (!version) return { ok: false, reason: '包版本不是具体版本（拒绝 latest / 范围 / 通配符）' };
+  const hint = typeof pkg.runtimeHint === 'string' ? pkg.runtimeHint : '';
+  const runtime = registryType === 'npm' ? 'npx' : 'uvx';
+  if (hint && hint !== runtime) {
+    return { ok: false, reason: `runtimeHint ${clip(hint, 40)} 与 ${registryType} 包不匹配` };
+  }
+  const base = typeof pkg.registryBaseUrl === 'string' ? pkg.registryBaseUrl : '';
+  if (base && !(registryType === 'npm' ? NPM_REGISTRY_BASE_RE : PYPI_REGISTRY_BASE_RE).test(base)) {
+    return { ok: false, reason: '自定义 registryBaseUrl 暂不支持，避免包来源与 Registry 声明不一致' };
+  }
+  const packageSpec = registryType === 'npm' ? `${id}@${version}` : `${id}==${version}`;
+  const runtimePlan = planArguments(pkg.runtimeArguments, { prefix: 'rt' });
+  if (!runtimePlan.ok) return runtimePlan;
+  const packagePlan = planArguments(pkg.packageArguments, { prefix: 'arg' });
+  if (!packagePlan.ok) return packagePlan;
+
+  const hasYesFlag = runtimePlan.tokens.some((token) => token.parts.includes('-y') || token.parts.includes('--yes'));
+  const runtimeDefaults = registryType === 'npm' && !hasYesFlag
+    ? [{ kind: 'literal', parts: ['-y'], fields: [], template: '-y' }]
+    : [];
+  const tokens = [
+    ...runtimeDefaults,
+    ...runtimePlan.tokens,
+    { kind: 'literal', parts: [packageSpec], fields: [], template: packageSpec },
+    ...packagePlan.tokens,
+  ];
+  const fields = [...runtimePlan.fields, ...packagePlan.fields];
+  const command = runtime;
+  const commandTemplate = [command, ...tokens.map(tokenTemplate)].join(' ');
+
+  /* 固定参数里如果已经带凭据形态的值，直接标成不可安装。带字段的参数在
+   * 安装时还会用同一判据再检查一次。 */
+  const literalArgs = tokens.flatMap((token) => token.parts.filter((p) => typeof p === 'string'));
+  if (argsContainSecret(literalArgs)) {
+    return { ok: false, reason: '固定参数疑似包含明文凭据，Pi GUI 不支持写入 args' };
+  }
+
+  const envPlan = { ok: true, envFields: [], requiredEnvKeys: [], staticEnv: [], envInputs: [] };
+  const envList = Array.isArray(pkg.environmentVariables) ? pkg.environmentVariables : [];
+  if (pkg.environmentVariables !== undefined && !Array.isArray(pkg.environmentVariables)) {
+    return { ok: false, reason: 'environmentVariables 不是数组' };
+  }
+  if (envList.length > 64) return { ok: false, reason: '环境变量过多' };
+  const seenEnv = new Set();
+  for (const entry of envList) {
+    const p = planEnvEntry(entry);
+    if (!p.ok) return p;
+    if (entry && typeof entry.name === 'string') {
+      if (seenEnv.has(entry.name)) return { ok: false, reason: '环境变量名重复' };
+      seenEnv.add(entry.name);
+    }
+    envPlan.envFields.push(...(p.envFields || []));
+    envPlan.requiredEnvKeys.push(...(p.requiredEnvKeys || []).filter(Boolean));
+    if (p.staticEnv) envPlan.staticEnv.push(p.staticEnv);
+    if (p.envInputs) envPlan.envInputs.push(...p.envInputs);
+  }
+
+  if (tokens.length > 32) return { ok: false, reason: '参数量超过 Pi 的 32 项上限' };
+
+  return {
+    ok: true,
+    plan: {
+      kind: 'stdio',
+      command,
+      tokens,
+      fields,
+      commandTemplate,
+      envFields: envPlan.envFields,
+      requiredEnvKeys: [...new Set(envPlan.requiredEnvKeys)],
+      staticEnv: envPlan.staticEnv,
+      envInputs: envPlan.envInputs,
+      requires: registryType === 'npm' ? ['node', 'npx'] : ['python', 'uv', 'uvx'],
+      packageSpec,
+    },
+  };
+}
+
+function probeUrlFromParts(parts) {
+  return parts.map((part) => (typeof part === 'string' ? part : 'x')).join('');
+}
+
+function planRemote(remote) {
+  if (!isRecord(remote)) return { ok: false, reason: '远程条目不是对象' };
+  if (remote.type === 'sse') return { ok: false, reason: 'Pi 不支持 legacy SSE transport' };
+  if (remote.type !== 'streamable-http') return { ok: false, reason: '远程 transport 不是 streamable-http' };
+  if (typeof remote.url !== 'string' || remote.url.length > 2048) {
+    return { ok: false, reason: '远程 URL 模板不合法' };
+  }
+  const variables = isRecord(remote.variables) ? remote.variables : {};
+  const parts = [];
+  const fields = [];
+  const re = /\{([A-Za-z0-9_.-]+)\}/g;
+  let last = 0;
+  let match;
+  while ((match = re.exec(remote.url))) {
+    if (match.index > last) parts.push(remote.url.slice(last, match.index));
+    const name = match[1];
+    const def = isRecord(variables[name]) ? variables[name] : null;
+    if (!def) return { ok: false, reason: `URL 模板变量 ${name} 没有定义` };
+    if (def.isSecret === true) return { ok: false, reason: 'URL 模板不能包含敏感变量（凭据不能进 URL）' };
+    const staticValue = def.value !== undefined ? def.value : def.default;
+    if (staticValue !== undefined) {
+      const checked = checkInputValue(def, staticValue);
+      if (!checked.ok) return { ok: false, reason: checked.error };
+      parts.push(encodeURIComponent(checked.value));
+    } else {
+      const field = {
+        key: `url.${name}`,
+        label: inputLabel(def, name),
+        required: def.isRequired === true,
+        format: 'string',
+        choices: Array.isArray(def.choices) ? def.choices.filter((c) => typeof c === 'string') : [],
+        placeholder: typeof def.placeholder === 'string' ? def.placeholder : '',
+        default: '',
+        help: cleanText(def.description, 160),
+        secret: false,
+      };
+      fields.push(field);
+      parts.push({ field });
+    }
+    last = re.lastIndex;
+  }
+  if (last < remote.url.length) parts.push(remote.url.slice(last));
+  if (!parts.length) return { ok: false, reason: '远程 URL 为空' };
+  if (parts.some((p) => typeof p === 'string' && /[{}]/.test(p))) {
+    return { ok: false, reason: 'URL 模板包含无法解析的花括号变量' };
+  }
+  const probe = probeUrlFromParts(parts);
+  let parsed;
+  try { parsed = new URL(probe); } catch { return { ok: false, reason: '远程 URL 模板不是合法 URL' }; }
+  if (parsed.protocol !== 'https:') return { ok: false, reason: '远程 URL 只允许 HTTPS' };
+  if (parsed.username || parsed.password) return { ok: false, reason: '远程 URL 不能包含用户名或密码' };
+  if (parsed.port && parsed.port !== '443') return { ok: false, reason: '远程 URL 只允许 443 端口' };
+  if (queryLooksSensitive(parsed)) {
+    return { ok: false, reason: '远程 URL 的查询串或路径疑似包含凭据，无法安全转换；请改用请求头环境变量引用' };
+  }
+  const host = hostnameOf(parsed);
+  if (blockedHostname(host) || (net.isIP(host) && isPrivateIp(host))) {
+    return { ok: false, reason: '远程 URL 指向本机或内网地址' };
+  }
+
+  const headerPlan = { headerFields: [], requiredEnvKeys: [], staticHeaders: [], headerInputs: [] };
+  if (remote.headers !== undefined && !Array.isArray(remote.headers)) {
+    return { ok: false, reason: '远程 headers 不是数组' };
+  }
+  const seenHeaders = new Set();
+  for (const entry of Array.isArray(remote.headers) ? remote.headers : []) {
+    const p = planHeaderEntry(entry);
+    if (!p.ok) return p;
+    if (entry && typeof entry.name === 'string') {
+      if (seenHeaders.has(entry.name)) return { ok: false, reason: '请求头名称重复' };
+      seenHeaders.add(entry.name);
+    }
+    headerPlan.headerFields.push(...(p.headerFields || []));
+    headerPlan.requiredEnvKeys.push(...(p.requiredEnvKeys || []).filter(Boolean));
+    if (p.staticHeader) headerPlan.staticHeaders.push(p.staticHeader);
+    if (p.headerInputs) headerPlan.headerInputs.push(...p.headerInputs);
+  }
+
+  const urlTemplate = parts.map((p) => (typeof p === 'string' ? p : `{${p.field.key}}`)).join('');
+  return {
+    ok: true,
+    plan: {
+      kind: 'http',
+      urlParts: parts,
+      fields,
+      urlTemplate,
+      headerFields: headerPlan.headerFields,
+      requiredEnvKeys: [...new Set(headerPlan.requiredEnvKeys)],
+      staticHeaders: headerPlan.staticHeaders,
+      headerInputs: headerPlan.headerInputs,
+      requires: [],
+    },
+  };
+}
+
+function analyzeRegistryServer(server) {
+  if (!isRecord(server)) return { ok: false, reason: 'Registry server 不是对象' };
+  const reasons = [];
+  const packages = Array.isArray(server.packages) ? server.packages : [];
+  for (const pkg of packages) {
+    const p = planPackage(pkg, server);
+    if (p.ok) return { ok: true, plan: p.plan };
+    if (p.reason) reasons.push(p.reason);
+  }
+  const remotes = Array.isArray(server.remotes) ? server.remotes : [];
+  for (const remote of remotes) {
+    const p = planRemote(remote);
+    if (p.ok) return { ok: true, plan: p.plan };
+    if (p.reason) reasons.push(p.reason);
+  }
+  return {
+    ok: false,
+    reason: reasons[0] || '该条目没有可直接安装的 npm / PyPI stdio 包或 HTTPS streamable-http 端点，请在来源仓库按文档手动配置。',
+  };
+}
+
+function resolveToken(token, values) {
+  const used = [];
+  let text = '';
+  let empty = true;
+  for (const part of token.parts) {
+    if (typeof part === 'string') {
+      text += part;
+      if (part) empty = false;
+      continue;
+    }
+    const field = part.field;
+    const raw = values && values[field.key] !== undefined ? values[field.key] : field.default;
+    const value = String(raw === undefined || raw === null ? '' : raw).trim();
+    if (!value) {
+      if (field.required) {
+        return codeError('missing-field', `请填写「${field.label}」`, { field: field.key });
+      }
+      continue;
+    }
+    const checked = checkInputValue(field, value);
+    if (!checked.ok) {
+      return codeError('bad-field', `「${field.label}」不合法：${checked.error}`, { field: field.key });
+    }
+    used.push({ key: field.key, value: checked.value, secret: field.secret === true });
+    text += checked.value;
+    empty = false;
+  }
+  return { ok: true, text, empty, used };
+}
+
+function displayArg(arg) {
+  return /^[A-Za-z0-9_@%+=:,.\\/.-]+$/.test(arg) ? arg : `"${String(arg).replace(/"/g, '\\"')}"`;
+}
+
+function commandPreviewOf(command, args) {
+  return [command, ...args].map(displayArg).join(' ');
+}
+
+function resolveEnvPlan(plan, values) {
+  const env = {};
+  for (const item of plan.staticEnv || []) {
+    if (settingNeedsReference(item.name, item.value) && !ENV_REFERENCE_RE.test(item.value)) {
+      return codeError('secret-value-unsupported', `环境变量「${item.name}」的值疑似凭据；请改用 \${环境变量名} 引用`);
+    }
+    env[item.name] = item.value;
+  }
+  for (const item of plan.envInputs || []) {
+    const token = { parts: item.parts, fields: [] };
+    const r = resolveToken(token, values);
+    if (!r.ok) return r;
+    if (r.empty) {
+      if (item.required) return codeError('missing-field', `请填写「${item.label}」`);
+      continue;
+    }
+    if (settingNeedsReference(item.name, r.text) && !ENV_REFERENCE_RE.test(r.text)) {
+      return codeError('secret-value-unsupported', `环境变量「${item.name}」的值疑似凭据；请改用 \${环境变量名} 引用`);
+    }
+    env[item.name] = r.text;
+  }
+  for (const field of (plan.envFields || []).filter((f) => f.standalone === true)) {
+    const raw = values && values[field.key] !== undefined ? values[field.key] : field.default;
+    const value = String(raw === undefined || raw === null ? '' : raw).trim();
+    if (!value) {
+      if (field.required) return codeError('missing-field', `请填写「${field.label}」`, { field: field.key });
+      continue;
+    }
+    if (field.secret) {
+      const ref = envReference(value);
+      if (!ref) return codeError('bad-field', `「${field.label}」必须是合法的环境变量名`, { field: field.key });
+      env[field.envKey] = ref;
+    } else {
+      const checked = checkInputValue(field, value);
+      if (!checked.ok) return codeError('bad-field', `「${field.label}」不合法：${checked.error}`, { field: field.key });
+      if (settingNeedsReference(field.envKey, checked.value) && !ENV_REFERENCE_RE.test(checked.value)) {
+        return codeError('secret-value-unsupported', `环境变量「${field.envKey}」的值疑似凭据；请改用 \${环境变量名} 引用`, { field: field.key });
+      }
+      env[field.envKey] = checked.value;
+    }
+  }
+  return { ok: true, env };
+}
+
+function resolveHeaderPlan(plan, values) {
+  const headers = {};
+  for (const item of plan.staticHeaders || []) {
+    if (settingNeedsReference(item.name, item.value, { headers: true }) && !SETTING_REFERENCE_RE.test(item.value)) {
+      return codeError('secret-value-unsupported', `请求头「${item.name}」的值疑似凭据；请改用 \${环境变量名} 引用`);
+    }
+    headers[item.name] = item.value;
+  }
+  for (const item of plan.headerInputs || []) {
+    const r = resolveToken({ parts: item.parts, fields: [] }, values);
+    if (!r.ok) return r;
+    if (r.empty) {
+      if (item.required) return codeError('missing-field', `请填写「${item.label}」`);
+      continue;
+    }
+    if (settingNeedsReference(item.name, r.text, { headers: true }) && !SETTING_REFERENCE_RE.test(r.text)) {
+      return codeError('secret-value-unsupported', `请求头「${item.name}」的值疑似凭据；请改用 \${环境变量名} 引用`);
+    }
+    if (/[\r\n\u0000]/.test(r.text)) return codeError('bad-field', `请求头「${item.name}」的值包含非法字符`);
+    headers[item.name] = r.text;
+  }
+  for (const field of (plan.headerFields || []).filter((f) => f.standalone === true)) {
+    const raw = values && values[field.key] !== undefined ? values[field.key] : field.default;
+    const value = String(raw === undefined || raw === null ? '' : raw).trim();
+    if (!value) {
+      if (field.required) return codeError('missing-field', `请填写「${field.label}」`, { field: field.key });
+      continue;
+    }
+    if (field.secret) {
+      const ref = headerReference(value, field.prefix || '');
+      if (!ref) return codeError('bad-field', `「${field.label}」必须是合法的环境变量名`, { field: field.key });
+      headers[field.header] = ref;
+    } else {
+      const checked = checkInputValue(field, value);
+      if (!checked.ok) return codeError('bad-field', `「${field.label}」不合法：${checked.error}`, { field: field.key });
+      if (/[\r\n\u0000]/.test(checked.value)) {
+        return codeError('bad-field', `「${field.label}」包含非法字符`, { field: field.key });
+      }
+      if (settingNeedsReference(field.header, checked.value, { headers: true }) && !SETTING_REFERENCE_RE.test(checked.value)) {
+        return codeError('secret-value-unsupported', `请求头「${field.header}」的值疑似凭据；请改用 \${环境变量名} 引用`, { field: field.key });
+      }
+      headers[field.header] = checked.value;
+    }
+  }
+  return { ok: true, headers };
+}
+
+function resolveUrlPlan(plan, values) {
+  let url = '';
+  for (const part of plan.urlParts) {
+    if (typeof part === 'string') { url += part; continue; }
+    const field = part.field;
+    const raw = values && values[field.key] !== undefined ? values[field.key] : field.default;
+    const value = String(raw === undefined || raw === null ? '' : raw).trim();
+    if (!value) {
+      if (field.required) return codeError('missing-field', `请填写「${field.label}」`, { field: field.key });
+      continue;
+    }
+    const checked = checkInputValue(field, value);
+    if (!checked.ok) return codeError('bad-field', `「${field.label}」不合法：${checked.error}`, { field: field.key });
+    url += encodeURIComponent(checked.value);
+  }
+  if (url.length > 2048 || /[\u0000-\u001f\u007f]/.test(url)) {
+    return codeError('bad-url', '远程 URL 不合法或过长');
+  }
+  let parsed;
+  try { parsed = new URL(url); } catch { return codeError('bad-url', '远程 URL 不是合法地址'); }
+  if (parsed.protocol !== 'https:') return codeError('bad-url', '远程 URL 只允许 HTTPS');
+  if (parsed.username || parsed.password) return codeError('bad-url', '远程 URL 不能包含用户名或密码');
+  if (parsed.port && parsed.port !== '443') return codeError('bad-url', '远程 URL 只允许 443 端口');
+  if (queryLooksSensitive(parsed)) {
+    return codeError('bad-url', '远程 URL 的查询串或路径疑似包含凭据；请改用请求头环境变量引用');
+  }
+  const host = hostnameOf(parsed);
+  if (blockedHostname(host) || (net.isIP(host) && isPrivateIp(host))) {
+    return codeError('bad-url', '远程 URL 指向本机或内网地址');
+  }
+  return { ok: true, url: parsed.toString() };
+}
+
+function buildRegistryConfig(server, values = {}) {
+  const analysis = analyzeRegistryServer(server);
+  if (!analysis.ok) return codeError('unsupported', analysis.reason);
+  const plan = analysis.plan;
+  const input = isRecord(values) ? values : {};
+  if (plan.kind === 'stdio') {
+    const args = [];
+    for (const token of plan.tokens) {
+      const r = resolveToken(token, input);
+      if (!r.ok) return r;
+      /* 可选参数没有填值时整项省略，不能留成 `--name=`。named 参数带有
+       * `--name=` 前缀，单看 r.empty 永远为 false；要看实际填了几个字段值。 */
+      if (token.skipIfEmpty && (r.empty || !r.used.length)) continue;
+      args.push(r.text);
+    }
+    if (args.length > 32) return codeError('bad-args', '参数量超过 Pi 的 32 项上限');
+    if (argsContainSecret(args)) {
+      return codeError('secret-value-unsupported', '启动参数疑似包含明文凭据；请改用环境变量，Pi GUI 不接收明文凭据');
+    }
+    const envResult = resolveEnvPlan(plan, input);
+    if (!envResult.ok) return envResult;
+    const config = {
+      transport: 'stdio',
+      command: plan.command,
+      args,
+      description: cleanText(server.description, 200),
+      timeout: 60,
+      exposure: 'codemode',
+      ...(Object.keys(envResult.env).length ? { env: envResult.env } : {}),
+    };
+    return {
+      ok: true,
+      config,
+      commandPreview: commandPreviewOf(plan.command, args),
+      requires: plan.requires,
+      requiredEnvKeys: plan.requiredEnvKeys,
+    };
+  }
+  const urlResult = resolveUrlPlan(plan, input);
+  if (!urlResult.ok) return urlResult;
+  const headersResult = resolveHeaderPlan(plan, input);
+  if (!headersResult.ok) return headersResult;
+  const config = {
+    transport: 'http',
+    url: urlResult.url,
+    description: cleanText(server.description, 200),
+    timeout: 60,
+    exposure: 'codemode',
+    ...(Object.keys(headersResult.headers).length ? { headers: headersResult.headers } : {}),
+  };
+  return {
+    ok: true,
+    config,
+    urlPreview: urlResult.url,
+    requires: [],
+    requiredEnvKeys: plan.requiredEnvKeys,
+  };
 }
 
 function normalizeRegistryEntry(raw) {
@@ -562,13 +1611,13 @@ function normalizeRegistryEntry(raw) {
   const name = typeof s.name === 'string' ? s.name : '';
   const version = typeof s.version === 'string' && VERSION_RE.test(s.version) ? s.version : '';
   if (!name || name.length > 200 || !version) return null;
-  const packages = Array.isArray(s.packages) ? s.packages : [];
-  const npmPackage = packages.find((p) => isRecord(p) && p.registryType === 'npm') || packages[0];
-  const config = npmPackageConfig(npmPackage) || remoteConfig(s.remotes);
+  const analysis = analyzeRegistryServer(s);
+  const plan = analysis.ok ? analysis.plan : null;
   const title = cleanText(s.title || name.split('/').pop() || name, 80);
   const description = cleanText(s.description, 400);
   const id = `registry:${Buffer.from(JSON.stringify({ name, version })).toString('base64url')}`;
   const installName = safeInstallName(title || name);
+  const hasSse = Array.isArray(s.remotes) && s.remotes.some((r) => isRecord(r) && r.type === 'sse');
   return {
     id,
     source: 'registry',
@@ -583,18 +1632,20 @@ function normalizeRegistryEntry(raw) {
     trust: 'registry',
     trustEvidence: 'MCP 官方 Registry 收录；收录不代表安全性审核',
     description,
-    transport: config ? config.transport : (Array.isArray(s.remotes) && s.remotes[0] && s.remotes[0].type === 'sse' ? 'sse' : ''),
-    commandSummary: config && config.transport === 'stdio' ? [config.command, ...config.args].join(' ') : '',
-    urlPreview: config && config.transport === 'http' ? config.url : '',
+    transport: plan ? plan.kind : (hasSse ? 'sse' : (Array.isArray(s.packages) && s.packages.length ? 'stdio' : '')),
+    commandSummary: plan && plan.kind === 'stdio' ? templateWithLabels(plan.commandTemplate, plan.fields) : '',
+    commandTemplate: plan && plan.kind === 'stdio' ? plan.commandTemplate : '',
+    urlPreview: plan && plan.kind === 'http' ? templateWithLabels(plan.urlTemplate, plan.fields) : '',
+    urlTemplate: plan && plan.kind === 'http' ? plan.urlTemplate : '',
     homepage: isRecord(s.repository) && typeof s.repository.url === 'string' ? s.repository.url : '',
-    requires: config ? config.requires : [],
-    requiredEnvKeys: config && config.requiredEnvKeys ? config.requiredEnvKeys : [],
-    installable: Boolean(config),
-    installReason: config ? '' : '该条目没有可直接安装的 npm(npx) 包或 HTTPS streamable-http 端点，请在来源仓库按文档手动配置。',
+    requires: plan ? plan.requires : [],
+    requiredEnvKeys: plan ? plan.requiredEnvKeys : [],
+    installable: Boolean(plan),
+    installReason: plan ? '' : analysis.reason,
     warning: '',
-    fields: [],
-    envFields: [],
-    headerFields: [],
+    fields: plan ? plan.fields.filter((f) => !f.key.startsWith('env.') && !f.key.startsWith('header.')).map(publicField) : [],
+    envFields: plan ? (plan.envFields || []).map(publicEnvField) : [],
+    headerFields: plan ? (plan.headerFields || []).map(publicHeaderField) : [],
   };
 }
 
@@ -629,6 +1680,7 @@ function normalizeCustomEntry(src, raw, index) {
       const u = new URL(String(raw.url || ''));
       if (u.protocol !== 'https:' || u.username || u.password) return null;
       if (u.port && u.port !== '443') return null;
+      if (queryLooksSensitive(u)) return null;
       const host = hostnameOf(u);
       if (net.isIP(host) && isPrivateIp(host)) return null;
       if (blockedHostname(host)) return null;
@@ -679,7 +1731,7 @@ export function createMcpMarket({
   dataDir,
   configStore,
   env = process.env,
-  fetchImpl = globalThis.fetch,
+  requestImpl = httpsGetPinned,
   lookupImpl = dns.promises.lookup,
   now = () => Date.now(),
 } = {}) {
@@ -760,7 +1812,7 @@ export function createMcpMarket({
      * 只取当前页会在“第一页全是别的分类”时显示空分类；最多再追两页，
      * 找到匹配条目就停，避免为了一个筛选把 Registry 翻个底朝天。 */
     for (let page = 0; page < 3; page += 1) {
-      const fetched = await fetchJson(registryQueryUrl({ q, cursor: pageCursor, limit }), { fetchImpl, lookupImpl });
+      const fetched = await fetchJson(registryQueryUrl({ q, cursor: pageCursor, limit }), { requestImpl, lookupImpl, env });
       if (!fetched.ok) return { ...fetched, items: [] };
       const data = fetched.data;
       if (!isRecord(data) || !Array.isArray(data.servers)) return { ...codeError('invalid-response', 'Registry 响应缺少 servers 数组'), items: [] };
@@ -782,7 +1834,7 @@ export function createMcpMarket({
   }
 
   async function loadCustomSource(source) {
-    const fetched = await fetchJson(source.url, { fetchImpl, lookupImpl });
+    const fetched = await fetchJson(source.url, { requestImpl, lookupImpl, env });
     if (!fetched.ok) return fetched;
     const data = fetched.data;
     const rows = Array.isArray(data) ? data : (isRecord(data) && Array.isArray(data.servers) ? data.servers : null);
@@ -843,7 +1895,7 @@ export function createMcpMarket({
     return { ok: true, entry };
   }
 
-  async function resolveRegistry(id) {
+  async function resolveRegistry(id, values = {}) {
     if (!id.startsWith('registry:')) return codeError('bad-id', 'Registry 条目 ID 不合法');
     let decoded;
     try {
@@ -852,18 +1904,26 @@ export function createMcpMarket({
     if (!isRecord(decoded) || typeof decoded.name !== 'string' || typeof decoded.version !== 'string') {
       return codeError('bad-id', 'Registry 条目 ID 不合法');
     }
-    const fetched = await fetchJson(registryQueryUrl({ q: decoded.name, limit: 50 }), { fetchImpl, lookupImpl });
+    const fetched = await fetchJson(registryQueryUrl({ q: decoded.name, limit: 50 }), { requestImpl, lookupImpl, env });
     if (!fetched.ok) return fetched;
     const rows = isRecord(fetched.data) && Array.isArray(fetched.data.servers) ? fetched.data.servers : [];
+    let unsupported = null;
     for (const row of rows) {
       const item = normalizeRegistryEntry(row);
-      if (!item || item.identifier !== decoded.name || item.version !== decoded.version || !item.installable) continue;
-      const packages = Array.isArray(row.server.packages) ? row.server.packages : [];
-      const npmPackage = packages.find((p) => isRecord(p) && p.registryType === 'npm') || packages[0];
-      const config = npmPackageConfig(npmPackage) || remoteConfig(row.server.remotes);
-      if (!config) continue;
-      return { ok: true, entry: item, config };
+      if (!item || item.identifier !== decoded.name || item.version !== decoded.version) continue;
+      const built = buildRegistryConfig(row.server, values);
+      if (!built.ok) { unsupported = built; continue; }
+      return {
+        ok: true,
+        entry: item,
+        config: built.config,
+        commandPreview: built.commandPreview || '',
+        urlPreview: built.urlPreview || '',
+        requires: built.requires || [],
+        requiredEnvKeys: built.requiredEnvKeys || [],
+      };
     }
+    if (unsupported) return unsupported;
     return codeError('not-found', 'Registry 中已找不到这个版本，请刷新市场');
   }
 
@@ -903,9 +1963,13 @@ export function createMcpMarket({
       built.name = r.entry.id;
       built.entry = r.entry;
     } else if (source === 'registry' || catalogId.startsWith('registry:')) {
-      const r = await resolveRegistry(catalogId);
+      const r = await resolveRegistry(catalogId, isRecord(input.values) ? input.values : {});
       if (!r.ok) return r;
-      built = { ok: true, config: r.config, name: r.entry.installName, entry: r.entry };
+      built = {
+        ok: true, config: r.config, name: r.entry.installName, entry: r.entry,
+        commandPreview: r.commandPreview, urlPreview: r.urlPreview,
+        requires: r.requires, requiredEnvKeys: r.requiredEnvKeys,
+      };
     } else if (source.startsWith('custom:')) {
       const r = await resolveCustom(catalogId);
       if (!r.ok) return r;
@@ -932,12 +1996,16 @@ export function createMcpMarket({
       url: cfg.url,
       env: cfg.env ? Object.entries(cfg.env).map(([key, value]) => ({ key, value })) : undefined,
       headers: cfg.headers ? Object.entries(cfg.headers).map(([key, value]) => ({ key, value })) : undefined,
-      description: cleanText(entry.description, 200),
-      timeout: 60,
-      exposure: 'codemode',
+      description: cleanText(cfg.description || entry.description, 200),
+      timeout: cfg.timeout || 60,
+      exposure: cfg.exposure || 'codemode',
       enabled: true,
     });
     if (!save.ok) return save;
+    const requires = Array.isArray(built.requires) ? built.requires : (entry.requires || []);
+    const actualPreview = cfg.transport === 'stdio'
+      ? commandPreviewOf(cfg.command, cfg.args || [])
+      : (cfg.url || '');
     return {
       ...save,
       configured: true,
@@ -954,8 +2022,11 @@ export function createMcpMarket({
         trust: entry.trust,
         trustEvidence: entry.trustEvidence,
       },
-      requires: entry.requires || [],
-      dependencyProbe: probeDependencies(entry.requires || [], env),
+      requires,
+      commandPreview: built.commandPreview || actualPreview,
+      urlPreview: built.urlPreview || (cfg.transport === 'http' ? (cfg.url || '') : ''),
+      requiredEnvKeys: built.requiredEnvKeys || entry.requiredEnvKeys || [],
+      dependencyProbe: probeDependencies(requires, env),
       message: '配置已保存。它还没有被运行中的 Pi 会话加载，也没有验证连接；保存 ≠ 已连接 ≠ 可调用。',
     };
   }
@@ -968,7 +2039,7 @@ export function createMcpMarket({
     if (!read.ok) return codeError(read.code, '现有市场源列表无法读取，为避免覆盖已拒绝写入');
     if (read.sources.length >= MAX_SOURCES) return codeError('too-many-sources', `最多只能添加 ${MAX_SOURCES} 个第三方市场源`);
     if (read.sources.some((s) => s.url === rawUrl)) return codeError('source-exists', '这个市场源已经添加过了');
-    const fetched = await fetchJson(rawUrl, { fetchImpl, lookupImpl });
+    const fetched = await fetchJson(rawUrl, { requestImpl, lookupImpl, env });
     if (!fetched.ok) return fetched;
     const rows = Array.isArray(fetched.data) ? fetched.data : (isRecord(fetched.data) && Array.isArray(fetched.data.servers) ? fetched.data.servers : null);
     if (!rows) return codeError('invalid-source', '第三方源必须返回 servers 数组');
@@ -1013,6 +2084,7 @@ export function createMcpMarket({
       BUILTIN,
       CATEGORIES,
       isPrivateIp,
+      isFakeIpAddress,
       assertPublicHttps,
       normalizeRegistryEntry,
       normalizeCustomEntry,
@@ -1020,6 +2092,13 @@ export function createMcpMarket({
       probeDependencies,
       fetchJson,
       builtinItems,
+      analyzeRegistryServer,
+      buildRegistryConfig,
+      pinnedRequestOptions,
+      httpsGetPinned,
+      noProxyMatches,
+      blockingProxy,
+      commandPreviewOf,
     },
   };
 }

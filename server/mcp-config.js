@@ -96,7 +96,7 @@ function argLooksSecret(arg, previousWasSensitiveFlag = false) {
   return false;
 }
 
-function argsContainSecret(args) {
+export function argsContainSecret(args) {
   let previousWasSensitiveFlag = false;
   for (const raw of Array.isArray(args) ? args : []) {
     if (typeof raw !== 'string') return false;
@@ -287,13 +287,16 @@ function serializeConfig(data, rawText) {
 /* URL 的敏感判定不能只看参数名：`?sid=ghp_...`、`/mcp/sk-...` 这类
  * “无害参数名 / 路径 + 凭据形态的值”同样会把明文带进 renderer。
  * 只要值看起来像凭据，就按敏感处理；预览只保留 origin。 */
-function queryLooksSensitive(u) {
+export function queryLooksSensitive(u) {
   for (const [key, value] of u.searchParams) {
     if (SECRET_QUERY_RE.test(key)) return true;
     if (valuesLikeSecret(value)) return true;
     if (/(?:^|[_-])(?:key|code|session|sid|sig)$/i.test(key) && value.length >= 8) return true;
   }
-  return valuesLikeSecret(u.pathname);
+  if (valuesLikeSecret(u.pathname)) return true;
+  /* 路径里的凭据常常不是第一段（例如 /tenant/sk-...）；逐段检查，
+   * 避免只因为前面多了 `/` 就漏掉。 */
+  return u.pathname.split('/').some((part) => valuesLikeSecret(part));
 }
 
 function inspectUrl(value) {

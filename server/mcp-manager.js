@@ -84,24 +84,56 @@ export function createMcpManager({ runtime, mcpNative, configStore, market, impo
      * 不按行 scope 查会拿项目级的结果去回答用户级那条。 */
     const requestedScope = body.scope === 'project' ? 'project' : body.scope === 'user' ? 'user' : '';
     let configScope = requestedScope;
-    try {
-      if (!requestedScope && configStore) {
-        for (const scope of ['user', 'project']) {
-          const detail = await configStore.getDetail({ scope, name });
-          if (detail && detail.ok) { configScope = scope; break; }
+    /* configured 必须来自真实配置，而不是“调用方说要测”这件事本身。
+     * 三个值：
+     *   true  —— 读到了对应 scope 的条目；
+     *   false —— 明确 not-found；
+     *   null  —— 配置层没装配或读取失败，不能下结论。 */
+    let configured = configStore ? false : null;
+    if (configStore) {
+      const scopes = requestedScope ? [requestedScope] : ['project', 'user'];
+      let unknown = false;
+      for (const scope of scopes) {
+        let detail;
+        try {
+          detail = await configStore.getDetail({ scope, name });
+        } catch {
+          unknown = true;
+          continue;
         }
+        if (detail && detail.ok === true) {
+          configured = true;
+          configScope = scope;
+          break;
+        }
+        if (!detail || detail.code !== 'not-found') unknown = true;
       }
-    } catch { /* 配置详情拿不到也继续测试运行时 */ }
+      if (configured !== true && unknown) configured = null;
+    }
     let refresh;
     try {
       refresh = await mcpNative.refresh({ force: true });
     } catch (err) {
-      return { ok: false, code: 'refresh-failed', error: String((err && err.message) || err).slice(0, 200), configured: true, connected: null, loaded: null };
+      return {
+        ok: false,
+        code: 'refresh-failed',
+        error: String((err && err.message) || err).slice(0, 200),
+        configured,
+        connected: null,
+        loaded: null,
+      };
     }
     const rows = Array.isArray(refresh.servers) ? refresh.servers : [];
-    const wantedScope = configScope === 'user' ? 'global' : configScope === 'project' ? 'project' : '';
+    /* mcpNative 把 Pi 运行时报告里的 `global` 归一成 `user`（与配置层
+     * 的 scope 词汇一致）；旧夹具 / 旧投影仍可能给 `global`，两种都接受。 */
+    const wantedScope = configScope === 'user' ? 'user' : configScope === 'project' ? 'project' : '';
     const matches = rows.filter((s) => s && s.name === name);
-    const server = matches.find((s) => !wantedScope || s.scope === wantedScope) || matches[0] || null;
+    /* 行 scope 已知时只认同一 scope 的运行时结果。同名 server 可以同时存在
+     * 用户级与项目级；拿用户级行去回答项目行会把两个条目的状态串在一起。
+     * 只有完全不知道 scope 时，才退回第一条同名结果。 */
+    const server = (wantedScope
+      ? matches.find((s) => s.scope === wantedScope || (wantedScope === 'user' && s.scope === 'global'))
+      : matches[0]) || null;
     if (!refresh.ok) {
       /* `pi mcp list` 本身失败时，我们既没有证据说连上，也没有证据说没连上。
        * connected:false 会把“测不了”误报成“服务器连接失败”，与抛错分支的
@@ -110,7 +142,9 @@ export function createMcpManager({ runtime, mcpNative, configStore, market, impo
         ok: false,
         code: refresh.code || 'refresh-failed',
         error: refresh.error || 'pi mcp list 没有成功返回',
-        configured: true,
+        /* 运行时有这一行，不代表配置层一定读到了它；configured 只由
+         * configStore 的读取结果决定，这里的 CLI 投影不参与。 */
+        configured,
         connected: null,
         loaded: null,
         connectsAll: true,
@@ -118,24 +152,55 @@ export function createMcpManager({ runtime, mcpNative, configStore, market, impo
       };
     }
     if (!server) {
+      /* `pi mcp list` 成功返回、但没有这台 server：这是一次“没有观察到”。
+       * 它不等于连接失败，更不等于 Agent 会话没有加载 —— 后两者都需要
+       * 各自的权威证据。不要把 CLI 列表的缺失推断成 loaded:false。 */
+      if (configured === false) {
+        return {
+          ok: false,
+          code: 'not-configured',
+          error: 'mcp.json 里没有这台 server；它可能已被删除或改名。',
+          configured: false,
+          connected: null,
+          loaded: null,
+          connectsAll: true,
+          runtimeAt: refresh.at || '',
+        };
+      }
       return {
         ok: false,
         code: 'not-loaded',
-        error: '配置已存在，但 pi mcp list 没有返回这台 server；请确认项目信任状态，或在重启 Pi 会话后重试。',
-        configured: true,
-        connected: false,
-        loaded: false,
+        error: '本次 pi mcp list 没有返回这台 server，无法确认连接状态；请确认项目信任状态，或在重启 Pi 会话后重试。',
+        configured,
+        connected: null,
+        loaded: null,
         connectsAll: true,
         runtimeAt: refresh.at || '',
       };
     }
-    const state = typeof server.state === 'string' ? server.state : 'unknown';
-    const connected = state === 'connected';
+    const state = typeof server.state === 'string' && server.state ? server.state : 'unknown';
+    /* 只有明确 evidence 才下结论：connected 为真只认 state=connected；
+     * needs-auth / failed / disabled / error 是明确失败；其它状态是未知。 */
+    let connected = null;
+    if (state === 'connected') connected = true;
+    else if (['failed', 'needs-auth', 'disabled', 'error', 'disconnected', 'not-connected'].includes(state)) connected = false;
+    const code = connected === true
+      ? ''
+      : state === 'needs-auth'
+        ? 'needs-auth'
+        : (state === 'failed' || state === 'error')
+          ? 'connect-failed'
+          : `state-${state}`;
     return {
-      ok: connected,
-      code: connected ? '' : (state === 'needs-auth' ? 'needs-auth' : state === 'failed' ? 'connect-failed' : `state-${state}`),
-      error: connected ? '' : (server.error || (state === 'needs-auth' ? '这台 server 需要 OAuth 授权' : `运行时状态：${state}`)),
-      configured: true,
+      ok: connected === true,
+      code,
+      error: connected === true
+        ? ''
+        : (server.error || (state === 'needs-auth'
+          ? '这台 server 需要 OAuth 授权'
+          : connected === false ? `运行时状态：${state}` : `无法确认连接状态（运行时状态：${state}）`)),
+      /* 已配置只看真实 mcp.json；运行时列表不是配置文件存在的证据。 */
+      configured,
       connected,
       loaded: null,
       state,

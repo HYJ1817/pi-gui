@@ -311,7 +311,7 @@ GUI 侧的判定因此不用「原始 JSON key 是否存在」，而用 `parseMc
 | 新增 / 编辑 | 受控写入 `mcp.json` | 原子写 + 备份 + revision + trust 闸门 |
 | 启停 | 受控写入 `enabled` | CLI 没有 shell 接口；不是视觉假开关，Agent 会话需 `/reload` 或重启 |
 | 删除 | 受控删除条目 | 显式确认；OAuth 凭据保留，清凭据走 logout |
-| 测试连接 | 独立运行 `pi mcp list --json` | 返回 `configured / connected / loaded`，不把保存当连接 |
+| 测试连接 | 独立运行 `pi mcp list --json` | `configured` 只来自 `mcp.json`；`connected` 只认本次运行时状态，同名跨 scope 时只取同一 scope 的行；`loaded` 恒为 `null`，不从 CLI 列表推断 Agent 会话加载 |
 | 登录 / 退出 | `pi mcp login` / `logout` | OAuth 全程 pi 负责；超时给终端指引 |
 | 从其他工具导入 | `server/mcp-import.js` | 只读扫描 → 服务端按 ID 重新扫描并校验 → 原子批量写入 |
 | 市场 | `server/mcp-market.js` | 内置离线目录 + 官方 Registry + 受控第三方源；安装只接收 catalogId |
@@ -322,11 +322,28 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
 ## 市场与外部导入的额外边界
 
 - 内置目录完全离线；官方 Registry 失败时保留内置目录并给出明确错误码；
-- Registry / 第三方源只允许 **HTTPS + 443**，拒绝 IP 字面量（含 IPv4-mapped
-  IPv6、NAT64、6to4）、本机 / 内网 DNS、重定向、非 JSON content-type、超大响应；
+- Registry / 第三方源只允许 **HTTPS + 443**，拒绝**本机 / 内网 IP 字面量**（含
+  IPv4-mapped IPv6、NAT64、6to4 里嵌的内网地址）、本机 / 内网 DNS、重定向、
+  非 JSON content-type、超大响应；公网 IP 字面量允许，但证书仍按 IP SAN 校验；
   8s 超时；第三方源条目里的 HTTP 地址也按同一套规则检查；
+- **DNS 校验约束实际连接目标**：解析一次后把已校验 IP 交给 `https.request`
+  的 `lookup` 固定，`hostname` / SNI / 证书仍按原域名校验；双栈地址逐个尝试，
+  不会再次解析。出现 3xx 直接拒绝，不跟随；
+- 检测到 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` 等代理环境时**默认拒绝**
+  （代理会重新解析域名，GUI 无法确认实际连接地址）。`NO_PROXY` 命中目标域名时
+  走直连并同样固定 IP。解析结果落在 fake-IP 网段 `198.18.0.0/15` 时返回
+  `proxy-blocked`，明确说明是代理环境导致，而不是冒充 `blocked-host`；
+- 官方 Registry schema（2025-12-11）适配：`packages` 的 npm/npx、PyPI/uvx，
+  `runtimeArguments` / `packageArguments`（positional / named）、变量模板、
+  `environmentVariables`（必填 / secret → `${VAR}` 引用）、远程 `streamable-http`
+  URL 模板与 headers；SSE、OCI、版本范围、非官方 registryBaseUrl、重复参数、
+  凭据型参数变量都标为不可安装并给出原因；
+- Registry 收录**不是安全认证**：条目显示为「Registry 收录」（未审核），
+  不自动标成「官方」或「已验证」；
 - 第三方源条目只接受 `npx` / `uvx` 或 HTTPS URL，命令模板与占位符由服务端校验；
   安装请求只传 `catalogId` + 表单字段，**客户端不能注入 command / url**；
+  确认弹窗显示按当前输入生成的完整命令 / 端点预览（含引号与占位符），
+  敏感值只显示 `${VAR}` 或 `***`，安装成功后显示服务端实际写入的命令；
 - 来源文件扫描读取 Claude Desktop / Cursor / VS Code，只读；真正导入时服务端
   重新扫描并重新校验，renderer 只提交条目 ID 与重命名 / scope。
 
@@ -412,10 +429,10 @@ CLI 实际只产两个」）。
 ```bash
 npm run test:mcp
 # tests/mcp-config.cjs     38 条（配置读写 / 原子写 / 备份 / trust / override / 保留上游键 / args 凭据 / cwd / 父链接 / revision）
-# tests/mcp-manager.cjs    17 条（stale 守卫 / 测试连接三态 / scope 隔离 / 路由装配）
-# tests/mcp-market.cjs     21 条（内置目录 / Registry 分页与分类 / 第三方源 / 安装 / SSRF）
+# tests/mcp-manager.cjs    22 条（stale 守卫 / 测试连接三态 / configured 来源 / scope 隔离 / 路由装配）
+# tests/mcp-market.cjs     33 条（内置目录 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 代理与重定向）
 # tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
-# tests/mcp-management-ui.cjs 18 条（管理页 / 表单 / 详情 / 市场 / 导入 / 项目信任 / 连接未知态）
+# tests/mcp-management-ui.cjs 20 条（管理页 / 表单 / exposure / 详情 / 市场 scope / 命令预览 / 导入 / 项目信任 / 连接未知态）
 # tests/mcp-native.cjs     202 条（Pi 契约 / 运行时投影 / 状态机 / 缓存）
 ```
 
@@ -427,8 +444,9 @@ unknown 三态 + 非法条目 + 坏文件）、**raw MCP tool name 安全投影*
 0.99.2 fixture/schema、unknown enum fallback，以及安全解析、入口派生、
 scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsupported、
 语义投影与运行观察；管理面另有原子写 / revision / 备份 / 上游键保留、
-市场目录与 Registry 分页分类、来源扫描脱敏、安装只传 catalogId、
-关键 UI 交互与项目未信任降级。
+市场目录与 Registry 分页分类、Registry 参数 / 环境变量 / URL 模板适配、
+来源扫描脱敏、安装只传 catalogId、DNS 固定与代理 / 重定向拒绝、
+关键 UI 交互（exposure 回填、安装 scope 继承、实际命令预览）与项目未信任降级。
 
 `test:ui`（smoke）另有旧 MCP 能力标签页的界面行为（状态横幅、server 行、
 刷新/移除/添加 wiring、trust 提示、workspace 隔离文案、无凭据字段）。

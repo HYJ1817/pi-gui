@@ -695,6 +695,15 @@
 .mcp-inherit-title { font-size: 11px; font-weight: 600; color: var(--ds-text-secondary); margin-bottom: 4px; }
 .mcp-inherit-text { margin: 0; font-family: var(--ui-font-mono); font-size: 10.5px; color: var(--ds-text-muted); overflow-wrap: anywhere; }
 
+.mcp-install-preview {
+  margin-top: 14px;
+}
+.mcp-install-command {
+  max-height: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .mcp-code-block {
   display: block;
   margin: 10px 0;

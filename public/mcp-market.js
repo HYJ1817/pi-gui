@@ -39,6 +39,9 @@ function sourceCount(state) {
 function marketErrorText(result) {
   if (!result) return '请求失败（没有响应）';
   const code = result.code ? `（${result.code}）` : '';
+  if (result.code === 'proxy-blocked') return `${result.error || '代理网络无法确认实际连接地址，市场请求已拒绝。'}${code}`;
+  if (result.code === 'redirect-blocked') return `${result.error || '市场源返回重定向，已拒绝跟随。'}${code}`;
+  if (result.code === 'unsupported') return `${result.error || '这个条目无法安全转换成 Pi 配置。'}${code}`;
   if (result.error) return `${result.error}${code}`;
   if (result.code === 'timeout') return '请求超时。Registry 可能暂时不可达；内置精选仍可离线使用。';
   if (result.code === 'blocked-host' || result.code === 'blocked-url') return '这个地址指向本机或内网，已被拒绝。';
@@ -59,16 +62,56 @@ function installState(item, configured) {
   return { label: '安装', disabled: false, installed: false };
 }
 
+function previewQuote(value) {
+  return /^[A-Za-z0-9_@%+=:,.\\/.-]+$/.test(value) ? value : `"${value.replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * 只用于界面预览。字段值来自用户输入，模板来自服务端市场条目；这里
+ * 不构造也不提交命令，安装时仍由服务端按同一模板重新生成并校验。
+ */
+function previewText(item, values) {
+  const template = item.commandTemplate || item.urlTemplate || '';
+  if (!template) return item.commandSummary || item.urlPreview || '';
+  const isUrl = Boolean(item.urlTemplate);
+  const fields = [
+    ...(item.fields || []),
+    ...(item.envFields || []),
+    ...(item.headerFields || []),
+  ];
+  const byKey = new Map(fields.map((f) => [f.key, f]));
+  return String(template).replace(/\{([A-Za-z0-9_.-]+)\}/g, (whole, key) => {
+    const field = byKey.get(key);
+    if (!field) return whole;
+    const value = String(values[key] ?? '').trim();
+    if (!value) return `<${field.label || key}>`;
+    if (field.secret) {
+      return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value) ? `\${${value}}` : '***';
+    }
+    /* 服务端会用 encodeURIComponent 写入 URL 变量；预览也必须一致，
+     * 否则确认时看到的地址和实际保存的不是同一个。 */
+    return isUrl ? encodeURIComponent(value) : previewQuote(value);
+  });
+}
+
 function openInstallModal(item, {
-  state, trust, projectPath, projectName, revisionFor,
+  state, trust, projectPath, projectName, revisionFor, defaultScope = 'user',
 }) {
   let disposed = false;
   let success = null;
   let error = '';
   let busy = false;
   const values = {};
+  const allFields = [
+    ...(item.fields || []),
+    ...(item.envFields || []),
+    ...(item.headerFields || []),
+  ];
+  for (const field of allFields) {
+    if (field.default !== undefined && field.default !== null && field.default !== '') values[field.key] = field.default;
+  }
   let nameValue = item.installName || item.name || '';
-  let scope = 'user';
+  let scope = defaultScope === 'project' && trust === true && projectPath ? 'project' : 'user';
 
   openModal((card, close) => {
     card.classList.add('mcp-install-modal');
@@ -130,9 +173,9 @@ function openInstallModal(item, {
       const wrap = node('div', 'mcp-install-form');
 
       const sourceBox = node('div', 'mcp-install-source');
-      const trust = trustMeta(item.trust);
-      const trustBadge = badge(trust.label, trust.tone);
-      trustBadge.title = item.trustEvidence || trust.title;
+      const trustInfo = trustMeta(item.trust);
+      const trustBadge = badge(trustInfo.label, trustInfo.tone);
+      trustBadge.title = item.trustEvidence || trustInfo.title;
       sourceBox.append(trustBadge);
       sourceBox.appendChild(node('span', 'mcp-install-source-name', item.sourceLabel || item.source));
       if (item.version) sourceBox.appendChild(node('span', 'mcp-install-version', `v${item.version}`));
@@ -154,6 +197,44 @@ function openInstallModal(item, {
         wrap.appendChild(warn);
       }
 
+      const refreshPreview = () => {
+        const previewEl = card.querySelector('[data-market-preview]');
+        if (previewEl) previewEl.textContent = previewText(item, values);
+      };
+
+      const controlFor = (f, prefix) => {
+        if (Array.isArray(f.choices) && f.choices.length) {
+          const select = node('select', 'mcp-input mcp-select');
+          select.dataset.field = `${prefix}-${f.key}`;
+          const blank = node('option', '', f.required ? '请选择…' : '（不设置）');
+          blank.value = '';
+          select.appendChild(blank);
+          for (const choice of f.choices) {
+            const option = node('option', '', choice);
+            option.value = choice;
+            select.appendChild(option);
+          }
+          select.value = String(values[f.key] ?? '');
+          select.onchange = () => {
+            values[f.key] = select.value;
+            refreshPreview();
+          };
+          return select;
+        }
+        const input = node('input', 'mcp-input');
+        input.type = f.type === 'number' ? 'number' : 'text';
+        if (f.type === 'path') input.placeholder = f.placeholder || '绝对路径，例如 C:\\projects\\demo';
+        else if (f.type === 'url') { input.inputMode = 'url'; input.placeholder = f.placeholder || 'https://…'; }
+        else input.placeholder = f.placeholder || '';
+        input.value = String(values[f.key] ?? '');
+        input.dataset.field = `${prefix}-${f.key}`;
+        input.oninput = () => {
+          values[f.key] = input.value;
+          refreshPreview();
+        };
+        return input;
+      };
+
       const fields = node('div', 'mcp-install-fields');
       const nameInput = node('input', 'mcp-input');
       nameInput.type = 'text';
@@ -167,42 +248,37 @@ function openInstallModal(item, {
       nameField.appendChild(node('span', 'mcp-field-hint', '只允许字母、数字、_ 和 -。同名配置已存在时会要求确认覆盖。'));
       fields.appendChild(nameField);
 
-      for (const f of item.fields || []) {
-        const input = node('input', 'mcp-input');
-        input.type = 'text';
-        if (f.type === 'url') input.inputMode = 'url';
-        input.placeholder = f.placeholder || '';
-        input.dataset.field = `install-field-${f.key}`;
-        input.oninput = () => { values[f.key] = input.value; };
+      const appendField = (f, prefix, hint) => {
         const field = node('label', 'mcp-field');
         field.appendChild(node('span', 'mcp-field-label', `${f.label || f.key}${f.required ? '（必填）' : ''}`));
-        field.appendChild(input);
+        field.appendChild(controlFor(f, prefix));
+        const help = hint || f.help || '';
+        if (help) field.appendChild(node('span', 'mcp-field-hint', help));
         fields.appendChild(field);
-      }
+      };
+      for (const f of item.fields || []) appendField(f, 'install-field', f.help || '');
       for (const f of item.envFields || []) {
-        const input = node('input', 'mcp-input');
-        input.type = 'text';
-        input.placeholder = f.placeholder || (f.secret ? '${ENV_VAR}' : '');
-        input.dataset.field = `install-env-${f.key}`;
-        input.oninput = () => { values[f.key] = input.value; };
-        const field = node('label', 'mcp-field');
-        field.appendChild(node('span', 'mcp-field-label', `${f.label || f.key}${f.required ? '（必填）' : ''}`));
-        field.appendChild(input);
-        if (f.secret) field.appendChild(node('span', 'mcp-field-hint', '凭据请填写 ${环境变量名} 引用。'));
-        fields.appendChild(field);
+        appendField(f, 'install-env', f.secret
+          ? `填写系统环境变量名；安装后写成 \${环境变量名}，值不会进入配置。${f.help ? ` ${f.help}` : ''}`
+          : (f.help || ''));
       }
       for (const f of item.headerFields || []) {
-        const input = node('input', 'mcp-input');
-        input.type = 'text';
-        input.placeholder = f.placeholder || 'ENV_VAR_NAME';
-        input.dataset.field = `install-header-${f.key}`;
-        input.oninput = () => { values[f.key] = input.value; };
-        const field = node('label', 'mcp-field');
-        field.appendChild(node('span', 'mcp-field-label', `${f.label || f.key}${f.required ? '（必填）' : ''}`));
-        field.appendChild(input);
-        field.appendChild(node('span', 'mcp-field-hint', f.help || '填写环境变量名；安装后写成 ${环境变量名}，值不会进入配置。'));
-        fields.appendChild(field);
+        let hint = f.help || '';
+        if (f.secret) hint = `填写系统环境变量名；安装后写成 \${环境变量名}，值不会进入配置。${hint ? ` ${hint}` : ''}`;
+        else if (f.literal) hint = hint || '填写这个请求头的字面值；凭据类值必须改用环境变量引用。';
+        appendField(f, 'install-header', hint);
       }
+
+      /* 安装确认必须能看见“实际会写进配置的命令 / 端点”。模板来自服务端
+       * 目录，输入框变化时只更新预览，不会把客户端拼的命令回传给服务端。 */
+      const preview = node('div', 'mcp-install-preview');
+      preview.appendChild(node('div', 'mcp-field-label', item.urlTemplate ? '安装后的端点' : '安装后的启动命令'));
+      const previewCode = node('code', 'mcp-code-block mcp-install-command');
+      previewCode.dataset.marketPreview = '1';
+      previewCode.textContent = previewText(item, values);
+      preview.appendChild(previewCode);
+      preview.appendChild(node('p', 'mcp-field-hint', '这是按当前输入生成的预览；真正的配置仍由服务端用目录模板重新构造。敏感值不会显示。'));
+      wrap.appendChild(preview);
       if (Array.isArray(item.requiredEnvKeys) && item.requiredEnvKeys.length) {
         const envBox = node('div', 'mcp-install-envkeys');
         envBox.appendChild(node('div', 'mcp-field-label', '安装后需要存在的环境变量'));
@@ -240,7 +316,9 @@ function openInstallModal(item, {
       scopeField.appendChild(node('span', 'mcp-field-label', '安装到'));
       scopeField.appendChild(scopeSelect);
       scopeField.appendChild(node('span', 'mcp-field-hint',
-        trust !== true ? '当前项目未信任，项目级安装已禁用。' : '项目级配置只对当前项目生效，并受项目信任状态约束。'));
+        trust !== true
+          ? `当前项目未信任，项目级安装已禁用${defaultScope === 'project' ? '，本次已回退到全局' : ''}。`
+          : '项目级配置只对当前项目生效，并受项目信任状态约束。'));
       fields.appendChild(scopeField);
 
       wrap.appendChild(fields);
@@ -286,6 +364,14 @@ function openInstallModal(item, {
         row('依赖检测', deps.map((d) => `${d.name}：${d.found ? '已在 PATH 找到' : '未在 PATH 找到'}`).join('\n'));
       }
       wrap.appendChild(grid);
+
+      const actual = success.commandPreview || success.urlPreview || '';
+      if (actual) {
+        const preview = node('div', 'mcp-install-preview');
+        preview.appendChild(node('div', 'mcp-field-label', '已写入的实际启动命令 / 端点'));
+        preview.appendChild(node('code', 'mcp-code-block mcp-install-command', actual));
+        wrap.appendChild(preview);
+      }
 
       const missing = deps.filter((d) => !d.found);
       if (missing.length) {
@@ -524,7 +610,7 @@ function openSourceManager(state, { onChange } = {}) {
 
 export function openMcpMarket({
   present, onBack, projectPath = '', projectName = '', trust = null,
-  configuredNames = [], revisionFor = () => undefined,
+  configuredNames = [], revisionFor = () => undefined, defaultScope = 'user',
 } = {}) {
   if (typeof present !== 'function') return null;
   let active = null;
@@ -532,7 +618,7 @@ export function openMcpMarket({
   const build = (card, close) => {
     card.classList.add('mcp-market-page');
     active = createMarketPage(card, {
-      onBack, projectPath, projectName, trust, configuredNames, revisionFor,
+      onBack, projectPath, projectName, trust, configuredNames, revisionFor, defaultScope,
       onDispose: () => { active = null; },
     });
   };
@@ -545,7 +631,8 @@ export function openMcpMarket({
 }
 
 function createMarketPage(card, {
-  onBack, projectPath, projectName, trust, configuredNames = [], revisionFor = () => undefined, onDispose,
+  onBack, projectPath, projectName, trust, configuredNames = [], revisionFor = () => undefined,
+  defaultScope = 'user', onDispose,
 }) {
   const state = {
     source: 'builtin',
@@ -786,7 +873,9 @@ function createMarketPage(card, {
 
   function renderCard(item) {
     const cardEl = node('article', 'mcp-market-card');
-    const trust = trustMeta(item.trust);
+    /* 不能叫 trust：会遮蔽页面级的项目信任布尔值，安装弹层就会永远
+     * 把项目级安装当成“未信任”并禁用。 */
+    const trustInfo = trustMeta(item.trust);
     const install = installState(item, configured());
     const head = node('div', 'mcp-market-card-head');
     const iconBox = node('div', 'mcp-market-icon');
@@ -795,8 +884,8 @@ function createMarketPage(card, {
     const title = node('div', 'mcp-market-card-title');
     const titleLine = node('div', 'mcp-market-title-line');
     titleLine.appendChild(node('h4', '', item.name));
-    const trustBadge = badge(trust.label, trust.tone);
-    trustBadge.title = item.trustEvidence || trust.title;
+    const trustBadge = badge(trustInfo.label, trustInfo.tone);
+    trustBadge.title = item.trustEvidence || trustInfo.title;
     titleLine.appendChild(trustBadge);
     title.appendChild(titleLine);
     const sub = node('div', 'mcp-market-card-sub');
@@ -822,8 +911,8 @@ function createMarketPage(card, {
     if (chips.childElementCount) cardEl.appendChild(chips);
 
     const foot = node('div', 'mcp-market-card-foot');
-    const evidence = node('span', 'mcp-trust-evidence', item.trustEvidence || trust.title);
-    evidence.title = item.trustEvidence || trust.title;
+    const evidence = node('span', 'mcp-trust-evidence', item.trustEvidence || trustInfo.title);
+    evidence.title = item.trustEvidence || trustInfo.title;
     foot.appendChild(evidence);
 
     if (item.homepage && /^https:\/\//.test(item.homepage)) {
@@ -846,7 +935,7 @@ function createMarketPage(card, {
       action.title = '配置里已经有同名 server；在“我的服务”里查看或编辑';
     }
     action.onclick = () => openInstallModal(item, {
-      state, trust, projectPath, projectName, revisionFor,
+      state, trust, projectPath, projectName, revisionFor, defaultScope,
     });
     foot.appendChild(action);
     cardEl.appendChild(foot);
