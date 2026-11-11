@@ -698,8 +698,11 @@
 .mcp-install-preview {
   margin-top: 14px;
 }
-.mcp-install-command {
+/* 两个类一起用，确保压过后面 .mcp-code-block 的 max-height / overflow；
+ * 安装确认里的命令不能被截断，用户要能核对完整参数。 */
+.mcp-code-block.mcp-install-command {
   max-height: none;
+  overflow: visible;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
