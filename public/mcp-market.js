@@ -22,16 +22,30 @@ import { toast } from './ui/toast.js';
 const DEFAULT_CATEGORIES = ['全部', '开发工具', '网络', '文档', '数据', '效率'];
 const REGISTRY_PAGE_SIZE = 24;
 const PAGE_ELLIPSIS = '…';
+/* 过期缓存的后台刷新检测间隔。与 partial 轮询同为 2s，但两者状态互斥、
+ * 定时器独立；请求仍走同一条列表接口，不新增端点。 */
+const STALE_POLL_MS = 2000;
 
 /**
  * 页码窗口：总页数较少时全部显示；较多时保留首页、末页与当前页附近。
+ * 参考 pi-desktop 的窗口（首尾各两页 + 当前页 ±2），并在靠近两端时补到
+ * 4 个连续页码，避免 9 页首页只剩 `1 2 3 … 8 9`。
  * 返回值里的 `PAGE_ELLIPSIS` 由渲染层画成不可点击的省略号。
  */
 function paginationWindow(current, totalPages) {
   const total = Math.max(0, Math.floor(Number(totalPages) || 0));
   const page = Math.min(Math.max(1, Math.floor(Number(current) || 1)), Math.max(1, total));
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const wanted = new Set([1, total, page - 1, page, page + 1]);
+  const wanted = new Set([1, 2, total - 1, total]);
+  for (let p = page - 2; p <= page + 2; p += 1) {
+    if (p >= 1 && p <= total) wanted.add(p);
+  }
+  if (page <= 3) {
+    for (let p = 1; p <= 4 && p <= total; p += 1) wanted.add(p);
+  }
+  if (page >= total - 2) {
+    for (let p = Math.max(1, total - 3); p <= total; p += 1) wanted.add(p);
+  }
   const pages = [...wanted].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
   const out = [];
   for (const p of pages) {
@@ -714,6 +728,8 @@ function createMarketPage(card, {
   let loadToken = 0;
   let searchTimer = null;
   let partialTimer = null;
+  /* 后台刷新完成检测：与 partialTimer 独立，二者状态互斥。 */
+  let staleTimer = null;
   /* 失败重试要回到刚才请求的那一页，而不是把用户扔回第 1 页。 */
   let retryPage = null;
   /* 本次 render 开始前焦点在哪个控件上；渲染中保留它可用，避免焦点丢失。 */
@@ -726,8 +742,9 @@ function createMarketPage(card, {
     if (disposed) return;
     disposed = true;
     stopPartialPolling();
+    stopStalePolling();
     loadToken++;
-    if (searchTimer) clearTimeout(searchTimer);
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
     try { onDispose?.(); } catch { /* ignore */ }
   }
 
@@ -751,7 +768,16 @@ function createMarketPage(card, {
       }
       return;
     }
-    if (snapshot.key) card.querySelector(`[data-focus-key="${snapshot.key}"]`)?.focus();
+    if (snapshot.key) {
+      const target = card.querySelector(`[data-focus-key="${snapshot.key}"]`);
+      if (target) { target.focus(); return; }
+      /* 后台刷新后总页数变少 / 条目消失时，原来的焦点目标可能已经不在了。
+       * 页码焦点落到当前页，其余落到搜索框，别把键盘用户扔回 body。 */
+      const fallback = snapshot.key.startsWith('page:')
+        ? card.querySelector('.mcp-pagination [aria-current="page"]')
+        : card.querySelector('#mcpMarketSearch');
+      fallback?.focus();
+    }
   }
 
   function render() {
@@ -866,7 +892,8 @@ function createMarketPage(card, {
    * “看到的是旧数据”明确告诉用户，而不是假装刚刷新成功。 */
   function renderStaleNotice() {
     if (state.source !== 'registry' || !state.stale) return null;
-    const wrap = node('div', 'mcp-banners');
+    /* 单独标记，后台刷新完成时只替换这一块，不重建整页。 */
+    const wrap = node('div', 'mcp-banners mcp-stale-banners');
     const refreshing = state.stale.refreshing === true && !state.stale.refreshError;
     const banner = node('div', `mcp-banner ${refreshing ? 'is-info' : 'is-warn'}`);
     banner.appendChild(icon(refreshing ? 'clock' : 'warning', 'mcp-icon'));
@@ -874,7 +901,12 @@ function createMarketPage(card, {
     if (refreshing) {
       copy.appendChild(node('strong', '', '正在后台刷新官方 Registry 目录，当前显示的是上次加载的缓存。'));
     } else {
-      copy.appendChild(node('strong', '', 'Registry 刷新失败，正在显示上次成功加载的缓存。'));
+      /* renderer 到本地服务的一次请求失败（network:true）不等于 Registry
+       * 刷新失败，不能把本地故障说成上游故障。 */
+      const local = state.stale.refreshError?.network === true;
+      copy.appendChild(node('strong', '', local
+        ? '暂时无法确认后台刷新状态，正在显示上次成功加载的缓存。'
+        : 'Registry 刷新失败，正在显示上次成功加载的缓存。'));
       const detail = marketErrorText(state.stale.refreshError);
       if (detail) copy.appendChild(node('span', '', ` ${detail}`));
     }
@@ -935,6 +967,66 @@ function createMarketPage(card, {
     applyRegistryList(result, { quiet: true });
   }
 
+  /* 过期缓存的后台刷新检测：与 partial 轮询完全独立。partial 只在“还没有
+   * 完整目录”时跑；stale 只在“已有旧目录、服务端正在后台刷新”时跑，两者
+   * 状态互斥。这里同样只替换结果区与横幅，不重建整页。 */
+  function stopStalePolling() {
+    if (staleTimer) {
+      clearTimeout(staleTimer);
+      staleTimer = null;
+    }
+  }
+
+  function scheduleStalePoll() {
+    if (staleTimer || disposed) return;
+    if (state.partial || state.source !== 'registry') return;
+    if (!state.stale || state.stale.refreshing !== true) return;
+    staleTimer = setTimeout(pollStale, STALE_POLL_MS);
+  }
+
+  async function pollStale() {
+    staleTimer = null;
+    if (disposed || state.source !== 'registry' || state.partial) return;
+    if (!state.stale || state.stale.refreshing !== true) return;
+    /* 用户正在搜索 / 翻页 / 重试时先让位；那次请求结束后会重新调度。
+     * searchTimer 非空表示输入还在防抖，不能抢在用户那次请求之前用半截
+     * 搜索词再发一次。 */
+    if (state.loading || searchTimer) {
+      scheduleStalePoll();
+      return;
+    }
+    const my = loadToken;
+    const result = await fetchMcpMarket({
+      source: 'registry',
+      q: state.q,
+      category: state.category,
+      page: state.page,
+      pageSize: state.pageSize,
+    });
+    if (disposed || my !== loadToken || state.source !== 'registry') return;
+    if (!result || result.ok !== true) {
+      /* 轮询请求本身失败：保留已有列表，只把横幅改成失败提示。服务端在
+       * 刷新失败后有自己的 30s 退避，这里也停止轮询，等下一次用户操作。 */
+      state.stale = {
+        stale: true,
+        refreshing: false,
+        refreshError: result || { error: '请求失败' },
+      };
+      if (result && result.network) state.network = result.network;
+      refreshStaleNotice();
+      return;
+    }
+    if (result.stale === true && result.refreshing === true) {
+      /* 服务端还在刷新：这次响应仍是同一份旧目录，只续上下一次检测，
+       * 不重绘结果区，避免每 2s 替换一次 DOM 打断点击 / 悬停。服务端
+       * 抓取有 600s 总时限，refreshing 不会永久为 true。 */
+      state.stale = result;
+      scheduleStalePoll();
+      return;
+    }
+    applyRegistryList(result, { quiet: true });
+  }
+
   function renderToolbar() {
     const bar = node('div', 'mcp-market-toolbar');
     const search = node('label', 'mcp-search');
@@ -948,7 +1040,10 @@ function createMarketPage(card, {
     input.oninput = () => {
       state.q = input.value;
       if (searchTimer) clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => { if (!disposed) loadListNow(); }, 320);
+      searchTimer = setTimeout(() => {
+        searchTimer = null;
+        if (!disposed) loadListNow();
+      }, 320);
     };
     search.appendChild(input);
     bar.appendChild(search);
@@ -982,8 +1077,26 @@ function createMarketPage(card, {
   /** 只替换结果区：抓取轮询不会打断搜索框焦点。 */
   function refreshResults() {
     const host = card.querySelector('.mcp-market-results');
-    if (host) host.replaceWith(renderResults());
+    if (!host) return;
+    const focus = captureFocus();
+    host.replaceWith(renderResults());
     updateToolbarTotal();
+    restoreFocus(focus);
+  }
+
+  /** 只替换旧缓存横幅；后台刷新完成时不必重建整页。 */
+  function refreshStaleNotice() {
+    const current = card.querySelector('.mcp-stale-banners');
+    const next = renderStaleNotice();
+    if (current) {
+      if (next) current.replaceWith(next);
+      else current.remove();
+      return;
+    }
+    if (!next) return;
+    const toolbar = card.querySelector('.mcp-market-toolbar');
+    if (toolbar && toolbar.parentNode) toolbar.parentNode.insertBefore(next, toolbar);
+    else render();
   }
 
   function renderCategories() {
@@ -1220,7 +1333,7 @@ function createMarketPage(card, {
   }
 
   function loadListNow() {
-    if (searchTimer) clearTimeout(searchTimer);
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
     /* 失败后用户改搜索 / 分类，应当视为显式重试，而不是再次拿回同一个错误。 */
     return loadList({ reset: true, retry: state.error !== null });
   }
@@ -1240,6 +1353,7 @@ function createMarketPage(card, {
       state.hasMore = false;
       state.nextCursor = null;
       state.stale = null;
+      stopStalePolling();
       if (result.progress && typeof result.progress === 'object') {
         state.progress = {
           pages: Number(result.progress.pages) || 0,
@@ -1249,6 +1363,7 @@ function createMarketPage(card, {
       if (result.categories?.length) state.categories = result.categories;
       if (result.sources && result.sources.ok !== false) state.sources = result.sources;
       refreshResults();
+      refreshStaleNotice();
       if (result.loading === true) schedulePartialPoll();
       else stopPartialPolling();
       return;
@@ -1272,12 +1387,21 @@ function createMarketPage(card, {
     state.stale = result.stale === true ? result : null;
     if (result.categories?.length) state.categories = result.categories;
     if (result.sources && result.sources.ok !== false) state.sources = result.sources;
-    if (quiet) refreshResults();
-    else render();
+    if (quiet) {
+      refreshResults();
+      refreshStaleNotice();
+    } else {
+      render();
+    }
+    /* 服务端还在后台刷新时继续检测；完成或失败后停止，遵守服务端退避。 */
+    if (state.stale && state.stale.refreshing === true) scheduleStalePoll();
+    else stopStalePolling();
   }
 
   async function loadList({ reset = false, page = null, quiet = false, retry = false } = {}) {
     const my = ++loadToken;
+    /* 用户操作优先：先停掉后台刷新轮询；这次响应若仍 refreshing 会重新调度。 */
+    stopStalePolling();
     const registry = state.source === 'registry';
     if (reset) {
       state.items = [];
@@ -1323,6 +1447,7 @@ function createMarketPage(card, {
       state.partial = false;
       state.progress = null;
       stopPartialPolling();
+      stopStalePolling();
       state.error = result || { error: '请求失败' };
       if (result && result.network) state.network = result.network;
       if (result && Array.isArray(result.items)) state.items = result.items;
@@ -1358,4 +1483,5 @@ export const mcpMarketInternals = {
   categoryIcon,
   installState,
   marketErrorText,
+  paginationWindow,
 };

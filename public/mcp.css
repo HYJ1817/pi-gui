@@ -1054,6 +1054,8 @@
   justify-content: center;
   gap: 5px;
   flex-wrap: wrap;
+  max-width: 100%;
+  box-sizing: border-box;
   margin: 20px auto 0;
   /* 底部留出滚动余量：设置页的滚动容器被 46px 顶栏压住一截，
    * 页码贴着内容末尾时会被裁掉，滚到底也看不见。 */
@@ -1064,6 +1066,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   min-width: 30px;
   height: 28px;
   padding: 0 8px;
