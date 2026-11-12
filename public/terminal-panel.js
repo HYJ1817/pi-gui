@@ -197,6 +197,15 @@ export function mountTerminalPanel(host, view, options = {}) {
     });
   }
 
+  /* A truncated stream has lost the mode-setting prefix (alternate screen,
+   * cursor state, colors). Replaying its tail would feed xterm a state
+   * fragment, not a trustworthy screen. Reset instead and say so; the PTY is
+   * still alive, so keyboard input and resize keep working. */
+  function showTruncatedReplayFallback() {
+    term.reset();
+    writeSystem('较早的输出已超出缓存上限，无法完整恢复；显示已重置，输入仍可用。');
+  }
+
   function updateState(state, exitCode) {
     if (!session) return;
     if (state) session.state = state;
@@ -291,8 +300,9 @@ export function mountTerminalPanel(host, view, options = {}) {
       return;
     }
     const atBottom = term?.isAtBottom?.() ?? true;
-    if (result.truncated) term.write(RESET);
-    if (result.text) {
+    if (result.truncated) {
+      showTruncatedReplayFallback();
+    } else if (result.text) {
       term.write(result.text, () => {
         if (atBottom) term.scrollToBottom();
       });
@@ -387,9 +397,10 @@ export function mountTerminalPanel(host, view, options = {}) {
       return;
     }
     if (result.truncated) {
-      term.write(`${RESET}\x1b[2m[较早的输出已省略]\x1b[0m\r\n`);
+      showTruncatedReplayFallback();
+    } else if (result.text) {
+      term.write(result.text);
     }
-    if (result.text) term.write(result.text);
     if (Number.isSafeInteger(result.cursor) && result.cursor >= 0) cursor = result.cursor;
     if (result.session) session = result.session;
     term.scrollToBottom();

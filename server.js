@@ -640,15 +640,23 @@ const terminal = createTerminal({
    * workspace change would kill a terminal the user is still looking at.
    * If the registry cannot answer, return null; the sweep keeps the session
    * rather than treating a transient error as proof of a workspace change. */
-  scopeForSession: (session) => {
+  scopeForSession: async (session) => {
     let snapshot;
     try { snapshot = runtimeRegistryRef?.snapshot?.(); } catch { return null; }
     if (!snapshot?.ok) return null;
+    /* Resolve the session's own conversation first, without swallowing errors:
+     * a deleted record must retire the PTY even if another conversation is
+     * focused in the same workspace. The sweep distinguishes a confirmed
+     * `unknown_conversation` (stop) from transient `registry_unavailable`
+     * (keep for the next sweep). */
+    const own = await workspaceScopeForConversation(session.conversationId);
     const focused = snapshot.focusedConversationId;
     if (focused && focused !== session.conversationId) {
-      return workspaceScopeForConversation(focused);
+      /* A race while the focused record is being replaced must not decide this
+       * session's fate. Keep it and let the next sweep re-evaluate. */
+      try { return await workspaceScopeForConversation(focused); } catch { return null; }
     }
-    return workspaceScopeForConversation(session.conversationId);
+    return own;
   },
   enabled: !auth.isDevMode || process.env.PI_GUI_ENABLE_TERMINAL === '1',
 });

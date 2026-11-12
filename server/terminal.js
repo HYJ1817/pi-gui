@@ -40,6 +40,18 @@ export const TERMINAL_LIMITS = Object.freeze({
 });
 
 const fail = (code, message) => Object.assign(new Error(message || code), { code });
+/* Scope errors that prove the session no longer has a workspace to belong to.
+ * `registry_unavailable`, `workspace_check_failed` and errors without a
+ * confirmed invalid code are deliberately absent: a temporary failure is not
+ * proof of deletion, and killing a live shell on one is worse than keeping it
+ * for the next sweep. */
+const INVALID_SCOPE_CODES = new Set([
+  'unknown_conversation',
+  'unknown_workspace',
+  'unknown_project',
+  'workspace_unavailable',
+  'stale_workspace',
+]);
 const hash = (value) => crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 32);
 const toSlashes = (value) => String(value).replace(/\\/g, '/');
 const isHighSurrogate = (code) => code >= 0xd800 && code <= 0xdbff;
@@ -49,15 +61,23 @@ function workspaceFor(scope) {
   if (!scope || typeof scope !== 'object') throw fail('unknown_conversation');
   if (scope.root == null) return null;
   if (typeof scope.root !== 'string') throw fail('workspace_unavailable');
-  const root = realPathOrNull(scope.root);
-  if (!root) throw fail('workspace_unavailable');
+  /* Stat before realpath so a removed directory can be told apart from a
+   * transient I/O failure. `realPathOrNull` deliberately swallows the error
+   * code; treating every failure as `workspace_unavailable` would let one
+   * EACCES/EMFILE on a network share retire a healthy shell. Only ENOENT /
+   * ENOTDIR (or a non-directory root) prove the workspace is gone. */
   let stat;
   try {
-    stat = fs.statSync(root);
-  } catch {
-    throw fail('workspace_unavailable');
+    stat = fs.statSync(scope.root);
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') throw fail('workspace_unavailable');
+    throw fail('workspace_check_failed');
   }
   if (!stat.isDirectory()) throw fail('workspace_unavailable');
+  const root = realPathOrNull(scope.root);
+  /* Stat succeeded but realpath did not: an access or link problem, not proof
+   * that the workspace was deleted. Keep the shell and check again later. */
+  if (!root) throw fail('workspace_check_failed');
   const scopeId = typeof scope.scopeId === 'string' ? scope.scopeId : '';
   return {
     root,
@@ -616,6 +636,14 @@ export function createTerminal({
     return json(res, 200, { ok: true, session: publicSession(session) });
   }
 
+  /* Mark the session retired and start the kill without blocking the sweep.
+   * `stopSession` changes the state synchronously, so the next sweep's
+   * `stopping` branch can retry a wedged kill; awaiting the real exit here
+   * would hold every other session behind a five-second timeout. */
+  function retireInBackground(session, reason) {
+    removeAndStop(session, reason).catch(() => {});
+  }
+
   async function sweep() {
     if (sweeping || disposed) return;
     sweeping = true;
@@ -645,13 +673,16 @@ export function createTerminal({
           if (!scope) continue;
           const workspace = workspaceFor(scope);
           if (!workspace || workspace.id !== session.workspace.id) {
-            await removeAndStop(session, 'workspace');
+            retireInBackground(session, 'workspace');
           }
-        } catch {
-          /* Transient workspace/git/filesystem errors must not kill a healthy
-           * shell. A real switch resolves successfully to a different
-           * workspace id on a later sweep; unknown conversations are cleaned up
-           * by the idle timeout instead. */
+        } catch (error) {
+          /* A deleted conversation or invalid workspace is confirmed state:
+           * stop the PTY even if the shell keeps producing output. A transient
+           * registry/filesystem failure is not proof of deletion; keep the
+           * session for the next sweep instead of killing a healthy shell. */
+          if (INVALID_SCOPE_CODES.has(error?.code)) {
+            retireInBackground(session, 'conversation');
+          }
         }
       }
     } finally {
