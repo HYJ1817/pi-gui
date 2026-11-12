@@ -1,6 +1,7 @@
 /* UI contract for the Terminal and Files right-pane surfaces.
  * No real shell, project or network: transports are injected fixtures. */
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
@@ -56,8 +57,42 @@ const terminalSession = (id = 's1', state = 'running') => ({
   cwd: 'C:/fixture/project',
   shell: 'PowerShell',
   state,
+  cols: 80,
+  rows: 24,
   workspace: { id: 'w1', generation: '1' },
 });
+
+function fakeTerminalView(size = { cols: 100, rows: 30 }) {
+  const view = {
+    size,
+    writes: [],
+    data: [],
+    resize: null,
+    disposed: false,
+    fitCalls: 0,
+    clearCalls: 0,
+    resetCalls: 0,
+    scrollCalls: 0,
+    stdin: true,
+    themeRefreshes: 0,
+    fit() { view.fitCalls++; },
+    write(text, callback) { view.writes.push(text); callback?.(); },
+    focus() {},
+    clear() { view.clearCalls++; view.writes.length = 0; },
+    reset() { view.resetCalls++; view.writes.length = 0; },
+    scrollToBottom() { view.scrollCalls++; },
+    isAtBottom: () => true,
+    getSize: () => view.size,
+    setStdinEnabled(enabled) { view.stdin = enabled; },
+    refreshTheme() { view.themeRefreshes++; },
+    onData(fn) { view.data.push(fn); return { dispose() {} }; },
+    onResize(fn) { view.resize = fn; return { dispose() {} }; },
+    dispose() { view.disposed = true; },
+    emitData(data) { for (const fn of view.data) fn(data); },
+    emitResize(cols, rows) { view.size = { cols, rows }; view.resize?.({ cols, rows }); },
+  };
+  return view;
+}
 
 (async () => {
   const dom = makeDom();
@@ -66,89 +101,152 @@ const terminalSession = (id = 's1', state = 'running') => ({
   const host = document.getElementById('host');
 
   try {
-    let starts = 0, writes = [], stops = 0, reads = 0, disposed = false;
+    {
+      /* The real xterm bundle is ESM and only loaded in the browser. jsdom
+       * cannot execute it, but it can at least prove the committed vendor copy
+       * is the one the adapter imports and still matches its recorded hashes. */
+      const vendor = path.join(__dirname, '..', 'public', 'vendor', 'xterm');
+      const vendorMeta = JSON.parse(fs.readFileSync(path.join(vendor, 'versions.json'), 'utf8'));
+      const hashes = Object.fromEntries(Object.entries(vendorMeta.files).map(([name, expected]) => [
+        name,
+        crypto.createHash('sha256').update(fs.readFileSync(path.join(vendor, name))).digest('hex') === expected ? expected : 'mismatch',
+      ]));
+      const adapter = fs.readFileSync(path.join(__dirname, '..', 'public', 'terminal-xterm.js'), 'utf8');
+      ok('the adapter imports the committed xterm bundle whose hashes still match', () => {
+        assert.deepEqual(hashes, vendorMeta.files);
+        assert.match(adapter, /\.\/vendor\/xterm\/xterm\.mjs/);
+        assert.match(adapter, /\.\/vendor\/xterm\/addon-fit\.mjs/);
+      });
+    }
+
+    let starts = 0;
+    const startSizes = [];
+    const readSince = [];
+    const writes = [];
+    const resizes = [];
+    const stops = [];
+    const replay = '\x1b[32mPowerShell ready\x1b[0m\r\n';
     const terminalTransport = {
-      status: async () => ({ ok: true, enabled: true, pipe: true, platform: 'win32' }),
-      start: async () => { starts++; return { ok: true, session: terminalSession() }; },
-      read: async () => {
-        reads++;
-        return reads === 1
-          ? { ok: true, text: 'PowerShell ready\n', cursor: 17, state: 'running', session: terminalSession() }
-          : { ok: true, text: '', cursor: 17, state: 'running', session: terminalSession() };
+      status: async () => ({ ok: true, enabled: true, pty: true, platform: 'win32' }),
+      start: async (size) => {
+        starts++;
+        startSizes.push(size);
+        return { ok: true, reused: starts > 1, session: { ...terminalSession(), cols: size.cols, rows: size.rows } };
+      },
+      read: async (id, since) => {
+        readSince.push(since);
+        return since === 0
+          ? { ok: true, text: replay, cursor: replay.length, state: 'running', session: terminalSession() }
+          : { ok: true, text: '', cursor: replay.length, state: 'running', session: terminalSession() };
       },
       write: async (id, data) => { writes.push([id, data]); return { ok: true }; },
-      stop: async () => { stops++; return { ok: true }; },
+      resize: async (id, cols, rows) => { resizes.push([id, cols, rows]); return { ok: true }; },
+      stop: async (id) => {
+        stops.push(id);
+        return { ok: true, session: terminalSession(id, 'stopping') };
+      },
     };
+    const termView = fakeTerminalView();
     const view = fakeView();
-    mountTerminalPanel(host, view, { transport: terminalTransport });
-    await until(() => host.querySelector('.term-output')?.textContent.includes('PowerShell ready'));
-    ok('terminal starts against the focused project and renders streamed output', () => {
+    mountTerminalPanel(host, view, { transport: terminalTransport, createTerminalView: () => termView });
+    await until(() => termView.writes.join('').includes('PowerShell ready'));
+    ok('xterm starts with its measured size and replays raw ANSI/CR output', () => {
       assert.equal(starts, 1);
+      assert.deepEqual(startSizes[0], { cols: 100, rows: 30 });
+      assert.equal(readSince.filter((since) => since === 0).length, 1);
+      assert.equal(readSince[0], 0);
+      assert.equal(termView.writes.join(''), replay);
       assert.equal(host.querySelectorAll('.rp-head').length, 1);
       assert.equal(host.querySelector('.rp-head-title').textContent, '终端');
       assert.ok(host.querySelector('.rp-head-sub').textContent.includes('运行中'));
-      assert.ok(host.querySelector('.term-output').textContent.includes('PowerShell ready'));
-      assert.equal(host.querySelector('.term-input').disabled, false);
+      assert.equal(host.querySelector('.term-input'), null);
+      assert.equal(host.querySelector('.term-compose'), null);
+      assert.equal(termView.stdin, true);
+      assert.ok(termView.fitCalls >= 1);
     });
 
-    const input = host.querySelector('.term-input');
-    input.value = 'echo fixture';
-    input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    termView.emitData('echo 你好\r');
     await until(() => writes.length === 1);
-    ok('Enter sends exactly one line to the active session', () => {
-      assert.deepEqual(writes[0], ['s1', 'echo fixture\n']);
-      assert.equal(input.value, '');
+    termView.emitData('\x03');
+    await until(() => writes.length === 2);
+    ok('keyboard and Ctrl+C are forwarded byte-for-byte with no appended newline', () => {
+      assert.deepEqual(writes, [['s1', 'echo 你好\r'], ['s1', '\x03']]);
     });
 
-    input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-    ok('command history is available within the panel', () => assert.equal(input.value, 'echo fixture'));
+    termView.emitResize(120, 40);
+    await until(() => resizes.length === 1);
+    ok('xterm resize is debounced and sent with the active session id', () => {
+      assert.deepEqual(resizes[0], ['s1', 120, 40]);
+      assert.equal(termView.stdin, true);
+    });
 
-    host.querySelector('.term-compose .term-send').click();
-    await until(() => writes.length === 2);
-    ok('the send button uses the same command path', () => assert.deepEqual(writes[1], ['s1', 'echo fixture\n']));
+    dom.window.document.documentElement.dataset.theme = 'light';
+    await until(() => termView.themeRefreshes > 0);
+    ok('the terminal theme follows the resolved light/dark mode', () => {
+      assert.ok(termView.themeRefreshes >= 1);
+    });
 
     const clear = [...host.querySelectorAll('.rp-head-actions button')].find((button) => button.textContent === '清屏');
+    const beforeClear = stops.length;
     clear.click();
-    ok('clear only resets the local display', () => {
-      assert.equal(host.querySelector('.term-output').textContent, '');
-      assert.equal(stops, 0);
+    ok('clear only touches the local xterm display', () => {
+      assert.ok(termView.clearCalls >= 1);
+      assert.equal(stops.length, beforeClear);
     });
 
-    host.ownerDocument.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
-    await tick();
-    ok('a workspace change stops the old session and requires a restart', () => {
-      assert.equal(stops, 1);
-      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('工作区已变化'));
-      assert.equal(host.querySelector('.term-input').disabled, true);
-    });
     view.dispose();
-    disposed = view.isCurrent() === false;
-    ok('terminal dispose releases the view and does not leave a live session', () => {
-      assert.equal(disposed, true);
-      assert.equal(host.querySelector('.term-input').disabled, true);
+    assert.equal(termView.disposed, true);
+    assert.equal(stops.length, 0);
+    assert.equal(view.isCurrent(), false);
+    host.replaceChildren();
+
+    const secondView = fakeTerminalView();
+    const second = fakeView();
+    mountTerminalPanel(host, second, { transport: terminalTransport, createTerminalView: () => secondView });
+    await until(() => secondView.writes.join('').includes('PowerShell ready'));
+    ok('switching surfaces disposes only xterm and reconnects the same workspace session', () => {
+      assert.equal(starts, 2);
+      assert.deepEqual(startSizes[1], { cols: 100, rows: 30 });
+      assert.equal(readSince.filter((since) => since === 0).length, 2);
+      assert.equal(secondView.writes.join(''), replay);
+      assert.equal(stops.length, 0);
+      assert.equal(secondView.disposed, false);
+      assert.equal(second.isCurrent(), true);
     });
+
+    dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
+    await tick(10);
+    ok('a workspace change stops the old PTY and clears the frontend instead of reusing it', () => {
+      assert.deepEqual(stops, ['s1']);
+      assert.ok(secondView.resetCalls >= 1);
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('工作区已变化'));
+      assert.equal(secondView.stdin, false);
+    });
+    second.dispose();
+    host.replaceChildren();
   } finally {
     host.replaceChildren();
   }
 
   {
     let starts = 0;
-    let stopped = 0;
     const view = fakeView();
+    const termView = fakeTerminalView();
     const transport = {
       status: async () => ({ ok: true, enabled: false }),
       start: async () => { starts++; return { ok: false, code: 'terminal_disabled' }; },
       read: async () => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession() }),
       write: async () => ({ ok: true }),
-      stop: async () => { stopped++; return { ok: true }; },
+      resize: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
     };
-    mountTerminalPanel(host, view, { transport });
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
     await until(() => host.querySelector('.rp-head-sub')?.textContent.includes('不可用'));
-    ok('a disabled terminal explains itself and does not attempt a spawn', () => {
+    ok('a disabled terminal does not attempt a spawn and has no command input', () => {
       assert.equal(starts, 0);
-      assert.equal(stopped, 0);
-      assert.equal(host.querySelector('.term-input').disabled, true);
-      assert.equal([...host.querySelectorAll('.rp-head-actions button')].at(-1).disabled, true);
+      assert.equal(host.querySelector('.term-input'), null);
+      assert.equal(host.querySelector('.rp-head-actions button:last-child').disabled, true);
+      assert.equal(termView.disposed, false);
     });
     view.dispose();
     host.replaceChildren();
@@ -159,21 +257,263 @@ const terminalSession = (id = 's1', state = 'running') => ({
     let releaseStart = null;
     const stopped = [];
     const view = fakeView();
+    const termView = fakeTerminalView();
     const transport = {
       status: async () => ({ ok: true, enabled: true }),
       start: () => { starts++; return new Promise((resolve) => { releaseStart = resolve; }); },
       read: async () => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession('s-late') }),
       write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
       stop: async (id) => { stopped.push(id); return { ok: true }; },
     };
-    mountTerminalPanel(host, view, { transport });
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
     await until(() => starts === 1);
     view.dispose();
     releaseStart({ ok: true, session: terminalSession('s-late') });
     await tick(10);
-    ok('a session that starts after panel disposal is stopped instead of leaked', () => {
+    ok('a session that starts after panel disposal is stopped instead of mounted', () => {
       assert.deepEqual(stopped, ['s-late']);
+      assert.equal(termView.writes.length, 0);
     });
+    host.replaceChildren();
+  }
+
+  {
+    let starts = 0;
+    let releaseStart = null;
+    const stopped = [];
+    const view = fakeView();
+    const termView = fakeTerminalView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true }),
+      start: () => { starts++; return new Promise((resolve) => { releaseStart = resolve; }); },
+      read: async () => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession('s-keep') }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async (id) => { stopped.push(id); return { ok: true }; },
+    };
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
+    await until(() => starts === 1);
+    view.dispose();
+    /* A reused session already existed (surface reopened); the late response
+     * must not treat it as an orphan of the disposed view. */
+    releaseStart({ ok: true, reused: true, session: terminalSession('s-keep') });
+    await tick(10);
+    ok('a reused workspace session is not stopped when a late start lands after disposal', () => {
+      assert.deepEqual(stopped, []);
+      assert.equal(termView.writes.length, 0);
+    });
+    host.replaceChildren();
+  }
+
+  {
+    const startSizes = [];
+    const resizes = [];
+    const view = fakeView();
+    const termView = fakeTerminalView({ cols: 3, rows: 1 });
+    const transport = {
+      status: async () => ({
+        ok: true,
+        enabled: true,
+        limits: { minCols: 20, maxCols: 120, minRows: 5, maxRows: 40 },
+      }),
+      start: async (size) => {
+        startSizes.push(size);
+        return { ok: true, session: { ...terminalSession('s-clamp'), cols: size.cols, rows: size.rows } };
+      },
+      read: async () => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession('s-clamp') }),
+      write: async () => ({ ok: true }),
+      resize: async (id, cols, rows) => { resizes.push([id, cols, rows]); return { ok: true }; },
+      stop: async () => ({ ok: true }),
+    };
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
+    await until(() => startSizes.length === 1);
+    ok('start dimensions are clamped to the limits reported by status', () => {
+      assert.deepEqual(startSizes[0], { cols: 20, rows: 5 });
+    });
+    await until(() => host.querySelector('.rp-head-actions button:last-child')?.textContent === '停止');
+    termView.emitResize(900, 80);
+    await until(() => resizes.length === 1);
+    ok('resize dimensions are clamped before reaching the server', () => {
+      assert.deepEqual(resizes[0], ['s-clamp', 120, 40]);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    let state = 'running';
+    let stopped = 0;
+    const view = fakeView();
+    const termView = fakeTerminalView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true }),
+      start: async () => ({ ok: true, session: terminalSession('s-stop') }),
+      read: async () => ({ ok: true, text: '', cursor: 0, state, session: terminalSession('s-stop', state) }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async () => {
+        stopped++;
+        state = 'stopping';
+        setTimeout(() => { state = 'exited'; }, 20);
+        /* Polling replaces the session object while stop is in flight; this
+         * used to leave the control stuck on 「处理中…」. */
+        await new Promise((resolve) => setTimeout(resolve, 130));
+        return { ok: true, session: terminalSession('s-stop', 'stopping') };
+      },
+    };
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
+    await until(() => host.querySelector('.rp-head-actions button:last-child')?.textContent === '停止');
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await until(() => stopped === 1);
+    await until(() => {
+      const button = host.querySelector('.rp-head-actions button:last-child');
+      return button?.textContent === '重启' && !button.disabled;
+    }, 'restart control after exit');
+    ok('the Stop button ends the session and the UI follows real exit polling', () => {
+      assert.equal(stopped, 1);
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('已退出'));
+      assert.equal(termView.stdin, false);
+      const restart = host.querySelector('.rp-head-actions button:last-child');
+      assert.equal(restart.textContent, '重启');
+      assert.equal(restart.disabled, false);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* A stop response can schedule an immediate poll while the previous read
+     * is still outstanding. That tick used to be dropped, freezing the UI on
+     * 「正在停止…」 because the in-flight read returned to a replaced object. */
+    let readCalls = 0;
+    let releasePoll = null;
+    let state = 'running';
+    const view = fakeView();
+    const termView = fakeTerminalView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true }),
+      start: async () => ({ ok: true, session: terminalSession('s-poll', 'running') }),
+      read: async () => {
+        readCalls++;
+        if (readCalls === 1) return { ok: true, text: '', cursor: 0, state, session: terminalSession('s-poll', state) };
+        if (readCalls === 2) {
+          return new Promise((resolve) => {
+            releasePoll = () => resolve({
+              ok: true, text: '', cursor: 0, state: 'running', session: terminalSession('s-poll', 'running'),
+            });
+          });
+        }
+        return { ok: true, text: '', cursor: 0, state, session: terminalSession('s-poll', state) };
+      },
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async () => {
+        state = 'stopping';
+        return { ok: true, session: terminalSession('s-poll', 'stopping') };
+      },
+    };
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
+    await until(() => readCalls >= 2 && releasePoll, 'in-flight read');
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await until(() => host.querySelector('.rp-head-actions button:last-child')?.textContent === '正在停止…');
+    await tick(30);
+    state = 'exited';
+    releasePoll();
+    await until(() => host.querySelector('.rp-head-actions button:last-child')?.textContent === '重启', 'poll resumes after stop');
+    ok('a poll tick that lands during an in-flight read is not lost after stop', () => {
+      assert.ok(readCalls >= 3);
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('已退出'));
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* Closing a surface while its start is slow, then reopening it, can make
+     * the closed mount's late "created" response arrive after the new mount
+     * has already reused the same workspace session. The late mount must not
+     * stop the session the live mount is showing. */
+    let releaseLate = null;
+    const lateStops = [];
+    const viewA = fakeView();
+    const termA = fakeTerminalView();
+    const hostA = document.createElement('div');
+    document.body.append(hostA);
+    mountTerminalPanel(hostA, viewA, {
+      createTerminalView: () => termA,
+      transport: {
+        status: async () => ({ ok: true, enabled: true }),
+        start: () => new Promise((resolve) => { releaseLate = resolve; }),
+        read: async () => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession('s-shared') }),
+        write: async () => ({ ok: true }),
+        resize: async () => ({ ok: true }),
+        stop: async (id) => { lateStops.push(id); return { ok: true }; },
+      },
+    });
+    await until(() => typeof releaseLate === 'function', 'deferred start');
+    viewA.dispose();
+    hostA.remove();
+
+    const viewB = fakeView();
+    const termB = fakeTerminalView();
+    const hostB = document.createElement('div');
+    document.body.append(hostB);
+    mountTerminalPanel(hostB, viewB, {
+      createTerminalView: () => termB,
+      transport: {
+        status: async () => ({ ok: true, enabled: true }),
+        start: async () => ({ ok: true, reused: true, session: terminalSession('s-shared') }),
+        read: async () => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession('s-shared') }),
+        write: async () => ({ ok: true }),
+        resize: async () => ({ ok: true }),
+        stop: async () => ({ ok: true }),
+      },
+    });
+    await until(() => hostB.querySelector('.rp-head-sub')?.textContent.includes('运行中'), 'reopened mount running');
+    releaseLate({ ok: true, reused: false, session: terminalSession('s-shared') });
+    await tick(50);
+    ok('a late start from a closed mount does not stop a session another mount reused', () => {
+      assert.deepEqual(lateStops, []);
+      assert.equal(termB.disposed, false);
+    });
+    viewB.dispose();
+    hostB.remove();
+  }
+
+  {
+    const writes = [];
+    let releaseFirst = null;
+    const view = fakeView();
+    const termView = fakeTerminalView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true }),
+      start: async () => ({ ok: true, session: terminalSession('s-queue') }),
+      read: async () => {
+        await tick(0);
+        return { ok: true, text: '', cursor: 0, state: 'running', session: terminalSession('s-queue') };
+      },
+      write: async (id, data) => {
+        writes.push(data);
+        if (writes.length === 1) await new Promise((resolve) => { releaseFirst = resolve; });
+        return { ok: true };
+      },
+      resize: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
+    };
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
+    await until(() => host.querySelector('.rp-head-actions button:last-child')?.textContent === '停止');
+    const payload = 'x'.repeat(20000);
+    termView.emitData(payload);
+    await until(() => writes.length === 1);
+    await tick(150);
+    releaseFirst();
+    await until(() => writes.length === 2);
+    ok('queued input is not dropped when polling replaces the session object', () => {
+      assert.equal(writes.join(''), payload);
+      assert.deepEqual(writes.map((chunk) => chunk.length), [16384, 3616]);
+    });
+    view.dispose();
     host.replaceChildren();
   }
 

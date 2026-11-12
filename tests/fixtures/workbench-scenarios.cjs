@@ -50,8 +50,8 @@ module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win,
   await click('#workPanelHome');
   await click('.work-panel-launcher-more');
   await click('.work-panel-launcher-row[data-tool="btnTerminal"]');
-  await waitFor(`document.querySelector('#rightPane').dataset.surface==='terminal'&&!!document.querySelector('.term-output')`);
-  check('E Terminal launcher mounts the real command surface',await read(`document.querySelector('.rp-head-title').textContent==='终端'&&!!document.querySelector('.term-input')`));
+  await waitFor(`document.querySelector('#rightPane').dataset.surface==='terminal'&&!!document.querySelector('.term-host .xterm')`);
+  check('E Terminal launcher mounts the real xterm surface without a command composer',await read(`document.querySelector('.rp-head-title').textContent==='终端'&&!!document.querySelector('.term-host .xterm')&&!document.querySelector('.term-input')&&!document.querySelector('.term-compose')`));
   await shot('e01d-terminal-dark');
   await click('#workPanelHome');
   await click('.work-panel-launcher-more');
