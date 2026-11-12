@@ -24,7 +24,32 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const TOKEN = 'source-terminal-check-token';
 const TASKKILL = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe');
+const POWERSHELL = path.join(
+  process.env.SystemRoot || 'C:\\Windows',
+  'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
+);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function runPowerShell(script) {
+  return execFileSync(POWERSHELL, ['-NoProfile', '-NonInteractive', '-Command', script], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 15000,
+  }).trim();
+}
+
+/* Command-line identity, not a bare PID: the same PID may be reused. */
+function markerPids(marker) {
+  const script = `$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains('${marker}') } | ForEach-Object { [int]$_.ProcessId }) -join ','`;
+  const out = runPowerShell(script);
+  return out ? out.split(',').map(Number).filter(Number.isInteger) : [];
+}
+
+function killMarker(marker) {
+  for (const pid of markerPids(marker)) {
+    try { execFileSync(TASKKILL, ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 }); } catch { /* already gone */ }
+  }
+}
 
 if (process.platform !== 'win32') {
   console.log('SKIP: terminal-source-check requires Windows/ConPTY.');
@@ -124,9 +149,20 @@ function freePort() {
       assert.equal(state.bridgeState, 'ready');
     });
 
-    const started = await (await fetch(base + '/api/terminal', {
-      method: 'POST', headers, body: JSON.stringify({ action: 'start', cols: 100, rows: 30 }),
+    const terminalCall = async (body) => (await fetch(base + '/api/terminal', {
+      method: 'POST', headers, body: JSON.stringify(body),
     })).json();
+    const activated = async (target) => {
+      const result = await (await fetch(base + '/api/projects/activate', {
+        method: 'POST', headers, body: JSON.stringify({ path: target }),
+      })).json();
+      if (!result.ok) throw new Error('activate failed: ' + JSON.stringify(result));
+      /* activate setCurrentCwd synchronously before responding; give the
+       * restarted bridge a moment to settle as the real app would. */
+      await sleep(400);
+    };
+
+    const started = await terminalCall({ action: 'start', cols: 100, rows: 30 });
     terminalId = started.session?.id || '';
     check('the source server loads repository node-pty and spawns PowerShell', () => {
       assert.equal(started.ok, true, JSON.stringify(started));
@@ -135,22 +171,20 @@ function freePort() {
       assert.equal(started.session.cwd.replace(/\\/g, '/'), work.replace(/\\/g, '/'));
     });
 
-    const read = async () => {
-      const result = await (await fetch(base + '/api/terminal?id=' + encodeURIComponent(terminalId) + '&since=0', { headers })).json();
+    const readId = async (id, since = 0) => {
+      const result = await (await fetch(base + '/api/terminal?id=' + encodeURIComponent(id) + '&since=' + since, { headers })).json();
       if (!result.ok) throw new Error(JSON.stringify(result));
       return result;
     };
-    const write = async (data) => {
-      const result = await (await fetch(base + '/api/terminal', {
-        method: 'POST', headers, body: JSON.stringify({ action: 'input', id: terminalId, data }),
-      })).json();
+    const writeId = async (id, data) => {
+      const result = await terminalCall({ action: 'input', id, data });
       if (!result.ok) throw new Error(JSON.stringify(result));
     };
-    const readUntil = async (pattern, timeoutMs = 15000) => {
+    const readUntil = async (id, pattern, timeoutMs = 15000) => {
       const deadline = Date.now() + timeoutMs;
       let text = '';
       while (Date.now() < deadline) {
-        const result = await read();
+        const result = await readId(id, 0);
         text = result.text || '';
         if (pattern.test(text)) return text;
         await sleep(100);
@@ -158,30 +192,158 @@ function freePort() {
       throw new Error('timeout waiting for ' + pattern + ': ' + text.slice(-300));
     };
 
-    await readUntil(/PS [^>]*>/);
-    await write('node -v\r');
-    const versionText = await readUntil(/v\d+\.\d+\.\d+/);
+    const firstId = terminalId;
+    await readUntil(firstId, /PS [^>]*>/);
+    await writeId(firstId, 'node -v\r');
+    const versionText = await readUntil(firstId, /v\d+\.\d+\.\d+/);
     check('a real Node.js process runs inside the source-mode ConPTY', () => {
       assert.match(versionText, /v\d+\.\d+\.\d+/);
     });
 
-    await write("if ($env:PI_GUI_TOKEN) { 'TOKEN_' + 'LEAK' } else { 'TOKEN_' + 'CLEAN' }\r");
-    const tokenText = await readUntil(/TOKEN_(?:LEAK|CLEAN)/);
+    await writeId(firstId, "if ($env:PI_GUI_TOKEN) { 'TOKEN_' + 'LEAK' } else { 'TOKEN_' + 'CLEAN' }\r");
+    const tokenText = await readUntil(firstId, /TOKEN_(?:LEAK|CLEAN)/);
     check('the PTY child environment does not inherit PI_GUI_TOKEN', () => {
       assert.ok(tokenText.includes('TOKEN_CLEAN'), 'token leaked into the shell');
       assert.ok(!tokenText.includes('TOKEN_LEAK'));
     });
 
-    const stopped = await (await fetch(base + '/api/terminal', {
-      method: 'POST', headers, body: JSON.stringify({ action: 'stop', id: terminalId }),
-    })).json();
+    const second = await terminalCall({ action: 'create', cols: 120, rows: 40 });
+    const third = await terminalCall({ action: 'create', cols: 90, rows: 24 });
+    const secondId = second.session?.id || '';
+    const thirdId = third.session?.id || '';
+    await readUntil(secondId, /PS [^>]*>/);
+    await readUntil(thirdId, /PS [^>]*>/);
+    const initialList = await terminalCall({ action: 'list' });
+    const workspaceA = initialList.workspace?.id || '';
+    check('three real ConPTY sessions belong to the same workspace with independent ids', () => {
+      assert.equal(second.ok, true, JSON.stringify(second));
+      assert.equal(third.ok, true, JSON.stringify(third));
+      assert.equal(new Set([firstId, secondId, thirdId]).size, 3);
+      assert.equal(initialList.sessions.length, 3);
+      assert.deepEqual(initialList.sessions.map((session) => session.ordinal), [1, 2, 3]);
+      assert.ok(initialList.sessions.every((session) => session.cwd.replace(/\\/g, '/') === work.replace(/\\/g, '/')));
+      assert.ok(initialList.sessions.every((session) => session.workspace.id === workspaceA));
+      assert.equal(second.session.cols, 120);
+      assert.equal(second.session.rows, 40);
+    });
+
+    /* Let the slow session echo its command before the fast one is written.
+     * The marker is concatenated so the echoed command line does not match. */
+    const parallelStart = Date.now();
+    await writeId(firstId, "Start-Sleep -Milliseconds 3000; 'P2_SLOW_' + 'OK'\r");
+    await sleep(150);
+    await writeId(secondId, "'P2_FAST_' + 'OK'\r");
+    const fastText = await readUntil(secondId, /P2_FAST_OK/, 10000);
+    const fastMs = Date.now() - parallelStart;
+    const slowText = await readUntil(firstId, /P2_SLOW_OK/, 12000);
+    const slowMs = Date.now() - parallelStart;
+    check('three real ConPTY sessions run commands in parallel, not one after another', () => {
+      assert.ok(fastMs < 2000, `fast marker took ${fastMs}ms while the slow shell slept`);
+      assert.ok(slowMs >= 2500, `slow marker returned after ${slowMs}ms`);
+    });
+    check('each ConPTY session only sees its own output', () => {
+      assert.ok(fastText.includes('P2_FAST_OK'));
+      assert.ok(!fastText.includes('P2_SLOW_OK'));
+      assert.ok(slowText.includes('P2_SLOW_OK'));
+      assert.ok(!slowText.includes('P2_FAST_OK'));
+    });
+
+    const workB = path.join(world, 'work-b');
+    fs.mkdirSync(workB, { recursive: true });
+    await activated(workB);
+    const bCreated = await terminalCall({ action: 'create', cols: 80, rows: 24 });
+    const bId = bCreated.session?.id || '';
+    const bList = await terminalCall({ action: 'list' });
+    const forgedRead = await (await fetch(base + '/api/terminal?id=' + encodeURIComponent(firstId) + '&since=0', { headers })).json();
+    const forgedWrite = await terminalCall({ action: 'input', id: firstId, data: 'x' });
+    const forgedClose = await terminalCall({ action: 'close', id: secondId });
+    check('workspace B lists only its own terminal and cannot reach workspace A sessions', () => {
+      assert.equal(bCreated.ok, true, JSON.stringify(bCreated));
+      assert.equal(bCreated.session.cwd.replace(/\\/g, '/'), workB.replace(/\\/g, '/'));
+      assert.notEqual(bList.workspace.id, workspaceA);
+      assert.deepEqual(bList.sessions.map((session) => session.id), [bId]);
+      assert.equal(forgedRead.code, 'stale_workspace');
+      assert.equal(forgedWrite.code, 'stale_workspace');
+      assert.equal(forgedClose.code, 'stale_workspace');
+    });
+
+    await activated(work);
+    const backList = await terminalCall({ action: 'list' });
+    const backText = await readUntil(firstId, /P2_SLOW_OK/, 5000);
+    await writeId(secondId, "'P2_RETURN_' + 'OK'\r");
+    const returnText = await readUntil(secondId, /P2_RETURN_OK/, 10000);
+    check('returning to workspace A reconnects to the same three live PTYs and buffers', () => {
+      assert.equal(backList.workspace.id, workspaceA);
+      assert.deepEqual(backList.sessions.map((session) => session.id).sort(), [firstId, secondId, thirdId].sort());
+      assert.ok(!backList.sessions.some((session) => session.id === bId));
+      assert.ok(backText.includes('P2_SLOW_OK'));
+      assert.ok(returnText.includes('P2_RETURN_OK'));
+    });
+
+    /* Close one tab and prove the real ConPTY tree (shell + foreground Node
+     * child) is gone by command-line identity, not by PID reuse. */
+    const marker = `PI_GUI_SOURCE_${process.pid}_${Date.now()}`;
+    const nodePath = process.execPath.replace(/'/g, "''");
+    await writeId(thirdId, `& '${nodePath}' -e 'setInterval(()=>{},1000)' '${marker}'\r`);
+    let markerRunning = [];
+    for (let i = 0; i < 40 && !markerRunning.length; i++) {
+      await sleep(250);
+      markerRunning = markerPids(marker);
+    }
+    check('a real foreground Node child is running inside the third PTY tree', () => {
+      assert.ok(markerRunning.length > 0, 'marker child not found');
+    });
+    const closeThird = await terminalCall({ action: 'close', id: thirdId });
+    let markerLeft = markerPids(marker);
+    for (let i = 0; i < 60 && markerLeft.length; i++) {
+      await sleep(250);
+      markerLeft = markerPids(marker);
+    }
+    let thirdAfterClose = null;
+    for (let i = 0; i < 40; i++) {
+      thirdAfterClose = await (await fetch(base + '/api/terminal?id=' + encodeURIComponent(thirdId) + '&since=0', { headers })).json();
+      if (thirdAfterClose.code === 'terminal_missing' || thirdAfterClose.state === 'exited') break;
+      await sleep(100);
+    }
+    await writeId(secondId, "'P2_ALIVE_' + 'OK'\r");
+    const aliveText = await readUntil(secondId, /P2_ALIVE_OK/, 8000);
+    const firstState = (await readId(firstId, 0)).state;
+    check('closing one tab tree-kills only its ConPTY and leaves the other sessions running', () => {
+      assert.equal(closeThird.ok, true, JSON.stringify(closeThird));
+      assert.deepEqual(markerLeft, []);
+      assert.ok(
+        thirdAfterClose.code === 'terminal_missing' || thirdAfterClose.state === 'exited',
+        JSON.stringify(thirdAfterClose)
+      );
+      assert.ok(aliveText.includes('P2_ALIVE_OK'));
+      assert.equal(firstState, 'running');
+    });
+
+    await terminalCall({ action: 'close', id: secondId });
+    const stopped = await terminalCall({ action: 'stop', id: firstId });
     check('the source-mode terminal acknowledges stop', () => assert.equal(stopped.ok, true));
     let finalState = stopped.session?.state;
     for (let i = 0; i < 50 && finalState !== 'exited'; i++) {
       await sleep(100);
-      finalState = (await read()).state;
+      finalState = (await readId(firstId, 0)).state;
     }
     check('the source-mode PTY reaches the real exit state', () => assert.equal(finalState, 'exited'));
+
+    await activated(workB);
+    const bAgain = await terminalCall({ action: 'list' });
+    check('workspace B kept its terminal alive while workspace A was focused and closed', () => {
+      assert.equal(bAgain.sessions.length, 1);
+      assert.equal(bAgain.sessions[0].id, bId);
+      assert.equal(bAgain.sessions[0].state, 'running');
+    });
+    await terminalCall({ action: 'close', id: bId });
+    const bEmpty = await terminalCall({ action: 'list' });
+    check('closing workspace B leaves no session in B', () => assert.deepEqual(bEmpty.sessions, []));
+
+    const logTail = fs.readFileSync(logPath, 'utf8');
+    check('no ConPTY helper crash stack in the source-mode log', () => {
+      assert.ok(!/AttachConsole failed|conpty_console_list_agent\.js.*Error/i.test(logTail), 'ConPTY helper crash trace found');
+    });
 
     if (failed) {
       console.error('\nFailure details:');
