@@ -1,10 +1,15 @@
-/* Project terminal in the existing right pane.
+/* Multi-terminal surface in the existing right pane.
  *
- * The xterm instance is a *frontend* resource. Switching to Files/Changes (or
- * closing the pane) disposes it, but the backend PTY session stays alive; the
- * next mount calls `start`, which reuses the workspace session and replays its
- * bounded output buffer. Only the explicit Stop button, a workspace change,
- * idle timeout or app shutdown end the shell.
+ * P2 changes the unit of ownership: one backend PTY session per tab, each with
+ * its own xterm instance kept mounted while the panel is open. Switching tabs
+ * only toggles visibility, so the PTY is never recreated and the scrollback,
+ * alternate screen and cursor state stay intact.
+ *
+ * Closing the surface disposes the xterm instances but not the PTYs. Reopening
+ * calls `list` for the focused workspace and replays each session's bounded
+ * buffer. Changing workspace detaches the frontend without stopping anything;
+ * sessions are retired only when their own conversation/workspace is confirmed
+ * gone (server sweep), or by an explicit stop/close.
  *
  * Keyboard bytes are forwarded verbatim and output is written to xterm
  * verbatim. No newline is appended and CR/ANSI sequences are not normalized.
@@ -13,19 +18,24 @@ import { createPaneHeader } from './right-pane.js';
 import { openSecondarySurface } from './ui/secondary-surface.js';
 import {
   fetchTerminalStatus,
+  listTerminals,
+  createTerminal,
   startTerminal,
   readTerminal,
   writeTerminal,
   resizeTerminal,
   stopTerminal,
+  closeTerminal,
 } from './api.js';
+import { createTerminalSession } from './terminal-session.js';
+import { createTerminalTabs } from './terminal-tabs.js';
 
-const POLL_MS = 60;
-const RETRY_MS = 1000;
-const INPUT_BATCH_MS = 8;
-const INPUT_CHUNK_BYTES = 16 * 1024;
-const RESIZE_DEBOUNCE_MS = 60;
-const RESET = '\x1b[0m\x1b[?25h';
+const DEFAULT_SIZE = Object.freeze({ cols: 80, rows: 24 });
+const DEFAULT_LIMITS = Object.freeze({ minCols: 20, maxCols: 500, minRows: 5, maxRows: 200 });
+/* These answers mean the backend no longer owns the session, so removing the
+ * tab cannot hide a live PTY. Anything else (network error, 503, unknown code)
+ * leaves the backend state uncertain. */
+const CLOSE_SETTLED_CODES = new Set(['terminal_missing', 'stale_workspace', 'unknown_conversation']);
 
 const node = (tag, className, text) => {
   const element = document.createElement(tag);
@@ -34,12 +44,16 @@ const node = (tag, className, text) => {
   return element;
 };
 
-/* Mounts and their claimed sessions are module-wide because the backend PTY
- * outlives a frontend mount. A disposed mount's late `start` response must not
- * stop a session that a reopened pane already reused while that response was
- * in flight. */
-let liveMounts = 0;
+/* A disposed mount's late `create` response must not close a session that a
+ * reopened pane already listed while that response was in flight. Claims are
+ * module-wide because the backend PTY outlives a frontend mount; a session no
+ * live mount has claimed is an orphan and is closed. */
 const claimedSessions = new Map();
+/* Remembering the active tab per workspace is a UI convenience only; it never
+ * grants access. The backend still filters every list/read by workspace. */
+const preferredByWorkspace = new Map();
+const PREFERRED_LIMIT = 64;
+
 function claimSession(id) {
   if (!id) return;
   claimedSessions.set(id, (claimedSessions.get(id) || 0) + 1);
@@ -60,545 +74,932 @@ export function openTerminalPanel(options = {}) {
   );
 }
 
-function utf8Width(codePoint) {
-  if (codePoint <= 0x7f) return 1;
-  if (codePoint <= 0x7ff) return 2;
-  if (codePoint <= 0xffff) return 3;
-  return 4;
-}
-
-function splitInput(text) {
-  const parts = [];
-  let start = 0;
-  let bytes = 0;
-  for (let index = 0; index < text.length;) {
-    const codePoint = text.codePointAt(index);
-    const width = codePoint > 0xffff ? 2 : 1;
-    const size = utf8Width(codePoint);
-    if (bytes + size > INPUT_CHUNK_BYTES && index > start) {
-      parts.push(text.slice(start, index));
-      start = index;
-      bytes = 0;
-    }
-    bytes += size;
-    index += width;
-  }
-  if (start < text.length) parts.push(text.slice(start));
-  return parts;
-}
-
 export function mountTerminalPanel(host, view, options = {}) {
-  liveMounts++;
   host.classList.add('terminal-surface');
   const transport = options.transport || {
     status: fetchTerminalStatus,
+    list: listTerminals,
+    create: createTerminal,
     start: startTerminal,
     read: readTerminal,
     write: writeTerminal,
     resize: resizeTerminal,
     stop: stopTerminal,
+    close: closeTerminal,
   };
   const makeView = options.createTerminalView
     ? async (container) => options.createTerminalView(container)
     : async (container) => (await import('./terminal-xterm.js')).createXtermTerminal(container);
 
   let alive = true;
-  let term = null;
-  let session = null;
-  let cursor = 0;
-  let generation = 0;
-  let startToken = 0;
-  let busy = false;
+  let multi = typeof transport.list === 'function' && typeof transport.create === 'function';
+  let limits = null;
+  let maxPerWorkspace = Infinity;
   let disabled = false;
   let noProject = false;
-  let limits = null;
-  let claimedId = null;
-  let pollTimer = 0;
-  let pollInFlight = false;
-  let pollAgain = false;
-  let inputTimer = 0;
-  let inputPending = '';
-  let inputChain = Promise.resolve();
-  let resizeTimer = 0;
+  let busy = false;
+  let booting = false;
+  let emptyKind = null;
+  let workspaceId = null;
+  let workspaceGeneration = null;
+  let activeId = null;
+  let createToken = 0;
+  let bootToken = 0;
+  let scopeSyncToken = 0;
+  let scopeSyncTimer = 0;
+  let scopeSyncPending = false;
+  /* Boot and scope-sync both issue workspace lists. A single sequence number
+   * makes a later request supersede an earlier one regardless of which path
+   * started it, so a slow boot response cannot append the previous workspace's
+   * sessions after a scope sync already switched the panel. */
+  let listToken = 0;
+  /* A list sampled before a close can still contain that tab. Remember ids the
+   * backend has definitively forgotten so a late snapshot cannot resurrect
+   * them as dead tabs. The cap only bounds memory for very long sessions. */
+  const closedIds = new Set();
+  const CLOSED_ID_LIMIT = 256;
+  let lastMeasuredSize = null;
   let fitFrame = 0;
-  let lastSize = null;
   let resizeObserver = null;
   let themeObserver = null;
-  let headerNode;
   let subtitle;
   let control;
   let clearButton;
+  let noticeClearTimer = 0;
+  const tabs = new Map();
+  const order = [];
 
   const isCurrent = () => alive && (!view || view.isCurrent());
-  const running = () => session?.state === 'running';
-  const stopping = () => session?.state === 'stopping';
+  const activeMeta = () => (activeId ? tabs.get(activeId) || null : null);
+  const activeController = () => activeMeta()?.controller || null;
 
-  /* The server rejects dimensions outside its limits; a narrow/detached pane
-   * can make FitAddon report 2×1. Clamp before start/resize instead of failing
-   * the whole start or spamming an invalid_size error. */
-  function clampSize(cols, rows) {
-    const minCols = limits?.minCols ?? 20;
-    const maxCols = limits?.maxCols ?? 500;
-    const minRows = limits?.minRows ?? 5;
-    const maxRows = limits?.maxRows ?? 200;
-    return {
-      cols: Math.min(Math.max(Math.trunc(cols), minCols), maxCols),
-      rows: Math.min(Math.max(Math.trunc(rows), minRows), maxRows),
-    };
-  }
+  const clearButtonNode = node('button', 'btn tiny rp-btn', '清屏');
+  clearButtonNode.type = 'button';
+  clearButtonNode.title = '只清除当前显示，不结束后台终端';
+  clearButtonNode.onclick = () => activeController()?.clearScreen();
+  clearButton = clearButtonNode;
+
+  control = node('button', 'btn tiny rp-btn', '启动');
+  control.type = 'button';
+  control.onclick = () => {
+    if (disabled) return;
+    if (noProject) {
+      void boot();
+      return;
+    }
+    const controller = activeController();
+    if (!controller) {
+      if (emptyKind === 'error' || emptyKind === 'stale') {
+        void (multi ? boot() : startLegacy());
+        return;
+      }
+      void createTab();
+      return;
+    }
+    if (busy || controller.busy) return;
+    if (controller.isClosing()) return;
+    if (controller.isRunning()) {
+      void controller.stop().then(() => updateHeader());
+      return;
+    }
+    if (controller.isFinished() || controller.detached) {
+      void restartTab(controller.id);
+      return;
+    }
+    void createTab();
+  };
+
+  const header = createPaneHeader({ title: '终端', subtitle: '正在检测…', actions: [clearButton, control] });
+  subtitle = header.subtitle;
+  const headerNode = header.el;
+  host.append(headerNode);
+
+  const tabsUi = createTerminalTabs({
+    onActivate: (id) => activateTab(id),
+    onClose: (id) => { void closeTab(id); },
+    onNew: () => { void createTab(); },
+  });
+  tabsUi.newButton.hidden = !multi;
+  host.append(tabsUi.el, tabsUi.notice);
+
+  const termHost = node('div', 'term-host');
+  host.append(termHost);
+  host.append(tabsUi.empty);
 
   function setStatus(text, state = 'idle') {
     if (subtitle) subtitle.textContent = text;
     if (headerNode) headerNode.setAttribute('data-state', state);
   }
 
-  function syncControls() {
-    if (!control) return;
-    if (!term) {
-      control.textContent = '启动';
-      control.disabled = true;
-    } else if (disabled) {
+  function clearNotice() {
+    clearTimeout(noticeClearTimer);
+    noticeClearTimer = 0;
+    tabsUi.setNotice('');
+  }
+
+  function showNotice(text, tone = 'info') {
+    clearTimeout(noticeClearTimer);
+    tabsUi.setNotice(text, tone);
+  }
+
+  function clampSize(cols, rows) {
+    const bounds = limits || DEFAULT_LIMITS;
+    return {
+      cols: Math.min(Math.max(Math.trunc(cols), bounds.minCols ?? DEFAULT_LIMITS.minCols), bounds.maxCols ?? DEFAULT_LIMITS.maxCols),
+      rows: Math.min(Math.max(Math.trunc(rows), bounds.minRows ?? DEFAULT_LIMITS.minRows), bounds.maxRows ?? DEFAULT_LIMITS.maxRows),
+    };
+  }
+
+  function rememberActive() {
+    if (!workspaceId || !activeId) return;
+    preferredByWorkspace.delete(workspaceId);
+    preferredByWorkspace.set(workspaceId, activeId);
+    while (preferredByWorkspace.size > PREFERRED_LIMIT) {
+      preferredByWorkspace.delete(preferredByWorkspace.keys().next().value);
+    }
+  }
+
+  function preferredForWorkspace() {
+    const id = workspaceId ? preferredByWorkspace.get(workspaceId) : null;
+    return id && tabs.has(id) ? id : null;
+  }
+
+  function tabState(meta) {
+    const controller = meta.controller;
+    if (controller.busy) return 'creating';
+    if (controller.detached) return 'stale';
+    return controller.session?.state || 'idle';
+  }
+
+  function updateTab(id) {
+    const meta = tabs.get(id);
+    if (!meta) return;
+    tabsUi.update(meta.entry, {
+      label: meta.label,
+      state: tabState(meta),
+      selected: id === activeId,
+    });
+  }
+
+  function syncNewButton() {
+    if (!tabsUi.newButton) return;
+    tabsUi.newButton.hidden = !multi;
+    if (!multi) return;
+    const atCap = Number.isFinite(maxPerWorkspace) && tabs.size >= maxPerWorkspace;
+    tabsUi.setNewEnabled(
+      !busy && !booting && !scopeSyncPending && !disabled && !noProject && !atCap,
+      atCap ? '当前工作区终端数量已达上限' : '新建终端'
+    );
+  }
+
+  function updateHeader() {
+    const controller = activeController();
+    if (disabled) {
+      setStatus('不可用', 'disabled');
       control.textContent = '不可用';
       control.disabled = true;
-    } else if (busy) {
-      control.textContent = '处理中…';
-      control.disabled = true;
-    } else if (stopping()) {
-      control.textContent = '正在停止…';
-      control.disabled = true;
-    } else if (running()) {
-      control.textContent = '停止';
-      control.disabled = false;
-    } else if (noProject) {
+      clearButton.disabled = !controller;
+      syncNewButton();
+      return;
+    }
+    if (noProject) {
+      setStatus('未选择项目', 'idle');
       control.textContent = '重新检测';
       control.disabled = false;
-    } else if (session) {
+      clearButton.disabled = !controller;
+      syncNewButton();
+      return;
+    }
+    if (!controller) {
+      const status = emptyKind === 'error' ? ['无法使用终端', 'error']
+        : emptyKind === 'stale' ? ['工作区已变化', 'stale'] : ['未运行', 'idle'];
+      setStatus(status[0], status[1]);
+      control.textContent = emptyKind === 'error' ? '重试' : (multi ? '新建终端' : '启动');
+      control.disabled = busy || booting || scopeSyncPending;
+      clearButton.disabled = true;
+      syncNewButton();
+      return;
+    }
+
+    const session = controller.session || {};
+    if (controller.busy) setStatus('正在启动…', 'starting');
+    else if (controller.detached) setStatus('工作区已变化', 'stale');
+    else if (session.state === 'running') setStatus(`运行中 · ${session.shell || 'shell'}`, 'running');
+    else if (session.state === 'closing' || session.state === 'stopping') setStatus('正在停止…', 'closing');
+    else if (session.state === 'error' || session.state === 'failed') setStatus(session.error || '终端不可用', 'error');
+    else if (session.state === 'exited') {
+      const code = Number.isInteger(session.exitCode) ? ` (${session.exitCode})` : '';
+      setStatus(`已退出${code}`, 'exited');
+    } else setStatus('未运行', 'idle');
+
+    if (busy || controller.busy) {
+      control.textContent = '处理中…';
+      control.disabled = true;
+    } else if (session.state === 'closing' || session.state === 'stopping') {
+      control.textContent = '正在停止…';
+      control.disabled = true;
+    } else if (session.state === 'running') {
+      control.textContent = '停止';
+      control.disabled = false;
+    } else if (session.state === 'exited' || session.state === 'error' || session.state === 'failed') {
       control.textContent = '重启';
       control.disabled = false;
     } else {
       control.textContent = '启动';
       control.disabled = false;
     }
-    if (clearButton) clearButton.disabled = !term;
-    term?.setStdinEnabled?.(Boolean(running() && !busy));
+    clearButton.disabled = !controller.view;
+    syncNewButton();
   }
 
-  function releaseCurrentClaim() {
-    if (!claimedId) return;
-    releaseSessionClaim(claimedId);
-    claimedId = null;
+  function showEmpty(kind, { title = '', hint = '', actionLabel = '', onAction = null } = {}) {
+    emptyKind = kind;
+    if (termHost) termHost.hidden = true;
+    tabsUi.setEmpty({ title, hint, actionLabel, onAction });
+    updateHeader();
   }
 
-  function writeSystem(text) {
-    if (!term || !text) return;
-    const atBottom = term.isAtBottom?.() ?? true;
-    term.write(`${RESET}\r\n\x1b[2m[${text}]\x1b[0m\r\n`, () => {
-      if (atBottom) term.scrollToBottom();
+  function hideEmpty() {
+    emptyKind = null;
+    if (termHost) termHost.hidden = false;
+    tabsUi.setEmpty({ hidden: true });
+  }
+
+  function showEmptyIfIdle() {
+    if (tabs.size) return;
+    if (disabled) {
+      showEmpty('disabled', {
+        title: '终端不可用',
+        hint: '终端仅在桌面版可用，或需显式启用。',
+      });
+      return;
+    }
+    if (noProject) {
+      showEmpty('no-project', {
+        title: '未选择项目',
+        hint: '先选择一个项目，终端会继承该工作区的目录。',
+        actionLabel: '重新检测',
+        onAction: () => { void boot(); },
+      });
+      return;
+    }
+    showEmpty('none', {
+      title: '当前工作区还没有终端',
+      hint: '新建的终端会继承当前工作区目录，并保持独立运行。',
+      actionLabel: multi ? '新建终端' : '启动',
+      onAction: () => { void (multi ? createTab() : startLegacy()); },
     });
   }
 
-  /* A truncated stream has lost the mode-setting prefix (alternate screen,
-   * cursor state, colors). Replaying its tail would feed xterm a state
-   * fragment, not a trustworthy screen. Reset instead and say so; the PTY is
-   * still alive, so keyboard input and resize keep working. */
-  function showTruncatedReplayFallback() {
-    term.reset();
-    writeSystem('较早的输出已超出缓存上限，无法完整恢复；显示已重置，输入仍可用。');
+  function onControllerState(id) {
+    updateTab(id);
+    if (id === activeId) updateHeader();
   }
 
-  function updateState(state, exitCode) {
-    if (!session) return;
-    if (state) session.state = state;
-    if (Number.isInteger(exitCode)) session.exitCode = exitCode;
-    if (state === 'running') {
-      setStatus(`运行中 · ${session.shell || 'shell'}`, 'running');
-    } else if (state === 'stopping') {
-      setStatus('正在停止…', 'stopping');
-    } else if (state === 'failed') {
-      setStatus('启动失败', 'failed');
-    } else if (state === 'exited') {
-      const code = Number.isInteger(session.exitCode) ? ` (${session.exitCode})` : '';
-      setStatus(`已退出${code}`, 'exited');
+  function activateTab(id, { focus = true } = {}) {
+    const meta = tabs.get(id);
+    if (!meta) return;
+    activeId = id;
+    hideEmpty();
+    for (const other of tabs.values()) {
+      other.controller.show(other.id === id);
+      updateTab(other.id);
+    }
+    tabsUi.activate(id);
+    rememberActive();
+    updateHeader();
+    if (focus) meta.controller.focus();
+  }
+
+  function removeTab(id) {
+    const meta = tabs.get(id);
+    if (!meta) return;
+    const index = order.indexOf(id);
+    tabs.delete(id);
+    if (index >= 0) order.splice(index, 1);
+    meta.controller.dispose();
+    releaseSessionClaim(id);
+    tabsUi.remove(id);
+    if (activeId === id) {
+      activeId = null;
+      const next = order[index] || order[index - 1] || order[0] || null;
+      if (next) activateTab(next);
+      else {
+        updateHeader();
+        showEmptyIfIdle();
+      }
     } else {
-      setStatus('未运行', 'idle');
+      updateHeader();
     }
-    syncControls();
   }
 
-  function stopPolling() {
-    clearTimeout(pollTimer);
-    pollTimer = 0;
-    pollAgain = false;
+  function addSession(session, { slot = null, activate = false, label = null } = {}) {
+    if (!session?.id) return null;
+    const existing = tabs.get(session.id);
+    if (existing) {
+      existing.controller.updateSession(session);
+      updateTab(session.id);
+      if (activate) activateTab(session.id);
+      return existing;
+    }
+    claimSession(session.id);
+    const viewId = `term-view-${session.id}`;
+    const labelText = label || `终端 ${session.ordinal || order.length + 1}`;
+    const entry = tabsUi.add({ id: session.id, label: labelText, viewId, ordinal: session.ordinal });
+    const container = slot?.container || node('div', 'term-view');
+    container.id = viewId;
+    container.setAttribute('role', 'tabpanel');
+    container.setAttribute('aria-label', labelText);
+    container.hidden = true;
+    if (!container.isConnected) termHost.append(container);
+    const controller = createTerminalSession({
+      session,
+      transport,
+      createView: makeView,
+      clampSize,
+      view: slot?.view || null,
+      container,
+      onState: () => onControllerState(session.id),
+      onScopeStale: () => requestScopeSync(),
+    });
+    if (slot) slot.adopted = true;
+    const meta = { id: session.id, label: labelText, viewId, entry, controller, container };
+    tabs.set(session.id, meta);
+    order.push(session.id);
+    updateTab(session.id);
+    void controller.mount(container).then((mounted) => {
+      if (!alive || tabs.get(session.id) !== meta) return;
+      if (!mounted) {
+        updateTab(session.id);
+        updateHeader();
+        return;
+      }
+      if (activeId === session.id) controller.show(true);
+      else controller.show(false);
+      updateTab(session.id);
+      updateHeader();
+    });
+    if (activate) activateTab(session.id);
+    return meta;
   }
 
-  function schedulePoll(delay = POLL_MS) {
-    stopPolling();
-    if (!isCurrent() || !session) return;
-    pollTimer = setTimeout(() => { void poll(); }, delay);
+  function createViewSlot() {
+    const container = node('div', 'term-view');
+    container.hidden = true;
+    termHost.hidden = false;
+    tabsUi.setEmpty({ hidden: true });
+    termHost.append(container);
+    return makeView(container).then((view) => {
+      if (!alive) {
+        try { view?.dispose?.(); } catch { /* noop */ }
+        container.remove();
+        return null;
+      }
+      return { container, view, adopted: false };
+    }).catch(() => {
+      container.remove();
+      return null;
+    });
   }
 
-  function handleReadError(result) {
+  function disposeSlot(slot) {
+    if (!slot || slot.adopted) return;
+    try { slot.view?.dispose?.(); } catch { /* noop */ }
+    slot.container?.remove?.();
+  }
+
+  function handleLateSession(result) {
+    if (!result?.ok || !result.session?.id) return;
+    const id = result.session.id;
+    /* A reused session belongs to whoever had it first; one another mount
+     * already listed is also safe. Anything else was created by this stale
+     * mount only and would otherwise live with no tab. */
+    if (result.reused || claimedSessions.has(id)) return;
+    if (typeof transport.close === 'function') void transport.close(id);
+    else void transport.stop(id);
+  }
+
+  function handleOpenFailure(result) {
     const code = result?.code;
-    if (code === 'stale_workspace' || code === 'unknown_conversation') {
-      const stale = session;
-      releaseCurrentClaim();
-      session = null;
-      stopPolling();
-      setStatus('工作区已变化', 'stale');
-      writeSystem(result.error || '工作区已经变化，终端已停止。');
-      syncControls();
-      /* A read can discover a workspace change before the generation event
-       * reaches this mount (for example a project switch that clears the
-       * conversation scope first). Stop through the scope captured by
-       * `startTerminal` so the backend does not keep an orphan PTY until its
-       * idle timeout. `unknown_conversation` has no resolvable scope, so the
-       * backend sweep owns that case. */
-      if (code === 'stale_workspace' && stale?.id) void transport.stop(stale.id);
-      return;
+    if (code === 'terminal_disabled') {
+      disabled = true;
+      showEmptyIfIdle();
+    } else if (code === 'noProject') {
+      noProject = true;
+      showEmptyIfIdle();
+    } else if (code === 'terminal_limit' || code === 'terminal_stopping') {
+      showNotice(result?.error || '终端数量已达上限，请先关闭一个终端。', 'warn');
+      if (!tabs.size) showEmpty('error', {
+        title: '无法新建终端',
+        hint: result?.error || '终端数量已达上限，请先关闭一个终端。',
+        actionLabel: '重试',
+        onAction: () => { void createTab(); },
+      });
+    } else if (code === 'stale_workspace' || code === 'unknown_conversation'
+      || code === 'workspace_unavailable' || code === 'unknown_workspace' || code === 'unknown_project') {
+      showNotice(result?.error || '工作区已经变化。', 'warn');
+      requestScopeSync();
+    } else if (result?.network) {
+      showNotice('无法连接终端服务，请稍后重试。', 'warn');
+      if (!tabs.size) showEmpty('error', {
+        title: '无法连接终端服务',
+        hint: '请确认本地后端仍在运行，然后重试。',
+        actionLabel: '重试',
+        onAction: () => { void createTab(); },
+      });
+    } else {
+      const message = result?.error || '无法启动终端。';
+      showNotice(message, 'error');
+      if (!tabs.size) showEmpty('error', {
+        title: '启动失败',
+        hint: message,
+        actionLabel: '重试',
+        onAction: () => { void createTab(); },
+      });
     }
-    if (code === 'terminal_missing') {
-      releaseCurrentClaim();
-      session = null;
-      stopPolling();
-      setStatus('会话已结束', 'exited');
-      writeSystem(result.error || '终端会话已结束。');
-      syncControls();
-      return;
-    }
-    setStatus('连接中断，正在重试…', 'retry');
-    syncControls();
-    schedulePoll(RETRY_MS);
+    updateHeader();
   }
 
-  async function poll() {
-    pollTimer = 0;
-    if (!isCurrent() || !session || pollInFlight) {
-      /* A stop/workspace response can schedule an immediate poll while the
-       * previous read is still outstanding. Dropping that tick here used to
-       * freeze the terminal on 「正在停止…」 forever: the in-flight read then
-       * returned to a replaced session object and did not reschedule. */
-      if (pollInFlight) pollAgain = true;
-      return;
+  async function createTab({ size = null, label = null, fromBoot = false, replacingId = null } = {}) {
+    if (!alive || busy || disabled || noProject) return null;
+    if (!fromBoot && (booting || scopeSyncPending)) return null;
+    if (!multi) return startLegacy({ size, atBoot: fromBoot });
+    /* A restart still shows the old exited tab while its replacement is being
+     * created, but the backend has already freed that slot. */
+    const occupied = tabs.size - (replacingId && tabs.has(replacingId) ? 1 : 0);
+    if (Number.isFinite(maxPerWorkspace) && occupied >= maxPerWorkspace) {
+      showNotice('当前工作区的终端数量已达上限，请先关闭一个终端。', 'warn');
+      return null;
     }
-    const active = session;
-    const gen = generation;
-    pollInFlight = true;
-    const result = await transport.read(active.id, cursor);
-    pollInFlight = false;
-    const rerun = pollAgain;
-    pollAgain = false;
-    if (!isCurrent() || generation !== gen) return;
-    if (session !== active) {
-      /* Do not apply a read that started before the stop/start swapped the
-       * session object (its state may be stale), but keep the current live
-       * session polled. */
-      if (session && (session.state === 'running' || session.state === 'stopping')) schedulePoll(rerun ? 0 : POLL_MS);
-      return;
+    const token = ++createToken;
+    busy = true;
+    clearNotice();
+    updateHeader();
+    const slot = await createViewSlot();
+    if (!alive || token !== createToken) {
+      disposeSlot(slot);
+      return null;
     }
+    try { slot?.view?.fit?.(); } catch { /* hidden or detached container */ }
+    const measured = slot?.view?.getSize?.() || activeController()?.getSize?.() || lastMeasuredSize || DEFAULT_SIZE;
+    const requestSize = clampSize(measured.cols, measured.rows);
+    lastMeasuredSize = requestSize;
+    let result;
+    try {
+      result = await transport.create(requestSize);
+    } catch {
+      result = { ok: false, network: true, error: '无法连接终端服务。' };
+    }
+    if (!alive || token !== createToken) {
+      disposeSlot(slot);
+      handleLateSession(result);
+      return null;
+    }
+    busy = false;
     if (!result?.ok) {
-      handleReadError(result);
+      disposeSlot(slot);
+      handleOpenFailure(result);
+      return null;
+    }
+    if (result.noProject) {
+      disposeSlot(slot);
+      noProject = true;
+      showEmptyIfIdle();
+      updateHeader();
+      return null;
+    }
+    const session = result.session;
+    if (!session?.id) {
+      disposeSlot(slot);
+      showNotice('后端没有返回终端会话。', 'error');
+      updateHeader();
+      return null;
+    }
+    if (workspaceId && session.workspace?.id && session.workspace.id !== workspaceId) {
+      /* The focused workspace changed while the request was in flight. Do not
+       * mount the new session into the wrong tab list. */
+      disposeSlot(slot);
+      handleLateSession(result);
+      requestScopeSync();
+      updateHeader();
+      return null;
+    }
+    if (!workspaceId && session.workspace?.id) workspaceId = session.workspace.id;
+    hideEmpty();
+    addSession(session, { slot, activate: true, label });
+    updateHeader();
+    return session;
+  }
+
+  async function startLegacy({ size = null, atBoot = false } = {}) {
+    if (!alive || busy || disabled || noProject) return null;
+    if (!atBoot && (booting || scopeSyncPending)) return null;
+    if (tabs.size) {
+      const only = order[0];
+      if (only) activateTab(only);
+      return null;
+    }
+    const token = ++createToken;
+    busy = true;
+    clearNotice();
+    updateHeader();
+    const slot = await createViewSlot();
+    if (!alive || token !== createToken || (atBoot && !isCurrent())) {
+      disposeSlot(slot);
+      return null;
+    }
+    try { slot?.view?.fit?.(); } catch { /* hidden */ }
+    const measured = slot?.view?.getSize?.() || lastMeasuredSize || DEFAULT_SIZE;
+    const requestSize = size || clampSize(measured.cols, measured.rows);
+    let result;
+    try {
+      result = await transport.start(requestSize);
+    } catch {
+      result = { ok: false, network: true, error: '无法连接终端服务。' };
+    }
+    if (!alive || token !== createToken) {
+      disposeSlot(slot);
+      handleLateSession(result);
+      return null;
+    }
+    busy = false;
+    if (!result?.ok) {
+      disposeSlot(slot);
+      handleOpenFailure(result);
+      return null;
+    }
+    if (result.noProject) {
+      disposeSlot(slot);
+      noProject = true;
+      showEmptyIfIdle();
+      updateHeader();
+      return null;
+    }
+    const session = result.session;
+    if (!session?.id) {
+      disposeSlot(slot);
+      showNotice('后端没有返回终端会话。', 'error');
+      updateHeader();
+      return null;
+    }
+    if (!workspaceId && session.workspace?.id) workspaceId = session.workspace.id;
+    hideEmpty();
+    addSession(session, { slot, activate: true });
+    updateHeader();
+    return session;
+  }
+
+  /* A close with no definitive answer may leave the PTY running. Removing the
+   * tab then would hide a live session and keep it occupying a workspace slot
+   * with no UI to retry, so only settle the tab after the backend answers. */
+  function closeSettled(result) {
+    return Boolean(result?.ok) || CLOSE_SETTLED_CODES.has(result?.code);
+  }
+
+  function rememberClosed(id) {
+    if (!id) return;
+    closedIds.add(id);
+    if (closedIds.size > CLOSED_ID_LIMIT) {
+      closedIds.delete(closedIds.values().next().value);
+    }
+  }
+
+  function filterClosedSessions(sessions) {
+    return (Array.isArray(sessions) ? sessions : [])
+      .filter((session) => session?.id && !closedIds.has(session.id));
+  }
+
+  async function restartTab(id) {
+    const meta = tabs.get(id);
+    if (!meta) return;
+    const controller = meta.controller;
+    if (!controller.isFinished()) return;
+    const size = controller.getSize();
+    const label = meta.label;
+    let result;
+    try {
+      result = await controller.close();
+    } catch {
+      result = { ok: false, network: true };
+    }
+    if (!alive || !tabs.has(id)) return;
+    if (!closeSettled(result)) {
+      showNotice(result?.error || '重启终端失败，请重试。', 'error');
+      updateHeader();
       return;
     }
-    const atBottom = term?.isAtBottom?.() ?? true;
-    if (result.truncated) {
-      showTruncatedReplayFallback();
-    } else if (result.text) {
-      term.write(result.text, () => {
-        if (atBottom) term.scrollToBottom();
-      });
-    }
-    if (Number.isSafeInteger(result.cursor) && result.cursor >= 0) cursor = result.cursor;
-    if (result.session) session = result.session;
-    updateState(result.state || session.state, result.exitCode);
-    if (session?.state === 'running' || session?.state === 'stopping') schedulePoll(rerun ? 0 : POLL_MS);
-  }
-
-  function handleWriteFailure(result) {
-    if (result?.code === 'terminal_not_running') {
-      if (session) session.state = 'exited';
-      updateState('exited');
+    if (result?.ok || result?.code === 'terminal_missing') rememberClosed(id);
+    if (multi) {
+      /* Keep the old tab until its replacement exists. If a scope sync is in
+       * flight, createTab returns null; removing first would leave the user
+       * with neither the tab nor a new terminal. */
+      const created = await createTab({ size, label, replacingId: id });
+      if (!alive || !tabs.has(id)) return;
+      if (!created) {
+        if (scopeSyncPending) showNotice('工作区正在切换，请稍后再试。', 'warn');
+        return;
+      }
+      removeTab(id);
       return;
     }
-    writeSystem(result?.error || '终端输入没有发出去。');
+    removeTab(id);
+    await startLegacy({ size });
   }
 
-  function flushInput() {
-    inputTimer = 0;
-    const data = inputPending;
-    inputPending = '';
-    if (!data || !isCurrent() || !running()) return;
-    const active = session;
-    const gen = generation;
-    for (const chunk of splitInput(data)) {
-      inputChain = inputChain.then(async () => {
-        /* Polling replaces `session` with a fresh object on every response.
-         * Compare ids so a chunk queued before that response is still sent. */
-        if (!isCurrent() || generation !== gen || session?.id !== active.id || session?.state !== 'running') return;
-        const result = await transport.write(active.id, chunk);
-        if (!isCurrent() || generation !== gen || session?.id !== active.id) return;
-        if (!result?.ok) handleWriteFailure(result);
-      }).catch(() => {
-        /* A failed request must not poison the rest of the input queue. */
-      });
+  async function closeTab(id) {
+    const meta = tabs.get(id);
+    if (!meta) return;
+    let result;
+    try {
+      result = await meta.controller.close();
+    } catch {
+      result = { ok: false, network: true };
+    }
+    if (!alive || !tabs.has(id)) return;
+    if (!closeSettled(result)) {
+      showNotice(result?.error || '关闭终端失败，请重试。', 'error');
+      updateHeader();
+      return;
+    }
+    if (result?.ok || result?.code === 'terminal_missing') rememberClosed(id);
+    removeTab(id);
+  }
+
+  function detachTabsForScope() {
+    createToken++;
+    busy = false;
+    clearNotice();
+    for (const meta of [...tabs.values()]) {
+      meta.controller.dispose();
+      releaseSessionClaim(meta.id);
+      tabsUi.remove(meta.id);
+    }
+    tabs.clear();
+    order.length = 0;
+    activeId = null;
+    termHost.hidden = false;
+    tabsUi.setEmpty({ hidden: true });
+  }
+
+  function reconcileSessions(sessions, { removable = null } = {}) {
+    const incoming = new Map(filterClosedSessions(sessions).map((session) => [session.id, session]));
+    for (const id of [...tabs.keys()]) {
+      const session = incoming.get(id);
+      if (!session) {
+        /* A restart whose replacement was deferred by an in-flight scope sync
+         * keeps its old exited tab. Its backend is already closed, so the
+         * filtered list will never contain it; keep that retry affordance. */
+        if (closedIds.has(id)) continue;
+        /* Only remove tabs that existed when this list was requested. A tab
+         * created while the request was in flight is absent from the older
+         * snapshot; removing it would hide a live PTY and leave it occupying a
+         * slot with no way to close it from the UI. */
+        if (!removable || removable.has(id)) removeTab(id);
+        continue;
+      }
+      const meta = tabs.get(id);
+      meta.controller.updateSession(session);
+      if (meta.controller.detached) meta.controller.reattach();
+      updateTab(id);
+    }
+    for (const session of incoming.values()) {
+      if (!tabs.has(session.id)) addSession(session, { activate: false });
+    }
+    if (!tabs.size) {
+      activeId = null;
+      updateHeader();
+      showEmptyIfIdle();
+      return;
+    }
+    if (!activeId || !tabs.has(activeId)) {
+      activateTab(preferredForWorkspace() || order.at(-1), { focus: false });
+    } else {
+      updateHeader();
     }
   }
 
-  function onData(data) {
-    if (!isCurrent() || !running() || busy || typeof data !== 'string' || !data) return;
-    inputPending += data;
-    if (!inputTimer) inputTimer = setTimeout(flushInput, INPUT_BATCH_MS);
+  function applyWorkspaceSessions(sessions, { autoCreate = false } = {}) {
+    const list = filterClosedSessions(sessions);
+    if (list.length) {
+      hideEmpty();
+      for (const session of list) addSession(session, { activate: false });
+      activateTab(preferredForWorkspace() || order.at(-1));
+      updateHeader();
+      return;
+    }
+    activeId = null;
+    if (autoCreate) {
+      void createTab({ fromBoot: true });
+      return;
+    }
+    showEmptyIfIdle();
+  }
+
+  function handleListFailure(result, { autoCreate = false } = {}) {
+    const code = result?.code;
+    if (code === 'terminal_disabled') {
+      disabled = true;
+      showEmptyIfIdle();
+      return;
+    }
+    if (code === 'unknown_conversation' || code === 'workspace_unavailable'
+      || code === 'stale_workspace' || code === 'unknown_workspace' || code === 'unknown_project') {
+      detachTabsForScope();
+      workspaceId = null;
+      showEmpty('error', {
+        title: '工作区不可用',
+        hint: result?.error || '当前工作区已经失效。',
+        actionLabel: '重试',
+        onAction: () => { requestScopeSync({ force: true }); },
+      });
+      return;
+    }
+    const message = result?.network ? '无法连接终端服务，请稍后重试。' : (result?.error || '无法读取终端列表。');
+    showNotice(message, 'warn');
+    if (!tabs.size) {
+      showEmpty('error', {
+        title: autoCreate ? '无法启动终端' : '无法读取终端列表',
+        hint: message,
+        actionLabel: '重试',
+        onAction: () => { void boot(); },
+      });
+    }
+    updateHeader();
+  }
+
+  async function loadWorkspace(token, { autoCreate = false } = {}) {
+    const listSeq = ++listToken;
+    let result;
+    try { result = await transport.list(); } catch { result = { ok: false, network: true }; }
+    if (!alive || token !== bootToken || listSeq !== listToken) return;
+    /* This boot list is now the newest workspace request. It may have
+     * superseded a scope-sync list whose response will be discarded before it
+     * can clear the pending flag; clear it here or the New/Restart controls
+     * stay disabled forever. */
+    scopeSyncPending = false;
+    if (!result?.ok) {
+      if (result?.code === 'invalid_action') {
+        multi = false;
+        tabsUi.newButton.hidden = true;
+        await startLegacy({ atBoot: true });
+        return;
+      }
+      handleListFailure(result, { autoCreate });
+      return;
+    }
+    if (result.noProject) {
+      detachTabsForScope();
+      workspaceId = null;
+      noProject = true;
+      showEmptyIfIdle();
+      return;
+    }
+    noProject = false;
+    workspaceId = result.workspace?.id || null;
+    workspaceGeneration = result.workspace?.generation ?? null;
+    applyWorkspaceSessions(result.sessions, { autoCreate });
+  }
+
+  async function runScopeSync(token) {
+    if (!alive || token !== scopeSyncToken) return;
+    if (!multi) {
+      scopeSyncPending = false;
+      detachTabsForScope();
+      workspaceId = null;
+      setStatus('工作区已变化', 'stale');
+      showEmpty('stale', {
+        title: '工作区已变化',
+        hint: '点击启动会在当前工作区打开一个终端。',
+        actionLabel: '启动',
+        onAction: () => { void startLegacy(); },
+      });
+      return;
+    }
+    const listSeq = ++listToken;
+    const localIds = new Set(tabs.keys());
+    let result;
+    try { result = await transport.list(); } catch { result = { ok: false, network: true }; }
+    if (!alive || token !== scopeSyncToken || listSeq !== listToken) return;
+    scopeSyncPending = false;
+    if (!result?.ok) {
+      if (result?.code === 'terminal_disabled') {
+        disabled = true;
+        detachTabsForScope();
+        showEmptyIfIdle();
+        return;
+      }
+      if (result?.code === 'unknown_conversation' || result?.code === 'workspace_unavailable'
+        || result?.code === 'stale_workspace' || result?.code === 'unknown_workspace'
+        || result?.code === 'unknown_project') {
+        detachTabsForScope();
+        workspaceId = null;
+        showEmpty('error', {
+          title: '工作区不可用',
+          hint: result?.error || '当前工作区已经失效。',
+          actionLabel: '重试',
+          onAction: () => { requestScopeSync({ force: true }); },
+        });
+        return;
+      }
+      showNotice(result?.network ? '无法连接终端服务，请稍后重试。' : (result?.error || '无法读取终端列表。'), 'warn');
+      updateHeader();
+      return;
+    }
+    if (result.noProject) {
+      detachTabsForScope();
+      workspaceId = null;
+      noProject = true;
+      showEmptyIfIdle();
+      return;
+    }
+    noProject = false;
+    const nextWorkspace = result.workspace?.id || null;
+    const sessions = Array.isArray(result.sessions) ? result.sessions : [];
+    if (workspaceId && nextWorkspace === workspaceId && tabs.size) {
+      reconcileSessions(sessions, { removable: localIds });
+      return;
+    }
+    detachTabsForScope();
+    workspaceId = nextWorkspace;
+    workspaceGeneration = result.workspace?.generation ?? null;
+    applyWorkspaceSessions(sessions, { autoCreate: false });
+  }
+
+  function requestScopeSync({ force = false } = {}) {
+    if (!alive || disabled) return;
+    const token = ++scopeSyncToken;
+    /* Invalidate any list already in flight as soon as a scope change is
+     * requested, not when the debounced request starts. Otherwise a boot/list
+     * response for the old workspace could land in the gap and be applied. */
+    listToken++;
+    scopeSyncPending = true;
+    if (force) detachTabsForScope();
+    clearTimeout(scopeSyncTimer);
+    scopeSyncTimer = setTimeout(() => { void runScopeSync(token); }, 0);
+  }
+
+  async function boot() {
+    if (!alive) return;
+    const token = ++bootToken;
+    scopeSyncToken++;
+    listToken++;
+    scopeSyncPending = false;
+    clearTimeout(scopeSyncTimer);
+    detachTabsForScope();
+    disabled = false;
+    noProject = false;
+    busy = false;
+    booting = true;
+    workspaceId = null;
+    workspaceGeneration = null;
+    emptyKind = null;
+    setStatus('正在检测…', 'starting');
+    updateHeader();
+    try {
+      let result;
+      try { result = await transport.status(); } catch { result = { ok: false, network: true }; }
+      if (!alive || token !== bootToken) return;
+      if (!result?.ok) {
+        showEmpty('error', {
+          title: '无法检测终端状态',
+          hint: result?.network ? '无法连接终端服务。' : (result?.error || '终端暂时不可用。'),
+          actionLabel: '重试',
+          onAction: () => { void boot(); },
+        });
+        return;
+      }
+      if (!result.enabled) {
+        disabled = true;
+        showEmptyIfIdle();
+        return;
+      }
+      disabled = false;
+      limits = result.limits && typeof result.limits === 'object' ? result.limits : null;
+      maxPerWorkspace = Number.isSafeInteger(result.maxSessionsPerWorkspace) ? result.maxSessionsPerWorkspace : Infinity;
+      if (!multi) {
+        tabsUi.newButton.hidden = true;
+        await startLegacy({ atBoot: true });
+        return;
+      }
+      await loadWorkspace(token, { autoCreate: true });
+    } finally {
+      if (alive && token === bootToken) {
+        booting = false;
+        updateHeader();
+      }
+    }
   }
 
   function scheduleFit() {
     if (!isCurrent() || fitFrame) return;
     fitFrame = requestAnimationFrame(() => {
       fitFrame = 0;
-      if (!isCurrent() || !term) return;
-      term.fit();
+      if (!isCurrent()) return;
+      activeController()?.fit();
     });
   }
 
-  function scheduleResize(cols, rows) {
-    if (!running() || !Number.isSafeInteger(cols) || !Number.isSafeInteger(rows)) return;
-    const size = clampSize(cols, rows);
-    if (lastSize && lastSize.cols === size.cols && lastSize.rows === size.rows) return;
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      resizeTimer = 0;
-      void sendResize(size.cols, size.rows);
-    }, RESIZE_DEBOUNCE_MS);
-  }
-
-  async function sendResize(cols, rows) {
-    if (!isCurrent() || !running()) return;
-    const size = clampSize(cols, rows);
-    if (lastSize && lastSize.cols === size.cols && lastSize.rows === size.rows) return;
-    const active = session;
-    const gen = generation;
-    const result = await transport.resize(active.id, size.cols, size.rows);
-    if (!isCurrent() || generation !== gen || session?.id !== active.id) return;
-    if (result?.ok) {
-      lastSize = { cols: size.cols, rows: size.rows };
-      if (result.session) session = result.session;
-      return;
-    }
-    if (result?.code === 'terminal_not_running') {
-      updateState('exited');
-      return;
-    }
-    if (!result?.network) writeSystem(result?.error || '终端尺寸没有同步。');
-  }
-
-  async function restoreSession(active, token, gen) {
-    const result = await transport.read(active.id, 0);
-    if (!isCurrent() || startToken !== token || generation !== gen || session?.id !== active.id) return;
-    if (!result?.ok) {
-      handleReadError(result);
-      return;
-    }
-    if (result.truncated) {
-      showTruncatedReplayFallback();
-    } else if (result.text) {
-      term.write(result.text);
-    }
-    if (Number.isSafeInteger(result.cursor) && result.cursor >= 0) cursor = result.cursor;
-    if (result.session) session = result.session;
-    term.scrollToBottom();
-    updateState(result.state || session.state, result.exitCode);
-  }
-
-  async function start() {
-    if (!isCurrent() || !term || busy || disabled) return;
-    const token = ++startToken;
-    const gen = generation;
-    busy = true;
-    setStatus('正在启动…', 'starting');
-    syncControls();
-    term.fit();
-    const raw = term.getSize();
-    const size = clampSize(raw.cols, raw.rows);
-    const result = await transport.start(size);
-    if (!isCurrent() || startToken !== token || generation !== gen) {
-      /* The panel or workspace changed while the PTY was being created. The
-       * late session must be released instead of mounted into the new view.
-       * Keep it when it was reused, someone already claims it, another mount
-       * is still alive (a reopened pane may reuse it while this response is
-       * in flight), or this same mount merely retried within the workspace. */
-      const id = result?.session?.id;
-      const otherLiveMount = liveMounts > (alive ? 1 : 0);
-      const mayBeShared = result?.reused || (id && claimedSessions.has(id))
-        || otherLiveMount || (alive && generation === gen);
-      if (id && !mayBeShared) void transport.stop(id);
-      return;
-    }
-    busy = false;
-    if (!result?.ok) {
-      if (result?.code === 'terminal_disabled') {
-        disabled = true;
-        setStatus('不可用', 'disabled');
-      } else if (result?.code === 'terminal_limit' || result?.code === 'terminal_stopping') {
-        setStatus('无法启动', 'error');
-        writeSystem(result.error || '终端暂时无法启动。');
-      } else {
-        setStatus('启动失败', 'failed');
-        writeSystem(result?.error || '无法启动终端。');
-      }
-      syncControls();
-      return;
-    }
-    if (result.noProject) {
-      noProject = true;
-      session = null;
-      setStatus('未选择项目', 'idle');
-      syncControls();
-      return;
-    }
-    noProject = false;
-    if (!result.session?.id) {
-      setStatus('启动失败', 'failed');
-      writeSystem('后端没有返回终端会话。');
-      syncControls();
-      return;
-    }
-    releaseCurrentClaim();
-    session = result.session;
-    claimSession(session.id);
-    claimedId = session.id;
-    cursor = 0;
-    lastSize = Number.isSafeInteger(session.cols) && Number.isSafeInteger(session.rows)
-      ? { cols: session.cols, rows: session.rows }
-      : null;
-    updateState(session.state);
-    await restoreSession(session, token, gen);
-    if (!isCurrent() || startToken !== token || generation !== gen || session?.id !== result.session.id) return;
-    const now = term.getSize();
-    const sizeNow = clampSize(now.cols, now.rows);
-    if (!lastSize || lastSize.cols !== sizeNow.cols || lastSize.rows !== sizeNow.rows) {
-      scheduleResize(sizeNow.cols, sizeNow.rows);
-    }
-    term.focus();
-    if (session?.state === 'running') schedulePoll(0);
-  }
-
-  async function requestStop() {
-    if (busy || !session) return;
-    const active = session;
-    const gen = generation;
-    const token = startToken;
-    busy = true;
-    setStatus('正在停止…', 'stopping');
-    syncControls();
-    const result = await transport.stop(active.id);
-    /* A late stop response must not re-install the old session after a
-     * workspace change or a newer start attempt. */
-    if (!isCurrent() || generation !== gen || startToken !== token) return;
-    /* Polling can replace `session` with a fresh object while the stop request
-     * is in flight. Compare by identity, not by object reference, or the
-     * control stays disabled on 「处理中…」 forever. */
-    if (!session || session.id !== active.id) {
-      busy = false;
-      syncControls();
-      return;
-    }
-    busy = false;
-    if (!result?.ok && result?.code !== 'terminal_missing') {
-      setStatus('停止失败', 'error');
-      writeSystem(result?.error || '停止终端失败。');
-      syncControls();
-      return;
-    }
-    if (result?.session && session?.state !== 'exited') session = result.session;
-    if (session && session.state === 'running') session.state = 'stopping';
-    if (session?.state === 'exited') {
-      /* Polling already observed the real exit while the stop request was in
-       * flight. Do not downgrade the UI back to 「正在停止…」. */
-      updateState('exited', session.exitCode);
-      return;
-    }
-    setStatus('正在停止…', 'stopping');
-    syncControls();
-    schedulePoll(0);
-  }
-
-  async function retry() {
-    if (noProject) {
-      noProject = false;
-      await probe();
-      return;
-    }
-    if (session && ['running', 'stopping'].includes(session.state)) {
-      await requestStop();
-      return;
-    }
-    if (session) {
-      /* Reset terminal modes as well as text: a shell that died inside a TUI
-       * can leave the alternate screen or cursor state behind. */
-      term?.reset();
-      releaseCurrentClaim();
-      session = null;
-      cursor = 0;
-    }
-    await start();
-  }
-
-  async function probe() {
-    if (!isCurrent() || busy) return;
-    busy = true;
-    setStatus('正在检测…', 'starting');
-    syncControls();
-    const result = await transport.status();
-    if (!isCurrent()) return;
-    busy = false;
-    if (!result?.ok) {
-      setStatus('不可用', 'error');
-      writeSystem(result?.error || '无法检测终端状态。');
-      syncControls();
-      return;
-    }
-    if (!result.enabled) {
-      disabled = true;
-      setStatus('不可用', 'disabled');
-      writeSystem('终端仅在桌面版可用，或需显式启用。');
-      syncControls();
-      return;
-    }
-    disabled = false;
-    if (result.limits && typeof result.limits === 'object') limits = result.limits;
-    await start();
-  }
-
-  function clearScreen() {
-    term?.clear();
-    term?.focus();
-  }
-
-  function onWorkspaceChange() {
-    if (!alive) return;
-    generation++;
-    startToken++;
-    stopPolling();
-    clearTimeout(inputTimer);
-    inputTimer = 0;
-    inputPending = '';
-    clearTimeout(resizeTimer);
-    resizeTimer = 0;
-    const active = session;
-    releaseCurrentClaim();
-    session = null;
-    cursor = 0;
-    lastSize = null;
-    busy = false;
-    if (active && ['running', 'stopping'].includes(active.state)) {
-      /* The request carries the *new* scope header. The backend verifies it,
-       * stops the stale session, and answers stale_workspace. */
-      void transport.stop(active.id);
-    }
-    term?.reset();
-    setStatus('工作区已变化', 'stale');
-    syncControls();
-  }
-
-  function installResizeWatcher() {
+  function installWatchers() {
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(scheduleFit);
       resizeObserver.observe(host);
@@ -612,77 +1013,47 @@ export function mountTerminalPanel(host, view, options = {}) {
 
   function installThemeWatcher() {
     if (typeof MutationObserver === 'undefined') return;
-    themeObserver = new MutationObserver(() => term?.refreshTheme?.());
+    themeObserver = new MutationObserver(() => {
+      for (const meta of tabs.values()) meta.controller.refreshTheme();
+    });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-theme-preference'] });
   }
 
-  async function boot() {
-    try {
-      term = await makeView(host.querySelector('.term-host'));
-    } catch {
-      if (!isCurrent()) return;
-      disabled = true;
-      setStatus('不可用', 'disabled');
-      writeSystem('终端组件无法加载。');
-      syncControls();
-      return;
-    }
-    if (!isCurrent()) {
-      term.dispose();
-      term = null;
-      return;
-    }
-    term.onData(onData);
-    term.onResize(({ cols, rows }) => scheduleResize(cols, rows));
-    installResizeWatcher();
-    installThemeWatcher();
-    term.fit();
-    syncControls();
-    await probe();
+  function onWorkspaceEvent() {
+    requestScopeSync({ force: true });
   }
 
-  clearButton = node('button', 'btn tiny rp-btn', '清屏');
-  clearButton.type = 'button';
-  clearButton.title = '只清除当前显示，不结束后台终端';
-  clearButton.onclick = clearScreen;
-  control = node('button', 'btn tiny rp-btn', '启动');
-  control.type = 'button';
-  control.onclick = () => {
-    if (running()) void requestStop();
-    else void retry();
-  };
-  const header = createPaneHeader({ title: '终端', subtitle: '正在检测…', actions: [clearButton, control] });
-  subtitle = header.subtitle;
-  headerNode = header['el'];
-  host.append(headerNode);
-  const termHost = node('div', 'term-host');
-  host.append(termHost);
-  syncControls();
+  function onGitScope() {
+    /* Do not drop a newer scope event just because an older list is in flight;
+     * requestScopeSync bumps the token, so the older response is discarded. */
+    requestScopeSync();
+  }
 
-  document.addEventListener('pi-gui:workspace-generation', onWorkspaceChange);
+  document.addEventListener('pi-gui:workspace-generation', onWorkspaceEvent);
+  document.addEventListener('pi-gui:git-scope', onGitScope);
+
   view.onDispose(() => {
     alive = false;
-    liveMounts = Math.max(0, liveMounts - 1);
-    releaseCurrentClaim();
-    generation++;
-    startToken++;
-    stopPolling();
-    clearTimeout(inputTimer);
-    inputTimer = 0;
-    inputPending = '';
-    clearTimeout(resizeTimer);
-    resizeTimer = 0;
+    bootToken++;
+    createToken++;
+    scopeSyncToken++;
+    clearTimeout(scopeSyncTimer);
+    clearTimeout(noticeClearTimer);
+    noticeClearTimer = 0;
     if (fitFrame) cancelAnimationFrame(fitFrame);
     fitFrame = 0;
-    document.removeEventListener('pi-gui:workspace-generation', onWorkspaceChange);
+    document.removeEventListener('pi-gui:workspace-generation', onWorkspaceEvent);
+    document.removeEventListener('pi-gui:git-scope', onGitScope);
     window.removeEventListener('resize', scheduleFit);
     resizeObserver?.disconnect();
     resizeObserver = null;
     themeObserver?.disconnect();
     themeObserver = null;
-    term?.dispose();
-    term = null;
+    detachTabsForScope();
   });
 
+  updateHeader();
   void boot();
+  installWatchers();
+  installThemeWatcher();
 }

@@ -611,6 +611,10 @@ const workspaceScopeForConversation = async (conversationId) => {
       root: runtime.getCurrentCwd(),
       scopeId: 'classic-chat',
       generation: String(runtime.getWorkspaceGeneration()),
+      /* Classic chat has no durable conversation identity. Terminals bind to
+       * the folder itself so switching projects away and back reconnects to
+       * the same PTYs instead of killing them on every generation bump. */
+      stable: true,
     };
   }
   const identity = typeof conversationId === 'string' && conversationId
@@ -632,31 +636,28 @@ const files = createFiles({ scopeForRequest: workspaceScopeForRequest });
  * was opened. The router still applies Origin + token gates to every call. */
 const terminal = createTerminal({
   scopeForRequest: workspaceScopeForRequest,
-  /* The sweep follows a different *live* focused conversation so switching to
-   * another runtime workspace stops the old PTY even when no terminal request
-   * is in flight. With no focused runtime conversation (classic chat, a
-   * dormant history conversation) the session keeps its own scope: the
-   * registry cannot focus dormant records, and treating focus === null as a
-   * workspace change would kill a terminal the user is still looking at.
+  /* P2 keeps a workspace's terminals alive when the user focuses another
+   * workspace; returning to the first workspace reconnects to the same PTYs.
+   * Each session is therefore validated against its *own* conversation, not
+   * against whatever is focused right now. This is what makes cross-workspace
+   * isolation meaningful: a focused conversation can never reach or retire a
+   * sibling workspace's terminal, and a deleted conversation/workspace is
+   * still confirmed by resolving that same conversation.
+   *
+   * Classic chat has no conversation id; its stored workspace is stable, so
+   * the sweep re-stats that folder directly instead of following the global
+   * cwd (which changes on every project switch).
+   *
    * If the registry cannot answer, return null; the sweep keeps the session
    * rather than treating a transient error as proof of a workspace change. */
   scopeForSession: async (session) => {
+    if (session.conversationId === undefined) {
+      return { ...session.workspace, stable: true };
+    }
     let snapshot;
     try { snapshot = runtimeRegistryRef?.snapshot?.(); } catch { return null; }
     if (!snapshot?.ok) return null;
-    /* Resolve the session's own conversation first, without swallowing errors:
-     * a deleted record must retire the PTY even if another conversation is
-     * focused in the same workspace. The sweep distinguishes a confirmed
-     * `unknown_conversation` (stop) from transient `registry_unavailable`
-     * (keep for the next sweep). */
-    const own = await workspaceScopeForConversation(session.conversationId);
-    const focused = snapshot.focusedConversationId;
-    if (focused && focused !== session.conversationId) {
-      /* A race while the focused record is being replaced must not decide this
-       * session's fate. Keep it and let the next sweep re-evaluate. */
-      try { return await workspaceScopeForConversation(focused); } catch { return null; }
-    }
-    return own;
+    return workspaceScopeForConversation(session.conversationId);
   },
   enabled: !auth.isDevMode || process.env.PI_GUI_ENABLE_TERMINAL === '1',
 });

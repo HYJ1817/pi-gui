@@ -383,6 +383,14 @@ export const fetchTerminalStatus = () => getJSON('/api/terminal/status', gitScop
  * workspace it belongs to. Only the opaque conversation id is retained; the
  * workspace root still resolves inside the backend. */
 const terminalScopes = new Map();
+function rememberTerminalScope(id, conversationId) {
+  if (typeof id !== 'string' || !id || terminalScopes.has(id)) return;
+  terminalScopes.set(id, conversationId);
+}
+function rememberListedScopes(sessions, conversationId) {
+  if (!Array.isArray(sessions)) return;
+  for (const session of sessions) rememberTerminalScope(session?.id, conversationId);
+}
 
 export const startTerminal = ({ cols, rows } = {}) => {
   const conversationId = gitConversationId;
@@ -390,24 +398,51 @@ export const startTerminal = ({ cols, rows } = {}) => {
     headers: gitScopeHeaders(conversationId),
     body: { action: 'start', ...(Number.isFinite(cols) && Number.isFinite(rows) ? { cols, rows } : {}) },
   }).then((result) => {
-    const id = result?.session?.id;
     /* A reused session belongs to the conversation that spawned it. Do not let
      * a later start from a sibling conversation replace the scope that is
      * allowed to stop it after a workspace change. */
-    if (typeof id === 'string' && id && !terminalScopes.has(id)) terminalScopes.set(id, conversationId);
+    rememberTerminalScope(result?.session?.id, conversationId);
     return result;
   });
 };
+
+/* P2: always create a new tab in the focused workspace. The server owns the
+ * session id and the workspace binding; the renderer only reports dimensions. */
+export const createTerminal = ({ cols, rows } = {}) => {
+  const conversationId = gitConversationId;
+  return sendJSON('/api/terminal', {
+    headers: gitScopeHeaders(conversationId),
+    body: { action: 'create', ...(Number.isFinite(cols) && Number.isFinite(rows) ? { cols, rows } : {}) },
+  }).then((result) => {
+    rememberTerminalScope(result?.session?.id, conversationId);
+    return result;
+  });
+};
+
+/* Only the sessions of the focused workspace come back. The server filters by
+ * workspace identity; the renderer never guesses another workspace's ids. */
+export const listTerminals = () => {
+  /* Capture the scope at request time. If the user switches workspace while
+   * the list is in flight, the response still describes the old workspace;
+   * tagging those ids with the new conversation would make their close/stop
+   * headers wrong even after the user returns. */
+  const conversationId = gitConversationId;
+  return sendJSON('/api/terminal', {
+    headers: gitScopeHeaders(conversationId),
+    body: { action: 'list' },
+  }).then((result) => {
+    rememberListedScopes(result?.sessions, conversationId);
+    return result;
+  });
+};
+
 export const readTerminal = (id, since = 0) => getJSON(
   '/api/terminal?' + new URLSearchParams({ id, since: String(since) }),
   gitScopeHeaders()
 ).then((result) => {
-  /* A finished session will never accept another stop. Do not clean up on
-   * `stale_workspace`: `handleReadError` still needs the captured scope to
-   * retire the backend PTY. */
-  if (result?.state === 'exited' || result?.state === 'failed' || result?.code === 'terminal_missing') {
-    terminalScopes.delete(id);
-  }
+  /* Keep the captured scope after a normal exit: closing or restarting the tab
+   * still needs the conversation that owns the session. */
+  if (result?.code === 'terminal_missing') terminalScopes.delete(id);
   return result;
 });
 export const writeTerminal = (id, data) => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'input', id, data } });
@@ -421,9 +456,24 @@ export const stopTerminal = (id) => {
     headers: gitScopeHeaders(conversationId),
     body: { action: 'stop', id },
   }).then((result) => {
-    /* The session is gone or has been retired; its captured scope is no longer
-     * useful. Keep it on transport failures so a retry still has the header. */
-    if (result?.ok || result?.code === 'terminal_missing' || result?.code === 'stale_workspace') {
+    /* The shell is gone but an exited tab may still be restarted in place; the
+     * scope stays until `closeTerminal` removes the tab. */
+    if (result?.code === 'terminal_missing') terminalScopes.delete(id);
+    return result;
+  });
+};
+
+/* Close the tab: stop the shell and forget its record. Uses the scope captured
+ * when the session was created/listed so a focus change does not leave an
+ * untracked PTY behind. */
+export const closeTerminal = (id) => {
+  const conversationId = terminalScopes.get(id);
+  return sendJSON('/api/terminal', {
+    headers: gitScopeHeaders(conversationId),
+    body: { action: 'close', id },
+  }).then((result) => {
+    if (result?.ok || result?.code === 'terminal_missing'
+      || result?.code === 'stale_workspace' || result?.code === 'unknown_conversation') {
       terminalScopes.delete(id);
     }
     return result;
