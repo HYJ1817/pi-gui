@@ -99,7 +99,7 @@ function fakeTerminalView(size = { cols: 100, rows: 30 }) {
  * every transport call so the test can prove that switching tabs does not
  * create, close or re-read a PTY. */
 function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspace = 6, limits = null } = {}) {
-  const calls = { status: 0, list: 0, create: [], start: [], read: [], write: [], resize: [], stop: [], close: [] };
+  const calls = { status: 0, list: 0, create: [], start: [], read: [], write: [], resize: [], stop: [], close: [], keepAlive: [] };
   const model = new Map();
   const state = {
     workspace: { ...workspace },
@@ -121,6 +121,8 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
       cols: size.cols,
       rows: size.rows,
       ordinal: state.seq,
+      keepAlive: false,
+      keepAliveRevision: 0,
     };
     const entry = { session, output: '', cursor: 0, removed: false };
     model.set(session.id, entry);
@@ -193,6 +195,17 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
       if (entry) entry.removed = true;
       return { ok: true, closed: true, missing: !entry };
     },
+    setKeepAlive: async (id, enabled) => {
+      calls.keepAlive.push([id, enabled]);
+      const entry = model.get(id);
+      if (!entry) return { ok: false, code: 'terminal_missing' };
+      if (state.keepAliveFailure) return state.keepAliveFailure;
+      if (entry.session.keepAlive !== enabled) {
+        entry.session.keepAlive = enabled;
+        entry.session.keepAliveRevision = (entry.session.keepAliveRevision || 0) + 1;
+      }
+      return { ok: true, session: { ...entry.session } };
+    },
   };
 
   return {
@@ -212,6 +225,10 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
       if (!entry) throw new Error('unknown session ' + id);
       entry.session.state = sessionState;
       if (exitCode !== null) entry.session.exitCode = exitCode;
+      if (sessionState === 'exited' && entry.session.keepAlive) {
+        entry.session.keepAlive = false;
+        entry.session.keepAliveRevision = (entry.session.keepAliveRevision || 0) + 1;
+      }
     },
   };
 }
@@ -782,13 +799,18 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
       await api.startTerminal({ cols: 80, rows: 24 });
       api.setGitConversationScope(null);
       await api.stopTerminal('s-scope');
+      await api.setTerminalKeepAlive('s-scope', true);
       const startCalls = calls.filter((call) => call.body.action === 'start');
       const stopCall = calls.find((call) => call.body.action === 'stop');
-      ok('stop uses the conversation that spawned the terminal, even after a sibling start', () => {
+      const keepAliveCall = calls.find((call) => call.body.action === 'keep-alive');
+      ok('stop and Keep Alive use the conversation that spawned the terminal', () => {
         assert.equal(startCalls[0].headers['X-Pi-Gui-Conversation'], 'conv-scope-a');
         assert.equal(startCalls[1].headers['X-Pi-Gui-Conversation'], 'conv-scope-b');
         assert.equal(stopCall.headers['X-Pi-Gui-Conversation'], 'conv-scope-a');
         assert.equal(stopCall.body.id, 's-scope');
+        assert.equal(keepAliveCall.headers['X-Pi-Gui-Conversation'], 'conv-scope-a');
+        assert.equal(keepAliveCall.body.id, 's-scope');
+        assert.equal(keepAliveCall.body.enabled, true);
       });
     } finally {
       api.setGitConversationScope(null);
@@ -1062,6 +1084,194 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
       assert.equal(host.querySelector('.terminal-tab').dataset.state, 'running');
       assert.ok(reopenedViews[2].writes.join('').includes('persisted-after-reopen'));
     });
+
+    reopened.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* P3 Keep Alive: an explicit per-session toggle, rendered from the
+     * server's session state (not local DOM), with tab switching, workspace
+     * return, panel reopen, exit/restart and late-poll coverage. */
+    const backend = multiBackend({ workspace: { id: 'w-keep', generation: '1' } });
+    const views = [];
+    const view = fakeView();
+    const makeView = () => {
+      const next = fakeTerminalView();
+      views.push(next);
+      return next;
+    };
+    mountTerminalPanel(host, view, { transport: backend.transport, createTerminalView: makeView });
+    await until(() => backend.calls.create.length === 1 && host.querySelectorAll('.terminal-tab').length === 1);
+    const keepButton = () => host.querySelector('.terminal-keepalive');
+    const firstId = [...backend.model.keys()][0];
+    ok('Keep Alive is off by default and explains its effect', () => {
+      const button = keepButton();
+      assert.ok(button);
+      assert.equal(button.getAttribute('aria-pressed'), 'false');
+      assert.equal(button.textContent.trim(), '保持');
+      assert.match(button.title, /30 分钟无输入输出也不会自动停止/);
+      assert.equal(host.querySelector('.terminal-tab').dataset.keepAlive, 'false');
+      assert.equal(host.querySelector('.terminal-tab-keep').hidden, true);
+    });
+
+    keepButton().click();
+    await until(() => backend.calls.keepAlive.length === 1 && keepButton().getAttribute('aria-pressed') === 'true');
+    ok('the toggle is explicit, scoped and reflected in the tab marker', () => {
+      assert.deepEqual(backend.calls.keepAlive[0], [firstId, true]);
+      assert.equal(backend.model.get(firstId).session.keepAlive, true);
+      assert.equal(keepButton().classList.contains('is-active'), true);
+      assert.equal(keepButton().textContent.trim(), '保持中');
+      assert.match(keepButton().title, /30 分钟无输入输出也不会自动停止/);
+      assert.equal(host.querySelector('.terminal-tab').dataset.keepAlive, 'true');
+      assert.equal(host.querySelector('.terminal-tab-keep').hidden, false);
+    });
+
+    host.querySelector('.terminal-new').click();
+    await until(() => host.querySelectorAll('.terminal-tab').length === 2);
+    const secondId = [...backend.model.keys()][1];
+    ok('each terminal keeps its own Keep Alive state', () => {
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'false');
+      const [firstTab, secondTab] = host.querySelectorAll('.terminal-tab');
+      assert.equal(firstTab.dataset.keepAlive, 'true');
+      assert.equal(secondTab.dataset.keepAlive, 'false');
+      assert.equal(backend.model.get(secondId).session.keepAlive, false);
+    });
+    host.querySelectorAll('.terminal-tab-select')[0].click();
+    await tick(30);
+    ok('switching tabs restores the session-backed Keep Alive state', () => {
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'true');
+      assert.equal(keepButton().textContent.trim(), '保持中');
+    });
+
+    backend.setState(firstId, 'exited', 0);
+    await until(() => host.querySelectorAll('.terminal-tab')[0]?.dataset.state === 'exited');
+    ok('terminal exit clears Keep Alive and disables the control', () => {
+      assert.equal(backend.model.get(firstId).session.keepAlive, false);
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'false');
+      assert.equal(keepButton().disabled, true);
+      assert.equal(host.querySelectorAll('.terminal-tab')[0].dataset.keepAlive, 'false');
+    });
+
+    const beforeRestart = backend.calls.create.length;
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await until(() => backend.calls.create.length === beforeRestart + 1);
+    await until(() => host.querySelector('.rp-head-sub')?.textContent.includes('运行中'));
+    const restartedId = [...backend.model.entries()].filter(([, entry]) => !entry.removed).at(-1)[0];
+    ok('restart creates a fresh session with Keep Alive reset to off', () => {
+      assert.equal(backend.model.get(restartedId).session.keepAlive, false);
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'false');
+      assert.equal(keepButton().disabled, false);
+    });
+
+    const w2 = backend.addExisting({ cols: 80, rows: 24 }, 'running', { id: 'w-keep-2', generation: '2' });
+    w2.session.keepAlive = true;
+    w2.session.keepAliveRevision = 1;
+    backend.state.workspace = { id: 'w-keep-2', generation: '2' };
+    document.dispatchEvent(new dom.window.CustomEvent('pi-gui:git-scope'));
+    await until(() => host.querySelector('.terminal-tab')?.dataset.terminalId === w2.session.id);
+    ok('Keep Alive follows the session across a workspace switch', () => {
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'true');
+      assert.equal(host.querySelector('.terminal-tab').dataset.keepAlive, 'true');
+      assert.equal(backend.model.get(w2.session.id).session.keepAlive, true);
+    });
+
+    backend.state.workspace = { id: 'w-keep', generation: '1' };
+    document.dispatchEvent(new dom.window.CustomEvent('pi-gui:git-scope'));
+    await until(() => [...host.querySelectorAll('.terminal-tab')]
+      .some((tab) => tab.dataset.terminalId === restartedId));
+    ok('returning to the first workspace restores its own off state', () => {
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'false');
+      assert.equal(host.querySelector('.terminal-tab').dataset.keepAlive, 'false');
+      assert.equal(backend.model.get(restartedId).session.keepAlive, false);
+    });
+
+    backend.state.workspace = { id: 'w-keep-2', generation: '2' };
+    document.dispatchEvent(new dom.window.CustomEvent('pi-gui:git-scope'));
+    await until(() => host.querySelector('.terminal-tab')?.dataset.terminalId === w2.session.id);
+
+    view.dispose();
+    host.replaceChildren();
+    const reopenedViews = [];
+    const reopened = fakeView();
+    mountTerminalPanel(host, reopened, {
+      transport: backend.transport,
+      createTerminalView: () => {
+        const next = fakeTerminalView();
+        reopenedViews.push(next);
+        return next;
+      },
+    });
+    await until(() => host.querySelector('.terminal-tab')?.dataset.terminalId === w2.session.id
+      && reopenedViews.length === 1
+      && host.querySelector('.rp-head-sub')?.textContent.includes('运行中'));
+    ok('reopening the panel restores Keep Alive from the live session', () => {
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'true');
+      assert.equal(host.querySelector('.terminal-tab').dataset.keepAlive, 'true');
+      assert.equal(reopenedViews[0].disposed, false);
+    });
+
+    /* Let one poll snapshot the current session, then toggle off before that
+     * snapshot is delivered. The stale response must not resurrect the button. */
+    const originalRead = backend.transport.read;
+    let releaseRead;
+    let heldResolve;
+    const held = new Promise((resolve) => { heldResolve = resolve; });
+    let releaseNext;
+    let nextHeldResolve;
+    const nextHeld = new Promise((resolve) => { nextHeldResolve = resolve; });
+    let hold = true;
+    let holdNext = false;
+    backend.transport.read = async (id, since) => {
+      const snapshot = await originalRead(id, since);
+      if (id === w2.session.id) {
+        if (hold) {
+          hold = false;
+          heldResolve();
+          await new Promise((resolve) => { releaseRead = resolve; });
+        } else if (holdNext) {
+          holdNext = false;
+          nextHeldResolve();
+          await new Promise((resolve) => { releaseNext = resolve; });
+        }
+      }
+      return snapshot;
+    };
+    await held;
+    keepButton().click();
+    await until(() => backend.calls.keepAlive.at(-1)?.[0] === w2.session.id
+      && keepButton().getAttribute('aria-pressed') === 'false');
+    /* Also hold the next fresh poll. Otherwise an unguarded stale snapshot
+     * would be corrected by the 60ms poll before the assertion runs, and the
+     * test would pass without the revision guard it is meant to prove. */
+    holdNext = true;
+    releaseRead();
+    await nextHeld;
+    await tick(10);
+    ok('a late poll cannot overwrite the newest Keep Alive state', () => {
+      assert.deepEqual(backend.calls.keepAlive.at(-1), [w2.session.id, false]);
+      assert.equal(backend.model.get(w2.session.id).session.keepAlive, false);
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'false');
+      assert.equal(host.querySelector('.terminal-tab').dataset.keepAlive, 'false');
+    });
+    releaseNext();
+    await tick(100);
+    backend.transport.read = originalRead;
+
+    backend.state.keepAliveFailure = {
+      ok: false,
+      code: 'terminal_unavailable',
+      error: '保持运行状态更新失败。',
+    };
+    keepButton().click();
+    await until(() => host.querySelector('.terminal-notice')?.textContent.includes('保持运行状态更新失败'));
+    ok('a failed toggle keeps the real off state and reports it once', () => {
+      assert.equal(backend.model.get(w2.session.id).session.keepAlive, false);
+      assert.equal(keepButton().getAttribute('aria-pressed'), 'false');
+      assert.equal(host.querySelector('.terminal-tab').dataset.keepAlive, 'false');
+      assert.equal(host.querySelector('.terminal-notice').hidden, false);
+    });
+    backend.state.keepAliveFailure = null;
 
     reopened.dispose();
     host.replaceChildren();
@@ -1670,6 +1880,9 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
       assert.match(css, /\.terminal-tab\{[^}]*max-width:170px/s);
       assert.match(css, /\.terminal-tab-label\{[^}]*text-overflow:ellipsis/s);
       assert.match(css, /\.terminal-new\{[^}]*flex:none/s);
+      assert.match(css, /\.terminal-keepalive\{[^}]*display:inline-flex/s);
+      assert.match(css, /\.terminal-keepalive\[aria-pressed="true"\]\{[^}]*background/s);
+      assert.match(css, /\.terminal-tab-keep\[hidden\]\{display:none\}/);
       assert.match(css, /\.terminal-surface \.term-host \.term-view\{[^}]*position:absolute/s);
     });
   }

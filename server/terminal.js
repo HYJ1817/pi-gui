@@ -165,10 +165,12 @@ export function createTerminal({
       exitCode: session.exitCode,
       signal: session.signal,
       cursor: session.end,
+      keepAliveRevision: session.keepAliveRevision || 0,
       cols: session.cols,
       rows: session.rows,
       ordinal: session.ordinal,
       createdAt: session.createdAt,
+      keepAlive: session.keepAlive === true,
       pty: true,
     };
   }
@@ -227,6 +229,18 @@ export function createTerminal({
     session.idleTimer = null;
   }
 
+  /* Keep Alive changes carry a small monotonic revision. Poll and list
+   * responses are authorized against the same server state, but a response
+   * sampled before a toggle can arrive after the toggle's response. The
+   * renderer uses this revision to discard that stale snapshot instead of
+   * letting it flip the visible button back. */
+  function setKeepAliveFlag(session, enabled) {
+    if (!session || session.keepAlive === enabled) return false;
+    session.keepAlive = enabled;
+    session.keepAliveRevision = (session.keepAliveRevision || 0) + 1;
+    return true;
+  }
+
   /* Server-side idle clock. Only real keyboard input and new PTY output count
    * as activity. read/list/resize and a reused start are observations or
    * layout: the renderer polls them every 60-240 ms, so treating them as
@@ -262,14 +276,16 @@ export function createTerminal({
 
   function touch(session) {
     clearIdleTimer(session);
-    if (!limits.idleMs || !Number.isFinite(limits.idleMs) || disposed || session.state !== 'running') return;
+    if (!limits.idleMs || !Number.isFinite(limits.idleMs) || disposed || session.state !== 'running'
+      || session.keepAlive === true) return;
     /* noteActivity() stamps lastActivityAt immediately before calling here, so
      * this is normally a full window. Computing the remainder still keeps a
      * future direct caller from granting extra time. */
     const elapsed = Math.max(0, Date.now() - (session.lastActivityAt || Date.now()));
     const delay = Math.max(0, limits.idleMs - elapsed);
     session.idleTimer = setTimeout(() => {
-      if (sessions.get(session.id) !== session || session.state !== 'running') return;
+      if (sessions.get(session.id) !== session || session.state !== 'running'
+        || session.keepAlive === true) return;
       append(session, '\r\n[空闲超时，终端已停止]\r\n', { activity: false });
       void stopSession(session, 'idle');
     }, delay);
@@ -279,6 +295,7 @@ export function createTerminal({
   function handleExit(session, event) {
     if (FINISHED_STATES.has(session.state)) return;
     clearIdleTimer(session);
+    setKeepAliveFlag(session, false);
     session.state = 'exited';
     session.exitCode = Number.isInteger(event?.exitCode) ? event.exitCode : null;
     session.signal = event?.signal ?? null;
@@ -309,6 +326,10 @@ export function createTerminal({
       return Promise.resolve();
     }
     if (session.state === 'closing') return waitForExit(session, 5000);
+    /* Keep Alive only exempts the idle timer. Explicit stop, close, workspace
+     * retirement and shutdown all reach this path, so none of them can be
+     * bypassed by the flag. The flag itself is meaningless once not running. */
+    setKeepAliveFlag(session, false);
     session.state = 'closing';
     session.stopReason = reason;
     clearIdleTimer(session);
@@ -448,6 +469,10 @@ export function createTerminal({
       exitedAt: null,
       stopReason: null,
       retired: false,
+      /* Server-owned. A create/start body that sends `keepAlive` is ignored:
+       * the renderer must opt in through the scoped keep-alive action. */
+      keepAlive: false,
+      keepAliveRevision: 0,
       idleTimer: null,
       dataSub: null,
       exitSub: null,
@@ -594,6 +619,40 @@ export function createTerminal({
     }
     noteActivity(session);
     return json(res, 200, { ok: true, cursor: session.end });
+  }
+
+  /* Explicit, per-session exemption from the idle timer. It does not touch the
+   * PTY, the buffer or the workspace binding. The server owns the flag; a
+   * create/start body cannot pre-set it. Only a running session can be marked,
+   * and a confirmed workspace change still retires the session through the
+   * normal sweep/stop path. */
+  async function setKeepAlive(req, res, body) {
+    const id = typeof body?.id === 'string' ? body.id : '';
+    const session = sessions.get(id);
+    if (!session) return json(res, 404, { ok: false, code: 'terminal_missing', error: '终端会话不存在。' });
+    await verifyScope(req, session);
+    if (typeof body?.enabled !== 'boolean') {
+      return json(res, 400, { ok: false, code: 'invalid_keep_alive', error: '保持运行状态不合法。' });
+    }
+    if (session.state !== 'running') {
+      return json(res, 409, {
+        ok: false,
+        code: 'terminal_not_running',
+        error: '终端已经停止，请重新启动。',
+        session: publicSession(session),
+      });
+    }
+    if (body.enabled) {
+      setKeepAliveFlag(session, true);
+      clearIdleTimer(session);
+    } else {
+      setKeepAliveFlag(session, false);
+      /* Starting from this request, not from the last input/output: the user
+       * gets a complete idle window after switching the exemption off. */
+      session.lastActivityAt = Date.now();
+      touch(session);
+    }
+    return json(res, 200, { ok: true, session: publicSession(session) });
   }
 
   async function resize(req, res, body) {
@@ -769,6 +828,7 @@ export function createTerminal({
       if (body?.action === 'start') return await start(req, res, body);
       if (body?.action === 'input') return await input(req, res, body);
       if (body?.action === 'resize') return await resize(req, res, body);
+      if (body?.action === 'keep-alive') return await setKeepAlive(req, res, body);
       if (body?.action === 'stop') return await stop(req, res, body);
       if (body?.action === 'close') return await close(req, res, body);
       return json(res, 400, { ok: false, code: 'invalid_action', error: '未知的终端操作。' });
@@ -780,7 +840,8 @@ export function createTerminal({
   function terminalError(res, error) {
     const code = error?.code || 'terminal_unavailable';
     const status = code === 'terminal_missing' ? 404
-      : code === 'invalid_request' || code === 'invalid_input' || code === 'invalid_size' || code === 'invalid_cursor' ? 400
+      : code === 'invalid_request' || code === 'invalid_input' || code === 'invalid_size'
+        || code === 'invalid_cursor' || code === 'invalid_keep_alive' ? 400
         : code === 'stale_workspace' || code === 'terminal_not_running' || code === 'terminal_stopping'
           || code === 'terminal_limit' || code === 'terminal_resize_failed'
           || code === 'unknown_conversation' || code === 'workspace_unavailable' ? 409
@@ -797,7 +858,9 @@ export function createTerminal({
               ? '终端尺寸不合法。'
               : code === 'invalid_cursor'
                 ? '终端读取位置不合法。'
-                : code === 'terminal_missing'
+                : code === 'invalid_keep_alive'
+                  ? '保持运行状态不合法。'
+                  : code === 'terminal_missing'
                   ? '终端会话不存在。'
                   : code === 'pty_unavailable'
                     ? '终端组件未安装或无法加载。'

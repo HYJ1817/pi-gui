@@ -283,6 +283,12 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 多终端时钟独立、面板隐藏不终止、自然退出清除计时器、停止失败由 sweep 重试；真实 source
 运行不等待生产 30 分钟窗口。
 
+P3-A Keep Alive 也在这两个层验证：假 PTY 用短 `idleMs` 覆盖默认关闭、静默不超时、
+关闭后重新计满窗口、多终端独立、手动停止/关闭、workspace 变更、dispose、重启重置、
+伪造/跨 workspace 请求、并发开关和迟到响应；真实 source 只验证会话能接受并列出
+服务端标志，不等待 30 分钟。Electron 套件另外验证工具条按钮、标签图钉与切换标签后的
+状态一致。
+
 `test:terminal:electron` 与 B 层不是同一个运行时：`test:app` 用 Node 启动打包后的
 `server.cjs`（随包 node-pty），`test:exe` 验证 Node SEA 便携版；两者都不能替代 Electron
 自带 Node 的加载路径。该专项把 `dist-app/Pi GUI-win32-x64` 复制到 `os.tmpdir()` 的

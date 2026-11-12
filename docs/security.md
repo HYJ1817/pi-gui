@@ -757,7 +757,10 @@ PTY 由 node-pty（Windows 上为 ConPTY）创建，以 `TERM=xterm-256color` �
 进程树。切换工作区或焦点不会停止任何终端；只有显式 `stop` / `close`、所属会话确认失效
 （前端停止与后端 scope sweep 双保险）、空闲超时或服务关闭才结束进程树。空闲计时由
 服务端持有，只有真实用户输入与新 PTY 输出会续期；`read` / `list` / `resize` / `start`
-复用和 UI 重挂载都不能让静默 shell 永久存活。前端在
+复用和 UI 重挂载都不能让静默 shell 永久存活。P3-A 的 Keep Alive 是每个会话独立的服务端
+标志，只能由当前 workspace 身份校验通过的 `keep-alive` 动作修改；`create` / `start`
+请求体里的同名字段被忽略。它只豁免空闲计时，不绕过停止、关闭、workspace 失效、应用退出、
+dispose 或终端数量上限。前端在
 `start` / `create` 时记录该会话的工作区身份（conversation id），`stop` / `close` 时沿用；
 切换项目会先清空当前 scope，若停止时现取 scope，后端会拒绝而留下孤儿 PTY。后端 sweep
 只在**成功解析**出一个不同的 workspace 时停止；scope 暂时不可用或解析报错都不当作

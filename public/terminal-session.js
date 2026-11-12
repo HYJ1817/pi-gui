@@ -82,6 +82,19 @@ export function createTerminalSession({
   const finished = () => current?.state === 'exited' || current?.state === 'failed' || current?.state === 'error';
   const active = () => running() || closing();
 
+  const keepAliveRevision = (session) => (
+    Number.isSafeInteger(session?.keepAliveRevision) ? session.keepAliveRevision : 0
+  );
+
+  /* Poll, list and keep-alive responses can cross on the wire. A snapshot
+   * sampled before a keep-alive toggle must not overwrite the newer flag. */
+  function applySession(next) {
+    if (!next?.id || next.id !== current?.id) return false;
+    if (keepAliveRevision(next) < keepAliveRevision(current)) return false;
+    current = next;
+    return true;
+  }
+
   function notify() {
     if (alive) onState(controller);
   }
@@ -130,7 +143,7 @@ export function createTerminalSession({
       });
     }
     if (Number.isSafeInteger(result.cursor) && result.cursor >= 0) cursor = result.cursor;
-    if (result.session) current = result.session;
+    if (result.session) applySession(result.session);
     if (Number.isInteger(result.exitCode)) current.exitCode = result.exitCode;
     return true;
   }
@@ -251,7 +264,7 @@ export function createTerminalSession({
     if (!alive || current?.id !== activeSession.id) return;
     if (result?.ok) {
       lastSize = { cols: size.cols, rows: size.rows };
-      if (result.session) current = result.session;
+      if (result.session) applySession(result.session);
       notify();
       return;
     }
@@ -384,7 +397,7 @@ export function createTerminalSession({
     const result = await transport.stop(current.id);
     if (!alive) return result;
     if (result?.ok) {
-      if (result.session) current = result.session;
+      if (result.session) applySession(result.session);
       if (current.state === 'running') current.state = 'closing';
       syncStdin();
       notify();
@@ -416,8 +429,7 @@ export function createTerminalSession({
   }
 
   function updateSession(next) {
-    if (!alive || !next?.id || next.id !== current.id) return;
-    current = next;
+    if (!alive || !applySession(next)) return;
     syncStdin();
     notify();
   }

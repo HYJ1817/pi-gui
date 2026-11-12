@@ -598,6 +598,16 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 .terminal-surface .rp-head[data-state="exited"] .rp-head-sub,
 .terminal-surface .rp-head[data-state="disabled"] .rp-head-sub{color:var(--ui-text-muted)}
 
+/* Keep Alive：工具条按钮 + 标签上的小图钉。开启态只用文字主色与浅底，
+ * 不做整条高亮；窄栏由 rp-head-actions 自身收缩，标签条仍横向滚动。 */
+.terminal-keepalive{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.terminal-keepalive svg{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.terminal-keepalive[aria-pressed="true"]{background:var(--ui-hover);color:var(--ds-text-primary)}
+.terminal-keepalive[hidden]{display:none}
+.terminal-tab-keep{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;flex:none;color:var(--ui-text-secondary)}
+.terminal-tab-keep svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.terminal-tab-keep[hidden]{display:none}
+
 /* 多终端标签栏：标签自己横向滚动，新建按钮始终留在右侧。
  * 标签宽度有上限，长名字省略而不是把右侧布局撑开。 */
 .terminal-tabbar{

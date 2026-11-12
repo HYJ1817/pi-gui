@@ -26,6 +26,7 @@ import {
   resizeTerminal,
   stopTerminal,
   closeTerminal,
+  setTerminalKeepAlive,
 } from './api.js';
 import { createTerminalSession } from './terminal-session.js';
 import { createTerminalTabs } from './terminal-tabs.js';
@@ -36,6 +37,7 @@ const DEFAULT_LIMITS = Object.freeze({ minCols: 20, maxCols: 500, minRows: 5, ma
  * tab cannot hide a live PTY. Anything else (network error, 503, unknown code)
  * leaves the backend state uncertain. */
 const CLOSE_SETTLED_CODES = new Set(['terminal_missing', 'stale_workspace', 'unknown_conversation']);
+const KEEP_ALIVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6"/><path d="M10 4v5l-3.5 4.5h11L14 9V4"/><path d="M12 13.5V20"/></svg>';
 
 const node = (tag, className, text) => {
   const element = document.createElement(tag);
@@ -86,6 +88,7 @@ export function mountTerminalPanel(host, view, options = {}) {
     resize: resizeTerminal,
     stop: stopTerminal,
     close: closeTerminal,
+    setKeepAlive: setTerminalKeepAlive,
   };
   const makeView = options.createTerminalView
     ? async (container) => options.createTerminalView(container)
@@ -125,6 +128,8 @@ export function mountTerminalPanel(host, view, options = {}) {
   let subtitle;
   let control;
   let clearButton;
+  let keepAliveButton;
+  let keepAliveBusy = false;
   let noticeClearTimer = 0;
   const tabs = new Map();
   const order = [];
@@ -138,6 +143,12 @@ export function mountTerminalPanel(host, view, options = {}) {
   clearButtonNode.title = '只清除当前显示，不结束后台终端';
   clearButtonNode.onclick = () => activeController()?.clearScreen();
   clearButton = clearButtonNode;
+
+  const keepAliveButtonNode = node('button', 'btn tiny rp-btn terminal-keepalive');
+  keepAliveButtonNode.type = 'button';
+  keepAliveButtonNode.innerHTML = `${KEEP_ALIVE_ICON}<span>保持</span>`;
+  keepAliveButtonNode.onclick = () => { void toggleKeepAlive(); };
+  keepAliveButton = keepAliveButtonNode;
 
   control = node('button', 'btn tiny rp-btn', '启动');
   control.type = 'button';
@@ -169,7 +180,7 @@ export function mountTerminalPanel(host, view, options = {}) {
     void createTab();
   };
 
-  const header = createPaneHeader({ title: '终端', subtitle: '正在检测…', actions: [clearButton, control] });
+  const header = createPaneHeader({ title: '终端', subtitle: '正在检测…', actions: [keepAliveButton, clearButton, control] });
   subtitle = header.subtitle;
   const headerNode = header.el;
   host.append(headerNode);
@@ -238,6 +249,7 @@ export function mountTerminalPanel(host, view, options = {}) {
       label: meta.label,
       state: tabState(meta),
       selected: id === activeId,
+      keepAlive: meta.controller.session?.keepAlive === true,
     });
   }
 
@@ -252,8 +264,61 @@ export function mountTerminalPanel(host, view, options = {}) {
     );
   }
 
+  function updateKeepAliveButton(controller) {
+    const supported = typeof transport.setKeepAlive === 'function';
+    keepAliveButton.hidden = !supported;
+    if (!supported) return;
+    const session = controller?.session || null;
+    const on = session?.keepAlive === true;
+    keepAliveButton.classList.toggle('is-active', on);
+    keepAliveButton.setAttribute('aria-pressed', on ? 'true' : 'false');
+    keepAliveButton.querySelector('span').textContent = on ? '保持中' : '保持';
+    keepAliveButton.disabled = !controller || !controller.isRunning()
+      || busy || controller.busy || keepAliveBusy;
+    keepAliveButton.title = on
+      ? '保持运行已开启：30 分钟无输入输出也不会自动停止；点击恢复空闲超时'
+      : '保持运行：开启后 30 分钟无输入输出也不会自动停止';
+    keepAliveButton.setAttribute('aria-label', on ? '保持运行已开启' : '保持运行');
+  }
+
+  async function toggleKeepAlive() {
+    const meta = activeMeta();
+    const controller = meta?.controller;
+    if (!alive || keepAliveBusy || !controller || controller.busy || !controller.isRunning()
+      || typeof transport.setKeepAlive !== 'function') return;
+    const id = meta.id;
+    const enabled = controller.session?.keepAlive !== true;
+    keepAliveBusy = true;
+    updateHeader();
+    let result;
+    try {
+      result = await transport.setKeepAlive(id, enabled);
+    } catch {
+      result = { ok: false, network: true };
+    }
+    if (!alive) return;
+    keepAliveBusy = false;
+    /* Apply to the session the request was made for, not to whichever tab is
+     * active now. A late response for a background tab must not flip the
+     * visible terminal's state. */
+    const target = tabs.get(id);
+    if (target && result?.session) target.controller.updateSession(result.session);
+    if (!result?.ok && result?.code !== 'terminal_not_running') {
+      if (result?.code === 'stale_workspace' || result?.code === 'unknown_conversation'
+        || result?.code === 'workspace_unavailable' || result?.code === 'unknown_workspace'
+        || result?.code === 'unknown_project') {
+        requestScopeSync();
+      } else {
+        showNotice(result?.error || '无法更新保持运行状态。', 'warn');
+      }
+    }
+    if (target) updateTab(id);
+    updateHeader();
+  }
+
   function updateHeader() {
     const controller = activeController();
+    updateKeepAliveButton(controller);
     if (disabled) {
       setStatus('不可用', 'disabled');
       control.textContent = '不可用';
