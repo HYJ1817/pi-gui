@@ -301,6 +301,20 @@ async function main() {
     if (!/PI_GUI_TOKEN:\s*AUTH_TOKEN/.test(mainSrc)) return '没有把令牌经环境变量交给后端';
     return true;
   });
+  check('退出时先 tree-kill 后端，再 kill 父进程', () => {
+    /* 反了就会漏进程：后端先退出后，taskkill /T 失去父子链路，
+     * ConPTY shell 里 Start-Process 出来的子进程会留成孤儿。 */
+    const code = mainSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+    const fn = code.match(/function killServer\(\)\s*\{([\s\S]*?)\n\}/);
+    if (!fn) return '找不到 killServer';
+    const body = fn[1];
+    const treeKill = body.indexOf('execFileSync(');
+    const fallback = body.indexOf('server.kill()');
+    if (treeKill < 0 || !/taskkill\.exe/.test(body)) return '没有同步 taskkill';
+    if (!/win32/.test(body)) return 'taskkill 没有限定 Windows';
+    if (fallback < 0) return '没有 server.kill 兜底';
+    return treeKill < fallback || `taskkill@${treeKill} 在 server.kill@${fallback} 之后`;
+  });
 
   /* ---------- 7. preload 桥（只为两个转发动作而存在） ----------
    *

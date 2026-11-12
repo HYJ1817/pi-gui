@@ -17,16 +17,44 @@ module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win,
   await click('#btnWorkPanel');
   await waitFor(`document.querySelector('#rightPane').dataset.surface==='work-tools'`);
   const metrics = () => read(`(()=>{
-    const box=s=>{const e=document.querySelector(s),r=e.getBoundingClientRect(),c=getComputedStyle(e);return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height,bg:c.backgroundColor,border:c.borderLeftWidth,drag:c.webkitAppRegion}};
-    return {pane:box('#rightPane'),header:box('#workPanelNav'),close:box('#workPanelClose'),row:box('.work-panel-launcher-row'),body:box('.work-panel-empty'),native:navigator.windowControlsOverlay?.getTitlebarAreaRect().toJSON(),viewport:[innerWidth,innerHeight],overflow:document.documentElement.scrollWidth>innerWidth};
+    const box=s=>{const e=document.querySelector(s),r=e.getBoundingClientRect(),c=getComputedStyle(e);return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height,bg:c.backgroundColor,border:c.borderLeftWidth,radius:c.borderRadius,pad:c.padding,font:c.fontSize,drag:c.webkitAppRegion}};
+    return {pane:box('#rightPane'),header:box('#workPanelNav'),close:box('#workPanelClose'),row:box('.work-panel-launcher-row'),card:box('.work-panel-launcher-row'),body:box('.work-panel-empty'),native:navigator.windowControlsOverlay?.getTitlebarAreaRect().toJSON(),viewport:[innerWidth,innerHeight],overflow:document.documentElement.scrollWidth>innerWidth};
   })()`);
   let m=await metrics();
   check('E single 46px tool band starts at the window top without a blank title band', m.header.y===0&&m.header.height===46&&m.pane.border==='0px'&&m.body.y===46,m);
   check('E native caption lane stays beyond header drag and close hit target', m.native&&m.header.right<=m.native.right+1&&m.close.right<=m.native.right+1&&m.header.drag==='drag',m);
-  check('E launcher uses 40px rows, 18px icons and semantic dock',m.row.height===40&&m.body.bg==='rgb(33, 33, 33)'&&await read(`getComputedStyle(document.querySelector('.work-panel-launcher-icon svg')).width==='18px'`),m);
+  check('E launcher uses the calibrated 60px cards, 20px icons and #181818 canvas',m.row.height===60&&m.body.bg==='rgb(24, 24, 24)'&&m.card.radius==='12px'&&await read(`getComputedStyle(document.querySelector('.work-panel-launcher-icon svg')).width==='20px'`),m);
   check('E launcher entries share the actual capability and disabled states',await read(`[...document.querySelectorAll('.work-panel-launcher-row')].every(row=>{const src=document.getElementById(row.dataset.tool);return row.hidden===src.hidden&&row.disabled===src.disabled})`));
+  check('E launcher exposes live primary cards and a collapsed more control',await read(`(()=>{
+    const root=document.querySelector('.work-panel-empty');
+    const primary=root.querySelector('.work-panel-launcher-grid:not(.work-panel-launcher-extra)');
+    const cards=[...primary.querySelectorAll('.work-panel-launcher-row')];
+    const more=root.querySelector('.work-panel-launcher-more');
+    const extra=root.querySelector('.work-panel-launcher-extra');
+    const labels=cards.map(card=>card.querySelector('.work-panel-launcher-label').textContent);
+    return root.querySelector('h2').textContent==='工具'&&cards.length===3&&labels.join('/')==='变更/终端/文件'&&primary.children.length===4&&primary.lastElementChild===more&&!!extra&&extra.hidden&&more.getAttribute('aria-expanded')==='false'&&more.textContent.includes('更多工具')&&!root.textContent.includes('推荐');
+  })()`));
+  await click('.work-panel-launcher-more');
+  check('E more tools expands the remaining real entries without changing their owners',await read(`(()=>{
+    const more=document.querySelector('.work-panel-launcher-more'),extra=document.querySelector('.work-panel-launcher-extra');
+    const rows=[...extra.querySelectorAll('.work-panel-launcher-row')];
+    return more.getAttribute('aria-expanded')==='true'&&!extra.hidden&&rows.length===4&&rows.every(row=>{const src=document.getElementById(row.dataset.tool);return row.hidden===src.hidden&&row.disabled===src.disabled});
+  })()`));
   await shot('e01-launcher-dark');
+  await shot('e01b-launcher-more-dark');
   await nativeShot('e01-launcher-dark');
+  await click('.work-panel-launcher-row[data-tool="btnFiles"]');
+  await waitFor(`document.querySelector('#rightPane').dataset.surface==='files'&&!!document.querySelector('.files-layout')`);
+  check('E Files launcher mounts the real read-only file surface',await read(`document.querySelector('.rp-head-title').textContent==='文件'&&document.querySelector('.files-preview').textContent.includes('只读')`));
+  await shot('e01c-files-dark');
+  await click('#workPanelHome');
+  await click('.work-panel-launcher-more');
+  await click('.work-panel-launcher-row[data-tool="btnTerminal"]');
+  await waitFor(`document.querySelector('#rightPane').dataset.surface==='terminal'&&!!document.querySelector('.term-host .xterm')`);
+  check('E Terminal launcher mounts the real xterm surface without a command composer',await read(`document.querySelector('.rp-head-title').textContent==='终端'&&!!document.querySelector('.term-host .xterm')&&!document.querySelector('.term-input')&&!document.querySelector('.term-compose')`));
+  await shot('e01d-terminal-dark');
+  await click('#workPanelHome');
+  await click('.work-panel-launcher-more');
   await click('#btnSidebarCollapse');
   check('E sidebar collapse preserves the open dock and original draft node',await read(`document.querySelector('#projectSidebar').hidden&&!document.querySelector('#rightPane').hidden&&document.querySelector('#input')===eInput`));
   await shot('e16-launcher-collapsed-dark');await click('#btnSidebarExpand');
@@ -37,6 +65,7 @@ module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win,
   await waitFor(`!!document.querySelector('.collab-head')`);
   check('E Collab launcher uses the existing surface and preserves its real availability state',await read(`document.querySelector('#rightPane').dataset.surface==='collab'&&!!document.querySelector('.collab-panel-status')`));
   await shot('e18-collab-surface-dark');await click('#workPanelHome');
+  await click('.work-panel-launcher-more');
   await click('.work-panel-launcher-row[data-tool="btnSpecs"]');
   await waitFor(`!!document.querySelector('.specs-markdown')`);
   check('E Specs launcher mounts the real tree/document and selects the existing tool',await read(`document.querySelectorAll('.specs-doc-item').length===2&&document.querySelector('#btnSpecs').classList.contains('is-active')&&document.querySelector('.specs-markdown').textContent.includes('工作台验收')`));
@@ -55,11 +84,12 @@ module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win,
   await shot('e04-changes-dark');
   await read(`ETheme.setThemePreference('light')`);await shot('e05-changes-light');
   await click('#workPanelHome');await shot('e06-launcher-light');await nativeShot('e06-launcher-light');
-  await read(`eSpecs='empty'`);await click('.work-panel-launcher-row[data-tool="btnSpecs"]');
+  await click('.work-panel-launcher-more');await shot('e06b-launcher-more-light');await click('.work-panel-launcher-more');
+  await read(`eSpecs='empty'`);await click('.work-panel-launcher-more');await click('.work-panel-launcher-row[data-tool="btnSpecs"]');
   await waitFor(`!!document.querySelector('.specs-empty')`);
   check('E actual Specs empty state has 38px tile / 18px icon without fake operations',await read(`getComputedStyle(document.querySelector('.specs-empty-icon')).width==='38px'&&getComputedStyle(document.querySelector('.specs-empty-icon svg')).width==='18px'&&document.querySelector('.specs-empty').textContent.includes('还没有 Specs')`));
   await shot('e07-specs-empty-light');
-  await read(`eSpecs='documents'`);await click('#workPanelHome');await click('.work-panel-launcher-row[data-tool="btnSpecs"]');
+  await read(`eSpecs='documents'`);await click('#workPanelHome');await click('.work-panel-launcher-more');await click('.work-panel-launcher-row[data-tool="btnSpecs"]');
   await waitFor(`!!document.querySelector('.specs-markdown')`);await shot('e08-specs-light');
   await click('#btnSpecsSplit');await waitFor(`!!document.querySelector('#workbenchSpecsPane')`);
   win.setContentSize(700,600);await paint();
@@ -69,6 +99,7 @@ module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win,
   check('E fallback switches actual visible panels without remounting the draft',await read(`document.querySelector('#workbenchSpecsPane').hidden&&!document.querySelector('#workbenchChangesPane').hidden&&document.querySelector('#input')===eInput`));
   await shot('e10-narrow-changes-light');
   await click('#workPanelHome');await shot('e11-narrow-launcher-light');
+  check('E narrow launcher keeps cards inside the pane without page overflow',await read(`(()=>{const grid=document.querySelector('.work-panel-launcher-grid');const pane=document.querySelector('#rightPane');const g=grid.getBoundingClientRect(),p=pane.getBoundingClientRect();return g.left>=p.left-1&&g.right<=p.right+1&&document.documentElement.scrollWidth<=innerWidth})()`));
   await read(`document.querySelector('#workPanelClose').focus()`);await key('ESC');
   check('E Escape closes pane and returns focus to the original topbar trigger',await read(`document.querySelector('#rightPane').hidden&&document.activeElement.id==='btnWorkPanel'`));
   win.setContentSize(1205,803);await click('#btnWorkPanel');
@@ -77,6 +108,7 @@ module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win,
   check('E existing keyboard width control persists its real value',await read(`document.querySelector('#rightPane').getBoundingClientRect().width>${width}&&Number.isFinite(JSON.parse(localStorage.getItem('pi-gui.rightpane.v1')).width)`));
   await shot('e12-resized-launcher-light');
   await read(`ETheme.setThemePreference('dark')`);await shot('e13-resized-launcher-dark');
+  await click('.work-panel-launcher-more');
   await click('.work-panel-launcher-row[data-tool="btnBrowser"]');
   await waitFor(`!!document.querySelector('#browserViewport')`);
   const native = () => win.contentView.children.find(view => view.webContents === browser.getWebContents());

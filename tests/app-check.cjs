@@ -93,6 +93,33 @@ fs.writeFileSync(FAKE_PI, '@echo off\r\n"%FAKE_PI_NODE%" "%~dp0fake-pi.cjs" %*\r
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* Windows 上只杀 shell 父进程，Start-Process 出来的子进程会活下来。用命令行
+ * 里的唯一 marker 找身份，不用 PID 当判据 —— 繁忙机器上 PID 会被复用。 */
+const WINDOWS_POWERSHELL = path.join(
+  process.env.SystemRoot || 'C:\\Windows',
+  'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
+);
+function markerPids(marker) {
+  /* 查询脚本本身也在命令行里带着 marker；排除当前 PowerShell，否则永远数到自己。 */
+  const script = `$ErrorActionPreference='Stop'; @(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains('${marker}') } | ForEach-Object { [int]$_.ProcessId }) -join ','`;
+  const out = execFileSync(WINDOWS_POWERSHELL, ['-NoProfile', '-NonInteractive', '-Command', script], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 15000,
+  }).trim();
+  return out ? out.split(',').map(Number).filter(Number.isInteger) : [];
+}
+function killMarker(marker) {
+  for (const pid of markerPids(marker)) {
+    try {
+      execFileSync(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe'),
+        ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
+    } catch {
+      /* 已经没了 */
+    }
+  }
+}
+
 /** 删临时目录 —— 带命令行兜底。
  *
  * 受限环境给 node 注入了批量删除保护（一轮里删超过 50 个文件就抛错），
@@ -138,9 +165,12 @@ function check(name, fn) {
   }
 }
 
-/** 从某个目录一路往上找，看看有没有 node_modules —— 用来证明测试环境是干净的 */
+/** 从某个目录的**父级**一路往上找，看看有没有外部 node_modules。
+ * 打包目录自己现在带 node_modules/node-pty（原生模块不能进 asar，也不能
+ * 被打进 server.cjs），所以不能再用「目录里有 node_modules」当作回退证据。
+ * 要证明的是没有从 SANDBOX 之外偷到依赖。 */
 function hasNodeModulesAncestor(dir) {
-  let cur = path.resolve(dir);
+  let cur = path.dirname(path.resolve(dir));
   for (;;) {
     if (fs.existsSync(path.join(cur, 'node_modules'))) return cur;
     const up = path.dirname(cur);
@@ -159,12 +189,17 @@ async function main() {
   const { copyInto } = await import('../scripts/util.mjs');
   copyInto(path.dirname(SANDBOX), APP, path.basename(SANDBOX));
 
-  check('测试目录里没有 node_modules', () => {
+  check('测试目录没有外部 node_modules 回退', () => {
     const hit = hasNodeModulesAncestor(SANDBOX);
     return hit ? `意外找到 ${hit}\\node_modules` : true;
   });
   check('随包资源齐全', () => {
-    for (const p of ['server.cjs', 'main.cjs', 'net-probe.cjs', 'asset-manifest.json', 'pdfjs/standard_fonts', 'pdfjs/cmaps', 'pdfjs/worker/pdf.worker.mjs']) {
+    for (const p of ['server.cjs', 'main.cjs', 'net-probe.cjs', 'asset-manifest.json', 'pdfjs/standard_fonts', 'pdfjs/cmaps', 'pdfjs/worker/pdf.worker.mjs',
+      'node_modules/node-pty/package.json', 'node_modules/node-pty/lib/index.js',
+      'node_modules/node-pty/lib/shared/conout.js', 'node_modules/node-pty/lib/worker/conoutSocketWorker.js',
+      'node_modules/node-pty/prebuilds/win32-x64/conpty.node',
+      'node_modules/node-pty/prebuilds/win32-x64/conpty/conpty.dll',
+      'node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe']) {
       if (!fs.existsSync(path.join(SANDBOX, p))) return '缺 ' + p;
     }
     return true;
@@ -251,6 +286,9 @@ async function main() {
     if (!/TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION/.test(n)) {
       return '只写了组件名，没附 Apache-2.0 许可证正文';
     }
+    if (!/node-pty/.test(n)) return '署名里没提 node-pty';
+    if (!/@xterm\/xterm/.test(n) || !/@xterm\/addon-fit/.test(n)) return '署名里没提 xterm / addon-fit';
+    if ((n.match(/MIT License/g) || []).length < 3) return 'MIT 组件没有逐一附许可证正文';
     return true;
   });
 
@@ -265,6 +303,9 @@ async function main() {
       PI_GUI_DATA: DATA,
       PI_CWD: WORK,
       PI_BIN: FAKE_PI,
+      // 打包的终端默认只在桌面版启用；这里显式打开，验证随包 node-pty
+      // 真的能从 resources/app/node_modules 加载，而不是只在源码树里能用。
+      PI_GUI_ENABLE_TERMINAL: '1',
       // 假 pi shim 靠它找到 node —— 见上面「正文必须纯 ASCII」的说明
       FAKE_PI_NODE: process.execPath,
     },
@@ -306,6 +347,99 @@ async function main() {
     let readyState = st;
     for (let i = 0; i < 40 && readyState.bridgeState === 'starting'; i++) { await sleep(50); readyState = await (await fetch(BASE + '/api/status')).json(); }
     check('私有 RPC 确认打包后的 bridge ready', () => readyState.bridgeState === 'ready' || readyState.bridgeState);
+
+    /* Fake PTY 测试证明不了原生模块真的能加载。这条在打包目录里启动真实
+     * PowerShell，确认 sidecar 的 require 路径、prebuild ABI 与生命周期都对。 */
+    {
+      let note = '';
+      let id = '';
+      let treeMarker = '';
+      try {
+        const started = await (
+          await fetch(BASE + '/api/terminal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'start', cols: 80, rows: 24 }),
+          })
+        ).json();
+        if (!started.ok) throw new Error(`start: ${started.code || started.error}`);
+        id = started.session.id;
+        const expectedShell = process.platform === 'win32' ? 'PowerShell' : path.basename(process.env.SHELL || '');
+        if (started.session.shell !== expectedShell) throw new Error('shell=' + started.session.shell);
+        let text = '';
+        for (let i = 0; i < 60 && !text.trim(); i++) {
+          await sleep(100);
+          const r = await (await fetch(BASE + '/api/terminal?id=' + encodeURIComponent(id) + '&since=0')).json();
+          text = r.text || '';
+        }
+        if (!text.trim()) throw new Error('PTY 没有输出');
+        /* 行为验证「退出/停止时整棵树都收掉」：让 shell 起一个独立子进程，
+         * 记为 marker 身份，再停终端。只杀 PowerShell 父进程时它会活下来。 */
+        let childPid = 0;
+        if (process.platform === 'win32') {
+          treeMarker = `PI_GUI_TREE_${process.pid}_${Date.now()}`;
+          const command = `$p = Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' `
+            + `-ArgumentList '-e','setTimeout(()=>{},60000)','${treeMarker}' -PassThru -WindowStyle Hidden; `
+            + `Write-Output ('TREEPID=' + $p.Id)\r`;
+          const sent = await (
+            await fetch(BASE + '/api/terminal', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'input', id, data: command }),
+            })
+          ).json();
+          if (!sent.ok) throw new Error(`input: ${sent.code || sent.error}`);
+          let seen = '';
+          for (let i = 0; i < 100 && !/TREEPID=\d+/.test(seen); i++) {
+            await sleep(100);
+            const r = await (await fetch(BASE + '/api/terminal?id=' + encodeURIComponent(id) + '&since=0')).json();
+            seen = r.text || '';
+          }
+          const match = seen.match(/TREEPID=(\d+)/);
+          if (!match) throw new Error('子树子进程没有启动');
+          childPid = Number(match[1]);
+          if (!markerPids(treeMarker).includes(childPid)) throw new Error('子进程 marker 不在');
+        }
+        const stopped = await (
+          await fetch(BASE + '/api/terminal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'stop', id }),
+          })
+        ).json();
+        if (!stopped.ok) throw new Error(`stop: ${stopped.code || stopped.error}`);
+        let state = stopped.session?.state;
+        for (let i = 0; i < 50 && state !== 'exited'; i++) {
+          await sleep(100);
+          const r = await (await fetch(BASE + '/api/terminal?id=' + encodeURIComponent(id) + '&since=0')).json();
+          state = r.state || r.session?.state;
+        }
+        if (state !== 'exited') throw new Error('state=' + state);
+        if (treeMarker) {
+          let left = markerPids(treeMarker);
+          for (let i = 0; i < 60 && left.length; i++) {
+            await sleep(250);
+            left = markerPids(treeMarker);
+          }
+          if (left.length) throw new Error('停止后子进程仍存活: ' + left.join(','));
+        }
+      } catch (e) {
+        note = e.message;
+        if (treeMarker) killMarker(treeMarker);
+        if (id) {
+          try {
+            await fetch(BASE + '/api/terminal', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'stop', id }),
+            });
+          } catch {
+            /* 已经结束 */
+          }
+        }
+      }
+      results.push([note ? 'FAIL' : 'PASS', '随包 node-pty 启动真实 PTY 并树杀 shell 子进程', note]);
+    }
 
     const index = await (await fetch(BASE + '/')).text();
     check('根路径返回页面', () => index.includes('<title>Pi GUI</title>') || '内容不对');
@@ -359,7 +493,10 @@ async function main() {
       check('图片识别为 image', () => j.kind === 'image' || `kind=${j.kind}`);
     }
 
-    check('运行期没有崩栈输出', () => !/^\s*at .+\(node:/m.test(out) || out.slice(0, 300));
+    check('运行期没有崩栈输出', () => {
+      const crash = out.match(/^\s*at .+\(node:.*$/m);
+      return !crash || `stack=${crash[0]}\n${out.slice(-1500)}`;
+    });
 
     /* 上传缓存必须落在 PI_GUI_DATA 指的地方，不能写进应用目录 ——
      * 桌面版装在 Program Files 下时那里是只读的。 */

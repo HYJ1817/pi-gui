@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="/ui3-model.css">
 <link id="ui3-inline-commands-style" data-ui3-inline-commands rel="stylesheet" href="/ui3-inline-commands.css">
 <link rel="stylesheet" href="/process.css">
+<link rel="stylesheet" href="/vendor/xterm/xterm.css">
 <link id="ui4-pane-style" rel="stylesheet" href="/ui4-pane.css">
 <link id="specs-style" rel="stylesheet" href="/specs.css">
 <link id="ui4-approval-style" data-ui4-approval rel="stylesheet" href="/ui4-approval.css">
@@ -224,6 +225,12 @@
         <span id="branchCount" class="head-count"></span>
       </button>
         <button type="button" class="icon-btn" id="navChanges" aria-label="文件变更" title="文件变更" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M7 4.5h10a2 2 0 0 1 2 2v13l-3-2-3 2-3-2-3 2v-13a2 2 0 0 1 2-2z"/><path d="M10 9.5h4M10 13h4"/></svg><span class="work-tool-label">文件变更</span><span class="head-count" id="changesCount" hidden></span></button>
+        <button type="button" class="icon-btn" id="btnTerminal" title="终端" aria-label="终端" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="m7 9 3 3-3 3M12.5 15H17"/></svg><span class="work-tool-label">终端</span>
+        </button>
+        <button type="button" class="icon-btn" id="btnFiles" title="文件" aria-label="文件" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M3.5 6.5h6l2 2h9v10.5h-17z"/><path d="M3.5 8.5v-2h6"/></svg><span class="work-tool-label">文件</span>
+        </button>
         <button type="button" class="icon-btn" id="btnSpecs" title="项目 Specs" aria-label="项目 Specs" aria-pressed="false">
           <svg viewBox="0 0 24 24"><path d="M6 4.5h9l3 3v12H6z"/><path d="M15 4.5v3h3M9 11h6M9 14h6M9 17h4"/></svg><span class="work-tool-label">Specs</span>
         </button>

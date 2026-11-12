@@ -9,8 +9,10 @@
  *   允许：import { a, b as c } from './x.js';
  *        export function / async function / const / let / var / class
  *        export { a, b };
+ *        import('./x.js') —— 静态字面量的动态导入原样保留，但**不纳入链接**；
+ *        它只允许出现在 jsdom 不会执行的懒加载分支里（例如终端打开时才加载 xterm）。
  *   不允许（遇到就抛错，绝不静默跳过）：default 导入/导出、命名空间导入、
- *        裸导入、动态 import()、re-export。
+ *        裸导入、非静态 specifier 的动态 import、re-export。
  * 这样一旦有人写出链接器认不出的写法，测试会立刻以明确信息失败，
  * 而不是产出一个「少了一个模块」的残缺脚本。
  *
@@ -35,7 +37,7 @@ const FORBIDDEN = [
   [/^[ \t]*import\s+['"]/m, '裸导入（import "./x.js"）'],
   [/^[ \t]*export\s+default/m, '默认导出（export default）'],
   [/^[ \t]*export\s+\*\s*from/m, 're-export（export * from ...）'],
-  [/\bimport\s*\(/, '动态 import()'],
+  [/\bimport\s*\(\s*(?!['"])/, '非静态 specifier 的动态 import()'],
 ];
 
 function readModule(file) {

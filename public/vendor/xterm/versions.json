@@ -1,0 +1,11 @@
+{
+  "@xterm/xterm": "6.0.0",
+  "@xterm/addon-fit": "0.11.0",
+  "files": {
+    "xterm.mjs": "b336ec65a086c056d4804b3d4c2347da5663d3f23c3f25be866467bd8857ad59",
+    "xterm.css": "854a7c0fb70e8b1a083c16797ab827299fb18744f5ad34f227b48337e33293c6",
+    "LICENSE.xterm": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd",
+    "addon-fit.mjs": "2d87e1bddc73be9111de8beee5370c3bb7aac9c94e18e6f245f02ca741ef1769",
+    "LICENSE.addon-fit": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f"
+  }
+}

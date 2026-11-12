@@ -258,6 +258,27 @@
   --ui-duration-sheet: 180ms;
   --ui-ease-out: cubic-bezier(.165,.84,.44,1);
 
+  /* Terminal (xterm.js). The ANSI ramp is derived from the same semantic
+   * status colors as the rest of the app; the canvas/ink stay on --ds-* and
+   * are resolved by terminal-xterm.js at runtime. */
+  --term-selection: #3a3a3a;
+  --term-ansi-black: #1f1f1f;
+  --term-ansi-red: #f87171;
+  --term-ansi-green: #4ade80;
+  --term-ansi-yellow: #fbbf24;
+  --term-ansi-blue: #9dbaf8;
+  --term-ansi-magenta: #d8b4fe;
+  --term-ansi-cyan: #22d3ee;
+  --term-ansi-white: #d4d4d4;
+  --term-ansi-bright-black: #6b6b6b;
+  --term-ansi-bright-red: #fca5a5;
+  --term-ansi-bright-green: #86efac;
+  --term-ansi-bright-yellow: #fde68a;
+  --term-ansi-bright-blue: #bfdbfe;
+  --term-ansi-bright-magenta: #e9d5ff;
+  --term-ansi-bright-cyan: #67e8f9;
+  --term-ansi-bright-white: #ffffff;
+
   /* Component Alias Bridges */
   --shell: var(--ui-nav-surface);
   --main: var(--ui-canvas);
@@ -441,6 +462,24 @@
   --ui-backdrop: rgba(11,11,11,.32);
   --ui-shadow-popover: 0 8px 24px #0000001f, 0 2px 6px #00000014;
   --ui-shadow-panel: -18px 0 34px rgba(11,11,11,.12);
+
+  --term-selection: #c9c9c9;
+  --term-ansi-black: #1a1c1f;
+  --term-ansi-red: #b91c1c;
+  --term-ansi-green: #166534;
+  --term-ansi-yellow: #854d0e;
+  --term-ansi-blue: #1d4ed8;
+  --term-ansi-magenta: #7e22ce;
+  --term-ansi-cyan: #0e7490;
+  --term-ansi-white: #5d5d5d;
+  --term-ansi-bright-black: #9ca3af;
+  --term-ansi-bright-red: #dc2626;
+  --term-ansi-bright-green: #16a34a;
+  --term-ansi-bright-yellow: #ca8a04;
+  --term-ansi-bright-blue: #2563eb;
+  --term-ansi-bright-magenta: #9333ea;
+  --term-ansi-bright-cyan: #0891b2;
+  --term-ansi-bright-white: #1a1c1f;
 }
 
 /* ==========================================================================

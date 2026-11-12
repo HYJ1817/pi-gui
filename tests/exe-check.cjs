@@ -121,6 +121,9 @@ async function main() {
       PI_CWD: WORK,
       PI_GUI_DATA: DATA,
       PI_BIN: FAKE_PI,
+      // The portable build needs an explicit opt-in outside the desktop token
+      // boundary; this proves the SEA sidecar can load node-pty at all.
+      PI_GUI_ENABLE_TERMINAL: '1',
       // 假 pi shim 靠它找到 node —— 见上面「正文必须纯 ASCII」的说明
       FAKE_PI_NODE: process.execPath,
     },
@@ -293,6 +296,60 @@ async function main() {
     ).json();
     check('exe 内带 projectPath / 穿越参数不改变目标项目（唯一来源是 runtime 的 cwd）', () =>
       cfgQ.cwd === WORK || 'cwd=' + cfgQ.cwd);
+
+    /* node-pty 不能进 SEA blob，只能作为 build/node_modules 里的 sidecar 加载。
+     * 这条在 exe 自己身上启动一次真实 PTY，证明 sidecar 路径与 ABI 都对。 */
+    {
+      let note = '';
+      let id = '';
+      try {
+        const started = await (
+          await fetch(BASE + '/api/terminal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'start', cols: 80, rows: 24 }),
+          })
+        ).json();
+        if (!started.ok) throw new Error(`start: ${started.code || started.error}`);
+        id = started.session.id;
+        let text = '';
+        for (let i = 0; i < 60 && !text.trim(); i++) {
+          await sleep(100);
+          const r = await (await fetch(BASE + '/api/terminal?id=' + encodeURIComponent(id) + '&since=0')).json();
+          text = r.text || '';
+        }
+        if (!text.trim()) throw new Error('PTY 没有输出');
+        const stopped = await (
+          await fetch(BASE + '/api/terminal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'stop', id }),
+          })
+        ).json();
+        if (!stopped.ok) throw new Error(`stop: ${stopped.code || stopped.error}`);
+        let state = stopped.session?.state;
+        for (let i = 0; i < 50 && state !== 'exited'; i++) {
+          await sleep(100);
+          const r = await (await fetch(BASE + '/api/terminal?id=' + encodeURIComponent(id) + '&since=0')).json();
+          state = r.state || r.session?.state;
+        }
+        if (state !== 'exited') throw new Error('state=' + state);
+      } catch (error) {
+        note = error.message;
+        if (id) {
+          try {
+            await fetch(BASE + '/api/terminal', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'stop', id }),
+            });
+          } catch {
+            /* already gone */
+          }
+        }
+      }
+      check('exe 内 node-pty sidecar 启动并结束真实 PTY', () => note || true);
+    }
 
     /* 扩展能力（Skills / MCP）。和 project-config 同理：单文件 exe 里模块没进包
      * 就是 404，所以这两个 GET 必须真的通。 */

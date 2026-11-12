@@ -7,7 +7,24 @@
 
 PI-Desktop 阶段 E 将原空白 `rp-titlebar` 与 `#workPanelNav` 合为同一条 46px 工具带；保留 `rp-titlebar` 类作为原生标题栏验收的定位接口。工具带按实际原生 caption 区域结束拖拽矩形，28px 控件及选中标签可横向滚动；选中状态仍来自各工具 owner，更新后仅滚动到当前项。右栏默认 392px、最小 320px、宽度记忆、dock/overlay 与分屏比例都由原模块持有。
 
-“工作面板”打开的是工具列表，选择入口委托既有按钮；“选择工具”返回列表，不承诺创建任意独立标签。列表观察原按钮的 hidden/disabled/标签属性，离开时释放观察器。Specs 仍使用自己的文档树、Markdown、空态与只读边界。参考文件管理器的任意文件编辑、最大化及拖放不属于该阶段。实际证据与未验证边界见 [阶段 E 实施记录](ui/pi-desktop-reference/16-phase-e-implementation.md)。
+“工作面板”打开的是工具列表，选择入口委托既有按钮；“选择工具”返回列表，不承诺创建任意独立标签。列表观察原按钮的 hidden/disabled/标签属性，离开时释放观察器。起始页是「工具」卡片网格，固定两列四格：变更、终端、文件、更多工具…；浏览器、Specs、分支树、协同文档收在默认折叠的「更多工具…」里。卡片只克隆原按钮图标并委托点击，快捷键提示从 `public/shortcuts.js` 的唯一注册表读取：`Ctrl+Shift+G` 变更、``Ctrl+` `` 终端、`Ctrl+P` 文件。没有推荐区。Specs 仍使用自己的文档树、Markdown、空态与只读边界。
+
+终端与文件是右栏里的两个真实 surface，入口按钮、快捷键和起始页卡片走同一条 `openSecondarySurface` 生命周期：
+
+- **终端**：项目级 PTY（node-pty，Windows 走 ConPTY），前端为 xterm。Windows 默认绝对路径 PowerShell，缺失时回退绝对路径 CMD；POSIX 用 `$SHELL`，统一以 `TERM=xterm-256color` 启动。只有桌面版（本地令牌边界）或显式 `PI_GUI_ENABLE_TERMINAL=1` 时启用；cwd 来自聚焦会话的 workspace identity，Renderer 不传 shell、cwd、参数或环境变量；`start` / `read` / `input` / `resize` / `stop` 全部按 workspace 校验，跨工作区返回 409。输入拒绝 NUL 与超长、按原始字节写入且不追加换行；输出保留 ANSI/CR 原文、只在内存保留上限内的尾部、不写日志；`cols` / `rows` 有范围校验。每个工作区复用一个活动会话，达到并发上限时显式拒绝而不是杀掉用户其它终端。关闭面板只销毁 xterm 前端，后端继续运行并在重开时重放缓冲；只有显式停止、所属会话确认失效、工作区变化、空闲超时或服务关闭才结束整棵进程树（Windows `taskkill /T`）。源码运行与打包产物都必须带 node-pty 原生模块（`resources/app/node_modules/node-pty` / `build/node_modules/node-pty`）。
+- **文件**：只读项目文件树与文本预览；按目录懒加载，跳过符号链接/junction 与隐藏项（除非用户显式显示），正文上限 256 KiB，二进制只标注不预览。没有写入、删除、重命名或上传入口。
+
+### 终端生命周期与缓存截断（2026-11）
+
+PTY 的生命周期由后端持有，前端换面板不结束进程：
+
+- **已确认失效才结束。** 后端每 5 秒用会话自己的 conversation 重新解析 workspace。`unknown_conversation`、`unknown_workspace`、`unknown_project`、`workspace_unavailable`、`stale_workspace` 属于确认失效，即使 shell 仍在持续输出也会立即退休并树杀；`registry_unavailable`、快照不可用、`workspace_check_failed` 和没有确认码的普通文件系统错误只表示暂时答不上来，保留到下一轮，避免误杀健康 shell。`workspace_unavailable` 只在根目录确实不存在（`ENOENT`/`ENOTDIR`）或不是目录时产生；`EACCES`/`EBUSY`/`EMFILE` 等暂时性 stat 失败归为 `workspace_check_failed`。`stop` 仍先校验请求方 workspace，别的 conversation 只有 session id 不能跨工作区结束终端。
+- **退休不等于退出。** 退休会话保留在账本里，状态只随真实 `onExit` 变为 `exited`；kill 卡住时 sweep 会重试，退出前不会被静默删除。
+- **面板与缓存。** 关闭右栏或切到 Files/Changes 只销毁 xterm，后端继续运行；重开时按游标重放内存缓冲，输入与 resize 继续可用。缓冲上限 256 KiB，保留尾部并避免切开 UTF-16 代理对。
+- **截断的降级。** 当请求的游标早于缓存起点时，回放不再把尾部 ANSI 片段当作完整屏幕重放：前端调用 `reset()` 清屏并显示「较早的输出已超出缓存上限，无法完整恢复；显示已重置，输入仍可用。」PTY 不停止，键盘输入和 resize 保留。alternate-screen 的完整快照不在本期范围。
+- **验证环境分开记录。** 源码 Node、Node SEA 便携版和 Electron 桌面安装版是三个运行时；`npm run test:terminal:source` 证明普通 `node server.js` + 仓库 node-pty，`npm run test:app` 只证明打包后的 `server.cjs` 在 Node 下可启动，`npm run test:exe` 只证明 SEA，真实 Electron 用 `npm run test:terminal:electron`（Windows 11 桌面 + Electron 44.4.3）单独验收，详见 [测试分层](testing.md)。
+
+参考文件管理器的任意文件编辑、最大化及拖放不属于该阶段。实际证据与未验证边界见 [阶段 E 实施记录](ui/pi-desktop-reference/16-phase-e-implementation.md)。
 
 2026-11-01 Refined 工作区将会话顶栏的 Changes、Specs、Browser 等按钮移入右栏内的持久导航，
 顶栏只保留总开关。导航在 `.rp-body` 外，业务 Surface 切换不会卸载入口；关闭后焦点回到顶栏总开关。
