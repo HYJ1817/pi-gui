@@ -375,13 +375,60 @@ export const fetchFileDocument = (filePath, workspace, generation) => getJSON(
 );
 
 export const fetchTerminalStatus = () => getJSON('/api/terminal/status', gitScopeHeaders());
-export const startTerminal = () => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'start' } });
+
+/* A terminal session is authorized against the workspace that started it.
+ * `gitConversationId` changes (or is cleared by `showChat()`) before a project
+ * switch reaches the terminal, so Stop must keep the scope captured at start
+ * time. Otherwise the backend refuses the scoped stop and the PTY outlives the
+ * workspace it belongs to. Only the opaque conversation id is retained; the
+ * workspace root still resolves inside the backend. */
+const terminalScopes = new Map();
+
+export const startTerminal = ({ cols, rows } = {}) => {
+  const conversationId = gitConversationId;
+  return sendJSON('/api/terminal', {
+    headers: gitScopeHeaders(conversationId),
+    body: { action: 'start', ...(Number.isFinite(cols) && Number.isFinite(rows) ? { cols, rows } : {}) },
+  }).then((result) => {
+    const id = result?.session?.id;
+    /* A reused session belongs to the conversation that spawned it. Do not let
+     * a later start from a sibling conversation replace the scope that is
+     * allowed to stop it after a workspace change. */
+    if (typeof id === 'string' && id && !terminalScopes.has(id)) terminalScopes.set(id, conversationId);
+    return result;
+  });
+};
 export const readTerminal = (id, since = 0) => getJSON(
   '/api/terminal?' + new URLSearchParams({ id, since: String(since) }),
   gitScopeHeaders()
-);
+).then((result) => {
+  /* A finished session will never accept another stop. Do not clean up on
+   * `stale_workspace`: `handleReadError` still needs the captured scope to
+   * retire the backend PTY. */
+  if (result?.state === 'exited' || result?.state === 'failed' || result?.code === 'terminal_missing') {
+    terminalScopes.delete(id);
+  }
+  return result;
+});
 export const writeTerminal = (id, data) => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'input', id, data } });
-export const stopTerminal = (id) => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'stop', id } });
+export const resizeTerminal = (id, cols, rows) => sendJSON('/api/terminal', {
+  headers: gitScopeHeaders(),
+  body: { action: 'resize', id, cols, rows },
+});
+export const stopTerminal = (id) => {
+  const conversationId = terminalScopes.get(id);
+  return sendJSON('/api/terminal', {
+    headers: gitScopeHeaders(conversationId),
+    body: { action: 'stop', id },
+  }).then((result) => {
+    /* The session is gone or has been retired; its captured scope is no longer
+     * useful. Keep it on transport failures so a retry still has the header. */
+    if (result?.ok || result?.code === 'terminal_missing' || result?.code === 'stale_workspace') {
+      terminalScopes.delete(id);
+    }
+    return result;
+  });
+};
 
 export const fetchGitStatus = () => getJSON('/api/git/status', gitScopeHeaders());
 

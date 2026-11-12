@@ -27,6 +27,7 @@ import { spawn } from 'node:child_process';
 import { basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { formatLaunch } from './pi-launch.js';
+import { scrubInternalEnv } from './child-env.js';
 
 /* ⚠️ 这一层刻意**只**依赖 node 内建 + pi-launch（有架构守卫测试钉着）：
  * rpc-bridge 不该认识业务模块。所以下面那个「收整棵进程树」的原语是**注入**的
@@ -258,11 +259,7 @@ export function createRpcBridge({
      * pi 自带 bash 工具，环境变量对它（以及它跑的任何命令）都是可读的。
      * 令牌一旦被读进工具输出，就会随对话内容一起进模型上下文 —— 属于
      * 没必要存在的暴露面。pi 本身也不需要这个变量。 */
-    const childEnv = { ...env };
-    delete childEnv.PI_GUI_TOKEN;
-    for (const key of ['PI_GUI_BROWSER_BRIDGE_URL','PI_GUI_BROWSER_BRIDGE_TOKEN','PI_GUI_BROWSER_EXTENSION','PI_GUI_BROWSER_URL','PI_GUI_BROWSER_TOKEN']) delete childEnv[key];
-    for (const key of ['PI_GUI_PROCESS_URL','PI_GUI_PROCESS_TOKEN']) delete childEnv[key];
-    for (const key of ['PI_GUI_RUNTIME_BROWSER_URL','PI_GUI_RUNTIME_BROWSER_TOKEN']) delete childEnv[key];
+    const childEnv = scrubInternalEnv(env);
     if (browser) Object.assign(childEnv, browser.env);
 
     const opts = {

@@ -605,8 +605,7 @@ const gitRoutes = createGitRoutes({
 /* Specs, Files and Terminal share the focused conversation's project cwd.
  * Changes uses the Git worktree root instead; these three read the project
  * directory so a repo checked out in a subdirectory keeps its own files. */
-const workspaceScopeForRequest = async (req) => {
-  const conversationId = req.headers?.['x-pi-gui-conversation'];
+const workspaceScopeForConversation = async (conversationId) => {
   if (conversationId === undefined) {
     return {
       root: runtime.getCurrentCwd(),
@@ -624,6 +623,7 @@ const workspaceScopeForRequest = async (req) => {
     generation: workspace.workspaceEpoch,
   }));
 };
+const workspaceScopeForRequest = (req) => workspaceScopeForConversation(req.headers?.['x-pi-gui-conversation']);
 const specs = createSpecs({ scopeForRequest: workspaceScopeForRequest });
 const files = createFiles({ scopeForRequest: workspaceScopeForRequest });
 /* The desktop build has a token (auth.isDevMode is false), so the terminal is
@@ -632,6 +632,32 @@ const files = createFiles({ scopeForRequest: workspaceScopeForRequest });
  * was opened. The router still applies Origin + token gates to every call. */
 const terminal = createTerminal({
   scopeForRequest: workspaceScopeForRequest,
+  /* The sweep follows a different *live* focused conversation so switching to
+   * another runtime workspace stops the old PTY even when no terminal request
+   * is in flight. With no focused runtime conversation (classic chat, a
+   * dormant history conversation) the session keeps its own scope: the
+   * registry cannot focus dormant records, and treating focus === null as a
+   * workspace change would kill a terminal the user is still looking at.
+   * If the registry cannot answer, return null; the sweep keeps the session
+   * rather than treating a transient error as proof of a workspace change. */
+  scopeForSession: async (session) => {
+    let snapshot;
+    try { snapshot = runtimeRegistryRef?.snapshot?.(); } catch { return null; }
+    if (!snapshot?.ok) return null;
+    /* Resolve the session's own conversation first, without swallowing errors:
+     * a deleted record must retire the PTY even if another conversation is
+     * focused in the same workspace. The sweep distinguishes a confirmed
+     * `unknown_conversation` (stop) from transient `registry_unavailable`
+     * (keep for the next sweep). */
+    const own = await workspaceScopeForConversation(session.conversationId);
+    const focused = snapshot.focusedConversationId;
+    if (focused && focused !== session.conversationId) {
+      /* A race while the focused record is being replaced must not decide this
+       * session's fate. Keep it and let the next sweep re-evaluate. */
+      try { return await workspaceScopeForConversation(focused); } catch { return null; }
+    }
+    return own;
+  },
   enabled: !auth.isDevMode || process.env.PI_GUI_ENABLE_TERMINAL === '1',
 });
 
@@ -1448,7 +1474,7 @@ if (process.send) process.on('message', async message => {
 
 async function shutdown() {
   if(runtime.isShuttingDown())return;
-  terminal.dispose();
+  await terminal.dispose();
   marketNetwork?.dispose();
   providerAuth.dispose();
   providerCredentialBridge.dispose();

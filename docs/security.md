@@ -728,15 +728,34 @@ Extension 是**第三方本地代码**，在 Pi 进程权限下运行，可能�
 
 ### 项目终端
 
-**威胁**：把浏览器输入直接接进 shell，或让渲染层指定任意 cwd/可执行文件。
+**威胁**：把浏览器输入直接接进 shell，或让渲染层指定任意 cwd / 可执行文件 / 参数。
 
 **做法**：终端只在桌面版（`auth.isDevMode === false`）或显式
 `PI_GUI_ENABLE_TERMINAL=1` 时启用；路由仍先过本地令牌与 Origin 检查。
-cwd 来自聚焦会话的 workspace identity，Renderer 只提交会话 id、输入文本和停止动作，
-不能提交命令路径、cwd 或环境变量。输入有字节上限并拒绝 NUL；子进程环境剥离
-`PI_GUI_TOKEN`。输出只在内存中保留上限内的尾部，不写日志；关闭面板、工作区变化、
-空闲超时或服务关闭都会结束进程树。它是管道 shell，不是 PTY —— 全屏终端程序不在
-支持范围，能力状态通过 `/api/terminal/status` 的 `pipe:true` 如实暴露。
+`start` / `read` / `input` / `resize` / `stop` 全部按聚焦会话的 workspace identity
+校验，跨工作区请求返回 409，`stop` 也不例外；只有**同一会话**的工作区变化才会顺手结束
+旧会话，别的会话即便拿到 session id 也不能停止它（旧会话仍按自己的 workspace 身份、空闲超时
+或服务关闭结束）。
+Shell 由服务端按平台选定（Windows
+优先绝对路径 PowerShell，缺失时回退绝对路径 CMD；其它平台用 `$SHELL`），cwd 来自
+workspace identity；Renderer 只能提交会话 id、原始输入、`cols` / `rows` 与停止动作，
+不能提交命令路径、cwd、参数或环境变量。
+
+PTY 由 node-pty（Windows 上为 ConPTY）创建，以 `TERM=xterm-256color` 启动，
+环境在 spawn 前剥离 `PI_GUI_TOKEN` 及浏览器 / 进程桥的内部令牌与 URL。node-pty 只从源码树、应用资源目录或可执行文件
+同目录加载，不搜索进程 cwd —— 桌面版后端 cwd 是用户可写的数据目录，搜索它会允许
+预置的 `node_modules/node-pty` 执行任意原生代码。输入有字节上限并拒绝 NUL，按原始字节写入，
+不追加换行；输出保留 ANSI 与 CR 原文，只在内存中保留上限内的尾部，不写日志；
+`resize` 的 `cols` / `rows` 有范围校验。每个工作区复用一个活动会话；达到并发上限时
+显式拒绝新会话，不杀用户其它的终端。关闭面板只销毁 xterm 前端，后端 PTY 继续运行，
+重新打开时按缓冲重放；只有显式停止、工作区变化（前端 stop 与后端 scope sweep 双保险）、
+空闲超时或服务关闭才结束进程树。前端在 `start` 时记录该会话的工作区身份（conversation id），停止时沿用；
+切换项目会先清空当前 scope，若停止时现取 scope，后端会拒绝而留下孤儿 PTY。后端 sweep
+只在**成功解析**出一个不同的 workspace 时停止；scope 暂时不可用或解析报错都不当作
+工作区已变化。Windows 用 `taskkill /T` 结束整棵树，服务退出时等待
+真实 exit 事件；桌面外壳退出时先在**后端仍存活**时对后端做 `taskkill /T`，再结束后端，
+避免 ConPTY 子进程因父子链断开而成为孤儿。能力状态通过
+`/api/terminal/status` 的 `pty:true` 如实暴露。
 
 ## 五、子进程边界
 

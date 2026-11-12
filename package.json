@@ -97,12 +97,15 @@
     "e2e:app": "node tests/e2e-app.cjs",
     "test:exe": "node tests/exe-check.cjs",
     "test:app": "node tests/app-check.cjs",
+    "test:terminal:source": "node tests/terminal-source-check.cjs",
+    "test:terminal:electron": "node tests/terminal-electron-check.cjs",
     "test:history-summary:packaged": "node tests/history-tool-summary-packaged.cjs",
     "test:inject": "node tests/append-injection.cjs",
     "test:window": "node tests/window-state.cjs",
     "test:browser-pane": "node tests/browser-pane.cjs",
     "test:browser-session": "electron tests/browser-session-check.cjs",
     "diag:content": "node tests/diag-content.cjs",
+    "sync:xterm": "node scripts/sync-xterm.mjs",
     "build:exe": "node scripts/build-exe.mjs",
     "build:app": "node scripts/build-app.mjs",
     "build:installer": "node scripts/build-installer.mjs",
@@ -184,6 +187,9 @@
     "node": ">=22.19"
   },
   "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.1.0",
     "pdfjs-dist": "^6.3.289"
   }
 }

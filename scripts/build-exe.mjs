@@ -1,18 +1,23 @@
-/* 打包成单文件 exe（Node SEA）。
+/* 打包成 exe（Node SEA）。
  *
  * 做三件事：
  *   1. esbuild 把 ESM 服务端代码打成一份 CJS（含 pdfjs，约 1.2MB）
  *   2. 把 public/ 和 pdfjs 的字体/cmaps 收集成 SEA assets 清单
  *   3. 生成 blob，注入到 node.exe 副本里，产出 Pi GUI.exe
  *
+ * node-pty 是原生模块，不能塞进 SEA blob，也不能从 blob 里 require；它作为
+ * sidecar 落到 build/node_modules/node-pty，由 server 的 createRequire 加载。
+ * 复制 exe 时要把同级 node_modules/ 一起带走，否则终端会报 pty_unavailable。
+ *
  * 用法：npm run build:exe
- * 产物：build/Pi GUI.exe（约 100MB，单文件，内嵌全部资源） */
+ * 产物：build/Pi GUI.exe + build/node_modules/node-pty */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import * as esbuild from 'esbuild';
 import { clearDir } from './util.mjs';
+import { stageNodePty } from './node-pty-package.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputAt = process.argv.indexOf('--output-root');
@@ -43,6 +48,10 @@ function main() {
   // 报 "state lock timeout" 而构建直接失败。clearDir 有三级兜底。
   clearDir(BUILD, 'build/');
   fs.mkdirSync(BUILD, { recursive: true });
+
+  // public/ is served directly; keep the vendored xterm copy in lockstep with
+  // the installed package before it becomes a SEA asset.
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'sync-xterm.mjs')], { stdio: 'inherit', cwd: ROOT });
 
   /* 1. 收集资源 */
   const assets = {};
@@ -117,6 +126,13 @@ function main() {
   const bundleSize = fs.statSync(path.join(BUILD, 'server.cjs')).size;
   console.log(`  代码打包 ${(bundleSize / 1024 / 1024).toFixed(2)} MB`);
 
+  /* node-pty is a native module. A SEA executable can load it through
+   * createRequire, but only as a sidecar — it cannot be embedded in the blob.
+   * Keep it next to the exe so the terminal remains functional in the
+   * portable build instead of silently falling back to a pipe shell. */
+  const pty = stageNodePty(ROOT, path.join(BUILD, 'node_modules', 'node-pty'));
+  console.log(`  node-pty ${pty.version} → build/node_modules/node-pty`);
+
   /* 3. 生成 blob */
   const seaConfig = path.join(BUILD, 'sea-config.json');
   fs.writeFileSync(
@@ -155,7 +171,7 @@ function main() {
   const final = fs.statSync(exe).size;
   console.log('');
   console.log(`  完成 → build/${EXE_NAME}  (${(final / 1024 / 1024).toFixed(1)} MB)`);
-  console.log('  双击即可运行；资源全部内嵌，可单独拷走。');
+  console.log('  双击即可运行；资源内嵌在 exe 里，PTY 原生模块在 build/node_modules/，拷贝时两者要一起带走。');
 }
 
 main();

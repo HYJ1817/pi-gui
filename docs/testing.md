@@ -262,6 +262,7 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 |---|---|---|---|
 | **A. 基础测试** | `npm test` | Node ≥ 22.19 与已准备的项目依赖；Native/权限相关限制见对应套件 | main push / PR 到 main（CI）；本地按[测试执行政策](#测试执行政策) |
 | **B. 打包验证** | `npm run test:exe` / `test:app` | 先跑 `npm run fixtures` 与 `build:exe` / `build:app` | CI 的 build-check job |
+| **B2. 终端运行时验收** | `npm run test:terminal:source` / `test:terminal:electron` | 源码需 Windows/ConPTY；Electron 还需先跑 `build:app -- --rebuild`，Electron 44.4.3 | 本地 Windows（非 CI、非无桌面 canonical） |
 | **C. 安装程序验证** | `npm run test:portable` / `test:installer` | 先跑 `build:installer`，且本机有 NSIS | 手动（release-check）或本地 |
 | **D. 真 pi 验证** | `npm run test:skills-live` / `test:reliability-live` / `test:inject` | 本机装了 `pi` | 只在本地 / 手动 |
 | **E. 界面视觉核对** | `npm run harness` + `shots` / `test:window` | 真浏览器 / 真窗口 | 只在本地 |
@@ -272,6 +273,20 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 > **纯 Node 写的最小 PDF**，任何机器都能生成；有 LibreOffice 时仍会用
 > 它转出的中文版覆盖掉（本地行为不变）。
 > 想强制走最小 PDF 那条路（复现 CI）：`PI_GUI_SKIP_LIBREOFFICE=1 npm run fixtures`。
+
+`test:terminal:source` 启动普通 `node server.js`，从仓库 `node_modules/node-pty` 加载
+原生模块，在临时 cwd/data 中启动真实 PowerShell，验证 `node -v`、`PI_GUI_TOKEN` 不进入
+PTY 子环境，并等待真实退出状态。它只证明源码 Node 运行时。
+
+`test:terminal:electron` 与 B 层不是同一个运行时：`test:app` 用 Node 启动打包后的
+`server.cjs`（随包 node-pty），`test:exe` 验证 Node SEA 便携版；两者都不能替代 Electron
+自带 Node 的加载路径。该专项把 `dist-app/Pi GUI-win32-x64` 复制到 `os.tmpdir()` 的
+独立目录（祖先路径没有 `node_modules`），用真实 Electron 44.4.3、临时 `PI_GUI_DATA` /
+`PI_CWD` / fake Pi 启动，经 CDP 驱动真实 xterm，覆盖 PowerShell、`node -v`、Node REPL、
+Ctrl+C、ANSI 颜色、光标定位、alternate screen、resize、面板关闭/重开的缓冲重放，
+以及关闭应用后的 shell/Node 子进程按身份清理。非 Windows 或缺少构建产物返回 exit 2
+（skip）；Windows 上无桌面会话、Electron 起不来或任一断言失败会明确非零退出，不得记为通过。
+运行前必须重建 `build:app`。
 
 ## 二、`npm test` 的定位
 
