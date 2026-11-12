@@ -654,6 +654,216 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
   }
 
   {
+    /* P3 Keep Alive: an explicit per-session exemption from the idle timer.
+     * It must never be settable through create/start, never cross a workspace
+     * boundary, and never bypass stop/close/sweep/dispose. */
+    const p3Spawned = [];
+    const p3Terminal = createTerminal({
+      scopeForRequest: async (req) => scopeFor(req),
+      limits: noSweep({ ...TERMINAL_LIMITS, idleMs: 1000 }),
+      spawnPty: fakePty(p3Spawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const p3App = await serve({ terminal: p3Terminal });
+    const p3Request = (body, headers = scoped()) => p3App.request('/api/terminal', { method: 'POST', headers, body });
+    const p3Read = (id, since = 0) => p3App.request('/api/terminal?' + new URLSearchParams({
+      id, since: String(since),
+    }), { headers: scoped() });
+    const p3Create = async () => (await p3Request({ action: 'create' })).body.session;
+    const p3Close = async (id) => p3Request({ action: 'close', id });
+    const p3Wait = async (id, expected, timeout = 2000) => {
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeout) {
+        const response = await p3Read(id);
+        if (response.body.state === expected) return response;
+        await tick(10);
+      }
+      throw new Error(`terminal ${id} did not reach ${expected}`);
+    };
+    try {
+      const created = await p3Request({ action: 'create', keepAlive: true });
+      await check('create ignores a renderer-supplied keepAlive field', () => {
+        assert.equal(created.body.ok, true);
+        assert.equal(created.body.session.keepAlive, false);
+      });
+      await p3Request({ action: 'keep-alive', id: created.body.session.id, enabled: true });
+      const reused = await p3Request({ action: 'start', keepAlive: false });
+      await check('start reuse cannot overwrite the server-owned Keep Alive flag', () => {
+        assert.equal(reused.body.reused, true);
+        assert.equal(reused.body.session.id, created.body.session.id);
+        assert.equal(reused.body.session.keepAlive, true);
+      });
+      await p3Close(created.body.session.id);
+
+      const silent = await p3Create();
+      const enabled = await p3Request({ action: 'keep-alive', id: silent.id, enabled: true });
+      await check('a user can enable Keep Alive for one running session', () => {
+        assert.equal(enabled.body.ok, true);
+        assert.equal(enabled.body.session.keepAlive, true);
+      });
+      await tick(1400);
+      const stillRunning = await p3Read(silent.id);
+      await check('Keep Alive prevents the idle stop for a silent session', () => {
+        assert.equal(stillRunning.body.state, 'running');
+        assert.equal(stillRunning.body.session.keepAlive, true);
+      });
+
+      const normal = await p3Create();
+      const normalEnd = await p3Wait(normal.id, 'exited');
+      const silentWhileNormalEnded = await p3Read(silent.id);
+      await check('Keep Alive is independent per terminal', () => {
+        assert.equal(normalEnd.body.session.keepAlive, false);
+        assert.equal(silentWhileNormalEnded.body.state, 'running');
+      });
+      await p3Close(normal.id);
+
+      const disabled = await p3Request({ action: 'keep-alive', id: silent.id, enabled: false });
+      await tick(300);
+      const justAfterDisable = await p3Read(silent.id);
+      await tick(900);
+      const expired = await p3Read(silent.id);
+      await check('disabling Keep Alive starts a fresh full idle window', () => {
+        assert.equal(disabled.body.ok, true);
+        assert.equal(disabled.body.session.keepAlive, false);
+        assert.equal(justAfterDisable.body.state, 'running');
+        assert.equal(expired.body.state, 'exited');
+      });
+      await p3Close(silent.id);
+
+      const natural = await p3Create();
+      const naturalEnabled = await p3Request({ action: 'keep-alive', id: natural.id, enabled: true });
+      p3Terminal._sessions.get(natural.id).pty.emitExit(0);
+      const naturalEnd = await p3Wait(natural.id, 'exited');
+      await check('a natural exit clears Keep Alive and bumps its revision', () => {
+        assert.equal(naturalEnd.body.state, 'exited');
+        assert.equal(naturalEnd.body.session.keepAlive, false);
+        assert.ok(naturalEnd.body.session.keepAliveRevision
+          > naturalEnabled.body.session.keepAliveRevision);
+      });
+      await p3Close(natural.id);
+
+      const restartSource = await p3Create();
+      await p3Request({ action: 'keep-alive', id: restartSource.id, enabled: true });
+      await p3Request({ action: 'stop', id: restartSource.id });
+      await p3Wait(restartSource.id, 'exited');
+      const restarted = await p3Request({ action: 'start', keepAlive: true });
+      await check('stop still works and restart resets Keep Alive to off', () => {
+        assert.equal(restarted.body.ok, true);
+        assert.notEqual(restarted.body.session.id, restartSource.id);
+        assert.equal(restarted.body.session.keepAlive, false);
+      });
+      await p3Close(restartSource.id);
+      await p3Close(restarted.body.session.id);
+
+      const manuallyStopped = await p3Create();
+      await p3Request({ action: 'keep-alive', id: manuallyStopped.id, enabled: true });
+      const stopResult = await p3Request({ action: 'stop', id: manuallyStopped.id });
+      const stoppedEnd = await p3Wait(manuallyStopped.id, 'exited');
+      const revive = await p3Request({ action: 'keep-alive', id: manuallyStopped.id, enabled: true });
+      await check('a Keep Alive terminal can still be stopped by the user', () => {
+        assert.equal(stopResult.body.session.keepAlive, false);
+        assert.equal(stoppedEnd.body.state, 'exited');
+        assert.equal(stoppedEnd.body.session.keepAlive, false);
+        assert.equal(revive.body.code, 'terminal_not_running');
+        assert.equal(revive.body.session.keepAlive, false);
+      });
+      await p3Close(manuallyStopped.id);
+
+      const closed = await p3Create();
+      await p3Request({ action: 'keep-alive', id: closed.id, enabled: true });
+      const closeResult = await p3Close(closed.id);
+      await tick(30);
+      const closedAgain = await p3Close(closed.id);
+      await check('a Keep Alive terminal can still be closed and its tab removed', () => {
+        assert.equal(closeResult.body.ok, true);
+        assert.equal(closeResult.body.session.keepAlive, false);
+        assert.equal(closedAgain.body.missing, true);
+        assert.equal(p3Terminal._sessions.has(closed.id), false);
+      });
+
+      const owned = await p3Create();
+      await p3Request({ action: 'keep-alive', id: owned.id, enabled: true });
+      const foreign = await p3Request({ action: 'keep-alive', id: owned.id, enabled: false }, scoped('b'));
+      const forged = await p3Request({ action: 'keep-alive', id: 'not-a-session', enabled: true });
+      const invalid = await p3Request({ action: 'keep-alive', id: owned.id, enabled: 'yes' });
+      const ownedAfter = await p3Read(owned.id);
+      await check('forged, cross-workspace and malformed requests cannot change Keep Alive', () => {
+        assert.equal(foreign.body.code, 'stale_workspace');
+        assert.equal(forged.body.code, 'terminal_missing');
+        assert.equal(invalid.body.code, 'invalid_keep_alive');
+        assert.equal(ownedAfter.body.session.keepAlive, true);
+      });
+      await p3Close(owned.id);
+
+      const rapid = await p3Create();
+      /* Truly concurrent requests have no guaranteed completion order, but the
+       * flag, the timer and the later state must still agree. */
+      await Promise.all([true, false, true, false, true].map(
+        (enabled) => p3Request({ action: 'keep-alive', id: rapid.id, enabled })
+      ));
+      const rapidSettled = await p3Read(rapid.id);
+      await tick(1400);
+      const rapidLater = await p3Read(rapid.id);
+      await check('rapid concurrent enable/disable requests settle without a timer race', () => {
+        assert.equal(rapidLater.body.session.keepAlive, rapidSettled.body.session.keepAlive);
+        assert.equal(
+          rapidLater.body.state,
+          rapidSettled.body.session.keepAlive ? 'running' : 'exited'
+        );
+      });
+      if (rapidLater.body.session.keepAlive) {
+        await p3Request({ action: 'keep-alive', id: rapid.id, enabled: false });
+        await p3Wait(rapid.id, 'exited');
+      }
+      await p3Close(rapid.id);
+
+      const shutdown = await p3Create();
+      await p3Request({ action: 'keep-alive', id: shutdown.id, enabled: true });
+      const shutdownPty = p3Terminal._sessions.get(shutdown.id).pty;
+      await p3Terminal.dispose();
+      await check('app dispose still kills a Keep Alive terminal', () => {
+        assert.equal(shutdownPty.killed, true);
+        assert.equal(p3Terminal._sessions.size, 0);
+      });
+    } finally {
+      await p3Terminal.dispose();
+      await p3App.close();
+    }
+  }
+
+  {
+    /* Workspace invalidation must retire a Keep Alive session even while the
+     * shell is silent; Keep Alive only suppresses the idle timer. */
+    const sweepSpawned = [];
+    const sweepScopes = { a: { root: rootA, scopeId: 'p3-sweep', generation: '1' } };
+    const sweepTerminal = createTerminal({
+      scopeForRequest: async (req) => sweepScopes[req.headers?.['x-pi-gui-conversation'] || 'a'],
+      limits: { ...TERMINAL_LIMITS, idleMs: 10_000, scopeSweepMs: 20 },
+      spawnPty: fakePty(sweepSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const sweepApp = await serve({ terminal: sweepTerminal });
+    const sweepRequest = (body) => sweepApp.request('/api/terminal', { method: 'POST', body });
+    try {
+      const started = await sweepRequest({ action: 'create' });
+      const id = started.body.session.id;
+      await sweepRequest({ action: 'keep-alive', id, enabled: true });
+      const pty = sweepTerminal._sessions.get(id).pty;
+      sweepScopes.a = { root: rootB, scopeId: 'p3-sweep', generation: '1' };
+      for (let i = 0; i < 100 && sweepTerminal._sessions.has(id); i++) await tick(10);
+      await check('a confirmed workspace change still retires a Keep Alive terminal', () => {
+        assert.equal(pty.killed, true);
+        assert.equal(sweepTerminal._sessions.has(id), false);
+      });
+    } finally {
+      await sweepTerminal.dispose();
+      await sweepApp.close();
+    }
+  }
+
+  {
     /* If the idle kill is wedged, the record stays tracked as closing and the
      * existing scope sweep retries; only the real exit changes the state. */
     let killCalls = 0;

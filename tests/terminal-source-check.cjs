@@ -248,6 +248,17 @@ function freePort() {
       assert.ok(!slowText.includes('P2_FAST_OK'));
     });
 
+    const keepOn = await terminalCall({ action: 'keep-alive', id: thirdId, enabled: true });
+    const keepList = await terminalCall({ action: 'list' });
+    const keepOff = await terminalCall({ action: 'keep-alive', id: thirdId, enabled: false });
+    check('a real ConPTY session accepts server-owned Keep Alive and lists it', () => {
+      assert.equal(keepOn.ok, true, JSON.stringify(keepOn));
+      assert.equal(keepOn.session.keepAlive, true);
+      assert.equal(keepList.sessions.find((session) => session.id === thirdId)?.keepAlive, true);
+      assert.equal(keepOff.ok, true, JSON.stringify(keepOff));
+      assert.equal(keepOff.session.keepAlive, false);
+    });
+
     const workB = path.join(world, 'work-b');
     fs.mkdirSync(workB, { recursive: true });
     await activated(workB);

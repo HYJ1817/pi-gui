@@ -646,6 +646,50 @@ async function connect(url) {
       const reopenCreatedAt = afterReopen?.sessions.every((session) => session.id in createdBefore
         && session.createdAt === createdBefore[session.id]);
 
+      /* P3: the real toolbar writes the per-session flag; switching tabs must
+       * show each session's own state, and no PTY is recreated by the toggle. */
+      const keepId = (afterReopen || afterClose || afterSwitch).sessions[0].id;
+      const otherTabId = (afterReopen || afterClose || afterSwitch).sessions
+        .find((session) => session.id !== keepId)?.id;
+      const keepSessionsBefore = (await list()).sessions
+        .map((session) => ({ id: session.id, createdAt: session.createdAt }));
+      await clickTab(keepId);
+      const keepButtonEval = (expr) => cdp.evaluate(`(()=>{const b=document.querySelector('.terminal-keepalive');${expr}})()`);
+      const keepBefore = await keepButtonEval("return b?.getAttribute('aria-pressed')||'';");
+      await keepButtonEval("if(!b)return false;b.click();return true;");
+      const keepOn = await waitFor(async () => {
+        const result = await list();
+        const session = result?.sessions?.find((s) => s.id === keepId);
+        const pressed = await keepButtonEval("return b?.getAttribute('aria-pressed')||'';");
+        return session?.keepAlive === true && pressed === 'true';
+      }, 8000);
+      const keepTabMark = await cdp.evaluate(`document.querySelector('.terminal-tab[data-terminal-id=${JSON.stringify(keepId)}]')?.dataset.keepAlive||''`);
+      const keepShot = await shot('terminal-p3-keep-alive.png');
+      await clickTab(otherTabId);
+      await sleep(300);
+      const otherPressed = await keepButtonEval("return b?.getAttribute('aria-pressed')||'';");
+      const otherTabMark = await cdp.evaluate(`document.querySelector('.terminal-tab[data-terminal-id=${JSON.stringify(otherTabId)}]')?.dataset.keepAlive||''`);
+      await clickTab(keepId);
+      await sleep(300);
+      const backPressed = await keepButtonEval("return b?.getAttribute('aria-pressed')||'';");
+      await keepButtonEval("if(!b)return false;b.click();return true;");
+      const keepOff = await waitFor(async () => {
+        const result = await list();
+        return result?.sessions?.find((s) => s.id === keepId)?.keepAlive === false;
+      }, 8000);
+      const keepSessionsAfter = (await list()).sessions
+        .map((session) => ({ id: session.id, createdAt: session.createdAt }));
+      const keepNoRecreate = keepSessionsAfter.length === keepSessionsBefore.length
+        && keepSessionsAfter.every((session, index) => session.id === keepSessionsBefore[index].id
+          && session.createdAt === keepSessionsBefore[index].createdAt);
+      /* Leave one session exempt for the app-exit phase: the existing marker
+       * checks then prove Keep Alive cannot survive Electron shutdown. */
+      await keepButtonEval("if(!b)return false;b.click();return true;");
+      const keepOnBeforeExit = await waitFor(async () => {
+        const result = await list();
+        return result?.sessions?.find((s) => s.id === keepId)?.keepAlive === true;
+      }, 8000);
+
       return {
         baseCount: baseIds.length,
         sessionCount: ids.length,
@@ -672,6 +716,18 @@ async function connect(url) {
         afterReopenCount: afterReopen?.sessions.length || 0,
         reopenCreatedAt,
         reopenedReplay,
+        keepAlive: {
+          before: keepBefore,
+          on: Boolean(keepOn),
+          tabMark: keepTabMark,
+          otherPressed,
+          otherTabMark,
+          backPressed,
+          off: Boolean(keepOff),
+          noRecreate: keepNoRecreate,
+          onBeforeExit: Boolean(keepOnBeforeExit),
+          shot: keepShot.bytes,
+        },
         remaining: (afterReopen || afterClose || afterSwitch).sessions.map((session) => session.id),
         shots: [multiShot.bytes, afterCloseShot.bytes],
       };
@@ -709,6 +765,20 @@ async function connect(url) {
     check('P2: real multi-terminal screenshots were captured', () => {
       for (const bytes of p2.shots) assert.ok(bytes > 1000, `screenshot too small: ${bytes} bytes`);
       console.log(`  ..  screenshots: ${shotDir}`);
+    });
+    check('P3: the real Electron toolbar toggles Keep Alive per tab', () => {
+      assert.equal(p2.keepAlive.before, 'false');
+      assert.equal(p2.keepAlive.on, true);
+      assert.equal(p2.keepAlive.tabMark, 'true');
+      assert.equal(p2.keepAlive.otherPressed, 'false');
+      assert.equal(p2.keepAlive.otherTabMark, 'false');
+      assert.equal(p2.keepAlive.backPressed, 'true');
+      assert.equal(p2.keepAlive.off, true);
+      assert.equal(p2.keepAlive.noRecreate, true);
+      assert.equal(p2.keepAlive.onBeforeExit, true);
+    });
+    check('P3: Keep Alive screenshot was captured', () => {
+      assert.ok(p2.keepAlive.shot > 1000, `screenshot too small: ${p2.keepAlive.shot} bytes`);
     });
 
     marker = `PI_GUI_ELECTRON_${process.pid}_${Date.now()}`;
