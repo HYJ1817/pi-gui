@@ -96,6 +96,11 @@
 保留 `exited` 标签；这是为避免把前端轮询当作活动而保留的有界资源策略，限制已在本记录
 和 `work-surfaces.md` 中说明，不通过关闭空闲超时绕过。
 
+P3-A 在此基础上增加了**显式、按终端**的「保持运行」：默认关闭，开启后只豁免空闲计时，
+手动停止、关闭标签、workspace 失效、应用退出和 dispose 仍然有效；关闭后重新计算完整
+30 分钟。P2 的定向测试数字仍是本记录实际运行的结果，P3 的测试与证据见
+[terminal-p3-keep-alive-acceptance.md](terminal-p3-keep-alive-acceptance.md)。
+
 ## 三、环境
 
 - Windows 11 Home China 10.0.26200（真实桌面会话）
@@ -210,7 +215,9 @@ Files 套件的既有断言仍保留在同一测试文件中，P2 新增检查�
 - `taskkill /T` 只能清理当时仍在进程树中的后代；若子进程先自行脱离父链，P2 不声称
   能追踪到它。Windows 的树杀仍以 PID 为句柄：若 shell 的 PID 在 exit 丢失后被系统
   复用，理论上可能终止无关进程树。这是 P1 既有的窄窗口风险，P2 未改变，建议后续按
-  创建时间 / 命令行身份收紧。
+  创建时间 / 命令行身份收紧。P3-B 的专项审计与候选方案见
+  [terminal-p3-process-termination-design.md](terminal-p3-process-termination-design.md)；
+  其中明确说明身份校验只能缩小 TOCTOU，不能消除 PID 复用，P3-A 未修改终止逻辑。
 - 关闭未知 id 幂等成功是产品语义；已知跨区 id 仍返回 `stale_workspace`，但 id 是随机
   UUID，不能靠响应差异枚举。已知 id 仍校验归属。
 - 若 kill 永久卡住，`close` 会把会话标为 retired，`list` 不再显示但会话仍占额度；

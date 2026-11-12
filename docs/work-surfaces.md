@@ -30,6 +30,7 @@ PTY 的生命周期由后端持有，前端换面板不结束进程：
 - **退休不等于退出。** 退休会话保留在账本里，状态只随真实 `onExit` 变为 `exited`；kill 卡住时 sweep 会重试，退出前不会被静默删除。
 - **面板与缓存。** 关闭右栏或切到 Files/Changes 只销毁 xterm，后端继续运行；重开时按游标重放内存缓冲，输入与 resize 继续可用。缓冲上限 256 KiB，保留尾部并避免切开 UTF-16 代理对。
 - **空闲计时。** 服务端按会话维护活动时间，只有成功写入的用户输入和 PTY 新输出会刷新；`read` / `list` / `resize` / `start` 复用、切换标签或重开面板都不算活动，否则前端的 60–240ms 轮询会让静默 shell 永不超时。默认仍为 30 分钟，计时器在退出、停止、关闭和 dispose 时清除；面板隐藏本身不终止 PTY。任何进度输出都会续期，但完全无输入、无输出超过 30 分钟的长期任务在服务端看来与空闲 shell 不可区分，会被停止并保留 `exited` 标签供重启，这是有界资源策略而不是前端计时器。
+- **保持运行（P3-A）。** 每个终端可显式开启 Keep Alive；默认关闭，普通终端仍走 30 分钟空闲超时。开启只豁免空闲计时，状态由服务端会话账本持有，按钮和标签图钉只是投影；手动停止、关闭标签、workspace 确认失效、应用退出和服务端 dispose 仍然结束进程。关闭后从这次操作重新计算完整 30 分钟。它不通过心跳或伪造输入实现，也不跨应用重启持久化。
 - **截断的降级。** 当请求的游标早于缓存起点时，回放不再把尾部 ANSI 片段当作完整屏幕重放：前端调用 `reset()` 清屏并显示「较早的输出已超出缓存上限，无法完整恢复；显示已重置，输入仍可用。」PTY 不停止，键盘输入和 resize 保留。alternate-screen 的完整快照不在本期范围。
 - **验证环境分开记录。** 源码 Node、Node SEA 便携版和 Electron 桌面安装版是三个运行时；`npm run test:terminal:source` 证明普通 `node server.js` + 仓库 node-pty，`npm run test:app` 只证明打包后的 `server.cjs` 在 Node 下可启动，`npm run test:exe` 只证明 SEA，真实 Electron 用 `npm run test:terminal:electron`（Windows 11 桌面 + Electron 44.4.3）单独验收，详见 [测试分层](testing.md)。
 
