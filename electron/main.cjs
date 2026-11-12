@@ -53,6 +53,14 @@ const {
   isSafeWebUrl,
 } = require('./net-probe.cjs');
 
+/* Windows 进程身份查询与后端共用同一份实现。
+ * 源码模式读 ../lib，打包后 build-app 把它平铺到 resources/app。 */
+const processIdentityPath = [
+  path.join(__dirname, 'process-identity.cjs'),
+  path.join(__dirname, '..', 'lib', 'process-identity.cjs'),
+].find((file) => fs.existsSync(file));
+const processIdentity = require(processIdentityPath);
+
 /* 右栏内置浏览器的宿主（WebContentsView）。
  * 它有一套**自己的、更严的**导航策略（远程只准 https、http 只准回环、
  * 不许去 Pi GUI 自己），所以 hardenWebContents 必须把它排除掉 ——
@@ -90,6 +98,9 @@ const TOKEN_HEADER = 'X-Pi-Gui-Token';
 let win = null;
 let desktopTheme = null;
 let server = null;
+/* 本次实例真正 spawn 的后端身份：{ pid, expected }。expected 是启动后
+ * 异步抓取的创建时间 + 映像路径，退出时用它校验 pid 没有被复用。 */
+let serverIdentity = null;
 let marketNetwork = null;
 let browser = null;
 let browserAgent = null;
@@ -229,6 +240,23 @@ async function ensureServer() {
     windowsHide: true,
   });
 
+  /* 抓取后端的 (pid, 创建时间, 映像路径)。查询是异步的，不阻塞启动；
+   * 退出时如果查询还没回来，就跳过 taskkill 树杀，只按 ChildProcess
+   * 句柄终止后端（宁可留下孤儿，也不误杀复用 pid 的无关进程）。
+   *
+   * 只比较 spawn 时的局部 pid：后端可能在查询返回前退出，届时模块级
+   * `server` 已被 exit 处理置空；若回调再读 `server.pid`，会抛 TypeError
+   * 变成未处理的 rejection。迟到结果也不得写进后来重启的后端。 */
+  const spawnedPid = server.pid;
+  serverIdentity = { pid: spawnedPid, expected: null };
+  if (process.platform === 'win32') {
+    void processIdentity.captureProcessIdentity(spawnedPid, process.execPath, { env: process.env })
+      .then((identity) => {
+        if (serverIdentity && serverIdentity.pid === spawnedPid) serverIdentity.expected = identity;
+      })
+      .catch(() => { /* 抓取是尽力而为；没有身份就不树杀，仍按句柄结束后端 */ });
+  }
+
   const collect = (buf) => {
     log.push(buf.toString('utf8'));
     if (log.length > 200) log.shift();
@@ -263,6 +291,8 @@ async function ensureServer() {
     marketNetwork?.dispose();
     marketNetwork = null;
     server = null;
+    /* 后端已退出，迟到或旧的抓取结果不能留给下一次 killServer 使用。 */
+    serverIdentity = null;
     // A dead backend cannot own a Browser scope. Revoke its private gateways
     // even while the desktop window remains open to show the failure.
     browserAgent?.stop().catch(() => {});
@@ -395,22 +425,46 @@ function installOpenExternalHandler() {
 function killServer() {
   marketNetwork?.dispose();
   marketNetwork = null;
-  if (!server || server.exitCode !== null) return;
+  if (!server || server.exitCode !== null) {
+    serverIdentity = null;
+    return;
+  }
   const pid = server.pid;
+  const identity = serverIdentity && serverIdentity.pid === pid ? serverIdentity.expected : null;
   /* Windows 必须先做 /T 树杀，再 kill 后端。
    *
    * 后端下面挂着 ConPTY 的 shell 及 shell 里启动的子进程；一旦后端先退出，
    * taskkill 就失去了父子链路，孙子进程会活下来（实测 PowerShell 死了、
-   * 它启动的 node 还在）。taskkill 同步执行并短暂等待，退出流程需要确定。 */
+   * 它启动的 node 还在）。taskkill 同步执行并短暂等待，退出流程需要确定。
+   *
+   * 但 taskkill /T 只按裸 pid 寻址。退出前先同步查询后端身份：创建时间与
+   * 映像路径都匹配才树杀；不匹配/查询失败/启动时还没抓完，就跳过 taskkill
+   * （后端仍由下面的 server.kill() 按句柄终止）。代价是后端的子进程可能成为
+   * 孤儿，但比误杀复用 pid 的无关进程安全。 */
   if (process.platform === 'win32' && pid) {
-    // /T 连子孙一起杀，/F 免确认 —— 退出流程里不能弹窗
-    try {
-      const envRoot = process.env.SystemRoot;
-      const winRoot = typeof envRoot === 'string' && path.isAbsolute(envRoot) ? envRoot : 'C:\\Windows';
-      const taskkill = path.join(winRoot, 'System32', 'taskkill.exe');
-      execFileSync(taskkill, ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
-    } catch {
-      /* 后端已退出或 taskkill 不可用，下面还有直接 kill 兜底 */
+    let verdict = identity ? 'unknown' : 'pending';
+    if (identity?.state === 'captured') {
+      try {
+        verdict = processIdentity.classifyProcessIdentity(
+          identity,
+          processIdentity.queryProcessIdentitySync(pid, { env: process.env })
+        );
+      } catch {
+        verdict = 'identity_query_failed';
+      }
+    }
+    if (verdict === 'match') {
+      try {
+        // /T 连子孙一起杀，/F 免确认 —— 退出流程里不能弹窗
+        const envRoot = process.env.SystemRoot;
+        const winRoot = typeof envRoot === 'string' && path.isAbsolute(envRoot) ? envRoot : 'C:\\Windows';
+        const taskkill = path.join(winRoot, 'System32', 'taskkill.exe');
+        execFileSync(taskkill, ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
+      } catch {
+        mlog('electron', 'electron.backend_kill_skipped', { result: 'taskkill_failed' });
+      }
+    } else {
+      mlog('electron', 'electron.backend_kill_skipped', { result: verdict });
     }
   }
   try {
@@ -419,6 +473,7 @@ function killServer() {
     /* 已经没了就算了 */
   }
   server = null;
+  serverIdentity = null;
 }
 
 /* ---------- 窗口 ---------- */

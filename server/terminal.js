@@ -27,9 +27,15 @@ import {
   resolveTerminalShell,
   defaultSpawnPty,
   defaultKillPty,
+  createWindowsKillGate,
 } from './terminal-process.js';
 
-export { resolveTerminalShell, defaultSpawnPty, defaultKillPty, ptyProcessAlive } from './terminal-process.js';
+export {
+  resolveTerminalShell,
+  defaultSpawnPty,
+  defaultKillPty,
+  createWindowsKillGate,
+} from './terminal-process.js';
 
 export const TERMINAL_LIMITS = Object.freeze({
   maxSessions: 12,
@@ -50,6 +56,12 @@ export const TERMINAL_LIMITS = Object.freeze({
    * a reason to stop anything: P2 keeps per-workspace terminals alive so
    * returning to a workspace reconnects to the same PTYs. */
   scopeSweepMs: 5000,
+  /* A kill that cannot be confirmed is retried a bounded number of times.
+   * The first attempt is immediate, then backoff[n] after attempt n completes.
+   * After the budget is spent the session stays `closing` (`killState
+   * unconfirmed`) and is never PID-killed again. */
+  killMaxAttempts: 3,
+  killBackoffMs: [0, 1000, 3000],
 });
 
 const fail = (code, message) => Object.assign(new Error(message || code), { code });
@@ -66,6 +78,10 @@ const INVALID_SCOPE_CODES = new Set([
   'stale_workspace',
 ]);
 const FINISHED_STATES = new Set(['exited', 'error']);
+/* Kill verdicts that prove another attempt would still be unsafe or useless:
+ * the pid is gone, belongs to another process, or its identity could not be
+ * established. Only a failed/unconfirmed taskkill is worth retrying. */
+const KILL_STOP_RESULTS = new Set(['gone', 'mismatch', 'unknown']);
 const hash = (value) => crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 32);
 const toSlashes = (value) => String(value).replace(/\\/g, '/');
 const isHighSurrogate = (code) => code >= 0xd800 && code <= 0xdbff;
@@ -297,6 +313,8 @@ export function createTerminal({
     clearIdleTimer(session);
     setKeepAliveFlag(session, false);
     session.state = 'exited';
+    session.killState = 'exited';
+    session.killNextAt = 0;
     session.exitCode = Number.isInteger(event?.exitCode) ? event.exitCode : null;
     session.signal = event?.signal ?? null;
     session.exitedAt = Date.now();
@@ -319,6 +337,74 @@ export function createTerminal({
     return stopSession(session, reason);
   }
 
+  function killBudget() {
+    return Number.isInteger(limits.killMaxAttempts) && limits.killMaxAttempts > 0
+      ? limits.killMaxAttempts
+      : 3;
+  }
+
+  function killBackoff(session) {
+    const plan = Array.isArray(limits.killBackoffMs) && limits.killBackoffMs.length
+      ? limits.killBackoffMs
+      : [0, 1000, 3000];
+    const value = Number(plan[Math.min(session.killAttempts, plan.length - 1)]);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }
+
+  function markKillUnconfirmed(session) {
+    /* Not `exited`: the shell may still be alive. Keeping the public state
+     * `closing` preserves the session's slot and its tab; the real exit event
+     * is the only thing that can finish it. */
+    session.killState = 'unconfirmed';
+    session.killNextAt = 0;
+  }
+
+  /* Start (or account for) one kill attempt. The killPty contract is:
+   *   - `{result:'killed'|'failed'}` on Windows identity-gated taskkill
+   *   - `{result:'gone'|'mismatch'|'unknown'}` when killing is unsafe/useless
+   *   - anything else (undefined from a legacy injected killer) means
+   *     "signal sent, wait for the real exit"
+   * A promise lets the identity query finish before taskkill. Attempts never
+   * overlap: sweep skips while killInFlight is true. */
+  function attemptKill(session) {
+    if (!session || session.state !== 'closing' || session.killState === 'unconfirmed') return;
+    if (session.killInFlight) return;
+    if (session.killAttempts >= killBudget()) {
+      markKillUnconfirmed(session);
+      return;
+    }
+    session.killAttempts += 1;
+    session.killInFlight = true;
+    session.killState = 'pending';
+    let outcome;
+    try {
+      outcome = killPty(session.pty, platform);
+    } catch {
+      outcome = { result: 'failed' };
+    }
+    Promise.resolve(outcome).then((result) => {
+      if (sessions.get(session.id) !== session || session.state !== 'closing') return;
+      if (KILL_STOP_RESULTS.has(result?.result)) {
+        markKillUnconfirmed(session);
+        return;
+      }
+      if (session.killAttempts >= killBudget()) {
+        markKillUnconfirmed(session);
+        return;
+      }
+      session.killNextAt = Date.now() + killBackoff(session);
+    }, () => {
+      if (sessions.get(session.id) !== session || session.state !== 'closing') return;
+      if (session.killAttempts >= killBudget()) {
+        markKillUnconfirmed(session);
+        return;
+      }
+      session.killNextAt = Date.now() + killBackoff(session);
+    }).finally(() => {
+      session.killInFlight = false;
+    });
+  }
+
   function stopSession(session, reason = 'user') {
     if (!session) return Promise.resolve();
     if (FINISHED_STATES.has(session.state)) {
@@ -333,13 +419,10 @@ export function createTerminal({
     session.state = 'closing';
     session.stopReason = reason;
     clearIdleTimer(session);
-    try {
-      killPty(session.pty, platform);
-    } catch {
-      try { session.pty?.kill?.(); } catch { /* already gone */ }
-    }
-    // The state changes only when node-pty reports the real exit event. If a
-    // kill path is wedged, the sweep retries it instead of pretending success.
+    attemptKill(session);
+    // The state changes only when node-pty reports the real exit event. The
+    // sweep retries a failed kill a bounded number of times instead of
+    // pretending success.
     return waitForExit(session, 5000);
   }
 
@@ -474,6 +557,12 @@ export function createTerminal({
       keepAlive: false,
       keepAliveRevision: 0,
       idleTimer: null,
+      /* Internal kill bookkeeping. `killState` never becomes `exited` except
+       * through the real PTY exit event above. */
+      killAttempts: 0,
+      killInFlight: false,
+      killNextAt: 0,
+      killState: 'none',
       dataSub: null,
       exitSub: null,
       exitWaiters: new Set(),
@@ -503,7 +592,7 @@ export function createTerminal({
     }
     if (!pty || typeof pty.onData !== 'function' || typeof pty.onExit !== 'function'
       || typeof pty.write !== 'function' || typeof pty.resize !== 'function') {
-      try { pty?.kill?.(); } catch { /* noop */ }
+      try { void Promise.resolve(killPty(pty, platform)).catch(() => {}); } catch { /* noop */ }
       removeSession(session);
       return json(res, 503, { ok: false, code: 'terminal_unavailable', state: 'error', error: '无法启动终端。' });
     }
@@ -514,10 +603,9 @@ export function createTerminal({
       session.exitSub = pty.onExit((event) => handleExit(session, event));
     } catch {
       /* A PTY that cannot be subscribed to is unusable. Tear it down without
-       * leaving a ledger entry or an orphan process. */
-      try { killPty(pty, platform); } catch {
-        try { pty.kill?.(); } catch { /* already gone */ }
-      }
+       * leaving a ledger entry or an orphan process. On Windows this goes
+       * through the identity gate; there is no bare pty.kill() fallback. */
+      try { void Promise.resolve(killPty(pty, platform)).catch(() => {}); } catch { /* noop */ }
       removeSession(session);
       return json(res, 503, { ok: false, code: 'terminal_unavailable', state: 'error', error: '无法连接终端。' });
     }
@@ -734,13 +822,13 @@ export function createTerminal({
       for (const session of [...sessions.values()]) {
         if (session.state === 'closing') {
           /* A kill path that never produced an exit would otherwise leave the
-           * session stuck in "closing" forever. Retry the tree kill; the
-           * state still changes only when node-pty reports the real exit. */
-          try {
-            killPty(session.pty, platform);
-          } catch {
-            try { session.pty?.kill?.(); } catch { /* already gone */ }
-          }
+           * session stuck in "closing" forever. Retry only while the identity
+           * gate still allows it and the previous attempt has settled; after
+           * the bounded budget the session stays closing instead of PID-killing
+           * an unverified process. */
+          if (session.killState === 'unconfirmed' || session.killInFlight) continue;
+          if (Date.now() < (session.killNextAt || 0)) continue;
+          attemptKill(session);
           continue;
         }
         if (session.state !== 'running') continue;
