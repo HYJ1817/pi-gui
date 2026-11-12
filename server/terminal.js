@@ -216,11 +216,34 @@ export function createTerminal({
 
   function removeSession(session) {
     sessions.delete(session.id);
+    clearIdleTimer(session);
     disposeSessionHandles(session);
     cleanupOrdinals(session.workspace.id);
   }
 
-  function append(session, text) {
+  function clearIdleTimer(session) {
+    if (!session) return;
+    if (session.idleTimer) clearTimeout(session.idleTimer);
+    session.idleTimer = null;
+  }
+
+  /* Server-side idle clock. Only real keyboard input and new PTY output count
+   * as activity. read/list/resize and a reused start are observations or
+   * layout: the renderer polls them every 60-240 ms, so treating them as
+   * activity would keep a silent shell alive forever.
+   *
+   * A task that emits no output is indistinguishable from an idle shell using
+   * only this interface. Any output resets the clock, so a long task that is
+   * still working (even progress dots) is protected; complete silence for the
+   * whole idle window is the bounded-resource policy. See the acceptance
+   * record for the documented limitation. */
+  function noteActivity(session) {
+    if (!session || session.state !== 'running') return;
+    session.lastActivityAt = Date.now();
+    touch(session);
+  }
+
+  function append(session, text, { activity = true } = {}) {
     if (typeof text !== 'string' || !text) return;
     session.output += text;
     session.end += text.length;
@@ -234,24 +257,28 @@ export function createTerminal({
       session.start += drop;
       session.dropped = true;
     }
-    session.lastAt = Date.now();
-    if (session.state === 'running') touch(session);
+    if (activity) noteActivity(session);
   }
 
   function touch(session) {
-    clearTimeout(session.idleTimer);
+    clearIdleTimer(session);
     if (!limits.idleMs || !Number.isFinite(limits.idleMs) || disposed || session.state !== 'running') return;
+    /* noteActivity() stamps lastActivityAt immediately before calling here, so
+     * this is normally a full window. Computing the remainder still keeps a
+     * future direct caller from granting extra time. */
+    const elapsed = Math.max(0, Date.now() - (session.lastActivityAt || Date.now()));
+    const delay = Math.max(0, limits.idleMs - elapsed);
     session.idleTimer = setTimeout(() => {
       if (sessions.get(session.id) !== session || session.state !== 'running') return;
-      append(session, '\r\n[空闲超时，终端已停止]\r\n');
+      append(session, '\r\n[空闲超时，终端已停止]\r\n', { activity: false });
       void stopSession(session, 'idle');
-    }, limits.idleMs);
+    }, delay);
     session.idleTimer.unref?.();
   }
 
   function handleExit(session, event) {
     if (FINISHED_STATES.has(session.state)) return;
-    clearTimeout(session.idleTimer);
+    clearIdleTimer(session);
     session.state = 'exited';
     session.exitCode = Number.isInteger(event?.exitCode) ? event.exitCode : null;
     session.signal = event?.signal ?? null;
@@ -284,7 +311,7 @@ export function createTerminal({
     if (session.state === 'closing') return waitForExit(session, 5000);
     session.state = 'closing';
     session.stopReason = reason;
-    clearTimeout(session.idleTimer);
+    clearIdleTimer(session);
     try {
       killPty(session.pty, platform);
     } catch {
@@ -373,7 +400,9 @@ export function createTerminal({
         || inWorkspace.find((session) => session.state === 'closing');
       if (existing) {
         if (existing.state === 'running') {
-          touch(existing);
+          /* Reusing a live session is an observation, not keyboard activity.
+           * Otherwise opening or remounting the legacy surface would postpone
+           * the idle timeout indefinitely. */
           return json(res, 200, { ok: true, enabled: true, reused: true, session: publicSession(existing) });
         }
         return json(res, 409, {
@@ -415,7 +444,7 @@ export function createTerminal({
       rows: dimensions.rows,
       ordinal: null,
       createdAt: Date.now(),
-      lastAt: Date.now(),
+      lastActivityAt: Date.now(),
       exitedAt: null,
       stopReason: null,
       retired: false,
@@ -469,7 +498,7 @@ export function createTerminal({
     }
     session.ordinal = allocateOrdinal(workspace.id);
     session.state = 'running';
-    touch(session);
+    noteActivity(session);
 
     return json(res, 200, {
       ok: true, enabled: true, reused: false, session: publicSession(session),
@@ -533,10 +562,8 @@ export function createTerminal({
     } else {
       text = session.output.slice(since - session.start);
     }
-    if (session.state === 'running') {
-      session.lastAt = Date.now();
-      touch(session);
-    }
+    /* Reading a cursor is explicit observation only. The renderer polls this
+     * endpoint continuously, so it must not count as user or shell activity. */
     return json(res, 200, {
       ok: true,
       text,
@@ -565,8 +592,7 @@ export function createTerminal({
     } catch {
       return json(res, 503, { ok: false, code: 'terminal_unavailable', error: '无法写入终端。' });
     }
-    session.lastAt = Date.now();
-    touch(session);
+    noteActivity(session);
     return json(res, 200, { ok: true, cursor: session.end });
   }
 
@@ -586,8 +612,9 @@ export function createTerminal({
     }
     session.cols = dimensions.cols;
     session.rows = dimensions.rows;
-    session.lastAt = Date.now();
-    touch(session);
+    /* Resize is layout, not command input. Counting it would let window
+     * resizing or a tab remount keep a silent shell alive, which is the same
+     * class of bug as counting read polling. */
     return json(res, 200, { ok: true, cursor: session.end, cols: session.cols, rows: session.rows });
   }
 
@@ -785,7 +812,7 @@ export function createTerminal({
     sweepTimer = null;
     const live = [...sessions.values()];
     for (const session of live) {
-      clearTimeout(session.idleTimer);
+      clearIdleTimer(session);
       if (!FINISHED_STATES.has(session.state)) void stopSession(session, 'shutdown');
     }
     disposePromise = Promise.all(live

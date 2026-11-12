@@ -6,6 +6,10 @@
  * never recreates the PTY or loses the scrollback. Disposing the controller
  * frees only frontend resources; the backend session is stopped/closed by an
  * explicit action or by the server's own workspace sweep.
+ *
+ * Polling and restoring call `read` for observation only. The server's idle
+ * clock is refreshed by real keyboard input and new PTY output, never by this
+ * loop, so do not add an activity ping here.
  */
 
 const POLL_MS = 60;
