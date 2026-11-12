@@ -134,6 +134,11 @@ async function main() {
     } },
     auth: { denyRequest: () => null }, sse: {}, managedProcesses: { manager: null }, worktrees: null,
     specs: null,
+    /* This Stop fixture never enters the Files or Terminal routes; their real
+     * handlers have isolated suites. The Router facade still needs the
+     * composition identifiers to exist. */
+    files: null,
+    terminal: null,
     /* 装配片段现在把经典会话和普通项目统一交给 conversationWorkspaces。
      * 本用例不进入 revert 路由，但必须提供真实形状的依赖，避免 VM 装配
      * 用隐式全局或 null 掩盖生产引用已经漂移。 */
