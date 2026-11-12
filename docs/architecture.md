@@ -452,7 +452,7 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
     - `index.js` — HTTP 路由 + 计划生成（用 pi 适配器 + 独立会话，不污染主聊天）；
       另含「从任务打开会话」与「会话 → 任务」反查两条 P7 接口
   - `uploads.js` — 附件上传与落盘（`safeName`）
-  - `terminal.js` / `terminal-process.js` — 工作区范围的 PTY 账本（多会话、绝对游标、上限、scope sweep）与进程原语（受信目录加载 node-pty、ConPTY spawn、Windows `taskkill /T`）。HTTP 动作、标签语义与工作区隔离见 [work-surfaces.md](work-surfaces.md)
+  - `terminal.js` / `terminal-process.js` / `lib/process-identity.cjs` — 工作区范围的 PTY 账本（多会话、绝对游标、上限、scope sweep）与进程原语（受信目录加载 node-pty、ConPTY spawn、Windows 身份门控的 `taskkill /T` 与有界重试）。身份查询与 `taskkill` 之间仍有 TOCTOU，完整修复属于 P3-C。HTTP 动作、标签语义与工作区隔离见 [work-surfaces.md](work-surfaces.md)
   - `review-comment-authority.js` / `review-comment-store.js` / `review-comment-routes.js` — 当前 owner/稳定身份取证、有界原子存储与认证 HTTP；见 [评论设计](T3-B-plan.md)
   - `git-routes.js` — Git 接口的 **HTTP 适配层**，业务逻辑全在 `lib/git.js`
   - `router.js` — 路由表与静态资源。**顺序即语义**

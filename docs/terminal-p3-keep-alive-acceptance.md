@@ -192,9 +192,9 @@ Keep Alive 只增加了一条服务端动作和一个会话字段，没有改变
 - Keep Alive 只豁免空闲计时：若进程或 `taskkill` 永久卡住，既有 sweep 仍会重试，
   但没有额外的强制释放额度入口；该限制与 P2 相同。
 - Windows `taskkill /T` 仍以 PID 为句柄。PID 复用窗口是 P1 既有风险，本变更没有修改
-  生产终止逻辑；独立的 P3-B 设计见
-  [terminal-p3-process-termination-design.md](terminal-p3-process-termination-design.md)，
-  仅给出方案，不代表已实现。
+  生产终止逻辑；P3-B 的 [设计](terminal-p3-process-termination-design.md) 与后续
+  [实现验收](terminal-p3b-termination-acceptance.md) 在独立分支，不计入本记录的
+  P3-A 验证范围。
 - 没有为本期引入原生依赖或新的网络行为。
 
 ## 九、独立审查
@@ -240,4 +240,4 @@ canonical 仍以本 PR 的 CI 为准。
 - [工作区与生命周期说明](work-surfaces.md)
 - [终端安全边界](security.md#项目终端)
 - [测试分层](testing.md)
-- [P3-B Windows 进程终止设计](terminal-p3-process-termination-design.md)（仅设计，未实现）
+- [P3-B Windows 进程终止设计](terminal-p3-process-termination-design.md)（设计；实现与验收在独立分支）

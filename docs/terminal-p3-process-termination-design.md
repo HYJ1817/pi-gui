@@ -1,8 +1,10 @@
 # 终端 P3 进程终止设计审计：PID 复用、句柄与 Job Object
 
 日期：2026-11-13  
-分支：`feat/terminal-p3-keep-alive`（P3-A 保持运行）  
-状态：**设计 / 审计，仅文档。P3-A 不实现终止改造。**  
+分支：设计时 `feat/terminal-p3-keep-alive`（P3-A）；P3-B 实现分支
+`feat/terminal-p3b-identity-kill`  
+状态：**设计 / 审计。P3-A 未实现终止改造；P3-B 已于 2026-11-13 按第 6.2 节实现，
+验收见 [terminal-p3b-termination-acceptance.md](terminal-p3b-termination-acceptance.md)。**  
 范围：Windows 10/11、Electron 44、node-pty 1.1.0、ConPTY；审计
 `server/terminal-process.js`、`server/terminal.js`、`electron/main.cjs` 以及仓库中其它
 `taskkill /T` 路径。
@@ -11,8 +13,9 @@
 > Microsoft Learn 或上游 issue；`[未验证]` 表示本轮没有运行对应实验。本文没有为了写
 > 结论而运行杀进程、PID 复用或 Electron 交互实验；所有运行时结论都明确标为未验证。
 >
-> 命名说明：任务书把本次审计称为 P3-B；第 6 节把建议的后续代码阶段也命名为 P3-B，
-> 仅表示推荐的实施顺序，不代表本期已实现或已获授权。
+> 命名说明：任务书把本次审计称为 P3-B；第 6 节把建议的后续代码阶段也命名为 P3-B。
+> 本文写作时只是推荐的实施顺序；P3-B 随后已在独立分支实现，实现状态与证据见第
+> 6.2.7 节和验收记录，不代表 P3-C 已实现或已获授权。
 
 ## 一、结论先行
 
@@ -628,6 +631,41 @@ jobMode=<true|false>
 不要记录：PID 原文、命令行、映像完整路径、CIM 原始输出、`taskkill` stderr、终端输出。
 PID 可以作为内存字段用于 `OpenProcess`，但不进日志/诊断报告。
 
+#### 6.2.7 P3-B 实现落点（2026-11-13）
+
+实际实现与本节设计的对应关系：
+
+| 设计项 | 落地 |
+| --- | --- |
+| 抓取身份 | `lib/process-identity.cjs`；`defaultSpawnPty` 在返回前启动异步抓取，`WeakMap` 按 PTY 对象保存 |
+| 查询实现 | 绝对路径 Windows PowerShell + `Get-CimInstance Win32_Process`；FILETIME 用十进制字符串保存，避免 JS number 精度损失 |
+| 停止判定 | `server/terminal-process.js` 的 `createWindowsKillGate`；`match` 才 `taskkill`，`gone` / `mismatch` / `unknown` / 无身份一律不杀 |
+| Windows 回退 | 删除 `ptyProcessAlive` 与 `pty.kill()` 回退；POSIX 保持 `pty.kill()` |
+| 有界重试 | `server/terminal.js` 每会话 `killAttempts` / `killInFlight` / `killNextAt`；默认 3 次、退避 0/1 000/3 000 ms；未确认时公开状态仍为 `closing` |
+| Electron 后端 | `electron/main.cjs` spawn 后异步抓取身份（仅 win32），退出前同步复查；仅 `match` 执行 `taskkill /T`，随后仍 `server.kill()`；跳过原因写已声明的 `electron.backend_kill_skipped` |
+| 打包 | `scripts/build-app.mjs` 把 `lib/process-identity.cjs` 平铺进 `resources/app` |
+
+与设计的偏差：
+
+- 没有新增服务端 `terminal.kill` / `dispose_unconfirmed` 结构化日志。加这些事件需要
+  扩展日志契约（新 source/event）与日志 UI 的来源筛选；kill 结果保存在会话内部
+  `killState`，`dispose()` 3 秒超时清空账本时不留日志。Electron 跳过树杀写现有
+  `mlog` 的 `electron.backend_kill_skipped`，只记结果分类，不记录 PID、命令行、
+  映像路径或原始 CIM 输出。
+- 身份查询超时 2 500 ms，`taskkill` 超时 8 000 ms；默认重试预算 3 次。它们是实现常量，
+  不是产品配置。
+- 抓取失败或查询失败一律不杀。停止可能停在 `closing` 并继续占用会话额度，这是
+  安全优先的接受结果，不自动释放额度。
+- CIM 查询以 0 退出但输出为空/不可解析时按 `unknown`，不按 `gone`；只有显式的
+  `exit 3` 才表示该 PID 不存在。
+- Electron 后端身份抓取只在本机 `win32` 执行；POSIX 开发运行不抓取，仍按
+  `ChildProcess` 句柄结束后端。抓取回调只比较 spawn 时的局部 pid，后端在查询返回前
+  退出不会解引用已置空的 `server`。
+
+实现没有改变第 3 节的根因判断：查询与 `taskkill` 仍是两步，TOCTOU 仍在；后代枚举
+仍按 PID，P3-C 的 Job Object 仍是完整修复。验收结果见
+[terminal-p3b-termination-acceptance.md](terminal-p3b-termination-acceptance.md)。
+
 ### 6.3 P3-C：上游 node-pty Job-at-creation
 
 #### 6.3.1 API 形状
@@ -1223,10 +1261,11 @@ gone.”（`:838-844` 附近的注释）。P3-B/P3-C 应沿用这个模式，并
 
 ### 13.3 建议的后续
 
-1. **P3-B（优先，低风险）**：实现身份抓取（PID + 创建时间 + 映像路径）、停止前
-   校验、`mismatch/gone/unknown` 一律不杀、Windows 不再回退 `pty.kill()`、有界重试
-   与单飞、结构化日志；补单元/假 PTY/真实 ConPTY 负向测试。验收标准：不匹配身份时
-   零 `taskkill`；无关 sentinel 在所有终止路径后仍活；`killUnconfirmed` 不谎报 exit。
+1. **P3-B（优先，低风险）— 已实现（2026-11-13）**：身份抓取（PID + 创建时间 +
+   映像路径）、停止前校验、`mismatch/gone/unknown` 一律不杀、Windows 不再回退
+   `pty.kill()`、有界重试与单飞；补单元/假 PTY/真实 ConPTY 负向测试。结构化日志未落地，
+   原因见 6.2.7。验收标准：不匹配身份时零 `taskkill`；无关 sentinel 在所有终止路径后
+   仍活；`killUnconfirmed` 不谎报 exit。
 2. **P3-C（根因修复）**：给 node-pty 提交 Job-at-creation 补丁或维护固定补丁：
    `CreateJobObject` + `KILL_ON_JOB_CLOSE` + `CREATE_SUSPENDED`/`PROC_THREAD_ATTRIBUTE_JOB_LIST`
    + `AssignProcessToJobObject` + `TerminateJobObject` + exit watcher 关闭 `hpc`；
@@ -1244,13 +1283,15 @@ gone.”（`:838-844` 附近的注释）。P3-B/P3-C 应沿用这个模式，并
 
 ### 13.4 回滚
 
-本文是纯文档，无数据迁移、无配置变更、无用户文件写入。回滚只需删除
-`docs/terminal-p3-process-termination-design.md`；不影响运行中的应用或已有终端会话。
-P3-A 的 keep-alive 改动另有自己的回滚边界，不在本文范围。
+P3-B 实现没有数据迁移、配置格式变更或用户文件写入。回滚时撤销
+`feat/terminal-p3b-identity-kill` 的提交即可恢复旧的 `taskkill` + `pty.kill()` 语义；
+已处于 `closing` 的会话在应用退出时按既有生命周期清理。P3-A 的 keep-alive 改动另有
+自己的回滚边界，不在本文范围。删除本文档不会回滚已实现的代码。
 
 ### 13.5 最终结论
 
-**P3-A 未实现进程终止改造；建议按 P3-B（身份门控 + 有界重试）→ P3-C（上游
-Job Object）跟进。** 在 P3-C 落地前，不能对外声称终端的 Windows 树杀已经消除
+**P3-A 未实现进程终止改造；P3-B（身份门控 + 有界重试）已实现；下一步是 P3-C
+（上游 Job Object）。** 在 P3-C 落地前，不能对外声称终端的 Windows 树杀已经消除
 PID 复用误杀风险；P3-B 只是把风险从“每个 sweep 都可能命中”收窄到“身份匹配且
-检查与系统调用之间没有复用”，TOCTOU 仍然存在。
+检查与系统调用之间没有复用”，TOCTOU 仍然存在。P3-B 的失败关闭还可能让停止停在
+`closing` 并继续占额度，这是有意的安全取舍，不是缺陷。

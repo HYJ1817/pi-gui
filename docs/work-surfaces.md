@@ -11,7 +11,7 @@ PI-Desktop 阶段 E 将原空白 `rp-titlebar` 与 `#workPanelNav` 合为同一�
 
 终端与文件是右栏里的两个真实 surface，入口按钮、快捷键和起始页卡片走同一条 `openSecondarySurface` 生命周期：
 
-- **终端**：工作区级多会话 PTY（node-pty，Windows 走 ConPTY），前端为多个 xterm 标签。Windows 默认绝对路径 PowerShell，缺失时回退绝对路径 CMD；POSIX 用 `$SHELL`，统一以 `TERM=xterm-256color` 启动。只有桌面版（本地令牌边界）或显式 `PI_GUI_ENABLE_TERMINAL=1` 时启用；cwd 来自聚焦会话的 workspace identity，Renderer 不传 shell、cwd、参数或环境变量。`create` / `list` / `start` / `read` / `input` / `resize` / `stop` / `close` 全部按 workspace 校验，跨工作区返回 409；`list` 只返回当前工作区的会话。输入拒绝 NUL 与超长、按原始字节写入且不追加换行；输出保留 ANSI/CR 原文、只在内存保留上限内的尾部、不写日志；`cols` / `rows` 有范围校验。每工作区最多 6 个未关闭终端，全局最多 12 个，达到上限时显式拒绝而不是杀掉用户其它终端。关闭面板只销毁 xterm 前端，后端继续运行并在重开时重放缓冲；只有显式 `stop` / `close`、所属会话确认失效、空闲超时或服务关闭才结束整棵进程树（Windows `taskkill /T`）。源码运行与打包产物都必须带 node-pty 原生模块（`resources/app/node_modules/node-pty` / `build/node_modules/node-pty`）。
+- **终端**：工作区级多会话 PTY（node-pty，Windows 走 ConPTY），前端为多个 xterm 标签。Windows 默认绝对路径 PowerShell，缺失时回退绝对路径 CMD；POSIX 用 `$SHELL`，统一以 `TERM=xterm-256color` 启动。只有桌面版（本地令牌边界）或显式 `PI_GUI_ENABLE_TERMINAL=1` 时启用；cwd 来自聚焦会话的 workspace identity，Renderer 不传 shell、cwd、参数或环境变量。`create` / `list` / `start` / `read` / `input` / `resize` / `stop` / `close` 全部按 workspace 校验，跨工作区返回 409；`list` 只返回当前工作区的会话。输入拒绝 NUL 与超长、按原始字节写入且不追加换行；输出保留 ANSI/CR 原文、只在内存保留上限内的尾部、不写日志；`cols` / `rows` 有范围校验。每工作区最多 6 个未关闭终端，全局最多 12 个，达到上限时显式拒绝而不是杀掉用户其它终端。关闭面板只销毁 xterm 前端，后端继续运行并在重开时重放缓冲；只有显式 `stop` / `close`、所属会话确认失效、空闲超时或服务关闭才结束整棵进程树。Windows 的停止先按 spawn 时抓取的 `(pid, 创建时间, 映像路径)` 复查身份，匹配才 `taskkill /T`；不匹配/查询失败不杀，且不再回退 `pty.kill()`（P3-B）。源码运行与打包产物都必须带 node-pty 原生模块（`resources/app/node_modules/node-pty` / `build/node_modules/node-pty`）。
 - **文件**：只读项目文件树与文本预览；按目录懒加载，跳过符号链接/junction 与隐藏项（除非用户显式显示），正文上限 256 KiB，二进制只标注不预览。没有写入、删除、重命名或上传入口。
 
 ### 多终端与工作区隔离（2026-11 P2）
@@ -27,10 +27,11 @@ PI-Desktop 阶段 E 将原空白 `rp-titlebar` 与 `#workPanelNav` 合为同一�
 PTY 的生命周期由后端持有，前端换面板不结束进程：
 
 - **已确认失效才结束。** 后端每 5 秒用会话自己的 conversation 重新解析 workspace。`unknown_conversation`、`unknown_workspace`、`unknown_project`、`workspace_unavailable`、`stale_workspace` 属于确认失效，即使 shell 仍在持续输出也会立即退休并树杀；`registry_unavailable`、快照不可用、`workspace_check_failed` 和没有确认码的普通文件系统错误只表示暂时答不上来，保留到下一轮，避免误杀健康 shell。`workspace_unavailable` 只在根目录确实不存在（`ENOENT`/`ENOTDIR`）或不是目录时产生；`EACCES`/`EBUSY`/`EMFILE` 等暂时性 stat 失败归为 `workspace_check_failed`。`stop` 仍先校验请求方 workspace，别的 conversation 只有 session id 不能跨工作区结束终端。
-- **退休不等于退出。** 退休会话保留在账本里，状态只随真实 `onExit` 变为 `exited`；kill 卡住时 sweep 会重试，退出前不会被静默删除。
+- **退休不等于退出。** 退休会话保留在账本里，状态只随真实 `onExit` 变为 `exited`；kill 失败时 sweep 在预算内重试，退出前或预算耗尽后都不会被静默删除。
 - **面板与缓存。** 关闭右栏或切到 Files/Changes 只销毁 xterm，后端继续运行；重开时按游标重放内存缓冲，输入与 resize 继续可用。缓冲上限 256 KiB，保留尾部并避免切开 UTF-16 代理对。
 - **空闲计时。** 服务端按会话维护活动时间，只有成功写入的用户输入和 PTY 新输出会刷新；`read` / `list` / `resize` / `start` 复用、切换标签或重开面板都不算活动，否则前端的 60–240ms 轮询会让静默 shell 永不超时。默认仍为 30 分钟，计时器在退出、停止、关闭和 dispose 时清除；面板隐藏本身不终止 PTY。任何进度输出都会续期，但完全无输入、无输出超过 30 分钟的长期任务在服务端看来与空闲 shell 不可区分，会被停止并保留 `exited` 标签供重启，这是有界资源策略而不是前端计时器。
 - **保持运行（P3-A）。** 每个终端可显式开启 Keep Alive；默认关闭，普通终端仍走 30 分钟空闲超时。开启只豁免空闲计时，状态由服务端会话账本持有，按钮和标签图钉只是投影；手动停止、关闭标签、workspace 确认失效、应用退出和服务端 dispose 仍然结束进程。关闭后从这次操作重新计算完整 30 分钟。它不通过心跳或伪造输入实现，也不跨应用重启持久化。
+- **身份门控终止（P3-B）。** Windows 停止前用 spawn 时抓取的 `(pid, 创建时间, 映像路径)` 复查；只有 `match` 才 `taskkill /T`，`mismatch` / `gone` / 查询失败一律不杀，Windows 不再回退 `pty.kill()`。每会话最多 3 次 kill 尝试且单飞；无法确认时标签保持「停止中」，不谎报已退出，也不释放额度。身份查询与 `taskkill` 之间仍有 TOCTOU，后代枚举仍按 PID；完整修复是 P3-C 的 Job Object。
 - **截断的降级。** 当请求的游标早于缓存起点时，回放不再把尾部 ANSI 片段当作完整屏幕重放：前端调用 `reset()` 清屏并显示「较早的输出已超出缓存上限，无法完整恢复；显示已重置，输入仍可用。」PTY 不停止，键盘输入和 resize 保留。alternate-screen 的完整快照不在本期范围。
 - **验证环境分开记录。** 源码 Node、Node SEA 便携版和 Electron 桌面安装版是三个运行时；`npm run test:terminal:source` 证明普通 `node server.js` + 仓库 node-pty，`npm run test:app` 只证明打包后的 `server.cjs` 在 Node 下可启动，`npm run test:exe` 只证明 SEA，真实 Electron 用 `npm run test:terminal:electron`（Windows 11 桌面 + Electron 44.4.3）单独验收，详见 [测试分层](testing.md)。
 
