@@ -35,7 +35,7 @@ if (!app || typeof app.whenReady !== 'function') {
   );
   process.exit(1);
 }
-const { spawn } = require('node:child_process');
+const { spawn, execFileSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -397,18 +397,24 @@ function killServer() {
   marketNetwork = null;
   if (!server || server.exitCode !== null) return;
   const pid = server.pid;
+  /* Windows 必须先做 /T 树杀，再 kill 后端。
+   *
+   * 后端下面挂着 ConPTY 的 shell 及 shell 里启动的子进程；一旦后端先退出，
+   * taskkill 就失去了父子链路，孙子进程会活下来（实测 PowerShell 死了、
+   * 它启动的 node 还在）。taskkill 同步执行并短暂等待，退出流程需要确定。 */
+  if (process.platform === 'win32' && pid) {
+    // /T 连子孙一起杀，/F 免确认 —— 退出流程里不能弹窗
+    try {
+      const taskkill = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe');
+      execFileSync(taskkill, ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
+    } catch {
+      /* 后端已退出或 taskkill 不可用，下面还有直接 kill 兜底 */
+    }
+  }
   try {
     server.kill();
   } catch {
     /* 已经没了就算了 */
-  }
-  if (process.platform === 'win32' && pid) {
-    // /T 连子孙一起杀，/F 免确认 —— 退出流程里不能弹窗
-    try {
-      spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
-    } catch {
-      /* noop */
-    }
   }
   server = null;
 }
