@@ -600,6 +600,44 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
   }
 
   {
+    let scopeAnswer = 'throw';
+    const transientSpawned = [];
+    const transientTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'transient', generation: '1' }),
+      scopeForSession: async () => {
+        if (scopeAnswer === 'throw') throw Object.assign(new Error('unknown_conversation'), { code: 'unknown_conversation' });
+        return scopeAnswer;
+      },
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
+      spawnPty: fakePty(transientSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const transientApp = await serve({ terminal: transientTerminal });
+    const started = await transientApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+    const id = started.body.session.id;
+    await tick(100);
+    await check('a transient scope error does not kill a live shell', () => {
+      assert.equal(transientSpawned[0].pty.killed, false);
+      assert.equal(transientTerminal._sessions.get(id)?.state, 'running');
+    });
+    scopeAnswer = null;
+    await tick(100);
+    await check('an unavailable scope keeps the shell instead of guessing a workspace change', () => {
+      assert.equal(transientSpawned[0].pty.killed, false);
+      assert.equal(transientTerminal._sessions.get(id)?.state, 'running');
+    });
+    scopeAnswer = { root: rootB, scopeId: 'transient-b', generation: '2' };
+    await tick(100);
+    await check('a successfully resolved different workspace still stops the shell', () => {
+      assert.equal(transientSpawned[0].pty.killed, true);
+      assert.equal(transientTerminal._sessions.size, 0);
+    });
+    await transientTerminal.dispose();
+    await transientApp.close();
+  }
+
+  {
     let killCalls = 0;
     const exitListeners = [];
     const stubborn = {
@@ -689,6 +727,25 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
       }
     });
   }
+
+  await check('the Windows tree-kill fallback is one-shot and ignores a relative SystemRoot', () => {
+    /* spawn() emits both `error` and a non-zero `close` when taskkill is
+     * missing. Without a one-shot guard the second signal calls pty.kill()
+     * again after the ConPTY agent already attached; with a relative
+     * SystemRoot the executable would even be resolved against cwd. */
+    const src = fs.readFileSync(path.join(__dirname, '..', 'server', 'terminal.js'), 'utf8');
+    const from = src.indexOf('export function defaultKillPty');
+    const to = src.indexOf('export function createTerminal');
+    const body = src.slice(from, to);
+    assert.ok(from > 0 && to > from, 'defaultKillPty not found');
+    assert.match(body, /let fellBack = false;/);
+    assert.match(body, /if \(fellBack\) return;/);
+    assert.match(body, /path\.isAbsolute\(envRoot\)/);
+    const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
+    const mainFrom = mainSrc.indexOf('function killServer()');
+    const mainBody = mainSrc.slice(mainFrom, mainSrc.indexOf('\n}', mainFrom));
+    assert.match(mainBody, /path\.isAbsolute\(envRoot\)/);
+  });
 
   await check('node-pty is loaded only from app/source directories, never cwd', () => {
     /* The desktop backend's cwd is the user-writable data directory. If the

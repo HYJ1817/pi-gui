@@ -405,7 +405,9 @@ function killServer() {
   if (process.platform === 'win32' && pid) {
     // /T 连子孙一起杀，/F 免确认 —— 退出流程里不能弹窗
     try {
-      const taskkill = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe');
+      const envRoot = process.env.SystemRoot;
+      const winRoot = typeof envRoot === 'string' && path.isAbsolute(envRoot) ? envRoot : 'C:\\Windows';
+      const taskkill = path.join(winRoot, 'System32', 'taskkill.exe');
       execFileSync(taskkill, ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
     } catch {
       /* 后端已退出或 taskkill 不可用，下面还有直接 kill 兜底 */

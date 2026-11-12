@@ -189,13 +189,17 @@ export function ptyProcessAlive(pty) {
 export function defaultKillPty(pty, platform = process.platform) {
   if (!pty) return;
   const pid = Number.isInteger(pty.pid) && pty.pid > 0 ? pty.pid : null;
+  let fellBack = false;
   const fallbackToPty = () => {
+    if (fellBack) return;
+    fellBack = true;
     if (platform === 'win32' && !ptyProcessAlive(pty)) return;
     try { pty.kill(); } catch { /* already gone */ }
   };
   if (platform === 'win32' && pid) {
     try {
-      const winRoot = process.env.SystemRoot || 'C:\\Windows';
+      const envRoot = process.env.SystemRoot;
+      const winRoot = typeof envRoot === 'string' && path.isAbsolute(envRoot) ? envRoot : 'C:\\Windows';
       const taskkill = path.join(winRoot, 'System32', 'taskkill.exe');
       const child = spawn(taskkill, ['/pid', String(pid), '/T', '/F'], {
         windowsHide: true,
@@ -209,11 +213,14 @@ export function defaultKillPty(pty, platform = process.platform) {
         // Non-zero means taskkill could not tear the tree down (or the shell
         // was already gone). Retry through node-pty only while it is alive so
         // the session still reaches a real exit event without a crash trace.
+        // spawn() emits error and then close for a missing executable; the
+        // one-shot guard keeps that from killing the same PTY twice.
         if (code !== 0) fallbackToPty();
       });
       return;
     } catch {
-      /* fall through to the PTY handle */
+      fallbackToPty();
+      return;
     }
   }
   try {
@@ -632,12 +639,19 @@ export function createTerminal({
             : await scopeForRequest({
               headers: session.conversationId ? { 'x-pi-gui-conversation': session.conversationId } : {},
             });
+          /* No scope means the registry could not answer (booting, invalidated,
+           * or a race while it is being replaced). That is not evidence that
+           * the workspace changed; keep the live PTY for the next sweep. */
+          if (!scope) continue;
           const workspace = workspaceFor(scope);
           if (!workspace || workspace.id !== session.workspace.id) {
             await removeAndStop(session, 'workspace');
           }
         } catch {
-          await removeAndStop(session, 'workspace');
+          /* Transient workspace/git/filesystem errors must not kill a healthy
+           * shell. A real switch resolves successfully to a different
+           * workspace id on a later sweep; unknown conversations are cleaned up
+           * by the idle timeout instead. */
         }
       }
     } finally {

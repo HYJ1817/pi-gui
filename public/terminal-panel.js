@@ -231,12 +231,20 @@ export function mountTerminalPanel(host, view, options = {}) {
   function handleReadError(result) {
     const code = result?.code;
     if (code === 'stale_workspace' || code === 'unknown_conversation') {
+      const stale = session;
       releaseCurrentClaim();
       session = null;
       stopPolling();
       setStatus('工作区已变化', 'stale');
       writeSystem(result.error || '工作区已经变化，终端已停止。');
       syncControls();
+      /* A read can discover a workspace change before the generation event
+       * reaches this mount (for example a project switch that clears the
+       * conversation scope first). Stop through the scope captured by
+       * `startTerminal` so the backend does not keep an orphan PTY until its
+       * idle timeout. `unknown_conversation` has no resolvable scope, so the
+       * backend sweep owns that case. */
+      if (code === 'stale_workspace' && stale?.id) void transport.stop(stale.id);
       return;
     }
     if (code === 'terminal_missing') {

@@ -518,6 +518,74 @@ function fakeTerminalView(size = { cols: 100, rows: 30 }) {
   }
 
   {
+    /* A read that discovers a workspace change before the generation event
+     * reaches this mount must not leave the backend PTY running until its idle
+     * timeout. Stop through the scope captured when the session started. */
+    const stopped = [];
+    const view = fakeView();
+    const termView = fakeTerminalView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true }),
+      start: async () => ({ ok: true, session: terminalSession('s-stale') }),
+      read: async () => ({ ok: false, code: 'stale_workspace', error: '工作区已经变化，终端已停止。' }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async (id) => { stopped.push(id); return { ok: true }; },
+    };
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
+    await until(() => stopped.length === 1, 'stale read stop');
+    await tick(20);
+    ok('a stale read stops the old session instead of waiting for the idle timeout', () => {
+      assert.deepEqual(stopped, ['s-stale']);
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('工作区已变化'));
+      assert.equal(termView.stdin, false);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* showChat() clears the conversation scope before the workspace-generation
+     * event runs, so a stop that read the live scope would be refused by the
+     * backend and orphan the PTY. The API must keep the scope from start. */
+    const calls = [];
+    const realFetch = global.fetch;
+    global.fetch = async (url, options = {}) => {
+      const body = options.body ? JSON.parse(options.body) : {};
+      calls.push({ url: String(url), headers: options.headers || {}, body });
+      return {
+        status: 200,
+        ok: true,
+        json: async () => (body.action === 'start'
+          ? { ok: true, session: terminalSession('s-scope') }
+          : { ok: true, session: terminalSession('s-scope', 'stopping') }),
+      };
+    };
+    const api = await import('../public/api.js');
+    try {
+      api.setGitConversationScope('conv-scope-a');
+      await api.startTerminal({ cols: 80, rows: 24 });
+      /* A sibling conversation in the same workspace reuses the session. The
+       * stop must still be authorized by the conversation that spawned it. */
+      api.setGitConversationScope('conv-scope-b');
+      await api.startTerminal({ cols: 80, rows: 24 });
+      api.setGitConversationScope(null);
+      await api.stopTerminal('s-scope');
+      const startCalls = calls.filter((call) => call.body.action === 'start');
+      const stopCall = calls.find((call) => call.body.action === 'stop');
+      ok('stop uses the conversation that spawned the terminal, even after a sibling start', () => {
+        assert.equal(startCalls[0].headers['X-Pi-Gui-Conversation'], 'conv-scope-a');
+        assert.equal(startCalls[1].headers['X-Pi-Gui-Conversation'], 'conv-scope-b');
+        assert.equal(stopCall.headers['X-Pi-Gui-Conversation'], 'conv-scope-a');
+        assert.equal(stopCall.body.id, 's-scope');
+      });
+    } finally {
+      api.setGitConversationScope(null);
+      global.fetch = realFetch;
+    }
+  }
+
+  {
     let lists = [], docs = [];
     let binary = false;
     const workspace = { id: 'w1', generation: '1' };

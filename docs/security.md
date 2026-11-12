@@ -749,7 +749,10 @@ PTY 由 node-pty（Windows 上为 ConPTY）创建，以 `TERM=xterm-256color` �
 `resize` 的 `cols` / `rows` 有范围校验。每个工作区复用一个活动会话；达到并发上限时
 显式拒绝新会话，不杀用户其它的终端。关闭面板只销毁 xterm 前端，后端 PTY 继续运行，
 重新打开时按缓冲重放；只有显式停止、工作区变化（前端 stop 与后端 scope sweep 双保险）、
-空闲超时或服务关闭才结束进程树。Windows 用 `taskkill /T` 结束整棵树，服务退出时等待
+空闲超时或服务关闭才结束进程树。前端在 `start` 时记录该会话的工作区身份（conversation id），停止时沿用；
+切换项目会先清空当前 scope，若停止时现取 scope，后端会拒绝而留下孤儿 PTY。后端 sweep
+只在**成功解析**出一个不同的 workspace 时停止；scope 暂时不可用或解析报错都不当作
+工作区已变化。Windows 用 `taskkill /T` 结束整棵树，服务退出时等待
 真实 exit 事件；桌面外壳退出时先在**后端仍存活**时对后端做 `taskkill /T`，再结束后端，
 避免 ConPTY 子进程因父子链断开而成为孤儿。能力状态通过
 `/api/terminal/status` 的 `pty:true` 如实暴露。

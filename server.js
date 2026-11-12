@@ -632,9 +632,24 @@ const files = createFiles({ scopeForRequest: workspaceScopeForRequest });
  * was opened. The router still applies Origin + token gates to every call. */
 const terminal = createTerminal({
   scopeForRequest: workspaceScopeForRequest,
-  // The sweep keeps the stored conversation scope so a project switch stops
-  // the old PTY even when the terminal surface is not mounted at that moment.
-  scopeForSession: (session) => workspaceScopeForConversation(session.conversationId),
+  /* The sweep follows a different *live* focused conversation so switching to
+   * another runtime workspace stops the old PTY even when no terminal request
+   * is in flight. With no focused runtime conversation (classic chat, a
+   * dormant history conversation) the session keeps its own scope: the
+   * registry cannot focus dormant records, and treating focus === null as a
+   * workspace change would kill a terminal the user is still looking at.
+   * If the registry cannot answer, return null; the sweep keeps the session
+   * rather than treating a transient error as proof of a workspace change. */
+  scopeForSession: (session) => {
+    let snapshot;
+    try { snapshot = runtimeRegistryRef?.snapshot?.(); } catch { return null; }
+    if (!snapshot?.ok) return null;
+    const focused = snapshot.focusedConversationId;
+    if (focused && focused !== session.conversationId) {
+      return workspaceScopeForConversation(focused);
+    }
+    return workspaceScopeForConversation(session.conversationId);
+  },
   enabled: !auth.isDevMode || process.env.PI_GUI_ENABLE_TERMINAL === '1',
 });
 
