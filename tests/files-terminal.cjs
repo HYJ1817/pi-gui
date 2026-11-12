@@ -473,6 +473,235 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
   }
 
   {
+    /* Idle activity is server-side only: keyboard input and new PTY output
+     * refresh it; read/list/resize and reused start do not. The short idleMs
+     * keeps the test fast without waiting the production 30 minutes. */
+    const idleSpawned = [];
+    const idleTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'idle', generation: '1' }),
+      /* Keep every "still running" assertion at least a few event-loop turns
+       * away from the deadline; CI machines can stall well past 100 ms. */
+      limits: noSweep({ ...TERMINAL_LIMITS, idleMs: 400 }),
+      spawnPty: fakePty(idleSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const idleApp = await serve({ terminal: idleTerminal });
+    const idleRequest = (body) => idleApp.request('/api/terminal', { method: 'POST', body });
+    const idleRead = (id, since = 0) => idleApp.request('/api/terminal?' + new URLSearchParams({
+      id, since: String(since),
+    }));
+    const idleCreate = async () => (await idleRequest({ action: 'create' })).body.session.id;
+    const idleClose = async (id) => idleRequest({ action: 'close', id });
+    const waitForState = async (id, state, timeout = 2000) => {
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeout) {
+        const response = await idleRead(id);
+        if (response.body.state === state) return response;
+        await tick(10);
+      }
+      throw new Error(`terminal ${id} did not reach ${state}`);
+    };
+    try {
+      const polled = await idleCreate();
+      const pollStart = Date.now();
+      let sawRunning = false;
+      while (Date.now() - pollStart < 900) {
+        const response = await idleRead(polled);
+        sawRunning ||= response.body.state === 'running';
+        await tick(15);
+      }
+      const polledEnd = await idleRead(polled);
+      await check('continuous reads alone do not keep a silent terminal alive', () => {
+        assert.equal(sawRunning, true);
+        assert.equal(polledEnd.body.state, 'exited');
+        assert.ok(polledEnd.body.text.includes('空闲超时'));
+      });
+      const restarted = await idleRequest({ action: 'start' });
+      await check('an idle-stopped terminal stays exited but can be restarted', () => {
+        assert.equal(restarted.body.ok, true);
+        assert.notEqual(restarted.body.session.id, polled);
+        assert.equal(restarted.body.session.state, 'running');
+      });
+      await idleClose(restarted.body.session.id);
+
+      const typed = await idleCreate();
+      await tick(160);
+      await idleRequest({ action: 'input', id: typed, data: 'a' });
+      await tick(160);
+      const typedMid = await idleRead(typed);
+      await tick(320);
+      const typedEnd = await idleRead(typed);
+      await check('real keyboard input refreshes the idle deadline', () => {
+        assert.equal(typedMid.body.state, 'running');
+        assert.equal(typedEnd.body.state, 'exited');
+      });
+      await idleClose(typed);
+
+      const output = await idleCreate();
+      await tick(160);
+      idleTerminal._sessions.get(output).pty.emitData('progress');
+      await tick(160);
+      const outputMid = await idleRead(output);
+      await tick(320);
+      const outputEnd = await idleRead(output);
+      await check('new PTY output refreshes the idle deadline', () => {
+        assert.equal(outputMid.body.state, 'running');
+        assert.equal(outputEnd.body.state, 'exited');
+      });
+      await idleClose(output);
+
+      const history = await idleCreate();
+      idleTerminal._sessions.get(history).pty.emitData('history-output');
+      await tick(120);
+      const historyStart = Date.now();
+      while (Date.now() - historyStart < 520) {
+        const response = await idleRead(history);
+        assert.ok(response.body.text.includes('history-output'));
+        await tick(15);
+      }
+      const historyEnd = await idleRead(history);
+      await check('reading already-buffered output does not refresh idle', () => {
+        assert.equal(historyEnd.body.state, 'exited');
+      });
+      await idleClose(history);
+
+      const first = await idleCreate();
+      const second = await idleCreate();
+      await tick(300);
+      await idleRequest({ action: 'input', id: first, data: 'x' });
+      /* Reading first and listing the workspace must not refresh second. Wait
+       * for second to expire on its own; first still has its post-input window. */
+      await idleRead(first);
+      await idleRequest({ action: 'list' });
+      const secondEnd = await waitForState(second, 'exited');
+      const firstMid = await idleRead(first);
+      const firstEnd = await waitForState(first, 'exited');
+      await check('terminals have independent idle clocks and observation does not reset a background one', () => {
+        assert.equal(firstMid.body.state, 'running');
+        assert.equal(secondEnd.body.state, 'exited');
+        assert.equal(firstEnd.body.state, 'exited');
+      });
+      await idleClose(first);
+      await idleClose(second);
+
+      const background = await idleCreate();
+      const backgroundPty = idleTerminal._sessions.get(background).pty;
+      const outputTimer = setInterval(() => backgroundPty.emitData('tick'), 60);
+      await tick(1000);
+      clearInterval(outputTimer);
+      const backgroundMid = await idleRead(background);
+      await tick(600);
+      const backgroundEnd = await idleRead(background);
+      await check('a hidden panel does not stop a background PTY, and its output keeps it alive', () => {
+        assert.equal(backgroundMid.body.state, 'running');
+        assert.equal(backgroundEnd.body.state, 'exited');
+      });
+      await idleClose(background);
+
+      const legacyStart = await idleRequest({ action: 'start' });
+      const legacyId = legacyStart.body.session.id;
+      const legacySession = idleTerminal._sessions.get(legacyId);
+      const legacyActivity = legacySession.lastActivityAt;
+      const legacyStartAt = Date.now();
+      while (Date.now() - legacyStartAt < 240) {
+        await idleRequest({ action: 'start' });
+        await tick(20);
+      }
+      await tick(300);
+      const legacyEnd = await idleRead(legacyId);
+      await check('reusing a live session through start does not refresh idle', () => {
+        assert.equal(legacySession.lastActivityAt, legacyActivity);
+        assert.equal(legacyEnd.body.state, 'exited');
+      });
+      await idleClose(legacyId);
+
+      const resizedId = await idleCreate();
+      const resizedSession = idleTerminal._sessions.get(resizedId);
+      const resizedActivity = resizedSession.lastActivityAt;
+      const resizeStart = Date.now();
+      while (Date.now() - resizeStart < 240) {
+        await idleRequest({ action: 'resize', id: resizedId, cols: 90, rows: 30 });
+        await tick(20);
+      }
+      await tick(300);
+      const resizedEnd = await idleRead(resizedId);
+      await check('resize is layout, not activity', () => {
+        assert.equal(resizedSession.lastActivityAt, resizedActivity);
+        assert.equal(resizedEnd.body.state, 'exited');
+      });
+      await idleClose(resizedId);
+
+      const naturalId = await idleCreate();
+      const naturalSession = idleTerminal._sessions.get(naturalId);
+      naturalSession.pty.emitExit(0);
+      await tick(10);
+      const naturalTimer = naturalSession.idleTimer;
+      await tick(600);
+      const naturalEnd = await idleRead(naturalId);
+      await check('a naturally exited terminal clears its idle timer and never gets an idle message', () => {
+        assert.equal(naturalTimer, null);
+        assert.equal(naturalEnd.body.state, 'exited');
+        assert.equal(naturalEnd.body.exitCode, 0);
+        assert.equal(naturalSession.pty.killed, false);
+        assert.ok(!naturalEnd.body.text.includes('空闲超时'));
+      });
+      await idleClose(naturalId);
+    } finally {
+      await idleTerminal.dispose();
+      await idleApp.close();
+    }
+  }
+
+  {
+    /* If the idle kill is wedged, the record stays tracked as closing and the
+     * existing scope sweep retries; only the real exit changes the state. */
+    let killCalls = 0;
+    const exitListeners = [];
+    const wedged = {
+      pid: 991002,
+      cols: 80,
+      rows: 24,
+      onData() { return { dispose() {} }; },
+      onExit(fn) { exitListeners.push(fn); return { dispose() {} }; },
+      write() {},
+      resize() {},
+      kill() { killCalls++; },
+      emitExit() { for (const fn of [...exitListeners]) fn({ exitCode: 0, signal: null }); },
+    };
+    const wedgedTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'idle-wedged', generation: '1' }),
+      limits: { ...TERMINAL_LIMITS, idleMs: 80, scopeSweepMs: 20 },
+      spawnPty: () => wedged,
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const wedgedApp = await serve({ terminal: wedgedTerminal });
+    try {
+      const started = await wedgedApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } });
+      const id = started.body.session.id;
+      await tick(200);
+      const firstKills = killCalls;
+      const session = wedgedTerminal._sessions.get(id);
+      assert.equal(session?.state, 'closing');
+      assert.ok(firstKills > 0);
+      await tick(100);
+      await check('a wedged idle kill stays tracked and is retried by the sweep', () => {
+        assert.ok(killCalls > firstKills);
+        assert.equal(wedgedTerminal._sessions.get(id)?.state, 'closing');
+      });
+      wedged.emitExit();
+      await tick(10);
+      await check('the idle-stopped session reaches exited only after the real exit event', () => {
+        assert.equal(wedgedTerminal._sessions.get(id)?.state, 'exited');
+      });
+    } finally {
+      await wedgedTerminal.dispose();
+      await wedgedApp.close();
+    }
+  }
+
+  {
     /* The cap is counted in UTF-16 code units because the xterm wire format
      * is a string. When the cut lands on the low half of an emoji, drop the
      * whole pair instead of leaving a lone surrogate in the replay tail. */
