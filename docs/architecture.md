@@ -452,6 +452,7 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
     - `index.js` — HTTP 路由 + 计划生成（用 pi 适配器 + 独立会话，不污染主聊天）；
       另含「从任务打开会话」与「会话 → 任务」反查两条 P7 接口
   - `uploads.js` — 附件上传与落盘（`safeName`）
+  - `terminal.js` / `terminal-process.js` — 工作区范围的 PTY 账本（多会话、绝对游标、上限、scope sweep）与进程原语（受信目录加载 node-pty、ConPTY spawn、Windows `taskkill /T`）。HTTP 动作、标签语义与工作区隔离见 [work-surfaces.md](work-surfaces.md)
   - `review-comment-authority.js` / `review-comment-store.js` / `review-comment-routes.js` — 当前 owner/稳定身份取证、有界原子存储与认证 HTTP；见 [评论设计](T3-B-plan.md)
   - `git-routes.js` — Git 接口的 **HTTP 适配层**，业务逻辑全在 `lib/git.js`
   - `router.js` — 路由表与静态资源。**顺序即语义**
@@ -484,6 +485,8 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
 - `markdown.js` Markdown 渲染（安全设计见 [security.md](security.md)）
 - `messages.js` 对话流 / `composer.js` 输入框 / `attachments.js` 附件
 - `tools.js` + `tool-model.js` + `tool-view.js` + `tool-history.js` 工具时间线
+- `terminal-panel.js` 面板编排 / `terminal-session.js` 每会话 xterm 控制器 /
+  `terminal-tabs.js` 标签条；PTY 与账本归后端，切换标签和关闭面板不重建会话
 - 语义适配器（按工具名匹配，互不依赖包名）：`web-activity.js` / `subagent-activity.js` /
   `memory-activity.js` / `browser-activity.js` / `mcp-activity.js`（`mcp__` 与资源工具，
   只投影 server / tool / 状态）；各自的 `*-capabilities.js` 管状态证据与运行观察

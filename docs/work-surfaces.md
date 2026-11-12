@@ -11,8 +11,16 @@ PI-Desktop 阶段 E 将原空白 `rp-titlebar` 与 `#workPanelNav` 合为同一�
 
 终端与文件是右栏里的两个真实 surface，入口按钮、快捷键和起始页卡片走同一条 `openSecondarySurface` 生命周期：
 
-- **终端**：项目级 PTY（node-pty，Windows 走 ConPTY），前端为 xterm。Windows 默认绝对路径 PowerShell，缺失时回退绝对路径 CMD；POSIX 用 `$SHELL`，统一以 `TERM=xterm-256color` 启动。只有桌面版（本地令牌边界）或显式 `PI_GUI_ENABLE_TERMINAL=1` 时启用；cwd 来自聚焦会话的 workspace identity，Renderer 不传 shell、cwd、参数或环境变量；`start` / `read` / `input` / `resize` / `stop` 全部按 workspace 校验，跨工作区返回 409。输入拒绝 NUL 与超长、按原始字节写入且不追加换行；输出保留 ANSI/CR 原文、只在内存保留上限内的尾部、不写日志；`cols` / `rows` 有范围校验。每个工作区复用一个活动会话，达到并发上限时显式拒绝而不是杀掉用户其它终端。关闭面板只销毁 xterm 前端，后端继续运行并在重开时重放缓冲；只有显式停止、所属会话确认失效、工作区变化、空闲超时或服务关闭才结束整棵进程树（Windows `taskkill /T`）。源码运行与打包产物都必须带 node-pty 原生模块（`resources/app/node_modules/node-pty` / `build/node_modules/node-pty`）。
+- **终端**：工作区级多会话 PTY（node-pty，Windows 走 ConPTY），前端为多个 xterm 标签。Windows 默认绝对路径 PowerShell，缺失时回退绝对路径 CMD；POSIX 用 `$SHELL`，统一以 `TERM=xterm-256color` 启动。只有桌面版（本地令牌边界）或显式 `PI_GUI_ENABLE_TERMINAL=1` 时启用；cwd 来自聚焦会话的 workspace identity，Renderer 不传 shell、cwd、参数或环境变量。`create` / `list` / `start` / `read` / `input` / `resize` / `stop` / `close` 全部按 workspace 校验，跨工作区返回 409；`list` 只返回当前工作区的会话。输入拒绝 NUL 与超长、按原始字节写入且不追加换行；输出保留 ANSI/CR 原文、只在内存保留上限内的尾部、不写日志；`cols` / `rows` 有范围校验。每工作区最多 6 个未关闭终端，全局最多 12 个，达到上限时显式拒绝而不是杀掉用户其它终端。关闭面板只销毁 xterm 前端，后端继续运行并在重开时重放缓冲；只有显式 `stop` / `close`、所属会话确认失效、空闲超时或服务关闭才结束整棵进程树（Windows `taskkill /T`）。源码运行与打包产物都必须带 node-pty 原生模块（`resources/app/node_modules/node-pty` / `build/node_modules/node-pty`）。
 - **文件**：只读项目文件树与文本预览；按目录懒加载，跳过符号链接/junction 与隐藏项（除非用户显式显示），正文上限 256 KiB，二进制只标注不预览。没有写入、删除、重命名或上传入口。
+
+### 多终端与工作区隔离（2026-11 P2）
+
+- **会话账本。** 每个终端是服务端账本中的一条独立会话：随机 UUID（不使用 PID）、独立 PTY、独立 256 KiB 输出缓冲和绝对游标、独立尺寸与 `creating` / `running` / `exited` / `closing` / `error` 状态。`read` / `input` / `resize` / `stop` / `close` 都先按请求方 workspace 校验；伪造别的 workspace 的 session id 只会得到 `stale_workspace`，未知 id 返回 `terminal_missing`。id 是随机 UUID，不能靠响应差异枚举；跨区请求也不能控制其他工作区的会话。
+- **标签语义。** 新标签走 `create`；`start` 保留 P1 兼容语义，复用当前工作区最近运行中的会话。`stop` 只结束进程并把标签留在 `exited` 供原地重启；`close` 删除标签和缓冲，对未知 id 幂等成功，对已知 id 仍校验归属；关闭一个标签只树杀该会话，其他终端继续运行。关闭或重启遇到网络错误等没有定论的响应时保留标签并提示重试，避免界面把一个可能仍存活的 PTY 藏起来、继续占用工作区额度。标签序号由服务端按 workspace 分配，最后一个标签关闭后从 1 重新开始。
+- **前端切换。** 每个标签只有一个 xterm 视图；切换只显示/隐藏已经挂载的视图，不重建 PTY。隐藏标签降低轮询频率但仍同步状态和输出游标；键盘输入只进入当前可见标签。标签条横向滚动，长标题省略号截断，状态点区分创建中、运行、已退出、停止中与错误；空态、错误态和达上限时禁用「新建终端」都有明确文案，没有占位按钮。
+- **工作区不是标签。** 关闭面板只销毁 xterm，后端 PTY 和会话账本继续存在；重开时 `list` 恢复标签并按游标重放缓冲，不新建 PTY。切换工作区只 detach 当前标签、停止轮询，不停止任何会话；回到原工作区重新 `list` 并接管同一批会话。`pi-gui:workspace-generation` 视为强制 detach，`pi-gui:git-scope` 先探测确认是否仍为同一 workspace。迟到的创建响应若不属于当前标签集会被关闭，迟到的列表响应按 token 丢弃，不能把旧工作区的会话挂到新界面；已被后端确认关闭的 id 也会从迟到列表里过滤，不会重新挂成死标签。
+- **退出与重启。** 服务关闭时停止账本中所有未结束会话并等待真实退出；Electron 外壳先结束后端进程树再退出。应用重启不持久化 session id，旧 id 按 `terminal_missing` 处理，前端在新进程里新建终端。
 
 ### 终端生命周期与缓存截断（2026-11）
 
