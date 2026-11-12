@@ -214,6 +214,16 @@ function fakeTerminalView(size = { cols: 100, rows: 30 }) {
       assert.equal(second.isCurrent(), true);
     });
 
+    secondView.emitData('echo reopen\r');
+    await until(() => writes.length === 3);
+    secondView.emitResize(110, 32);
+    await until(() => resizes.length === 2);
+    ok('input and resize still work after reopening a replayed terminal', () => {
+      assert.deepEqual(writes.at(-1), ['s1', 'echo reopen\r']);
+      assert.deepEqual(resizes.at(-1), ['s1', 110, 32]);
+      assert.equal(stops.length, 0);
+    });
+
     dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
     await tick(10);
     ok('a workspace change stops the old PTY and clears the frontend instead of reusing it', () => {
@@ -512,6 +522,81 @@ function fakeTerminalView(size = { cols: 100, rows: 30 }) {
     ok('queued input is not dropped when polling replaces the session object', () => {
       assert.equal(writes.join(''), payload);
       assert.deepEqual(writes.map((chunk) => chunk.length), [16384, 3616]);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* Replaying a buffer whose beginning was dropped would feed xterm a
+     * fragment of ANSI/mode state. The safe contract is: reset, explain, keep
+     * the live PTY usable. */
+    const reads = [];
+    let truncatedReads = 0;
+    let liveSent = false;
+    const writes = [];
+    const resizes = [];
+    const milestoneText = 'LIVE_AFTER_TRUNCATION\r\n';
+    const view = fakeView();
+    const termView = fakeTerminalView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true }),
+      start: async (size) => ({ ok: true, session: { ...terminalSession('s-trunc'), cols: size.cols, rows: size.rows } }),
+      /* Honour `since`: the truncated read reports cursor 123, so a correct
+       * panel must request since=123 next. If the cursor assignment regresses,
+       * every poll asks for 0 and keeps resetting the live screen. */
+      read: async (id, since) => {
+        reads.push(since);
+        if (since === 0) {
+          truncatedReads++;
+          return {
+            ok: true,
+            truncated: true,
+            text: 'OLD_PARTIAL\x1b[31mTAIL',
+            cursor: 123,
+            state: 'running',
+            session: terminalSession('s-trunc'),
+          };
+        }
+        const text = liveSent ? '' : milestoneText;
+        liveSent = true;
+        return {
+          ok: true,
+          truncated: false,
+          text,
+          cursor: since + text.length,
+          state: 'running',
+          session: terminalSession('s-trunc'),
+        };
+      },
+      write: async (id, data) => { writes.push(data); return { ok: true }; },
+      resize: async (id, cols, rows) => { resizes.push([id, cols, rows]); return { ok: true }; },
+      stop: async () => ({ ok: true }),
+    };
+    mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
+    /* Fixed wait rather than until(LIVE...): if the cursor regresses, LIVE never
+     * arrives and the assertions below must still report why. */
+    await tick(300);
+    ok('a truncated replay resets the display instead of replaying an ANSI fragment', () => {
+      assert.ok(termView.resetCalls >= 1);
+      const shown = termView.writes.join('');
+      assert.ok(shown.includes('较早的输出已超出缓存上限'));
+      assert.ok(!shown.includes('OLD_PARTIAL'));
+      assert.ok(!shown.includes('TAIL'));
+    });
+    ok('the truncated cursor advances so the live tail is not reset on every poll', () => {
+      assert.equal(truncatedReads, 1, `truncated reads: ${truncatedReads}`);
+      assert.equal(reads[0], 0);
+      assert.ok(reads.includes(123), `read cursors: ${reads.join(',')}`);
+      assert.ok(termView.writes.join('').includes('LIVE_AFTER_TRUNCATION'));
+    });
+    termView.emitData('echo after\r');
+    await until(() => writes.length === 1);
+    termView.emitResize(120, 40);
+    await until(() => resizes.length === 1);
+    ok('input and resize still work after the truncated replay fallback', () => {
+      assert.deepEqual(writes, ['echo after\r']);
+      assert.deepEqual(resizes, [['s-trunc', 120, 40]]);
     });
     view.dispose();
     host.replaceChildren();

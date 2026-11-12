@@ -471,6 +471,37 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
   }
 
   {
+    /* The cap is counted in UTF-16 code units because the xterm wire format
+     * is a string. When the cut lands on the low half of an emoji, drop the
+     * whole pair instead of leaving a lone surrogate in the replay tail. */
+    const surrogateSpawned = [];
+    const surrogateTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'surrogate', generation: '1' }),
+      limits: noSweep({ ...TERMINAL_LIMITS, maxBufferChars: 4 }),
+      spawnPty: fakePty(surrogateSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const surrogateApp = await serve({ terminal: surrogateTerminal });
+    try {
+      const started = await surrogateApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+      surrogateSpawned[0].pty.emitData('a😀bcd');
+      await tick();
+      const read = await surrogateApp.request('/api/terminal?' + new URLSearchParams({ id: started.body.session.id, since: '0' }));
+      await check('truncating the buffer never splits a UTF-16 surrogate pair', () => {
+        assert.equal(read.body.truncated, true);
+        assert.equal(read.body.text, 'bcd');
+        const firstUnit = read.body.text.charCodeAt(0);
+        assert.ok(!(firstUnit >= 0xdc00 && firstUnit <= 0xdfff), 'retained text starts with a lone low surrogate');
+        assert.equal(read.body.cursor, 6);
+      });
+    } finally {
+      await surrogateTerminal.dispose();
+      await surrogateApp.close();
+    }
+  }
+
+  {
     const many = new Map([
       ['a', { root: rootA, scopeId: 'limit-a', generation: '1' }],
       ['b', { root: rootB, scopeId: 'limit-b', generation: '1' }],
@@ -605,7 +636,7 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     const transientTerminal = createTerminal({
       scopeForRequest: async () => ({ root: rootA, scopeId: 'transient', generation: '1' }),
       scopeForSession: async () => {
-        if (scopeAnswer === 'throw') throw Object.assign(new Error('unknown_conversation'), { code: 'unknown_conversation' });
+        if (scopeAnswer === 'throw') throw Object.assign(new Error('registry_unavailable'), { code: 'registry_unavailable' });
         return scopeAnswer;
       },
       limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
@@ -635,6 +666,197 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     });
     await transientTerminal.dispose();
     await transientApp.close();
+  }
+
+  {
+    /* Registry resolution succeeded but the workspace stat failed. A network
+     * share or AV/indexer can produce EACCES/EBUSY for one sweep; that is not
+     * proof the workspace is gone, so the shell must survive it. */
+    let currentScope = { root: rootA, scopeId: 'fs-transient', generation: '1' };
+    const fsSpawned = [];
+    const fsTerminal = createTerminal({
+      scopeForRequest: async () => currentScope,
+      scopeForSession: async () => currentScope,
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
+      spawnPty: fakePty(fsSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const fsApp = await serve({ terminal: fsTerminal });
+    const started = await fsApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+    const id = started.body.session.id;
+    const realStat = fs.statSync;
+    fs.statSync = function patchedStat(target, ...args) {
+      if (path.resolve(String(target)) === path.resolve(rootA)) {
+        const error = new Error('fixture EACCES');
+        error.code = 'EACCES';
+        throw error;
+      }
+      return realStat.call(fs, target, ...args);
+    };
+    try {
+      await tick(100);
+    } finally {
+      fs.statSync = realStat;
+    }
+    await check('a transient workspace stat failure keeps the shell alive', () => {
+      assert.equal(fsSpawned[0].pty.killed, false);
+      assert.equal(fsTerminal._sessions.get(id)?.state, 'running');
+    });
+    currentScope = { root: rootB, scopeId: 'fs-transient-b', generation: '2' };
+    await tick(100);
+    await check('a confirmed workspace change still retires the shell after the transient error', () => {
+      assert.equal(fsSpawned[0].pty.killed, true);
+      assert.equal(fsTerminal._sessions.size, 0);
+    });
+    await fsTerminal.dispose();
+    await fsApp.close();
+  }
+
+  {
+    const deletedSpawned = [];
+    const deletedTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'deleted', generation: '1' }),
+      scopeForSession: async () => {
+        throw Object.assign(new Error('unknown_conversation'), { code: 'unknown_conversation' });
+      },
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
+      spawnPty: fakePty(deletedSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const deletedApp = await serve({ terminal: deletedTerminal });
+    const started = await deletedApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+    const id = started.body.session.id;
+    /* The shell keeps producing output, which refreshes the idle timer. The
+     * ownership sweep must still retire it once the conversation is gone. */
+    const output = setInterval(() => deletedSpawned[0]?.pty.emitData('still running\r\n'), 5);
+    await tick(120);
+    clearInterval(output);
+    await check('a deleted conversation stops its PTY even while output keeps arriving', () => {
+      assert.equal(deletedSpawned[0].pty.killed, true);
+      assert.equal(deletedTerminal._sessions.has(id), false);
+    });
+    await deletedTerminal.dispose();
+    await deletedApp.close();
+  }
+
+  {
+    let killCalls = 0;
+    const exitListeners = [];
+    const wedged = {
+      pid: 990002,
+      cols: 80,
+      rows: 24,
+      onData() { return { dispose() {} }; },
+      onExit(fn) { exitListeners.push(fn); return { dispose() {} }; },
+      write() {},
+      resize() {},
+      kill() { killCalls++; /* deliberately no exit event */ },
+      emitExit() { for (const fn of [...exitListeners]) fn({ exitCode: 0, signal: null }); },
+    };
+    const wedgedTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'deleted-wedged', generation: '1' }),
+      scopeForSession: async () => { throw Object.assign(new Error('unknown_conversation'), { code: 'unknown_conversation' }); },
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
+      spawnPty: () => wedged,
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const wedgedApp = await serve({ terminal: wedgedTerminal });
+    const started = await wedgedApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+    const id = started.body.session.id;
+    await tick(100);
+    const beforeRetry = killCalls;
+    await tick(100);
+    await check('a failed retirement keeps the session tracked and retries the tree kill', () => {
+      assert.ok(killCalls > beforeRetry, `kill retried ${killCalls - beforeRetry} times`);
+      assert.equal(wedgedTerminal._sessions.get(id)?.state, 'stopping');
+    });
+    wedged.emitExit();
+    await tick(10);
+    await check('the retired session disappears only after the real PTY exit', () => {
+      assert.equal(wedgedTerminal._sessions.has(id), false);
+    });
+    await wedgedTerminal.dispose();
+    await wedgedApp.close();
+  }
+
+  for (const code of ['unknown_workspace', 'workspace_unavailable', 'stale_workspace']) {
+    const invalidSpawned = [];
+    const invalidTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: `invalid-${code}`, generation: '1' }),
+      scopeForSession: async () => { throw Object.assign(new Error(code), { code }); },
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
+      spawnPty: fakePty(invalidSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const invalidApp = await serve({ terminal: invalidTerminal });
+    const started = await invalidApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+    const id = started.body.session.id;
+    await tick(100);
+    await check(`a confirmed ${code} retires the PTY`, () => {
+      assert.equal(invalidSpawned[0].pty.killed, true);
+      assert.equal(invalidTerminal._sessions.has(id), false);
+    });
+    await invalidTerminal.dispose();
+    await invalidApp.close();
+  }
+
+  {
+    /* Explicit stop and a workspace-generation switch arrive together. The old
+     * PTY must be retired exactly once and the new workspace must get exactly
+     * one shell, with no session left untracked in either order. */
+    let currentScope = { root: rootA, scopeId: 'race-a', generation: '1' };
+    const raceSpawned = [];
+    const spawnWithSlowExit = fakePty(raceSpawned);
+    const raceTerminal = createTerminal({
+      scopeForRequest: async () => currentScope,
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
+      spawnPty: (spawnArgs) => {
+        const pty = spawnWithSlowExit(spawnArgs);
+        pty.kill = () => {
+          if (pty.killed) return;
+          pty.killed = true;
+          setTimeout(() => pty.emitExit(0, null), 30);
+        };
+        return pty;
+      },
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const raceApp = await serve({ terminal: raceTerminal });
+    try {
+      const first = await raceApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+      const firstId = first.body.session.id;
+      const stopPending = raceApp.request('/api/terminal', {
+        method: 'POST', body: { action: 'stop', id: firstId },
+      });
+      currentScope = { root: rootB, scopeId: 'race-b', generation: '2' };
+      const startPending = raceApp.request('/api/terminal', {
+        method: 'POST', body: { action: 'start', cols: 90, rows: 25 },
+      });
+      const [stopResult, startResult] = await Promise.all([stopPending, startPending]);
+      await tick(100);
+      const secondId = startResult.body.session?.id;
+      const again = await raceApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+      await check('stop racing a workspace switch leaks no process and spawns no duplicate', () => {
+        assert.ok(stopResult.status === 200 || stopResult.body.code === 'stale_workspace');
+        assert.equal(startResult.status, 200);
+        assert.equal(startResult.body.reused, false);
+        assert.equal(raceSpawned.length, 2);
+        assert.equal(raceSpawned[0].pty.killed, true);
+        assert.equal(raceSpawned[1].pty.killed, false);
+        assert.equal(raceTerminal._sessions.has(firstId), false);
+        assert.equal(raceTerminal._sessions.get(secondId)?.state, 'running');
+        assert.equal(again.body.reused, true);
+        assert.equal(raceSpawned.length, 2);
+      });
+    } finally {
+      await raceTerminal.dispose();
+      await raceApp.close();
+    }
   }
 
   {

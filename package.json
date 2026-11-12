@@ -97,6 +97,8 @@
     "e2e:app": "node tests/e2e-app.cjs",
     "test:exe": "node tests/exe-check.cjs",
     "test:app": "node tests/app-check.cjs",
+    "test:terminal:source": "node tests/terminal-source-check.cjs",
+    "test:terminal:electron": "node tests/terminal-electron-check.cjs",
     "test:history-summary:packaged": "node tests/history-tool-summary-packaged.cjs",
     "test:inject": "node tests/append-injection.cjs",
     "test:window": "node tests/window-state.cjs",
