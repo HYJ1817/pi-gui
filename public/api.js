@@ -354,6 +354,35 @@ export const fetchSpecDocument = (id, workspace, generation) => getJSON(
   gitScopeHeaders()
 );
 
+/* Files and Terminal reuse the focused conversation's workspace scope.
+ * The renderer sends only the opaque workspace token and a relative path. */
+export const fetchFiles = (dir = '', { workspace, generation, hidden = false } = {}) => getJSON(
+  '/api/files?' + new URLSearchParams({
+    dir,
+    workspace: workspace?.id || '',
+    generation: String(generation ?? ''),
+    hidden: hidden ? '1' : '0',
+  }),
+  gitScopeHeaders()
+);
+export const fetchFileDocument = (filePath, workspace, generation) => getJSON(
+  '/api/files/document?' + new URLSearchParams({
+    path: filePath,
+    workspace: workspace?.id || '',
+    generation: String(generation ?? ''),
+  }),
+  gitScopeHeaders()
+);
+
+export const fetchTerminalStatus = () => getJSON('/api/terminal/status', gitScopeHeaders());
+export const startTerminal = () => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'start' } });
+export const readTerminal = (id, since = 0) => getJSON(
+  '/api/terminal?' + new URLSearchParams({ id, since: String(since) }),
+  gitScopeHeaders()
+);
+export const writeTerminal = (id, data) => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'input', id, data } });
+export const stopTerminal = (id) => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'stop', id } });
+
 export const fetchGitStatus = () => getJSON('/api/git/status', gitScopeHeaders());
 
 /* Headers are captured by the review coordinator before an async operation.

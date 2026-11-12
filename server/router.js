@@ -65,6 +65,8 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param projects      项目（handle / handleFs）
  * @param projectConfig 当前项目的配置（handle）
  * @param specs         只读 Specs 文档树与正文（handle）
+ * @param files         只读项目文件树与预览（handle）
+ * @param terminal      项目命令终端（handle）
  * @param skills        Skills（handle）
  * @param mcp           MCP 能力报告（handle）
  * @param mcpNative     P20.6 原生 MCP 状态与受控动作（handleServers / handleStatus）
@@ -92,6 +94,8 @@ export function createRouter({
   projects,
   projectConfig,
   specs = null,
+  files = null,
+  terminal = null,
   skills,
   mcp,
   mcpNative = null,
@@ -276,6 +280,18 @@ export function createRouter({
      * cannot be swallowed by the projects prefix or the non-GET fallback. */
     if (url.pathname === '/api/specs' || url.pathname === '/api/specs/document') {
       return specs ? specs.handle(req, res, url) : json(res, 503, { ok: false, code: 'specs_unavailable' });
+    }
+    /* Files is read-only and uses the same focused-conversation workspace
+     * resolution as Specs / Changes. It has its own top-level path so the
+     * projects prefix and the GET/405 fallback cannot swallow it. */
+    if (url.pathname === '/api/files' || url.pathname === '/api/files/document') {
+      return files ? files.handle(req, res, url) : json(res, 503, { ok: false, code: 'files_unavailable' });
+    }
+    /* Terminal is a POST-capable top-level path. The module itself enforces
+     * the desktop/local-development enable switch; the router still applies
+     * the normal Origin + token gate to every /api request above. */
+    if (url.pathname === '/api/terminal' || url.pathname === '/api/terminal/status') {
+      return terminal ? terminal.handle(req, res, url) : json(res, 503, { ok: false, code: 'terminal_unavailable' });
     }
     /* 扩展能力（Skills / MCP）。和 project-config 同理用独立顶层路径，
      * 不挂在别的前缀下面，省掉一条「谁必须排在谁前面」的隐式约束。

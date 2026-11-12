@@ -716,6 +716,28 @@ Extension 是**第三方本地代码**，在 Pi 进程权限下运行，可能�
 没有授权时后端一个字都不动，而是把「还需要什么授权」原样返回给界面 ——
 所以不存在「静默改了 index」这种状态。
 
+### 文件面板只读
+
+**威胁**：文件树一旦接受客户端路径或允许写入，就会变成任意文件读写接口。
+
+**做法**：`server/files.js` 只暴露 `GET /api/files` 与 `GET /api/files/document`。
+项目根来自聚焦会话的 workspace identity，客户端只传相对路径；目录逐级懒加载，
+路径仍经 `lib/safe-path.js` 校验。目录项跳过符号链接 / junction，预览用
+`O_NOFOLLOW` 打开并复核 inode，拒绝二进制与超过 256 KiB 的文件，不回绝对路径。
+没有删除、重命名、上传或保存接口；写操作需要单独设计与授权。
+
+### 项目终端
+
+**威胁**：把浏览器输入直接接进 shell，或让渲染层指定任意 cwd/可执行文件。
+
+**做法**：终端只在桌面版（`auth.isDevMode === false`）或显式
+`PI_GUI_ENABLE_TERMINAL=1` 时启用；路由仍先过本地令牌与 Origin 检查。
+cwd 来自聚焦会话的 workspace identity，Renderer 只提交会话 id、输入文本和停止动作，
+不能提交命令路径、cwd 或环境变量。输入有字节上限并拒绝 NUL；子进程环境剥离
+`PI_GUI_TOKEN`。输出只在内存中保留上限内的尾部，不写日志；关闭面板、工作区变化、
+空闲超时或服务关闭都会结束进程树。它是管道 shell，不是 PTY —— 全屏终端程序不在
+支持范围，能力状态通过 `/api/terminal/status` 的 `pipe:true` 如实暴露。
+
 ## 五、子进程边界
 
 ### Provider 环境凭据的信任边界

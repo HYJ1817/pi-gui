@@ -113,6 +113,8 @@ import { knownSessions, switchToSessionById } from './sessions.js';
 import { initRightPane } from './right-pane.js';
 import { openSpecsPanel } from './specs-panel.js';
 import { openCollabPanel } from './collab-panel.js';
+import { openTerminalPanel } from './terminal-panel.js';
+import { openFilesPanel } from './files-panel.js';
 import { openSplitWorkbench } from './ui/split-workbench.js';
 import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
@@ -270,12 +272,22 @@ configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane, { openWorkbench: openSplitWorkbench }) : null;
 const workPanelToggle = $('btnWorkPanel');
 let disposeWorkPanelLauncher = null;
+/* 起始页的主卡片只放常用工具；其余真实入口收进「更多工具」。
+ * 入口仍然是顶部那排按钮本身 —— launcher 只负责摆放和委托点击。 */
+const workPanelToolEntries = [
+  { source: $('navChanges'), label: '变更', shortcutId: 'work-changes' },
+  { source: $('btnTerminal'), label: '终端', shortcutId: 'work-terminal' },
+  { source: $('btnFiles'), label: '文件', shortcutId: 'work-files' },
+  { source: $('btnBrowser'), label: '浏览器', more: true },
+  { source: $('btnSpecs'), label: 'Specs', more: true },
+  { source: $('btnTree'), label: '分支树', more: true },
+  { source: $('btnCollab'), label: '协同文档', more: true },
+];
 rightPane.onSurfaceChange(() => { disposeWorkPanelLauncher?.(); disposeWorkPanelLauncher = null; });
 function openWorkPanelTools() {
   if (rightPane.surface() === 'work-tools') return;
   rightPane.open('work-tools');
-  disposeWorkPanelLauncher = mountWorkPanelLauncher(rightPane.root.querySelector('.rp-body'),
-    ['navChanges', 'btnBrowser', 'btnSpecs', 'btnCollab', 'btnTree'].map($));
+  disposeWorkPanelLauncher = mountWorkPanelLauncher(rightPane.root.querySelector('.rp-body'), workPanelToolEntries);
 }
 workPanelToggle.onclick = () => {
   if (rightPane.isOpen()) { rightPane.close(); workPanelToggle.focus(); return; }
@@ -334,6 +346,39 @@ document.addEventListener('pi-gui:open-split-workbench', (event) => {
   if (!rightPane) return;
   openSplitWorkbench({ returnSurface: event.detail?.source === 'changes' ? 'changes' : 'specs' });
 });
+
+const btnTerminal = $('btnTerminal');
+const btnFiles = $('btnFiles');
+if (btnTerminal) {
+  if (!rightPane) {
+    btnTerminal.hidden = true;
+  } else {
+    btnTerminal.addEventListener('click', () => {
+      if (rightPane.isOpen() && rightPane.surface() === 'terminal') rightPane.close();
+      else openTerminalPanel({ triggerId: 'btnTerminal' });
+    });
+    document.addEventListener('pi-gui:right-pane', (event) => {
+      const open = event.detail?.open === true && event.detail?.surface === 'terminal';
+      btnTerminal.setAttribute('aria-pressed', String(open));
+      btnTerminal.classList.toggle('is-active', open);
+    });
+  }
+}
+if (btnFiles) {
+  if (!rightPane) {
+    btnFiles.hidden = true;
+  } else {
+    btnFiles.addEventListener('click', () => {
+      if (rightPane.isOpen() && rightPane.surface() === 'files') rightPane.close();
+      else openFilesPanel({ triggerId: 'btnFiles' });
+    });
+    document.addEventListener('pi-gui:right-pane', (event) => {
+      const open = event.detail?.open === true && event.detail?.surface === 'files';
+      btnFiles.setAttribute('aria-pressed', String(open));
+      btnFiles.classList.toggle('is-active', open);
+    });
+  }
+}
 
 const btnBrowser = $('btnBrowser');
 if (btnBrowser) {
@@ -1280,6 +1325,10 @@ registerShortcut({ id: 'view-chat', combo: 'alt+1', label: '切到对话', group
 registerShortcut({ id: 'view-planner', combo: 'alt+2', label: '切到任务', group: '视图', when: canRun, run: openView('planner') });
 registerShortcut({ id: 'view-changes', combo: 'alt+3', label: '切到文件变更', group: '视图', when: canRun, run: openView('changes') });
 registerShortcut({ id: 'view-extensions', combo: 'alt+4', label: '切到扩展与能力', group: '视图', when: canRun, run: openView('extensions') });
+/* 起始页「变更」卡片显示的就是这一条 —— 提示从注册表读，不另写一份组合键。 */
+registerShortcut({ id: 'work-changes', combo: 'primary+shift+g', label: '打开文件变更面板', group: '工作面板', when: canRun, run: () => openChangesPanel() });
+registerShortcut({ id: 'work-terminal', combo: 'primary+`', label: '打开终端面板', group: '工作面板', when: canRun, run: () => openTerminalPanel({ triggerId: 'btnTerminal' }) });
+registerShortcut({ id: 'work-files', combo: 'primary+p', label: '打开项目文件面板', group: '工作面板', when: canRun, run: () => openFilesPanel({ triggerId: 'btnFiles' }) });
 /* 冲突检查放在装配末尾：注册完立刻验，重复键位在启动时就炸出来，
  * 而不是等用户按下那个键才发现有两个功能抢。 */
 assertNoConflicts();

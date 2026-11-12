@@ -7,7 +7,14 @@
 
 PI-Desktop 阶段 E 将原空白 `rp-titlebar` 与 `#workPanelNav` 合为同一条 46px 工具带；保留 `rp-titlebar` 类作为原生标题栏验收的定位接口。工具带按实际原生 caption 区域结束拖拽矩形，28px 控件及选中标签可横向滚动；选中状态仍来自各工具 owner，更新后仅滚动到当前项。右栏默认 392px、最小 320px、宽度记忆、dock/overlay 与分屏比例都由原模块持有。
 
-“工作面板”打开的是工具列表，选择入口委托既有按钮；“选择工具”返回列表，不承诺创建任意独立标签。列表观察原按钮的 hidden/disabled/标签属性，离开时释放观察器。Specs 仍使用自己的文档树、Markdown、空态与只读边界。参考文件管理器的任意文件编辑、最大化及拖放不属于该阶段。实际证据与未验证边界见 [阶段 E 实施记录](ui/pi-desktop-reference/16-phase-e-implementation.md)。
+“工作面板”打开的是工具列表，选择入口委托既有按钮；“选择工具”返回列表，不承诺创建任意独立标签。列表观察原按钮的 hidden/disabled/标签属性，离开时释放观察器。起始页是「工具」卡片网格，固定两列四格：变更、终端、文件、更多工具…；浏览器、Specs、分支树、协同文档收在默认折叠的「更多工具…」里。卡片只克隆原按钮图标并委托点击，快捷键提示从 `public/shortcuts.js` 的唯一注册表读取：`Ctrl+Shift+G` 变更、``Ctrl+` `` 终端、`Ctrl+P` 文件。没有推荐区。Specs 仍使用自己的文档树、Markdown、空态与只读边界。
+
+终端与文件是右栏里的两个真实 surface，入口按钮、快捷键和起始页卡片走同一条 `openSecondarySurface` 生命周期：
+
+- **终端**：项目级命令面板，后端为管道 shell（Windows 走 `cmd.exe` 下的 PowerShell，POSIX 用 `$SHELL`），**不是 PTY**，因此不支持 vim/top 等全屏程序。只有桌面版（本地令牌边界）或显式 `PI_GUI_ENABLE_TERMINAL=1` 时启用；命令在聚焦会话的项目目录执行，Renderer 不传 cwd；输出有上限、不写日志，面板关闭、工作区切换或空闲超时都会结束后端会话。
+- **文件**：只读项目文件树与文本预览；按目录懒加载，跳过符号链接/junction 与隐藏项（除非用户显式显示），正文上限 256 KiB，二进制只标注不预览。没有写入、删除、重命名或上传入口。
+
+参考文件管理器的任意文件编辑、最大化及拖放不属于该阶段。实际证据与未验证边界见 [阶段 E 实施记录](ui/pi-desktop-reference/16-phase-e-implementation.md)。
 
 2026-11-01 Refined 工作区将会话顶栏的 Changes、Specs、Browser 等按钮移入右栏内的持久导航，
 顶栏只保留总开关。导航在 `.rp-body` 外，业务 Surface 切换不会卸载入口；关闭后焦点回到顶栏总开关。

@@ -49,6 +49,8 @@ import { createWorktrees } from './server/worktrees.js';
 import { samePath } from './lib/git-worktree.js';
 import { createProjectConfig } from './server/project-config.js';
 import { createSpecs } from './server/specs.js';
+import { createFiles } from './server/files.js';
+import { createTerminal } from './server/terminal.js';
 import { createProviders } from './server/providers.js';
 import { createProviderManagement } from './server/provider-management.js';
 import { guardNativeCredentialTarget, own, targetChanged } from './server/provider-config-records.js';
@@ -600,29 +602,37 @@ const gitRoutes = createGitRoutes({
     return withWorkspaceIdentity(identity, workspace => action(workspace.root));
   },
 });
-const specs = createSpecs({
-  /* Mirror Changes' conversation scope, but read the project cwd rather than
-   * the Git worktree root so a project stored in a repo subdirectory keeps
-   * its own SPEC.md and specs/ tree. */
-  scopeForRequest: async (req) => {
-    const conversationId = req.headers?.['x-pi-gui-conversation'];
-    if (conversationId === undefined) {
-      return {
-        root: runtime.getCurrentCwd(),
-        scopeId: 'classic-chat',
-        generation: String(runtime.getWorkspaceGeneration()),
-      };
-    }
-    const identity = typeof conversationId === 'string' && conversationId
-      ? runtimeRegistryRef?.workspaceIdentityOf?.(conversationId)
-      : null;
-    if (!identity) throw Object.assign(Error('unknown_conversation'), { code: 'unknown_conversation' });
-    return withWorkspaceIdentity(identity, workspace => ({
-      root: workspace.cwd,
-      scopeId: workspace.workspaceId,
-      generation: workspace.workspaceEpoch,
-    }));
-  },
+/* Specs, Files and Terminal share the focused conversation's project cwd.
+ * Changes uses the Git worktree root instead; these three read the project
+ * directory so a repo checked out in a subdirectory keeps its own files. */
+const workspaceScopeForRequest = async (req) => {
+  const conversationId = req.headers?.['x-pi-gui-conversation'];
+  if (conversationId === undefined) {
+    return {
+      root: runtime.getCurrentCwd(),
+      scopeId: 'classic-chat',
+      generation: String(runtime.getWorkspaceGeneration()),
+    };
+  }
+  const identity = typeof conversationId === 'string' && conversationId
+    ? runtimeRegistryRef?.workspaceIdentityOf?.(conversationId)
+    : null;
+  if (!identity) throw Object.assign(Error('unknown_conversation'), { code: 'unknown_conversation' });
+  return withWorkspaceIdentity(identity, workspace => ({
+    root: workspace.cwd,
+    scopeId: workspace.workspaceId,
+    generation: workspace.workspaceEpoch,
+  }));
+};
+const specs = createSpecs({ scopeForRequest: workspaceScopeForRequest });
+const files = createFiles({ scopeForRequest: workspaceScopeForRequest });
+/* The desktop build has a token (auth.isDevMode is false), so the terminal is
+ * enabled there. A plain `npm start` browser session needs an explicit opt-in;
+ * this keeps a new shell capability from appearing just because the dev page
+ * was opened. The router still applies Origin + token gates to every call. */
+const terminal = createTerminal({
+  scopeForRequest: workspaceScopeForRequest,
+  enabled: !auth.isDevMode || process.env.PI_GUI_ENABLE_TERMINAL === '1',
 });
 
 /* Skills 与 MCP。
@@ -1362,6 +1372,8 @@ const route = createRouter({
   projects,
   projectConfig,
   specs,
+  files,
+  terminal,
   skills,
   mcp,
   mcpNative,
@@ -1436,6 +1448,7 @@ if (process.send) process.on('message', async message => {
 
 async function shutdown() {
   if(runtime.isShuttingDown())return;
+  terminal.dispose();
   marketNetwork?.dispose();
   providerAuth.dispose();
   providerCredentialBridge.dispose();
