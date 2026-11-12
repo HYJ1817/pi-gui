@@ -535,6 +535,15 @@ async function main() {
       assert.equal(defaultMainLogDir({ app, env: {} }), path.join(dir, 'user-data', 'logs'));
       assert.equal(defaultMainLogDir({ app, env: { PI_GUI_DATA: path.join(dir, 'data') } }), path.join(dir, 'data', 'logs'));
     });
+    check('主进程记录后端树杀跳过事件，但丢弃未声明的 pid 字段', () => {
+      assert.equal(main.event('electron', 'electron.backend_kill_skipped', { result: 'identity_query_failed', pid: 4321 }), true);
+      main.flushSync();
+      const entry = readLines(dir).find((line) => line.event === 'electron.backend_kill_skipped');
+      assert.ok(entry, 'skip event was not written');
+      assert.equal(entry.level, 'WARN');
+      assert.equal(entry.details.result, 'identity_query_failed');
+      assert.equal(entry.details.pid, undefined);
+    });
     main.close('test');
     fs.rmSync(dir, { recursive: true, force: true });
   }

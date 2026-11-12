@@ -15,6 +15,14 @@ async function check(name, fn) {
   console.log('  ok  ' + name);
 }
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+const waitUntil = async (predicate, timeoutMs = 3000, stepMs = 10) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await tick(stepMs);
+  }
+  return predicate();
+};
 
 function write(root, rel, content) {
   const file = path.join(root, rel);
@@ -881,7 +889,7 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     };
     const wedgedTerminal = createTerminal({
       scopeForRequest: async () => ({ root: rootA, scopeId: 'idle-wedged', generation: '1' }),
-      limits: { ...TERMINAL_LIMITS, idleMs: 80, scopeSweepMs: 20 },
+      limits: { ...TERMINAL_LIMITS, idleMs: 80, scopeSweepMs: 20, killBackoffMs: [0, 10, 20] },
       spawnPty: () => wedged,
       killPty: (pty) => pty.kill(),
       platform: 'fixture',
@@ -890,14 +898,15 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     try {
       const started = await wedgedApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } });
       const id = started.body.session.id;
-      await tick(200);
+      await waitUntil(() => wedgedTerminal._sessions.get(id)?.killState === 'unconfirmed');
       const firstKills = killCalls;
       const session = wedgedTerminal._sessions.get(id);
       assert.equal(session?.state, 'closing');
-      assert.ok(firstKills > 0);
+      assert.ok(firstKills >= 2, `bounded retries did not run: ${firstKills}`);
       await tick(100);
-      await check('a wedged idle kill stays tracked and is retried by the sweep', () => {
-        assert.ok(killCalls > firstKills);
+      await check('a wedged idle kill is retried a bounded number of times and stays closing', () => {
+        assert.equal(killCalls, firstKills, 'kill kept retrying after the budget');
+        assert.equal(session.killState, 'unconfirmed');
         assert.equal(wedgedTerminal._sessions.get(id)?.state, 'closing');
       });
       wedged.emitExit();
@@ -1199,7 +1208,7 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     const wedgedTerminal = createTerminal({
       scopeForRequest: async () => ({ root: rootA, scopeId: 'deleted-wedged', generation: '1' }),
       scopeForSession: async () => { throw Object.assign(new Error('unknown_conversation'), { code: 'unknown_conversation' }); },
-      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20, killBackoffMs: [0, 10, 20] },
       spawnPty: () => wedged,
       killPty: (pty) => pty.kill(),
       platform: 'fixture',
@@ -1207,11 +1216,14 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     const wedgedApp = await serve({ terminal: wedgedTerminal });
     const started = await wedgedApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
     const id = started.body.session.id;
-    await tick(100);
+    await waitUntil(() => wedgedTerminal._sessions.get(id)?.killState === 'unconfirmed');
     const beforeRetry = killCalls;
+    const wedgedRecord = wedgedTerminal._sessions.get(id);
     await tick(100);
-    await check('a failed retirement keeps the session tracked and retries the tree kill', () => {
-      assert.ok(killCalls > beforeRetry, `kill retried ${killCalls - beforeRetry} times`);
+    await check('a failed retirement keeps the session tracked and is retried within the bounded budget', () => {
+      assert.ok(beforeRetry >= 2, `bounded retries did not run: ${beforeRetry}`);
+      assert.equal(killCalls, beforeRetry, 'kill kept retrying after the budget');
+      assert.equal(wedgedRecord.killState, 'unconfirmed');
       assert.equal(wedgedTerminal._sessions.get(id)?.state, 'closing');
     });
     wedged.emitExit();
@@ -1316,7 +1328,7 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     };
     const stubbornTerminal = createTerminal({
       scopeForRequest: async () => ({ root: rootA, scopeId: 'stubborn', generation: '1' }),
-      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20 },
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 20, killBackoffMs: [0, 10, 20] },
       spawnPty: () => stubborn,
       killPty: (pty) => pty.kill(),
       platform: 'fixture',
@@ -1327,15 +1339,161 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     const stopResult = await stubbornApp.request('/api/terminal', { method: 'POST', body: { action: 'stop', id } });
     assert.equal(stopResult.body.session.state, 'closing');
     const beforeRetry = killCalls;
-    await tick(150);
-    await check('sweep retries a wedged stop without faking the exit state', () => {
+    await waitUntil(() => stubbornTerminal._sessions.get(id)?.killState === 'unconfirmed');
+    await check('sweep retries a wedged stop within the bounded budget without faking exit', () => {
       assert.ok(killCalls > beforeRetry, `kill retried ${killCalls - beforeRetry} times`);
+      assert.equal(killCalls, 3);
       assert.equal(stubbornTerminal._sessions.get(id).state, 'closing');
     });
     stubborn.emitExit();
     await tick(10);
     await stubbornTerminal.dispose();
     await stubbornApp.close();
+  }
+
+  {
+    /* P3-B: an unverifiable kill must stop after a bounded budget instead of
+     * retrying a bare pid forever. The public state stays `closing`; only the
+     * real exit event may finish the session. */
+    const wedgedSpawned = [];
+    const wedgedExitListeners = [];
+    const wedged = {
+      pid: 990002,
+      cols: 80,
+      rows: 24,
+      onData() { return { dispose() {} }; },
+      onExit(fn) { wedgedExitListeners.push(fn); return { dispose() {} }; },
+      write() {},
+      resize() {},
+      kill() { throw new Error('Windows must not fall back to pty.kill()'); },
+    };
+    const wedgedTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'bounded-kill', generation: '1' }),
+      limits: {
+        ...TERMINAL_LIMITS,
+        scopeSweepMs: 10,
+        killMaxAttempts: 3,
+        killBackoffMs: [0, 10, 20],
+      },
+      spawnPty: () => wedged,
+      killPty: () => { wedgedSpawned.push(Date.now()); return { result: 'failed' }; },
+      platform: 'fixture',
+    });
+    const wedgedApp = await serve({ terminal: wedgedTerminal });
+    try {
+      const started = await wedgedApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+      const id = started.body.session.id;
+      const stopped = await wedgedApp.request('/api/terminal', { method: 'POST', body: { action: 'stop', id } });
+      assert.equal(stopped.body.session.state, 'closing');
+      await waitUntil(() => wedgedTerminal._sessions.get(id)?.killState === 'unconfirmed');
+      const record = wedgedTerminal._sessions.get(id);
+      await check('an unconfirmed kill is retried only up to the bounded budget', () => {
+        assert.equal(wedgedSpawned.length, 3, `kill attempts: ${wedgedSpawned.length}`);
+        assert.equal(record.state, 'closing');
+        assert.equal(record.killState, 'unconfirmed');
+      });
+      await tick(60);
+      await check('the bounded budget stops further PID kills and never fakes an exit', () => {
+        assert.equal(wedgedSpawned.length, 3, 'kill kept retrying after the budget');
+        assert.equal(record.state, 'closing');
+      });
+    } finally {
+      for (const fn of wedgedExitListeners) fn({ exitCode: 0, signal: null });
+      await wedgedTerminal.dispose();
+      await wedgedApp.close();
+    }
+  }
+
+  {
+    /* mismatch means the pid now belongs to another process. One attempt is
+     * enough: retrying is both useless and unsafe. */
+    let mismatchCalls = 0;
+    const mismatchExitListeners = [];
+    const mismatchPty = {
+      pid: 990003,
+      cols: 80,
+      rows: 24,
+      onData() { return { dispose() {} }; },
+      onExit(fn) { mismatchExitListeners.push(fn); return { dispose() {} }; },
+      write() {},
+      resize() {},
+      kill() { throw new Error('mismatch fell back to pty.kill()'); },
+    };
+    const mismatchTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'identity-mismatch', generation: '1' }),
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 10, killBackoffMs: [0, 10, 20] },
+      spawnPty: () => mismatchPty,
+      killPty: () => { mismatchCalls += 1; return { result: 'mismatch' }; },
+      platform: 'fixture',
+    });
+    const mismatchApp = await serve({ terminal: mismatchTerminal });
+    try {
+      const started = await mismatchApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+      const id = started.body.session.id;
+      await mismatchApp.request('/api/terminal', { method: 'POST', body: { action: 'stop', id } });
+      await waitUntil(() => mismatchTerminal._sessions.get(id)?.killState === 'unconfirmed');
+      const record = mismatchTerminal._sessions.get(id);
+      await check('an identity mismatch is never retried', () => {
+        assert.equal(mismatchCalls, 1);
+        assert.equal(record.state, 'closing');
+        assert.equal(record.killState, 'unconfirmed');
+      });
+    } finally {
+      for (const fn of mismatchExitListeners) fn({ exitCode: 0, signal: null });
+      await mismatchTerminal.dispose();
+      await mismatchApp.close();
+    }
+  }
+
+  {
+    /* While one kill is awaiting the identity query, the sweep must not start
+     * a second overlapping attempt. */
+    let inFlightCalls = 0;
+    let releaseKill = null;
+    const inFlightExitListeners = [];
+    const inFlightPty = {
+      pid: 990004,
+      cols: 80,
+      rows: 24,
+      onData() { return { dispose() {} }; },
+      onExit(fn) { inFlightExitListeners.push(fn); return { dispose() {} }; },
+      write() {},
+      resize() {},
+      kill() { throw new Error('in-flight test fell back to pty.kill()'); },
+    };
+    const inFlightTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'kill-in-flight', generation: '1' }),
+      limits: { ...TERMINAL_LIMITS, scopeSweepMs: 5, killBackoffMs: [0, 10, 20] },
+      spawnPty: () => inFlightPty,
+      killPty: () => {
+        inFlightCalls += 1;
+        return new Promise((resolve) => { releaseKill = resolve; });
+      },
+      platform: 'fixture',
+    });
+    const inFlightApp = await serve({ terminal: inFlightTerminal });
+    try {
+      const started = await inFlightApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
+      const id = started.body.session.id;
+      await inFlightApp.request('/api/terminal', { method: 'POST', body: { action: 'stop', id } });
+      await tick(80);
+      const record = inFlightTerminal._sessions.get(id);
+      await check('the sweep never overlaps an in-flight kill attempt', () => {
+        assert.equal(inFlightCalls, 1, `kill attempts: ${inFlightCalls}`);
+        assert.equal(record.killInFlight, true);
+      });
+      releaseKill({ result: 'failed' });
+      await Promise.resolve();
+      await Promise.resolve();
+      await check('a settled attempt clears the in-flight guard', () => {
+        assert.equal(record.killInFlight, false);
+        assert.equal(record.killState, 'pending');
+      });
+    } finally {
+      for (const fn of inFlightExitListeners) fn({ exitCode: 0, signal: null });
+      await inFlightTerminal.dispose();
+      await inFlightApp.close();
+    }
   }
 
   {
@@ -1364,30 +1522,181 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
   }
 
   {
-    /* Regression for the ConPTY helper crash: once the shell is gone,
-     * node-pty's pty.kill() forks conpty_console_list_agent.js, which calls
-     * AttachConsole on the dead pid and prints an "AttachConsole failed" stack
-     * trace. defaultKillPty only falls back to the PTY handle when this probe
-     * says the shell is still alive, so the probe itself must be honest. */
-    const { ptyProcessAlive } = await import('../server/terminal.js');
-    const { spawn } = await import('node:child_process');
-    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], {
-      stdio: 'ignore',
-      windowsHide: true,
+    /* P3-B: pid alone is not identity. Capture (pid, creation time, image)
+     * right after spawn; before taskkill, re-query and compare. */
+    const identity = require('../lib/process-identity.cjs');
+    await check('identity parsing keeps FILETIME precision and rejects junk', () => {
+      const parsed = identity.parseIdentityOutput(
+        '133555555555555555|C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\r\n'
+      );
+      assert.deepEqual(parsed, {
+        creationTimeUtc: '133555555555555555',
+        imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      });
+      assert.equal(parsed.creationTimeUtc.length, 18);
+      assert.equal(identity.parseIdentityOutput(''), null);
+      assert.equal(identity.parseIdentityOutput('Warning: something'), null);
     });
-    await check('ptyProcessAlive separates a live shell from a dead pid', async () => {
-      try {
-        assert.equal(ptyProcessAlive({ pid: child.pid }), true);
-        assert.equal(ptyProcessAlive({ pid: 0 }), false);
-        assert.equal(ptyProcessAlive(null), false);
-        const gone = new Promise((resolve) => child.once('exit', resolve));
-        child.kill();
-        await gone;
-        for (let i = 0; i < 50 && ptyProcessAlive({ pid: child.pid }); i++) await tick(20);
-        assert.equal(ptyProcessAlive({ pid: child.pid }), false, 'exited pid still reads alive');
-      } finally {
-        try { child.kill(); } catch { /* already gone */ }
+    await check('identity comparison requires creation time and image path', () => {
+      const expected = {
+        state: 'captured',
+        pid: 4321,
+        creationTimeUtc: '133555555555555555',
+        imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      };
+      const found = (creationTimeUtc, imagePath) => ({ state: 'found', creationTimeUtc, imagePath });
+      assert.equal(identity.classifyProcessIdentity(expected, found(expected.creationTimeUtc, expected.imagePath)), 'match');
+      assert.equal(identity.classifyProcessIdentity(expected, found('133555555555555556', expected.imagePath)), 'mismatch');
+      assert.equal(identity.classifyProcessIdentity(expected, found(expected.creationTimeUtc, 'C:\\Windows\\System32\\cmd.exe')), 'mismatch');
+      assert.equal(identity.classifyProcessIdentity(expected, { state: 'gone' }), 'gone');
+      assert.equal(identity.classifyProcessIdentity(expected, { state: 'unknown', reason: 'query_failed' }), 'unknown');
+      assert.equal(identity.classifyProcessIdentity({ state: 'unknown' }, found(expected.creationTimeUtc, expected.imagePath)), 'unknown');
+      assert.equal(
+        identity.normalizeImagePath('C:\\Windows\\System32\\CMD.EXE'),
+        identity.normalizeImagePath('c:/windows/system32/cmd.exe')
+      );
+    });
+    await check('identity query distinguishes gone, empty output, and a failed probe', async () => {
+      const gone = await identity.queryProcessIdentity(4321, {
+        env: { SystemRoot: 'C:\\Windows' },
+        execFile: (_file, _args, _opts, callback) => callback(Object.assign(new Error('exit'), { code: 3 })),
+      });
+      assert.equal(gone.state, 'gone');
+      const failed = await identity.queryProcessIdentity(4321, {
+        env: { SystemRoot: 'C:\\Windows' },
+        execFile: (_file, _args, _opts, callback) => callback(Object.assign(new Error('no'), { code: 'ENOENT' })),
+      });
+      assert.equal(failed.state, 'unknown');
+      /* Exit code 0 with no output is a broken probe, not proof of exit;
+       * only the explicit exit 3 above means the pid is gone. */
+      const empty = await identity.queryProcessIdentity(4321, {
+        env: { SystemRoot: 'C:\\Windows' },
+        execFile: (_file, _args, _opts, callback) => callback(null, ''),
+      });
+      assert.deepEqual(empty, { state: 'unknown', reason: 'empty_output' });
+      const found = await identity.queryProcessIdentity(4321, {
+        env: { SystemRoot: 'C:\\Windows' },
+        execFile: (_file, _args, _opts, callback) => callback(null, '133555555555555555|C:\\Windows\\System32\\cmd.exe\n'),
+      });
+      assert.deepEqual(found, {
+        state: 'found',
+        creationTimeUtc: '133555555555555555',
+        imagePath: 'C:\\Windows\\System32\\cmd.exe',
+      });
+    });
+    await check('the synchronous Electron quit query fails closed', () => {
+      const gone = identity.queryProcessIdentitySync(4321, {
+        env: { SystemRoot: 'C:\\Windows' },
+        execFileSync: () => { throw Object.assign(new Error('exit'), { status: 3 }); },
+      });
+      assert.equal(gone.state, 'gone');
+      const failed = identity.queryProcessIdentitySync(4321, {
+        env: { SystemRoot: 'C:\\Windows' },
+        execFileSync: () => { throw Object.assign(new Error('no'), { code: 'ENOENT' }); },
+      });
+      assert.equal(failed.state, 'unknown');
+      const empty = identity.queryProcessIdentitySync(4321, {
+        env: { SystemRoot: 'C:\\Windows' },
+        execFileSync: () => '',
+      });
+      assert.deepEqual(empty, { state: 'unknown', reason: 'empty_output' });
+    });
+    await check('defaultKillPty refuses an unverified Windows pty but keeps POSIX pty.kill()', async () => {
+      const { defaultKillPty } = await import('../server/terminal.js');
+      const pty = { pid: 4321, kills: 0, kill() { this.kills += 1; } };
+      const outcome = await defaultKillPty(pty, 'win32');
+      assert.equal(outcome.result, 'unknown');
+      assert.equal(pty.kills, 0, 'Windows reached pty.kill() without identity');
+      defaultKillPty(pty, 'linux');
+      assert.equal(pty.kills, 1, 'POSIX pty.kill() no longer runs');
+    });
+  }
+
+  {
+    const { createWindowsKillGate } = await import('../server/terminal.js');
+    const captured = {
+      state: 'captured',
+      pid: 4321,
+      creationTimeUtc: '133555555555555555',
+      imagePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    };
+    const makePty = () => ({
+      pid: 4321,
+      kills: 0,
+      kill() { this.kills += 1; },
+    });
+    const makeGate = ({ current, captureResult = captured, taskkillResult = { ok: true } } = {}) => {
+      const calls = { query: 0, taskkill: 0, taskkillPid: null };
+      const gate = createWindowsKillGate({
+        capture: async () => captureResult,
+        query: async () => { calls.query += 1; return current; },
+        taskkill: async (pid) => { calls.taskkill += 1; calls.taskkillPid = pid; return taskkillResult; },
+        timeoutMs: 20,
+        taskkillTimeoutMs: 20,
+      });
+      return { gate, calls };
+    };
+    const run = async (options) => {
+      const { gate, calls } = makeGate(options);
+      const pty = makePty();
+      gate.capture(pty, captured.imagePath);
+      const outcome = await gate.kill(pty);
+      return { outcome, calls, pty };
+    };
+
+    await check('the identity gate taskkills only the original process', async () => {
+      const { outcome, calls, pty } = await run({
+        current: { state: 'found', creationTimeUtc: captured.creationTimeUtc, imagePath: captured.imagePath },
+      });
+      assert.deepEqual(outcome, { result: 'killed' });
+      assert.equal(calls.query, 1);
+      assert.equal(calls.taskkill, 1);
+      assert.equal(calls.taskkillPid, 4321);
+      assert.equal(pty.kills, 0, 'Windows must not fall back to pty.kill()');
+    });
+
+    await check('a reused or unverifiable pid is never taskkilled', async () => {
+      const cases = [
+        { name: 'gone', current: { state: 'gone' }, expected: 'gone' },
+        {
+          name: 'creation time',
+          current: { state: 'found', creationTimeUtc: '133555555555555556', imagePath: captured.imagePath },
+          expected: 'mismatch',
+        },
+        {
+          name: 'image path',
+          current: { state: 'found', creationTimeUtc: captured.creationTimeUtc, imagePath: 'C:\\Windows\\System32\\cmd.exe' },
+          expected: 'mismatch',
+        },
+        { name: 'query failed', current: { state: 'unknown', reason: 'query_failed' }, expected: 'unknown' },
+        { name: 'capture failed', current: { state: 'gone' }, captureResult: { state: 'unknown', reason: 'image_mismatch' }, expected: 'unknown' },
+      ];
+      for (const item of cases) {
+        const { outcome, calls, pty } = await run(item);
+        assert.equal(outcome.result, item.expected, `${item.name}: ${JSON.stringify(outcome)}`);
+        assert.equal(calls.taskkill, 0, `${item.name} reached taskkill`);
+        assert.equal(pty.kills, 0, `${item.name} fell back to pty.kill()`);
       }
+      const noCapture = await (async () => {
+        const { gate, calls } = makeGate({ current: { state: 'gone' } });
+        const pty = makePty();
+        const outcome = await gate.kill(pty);
+        return { outcome, calls, pty };
+      })();
+      assert.equal(noCapture.outcome.result, 'unknown');
+      assert.equal(noCapture.calls.query, 0);
+      assert.equal(noCapture.calls.taskkill, 0);
+      assert.equal(noCapture.pty.kills, 0);
+    });
+
+    await check('a failed taskkill is reported as failed for bounded retry', async () => {
+      const { outcome, calls, pty } = await run({
+        current: { state: 'found', creationTimeUtc: captured.creationTimeUtc, imagePath: captured.imagePath },
+        taskkillResult: { ok: false, code: 5 },
+      });
+      assert.deepEqual(outcome, { result: 'failed', code: 5 });
+      assert.equal(calls.taskkill, 1);
+      assert.equal(pty.kills, 0);
     });
   }
 
@@ -1808,23 +2117,58 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     }
   }
 
-  await check('the Windows tree-kill fallback is one-shot and ignores a relative SystemRoot', () => {
-    /* spawn() emits both `error` and a non-zero `close` when taskkill is
-     * missing. Without a one-shot guard the second signal calls pty.kill()
-     * again after the ConPTY agent already attached; with a relative
-     * SystemRoot the executable would even be resolved against cwd. */
+  await check('Windows kills are identity-gated and never fall back to pty.kill()', () => {
+    /* P3-B: a taskkill failure used to retry through node-pty, whose ConPTY
+     * agent attaches to the same bare pid and can kill a reused pid. Windows
+     * must only ever reach taskkill after an identity match. */
     const src = fs.readFileSync(path.join(__dirname, '..', 'server', 'terminal-process.js'), 'utf8');
     const from = src.indexOf('export function defaultKillPty');
-    const to = src.indexOf('\n}', src.indexOf('try {\n    pty.kill();', from));
+    const to = src.indexOf('\n}', from);
     const body = src.slice(from, to);
     assert.ok(from > 0 && to > from, 'defaultKillPty not found');
-    assert.match(body, /let fellBack = false;/);
-    assert.match(body, /if \(fellBack\) return;/);
-    assert.match(body, /path\.isAbsolute\(envRoot\)/);
+    assert.match(body, /if \(platform === 'win32'\) return defaultWindowsKillGate\.kill\(pty\)/);
+    assert.match(body, /try \{\s*pty\.kill\(\);\s*\}/, 'POSIX pty.kill() branch missing');
+    assert.ok(!/fallbackToPty|ptyProcessAlive/.test(src), 'old Windows fallback is back');
+    const gateFrom = src.indexOf('export function createWindowsKillGate');
+    const gateTo = src.indexOf('const defaultWindowsKillGate', gateFrom);
+    assert.ok(gateFrom > 0 && gateTo > gateFrom, 'identity gate not found');
+    assert.ok(!/pty\.kill/.test(src.slice(gateFrom, gateTo)), 'identity gate calls pty.kill()');
+    assert.match(src.slice(gateFrom, gateTo), /classifyProcessIdentity/);
+    assert.match(src.slice(gateFrom, gateTo), /taskkill\(/);
+    assert.match(src, /path\.isAbsolute\(envRoot\)/);
+
     const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'electron', 'main.cjs'), 'utf8');
     const mainFrom = mainSrc.indexOf('function killServer()');
     const mainBody = mainSrc.slice(mainFrom, mainSrc.indexOf('\n}', mainFrom));
-    assert.match(mainBody, /path\.isAbsolute\(envRoot\)/);
+    const clean = mainBody.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    assert.match(clean, /classifyProcessIdentity/);
+    assert.match(clean, /queryProcessIdentitySync/);
+    assert.match(clean, /taskkill\.exe/);
+    assert.ok(clean.indexOf('taskkill.exe') < clean.indexOf('server.kill()'), 'taskkill must run before server.kill()');
+    assert.match(clean, /path\.isAbsolute\(envRoot\)/);
+    /* Removing the match guard must fail this test: taskkill has to be inside
+     * the `match` branch, and every other verdict has to log a skip. */
+    assert.match(
+      clean,
+      /if \(verdict === 'match'\) \{[\s\S]*?execFileSync\(taskkill[\s\S]*?\} else \{[\s\S]*?backend_kill_skipped/,
+      'taskkill is not conditional on an identity match'
+    );
+    assert.match(clean, /result: 'taskkill_failed'/, 'a failed taskkill is not distinguished from an identity skip');
+
+    /* The capture callback must compare against the pid captured at spawn,
+     * not the mutable module-level server object. The backend can exit before
+     * the async query resolves, which would otherwise throw on null. */
+    const captureAt = mainSrc.indexOf('processIdentity.captureProcessIdentity(');
+    assert.ok(captureAt > 0, 'backend identity capture missing');
+    const captureBlock = mainSrc.slice(Math.max(0, captureAt - 500), captureAt + 700);
+    assert.match(captureBlock, /const spawnedPid = server\.pid;/, 'capture does not pin the spawned pid');
+    assert.match(captureBlock, /serverIdentity\.pid === spawnedPid/, 'capture callback still reads mutable server state');
+    assert.ok(!/serverIdentity\.pid === server\.pid/.test(captureBlock), 'capture callback dereferences server after exit');
+    assert.match(captureBlock, /\.catch\(/, 'capture rejection is left unhandled');
+    assert.match(captureBlock, /if \(process\.platform === 'win32'\)/, 'identity capture is not Windows-gated');
+
+    const contract = require('../lib/log-contract.cjs');
+    assert.ok(contract.EVENT_CATALOG['electron.backend_kill_skipped'], 'skip event is not declared in the log contract');
   });
 
   await check('node-pty is loaded only from app/source directories, never cwd', () => {
