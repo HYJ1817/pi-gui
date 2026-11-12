@@ -241,7 +241,8 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
       assert.equal(status.body.enabled, true);
       assert.equal(status.body.pty, true);
       assert.equal(status.body.platform, 'fixture');
-      assert.equal(status.body.maxSessions, 2);
+      assert.equal(status.body.maxSessions, 12);
+      assert.equal(status.body.maxSessionsPerWorkspace, 6);
       assert.equal(status.body.limits.maxInputBytes, 64 * 1024);
     });
 
@@ -399,7 +400,7 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     const stoppedRead = await app.request('/api/terminal?' + new URLSearchParams({ id: restartedAgain.body.session.id, since: String(restartedAgain.body.session.cursor) }), { headers: scoped() });
     await check('explicit stop reaches the injected kill path and the real exit state', () => {
       assert.equal(stopped.status, 200);
-      assert.equal(stopped.body.session.state, 'stopping');
+      assert.equal(stopped.body.session.state, 'closing');
       assert.equal(spawned.at(-1).pty.killed, true);
       assert.equal(stoppedRead.body.state, 'exited');
       assert.equal(stoppedRead.body.exitCode, 0);
@@ -412,7 +413,8 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
       assert.equal(spawned.length, 3);
     });
     await check('terminal limits keep native processes and buffers bounded', () => {
-      assert.equal(TERMINAL_LIMITS.maxSessions, 2);
+      assert.equal(TERMINAL_LIMITS.maxSessions, 12);
+      assert.equal(TERMINAL_LIMITS.maxSessionsPerWorkspace, 6);
       assert.equal(TERMINAL_LIMITS.maxBufferChars, 256 * 1024);
       assert.equal(TERMINAL_LIMITS.maxInputBytes, 64 * 1024);
       assert.equal(TERMINAL_LIMITS.minCols, 20);
@@ -468,6 +470,235 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
   } finally {
     await small.dispose();
     await smallApp.close();
+  }
+
+  {
+    /* Idle activity is server-side only: keyboard input and new PTY output
+     * refresh it; read/list/resize and reused start do not. The short idleMs
+     * keeps the test fast without waiting the production 30 minutes. */
+    const idleSpawned = [];
+    const idleTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'idle', generation: '1' }),
+      /* Keep every "still running" assertion at least a few event-loop turns
+       * away from the deadline; CI machines can stall well past 100 ms. */
+      limits: noSweep({ ...TERMINAL_LIMITS, idleMs: 400 }),
+      spawnPty: fakePty(idleSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const idleApp = await serve({ terminal: idleTerminal });
+    const idleRequest = (body) => idleApp.request('/api/terminal', { method: 'POST', body });
+    const idleRead = (id, since = 0) => idleApp.request('/api/terminal?' + new URLSearchParams({
+      id, since: String(since),
+    }));
+    const idleCreate = async () => (await idleRequest({ action: 'create' })).body.session.id;
+    const idleClose = async (id) => idleRequest({ action: 'close', id });
+    const waitForState = async (id, state, timeout = 2000) => {
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeout) {
+        const response = await idleRead(id);
+        if (response.body.state === state) return response;
+        await tick(10);
+      }
+      throw new Error(`terminal ${id} did not reach ${state}`);
+    };
+    try {
+      const polled = await idleCreate();
+      const pollStart = Date.now();
+      let sawRunning = false;
+      while (Date.now() - pollStart < 900) {
+        const response = await idleRead(polled);
+        sawRunning ||= response.body.state === 'running';
+        await tick(15);
+      }
+      const polledEnd = await idleRead(polled);
+      await check('continuous reads alone do not keep a silent terminal alive', () => {
+        assert.equal(sawRunning, true);
+        assert.equal(polledEnd.body.state, 'exited');
+        assert.ok(polledEnd.body.text.includes('空闲超时'));
+      });
+      const restarted = await idleRequest({ action: 'start' });
+      await check('an idle-stopped terminal stays exited but can be restarted', () => {
+        assert.equal(restarted.body.ok, true);
+        assert.notEqual(restarted.body.session.id, polled);
+        assert.equal(restarted.body.session.state, 'running');
+      });
+      await idleClose(restarted.body.session.id);
+
+      const typed = await idleCreate();
+      await tick(160);
+      await idleRequest({ action: 'input', id: typed, data: 'a' });
+      await tick(160);
+      const typedMid = await idleRead(typed);
+      await tick(320);
+      const typedEnd = await idleRead(typed);
+      await check('real keyboard input refreshes the idle deadline', () => {
+        assert.equal(typedMid.body.state, 'running');
+        assert.equal(typedEnd.body.state, 'exited');
+      });
+      await idleClose(typed);
+
+      const output = await idleCreate();
+      await tick(160);
+      idleTerminal._sessions.get(output).pty.emitData('progress');
+      await tick(160);
+      const outputMid = await idleRead(output);
+      await tick(320);
+      const outputEnd = await idleRead(output);
+      await check('new PTY output refreshes the idle deadline', () => {
+        assert.equal(outputMid.body.state, 'running');
+        assert.equal(outputEnd.body.state, 'exited');
+      });
+      await idleClose(output);
+
+      const history = await idleCreate();
+      idleTerminal._sessions.get(history).pty.emitData('history-output');
+      await tick(120);
+      const historyStart = Date.now();
+      while (Date.now() - historyStart < 520) {
+        const response = await idleRead(history);
+        assert.ok(response.body.text.includes('history-output'));
+        await tick(15);
+      }
+      const historyEnd = await idleRead(history);
+      await check('reading already-buffered output does not refresh idle', () => {
+        assert.equal(historyEnd.body.state, 'exited');
+      });
+      await idleClose(history);
+
+      const first = await idleCreate();
+      const second = await idleCreate();
+      await tick(300);
+      await idleRequest({ action: 'input', id: first, data: 'x' });
+      /* Reading first and listing the workspace must not refresh second. Wait
+       * for second to expire on its own; first still has its post-input window. */
+      await idleRead(first);
+      await idleRequest({ action: 'list' });
+      const secondEnd = await waitForState(second, 'exited');
+      const firstMid = await idleRead(first);
+      const firstEnd = await waitForState(first, 'exited');
+      await check('terminals have independent idle clocks and observation does not reset a background one', () => {
+        assert.equal(firstMid.body.state, 'running');
+        assert.equal(secondEnd.body.state, 'exited');
+        assert.equal(firstEnd.body.state, 'exited');
+      });
+      await idleClose(first);
+      await idleClose(second);
+
+      const background = await idleCreate();
+      const backgroundPty = idleTerminal._sessions.get(background).pty;
+      const outputTimer = setInterval(() => backgroundPty.emitData('tick'), 60);
+      await tick(1000);
+      clearInterval(outputTimer);
+      const backgroundMid = await idleRead(background);
+      await tick(600);
+      const backgroundEnd = await idleRead(background);
+      await check('a hidden panel does not stop a background PTY, and its output keeps it alive', () => {
+        assert.equal(backgroundMid.body.state, 'running');
+        assert.equal(backgroundEnd.body.state, 'exited');
+      });
+      await idleClose(background);
+
+      const legacyStart = await idleRequest({ action: 'start' });
+      const legacyId = legacyStart.body.session.id;
+      const legacySession = idleTerminal._sessions.get(legacyId);
+      const legacyActivity = legacySession.lastActivityAt;
+      const legacyStartAt = Date.now();
+      while (Date.now() - legacyStartAt < 240) {
+        await idleRequest({ action: 'start' });
+        await tick(20);
+      }
+      await tick(300);
+      const legacyEnd = await idleRead(legacyId);
+      await check('reusing a live session through start does not refresh idle', () => {
+        assert.equal(legacySession.lastActivityAt, legacyActivity);
+        assert.equal(legacyEnd.body.state, 'exited');
+      });
+      await idleClose(legacyId);
+
+      const resizedId = await idleCreate();
+      const resizedSession = idleTerminal._sessions.get(resizedId);
+      const resizedActivity = resizedSession.lastActivityAt;
+      const resizeStart = Date.now();
+      while (Date.now() - resizeStart < 240) {
+        await idleRequest({ action: 'resize', id: resizedId, cols: 90, rows: 30 });
+        await tick(20);
+      }
+      await tick(300);
+      const resizedEnd = await idleRead(resizedId);
+      await check('resize is layout, not activity', () => {
+        assert.equal(resizedSession.lastActivityAt, resizedActivity);
+        assert.equal(resizedEnd.body.state, 'exited');
+      });
+      await idleClose(resizedId);
+
+      const naturalId = await idleCreate();
+      const naturalSession = idleTerminal._sessions.get(naturalId);
+      naturalSession.pty.emitExit(0);
+      await tick(10);
+      const naturalTimer = naturalSession.idleTimer;
+      await tick(600);
+      const naturalEnd = await idleRead(naturalId);
+      await check('a naturally exited terminal clears its idle timer and never gets an idle message', () => {
+        assert.equal(naturalTimer, null);
+        assert.equal(naturalEnd.body.state, 'exited');
+        assert.equal(naturalEnd.body.exitCode, 0);
+        assert.equal(naturalSession.pty.killed, false);
+        assert.ok(!naturalEnd.body.text.includes('空闲超时'));
+      });
+      await idleClose(naturalId);
+    } finally {
+      await idleTerminal.dispose();
+      await idleApp.close();
+    }
+  }
+
+  {
+    /* If the idle kill is wedged, the record stays tracked as closing and the
+     * existing scope sweep retries; only the real exit changes the state. */
+    let killCalls = 0;
+    const exitListeners = [];
+    const wedged = {
+      pid: 991002,
+      cols: 80,
+      rows: 24,
+      onData() { return { dispose() {} }; },
+      onExit(fn) { exitListeners.push(fn); return { dispose() {} }; },
+      write() {},
+      resize() {},
+      kill() { killCalls++; },
+      emitExit() { for (const fn of [...exitListeners]) fn({ exitCode: 0, signal: null }); },
+    };
+    const wedgedTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'idle-wedged', generation: '1' }),
+      limits: { ...TERMINAL_LIMITS, idleMs: 80, scopeSweepMs: 20 },
+      spawnPty: () => wedged,
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const wedgedApp = await serve({ terminal: wedgedTerminal });
+    try {
+      const started = await wedgedApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } });
+      const id = started.body.session.id;
+      await tick(200);
+      const firstKills = killCalls;
+      const session = wedgedTerminal._sessions.get(id);
+      assert.equal(session?.state, 'closing');
+      assert.ok(firstKills > 0);
+      await tick(100);
+      await check('a wedged idle kill stays tracked and is retried by the sweep', () => {
+        assert.ok(killCalls > firstKills);
+        assert.equal(wedgedTerminal._sessions.get(id)?.state, 'closing');
+      });
+      wedged.emitExit();
+      await tick(10);
+      await check('the idle-stopped session reaches exited only after the real exit event', () => {
+        assert.equal(wedgedTerminal._sessions.get(id)?.state, 'exited');
+      });
+    } finally {
+      await wedgedTerminal.dispose();
+      await wedgedApp.close();
+    }
   }
 
   {
@@ -771,7 +1002,7 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     await tick(100);
     await check('a failed retirement keeps the session tracked and retries the tree kill', () => {
       assert.ok(killCalls > beforeRetry, `kill retried ${killCalls - beforeRetry} times`);
-      assert.equal(wedgedTerminal._sessions.get(id)?.state, 'stopping');
+      assert.equal(wedgedTerminal._sessions.get(id)?.state, 'closing');
     });
     wedged.emitExit();
     await tick(10);
@@ -884,12 +1115,12 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     const started = await stubbornApp.request('/api/terminal', { method: 'POST', body: { action: 'start' } });
     const id = started.body.session.id;
     const stopResult = await stubbornApp.request('/api/terminal', { method: 'POST', body: { action: 'stop', id } });
-    assert.equal(stopResult.body.session.state, 'stopping');
+    assert.equal(stopResult.body.session.state, 'closing');
     const beforeRetry = killCalls;
     await tick(150);
     await check('sweep retries a wedged stop without faking the exit state', () => {
       assert.ok(killCalls > beforeRetry, `kill retried ${killCalls - beforeRetry} times`);
-      assert.equal(stubbornTerminal._sessions.get(id).state, 'stopping');
+      assert.equal(stubbornTerminal._sessions.get(id).state, 'closing');
     });
     stubborn.emitExit();
     await tick(10);
@@ -950,14 +1181,431 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     });
   }
 
+  {
+    /* P2: three sessions in one workspace, a forge from another workspace, and
+     * close/stop affecting only their own PTY. */
+    const multiSpawned = [];
+    const multiScopes = {
+      a: { root: rootA, scopeId: 'multi-a', generation: '1' },
+      b: { root: rootB, scopeId: 'multi-b', generation: '1' },
+    };
+    const multi = createTerminal({
+      scopeForRequest: async (req) => multiScopes[req.headers?.['x-pi-gui-conversation'] || 'a'],
+      limits: noSweep(TERMINAL_LIMITS),
+      spawnPty: fakePty(multiSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+      env: { PATH: 'fixture', HOME: world },
+    });
+    const multiApp = await serve({ terminal: multi });
+    try {
+      const created = [];
+      for (const size of [{ cols: 100, rows: 30 }, { cols: 120, rows: 40 }, { cols: 80, rows: 24 }]) {
+        created.push(await multiApp.request('/api/terminal', {
+          method: 'POST',
+          headers: scoped('a'),
+          body: {
+            action: 'create', ...size,
+            shell: 'evil.exe', cwd: outside, args: ['--evil'], env: { PI_GUI_TOKEN: 'leak' },
+          },
+        }));
+      }
+      const ids = created.map((result) => result.body.session.id);
+      const listed = await multiApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'list' } });
+      await check('create opens three independent sessions with random ids and inherited cwd', () => {
+        assert.ok(created.every((result) => result.status === 200 && result.body.ok && result.body.reused === false));
+        assert.equal(new Set(ids).size, 3);
+        for (const id of ids) {
+          assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+        }
+        assert.deepEqual(created.map((result) => result.body.session.ordinal), [1, 2, 3]);
+        assert.deepEqual(listed.body.sessions.map((session) => session.id), ids);
+        assert.equal(listed.body.sessions.length, 3);
+        assert.match(listed.body.workspace.id, /^[0-9a-f]{32}$/);
+        assert.ok(!JSON.stringify(listed.body.workspace).includes(rootB));
+        assert.equal(new Set(multiSpawned.map((spawn) => spawn.pty.pid)).size, 3);
+        assert.ok(multiSpawned.every((spawn) => spawn.cwd === fs.realpathSync.native(rootA)));
+        assert.ok(multiSpawned.every((spawn) => spawn.file === '/bin/sh' && spawn.args.length === 0));
+        assert.ok(multiSpawned.every((spawn) => spawn.env.PI_GUI_TOKEN === undefined));
+        assert.ok(!ids.includes(String(multiSpawned[0].pty.pid)));
+      });
+
+      const input = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('a'), body: { action: 'input', id: ids[0], data: 'echo one\r' },
+      });
+      multiSpawned[1].pty.emitData('only-two\r\n');
+      for (const spawn of multiSpawned) spawn.pty.emitData('');
+      const readZero = await multiApp.request('/api/terminal?' + new URLSearchParams({ id: ids[0], since: '0' }), { headers: scoped('a') });
+      const readOne = await multiApp.request('/api/terminal?' + new URLSearchParams({ id: ids[1], since: '0' }), { headers: scoped('a') });
+      const readOneTail = await multiApp.request('/api/terminal?' + new URLSearchParams({ id: ids[1], since: String(readOne.body.cursor) }), { headers: scoped('a') });
+      await check('input and output stay isolated per terminal', () => {
+        assert.equal(input.status, 200);
+        assert.deepEqual(multiSpawned[0].pty.writes, ['echo one\r']);
+        assert.deepEqual(multiSpawned[1].pty.writes, []);
+        assert.deepEqual(multiSpawned[2].pty.writes, []);
+        assert.equal(readZero.body.text, '');
+        assert.equal(readOne.body.text, 'only-two\r\n');
+        assert.equal(readOneTail.body.text, '');
+        assert.equal(readOne.body.cursor, 'only-two\r\n'.length);
+      });
+
+      const foreign = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('b'), body: { action: 'create' },
+      });
+      const foreignId = foreign.body.session.id;
+      const foreignCalls = await Promise.all([
+        multiApp.request('/api/terminal?' + new URLSearchParams({ id: foreignId, since: '0' }), { headers: scoped('a') }),
+        multiApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'input', id: foreignId, data: 'x' } }),
+        multiApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'resize', id: foreignId, cols: 90, rows: 25 } }),
+        multiApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'stop', id: foreignId } }),
+        multiApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'close', id: foreignId } }),
+      ]);
+      const foreignList = await multiApp.request('/api/terminal', { method: 'POST', headers: scoped('b'), body: { action: 'list' } });
+      await check('a forged id from another workspace cannot be read, written, resized, stopped or closed', () => {
+        assert.ok(foreignCalls.every((result) => result.status === 409 && result.body.code === 'stale_workspace'));
+        assert.equal(multiSpawned[3].pty.killed, false);
+        assert.equal(multiSpawned[3].pty.writes.length, 0);
+        assert.deepEqual(foreignList.body.sessions.map((session) => session.id), [foreignId]);
+      });
+
+      const stopped = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('a'), body: { action: 'stop', id: ids[2] },
+      });
+      const stoppedList = await multiApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'list' } });
+      await check('stopping one tab keeps the other running terminals and their buffers', () => {
+        assert.equal(stopped.body.ok, true);
+        assert.equal(stopped.body.session.state, 'closing');
+        assert.equal(multiSpawned[2].pty.killed, true);
+        assert.equal(multiSpawned[0].pty.killed, false);
+        assert.equal(multiSpawned[1].pty.killed, false);
+        const states = Object.fromEntries(stoppedList.body.sessions.map((session) => [session.id, session.state]));
+        assert.equal(states[ids[0]], 'running');
+        assert.equal(states[ids[1]], 'running');
+        assert.equal(states[ids[2]], 'exited');
+        assert.equal(stoppedList.body.sessions.length, 3);
+      });
+
+      const closed = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('a'), body: { action: 'close', id: ids[1] },
+      });
+      const closedAgain = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('a'), body: { action: 'close', id: ids[1] },
+      });
+      await tick(20);
+      const afterClose = await multiApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'list' } });
+      await check('close removes one tab, is idempotent, and leaves the others alive', () => {
+        assert.equal(closed.status, 200);
+        assert.equal(closed.body.closed, true);
+        assert.equal(closedAgain.status, 200);
+        assert.equal(closedAgain.body.ok, true);
+        assert.equal(closedAgain.body.missing, true);
+        assert.equal(multiSpawned[1].pty.killed, true);
+        assert.equal(multiSpawned[0].pty.killed, false);
+        assert.equal(multi._sessions.has(ids[1]), false);
+        assert.deepEqual(afterClose.body.sessions.map((session) => session.id), [ids[0], ids[2]]);
+      });
+
+      const closeForeign = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('b'), body: { action: 'close', id: foreignId },
+      });
+      const forgedId = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('a'), body: { action: 'close', id: 'x'.repeat(129) },
+      });
+      await check('close verifies ownership and treats an unknown id as idempotent', () => {
+        assert.equal(closeForeign.status, 200);
+        assert.equal(closeForeign.body.closed, true);
+        assert.equal(forgedId.status, 200);
+        assert.equal(forgedId.body.missing, true);
+      });
+
+      /* Legacy `start` replaces the focused workspace's finished tab. It must
+       * not delete another workspace's exited tab, which is still restartable
+       * when the user returns there. */
+      const startB = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('b'), body: { action: 'start' },
+      });
+      const startBId = startB.body.session?.id;
+      const listAAfterStartB = await multiApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('a'), body: { action: 'list' },
+      });
+      await check('a legacy start in workspace B does not prune workspace A exited tabs', () => {
+        assert.equal(startB.status, 200);
+        assert.ok(listAAfterStartB.body.sessions.some((session) => session.id === ids[2] && session.state === 'exited'));
+      });
+
+      const closeLast = await Promise.all([ids[0], ids[2], startBId].map((id) => multiApp.request('/api/terminal', {
+        method: 'POST',
+        headers: scoped(id === startBId ? 'b' : 'a'),
+        body: { action: 'close', id },
+      })));
+      assert.ok(closeLast.every((result) => result.status === 200 && result.body.ok));
+      await tick(30);
+      await check('every terminal created in this block is gone after closing', () => {
+        assert.equal(multi._sessions.size, 0);
+        assert.ok(multiSpawned.every((spawn) => spawn.pty.killed));
+      });
+    } finally {
+      await multi.dispose();
+      await multiApp.close();
+    }
+  }
+
+  {
+    let failNext = false;
+    const failSpawned = [];
+    const baseSpawn = fakePty(failSpawned);
+    const failTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'multi-start-fail', generation: '1' }),
+      limits: noSweep(TERMINAL_LIMITS),
+      spawnPty: (spawnArgs) => {
+        if (failNext) throw Object.assign(new Error('node-pty unavailable'), { code: 'pty_unavailable' });
+        return baseSpawn(spawnArgs);
+      },
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const failApp = await serve({ terminal: failTerminal });
+    try {
+      const first = await failApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } });
+      const second = await failApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } });
+      failNext = true;
+      const failed = await failApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } });
+      await check('a failed create removes only its own record and leaves the other terminals running', () => {
+        assert.equal(failed.status, 503);
+        assert.equal(failed.body.code, 'pty_unavailable');
+        assert.equal(failTerminal._sessions.size, 2);
+        assert.equal(failSpawned.length, 2);
+        assert.equal(failTerminal._sessions.get(first.body.session.id).state, 'running');
+        assert.equal(failTerminal._sessions.get(second.body.session.id).state, 'running');
+      });
+      failNext = false;
+      const third = await failApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } });
+      await check('create recovers after a failed spawn without renumbering the surviving tabs', () => {
+        assert.equal(third.status, 200);
+        assert.equal(third.body.session.ordinal, 3);
+        assert.equal(failTerminal._sessions.size, 3);
+      });
+    } finally {
+      await failTerminal.dispose();
+      await failApp.close();
+    }
+  }
+
+  {
+    /* Per-workspace and global caps count tabs, including exited tabs whose
+     * buffers are still visible. Closing an exited tab frees its slot. */
+    const capScopes = {
+      a: { root: rootA, scopeId: 'cap-a', generation: '1' },
+      b: { root: rootB, scopeId: 'cap-b', generation: '1' },
+    };
+    const capSpawned = [];
+    const capTerminal = createTerminal({
+      scopeForRequest: async (req) => capScopes[req.headers?.['x-pi-gui-conversation'] || 'a'],
+      limits: noSweep({ ...TERMINAL_LIMITS, maxSessions: 3, maxSessionsPerWorkspace: 2 }),
+      spawnPty: fakePty(capSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const capApp = await serve({ terminal: capTerminal });
+    try {
+      const a1 = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'create' } });
+      const a2 = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'create' } });
+      const a3 = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'create' } });
+      const b1 = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('b'), body: { action: 'create' } });
+      const b2 = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('b'), body: { action: 'create' } });
+      await check('per-workspace and global caps reject without killing existing terminals', () => {
+        assert.equal(a1.status, 200);
+        assert.equal(a2.status, 200);
+        assert.equal(a3.status, 409);
+        assert.equal(a3.body.code, 'terminal_limit');
+        assert.equal(a3.body.limit, 'workspace');
+        assert.equal(b1.status, 200);
+        assert.equal(b2.status, 409);
+        assert.equal(b2.body.limit, 'global');
+        assert.equal(capSpawned.length, 3);
+        assert.ok(capSpawned.every((spawn) => spawn.pty.killed === false));
+      });
+
+      capSpawned[0].pty.emitExit(0, null);
+      await tick(10);
+      const blockedByExited = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'create' } });
+      const closedExited = await capApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('a'), body: { action: 'close', id: a1.body.session.id },
+      });
+      const a4 = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'create' } });
+      const listA = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'list' } });
+      await check('an exited tab still occupies its slot until closed, then a new tab gets the next ordinal', () => {
+        assert.equal(blockedByExited.status, 409);
+        assert.equal(blockedByExited.body.code, 'terminal_limit');
+        assert.equal(closedExited.status, 200);
+        assert.equal(closedExited.body.closed, true);
+        assert.equal(a4.status, 200);
+        assert.equal(a4.body.session.ordinal, 3);
+        assert.deepEqual(listA.body.sessions.map((session) => session.ordinal), [2, 3]);
+      });
+
+      const closeA = await Promise.all([a2, a4].map((result) => capApp.request('/api/terminal', {
+        method: 'POST', headers: scoped('a'), body: { action: 'close', id: result.body.session.id },
+      })));
+      await tick(20);
+      const a5 = await capApp.request('/api/terminal', { method: 'POST', headers: scoped('a'), body: { action: 'create' } });
+      await check('closing every tab in a workspace resets its tab numbering', () => {
+        assert.ok(closeA.every((result) => result.status === 200));
+        assert.equal(a5.status, 200);
+        assert.equal(a5.body.session.ordinal, 1);
+      });
+    } finally {
+      await capTerminal.dispose();
+      await capApp.close();
+    }
+  }
+
+  {
+    /* Classic chat switches folders by incrementing a generation; the folder
+     * itself is the stable identity, so returning must find the same PTY. A
+     * runtime workspace epoch is deliberately not stable. */
+    let stableScope = { root: rootA, scopeId: 'classic-chat', generation: '1', stable: true };
+    const stableSpawned = [];
+    const stableTerminal = createTerminal({
+      scopeForRequest: async () => stableScope,
+      scopeForSession: async () => stableScope,
+      limits: noSweep(TERMINAL_LIMITS),
+      spawnPty: fakePty(stableSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const stableApp = await serve({ terminal: stableTerminal });
+    try {
+      const first = await stableApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } });
+      const id = first.body.session.id;
+      stableScope = { ...stableScope, generation: '2' };
+      stableSpawned[0].pty.emitData('still-here\r\n');
+      const list = await stableApp.request('/api/terminal', { method: 'POST', body: { action: 'list' } });
+      const read = await stableApp.request('/api/terminal?' + new URLSearchParams({ id, since: '0' }));
+      const input = await stableApp.request('/api/terminal', { method: 'POST', body: { action: 'input', id, data: 'echo back\r' } });
+      await check('a stable classic workspace reconnects to the same live PTY after a generation change', () => {
+        assert.deepEqual(list.body.sessions.map((session) => session.id), [id]);
+        assert.equal(read.body.ok, true);
+        assert.equal(read.body.text, 'still-here\r\n');
+        assert.equal(input.status, 200);
+        assert.deepEqual(stableSpawned[0].pty.writes, ['echo back\r']);
+        assert.equal(stableSpawned.length, 1);
+      });
+    } finally {
+      await stableTerminal.dispose();
+      await stableApp.close();
+    }
+
+    let runtimeScope = { root: rootA, scopeId: 'runtime-epoch', generation: '10' };
+    const runtimeSpawned = [];
+    const runtimeTerminal = createTerminal({
+      scopeForRequest: async () => runtimeScope,
+      limits: noSweep(TERMINAL_LIMITS),
+      spawnPty: fakePty(runtimeSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const runtimeApp = await serve({ terminal: runtimeTerminal });
+    try {
+      const first = await runtimeApp.request('/api/terminal', { method: 'POST', headers: scoped('epoch'), body: { action: 'create' } });
+      runtimeScope = { ...runtimeScope, generation: '11' };
+      const read = await runtimeApp.request('/api/terminal?' + new URLSearchParams({ id: first.body.session.id, since: '0' }), { headers: scoped('epoch') });
+      await check('a recreated runtime workspace epoch retires its old shell instead of resurrecting it', () => {
+        assert.equal(read.status, 409);
+        assert.equal(read.body.code, 'stale_workspace');
+        assert.equal(runtimeSpawned[0].pty.killed, true);
+      });
+    } finally {
+      await runtimeTerminal.dispose();
+      await runtimeApp.close();
+    }
+  }
+
+  {
+    const floodSpawned = [];
+    const floodTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'flood', generation: '1' }),
+      limits: noSweep({ ...TERMINAL_LIMITS, maxBufferChars: 1024 }),
+      spawnPty: fakePty(floodSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const floodApp = await serve({ terminal: floodTerminal });
+    try {
+      const created = [];
+      for (let i = 0; i < 3; i++) {
+        created.push(await floodApp.request('/api/terminal', { method: 'POST', body: { action: 'create' } }));
+      }
+      const ids = created.map((result) => result.body.session.id);
+      for (let i = 0; i < 3; i++) {
+        floodSpawned[i].pty.emitData(String.fromCharCode(65 + i).repeat(2000));
+      }
+      const reads = await Promise.all(ids.map((id) => floodApp.request('/api/terminal?' + new URLSearchParams({ id, since: '0' }))));
+      await check('mass output in one terminal is bounded and never bleeds into another', () => {
+        for (let i = 0; i < 3; i++) {
+          const text = reads[i].body.text;
+          assert.equal(reads[i].body.truncated, true);
+          assert.equal(text.length, 1024);
+          assert.equal(text, String.fromCharCode(65 + i).repeat(1024));
+          assert.equal(reads[i].body.cursor, 2000);
+        }
+      });
+    } finally {
+      await floodTerminal.dispose();
+      await floodApp.close();
+    }
+  }
+
+  {
+    const rapidSpawned = [];
+    const rapidTerminal = createTerminal({
+      scopeForRequest: async () => ({ root: rootA, scopeId: 'rapid', generation: '1' }),
+      limits: noSweep(TERMINAL_LIMITS),
+      spawnPty: fakePty(rapidSpawned),
+      killPty: (pty) => pty.kill(),
+      platform: 'fixture',
+    });
+    const rapidApp = await serve({ terminal: rapidTerminal });
+    try {
+      const created = await Promise.all([0, 1, 2].map(() => rapidApp.request('/api/terminal', {
+        method: 'POST', body: { action: 'create' },
+      })));
+      const ids = created.map((result) => result.body.session.id);
+      const closed = await Promise.all(ids.map((id) => rapidApp.request('/api/terminal', {
+        method: 'POST', body: { action: 'close', id },
+      })));
+      await tick(30);
+      await check('rapid create/close leaves no session or process behind', () => {
+        assert.ok(created.every((result) => result.status === 200));
+        assert.ok(closed.every((result) => result.status === 200 && result.body.ok));
+        assert.equal(rapidSpawned.length, 3);
+        assert.ok(rapidSpawned.every((spawn) => spawn.pty.killed));
+        assert.equal(rapidTerminal._sessions.size, 0);
+      });
+
+      const live = await Promise.all([0, 1, 2].map(() => rapidApp.request('/api/terminal', {
+        method: 'POST', body: { action: 'create' },
+      })));
+      assert.ok(live.every((result) => result.status === 200));
+      const exitPromise = rapidTerminal.dispose();
+      await check('app exit kills every workspace terminal and waits for their real exits', async () => {
+        await exitPromise;
+        assert.equal(rapidTerminal._sessions.size, 0);
+        assert.ok(rapidSpawned.slice(-3).every((spawn) => spawn.pty.killed));
+      });
+    } finally {
+      await rapidApp.close();
+    }
+  }
+
   await check('the Windows tree-kill fallback is one-shot and ignores a relative SystemRoot', () => {
     /* spawn() emits both `error` and a non-zero `close` when taskkill is
      * missing. Without a one-shot guard the second signal calls pty.kill()
      * again after the ConPTY agent already attached; with a relative
      * SystemRoot the executable would even be resolved against cwd. */
-    const src = fs.readFileSync(path.join(__dirname, '..', 'server', 'terminal.js'), 'utf8');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'server', 'terminal-process.js'), 'utf8');
     const from = src.indexOf('export function defaultKillPty');
-    const to = src.indexOf('export function createTerminal');
+    const to = src.indexOf('\n}', src.indexOf('try {\n    pty.kill();', from));
     const body = src.slice(from, to);
     assert.ok(from > 0 && to > from, 'defaultKillPty not found');
     assert.match(body, /let fellBack = false;/);
@@ -973,7 +1621,7 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
     /* The desktop backend's cwd is the user-writable data directory. If the
      * loader searched it, a planted node_modules/node-pty would run arbitrary
      * native code before any auth check. */
-    const src = fs.readFileSync(path.join(__dirname, '..', 'server', 'terminal.js'), 'utf8');
+    const src = fs.readFileSync(path.join(__dirname, '..', 'server', 'terminal-process.js'), 'utf8');
     const from = src.indexOf('function loadNodePty');
     const to = src.indexOf('export function defaultSpawnPty');
     assert.ok(from > 0 && to > from, 'loadNodePty not found');

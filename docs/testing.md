@@ -275,18 +275,26 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 > 想强制走最小 PDF 那条路（复现 CI）：`PI_GUI_SKIP_LIBREOFFICE=1 npm run fixtures`。
 
 `test:terminal:source` 启动普通 `node server.js`，从仓库 `node_modules/node-pty` 加载
-原生模块，在临时 cwd/data 中启动真实 PowerShell，验证 `node -v`、`PI_GUI_TOKEN` 不进入
-PTY 子环境，并等待真实退出状态。它只证明源码 Node 运行时。
+原生模块，在临时 cwd/data 中启动真实 PowerShell。它创建三个独立会话，验证并行命令的
+时序与输出隔离、`node -v`、`PI_GUI_TOKEN` 不进入 PTY 子环境、workspace B 只能列出自己的
+终端且伪造 A 的 id 被拒绝、回到 A 后接管同一批 PTY 和缓冲、关闭一个标签只树杀自己的
+进程树，并等待真实退出状态。它只证明源码 Node 运行时。空闲计时在假 PTY 套件中用
+短 `idleMs` 覆盖：持续 `read` 不会续期、输入和新输出会续期、历史读取与 `resize` 不会、
+多终端时钟独立、面板隐藏不终止、自然退出清除计时器、停止失败由 sweep 重试；真实 source
+运行不等待生产 30 分钟窗口。
 
 `test:terminal:electron` 与 B 层不是同一个运行时：`test:app` 用 Node 启动打包后的
 `server.cjs`（随包 node-pty），`test:exe` 验证 Node SEA 便携版；两者都不能替代 Electron
 自带 Node 的加载路径。该专项把 `dist-app/Pi GUI-win32-x64` 复制到 `os.tmpdir()` 的
 独立目录（祖先路径没有 `node_modules`），用真实 Electron 44.4.3、临时 `PI_GUI_DATA` /
-`PI_CWD` / fake Pi 启动，经 CDP 驱动真实 xterm，覆盖 PowerShell、`node -v`、Node REPL、
-Ctrl+C、ANSI 颜色、光标定位、alternate screen、resize、面板关闭/重开的缓冲重放，
-以及关闭应用后的 shell/Node 子进程按身份清理。非 Windows 或缺少构建产物返回 exit 2
-（skip）；Windows 上无桌面会话、Electron 起不来或任一断言失败会明确非零退出，不得记为通过。
-运行前必须重建 `build:app`。
+`PI_CWD` / fake Pi 启动，经 CDP 驱动真实 xterm。除 P1 的 PowerShell、`node -v`、Node REPL、
+Ctrl+C、ANSI 颜色、光标定位、alternate screen、resize、面板关闭/重开的缓冲重放外，
+P2 还通过界面按钮创建三个标签、验证并行输出与各自视图、切换标签不重建 PTY、关闭一个
+标签不影响其余会话、关闭并重开面板后按 `list` 恢复两个标签，最后在两个会话内各启动一个
+带命令行标记的 Node 子进程，验证关闭应用后两组进程树都按身份清理。加
+`--shots <dir>` 会写出真实窗口截图；仓库的 P2 证据在 `docs/terminal-p2-evidence/`。
+非 Windows 或缺少构建产物返回 exit 2（skip）；Windows 上无桌面会话、Electron 起不来或
+任一断言失败会明确非零退出，不得记为通过。运行前必须重建 `build:app`。
 
 ## 二、`npm test` 的定位
 

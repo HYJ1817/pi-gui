@@ -1,28 +1,39 @@
-/* Project-scoped PTY terminal for the right-pane Terminal surface.
+/* Project-scoped PTY terminals for the right-pane Terminal surface.
  *
  * The renderer never supplies a cwd, shell executable, arguments or environment.
  * Those come from the focused conversation's workspace identity and from the
  * server's own platform defaults. The HTTP body carries only an action, a
  * session id, raw keyboard bytes and terminal dimensions.
  *
+ * P2 keeps several independent sessions per workspace. Each session owns one
+ * PTY and one bounded output buffer; input, resize, stop and close are always
+ * checked against the requesting workspace. The renderer may list only the
+ * sessions of its current workspace, and a session from another workspace can
+ * neither be read nor controlled with a forged id.
+ *
  * PTY output is kept byte-for-byte (well, code-unit-for-code-unit): CR, ANSI
  * escapes and cursor movement are not normalized. The buffer is bounded in
  * memory and is never written to logs. A session keeps running when the xterm
- * surface is closed, so reopening the panel can reconnect to it; it is stopped
- * by an explicit stop, a workspace change, an idle timeout or app shutdown.
+ * surface is closed or the user focuses another workspace; it is stopped by an
+ * explicit stop/close, a confirmed workspace invalidation, an idle timeout or
+ * app shutdown. Only an explicit close removes a stopped tab from the ledger.
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
 import { normalizeForCompare, realPathOrNull } from '../lib/safe-path.js';
 import { json, readRawBody } from './http-utils.js';
 import { scrubInternalEnv } from './child-env.js';
+import {
+  resolveTerminalShell,
+  defaultSpawnPty,
+  defaultKillPty,
+} from './terminal-process.js';
+
+export { resolveTerminalShell, defaultSpawnPty, defaultKillPty, ptyProcessAlive } from './terminal-process.js';
 
 export const TERMINAL_LIMITS = Object.freeze({
-  maxSessions: 2,
+  maxSessions: 12,
+  maxSessionsPerWorkspace: 6,
   maxInputBytes: 64 * 1024,
   maxBufferChars: 256 * 1024,
   maxBodyBytes: 128 * 1024,
@@ -33,9 +44,11 @@ export const TERMINAL_LIMITS = Object.freeze({
   maxRows: 200,
   defaultCols: 80,
   defaultRows: 24,
-  /* Recheck the focused workspace even when the terminal panel is closed.
-   * Without this, switching projects while another surface is open would
-   * leave the old shell alive until its idle timeout. */
+  /* Recheck each session's own workspace even when the terminal panel is
+   * closed. A deleted conversation or workspace must release its shells even
+   * if the shell keeps producing output. A different focused workspace is not
+   * a reason to stop anything: P2 keeps per-workspace terminals alive so
+   * returning to a workspace reconnects to the same PTYs. */
   scopeSweepMs: 5000,
 });
 
@@ -52,6 +65,7 @@ const INVALID_SCOPE_CODES = new Set([
   'workspace_unavailable',
   'stale_workspace',
 ]);
+const FINISHED_STATES = new Set(['exited', 'error']);
 const hash = (value) => crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 32);
 const toSlashes = (value) => String(value).replace(/\\/g, '/');
 const isHighSurrogate = (code) => code >= 0xd800 && code <= 0xdbff;
@@ -79,175 +93,21 @@ function workspaceFor(scope) {
    * that the workspace was deleted. Keep the shell and check again later. */
   if (!root) throw fail('workspace_check_failed');
   const scopeId = typeof scope.scopeId === 'string' ? scope.scopeId : '';
+  const generation = String(scope.generation ?? '');
+  /* Stable scopes (the classic single-project chat) have no durable
+   * conversation identity. Their workspace is the folder itself, so returning
+   * to the same folder must find the same terminal even though the classic
+   * generation counter keeps increasing. Runtime workspaces keep the full
+   * identity: a recreated workspace epoch must not resurrect an old shell. */
+  const base = hash(normalizeForCompare(root) + '\0' + scopeId);
+  const stable = scope.stable === true;
   return {
     root,
     scopeId,
-    generation: String(scope.generation ?? ''),
-    id: hash(normalizeForCompare(root) + '\0' + scopeId + '\0' + String(scope.generation ?? '')),
+    generation,
+    stable,
+    id: stable ? base : hash(base + '\0' + generation),
   };
-}
-
-/** Resolve the shell without accepting a path from the renderer.
- *
- * Windows prefers the absolute Windows PowerShell path, then the absolute
- * ComSpec/cmd.exe. POSIX uses $SHELL only when it is an absolute path.
- * `exists` is injectable so the selection rules can be tested without spawning
- * a shell. */
-export function resolveTerminalShell({ platform = process.platform, env = process.env, exists = fs.existsSync } = {}) {
-  if (platform === 'win32') {
-    const winRoot = typeof env.SystemRoot === 'string' && path.isAbsolute(env.SystemRoot)
-      ? env.SystemRoot
-      : 'C:\\Windows';
-    const powerShell = path.join(winRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    if (exists(powerShell)) {
-      return { file: powerShell, args: ['-NoLogo', '-NoProfile'], shell: 'PowerShell', winRoot };
-    }
-    const comspec = typeof env.ComSpec === 'string' && path.isAbsolute(env.ComSpec)
-      ? env.ComSpec
-      : path.join(winRoot, 'System32', 'cmd.exe');
-    return { file: comspec, args: ['/d', '/q'], shell: '命令提示符', winRoot };
-  }
-  const configured = typeof env.SHELL === 'string' && path.isAbsolute(env.SHELL) && exists(env.SHELL)
-    ? env.SHELL
-    : '/bin/sh';
-  return { file: configured, args: [], shell: path.basename(configured) || 'shell' };
-}
-
-let nativePty = null;
-let nativePtyFailure = null;
-
-/** Load node-pty from the directories that exist in our three run modes:
- *   - source:       <repo>/node_modules/node-pty
- *   - Electron app: <resources>/app/node_modules/node-pty
- *   - Node SEA:     <exe dir>/node_modules/node-pty
- *
- * `createRequire` works inside a Node SEA executable (plain `require` only
- * knows built-ins), so the native prebuild can be loaded without bundling it
- * into server.cjs. */
-function loadNodePty() {
-  if (nativePty) return nativePty;
-  if (nativePtyFailure) throw nativePtyFailure;
-  const candidates = [];
-  const add = (dir) => {
-    if (dir && !candidates.includes(dir)) candidates.push(dir);
-  };
-  try {
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    add(here);
-    /* Source mode only: server/terminal.js -> <repo>/node_modules. The
-     * packaged app must not walk up from build/ or resources/app into an
-     * arbitrary ancestor checkout and load its node-pty instead of the
-     * staged sidecar. */
-    if (path.basename(here) === 'server') add(path.resolve(here, '..'));
-  } catch {
-    /* Bundled CJS still has __filename via the esbuild banner. */
-  }
-  /* Never search process.cwd(): the desktop backend runs with cwd set to the
-   * user-writable data directory, so a planted node_modules/node-pty there
-   * would execute arbitrary native code. Only the source tree, the app
-   * directory and the executable directory are trusted. */
-  if (process.execPath) add(path.dirname(process.execPath));
-  if (process.resourcesPath) add(path.join(process.resourcesPath, 'app'));
-
-  let lastError = null;
-  for (const base of candidates) {
-    const packageDir = path.join(base, 'node_modules', 'node-pty');
-    try {
-      const req = createRequire(path.join(base, '.pi-gui-pty-loader.cjs'));
-      const loaded = req(packageDir);
-      if (loaded && typeof loaded.spawn === 'function') {
-        nativePty = loaded;
-        return loaded;
-      }
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  nativePtyFailure = Object.assign(
-    Error('node-pty is not available in this build'),
-    { code: 'pty_unavailable', cause: lastError }
-  );
-  throw nativePtyFailure;
-}
-
-export function defaultSpawnPty({ file, args, cwd, env, cols, rows, platform = process.platform }) {
-  const pty = loadNodePty();
-  const options = {
-    name: 'xterm-256color',
-    cols,
-    rows,
-    cwd,
-    env,
-  };
-  // Default ConPTY is the supported mode on Windows 10/11. winpty and the
-  // bundled ConPTY DLL are not used: they failed independently in the target
-  // Electron/Node combination, and silently switching would hide that failure.
-  if (platform === 'win32') options.useConpty = true;
-  return pty.spawn(file, args, options);
-}
-
-/* node-pty's ConPTY kill path forks conpty_console_list_agent.js, which calls
- * AttachConsole on the shell pid. If the shell has already exited that helper
- * crashes and prints a full stack trace to the backend's stderr — even though
- * the session is on its way to a perfectly normal exit. A repeated tree kill
- * is routine here (the sweep retries while a session is "stopping", and
- * taskkill reports 128 once the pid is gone), so only fall back to the PTY
- * handle while the shell is actually alive. Otherwise the real exit event is
- * already in flight and pty.kill() has nothing left to do. */
-export function ptyProcessAlive(pty) {
-  const pid = Number.isInteger(pty?.pid) && pty.pid > 0 ? pty.pid : null;
-  if (!pid) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // EPERM still means the process exists; node cannot query it.
-    return error?.code === 'EPERM';
-  }
-}
-
-export function defaultKillPty(pty, platform = process.platform) {
-  if (!pty) return;
-  const pid = Number.isInteger(pty.pid) && pty.pid > 0 ? pty.pid : null;
-  let fellBack = false;
-  const fallbackToPty = () => {
-    if (fellBack) return;
-    fellBack = true;
-    if (platform === 'win32' && !ptyProcessAlive(pty)) return;
-    try { pty.kill(); } catch { /* already gone */ }
-  };
-  if (platform === 'win32' && pid) {
-    try {
-      const envRoot = process.env.SystemRoot;
-      const winRoot = typeof envRoot === 'string' && path.isAbsolute(envRoot) ? envRoot : 'C:\\Windows';
-      const taskkill = path.join(winRoot, 'System32', 'taskkill.exe');
-      const child = spawn(taskkill, ['/pid', String(pid), '/T', '/F'], {
-        windowsHide: true,
-        stdio: 'ignore',
-      });
-      child.once('error', () => {
-        // taskkill itself was unavailable; fall back to the PTY handle.
-        fallbackToPty();
-      });
-      child.once('close', (code) => {
-        // Non-zero means taskkill could not tear the tree down (or the shell
-        // was already gone). Retry through node-pty only while it is alive so
-        // the session still reaches a real exit event without a crash trace.
-        // spawn() emits error and then close for a missing executable; the
-        // one-shot guard keeps that from killing the same PTY twice.
-        if (code !== 0) fallbackToPty();
-      });
-      return;
-    } catch {
-      fallbackToPty();
-      return;
-    }
-  }
-  try {
-    pty.kill();
-  } catch {
-    /* already gone */
-  }
 }
 
 function validDimension(value, min, max) {
@@ -287,6 +147,9 @@ export function createTerminal({
   if (typeof killPty !== 'function') throw new TypeError('killPty must be a function');
 
   const sessions = new Map();
+  /* Per-workspace tab numbering. Purely presentational, but stable across
+   * panel reopen while at least one tab of that workspace still exists. */
+  const nextOrdinals = new Map();
   let disposed = false;
   let disposePromise = null;
   let sweepTimer = null;
@@ -304,13 +167,14 @@ export function createTerminal({
       cursor: session.end,
       cols: session.cols,
       rows: session.rows,
+      ordinal: session.ordinal,
       createdAt: session.createdAt,
       pty: true,
     };
   }
 
   function waitForExit(session, ms) {
-    if (!session || ['exited', 'failed'].includes(session.state)) return Promise.resolve();
+    if (!session || FINISHED_STATES.has(session.state)) return Promise.resolve();
     return new Promise((resolve) => {
       let timer = null;
       const done = () => {
@@ -329,7 +193,57 @@ export function createTerminal({
     session.exitWaiters.clear();
   }
 
-  function append(session, text) {
+  function disposeSessionHandles(session) {
+    try { session.dataSub?.dispose?.(); } catch { /* already gone */ }
+    try { session.exitSub?.dispose?.(); } catch { /* already gone */ }
+    session.dataSub = null;
+    session.exitSub = null;
+  }
+
+  function cleanupOrdinals(workspaceId) {
+    if (!workspaceId) return;
+    for (const session of sessions.values()) {
+      if (session.workspace.id === workspaceId) return;
+    }
+    nextOrdinals.delete(workspaceId);
+  }
+
+  function allocateOrdinal(workspaceId) {
+    const ordinal = nextOrdinals.get(workspaceId) || 1;
+    nextOrdinals.set(workspaceId, ordinal + 1);
+    return ordinal;
+  }
+
+  function removeSession(session) {
+    sessions.delete(session.id);
+    clearIdleTimer(session);
+    disposeSessionHandles(session);
+    cleanupOrdinals(session.workspace.id);
+  }
+
+  function clearIdleTimer(session) {
+    if (!session) return;
+    if (session.idleTimer) clearTimeout(session.idleTimer);
+    session.idleTimer = null;
+  }
+
+  /* Server-side idle clock. Only real keyboard input and new PTY output count
+   * as activity. read/list/resize and a reused start are observations or
+   * layout: the renderer polls them every 60-240 ms, so treating them as
+   * activity would keep a silent shell alive forever.
+   *
+   * A task that emits no output is indistinguishable from an idle shell using
+   * only this interface. Any output resets the clock, so a long task that is
+   * still working (even progress dots) is protected; complete silence for the
+   * whole idle window is the bounded-resource policy. See the acceptance
+   * record for the documented limitation. */
+  function noteActivity(session) {
+    if (!session || session.state !== 'running') return;
+    session.lastActivityAt = Date.now();
+    touch(session);
+  }
+
+  function append(session, text, { activity = true } = {}) {
     if (typeof text !== 'string' || !text) return;
     session.output += text;
     session.end += text.length;
@@ -343,24 +257,28 @@ export function createTerminal({
       session.start += drop;
       session.dropped = true;
     }
-    session.lastAt = Date.now();
-    if (session.state === 'running') touch(session);
+    if (activity) noteActivity(session);
   }
 
   function touch(session) {
-    clearTimeout(session.idleTimer);
+    clearIdleTimer(session);
     if (!limits.idleMs || !Number.isFinite(limits.idleMs) || disposed || session.state !== 'running') return;
+    /* noteActivity() stamps lastActivityAt immediately before calling here, so
+     * this is normally a full window. Computing the remainder still keeps a
+     * future direct caller from granting extra time. */
+    const elapsed = Math.max(0, Date.now() - (session.lastActivityAt || Date.now()));
+    const delay = Math.max(0, limits.idleMs - elapsed);
     session.idleTimer = setTimeout(() => {
       if (sessions.get(session.id) !== session || session.state !== 'running') return;
-      append(session, '\r\n[空闲超时，终端已停止]\r\n');
+      append(session, '\r\n[空闲超时，终端已停止]\r\n', { activity: false });
       void stopSession(session, 'idle');
-    }, limits.idleMs);
+    }, delay);
     session.idleTimer.unref?.();
   }
 
   function handleExit(session, event) {
-    if (['exited', 'failed'].includes(session.state)) return;
-    clearTimeout(session.idleTimer);
+    if (FINISHED_STATES.has(session.state)) return;
+    clearIdleTimer(session);
     session.state = 'exited';
     session.exitCode = Number.isInteger(event?.exitCode) ? event.exitCode : null;
     session.signal = event?.signal ?? null;
@@ -371,28 +289,29 @@ export function createTerminal({
         : session.signal !== null ? ` (${String(session.signal)})` : '';
       append(session, `\r\n[进程已退出${suffix}]\r\n`);
     }
+    disposeSessionHandles(session);
     resolveWaiters(session);
-    if (session.retired && sessions.get(session.id) === session) sessions.delete(session.id);
+    if (session.retired && sessions.get(session.id) === session) removeSession(session);
   }
 
   function removeAndStop(session, reason) {
     /* Keep the retired session in the map until the real exit event. Deleting
      * it up front would hide a wedged kill from dispose() and from the sweep's
-     * stopping-session retry, leaving an untracked process tree behind. */
+     * closing-session retry, leaving an untracked process tree behind. */
     session.retired = true;
     return stopSession(session, reason);
   }
 
   function stopSession(session, reason = 'user') {
     if (!session) return Promise.resolve();
-    if (['exited', 'failed'].includes(session.state)) {
+    if (FINISHED_STATES.has(session.state)) {
       resolveWaiters(session);
       return Promise.resolve();
     }
-    if (session.state === 'stopping') return waitForExit(session, 5000);
-    session.state = 'stopping';
+    if (session.state === 'closing') return waitForExit(session, 5000);
+    session.state = 'closing';
     session.stopReason = reason;
-    clearTimeout(session.idleTimer);
+    clearIdleTimer(session);
     try {
       killPty(session.pty, platform);
     } catch {
@@ -408,12 +327,14 @@ export function createTerminal({
     const scope = await scopeForRequest(req);
     const workspace = workspaceFor(scope);
     if (!workspace || workspace.id !== session.workspace.id) {
-      /* Same conversation + different workspace generation means the user
-       * switched this conversation's project: retire the stale shell. A
+      /* Same conversation + different workspace identity means that
+       * conversation's workspace was replaced: retire the stale shell. A
        * request from a *different* conversation must only be refused — if it
        * could stop the session here, knowing a session id would be enough to
-       * kill another workspace's shell. */
-      if (conversationIdOf(req) === session.conversationId) {
+       * kill another workspace's shell. Stable classic scopes have no
+       * conversation identity to prove continuity, so they are never retired
+       * by a cross-workspace request; their sweep validates the folder. */
+      if (!session.workspace.stable && conversationIdOf(req) === session.conversationId) {
         await removeAndStop(session, 'workspace');
       }
       throw fail('stale_workspace', '工作区已经变化，终端已停止。');
@@ -424,13 +345,39 @@ export function createTerminal({
     return [...sessions.values()].filter((session) => session.workspace.id === workspace.id);
   }
 
-  function pruneFinished() {
+  /* Legacy `start` replaces the workspace's finished tab. Scope the cleanup to
+   * that workspace: a request in workspace A must not delete an exited tab that
+   * workspace B still shows (and can restart). */
+  function pruneFinished(workspaceId) {
     for (const session of [...sessions.values()]) {
-      if (['exited', 'failed'].includes(session.state)) sessions.delete(session.id);
+      if (session.workspace.id === workspaceId && FINISHED_STATES.has(session.state)) {
+        removeSession(session);
+      }
     }
   }
 
-  async function start(req, res, body) {
+  function counts(workspace) {
+    const inWorkspace = [...sessions.values()].filter((other) => other.workspace.id === workspace.id).length;
+    return { inWorkspace, total: sessions.size };
+  }
+
+  function limitResponse(res, reason) {
+    return json(res, 409, {
+      ok: false,
+      code: 'terminal_limit',
+      limit: reason,
+      error: reason === 'workspace'
+        ? '当前工作区的终端数量已达上限，请先关闭一个终端。'
+        : '终端会话总数已达上限，请先关闭一个终端。',
+    });
+  }
+
+  /* Shared by `start` (reuse the workspace's most recent running terminal) and
+   * `create` (always add a tab). Scope resolution is async; every check after
+   * it re-runs against the current state, and the `creating` record is
+   * inserted without another await so two concurrent creates cannot both pass
+   * the cap. */
+  async function openSession(req, res, body, { reuse }) {
     if (disposed) return json(res, 503, { ok: false, code: 'terminal_unavailable', error: '终端已关闭。' });
     if (!enabled) {
       return json(res, 403, { ok: false, code: 'terminal_disabled', error: '终端仅在桌面版可用。' });
@@ -446,44 +393,67 @@ export function createTerminal({
      * outside every cleanup path. */
     if (disposed) return json(res, 503, { ok: false, code: 'terminal_unavailable', error: '终端已关闭。' });
 
-    const existing = sessionsForWorkspace(workspace)
-      .find((session) => !session.retired && !['exited', 'failed'].includes(session.state));
-    if (existing) {
-      if (existing.state === 'running') {
-        touch(existing);
-        return json(res, 200, { ok: true, enabled: true, reused: true, session: publicSession(existing) });
+    if (reuse) {
+      const inWorkspace = sessionsForWorkspace(workspace)
+        .filter((session) => !session.retired && !FINISHED_STATES.has(session.state));
+      const existing = inWorkspace.find((session) => session.state === 'running')
+        || inWorkspace.find((session) => session.state === 'closing');
+      if (existing) {
+        if (existing.state === 'running') {
+          /* Reusing a live session is an observation, not keyboard activity.
+           * Otherwise opening or remounting the legacy surface would postpone
+           * the idle timeout indefinitely. */
+          return json(res, 200, { ok: true, enabled: true, reused: true, session: publicSession(existing) });
+        }
+        return json(res, 409, {
+          ok: false,
+          code: 'terminal_stopping',
+          error: '终端正在停止，请稍后再试。',
+          session: publicSession(existing),
+        });
       }
-      return json(res, 409, {
-        ok: false,
-        code: 'terminal_stopping',
-        error: '终端正在停止，请稍后再试。',
-        session: publicSession(existing),
-      });
-    }
-    pruneFinished();
-
-    // A different workspace generation in the same project must not be reused.
-    // Stop it and drop it from the accounting before checking the session cap.
-    for (const stale of [...sessions.values()]) {
-      if (!stale.retired && stale.workspace.scopeId === workspace.scopeId && stale.workspace.id !== workspace.id) {
-        removeAndStop(stale, 'workspace');
-      }
+      // P1 compatibility: `start` treats this workspace's finished sessions as
+      // replaceable. `create` keeps them as closable tabs instead.
+      pruneFinished(workspace.id);
     }
 
-    const live = [...sessions.values()].filter((session) => ['running', 'stopping'].includes(session.state));
-    if (live.length >= limits.maxSessions) {
-      return json(res, 409, {
-        ok: false,
-        code: 'terminal_limit',
-        error: '终端会话数已达上限。请先停止另一个终端。',
-      });
-    }
+    const current = counts(workspace);
+    if (current.inWorkspace >= limits.maxSessionsPerWorkspace) return limitResponse(res, 'workspace');
+    if (current.total >= limits.maxSessions) return limitResponse(res, 'global');
 
     const shell = resolveTerminalShell({ platform, env });
     const childEnv = scrubInternalEnv(env);
     childEnv.TERM = 'xterm-256color';
     childEnv.COLORTERM = 'truecolor';
     if (shell.winRoot) childEnv.SystemRoot = shell.winRoot;
+
+    const session = {
+      id: crypto.randomUUID(),
+      conversationId: conversationIdOf(req),
+      workspace,
+      pty: null,
+      shell: shell.shell,
+      output: '',
+      start: 0,
+      end: 0,
+      dropped: false,
+      state: 'creating',
+      exitCode: null,
+      signal: null,
+      cols: dimensions.cols,
+      rows: dimensions.rows,
+      ordinal: null,
+      createdAt: Date.now(),
+      lastActivityAt: Date.now(),
+      exitedAt: null,
+      stopReason: null,
+      retired: false,
+      idleTimer: null,
+      dataSub: null,
+      exitSub: null,
+      exitWaiters: new Set(),
+    };
+    sessions.set(session.id, session);
 
     let pty;
     try {
@@ -497,48 +467,76 @@ export function createTerminal({
         platform,
       });
     } catch (error) {
+      removeSession(session);
       const unavailable = error?.code === 'pty_unavailable' || /node-pty|native module/i.test(String(error?.message || ''));
       return json(res, 503, {
         ok: false,
         code: unavailable ? 'pty_unavailable' : 'terminal_unavailable',
+        state: 'error',
         error: unavailable ? '终端组件未安装或无法加载。' : '无法启动终端。',
       });
     }
     if (!pty || typeof pty.onData !== 'function' || typeof pty.onExit !== 'function'
       || typeof pty.write !== 'function' || typeof pty.resize !== 'function') {
       try { pty?.kill?.(); } catch { /* noop */ }
-      return json(res, 503, { ok: false, code: 'terminal_unavailable', error: '无法启动终端。' });
+      removeSession(session);
+      return json(res, 503, { ok: false, code: 'terminal_unavailable', state: 'error', error: '无法启动终端。' });
     }
 
-    const session = {
-      id: crypto.randomUUID(),
-      conversationId: conversationIdOf(req),
-      workspace,
-      pty,
-      shell: shell.shell,
-      output: '',
-      start: 0,
-      end: 0,
-      dropped: false,
-      state: 'running',
-      exitCode: null,
-      signal: null,
-      cols: dimensions.cols,
-      rows: dimensions.rows,
-      createdAt: Date.now(),
-      lastAt: Date.now(),
-      exitedAt: null,
-      stopReason: null,
-      retired: false,
-      idleTimer: null,
-      exitWaiters: new Set(),
-    };
-    sessions.set(session.id, session);
-    pty.onData((chunk) => append(session, chunk));
-    pty.onExit((event) => handleExit(session, event));
-    touch(session);
+    session.pty = pty;
+    try {
+      session.dataSub = pty.onData((chunk) => append(session, chunk));
+      session.exitSub = pty.onExit((event) => handleExit(session, event));
+    } catch {
+      /* A PTY that cannot be subscribed to is unusable. Tear it down without
+       * leaving a ledger entry or an orphan process. */
+      try { killPty(pty, platform); } catch {
+        try { pty.kill?.(); } catch { /* already gone */ }
+      }
+      removeSession(session);
+      return json(res, 503, { ok: false, code: 'terminal_unavailable', state: 'error', error: '无法连接终端。' });
+    }
+    session.ordinal = allocateOrdinal(workspace.id);
+    session.state = 'running';
+    noteActivity(session);
 
-    return json(res, 200, { ok: true, enabled: true, reused: false, session: publicSession(session) });
+    return json(res, 200, {
+      ok: true, enabled: true, reused: false, session: publicSession(session),
+    });
+  }
+
+  async function start(req, res, body) {
+    return openSession(req, res, body, { reuse: true });
+  }
+
+  async function create(req, res, body) {
+    return openSession(req, res, body, { reuse: false });
+  }
+
+  async function list(req, res) {
+    if (disposed) return json(res, 503, { ok: false, code: 'terminal_unavailable', error: '终端已关闭。' });
+    if (!enabled) {
+      return json(res, 403, { ok: false, code: 'terminal_disabled', error: '终端仅在桌面版可用。' });
+    }
+    const scope = await scopeForRequest(req);
+    const workspace = workspaceFor(scope);
+    if (!workspace) {
+      return json(res, 200, {
+        ok: true, enabled: true, noProject: true, workspace: null, sessions: [],
+      });
+    }
+    const visible = sessionsForWorkspace(workspace)
+      .filter((session) => !session.retired)
+      .sort((a, b) => (a.ordinal ?? Number.MAX_SAFE_INTEGER) - (b.ordinal ?? Number.MAX_SAFE_INTEGER)
+        || a.createdAt - b.createdAt)
+      .map(publicSession);
+    return json(res, 200, {
+      ok: true,
+      enabled: true,
+      noProject: false,
+      workspace: { id: workspace.id, generation: workspace.generation },
+      sessions: visible,
+    });
   }
 
   async function read(req, res, url) {
@@ -564,10 +562,8 @@ export function createTerminal({
     } else {
       text = session.output.slice(since - session.start);
     }
-    if (session.state === 'running') {
-      session.lastAt = Date.now();
-      touch(session);
-    }
+    /* Reading a cursor is explicit observation only. The renderer polls this
+     * endpoint continuously, so it must not count as user or shell activity. */
     return json(res, 200, {
       ok: true,
       text,
@@ -596,8 +592,7 @@ export function createTerminal({
     } catch {
       return json(res, 503, { ok: false, code: 'terminal_unavailable', error: '无法写入终端。' });
     }
-    session.lastAt = Date.now();
-    touch(session);
+    noteActivity(session);
     return json(res, 200, { ok: true, cursor: session.end });
   }
 
@@ -617,8 +612,9 @@ export function createTerminal({
     }
     session.cols = dimensions.cols;
     session.rows = dimensions.rows;
-    session.lastAt = Date.now();
-    touch(session);
+    /* Resize is layout, not command input. Counting it would let window
+     * resizing or a tab remount keep a silent shell alive, which is the same
+     * class of bug as counting read polling. */
     return json(res, 200, { ok: true, cursor: session.end, cols: session.cols, rows: session.rows });
   }
 
@@ -626,19 +622,47 @@ export function createTerminal({
     const id = typeof body?.id === 'string' ? body.id : '';
     const session = sessions.get(id);
     if (!session) return json(res, 404, { ok: false, code: 'terminal_missing', error: '终端会话不存在。' });
-    // This call was missing from the pipe-era implementation. Every action,
-    // including stop, must prove that the session belongs to this workspace.
+    // Every action, including stop, must prove that the session belongs to
+    // this workspace.
     await verifyScope(req, session);
-    if (['exited', 'failed'].includes(session.state)) {
+    if (FINISHED_STATES.has(session.state)) {
       return json(res, 200, { ok: true, session: publicSession(session) });
     }
     void stopSession(session, 'user');
     return json(res, 200, { ok: true, session: publicSession(session) });
   }
 
+  /* Closing a tab is different from stopping a shell: stop leaves the exited
+   * session visible so it can be restarted in place, close removes the tab and
+   * its buffer for good. `close` is idempotent for a missing id — a repeated
+   * click, a double request or a tab already cleaned up by another surface
+   * must not surface an error. It still verifies workspace ownership before
+   * touching a known id. */
+  async function close(req, res, body) {
+    const id = typeof body?.id === 'string' ? body.id : '';
+    if (!id || id.length > 128) {
+      return json(res, 200, { ok: true, closed: true, missing: true });
+    }
+    const session = sessions.get(id);
+    if (!session) return json(res, 200, { ok: true, closed: true, missing: true });
+    await verifyScope(req, session);
+    if (FINISHED_STATES.has(session.state)) {
+      const snapshot = publicSession(session);
+      removeSession(session);
+      return json(res, 200, { ok: true, closed: true, session: snapshot });
+    }
+    if (session.state === 'closing') {
+      session.retired = true;
+      return json(res, 200, { ok: true, closed: true, session: publicSession(session) });
+    }
+    session.retired = true;
+    void stopSession(session, 'closed');
+    return json(res, 200, { ok: true, closed: true, session: publicSession(session) });
+  }
+
   /* Mark the session retired and start the kill without blocking the sweep.
    * `stopSession` changes the state synchronously, so the next sweep's
-   * `stopping` branch can retry a wedged kill; awaiting the real exit here
+   * `closing` branch can retry a wedged kill; awaiting the real exit here
    * would hold every other session behind a five-second timeout. */
   function retireInBackground(session, reason) {
     removeAndStop(session, reason).catch(() => {});
@@ -649,9 +673,9 @@ export function createTerminal({
     sweeping = true;
     try {
       for (const session of [...sessions.values()]) {
-        if (session.state === 'stopping') {
+        if (session.state === 'closing') {
           /* A kill path that never produced an exit would otherwise leave the
-           * session stuck in "stopping" forever. Retry the tree kill; the
+           * session stuck in "closing" forever. Retry the tree kill; the
            * state still changes only when node-pty reports the real exit. */
           try {
             killPty(session.pty, platform);
@@ -706,6 +730,7 @@ export function createTerminal({
         platform,
         pty: true,
         maxSessions: limits.maxSessions,
+        maxSessionsPerWorkspace: limits.maxSessionsPerWorkspace,
         limits: {
           maxInputBytes: limits.maxInputBytes,
           maxBufferChars: limits.maxBufferChars,
@@ -739,10 +764,13 @@ export function createTerminal({
       return json(res, 400, { ok: false, code: 'invalid_request', error: '请求不是合法 JSON。' });
     }
     try {
+      if (body?.action === 'list') return await list(req, res);
+      if (body?.action === 'create') return await create(req, res, body);
       if (body?.action === 'start') return await start(req, res, body);
       if (body?.action === 'input') return await input(req, res, body);
       if (body?.action === 'resize') return await resize(req, res, body);
       if (body?.action === 'stop') return await stop(req, res, body);
+      if (body?.action === 'close') return await close(req, res, body);
       return json(res, 400, { ok: false, code: 'invalid_action', error: '未知的终端操作。' });
     } catch (error) {
       return terminalError(res, error);
@@ -764,7 +792,7 @@ export function createTerminal({
         : code === 'terminal_stopping'
           ? '终端正在停止，请稍后再试。'
           : code === 'terminal_limit'
-            ? '终端会话数已达上限。请先停止另一个终端。'
+            ? '终端数量已达上限，请先关闭一个终端。'
             : code === 'invalid_size'
               ? '终端尺寸不合法。'
               : code === 'invalid_cursor'
@@ -784,11 +812,15 @@ export function createTerminal({
     sweepTimer = null;
     const live = [...sessions.values()];
     for (const session of live) {
-      clearTimeout(session.idleTimer);
-      void stopSession(session, 'shutdown');
+      clearIdleTimer(session);
+      if (!FINISHED_STATES.has(session.state)) void stopSession(session, 'shutdown');
     }
-    disposePromise = Promise.all(live.map((session) => waitForExit(session, 3000))).then(() => {
+    disposePromise = Promise.all(live
+      .filter((session) => !FINISHED_STATES.has(session.state))
+      .map((session) => waitForExit(session, 3000))).then(() => {
+      for (const session of sessions.values()) disposeSessionHandles(session);
       sessions.clear();
+      nextOrdinals.clear();
     });
     return disposePromise;
   }

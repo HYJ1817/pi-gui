@@ -25,12 +25,26 @@ const APP_AT = process.argv.indexOf('--app');
 const DEFAULT_APP = path.join(ROOT, 'dist-app', 'Pi GUI-win32-x64');
 const SOURCE_APP = path.resolve(APP_AT >= 0 ? process.argv[APP_AT + 1] || '' : DEFAULT_APP);
 const EXE = path.join(SOURCE_APP, 'Pi GUI.exe');
+const SHOTS_AT = process.argv.indexOf('--shots');
+const SHOTS_ARG = SHOTS_AT >= 0
+  ? path.resolve(process.argv[SHOTS_AT + 1] || path.join(ROOT, 'docs', 'terminal-p2-evidence'))
+  : null;
 const POWERSHELL = path.join(
   process.env.SystemRoot || 'C:\\Windows',
   'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
 );
 const TASKKILL = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'taskkill.exe');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function waitFor(fn, timeoutMs = 15000, interval = 100) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await fn();
+    if (value) return value;
+    if (Date.now() >= deadline) return null;
+    await sleep(interval);
+  }
+}
 
 if (process.platform !== 'win32') {
   console.log('SKIP: terminal-electron-check requires Windows 11 + a desktop session.');
@@ -199,9 +213,13 @@ async function connect(url) {
   let appExited = false;
   let marker = '';
   let markerChild = 0;
+  const markers = [];
   let shellPid = 0;
   let shellIdentity = '';
   let terminalId = '';
+  let p2Remaining = [];
+  const shotDir = SHOTS_ARG || path.join(temp, 'shots');
+  fs.mkdirSync(shotDir, { recursive: true });
 
   try {
     check('packaged app is independent of the development repository', () => {
@@ -515,7 +533,186 @@ async function connect(url) {
     })();
     check('resize reaches the real ConPTY', () => assert.deepEqual(resized, { resize: true, matched: true }));
 
+    const p2 = await (async () => {
+      await cdp.evaluate("(async()=>{window.__terminalApi=window.__terminalApi||await import('/api.js');return true;})()");
+      const apiEval = (body) => cdp.evaluate(`(async()=>{const api=window.__terminalApi;${body}})()`);
+      const list = () => apiEval('return api.listTerminals();');
+      const write = (id, data) => apiEval(`return api.writeTerminal(${JSON.stringify(id)},${JSON.stringify(data)});`);
+      const read = (id, since = 0) => apiEval(`return api.readTerminal(${JSON.stringify(id)},${since});`);
+      const readUntil = async (id, pattern, timeoutMs = 12000) => {
+        const deadline = Date.now() + timeoutMs;
+        let text = '';
+        while (Date.now() < deadline) {
+          const result = await read(id, 0);
+          if (!result?.ok) throw new Error('P2 terminal read failed: ' + JSON.stringify(result));
+          text = result.text || '';
+          if (pattern.test(text)) return { matched: true, text };
+          await sleep(120);
+        }
+        return { matched: false, text };
+      };
+      const tabCount = () => cdp.evaluate("document.querySelectorAll('.terminal-tab').length");
+      const clickTab = (id) => cdp.evaluate(`(()=>{const el=document.querySelector('.terminal-tab[data-terminal-id=${JSON.stringify(id)}] .terminal-tab-select');if(!el)return false;el.click();return true;})()`);
+      const rows = (id) => cdp.evaluate(`document.querySelector('#term-view-${id} .xterm-rows')?.textContent||''`);
+      const shot = async (name) => {
+        const image = await cdp.send('Page.captureScreenshot', { format: 'png' });
+        const file = path.join(shotDir, name);
+        fs.writeFileSync(file, Buffer.from(image.data, 'base64'));
+        return { file, bytes: fs.statSync(file).size };
+      };
+
+      const before = await list();
+      if (!before?.ok) throw new Error('initial list failed: ' + JSON.stringify(before));
+      const baseIds = before.sessions.map((session) => session.id);
+      for (let i = 0; i < 2; i++) {
+        const target = (await tabCount()) + 1;
+        const clicked = await cdp.evaluate("(()=>{const b=document.querySelector('.terminal-new');if(!b)return false;b.click();return true;})()");
+        if (!clicked) throw new Error('new-terminal button missing');
+        const appeared = await waitFor(async () => (await tabCount()) === target, 15000);
+        if (!appeared) throw new Error(`tab ${target} did not appear`);
+      }
+      const afterCreate = await waitFor(async () => {
+        const result = await list();
+        return result?.ok && result.sessions.length === 3 ? result : null;
+      }, 15000);
+      if (!afterCreate) throw new Error('three sessions were not listed');
+      const ids = afterCreate.sessions.map((session) => session.id);
+      const newIds = ids.filter((id) => !baseIds.includes(id));
+      const labels = await cdp.evaluate("[...document.querySelectorAll('.terminal-tab-label')].map(e=>e.textContent)");
+      const activeAfterCreate = await cdp.evaluate("document.querySelector('.terminal-tab.is-active')?.dataset.terminalId||''");
+      const visibleAfterCreate = await cdp.evaluate("document.querySelectorAll('.term-view:not([hidden])').length");
+      const tabSessions = await cdp.evaluate("[...document.querySelectorAll('.terminal-tab')].map(e=>e.dataset.terminalId)");
+      for (const id of newIds) {
+        const prompt = await readUntil(id, /PS [^>]*>/, 15000);
+        if (!prompt.matched) throw new Error('new PTY prompt timeout');
+      }
+
+      const stamp = Date.now();
+      const parallelStart = Date.now();
+      await write(baseIds[0], `Start-Sleep -Milliseconds 3000; 'EL_SLOW_' + 'OK_${stamp}'\r`);
+      await write(newIds[0], `'EL_FAST_' + 'OK_${stamp}'\r`);
+      const fast = await readUntil(newIds[0], new RegExp('EL_FAST_OK_' + stamp), 10000);
+      const fastMs = Date.now() - parallelStart;
+      const slow = await readUntil(baseIds[0], new RegExp('EL_SLOW_OK_' + stamp), 12000);
+      const slowMs = Date.now() - parallelStart;
+      await write(newIds[1], `'EL_THIRD_' + 'OK_${stamp}'\r`);
+      const third = await readUntil(newIds[1], new RegExp('EL_THIRD_OK_' + stamp), 10000);
+
+      const viewMarkers = {};
+      for (const id of [baseIds[0], newIds[0], newIds[1]]) {
+        const marker = id === baseIds[0] ? `EL_SLOW_OK_${stamp}`
+          : id === newIds[0] ? `EL_FAST_OK_${stamp}` : `EL_THIRD_OK_${stamp}`;
+        const switched = await clickTab(id);
+        const seen = switched && await waitFor(async () => (await rows(id)).includes(marker), 8000);
+        viewMarkers[id] = Boolean(seen);
+      }
+      await clickTab(baseIds[0]);
+      await sleep(300);
+      const multiShot = await shot('terminal-p2-multi-tabs.png');
+
+      const createdBefore = Object.fromEntries(afterCreate.sessions.map((session) => [session.id, session.createdAt]));
+      await clickTab(newIds[1]);
+      await sleep(400);
+      const afterSwitch = await list();
+      const noRecreate = afterSwitch.ok
+        && afterSwitch.sessions.length === 3
+        && afterSwitch.sessions.every((session) => session.id in createdBefore
+          && session.createdAt === createdBefore[session.id]);
+
+      const closingId = newIds[0];
+      const closeClicked = await cdp.evaluate(`(()=>{const b=document.querySelector('.terminal-tab[data-terminal-id=${JSON.stringify(closingId)}] .terminal-tab-close');if(!b)return false;b.click();return true;})()`);
+      const afterClose = await waitFor(async () => {
+        const result = await list();
+        return result?.ok && result.sessions.length === 2 ? result : null;
+      }, 15000);
+      const closedViewGone = await waitFor(async () => cdp.evaluate(`!document.querySelector('#term-view-${closingId}')`), 5000);
+      const afterCloseShot = await shot('terminal-p2-after-close.png');
+
+      const beforeReopen = (afterClose || afterSwitch).sessions;
+      await cdp.evaluate("document.getElementById('workPanelClose')?.click()");
+      await waitFor(async () => (await cdp.evaluate("!!document.querySelector('.term-host .xterm')")) === false, 5000);
+      await cdp.evaluate("document.getElementById('btnTerminal')?.click()");
+      const reopenedTabs = await waitFor(async () => (await tabCount()) === 2, 15000);
+      const afterReopen = await waitFor(async () => {
+        const result = await list();
+        return result?.ok && result.sessions.length === 2 ? result : null;
+      }, 15000);
+      const reopenedReplay = {};
+      for (const session of (afterReopen || afterClose || afterSwitch).sessions) {
+        const marker = session.id === baseIds[0] ? `EL_SLOW_OK_${stamp}` : `EL_THIRD_OK_${stamp}`;
+        await clickTab(session.id);
+        reopenedReplay[session.id] = Boolean(await waitFor(async () => (await rows(session.id)).includes(marker), 8000));
+      }
+      const reopenCreatedAt = afterReopen?.sessions.every((session) => session.id in createdBefore
+        && session.createdAt === createdBefore[session.id]);
+
+      return {
+        baseCount: baseIds.length,
+        sessionCount: ids.length,
+        newCount: newIds.length,
+        ids,
+        labels,
+        tabSessions,
+        activeAfterCreate,
+        lastNewId: newIds[1],
+        visibleAfterCreate,
+        fastMatched: fast.matched,
+        slowMatched: slow.matched,
+        thirdMatched: third.matched,
+        fastMs,
+        slowMs,
+        viewMarkers,
+        noRecreate,
+        closeClicked,
+        afterCloseCount: afterClose?.sessions.length || 0,
+        closedViewGone,
+        closedId: closingId,
+        reopenedTabs: Boolean(reopenedTabs),
+        beforeReopenCount: beforeReopen.length,
+        afterReopenCount: afterReopen?.sessions.length || 0,
+        reopenCreatedAt,
+        reopenedReplay,
+        remaining: (afterReopen || afterClose || afterSwitch).sessions.map((session) => session.id),
+        shots: [multiShot.bytes, afterCloseShot.bytes],
+      };
+    })();
+    p2Remaining = p2.remaining;
+    check('P2: the real Electron UI creates and switches among three independent PTY tabs', () => {
+      assert.equal(p2.baseCount, 1);
+      assert.equal(p2.sessionCount, 3);
+      assert.equal(p2.newCount, 2);
+      assert.deepEqual(p2.labels, ['终端 1', '终端 2', '终端 3']);
+      assert.deepEqual(p2.tabSessions.slice().sort(), p2.ids.slice().sort());
+      assert.equal(p2.activeAfterCreate, p2.lastNewId);
+      assert.equal(p2.visibleAfterCreate, 1);
+      assert.equal(p2.fastMatched, true);
+      assert.equal(p2.slowMatched, true);
+      assert.equal(p2.thirdMatched, true);
+      assert.ok(p2.fastMs < 2000, `fast marker took ${p2.fastMs}ms`);
+      assert.ok(p2.slowMs >= 2500, `slow marker took ${p2.slowMs}ms`);
+      assert.ok(Object.values(p2.viewMarkers).every(Boolean), JSON.stringify(p2.viewMarkers));
+      assert.equal(p2.noRecreate, true, 'switching tabs recreated a session');
+    });
+    check('P2: closing one UI tab removes only that session and its view', () => {
+      assert.equal(p2.closeClicked, true);
+      assert.equal(p2.afterCloseCount, 2);
+      assert.equal(p2.closedViewGone, true);
+      assert.ok(!p2.remaining.includes(p2.closedId), 'closed session still listed');
+    });
+    check('P2: reopening the panel restores the remaining tabs without a new PTY', () => {
+      assert.equal(p2.reopenedTabs, true);
+      assert.equal(p2.beforeReopenCount, 2);
+      assert.equal(p2.afterReopenCount, 2);
+      assert.equal(p2.reopenCreatedAt, true, 'reopen created a new session');
+      assert.ok(Object.values(p2.reopenedReplay).every(Boolean), JSON.stringify(p2.reopenedReplay));
+    });
+    check('P2: real multi-terminal screenshots were captured', () => {
+      for (const bytes of p2.shots) assert.ok(bytes > 1000, `screenshot too small: ${bytes} bytes`);
+      console.log(`  ..  screenshots: ${shotDir}`);
+    });
+
     marker = `PI_GUI_ELECTRON_${process.pid}_${Date.now()}`;
+    markers.push(marker);
     const tree = await (async () => {
       const command = `$p = Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' -ArgumentList '-e','setTimeout(()=>{},60000)','${marker}' -PassThru -WindowStyle Hidden; Write-Output ('TREEPID=' + $p.Id)\r`;
       await write(command);
@@ -527,6 +724,44 @@ async function connect(url) {
     check('a unique child process is running inside the PTY tree', () => {
       assert.ok(markerChild > 0, 'TREEPID missing');
       assert.ok(markerPids(marker).includes(markerChild), 'marker child not found by command-line identity');
+    });
+
+    /* The app owns every ledger session, not just the one the renderer last
+     * focused. Start a second child in the other remaining tab and prove app
+     * shutdown reaps both trees. */
+    const otherId = p2Remaining.find((id) => id !== terminalId);
+    const marker2 = `PI_GUI_ELECTRON2_${process.pid}_${Date.now()}`;
+    markers.push(marker2);
+    let otherChild = 0;
+    const secondTree = await (async () => {
+      if (!otherId) return { matched: false, text: 'no second session' };
+      const command = `$p = Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' -ArgumentList '-e','setTimeout(()=>{},60000)','${marker2}' -PassThru -WindowStyle Hidden; Write-Output ('TREEPID2=' + $p.Id)\r`;
+      const written = await cdp.evaluate(`(async()=>window.__terminalApi.writeTerminal(${JSON.stringify(otherId)},${JSON.stringify(command)}))()`);
+      if (!written?.ok) return { matched: false, text: JSON.stringify(written) };
+      const deadline = Date.now() + 15000;
+      let text = '';
+      while (Date.now() < deadline) {
+        const result = await cdp.evaluate(`(async()=>window.__terminalApi.readTerminal(${JSON.stringify(otherId)},0))()`);
+        if (!result?.ok) return { matched: false, text: JSON.stringify(result) };
+        text = result.text || '';
+        if (/TREEPID2=\d+/.test(text)) return { matched: true, text };
+        await sleep(120);
+      }
+      return { matched: false, text };
+    })();
+    if (secondTree.matched) otherChild = Number(secondTree.text.match(/TREEPID2=(\d+)/)[1]);
+    check('a second PTY session has its own live child process', () => {
+      assert.ok(otherId, 'no second session available for the tree check');
+      assert.ok(secondTree.matched, 'TREEPID2 missing');
+      assert.ok(otherChild > 0, 'TREEPID2 missing');
+      assert.ok(markerPids(marker2).includes(otherChild), 'second marker child not found');
+    });
+
+    const survivors = await cdp.evaluate("(async()=>window.__terminalApi.listTerminals())()");
+    check('both remaining sessions are still running before app exit', () => {
+      assert.equal(survivors?.ok, true, JSON.stringify(survivors));
+      assert.equal(survivors.sessions.length, 2);
+      assert.ok(survivors.sessions.every((session) => session.state === 'running'));
     });
 
     console.log('  ..  closing the Electron app');
@@ -541,12 +776,12 @@ async function connect(url) {
     console.log('  ..  app exited:', appExited);
     check('the Electron app exits normally', () => assert.equal(appExited, true));
 
-    let markerLeft = markerPids(marker);
+    let markerLeft = markers.flatMap((item) => markerPids(item));
     for (let i = 0; i < 60 && markerLeft.length; i++) {
       await sleep(250);
-      markerLeft = markerPids(marker);
+      markerLeft = markers.flatMap((item) => markerPids(item));
     }
-    check('closing the app removes the PTY tree and its Node child', () => assert.deepEqual(markerLeft, []));
+    check('closing the app removes every PTY tree and its Node child', () => assert.deepEqual(markerLeft, []));
 
     const shellExit = shellPid
       ? await waitForIdentityChange(shellPid, shellIdentity)
@@ -583,7 +818,7 @@ async function connect(url) {
     process.exitCode = 1;
   } finally {
     try { cdp?.ws.close(); } catch { /* noop */ }
-    try { if (marker) killMarker(marker); } catch { /* best effort */ }
+    try { for (const item of markers) killMarker(item); } catch { /* best effort */ }
     if (app && !appExited) {
       try { execFileSync(TASKKILL, ['/PID', String(app.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 15000 }); } catch { /* already gone */ }
     }

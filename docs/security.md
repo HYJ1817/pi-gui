@@ -732,13 +732,17 @@ Extension 是**第三方本地代码**，在 Pi 进程权限下运行，可能�
 
 **做法**：终端只在桌面版（`auth.isDevMode === false`）或显式
 `PI_GUI_ENABLE_TERMINAL=1` 时启用；路由仍先过本地令牌与 Origin 检查。
-`start` / `read` / `input` / `resize` / `stop` 全部按聚焦会话的 workspace identity
-校验，跨工作区请求返回 409，`stop` 也不例外；只有**同一会话**的工作区变化才会顺手结束
-旧会话，别的会话即便拿到 session id 也不能停止它（旧会话仍按自己的 workspace 身份、空闲超时
-或服务关闭结束）。
+`create` / `list` / `start` / `read` / `input` / `resize` / `stop` / `close` 全部按
+聚焦会话的 workspace identity 校验，跨工作区请求返回 409，`stop` 和 `close` 也不例外；
+`list` 只返回当前 workspace 未退休的会话。会话 id 是随机 UUID，不使用 PID 作为身份；
+未知 id 返回 `terminal_missing`，已知但属于别的工作区的 id 返回 `stale_workspace`。
+`close` 对未知 id 幂等成功，避免重复点击弹错，但对已知 id 仍先校验归属，不能结束其他
+工作区的会话；已知跨区 id 仍会返回 `stale_workspace`，但 id 是随机 UUID，不能靠响应差异
+枚举会话。只有**同一会话**的工作区变化才会顺手结束旧会话，别的会话即便拿到 session id
+也不能停止它（旧会话仍按自己的 workspace 身份、空闲超时或服务关闭结束）。
 Shell 由服务端按平台选定（Windows
 优先绝对路径 PowerShell，缺失时回退绝对路径 CMD；其它平台用 `$SHELL`），cwd 来自
-workspace identity；Renderer 只能提交会话 id、原始输入、`cols` / `rows` 与停止动作，
+workspace identity；Renderer 只能提交动作、会话 id、原始输入与 `cols` / `rows`，
 不能提交命令路径、cwd、参数或环境变量。
 
 PTY 由 node-pty（Windows 上为 ConPTY）创建，以 `TERM=xterm-256color` 启动，
@@ -746,16 +750,22 @@ PTY 由 node-pty（Windows 上为 ConPTY）创建，以 `TERM=xterm-256color` �
 同目录加载，不搜索进程 cwd —— 桌面版后端 cwd 是用户可写的数据目录，搜索它会允许
 预置的 `node_modules/node-pty` 执行任意原生代码。输入有字节上限并拒绝 NUL，按原始字节写入，
 不追加换行；输出保留 ANSI 与 CR 原文，只在内存中保留上限内的尾部，不写日志；
-`resize` 的 `cols` / `rows` 有范围校验。每个工作区复用一个活动会话；达到并发上限时
-显式拒绝新会话，不杀用户其它的终端。关闭面板只销毁 xterm 前端，后端 PTY 继续运行，
-重新打开时按缓冲重放；只有显式停止、工作区变化（前端 stop 与后端 scope sweep 双保险）、
-空闲超时或服务关闭才结束进程树。前端在 `start` 时记录该会话的工作区身份（conversation id），停止时沿用；
+`resize` 的 `cols` / `rows` 有范围校验。每个工作区可有多个独立终端（默认上限 6 个，
+全局 12 个；已退出但未关闭的标签也占额度），达到上限时显式拒绝新会话，不杀用户其它的
+终端。关闭面板只销毁 xterm 前端，后端 PTY 继续运行，重新打开时 `list` 恢复标签并按缓冲
+重放；显式 `stop` 只结束进程并保留已退出标签，`close` 才删除标签，两者都只结束目标会话的
+进程树。切换工作区或焦点不会停止任何终端；只有显式 `stop` / `close`、所属会话确认失效
+（前端停止与后端 scope sweep 双保险）、空闲超时或服务关闭才结束进程树。空闲计时由
+服务端持有，只有真实用户输入与新 PTY 输出会续期；`read` / `list` / `resize` / `start`
+复用和 UI 重挂载都不能让静默 shell 永久存活。前端在
+`start` / `create` 时记录该会话的工作区身份（conversation id），`stop` / `close` 时沿用；
 切换项目会先清空当前 scope，若停止时现取 scope，后端会拒绝而留下孤儿 PTY。后端 sweep
 只在**成功解析**出一个不同的 workspace 时停止；scope 暂时不可用或解析报错都不当作
-工作区已变化。Windows 用 `taskkill /T` 结束整棵树，服务退出时等待
-真实 exit 事件；桌面外壳退出时先在**后端仍存活**时对后端做 `taskkill /T`，再结束后端，
-避免 ConPTY 子进程因父子链断开而成为孤儿。能力状态通过
-`/api/terminal/status` 的 `pty:true` 如实暴露。
+工作区已变化。Windows 用 `taskkill /T` 结束整棵树，服务退出时停止账本中所有未结束会话
+并等待真实 exit 事件；桌面外壳退出时先在**后端仍存活**时对后端做 `taskkill /T`，再结束后端，
+避免 ConPTY 子进程因父子链断开而成为孤儿。`/api/terminal/status` 声明 `pty:true` 表示
+终端能力已编译进运行时；native 模块实际加载失败会在 `create` / `start` 时返回
+`pty_unavailable`，不会被状态接口掩盖。
 
 ## 五、子进程边界
 

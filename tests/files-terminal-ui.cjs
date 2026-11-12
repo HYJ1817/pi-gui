@@ -94,6 +94,128 @@ function fakeTerminalView(size = { cols: 100, rows: 30 }) {
   return view;
 }
 
+/* Minimal backend for the P2 multi-terminal surface. It owns a per-workspace
+ * session ledger, replays each session's own buffer from `since`, and records
+ * every transport call so the test can prove that switching tabs does not
+ * create, close or re-read a PTY. */
+function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspace = 6, limits = null } = {}) {
+  const calls = { status: 0, list: 0, create: [], start: [], read: [], write: [], resize: [], stop: [], close: [] };
+  const model = new Map();
+  const state = {
+    workspace: { ...workspace },
+    seq: 0,
+    createFailure: null,
+    listFailure: null,
+    closeFailure: null,
+  };
+
+  function addExisting(size = { cols: 80, rows: 24 }, sessionState = 'running', ws = state.workspace) {
+    state.seq += 1;
+    const session = {
+      id: `m${state.seq}`,
+      workspace: { id: ws.id, generation: ws.generation },
+      cwd: `C:/fixture/${ws.id}`,
+      shell: 'PowerShell',
+      state: sessionState,
+      exitCode: null,
+      cols: size.cols,
+      rows: size.rows,
+      ordinal: state.seq,
+    };
+    const entry = { session, output: '', cursor: 0, removed: false };
+    model.set(session.id, entry);
+    return entry;
+  }
+
+  const transport = {
+    status: async () => {
+      calls.status++;
+      return { ok: true, enabled: true, limits, maxSessionsPerWorkspace: maxPerWorkspace };
+    },
+    list: async () => {
+      calls.list++;
+      if (state.listFailure) return state.listFailure;
+      const ws = state.workspace;
+      return {
+        ok: true,
+        workspace: { ...ws },
+        sessions: [...model.values()]
+          .filter((entry) => !entry.removed && entry.session.workspace.id === ws.id)
+          .sort((a, b) => a.session.ordinal - b.session.ordinal)
+          .map((entry) => ({ ...entry.session })),
+      };
+    },
+    create: async (size) => {
+      calls.create.push(size);
+      if (state.createFailure) return state.createFailure;
+      const entry = addExisting(size, 'running');
+      return { ok: true, reused: false, session: { ...entry.session } };
+    },
+    start: async (size) => {
+      calls.start.push(size);
+      if (state.createFailure) return state.createFailure;
+      const entry = addExisting(size, 'running');
+      return { ok: true, reused: false, session: { ...entry.session } };
+    },
+    read: async (id, since) => {
+      calls.read.push([id, since]);
+      const entry = model.get(id);
+      if (!entry || entry.removed) return { ok: false, code: 'terminal_missing' };
+      const text = Number.isSafeInteger(since) && since < entry.cursor ? entry.output.slice(since) : '';
+      return {
+        ok: true,
+        text,
+        cursor: entry.cursor,
+        state: entry.session.state,
+        exitCode: entry.session.exitCode,
+        session: { ...entry.session },
+      };
+    },
+    write: async (id, data) => {
+      calls.write.push([id, data]);
+      return { ok: true };
+    },
+    resize: async (id, cols, rows) => {
+      calls.resize.push([id, cols, rows]);
+      return { ok: true };
+    },
+    stop: async (id) => {
+      calls.stop.push(id);
+      const entry = model.get(id);
+      if (!entry) return { ok: false, code: 'terminal_missing' };
+      entry.session.state = 'closing';
+      return { ok: true, session: { ...entry.session } };
+    },
+    close: async (id) => {
+      calls.close.push(id);
+      if (state.closeFailure) return state.closeFailure;
+      const entry = model.get(id);
+      if (entry) entry.removed = true;
+      return { ok: true, closed: true, missing: !entry };
+    },
+  };
+
+  return {
+    transport,
+    calls,
+    model,
+    state,
+    addExisting,
+    emit(id, text) {
+      const entry = model.get(id);
+      if (!entry) throw new Error('unknown session ' + id);
+      entry.output += text;
+      entry.cursor += text.length;
+    },
+    setState(id, sessionState, exitCode = null) {
+      const entry = model.get(id);
+      if (!entry) throw new Error('unknown session ' + id);
+      entry.session.state = sessionState;
+      if (exitCode !== null) entry.session.exitCode = exitCode;
+    },
+  };
+}
+
 (async () => {
   const dom = makeDom();
   const { mountTerminalPanel } = await import('../public/terminal-panel.js');
@@ -225,12 +347,15 @@ function fakeTerminalView(size = { cols: 100, rows: 30 }) {
     });
 
     dom.window.document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
-    await tick(10);
-    ok('a workspace change stops the old PTY and clears the frontend instead of reusing it', () => {
-      assert.deepEqual(stops, ['s1']);
-      assert.ok(secondView.resetCalls >= 1);
-      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('工作区已变化'));
+    await tick(30);
+    ok('a workspace change detaches the frontend without killing the PTY', () => {
+      /* P2: sessions belong to their own workspace and stay alive; returning
+       * to the original workspace must reconnect to the same PTY. */
+      assert.deepEqual(stops, []);
+      assert.equal(secondView.disposed, true);
       assert.equal(secondView.stdin, false);
+      assert.equal(secondView.resetCalls, 0);
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('工作区已变化'));
     });
     second.dispose();
     host.replaceChildren();
@@ -618,12 +743,13 @@ function fakeTerminalView(size = { cols: 100, rows: 30 }) {
       stop: async (id) => { stopped.push(id); return { ok: true }; },
     };
     mountTerminalPanel(host, view, { transport, createTerminalView: () => termView });
-    await until(() => stopped.length === 1, 'stale read stop');
+    await until(() => host.querySelector('.rp-head-sub')?.textContent.includes('工作区已变化'), 'stale read detach');
     await tick(20);
-    ok('a stale read stops the old session instead of waiting for the idle timeout', () => {
-      assert.deepEqual(stopped, ['s-stale']);
-      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('工作区已变化'));
+    ok('a stale read detaches instead of killing the PTY', () => {
+      assert.deepEqual(stopped, []);
+      assert.equal(termView.disposed, true);
       assert.equal(termView.stdin, false);
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('工作区已变化'));
     });
     view.dispose();
     host.replaceChildren();
@@ -668,6 +794,884 @@ function fakeTerminalView(size = { cols: 100, rows: 30 }) {
       api.setGitConversationScope(null);
       global.fetch = realFetch;
     }
+  }
+
+  {
+    /* A list response describes the workspace at request time. If the user
+     * switches conversation before it lands, tagging the returned ids with the
+     * new conversation would send close/stop to the wrong workspace forever. */
+    const calls = [];
+    let resolveList = null;
+    const realFetch = global.fetch;
+    global.fetch = async (url, options = {}) => {
+      const body = options.body ? JSON.parse(options.body) : {};
+      calls.push({ url: String(url), headers: options.headers || {}, body });
+      if (body.action === 'list') {
+        return new Promise((resolve) => {
+          resolveList = () => resolve({
+            status: 200,
+            ok: true,
+            json: async () => ({ ok: true, sessions: [terminalSession('s-list')] }),
+          });
+        });
+      }
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({ ok: true, closed: true, session: terminalSession('s-list') }),
+      };
+    };
+    const api = await import('../public/api.js');
+    try {
+      api.setGitConversationScope('conv-list-a');
+      const pending = api.listTerminals();
+      await tick();
+      api.setGitConversationScope('conv-list-b');
+      resolveList();
+      const result = await pending;
+      await api.closeTerminal('s-list');
+      const listCall = calls.find((call) => call.body.action === 'list');
+      const closeCall = calls.find((call) => call.body.action === 'close');
+      ok('a list response keeps the conversation that issued it, not a later switch', () => {
+        assert.equal(result.sessions[0].id, 's-list');
+        assert.equal(listCall.headers['X-Pi-Gui-Conversation'], 'conv-list-a');
+        assert.equal(closeCall.headers['X-Pi-Gui-Conversation'], 'conv-list-a');
+      });
+    } finally {
+      api.setGitConversationScope(null);
+      global.fetch = realFetch;
+    }
+  }
+
+  {
+    /* P2 multi-terminal surface: three independent sessions, tab switching
+     * without PTY recreation, one-tab close, exit/restart, panel reopen and
+     * workspace isolation/return. */
+    const backend = multiBackend();
+    const views = [];
+    const view = fakeView();
+    const makeView = () => {
+      const next = fakeTerminalView();
+      views.push(next);
+      return next;
+    };
+    mountTerminalPanel(host, view, { transport: backend.transport, createTerminalView: makeView });
+    await until(() => backend.calls.create.length === 1 && host.querySelectorAll('.terminal-tab').length === 1);
+    await until(() => host.querySelector('.rp-head-sub')?.textContent.includes('运行中'));
+    const firstId = [...backend.model.keys()][0];
+    ok('P2 create adds a measured tab and replays its own buffer', () => {
+      assert.deepEqual(backend.calls.create[0], { cols: 100, rows: 30 });
+      assert.equal(views.length, 1);
+      const tab = host.querySelector('.terminal-tab');
+      assert.equal(tab.dataset.terminalId, firstId);
+      assert.equal(tab.dataset.state, 'running');
+      assert.ok(tab.classList.contains('is-active'));
+      assert.equal(tab.querySelector('.terminal-tab-label').textContent, '终端 1');
+      assert.equal(host.querySelector('.term-host').hidden, false);
+      assert.equal(host.querySelector('.terminal-empty').hidden, true);
+      assert.equal(host.querySelectorAll('.term-view:not([hidden])').length, 1);
+    });
+    await tick(40);
+    ok('the active terminal restores from cursor 0 and polls the same session', () => {
+      /* A fresh PTY has no output yet, so its cursor legitimately stays 0
+       * until the first bytes arrive. */
+      assert.ok(backend.calls.read.some(([id, since]) => id === firstId && since === 0));
+      assert.equal(backend.calls.create.length, 1);
+    });
+
+    backend.emit(firstId, 'first-only\r\n');
+    await until(() => views[0].writes.join('').includes('first-only'));
+    const readMark = backend.calls.read.length;
+    await tick(150);
+    ok('after output is replayed the poll advances the opaque cursor', () => {
+      const later = backend.calls.read.slice(readMark).filter(([id]) => id === firstId);
+      assert.ok(later.length >= 1);
+      assert.ok(later.every(([, since]) => since > 0));
+    });
+    host.querySelector('.terminal-new').click();
+    await until(() => backend.calls.create.length === 2 && host.querySelectorAll('.terminal-tab').length === 2);
+    await until(() => host.querySelectorAll('.term-view').length === 2);
+    const secondId = [...backend.model.keys()][1];
+    ok('a second terminal is truly separate while the first stays mounted', () => {
+      assert.equal(views.length, 2);
+      assert.equal(views[0].disposed, false);
+      assert.equal(views[1].disposed, false);
+      assert.equal(host.querySelector('#term-view-' + firstId).hidden, true);
+      assert.equal(host.querySelector('#term-view-' + secondId).hidden, false);
+      assert.ok(host.querySelectorAll('.terminal-tab')[1].classList.contains('is-active'));
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 2);
+    });
+
+    backend.emit(firstId, 'first-tail\r\n');
+    backend.emit(secondId, 'second-tail\r\n');
+    await until(() => views[0].writes.join('').includes('first-tail')
+      && views[1].writes.join('').includes('second-tail'));
+    ok('hidden tabs keep polling and each view receives only its own output', () => {
+      assert.ok(!views[0].writes.join('').includes('second-tail'));
+      assert.ok(!views[1].writes.join('').includes('first-tail'));
+      assert.equal(views[0].writes.join(''), 'first-only\r\nfirst-tail\r\n');
+      assert.equal(views[1].writes.join(''), 'second-tail\r\n');
+    });
+
+    views[1].emitData('echo second\r');
+    await until(() => backend.calls.write.some(([id]) => id === secondId));
+    views[0].emitData('hidden-must-not-send\r');
+    await tick(40);
+    ok('keyboard input goes only to the visible terminal', () => {
+      assert.deepEqual(backend.calls.write, [[secondId, 'echo second\r']]);
+    });
+
+    host.querySelectorAll('.terminal-tab-select')[0].click();
+    await tick(40);
+    ok('switching tabs only toggles visibility and never recreates a PTY', () => {
+      assert.equal(backend.calls.create.length, 2);
+      assert.equal(views.length, 2);
+      assert.equal(views[0].disposed, false);
+      assert.equal(views[1].disposed, false);
+      assert.equal(host.querySelector('#term-view-' + firstId).hidden, false);
+      assert.equal(host.querySelector('#term-view-' + secondId).hidden, true);
+      assert.ok(host.querySelectorAll('.terminal-tab')[0].classList.contains('is-active'));
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('运行中'));
+      assert.equal(host.querySelector('.terminal-tab-label').textContent, '终端 1');
+    });
+
+    host.querySelectorAll('.terminal-tab-close')[1].click();
+    await until(() => backend.calls.close.includes(secondId));
+    await tick(20);
+    ok('closing one tab terminates only that terminal', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(views[1].disposed, true);
+      assert.equal(backend.model.get(secondId).removed, true);
+      assert.equal(backend.calls.close.includes(firstId), false);
+      assert.equal(views[0].disposed, false);
+      assert.equal(host.querySelector('#term-view-' + firstId).hidden, false);
+    });
+
+    backend.setState(firstId, 'exited', 7);
+    await until(() => host.querySelector('.rp-head-sub')?.textContent.includes('已退出'), 'exit state');
+    ok('a real shell exit is reflected in the tab and the header', () => {
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'exited');
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('(7)'));
+      const control = host.querySelector('.rp-head-actions button:last-child');
+      assert.equal(control.textContent, '重启');
+      assert.equal(control.disabled, false);
+    });
+
+    const beforeRestart = backend.calls.create.length;
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await until(() => backend.calls.create.length === beforeRestart + 1
+      && host.querySelectorAll('.terminal-tab').length === 1);
+    await until(() => host.querySelector('.rp-head-sub')?.textContent.includes('运行中'));
+    const restartedId = [...backend.model.entries()]
+      .filter(([, entry]) => !entry.removed)
+      .at(-1)[0];
+    ok('restart closes the exited tab and creates a fresh session with the same size', () => {
+      assert.ok(backend.calls.close.includes(firstId));
+      assert.notEqual(restartedId, firstId);
+      assert.deepEqual(backend.calls.create.at(-1), { cols: 100, rows: 30 });
+      assert.equal(host.querySelector('.terminal-tab-label').textContent, '终端 1');
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'running');
+    });
+
+    host.querySelector('.terminal-tab-close').click();
+    await until(() => host.querySelector('.terminal-empty').hidden === false, 'empty after last close');
+    ok('closing the last tab shows the workspace empty state', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 0);
+      assert.ok(host.querySelector('.terminal-empty-title').textContent.includes('还没有终端'));
+      assert.equal(host.querySelector('.term-host').hidden, true);
+      assert.equal(host.querySelector('.terminal-new').disabled, false);
+      assert.equal(host.querySelector('#term-view-' + restartedId), null);
+    });
+
+    host.querySelector('.terminal-empty-action').click();
+    await until(() => host.querySelectorAll('.terminal-tab').length === 1, 'create from empty state');
+    const liveId = [...backend.model.entries()].filter(([, entry]) => !entry.removed).at(-1)[0];
+
+    view.dispose();
+    await tick(30);
+    ok('closing the panel disposes xterm but leaves the PTY running', () => {
+      assert.equal(views.at(-1).disposed, true);
+      assert.equal(backend.calls.close.includes(liveId), false);
+      assert.equal(backend.calls.stop.includes(liveId), false);
+      assert.equal(backend.model.get(liveId).removed, false);
+    });
+    host.replaceChildren();
+
+    backend.emit(liveId, 'persisted-after-reopen\r\n');
+    const reopenedViews = [];
+    const reopened = fakeView();
+    const createBeforeReopen = backend.calls.create.length;
+    mountTerminalPanel(host, reopened, {
+      transport: backend.transport,
+      createTerminalView: () => {
+        const next = fakeTerminalView();
+        reopenedViews.push(next);
+        return next;
+      },
+    });
+    await until(() => host.querySelectorAll('.terminal-tab').length === 1 && reopenedViews.length === 1);
+    await until(() => reopenedViews[0].writes.join('').includes('persisted-after-reopen'));
+    ok('reopening lists the live workspace sessions instead of spawning again', () => {
+      assert.equal(backend.calls.create.length, createBeforeReopen);
+      assert.ok(backend.calls.read.filter(([id, since]) => id === liveId && since === 0).length >= 2);
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'running');
+      assert.equal(reopenedViews[0].disposed, false);
+    });
+
+    const listBefore = backend.calls.list;
+    document.dispatchEvent(new dom.window.CustomEvent('pi-gui:git-scope'));
+    await until(() => backend.calls.list > listBefore);
+    await tick(30);
+    ok('a same-workspace git scope change keeps the tabs mounted', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(reopenedViews[0].disposed, false);
+      assert.equal(backend.calls.close.includes(liveId), false);
+      assert.equal(backend.calls.stop.includes(liveId), false);
+      assert.equal(backend.calls.create.length, createBeforeReopen);
+    });
+
+    const w2 = backend.addExisting({ cols: 70, rows: 20 }, 'running', { id: 'w2', generation: '2' });
+    backend.state.workspace = { id: 'w2', generation: '2' };
+    const closesBeforeSwitch = backend.calls.close.length;
+    document.dispatchEvent(new dom.window.CustomEvent('pi-gui:git-scope'));
+    await until(() => host.querySelector('.terminal-tab')?.dataset.terminalId === w2.session.id
+      && reopenedViews.length >= 2, 'workspace B tab');
+    ok('switching workspace detaches the old tabs without stopping their PTYs', () => {
+      assert.equal(host.querySelector('.terminal-tab').dataset.terminalId, w2.session.id);
+      assert.equal(reopenedViews[0].disposed, true);
+      assert.equal(backend.calls.close.length, closesBeforeSwitch);
+      assert.equal(backend.calls.stop.some((id) => id === liveId || id === w2.session.id), false);
+      assert.equal(backend.model.get(liveId).removed, false);
+      assert.equal(backend.model.get(w2.session.id).removed, false);
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('运行中'));
+      assert.equal(host.querySelector('#term-view-' + liveId), null);
+    });
+
+    backend.state.workspace = { id: 'w1', generation: '1' };
+    const listBeforeReturn = backend.calls.list;
+    document.dispatchEvent(new dom.window.CustomEvent('pi-gui:git-scope'));
+    await until(() => backend.calls.list > listBeforeReturn);
+    await until(() => host.querySelector('.terminal-tab')?.dataset.terminalId === liveId
+      && reopenedViews.length >= 3, 'workspace A tab restored');
+    ok('returning to the original workspace reconnects to the same live session', () => {
+      assert.equal(reopenedViews[1].disposed, true);
+      assert.equal(reopenedViews[2].disposed, false);
+      assert.equal(backend.calls.create.length, createBeforeReopen);
+      assert.equal(backend.calls.close.some((id) => id === liveId), false);
+      assert.equal(backend.model.get(liveId).removed, false);
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'running');
+      assert.ok(reopenedViews[2].writes.join('').includes('persisted-after-reopen'));
+    });
+
+    reopened.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* A close that gets no definitive answer must not hide a possibly live PTY.
+     * Keep the tab and let the user retry once the backend is reachable again. */
+    const backend = multiBackend({ workspace: { id: 'w-close-failure', generation: '1' } });
+    const view = fakeView();
+    mountTerminalPanel(host, view, {
+      transport: backend.transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => backend.calls.create.length === 1 && host.querySelectorAll('.terminal-tab').length === 1);
+    const id = [...backend.model.keys()][0];
+    backend.state.closeFailure = { ok: false, code: 'workspace_check_failed', error: '工作区暂时不可用' };
+    host.querySelector('.terminal-tab-close').click();
+    await until(() => host.querySelector('.terminal-notice')?.textContent.includes('工作区暂时不可用'));
+    ok('a close without a definitive answer keeps the tab for a retry', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(host.querySelector('.terminal-tab').dataset.terminalId, id);
+      assert.equal(backend.model.get(id).removed, false);
+      assert.equal(host.querySelector('.terminal-new').disabled, false);
+    });
+    backend.state.closeFailure = null;
+    host.querySelector('.terminal-tab-close').click();
+    await until(() => host.querySelectorAll('.terminal-tab').length === 0);
+    ok('retrying the same tab after the backend recovers closes it', () => {
+      assert.equal(backend.model.get(id).removed, true);
+      assert.equal(host.querySelector('.terminal-empty').hidden, false);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* Boot with existing sessions: no start/create, no duplicate PTY. */
+    const backend = multiBackend();
+    const first = backend.addExisting({ cols: 90, rows: 20 });
+    const second = backend.addExisting({ cols: 110, rows: 28 }, 'exited');
+    const views = [];
+    const view = fakeView();
+    mountTerminalPanel(host, view, {
+      transport: backend.transport,
+      createTerminalView: () => {
+        const next = fakeTerminalView();
+        views.push(next);
+        return next;
+      },
+    });
+    await until(() => host.querySelectorAll('.terminal-tab').length === 2 && views.length === 2);
+    await tick(40);
+    ok('opening the panel lists the workspace sessions without spawning', () => {
+      assert.equal(backend.calls.create.length, 0);
+      assert.equal(backend.calls.start.length, 0);
+      assert.deepEqual(
+        [...host.querySelectorAll('.terminal-tab')].map((tab) => tab.dataset.terminalId),
+        [first.session.id, second.session.id]
+      );
+      assert.ok(host.querySelectorAll('.terminal-tab')[1].classList.contains('is-active'));
+      assert.equal(host.querySelectorAll('.terminal-tab')[1].dataset.state, 'exited');
+      const zero = [...new Set(backend.calls.read.filter(([, since]) => since === 0).map(([id]) => id))].sort();
+      assert.deepEqual(zero, [first.session.id, second.session.id].sort());
+    });
+    await until(() => host.querySelector('.rp-head-actions button:last-child')?.textContent === '重启');
+    ok('an already-exited session is shown as restartable, not running', () => {
+      assert.ok(host.querySelector('.rp-head-sub').textContent.includes('已退出'));
+      assert.equal(host.querySelector('#term-view-' + first.session.id).hidden, true);
+      assert.equal(host.querySelector('#term-view-' + second.session.id).hidden, false);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* A double click on + must not create two PTYs. */
+    const backend = multiBackend();
+    const view = fakeView();
+    mountTerminalPanel(host, view, {
+      transport: backend.transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => backend.calls.create.length === 1 && host.querySelectorAll('.terminal-tab').length === 1);
+    host.querySelector('.terminal-new').click();
+    host.querySelector('.terminal-new').click();
+    await tick(100);
+    ok('a create already in flight blocks a second click from spawning a duplicate', () => {
+      assert.equal(backend.calls.create.length, 2);
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 2);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    const backend = multiBackend({ maxPerWorkspace: 2 });
+    const view = fakeView();
+    mountTerminalPanel(host, view, {
+      transport: backend.transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => backend.calls.create.length === 1 && host.querySelectorAll('.terminal-tab').length === 1);
+    host.querySelector('.terminal-new').click();
+    await until(() => backend.calls.create.length === 2 && host.querySelectorAll('.terminal-tab').length === 2);
+    await tick(20);
+    ok('the new-terminal control stops at the per-workspace cap', () => {
+      const newButton = host.querySelector('.terminal-new');
+      assert.equal(newButton.disabled, true);
+      assert.ok(newButton.title.includes('上限'));
+    });
+    const before = backend.calls.create.length;
+    host.querySelector('.terminal-new').click();
+    await tick(50);
+    ok('a disabled new-terminal control sends no request', () => {
+      assert.equal(backend.calls.create.length, before);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    const backend = multiBackend();
+    backend.state.createFailure = { ok: false, code: 'terminal_limit', error: '当前工作区的终端数量已达上限，请先关闭一个终端。' };
+    const view = fakeView();
+    mountTerminalPanel(host, view, {
+      transport: backend.transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => host.querySelector('.terminal-empty')?.hidden === false
+      && host.querySelector('.terminal-empty-title')?.textContent.includes('无法新建终端'), 'create failure state');
+    ok('a create failure is an explicit empty/error state, not a blank surface', () => {
+      assert.ok(host.querySelector('.terminal-notice').textContent.includes('上限'));
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 0);
+      assert.equal(host.querySelector('.rp-head-actions button:last-child').textContent, '重试');
+    });
+    backend.state.createFailure = null;
+    host.querySelector('.terminal-empty-action').click();
+    await until(() => host.querySelectorAll('.terminal-tab').length === 1, 'retry create');
+    ok('retrying after a create failure starts exactly one terminal', () => {
+      assert.equal(backend.calls.create.length, 2);
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    const backend = multiBackend();
+    backend.state.listFailure = { ok: false, network: true };
+    const view = fakeView();
+    mountTerminalPanel(host, view, {
+      transport: backend.transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => host.querySelector('.terminal-empty-title')?.textContent.includes('无法启动终端'), 'list failure state');
+    ok('a list failure is retryable and never shows a stale id as running', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 0);
+      assert.ok(host.querySelector('.terminal-empty-hint').textContent.includes('无法连接'));
+      assert.equal(host.querySelector('.rp-head-actions button:last-child').textContent, '重试');
+    });
+    backend.state.listFailure = null;
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await until(() => backend.calls.create.length === 1 && host.querySelectorAll('.terminal-tab').length === 1);
+    ok('retrying the boot path creates one terminal', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(backend.calls.create.length, 1);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* A list sampled before a tab was created must not delete that tab when it
+     * lands later. The backend PTY is still running and would otherwise become
+     * an orphan that occupies a session slot. */
+    let listCalls = 0;
+    let releaseCreate = null;
+    let releaseList = null;
+    const closed = [];
+    const view = fakeView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true, maxSessionsPerWorkspace: 6 }),
+      list: async () => {
+        listCalls++;
+        if (listCalls === 1) {
+          return { ok: true, workspace: { id: 'w1', generation: '1' }, sessions: [terminalSession('s1')] };
+        }
+        return new Promise((resolve) => {
+          releaseList = () => resolve({
+            ok: true,
+            workspace: { id: 'w1', generation: '1' },
+            sessions: [terminalSession('s1')],
+          });
+        });
+      },
+      create: () => new Promise((resolve) => {
+        releaseCreate = () => resolve({ ok: true, session: { ...terminalSession('s2'), ordinal: 2 } });
+      }),
+      read: async (id) => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession(id) }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
+      close: async (id) => { closed.push(id); return { ok: true, closed: true }; },
+    };
+    mountTerminalPanel(host, view, {
+      transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => host.querySelectorAll('.terminal-tab').length === 1, 'boot tab');
+    host.querySelector('.terminal-new').click();
+    await until(() => typeof releaseCreate === 'function', 'deferred create');
+    document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+    await until(() => typeof releaseList === 'function', 'deferred scope list');
+    releaseCreate();
+    await until(() => host.querySelectorAll('.terminal-tab').length === 2, 'new tab mounts');
+    releaseList();
+    await tick(40);
+    ok('a late list snapshot does not remove a tab created while it was in flight', () => {
+      assert.deepEqual(
+        [...host.querySelectorAll('.terminal-tab')].map((el) => el.dataset.terminalId),
+        ['s1', 's2']
+      );
+      assert.deepEqual(closed, []);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* The opposite race: a list sampled before a close must not add the closed
+     * tab back as a dead tab after the close has already succeeded. */
+    let listCalls = 0;
+    let releaseList = null;
+    const closed = [];
+    const view = fakeView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true, maxSessionsPerWorkspace: 6 }),
+      list: async () => {
+        listCalls++;
+        if (listCalls === 1) {
+          return { ok: true, workspace: { id: 'w1', generation: '1' }, sessions: [terminalSession('s1')] };
+        }
+        return new Promise((resolve) => {
+          releaseList = () => resolve({
+            ok: true,
+            workspace: { id: 'w1', generation: '1' },
+            sessions: [terminalSession('s1')],
+          });
+        });
+      },
+      create: async () => ({ ok: true, session: { ...terminalSession('s2'), ordinal: 2 } }),
+      read: async (id) => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession(id) }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
+      close: async (id) => { closed.push(id); return { ok: true, closed: true }; },
+    };
+    mountTerminalPanel(host, view, {
+      transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => host.querySelectorAll('.terminal-tab').length === 1, 'boot tab');
+    document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+    await until(() => typeof releaseList === 'function', 'deferred scope list');
+    host.querySelector('.terminal-tab-close').click();
+    await until(() => closed.includes('s1') && host.querySelectorAll('.terminal-tab').length === 0, 'closed tab');
+    releaseList();
+    await tick(40);
+    ok('a late same-workspace list does not resurrect an already closed tab', () => {
+      assert.deepEqual(closed, ['s1']);
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 0);
+      assert.equal(host.querySelector('.terminal-empty').hidden, false);
+      assert.equal(host.querySelector('.terminal-new').disabled, false);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* Restart must not discard the only tab when its close has no definitive
+     * answer; the user needs a visible, retryable control. */
+    const backend = multiBackend();
+    backend.addExisting({ cols: 90, rows: 20 }, 'exited');
+    const view = fakeView();
+    const beforeCreate = backend.calls.create.length;
+    mountTerminalPanel(host, view, {
+      transport: backend.transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => host.querySelector('.rp-head-actions button:last-child')?.textContent === '重启');
+    backend.state.closeFailure = { ok: false, code: 'workspace_check_failed', error: '工作区暂时不可用' };
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await until(() => host.querySelector('.terminal-notice')?.textContent.includes('工作区暂时不可用'));
+    ok('a failed restart keeps the exited tab and spawns no replacement', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(backend.calls.create.length, beforeCreate);
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'exited');
+      assert.equal(host.querySelector('.rp-head-actions button:last-child').disabled, false);
+    });
+    backend.state.closeFailure = null;
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await until(() => backend.calls.create.length === beforeCreate + 1
+      && host.querySelectorAll('.terminal-tab').length === 1);
+    ok('retrying a failed restart replaces the old tab exactly once', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'running');
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* A restart can be deferred by an in-flight scope list. The old exited tab
+     * must stay visible through that list so the user can retry; a late
+     * snapshot that still contains it must not remove the retry affordance. */
+    let listCalls = 0;
+    let releaseList = null;
+    let createCalls = 0;
+    const closed = [];
+    const workspace = { id: 'w-restart-scope', generation: '1' };
+    const scoped = (id, state = 'running') => ({ ...terminalSession(id, state), workspace });
+    const view = fakeView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true, maxSessionsPerWorkspace: 6 }),
+      list: async () => {
+        listCalls++;
+        if (listCalls === 1) {
+          return { ok: true, workspace, sessions: [scoped('s1', 'exited')] };
+        }
+        return new Promise((resolve) => {
+          releaseList = () => resolve({
+            ok: true,
+            workspace,
+            sessions: [scoped('s1', 'exited')],
+          });
+        });
+      },
+      create: async () => {
+        createCalls++;
+        return { ok: true, session: { ...scoped('s2'), ordinal: 2 } };
+      },
+      read: async (id) => ({ ok: true, text: '', cursor: 0, state: id === 's1' ? 'exited' : 'running', session: scoped(id, id === 's1' ? 'exited' : 'running') }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
+      close: async (id) => { closed.push(id); return { ok: true, closed: true }; },
+    };
+    mountTerminalPanel(host, view, {
+      transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => host.querySelector('.rp-head-actions button:last-child')?.textContent === '重启');
+    document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+    await until(() => typeof releaseList === 'function', 'deferred scope list');
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await tick(30);
+    ok('a restart deferred by a scope list keeps the old tab and creates nothing', () => {
+      assert.deepEqual(closed, ['s1']);
+      assert.equal(createCalls, 0);
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'exited');
+    });
+    releaseList();
+    await tick(40);
+    ok('the scope list that deferred the restart does not remove its retry tab', () => {
+      assert.equal(host.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'exited');
+      assert.equal(host.querySelector('.rp-head-actions button:last-child').textContent, '重启');
+    });
+    host.querySelector('.rp-head-actions button:last-child').click();
+    await until(() => createCalls === 1 && host.querySelectorAll('.terminal-tab').length === 1
+      && host.querySelector('.terminal-tab').dataset.terminalId === 's2');
+    ok('retrying after the scope list settles creates the replacement', () => {
+      assert.deepEqual(closed, ['s1', 's1']);
+      assert.equal(host.querySelector('.terminal-tab').dataset.state, 'running');
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* Boot and scope-sync issue independent lists. A slow boot response must
+     * not append workspace A after scope sync already switched to B; a newer
+     * scope event must also supersede an older in-flight list. */
+    let listCalls = 0;
+    let releaseBoot = null;
+    let releaseThird = null;
+    const view = fakeView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true, maxSessionsPerWorkspace: 6 }),
+      list: async () => {
+        listCalls++;
+        if (listCalls === 1) {
+          return new Promise((resolve) => {
+            releaseBoot = () => resolve({
+              ok: true,
+              workspace: { id: 'wa', generation: '1' },
+              sessions: [terminalSession('a1')],
+            });
+          });
+        }
+        if (listCalls === 2) {
+          return {
+            ok: true,
+            workspace: { id: 'wb', generation: '2' },
+            sessions: [{ ...terminalSession('b1'), workspace: { id: 'wb', generation: '2' } }],
+          };
+        }
+        if (listCalls === 3) {
+          return new Promise((resolve) => {
+            releaseThird = () => resolve({
+              ok: true,
+              workspace: { id: 'wc', generation: '3' },
+              sessions: [{ ...terminalSession('c1'), workspace: { id: 'wc', generation: '3' } }],
+            });
+          });
+        }
+        return {
+          ok: true,
+          workspace: { id: 'wd', generation: '4' },
+          sessions: [{ ...terminalSession('d1'), workspace: { id: 'wd', generation: '4' } }],
+        };
+      },
+      create: async () => ({ ok: true, session: terminalSession('unused') }),
+      read: async (id) => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession(id) }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
+      close: async () => ({ ok: true, closed: true }),
+    };
+    mountTerminalPanel(host, view, {
+      transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => typeof releaseBoot === 'function', 'deferred boot list');
+    document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-generation'));
+    await until(() => host.querySelector('.terminal-tab')?.dataset.terminalId === 'b1', 'scope switch tab');
+    releaseBoot();
+    await tick(40);
+    ok('a late boot list cannot append the previous workspace after a scope switch', () => {
+      assert.deepEqual([...host.querySelectorAll('.terminal-tab')].map((el) => el.dataset.terminalId), ['b1']);
+    });
+
+    document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+    await until(() => typeof releaseThird === 'function', 'third list in flight');
+    document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+    await until(() => host.querySelector('.terminal-tab')?.dataset.terminalId === 'd1', 'newer scope wins');
+    releaseThird();
+    await tick(40);
+    ok('a newer scope event supersedes an older in-flight list instead of being dropped', () => {
+      assert.deepEqual([...host.querySelectorAll('.terminal-tab')].map((el) => el.dataset.terminalId), ['d1']);
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* A scope event during boot can start a list before status returns. The
+     * boot list then supersedes it; the discarded scope response must not
+     * leave `scopeSyncPending` stuck and disable New/Restart forever. */
+    let releaseStatus = null;
+    let releaseScopeList = null;
+    let listCalls = 0;
+    let createCalls = 0;
+    const view = fakeView();
+    const transport = {
+      status: () => new Promise((resolve) => {
+        releaseStatus = () => resolve({ ok: true, enabled: true, maxSessionsPerWorkspace: 6 });
+      }),
+      list: async () => {
+        listCalls++;
+        if (listCalls === 1) {
+          return new Promise((resolve) => {
+            releaseScopeList = () => resolve({
+              ok: true,
+              workspace: { id: 'w1', generation: '1' },
+              sessions: [terminalSession('b1')],
+            });
+          });
+        }
+        return { ok: true, workspace: { id: 'w1', generation: '1' }, sessions: [terminalSession('b1')] };
+      },
+      create: async () => {
+        createCalls++;
+        return { ok: true, session: { ...terminalSession('b2'), ordinal: 2 } };
+      },
+      read: async (id) => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession(id) }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
+      close: async () => ({ ok: true, closed: true }),
+    };
+    mountTerminalPanel(host, view, {
+      transport,
+      createTerminalView: () => fakeTerminalView(),
+    });
+    await until(() => typeof releaseStatus === 'function', 'deferred status');
+    document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+    await until(() => typeof releaseScopeList === 'function', 'scope list before boot');
+    releaseStatus();
+    await until(() => host.querySelector('.terminal-tab')?.dataset.terminalId === 'b1', 'boot list applied');
+    await until(() => host.querySelector('.terminal-new')?.disabled === false, 'new terminal re-enabled');
+    host.querySelector('.terminal-new').click();
+    await until(() => createCalls === 1 && host.querySelectorAll('.terminal-tab').length === 2, 'create after pending clears');
+    releaseScopeList();
+    await tick(40);
+    ok('a boot list that supersedes a scope list clears pending and keeps New usable', () => {
+      assert.equal(createCalls, 1);
+      assert.deepEqual(
+        [...host.querySelectorAll('.terminal-tab')].map((el) => el.dataset.terminalId),
+        ['b1', 'b2']
+      );
+    });
+    view.dispose();
+    host.replaceChildren();
+  }
+
+  {
+    /* P2 transports have `close`; a late create from a disposed panel must
+     * close (remove) the session instead of stopping it into a hidden tab. */
+    let releaseCreate = null;
+    const stopped = [];
+    const closed = [];
+    const views = [];
+    const view = fakeView();
+    const transport = {
+      status: async () => ({ ok: true, enabled: true }),
+      list: async () => ({ ok: true, workspace: { id: 'w1', generation: '1' }, sessions: [] }),
+      create: () => new Promise((resolve) => { releaseCreate = resolve; }),
+      read: async () => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession('s-late2') }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async (id) => { stopped.push(id); return { ok: true }; },
+      close: async (id) => { closed.push(id); return { ok: true, closed: true }; },
+    };
+    mountTerminalPanel(host, view, {
+      transport,
+      createTerminalView: () => {
+        const next = fakeTerminalView();
+        views.push(next);
+        return next;
+      },
+    });
+    await until(() => typeof releaseCreate === 'function', 'deferred create');
+    view.dispose();
+    releaseCreate({ ok: true, session: terminalSession('s-late2') });
+    await tick(30);
+    ok('a created session whose panel was disposed is closed, not left running', () => {
+      assert.deepEqual(closed, ['s-late2']);
+      assert.deepEqual(stopped, []);
+      assert.equal(views[0].disposed, true);
+    });
+    host.replaceChildren();
+  }
+
+  {
+    /* A reopened panel lists before the old mount's create completes. The new
+     * session is not in that list and has no tab; it must be closed even
+     * though another mount is alive. */
+    let releaseFirst = null;
+    let creates = 0;
+    const closed = [];
+    const transport = {
+      status: async () => ({ ok: true, enabled: true }),
+      list: async () => ({ ok: true, workspace: { id: 'w1', generation: '1' }, sessions: [] }),
+      create: () => {
+        creates++;
+        if (creates === 1) return new Promise((resolve) => { releaseFirst = resolve; });
+        return Promise.resolve({ ok: true, session: terminalSession('s-b') });
+      },
+      read: async (id) => ({ ok: true, text: '', cursor: 0, state: 'running', session: terminalSession(id) }),
+      write: async () => ({ ok: true }),
+      resize: async () => ({ ok: true }),
+      stop: async () => ({ ok: true }),
+      close: async (id) => { closed.push(id); return { ok: true, closed: true }; },
+    };
+    const hostA = document.createElement('div');
+    document.body.append(hostA);
+    const viewA = fakeView();
+    mountTerminalPanel(hostA, viewA, { transport, createTerminalView: () => fakeTerminalView() });
+    await until(() => typeof releaseFirst === 'function', 'deferred create A');
+    viewA.dispose();
+    hostA.remove();
+
+    const hostB = document.createElement('div');
+    document.body.append(hostB);
+    const viewB = fakeView();
+    mountTerminalPanel(hostB, viewB, { transport, createTerminalView: () => fakeTerminalView() });
+    await until(() => hostB.querySelectorAll('.terminal-tab').length === 1, 'reopened tab');
+    releaseFirst({ ok: true, session: terminalSession('s-orphan') });
+    await tick(30);
+    ok('a late create that the reopened panel did not list is closed, not orphaned', () => {
+      assert.deepEqual(closed, ['s-orphan']);
+      assert.equal(hostB.querySelectorAll('.terminal-tab').length, 1);
+      assert.equal(hostB.querySelector('.terminal-tab').dataset.terminalId, 's-b');
+    });
+    viewB.dispose();
+    hostB.remove();
+  }
+
+  {
+    const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'ui4-pane.css'), 'utf8');
+    ok('terminal tabs scroll horizontally and long labels ellipsize without reflowing the pane', () => {
+      assert.match(css, /\.terminal-tablist\{[^}]*overflow-x:auto/s);
+      assert.match(css, /\.terminal-tab\{[^}]*max-width:170px/s);
+      assert.match(css, /\.terminal-tab-label\{[^}]*text-overflow:ellipsis/s);
+      assert.match(css, /\.terminal-new\{[^}]*flex:none/s);
+      assert.match(css, /\.terminal-surface \.term-host \.term-view\{[^}]*position:absolute/s);
+    });
   }
 
   {
