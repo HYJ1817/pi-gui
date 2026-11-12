@@ -1205,7 +1205,9 @@ gone.”（`:838-844` 附近的注释）。P3-B/P3-C 应沿用这个模式，并
   无行为影响”条款说明原因后跳过，且没有重建产物；
 - 本文交付只新增本文；`AGENTS.md`、`REVIEW.md`、`docs/security.md` 与生产代码不在
   本文的改动范围内；工作区中的 P3-A keep-alive 修改与其它既有改动属于各自的范围；
-- 没有提交、推送、合并或发版。
+- 本文写作时没有提交、推送、合并或发版；P3-A 分支的提交、推送、审查与 PR 由该分支
+  的验收流程分别记录，见
+  [terminal-p3-keep-alive-acceptance.md](terminal-p3-keep-alive-acceptance.md)。
 
 ### 13.2 本轮实际做过什么
 
