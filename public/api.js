@@ -450,6 +450,19 @@ export const resizeTerminal = (id, cols, rows) => sendJSON('/api/terminal', {
   headers: gitScopeHeaders(),
   body: { action: 'resize', id, cols, rows },
 });
+/* Keep Alive is a per-session server flag, not a heartbeat. Use the scope
+ * captured when the session was created/listed so a focus change cannot make
+ * an otherwise valid request look cross-workspace. */
+export const setTerminalKeepAlive = (id, enabled) => {
+  const conversationId = terminalScopes.get(id);
+  return sendJSON('/api/terminal', {
+    headers: gitScopeHeaders(conversationId),
+    body: { action: 'keep-alive', id, enabled: enabled === true },
+  }).then((result) => {
+    if (result?.code === 'terminal_missing') terminalScopes.delete(id);
+    return result;
+  });
+};
 export const stopTerminal = (id) => {
   const conversationId = terminalScopes.get(id);
   return sendJSON('/api/terminal', {

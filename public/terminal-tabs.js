@@ -18,6 +18,8 @@ const button = (className, text) => {
   return element;
 };
 
+const KEEP_ALIVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6"/><path d="M10 4v5l-3.5 4.5h11L14 9V4"/><path d="M12 13.5V20"/></svg>';
+
 const STATE_TEXT = {
   creating: '正在启动',
   running: '运行中',
@@ -76,7 +78,12 @@ export function createTerminalTabs({ onActivate, onClose, onNew } = {}) {
     const dot = node('span', 'terminal-tab-dot');
     dot.setAttribute('aria-hidden', 'true');
     const text = node('span', 'terminal-tab-label', label);
-    select.append(dot, text);
+    /* A quiet per-tab marker: the toolbar explains the active tab, this icon
+     * lets a background tab show that it is exempt from the idle timer. */
+    const keep = node('span', 'terminal-tab-keep');
+    keep.innerHTML = KEEP_ALIVE_ICON;
+    keep.hidden = true;
+    select.append(dot, text, keep);
     select.onclick = () => onActivate?.(id);
     select.ondblclick = (event) => {
       event.preventDefault();
@@ -94,12 +101,12 @@ export function createTerminalTabs({ onActivate, onClose, onNew } = {}) {
     };
     tab.append(select, close);
     list.append(tab);
-    const entry = { id, label, viewId, ordinal, tab, select, close, text, dot };
+    const entry = { id, label, viewId, ordinal, tab, select, close, text, dot, keep, keepAlive: false };
     tabs.set(id, entry);
     return entry;
   }
 
-  function update(entry, { label, state = 'idle', selected = false } = {}) {
+  function update(entry, { label, state = 'idle', selected = false, keepAlive = false } = {}) {
     if (!entry) return;
     if (label && label !== entry.label) {
       entry.label = label;
@@ -108,12 +115,15 @@ export function createTerminalTabs({ onActivate, onClose, onNew } = {}) {
       entry.close.title = `关闭${label}`;
     }
     entry.state = state;
+    entry.keepAlive = keepAlive === true;
+    entry.keep.hidden = !entry.keepAlive;
+    entry.tab.dataset.keepAlive = entry.keepAlive ? 'true' : 'false';
     const stateText = terminalStateText(state);
     entry.tab.dataset.state = state;
     entry.select.dataset.state = state;
     entry.select.setAttribute('aria-selected', selected ? 'true' : 'false');
     entry.select.tabIndex = selected ? 0 : -1;
-    entry.select.title = `${entry.label} · ${stateText}`;
+    entry.select.title = `${entry.label} · ${stateText}${entry.keepAlive ? ' · 保持运行' : ''}`;
     if (selected) entry.tab.classList.add('is-active');
     else entry.tab.classList.remove('is-active');
   }
@@ -130,7 +140,7 @@ export function createTerminalTabs({ onActivate, onClose, onNew } = {}) {
     if (!entry) return;
     for (const other of tabs.values()) {
       const selected = other.id === id;
-      update(other, { state: other.state || 'idle', selected });
+      update(other, { state: other.state || 'idle', selected, keepAlive: other.keepAlive });
     }
     try {
       entry.select.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
