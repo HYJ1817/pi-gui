@@ -62,6 +62,62 @@ const click = (d, text, id = 'confirmCard') => {
       assert.equal(runs, 1); assert.equal(rows[0].disabled, true);
     } finally { f.close(); }
   });
+  await check('work panel launcher renders the four default cells, live shortcut hints and a controlled more grid', async () => {
+    const f = fixture('work-panel', 'ui/work-panel-launcher.js');
+    try {
+      const { w, d } = f;
+      const changes = d.getElementById('navChanges'), terminal = d.getElementById('btnTerminal'), files = d.getElementById('btnFiles');
+      const browser = d.getElementById('btnBrowser'), specs = d.getElementById('btnSpecs'), tree = d.getElementById('btnTree'), collab = d.getElementById('btnCollab');
+      w.registerShortcut({ id: 'fixture-changes', combo: 'primary+shift+g', label: '变更', run() {} });
+      w.registerShortcut({ id: 'fixture-terminal', combo: 'primary+`', label: '终端', run() {} });
+      w.registerShortcut({ id: 'fixture-files', combo: 'primary+p', label: '文件', run() {} });
+      const host = d.querySelector('#rightPane .rp-body');
+      const dispose = w.mountWorkPanelLauncher(host, [
+        { source: changes, label: '变更', shortcutId: 'fixture-changes' },
+        { source: terminal, label: '终端', shortcutId: 'fixture-terminal' },
+        { source: files, label: '文件', shortcutId: 'fixture-files' },
+        { source: browser, label: '浏览器', more: true },
+        { source: specs, label: 'Specs', more: true },
+        { source: tree, label: '分支树', more: true },
+        { source: collab, label: '协同文档', more: true },
+      ]);
+      assert.equal(host.querySelector('.work-panel-empty h2').textContent, '工具');
+      const primary = host.querySelector('.work-panel-launcher-grid:not(.work-panel-launcher-extra)');
+      assert.equal(primary.querySelectorAll('.work-panel-launcher-row').length, 3);
+      const more = host.querySelector('.work-panel-launcher-more');
+      assert.equal(primary.children.length, 4);
+      assert.equal(primary.children[3], more);
+      assert.deepEqual(
+        [...primary.querySelectorAll('.work-panel-launcher-row .work-panel-launcher-label')].map((n) => n.textContent),
+        ['变更', '终端', '文件']
+      );
+      const hints = [...primary.querySelectorAll('.work-panel-launcher-row .work-panel-launcher-shortcut')].map((n) => n.textContent);
+      assert.deepEqual(hints, [
+        w.formatCombo('primary+shift+g'),
+        w.formatCombo('primary+`'),
+        w.formatCombo('primary+p'),
+      ]);
+      const extra = host.querySelector('.work-panel-launcher-extra');
+      assert.ok(more && extra);
+      assert.ok(more.querySelector('.work-panel-launcher-label').textContent.includes('更多工具'));
+      assert.equal(extra.hidden, true);
+      assert.equal(more.getAttribute('aria-expanded'), 'false');
+      more.click();
+      assert.equal(extra.hidden, false);
+      assert.equal(more.getAttribute('aria-expanded'), 'true');
+      assert.deepEqual(
+        [...extra.querySelectorAll('.work-panel-launcher-label')].map((n) => n.textContent),
+        ['浏览器', 'Specs', '分支树', '协同文档']
+      );
+      more.click();
+      assert.equal(extra.hidden, true);
+      assert.equal(more.getAttribute('aria-expanded'), 'false');
+      assert.equal(host.querySelector('[class*="recommend"]'), null);
+      assert.ok(!host.textContent.includes('推荐'));
+      dispose();
+      assert.equal(more.disabled, true);
+    } finally { f.close(); }
+  });
   for (const decision of ['允许一次', '拒绝']) for (const lifecycle of ['expired', 'stop', 'workspace', 'session', 'bridge', 'timeout']) {
     await check('late ' + decision + ' success cannot authorize replacement after ' + lifecycle, async () => {
       const f = fixture('B', 'approval.js');
