@@ -570,29 +570,24 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 }
 
 /* ================= 终端面板 ================= */
-.secondary-surface.terminal-surface{overflow:hidden}
+.secondary-surface.terminal-surface{padding:0;overflow:hidden;background:var(--ds-bg-inset)}
 .terminal-surface>.rp-head{flex:0 0 auto}
-.terminal-surface .term-output{
-  flex:1 1 auto;min-height:0;margin:0;padding:12px;
-  background:var(--ds-bg-inset);color:var(--ds-text-secondary);
-  font-family:var(--ui-font-mono);font-size:12px;line-height:1.55;
-  white-space:pre-wrap;overflow-wrap:anywhere;tab-size:4;
+.terminal-surface .term-host{
+  position:relative;flex:1 1 auto;min-width:0;min-height:0;box-sizing:border-box;
+  padding:8px 8px 10px;overflow:hidden;background:var(--ds-bg-inset);
 }
-.terminal-surface .term-compose{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:8px 12px;border-top:1px solid var(--ds-border-subtle);background:var(--ds-bg-dock)}
-.terminal-surface .term-prompt{flex:none;color:var(--ds-text-muted);font-family:var(--ui-font-mono);font-size:14px;line-height:1}
-.terminal-surface .term-input{
-  flex:1 1 auto;min-width:0;height:30px;box-sizing:border-box;
-  padding:0 9px;border:1px solid var(--ds-border-default);border-radius:var(--radius-sm);
-  background:var(--ds-surface-input);color:var(--ds-text-primary);
-  font-family:var(--ui-font-mono);font-size:12px;outline:none;
-}
-.terminal-surface .term-input:focus{border-color:var(--ds-focus)}
-.terminal-surface .term-input:disabled{opacity:.55}
-.terminal-surface .term-hint{flex:0 0 auto;margin:0;padding:0 12px 8px;font-size:11px;line-height:1.4;color:var(--ds-text-faint)}
-.terminal-surface .term-send{flex:none}
+.terminal-surface .term-host .xterm{height:100%}
+.terminal-surface .term-host .xterm-viewport{background:transparent!important;scrollbar-color:var(--ui-scrollbar) transparent}
+.terminal-surface .term-host .xterm-viewport::-webkit-scrollbar{width:10px}
+.terminal-surface .term-host .xterm-viewport::-webkit-scrollbar-thumb{background:var(--ui-scrollbar);border-radius:999px;border:2px solid transparent;background-clip:padding-box}
+.terminal-surface .term-host .xterm-viewport::-webkit-scrollbar-thumb:hover{background:var(--ui-scrollbar-hover);background-clip:padding-box}
 .terminal-surface .rp-head[data-state="running"] .rp-head-sub{color:var(--ui-success)}
+.terminal-surface .rp-head[data-state="stopping"] .rp-head-sub,
+.terminal-surface .rp-head[data-state="starting"] .rp-head-sub{color:var(--ui-warning)}
 .terminal-surface .rp-head[data-state="error"] .rp-head-sub,
 .terminal-surface .rp-head[data-state="failed"] .rp-head-sub{color:var(--ui-danger)}
+.terminal-surface .rp-head[data-state="stale"] .rp-head-sub,
+.terminal-surface .rp-head[data-state="retry"] .rp-head-sub{color:var(--ui-warning)}
 
 /* ================= 文件面板 ================= */
 .secondary-surface.files-surface{overflow:hidden}

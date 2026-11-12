@@ -11,7 +11,7 @@ PI-Desktop 阶段 E 将原空白 `rp-titlebar` 与 `#workPanelNav` 合为同一�
 
 终端与文件是右栏里的两个真实 surface，入口按钮、快捷键和起始页卡片走同一条 `openSecondarySurface` 生命周期：
 
-- **终端**：项目级命令面板，后端为管道 shell（Windows 走 `cmd.exe` 下的 PowerShell，POSIX 用 `$SHELL`），**不是 PTY**，因此不支持 vim/top 等全屏程序。只有桌面版（本地令牌边界）或显式 `PI_GUI_ENABLE_TERMINAL=1` 时启用；命令在聚焦会话的项目目录执行，Renderer 不传 cwd；输出有上限、不写日志，面板关闭、工作区切换或空闲超时都会结束后端会话。
+- **终端**：项目级 PTY（node-pty，Windows 走 ConPTY），前端为 xterm。Windows 默认绝对路径 PowerShell，缺失时回退绝对路径 CMD；POSIX 用 `$SHELL`，统一以 `TERM=xterm-256color` 启动。只有桌面版（本地令牌边界）或显式 `PI_GUI_ENABLE_TERMINAL=1` 时启用；cwd 来自聚焦会话的 workspace identity，Renderer 不传 shell、cwd、参数或环境变量；`start` / `read` / `input` / `resize` / `stop` 全部按 workspace 校验，跨工作区返回 409。输入拒绝 NUL 与超长、按原始字节写入且不追加换行；输出保留 ANSI/CR 原文、只在内存保留上限内的尾部、不写日志；`cols` / `rows` 有范围校验。每个工作区复用一个活动会话，达到并发上限时显式拒绝而不是杀掉用户其它终端。关闭面板只销毁 xterm 前端，后端继续运行并在重开时重放缓冲；只有显式停止、工作区变化、空闲超时或服务关闭才结束整棵进程树（Windows `taskkill /T`）。源码运行与打包产物都必须带 node-pty 原生模块（`resources/app/node_modules/node-pty` / `build/node_modules/node-pty`）。
 - **文件**：只读项目文件树与文本预览；按目录懒加载，跳过符号链接/junction 与隐藏项（除非用户显式显示），正文上限 256 KiB，二进制只标注不预览。没有写入、删除、重命名或上传入口。
 
 参考文件管理器的任意文件编辑、最大化及拖放不属于该阶段。实际证据与未验证边界见 [阶段 E 实施记录](ui/pi-desktop-reference/16-phase-e-implementation.md)。

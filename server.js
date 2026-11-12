@@ -605,8 +605,7 @@ const gitRoutes = createGitRoutes({
 /* Specs, Files and Terminal share the focused conversation's project cwd.
  * Changes uses the Git worktree root instead; these three read the project
  * directory so a repo checked out in a subdirectory keeps its own files. */
-const workspaceScopeForRequest = async (req) => {
-  const conversationId = req.headers?.['x-pi-gui-conversation'];
+const workspaceScopeForConversation = async (conversationId) => {
   if (conversationId === undefined) {
     return {
       root: runtime.getCurrentCwd(),
@@ -624,6 +623,7 @@ const workspaceScopeForRequest = async (req) => {
     generation: workspace.workspaceEpoch,
   }));
 };
+const workspaceScopeForRequest = (req) => workspaceScopeForConversation(req.headers?.['x-pi-gui-conversation']);
 const specs = createSpecs({ scopeForRequest: workspaceScopeForRequest });
 const files = createFiles({ scopeForRequest: workspaceScopeForRequest });
 /* The desktop build has a token (auth.isDevMode is false), so the terminal is
@@ -632,6 +632,9 @@ const files = createFiles({ scopeForRequest: workspaceScopeForRequest });
  * was opened. The router still applies Origin + token gates to every call. */
 const terminal = createTerminal({
   scopeForRequest: workspaceScopeForRequest,
+  // The sweep keeps the stored conversation scope so a project switch stops
+  // the old PTY even when the terminal surface is not mounted at that moment.
+  scopeForSession: (session) => workspaceScopeForConversation(session.conversationId),
   enabled: !auth.isDevMode || process.env.PI_GUI_ENABLE_TERMINAL === '1',
 });
 
@@ -1448,7 +1451,7 @@ if (process.send) process.on('message', async message => {
 
 async function shutdown() {
   if(runtime.isShuttingDown())return;
-  terminal.dispose();
+  await terminal.dispose();
   marketNetwork?.dispose();
   providerAuth.dispose();
   providerCredentialBridge.dispose();

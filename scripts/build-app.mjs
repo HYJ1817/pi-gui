@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
 // 删目录 / 算体积 / 拷文件这套东西安装程序脚本也要用，统一放 scripts/util.mjs
 import { sizeOf, mb, copyInto, removePaths, clearDir, COPYRIGHT } from './util.mjs';
+import { stageNodePty } from './node-pty-package.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputAt = process.argv.indexOf('--output-root');
@@ -94,9 +95,22 @@ for (const f of ['log-core.cjs', 'log-contract.cjs', 'zip.cjs', 'market-network-
 }
 fs.copyFileSync(path.join(BUILD, 'asset-manifest.json'), path.join(STAGE, 'asset-manifest.json'));
 
+/* xterm is served as browser-native ESM from public/vendor/xterm. Refresh the
+ * vendor copy before staging so a package upgrade cannot ship a stale parser. */
+execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'sync-xterm.mjs')], { stdio: 'inherit', cwd: ROOT });
+
 /* 前端静态资源。漏了这个的话页面直接 404 —— 而且开发机上不会发现，
  * 因为开发模式读的是项目根的 public/。 */
 copyInto(STAGE, path.join(ROOT, 'public'), 'public');
+
+/* node-pty cannot be bundled into server.cjs and cannot live in an asar.
+ * It is staged as a real directory and loaded through createRequire from
+ * resources/app. Without this the packaged app starts but the terminal
+ * reports pty_unavailable — a failure that never appears in source mode. */
+/* The packager target is fixed below (win32-x64), so stage that exact prebuild
+ * even when the host itself is ARM64. */
+const stagedPty = stageNodePty(ROOT, path.join(STAGE, 'node_modules', 'node-pty'), 'win32-x64');
+console.log(`  node-pty ${stagedPty.version} 已随包 staging`);
 // Official Pi --extension path stays within the installed application.
 copyInto(STAGE, path.join(ROOT, 'extensions'), 'extensions');
 fs.mkdirSync(path.join(STAGE, 'revert-compute'), { recursive: true });
@@ -131,6 +145,14 @@ copyInto(path.join(STAGE, 'pdfjs', 'worker'), worker, 'pdf.worker.mjs');
 const pdfjsLicense = path.join(PDFJS, 'LICENSE');
 if (!fs.existsSync(pdfjsLicense)) throw new Error(`缺少 ${pdfjsLicense}，先运行 npm install`);
 const pdfjsVersion = JSON.parse(fs.readFileSync(path.join(PDFJS, 'package.json'), 'utf8')).version;
+const xtermVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', '@xterm', 'xterm', 'package.json'), 'utf8')).version;
+const fitVersion = JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', '@xterm', 'addon-fit', 'package.json'), 'utf8')).version;
+const ptyLicense = path.join(ROOT, 'node_modules', 'node-pty', 'LICENSE');
+const xtermLicensePath = path.join(ROOT, 'node_modules', '@xterm', 'xterm', 'LICENSE');
+const fitLicensePath = path.join(ROOT, 'node_modules', '@xterm', 'addon-fit', 'LICENSE');
+for (const file of [ptyLicense, xtermLicensePath, fitLicensePath]) {
+  if (!fs.existsSync(file)) throw new Error(`缺少 ${file}，先运行 npm install`);
+}
 
 fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(STAGE, 'LICENSE'));
 fs.writeFileSync(
@@ -142,6 +164,15 @@ fs.writeFileSync(
     'https://github.com/mozilla/pdf.js',
     '用途：从 PDF 里抽取文本（PDF 附件功能）。',
     '',
+    `node-pty ${stagedPty.version}   MIT License`,
+    'https://github.com/microsoft/node-pty',
+    '用途：项目终端（PTY / ConPTY）。',
+    '',
+    `@xterm/xterm ${xtermVersion}   MIT License`,
+    `@xterm/addon-fit ${fitVersion}   MIT License`,
+    'https://github.com/xtermjs/xterm.js',
+    '用途：终端显示与尺寸适配。',
+    '',
     'Electron 及内嵌 Chromium 的许可证在应用根目录：',
     '  LICENSE、LICENSES.chromium.html',
     '',
@@ -150,6 +181,24 @@ fs.writeFileSync(
     '='.repeat(72),
     '',
     fs.readFileSync(pdfjsLicense, 'utf8'),
+    '',
+    '='.repeat(72),
+    '',
+    'node-pty',
+    '',
+    fs.readFileSync(ptyLicense, 'utf8'),
+    '',
+    '='.repeat(72),
+    '',
+    '@xterm/xterm',
+    '',
+    fs.readFileSync(xtermLicensePath, 'utf8'),
+    '',
+    '='.repeat(72),
+    '',
+    '@xterm/addon-fit',
+    '',
+    fs.readFileSync(fitLicensePath, 'utf8'),
   ].join('\n'),
   'utf8'
 );

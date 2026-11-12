@@ -375,12 +375,19 @@ export const fetchFileDocument = (filePath, workspace, generation) => getJSON(
 );
 
 export const fetchTerminalStatus = () => getJSON('/api/terminal/status', gitScopeHeaders());
-export const startTerminal = () => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'start' } });
+export const startTerminal = ({ cols, rows } = {}) => sendJSON('/api/terminal', {
+  headers: gitScopeHeaders(),
+  body: { action: 'start', ...(Number.isFinite(cols) && Number.isFinite(rows) ? { cols, rows } : {}) },
+});
 export const readTerminal = (id, since = 0) => getJSON(
   '/api/terminal?' + new URLSearchParams({ id, since: String(since) }),
   gitScopeHeaders()
 );
 export const writeTerminal = (id, data) => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'input', id, data } });
+export const resizeTerminal = (id, cols, rows) => sendJSON('/api/terminal', {
+  headers: gitScopeHeaders(),
+  body: { action: 'resize', id, cols, rows },
+});
 export const stopTerminal = (id) => sendJSON('/api/terminal', { headers: gitScopeHeaders(), body: { action: 'stop', id } });
 
 export const fetchGitStatus = () => getJSON('/api/git/status', gitScopeHeaders());
