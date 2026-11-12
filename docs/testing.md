@@ -278,7 +278,10 @@ node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=p25 --auth-only=true
 原生模块，在临时 cwd/data 中启动真实 PowerShell。它创建三个独立会话，验证并行命令的
 时序与输出隔离、`node -v`、`PI_GUI_TOKEN` 不进入 PTY 子环境、workspace B 只能列出自己的
 终端且伪造 A 的 id 被拒绝、回到 A 后接管同一批 PTY 和缓冲、关闭一个标签只树杀自己的
-进程树，并等待真实退出状态。它只证明源码 Node 运行时。
+进程树，并等待真实退出状态。它只证明源码 Node 运行时。空闲计时在假 PTY 套件中用
+短 `idleMs` 覆盖：持续 `read` 不会续期、输入和新输出会续期、历史读取与 `resize` 不会、
+多终端时钟独立、面板隐藏不终止、自然退出清除计时器、停止失败由 sweep 重试；真实 source
+运行不等待生产 30 分钟窗口。
 
 `test:terminal:electron` 与 B 层不是同一个运行时：`test:app` 用 Node 启动打包后的
 `server.cjs`（随包 node-pty），`test:exe` 验证 Node SEA 便携版；两者都不能替代 Electron

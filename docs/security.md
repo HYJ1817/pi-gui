@@ -755,7 +755,9 @@ PTY 由 node-pty（Windows 上为 ConPTY）创建，以 `TERM=xterm-256color` �
 终端。关闭面板只销毁 xterm 前端，后端 PTY 继续运行，重新打开时 `list` 恢复标签并按缓冲
 重放；显式 `stop` 只结束进程并保留已退出标签，`close` 才删除标签，两者都只结束目标会话的
 进程树。切换工作区或焦点不会停止任何终端；只有显式 `stop` / `close`、所属会话确认失效
-（前端停止与后端 scope sweep 双保险）、空闲超时或服务关闭才结束进程树。前端在
+（前端停止与后端 scope sweep 双保险）、空闲超时或服务关闭才结束进程树。空闲计时由
+服务端持有，只有真实用户输入与新 PTY 输出会续期；`read` / `list` / `resize` / `start`
+复用和 UI 重挂载都不能让静默 shell 永久存活。前端在
 `start` / `create` 时记录该会话的工作区身份（conversation id），`stop` / `close` 时沿用；
 切换项目会先清空当前 scope，若停止时现取 scope，后端会拒绝而留下孤儿 PTY。后端 sweep
 只在**成功解析**出一个不同的 workspace 时停止；scope 暂时不可用或解析报错都不当作

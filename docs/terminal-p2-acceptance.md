@@ -9,8 +9,8 @@
 范围：多终端标签、会话生命周期、工作区隔离、右栏标签 UI 与三运行时证据。
 
 > 本记录只证明下列命令、构建和真实环境。完整的 `npm test` 尚未在本记录完成，
-> 因此**不宣称 canonical 全量已通过**；按用户要求本轮只推送、不建 PR，合并结论仍须
-> 以完整 canonical、独立审查和用户明确授权为准。
+> 因此**不宣称 canonical 全量已通过**；本 PR 的 CI 将作为最终 canonical，结果出来前
+> 合并结论仍须以完整 canonical、独立审查和用户明确授权为准。
 
 ## 一、实现落点
 
@@ -62,6 +62,40 @@
 - Windows 用 `taskkill /pid <pid> /T /F`；失败时仅在 PTY 进程仍存活时回退一次
   `pty.kill()`。服务退出时等待真实 exit；Electron 外壳先结束后端进程树再退出。
 
+### 空闲计时语义（2026-11-13 最终审查修复）
+
+原问题：`server/terminal.js` 的 `read()` 在每次成功读取后调用 `touch()`；前端多个 xterm
+控制器以约 60ms（可见）或 240ms（隐藏）轮询 `read`。因此即使用户没有任何输入、PTY 也
+没有新输出，空闲计时器仍会被持续重置，静默 shell 可能永远不进入 30 分钟超时，关闭面板
+后也会一直占着进程和额度。
+
+根因与修复：把空闲活动收敛为服务端唯一的 `lastActivityAt`，由 `noteActivity()` 统一
+刷新；`read` / `list` / `resize` / `start` 复用、标签切换和 UI 重挂载都只是观察或布局，
+不再续期。计时器仍在服务端，不依赖渲染层计时器。
+
+| 事件 | 是否刷新空闲活动 | 依据 |
+| --- | --- | --- |
+| 新建会话成功 | 是（初始活动） | 会话从创建时开始计算 |
+| 成功写入用户输入 | 是 | 真实键盘输入是唯一明确的用户活动 |
+| PTY 产生新输出（`onData` → `append`） | 是 | 输出表明进程仍在工作，包括后台任务和进度点 |
+| `read`（含首次重放、历史游标） | 否 | 前端轮询/重挂载不能代表用户或 shell 活动 |
+| `list` | 否 | 打开面板或 scope 同步只是观察 |
+| `resize` | 否 | 窗口/标签布局变化，不是命令输入；否则窗口调整可无限续期 |
+| `start` 复用已有运行会话 | 否 | 与 UI 重挂载同类的观察 |
+| `stop` / `close` / 真实退出 / dispose | 清除计时器 | 已结束或正在结束的会话不再产生空闲定时器 |
+
+空闲超时仍为 **30 分钟**（`TERMINAL_LIMITS.idleMs`）。计时器在 `handleExit`、`stopSession`、
+`removeSession` 和 `dispose` 中清除并把句柄置空；只有真实 `onExit` 才把状态变成 `exited`。
+超时停止失败（kill 未产生 exit）时会话保持 `closing` 并由既有 scope sweep 重试；最终仍保留
+可识别的 `exited` 标签，用户可原地重启。每个会话独立计时，一个标签的输入或输出不会刷新
+其他标签。
+
+**长期运行但暂时没有输出的任务：** 服务端没有跨平台可信的“前台命令是否仍在运行”信号；
+本修复不伪造该信号。保护边界是：任何新输出（包括进度点）都会续期，面板隐藏不会终止，
+只有连续 30 分钟完全无输入且无输出才会被视为空闲。完全静默超过 30 分钟的任务会被停止并
+保留 `exited` 标签；这是为避免把前端轮询当作活动而保留的有界资源策略，限制已在本记录
+和 `work-surfaces.md` 中说明，不通过关闭空闲超时绕过。
+
 ## 三、环境
 
 - Windows 11 Home China 10.0.26200（真实桌面会话）
@@ -79,7 +113,7 @@
 npm run build:app -- --rebuild
 ```
 
-结果：exit 0。应用目录 13.1 MB，整包 333.5 MB。已检查打包产物：
+结果：exit 0（空闲计时修复及最终注释后重建）。应用目录 13.1 MB，整包 333.5 MB。已检查打包产物：
 
 - `resources/app/public/terminal-panel.js`、`terminal-session.js`、`terminal-tabs.js` 存在
 - `resources/app/node_modules/node-pty/prebuilds/win32-x64/conpty.node` 与
@@ -92,7 +126,7 @@ npm run build:app -- --rebuild
 
 | 命令 | 结果 | 说明 |
 | --- | --- | --- |
-| `node tests/files-terminal.cjs` | **71/71 PASS** | 假 PTY 的服务端契约：三会话、隔离、伪造 id、上限、序号、失败回滚、跨工作区 `start` 清理边界、快速创建/关闭、海量输出、dispose、app 退出 |
+| `node tests/files-terminal.cjs` | **83/83 PASS** | 假 PTY 的服务端契约：三会话、隔离、伪造 id、上限、序号、失败回滚、跨工作区 `start` 清理边界、快速创建/关闭、海量输出、dispose、app 退出；空闲计时短窗口覆盖轮询/输入/输出/历史读取/独立时钟/隐藏面板/自然退出/失败重试/超时后可重启 |
 | `node tests/files-terminal-ui.cjs` | **73/73 PASS** | jsdom 面板：多标签、切换不重建、隐藏标签轮询、关闭/重启、关闭无定论时保留标签重试、重启失败/被 scope 列表延迟时不丢原标签、迟到列表不复活已关标签、面板重开、空态/错误、迟到响应、workspace detach/return、list 快照竞争、boot/scope 列表竞争、pending 死区、CSS 规则 |
 | `node tests/modules.cjs` | **121/121 PASS** | 服务端模块依赖方向与无环；新增 `terminal-process.js` 属同目录叶子模块 |
 | `node tests/smoke.cjs` | **1345/1345 PASS** | 既有 UI / 状态 smoke 回归；未改动该套件 |
@@ -100,8 +134,9 @@ npm run build:app -- --rebuild
 | `node tests/terminal-source-check.cjs` | **17/17 PASS** | 真实 `node server.js` + 仓库 node-pty + 真实 ConPTY；三会话并行、输出隔离、workspace A/B 隔离与返回、伪造 id、树杀、真实退出、令牌不泄漏 |
 | `node tests/terminal-electron-check.cjs --shots docs/terminal-p2-evidence` | **30/30 PASS** | 真实 Electron 44.4.3：P1 能力 + P2 三标签、并行输出、切换不重建、关一个、面板重开恢复两个、两个会话的进程树在应用退出后按命令行身份消失 |
 
-上述运行均无 skip，均以 exit 0 结束；Files 套件的既有断言仍保留在同一测试文件中，
-P2 新增检查见对应测试源。未单独运行 `npm test` 全量链，见第七节。
+上述数字是空闲计时修复与复审后、在最终工作区上重跑的结果；均无 skip，均以 exit 0 结束。
+Files 套件的既有断言仍保留在同一测试文件中，P2 新增检查见对应测试源。未单独运行
+`npm test` 全量链，见第七节。
 
 ### 真实 Electron P2 细节
 
@@ -121,8 +156,8 @@ P2 新增检查见对应测试源。未单独运行 `npm test` 全量链，见�
 
 截图（真实 Electron 窗口，CDP 页面捕获，1980×1323）：
 
-- [terminal-p2-multi-tabs.png](terminal-p2-evidence/terminal-p2-multi-tabs.png)：3 个标签、活动态、状态点与「新建终端」按钮；204 641 字节
-- [terminal-p2-after-close.png](terminal-p2-evidence/terminal-p2-after-close.png)：关闭一个标签后剩 2 个；85 665 字节
+- [terminal-p2-multi-tabs.png](terminal-p2-evidence/terminal-p2-multi-tabs.png)：3 个标签、活动态、状态点与「新建终端」按钮；207 233 字节
+- [terminal-p2-after-close.png](terminal-p2-evidence/terminal-p2-after-close.png)：关闭一个标签后剩 2 个；86 295 字节
 
 ### 独立复审与修复记录
 
@@ -136,6 +171,7 @@ P2 新增检查见对应测试源。未单独运行 `npm test` 全量链，见�
 | 功能第 3 轮 | 0 Blocker / 0 Important / 1 Nit | 重启时并发 scope-sync 会让 `createTab` 返回 null，旧标签已被删、替换却没建。改为先建新标签再删旧标签；延迟创建的旧标签在这次 scope 列表到达时也保留，补失败重启、延迟重启与迟到列表用例 |
 | 安全复审 | 0 Blocker / 0 Important / 1 Nit / 1 既有 | 迟到同工作区列表可能把已关闭标签重新挂回；用 `closedIds` 过滤已确认关闭的 id 并补用例。既有风险：Windows `taskkill /T` 以 PID 为句柄，PID 复用窗口列入 P3 跟进 |
 | Nit 定向复核 | 通过 | 功能侧确认保留的延迟重启标签不对应任何活 PTY、普通关闭不会遗留；安全侧确认 `closedIds` 不隐藏活会话、不跨工作区。UI 73/73 |
+| 空闲修复复审 | 0 Blocker / 1 Important / 2 Nit | 独立复审确认轮询、读取、切换、重挂载均不再刷新空闲，计时器清理与多会话独立无问题。Important：短 `idleMs` 用例的「仍运行」窗口余量偏小，CI 事件循环停顿可能假红；已把 `idleMs` 提到 400ms 并同比放大等待，重复运行 83/83。Nit：验收文档仍写 82/82，已改 83/83；`touch()` 的剩余窗口计算加注释说明。 |
 
 功能复审第 3 轮结论为「无 Blocker / 无 Important」，安全复审结论为「有条件通过」；
 两处 Nit 修复后均做了定向复核并通过。两者都明确 AI 审查意见不代替用户审批，且完整
@@ -145,7 +181,7 @@ P2 新增检查见对应测试源。未单独运行 `npm test` 全量链，见�
 
 | 要求 | 证据 |
 | --- | --- |
-| 新建多个终端、并行运行 | source 17/17、Electron 30/30、fake 71/71 |
+| 新建多个终端、并行运行 | source 17/17、Electron 30/30、fake 83/83 |
 | 独立 session id / 缓冲 / 输入输出 | fake 三会话隔离、source 并行与输出隔离、UI 每视图只收到自己的输出 |
 | 切换标签不重建 PTY、保留状态 | UI「switching tabs only toggles visibility」、Electron `createdAt` 不变 |
 | 关闭指定终端、幂等关闭、只结束一个 | fake/UI/source/Electron 均有对应断言 |
@@ -156,12 +192,12 @@ P2 新增检查见对应测试源。未单独运行 `npm test` 全量链，见�
 | 快速创建/关闭、海量输出、运行中切 workspace/关应用 | fake + UI + Electron |
 | 标签 UI、活动态、空态/错误态、横向滚动、长标题 | UI 73/73、Electron 截图 |
 | 不泄漏 `PI_GUI_TOKEN`、会话 id 非 PID、服务端归属校验 | source 令牌断言、fake UUID/伪造 id、security.md |
+| 空闲计时不被轮询/读取/切换刷新，输入和新输出独立续期 | fake 83/83 的短 `idleMs` 用例；`work-surfaces.md` 记录 30 分钟窗口与静默任务限制 |
 
 ## 七、未验证与剩余风险
 
-- **完整 `npm test` 尚未运行。** 本记录只覆盖终端相关定向套件与真实运行时；按用户
-  要求本轮只推送、不建 PR，因此没有 PR CI 结果。合并前必须以完整 `npm test`（或后续
-  PR CI）为准，当前不能记为全量通过。
+- **完整 `npm test` 尚未运行。** 本记录只覆盖终端相关定向套件与真实运行时；本 PR
+  的完整 CI 返回前不能记为 canonical 全量通过，最终以该次 CI 结果为准。
 - 只在 Windows 11 + ConPTY 验证；POSIX 分支有单元覆盖（绝对 `$SHELL` / `/bin/sh`），
   没有在 macOS/Linux 实机跑真实 PTY。
 - 只验证 Electron 44.4.3 与 Node 24.22.1；没有验证其它 Electron/Node ABI 组合。
@@ -186,9 +222,9 @@ P2 新增检查见对应测试源。未单独运行 `npm test` 全量链，见�
 - **开发完成：是。** P2-A 多终端标签、P2-B 生命周期、P2-C 工作区隔离与 P2-D 标签 UI
   已实现；文档、打包和定向运行时验证已完成。
 - **代码验收：待完整 `npm test` 与用户确认。** 独立功能复审与安全复审已完成并处置发现；
-  按用户要求本轮只推送、不建 PR，完整 `npm test` 尚未运行，保持「待验证」，不能用定向
-  套件或 AI 复审意见代替用户审批。
-- **合并许可：未授权。** 本分支只提交并推送；按用户要求未创建 PR，也不自行合并。
+  完整 `npm test` 由本 PR 的 CI 提供，结果出来前保持「待验证」，不能用定向套件或 AI
+  复审意见代替用户审批。
+- **合并许可：未授权。** 本分支提交、推送并创建 PR，不自行合并。
 - **发布许可：未授权。** 未打 tag、未推送发布 tag、未执行正式发布。
 
 ## 九、回滚
