@@ -40,8 +40,8 @@
 
 - **当前设计入口**是上表中的功能文档。文档若包含历史段落，先读其当前实现说明，再核对正在使用的代码与边界。
 - **历史方案**记录当时的设想，不代表已实现或已批准。例如 [P32 设计探索](p32-design-spike.md)、[T2-B 计划](T2-B-plan.md)、[Windows 更新计划](windows-in-app-update-plan.md)。
-- **验收记录**绑定当时的提交、环境和验证范围。例如 [T2-A](T2-A-acceptance.md)、[T2-B](T2-B-acceptance.md)、[T3-A](T3-A-acceptance.md)、[终端 P2](terminal-p2-acceptance.md)、[终端 P3-A](terminal-p3-keep-alive-acceptance.md) 和 [CI 优化验收](ci-optimization-acceptance.md)。其中的数字和通过结论不能直接用于新的行为提交。
-- 终端 P3-B 的 [Windows 进程终止设计](terminal-p3-process-termination-design.md) 只记录现状、威胁模型、候选方案与验证计划；P3-A 未修改生产终止逻辑，设计本身不代表已实现或已批准。
+- **验收记录**绑定当时的提交、环境和验证范围。例如 [T2-A](T2-A-acceptance.md)、[T2-B](T2-B-acceptance.md)、[T3-A](T3-A-acceptance.md)、[终端 P2](terminal-p2-acceptance.md)、[终端 P3-A](terminal-p3-keep-alive-acceptance.md)、[终端 P3-B](terminal-p3b-termination-acceptance.md) 和 [CI 优化验收](ci-optimization-acceptance.md)。其中的数字和通过结论不能直接用于新的行为提交。
+- 终端 P3-B 的 [Windows 进程终止设计](terminal-p3-process-termination-design.md) 记录现状、威胁模型、候选方案与验证计划；身份门控 + 有界重试已在该阶段实现并单独验收，仍不是 PID 复用误杀的完整修复，后续 P3-C 的 Job Object 尚未实现。
 - **治理阶段记录**见 [G0-A](G0-A-acceptance.md)、[G0-B](G0-B-acceptance.md)、[G1](G1-acceptance.md)、[G2](G2-acceptance.md) 与 [G3 本地交付/待 PR 验收](G3-acceptance.md)；G2 [性能基线](G2-ci-baseline.md) 单列历史样本，G3 报告另列调度、文档分类与未启用的保护草案，当前规范以上方权威入口为准，阶段报告保留各自证据范围。
 - **P33 写入/撤销边界**涉及长期安全资格：[安全回退设计](p33-1-safe-session-revert-design.md)、[安全验证记录](p33-4b-safety-validation.md)、[后续安全契约提案](p33-4d-security-contract-proposal.md) 与 [D6 最终验收](p33-d6-final-acceptance.md) 均保留各自阶段范围。后续修改须沿代码核对当前资格，不能凭设计或旧报告推定已开放写入能力。
 

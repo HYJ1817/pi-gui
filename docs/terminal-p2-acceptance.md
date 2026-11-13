@@ -11,6 +11,10 @@
 > 本记录只证明下列命令、构建和真实环境。完整的 `npm test` 尚未在本记录完成，
 > 因此**不宣称 canonical 全量已通过**；本 PR 的 CI 将作为最终 canonical，结果出来前
 > 合并结论仍须以完整 canonical、独立审查和用户明确授权为准。
+>
+> P3-B 后续更改了 Windows 终止路径（身份门控、有界重试、去掉 `pty.kill()` 回退）。
+> 本记录中关于 `taskkill`、一次性回退与 sweep 重试的描述只代表 P2 当时的状态；
+> 当前行为见 [P3-B 验收](terminal-p3b-termination-acceptance.md)。
 
 ## 一、实现落点
 

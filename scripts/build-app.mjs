@@ -90,7 +90,7 @@ fs.mkdirSync(path.join(STAGE, 'private'), { recursive: true });
 fs.copyFileSync(credentialWorker, path.join(STAGE, 'private/provider-credentials.cjs'));
 /* 主进程日志核心与后端共用同一份实现；打包后平铺在 resources/app/ 下，
  * 与 electron/logging.cjs 的候选路径一致。 */
-for (const f of ['log-core.cjs', 'log-contract.cjs', 'zip.cjs', 'market-network-policy.cjs']) {
+for (const f of ['log-core.cjs', 'log-contract.cjs', 'zip.cjs', 'market-network-policy.cjs', 'process-identity.cjs']) {
   fs.copyFileSync(path.join(ROOT, 'lib', f), path.join(STAGE, f));
 }
 fs.copyFileSync(path.join(BUILD, 'asset-manifest.json'), path.join(STAGE, 'asset-manifest.json'));

@@ -9,6 +9,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import processIdentity from '../lib/process-identity.cjs';
 
 /** Resolve the shell without accepting a path from the renderer.
  *
@@ -93,8 +94,99 @@ function loadNodePty() {
   throw nativePtyFailure;
 }
 
+const WINDOWS_TASKKILL_TIMEOUT_MS = 8000;
+
+/* taskkill is the tree kill, but it is still addressed by a bare pid. The
+ * caller must have verified the pid's identity immediately before this runs.
+ * There is no fallback to pty.kill() on Windows: node-pty's ConPTY agent
+ * attaches to the same bare pid and, after five seconds, may call
+ * process.kill(shellPid). If the shell exited and its pid was reused, that
+ * fallback creates a second chance to kill an unrelated process. A wedged
+ * session stays `closing` until the bounded retry budget is spent. */
+function runWindowsTaskkill(pid, { env = process.env, timeoutMs = WINDOWS_TASKKILL_TIMEOUT_MS } = {}) {
+  return new Promise((resolve) => {
+    if (!Number.isInteger(pid) || pid <= 0) return resolve({ ok: false, code: 'invalid_pid' });
+    const envRoot = env.SystemRoot;
+    const winRoot = typeof envRoot === 'string' && path.isAbsolute(envRoot) ? envRoot : 'C:\\Windows';
+    const taskkill = path.join(winRoot, 'System32', 'taskkill.exe');
+    let settled = false;
+    let timer = null;
+    let child = null;
+    const finish = (outcome) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(outcome);
+    };
+    try {
+      child = spawn(taskkill, ['/pid', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+    } catch {
+      finish({ ok: false, code: 'spawn_failed' });
+      return;
+    }
+    timer = setTimeout(() => {
+      try { child.kill(); } catch { /* already gone */ }
+      finish({ ok: false, code: 'timeout' });
+    }, timeoutMs);
+    timer.unref?.();
+    child.once('error', (error) => finish({ ok: false, code: error?.code || 'spawn_failed' }));
+    child.once('close', (code) => finish({ ok: code === 0, code }));
+  });
+}
+
+/* Identity gate for Windows kills.
+ *
+ * `capture` records the shell identity as soon as spawn returns. `kill`
+ * re-queries the pid and only runs taskkill when creation time and image path
+ * still match. gone/mismatch/unknown never reach taskkill:
+ *   - gone: the shell already exited; wait for the real exit event
+ *   - mismatch: the pid now belongs to another process; do not kill
+ *   - unknown: identity could not be proven; fail closed
+ * A query and the subsequent taskkill remain two separate steps, so a pid
+ * reused in between is still possible. This narrows the window; it does not
+ * remove it. */
+export function createWindowsKillGate({
+  query = processIdentity.queryProcessIdentity,
+  capture = processIdentity.captureProcessIdentity,
+  taskkill = runWindowsTaskkill,
+  timeoutMs = processIdentity.DEFAULT_QUERY_TIMEOUT_MS,
+  taskkillTimeoutMs = WINDOWS_TASKKILL_TIMEOUT_MS,
+} = {}) {
+  const identities = new WeakMap();
+
+  function remember(pty, expectedImagePath, { env = process.env } = {}) {
+    if (!pty || !Number.isInteger(pty.pid) || pty.pid <= 0) return;
+    identities.set(pty, {
+      pid: pty.pid,
+      env,
+      expected: capture(pty.pid, expectedImagePath, { env, timeoutMs }),
+    });
+  }
+
+  async function kill(pty) {
+    const entry = pty ? identities.get(pty) : null;
+    if (!entry) return { result: 'unknown', reason: 'no_identity' };
+    const expected = await entry.expected;
+    if (!expected || expected.state !== 'captured') {
+      return { result: 'unknown', reason: expected?.reason || 'identity_unknown' };
+    }
+    const current = await query(entry.pid, { env: entry.env, timeoutMs });
+    const verdict = processIdentity.classifyProcessIdentity(expected, current);
+    if (verdict !== 'match') return { result: verdict };
+    const outcome = await taskkill(entry.pid, { env: entry.env, timeoutMs: taskkillTimeoutMs });
+    return outcome?.ok ? { result: 'killed' } : { result: 'failed', code: outcome?.code ?? null };
+  }
+
+  return { capture: remember, kill, _identities: identities };
+}
+
+const defaultWindowsKillGate = createWindowsKillGate();
+
 export function defaultSpawnPty({ file, args, cwd, env, cols, rows, platform = process.platform }) {
-  const pty = loadNodePty();
+  const nodePty = loadNodePty();
   const options = {
     name: 'xterm-256color',
     cols,
@@ -106,69 +198,21 @@ export function defaultSpawnPty({ file, args, cwd, env, cols, rows, platform = p
   // bundled ConPTY DLL are not used: they failed independently in the target
   // Electron/Node combination, and silently switching would hide that failure.
   if (platform === 'win32') options.useConpty = true;
-  return pty.spawn(file, args, options);
-}
-
-/* node-pty's ConPTY kill path forks conpty_console_list_agent.js, which calls
- * AttachConsole on the shell pid. If the shell has already exited that helper
- * crashes and prints a full stack trace to the backend's stderr — even though
- * the session is on its way to a perfectly normal exit. A repeated tree kill
- * is routine here (the sweep retries while a session is "closing", and
- * taskkill reports 128 once the pid is gone), so only fall back to the PTY
- * handle while the shell is actually alive. Otherwise the real exit event is
- * already in flight and pty.kill() has nothing left to do. */
-export function ptyProcessAlive(pty) {
-  const pid = Number.isInteger(pty?.pid) && pty.pid > 0 ? pty.pid : null;
-  if (!pid) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // EPERM still means the process exists; node cannot query it.
-    return error?.code === 'EPERM';
-  }
+  const pty = nodePty.spawn(file, args, options);
+  /* Capture before returning, so a stop that arrives immediately after
+   * create still has an identity to wait for. The probe is asynchronous and
+   * does not delay the response. */
+  if (platform === 'win32') defaultWindowsKillGate.capture(pty, file, { env });
+  return pty;
 }
 
 export function defaultKillPty(pty, platform = process.platform) {
-  if (!pty) return;
-  const pid = Number.isInteger(pty.pid) && pty.pid > 0 ? pty.pid : null;
-  let fellBack = false;
-  const fallbackToPty = () => {
-    if (fellBack) return;
-    fellBack = true;
-    if (platform === 'win32' && !ptyProcessAlive(pty)) return;
-    try { pty.kill(); } catch { /* already gone */ }
-  };
-  if (platform === 'win32' && pid) {
-    try {
-      const envRoot = process.env.SystemRoot;
-      const winRoot = typeof envRoot === 'string' && path.isAbsolute(envRoot) ? envRoot : 'C:\\Windows';
-      const taskkill = path.join(winRoot, 'System32', 'taskkill.exe');
-      const child = spawn(taskkill, ['/pid', String(pid), '/T', '/F'], {
-        windowsHide: true,
-        stdio: 'ignore',
-      });
-      child.once('error', () => {
-        // taskkill itself was unavailable; fall back to the PTY handle.
-        fallbackToPty();
-      });
-      child.once('close', (code) => {
-        // Non-zero means taskkill could not tear the tree down (or the shell
-        // was already gone). Retry through node-pty only while it is alive so
-        // the session still reaches a real exit event without a crash trace.
-        // spawn() emits error and then close for a missing executable; the
-        // one-shot guard keeps that from killing the same PTY twice.
-        if (code !== 0) fallbackToPty();
-      });
-      return;
-    } catch {
-      fallbackToPty();
-      return;
-    }
-  }
+  if (!pty) return undefined;
+  if (platform === 'win32') return defaultWindowsKillGate.kill(pty);
   try {
     pty.kill();
   } catch {
     /* already gone */
   }
+  return undefined;
 }

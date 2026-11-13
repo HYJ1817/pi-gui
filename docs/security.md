@@ -764,9 +764,18 @@ dispose 或终端数量上限。前端在
 `start` / `create` 时记录该会话的工作区身份（conversation id），`stop` / `close` 时沿用；
 切换项目会先清空当前 scope，若停止时现取 scope，后端会拒绝而留下孤儿 PTY。后端 sweep
 只在**成功解析**出一个不同的 workspace 时停止；scope 暂时不可用或解析报错都不当作
-工作区已变化。Windows 用 `taskkill /T` 结束整棵树，服务退出时停止账本中所有未结束会话
-并等待真实 exit 事件；桌面外壳退出时先在**后端仍存活**时对后端做 `taskkill /T`，再结束后端，
-避免 ConPTY 子进程因父子链断开而成为孤儿。`/api/terminal/status` 声明 `pty:true` 表示
+工作区已变化。P3-B 起，Windows 不再把 PID 当作身份：spawn 后抓取 shell 的
+`(pid, FILETIME 创建时间, 映像路径)`，停止前重新查询，三项都匹配才执行
+`taskkill /pid <pid> /T /F`；查不到、不匹配、查询失败或没有身份一律**不杀**，并且
+不再回退 `pty.kill()`。身份只在内存中比较，不写日志、不写盘、不进诊断报告。每个会话的
+kill 有界（最多 3 次）且单飞；无法确认时公开状态仍是 `closing`，不谎报 `exited`、
+不释放会话额度。服务退出时停止账本中所有未结束会话，最多等待 3 秒真实 exit；超时后
+清空账本，未确认的会话不当作已退出（当前没有 `dispose_unconfirmed` 日志）。桌面外壳
+只在 `win32` 抓取后端身份，退出时先同步复查，匹配才在**后端仍存活**时做 `taskkill /T`，
+再按 `ChildProcess` 句柄结束后端，避免 ConPTY 子进程因父子链断开而成为孤儿；跳过树杀时
+只按句柄终止根进程，原因写入已声明的 `electron.backend_kill_skipped`（只记结果分类）。
+身份查询与 `taskkill` 之间仍有 TOCTOU，后代枚举也仍按 PID；完整修复需要 P3-C 的
+Job-at-creation，不能把 P3-B 表述为已消除 PID 复用误杀。`/api/terminal/status` 声明 `pty:true` 表示
 终端能力已编译进运行时；native 模块实际加载失败会在 `create` / `start` 时返回
 `pty_unavailable`，不会被状态接口掩盖。
 

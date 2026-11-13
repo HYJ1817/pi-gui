@@ -356,6 +356,103 @@ function freePort() {
       assert.ok(!/AttachConsole failed|conpty_console_list_agent\.js.*Error/i.test(logTail), 'ConPTY helper crash trace found');
     });
 
+    /* P3-B: exercise the real CIM query and classification against harmless
+     * sentinel processes. A genuine pid-reuse race is not reproducible; a
+     * mismatched creation time is exactly what a reused pid presents, so we
+     * construct that and prove taskkill is never reached. */
+    {
+      const { createWindowsKillGate } = await import('../server/terminal.js');
+      const readIdentity = (pid) => {
+        const out = runPowerShell(
+          `$p=Get-CimInstance Win32_Process -Filter 'ProcessId=${Number(pid)}'; ` +
+          "if($p){ '{0}|{1}' -f ([datetime]$p.CreationDate).ToUniversalTime().ToFileTimeUtc(), [string]$p.ExecutablePath }"
+        );
+        const line = String(out).split(/\r?\n/)[0];
+        const match = /^(\d{10,20})\|(.*)$/.exec(line);
+        if (!match) throw new Error('identity query returned no usable line');
+        return { creationTimeUtc: match[1], imagePath: match[2].trim() };
+      };
+      const spawnSentinel = () => {
+        const marker = `PI_GUI_IDENTITY_${process.pid}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const child = spawn(process.execPath, ['-e', `setTimeout(()=>{},30000); // ${marker}`], {
+          stdio: 'ignore',
+          windowsHide: true,
+        });
+        const exited = new Promise((resolve) => child.once('exit', resolve));
+        return { child, exited, marker };
+      };
+      const tryGate = async (captured, { query, taskkill } = {}) => {
+        const calls = { taskkill: 0 };
+        const gate = createWindowsKillGate({
+          capture: async () => captured,
+          ...(query ? { query } : {}),
+          taskkill: taskkill || (async () => { calls.taskkill += 1; return { ok: true }; }),
+          timeoutMs: 4000,
+        });
+        const pty = { pid: captured.pid, kill() { throw new Error('gate fell back to pty.kill()'); } };
+        gate.capture(pty, captured.imagePath);
+        const outcome = await gate.kill(pty);
+        return { outcome, calls };
+      };
+
+      const matchSentinel = spawnSentinel();
+      let matchTaskkills = 0;
+      try {
+        const real = readIdentity(matchSentinel.child.pid);
+        const { outcome } = await tryGate({
+          state: 'captured', pid: matchSentinel.child.pid, ...real,
+        }, { taskkill: async (pid) => {
+          matchTaskkills += 1;
+          execFileSync(TASKKILL, ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 10000 });
+          return { ok: true };
+        } });
+        await Promise.race([matchSentinel.exited, sleep(10000)]);
+        check('the identity gate kills a real sentinel through CIM and taskkill', () => {
+          assert.equal(outcome.result, 'killed');
+          assert.equal(matchTaskkills, 1);
+          assert.equal(matchSentinel.child.exitCode !== null || matchSentinel.child.signalCode !== null, true);
+        });
+      } finally {
+        try { matchSentinel.child.kill(); } catch { /* already gone */ }
+      }
+
+      const recycledSentinel = spawnSentinel();
+      try {
+        const real = readIdentity(recycledSentinel.child.pid);
+        const shifted = (BigInt(real.creationTimeUtc) + 1n).toString();
+        const { outcome, calls } = await tryGate({
+          state: 'captured', pid: recycledSentinel.child.pid, creationTimeUtc: shifted, imagePath: real.imagePath,
+        });
+        await sleep(300);
+        check('a mismatched creation time never reaches taskkill and leaves the sentinel alive', () => {
+          assert.equal(outcome.result, 'mismatch');
+          assert.equal(calls.taskkill, 0);
+          assert.equal(recycledSentinel.child.exitCode, null);
+        });
+      } finally {
+        try { recycledSentinel.child.kill(); } catch { /* already gone */ }
+        await Promise.race([recycledSentinel.exited, sleep(2000)]);
+      }
+
+      const unknownSentinel = spawnSentinel();
+      try {
+        const real = readIdentity(unknownSentinel.child.pid);
+        const { outcome, calls } = await tryGate(
+          { state: 'captured', pid: unknownSentinel.child.pid, ...real },
+          { query: async () => ({ state: 'unknown', reason: 'query_failed' }) }
+        );
+        await sleep(300);
+        check('a failed identity probe is unknown, not gone, and never kills', () => {
+          assert.equal(outcome.result, 'unknown');
+          assert.equal(calls.taskkill, 0);
+          assert.equal(unknownSentinel.child.exitCode, null);
+        });
+      } finally {
+        try { unknownSentinel.child.kill(); } catch { /* already gone */ }
+        await Promise.race([unknownSentinel.exited, sleep(2000)]);
+      }
+    }
+
     if (failed) {
       console.error('\nFailure details:');
       for (const failure of failures) console.error('- ' + failure);
