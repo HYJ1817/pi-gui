@@ -389,7 +389,7 @@ Windows 版本和启动路径而异，本轮没有逐进程核对 `[未验证]`�
 | 方案 | 根 PID 复用 | 整棵树 | 应用崩溃 | 改 node-pty | 新原生依赖 | 结论 |
 | --- | --- | --- | --- | --- | --- | --- |
 | A. 现状：`taskkill /T /F` + `pty.kill()` | 否 | 部分（仅当前树） | 否 | 否 | 否 | 不可接受，但改动最小 |
-| B. 身份校验后 `taskkill` | 缩小窗口，不消除 | 部分 | 否 | 否 | 否（用 PowerShell/CIM） | P3-B 的现实选择 |
+| B. 身份校验后 `taskkill` | 缩小窗口，不消除 | 部分 | 否 | 否 | 否（用 PowerShell/Get-Process） | P3-B 的现实选择 |
 | C. 原生模块持句柄 + 身份校验 + 根 `TerminateProcess` | 根进程可钉住 | 否（只根） | 否 | 否 | 是 | 可作为 B 的加强，但不完整 |
 | D. 原生模块创建后补 Job | 部分 | 部分（漏创建前子进程） | 部分（句柄关闭时杀） | 否 | 是 | 不推荐，语义不完整 |
 | E. 上游在创建时分配 Job | 是（根/后代都在 Job） | 是（普通后代） | 是（`KILL_ON_JOB_CLOSE`） | 是 | 否（补丁进 node-pty） | 推荐的目标方案 |
@@ -409,7 +409,7 @@ Windows 版本和启动路径而异，本轮没有逐进程核对 `[未验证]`�
 多数情况，因为复用后的创建时间必然不同；但它仍然是“检查 → 系统调用”的两步，
 中间有 TOCTOU。它也不能阻止 `taskkill` 在枚举树时把某个后代 PID 误认成目标的后代。
 
-优点：不改 node-pty、不加原生依赖、可用 Windows PowerShell 的 CIM 查询实现。
+优点：不改 node-pty、不加原生依赖、可用 Windows PowerShell 的 Get-Process 或 CIM 查询实现。
 缺点：每次 spawn 多一次 PowerShell 查询（延迟/成本）；身份查询本身可能失败；TOCTOU
 仍在；`taskkill` 的树枚举仍按 PID/父子关系。
 
@@ -514,8 +514,8 @@ sweep 都可能误杀”降到“身份明确且匹配时才杀”；P3-C 才是
 ```text
 identity = {
   pid,                 // pty.pid
-  creationTimeUtc,     // FILETIME / 100ns，来自 GetProcessTimes 或 CIM CreationDate
-  imagePath,           // QueryFullProcessImageNameW 或 CIM ExecutablePath
+  creationTimeUtc,     // FILETIME / 100ns，来自 GetProcessTimes / Get-Process / CIM
+  imagePath,           // QueryFullProcessImageNameW / Get-Process Path / CIM ExecutablePath
   commandLineHash,     // 可选；只用于二次核对，不进日志
 }
 ```
@@ -530,6 +530,10 @@ $p = Get-CimInstance Win32_Process -Filter "ProcessId=$pid"
 }
 ```
 
+> 实现最终选用了 `Get-Process -Id`：同等条件下比 CIM 快约 3-4 倍（CimCmdlets 模块
+> 加载是主要成本），详见 §6.2.7。抓取与复查必须用**同一种**查询原语；CIM 的
+> `CreationDate` 与 Get-Process 的 `StartTime` 精度不同，混用会产生假 `mismatch`。
+
 注意：
 
 - 必须用**绝对路径**的 Windows PowerShell（和 `resolveTerminalShell` 一样，不搜索
@@ -538,8 +542,8 @@ $p = Get-CimInstance Win32_Process -Filter "ProcessId=$pid"
   因此要用**已知的 shell 映像路径**做一次 sanity check：`ExecutablePath` 必须匹配
   `resolveTerminalShell()` 返回的 `file`（规范化大小写和分隔符），否则标记
   `identityUnknown`，不要把它当成 shell 身份。
-- `CreationDate` 必须比较 UTC/FILETIME，不要比较本地化字符串；CIM 的 `DateTime`
-  默认带本地时区，格式化字符串会引入时区/精度问题。
+- 创建时间必须比较 UTC/FILETIME，不要比较本地化字符串；CIM 的 `DateTime` 与
+  Get-Process 的 `StartTime` 都带本地时区，格式化字符串会引入时区/精度问题。
 - 身份只存在内存；不写日志、不写盘、不进诊断报告。命令行的原文可能含用户信息，
   不要记录；如果确实需要二次核对，只保存哈希。
 
@@ -628,7 +632,7 @@ errorCode=<Win32/Node code|null>
 jobMode=<true|false>
 ```
 
-不要记录：PID 原文、命令行、映像完整路径、CIM 原始输出、`taskkill` stderr、终端输出。
+不要记录：PID 原文、命令行、映像完整路径、身份查询原始输出、`taskkill` stderr、终端输出。
 PID 可以作为内存字段用于 `OpenProcess`，但不进日志/诊断报告。
 
 #### 6.2.7 P3-B 实现落点（2026-11-13）
@@ -638,12 +642,17 @@ PID 可以作为内存字段用于 `OpenProcess`，但不进日志/诊断报告�
 | 设计项 | 落地 |
 | --- | --- |
 | 抓取身份 | `lib/process-identity.cjs`；`defaultSpawnPty` 在返回前启动异步抓取，`WeakMap` 按 PTY 对象保存 |
-| 查询实现 | 绝对路径 Windows PowerShell + `Get-CimInstance Win32_Process`；FILETIME 用十进制字符串保存，避免 JS number 精度损失 |
+| 查询实现 | 绝对路径 Windows PowerShell + `Get-Process -Id`；FILETIME 用十进制字符串保存，避免 JS number 精度损失 |
 | 停止判定 | `server/terminal-process.js` 的 `createWindowsKillGate`；`match` 才 `taskkill`，`gone` / `mismatch` / `unknown` / 无身份一律不杀 |
 | Windows 回退 | 删除 `ptyProcessAlive` 与 `pty.kill()` 回退；POSIX 保持 `pty.kill()` |
 | 有界重试 | `server/terminal.js` 每会话 `killAttempts` / `killInFlight` / `killNextAt`；默认 3 次、退避 0/1 000/3 000 ms；未确认时公开状态仍为 `closing` |
 | Electron 后端 | `electron/main.cjs` spawn 后异步抓取身份（仅 win32），退出前同步复查；仅 `match` 执行 `taskkill /T`，随后仍 `server.kill()`；跳过原因写已声明的 `electron.backend_kill_skipped` |
 | 打包 | `scripts/build-app.mjs` 把 `lib/process-identity.cjs` 平铺进 `resources/app` |
+
+> 查询原语在实现时从草案里的 `Get-CimInstance` 改为 `Get-Process -Id`：CimCmdlets
+> 模块加载在 6 个并发查询下实测 3.4-4.3 s，会超过抓取必须保持的 2.5 s 紧预算；
+> `Get-Process` 在同等条件下约 1.0 s。两者都给出创建时间与映像路径；只有
+> `NoProcessFoundForGivenId` 映射为 `gone`，其它失败仍是 `unknown`。判定语义不变。
 
 与设计的偏差：
 
@@ -651,12 +660,21 @@ PID 可以作为内存字段用于 `OpenProcess`，但不进日志/诊断报告�
   扩展日志契约（新 source/event）与日志 UI 的来源筛选；kill 结果保存在会话内部
   `killState`，`dispose()` 3 秒超时清空账本时不留日志。Electron 跳过树杀写现有
   `mlog` 的 `electron.backend_kill_skipped`，只记结果分类，不记录 PID、命令行、
-  映像路径或原始 CIM 输出。
-- 身份查询超时 2 500 ms，`taskkill` 超时 8 000 ms；默认重试预算 3 次。它们是实现常量，
-  不是产品配置。
+  映像路径或原始身份查询输出。
+- 身份探测时间预算分三档：spawn 抓取 `DEFAULT_CAPTURE_TIMEOUT_MS = 2 500 ms`（保持
+  紧预算，缩小“shell 退出后 PID 被复用、抓取读到无关进程”的窗口；异步，不阻塞创建），
+  停止复查 `DEFAULT_QUERY_TIMEOUT_MS = 5 000 ms`（结果始终与已抓取身份比较，慢查询
+  只会延迟决定，不会放宽杀的条件），Electron 退出同步复查
+  `DEFAULT_SYNC_QUERY_TIMEOUT_MS = 2 500 ms`；`taskkill` 超时 8 000 ms；默认
+  重试预算 3 次。它们是实现常量，不是产品配置。2026-11-13 合并后的 CI flake 复盘
+  显示，并发拆卸多个 shell 时 stop→真实 exit 可达 5.4 s（旧 CIM 复查≈2.0 s、
+  `taskkill`≈2.7 s、exit≈1.0 s；改用 Get-Process 后 6 并发复查约 1.0 s）；
+  停止复查原来与抓取共用 2.5 s 预算，对实测 2.0 s 余量过小，慢查询会被判成
+  `unknown` 并永久停在 `closing`。canonical 测试的 exit 轮询窗口
+  也从 5 s 延长到 15 s，但断言仍只接受真实 `exited`，不把 `closing` 当成功。
 - 抓取失败或查询失败一律不杀。停止可能停在 `closing` 并继续占用会话额度，这是
   安全优先的接受结果，不自动释放额度。
-- CIM 查询以 0 退出但输出为空/不可解析时按 `unknown`，不按 `gone`；只有显式的
+- 身份查询以 0 退出但输出为空/不可解析时按 `unknown`，不按 `gone`；只有显式的
   `exit 3` 才表示该 PID 不存在。
 - Electron 后端身份抓取只在本机 `win32` 执行；POSIX 开发运行不抓取，仍按
   `ChildProcess` 句柄结束后端。抓取回调只比较 spawn 时的局部 pid，后端在查询返回前
@@ -816,7 +834,7 @@ if (pty.treeKill === 'job') {
 
 ### 7.2 不改 node-pty 能做什么
 
-- 抓 PID + 创建时间 + 映像路径（PowerShell/CIM）。
+- 抓 PID + 创建时间 + 映像路径（PowerShell/Get-Process）。
 - 在 `taskkill` 前做身份校验，匹配才杀；不匹配/未知不杀。
 - 有界重试、单飞、日志、状态机。
 - 在 Electron 后端路径做同样的门控。
@@ -945,7 +963,7 @@ P3-C 只改 node-pty 的 prebuild，同样涉及“这个 `.node` 是谁编译�
 
 ### 8.5 结论
 
-- **P3-A / P3-B 不引入新原生依赖。** P3-B 用 PowerShell/CIM 做身份查询，代价是
+- **P3-A / P3-B 不引入新原生依赖。** P3-B 用 PowerShell/Get-Process 做身份查询，代价是
   每次 spawn 多一次查询；不新增包。
 - **P3-C 优先上游/固定补丁**，沿用 node-pty 的 sidecar，不新增模块；但需要重建
   prebuild、处理签名/供应链。
@@ -1018,7 +1036,7 @@ pending -> confirmed
 
 - 只记结构：`event`、`sessionHash`、`phase`、`result`、`attempt`、`exitCode`、
   `errorCode`、`jobMode`。
-- 不记：PID 原文、命令行、映像路径、CIM 原文、`taskkill` stderr、终端输出、
+- 不记：PID 原文、命令行、映像路径、身份查询原文、`taskkill` stderr、终端输出、
   环境变量。
 - 失败不是成功：`killUnconfirmed` 必须显式记录，不能用“已经发起 kill”代替“已终止”。
 - 如果断言/日志里需要关联会话，用 UUID 的哈希，不用 PID。
@@ -1031,7 +1049,7 @@ pending -> confirmed
   CommandLine（或至少 CreationDate + 映像路径），不能只 `process.kill(pid, 0)`。
 - **不要测试真实 PID 复用。** 真实复用不可控且会 flaky；用注入的 identity provider
   构造 `match / gone / mismatch / unknown` 四种结果。
-- **失败查询不等于 gone。** CIM/PowerShell 查询失败要当成 `unknown`，测试必须覆盖；
+- **失败查询不等于 gone。** PowerShell 身份查询失败要当成 `unknown`，测试必须覆盖；
   不能把空字符串当成“进程不存在”。
 - **标记用命令行，清理用标记。** 和现有 `terminal-source-check.cjs:41-51` 一样，用
   唯一 marker 查进程，不用 PID 当判据。
@@ -1129,7 +1147,7 @@ gone.”（`:838-844` 附近的注释）。P3-B/P3-C 应沿用这个模式，并
 - 不写“等 PID 复用”的测试；用 fake identity。
 - 不写“睡 5 秒然后断言”的测试；用有界轮询 + 身份查询。
 - 不用 `taskkill` 退出码单独证明树已死；查身份。
-- 不把 CIM 查询失败当 gone；测试失败/重试。
+- 不把身份查询失败当 gone；测试失败/重试。
 - 不把 `conhost` 命令行当成唯一身份；结合父 PID + 创建时间；查不到就标 unknown，
   不要把 unknown 当通过。
 - 不用真实用户项目/会话做写操作；全部 `os.tmpdir()` fixture（AGENTS.md 硬约束）。
@@ -1161,7 +1179,7 @@ gone.”（`:838-844` 附近的注释）。P3-B/P3-C 应沿用这个模式，并
    等待；JS 的 5 秒超时不能取消原生调用。
 10. **命令行不是身份。** 进程可以修改自己的 PEB 命令行；不要用命令行做安全边界。
     创建时间更强，但也不是秘密；它只用于区分实例，不用于授权。
-11. **身份查询依赖 PowerShell/CIM。** 查询可能慢、被 AV/策略阻止、在精简系统上
+11. **身份查询依赖 Windows PowerShell。** 查询可能慢、被 AV/策略阻止、在精简系统上
     不可用；失败关闭意味着清理可能不完整。
 12. **`taskkill` 本身可能不可用/被策略阻止。** 失败关闭意味着会话可能留在
     `closing`；应用退出时的后端树杀仍是独立兜底。
