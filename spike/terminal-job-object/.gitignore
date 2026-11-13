@@ -1,0 +1,7 @@
+# P3-C0 spike build outputs and fixtures. Evidence logs stay in results/.
+*.exe
+*.node
+*.obj
+*.exp
+*.lib
+.tmp/
