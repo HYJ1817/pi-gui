@@ -96,6 +96,19 @@ function loadNodePty() {
 
 const WINDOWS_TASKKILL_TIMEOUT_MS = 8000;
 
+/* Opt-in, structure-only trace for hard-to-reproduce CI failures. It never
+ * records pids, image paths or command lines: those can end up in a public CI
+ * log. The app-check turns it on so a failed teardown says whether the gate
+ * stopped at capture, query, verdict or taskkill. */
+function killDebug(env, text) {
+  if (!env || env.PI_GUI_KILL_DEBUG !== '1') return;
+  try {
+    process.stderr.write(`[kill] ${text}\n`);
+  } catch {
+    /* diagnostics must never affect teardown */
+  }
+}
+
 /* taskkill is the tree kill, but it is still addressed by a bare pid. The
  * caller must have verified the pid's identity immediately before this runs.
  * There is no fallback to pty.kill() on Windows: node-pty's ConPTY agent
@@ -148,6 +161,20 @@ function runWindowsTaskkill(pid, { env = process.env, timeoutMs = WINDOWS_TASKKI
  * A query and the subsequent taskkill remain two separate steps, so a pid
  * reused in between is still possible. This narrows the window; it does not
  * remove it. */
+function captureOnce(capture, pid, expectedImagePath, options) {
+  const started = Date.now();
+  return Promise.resolve()
+    .then(() => capture(pid, expectedImagePath, options))
+    .then((result) => {
+      killDebug(options.env, `capture state=${result?.state || 'none'} reason=${result?.reason || ''} ms=${Date.now() - started}`);
+      return result;
+    })
+    .catch((error) => {
+      killDebug(options.env, `capture state=unknown reason=${error?.code || 'capture_failed'} ms=${Date.now() - started}`);
+      return { state: 'unknown', reason: error?.code || 'capture_failed' };
+    });
+}
+
 export function createWindowsKillGate({
   query = processIdentity.queryProcessIdentity,
   capture = processIdentity.captureProcessIdentity,
@@ -160,32 +187,74 @@ export function createWindowsKillGate({
 
   function remember(pty, expectedImagePath, { env = process.env } = {}) {
     if (!pty || !Number.isInteger(pty.pid) || pty.pid <= 0) return;
-    identities.set(pty, {
+    const entry = {
       pid: pty.pid,
       env,
-      /* Capture has its own, deliberately tight budget: it starts immediately
-       * after spawn, and delaying the identity read increases the chance of
-       * capturing a reused pid. The stop-time re-query may use a larger budget
-       * because it is always compared against this captured identity. */
-      expected: capture(pty.pid, expectedImagePath, { env, timeoutMs: captureTimeoutMs }),
-    });
+      expectedImagePath,
+      retried: false,
+      retryPending: null,
+    };
+    /* Capture has its own, deliberately tight budget: it starts immediately
+     * after spawn, and delaying the identity read increases the chance of
+     * capturing a reused pid. The stop-time re-query may use a larger budget
+     * because it is always compared against this captured identity. */
+    entry.expected = captureOnce(capture, entry.pid, expectedImagePath, { env, timeoutMs: captureTimeoutMs });
+    identities.set(pty, entry);
+  }
+
+  /* A cold PowerShell can push the spawn-time probe past its tight budget even
+   * though the shell is healthy. Retry only after the PTY has produced output:
+   * live output is strong evidence the shell is still alive, which narrows the
+   * pid-reuse window (it does not eliminate it). Definite answers (`gone`,
+   * `mismatch`, `missing`) are never retried; they must keep failing closed. */
+  async function recapture(pty) {
+    const entry = pty ? identities.get(pty) : null;
+    if (!entry || entry.retried) return;
+    const first = await entry.expected;
+    if (first?.state === 'captured' || entry.retried) return;
+    if (first?.reason === 'gone' || first?.reason === 'missing' || first?.reason === 'image_mismatch') return;
+    entry.retried = true;
+    const retry = captureOnce(capture, entry.pid, entry.expectedImagePath, { env: entry.env, timeoutMs: captureTimeoutMs });
+    entry.retryPending = retry;
+    entry.expected = retry;
+    try {
+      await retry;
+    } finally {
+      if (entry.retryPending === retry) entry.retryPending = null;
+    }
   }
 
   async function kill(pty) {
     const entry = pty ? identities.get(pty) : null;
     if (!entry) return { result: 'unknown', reason: 'no_identity' };
-    const expected = await entry.expected;
+    /* A first-output recapture may still be in flight. Waiting for it is
+     * bounded by the same capture budget and avoids reporting `unknown` just
+     * because the stop arrived while the retry was starting. */
+    if (entry.retryPending) {
+      try { await entry.retryPending; } catch { /* captureOnce resolves unknown */ }
+    }
+    let expected = await entry.expected;
+    if (expected?.state !== 'captured' && entry.retried) {
+      /* The first probe settled just as recapture replaced the promise. Read
+       * the current one instead of deciding from the stale first result. */
+      expected = await entry.expected;
+    }
     if (!expected || expected.state !== 'captured') {
       return { result: 'unknown', reason: expected?.reason || 'identity_unknown' };
     }
+    const queryStarted = Date.now();
     const current = await query(entry.pid, { env: entry.env, timeoutMs });
+    killDebug(entry.env, `query state=${current?.state || 'none'} reason=${current?.reason || ''} ms=${Date.now() - queryStarted}`);
     const verdict = processIdentity.classifyProcessIdentity(expected, current);
+    killDebug(entry.env, `verdict=${verdict}`);
     if (verdict !== 'match') return { result: verdict };
+    const taskkillStarted = Date.now();
     const outcome = await taskkill(entry.pid, { env: entry.env, timeoutMs: taskkillTimeoutMs });
+    killDebug(entry.env, `taskkill ok=${outcome?.ok === true} code=${outcome?.code ?? ''} ms=${Date.now() - taskkillStarted}`);
     return outcome?.ok ? { result: 'killed' } : { result: 'failed', code: outcome?.code ?? null };
   }
 
-  return { capture: remember, kill, _identities: identities };
+  return { capture: remember, recapture, kill, _identities: identities };
 }
 
 const defaultWindowsKillGate = createWindowsKillGate();
@@ -207,7 +276,23 @@ export function defaultSpawnPty({ file, args, cwd, env, cols, rows, platform = p
   /* Capture before returning, so a stop that arrives immediately after
    * create still has an identity to wait for. The probe is asynchronous and
    * does not delay the response. */
-  if (platform === 'win32') defaultWindowsKillGate.capture(pty, file, { env });
+  if (platform === 'win32') {
+    defaultWindowsKillGate.capture(pty, file, { env });
+    /* If a cold probe missed the tight spawn-time budget, the first PTY output
+     * is a safe point to try again: the shell is demonstrably alive then.
+     * The listener is one-shot and never consumes the data. */
+    try {
+      if (typeof pty.onData === 'function') {
+        let dataSub = null;
+        dataSub = pty.onData(() => {
+          try { dataSub?.dispose?.(); } catch { /* already disposed */ }
+          void defaultWindowsKillGate.recapture(pty).catch(() => {});
+        });
+      }
+    } catch {
+      /* keep the single capture result: an unverified pid is never killed */
+    }
+  }
   return pty;
 }
 

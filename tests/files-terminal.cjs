@@ -1713,6 +1713,71 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
       assert.equal(calls.queryOptions.timeoutMs, 5678, 'kill re-query did not get its own budget');
     });
 
+    await check('a cold spawn-time capture is retried after the shell produces output', async () => {
+      /* The first probe can exceed its tight budget on a cold CI runner. Once
+       * the PTY has emitted output the shell is demonstrably alive, so a
+       * second probe is safe; a definite gone/mismatch answer is not retried. */
+      let captures = 0;
+      const gate = createWindowsKillGate({
+        capture: async () => {
+          captures += 1;
+          return captures === 1 ? { state: 'unknown', reason: 'query_failed' } : captured;
+        },
+        query: async () => ({
+          state: 'found',
+          creationTimeUtc: captured.creationTimeUtc,
+          imagePath: captured.imagePath,
+        }),
+        taskkill: async () => ({ ok: true }),
+        timeoutMs: 20,
+        taskkillTimeoutMs: 20,
+      });
+      const pty = makePty();
+      gate.capture(pty, captured.imagePath);
+      await gate.recapture(pty);
+      const outcome = await gate.kill(pty);
+      assert.deepEqual(outcome, { result: 'killed' });
+      assert.equal(captures, 2, 'failed capture was not retried');
+      assert.equal(pty.kills, 0);
+    });
+
+    await check('definite capture failures and successful captures are not retried', async () => {
+      for (const reason of ['gone', 'missing', 'image_mismatch']) {
+        let captures = 0;
+        const gate = createWindowsKillGate({
+          capture: async () => { captures += 1; return { state: 'unknown', reason }; },
+          query: async () => ({ state: 'gone' }),
+          taskkill: async () => ({ ok: true }),
+          timeoutMs: 20,
+          taskkillTimeoutMs: 20,
+        });
+        const pty = makePty();
+        gate.capture(pty, captured.imagePath);
+        await gate.recapture(pty);
+        const outcome = await gate.kill(pty);
+        assert.equal(captures, 1, `${reason} was retried`);
+        assert.equal(outcome.result, 'unknown');
+        assert.equal(pty.kills, 0);
+      }
+      let captures = 0;
+      const successful = createWindowsKillGate({
+        capture: async () => { captures += 1; return captured; },
+        query: async () => ({
+          state: 'found',
+          creationTimeUtc: captured.creationTimeUtc,
+          imagePath: captured.imagePath,
+        }),
+        taskkill: async () => ({ ok: true }),
+        timeoutMs: 20,
+        taskkillTimeoutMs: 20,
+      });
+      const pty = makePty();
+      successful.capture(pty, captured.imagePath);
+      await successful.recapture(pty);
+      assert.deepEqual(await successful.kill(pty), { result: 'killed' });
+      assert.equal(captures, 1, 'a successful capture was re-queried');
+    });
+
     await check('a reused or unverifiable pid is never taskkilled', async () => {
       const cases = [
         { name: 'gone', current: { state: 'gone' }, expected: 'gone' },

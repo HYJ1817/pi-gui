@@ -120,6 +120,35 @@ function killMarker(marker) {
   }
 }
 
+/* 子树子进程的父 PID 就是 PTY 的 shell。失败时用它区分「门控根本没杀」
+ * 和「杀了但 ConPTY 没发退出事件」；断言本身仍然只认 state=exited。 */
+function parentPid(pid) {
+  if (process.platform !== 'win32' || !Number.isInteger(pid) || pid <= 0) return 0;
+  try {
+    const script = `$p = Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}' -ErrorAction SilentlyContinue; if ($p) { [int]$p.ParentProcessId }`;
+    const text = execFileSync(WINDOWS_POWERSHELL, ['-NoProfile', '-NonInteractive', '-Command', script], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 15000,
+    }).trim();
+    const value = Number(text);
+    return Number.isInteger(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    /* EPERM means it exists but this user cannot signal it. */
+    return error?.code === 'EPERM';
+  }
+}
+
 /** 删临时目录 —— 带命令行兜底。
  *
  * 受限环境给 node 注入了批量删除保护（一轮里删超过 50 个文件就抛错），
@@ -306,6 +335,8 @@ async function main() {
       // 打包的终端默认只在桌面版启用；这里显式打开，验证随包 node-pty
       // 真的能从 resources/app/node_modules 加载，而不是只在源码树里能用。
       PI_GUI_ENABLE_TERMINAL: '1',
+      // 终端拆卸失败时只输出结构化的阶段/结果，不记录 pid、路径或命令行。
+      PI_GUI_KILL_DEBUG: '1',
       // 假 pi shim 靠它找到 node —— 见上面「正文必须纯 ASCII」的说明
       FAKE_PI_NODE: process.execPath,
     },
@@ -376,6 +407,7 @@ async function main() {
         /* 行为验证「退出/停止时整棵树都收掉」：让 shell 起一个独立子进程，
          * 记为 marker 身份，再停终端。只杀 PowerShell 父进程时它会活下来。 */
         let childPid = 0;
+        let shellPid = 0;
         if (process.platform === 'win32') {
           treeMarker = `PI_GUI_TREE_${process.pid}_${Date.now()}`;
           const command = `$p = Start-Process -FilePath '${process.execPath.replace(/'/g, "''")}' `
@@ -399,7 +431,9 @@ async function main() {
           if (!match) throw new Error('子树子进程没有启动');
           childPid = Number(match[1]);
           if (!markerPids(treeMarker).includes(childPid)) throw new Error('子进程 marker 不在');
+          shellPid = parentPid(childPid);
         }
+        const stopStarted = Date.now();
         const stopped = await (
           await fetch(BASE + '/api/terminal', {
             method: 'POST',
@@ -410,16 +444,29 @@ async function main() {
         if (!stopped.ok) throw new Error(`stop: ${stopped.code || stopped.error}`);
         let state = stopped.session?.state;
         /* Stop returns while the kill is still running in the background:
-         * identity re-query, taskkill and the ConPTY exit event can take
-         * seconds on a cold CI runner or while several shells are torn down.
-         * Keep asserting the real `exited` state, but give that path enough
-         * time instead of treating a slow kill as a failed teardown. */
-        for (let i = 0; i < 150 && state !== 'exited'; i++) {
+         * identity re-query (up to 5 s), taskkill (up to 8 s) and the ConPTY
+         * exit event can exceed 15 s on a cold CI runner. Thirty seconds covers
+         * the product's first bounded attempt plus the real exit; the loop
+         * still ends as soon as `exited` arrives. */
+        for (let i = 0; i < 300 && state !== 'exited'; i++) {
           await sleep(100);
           const r = await (await fetch(BASE + '/api/terminal?id=' + encodeURIComponent(id) + '&since=0')).json();
           state = r.state || r.session?.state;
         }
-        if (state !== 'exited') throw new Error('state=' + state);
+        if (state !== 'exited') {
+          /* Keep the assertion strict but say where the teardown stopped:
+           * a live shell means the identity gate never reached taskkill;
+           * a gone shell means ConPTY never delivered the exit event. The
+           * [kill] lines are structure-only (no pids or paths). */
+          const debug = out.split(/\r?\n/).filter((line) => line.includes('[kill]')).slice(-12).join('\n');
+          const where = [
+            'state=' + state,
+            'elapsed=' + (Date.now() - stopStarted) + 'ms',
+            shellPid ? 'shell=' + (processAlive(shellPid) ? 'alive' : 'gone') : '',
+            childPid ? 'child=' + (processAlive(childPid) ? 'alive' : 'gone') : '',
+          ].filter(Boolean).join(' ');
+          throw new Error(where + (debug ? '\n' + debug : ''));
+        }
         if (treeMarker) {
           let left = markerPids(treeMarker);
           for (let i = 0; i < 60 && left.length; i++) {

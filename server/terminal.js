@@ -170,6 +170,14 @@ export function createTerminal({
   let disposePromise = null;
   let sweepTimer = null;
   let sweeping = false;
+  const debugKill = (text) => {
+    if (!env || env.PI_GUI_KILL_DEBUG !== '1') return;
+    try {
+      process.stderr.write(`[kill] ${text}\n`);
+    } catch {
+      /* diagnostics must never affect teardown */
+    }
+  };
 
   function publicSession(session) {
     return {
@@ -310,6 +318,7 @@ export function createTerminal({
 
   function handleExit(session, event) {
     if (FINISHED_STATES.has(session.state)) return;
+    debugKill(`exit code=${event?.exitCode ?? ''} state=${session.state}`);
     clearIdleTimer(session);
     setKeepAliveFlag(session, false);
     session.state = 'exited';
@@ -351,10 +360,11 @@ export function createTerminal({
     return Number.isFinite(value) && value > 0 ? value : 0;
   }
 
-  function markKillUnconfirmed(session) {
+  function markKillUnconfirmed(session, result) {
     /* Not `exited`: the shell may still be alive. Keeping the public state
      * `closing` preserves the session's slot and its tab; the real exit event
      * is the only thing that can finish it. */
+    debugKill(`unconfirmed attempts=${session.killAttempts} result=${result || ''}`);
     session.killState = 'unconfirmed';
     session.killNextAt = 0;
   }
@@ -374,6 +384,7 @@ export function createTerminal({
       return;
     }
     session.killAttempts += 1;
+    debugKill(`attempt=${session.killAttempts} reason=${session.stopReason || ''}`);
     session.killInFlight = true;
     session.killState = 'pending';
     let outcome;
@@ -385,18 +396,18 @@ export function createTerminal({
     Promise.resolve(outcome).then((result) => {
       if (sessions.get(session.id) !== session || session.state !== 'closing') return;
       if (KILL_STOP_RESULTS.has(result?.result)) {
-        markKillUnconfirmed(session);
+        markKillUnconfirmed(session, result?.result);
         return;
       }
       if (session.killAttempts >= killBudget()) {
-        markKillUnconfirmed(session);
+        markKillUnconfirmed(session, result?.result);
         return;
       }
       session.killNextAt = Date.now() + killBackoff(session);
     }, () => {
       if (sessions.get(session.id) !== session || session.state !== 'closing') return;
       if (session.killAttempts >= killBudget()) {
-        markKillUnconfirmed(session);
+        markKillUnconfirmed(session, 'rejected');
         return;
       }
       session.killNextAt = Date.now() + killBackoff(session);

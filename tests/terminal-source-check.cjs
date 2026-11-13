@@ -122,6 +122,7 @@ function freePort() {
       PI_BIN: path.join(bin, 'fake-pi.cmd'),
       FAKE_PI_NODE: process.execPath,
       PI_GUI_ENABLE_TERMINAL: '1',
+      PI_GUI_KILL_DEBUG: '1',
     },
     stdio: ['ignore', logFd, logFd],
     windowsHide: true,
@@ -338,11 +339,24 @@ function freePort() {
      * the ConPTY exit event can together take over five seconds when several
      * shells are torn down under load. The assertion still requires the real
      * `exited` state; only the wait window is large enough for that path. */
-    for (let i = 0; i < 150 && finalState !== 'exited'; i++) {
+    for (let i = 0; i < 300 && finalState !== 'exited'; i++) {
       await sleep(100);
       finalState = (await readId(firstId, 0)).state;
     }
-    check('the source-mode PTY reaches the real exit state', () => assert.equal(finalState, 'exited'));
+    check('the source-mode PTY reaches the real exit state', () => {
+      if (finalState === 'exited') return;
+      let debug = '';
+      try {
+        debug = fs.readFileSync(logPath, 'utf8')
+          .split(/\r?\n/)
+          .filter((line) => line.includes('[kill]'))
+          .slice(-12)
+          .join('\n');
+      } catch {
+        /* the log may already be gone; the state is still the failure */
+      }
+      assert.equal(finalState, 'exited', `finalState=${finalState}${debug ? '\n' + debug : ''}`);
+    });
 
     await activated(workB);
     const bAgain = await terminalCall({ action: 'list' });
