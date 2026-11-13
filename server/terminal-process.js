@@ -259,8 +259,21 @@ export function createWindowsKillGate({
 
 const defaultWindowsKillGate = createWindowsKillGate();
 
-export function defaultSpawnPty({ file, args, cwd, env, cols, rows, platform = process.platform }) {
-  const nodePty = loadNodePty();
+/** Local trial switch. Default off: every existing terminal keeps the P3-B
+ * identity-gated PID path and never loads the Job-Object code path. */
+export function jobObjectEnabled(env = process.env) {
+  return env?.PI_GUI_TERMINAL_JOB_OBJECT === '1';
+}
+
+/** Build node-pty options and enforce the capability before any shell (or
+ * even the PTY pipes) is created. `nodePty` is injectable so the refusal
+ * path is testable without a real native module. */
+export function resolvePtyOptions({
+  file, cwd, env, cols, rows,
+  platform = process.platform,
+  nodePty,
+  jobObject = jobObjectEnabled(),
+} = {}) {
   const options = {
     name: 'xterm-256color',
     cols,
@@ -271,12 +284,35 @@ export function defaultSpawnPty({ file, args, cwd, env, cols, rows, platform = p
   // Default ConPTY is the supported mode on Windows 10/11. winpty and the
   // bundled ConPTY DLL are not used: they failed independently in the target
   // Electron/Node combination, and silently switching would hide that failure.
-  if (platform === 'win32') options.useConpty = true;
-  const pty = nodePty.spawn(file, args, options);
-  /* Capture before returning, so a stop that arrives immediately after
-   * create still has an identity to wait for. The probe is asynchronous and
-   * does not delay the response. */
+  if (jobObject && (platform !== 'win32' || typeof nodePty?.supportsJobObject !== 'function'
+    || nodePty.supportsJobObject() !== true)) {
+    throw Object.assign(new Error('terminal Job Object capability is unavailable'), {
+      code: 'pty_job_unavailable',
+    });
+  }
   if (platform === 'win32') {
+    options.useConpty = true;
+    if (jobObject) options.useJobObject = true;
+  }
+  return options;
+}
+
+export function defaultSpawnPty({ file, args, cwd, env, cols, rows, platform = process.platform }) {
+  const jobObject = jobObjectEnabled();
+  let nodePty;
+  try {
+    nodePty = loadNodePty();
+  } catch (error) {
+    if (jobObject) error.code = 'pty_job_unavailable';
+    throw error;
+  }
+  const options = resolvePtyOptions({
+    file, cwd, env, cols, rows, platform, nodePty, jobObject,
+  });
+  const pty = nodePty.spawn(file, args, options);
+  /* Job mode has no PID to gate: the exit path is killJob/TerminateJobObject.
+   * Capturing an identity would only invite a PID-based fallback later. */
+  if (platform === 'win32' && pty.jobMode !== true) {
     defaultWindowsKillGate.capture(pty, file, { env });
     /* If a cold probe missed the tight spawn-time budget, the first PTY output
      * is a safe point to try again: the shell is demonstrably alive then.
@@ -298,6 +334,18 @@ export function defaultSpawnPty({ file, args, cwd, env, cols, rows, platform = p
 
 export function defaultKillPty(pty, platform = process.platform) {
   if (!pty) return undefined;
+  /* Job mode is a hard boundary: no identity gate, no taskkill, no PID reuse
+   * guess. killJob() terminates the Job and returns immediately; the native
+   * exit/cleanup threads close HPCON after the Job drains. */
+  if (platform === 'win32' && pty.jobMode === true) {
+    let snapshot;
+    try { snapshot = pty.killJob?.(); } catch { /* reconciliation still runs */ }
+    return {
+      job: true,
+      requested: snapshot?.requested === true,
+      terminateAccepted: snapshot?.terminateAccepted === true,
+    };
+  }
   if (platform === 'win32') return defaultWindowsKillGate.kill(pty);
   try {
     pty.kill();

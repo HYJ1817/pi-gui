@@ -106,6 +106,7 @@
     "test:browser-session": "electron tests/browser-session-check.cjs",
     "diag:content": "node tests/diag-content.cjs",
     "sync:xterm": "node scripts/sync-xterm.mjs",
+    "prepare:terminal-job": "node scripts/prepare-terminal-job.mjs",
     "build:exe": "node scripts/build-exe.mjs",
     "build:app": "node scripts/build-app.mjs",
     "build:installer": "node scripts/build-installer.mjs",
@@ -151,7 +152,7 @@
     "test:ui3:visual": "node tests/ui3-cdp.cjs",
     "test:ui4": "node tests/ui4-approval.cjs && node tests/ui4-feedback.cjs && node tests/ui4-integration.cjs",
     "test:specs": "node tests/specs.cjs && node tests/specs-ui.cjs && node tests/panel-restore-ui.cjs",
-    "test:work-surfaces": "node tests/files-terminal.cjs && node tests/files-terminal-ui.cjs",
+    "test:work-surfaces": "node tests/files-terminal.cjs && node tests/files-terminal-ui.cjs && node tests/terminal-job-object.cjs",
     "test:diff-comments": "node tests/diff-comments.cjs && node tests/diff-comments-ui.cjs && node tests/diff-comments-split.cjs && node tests/diff-comment-ranges.cjs && node tests/diff-comment-ranges-ui.cjs && npm run test:review-tasks",
     "test:review-tasks": "node tests/review-task.cjs && node tests/review-task-ui.cjs",
     "test:review-tasks:electron": "node tests/review-task-electron.cjs",
@@ -189,7 +190,7 @@
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "node-pty": "^1.1.0",
+    "node-pty": "1.1.0",
     "pdfjs-dist": "^6.3.289"
   }
 }
