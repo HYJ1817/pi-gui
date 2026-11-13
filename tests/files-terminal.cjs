@@ -1601,6 +1601,43 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
       });
       assert.deepEqual(empty, { state: 'unknown', reason: 'empty_output' });
     });
+    await check('identity capture keeps the tight spawn-time budget', async () => {
+      /* Capture starts immediately after spawn. Extending its budget would
+       * widen the window in which a reused pid could be captured as the shell;
+       * it must stay tighter than the stop-time re-query, whose result is
+       * compared against this captured identity. */
+      const image = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+      const seen = [];
+      const capture = (options) => identity.captureProcessIdentity(4321, image, {
+        env: { SystemRoot: 'C:\\Windows' },
+        execFile: (_file, _args, opts, callback) => {
+          seen.push(opts.timeout);
+          callback(null, `133555555555555555|${image}\n`);
+        },
+        ...options,
+      });
+      const withDefault = await capture({});
+      assert.equal(withDefault.state, 'captured');
+      const withOverride = await capture({ timeoutMs: 123 });
+      assert.equal(withOverride.state, 'captured');
+      assert.deepEqual(seen, [identity.DEFAULT_CAPTURE_TIMEOUT_MS, 123]);
+      assert.ok(
+        identity.DEFAULT_CAPTURE_TIMEOUT_MS <= 2500,
+        'spawn-time capture budget grew beyond the tight 2.5 s window'
+      );
+      assert.ok(
+        identity.DEFAULT_CAPTURE_TIMEOUT_MS < identity.DEFAULT_QUERY_TIMEOUT_MS,
+        'spawn-time capture no longer has a tighter budget than the kill re-query'
+      );
+      assert.ok(
+        identity.DEFAULT_QUERY_TIMEOUT_MS >= 5000,
+        'kill re-query fell back to the old 2.5 s window'
+      );
+      assert.ok(
+        identity.DEFAULT_SYNC_QUERY_TIMEOUT_MS <= 2500,
+        'the synchronous Electron quit probe can block for too long'
+      );
+    });
     await check('defaultKillPty refuses an unverified Windows pty but keeps POSIX pty.kill()', async () => {
       const { defaultKillPty } = await import('../server/terminal.js');
       const pty = { pid: 4321, kills: 0, kill() { this.kills += 1; } };
@@ -1625,13 +1662,20 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
       kills: 0,
       kill() { this.kills += 1; },
     });
-    const makeGate = ({ current, captureResult = captured, taskkillResult = { ok: true } } = {}) => {
-      const calls = { query: 0, taskkill: 0, taskkillPid: null };
+    const makeGate = ({
+      current,
+      captureResult = captured,
+      taskkillResult = { ok: true },
+      captureTimeoutMs,
+      timeoutMs = 20,
+    } = {}) => {
+      const calls = { query: 0, taskkill: 0, taskkillPid: null, captureOptions: null, queryOptions: null };
       const gate = createWindowsKillGate({
-        capture: async () => captureResult,
-        query: async () => { calls.query += 1; return current; },
+        capture: async (_pid, _imagePath, options) => { calls.captureOptions = options; return captureResult; },
+        query: async (_pid, options) => { calls.query += 1; calls.queryOptions = options; return current; },
         taskkill: async (pid) => { calls.taskkill += 1; calls.taskkillPid = pid; return taskkillResult; },
-        timeoutMs: 20,
+        ...(captureTimeoutMs === undefined ? {} : { captureTimeoutMs }),
+        timeoutMs,
         taskkillTimeoutMs: 20,
       });
       return { gate, calls };
@@ -1653,6 +1697,85 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
       assert.equal(calls.taskkill, 1);
       assert.equal(calls.taskkillPid, 4321);
       assert.equal(pty.kills, 0, 'Windows must not fall back to pty.kill()');
+    });
+
+    await check('capture and kill re-query use separate timeout budgets', async () => {
+      /* A cold PowerShell start is the expensive part. Capture keeps its own
+       * tight budget; the re-query that gates a kill has a separate, larger
+       * budget because it is compared against the captured identity. */
+      const { outcome, calls } = await run({
+        current: { state: 'found', creationTimeUtc: captured.creationTimeUtc, imagePath: captured.imagePath },
+        captureTimeoutMs: 1234,
+        timeoutMs: 5678,
+      });
+      assert.deepEqual(outcome, { result: 'killed' });
+      assert.equal(calls.captureOptions.timeoutMs, 1234, 'capture did not get its own budget');
+      assert.equal(calls.queryOptions.timeoutMs, 5678, 'kill re-query did not get its own budget');
+    });
+
+    await check('a cold spawn-time capture is retried after the shell produces output', async () => {
+      /* The first probe can exceed its tight budget on a cold CI runner. Once
+       * the PTY has emitted output the shell is demonstrably alive, so a
+       * second probe is safe; a definite gone/mismatch answer is not retried. */
+      let captures = 0;
+      const gate = createWindowsKillGate({
+        capture: async () => {
+          captures += 1;
+          return captures === 1 ? { state: 'unknown', reason: 'query_failed' } : captured;
+        },
+        query: async () => ({
+          state: 'found',
+          creationTimeUtc: captured.creationTimeUtc,
+          imagePath: captured.imagePath,
+        }),
+        taskkill: async () => ({ ok: true }),
+        timeoutMs: 20,
+        taskkillTimeoutMs: 20,
+      });
+      const pty = makePty();
+      gate.capture(pty, captured.imagePath);
+      await gate.recapture(pty);
+      const outcome = await gate.kill(pty);
+      assert.deepEqual(outcome, { result: 'killed' });
+      assert.equal(captures, 2, 'failed capture was not retried');
+      assert.equal(pty.kills, 0);
+    });
+
+    await check('definite capture failures and successful captures are not retried', async () => {
+      for (const reason of ['gone', 'missing', 'image_mismatch']) {
+        let captures = 0;
+        const gate = createWindowsKillGate({
+          capture: async () => { captures += 1; return { state: 'unknown', reason }; },
+          query: async () => ({ state: 'gone' }),
+          taskkill: async () => ({ ok: true }),
+          timeoutMs: 20,
+          taskkillTimeoutMs: 20,
+        });
+        const pty = makePty();
+        gate.capture(pty, captured.imagePath);
+        await gate.recapture(pty);
+        const outcome = await gate.kill(pty);
+        assert.equal(captures, 1, `${reason} was retried`);
+        assert.equal(outcome.result, 'unknown');
+        assert.equal(pty.kills, 0);
+      }
+      let captures = 0;
+      const successful = createWindowsKillGate({
+        capture: async () => { captures += 1; return captured; },
+        query: async () => ({
+          state: 'found',
+          creationTimeUtc: captured.creationTimeUtc,
+          imagePath: captured.imagePath,
+        }),
+        taskkill: async () => ({ ok: true }),
+        timeoutMs: 20,
+        taskkillTimeoutMs: 20,
+      });
+      const pty = makePty();
+      successful.capture(pty, captured.imagePath);
+      await successful.recapture(pty);
+      assert.deepEqual(await successful.kill(pty), { result: 'killed' });
+      assert.equal(captures, 1, 'a successful capture was re-queried');
     });
 
     await check('a reused or unverifiable pid is never taskkilled', async () => {

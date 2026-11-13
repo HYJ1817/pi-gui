@@ -447,7 +447,10 @@ function killServer() {
       try {
         verdict = processIdentity.classifyProcessIdentity(
           identity,
-          processIdentity.queryProcessIdentitySync(pid, { env: process.env })
+          processIdentity.queryProcessIdentitySync(pid, {
+            env: process.env,
+            timeoutMs: processIdentity.DEFAULT_SYNC_QUERY_TIMEOUT_MS,
+          })
         );
       } catch {
         verdict = 'identity_query_failed';

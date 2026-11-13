@@ -122,6 +122,7 @@ function freePort() {
       PI_BIN: path.join(bin, 'fake-pi.cmd'),
       FAKE_PI_NODE: process.execPath,
       PI_GUI_ENABLE_TERMINAL: '1',
+      PI_GUI_KILL_DEBUG: '1',
     },
     stdio: ['ignore', logFd, logFd],
     windowsHide: true,
@@ -334,11 +335,28 @@ function freePort() {
     const stopped = await terminalCall({ action: 'stop', id: firstId });
     check('the source-mode terminal acknowledges stop', () => assert.equal(stopped.ok, true));
     let finalState = stopped.session?.state;
-    for (let i = 0; i < 50 && finalState !== 'exited'; i++) {
+    /* Stop returns before the kill finishes: identity re-query, taskkill and
+     * the ConPTY exit event can together take over five seconds when several
+     * shells are torn down under load. The assertion still requires the real
+     * `exited` state; only the wait window is large enough for that path. */
+    for (let i = 0; i < 300 && finalState !== 'exited'; i++) {
       await sleep(100);
       finalState = (await readId(firstId, 0)).state;
     }
-    check('the source-mode PTY reaches the real exit state', () => assert.equal(finalState, 'exited'));
+    check('the source-mode PTY reaches the real exit state', () => {
+      if (finalState === 'exited') return;
+      let debug = '';
+      try {
+        debug = fs.readFileSync(logPath, 'utf8')
+          .split(/\r?\n/)
+          .filter((line) => line.includes('[kill]'))
+          .slice(-12)
+          .join('\n');
+      } catch {
+        /* the log may already be gone; the state is still the failure */
+      }
+      assert.equal(finalState, 'exited', `finalState=${finalState}${debug ? '\n' + debug : ''}`);
+    });
 
     await activated(workB);
     const bAgain = await terminalCall({ action: 'list' });
@@ -356,16 +374,18 @@ function freePort() {
       assert.ok(!/AttachConsole failed|conpty_console_list_agent\.js.*Error/i.test(logTail), 'ConPTY helper crash trace found');
     });
 
-    /* P3-B: exercise the real CIM query and classification against harmless
-     * sentinel processes. A genuine pid-reuse race is not reproducible; a
-     * mismatched creation time is exactly what a reused pid presents, so we
-     * construct that and prove taskkill is never reached. */
+    /* P3-B: exercise the real PowerShell identity query and classification
+     * against harmless sentinel processes. A genuine pid-reuse race is not
+     * reproducible; a mismatched creation time is exactly what a reused pid
+     * presents, so we construct that and prove taskkill is never reached. */
     {
       const { createWindowsKillGate } = await import('../server/terminal.js');
       const readIdentity = (pid) => {
         const out = runPowerShell(
-          `$p=Get-CimInstance Win32_Process -Filter 'ProcessId=${Number(pid)}'; ` +
-          "if($p){ '{0}|{1}' -f ([datetime]$p.CreationDate).ToUniversalTime().ToFileTimeUtc(), [string]$p.ExecutablePath }"
+          "$ErrorActionPreference='Stop'; " +
+          `try { $p = Get-Process -Id ${Number(pid)} -ErrorAction Stop } catch { exit 3 }; ` +
+          "$t = $p.StartTime.ToUniversalTime().ToFileTimeUtc(); " +
+          "'{0}|{1}' -f $t, [string]$p.Path"
         );
         const line = String(out).split(/\r?\n/)[0];
         const match = /^(\d{10,20})\|(.*)$/.exec(line);
@@ -407,7 +427,7 @@ function freePort() {
           return { ok: true };
         } });
         await Promise.race([matchSentinel.exited, sleep(10000)]);
-        check('the identity gate kills a real sentinel through CIM and taskkill', () => {
+        check('the identity gate kills a real sentinel through Get-Process and taskkill', () => {
           assert.equal(outcome.result, 'killed');
           assert.equal(matchTaskkills, 1);
           assert.equal(matchSentinel.child.exitCode !== null || matchSentinel.child.signalCode !== null, true);

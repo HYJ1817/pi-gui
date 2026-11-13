@@ -291,14 +291,18 @@ P3-A Keep Alive 也在这两个层验证：假 PTY 用短 `idleMs` 覆盖默认�
 
 P3-B 的终止门控分两层验证。假 PTY 通过可注入的 identity provider 覆盖
 `match` / `gone` / `mismatch` / `unknown`、无身份、`taskkill` 失败、有界重试、单飞与
-`killUnconfirmed` 不谎报退出，并断言 Windows 不调用 `pty.kill()`；CIM 以 0 退出但
-输出为空同样归为 `unknown`。结构检查要求 Electron 的 `killServer` 只在
+`killUnconfirmed` 不谎报退出，并断言 Windows 不调用 `pty.kill()`；身份查询以 0 退出
+但输出为空同样归为 `unknown`。结构检查要求 Electron 的 `killServer` 只在
 `verdict === 'match'` 分支执行 `taskkill`、其它判决写跳过事件，并检查抓取回调使用
 spawn 时的局部 pid 与 win32 守卫——去掉 match 守卫会让该检查变红。真实 source 套件
-用真实 CIM 查询和真实 `taskkill` 对一个带命令行 marker 的无害 sentinel 验证
-`match` 会结束、`mismatch`（创建时间 +1）与查询失败不会调用 `taskkill` 且 sentinel
-仍活。测试不制造真实 PID 复用（不可控且 flaky）；查询与 `taskkill` 之间仍有 TOCTOU，
-这一点不能由测试全绿推翻。
+用真实 PowerShell `Get-Process` 身份查询和真实 `taskkill` 对一个带命令行 marker 的
+无害 sentinel 验证 `match` 会结束、`mismatch`（创建时间 +1）与查询失败不会调用
+`taskkill` 且 sentinel 仍活。测试不制造真实 PID 复用（不可控且 flaky）；查询与
+`taskkill` 之间仍有 TOCTOU，这一点不能由测试全绿推翻。冷 runner 上首次身份抓取
+可能超过 2.5 s，门控在 PTY 首次输出后对 `unknown` 结果重试一次；canonical 测试的
+exit 等待窗口是 30 s，但仍只接受真实 `exited`。app-check 与 source-check 失败时
+会带上 `[kill]` 结构轨迹（不含 PID/路径）以及 shell/child 是否仍存活，用来区分
+“门控没杀”和“杀了但 ConPTY 没发 exit”。
 
 `test:terminal:electron` 与 B 层不是同一个运行时：`test:app` 用 Node 启动打包后的
 `server.cjs`（随包 node-pty），`test:exe` 验证 Node SEA 便携版；两者都不能替代 Electron
