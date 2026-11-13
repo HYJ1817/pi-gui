@@ -2,16 +2,16 @@
 
 日期：2026-11-13  
 分支：`feat/terminal-p3b-identity-kill`（已合并为 `5c8c9a4`）；
-后续修复分支 `fix/terminal-identity-timeout`
+后续修复分支 `fix/terminal-identity-timeout`（PR #80）
 基线：`62eedef`（P3-A / PR #78 合并后的 `main`）  
 证据范围：提交前工作区 diff；交付提交可用
 `git log -1 --format=%H -- docs/terminal-p3b-termination-acceptance.md` 解析  
 风险级别：**高**（Windows 进程终止、PID 复用、应用退出清理；安全优先的失败关闭会改变“停止失败”的表现）
 
 > 本记录只证明下列命令、构建和真实环境。完整 `npm test` 尚未在本地运行，因此不宣称
-> canonical 全量已通过；P3-B 的 PR CI 已通过并合并，合并后的 push CI 暴露了一个
-> 时序 flake（见第六节后半），修复分支的 CI 将作为最终 canonical，结果出来前保持
-> 「待验证」。
+> canonical 全量已通过；P3-B 的 PR CI 已通过并合并，合并后的 push CI 和 PR #80 的
+> 两次 attempt 仍暴露了时序/冷启动问题（见第六节后半），第二次修复的 PR #80 CI 将
+> 作为最终 canonical，结果出来前保持「待验证」。
 > P3-B 消除的是**每个 sweep 都可能误杀**的放大面，不是 PID 复用本身：查询与
 > `taskkill` 仍是两步，中间存在 TOCTOU；完整修复仍需 P3-C 的 Job-at-creation。
 
@@ -69,8 +69,8 @@
 
 | 命令 | 结果 | 说明 |
 | --- | --- | --- |
-| `node tests/files-terminal.cjs` | **111/111 PASS** | 假 PTY 服务端契约；复审修复后重跑通过。新增身份解析/比较、真实查询失败分类、门控四种判决、无身份不杀、`taskkill` 失败、有界重试、单飞、未确认不谎报 exit；后续修复再加 2 条“抓取与停止复查使用独立超时预算”断言；既有 P2/P3-A 回归 |
-| `node tests/terminal-source-check.cjs` | **21/21 PASS** | 真实 `node server.js` + 仓库 node-pty + ConPTY；既有 18 项全部保留，另加 3 项真实 PowerShell `Get-Process` 身份测试（见下）。修复后以 2 个实例并发跑了 3 轮，6 次均 21/21 |
+| `node tests/files-terminal.cjs` | **113/113 PASS** | 假 PTY 服务端契约；复审修复后重跑通过。新增身份解析/比较、真实查询失败分类、门控四种判决、无身份不杀、`taskkill` 失败、有界重试、单飞、未确认不谎报 exit；后续修复再加 2 条“抓取与停止复查使用独立超时预算”断言，第二次修复再加 2 条“冷抓取在首次输出后重试/确定失败不重试”断言；既有 P2/P3-A 回归 |
+| `node tests/terminal-source-check.cjs` | **21/21 PASS** | 真实 `node server.js` + 仓库 node-pty + ConPTY；既有 18 项全部保留，另加 3 项真实 PowerShell `Get-Process` 身份测试（见下）。修复后以 2 个实例并发跑了 3 轮，6 次均 21/21；exit 等待窗口现为 30 s |
 | `node tests/files-terminal-ui.cjs` | **84/84 PASS** | 前端未改动；Keep Alive/多终端/面板/标签回归 |
 | `node tests/modules.cjs` | **121/121 PASS** | 新增 `lib/process-identity.cjs` 不破坏依赖方向 |
 | `node tests/electron-guard.cjs` | **128/128 PASS** | `killServer` 仍先树杀后 `server.kill()`；`killServer` 的身份门控结构断言在 `files-terminal` 同一轮中执行 |
@@ -103,14 +103,16 @@
 
 ### 断言数量变化
 
-- `files-terminal` 从 97 → 111：P3-B 先**新增 13 条**、**删除 1 条**（到 109）；
-  合并后修复再新增 2 条（到 111）。
+- `files-terminal` 从 97 → 113：P3-B 先**新增 13 条**、**删除 1 条**（到 109）；
+  合并后修复新增 2 条（到 111）；PR #80 的第二次修复再新增 2 条（到 113）。
   - 删除的是 `ptyProcessAlive separates a live shell from a dead pid`。它只证明
     “PID 现在是否存活”，不能证明“这个 PID 是否还是原来的进程”；设计文档 10.2 明确
     要求用身份测试替换。
   - 新增 13 条覆盖身份解析、比较、异步/同步查询失败分类、门控四态、无身份、
     `taskkill` 失败、有界预算、单飞、未确认状态。
   - 后续 2 条覆盖：spawn 抓取保持独立的 2.5 s 紧预算，停止复查可用更大的独立预算；
+  - 第二次修复的 2 条覆盖：冷抓取为 `unknown` 时在首次输出后重试一次，以及
+    `gone` / `missing` / `image_mismatch` 与已成功抓取都不重试；
     门控把 `captureTimeoutMs` 与停止复查的 `timeoutMs` 分别传给捕获与查询。
 - `terminal-source-check` 从 18 → 21：既有 18 条全部保留，新增 3 条真实身份测试。
 - 三个既有的“wedged stop 会一直被 sweep 重试”断言改为“有界重试后停止”，没有删除
@@ -197,7 +199,8 @@
      `mismatch`。只有 `NoProcessFoundForGivenId` 映射为 `gone`，其它失败仍是
      `unknown`。
   3. `app-check` 与 `terminal-source-check` 的 exit 轮询从 50 × 100 ms 延长到
-     150 × 100 ms；断言仍是**真实 `exited`**，没有把 `closing` 当成成功。
+     150 × 100 ms；PR #80 仍失败后再延长到 300 × 100 ms（见下一小节）。断言仍是
+     **真实 `exited`**，没有把 `closing` 当成成功。
 - **验证。** `files-terminal` 111/111；`terminal-source-check` 修复后 2 实例并发
   3 轮共 6 次，均 21/21；重建产物后 `app-check` 27/27；`terminal-electron-check`
   32/32；`files-terminal-ui` 84/84；`modules` 121/121；`electron-guard` 128/128；
@@ -205,6 +208,35 @@
   以修复分支 CI 为准。
 - **未改变。** 仍然只有 `match` 才 `taskkill`；`gone` / `mismatch` / `unknown`
   仍不杀；没有恢复 Windows `pty.kill()` 回退；没有新增依赖、日志字段或 PID 持久化。
+
+### PR #80 上 15 s 仍失败与第二次修复（2026-11-13）
+
+- **现象。** PR #80（run
+  [43366924980](https://github.com/HYJ1817/pi-gui/actions/runs/43366924980)）的
+  attempt 1 和 attempt 2 都在 `Electron build check` / `Verify packaged app` 的同一
+  断言失败：`state=closing`，26/27；5 个测试组全部通过，`CI gate` 仅汇总失败。
+  attempt 2 的步骤日志从 05:07:29 到 05:08:00，失败文本与 attempt 1 相同。
+- **判断。** 第一次修复后的 15 s 窗口仍可能短于产品自己的最坏首轮预算：停止复查
+  5 s + `taskkill` 8 s = 13 s，加上抓取与 ConPTY exit 就超过 15 s；冷 runner 上
+  spawn 抓取也可能直接超过 2.5 s，返回 `unknown` 后按设计不杀。这不是身份门控
+  误判，也不是 `taskkill` 失败。
+- **第二次修复。**
+  1. `app-check` 与 `terminal-source-check` 的 exit 轮询再延长到 300 × 100 ms
+     （30 s）；仍然只接受真实 `exited`。
+  2. `createWindowsKillGate` 在首次抓取为 `unknown` 时，于 PTY 首次输出后重试一次：
+     输出是 shell 仍存活的强证据，缩窄但不消除 PID 复用窗口；`gone` / `mismatch` /
+     `missing` 是确定答案，不重试；重试仍须 `captured` + `match` 才 `taskkill`。
+  3. `PI_GUI_KILL_DEBUG=1` 时输出不含 PID/路径的 `[kill]` 结构轨迹；app-check 失败
+     时附带 elapsed、shell/child 是否存活与最后 12 行轨迹，source-check 附带轨迹尾部。
+     正常产品运行不设置该变量，不产生这些日志。
+- **验证。** `files-terminal` 113/113（新增 2 条重试断言）；`terminal-source-check`
+  21/21；重建后 `app-check` 27/27；`electron-guard` 128/128（单跑；与
+  `terminal-electron-check` 并行时因 Electron 资源冲突失败，单跑通过）；
+  `modules` 121/121；`logging` 33/33；`terminal-electron-check` 32/32；
+  `logging-packaged` 15/15；`files-terminal-ui` 84/84。完整 `npm test` 未本地运行，
+  以 PR #80 的最新 CI 为准。
+- **未改变。** 仍只有 `match` 才杀；`gone` / `mismatch` / `unknown` / 无身份不杀；
+  没有恢复 `pty.kill()` 回退；没有新增依赖或持久化字段。
 
 ## 七、未验证与剩余风险
 
@@ -217,12 +249,14 @@
   查询超时都会降级为 `unknown` → **不杀**；此时 stop 可能停在 `closing`，会话继续占额度。
   这是安全优先的故意选择，需要产品层面接受“宁可留下未确认会话”。抓取预算 2.5 s、
   停止复查 5 s、Electron 同步复查 2.5 s；持续失败（而不是一次慢查询）仍会停在
-  `closing`，不会自动释放额度。
+  `closing`，不会自动释放额度。首次抓取为 `unknown` 时，会在 PTY 首次输出后重试
+  一次；输出是 shell 存活的强证据，但不消除“输出已缓冲、shell 刚退出、PID 被复用”
+  的残余窗口；`gone` / `mismatch` / `missing` 是确定答案，不重试。
 - `taskkill` 返回 0 后，ConPTY 的真实 exit 事件仍可能延迟；并发拆卸多个 shell 时
   实测 stop 到 exit 约 5.4 s（旧 CIM 复查 ≈2.0 s、`taskkill` ≈2.7 s、exit ≈1.0 s；
   改用 `Get-Process` 后 6 并发复查 ≈1.0 s）。
   stop 接口先返回 `closing`，界面在真实 exit 前一直显示「停止中」。canonical 测试
-  现在最多等 15 s，但断言仍是真实 `exited`；超过窗口仍判失败，不会把 `closing`
+  现在最多等 30 s，但断言仍是真实 `exited`；超过窗口仍判失败，不会把 `closing`
   当成功。
 - 应用退出时若后端身份抓取尚未完成，跳过 `taskkill /T`，只按句柄终止后端；后端子进程
   可能成为孤儿。正常使用中抓取在启动后数百毫秒内完成，但极快退出仍可能命中。
@@ -241,8 +275,8 @@
   PTY 分支，没有实机验证。
 - conhost/OpenConsole 残留（上游 #965）与后代 breakaway 仍是已知边界，未在本期测试。
 - 提权进程的身份查询需要更高权限，未自动化验证。
-- 完整 `npm test` 未本地运行；P3-B 的 PR CI 已通过并合并，合并后 flake 的修复以
-  `fix/terminal-identity-timeout` 的 CI 为准。
+- 完整 `npm test` 未本地运行；P3-B 的 PR CI 已通过并合并，合并后 flake 的第二次
+  修复以 PR #80 的最新 CI 为准。
 
 ## 八、独立审查
 
@@ -263,7 +297,7 @@ Blocker**，2 个 Important、2 个 Nit；以下均已在最终工作区处置�
 | R6 | 自查 | 身份查询 0 退出但输出为空时返回 `gone`，与设计“空输出不能证明进程不存在”冲突 | 改为 `unknown`（`empty_output`），补异步/同步断言 |
 
 复审确认：`files-terminal` 的 97 → 109 与记录一致（删 1 加 13）；后续合并后修复
-又加 2 条超时预算断言，当前 111/111。删除的
+又加 2 条超时预算断言，PR #80 的第二次修复再加 2 条抓取重试断言，当前 113/113。删除的
 `ptyProcessAlive` 正是设计 §10.2 要求替换的 liveness 断言；三个“无限 sweep 重试”
 断言是有意改为有界重试，不是删除；服务端门控、`pty.kill()` 回退移除与重试预算都有
 会在回归时变红的测试。修复后由本记录作者重跑了上表所有定向套件、重建产物并运行
@@ -275,9 +309,9 @@ Blocker**，2 个 Important、2 个 Nit；以下均已在最终工作区处置�
 
 - **开发完成：是。** 身份抓取、停止前校验、失败关闭、Windows 无 `pty.kill()` 回退、
   有界重试/单飞、Electron 后端门控、打包与定向运行时验证已完成。
-- **代码验收：P3-B 的 PR CI 已通过并合并；合并后时序 flake 的修复待
-  `fix/terminal-identity-timeout` 的完整 CI 与用户确认。** 独立复审已完成并处置，
-  修复分支的本地定向套件已通过，完整结果出来前保持「待验证」。
+- **代码验收：P3-B 的 PR CI 已通过并合并；合并后时序 flake 的第二次修复已推送到
+  PR #80，待完整 CI 与用户确认。** 独立复审已完成并处置，第二次修复的本地定向套件
+  已通过，完整结果出来前保持「待验证」。
 - **合并许可：未授权。**
 - **发布许可：未授权。** 未打 tag、未推送发布 tag、未执行正式发布。
 

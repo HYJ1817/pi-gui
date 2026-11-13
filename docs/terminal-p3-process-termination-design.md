@@ -642,6 +642,7 @@ PID 可以作为内存字段用于 `OpenProcess`，但不进日志/诊断报告�
 | 设计项 | 落地 |
 | --- | --- |
 | 抓取身份 | `lib/process-identity.cjs`；`defaultSpawnPty` 在返回前启动异步抓取，`WeakMap` 按 PTY 对象保存 |
+| 冷启动重试 | 首次抓取为 `unknown` 时，PTY 首次输出后重试一次；`gone` / `mismatch` / `missing` 是确定答案，不重试；重试仍须 `captured` + `match` 才杀 |
 | 查询实现 | 绝对路径 Windows PowerShell + `Get-Process -Id`；FILETIME 用十进制字符串保存，避免 JS number 精度损失 |
 | 停止判定 | `server/terminal-process.js` 的 `createWindowsKillGate`；`match` 才 `taskkill`，`gone` / `mismatch` / `unknown` / 无身份一律不杀 |
 | Windows 回退 | 删除 `ptyProcessAlive` 与 `pty.kill()` 回退；POSIX 保持 `pty.kill()` |
@@ -653,6 +654,14 @@ PID 可以作为内存字段用于 `OpenProcess`，但不进日志/诊断报告�
 > 模块加载在 6 个并发查询下实测 3.4-4.3 s，会超过抓取必须保持的 2.5 s 紧预算；
 > `Get-Process` 在同等条件下约 1.0 s。两者都给出创建时间与映像路径；只有
 > `NoProcessFoundForGivenId` 映射为 `gone`，其它失败仍是 `unknown`。判定语义不变。
+>
+> 2026-11-13 PR #80 的两次 CI 仍在 `state=closing` 失败：15 s 窗口仍小于停止路径的
+> 最坏首轮预算（停止复查 5 s + `taskkill` 8 s，另加抓取与 ConPTY exit），冷 runner
+> 上 spawn 抓取也可能超过 2.5 s。现在的做法是：抓取保持 2.5 s；首次抓取为 `unknown`
+> 时在 PTY 首次输出后重试一次（输出说明 shell 仍活着，缩窄但不消除 PID 复用窗口；
+> `gone` / `mismatch` / `missing` 不重试）；canonical 测试窗口延长到 30 s，断言仍是
+> 真实 `exited`；`PI_GUI_KILL_DEBUG=1` 时输出不含 PID/路径的结构化 `[kill]` 轨迹，
+> 供 CI 失败时定位。
 
 与设计的偏差：
 
@@ -670,8 +679,9 @@ PID 可以作为内存字段用于 `OpenProcess`，但不进日志/诊断报告�
   显示，并发拆卸多个 shell 时 stop→真实 exit 可达 5.4 s（旧 CIM 复查≈2.0 s、
   `taskkill`≈2.7 s、exit≈1.0 s；改用 Get-Process 后 6 并发复查约 1.0 s）；
   停止复查原来与抓取共用 2.5 s 预算，对实测 2.0 s 余量过小，慢查询会被判成
-  `unknown` 并永久停在 `closing`。canonical 测试的 exit 轮询窗口
-  也从 5 s 延长到 15 s，但断言仍只接受真实 `exited`，不把 `closing` 当成功。
+  `unknown` 并永久停在 `closing`。canonical 测试的 exit 轮询窗口先从 5 s 延长到
+  15 s，PR #80 仍失败后再延长到 30 s；断言仍只接受真实 `exited`，不把 `closing`
+  当成功。
 - 抓取失败或查询失败一律不杀。停止可能停在 `closing` 并继续占用会话额度，这是
   安全优先的接受结果，不自动释放额度。
 - 身份查询以 0 退出但输出为空/不可解析时按 `unknown`，不按 `gone`；只有显式的
