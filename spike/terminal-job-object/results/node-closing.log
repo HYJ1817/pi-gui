@@ -1,0 +1,20 @@
+[lifecycle 0] tsfn-create: status=0 queue=64 mode=0
+[lifecycle 0] started: holders=1
+[lifecycle 0] post seq=0 status=0
+[lifecycle 0] post seq=1 status=0
+[lifecycle 0] post seq=2 status=0
+[lifecycle 0] exit-thread: start mode=0
+[lifecycle 0] unref: status=0
+[js] cb seq=0 t=0ms
+[lifecycle 3] calljs event seq=0: status=0
+[js] cb seq=1 t=3ms
+[lifecycle 3] calljs event seq=1: status=0
+[js] cb seq=2 t=3ms
+[lifecycle 3] calljs event seq=2: status=0
+[js] stop t=54ms
+[lifecycle 55] stop: requested
+[lifecycle 55] exit-thread: stop observed stop=1 closing=0
+[lifecycle 55] release exit-thread: holders=0 status=0
+[lifecycle 55] exit-thread: done
+[lifecycle 55] tsfn-finalize: holders=0 posted=3
+[js] post-after-stop t=162ms

@@ -1,0 +1,41 @@
+[truncated: full log had 50050 lines; keeping the final 40]
+[js] cb seq=1086 t=1312ms
+[lifecycle 1312] calljs spam seq=1086: status=0
+[js] cb seq=1087 t=1327ms
+[lifecycle 1327] calljs spam seq=1087: status=0
+[js] cb seq=1088 t=1342ms
+[lifecycle 1343] calljs spam seq=1088: status=0
+[js] cb seq=1089 t=1357ms
+[lifecycle 1358] calljs spam seq=1089: status=0
+[js] cb seq=1090 t=1373ms
+[lifecycle 1373] calljs spam seq=1090: status=0
+[js] cb seq=1091 t=1388ms
+[lifecycle 1388] calljs spam seq=1091: status=0
+[js] cb seq=1092 t=1404ms
+[lifecycle 1404] calljs spam seq=1092: status=0
+[js] cb seq=1093 t=1419ms
+[lifecycle 1419] calljs spam seq=1093: status=0
+[js] cb seq=1094 t=1434ms
+[lifecycle 1434] calljs spam seq=1094: status=0
+[js] cb seq=1095 t=1449ms
+[lifecycle 1450] calljs spam seq=1095: status=0
+[js] cb seq=1096 t=1465ms
+[lifecycle 1465] calljs spam seq=1096: status=0
+[js] cb seq=1097 t=1480ms
+[lifecycle 1481] calljs spam seq=1097: status=0
+[js] cb seq=1098 t=1495ms
+[lifecycle 1495] calljs spam seq=1098: status=0
+[js] cb seq=1099 t=1511ms
+[lifecycle 1511] calljs spam seq=1099: status=0
+[js] cb seq=1100 t=1527ms
+[lifecycle 1527] calljs spam seq=1100: status=0
+[js] cb seq=1101 t=1541ms
+[lifecycle 1542] calljs spam seq=1101: status=0
+[js] cb seq=1102 t=1557ms
+[lifecycle 1557] calljs spam seq=1102: status=0
+[js] cb seq=1103 t=1572ms
+[lifecycle 1572] calljs spam seq=1103: status=0
+[js] cb seq=1104 t=1587ms
+[lifecycle 1588] calljs spam seq=1104: status=0
+[js] exit t=1603ms state={"started":true,"holders":1,"closing":false,"stop":false,"finalized":false,"exitThreadDone":false,"cleanupThreadDone":false,"posted":23,"queueFull":50083,"closingPosts":0,"otherPostErrors":0,"finalPtyDisposed":false,"finalCloseMs":0}
+[js] process-exit code=0 t=1603ms state={"started":true,"holders":1,"closing":false,"stop":false,"finalized":false,"exitThreadDone":false,"cleanupThreadDone":false,"posted":23,"queueFull":50083,"closingPosts":0,"otherPostErrors":0,"finalPtyDisposed":false,"finalCloseMs":0}

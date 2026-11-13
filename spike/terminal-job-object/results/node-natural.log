@@ -1,0 +1,17 @@
+[lifecycle 0] tsfn-create: status=0 queue=64 mode=0
+[lifecycle 0] started: holders=1
+[lifecycle 0] post seq=0 status=0
+[lifecycle 0] post seq=1 status=0
+[lifecycle 0] post seq=2 status=0
+[lifecycle 0] exit-thread: start mode=0
+[lifecycle 0] unref: status=0
+[js] process-exit code=0 t=1ms state={"started":true,"holders":1,"closing":false,"stop":false,"finalized":false,"exitThreadDone":false,"cleanupThreadDone":false,"posted":3,"queueFull":0,"closingPosts":0,"otherPostErrors":0,"finalPtyDisposed":false,"finalCloseMs":0}
+[lifecycle 2] calljs event seq=0: status=10
+[lifecycle 2] calljs event seq=1: status=10
+[lifecycle 2] calljs event seq=2: status=10
+[lifecycle 3] env-cleanup-hook: enter holders=1 exitDone=0 cleanupDone=0
+[lifecycle 3] env-cleanup-hook: leave (no TSFN release here; exit thread owns it)
+[lifecycle 3] tsfn-finalize: holders=1 posted=3
+[lifecycle 3] exit-thread: stop observed stop=1 closing=1
+[lifecycle 3] release exit-thread: holders=0 status=0
+[lifecycle 3] exit-thread: done

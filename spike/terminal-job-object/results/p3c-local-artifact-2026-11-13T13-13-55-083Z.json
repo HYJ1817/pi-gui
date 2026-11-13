@@ -1,0 +1,94 @@
+{
+  "test": "p3c-local-artifact",
+  "artifact": {
+    "path": "C:\\pi-GUI\\build\\Pi GUI.exe",
+    "bytes": 104839168,
+    "sha256": "247029f360b0b74ef80b5ba98966f81aeb18e5ac01daddfa98dd8671f360194f"
+  },
+  "os": {
+    "release": "10.0.26200",
+    "version": "Windows 11 Home China",
+    "arch": "x64"
+  },
+  "env": {
+    "PORT": "12820",
+    "PI_GUI_TERMINAL_JOB_OBJECT": "1",
+    "data": "<local-user>\\AppData\\Local\\Temp\\p3c-artifact-3huBeL\\data"
+  },
+  "health": {
+    "ok": true,
+    "app": "pi-gui",
+    "protocol": 1,
+    "version": "0.33.0"
+  },
+  "terminalStatus": {
+    "ok": true,
+    "enabled": true,
+    "platform": "win32",
+    "pty": true,
+    "maxSessions": 12,
+    "maxSessionsPerWorkspace": 6,
+    "limits": {
+      "maxInputBytes": 65536,
+      "maxBufferChars": 262144,
+      "minCols": 20,
+      "maxCols": 500,
+      "minRows": 5,
+      "maxRows": 200
+    }
+  },
+  "created": {
+    "id": "7e170517-2e15-4f9d-b5e7-52abf380eaa4",
+    "workspace": {
+      "id": "26aee3c7c2d206c879bbf6e212c325d8",
+      "generation": "0"
+    },
+    "cwd": "<local-user>/AppData/Local/Temp/p3c-artifact-3huBeL/project",
+    "shell": "PowerShell",
+    "state": "running",
+    "exitCode": null,
+    "signal": null,
+    "cursor": 0,
+    "keepAliveRevision": 0,
+    "cols": 100,
+    "rows": 30,
+    "ordinal": 1,
+    "createdAt": 1794575643430,
+    "keepAlive": false,
+    "pty": true,
+    "jobMode": true
+  },
+  "marker": "artifact_marker_1794575643498",
+  "activeAfterMs": 15505,
+  "markerSeen": true,
+  "stopped": {
+    "ok": true,
+    "session": {
+      "id": "7e170517-2e15-4f9d-b5e7-52abf380eaa4",
+      "workspace": {
+        "id": "26aee3c7c2d206c879bbf6e212c325d8",
+        "generation": "0"
+      },
+      "cwd": "<local-user>/AppData/Local/Temp/p3c-artifact-3huBeL/project",
+      "shell": "PowerShell",
+      "state": "closing",
+      "exitCode": null,
+      "signal": null,
+      "cursor": 1215,
+      "keepAliveRevision": 0,
+      "cols": 100,
+      "rows": 30,
+      "ordinal": 1,
+      "createdAt": 1794575643430,
+      "keepAlive": false,
+      "pty": true,
+      "jobMode": true
+    }
+  },
+  "finalState": "exited",
+  "logs": "<local-user>\\AppData\\Local\\Temp\\p3c-artifact-3huBeL\\data\\logs",
+  "result": {
+    "ok": true,
+    "elapsedMs": 24285
+  }
+}

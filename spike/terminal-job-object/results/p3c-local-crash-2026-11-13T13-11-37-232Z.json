@@ -1,0 +1,91 @@
+{
+  "test": "p3c-local-crash-reclaim",
+  "os": {
+    "release": "10.0.26200",
+    "version": "Windows 11 Home China",
+    "arch": "x64"
+  },
+  "runtime": {
+    "node": "24.22.1"
+  },
+  "driverExit": {
+    "code": 134,
+    "signal": null
+  },
+  "state": {
+    "role": "node-pty-job-driver",
+    "shellPid": 147756,
+    "childPid": 146628,
+    "ticks": 3,
+    "status": {
+      "present": true,
+      "gone": false,
+      "final": false,
+      "jobMode": true,
+      "jobAssigned": true,
+      "jobState": "active",
+      "treeState": "active",
+      "connectState": "connected",
+      "terminateAccepted": false,
+      "drainedVerified": false,
+      "shellExited": false,
+      "ptyDisposed": false,
+      "closeUnconfirmed": false,
+      "disposeRequested": false,
+      "queued": false,
+      "resumeReturned": true,
+      "finalizerRan": false,
+      "envClosing": false,
+      "activeProcesses": 2,
+      "lostEvents": 0,
+      "spawnedAtMs": 807984739,
+      "assignedAtMs": 807984739,
+      "resumeAtMs": 807984739,
+      "closeMs": -1,
+      "shellExitMs": -1,
+      "shellExitCode": 0,
+      "error": ""
+    },
+    "outputHasShellEcho": true,
+    "at": 1794575497683
+  },
+  "ticks": {
+    "beforeCrash": 3,
+    "atCrash": 5,
+    "after": 5
+  },
+  "shell": {
+    "role": "watch-child",
+    "pid": 147756,
+    "open": true,
+    "openErr": 0,
+    "wait": 0,
+    "exitCode": 0,
+    "waitMs": 212,
+    "exitAt": 1794575497941
+  },
+  "child": {
+    "role": "watch-child",
+    "pid": 146628,
+    "open": true,
+    "openErr": 0,
+    "wait": 0,
+    "exitCode": 0,
+    "waitMs": 204,
+    "exitAt": 1794575497934
+  },
+  "driverOutput": [
+    "\r",
+    "----- JavaScript stack trace -----\r",
+    "\r",
+    "1: C:\\pi-GUI\\spike\\terminal-job-object\\acceptance-crash-driver.cjs:52:15\r",
+    "2: listOnTimeout (node:internal/timers:685:17)\r",
+    "3: processTimers (node:internal/timers:618:7)\r",
+    "\r",
+    "\r"
+  ],
+  "result": {
+    "ok": true,
+    "elapsedMs": 1422
+  }
+}

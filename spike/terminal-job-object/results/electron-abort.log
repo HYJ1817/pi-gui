@@ -1,0 +1,21 @@
+[lifecycle 0] tsfn-create: status=0 queue=64 mode=0
+[lifecycle 1] started: holders=1
+[lifecycle 1] post seq=0 status=0
+[lifecycle 1] post seq=1 status=0
+[lifecycle 1] post seq=2 status=0
+[lifecycle 1] unref: status=0
+[lifecycle 1] exit-thread: start mode=0
+[js] cb seq=0 t=1ms
+[lifecycle 2] calljs event seq=0: status=0
+[js] cb seq=1 t=2ms
+[lifecycle 2] calljs event seq=1: status=0
+[js] cb seq=2 t=2ms
+[lifecycle 2] calljs event seq=2: status=0
+[js] abort t=112ms
+[lifecycle 112] abort: status=0 holders=1
+[lifecycle 112] post seq=0 status=1
+[js] state after abort {"started":true,"holders":1,"closing":false,"stop":false,"finalized":false,"exitThreadDone":false,"cleanupThreadDone":false,"posted":3,"queueFull":0,"closingPosts":0,"otherPostErrors":1,"finalPtyDisposed":false,"finalCloseMs":0}
+[lifecycle 113] tsfn-finalize: holders=1 posted=3
+[lifecycle 516] exit-thread: stop observed stop=0 closing=1
+[js] exit t=722ms state={"started":true,"holders":0,"closing":true,"stop":false,"finalized":true,"exitThreadDone":false,"cleanupThreadDone":false,"posted":3,"queueFull":0,"closingPosts":0,"otherPostErrors":1,"finalPtyDisposed":false,"finalCloseMs":0}
+[js] process-exit code=0 t=722ms state={"started":true,"holders":0,"closing":true,"stop":false,"finalized":true,"exitThreadDone":false,"cleanupThreadDone":false,"posted":3,"queueFull":0,"closingPosts":0,"otherPostErrors":1,"finalPtyDisposed":false,"finalCloseMs":0}

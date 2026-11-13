@@ -1,0 +1,21 @@
+[lifecycle 0] tsfn-create: status=0 queue=64 mode=0
+[lifecycle 1] started: holders=1
+[lifecycle 1] acquire js: holders=2
+[lifecycle 1] acquire: ok=1 holders=2
+[lifecycle 1] post seq=0 status=0
+[lifecycle 1] post seq=1 status=0
+[lifecycle 1] post seq=2 status=0
+[lifecycle 1] unref: status=0
+[lifecycle 1] exit-thread: start mode=0
+[js] cb seq=0 t=1ms
+[lifecycle 3] calljs event seq=0: status=0
+[js] cb seq=1 t=3ms
+[lifecycle 3] calljs event seq=1: status=0
+[js] cb seq=2 t=3ms
+[lifecycle 3] calljs event seq=2: status=0
+[js] abort t=105ms
+[lifecycle 105] abort: status=0 holders=2
+[lifecycle 105] post seq=0 status=16
+[js] state after abort {"started":true,"holders":2,"closing":false,"stop":false,"finalized":false,"exitThreadDone":false,"cleanupThreadDone":false,"posted":3,"queueFull":0,"closingPosts":1,"otherPostErrors":0,"finalPtyDisposed":false,"finalCloseMs":0}
+[lifecycle 105] tsfn-finalize: holders=2 posted=3
+[lifecycle 510] exit-thread: stop observed stop=0 closing=1

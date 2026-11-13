@@ -1,0 +1,1 @@
+{"test":"conpty-eof-close","windows":"10.0.26200","spawn":true,"spawnErr":0,"resumeRet":1,"actionAtMs":1516,"closeDuringAction":true,"eofAfterAction":true,"eofAfterFinalClose":true,"eofErr":109,"eofMs":1527,"bytesRead":122,"tailMarkerSeen":false,"actionCloseMs":0,"finalCloseMs":0,"shellStateAtObservation":0,"shellWait":0,"shellExitCode":3221225786,"ok":true}

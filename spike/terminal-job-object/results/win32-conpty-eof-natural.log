@@ -1,0 +1,1 @@
+{"test":"conpty-eof-natural","windows":"10.0.26200","spawn":true,"spawnErr":0,"resumeRet":1,"actionAtMs":1513,"closeDuringAction":false,"eofAfterAction":false,"eofAfterFinalClose":true,"eofErr":109,"eofMs":9550,"bytesRead":292,"tailMarkerSeen":true,"actionCloseMs":-1,"finalCloseMs":0,"shellStateAtObservation":0,"shellWait":0,"shellExitCode":0,"ok":true}

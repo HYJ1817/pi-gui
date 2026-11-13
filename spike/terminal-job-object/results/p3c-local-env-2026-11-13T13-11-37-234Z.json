@@ -1,0 +1,78 @@
+{
+  "test": "p3c-local-env-teardown",
+  "os": {
+    "release": "10.0.26200",
+    "version": "Windows 11 Home China",
+    "arch": "x64"
+  },
+  "runtime": {
+    "node": "24.22.1"
+  },
+  "workerExit": 1,
+  "workerError": null,
+  "state": {
+    "shellPid": 147116,
+    "childPid": 39484,
+    "ticks": 3,
+    "status": {
+      "present": true,
+      "gone": false,
+      "final": false,
+      "jobMode": true,
+      "jobAssigned": true,
+      "jobState": "active",
+      "treeState": "active",
+      "connectState": "connected",
+      "terminateAccepted": false,
+      "drainedVerified": false,
+      "shellExited": false,
+      "ptyDisposed": false,
+      "closeUnconfirmed": false,
+      "disposeRequested": false,
+      "queued": false,
+      "resumeReturned": true,
+      "finalizerRan": false,
+      "envClosing": false,
+      "activeProcesses": 2,
+      "lostEvents": 0,
+      "spawnedAtMs": 807984685,
+      "assignedAtMs": 807984685,
+      "resumeAtMs": 807984685,
+      "closeMs": -1,
+      "shellExitMs": -1,
+      "shellExitCode": 0,
+      "error": ""
+    },
+    "at": 1794575497645
+  },
+  "ticks": {
+    "beforeTerminate": 4,
+    "atExit": 4,
+    "after": 4
+  },
+  "shell": {
+    "role": "watch-child",
+    "pid": 147116,
+    "open": true,
+    "openErr": 0,
+    "wait": 0,
+    "exitCode": 3221225786,
+    "waitMs": 43,
+    "exitAt": 1794575497742
+  },
+  "child": {
+    "role": "watch-child",
+    "pid": 39484,
+    "open": true,
+    "openErr": 0,
+    "wait": 0,
+    "exitCode": 3221225786,
+    "waitMs": 31,
+    "exitAt": 1794575497742
+  },
+  "hostStillAlive": true,
+  "result": {
+    "ok": true,
+    "elapsedMs": 1222
+  }
+}

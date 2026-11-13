@@ -1,0 +1,89 @@
+[lifecycle 0] tsfn-create: status=0 queue=64 mode=4
+[lifecycle 1] started: holders=1
+[lifecycle 1] unref: status=0
+[lifecycle 1] exit-thread: start mode=4
+[lifecycle 4] env-cleanup-hook: enter holders=1 exitDone=0 cleanupDone=0
+[lifecycle 4] exit-thread: stop observed stop=1 closing=1
+[lifecycle 5] env-cleanup-hook: leave (no TSFN release here; exit thread owns it)
+[lifecycle 5] tsfn-finalize: holdersAtEntry=1 holdersNow=1 posted=0
+[lifecycle 6] release exit-thread: holders=0 status=0
+[lifecycle 8] exit-thread: done
+{
+  "test": "worker-env-teardown",
+  "runtime": "node",
+  "versions": {
+    "node": "24.22.1",
+    "electron": null,
+    "v8": "13.6.233.17-node.58"
+  },
+  "os": {
+    "release": "10.0.26200",
+    "version": "Windows 11 Home China",
+    "arch": "x64"
+  },
+  "execPath": "C:\\Program Files\\nodejs\\node.exe",
+  "workerExitCode": 0,
+  "workerError": null,
+  "watcherExitCode": 0,
+  "ticking": true,
+  "watchOpen": {
+    "role": "watch-child",
+    "pid": 136836,
+    "open": true,
+    "openErr": 0,
+    "openAt": 1794568005789,
+    "openMs": 0
+  },
+  "watchResult": {
+    "role": "watch-child",
+    "pid": 136836,
+    "open": true,
+    "openErr": 0,
+    "wait": 0,
+    "exitCode": 0,
+    "waitMs": 237,
+    "exitAt": 1794568006025
+  },
+  "nativeState": {
+    "released": true,
+    "childWait": 0,
+    "childExitMs": 1,
+    "childExitCode": 0,
+    "stateWrittenAt": 1794568006028
+  },
+  "killLatencyMs": 16,
+  "ticks": {
+    "atOpen": 1,
+    "beforeRelease": 3,
+    "atWorkerExit": 3,
+    "final": 3
+  },
+  "order": [
+    "1794568005701 js host-start",
+    "1794568005733 native job-created",
+    "1794568005756 native child-created pid=136836 inJob=1 active=1",
+    "1794568005756 native child-resumed ret=1",
+    "1794568005757 js worker-child-started pid=136836 inJob=true active=1",
+    "1794568005757 native tsfn-create holders=1 queue=64 mode=4",
+    "1794568005758 native unref status=0",
+    "1794568005758 js worker-unref",
+    "1794568005759 native cleanup-thread-start zero-refs",
+    "1794568005759 native exit-thread-start",
+    "1794568005760 js worker-posted",
+    "1794568005760 js host-worker-message pid=136836",
+    "1794568005760 js worker-port-closed",
+    "1794568005761 native env-cleanup-hook",
+    "1794568005762 native exit-thread-stop-observed",
+    "1794568005763 native tsfn-finalize holdersAtEntry=1 holdersNow=1 posted=0",
+    "1794568005763 native release exit-thread holders=0 status=0",
+    "1794568005764 native exit-thread-done",
+    "1794568005776 js host-worker-exit code=0",
+    "1794568005801 js host-watch-opened",
+    "1794568006010 js host-release-written workerExit=0",
+    "1794568006025 native cleanup-release-observed released=1",
+    "1794568006029 native cleanup-final-state-written childWait=0 exitMs=1 exitCode=0",
+    "1794568006030 native cleanup-thread-done",
+    "1794568006033 js host-watcher-exit code=0"
+  ],
+  "dir": "C:\\pi-GUI\\spike\\terminal-job-object\\.tmp\\worker-152640-1794568005697"
+}
