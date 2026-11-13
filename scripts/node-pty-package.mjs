@@ -10,6 +10,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { applyTerminalJobPatch } from './prepare-terminal-job.mjs';
 
 /* The app is packaged for the host platform, so stage exactly the prebuild
  * Electron will load. An unsupported target fails here with a clear message
@@ -56,6 +57,8 @@ export function stageNodePty(root, destination, platform = NODE_PTY_PLATFORM) {
   // debug symbols and source maps are dropped.
   copyTree(prebuild, path.join(destination, 'prebuilds', platform), (name) => !name.endsWith('.pdb') && !name.endsWith('.map'));
 
+  const terminalJobSha256 = applyTerminalJobPatch(root, destination, platform);
+  if (terminalJobSha256) console.log(`  Terminal Job conpty.node SHA-256: ${terminalJobSha256}`);
   return {
     version: nodePtyVersion(root),
     files: fs.readdirSync(destination).length,

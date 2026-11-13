@@ -78,6 +78,11 @@ const INVALID_SCOPE_CODES = new Set([
   'stale_workspace',
 ]);
 const FINISHED_STATES = new Set(['exited', 'error']);
+/* Job-mode reconciliation cadence and the grace period between HPCON close
+ * returning and the output pipe EOF. The grace only applies when EOF never
+ * arrives (for example a kill before the output socket connected). */
+const JOB_RECONCILE_MS = 250;
+const JOB_EOF_GRACE_MS = 750;
 /* Kill verdicts that prove another attempt would still be unsafe or useless:
  * the pid is gone, belongs to another process, or its identity could not be
  * established. Only a failed/unconfirmed taskkill is worth retrying. */
@@ -196,6 +201,7 @@ export function createTerminal({
       createdAt: session.createdAt,
       keepAlive: session.keepAlive === true,
       pty: true,
+      jobMode: session.jobMode === true,
     };
   }
 
@@ -220,10 +226,14 @@ export function createTerminal({
   }
 
   function disposeSessionHandles(session) {
+    if (session.jobReconcileTimer) clearInterval(session.jobReconcileTimer);
+    session.jobReconcileTimer = null;
     try { session.dataSub?.dispose?.(); } catch { /* already gone */ }
     try { session.exitSub?.dispose?.(); } catch { /* already gone */ }
+    try { session.eofSub?.dispose?.(); } catch { /* already gone */ }
     session.dataSub = null;
     session.exitSub = null;
+    session.eofSub = null;
   }
 
   function cleanupOrdinals(workspaceId) {
@@ -316,6 +326,45 @@ export function createTerminal({
     session.idleTimer.unref?.();
   }
 
+  /* Native final state is the reconciliation source. This runs for sessions
+   * still marked `running` as well as `closing`, so a lost onExit cannot
+   * leave a dead shell in the ledger. It never substitutes for the socket
+   * EOF: exit is only synthesized after ptyDisposed plus a grace when EOF
+   * never arrives. */
+  function reconcileJobSession(session) {
+    if (!session || session.jobMode !== true || !session.pty
+      || typeof session.pty.jobStatus !== 'function') return;
+    if (FINISHED_STATES.has(session.state)) return;
+    if (session.state !== 'running' && session.state !== 'closing' && session.state !== 'creating') return;
+    let status;
+    try { status = session.pty.jobStatus(); } catch { return; }
+    if (!status || status.jobMode === false) return;
+    if (status.shellExited === true) session.nativeShellExited = true;
+    if (status.ptyDisposed === true && !session.nativeDisposedAt) {
+      session.nativeDisposedAt = Date.now();
+    }
+    if (!session.nativeDisposedAt) return;
+    const sinceDisposed = Date.now() - session.nativeDisposedAt;
+    if (!session.eof && sinceDisposed < JOB_EOF_GRACE_MS) return;
+    if (!session.nativeShellExited) {
+      if (status.final !== true || status.closeUnconfirmed !== true) return;
+      if (!session.eof) session.pty.closeJobTransport?.();
+      clearIdleTimer(session);
+      setKeepAliveFlag(session, false);
+      session.state = 'closing';
+      markKillUnconfirmed(session, 'native-exit');
+      disposeSessionHandles(session);
+      resolveWaiters(session);
+      return;
+    }
+    if (!session.eof) session.pty.closeJobTransport?.();
+    debugKill(`job-reconcile code=${status.shellExitCode} eof=${session.eof} disposedMs=${sinceDisposed}`);
+    handleExit(session, {
+      exitCode: Number.isInteger(status.shellExitCode) ? status.shellExitCode : null,
+      signal: null,
+    });
+  }
+
   function handleExit(session, event) {
     if (FINISHED_STATES.has(session.state)) return;
     debugKill(`exit code=${event?.exitCode ?? ''} state=${session.state}`);
@@ -395,6 +444,11 @@ export function createTerminal({
     }
     Promise.resolve(outcome).then((result) => {
       if (sessions.get(session.id) !== session || session.state !== 'closing') return;
+      if (result?.job === true && result.terminateAccepted === true) {
+        // Native accepted the request. Only exit/status reconciliation ends the session.
+        session.killNextAt = Infinity;
+        return;
+      }
       if (KILL_STOP_RESULTS.has(result?.result)) {
         markKillUnconfirmed(session, result?.result);
         return;
@@ -576,6 +630,12 @@ export function createTerminal({
       killState: 'none',
       dataSub: null,
       exitSub: null,
+      eofSub: null,
+      jobMode: false,
+      eof: false,
+      nativeShellExited: false,
+      nativeDisposedAt: 0,
+      jobReconcileTimer: null,
       exitWaiters: new Set(),
     };
     sessions.set(session.id, session);
@@ -594,11 +654,13 @@ export function createTerminal({
     } catch (error) {
       removeSession(session);
       const unavailable = error?.code === 'pty_unavailable' || /node-pty|native module/i.test(String(error?.message || ''));
+      const jobUnavailable = error?.code === 'pty_job_unavailable';
       return json(res, 503, {
         ok: false,
-        code: unavailable ? 'pty_unavailable' : 'terminal_unavailable',
+        code: jobUnavailable ? 'pty_job_unavailable' : unavailable ? 'pty_unavailable' : 'terminal_unavailable',
         state: 'error',
-        error: unavailable ? '终端组件未安装或无法加载。' : '无法启动终端。',
+        error: jobUnavailable ? '终端 Job Object 能力不可用，未创建 Shell。'
+          : unavailable ? '终端组件未安装或无法加载。' : '无法启动终端。',
       });
     }
     if (!pty || typeof pty.onData !== 'function' || typeof pty.onExit !== 'function'
@@ -609,9 +671,25 @@ export function createTerminal({
     }
 
     session.pty = pty;
+    session.jobMode = pty.jobMode === true;
     try {
       session.dataSub = pty.onData((chunk) => append(session, chunk));
-      session.exitSub = pty.onExit((event) => handleExit(session, event));
+      session.exitSub = pty.onExit((event) => {
+        if (session.jobMode) reconcileJobSession(session);
+        else handleExit(session, event);
+      });
+      if (session.jobMode) {
+        if (typeof pty.onEof === 'function') {
+          session.eofSub = pty.onEof(() => {
+            session.eof = true;
+            reconcileJobSession(session);
+          });
+        }
+        if (typeof pty.jobStatus === 'function') {
+          session.jobReconcileTimer = setInterval(() => reconcileJobSession(session), JOB_RECONCILE_MS);
+          session.jobReconcileTimer.unref?.();
+        }
+      }
     } catch {
       /* A PTY that cannot be subscribed to is unusable. Tear it down without
        * leaving a ledger entry or an orphan process. On Windows this goes
@@ -963,7 +1041,9 @@ export function createTerminal({
                   ? '终端会话不存在。'
                   : code === 'pty_unavailable'
                     ? '终端组件未安装或无法加载。'
-                    : '终端暂时不可用。';
+                    : code === 'pty_job_unavailable'
+                      ? '终端 Job Object 能力不可用，未创建 Shell。'
+                      : '终端暂时不可用。';
     return json(res, status, { ok: false, code, error: message });
   }
 
