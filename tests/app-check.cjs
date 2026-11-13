@@ -409,7 +409,12 @@ async function main() {
         ).json();
         if (!stopped.ok) throw new Error(`stop: ${stopped.code || stopped.error}`);
         let state = stopped.session?.state;
-        for (let i = 0; i < 50 && state !== 'exited'; i++) {
+        /* Stop returns while the kill is still running in the background:
+         * identity re-query, taskkill and the ConPTY exit event can take
+         * seconds on a cold CI runner or while several shells are torn down.
+         * Keep asserting the real `exited` state, but give that path enough
+         * time instead of treating a slow kill as a failed teardown. */
+        for (let i = 0; i < 150 && state !== 'exited'; i++) {
           await sleep(100);
           const r = await (await fetch(BASE + '/api/terminal?id=' + encodeURIComponent(id) + '&since=0')).json();
           state = r.state || r.session?.state;

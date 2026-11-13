@@ -152,6 +152,7 @@ export function createWindowsKillGate({
   query = processIdentity.queryProcessIdentity,
   capture = processIdentity.captureProcessIdentity,
   taskkill = runWindowsTaskkill,
+  captureTimeoutMs = processIdentity.DEFAULT_CAPTURE_TIMEOUT_MS,
   timeoutMs = processIdentity.DEFAULT_QUERY_TIMEOUT_MS,
   taskkillTimeoutMs = WINDOWS_TASKKILL_TIMEOUT_MS,
 } = {}) {
@@ -162,7 +163,11 @@ export function createWindowsKillGate({
     identities.set(pty, {
       pid: pty.pid,
       env,
-      expected: capture(pty.pid, expectedImagePath, { env, timeoutMs }),
+      /* Capture has its own, deliberately tight budget: it starts immediately
+       * after spawn, and delaying the identity read increases the chance of
+       * capturing a reused pid. The stop-time re-query may use a larger budget
+       * because it is always compared against this captured identity. */
+      expected: capture(pty.pid, expectedImagePath, { env, timeoutMs: captureTimeoutMs }),
     });
   }
 
