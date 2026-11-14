@@ -89,10 +89,8 @@ export function mountCollabCanvas(host, {
 
   const status = element('p', 'collab-status'); status.setAttribute('role', 'status');
   const alert = element('p', 'collab-error'); alert.setAttribute('role', 'alert');
-  const help = element('p', 'collab-help', '拖动节点或空白处；Shift+拖动框选；滚轮缩放。Ctrl+点击多选，Ctrl+A 全选，Ctrl+C/V 复制粘贴，Ctrl+D 副本，Delete 批量删除，方向键移动所选。');
-  help.id = `${markerId}-help`;
 
-  const svg = svgElement('svg', { class: 'collab-stage', tabindex: '0', role: 'group', 'aria-label': '节点与有向连线', 'aria-describedby': help.id });
+  const svg = svgElement('svg', { class: 'collab-stage', tabindex: '0', role: 'group', 'aria-label': '节点与有向连线' });
   const defs = svgElement('defs');
   const marker = svgElement('marker', { id: markerId, viewBox: '0 0 10 10', refX: '9', refY: '5', markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse' });
   marker.append(svgElement('path', { d: 'M 0 0 L 10 5 L 0 10 z' })); defs.append(marker);
@@ -154,7 +152,7 @@ export function mountCollabCanvas(host, {
   button(confirmation, '取消', cancelDelete);
 
   editor.append(selectionLabel, editForm, connectForm, alignForm, remove);
-  root.append(toolbar, status, alert, svg, empty, editor, confirmation, help);
+  root.append(toolbar, status, alert, svg, empty, editor, confirmation);
   host.append(root);
 
   function writable() { return alive && valid && !readOnly && !busy && !error && !confirming; }
@@ -636,7 +634,7 @@ export function mountCollabCanvas(host, {
 
     const message = !valid ? '画布数据无效或尚未加载。' : (typeof error === 'string' ? error : error ? '操作失败，请刷新后重试。' : localError);
     alert.textContent = message; alert.hidden = !message;
-    status.textContent = valid ? `版本 ${document.revision} · ${document.graph.nodes.length} 节点 · ${document.graph.edges.length} 连线${readOnly ? ' · 只读' : ''}${busy ? ' · 处理中' : ''}` : '画布不可编辑';
+    status.textContent = valid ? `${document.graph.nodes.length} 节点 · ${document.graph.edges.length} 连线${readOnly ? ' · 只读' : ''}` : '画布不可编辑';
     empty.hidden = !valid || document.graph.nodes.length > 0;
   }
 

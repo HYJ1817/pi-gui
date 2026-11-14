@@ -7,7 +7,7 @@
  * 这里没有多行 textarea 模型配置，也没有 API Key 输入框：
  * 模型在双栏弹窗里管理，密钥由 P2 的安全桌面窗口负责。 */
 
-import { el, panels } from './state.js';
+import { S, el, panels } from './state.js';
 import { fmtTokens } from './util.js';
 import {
   deleteProvider as apiDeleteProvider,
@@ -931,20 +931,12 @@ function legacyRow(name) {
   return row;
 }
 
-function emptyCard(box) {
-  const card = h('div', { class: 'hint-empty prov-empty-card ds-settings-card' },
+function emptyCard() {
+  return h('div', { class: 'hint-empty prov-empty-card ds-settings-card' },
     h('div', { class: 'prov-empty-icon', 'aria-hidden': 'true' }, icon('globe', 38)),
     h('h4', { class: 'prov-empty-title', text: '还没有 AI 服务' }),
     h('p', { class: 'prov-empty-desc', text: '添加 AI 服务即可开始；订阅账户与 API Key 服务都在这里管理。' }),
   );
-  const add = h('button', {
-    type: 'button',
-    class: 'btn primary prov-empty-btn',
-    text: '添加服务',
-    on: { click: () => openAddProvider() },
-  });
-  card.appendChild(add);
-  return card;
 }
 
 export async function loadProviders(container) {
@@ -1020,7 +1012,7 @@ export function renderProviders(box) {
       return;
     }
     pageStatus('管理接口未启用：当前使用兼容编辑器；保存后重载 pi 配置生效。', 'info');
-    if (!names.length) { target.appendChild(emptyCard(target)); return; }
+    if (!names.length) { target.appendChild(emptyCard()); return; }
     for (const name of names) target.appendChild(legacyRow(name));
     return;
   }
@@ -1032,7 +1024,7 @@ export function renderProviders(box) {
   // 同步事实来自 P3-C 协调器；这里只展示与手动触发只读核验，不重启任何 Runtime。
   const banner = syncBanner(managementSnapshot);
   if (banner) target.appendChild(banner);
-  if (!services.length) target.appendChild(emptyCard(target));
+  if (!services.length) target.appendChild(emptyCard());
   else for (const service of services) target.appendChild(managementRow(service));
   if (lastSaveNotice) pageStatus(lastSaveNotice.text, lastSaveNotice.tone);
   else pageStatus('');
@@ -1084,10 +1076,7 @@ export function openProvidersPanel({ present = openModal } = {}) {
     topHeader.append(titleCol, actionCol);
     card.appendChild(topHeader);
 
-    const desc = document.createElement('div');
-    desc.className = 'modal-desc settings-page-desc';
-    desc.textContent = `管理 Pi 的模型服务（${providerData.path || '~/.pi/agent/models.json'}）。API Key 不经过这个页面。`;
-    card.appendChild(desc);
+    card.appendChild(h('p', { class: 'settings-page-desc', text: 'API Key 不在此页输入。请使用安全输入窗口或环境变量。' }));
 
     const status = h('div', { class: 'pm-page-status', role: 'status', hidden: true });
     pageStatusHost = status;
@@ -1110,18 +1099,26 @@ export function openProvidersPanel({ present = openModal } = {}) {
     const reloadBtn = h('button', {
       type: 'button',
       class: 'btn tiny ds-btn-secondary prov-reload-btn',
-      on: { click: () => { close(); reloadPi(); } },
+      on: { click: async event => {
+        const button = event.currentTarget;
+        if (button.getAttribute('aria-busy') === 'true') return;
+        // Keep the trigger focusable so canceling confirmation returns to it.
+        button.setAttribute('aria-busy', 'true');
+        try {
+          await restartPi({ onConfirmed: () => button.setAttribute('aria-disabled', 'true') });
+        } finally {
+          button.removeAttribute('aria-disabled');
+          button.removeAttribute('aria-busy');
+        }
+      } },
     }, icon('refresh', 14), h('span', { text: '重载 pi 配置' }));
     catalogFooter.appendChild(reloadBtn);
     card.appendChild(catalogFooter);
 
-    const actions = document.createElement('div');
-    actions.className = 'modal-actions';
-    const add = h('button', { type: 'button', class: 'btn primary', text: '添加服务', on: { click: () => openAddProvider() } });
-    const reload = h('button', { type: 'button', class: 'btn', text: '重载 pi 配置', on: { click: () => { close(); reloadPi(); } } });
-    const done = h('button', { type: 'button', class: 'btn', text: '关闭', on: { click: close } });
-    actions.append(add, reload, done);
-    card.appendChild(actions);
+    if (present === openModal) {
+      const done = h('button', { type: 'button', class: 'btn', text: '关闭', on: { click: close } });
+      card.appendChild(h('div', { class: 'modal-actions' }, done));
+    }
 
     loadProviders(box);
   }, () => {
@@ -1234,6 +1231,20 @@ export async function removeProvider(name) {
   toast(`已移除供应商 ${name} 的 Pi 配置；Pi 本机认证与环境变量未改动。重载 pi 后生效。`, 'info', { important: true });
   await loadProviders();
   return j;
+}
+
+export async function restartPi({ onConfirmed } = {}) {
+  // Keep all interactive restart entry points on the same confirmation path.
+  const ok = await confirmModal({
+    title: '重启 pi？',
+    message: S.streaming
+      ? '正在生成回答，重启会中断这一轮。\n\n磁盘上的会话与文件不受影响，重启后仍在。'
+      : '重启会重新加载配置；当前对话视图会保留，pi 重连后按现有配置恢复会话。\n\n磁盘上的会话与文件不受影响。',
+    okText: '重启 pi',
+  });
+  if (ok !== true) return false;
+  onConfirmed?.();
+  return await reloadPi();
 }
 
 export async function reloadPi() {

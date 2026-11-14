@@ -35,7 +35,7 @@ import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { configureFeedbackContext, configureNotificationLogging, refreshFeedbackContext, toast, withNotificationSource } from './ui/toast.js';
 import { handleExtensionNotification } from './extension-notices.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
-import { closeModal, confirmModal, openModal } from './ui/modal.js';
+import { closeModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText, setRuntimeTitle } from './shell.js';
 import { createBridgeRecovery } from './bridge-recovery.js';
 import { samePath } from './util.js';
@@ -74,7 +74,7 @@ import { openBranchPanel, setForkHandler } from './tree.js';
 import { openCtxTip, renderCtxChip, onTurnUsage } from './usage.js';
 import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker, setSessionsSlot, setProjectSessionActions, flushProjectSessionAction } from './projects.js';
-import { loadProviders, openProvidersPanel, openProviderAuthPanel, reloadPi } from './providers.js';
+import { loadProviders, openProvidersPanel, openProviderAuthPanel, restartPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel, refreshGitNow } from './git.js';
 import { loadExtensionsBadge, openExtensions } from './extensions.js';
@@ -1270,26 +1270,7 @@ $('groupHead').onclick = () => {
  * **全部复用既有 handler**：这里不实现任何「切视图」「重启」「复制」的细节，
  * 只把「动作 → 名字 → 键位 / 面板条目」接起来。加一个动作 = 加一行，不是加一套逻辑。 */
 
-/* ---------- P24：重启 pi 的唯一入口（含确认）----------
- *
- * 为什么要有这个包装：P24 给「重启 pi」加了两个新入口（命令面板、状态条），
- * 而它原本在 More 菜单里是**直接执行**的。三个入口各写一遍确认，迟早会有一个漏掉
- * —— 那就等于「有确认」是假的。所以收敛成一个函数，谁都从这里走。
- *
- * 危险动作不能被绕过：命令面板只调这个函数，不提供任何跳过确认的参数。
- * 提示语按「会不会真的中断什么」分开写 —— 正在生成时要说清会中断这一轮。 */
-export async function restartPi() {
-  const busy = Boolean(S.streaming);
-  const ok = await confirmModal({
-    title: '重启 pi？',
-    message: busy
-      ? '正在生成回答，重启会中断这一轮。\n\n磁盘上的会话与文件不受影响，重启后仍在。'
-      : '重启会重新加载配置；当前对话视图会保留，pi 重连后按现有配置恢复会话。\n\n磁盘上的会话与文件不受影响。',
-    okText: '重启 pi',
-  });
-  if (ok !== true) return false;
-  return await reloadPi();
-}
+export { restartPi };
 
 /** 弹层开着时不要抢键位（弹层有自己的 Esc / Tab 处理）。 */
 const noOverlay = () => el.modal.hidden && el.confirmLayer.hidden && !paletteOpen();

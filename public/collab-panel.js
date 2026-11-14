@@ -8,6 +8,8 @@ import { mountCollabCanvas } from './collab-canvas.js';
 import { mountCollabProductivity } from './collab-canvas-productivity.js';
 import { mountCollabProposal } from './collab-proposal.js';
 import { confirmModal, confirmSurfaceMeta, dismissConfirm } from './ui/modal.js';
+import { createHelpIcon } from './ui/primitives.js';
+import { closePop, currentAnchor } from './ui/popover.js';
 
 const node=(tag,className,text)=>{const domNode=document.createElement(tag);if(className)domNode.className=className;if(text!==undefined)domNode.textContent=text;return domNode;};
 function context() {
@@ -30,7 +32,13 @@ export function openCollabPanel() {
  * 被误判为过期，也不与用户操作争用 busy。 */
 export function mountCollabPanel(host,view) {
   const captured=context();
-  const head=createPaneHeader({title:'协同文档',subtitle:'结构化流程图 · 自动保存到应用数据目录'}).el;head.classList.add('collab-head');
+  const help=createHelpIcon({
+    ariaLabel:'画布快捷键',
+    tooltipText:'拖动节点或空白处，Shift+拖动框选，滚轮缩放。\nCtrl+点击多选，Ctrl+A 全选，Ctrl+C/V 复制粘贴，Ctrl+D 创建副本。\nDelete 删除所选，方向键移动所选。',
+  });
+  help.hidden=true;
+  const {el:head,subtitle}=createPaneHeader({title:'协同文档',actions:[help]});head.classList.add('collab-head');
+  const closeHelp=()=>{if(currentAnchor()===help)closePop();};
   const body=node('div','collab-panel-body'),status=node('p','collab-panel-status','正在读取文档…');status.setAttribute('role','status');status.setAttribute('aria-live','polite');
   const controls=node('div','collab-panel-actions'),create=node('button','','新建流程图'),reload=node('button','','重新打开');
   create.type=reload.type='button';create.hidden=true;reload.hidden=true;controls.append(create,reload);
@@ -99,7 +107,11 @@ export function mountCollabPanel(host,view) {
   };
   function render(error='') {
     const doc=snapshot?.document;
-    status.textContent=error || (busy?'正在保存…':generating?'正在生成建议…（可在会话工具栏停止 Agent 取消）':doc?`版本 ${doc.revision} · 已保存`:'当前会话还没有协同文档。');
+    subtitle.textContent=doc?.title||'';
+    subtitle.hidden=!subtitle.textContent;
+    subtitle.title=subtitle.textContent;
+    help.hidden=!doc;
+    status.textContent=error || (busy?(doc?'正在保存…':'正在读取文档…'):generating?'正在生成建议…（可在会话工具栏停止 Agent 取消）':doc?`版本 ${doc.revision} · 已保存`:'当前会话还没有协同文档。');
     source.textContent=snapshot?.proposalSourceAvailable===false
       ?'Agent 建议来源尚未接入；当前支持用户编辑与保存。'
       :'建议由当前 Pi 会话生成；预览确认后才会应用，生成不会直接修改文档。';
@@ -192,6 +204,7 @@ export function mountCollabPanel(host,view) {
     invalid=true;sequence++;pollSequence++;stopPolling();generating=false;closeEditor(snapshot?.editorId);snapshot=null;busy=false;
     dismissOwnedConfirmation();
     revokeDownloads();
+    closeHelp();help.hidden=true;subtitle.hidden=true;subtitle.textContent=subtitle.title='';
     canvas?.destroy();productivity?.destroy();proposal?.destroy();canvas=productivity=proposal=null;
     canvasHost.replaceChildren();productivityHost.replaceChildren();proposalHost.replaceChildren();
     create.hidden=true;reload.hidden=false;
@@ -205,6 +218,7 @@ export function mountCollabPanel(host,view) {
     alive=false;sequence++;pollSequence++;stopPolling();generating=false;closeEditor(snapshot?.editorId);snapshot=null;
     dismissOwnedConfirmation();
     revokeDownloads();
+    closeHelp();
     offRuntime();for(const event of events)document.removeEventListener(event,invalidate);
     canvas?.destroy();productivity?.destroy();proposal?.destroy();create.onclick=reload.onclick=null;generateBtn.onclick=null;
   });

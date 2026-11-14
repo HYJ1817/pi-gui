@@ -215,7 +215,9 @@ async function run() {
     await click('#navAppearance'); await waitFor(`!!document.querySelector('.settings-detail-card > h3')`); await shot('10-settings-appearance-dark');
     const settings = await read(`(()=>{const rail=document.querySelector('#projectSidebar').getBoundingClientRect(),h=document.querySelector('.settings-detail-card > h3').getBoundingClientRect();return {width:rail.width,titleY:h.y,topbar:getComputedStyle(document.querySelector('.conversation-heading')).display}})()`);
     check('A/B settings rail/headings retain geometry and hide conversation chrome', settings.width === 275 && settings.titleY >= 46 && settings.topbar === 'none', settings);
-    await click('#navProviders'); await waitFor(`!!document.querySelector('.prov-toolbar') || !!document.querySelector('.prov')`); await shot('11-settings-providers-dark');
+    await click('#navProviders');
+    await waitFor(`!!document.querySelector('.prov-settings-page :is(.prov,.prov-empty-card,.pm-management-error)')`);
+    await shot('11-settings-providers-dark');
     await click('#navAppearance'); await read(`TH.setThemePreference('light')`); await shot('12-settings-appearance-light');
     await click('#settingsReturn'); await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='chat'`);
     await read('shellWrites.length=0'); await click('#btnTopbarNew'); await sleep(350);

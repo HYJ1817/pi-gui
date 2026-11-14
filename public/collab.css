@@ -41,9 +41,7 @@
 .collab-proposal :focus-visible { outline: 2px solid var(--ui-focus, #86b6ef); outline-offset: 3px; }
 .collab-status,
 .collab-proposal-meta,
-.collab-help,
 .collab-selection { color: var(--ui-text-secondary, #c3c2b7); font-size: 12px; margin: 10px 0; }
-.collab-help { line-height: 1.6; }
 .collab-zoom { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
 .collab-error {
   color: var(--ui-danger, #f87171);

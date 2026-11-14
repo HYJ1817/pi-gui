@@ -155,6 +155,9 @@ export function mountFilesPanel(host, view, options = {}) {
       rootStatus = 'error';
       setMessage(result?.error || '无法读取项目文件。', 'error');
       rootEntries = [];
+      selectedPath = null;
+      previewRequest++;
+      renderEmptyPreview('暂时无法预览', '请刷新文件列表后重新选择文件。');
       renderTree();
       return;
     }

@@ -53,24 +53,21 @@ module.exports = async ({ read, click, key, shot, paint, check, win, waitFor }) 
     };
   })()`);
   await click('#navProviders');
-  await waitFor(`!!document.querySelector('.prov-btn-main') && !!document.querySelector('.prov-empty-btn')`);
+  await waitFor(`!!document.querySelector('.prov-btn-main') && !!document.querySelector('.prov-empty-card')`);
+  check('R1 empty Provider page keeps one Add entry', await read(`document.querySelectorAll('.prov-settings-page button.prov-btn-main').length===1&&[...document.querySelectorAll('.prov-settings-page button')].filter(e=>e.textContent.includes('添加服务')).length===1`));
   await click('.prov-btn-main');
   await waitFor(`!!document.querySelector('.pm-chooser')`);
   const providerActions = await read(`(()=>{const b=[...document.querySelectorAll('.pm-dialog-actions button')];return {items:b.map(e=>({text:e.textContent,visible:e.checkVisibility()})),save:b.some(e=>e.textContent==='保存服务'&&e.checkVisibility()),cancel:b.some(e=>e.textContent==='取消'&&e.checkVisibility())}})()`);
-  check('R1 provider primary entry exposes both Save and Cancel', providerActions.save && providerActions.cancel, providerActions);
+  check('R1 provider chooser exposes Cancel and waits for a service before offering Save', !providerActions.save && providerActions.cancel, providerActions);
   await shot('r02-provider-add-dark');
   check('R1 cancelling provider chooser performs no writes', await read(`rManagementCalls.filter(c=>c.method==='POST').length===0&&rProviderWrites.length===0`));
-  await click('.pm-dialog-actions button:nth-child(2)');
-  await waitFor(`document.querySelector('#modal').hidden`);
-  await click('.prov-empty-btn');
-  await waitFor(`!!document.querySelector('.pm-chooser')`);
-  check('R1 empty and primary Add share the same existing presenter', await read(`!!document.querySelector('.pm-dialog-actions')&&document.querySelector('#modal').hidden===false`));
   await click('.pm-dialog-actions button:nth-child(2)');
   await waitFor(`document.querySelector('#modal').hidden`);
   await click('.prov-btn-main');
   await waitFor(`!!document.querySelector('.pm-service-tile[data-service-id="custom"]')`);
   await click('.pm-service-tile[data-service-id="custom"]');
   await waitFor(`!!document.querySelector('.pm-provider-id')`);
+  check('R1 provider configuration exposes Save and Cancel', await read(`[...document.querySelectorAll('.pm-dialog-actions button')].filter(e=>e.checkVisibility()).map(e=>e.textContent).includes('保存服务')&&[...document.querySelectorAll('.pm-dialog-actions button')].filter(e=>e.checkVisibility()).map(e=>e.textContent).includes('取消')`));
   const fillProvider = values => read(`(()=>{const values=${JSON.stringify(values)};for(const [selector,value] of Object.entries(values)){const e=document.querySelector(selector);if(!e)throw Error('missing '+selector);e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));}})()`);
   await fillProvider({
     'input[aria-label="服务名称"]': 'Fixture Provider',

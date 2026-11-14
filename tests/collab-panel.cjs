@@ -44,6 +44,23 @@ const check=async(name,fn)=>{await fn();checks++;console.log('ok '+name);};
     assert.equal(doc,null);button(panel.host,'新建流程图').click();await tick();assert.equal(doc.graph.nodes.length,3);assert.equal(panel.host.querySelectorAll('[data-node-id]').length,3);
     assert.match(panel.host.textContent,/版本 1 · 已保存/);assert.match(panel.host.textContent,/来源尚未接入/);
   });
+  await check('the panel shows document identity, one revision and on-demand keyboard help',async()=>{
+    assert.equal(panel.host.querySelector('.rp-head-sub').textContent,doc.title);
+    assert.equal((panel.host.textContent.match(/版本 1/g)||[]).length,1);
+    assert.match(panel.host.querySelector('.collab-status').textContent,/3 节点.*连线/);
+    assert.doesNotMatch(panel.host.textContent,/应用数据目录|Ctrl\+A/);
+    const help=panel.host.querySelector('button[aria-label="画布快捷键"]');
+    help.focus();help.click();
+    const pop=document.getElementById(help.getAttribute('aria-controls'));
+    assert.equal(pop.hidden,false);
+    assert.match(document.getElementById(help.getAttribute('aria-describedby')).textContent,/Shift.*Ctrl\+A.*Delete/s);
+    help.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+    assert.equal(pop.hidden,true);
+    assert.equal(document.activeElement,help);
+    help.click();assert.equal(pop.hidden,false);
+    panel.close();assert.equal(pop.hidden,true);
+    panel=mount();await tick();
+  });
   await check('pending durable update keeps visible prior document until acknowledged',async()=>{
     hold='operations';button(panel.host,'新增节点').click();await tick();assert.equal(doc.graph.nodes.length,4);assert.equal(panel.host.querySelectorAll('[data-node-id]').length,3);
     assert.equal(button(panel.host,'新增节点').disabled,true);pending();await tick();assert.equal(panel.host.querySelectorAll('[data-node-id]').length,4);

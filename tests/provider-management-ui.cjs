@@ -107,6 +107,57 @@ function boot({
 
 const tick = (ms = 0) => new Promise(resolve => setTimeout(resolve, ms));
 
+test('field labels and descriptions stay valid through errors, rerender and disabled states', () => {
+  const { dom, window } = boot();
+  window.eval(bundle(path.join(pub, 'provider-management', 'dom.js')).code);
+  const doc = window.document;
+  const host = doc.createElement('section');
+  doc.body.append(host);
+  function render(error) {
+    host.replaceChildren();
+    const inheritedHint = doc.createElement('p');
+    inheritedHint.id = 'test-provider-hint';
+    inheritedHint.textContent = '原有关联';
+    const baseUrl = doc.createElement('input');
+    baseUrl.setAttribute('aria-describedby', inheritedHint.id);
+    const api = doc.createElement('select');
+    api.disabled = true;
+    host.append(inheritedHint, window.field('Base URL', baseUrl, { hint: '请输入服务地址', error }),
+      window.field('API 类型', api, { hint: '配置后固定' }));
+    return { baseUrl, api };
+  }
+  function descriptions(control) {
+    return control.getAttribute('aria-describedby').split(/\s+/).map(id => {
+      const node = doc.getElementById(id);
+      assert.ok(node?.isConnected, id);
+      return node.textContent;
+    });
+  }
+  try {
+    let { baseUrl, api } = render('');
+    assert.equal(baseUrl.labels[0].control, baseUrl);
+    assert.equal(api.labels[0].control, api);
+    assert.equal(api.disabled, true);
+    assert.equal(api.hasAttribute('aria-invalid'), false);
+    assert.deepEqual(descriptions(api), ['配置后固定']);
+    assert.equal(baseUrl.hasAttribute('aria-invalid'), false);
+    assert.deepEqual(descriptions(baseUrl), ['原有关联', '请输入服务地址']);
+    for (const error of ['地址格式不正确', '必须使用 HTTPS', '']) {
+      const previous = baseUrl;
+      ({ baseUrl, api } = render(error));
+      assert.equal(previous.isConnected, false);
+      assert.equal(baseUrl.labels[0].control, baseUrl);
+      const ids = [...host.querySelectorAll('[id]')].map(node => node.id);
+      assert.equal(new Set(ids).size, ids.length);
+      assert.equal(baseUrl.getAttribute('aria-invalid'), error ? 'true' : null);
+      assert.deepEqual(descriptions(baseUrl), ['原有关联', '请输入服务地址', ...(error ? [error] : [])]);
+      assert.equal(host.querySelector('[role="alert"]')?.textContent, error || undefined);
+    }
+  } finally {
+    dom.window.close();
+  }
+});
+
 function openCreate(window, snapshot, api, mode = 'create', target = null) {
   const saved = [];
   window.openProviderDialog({
@@ -815,6 +866,39 @@ test('failed reload keeps the thread and shows the real error', async () => {
   assert.equal(calls.restart.length, 1);
   assert.ok(thread.textContent.includes('fixture conversation survives failure'));
   assert.ok(window.document.getElementById('toasts').textContent.includes('fixture restart failed'));
+});
+
+test('Provider modal exposes one add and reload, and reload waits for confirmation', async () => {
+  const { dom, window, calls } = boot();
+  try {
+    window.openProvidersPanel();
+    await tick();
+    const doc = window.document;
+    const card = doc.getElementById('modalCard');
+    const confirm = doc.getElementById('confirmCard');
+    assert.equal([...card.querySelectorAll('button')].filter(button => button.textContent.includes('添加服务')).length, 1);
+    const reloads = [...card.querySelectorAll('button')].filter(button => button.textContent === '重载 pi 配置');
+    assert.equal(reloads.length, 1);
+    assert.equal(card.querySelector('.modal-actions').textContent, '关闭');
+    assert.doesNotMatch(card.textContent, /models\.json/);
+    const reload = reloads[0];
+    reload.focus();
+    reload.click();
+    assert.equal(calls.restart.length, 0);
+    reload.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await tick();
+    assert.equal(calls.restart.length, 0);
+    assert.equal(doc.activeElement, reload);
+    reload.click();
+    [...confirm.querySelectorAll('button')].find(button => button.textContent === '重启 pi').click();
+    await tick();
+    assert.equal(calls.restart.length, 1);
+    assert.equal(doc.activeElement, reload);
+    assert.equal(reload.hasAttribute('aria-busy'), false);
+    assert.equal(doc.getElementById('modal').hidden, false);
+  } finally {
+    dom.window.close();
+  }
 });
 
 test('clone setup shows a neutral credential state and no credential controls', async () => {

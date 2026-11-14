@@ -12,10 +12,6 @@ export function openAppearance({ present = openModal } = {}) {
 
     const heading = document.createElement('h3');
     heading.textContent = '外观与主题';
-    
-    const desc = document.createElement('p');
-    desc.className = 'modal-desc settings-page-desc';
-    desc.textContent = '自定义界面主题与字体排版偏好。';
 
     // Row 1: 主题
     const select = document.createElement('select');
@@ -31,7 +27,7 @@ export function openAppearance({ present = openModal } = {}) {
 
     const themeRow = createSettingsRow({
       label: '主题',
-      help: '选择深色、浅色或跟随操作系统外观',
+      help: '选择深色、浅色或跟随操作系统外观。选择「跟随系统」后，界面会随系统主题变化。',
       control: select,
       extraClass: 'appearance-theme-row'
     });
@@ -146,10 +142,18 @@ export function openAppearance({ present = openModal } = {}) {
     const status = document.createElement('p');
     status.className = 'appearance-status';
     status.setAttribute('role', 'status');
-    status.textContent = '仅改变界面外观；System 随系统主题变化。';
+    status.hidden = true;
+    let saveRequest = 0;
 
     select.onchange = async () => {
+      const request = ++saveRequest;
+      select.setAttribute('aria-busy', 'true');
+      status.hidden = false;
+      status.className = 'appearance-status';
+      status.textContent = '正在保存主题偏好…';
       const ok = await setThemePreference(select.value);
+      if (request !== saveRequest) return;
+      select.removeAttribute('aria-busy');
       if (!ok) {
         select.value = themePreference();
         status.textContent = '主题未能保存，请重试。';
@@ -158,6 +162,7 @@ export function openAppearance({ present = openModal } = {}) {
     };
     unsubscribe = onThemeChange(snapshot => {
       select.value = snapshot.preference;
+      status.hidden = false;
       if (!snapshot.persisted) {
         status.textContent = '主题已应用，本次无法保存偏好。';
         status.className = 'appearance-status is-warning';
@@ -176,7 +181,7 @@ export function openAppearance({ present = openModal } = {}) {
     done.onclick = close;
     actions.append(done);
 
-    card.append(heading, desc, cardBlock, status, actions);
+    card.append(heading, cardBlock, status, actions);
     select.focus();
   }, () => unsubscribe?.());
 }
