@@ -1983,6 +1983,76 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
   }
 
   {
+    const view = fakeView();
+    const pending = [];
+    const workspace = { id: 'new-workspace', generation: '2' };
+    const file = { type: 'file', name: 'README.md', path: 'README.md', bytes: 4 };
+    const list = () => new Promise((resolve) => pending.push(resolve));
+    mountFilesPanel(host, view, { transport: { list } });
+    const tree = host.querySelector('.files-tree');
+    const refresh = [...host.querySelectorAll('.rp-head-actions button')].find((button) => button.textContent === '刷新');
+    const finishRoot = async (result) => {
+      pending.shift()(result);
+      await tick();
+    };
+
+    ok('files announces the initial root load', () => {
+      assert.match(tree.textContent, /正在读取项目文件/);
+    });
+    await finishRoot({ ok: false, error: '无法读取项目文件。' });
+    ok('initial root read failure is neither no-project nor empty, and refresh stays available', () => {
+      assert.doesNotMatch(tree.textContent, /还没有打开项目|这个目录没有可显示的文件/);
+      assert.match(host.textContent, /无法读取项目文件/);
+      assert.equal(refresh.disabled, false);
+    });
+    refresh.click();
+    await finishRoot({ ok: true, workspace, entries: [] });
+    ok('successful empty root displays the empty-directory message', () => {
+      assert.match(tree.textContent, /这个目录没有可显示的文件/);
+      assert.equal(host.querySelector('.files-message').hidden, true);
+    });
+    refresh.click();
+    await finishRoot({ ok: true, workspace, entries: [file] });
+    ok('refresh can recover the file tree after an error', () => {
+      assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
+    });
+
+    refresh.click();
+    const finishOld = pending.shift();
+    host.ownerDocument.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
+    await finishRoot({ ok: true, workspace, entries: [file] });
+    finishOld({ ok: false, error: '旧工作区读取失败' });
+    await tick();
+    ok('a late root failure cannot replace the new workspace tree', () => {
+      assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
+      assert.doesNotMatch(host.textContent, /旧工作区读取失败/);
+    });
+    refresh.click();
+    const finishClassic = pending.shift();
+    const { setGitConversationScope } = await import('../public/api.js');
+    setGitConversationScope('fixture-runtime');
+    ok('focusing a Runtime conversation reloads files even without a workspace generation change', () => {
+      assert.equal(pending.length, 1);
+    });
+    await finishRoot({ ok: true, workspace, entries: [file] });
+    finishClassic({ ok: false, error: 'Classic 读取失败' });
+    await tick();
+    ok('a late Classic failure cannot replace Runtime files', () => {
+      assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
+      assert.doesNotMatch(host.textContent, /Classic 读取失败/);
+    });
+    refresh.click();
+    await finishRoot({ ok: true, noProject: true, workspace: null, entries: [] });
+    ok('only explicit noProject displays the closed-project message', () => {
+      assert.match(tree.textContent, /还没有打开项目/);
+      assert.equal(host.querySelector('.files-message').hidden, true);
+    });
+    view.dispose();
+    setGitConversationScope(null);
+    host.replaceChildren();
+  }
+
+  {
     const { registerShortcut, assertNoConflicts } = await import('../public/shortcuts.js');
     const appSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
     const block = appSource.slice(appSource.indexOf('const workPanelToolEntries = ['), appSource.indexOf('];', appSource.indexOf('const workPanelToolEntries = [')) + 2);

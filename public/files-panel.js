@@ -39,7 +39,7 @@ export function mountFilesPanel(host, view, options = {}) {
   let dirs = new Map();
   let selectedPath = null;
   let showHidden = false;
-  let rootLoading = true;
+  let rootStatus = 'loading';
   let epoch = 0;
   let rootRequest = 0;
   let previewRequest = 0;
@@ -55,6 +55,7 @@ export function mountFilesPanel(host, view, options = {}) {
   function setMessage(text, tone = '') {
     if (!message) return;
     message.hidden = !text;
+    message.setAttribute('role', tone === 'error' ? 'alert' : 'status');
     message.textContent = text || '';
     if (tone) message.dataset.tone = tone;
     else delete message.dataset.tone;
@@ -103,14 +104,16 @@ export function mountFilesPanel(host, view, options = {}) {
 
   function renderTree() {
     tree.replaceChildren();
-    if (rootLoading) {
+    tree.setAttribute('aria-busy', String(rootStatus === 'loading'));
+    if (rootStatus === 'loading') {
       tree.append(node('div', 'files-tree-status', '正在读取项目文件…'));
       return;
     }
-    if (!rootEntries.length) {
-      tree.append(node('div', 'files-tree-status', workspace ? '这个目录没有可显示的文件。' : '还没有打开项目。'));
+    if (rootStatus === 'no-project' || rootStatus === 'empty') {
+      tree.append(node('div', 'files-tree-status', rootStatus === 'empty' ? '这个目录没有可显示的文件。' : '还没有打开项目。'));
       return;
     }
+    if (rootStatus === 'error') return;
     const visit = (entries, depth) => {
       for (const entry of entries) {
         tree.append(entryRow(entry, depth));
@@ -118,7 +121,11 @@ export function mountFilesPanel(host, view, options = {}) {
         const state = dirs.get(entry.path);
         if (!state?.expanded) continue;
         if (state.loading) tree.append(node('div', 'files-tree-status files-tree-indent', '读取中…'));
-        else if (state.error) tree.append(node('div', 'files-tree-status files-tree-indent', state.error));
+        else if (state.error) {
+          const error = node('div', 'files-tree-status files-tree-indent', state.error);
+          error.setAttribute('role', 'alert');
+          tree.append(error);
+        }
         else visit(state.entries || [], depth + 1);
       }
     };
@@ -128,21 +135,24 @@ export function mountFilesPanel(host, view, options = {}) {
   async function loadRoot() {
     const request = ++rootRequest;
     const scopeEpoch = epoch;
-    rootLoading = true;
+    rootStatus = 'loading';
     setMessage('');
     renderTree();
     const result = await transport.list('', { hidden: showHidden });
     if (!isCurrent() || scopeEpoch !== epoch || request !== rootRequest) return;
-    rootLoading = false;
-    if (result?.noProject) {
+    if (result?.noProject === true) {
+      rootStatus = 'no-project';
       workspace = null;
       rootEntries = [];
       dirs = new Map();
+      selectedPath = null;
+      previewRequest++;
       renderTree();
       renderEmptyPreview('还没有打开项目', '在左侧选择一个项目后，这里会显示项目文件。');
       return;
     }
     if (!result?.ok) {
+      rootStatus = 'error';
       setMessage(result?.error || '无法读取项目文件。', 'error');
       rootEntries = [];
       renderTree();
@@ -151,10 +161,12 @@ export function mountFilesPanel(host, view, options = {}) {
     if (workspace && result.workspace?.id !== workspace.id) {
       dirs = new Map();
       selectedPath = null;
+      previewRequest++;
       renderEmptyPreview('工作区已切换', '已刷新到新的项目文件。');
     }
     workspace = result.workspace || null;
     rootEntries = Array.isArray(result.entries) ? result.entries : [];
+    rootStatus = rootEntries.length ? 'success' : 'empty';
     setMessage(result.truncated ? '目录内容过多，只显示了前一部分。' : '', result.truncated ? 'warn' : '');
     renderTree();
     if (!selectedPath) renderEmptyPreview('选择文件预览', '文件内容只读，不会在这里修改。');
@@ -183,7 +195,7 @@ export function mountFilesPanel(host, view, options = {}) {
       generation: workspace?.generation,
       hidden: showHidden,
     });
-    if (!isCurrent() || scopeEpoch !== epoch || state.request !== request) return;
+    if (!isCurrent() || scopeEpoch !== epoch || dirs.get(entry.path) !== state || state.request !== request) return;
     state.loading = false;
     if (!result?.ok) {
       state.error = result?.error || '无法读取目录。';
@@ -250,17 +262,16 @@ export function mountFilesPanel(host, view, options = {}) {
     dirs = new Map();
     selectedPath = null;
     previewRequest++;
-    rootLoading = true;
-    renderTree();
     renderEmptyPreview('工作区已切换', '正在读取新的项目文件。');
     void loadRoot();
   }
 
-  const onGeneration = () => resetForWorkspace();
-  document.addEventListener('pi-gui:workspace-generation', onGeneration);
+  document.addEventListener('pi-gui:workspace-generation', resetForWorkspace);
+  document.addEventListener('pi-gui:git-scope', resetForWorkspace);
   view.onDispose(() => {
     alive = false;
-    document.removeEventListener('pi-gui:workspace-generation', onGeneration);
+    document.removeEventListener('pi-gui:workspace-generation', resetForWorkspace);
+    document.removeEventListener('pi-gui:git-scope', resetForWorkspace);
   });
 
   refresh = node('button', 'btn tiny rp-btn', '刷新');
