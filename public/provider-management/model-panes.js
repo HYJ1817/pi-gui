@@ -425,7 +425,7 @@ export function renderModelPanes({
   const right = h('section', { class: 'pm-model-pane pm-chosen-pane', 'data-model-pane': 'chosen', 'aria-label': '已选模型' });
   const leftHead = h('div', { class: 'pm-pane-head' });
   const rightHead = h('div', { class: 'pm-pane-head' });
-  const leftSearch = h('div', { class: 'pm-search pm-pane-search' },
+  const leftSearch = h('div', { class: 'pm-search ds-search-field pm-pane-search' },
     icon('search', 14),
     h('input', {
       class: 'pm-search-input',
@@ -436,7 +436,7 @@ export function renderModelPanes({
       autocomplete: 'off',
     }),
   );
-  const rightSearch = h('div', { class: 'pm-search pm-pane-search' },
+  const rightSearch = h('div', { class: 'pm-search ds-search-field pm-pane-search' },
     icon('search', 14),
     h('input', {
       class: 'pm-search-input',

@@ -35,6 +35,12 @@ export function renderModelControls() {
   updateSendState();
 }
 
+export function bindComposerPointerFocus(input) {
+  // Chromium matches :focus-visible on text editors even after a pointer click.
+  input.addEventListener('pointerdown', () => { input.dataset.pointerFocus = ''; });
+  input.addEventListener('blur', () => { delete input.dataset.pointerFocus; });
+}
+
 export function autoGrow() {
   el.input.style.height = 'auto';
   el.input.style.height = Math.min(el.input.scrollHeight, 184, window.innerHeight * 0.24) + 'px';
@@ -46,6 +52,7 @@ export function initComposerLayout() {
   const composer = el.composerBox.closest('.composer');
   const stage = composer?.closest('.stage');
   if (!composer || !stage) return;
+  bindComposerPointerFocus(el.input);
   composer.classList.add('ui3-composer');
   let previousWidth = -1;
   const reserve = () => {

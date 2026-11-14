@@ -50,6 +50,7 @@ import { messageActions } from './ui/message-actions.js';
 import { openModal } from './ui/modal.js';
 import { md, renderVizCardHtml } from './markdown.js';
 import { createRuntimePicker } from './runtime-picker.js';
+import { bindComposerPointerFocus } from './composer.js';
 import { thinkingAvailability } from './thinking-availability.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { normalizePlan } from './plan-model.js';
@@ -311,6 +312,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
   let composing = false;
   const input = el('textarea'); input.rows = 3; input.maxLength = 256 * 1024; input.setAttribute('aria-label', '给当前会话的任务'); root.append(input);
+  bindComposerPointerFocus(input);
   const draftNotice = el('div', 'rtc-draft-notice'); draftNotice.hidden = true; root.append(draftNotice);
 
   function updateDraftNotice(statusObj) {
@@ -410,7 +412,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const liveBtn = el('button', 'btn', '返回实时会话'); liveBtn.type = 'button';
   liveBtn.onclick = () => { if (id) { current().history = null; draw(); } };
   controls.append(restart, end, resume, historyBtn, liveBtn);
-  const composer = el('div', 'rtc-composer');
+  const composer = el('div', 'rtc-composer ds-composer-field');
   const composerBar = el('div', 'rtc-composer-bar');
   const composerActions = el('div', 'rtc-composer-actions');
   const composerNote = el('div', 'rtc-composer-note', 'Enter 发送 · Shift+Enter 换行');

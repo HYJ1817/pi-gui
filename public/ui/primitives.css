@@ -126,19 +126,36 @@
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 600;
-  cursor: help;
+  border: 0;
+  flex: 0 0 auto;
+  cursor: pointer;
   vertical-align: middle;
   margin-left: 6px;
   user-select: none;
-  outline: none;
   transition: color var(--motion-duration-fast) var(--motion-ease-out),
               background var(--motion-duration-fast) var(--motion-ease-out);
 }
 
 .ds-help-icon:hover,
-.ds-help-icon:focus-visible {
+.ds-help-icon[aria-expanded="true"] {
   color: var(--ds-text-primary);
   background: var(--ds-tile-deep);
+}
+
+.ds-help-icon:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+.pop.help-mode {
+  padding: var(--ui-space-3);
+  background: var(--ds-bg-elevated-opaque);
+  color: var(--ds-text-primary);
+  border-color: var(--ds-border-default);
+  box-shadow: var(--ds-shadow-popover);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  overflow-wrap: anywhere;
 }
 
 /* ==========================================================================
@@ -315,27 +332,37 @@
   gap: 8px 24px;
 }
 
-/* Universal Input & Select Overrides in Settings */
+/* Settings fields */
 .ds-select {
-  height: var(--ds-settings-picker-height, 32px);
-  padding: 0 10px;
-  background: var(--ds-field-inset-bg);
-  border: 1px solid var(--ds-border-default);
-  border-radius: var(--radius-sm);
+  height: 34px;
+  min-height: 34px;
+  padding: 0 32px 0 12px;
+  background: var(--ds-surface-input);
+  border: 1px solid var(--ds-border-input);
+  border-radius: var(--ds-radius-8);
   color: var(--ds-text-primary);
   font-family: inherit;
-  font-size: var(--text-sm-plus);
-  outline: none;
+  font-size: var(--text-md);
   cursor: pointer;
+  box-sizing: border-box;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
   transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
 }
 
-.ds-select:hover {
-  border-color: var(--ds-border-strong);
+.ds-select:hover:not(:disabled) {
+  border-color: var(--ds-border-subtle);
 }
 
-.ds-select:focus {
-  border-color: var(--ds-focus);
+.ds-select:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 1px;
+}
+
+.ds-select:disabled {
+  cursor: not-allowed;
 }
 
 .ds-input {
@@ -355,4 +382,33 @@
 .ds-input:focus {
   border-color: var(--ds-focus);
   background: var(--ds-field-inset-focus-bg);
+}
+
+/* The wrapper paints text focus. Sibling actions retain their own indicators. */
+@media (forced-colors: none) {
+  .ds-search-field:has(> input:focus) {
+    border-color: var(--ds-focus);
+  }
+}
+
+.ds-search-field > input:focus-visible {
+  outline: none;
+}
+
+@media (forced-colors: active) {
+  .ds-search-field:has(> input:focus-visible) {
+    outline: 2px solid Highlight;
+    outline-offset: 1px;
+  }
+
+  .ds-select:focus-visible {
+    /* Chromium also highlights the native border in forced colors. */
+    outline: 2px solid Highlight;
+    outline-offset: -1px;
+  }
+}
+
+.ds-composer-field:has(> textarea:focus-visible:not([data-pointer-focus])) {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
 }

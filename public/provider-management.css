@@ -180,7 +180,6 @@
   color: var(--ds-text-muted);
   transition: border-color .12s ease;
 }
-.pm-search:focus-within { border-color: var(--ds-focus); }
 .pm-search-input {
   flex: 1;
   min-width: 0;

@@ -13,37 +13,52 @@ pop.hidden = true;
 document.body.appendChild(pop);
 
 let anchor = null;
+const helpTextId = 'settingsHelpPopoverText';
 
 export const currentAnchor = () => anchor;
 export const popVisible = () => !pop.hidden;
 
+function clearHelpAnchor() {
+  if (!pop.classList.contains('help-mode')) return;
+  anchor?.removeAttribute('aria-describedby');
+  if (pop.parentElement !== document.body) document.body.appendChild(pop);
+}
+
 export function closePop({ restoreFocus = false } = {}) {
   const previous = anchor;
+  clearHelpAnchor();
   pop.hidden = true;
   pop.innerHTML = '';
-  pop.classList.remove('tip-mode', 'model-mode');
+  pop.classList.remove('tip-mode', 'model-mode', 'help-mode');
   pop.style.maxHeight = '';
   pop.style.minWidth = '';
   pop.style.maxWidth = '';
   if (previous) previous.setAttribute('aria-expanded', 'false');
   anchor = null;
-  if (restoreFocus) previous?.focus();
+  if (restoreFocus && previous?.isConnected) previous.focus();
 }
 
-export function openPop(target, { tip = false, model = false, align = 'right' } = {}) {
+export function openPop(target, { tip = false, model = false, help = false, align = 'right' } = {}) {
+  clearHelpAnchor();
   if (anchor && anchor !== target) anchor.setAttribute('aria-expanded', 'false');
   pop.classList.toggle('tip-mode', tip);
   pop.classList.toggle('model-mode', model);
-  pop.setAttribute('role', tip ? 'tooltip' : 'dialog');
-  pop.setAttribute('aria-label', tip ? '上下文占用' : '选择选项');
+  pop.classList.toggle('help-mode', help);
+  pop.setAttribute('role', help ? 'region' : tip ? 'tooltip' : 'dialog');
+  pop.setAttribute('aria-label', help ? target.getAttribute('aria-label') : tip ? '上下文占用' : '选择选项');
+  if (help) {
+    target.setAttribute('aria-describedby', helpTextId);
+    // Keep the disclosure inside the modal's accessible region, when present.
+    target.closest('[aria-modal="true"]')?.appendChild(pop);
+  }
   pop.hidden = false;
 
   // Native Browser content cannot be covered by page z-index. Keep anchored
   // menus on the available side of the existing pane without changing it.
   const pane = document.getElementById('rightPane');
   const edge = pane && !pane.hidden ? Math.max(40, Math.min(window.innerWidth, pane.getBoundingClientRect().left)) : window.innerWidth;
-  pop.style.minWidth = Math.min(tip ? 376 : 232, edge - 16) + 'px';
-  pop.style.maxWidth = Math.min(tip ? 376 : 420, edge - 16) + 'px';
+  pop.style.minWidth = Math.min(help ? 0 : tip ? 376 : 232, edge - 16) + 'px';
+  pop.style.maxWidth = Math.min(help ? 280 : tip ? 376 : 420, edge - 16) + 'px';
 
   const a = target.getBoundingClientRect();
   const r = pop.getBoundingClientRect();
@@ -66,10 +81,38 @@ export function openPop(target, { tip = false, model = false, align = 'right' } 
   pop.style.top = Math.round(top) + 'px';
   anchor = target;
   target.setAttribute('aria-expanded', 'true');
-  if (!tip) (model
+  if (!tip && !help) (model
     ? pop.querySelector('.pop-provider-models:not([hidden]) .pop-item.on') || pop.querySelector('.pop-provider')
     : pop.querySelector('.pop-item.on') || pop.querySelector('.pop-item'))?.focus();
 }
+
+export function toggleHelpPop(target, text) {
+  if (anchor === target && popVisible()) {
+    closePop();
+    return;
+  }
+  const description = document.createElement('div');
+  description.id = helpTextId;
+  description.textContent = text;
+  pop.replaceChildren(description);
+  openPop(target, { help: true, align: 'left' });
+}
+
+// A help disclosure keeps focus on its trigger. Escape dismisses it before
+// the enclosing settings surface or modal handles that same key.
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || event.target !== anchor || !pop.classList.contains('help-mode')) return;
+  event.preventDefault();
+  event.stopPropagation();
+  closePop({ restoreFocus: true });
+}, true);
+
+document.addEventListener('focusin', (event) => {
+  if (pop.classList.contains('help-mode') && event.target !== anchor) closePop();
+});
+document.addEventListener('pi-gui:workspace-view', () => {
+  if (pop.classList.contains('help-mode')) closePop();
+});
 
 pop.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;

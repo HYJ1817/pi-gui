@@ -15,36 +15,6 @@
   color: var(--ds-text-muted);
   line-height: 1.4;
 }
-.ds-select,
-.appearance-body select {
-  height: 34px;
-  min-height: 34px;
-  padding: 0 32px 0 12px;
-  border-radius: var(--ds-radius-8);
-  border: 1px solid var(--ds-border-input);
-  background: var(--ds-surface-input);
-  color: var(--ds-text-primary);
-  font-family: inherit;
-  font-size: var(--text-md);
-  outline: none;
-  cursor: pointer;
-  box-sizing: border-box;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
-}
-.ds-select:hover,
-.appearance-body select:hover {
-  border-color: var(--ds-border-subtle);
-}
-.ds-select:focus-visible,
-.appearance-body select:focus-visible {
-  outline: 2px solid var(--ds-focus);
-  outline-offset: 1px;
-}
-
 /* [hidden] 必须赢。
  *
  * 浏览器给 [hidden] 的默认样式是 display:none，但优先级极低 —— 只要组件自己
@@ -650,7 +620,6 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   border-radius:16px;padding:12px 13px 9px;pointer-events:auto;
   transition:border-color .16s,background .16s;
 }
-.composer-box:focus-within{border-color:var(--control-border)}
 /* 还没选项目：整块输入区「看起来就不能用」。
    只把 textarea 设 disabled 是不够的 —— 光标、hover 高亮、发送按钮都还在，
    用户会以为能打字。所以整块降透明度 + 禁掉指针事件，把状态说清楚。 */
@@ -2090,7 +2059,6 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   background:var(--input);border:1px solid var(--line);border-radius:7px;
   transition:border-color .12s;
 }
-.pj-search-row:focus-within{border-color:var(--focus-ring)}
 .pj-search-ic{flex:0 0 auto;font-size:13px;color:var(--t3);line-height:1}
 .pj-search-input{
   flex:1;min-width:0;border:0;background:transparent;outline:none;
@@ -2671,9 +2639,6 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   border: 1px solid var(--ds-border-default);
   border-radius: var(--radius-sm);
   box-sizing: border-box;
-}
-.settings-search-bar:focus-within {
-  border-color: var(--ds-focus);
 }
 .settings-search-bar .search-ic {
   width: 14px;
