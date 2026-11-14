@@ -1988,7 +1988,9 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
     const workspace = { id: 'new-workspace', generation: '2' };
     const file = { type: 'file', name: 'README.md', path: 'README.md', bytes: 4 };
     const list = () => new Promise((resolve) => pending.push(resolve));
-    mountFilesPanel(host, view, { transport: { list } });
+    const previews = [];
+    const document = () => new Promise(resolve => previews.push(resolve));
+    mountFilesPanel(host, view, { transport: { list, document } });
     const tree = host.querySelector('.files-tree');
     const refresh = [...host.querySelectorAll('.rp-head-actions button')].find((button) => button.textContent === '刷新');
     const finishRoot = async (result) => {
@@ -2017,15 +2019,35 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
       assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
     });
 
+    const preview = host.querySelector('.files-preview');
+    tree.querySelector('.files-entry').click();
+    previews.shift()({ ok: true, workspace, file: { path: file.path, content: 'old preview' } });
+    await until(() => preview.querySelector('pre')?.textContent === 'old preview');
+    refresh.click();
+    await finishRoot({ ok: false, error: '刷新失败' });
+    ok('same-workspace root refresh failure clears old preview and explains how to recover', () => {
+      assert.doesNotMatch(preview.textContent, /old preview|选择文件预览/);
+      assert.match(preview.textContent, /刷新文件列表/);
+    });
+    refresh.click();
+    await finishRoot({ ok: true, workspace, entries: [file] });
+    ok('successful refresh clears the unavailable preview message', () => {
+      assert.match(preview.textContent, /选择文件预览/);
+      assert.doesNotMatch(preview.textContent, /刷新文件列表/);
+    });
+    tree.querySelector('.files-entry').click();
+    const finishClassicPreview = previews.shift();
     refresh.click();
     const finishOld = pending.shift();
     host.ownerDocument.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
     await finishRoot({ ok: true, workspace, entries: [file] });
+    finishClassicPreview({ ok: true, workspace, file: { path: file.path, content: 'late Classic preview' } });
     finishOld({ ok: false, error: '旧工作区读取失败' });
     await tick();
     ok('a late root failure cannot replace the new workspace tree', () => {
       assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
       assert.doesNotMatch(host.textContent, /旧工作区读取失败/);
+      assert.doesNotMatch(preview.textContent, /late Classic preview/);
     });
     refresh.click();
     const finishClassic = pending.shift();
@@ -2040,6 +2062,16 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
     ok('a late Classic failure cannot replace Runtime files', () => {
       assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
       assert.doesNotMatch(host.textContent, /Classic 读取失败/);
+    });
+    tree.querySelector('.files-entry').click();
+    const finishRuntimePreview = previews.shift();
+    setGitConversationScope(null);
+    await finishRoot({ ok: true, workspace, entries: [file] });
+    finishRuntimePreview({ ok: true, workspace, file: { path: file.path, content: 'late Runtime preview' } });
+    await tick();
+    ok('returning to Classic discards an in-flight Runtime preview without a manual refresh', () => {
+      assert.match(preview.textContent, /选择文件预览/);
+      assert.doesNotMatch(preview.textContent, /late Runtime preview/);
     });
     refresh.click();
     await finishRoot({ ok: true, noProject: true, workspace: null, entries: [] });
