@@ -1,5 +1,7 @@
 # 05. 公共组件体系规范 (Component Specification)
 
+> 本文用于复核 PI-Desktop 参考与当时的改造阶段。当前开发与验收见 [pi-GUI 全局 UI/UX 设计规范](../design-system.md)。
+
 ## 1. 概述
 
 本规范基于 PI-Desktop 官方前端组件库（`apps/desktop/src/components/ui.tsx`、`apps/desktop/src/components/*` 及 `styles/ui-kit.css`）制定。明确定义各个可复用 UI 基础构件的视觉规格、交互状态、按键焦点行为及在 pi-GUI 中的实现策略。

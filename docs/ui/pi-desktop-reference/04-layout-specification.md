@@ -1,5 +1,7 @@
 # 04. 页面与布局架构规范 (Layout Specification)
 
+> 本文用于复核 PI-Desktop 参考与当时的改造阶段。当前开发与验收见 [pi-GUI 全局 UI/UX 设计规范](../design-system.md)。
+
 ## 1. 全局视口与分栏架构 (Application Shell Overview)
 
 PI-Desktop 采用基于 CSS Flexbox 与绝对定位混合的高性能桌面多栏架构。其核心布局由四层结构嵌套组成：

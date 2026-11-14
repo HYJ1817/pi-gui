@@ -23,8 +23,8 @@
 | --- | --- | --- |
 | 代码规范与开发验收材料 | [代码规范](coding-style.md)、[验收材料](acceptance.md) | [开发约束](../AGENTS.md)、[审查规则](../REVIEW.md)、[测试政策](testing.md#测试执行政策) |
 | 日常交付工具 | [PR 模板](../.github/PULL_REQUEST_TEMPLATE.md)、[EditorConfig](../.editorconfig)、[文件规模报告](../scripts/report-file-size.mjs) | [代码规范](coding-style.md)、[验收材料](acceptance.md)、[审查规则](../REVIEW.md) |
-| UI 与布局 | [工作区与生命周期](work-surfaces.md)、[应用外壳](app-shell.md) | [会话界面](conversation-ui.md)、[输入区](composer-ui.md)、[能力展示](capability-ux.md) |
-| PI-Desktop 重构最终修复 | [修复与验收材料](ui/pi-desktop-final-remediation-acceptance.md) | [原独立审计](ui/pi-desktop-final-audit.md)、[分批修复计划](ui/pi-desktop-final-remediation-plan.md)、[参考规范](ui/pi-desktop-reference/README.md) |
+| UI 开发与审查 | [全局 UI/UX 设计规范](ui/design-system.md)，唯一全局视觉与交互规范，含实际渲染验收 | [工作区与生命周期](work-surfaces.md)、[应用外壳](app-shell.md)、[会话界面](conversation-ui.md)、[输入区](composer-ui.md)、[能力展示](capability-ux.md) |
+| PI-Desktop 重构历史 | [修复与验收材料](ui/pi-desktop-final-remediation-acceptance.md) | [原独立审计](ui/pi-desktop-final-audit.md)、[分批修复计划](ui/pi-desktop-final-remediation-plan.md)、[参考档案](ui/pi-desktop-reference/README.md) |
 | Git Changes 与 Diff | [Git Changes](git-changes.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)；行级评论当前设计见 [持久化说明](git-changes.md#九行级评论持久化t3-b)，历史 [T3-A 验收](T3-A-acceptance.md) 与 [T3-B 验收](T3-B-acceptance.md) 仅证明各自提交 |
 | 协同流程图编辑 | [Z4-2 契约](Z4-2-contract.md)、[验收状态](Z4-2-acceptance.md) | [独立审查](Z4-2-reviews.md)、[Agent 来源研究](Z4-2-agent-source-research.md)；Z4-3 接入真实 Agent 建议来源：[来源契约](Z4-3-agent-source-contract.md)、[验收状态](Z4-3-acceptance.md) |
 | 并行输入、思考等级与历史工具摘要 | [Z5 规划](Z5-roadmap.md)、[Z5 审计](Z5-0-product-audit.md) | [Z5-1 验收](Z5-1-acceptance.md)、[Z5-2 验收](Z5-2-acceptance.md)、[Z5-3 验收](Z5-3-acceptance.md)、[Z5-3B 验收](Z5-3B-acceptance.md)、[Z5-Final 验收](Z5-final-acceptance.md) |
@@ -38,6 +38,8 @@
 
 ## 当前设计、历史方案和验收记录
 
+- **全项目 UI 审计**记录已审计代码基线的具体问题、截图、待验证项及整改顺序。开展整改前核对目标代码与报告基线。[全项目 UI/UX 审计报告](ui/PI-GUI-UI-FULL-AUDIT.md)
+- **设计系统建立时的现状审查**保留当时的 Token、组件实现与历史发现，便于追溯规范来源。[设计系统现状审查](ui/design-system-audit.md)
 - **当前设计入口**是上表中的功能文档。文档若包含历史段落，先读其当前实现说明，再核对正在使用的代码与边界。
 - **历史方案**记录当时的设想，不代表已实现或已批准。例如 [P32 设计探索](p32-design-spike.md)、[T2-B 计划](T2-B-plan.md)、[Windows 更新计划](windows-in-app-update-plan.md)。
 - **验收记录**绑定当时的提交、环境和验证范围。例如 [T2-A](T2-A-acceptance.md)、[T2-B](T2-B-acceptance.md)、[T3-A](T3-A-acceptance.md)、[终端 P2](terminal-p2-acceptance.md)、[终端 P3-A](terminal-p3-keep-alive-acceptance.md)、[终端 P3-B](terminal-p3b-termination-acceptance.md) 和 [CI 优化验收](ci-optimization-acceptance.md)。其中的数字和通过结论不能直接用于新的行为提交。

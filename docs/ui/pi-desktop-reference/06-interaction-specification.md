@@ -1,5 +1,7 @@
 # 06. 交互设计与状态行为规范 (Interaction Specification)
 
+> 本文用于复核 PI-Desktop 参考与当时的改造阶段。当前开发与验收见 [pi-GUI 全局 UI/UX 设计规范](../design-system.md)。
+
 ## 1. 概述与证据分类准则
 
 本规范系统性分析 PI-Desktop 的动态交互体系与状态机流转。依据分析原则，对每一项交互特征严格标注验证状态：

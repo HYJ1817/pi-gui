@@ -1,5 +1,7 @@
 # 08. 分阶段实施与代码重构路线图 (Implementation Roadmap)
 
+> 本文用于复核 PI-Desktop 参考与当时的改造阶段。当前开发与验收见 [pi-GUI 全局 UI/UX 设计规范](../design-system.md)。
+
 > **修订说明 (Audit Revision)**：
 > 1. 本实施方案摒弃了前一版本的脱节设想，完全立足于 pi-GUI 真实已有代码（Commit: `f4e6591e22206a4a0b2447292003fdf4eaf21c03`）。
 > 2. 全面核实所有 npm 命令与真实测试套件：彻底移除不存在的 `npm run test:unit` 与 `test/unit/settings.test.mjs`，换用 `package.json` 中真实注册的 `npm run test:theme`、`npm run test:auth`、`npm run test:ui3`、`node tests/ui3-composer.cjs` 及全量规范测试 `npm test`。

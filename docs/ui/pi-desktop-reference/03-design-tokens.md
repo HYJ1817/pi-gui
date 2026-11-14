@@ -1,5 +1,7 @@
 # 03. 视觉规范与设计系统 (Design Tokens Specification)
 
+> 本文用于复核 PI-Desktop 参考与当时的改造阶段。当前开发与验收见 [pi-GUI 全局 UI/UX 设计规范](../design-system.md)。
+
 > **审计与对齐说明 (Audit Reconciliation)**：
 > 1. 本文档与 PI-Desktop 固定版本源码 [`apps/desktop/src/styles/tokens.css`](https://github.com/vastsa/PI-Desktop/blob/92ae661f1e399e69d514086b46029b4c34ba1a92/apps/desktop/src/styles/tokens.css) 及设计规范文档 [`07-ui-design-system.md`](https://github.com/vastsa/PI-Desktop/blob/92ae661f1e399e69d514086b46029b4c34ba1a92/docs/zh-CN/spec/04-ux/07-ui-design-system.md) 进行了程序化逐变量比对。
 > 2. 对此前过于绝对化的设计断言（如“全局绝对零边框”）进行了修正：依据 D297 规范，内流布局（In-flow structure）废弃分割线条，依靠三层色调表达结构；但浮层结构（弹窗、下拉菜单、Tooltip）保留微发丝微边框作为海拔层级提示（Elevation cues），开关关闭态保留 1px 细环。

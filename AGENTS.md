@@ -12,6 +12,15 @@
 代码风格与模块组织见 [docs/coding-style.md](docs/coding-style.md)，
 开发者提交证据的结构与模板见 [docs/acceptance.md](docs/acceptance.md)。
 
+涉及 UI 的设计、审查、新增、修改、优化或重构时，所有 Agent 必须遵循唯一的
+[全局 UI/UX 设计规范](docs/ui/design-system.md)。开发前必须阅读规范，核对既有 Token、
+公共组件及页面实际加载的 CSS，优先复用公共实现。发现规范与实现冲突时，先定位原因，
+按规范处理例外。UI 变更完成后必须按规范进行实际渲染验收并提交证据。
+
+Claude Code 与 Gemini CLI 通过各自的项目文件导入本文件。Codex、OpenCode 等支持
+`AGENTS.md` 的宿主直接使用本文件。DeepSeek、GLM 等模型随实际宿主接收规则，
+宿主未自动读取本文件时，在任务入口明确要求读取。
+
 ## 二、动手之前
 
 1. `git status` / `git log` —— 确认工作区干净、看清楚最近在做什么
