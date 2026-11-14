@@ -56,7 +56,8 @@ export function openPop(target, { tip = false, model = false, help = false, alig
   // Native Browser content cannot be covered by page z-index. Keep anchored
   // menus on the available side of the existing pane without changing it.
   const pane = document.getElementById('rightPane');
-  const edge = pane && !pane.hidden ? Math.max(40, Math.min(window.innerWidth, pane.getBoundingClientRect().left)) : window.innerWidth;
+  const edge = pane && !pane.hidden && !(help && pane.contains(target))
+    ? Math.max(40, Math.min(window.innerWidth, pane.getBoundingClientRect().left)) : window.innerWidth;
   pop.style.minWidth = Math.min(help ? 0 : tip ? 376 : 232, edge - 16) + 'px';
   pop.style.maxWidth = Math.min(help ? 280 : tip ? 376 : 420, edge - 16) + 'px';
 
@@ -71,7 +72,7 @@ export function openPop(target, { tip = false, model = false, help = false, alig
     const available = (composer ? composer.getBoundingClientRect().top : a.top) - 16;
     pop.style.maxHeight = Math.max(32, Math.min(window.innerHeight - 16, available)) + 'px';
   } else {
-    pop.style.maxHeight = '';
+    pop.style.maxHeight = help ? Math.max(32, window.innerHeight - 16) + 'px' : '';
   }
   const height = pop.getBoundingClientRect().height;
   let top = (composer ? composer.getBoundingClientRect().top : a.top) - height - 8;

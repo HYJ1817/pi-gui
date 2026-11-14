@@ -235,6 +235,12 @@ const pub = path.join(root, 'public');
 
       assert.equal(badge, '', 'Badge should be empty string when 0 providers');
       assert.ok(emptyCard, 'Empty card must be present');
+      const page = emptyCard.closest('.prov-settings-page');
+      const actions = [...page.querySelectorAll('button')].map(button => button.textContent.trim());
+      assert.equal(actions.filter(text => /添加服务/.test(text)).length, 1);
+      assert.equal(actions.filter(text => text === '重载 pi 配置').length, 1);
+      assert.doesNotMatch(page.textContent, /models\.json/);
+      assert.match(page.textContent, /API Key/);
       assert.ok(catalogSpan.includes('0 个自定义服务'), `Footer catalog info must show 0 custom services, got: ${catalogSpan}`);
     });
 
@@ -296,6 +302,8 @@ const pub = path.join(root, 'public');
 
     const status = window.document.querySelector('.appearance-status');
     assert.ok(status, 'appearance-status element must be rendered');
+    assert.equal(status.textContent, '');
+    assert.doesNotMatch(status.closest('.appearance-card').textContent, /自定义界面主题与字体排版偏好/);
     assert.ok(!status.classList.contains('is-error'), 'Initial status must not have error class');
 
     // Trigger save failure by passing invalid theme mode to select onchange

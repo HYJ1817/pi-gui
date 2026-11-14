@@ -156,6 +156,8 @@
   font-size: var(--text-sm);
   line-height: var(--leading-body);
   overflow-wrap: anywhere;
+  white-space: pre-line;
+  overflow-y: auto;
 }
 
 /* ==========================================================================

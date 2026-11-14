@@ -1,4 +1,5 @@
 .collab-panel-body { min-width: 0; overflow: auto; padding: 12px; }
+.collab-head .rp-head-sub:not([hidden]) { display: block; }
 .collab-panel-status, .collab-panel-source { font-size: 12px; line-height: 1.6; color: var(--ui-text-secondary); overflow-wrap: anywhere; }
 .collab-panel-actions { display: flex; gap: 8px; margin-block: 8px; }
 .collab-panel-actions button { border: 1px solid var(--ui-border); border-radius: 6px; background: var(--ui-panel-surface); color: var(--ui-text-primary); padding: 6px 10px; font: inherit; cursor: pointer; }

@@ -3052,8 +3052,11 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   background: var(--ds-tile-hover);
   border-color: var(--ds-border-strong);
 }
-.btn.primary.prov-btn-main,
-.btn.primary.prov-empty-btn {
+.btn.prov-reload-btn[aria-disabled="true"] {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.btn.primary.prov-btn-main {
   height: 32px;
   padding: 0 16px;
   background: var(--ds-accent);
@@ -3065,8 +3068,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   cursor: pointer;
   transition: opacity var(--motion-duration-fast) var(--motion-ease-out);
 }
-.btn.primary.prov-btn-main:hover,
-.btn.primary.prov-empty-btn:hover {
+.btn.primary.prov-btn-main:hover {
   opacity: 0.9;
 }
 .prov-empty-card {
