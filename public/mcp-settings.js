@@ -64,7 +64,7 @@ let uidSeq = 0;
 function fieldId() { return `mcp-field-${++uidSeq}`; }
 
 function textInput({ value = '', placeholder = '', field = '', ariaLabel = '', type = 'text', autocomplete = 'off' } = {}) {
-  const input = node('input', 'mcp-input');
+  const input = node('input', 'mcp-input ds-input');
   input.type = type;
   input.value = value;
   input.autocomplete = autocomplete;
@@ -99,7 +99,7 @@ function iconButton(name, label, title, className = 'mcp-icon-btn') {
 }
 
 function exposureSelect(value, onChange, { inherit = false } = {}) {
-  const select = node('select', 'mcp-input mcp-select');
+  const select = node('select', 'mcp-input ds-input mcp-select');
   select.dataset.field = 'exposure';
   const blank = node('option', '', inherit ? '继承全局（不覆盖）' : '不显式设置（Pi 默认 codemode）');
   blank.value = '';
@@ -523,7 +523,7 @@ function openServerForm({
           ? '这个名称同时是 Pi 的配置键；改名会删除旧名字对应的条目，运行中的 Agent 会话需要重载。'
           : '同时作为 Pi 配置键和工具名前缀；只允许字母、数字、_ 和 -。'));
 
-      const scope = node('select', 'mcp-input mcp-select');
+      const scope = node('select', 'mcp-input ds-input mcp-select');
       scope.dataset.field = 'scope';
       const optUser = node('option', '', '全局（所有项目可用）');
       optUser.value = 'user';
@@ -570,7 +570,7 @@ function openServerForm({
 
     const renderStdioSection = () => {
       const sec = formSection('启动命令');
-      const choice = node('select', 'mcp-input mcp-select');
+      const choice = node('select', 'mcp-input ds-input mcp-select');
       choice.dataset.field = 'command-choice';
       for (const [value, label] of [['npx', 'npx（Node 包）'], ['uvx', 'uvx（Python 包）'], ['custom', '自定义可执行文件']]) {
         const o = node('option', '', label);
@@ -806,7 +806,7 @@ function openImportModal({
 
         const scopeField = node('div', 'mcp-form-section');
         scopeField.appendChild(node('h4', 'mcp-form-section-title', '写入到'));
-        const select = node('select', 'mcp-input mcp-select');
+        const select = node('select', 'mcp-input ds-input mcp-select');
         select.dataset.field = 'import-scope';
         const optUser = node('option', '', '全局 mcp.json');
         optUser.value = 'user';
@@ -1241,10 +1241,12 @@ function createPage(card, { reopen, present }) {
   }
 
   function renderError() {
-    const box = node('div', 'mcp-empty');
+    const box = node('div', 'mcp-empty is-error');
     box.appendChild(icon('warning', 'mcp-empty-icon'));
     box.appendChild(node('h4', '', '读取 MCP 配置失败'));
-    box.appendChild(node('p', '', state.error));
+    const detail = node('p', '', state.error);
+    detail.setAttribute('role', 'alert');
+    box.appendChild(detail);
     const retry = button('btn primary', '重试');
     retry.onclick = () => load();
     box.appendChild(retry);
@@ -1321,7 +1323,7 @@ function createPage(card, { reopen, present }) {
     }
     bar.appendChild(seg);
 
-    const search = node('label', 'mcp-search ds-search-field');
+    const search = node('label', 'mcp-search ds-search-field ds-search-control');
     search.appendChild(icon('search', 'mcp-icon'));
     const input = node('input', 'mcp-search-input');
     input.id = 'mcpServerSearch';
@@ -1337,7 +1339,7 @@ function createPage(card, { reopen, present }) {
 
     const projectLabel = node('label', 'mcp-project-picker');
     projectLabel.appendChild(node('span', 'mcp-project-picker-label', '项目'));
-    const select = node('select', 'mcp-input mcp-select mcp-project-select');
+    const select = node('select', 'mcp-input ds-input mcp-select mcp-project-select');
     select.setAttribute('aria-label', '切换当前项目');
     if (state.switching) select.disabled = true;
     const current = state.projectPath || '';

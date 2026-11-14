@@ -75,7 +75,7 @@ export function renderServiceChooser({
   initialQuery = '',
 } = {}) {
   const root = h('div', { class: 'pm-chooser' });
-  const searchWrap = h('div', { class: 'pm-search ds-search-field' },
+  const searchWrap = h('div', { class: 'pm-search ds-search-field ds-search-control' },
     icon('search', 15),
     h('input', {
       class: 'pm-search-input pm-chooser-search',

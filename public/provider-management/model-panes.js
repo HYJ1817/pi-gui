@@ -204,7 +204,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
     : '继承';
   const nameInput = h('input', {
     type: 'text',
-    class: 'pm-input pm-input-small',
+    class: 'pm-input ds-input pm-input-small',
     value: model.name || '',
     placeholder: '使用 Pi 默认名称',
     'aria-label': '显示名',
@@ -216,7 +216,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
     type: 'number',
     min: '1',
     step: '1',
-    class: 'pm-input pm-input-small',
+    class: 'pm-input ds-input pm-input-small',
     value: model.contextWindow || '',
     placeholder: sizePlaceholder(shown.contextWindow),
     'aria-label': '上下文窗口',
@@ -228,7 +228,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
     type: 'number',
     min: '1',
     step: '1',
-    class: 'pm-input pm-input-small',
+    class: 'pm-input ds-input pm-input-small',
     value: model.maxTokens || '',
     placeholder: sizePlaceholder(shown.maxTokens),
     'aria-label': '最大输出',
@@ -238,7 +238,7 @@ function advancedPanel(model, draft, dispatch, errors, onRemove) {
   maxInput.addEventListener('input', () => setField('maxTokens', maxInput.value));
 
   const reasoning = h('select', {
-    class: 'pm-select pm-select-small',
+    class: 'pm-select ds-input pm-select-small',
     'aria-label': '推理能力',
     'data-model-field': `${model.modelId}:reasoning`,
     'data-focus-key': `advanced:${model.modelId}:reasoning`,
@@ -425,7 +425,7 @@ export function renderModelPanes({
   const right = h('section', { class: 'pm-model-pane pm-chosen-pane', 'data-model-pane': 'chosen', 'aria-label': '已选模型' });
   const leftHead = h('div', { class: 'pm-pane-head' });
   const rightHead = h('div', { class: 'pm-pane-head' });
-  const leftSearch = h('div', { class: 'pm-search ds-search-field pm-pane-search' },
+  const leftSearch = h('div', { class: 'pm-search ds-search-field ds-search-control pm-pane-search' },
     icon('search', 14),
     h('input', {
       class: 'pm-search-input',
@@ -436,7 +436,7 @@ export function renderModelPanes({
       autocomplete: 'off',
     }),
   );
-  const rightSearch = h('div', { class: 'pm-search ds-search-field pm-pane-search' },
+  const rightSearch = h('div', { class: 'pm-search ds-search-field ds-search-control pm-pane-search' },
     icon('search', 14),
     h('input', {
       class: 'pm-search-input',
@@ -554,7 +554,7 @@ export function renderModelPanes({
   function renderFoot() {
     if (rightFoot.childElementCount) return;
     const input = h('input', {
-      class: 'pm-input pm-custom-model-input',
+      class: 'pm-input ds-input pm-custom-model-input',
       type: 'text',
       placeholder: '输入模型 ID，例如 gpt-5',
       'aria-label': '自定义模型 ID',

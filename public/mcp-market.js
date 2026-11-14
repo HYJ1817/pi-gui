@@ -254,7 +254,7 @@ function openInstallModal(item, {
 
       const controlFor = (f, prefix) => {
         if (Array.isArray(f.choices) && f.choices.length) {
-          const select = node('select', 'mcp-input mcp-select');
+          const select = node('select', 'mcp-input ds-input mcp-select');
           select.dataset.field = `${prefix}-${f.key}`;
           const blank = node('option', '', f.required ? '请选择…' : '（不设置）');
           blank.value = '';
@@ -271,7 +271,7 @@ function openInstallModal(item, {
           };
           return select;
         }
-        const input = node('input', 'mcp-input');
+        const input = node('input', 'mcp-input ds-input');
         input.type = f.type === 'number' ? 'number' : 'text';
         if (f.type === 'path') input.placeholder = f.placeholder || '绝对路径，例如 C:\\projects\\demo';
         else if (f.type === 'url') { input.inputMode = 'url'; input.placeholder = f.placeholder || 'https://…'; }
@@ -286,7 +286,7 @@ function openInstallModal(item, {
       };
 
       const fields = node('div', 'mcp-install-fields');
-      const nameInput = node('input', 'mcp-input');
+      const nameInput = node('input', 'mcp-input ds-input');
       nameInput.type = 'text';
       nameInput.value = nameValue;
       nameInput.placeholder = item.installName || 'server-name';
@@ -349,7 +349,7 @@ function openInstallModal(item, {
         fields.appendChild(dep);
       }
 
-      const scopeSelect = node('select', 'mcp-input mcp-select');
+      const scopeSelect = node('select', 'mcp-input ds-input mcp-select');
       scopeSelect.dataset.field = 'install-scope';
       const optUser = node('option', '', '全局（所有项目可用）');
       optUser.value = 'user';
@@ -595,7 +595,7 @@ function openSourceManager(state, { onChange } = {}) {
 
       const addSection = node('section', 'mcp-form-section');
       addSection.appendChild(node('h4', 'mcp-form-section-title', '添加第三方来源'));
-      const input = node('input', 'mcp-input');
+      const input = node('input', 'mcp-input ds-input');
       input.type = 'text';
       input.placeholder = 'https://example.com/mcp-market.json';
       input.value = url;
@@ -1029,7 +1029,7 @@ function createMarketPage(card, {
 
   function renderToolbar() {
     const bar = node('div', 'mcp-market-toolbar');
-    const search = node('label', 'mcp-search ds-search-field');
+    const search = node('label', 'mcp-search ds-search-field ds-search-control');
     search.appendChild(icon('search', 'mcp-icon'));
     const input = node('input', 'mcp-search-input');
     input.id = 'mcpMarketSearch';
@@ -1124,6 +1124,7 @@ function createMarketPage(card, {
     const partialEmpty = state.partial && state.loaded === 0
       && !(state.progress && state.progress.items > 0);
     if (state.loading || partialEmpty) {
+      wrap.setAttribute('aria-busy', 'true');
       if (state.source === 'registry' && !state.catalogLoaded) {
         wrap.appendChild(node('p', 'mcp-market-loading-note', loadingNoteText()));
       }
@@ -1142,10 +1143,12 @@ function createMarketPage(card, {
       return wrap;
     }
     if (state.error) {
-      const box = node('div', 'mcp-empty');
+      const box = node('div', 'mcp-empty is-error');
       box.appendChild(icon('warning', 'mcp-empty-icon'));
       box.appendChild(node('h4', '', '这个市场源暂时不可用'));
-      box.appendChild(node('p', '', marketErrorText(state.error)));
+      const detail = node('p', '', marketErrorText(state.error));
+      detail.setAttribute('role', 'alert');
+      box.appendChild(detail);
       const acts = node('div', 'mcp-empty-actions');
       if (state.source !== 'builtin') {
         const fallback = button('btn primary', '切到内置精选');
