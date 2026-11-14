@@ -105,7 +105,9 @@ async function main() {
   await check('custom provider management contains no Pi auth catalog', async () => { w.document.querySelector('#navProviders').click(); await wait(); assert.equal(w.document.querySelector('.provider-auth'), null); });
   await check('add provider opens the final service chooser without the Pi auth catalog', async () => {
     const page = w.document.querySelector('#workSurface .settings-detail-card');
-    [...page.querySelectorAll('button')].find(b => b.textContent === '添加服务').click(); await wait();
+    const addService = page.querySelector('.prov-btn-main');
+    assert.ok(addService, 'provider add button must exist');
+    addService.click(); await wait();
     const modal = w.document.querySelector('#modal');
     const card = w.document.querySelector('#modalCard');
     assert.equal(modal.hidden, false);
