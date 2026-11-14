@@ -166,7 +166,6 @@
   background: var(--ds-surface-input);
   color: var(--ds-text-muted);
 }
-.mcp-search:focus-within { border-color: var(--ds-focus); }
 .mcp-search-input {
   min-width: 0;
   flex: 1;

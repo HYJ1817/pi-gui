@@ -4,11 +4,12 @@
   border:0;border-radius:var(--ds-composer-radius);
   background:var(--ds-bg-composer);padding:10px 12px 8px;box-shadow:var(--ds-shadow-composer);
 }
+/* Dragging takes precedence over the shared focus ring on the same outline. */
 #chatComposer .composer-box.drop {outline:2px solid var(--ds-focus);outline-offset:3px}
 #chatComposer #input {
   display:block;font-family:var(--ui-font-sans);font-size:var(--text-base);
   color:var(--ds-text-primary);line-height:var(--leading-body);min-height:62px;padding:2px 0 10px;
-  background:transparent;border-radius:0;outline:none;
+  background:transparent;border-radius:0;
   overflow-wrap:anywhere;white-space:pre-wrap;
 }
 #chatComposer #input::placeholder {color:var(--ds-placeholder-ink,var(--ds-text-muted))}

@@ -1321,7 +1321,7 @@ function createPage(card, { reopen, present }) {
     }
     bar.appendChild(seg);
 
-    const search = node('label', 'mcp-search');
+    const search = node('label', 'mcp-search ds-search-field');
     search.appendChild(icon('search', 'mcp-icon'));
     const input = node('input', 'mcp-search-input');
     input.id = 'mcpServerSearch';

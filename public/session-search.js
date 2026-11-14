@@ -115,7 +115,7 @@ export function createSearchBar() {
   wrap.className = 'pj-search';
 
   const row = document.createElement('div');
-  row.className = 'pj-search-row';
+  row.className = 'pj-search-row ds-search-field';
 
   const icon = document.createElement('span');
   icon.className = 'pj-search-ic';

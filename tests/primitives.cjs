@@ -1,71 +1,13 @@
 'use strict';
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
+const { JSDOM } = require('jsdom');
+const { bundle } = require('./esm-bundle.cjs');
 
 console.log('Testing public/ui/primitives.js...');
-
-// Setup JSDOM or minimal DOM mock for testing primitives
-class MockElement {
-  constructor(tag) {
-    this.tagName = tag.toUpperCase();
-    this.nodeType = 1;
-    this.children = [];
-    this.attributes = {};
-    const classes = new Set();
-    this.classList = {
-      add: cls => classes.add(cls),
-      remove: cls => classes.delete(cls),
-      toggle: (cls, force) => {
-        if (force === undefined) {
-          if (classes.has(cls)) classes.delete(cls);
-          else classes.add(cls);
-        } else if (force) {
-          classes.add(cls);
-        } else {
-          classes.delete(cls);
-        }
-        return classes.has(cls);
-      },
-      contains: cls => classes.has(cls)
-    };
-    Object.defineProperty(this, 'className', {
-      set: v => {
-        classes.clear();
-        (v || '').split(/\s+/).filter(Boolean).forEach(c => classes.add(c));
-      },
-      get: () => Array.from(classes).join(' ')
-    });
-    this._textContent = '';
-  }
-  setAttribute(k, v) { this.attributes[k] = String(v); }
-  getAttribute(k) { return this.attributes[k] ?? null; }
-  removeAttribute(k) { delete this.attributes[k]; }
-  appendChild(el) { this.children.push(el); return el; }
-  append(...els) { els.forEach(e => this.children.push(e)); }
-  set textContent(v) { this._textContent = v; }
-  get textContent() {
-    return this._textContent || this.children.map(c => c.textContent).join('');
-  }
-}
-
-globalThis.document = {
-  createElement: tag => new MockElement(tag)
-};
-
-// Read and eval primitives.js
-const code = fs.readFileSync(path.join(__dirname, '../public/ui/primitives.js'), 'utf8')
-  .replace(/export function /g, 'function ');
-
-const context = {
-  document: globalThis.document,
-  console
-};
-vm.createContext(context);
-vm.runInContext(code + '\n;globalThis.primitives = { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadge, createSettingsCard, createSettingsRow };', context);
-
-const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadge, createSettingsCard, createSettingsRow } = context.primitives;
+const dom = new JSDOM('<!doctype html>', { runScripts: 'outside-only' });
+dom.window.eval(bundle(path.join(__dirname, '../public/ui/primitives.js')).code);
+const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadge, createSettingsCard, createSettingsRow } = dom.window;
 
 // 1. Settings Toggle
 {
@@ -125,8 +67,9 @@ const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadg
 // 3. Help Icon
 {
   const icon = createHelpIcon({ tooltipText: '此处用于配置思维链推理预算' });
-  assert.equal(icon.getAttribute('role'), 'note');
-  assert.equal(icon.getAttribute('aria-label'), '此处用于配置思维链推理预算');
+  assert.equal(icon.tagName, 'BUTTON');
+  assert.equal(icon.getAttribute('aria-expanded'), 'false');
+  assert.equal(icon.getAttribute('aria-label'), '帮助');
   assert.equal(icon.textContent, '?');
   console.log('✓ createHelpIcon passed');
 }
@@ -160,3 +103,4 @@ const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadg
 }
 
 console.log('All primitive tests passed successfully!');
+dom.window.close();

@@ -1,3 +1,5 @@
+import { pop, toggleHelpPop } from './popover.js';
+
 /**
  * Base UI Primitives for pi-GUI
  * Audited and implemented cleanly following PI-Desktop Design Specifications.
@@ -107,17 +109,18 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
 }
 
 /**
- * Creates an inline Help Icon (?) with tooltip according to D601 specifications.
+ * Creates the inline help disclosure used by settings headings and rows.
  */
 export function createHelpIcon({ tooltipText = '', ariaLabel = '' } = {}) {
-  const span = document.createElement('span');
-  span.className = 'ds-help-icon';
-  span.tabIndex = 0;
-  span.setAttribute('role', 'note');
-  span.setAttribute('aria-label', ariaLabel || tooltipText);
-  span.title = tooltipText;
-  span.textContent = '?';
-  return span;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ds-help-icon';
+  button.setAttribute('aria-label', ariaLabel || '帮助');
+  button.setAttribute('aria-expanded', 'false');
+  button.setAttribute('aria-controls', pop.id);
+  button.textContent = '?';
+  button.onclick = () => toggleHelpPop(button, tooltipText);
+  return button;
 }
 
 /**

@@ -1029,7 +1029,7 @@ function createMarketPage(card, {
 
   function renderToolbar() {
     const bar = node('div', 'mcp-market-toolbar');
-    const search = node('label', 'mcp-search');
+    const search = node('label', 'mcp-search ds-search-field');
     search.appendChild(icon('search', 'mcp-icon'));
     const input = node('input', 'mcp-search-input');
     input.id = 'mcpMarketSearch';

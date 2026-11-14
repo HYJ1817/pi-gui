@@ -7,6 +7,7 @@
  * 用于让「等用户答复」的调用方不会因为用户点了遮罩就永远挂着。 */
 
 import { el, panels } from '../state.js';
+import { closePop, currentAnchor } from './popover.js';
 
 /* 当前弹层的关闭回调。只可能有一个弹层，所以用单个槽位就够。 */
 let closeHook = null;
@@ -71,6 +72,7 @@ export function closeModal() {
   closeHook = null;
   modalInstance = null;
 
+  if (el.modalCard.contains(currentAnchor())) closePop();
   el.modal.hidden = true;
   releaseOwnedPanels();
   el.modalCard.innerHTML = '';

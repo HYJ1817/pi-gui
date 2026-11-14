@@ -2,7 +2,6 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 const { JSDOM } = require('jsdom');
 const { bundle } = require('./esm-bundle.cjs');
 
@@ -67,14 +66,9 @@ const pub = path.join(root, 'public');
 
   // Test Group 2: D297 & D601 Primitives Specification
   {
-    const primitivesCode = fs.readFileSync(path.join(pub, 'ui/primitives.js'), 'utf8')
-      .replace(/export function /g, 'function ');
-    
-    const dom = new JSDOM('<html><body></body></html>');
-    const ctx = { document: dom.window.document, console };
-    vm.createContext(ctx);
-    vm.runInContext(primitivesCode + '\n;globalThis.prim = { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadge, createSettingsCard, createSettingsRow };', ctx);
-    const { createSettingsToggle, createSegmentedControl, createHelpIcon, createSettingsCard, createSettingsRow } = ctx.prim;
+    const dom = new JSDOM('<html><body></body></html>', { runScripts: 'outside-only' });
+    dom.window.eval(bundle(path.join(pub, 'ui/primitives.js')).code);
+    const { createSettingsToggle, createSettingsCard, createSettingsRow } = dom.window;
 
     check('createSettingsCard produces D297 independent card block with heading and panel', () => {
       const row = createSettingsRow({ label: '主题', control: dom.window.document.createElement('select') });
@@ -114,6 +108,47 @@ const pub = path.join(root, 'public');
       const ctrl = row.querySelector('.settings-row-control');
       assert.ok(ctrl);
       assert.ok(ctrl.querySelector('.ds-switch'));
+    });
+
+    check('settings help uses one named disclosure with Escape, toggle and outside dismissal', () => {
+      const dom = new JSDOM('<button id="outside">其他</button>', { runScripts: 'outside-only' });
+      const w = dom.window;
+      w.eval(bundle(path.join(pub, 'ui/primitives.js')).code);
+      const first = w.createHelpIcon({ tooltipText: '<b>主题说明</b>', ariaLabel: '主题提示' });
+      const second = w.createHelpIcon({ tooltipText: '字体说明', ariaLabel: '字体提示' });
+      const outside = w.document.querySelector('#outside');
+      w.document.body.append(first, second);
+      assert.equal(first.tagName, 'BUTTON');
+      assert.equal(first.type, 'button');
+      assert.equal(first.getAttribute('aria-label'), '主题提示');
+      assert.equal(first.getAttribute('aria-expanded'), 'false');
+      assert.equal(first.hasAttribute('title'), false);
+      first.focus();
+      first.click();
+      const popup = w.document.getElementById(first.getAttribute('aria-controls'));
+      assert.equal(first.getAttribute('aria-expanded'), 'true');
+      const description = w.document.getElementById(first.getAttribute('aria-describedby'));
+      assert.notEqual(description, popup);
+      assert.equal(description.textContent, '<b>主题说明</b>');
+      assert.equal(popup.getAttribute('role'), 'region');
+      assert.equal(popup.textContent, '<b>主题说明</b>');
+      assert.equal(popup.querySelector('b'), null);
+      second.click();
+      assert.equal(first.getAttribute('aria-expanded'), 'false');
+      assert.equal(first.hasAttribute('aria-describedby'), false);
+      assert.equal(second.getAttribute('aria-controls'), popup.id);
+      assert.equal(popup.textContent, '字体说明');
+      second.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      assert.equal(popup.hidden, true);
+      assert.equal(w.document.activeElement, second);
+      first.click();
+      first.click();
+      assert.equal(popup.hidden, true);
+      second.click();
+      outside.dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true }));
+      assert.equal(popup.hidden, true);
+      assert.equal(second.getAttribute('aria-expanded'), 'false');
+      dom.window.close();
     });
   }
 
@@ -227,6 +262,29 @@ const pub = path.join(root, 'public');
   }
 
   // Test Group 5: Real Appearance Status & Error Reporting
+  check('closing the Appearance modal releases its help popover and restores focus', () => {
+    const trigger = window.document.createElement('button');
+    window.document.body.append(trigger);
+    trigger.focus();
+    window.openAppearance();
+    const card = window.document.getElementById('modalCard');
+    const help = card.querySelector('.ds-help-icon');
+    help.focus();
+    help.click();
+    const popup = window.document.getElementById(help.getAttribute('aria-controls'));
+    assert.equal(popup.parentElement, card);
+    help.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert.equal(popup.hidden, true);
+    assert.equal(window.document.activeElement, help);
+    assert.equal(window.document.getElementById('modal').hidden, false);
+    help.click();
+    window.closeModal();
+    assert.equal(popup.parentElement, window.document.body);
+    assert.equal(popup.hidden, true);
+    assert.equal(window.document.activeElement, trigger);
+    trigger.remove();
+  });
+
   await checkAsync('real openAppearance displays status and reflects save error states', async () => {
     window.openAppearance({
       present: (build) => {
