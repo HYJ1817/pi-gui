@@ -709,7 +709,8 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 .files-entry-mark{flex:none;width:12px;color:var(--ds-text-faint);text-align:center}
 .files-entry-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .files-entry-size{flex:none;color:var(--ds-text-faint);font-size:10.5px}
-.files-tree-status{padding:7px 8px;color:var(--ds-text-faint);font-size:11.5px;line-height:1.45;overflow-wrap:anywhere}
+.files-tree-status{padding:7px 8px;color:var(--ds-text-secondary);font-size:11.5px;line-height:1.45;overflow-wrap:anywhere}
+.files-tree-status[role="alert"]{color:var(--ui-danger)}
 .files-tree-indent{padding-left:22px}
 .files-preview-head{
   position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;

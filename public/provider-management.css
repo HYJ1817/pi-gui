@@ -71,77 +71,23 @@
 /* ---------- 按钮与表单 ---------- */
 
 .pm-btn {
-  height: 30px;
-  padding: 0 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--ds-border-default);
-  border-radius: var(--radius-2xs);
-  background: var(--ds-tile);
-  color: var(--ds-text-primary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  cursor: pointer;
   white-space: nowrap;
-  transition: background .12s ease, border-color .12s ease, color .12s ease, opacity .12s ease;
 }
-.pm-btn:hover:not(:disabled) { background: var(--ds-tile-hover); border-color: var(--ds-border-strong); }
-.pm-btn:disabled { opacity: .48; cursor: not-allowed; }
-.pm-btn.pm-primary {
-  background: var(--ds-accent);
-  border-color: transparent;
-  color: var(--ui-on-primary, var(--gray-900));
-  font-weight: 600;
-}
-.pm-btn.pm-primary:hover:not(:disabled) { background: var(--ds-accent-hover); border-color: transparent; }
 .pm-btn.pm-btn-ghost { background: transparent; border-color: transparent; }
-.pm-btn.pm-btn-ghost:hover:not(:disabled) { background: var(--ds-tile-hover); border-color: transparent; }
-.pm-btn.pm-btn-small { height: 26px; padding: 0 9px; font-size: 11.5px; border-radius: var(--radius-3xs); }
+.pm-btn.pm-btn-ghost:hover:not(:disabled) { background: var(--ds-tile-hover); }
+.pm-btn.pm-btn-small { height: var(--ds-control-size); padding: 0 10px; font-size: 11.5px; border-radius: var(--radius-xs); }
 .pm-btn.pm-btn-danger-ghost { color: var(--ui-danger); background: transparent; border-color: transparent; }
-.pm-btn.pm-btn-danger-ghost:hover:not(:disabled) { background: var(--ui-danger-surface); border-color: var(--ui-danger-border); }
-.pm-btn.pm-primary svg, .pm-btn.pm-btn-danger-ghost svg { flex: 0 0 auto; }
-
-.pm-icon-btn {
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-3xs);
-  background: transparent;
-  color: var(--ds-text-muted);
-  cursor: pointer;
-}
-.pm-icon-btn:hover { background: var(--ds-tile-hover); color: var(--ds-text-primary); }
+.pm-btn.pm-btn-danger-ghost:hover:not(:disabled) { background: var(--ui-danger-surface); border-color: var(--ui-danger-border); color: var(--ui-danger); }
 
 .pm-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .pm-field-label { font-size: 11.5px; font-weight: 500; color: var(--ds-text-secondary); }
-.pm-field-hint { font-size: 10.5px; line-height: 1.5; color: var(--ds-text-muted); }
+.pm-field-hint { font-size: 10.5px; line-height: 1.5; color: var(--ds-text-secondary); }
 .pm-field-error { font-size: 10.5px; line-height: 1.5; color: var(--ui-danger); }
-.pm-input, .pm-select {
-  width: 100%;
-  height: 32px;
-  min-width: 0;
-  padding: 0 9px;
-  border: 1px solid var(--ds-border-input);
-  border-radius: var(--radius-2xs);
-  background: var(--ds-field-inset-bg);
-  color: var(--ds-text-primary);
-  font: inherit;
-  font-size: 12px;
-  outline: none;
-  box-sizing: border-box;
-  transition: border-color .12s ease, background .12s ease;
-}
-.pm-input::placeholder { color: var(--ds-text-faint); }
-.pm-input:focus, .pm-select:focus { border-color: var(--ds-focus); background: var(--ds-field-inset-focus-bg); }
-.pm-input[readonly] { color: var(--ds-text-muted); }
+.pm-input, .pm-select { width: 100%; }
 .pm-input-small { height: 28px; font-size: 11.5px; }
 .pm-select-small { height: 28px; font-size: 11.5px; }
 .pm-readonly-value {
@@ -168,29 +114,6 @@
 .pm-check-line { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--ds-text-secondary); cursor: pointer; }
 .pm-check-row { display: flex; gap: 14px; flex-wrap: wrap; }
 
-.pm-search {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 9px;
-  border: 1px solid var(--ds-border-input);
-  border-radius: var(--radius-2xs);
-  background: var(--ds-field-inset-bg);
-  color: var(--ds-text-muted);
-  transition: border-color .12s ease;
-}
-.pm-search-input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--ds-text-primary);
-  font: inherit;
-  font-size: 12px;
-}
-.pm-search-input::placeholder { color: var(--ds-text-faint); }
 .pm-search-hint {
   font-size: 9.5px;
   color: var(--ds-text-faint);

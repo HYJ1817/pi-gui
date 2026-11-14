@@ -153,30 +153,7 @@
 }
 .mcp-filter-btn.on .mcp-filter-count { background: var(--ds-bg-primary); color: var(--ds-text-secondary); }
 
-.mcp-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 240px;
-  max-width: 100%;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--ds-border-input);
-  border-radius: 8px;
-  background: var(--ds-surface-input);
-  color: var(--ds-text-muted);
-}
-.mcp-search-input {
-  min-width: 0;
-  flex: 1;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--ds-text-primary);
-  font: inherit;
-  font-size: 12px;
-}
-.mcp-search-input::placeholder { color: var(--ds-text-faint); }
+.mcp-search { width: 240px; max-width: 100%; }
 .mcp-toolbar-spacer { flex: 1 1 auto; }
 .mcp-project-picker {
   display: inline-flex;
@@ -186,19 +163,7 @@
   font-size: 12px;
 }
 .mcp-project-picker-label { white-space: nowrap; }
-.mcp-input {
-  width: 100%;
-  min-height: 32px;
-  padding: 6px 10px;
-  border: 1px solid var(--ds-border-input);
-  border-radius: 8px;
-  background: var(--ds-surface-input);
-  color: var(--ds-text-primary);
-  font: inherit;
-  font-size: 12.5px;
-  outline: 0;
-}
-.mcp-input:focus { border-color: var(--ds-focus); }
+.mcp-input { width: 100%; }
 .mcp-select { appearance: none; padding-right: 28px; cursor: pointer; }
 .mcp-project-select { width: auto; max-width: 220px; height: 32px; min-height: 32px; padding-top: 0; padding-bottom: 0; }
 .mcp-project-select:disabled { opacity: 0.6; cursor: default; }
@@ -399,21 +364,6 @@
 .mcp-server-status-text.is-warn { color: var(--ui-warning); }
 .mcp-server-status-text.is-err { color: var(--ui-danger); }
 
-.mcp-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--ds-text-muted);
-  cursor: pointer;
-}
-.mcp-icon-btn:hover:not(:disabled) { background: var(--ds-tile-hover); color: var(--ds-text-primary); }
-.mcp-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .mcp-icon-btn.is-danger:hover:not(:disabled) { color: var(--ui-danger); background: var(--ui-danger-surface); }
 .mcp-icon-btn.is-busy { animation: mcp-pulse 1.2s ease-in-out infinite; }
 .mcp-auth-btn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; font-size: 11px; }
@@ -593,6 +543,7 @@
 }
 .mcp-form-error[hidden] { display: none; }
 .mcp-form-error[data-state="ok"] { color: var(--ui-success); }
+.mcp-empty.is-error .mcp-empty-icon { color: var(--ui-danger); }
 
 .mcp-form-hint,
 .mcp-form-note {
@@ -632,7 +583,7 @@
   margin-top: 5px;
   font-size: 10.5px;
   line-height: 1.5;
-  color: var(--ds-text-faint);
+  color: var(--ds-text-secondary);
 }
 .mcp-field .mcp-input { display: block; }
 .mcp-readonly-value {

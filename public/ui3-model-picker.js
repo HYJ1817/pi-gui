@@ -299,7 +299,7 @@ export function renderModelPicker({
   }
 
   const search = document.createElement('input');
-  search.className = 'ui3-model-search'; search.type = 'search';
+  search.className = 'ui3-model-search ds-readable-placeholder'; search.type = 'search';
   search.placeholder = '搜索模型或供应商…'; search.setAttribute('aria-label', '搜索模型或供应商');
   pop.appendChild(search);
   const filterGroups = [];

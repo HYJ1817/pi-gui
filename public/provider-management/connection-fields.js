@@ -133,7 +133,7 @@ function credentialRow({ draft, snapshot, legacy = false, onCredentialTrigger, o
   else trigger.addEventListener('click', event => event.preventDefault());
 
   const envInput = h('input', {
-    class: 'pm-input pm-env-input',
+    class: 'pm-input ds-input pm-env-input',
     type: 'text',
     value: envReference,
     placeholder: hasCredential && !clearing ? '保留现有凭据；输入新的 $NAME 可改用环境变量' : '$OPENAI_API_KEY 或 ${OPENAI_API_KEY}',
@@ -249,7 +249,7 @@ export function renderConnectionFields({
   let nameField = null;
   if (!legacy) {
     const nameInput = h('input', {
-      class: 'pm-input',
+      class: 'pm-input ds-input',
       type: 'text',
       value: draft.displayName,
       placeholder: '服务名称',
@@ -263,7 +263,7 @@ export function renderConnectionFields({
   }
 
   const baseInput = h('input', {
-    class: 'pm-input',
+    class: 'pm-input ds-input',
     type: 'text',
     value: draft.connection?.baseUrl || '',
     placeholder: 'https://api.example.com/v1',
@@ -276,7 +276,7 @@ export function renderConnectionFields({
   baseInput.addEventListener('input', () => onDispatch({ type: 'connection-field', field: 'baseUrl', value: baseInput.value }));
 
   const apiSelect = h('select', {
-    class: 'pm-select',
+    class: 'pm-select ds-input',
     'aria-label': 'API 类型',
     disabled: editingExisting,
   });
@@ -288,7 +288,7 @@ export function renderConnectionFields({
   let idField = null;
   if (draft.mode === 'create' || draft.mode === 'clone') {
     const idInput = h('input', {
-      class: 'pm-input pm-provider-id',
+      class: 'pm-input ds-input pm-provider-id',
       type: 'text',
       value: draft.providerId,
       placeholder: 'provider-id',

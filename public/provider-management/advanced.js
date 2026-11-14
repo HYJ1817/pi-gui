@@ -16,7 +16,7 @@ export function renderAdvanced({ draft, snapshot, legacy = false, errors = {}, o
   let nameInput = null;
   if (!legacy) {
     nameInput = h('input', {
-      class: 'pm-input',
+      class: 'pm-input ds-input',
       type: 'text',
       value: draft.displayName,
       'aria-label': '服务显示名称',
@@ -37,7 +37,7 @@ export function renderAdvanced({ draft, snapshot, legacy = false, errors = {}, o
   }
 
   const piInput = h('input', {
-    class: 'pm-input',
+    class: 'pm-input ds-input',
     type: 'text',
     value: draft.piRegistrationReference || '',
     placeholder: '$LOCAL_PROVIDER_TOKEN',
