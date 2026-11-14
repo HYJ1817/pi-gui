@@ -113,15 +113,35 @@ export function button(label, className = '', onClick = null, attrs = {}) {
   }, label);
 }
 
+let fieldDescriptionId = 0;
+
 export function field(label, control, { hint = '', error = '', className = '' } = {}) {
   const wrap = h('div', { class: `pm-field ${className}`.trim() });
   const labelNode = h('label', { class: 'pm-field-label' });
+  const isField = control.matches('input, select, textarea');
+  if (isField) {
+    control.id ||= `pm-field-${++fieldDescriptionId}`;
+    labelNode.htmlFor = control.id;
+  }
   const text = h('span', { text: label });
   labelNode.appendChild(text);
   wrap.appendChild(labelNode);
   wrap.appendChild(control);
-  if (hint) wrap.appendChild(h('div', { class: 'pm-field-hint', text: hint }));
-  if (error) wrap.appendChild(h('div', { class: 'pm-field-error', role: 'alert', text: error }));
+  const descriptions = [control.getAttribute('aria-describedby')].filter(Boolean);
+  if (hint && isField) {
+    const id = `pm-field-hint-${++fieldDescriptionId}`;
+    wrap.appendChild(h('div', { class: 'pm-field-hint', id, text: hint }));
+    descriptions.push(id);
+  } else if (hint) wrap.appendChild(h('div', { class: 'pm-field-hint', text: hint }));
+  if (error) {
+    const id = `pm-field-error-${++fieldDescriptionId}`;
+    wrap.appendChild(h('div', { class: 'pm-field-error', id, role: 'alert', text: error }));
+    if (isField) {
+      control.setAttribute('aria-invalid', 'true');
+      descriptions.push(id);
+    }
+  }
+  if (descriptions.length) control.setAttribute('aria-describedby', descriptions.join(' '));
   return wrap;
 }
 

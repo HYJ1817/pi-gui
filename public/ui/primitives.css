@@ -366,22 +366,54 @@
 }
 
 .ds-input {
-  height: var(--ds-settings-picker-height, 32px);
+  height: var(--ui-control-height);
+  min-width: 0;
   padding: 0 10px;
   background: var(--ds-field-inset-bg);
-  border: 1px solid var(--ds-border-default);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--ds-border-input);
+  border-radius: var(--ds-radius-8);
   color: var(--ds-text-primary);
   font-family: inherit;
-  font-size: var(--text-sm-plus);
-  outline: none;
+  font-size: var(--text-sm);
   box-sizing: border-box;
   transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
 }
 
-.ds-input:focus {
-  border-color: var(--ds-focus);
-  background: var(--ds-field-inset-focus-bg);
+.ds-input:focus { background: var(--ds-field-inset-focus-bg); }
+.ds-input:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 1px; }
+.ds-input[readonly] { color: var(--ds-text-secondary); }
+.ds-input:disabled { cursor: not-allowed; }
+
+.ds-search-control {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  height: 34px;
+  min-width: 0;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--ds-border-input);
+  border-radius: var(--ds-radius-8);
+  background: var(--ds-field-inset-bg);
+  color: var(--ds-text-muted);
+}
+
+.ds-search-control > input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.ds-input::placeholder,
+.ds-search-control > input::placeholder,
+.ds-readable-placeholder::placeholder {
+  color: var(--ds-text-secondary);
+  opacity: 1;
 }
 
 /* The wrapper paints text focus. Sibling actions retain their own indicators. */
@@ -401,6 +433,7 @@
     outline-offset: 1px;
   }
 
+  .ds-input:focus-visible,
   .ds-select:focus-visible {
     /* Chromium also highlights the native border in forced colors. */
     outline: 2px solid Highlight;
