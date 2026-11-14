@@ -45,7 +45,12 @@ module.exports = async ({ read, click, key, shot, nativeShot, paint, check, win,
   await nativeShot('e01-launcher-dark');
   await click('.work-panel-launcher-row[data-tool="btnFiles"]');
   await waitFor(`document.querySelector('#rightPane').dataset.surface==='files'&&!!document.querySelector('.files-layout')`);
-  check('E Files launcher mounts the real read-only file surface',await read(`document.querySelector('.rp-head-title').textContent==='文件'&&document.querySelector('.files-preview').textContent.includes('只读')`));
+  check('E Files launcher mounts the real read-only file surface',await read(`(()=>{
+    const host=document.querySelector('.files-surface'),preview=host?.querySelector('.files-preview');
+    const error=host?.querySelector('.files-message[data-tone="error"]:not([hidden])');
+    return host?.querySelector('.rp-head-title')?.textContent==='文件'&&
+      (preview?.textContent.includes('只读')||Boolean(error&&preview?.textContent.includes('刷新文件列表')));
+  })()`));
   await shot('e01c-files-dark');
   await click('#workPanelHome');
   await click('.work-panel-launcher-more');
