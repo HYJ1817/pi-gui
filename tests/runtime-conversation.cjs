@@ -800,12 +800,9 @@ const { JSDOM } = require('jsdom');
     stateLine().includes('800 条（仅显示最近部分）') && stateLine().includes('仅显示部分工具') &&
     Boolean(host.querySelector('.rtc-history-unconfirmed')));
 
-  // 12 & 13. 历史搜索按 messageId 与 userIndex 精确定位，不受插入的工具行干扰
-  let scrolledElements = [];
-  const origScrollIntoView = dom.window.HTMLElement.prototype.scrollIntoView;
-  dom.window.HTMLElement.prototype.scrollIntoView = function (opts) {
-    scrolledElements.push(this);
-  };
+  // 12 & 13. 历史搜索按 messageId 与 userIndex 精确定位，不受插入的工具行干扰（P2-C：限定在 rtc-output 内滚动，不使用 scrollIntoView）
+  const getScrolledElements = () => [...host.querySelectorAll('[data-history-scrolled="true"]')];
+  const clearScrolledElements = () => host.querySelectorAll('[data-history-scrolled]').forEach(el => delete el.dataset.historyScrolled);
   try {
     zHistoryMock = {
       ok: true,
@@ -824,23 +821,25 @@ const { JSDOM } = require('jsdom');
         returned: 3, limit: 100, truncated: false, historyTruncated: false, unavailableReason: null, uncertain: false
       }
     };
-    scrolledElements = [];
+    clearScrolledElements();
     await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' }, { messageId: 'search-a' });
     await tick();
 
+    const scrolled1 = getScrolledElements();
     ok('12. 历史搜索按 messageId 精确定位到正文行而非工具行',
-      scrolledElements.length === 1 && scrolledElements[0].dataset.historyMessageId === 'search-a' &&
-      scrolledElements[0].classList.contains('rtc-history-message'));
+      scrolled1.length === 1 && scrolled1[0].dataset.historyMessageId === 'search-a' &&
+      scrolled1[0].classList.contains('rtc-history-message'));
 
-    scrolledElements = [];
+    clearScrolledElements();
     await z53bView.openHistory({ conversationId: 'Z-1', nativeSessionId: 'native-Z-1', projectId: 'p-z53b', workspaceId: 'ws-Z-1', workspaceEpoch: 'epoch-1' }, { userIndex: 0 });
     await tick();
 
+    const scrolled2 = getScrolledElements();
     ok('13. 历史搜索按 userIndex 精确定位到正文行而非工具行',
-      scrolledElements.length === 1 && scrolledElements[0].dataset.historyUserIndex === '0' &&
-      scrolledElements[0].classList.contains('rtc-history-message'));
+      scrolled2.length === 1 && scrolled2[0].dataset.historyUserIndex === '0' &&
+      scrolled2[0].classList.contains('rtc-history-message'));
   } finally {
-    dom.window.HTMLElement.prototype.scrollIntoView = origScrollIntoView;
+    clearScrolledElements();
   }
 
   // 14. A 请求迟到不能覆盖 B

@@ -1,0 +1,54 @@
+{
+  "label": "phase2",
+  "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "cdpPort": 10913,
+  "measurements": [
+    {
+      "test": "Classic 阅读位置恢复",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "工具组头折叠位置误差",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "工具详情折叠位置误差",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "视口上方折叠下方稳定",
+      "errorPx": 0.19,
+      "passed": true
+    },
+    {
+      "test": "Plan 任务卡折叠位置误差",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索祖先 stage 零滚动",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索 work-surface 零滚动",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索外层 doc 零滚动",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索居中误差",
+      "errorPx": 0,
+      "passed": true
+    }
+  ],
+  "allPassed": true,
+  "capturedAt": "2026-11-15T15:58:38.895Z"
+}

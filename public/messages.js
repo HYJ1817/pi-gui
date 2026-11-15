@@ -38,6 +38,36 @@ import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePla
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
 import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
+import {
+  saveSessionBookmark,
+  restoreSessionBookmark,
+  preserveScrollAround,
+} from './reading-position.js';
+
+/* 实时顺序序号（与历史重建使用同一命名空间 user-N / assistant-N / tools-N / outcome-N）。 */
+let liveUserSeq = 0;
+let liveAssistantSeq = 0;
+let liveToolsSeq = 0;
+let liveOutcomeSeq = 0;
+let streamScrollBound = false;
+let streamScrollRaf = null;
+
+function onStreamScroll() {
+  if (streamScrollRaf) return;
+  streamScrollRaf = requestAnimationFrame(() => {
+    streamScrollRaf = null;
+    const curSessionId = S.state?.sessionId || S.localUsage?.sessionId;
+    if (curSessionId && el.stream && S.thread) {
+      saveSessionBookmark(curSessionId, el.stream, S.thread);
+    }
+  });
+}
+
+export function bindStreamReadingPosition() {
+  if (streamScrollBound || !el.stream) return;
+  streamScrollBound = true;
+  el.stream.addEventListener('scroll', onStreamScroll, { passive: true });
+}
 
 /* 当前 session 级 run 的证据。只在 app.js 收到真实 agent_start（上一轮已 settled）
  * 时开启；steer / follow-up / 自动重试不会开启新轮次。 */
@@ -57,6 +87,7 @@ export function ensureThread() {
   t.className = 'thread';
   el.stream.appendChild(t);
   S.thread = t;
+  bindStreamReadingPosition();
   return t;
 }
 
@@ -73,6 +104,14 @@ export function syncWelcome() {
 }
 
 export function clearThread() {
+  const curSessionId = S.state?.sessionId || S.localUsage?.sessionId;
+  if (curSessionId && el.stream && S.thread) {
+    saveSessionBookmark(curSessionId, el.stream, S.thread);
+  }
+  liveUserSeq = 0;
+  liveAssistantSeq = 0;
+  liveToolsSeq = 0;
+  liveOutcomeSeq = 0;
   if (S.thread) S.thread.innerHTML = '';
   clearPlanLive();
   clearRetryNotice();
@@ -165,7 +204,9 @@ function finalizeTurn() {
   });
   if (!outcome) return;
   const t = ensureThread();
-  t.appendChild(renderTurnOutcome(outcome));
+  const outcomeNode = renderTurnOutcome(outcome);
+  if (outcomeNode) outcomeNode.dataset.anchorId = 'outcome-' + (++liveOutcomeSeq);
+  t.appendChild(outcomeNode);
   scrollBottom();
 }
 
@@ -288,7 +329,9 @@ function thinkingBlock(text = '') {
   button.appendChild(status);
   button.setAttribute('aria-controls', body.id);
   setDisclosure(button, body, false);
-  button.addEventListener('click', () => setDisclosure(button, body, body.hidden));
+  button.addEventListener('click', () => {
+    preserveScrollAround(button, () => setDisclosure(button, body, body.hidden));
+  });
   wrap.append(button, body);
   updateThinking(wrap, text);
   setThinkingState(wrap, 'streaming');
@@ -431,6 +474,7 @@ function renderUser(msg) {
 
   const wrap = document.createElement('article');
   wrap.className = 'msg user';
+  wrap.dataset.anchorId = 'user-' + (++liveUserSeq);
 
   const role = document.createElement('div');
   role.className = 'msg-role';
@@ -449,6 +493,7 @@ function createAssistant() {
   const t = ensureThread();
   const wrap = document.createElement('article');
   wrap.className = 'msg assistant';
+  wrap.dataset.anchorId = 'assistant-' + (++liveAssistantSeq);
 
   const role = document.createElement('div');
   role.className = 'msg-role';
@@ -882,6 +927,10 @@ export function rebuildFromMessages(data) {
   /* 每个用户回合最多一张计划卡，内容取该回合最后一次有效更新。 */
   const planTurns = collectPlanTurns(items);
   let planTurn = 0;
+  let historyUserSeq = 0;
+  let historyAssistantSeq = 0;
+  let historyToolsSeq = 0;
+  let historyOutcomeSeq = 0;
 
   /* 历史轮次终态：只在 assistant / 工具证据存在时画；工具 isError 只计数，
    * 不把整轮判失败。时长来自消息/工具的真实时间戳，缺失就省略。 */
@@ -911,7 +960,11 @@ export function rebuildFromMessages(data) {
       startedAt: turn.startedAt,
       endedAt: turn.endedAt,
     });
-    if (outcome) frag.appendChild(renderTurnOutcome(outcome));
+    if (outcome) {
+      const outcomeNode = renderTurnOutcome(outcome);
+      if (outcomeNode) outcomeNode.dataset.anchorId = 'outcome-' + (++historyOutcomeSeq);
+      frag.appendChild(outcomeNode);
+    }
   };
 
   for (let index = 0; index < items.length; index++) {
@@ -921,6 +974,7 @@ export function rebuildFromMessages(data) {
       planTurn += 1;
       const wrap = document.createElement('article');
       wrap.className = 'msg user';
+      wrap.dataset.anchorId = 'user-' + (++historyUserSeq);
       wrap.innerHTML = '<div class="msg-role">你</div>';
       wrap.appendChild(userBody(item.message));
       wrap.appendChild(messageActions(textOf(item.message)));
@@ -944,6 +998,7 @@ export function rebuildFromMessages(data) {
       }
       const wrap = document.createElement('article');
       wrap.className = 'msg assistant';
+      wrap.dataset.anchorId = 'assistant-' + (++historyAssistantSeq);
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
       const body = document.createElement('div');
       body.className = 'msg-body';
@@ -960,7 +1015,11 @@ export function rebuildFromMessages(data) {
 
     if (item.kind === 'tools') {
       const turnPlan = planTurns.get(planTurn);
-      if (turnPlan && turnPlan.firstIndex === index) frag.appendChild(renderPlan(turnPlan.plan));
+      if (turnPlan && turnPlan.firstIndex === index) {
+        const planNode = renderPlan(turnPlan.plan);
+        if (planNode) planNode.dataset.anchorId = 'plan-' + planTurn;
+        frag.appendChild(planNode);
+      }
       /* gui_plan 的调用行由上面的任务列表承担，不再重复画成工具记录。 */
       const entries = item.entries.filter(entry => !isPlanTool(entry.name));
       if (entries.length) {
@@ -977,6 +1036,7 @@ export function rebuildFromMessages(data) {
           }
         }
         const g = createGroup();
+        g.dataset.anchorId = 'tools-' + (++historyToolsSeq);
         for (const entry of entries) addToGroup(g, renderEntry(entry));
         frag.appendChild(g);
       }
@@ -1000,6 +1060,12 @@ export function rebuildFromMessages(data) {
     } catch {
       /* 监听方自己炸了不该带塌历史重建 */
       handled = false;
+    }
+  }
+  if (!handled) {
+    const curSessionId = S.state?.sessionId || S.localUsage?.sessionId;
+    if (curSessionId && restoreSessionBookmark(curSessionId, el.stream, t)) {
+      handled = true;
     }
   }
   if (!handled) scrollBottom(true);
