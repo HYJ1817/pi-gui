@@ -1,3 +1,4 @@
+import { createIcon } from './ui/icons.js';
 /* Planner / Agent 编排面板（P5）。
  *
  * ---------- 这个面板的立场 ----------
@@ -85,6 +86,12 @@ const dotClass = (meta) => 'ext-dot ' + (meta && meta.dot ? meta.dot : 'dim');
  * 次级问题写进 `sub`（「另有 N 个任务等待验收」）—— 把所有问题并列，「下一步」
  * 就又变回一面没有重点的墙。stale / 无效面板不走这里（那是 renderStalePlanner）。
  */
+function reviewWarning(text) {
+  const warning = el('span', 'planner-rv-warn', text);
+  warning.prepend(createIcon('warning'));
+  return warning;
+}
+
 export function derivePlanAttention(plan) {
   if (!plan || !Array.isArray(plan.tasks)) return null;
   const tasks = plan.tasks;
@@ -225,9 +232,9 @@ function fmtTime(ms) {
  */
 
 const REVIEW_STATE = {
-  pending: { cls: 'pending', mark: '○', label: '待审阅' },
-  accepted: { cls: 'ok', mark: '✓', label: '已接受' },
-  needs_changes: { cls: 'warn', mark: '↻', label: '需修改' },
+  pending: { cls: 'pending', icon: 'pending', label: '待审阅' },
+  accepted: { cls: 'ok', icon: 'check', label: '已接受' },
+  needs_changes: { cls: 'warn', icon: 'refresh', label: '需修改' },
 };
 /** 与后端 MAX_REVIEW_NOTE 对齐。前端 maxlength 只是顺手，**后端才是最终权威**。 */
 const REVIEW_NOTE_MAX = 1000;
@@ -1144,7 +1151,9 @@ export function openPlanner(focus = null) {
         const meta = REVIEW_STATE[saved.status];
         const line = el('div', 'planner-rv-view');
         /* **状态必须有文字**，不能只靠颜色区分（§五十二）。 */
-        line.append(el('span', 'planner-rv-state ' + meta.cls, meta.mark + ' ' + meta.label));
+        const state = el('span', 'planner-rv-state ' + meta.cls, meta.label);
+        state.prepend(createIcon(meta.icon));
+        line.append(state);
         if (saved.reviewedAt) line.append(el('span', 'planner-rv-time', fmtTime(saved.reviewedAt)));
         wrap.append(line);
         if (saved.note) wrap.append(el('div', 'planner-rv-note', saved.note));
@@ -1167,8 +1176,9 @@ export function openPlanner(focus = null) {
 
       /* ---------- 编辑态 ---------- */
       const pick = el('div', 'planner-rv-pick');
-      const mkPick = (value, label) => {
+      const mkPick = (value, label, icon) => {
         const b = el('button', 'planner-rv-opt' + (draft.status === value ? ' on' : ''), label);
+        b.prepend(createIcon(icon));
         b.type = 'button';
         b.disabled = Boolean(draft.saving);
         b.onclick = () => {
@@ -1177,8 +1187,8 @@ export function openPlanner(focus = null) {
         };
         return b;
       };
-      if (canAccept(a)) pick.append(mkPick('accepted', '✓ 接受本次结果'));
-      pick.append(mkPick('needs_changes', '↻ 需要修改'));
+      if (canAccept(a)) pick.append(mkPick('accepted', '接受本次结果', 'check'));
+      pick.append(mkPick('needs_changes', '需要修改', 'refresh'));
       wrap.append(pick);
 
       wrap.append(el('div', 'planner-lbl planner-rv-lbl2', '说明'));
@@ -1619,7 +1629,7 @@ export function openPlanner(focus = null) {
         frow.append(list);
         if (a.changeCaptureIncomplete) {
           /* 有文件但采集不全 —— 不能因为「有内容」就不提这件事（§二十三）。 */
-          frow.append(el('span', 'planner-rv-warn', '⚠ 执行期间文件变化未完整采集'));
+          frow.append(reviewWarning('执行期间文件变化未完整采集'));
         }
         row.append(frow);
         if (anyChanged) {
@@ -1644,7 +1654,7 @@ export function openPlanner(focus = null) {
       if (ev && ev.status !== 'unavailable') {
         evRow.append(miniBtn('查看本次 Diff', '', () => openHistoricalDiff(task.id, a.attempt)));
         evRow.append(el('span', 'planner-rv-hint', `这次执行前后 ${ev.files.length} 个文件的变化（冻结证据，不会随工作区改变）`));
-        if (ev.status === 'partial' || ev.truncated) evRow.append(el('span', 'planner-rv-warn', '⚠ 证据不完整'));
+        if (ev.status === 'partial' || ev.truncated) evRow.append(reviewWarning('证据不完整'));
       } else if (ev) {
         evRow.append(el('span', 'planner-rv-hint', '这次执行没有采集到变更证据'));
         if (ev.note) evRow.append(el('span', 'planner-rv-hint', `（${ev.note}）`));
@@ -1724,7 +1734,7 @@ export function openPlanner(focus = null) {
       const evSum = evidenceOf(a);
       head.append(el('span', 'planner-att-ev', evSum && evSum.status !== 'unavailable' ? `证据 ${evSum.files.length} 个文件` : '无证据'));
       if (a.error) head.append(el('span', 'planner-attempt-err', String(a.error).slice(0, 160)));
-      const caret = el('span', 'planner-attempt-caret', open ? '▾' : '▸');
+      const caret = createIcon(open ? 'chevronDown' : 'chevronRight', { className: 'planner-attempt-caret' });
       caret.setAttribute('aria-hidden', 'true');
       head.append(caret);
       head.setAttribute('aria-expanded', String(open));

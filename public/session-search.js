@@ -1,3 +1,4 @@
+import { createIcon } from './ui/icons.js';
 /* 会话搜索：输入框 + 范围筛选 + 结果视图。
  *
  * ---------- 它挂在哪 ----------
@@ -119,7 +120,7 @@ export function createSearchBar() {
 
   const icon = document.createElement('span');
   icon.className = 'pj-search-ic';
-  icon.textContent = '⌕';
+  icon.append(createIcon('search', { size: 14 }));
   icon.setAttribute('aria-hidden', 'true');
 
   const input = document.createElement('input');

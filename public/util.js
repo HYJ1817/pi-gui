@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* 通用工具：格式化、转义、路径、图标。
  *
  * 这个文件不碰业务状态（唯一的例外是 absPath —— 它要用 S.cwd 把 pi 返回的
@@ -125,6 +126,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 export function icon(paths) {
   const s = document.createElementNS(SVG_NS, 'svg');
   s.setAttribute('viewBox', '0 0 24 24');
+  s.setAttribute('aria-hidden', 'true');
   for (const d of paths) {
     const p = document.createElementNS(SVG_NS, 'path');
     p.setAttribute('d', d);
@@ -134,11 +136,11 @@ export function icon(paths) {
 }
 
 export const ICONS = {
-  terminal: '<svg viewBox="0 0 24 24"><polyline points="5 8 9.5 12 5 16"/><path d="M12.5 16h6.5"/></svg>',
-  file: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
-  edit: '<svg viewBox="0 0 24 24"><path d="M16.5 4.5l3 3L8.5 18.5 4.5 20l1.5-4z"/></svg>',
-  search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>',
-  tool: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 1 5 5l-8.4 8.4a2 2 0 0 1-2.8-2.8z"/><path d="M5 5l4 4"/></svg>',
+  terminal: iconMarkup('terminal'),
+  file: iconMarkup('file'),
+  edit: iconMarkup('edit'),
+  search: iconMarkup('search'),
+  tool: iconMarkup('tool'),
 };
 
 export const FILE_ICON = {

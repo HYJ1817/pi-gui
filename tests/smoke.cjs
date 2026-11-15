@@ -1630,6 +1630,17 @@ staticCheck();
   const LIVE_SEL = 'script,img,iframe,svg,object,embed,style,link,meta,form,input,base';
   const liveCount = (root) => root.querySelectorAll(LIVE_SEL).length;
   const noLiveTagIn = (html) => !/<\s*(script|img|iframe|svg|object|embed|style|link|meta|form|input|base)\b/i.test(html);
+  function withoutVerifiedIcons(root, slots) {
+    const clone = root.cloneNode(true);
+    for (const [selector, name] of slots) {
+      const template = window.document.createElement('template');
+      template.innerHTML = window.iconMarkup(name);
+      for (const svg of clone.querySelectorAll(selector)) {
+        if (svg.isEqualNode(template.content.firstChild)) svg.remove();
+      }
+    }
+    return clone;
+  }
 
   console.log('\n--- Tool Timeline：实时 ---');
 
@@ -2092,7 +2103,13 @@ staticCheck();
   check('Changes 全部过滤器的选中语义与状态一致', () => $('chgFilterAll').classList.contains('on') && $('chgFilterAll').getAttribute('aria-pressed') === 'true' && $('chgFilterSession').getAttribute('aria-pressed') === 'false');
   check('状态字母正确', () => chgRows().map((x) => x.querySelector('.chg-code').textContent).join('') === 'MA??M??');
   check('含空格与中文的路径原样渲染', () => chgRows().some((x) => x.querySelector('.chg-path').textContent === 'docs/中文 说明.md'));
-  check('恶意文件名只作为文本（不产生活元素）', () => liveCount($('rightPane').querySelector('.rp-body')) === 0 || `解析出了 ${liveCount($('rightPane').querySelector('.rp-body'))} 个危险元素`);
+  check('恶意文件名只作为文本（不产生活元素）', () => {
+    const pane = withoutVerifiedIcons($('rightPane').querySelector('.rp-body'), [
+      ['#btnChangesSplit > svg', 'split'],
+      ['#rightPaneClose > svg', 'close'],
+    ]);
+    return liveCount(pane) === 0 || `解析出了 ${liveCount(pane)} 个危险元素`;
+  });
   check('恶意文件名仍以原样文本呈现（没被截断或吃掉）', () =>
     chgRows().some((x) => x.querySelector('.chg-path').textContent === 'tmp/<img onerror=alert(1)>.txt'));
   check('增删行数渲染', () => {
@@ -2125,8 +2142,7 @@ staticCheck();
   const DIFF_STAGED = 'diff --git a/src/app.js b/src/app.js\n@@ -0,0 +1 @@\n+暂存的一行\n';
 
   gitStub.diff = { ok: true, isRepo: true, path: 'src/app.js', untracked: false, isDir: false, binary: false, working: DIFF_WORKING, staged: DIFF_STAGED, truncated: false, limit: 524288, notice: '' };
-  chgRows()[0].querySelector('.chg-main').click();
-  await new Promise((r) => setTimeout(r, 20));
+  await chgRows()[0].querySelector('.chg-main').onclick();
   check('点击行会去拉 diff（带正确路径）', () => {
     const c = gitCalls[gitCalls.length - 1];
     return (c && c.kind === 'diff' && c.body && c.body.path === 'src/app.js') || JSON.stringify(c);
@@ -2165,11 +2181,11 @@ staticCheck();
     working: 'diff --git a/<img src=x onerror=alert(1)> b/<img src=x onerror=alert(1)>\n@@ -0,0 +1 @@\n+<script>alert(1)</script>\n',
     staged: '', truncated: false, limit: 524288, notice: '',
   };
-  chgRows()[2].querySelector('.chg-main').click();
-  await new Promise((r) => setTimeout(r, 20));
+  await chgRows()[2].querySelector('.chg-main').onclick();
   check('恶意文件名与内容不产生活标签', () => {
     const box = chgRows()[2].querySelector('.chg-diff');
-    return (noLiveTagIn(box.innerHTML) && liveCount(box) === 0) || box.innerHTML.slice(0, 200);
+    const content = withoutVerifiedIcons(box, [['.d-hunkbar > .d-chev > svg', 'chevronDown']]);
+    return (noLiveTagIn(content.innerHTML) && liveCount(content) === 0) || content.innerHTML.slice(0, 200);
   });
   check('<script> 被转义成可读文本', () => {
     const b = chgRows()[2].querySelector('.chg-diff');
@@ -2182,21 +2198,18 @@ staticCheck();
 
   /* --- 二进制 / 截断 --- */
   gitStub.diff = { ok: true, isRepo: true, path: 'logo.png', untracked: false, isDir: false, binary: true, working: 'Binary files a/logo.png and b/logo.png differ\n', staged: '', truncated: false, limit: 524288, notice: '' };
-  chgRows()[1].querySelector('.chg-main').click();
-  await new Promise((r) => setTimeout(r, 20));
+  await chgRows()[1].querySelector('.chg-main').onclick();
   check('二进制文件明确提示看不了', () => chgText().includes('二进制文件'));
   check('二进制不渲染文本 diff 块', () => chgRows()[1].querySelector('.chg-diff .diff-body') === null);
 
   gitStub.diff = { ok: true, isRepo: true, path: 'big.log', untracked: false, isDir: false, binary: false, working: '@@ -1 +1 @@\n+一行\n', staged: '', truncated: true, limit: 524288, notice: '' };
-  chgRows()[3].querySelector('.chg-main').click();
-  await new Promise((r) => setTimeout(r, 20));
+  await chgRows()[3].querySelector('.chg-main').onclick();
   check('超限的 diff 有截断提示', () => chgText().includes('已截断') && chgText().includes('512 KB'));
 
   /* --- 后端没给 numstat 时，从 diff 正文补行数 --- */
   window.renderChangesBody();
   gitStub.diff = { ok: true, isRepo: true, path: 'newdir', untracked: true, isDir: true, binary: false, working: '@@ -0,0 +1,2 @@\n+甲\n-乙\n+丙\n', staged: '', truncated: false, limit: 524288, notice: '这是一个未被 Git 跟踪的目录，没有展开显示其中的文件。' };
-  chgRows()[4].querySelector('.chg-main').click();
-  await new Promise((r) => setTimeout(r, 20));
+  await chgRows()[4].querySelector('.chg-main').onclick();
   check('未跟踪目录的 notice 会显示', () => chgText().includes('未被 Git 跟踪的目录'));
   check('缺 numstat 时从 diff 正文补出 +N −M', () => {
     const t = chgRows()[4].querySelector('.chg-stat').textContent;
@@ -2372,7 +2385,7 @@ staticCheck();
   check('每个 hunk 一个可折叠块', () => wrapsOf(hunkRow).length === 2 || wrapsOf(hunkRow).length);
   check('hunk 默认是展开的', () => wrapsOf(hunkRow).every((w) => w.dataset.open === '1'));
   check('每个 hunk 都有可点击的标题栏', () => hunkRow.querySelectorAll('.chg-diff .d-hunkbar').length === 2);
-  check('展开态显示下三角', () => hunkRow.querySelector('.d-chev').textContent === '▾');
+  check('展开态显示向下箭头', () => !!hunkRow.querySelector('.d-chev > svg[data-icon="chevronDown"] > path'));
   check('hunk 标题栏标出该块的 +N −M', () => {
     const t = [...hunkRow.querySelectorAll('.d-hunkstat')].map((x) => x.textContent).join('|');
     return t === '+1−1|+1−1' || t;
@@ -2385,7 +2398,7 @@ staticCheck();
 
   wrapsOf(hunkRow)[0].querySelector('.d-hunkbar').click();
   check('点标题栏折叠这一个 hunk', () => wrapsOf(hunkRow)[0].dataset.open === '0');
-  check('折叠后三角朝右', () => wrapsOf(hunkRow)[0].querySelector('.d-chev').textContent === '▸');
+  check('折叠后箭头朝右', () => !!wrapsOf(hunkRow)[0].querySelector('.d-chev > svg[data-icon="chevronRight"] > path'));
   check('另一个 hunk 不受影响', () => wrapsOf(hunkRow)[1].dataset.open === '1');
 
   check('有折叠块时按钮是「展开全部块」', () => allBtnOf(hunkRow).textContent === '展开全部块' || allBtnOf(hunkRow).textContent);
@@ -5374,7 +5387,12 @@ staticCheck();
 
     /* ---------- XSS：说明一律当纯文本 ---------- */
     check('R29. 审阅说明按纯文本渲染（img/script/svg 都进不了 DOM）', () => {
-      const bad = card.querySelectorAll('.planner-rv img, .planner-rv script, .planner-rv svg, .planner-rv iframe, .planner-rv object, .planner-rv embed');
+      const review = withoutVerifiedIcons(rvEl('xsstask', 1), [
+        ['.planner-rv-state.pending > svg', 'pending'],
+        ['.planner-rv-state.ok > svg', 'check'],
+        ['.planner-rv-state.warn > svg', 'refresh'],
+      ]);
+      const bad = review.querySelectorAll('img, script, svg, iframe, object, embed');
       const shown = /onerror=alert\(1\)/.test(T(rvEl('xsstask', 1)));
       return (bad.length === 0 && shown) || `注入节点 ${bad.length} 个 / 文本=${shown}`;
     });

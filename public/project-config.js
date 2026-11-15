@@ -1,3 +1,4 @@
+import { createIcon } from './ui/icons.js';
 /* 当前项目的偏好设置（`<project>/.pi-gui/config.json`）。
  *
  * ---------- 这个模块做两件事 ----------
@@ -321,7 +322,8 @@ export async function openProjectSettings() {
       del.type = 'button';
       del.className = 'cfg-cmd-del';
       del.title = '删除这一条';
-      del.textContent = '×';
+      del.setAttribute('aria-label', del.title);
+      del.append(createIcon('close'));
       del.onclick = () => row.remove();
 
       row.append(iName, iCmd, del);

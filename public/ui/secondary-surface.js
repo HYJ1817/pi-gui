@@ -1,3 +1,4 @@
+import { createIcon } from './icons.js';
 /* Contextual work shares the existing right pane; Chat remains mounted. */
 import { $ } from '../state.js';
 
@@ -126,7 +127,7 @@ export function openSecondarySurface(view, mount, {label='文件变更',headerSe
   const close = document.createElement('button');
   close.id = 'rightPaneClose';
   close.type = 'button'; close.className = 'icon-btn secondary-close';
-  close.textContent = '×'; close.setAttribute('aria-label', `关闭${label}`);
+  close.append(createIcon('close')); close.setAttribute('aria-label', `关闭${label}`);
   close.onclick = () => { secondaryPane.close(); ($('btnWorkPanel') || $(triggerId))?.focus(); };
   const disposers = new Set();
   let disposed = false;

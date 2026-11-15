@@ -1,3 +1,4 @@
+import { createIcon } from './icons.js';
 /* 轻提示。 */
 
 import { el, S } from '../state.js';
@@ -121,6 +122,7 @@ export function toast(msg, kind = 'info', options = {}) {
   const icon = document.createElement('span');
   icon.className = 'ui4-feedback-toast-icon';
   icon.setAttribute('aria-hidden', 'true');
+  icon.append(createIcon({ error: 'warning', warning: 'warning', success: 'check' }[normalized] || 'info'));
 
   const body = document.createElement('div');
   body.className = 'ui4-feedback-toast-body';
@@ -144,6 +146,7 @@ export function toast(msg, kind = 'info', options = {}) {
   close.className = 'ui4-feedback-toast-close';
   close.title = '关闭通知';
   close.setAttribute('aria-label', '关闭通知');
+  close.append(createIcon('close'));
   close.onclick = () => dismiss(node);
   node.append(close);
 

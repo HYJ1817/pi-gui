@@ -39,7 +39,7 @@
 .rtc-composer-actions>.rtc-send{background:var(--ds-accent);color:var(--ds-bg-primary)}
 .rtc-composer-actions>.rtc-send:disabled{opacity:1;background:var(--ds-send-disabled-bg);color:var(--ds-send-disabled-fg)}
 .rtc-composer-actions>.rtc-stop{background:var(--ds-bg-active);color:var(--ds-text-primary)}
-.rtc-composer-actions>.btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.rtc-composer-actions>.btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
 .rtc-composer-actions>.btn span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 .runtime-conversation .rtc-model-trigger{font-size:var(--text-sm-plus);font-weight:var(--font-weight-semibold)}
 .rtc-markdown pre.code{max-width:100%;overflow:auto;padding:12px 14px;border-radius:var(--radius-md);background:var(--ds-tile);font:12px/1.6 var(--font-mono)}

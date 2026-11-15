@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* Multi-terminal surface in the existing right pane.
  *
  * P2 changes the unit of ownership: one backend PTY session per tab, each with
@@ -37,7 +38,7 @@ const DEFAULT_LIMITS = Object.freeze({ minCols: 20, maxCols: 500, minRows: 5, ma
  * tab cannot hide a live PTY. Anything else (network error, 503, unknown code)
  * leaves the backend state uncertain. */
 const CLOSE_SETTLED_CODES = new Set(['terminal_missing', 'stale_workspace', 'unknown_conversation']);
-const KEEP_ALIVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6"/><path d="M10 4v5l-3.5 4.5h11L14 9V4"/><path d="M12 13.5V20"/></svg>';
+const KEEP_ALIVE_ICON = iconMarkup('pin');
 
 const node = (tag, className, text) => {
   const element = document.createElement(tag);

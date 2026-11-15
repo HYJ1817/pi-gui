@@ -1,3 +1,4 @@
+import { iconMarkup, createIcon } from './ui/icons.js';
 /* Unified Diff 渲染。
  *
  * 为什么不复用 markdown.js 的 diff 着色：
@@ -162,7 +163,7 @@ function hunkWrap(header, bodyHtml, add, del, complete = false) {
   return (
     `<span class="d-hunkwrap" data-open="1" data-range-complete="${complete ? '1' : '0'}">` +
     '<button class="d-hunkbar" type="button" title="折叠 / 展开这一块">' +
-    '<span class="d-chev" aria-hidden="true">▾</span>' +
+    '<span class="d-chev" aria-hidden="true">' + iconMarkup('chevronDown') + '</span>' +
     `<span class="dl d-hunk">${esc(header) || ' '}</span>` +
     (stat.length ? `<span class="d-hunkstat">${stat.join('')}</span>` : '') +
     '</button>' +
@@ -263,7 +264,7 @@ function setHunkOpen(wrap, open) {
   if (!wrap) return;
   wrap.dataset.open = open ? '1' : '0';
   const chev = wrap.querySelector('.d-chev');
-  if (chev) chev.textContent = open ? '▾' : '▸';
+  if (chev) chev.replaceChildren(createIcon(open ? 'chevronDown' : 'chevronRight'));
 }
 
 /** 切换一个 hunk 的展开状态。 */

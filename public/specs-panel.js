@@ -1,3 +1,4 @@
+import { createIcon, iconMarkup } from './ui/icons.js';
 /* Read-only Specs surface inside the existing right pane. */
 import { S } from './state.js';
 import { fetchSpecs, fetchSpecDocument } from './api.js';
@@ -106,7 +107,7 @@ export function mountSpecsPanel(host, view, {
     const empty = node('section', 'specs-empty');
     const icon = node('span', 'specs-empty-icon');
     icon.setAttribute('aria-hidden', 'true');
-    icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6"/></svg>';
+    icon.innerHTML = iconMarkup('fileText');
     empty.append(icon, node('h4', 'specs-empty-title', title), node('p', 'specs-empty-text', text));
     docPane.append(empty);
   }
@@ -155,7 +156,7 @@ export function mountSpecsPanel(host, view, {
     row.setAttribute('aria-expanded', String(expanded.has(directory.path)));
     row.setAttribute('aria-controls', 'specs-dir-' + cssId(directory.path));
     row.append(
-      node('span', 'specs-dir-chev', expanded.has(directory.path) ? '▾' : '▸'),
+      createIcon(expanded.has(directory.path) ? 'chevronDown' : 'chevronRight', { className: 'specs-dir-chev' }),
       node('span', 'specs-dir-name', directory.name),
       node('span', 'specs-dir-count', String(countDocuments(directory)))
     );

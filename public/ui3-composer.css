@@ -21,6 +21,7 @@
 #chatComposer #btnSend:disabled {background:var(--ds-send-disabled-bg);color:var(--ds-send-disabled-fg)}
 #chatComposer #btnStop {width:28px;height:28px;padding:0;border:0;border-radius:var(--radius-full);justify-content:center;background:var(--ds-bg-active)}
 #chatComposer #btnStop span {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+#chatComposer :is(#btnSend,#btnStop) svg {width:16px;height:16px;stroke-width:1.7}
 #chatComposer .chip-dot {display:none}
 #chatComposer .chip {font-size:var(--text-sm-plus);border-radius:var(--radius-md)}
 #chatComposer #btnModel {font-weight:var(--font-weight-semibold)}

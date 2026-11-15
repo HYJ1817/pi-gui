@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* 任务列表的 DOM 层。
  *
  * 只认 plan-model.normalizePlan() 的结果。所有任务标题都走 textContent；
@@ -12,11 +13,11 @@
 import { planStatusLabel } from './plan-model.js';
 
 const ICON = {
-  pending: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" stroke-dasharray="2.4 2.8"/></svg>',
-  in_progress: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5"/><circle class="plan-pulse-dot" cx="12" cy="12" r="2.1"/></svg>',
-  completed: '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5.5 12.5 10 17 18.5 7.5"/></svg>',
-  failed: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 7.5l9 9M16.5 7.5l-9 9"/></svg>',
-  cancelled: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 12h11"/></svg>',
+  pending: iconMarkup('pending'),
+  in_progress: iconMarkup('progress'),
+  completed: iconMarkup('check'),
+  failed: iconMarkup('close'),
+  cancelled: iconMarkup('minus'),
 };
 
 let planId = 0;
@@ -93,7 +94,7 @@ export function renderPlan(plan) {
   count.className = 'plan-count';
   const chev = document.createElement('span');
   chev.className = 'plan-chev';
-  chev.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>';
+  chev.innerHTML = iconMarkup('chevronRight');
   head.append(title, count, chev);
 
   const list = document.createElement('ol');

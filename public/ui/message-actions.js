@@ -1,3 +1,4 @@
+import { iconMarkup } from './icons.js';
 /* Read-only message actions shared by live/history renderers. No session writes. */
 export function messageActions(text) {
   const bar = document.createElement('div');
@@ -6,7 +7,7 @@ export function messageActions(text) {
   const button = document.createElement('button');
   button.type = 'button'; button.className = 'message-copy';
   button.title = '复制消息'; button.setAttribute('aria-label', '复制消息');
-  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M15 4H6a2 2 0 0 0-2 2v9"/></svg>';
+  button.innerHTML = iconMarkup('copy');
   const feedback = document.createElement('span');
   feedback.className = 'message-copy-feedback'; feedback.setAttribute('role', 'status');
   button.onclick = async () => {

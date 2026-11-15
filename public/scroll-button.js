@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* 「回到底部」悬浮按钮。
  *
  * 铁律：只滚**传进来的那个**滚动容器。Classic 是 #stream，Runtime 是
@@ -55,7 +56,7 @@ export function createScrollButton({ host, scroller, running = () => false, labe
   const arrow = document.createElement('span');
   arrow.className = 'scroll-arrow';
   arrow.setAttribute('aria-hidden', 'true');
-  arrow.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v13m-5.5-5.5L12 18l5.5-5.5"/></svg>';
+  arrow.innerHTML = iconMarkup('arrowDown');
   button.append(dots, arrow);
   host.appendChild(button);
 

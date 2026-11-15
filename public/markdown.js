@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* Markdown 渲染。
  *
  * 覆盖 Coding Agent 实际会吐出来的东西：段落、标题、有序/无序/嵌套/任务列表、
@@ -92,7 +93,7 @@ export function renderVizCardHtml(code) {
   if (!res.ok) return null;
   const typeBadge = res.data.type === 'line' ? '折线图' : '柱状图';
   const metaText = `${res.data.series.length} 个系列 · ${res.data.labels.length} 个数据点`;
-  const svgIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>';
+  const svgIcon = iconMarkup('chart');
   return `<div class="viz-card" data-viz-card>` +
     `<div class="viz-card-header">` +
     `<div class="viz-card-icon" aria-hidden="true">${svgIcon}</div>` +

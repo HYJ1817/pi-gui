@@ -1,3 +1,4 @@
+import { iconMarkup } from './icons.js';
 /* 侧栏动作菜单（P24 收口）—— 项目行与会话行共用的**一套**浮层。
  *
  * ---------- 为什么新开一个模块，而不是复用 composer 的 popover ----------
@@ -35,17 +36,11 @@ function el(tag, cls, text) {
   return node;
 }
 
-/** 细线单色图标（16px，`currentColor`）。**都是自己写的 path**，不复制任何产品资产。 */
-const SVG_ATTRS = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"';
 export const MENU_ICONS = Object.freeze({
-  /* 铅笔：项目设置 / 重命名 */
-  pencil: `<svg ${SVG_ATTRS}><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 5.5l3 3"/></svg>`,
-  /* 垃圾桶：移除 / 删除 */
-  trash: `<svg ${SVG_ATTRS}><path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l.9 12.1a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/><path d="M10.5 11v6M13.5 11v6"/></svg>`,
-  /* 归档：向下的方框箭头 */
-  archive: `<svg ${SVG_ATTRS}><path d="M3.5 5h17v4h-17z"/><path d="M5.5 9v9.5A1.5 1.5 0 0 0 7 20h10a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M12 11.5v4.5"/><path d="M9.8 14l2.2 2.2L14.2 14"/></svg>`,
-  /* 取消归档：向上的方框箭头 */
-  restore: `<svg ${SVG_ATTRS}><path d="M3.5 5h17v4h-17z"/><path d="M5.5 9v9.5A1.5 1.5 0 0 0 7 20h10a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M12 16v-4.5"/><path d="M9.8 13.5l2.2-2.2 2.2 2.2"/></svg>`,
+  pencil: iconMarkup('edit'),
+  trash: iconMarkup('trash'),
+  archive: iconMarkup('archive'),
+  restore: iconMarkup('restore'),
 });
 
 const MENU_ID = 'actionMenu';
