@@ -78,6 +78,33 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     equal(timed.durationMs, 12400, '真实起止才计算时长');
     equal(TO.deriveTurnOutcome({ lastAssistant: { failed: false }, startedAt: 1000 }).durationMs, null, '缺结束时间就省略时长');
     equal(TO.deriveTurnOutcome({ tools: [{ state: 'error' }] }).toolFailures, 1, 'Runtime block 的 state 也能计数');
+
+    const recovered = TO.deriveTurnOutcome({
+      tools: [{ status: 'interrupted' }, { status: 'success' }],
+      lastAssistant: { failed: false },
+      interruptedToolTerminal: false,
+    });
+    equal(recovered.state, 'completed', '早前中断、最终成功不把整轮判成已停止');
+    equal(recovered.toolInterruptions, 1, '中断工具仍单独计数');
+    const recoveredDefault = TO.deriveTurnOutcome({
+      tools: [{ status: 'interrupted' }],
+      lastAssistant: { failed: false },
+    });
+    equal(recoveredDefault.state, 'completed', '有最终成功内容时默认不把中断当终态');
+    const recoveredByTool = TO.deriveTurnOutcome({
+      tools: [{ status: 'interrupted' }, { status: 'success' }],
+    });
+    equal(recoveredByTool.state, 'completed', '后续工具成功也覆盖早前中断');
+    const terminalNoAnswer = TO.deriveTurnOutcome({
+      tools: [{ status: 'success' }, { status: 'interrupted' }],
+    });
+    equal(terminalNoAnswer.state, 'stopped', '最后一个工具仍中断且无最终内容时为已停止');
+    const terminal = TO.deriveTurnOutcome({
+      tools: [{ status: 'interrupted' }],
+      lastAssistant: { failed: false },
+      interruptedToolTerminal: true,
+    });
+    equal(terminal.state, 'stopped', '中断发生在最后成功内容之后仍是已停止');
   }
 
   console.log('工具组折叠优先级');
@@ -224,6 +251,40 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     equal(stopped?.dataset.state, 'stopped', '用户主动停止是 stopped');
     equal(stopped?.textContent.includes('已停止'), true, '用户停止用“已停止”文案');
     S.stopOwnedTurn = false;
+
+    /* 早前工具被中断，但 Agent 后来恢复并给出最终成功回答：整轮仍是 completed。 */
+    M.clearThread();
+    M.beginTurn();
+    M.onMessageStart({ message: { role: 'user', content: [text('恢复任务')] } });
+    M.onMessageStart({ message: { role: 'assistant' } });
+    T.onToolStart({ toolCallId: 'recovered-old', toolName: 'bash', args: { command: 'old' } });
+    const recoveredOld = S.tools.get('recovered-old').entry;
+    recoveredOld.status = 'interrupted';
+    recoveredOld.endedAt = Date.now();
+    T.onToolStart({ toolCallId: 'recovered-new', toolName: 'read', args: { path: 'fixture.txt' } });
+    T.onToolEnd({ toolCallId: 'recovered-new', isError: false, result: { content: [text('ok')] } });
+    M.onMessageEnd({ message: { role: 'assistant', content: [text('恢复完成')], stopReason: 'stop' } });
+    M.onSettled();
+    const recoveredOutcome = d.querySelector('#stream .turn-outcome');
+    equal(recoveredOutcome?.dataset.state, 'completed', '早前中断的工具不覆盖最终成功');
+    equal(recoveredOutcome?.textContent.includes('1 次工具中断'), true, '终态仍如实显示早前中断数');
+
+    /* 中断发生在最后一次成功内容之后：仍要识别为已停止/已中断。 */
+    M.clearThread();
+    M.beginTurn();
+    M.onMessageStart({ message: { role: 'user', content: [text('执行到一半停止')] } });
+    M.onMessageStart({ message: { role: 'assistant' } });
+    T.onToolStart({ toolCallId: 'terminal-before', toolName: 'read', args: { path: 'fixture.txt' } });
+    T.onToolEnd({ toolCallId: 'terminal-before', isError: false, result: { content: [text('ok')] } });
+    M.onMessageEnd({ message: { role: 'assistant', content: [text('继续执行')], stopReason: 'toolUse' } });
+    T.onToolStart({ toolCallId: 'terminal-stop', toolName: 'bash', args: { command: 'sleep 10' } });
+    const terminalTool = S.tools.get('terminal-stop').entry;
+    terminalTool.status = 'interrupted';
+    terminalTool.endedAt = Date.now();
+    M.onSettled();
+    const terminalOutcome = d.querySelector('#stream .turn-outcome');
+    equal(terminalOutcome?.dataset.state, 'stopped', '最后成功内容之后的中断仍判为已停止');
+    equal(terminalOutcome?.textContent.includes('已中断'), true, '非用户停止的中断使用“已中断”文案');
   }
 
   console.log('Classic 历史轮次终态');
@@ -311,6 +372,40 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     const failed = output().querySelector('.turn-outcome');
     equal(failed?.dataset.state, 'failed', 'Runtime 轮次级错误显示失败');
     ok('Runtime 失败文案来自真实状态', failed?.textContent.includes('失败'));
+
+    /* Runtime 同一轮：早前工具 interrupted，后面 assistant 成功 → completed。 */
+    seedRuntimeSnapshot({ backendInstance: 'backend', items: [{ ...item('R'), activity: 'idle' }] });
+    const recoveredRecord = runtimeStore.get('R');
+    recoveredRecord.timeline = [
+      { id: 'r1', kind: 'user', text: '恢复任务' },
+      { id: 'r2', kind: 'tools', tools: [{ id: 'r-old', name: 'bash', state: 'interrupted' }] },
+      { id: 'r3', kind: 'assistant', text: '恢复完成', state: 'complete' },
+    ];
+    recoveredRecord.settled = true;
+    view.show('R'); await tick();
+    const recoveredRuntime = output().querySelector('.turn-outcome');
+    equal(recoveredRuntime?.dataset.state, 'completed', 'Runtime 早前中断不覆盖最终成功');
+    equal(recoveredRuntime?.textContent.includes('1 次工具中断'), true, 'Runtime 终态仍显示早前中断数');
+
+    /* 没有最终回答、但后面工具成功：同样说明已恢复，不应判 stopped。 */
+    recoveredRecord.timeline = [
+      { id: 'r1', kind: 'user', text: '恢复任务' },
+      { id: 'r2', kind: 'tools', tools: [{ id: 'r-old', name: 'bash', state: 'interrupted' }] },
+      { id: 'r3', kind: 'tools', tools: [{ id: 'r-new', name: 'bash', state: 'success' }] },
+    ];
+    view.draw(); await tick();
+    const recoveredByTool = output().querySelector('.turn-outcome');
+    equal(recoveredByTool?.dataset.state, 'completed', 'Runtime 后续工具成功覆盖早前中断');
+
+    /* 中断发生在最后成功内容之后：仍是 stopped。 */
+    recoveredRecord.timeline = [
+      { id: 'r1', kind: 'user', text: '恢复任务' },
+      { id: 'r2', kind: 'tools', tools: [{ id: 'r-old', name: 'bash', state: 'interrupted' }] },
+    ];
+    view.draw(); await tick();
+    const terminalRuntime = output().querySelector('.turn-outcome');
+    equal(terminalRuntime?.dataset.state, 'stopped', 'Runtime 最后内容之后的中断仍判为已停止');
+    equal(terminalRuntime?.textContent.includes('已中断'), true, 'Runtime 非用户停止的中断使用“已中断”文案');
     view.dispose();
   }
 
