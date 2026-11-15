@@ -349,23 +349,29 @@ PI-Desktop 是 React + Electron 的 monorepo；会话渲染集中在 `apps/deskt
 #### O-01 运行中的多工具组不应自动折叠
 
 - **现状**：`public/tool-view.js:317-337` 的 `syncGroup` 在 `count >= 2`、用户未手动切换、焦点不在组内时直接 `list.hidden = true`。第二个工具 `tool_execution_start` 时立即触发（`public/tools.js:126-147`）。于是一次并行/连续工具执行中，用户只能看到“工具调用 · 2 次”与状态汇总，看不到任何运行中的输出；失败项也要等结束或手动展开。
-- **目标**：活跃组保持展开；全部子项结束后再按默认规则折叠；用户显式折叠始终优先；用户正在阅读的展开行/文本选择不被自动收起。
-- **实现**：在 `syncGroup` 计算 `running` 与 `openChild`，仅当 `multiple && !running && !g.userToggled && !focusInside && !selectionInside && !openChild` 时折叠；运行中强制 `hidden = false`、`aria-expanded = true`，但不设置 `userToggled`，以便结束后仍能按默认折叠。`syncGroup` 在 `onToolWait` 时也要调用（更新等待状态）。
+- **目标**：折叠优先级固定为：**① 用户显式展开/折叠 > ② 活跃组默认展开 > ③ 已结束默认折叠**。用户显式选择永远不被运行状态、新工具到达或结束事件覆盖。
+- **实现**：在 `syncGroup` 区分“显式选择”和“默认规则”：
+  - `g.userToggled`（组头点击）或 `openChild`（任一工具行被用户展开）存在时，只同步状态文字，不改 `hidden` / `aria-expanded`；`userToggled` 不得在 `syncGroup` 中被清掉。
+  - 没有显式选择且有 `running`/`waiting` 子项时默认展开。
+  - 没有显式选择且全部子项结束、焦点/文本选择不在组内时默认折叠；焦点/选择在组内时保持展开。
+  - 运行中不再“强制展开”一个被用户手动折叠的组；只在无显式选择时按默认展开。
+  - `syncGroup` 在 `onToolWait` 时也要调用（更新等待状态）。
 - **不改变**：组边界、单项无组头、状态图标、思考动画。
-- **测试**：工具 1 启动 → 组只有 1 行；工具 2 启动 → 组仍展开；两者结束 → 组折叠；用户先手动折叠 → 新工具启动不展开；用户展开某行 → 结束时不自动折叠该组。
+- **测试**：工具 1 启动 → 组只有 1 行；工具 2 启动 → 组仍展开；两者结束 → 组折叠；用户运行中手动折叠 → 第二个工具到来时保持折叠；用户手动展开 → 结束后保持展开；用户展开某行 → 结束时不自动折叠该组。
 
 #### O-02 新增轮次终态行
 
 - **现状**：`public/messages.js:159-183` 的 `onSettled` 只隐藏 working、发统计请求、settle 计划；没有“这一轮完成了什么/为什么停止”的轮次摘要。Runtime 只有会话级状态行（`public/runtime-conversation.js:835-843`）。
-- **目标**：每轮结束出现一行紧凑终态：`已完成 · 12.4s · 5 次工具`、`已停止 · 3.1s · 2 次工具`、`失败 · 1 次工具`、`未完成 · 工具未返回`。没有真实时长就不显示时长；没有真实工具数就不显示数量。
+- **目标**：每轮结束出现一行紧凑终态：`已完成 · 12.4s · 5 次工具`、`已停止 · 3.1s · 2 次工具`、`失败 · 1 次工具`、`未完成 · 工具未返回`。没有真实时长就不显示时长；没有真实工具数就不显示数量。工具失败单独计数（如 `已完成 · 2 次工具失败`），不改变轮次状态。
 - **实现**：新增 `public/turn-outcome.js`（纯模型 + 小视图，无业务依赖）：
-  - 输入证据：本轮用户消息时间、最后一条消息/工具时间、`stopOwnedTurn`、`stopReason`、工具状态集合、Thinking 状态、是否仍有 streaming 行。
+  - 输入证据：本轮用户消息时间、最后一条消息/工具时间、`stopOwnedTurn`、assistant 消息的 `stopReason`/`errorMessage`、工具状态集合、Thinking 状态、是否仍有 streaming 行。
+  - **轮次 `failed` 只接受轮次级错误证据**：本轮 assistant 消息的 `stopReason === 'error'` 或非空 `errorMessage`，或明确属于该轮的最终错误事件。工具结果 `isError` 只计入 `toolFailures`，**不得**把整轮判成 `failed`；全部工具失败但轮次正常收尾时仍是 `completed`，只在终态行显示工具失败数。
   - 输出状态：`completed` / `stopped` / `failed` / `unsettled`；已结束行的优先级 failed > stopped > unsettled > completed。`running` 只用于实时状态行，不写进已结束终态（与 PI-Desktop `turn-process.ts:222-251` 同序，但这里只作为展示层）。
-  - Classic：在 `agent_settled` 时创建/更新该轮终态行，下一次用户消息前保留；历史重建按用户回合分组，只有 `stopReason`/工具状态/时间戳可证明时才显示。
+  - Classic：在 `agent_settled` 时创建/更新该轮终态行，下一次用户消息前保留；历史重建按用户回合分组，只有上述轮次级证据/工具状态/时间戳可证明时才显示。
   - Runtime：首版由视图扫描 block 派生，不改 timeline 契约；在最后一个 block 后追加一个视图节点，下一用户 block 出现时把上一轮节点固定。没有时间戳就省略时长。
   - Thinking 行若要显示耗时，只在实时把 `thinking_start`/`thinking_end` 的到达时间记在视图状态里；历史没有块级时间戳，省略。
 - **不改变**：现有消息/组/计划节点位置；不新增父折叠。
-- **测试**：完成、失败、用户停止、provider 取消、工具未完成、历史无时间戳、切换会话。
+- **测试**：完成、轮次级失败、仅工具失败、用户停止、provider 取消、工具未完成、历史无时间戳、切换会话。
 
 #### O-03 自动重试时保留“为什么在重试”
 
@@ -386,10 +392,11 @@ PI-Desktop 是 React + Electron 的 monorepo；会话渲染集中在 `apps/deskt
 #### O-05 Classic 按会话恢复阅读位置
 
 - **现状**：`public/messages.js:764` 在历史重建后 `scrollBottom(true)`（除非 `afterHistoryRendered` 返回 true）；没有阅读书签。切换会话/刷新后总是回到底部，用户找不到刚才读到的位置。
-- **目标**：每个会话记住“是否贴底 + 可见锚点（用户/助手消息的 `data-nav-id` 或新增 id）+ 偏移”；切回时恢复；贴底会话仍回到底部；搜索跳转/用户发送优先于书签。
+- **目标**：同一渲染进程内，每个会话记住“是否贴底 + 可见锚点（用户/助手消息的 `data-nav-id` 或新增 id）+ 偏移”；切回时恢复；贴底会话仍回到底部；搜索跳转/用户发送优先于书签。
 - **实现**：新增 `public/reading-position.js`（纯函数 + DOM 锚点，不存消息副本）：`capture(scroller, content, pinned)`、`restore(scroller, content, bookmark)`；键用 pi `sessionId`（不要用路径/标题猜）；在 `renderUser`/`onSettled` 更新 pinned；在 `rebuildFromMessages` 末尾、`afterHistoryRendered` 之前尝试恢复；恢复用 `scrollTop += rect.top - viewportTop - offset`，绝不 `scrollIntoView`。
+- **恢复边界**：阶段 2 只做**渲染进程内存书签**（`Map<sessionId, bookmark>`），完整刷新页面或重启应用后丢失；不写 `localStorage`、不写会话文件、不改 pi 数据。跨刷新持久化是**独立的后续决策**，需要另行明确会话身份、保留期限、隐私边界与清理策略，不与本阶段混在一起。
 - **不改变**：160px 跟随阈值、回到底部按钮、minimap；新用户发送仍强制到底。
-- **测试**：中段滚动 → 切会话 → 切回；刷新/历史重建；搜索落点；新发送；无 sessionId 时不恢复。
+- **测试**：同一渲染进程内中段滚动 → 切会话 → 切回；历史重建；搜索落点；新发送；无 sessionId 时不恢复。跨刷新恢复不在阶段 2 验收范围，单列为未验证/后续项。
 
 #### O-06 折叠/展开保持被点击标题的位置
 
@@ -403,9 +410,9 @@ PI-Desktop 是 React + Electron 的 monorepo；会话渲染集中在 `apps/deskt
 
 - **现状**：`public/tool-view.js:214-220` 只写 `pre.textContent`；长输出运行中不会滚动到底，用户看到的是静止的旧行。
 - **目标**：仅当工具 running、详情展开、`pre` 距底 <40px 时，把 `pre.scrollTop` 设到 `scrollHeight`；用户手动上滚后不再拉回。
-- **实现**：在 `updateEntry` 写完输出后做上述判断；用现有 150ms 批量绘制（`public/tools.js:59-85`），不新增定时器。
+- **实现**：在**写入 `pre.textContent` 之前**读取 `pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40`（`wasNearBottom`）；写入后仅当 `entry.status === 'running'`、详情展开（`!p.more.hidden`）、`wasNearBottom` 时，把 `pre.scrollTop` 设到 `scrollHeight`。追加内容会增大 `scrollHeight`，写完再测会把“原本贴底”误判成“用户已上滚”，因此必须先测后写。用户手动上滚后 `wasNearBottom` 为 false，不再拉回。
 - **不改变**：输出截断、`textContent` 安全边界、工具组折叠。
-- **测试**：长输出、展开/收起、手动上滚、结束后不再跟随。
+- **测试**：长输出、展开/收起、先贴底后上滚、先上滚后追加、结束后不再跟随。
 
 #### O-08 Runtime 历史搜索不要使用 `scrollIntoView`
 
@@ -537,7 +544,8 @@ PI-Desktop 是 React + Electron 的 monorepo；会话渲染集中在 `apps/deskt
 | 等待写入 | `tool_wait_state.waiting === true` | 不能从工具名猜写租约 |
 | 完成 | `agent_settled` + 无错误/中止/未完成行 | 不能把“没有 error”直接当完成（可能 unsettled） |
 | 已停止 | `stopOwnedTurn` + `stopReason:aborted`，或后端 stop 确认 | 不能把 provider 取消当用户停止 |
-| 失败 | `stopReason:error` / `errorMessage` / 最终错误事件 | 不能把工具失败自动升级为整轮失败（除非整轮错误） |
+| 失败 | 仅轮次级证据：本轮 assistant 的 `stopReason:error` / 非空 `errorMessage`，或明确属于该轮的最终错误事件 | **工具 `isError` 只能计入工具失败数，不能把整轮判失败**；不能把工具失败自动升级为整轮失败 |
+| 完成但含工具失败 | `agent_settled` + 无轮次级错误/中止/未完成行；工具状态中有 `error` | 不把工具失败改写成轮次 `failed`；单独显示失败数 |
 | 未完成 | 收尾仍有 `running`/`streaming` 行；历史缺 result | 不能伪造 `completed` |
 | 思考耗时 | 实时 `thinking_start` → `thinking_end` | 历史没有块级时间戳，不能估算 |
 | 轮次耗时 | 用户消息/agent_start → 最后消息/工具/agent_settled | 缺失就省略，不补 0 |
@@ -574,8 +582,8 @@ PI-Desktop 是 React + Electron 的 monorepo；会话渲染集中在 `apps/deskt
 
 - **状态样式**：完成用 `--ds-success`；停止用 `--ds-text-secondary`；失败用 `--ds-error`；未完成用 warning 语义（新组件用 `--ds-warning`；既有工具行沿用该区域已有的 `--warn`）。始终有文字和形状，不仅靠颜色。
 - **交互**：整行不是按钮（避免误点）；“详情”按钮可键盘展开；失败时详情里给出已有错误块/原始错误，不复制错误文本；没有详情时不渲染按钮。
-- **内容克制**：成功且无异常时只显示三个值；不显示“运行完成”之类重复装饰；不显示模型/Token（回答元信息已有）。
-- **历史**：只有能证明的才显示；缺时间就不显示时间；缺工具数就不显示；不能从“消息条数”猜工具数。
+- **内容克制**：成功且无异常时只显示三个值；不显示“运行完成”之类重复装饰；不显示模型/Token（回答元信息已有）。工具失败不改变轮次状态：`completed` 行可附加 `· N 次工具失败`，用 warning 语义，`data-state` 仍为 `completed`。
+- **历史**：只有能证明的才显示；缺时间就不显示时间；缺工具数就不显示；不能从“消息条数”猜工具数；工具 `isError` 只计入失败数，不把整轮标成失败。
 
 ### 6.2 工具组头与折叠
 
@@ -624,12 +632,13 @@ PI-Desktop 是 React + Electron 的 monorepo；会话渲染集中在 `apps/deskt
 - **错误卡**：保留人话标题、下一步、原始详情；可选增加错误码/网络码（如果上游有结构化字段且不泄露敏感信息）；不默认增加“关闭”。
 - **停止**：用户主动停止显示中性“已由用户取消”；provider 取消照常显示错误；工具/Thinking/任务分别标未完成/中断；轮次终态行显示“已停止”。
 - **重试**：成功后移除重试行；最终失败显示完整错误卡 + 轮次“失败”；连续重试只保留一行。
+- **轮次失败与工具失败分离**：轮次“失败”只认 assistant 的轮次级错误；工具失败在终态行单独计数并保持 warning 语义，不改写轮次状态，也不触发错误卡。
 - **不伪造**：没有 `auto_retry` 事件时不显示重试；未确认上游 delay 字段时不倒计时。
 
 ### 6.7 滚动与阅读位置
 
 - **跟随**：保持距底 160px 内跟随；用户上滚立即停止；回到底部按钮保持 160/8px 两段阈值与运行态动画。
-- **书签**：每个会话保存 `{pinned, anchorId, offset, scrollTop}`；切会话/历史重建恢复；搜索跳转/发送优先。
+- **书签**：每个会话保存 `{pinned, anchorId, offset, scrollTop}`；切会话/历史重建恢复；搜索跳转/发送优先。阶段 2 仅在渲染进程内存中保存，刷新/重启后丢失；跨刷新持久化另做决策，不写 `localStorage` 或会话文件。
 - **折叠锚点**：点击标题时保持标题位置；贴底时保持跟随。
 - **跳转**：只写当前滚动容器；不使用 `scrollIntoView`；点击后短期 follow（现有 900ms）保留。
 - **Minimap**：保持只索引用户消息；聚簇布局与点击只写 `#stream.scrollTop` 的规则不变。
@@ -711,7 +720,7 @@ PI-Desktop 是 React + Electron 的 monorepo；会话渲染集中在 `apps/deskt
 
 | 工作项 | 文件 | 说明 |
 | --- | --- | --- |
-| 2-A Classic 阅读书签 | 新增 `public/reading-position.js`；`public/messages.js` | O-05；按 sessionId，锚点 + 偏移；搜索/发送优先 |
+| 2-A Classic 阅读书签 | 新增 `public/reading-position.js`；`public/messages.js` | O-05；按 sessionId，锚点 + 偏移；搜索/发送优先；只在内存，不做跨刷新持久化 |
 | 2-B 折叠锚点补偿 | `public/tool-view.js`、`public/plan-view.js`、`public/messages.js`、`public/runtime-conversation.js`、共享小工具 | O-06；只调当前容器 |
 | 2-C 工具输出跟随 | `public/tool-view.js` | O-07；距底 40px 内 |
 | 2-D Runtime 历史搜索滚动修正 | `public/runtime-conversation.js` | O-08；先实测祖先滚动风险 |
@@ -769,7 +778,7 @@ PI-Desktop 是 React + Electron 的 monorepo；会话渲染集中在 `apps/deskt
 
 | 验收项 | 方法 | 通过标准 |
 | --- | --- | --- |
-| 阅读书签 | 新增 `tests/reading-position.cjs`（纯函数）+ 真实浏览器会话切换 | 中段 → 切走 → 切回，锚点误差 ≤1px；贴底会话回到底部；搜索/发送优先 |
+| 阅读书签 | 新增 `tests/reading-position.cjs`（纯函数）+ 真实浏览器会话切换 | 同一渲染进程内中段 → 切走 → 切回，锚点误差 ≤1px；贴底会话回到底部；搜索/发送优先；完整刷新后不恢复（阶段 2 不承诺跨刷新） |
 | 历史重建恢复 | 夹具会话 + 刷新/重新打开 | 不强制到底；无书签时保持原行为 |
 | 折叠锚点 | 真实浏览器：展开视口上方工具/Thinking/Plan | 被点击标题的视口 top 变化 ≤1px；用户滚动不被覆盖 |
 | 工具输出跟随 | 长输出夹具 | 距底 <40px 跟随；上滚后不拉回；结束后停止 |
