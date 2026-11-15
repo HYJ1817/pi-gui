@@ -1,0 +1,22 @@
+{
+  "label": "after",
+  "publicRoot": "C:\\pi-GUI\\public",
+  "shots": [
+    "after-01-group-default-dark.png",
+    "after-02-group-default-light.png",
+    "after-03-group-default-narrow-700-dark.png",
+    "after-04-token-default-dark.png",
+    "after-05-token-expanded-dark.png",
+    "after-06-token-default-light.png",
+    "after-07-turn-end-dark.png",
+    "after-08-turn-end-light.png",
+    "after-09-error-before-retry-dark.png",
+    "after-10-after-retry-dark.png",
+    "after-11-after-retry-light.png"
+  ],
+  "versions": {
+    "electron": "44.4.3",
+    "chrome": "152.0.7977.130"
+  },
+  "capturedAt": "2026-11-15T14:30:06.493Z"
+}
