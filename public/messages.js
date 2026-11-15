@@ -106,7 +106,9 @@ export function scrollBottom(force) {
 export function beginTurn() {
   liveTurn = {
     startedAt: Date.now(),
+    seq: 0,
     toolIds: new Set(),
+    toolSeqs: new Map(),
     lastAssistant: null,
     finalized: false,
   };
@@ -114,7 +116,36 @@ export function beginTurn() {
 
 /** 工具行进入本轮统计；gui_plan 等不进入工具时间线的调用不会走到这里。 */
 export function noteTurnTool(id) {
-  if (liveTurn && !liveTurn.finalized && id != null) liveTurn.toolIds.add(String(id));
+  if (!liveTurn || liveTurn.finalized || id == null) return;
+  const key = String(id);
+  liveTurn.toolIds.add(key);
+  liveTurn.toolSeqs.set(key, ++liveTurn.seq);
+}
+
+/** 中断工具是否发生在最后一次成功内容之后；没有最终内容时仅最后一个工具算终态。 */
+function interruptedToolTerminal(tools, lastAssistant, toolSeqs = null) {
+  const interrupted = tools.filter(entry => entry?.status === 'interrupted');
+  if (!interrupted.length) return false;
+  if (!lastAssistant) {
+    return tools.length > 0 && tools[tools.length - 1]?.status === 'interrupted';
+  }
+  /* 实时事件用单调序号判先后：只有最后一次 message_end 之后、且后面没有
+   * 其它工具的中断，才是轮次终态；后续工具成功说明已经恢复。 */
+  if (Number.isInteger(lastAssistant.seq) && toolSeqs instanceof Map) {
+    const seqs = tools
+      .map(entry => toolSeqs.get(String(entry.id)))
+      .filter(Number.isInteger);
+    const latestToolSeq = seqs.length ? Math.max(...seqs) : -Infinity;
+    return interrupted.some(entry => {
+      const seq = toolSeqs.get(String(entry.id));
+      return Number.isInteger(seq) && seq > lastAssistant.seq && seq === latestToolSeq;
+    });
+  }
+  const lastAt = lastAssistant.at;
+  if (!Number.isFinite(lastAt)) return false;
+  const lastTool = tools[tools.length - 1];
+  if (!lastTool || lastTool.status !== 'interrupted') return false;
+  return !Number.isFinite(lastTool.endedAt) || lastTool.endedAt > lastAt;
 }
 
 /** agent_settled 后的轮次终态。没有真实证据（assistant / 工具）就不画。 */
@@ -128,6 +159,7 @@ function finalizeTurn() {
   const outcome = deriveTurnOutcome({
     tools,
     lastAssistant: turn.lastAssistant,
+    interruptedToolTerminal: interruptedToolTerminal(tools, turn.lastAssistant, turn.toolSeqs),
     startedAt: turn.startedAt,
     endedAt: Date.now(),
   });
@@ -553,6 +585,8 @@ export function onMessageEnd(evt) {
         failed: !ownedAbort && (msg.stopReason === 'error' || Boolean(msg.errorMessage)),
         stopped: ownedAbort,
         interrupted: msg.stopReason === 'aborted' && !ownedAbort,
+        at: Number.isFinite(msg.timestamp) ? msg.timestamp : Date.now(),
+        seq: ++liveTurn.seq,
       };
     }
     if (S.current) {
@@ -873,6 +907,7 @@ export function rebuildFromMessages(data) {
     const outcome = deriveTurnOutcome({
       tools: turn.tools,
       lastAssistant: turn.lastAssistant,
+      interruptedToolTerminal: interruptedToolTerminal(turn.tools, turn.lastAssistant),
       startedAt: turn.startedAt,
       endedAt: turn.endedAt,
     });
@@ -899,7 +934,12 @@ export function rebuildFromMessages(data) {
       if (historyTurn) {
         const failed = msg.stopReason === 'error' || Boolean(msg.errorMessage);
         const interrupted = msg.stopReason === 'aborted' && !failed;
-        historyTurn.lastAssistant = { failed, stopped: false, interrupted };
+        historyTurn.lastAssistant = {
+          failed,
+          stopped: false,
+          interrupted,
+          at: Number.isFinite(msg.timestamp) ? msg.timestamp : null,
+        };
         markHistoryEnd(msg.timestamp);
       }
       const wrap = document.createElement('article');

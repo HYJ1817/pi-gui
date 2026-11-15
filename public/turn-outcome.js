@@ -35,6 +35,7 @@ export function formatTurnDuration(ms) {
  *   tools?: Array<{status?: string}>,
  *   lastAssistant?: {failed?: boolean, stopped?: boolean, interrupted?: boolean}|null,
  *   contentUnsettled?: boolean,
+ *   interruptedToolTerminal?: boolean|null, // 中断是否发生在最后一次成功内容之后
  *   startedAt?: number|null,
  *   endedAt?: number|null
  * }} evidence
@@ -44,6 +45,7 @@ export function formatTurnDuration(ms) {
  *   durationMs: number|null,
  *   toolCount: number,
  *   toolFailures: number,
+ *   toolInterruptions: number,
  *   unfinishedTools: number
  * }}
  */
@@ -51,6 +53,7 @@ export function deriveTurnOutcome({
   tools = [],
   lastAssistant = null,
   contentUnsettled = false,
+  interruptedToolTerminal = null,
   startedAt = null,
   endedAt = null,
 } = {}) {
@@ -59,26 +62,34 @@ export function deriveTurnOutcome({
     : [];
   const toolCount = states.length;
   const toolFailures = states.filter(status => status === 'error').length;
+  const toolInterruptions = states.filter(status => status === 'interrupted').length;
   const unfinishedTools = states.filter(status => UNFINISHED_TOOL_STATES.has(status)).length;
-  const interruptedTool = states.includes('interrupted');
+  const interruptedTool = toolInterruptions > 0;
   const hasEvidence = Boolean(lastAssistant) || toolCount > 0 || contentUnsettled;
   if (!hasEvidence) return null;
 
+  /* 一个较早被中断、随后又成功完成的工具不能把整轮判成“已停止”。
+   * 只有中断发生在最后一次成功内容之后（或根本没有最终内容）才作为轮次终态；
+   * 调用方有顺序证据时应显式传入，缺省只保守处理“没有最终内容”的情况。 */
+  const terminalInterruption = interruptedToolTerminal === true
+    || (interruptedToolTerminal == null && interruptedTool && !lastAssistant
+      && states.length > 0 && states[states.length - 1] === 'interrupted');
+
   let state;
   if (lastAssistant?.failed) state = 'failed';
-  else if (lastAssistant?.stopped || lastAssistant?.interrupted || interruptedTool) state = 'stopped';
+  else if (lastAssistant?.stopped || lastAssistant?.interrupted || terminalInterruption) state = 'stopped';
   else if (contentUnsettled || unfinishedTools > 0) state = 'unsettled';
   else state = 'completed';
 
   const interrupted = state === 'stopped'
     && lastAssistant?.stopped !== true
-    && (lastAssistant?.interrupted === true || interruptedTool);
+    && (lastAssistant?.interrupted === true || terminalInterruption);
   const label = interrupted ? '已中断' : STATE_LABEL[state];
   const durationMs = finite(startedAt) && finite(endedAt) && endedAt >= startedAt
     ? endedAt - startedAt
     : null;
 
-  return { state, label, durationMs, toolCount, toolFailures, unfinishedTools };
+  return { state, label, durationMs, toolCount, toolFailures, toolInterruptions, unfinishedTools };
 }
 
 function span(className, text = '') {
@@ -119,6 +130,7 @@ export function updateTurnOutcome(node, outcome) {
   if (duration) parts.push(duration);
   if (outcome.toolCount > 0) parts.push(`${outcome.toolCount} 次工具`);
   if (outcome.toolFailures > 0) parts.push(`${outcome.toolFailures} 次工具失败`);
+  if (outcome.toolInterruptions > 0) parts.push(`${outcome.toolInterruptions} 次工具中断`);
   if (outcome.unfinishedTools > 0) parts.push(`${outcome.unfinishedTools} 次工具未完成`);
   const meta = parts.length ? ' · ' + parts.join(' · ') : '';
   if (p.meta.textContent !== meta) p.meta.textContent = meta;

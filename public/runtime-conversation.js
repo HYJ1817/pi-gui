@@ -773,11 +773,22 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   function timelineTurnOutcomes(blocks, record) {
     const turns = [];
     let current = null;
+    let blockIndex = -1;
     for (const block of blocks) {
       if (!block || typeof block.id !== 'string') continue;
+      blockIndex += 1;
       if (block.kind === 'user') {
         if (current) turns.push(current);
-        current = { key: block.id, lastBlockId: block.id, lastContentState: null, tools: [], hasEvidence: false };
+        current = {
+          key: block.id,
+          lastBlockId: block.id,
+          lastContentState: null,
+          lastContentIndex: -1,
+          lastInterruptedToolIndex: -1,
+          lastToolIndex: -1,
+          tools: [],
+          hasEvidence: false,
+        };
         continue;
       }
       if (!current) continue;
@@ -787,9 +798,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         if (tools.length) {
           current.tools.push(...tools);
           current.hasEvidence = true;
+          current.lastToolIndex = blockIndex;
+          if (tools.some(tool => tool?.state === 'interrupted')) {
+            current.lastInterruptedToolIndex = blockIndex;
+          }
         }
       } else if (block.kind === 'assistant' || block.kind === 'thinking') {
         current.lastContentState = block.state || null;
+        current.lastContentIndex = blockIndex;
         current.hasEvidence = true;
       }
     }
@@ -810,6 +826,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         tools: turn.tools,
         lastAssistant,
         contentUnsettled: turn.lastContentState === 'streaming',
+        /* 中断工具只有在最后一次成功内容之后、且是最后一个工具块时才是
+         * 轮次终态；更早的中断被后续回答/工具覆盖，不能误报为“已停止”。 */
+        interruptedToolTerminal: turn.lastInterruptedToolIndex >= 0
+          && turn.lastInterruptedToolIndex === turn.lastToolIndex
+          && turn.lastInterruptedToolIndex > turn.lastContentIndex,
       });
       if (!outcome) return null;
       return { key: turn.key, lastBlockId: turn.lastBlockId, outcome, complete: !isLast || settled };
