@@ -144,6 +144,67 @@
 .ui2-runtime-thinking[data-state="error"] summary { color: var(--err); }
 .ui2-runtime-thinking[data-state="interrupted"] summary { color: var(--warn); }
 
+/* ---------- 轮次终态 ---------- */
+
+/* Classic 与 Runtime 共用。只呈现真实证据：状态、时长、工具数与工具失败数；
+ * 没有对应的值就不生成文本。颜色只做辅助，文字本身已经说明状态。 */
+.turn-outcome {
+  margin: 8px 0 16px;
+  min-width: 0;
+}
+
+.turn-outcome-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--t3);
+  font-size: 11px;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.turn-outcome-dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--t3);
+}
+
+.turn-outcome-label {
+  flex: 0 0 auto;
+  color: var(--t2);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.turn-outcome-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.turn-outcome[data-state="completed"] .turn-outcome-dot { background: var(--ok); }
+.turn-outcome[data-state="failed"] .turn-outcome-dot { background: var(--err); }
+.turn-outcome[data-state="failed"] .turn-outcome-label { color: var(--err); }
+.turn-outcome[data-state="stopped"] .turn-outcome-dot,
+.turn-outcome[data-state="unsettled"] .turn-outcome-dot { background: var(--warn); }
+.turn-outcome[data-state="stopped"] .turn-outcome-label,
+.turn-outcome[data-state="unsettled"] .turn-outcome-label { color: var(--warn); }
+
+.runtime-conversation .rtc-output .turn-outcome {
+  margin: 4px 0 18px;
+}
+
+@media (max-width: 700px) {
+  .turn-outcome-line { font-size: 10.5px; }
+}
+
 /* ---------- 回到底部 ---------- */
 
 #chatComposer .composer-box,

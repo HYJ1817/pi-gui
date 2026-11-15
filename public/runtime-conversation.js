@@ -66,6 +66,7 @@ import {
   setEntryExpanded,
   isEntryExpanded,
 } from './tool-view.js';
+import { deriveTurnOutcome, renderTurnOutcome, updateTurnOutcome } from './turn-outcome.js';
 import { createScrollButton } from './scroll-button.js';
 import {
   extractStableLocator,
@@ -205,6 +206,10 @@ const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false
  * 更新只改变化的块；展开状态在切换会话后重建时按会话恢复。 */
 const EMPTY_TIMELINE_VIEW = () => ({
   nodes: new Map(),
+  outcomeNodes: new Map(),
+  settledTurns: new Set(),
+  ownerKey: null,
+  historyRef: null,
   mode: null,
   thinkingOpen: new Map(),
   groupOpen: new Map(),
@@ -763,14 +768,99 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     return null;
   }
 
+  /* 从有界 block 派生轮次终态。只读视图需要的证据，不改 timeline 契约：
+   * assistant/thinking 取最后一个终态；工具错误只计失败数，不把整轮判失败。 */
+  function timelineTurnOutcomes(blocks, record) {
+    const turns = [];
+    let current = null;
+    let blockIndex = -1;
+    for (const block of blocks) {
+      if (!block || typeof block.id !== 'string') continue;
+      blockIndex += 1;
+      if (block.kind === 'user') {
+        if (current) turns.push(current);
+        current = {
+          key: block.id,
+          lastBlockId: block.id,
+          lastContentState: null,
+          lastContentIndex: -1,
+          lastInterruptedToolIndex: -1,
+          lastToolIndex: -1,
+          tools: [],
+          hasEvidence: false,
+        };
+        continue;
+      }
+      if (!current) continue;
+      current.lastBlockId = block.id;
+      if (block.kind === 'tools') {
+        const tools = Array.isArray(block.tools) ? block.tools : [];
+        if (tools.length) {
+          current.tools.push(...tools);
+          current.hasEvidence = true;
+          current.lastToolIndex = blockIndex;
+          if (tools.some(tool => tool?.state === 'interrupted')) {
+            current.lastInterruptedToolIndex = blockIndex;
+          }
+        }
+      } else if (block.kind === 'assistant' || block.kind === 'thinking') {
+        current.lastContentState = block.state || null;
+        current.lastContentIndex = blockIndex;
+        current.hasEvidence = true;
+      }
+    }
+    if (current) turns.push(current);
+    const settled = record?.settled === true;
+    return turns.map((turn, index) => {
+      const isLast = index === turns.length - 1;
+      /* 内容为空的失败消息不会产生 assistant block；runtime item 的
+       * generation_failed 是本轮最后一次生成的明确证据。 */
+      const sessionError = isLast && record?.item?.error === 'generation_failed';
+      if (!turn.hasEvidence && !sessionError) return null;
+      const lastAssistant = turn.lastContentState ? {
+        failed: turn.lastContentState === 'error',
+        interrupted: turn.lastContentState === 'interrupted',
+        stopped: false,
+      } : sessionError ? { failed: true, interrupted: false, stopped: false } : null;
+      const outcome = deriveTurnOutcome({
+        tools: turn.tools,
+        lastAssistant,
+        contentUnsettled: turn.lastContentState === 'streaming',
+        /* 中断工具只有在最后一次成功内容之后、且是最后一个工具块时才是
+         * 轮次终态；更早的中断被后续回答/工具覆盖，不能误报为“已停止”。 */
+        interruptedToolTerminal: turn.lastInterruptedToolIndex >= 0
+          && turn.lastInterruptedToolIndex === turn.lastToolIndex
+          && turn.lastInterruptedToolIndex > turn.lastContentIndex,
+      });
+      if (!outcome) return null;
+      return { key: turn.key, lastBlockId: turn.lastBlockId, outcome, complete: !isLast || settled };
+    }).filter(Boolean);
+  }
+
   function renderTimeline(blocks, view, record, history) {
     if (!view.timeline) view.timeline = EMPTY_TIMELINE_VIEW();
     const mode = history ? 'history' : 'live';
+    const ownerKey = record?.owner
+      ? `${record.owner.runtimeId || ''}:${record.owner.runtimeGeneration || ''}:${record.owner.sessionId || ''}`
+      : 'none';
+    const historyChanged = history && view.timeline.historyRef !== view.history;
     if (view.timeline.mode !== mode) {
       output.replaceChildren();
       view.timeline.nodes.clear();
+      view.timeline.outcomeNodes.clear();
+      view.timeline.settledTurns.clear();
       view.timeline.mode = mode;
+    } else if (view.timeline.ownerKey !== ownerKey || historyChanged) {
+      /* 换 runtime / 换一份历史时，旧终态的 block id 可能被复用；
+       * 不清掉会把上一代运行的终态误挂到新记录上。 */
+      view.timeline.outcomeNodes.clear();
+      view.timeline.settledTurns.clear();
     }
+    view.timeline.ownerKey = ownerKey;
+    view.timeline.historyRef = history ? view.history : null;
+    const turnOutcomes = timelineTurnOutcomes(blocks, record);
+    const outcomeByLastBlock = new Map();
+    for (const turn of turnOutcomes) outcomeByLastBlock.set(turn.lastBlockId, turn);
     const wanted = [];
     for (const block of blocks) {
       if (!block || typeof block.id !== 'string') continue;
@@ -790,9 +880,33 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         info.update(block);
       }
       wanted.push(info.node);
+
+      const turn = outcomeByLastBlock.get(block.id);
+      if (!turn) continue;
+      /* 最后一轮只有 store 明确 settled 后才算终态；更早的轮次以用户消息为
+       * 边界，已经结束。settledTurns 让已展示的终态在下一轮 agent_start 后
+       * 仍然保留，不会因为 settled 翻转而消失。 */
+      if (turn.complete) view.timeline.settledTurns.add(turn.key);
+      if (!view.timeline.settledTurns.has(turn.key)) continue;
+      let outcomeInfo = view.timeline.outcomeNodes.get(turn.key);
+      if (!outcomeInfo) {
+        const node = renderTurnOutcome(turn.outcome);
+        if (!node) continue;
+        outcomeInfo = { node, signature: '' };
+        view.timeline.outcomeNodes.set(turn.key, outcomeInfo);
+      }
+      const outcomeSignature = JSON.stringify(turn.outcome);
+      if (outcomeInfo.signature !== outcomeSignature) {
+        outcomeInfo.signature = outcomeSignature;
+        updateTurnOutcome(outcomeInfo.node, turn.outcome);
+      }
+      wanted.push(outcomeInfo.node);
     }
     for (const [key, info] of [...view.timeline.nodes]) {
       if (!wanted.includes(info.node)) { info.node.remove(); view.timeline.nodes.delete(key); }
+    }
+    for (const [key, info] of [...view.timeline.outcomeNodes]) {
+      if (!wanted.includes(info.node)) { info.node.remove(); view.timeline.outcomeNodes.delete(key); }
     }
     /* 有界视图态：清理当前模式下已经被截断的 block/tool 展开记录，
      * 另一模式（历史/实时）的记录保留，切回时仍能恢复。 */
@@ -803,6 +917,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     for (const key of view.timeline.thinkingOpen.keys()) if (key.startsWith(prefix) && !blockIds.has(key.slice(prefix.length))) view.timeline.thinkingOpen.delete(key);
     for (const key of view.timeline.groupOpen.keys()) if (key.startsWith(prefix) && !blockIds.has(key.slice(prefix.length))) view.timeline.groupOpen.delete(key);
     for (const key of view.timeline.entryOpen.keys()) if (key.startsWith(prefix) && !toolIds.has(key.slice(prefix.length))) view.timeline.entryOpen.delete(key);
+    const turnKeys = new Set(blocks.filter(block => block && block.kind === 'user').map(block => block.id));
+    for (const key of view.timeline.settledTurns) if (!turnKeys.has(key)) view.timeline.settledTurns.delete(key);
     /* 顺序由数据决定；这里只是把 DOM 对齐到数据，不猜测事件先后。 */
     let cursor = output.firstChild;
     for (const node of wanted) {
@@ -853,6 +969,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       } else if (renderedHistory !== view.history || renderedId !== id || view.timeline.mode !== null) {
         view.timeline.mode = null;
         view.timeline.nodes.clear();
+        view.timeline.outcomeNodes.clear();
+        view.timeline.settledTurns.clear();
         output.replaceChildren(); let userIndex = 0;
         delete output.dataset.renderedText;
         const messages = Array.isArray(view.history.messages) ? view.history.messages : [];
@@ -924,6 +1042,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       } else {
         view.timeline.mode = null;
         view.timeline.nodes.clear();
+        view.timeline.outcomeNodes.clear();
+        view.timeline.settledTurns.clear();
         const curText = r?.text || '';
         if (output.dataset.renderedText !== curText || renderedId !== id) {
           output.dataset.renderedText = curText;

@@ -29,7 +29,7 @@
  * 用户消息进来同样关组。 */
 
 import { S } from './state.js';
-import { ensureThread, moveWorkingToEnd, scrollBottom, syncToolWorking } from './messages.js';
+import { ensureThread, moveWorkingToEnd, noteTurnTool, scrollBottom, syncToolWorking } from './messages.js';
 import { recordToolChange } from './changes.js';
 import { scheduleGitRefresh, setGitStatusHook } from './git.js';
 import {
@@ -127,6 +127,7 @@ export function onToolStart(evt) {
   /* 计划工具被消费成任务列表，不进入 Tool Timeline（否则同一件事出现两次）。 */
   if (handlePlanToolStart(evt)) { scrollBottom(); return; }
   const entry = registerEntry(makeEntry(evt));
+  noteTurnTool(entry.id);
   const node = renderEntry(entry);
 
   const t = ensureThread();

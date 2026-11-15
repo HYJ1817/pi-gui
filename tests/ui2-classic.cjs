@@ -67,10 +67,9 @@ async function unit() {
     const group = one('.tl-group'), head = group.querySelector('.tl-group-head'), list = group.querySelector('.tl-list');
     check('real message boundary groups both tools once', () => { equal(all('.tl-group').length, 1); equal(list.children.length, 2); equal(head.textContent, '工具调用 · 2 次'); });
     check('batch summary is native keyboard button', () => { equal(head.tagName, 'BUTTON'); equal(head.type, 'button'); assert.ok(head.classList.contains('ui2-tool-summary')); });
-    check('multiple tools start collapsed without hiding their status summary', () => { equal(list.hidden, true); equal(head.getAttribute('aria-expanded'), 'false'); });
+    check('multiple running tools start expanded by default', () => { equal(list.hidden, false); equal(head.getAttribute('aria-expanded'), 'true'); });
     head.click();
-    check('summary controls its unique ARIA list', () => { assert.ok(list.id); equal(head.getAttribute('aria-controls'), list.id); equal(head.getAttribute('aria-expanded'), 'true'); });
-    head.click();
+    check('summary controls its unique ARIA list', () => { assert.ok(list.id); equal(head.getAttribute('aria-controls'), list.id); equal(head.getAttribute('aria-expanded'), 'false'); });
     check('batch can collapse without destroying tool nodes', () => { equal(list.hidden, true); equal(head.getAttribute('aria-expanded'), 'false'); equal(list.children.length, 2); });
     check('running tools are discoverable while collapsed', () => assert.match(group.querySelector('.ui2-tool-state')?.textContent || '', /运行中 2/));
     w.onToolEnd({ toolCallId: 'a', isError: true, result: { content: [text('provider cancelled request')] } });

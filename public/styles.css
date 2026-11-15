@@ -542,7 +542,8 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 .tl-item.has-more .tl-head{cursor:pointer}
 .tl-label{font-size:12px;color:var(--t1);flex:0 0 auto}
 .tl-status{font-size:10px;color:var(--t3);white-space:nowrap;flex:0 0 auto}
-.tl-item[data-status=error] .tl-status,.tl-item[data-status=incomplete] .tl-status{color:var(--err)}
+.tl-item[data-status=error] .tl-status{color:var(--err)}
+.tl-item[data-status=incomplete] .tl-status{color:var(--warn)}
 .tl-arg{font-family:var(--mono);font-size:11.5px;color:var(--t3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tl-stat{flex:0 0 auto;font-family:var(--mono);font-size:11px;display:flex;gap:5px}
 .tl-stat .add{color:var(--ui-diff-add)}
@@ -594,7 +595,20 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 }
 .ui2-tool-summary[aria-expanded=false]::before{transform:rotate(-45deg)}
 .ui2-tool-state{font-size:10.5px;color:var(--t3);letter-spacing:.2px;line-height:1.5;padding:0 9px 5px}
+.tl-group-meta{display:flex;align-items:baseline;gap:8px;min-width:0;padding:0 9px 5px}
+.tl-group-meta[hidden]{display:none}
+.tl-group-meta .ui2-tool-state{padding:0;flex:1;min-width:0}
+.tl-group-time{flex:0 0 auto;font-family:var(--mono);font-size:10.5px;color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap}
 .ui2-msg-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:var(--t3);min-width:0}
+.ui2-msg-meta-summary{white-space:nowrap;font-variant-numeric:tabular-nums}
+.ui2-msg-meta-details{display:inline-block;min-width:0}
+.ui2-msg-meta-details[open]{flex-basis:100%;width:100%}
+.ui2-msg-meta-details>summary{display:inline-block;cursor:pointer;color:var(--t3);font-size:11px;line-height:1.5;border-radius:3px}
+.ui2-msg-meta-details>summary::marker,.ui2-msg-meta-details>summary::-webkit-details-marker{display:none}
+.ui2-msg-meta-details>summary::before{content:"";display:inline-block;width:5px;height:5px;margin-right:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);vertical-align:middle}
+.ui2-msg-meta-details[open]>summary::before{transform:rotate(45deg)}
+.ui2-msg-meta-details>summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.ui2-msg-meta-details .ui2-msg-meta-item{display:inline-block;margin-right:10px}
 .ui2-msg-meta-item{white-space:nowrap;font-variant-numeric:tabular-nums}
 /* C 预留、A 未使用：A 的图标是内联 svg，摘要按钮也不含 chevron 元素。
  * 作为兼容扩展保留，不代表 A 已经采用（见 UI-2C-acceptance.md 第 3 节）。 */
@@ -609,6 +623,17 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 .note svg{width:13px;height:13px;flex:0 0 auto}
 .note.warn{color:var(--warn);border-color:var(--ui-warning-border);background:var(--ui-warning-surface)}
 .note.err{color:var(--err);border-color:var(--ui-danger-border);background:var(--ui-danger-surface)}
+
+/* 自动重试期间的紧凑错误摘要：错误块会被撤掉，但失败原因必须留得住。 */
+.msg-retry{display:flex;flex-direction:column;gap:4px;margin:8px 0 14px;padding:8px 12px;border:1px solid var(--ui-warning-border);border-radius:8px;background:var(--ui-warning-surface);font-size:12px;line-height:1.5;min-width:0}
+.msg-retry-line{display:flex;align-items:baseline;gap:6px;min-width:0}
+.msg-retry-title{color:var(--warn);font-weight:500;overflow-wrap:anywhere}
+.msg-retry-details{min-width:0}
+.msg-retry-details>summary{cursor:pointer;color:var(--t3);font-size:11px;border-radius:3px}
+.msg-retry-details>summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.msg-retry-body{display:flex;flex-direction:column;gap:4px;margin-top:5px;min-width:0}
+.msg-retry-hint{color:var(--t2);font-size:11.5px}
+.msg-retry-raw{margin:0;padding:7px 9px;max-height:180px;overflow:auto;border:1px solid var(--line-soft);border-radius:7px;background:var(--ui-code-surface);color:var(--t2);font-family:var(--mono);font-size:11.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 
 .working{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--t2);padding:2px 0}
 .spinner{

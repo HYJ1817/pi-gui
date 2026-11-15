@@ -48,6 +48,7 @@ const STATUS_ICON = {
 
 const STATUS_TEXT = {
   running: '运行中',
+  waiting: '等待写入',
   success: '成功',
   error: '失败',
   incomplete: '未完成',
@@ -169,10 +170,13 @@ export function updateEntry(node, entry) {
   if (semantic) entry = { ...entry, ...semantic, resultLine: '', output: semantic.facts };
   const p = tl(node);
   if (!p) return;
+  node._tlEntry = entry;
 
   const status = entry.status || 'running';
   const previousStatus = node.dataset.status;
+  const previousWaiting = node.dataset.waiting;
   node.dataset.status = status;
+  node.dataset.waiting = entry.waiting === true ? 'true' : 'false';
   node.className = 'tl-item' + (node.classList.contains('open') ? ' open' : '');
 
   const iconHtml = STATUS_ICON[status] || STATUS_ICON.unknown;
@@ -214,10 +218,17 @@ export function updateEntry(node, entry) {
   const output = String(entry.output || '');
   const hasOutput = Boolean(output.trim());
 
+  /* 追加输出会增大 scrollHeight；必须在写入前判断“原本是否贴底”，否则
+   * 写完再测永远像是用户已经上滚。只有运行中、详情已展开、原本贴底时才跟随。 */
+  const outVisible = !p.more.hidden;
+  const wasNearBottom = outVisible
+    && p.out.scrollHeight - p.out.scrollTop - p.out.clientHeight < 40;
+
   if (p.out.dataset.len !== String(output.length) || (semantic && p.out.textContent !== output)) {
     p.out.dataset.len = String(output.length);
     p.out.textContent = output;
   }
+  if (status === 'running' && outVisible && wasNearBottom) p.out.scrollTop = p.out.scrollHeight;
 
   /* 原始参数：write 的 content 可能是整个文件，必须截断。
    * 用 textContent 写进 <pre>，所以就算里面是 <script> 也只是文本。
@@ -271,7 +282,12 @@ export function updateEntry(node, entry) {
   syncTitle(node, p);
 
   // Duration/output/Git repaint ticks must not rescan a whole batch.
-  if (previousStatus !== status) syncGroup(node.closest('.tl-group'));
+  // A running row still refreshes its group's elapsed clock; that is one small
+  // child scan, not a full timeline rebuild.
+  const group = node.closest('.tl-group');
+  if (group && (previousStatus !== status || previousWaiting !== node.dataset.waiting || status === 'running')) {
+    syncGroup(group);
+  }
 
   /* 预览行数不再单独占位：resultLine 已经给了「最有价值的一行」（§5/§6），
    * 完整输出在折叠区里。多铺一块预览会让紧凑的时间线变成三倍高。 */
@@ -314,26 +330,84 @@ function argsTextOf(entry) {
 
 let groupId = 0;
 
+function selectionInside(node) {
+  if (typeof window === 'undefined' || typeof window.getSelection !== 'function') return false;
+  const selection = window.getSelection();
+  return Boolean(selection && !selection.isCollapsed
+    && (node.contains(selection.anchorNode) || node.contains(selection.focusNode)));
+}
+
+function setGroupOpen(g, group, open) {
+  g.list.hidden = !open;
+  g.head.setAttribute('aria-expanded', String(open));
+  group.classList.toggle('is-collapsed', !open);
+}
+
+function groupElapsed(children) {
+  let started = Infinity;
+  let ended = -Infinity;
+  let running = false;
+  for (const node of children) {
+    const entry = node._tlEntry;
+    if (!entry || !Number.isFinite(entry.startedAt)) continue;
+    started = Math.min(started, entry.startedAt);
+    if (entry.status === 'running') running = true;
+    const fallbackEnd = Number.isFinite(entry.durationMs)
+      ? entry.startedAt + entry.durationMs
+      : null;
+    const end = Number.isFinite(entry.endedAt) ? entry.endedAt : fallbackEnd;
+    if (Number.isFinite(end)) ended = Math.max(ended, end);
+  }
+  if (!Number.isFinite(started)) return null;
+  const end = running ? Date.now() : ended;
+  return Number.isFinite(end) && end >= started ? end - started : null;
+}
+
+/* 折叠优先级：用户显式选择 > 活跃组默认展开 > 已结束默认折叠。
+ * 用户点过组头（userToggled）或展开过任一行（openChild）后，运行状态和
+ * 结束事件都不能再改它。 */
 function syncGroup(group) {
   const g = group?._tlGroup;
   if (!g) return;
   const multiple = g.count >= 2;
-  if (multiple && !g.userToggled && !g.list.contains(document.activeElement)) {
-    g.list.hidden = true;
-    g.head.setAttribute('aria-expanded', 'false');
-    group.classList.add('is-collapsed');
+  const children = [...g.list.children];
+  const hasRunning = children.some(node => node.dataset.status === 'running' && node.dataset.waiting !== 'true');
+  const hasWaiting = children.some(node => node.dataset.status === 'running' && node.dataset.waiting === 'true');
+  const hasOpenChild = children.some(node => node.classList.contains('open'));
+  const focusInside = g.list.contains(document.activeElement) || selectionInside(g.list);
+  const explicit = g.userToggled || hasOpenChild;
+
+  if (multiple) {
+    if (!g.userToggled && hasOpenChild && g.list.hidden) {
+      /* 用户展开的行不能被自动折叠隐藏；但组头被用户显式收起时，收起优先。 */
+      setGroupOpen(g, group, true);
+    } else if (!explicit) {
+      setGroupOpen(g, group, hasRunning || hasWaiting || focusInside);
+    }
+  } else if (g.list.hidden) {
+    setGroupOpen(g, group, true);
   }
+
   g.head.hidden = !multiple;
+  g.meta.hidden = !multiple;
   g.state.hidden = !multiple;
+  g.time.hidden = !multiple;
   setText(g.head, multiple ? `工具调用 · ${g.count} 次` : '');
+
   const counts = new Map();
-  for (const node of g.list.children) {
+  for (const node of children) {
     const status = Object.hasOwn(STATUS_TEXT, node.dataset.status) ? node.dataset.status : 'unknown';
-    counts.set(status, (counts.get(status) || 0) + 1);
+    const key = node.dataset.status === 'running' && node.dataset.waiting === 'true' ? 'waiting' : status;
+    counts.set(key, (counts.get(key) || 0) + 1);
   }
-  const summary = ['running', 'error', 'incomplete', 'interrupted', 'cancelled', 'unknown', 'success']
+  const summary = ['running', 'waiting', 'error', 'incomplete', 'interrupted', 'cancelled', 'unknown', 'success']
     .filter(status => counts.has(status)).map(status => `${STATUS_TEXT[status]} ${counts.get(status)}`).join(' · ');
   setText(g.state, multiple ? summary : '');
+
+  const elapsed = multiple ? groupElapsed(children) : null;
+  const timeText = elapsed != null && elapsed >= 100 ? formatDuration(elapsed) : '';
+  setText(g.time, timeText);
+  g.time.hidden = !multiple || !timeText;
 }
 
 /* 一组 = 一条 assistant 消息里的全部 toolCall。
@@ -350,13 +424,23 @@ export function createGroup() {
   head.hidden = true;
   g.appendChild(head);
 
+  const meta = document.createElement('div');
+  meta.className = 'tl-group-meta';
+  meta.hidden = true;
+  g.appendChild(meta);
+
   const state = document.createElement('span');
   state.className = 'ui2-tool-state';
   state.id = 'tool-group-state-' + ++groupId;
   state.setAttribute('role', 'status');
   state.hidden = true;
   head.setAttribute('aria-describedby', state.id);
-  g.appendChild(state);
+  meta.appendChild(state);
+
+  const time = document.createElement('span');
+  time.className = 'tl-group-time';
+  time.hidden = true;
+  meta.appendChild(time);
 
   const list = document.createElement('div');
   list.className = 'tl-list';
@@ -365,7 +449,7 @@ export function createGroup() {
   head.setAttribute('aria-expanded', 'true');
   g.appendChild(list);
 
-  g._tlGroup = { head, list, state, count: 0 };
+  g._tlGroup = { head, meta, state, time, list, count: 0 };
   head.addEventListener('click', () => {
     g._tlGroup.userToggled = true;
     const open = list.hidden;

@@ -37,6 +37,12 @@ import { renderPlan } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
+import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
+
+/* 当前 session 级 run 的证据。只在 app.js 收到真实 agent_start（上一轮已 settled）
+ * 时开启；steer / follow-up / 自动重试不会开启新轮次。 */
+let liveTurn = null;
+let retryNotice = null;
 
 /* ---------- 线程与滚动 ---------- */
 
@@ -69,6 +75,8 @@ export function syncWelcome() {
 export function clearThread() {
   if (S.thread) S.thread.innerHTML = '';
   clearPlanLive();
+  clearRetryNotice();
+  liveTurn = null;
   S.current = null;
   S.blocks.clear();
   S.tools.clear();
@@ -90,6 +98,75 @@ export function scrollBottom(force) {
       s.scrollTop = s.scrollHeight;
     });
   }
+}
+
+/* ---------- 轮次证据（只认真实事件） ---------- */
+
+/** 真正的 session 级 run 开始。由 app.js 在 agent_start 且上一轮已 settled 时调用。 */
+export function beginTurn() {
+  liveTurn = {
+    startedAt: Date.now(),
+    seq: 0,
+    toolIds: new Set(),
+    toolSeqs: new Map(),
+    lastAssistant: null,
+    finalized: false,
+  };
+}
+
+/** 工具行进入本轮统计；gui_plan 等不进入工具时间线的调用不会走到这里。 */
+export function noteTurnTool(id) {
+  if (!liveTurn || liveTurn.finalized || id == null) return;
+  const key = String(id);
+  liveTurn.toolIds.add(key);
+  liveTurn.toolSeqs.set(key, ++liveTurn.seq);
+}
+
+/** 中断工具是否发生在最后一次成功内容之后；没有最终内容时仅最后一个工具算终态。 */
+function interruptedToolTerminal(tools, lastAssistant, toolSeqs = null) {
+  const interrupted = tools.filter(entry => entry?.status === 'interrupted');
+  if (!interrupted.length) return false;
+  if (!lastAssistant) {
+    return tools.length > 0 && tools[tools.length - 1]?.status === 'interrupted';
+  }
+  /* 实时事件用单调序号判先后：只有最后一次 message_end 之后、且后面没有
+   * 其它工具的中断，才是轮次终态；后续工具成功说明已经恢复。 */
+  if (Number.isInteger(lastAssistant.seq) && toolSeqs instanceof Map) {
+    const seqs = tools
+      .map(entry => toolSeqs.get(String(entry.id)))
+      .filter(Number.isInteger);
+    const latestToolSeq = seqs.length ? Math.max(...seqs) : -Infinity;
+    return interrupted.some(entry => {
+      const seq = toolSeqs.get(String(entry.id));
+      return Number.isInteger(seq) && seq > lastAssistant.seq && seq === latestToolSeq;
+    });
+  }
+  const lastAt = lastAssistant.at;
+  if (!Number.isFinite(lastAt)) return false;
+  const lastTool = tools[tools.length - 1];
+  if (!lastTool || lastTool.status !== 'interrupted') return false;
+  return !Number.isFinite(lastTool.endedAt) || lastTool.endedAt > lastAt;
+}
+
+/** agent_settled 后的轮次终态。没有真实证据（assistant / 工具）就不画。 */
+function finalizeTurn() {
+  const turn = liveTurn;
+  if (!turn || turn.finalized) return;
+  turn.finalized = true;
+  const tools = [...turn.toolIds]
+    .map(id => S.tools.get(id)?.entry)
+    .filter(Boolean);
+  const outcome = deriveTurnOutcome({
+    tools,
+    lastAssistant: turn.lastAssistant,
+    interruptedToolTerminal: interruptedToolTerminal(tools, turn.lastAssistant, turn.toolSeqs),
+    startedAt: turn.startedAt,
+    endedAt: Date.now(),
+  });
+  if (!outcome) return;
+  const t = ensureThread();
+  t.appendChild(renderTurnOutcome(outcome));
+  scrollBottom();
 }
 
 /* ---------- 「正在处理」指示 ---------- */
@@ -158,6 +235,7 @@ export function setStreaming(on) {
 
 export function onSettled() {
   interruptActive();
+  finalizeTurn();
   sendCommand({ type: 'get_session_stats' });
   sendCommand({ type: 'get_state' });
   sendCommand({ type: 'get_tree' });
@@ -166,6 +244,7 @@ export function onSettled() {
 
 export function interruptActive() {
   setStreaming(false);
+  clearRetryNotice();
   /* 本次 run 已收尾：未消费的新任务边界到此失效，不能留给下一轮 steer。 */
   settlePlanTaskBoundary();
   /* 计划数据不被改写；只是不再把残留的 in_progress 显示成「还在跑」。 */
@@ -497,18 +576,32 @@ export function onMessageUpdate(evt) {
 
 export function onMessageEnd(evt) {
   const msg = evt.message;
-  if (msg?.role === 'assistant' && S.current) {
-    // 最终消息是权威值；丢弃尚未执行的流式绘制，避免下一帧把旧草稿写回复用节点。
-    pendingPaint.clear();
-    // message_end.message 是权威，用它校正渲染结果
-    const keep = rebuildAssistant(S.current.body, msg);
-    /* 只有工具调用、没有正文时整条外壳收掉。
-     * 工具卡片由 tools.js 直接挂在 thread 上，不在这个 body 里，所以不受影响；
-     * 下一轮 message_start 会再建一个新的外壳。 */
-    if (!keep) S.current.wrap.remove();
-    else {
-      const meta = renderMessageMeta(msg);
-      if (meta) S.current.wrap.appendChild(meta);
+  if (msg?.role === 'assistant') {
+    /* 轮次失败只认 assistant 的终态证据；工具 isError 不改变轮次状态。
+     * 与 rebuildAssistant 的判定保持一致：用户主动停止优先按中性处理。 */
+    if (liveTurn && !liveTurn.finalized) {
+      const ownedAbort = msg.stopReason === 'aborted' && S.stopOwnedTurn === true;
+      liveTurn.lastAssistant = {
+        failed: !ownedAbort && (msg.stopReason === 'error' || Boolean(msg.errorMessage)),
+        stopped: ownedAbort,
+        interrupted: msg.stopReason === 'aborted' && !ownedAbort,
+        at: Number.isFinite(msg.timestamp) ? msg.timestamp : Date.now(),
+        seq: ++liveTurn.seq,
+      };
+    }
+    if (S.current) {
+      // 最终消息是权威值；丢弃尚未执行的流式绘制，避免下一帧把旧草稿写回复用节点。
+      pendingPaint.clear();
+      // message_end.message 是权威，用它校正渲染结果
+      const keep = rebuildAssistant(S.current.body, msg);
+      /* 只有工具调用、没有正文时整条外壳收掉。
+       * 工具卡片由 tools.js 直接挂在 thread 上，不在这个 body 里，所以不受影响；
+       * 下一轮 message_start 会再建一个新的外壳。 */
+      if (!keep) S.current.wrap.remove();
+      else {
+        const meta = renderMessageMeta(msg);
+        if (meta) S.current.wrap.appendChild(meta);
+      }
     }
   }
   S.current = null;
@@ -617,6 +710,94 @@ export function dropTrailingError() {
   }
 }
 
+/** 取出当前错误块里**已经显示过**的安全文本，供重试摘要保留。 */
+export function captureTrailingError() {
+  const body = S.current?.body || [...document.querySelectorAll('#stream .thread .msg.assistant .msg-body')].pop();
+  const err = body?.querySelector('.msg-err');
+  if (!err) return null;
+  return {
+    title: err.querySelector('.me-head')?.textContent || '',
+    hint: err.querySelector('.me-hint')?.textContent || '',
+    raw: err.querySelector('.me-raw')?.textContent || '',
+  };
+}
+
+/**
+ * 自动重试期间的紧凑错误摘要。
+ *
+ * 重试会删除上一轮的错误块（避免重试成功后仍留一张失败卡），但失败原因
+ * 不能跟着消失。这里保留一条可展开的摘要，重试结束/成功/最终失败时移除；
+ * 原始错误来自已经渲染过的 `.me-raw`（服务端已做安全归一），只走 textContent。
+ */
+export function showRetryNotice({ attempt, maxAttempts, error } = {}) {
+  const t = ensureThread();
+  if (!retryNotice || !retryNotice.isConnected) {
+    retryNotice = document.createElement('div');
+    retryNotice.className = 'msg-retry';
+    const line = document.createElement('div');
+    line.className = 'msg-retry-line';
+    line.setAttribute('role', 'status');
+    const title = document.createElement('span');
+    title.className = 'msg-retry-title';
+    line.appendChild(title);
+    retryNotice.appendChild(line);
+    retryNotice._retry = { title, details: null, hint: null, raw: null };
+    t.appendChild(retryNotice);
+  }
+
+  const p = retryNotice._retry;
+  const raw = String(error?.raw || '');
+  const hint = String(error?.hint || '');
+  const title = error?.title || (raw ? explainError(raw).title : '请求失败');
+  const attemptText = Number.isInteger(attempt) && Number.isInteger(maxAttempts)
+    ? `第 ${attempt}/${maxAttempts} 次重试…`
+    : '正在重试…';
+  const titleText = `${title} · ${attemptText}`;
+  if (p.title.textContent !== titleText) p.title.textContent = titleText;
+
+  if ((raw || hint) && !p.details) {
+    const details = document.createElement('details');
+    details.className = 'msg-retry-details';
+    const summary = document.createElement('summary');
+    summary.textContent = '错误详情';
+    details.appendChild(summary);
+    const body = document.createElement('div');
+    body.className = 'msg-retry-body';
+    if (hint) {
+      const h = document.createElement('div');
+      h.className = 'msg-retry-hint';
+      body.appendChild(h);
+      p.hint = h;
+    }
+    if (raw) {
+      const r = document.createElement('pre');
+      r.className = 'msg-retry-raw';
+      body.appendChild(r);
+      p.raw = r;
+    }
+    details.appendChild(body);
+    retryNotice.appendChild(details);
+    p.details = details;
+  }
+
+  if (p.hint) {
+    if (p.hint.textContent !== hint) p.hint.textContent = hint;
+    p.hint.hidden = !hint;
+  }
+  if (p.raw) {
+    if (p.raw.textContent !== raw) p.raw.textContent = raw;
+    p.raw.hidden = !raw;
+  }
+  if (p.details) p.details.hidden = !(raw || hint);
+  return retryNotice;
+}
+
+export function clearRetryNotice() {
+  if (!retryNotice) return;
+  retryNotice.remove();
+  retryNotice = null;
+}
+
 /* 用 message_end 的权威内容重建一条助手消息的正文。
  *
  * **返回值 = 这条消息有没有值得占位的正文**（bodyEl 里落了东西就是 true）。
@@ -701,9 +882,42 @@ export function rebuildFromMessages(data) {
   /* 每个用户回合最多一张计划卡，内容取该回合最后一次有效更新。 */
   const planTurns = collectPlanTurns(items);
   let planTurn = 0;
+
+  /* 历史轮次终态：只在 assistant / 工具证据存在时画；工具 isError 只计数，
+   * 不把整轮判失败。时长来自消息/工具的真实时间戳，缺失就省略。 */
+  let historyTurn = null;
+  const markHistoryEnd = (ts) => {
+    if (!historyTurn || !Number.isFinite(ts)) return;
+    if (historyTurn.endedAt === null || ts > historyTurn.endedAt) historyTurn.endedAt = ts;
+  };
+  const startHistoryTurn = (msg) => {
+    historyTurn = {
+      startedAt: Number.isFinite(msg?.timestamp) ? msg.timestamp : null,
+      endedAt: null,
+      tools: [],
+      lastAssistant: null,
+      hasEvidence: false,
+    };
+  };
+  const flushHistoryTurn = () => {
+    if (!historyTurn) return;
+    const turn = historyTurn;
+    historyTurn = null;
+    if (!turn.hasEvidence) return;
+    const outcome = deriveTurnOutcome({
+      tools: turn.tools,
+      lastAssistant: turn.lastAssistant,
+      interruptedToolTerminal: interruptedToolTerminal(turn.tools, turn.lastAssistant),
+      startedAt: turn.startedAt,
+      endedAt: turn.endedAt,
+    });
+    if (outcome) frag.appendChild(renderTurnOutcome(outcome));
+  };
+
   for (let index = 0; index < items.length; index++) {
     const item = items[index];
     if (item.kind === 'user') {
+      flushHistoryTurn();
       planTurn += 1;
       const wrap = document.createElement('article');
       wrap.className = 'msg user';
@@ -711,10 +925,23 @@ export function rebuildFromMessages(data) {
       wrap.appendChild(userBody(item.message));
       wrap.appendChild(messageActions(textOf(item.message)));
       frag.appendChild(wrap);
+      startHistoryTurn(item.message);
       continue;
     }
 
     if (item.kind === 'assistant') {
+      const msg = item.message;
+      if (historyTurn) {
+        const failed = msg.stopReason === 'error' || Boolean(msg.errorMessage);
+        const interrupted = msg.stopReason === 'aborted' && !failed;
+        historyTurn.lastAssistant = {
+          failed,
+          stopped: false,
+          interrupted,
+          at: Number.isFinite(msg.timestamp) ? msg.timestamp : null,
+        };
+        markHistoryEnd(msg.timestamp);
+      }
       const wrap = document.createElement('article');
       wrap.className = 'msg assistant';
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
@@ -722,9 +949,10 @@ export function rebuildFromMessages(data) {
       body.className = 'msg-body';
       /* 重建历史时同样不留空白「Pi」：只有工具调用的那轮没有正文可渲染，
        * 整条跳过。那次工具调用不会因此消失 —— 紧跟其后的 tools 计划项会画它。 */
-      if (!rebuildAssistant(body, item.message)) continue;
+      if (!rebuildAssistant(body, msg)) continue;
+      if (historyTurn) historyTurn.hasEvidence = true;
       wrap.appendChild(body);
-      const meta = renderMessageMeta(item.message);
+      const meta = renderMessageMeta(msg);
       if (meta) wrap.appendChild(meta);
       frag.appendChild(wrap);
       continue;
@@ -736,12 +964,25 @@ export function rebuildFromMessages(data) {
       /* gui_plan 的调用行由上面的任务列表承担，不再重复画成工具记录。 */
       const entries = item.entries.filter(entry => !isPlanTool(entry.name));
       if (entries.length) {
+        if (historyTurn) {
+          historyTurn.tools.push(...entries);
+          historyTurn.hasEvidence = true;
+          for (const entry of entries) {
+            const end = Number.isFinite(entry.endedAt)
+              ? entry.endedAt
+              : Number.isFinite(entry.startedAt) && Number.isFinite(entry.durationMs)
+                ? entry.startedAt + entry.durationMs
+                : null;
+            markHistoryEnd(end);
+          }
+        }
         const g = createGroup();
         for (const entry of entries) addToGroup(g, renderEntry(entry));
         frag.appendChild(g);
       }
     }
   }
+  flushHistoryTurn();
 
   t.appendChild(frag);
   /* 历史重建完之后**重新扫一遍 DOM** 建导航（§10）—— 刷新页面、重开 App、

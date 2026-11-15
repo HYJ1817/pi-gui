@@ -1,0 +1,21 @@
+{
+  "label": "before",
+  "publicRoot": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-gui-phase1-baseline\\public",
+  "shots": [
+    "before-01-group-default-dark.png",
+    "before-02-group-default-light.png",
+    "before-03-group-default-narrow-700-dark.png",
+    "before-04-token-default-dark.png",
+    "before-06-token-default-light.png",
+    "before-07-turn-end-dark.png",
+    "before-08-turn-end-light.png",
+    "before-09-error-before-retry-dark.png",
+    "before-10-after-retry-dark.png",
+    "before-11-after-retry-light.png"
+  ],
+  "versions": {
+    "electron": "44.4.3",
+    "chrome": "152.0.7977.130"
+  },
+  "capturedAt": "2026-11-15T14:30:25.239Z"
+}
