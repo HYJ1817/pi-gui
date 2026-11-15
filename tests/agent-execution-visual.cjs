@@ -403,7 +403,7 @@ if (!process.versions.electron) {
     });
     await click('.plan-head');
 
-    /* 工具调用：4 条，默认折叠，错误汇总在组头可见 */
+    /* 工具调用：4 条，其中 grep 仍在运行；活跃组保持展开，错误汇总在组头可见 */
     await read(`__tool('read-1', 'read', { path: 'public/messages.js' });
       __tool('bash-1', 'bash', { command: 'npm test -- agent-execution' });
       __tool('edit-1', 'edit', { path: 'public/plan-view.js' });
@@ -412,7 +412,7 @@ if (!process.versions.electron) {
       __toolEnd('bash-1', 'Command exited with code 1\\nAssertionError: expected 2/5, got 1/5', true);
       __toolEnd('edit-1', '已更新 public/plan-view.js', false);`);
     await sleep(350);
-    await check('工具调用组默认折叠，组头显示真实次数与错误状态', async () => {
+    await check('运行中的工具组保持展开，组头显示真实次数与错误状态', async () => {
       const f = await read(`(() => {
         const group = document.querySelector('.tl-group');
         const head = group.querySelector('.tl-group-head');
@@ -423,13 +423,12 @@ if (!process.versions.electron) {
       })()`);
       must(f.head.includes('工具调用 · 4 次'), '组头文字不是「工具调用 · 4 次」，而是 ' + f.head);
       must(f.rows === 4, '工具条目数不是 4');
-      must(f.hidden === true && f.expanded === 'false', '工具组没有默认折叠');
-      must(f.state.includes('失败 1'), '折叠时错误状态不可见');
+      must(f.hidden === false && f.expanded === 'true', '运行中的工具组被折叠了');
+      must(f.state.includes('失败 1'), '工具组摘要没有显示真实错误状态');
       return f;
     });
 
-    await click('.tl-group-head');
-    await check('展开工具组后每条都有名称、状态、时长与结果摘要', async () => {
+    await check('工具组展开时每条都有名称、状态、时长与结果摘要', async () => {
       const f = await read(`(() => {
         const rows = [...document.querySelectorAll('.tl-group .tl-item')];
         return rows.map(r => ({
@@ -807,6 +806,167 @@ if (!process.versions.electron) {
     await bringIntoView('.think-head');
     if (await read(`document.querySelector('.think-head').getAttribute('aria-expanded') === 'true'`)) await click('.think-head');
     recordingEvidence = await recordInteraction();
+
+    /* ---------- 第一阶段：轮次终态 / Token 摘要 / 重试摘要 ---------- */
+    await read(`(async () => {
+      __surface.showChat();
+      __M.clearThread();
+      __T.resetTimeline();
+      __M.beginTurn();
+      __M.onMessageStart({ message: { role: 'user', content: [{ type: 'text', text: '检查会话执行过程的显示' }] } });
+      __M.onMessageStart({ message: { role: 'assistant' } });
+      __T.onToolStart({ toolCallId: 'p1-read', toolName: 'read', args: { path: 'public/messages.js' } });
+      __T.onToolEnd({ toolCallId: 'p1-read', isError: false, result: { content: [{ type: 'text', text: '已读取 812 行' }] } });
+      __T.onToolStart({ toolCallId: 'p1-bash', toolName: 'bash', args: { command: 'npm test -- agent-execution' } });
+      await new Promise(resolve => setTimeout(resolve, 220));
+      __T.onToolEnd({ toolCallId: 'p1-bash', isError: true, result: { content: [{ type: 'text', text: 'AssertionError: expected 2/5, got 1/5\\nCommand exited with code 1' }] } });
+      __M.onMessageEnd({ message: { role: 'assistant', content: [{ type: 'text', text: '已完成检查：读取通过，测试有一处失败。' }], stopReason: 'stop',
+        usage: { input: 1200, output: 340, cacheRead: 800, reasoning: 120, totalTokens: 1540 } } });
+      __M.onSettled();
+      return true;
+    })()`);
+    await sleep(260);
+    win.setContentSize(1320, 820);
+    await read(`document.documentElement.dataset.theme = 'dark'`);
+    await sleep(220);
+    await bringIntoView('.turn-outcome');
+    await shot('13-phase1-classic-turn-outcome-dark');
+    await check('阶段 1：Classic 轮次终态显示真实工具失败数且不判整轮失败', async () => {
+      const f = await read(`(() => {
+        const outcome = document.querySelector('.turn-outcome');
+        return { state: outcome?.dataset.state, text: outcome?.textContent || '' };
+      })()`);
+      must(f.state === 'completed', '工具失败把整轮判成了 ' + f.state);
+      must(f.text.includes('已完成') && f.text.includes('1 次工具失败'), '终态没有显示真实工具失败数');
+      return f;
+    });
+    await bringIntoView('.ui2-msg-meta');
+    await shot('14-phase1-classic-token-summary-dark');
+    await check('阶段 1：Token 默认简洁摘要，完整字段可展开', async () => {
+      const f = await read(`(() => {
+        const meta = document.querySelector('.ui2-msg-meta');
+        const details = meta?.querySelector('details');
+        return { summary: meta?.querySelector('.ui2-msg-meta-summary')?.textContent || '',
+          open: details?.open, items: details?.querySelectorAll('.ui2-msg-meta-item').length || 0 };
+      })()`);
+      must(f.summary.includes('Token 1,540') && f.summary.includes('思考 120'), '摘要不是真实总量/思考：' + f.summary);
+      must(f.open === false && f.items === 5, '完整字段不是默认收起且仍可达');
+      return f;
+    });
+    await click('.ui2-msg-meta-details > summary');
+    await shot('15-phase1-classic-token-details-dark');
+    await click('.tl-group-head');
+    await bringIntoView('.tl-group');
+    await shot('16-phase1-classic-tools-expanded-dark');
+    await check('阶段 1：工具组保留真实耗时与混合状态', async () => {
+      const f = await read(`(() => {
+        const group = document.querySelector('.tl-group');
+        return { hidden: group?.querySelector('.tl-list')?.hidden,
+          state: group?.querySelector('.ui2-tool-state')?.textContent || '',
+          time: group?.querySelector('.tl-group-time')?.textContent || '' };
+      })()`);
+      must(f.hidden === false, '用户展开的工具组没有保持展开');
+      must(f.state.includes('失败 1') && f.state.includes('成功 1'), '组状态不是真实失败/成功数');
+      must(/0\.\d+s|1\.\d+s/.test(f.time), '组耗时没有显示真实值：' + f.time);
+      return f;
+    });
+    await read(`document.documentElement.dataset.theme = 'light'`);
+    await sleep(220);
+    await bringIntoView('.ui2-msg-meta');
+    await shot('17-phase1-classic-token-summary-light');
+    await bringIntoView('.turn-outcome');
+    await shot('18-phase1-classic-turn-outcome-light');
+    win.setContentSize(700, 600);
+    await sleep(260);
+    await read(`document.documentElement.dataset.theme = 'dark'`);
+    await sleep(180);
+    await bringIntoView('.ui2-msg-meta');
+    await shot('19-phase1-classic-narrow-700-dark');
+    await read(`document.documentElement.dataset.theme = 'light'`);
+    await sleep(180);
+    await bringIntoView('.ui2-msg-meta');
+    await shot('20-phase1-classic-narrow-700-light');
+
+    /* 重试摘要：错误块撤掉后仍能看到失败原因。 */
+    await read(`(async () => {
+      __surface.showChat();
+      document.documentElement.dataset.theme = 'dark';
+      __M.clearThread();
+      __M.onMessageStart({ message: { role: 'assistant' } });
+      __M.onMessageEnd({ message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: '429 Too Many Requests' } });
+      const captured = __M.captureTrailingError();
+      __M.dropTrailingError();
+      __M.showRetryNotice({ attempt: 1, maxAttempts: 3, error: captured });
+      return true;
+    })()`);
+    win.setContentSize(1320, 820);
+    await sleep(260);
+    await bringIntoView('.msg-retry');
+    await shot('21-phase1-classic-retry-dark');
+    await check('阶段 1：重试摘要保留失败原因与真实次数', async () => {
+      const f = await read(`(() => {
+        const notice = document.querySelector('.msg-retry');
+        return { text: notice?.textContent || '', raw: notice?.querySelector('.msg-retry-raw')?.textContent || '' };
+      })()`);
+      must(f.text.includes('第 1/3 次重试') && f.text.includes('触发限流'), '重试摘要缺少真实次数/错误标题');
+      must(f.raw.includes('429'), '重试摘要没有保留原始错误文本');
+      return f;
+    });
+    await read(`document.documentElement.dataset.theme = 'light'`);
+    await sleep(200);
+    await bringIntoView('.msg-retry');
+    await shot('22-phase1-classic-retry-light');
+
+    /* Runtime 轮次终态：工具失败只计数，整轮仍是已完成。 */
+    await read(`(async () => {
+      __surface.showRuntimeConversation();
+      document.documentElement.dataset.theme = 'dark';
+      const item = { conversationId: 'S', owner: __owner('S'), workspace: { branch: '视觉验收 S', cwd: 'C:/fixture' }, lifecycle: 'ready', activity: 'running', revision: 1 };
+      __seq.S = 0;
+      __R.seedRuntimeSnapshot({ backendInstance: 'agent-visual-backend', items: [item] });
+      __frame('S', { type: 'agent_start' });
+      __frame('S', { type: 'message_start', message: { role: 'user', content: [{ type: 'text', text: '检查 Runtime 的轮次终态' }] } });
+      __frame('S', { type: 'message_start', message: { role: 'assistant' } });
+      __frame('S', { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '读取通过，测试有一处失败。' } });
+      __frame('S', { type: 'tool_execution_start', toolCallId: 's-read', toolName: 'read' });
+      __frame('S', { type: 'tool_execution_end', toolCallId: 's-read', toolName: 'read', isError: false });
+      __frame('S', { type: 'tool_execution_start', toolCallId: 's-bash', toolName: 'bash' });
+      __frame('S', { type: 'tool_execution_end', toolCallId: 's-bash', toolName: 'bash', isError: true });
+      __frame('S', { type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: '读取通过，测试有一处失败。' }], stopReason: 'stop' } });
+      __frame('S', { type: 'agent_settled' });
+      __V.show('S');
+      __R.seedRuntimeSnapshot({ backendInstance: 'agent-visual-backend', items: [{ ...item, activity: 'idle' }] });
+      return true;
+    })()`);
+    await sleep(300);
+    await bringRuntimeIntoView('.turn-outcome');
+    await shot('23-phase1-runtime-turn-outcome-dark');
+    await check('阶段 1：Runtime 终态不把工具失败升级为轮次失败', async () => {
+      const f = await read(`(() => {
+        const outcome = document.querySelector('.turn-outcome');
+        return { state: outcome?.dataset.state, text: outcome?.textContent || '' };
+      })()`);
+      must(f.state === 'completed', 'Runtime 工具失败把整轮判成了 ' + f.state);
+      must(f.text.includes('1 次工具失败'), 'Runtime 终态没有显示真实工具失败数');
+      return f;
+    });
+    await read(`document.documentElement.dataset.theme = 'light'`);
+    await sleep(220);
+    await bringRuntimeIntoView('.turn-outcome');
+    await shot('24-phase1-runtime-turn-outcome-light');
+    win.setContentSize(700, 600);
+    await sleep(260);
+    await read(`document.documentElement.dataset.theme = 'dark'`);
+    await sleep(180);
+    await bringRuntimeIntoView('.turn-outcome');
+    await shot('25-phase1-runtime-narrow-700-dark');
+    await read(`document.documentElement.dataset.theme = 'light'`);
+    await sleep(180);
+    await bringRuntimeIntoView('.turn-outcome');
+    await shot('26-phase1-runtime-narrow-700-light');
+    win.setContentSize(1280, 900);
+    await sleep(220);
+    await read(`document.documentElement.dataset.theme = 'light'`);
 
     finalExit = checks.some((c) => !c.pass) ? 1 : 0;
     fs.mkdirSync(OUT, { recursive: true });

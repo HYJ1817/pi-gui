@@ -421,12 +421,13 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   deep(toolRows().slice(0, 2).map(node => node.dataset.toolName), ['bash', 'read'], '组内工具保持真实调用顺序');
   equal(toolGroup().querySelector('.tl-group-head').textContent, '工具调用 · 2 次', '工具组标题显示真实次数');
   equal(toolGroup().querySelector('.ui2-tool-state').textContent, '运行中 2', '运行中的组摘要来自真实状态');
-  equal(toolGroup().querySelector('.tl-list').hidden, true, '多项工具组默认折叠');
-  equal(toolGroup().querySelector('.tl-group-head').getAttribute('aria-expanded'), 'false', '默认折叠时 aria-expanded=false');
+  equal(toolGroup().querySelector('.tl-list').hidden, false, '运行中的多项工具组默认展开');
+  equal(toolGroup().querySelector('.tl-group-head').getAttribute('aria-expanded'), 'true', '运行中展开时 aria-expanded=true');
   equal(toolGroup().querySelectorAll('.ui2-runtime-tool[data-tool-name="gui_plan"]').length, 0, 'gui_plan 不进入工具行');
   endTool('t2', 'read', false, 1200); endTool('t1', 'bash', true, 300);
   await tick();
   equal(toolGroup().querySelector('.ui2-tool-state').textContent, '失败 1 · 成功 1', '组摘要区分失败与成功，不靠工具调用数猜进度');
+  equal(toolGroup().querySelector('.tl-list').hidden, true, '全部结束后未手动操作的多项组默认折叠');
 
   toolGroup().querySelector('.tl-group-head').click();
   await tick();
@@ -469,7 +470,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   frame('U', 3, { type: 'tool_execution_start', toolCallId: 'u2', toolName: 'read' });
   toolsView.show('U'); await tick();
   const uGroup = toolsHost.querySelector('.ui2-runtime-tools .tl-group');
-  equal(uGroup.querySelector('.tl-list').hidden, true, '切到另一会话时该会话自己的组默认折叠');
+  equal(uGroup.querySelector('.tl-list').hidden, false, '切到另一会话时该会话自己的运行中组按默认规则展开');
   toolsView.show('T'); await tick();
   equal(toolGroup().querySelector('.tl-list').hidden, false, '切回原会话恢复用户自己的展开状态');
   toolsView.dispose();
@@ -888,8 +889,10 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     || (node.classList.contains('ui2-runtime-thinking') ? 'thinking'
       : node.classList.contains('ui2-runtime-tools') ? 'tools'
         : node.classList.contains('ui2-runtime-plan') ? 'plan' : node.className));
-  deep(historyKinds, ['user', 'thinking', 'assistant', 'tools', 'plan', 'assistant'],
-    '历史视图按恢复的时间线渲染真实顺序');
+  deep(historyKinds, ['user', 'thinking', 'assistant', 'tools', 'plan', 'assistant', 'turn-outcome'],
+    '历史视图按恢复的时间线渲染真实顺序，并在轮次末尾显示终态');
+  ok('历史轮次终态来自真实工具/回答状态', historyHost.querySelector('.turn-outcome')?.textContent.includes('已完成')
+    && historyHost.querySelector('.turn-outcome')?.textContent.includes('1 次工具失败'));
   ok('历史恢复 Thinking 可见内容', historyHost.querySelector('.ui2-runtime-thinking-body')?.textContent === '先看代码');
   ok('历史恢复工具名/状态摘要', [...historyHost.querySelectorAll('.ui2-runtime-tool')].map(node => node.dataset.toolName).join(',') === 'read,bash');
   ok('历史恢复计划与最终回答', historyHost.textContent.includes('修复') && historyHost.textContent.includes('最终回答'));
