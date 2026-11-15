@@ -70,6 +70,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare isolated test directories
+        shell: pwsh
+        run: |
+          $tempBase = Join-Path $env:USERPROFILE 'AppData\Local\Temp'
+          $temp = Join-Path $tempBase 'pi-gui-release-check'
+          New-Item -ItemType Directory -Force -Path $temp | Out-Null
+          "TEMP=$temp" >> $env:GITHUB_ENV
+          "TMP=$temp" >> $env:GITHUB_ENV
+          "TMPDIR=$temp" >> $env:GITHUB_ENV
+
       - name: Run core tests
         run: npm test
 

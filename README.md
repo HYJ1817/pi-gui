@@ -36,18 +36,7 @@ Windows · 本地优先 · 多会话 · 可视化工作流
 
 ## 快速开始
 
-### 1. 安装 Pi
-
-Pi GUI 使用本机独立安装的 [Pi Coding Agent](https://github.com/earendil-works/pi)，需要先配置可用的模型供应商。
-
-安装 [Node.js](https://nodejs.org/) 22.19 或更新版本后运行：
-
-```bash
-npm install -g @earendil-works/pi-coding-agent
-pi --version
-```
-
-### 2. 下载 Pi GUI
+### 1. 下载 Pi GUI
 
 从 [GitHub Releases](https://github.com/HYJ1817/pi-gui/releases/latest) 选择 Windows 版本：
 
@@ -57,6 +46,27 @@ pi --version
 | 便携版 | `Pi-GUI-<版本>-portable.zip` |
 
 安装版可从开始菜单启动；便携版解压后运行 `Pi GUI.exe`。
+
+### 2. 首次启动：检查运行环境
+
+Pi GUI 使用本机独立安装的 [Pi Coding Agent](https://github.com/earendil-works/pi)，
+并由 [Node.js](https://nodejs.org/) 运行。首次启动会自动检查：
+
+- **必需**：Node.js 22.19 或更新版本、Pi、Pi RPC；
+- **推荐**：npm（安装或更新 Pi 时需要；Pi 已装好时缺失不影响对话）、Git。
+
+缺少必需项时，点一次「一键安装缺失依赖」即可。组件会安装到当前用户目录，
+不需要管理员权限，也不会改动系统 PATH 或覆盖已有的 Pi。已经通过 `PI_BIN`
+或手动路径指定 Pi 的用户，向导会尊重现有设置。安装完成后，向导会重新验证版本与
+RPC 启动，通过后进入主界面。之后可在 **设置 → 应用与更新 → 环境与依赖**
+再次检查或修复。
+
+也可以手动准备环境：
+
+```bash
+npm install -g @earendil-works/pi-coding-agent
+pi --version
+```
 
 ### 3. 开始工作
 

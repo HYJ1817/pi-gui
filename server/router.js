@@ -82,6 +82,7 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param updateCheck   版本检查（handle）
  * @param piUpdate      Pi 运行时更新（handle）
  * @param capabilityInstall Known Capability 一键安装（handle；POST）
+ * @param environment   首次启动环境检测与安装（handle；GET/POST）
  * @returns {import('node:http').RequestListener}
  */
 export function createRouter({
@@ -109,6 +110,7 @@ export function createRouter({
   gitRoutes,
   uploads,
   diagnostics,
+  environment = null,
   logging = null,
   updateCheck,
   piUpdate = null,
@@ -190,6 +192,14 @@ export function createRouter({
     /* 日志是应用级能力：认证已完成，但不能因为并行会话活着就要求经典 owner。 */
     if (url.pathname === '/api/logs' || url.pathname.startsWith('/api/logs/')) {
       return logging ? logging.handle(req, res, url) : json(res, 503, { ok: false, code: 'logs_unavailable' });
+    }
+    /* 首次环境检测与安装也是**应用级**能力：它回答的是「这台机器能不能跑 Pi」，
+     * 与当前聊天会话无关。所以必须在 legacy owner 检查**之前**——
+     * 否则环境没装好、根本没有经典会话时，向导自己先被 409 挡住。
+     * GET 与 POST 都有（安装/取消/确认），也必须在下面的 GET/405 兜底之前。 */
+    if (url.pathname === '/api/environment' || url.pathname.startsWith('/api/environment/')) {
+      if (!environment) return json(res, 503, { ok: false, code: 'not-wired', error: '环境模块未装配' });
+      return environment.handle(req, res, url);
     }
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
     if (url.pathname === '/api/review-comments') return reviewComments ? reviewComments.handle(req, res, url) : json(res,503,{ok:false,code:'comment_storage_unavailable'});

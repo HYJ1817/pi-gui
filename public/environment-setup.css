@@ -1,0 +1,693 @@
+/* 首次环境向导。
+ *
+ * 只消费 tokens.css 的语义 Token（--ds-* / --control-* / --ui-*），不写死颜色；
+ * 深浅色由 data-theme 切换，这里不重复一份。几何沿用 .modal-card 的 14px 圆角
+ * 与 --ui-shadow-popover，和设置、更新、审批是同一族弹层。
+ *
+ * 结构：头部（说明）→ 步骤条 → 可滚动正文 → 固定操作区。正文滚动、操作区不动，
+ * 状态再长也不会把「取消 / 继续」挤出屏幕。 */
+
+.modal-card.environment-wizard {
+  display: flex;
+  flex-direction: column;
+  width: min(600px, 100%);
+  max-width: 600px;
+  max-height: min(84vh, 760px);
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--ds-radius-14);
+  background: var(--ds-bg-elevated-opaque);
+  box-shadow: var(--ui-shadow-popover);
+}
+
+.env-wizard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ---------- 头部 ---------- */
+
+.env-head {
+  flex: 0 0 auto;
+  padding: 22px 24px 0;
+}
+
+.env-eyebrow {
+  font-size: var(--ui-font-caption);
+  letter-spacing: 0.04em;
+  color: var(--ds-text-muted);
+  margin-bottom: 6px;
+}
+
+.env-title {
+  font-size: var(--ui-font-title);
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ds-text-primary);
+  margin: 0 0 6px;
+}
+
+.env-sub {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--ds-text-secondary);
+  margin: 0;
+  max-width: 52ch;
+}
+
+/* ---------- 步骤条 ---------- */
+
+.env-steps {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0 24px 14px;
+  border-bottom: 1px solid var(--ds-border-subtle);
+}
+
+.env-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--ds-text-faint);
+  font-size: 11.5px;
+}
+
+.env-step + .env-step::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  margin-right: 1px;
+  background: var(--ds-border-default);
+}
+
+.env-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--ds-radius-full);
+  border: 1px solid var(--ds-border-default);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text-muted);
+}
+
+.env-step.is-current {
+  color: var(--ds-text-primary);
+}
+
+.env-step.is-current .env-step-index {
+  border-color: var(--ds-text-primary);
+  background: var(--ds-text-primary);
+  color: var(--ds-bg-primary);
+}
+
+.env-step.is-done {
+  color: var(--ds-text-secondary);
+}
+
+.env-step.is-done .env-step-index {
+  border-color: var(--ds-border-strong);
+  color: var(--ds-text-primary);
+}
+
+/* ---------- 正文 ---------- */
+
+.env-body {
+  flex: 1 1 auto;
+  min-height: 180px;
+  overflow: auto;
+  padding: 18px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.env-body:focus-visible {
+  outline: none;
+}
+
+.env-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 140px;
+  justify-content: center;
+  color: var(--ds-text-secondary);
+  font-size: 12.5px;
+}
+
+.env-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ds-border-strong);
+  border-top-color: var(--ds-text-primary);
+  animation: env-spin 0.8s linear infinite;
+}
+
+@keyframes env-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .env-spinner { animation-duration: 2.4s; }
+  .env-progress-fill { transition: none; }
+}
+
+.env-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ds-text-primary);
+}
+
+.env-hint {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ds-text-muted);
+}
+
+/* ---------- 组件行 ---------- */
+
+.env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.env-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--ds-radius-10);
+  background: var(--ds-tile);
+}
+
+.env-row-lead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 1px;
+  border-radius: var(--ds-radius-8);
+  background: var(--ds-tile-deep);
+  color: var(--ds-text-secondary);
+}
+
+.env-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+}
+
+.env-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.env-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.env-row-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.env-row-name {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ds-text-primary);
+}
+
+.env-row-meta {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ds-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.env-row-detail {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.env-kind {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: var(--ds-radius-full);
+  border: 1px solid var(--ds-border-default);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--ds-text-muted);
+}
+
+.env-kind.is-required {
+  border-color: var(--ds-border-strong);
+  color: var(--ds-text-secondary);
+}
+
+.env-kind.is-recommended {
+  border-color: var(--ds-badge-warning-border);
+  background: var(--ds-badge-warning-bg);
+  color: var(--ds-warning);
+}
+
+.env-kind.is-optional {
+  color: var(--ds-text-faint);
+}
+
+.env-status {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ds-text-muted);
+}
+
+.env-status.is-ok { color: var(--ds-success); }
+.env-status.is-warn { color: var(--ds-warning); }
+.env-status.is-busy { color: var(--ds-text-primary); }
+
+/* ---------- 提示条 ---------- */
+
+.env-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--ds-radius-8);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ds-text-secondary);
+}
+
+.env-callout .env-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.env-callout.is-info {
+  background: var(--ds-info-surface);
+}
+
+.env-callout.is-ok {
+  border-color: color-mix(in oklab, var(--ds-success) 30%, transparent);
+  background: var(--ds-success-surface);
+}
+
+.env-callout.is-error {
+  border-color: var(--ui-danger-border);
+  background: var(--ui-danger-surface);
+  color: var(--err);
+  overflow-wrap: anywhere;
+}
+
+.env-callout .btn {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* ---------- 手动 Pi 路径 ---------- */
+
+.env-manual {
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--ds-radius-10);
+  background: transparent;
+}
+
+.env-manual > summary {
+  cursor: pointer;
+  padding: 10px 13px;
+  font-size: 11.5px;
+  color: var(--ds-text-muted);
+  border-radius: var(--ds-radius-10);
+}
+
+.env-manual > summary:hover {
+  color: var(--ds-text-primary);
+  background: var(--ds-hover-overlay);
+}
+
+.env-manual[open] > summary {
+  border-bottom: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-10) var(--ds-radius-10) 0 0;
+}
+
+.env-manual > summary:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+
+.env-manual-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px 13px 4px;
+}
+
+.env-path-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+}
+
+.env-manual .env-hint {
+  padding: 10px 13px;
+  margin: 0;
+}
+
+.env-manual .env-link-button {
+  margin: 4px 13px 12px;
+}
+
+/* ---------- 确认页 ---------- */
+
+.env-confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.env-confirm-row {
+  padding: 10px 12px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--ds-radius-8);
+  background: var(--ds-tile);
+}
+
+.env-confirm-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ds-text-primary);
+}
+
+.env-confirm-meta {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.env-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--ds-text-secondary);
+  cursor: pointer;
+}
+
+.env-check input {
+  margin: 2px 0 0;
+  accent-color: var(--ds-accent);
+}
+
+/* ---------- 安装进度 ---------- */
+
+.env-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.env-progress-head .env-lead {
+  flex: 1 1 auto;
+}
+
+.env-progress-count {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text-muted);
+}
+
+.env-progress {
+  position: relative;
+  height: 5px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-tile-deep);
+  overflow: hidden;
+}
+
+.env-progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--ds-text-primary);
+  transition: width 0.25s ease;
+}
+
+.env-progress.is-compact {
+  height: 3px;
+  margin-top: 8px;
+  background: var(--ds-tile);
+}
+
+.env-install-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.env-install-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  padding: 12px 13px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--ds-radius-10);
+  background: var(--ds-tile);
+}
+
+.env-install-name {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ds-text-primary);
+}
+
+.env-install-phase {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.env-install-status {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ds-text-muted);
+}
+
+.env-install-status.is-ok { color: var(--ds-success); }
+.env-install-status.is-warn { color: var(--ds-warning); }
+.env-install-status.is-busy { color: var(--ds-text-primary); }
+
+.env-install-row .env-progress {
+  grid-column: 1 / -1;
+}
+
+.env-install-error {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--err);
+  overflow-wrap: anywhere;
+}
+
+.env-install-error[hidden] {
+  display: none;
+}
+
+/* ---------- 验证页 ---------- */
+
+.env-verify-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--ds-radius-10);
+  overflow: hidden;
+}
+
+.env-verify-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 13px;
+  background: var(--ds-tile);
+}
+
+.env-verify-row + .env-verify-row {
+  border-top: 1px solid var(--ds-border-subtle);
+}
+
+.env-check-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1px solid var(--ds-border-default);
+  color: var(--ds-text-faint);
+}
+
+.env-check-mark svg {
+  width: 11px;
+  height: 11px;
+}
+
+.env-check-mark.is-ok {
+  border-color: transparent;
+  background: var(--ds-success-surface);
+  color: var(--ds-success);
+}
+
+.env-check-mark.is-warn {
+  border-color: var(--ui-warning-border);
+  background: var(--ui-warning-surface);
+}
+
+.env-verify-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.env-verify-name {
+  font-size: 12.5px;
+  color: var(--ds-text-primary);
+}
+
+.env-verify-detail {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 操作区 ---------- */
+
+.env-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 13px 24px 18px;
+  border-top: 1px solid var(--ds-border-subtle);
+  background: color-mix(in oklab, var(--ds-bg-elevated-opaque) 88%, transparent);
+}
+
+.env-actions .btn {
+  height: 32px;
+}
+
+.env-link-button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: var(--ds-text-muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.env-link-button:hover {
+  color: var(--ds-text-primary);
+}
+
+.env-link-button:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+  border-radius: var(--ds-radius-4);
+}
+
+/* 文字链接默认贴右；紧跟在按钮后面或另一个链接后面时按普通间距排。 */
+.env-actions .env-link-button {
+  margin-left: auto;
+}
+
+.env-actions .btn + .env-link-button,
+.env-actions .env-link-button + .env-link-button {
+  margin-left: 0;
+}
+
+/* 诊断面板里的入口按钮：与 `.stat-rows` 之间留一点距离，不贴住说明文字。 */
+.diag-env-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+
+/* 窄窗口：步骤条只留编号和当前项的文字，操作区改成整宽按钮。 */
+@media (max-width: 520px) {
+  .modal-card.environment-wizard {
+    max-height: 90vh;
+  }
+
+  .env-head {
+    padding: 18px 16px 0;
+  }
+
+  .env-steps {
+    padding: 14px 16px 12px;
+  }
+
+  .env-step:not(.is-current) .env-step-label {
+    display: none;
+  }
+
+  .env-body {
+    padding: 14px 16px 16px;
+  }
+
+  .env-actions {
+    padding: 12px 16px 16px;
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .env-actions .btn,
+  .env-actions .env-link-button {
+    width: 100%;
+    text-align: center;
+    margin-left: 0;
+  }
+}

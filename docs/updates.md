@@ -13,6 +13,10 @@ Release 页面或安装包。
 | **第一部分：Pi GUI 更新** | 这个界面要不要升级 | `/api/update` | **不会** —— 只把用户带到 GitHub | GitHub Release |
 | **第二部分：Pi 运行时更新** | 它驱动的那个 `pi` 要不要升级 | `/api/pi-update` | 只会在用户确认后跑 `pi update --self` | `https://pi.dev/api/latest-version` |
 
+还有**第三件独立的事**：首次启动时安装缺失的 Node / Pi / Git。
+它有自己的状态机、计划校验和安装边界，只在用户点击后运行，不重装已有组件，
+也不复用上面两条更新路径。见[首次环境检测与一键安装](environment-setup.md)。
+
 两者的**状态、相位、缓存、文案、代码模块**（`server/update-check.js` 对
 `server/pi-update.js`、`public/update.js` 对 `public/pi-update.js`）各有一套，
 **绝不互相复用**。命名也刻意分开：`update` 只指 Pi GUI 自己，`pi-update` 只指运行时。

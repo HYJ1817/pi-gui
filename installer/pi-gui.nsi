@@ -45,16 +45,16 @@ BrandingText "${APP_NAME}"
 !define MUI_WELCOMEPAGE_TITLE "${APP_NAME} 安装向导"
 !define MUI_WELCOMEPAGE_TEXT \
   "将把 ${APP_NAME} 安装到你的用户目录，不需要管理员权限。$\r$\n$\r$\n\
-  ${APP_NAME} 是 pi-coding-agent 的图形界面：**它需要本机已经装好 pi**。\
-  界面靠 pi 与模型通信，没有 pi 的话程序能打开但无法对话。$\r$\n$\r$\n\
+  首次启动会自动检查 Node.js、Pi 和 Git。缺少必需组件时，可以按向导提示\
+  一键安装到当前用户目录；已经装好的 Pi 不会被覆盖。$\r$\n$\r$\n\
   点击“下一步”继续。"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
 !define MUI_FINISHPAGE_RUN_TEXT "立即运行 ${APP_NAME}"
 !define MUI_FINISHPAGE_TEXT \
   "${APP_NAME} 已安装完成。$\r$\n$\r$\n\
-  第一次打开时先点左侧的“添加文件夹”选一个项目目录 —— 程序不会替你猜，\
-  也不会默认落在某个目录里。$\r$\n$\r$\n\
-  如果你的 pi 还没装好，现在装上再打开。"
+  第一次打开会先检查运行环境；缺少 Node.js 或 Pi 时按提示一键安装即可。\
+  然后点左侧的“添加文件夹”选一个项目目录 —— 程序不会替你猜，\
+  也不会默认落在某个目录里。"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY

@@ -31,6 +31,7 @@ import { observeMemoryEvent } from './memory.js';
 import { observeBrowserEvent } from './browser.js';
 import { observeGuiBrowserEvent, initGuiBrowserState } from './gui-browser-capabilities.js';
 import { observeMcpEvent } from './mcp-observer.js';
+import { initEnvironmentSetup, observeEnvironmentEvent, openEnvironmentSettings } from './environment-setup.js';
 import { cancelPendingApprovals, expireAll, observeApprovalEvent, approvalSnapshot } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { configureFeedbackContext, configureNotificationLogging, refreshFeedbackContext, toast, withNotificationSource } from './ui/toast.js';
@@ -444,6 +445,9 @@ function handle(evt) {
 
 function handleEvent(evt) {
   if (['runtime_event', 'runtime_state', 'runtime_closed'].includes(evt.type)) { observeRuntimeEvent(evt); return; }
+  /* 环境安装是整机级任务，不属于任何项目/会话：在项目与 bridgeRun 的过滤之前
+   * 就交给它，否则「还没选项目」时首次安装的进度会被静默丢掉。 */
+  if (evt.type === 'environment_job') { observeEnvironmentEvent(evt); return; }
   if (evt.type === 'bridge_status' || evt.type === 'bridge_snapshot') {
     if (evt._replay) return;
     return reconcileBridgeSnapshot(evt);
@@ -617,7 +621,7 @@ setBridgeReconciler(reconcileBridgeSnapshot);
 export function reconcileBridgeSnapshot(snapshot) {
   if (snapshot.bridgeInstance && S.bridgeInstance && snapshot.bridgeInstance !== S.bridgeInstance
     || Number.isInteger(snapshot.bridgeRun) && Number.isInteger(S.bridgeRun) && snapshot.bridgeRun !== S.bridgeRun
-    || ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(snapshot.bridgeState || snapshot.state)) {
+    || ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance', 'environment-required'].includes(snapshot.bridgeState || snapshot.state)) {
     cancelFallback('bridge-lifecycle');
     /* 换了进程/换了一代执行线：还在飞的停止应答已经不属于任何东西，
      * 覆盖它是错的。后端同样会在这些时刻解除屏障（releaseStop）。 */
@@ -626,7 +630,7 @@ export function reconcileBridgeSnapshot(snapshot) {
   const evt = { ...snapshot, type: 'bridge_status', state: snapshot.bridgeState || snapshot.state,
     error: snapshot.bridgeError ?? snapshot.error, hint: snapshot.bridgeHint ?? snapshot.hint,
     reason: snapshot.maintenance?.reason ?? snapshot.reason };
-  if (!['no-project', 'starting', 'ready', 'restarting', 'maintenance', 'exited', 'error'].includes(evt.state)) return;
+  if (!['no-project', 'environment-required', 'starting', 'ready', 'restarting', 'maintenance', 'exited', 'error'].includes(evt.state)) return;
   if (typeof snapshot.bridgeInstance === 'string' && snapshot.bridgeInstance !== S.bridgeInstance) {
     // Only a current snapshot may establish a new backend epoch. Counters are
     // monotonic inside that epoch, not across GUI server process restarts.
@@ -660,6 +664,13 @@ export function reconcileBridgeSnapshot(snapshot) {
   observeMcpEvent(evt);
   observeApprovalEvent(evt);
   switch (evt.state) {
+    case 'environment-required':
+      resetDrift();
+      S.switching = false;
+      S.syncPending = null;
+      setStatus('');
+      setBridgeState('environment-required');
+      return syncNotice();
     case 'starting':
       /* P23：bridge 生命周期一变，前端看到的 schema 漂移也不再属于当前运行 ——
        * 与各 feature 的运行观察同一条纪律（旧 run 的结论不许留在表里）。 */
@@ -1209,6 +1220,7 @@ for (const [id, render] of [
 ]) {
   $(id).onclick = () => render({ present: (build, dispose, options) => settingsSurface.presentDetail(id, build, dispose, options) });
 }
+$('navEnvironment').onclick = () => openEnvironmentSettings();
 $('btnTheme').onclick = () => $('navAppearance').click();
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !projectMenu.hidden) {
@@ -1322,6 +1334,7 @@ defineCommands([
   { id:'view.processes',title:'开发进程',group:'视图',keywords:'process dev server 服务 进程 日志',run:openProcessPanel },
   { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => settingsSurface.open() },
   { id: 'app.updates', title: '应用与更新', group: '全局', keywords: 'update 更新 pi gui 版本', run: () => $('navAppUpdates').click() },
+  { id: 'app.environment', title: '环境与依赖', group: '全局', keywords: 'environment 环境 node npm pi git 安装 修复', run: () => openEnvironmentSettings() },
   { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', run: goChat },
   { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', run: () => openPlanner() },
   { id: 'view.changes', title: '文件变更', group: '视图', keywords: 'git diff changes 变更', run: () => openChangesPanel() },
@@ -1413,6 +1426,9 @@ loadStatus().then(() => {
   syncNotice();
   connect();
   restoreOrdinaryPanel();
+  /* 首次启动的环境向导。它自己决定要不要出现（缺必需依赖、或上次安装被
+   * 打断）；失败只是不弹，不阻塞应用启动。 */
+  void initEnvironmentSetup();
 });
 
 function restoreOrdinaryPanel() {

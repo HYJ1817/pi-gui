@@ -13,6 +13,7 @@
 import { fetchDiagnostics } from './api.js';
 import { renderUpdateSection } from './update.js';
 import { renderPiUpdateSection } from './pi-update.js';
+import { statusLabel } from './environment-setup-model.js';
 import { openModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { driftSnapshot } from './schema-drift.js';
@@ -263,6 +264,42 @@ function downloadJSON(text) {
 }
 
 /** P23：版本与核对状态 —— 诊断面板里最先要看的一行。 */
+/* ---------- 运行环境（首次设置 / 修复入口） ----------
+ *
+ * 这里只展示后端 `diagnosticsSummary()` 给出的**脱敏结构**：组件状态、
+ * 版本、来源与最近一次安装的结果码。具体路径不进来，也不会把子进程输出
+ * 贴给用户。入口按钮派发一个应用内事件，由环境向导自己接住 —— 诊断模块
+ * 不 import 向导，避免两块 UI 互相依赖。 */
+const ENV_COMPONENT_NAME = { node: 'Node.js', pi: 'Pi Coding Agent', git: 'Git' };
+
+function renderEnvironmentSection(body, d) {
+  const env = d.environment;
+  if (!env) return;
+  body.appendChild(head('运行环境'));
+  if (!env.components) {
+    body.appendChild(note(env.note || '环境检测尚未运行。'));
+  } else {
+    const rows = node('div', 'stat-rows');
+    for (const [id, component] of Object.entries(env.components)) {
+      const value = [statusLabel(component.status), component.version].filter(Boolean).join(' · ');
+      const cls = component.status === 'ready' ? '' : component.kind === 'required' ? 'warn' : 'dim';
+      rows.appendChild(row(ENV_COMPONENT_NAME[id] || id, value || '未知', cls));
+    }
+    body.appendChild(rows);
+    const last = env.lastJob;
+    if (last) {
+      const progress = `${last.completedSteps || 0}/${last.totalSteps || 0}`;
+      body.appendChild(note(`最近一次安装：${statusLabel(last.state)} · 完成 ${progress}${last.errorCode ? ' · ' + last.errorCode : ''}`));
+    }
+  }
+  const actions = node('div', 'diag-env-actions');
+  const open = node('button', 'btn', '打开环境检查');
+  open.type = 'button';
+  open.onclick = () => document.dispatchEvent(new CustomEvent('pi-gui:open-environment'));
+  actions.appendChild(open);
+  body.appendChild(actions);
+}
+
 function renderVersionVerification(body, d) {
   const pi = d.pi || {};
   const rows = node('div', 'stat-rows');
@@ -419,6 +456,7 @@ function render(card, close, payload) {
    * 上面那个是「Pi GUI 要不要升级」，这个是「它驱动的 pi 要不要升级」。
    * 当前版本用诊断快照里的 `pi.version` 兜底（同一个东西，后端是唯一真相）。 */
   renderPiUpdateSection(body, d.pi?.version);
+  renderEnvironmentSection(body, d);
 
   const rows = node('div', 'stat-rows');
   rows.append(

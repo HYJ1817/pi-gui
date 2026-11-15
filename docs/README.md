@@ -33,7 +33,7 @@
 | Browser 与 Electron | [Browser](browser.md)、[Agent Control](agent-browser.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)、[构建](development.md) |
 | 安全、路径及权限 | [安全](security.md)、[架构](architecture.md) | [审批](approvals.md)、相关功能的写入/恢复设计；历史 P33 材料见下文 |
 | CI 与测试 | [测试政策与分层](testing.md)、[开发构建](development.md) | 当前 `package.json`、`scripts/test-group-plan.mjs`、`scripts/run-test-group.mjs` 和相关 workflow/测试；不从旧验收报告抄测试清单 |
-| 安装、更新及发布 | [发版](releasing.md)、[更新](updates.md)、[应用内更新](windows-in-app-update.md) | [构建](development.md)、[签名](code-signing.md)、[兼容升级](upgrade-playbook.md)、[安全](security.md) |
+| 安装、更新及发布 | [发版](releasing.md)、[更新](updates.md)、[应用内更新](windows-in-app-update.md)、[首次环境安装](environment-setup.md) | [构建](development.md)、[签名](code-signing.md)、[兼容升级](upgrade-playbook.md)、[安全](security.md) |
 | Pi、供应商与扩展兼容 | [Pi 兼容](pi-compatibility.md)、[兼容升级](upgrade-playbook.md) | [供应商认证](provider-auth.md)、[MCP](mcp.md)、[扩展](extensions.md)、[项目配置](project-config.md) |
 
 ## 当前设计、历史方案和验收记录

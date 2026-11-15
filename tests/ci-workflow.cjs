@@ -124,6 +124,10 @@ assert.match(publishJob, /GH_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/);
 assert.match(publishJob, /GITHUB_TOKEN:\s*\$\{\{\s*github\.token\s*\}\}/);
 assert.match(publishJob, /publish-release\.mjs --tag="\$env:RELEASE_TAG" --expected-sha="\$env:EXPECTED_SHA"/);
 assert.match(releaseCheck, /run:\s*npm test\b/);
+const releaseCheckVerify = section(releaseCheck, '  verify:', '  installer:');
+assert.match(releaseCheckVerify,
+  /Prepare isolated test directories[\s\S]*?\$tempBase = Join-Path \$env:USERPROFILE 'AppData\\Local\\Temp'[\s\S]*?Run core tests/,
+  'release check must use the same C: profile TEMP boundary as canonical CI');
 assert.doesNotMatch(release, /run-test-group\.mjs/);
 assert.doesNotMatch(releaseCheck, /run-test-group\.mjs/);
 

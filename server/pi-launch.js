@@ -248,6 +248,22 @@ function commandFileFromPath(bin, { env, cwd, isWin }) {
 }
 
 /**
+ * 按 PATH 解析一个裸命令，供环境检测复用。
+ *
+ * 环境检测要回答「系统里有没有 node / npm / git」，这与 Pi 的启动身份是同一件
+ * 文件系统解析工作，所以**复用**这里已经验证过的 Windows `PATHEXT` / cwd 规则，
+ * 不另写一份 `where` 调用或目录清单。仍然只做 stat，不执行任何东西。
+ */
+export function resolveExecutable(bin, { env = process.env, cwd = null, isWin = process.platform === 'win32' } = {}) {
+  if (typeof bin !== 'string' || !bin) return null;
+  if (isPathLike(bin)) {
+    const file = path.isAbsolute(bin) ? bin : path.resolve(cwd || process.cwd(), bin);
+    return isFile(file) ? file : null;
+  }
+  return commandFileFromPath(bin, { env, cwd, isWin });
+}
+
+/**
  * 算一份 launch identity。**纯函数式的副作用边界只有文件系统 stat / 读 package.json。**
  *
  * @param bin   实际启动命令（`PI_BIN` 或 `'pi'`）
@@ -298,26 +314,45 @@ function compute({ bin, env, cwd, isWin }) {
  * 负责，它用这里的 `launcher` 拿到与 bridge 同一个 launch spec。
  *
  * @param piBin   实际启动命令，默认 `'pi'`
+ * @param getPiBin 可选的**动态**启动命令来源。环境安装完成后 Pi GUI 自己的
+ *                运行时目录里可能刚出现一份 Pi —— 它必须能被同一个 launch
+ *                identity 接上，而不是要求整个后端重启。给了它就每次解析时
+ *                重新问一次；返回值不是非空字符串则退回 `piBin`。
  * @param env     环境变量来源（PATH / PATHEXT）
  * @param getCwd  当前项目目录（bridge 的 cwd），默认 null
  */
 export function createPiLaunch({
   piBin = 'pi',
+  getPiBin = null,
   env = process.env,
   isWin = process.platform === 'win32',
   getCwd = () => null,
   now = () => Date.now(),
   ttlMs = 30_000,
 } = {}) {
-  const bin = typeof piBin === 'string' && piBin ? piBin : 'pi';
+  const fixedBin = typeof piBin === 'string' && piBin ? piBin : 'pi';
+
+  function currentBin() {
+    if (typeof getPiBin === 'function') {
+      try {
+        const value = getPiBin();
+        if (typeof value === 'string' && value) return value;
+      } catch {
+        /* 动态来源不可用时退回固定值；身份解析不该把请求打挂 */
+      }
+    }
+    return fixedBin;
+  }
+
   let cache = null;
 
   function identity({ force = false } = {}) {
     const cwd = getCwd() || null;
+    const bin = currentBin();
     const t = now();
-    if (force || !cache || cache.key !== cwd || t - cache.at >= ttlMs) {
+    if (force || !cache || cache.key !== cwd || cache.bin !== bin || t - cache.at >= ttlMs) {
       const { data, identityKey } = compute({ bin, env, cwd, isWin });
-      cache = { key: cwd, at: t, data, identityKey };
+      cache = { key: cwd, bin, at: t, data, identityKey };
     }
     return cache.data;
   }
@@ -381,7 +416,20 @@ export function createPiLaunch({
   }
 
   /** 给 `createPiVersionProbe({ launcher })` 用：**同一个 launch spec** 的 `--version`。 */
-  const launcher = (args) => formatLaunch(bin, args, isWin);
+  const launcher = (args) => formatLaunch(currentBin(), args, isWin);
 
-  return { identity, identityKey, packageDir, cliEntry, summary, reset, launcher, formatLaunch: launcher };
+  return {
+    identity,
+    identityKey,
+    packageDir,
+    cliEntry,
+    summary,
+    reset,
+    launcher,
+    formatLaunch: launcher,
+    /** 当前实际会启动的命令。**动态**：`getPiBin` 变化后无需重新建对象。 */
+    get bin() {
+      return currentBin();
+    },
+  };
 }

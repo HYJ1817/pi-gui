@@ -247,6 +247,48 @@ export const fetchPiUpdate = (force = false) => getJSON('/api/pi-update' + (forc
 export const postPiUpdate = (body) =>
   sendJSON('/api/pi-update', { body: { ...body, __expectedCwd: S.cwd } });
 
+/* ---------- 首次环境检查 / 安装 ----------
+ *
+ * 这是**第三件事**，别和上面两个混：
+ *   /api/update     —— Pi GUI 自己要不要升级；
+ *   /api/pi-update  —— 本机已装的 Pi 运行时要不要升级；
+ *   /api/environment—— 本机有没有 Node / Pi / Git，缺的怎么装。
+ *
+ * 前端只送组件 id、后端给的 planId 与布尔确认；不送路径、URL、命令或参数。
+ * 安装是用户级、无提权的，真正的下载/校验/解压/npm 全在后端。写操作都带
+ * applicationScoped：环境是整机共享的，不属于某个项目，不能带项目级 owner 头。 */
+
+/** 读取环境报告。后端有 5 秒缓存，正常打开界面不需要 force。 */
+export const fetchEnvironment = (force = false) =>
+  getJSON('/api/environment' + (force ? '?recheck=1' : ''));
+
+/** 用户主动点「重新检查」—— 清缓存后重新探测（只读，不写盘、不联网）。 */
+export const recheckEnvironment = () => sendJSON('/api/environment/recheck', { applicationScoped: true });
+
+/** 启动安装任务。`planId` 是检测时报告给出的计划指纹：环境在确认期间变了，
+ *  后端会拒掉并要求重新检查，而不是照着旧计划装错东西。 */
+export const startEnvironmentInstall = ({ planId, components, consent }) =>
+  sendJSON('/api/environment/install', {
+    applicationScoped: true,
+    body: { planId, components, consent: consent === true },
+  });
+
+/** 读一次安装任务（轮询兜底；正常情况下走 SSE `environment_job`）。 */
+export const fetchEnvironmentJob = (id) =>
+  getJSON('/api/environment/job?id=' + encodeURIComponent(String(id || '')));
+
+/** 取消安装：后端会杀掉子进程树并清理这次任务的临时目录。 */
+export const cancelEnvironmentInstall = (id) =>
+  sendJSON('/api/environment/cancel', { applicationScoped: true, body: { id } });
+
+/** 手动指定 Pi 可执行文件路径；传 null 清除。环境变量 PI_BIN 存在时后端拒绝。 */
+export const setEnvironmentPiPath = (path) =>
+  sendJSON('/api/environment/pi-path', { applicationScoped: true, body: { path } });
+
+/** 记下向导已完成（仅必需项就绪时后端才接受），避免下次启动重复弹向导。 */
+export const ackEnvironmentSetup = ({ completed = false, skippedOptional = false } = {}) =>
+  sendJSON('/api/environment/ack', { applicationScoped: true, body: { completed, skippedOptional } });
+
 export const createProject = (path, name) => sendJSON('/api/projects', { body: { path, name } });
 export const deleteProject = (path) => sendJSON('/api/projects?path=' + encodeURIComponent(path), { method: 'DELETE' });
 export const activateProject = (path) => sendJSON('/api/projects/activate', { body: { path } });

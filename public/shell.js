@@ -38,6 +38,7 @@ export function setBridgeState(state, detail = '', maintenanceReason = null) {
   S.maintenanceReason = state === 'maintenance' ? (maintenanceReason || S.maintenanceReason) : null;
   const labels = {
     'no-project': ['', '未选择项目'],
+    'environment-required': ['', '等待安装运行环境'],
     starting: ['busy', '正在启动 pi…'],
     ready: ['ok', '已连接'],
     restarting: ['busy', '正在重启 pi…'],
@@ -131,7 +132,7 @@ export function applyProjectState() {
  * （那需要证据，而我们只有能力证据；版本号本身不参与判定）。 */
 let compatWarned = false;
 function warnIfIncompatible() {
-  if (compatWarned || !S.compat) return;
+  if (compatWarned || !S.compat || S.bridgeState === 'environment-required') return;
   if (S.compat.status !== 'incompatible') return;
   compatWarned = true;
   const miss = (S.compat.missing || []).join('、');
@@ -149,8 +150,8 @@ export async function loadStatus(generation = S.workspaceGeneration) {
   if (j && j.ok !== false) {
     if (bridgeReconciler && j.bridgeState) {
       S.compat = j.compat || null;
-      warnIfIncompatible();
       bridgeReconciler(j);
+      warnIfIncompatible();
       return j;
     }
     S.cwd = j.cwd || '';

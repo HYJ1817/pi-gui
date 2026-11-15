@@ -70,6 +70,7 @@ const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 const { createDesktopTheme } = require('./theme.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
+const { installEnvironmentSetup } = require('./environment-setup.cjs');
 const { installAppUpdate } = require('./app-update-desktop.cjs');
 /* P2：供应商凭据受限输入窗（CredentialSheet）。协议必须在 app ready 前注册。 */
 const { createProviderCredentialDesktop, registerCredentialScheme, PARTITION: CREDENTIAL_SHEET_PARTITION } = require('./provider-credentials.cjs');
@@ -106,6 +107,7 @@ let browser = null;
 let browserAgent = null;
 let runtimeBrowserHost = null;
 let quitting = false;
+let environmentInstallQuit = null;
 let mainLog = null;
 let appUpdate = null;
 let credentialDesktop = null;
@@ -189,6 +191,9 @@ async function ensureServer() {
   const probe = await probePort();
 
   if (probe.state === 'pi-gui') {
+    if (app.isPackaged) {
+      throw new Error(`端口 ${PORT} 上已有 Pi GUI 后端。请结束该后端或换一个端口，以启动本实例的私有后端。`);
+    }
     mlog('electron', 'electron.backend_spawn', { reused: true, phase: 'reuse' });
     const access = await verifyAccess();
     if (!access.ok) {
@@ -224,6 +229,7 @@ async function ensureServer() {
       // 本实例的访问令牌。后端据此要求所有 /api/* 带令牌，
       // 而令牌只经由下面的 installTokenHeader() 注入到请求头里。
       PI_GUI_TOKEN: AUTH_TOKEN,
+      PI_GUI_DESKTOP: '1',
       ...browserAgent.environment(),
       ...runtimeBrowserHost.environment(),
       // projects.json 和上传缓存要写到可写的地方。默认是应用安装目录，
@@ -323,6 +329,12 @@ async function ensureServer() {
  * 文件」这一个能力而存在（见 installOpenPathHandler）。令牌依然不进渲染进程 ——
  * preload 只转发**项目相对路径**，一个字节的凭据都不碰。 */
 function installTokenHeader() {
+  // Source builds can use an existing development backend. Keep desktop write
+  // operations behind the native bridge even when that backend accepts web requests.
+  session.defaultSession.webRequest.onBeforeRequest({ urls: [`${ORIGIN}/*`, `http://localhost:${PORT}/*`] }, (details, callback) => {
+    const path = new URL(details.url).pathname;
+    callback({ cancel: !server?.connected && details.method === 'POST' && (path === '/api/environment/install' || path === '/api/environment/pi-path') });
+  });
   session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [`${ORIGIN}/*`] }, (details, callback) => {
     callback({ requestHeaders: { ...details.requestHeaders, [TOKEN_HEADER]: AUTH_TOKEN } });
   });
@@ -418,6 +430,27 @@ function installOpenExternalHandler() {
       return { ok: false, error: '打开失败：' + (err && err.message ? err.message : String(err)) };
     }
     return { ok: true };
+  });
+}
+
+/** Give the owned backend time to cancel installation and remove its staging files. */
+function waitForEnvironmentCleanup(child) {
+  return new Promise(resolve => {
+    function finish() {
+      clearTimeout(timer);
+      child.removeListener('message', onMessage);
+      child.removeListener('disconnect', finish);
+      resolve();
+    }
+    function onMessage(message) {
+      if (message?.type === 'environment-cleanup-complete') finish();
+    }
+    // Environment verification may be waiting for its bounded Pi RPC probe.
+    const timer = setTimeout(finish, 20_000);
+    child.on('message', onMessage);
+    child.once('disconnect', finish);
+    try { child.send({ type: 'environment-cleanup-on-quit' }, error => { if (error) finish(); }); }
+    catch { finish(); }
   });
 }
 
@@ -934,6 +967,7 @@ if (!app.requestSingleInstanceLock()) {
     // "No handler registered"。
     installOpenPathHandler();
     installOpenExternalHandler();
+    installEnvironmentSetup({ ipcMain, dialog, getWindow: () => win, getServer: () => server, origin: ORIGIN });
     try { appUpdate=installAppUpdate({app,ipcMain,origin:ORIGIN,getWindow:()=>win,getServer:()=>server,dialog,shell,
       inspectDesktop:()=>{
         const states=[browserAgent?.agent.status(),...[...(runtimeBrowserHost?.records.values()||[])].map(r=>r.agent.status())].filter(Boolean);
@@ -1044,6 +1078,17 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', event => {
     if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
+    if (process.platform === 'win32' && server?.connected && environmentInstallQuit !== 'done') {
+      event.preventDefault();
+      if (environmentInstallQuit === null) {
+        environmentInstallQuit = 'waiting';
+        void waitForEnvironmentCleanup(server).then(() => {
+          environmentInstallQuit = 'done';
+          app.quit();
+        });
+      }
+      return;
+    }
     // 再兜一层：Ctrl+Q、系统关机等直接触发 quit 的情况，窗口可能还活着也可能已经没了
     saveWindowState();
     quitting = true;

@@ -111,6 +111,11 @@ import { createMcpManager } from './server/mcp-manager.js';
 import { createPiBuiltins } from './server/pi-builtins.js';
 import { createPiLaunch } from './server/pi-launch.js';
 import { createPiVersion, createPiVersionProbe } from './server/pi-version.js';
+import { createEnvironmentStore } from './server/environment-store.js';
+import { createEnvironmentSetup } from './server/environment-setup.js';
+import { createEnvironmentInstall } from './server/environment-install.js';
+import { createEnvironmentRoutes } from './server/environment-routes.js';
+import { cleanupStaleTemp } from './server/environment-download.js';
 import { createApprovalProbe } from './server/approval-probe.js';
 import { createSessions } from './server/sessions.js';
 import { createSessionSearch } from './server/session-search.js';
@@ -204,6 +209,20 @@ const DATA_DIR = resolveDataDir({
   },
 });
 
+/* 首次环境安装的持久状态与受管运行时目录。
+ *
+ * **BASE_ENV 必须在 applyManagedPath 之前拍快照**：环境检测要能区分
+ * 「系统里本来就有 Node」与「Pi GUI 自己装到用户目录里的 Node」。如果先改
+ * PATH 再检测，我们自己装的 Node 会被误报成系统 Node，用户在设置里就再也
+ * 看不出真实来源。
+ *
+ * applyManagedPath 只改本进程的 PATH，不写注册表、不改用户环境变量。 */
+const BASE_ENV = Object.freeze({ ...process.env });
+const desktopEnvironment = process.env.PI_GUI_DESKTOP === '1';
+const environmentStore = createEnvironmentStore({ dataDir: DATA_DIR, env: process.env });
+environmentStore.applyManagedPath(process.env);
+try { cleanupStaleTemp(environmentStore.paths().root); } catch { /* 清理失败不影响启动 */ }
+
 // pi 的用户级自定义供应商配置。
 // 注意：这是「用户配置」，与 pi 自身的 models-store.json（模型目录缓存）不是一回事。
 const agentDirOverride = process.env.PI_CODING_AGENT_DIR;
@@ -239,7 +258,15 @@ const runtime = createRuntime({ initialCwd: resolveInitialCwd(PROJECTS_FILE) });
  *
  * 放在 runtime 之后建，是因为 `getCwd` 要读 runtime（惰性求值，但顺序上
  * 紧跟着它更好懂）。 */
-const piLaunch = createPiLaunch({ piBin: PI_BIN, env: process.env, getCwd: () => runtime.getCurrentCwd() });
+const piLaunch = createPiLaunch({
+  piBin: PI_BIN,
+  /* 环境安装完成后，受管目录里会出现一份新的 Pi。后端不重启，但下一次
+   * spawn / 版本探测 / 能力检视都必须接到这份新入口上 —— 所以 bin 是动态的：
+   * PI_BIN > 用户手动路径 > 受管 Pi > PATH 上的 `pi`（顺序在 store 里）。 */
+  getPiBin: () => environmentStore.effectivePiBin().bin,
+  env: process.env,
+  getCwd: () => runtime.getCurrentCwd(),
+});
 
 const sse = createEventBus({ getBridgeSnapshot: () => rpc.getState() });
 
@@ -292,6 +319,48 @@ const piVersion = createPiVersion({
    * **不参与能力判定** —— 能力走 pi-probes。 */
   matrix: piCompatMatrix,
 });
+
+/* 首次启动环境检测（只读）。
+ *
+ * 它与 bridge / 版本探测看的是**同一份 launch identity**：Pi 的入口与版本
+ * 不在这里另算一遍。系统 Node 按 `BASE_ENV` 判断，受管 Node 单独列出来，
+ * Electron 自带 Node 也单独说明 —— 三者不混成一句「有 Node」。
+ *
+ * RPC 探测只在确实找到 Pi 时运行，12 秒超时，结果缓存 60 秒；探测失败
+ * 只影响「Pi 是否 ready」，不会抛到 HTTP 层。 */
+const environmentSetup = createEnvironmentSetup({
+  store: environmentStore,
+  piLaunch,
+  piVersion,
+  baseEnv: BASE_ENV,
+  isWin: IS_WIN,
+  killTree,
+});
+
+/* 首次环境安装（受控写路径）。
+ *
+ * 与 Pi GUI 更新、Pi 运行时更新是**三个独立状态机**：
+ *   - 这里只装 Node / Pi / Git，且只在用户确认后、且组件确实缺失时；
+ *   - 已有 Pi（PI_BIN / 手动路径 / PATH / 受管目录）不会被重装或覆盖；
+ *   - 没有后台轮询，没有自动重试。 */
+const environmentInstall = createEnvironmentInstall({
+  setup: environmentSetup,
+  store: environmentStore,
+  piLaunch,
+  piVersion,
+  runCli,
+  env: process.env,
+  isWin: IS_WIN,
+  desktop: desktopEnvironment,
+  canInstall: () => !updateMaintenance.locked(),
+  onEvent: job => {
+    try { sse.publish({ type: 'environment_job', job }); } catch { /* 推事件失败不影响安装 */ }
+  },
+  /* 安装器已重新检测并验证 Node/Pi，启动当前项目的 RPC。 */
+  onInstalled: () => { if (environmentInstalledHandler) environmentInstalledHandler(); },
+});
+environmentSetup.setJobProvider(() => environmentInstall.currentJob());
+let environmentInstalledHandler = null;
 
 /* Pi built-in 能力探测（P20.5）。
  * built-ins（`llama.cpp` / `codemode` / `tool-search` / `mcp`）编译在 pi 包里，
@@ -446,12 +515,20 @@ const rpc = createRpcBridge({
   },
   piBin: PI_BIN,
   launch: piLaunch,
+  hasRuntimeDependencies: environmentSetup.hasRuntimeDependencies,
   isWin: IS_WIN,
   projectLaunch: projectConfig,
   compat: piCompat,
   toolLaunch: primaryToolGuard,
   planLaunch: planBridge,
 });
+
+/* 安装完成后重新解析入口。start 合并已在启动或运行的桥；没有项目就延迟。 */
+environmentInstalledHandler = () => {
+  invalidatePiCaches();
+  if (!runtime.getCurrentCwd()) return;
+  void rpc.start();
+};
 
 /* 依赖方向：projects → rpc 通过**注入回调**表达，而不是 import ——
  * 否则 projects ↔ rpc-bridge 会成环。
@@ -926,6 +1003,8 @@ const diagnostics = createDiagnostics({
   extensions: () => extensions.peek(),
   /* Pi 运行时更新：只读缓存/最近一次结果，**不发请求**（诊断不该打公网）。 */
   piUpdate: () => piUpdate.snapshot(),
+  /* 首次环境安装：只给状态/版本/来源的脱敏摘要，没有路径或命令输出。 */
+  environment: () => environmentSetup.diagnosticsSummary(),
   dataDir: DATA_DIR,
   version: VERSION,
   env: process.env,
@@ -1016,6 +1095,8 @@ function invalidatePiCaches() {
   mcpNative.reset();
   piCompat.reset();
   probesRef?.reset();
+  /* 环境报告里的 Pi 版本 / RPC 结论也绑在这份 identity 上；更新完必须重算。 */
+  environmentSetup.invalidate();
 }
 
 /**
@@ -1143,10 +1224,18 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   },
   onFocus: async owner => { if (!owner) { await runtimeBrowser.focus(null); return; } const { repoId, ...scope } = owner; await runtimeBrowser.focus(scope); },
   factory: async (context, emit) => {
-    const launch = createPiLaunch({ piBin: PI_BIN, env: process.env, getCwd: () => context.cwd });
+    /* 独立会话与主聊天必须用**同一个有效 Pi 入口**。环境安装可能刚把
+     * 受管 Pi 放到用户目录；这里在创建时取一次，避免又回到「两套身份」。 */
+    const effectivePiBin = environmentStore.effectivePiBin().bin;
+    const launch = createPiLaunch({
+      piBin: effectivePiBin,
+      getPiBin: () => environmentStore.effectivePiBin().bin,
+      env: process.env,
+      getCwd: () => context.cwd,
+    });
     const browser = await runtimeBrowser.allocate(launch, context.owner);
     let adapter;
-    try { adapter = await createSessionRuntime({ context, emit, piBin: PI_BIN, env: process.env, dataDir: DATA_DIR,
+    try { adapter = await createSessionRuntime({ context, emit, piBin: effectivePiBin, env: process.env, dataDir: DATA_DIR,
       guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig, mutationAdmission, toolScheduler,
       captureProviderLaunch,
       candidateAudit: context.workspace.branch?.startsWith('pi-gui/t4b/') ? event => candidateRunsRef?.audit(context.getOwner(),event) : null,
@@ -1216,6 +1305,18 @@ function classicProviderTargets() {
   }];
 }
 
+const environmentRoutes = createEnvironmentRoutes({
+  setup: environmentSetup,
+  install: environmentInstall,
+  desktop: desktopEnvironment,
+  onReady: () => {
+    if (rpc.getState().state === 'environment-required') void rpc.start();
+  },
+  onPiPathChanged: () => {
+    invalidatePiCaches();
+    if (rpc.getState().state === 'environment-required') void rpc.start();
+  },
+});
 const revertAuthority = createSessionRevertAuthority({ classicBridge:sessionChanges, classicOwner:primaryOwner,
       classicNativeState:()=>rpc.request({type:'get_state'}), classicBusy:()=>Boolean(piActivity.busy() || rpc.getState().stop?.pending),
       registry:runtimeRegistry, worktrees:conversationWorkspaces, classicRoot:()=>runtime.getCurrentCwd() });
@@ -1413,6 +1514,7 @@ const route = createRouter({
   gitRoutes,
   uploads,
   diagnostics,
+  environment: environmentRoutes,
   logging,
   updateCheck,
   piUpdate,
@@ -1426,7 +1528,7 @@ const updateMaintenance = createAppUpdateMaintenance({
   otherBusy: () => rpc.stopState()?.pending || ['starting','restarting','maintenance'].includes(rpc.getState().state)
     || rpc.updateBusy() || runtimeRegistry.updateBusy()
     || candidateRuns.busy()
-    || toolScheduler.busy() || mutationAdmission.busy()
+    || toolScheduler.busy() || mutationAdmission.busy() || environmentInstall.busy()
     || [...processManagers].some(manager => manager.snapshot().activeCount || manager.snapshot().cleanupPending),
   closeSessions: () => runtimeRegistry.closeAll(),
   pause: () => rpc.pauseForMaintenance('app-update', { graceful: true }),
@@ -1442,6 +1544,20 @@ const server = http.createServer((req,res) => {
   }
   updateMaintenance.track(req,res);
   return route(req,res);
+});
+
+// This installation channel belongs to the directly spawned Electron backend.
+if (desktopEnvironment && process.send) process.on('message', async message => {
+  if (message?.type !== 'environment-install' || !Number.isSafeInteger(message.id)) return;
+  let result = { ok: false, code: 'install-unavailable', error: '安装服务暂不可用，请重试。' };
+  try {
+    if (!runtime.isShuttingDown() && !updateMaintenance.locked()) {
+      if (message.action === 'approve') result = environmentInstall.approveDesktop(message);
+      if (message.action === 'start') result = await environmentInstall.startDesktop(message);
+      if (message.action === 'set-pi-path') result = await environmentRoutes.setPiPath(message.path);
+    }
+  } catch { /* Reply with the fixed failure projection. */ }
+  if (process.connected) process.send({ type: 'environment-install-result', id: message.id, result }, () => {});
 });
 // Only the Electron parent owns this channel. No token, path or command payload.
 if (process.send) process.on('message', async message => {
@@ -1473,14 +1589,22 @@ if (process.send) process.on('message', async message => {
 
 // ---------- 生命周期 ----------
 
+if (process.send) process.on('message', async message => {
+  if (message?.type !== 'environment-cleanup-on-quit') return;
+  await environmentInstall.dispose();
+  if (process.connected) process.send({ type: 'environment-cleanup-complete' }, () => {});
+});
+
 async function shutdown() {
   if(runtime.isShuttingDown())return;
+  runtime.setShuttingDown(true);
+  /* Await cancellation and the job's staging cleanup before closing the process. */
+  await environmentInstall.dispose();
   await terminal.dispose();
   marketNetwork?.dispose();
   providerAuth.dispose();
   providerCredentialBridge.dispose();
   void providerCredentials.dispose();
-  runtime.setShuttingDown(true);
   clearInterval(runtimeHealthTimer);
   await sessionChanges.dispose();
   await primaryToolGuard.dispose();

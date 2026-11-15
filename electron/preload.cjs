@@ -56,6 +56,12 @@ try {
   contextBridge.exposeInMainWorld('piGuiDesktop', {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
     isDesktop: true,
+    // 固定操作。安装授权和本机文件选择都由主进程持有。
+    environmentSetup: {
+      install: (planId, components) => ipcRenderer.invoke('pi-gui:environment-install', { planId, components }),
+      choosePi: () => ipcRenderer.invoke('pi-gui:environment-choose-pi'),
+      clearPi: () => ipcRenderer.invoke('pi-gui:environment-clear-pi'),
+    },
     appUpdate: {
       state: () => ipcRenderer.invoke('pi-gui:app-update-state'),
       download: () => ipcRenderer.invoke('pi-gui:app-update-download', {confirm:true}),
