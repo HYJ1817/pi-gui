@@ -151,7 +151,10 @@
 - **中断工具边界**：Classic 用事件序号，Runtime 用 block 顺序；若同一并行工具块内同时有 `interrupted` 与 `success`、且没有后续内容，Runtime 仍按“最后一个工具块”判终态，未细分块内顺序。这是保守选择，避免把真正终止的中断吞掉。
 - **Token 明细可访问性**：原生 `<details>` 在 Electron/Chromium 已验证；未覆盖其它浏览器（产品是 Electron，风险低）。
 - **视觉窄窗**：700px 的既有右侧裁切未修复，阶段 1 截图保留该基线状态，未把它误报为回归。
-- **文件规模**：[runtime-conversation.js](../public/runtime-conversation.js) 从 1090 行增至 1189 行，超过 1000 行软阈值。集中原因是时钟线投影/节点缓存/会话视图态必须在同一闭包内共享；本阶段只加视图派生的终态节点与清理，不改 store/timeline 契约。拆分会把“哪些节点属于哪个会话/哪一代 runtime”的判据分散，风险高于当前集中实现；后续若继续增长，建议先把 timeline 投影抽成独立纯模块并补契约测试。
+- **文件规模**：[messages.js](../public/messages.js) 从 782 行增至 1023 行，[runtime-conversation.js](../public/runtime-conversation.js) 从 1090 行增至 1210 行，均超过 1000 行软阈值；新增的 [turn-outcome.js](../public/turn-outcome.js) 为 138 行。
+  - `messages.js` 集中了 Classic 消息渲染、流式组装、历史重建、错误/重试与轮次证据；本阶段只在其中接入实时轮次跟踪与重试摘要。拆分会越过现有 `S.current` / `S.blocks` / `S.tools` 的所有权边界，并可能与 `tools.js` 形成新的循环依赖，风险高于当前集中实现。
+  - `runtime-conversation.js` 集中了时间线投影、节点缓存与按会话视图态；本阶段只加视图派生的终态节点、清理与 runtime 换代守卫，不改 store/timeline 契约。拆分会把“哪些节点属于哪个会话/哪一代 runtime”的判据分散。
+  - 后续若继续增长，建议先把 Classic 轮次跟踪/重试摘要抽成独立模块、把 Runtime 终态投影抽成纯模块，并补充独立契约测试；本次不做，以保持改动可回滚。
 
 ## 9. 回滚方式
 
