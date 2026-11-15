@@ -29,10 +29,12 @@
 
 ## 首次环境安装验证
 
-`npm run test:environment` 已纳入 canonical `test` 链，包含四个离线套件：
+`npm run test:environment` 已纳入 canonical `test` 链，包含六个离线套件：
 `environment-download`（下载白名单、校验、解压与目录替换原语）、
+`environment-store`（受管版本、PATH 和中断状态持久化）、
 `environment-setup`（检测、兼容性、RPC 握手、手动路径与脱敏）、
-`environment-install`（计划校验、完整安装状态机、取消与失败隔离）、
+`environment-install`（一次性许可、HTTP 边界、安装状态机、目录锁、取消与失败隔离）、
+`environment-electron`（原生对话框和主进程 IPC 的调用边界）、
 `environment-ui`（纯展示模型与 jsdom 四页流程）。
 
 全部使用 `os.tmpdir()` 下的 fixture、注入的下载/命令替身和假安装器，

@@ -69,8 +69,8 @@
 
 ## 四、一键安装做什么
 
-入口只有用户明确点击后的 `POST /api/environment/install`。
-后端用 `planId` 拒绝过期计划，用组件 id 白名单拒绝额外目标；同一时间只允许一个任务。
+桌面采用主进程原生确认，网页版采用向导中的明确安装操作。
+后端重新检测环境，用 `planId` 与组件白名单核对安装范围。任务全程独占受管安装根目录。
 
 ### Node.js
 
@@ -146,6 +146,8 @@ queued → running → verifying → succeeded
 - 「取消安装」走 `POST /api/environment/cancel`：abort 下载请求，
   kill npm / PowerShell 的整个进程树；已完成的组件保留。
 - 「后台继续」只关闭弹层，任务继续在服务端运行；再打开向导会接回同一个 job。
+- Windows 桌面正常退出时，主进程经直属后端 IPC 请求取消并等待清理。若退出等待超时，
+  进程树终止后仍可由下次启动清理超过时限的残留临时文件。
 - 进程重启后旧 job 不会假装还在跑；store 里留下 `interrupted` 记录，下次检测可见。
 - npm 安装步骤有 10 分钟上限；HTTP 传输有 30 秒空闲超时，重定向有次数上限。
   任务本身没有后台自动重试，失败后由用户再次点击。
@@ -165,6 +167,10 @@ queued → running → verifying → succeeded
 
 向导完成后写入 `completedAt`；之后即使环境再次缺失，也会按需提示，而不是每次启动都弹窗。
 
+主 RPC 在启动前核对可执行的外部 Node、最低版本和 Pi 入口。缺依赖时状态为
+`environment-required`，主界面继续运行。有项目且安装复检通过后，桥合并同一轮启动请求。
+没有项目时延迟启动。已有依赖的 Pi 进程仍使用原来的启动握手、错误反馈与重试策略。
+
 ## 七、API 与 IPC
 
 所有路由都在现有的 Origin + 令牌鉴权之后，只接受固定形状的 JSON：
@@ -173,15 +179,18 @@ queued → running → verifying → succeeded
 | --- | --- |
 | `GET /api/environment[?recheck=1]` | 读取检测报告 |
 | `POST /api/environment/recheck` | 强制重新检测 |
-| `POST /api/environment/install` | 启动安装，body 只含 `planId / components / consent` |
+| `POST /api/environment/install` | Web 安装入口，body 只含 `planId / components / consent`。桌面后端拒绝 |
 | `GET /api/environment/job?id=…` | 读取任务快照 |
 | `POST /api/environment/cancel` | 取消任务 |
-| `POST /api/environment/pi-path` | 设置或清除手动 Pi 路径 |
+| `POST /api/environment/pi-path` | Web 手动 Pi 路径。桌面使用原生选择或清除确认 |
 | `POST /api/environment/ack` | 记录向导完成 / 跳过可选项 |
 
 进度通过现有 SSE 事件 `environment_job` 推送；断线后前端用 `GET job` 轮询补齐。
-renderer 不执行任何系统命令。桌面版在真正开始前还会调用一次原生确认框
-（`window.piGuiDesktop.environmentSetup.confirmInstall`），preload 只暴露这一个方法。
+桌面 renderer 通过 `window.piGuiDesktop.environmentSetup.install(planId, components)` 请求安装。
+主进程检查调用窗口、顶层 frame、同源和组件集合，由固定文案的原生对话框获得确认。
+确认后，直属后端在私有 IPC 上签发绑定同一计划和组件集合的 30 秒许可，兑换即消费。
+后端在创建任务前重新检测环境并检查任务、维护和退出状态。Web 的 `consent` 字段表达网页上的显式操作，
+其访问控制沿用本机 HTTP 服务的 Origin 和令牌规则。桌面路径选择只发送原生文件选择器的结果。
 
 ## 八、安全边界（实现对照）
 
