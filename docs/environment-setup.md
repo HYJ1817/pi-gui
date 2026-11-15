@@ -223,8 +223,10 @@ npm run test:environment
 包含：
 
 - `tests/environment-download.cjs`：URL / 重定向 / 大小 / 校验 / 解压脚本 / 目录替换。
+- `tests/environment-store.cjs`：受管版本、进程 PATH 和中断状态持久化。
 - `tests/environment-setup.cjs`：检测、兼容性、RPC 握手、手动路径、脱敏、诊断。
-- `tests/environment-install.cjs`：确认与计划校验、完整安装状态机、取消、失败隔离。
+- `tests/environment-install.cjs`：一次性授权、HTTP 边界、计划校验、安装状态机、目录锁、取消和失败隔离。
+- `tests/environment-electron.cjs`：原生确认、主进程私有 IPC 和本机文件选择边界。
 - `tests/environment-ui.cjs`：纯模型 + jsdom 四页流程与静态边界。
 
 真实渲染截图使用 Chrome CDP 驱动源码版，归档在
