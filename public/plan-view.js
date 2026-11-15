@@ -11,6 +11,7 @@ import { iconMarkup } from './ui/icons.js';
  */
 
 import { planStatusLabel } from './plan-model.js';
+import { preserveScrollAround } from './reading-position.js';
 
 const ICON = {
   pending: iconMarkup('pending'),
@@ -108,9 +109,11 @@ export function renderPlan(plan) {
   head.addEventListener('click', () => {
     const p = card._plan;
     if (!p) return;
-    p.collapsed = !p.collapsed;
-    list.hidden = p.collapsed;
-    head.setAttribute('aria-expanded', String(!p.collapsed));
+    preserveScrollAround(head, () => {
+      p.collapsed = !p.collapsed;
+      list.hidden = p.collapsed;
+      head.setAttribute('aria-expanded', String(!p.collapsed));
+    });
   });
 
   updatePlan(card, plan);

@@ -41,6 +41,15 @@ export function isPlanTool(name) {
   return name === PLAN_TOOL_NAME;
 }
 
+export function planAnchorId(toolCallId, content) {
+  const base = 'plan-' + encodeURIComponent(toolCallId);
+  let anchorId = base;
+  for (let occurrence = 2; content.querySelector(`[data-anchor-id="${anchorId}"]`); occurrence++) {
+    anchorId = base + ':' + occurrence;
+  }
+  return anchorId;
+}
+
 /** 状态文案只映射真实存在的五种；未知值返回空串，调用方不显示。 */
 export function planStatusLabel(status) {
   return { pending: '待处理', in_progress: '进行中', completed: '已完成', failed: '失败', cancelled: '已取消' }[status] || '';
@@ -91,13 +100,14 @@ export function planFromToolEntry(entry) {
 }
 
 /**
- * 按用户回合归并历史里的计划：一个回合只显示一张卡，内容取该回合最后一次
- * **有效**计划；首次出现的位置用来决定卡片插在哪一组工具之前。
+ * 按任务回合归并历史里的计划：同一 turnId 的 steer 继续更新原卡。
+ * 旧记录没有 turnId 时按用户消息归并。保留首次有效调用的位置和锚点。
  *
- * 输入是 tool-history.js 的 planHistory() 结果。返回 Map<turn, { plan, firstIndex }>。
+ * 输入是 tool-history.js 的 planHistory() 结果。首条有效调用为计划卡提供锚点。
  */
 export function collectPlanTurns(items) {
   const byTurn = new Map();
+  const byTurnId = new Map();
   let turn = 0;
   (Array.isArray(items) ? items : []).forEach((item, index) => {
     if (item?.kind === 'user') { turn += 1; return; }
@@ -105,9 +115,11 @@ export function collectPlanTurns(items) {
     for (const entry of item.entries) {
       const plan = planFromToolEntry(entry);
       if (!plan) continue;
-      const current = byTurn.get(turn);
-      if (current) current.plan = plan;
-      else byTurn.set(turn, { plan, firstIndex: index });
+      const current = byTurnId.get(plan.turnId) || byTurn.get(turn);
+      const card = current || { firstIndex: index, firstCallId: entry.id };
+      card.plan = plan;
+      byTurn.set(turn, card);
+      if (plan.turnId) byTurnId.set(plan.turnId, card);
     }
   });
   return byTurn;

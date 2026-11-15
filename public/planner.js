@@ -40,6 +40,7 @@ import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { S, ownsWorkspace } from './state.js';
 import { afterSessionSwitch } from './rpc.js';
+import { classicThreadSessionId } from './messages.js';
 import { openChangesPanel } from './git.js';
 import { openWorkSurface } from './ui/workspace-surface.js';
 
@@ -1783,6 +1784,7 @@ export function openPlanner(focus = null) {
      */
     async function doOpenSession(planId, taskId, attempt) {
       const preview = Boolean(S.streaming || S.submitting || S.stopping || S.fallbackActive);
+      const previousSessionId = classicThreadSessionId();
       try {
         const r = await openPlanTaskSession(planId, taskId, attempt, preview);
         if (!r.ok) {
@@ -1791,7 +1793,7 @@ export function openPlanner(focus = null) {
           return;
         }
         if (preview) { taskSessionViewer?.(r); return; }
-        afterSessionSwitch();
+        afterSessionSwitch(previousSessionId);
         toast('已切到任务会话：' + (r.title || '（无标题）'), 'info');
       } catch (err) {
         toast('打开会话失败：' + err.message, 'error');

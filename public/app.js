@@ -63,6 +63,7 @@ import {
 import {
   beginTurn,
   captureTrailingError,
+  classicThreadSessionId,
   clearRetryNotice,
   dropTrailingError,
   onMessageEnd,
@@ -231,9 +232,10 @@ const sessionNavigation = createSessionNavigation({
   busy: () => Boolean(S.streaming || S.submitting || S.stopping || S.fallbackActive || approvalSnapshot().pending.length),
   continueSession: async (session, project) => {
     if (!samePath(project.path, S.cwd)) return false;
+    const previousSessionId = classicThreadSessionId();
     const result = await switchSession(session.id);
     if (!result.ok) return false;
-    afterSessionSwitch(); return result;
+    afterSessionSwitch(previousSessionId); return result;
   },
   newSession: async (project, _draft, requestId) => {
     if (!samePath(project.path, S.cwd)) return false;

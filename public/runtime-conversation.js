@@ -68,6 +68,7 @@ import {
 } from './tool-view.js';
 import { deriveTurnOutcome, renderTurnOutcome, updateTurnOutcome } from './turn-outcome.js';
 import { createScrollButton } from './scroll-button.js';
+import { findScrollContainer } from './reading-position.js';
 import {
   extractStableLocator,
   sameStableLocator,
@@ -216,6 +217,29 @@ const EMPTY_TIMELINE_VIEW = () => ({
   entryOpen: new Map(),
 });
 
+/**
+ * 历史消息搜索跳转滚动：严格限定在 output 容器内部，居中对齐目标行，
+ * 绝不使用 scrollIntoView，避免连带滚动 .stage、work surface 或 Composer。
+ */
+export function scrollRowIntoView(output, row, block = 'center') {
+  if (!output || !row || typeof output.scrollTop !== 'number') return;
+  row.dataset.historyScrolled = 'true';
+  const outRect = output.getBoundingClientRect ? output.getBoundingClientRect() : { top: 0, height: output.clientHeight || 0 };
+  const rowRect = row.getBoundingClientRect ? row.getBoundingClientRect() : { top: 0, height: row.clientHeight || 0 };
+  const relativeTop = rowRect.top - outRect.top;
+  let targetScrollTop = output.scrollTop + relativeTop;
+
+  if (block === 'center') {
+    const centerOffset = ((outRect.height || output.clientHeight || 0) - (rowRect.height || row.clientHeight || 0)) / 2;
+    targetScrollTop -= centerOffset;
+  } else if (block === 'end') {
+    targetScrollTop -= ((outRect.height || output.clientHeight || 0) - (rowRect.height || row.clientHeight || 0));
+  }
+
+  const maxScroll = Math.max(0, (output.scrollHeight || 0) - (output.clientHeight || 0));
+  output.scrollTop = Math.max(0, Math.min(maxScroll, targetScrollTop));
+}
+
 export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, openSessionChanges = null, models = null, display = null }) {
   const scrollTops = new Map();       // conversationId -> scrollTop
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
@@ -310,6 +334,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
    * `.rtc-output` 滚动容器，按 store/历史投影的真实 block 顺序渲染。没有
    * 任何「按类别摆位置」的 DOM 重排。 */
   const output = el('div', 'rtc-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前会话输出'); root.append(output);
+  output.addEventListener('scroll', () => { if (id && !current().history) scrollTops.set(id, output.scrollTop); }, { passive: true });
 
   /* 本轮用量：只显示 Pi 报过的数字（见 runtime-display.js）。刻意**不加** aria-live ——
    * 它每帧都在变，做成 live region 会不停打断读屏。 */
@@ -688,6 +713,28 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       details.append(head, body);
       details.open = view.timeline.thinkingOpen.get(openKey(block.id)) === true;
       details.addEventListener('toggle', () => { view.timeline.thinkingOpen.set(openKey(block.id), details.open); });
+      head.addEventListener('click', () => {
+        const scroller = findScrollContainer(head);
+        if (!scroller || typeof scroller.scrollTop !== 'number') return;
+        const initialScrollTop = scroller.scrollTop;
+        const initialOffset = head.getBoundingClientRect ? head.getBoundingClientRect().top - scroller.getBoundingClientRect().top : 0;
+        const wasPinned = (scroller.scrollHeight || 0) - initialScrollTop - (scroller.clientHeight || 0) <= 24;
+        requestAnimationFrame(() => {
+          if (scroller.scrollTop !== initialScrollTop) return;
+          const maxScroll = Math.max(0, (scroller.scrollHeight || 0) - (scroller.clientHeight || 0));
+          if (wasPinned) {
+            scroller.scrollTop = maxScroll;
+            return;
+          }
+          if (head.getBoundingClientRect && scroller.getBoundingClientRect) {
+            const newOffset = head.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+            const delta = newOffset - initialOffset;
+            if (Math.abs(delta) > 0.5) {
+              scroller.scrollTop = Math.max(0, Math.min(maxScroll, initialScrollTop + delta));
+            }
+          }
+        });
+      });
       return {
         node: details,
         update(next) {
@@ -939,7 +986,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
      * 滚动策略要用它区分「用户主动切过来」与「同一条会话内的流式更新」。 */
     const entered = renderedId !== id;
     // Capture intent before text/thinking/tool changes can increase scrollHeight.
-    const follow = !entered && !view.history && shouldFollow(output);
+    const wasNearBottom = !entered && !view.history && shouldFollow(output);
+    const prevScrollHeight = output.scrollHeight || 0;
     root.hidden = !id;
     if (!id) return;
     title.textContent = r?.item?.sessionName || models?.get(id)?.sessionName || r?.item?.workspace?.branch || '并行会话';
@@ -1141,13 +1189,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         const rows = [...output.querySelectorAll('.rtc-history-message')];
         const row = messageId ? rows.find(r => r.dataset.historyMessageId === messageId)
           : Number.isInteger(index) && index >= 0 ? rows.find(r => r.dataset.historyUserIndex === String(index)) : null;
-        row?.scrollIntoView?.({ block: 'center' });
+        if (row) scrollRowIntoView(output, row, 'center');
         output.dataset.historyMatch = matchKey;
       }
     } else if (entered) {
       const top = scrollTops.get(id);
       output.scrollTop = top === undefined ? output.scrollHeight : top;
-    } else if (follow) {
+    } else if (wasNearBottom && (output.scrollHeight || 0) > prevScrollHeight) {
       output.scrollTop = output.scrollHeight;
     }
     /* 回到底部按钮：滚的是 output 自己；运行态复用四点动画。切会话后

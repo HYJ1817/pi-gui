@@ -22,6 +22,7 @@ import { iconMarkup } from './ui/icons.js';
  * 会让长时间命令（npm test 能吐几千行）把主线程堵死。 */
 
 import { formatDuration, previewOf, statOf } from './tool-model.js';
+import { preserveScrollAround } from './reading-position.js';
 import { webActivity, webSourceLink } from './web-activity.js';
 import { subagentActivity } from './subagent-activity.js';
 import { memoryActivity } from './memory-activity.js';
@@ -75,7 +76,7 @@ function sub(parent, cls, tag = 'div') {
  * 画一条 entry。
  * @returns {HTMLElement} 节点；子引用缓存在 node._tl 上，供 updateEntry 复用
  */
-export function renderEntry(entry) {
+export function renderEntry(entry, onExpanded) {
   const node = document.createElement('div');
   node.className = 'tl-item';
   node.dataset.id = entry.id;
@@ -115,13 +116,16 @@ export function renderEntry(entry) {
    * 折叠是纯前端状态，不进 entry —— 刷新后没必要记住某一条展开过。 */
   const flip = () => {
     if (!node._tl.hasMore) return;
-    more.hidden = !more.hidden;
-    node.classList.toggle('open', !more.hidden);
-    toggle.setAttribute('aria-expanded', String(!more.hidden));
-    /* 按钮文案和悬停提示都跟着折叠状态重算。不重算的话，展开之后按钮
-     * 还写着「展开输出」，用户会以为点不动。 */
-    syncToggle(node._tl);
-    syncTitle(node, node._tl);
+    preserveScrollAround(head, () => {
+      more.hidden = !more.hidden;
+      node.classList.toggle('open', !more.hidden);
+      toggle.setAttribute('aria-expanded', String(!more.hidden));
+      /* 按钮文案和悬停提示都跟着折叠状态重算。不重算的话，展开之后按钮
+       * 还写着「展开输出」，用户会以为点不动。 */
+      syncToggle(node._tl);
+      syncTitle(node, node._tl);
+      onExpanded?.(!more.hidden);
+    });
   };
   head.onclick = flip;
   toggle.onclick = (e) => {
@@ -338,9 +342,12 @@ function selectionInside(node) {
 }
 
 function setGroupOpen(g, group, open) {
-  g.list.hidden = !open;
-  g.head.setAttribute('aria-expanded', String(open));
-  group.classList.toggle('is-collapsed', !open);
+  if (g.list.hidden === !open) return;
+  preserveScrollAround(group, () => {
+    g.list.hidden = !open;
+    g.head.setAttribute('aria-expanded', String(open));
+    group.classList.toggle('is-collapsed', !open);
+  });
 }
 
 function groupElapsed(children) {
@@ -413,7 +420,7 @@ function syncGroup(group) {
 /* 一组 = 一条 assistant 消息里的全部 toolCall。
  * 这个边界是**真实存在**的（消息本身就是边界），不是「超过几秒算一组」那种猜测。
  * 只有一项时不摆「操作 1 项」这种废话标题。 */
-export function createGroup() {
+export function createGroup(onExpanded) {
   const g = document.createElement('section');
   g.className = 'tl-group';
   g.setAttribute('aria-label', '工具调用');
@@ -452,11 +459,14 @@ export function createGroup() {
   g._tlGroup = { head, meta, state, time, list, count: 0 };
   head.addEventListener('click', () => {
     g._tlGroup.userToggled = true;
-    const open = list.hidden;
-    if (!open && list.contains(document.activeElement)) head.focus();
-    list.hidden = !open;
-    head.setAttribute('aria-expanded', String(open));
-    g.classList.toggle('is-collapsed', !open);
+    preserveScrollAround(head, () => {
+      const open = list.hidden;
+      if (!open && list.contains(document.activeElement)) head.focus();
+      list.hidden = !open;
+      head.setAttribute('aria-expanded', String(open));
+      g.classList.toggle('is-collapsed', !open);
+      onExpanded?.(open);
+    });
   });
   return g;
 }

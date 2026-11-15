@@ -31,13 +31,54 @@ import { FILE_BLOCK_RE } from './attachments.js';
 import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { planHistory } from './tool-history.js';
-import { addToGroup, createGroup, renderEntry } from './tool-view.js';
-import { collectPlanTurns, isPlanTool } from './plan-model.js';
+import { addToGroup, createGroup, groupCount, renderEntry, setEntryExpanded, setGroupExpanded } from './tool-view.js';
+import { collectPlanTurns, isPlanTool, planAnchorId } from './plan-model.js';
 import { renderPlan } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
 import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
+import {
+  saveSessionBookmark,
+  restoreSessionBookmark,
+  clearSessionBookmark,
+  preserveScrollAround,
+} from './reading-position.js';
+
+/* 消息序号由历史重建和实时追加共用，clearThread 开启新序列。 */
+let userSeq = 0;
+let assistantSeq = 0;
+let outcomeSeq = 0;
+let toolGroupCallId = null;
+const toolGroupCounts = new Map();
+let threadSessionId = null;
+let threadGeneration = 0;
+let streamScrollBound = false;
+let streamScrollRaf = null;
+
+export function classicThreadSessionId() {
+  return threadSessionId;
+}
+
+export function saveClassicReadingPosition(sessionId) {
+  if (!sessionId || sessionId !== threadSessionId || !S.thread?.childElementCount || !el.stream?.clientHeight) return;
+  saveSessionBookmark(sessionId, el.stream, S.thread);
+}
+
+function onStreamScroll() {
+  if (streamScrollRaf) return;
+  const sessionId = threadSessionId;
+  streamScrollRaf = requestAnimationFrame(() => {
+    streamScrollRaf = null;
+    saveClassicReadingPosition(sessionId);
+  });
+}
+
+export function bindStreamReadingPosition() {
+  if (streamScrollBound || !el.stream) return;
+  streamScrollBound = true;
+  el.stream.addEventListener('scroll', onStreamScroll, { passive: true });
+}
 
 /* 当前 session 级 run 的证据。只在 app.js 收到真实 agent_start（上一轮已 settled）
  * 时开启；steer / follow-up / 自动重试不会开启新轮次。 */
@@ -57,6 +98,7 @@ export function ensureThread() {
   t.className = 'thread';
   el.stream.appendChild(t);
   S.thread = t;
+  bindStreamReadingPosition();
   return t;
 }
 
@@ -73,6 +115,15 @@ export function syncWelcome() {
 }
 
 export function clearThread() {
+  ++threadGeneration;
+  if (streamScrollRaf !== null) cancelAnimationFrame(streamScrollRaf);
+  streamScrollRaf = null;
+  threadSessionId = null;
+  userSeq = 0;
+  assistantSeq = 0;
+  outcomeSeq = 0;
+  toolGroupCallId = null;
+  toolGroupCounts.clear();
   if (S.thread) S.thread.innerHTML = '';
   clearPlanLive();
   clearRetryNotice();
@@ -90,12 +141,55 @@ export function clearThread() {
   clearConversationNav();
 }
 
+/* 只记用户明确操作，按已渲染会话隔离。单个会话和总会话数都设有上限。 */
+const toolExpansion = new Map();
+function expansionChoice(sessionId, key, expanded) {
+  if (!sessionId) return;
+  const saved = toolExpansion.get(sessionId);
+  if (!saved && expanded === undefined) return;
+  const choices = saved || new Map();
+  toolExpansion.delete(sessionId);
+  toolExpansion.set(sessionId, choices);
+  if (expanded === undefined) return choices.get(key);
+  choices.delete(key);
+  choices.set(key, expanded);
+  if (choices.size > 500) choices.delete(choices.keys().next().value);
+  if (toolExpansion.size > 100) toolExpansion.delete(toolExpansion.keys().next().value);
+}
+
+export function clearClassicSessionView(sessionId) {
+  clearSessionBookmark(sessionId);
+  toolExpansion.delete(sessionId);
+}
+
+export function createClassicToolGroup(firstCallId) {
+  const sessionId = threadSessionId;
+  const callId = toolGroupCallId || firstCallId || '';
+  const occurrence = (toolGroupCounts.get(callId) || 0) + 1;
+  toolGroupCounts.set(callId, occurrence);
+  const anchorId = 'tools-' + encodeURIComponent(callId) + (occurrence === 1 ? '' : ':' + occurrence);
+  const group = createGroup(expanded => expansionChoice(sessionId, anchorId, expanded));
+  group.dataset.anchorId = anchorId;
+  return group;
+}
+
+export function addClassicToolEntry(group, entry, sessionId = threadSessionId) {
+  const key = 'entry-' + group.dataset.anchorId + ':' + encodeURIComponent(entry.id);
+  const node = renderEntry(entry, expanded => expansionChoice(sessionId, key, expanded));
+  if (expansionChoice(sessionId, key) === true) setEntryExpanded(node, true);
+  addToGroup(group, node);
+  const groupChoice = expansionChoice(sessionId, group.dataset.anchorId);
+  if (groupCount(group) >= 2 && groupChoice !== undefined) setGroupExpanded(group, groupChoice);
+  return node;
+}
+
 export function scrollBottom(force) {
   const s = el.stream;
   const nearBottom = s.scrollHeight - s.scrollTop - s.clientHeight < 160;
   if (force || nearBottom) {
+    const generation = threadGeneration;
     requestAnimationFrame(() => {
-      s.scrollTop = s.scrollHeight;
+      if (generation === threadGeneration) s.scrollTop = s.scrollHeight;
     });
   }
 }
@@ -165,7 +259,9 @@ function finalizeTurn() {
   });
   if (!outcome) return;
   const t = ensureThread();
-  t.appendChild(renderTurnOutcome(outcome));
+  const outcomeNode = renderTurnOutcome(outcome);
+  if (outcomeNode) outcomeNode.dataset.anchorId = 'outcome-' + (++outcomeSeq);
+  t.appendChild(outcomeNode);
   scrollBottom();
 }
 
@@ -288,7 +384,9 @@ function thinkingBlock(text = '') {
   button.appendChild(status);
   button.setAttribute('aria-controls', body.id);
   setDisclosure(button, body, false);
-  button.addEventListener('click', () => setDisclosure(button, body, body.hidden));
+  button.addEventListener('click', () => {
+    preserveScrollAround(button, () => setDisclosure(button, body, body.hidden));
+  });
   wrap.append(button, body);
   updateThinking(wrap, text);
   setThinkingState(wrap, 'streaming');
@@ -426,11 +524,13 @@ function renderUser(msg) {
   /* 用户消息是工具分组的硬边界：上一条 assistant 那批工具已经彻底结束了。
    * 放在这里而不是靠时间判断 —— §12 明确禁止「超过几秒算新组」那种猜测。 */
   S.tlGroup = null;
+  toolGroupCallId = null;
   /* 新回合：上一张计划卡留在时间线里，但下一批 gui_plan 更新要开新卡。 */
   resetPlanLiveForUserTurn();
 
   const wrap = document.createElement('article');
   wrap.className = 'msg user';
+  wrap.dataset.anchorId = 'user-' + (++userSeq);
 
   const role = document.createElement('div');
   role.className = 'msg-role';
@@ -449,6 +549,7 @@ function createAssistant() {
   const t = ensureThread();
   const wrap = document.createElement('article');
   wrap.className = 'msg assistant';
+  wrap.dataset.anchorId = 'assistant-' + (++assistantSeq);
 
   const role = document.createElement('div');
   role.className = 'msg-role';
@@ -476,6 +577,7 @@ export function onMessageStart(evt) {
    * message_end → tool_execution_start，所以组在这里关掉正好）。
    * 这是**真实边界**：消息本身就是边界。 */
   S.tlGroup = null;
+  toolGroupCallId = null;
   createAssistant();
 }
 
@@ -577,6 +679,10 @@ export function onMessageUpdate(evt) {
 export function onMessageEnd(evt) {
   const msg = evt.message;
   if (msg?.role === 'assistant') {
+    // 与历史按同一条 assistant 声明的首个普通工具定位，实际工具启动顺序可以不同。
+    toolGroupCallId = Array.isArray(msg.content)
+      ? msg.content.find(part => part?.type === 'toolCall' && !isPlanTool(part.name))?.id
+      : null;
     /* 轮次失败只认 assistant 的终态证据；工具 isError 不改变轮次状态。
      * 与 rebuildAssistant 的判定保持一致：用户主动停止优先按中性处理。 */
     if (liveTurn && !liveTurn.finalized) {
@@ -867,9 +973,12 @@ export function rebuildAssistant(bodyEl, msg) {
   return bodyEl.childElementCount > 0;
 }
 
-export function rebuildFromMessages(data) {
+export function rebuildFromMessages(data, sessionId = threadSessionId || S.state?.sessionId || null) {
   const msgs = Array.isArray(data) ? data : data?.messages || [];
+  // 同一会话原地刷新时保存已有位置。切换后的空线程由其原会话保存入口负责。
+  saveClassicReadingPosition(sessionId);
   clearThread();
+  threadSessionId = sessionId;
   const t = ensureThread();
   /* 先全拼进 DocumentFragment 再一次性挂上去（§17）：一段历史可能有几百条，
    * 逐条 append 会触发同样多次布局计算。 */
@@ -911,7 +1020,11 @@ export function rebuildFromMessages(data) {
       startedAt: turn.startedAt,
       endedAt: turn.endedAt,
     });
-    if (outcome) frag.appendChild(renderTurnOutcome(outcome));
+    if (outcome) {
+      const outcomeNode = renderTurnOutcome(outcome);
+      if (outcomeNode) outcomeNode.dataset.anchorId = 'outcome-' + (++outcomeSeq);
+      frag.appendChild(outcomeNode);
+    }
   };
 
   for (let index = 0; index < items.length; index++) {
@@ -921,6 +1034,7 @@ export function rebuildFromMessages(data) {
       planTurn += 1;
       const wrap = document.createElement('article');
       wrap.className = 'msg user';
+      wrap.dataset.anchorId = 'user-' + (++userSeq);
       wrap.innerHTML = '<div class="msg-role">你</div>';
       wrap.appendChild(userBody(item.message));
       wrap.appendChild(messageActions(textOf(item.message)));
@@ -944,6 +1058,7 @@ export function rebuildFromMessages(data) {
       }
       const wrap = document.createElement('article');
       wrap.className = 'msg assistant';
+      wrap.dataset.anchorId = 'assistant-' + (++assistantSeq);
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
       const body = document.createElement('div');
       body.className = 'msg-body';
@@ -960,7 +1075,11 @@ export function rebuildFromMessages(data) {
 
     if (item.kind === 'tools') {
       const turnPlan = planTurns.get(planTurn);
-      if (turnPlan && turnPlan.firstIndex === index) frag.appendChild(renderPlan(turnPlan.plan));
+      if (turnPlan && turnPlan.firstIndex === index) {
+        const planNode = renderPlan(turnPlan.plan);
+        if (planNode) planNode.dataset.anchorId = planAnchorId(turnPlan.firstCallId, frag);
+        frag.appendChild(planNode);
+      }
       /* gui_plan 的调用行由上面的任务列表承担，不再重复画成工具记录。 */
       const entries = item.entries.filter(entry => !isPlanTool(entry.name));
       if (entries.length) {
@@ -976,8 +1095,8 @@ export function rebuildFromMessages(data) {
             markHistoryEnd(end);
           }
         }
-        const g = createGroup();
-        for (const entry of entries) addToGroup(g, renderEntry(entry));
+        const g = createClassicToolGroup(entries[0].id);
+        for (const entry of entries) addClassicToolEntry(g, entry);
         frag.appendChild(g);
       }
     }
@@ -996,10 +1115,15 @@ export function rebuildFromMessages(data) {
   let handled = false;
   if (afterHistoryRendered) {
     try {
-      handled = afterHistoryRendered() === true;
+      handled = afterHistoryRendered(sessionId) === true;
     } catch {
       /* 监听方自己炸了不该带塌历史重建 */
       handled = false;
+    }
+  }
+  if (!handled) {
+    if (sessionId && restoreSessionBookmark(sessionId, el.stream, t)) {
+      handled = true;
     }
   }
   if (!handled) scrollBottom(true);

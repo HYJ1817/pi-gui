@@ -1242,6 +1242,12 @@ function staticCheck() {
 staticCheck();
 
 (async () => {
+  const emitBootRead = (command, response = {}) => {
+    const request = commands.findLast(c => c.type === command &&
+      (c.id?.startsWith('classic-history-') || c.id?.startsWith('composer-model-')));
+    if (!request) throw new Error('Missing boot request: ' + command);
+    es.emit({ type: 'response', command, id: request.id, success: true, ...response });
+  };
   try {
     run();
   } catch (e) {
@@ -1386,15 +1392,15 @@ staticCheck();
   check('boot 请求 get_messages', () => cmds.includes('get_messages'));
 
   // --- get_state ---
-  es.emit({
-    type: 'response', command: 'get_state', success: true,
-    data: { model: { provider: 'deepseek', id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }, thinkingLevel: 'high', isStreaming: false, sessionName: 'pi-gui-work' },
+  emitBootRead('get_state', {
+    data: { model: { provider: 'deepseek', id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }, thinkingLevel: 'high', isStreaming: false, sessionName: 'pi-gui-work', sessionId: 'fixture-initial' },
   });
+  emitBootRead('get_available_thinking_levels', { data: { levels: ['off', 'low', 'high'] } });
+  emitBootRead('get_messages', { data: { messages: [] } });
   check('标题 = 会话名', () => $('title').textContent === 'pi-gui-work');
   check('底部 = 会话名', () => $('footName').textContent === 'pi-gui-work');
   check('模型 chip', () => $('modelText').textContent === 'DeepSeek V4 Pro');
   // Current thinking choices come from Pi, not get_state/metadata alone.
-  es.emit({ type: 'response', command: 'get_available_thinking_levels', success: true, data: { levels: ['off', 'low', 'high'] } });
   check('思考 chip', () => $('thinkText').textContent === '思考 high');
 
   // --- get_session_stats ---
@@ -6278,8 +6284,9 @@ staticCheck();
     ];
     await Promise.all(switches);
     es.emit({ type: 'bridge_status', state: 'ready', cwd: 'C:\\project-c', bridgeRun: 500, _seq: 10000 });
-    es.emit({ type: 'response', command: 'get_state', success: true, bridgeRun: 500, _seq: 10001, data: { sessionName: 'C', isStreaming: false } });
-    es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 500, _seq: 10002, data: { messages: [{ role: 'user', content: [{ type: 'text', text: 'C history' }] }] } });
+    emitBootRead('get_state', { bridgeRun: 500, _seq: 10001, data: { sessionName: 'C', sessionId: 'fixture-project-c', isStreaming: false } });
+    emitBootRead('get_available_thinking_levels', { bridgeRun: 500, data: { levels: [] } });
+    emitBootRead('get_messages', { bridgeRun: 500, _seq: 10002, data: { messages: [{ role: 'user', content: [{ type: 'text', text: 'C history' }] }] } });
     es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 499, _seq: 10003, data: { messages: [{ role: 'user', content: [{ type: 'text', text: 'OLD history' }] }] } });
     check('A→B→C 仅 C 更新项目与消息', () =>
       window.S.cwd === 'C:\\project-c' && $('title').textContent === 'C' && $('stream').textContent.includes('C history') && !$('stream').textContent.includes('OLD history'));
@@ -6293,8 +6300,9 @@ staticCheck();
     check('pi crash 收尾 running Tool', () => window.document.querySelectorAll('.tl-item[data-status="running"]').length === 0);
     es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: 501, cwd: 'C:\\project-c', _seq: 10006 });
     const restored = { messages: [{ role: 'user', content: [{ type: 'text', text: 'restored once' }] }] };
-    es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 501, _seq: 10007, data: restored });
-    es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: 501, _seq: 10008, data: restored });
+    emitBootRead('get_messages', { bridgeRun: 501, _seq: 10007, data: restored });
+    emitBootRead('get_state', { bridgeRun: 501, _seq: 10008, data: { sessionId: 'fixture-project-c' } });
+    emitBootRead('get_messages', { bridgeRun: 501, _seq: 10009, data: restored });
     check('重复历史重建仍只有一份消息', () => window.document.querySelectorAll('.msg.user').length === 1);
     window.fetch = baseFetch;
   }
@@ -6467,7 +6475,7 @@ staticCheck();
       const userHit = [...area().querySelectorAll('.pj-sr-hit')].find((h) => h.dataset.matchType === 'user');
       check('搜索：结果里有可点的「你问的」命中行', () => Boolean(userHit) || '没找到');
       if (userHit) userHit.onclick({ stopPropagation() {} });
-      await new Promise((r) => setTimeout(r, 140));
+      await new Promise((r) => setTimeout(r, 300));
       const hit = sessionCalls.find((c) => /\/switch/.test(c.url));
       check('搜索：点结果会切到那个会话，传的是稳定 ID 而不是路径', () =>
         Boolean(hit && hit.body && /^[0-9a-f]{16}$/.test(hit.body.id)) ||
@@ -6475,7 +6483,9 @@ staticCheck();
 
       // 历史回来了 → 应当定位到第 2 条用户消息（userIndex = 1）
       const msgs = [1, 2, 3].map((i) => ({ role: 'user', content: [{ type: 'text', text: `第 ${i} 次提问` }] }));
-      es.emit({ type: 'response', command: 'get_messages', success: true, bridgeRun: window.S.bridgeRun, _seq: 20001, data: { messages: msgs } });
+      emitBootRead('get_messages', { bridgeRun: window.S.bridgeRun, _seq: 20001, data: { messages: msgs } });
+      emitBootRead('get_state', { bridgeRun: window.S.bridgeRun, _seq: 20002,
+        data: { sessionId: SEARCH_ACTIVE_HIT.sessionId } });
       await new Promise((r) => setTimeout(r, 140));
       const users = [...$('stream').querySelectorAll('.msg.user')];
       check('搜索：历史渲染完成后定位到命中那次提问（第 2 条，不是最底）', () =>
@@ -8085,8 +8095,8 @@ staticCheck();
     await new Promise((resolve) => setTimeout(resolve, 280));
     check('P14-D 收口：侧栏成功切换走现有 boot 历史重建链路', () =>
       commands.slice(beforeBoot).some((c) => c.type === 'get_messages'));
-    es.emit({ type: 'response', command: 'get_messages', success: true,
-      data: { messages: [{ role: 'user', content: '新会话历史正文' }] } });
+    emitBootRead('get_state', { data: { sessionId: 'fixture-classic-history' } });
+    emitBootRead('get_messages', { data: { messages: [{ role: 'user', content: '新会话历史正文' }] } });
     check('P14-D 收口：新会话历史在 Chat 中可见', () =>
       $('workspace').dataset.workspaceView === 'chat' && $('stream').textContent.includes('新会话历史正文'));
     stubSwitch = { ok: true, id: 'bbbbbbbbbbbbbbbb', title: '帮我写个登录功能' };

@@ -1,0 +1,92 @@
+{
+  "label": "phase2-final",
+  "browser": "Chrome/157.0.8103.78",
+  "measurements": [
+    {
+      "test": "Classic A → B → A",
+      "anchorId": "user-7",
+      "savedOffset": -11.6875,
+      "restoredOffset": -11.6875,
+      "beforeScrollTop": 1431,
+      "afterScrollTop": 1550,
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Classic B 独立书签",
+      "anchorId": "user-9",
+      "savedOffset": -12.25,
+      "restoredOffset": -12.25,
+      "beforeScrollTop": 1898,
+      "afterScrollTop": 2017,
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "实时 tools 锚点重建恢复",
+      "anchorId": "tools-live-tools",
+      "savedOffset": -12,
+      "restoredOffset": -12,
+      "beforeScrollTop": 1526,
+      "afterScrollTop": 1645,
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "实时 plan 锚点重建恢复",
+      "anchorId": "plan-live-plan",
+      "savedOffset": -12,
+      "restoredOffset": -12,
+      "beforeScrollTop": 1525,
+      "afterScrollTop": 1644,
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "工具组头折叠位置误差",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "工具详情折叠位置误差",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "视口上方折叠下方稳定",
+      "errorPx": 0.19,
+      "passed": true
+    },
+    {
+      "test": "Plan 任务卡折叠位置误差",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索祖先 stage 零滚动",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索 work-surface 零滚动",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索外层 doc 零滚动",
+      "errorPx": 0,
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索目标容器发生滚动",
+      "passed": true
+    },
+    {
+      "test": "Runtime 搜索居中误差",
+      "errorPx": 0,
+      "passed": true
+    }
+  ],
+  "allPassed": true,
+  "capturedAt": "2026-11-15T17:02:11.537Z"
+}
