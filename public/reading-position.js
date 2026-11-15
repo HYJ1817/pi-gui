@@ -14,6 +14,14 @@
 const MAX_BOOKMARKS = 100;
 const bookmarks = new Map();
 
+function readingTop(node, rect) {
+  // Classic 入场动效带有 3px 的位移。书签记录静止布局，动效仍按原样播放。
+  if (!node.getAnimations?.().some(animation => animation.animationName === 'ui2-rise-in')) return rect.top;
+  const view = node.ownerDocument.defaultView;
+  const transform = view.getComputedStyle(node).transform;
+  return transform === 'none' ? rect.top : rect.top - new view.DOMMatrixReadOnly(transform).m42;
+}
+
 /**
  * 采集指定容器的阅读位置。
  * @param {HTMLElement} scroller 滚动容器（如 #stream 或 .rtc-output）
@@ -41,14 +49,12 @@ export function captureReadingPosition(scroller, content, options = {}) {
       scrollHeight,
       clientHeight,
       anchorId: null,
-      childIndex: -1,
       offset: 0,
       timestamp: Date.now(),
     };
   }
 
   let anchorId = null;
-  let childIndex = -1;
   let offset = 0;
 
   if (content && content.children && content.children.length > 0) {
@@ -56,9 +62,7 @@ export function captureReadingPosition(scroller, content, options = {}) {
       ? scroller.getBoundingClientRect()
       : { top: 0, bottom: clientHeight, height: clientHeight };
 
-    const children = Array.from(content.children);
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i];
+    for (const child of content.children) {
       if (!child || child.nodeType !== 1) continue;
       if (child.hidden || child.classList?.contains('working')) continue;
 
@@ -67,10 +71,12 @@ export function captureReadingPosition(scroller, content, options = {}) {
       if (r.height === 0 && r.width === 0) continue;
 
       // 寻找底部处于视口顶部以下（即在视口内可见或跨越视口上边界）的第一个子元素
-      if (r.bottom > scrollerRect.top + 2) {
-        anchorId = child.dataset?.anchorId || child.dataset?.navId || child.id || null;
-        childIndex = i;
-        offset = r.top - scrollerRect.top;
+      const id = child.dataset?.anchorId || child.dataset?.navId || child.id;
+      if (id && r.bottom > scrollerRect.top + 2) {
+        const layoutOffset = readingTop(child, r) - scrollerRect.top;
+        if (layoutOffset + r.height <= 2) continue;
+        anchorId = id;
+        offset = layoutOffset;
         break;
       }
     }
@@ -82,7 +88,6 @@ export function captureReadingPosition(scroller, content, options = {}) {
     scrollHeight,
     clientHeight,
     anchorId,
-    childIndex,
     offset,
     timestamp: Date.now(),
   };
@@ -111,24 +116,14 @@ export function restoreReadingPosition(scroller, content, bookmark) {
   // 2. 尝试通过锚点恢复
   let anchor = null;
   if (bookmark.anchorId && content) {
-    anchor = content.querySelector(`[data-anchor-id="${bookmark.anchorId}"]`)
-      || content.querySelector(`[data-nav-id="${bookmark.anchorId}"]`)
-      || (content.ownerDocument || document).getElementById(bookmark.anchorId);
-  }
-
-  if (!anchor && content && Number.isInteger(bookmark.childIndex) && bookmark.childIndex >= 0) {
-    if (bookmark.childIndex < content.children.length) {
-      const candidate = content.children[bookmark.childIndex];
-      if (candidate && !candidate.hidden && !candidate.classList?.contains('working')) {
-        anchor = candidate;
-      }
-    }
+    anchor = Array.from(content.children).find(child =>
+      (child.dataset.anchorId || child.dataset.navId || child.id) === bookmark.anchorId);
   }
 
   if (anchor && anchor.getBoundingClientRect && scroller.getBoundingClientRect) {
     const scrollerRect = scroller.getBoundingClientRect();
     const anchorRect = anchor.getBoundingClientRect();
-    const currentOffset = anchorRect.top - scrollerRect.top;
+    const currentOffset = readingTop(anchor, anchorRect) - scrollerRect.top;
     const delta = currentOffset - (bookmark.offset || 0);
     const target = (scroller.scrollTop || 0) + delta;
     scroller.scrollTop = Math.max(0, Math.min(maxScroll, target));
@@ -218,9 +213,9 @@ export function bookmarkCount() {
  * @param {HTMLElement} el
  * @returns {HTMLElement|null}
  */
-export function findScrollContainer(el) {
-  if (!el || typeof el.closest !== 'function') return null;
-  return el.closest('#stream, .stream, .rtc-output, [data-scroll-container]');
+export function findScrollContainer(element) {
+  if (!element || typeof element.closest !== 'function') return null;
+  return element.closest('#stream, .stream, .rtc-output, [data-scroll-container]');
 }
 
 /**

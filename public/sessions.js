@@ -44,10 +44,9 @@ import { fmtTime } from './util.js';
 import { toast } from './ui/toast.js';
 import { confirmModal } from './ui/modal.js';
 import { openActionMenu, MENU_ICONS } from './ui/action-menu.js';
-import { setAfterHistoryRendered } from './messages.js';
+import { classicThreadSessionId, clearClassicSessionView, setAfterHistoryRendered } from './messages.js';
 import { scrollToUserTurn } from './conversation-nav.js';
 import { clearSessionPlans, refreshSessionPlans } from './session-plans.js';
-import { saveSessionBookmark, clearSessionBookmark } from './reading-position.js';
 import { projectExpanded, setProjectExpanded } from './sidebar-expansion.js';
 import { showChat } from './ui/workspace-surface.js';
 import { runtimeStore } from './runtime-state.js';
@@ -204,11 +203,15 @@ function makeChevron(projectEl, label) {
 let pendingLocate = null;
 const LOCATE_TTL_MS = 15000;
 
-setAfterHistoryRendered(() => {
+setAfterHistoryRendered(sessionId => {
   const p = pendingLocate;
-  pendingLocate = null;
   if (!p) return false;
-  if (Date.now() - p.at > LOCATE_TTL_MS) return false; // 过期了，宁愿不跳也不要乱跳
+  if (Date.now() - p.at > LOCATE_TTL_MS) {
+    pendingLocate = null;
+    return false;
+  }
+  if (!p.switched || (p.sessionId && p.sessionId !== sessionId)) return false;
+  pendingLocate = null;
   return scrollToUserTurn(p.userIndex);
 });
 
@@ -569,14 +572,12 @@ async function doSwitch(s, locateUserIndex = null) {
   if (sessionOpenHandler?.(s, currentProject, locateUserIndex)) return;
   if (busy) return;
   busy = true;
-  const curSessionId = S.state?.sessionId || S.localUsage?.sessionId;
-  const streamEl = document.getElementById('stream');
-  if (curSessionId && S.thread && streamEl) {
-    saveSessionBookmark(curSessionId, streamEl, S.thread);
-  }
+  const previousSessionId = classicThreadSessionId();
   /* **先挂待办再切** —— 顺序反了就可能挂在「历史已重建」回调之后，
    * 那一次定位永远等不到。 */
-  pendingLocate = Number.isInteger(locateUserIndex) ? { userIndex: locateUserIndex, at: Date.now() } : null;
+  pendingLocate = Number.isInteger(locateUserIndex)
+    ? { userIndex: locateUserIndex, sessionId: s.sessionId, at: Date.now(), switched: false }
+    : null;
   try {
     const r = await switchSession(s.id);
     if (!r.ok) {
@@ -587,7 +588,11 @@ async function doSwitch(s, locateUserIndex = null) {
     // 换会话之后必须清界面再重建，否则旧消息还挂在上面。
     // 列表的重画由 afterSessionSwitch 的回调负责（见文件头规矩 4）；
     // 「跳到第 N 次提问」由 messages.js 的「历史渲染完成」回调消费（规矩 6）。
-    afterSessionSwitch();
+    if (pendingLocate) {
+      pendingLocate.sessionId = r.sessionId || pendingLocate.sessionId;
+      pendingLocate.switched = true;
+    }
+    afterSessionSwitch(previousSessionId);
   } catch (err) {
     pendingLocate = null;
     toast('切换失败：' + err.message, 'error');
@@ -654,7 +659,7 @@ async function doDelete(s) {
       return;
     }
     toast('已删除：' + (s.title || '（无标题）'), 'info');
-    if (s.sessionId) clearSessionBookmark(s.sessionId);
+    if (s.sessionId) clearClassicSessionView(s.sessionId);
     await refreshSidebarSessions();
     // 删掉的东西不该再出现在搜索结果里
     refreshSearch();

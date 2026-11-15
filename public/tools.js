@@ -29,7 +29,7 @@
  * 用户消息进来同样关组。 */
 
 import { S } from './state.js';
-import { ensureThread, moveWorkingToEnd, noteTurnTool, scrollBottom, syncToolWorking } from './messages.js';
+import { addClassicToolEntry, createClassicToolGroup, ensureThread, moveWorkingToEnd, noteTurnTool, scrollBottom, syncToolWorking } from './messages.js';
 import { recordToolChange } from './changes.js';
 import { scheduleGitRefresh, setGitStatusHook } from './git.js';
 import {
@@ -42,7 +42,7 @@ import {
   registerEntry,
   setEntryDirtyHandler,
 } from './tool-model.js';
-import { addToGroup, createGroup, renderEntry, updateEntry } from './tool-view.js';
+import { updateEntry } from './tool-view.js';
 import { subagentNeedsGitRefresh } from './subagent-activity.js';
 import { handlePlanToolEnd, handlePlanToolStart } from './plan-live.js';
 
@@ -128,16 +128,14 @@ export function onToolStart(evt) {
   if (handlePlanToolStart(evt)) { scrollBottom(); return; }
   const entry = registerEntry(makeEntry(evt));
   noteTurnTool(entry.id);
-  const node = renderEntry(entry);
-
   const t = ensureThread();
   /* 上一条 assistant 消息已经结束（message_end 早于 tool_execution_start），
    * 所以这里没组就说明这是一批新的工具调用。 */
   if (!S.tlGroup) {
-    S.tlGroup = createGroup();
+    S.tlGroup = createClassicToolGroup(entry.id);
     t.appendChild(S.tlGroup);
   }
-  addToGroup(S.tlGroup, node);
+  const node = addClassicToolEntry(S.tlGroup, entry);
 
   S.tools.set(entry.id, { entry, node });
 

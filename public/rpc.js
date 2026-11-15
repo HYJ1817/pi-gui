@@ -13,7 +13,7 @@ import { logRendererEvent } from './log-client.js';
 import { sendCommand, downloadSessionHtml } from './api.js';
 import { toast, withNotificationSource } from './ui/toast.js';
 import { setStatus } from './shell.js';
-import { clearThread, rebuildFromMessages, noteLoadFailure, setStreaming } from './messages.js';
+import { classicThreadSessionId, clearThread, rebuildFromMessages, noteLoadFailure, saveClassicReadingPosition, setStreaming } from './messages.js';
 import { applyTree } from './tree.js';
 import { applyState, applyStats, onModels, onThinkingLevels } from './usage.js';
 import { autoGrow, updateSendState, renderModelControls, imageInputBlocked } from './composer.js';
@@ -27,14 +27,23 @@ import { startFallbackRequest, cancelFallback, setFallbackModelSwitcher } from '
 
 /** pi 就绪后拉一遍初始状态。切换项目 / 重载配置也会走这里。 */
 export function boot() {
+  clearTimeout(sessionBootTimer);
+  sessionBootTimer = null;
+  cancelHistoryLoad();
   cancelFallback('boot');
   activeModelSwitch = null;
   queuedModelSwitch = null;
-  refreshModelState({ pending: false });
+  const stateId = refreshModelState({ pending: false });
+  const load = historyLoad = {
+    stateId, messagesId: 'classic-history-' + (++historySequence),
+    workspace: S.workspaceGeneration, bridgeRun: S.bridgeRun,
+  };
   sendCommand({ type: 'get_session_stats' });
   sendCommand({ type: 'get_tree' });
   // 切换项目 / 重载配置后 pi 会恢复该目录的历史会话，用 get_messages 重建对话区
-  sendCommand({ type: 'get_messages' });
+  sendCommand({ type: 'get_messages', id: load.messagesId }, { notify: false }).then(result => {
+    if (!result?.ok && isCurrentHistoryLoad(load)) historyReadFailed(result?.error);
+  });
   sendCommand({ type: 'get_available_models' });
 }
 
@@ -46,6 +55,57 @@ let modelRefresh = null;
 const modelRequestPrefix = 'composer-model-';
 const stateReads = new Map();
 let stateReadSequence = 0;
+let historyLoad = null;
+let historySequence = 0;
+let sessionBootTimer = null;
+
+function cancelHistoryLoad() {
+  clearTimeout(historyLoad?.timer);
+  historyLoad = null;
+}
+
+function historyReadFailed(error) {
+  cancelHistoryLoad();
+  toast(error || '命令 get_messages 执行失败', 'error');
+  noteLoadFailure(`无法读取历史消息：${error || '上游没有说明原因'}`);
+}
+
+function isCurrentHistoryLoad(load) {
+  return historyLoad === load && load.workspace === S.workspaceGeneration && load.bridgeRun === S.bridgeRun;
+}
+
+function renderLoadedHistory(load) {
+  if (!isCurrentHistoryLoad(load)) return;
+  cancelHistoryLoad();
+  withNotificationSource('history', () => rebuildFromMessages(load.messages, load.sessionId || null));
+}
+
+/* get_messages 只有消息数组。用同次 boot 的 get_state 确定线程归属，
+ * 两个响应的到达顺序不影响恢复，迟到的上一轮应答也不能覆盖新线程。 */
+function acceptHistoryResponse(evt) {
+  const load = historyLoad;
+  if (evt.command === 'get_state' && load && evt.id === load.stateId) {
+    load.sessionId = evt.success ? evt.data?.sessionId || null : null;
+    if (load.messages) renderLoadedHistory(load);
+    return false; // get_state 仍由模型回读逻辑处理
+  }
+  if (evt.command !== 'get_messages') return false;
+  if (typeof evt.id !== 'string' || !evt.id.startsWith('classic-history-')) {
+    return Boolean((load && isCurrentHistoryLoad(load)) || sessionBootTimer !== null);
+  }
+  if (!load || evt.id !== load.messagesId || !isCurrentHistoryLoad(load)) return true;
+  if (!evt.success) {
+    historyReadFailed(evt.error);
+    return true;
+  }
+  load.messages = evt.data || [];
+  if (load.sessionId !== undefined) renderLoadedHistory(load);
+  else if (load.timer === undefined) {
+    // 旧构建若不回 get_state，仍显示历史，但不给无明确归属的线程恢复书签。
+    load.timer = setTimeout(() => renderLoadedHistory(load), 3000);
+  }
+  return true;
+}
 
 function readState() {
   const id = 'composer-state-' + (++stateReadSequence);
@@ -74,11 +134,12 @@ export function refreshModelState({ pending = true, completion = null } = {}) {
   const refresh = modelRefresh = { generation, workspace: S.workspaceGeneration, stateId: prefix + '-state', levelsId: prefix + '-levels', completion };
   for (const [type, id] of [['get_state', refresh.stateId], ['get_available_thinking_levels', refresh.levelsId]]) {
     sendCommand({ type, id }).then((result) => {
-      if (!result?.ok && modelRefresh === refresh) {
+      if (!result?.ok && (modelRefresh === refresh || historyLoad?.stateId === id)) {
         onResponse({ command: type, id, success: false });
       }
     });
   }
+  return refresh.stateId;
 }
 
 function sendModelSwitch(request) {
@@ -143,7 +204,8 @@ function acceptModelResponse(evt) {
 export function onResponse(evt) {
   // Replayed mutation acknowledgements must not initiate another session rebuild.
   if (evt._replay && ['new_session', 'fork', 'set_model', 'compact'].includes(evt.command)) return;
-  if (acceptModelResponse(evt)) return;
+  const modelHandled = acceptModelResponse(evt);
+  if (acceptHistoryResponse(evt) || modelHandled) return;
   if (!evt.success) {
     if (evt.command === 'set_thinking_level') logRendererEvent('ui.thinking_failed', { phase: 'response', code: 'command_failed' });
     if (evt.command !== 'get_available_thinking_levels') {
@@ -182,11 +244,13 @@ export function onResponse(evt) {
       refreshModelState();
       return;
     case 'new_session':
-      afterSessionSwitch();
+      if (d.cancelled) return;
+      afterSessionSwitch(classicThreadSessionId());
       toast('已开始新会话（旧会话还在侧栏项目下面，点一下就能切回去）', 'info');
       return;
     case 'fork':
-      afterSessionSwitch();
+      if (d.cancelled) return;
+      afterSessionSwitch(classicThreadSessionId());
       toast('已从该节点分叉', 'info');
       return;
     case 'compact':
@@ -376,7 +440,9 @@ export function setSessionListRefresh(fn) {
  * 不在这里刷的话它会停在旧状态 —— 旧会话仍然带着 current 标记，而当前项是
  * 不给点的，用户就再也回不到那条对话（这正是「开新对话后旧对话消失」的根因）。
  */
-export function afterSessionSwitch() {
+export function afterSessionSwitch(previousSessionId = classicThreadSessionId()) {
+  saveClassicReadingPosition(previousSessionId);
+  cancelHistoryLoad();
   document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
   cancelFallback('session-switch');
   pendingModel();
@@ -395,7 +461,12 @@ export function afterSessionSwitch() {
    * 归到上一条会话的 key，并把新会话的草稿填回来），而不是等 get_state
    * 回来才动 —— 那中间用户可能已经开始打字了。 */
   draftSync();
-  setTimeout(boot, 250);
+  clearTimeout(sessionBootTimer);
+  const workspace = S.workspaceGeneration;
+  sessionBootTimer = setTimeout(() => {
+    sessionBootTimer = null;
+    if (workspace === S.workspaceGeneration) boot();
+  }, 250);
 }
 
 export const forkFrom = (entryId) => sendCommand({ type: 'fork', entryId });

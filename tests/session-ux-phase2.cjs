@@ -25,8 +25,8 @@ let passed = 0;
 let failed = 0;
 function ok(label, value) {
   try {
-    if (typeof value === 'function') value();
-    else assert.ok(value, label);
+    const result = typeof value === 'function' ? value() : value;
+    if (typeof value !== 'function' || result !== undefined) assert.ok(result, label);
     passed++;
     console.log('  ok  ' + label);
   } catch (error) {
@@ -63,6 +63,8 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   const V = await import(url('tool-view.js'));
   const PV = await import(url('plan-view.js'));
   const RTC = await import(url('runtime-conversation.js'));
+  const rpc = await import(url('rpc.js'));
+  const sessions = await import(url('sessions.js'));
   const { S } = await import(url('state.js'));
 
   const tick = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
@@ -171,52 +173,186 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   console.log('P2-A：Classic 会话阅读位置与切换');
   {
     RP.clearAllBookmarks();
-    d.getElementById('stream').scrollTop = 0;
     M.clearThread();
-
-    // 模拟构建会话 1：中段阅读
-    S.state = { sessionId: 'session-classic-1' };
-    const messages1 = [
-      { role: 'user', content: [{ type: 'text', text: '问题一' }] },
-      { role: 'assistant', content: [{ type: 'text', text: '回答一' }] },
-      { role: 'user', content: [{ type: 'text', text: '问题二' }] },
-      { role: 'assistant', content: [{ type: 'text', text: '回答二' }] },
-    ];
-    M.rebuildFromMessages(messages1);
-    const t = S.thread;
-    ok('历史重建后为元素分配稳定 anchorId', () => {
-      const u1 = t.querySelector('.msg.user');
-      return u1 && u1.dataset.anchorId === 'user-1';
-    });
-
-    // 模拟用户在中间阅读，非贴底
     const stream = d.getElementById('stream');
-    stream.scrollTop = 250;
-    // 保存会话 1 书签
-    RP.saveSessionBookmark('session-classic-1', stream, t, { isPinned: false });
-    equal(RP.hasSessionBookmark('session-classic-1'), true, '会话 1 书签已保存');
+    const rect = (top, height) => ({ top, bottom: top + height, height, left: 0, right: 800, width: 800 });
+    setScrollDims(stream, 2600, 400);
+    stream.getBoundingClientRect = () => rect(0, 400);
+    const nativeRect = w.HTMLElement.prototype.getBoundingClientRect;
+    let rowHeight = 100;
+    w.HTMLElement.prototype.getBoundingClientRect = function() {
+      if (this.parentNode === S.thread && S.thread) {
+        const index = [...S.thread.children].indexOf(this);
+        return rect(index * rowHeight - stream.scrollTop, rowHeight);
+      }
+      return nativeRect.call(this);
+    };
 
-    // 切换到会话 2（贴底）
-    S.state = { sessionId: 'session-classic-2' };
-    const messages2 = [
-      { role: 'user', content: [{ type: 'text', text: '会话2问题' }] },
-      { role: 'assistant', content: [{ type: 'text', text: '会话2回答' }] },
+    const user = text => ({ role: 'user', content: [{ type: 'text', text }] });
+    const assistant = content => ({ role: 'assistant', content, stopReason: 'stop' });
+    const call = (id, name, args) => ({ type: 'toolCall', id, name, arguments: args });
+    const result = (id, name, details) => ({
+      role: 'toolResult', toolCallId: id, toolName: name, details, isError: false,
+      content: [{ type: 'text', text: 'Fixture output ' + id }],
+    });
+    const plan = { version: 1, tasks: [{ id: 'step', title: '检查测试数据', status: 'pending' }] };
+    const history = tag => [
+      user(tag + ' question'),
+      assistant([call(tag + '-plan', 'gui_plan', plan), call('read-1', 'read', { path: 'fixture.txt' }), call('read-2', 'read', { path: 'other.txt' })]),
+      result(tag + '-plan', 'gui_plan', plan), result('read-1', 'read'), result('read-2', 'read'),
+      assistant([{ type: 'text', text: tag + ' answer' }]),
+      ...Array.from({ length: 5 }, (_, i) => user(tag + ' extra ' + i)),
     ];
-    M.rebuildFromMessages(messages2);
-    RP.saveSessionBookmark('session-classic-2', stream, S.thread, { isPinned: true });
+    const commands = [];
+    global.fetch = async (request, opts = {}) => {
+      const body = opts.body ? JSON.parse(opts.body) : null;
+      if (request === '/api/command') commands.push(body);
+      if (request === '/api/sessions/switch') {
+        // 独立的状态通知可早于 HTTP 应答；旧线程仍属于离开的会话。
+        S.state = { sessionId: body.id };
+      }
+      return { ok: true, json: async () => ({ ok: true, sessionId: body?.id }) };
+    };
+    const frame = () => new Promise(r => w.requestAnimationFrame(r));
+    let previousHistoryRequest;
+    const deliverHistory = async (sessionId, messages, messagesFirst) => {
+      for (let i = 0; !commands.some(c => c.type === 'get_messages') && i < 80; i++) {
+        await new Promise(r => setTimeout(r, 10));
+      }
+      const respond = (command, data) => rpc.onResponse({
+        type: 'response', command, id: commands.find(c => c.type === command)?.id, success: true, data,
+      });
+      const state = () => respond('get_state', { sessionId });
+      const messagesResponse = () => respond('get_messages', { messages });
+      if (previousHistoryRequest) {
+        rpc.onResponse({ command: 'get_messages', id: previousHistoryRequest, success: true,
+          data: { messages: [user('迟到的旧历史')] } });
+        equal(S.thread?.childElementCount ?? 0, 0, '忽略上一轮历史响应');
+      }
+      previousHistoryRequest = commands.find(c => c.type === 'get_messages')?.id;
+      if (messagesFirst) {
+        messagesResponse();
+        equal(S.thread?.childElementCount ?? 0, 0, '消息先到时等待同次会话身份');
+        state();
+      }
+      else { state(); messagesResponse(); }
+      respond('get_available_thinking_levels', { levels: [] });
+      commands.length = 0;
+      await frame();
+    };
+    const switchTo = async (id, messagesFirst) => {
+      await sessions.openSidebarPreviewSession({ id, sessionId: id });
+      equal(S.thread.childElementCount, 0, '切换至 ' + id + ' 后清空旧线程');
+      stream.scrollTop = 0;
+      await deliverHistory(id, history(id), messagesFirst);
+      ok(id + ' 渲染目标会话历史', S.thread.textContent.includes(id + ' question'));
+    };
+    const groupOpen = () => S.thread.querySelector('.tl-group-head').getAttribute('aria-expanded');
+    const detailOpen = () => S.thread.querySelector('.tl-toggle').getAttribute('aria-expanded');
+    rpc.boot();
+    await deliverHistory('A', history('A'), false);
+    equal(S.thread.firstElementChild.dataset.anchorId, 'user-1', '历史锚点分配用户序号');
+    S.thread.querySelector('.tl-group-head').click();
+    S.thread.querySelector('.tl-toggle').click();
+    equal(groupOpen(), 'true', 'A 展开工具组');
+    equal(detailOpen(), 'true', 'A 展开工具详情');
+    stream.scrollTop = 215;
+    await switchTo('B', true);
+    equal(groupOpen(), 'false', 'B 的工具组不继承 A 的选择');
+    equal(detailOpen(), 'false', '相同 toolCallId 的 B 详情不继承 A 的选择');
+    equal(stream.scrollTop, stream.scrollHeight, '无书签的 B 回到底部');
+    stream.scrollTop = 340;
+    rowHeight = 120;
+    await switchTo('A', false);
+    equal(stream.scrollTop, 255, 'A → B → A 通过 anchorId 与偏移恢复 A');
+    equal(groupOpen(), 'true', '切回 A 恢复工具组展开');
+    equal(detailOpen(), 'true', '切回 A 恢复工具详情展开');
+    await switchTo('B', true);
+    equal(stream.scrollTop, 340, '重复切换后 B 保留独立书签');
 
-    // 切回会话 1：历史重建自动触发恢复书签
-    S.state = { sessionId: 'session-classic-1' };
-    M.rebuildFromMessages(messages1);
-    ok('切回会话 1 后恢复原阅读位置', () => {
-      return stream.scrollTop === 250 || stream.scrollTop > 0;
+    for (const [command, next, first] of [['new_session', 'new', true], ['fork', 'forked', false]]) {
+      const oldSessionId = next === 'new' ? 'B' : 'new';
+      stream.scrollTop = 225;
+      S.state = { sessionId: next };
+      rpc.onResponse({ type: 'response', command, success: true });
+      equal(S.thread.childElementCount, 0, command + ' 清空原会话');
+      equal(RP.hasSessionBookmark(next), false, command + ' 不将旧线程记给新会话');
+      equal(RP.hasSessionBookmark(oldSessionId), true, command + ' 保留原会话书签');
+      stream.scrollTop = 0;
+      await deliverHistory(next, command === 'new_session' ? [] : history(next), first);
+      equal(stream.scrollTop, stream.scrollHeight, command + ' 未继承旧会话位置');
+      if (command === 'new_session') {
+        stream.dispatchEvent(new w.Event('scroll'));
+        await frame();
+        equal(RP.hasSessionBookmark(next), false, '空历史和滞后滚动事件均不写书签');
+        M.onMessageStart({ message: user('新会话第一条提问') });
+        await frame();
+      }
+    }
+    const liveUser = user('新发送消息');
+    const liveToolMessage = assistant([call('live-plan', 'gui_plan', plan), call('live-read', 'read', { path: 'fixture.txt' })]);
+    const steer = user('运行中补充要求');
+    const livePlanDetails = { ...plan, turnId: '123e4567-e89b-42d3-a456-426614174000' };
+    const updatedPlan = { ...livePlanDetails, tasks: [{ ...plan.tasks[0], status: 'completed' }] };
+    const steerPlanMessage = assistant([call('steer-plan', 'gui_plan', updatedPlan)]);
+    const liveAnswer = assistant([{ type: 'text', text: 'live answer' }]);
+    const anchorIds = () => [...S.thread.querySelectorAll('[data-anchor-id]')].map(node => node.dataset.anchorId);
+    const historicalIds = anchorIds();
+    const { beginPlanTaskBoundary } = await import(url('plan-live.js'));
+    beginPlanTaskBoundary();
+    M.beginTurn();
+    M.onMessageStart({ message: liveUser });
+    await frame();
+    equal(stream.scrollTop, stream.scrollHeight, '用户发消息强制滚到底部');
+    M.onMessageStart({ message: liveToolMessage });
+    M.onMessageEnd({ message: liveToolMessage });
+    T.onToolStart({ toolCallId: 'live-plan', toolName: 'gui_plan', args: plan });
+    T.onToolEnd({ toolCallId: 'live-plan', result: { details: livePlanDetails } });
+    T.onToolStart({ toolCallId: 'live-read', toolName: 'read', args: { path: 'fixture.txt' } });
+    T.onToolEnd({ toolCallId: 'live-read', result: { content: [{ type: 'text', text: 'Fixture output live-read' }] } });
+    M.onMessageStart({ message: steer });
+    M.onMessageStart({ message: steerPlanMessage });
+    M.onMessageEnd({ message: steerPlanMessage });
+    T.onToolStart({ toolCallId: 'steer-plan', toolName: 'gui_plan', args: updatedPlan });
+    T.onToolEnd({ toolCallId: 'steer-plan', result: { details: updatedPlan } });
+    M.onMessageStart({ message: liveAnswer });
+    M.onMessageEnd({ message: liveAnswer });
+    M.onSettled();
+    const combined = anchorIds();
+    deep(combined.slice(0, historicalIds.length), historicalIds, '追加实时消息保留历史锚点');
+    equal(new Set(combined).size, combined.length, '历史与实时 anchorId 无重复');
+    const liveGroup = [...S.thread.querySelectorAll('.tl-group')].at(-1).dataset.anchorId;
+    const livePlan = [...S.thread.querySelectorAll('.plan-card')].at(-1)?.dataset.anchorId;
+    ok('实时工具组和 Plan 均分配锚点', Boolean(liveGroup && livePlan));
+    const unstartedTool = assistant([call('never-started', 'read', { path: 'fixture.txt' })]);
+    const livePlans = [...S.thread.querySelectorAll('.plan-card')].map(node => node.dataset.anchorId);
+    M.rebuildFromMessages([
+      ...history('forked'), unstartedTool, liveUser, liveToolMessage, result('live-plan', 'gui_plan', livePlanDetails),
+      result('live-read', 'read'), steer, steerPlanMessage, result('steer-plan', 'gui_plan', updatedPlan), liveAnswer,
+    ]);
+    const rebuiltLiveGroup = S.thread.querySelector('.tl-item[data-id="live-read"]')?.closest('.tl-group');
+    equal(rebuiltLiveGroup?.dataset.anchorId, liveGroup, '历史独有的未执行工具组不改变后续实时组锚点');
+    ok('实时 Plan 锚点在历史重建中命中', anchorIds().includes(livePlan));
+    deep([...S.thread.querySelectorAll('.plan-card')].map(node => node.dataset.anchorId),
+      livePlans, '同一 turnId 的 steer 重建前后共用首次 Plan 锚点');
+    rpc.onResponse({ type: 'response', command: 'fork', success: true, data: { cancelled: true } });
+    ok('取消 fork 保留当前线程', S.thread.textContent.includes('forked question'));
+    stream.scrollTop = 219;
+    let locateCalls = 0;
+    M.setAfterHistoryRendered(sessionId => {
+      assert.equal(sessionId, 'forked');
+      assert.ok(S.thread.querySelector('.msg.user'));
+      locateCalls++;
+      stream.scrollTop = 640;
+      return true;
     });
-
-    // 用户主动发消息：强制滚到底部并恢复贴底
-    M.onMessageStart({ message: { role: 'user', content: [{ type: 'text', text: '新发送消息' }] } });
-    ok('用户发消息优先执行自动滚到底部', () => {
-      return stream.scrollTop === stream.scrollHeight || true;
-    });
+    M.rebuildFromMessages(history('forked'));
+    await frame();
+    equal(locateCalls, 1, '历史完成回调在重建后收到会话 ID');
+    equal(stream.scrollTop, 640, '搜索接管定位后书签和贴底均不覆盖结果');
+    M.setAfterHistoryRendered(null);
+    w.HTMLElement.prototype.getBoundingClientRect = nativeRect;
+    global.fetch = w.fetch;
   }
 
   console.log('P2-B：折叠与展开阅读位置补偿');
@@ -298,17 +434,15 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   {
     // 检查工具组折叠
     const g = V.createGroup();
-    ok('工具组头具备折叠事件与 aria 属性', () => {
-      const head = g.querySelector('.tl-group-head');
-      return head && head.getAttribute('aria-expanded') !== null;
-    });
+    const groupHead = g.querySelector('.tl-group-head');
+    groupHead.click();
+    equal(groupHead.getAttribute('aria-expanded'), 'false', '工具组点击后报告收起状态');
 
     // 检查 Plan 任务折叠
     const card = PV.renderPlan({ completed: 1, total: 3, tasks: [{ id: '1', title: '任务1', status: 'completed' }] });
-    ok('Plan 任务卡具备折叠事件与 aria 属性', () => {
-      const head = card.querySelector('.plan-head');
-      return head && head.getAttribute('aria-expanded') !== null;
-    });
+    const planHead = card.querySelector('.plan-head');
+    planHead.click();
+    equal(planHead.getAttribute('aria-expanded'), 'false', 'Plan 点击后报告收起状态');
   }
 
   console.log('P2-C：Runtime 历史搜索滚动修复');

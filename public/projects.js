@@ -23,7 +23,7 @@ import { openProjectSettings } from './project-config.js';
 import { toast } from './ui/toast.js';
 import { applyProjectState, loadStatus, setBridgeState, syncTitleProject } from './shell.js';
 import { refreshGitNow, resetChanges } from './git.js';
-import { clearThread, setStreaming } from './messages.js';
+import { classicThreadSessionId, clearThread, saveClassicReadingPosition, setStreaming } from './messages.js';
 import { clearSessionPlans } from './session-plans.js';
 import { renderAttachments } from './attachments.js';
 import { draftSync } from './draft.js';
@@ -332,6 +332,7 @@ export async function removeProject(target) {
     if (!ownsWorkspace(requestedGeneration)) return;
     let generation = requestedGeneration;
     if (j.closedWorkspace) {
+      saveClassicReadingPosition(classicThreadSessionId());
       pendingProjectAction = null;
       generation = beginWorkspaceSwitch(null);
       showChat();
@@ -371,6 +372,7 @@ export async function removeProject(target) {
 
 export function activateProject(target, label, activate = apiActivateProject) {
   if (sessionActions.browseProject?.({ path: target, name: label || target })) return Promise.resolve(false);
+  saveClassicReadingPosition(classicThreadSessionId());
   pendingProjectAction = null;
   showChat();
   const generation = beginWorkspaceSwitch(target);

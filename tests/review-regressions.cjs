@@ -188,14 +188,13 @@ function docx(xml) {
       global.fetch = async () => ({ json: async () => ({ ok: true, locator, truncated: true, messages: [
         { role: 'user', text: 'last retained question', userIndex: byId ? null : 804, messageId: 'target-id' },
       ] }) });
-      let scrolled = '';
-      dom.window.HTMLElement.prototype.scrollIntoView = function() { scrolled = this.textContent; };
       const host = document.getElementById('host'), view = createRuntimeConversation({ host });
       try {
         await view.openHistory(locator, { userIndex: 804, ...(byId ? { messageId: 'target-id' } : {}) });
-        assert.ok(scrolled.includes('last retained question'));
+        const target = host.querySelector('.rtc-output [data-history-scrolled="true"]');
+        assert.equal(target?.textContent.includes('last retained question'), true);
         if (byId) assert.equal(host.querySelector('[data-history-user-index]'), null);
-      } finally { view.dispose(); delete dom.window.HTMLElement.prototype.scrollIntoView; }
+      } finally { view.dispose(); }
     });
     for (const surface of ['central', 'modal']) for (const result of ['success', 'failure', 'owner change']) await check(surface + ' approval ' + result + ': settles only captured request; failure retries', async () => {
       let records = [item('one')], finish, calls = 0; reset(records);

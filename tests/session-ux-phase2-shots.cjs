@@ -8,7 +8,7 @@
  * 5. 700px 窄屏与正常宽屏、深色与浅色主题实测。
  *
  * 只用于验收取证，不启动真 pi、不读用户会话；
- * 产物保存在 docs/ui/session-ux-phase2-evidence/。
+ * 产物保存在 docs/ui/session-ux-phase2-final-evidence/。
  */
 'use strict';
 
@@ -18,7 +18,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
-const OUT = path.join(ROOT, 'docs', 'ui', 'session-ux-phase2-evidence');
+const OUT = path.join(ROOT, 'docs', 'ui', 'session-ux-phase2-final-evidence');
 
 const BROWSER_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -165,6 +165,13 @@ async function main() {
   };
 
   const measurements = [];
+  const recordAnchor = (test, result) => {
+    const error = Math.abs(result.restoredOffset - result.savedOffset);
+    const shift = Math.abs(result.afterScrollTop - result.beforeScrollTop);
+    const passed = error <= 1 && shift > 24;
+    measurements.push({ test, ...result, errorPx: error, passed });
+    console.log(test + ' · ' + result.anchorId + ': offset error ' + error.toFixed(2) + 'px, scrollTop shift ' + shift.toFixed(2) + 'px');
+  };
 
   try {
     await send('Page.enable');
@@ -195,77 +202,121 @@ async function main() {
     /* =========================================================================
      * 场景 1：Classic 会话阅读位置捕获与恢复（多会话切换）
      * ========================================================================= */
-    console.log('\n--- 场景 1：Classic 阅读位置恢复（真实 Chromium 几何测量） ---');
-    await evalJs(`(async () => {
-      __M.clearThread();
-      __T.resetTimeline();
-      const msgs = [];
-      for (let i = 1; i <= 15; i++) {
-        msgs.push({ role: 'user', content: [{ type: 'text', text: '用户提问第 ' + i + ' 回合：架构设计与模块解耦' }] });
-        msgs.push({ role: 'assistant', content: [{ type: 'text', text: '助手回复第 ' + i + ' 回合：确保离线优先、无全局污染、严格保持单一真相。' }] });
-      }
-      __M.rebuildFromMessages(msgs);
-      __S.currentSessionId = 'sess-shot-1';
-      return true;
-    })()`);
-    await sleep(350);
-
-    const initialPos = await evalJs(`(() => {
+    // 两个会话都保存中段位置；改变锚点之前的布局，证明恢复使用相对偏移。
+    console.log('\n--- Classic 会话切换与实时锚点（Chromium） ---');
+    const classic = await evalJs(`(async () => {
       const stream = document.querySelector('#stream');
-      const target = document.querySelector('[data-anchor-id="user-7"]');
-      if (!target || !stream) return null;
-      const sRect = stream.getBoundingClientRect();
-      const tRect = target.getBoundingClientRect();
-      stream.scrollTop += (tRect.top - sRect.top) - 120;
-      
-      const beforeRect = target.getBoundingClientRect();
-      const beforeRelTop = beforeRect.top - stream.getBoundingClientRect().top;
-      __RP.saveSessionBookmark('sess-shot-1', stream);
-      return { scrollTop: stream.scrollTop, relTop: beforeRelTop };
-    })()`);
-
-    // 切换到会话 2
-    await evalJs(`(async () => {
+      const text = (role, value) => ({ role, content: [{ type: 'text', text: value }] });
+      const history = label => Array.from({ length: 15 }, (_, i) => [
+        text('user', label + ' · 用户提问 ' + (i + 1)),
+        text('assistant', '架构设计：核对模块边界、离线验证和异常处理。'),
+      ]).flat();
+      const painted = async () => {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const entrance = __S.thread.getAnimations({ subtree: true }).filter(animation => animation.animationName === 'ui2-rise-in');
+        await Promise.all(entrance.map(animation => animation.finished));
+      };
+      const relativeTop = target => target.getBoundingClientRect().top - stream.getBoundingClientRect().top;
+      const find = anchorId => [...__S.thread.children].find(node => node.dataset.anchorId === anchorId);
+      const capture = target => {
+        stream.scrollTop += relativeTop(target) + 12;
+        const bookmark = __RP.captureReadingPosition(stream, __S.thread);
+        if (bookmark.isPinned || bookmark.anchorId !== target.dataset.anchorId || Math.abs(bookmark.offset) < 5) {
+          throw new Error('未捕获预期的非贴底锚点：' + JSON.stringify(bookmark));
+        }
+        return bookmark;
+      };
+      const compare = bookmark => {
+        const target = find(bookmark.anchorId);
+        if (!target) throw new Error('历史中找不到锚点 ' + bookmark.anchorId);
+        return {
+          anchorId: bookmark.anchorId,
+          savedOffset: bookmark.offset, restoredOffset: relativeTop(target),
+          beforeScrollTop: bookmark.scrollTop, afterScrollTop: stream.scrollTop,
+        };
+      };
+      const switchTo = async (from, to, messages) => {
+        __M.saveClassicReadingPosition(from);
+        __M.clearThread();
+        stream.scrollTop = 0;
+        __M.rebuildFromMessages(messages, to);
+        await painted();
+      };
+      const style = document.createElement('style');
+      document.head.append(style);
+      const shiftLayout = () => {
+        style.textContent = '#stream .thread > .msg.user:first-child { margin-bottom: 137px !important; }';
+      };
+      window.__p2AnchorFixture = { text, history, painted, capture, compare, switchTo, style, shiftLayout };
+      await switchTo(null, 'shot-A', history('会话 A'));
+      const a = capture(find('user-7'));
+      await switchTo('shot-A', 'shot-B', history('会话 B'));
+      const b = capture(find('user-9'));
+      __M.saveClassicReadingPosition('shot-B');
       __M.clearThread();
-      __S.currentSessionId = 'sess-shot-2';
-      const msgs2 = [
-        { role: 'user', content: [{ type: 'text', text: '会话 2 简短内容' }] },
-        { role: 'assistant', content: [{ type: 'text', text: '会话 2 回复完毕。' }] },
-      ];
-      __M.rebuildFromMessages(msgs2);
-      return true;
+      shiftLayout();
+      await switchTo(null, 'shot-A', history('会话 A'));
+      const restoredA = compare(a);
+      await switchTo('shot-A', 'shot-B', history('会话 B'));
+      const restoredB = compare(b);
+      await switchTo('shot-B', 'shot-A', history('会话 A'));
+      style.textContent = '';
+      await switchTo(null, 'shot-A', history('会话 A'));
+      return { A: restoredA, B: restoredB };
     })()`);
-    await sleep(250);
-
-    // 切回会话 1 并恢复阅读位置
-    const restoredPos = await evalJs(`(async () => {
-      __M.clearThread();
-      __S.currentSessionId = 'sess-shot-1';
-      const msgs = [];
-      for (let i = 1; i <= 15; i++) {
-        msgs.push({ role: 'user', content: [{ type: 'text', text: '用户提问第 ' + i + ' 回合：架构设计与模块解耦' }] });
-        msgs.push({ role: 'assistant', content: [{ type: 'text', text: '助手回复第 ' + i + ' 回合：确保离线优先、无全局污染、严格保持单一真相。' }] });
-      }
-      __M.rebuildFromMessages(msgs);
-      await new Promise(r => setTimeout(r, 260));
-      const stream = document.querySelector('#stream');
-      __RP.restoreSessionBookmark('sess-shot-1', stream);
-      
-      const target = document.querySelector('[data-anchor-id="user-7"]');
-      const sRect = stream.getBoundingClientRect();
-      const tRect = target.getBoundingClientRect();
-      const afterRelTop = tRect.top - sRect.top;
-      return { scrollTop: stream.scrollTop, relTop: afterRelTop };
-    })()`);
-
-    const p1Error = Math.abs(restoredPos.relTop - initialPos.relTop);
-    console.log(`Classic 阅读位置恢复误差: ${p1Error.toFixed(2)}px (期望 <= 1.00px)`);
-    measurements.push({ test: 'Classic 阅读位置恢复', errorPx: Number(p1Error.toFixed(2)), passed: p1Error <= 1.0 });
+    recordAnchor('Classic A → B → A', classic.A);
+    recordAnchor('Classic B 独立书签', classic.B);
 
     await setTheme('dark');
     await shot('01-classic-reading-position-restored-dark');
     await setTheme('light');
     await shot('02-classic-reading-position-restored-light');
+    await setTheme('dark');
+
+    for (const kind of ['tools', 'plan']) {
+      const restored = await evalJs(`(async () => {
+        const kind = ${JSON.stringify(kind)};
+        const fixture = __p2AnchorFixture;
+        const id = 'shot-live-' + kind;
+        const prefix = fixture.history('前置历史').slice(0, 12);
+        const question = fixture.text('user', '实时执行：验证' + (kind === 'plan' ? '计划锚点' : '工具组锚点'));
+        const name = kind === 'plan' ? 'gui_plan' : 'read';
+        const callId = 'live-' + kind;
+        const args = kind === 'plan'
+          ? { version: 1, tasks: [{ id: 'read', title: '检查实时锚点与历史重建', status: 'completed' }] }
+          : { path: 'fixture.txt' };
+        const assistant = { role: 'assistant', content: [{ type: 'toolCall', id: callId, name, arguments: args }] };
+        const result = {
+          role: 'toolResult', toolCallId: callId, toolName: name, isError: false,
+          details: kind === 'plan' ? args : undefined,
+          content: [{ type: 'text', text: 'Fixture result' }],
+        };
+        const tail = fixture.history('后续历史').slice(0, 20);
+        await fixture.switchTo(null, id, prefix);
+        __M.onMessageStart({ message: question });
+        __M.onMessageStart({ message: assistant });
+        __M.onMessageEnd({ message: assistant });
+        __T.onToolStart({ toolCallId: callId, toolName: name, args });
+        __T.onToolEnd({ toolCallId: callId, result });
+        for (const message of tail) {
+          __M.onMessageStart({ message });
+          __M.onMessageEnd({ message });
+        }
+        await fixture.painted();
+        const live = __S.thread.querySelector(kind === 'plan' ? '.plan-card' : '.tl-group');
+        if (!live?.dataset.anchorId) throw new Error('实时锚点不存在：' + kind);
+        const bookmark = fixture.capture(live);
+        __M.saveClassicReadingPosition(id);
+        __M.clearThread();
+        fixture.shiftLayout();
+        await fixture.switchTo(null, id, [...prefix, question, assistant, result, ...tail]);
+        const measurement = fixture.compare(bookmark);
+        return measurement;
+      })()`);
+      recordAnchor('实时 ' + kind + ' 锚点重建恢复', restored);
+      await shot('live-' + kind + '-anchor-restored-dark');
+      await evalJs(`__p2AnchorFixture.style.textContent = ''`);
+    }
 
     /* =========================================================================
      * 场景 2：折叠与展开阅读位置补偿（工具组、工具详情、Plan 卡片）
@@ -329,7 +380,8 @@ async function main() {
       return { beforeY, afterY, diff: Math.abs(afterY - beforeY) };
     })()`);
 
-    if (groupToggleResult) {
+    if (!groupToggleResult) throw new Error('缺少工具组几何结果');
+    {
       console.log(`工具组头折叠位置误差: ${groupToggleResult.diff.toFixed(2)}px (期望 <= 1.00px)`);
       measurements.push({ test: '工具组头折叠位置误差', errorPx: Number(groupToggleResult.diff.toFixed(2)), passed: groupToggleResult.diff <= 1.0 });
     }
@@ -351,7 +403,8 @@ async function main() {
       return { beforeY, afterY, diff: Math.abs(afterY - beforeY) };
     })()`);
 
-    if (detailToggleResult) {
+    if (!detailToggleResult) throw new Error('缺少工具详情几何结果');
+    {
       console.log(`工具详情折叠位置误差: ${detailToggleResult.diff.toFixed(2)}px (期望 <= 1.00px)`);
       measurements.push({ test: '工具详情折叠位置误差', errorPx: Number(detailToggleResult.diff.toFixed(2)), passed: detailToggleResult.diff <= 1.0 });
     }
@@ -375,8 +428,11 @@ async function main() {
       const streamRect = stream.getBoundingClientRect();
       stream.scrollTop += (groupRect.bottom - streamRect.top) + 150;
 
-      const readingTarget = document.querySelector('[data-anchor-id="user-6"]') || document.querySelector('.msg-user:nth-of-type(6)');
-      if (!readingTarget) return null;
+      const readingTarget = [...__S.thread.children].find(node => {
+        const rect = node.getBoundingClientRect();
+        return node.dataset.anchorId && rect.bottom > streamRect.top + 2 && rect.top < streamRect.bottom;
+      });
+      if (!readingTarget || group.getBoundingClientRect().bottom > streamRect.top) return null;
       const readingBeforeY = readingTarget.getBoundingClientRect().top;
 
       // 折叠视口上方的工具组
@@ -387,7 +443,8 @@ async function main() {
       return { readingBeforeY, readingAfterY, diff: Math.abs(readingAfterY - readingBeforeY) };
     })()`);
 
-    if (aboveFoldResult) {
+    if (!aboveFoldResult) throw new Error('缺少视口上方折叠几何结果');
+    {
       console.log(`视口上方折叠时阅读内容位移: ${aboveFoldResult.diff.toFixed(2)}px (期望 <= 1.00px)`);
       measurements.push({ test: '视口上方折叠下方稳定', errorPx: Number(aboveFoldResult.diff.toFixed(2)), passed: aboveFoldResult.diff <= 1.0 });
     }
@@ -411,6 +468,7 @@ async function main() {
       const card = __PV.renderPlan(planData);
       stream.appendChild(card);
       const spacer = document.createElement('div');
+      spacer.dataset.p2PlanSpacer = 'true';
       spacer.style.height = '600px';
       stream.appendChild(spacer);
 
@@ -428,7 +486,8 @@ async function main() {
       return { beforeY, afterY, diff: Math.abs(afterY - beforeY) };
     })()`);
 
-    if (planToggleResult) {
+    if (!planToggleResult) throw new Error('缺少 Plan 折叠几何结果');
+    {
       console.log(`Plan 任务卡折叠位置误差: ${planToggleResult.diff.toFixed(2)}px (期望 <= 1.00px)`);
       measurements.push({ test: 'Plan 任务卡折叠位置误差', errorPx: Number(planToggleResult.diff.toFixed(2)), passed: planToggleResult.diff <= 1.0 });
     }
@@ -493,7 +552,8 @@ async function main() {
       };
     })()`);
 
-    if (runtimeSearchResult) {
+    if (!runtimeSearchResult) throw new Error('缺少 Runtime 搜索几何结果');
+    {
       console.log(`Runtime 搜索祖先 .stage 滚动量: ${runtimeSearchResult.stageScrolled}px (期望 0)`);
       console.log(`Runtime 搜索 work-surface 滚动量: ${runtimeSearchResult.wsScrolled}px (期望 0)`);
       console.log(`Runtime 搜索外层 document 滚动量: ${runtimeSearchResult.docScrolled}px (期望 0)`);
@@ -501,6 +561,7 @@ async function main() {
       measurements.push({ test: 'Runtime 搜索祖先 stage 零滚动', errorPx: runtimeSearchResult.stageScrolled, passed: runtimeSearchResult.stageScrolled === 0 });
       measurements.push({ test: 'Runtime 搜索 work-surface 零滚动', errorPx: runtimeSearchResult.wsScrolled, passed: runtimeSearchResult.wsScrolled === 0 });
       measurements.push({ test: 'Runtime 搜索外层 doc 零滚动', errorPx: runtimeSearchResult.docScrolled, passed: runtimeSearchResult.docScrolled === 0 });
+      measurements.push({ test: 'Runtime 搜索目标容器发生滚动', passed: runtimeSearchResult.outputScrolled });
       measurements.push({ test: 'Runtime 搜索居中误差', errorPx: Number(runtimeSearchResult.centerDiff.toFixed(2)), passed: runtimeSearchResult.centerDiff <= 1.0 });
     }
     await shot('07-runtime-history-search-dark');
@@ -512,8 +573,21 @@ async function main() {
     await setViewport(700, 600);
     await shot('08-narrow-700-runtime-search-dark');
 
-    await evalJs(`window.__surface.showChat();`);
-    await sleep(200);
+    await evalJs(`(async () => {
+      __surface.showChat();
+      const stream = document.getElementById('stream');
+      stream.querySelector(':scope > .plan-card').remove();
+      stream.querySelector(':scope > [data-p2-plan-spacer]').remove();
+      __M.rebuildFromMessages(__p2AnchorFixture.history('窄屏会话'), 'shot-narrow');
+      await __p2AnchorFixture.painted();
+      const target = __S.thread.querySelector('[data-anchor-id="user-4"]');
+      const viewport = stream.getBoundingClientRect();
+      stream.scrollTop += target.getBoundingClientRect().top - viewport.top - 40;
+      const visible = target.getBoundingClientRect();
+      if (innerWidth !== 700 || visible.top < viewport.top || visible.bottom > viewport.bottom) {
+        throw new Error('窄屏 Classic 截图缺少可见的目标消息');
+      }
+    })()`);
     await shot('09-narrow-700-classic-dark');
     await setTheme('light');
     await shot('10-narrow-700-classic-light');
@@ -521,9 +595,8 @@ async function main() {
     await setViewport(1320, 820);
 
     const reportData = {
-      label: 'phase2',
-      browser: CHROME,
-      cdpPort: actualPort,
+      label: 'phase2-final',
+      browser: (await send('Browser.getVersion')).result.product,
       measurements,
       allPassed: measurements.every((m) => m.passed),
       capturedAt: new Date().toISOString(),
