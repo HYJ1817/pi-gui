@@ -27,6 +27,19 @@
 
 以上不改变 CI 触发、测试清单、gate 或发布脚本，也不授予联网模型调用、推送、合并、tag 或发布权限。
 
+## 首次环境安装验证
+
+`npm run test:environment` 已纳入 canonical `test` 链，包含四个离线套件：
+`environment-download`（下载白名单、校验、解压与目录替换原语）、
+`environment-setup`（检测、兼容性、RPC 握手、手动路径与脱敏）、
+`environment-install`（计划校验、完整安装状态机、取消与失败隔离）、
+`environment-ui`（纯展示模型与 jsdom 四页流程）。
+
+全部使用 `os.tmpdir()` 下的 fixture、注入的下载/命令替身和假安装器，
+不修改真实用户的 Node、Pi、Git，也不访问网络。jsdom 不证明排版；
+向导的检查、确认、安装、验证四页另需真实浏览器截图，见
+[environment-setup.md](environment-setup.md#九测试与验收)。
+
 ## G3 调度与文档候选分类
 
 打包检查在 test-plan 成功后与五组测试运行于不同 runner，各自 checkout、准备依赖和 fixture；

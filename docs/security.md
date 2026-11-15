@@ -172,6 +172,37 @@ Pi GUI 会**执行一次官方 self-update** 去升级本机装着的那份 pi�
 
 详见 [updates.md](updates.md) 与 [upgrade-playbook.md](upgrade-playbook.md)。
 
+## 首次环境安装（Environment Setup）边界
+
+首次启动向导会在用户点击后安装 **Node.js / Pi / Git**，这是项目里除 Pi 更新与
+Capability 安装之外**又一条会写用户目录的执行路径**。它不复用 Pi Updater 的代码，
+也不放宽后者的边界；两者状态机、路由和文案互不相干。完整行为见
+[environment-setup.md](environment-setup.md)。
+
+- **renderer 不能指定目标。** `POST /api/environment/install` 只认 `planId`、
+  组件 id 数组和 `consent === true`；URL、版本、命令、args、环境变量一律不接受。
+  组件 id 必须在当前计划的 `steps` 里，必需项不能漏，过期 `planId` 直接拒绝。
+  同一时间只允许一个任务，重复启动返回 `busy` 和现有 job。
+- **命令是固定的。** Node / Git 用固定版本的官方 ZIP；Pi 用固定参数调用 npm，
+  `shell:false`，不经过 `curl | bash` / `iwr | iex`，也不执行安装包里的脚本
+  （npm 侧 `--ignore-scripts`，并清空用户/全局 `.npmrc` 与 `NODE_OPTIONS` 的影响）。
+- **下载只走 HTTPS 白名单。** 主机限定 `nodejs.org`、`github.com`、
+  `objects.githubusercontent.com`、`release-assets.githubusercontent.com`；
+  重定向逐跳复查；非 200、超长、校验不符立即失败。Node 同时核对仓库钉死的
+  SHA256 与官方 `SHASUMS256.txt`；Git 核对 GitHub Release asset 的固定摘要。
+- **解压与替换。** 固定 PowerShell `-File` 脚本（不是 `-Command` 拼串）拒绝绝对路径、
+  `..`、盘符、符号链接和超大条目；先解压到随机临时目录，验证 `--version` 后再
+  同卷 rename，失败恢复旧目录。临时目录在任务结束时清理。
+- **不碰已有安装。** 不写系统 PATH、不改用户环境变量、不申请管理员权限，
+  也不覆盖已经可用的 Pi。`PI_BIN` 优先级最高：它指向坏路径时向导只报告
+  `locked` 与 `manual`，绝不擅自另装一份。
+- **路径与诊断脱敏。** 报告和错误只带固定 code、版本与脱敏路径
+  （`%LOCALAPPDATA%`、`%ProgramFiles%`、主目录、数据目录、安装根替换为占位符），
+  不回传原始 stdout/stderr、完整环境变量或任何 token。
+- **取消与失败。** 取消会 abort 下载并 kill npm / PowerShell 的整个进程树；
+  已完成组件保留，未完成组件不改变系统状态。任务不因应用退出被记成成功，
+  下次启动按 `interrupted` 重新检测。
+
 ## Known Capability Installer 边界
 
 上面那节是「升级 pi 本体」。这一节是 P24 新增的**唯一另一条执行官方 CLI 的写路径**：
