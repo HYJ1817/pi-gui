@@ -70,6 +70,7 @@ const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 const { createDesktopTheme } = require('./theme.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
+const { installEnvironmentSetup } = require('./environment-setup.cjs');
 const { installAppUpdate } = require('./app-update-desktop.cjs');
 /* P2：供应商凭据受限输入窗（CredentialSheet）。协议必须在 app ready 前注册。 */
 const { createProviderCredentialDesktop, registerCredentialScheme, PARTITION: CREDENTIAL_SHEET_PARTITION } = require('./provider-credentials.cjs');
@@ -106,6 +107,7 @@ let browser = null;
 let browserAgent = null;
 let runtimeBrowserHost = null;
 let quitting = false;
+let environmentInstallQuit = null;
 let mainLog = null;
 let appUpdate = null;
 let credentialDesktop = null;
@@ -189,6 +191,9 @@ async function ensureServer() {
   const probe = await probePort();
 
   if (probe.state === 'pi-gui') {
+    if (app.isPackaged) {
+      throw new Error(`端口 ${PORT} 上已有 Pi GUI 后端。请结束该后端或换一个端口，以启动本实例的私有后端。`);
+    }
     mlog('electron', 'electron.backend_spawn', { reused: true, phase: 'reuse' });
     const access = await verifyAccess();
     if (!access.ok) {
@@ -224,6 +229,7 @@ async function ensureServer() {
       // 本实例的访问令牌。后端据此要求所有 /api/* 带令牌，
       // 而令牌只经由下面的 installTokenHeader() 注入到请求头里。
       PI_GUI_TOKEN: AUTH_TOKEN,
+      PI_GUI_DESKTOP: '1',
       ...browserAgent.environment(),
       ...runtimeBrowserHost.environment(),
       // projects.json 和上传缓存要写到可写的地方。默认是应用安装目录，
@@ -323,6 +329,12 @@ async function ensureServer() {
  * 文件」这一个能力而存在（见 installOpenPathHandler）。令牌依然不进渲染进程 ——
  * preload 只转发**项目相对路径**，一个字节的凭据都不碰。 */
 function installTokenHeader() {
+  // Source builds can use an existing development backend. Keep desktop write
+  // operations behind the native bridge even when that backend accepts web requests.
+  session.defaultSession.webRequest.onBeforeRequest({ urls: [`${ORIGIN}/*`, `http://localhost:${PORT}/*`] }, (details, callback) => {
+    const path = new URL(details.url).pathname;
+    callback({ cancel: !server?.connected && details.method === 'POST' && (path === '/api/environment/install' || path === '/api/environment/pi-path') });
+  });
   session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [`${ORIGIN}/*`] }, (details, callback) => {
     callback({ requestHeaders: { ...details.requestHeaders, [TOKEN_HEADER]: AUTH_TOKEN } });
   });
@@ -397,53 +409,6 @@ function installOpenPathHandler() {
  * 注意这里**不查后端**：URL 本身就是判据，不需要向任何服务求证。
  * 另外刻意不做「先 GET 一下看看」这类预检 —— 那会给用户点开的链接
  * 平白多出一次请求，而且和浏览器实际发的请求并不是同一个。 */
-/* 首次环境安装的原生确认框。
- *
- * 渲染进程只能送**组件 id**（node / pi / git），不能送文案、路径、URL 或命令。
- * 对话框正文由这里按固定 allowlist 生成 —— 否则一个被注入的页面就能把
- * 任意文本塞进一个看起来像系统确认框的窗口里。
- *
- * 这里不做安装，只拿到「用户确实点过确认」这个信号；真正的执行在后端，
- * 并且后端还会重新校验 planId 与组件集合。 */
-function installEnvironmentConfirmHandler() {
-  const allowed = {
-    node: 'Node.js 24 LTS（含 npm）',
-    pi: 'Pi Coding Agent（npm 官方包）',
-    git: 'Git for Windows（MinGit，可选）',
-  };
-  ipcMain.handle('pi-gui:environment-confirm', async (_event, components) => {
-    const ids = Array.isArray(components)
-      ? [...new Set(components.filter((id) => typeof id === 'string' && Object.prototype.hasOwnProperty.call(allowed, id)))]
-      : [];
-    if (!ids.length) return { ok: false, error: '没有需要确认的安装项' };
-    const detail = [
-      ...ids.map((id) => `• ${allowed[id]}`),
-      '',
-      '安装到当前用户目录，不需要管理员权限，不修改系统环境变量。',
-      '不会覆盖已有的 Pi；安装包只从官方渠道下载并校验。',
-    ].join('\n');
-    try {
-      const options = {
-        type: 'question',
-        title: '安装缺失依赖',
-        message: 'Pi GUI 需要安装以下组件',
-        detail,
-        buttons: ['开始安装', '取消'],
-        defaultId: 1,
-        cancelId: 1,
-        noLink: true,
-      };
-      const result = win && !win.isDestroyed()
-        ? await dialog.showMessageBox(win, options)
-        : await dialog.showMessageBox(options);
-      if (result.response !== 0) return { ok: false, cancelled: true };
-      return { ok: true, consent: true, components: ids };
-    } catch {
-      return { ok: false, error: '确认窗口无法打开' };
-    }
-  });
-}
-
 function installOpenExternalHandler() {
   ipcMain.handle('pi-gui:open-web-url', async (_event, url) => {
     if (!isSafeWebUrl(url)) return { ok: false, error: '已拒绝不安全的 Web 链接' };
@@ -465,6 +430,27 @@ function installOpenExternalHandler() {
       return { ok: false, error: '打开失败：' + (err && err.message ? err.message : String(err)) };
     }
     return { ok: true };
+  });
+}
+
+/** Give the owned backend time to cancel installation and remove its staging files. */
+function waitForEnvironmentCleanup(child) {
+  return new Promise(resolve => {
+    function finish() {
+      clearTimeout(timer);
+      child.removeListener('message', onMessage);
+      child.removeListener('disconnect', finish);
+      resolve();
+    }
+    function onMessage(message) {
+      if (message?.type === 'environment-cleanup-complete') finish();
+    }
+    // Environment verification may be waiting for its bounded Pi RPC probe.
+    const timer = setTimeout(finish, 20_000);
+    child.on('message', onMessage);
+    child.once('disconnect', finish);
+    try { child.send({ type: 'environment-cleanup-on-quit' }, error => { if (error) finish(); }); }
+    catch { finish(); }
   });
 }
 
@@ -981,7 +967,7 @@ if (!app.requestSingleInstanceLock()) {
     // "No handler registered"。
     installOpenPathHandler();
     installOpenExternalHandler();
-    installEnvironmentConfirmHandler();
+    installEnvironmentSetup({ ipcMain, dialog, getWindow: () => win, getServer: () => server, origin: ORIGIN });
     try { appUpdate=installAppUpdate({app,ipcMain,origin:ORIGIN,getWindow:()=>win,getServer:()=>server,dialog,shell,
       inspectDesktop:()=>{
         const states=[browserAgent?.agent.status(),...[...(runtimeBrowserHost?.records.values()||[])].map(r=>r.agent.status())].filter(Boolean);
@@ -1092,6 +1078,17 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', event => {
     if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
+    if (process.platform === 'win32' && server?.connected && environmentInstallQuit !== 'done') {
+      event.preventDefault();
+      if (environmentInstallQuit === null) {
+        environmentInstallQuit = 'waiting';
+        void waitForEnvironmentCleanup(server).then(() => {
+          environmentInstallQuit = 'done';
+          app.quit();
+        });
+      }
+      return;
+    }
     // 再兜一层：Ctrl+Q、系统关机等直接触发 quit 的情况，窗口可能还活着也可能已经没了
     saveWindowState();
     quitting = true;

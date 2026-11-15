@@ -92,6 +92,7 @@ export function createRpcBridge({
   publish,
   piBin,
   launch = null,
+  hasRuntimeDependencies = () => true,
   isWin,
   env = process.env,
   projectLaunch = null,
@@ -314,6 +315,11 @@ export function createRpcBridge({
     if (!cwd) {
       restartRequested = false;
       publish({ type: 'bridge_status', state: 'no-project' });
+      return;
+    }
+    if (!hasRuntimeDependencies()) {
+      restartRequested = false;
+      publish({ type: 'bridge_status', state: 'environment-required' });
       return;
     }
     const run = ++bridgeRun;

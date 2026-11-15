@@ -172,11 +172,20 @@ export function downloadFile({
 
     let req;
     let out = null;
+    let writeError = null;
+    let redirected = false;
+    const fail = (code, message) => {
+      const error = errorWith(signal?.aborted ? 'cancelled' : code, message);
+      if (!out || out.closed) return done(reject, error);
+      writeError ||= error;
+      out.destroy();
+    };
     try {
       req = request(current, {
         headers: { 'user-agent': USER_AGENT, accept: '*/*' },
         signal: signal || undefined,
       }, (res) => {
+        if (settled) { res.resume(); return; }
         const status = Number(res.statusCode) || 0;
         if ([301, 302, 303, 307, 308].includes(status)) {
           res.resume();
@@ -197,6 +206,7 @@ export function downloadFile({
             done(reject, err);
             return;
           }
+          redirected = true;
           downloadFile({ url: next.href, file, allowlist, fsApi, maxBytes, signal, onProgress, redirects: redirects - 1, request })
             .then((value) => done(resolve, value), (err) => done(reject, err));
           return;
@@ -220,26 +230,28 @@ export function downloadFile({
           done(reject, errorWith('write-failed'));
           return;
         }
-        const fail = (code) => {
-          try { req.destroy(); } catch { /* noop */ }
-          try { out.destroy(); } catch { /* noop */ }
-          /* 取消期间任何传输错误都归为 cancelled：否则用户点了取消，
-           * 任务却可能以 write-failed / network-error 结束。 */
-          done(reject, errorWith(signal && signal.aborted ? 'cancelled' : code));
+        const failResponse = (code) => {
+          fail(code);
+          req.destroy();
         };
         res.on('data', (chunk) => {
           received += chunk.length;
           if (received > maxBytes) {
-            fail('too-large');
+            failResponse('too-large');
             return;
           }
           if (onProgress) {
             try { onProgress({ receivedBytes: received, totalBytes }); } catch { /* noop */ }
           }
         });
-        res.on('error', () => fail('network-error'));
-        out.on('error', () => fail('write-failed'));
-        out.on('finish', () => done(resolve, { bytes: received, totalBytes }));
+        res.on('error', () => failResponse('network-error'));
+        out.on('error', () => failResponse('write-failed'));
+        // Windows needs the file handle closed before the installer can remove staging.
+        out.on('close', () => {
+          if (writeError) return done(reject, writeError);
+          if (!out.writableFinished || signal?.aborted) return fail('write-failed');
+          done(resolve, { bytes: received, totalBytes });
+        });
         res.pipe(out);
       });
       armSocketTimeout(req);
@@ -247,12 +259,7 @@ export function downloadFile({
       reject(errorWith('network-error'));
       return;
     }
-    req.on('error', (err) => {
-      /* 取消 / 网络错误时关掉写流，让调用方能立刻清理临时目录；
-       * 否则 Windows 上残留的文件句柄会让删除失败。 */
-      try { if (out) out.destroy(); } catch { /* noop */ }
-      done(reject, errorWith(signal && signal.aborted ? 'cancelled' : 'network-error', err && err.message));
-    });
+    req.on('error', err => { if (!redirected) fail('network-error', err?.message); });
   });
 }
 

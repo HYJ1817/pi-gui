@@ -92,10 +92,14 @@ function makeHarness({
   verifyGate = null,
   onInstalled = null,
   badChecksum = false,
+  missingOfficialChecksum = false,
+  desktop = false,
+  now = () => 1_700_000_000_000,
+  runtimeDirOverride = null,
 } = {}) {
   const root = fs.mkdtempSync(path.join(TMP_ROOT, 'run-'));
   const dataDir = path.join(root, 'data');
-  const runtimeDir = path.join(root, 'runtime');
+  const runtimeDir = runtimeDirOverride ?? path.join(root, 'runtime');
   const env = {
     PATH: path.join(root, 'empty-path'),
     LOCALAPPDATA: path.join(root, 'localappdata'),
@@ -104,6 +108,10 @@ function makeHarness({
     NODE_OPTIONS: '--require evil.js',
     NODE_TLS_REJECT_UNAUTHORIZED: '0',
     NODE_EXTRA_CA_CERTS: path.join(root, 'evil-ca.pem'),
+    NODE_V8_COVERAGE: path.join(root, 'ambient-coverage'),
+    SSL_CERT_FILE: path.join(root, 'ambient-ca.pem'),
+    NPM_CONFIG_STRICT_SSL: 'false',
+    NPM_CONFIG_IGNORE_SCRIPTS: 'false',
     npm_config_cafile: path.join(root, 'evil-ca.pem'),
     npm_config_prefix: path.join(root, 'evil-prefix'),
     PI_GUI_TOKEN: 'secret-token',
@@ -128,19 +136,18 @@ function makeHarness({
   });
   const setup = {
     check: async ({ force } = {}) => {
+      if (instance.currentJob()?.state !== 'verifying') return planReport(steps, { locked });
       if (force && verifyGate) await verifyGate.promise;
-      return force
-        ? (verifyReady ? readyReport() : verifyFailedReport())
-        : planReport(steps, { locked });
+      return verifyReady ? readyReport() : verifyFailedReport();
     },
     invalidate: () => { counters.invalidations++; },
   };
 
-  const runCli = async ({ entry, args = [], signal, env: callEnv = null }) => {
+  const runCli = async ({ entry, args = [], signal, env: callEnv = null, inheritEnv }) => {
     if (signal && signal.aborted) return { ok: false, code: 'cancelled' };
     const cmd = String(entry.cmd || '');
     const list = [...(entry.baseArgs || []), ...args].map(String);
-    calls.push({ cmd, list, env: callEnv });
+    calls.push({ cmd, list, env: callEnv, inheritEnv });
     const npmIndex = list.findIndex((item) => item.endsWith('npm-cli.js'));
     if (npmIndex !== -1) {
       if (list[npmIndex + 1] === '--version') return ok('11.6.0');
@@ -185,7 +192,7 @@ function makeHarness({
       onProgress?.({ receivedBytes: 12, totalBytes: 12 });
       return { bytes: 12 };
     },
-    downloadText: async () => `${NODE_LTS.sha256}  ${NODE_LTS.archive}\n`,
+    downloadText: async () => missingOfficialChecksum ? '' : `${NODE_LTS.sha256}  ${NODE_LTS.archive}\n`,
     sha256File: async (file) => {
       if (badChecksum) return '0'.repeat(64);
       return path.basename(file) === NODE_LTS.archive ? NODE_LTS.sha256 : GIT_MINIGIT.sha256;
@@ -220,9 +227,10 @@ function makeHarness({
     env,
     isWin: true,
     io,
-    now: () => 1_700_000_000_000,
+    desktop,
+    now,
   });
-  return { root, runtimeDir, dataDir, setup, store, instance, calls, events, downloads, counters, abortSeen };
+  return { root, runtimeDir, dataDir, env, setup, store, instance, calls, events, downloads, counters, abortSeen };
 }
 
 function deferred() {
@@ -246,6 +254,30 @@ async function waitFor(fn, timeoutMs = 8000) {
   ({ createEnvironmentRoutes } = await import('../server/environment-routes.js'));
   STORE_MOD = await import('../server/environment-store.js');
   const { NODE_LTS, GIT_MINIGIT } = STORE_MOD;
+
+  await check('CLI 可用完整环境启动，已删除的 Node/TLS 变量不会从父进程回流', async () => {
+    const { runCli } = await import('../server/agents/cli.js');
+    const keys = ['NODE_OPTIONS', 'NODE_TLS_REJECT_UNAUTHORIZED'];
+    const prior = keys.map((key) => process.env[key]);
+    try {
+      process.env.NODE_OPTIONS = '--no-warnings';
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      const env = { SystemRoot: process.env.SystemRoot, npm_config_strict_ssl: 'true' };
+      const probeKeys = [...keys, 'npm_config_strict_ssl'];
+      const entry = {
+        ok: true, cmd: process.execPath,
+        baseArgs: ['-p', `JSON.stringify(${JSON.stringify(probeKeys)}.map(key => process.env[key] ?? null))`],
+      };
+      const isolated = await runCli({ entry, env, inheritEnv: false, cwd: TMP_ROOT });
+      assert.equal(isolated.ok, true);
+      assert.deepEqual(JSON.parse(isolated.stdout), [null, null, 'true']);
+    } finally {
+      for (const [index, key] of keys.entries()) {
+        if (prior[index] === undefined) delete process.env[key];
+        else process.env[key] = prior[index];
+      }
+    }
+  });
 
   section('开始前的校验');
 
@@ -338,10 +370,22 @@ async function waitFor(fn, timeoutMs = 8000) {
     assert.equal(npmCall.env.PI_GUI_TOKEN, undefined);
     assert.equal(npmCall.env.NODE_TLS_REJECT_UNAUTHORIZED, undefined);
     assert.equal(npmCall.env.NODE_EXTRA_CA_CERTS, undefined);
+    assert.equal(npmCall.env.NODE_V8_COVERAGE, undefined);
+    assert.equal(npmCall.env.SSL_CERT_FILE, undefined);
+    assert.equal(npmCall.env.NPM_CONFIG_STRICT_SSL, undefined);
+    assert.equal(npmCall.env.NPM_CONFIG_IGNORE_SCRIPTS, undefined);
     assert.equal(npmCall.env.npm_config_cafile, undefined);
     assert.equal(npmCall.env.npm_config_prefix, undefined);
     assert.equal(npmCall.env.npm_config_strict_ssl, 'true');
     assert.equal(npmCall.env.npm_config_registry, 'https://registry.npmjs.org/');
+    assert.equal(npmCall.inheritEnv, false);
+    assert.ok(npmCall.list.includes('--strict-ssl=true'));
+    const userConfig = npmCall.list[npmCall.list.indexOf('--userconfig') + 1];
+    const globalConfig = npmCall.list[npmCall.list.indexOf('--globalconfig') + 1];
+    assert.notEqual(userConfig.toLowerCase(), globalConfig.toLowerCase(), 'npm refuses config files loaded twice');
+    assert.equal(path.dirname(userConfig), path.dirname(globalConfig));
+    assert.equal(npmCall.env.npm_config_userconfig, userConfig);
+    assert.equal(npmCall.env.npm_config_globalconfig, globalConfig);
 
     const config = h.store.read();
     assert.equal(config.managed.nodeVersion, NODE_LTS.version);
@@ -378,6 +422,30 @@ async function waitFor(fn, timeoutMs = 8000) {
     assert.equal(stale.ok, false);
     assert.equal(stale.code, 'stale-plan');
     h.instance.dispose();
+  });
+
+  await checkWin('仅安装 Pi 时从 PATH 选 Node，忽略启动目录中的同名文件', async () => {
+    const h = makeHarness({ steps: ['pi'] });
+    const systemNode = write(path.join(h.env.PATH, 'node.exe'));
+    write(path.join(h.env.PATH, 'node_modules', 'npm', 'bin', 'npm-cli.js'));
+    const cwd = path.join(h.root, 'launch-cwd');
+    write(path.join(cwd, 'node.exe'));
+    write(path.join(cwd, 'node_modules', 'npm', 'bin', 'npm-cli.js'));
+    const previousCwd = process.cwd();
+    process.chdir(cwd);
+    try {
+      const result = await h.instance.start({ planId: PLAN_ID, components: ['pi'], consent: true });
+      assert.equal(result.ok, true);
+      const job = await waitFor(() => {
+        const current = h.instance.getJob(result.job.id);
+        return current?.finishedAt ? current : null;
+      });
+      assert.equal(job.state, 'succeeded');
+      assert.equal(h.calls.find((call) => call.list.includes('install'))?.cmd.toLowerCase(), systemNode.toLowerCase());
+    } finally {
+      process.chdir(previousCwd);
+      await h.instance.dispose();
+    }
   });
 
   await checkWin('只请求计划里的组件：不装 Git 时任务里根本没有它', async () => {
@@ -512,7 +580,134 @@ async function waitFor(fn, timeoutMs = 8000) {
     h.instance.dispose();
   });
 
+  await checkWin('共用受管安装目录的后端不能并行写入，任务清理后释放目录锁', async () => {
+    const first = makeHarness({ steps: ['node'], blockingDownload: true });
+    const second = makeHarness({ steps: ['node'], runtimeDirOverride: first.runtimeDir.toUpperCase() });
+    const request = { planId: PLAN_ID, components: ['node'], consent: true };
+    try {
+      const started = await first.instance.start(request);
+      assert.equal(started.ok, true);
+      await waitFor(() => first.downloads.length > 0);
+      const rejected = await second.instance.start(request);
+      assert.equal(rejected.status, 409);
+      assert.equal(rejected.code, 'busy');
+      assert.equal(second.instance.currentJob(), null);
+      assert.deepEqual(second.downloads, []);
+      await first.instance.dispose();
+      assert.equal(first.instance.getJob(started.job.id)?.state, 'cancelled');
+      const later = await second.instance.start(request);
+      assert.equal(later.ok, true);
+      const done = await waitFor(() => {
+        const job = second.instance.getJob(later.job.id);
+        return job?.finishedAt ? job : null;
+      });
+      assert.equal(done.state, 'succeeded');
+    } finally {
+      await first.instance.dispose();
+      await second.instance.dispose();
+    }
+  });
+
+  await checkWin('退出等待下载取消与临时目录清理，之后拒绝新任务', async () => {
+    const h = makeHarness({ steps: ['node'], blockingDownload: true });
+    const request = { planId: PLAN_ID, components: ['node'], consent: true };
+    const started = await h.instance.start(request);
+    assert.equal(started.ok, true);
+    await waitFor(() => h.downloads.length > 0);
+    await h.instance.dispose();
+    assert.equal(h.instance.getJob(started.job.id)?.state, 'cancelled');
+    assert.equal(h.abortSeen.count, 1);
+    const tmp = path.join(h.runtimeDir, '.tmp');
+    assert.deepEqual(fs.readdirSync(tmp), ['scripts']);
+    assert.deepEqual(fs.readdirSync(path.join(tmp, 'scripts')), []);
+    assert.equal((await h.instance.start(request)).code, 'install-unavailable');
+  });
+
+  await checkWin('Node 固定摘要虽匹配，缺官方同名条目仍停止安装', async () => {
+    const { instance, store } = makeHarness({ steps: ['node'], missingOfficialChecksum: true });
+    const result = await instance.start({ planId: PLAN_ID, components: ['node'], consent: true });
+    assert.equal(result.status, 202);
+    const job = await waitFor(() => instance.getJob(result.job.id)?.finishedAt && instance.getJob(result.job.id));
+    assert.equal(job.errorCode, 'checksum-mismatch');
+    assert.equal(store.managedNodeDir(), null);
+  });
+
+  section('桌面安装授权');
+  const selection = { planId: PLAN_ID, components: ['node', 'pi'] };
+
+  await check('桌面业务层拒绝 web consent 与无授权的启动', async () => {
+    const { instance } = makeHarness({ desktop: true });
+    assert.equal((await instance.start({ ...selection, consent: true })).code, 'native-confirmation-required');
+    assert.equal((await instance.startDesktop(selection)).code, 'native-confirmation-required');
+    assert.equal(instance.currentJob(), null);
+  });
+
+  await check('单次许可分别绑定计划和组件集合，错误兑换后不能重试', async () => {
+    const { instance } = makeHarness({ desktop: true });
+    for (const change of [{ planId: 'plan-' + 'b'.repeat(20) }, { components: ['node', 'git'] }]) {
+      const { ticket } = instance.approveDesktop(selection);
+      assert.ok(ticket);
+      assert.equal((await instance.startDesktop({ ...selection, ...change, ticket })).code, 'native-confirmation-required');
+      assert.equal((await instance.startDesktop({ ...selection, ticket })).code, 'native-confirmation-required');
+    }
+    assert.equal(instance.currentJob(), null);
+  });
+
+  await check('桌面许可在 30 秒时失效', async () => {
+    let clock = 1_000;
+    const { instance } = makeHarness({ desktop: true, now: () => clock });
+    const { ticket } = instance.approveDesktop(selection);
+    clock += 30_000;
+    assert.equal((await instance.startDesktop({ ...selection, ticket })).code, 'native-confirmation-required');
+    assert.equal(instance.currentJob(), null);
+  });
+
+  await checkWin('有效许可只建立一个任务，重放与并发新许可不产生第二个任务', async () => {
+    const { instance, events } = makeHarness({ desktop: true, blockingDownload: true });
+    const { ticket } = instance.approveDesktop(selection);
+    const first = instance.startDesktop({ ...selection, ticket });
+    const replay = await instance.startDesktop({ ...selection, ticket });
+    assert.equal(replay.code, 'native-confirmation-required');
+    const other = instance.approveDesktop(selection);
+    assert.equal((await instance.startDesktop({ ...selection, ticket: other.ticket })).code, 'busy');
+    const started = await first;
+    assert.equal(started.status, 202);
+    assert.deepEqual(new Set(events.map(job => job.id)), new Set([started.job.id]));
+    await instance.dispose();
+  });
+
+  await checkWin('许可匹配仍重新检测环境，计划实际变化时拒绝', async () => {
+    const { instance, setup } = makeHarness({ desktop: true });
+    const { ticket } = instance.approveDesktop(selection);
+    setup.check = async ({ force }) => {
+      assert.equal(force, true);
+      return { ...readyReport(), plan: { planId: 'plan-' + 'c'.repeat(20), steps: [] } };
+    };
+    const result = await instance.startDesktop({ ...selection, ticket });
+    assert.equal(result.code, 'stale-plan');
+    assert.equal(instance.currentJob(), null);
+  });
+
   section('HTTP 适配层');
+
+  await check('桌面普通 HTTP 安装和路径选择入口不调用写操作', async () => {
+    const routes = createEnvironmentRoutes({ desktop: true, setup: {
+      setPiBinOverride: () => assert.fail('HTTP 不得修改桌面 Pi 路径'),
+    }, install: { start: () => assert.fail('HTTP 不得调用桌面安装') } });
+    const server = http.createServer((req, res) => routes.handle(req, res, new URL(req.url, 'http://127.0.0.1')));
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      for (const [endpoint, code] of [['install', 'native-confirmation-required'], ['pi-path', 'native-selection-required']]) {
+        const response = await fetch(`http://127.0.0.1:${server.address().port}/api/environment/${endpoint}`, {
+          method: 'POST', body: JSON.stringify({ ...selection, consent: true }),
+        });
+        assert.equal(response.status, 403);
+        assert.equal((await response.json()).code, code);
+      }
+    } finally {
+      await new Promise(resolve => server.close(resolve));
+    }
+  });
 
   await check('安装路由只透传 planId / 组件 / consent，不把额外字段带进业务层', async () => {
     const seen = [];

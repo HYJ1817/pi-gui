@@ -26,6 +26,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { createServer } from 'node:net';
 import { resolveExecutable } from './pi-launch.js';
 import {
   PI_PACKAGE, PI_MIN_NODE, NODE_LTS, GIT_MINIGIT, DOWNLOAD_HOSTS,
@@ -39,6 +40,8 @@ import {
 
 const VERSION_RE = /(\d+\.\d+\.\d+)(?:[-+][0-9A-Za-z.-]+)?/;
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
+const NPM_ENV_OVERRIDE = /^(?:NPM_CONFIG_|NODE_|SSL_CERT_|OPENSSL_CONF$|ELECTRON_RUN_AS_NODE$|PI_GUI_TOKEN$)/i;
+const DESKTOP_APPROVAL_TTL_MS = 30_000;
 const LABELS = Object.freeze({ node: 'Node.js', pi: 'Pi', git: 'Git' });
 
 const MESSAGES = Object.freeze({
@@ -46,6 +49,8 @@ const MESSAGES = Object.freeze({
   'busy': '已有安装任务正在进行。',
   'stale-plan': '环境在确认期间发生了变化，请重新检查后再安装。',
   'consent-required': '需要先确认安装内容。',
+  'native-confirmation-required': '请在 Pi GUI 的原生确认窗口中确认安装。',
+  'install-unavailable': '应用正在退出，无法开始安装。',
   'invalid-components': '安装项不合法。',
   'pi-locked': '已经指定了 PI_BIN 或手动 Pi 路径，向导不会覆盖它。',
   'up-to-date': '需要安装的组件已经就绪。',
@@ -83,6 +88,12 @@ const MESSAGES = Object.freeze({
 
 function messageFor(code) {
   return MESSAGES[code] || MESSAGES.failed;
+}
+
+function validComponents(components) {
+  return Array.isArray(components) && components.length <= 3
+    && new Set(components).size === components.length
+    && components.every(id => typeof id === 'string' && Object.hasOwn(LABELS, id));
 }
 
 function fail(code) {
@@ -137,6 +148,41 @@ function componentLabel(id) {
   return LABELS[id] || id;
 }
 
+function runtimeLockIdentity(root) {
+  let current = path.resolve(root);
+  const missing = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(current), ...missing).toLowerCase();
+    } catch (error) {
+      const parent = path.dirname(current);
+      if (error.code !== 'ENOENT' || parent === current) throw error;
+      missing.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+// Web and desktop can be separate processes using the same runtime folder.
+// Windows excludes a second listener, and releases the name on process exit.
+// The pipe carries no messages or operations.
+function acquireRuntimeLock(root) {
+  if (process.platform !== 'win32') return Promise.resolve(() => {});
+  const digest = crypto.createHash('sha256').update(runtimeLockIdentity(root)).digest('hex');
+  const address = `\\\\.\\pipe\\pi-gui-environment-${digest}`;
+  return new Promise((resolve, reject) => {
+    const lock = createServer(socket => socket.destroy());
+    lock.on('error', error => {
+      if (error.code === 'EADDRINUSE') resolve(null);
+      else reject(error);
+    });
+    lock.listen(address, () => {
+      lock.unref();
+      resolve(() => new Promise(done => lock.close(done)));
+    });
+  });
+}
+
 /**
  * @param setup        `createEnvironmentSetup()`，用于计划、复检与 RPC 验证
  * @param store        `createEnvironmentStore()`
@@ -161,6 +207,8 @@ export function createEnvironmentInstall({
   onInstalled = null,
   env = process.env,
   isWin = process.platform === 'win32',
+  desktop = false,
+  canInstall = () => true,
   now = () => Date.now(),
   fsApi = fs,
   io = null,
@@ -173,6 +221,8 @@ export function createEnvironmentInstall({
     ...(io && typeof io === 'object' ? io : {}),
   };
   let planning = false;
+  let disposed = false;
+  let approval = null;
   let inFlight = null; // { job, controller, tempDir, scriptFile }
   let last = null;
 
@@ -237,8 +287,9 @@ export function createEnvironmentInstall({
       const version = await runVersion(exe, ['--version'], signal);
       if (version) return { exe, version, source: 'managed' };
     }
-    const systemExe = resolveExecutable('node', { env: process.env, cwd: process.cwd(), isWin });
-    if (systemExe) {
+    // Match setup detection: the launch directory is not a Node source.
+    const systemExe = resolveExecutable('node', { env, cwd: null, isWin });
+    if (systemExe && path.isAbsolute(systemExe)) {
       const version = await runVersion(systemExe, ['--version'], signal);
       if (version) return { exe: systemExe, version, source: 'system' };
     }
@@ -289,18 +340,13 @@ export function createEnvironmentInstall({
     const actual = await wire.sha256File(archive, fsApi);
     if (actual.toLowerCase() !== NODE_LTS.sha256.toLowerCase()) throw fail('checksum-mismatch');
 
-    let official = null;
-    try {
-      const text = await wire.downloadText({
-        url: `${NODE_LTS.distBase}/v${version}/SHASUMS256.txt`,
-        allowlist: DOWNLOAD_HOSTS,
-        signal,
-      });
-      official = wire.checksumFor(NODE_LTS.archive, text);
-    } catch {
-      official = null; // 官方校验文件拿不到时仍使用代码里钉死的官方摘要
-    }
-    if (official && official !== NODE_LTS.sha256.toLowerCase()) throw fail('checksum-mismatch');
+    const text = await wire.downloadText({
+      url: `${NODE_LTS.distBase}/v${version}/SHASUMS256.txt`,
+      allowlist: DOWNLOAD_HOSTS,
+      signal,
+    });
+    const official = wire.checksumFor(NODE_LTS.archive, text);
+    if (official !== NODE_LTS.sha256.toLowerCase()) throw fail('checksum-mismatch');
 
     comp.phase = 'extracting';
     publish();
@@ -361,10 +407,17 @@ export function createEnvironmentInstall({
     comp.phase = 'installing';
     comp.progress = { phase: 'installing', receivedBytes: null, totalBytes: null, percent: null };
     publish();
-    const npmrc = path.join(internal.tempDir, 'empty.npmrc');
-    fsApi.writeFileSync(npmrc, '', { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    // npm rejects loading one config file into both its user and global slots.
+    const userConfig = path.join(internal.tempDir, 'user.npmrc');
+    const globalConfig = path.join(internal.tempDir, 'global.npmrc');
+    for (const file of [userConfig, globalConfig]) {
+      fsApi.writeFileSync(file, '', { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    }
+    // Strip all npm config overrides and Node startup/TLS options. Windows
+    // resolves environment keys case-insensitively, including uppercase aliases.
+    const sanitized = Object.fromEntries(Object.entries(env).filter(([key]) => !NPM_ENV_OVERRIDE.test(key)));
     const npmEnv = {
-      ...env,
+      ...sanitized,
       npm_config_cache: path.join(internal.tempDir, 'npm-cache'),
       npm_config_registry: 'https://registry.npmjs.org/',
       npm_config_audit: 'false',
@@ -372,28 +425,20 @@ export function createEnvironmentInstall({
       npm_config_update_notifier: 'false',
       npm_config_ignore_scripts: 'true',
       npm_config_strict_ssl: 'true',
-      npm_config_userconfig: npmrc,
-      npm_config_globalconfig: npmrc,
+      npm_config_userconfig: userConfig,
+      npm_config_globalconfig: globalConfig,
     };
-    // 环境变量不能改写本次安装的 Node 启动参数、TLS 校验或安装前缀；
-    // npm 也只读取本次任务创建的空配置。
-    delete npmEnv.NODE_OPTIONS;
-    delete npmEnv.PI_GUI_TOKEN;
-    delete npmEnv.NODE_TLS_REJECT_UNAUTHORIZED;
-    delete npmEnv.NODE_EXTRA_CA_CERTS;
-    delete npmEnv.npm_config_cafile;
-    delete npmEnv.npm_config_prefix;
-    delete npmEnv.NPM_CONFIG_PREFIX;
     const res = await runCli({
       entry: { ok: true, cmd: node.exe, baseArgs: [] },
       args: [
         npmCli, 'install', '--global', '--ignore-scripts', '--no-audit', '--no-fund',
-        '--no-update-notifier', '--registry', 'https://registry.npmjs.org/',
-        '--userconfig', npmrc, '--globalconfig', npmrc,
+        '--no-update-notifier', '--strict-ssl=true', '--registry', 'https://registry.npmjs.org/',
+        '--userconfig', userConfig, '--globalconfig', globalConfig,
         '--loglevel=error', '--prefix', staging, `${PI_PACKAGE}@latest`,
       ],
       cwd: internal.tempDir,
       env: npmEnv,
+      inheritEnv: false,
       timeoutMs: INSTALL_TIMEOUT_MS,
       maxStdoutBytes: 8192,
       signal,
@@ -596,25 +641,63 @@ export function createEnvironmentInstall({
         /* 临时目录清理失败不是安装结论 */
       }
       persist(job);
+      await internal.releaseLock();
       inFlight = null;
       last = job;
       publish(job);
     }
   }
 
-  async function start({ planId, components, consent } = {}) {
+  function nativeConfirmationRequired() {
+    return { ok: false, status: 403, code: 'native-confirmation-required', error: messageFor('native-confirmation-required') };
+  }
+
+  // Only the Electron parent channel calls this. The ticket never crosses into
+  // a renderer or an HTTP response, and every redemption consumes it first.
+  function approveDesktop({ planId, components }) {
+    if (!desktop) return nativeConfirmationRequired();
+    if (!/^plan-[a-f0-9]{20}$/.test(typeof planId === 'string' ? planId : '')
+      || !validComponents(components) || components.length === 0) return nativeConfirmationRequired();
+    approval = { ticket: makeToken(), planId, components: [...components].sort(), expiresAt: now() + DESKTOP_APPROVAL_TTL_MS };
+    return { ok: true, ticket: approval.ticket };
+  }
+
+  function startDesktop({ ticket, planId, components }) {
+    if (!desktop || !approval || ticket !== approval.ticket) return nativeConfirmationRequired();
+    const confirmed = approval;
+    approval = null;
+    if (now() >= confirmed.expiresAt || planId !== confirmed.planId || !validComponents(components)
+      || confirmed.components.length !== components.length
+      || [...components].sort().some((id, index) => id !== confirmed.components[index])) return nativeConfirmationRequired();
+    return startJob({ planId, components }, confirmed.expiresAt);
+  }
+
+  function start({ planId, components, consent } = {}) {
+    if (desktop) return nativeConfirmationRequired();
+    if (consent !== true) return { ok: false, status: 400, code: 'consent-required', error: messageFor('consent-required') };
+    return startJob({ planId, components });
+  }
+
+  async function startJob({ planId, components }, expiresAt = Infinity) {
+    if (disposed || !canInstall()) return { ok: false, status: 503, code: 'install-unavailable', error: messageFor('install-unavailable') };
     if (!isWin) return { ok: false, status: 409, code: 'unsupported-platform', error: messageFor('unsupported-platform') };
     if (inFlight || planning) return { ok: false, status: 409, code: 'busy', error: messageFor('busy'), job: snapshot(inFlight && inFlight.job) };
-    if (consent !== true) return { ok: false, status: 400, code: 'consent-required', error: messageFor('consent-required') };
-    if (!Array.isArray(components)) return { ok: false, status: 400, code: 'invalid-components', error: messageFor('invalid-components') };
-    const requested = [...new Set(components)];
-    if (requested.length !== components.length || requested.some((id) => !['node', 'pi', 'git'].includes(id))) {
+    if (!validComponents(components)) {
       return { ok: false, status: 400, code: 'invalid-components', error: messageFor('invalid-components') };
     }
+    const requested = [...components];
 
+    let releaseLock;
     planning = true;
     try {
-      const report = await setup.check({ force: false });
+      try { releaseLock = await acquireRuntimeLock(store.paths().root); }
+      catch {
+        return { ok: false, status: 503, code: 'install-unavailable', error: messageFor('install-unavailable') };
+      }
+      if (!releaseLock) return { ok: false, status: 409, code: 'busy', error: messageFor('busy') };
+      const report = await setup.check({ force: true });
+      if (disposed || !canInstall()) return { ok: false, status: 503, code: 'install-unavailable', error: messageFor('install-unavailable') };
+      if (now() >= expiresAt) return nativeConfirmationRequired();
       if (!planId || planId !== report.plan.planId) {
         return { ok: false, status: 409, code: 'stale-plan', error: messageFor('stale-plan'), report };
       }
@@ -666,11 +749,13 @@ export function createEnvironmentInstall({
         result: null,
       };
       const token = makeToken();
+      const powershell = wire.windowsPowerShellPath(env, fsApi);
+      if (!powershell) return { ok: false, status: 500, code: 'extract-input-missing', error: messageFor('extract-input-missing') };
       const tempDir = wire.createTempDir(store.paths().root, token, fsApi);
-      const scriptFile = isWin ? wire.writeExtractScript(store.paths().root, token, fsApi) : null;
-      const powershell = isWin ? wire.windowsPowerShellPath(env, fsApi) : null;
-      if (isWin && (!scriptFile || !powershell)) {
-        wire.removeTree(tempDir, fsApi);
+      let scriptFile;
+      try { scriptFile = wire.writeExtractScript(store.paths().root, token, fsApi); }
+      finally { if (!scriptFile) wire.removeTree(tempDir, fsApi); }
+      if (!scriptFile) {
         return { ok: false, status: 500, code: 'extract-input-missing', error: messageFor('extract-input-missing') };
       }
       const internal = {
@@ -679,22 +764,30 @@ export function createEnvironmentInstall({
         tempDir,
         scriptFile,
         powershell,
+        releaseLock,
         controller: new AbortController(),
       };
+      releaseLock = null;
       inFlight = internal;
       persist(job);
       publish();
-      setImmediate(() => {
-        runJob(internal).catch(() => {
-          // runJob 自己会落终态；这里只兜底保证 inFlight 不永久占住
-          if (inFlight === internal) {
-            inFlight = null;
-            last = job;
+      internal.completion = new Promise(resolve => {
+        setImmediate(async () => {
+          try {
+            await runJob(internal);
+          } catch {
+            if (inFlight === internal) {
+              inFlight = null;
+              last = job;
+            }
+          } finally {
+            resolve();
           }
         });
       });
       return { ok: true, status: 202, job: snapshot(job) };
     } finally {
+      await releaseLock?.();
       planning = false;
     }
   }
@@ -725,11 +818,13 @@ export function createEnvironmentInstall({
     return snapshot(job);
   }
 
-  function dispose() {
-    if (inFlight) {
-      try { inFlight.controller.abort(); } catch { /* noop */ }
-    }
+  async function dispose() {
+    disposed = true;
+    const internal = inFlight;
+    if (!internal) return;
+    internal.controller.abort();
+    await internal.completion;
   }
 
-  return { start, cancel, currentJob, getJob, dispose };
+  return { start, approveDesktop, startDesktop, cancel, currentJob, getJob, dispose, busy: () => planning || Boolean(inFlight) };
 }

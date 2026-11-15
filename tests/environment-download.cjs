@@ -12,7 +12,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
-const { Readable } = require('node:stream');
+const { Readable, Writable } = require('node:stream');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-env-download-'));
 let pass = 0;
@@ -98,6 +98,34 @@ function fakeResponse({ statusCode = 200, headers = {}, body = '' } = {}) {
   });
 
   section('下载边界');
+
+  await checkAsync('取消下载在写入流关闭后才结束，以便 Windows 能清理文件', async () => {
+    const controller = new AbortController();
+    let markWriting;
+    const writing = new Promise(resolve => { markWriting = resolve; });
+    const output = new Writable({
+      write(_chunk, _encoding, callback) { markWriting(); callback(); },
+      destroy(error, callback) { setImmediate(() => callback(error)); },
+    });
+    const request = (_url, options, onResponse) => {
+      const req = new EventEmitter();
+      req.destroy = () => {};
+      options.signal.addEventListener('abort', () => req.emit('error', new Error('aborted')), { once: true });
+      const response = new Readable({ read() {} });
+      response.statusCode = 200;
+      process.nextTick(() => { onResponse(response); response.push('partial'); });
+      return req;
+    };
+    const pending = downloadFile({
+      url: 'https://nodejs.org/file.zip', file: path.join(TMP, 'cancel.bin'),
+      allowlist: ['nodejs.org'], signal: controller.signal, request,
+      fsApi: { createWriteStream: () => output },
+    });
+    await writing;
+    controller.abort();
+    await assert.rejects(pending, error => error.code === 'cancelled');
+    assert.equal(output.closed, true);
+  });
 
   await checkAsync('非 HTTPS / 非法 URL 在发请求前就被拒绝', async () => {
     let requested = 0;

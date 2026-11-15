@@ -363,6 +363,7 @@ function appendManualPi(report) {
   if (envLocked) {
     details.append(h('p', 'env-hint', '当前由环境变量 PI_BIN 指定。要更换路径，请修改启动 Pi GUI 的环境变量。'));
   } else {
+    const desktop = window.piGuiDesktop?.environmentSetup;
     const form = h('div', 'env-manual-form');
     const input = document.createElement('input');
     input.type = 'text';
@@ -371,12 +372,13 @@ function appendManualPi(report) {
     input.setAttribute('aria-label', 'Pi 可执行文件完整路径');
     input.value = state.manualPath || '';
     input.oninput = () => { state.manualPath = input.value; };
-    const submit = primaryButton('使用此路径', async () => {
+    const submit = primaryButton(desktop ? '选择 Pi 可执行文件' : '使用此路径', async () => {
       const value = input.value.trim();
-      if (!value) return;
+      if (!desktop && !value) return;
       submit.disabled = true;
-      const result = await setEnvironmentPiPath(value);
+      const result = desktop ? await desktop.choosePi().catch(() => ({})) : await setEnvironmentPiPath(value);
       submit.disabled = false;
+      if (result.cancelled) return;
       if (result.ok) {
         applyReport(result.environment);
         state.notice = '已更新 Pi 路径。';
@@ -386,11 +388,13 @@ function appendManualPi(report) {
         render();
       }
     });
-    form.append(input, submit);
+    if (!desktop) form.append(input);
+    form.append(submit);
     details.append(form);
     if (report.setup && report.setup.piBinOverride) {
       details.append(textButton('清除手动指定', async () => {
-        const result = await setEnvironmentPiPath(null);
+        const result = desktop ? await desktop.clearPi().catch(() => ({})) : await setEnvironmentPiPath(null);
+        if (result.cancelled) return;
         if (result.ok) {
           applyReport(result.environment);
           state.notice = '已清除手动指定的 Pi 路径。';
@@ -671,21 +675,15 @@ async function startInstall() {
   const optionalInPlan = (report.plan.steps || []).some((id) => id === 'git');
   state.skippedOptional = optionalInPlan && !ids.includes('git');
 
-  // 桌面版先走系统原生确认框；网页版由这次显式点击承担确认。
-  if (window.piGuiDesktop && window.piGuiDesktop.environmentSetup) {
-    const consent = await window.piGuiDesktop.environmentSetup.confirmInstall(ids);
-    if (!consent || consent.ok !== true) {
-      if (consent && !consent.cancelled) state.error = consent.error || '确认窗口无法打开。';
-      render();
-      return;
-    }
-  }
-
-  const result = await startEnvironmentInstall({
-    planId: report.plan.planId,
-    components: ids,
-    consent: true,
-  });
+  // Web consent records this explicit UI action. Desktop uses the native bridge.
+  const desktop = window.piGuiDesktop?.environmentSetup;
+  let result;
+  try {
+    result = desktop
+      ? await desktop.install(report.plan.planId, ids)
+      : await startEnvironmentInstall({ planId: report.plan.planId, components: ids, consent: true });
+  } catch { /* Bridge unavailable. Use the same inline error as a failed start. */ }
+  if (result?.cancelled) return;
   if (!result || result.ok !== true) {
     if (result && result.environment) applyReport(result.environment);
     if (result && result.code === 'stale-plan') {

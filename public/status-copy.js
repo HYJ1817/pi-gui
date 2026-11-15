@@ -55,6 +55,12 @@ export const CONNECTION_STATES = Object.freeze({
     detail: 'pi 只在选定目录后启动。先在左侧「添加文件夹」选一个目录。',
     actions: [],
   },
+  'environment-required': {
+    tone: '',
+    label: '等待安装运行环境',
+    detail: '请在环境向导中安装缺少的必需组件。',
+    actions: [],
+  },
   starting: {
     tone: 'busy',
     label: '正在启动 pi…',
@@ -117,7 +123,7 @@ export function connectionCopy(state, detail = '', extra = {}) {
  */
 export function startupNotice(ctx = {}) {
   const { bridgeState, bridgeError, bridgeHint, hasProject, compat } = ctx;
-  if (!hasProject) return null;
+  if (!hasProject || bridgeState === 'environment-required') return null;
   if (ctx.recoveryOverdue && ['starting', 'restarting'].includes(bridgeState)) {
     return { id: 'bridge-sync-delayed', tone: 'warn', title: 'Pi 状态同步时间过长',
       detail: '可以重新读取后端状态；重新同步不会重启 Pi。', actions: ['resync', 'restart', 'diagnostics'] };

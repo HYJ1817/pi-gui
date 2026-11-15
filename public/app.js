@@ -621,7 +621,7 @@ setBridgeReconciler(reconcileBridgeSnapshot);
 export function reconcileBridgeSnapshot(snapshot) {
   if (snapshot.bridgeInstance && S.bridgeInstance && snapshot.bridgeInstance !== S.bridgeInstance
     || Number.isInteger(snapshot.bridgeRun) && Number.isInteger(S.bridgeRun) && snapshot.bridgeRun !== S.bridgeRun
-    || ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance'].includes(snapshot.bridgeState || snapshot.state)) {
+    || ['starting', 'restarting', 'exited', 'error', 'no-project', 'maintenance', 'environment-required'].includes(snapshot.bridgeState || snapshot.state)) {
     cancelFallback('bridge-lifecycle');
     /* 换了进程/换了一代执行线：还在飞的停止应答已经不属于任何东西，
      * 覆盖它是错的。后端同样会在这些时刻解除屏障（releaseStop）。 */
@@ -630,7 +630,7 @@ export function reconcileBridgeSnapshot(snapshot) {
   const evt = { ...snapshot, type: 'bridge_status', state: snapshot.bridgeState || snapshot.state,
     error: snapshot.bridgeError ?? snapshot.error, hint: snapshot.bridgeHint ?? snapshot.hint,
     reason: snapshot.maintenance?.reason ?? snapshot.reason };
-  if (!['no-project', 'starting', 'ready', 'restarting', 'maintenance', 'exited', 'error'].includes(evt.state)) return;
+  if (!['no-project', 'environment-required', 'starting', 'ready', 'restarting', 'maintenance', 'exited', 'error'].includes(evt.state)) return;
   if (typeof snapshot.bridgeInstance === 'string' && snapshot.bridgeInstance !== S.bridgeInstance) {
     // Only a current snapshot may establish a new backend epoch. Counters are
     // monotonic inside that epoch, not across GUI server process restarts.
@@ -664,6 +664,13 @@ export function reconcileBridgeSnapshot(snapshot) {
   observeMcpEvent(evt);
   observeApprovalEvent(evt);
   switch (evt.state) {
+    case 'environment-required':
+      resetDrift();
+      S.switching = false;
+      S.syncPending = null;
+      setStatus('');
+      setBridgeState('environment-required');
+      return syncNotice();
     case 'starting':
       /* P23：bridge 生命周期一变，前端看到的 schema 漂移也不再属于当前运行 ——
        * 与各 feature 的运行观察同一条纪律（旧 run 的结论不许留在表里）。 */

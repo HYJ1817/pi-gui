@@ -185,7 +185,8 @@ export function killTree(child, { signal = 'SIGTERM' } = {}) {
  * @param entry   resolveEntry() 的结果（必须是 ok:true）
  * @param args    参数数组
  * @param cwd     工作目录（**必须已经过安全校验**，本层不做 containment 判断）
- * @param env     额外环境变量（会与 process.env 合并；传 null 表示不合并）
+ * @param env     额外环境变量，或 inheritEnv=false 时的完整环境
+ * @param inheritEnv  默认让子进程继承 process.env
  * @param onLine  逐行回调（用于 JSONL 解析）。只按 LF 切分 —— pi 的协议明确要求，
  *                不能用 readline，因为它还会在 U+2028/U+2029 处切分。
  * @param onStderr stderr 文本回调
@@ -199,6 +200,7 @@ export function runCli({
   args = [],
   cwd,
   env = {},
+  inheritEnv = true,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxStdoutBytes = DEFAULT_MAX_STDOUT,
   signal = null,
@@ -215,7 +217,7 @@ export function runCli({
       return;
     }
 
-    const childEnv = { ...process.env, ...(env || {}) };
+    const childEnv = inheritEnv ? { ...process.env, ...env } : { ...env };
     // agent 不需要、也不该看到访问令牌（与 rpc-bridge 同一条理由）
     delete childEnv.PI_GUI_TOKEN;
 

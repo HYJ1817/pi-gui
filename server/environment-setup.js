@@ -174,6 +174,7 @@ export function probePiRpc({ bin, env, isWin, killTree = (child) => child.kill()
 
     child.on('error', () => finish({ ok: false, code: 'spawn-failed' }));
     child.on('exit', () => finish({ ok: false, code: 'exited' }));
+    child.stdin.on('error', () => finish({ ok: false, code: 'write-failed' }));
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
       if (settled) return;
@@ -418,17 +419,17 @@ export function createEnvironmentSetup({
     })();
     const system = detectNodeCandidate('system', systemExe);
     const managed = detectNodeCandidate('managed', managedExe);
-    const meets = (c) => Boolean(c && c.version && compareVersions(c.version, minNode) >= 0);
+    const meets = (c) => Boolean(c?.runnable && c.version && compareVersions(c.version, minNode) >= 0);
     let primary = null;
-    if (meets(system)) primary = system;
-    else if (meets(managed)) primary = managed;
+    if (meets(managed)) primary = managed;
+    else if (meets(system)) primary = system;
     else if (system) primary = system;
     else if (managed) primary = managed;
 
     const npm = detectNpmFor(primary);
     const present = Boolean(primary);
     const version = primary ? primary.version : null;
-    const meetsMinimum = Boolean(primary && primary.version && compareVersions(primary.version, minNode) >= 0);
+    const meetsMinimum = meets(primary);
     let status = present ? (meetsMinimum ? 'ready' : 'incompatible') : 'needs-install';
     let action = status === 'ready' ? 'none' : (isWin ? 'install-node' : 'manual');
     const warnings = [];
@@ -486,7 +487,18 @@ export function createEnvironmentSetup({
     }
   }
 
-  async function detectPi(force) {
+  // Launch preflight is deliberately cheaper than the report. Installed Pi
+  // processes still use the bridge's existing error and recovery handling.
+  function hasRuntimeDependencies() {
+    const node = resolveExecutable('node', { env: rpcEnv(), cwd: null, isWin });
+    if (!node || !piLaunch?.identity()?.entryKnown) return false;
+    const result = probeOutput(node, ['--version']);
+    const version = parseVersion(result.stdout || result.stderr);
+    const minimum = readPiMinNode(piLaunchPackageDir(), fsApi) || PI_MIN_NODE;
+    return result.ok && Boolean(version) && compareVersions(version, minimum) >= 0;
+  }
+
+  async function detectPi(force, nodeReady) {
     const identity = (() => {
       try {
         return piLaunch && typeof piLaunch.identity === 'function' ? piLaunch.identity({ force }) : null;
@@ -513,7 +525,7 @@ export function createEnvironmentSetup({
       verifiedAgainst: state.verifiedAgainst || null,
     };
     let rpc = { state: 'skipped', code: null, checkedAt: null, ms: null };
-    if (present) {
+    if (present && nodeReady) {
       const cached = currentPiRpc(true, force);
       rpc = cached || await runPiRpcOnce(identity.bin, force);
     }
@@ -547,6 +559,10 @@ export function createEnvironmentSetup({
       status = 'incompatible';
       action = locked ? 'manual' : 'update-pi';
       detail = `Pi ${version} 低于本应用验证过的最低版本 ${baseline.version}。请通过现有 Pi Updater 升级。`;
+    } else if (!nodeReady) {
+      status = 'incompatible';
+      action = 'manual';
+      detail = '已找到 Pi。请先补齐 Node.js，再验证 Pi RPC。';
     } else if (rpc.state === 'failed') {
       status = 'incompatible';
       action = version ? 'update-pi' : 'manual';
@@ -650,20 +666,6 @@ export function createEnvironmentSetup({
     if (!force && reportCache && t - reportCache.at < reportTtlMs) return reportCache.report;
 
     const minNode = readPiMinNode(piLaunchPackageDir(), fsApi) || PI_MIN_NODE;
-    let pi;
-    try {
-      pi = await detectPi(force);
-    } catch {
-      pi = {
-        id: 'pi', kind: 'required', status: 'failed', present: false, version: null,
-        versionStatus: 'unknown', versionSource: 'none', compat: { status: 'unknown', relative: 'unknown', verifiedAgainst: null },
-        rpc: { state: 'unknown', code: 'detect-error', checkedAt: null, ms: null },
-        source: 'none', locked: false, executable: null, executableLabel: null, packageKnown: false,
-        action: 'manual', installAvailable: false, installSource: `npm 官方包 ${PI_PACKAGE}`,
-        warnings: [], detail: 'Pi 检测没有完成。可以重试，或在诊断中查看脱敏信息。',
-      };
-    }
-
     let node;
     try {
       node = detectNode(minNode);
@@ -676,6 +678,20 @@ export function createEnvironmentSetup({
         electron: detectElectronNode(), warnings: [], action: isWin ? 'install-node' : 'manual',
         installAvailable: isWin, installVersion: NODE_LTS.version, installSource: 'Node.js 官方 LTS ZIP',
         detail: 'Node.js 检测没有完成。可以重试。',
+      };
+    }
+
+    let pi;
+    try {
+      pi = await detectPi(force, node.status === 'ready');
+    } catch {
+      pi = {
+        id: 'pi', kind: 'required', status: 'failed', present: false, version: null,
+        versionStatus: 'unknown', versionSource: 'none', compat: { status: 'unknown', relative: 'unknown', verifiedAgainst: null },
+        rpc: { state: 'unknown', code: 'detect-error', checkedAt: null, ms: null },
+        source: 'none', locked: false, executable: null, executableLabel: null, packageKnown: false,
+        action: 'manual', installAvailable: false, installSource: `npm 官方包 ${PI_PACKAGE}`,
+        warnings: [], detail: 'Pi 检测没有完成。可以重试，或在诊断中查看脱敏信息。',
       };
     }
 
@@ -774,6 +790,7 @@ export function createEnvironmentSetup({
   }
 
   return {
+    hasRuntimeDependencies,
     check,
     invalidate,
     diagnosticsSummary,

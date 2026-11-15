@@ -192,6 +192,17 @@ function writePiPackage(root, engines) {
     assert.equal(report.firstRun, true);
   });
 
+  await check('RPC 启动前检查外部 Node 最低版本与 Pi 入口，缺依赖时不运行 RPC 探测', async () => {
+    const ready = makeFixture({ label: 'runtime-ready' });
+    assert.equal(buildSetup(ready).setup.hasRuntimeDependencies(), true);
+    const old = makeFixture({ label: 'runtime-old-node', nodeVersion: '18.0.0' });
+    const partial = buildSetup(old).setup;
+    assert.equal(partial.hasRuntimeDependencies(), false);
+    assert.equal((await partial.check({ force: true })).components.pi.rpc.state, 'skipped');
+    assert.equal(old.mocks.rpcCalls, 0);
+    assert.equal(buildSetup(makeFixture({ label: 'runtime-no-pi', piPresent: false })).setup.hasRuntimeDependencies(), false);
+  });
+
   await check('npm 缺失只给警告；Pi 已装好时不阻塞运行', async () => {
     const fx = makeFixture({ label: 'no-npm', npm: false });
     const { setup } = buildSetup(fx);

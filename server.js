@@ -218,6 +218,7 @@ const DATA_DIR = resolveDataDir({
  *
  * applyManagedPath 只改本进程的 PATH，不写注册表、不改用户环境变量。 */
 const BASE_ENV = Object.freeze({ ...process.env });
+const desktopEnvironment = process.env.PI_GUI_DESKTOP === '1';
 const environmentStore = createEnvironmentStore({ dataDir: DATA_DIR, env: process.env });
 environmentStore.applyManagedPath(process.env);
 try { cleanupStaleTemp(environmentStore.paths().root); } catch { /* 清理失败不影响启动 */ }
@@ -350,11 +351,12 @@ const environmentInstall = createEnvironmentInstall({
   runCli,
   env: process.env,
   isWin: IS_WIN,
+  desktop: desktopEnvironment,
+  canInstall: () => !updateMaintenance.locked(),
   onEvent: job => {
     try { sse.publish({ type: 'environment_job', job }); } catch { /* 推事件失败不影响安装 */ }
   },
-  /* 装完 Node/Pi 后，长驻的 RPC 桥还在用旧入口/旧 PATH。这里清缓存并重启，
-   * 让用户**不需要手动重启应用**。rpc 在下面才建，所以先挂一个惰性回调。 */
+  /* 安装器已重新检测并验证 Node/Pi，启动当前项目的 RPC。 */
   onInstalled: () => { if (environmentInstalledHandler) environmentInstalledHandler(); },
 });
 environmentSetup.setJobProvider(() => environmentInstall.currentJob());
@@ -513,6 +515,7 @@ const rpc = createRpcBridge({
   },
   piBin: PI_BIN,
   launch: piLaunch,
+  hasRuntimeDependencies: environmentSetup.hasRuntimeDependencies,
   isWin: IS_WIN,
   projectLaunch: projectConfig,
   compat: piCompat,
@@ -520,13 +523,11 @@ const rpc = createRpcBridge({
   planLaunch: planBridge,
 });
 
-/* 首次环境安装成功后的运行时刷新。顺序与 `invalidatePiCaches` 一致：先让
- * identity 失效，再重启桥 —— 否则新进程还可能用旧入口。没有当前项目时
- * 不拉起桥（那会立刻以 no-project 退出），等用户选项目时自然会启动。 */
+/* 安装完成后重新解析入口。start 合并已在启动或运行的桥；没有项目就延迟。 */
 environmentInstalledHandler = () => {
   invalidatePiCaches();
   if (!runtime.getCurrentCwd()) return;
-  try { rpc.restart(); } catch { /* 重启失败时下一次项目启动会重新解析 */ }
+  void rpc.start();
 };
 
 /* 依赖方向：projects → rpc 通过**注入回调**表达，而不是 import ——
@@ -1304,6 +1305,18 @@ function classicProviderTargets() {
   }];
 }
 
+const environmentRoutes = createEnvironmentRoutes({
+  setup: environmentSetup,
+  install: environmentInstall,
+  desktop: desktopEnvironment,
+  onReady: () => {
+    if (rpc.getState().state === 'environment-required') void rpc.start();
+  },
+  onPiPathChanged: () => {
+    invalidatePiCaches();
+    if (rpc.getState().state === 'environment-required') void rpc.start();
+  },
+});
 const revertAuthority = createSessionRevertAuthority({ classicBridge:sessionChanges, classicOwner:primaryOwner,
       classicNativeState:()=>rpc.request({type:'get_state'}), classicBusy:()=>Boolean(piActivity.busy() || rpc.getState().stop?.pending),
       registry:runtimeRegistry, worktrees:conversationWorkspaces, classicRoot:()=>runtime.getCurrentCwd() });
@@ -1501,11 +1514,7 @@ const route = createRouter({
   gitRoutes,
   uploads,
   diagnostics,
-  environment: createEnvironmentRoutes({
-    setup: environmentSetup,
-    install: environmentInstall,
-    onPiPathChanged: () => invalidatePiCaches(),
-  }),
+  environment: environmentRoutes,
   logging,
   updateCheck,
   piUpdate,
@@ -1519,7 +1528,7 @@ const updateMaintenance = createAppUpdateMaintenance({
   otherBusy: () => rpc.stopState()?.pending || ['starting','restarting','maintenance'].includes(rpc.getState().state)
     || rpc.updateBusy() || runtimeRegistry.updateBusy()
     || candidateRuns.busy()
-    || toolScheduler.busy() || mutationAdmission.busy()
+    || toolScheduler.busy() || mutationAdmission.busy() || environmentInstall.busy()
     || [...processManagers].some(manager => manager.snapshot().activeCount || manager.snapshot().cleanupPending),
   closeSessions: () => runtimeRegistry.closeAll(),
   pause: () => rpc.pauseForMaintenance('app-update', { graceful: true }),
@@ -1535,6 +1544,20 @@ const server = http.createServer((req,res) => {
   }
   updateMaintenance.track(req,res);
   return route(req,res);
+});
+
+// This installation channel belongs to the directly spawned Electron backend.
+if (desktopEnvironment && process.send) process.on('message', async message => {
+  if (message?.type !== 'environment-install' || !Number.isSafeInteger(message.id)) return;
+  let result = { ok: false, code: 'install-unavailable', error: '安装服务暂不可用，请重试。' };
+  try {
+    if (!runtime.isShuttingDown() && !updateMaintenance.locked()) {
+      if (message.action === 'approve') result = environmentInstall.approveDesktop(message);
+      if (message.action === 'start') result = await environmentInstall.startDesktop(message);
+      if (message.action === 'set-pi-path') result = await environmentRoutes.setPiPath(message.path);
+    }
+  } catch { /* Reply with the fixed failure projection. */ }
+  if (process.connected) process.send({ type: 'environment-install-result', id: message.id, result }, () => {});
 });
 // Only the Electron parent owns this channel. No token, path or command payload.
 if (process.send) process.on('message', async message => {
@@ -1566,17 +1589,22 @@ if (process.send) process.on('message', async message => {
 
 // ---------- 生命周期 ----------
 
+if (process.send) process.on('message', async message => {
+  if (message?.type !== 'environment-cleanup-on-quit') return;
+  await environmentInstall.dispose();
+  if (process.connected) process.send({ type: 'environment-cleanup-complete' }, () => {});
+});
+
 async function shutdown() {
   if(runtime.isShuttingDown())return;
+  runtime.setShuttingDown(true);
+  /* Await cancellation and the job's staging cleanup before closing the process. */
+  await environmentInstall.dispose();
   await terminal.dispose();
   marketNetwork?.dispose();
   providerAuth.dispose();
   providerCredentialBridge.dispose();
   void providerCredentials.dispose();
-  runtime.setShuttingDown(true);
-  /* 环境安装是用户显式启动的写操作；退出时先收掉下载 / npm / 解压进程树。
-   * 落盘状态若仍停在 running，下次启动会如实标成 interrupted，而不是假装完成。 */
-  try { environmentInstall.dispose(); } catch { /* 退出路径不因收尾失败而卡住 */ }
   clearInterval(runtimeHealthTimer);
   await sessionChanges.dispose();
   await primaryToolGuard.dispose();

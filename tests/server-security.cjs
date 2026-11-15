@@ -155,7 +155,7 @@ async function main() {
   fs.mkdirSync(DATA, { recursive: true });
 
   /* ============ 有令牌（桌面版形态） ============ */
-  let st = startServer({ PI_GUI_TOKEN: TOKEN });
+  let st = startServer({ PI_GUI_TOKEN: TOKEN, PI_GUI_DESKTOP: '1' });
   try {
     const up = await waitUp();
     check('后端能起来', () => up || st.out.slice(0, 300));
@@ -173,6 +173,14 @@ async function main() {
     });
 
     /* ---- 2. 令牌认证 ---- */
+    for (const [path, code] of [['install', 'native-confirmation-required'], ['pi-path', 'native-selection-required']]) {
+      const write = await jsonReq(`/api/environment/${path}`, {
+        method: 'POST',
+        headers: { origin: ORIGIN, 'x-pi-gui-token': TOKEN, 'content-type': 'application/json' },
+        body: JSON.stringify({ planId: 'plan-' + '0'.repeat(20), components: ['pi'], consent: true }),
+      });
+      check(`桌面持有有效访问令牌仍不能写入 environment/${path}`, write.status === 403 && write.body?.code === code);
+    }
     const noTok = await jsonReq('/api/status');
     check('无令牌访问 /api/status → 401', () => noTok.status === 401 || `状态 ${noTok.status}`);
     check('401 不回显令牌、也不透露期望值', () => {

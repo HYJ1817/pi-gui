@@ -24,14 +24,31 @@ function methodNotAllowed(res) {
  * @param install     `createEnvironmentInstall()`
  * @param onPiPathChanged  Pi 路径改变后清 identity 缓存（server.js 注入）
  */
-export function createEnvironmentRoutes({ setup, install = null, onPiPathChanged = null, now = () => new Date() } = {}) {
+export function createEnvironmentRoutes({ setup, install = null, desktop = false, onPiPathChanged = null, onReady = null, now = () => new Date() } = {}) {
   if (!setup) throw new Error('environment routes require setup');
 
   async function report(res, force = false) {
     try {
-      return json(res, 200, { ok: true, environment: await setup.check({ force }) });
+      const environment = await setup.check({ force });
+      if (force && environment.requiredReady) onReady?.();
+      return json(res, 200, { ok: true, environment });
     } catch {
       return json(res, 500, { ok: false, code: 'detection-failed', error: '环境检测没有完成，请重试。' });
+    }
+  }
+
+  async function setPiPath(value) {
+    if (setup.effectivePiBinSource?.() === 'env') {
+      return { status: 409, ok: false, code: 'env-locked', error: '已通过环境变量 PI_BIN 指定 Pi，向导不会覆盖它。' };
+    }
+    if (install?.busy?.()) return { status: 409, ok: false, code: 'busy', error: '请等待当前安装结束。' };
+    const result = setup.setPiBinOverride(value);
+    if (!result.ok) return { status: 400, ok: false, code: result.code || 'bad-path', error: result.error || 'Pi 路径不合法。' };
+    try { onPiPathChanged?.(); } catch { /* 下一次检测会重新解析 */ }
+    try {
+      return { status: 200, ok: true, environment: await setup.check({ force: true }) };
+    } catch {
+      return { status: 500, ok: false, code: 'detection-failed', error: '环境检测没有完成，请重试。' };
     }
   }
 
@@ -49,6 +66,7 @@ export function createEnvironmentRoutes({ setup, install = null, onPiPathChanged
 
     if (path === '/api/environment/install') {
       if (req.method !== 'POST') return methodNotAllowed(res);
+      if (desktop) return json(res, 403, { ok: false, code: 'native-confirmation-required', error: '请在 Pi GUI 的原生确认窗口中确认安装。' });
       if (!install) return json(res, 503, { ok: false, code: 'not-wired', error: '环境安装模块未装配。' });
       let body;
       try {
@@ -101,20 +119,16 @@ export function createEnvironmentRoutes({ setup, install = null, onPiPathChanged
 
     if (path === '/api/environment/pi-path') {
       if (req.method !== 'POST') return methodNotAllowed(res);
+      if (desktop) return json(res, 403, { ok: false, code: 'native-selection-required', error: '请通过原生文件选择窗口指定 Pi。' });
       let body;
       try {
         body = await readJson(req);
       } catch {
         return json(res, 400, { ok: false, code: 'bad-json', error: '请求不是合法 JSON。' });
       }
-      if (setup.effectivePiBinSource && setup.effectivePiBinSource() === 'env') {
-        return json(res, 409, { ok: false, code: 'env-locked', error: '已通过环境变量 PI_BIN 指定 Pi，向导不会覆盖它。' });
-      }
       const value = body.path === null || body.path === '' ? null : body.path;
-      const result = setup.setPiBinOverride(value);
-      if (!result.ok) return json(res, 400, { ok: false, code: result.code || 'bad-path', error: result.error || 'Pi 路径不合法。' });
-      try { if (typeof onPiPathChanged === 'function') onPiPathChanged(); } catch { /* 下一次检测会重新解析 */ }
-      return report(res, true);
+      const { status, ...result } = await setPiPath(value);
+      return json(res, status, result);
     }
 
     if (path === '/api/environment/ack') {
@@ -151,5 +165,5 @@ export function createEnvironmentRoutes({ setup, install = null, onPiPathChanged
     return json(res, 404, { ok: false, code: 'not-found', error: 'Not found' });
   }
 
-  return { handle };
+  return { handle, setPiPath };
 }

@@ -260,9 +260,10 @@ function makeJob(patch = {}) {
   const confirmCalls = [];
   window.piGuiDesktop = {
     environmentSetup: {
-      confirmInstall: async (ids) => {
-        confirmCalls.push(ids.slice());
-        return { ok: true, consent: true, components: ids };
+      install: async (planId, ids) => {
+        confirmCalls.push({ planId, components: ids.slice() });
+        const components = installJob.components.filter(component => ids.includes(component.id));
+        return { ok: true, job: { ...installJob, components, totalSteps: components.length } };
       },
     },
   };
@@ -317,17 +318,12 @@ function makeJob(patch = {}) {
     assert.ok(textButton('开始安装'));
   });
 
-  await check('开始安装先走系统原生确认，只送组件 id', async () => {
+  await check('桌面开始安装只调用具名 IPC，绑定计划与所选组件', async () => {
     textButton('开始安装').click();
     await waitFor(() => confirmCalls.length === 1);
-    assert.deepEqual(confirmCalls[0], ['pi']);
+    assert.deepEqual(confirmCalls[0], { planId: currentReport.plan.planId, components: ['pi'] });
     await waitFor(() => document.querySelectorAll('.env-install-row').length === 1);
-    const install = apiCalls.find((call) => call.path === '/api/environment/install');
-    assert.equal(install.method, 'POST');
-    assert.deepEqual(install.body.components, ['pi']);
-    assert.equal(install.body.consent, true);
-    assert.equal(install.body.planId, currentReport.plan.planId);
-    assert.equal(install.body.components.includes('git'), false);
+    assert.equal(apiCalls.some(call => call.path === '/api/environment/install'), false);
     const steps = [...document.querySelectorAll('.env-step')];
     assert.equal(steps.findIndex((step) => step.classList.contains('is-current')), 2);
   });
@@ -414,8 +410,8 @@ function makeJob(patch = {}) {
     assert.ok(app.includes('initEnvironmentSetup()'));
     assert.ok(app.includes("$('navEnvironment').onclick"));
     const preload = read('electron/preload.cjs');
-    assert.match(preload, /confirmInstall[\s\S]{0,160}pi-gui:environment-confirm/);
-    assert.equal(preload.includes('environment-install'), false);
+    assert.match(preload, /install: \(planId, components\) => ipcRenderer.invoke\('pi-gui:environment-install'/);
+    assert.equal(preload.includes('environment-confirm'), false);
   });
 
   await check('向导 CSS 只用语义 Token，没有写死颜色', () => {

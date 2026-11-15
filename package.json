@@ -132,7 +132,7 @@
     "test:pi-version": "node tests/pi-version.cjs",
     "test:mcp": "node tests/mcp-config.cjs && node tests/mcp-manager.cjs && node tests/mcp-market.cjs && node tests/mcp-market-network.cjs && node tests/mcp-import.cjs && node tests/mcp-management-ui.cjs && node tests/mcp-native.cjs",
     "test:pi-update": "node tests/pi-update.cjs",
-    "test:environment": "node tests/environment-download.cjs && node tests/environment-setup.cjs && node tests/environment-install.cjs && node tests/environment-ui.cjs",
+    "test:environment": "node tests/environment-download.cjs && node tests/environment-store.cjs && node tests/environment-setup.cjs && node tests/environment-install.cjs && node tests/environment-electron.cjs && node tests/environment-ui.cjs",
     "test:stop": "node tests/stop-barrier.cjs && node tests/gui-browser-stop.cjs && node tests/bug8-real-pi-fixture.cjs",
     "test:stop-live": "node tests/stop-live.cjs",
     "test:process": "node tests/managed-processes.cjs && node tests/process-tools.cjs && node tests/process-stop.cjs && node tests/process-ui.cjs && node tests/process-runner.cjs",

@@ -157,6 +157,7 @@ function createFakePi() {
 async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createRouter } = await import('../server/router.js');
+  const { createEnvironmentRoutes } = await import('../server/environment-routes.js');
   const { createReviewCommentStore } = await import('../server/review-comment-store.js');
   const { createReviewCommentAuthority } = await import('../server/review-comment-authority.js');
   const { createReviewCommentRoutes } = await import('../server/review-comment-routes.js');
@@ -188,7 +189,7 @@ async function main() {
   /* 路由用**生产的那一段装配**（从 server.js 里原样取出来跑），不另抄一份 wrapper
    * —— 抄一份就等于测了个仿制品。这一段里现在有 abortAndWait 的前置守卫与记账。 */
   const source = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
-  const start = source.indexOf('const revertAuthority = createSessionRevertAuthority({');
+  const start = source.indexOf('const environmentRoutes = createEnvironmentRoutes({');
   // Router composition ends before the independent app-update HTTP wrapper.
   const end = source.indexOf('\nconst updateMaintenance = createAppUpdateMaintenance({', start);
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
@@ -200,6 +201,11 @@ async function main() {
     createReviewCommentStore, createReviewCommentAuthority, createReviewCommentRoutes,
     createCollabStore, createCollabAuthority, createCollabService, createCollabRoutes,
     createCollabProposalSource, createProposalQueue,
+    createEnvironmentRoutes,
+    desktopEnvironment: false,
+    environmentSetup: { check: async () => ({ requiredReady: false }) },
+    environmentInstall: { getJob: () => null },
+    invalidatePiCaches() {},
     // No candidate exists in this Stop facade fixture. Its independent real
     // lifecycle is covered by candidate-runs and normal-sandbox Electron.
     createCandidateRuns: () => ({busy: () => false}), createCandidateRoutes: () => null, candidateRunsRef: null,

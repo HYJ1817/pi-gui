@@ -3,11 +3,12 @@ const { EventEmitter } = require('node:events');
 async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createEventBus } = await import('../server/sse.js');
-  let cwd = 'fixture-workspace', shutdown = false, child;
+  let cwd = 'fixture-workspace', shutdown = false, child, dependencies = false, launches = 0;
   const events = [];
   const rpc = createRpcBridge({ runtime: { getCurrentCwd: () => cwd, isShuttingDown: () => shutdown },
-    publish: e => events.push(e), piBin: 'fixture-pi', isWin: false,
+    publish: e => events.push(e), piBin: 'fixture-pi', isWin: false, hasRuntimeDependencies: () => dependencies,
     spawnProcess: () => {
+      launches++;
       child = new EventEmitter(); child.pid = 42;
       child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
       child.stdout.setEncoding = child.stderr.setEncoding = () => {};
@@ -17,7 +18,18 @@ async function main() {
     } });
   let n = 0;
   function check(value, label) { assert.ok(value, label); n++; console.log('ok', label); }
+  await rpc.start();
+  await rpc.restart();
+  check(rpc.getState().bridgeState === 'environment-required' && launches === 0, 'missing environment defers startup and manual restart');
+  check(events.every(e => e.state !== 'error' && e.state !== 'exited'), 'deferral does not report a process fault');
+  dependencies = true;
+  cwd = '';
+  await rpc.start();
+  check(rpc.getState().bridgeState === 'no-project' && launches === 0, 'ready environment with no workspace still defers launch');
+  cwd = 'fixture-workspace';
   rpc.start();
+  rpc.start();
+  check(launches === 1, 'environment completion and concurrent activation start one Pi');
   check(rpc.getState().bridgeState === 'starting', 'authoritative starting snapshot');
   child.emit('spawn');
   check(rpc.getState().bridgeState === 'starting', 'shell spawn and PID do not prove Pi ready');
@@ -112,7 +124,7 @@ async function main() {
     w.eval(app); await new Promise(r => setTimeout(r, 20));
     return { dom, w, calls, recoveryTimers, setStatus: x => { current = { ...current, ...x }; } };
   }
-  for (const state of ['ready', 'starting', 'restarting', 'maintenance', 'exited', 'error']) {
+  for (const state of ['ready', 'starting', 'restarting', 'maintenance', 'exited', 'error', 'environment-required']) {
     const b = await browser(state);
     check(b.w.S.bridgeState === state, `refresh independently restores ${state}`);
     check(b.w.el.input.disabled === !['ready', 'maintenance'].includes(state), `composer follows authoritative ${state}, not piRunning`);

@@ -56,14 +56,11 @@ try {
   contextBridge.exposeInMainWorld('piGuiDesktop', {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
     isDesktop: true,
-    /* 首次环境安装的系统确认框。只暴露「确认」这一个具名入口：
-     * 页面送组件 id，主进程用固定文案与原生对话框询问用户。
-     * 没有通用 invoke，也没有把对话框返回的任意文本带回页面的通道。 */
+    // 固定操作。安装授权和本机文件选择都由主进程持有。
     environmentSetup: {
-      confirmInstall: (components) => ipcRenderer.invoke(
-        'pi-gui:environment-confirm',
-        Array.isArray(components) ? components.filter((id) => typeof id === 'string').slice(0, 3) : [],
-      ),
+      install: (planId, components) => ipcRenderer.invoke('pi-gui:environment-install', { planId, components }),
+      choosePi: () => ipcRenderer.invoke('pi-gui:environment-choose-pi'),
+      clearPi: () => ipcRenderer.invoke('pi-gui:environment-clear-pi'),
     },
     appUpdate: {
       state: () => ipcRenderer.invoke('pi-gui:app-update-state'),
