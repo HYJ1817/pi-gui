@@ -1,3 +1,4 @@
+import { createIcon } from './icons.js';
 /* Presentation only: the existing tool buttons retain capability and action ownership.
  *
  * 起始页只决定「怎么摆」：入口仍然来自右栏顶部那排真实按钮，
@@ -13,7 +14,6 @@
  * 的唯一注册表读取组合键，提示不会和真实按键漂移。 */
 import { formatCombo, shortcutFor } from '../shortcuts.js';
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
 let moreSerial = 0;
 
 function span(className, text) {
@@ -34,32 +34,6 @@ function normalise(tool) {
     shortcutId: typeof tool.shortcutId === 'string' ? tool.shortcutId : '',
     more: tool.more === true,
   };
-}
-
-function moreIcon() {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  for (const [x, y] of [[4, 4], [14, 4], [4, 14], [14, 14]]) {
-    const rect = document.createElementNS(SVG_NS, 'rect');
-    rect.setAttribute('x', String(x));
-    rect.setAttribute('y', String(y));
-    rect.setAttribute('width', '6');
-    rect.setAttribute('height', '6');
-    rect.setAttribute('rx', '1.4');
-    svg.append(rect);
-  }
-  return svg;
-}
-
-function chevronIcon() {
-  const svg = document.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  const path = document.createElementNS(SVG_NS, 'path');
-  path.setAttribute('d', 'm9 10 3 3 3-3');
-  svg.append(path);
-  return svg;
 }
 
 export function mountWorkPanelLauncher(host, tools, options = {}) {
@@ -135,10 +109,10 @@ export function mountWorkPanelLauncher(host, tools, options = {}) {
     moreButton.setAttribute('aria-controls', extraGrid.id);
     const icon = span('work-panel-launcher-icon');
     icon.setAttribute('aria-hidden', 'true');
-    icon.append(moreIcon());
+    icon.append(createIcon('grid'));
     const chevron = span('work-panel-launcher-chevron');
     chevron.setAttribute('aria-hidden', 'true');
-    chevron.append(chevronIcon());
+    chevron.append(createIcon('chevronDown'));
     moreButton.append(icon, span('work-panel-launcher-label', '更多工具…'), chevron);
     moreButton.onclick = () => {
       const open = moreButton.getAttribute('aria-expanded') !== 'true';

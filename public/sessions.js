@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* 侧栏的会话列表。
  *
  * ---------- 为什么不是弹窗 ----------
@@ -122,11 +123,11 @@ let archivedOpen = false;
  *      expandSidebarSessions()，否则用户点了「搜索会话」却看不到输入框。
  */
 const SVG_CHEV =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>';
+  iconMarkup('chevronRight');
 /* 行尾的动作入口：三点（…）。**没有用 ✎ / ⤓ / ✕ / ↩ 这些字符当图标** ——
  * 字符图标在不同字体下大小与基线都不可控，换成自己画的三个圆。 */
 const SVG_MORE =
-  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.55"/><circle cx="12" cy="12" r="1.55"/><circle cx="18.5" cy="12" r="1.55"/></svg>';
+  iconMarkup('more');
 
 let collapsed = false;
 let chevRef = null;

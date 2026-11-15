@@ -1,3 +1,4 @@
+import { createIcon } from './icons.js';
 /* P24 常驻状态条（Stage 顶部的一条说明 + 最多两个可执行入口）。
  *
  * ---------- 与 toast 的分工 ----------
@@ -91,6 +92,8 @@ export function showNotice(model) {
 
   const dot = node('span', 'notice-dot ui4-feedback-notice-icon');
   dot.setAttribute('aria-hidden', 'true');
+  const glyph = { bad: 'warning', warn: 'warning', ok: 'check', unknown: 'help', info: 'info' }[tone];
+  if (glyph) dot.append(createIcon(glyph));
 
   const body = node('div', 'notice-body ui4-feedback-notice-body');
   const title = node('div', 'notice-title ui4-feedback-notice-title', model.title);
@@ -109,7 +112,8 @@ export function showNotice(model) {
     bind(button, action);
     actions.appendChild(button);
   }
-  const close = node('button', 'icon-btn notice-close ui4-feedback-notice-close', '✕');
+  const close = node('button', 'icon-btn notice-close ui4-feedback-notice-close');
+  close.append(createIcon('close'));
   close.type = 'button';
   close.title = '隐藏这条提示';
   close.setAttribute('aria-label', '隐藏这条提示');

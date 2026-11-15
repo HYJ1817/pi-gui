@@ -103,7 +103,7 @@
   color:var(--ui-text-primary);
 }
 
-.specs-dir-chev{
+.specs-dir-chev{height:12px;
   flex:0 0 12px;
   width:12px;
   color:var(--ui-text-muted);

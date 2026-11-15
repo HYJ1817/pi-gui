@@ -1,3 +1,4 @@
+import { createIcon } from './icons.js';
 /* Project-config form editor; no persistence or second model catalog. */
 import { S } from '../state.js';
 import { modelIdentity, modelCapabilitySummary } from '../model-capabilities.js';
@@ -25,8 +26,8 @@ export function createFallbackSettings(initial,primary) {
       const name=document.createElement('span');name.textContent=`${index+1}. ${id.providerId} / ${model?.name||id.modelId}`;name.title=id.modelId;
       const detail=document.createElement('small');detail.textContent=!model?'模型不可用（运行时跳过）':sameModel(id,primary())?'当前主模型（不会重复尝试）':modelCapabilitySummary(model).text||'能力未确认';
       text.append(name,detail);row.appendChild(text);
-      for(const [caption,delta] of [['↑',-1],['↓',1],['×',0]]){
-        const button=document.createElement('button');button.type='button';button.className='btn tiny';button.textContent=caption;
+      for(const [caption,delta] of [['arrowUp',-1],['arrowDown',1],['close',0]]){
+        const button=document.createElement('button');button.type='button';button.className='btn tiny';button.append(createIcon(caption));
         button.setAttribute('aria-label',`${delta===0?'删除':delta<0?'上移':'下移'}备用模型 ${id.providerId}/${id.modelId}`);
         button.disabled=delta!==0 && (index+delta<0 || index+delta>=config.chain.length);
         button.onclick=()=>{if(delta===0)config.chain.splice(index,1);else [config.chain[index],config.chain[index+delta]]=[config.chain[index+delta],config.chain[index]];draw();};row.appendChild(button);

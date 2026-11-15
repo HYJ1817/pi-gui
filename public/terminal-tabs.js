@@ -1,3 +1,4 @@
+import { iconMarkup, createIcon } from './ui/icons.js';
 /* Tab bar, empty state and inline notice for the multi-terminal surface.
  *
  * Kept free of PTY/transport state: the panel owns sessions and tells this
@@ -18,7 +19,7 @@ const button = (className, text) => {
   return element;
 };
 
-const KEEP_ALIVE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6"/><path d="M10 4v5l-3.5 4.5h11L14 9V4"/><path d="M12 13.5V20"/></svg>';
+const KEEP_ALIVE_ICON = iconMarkup('pin');
 
 const STATE_TEXT = {
   creating: '正在启动',
@@ -42,7 +43,8 @@ export function createTerminalTabs({ onActivate, onClose, onNew } = {}) {
   const list = node('div', 'terminal-tablist');
   list.setAttribute('role', 'tablist');
   list.setAttribute('aria-label', '终端标签');
-  const newButton = button('terminal-new', '+');
+  const newButton = button('terminal-new', '');
+  newButton.append(createIcon('plus'));
   newButton.title = '新建终端';
   newButton.setAttribute('aria-label', '新建终端');
   newButton.onclick = () => onNew?.();
@@ -91,7 +93,8 @@ export function createTerminalTabs({ onActivate, onClose, onNew } = {}) {
        * it toggling focus so a stray double click does not destroy a tab. */
       select.focus();
     };
-    const close = button('terminal-tab-close', '×');
+    const close = button('terminal-tab-close', '');
+    close.append(createIcon('close'));
     close.setAttribute('aria-label', `关闭${label}`);
     close.title = `关闭${label}`;
     close.onclick = (event) => {

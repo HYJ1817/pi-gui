@@ -1,3 +1,4 @@
+import { createIcon } from './icons.js';
 /* Optional two-surface workbench: Specs above, Git Changes below.
  *
  * This module owns layout only. Specs and Changes keep their existing state,
@@ -129,7 +130,8 @@ export function mountSplitWorkbench(host, view, {
   const modeGrow = node('span', 'workbench-grow');
   const modeExit = button('btn tiny workbench-exit', '退出', '退出分屏，恢复单面板', () => exitSplit());
   modeExit.dataset.workbenchExit = 'true';
-  const modeClose = button('icon-btn workbench-close', '×', '关闭工作台', () => view.close());
+  const modeClose = button('icon-btn workbench-close', '', '关闭工作台', () => view.close());
+  modeClose.append(createIcon('close'));
   modebar.append(specsTab, changesTab, modeGrow, modeExit, modeClose);
   modebar.hidden = true;
 

@@ -1,3 +1,4 @@
+import { createIcon } from './ui/icons.js';
 /* 文件变更面板（Changed Files → Unified Diff → 撤销 / 打开）。
  *
  * ---------- 与 changes.js 的分工（需求明确要求，不要混） ----------
@@ -431,7 +432,7 @@ export function openChangesPanel(options = {}) {
   split.type = 'button';
   split.id = 'btnChangesSplit';
   split.className = 'icon-btn changes-split-icon';
-  split.textContent = '⇅';
+  split.append(createIcon('split'));
   split.title = '同时显示 Specs 与文件变更';
   split.setAttribute('aria-label', '与 Specs 分屏');
   split.onclick = () => document.dispatchEvent(new window.CustomEvent(

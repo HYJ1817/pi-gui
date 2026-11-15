@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 import { S } from './state.js';
 import { fetchWorktrees, worktreeAction } from './api.js';
 import { openModal, closeModal, confirmModal, dismissConfirm } from './ui/modal.js';
@@ -84,7 +85,7 @@ export function openWorktreeManager(project, { activateWorkspace } = {}) {
           });
           open.dataset.unavailable = String(!usable); open.disabled = busy || !usable; item.append(open);
           if (row.kind === 'managed') {
-            const menu = button('⋯', () => openActionMenu(menu, [
+            const menu = button('', () => openActionMenu(menu, [
               { label: '独立会话', disabled: row.health !== 'healthy' || row.archived || row.current, onClick: () => { close(); openRuntimeSessions(project, row); } },
               { label: row.archived ? '取消归档' : '归档', icon: MENU_ICONS.archive, disabled: row.current, onClick: () => action('archive', row, { archived: !row.archived }) },
               ...(row.health !== 'healthy' ? [{ label: '以此分支新建', onClick: () => { source.value = row.branch; source.focus(); } }] : []),
@@ -94,7 +95,7 @@ export function openWorktreeManager(project, { activateWorkspace } = {}) {
               } },
             ]), 'row-action-trigger');
             menu.setAttribute('aria-label', `${row.branch} 的操作`); item.append(menu);
-            menu.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.55"/><circle cx="12" cy="12" r="1.55"/><circle cx="18.5" cy="12" r="1.55"/></svg>';
+            menu.innerHTML = iconMarkup('more');
           }
         }
         list.append(item);

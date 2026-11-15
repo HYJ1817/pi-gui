@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* 右栏里的「内置浏览器」这一面。
  *
  * 它只做两件事：把工具栏画出来、把主进程报上来的状态如实显示。
@@ -25,12 +26,12 @@ export function isBrowserAvailable() {
   return Boolean(window.piGuiDesktop?.browser);
 }
 
-const ICON_BACK = '<svg viewBox="0 0 24 24"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg>';
-const ICON_FORWARD = '<svg viewBox="0 0 24 24"><path d="M9 5.5 15.5 12 9 18.5"/></svg>';
-const ICON_RELOAD = '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4.5V10h-5.5"/></svg>';
-const ICON_STOP = '<svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
-const ICON_EXTERNAL = '<svg viewBox="0 0 24 24"><path d="M14 5.5h4.5V10"/><path d="M18.5 5.5 10 14"/><path d="M17 13.5V18a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 5 18V9a1.5 1.5 0 0 1 1.5-1.5H10"/></svg>';
-const ICON_CLOSE = '<svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>';
+const ICON_BACK = iconMarkup('chevronLeft');
+const ICON_FORWARD = iconMarkup('chevronRight');
+const ICON_RELOAD = iconMarkup('refresh');
+const ICON_STOP = iconMarkup('close');
+const ICON_EXTERNAL = iconMarkup('external');
+const ICON_CLOSE = iconMarkup('close');
 
 /** 建工具栏。用 DOM API 而不是 innerHTML —— 和其它面板一致，
  *  也免得把一个巨大的 HTML 字面量塞进 JS。 */
@@ -66,7 +67,7 @@ function buildToolbar(host) {
   const external = mk('browserExternal', ICON_EXTERNAL, '在系统浏览器中打开', '在系统浏览器中打开');
   const close = mk('browserClose', ICON_CLOSE, '关闭内置浏览器', '关闭');
   const split = mk('browserSplit', '', 'Browser 与 Changes 分屏', 'Browser 与 Changes 分屏');
-  split.textContent = '⇅';
+  split.innerHTML = iconMarkup('split');
   const agent = mk('browserAgentControl', '', 'Agent 控制', '允许 Agent 控制 localhost 页面', 'btn tiny browser-agent-control');
   agent.textContent = 'Agent 控制';
   agent.setAttribute('aria-pressed', 'false');
@@ -295,7 +296,7 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
     moveTo(target, split = false) {
       if (disposed) mount();
       target.append(host);
-      ui.split.textContent = split ? '↥' : '⇅';
+      ui.split.innerHTML = iconMarkup(split ? 'exitSplit' : 'split');
       ui.split.title = split ? '退出分屏' : 'Browser 与 Changes 分屏';
       ui.split.setAttribute('aria-label', ui.split.title);
       pane.refresh?.();

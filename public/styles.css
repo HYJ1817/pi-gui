@@ -82,7 +82,9 @@ body{
   *{scrollbar-width:thin;scrollbar-color:var(--ui-scrollbar) transparent}
 }
 
-svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+svg{display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+svg:not(:where([data-icon])){width:15px;height:15px}
+svg:where([data-icon]:not([width])){width:16px;height:16px}
 .grow{flex:1}
 
 .app{display:flex;height:100vh}
@@ -137,6 +139,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   transition:background .12s,color .12s;
 }
 .nav-item:hover{background:var(--hover);color:var(--t1)}
+.nav-item .ni-add-ic{width:13px;height:13px;flex:0 0 auto}
 .nav-item .ni-ic{color:var(--t3);width:15px;height:15px;flex:0 0 auto}
 .nav-item:hover .ni-ic{color:var(--t2)}
 .ni-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -378,7 +381,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
   font-size:13px;font-weight:500;transition:background .12s,border-color .12s;
 }
 .welcome-cta:hover{background:var(--control-primary-hover)}
-.welcome-cta svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.welcome-cta svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-linecap:round}
 
 .thread{width:100%;max-width:var(--conversation-max-width);margin:0 auto;padding:20px 32px calc(var(--composer-reserved-height, 112px) + 16px);display:flex;flex-direction:column;gap:0;min-width:0}
 
@@ -409,7 +412,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 :is(#stream,#runtimeView) .message-copy{display:grid;place-items:center;flex:none;width:24px;height:24px;padding:4px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--ds-text-muted);cursor:pointer}
 :is(#stream,#runtimeView) .message-copy:hover{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
 :is(#stream,#runtimeView) .message-copy:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
-:is(#stream,#runtimeView) .message-copy svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+:is(#stream,#runtimeView) .message-copy svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
 :is(#stream,#runtimeView) .message-copy-feedback{font-size:var(--text-xs)}
 @media(hover:none){:is(#stream,#runtimeView) .message-actions{opacity:1}}
 .msg.assistant{margin-bottom:18px}
@@ -490,7 +493,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .think-head{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--t3);font:inherit;cursor:pointer;padding:2px 4px 2px 0;text-align:left}
 .think-head:hover{color:var(--t2)}
 .think-head:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:3px}
-.think-head svg{width:11px;height:11px;transition:transform .16s;fill:none;stroke:currentColor;stroke-width:1.8}
+.think-head svg{width:11px;height:11px;transition:transform .16s;fill:none;stroke:currentColor;}
 .think-head[aria-expanded=true] svg{transform:rotate(90deg)}
 .think-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0 5px;padding:2px 0 2px 12px;border-left:1px solid var(--line);color:var(--t2)}
 /* UI-2C：思考状态补充文字（A 侧 .think-head 的第二个 span）。
@@ -524,7 +527,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .tl-item.open{background:var(--ui-selected)}
 
 .tl-dot{flex:0 0 14px;width:14px;height:14px;margin-top:2px;display:flex;align-items:center;justify-content:center;color:var(--t3)}
-.tl-dot svg{width:13px;height:13px;stroke-width:2}
+.tl-dot svg{width:13px;height:13px;}
 .tl-item[data-status=running] .tl-dot{color:var(--run)}
 .tl-item[data-status=success] .tl-dot{color:var(--ok)}
 .tl-item[data-status=error] .tl-dot{color:var(--err)}
@@ -595,7 +598,7 @@ svg{display:block;width:15px;height:15px;fill:none;stroke:currentColor;stroke-wi
 .ui2-msg-meta-item{white-space:nowrap;font-variant-numeric:tabular-nums}
 /* C 预留、A 未使用：A 的图标是内联 svg，摘要按钮也不含 chevron 元素。
  * 作为兼容扩展保留，不代表 A 已经采用（见 UI-2C-acceptance.md 第 3 节）。 */
-.ui2-chev{width:12px;height:12px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;
+.ui2-chev{width:12px;height:12px;flex:0 0 auto;fill:none;stroke:currentColor;
   transition:transform var(--ui-duration-snap) var(--ui-ease-out)}
 .ui2-tool-summary[aria-expanded=true] .ui2-chev{transform:rotate(90deg)}
 
@@ -928,6 +931,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 .d-hunkbar:hover{background:var(--hover)}
 .d-hunkbar:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
+.d-chev svg{width:12px;height:12px}
 .d-chev{flex:0 0 auto;font-size:9px;color:var(--t3);line-height:1}
 .d-hunkstat{flex:0 0 auto;display:flex;gap:5px;font-family:var(--mono);font-size:10.5px;margin-left:auto}
 .d-hunkstat .add{color:var(--ui-diff-add);font-weight:400}
@@ -1289,6 +1293,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .cfg-cmd input{flex:1;min-width:0}
 .cfg-cmd .cfg-cmd-name{flex:0 0 28%}
 .cfg-cmd-del{
+  display:grid;place-items:center;padding:0;
   flex:0 0 auto;width:24px;height:24px;border-radius:6px;font-size:14px;line-height:1;
   background:transparent;border:1px solid var(--line);color:var(--t3);cursor:pointer;
   transition:background .12s,color .12s;
@@ -2070,6 +2075,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   background:var(--input);border:1px solid var(--line);border-radius:7px;
   transition:border-color .12s;
 }
+.pj-search-ic svg{width:14px;height:14px}
 .pj-search-ic{flex:0 0 auto;font-size:13px;color:var(--t3);line-height:1}
 .pj-search-input{
   flex:1;min-width:0;border:0;background:transparent;outline:none;
@@ -2296,7 +2302,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .planner-rv-view { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
 /* **状态必须带文字**（已接受 / 需修改 / 待审阅），颜色只是辅助 ——
  * 只画绿点红点会让色觉障碍用户读不出状态（§五十二）。 */
-.planner-rv-state { flex: 0 0 auto; }
+.planner-rv-state { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .planner-rv-state.pending { color: var(--t3); }
 .planner-rv-state.ok { color: var(--ok); }
 .planner-rv-state.warn { color: var(--warn); }
@@ -2308,6 +2314,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 .planner-rv-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .planner-rv-hint { color: var(--t3); }
+.planner-rv-warn, .planner-rv-opt { display: inline-flex; align-items: center; gap: 4px; }
 .planner-rv-warn { color: var(--warn); font-size: 11px; }
 .planner-rv-lbl2 { margin-top: 2px; }
 
@@ -2843,7 +2850,6 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   height: 16px;
   stroke: currentColor;
   fill: none;
-  stroke-width: 2;
 }
 .settings-overview-item-label {
   font-size: var(--text-sm-plus);

@@ -1,3 +1,4 @@
+import { createIcon } from './ui/icons.js';
 /* Read-only project file tree + text preview in the existing right pane.
  *
  * The tree is lazy: opening a directory asks the backend for that directory
@@ -65,7 +66,7 @@ export function mountFilesPanel(host, view, options = {}) {
     preview.replaceChildren();
     const empty = node('section', 'files-empty');
     empty.append(
-      node('span', 'files-empty-icon', '[]'),
+      createIcon('fileText', { className: 'files-empty-icon' }),
       node('h4', 'files-empty-title', title),
       node('p', 'files-empty-text', text)
     );
@@ -85,7 +86,7 @@ export function mountFilesPanel(host, view, options = {}) {
       row.classList.add('files-entry-dir');
       row.setAttribute('aria-expanded', String(Boolean(state?.expanded)));
       row.append(
-        node('span', 'files-entry-chev', state?.expanded ? '▾' : '▸'),
+        createIcon(state?.expanded ? 'chevronDown' : 'chevronRight', { className: 'files-entry-chev' }),
         node('span', 'files-entry-name', entry.name)
       );
       row.onclick = () => toggleDirectory(entry);
@@ -93,7 +94,7 @@ export function mountFilesPanel(host, view, options = {}) {
       row.classList.add('files-entry-file');
       row.setAttribute('aria-current', entry.path === selectedPath ? 'page' : 'false');
       row.append(
-        node('span', 'files-entry-mark', '·'),
+        createIcon('file', { className: 'files-entry-mark' }),
         node('span', 'files-entry-name', entry.name),
         node('span', 'files-entry-size', formatBytes(entry.bytes))
       );

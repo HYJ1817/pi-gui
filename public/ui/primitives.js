@@ -1,4 +1,5 @@
 import { pop, toggleHelpPop } from './popover.js';
+import { createIcon } from './icons.js';
 
 /**
  * Base UI Primitives for pi-GUI
@@ -118,7 +119,7 @@ export function createHelpIcon({ tooltipText = '', ariaLabel = '' } = {}) {
   button.setAttribute('aria-label', ariaLabel || '帮助');
   button.setAttribute('aria-expanded', 'false');
   button.setAttribute('aria-controls', pop.id);
-  button.textContent = '?';
+  button.append(createIcon('help'));
   button.onclick = () => toggleHelpPop(button, tooltipText);
   return button;
 }

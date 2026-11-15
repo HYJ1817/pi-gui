@@ -1,3 +1,4 @@
+import { createIcon } from './ui/icons.js';
 /* Product binding only: the existing controllers retain all authority. */
 import { runtimeStore as store, onRuntimeChange } from './runtime-state.js';
 import { runtimeSessionAction } from './api.js';
@@ -24,7 +25,7 @@ export function createRuntimeSecondary({pane}) {
       if(action){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent='打开 Browser';b.onclick=action;host.append(b);}
       if(kind==='runtime-browser'&&browserSplit){
         const exit=document.createElement('button');exit.type='button';exit.className='btn tiny';exit.textContent='退出分屏';exit.onclick=()=>void mountBrowser(false,false);
-        const close=document.createElement('button');close.type='button';close.className='icon-btn';close.textContent='×';close.setAttribute('aria-label','关闭工作台');close.onclick=()=>pane.close();head.append(exit,close);
+        const close=document.createElement('button');close.type='button';close.className='icon-btn';close.append(createIcon('close'));close.setAttribute('aria-label','关闭工作台');close.onclick=()=>pane.close();head.append(exit,close);
       }
     };
     if(kind==='runtime-browser'&&browserSplit){

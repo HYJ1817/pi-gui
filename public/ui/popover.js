@@ -1,3 +1,4 @@
+import { createIcon } from './icons.js';
 /* 浮层。
  *
  * 模型选择、思考等级、上下文提示都用同一套：锚在触发元素上方，
@@ -179,12 +180,7 @@ export function popItem({ label, sub, on, onClick }) {
     d.appendChild(s);
   }
 
-  const c = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  c.setAttribute('viewBox', '0 0 24 24');
-  c.setAttribute('class', 'pi-check');
-  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  p.setAttribute('d', 'M5 12.5l4.5 4.5L19 7');
-  c.appendChild(p);
+  const c = createIcon('check', { className: 'pi-check' });
   d.appendChild(c);
 
   d.onclick = onClick;

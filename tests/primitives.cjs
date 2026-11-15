@@ -70,7 +70,7 @@ const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadg
   assert.equal(icon.tagName, 'BUTTON');
   assert.equal(icon.getAttribute('aria-expanded'), 'false');
   assert.equal(icon.getAttribute('aria-label'), '帮助');
-  assert.equal(icon.textContent, '?');
+  assert.equal(icon.querySelector('svg[data-icon="help"]').getAttribute('aria-hidden'), 'true');
   console.log('✓ createHelpIcon passed');
 }
 
@@ -100,6 +100,26 @@ const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadg
   });
   assert.equal(card.classList.contains('ds-settings-card'), true);
   console.log('✓ createSettingsCard & createSettingsRow passed');
+}
+
+// 6. Shared icons use one accessible SVG while preserving static shells.
+{
+  const dom = new JSDOM('<svg class="search-ic" data-icon="search"></svg>', { runScripts: 'outside-only' });
+  const browser = dom.window;
+  browser.eval(bundle(path.join(__dirname, '../public/ui/icons.js')).code);
+  browser.hydrateIcons(browser.document);
+  const staticIcon = browser.document.querySelector('svg');
+  const dynamicIcon = browser.createIcon('search', { ownerDocument: browser.document });
+  assert.equal(staticIcon.innerHTML, dynamicIcon.innerHTML);
+  assert.equal(staticIcon.getAttribute('class'), 'search-ic');
+  assert.equal(dynamicIcon.getAttribute('viewBox'), '0 0 24 24');
+  assert.equal(dynamicIcon.getAttribute('stroke'), 'currentColor');
+  assert.equal(dynamicIcon.getAttribute('stroke-width'), '1.7');
+  assert.equal(dynamicIcon.getAttribute('aria-hidden'), 'true');
+  assert.equal(browser.iconMarkup('constructor'), '');
+  assert.equal(browser.iconMarkup('<script>'), '');
+  browser.close();
+  console.log('✓ shared icon contract passed');
 }
 
 console.log('All primitive tests passed successfully!');

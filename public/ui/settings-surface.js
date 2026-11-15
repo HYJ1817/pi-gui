@@ -1,3 +1,4 @@
+import { iconMarkup } from './icons.js';
 /* Settings owns page lifetimes. Form builders retain persistence/auth ownership;
  * each detail has its own card and disposal, separate from the global modal. */
 import { $ } from '../state.js';
@@ -77,7 +78,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
           button.className = 'settings-overview-item';
           const label = target.querySelector('span')?.textContent || target.childNodes[0]?.textContent || target.textContent;
           const svg = target.querySelector('svg')?.outerHTML || '';
-          button.innerHTML = `<div class="settings-overview-item-lead"><span class="settings-overview-item-icon">${svg}</span><span class="settings-overview-item-label">${label}</span></div><svg class="settings-overview-item-arrow" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>`;
+          button.innerHTML = `<div class="settings-overview-item-lead"><span class="settings-overview-item-icon">${svg}</span><span class="settings-overview-item-label">${label}</span></div>${iconMarkup('chevronRight').replace('<svg ', '<svg class="settings-overview-item-arrow" ')}`;
           button.onclick = () => { target.focus(); target.click(); };
           group.append(button);
         }

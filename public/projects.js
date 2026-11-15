@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* 项目（= pi 的工作目录）管理 + 目录选择器。
  *
  * 关键前提：pi 的 RPC 协议**没有**切换工作目录的命令，所以「切换项目」
@@ -60,12 +61,12 @@ async function activateForSessionAction(project, run) {
 }
 
 const SVG_FOLDER =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+  iconMarkup('folder');
 const SVG_UP =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>';
+  iconMarkup('arrowUp');
 /* 行尾的动作入口：三点（…）。**不是** Codex 的图标资产，就是三个自己画的圆。 */
 const SVG_MORE =
-  '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.55"/><circle cx="12" cy="12" r="1.55"/><circle cx="18.5" cy="12" r="1.55"/></svg>';
+  iconMarkup('more');
 
 /* 会话列表要挂在**当前项目那一行下面**（参考 Codex：会话属于项目，
  * 不该单开一个窗口）。projects.js 不 import sessions.js —— 由 app.js 把
@@ -81,10 +82,10 @@ export function setProjectSessionActions(actions) {
 }
 
 const HEADER_ICONS = {
-  newSession: '<path d="M12 5v14M5 12h14"/>',
-  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>',
+  newSession: 'plus',
+  search: 'search',
 };
-const SVG_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg>';
+const SVG_CHEV = iconMarkup('chevronRight');
 
 function attachPreview(item, p, index) {
   const box = document.createElement('div');
@@ -139,7 +140,7 @@ function headerAction(action, label, onClick = null) {
   button.className = 'pj-header-action';
   button.title = label;
   button.setAttribute('aria-label', label);
-  button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">' + HEADER_ICONS[action] + '</svg>';
+  button.innerHTML = iconMarkup(HEADER_ICONS[action]);
   button.onclick = e => {
     e.preventDefault();
     e.stopPropagation();

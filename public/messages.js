@@ -1,3 +1,4 @@
+import { createIcon, iconMarkup } from './ui/icons.js';
 /* 对话渲染。
  *
  * 这里处理 pi 事件流里最麻烦的两条约定（见 pi docs/rpc.md）：
@@ -196,7 +197,7 @@ function thinkingBlock(text = '') {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'think-head';
-  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 5.5L16 12l-6.5 6.5"/></svg><span></span>';
+  button.innerHTML = iconMarkup('chevronRight') + '<span></span>';
   const body = document.createElement('div');
   body.className = 'think-body';
   body.id = 'thinking-detail-' + ++disclosureId;
@@ -260,7 +261,7 @@ function fileBlockCard(name, meta, content) {
 
   const chev = document.createElement('span');
   chev.className = 'mf-chev';
-  chev.appendChild(icon(['M9.5 5.5L16 12l-6.5 6.5']));
+  chev.appendChild(createIcon('chevronRight'));
   head.appendChild(chev);
 
   const inner = document.createElement('div');

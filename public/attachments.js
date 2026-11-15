@@ -1,3 +1,4 @@
+import { createIcon } from './ui/icons.js';
 /* 附件。
  *
  * pi 的原生附件只有图片（prompt / steer 的 images 字段，ImageContent 格式）。
@@ -176,7 +177,7 @@ export function renderAttachments() {
     x.dataset.attachmentId = String(a.id);
     x.title = '移除';
     x.setAttribute('aria-label', `移除附件：${a.name}`);
-    x.appendChild(icon(['M7 7l10 10', 'M17 7L7 17']));
+    x.appendChild(createIcon('close'));
     x.onclick = (e) => {
       e.stopPropagation();
       removeAttachment(a.id);

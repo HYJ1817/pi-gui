@@ -1,3 +1,4 @@
+import { hydrateIcons } from './ui/icons.js';
 import { initSettingsSurface } from './ui/settings-surface.js';
 /* Pi GUI — 前端入口。
  *
@@ -1185,6 +1186,8 @@ $('navPlanner').onclick = () => openPlanner();
 
 const globalMenu = $('globalMoreMenu');
 const globalMore = $('navGlobalMore');
+hydrateIcons(document);
+
 const settingsSurface = initSettingsSurface({
   captureRuntimeReturn: () => {
     const id = runtimeConversation.conversationId;

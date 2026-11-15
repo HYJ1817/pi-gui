@@ -1,3 +1,4 @@
+import { iconMarkup } from './ui/icons.js';
 /* Tool Timeline 的视图层。
  *
  * 只做一件事：把一条 ToolEntry 画成 DOM，以及在它变化时**就地更新**。
@@ -35,14 +36,14 @@ import { noteUnknownTool } from './schema-drift.js';
  * 用 SVG 而不是 ✓ / ✕ / ● 这些字符：时间线是多行左对齐的，字符的宽度和基线
  * 在不同字体下不一致，一歪就整列错位。 */
 const STATUS_ICON = {
-  running: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/></svg>',
-  success: '<svg viewBox="0 0 24 24"><polyline points="5.5 12.5 10 17 18.5 7.5"/></svg>',
-  error: '<svg viewBox="0 0 24 24"><path d="M7.5 7.5l9 9M16.5 7.5l-9 9"/></svg>',
+  running: iconMarkup('running'),
+  success: iconMarkup('check'),
+  error: iconMarkup('close'),
   /* 未完成：虚线圆圈 —— 既不是对勾也不是叉，一眼能看出「这一轮没跑完」 */
-  incomplete: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" stroke-dasharray="2.6 2.6"/></svg>',
-  interrupted: '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg>',
-  cancelled: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-  unknown: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4M12 17v.4"/></svg>',
+  incomplete: iconMarkup('pending'),
+  interrupted: iconMarkup('pause'),
+  cancelled: iconMarkup('close'),
+  unknown: iconMarkup('help'),
 };
 
 const STATUS_TEXT = {
