@@ -61,6 +61,9 @@ import {
   submit,
 } from './rpc.js';
 import {
+  beginTurn,
+  captureTrailingError,
+  clearRetryNotice,
   dropTrailingError,
   onMessageEnd,
   onMessageStart,
@@ -68,6 +71,7 @@ import {
   onSettled,
   interruptActive,
   setStreaming,
+  showRetryNotice,
   syncWelcome,
 } from './messages.js';
 import { beginPlanTaskBoundary } from './plan-live.js';
@@ -502,7 +506,10 @@ function handleEvent(evt) {
        * 上一轮已收尾（S.streaming=false）时到来的 agent_start 是新 session 级
        * run = 真正的新任务；运行中重试/压缩也会重发 agent_start，但此时
        * S.streaming 仍为 true，不得重置计划。回放事件不参与。 */
-      if (!evt._replay && !S.streaming) beginPlanTaskBoundary();
+      if (!evt._replay && !S.streaming) {
+        beginPlanTaskBoundary();
+        beginTurn();
+      }
       return setStreaming(true);
     case 'agent_end':
       return;
@@ -547,13 +554,21 @@ function handleEvent(evt) {
       return setStatus('正在压缩上下文…');
     case 'compaction_end':
       return setStatus('');
-    case 'auto_retry_start':
+    case 'auto_retry_start': {
+      if (evt._replay) return;
       // pi 会为每次重试单独发一轮 message_start / message_end，上一次那轮的
       // 错误卡片和已经空掉的外壳一起撤掉，否则重试成功后对话区里会留下
-      // 一张失败卡片 + 一串没有正文的空白「Pi」（见 dropTrailingError）
+      // 一张失败卡片 + 一串没有正文的空白「Pi」（见 dropTrailingError）。
+      // 撤掉之前先把已经显示过的安全错误文本搬进一条紧凑摘要：重试期间
+      // 用户仍然看得到失败原因，重试结束/最终失败时摘要移除。
+      const captured = captureTrailingError();
+      const retryError = captured || (evt.errorMessage ? { raw: String(evt.errorMessage) } : null);
       dropTrailingError();
+      showRetryNotice({ attempt: evt.attempt, maxAttempts: evt.maxAttempts, error: retryError });
       return setStatus(`请求失败，第 ${evt.attempt}/${evt.maxAttempts} 次重试…`);
+    }
     case 'auto_retry_end':
+      clearRetryNotice();
       return setStatus('');
     case 'extension_error':
       return toast(`扩展错误：${evt.error}`, 'error');
