@@ -91,6 +91,8 @@ export function createDiagnostics({
   extensions = null,
   /* Pi 运行时更新：**只读快照**（不发请求）。不注入时这一块是 null。 */
   piUpdate = null,
+  /* 首次环境安装：**脱敏摘要**（状态/版本/来源），没有路径、没有命令输出。 */
+  environment = null,
   dataDir,
   version,
   env = process.env,
@@ -307,6 +309,18 @@ export function createDiagnostics({
       }
     }
 
+    /* 首次环境安装的摘要：只回答「就绪没有、哪个组件是什么状态、上次任务什么结局」。
+     * 不带上安装根、可执行文件路径、npm prefix 或任何 stdout/stderr。 */
+    let environmentInfo = null;
+    if (typeof environment === 'function') {
+      try {
+        const s = environment();
+        if (s && typeof s === 'object') environmentInfo = s;
+      } catch {
+        environmentInfo = null;
+      }
+    }
+
     const raw = {
       schemaVersion: 1,
       generatedAt: now().toISOString(),
@@ -380,6 +394,8 @@ export function createDiagnostics({
       /* P23：关键 Extension 的版本（有可靠 metadata 时）。 */
       extensions: extensionInfo,
       piUpdate: piUpdateInfo,
+      /* 首次环境安装：必需/推荐依赖的状态与版本，不含路径或命令输出。 */
+      environment: environmentInfo,
       checks: [
         { id: 'data-readable', ok: dataReadable },
         { id: 'data-writable', ok: dataWritable },

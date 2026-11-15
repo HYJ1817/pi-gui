@@ -397,6 +397,53 @@ function installOpenPathHandler() {
  * 注意这里**不查后端**：URL 本身就是判据，不需要向任何服务求证。
  * 另外刻意不做「先 GET 一下看看」这类预检 —— 那会给用户点开的链接
  * 平白多出一次请求，而且和浏览器实际发的请求并不是同一个。 */
+/* 首次环境安装的原生确认框。
+ *
+ * 渲染进程只能送**组件 id**（node / pi / git），不能送文案、路径、URL 或命令。
+ * 对话框正文由这里按固定 allowlist 生成 —— 否则一个被注入的页面就能把
+ * 任意文本塞进一个看起来像系统确认框的窗口里。
+ *
+ * 这里不做安装，只拿到「用户确实点过确认」这个信号；真正的执行在后端，
+ * 并且后端还会重新校验 planId 与组件集合。 */
+function installEnvironmentConfirmHandler() {
+  const allowed = {
+    node: 'Node.js 24 LTS（含 npm）',
+    pi: 'Pi Coding Agent（npm 官方包）',
+    git: 'Git for Windows（MinGit，可选）',
+  };
+  ipcMain.handle('pi-gui:environment-confirm', async (_event, components) => {
+    const ids = Array.isArray(components)
+      ? [...new Set(components.filter((id) => typeof id === 'string' && Object.prototype.hasOwnProperty.call(allowed, id)))]
+      : [];
+    if (!ids.length) return { ok: false, error: '没有需要确认的安装项' };
+    const detail = [
+      ...ids.map((id) => `• ${allowed[id]}`),
+      '',
+      '安装到当前用户目录，不需要管理员权限，不修改系统环境变量。',
+      '不会覆盖已有的 Pi；安装包只从官方渠道下载并校验。',
+    ].join('\n');
+    try {
+      const options = {
+        type: 'question',
+        title: '安装缺失依赖',
+        message: 'Pi GUI 需要安装以下组件',
+        detail,
+        buttons: ['开始安装', '取消'],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+      };
+      const result = win && !win.isDestroyed()
+        ? await dialog.showMessageBox(win, options)
+        : await dialog.showMessageBox(options);
+      if (result.response !== 0) return { ok: false, cancelled: true };
+      return { ok: true, consent: true, components: ids };
+    } catch {
+      return { ok: false, error: '确认窗口无法打开' };
+    }
+  });
+}
+
 function installOpenExternalHandler() {
   ipcMain.handle('pi-gui:open-web-url', async (_event, url) => {
     if (!isSafeWebUrl(url)) return { ok: false, error: '已拒绝不安全的 Web 链接' };
@@ -934,6 +981,7 @@ if (!app.requestSingleInstanceLock()) {
     // "No handler registered"。
     installOpenPathHandler();
     installOpenExternalHandler();
+    installEnvironmentConfirmHandler();
     try { appUpdate=installAppUpdate({app,ipcMain,origin:ORIGIN,getWindow:()=>win,getServer:()=>server,dialog,shell,
       inspectDesktop:()=>{
         const states=[browserAgent?.agent.status(),...[...(runtimeBrowserHost?.records.values()||[])].map(r=>r.agent.status())].filter(Boolean);

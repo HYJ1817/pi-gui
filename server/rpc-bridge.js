@@ -124,17 +124,30 @@ export function createRpcBridge({
   const safeLog = (event, details = {}) => { try { diagLog(event, details); } catch { /* observation only */ } };
   const operationOf = (cmd) => (cmd && typeof cmd.type === 'string' ? cmd.type : 'unknown');
   /* 实际启动命令：launch identity 优先，`piBin` 只是缺省（老调用方 / 单测）。
+   * **每次启动时再问一次** —— 环境安装可能刚把一份 Pi 放进 Pi GUI 自己的
+   * 运行时目录，后端进程没有重启，但下一次 spawn 必须执行新的入口。
+   * identity 自己有 TTL，这里只做一次廉价读取，不在模块构造时钉死。
    * 这是「bridge spawn 的那个东西」的唯一取值处 —— 下面不再出现第二个来源。 */
-  const launchBin = (launch && typeof launch.bin === 'string' && launch.bin) ? launch.bin : piBin;
-  let restartSession = null;
-  /* 事件里能露出去的只有 basename（见 start() 里的说明）。 */
-  const binLabel = (() => {
+  function launchBinNow() {
     try {
-      return basename(launchBin) || launchBin;
+      if (launch && typeof launch.identity === 'function') {
+        const id = launch.identity();
+        if (id && typeof id.bin === 'string' && id.bin) return id.bin;
+      }
     } catch {
-      return launchBin;
+      /* 动态 identity 不可用时退回构造参数 */
     }
-  })();
+    if (launch && typeof launch.bin === 'string' && launch.bin) return launch.bin;
+    return piBin;
+  }
+  const binLabelOf = (value) => {
+    try {
+      return basename(value) || value;
+    } catch {
+      return value;
+    }
+  };
+  let restartSession = null;
   /* 兼容层（P4，可选注入）。
    *
    * 它只**观察**，不参与任何判断 —— 桥接的行为一行都不因它改变。
@@ -332,9 +345,10 @@ export function createRpcBridge({
 
     const args = buildArgs(extra);
     restartSession = null;
+    const launchBin = launchBinNow();
     /* `bin` 只给 basename —— 完整绝对路径（`PI_BIN=C:\...\pi.cmd`）不出后端，
      * renderer 与诊断里都只该看到「哪个入口」，不该看到它装在哪。 */
-    publish({ type: 'bridge_status', state: 'starting', bin: binLabel, args, cwd, bridgeRun: run });
+    publish({ type: 'bridge_status', state: 'starting', bin: binLabelOf(launchBin), args, cwd, bridgeRun: run });
 
     let child;
     try {
