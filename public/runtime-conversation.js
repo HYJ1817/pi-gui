@@ -855,7 +855,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         node: host,
         update(next) {
           const plan = normalizePlan(next.plan);
-          if (!plan) { host.replaceChildren(); host.hidden = true; return; }
+          if (!plan) {
+            host.replaceChildren();
+            host.hidden = true;
+            host._usageMeta = null;
+            host._usageKey = '';
+            return;
+          }
           host.hidden = false;
           if (!card) { card = renderPlan(plan); host.append(card); }
           const nextSignature = JSON.stringify([plan.tasks, plan.explanation, plan.completed, plan.total]);
@@ -865,6 +871,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           /* 旧回合的计划不再呼吸；当前回合按真实运行态决定。 */
           const currentPlan = record?.planBlock?.id === next.id;
           setPlanStalled(card, !currentPlan || !activeRun);
+          /* plan-only 消息的真实 usage 挂在计划 block 上；放在卡片外层，
+           * 折叠计划列表不会把用量一起藏掉。 */
+          syncUsageMeta(host, next);
         },
       };
     }

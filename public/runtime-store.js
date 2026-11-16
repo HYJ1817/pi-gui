@@ -12,6 +12,7 @@ import {
   contentSegments,
   timelineFromMessages,
   usageProjection,
+  USAGE_BLOCK_KINDS,
 } from './runtime-timeline.js';
 
 const same = (a, b) => a && b && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => a[k] === b[k]);
@@ -535,19 +536,53 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   }
   function apply(frame) { return applyDetailed(frame).ok; }
 
+  /* 工具条目也只复制渲染真正需要的字段；args/output/result 等原始载荷
+   * 不得随历史 block 进入 store。 */
+  function cloneTool(tool) {
+    if (!tool || typeof tool !== 'object') return {};
+    const copy = {};
+    if (typeof tool.id === 'string') copy.id = tool.id;
+    if (typeof tool.name === 'string') copy.name = tool.name;
+    if (typeof tool.state === 'string') copy.state = tool.state;
+    copy.waiting = tool.waiting === true;
+    if (tool.durationMs === null || (Number.isFinite(tool.durationMs) && tool.durationMs >= 0)) {
+      copy.durationMs = tool.durationMs;
+    }
+    return copy;
+  }
+
   function cloneBlock(block) {
+    /* 历史 block 也可能来自别的进程/旧响应。按既有 block 契约逐字段构造，
+     * 而不是对象展开：message、args、secret、extra 等附加属性没有入口。
+     * plan 再走一次 normalizePlan，任务也只保留 plan-model 白名单字段。 */
     let copy;
-    if (block.kind === 'tools') copy = { ...block, tools: block.tools.map(tool => ({ ...tool })) };
-    else if (block.kind === 'plan') copy = { ...block, plan: block.plan ? { ...block.plan, tasks: block.plan.tasks.map(task => ({ ...task })) } : null };
-    else copy = { ...block };
-    /* 历史 block 也可能来自别的进程/旧响应：进入 store 前再走一次白名单，
-     * 不把任意附加字段（含原始 message）带进视图或后续序列化。
-     * 只有真正承载单条消息用量的 block 类型才保留 usage。 */
-    const usage = ['assistant', 'thinking', 'tools'].includes(block.kind)
-      ? usageProjection(block.usage)
-      : null;
+    if (block.kind === 'user') {
+      copy = { kind: 'user', text: typeof block.text === 'string' ? block.text : '', truncated: block.truncated === true };
+      if (typeof block.messageId === 'string') copy.messageId = block.messageId;
+      if (Number.isInteger(block.userIndex)) copy.userIndex = block.userIndex;
+    } else if (block.kind === 'assistant' || block.kind === 'thinking') {
+      copy = {
+        kind: block.kind,
+        text: typeof block.text === 'string' ? block.text : '',
+        state: typeof block.state === 'string' ? block.state : '',
+        truncated: block.truncated === true,
+      };
+    } else if (block.kind === 'tools') {
+      copy = {
+        kind: 'tools',
+        tools: Array.isArray(block.tools) ? block.tools.map(cloneTool) : [],
+        truncated: block.truncated === true,
+      };
+    } else if (block.kind === 'plan') {
+      const plan = normalizePlan(block.plan);
+      if (!plan) return null;
+      copy = { kind: 'plan', plan };
+    } else return null;
+    if (typeof block.id === 'string') copy.id = block.id;
+    /* 只有契约允许承载单条消息用量的 block 类型才保留 usage；
+     * plan-only 消息同样属于这一白名单。 */
+    const usage = USAGE_BLOCK_KINDS.includes(block.kind) ? usageProjection(block.usage) : null;
     if (usage) copy.usage = usage;
-    else delete copy.usage;
     return copy;
   }
 
@@ -562,7 +597,8 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       } else if (block.kind === 'plan') {
         if (!normalizePlan(block.plan)) continue;
       } else continue;
-      bounded.push(cloneBlock(block));
+      const copy = cloneBlock(block);
+      if (copy) bounded.push(copy);
     }
     r.timeline = bounded.map((block, index) => ({ ...block, id: 'h' + (index + 1) }));
     r.timelineSeq = bounded.length;

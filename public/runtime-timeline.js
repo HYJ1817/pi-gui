@@ -30,6 +30,9 @@ const SAFE_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_.:-]{0,63}$/;
  * 用量，不是会话累计；成本单独保留为 costTotal（仍只接受 Pi 已算好的数，
  * 不由渲染端乘单价或补货币符号）。 */
 export const USAGE_FIELDS = ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite1h', 'reasoning', 'totalTokens'];
+/* 单条 assistant 消息的 usage 只会挂到它自己产生的 block 上，且只挂一次。
+ * 顺序同时是归属优先级：正文 > Thinking > 工具组 > Plan（plan-only 消息）。 */
+export const USAGE_BLOCK_KINDS = ['assistant', 'thinking', 'tools', 'plan'];
 const USAGE_CHARS = 64;
 
 /** 白名单投影：只保留非负安全整数的 token 字段与非负有限的 costTotal。
@@ -121,7 +124,7 @@ export function blockChars(block) {
   if (block.kind === 'tools') return block.tools.length * 24 + (block.usage ? USAGE_CHARS : 0);
   if (block.kind === 'plan') {
     return (block.plan?.tasks || []).reduce((sum, task) => sum + task.title.length + task.id.length, 0)
-      + (block.plan?.explanation?.length || 0);
+      + (block.plan?.explanation?.length || 0) + (block.usage ? USAGE_CHARS : 0);
   }
   return 0;
 }
@@ -292,12 +295,12 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
       if (block.kind === 'thinking' && state === 'interrupted') block.state = 'interrupted';
     }
     /* 单条消息的真实 usage 只挂一次：优先最后一个正文本 block，其次
-     * Thinking，最后工具组。这样只思考或只调工具的消息也有真实用量，
-     * 但不会为它伪造一条空的 assistant 消息。 */
+     * Thinking，再次工具组，最后 Plan。这样只思考、只调工具或只提交计划的
+     * 消息也有真实用量，但不会为它伪造一条空的 assistant 消息。 */
     const usage = usageProjection(message.usage);
     if (usage) {
       let target = null;
-      for (const kind of ['assistant', 'thinking', 'tools']) {
+      for (const kind of USAGE_BLOCK_KINDS) {
         for (let i = owned.length - 1; i >= 0; i--) {
           if (owned[i].kind === kind) { target = owned[i]; break; }
         }
