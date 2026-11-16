@@ -1,6 +1,6 @@
 {
   "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
-  "overrideFile": "docs/ui/session-ux-phase4bc-evidence/p4c-proposal-overrides.css",
+  "beforeOverrideFile": "docs/ui/session-ux-phase4bc-evidence/p4c-before-overrides.css",
   "viewports": [
     [
       1320,
@@ -9,11 +9,20 @@
     [
       700,
       600
+    ],
+    [
+      699,
+      600
+    ],
+    [
+      701,
+      600
     ]
   ],
+  "fontScale": 1.25,
   "assertions": [
     {
-      "name": "override-not-in-product",
+      "name": "before-override-not-in-product",
       "pass": true,
       "detail": []
     },
@@ -1746,6 +1755,324 @@
         "toolState": 6.29,
         "status": 6.29,
         "usage": 6.29
+      }
+    },
+    {
+      "name": "runtime-boundary-699-padding",
+      "pass": true,
+      "detail": {
+        "width": 439,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 381,
+        "clientWidth": 429,
+        "scrollWidth": 429,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-boundary-699-net-width",
+      "pass": true,
+      "detail": {
+        "width": 439,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 381,
+        "clientWidth": 429,
+        "scrollWidth": 429,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-boundary-699-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      }
+    },
+    {
+      "name": "runtime-boundary-701-padding",
+      "pass": true,
+      "detail": {
+        "width": 413,
+        "height": 280.25,
+        "top": 113.44,
+        "bottom": 393.69,
+        "netWidth": 339,
+        "clientWidth": 403,
+        "scrollWidth": 403,
+        "scrollHeight": 797,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-boundary-701-net-width",
+      "pass": true,
+      "detail": {
+        "width": 413,
+        "height": 280.25,
+        "top": 113.44,
+        "bottom": 393.69,
+        "netWidth": 339,
+        "clientWidth": 403,
+        "scrollWidth": 403,
+        "scrollHeight": 797,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-boundary-701-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      }
+    },
+    {
+      "name": "classic-boundary-699-padding",
+      "pass": true,
+      "detail": {
+        "width": 459,
+        "height": 1653.8,
+        "top": -259,
+        "bottom": 1394.8,
+        "netWidth": 427,
+        "scrollWidth": 459,
+        "clientWidth": 459,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "classic-boundary-699-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      }
+    },
+    {
+      "name": "classic-boundary-701-padding-stable",
+      "pass": true,
+      "detail": {
+        "width": 461,
+        "height": 1681.27,
+        "top": -259,
+        "bottom": 1422.27,
+        "netWidth": 429,
+        "scrollWidth": 461,
+        "clientWidth": 461,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "classic-boundary-701-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      }
+    },
+    {
+      "name": "classic-font125-scale",
+      "pass": true,
+      "detail": {
+        "groupHead": {
+          "fontSize": "15px",
+          "lineHeight": "21px"
+        },
+        "status": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "toolState": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "groupTime": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "toolLabel": {
+          "fontSize": "15px",
+          "lineHeight": "21px"
+        },
+        "planHead": {
+          "fontSize": "15px",
+          "lineHeight": "21px"
+        },
+        "planCount": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "planNow": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        }
+      }
+    },
+    {
+      "name": "classic-font125-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      }
+    },
+    {
+      "name": "classic-font125-composer",
+      "pass": true,
+      "detail": {
+        "width": 460,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      }
+    },
+    {
+      "name": "runtime-font125-scale",
+      "pass": true,
+      "detail": {
+        "groupHead": {
+          "fontSize": "15px",
+          "lineHeight": "21px"
+        },
+        "toolState": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "status": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        }
+      }
+    },
+    {
+      "name": "runtime-font125-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      }
+    },
+    {
+      "name": "runtime-font125-composer",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 183.38,
+        "top": 406.63,
+        "bottom": 590,
+        "visible": true
+      }
+    },
+    {
+      "name": "reduced-motion-plan-pulse",
+      "pass": true,
+      "detail": {
+        "pulse": "none",
+        "scrollTransition": "0s"
+      }
+    },
+    {
+      "name": "reduced-motion-scroll",
+      "pass": true,
+      "detail": {
+        "pulse": "none",
+        "scrollTransition": "0s"
+      }
+    },
+    {
+      "name": "classic-plan-focus-visible",
+      "pass": true,
+      "detail": {
+        "focused": true,
+        "focusVisible": true,
+        "outlineStyle": "solid",
+        "outlineWidth": "2px"
       }
     }
   ],
@@ -4283,6 +4610,879 @@
         "visible": true
       },
       "planTop": 155.38
+    },
+    {
+      "name": "runtime-boundary-699-light",
+      "viewport": [
+        699,
+        600
+      ],
+      "theme": "light",
+      "output": {
+        "width": 439,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 381,
+        "clientWidth": 429,
+        "scrollWidth": 429,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 89.38
+      },
+      "userText": {
+        "width": 312.41,
+        "height": 63.38,
+        "top": -146.56,
+        "bottom": -83.19
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "toolState": 6.29,
+        "status": 6.29
+      },
+      "composer": {
+        "width": 439,
+        "height": 181.5,
+        "top": 408.5,
+        "bottom": 590,
+        "visible": true
+      },
+      "planTop": 155.38
+    },
+    {
+      "name": "runtime-boundary-701-light",
+      "viewport": [
+        701,
+        600
+      ],
+      "theme": "light",
+      "output": {
+        "width": 413,
+        "height": 280.25,
+        "top": 113.44,
+        "bottom": 393.69,
+        "netWidth": 339,
+        "clientWidth": 403,
+        "scrollWidth": 403,
+        "scrollHeight": 797,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 89.38
+      },
+      "userText": {
+        "width": 277.97,
+        "height": 63.38,
+        "top": -156.56,
+        "bottom": -93.19
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 221
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 221
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "toolState": 6.29,
+        "status": 6.29
+      },
+      "composer": {
+        "width": 413,
+        "height": 152.5,
+        "top": 431.5,
+        "bottom": 584,
+        "visible": true
+      },
+      "planTop": 145.38
+    },
+    {
+      "name": "classic-boundary-699-light",
+      "viewport": [
+        699,
+        600
+      ],
+      "theme": "light",
+      "thread": {
+        "width": 459,
+        "height": 1653.8,
+        "top": -259,
+        "bottom": 1394.8,
+        "netWidth": 427,
+        "scrollWidth": 459,
+        "clientWidth": 459,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 32,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 627.09
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "status": 5.04,
+        "toolState": 6.29,
+        "groupTime": 6.29,
+        "planCount": 6.29,
+        "planNow": 6.29
+      },
+      "composer": {
+        "width": 459,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      },
+      "planTop": 62.2
+    },
+    {
+      "name": "classic-boundary-701-light",
+      "viewport": [
+        701,
+        600
+      ],
+      "theme": "light",
+      "thread": {
+        "width": 461,
+        "height": 1681.27,
+        "top": -259,
+        "bottom": 1422.27,
+        "netWidth": 429,
+        "scrollWidth": 461,
+        "clientWidth": 461,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 32,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 632.09
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 182.25
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "status": 5.04,
+        "toolState": 6.29,
+        "groupTime": 6.29,
+        "planCount": 6.29,
+        "planNow": 6.29
+      },
+      "composer": {
+        "width": 461,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      },
+      "planTop": 62.2
+    },
+    {
+      "name": "classic-font125-dark-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "thread": {
+        "width": 460,
+        "height": 1749.14,
+        "top": -281,
+        "bottom": 1468.14,
+        "netWidth": 428,
+        "scrollWidth": 460,
+        "clientWidth": 460,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 32,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 655.69
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 15,
+        "lineHeight": 21,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "15px",
+          "lineHeight": "21px"
+        },
+        "status": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "toolState": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "groupTime": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "toolLabel": {
+          "fontSize": "15px",
+          "lineHeight": "21px"
+        },
+        "planHead": {
+          "fontSize": "15px",
+          "lineHeight": "21px"
+        },
+        "planCount": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "planNow": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "status": 5.83,
+        "toolState": 8.19,
+        "groupTime": 8.19,
+        "planCount": 8.19,
+        "planNow": 8.19
+      },
+      "composer": {
+        "width": 460,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      },
+      "planTop": 62.3
+    },
+    {
+      "name": "runtime-font125-dark-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "output": {
+        "width": 440,
+        "height": 245.38,
+        "top": 123.44,
+        "bottom": 368.81,
+        "netWidth": 382,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 795,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 17.5,
+        "lineHeight": 28,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 17.5,
+        "lineHeight": 28,
+        "minHeight": 0,
+        "height": 100.25
+      },
+      "userText": {
+        "width": 313.23,
+        "height": 74.25,
+        "top": -176.56,
+        "bottom": -102.31
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 17.5,
+        "lineHeight": 28,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 17.5,
+        "lineHeight": 28,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 17.5,
+        "lineHeight": 28,
+        "minHeight": null,
+        "height": 60.25
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "15px",
+          "lineHeight": "21px"
+        },
+        "toolState": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        },
+        "status": {
+          "fontSize": "13.75px",
+          "lineHeight": "19.25px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "toolState": 8.19,
+        "status": 8.19
+      },
+      "composer": {
+        "width": 440,
+        "height": 183.38,
+        "top": 406.63,
+        "bottom": 590,
+        "visible": true
+      },
+      "planTop": 155.53
+    },
+    {
+      "name": "reduced-motion-runtime",
+      "pulse": "none",
+      "scrollTransition": "0s"
+    },
+    {
+      "name": "classic-plan-focus",
+      "focused": true,
+      "focusVisible": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px"
     }
   ]
 }

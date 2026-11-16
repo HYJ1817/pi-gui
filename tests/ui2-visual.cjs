@@ -485,9 +485,9 @@ async function suite(send) {
   const chevExpanded = await evalJs(`getComputedStyle(document.getElementById('u2c-sum'), '::before').transform`);
   await expect('A · .ui2-tool-summary 折叠图标随 aria-expanded 旋转',
     `${JSON.stringify(chevCollapsed)} !== 'none' && ${JSON.stringify(chevExpanded)} !== 'none' && ${JSON.stringify(chevCollapsed)} !== ${JSON.stringify(chevExpanded)}`);
-  await expect('A · .ui2-tool-state 组状态弱化小字（10.5px / t3）',
+  await expect('A · .ui2-tool-state 组状态弱化小字（11px / t3）',
     `(() => { const s = getComputedStyle(document.getElementById('u2c-st'));
-      return s.fontSize === '10.5px' && s.color === 'rgb(176, 176, 176)'; })()`);
+      return s.fontSize === '11px' && s.color === 'rgb(176, 176, 176)'; })()`);
   await expect('A · .ui2-msg-meta-item 等宽数字对齐（tabular-nums）',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-ab .ui2-msg-meta-item'));
       return s.fontVariantNumeric.includes('tabular'); })()`);
