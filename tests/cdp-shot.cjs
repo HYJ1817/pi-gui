@@ -1213,10 +1213,10 @@ async function main() {
   await evalJs(`fetch('/api/__conversation?what=subagent-activity').then(r=>r.ok)`);
   await sleep(350);
   await evalJs(`document.querySelector('[data-id="p17-workflow"] .tl-toggle').click(); document.querySelector('[data-id="p17-workflow"]').scrollIntoView({block:'center'})`);
-  await shotOf('#workspace', '157-subagent-workflow', 'P17：真实结构化 child 状态与显式关系', ['Children: 2', 'review-ui', 'review-api'], [
+  await shotOf('#workspace', '157-subagent-workflow', 'P17：真实结构化 child 状态与显式关系', ['子代理 · 2 项 · 运行 1 · 成功 1', 'review-ui', 'review-api'], [
     ...viewportChecks('#chatView'),
-    ['child 状态互不覆盖', `document.querySelector('[data-id="p17-workflow"] .tl-out').textContent.includes('review-ui · custom-ui · completed') && document.querySelector('[data-id="p17-workflow"] .tl-out').textContent.includes('review-api · custom-api · running')`],
-    ['父关系来自实际字段', `document.querySelector('[data-id="p17-workflow"] .tl-out').textContent.includes('Parent tool: p17-workflow')`],
+    ['child 状态互不覆盖', `(() => { const rows=[...document.querySelectorAll('[data-id="p17-workflow"] .tl-subagent-row')]; return rows.length===2 && rows[0].textContent.includes('review-ui') && rows[0].textContent.includes('custom-ui') && rows[0].dataset.state==='completed' && rows[1].textContent.includes('review-api') && rows[1].textContent.includes('custom-api') && rows[1].dataset.state==='running' })()`],
+    ['父关系仅由绑定 workflow 生成卡片', `document.querySelector('[data-id="p17-workflow"] .tl-out').textContent==='' && document.querySelectorAll('[data-id="p17-workflow"] .tl-subagent-row').length===2`],
     ['raw transcript 不展示', `!document.querySelector('#stream').textContent.includes('RAW_CHILD_SECRET')`],
   ]);
   await evalJs(`document.querySelector('[data-id="p17-bg"] .tl-toggle').click(); document.querySelector('[data-id="p17-bg"]').scrollIntoView({block:'center'})`);

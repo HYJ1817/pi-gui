@@ -1,0 +1,1961 @@
+{
+  "label": "after",
+  "hasCards": true,
+  "publicRoot": "C:\\pi-GUI\\public",
+  "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "assertions": [
+    {
+      "name": "probe",
+      "pass": true,
+      "detail": {
+        "label": "after",
+        "hasCards": true
+      }
+    },
+    {
+      "name": "plan-card-once",
+      "pass": true,
+      "detail": {
+        "name": "fixture",
+        "hasCards": true,
+        "planCards": 1,
+        "planToolRows": 0,
+        "guiPlanRows": 0,
+        "normalGroupChildren": 2,
+        "thinkingBlocks": 1,
+        "usageMetas": 2,
+        "toolGroups": 5,
+        "subagentCards": 3,
+        "subagentRows": 7,
+        "hiddenRawMarkers": {
+          "secretEnv": false,
+          "privateScript": false,
+          "privateToken": false,
+          "privateLive": false
+        }
+      }
+    },
+    {
+      "name": "plan-not-tool-row",
+      "pass": true,
+      "detail": {
+        "name": "fixture",
+        "hasCards": true,
+        "planCards": 1,
+        "planToolRows": 0,
+        "guiPlanRows": 0,
+        "normalGroupChildren": 2,
+        "thinkingBlocks": 1,
+        "usageMetas": 2,
+        "toolGroups": 5,
+        "subagentCards": 3,
+        "subagentRows": 7,
+        "hiddenRawMarkers": {
+          "secretEnv": false,
+          "privateScript": false,
+          "privateToken": false,
+          "privateLive": false
+        }
+      }
+    },
+    {
+      "name": "normal-group-2",
+      "pass": true,
+      "detail": {
+        "name": "fixture",
+        "hasCards": true,
+        "planCards": 1,
+        "planToolRows": 0,
+        "guiPlanRows": 0,
+        "normalGroupChildren": 2,
+        "thinkingBlocks": 1,
+        "usageMetas": 2,
+        "toolGroups": 5,
+        "subagentCards": 3,
+        "subagentRows": 7,
+        "hiddenRawMarkers": {
+          "secretEnv": false,
+          "privateScript": false,
+          "privateToken": false,
+          "privateLive": false
+        }
+      }
+    },
+    {
+      "name": "thinking-present",
+      "pass": true,
+      "detail": {
+        "name": "fixture",
+        "hasCards": true,
+        "planCards": 1,
+        "planToolRows": 0,
+        "guiPlanRows": 0,
+        "normalGroupChildren": 2,
+        "thinkingBlocks": 1,
+        "usageMetas": 2,
+        "toolGroups": 5,
+        "subagentCards": 3,
+        "subagentRows": 7,
+        "hiddenRawMarkers": {
+          "secretEnv": false,
+          "privateScript": false,
+          "privateToken": false,
+          "privateLive": false
+        }
+      }
+    },
+    {
+      "name": "usage-present",
+      "pass": true,
+      "detail": {
+        "name": "fixture",
+        "hasCards": true,
+        "planCards": 1,
+        "planToolRows": 0,
+        "guiPlanRows": 0,
+        "normalGroupChildren": 2,
+        "thinkingBlocks": 1,
+        "usageMetas": 2,
+        "toolGroups": 5,
+        "subagentCards": 3,
+        "subagentRows": 7,
+        "hiddenRawMarkers": {
+          "secretEnv": false,
+          "privateScript": false,
+          "privateToken": false,
+          "privateLive": false
+        }
+      }
+    },
+    {
+      "name": "raw-args-absent",
+      "pass": true,
+      "detail": {
+        "secretEnv": false,
+        "privateScript": false,
+        "privateToken": false,
+        "privateLive": false
+      }
+    },
+    {
+      "name": "after-cards",
+      "pass": true,
+      "detail": {
+        "name": "fixture",
+        "hasCards": true,
+        "planCards": 1,
+        "planToolRows": 0,
+        "guiPlanRows": 0,
+        "normalGroupChildren": 2,
+        "thinkingBlocks": 1,
+        "usageMetas": 2,
+        "toolGroups": 5,
+        "subagentCards": 3,
+        "subagentRows": 7,
+        "hiddenRawMarkers": {
+          "secretEnv": false,
+          "privateScript": false,
+          "privateToken": false,
+          "privateLive": false
+        }
+      }
+    },
+    {
+      "name": "wide-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0
+      }
+    },
+    {
+      "name": "wide-parent-compact",
+      "pass": true,
+      "detail": {
+        "headHeight": 26,
+        "metaHeight": 15.390625,
+        "collapsedHeight": 51.390625,
+        "expandedHeight": 119.078125,
+        "metaText": "子代理 · 1 项 · 成功 1",
+        "metaVisible": true,
+        "listRole": "list",
+        "listLabel": "子代理",
+        "toggleText": "收起",
+        "toggleExpanded": "true",
+        "controls": "tool-detail-4",
+        "controlsExists": true,
+        "controlsInside": true,
+        "stopButtons": 1,
+        "moreSections": [
+          {
+            "tag": "DIV",
+            "cls": "tl-subagents",
+            "hidden": false,
+            "display": "block",
+            "height": 59.6875,
+            "text": "reviewer-模块边界-中文长名称成功pro"
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "输出"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-out",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "详细信息"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-args",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "after-parent-meta",
+      "pass": true,
+      "detail": {
+        "headHeight": 26,
+        "metaHeight": 15.390625,
+        "collapsedHeight": 51.390625,
+        "expandedHeight": 119.078125,
+        "metaText": "子代理 · 1 项 · 成功 1",
+        "metaVisible": true,
+        "listRole": "list",
+        "listLabel": "子代理",
+        "toggleText": "收起",
+        "toggleExpanded": "true",
+        "controls": "tool-detail-4",
+        "controlsExists": true,
+        "controlsInside": true,
+        "stopButtons": 1,
+        "moreSections": [
+          {
+            "tag": "DIV",
+            "cls": "tl-subagents",
+            "hidden": false,
+            "display": "block",
+            "height": 59.6875,
+            "text": "reviewer-模块边界-中文长名称成功pro"
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "输出"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-out",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "详细信息"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-args",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "after-aria-controls",
+      "pass": true,
+      "detail": {
+        "headHeight": 26,
+        "metaHeight": 15.390625,
+        "collapsedHeight": 51.390625,
+        "expandedHeight": 119.078125,
+        "metaText": "子代理 · 1 项 · 成功 1",
+        "metaVisible": true,
+        "listRole": "list",
+        "listLabel": "子代理",
+        "toggleText": "收起",
+        "toggleExpanded": "true",
+        "controls": "tool-detail-4",
+        "controlsExists": true,
+        "controlsInside": true,
+        "stopButtons": 1,
+        "moreSections": [
+          {
+            "tag": "DIV",
+            "cls": "tl-subagents",
+            "hidden": false,
+            "display": "block",
+            "height": 59.6875,
+            "text": "reviewer-模块边界-中文长名称成功pro"
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "输出"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-out",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "详细信息"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-args",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "after-list-role",
+      "pass": true,
+      "detail": {
+        "headHeight": 26,
+        "metaHeight": 15.390625,
+        "collapsedHeight": 51.390625,
+        "expandedHeight": 119.078125,
+        "metaText": "子代理 · 1 项 · 成功 1",
+        "metaVisible": true,
+        "listRole": "list",
+        "listLabel": "子代理",
+        "toggleText": "收起",
+        "toggleExpanded": "true",
+        "controls": "tool-detail-4",
+        "controlsExists": true,
+        "controlsInside": true,
+        "stopButtons": 1,
+        "moreSections": [
+          {
+            "tag": "DIV",
+            "cls": "tl-subagents",
+            "hidden": false,
+            "display": "block",
+            "height": 59.6875,
+            "text": "reviewer-模块边界-中文长名称成功pro"
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "输出"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-out",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "详细信息"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-args",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "after-three-children",
+      "pass": true,
+      "detail": {
+        "summary": "子代理 · 3 项 · 成功 2 · 失败 1",
+        "rows": 3,
+        "states": [
+          "completed",
+          "failed",
+          "completed"
+        ],
+        "agents": [
+          "reviewer-ui-中文-长名称-用于窄屏换行",
+          "reviewer-api",
+          "writer-docs"
+        ],
+        "models": [
+          "provider/model-with-a-very-long-name-2026-11-16-alpha",
+          "provider/model-beta",
+          "provider/model-gamma"
+        ],
+        "tasks": [],
+        "toggleText": "收起",
+        "rowText": "Delegation returned成功Workflow · 3 children · completed收起子代理 · 3 项 · 成功 2 · 失败 1reviewer-ui-中文-长名称-用于窄屏换行成功provider/model-with-a-very-long-name-2026-11-16-alpha当前 read · 工具 8 · 轮次 4 · Token 32000 · 45.0sreviewer-api失败provider/model-betawriter-docs成功provider/model-gamma工具 3 · 轮次 2 · Token 5000 · 9.0s输出详细信息"
+      }
+    },
+    {
+      "name": "after-wide-one-line",
+      "pass": true,
+      "detail": {
+        "tops": [
+          -384.09375,
+          -381.28125,
+          -382.09375
+        ],
+        "maxDelta": 2.8125,
+        "lineRect": {
+          "x": 484.5,
+          "y": -384.09375,
+          "width": 648,
+          "height": 18.203125,
+          "top": -384.09375,
+          "right": 1132.5,
+          "bottom": -365.890625,
+          "left": 484.5
+        },
+        "agentRect": {
+          "x": 484.5,
+          "y": -384.09375,
+          "width": 208.5625,
+          "height": 16.796875,
+          "top": -384.09375,
+          "right": 693.0625,
+          "bottom": -367.296875,
+          "left": 484.5
+        },
+        "stateRect": {
+          "x": 700.0625,
+          "y": -381.28125,
+          "width": 31,
+          "height": 15.390625,
+          "top": -381.28125,
+          "right": 731.0625,
+          "bottom": -365.890625,
+          "left": 700.0625
+        },
+        "modelRect": {
+          "x": 738.0625,
+          "y": -382.09375,
+          "width": 394.4375,
+          "height": 15.390625,
+          "top": -382.09375,
+          "right": 1132.5,
+          "bottom": -366.703125,
+          "left": 738.0625
+        },
+        "lineHeight": 18.203125,
+        "modelWidth": 394.4375,
+        "modelScrollWidth": 394,
+        "modelStyle": {
+          "whiteSpace": "nowrap",
+          "textOverflow": "ellipsis",
+          "overflow": "hidden",
+          "fontSize": "11px",
+          "color": "rgb(176, 176, 176)"
+        },
+        "agentStyle": {
+          "fontSize": "12px",
+          "color": "rgb(238, 238, 238)",
+          "overflowWrap": "anywhere"
+        },
+        "stateStyle": {
+          "fontSize": "11px",
+          "color": "rgb(74, 222, 128)",
+          "whiteSpace": "nowrap"
+        },
+        "stateColors": [
+          {
+            "state": "completed",
+            "color": "rgb(74, 222, 128)"
+          },
+          {
+            "state": "failed",
+            "color": "rgb(248, 113, 113)"
+          },
+          {
+            "state": "completed",
+            "color": "rgb(74, 222, 128)"
+          }
+        ],
+        "listStyle": {
+          "overflow": "visible",
+          "overflowY": "visible",
+          "maxHeight": "none"
+        },
+        "listScroll": {
+          "height": 117,
+          "scrollHeight": 117
+        }
+      }
+    },
+    {
+      "name": "after-no-child-stop",
+      "pass": true,
+      "detail": {
+        "headHeight": 26,
+        "metaHeight": 15.390625,
+        "collapsedHeight": 51.390625,
+        "expandedHeight": 119.078125,
+        "metaText": "子代理 · 1 项 · 成功 1",
+        "metaVisible": true,
+        "listRole": "list",
+        "listLabel": "子代理",
+        "toggleText": "收起",
+        "toggleExpanded": "true",
+        "controls": "tool-detail-4",
+        "controlsExists": true,
+        "controlsInside": true,
+        "stopButtons": 1,
+        "moreSections": [
+          {
+            "tag": "DIV",
+            "cls": "tl-subagents",
+            "hidden": false,
+            "display": "block",
+            "height": 59.6875,
+            "text": "reviewer-模块边界-中文长名称成功pro"
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "输出"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-out",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "详细信息"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-args",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "after-no-scroll-area",
+      "pass": true,
+      "detail": {
+        "tops": [
+          -384.09375,
+          -381.28125,
+          -382.09375
+        ],
+        "maxDelta": 2.8125,
+        "lineRect": {
+          "x": 484.5,
+          "y": -384.09375,
+          "width": 648,
+          "height": 18.203125,
+          "top": -384.09375,
+          "right": 1132.5,
+          "bottom": -365.890625,
+          "left": 484.5
+        },
+        "agentRect": {
+          "x": 484.5,
+          "y": -384.09375,
+          "width": 208.5625,
+          "height": 16.796875,
+          "top": -384.09375,
+          "right": 693.0625,
+          "bottom": -367.296875,
+          "left": 484.5
+        },
+        "stateRect": {
+          "x": 700.0625,
+          "y": -381.28125,
+          "width": 31,
+          "height": 15.390625,
+          "top": -381.28125,
+          "right": 731.0625,
+          "bottom": -365.890625,
+          "left": 700.0625
+        },
+        "modelRect": {
+          "x": 738.0625,
+          "y": -382.09375,
+          "width": 394.4375,
+          "height": 15.390625,
+          "top": -382.09375,
+          "right": 1132.5,
+          "bottom": -366.703125,
+          "left": 738.0625
+        },
+        "lineHeight": 18.203125,
+        "modelWidth": 394.4375,
+        "modelScrollWidth": 394,
+        "modelStyle": {
+          "whiteSpace": "nowrap",
+          "textOverflow": "ellipsis",
+          "overflow": "hidden",
+          "fontSize": "11px",
+          "color": "rgb(176, 176, 176)"
+        },
+        "agentStyle": {
+          "fontSize": "12px",
+          "color": "rgb(238, 238, 238)",
+          "overflowWrap": "anywhere"
+        },
+        "stateStyle": {
+          "fontSize": "11px",
+          "color": "rgb(74, 222, 128)",
+          "whiteSpace": "nowrap"
+        },
+        "stateColors": [
+          {
+            "state": "completed",
+            "color": "rgb(74, 222, 128)"
+          },
+          {
+            "state": "failed",
+            "color": "rgb(248, 113, 113)"
+          },
+          {
+            "state": "completed",
+            "color": "rgb(74, 222, 128)"
+          }
+        ],
+        "listStyle": {
+          "overflow": "visible",
+          "overflowY": "visible",
+          "maxHeight": "none"
+        },
+        "listScroll": {
+          "height": 117,
+          "scrollHeight": 117
+        }
+      }
+    },
+    {
+      "name": "user-collapse-priority",
+      "pass": true,
+      "detail": {
+        "before": {
+          "expanded": "false",
+          "hidden": true
+        },
+        "after": {
+          "expanded": "false",
+          "hidden": true
+        }
+      }
+    },
+    {
+      "name": "parent-group-collapse-priority",
+      "pass": true,
+      "detail": {
+        "before": {
+          "expanded": "false",
+          "hidden": true
+        },
+        "after": {
+          "expanded": "false",
+          "hidden": true
+        }
+      }
+    },
+    {
+      "name": "live-state-change",
+      "pass": true,
+      "detail": {
+        "running": {
+          "name": "wide-live-running",
+          "parentStatus": "运行中",
+          "label": "Delegating…",
+          "summary": "子代理 · 3 项 · 运行 1 · 成功 1 · 失败 1",
+          "rows": [
+            {
+              "state": "completed",
+              "text": "reviewer-live-ui-中文-长名称-用于窄屏换行成功provider/model-live-ui-very-long-name当前 read · 工具 4 · 轮次 2 · Token 8000 · 1.8s"
+            },
+            {
+              "state": "running",
+              "text": "reviewer-live-api运行中provider/model-live-api当前 bash · 工具 1 · 轮次 1 · Token 1200 · 1.2s"
+            },
+            {
+              "state": "failed",
+              "text": "reviewer-live-edge失败"
+            }
+          ],
+          "toggleExpanded": "true"
+        },
+        "ended": {
+          "name": "wide-live-ended",
+          "parentStatus": "失败",
+          "label": "Delegation error",
+          "summary": "子代理 · 3 项 · 成功 2 · 失败 1",
+          "rows": [
+            {
+              "state": "completed",
+              "text": "reviewer-live-ui-中文-长名称-用于窄屏换行成功provider/model-live-ui-very-long-name当前 read · 工具 4 · 轮次 2 · Token 8000 · 1.8s"
+            },
+            {
+              "state": "failed",
+              "text": "reviewer-live-api失败provider/model-live-api当前 bash · 工具 1 · 轮次 1 · Token 1200 · 1.2s"
+            },
+            {
+              "state": "completed",
+              "text": "reviewer-live-edge成功"
+            }
+          ],
+          "toggleExpanded": "true",
+          "cardCount": true,
+          "factsText": ""
+        }
+      }
+    },
+    {
+      "name": "live-stays-expanded",
+      "pass": true,
+      "detail": {
+        "name": "wide-live-ended",
+        "parentStatus": "失败",
+        "label": "Delegation error",
+        "summary": "子代理 · 3 项 · 成功 2 · 失败 1",
+        "rows": [
+          {
+            "state": "completed",
+            "text": "reviewer-live-ui-中文-长名称-用于窄屏换行成功provider/model-live-ui-very-long-name当前 read · 工具 4 · 轮次 2 · Token 8000 · 1.8s"
+          },
+          {
+            "state": "failed",
+            "text": "reviewer-live-api失败provider/model-live-api当前 bash · 工具 1 · 轮次 1 · Token 1200 · 1.2s"
+          },
+          {
+            "state": "completed",
+            "text": "reviewer-live-edge成功"
+          }
+        ],
+        "toggleExpanded": "true",
+        "cardCount": true,
+        "factsText": ""
+      }
+    },
+    {
+      "name": "live-card-no-raw-facts",
+      "pass": true,
+      "detail": {
+        "name": "wide-live-ended",
+        "parentStatus": "失败",
+        "label": "Delegation error",
+        "summary": "子代理 · 3 项 · 成功 2 · 失败 1",
+        "rows": [
+          {
+            "state": "completed",
+            "text": "reviewer-live-ui-中文-长名称-用于窄屏换行成功provider/model-live-ui-very-long-name当前 read · 工具 4 · 轮次 2 · Token 8000 · 1.8s"
+          },
+          {
+            "state": "failed",
+            "text": "reviewer-live-api失败provider/model-live-api当前 bash · 工具 1 · 轮次 1 · Token 1200 · 1.2s"
+          },
+          {
+            "state": "completed",
+            "text": "reviewer-live-edge成功"
+          }
+        ],
+        "toggleExpanded": "true",
+        "cardCount": true,
+        "factsText": ""
+      }
+    },
+    {
+      "name": "collapsed-keeps-counts",
+      "pass": true,
+      "detail": {
+        "name": "collapsed-live",
+        "expanded": "false",
+        "toggleText": "子代理",
+        "metaVisible": true,
+        "metaText": "子代理 · 3 项 · 成功 2 · 失败 1",
+        "moreHidden": true,
+        "listOwnHidden": false,
+        "listVisible": false,
+        "listHidden": true,
+        "height": 51.390625
+      }
+    },
+    {
+      "name": "anchor-stable",
+      "pass": true,
+      "detail": {
+        "before": 344.515625,
+        "collapsed": 344.515625,
+        "expanded": 344.515625,
+        "collapseDelta": 0,
+        "expandDelta": 0
+      }
+    },
+    {
+      "name": "light-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0
+      }
+    },
+    {
+      "name": "light-state-colors",
+      "pass": true,
+      "detail": [
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        },
+        {
+          "state": "failed",
+          "color": "rgb(185, 28, 28)"
+        },
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        }
+      ]
+    },
+    {
+      "name": "narrow-dark-no-overflow",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "overflow": {
+          "document": 0,
+          "stream": 0
+        },
+        "rowOverflow": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "outsideStream": [
+          {
+            "left": 49,
+            "right": -27
+          },
+          {
+            "left": 49,
+            "right": -27
+          },
+          {
+            "left": 49,
+            "right": -27
+          },
+          {
+            "left": 49,
+            "right": -27
+          },
+          {
+            "left": 49,
+            "right": -27
+          },
+          {
+            "left": 49,
+            "right": -27
+          },
+          {
+            "left": 49,
+            "right": -27
+          }
+        ],
+        "line": {
+          "agentTop": 273.515625,
+          "stateTop": 276.328125,
+          "modelTop": 293.71875,
+          "agentBottom": 290.3125,
+          "modelBottom": 309.109375,
+          "lineTop": 273.515625,
+          "lineHeight": 35.59375,
+          "modelStyle": {
+            "whiteSpace": "normal",
+            "overflowWrap": "anywhere",
+            "overflow": "visible",
+            "width": 380
+          },
+          "modelText": "provider/model-live-ui-very-long-name"
+        },
+        "metaVisible": true,
+        "composer": {
+          "bottom": 600,
+          "top": 474,
+          "insideViewport": true
+        }
+      }
+    },
+    {
+      "name": "narrow-dark-composer",
+      "pass": true,
+      "detail": {
+        "bottom": 600,
+        "top": 474,
+        "insideViewport": true
+      }
+    },
+    {
+      "name": "narrow-name-state-first",
+      "pass": true,
+      "detail": {
+        "agentTop": 273.515625,
+        "stateTop": 276.328125,
+        "modelTop": 293.71875,
+        "agentBottom": 290.3125,
+        "modelBottom": 309.109375,
+        "lineTop": 273.515625,
+        "lineHeight": 35.59375,
+        "modelStyle": {
+          "whiteSpace": "normal",
+          "overflowWrap": "anywhere",
+          "overflow": "visible",
+          "width": 380
+        },
+        "modelText": "provider/model-live-ui-very-long-name"
+      }
+    },
+    {
+      "name": "narrow-model-second-line",
+      "pass": true,
+      "detail": {
+        "agentTop": 273.515625,
+        "stateTop": 276.328125,
+        "modelTop": 293.71875,
+        "agentBottom": 290.3125,
+        "modelBottom": 309.109375,
+        "lineTop": 273.515625,
+        "lineHeight": 35.59375,
+        "modelStyle": {
+          "whiteSpace": "normal",
+          "overflowWrap": "anywhere",
+          "overflow": "visible",
+          "width": 380
+        },
+        "modelText": "provider/model-live-ui-very-long-name"
+      }
+    },
+    {
+      "name": "narrow-anchor-stable",
+      "pass": true,
+      "detail": {
+        "before": 208.59375,
+        "collapsed": 208.59375,
+        "expanded": 208.59375,
+        "collapseDelta": 0,
+        "expandDelta": 0
+      }
+    },
+    {
+      "name": "narrow-collapsed-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0
+      }
+    },
+    {
+      "name": "narrow-collapsed-counts",
+      "pass": true,
+      "detail": {
+        "name": "narrow-collapsed",
+        "expanded": "false",
+        "toggleText": "子代理",
+        "metaVisible": true,
+        "metaText": "子代理 · 3 项 · 成功 2 · 失败 1",
+        "moreHidden": true,
+        "listVisible": false,
+        "overflow": {
+          "document": 0,
+          "stream": 0
+        }
+      }
+    },
+    {
+      "name": "narrow-light-no-overflow",
+      "pass": true,
+      "detail": {
+        "name": "narrow-light",
+        "viewport": [
+          700,
+          600
+        ],
+        "overflow": {
+          "document": 0,
+          "stream": 0
+        },
+        "rowOverflow": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "modelStyle": {
+          "whiteSpace": "normal",
+          "width": 380
+        },
+        "rowStateColors": [
+          {
+            "state": "completed",
+            "color": "rgb(22, 101, 52)"
+          },
+          {
+            "state": "completed",
+            "color": "rgb(22, 101, 52)"
+          },
+          {
+            "state": "failed",
+            "color": "rgb(185, 28, 28)"
+          },
+          {
+            "state": "completed",
+            "color": "rgb(22, 101, 52)"
+          },
+          {
+            "state": "completed",
+            "color": "rgb(22, 101, 52)"
+          },
+          {
+            "state": "failed",
+            "color": "rgb(185, 28, 28)"
+          },
+          {
+            "state": "completed",
+            "color": "rgb(22, 101, 52)"
+          }
+        ],
+        "composer": {
+          "bottom": 600,
+          "insideViewport": true
+        }
+      }
+    },
+    {
+      "name": "narrow-light-composer",
+      "pass": true,
+      "detail": {
+        "bottom": 600,
+        "insideViewport": true
+      }
+    },
+    {
+      "name": "keyboard-focus-visible",
+      "pass": true,
+      "detail": {
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px",
+          "color": "rgb(40, 91, 150)",
+          "offset": "2px"
+        }
+      }
+    },
+    {
+      "name": "keyboard-enter-collapse",
+      "pass": true,
+      "detail": {
+        "expanded": "false",
+        "hidden": true
+      }
+    },
+    {
+      "name": "keyboard-space-expand",
+      "pass": true,
+      "detail": {
+        "expanded": "true",
+        "hidden": false
+      }
+    },
+    {
+      "name": "ax-list-named",
+      "pass": true,
+      "detail": [
+        {
+          "role": "list",
+          "name": ""
+        },
+        {
+          "role": "list",
+          "name": "子代理"
+        },
+        {
+          "role": "list",
+          "name": "子代理"
+        },
+        {
+          "role": "list",
+          "name": "子代理"
+        }
+      ]
+    },
+    {
+      "name": "ax-listitems",
+      "pass": true,
+      "detail": {
+        "log": 1,
+        "status": 6,
+        "alert": 0,
+        "button": 50,
+        "list": 4,
+        "listitem": 10,
+        "disclosure": 3
+      }
+    },
+    {
+      "name": "runtime-no-card",
+      "pass": true,
+      "detail": {
+        "name": "runtime",
+        "subagentCards": 0,
+        "subagentRows": 0,
+        "subagentMetas": 0,
+        "toolRow": true,
+        "toolRowText": "Delegation returned成功Agent unknown · Task unavailable1.2s展开输出输出Model unknown · Child metadata unavailable详细信息",
+        "toolFields": [
+          "args",
+          "details",
+          "diffStat",
+          "durationMs",
+          "facts",
+          "gitStat",
+          "id",
+          "known",
+          "label",
+          "name",
+          "output",
+          "resultLine",
+          "sources",
+          "status",
+          "summary",
+          "truncated",
+          "waiting"
+        ],
+        "toolArgsNull": true,
+        "overflow": {
+          "document": 0,
+          "runtimeView": 0,
+          "output": 0
+        },
+        "leaked": false
+      }
+    },
+    {
+      "name": "runtime-safe-row",
+      "pass": true,
+      "detail": {
+        "name": "runtime",
+        "subagentCards": 0,
+        "subagentRows": 0,
+        "subagentMetas": 0,
+        "toolRow": true,
+        "toolRowText": "Delegation returned成功Agent unknown · Task unavailable1.2s展开输出输出Model unknown · Child metadata unavailable详细信息",
+        "toolFields": [
+          "args",
+          "details",
+          "diffStat",
+          "durationMs",
+          "facts",
+          "gitStat",
+          "id",
+          "known",
+          "label",
+          "name",
+          "output",
+          "resultLine",
+          "sources",
+          "status",
+          "summary",
+          "truncated",
+          "waiting"
+        ],
+        "toolArgsNull": true,
+        "overflow": {
+          "document": 0,
+          "runtimeView": 0,
+          "output": 0
+        },
+        "leaked": false
+      }
+    },
+    {
+      "name": "runtime-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "runtimeView": 0,
+        "output": 0
+      }
+    },
+    {
+      "name": "runtime-narrow-layout",
+      "pass": true,
+      "detail": {
+        "name": "runtime-narrow",
+        "viewport": [
+          700,
+          600
+        ],
+        "overflow": {
+          "document": 0,
+          "runtimeView": 0,
+          "output": 0
+        },
+        "composer": {
+          "bottom": 590,
+          "insideViewport": true
+        },
+        "cards": 0
+      }
+    }
+  ],
+  "failures": [],
+  "metrics": [
+    {
+      "name": "fixture",
+      "hasCards": true,
+      "planCards": 1,
+      "planToolRows": 0,
+      "guiPlanRows": 0,
+      "normalGroupChildren": 2,
+      "thinkingBlocks": 1,
+      "usageMetas": 2,
+      "toolGroups": 5,
+      "subagentCards": 3,
+      "subagentRows": 7,
+      "hiddenRawMarkers": {
+        "secretEnv": false,
+        "privateScript": false,
+        "privateToken": false,
+        "privateLive": false
+      }
+    },
+    {
+      "name": "wide-history",
+      "viewport": [
+        1320,
+        820
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0
+      },
+      "parent": {
+        "headHeight": 26,
+        "metaHeight": 15.390625,
+        "collapsedHeight": 51.390625,
+        "expandedHeight": 119.078125,
+        "metaText": "子代理 · 1 项 · 成功 1",
+        "metaVisible": true,
+        "listRole": "list",
+        "listLabel": "子代理",
+        "toggleText": "收起",
+        "toggleExpanded": "true",
+        "controls": "tool-detail-4",
+        "controlsExists": true,
+        "controlsInside": true,
+        "stopButtons": 1,
+        "moreSections": [
+          {
+            "tag": "DIV",
+            "cls": "tl-subagents",
+            "hidden": false,
+            "display": "block",
+            "height": 59.6875,
+            "text": "reviewer-模块边界-中文长名称成功pro"
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "输出"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-out",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          },
+          {
+            "tag": "DIV",
+            "cls": "tl-sec",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": "详细信息"
+          },
+          {
+            "tag": "PRE",
+            "cls": "tl-args",
+            "hidden": true,
+            "display": "none",
+            "height": 0,
+            "text": ""
+          }
+        ]
+      },
+      "workflow": {
+        "summary": "子代理 · 3 项 · 成功 2 · 失败 1",
+        "rows": 3,
+        "states": [
+          "completed",
+          "failed",
+          "completed"
+        ],
+        "agents": [
+          "reviewer-ui-中文-长名称-用于窄屏换行",
+          "reviewer-api",
+          "writer-docs"
+        ],
+        "models": [
+          "provider/model-with-a-very-long-name-2026-11-16-alpha",
+          "provider/model-beta",
+          "provider/model-gamma"
+        ],
+        "tasks": [],
+        "toggleText": "收起",
+        "rowText": "Delegation returned成功Workflow · 3 children · completed收起子代理 · 3 项 · 成功 2 · 失败 1reviewer-ui-中文-长名称-用于窄屏换行成功provider/model-with-a-very-long-name-2026-11-16-alpha当前 read · 工具 8 · 轮次 4 · Token 32000 · 45.0sreviewer-api失败provider/model-betawriter-docs成功provider/model-gamma工具 3 · 轮次 2 · Token 5000 · 9.0s输出详细信息"
+      },
+      "wideLine": {
+        "tops": [
+          -384.09375,
+          -381.28125,
+          -382.09375
+        ],
+        "maxDelta": 2.8125,
+        "lineRect": {
+          "x": 484.5,
+          "y": -384.09375,
+          "width": 648,
+          "height": 18.203125,
+          "top": -384.09375,
+          "right": 1132.5,
+          "bottom": -365.890625,
+          "left": 484.5
+        },
+        "agentRect": {
+          "x": 484.5,
+          "y": -384.09375,
+          "width": 208.5625,
+          "height": 16.796875,
+          "top": -384.09375,
+          "right": 693.0625,
+          "bottom": -367.296875,
+          "left": 484.5
+        },
+        "stateRect": {
+          "x": 700.0625,
+          "y": -381.28125,
+          "width": 31,
+          "height": 15.390625,
+          "top": -381.28125,
+          "right": 731.0625,
+          "bottom": -365.890625,
+          "left": 700.0625
+        },
+        "modelRect": {
+          "x": 738.0625,
+          "y": -382.09375,
+          "width": 394.4375,
+          "height": 15.390625,
+          "top": -382.09375,
+          "right": 1132.5,
+          "bottom": -366.703125,
+          "left": 738.0625
+        },
+        "lineHeight": 18.203125,
+        "modelWidth": 394.4375,
+        "modelScrollWidth": 394,
+        "modelStyle": {
+          "whiteSpace": "nowrap",
+          "textOverflow": "ellipsis",
+          "overflow": "hidden",
+          "fontSize": "11px",
+          "color": "rgb(176, 176, 176)"
+        },
+        "agentStyle": {
+          "fontSize": "12px",
+          "color": "rgb(238, 238, 238)",
+          "overflowWrap": "anywhere"
+        },
+        "stateStyle": {
+          "fontSize": "11px",
+          "color": "rgb(74, 222, 128)",
+          "whiteSpace": "nowrap"
+        },
+        "stateColors": [
+          {
+            "state": "completed",
+            "color": "rgb(74, 222, 128)"
+          },
+          {
+            "state": "failed",
+            "color": "rgb(248, 113, 113)"
+          },
+          {
+            "state": "completed",
+            "color": "rgb(74, 222, 128)"
+          }
+        ],
+        "listStyle": {
+          "overflow": "visible",
+          "overflowY": "visible",
+          "maxHeight": "none"
+        },
+        "listScroll": {
+          "height": 117,
+          "scrollHeight": 117
+        }
+      }
+    },
+    {
+      "name": "wide-live-running",
+      "parentStatus": "运行中",
+      "label": "Delegating…",
+      "summary": "子代理 · 3 项 · 运行 1 · 成功 1 · 失败 1",
+      "rows": [
+        {
+          "state": "completed",
+          "text": "reviewer-live-ui-中文-长名称-用于窄屏换行成功provider/model-live-ui-very-long-name当前 read · 工具 4 · 轮次 2 · Token 8000 · 1.8s"
+        },
+        {
+          "state": "running",
+          "text": "reviewer-live-api运行中provider/model-live-api当前 bash · 工具 1 · 轮次 1 · Token 1200 · 1.2s"
+        },
+        {
+          "state": "failed",
+          "text": "reviewer-live-edge失败"
+        }
+      ],
+      "toggleExpanded": "true"
+    },
+    {
+      "name": "collapse-priority",
+      "before": {
+        "expanded": "false",
+        "hidden": true
+      },
+      "after": {
+        "expanded": "false",
+        "hidden": true
+      }
+    },
+    {
+      "name": "group-priority",
+      "before": {
+        "expanded": "false",
+        "hidden": true
+      },
+      "after": {
+        "expanded": "false",
+        "hidden": true
+      }
+    },
+    {
+      "name": "wide-live-ended",
+      "parentStatus": "失败",
+      "label": "Delegation error",
+      "summary": "子代理 · 3 项 · 成功 2 · 失败 1",
+      "rows": [
+        {
+          "state": "completed",
+          "text": "reviewer-live-ui-中文-长名称-用于窄屏换行成功provider/model-live-ui-very-long-name当前 read · 工具 4 · 轮次 2 · Token 8000 · 1.8s"
+        },
+        {
+          "state": "failed",
+          "text": "reviewer-live-api失败provider/model-live-api当前 bash · 工具 1 · 轮次 1 · Token 1200 · 1.2s"
+        },
+        {
+          "state": "completed",
+          "text": "reviewer-live-edge成功"
+        }
+      ],
+      "toggleExpanded": "true",
+      "cardCount": true,
+      "factsText": ""
+    },
+    {
+      "name": "collapsed-live",
+      "expanded": "false",
+      "toggleText": "子代理",
+      "metaVisible": true,
+      "metaText": "子代理 · 3 项 · 成功 2 · 失败 1",
+      "moreHidden": true,
+      "listOwnHidden": false,
+      "listVisible": false,
+      "listHidden": true,
+      "height": 51.390625
+    },
+    {
+      "name": "anchor",
+      "before": 344.515625,
+      "collapsed": 344.515625,
+      "expanded": 344.515625,
+      "collapseDelta": 0,
+      "expandDelta": 0
+    },
+    {
+      "name": "light-wide",
+      "rowStates": [
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        },
+        {
+          "state": "failed",
+          "color": "rgb(185, 28, 28)"
+        },
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        }
+      ],
+      "metaColor": "rgb(96, 96, 96)",
+      "streamBg": "rgba(0, 0, 0, 0)",
+      "overflow": {
+        "document": 0,
+        "stream": 0
+      }
+    },
+    {
+      "name": "narrow-dark",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0
+      },
+      "rowOverflow": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "outsideStream": [
+        {
+          "left": 49,
+          "right": -27
+        },
+        {
+          "left": 49,
+          "right": -27
+        },
+        {
+          "left": 49,
+          "right": -27
+        },
+        {
+          "left": 49,
+          "right": -27
+        },
+        {
+          "left": 49,
+          "right": -27
+        },
+        {
+          "left": 49,
+          "right": -27
+        },
+        {
+          "left": 49,
+          "right": -27
+        }
+      ],
+      "line": {
+        "agentTop": 273.515625,
+        "stateTop": 276.328125,
+        "modelTop": 293.71875,
+        "agentBottom": 290.3125,
+        "modelBottom": 309.109375,
+        "lineTop": 273.515625,
+        "lineHeight": 35.59375,
+        "modelStyle": {
+          "whiteSpace": "normal",
+          "overflowWrap": "anywhere",
+          "overflow": "visible",
+          "width": 380
+        },
+        "modelText": "provider/model-live-ui-very-long-name"
+      },
+      "metaVisible": true,
+      "composer": {
+        "bottom": 600,
+        "top": 474,
+        "insideViewport": true
+      }
+    },
+    {
+      "name": "narrow-anchor",
+      "before": 208.59375,
+      "collapsed": 208.59375,
+      "expanded": 208.59375,
+      "collapseDelta": 0,
+      "expandDelta": 0
+    },
+    {
+      "name": "narrow-collapsed",
+      "expanded": "false",
+      "toggleText": "子代理",
+      "metaVisible": true,
+      "metaText": "子代理 · 3 项 · 成功 2 · 失败 1",
+      "moreHidden": true,
+      "listVisible": false,
+      "overflow": {
+        "document": 0,
+        "stream": 0
+      }
+    },
+    {
+      "name": "narrow-light",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0
+      },
+      "rowOverflow": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "modelStyle": {
+        "whiteSpace": "normal",
+        "width": 380
+      },
+      "rowStateColors": [
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        },
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        },
+        {
+          "state": "failed",
+          "color": "rgb(185, 28, 28)"
+        },
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        },
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        },
+        {
+          "state": "failed",
+          "color": "rgb(185, 28, 28)"
+        },
+        {
+          "state": "completed",
+          "color": "rgb(22, 101, 52)"
+        }
+      ],
+      "composer": {
+        "bottom": 600,
+        "insideViewport": true
+      }
+    },
+    {
+      "name": "keyboard",
+      "keyboardSetup": {
+        "expanded": "true",
+        "focused": true
+      },
+      "keyboardRing": {
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px",
+          "color": "rgb(40, 91, 150)",
+          "offset": "2px"
+        }
+      },
+      "afterEnter": {
+        "expanded": "false",
+        "hidden": true
+      },
+      "afterSpace": {
+        "expanded": "true",
+        "hidden": false
+      }
+    },
+    {
+      "name": "accessibility",
+      "counts": {
+        "log": 1,
+        "status": 6,
+        "alert": 0,
+        "button": 50,
+        "list": 4,
+        "listitem": 10,
+        "disclosure": 3
+      },
+      "lists": [
+        {
+          "role": "list",
+          "name": ""
+        },
+        {
+          "role": "list",
+          "name": "子代理"
+        },
+        {
+          "role": "list",
+          "name": "子代理"
+        },
+        {
+          "role": "list",
+          "name": "子代理"
+        }
+      ],
+      "listitems": [
+        {
+          "role": "listitem",
+          "name": "保留父工具行生命周期与用户折叠选择，已完成"
+        },
+        {
+          "role": "listitem",
+          "name": "展开后显示单列子代理卡片并验证并行、多模型与混合终态，已完成"
+        },
+        {
+          "role": "listitem",
+          "name": "在 1320×820 与 700×600 的深浅主题下检查无横向溢出和父组锚点，进行中"
+        },
+        {
+          "role": "listitem",
+          "name": ""
+        },
+        {
+          "role": "listitem",
+          "name": ""
+        },
+        {
+          "role": "listitem",
+          "name": ""
+        },
+        {
+          "role": "listitem",
+          "name": ""
+        },
+        {
+          "role": "listitem",
+          "name": ""
+        },
+        {
+          "role": "listitem",
+          "name": ""
+        },
+        {
+          "role": "listitem",
+          "name": ""
+        }
+      ],
+      "buttons": [
+        {
+          "role": "button",
+          "name": "展开全部 2 条"
+        },
+        {
+          "role": "button",
+          "name": "跳转到：P4-A 视觉验收：同一回合包含同步子代理、并行 workflow、后台启动、计…"
+        },
+        {
+          "role": "button",
+          "name": "收起「pi-GUI」的会话",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "展开「fermenter-notes」的会话",
+          "expanded": false
+        },
+        {
+          "role": "button",
+          "name": "工具调用 · 2 次",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "工具调用 · 2 次",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "收起",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "收起",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "收起",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "收起",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "收起",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "收起",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "收起",
+          "expanded": true
+        }
+      ]
+    },
+    {
+      "name": "runtime",
+      "subagentCards": 0,
+      "subagentRows": 0,
+      "subagentMetas": 0,
+      "toolRow": true,
+      "toolRowText": "Delegation returned成功Agent unknown · Task unavailable1.2s展开输出输出Model unknown · Child metadata unavailable详细信息",
+      "toolFields": [
+        "args",
+        "details",
+        "diffStat",
+        "durationMs",
+        "facts",
+        "gitStat",
+        "id",
+        "known",
+        "label",
+        "name",
+        "output",
+        "resultLine",
+        "sources",
+        "status",
+        "summary",
+        "truncated",
+        "waiting"
+      ],
+      "toolArgsNull": true,
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0,
+        "output": 0
+      },
+      "leaked": false
+    },
+    {
+      "name": "runtime-narrow",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0,
+        "output": 0
+      },
+      "composer": {
+        "bottom": 590,
+        "insideViewport": true
+      },
+      "cards": 0
+    }
+  ]
+}

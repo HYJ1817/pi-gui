@@ -58,6 +58,23 @@ const STATUS_TEXT = {
   unknown: '状态未知',
 };
 
+/* 子代理子项状态只映射白名单值；未知值保持「状态未知」，不猜完成度。 */
+const SUBAGENT_STATE_TEXT = {
+  pending: '等待',
+  queued: '排队',
+  running: '运行中',
+  complete: '成功',
+  completed: '成功',
+  failed: '失败',
+  partial: '部分完成',
+  paused: '已暂停',
+  stopped: '已停止',
+  detached: '已脱离',
+  rejected: '已拒绝',
+  interrupted: '已中断',
+  unknown: '状态未知',
+};
+
 /** 详细参数里最多铺多少字符。原始 JSON 可能有几十 KB（write 的 content 全文），
  *  不截断会把时间线撑成一片墙。 */
 const ARGS_MAX = 4000;
@@ -110,7 +127,7 @@ export function renderEntry(entry, onExpanded) {
   argHead.textContent = '详细信息';
   const args = sub(more, 'tl-args', 'pre');
 
-  node._tl = { dot, label, statusText, arg, stat, time, result, toggle, more, out, outHead, args, argHead, hasOutput: false, hasMore: false, output: '' };
+  node._tl = { dot, label, statusText, arg, stat, time, result, toggle, more, out, outHead, args, argHead, hasOutput: false, hasMore: false, output: '', subMeta: null, subList: null, subKey: '', subagents: null, toggleLabel: '' };
 
   /* 整行可点 = 展开 / 收起（和原来的工具卡片一致，用户已经习惯了）。
    * 折叠是纯前端状态，不进 entry —— 刷新后没必要记住某一条展开过。 */
@@ -152,13 +169,93 @@ function syncToggle(p) {
     setText(p.toggle, '');
     return;
   }
-  setText(p.toggle, p.hasOutput ? (p.more.hidden ? '展开输出' : '收起') : p.more.hidden ? '详细信息' : '收起');
+  setText(p.toggle, p.hasOutput ? (p.more.hidden ? '展开输出' : '收起') : p.more.hidden ? (p.toggleLabel || '详细信息') : '收起');
 }
 
 /** 折叠状态下把关键结果补进 title，鼠标悬停就能看到，不用点开。 */
 function syncTitle(node, p) {
   if (p.hasOutput && p.more.hidden) node.title = p.output.slice(0, 600);
   else node.removeAttribute('title');
+}
+
+/* ---------- 子代理紧凑列表（P4-A） ---------- */
+
+function subagentProgressText(progress) {
+  if (!progress) return '';
+  const bits = [];
+  if (progress.currentTool) bits.push('当前 ' + progress.currentTool);
+  if (Number.isFinite(progress.toolCount)) bits.push('工具 ' + progress.toolCount);
+  if (Number.isFinite(progress.turnCount)) bits.push('轮次 ' + progress.turnCount);
+  if (Number.isFinite(progress.tokens)) bits.push('Token ' + progress.tokens);
+  if (Number.isFinite(progress.durationMs)) bits.push(formatDuration(progress.durationMs));
+  return bits.join(' · ');
+}
+
+function subagentRowNode(row) {
+  const state = Object.hasOwn(SUBAGENT_STATE_TEXT, row.state) ? row.state : 'unknown';
+  const item = document.createElement('div');
+  item.className = 'tl-subagent-row';
+  item.setAttribute('role', 'listitem');
+  item.dataset.state = state;
+
+  const line = sub(item, 'tl-subagent-line');
+  /* 名称和状态优先；模型在其后，窄屏由 CSS 换到第二行。缺失字段直接省略。 */
+  if (row.agent) {
+    const agent = sub(line, 'tl-subagent-agent', 'span');
+    agent.textContent = row.agent;
+  }
+  const stateText = sub(line, 'tl-subagent-state', 'span');
+  stateText.textContent = SUBAGENT_STATE_TEXT[state];
+  if (row.model) {
+    const model = sub(line, 'tl-subagent-model', 'span');
+    model.textContent = row.model;
+    model.title = row.model;
+  }
+  if (row.task) {
+    const task = sub(item, 'tl-subagent-task', 'div');
+    task.textContent = row.task;
+  }
+  const progress = subagentProgressText(row.progress);
+  if (progress) {
+    const metrics = sub(item, 'tl-subagent-metrics', 'div');
+    metrics.textContent = progress;
+  }
+  return item;
+}
+
+/** 结构化列表只由 tool-view 懒创建；没有可绑定子项时完全退回原 facts 文本。 */
+function syncSubagents(p, subagents) {
+  if (!subagents) {
+    if (p.subMeta) { setText(p.subMeta, ''); p.subMeta.hidden = true; }
+    if (p.subList) { p.subList.replaceChildren(); p.subList.hidden = true; }
+    p.subKey = '';
+    p.subagents = null;
+    return;
+  }
+  p.subagents = subagents;
+  if (!p.subMeta) {
+    const meta = document.createElement('div');
+    meta.className = 'tl-subagent-meta';
+    p.more.parentNode.insertBefore(meta, p.more);
+    p.subMeta = meta;
+  }
+  setText(p.subMeta, subagents.summary);
+  p.subMeta.hidden = false;
+  if (!p.subList) {
+    const list = document.createElement('div');
+    list.className = 'tl-subagents';
+    list.setAttribute('role', 'list');
+    list.setAttribute('aria-label', '子代理');
+    p.more.insertBefore(list, p.more.firstChild);
+    p.subList = list;
+  }
+  const key = JSON.stringify(subagents);
+  if (key !== p.subKey) {
+    p.subKey = key;
+    p.subList.replaceChildren();
+    for (const row of subagents.rows) p.subList.appendChild(subagentRowNode(row));
+  }
+  p.subList.hidden = false;
 }
 
 /** 更新一条已经渲染出来的 entry。只改真正变了的字段。 */
@@ -171,7 +268,9 @@ export function updateEntry(node, entry) {
    * **这正是一条 schema/工具面漂移**（pi 或 Extension 加了新工具），
    * 记下来进诊断；只记「有个不认识的工具名」这件事，不记名字（名字是数据）。 */
   if (!semantic && typeof entry.name === 'string' && entry.name) noteUnknownTool(entry.name);
-  if (semantic) entry = { ...entry, ...semantic, resultLine: '', output: semantic.facts };
+  /* 只有带可绑定子项的子代理投影才换成结构化列表；其余继续用安全 facts。 */
+  const subagents = semantic?.subagents?.rows?.length ? semantic.subagents : null;
+  if (semantic) entry = { ...entry, ...semantic, resultLine: '', output: subagents ? '' : semantic.facts };
   const p = tl(node);
   if (!p) return;
   node._tlEntry = entry;
@@ -181,7 +280,7 @@ export function updateEntry(node, entry) {
   const previousWaiting = node.dataset.waiting;
   node.dataset.status = status;
   node.dataset.waiting = entry.waiting === true ? 'true' : 'false';
-  node.className = 'tl-item' + (node.classList.contains('open') ? ' open' : '');
+  node.className = 'tl-item' + (node.classList.contains('open') ? ' open' : '') + (subagents ? ' tl-subagent' : '');
 
   const iconHtml = STATUS_ICON[status] || STATUS_ICON.unknown;
   if (p.dot.dataset.s !== status) {
@@ -218,6 +317,8 @@ export function updateEntry(node, entry) {
 
   setText(p.time, formatDuration(entry.durationMs));
   setText(p.result, entry.resultLine || '');
+  p.toggleLabel = subagents ? '子代理' : '';
+  syncSubagents(p, subagents);
 
   const output = String(entry.output || '');
   const hasOutput = Boolean(output.trim());
@@ -280,7 +381,7 @@ export function updateEntry(node, entry) {
 
   p.hasOutput = hasOutput;
   p.output = output;
-  p.hasMore = hasOutput || Boolean(argsText) || sources.length > 0;
+  p.hasMore = hasOutput || Boolean(argsText) || sources.length > 0 || Boolean(subagents);
   node.classList.toggle('has-more', p.hasMore);
   syncToggle(p);
   syncTitle(node, p);
