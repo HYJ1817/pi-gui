@@ -632,6 +632,82 @@
         "InlineTextBox:你",
         "InlineTextBox:你"
       ]
+    },
+    {
+      "name": "planonly-history-1320",
+      "planCards": 1,
+      "metaCount": 2,
+      "summaries": [
+        "Token 12",
+        "Token 23"
+      ],
+      "planHeadCount": 1,
+      "assistantRows": 0,
+      "expanded": "true",
+      "metasOutsideList": true,
+      "hostWidth": 686,
+      "metaWidths": [
+        686,
+        686
+      ],
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0,
+        "output": 0
+      }
+    },
+    {
+      "name": "planonly-history-collapsed",
+      "expanded": "false",
+      "listHidden": true,
+      "metaCount": 2,
+      "metasVisible": true
+    },
+    {
+      "name": "planonly-history-details",
+      "usageDetailsOpen": true,
+      "usageItemCount": 3,
+      "metaCount": 2
+    },
+    {
+      "name": "planonly-history-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "planCards": 1,
+      "metaCount": 2,
+      "summaries": [
+        "Token 12",
+        "Token 23"
+      ],
+      "expanded": "true",
+      "metaWidths": [
+        366,
+        366
+      ],
+      "hostWidth": 366,
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0,
+        "output": 0
+      },
+      "composer": {
+        "bottom": 590,
+        "insideViewport": true,
+        "overlapsOutput": false
+      }
+    },
+    {
+      "name": "planonly-history-700-collapsed",
+      "expanded": "false",
+      "listHidden": true,
+      "metaCount": 2,
+      "metasVisible": true,
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0
+      }
     }
   ]
 }
