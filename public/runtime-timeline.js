@@ -31,7 +31,9 @@ const SAFE_TOOL_NAME = /^[a-zA-Z][a-zA-Z0-9_.:-]{0,63}$/;
  * 不由渲染端乘单价或补货币符号）。 */
 export const USAGE_FIELDS = ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite1h', 'reasoning', 'totalTokens'];
 /* 单条 assistant 消息的 usage 只会挂到它自己产生的 block 上，且只挂一次。
- * 顺序同时是归属优先级：正文 > Thinking > 工具组 > Plan（plan-only 消息）。 */
+ * 顺序同时是归属优先级：正文 > Thinking > 工具组 > Plan（plan-only 消息）。
+ * 非 Plan block 用 `usage`；同一 turnId 的 Plan 会复用同一张卡，因此 Plan 用
+ * `usages` 数组按消息顺序保留每一条真实 usage，不覆盖先前消息。 */
 export const USAGE_BLOCK_KINDS = ['assistant', 'thinking', 'tools', 'plan'];
 const USAGE_CHARS = 64;
 
@@ -118,13 +120,15 @@ export function boundText(value, limit) {
 
 export function blockChars(block) {
   if (!block) return 0;
+  /* Plan 可能携带多条消息 usage；兼容旧响应的单条 `usage`。 */
+  const usageChars = ((block.usage ? 1 : 0) + (Array.isArray(block.usages) ? block.usages.length : 0)) * USAGE_CHARS;
   if (block.kind === 'user' || block.kind === 'assistant' || block.kind === 'thinking') {
-    return block.text.length + (block.usage ? USAGE_CHARS : 0);
+    return block.text.length + usageChars;
   }
-  if (block.kind === 'tools') return block.tools.length * 24 + (block.usage ? USAGE_CHARS : 0);
+  if (block.kind === 'tools') return block.tools.length * 24 + usageChars;
   if (block.kind === 'plan') {
     return (block.plan?.tasks || []).reduce((sum, task) => sum + task.title.length + task.id.length, 0)
-      + (block.plan?.explanation?.length || 0) + (block.usage ? USAGE_CHARS : 0);
+      + (block.plan?.explanation?.length || 0) + usageChars;
   }
   return 0;
 }
@@ -214,6 +218,9 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
     /* 连续的同类型 content part 合并；一旦中间夹了别的类型（工具/思考/正文），
      * 后面的正文必须另起一段，不能并回更早的同类 block —— 那会改变真实顺序。 */
     const owned = [];
+    /* 本条消息更新/创建的计划卡。同一 turnId 会复用它，所以它可能不在
+     * owned 里；usage 仍需能落到这张卡上。 */
+    let messagePlan = null;
     const seenTools = new Set();
     const content = Array.isArray(message.content) ? message.content : [];
     let kind = null, current = null;
@@ -263,11 +270,14 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
           }
           if (block) block.plan = plan;
           else { block = add({ kind: 'plan', plan }); planByTurnId.set(plan.turnId, block); owned.push(block); }
+          messagePlan = block;
         } else if (legacyTurnPlan) {
           legacyTurnPlan.plan = plan;
+          messagePlan = legacyTurnPlan;
         } else {
           legacyTurnPlan = add({ kind: 'plan', plan });
           owned.push(legacyTurnPlan);
+          messagePlan = legacyTurnPlan;
         }
         kind = 'plan';
         continue;
@@ -296,7 +306,9 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
     }
     /* 单条消息的真实 usage 只挂一次：优先最后一个正文本 block，其次
      * Thinking，再次工具组，最后 Plan。这样只思考、只调工具或只提交计划的
-     * 消息也有真实用量，但不会为它伪造一条空的 assistant 消息。 */
+     * 消息也有真实用量，但不会为它伪造一条空的 assistant 消息。
+     * Plan 复用旧卡时它不在 owned 里，使用本条消息的 messagePlan 兜底；
+     * Plan 的 usage 追加到 usages，不覆盖先前消息。 */
     const usage = usageProjection(message.usage);
     if (usage) {
       let target = null;
@@ -306,7 +318,13 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
         }
         if (target) break;
       }
-      if (target) target.usage = usage;
+      if (!target && messagePlan) target = messagePlan;
+      if (target?.kind === 'plan') {
+        if (!Array.isArray(target.usages)) target.usages = [];
+        target.usages.push(usage);
+      } else if (target) {
+        target.usage = usage;
+      }
     }
   }
 

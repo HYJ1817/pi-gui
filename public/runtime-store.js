@@ -577,12 +577,22 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       const plan = normalizePlan(block.plan);
       if (!plan) return null;
       copy = { kind: 'plan', plan };
+      /* Plan 卡可能被同一 turnId 的多条消息复用；保留每条消息的 usage，
+       * 不覆盖。旧响应只有单条 `usage` 时规范化为 `usages: [usage]`。 */
+      const rawUsages = Array.isArray(block.usages) ? block.usages : (block.usage ? [block.usage] : []);
+      const usages = [];
+      for (const raw of rawUsages) {
+        const usage = usageProjection(raw);
+        if (usage) usages.push(usage);
+      }
+      if (usages.length) copy.usages = usages;
     } else return null;
     if (typeof block.id === 'string') copy.id = block.id;
-    /* 只有契约允许承载单条消息用量的 block 类型才保留 usage；
-     * plan-only 消息同样属于这一白名单。 */
-    const usage = USAGE_BLOCK_KINDS.includes(block.kind) ? usageProjection(block.usage) : null;
-    if (usage) copy.usage = usage;
+    /* 非 Plan block 用单条 usage；user 不在白名单内，不能承载用量。 */
+    if (block.kind !== 'plan') {
+      const usage = USAGE_BLOCK_KINDS.includes(block.kind) ? usageProjection(block.usage) : null;
+      if (usage) copy.usage = usage;
+    }
     return copy;
   }
 

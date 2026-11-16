@@ -56,6 +56,7 @@ import { bindComposerPointerFocus } from './composer.js';
 import { thinkingAvailability } from './thinking-availability.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { normalizePlan } from './plan-model.js';
+import { usageProjection } from './runtime-timeline.js';
 import { renderPlan, setPlanStalled, updatePlan } from './plan-view.js';
 import { labelFor } from './tool-model.js';
 import {
@@ -169,7 +170,8 @@ function formatHistoryState(history, owner) {
       : boundary === 'mixed' ? `；${HISTORY_NOTE_PLAN_MIXED}` : '';
     /* 提示只能描述这次记录里**实际有**的东西：旧记录没有 usage 时
      * 不声称「已恢复用量」，也不补一个 0。 */
-    const hasUsage = history.execution.timeline.some(block => block?.usage);
+    const hasUsage = history.execution.timeline.some(block => block?.usage
+      || (Array.isArray(block?.usages) && block.usages.length > 0));
     note = (hasUsage ? HISTORY_NOTE_WITH_TIMELINE : HISTORY_NOTE_WITH_TIMELINE_NO_USAGE)
       + boundaryNote + (executionTruncated ? '；更早的执行记录已截断' : '');
   } else if (!history?.toolSummary) {
@@ -701,13 +703,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   /* 一条 assistant 消息的真实 usage 可能挂在正文、Thinking 或工具组上；
    * 每个 block 只渲染一次，更新时按白名单投影的签名原位替换。 */
   function syncUsageMeta(host, block) {
-    const key = block.usage ? JSON.stringify(block.usage) : '';
+    const usage = usageProjection(block?.usage);
+    const key = usage ? JSON.stringify(usage) : '';
     if (!key) {
       if (host._usageMeta) { host._usageMeta.remove(); host._usageMeta = null; host._usageKey = ''; }
       return;
     }
     if (host._usageMeta && host._usageKey === key) return;
-    const fresh = renderUsageMeta(block.usage, { label: '本条助手消息用量' });
+    const fresh = renderUsageMeta(usage, { label: '本条助手消息用量' });
     if (!fresh) {
       if (host._usageMeta) { host._usageMeta.remove(); host._usageMeta = null; host._usageKey = ''; }
       return;
@@ -716,6 +719,23 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     else host.append(fresh);
     host._usageMeta = fresh;
     host._usageKey = key;
+  }
+
+  /* Plan 卡会被同一 turnId 的多条 assistant 消息复用；每条消息的真实 usage
+   * 都追加在卡外，按记录顺序各显示一次。旧响应只有单条 `usage` 时按一条处理。 */
+  function syncPlanUsages(host, block) {
+    const raw = Array.isArray(block?.usages) ? block.usages : (block?.usage ? [block.usage] : []);
+    const usages = raw.map(usageProjection).filter(Boolean);
+    const key = JSON.stringify(usages);
+    if (host._planUsageKey === key) return;
+    host._planUsageKey = key;
+    if (Array.isArray(host._planUsageMetas)) {
+      for (const node of host._planUsageMetas) node.remove();
+    }
+    host._planUsageMetas = usages
+      .map(usage => renderUsageMeta(usage, { label: '本条助手消息用量' }))
+      .filter(Boolean);
+    for (const meta of host._planUsageMetas) host.append(meta);
   }
 
   function createTimelineBlockNode(block, view, record, history) {
@@ -858,8 +878,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           if (!plan) {
             host.replaceChildren();
             host.hidden = true;
-            host._usageMeta = null;
-            host._usageKey = '';
+            host._planUsageMetas = null;
+            host._planUsageKey = '';
             return;
           }
           host.hidden = false;
@@ -873,7 +893,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           setPlanStalled(card, !currentPlan || !activeRun);
           /* plan-only 消息的真实 usage 挂在计划 block 上；放在卡片外层，
            * 折叠计划列表不会把用量一起藏掉。 */
-          syncUsageMeta(host, next);
+          syncPlanUsages(host, next);
         },
       };
     }
