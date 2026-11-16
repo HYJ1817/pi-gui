@@ -55,7 +55,7 @@ const { JSDOM } = require('jsdom');
   })());
   ok('usage 文案：只列有的字段，且**不带**货币符号（线上没有单位）', (() => {
     const text = usageText({ input: 0, output: 1234, source: 'message_end' });
-    return text === '本轮 · 输入 0 · 输出 1,234' && !text.includes('$') && !text.includes('缓存');
+    return text === '本轮 · 输出 1,234 Token' && !text.includes('$') && !text.includes('缓存');
   })());
   ok('usage 文案：流式中的数字标注「仍在累计」，不当终值', usageText({ output: 5, source: 'message_update' }).includes('Pi 仍在累计'));
   ok('usage 文案：一个数字都没有时是空串（整块隐藏）', usageText({ source: 'message_end' }) === '' && usageText(null) === '');
@@ -145,7 +145,7 @@ const { JSDOM } = require('jsdom');
     usage: { input: 100, output: 20, totalTokens: 120, cost: { total: 0.0025 } } } });
   await tick();
   ok('message_end 的 thinking 是权威值（覆盖流式累积）', thinkingBlock().querySelector('.ui2-runtime-thinking-body').textContent === '权威思考');
-  ok('message_end 的 usage 是终值（不再标「仍在累计」）', usageLine().textContent.includes('输入 100') && usageLine().textContent.includes('合计 120') && !usageLine().textContent.includes('仍在累计'));
+  ok('message_end 的 usage 是终值（不再标「仍在累计」）', usageLine().textContent.includes('输入 100') && usageLine().textContent.includes('总计 120') && !usageLine().textContent.includes('仍在累计'));
   ok('usage 缺的字段不出现（没有缓存/推理这一轮）', !usageLine().textContent.includes('缓存') && !usageLine().textContent.includes('推理'));
 
   /* ================= 6. 有界输出与截断 ================= */

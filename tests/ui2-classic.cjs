@@ -33,7 +33,7 @@ async function unit() {
       equal(all('.msg.assistant')[1].querySelector('[data-kind="input"]')?.textContent, '输入 29 Token');
     });
     check('missing usage stays absent despite global lastTurn', () => equal(all('.msg.assistant')[2].querySelector('.ui2-msg-meta'), null));
-    check('zero reasoning is distinct from unknown', () => equal(all('.msg.assistant')[0].querySelector('[data-kind="reasoning"]')?.textContent, '思考 0 Token（含在输出中）'));
+    check('zero reasoning is distinct from unknown', () => equal(all('.msg.assistant')[0].querySelector('[data-kind="reasoning"]')?.textContent, '推理 0 Token（含在输出中）'));
     check('all seven actual zero fields remain visible', () => equal(all('.msg.assistant')[3].querySelectorAll('.ui2-msg-meta-item').length, 7));
     check('global or inferred time never enters metadata', () => assert.ok(!all('.ui2-msg-meta').some(n => /999999|888888|耗时|秒|ms/.test(n.textContent))));
     const historyMeta = all('.ui2-msg-meta').map(n => n.textContent);

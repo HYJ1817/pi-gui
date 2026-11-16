@@ -76,6 +76,26 @@ export function setPlanStalled(card, stalled) {
     const state = row._planRow.state;
     setText(state, stateTextFor({ status }, value));
   }
+  syncNow(card);
+}
+
+/* 折叠后的摘要：真实完成数 + 当前 in_progress 任务的短标题。
+ * 展开时列表本身已经显示了当前任务，标题不再重复；折叠时才显示。
+ * 执行已结束但任务仍 in_progress 时用「未完成」，不冒充「正在执行」。 */
+function syncNow(card) {
+  const p = card?._plan;
+  if (!p) return;
+  const task = p.currentTask;
+  if (!task) {
+    p.now.hidden = true;
+    setText(p.now, '');
+    p.now.removeAttribute('title');
+    return;
+  }
+  p.now.hidden = false;
+  const stalled = card.dataset.stalled === 'true';
+  setText(p.now, `${stalled ? '未完成' : '正在执行'}：${task.title}`);
+  p.now.title = task.title;
 }
 
 export function renderPlan(plan) {
@@ -93,10 +113,13 @@ export function renderPlan(plan) {
   title.textContent = '任务列表';
   const count = document.createElement('span');
   count.className = 'plan-count';
+  const now = document.createElement('span');
+  now.className = 'plan-now';
+  now.hidden = true;
   const chev = document.createElement('span');
   chev.className = 'plan-chev';
   chev.innerHTML = iconMarkup('chevronRight');
-  head.append(title, count, chev);
+  head.append(title, count, now, chev);
 
   const list = document.createElement('ol');
   list.className = 'plan-list';
@@ -104,7 +127,7 @@ export function renderPlan(plan) {
   head.setAttribute('aria-controls', list.id);
 
   card.append(head, list);
-  card._plan = { head, count, list, rows: new Map(), collapsed: false };
+  card._plan = { head, count, now, list, rows: new Map(), collapsed: false, currentTask: null };
 
   head.addEventListener('click', () => {
     const p = card._plan;
@@ -130,6 +153,7 @@ export function updatePlan(card, plan) {
   p.count.setAttribute('aria-label', `已完成 ${countText}`);
 
   const stalled = card.dataset.stalled === 'true';
+  p.currentTask = plan.tasks.find(task => task.status === 'in_progress') || null;
   const wanted = new Set();
   plan.tasks.forEach((task, index) => {
     wanted.add(task.id);
@@ -151,5 +175,6 @@ export function updatePlan(card, plan) {
 
   p.list.hidden = p.collapsed === true;
   p.head.setAttribute('aria-expanded', String(!p.collapsed));
+  syncNow(card);
   return true;
 }

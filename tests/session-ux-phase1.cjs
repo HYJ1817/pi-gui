@@ -180,17 +180,17 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
       usage: { input: 11, output: 3, reasoning: 0, totalTokens: 14 } }]);
     const meta = d.querySelector('#stream .ui2-msg-meta');
     ok('Token 摘要存在', Boolean(meta));
-    equal(meta.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 14 · 思考 0 Token（含在输出中）', '摘要只放总量与思考');
+    equal(meta.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 14 · 推理 0（含在输出中）', '摘要只放总量与推理');
     equal(meta.querySelector('details')?.open, false, '完整拆分默认收起');
     equal(meta.querySelectorAll('.ui2-msg-meta-item').length, 4, '完整字段仍在 DOM 中');
     equal(meta.querySelector('[data-kind="input"]')?.textContent, '输入 11 Token', '输入字段保持不变');
-    equal(meta.querySelector('[data-kind="reasoning"]')?.textContent, '思考 0 Token（含在输出中）', '思考 0 仍是真实值');
+    equal(meta.querySelector('[data-kind="reasoning"]')?.textContent, '推理 0 Token（含在输出中）', '推理 0 仍是真实值');
 
     M.rebuildFromMessages([{ role: 'assistant', content: [text('zero')], stopReason: 'stop',
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, reasoning: 0, totalTokens: 0 } }]);
     const zero = d.querySelector('#stream .ui2-msg-meta');
     equal(zero.querySelectorAll('.ui2-msg-meta-item').length, 7, '七个真实 0 字段全部保留');
-    equal(zero.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 0 · 思考 0 Token（含在输出中）', '0 不被省略');
+    equal(zero.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 0 · 推理 0（含在输出中）', '0 不被省略');
     equal(zero.querySelector('details')?.querySelectorAll('.ui2-msg-meta-item').length, 7, '完整拆分仍可达');
 
     M.rebuildFromMessages([{ role: 'assistant', content: [text('none')], stopReason: 'stop' }]);

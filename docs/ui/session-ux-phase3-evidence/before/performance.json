@@ -1,0 +1,137 @@
+{
+  "label": "before",
+  "measuredAt": "2026-11-16T00:37:32.554Z",
+  "result": {
+    "classic": {
+      "fedMessages": 770,
+      "toolCalls": 200,
+      "initial": {
+        "ms": 184.60000002384186,
+        "longTasks": {
+          "count": 2,
+          "max": 157,
+          "total": 222
+        },
+        "nodes": 11399,
+        "scrollHeight": 77204,
+        "messages": 520,
+        "toolGroups": 50,
+        "toolRows": 200
+      },
+      "switchToB": {
+        "ms": 162.89999997615814,
+        "longTasks": {
+          "count": 1,
+          "max": 141,
+          "total": 141
+        },
+        "nodes": 11399,
+        "scrollHeight": 77204,
+        "messages": 520,
+        "toolGroups": 50,
+        "toolRows": 200
+      },
+      "switchBackToA": {
+        "ms": 158.09999990463257,
+        "longTasks": {
+          "count": 1,
+          "max": 146,
+          "total": 146
+        },
+        "nodes": 11399,
+        "scrollHeight": 77204,
+        "messages": 520,
+        "toolGroups": 50,
+        "toolRows": 200
+      },
+      "crossSessionLeak": false,
+      "scroll": {
+        "bottomMs": 23.5,
+        "middleMs": 38.799999952316284,
+        "longTasks": {
+          "count": 0,
+          "max": 0,
+          "total": 0
+        }
+      },
+      "toolGroup": {
+        "expandMs": 41.59999990463257,
+        "collapseMs": 34.5,
+        "expandDeltaPx": -0.140625
+      },
+      "dom": {
+        "documentNodes": 12438,
+        "streamNodes": 11399,
+        "heapBytes": 8080356
+      },
+      "longTaskAll": {
+        "count": 0,
+        "max": 0,
+        "total": 0
+      }
+    },
+    "runtime": {
+      "fedMessages": 770,
+      "toolCalls": 200,
+      "projectionMs": 4.099999904632568,
+      "blocksA": 240,
+      "truncatedA": true,
+      "blockKinds": {
+        "user": 95,
+        "assistant": 95,
+        "tools": 50
+      },
+      "initial": {
+        "ms": 35.60000002384186,
+        "longTasks": {
+          "count": 0,
+          "max": 0,
+          "total": 0
+        },
+        "nodes": 5765,
+        "scrollHeight": 27643,
+        "toolGroups": 50,
+        "toolRows": 200,
+        "toolBlocksInDom": 50
+      },
+      "switchToB": {
+        "ms": 34.300000071525574,
+        "longTasks": {
+          "count": 0,
+          "max": 0,
+          "total": 0
+        },
+        "blocks": 240
+      },
+      "switchBackToA": {
+        "ms": 22.200000047683716,
+        "longTasks": {
+          "count": 0,
+          "max": 0,
+          "total": 0
+        }
+      },
+      "crossSessionLeak": false,
+      "scrollBottomMs": 27.100000023841858,
+      "scrollMiddleMs": 33.800000071525574,
+      "scrollLongTasks": {
+        "count": 0,
+        "max": 0,
+        "total": 0
+      },
+      "expandMs": 34.299999952316284,
+      "collapseMs": 32,
+      "dom": {
+        "documentNodes": 18204,
+        "outputNodes": 5765,
+        "heapBytes": 11087632
+      },
+      "longTaskAll": {
+        "count": 0,
+        "max": 0,
+        "total": 0
+      }
+    },
+    "pageErrors": []
+  }
+}
