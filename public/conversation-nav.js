@@ -348,15 +348,33 @@ function ensureResizeObserver() {
  * styles.css 里 `.stage` 改成 `overflow:clip` 是第二道保险，但真正的修法是
  * 这里不再请求祖先滚动。
  *
- * 目标位置用 `entry.topInContent`（layout() 里算的内容偏移），clamp 到
+ * 目标位置在**跳转这一刻**从目标元素重算，并扣掉入场动效的位移，clamp 到
  * [0, maxScroll]，再减一个 JUMP_PAD —— 目标消息不贴死在滚动区顶部。
- * 不用 setTimeout / scrollBy 之类的猜测。 */
+ * 不在 layout() 里逐条补偿：分块挂载期间整棵线程的入场动画同时在跑，逐节点
+ * 读 transform 会反复触发全量样式重算（实测把 830 条重建从 ~130ms 拖到
+ * ~4.8s）；而跳转一次只需要读一个目标。不用 setTimeout / scrollBy 猜测。 */
+function riseInShift(element) {
+  if (typeof element.getAnimations !== 'function') return 0;
+  for (const animation of element.getAnimations()) {
+    if (animation.animationName !== 'ui2-rise-in') continue;
+    const progress = animation.effect?.getComputedTiming?.().progress;
+    return Number.isFinite(progress) ? 3 * (1 - Math.min(1, Math.max(0, progress))) : 0;
+  }
+  return 0;
+}
+
 function scrollToEntry(entry) {
   if (!entry || !entry.element.isConnected) return;
   const stream = el.stream;
   if (!stream) return;
   const max = Math.max(0, stream.scrollHeight - stream.clientHeight);
-  const top = Math.min(max, Math.max(0, Math.round(entry.topInContent - JUMP_PAD)));
+  const rect = entry.element.getBoundingClientRect();
+  const contentTop = Math.max(0, rect.top - riseInShift(entry.element)
+    - stream.getBoundingClientRect().top + stream.scrollTop);
+  /* 缓存也同步成静止口径：navEntries() 与「当前是第几条」随后读到的是
+   * 跳转后的真实位置，不用等下一次 debounce。 */
+  entry.topInContent = contentTop;
+  const top = Math.min(max, Math.max(0, Math.round(contentTop - JUMP_PAD)));
   /* jsdom（smoke）与很老的环境没有 scrollTo —— 退回直接写 scrollTop，
    * 只影响平滑动画，不影响落点。 */
   if (typeof stream.scrollTo === 'function') stream.scrollTo({ top, behavior: 'smooth' });

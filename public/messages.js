@@ -32,7 +32,7 @@ import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { planHistory } from './tool-history.js';
 import { addToGroup, createGroup, groupCount, renderEntry, setEntryExpanded, setGroupExpanded } from './tool-view.js';
-import { collectPlanTurns, isPlanTool, planAnchorId } from './plan-model.js';
+import { collectPlanTurns, isPlanTool } from './plan-model.js';
 import { renderPlan } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
@@ -56,11 +56,54 @@ let threadGeneration = 0;
 let streamScrollBound = false;
 let streamScrollRaf = null;
 
+/* P4-D：长历史（800 条消息起）分块构建并挂载。
+ *
+ * 实测 829 / 1653 条消息的会话把整棵 DOM 一次性 append 时，节点构建加
+ * 布局/样式重算会形成 200–450ms 的长任务。这里按顶层节点数分批：每批渲染
+ * 约 160 个节点就挂载并让出主线程，批大小逐次翻倍到 1024 封顶。这样首屏
+ * 只需很小一段同步工作，后续批次在独立任务里完成；总批次数保持个位数，
+ * 避免为每批反复付出整棵线程的布局成本。
+ *
+ * 阈值按消息数而不是节点数，避免把 770 条消息的既有定向测试从同步改成异步；
+ * 800 条是 P4-D 的验收下限（夹具 809 条）。 */
+const HISTORY_CHUNK_MESSAGES = 800;
+const HISTORY_CHUNK_NODES = 160;
+const HISTORY_CHUNK_MAX_NODES = 1024;
+
+/* 当前正在分块挂载的历史。generation 用于让 clearThread / 新重建取消旧任务；
+ * promise 供测试与需要完整 DOM 的调用方等待。 */
+let classicMount = null;
+
+/** 分块挂载期间滚动事件由本模块自己驱动，不能把半截历史写成阅读书签。 */
+function mountingClassicHistory() {
+  return Boolean(classicMount && classicMount.generation === threadGeneration);
+}
+/* 分块挂载让出主线程的窗口里如果来了实时消息，实时节点会 append 在尚未挂完的
+ * 历史中间，锚点序号也会被提前占用。任何实时写入之前先把剩余历史同步补完：
+ * 一次长任务换正确的顺序与锚点，正常浏览仍走分块。
+ *
+ * tools.js / plan-live.js 的实时写入也走这里 —— 计划卡不走 ensureThread，
+ * 只靠 ensureThread 兜不住。 */
+export function finishClassicHistoryBeforeLive() {
+  if (mountingClassicHistory() && typeof classicMount.flush === 'function') classicMount.flush();
+}
+
+function yieldToMainThread() {
+  if (typeof globalThis.scheduler?.yield === 'function') return globalThis.scheduler.yield();
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 export function classicThreadSessionId() {
   return threadSessionId;
 }
 
+/** 等当前长历史挂载完成（没有挂载时立即完成）。 */
+export function waitForClassicRenderIdle() {
+  return classicMount ? classicMount.promise : Promise.resolve();
+}
+
 export function saveClassicReadingPosition(sessionId) {
+  if (mountingClassicHistory()) return;
   if (!sessionId || sessionId !== threadSessionId || !S.thread?.childElementCount || !el.stream?.clientHeight) return;
   saveSessionBookmark(sessionId, el.stream, S.thread);
 }
@@ -93,6 +136,9 @@ let retryNotice = null;
  * 空线程，欢迎块就永久消失，对话区变成一片纯黑，用户看不到任何引导。
  * 现在改成显隐切换（见 syncWelcome），元素始终留在 DOM 里。 */
 export function ensureThread() {
+  /* 实时路径的统一入口：拿到线程时历史必须已经挂完，否则后续 append
+   * 会落在半截历史中间。历史重建自己在 clearThread 之后调用，这里不会命中。 */
+  finishClassicHistoryBeforeLive();
   if (S.thread) return S.thread;
   const t = document.createElement('div');
   t.className = 'thread';
@@ -124,7 +170,11 @@ export function clearThread() {
   outcomeSeq = 0;
   toolGroupCallId = null;
   toolGroupCounts.clear();
-  if (S.thread) S.thread.innerHTML = '';
+  if (S.thread) {
+    S.thread.innerHTML = '';
+    /* 取消中的分块挂载不会再走到 finishHistoryRender；busy 状态必须在这里收掉。 */
+    S.thread.removeAttribute('aria-busy');
+  }
   clearPlanLive();
   clearRetryNotice();
   liveTurn = null;
@@ -244,6 +294,7 @@ function interruptedToolTerminal(tools, lastAssistant, toolSeqs = null) {
 
 /** agent_settled 后的轮次终态。没有真实证据（assistant / 工具）就不画。 */
 function finalizeTurn() {
+  finishClassicHistoryBeforeLive();
   const turn = liveTurn;
   if (!turn || turn.finalized) return;
   turn.finalized = true;
@@ -268,6 +319,7 @@ function finalizeTurn() {
 /* ---------- 「正在处理」指示 ---------- */
 
 export function showWorking() {
+  finishClassicHistoryBeforeLive();
   hideWorking();
   const t = ensureThread();
   const w = document.createElement('div');
@@ -520,6 +572,7 @@ export function textOf(msg) {
  * 时间线（实时 + 历史）和消息渲染都要用，放在数据模型那一层更合适。 */
 
 function renderUser(msg) {
+  finishClassicHistoryBeforeLive();
   const t = ensureThread();
   /* 用户消息是工具分组的硬边界：上一条 assistant 那批工具已经彻底结束了。
    * 放在这里而不是靠时间判断 —— §12 明确禁止「超过几秒算新组」那种猜测。 */
@@ -546,6 +599,7 @@ function renderUser(msg) {
 }
 
 function createAssistant() {
+  finishClassicHistoryBeforeLive();
   const t = ensureThread();
   const wrap = document.createElement('article');
   wrap.className = 'msg assistant';
@@ -569,6 +623,7 @@ function createAssistant() {
 }
 
 export function onMessageStart(evt) {
+  finishClassicHistoryBeforeLive();
   const msg = evt.message || {};
   if (msg.role === 'user') return renderUser(msg);
   if (msg.role !== 'assistant') return;
@@ -788,6 +843,7 @@ export function noteBlock(text) {
  * 「对话丢了」。这条留在那里，直到下一次成功的历史重建把它清掉。
  */
 export function noteLoadFailure(text) {
+  finishClassicHistoryBeforeLive();
   const t = ensureThread();
   t.appendChild(noteBlock(text));
 }
@@ -903,6 +959,7 @@ export function attachErrorRecovery(action, { run } = {}) {
  * 原始错误来自已经渲染过的 `.me-raw`（服务端已做安全归一），只走 textContent。
  */
 export function showRetryNotice({ attempt, maxAttempts, error } = {}) {
+  finishClassicHistoryBeforeLive();
   const t = ensureThread();
   if (!retryNotice || !retryNotice.isConnected) {
     retryNotice = document.createElement('div');
@@ -1047,8 +1104,8 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
   clearThread();
   threadSessionId = sessionId;
   const t = ensureThread();
-  /* 先全拼进 DocumentFragment 再一次性挂上去（§17）：一段历史可能有几百条，
-   * 逐条 append 会触发同样多次布局计算。 */
+  /* 小历史仍在 DocumentFragment 里一次建好再挂载（§17）；长历史走
+   * mountHistoryInChunks，按批构建并挂载。 */
   const frag = document.createDocumentFragment();
 
   /* 配对规则全部在 tool-history.js 里（纯函数，可单独测）：
@@ -1094,8 +1151,19 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     }
   };
 
-  for (let index = 0; index < items.length; index++) {
-    const item = items[index];
+  /* 把单条历史项的渲染抽出来，让同步与分段两条路径共用同一份实现。
+   * 分段路径每批挂载后 DocumentFragment 会被清空，因此锚点查重要同时看
+   * 已挂到线程上的节点和当前批次里尚未挂载的节点。 */
+  const nextPlanAnchorId = (toolCallId) => {
+    const base = 'plan-' + encodeURIComponent(toolCallId);
+    let anchorId = base;
+    for (let occurrence = 2; t.querySelector(`[data-anchor-id="${anchorId}"]`) || frag.querySelector(`[data-anchor-id="${anchorId}"]`); occurrence++) {
+      anchorId = base + ':' + occurrence;
+    }
+    return anchorId;
+  };
+
+  const renderItem = (item, index) => {
     if (item.kind === 'user') {
       flushHistoryTurn();
       planTurn += 1;
@@ -1107,7 +1175,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       wrap.appendChild(messageActions(textOf(item.message)));
       frag.appendChild(wrap);
       startHistoryTurn(item.message);
-      continue;
+      return;
     }
 
     if (item.kind === 'assistant') {
@@ -1131,20 +1199,20 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       body.className = 'msg-body';
       /* 重建历史时同样不留空白「Pi」：只有工具调用的那轮没有正文可渲染，
        * 整条跳过。那次工具调用不会因此消失 —— 紧跟其后的 tools 计划项会画它。 */
-      if (!rebuildAssistant(body, msg)) continue;
+      if (!rebuildAssistant(body, msg)) return;
       if (historyTurn) historyTurn.hasEvidence = true;
       wrap.appendChild(body);
       const meta = renderMessageMeta(msg);
       if (meta) wrap.appendChild(meta);
       frag.appendChild(wrap);
-      continue;
+      return;
     }
 
     if (item.kind === 'tools') {
       const turnPlan = planTurns.get(planTurn);
       if (turnPlan && turnPlan.firstIndex === index) {
         const planNode = renderPlan(turnPlan.plan);
-        if (planNode) planNode.dataset.anchorId = planAnchorId(turnPlan.firstCallId, frag);
+        if (planNode) planNode.dataset.anchorId = nextPlanAnchorId(turnPlan.firstCallId);
         frag.appendChild(planNode);
       }
       /* gui_plan 的调用行由上面的任务列表承担，不再重复画成工具记录。 */
@@ -1167,10 +1235,28 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
         frag.appendChild(g);
       }
     }
-  }
-  flushHistoryTurn();
+  };
 
+  const generation = threadGeneration;
+  if (msgs.length >= HISTORY_CHUNK_MESSAGES) {
+    mountHistoryInChunks(t, items, sessionId, generation, { frag, renderItem, flushHistoryTurn });
+    return;
+  }
+
+  for (let index = 0; index < items.length; index++) renderItem(items[index], index);
+  flushHistoryTurn();
   t.appendChild(frag);
+  finishHistoryRender(t, sessionId, generation);
+}
+
+/** 所有历史节点挂完之后再建导航、恢复位置、通知监听方。
+ *
+ * 顺序不能变：导航与定位都依赖完整 DOM 的布局；必须等最后一个分块挂完。 */
+function finishHistoryRender(t, sessionId, generation, { userScrolled = false } = {}) {
+  if (generation !== threadGeneration || S.thread !== t) return;
+  /* 分块期间线程对辅助技术是 busy；完整 DOM、导航与位置都就绪后再解除。 */
+  t.removeAttribute('aria-busy');
+
   /* 历史重建完之后**重新扫一遍 DOM** 建导航（§10）—— 刷新页面、重开 App、
    * 恢复旧会话、fork、retry 之后走的都是这条路。不自己维护消息副本，
    * 所以这里不需要知道「刚才删了哪几条」。 */
@@ -1188,12 +1274,102 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       handled = false;
     }
   }
-  if (!handled) {
+  if (!handled && !userScrolled) {
     if (sessionId && restoreSessionBookmark(sessionId, el.stream, t)) {
       handled = true;
     }
   }
+  if (!handled && userScrolled) {
+    /* 用户在分块挂载期间自己滚过：尊重他的位置，并把它记成新的书签，
+     * 不再用挂载前保存的旧位置覆盖。没有 sessionId 的降级环境也保留位置。 */
+    if (sessionId) saveSessionBookmark(sessionId, el.stream, t);
+    return;
+  }
   if (!handled) scrollBottom(true);
+}
+
+/** 历史分块构建并挂载。
+ *
+ * 每批只渲染约 HISTORY_CHUNK_NODES 个顶层节点就挂上去并让出主线程：
+ *  - 首屏只需一小段同步工作就能看到内容；
+ *  - 构建与布局成本被拆到多个任务，避免一次 >100ms 的长任务；
+ *  - `clearThread` 或下一次重建递增 threadGeneration 后，旧任务在下一批前退出，
+ *    绝不写入新会话。
+ * 批大小逐次翻倍到 HISTORY_CHUNK_MAX_NODES 后封顶，长会话的块数保持个位数，
+ * 避免为每块反复付出整棵线程的布局成本。用户自己滚动后不再把视口拉到底，
+ * 最终位置由 finishHistoryRender 尊重。挂载窗口内如果来了实时消息 / 工具状态，
+ * 先由 complete() 同步补齐剩余历史，实时节点永远排在完整历史之后。 */
+function mountHistoryInChunks(t, items, sessionId, generation, { frag, renderItem, flushHistoryTurn }) {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  const state = { generation, promise, resolve };
+  classicMount = state;
+  /* 让读屏与「复制/打印前先等就绪」的调用方知道历史尚未完整。 */
+  t.setAttribute('aria-busy', 'true');
+
+  let settled = false;
+  let completed = false;
+  let pinned = true;
+  let index = 0;
+  const onInteract = () => { pinned = false; };
+  const stream = el.stream;
+  stream.addEventListener('wheel', onInteract, { passive: true });
+  stream.addEventListener('touchmove', onInteract, { passive: true });
+  stream.addEventListener('keydown', onInteract);
+  const current = () => generation === threadGeneration
+    && threadSessionId === sessionId
+    && S.thread === t
+    && t.isConnected !== false;
+  const settle = () => {
+    if (settled) return;
+    settled = true;
+    stream.removeEventListener('wheel', onInteract);
+    stream.removeEventListener('touchmove', onInteract);
+    stream.removeEventListener('keydown', onInteract);
+    if (classicMount === state) classicMount = null;
+    resolve();
+  };
+  /* 实时事件先到这里：把剩余历史一次性补齐并收尾，再让实时节点追加到末尾。
+   * 这一条同步路径只在挂载窗口内真的来了实时事件时执行。 */
+  const complete = () => {
+    if (completed || !current()) return;
+    completed = true;
+    while (index < items.length && current()) {
+      renderItem(items[index], index);
+      index += 1;
+    }
+    if (!current()) return;
+    flushHistoryTurn();
+    if (frag.childNodes.length) t.appendChild(frag);
+    if (pinned) stream.scrollTop = 1e9;
+    finishHistoryRender(t, sessionId, generation, { userScrolled: !pinned });
+    settle();
+  };
+  state.flush = complete;
+
+  void (async () => {
+    try {
+      let chunkSize = HISTORY_CHUNK_NODES;
+      while (index < items.length && current() && !completed) {
+        while (index < items.length && frag.childNodes.length < chunkSize && current() && !completed) {
+          renderItem(items[index], index);
+          index += 1;
+        }
+        if (!current() || completed) break;
+        t.appendChild(frag);
+
+        /* 顺序追加不会推动已读内容，只把视口带到当前已挂历史的底部。
+         * 用户自己滚动后就交还位置，后续块继续追加在下方，不影响他正在读的那段。 */
+        if (pinned) stream.scrollTop = 1e9;
+
+        chunkSize = Math.min(chunkSize * 2, HISTORY_CHUNK_MAX_NODES);
+        if (index < items.length && !completed) await yieldToMainThread();
+      }
+      if (!completed) complete();
+    } finally {
+      settle();
+    }
+  })();
 }
 
 /* 「历史已经渲染完了」的生命周期事件。
