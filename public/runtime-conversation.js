@@ -46,7 +46,8 @@ import { iconMarkup } from './ui/icons.js';
 import { runtimeSessionAction, fetchRuntimeHistory } from './api.js';
 import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
-import { createRuntimeDisplay, usageText, shouldFollow } from './runtime-display.js';
+import { createRuntimeDisplay, shouldFollow } from './runtime-display.js';
+import { renderUsageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
 import { openModal } from './ui/modal.js';
 import { md, renderVizCardHtml } from './markdown.js';
@@ -139,7 +140,8 @@ const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止
 /* 历史状态提示与文案映射 */
 const HISTORY_NOTE_LEGACY = '历史只含正文（无工具、思考、用量）';
 const HISTORY_NOTE_WITH_TOOLS = '历史正文与只读工具摘要；不含思考及用量';
-const HISTORY_NOTE_WITH_TIMELINE = '历史按真实记录恢复计划、思考、工具与正文；不含原始参数/输出及用量';
+const HISTORY_NOTE_WITH_TIMELINE = '历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出';
+const HISTORY_NOTE_WITH_TIMELINE_NO_USAGE = '历史按真实记录恢复计划、思考、工具与正文；记录中无可显示的用量；不含原始参数/输出';
 const HISTORY_NOTE_PLAN_UNKNOWN = '计划按用户消息分组，历史缺少运行边界，归属不确定';
 const HISTORY_NOTE_PLAN_MIXED = '部分计划缺少运行边界，归属不确定';
 const TOOL_UNAVAILABLE_REASONS = {
@@ -165,7 +167,11 @@ function formatHistoryState(history, owner) {
     const boundary = history?.execution?.planBoundary;
     const boundaryNote = boundary === 'unknown' ? `；${HISTORY_NOTE_PLAN_UNKNOWN}`
       : boundary === 'mixed' ? `；${HISTORY_NOTE_PLAN_MIXED}` : '';
-    note = HISTORY_NOTE_WITH_TIMELINE + boundaryNote + (executionTruncated ? '；更早的执行记录已截断' : '');
+    /* 提示只能描述这次记录里**实际有**的东西：旧记录没有 usage 时
+     * 不声称「已恢复用量」，也不补一个 0。 */
+    const hasUsage = history.execution.timeline.some(block => block?.usage);
+    note = (hasUsage ? HISTORY_NOTE_WITH_TIMELINE : HISTORY_NOTE_WITH_TIMELINE_NO_USAGE)
+      + boundaryNote + (executionTruncated ? '；更早的执行记录已截断' : '');
   } else if (!history?.toolSummary) {
     note = HISTORY_NOTE_LEGACY;
   } else {
@@ -248,7 +254,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
    * 会话的视图态），这样每个实例独立 dispose，测试之间也不共享残留记录。 */
   const projection = display || createRuntimeDisplay();
   const ownsProjection = !display;
-  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null, renderedHistory = null, renderedLocatorKey = null;
+  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null, renderedHistory = null, renderedLocatorKey = null, renderedUsageKey = '';
 
   function viewOf(conversationId) {
     let view = views.get(conversationId);
@@ -333,12 +339,23 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
    * 执行过程（用户任务 → 计划 → 思考 → 工具 → 正文）全部进入**同一个**
    * `.rtc-output` 滚动容器，按 store/历史投影的真实 block 顺序渲染。没有
    * 任何「按类别摆位置」的 DOM 重排。 */
-  const output = el('div', 'rtc-output'); output.tabIndex = 0; output.setAttribute('aria-label', '当前会话输出'); root.append(output);
+  const output = el('div', 'rtc-output');
+  output.tabIndex = 0;
+  output.setAttribute('aria-label', '当前会话输出');
+  /* role=log 表示「持续追加的会话记录」；但这里**不**开 aria-live：
+   * Runtime 时间线每个流式 delta 都会重建正文节点，若让容器播报 additions，
+   * 读屏会被整段消息反复打断。状态变化继续由局部 role=status/alert 承担。 */
+  output.setAttribute('role', 'log');
+  output.setAttribute('aria-live', 'off');
+  output.setAttribute('aria-relevant', 'additions');
+  output.setAttribute('aria-atomic', 'false');
+  root.append(output);
   output.addEventListener('scroll', () => { if (id && !current().history) scrollTops.set(id, output.scrollTop); }, { passive: true });
 
   /* 本轮用量：只显示 Pi 报过的数字（见 runtime-display.js）。刻意**不加** aria-live ——
-   * 它每帧都在变，做成 live region 会不停打断读屏。 */
-  const usage = el('p', 'ui2-runtime-usage'); usage.hidden = true; root.append(usage);
+   * 它每帧都在变，做成 live region 会不停打断读屏。
+   * 外面这层只负责占位/显隐，摘要与明细由 message-meta.js 与 Classic 共用。 */
+  const usage = el('div', 'ui2-runtime-usage'); usage.hidden = true; root.append(usage);
 
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
   let composing = false;
@@ -681,6 +698,26 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     };
   }
 
+  /* 一条 assistant 消息的真实 usage 可能挂在正文、Thinking 或工具组上；
+   * 每个 block 只渲染一次，更新时按白名单投影的签名原位替换。 */
+  function syncUsageMeta(host, block) {
+    const key = block.usage ? JSON.stringify(block.usage) : '';
+    if (!key) {
+      if (host._usageMeta) { host._usageMeta.remove(); host._usageMeta = null; host._usageKey = ''; }
+      return;
+    }
+    if (host._usageMeta && host._usageKey === key) return;
+    const fresh = renderUsageMeta(block.usage, { label: '本条助手消息用量' });
+    if (!fresh) {
+      if (host._usageMeta) { host._usageMeta.remove(); host._usageMeta = null; host._usageKey = ''; }
+      return;
+    }
+    if (host._usageMeta) host._usageMeta.replaceWith(fresh);
+    else host.append(fresh);
+    host._usageMeta = fresh;
+    host._usageKey = key;
+  }
+
   function createTimelineBlockNode(block, view, record, history) {
     /* 展开状态按「模式 + block/tool id」存：历史与实时各有一份，互不覆盖；
      * 切换会话、切换模式后都能恢复用户自己的选择。 */
@@ -695,22 +732,35 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         row.append(messageActions(block.text));
         if (block.messageId) row.dataset.historyMessageId = block.messageId;
         if (Number.isInteger(block.userIndex)) row.dataset.historyUserIndex = String(block.userIndex);
-      } else {
-        const body = el('div', 'rtc-assistant-text');
-        appendRuntimeContent(body, block.text);
-        row.append(body);
-        row.dataset.state = block.state || '';
+        return { node: row, update(next) { row.querySelector('.rtc-history-user-text').textContent = next.text; } };
       }
+      const body = el('div', 'rtc-assistant-text');
+      appendRuntimeContent(body, block.text);
+      row.append(body);
+      row.dataset.state = block.state || '';
+      /* 历史 usage 与 Classic 同一条摘要/明细；同一消息的多段正文不会重复
+       * 出现同一份用量（投影只把 usage 挂到该消息的一个 block 上）。 */
+      const syncMeta = next => syncUsageMeta(row, next);
+      syncMeta(block);
       /* 正文文本本身就是 output.textContent 的主体：角色标签用 CSS 伪元素，
        * 不额外插入文本节点，避免把「助手」混进正文复制/断言。 */
-      return { node: row, update(next) { if (row.dataset.role === 'user') row.querySelector('.rtc-history-user-text').textContent = next.text; else { const body = row.querySelector('.rtc-assistant-text'); body.replaceChildren(); appendRuntimeContent(body, next.text); } row.dataset.state = next.state || ''; } };
+      return { node: row, update(next) {
+        body.replaceChildren();
+        appendRuntimeContent(body, next.text);
+        row.dataset.state = next.state || '';
+        syncMeta(next);
+      } };
     }
 
     if (block.kind === 'thinking') {
+      /* 只有带真实历史 usage 的 Thinking 才包一层，用来在折叠区外显示用量；
+       * 实时 Thinking 的 DOM 保持原来的 details 直接子节点，不改变动画/滚动。 */
+      const wrap = block.usage ? el('div', 'ui2-runtime-thinking-wrap') : null;
       const details = el('details', 'ui2-runtime-thinking');
       const head = el('summary', 'ui2-runtime-thinking-head');
       const body = el('pre', 'ui2-runtime-thinking-body');
       details.append(head, body);
+      wrap?.append(details);
       details.open = view.timeline.thinkingOpen.get(openKey(block.id)) === true;
       details.addEventListener('toggle', () => { view.timeline.thinkingOpen.set(openKey(block.id), details.open); });
       head.addEventListener('click', () => {
@@ -735,8 +785,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           }
         });
       });
+      if (wrap) syncUsageMeta(wrap, block);
       return {
-        node: details,
+        node: wrap || details,
         update(next) {
           /* 当前 assistant 消息的思考仍经过展示投影的 maxThinkingBytes 上限；
            * 更早的消息已由 store / 历史投影各自按 64KiB 有界，不再二次裁剪。 */
@@ -748,6 +799,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           details.dataset.state = state || '';
           body.textContent = text;
           head.textContent = `思考过程 · ${text.length} 字${truncated ? '（已截断）' : ''}${stateLabel ? ' · ' + stateLabel : ''}`;
+          if (wrap) syncUsageMeta(wrap, next);
         },
       };
     }
@@ -760,33 +812,37 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         node: wrapper,
         update(next) {
           const nextSignature = JSON.stringify(next.tools);
-          if (nextSignature === signature) return;
-          signature = nextSignature;
-          wrapper.replaceChildren();
-          group = createGroup();
-          group.dataset.blockId = next.id;
-          wrapper.append(group);
-          for (const tool of next.tools) {
-            const entry = toolEntryOf(tool);
-            const node = renderEntry(entry);
-            node.classList.add('ui2-runtime-tool');
-            node.dataset.state = LEGACY_STATE[tool.state] || String(tool.state || 'unknown');
-            node.dataset.toolName = entry.name;
-            /* tool-view 的头/按钮自己处理折叠；这里在捕获阶段记录点击后的状态。 */
-            node.addEventListener('click', () => setTimeout(() => {
-              view.timeline.entryOpen.set(openKey(tool.id), isEntryExpanded(node));
-            }, 0), true);
-            if (view.timeline.entryOpen.get(openKey(tool.id)) === true) setEntryExpanded(node, true);
-            addToGroup(group, node);
+          if (nextSignature !== signature) {
+            signature = nextSignature;
+            wrapper.replaceChildren();
+            wrapper._usageMeta = null;
+            wrapper._usageKey = '';
+            group = createGroup();
+            group.dataset.blockId = next.id;
+            wrapper.append(group);
+            for (const tool of next.tools) {
+              const entry = toolEntryOf(tool);
+              const node = renderEntry(entry);
+              node.classList.add('ui2-runtime-tool');
+              node.dataset.state = LEGACY_STATE[tool.state] || String(tool.state || 'unknown');
+              node.dataset.toolName = entry.name;
+              /* tool-view 的头/按钮自己处理折叠；这里在捕获阶段记录点击后的状态。 */
+              node.addEventListener('click', () => setTimeout(() => {
+                view.timeline.entryOpen.set(openKey(tool.id), isEntryExpanded(node));
+              }, 0), true);
+              if (view.timeline.entryOpen.get(openKey(tool.id)) === true) setEntryExpanded(node, true);
+              addToGroup(group, node);
+            }
+            group.addEventListener('click', event => {
+              if (!event.target?.closest?.('.tl-group-head')) return;
+              view.timeline.groupOpen.set(openKey(next.id), isGroupExpanded(group));
+            });
+            /* 只有用户真的点过组头才恢复展开；否则交给 tool-view 的默认规则：
+             * 多项自动折叠、单项不摆组头。不能把「单项时列表可见」误判成
+             * 用户展开过，否则第二个工具一到就永远展开。 */
+            if (view.timeline.groupOpen.has(openKey(next.id))) setGroupExpanded(group, view.timeline.groupOpen.get(openKey(next.id)));
           }
-          group.addEventListener('click', event => {
-            if (!event.target?.closest?.('.tl-group-head')) return;
-            view.timeline.groupOpen.set(openKey(next.id), isGroupExpanded(group));
-          });
-          /* 只有用户真的点过组头才恢复展开；否则交给 tool-view 的默认规则：
-           * 多项自动折叠、单项不摆组头。不能把「单项时列表可见」误判成
-           * 用户展开过，否则第二个工具一到就永远展开。 */
-          if (view.timeline.groupOpen.has(openKey(next.id))) setGroupExpanded(group, view.timeline.groupOpen.get(openKey(next.id)));
+          syncUsageMeta(wrapper, next);
         },
       };
     }
@@ -1105,8 +1161,22 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       }
     }
 
-    const usageLine = view.history ? '' : usageText(projection.usageOf(id));
-    usage.hidden = !usageLine; usage.textContent = usageLine;
+    const usageStats = view.history ? null : projection.usageOf(id);
+    const usageKey = usageStats ? JSON.stringify(usageStats) : '';
+    if (usageKey !== renderedUsageKey) {
+      renderedUsageKey = usageKey;
+      usage.replaceChildren();
+      if (usageStats) {
+        const meta = renderUsageMeta(usageStats, {
+          source: usageStats.source,
+          label: '本轮助手消息用量',
+          prefix: '本轮 · ',
+          className: 'ui2-msg-meta ui2-runtime-usage-meta',
+        });
+        if (meta) usage.append(meta);
+      }
+    }
+    usage.hidden = !usageKey;
 
     const curLoc = r ? extractStableLocator(r?.item, r?.owner) : null;
     const curLocKey = runtimeDraftKey(curLoc);

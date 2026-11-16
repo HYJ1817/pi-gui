@@ -41,6 +41,20 @@
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+/* 折叠摘要：完成数旁边的当前任务。展开时列表已经能看到该行，不再重复。 */
+.plan-now {
+  min-width: 0;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t3);
+  font-size: 11px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.plan-head[aria-expanded="true"] .plan-now { display: none; }
+.plan-head[aria-expanded="false"] .plan-now:not([hidden]) { display: inline-block; }
 .plan-chev { display: inline-flex; width: 12px; height: 12px; color: var(--t3); }
 .plan-chev svg {
   width: 12px; height: 12px; fill: none; stroke: currentColor;
@@ -110,12 +124,19 @@
 
 /* 计划、思考、工具、正文现在都在同一个 .rtc-output 滚动容器里，按真实事件
  * 顺序排列；不要再给计划卡一个独立滚动区，否则同一段阅读流会被切成两块。 */
+/* 计划卡与工具组的外层只做定位；边距交给它们自己的公共样式
+ * （.plan-card 8/16、.tl-group 9/18），与 Classic 完全一致。
+ * 之前外层再叠 10/14、8/14 会让 Runtime 的组间距比 Classic 大一倍。 */
 .runtime-conversation .rtc-output .ui2-runtime-plan {
-  margin: 10px 0 14px;
+  margin: 8px 0 16px;
 }
 .runtime-conversation .rtc-output .ui2-runtime-plan .plan-card { margin: 0; }
 .runtime-conversation .rtc-output .ui2-runtime-thinking { margin: 8px 0 10px; }
-.runtime-conversation .rtc-output .ui2-runtime-tools { margin: 8px 0 14px; }
+.runtime-conversation .rtc-output .ui2-runtime-thinking-wrap { margin: 8px 0 10px; }
+.runtime-conversation .rtc-output .ui2-runtime-thinking-wrap .ui2-runtime-thinking { margin: 0; }
+.runtime-conversation .rtc-output .ui2-runtime-tools { margin: 0; }
+.runtime-conversation .rtc-output .ui2-runtime-thinking-wrap>.ui2-msg-meta,
+.runtime-conversation .rtc-output .ui2-runtime-tools>.ui2-msg-meta { margin-top: 6px; }
 .runtime-conversation .rtc-output .rtc-history-message { display: block; margin: 0 0 14px; }
 .runtime-conversation .rtc-output .rtc-timeline-message::before {
   content: attr(data-role-label);
@@ -123,12 +144,6 @@
   font-size: 10.5px;
   color: var(--t3);
   margin-bottom: 3px;
-}
-.runtime-conversation .rtc-output .rtc-history-message[data-role="user"] {
-  padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg-hover, rgba(0, 0, 0, .03));
 }
 .runtime-conversation .rtc-output .rtc-history-role {
   font-size: 10.5px;

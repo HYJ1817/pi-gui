@@ -594,13 +594,14 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
   transform:rotate(45deg);transition:transform var(--ui-duration-snap) var(--ui-ease-out);
 }
 .ui2-tool-summary[aria-expanded=false]::before{transform:rotate(-45deg)}
-.ui2-tool-state{font-size:10.5px;color:var(--t3);letter-spacing:.2px;line-height:1.5;padding:0 9px 5px}
-.tl-group-meta{display:flex;align-items:baseline;gap:8px;min-width:0;padding:0 9px 5px}
+.ui2-tool-state{font-size:10.5px;color:var(--t3);letter-spacing:.2px;line-height:1.5;padding:0 9px 5px;font-variant-numeric:tabular-nums}
+.tl-group-meta{display:flex;align-items:baseline;gap:8px;row-gap:1px;flex-wrap:wrap;min-width:0;padding:0 9px 5px}
 .tl-group-meta[hidden]{display:none}
-.tl-group-meta .ui2-tool-state{padding:0;flex:1;min-width:0}
+.tl-group-meta .ui2-tool-state{padding:0;flex:1 1 auto;min-width:0}
 .tl-group-time{flex:0 0 auto;font-family:var(--mono);font-size:10.5px;color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap}
 .ui2-msg-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:var(--t3);min-width:0}
 .ui2-msg-meta-summary{white-space:nowrap;font-variant-numeric:tabular-nums}
+.ui2-msg-meta-note{white-space:nowrap;color:var(--t3);font-size:11px}
 .ui2-msg-meta-details{display:inline-block;min-width:0}
 .ui2-msg-meta-details[open]{flex-basis:100%;width:100%}
 .ui2-msg-meta-details>summary{display:inline-block;cursor:pointer;color:var(--t3);font-size:11px;line-height:1.5;border-radius:3px}
@@ -3549,6 +3550,7 @@ body.rp-resizing{cursor:col-resize;user-select:none}
   color:var(--t2);font-family:inherit;font-size:12px;line-height:1.65;
 }
 .ui2-runtime-usage{margin:0;font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere}
+.ui2-runtime-usage .ui2-msg-meta{margin-top:0}
 .ui2-runtime-tools{display:flex;flex-direction:column;gap:1px;min-width:0}
 .ui2-runtime-tool{font-size:12px;line-height:1.5;color:var(--t2);overflow-wrap:anywhere}
 /* B 真实使用的工具状态只有 running / done / error 三种，只给这三种着色 */

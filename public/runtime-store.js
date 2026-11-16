@@ -11,6 +11,7 @@ import {
   contentText,
   contentSegments,
   timelineFromMessages,
+  usageProjection,
 } from './runtime-timeline.js';
 
 const same = (a, b) => a && b && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => a[k] === b[k]);
@@ -535,9 +536,19 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   function apply(frame) { return applyDetailed(frame).ok; }
 
   function cloneBlock(block) {
-    if (block.kind === 'tools') return { ...block, tools: block.tools.map(tool => ({ ...tool })) };
-    if (block.kind === 'plan') return { ...block, plan: block.plan ? { ...block.plan, tasks: block.plan.tasks.map(task => ({ ...task })) } : null };
-    return { ...block };
+    let copy;
+    if (block.kind === 'tools') copy = { ...block, tools: block.tools.map(tool => ({ ...tool })) };
+    else if (block.kind === 'plan') copy = { ...block, plan: block.plan ? { ...block.plan, tasks: block.plan.tasks.map(task => ({ ...task })) } : null };
+    else copy = { ...block };
+    /* 历史 block 也可能来自别的进程/旧响应：进入 store 前再走一次白名单，
+     * 不把任意附加字段（含原始 message）带进视图或后续序列化。
+     * 只有真正承载单条消息用量的 block 类型才保留 usage。 */
+    const usage = ['assistant', 'thinking', 'tools'].includes(block.kind)
+      ? usageProjection(block.usage)
+      : null;
+    if (usage) copy.usage = usage;
+    else delete copy.usage;
+    return copy;
   }
 
   function setHistoryTimeline(r, timeline, truncated) {

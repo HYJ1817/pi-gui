@@ -36,14 +36,13 @@
  */
 
 import { runtimeStore, onRuntimeChange } from './runtime-state.js';
+import { usageSummary } from './message-meta.js';
 
 const DEFAULT_MAX_THINKING_BYTES = 64 * 1024;  // 每会话 thinking 展示上限
 const DEFAULT_MAX_CONVERSATIONS = 64;          // 同时保留记录的会话数上限
 
-const USAGE_KEYS = [
-  ['input', '输入'], ['output', '输出'], ['cacheRead', '缓存读'], ['cacheWrite', '缓存写'],
-  ['cacheWrite1h', '缓存写(1h)'], ['reasoning', '推理'], ['totalTokens', '合计'],
-];
+/* 字段与标签和 Classic 共用 message-meta.js；这里只保留读取白名单。 */
+const USAGE_KEYS = ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite1h', 'reasoning', 'totalTokens'];
 const number = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 const tokenNumber = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
 
@@ -58,7 +57,7 @@ function boundText(text, limit) {
 export function readUsage(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const out = {};
-  for (const [key] of USAGE_KEYS) { const value = tokenNumber(raw[key]); if (value !== null) out[key] = value; }
+  for (const key of USAGE_KEYS) { const value = tokenNumber(raw[key]); if (value !== null) out[key] = value; }
   const cost = number(raw.cost?.total);
   if (cost !== null) out.costTotal = cost;
   return Object.keys(out).length ? out : null;
@@ -71,18 +70,13 @@ export function thinkingText(content) {
   return parts.length ? parts.map(c => c.thinking).join('\n\n') : null;
 }
 
-const grouped = value => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-
-/** 展示用的一行用量文案。纯函数，便于直接断言格式与「缺字段就不出现」。 */
+/** 展示用的一行用量摘要。纯函数，便于直接断言格式与「缺字段就不出现」。
+ *  字段名、数字格式与语义和 Classic 的 message-meta.js 完全一致。 */
 export function usageText(stats) {
-  if (!stats) return '';
-  const parts = [];
-  for (const [key, label] of USAGE_KEYS) { const value = tokenNumber(stats[key]); if (value !== null) parts.push(`${label} ${grouped(value)}`); }
-  const cost = number(stats.costTotal);
-  if (cost !== null) parts.push(`预估成本 ${cost.toFixed(4)}`);   // 不补货币符号：线上没有单位
-  if (!parts.length) return '';
+  const summary = usageSummary(stats);
+  if (!summary) return '';
   const provisional = stats.source === 'message_update' ? '（流式中，Pi 仍在累计）' : '';
-  return `本轮 · ${parts.join(' · ')}${provisional}`;
+  return `本轮 · ${summary}${provisional}`;
 }
 
 /** 距底 160px 以内算「还在看最新」——与 Classic `messages.js:78` 同一条规则。

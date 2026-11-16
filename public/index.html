@@ -131,7 +131,10 @@
     <!-- 会话内导航（Conversation Minimap）放在正文左侧的独立列里，
          不叠在滚动条上 —— 叠上去会有点击冲突，而且窄窗口下会挤正文。 -->
     <div class="convo" id="chatView">
-      <div class="stream" id="stream">
+      <!-- role=log 表达「持续追加的会话记录」；容器本身保持 aria-live=off，
+           流式 token 更新不会反复播报整段消息。错误/状态继续由局部
+           role=alert / role=status 负责。 -->
+      <div class="stream" id="stream" role="log" aria-live="off" aria-relevant="additions" aria-atomic="false" aria-label="对话记录">
       <div class="welcome" id="welcome">
         <div class="welcome-pane" id="welcomeRestore" hidden>
           <h2>正在恢复工作区…</h2>
