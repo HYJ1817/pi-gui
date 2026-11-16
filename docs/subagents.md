@@ -82,10 +82,41 @@ child Web 调用未必广播为父 RPC 独立事件，不读 transcript 或按�
 
 本阶段没有 FleetView、steering UI、transcript browser、mission dashboard、Agent Editor、worktree/lane 管理或跨会话编排。
 
+## P4-A 紧凑子项卡片
+
+父工具行仍是原来的 `.tl-item`：名称、父状态、请求摘要、耗时和 disclosure 不变。展开后，
+在现有 `.tl-more` 内增加一个单列子项列表；父行折叠时计数仍可见，用户主动折叠优先。
+
+- 只对 `entry.name === 'subagent'` 且没有 `args.action` 的调用生成结构化列表。
+- 来源一：`details.workflowChildren`，必须同时满足 `version === 1`、
+  `parentToolCallId === entry.id`、非空 `workflowRunId`，且父 `details.runId` 存在时必须相等。
+  子项必须带非空 `childId`，以 `childId` 为稳定键；重复键追加 `#2` 等后缀。
+- 来源二：`details.results`。只有父 `runId` 存在、每个结果都带唯一非负整数 `index` 时
+  才用 `${runId}/${index}` 作为身份；缺少任一证据或 index 重复时整组回退既有 facts，
+  不从行号推断 producer 身份。
+- 每项只读取 allowlist：`agent`、`model`、`state`、`task`、`activity/progress` 的
+  `currentTool/toolCount/turnCount/tokens/durationMs`。缺失字段省略；状态只映射白名单值，
+  未知值显示「状态未知」；不以工具调用数推算完成百分比，不以 `args.agent/task`
+  证明已经执行成功。
+- 计数只统计已知 `running`、成功（`complete/completed`）和 `failed`；摘要显示总项数、
+  已知状态计数、实际显示数和 `inventoryComplete === false` 时的「清单不完整」。
+- 每个来源最多 24 项，事实权重预算 8000 字符；超限时按前缀截断，摘要显示「显示 N」，
+  但仍继续统计后续已知项。原始 facts 仍按既有 8000 字符截断，现有 facts 字符串未改。
+- 展开复用现有 `.tl-toggle`、`aria-expanded`、`aria-controls`；列表为
+  `role=list` + `aria-label=子代理`，每项 `role=listitem`。不新增独立滚动区、
+  子代理 Stop 按钮、编排/控制入口或第二套状态机。
+- 以下情况完全回退到既有安全 facts 工具行：管理/控制调用、`bg_wait` 的未知完成状态、
+  background launch、空 `details`、过期或父 ID 不匹配的 workflow 帧、无法确认归属的 results。
+- Runtime 实时/历史的工具投影仍只有 `id/name/state/waiting/durationMs`；本阶段没有把
+  `args/details` 或子代理 facts 加进 Runtime。Runtime 的 `subagent` 工具行继续显示现有安全回退。
+
 ## 验证
 
-npm test 串行包含 tests/subagents.cjs，完全离线，不安装、不读真实 Agent、不启动 child model/detached runner、不消耗 quota。
+npm test 串行包含 tests/subagents.cjs 和 tests/session-ux-phase4a.cjs，完全离线，不安装、不读真实 Agent、不启动 child model/detached runner、不消耗 quota。
 UI smoke 验证真实 SSE 并发/stale/Stop/Git 防抖/重启确认。Chrome shots:harness 157/158 检查 workflow 状态、父关系及 background launch。
+P4-A 的 jsdom 契约与真实 Chromium 视觉证据分别见 `tests/session-ux-phase4a.cjs` 与
+`tests/session-ux-phase4a-shots.cjs`；截图和测量在
+[docs/ui/session-ux-phase4a-evidence](ui/session-ux-phase4a-evidence/)。
 
 Live 是人工可选流程，不在 CI/default tests，本阶段未自动运行。安装可信 Extension 并配置真实模型后，在隔离项目显式授权验证：
 
