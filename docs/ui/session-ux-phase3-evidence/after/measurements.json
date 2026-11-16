@@ -1,0 +1,637 @@
+{
+  "label": "after",
+  "metrics": [
+    {
+      "name": "classic-1320",
+      "bubble": {
+        "width": 570.71875,
+        "height": 85.0625,
+        "top": 66,
+        "left": 574.78125,
+        "backgroundColor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "borderTopWidth": "0px",
+        "borderTopStyle": "none",
+        "borderRadius": "18px 18px 8px",
+        "padding": "10px 15px",
+        "maxWidth": "min(82%, 600px)",
+        "fontSize": "14px",
+        "color": "rgb(238, 238, 238)"
+      },
+      "userRole": {
+        "width": "1px",
+        "height": "1px",
+        "top": 66,
+        "left": 1144.5,
+        "position": "absolute",
+        "clipPath": "none",
+        "overflow": "hidden"
+      },
+      "assistantRole": {
+        "width": 696,
+        "height": 18.140625,
+        "top": 195.0625,
+        "left": 449.5,
+        "fontSize": "11px",
+        "color": "rgb(176, 176, 176)",
+        "marginBottom": "5px"
+      },
+      "tool": {
+        "width": 696,
+        "height": 55.546875,
+        "top": 528.71875,
+        "left": 449.5,
+        "margin": "9px 0px 18px",
+        "padding": "2px 3px 3px",
+        "fontSize": "13px"
+      },
+      "toolTitle": {
+        "width": 688,
+        "height": 27.796875,
+        "top": 531.71875,
+        "left": 453.5,
+        "fontSize": "12px",
+        "color": "rgb(189, 189, 189)"
+      },
+      "toolLabel": {
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "left": 0,
+        "fontSize": "12px",
+        "color": "rgb(238, 238, 238)"
+      },
+      "toolArg": {
+        "width": 0,
+        "height": 0,
+        "top": 0,
+        "left": 0,
+        "fontSize": "11.5px",
+        "color": "rgb(176, 176, 176)"
+      },
+      "toolState": {
+        "width": 670,
+        "height": 15.75,
+        "top": 559.515625,
+        "left": 462.5,
+        "fontSize": "10.5px",
+        "color": "rgb(176, 176, 176)",
+        "flexWrap": "nowrap"
+      },
+      "plan": {
+        "width": 696,
+        "height": 151.5,
+        "top": 1255.1875,
+        "left": 449.5,
+        "margin": "8px 0px 16px",
+        "padding": "0px",
+        "fontSize": "13px"
+      },
+      "meta": {
+        "width": 696,
+        "height": 18.96875,
+        "top": 291.375,
+        "left": 449.5,
+        "fontSize": "11.5px",
+        "color": "rgb(176, 176, 176)",
+        "marginTop": "6px"
+      },
+      "metaSummary": {
+        "width": 230.34375,
+        "height": 18.96875,
+        "top": 291.375,
+        "left": 449.5,
+        "fontSize": "11.5px",
+        "color": "rgb(176, 176, 176)"
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0
+      }
+    },
+    {
+      "name": "classic-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0
+      },
+      "composer": {
+        "bottom": 600,
+        "top": 474
+      }
+    },
+    {
+      "name": "accessibility-classic",
+      "counts": {
+        "log": 1,
+        "status": 8,
+        "alert": 0,
+        "button": 47,
+        "disclosure": 3
+      },
+      "logs": [
+        {
+          "role": "log",
+          "name": "对话记录"
+        }
+      ],
+      "statuses": [
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        }
+      ],
+      "disclosures": [
+        {
+          "role": "DisclosureTriangle",
+          "name": "上下文 6%",
+          "expanded": false
+        },
+        {
+          "role": "DisclosureTriangle",
+          "name": "明细",
+          "expanded": false
+        },
+        {
+          "role": "DisclosureTriangle",
+          "name": "明细",
+          "expanded": false
+        }
+      ],
+      "buttons": [
+        {
+          "role": "button",
+          "name": "查看任务"
+        },
+        {
+          "role": "button",
+          "name": "跳转到：接着执行实时工具与任务列表。"
+        },
+        {
+          "role": "button",
+          "name": "跳转到：执行实时工具与任务列表，等待写入时不要改用户折叠选择。"
+        },
+        {
+          "role": "button",
+          "name": "工具调用 · 3 次",
+          "expanded": false
+        },
+        {
+          "role": "button",
+          "name": "工具调用 · 4 次",
+          "expanded": true
+        },
+        {
+          "role": "button",
+          "name": "任务列表 已完成 2/4 正在执行：在 1320×820 与 700×600 下验证深浅主题、长中文与英文、无横向溢出，并检查 Composer 是否遮挡内容",
+          "expanded": false
+        }
+      ],
+      "roleLabels": [
+        "StaticText:你",
+        "StaticText:你",
+        "StaticText:你",
+        "StaticText:你",
+        "InlineTextBox:你",
+        "InlineTextBox:你",
+        "InlineTextBox:你",
+        "InlineTextBox:你"
+      ]
+    },
+    {
+      "name": "runtime-live-1320",
+      "userOuter": {
+        "width": 686,
+        "height": 89.375,
+        "top": 133.4375,
+        "left": 449.5,
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "borderTopWidth": "0px",
+        "borderTopStyle": "none",
+        "padding": "0px",
+        "borderRadius": "0px"
+      },
+      "userInner": {
+        "width": 562.515625,
+        "height": 63.375,
+        "top": 133.4375,
+        "left": 572.984375,
+        "backgroundColor": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "borderTopWidth": "0px",
+        "borderRadius": "18px 18px 8px",
+        "padding": "10px 15px",
+        "maxWidth": "min(82%, 600px)",
+        "fontSize": "14px",
+        "color": "rgb(238, 238, 238)"
+      },
+      "userPseudo": {
+        "content": "\"你\"",
+        "position": "absolute",
+        "width": "1px",
+        "clipPath": "inset(50%)"
+      },
+      "assistantPseudo": {
+        "width": 686,
+        "height": 64.578125,
+        "top": 236.8125,
+        "left": 449.5,
+        "fontSize": "14px"
+      },
+      "tool": {
+        "width": 686,
+        "height": 174.9375,
+        "top": 324.390625,
+        "left": 449.5,
+        "margin": "9px 0px 18px",
+        "padding": "2px 3px 3px",
+        "fontSize": "14px"
+      },
+      "toolTitle": {
+        "width": 678,
+        "height": 27.1875,
+        "top": 327.390625,
+        "left": 453.5,
+        "fontSize": "12px",
+        "color": "rgb(189, 189, 189)"
+      },
+      "toolLabel": {
+        "width": 48,
+        "height": 18,
+        "top": 379.328125,
+        "left": 482.5,
+        "fontSize": "12px",
+        "color": "rgb(238, 238, 238)"
+      },
+      "toolArg": {
+        "width": 494,
+        "height": 0,
+        "top": 393.328125,
+        "left": 566.5,
+        "fontSize": "11.5px",
+        "color": "rgb(176, 176, 176)"
+      },
+      "planWrap": {
+        "width": 686,
+        "height": 151.5,
+        "top": 525.328125,
+        "left": 449.5,
+        "margin": "8px 0px 16px",
+        "padding": "0px"
+      },
+      "plan": {
+        "width": 686,
+        "height": 151.5,
+        "top": 525.328125,
+        "left": 449.5,
+        "margin": "0px",
+        "padding": "0px",
+        "fontSize": "14px"
+      },
+      "meta": {
+        "width": 760,
+        "height": 17.8125,
+        "top": 646.1875,
+        "left": 417.5,
+        "fontSize": "11.5px",
+        "color": "rgb(176, 176, 176)",
+        "marginTop": "0px"
+      },
+      "metaSummary": {
+        "width": 262.140625,
+        "height": 17.8125,
+        "top": 646.1875,
+        "left": 417.5,
+        "fontSize": "11.5px",
+        "color": "rgb(176, 176, 176)"
+      },
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0,
+        "output": 0
+      },
+      "composer": {
+        "top": 674,
+        "bottom": 804,
+        "overlapsOutput": false
+      }
+    },
+    {
+      "name": "runtime-live-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0,
+        "output": 0
+      },
+      "composer": {
+        "top": 465,
+        "bottom": 590,
+        "insideViewport": true,
+        "overlapsOutput": false
+      }
+    },
+    {
+      "name": "reduced-motion",
+      "before": {
+        "phase": "triangle",
+        "rect": {
+          "x": 569.90625,
+          "y": 50,
+          "width": 14,
+          "height": 14,
+          "top": 50,
+          "right": 583.90625,
+          "bottom": 64,
+          "left": 569.90625
+        },
+        "opacity": "1",
+        "running": [
+          "thinking-dots-tri-1",
+          "thinking-dots-tri-2",
+          "thinking-dots-tri-3",
+          "thinking-dots-tri-4"
+        ]
+      },
+      "after": {
+        "media": true,
+        "phase": "triangle",
+        "rect": {
+          "x": 569.90625,
+          "y": 50,
+          "width": 14,
+          "height": 14,
+          "top": 50,
+          "right": 583.90625,
+          "bottom": 64,
+          "left": 569.90625
+        },
+        "opacity": "1",
+        "running": []
+      }
+    },
+    {
+      "name": "runtime-history-1320",
+      "metaSummary": {
+        "width": 230.34375,
+        "height": 18.390625,
+        "top": 386.078125,
+        "left": 449.5,
+        "fontSize": "11.5px",
+        "color": "rgb(176, 176, 176)"
+      },
+      "metaNote": {
+        "width": 33,
+        "height": 18.390625,
+        "top": 386.078125,
+        "left": 689.84375,
+        "fontSize": "11.5px",
+        "color": "rgb(176, 176, 176)"
+      },
+      "thinkingMeta": {
+        "width": 686,
+        "height": 18.390625,
+        "top": 287.109375,
+        "left": 449.5,
+        "marginTop": "6px"
+      },
+      "toolState": {
+        "width": 660,
+        "height": 15.75,
+        "top": 457.65625,
+        "left": 462.5,
+        "fontSize": "10.5px",
+        "color": "rgb(176, 176, 176)",
+        "flexWrap": "nowrap"
+      },
+      "planHead": {
+        "width": 684,
+        "height": 34,
+        "top": 709.671875,
+        "left": 450.5,
+        "fontSize": "12px",
+        "color": "rgb(189, 189, 189)"
+      },
+      "planNowExpandedDisplay": "none",
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0
+      }
+    },
+    {
+      "name": "runtime-history-plan-collapsed",
+      "expanded": "false",
+      "text": "未完成：在 1320×820 与 700×600 下验证深浅主题、长中文与英文、无横向溢出，并检查 Composer 是否遮挡内容",
+      "title": "在 1320×820 与 700×600 下验证深浅主题、长中文与英文、无横向溢出，并检查 Composer 是否遮挡内容",
+      "display": "block",
+      "maxWidth": "46%",
+      "overflow": "hidden",
+      "textOverflow": "ellipsis",
+      "whiteSpace": "nowrap",
+      "width": 157.3125,
+      "headWidth": 364
+    },
+    {
+      "name": "runtime-history-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "runtimeView": 0,
+        "output": 0
+      },
+      "composer": {
+        "bottom": 590,
+        "insideViewport": true,
+        "overlapsOutput": false
+      }
+    },
+    {
+      "name": "keyboard-light",
+      "setup": {
+        "before": "false"
+      },
+      "ringLight": {
+        "active": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px",
+          "color": "rgb(40, 91, 150)",
+          "offset": "-2px"
+        }
+      },
+      "afterEnter": "true",
+      "afterSpace": "false",
+      "focusRescue": {
+        "before": true,
+        "after": true,
+        "expanded": "false"
+      },
+      "escapeBefore": "false",
+      "escapeAfter": {
+        "active": true,
+        "expanded": "false"
+      },
+      "thinkingToggle": {
+        "before": false,
+        "focus": true
+      },
+      "thinkingAfter": {
+        "open": true,
+        "focus": true
+      }
+    },
+    {
+      "name": "focus-dark",
+      "active": true,
+      "focusVisible": true,
+      "outline": {
+        "style": "solid",
+        "width": "2px",
+        "color": "rgb(170, 200, 237)",
+        "offset": "-2px"
+      }
+    },
+    {
+      "name": "accessibility-runtime",
+      "counts": {
+        "log": 1,
+        "status": 7,
+        "alert": 0,
+        "button": 36,
+        "disclosure": 5
+      },
+      "logs": [
+        {
+          "role": "log",
+          "name": "当前会话输出"
+        }
+      ],
+      "statuses": [
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        },
+        {
+          "role": "status",
+          "name": ""
+        }
+      ],
+      "disclosures": [
+        {
+          "role": "DisclosureTriangle",
+          "name": "上下文 6%",
+          "expanded": false
+        },
+        {
+          "role": "DisclosureTriangle",
+          "name": "思考过程 · 51 字 · 已完成",
+          "expanded": true
+        },
+        {
+          "role": "DisclosureTriangle",
+          "name": "明细",
+          "expanded": false
+        },
+        {
+          "role": "DisclosureTriangle",
+          "name": "明细",
+          "expanded": false
+        },
+        {
+          "role": "DisclosureTriangle",
+          "name": "明细",
+          "expanded": false
+        }
+      ],
+      "buttons": [
+        {
+          "role": "button",
+          "name": "恢复会话"
+        },
+        {
+          "role": "button",
+          "name": "打开历史"
+        },
+        {
+          "role": "button",
+          "name": "工具调用 · 3 次",
+          "expanded": false
+        },
+        {
+          "role": "button",
+          "name": "任务列表 已完成 2/4 未完成：在 1320×820 与 700×600 下验证深浅主题、长中文与英文、无横向溢出，并检查 Composer 是否遮挡内容",
+          "expanded": false
+        }
+      ],
+      "roleLabels": [
+        "generic:你",
+        "generic:助手",
+        "generic:你",
+        "generic:助手",
+        "StaticText:你",
+        "InlineTextBox:你",
+        "StaticText:你",
+        "InlineTextBox:你",
+        "InlineTextBox:你",
+        "InlineTextBox:你"
+      ]
+    }
+  ]
+}
