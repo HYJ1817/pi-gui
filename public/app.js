@@ -544,7 +544,6 @@ function handleEvent(evt) {
       workspaceId:S.legacyOwner?.workspaceId,workspaceEpoch:S.legacyOwner?.workspaceEpoch }}));
   if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeBrowserEvent(evt); observeGuiBrowserEvent(evt); observeMcpEvent(evt); observeApprovalEvent(evt); }
   observeFallbackEvent(evt);
-  attachGenerationRecovery(evt);
   switch (evt.type) {
     case 'bridge_status':
       return onBridge(evt);
@@ -595,7 +594,12 @@ function handleEvent(evt) {
       /* ⚠️ 这里**不动 S.stopping**。agent_settled 与 abort 应答的先后不确定；
        * 它先到时如果就把 stopping 落下去，用户能在屏障还挂着的时候发新消息
        * —— 那正是要修的 bug。停止的收口只有 stop_state 事件与 HTTP 应答。 */
-      return onSettled();
+      onSettled();
+      /* 恢复入口必须在 onSettled 收口 streaming / 当前消息之后判断：
+       * agent_start 到 agent_settled 之间 S.streaming 为真，提前判断会把
+       * 真实的模型 404 当成“仍在运行”而吞掉按钮。 */
+      attachGenerationRecovery(evt);
+      return;
     case 'stop_state':
       /* 后端停止屏障的状态广播（见 server/rpc-bridge.js）。它覆盖的是
        * 「HTTP 等超时了、屏障稍后才解除」那条路径。 */

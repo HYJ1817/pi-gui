@@ -229,6 +229,7 @@ const modelFailure = () => fail('model_unavailable', 404);
   const B = { providerId: 'provider-b', modelId: 'model-b' };
   const resetApp = () => {
     ad.querySelector('#modal').hidden = true;
+    ad.querySelector('#composerPopover').hidden = true;
     calls.length = 0;
     Object.assign(aw.S, {
       hasProject: true, bridgeState: 'ready', bridgeRun: 1, cwd: 'fixture',
@@ -237,24 +238,37 @@ const modelFailure = () => fail('model_unavailable', 404);
     aw.onModels({ models: [A, B] });
     aw.applyState({ model: A, sessionId: 'session-p4b', thinkingLevel: 'off' });
     aw.clearThread();
-    aw.beginTurn();
-    aw.onMessageStart({ message: { role: 'user', content: [text('请回答')] } });
-    aw.onMessageStart({ message: { role: 'assistant' } });
-    aw.onMessageEnd({ message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: '当前模型认证失败，自动备用未执行' } });
   };
-  const settle = (failure, extra = {}) => emit({
-    type: 'agent_settled', bridgeRun: 1,
-    generationResult: { requestId: 'owned-p4b', outcome: 'failed', hasVisibleOutput: false, failure, ...extra },
-  });
-  const settleAndTick = async (failure, extra = {}) => { settle(failure, extra); await tick(); };
+  const errorText = failure => failure?.class === 'model_unavailable'
+    ? '404 {"error":{"code":"model_not_found"}}'
+    : '当前模型认证失败，自动备用未执行';
+  /* 真实事件顺序：agent_start 打开 streaming，message_start/message_end 产出
+   * 错误块，agent_settled 才收口并挂恢复入口。不再手动把 streaming 预置为
+   * false —— 那会掩盖「收口前判断恢复动作」的时序缺陷。 */
+  const runGeneration = async (failure, { extra = {}, errorMessage = errorText(failure), beforeSettle } = {}) => {
+    emit({ type: 'message_start', message: { role: 'user', content: [text('请回答')] } });
+    emit({ type: 'agent_start', bridgeRun: 1 });
+    emit({ type: 'message_start', message: { role: 'assistant' } });
+    emit({ type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage } });
+    beforeSettle?.();
+    emit({ type: 'agent_settled', bridgeRun: 1,
+      generationResult: { requestId: 'owned-p4b', outcome: 'failed', hasVisibleOutput: false, failure, ...extra } });
+    await tick();
+  };
   const actionButton = () => ad.querySelector('#stream .me-action');
   const statusText = () => ad.querySelector('#stream .me-action-status')?.textContent || '';
   const commands = () => calls.map(command => command.type);
 
   {
     resetApp();
-    await settleAndTick(authFailure(401));
-    equal(actionButton()?.textContent, '检查供应商认证', '401 在真实装配路径显示认证入口');
+    await runGeneration(authFailure(401), {
+      beforeSettle: () => {
+        equal(aw.S.streaming, true, 'agent_start 到 message_end 之间仍在运行');
+        equal(actionButton(), null, 'agent_settled 收口前不提前生成动作');
+      },
+    });
+    equal(aw.S.streaming, false, 'agent_settled 后 streaming 已收口');
+    equal(actionButton()?.textContent, '检查供应商认证', '401 在真实事件顺序显示认证入口');
     const beforeRaw = ad.querySelector('#stream .me-raw')?.textContent;
     actionButton().click();
     await tick();
@@ -269,7 +283,7 @@ const modelFailure = () => fail('model_unavailable', 404);
 
   {
     resetApp();
-    await settleAndTick(authFailure(403));
+    await runGeneration(authFailure(403));
     equal(actionButton()?.textContent, '检查供应商认证', '403 供应商权限拒绝显示认证入口');
     actionButton().click();
     await tick();
@@ -278,56 +292,65 @@ const modelFailure = () => fail('model_unavailable', 404);
   }
 
   {
+    /* 用户报告的时序：agent_start → message_start → message_end(404) →
+     * agent_settled。修复前 attachGenerationRecovery 在 onSettled 之前运行，
+     * 此处 streaming 仍为 true，模型入口会被吞掉。 */
     resetApp();
-    await settleAndTick(modelFailure());
-    equal(actionButton()?.textContent, '选择其他模型', '404 模型不存在显示模型入口');
+    emit({ type: 'message_start', message: { role: 'user', content: [text('请回答')] } });
+    emit({ type: 'agent_start', bridgeRun: 1 });
+    equal(aw.S.streaming, true, 'agent_start 后 streaming=true');
+    emit({ type: 'message_start', message: { role: 'assistant' } });
+    emit({ type: 'message_end', message: {
+      role: 'assistant', content: [], stopReason: 'error',
+      errorMessage: '404 {"error":{"code":"model_not_found"}}',
+    } });
+    equal(aw.S.streaming, true, 'message_end 后 streaming 仍为 true');
+    equal(actionButton(), null, 'agent_settled 收口前不生成模型入口');
+    emit({ type: 'agent_settled', bridgeRun: 1,
+      generationResult: { requestId: 'owned-p4b', outcome: 'failed', hasVisibleOutput: false, failure: modelFailure() } });
+    await tick();
+    equal(aw.S.streaming, false, 'agent_settled 后 streaming=false');
+    equal(actionButton()?.textContent, '选择其他模型', '真实 404 事件顺序显示模型入口');
     actionButton().click();
     await tick();
     ok('模型列表弹层打开', ad.querySelector('#composerPopover')?.hidden === false);
     equal(statusText(), '已打开模型列表。', '模型入口成功反馈');
     deep(commands().filter(type => ['set_model', 'prompt', 'new_session', 'switch_session'].includes(type)), [], '不自动换模型也不发请求');
+    equal(aw.S.state.model.modelId, 'model-a', '当前模型保持不变');
     ad.querySelector('#composerPopover').hidden = true;
   }
 
   {
-    resetApp();
-    await settleAndTick(fail('rate_limited', 429));
-    equal(actionButton(), null, '限流不显示恢复按钮');
-    resetApp();
-    await settleAndTick(fail('quota_exhausted', 429));
-    equal(actionButton(), null, '余额不足不显示恢复按钮');
-    resetApp();
-    await settleAndTick(fail('provider_unavailable', 503));
-    equal(actionButton(), null, 'provider 不可用不显示恢复按钮');
-    resetApp();
-    await settleAndTick(fail('retryable_provider_error', 500));
-    equal(actionButton(), null, '5xx 不显示恢复按钮');
-    resetApp();
-    await settleAndTick(fail('request_incompatible', 400));
-    equal(actionButton(), null, '请求不兼容不显示恢复按钮');
-    resetApp();
-    await settleAndTick(fail('context_overflow', 400));
-    equal(actionButton(), null, '上下文超限不显示恢复按钮');
-    resetApp();
-    await settleAndTick(fail('user_cancelled', null));
-    equal(actionButton(), null, '取消不显示恢复按钮');
-    resetApp();
-    await settleAndTick(fail('unknown', null));
-    equal(actionButton(), null, '未知错误不显示虚假动作');
+    const silent = [
+      ['限流', fail('rate_limited', 429)],
+      ['余额不足', fail('quota_exhausted', 429)],
+      ['provider 不可用', fail('provider_unavailable', 503)],
+      ['5xx', fail('retryable_provider_error', 500)],
+      ['请求不兼容', fail('request_incompatible', 400)],
+      ['上下文超限', fail('context_overflow', 400)],
+      ['取消', fail('user_cancelled', null)],
+      ['未知错误', fail('unknown', null)],
+    ];
+    for (const [label, failure] of silent) {
+      resetApp();
+      await runGeneration(failure);
+      equal(actionButton(), null, label + '不显示恢复按钮');
+    }
   }
 
   {
     resetApp();
-    await settleAndTick({ ...authFailure(401), source: 'tool', apiKey: 'SECRET_KEY', message: 'SECRET_MESSAGE' });
+    await runGeneration({ ...authFailure(401), source: 'tool', apiKey: 'SECRET_KEY', message: 'SECRET_MESSAGE' });
     equal(actionButton(), null, '不可信来源不显示动作');
     ok('不可信失败不泄露字段', !ad.querySelector('#stream').textContent.includes('SECRET'));
     resetApp();
-    await settleAndTick(authFailure(401), { requestId: undefined });
+    await runGeneration(authFailure(401), { extra: { requestId: undefined } });
     equal(actionButton(), null, '没有请求归属不显示动作');
     resetApp();
-    await settleAndTick(authFailure(401), { outcome: 'success' });
+    await runGeneration(authFailure(401), { extra: { outcome: 'success' } });
     equal(actionButton(), null, '成功结果不显示动作');
     resetApp();
+    await runGeneration(fail('unknown', null));
     emit({ type: 'agent_settled', _replay: true, bridgeRun: 1,
       generationResult: { requestId: 'replay-p4b', outcome: 'failed', hasVisibleOutput: false, failure: authFailure(401) } });
     await tick();
@@ -336,7 +359,7 @@ const modelFailure = () => fail('model_unavailable', 404);
 
   {
     resetApp();
-    await settleAndTick(authFailure(401));
+    await runGeneration(authFailure(401));
     ok('认证入口已生成', Boolean(actionButton()));
     aw.S.state.sessionId = 'another-session';
     actionButton().click();
@@ -349,7 +372,7 @@ const modelFailure = () => fail('model_unavailable', 404);
 
   {
     resetApp();
-    await settleAndTick(authFailure(401));
+    await runGeneration(authFailure(401));
     aw.S.state.model = B;
     actionButton().click();
     await tick();
@@ -361,32 +384,37 @@ const modelFailure = () => fail('model_unavailable', 404);
     resetApp();
     aw.S.state.sessionId = null;
     aw.S.state.sessionFile = null;
-    await settleAndTick(authFailure(401));
+    await runGeneration(authFailure(401));
     equal(actionButton(), null, '无会话上下文时不生成恢复入口');
     resetApp();
     aw.S.bridgeState = 'error';
-    await settleAndTick(authFailure(401));
+    await runGeneration(authFailure(401));
     equal(actionButton(), null, 'Pi 未就绪时不生成恢复入口');
     resetApp();
-    aw.S.streaming = true;
-    await settleAndTick(modelFailure());
-    equal(actionButton(), null, '运行中不生成模型切换入口');
+    await runGeneration(modelFailure());
+    ok('模型入口已生成', Boolean(actionButton()));
+    emit({ type: 'agent_start', bridgeRun: 1 });
+    equal(aw.S.streaming, true, '新一轮开始时 streaming=true');
+    actionButton().click();
+    await tick();
+    equal(statusText(), '当前状态无法打开该设置，请稍后重试。', '运行中拒绝打开模型列表');
+    equal(ad.querySelector('#composerPopover').hidden, true, '运行中不打开模型列表');
     resetApp();
     aw.S.models = [];
-    await settleAndTick(modelFailure());
+    await runGeneration(modelFailure());
     equal(actionButton(), null, '模型列表未知时不生成模型入口');
     resetApp();
     aw.S.fallbackActive = true;
-    await settleAndTick(modelFailure());
+    await runGeneration(modelFailure());
     equal(actionButton(), null, '自动备用接管模型错误时不并排手动入口');
     resetApp();
-    await settleAndTick(authFailure(401));
+    await runGeneration(authFailure(401));
     ok('认证错误不受自动备用影响', Boolean(actionButton()));
   }
 
   {
     resetApp();
-    await settleAndTick(authFailure(401));
+    await runGeneration(authFailure(401));
     actionButton().focus();
     ok('动作按钮可键盘聚焦', ad.activeElement === actionButton());
     ok('动作按钮复用现有按钮类', actionButton().classList.contains('btn') && actionButton().classList.contains('tiny'));
