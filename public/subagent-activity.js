@@ -171,8 +171,12 @@ export function subagentActivity(entry) {
   if (!SUBAGENT_TOOLS.includes(entry?.name)) return null;
   const a = object(entry.args), d = object(entry.details);
   if (entry.name === 'subagent_supervisor') return supervisorActivity(entry, a, d);
-  const results = list(d.results).map(object);
-  const status = lifecycle(entry, d, results);
+  // Parent lifecycle uses the complete producer evidence; only the display
+  // facts are capped at 24. Otherwise a late failure beyond the display cap
+  // could leave the parent "success" while the child counters show a failure.
+  const allResults = Array.isArray(d.results) ? d.results.map(object) : [];
+  const results = allResults.slice(0, 24);
+  const status = lifecycle(entry, d, allResults);
   const running = status === 'running';
   let label;
   const facts = [];
