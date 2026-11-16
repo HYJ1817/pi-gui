@@ -110,6 +110,48 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       try { return resolve(binding.expected) === live; } catch { return false; }
     }, dispose: () => disposeResource(live, binding) });
   }
+  const COMPLETED_STOPS = new Set(['stop', 'length']);
+  /* P4-E：把一次真实运行结束归一成四种可展示终态。这里只消费 registry 已收到
+   * 的生命周期证据，不读错误文本、不把连接状态或历史 replay 当成任务结果。
+   * `generationResult` 是 model-generation.js 对同一 owner 的结构化总结；
+   * 没有它时，才退回该次运行最后一条 assistant 消息的真实 stopReason。 */
+  function terminalOutcome(live, event) {
+    /* Pi 的 agent_settled 自带 aborted；它比 stopReason / 摘要更能说明这次
+     * 运行是被中断的，必须先于 generationResult 判定。 */
+    if (event?.aborted === true) return ['interrupted', 'user_cancelled'];
+    const result = event?.generationResult;
+    if (result && typeof result === 'object') {
+      if (result.outcome === 'success') return ['completed', 'generation_completed'];
+      if (result.outcome === 'failed') {
+        const cancelled = result.failure?.class === 'user_cancelled'
+          || live.abortRequested || live.lastAssistantStop === 'aborted';
+        return cancelled ? ['interrupted', 'user_cancelled'] : ['failed', 'generation_failed'];
+      }
+      if (result.outcome === 'unknown') {
+        return live.abortRequested || live.lastAssistantStop === 'aborted'
+          ? ['interrupted', 'user_cancelled'] : ['unknown', 'unconfirmed'];
+      }
+    }
+    if (live.abortRequested || live.lastAssistantStop === 'aborted') return ['interrupted', 'user_cancelled'];
+    if (live.lastAssistantStop === 'error') return ['failed', 'generation_failed'];
+    if (COMPLETED_STOPS.has(live.lastAssistantStop)) return ['completed', 'generation_completed'];
+    return ['unknown', 'unconfirmed'];
+  }
+  function recordOutcome(live, kind, reason) {
+    /* 一轮运行只收口一次。abort / preflight / bridge 崩溃可能先于同一轮的
+     * settled 到达；之后即使再带 generationResult，也不能把已读掉或被用户
+     * Stop 的终态重新变成一条后台提示。新一轮由 prompt / agent_start /
+     * bridge 换代重新清空 claimed。 */
+    if (live.outcomeClaimed) return;
+    live.outcomeClaimed = true;
+    /* 失败状态属于这一轮，和会话是否在后台无关；与终态一样只收口一次，
+     * 否则重复/迟到的失败帧会在成功之后把 error 重新点亮。 */
+    if (kind === 'failed') live.error = 'generation_failed';
+    /* 正在看的会话不需要「后台完成」提示，但这一轮已经处理过。 */
+    if (focused === live.record.conversationId) { live.outcome = null; return; }
+    live.outcome = { kind, reason, sequence: ++live.outcomeRevision };
+    live.attention = true;
+  }
   function summary(record) {
     const live = lives.get(record.conversationId);
     return { conversationId: record.conversationId, workspace: { ...record.workspace }, kind: projectWorkspace(record.workspace) ? 'project' : 'worktree',
@@ -121,6 +163,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       revision: revisions.get(record.conversationId) || 0,
       owner: live ? owner(live) : null, lifecycle: live?.lifecycle || 'dormant', activity: live?.activity || 'idle',
       attention: live?.attention === true, focused: focused === record.conversationId, historyRequired: live?.historyRequired === true,
+      outcome: live?.outcome ? { kind: live.outcome.kind, reason: live.outcome.reason, sequence: live.outcome.sequence } : null,
       error: live?.error || null, stop: live?.adapter?.getState().stop || null };
   }
   function snapshot() { return { ok: !invalid, backendInstance, focusedConversationId: focused, liveCount: lives.size,
@@ -133,10 +176,15 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       if (event.bridgeRun < live.bridgeRun) return;
       if (event.bridgeRun > live.bridgeRun) { live.bridgeRun = event.bridgeRun; if (live.everReady) {
         live.generation = randomUUID();
+        live.outcome = null; live.outcomeClaimed = false; live.runObserved = false;
+        live.lastAssistantStop = null; live.abortRequested = false;
         settleResources(live);
       } }
     }
     if (event.type === 'bridge_status') {
+      /* 只有 bridge 在**一次已观察/已提交的运行**中退出，才是「中断」；
+       * 空闲时连接断开沿用原有 error/attention，不伪造任务终态。 */
+      const runActive = live.agentActive || live.pendingTurns.size > 0;
       live.lifecycle = event.state === 'ready' ? 'ready' : ['error', 'exited'].includes(event.state) ? 'error' : 'starting';
       if (event.state === 'ready') {
         live.everReady = true;
@@ -151,10 +199,40 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
         });
       }
       else { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); if (!live.everReady) live.sessionId = null; }
-      if (['error', 'exited'].includes(event.state)) { live.error = 'runtime_unavailable'; live.attention = true; }
+      if (['error', 'exited'].includes(event.state)) {
+        live.error = 'runtime_unavailable'; live.attention = true;
+        if (runActive) recordOutcome(live, 'interrupted', 'runtime_unavailable');
+      }
     }
-    if (event.type === 'agent_start') { live.agentActive = true; if (live.activity !== 'stopping') live.activity = 'running'; }
-    if (event.type === 'agent_settled') { live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); if (live.activity !== 'stopping') live.activity = 'idle'; if (focused !== live.record.conversationId) live.attention = true; }
+    if (event.type === 'agent_start') {
+      live.agentActive = true; live.runObserved = true;
+      live.outcome = null; live.outcomeClaimed = false;
+      /* 自动重试/续跑会产生新的 agent_start，但不经过新的 prompt command；
+       * 上一轮的失败错误必须在这里清掉，否则重试成功后详情仍显示上次失败。 */
+      if (live.error === 'generation_failed') live.error = null;
+      /* 自动重试/继续会产生新的 agent_start：上一轮的中断/停止证据不能
+       * 带进这一轮，否则一次新的空 settled 会被误判成上一轮的取消。 */
+      live.lastAssistantStop = null; live.abortRequested = false;
+      if (live.activity !== 'stopping') live.activity = 'running';
+    }
+    if (event.type === 'message_end' && event.message?.role === 'assistant') {
+      live.lastAssistantStop = typeof event.message.stopReason === 'string' ? event.message.stopReason : null;
+    }
+    if (event.type === 'agent_settled') {
+      const runEnded = live.runObserved || live.agentActive || live.pendingTurns.size > 0
+        || Boolean(event.generationResult) || event.aborted === true;
+      live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); if (live.activity !== 'stopping') live.activity = 'idle';
+      /* 有终态时由 recordOutcome 决定是否点亮 attention；重复 settled 和
+       * 已读掉的终态不能把通用 attention 点重新点亮。没有任何终态证据时，
+       * 沿用原有的通用 attention。 */
+      if (runEnded) {
+        const [kind, reason] = terminalOutcome(live, event);
+        recordOutcome(live, kind, reason);
+      } else if (focused !== live.record.conversationId && !live.outcomeClaimed) {
+        live.attention = true;
+      }
+      live.runObserved = false;
+    }
     if (event.type === 'agent_settled') void refreshSession(live).catch(()=>{if(belongs(live)){live.error='session_state_unconfirmed';changed(live);}});
     // A response settles only its captured request. Other requests may still be
     // awaiting acknowledgement, even before the first agent_start arrives.
@@ -170,7 +248,12 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     if (event.type === 'bridge_status' && event.state !== 'ready') live.approvals.clear();
     if (event.type === 'extension_ui_request' || event.type === 'extension_error') live.attention = true;
-    if (event.generationResult?.outcome === 'failed') { live.error = 'generation_failed'; live.attention = true; }
+    /* prompt preflight 失败没有 agent_start/agent_settled，但同一条 response
+     * 已带有结构化 generationResult；它是该次提交的真实终态。 */
+    if (event.type === 'response' && event.generationResult) {
+      const [kind, reason] = terminalOutcome(live, event);
+      recordOutcome(live, kind, reason);
+    }
     // Diagnostic raw lines are never retained in parallel conversation buffers.
     if (event.type === 'bridge_stderr' || event.type === 'bridge_parse_error') { changed(live); return; }
     const frame = { type: 'runtime_event', owner: owner(live), eventSequence: ++live.sequence, event };
@@ -224,7 +307,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
       providerSessionIdentity: record.sessionIdentity,
-      sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set(), approvals: new Map() };
+      sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set(), approvals: new Map(),
+      /* P4-E：每轮运行至多一条后台终态；revision 单调递增，作为前端去重/排序的
+       * 证据序号。runObserved 标记本轮确实观察到 agent_start 或提交成功。 */
+      outcome: null, outcomeRevision: 0, outcomeClaimed: false, runObserved: false,
+      lastAssistantStop: null, abortRequested: false };
     if (!leases.has(key)) leases.set(key, new Set());
     leases.get(key).add(live); lives.set(record.conversationId, live);
     live.adapterReady = Promise.resolve().then(async () => {
@@ -303,9 +390,29 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       throw fail('runtime_not_ready');
     }
     if (cmd.type === 'abort') {
+      const runActive = live.agentActive || live.pendingTurns.size > 0;
+      const seenOutcome = live.outcome;
+      if (runActive) live.abortRequested = true;
       live.activity = 'stopping'; changed(live);
-      const result = await live.adapter.abortAndWait(cmd);
-      live = resolve(expected); if (result.ok) { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); } changed(live); return result;
+      let result;
+      try { result = await live.adapter.abortAndWait(cmd); }
+      catch (error) {
+        /* adapter 自身异常同样表示 Stop 未被确认，不能留下取消证据。 */
+        if (belongs(live)) { live.abortRequested = false; changed(live); }
+        throw error;
+      }
+      live = resolve(expected);
+      if (result.ok) {
+        live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear();
+        /* 有些 adapter 的 abort 不保证补发 agent_settled；成功停下且此前确有
+         * 运行，就由命令结果收口。若期间已收到真实终态，不覆盖它。 */
+        if (runActive && live.outcome === seenOutcome) recordOutcome(live, 'interrupted', 'user_cancelled');
+      }
+      /* Stop 无论是否确认成功，都不再把这次请求留成后续终态的取消证据：
+       * 失败时运行可能仍在继续，成功时终态已由上面的命令结果收口。
+       * 后续正常完成不能被误报成「已中断」。 */
+      live.abortRequested = false;
+      changed(live); return result;
     }
     if (TURNS.has(cmd.type) && live.activity === 'stopping') throw fail('stop_in_progress');
     if (cmd.type === 'prompt' && (live.agentActive || live.pendingTurns.size)) throw fail('runtime_busy');
@@ -314,6 +421,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       if (live.pendingTurns.has(cmd.id)) throw fail('invalid_command');
       if (live.pendingTurns.size >= MAX_PENDING_TURNS) throw fail('runtime_request_limit');
       live.pendingTurns.set(cmd.id, cmd.type);
+      /* 新的一轮提交意味着上一轮结果已被用户处理；清掉旧终态与属于上一轮的
+       * 停止证据，agent_start 还会再清一次以覆盖自动续跑/重试。 */
+      live.outcome = null; live.outcomeClaimed = false; live.runObserved = false;
+      live.lastAssistantStop = null; live.abortRequested = false;
       live.error = null; live.activity = 'running'; changed(live);
     }
     try { await live.adapter.send(cmd); resolve(expected); if (cmd.type === 'extension_ui_response') live.approvals.delete(cmd.id); }
@@ -352,9 +463,13 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const prior = previous && previous !== live.record.conversationId ? lives.get(previous) : null;
     if (previous !== live.record.conversationId) contextRevision++;
     if (prior) for (const resource of prior.resources) resource.invalid = true;
+    /* 只清除用户在进入会话前已经看得到的那条终态。onFocus 期间新到的一条
+     * 不能被这次聚焦顺手吞掉（它尚未被呈现过）。 */
+    const seenOutcome = live.outcome;
     try { await onFocus(owner(live)); resolve(expected); }
     catch (error) { if (prior) settleResources(prior); throw error; }
     focused = live.record.conversationId; live.attention = false;
+    if (live.outcome === seenOutcome) live.outcome = null;
     if (prior) settleResources(prior);
     /* 焦点是**单值**：换了焦点必须把旧的那条也广播出去。只广播新的，旧会话的
      * item.focused 会一直留在前端 —— P32.4 的侧栏正是按这个字段画高亮的，

@@ -1,0 +1,2007 @@
+{
+  "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "viewports": [
+    [
+      1320,
+      820
+    ],
+    [
+      700,
+      600
+    ]
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "assertions": [
+    {
+      "name": "seed-shape",
+      "pass": true,
+      "detail": {
+        "rows": 4,
+        "results": 1
+      }
+    },
+    {
+      "name": "sidebar-one-aggregate-dark-1320",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 231,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 9.51,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "sidebar-four-terminal-states-dark-1320",
+      "pass": true,
+      "detail": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "status": "已完成",
+          "statusClass": "pj-runtime-status outcome-completed",
+          "statusColor": {
+            "color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(64, 201, 119)",
+            "boxShadow": "none"
+          },
+          "contrast": 9.9,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "status": "失败",
+          "statusClass": "pj-runtime-status outcome-failed",
+          "statusColor": {
+            "color": "oklab(0.787837 0.122399 0.0550776)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(255, 103, 100)",
+            "boxShadow": "none"
+          },
+          "contrast": 10.01,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "status": "已中断",
+          "statusClass": "pj-runtime-status outcome-interrupted",
+          "statusColor": {
+            "color": "oklab(0.815211 0.0842615 0.0845604)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(255, 133, 73)",
+            "boxShadow": "none"
+          },
+          "contrast": 11.24,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "status": "已结束",
+          "statusClass": "pj-runtime-status outcome-unknown",
+          "statusColor": {
+            "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgba(0, 0, 0, 0)",
+            "boxShadow": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52) 0px 0px 0px 1.5px inset"
+          },
+          "contrast": 5.69,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        }
+      ]
+    },
+    {
+      "name": "sidebar-no-overflow-dark-1320",
+      "pass": true,
+      "detail": {
+        "documentOverflow": 0,
+        "sidebar": 0,
+        "list": 0,
+        "results": 0,
+        "rows": [
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "sidebar-target-size-dark-1320",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 231,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 9.51,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "sidebar-contrast-dark-1320",
+      "pass": true,
+      "detail": {
+        "results": 9.51,
+        "rows": [
+          [
+            "completed",
+            9.9
+          ],
+          [
+            "failed",
+            10.01
+          ],
+          [
+            "interrupted",
+            11.24
+          ],
+          [
+            "unknown",
+            5.69
+          ]
+        ]
+      }
+    },
+    {
+      "name": "aggregate-focus-visible-dark-1320",
+      "pass": true,
+      "detail": {
+        "focused": true,
+        "focusVisible": true,
+        "outlineStyle": "solid",
+        "outlineWidth": "2px"
+      }
+    },
+    {
+      "name": "results-open-dark-1320",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "dark",
+        "open": true,
+        "card": {
+          "width": 1040,
+          "height": 507.5,
+          "top": 156.25,
+          "bottom": 663.75,
+          "overflow": 0
+        },
+        "layout": {
+          "width": 1002,
+          "height": 370.38,
+          "top": 274.38,
+          "bottom": 644.75,
+          "overflow": 0
+        },
+        "list": {
+          "width": 240,
+          "height": 370.38,
+          "top": 274.38,
+          "bottom": 644.75,
+          "overflow": 0
+        },
+        "buttons": [
+          {
+            "conversationId": "p4e-completed",
+            "outcome": "completed",
+            "text": "feat/background-completion · 已完成 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-failed",
+            "outcome": "failed",
+            "text": "fix/runtime-crash-on-start · 失败 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-interrupted",
+            "outcome": "interrupted",
+            "text": "feat/session-pagination · 已中断 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-unknown",
+            "outcome": "unknown",
+            "text": "chore/long-history-cleanup · 已结束 · 未读",
+            "pressed": true,
+            "overflow": 0
+          }
+        ],
+        "selected": "p4e-unknown",
+        "state": "就绪 · 空闲 · 已结束",
+        "documentOverflow": 0,
+        "runtimeHidden": true
+      }
+    },
+    {
+      "name": "results-labels-dark-1320",
+      "pass": true,
+      "detail": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "text": "feat/background-completion · 已完成 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "text": "fix/runtime-crash-on-start · 失败 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "text": "feat/session-pagination · 已中断 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "text": "chore/long-history-cleanup · 已结束 · 未读",
+          "pressed": true,
+          "overflow": 0
+        }
+      ]
+    },
+    {
+      "name": "results-preselect-latest-dark-1320",
+      "pass": true,
+      "detail": "p4e-unknown"
+    },
+    {
+      "name": "results-state-label-dark-1320",
+      "pass": true,
+      "detail": "就绪 · 空闲 · 已结束"
+    },
+    {
+      "name": "results-no-overflow-dark-1320",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "card": 0,
+        "layout": 0,
+        "list": 0,
+        "buttons": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "results-do-not-switch-dark-1320",
+      "pass": true,
+      "detail": {
+        "before": {
+          "runtimeHidden": true
+        },
+        "after": true
+      }
+    },
+    {
+      "name": "sidebar-one-aggregate-light-1320",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 231,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 6.6,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "sidebar-four-terminal-states-light-1320",
+      "pass": true,
+      "detail": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "status": "已完成",
+          "statusClass": "pj-runtime-status outcome-completed",
+          "statusColor": {
+            "color": "oklab(0.22559 -0.00131416 -0.00642684 / 0.74)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(0, 162, 64)",
+            "boxShadow": "none"
+          },
+          "contrast": 6.88,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "status": "失败",
+          "statusClass": "pj-runtime-status outcome-failed",
+          "statusColor": {
+            "color": "oklab(0.487896 0.135741 0.0695754)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(224, 46, 42)",
+            "boxShadow": "none"
+          },
+          "contrast": 6.15,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "status": "已中断",
+          "statusClass": "pj-runtime-status outcome-interrupted",
+          "statusColor": {
+            "color": "oklab(0.516484 0.101791 0.0885702)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(226, 85, 7)",
+            "boxShadow": "none"
+          },
+          "contrast": 5.34,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "status": "已结束",
+          "statusClass": "pj-runtime-status outcome-unknown",
+          "statusColor": {
+            "color": "rgb(93, 93, 93)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgba(0, 0, 0, 0)",
+            "boxShadow": "rgb(93, 93, 93) 0px 0px 0px 1.5px inset"
+          },
+          "contrast": 5.93,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        }
+      ]
+    },
+    {
+      "name": "sidebar-no-overflow-light-1320",
+      "pass": true,
+      "detail": {
+        "documentOverflow": 0,
+        "sidebar": 0,
+        "list": 0,
+        "results": 0,
+        "rows": [
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "sidebar-target-size-light-1320",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 231,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 6.6,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "sidebar-contrast-light-1320",
+      "pass": true,
+      "detail": {
+        "results": 6.6,
+        "rows": [
+          [
+            "completed",
+            6.88
+          ],
+          [
+            "failed",
+            6.15
+          ],
+          [
+            "interrupted",
+            5.34
+          ],
+          [
+            "unknown",
+            5.93
+          ]
+        ]
+      }
+    },
+    {
+      "name": "aggregate-focus-visible-light-1320",
+      "pass": true,
+      "detail": {
+        "focused": true,
+        "focusVisible": true,
+        "outlineStyle": "solid",
+        "outlineWidth": "2px"
+      }
+    },
+    {
+      "name": "results-open-light-1320",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "light",
+        "open": true,
+        "card": {
+          "width": 1040,
+          "height": 489.5,
+          "top": 165.25,
+          "bottom": 654.75,
+          "overflow": 0
+        },
+        "layout": {
+          "width": 1002,
+          "height": 370.38,
+          "top": 265.38,
+          "bottom": 635.75,
+          "overflow": 0
+        },
+        "list": {
+          "width": 240,
+          "height": 370.38,
+          "top": 265.38,
+          "bottom": 635.75,
+          "overflow": 0
+        },
+        "buttons": [
+          {
+            "conversationId": "p4e-completed",
+            "outcome": "completed",
+            "text": "feat/background-completion · 已完成 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-failed",
+            "outcome": "failed",
+            "text": "fix/runtime-crash-on-start · 失败 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-interrupted",
+            "outcome": "interrupted",
+            "text": "feat/session-pagination · 已中断 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-unknown",
+            "outcome": "unknown",
+            "text": "chore/long-history-cleanup · 已结束 · 未读",
+            "pressed": true,
+            "overflow": 0
+          }
+        ],
+        "selected": "p4e-unknown",
+        "state": "就绪 · 空闲 · 已结束",
+        "documentOverflow": 0,
+        "runtimeHidden": true
+      }
+    },
+    {
+      "name": "results-labels-light-1320",
+      "pass": true,
+      "detail": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "text": "feat/background-completion · 已完成 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "text": "fix/runtime-crash-on-start · 失败 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "text": "feat/session-pagination · 已中断 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "text": "chore/long-history-cleanup · 已结束 · 未读",
+          "pressed": true,
+          "overflow": 0
+        }
+      ]
+    },
+    {
+      "name": "results-preselect-latest-light-1320",
+      "pass": true,
+      "detail": "p4e-unknown"
+    },
+    {
+      "name": "results-state-label-light-1320",
+      "pass": true,
+      "detail": "就绪 · 空闲 · 已结束"
+    },
+    {
+      "name": "results-no-overflow-light-1320",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "card": 0,
+        "layout": 0,
+        "list": 0,
+        "buttons": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "results-do-not-switch-light-1320",
+      "pass": true,
+      "detail": {
+        "before": {
+          "runtimeHidden": true
+        },
+        "after": true
+      }
+    },
+    {
+      "name": "sidebar-one-aggregate-dark-700",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 196,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 9.51,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "sidebar-four-terminal-states-dark-700",
+      "pass": true,
+      "detail": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "status": "已完成",
+          "statusClass": "pj-runtime-status outcome-completed",
+          "statusColor": {
+            "color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(64, 201, 119)",
+            "boxShadow": "none"
+          },
+          "contrast": 9.9,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "status": "失败",
+          "statusClass": "pj-runtime-status outcome-failed",
+          "statusColor": {
+            "color": "oklab(0.787837 0.122399 0.0550776)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(255, 103, 100)",
+            "boxShadow": "none"
+          },
+          "contrast": 10.01,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "status": "已中断",
+          "statusClass": "pj-runtime-status outcome-interrupted",
+          "statusColor": {
+            "color": "oklab(0.815211 0.0842615 0.0845604)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(255, 133, 73)",
+            "boxShadow": "none"
+          },
+          "contrast": 11.24,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "status": "已结束",
+          "statusClass": "pj-runtime-status outcome-unknown",
+          "statusColor": {
+            "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgba(0, 0, 0, 0)",
+            "boxShadow": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52) 0px 0px 0px 1.5px inset"
+          },
+          "contrast": 5.69,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        }
+      ]
+    },
+    {
+      "name": "sidebar-no-overflow-dark-700",
+      "pass": true,
+      "detail": {
+        "documentOverflow": 0,
+        "sidebar": 0,
+        "list": 0,
+        "results": 0,
+        "rows": [
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "sidebar-target-size-dark-700",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 196,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 9.51,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "sidebar-contrast-dark-700",
+      "pass": true,
+      "detail": {
+        "results": 9.51,
+        "rows": [
+          [
+            "completed",
+            9.9
+          ],
+          [
+            "failed",
+            10.01
+          ],
+          [
+            "interrupted",
+            11.24
+          ],
+          [
+            "unknown",
+            5.69
+          ]
+        ]
+      }
+    },
+    {
+      "name": "sidebar-one-aggregate-light-700",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 196,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 6.6,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "sidebar-four-terminal-states-light-700",
+      "pass": true,
+      "detail": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "status": "已完成",
+          "statusClass": "pj-runtime-status outcome-completed",
+          "statusColor": {
+            "color": "oklab(0.22559 -0.00131416 -0.00642684 / 0.74)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(0, 162, 64)",
+            "boxShadow": "none"
+          },
+          "contrast": 6.88,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "status": "失败",
+          "statusClass": "pj-runtime-status outcome-failed",
+          "statusColor": {
+            "color": "oklab(0.487896 0.135741 0.0695754)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(224, 46, 42)",
+            "boxShadow": "none"
+          },
+          "contrast": 6.15,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "status": "已中断",
+          "statusClass": "pj-runtime-status outcome-interrupted",
+          "statusColor": {
+            "color": "oklab(0.516484 0.101791 0.0885702)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(226, 85, 7)",
+            "boxShadow": "none"
+          },
+          "contrast": 5.34,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "status": "已结束",
+          "statusClass": "pj-runtime-status outcome-unknown",
+          "statusColor": {
+            "color": "rgb(93, 93, 93)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgba(0, 0, 0, 0)",
+            "boxShadow": "rgb(93, 93, 93) 0px 0px 0px 1.5px inset"
+          },
+          "contrast": 5.93,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        }
+      ]
+    },
+    {
+      "name": "sidebar-no-overflow-light-700",
+      "pass": true,
+      "detail": {
+        "documentOverflow": 0,
+        "sidebar": 0,
+        "list": 0,
+        "results": 0,
+        "rows": [
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          },
+          {
+            "row": 0,
+            "status": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "sidebar-target-size-light-700",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 196,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 6.6,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "sidebar-contrast-light-700",
+      "pass": true,
+      "detail": {
+        "results": 6.6,
+        "rows": [
+          [
+            "completed",
+            6.88
+          ],
+          [
+            "failed",
+            6.15
+          ],
+          [
+            "interrupted",
+            5.34
+          ],
+          [
+            "unknown",
+            5.93
+          ]
+        ]
+      }
+    },
+    {
+      "name": "results-narrow-open-dark-700",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "dark",
+        "open": true,
+        "card": {
+          "width": 652,
+          "height": 468,
+          "top": 66,
+          "bottom": 534,
+          "overflow": 0
+        },
+        "layout": {
+          "width": 614,
+          "height": 502.38,
+          "top": 166.13,
+          "bottom": 668.5,
+          "overflow": 0
+        },
+        "list": {
+          "width": 614,
+          "height": 120,
+          "top": 166.13,
+          "bottom": 286.13,
+          "overflow": 0
+        },
+        "buttons": [
+          {
+            "conversationId": "p4e-completed",
+            "outcome": "completed",
+            "text": "feat/background-completion · 已完成 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-failed",
+            "outcome": "failed",
+            "text": "fix/runtime-crash-on-start · 失败 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-interrupted",
+            "outcome": "interrupted",
+            "text": "feat/session-pagination · 已中断 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-unknown",
+            "outcome": "unknown",
+            "text": "chore/long-history-cleanup · 已结束 · 未读",
+            "pressed": true,
+            "overflow": 0
+          }
+        ],
+        "selected": "p4e-unknown",
+        "state": "就绪 · 空闲 · 已结束",
+        "documentOverflow": 0,
+        "runtimeHidden": true
+      }
+    },
+    {
+      "name": "results-narrow-selected-dark-700",
+      "pass": true,
+      "detail": "p4e-unknown"
+    },
+    {
+      "name": "results-narrow-no-overflow-dark-700",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "card": 0,
+        "layout": 0,
+        "buttons": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "results-narrow-state-dark-700",
+      "pass": true,
+      "detail": "就绪 · 空闲 · 已结束"
+    },
+    {
+      "name": "results-narrow-open-light-700",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "light",
+        "open": true,
+        "card": {
+          "width": 652,
+          "height": 468,
+          "top": 66,
+          "bottom": 534,
+          "overflow": 0
+        },
+        "layout": {
+          "width": 614,
+          "height": 502.38,
+          "top": 166.13,
+          "bottom": 668.5,
+          "overflow": 0
+        },
+        "list": {
+          "width": 614,
+          "height": 120,
+          "top": 166.13,
+          "bottom": 286.13,
+          "overflow": 0
+        },
+        "buttons": [
+          {
+            "conversationId": "p4e-completed",
+            "outcome": "completed",
+            "text": "feat/background-completion · 已完成 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-failed",
+            "outcome": "failed",
+            "text": "fix/runtime-crash-on-start · 失败 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-interrupted",
+            "outcome": "interrupted",
+            "text": "feat/session-pagination · 已中断 · 未读",
+            "pressed": false,
+            "overflow": 0
+          },
+          {
+            "conversationId": "p4e-unknown",
+            "outcome": "unknown",
+            "text": "chore/long-history-cleanup · 已结束 · 未读",
+            "pressed": true,
+            "overflow": 0
+          }
+        ],
+        "selected": "p4e-unknown",
+        "state": "就绪 · 空闲 · 已结束",
+        "documentOverflow": 0,
+        "runtimeHidden": true
+      }
+    },
+    {
+      "name": "results-narrow-selected-light-700",
+      "pass": true,
+      "detail": "p4e-unknown"
+    },
+    {
+      "name": "results-narrow-no-overflow-light-700",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "card": 0,
+        "layout": 0,
+        "buttons": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "results-narrow-state-light-700",
+      "pass": true,
+      "detail": "就绪 · 空闲 · 已结束"
+    }
+  ],
+  "failures": [],
+  "metrics": [
+    {
+      "name": "seed",
+      "rows": 4,
+      "results": 1
+    },
+    {
+      "name": "sidebar-dark-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "dark",
+      "sidebar": {
+        "width": 275,
+        "height": 820,
+        "top": 0,
+        "bottom": 820,
+        "overflow": 0
+      },
+      "list": {
+        "width": 247,
+        "height": 210.5,
+        "top": 168,
+        "bottom": 378.5,
+        "overflow": 0
+      },
+      "results": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 231,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 9.51,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "rows": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "status": "已完成",
+          "statusClass": "pj-runtime-status outcome-completed",
+          "statusColor": {
+            "color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(64, 201, 119)",
+            "boxShadow": "none"
+          },
+          "contrast": 9.9,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "status": "失败",
+          "statusClass": "pj-runtime-status outcome-failed",
+          "statusColor": {
+            "color": "oklab(0.787837 0.122399 0.0550776)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(255, 103, 100)",
+            "boxShadow": "none"
+          },
+          "contrast": 10.01,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "status": "已中断",
+          "statusClass": "pj-runtime-status outcome-interrupted",
+          "statusColor": {
+            "color": "oklab(0.815211 0.0842615 0.0845604)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(255, 133, 73)",
+            "boxShadow": "none"
+          },
+          "contrast": 11.24,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "status": "已结束",
+          "statusClass": "pj-runtime-status outcome-unknown",
+          "statusColor": {
+            "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgba(0, 0, 0, 0)",
+            "boxShadow": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52) 0px 0px 0px 1.5px inset"
+          },
+          "contrast": 5.69,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        }
+      ],
+      "rowCount": 4,
+      "documentOverflow": 0
+    },
+    {
+      "name": "aggregate-focus-dark-1320",
+      "focused": true,
+      "focusVisible": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px"
+    },
+    {
+      "name": "results-dark-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "dark",
+      "open": true,
+      "card": {
+        "width": 1040,
+        "height": 507.5,
+        "top": 156.25,
+        "bottom": 663.75,
+        "overflow": 0
+      },
+      "layout": {
+        "width": 1002,
+        "height": 370.38,
+        "top": 274.38,
+        "bottom": 644.75,
+        "overflow": 0
+      },
+      "list": {
+        "width": 240,
+        "height": 370.38,
+        "top": 274.38,
+        "bottom": 644.75,
+        "overflow": 0
+      },
+      "buttons": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "text": "feat/background-completion · 已完成 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "text": "fix/runtime-crash-on-start · 失败 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "text": "feat/session-pagination · 已中断 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "text": "chore/long-history-cleanup · 已结束 · 未读",
+          "pressed": true,
+          "overflow": 0
+        }
+      ],
+      "selected": "p4e-unknown",
+      "state": "就绪 · 空闲 · 已结束",
+      "documentOverflow": 0,
+      "runtimeHidden": true
+    },
+    {
+      "name": "sidebar-light-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "light",
+      "sidebar": {
+        "width": 275,
+        "height": 820,
+        "top": 0,
+        "bottom": 820,
+        "overflow": 0
+      },
+      "list": {
+        "width": 247,
+        "height": 210.5,
+        "top": 168,
+        "bottom": 378.5,
+        "overflow": 0
+      },
+      "results": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 231,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 6.6,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "rows": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "status": "已完成",
+          "statusClass": "pj-runtime-status outcome-completed",
+          "statusColor": {
+            "color": "oklab(0.22559 -0.00131416 -0.00642684 / 0.74)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(0, 162, 64)",
+            "boxShadow": "none"
+          },
+          "contrast": 6.88,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "status": "失败",
+          "statusClass": "pj-runtime-status outcome-failed",
+          "statusColor": {
+            "color": "oklab(0.487896 0.135741 0.0695754)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(224, 46, 42)",
+            "boxShadow": "none"
+          },
+          "contrast": 6.15,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "status": "已中断",
+          "statusClass": "pj-runtime-status outcome-interrupted",
+          "statusColor": {
+            "color": "oklab(0.516484 0.101791 0.0885702)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(226, 85, 7)",
+            "boxShadow": "none"
+          },
+          "contrast": 5.34,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "status": "已结束",
+          "statusClass": "pj-runtime-status outcome-unknown",
+          "statusColor": {
+            "color": "rgb(93, 93, 93)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgba(0, 0, 0, 0)",
+            "boxShadow": "rgb(93, 93, 93) 0px 0px 0px 1.5px inset"
+          },
+          "contrast": 5.93,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        }
+      ],
+      "rowCount": 4,
+      "documentOverflow": 0
+    },
+    {
+      "name": "aggregate-focus-light-1320",
+      "focused": true,
+      "focusVisible": true,
+      "outlineStyle": "solid",
+      "outlineWidth": "2px"
+    },
+    {
+      "name": "results-light-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "light",
+      "open": true,
+      "card": {
+        "width": 1040,
+        "height": 489.5,
+        "top": 165.25,
+        "bottom": 654.75,
+        "overflow": 0
+      },
+      "layout": {
+        "width": 1002,
+        "height": 370.38,
+        "top": 265.38,
+        "bottom": 635.75,
+        "overflow": 0
+      },
+      "list": {
+        "width": 240,
+        "height": 370.38,
+        "top": 265.38,
+        "bottom": 635.75,
+        "overflow": 0
+      },
+      "buttons": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "text": "feat/background-completion · 已完成 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "text": "fix/runtime-crash-on-start · 失败 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "text": "feat/session-pagination · 已中断 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "text": "chore/long-history-cleanup · 已结束 · 未读",
+          "pressed": true,
+          "overflow": 0
+        }
+      ],
+      "selected": "p4e-unknown",
+      "state": "就绪 · 空闲 · 已结束",
+      "documentOverflow": 0,
+      "runtimeHidden": true
+    },
+    {
+      "name": "sidebar-dark-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "sidebar": {
+        "width": 240,
+        "height": 600,
+        "top": 0,
+        "bottom": 600,
+        "overflow": 0
+      },
+      "list": {
+        "width": 212,
+        "height": 210.5,
+        "top": 168,
+        "bottom": 378.5,
+        "overflow": 0
+      },
+      "results": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 196,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 9.51,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "rows": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "status": "已完成",
+          "statusClass": "pj-runtime-status outcome-completed",
+          "statusColor": {
+            "color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(64, 201, 119)",
+            "boxShadow": "none"
+          },
+          "contrast": 9.9,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "status": "失败",
+          "statusClass": "pj-runtime-status outcome-failed",
+          "statusColor": {
+            "color": "oklab(0.787837 0.122399 0.0550776)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(255, 103, 100)",
+            "boxShadow": "none"
+          },
+          "contrast": 10.01,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "status": "已中断",
+          "statusClass": "pj-runtime-status outcome-interrupted",
+          "statusColor": {
+            "color": "oklab(0.815211 0.0842615 0.0845604)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(255, 133, 73)",
+            "boxShadow": "none"
+          },
+          "contrast": 11.24,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "status": "已结束",
+          "statusClass": "pj-runtime-status outcome-unknown",
+          "statusColor": {
+            "color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgba(0, 0, 0, 0)",
+            "boxShadow": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52) 0px 0px 0px 1.5px inset"
+          },
+          "contrast": 5.69,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        }
+      ],
+      "rowCount": 4,
+      "documentOverflow": 0
+    },
+    {
+      "name": "sidebar-light-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "light",
+      "sidebar": {
+        "width": 240,
+        "height": 600,
+        "top": 0,
+        "bottom": 600,
+        "overflow": 0
+      },
+      "list": {
+        "width": 212,
+        "height": 210.5,
+        "top": 168,
+        "bottom": 378.5,
+        "overflow": 0
+      },
+      "results": {
+        "count": 1,
+        "text": "4 个后台会话有结果查看",
+        "aria": "4 个后台会话有结果：已完成 1、失败 1、已中断 1、已结束 1。查看结果",
+        "width": 196,
+        "height": 28,
+        "top": 196.5,
+        "bottom": 224.5,
+        "overflow": 0,
+        "contrast": 6.6,
+        "fontSize": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "rows": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "status": "已完成",
+          "statusClass": "pj-runtime-status outcome-completed",
+          "statusColor": {
+            "color": "oklab(0.22559 -0.00131416 -0.00642684 / 0.74)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(0, 162, 64)",
+            "boxShadow": "none"
+          },
+          "contrast": 6.88,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "status": "失败",
+          "statusClass": "pj-runtime-status outcome-failed",
+          "statusColor": {
+            "color": "oklab(0.487896 0.135741 0.0695754)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(224, 46, 42)",
+            "boxShadow": "none"
+          },
+          "contrast": 6.15,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "status": "已中断",
+          "statusClass": "pj-runtime-status outcome-interrupted",
+          "statusColor": {
+            "color": "oklab(0.516484 0.101791 0.0885702)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgb(226, 85, 7)",
+            "boxShadow": "none"
+          },
+          "contrast": 5.34,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "status": "已结束",
+          "statusClass": "pj-runtime-status outcome-unknown",
+          "statusColor": {
+            "color": "rgb(93, 93, 93)",
+            "fontSize": "11px",
+            "lineHeight": "18px"
+          },
+          "dotColor": {
+            "backgroundColor": "rgba(0, 0, 0, 0)",
+            "boxShadow": "rgb(93, 93, 93) 0px 0px 0px 1.5px inset"
+          },
+          "contrast": 5.93,
+          "overflow": {
+            "row": 0,
+            "status": 0
+          },
+          "rowHeight": 28
+        }
+      ],
+      "rowCount": 4,
+      "documentOverflow": 0
+    },
+    {
+      "name": "results-dark-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "open": true,
+      "card": {
+        "width": 652,
+        "height": 468,
+        "top": 66,
+        "bottom": 534,
+        "overflow": 0
+      },
+      "layout": {
+        "width": 614,
+        "height": 502.38,
+        "top": 166.13,
+        "bottom": 668.5,
+        "overflow": 0
+      },
+      "list": {
+        "width": 614,
+        "height": 120,
+        "top": 166.13,
+        "bottom": 286.13,
+        "overflow": 0
+      },
+      "buttons": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "text": "feat/background-completion · 已完成 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "text": "fix/runtime-crash-on-start · 失败 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "text": "feat/session-pagination · 已中断 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "text": "chore/long-history-cleanup · 已结束 · 未读",
+          "pressed": true,
+          "overflow": 0
+        }
+      ],
+      "selected": "p4e-unknown",
+      "state": "就绪 · 空闲 · 已结束",
+      "documentOverflow": 0,
+      "runtimeHidden": true
+    },
+    {
+      "name": "results-light-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "light",
+      "open": true,
+      "card": {
+        "width": 652,
+        "height": 468,
+        "top": 66,
+        "bottom": 534,
+        "overflow": 0
+      },
+      "layout": {
+        "width": 614,
+        "height": 502.38,
+        "top": 166.13,
+        "bottom": 668.5,
+        "overflow": 0
+      },
+      "list": {
+        "width": 614,
+        "height": 120,
+        "top": 166.13,
+        "bottom": 286.13,
+        "overflow": 0
+      },
+      "buttons": [
+        {
+          "conversationId": "p4e-completed",
+          "outcome": "completed",
+          "text": "feat/background-completion · 已完成 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-failed",
+          "outcome": "failed",
+          "text": "fix/runtime-crash-on-start · 失败 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-interrupted",
+          "outcome": "interrupted",
+          "text": "feat/session-pagination · 已中断 · 未读",
+          "pressed": false,
+          "overflow": 0
+        },
+        {
+          "conversationId": "p4e-unknown",
+          "outcome": "unknown",
+          "text": "chore/long-history-cleanup · 已结束 · 未读",
+          "pressed": true,
+          "overflow": 0
+        }
+      ],
+      "selected": "p4e-unknown",
+      "state": "就绪 · 空闲 · 已结束",
+      "documentOverflow": 0,
+      "runtimeHidden": true
+    }
+  ]
+}

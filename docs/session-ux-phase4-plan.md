@@ -1,10 +1,10 @@
 # 会话执行体验 P4 技术审查与实施规划
 
 审查日期 2026-11-16。本文用于确定 P4 取舍和后续验收。P4-A 已由 PR #91 合并；
-P4-B 已实现并验收，P4-C 已按用户确认的方案落地正式 CSS，记录见
-[P4-B/C 验收](session-ux-phase4bc-acceptance.md) 与
-[P4-C 方案与实施记录](session-ux-phase4c-visual-proposal.md)。
-本文保留当时的规划与基线调查。
+P4-B 已实现并验收，P4-C 已按用户确认的方案落地正式 CSS，P4-E 已实现并通过
+定向行为与真实 Chromium 验收。记录见 [P4-B/C 验收](session-ux-phase4bc-acceptance.md)、
+[P4-C 方案与实施记录](session-ux-phase4c-visual-proposal.md) 与
+[P4-E 验收](session-ux-phase4e-acceptance.md)。本文保留当时的规划与基线调查。
 
 ## 1. 基线、P3 合并与冻结范围
 
@@ -121,7 +121,7 @@ P4-B 已实现并验收，P4-C 已按用户确认的方案落地正式 CSS，记
 
 **交付门槛。** 以未变基线和候选分别跑至少 5 轮相同基准，再用正常 Electron 补带真实滚轮与多次 A→B→A 的跟踪。目标 Classic 首屏/切换中位数或最慢任务时长至少改善 30%，可交互前无 ≥100ms 同步段，画面总就绪时间和稳定后的 heap 不比基线恶化超过 10%。这是候选决策阈值。覆盖首尾命中与裁剪外命中、A/B 快速切换和过期批次取消、反复展开、跟随/不跟随、Minimap 位置与键盘、书签偏移 ≤1px、逐条复制和选择全文、打印对照、实时插入、退订与垃圾回收。主候选触点 `public/messages.js`、`public/conversation-nav.js`，按实际调用需要才改 `session-navigation.js`。D-1 若仅提示，归 `runtime-conversation.js` 和 `tests/runtime-history-search.cjs`；扩大历史读取须另立高风险决策。分段和定位提示分提交，可分别恢复同步重建及现有历史行为。约 3–5 人日，包含 trace 与候选去留，窗口化或历史分页未计入。
 
-## 7. P4-E 后台会话完成提示｜建议实施
+## 7. P4-E 后台会话完成提示｜已实施
 
 **真实来源。** `server/runtime-registry.js:113–176,351–370` 持有 live runtime 的 `attention`。后台 `agent_settled`、bridge error/exited、extension UI/error 和 generation 失败等都会置位，经 runtime session snapshot 广播。现有成功的 owner-validated `focus` 会清除，`runtime-nav.js` 用「需要注意」点及 `focusRuntimeById`，`runtime-sessions.js` 把同一 flag 称为「未读」。attention 混合了完成与需要操作的状态。`agent_settled` 是整个运行结束的证据（包括 retry/compaction 的等待），单独不足以判定成功。`generationResult` 有归属，但 failed 可含 aborted，prompt preflight 失败也可发出，`steer/follow_up/abort` 还可能使该归属不可用。`stop_state.pending=false` 仅证明停止屏障清理完成，`idle` 也可能来自拒绝/启动回退。
 
@@ -130,6 +130,30 @@ P4-B 已实现并验收，P4-C 已按用户确认的方案落地正式 CSS，记
 **权威判定和去重。** 在 registry 对同一当前 owner（含 backend 实例、项目/工作区、runtime generation、session identity）绑定已观察的执行起点和一次终态。记录一个有界的终态类型与现有事件序号或等价身份，按 conversation 去重。`agent_settled` 配合可信 assistant 终态或适用的 `generationResult`，有明确归属和成功证据才写「已完成」；失败、中断各按自己的真实状态证据，缺失时「已结束」或保留通用 attention。已观察到的活跃轮次若 bridge 确认退出，可记「运行异常／中断」，不把连接断线或历史 replay 当成错误。SSE 重复、补帧、快照、reload 都只重新对账，不触发第二次通知；`runtime-recovery.js` 的补帧走 observe 路径，不能仅用 `_replay` 过滤。用现有受校验 focus 成功后清除当时看见的版本；测试点击与新运行结束的竞争，同一条新的 outcome 应保留。若中心切换被更晚的用户 intent 淘汰或目标换代，旧响应不能夺回视图或清除下一代结果。仅工作区内提示，存续范围随现有 live record，初版无跨重启持久化和 Classic 单会话通知中心。
 
 **成本与验收。** 约 2–3 人日。触点 `server/runtime-registry.js`、`public/runtime-store.js` 或 `runtime-state.js` 的快照与 owner 接收、`public/runtime-nav.js`、`public/runtime-sessions.js`、组合根 `public/app.js` 仅在复用入口需要时。优先回归 `tests/runtime-registry.cjs`、`tests/runtime-events.cjs`、`tests/runtime-store.cjs`、`tests/runtime-nav.cjs`、`tests/runtime-finish-ui.cjs`、`tests/session-background-ui.cjs` 和 `tests/session-background-recovery.cjs`。覆盖前台/后台 A/B/C、并行终态、真实失败/停止/中断、未知、审批共存、preflight、重试中、关闭/换代、重复/反序、snapshot/reconnect 补帧、跨项目、过时点击、失败的 focus、仅成功查看后清除。真实浏览器验证计数与目标、工作区未自动切换，当前输入内容、键盘焦点、位置与运行标识稳定。保留兼容 `attention` 布尔项，回退 UI/可选终态元信息提交可直接恢复原来的点和列表。
+
+**实施记录（2026-11-16）。** 已按上述边界落地，记录与实测见
+[P4-E 验收](session-ux-phase4e-acceptance.md)。registry 的 `summary()` 增加可选
+`outcome: { kind, reason, sequence }`；`sequence` 使用该会话单调的
+`outcomeRevision`，而非全局事件序号。判定优先 `generationResult`，缺失时回退到
+该轮最后一条 assistant `message_end.stopReason`；`toolUse` 单独不算完成。
+bridge 仅在活跃运行中退出时记「已中断」，空闲断线仍沿用原 attention/error。
+同一轮由 abort、preflight 或 bridge crash 记录终态后，后续空 settled 不会降级；
+新运行、提交新任务或 bridge 换代才清理。失败终态同样经 `recordOutcome` 一次性
+写入 `generation_failed`，重复失败帧不会在已读后重新点亮 attention；自动重试的
+新 `agent_start` 会清掉上一轮失败错误。用户正看着的会话不写后台终态；
+`focus` 只清除进入前已看见的那一条，聚焦期间新到的结果保留。
+
+前端没有新增通知系统：每会话行复用状态点和一行文字，当前项目只加一条
+「N 个后台会话有结果」。单条直接 `focusRuntimeById`；多条打开既有「独立会话」
+列表并预选 revision 最新项，不自动 focus、不切换中央视图。与规划相比，
+未采用「聚焦整组」作为默认动作，因为那会在用户只点击聚合入口时自动切走当前会话。
+失败/中断文字使用语义色与主文字混合，保证浅色主题 11px 小字达到 4.5:1。
+
+`tests/session-ux-phase4e.cjs` 60/60，真实 Chromium
+`tests/session-ux-phase4e-shots.cjs` 43/43（1320×820 / 700×600、深色 / 浅色，
+8 张截图），相关 P1–P4-C、Runtime、后台会话与视觉套件均通过。终态仅保存在
+live registry 内存中，无跨重启持久化；未运行完整 `npm test`，未在真实 Electron、
+真实 Pi 长会话或读屏下复验。
 
 ## 8. 推荐实施顺序与回滚边界
 
@@ -162,7 +186,7 @@ flowchart TD
 - [ ] A 有事实时可快速识别并行子项及结果，缺字段按安全工具行回退；数据来源、状态、模型、计数和停止权限正确，`gui_plan` 无重复。
 - [ ] B 若纳入，只提供有可信证据和真实入口的恢复指引；设置操作、取消和失败后原错误与重试信息都可见，重放和隐式执行为零。
 - [ ] C 若纳入，用户确认视觉对照，已验收矩阵、状态/焦点、字体缩放、对比度与窄窗 Composer。
-- [ ] E 的结果来自真实终态，列表聚合和点击目标正确，重复帧、换代、取消及错误不误报，工作中的会话保持输入与执行归属。
+- [x] E 的结果来自真实终态，列表聚合和点击目标正确，重复帧、换代、取消及错误不误报，工作中的会话保持输入与执行归属。行为 60/60、Chromium 43/43，见 [P4-E 验收](session-ux-phase4e-acceptance.md)。
 - [ ] D 记录当前与候选同口径结果及取舍。若采用分段，Minimap、搜索、完整复制、展开、书签、工具跟随、打印与跨会话隔离通过。Runtime 有界裁剪与读取授权经针对性回归。
 - [ ] 两个动画文件及全部调用点逐项对照基线。P1–P3 冻结功能逐项定向、截图与完整 canonical 证明齐备；记录断言变化、跳过、平台和风险，产物已重建或明确源码验证边界。
 - [ ] `git diff --check`、审查、验收、回滚记录完整。合并和发布分别等待用户授权。
