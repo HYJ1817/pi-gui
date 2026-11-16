@@ -141,6 +141,36 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     equal(onlyTool.blocks.filter(block => block.kind === 'assistant').length, 0, '只调工具的消息不伪造 assistant block');
     deep(onlyTool.blocks.find(block => block.kind === 'tools').usage, usage, '只调工具的消息把真实 usage 挂到工具组');
 
+    const planTasks = [{ id: 'p', title: 'A', status: 'in_progress' }];
+    const planCall = { type: 'toolCall', id: 'plan-1', name: 'gui_plan',
+      arguments: { version: 1, tasks: planTasks } };
+    const planResult = { role: 'toolResult', toolCallId: 'plan-1', toolName: 'gui_plan',
+      content: [text('ok')], details: { version: 1, tasks: planTasks }, timestamp: 2 };
+    const onlyPlan = RT.timelineFromMessages([
+      { role: 'assistant', content: [planCall], usage, timestamp: 1 },
+      planResult,
+    ]);
+    const planBlock = onlyPlan.blocks.find(block => block.kind === 'plan');
+    deep(planBlock.usage, usage, '只提交计划的消息把真实 usage 挂到 plan block');
+    equal(onlyPlan.blocks.filter(block => block.kind === 'assistant').length, 0, 'plan-only 消息不伪造空的 assistant 正文');
+    equal(onlyPlan.blocks.filter(block => block.usage).length, 1, 'plan-only 消息的 usage 只出现一次');
+    equal(RT.blockChars(planBlock), 66, 'plan block 的 usage 计入有界预算（2 字符计划 + 64）');
+
+    const mixedPlan = RT.timelineFromMessages([
+      { role: 'assistant', content: [planCall, text('plan answer')], usage, timestamp: 1 },
+      planResult,
+    ]);
+    const mixedPlanBlock = mixedPlan.blocks.find(block => block.kind === 'plan');
+    equal(mixedPlan.blocks.filter(block => block.usage).length, 1, '计划加正文时 usage 仍然只挂一次');
+    equal(mixedPlanBlock.usage, undefined, '正文存在时 usage 不重复挂到计划卡');
+    deep(mixedPlan.blocks.find(block => block.kind === 'assistant').usage, usage, '正文优先承接 usage');
+
+    const planBase = { kind: 'plan', plan: { tasks: [{ id: 'p', title: 'A', status: 'pending' }] } };
+    const planWithUsage = { kind: 'plan', plan: { tasks: [{ id: 'q', title: 'B', status: 'pending' }] }, usage };
+    const boundedPlan = RT.boundTimeline([planBase, planWithUsage], { maxChars: 67 });
+    equal(boundedPlan.blocks.length, 1, 'plan usage 计入 maxChars，旧计划先被裁掉');
+    deep(boundedPlan.blocks[0].usage, usage, '裁剪后最近 plan block 的真实 usage 保留');
+
     const usageChars = RT.blockChars({ kind: 'assistant', text: 'abc', usage });
     equal(usageChars, 67, 'blockChars 计入 usage 的固定预算');
     equal(RT.blockChars({ kind: 'thinking', text: 'abc', usage }), 67, 'thinking 上的 usage 同样计费');
@@ -170,6 +200,48 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
       'store 只保留白名单 usage，附加字段被丢弃');
     deep(record.timeline.find(block => block.kind === 'thinking').usage, usage,
       'thinking block 的 usage 同样经过白名单');
+
+    const planTasks = [{ id: 'p', title: 'Plan A', status: 'in_progress', secret: 'PLAN_TASK_SECRET' }];
+    const historyTimeline = [
+      { kind: 'user', text: 'q', messageId: 'm1', userIndex: 0, truncated: false,
+        message: { raw: 1 }, args: { raw: 1 }, secret: 'TOP_SECRET' },
+      { kind: 'assistant', text: 'a', state: 'complete', truncated: false,
+        usage: { ...usage, extra: 'SECRET' }, message: { raw: 1 }, args: { raw: 1 }, secret: 'TOP_SECRET' },
+      { kind: 'thinking', text: 't', state: 'complete', truncated: false,
+        usage: { ...usage, extra: 'SECRET' }, message: { raw: 1 }, secret: 'TOP_SECRET' },
+      { kind: 'tools', truncated: false, message: { raw: 1 }, secret: 'TOP_SECRET',
+        tools: [{ id: 'tool-1', name: 'read', state: 'success', waiting: false, durationMs: 7,
+          args: { secret: 'RAW_ARGS' }, output: 'RAW_OUTPUT', extra: 'TOOL_SECRET' }] },
+      { kind: 'plan', message: { raw: 1 }, secret: 'TOP_SECRET', args: { raw: 1 },
+        usage: { ...usage, extra: 'SECRET' },
+        plan: { version: 1, tasks: planTasks, total: 1, completed: 0, explanation: 'e',
+          revision: 1, turnId: 'run-1', extra: 'PLAN_SECRET' } },
+    ];
+    ok('store 接受带附加顶层字段的历史', runtimeStore.history('H', [], o, 0, { truncated: false, timeline: historyTimeline }));
+    const clean = runtimeStore.get('H').timeline;
+    const keys = block => Object.keys(block).sort();
+    deep(clean.map(block => block.kind), ['user', 'assistant', 'thinking', 'tools', 'plan'], '合法历史 block 顺序不变');
+    deep(keys(clean[0]), ['id', 'kind', 'messageId', 'text', 'truncated', 'userIndex'], 'user 只保留契约字段');
+    deep(keys(clean[1]), ['id', 'kind', 'state', 'text', 'truncated', 'usage'], 'assistant 只保留契约字段');
+    deep(keys(clean[2]), ['id', 'kind', 'state', 'text', 'truncated', 'usage'], 'thinking 只保留契约字段');
+    deep(keys(clean[3]), ['id', 'kind', 'tools', 'truncated'], 'tools 只保留契约字段');
+    deep(keys(clean[3].tools[0]), ['durationMs', 'id', 'name', 'state', 'waiting'], '工具条目只保留展示字段');
+    deep(keys(clean[4]), ['id', 'kind', 'plan', 'usage'], 'plan 只保留契约字段');
+    deep(keys(clean[4].plan), ['completed', 'explanation', 'revision', 'tasks', 'total', 'turnId', 'version'],
+      'plan 对象只保留 normalizePlan 白名单字段');
+    deep(keys(clean[4].plan.tasks[0]), ['id', 'status', 'title'], 'plan 任务只保留白名单字段');
+    const serialized = JSON.stringify(clean);
+    ok('message / args / secret / extra / 原始工具载荷均未进入 store',
+      !serialized.includes('TOP_SECRET') && !serialized.includes('PLAN_SECRET') && !serialized.includes('PLAN_TASK_SECRET')
+      && !serialized.includes('TOOL_SECRET') && !serialized.includes('RAW_ARGS') && !serialized.includes('RAW_OUTPUT')
+      && !serialized.includes('"message"') && !serialized.includes('"args"') && !serialized.includes('"extra"'));
+    deep(clean[1].usage, usage, '顶层过滤不改变 usage 白名单');
+    deep(clean[2].usage, usage, 'thinking usage 仍按白名单投影');
+    deep(clean[4].usage, usage, 'plan-only usage 进入 store 且经过白名单');
+    equal(clean[0].text + clean[1].text + clean[2].text, 'qat', '合法正文内容仍完整');
+    equal(clean[3].tools[0].durationMs, 7, '合法工具耗时仍保留');
+    equal(clean[4].plan.tasks[0].title, 'Plan A', '合法计划标题仍保留');
+    equal(clean[4].plan.tasks[0].status, 'in_progress', '合法计划状态仍保留');
   }
   function storeOwner(id) {
     // seed() 保留传入的 owner 对象；用同一形状重建并通过 JSON 克隆避免引用相等假设。
@@ -261,6 +333,35 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     ok('只有 Thinking 用量时提示仍与实际字段相符', host.querySelector('.rtc-state').textContent.includes('正文与用量'));
     equal(host.querySelectorAll('.rtc-output .rtc-timeline-message[data-role="assistant"]').length, 0,
       'Thinking-only 历史不伪造空的助手正文');
+
+    historyPayload = { ok: true, conversationId: 'R', sessionId: 's-R',
+      messages: [{ role: 'user', text: 'history q' }], truncated: false,
+      execution: { truncated: false, planBoundary: null, timeline: [
+        { id: 'h-user-2', kind: 'user', text: 'history q', userIndex: 0 },
+        { id: 'h-plan-1', kind: 'plan', usage: { ...usage, costTotal: 0.0123 },
+          plan: PM.normalizePlan({ version: 1,
+            tasks: [{ id: 'p', title: '历史计划', status: 'in_progress' }],
+            explanation: '历史计划说明', revision: 1, turnId: 'run-plan' }) },
+      ] } };
+    [...host.querySelectorAll('button')].find(button => button.textContent === '打开历史').click();
+    await tick();
+    const planHost = host.querySelector('.rtc-output .ui2-runtime-plan');
+    const planMeta = planHost?.querySelector('.ui2-msg-meta');
+    ok('plan-only 历史显示真实 usage', Boolean(planMeta?.querySelector('.ui2-msg-meta-summary')));
+    equal(planMeta?.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 21 · 推理 4（含在输出中）',
+      '计划卡 usage 摘要与 Classic 一致');
+    equal(host.querySelectorAll('.rtc-output .ui2-runtime-plan > .ui2-msg-meta').length, 1,
+      'plan-only 历史的 usage 只显示一次');
+    equal(host.querySelectorAll('.rtc-output .rtc-timeline-message[data-role="assistant"]').length, 0,
+      'plan-only 历史不伪造空的助手正文');
+    ok('计划用量位于折叠列表之外', Boolean(planMeta) && planMeta.closest('.plan-list') === null);
+    const planHead = planHost.querySelector('.plan-head');
+    const planList = planHost.querySelector('.plan-list');
+    planHead.click();
+    equal(planHead.getAttribute('aria-expanded'), 'false', '计划卡仍可折叠');
+    ok('折叠计划列表不影响用量显示', planList.hidden && planMeta.isConnected);
+    planHead.click();
+    equal(planHead.getAttribute('aria-expanded'), 'true', '计划卡可再次展开');
     view.dispose(); host.remove();
   }
 
