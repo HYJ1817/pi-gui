@@ -81,4 +81,4 @@
 .rtc-picker-menu .rtc-picker-option[aria-current="true"]{font-weight:500;box-shadow:none}
 .rtc-picker-empty{padding:16px 10px;color:var(--t3);font-size:12px;text-align:center}
 @media(max-width:900px){.rtc-model-trigger{max-width:190px}.rtc-thinking-trigger{max-width:110px}.rtc-composer .rtc-models{gap:2px}.rtc-composer{padding:9px 9px 7px}}
-@media(max-width:700px){.runtime-conversation-view{padding:10px}.runtime-conversation .rtc-head>.runtime-resource-count{display:none}.rtc-model-trigger{max-width:140px}.rtc-composer-bar{flex-wrap:wrap;gap:4px}.rtc-composer .rtc-models{flex-basis:100%}.rtc-composer-actions{margin-top:-1px}.rtc-composer-note{padding-top:3px}}
+@media(max-width:700px){.runtime-conversation-view{padding:10px}.runtime-conversation .rtc-output{padding:20px var(--ui-space-5)}.runtime-conversation .rtc-head>.runtime-resource-count{display:none}.rtc-model-trigger{max-width:140px}.rtc-composer-bar{flex-wrap:wrap;gap:4px}.rtc-composer .rtc-models{flex-basis:100%}.rtc-composer-actions{margin-top:-1px}.rtc-composer-note{padding-top:3px}}

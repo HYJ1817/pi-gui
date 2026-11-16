@@ -6,7 +6,7 @@
 /* ---------- 任务列表 ---------- */
 
 .plan-card {
-  margin: 8px 0 16px;
+  margin: var(--ui-space-2) 0 var(--ui-space-3);
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--line-soft);
@@ -20,13 +20,13 @@
   gap: 8px;
   width: 100%;
   min-height: 34px;
-  padding: 7px 11px;
+  padding: 6px var(--ui-space-2);
   border: 0;
   background: transparent;
   color: var(--t2);
   font: inherit;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   text-align: left;
   cursor: pointer;
 }
@@ -38,7 +38,8 @@
 .plan-count {
   margin-left: auto;
   color: var(--t3);
-  font-size: 11px;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
   font-variant-numeric: tabular-nums;
 }
 /* 折叠摘要：完成数旁边的当前任务。展开时列表已经能看到该行，不再重复。 */
@@ -49,8 +50,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--t3);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
   font-variant-numeric: tabular-nums;
 }
 .plan-head[aria-expanded="true"] .plan-now { display: none; }
@@ -125,14 +126,14 @@
 /* 计划、思考、工具、正文现在都在同一个 .rtc-output 滚动容器里，按真实事件
  * 顺序排列；不要再给计划卡一个独立滚动区，否则同一段阅读流会被切成两块。 */
 /* 计划卡与工具组的外层只做定位；边距交给它们自己的公共样式
- * （.plan-card 8/16、.tl-group 9/18），与 Classic 完全一致。
+ * （.plan-card 8/12、.tl-group 8/16），与 Classic 完全一致。
  * 之前外层再叠 10/14、8/14 会让 Runtime 的组间距比 Classic 大一倍。 */
 .runtime-conversation .rtc-output .ui2-runtime-plan {
-  margin: 8px 0 16px;
+  margin: var(--ui-space-2) 0 var(--ui-space-3);
 }
 .runtime-conversation .rtc-output .ui2-runtime-plan .plan-card { margin: 0; }
-.runtime-conversation .rtc-output .ui2-runtime-thinking { margin: 8px 0 10px; }
-.runtime-conversation .rtc-output .ui2-runtime-thinking-wrap { margin: 8px 0 10px; }
+.runtime-conversation .rtc-output .ui2-runtime-thinking { margin: var(--ui-space-2) 0 var(--ui-space-3); }
+.runtime-conversation .rtc-output .ui2-runtime-thinking-wrap { margin: var(--ui-space-2) 0 var(--ui-space-3); }
 .runtime-conversation .rtc-output .ui2-runtime-thinking-wrap .ui2-runtime-thinking { margin: 0; }
 .runtime-conversation .rtc-output .ui2-runtime-tools { margin: 0; }
 .runtime-conversation .rtc-output .ui2-runtime-thinking-wrap>.ui2-msg-meta,
@@ -287,7 +288,6 @@
 
 @media (max-width: 700px) {
   .scroll-bottom { top: -50px; width: 40px; height: 40px; }
-  .plan-card { margin: 6px 0 13px; }
   .plan-item { font-size: 12px; }
 }
 

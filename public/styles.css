@@ -31,7 +31,7 @@
   /* Phase D: one 760px reference content band; the transcript owns its 32px inset. */
   --conversation-max-width:var(--ds-composer-width);
   --composer-max-width:var(--ds-composer-width);
-  --turn-gap:36px;
+  --turn-gap:var(--ui-space-6);
   --tool-row-height:30px;
 }
 
@@ -489,7 +489,7 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
   border:solid var(--ui-on-primary);border-width:0 1.6px 1.6px 0;transform:rotate(45deg);
 }
 
-.think{margin:7px 0 14px;color:var(--t3);font-size:12px;line-height:1.65;min-width:0}
+.think{margin:var(--ui-space-2) 0 var(--ui-space-3);color:var(--t3);font-size:12px;line-height:1.65;min-width:0}
 .think-head{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--t3);font:inherit;cursor:pointer;padding:2px 4px 2px 0;text-align:left}
 .think-head:hover{color:var(--t2)}
 .think-head:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:3px}
@@ -515,10 +515,10 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
  * 行与行之间 1px 分隔、不再用左侧竖线包住整列 —— 竖线在长输出展开时
  * 会把注意力拉到「缩进」而不是「这一组做了什么」。行内 hover 从圆角
  * 小药丸改成填满行宽，与容器圆角一致。 */
-.tl-group{display:flex;flex-direction:column;gap:0;margin:9px 0 18px;min-width:0;
+.tl-group{display:flex;flex-direction:column;gap:0;margin:var(--ui-space-2) 0 var(--ui-space-4);min-width:0;
   border:1px solid var(--line-soft);border-radius:var(--ui-radius-card);
   padding:2px 3px 3px;background:transparent}
-.tl-group-head{font-size:10.5px;color:var(--t3);letter-spacing:.2px;padding:6px 9px 4px}
+.tl-group-head{font-size:var(--text-sm);line-height:var(--leading-normal);color:var(--t3);letter-spacing:.2px;padding:6px 9px 4px}
 .tl-list{display:flex;flex-direction:column;gap:0;min-width:0}
 .tl-list>.tl-item+.tl-item{border-top:1px solid var(--line-soft)}
 
@@ -540,8 +540,8 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 .tl-body{flex:1;min-width:0}
 .tl-head{display:flex;align-items:baseline;gap:8px;min-width:0}
 .tl-item.has-more .tl-head{cursor:pointer}
-.tl-label{font-size:12px;color:var(--t1);flex:0 0 auto}
-.tl-status{font-size:10px;color:var(--t3);white-space:nowrap;flex:0 0 auto}
+.tl-label{font-size:var(--text-sm);line-height:var(--leading-normal);color:var(--t1);flex:0 0 auto}
+.tl-status{font-size:var(--text-xs);line-height:var(--leading-normal);color:var(--t3);white-space:nowrap;flex:0 0 auto}
 .tl-item[data-status=error] .tl-status{color:var(--err)}
 .tl-item[data-status=incomplete] .tl-status{color:var(--warn)}
 .tl-arg{font-family:var(--mono);font-size:11.5px;color:var(--t3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -639,7 +639,7 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
  * 随 [aria-expanded] 旋转（A 的结构契约明确授权由 C 绘制）。 */
 .ui2-tool-summary{
   display:flex;align-items:center;gap:7px;width:100%;min-width:0;text-align:left;
-  border:0;background:transparent;font:inherit;font-size:12px;color:var(--t2);
+  border:0;background:transparent;font:inherit;font-size:var(--text-sm);line-height:var(--leading-normal);color:var(--t2);
   padding:4px 8px;border-radius:var(--ui-radius-control);cursor:pointer;
   transition:background var(--ui-duration-snap) var(--ui-ease-out),color var(--ui-duration-snap) var(--ui-ease-out);
 }
@@ -652,11 +652,11 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
   transform:rotate(45deg);transition:transform var(--ui-duration-snap) var(--ui-ease-out);
 }
 .ui2-tool-summary[aria-expanded=false]::before{transform:rotate(-45deg)}
-.ui2-tool-state{font-size:10.5px;color:var(--t3);letter-spacing:.2px;line-height:1.5;padding:0 9px 5px;font-variant-numeric:tabular-nums}
+.ui2-tool-state{font-size:var(--text-xs);color:var(--t3);letter-spacing:.2px;line-height:var(--leading-normal);padding:0 9px 5px;font-variant-numeric:tabular-nums}
 .tl-group-meta{display:flex;align-items:baseline;gap:8px;row-gap:1px;flex-wrap:wrap;min-width:0;padding:0 9px 5px}
 .tl-group-meta[hidden]{display:none}
 .tl-group-meta .ui2-tool-state{padding:0;flex:1 1 auto;min-width:0}
-.tl-group-time{flex:0 0 auto;font-family:var(--mono);font-size:10.5px;color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tl-group-time{flex:0 0 auto;font-family:var(--mono);font-size:var(--text-xs);line-height:var(--leading-normal);color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap}
 .ui2-msg-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:var(--t3);min-width:0}
 .ui2-msg-meta-summary{white-space:nowrap;font-variant-numeric:tabular-nums}
 .ui2-msg-meta-note{white-space:nowrap;color:var(--t3);font-size:11px}
