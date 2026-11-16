@@ -241,7 +241,7 @@ Classic 与 Runtime 各自测量。Runtime 仍受 `MAX_BLOCKS=240` / `MAX_TIMELI
 | `node tests/ui2-runtime-display.cjs` | 83/83 |
 
 没有删除既有断言。没有修改思考动画、P2 阅读位置机制或任何 CSS；本轮未重跑视觉与性能脚本，
-因为它们对应的样式与性能路径未被整改改变，plan-only 用量的布局只做了 jsdom 行为验证。
+新增的 plan-only 用量节点只做了 jsdom 行为验证，未做真实像素验收。
 
 ## 真实视觉与 P2 回归
 
