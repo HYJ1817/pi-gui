@@ -199,6 +199,7 @@ async function main() {
       window.__RP = await import('/reading-position.js');
       window.__PV = await import('/plan-view.js');
       window.__RTC = await import('/runtime-conversation.js');
+      window.__RT = await import('/runtime-timeline.js');
       Object.assign(__S, { hasProject: true, bridgeState: 'ready', streaming: false, stopping: false });
       __surface.showChat();
       return true;
@@ -330,6 +331,9 @@ async function main() {
         { conversationId: 'HISTORY', createdAt: '2026-11-16T00:00:00.000Z',
           workspace: { branch: 'feat/session-ux-phase-3', projectId: 'project', workspaceId: 'ws-history', workspaceEpoch: 'epoch' },
           owner: null, lifecycle: 'dormant', activity: 'idle', attention: false, nativeSessionId: 'native-history' },
+        { conversationId: 'PLANONLY', createdAt: '2026-11-16T00:00:00.000Z',
+          workspace: { branch: 'feat/session-ux-phase-3', projectId: 'project', workspaceId: 'ws-planonly', workspaceEpoch: 'epoch' },
+          owner: null, lifecycle: 'dormant', activity: 'idle', attention: false, nativeSessionId: 'native-planonly' },
       ] });
       __rtc.show('LIVE');
       const frame = (seq, event) => __RS.observeRuntimeFrame({ type: 'runtime_event', owner, eventSequence: seq, event });
@@ -660,6 +664,169 @@ async function main() {
     /* ---------- 5. 可访问性树 ---------- */
     console.log('\n--- 可访问性树（Runtime 历史）---');
     recordMetrics('accessibility-runtime', await summarizeAx());
+
+    /* ---------- 6. Plan-only 多条 usage：同 turnId 的一张卡 ---------- */
+    console.log('\n--- Plan-only usage（同 turnId 两条消息）---');
+    await setTheme('dark');
+    await setViewport(1320, 820);
+    await evalJs(`(async () => {
+      const text = value => ({ type: 'text', text: value });
+      const firstTasks = [{ id: 'p', title: '核对计划卡用量归属与折叠行为', status: 'in_progress' }];
+      const secondTasks = [{ id: 'p', title: '核对计划卡用量归属与折叠行为', status: 'completed' },
+        { id: 'q', title: '在 700px 窄屏验证两条用量与计划折叠，不遮挡 Composer', status: 'in_progress' }];
+      const firstUsage = { input: 10, output: 2, totalTokens: 12 };
+      const secondUsage = { input: 20, output: 3, totalTokens: 23 };
+      const projection = __RT.timelineFromMessages([
+        { role: 'user', content: [text('第一条计划')], timestamp: 1 },
+        { role: 'assistant', timestamp: 2, usage: firstUsage,
+          content: [{ type: 'toolCall', id: 'plan-only-1', name: 'gui_plan', arguments: { version: 1, tasks: firstTasks } }] },
+        { role: 'toolResult', toolCallId: 'plan-only-1', toolName: 'gui_plan', timestamp: 2,
+          content: [text('ok')], details: { version: 1, tasks: firstTasks, turnId: 'run-plan-only' } },
+        { role: 'user', content: [text('steer：补充第二条计划')], timestamp: 3 },
+        { role: 'assistant', timestamp: 4, usage: secondUsage,
+          content: [{ type: 'toolCall', id: 'plan-only-2', name: 'gui_plan', arguments: { version: 1, tasks: secondTasks } }] },
+        { role: 'toolResult', toolCallId: 'plan-only-2', toolName: 'gui_plan', timestamp: 4,
+          content: [text('ok')], details: { version: 1, tasks: secondTasks, turnId: 'run-plan-only' } },
+      ]);
+      const payload = {
+        ok: true, conversationId: 'PLANONLY', sessionId: 'native-planonly', truncated: false,
+        messages: [{ role: 'user', text: '第一条计划' }, { role: 'user', text: 'steer：补充第二条计划' }],
+        execution: { truncated: false, planBoundary: 'verified', timeline: projection.blocks },
+      };
+      window.fetch = async (input) => {
+        const url = String(input);
+        if (url.includes('PLANONLY')) return { status: 200, json: async () => payload };
+        return { status: 200, json: async () => ({ ok: true, backendInstance: 'visual', items: [] }) };
+      };
+      __rtc.show('PLANONLY');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const button = [...document.querySelectorAll('#runtimeView button')].find(node => node.textContent === '打开历史');
+      if (!button) throw new Error('Plan-only 历史按钮不存在');
+      button.click();
+      await new Promise(resolve => setTimeout(resolve, 180));
+      const output = document.querySelector('#runtimeView .rtc-output');
+      output.scrollTop = output.scrollHeight;
+      return true;
+    })()`);
+    await sleep(400);
+    await shot('13-planonly-history-expanded-dark-1320');
+    recordMetrics('planonly-history-1320', await evalJs(`(() => {
+      const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
+      const metas = plan ? [...plan.querySelectorAll('.ui2-msg-meta')] : [];
+      const output = document.querySelector('#runtimeView .rtc-output');
+      return {
+        planCards: document.querySelectorAll('#runtimeView .ui2-runtime-plan').length,
+        metaCount: metas.length,
+        summaries: metas.map(meta => meta.querySelector('.ui2-msg-meta-summary')?.textContent || ''),
+        planHeadCount: document.querySelectorAll('#runtimeView .plan-card .plan-head').length,
+        assistantRows: document.querySelectorAll('#runtimeView .rtc-timeline-message[data-role="assistant"]').length,
+        expanded: plan?.querySelector('.plan-head')?.getAttribute('aria-expanded'),
+        metasOutsideList: metas.every(meta => !meta.closest('.plan-list')),
+        hostWidth: plan?.getBoundingClientRect().width || 0,
+        metaWidths: metas.map(meta => meta.getBoundingClientRect().width),
+        overflow: { document: document.documentElement.scrollWidth - innerWidth,
+          runtimeView: document.querySelector('#runtimeView').scrollWidth - document.querySelector('#runtimeView').clientWidth,
+          output: output.scrollWidth - output.clientWidth },
+      };
+    })()`));
+
+    await evalJs(`(() => {
+      const head = document.querySelector('#runtimeView .plan-card .plan-head');
+      if (head && head.getAttribute('aria-expanded') === 'true') head.click();
+      document.querySelector('#runtimeView .rtc-output').scrollTop = document.querySelector('#runtimeView .rtc-output').scrollHeight;
+      return true;
+    })()`);
+    await sleep(220);
+    await shot('13b-planonly-history-collapsed-dark-1320');
+    recordMetrics('planonly-history-collapsed', await evalJs(`(() => {
+      const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
+      const metas = plan ? [...plan.querySelectorAll('.ui2-msg-meta')] : [];
+      const head = plan?.querySelector('.plan-head');
+      const list = plan?.querySelector('.plan-list');
+      return {
+        expanded: head?.getAttribute('aria-expanded'),
+        listHidden: list?.hidden === true,
+        metaCount: metas.length,
+        metasVisible: metas.every(meta => meta.isConnected && meta.getBoundingClientRect().height > 0),
+      };
+    })()`));
+
+    await evalJs(`(() => {
+      const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
+      const head = plan?.querySelector('.plan-head');
+      if (head && head.getAttribute('aria-expanded') === 'false') head.click();
+      const toggle = plan?.querySelector('.ui2-msg-meta-toggle');
+      if (toggle) toggle.click();
+      const output = document.querySelector('#runtimeView .rtc-output');
+      output.scrollTop = output.scrollHeight;
+      return true;
+    })()`);
+    await sleep(220);
+    await shot('13c-planonly-history-usage-details-dark-1320');
+    recordMetrics('planonly-history-details', await evalJs(`(() => {
+      const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
+      const details = plan?.querySelector('.ui2-msg-meta-details');
+      return {
+        usageDetailsOpen: details?.open === true,
+        usageItemCount: details?.querySelectorAll('.ui2-msg-meta-item').length || 0,
+        metaCount: plan?.querySelectorAll('.ui2-msg-meta').length || 0,
+      };
+    })()`));
+
+    await setTheme('light');
+    await setViewport(700, 600);
+    await evalJs(`(() => {
+      const head = document.querySelector('#runtimeView .plan-card .plan-head');
+      if (head && head.getAttribute('aria-expanded') === 'false') head.click();
+      const output = document.querySelector('#runtimeView .rtc-output');
+      output.scrollTop = output.scrollHeight;
+      return true;
+    })()`);
+    await sleep(250);
+    await shot('13d-planonly-history-narrow-light-700');
+    recordMetrics('planonly-history-700', await evalJs(`(() => {
+      const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
+      const metas = plan ? [...plan.querySelectorAll('.ui2-msg-meta')] : [];
+      const output = document.querySelector('#runtimeView .rtc-output');
+      const composer = document.querySelector('#runtimeView .rtc-composer');
+      return {
+        viewport: [innerWidth, innerHeight],
+        planCards: document.querySelectorAll('#runtimeView .ui2-runtime-plan').length,
+        metaCount: metas.length,
+        summaries: metas.map(meta => meta.querySelector('.ui2-msg-meta-summary')?.textContent || ''),
+        expanded: plan?.querySelector('.plan-head')?.getAttribute('aria-expanded'),
+        metaWidths: metas.map(meta => meta.getBoundingClientRect().width),
+        hostWidth: plan?.getBoundingClientRect().width || 0,
+        overflow: { document: document.documentElement.scrollWidth - innerWidth,
+          runtimeView: document.querySelector('#runtimeView').scrollWidth - document.querySelector('#runtimeView').clientWidth,
+          output: output.scrollWidth - output.clientWidth },
+        composer: composer ? { bottom: composer.getBoundingClientRect().bottom,
+          insideViewport: composer.getBoundingClientRect().bottom <= innerHeight + 1,
+          overlapsOutput: output.getBoundingClientRect().bottom > composer.getBoundingClientRect().top + 1 } : null,
+      };
+    })()`));
+
+    await evalJs(`(() => {
+      const head = document.querySelector('#runtimeView .plan-card .plan-head');
+      if (head && head.getAttribute('aria-expanded') === 'true') head.click();
+      document.querySelector('#runtimeView .rtc-output').scrollTop = document.querySelector('#runtimeView .rtc-output').scrollHeight;
+      return true;
+    })()`);
+    await sleep(220);
+    await shot('13e-planonly-history-narrow-collapsed-light-700');
+    recordMetrics('planonly-history-700-collapsed', await evalJs(`(() => {
+      const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
+      const metas = plan ? [...plan.querySelectorAll('.ui2-msg-meta')] : [];
+      return {
+        expanded: plan?.querySelector('.plan-head')?.getAttribute('aria-expanded'),
+        listHidden: plan?.querySelector('.plan-list')?.hidden === true,
+        metaCount: metas.length,
+        metasVisible: metas.every(meta => meta.isConnected && meta.getBoundingClientRect().height > 0),
+        overflow: { document: document.documentElement.scrollWidth - innerWidth,
+          runtimeView: document.querySelector('#runtimeView').scrollWidth - document.querySelector('#runtimeView').clientWidth },
+      };
+    })()`));
+
     fs.writeFileSync(path.join(OUT, 'measurements.json'), JSON.stringify({ label: LABEL, metrics }, null, 2));
 
     console.log('\n验收测量写入: ' + path.join(OUT, 'measurements.json'));
