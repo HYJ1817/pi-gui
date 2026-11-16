@@ -570,6 +570,64 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 }
 .tl-args{color:var(--t2);max-height:180px}
 
+/* ---------- P4-A：子代理紧凑列表 ----------
+ * 父行仍是原来的 .tl-item；计数是行内一行紧凑元信息，展开后是单列子项。
+ * 不套第二层卡片、不加独立滚动区；只有可绑定子项时才生成这些节点。 */
+.tl-subagent-meta{
+  margin-top:1px;color:var(--t3);font-size:var(--text-xs);line-height:var(--leading-normal);
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
+}
+.tl-subagent-meta[hidden]{display:none}
+.tl-subagents{margin:6px 0 2px;min-width:0}
+.tl-subagents[hidden]{display:none}
+.tl-subagent-row{
+  display:flex;flex-direction:column;gap:1px;min-width:0;
+  padding:5px 2px;border-top:1px solid var(--line-soft);
+}
+.tl-subagent-row:first-child{border-top:0;padding-top:3px}
+.tl-subagent-line{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;min-width:0}
+.tl-subagent-agent{
+  min-width:0;color:var(--t1);font-size:var(--text-sm);font-weight:500;
+  line-height:var(--leading-normal);overflow-wrap:anywhere;
+}
+.tl-subagent-state{
+  display:inline-flex;align-items:center;gap:4px;flex:0 0 auto;
+  color:var(--t3);font-size:var(--text-xs);line-height:var(--leading-normal);white-space:nowrap;
+}
+.tl-subagent-state::before{
+  content:"";flex:0 0 5px;width:5px;height:5px;border-radius:var(--radius-full);
+  background:currentColor;
+}
+.tl-subagent-row[data-state=running] .tl-subagent-state{color:var(--run)}
+.tl-subagent-row[data-state=complete] .tl-subagent-state,
+.tl-subagent-row[data-state=completed] .tl-subagent-state{color:var(--ok)}
+.tl-subagent-row[data-state=failed] .tl-subagent-state{color:var(--err)}
+.tl-subagent-row[data-state=partial] .tl-subagent-state,
+.tl-subagent-row[data-state=paused] .tl-subagent-state,
+.tl-subagent-row[data-state=stopped] .tl-subagent-state,
+.tl-subagent-row[data-state=rejected] .tl-subagent-state,
+.tl-subagent-row[data-state=interrupted] .tl-subagent-state{color:var(--warn)}
+.tl-subagent-model{
+  flex:1 1 auto;min-width:0;color:var(--t3);font-family:var(--mono);
+  font-size:var(--text-xs);line-height:var(--leading-normal);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.tl-subagent-task{
+  min-width:0;color:var(--t2);font-size:var(--text-xs-plus);line-height:var(--leading-normal);
+  overflow-wrap:anywhere;
+}
+.tl-subagent-metrics{
+  min-width:0;color:var(--t3);font-size:var(--text-xs);line-height:var(--leading-normal);
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
+}
+@media (max-width:700px){
+  .tl-subagent-line{gap:2px 7px}
+  /* 窄窗把模型/次要信息放到第二行，名称与状态留在第一行。 */
+  .tl-subagent-model{
+    flex:1 1 100%;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;
+  }
+}
+
 /* ---------- UI-2C：UI-2A 的真实 DOM（Classic 消息 / 工具组 / 思考） ----------
  * 对应 A 侧 tool-view.js / messages.js / message-meta.js 实际生成的节点：
  *  - button.tl-group-head.ui2-tool-summary  原生 button（aria-expanded/-controls/-describedby）
