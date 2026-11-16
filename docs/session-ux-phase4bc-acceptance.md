@@ -3,7 +3,7 @@
 日期：2026-11-16。分支：`feat/session-ux-p4bc-recovery-density`。
 本记录冻结当时的代码、夹具、浏览器与测量范围；后续行为变化不能沿用这里的结论。
 
-- P4-B：已实现并验证错误恢复入口。
+- P4-B：已实现并验证错误恢复入口，含 `agent_settled` 收口时序修复。
 - P4-C：只交付视觉方案与真实 Chromium 前后对照，**未修改正式 CSS 或 Design Token**，
   等待用户确认后再实施。详见 [P4-C 视觉方案](session-ux-phase4c-visual-proposal.md)。
 - 不自动合并、不发版；本记录不构成合并或发布授权。
@@ -47,8 +47,8 @@
 
 ### 2.3 生效条件与安全性质
 
-- 只在实时 `agent_settled` 上附加；`_replay`、历史重建、Runtime
-  `generation_failed` 不经过该路径。
+- 只在实时 `agent_settled` 上附加，且在 `onSettled()` 收口 `streaming` 与当前
+  消息之后判断；`_replay`、历史重建、Runtime `generation_failed` 不经过该路径。
 - 要求 `generationResult.outcome === 'failed'` 且 `requestId` 为字符串。
 - 点击时重新核对 `bridgeRun`、`workspaceGeneration`、`cwd`、会话与模型身份；
   任一变化都不执行。
@@ -64,7 +64,8 @@
 - `public/messages.js`：`attachErrorRecovery(action, { run })`，在错误块内创建
   `.me-actions`、一个 `.btn.tiny.me-action` 与状态行；成功/失败只更新状态。
 - `public/app.js`：`recoveryIdentity()`、`recoveryActionAvailable()`、
-  `runRecoveryAction()`、`attachGenerationRecovery()`，接入实时事件分发。
+  `runRecoveryAction()`、`attachGenerationRecovery()`；恢复判断位于
+  `agent_settled` 分支的 `onSettled()` 之后。
 - `public/styles.css`：`.me-actions`、`.me-action-status` 的紧凑样式；错误块仍是
   透明背景、无边框，不新增红色大卡片。
 - `tests/session-ux-phase4b.cjs`、`tests/session-ux-phase4b-shots.cjs`；
@@ -74,17 +75,21 @@
 
 ### 3.1 行为与策略（jsdom）
 
-`node tests/session-ux-phase4b.cjs`：**97/97 通过**（0 失败）。覆盖：
+`node tests/session-ux-phase4b.cjs`：**108/108 通过**（0 失败）。覆盖：
 
 - 所有已知失败类别的映射、未知来源、状态码不匹配、敏感字段剥离。
 - 服务端结构化链路：401/404/429 与不可信 404。
 - DOM：只出现一个动作、原始错误保留、状态 `role=status`/`aria-live`、
   busy/`aria-busy`、重复点击、成功/失败/抛异常、无可附加错误块、无 runner。
+- 真实事件顺序：`agent_start`（`streaming=true`）→ `message_start` →
+  `message_end`（404）→ `agent_settled`；断言收口前不生成入口、`streaming`
+  先为 true 后为 false、随后出现「选择其他模型」，点击打开真实模型列表且
+  不发 `set_model`/`prompt`，当前模型不变。
 - 真实应用集成：401/403 打开供应商认证弹窗；404 打开模型列表；
   其他类别无动作；回放无动作；`source: tool` 无动作；缺 `requestId`/成功结果无动作；
-  会话或模型过期、无会话、bridge 异常、streaming、空模型列表均拒绝；
-  自动备用接管时跳过模型动作但保留认证动作；键盘焦点与类名；
-  历史重建不生成动作。
+  会话或模型过期、无会话、bridge 异常、空模型列表均拒绝；入口生成后新一轮
+  `agent_start` 使 `streaming=true`，点击仍拒绝打开模型列表；自动备用接管时
+  跳过模型动作但保留认证动作；键盘焦点与类名；历史重建不生成动作。
 
 ### 3.2 真实 Chromium（视觉）
 
@@ -97,6 +102,21 @@
 - 真实键盘 `Shift+Tab` 可聚焦动作，`:focus-visible` 为 `outline solid 2px`。
 - 对比度：按钮 9.45（深色）/ 7.34（浅色），状态文字 9.45 / 6.42 或 6.29。
 - 成功/失败状态文案、原始错误保留、重复点击禁用均有实测。
+
+### 3.3 `agent_settled` 时序修复
+
+问题：`attachGenerationRecovery()` 原在 `handleEvent` 的 `switch` 之前调用。
+实时 `agent_start` 已把 `S.streaming` 置为 true，而此时 `onSettled()` 尚未执行；
+`recoveryActionAvailable('model_picker')` 要求 `streaming=false`，于是真实的
+404 模型错误不会出现「选择其他模型」。认证动作不依赖 `streaming`，因此未受影响。
+
+修复：把调用移入 `agent_settled` 分支，在 `onSettled()` 之后执行。`onSettled()`
+先收口 `streaming`、当前消息和运行中工具，再判断恢复动作；事件来源、会话、模型、
+`workspaceGeneration` 与 `bridgeRun` 的身份校验保持不变。没有新增自动重试、
+模型切换或会话命令。
+
+验证：`session-ux-phase4b` 108/108。测试按真实顺序发事件，并断言收口前后的
+`streaming` 与按钮状态；旧夹具中手动预置 `streaming=false` 的写法已删除。
 
 ## 4. P4-C 视觉方案
 
@@ -123,7 +143,7 @@
 | `session-ux-phase2` | 96/96 |
 | `session-ux-phase3` | 128/128 |
 | `session-ux-phase4a` | 110/110 |
-| `session-ux-phase4b` | 97/97 |
+| `session-ux-phase4b` | 108/108 |
 | `session-ux-phase4b-shots` | 21/21 |
 | `session-ux-phase4c-shots` | 109/109 |
 | `runtime-conversation` | 106/106 |
