@@ -1,11 +1,11 @@
-/* P4-C 信息密度视觉方案：候选覆盖 CSS 的真实 Chromium 前后对照。
+/* P4-C 信息密度正式实施：真实 Chromium 的前后对照与边界验收。
  *
  * 用法：node tests/session-ux-phase4c-shots.cjs
  * 产物：docs/ui/session-ux-phase4bc-evidence/p4c/
- * 临时覆盖：docs/ui/session-ux-phase4bc-evidence/p4c-proposal-overrides.css
+ * 修改前覆盖：docs/ui/session-ux-phase4bc-evidence/p4c-before-overrides.css
  *
- * 只做视觉取证：不修改 public/、不加载正式产品样式之外的第二套 Design Token、
- * 不启动真 pi、不读取用户会话。覆盖 CSS 仅在证据页里注入，产品没有入口加载它。
+ * 产品 CSS 是「修改后」的直接证据；「修改前」只在证据页注入回滚覆盖，还原
+ * 2026-11-16 方案基线的旧值。不启动真 pi、不读取用户会话；覆盖 CSS 没有产品入口。
  */
 'use strict';
 
@@ -16,7 +16,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'docs', 'ui', 'session-ux-phase4bc-evidence', 'p4c');
-const OVERRIDES = path.join(ROOT, 'docs', 'ui', 'session-ux-phase4bc-evidence', 'p4c-proposal-overrides.css');
+const BEFORE_OVERRIDES = path.join(ROOT, 'docs', 'ui', 'session-ux-phase4bc-evidence', 'p4c-before-overrides.css');
 const BROWSER_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
@@ -85,7 +85,7 @@ async function launchCdpBrowser() {
 
 async function main() {
   if (!CHROME) throw new Error('找不到可用的 Chromium 浏览器');
-  const overrideCss = fs.readFileSync(OVERRIDES, 'utf8');
+  const beforeCss = fs.readFileSync(BEFORE_OVERRIDES, 'utf8');
   fs.mkdirSync(OUT, { recursive: true });
 
   /* 产品没有第二套样式入口：证据 CSS 不能被 public/ 引用。 */
@@ -98,7 +98,7 @@ async function main() {
     }
   };
   walk(path.join(ROOT, 'public'));
-  const referenced = publicFiles.filter((file) => fs.readFileSync(file, 'utf8').includes('p4c-proposal-overrides'));
+  const referenced = publicFiles.filter((file) => fs.readFileSync(file, 'utf8').includes('p4c-before-overrides'));
 
   const harness = spawn(process.execPath, [path.join(ROOT, 'tests', 'visual-harness.cjs')], {
     env: { ...process.env, HARNESS_PORT: '0' },
@@ -157,21 +157,21 @@ async function main() {
     await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
     await sleep(220);
   };
-  const applyOverride = async () => {
+  const applyBefore = async () => {
     await evalJs(`(() => {
-      let node = document.getElementById('p4c-proposal-overrides');
+      let node = document.getElementById('p4c-before-overrides');
       if (!node) {
         node = document.createElement('style');
-        node.id = 'p4c-proposal-overrides';
-        node.textContent = ${JSON.stringify(overrideCss)};
+        node.id = 'p4c-before-overrides';
+        node.textContent = ${JSON.stringify(beforeCss)};
         document.head.append(node);
       }
       return true;
     })()`);
     await sleep(220);
   };
-  const removeOverride = async () => {
-    await evalJs(`(() => { document.getElementById('p4c-proposal-overrides')?.remove(); return true; })()`);
+  const removeBefore = async () => {
+    await evalJs(`(() => { document.getElementById('p4c-before-overrides')?.remove(); return true; })()`);
     await sleep(180);
   };
   const scrollClassic = async (selector, offset = 24) => {
@@ -551,13 +551,12 @@ async function main() {
             planTop: rect(plan)?.top ?? null,
           };
         },
-        removeOverride() { document.getElementById('p4c-proposal-overrides')?.remove(); return true; },
       };
       return true;
     })()`);
 
     /* 参考样式只应存在于证据文件本身。 */
-    check('override-not-in-product', referenced.length === 0, referenced);
+    check('before-override-not-in-product', referenced.length === 0, referenced);
 
     /* ---------- Classic：深浅 × 宽窄，前后对照 ---------- */
     const fixture = await evalJs('__p4c.renderClassic()');
@@ -573,13 +572,13 @@ async function main() {
     for (const item of classicMatrix) {
       await setTheme(item.theme);
       await setViewport(item.width, item.height);
-      await removeOverride();
+      await applyBefore();
       await scrollClassic(item.anchor, item.width === 1320 ? 20 : 16);
       const before = await evalJs('__p4c.measureClassic()');
       record('classic-before-' + item.label, before);
       await shot('classic-before-' + item.label);
 
-      await applyOverride();
+      await removeBefore();
       await scrollClassic(item.anchor, item.width === 1320 ? 20 : 16);
       const after = await evalJs('__p4c.measureClassic()');
       record('classic-after-' + item.label, after);
@@ -607,7 +606,10 @@ async function main() {
       check('classic-after-aux-fonts-' + item.label,
         after.fonts.toolState?.fontSize === '11px' && after.fonts.status?.fontSize === '11px'
         && after.fonts.groupTime?.fontSize === '11px' && after.fonts.planCount?.fontSize === '11px'
-        && after.fonts.groupHead?.fontSize === '12px' && after.fonts.toolLabel?.fontSize === '12px',
+        && after.fonts.groupHead?.fontSize === '12px' && after.fonts.toolLabel?.fontSize === '12px'
+        && after.fonts.toolState?.lineHeight === '15.4px' && after.fonts.status?.lineHeight === '15.4px'
+        && after.fonts.groupTime?.lineHeight === '15.4px' && after.fonts.groupHead?.lineHeight === '16.8px'
+        && after.fonts.toolLabel?.lineHeight === '16.8px' && after.fonts.planHead?.lineHeight === '16.8px',
         after.fonts);
       check('classic-after-no-overflow-' + item.label,
         after.overflow.document === 0 && after.overflow.stream === 0 && after.overflow.thread === 0
@@ -618,13 +620,12 @@ async function main() {
         [after.contrast.groupHead, after.contrast.toolState, after.contrast.status, after.contrast.planCount]
           .every((value) => value == null || value >= 4.5),
         after.contrast);
-      await removeOverride();
     }
 
     /* 展开工具详情与子代理卡：检查横向溢出、阅读锚点与最大高度。 */
     await setTheme('dark');
     await setViewport(1320, 820);
-    await removeOverride();
+    await applyBefore();
     await scrollClassic('#stream .plan-card', 180);
     const anchorBefore = (await evalJs('__p4c.measureClassic()')).planTop;
     const expandedBefore = await evalJs('__p4c.expandClassic()');
@@ -637,7 +638,7 @@ async function main() {
     check('classic-expanded-before-no-overflow', expandedBeforeMetrics.overflow.stream === 0 && expandedBeforeMetrics.overflow.group === 0, expandedBeforeMetrics.overflow);
     await shot('classic-expanded-before-dark-1320');
 
-    await applyOverride();
+    await removeBefore();
     const expandedAfter = await evalJs('__p4c.expandClassic()');
     await sleep(260);
     const expandedAfterMetrics = await evalJs('__p4c.measureExpanded()');
@@ -647,10 +648,10 @@ async function main() {
     await shot('classic-expanded-after-dark-1320');
     await scrollClassic('#stream .tl-subagent', 96);
     await shot('classic-subagent-after-dark-1320');
-    await removeOverride();
+    await applyBefore();
     await scrollClassic('#stream .tl-subagent', 96);
     await shot('classic-subagent-before-dark-1320');
-    await applyOverride();
+    await removeBefore();
 
     /* 窄窗展开：子代理长名称必须换行，不能溢出。 */
     await setTheme('light');
@@ -665,13 +666,14 @@ async function main() {
     await scrollClassic('#stream .tl-subagent', 72);
     await shot('classic-subagent-after-light-700');
 
-    await removeOverride();
+    await applyBefore();
     await scrollClassic('#stream .tl-group', 12);
     const narrowExpandedBefore = await evalJs('__p4c.measureExpanded()');
     record('classic-expanded-before-light-700', narrowExpandedBefore);
     await shot('classic-expanded-before-light-700');
     await scrollClassic('#stream .tl-subagent', 72);
     await shot('classic-subagent-before-light-700');
+    await removeBefore();
 
     /* 右侧栏：默认 420px 时主干与阅读列的宽度关系（仅测量，不参与候选修改）。 */
     await setTheme('dark');
@@ -712,13 +714,13 @@ async function main() {
     for (const item of runtimeMatrix) {
       await setTheme(item.theme);
       await setViewport(item.width, item.height);
-      await removeOverride();
+      await applyBefore();
       await scrollRuntime(item.anchor, 32);
       const before = await evalJs('__p4c.measureRuntime()');
       record('runtime-before-' + item.label, before);
       await shot('runtime-before-' + item.label);
 
-      await applyOverride();
+      await removeBefore();
       await scrollRuntime(item.anchor, 32);
       const after = await evalJs('__p4c.measureRuntime()');
       record('runtime-after-' + item.label, after);
@@ -750,14 +752,128 @@ async function main() {
         [after.contrast.groupHead, after.contrast.toolState, after.contrast.status, after.usage.contrast]
           .every((value) => value == null || value >= 4.5),
         { ...after.contrast, usage: after.usage.contrast });
-      await removeOverride();
     }
+
+    /* 699/701 断点：窄窗内边距只在 ≤700 收口，阅读列不能被断点吞掉。 */
+    await setTheme('light');
+    await setViewport(699, 600);
+    await scrollRuntime('#runtimeView .ui2-runtime-plan', 32);
+    const boundary699 = await evalJs('__p4c.measureRuntime()');
+    record('runtime-boundary-699-light', boundary699);
+    check('runtime-boundary-699-padding', boundary699.output?.paddingLeft === 24 && boundary699.output?.paddingRight === 24, boundary699.output);
+    check('runtime-boundary-699-net-width',
+      boundary699.output?.netWidth === boundary699.output?.clientWidth - 48, boundary699.output);
+    check('runtime-boundary-699-no-overflow', boundary699.overflow.document === 0 && boundary699.overflow.output === 0, boundary699.overflow);
+    await shot('runtime-boundary-699-light');
+
+    await setViewport(701, 600);
+    await scrollRuntime('#runtimeView .ui2-runtime-plan', 32);
+    const boundary701 = await evalJs('__p4c.measureRuntime()');
+    record('runtime-boundary-701-light', boundary701);
+    check('runtime-boundary-701-padding', boundary701.output?.paddingLeft === 32 && boundary701.output?.paddingRight === 32, boundary701.output);
+    check('runtime-boundary-701-net-width',
+      boundary701.output?.netWidth === boundary701.output?.clientWidth - 64, boundary701.output);
+    check('runtime-boundary-701-no-overflow', boundary701.overflow.document === 0 && boundary701.overflow.output === 0, boundary701.overflow);
+    await shot('runtime-boundary-701-light');
+
+    await evalJs('__surface.showChat()');
+    await sleep(150);
+    await setViewport(699, 600);
+    await scrollClassic('#stream .plan-card', 16);
+    const classic699 = await evalJs('__p4c.measureClassic()');
+    record('classic-boundary-699-light', classic699);
+    check('classic-boundary-699-padding', classic699.thread?.paddingLeft === 16 && classic699.thread?.paddingRight === 16, classic699.thread);
+    check('classic-boundary-699-no-overflow', classic699.overflow.document === 0 && classic699.overflow.thread === 0, classic699.overflow);
+
+    await setViewport(701, 600);
+    await scrollClassic('#stream .plan-card', 16);
+    const classic701 = await evalJs('__p4c.measureClassic()');
+    record('classic-boundary-701-light', classic701);
+    /* Classic 的窄窗内边距断点是 900px；701 仍应保持 16px，不跟随 Runtime 的 700px 规则。 */
+    check('classic-boundary-701-padding-stable', classic701.thread?.paddingLeft === 16 && classic701.thread?.paddingRight === 16, classic701.thread);
+    check('classic-boundary-701-no-overflow', classic701.overflow.document === 0 && classic701.overflow.thread === 0, classic701.overflow);
+
+    /* 125% 字体缩放：走产品 --font-scale，窄窗仍无横向溢出。 */
+    await setTheme('dark');
+    await setViewport(700, 600);
+    await evalJs(`document.documentElement.style.setProperty('--font-scale', '1.25'); true`);
+    await sleep(180);
+    await scrollClassic('#stream .plan-card', 16);
+    const classicFont125 = await evalJs('__p4c.measureClassic()');
+    record('classic-font125-dark-700', classicFont125);
+    check('classic-font125-scale',
+      classicFont125.fonts.groupHead?.fontSize === '15px' && classicFont125.fonts.toolState?.fontSize === '13.75px',
+      classicFont125.fonts);
+    check('classic-font125-no-overflow',
+      classicFont125.overflow.document === 0 && classicFont125.overflow.thread === 0 && classicFont125.overflow.plan === 0,
+      classicFont125.overflow);
+    check('classic-font125-composer', classicFont125.composer.visible, classicFont125.composer);
+    await shot('classic-font125-dark-700');
+
+    await evalJs('__surface.showRuntimeConversation()');
+    await sleep(180);
+    await scrollRuntime('#runtimeView .ui2-runtime-plan', 32);
+    const runtimeFont125 = await evalJs('__p4c.measureRuntime()');
+    record('runtime-font125-dark-700', runtimeFont125);
+    check('runtime-font125-scale',
+      runtimeFont125.fonts.groupHead?.fontSize === '15px' && runtimeFont125.fonts.toolState?.fontSize === '13.75px',
+      runtimeFont125.fonts);
+    check('runtime-font125-no-overflow',
+      runtimeFont125.overflow.document === 0 && runtimeFont125.overflow.output === 0 && runtimeFont125.overflow.plan === 0,
+      runtimeFont125.overflow);
+    check('runtime-font125-composer', runtimeFont125.composer.visible, runtimeFont125.composer);
+    await shot('runtime-font125-dark-700');
+    await evalJs(`document.documentElement.style.removeProperty('--font-scale'); true`);
+    await sleep(150);
+
+    /* reduced motion：密度改动不新增动画，既有降级仍然生效。 */
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await sleep(120);
+    const reduced = await evalJs(`(() => {
+      const pulse = document.querySelector('#runtimeView .plan-pulse-dot');
+      const scroll = document.querySelector('#runtimeView .scroll-bottom') || document.querySelector('.scroll-bottom');
+      return {
+        pulse: pulse ? getComputedStyle(pulse).animationName : null,
+        scrollTransition: scroll ? getComputedStyle(scroll).transitionDuration : null,
+      };
+    })()`);
+    record('reduced-motion-runtime', reduced);
+    check('reduced-motion-plan-pulse', reduced.pulse == null || reduced.pulse === 'none', reduced);
+    check('reduced-motion-scroll',
+      reduced.scrollTransition == null || reduced.scrollTransition.split(',').every((value) => value.trim() === '0s'),
+      reduced);
+    await send('Emulation.setEmulatedMedia', { features: [] });
+
+    /* 键盘焦点：计划头沿用既有 2px focus-visible 轮廓。 */
+    await evalJs('__surface.showChat()');
+    await setTheme('dark');
+    await setViewport(1320, 820);
+    await sleep(150);
+    const tabKey = { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 };
+    await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...tabKey });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', ...tabKey });
+    const planFocus = await evalJs(`(() => {
+      const el = document.querySelector('#stream .plan-head');
+      el?.focus();
+      const cs = el ? getComputedStyle(el) : null;
+      return {
+        focused: document.activeElement === el,
+        focusVisible: el?.matches(':focus-visible') || false,
+        outlineStyle: cs?.outlineStyle || '',
+        outlineWidth: cs?.outlineWidth || '',
+      };
+    })()`);
+    record('classic-plan-focus', planFocus);
+    check('classic-plan-focus-visible',
+      planFocus.focused && planFocus.focusVisible && planFocus.outlineStyle === 'solid' && planFocus.outlineWidth === '2px',
+      planFocus);
 
     const failed = assertions.filter((item) => !item.pass);
     fs.writeFileSync(path.join(OUT, 'measurements.json'), JSON.stringify({
       browser: CHROME,
-      overrideFile: path.relative(ROOT, OVERRIDES).replace(/\\/g, '/'),
-      viewports: [[1320, 820], [700, 600]],
+      beforeOverrideFile: path.relative(ROOT, BEFORE_OVERRIDES).replace(/\\/g, '/'),
+      viewports: [[1320, 820], [700, 600], [699, 600], [701, 600]],
+      fontScale: 1.25,
       assertions, failures: failed, metrics,
     }, null, 2));
     console.log('\n断言: ' + (assertions.length - failed.length) + '/' + assertions.length + ' 通过');

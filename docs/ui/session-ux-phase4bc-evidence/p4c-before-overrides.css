@@ -1,0 +1,98 @@
+/* P4-C 正式实施后的「修改前」对照覆盖，不是产品样式。
+ *
+ * 只在 tests/session-ux-phase4c-shots.cjs 的 Chromium 证据页里注入，把已落地的
+ * 密度值还原到 2026-11-16 方案基线，用于同一夹具、同一锚点的前后截图。
+ * public/ 下没有任何入口加载本文件。
+ */
+
+/* 轮次留白：36px。 */
+:root {
+  --turn-gap: 36px;
+}
+
+/* Classic Thinking：7/14px。 */
+.think {
+  margin: 7px 0 14px;
+}
+
+/* 工具组：9/18px（Classic 与 Runtime 共用）。 */
+.tl-group {
+  margin: 9px 0 18px;
+}
+
+/* 主披露标题 12px；Classic 继承 1.65，Runtime 正文继承 1.6。 */
+.tl-group-head,
+.ui2-tool-summary,
+.tl-label,
+.plan-head {
+  font-size: 12px;
+}
+
+.ui2-tool-summary,
+.tl-label {
+  line-height: 1.65;
+}
+
+.runtime-conversation .rtc-output .ui2-tool-summary {
+  line-height: 1.6;
+}
+
+/* 辅助状态与耗时：10 / 10.5px 的旧档位。 */
+.tl-status {
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.runtime-conversation .rtc-output .tl-status {
+  line-height: 1.5;
+}
+
+.ui2-tool-state {
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.tl-group-time {
+  font-size: 10.5px;
+  line-height: 1.65;
+}
+
+.plan-count,
+.plan-now {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* 计划卡：8/16px；头部 7/11px，保留 34px 最小高度。 */
+.plan-card {
+  margin: 8px 0 16px;
+}
+
+.plan-head {
+  padding: 7px 11px;
+}
+
+/* Runtime 计划外壳与 Classic 使用同一组外距。 */
+.runtime-conversation .rtc-output .ui2-runtime-plan {
+  margin: 8px 0 16px;
+}
+
+/* Runtime Thinking：8/10px。 */
+.runtime-conversation .rtc-output .ui2-runtime-thinking,
+.runtime-conversation .rtc-output .ui2-runtime-thinking-wrap {
+  margin: 8px 0 10px;
+}
+
+/* 窄窗 Runtime 正文横向内边距 32px。 */
+@media (max-width: 700px) {
+  .runtime-conversation .rtc-output {
+    padding: 20px 32px;
+  }
+}
+
+/* 窄窗旧计划卡例外：6/13px。 */
+@media (max-width: 700px) {
+  .plan-card {
+    margin: 6px 0 13px;
+  }
+}

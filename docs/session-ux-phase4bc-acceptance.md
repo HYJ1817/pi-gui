@@ -4,8 +4,9 @@
 本记录冻结当时的代码、夹具、浏览器与测量范围；后续行为变化不能沿用这里的结论。
 
 - P4-B：已实现并验证错误恢复入口，含 `agent_settled` 收口时序修复。
-- P4-C：只交付视觉方案与真实 Chromium 前后对照，**未修改正式 CSS 或 Design Token**，
-  等待用户确认后再实施。详见 [P4-C 视觉方案](session-ux-phase4c-visual-proposal.md)。
+- P4-C：已按确认的方案修改正式 CSS；真实 Chromium 128/128 通过，
+  `public/tokens.css` 与冻结的 `thinking-dots` 文件未改。详见
+  [P4-C 方案与实施记录](session-ux-phase4c-visual-proposal.md)。
 - 不自动合并、不发版；本记录不构成合并或发布授权。
 
 ## 1. 前置与基线
@@ -70,6 +71,9 @@
   透明背景、无边框，不新增红色大卡片。
 - `tests/session-ux-phase4b.cjs`、`tests/session-ux-phase4b-shots.cjs`；
   `package.json` 注册测试入口。
+- P4-C 另改 `public/styles.css`、`public/agent-execution.css`、
+  `public/runtime-conversation.css`，并更新 `tests/session-ux-phase4c-shots.cjs`
+  与 `tests/ui2-visual.cjs` 的字号预期。
 
 ## 3. P4-B 验证
 
@@ -118,20 +122,27 @@
 验证：`session-ux-phase4b` 108/108。测试按真实顺序发事件，并断言收口前后的
 `streaming` 与按钮状态；旧夹具中手动预置 `streaming=false` 的写法已删除。
 
-## 4. P4-C 视觉方案
+## 4. P4-C 视觉实施
 
-- 方案文档：[session-ux-phase4c-visual-proposal.md](session-ux-phase4c-visual-proposal.md)。
-- 临时覆盖：[p4c-proposal-overrides.css](ui/session-ux-phase4bc-evidence/p4c-proposal-overrides.css)，
-  只在证据页注入；测试断言 `public/` 中没有引用。
-- 真实 Chromium 对照：`node tests/session-ux-phase4c-shots.cjs`，**109/109 通过**。
+- 方案与实施记录：[session-ux-phase4c-visual-proposal.md](session-ux-phase4c-visual-proposal.md)。
+- 正式修改：`--turn-gap` 使用 `--ui-space-6`；Thinking、工具组、Plan 卡与 Runtime
+  外壳外距分别收回 `--ui-space-2/3`、`--ui-space-2/4`；辅助字号统一
+  `--text-xs` + `--leading-normal`，主披露标题统一 `--text-sm`；Runtime
+  `≤700px` 的 `.rtc-output` 横向内边距改为 `--ui-space-5`。
+- 修改前回滚覆盖：[p4c-before-overrides.css](ui/session-ux-phase4bc-evidence/p4c-before-overrides.css)，
+  只在证据页注入；测试断言 `public/` 中没有引用。`public/tokens.css` 未改。
+- 真实 Chromium：`node tests/session-ux-phase4c-shots.cjs`，**128/128 通过**。
 - 覆盖 1320×820 与 700×600、深色与浅色，Classic 与 Runtime，共 16 张矩阵截图，
-  另有工具详情展开 4 张、子代理卡 4 张、右栏现状 1 张，共 25 张；证据在
+  另有工具详情展开 4 张、子代理卡 4 张、右栏现状 1 张、699/701 断点 2 张、
+  125% 字体缩放 2 张，共 29 张；证据在
   [p4c/measurements.json](ui/session-ux-phase4bc-evidence/p4c/measurements.json)。
 - 关键实测：Runtime 窄窗净宽 366 → **382px**；Classic 内容高 1057.28 → 1040.92px
   （1320）与 1090.25 → 1078.89px（700）；Runtime 内容高 705 → 698px（1320）与
   762 → 754px（700）；所有矩阵横向溢出 0，Composer 可见，工具详情展开锚点偏移 0。
-- **未修改** `public/styles.css`、`public/runtime-conversation.css`、
-  `public/agent-execution.css`、`public/tokens.css` 的正式规则；P4-C 等待确认。
+- 补充验证：699px Runtime 净宽 381px、701px 为 339px 且断点两侧零溢出；
+  125% 字体缩放下主披露 15px、辅助 13.75px、零溢出且 Composer 完整可见；
+  reduced motion 下计划呼吸点 `animation:none`、回到底部 `transition:0s`；
+  计划头键盘焦点为 2px `solid` 轮廓。右栏仍为 392px、阅读列净宽 589px。
 
 ## 5. 定向回归
 
@@ -145,9 +156,13 @@
 | `session-ux-phase4a` | 110/110 |
 | `session-ux-phase4b` | 108/108 |
 | `session-ux-phase4b-shots` | 21/21 |
-| `session-ux-phase4c-shots` | 109/109 |
+| `session-ux-phase4c-shots` | 128/128 |
+| `ui2-classic` | 55/55 |
+| `ui2-runtime-display` | 83/83 |
+| `ui2-visual` | 57/57 |
 | `runtime-conversation` | 106/106 |
 | `subagents` | 141/141 |
+| `thinking-dots` | 90/90 |
 | `ui4-feedback` | 27/27 |
 | `model-fallback` | 74/74 |
 | `provider-auth` | 110/110 |
@@ -160,8 +175,13 @@
 - `public/thinking-dots.js`、`public/thinking-dots.css`：无 diff；动画关键帧、
   速度、节奏、触发时机和调用逻辑未触碰。
 - `git diff --check`：无输出。
-- 变更 diff：`public/app.js`、`public/messages.js`、`public/styles.css`，新增
-  `public/error-recovery.js`；`package.json` 只增加 P4-B 测试入口。
+- 变更 diff：P4-B 为 `public/app.js`、`public/messages.js`，新增
+  `public/error-recovery.js`；P4-C 为 `public/styles.css`、
+  `public/agent-execution.css`、`public/runtime-conversation.css`；
+  `public/tokens.css` 无 diff。`package.json` 只增加 P4-B 测试入口。
+- P4-C 的视觉证据包含 29 张截图、回滚覆盖与更新后的 `measurements.json`；
+  测试文件为 `tests/session-ux-phase4c-shots.cjs`，另同步
+  `tests/ui2-visual.cjs` 的组状态字号断言。
 - 未跟踪的 `conpty.*`、`path_util.obj`、`win_delay_load_hook.obj`、`spike/`、
   `tmp-p3-shots.log` 等既有开发残留不进入提交。
 - `dist-app` 重建成功；构建产物不入库。用户运行源码版即可看到本分支改动。
@@ -171,6 +191,6 @@
 - 未运行完整 `npm test`；未在真实 Electron 沙箱、真实模型长会话、真实读屏下验证。
 - P4-B 未对“供应商设置打开后用户实际完成认证/换模型再重发”的闭环做端到端模型调用；
   本轮只验证入口打开、身份校验与状态反馈。
-- P4-C 未验证 699/701px、125% 字体缩放、reduced motion、右栏 overlay 模式与
-  长历史；正式实施前补。
-- P4-C 尚未获得用户确认，因此没有正式 CSS 提交；本轮不合并、不发版。
+- P4-C 已补 699/701px、125% 字体缩放、reduced motion、键盘焦点与右栏宽度；
+  仍未覆盖真实 Electron 打包应用手测、长历史分页与读屏。
+- P4-C 正式 CSS 已落地，但本轮不合并、不发版；合并与发布需另行授权。

@@ -1,9 +1,10 @@
 # 会话执行体验 P4 技术审查与实施规划
 
 审查日期 2026-11-16。本文用于确定 P4 取舍和后续验收。P4-A 已由 PR #91 合并；
-P4-B 已实现并验收，P4-C 只交付视觉方案、等待确认，记录见
+P4-B 已实现并验收，P4-C 已按用户确认的方案落地正式 CSS，记录见
 [P4-B/C 验收](session-ux-phase4bc-acceptance.md) 与
-[P4-C 视觉方案](session-ux-phase4c-visual-proposal.md)。本文保留当时的规划与基线调查。
+[P4-C 方案与实施记录](session-ux-phase4c-visual-proposal.md)。
+本文保留当时的规划与基线调查。
 
 ## 1. 基线、P3 合并与冻结范围
 
@@ -61,21 +62,26 @@ P4-B 已实现并验收，P4-C 只交付视觉方案、等待确认，记录见
 
 **实施门槛和验收。** 先为 Classic 当前会话证明一次结构化 provider/model 配置错误到设置弹窗的完整路径，处理过时错误、dismiss/关闭回焦、切走会话和打开失败。错误内容、轮次、重试阶段和操作失败提示是不同的 DOM 状态，设置失败只加就地提示。历史只读及 Runtime 只有通用 `generation_failed` 时保持现有展示。合成 401、403、404、网络、限流、未知、取消、过期 owner 与加载失败，断言“不发 prompt、不重试、不换模型、不泄漏凭据”，失败前后原错误相同。使用 `tests/model-fallback.cjs`、`tests/session-ux-phase1.cjs`、`tests/provider-auth.cjs`、`tests/runtime-models.cjs`。优先在 `public/app.js` 组合已有设置回调，`public/messages.js` 增加允许列表映射与按钮；证据缺失时本阶段跳过 B，需要新授权或修改可信分类语义时另行审查。约 0.5–1.5 人日。回滚单个动作提交即可移除入口。
 
-## 5. P4-C 信息密度｜有条件实施，需确认视觉对照
+## 5. P4-C 信息密度｜已实施
 
 **现状和机会。** `tokens.css`、`styles.css`、`agent-execution.css`、`runtime-conversation.css` 按此相对顺序加载。阅读列基线 `--conversation-max-width: var(--ds-composer-width)` 为 760px。Chrome 在 1320×820 下 Classic 工具区净宽 696px，Runtime 686px（10px 稳定滚动槽）。700×600 下 Classic 净宽 428px（460 减 32px 内边距），Runtime 净宽 366px（440 减 64px 内边距和 10px 滚动槽）。这 62px 差距增加了窄窗 Plan 与状态文字的换行压力。各矩阵 `scrollWidth - clientWidth = 0`，700px 代表场景 Composer 可达，Runtime 无正文重叠。宽窗截图中轮次与工具、任务卡之间仍有可节省的空白。缩小正文或点击目标会削弱实际收益。
 
-| 候选修改 | 生效位置、现状 → 候选 | 预期 |
+| 已实施修改 | 生效位置、现状 → 实施值 | 结果 |
 | --- | --- | --- |
 | 阅读列与窄窗内边距 | `--ds-composer-width` 760px 继续共享。`runtime-conversation.css` 在 `max-width:700px` 让 `.rtc-output` 的横向 padding 从 `--ui-space-6` 对应的 32px 改用 `--ui-space-5` 24px，Classic 同断点已有 16px。 | Runtime 净宽 +16px；继续保留自身 10px 滚动槽及容器布局。 |
 | 轮次留白 | `styles.css` 的 Classic `--turn-gap:36px` 改用 `--ui-space-6` 32px，Runtime 不重定义轮次语义。 | 每次 Classic 的用户轮次起始少 4px，仍有清晰分隔。 |
 | 工具组与 Plan | `.tl-group` 外距 9/18px → `--ui-space-2/4` 的 8/16px，计划卡 `8/16px` → `--ui-space-2/3` 的 8/12px，在 `agent-execution.css` 让 Classic `.plan-card` 和 Runtime 外壳共用外距规则。Plan 头可将 7/11px padding 收为 6/`--ui-space-2`，保留 34px min-height 和长标题换行。 | 折叠块序列更紧凑，避免 Runtime 内外层双重边距。 |
 | 工具行与辅助文字 | `--tool-row-height` 使用现有 30px，保留状态、上下分组线和 8px 行间隔。先将工具状态/耗时、Plan 次要状态硬编码 10.5/11px 映射到 `--text-xs` 11px、`--leading-normal` 1.4。主要披露标题 12px 映射 `--text-sm`，正文沿用 `--text-base` 14px / `--leading-prose` 1.6，usage 的现有精度和样式基线独立保留。 | 提升辅助文字的放大表现和同角色一致性，容许窄窗状态换行。工具 `.tl-item` 的 4px 垂直 padding 和现有 min-height 优先保留。 |
-| Thinking 文本区 | Classic `.think` 外距 7/14px、Runtime `.ui2-runtime-thinking(-wrap)` 8/10px，候选统一为 `--ui-space-2/3` 8/12px。文字仍是 12px 级，明细沿用现有行高、滚动与公开方式。 | 缩小两套容器的间距差异，只影响思考内容块。 |
+| Thinking 文本区 | Classic `.think` 外距 7/14px、Runtime `.ui2-runtime-thinking(-wrap)` 8/10px，统一为 `--ui-space-2/3` 8/12px。文字仍是 12px 级，明细沿用现有行高、滚动与公开方式。 | 缩小两套容器的间距差异，只影响思考内容块。 |
 
-**对照与用户确认。** 当前实拍矩阵是三个视图各四张 `matrix-{classic,runtime-live,runtime-history}-{dark,light}-{1320,700}.png`，Windows Headless Chrome 157、DPR 1，覆盖中英文夹具。额外截图包括工具行、折叠 Plan、双 Plan usage 及 reduced motion。现场查看了 Classic 宽屏与 Runtime 窄屏的代表图；完整主题 × 状态及对比度矩阵安排在候选验收。截图与 `measurements.json` 在 `%TEMP%/pi-gui-p4-0683b89/matrix/` 和 `visual/`，未入库。后续用同一 fixture、scroll anchor、viewport、主题、缩放与开合状态生成并排「基线 / 候选」截图，标注阅读列净宽、每段留白、可见状态行和文字对比度。先确认是否用这组调整进入 C，实施前用候选视觉对照取得用户认可。当前没有候选 CSS 或候选像素结论。
+**实施与证据。** 2026-11-16 用户确认后，按上述值修改
+`public/styles.css`、`public/agent-execution.css`、`public/runtime-conversation.css`，
+未改 `public/tokens.css`。真实 Chromium 用同一夹具、滚动锚点、视口与主题生成
+29 张前后截图，断言 128/128；矩阵、699/701、125% 字体缩放、reduced motion、
+键盘焦点与右栏宽度见 [P4-C 方案与实施记录](session-ux-phase4c-visual-proposal.md)
+和 [measurements.json](ui/session-ux-phase4bc-evidence/p4c/measurements.json)。
 
-**验收。** 1320×820 / 700×600 各深浅，补 699/701px 和默认及 125% 字体缩放，键盘聚焦、短/长中英文状态、运行/终态、Thinking 展开、详情、双 usage 和书签。普通文字至少 4.5:1，非文本控件与焦点 3:1，零横向溢出、Composer 无遮挡、锚点偏移 ≤1px。候选中 Runtime 窄窗净宽应为 382px 或更宽，现有阅读轴上同高度能容纳更多连续状态块且避免状态吞字。涉及 `public/styles.css`、`public/runtime-conversation.css`、`public/agent-execution.css`；`public/tokens.css` 作为现有变量提供者，优先在消费端映射。约 1–1.5 人日，按一个 CSS 提交回滚。 [唯一视觉验收规范](ui/design-system.md#视觉验收)
+**验收。** 1320×820 / 700×600 各深浅，补 699/701px 和默认及 125% 字体缩放，键盘聚焦、短/长中英文状态、运行/终态、Thinking 展开、详情、双 usage 和书签。普通文字至少 4.5:1，非文本控件与焦点 3:1，零横向溢出、Composer 无遮挡、锚点偏移 ≤1px。实施后 Runtime 窄窗净宽为 382px，现有阅读轴上同高度能容纳更多连续状态块且避免状态吞字。涉及 `public/styles.css`、`public/runtime-conversation.css`、`public/agent-execution.css`；`public/tokens.css` 作为现有变量提供者，优先在消费端映射。约 1–1.5 人日，按一个 CSS 提交回滚。 [唯一视觉验收规范](ui/design-system.md#视觉验收)
 
 ## 6. P4-D 长会话性能｜有条件实施 Classic 优化，暂缓窗口化
 
