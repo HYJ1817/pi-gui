@@ -1,0 +1,4288 @@
+{
+  "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "overrideFile": "docs/ui/session-ux-phase4bc-evidence/p4c-proposal-overrides.css",
+  "viewports": [
+    [
+      1320,
+      820
+    ],
+    [
+      700,
+      600
+    ]
+  ],
+  "assertions": [
+    {
+      "name": "override-not-in-product",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "classic-fixture-shape",
+      "pass": true,
+      "detail": {
+        "messages": 10,
+        "planCards": 1,
+        "groups": 1,
+        "subagentCards": 1,
+        "thinking": 1,
+        "usage": 2
+      }
+    },
+    {
+      "name": "classic-before-turn-gap-dark-1320",
+      "pass": true,
+      "detail": 36
+    },
+    {
+      "name": "classic-before-think-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "classic-before-group-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 55.55
+      }
+    },
+    {
+      "name": "classic-before-plan-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      }
+    },
+    {
+      "name": "classic-before-plan-head-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 7,
+        "paddingRight": 11,
+        "paddingBottom": 7,
+        "paddingLeft": 11,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      }
+    },
+    {
+      "name": "classic-before-net-width-dark-1320",
+      "pass": true,
+      "detail": {
+        "width": 760,
+        "height": 1057.28,
+        "top": 46,
+        "bottom": 1103.28,
+        "netWidth": 696,
+        "scrollWidth": 760,
+        "clientWidth": 760,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 142,
+        "paddingLeft": 32,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "classic-before-aux-fonts-dark-1320",
+      "pass": true,
+      "detail": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "16.5px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "groupTime": {
+          "fontSize": "10.5px",
+          "lineHeight": "17.325px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "classic-after-turn-gap-dark-1320",
+      "pass": true,
+      "detail": 32
+    },
+    {
+      "name": "classic-after-think-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "classic-after-group-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 52.19
+      }
+    },
+    {
+      "name": "classic-after-plan-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      }
+    },
+    {
+      "name": "classic-after-plan-head-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      }
+    },
+    {
+      "name": "classic-after-aux-fonts-dark-1320",
+      "pass": true,
+      "detail": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "classic-after-no-overflow-dark-1320",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      }
+    },
+    {
+      "name": "classic-after-composer-dark-1320",
+      "pass": true,
+      "detail": {
+        "width": 1045,
+        "height": 126,
+        "top": 694,
+        "bottom": 820,
+        "visible": true
+      }
+    },
+    {
+      "name": "classic-after-contrast-dark-1320",
+      "pass": true,
+      "detail": {
+        "groupHead": 9.45,
+        "status": 8.19,
+        "toolState": 8.19,
+        "groupTime": 8.19,
+        "planCount": 8.19,
+        "planNow": 8.19
+      }
+    },
+    {
+      "name": "classic-before-turn-gap-light-1320",
+      "pass": true,
+      "detail": 36
+    },
+    {
+      "name": "classic-before-think-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "classic-before-group-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 55.55
+      }
+    },
+    {
+      "name": "classic-before-plan-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      }
+    },
+    {
+      "name": "classic-before-plan-head-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 7,
+        "paddingRight": 11,
+        "paddingBottom": 7,
+        "paddingLeft": 11,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      }
+    },
+    {
+      "name": "classic-before-net-width-light-1320",
+      "pass": true,
+      "detail": {
+        "width": 760,
+        "height": 1057.28,
+        "top": 46,
+        "bottom": 1103.28,
+        "netWidth": 696,
+        "scrollWidth": 760,
+        "clientWidth": 760,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 142,
+        "paddingLeft": 32,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "classic-before-aux-fonts-light-1320",
+      "pass": true,
+      "detail": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "16.5px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "groupTime": {
+          "fontSize": "10.5px",
+          "lineHeight": "17.325px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "classic-after-turn-gap-light-1320",
+      "pass": true,
+      "detail": 32
+    },
+    {
+      "name": "classic-after-think-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "classic-after-group-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 52.19
+      }
+    },
+    {
+      "name": "classic-after-plan-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      }
+    },
+    {
+      "name": "classic-after-plan-head-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      }
+    },
+    {
+      "name": "classic-after-aux-fonts-light-1320",
+      "pass": true,
+      "detail": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "classic-after-no-overflow-light-1320",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      }
+    },
+    {
+      "name": "classic-after-composer-light-1320",
+      "pass": true,
+      "detail": {
+        "width": 1045,
+        "height": 126,
+        "top": 694,
+        "bottom": 820,
+        "visible": true
+      }
+    },
+    {
+      "name": "classic-after-contrast-light-1320",
+      "pass": true,
+      "detail": {
+        "groupHead": 7.34,
+        "status": 6.29,
+        "toolState": 6.29,
+        "groupTime": 6.29,
+        "planCount": 6.29,
+        "planNow": 6.29
+      }
+    },
+    {
+      "name": "classic-before-net-width-narrow-dark-700",
+      "pass": true,
+      "detail": {
+        "width": 460,
+        "height": 1090.25,
+        "top": -259,
+        "bottom": 831.25,
+        "netWidth": 428,
+        "scrollWidth": 460,
+        "clientWidth": 460,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "classic-after-turn-gap-dark-700",
+      "pass": true,
+      "detail": 32
+    },
+    {
+      "name": "classic-after-think-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "classic-after-group-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 52.19
+      }
+    },
+    {
+      "name": "classic-after-plan-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      }
+    },
+    {
+      "name": "classic-after-plan-head-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      }
+    },
+    {
+      "name": "classic-after-aux-fonts-dark-700",
+      "pass": true,
+      "detail": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "classic-after-no-overflow-dark-700",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      }
+    },
+    {
+      "name": "classic-after-composer-dark-700",
+      "pass": true,
+      "detail": {
+        "width": 460,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      }
+    },
+    {
+      "name": "classic-after-contrast-dark-700",
+      "pass": true,
+      "detail": {
+        "groupHead": 9.45,
+        "status": 8.19,
+        "toolState": 8.19,
+        "groupTime": 8.19,
+        "planCount": 8.19,
+        "planNow": 8.19
+      }
+    },
+    {
+      "name": "classic-before-net-width-narrow-light-700",
+      "pass": true,
+      "detail": {
+        "width": 460,
+        "height": 1090.25,
+        "top": -259,
+        "bottom": 831.25,
+        "netWidth": 428,
+        "scrollWidth": 460,
+        "clientWidth": 460,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "classic-after-turn-gap-light-700",
+      "pass": true,
+      "detail": 32
+    },
+    {
+      "name": "classic-after-think-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "classic-after-group-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 52.19
+      }
+    },
+    {
+      "name": "classic-after-plan-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      }
+    },
+    {
+      "name": "classic-after-plan-head-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      }
+    },
+    {
+      "name": "classic-after-aux-fonts-light-700",
+      "pass": true,
+      "detail": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      }
+    },
+    {
+      "name": "classic-after-no-overflow-light-700",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      }
+    },
+    {
+      "name": "classic-after-composer-light-700",
+      "pass": true,
+      "detail": {
+        "width": 460,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      }
+    },
+    {
+      "name": "classic-after-contrast-light-700",
+      "pass": true,
+      "detail": {
+        "groupHead": 7.34,
+        "status": 6.29,
+        "toolState": 6.29,
+        "groupTime": 6.29,
+        "planCount": 6.29,
+        "planNow": 6.29
+      }
+    },
+    {
+      "name": "classic-expanded-before-cards",
+      "pass": true,
+      "detail": {
+        "groupsOpen": 1,
+        "rowsOpen": 3,
+        "subagentCards": 1,
+        "subagentRows": 1
+      }
+    },
+    {
+      "name": "classic-expanded-before-anchor",
+      "pass": true,
+      "detail": {
+        "anchorBefore": 225.52,
+        "anchorAfterExpandBefore": 225.52
+      }
+    },
+    {
+      "name": "classic-expanded-before-no-overflow",
+      "pass": true,
+      "detail": {
+        "stream": 0,
+        "group": 0,
+        "out": 0,
+        "subagents": 0
+      }
+    },
+    {
+      "name": "classic-expanded-after-no-overflow",
+      "pass": true,
+      "detail": {
+        "stream": 0,
+        "group": 0,
+        "out": 0,
+        "subagents": 0
+      }
+    },
+    {
+      "name": "classic-expanded-after-out-height",
+      "pass": true,
+      "detail": {
+        "width": 652,
+        "height": 33.25,
+        "top": 512.48,
+        "bottom": 545.73,
+        "maxHeight": "260px",
+        "scrollHeight": 31
+      }
+    },
+    {
+      "name": "classic-expanded-narrow-no-overflow",
+      "pass": true,
+      "detail": {
+        "stream": 0,
+        "group": 0,
+        "out": 0,
+        "subagents": 0
+      }
+    },
+    {
+      "name": "right-pane-default-width",
+      "pass": true,
+      "detail": {
+        "open": true,
+        "paneWidth": 392,
+        "stageWidth": 653,
+        "threadWidth": 653,
+        "threadNet": 589
+      }
+    },
+    {
+      "name": "right-pane-squeezes-reading-column",
+      "pass": true,
+      "detail": {
+        "open": true,
+        "paneWidth": 392,
+        "stageWidth": 653,
+        "threadWidth": 653,
+        "threadNet": 589
+      }
+    },
+    {
+      "name": "runtime-fixture-shape",
+      "pass": true,
+      "detail": {
+        "output": true,
+        "visible": true,
+        "blocks": 7,
+        "planCards": 1,
+        "groups": 1,
+        "thinking": 1,
+        "usage": 1
+      }
+    },
+    {
+      "name": "runtime-before-thinking-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 10,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "runtime-before-plan-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      }
+    },
+    {
+      "name": "runtime-before-group-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 54.94
+      }
+    },
+    {
+      "name": "runtime-before-net-width-wide-dark-1320",
+      "pass": true,
+      "detail": {
+        "width": 760,
+        "height": 498.25,
+        "top": 113.44,
+        "bottom": 611.69,
+        "netWidth": 686,
+        "clientWidth": 750,
+        "scrollWidth": 750,
+        "scrollHeight": 705,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-after-thinking-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "runtime-after-plan-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      }
+    },
+    {
+      "name": "runtime-after-group-dark-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      }
+    },
+    {
+      "name": "runtime-after-no-overflow-dark-1320",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      }
+    },
+    {
+      "name": "runtime-after-composer-dark-1320",
+      "pass": true,
+      "detail": {
+        "width": 760,
+        "height": 154.5,
+        "top": 649.5,
+        "bottom": 804,
+        "visible": true
+      }
+    },
+    {
+      "name": "runtime-after-contrast-dark-1320",
+      "pass": true,
+      "detail": {
+        "groupHead": 9.45,
+        "toolState": 8.19,
+        "status": 8.19,
+        "usage": 8.19
+      }
+    },
+    {
+      "name": "runtime-before-thinking-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 10,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "runtime-before-plan-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      }
+    },
+    {
+      "name": "runtime-before-group-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 54.94
+      }
+    },
+    {
+      "name": "runtime-before-net-width-wide-light-1320",
+      "pass": true,
+      "detail": {
+        "width": 760,
+        "height": 498.25,
+        "top": 113.44,
+        "bottom": 611.69,
+        "netWidth": 686,
+        "clientWidth": 750,
+        "scrollWidth": 750,
+        "scrollHeight": 705,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-after-thinking-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "runtime-after-plan-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      }
+    },
+    {
+      "name": "runtime-after-group-light-1320",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      }
+    },
+    {
+      "name": "runtime-after-no-overflow-light-1320",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      }
+    },
+    {
+      "name": "runtime-after-composer-light-1320",
+      "pass": true,
+      "detail": {
+        "width": 760,
+        "height": 154.5,
+        "top": 649.5,
+        "bottom": 804,
+        "visible": true
+      }
+    },
+    {
+      "name": "runtime-after-contrast-light-1320",
+      "pass": true,
+      "detail": {
+        "groupHead": 7.34,
+        "toolState": 6.29,
+        "status": 6.29,
+        "usage": 6.29
+      }
+    },
+    {
+      "name": "runtime-before-thinking-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 10,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "runtime-before-plan-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      }
+    },
+    {
+      "name": "runtime-before-group-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 54.94
+      }
+    },
+    {
+      "name": "runtime-before-padding-dark-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 366,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 762,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-before-net-width-dark-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 366,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 762,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-after-thinking-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "runtime-after-plan-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      }
+    },
+    {
+      "name": "runtime-after-group-dark-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      }
+    },
+    {
+      "name": "runtime-after-padding-dark-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 382,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-after-net-width-dark-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 382,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-after-no-overflow-dark-700",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      }
+    },
+    {
+      "name": "runtime-after-composer-dark-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 181.5,
+        "top": 408.5,
+        "bottom": 590,
+        "visible": true
+      }
+    },
+    {
+      "name": "runtime-after-contrast-dark-700",
+      "pass": true,
+      "detail": {
+        "groupHead": 9.45,
+        "toolState": 8.19,
+        "status": 8.19,
+        "usage": 8.19
+      }
+    },
+    {
+      "name": "runtime-before-thinking-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 10,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "runtime-before-plan-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      }
+    },
+    {
+      "name": "runtime-before-group-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 54.94
+      }
+    },
+    {
+      "name": "runtime-before-padding-light-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 366,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 762,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-before-net-width-light-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 366,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 762,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-after-thinking-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      }
+    },
+    {
+      "name": "runtime-after-plan-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      }
+    },
+    {
+      "name": "runtime-after-group-light-700",
+      "pass": true,
+      "detail": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      }
+    },
+    {
+      "name": "runtime-after-padding-light-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 382,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-after-net-width-light-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 382,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      }
+    },
+    {
+      "name": "runtime-after-no-overflow-light-700",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      }
+    },
+    {
+      "name": "runtime-after-composer-light-700",
+      "pass": true,
+      "detail": {
+        "width": 440,
+        "height": 181.5,
+        "top": 408.5,
+        "bottom": 590,
+        "visible": true
+      }
+    },
+    {
+      "name": "runtime-after-contrast-light-700",
+      "pass": true,
+      "detail": {
+        "groupHead": 7.34,
+        "toolState": 6.29,
+        "status": 6.29,
+        "usage": 6.29
+      }
+    }
+  ],
+  "failures": [],
+  "metrics": [
+    {
+      "name": "classic-fixture",
+      "messages": 10,
+      "planCards": 1,
+      "groups": 1,
+      "subagentCards": 1,
+      "thinking": 1,
+      "usage": 2
+    },
+    {
+      "name": "classic-before-dark-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "dark",
+      "thread": {
+        "width": 760,
+        "height": 1057.28,
+        "top": 46,
+        "bottom": 1103.28,
+        "netWidth": 696,
+        "scrollWidth": 760,
+        "clientWidth": 760,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 142,
+        "paddingLeft": 32,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 36,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 55.55
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 7,
+        "paddingRight": 11,
+        "paddingBottom": 7,
+        "paddingLeft": 11,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "16.5px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "groupTime": {
+          "fontSize": "10.5px",
+          "lineHeight": "17.325px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "status": 8.19,
+        "toolState": 8.19,
+        "groupTime": 8.19,
+        "planCount": 8.19,
+        "planNow": 8.19
+      },
+      "composer": {
+        "width": 1045,
+        "height": 126,
+        "top": 694,
+        "bottom": 820,
+        "visible": true
+      },
+      "planTop": 349.52
+    },
+    {
+      "name": "classic-after-dark-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "dark",
+      "thread": {
+        "width": 760,
+        "height": 1040.92,
+        "top": 46,
+        "bottom": 1086.92,
+        "netWidth": 696,
+        "scrollWidth": 760,
+        "clientWidth": 760,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 142,
+        "paddingLeft": 32,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 32,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "status": 8.19,
+        "toolState": 8.19,
+        "groupTime": 8.19,
+        "planCount": 8.19,
+        "planNow": 8.19
+      },
+      "composer": {
+        "width": 1045,
+        "height": 126,
+        "top": 694,
+        "bottom": 820,
+        "visible": true
+      },
+      "planTop": 347.52
+    },
+    {
+      "name": "classic-before-light-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "light",
+      "thread": {
+        "width": 760,
+        "height": 1057.28,
+        "top": 46,
+        "bottom": 1103.28,
+        "netWidth": 696,
+        "scrollWidth": 760,
+        "clientWidth": 760,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 142,
+        "paddingLeft": 32,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 36,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 55.55
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 7,
+        "paddingRight": 11,
+        "paddingBottom": 7,
+        "paddingLeft": 11,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "16.5px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "groupTime": {
+          "fontSize": "10.5px",
+          "lineHeight": "17.325px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "status": 6.29,
+        "toolState": 6.29,
+        "groupTime": 6.29,
+        "planCount": 6.29,
+        "planNow": 6.29
+      },
+      "composer": {
+        "width": 1045,
+        "height": 126,
+        "top": 694,
+        "bottom": 820,
+        "visible": true
+      },
+      "planTop": 349.52
+    },
+    {
+      "name": "classic-after-light-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "light",
+      "thread": {
+        "width": 760,
+        "height": 1040.92,
+        "top": 46,
+        "bottom": 1086.92,
+        "netWidth": 696,
+        "scrollWidth": 760,
+        "clientWidth": 760,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 142,
+        "paddingLeft": 32,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 32,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "status": 6.29,
+        "toolState": 6.29,
+        "groupTime": 6.29,
+        "planCount": 6.29,
+        "planNow": 6.29
+      },
+      "composer": {
+        "width": 1045,
+        "height": 126,
+        "top": 694,
+        "bottom": 820,
+        "visible": true
+      },
+      "planTop": 347.52
+    },
+    {
+      "name": "classic-before-dark-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "thread": {
+        "width": 460,
+        "height": 1090.25,
+        "top": -259,
+        "bottom": 831.25,
+        "netWidth": 428,
+        "scrollWidth": 460,
+        "clientWidth": 460,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 36,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 55.55
+      },
+      "plan": {
+        "marginTop": 6,
+        "marginBottom": 13,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 7,
+        "paddingRight": 11,
+        "paddingBottom": 7,
+        "paddingLeft": 11,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "16.5px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "groupTime": {
+          "fontSize": "10.5px",
+          "lineHeight": "17.325px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "status": 8.19,
+        "toolState": 8.19,
+        "groupTime": 8.19,
+        "planCount": 8.19,
+        "planNow": 8.19
+      },
+      "composer": {
+        "width": 460,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      },
+      "planTop": 62.2
+    },
+    {
+      "name": "classic-after-dark-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "thread": {
+        "width": 460,
+        "height": 1078.89,
+        "top": -259,
+        "bottom": 819.89,
+        "netWidth": 428,
+        "scrollWidth": 460,
+        "clientWidth": 460,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 32,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "status": 8.19,
+        "toolState": 8.19,
+        "groupTime": 8.19,
+        "planCount": 8.19,
+        "planNow": 8.19
+      },
+      "composer": {
+        "width": 460,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      },
+      "planTop": 62.2
+    },
+    {
+      "name": "classic-before-light-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "light",
+      "thread": {
+        "width": 460,
+        "height": 1090.25,
+        "top": -259,
+        "bottom": 831.25,
+        "netWidth": 428,
+        "scrollWidth": 460,
+        "clientWidth": 460,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 36,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 55.55
+      },
+      "plan": {
+        "marginTop": 6,
+        "marginBottom": 13,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 7,
+        "paddingRight": 11,
+        "paddingBottom": 7,
+        "paddingLeft": 11,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "16.5px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "groupTime": {
+          "fontSize": "10.5px",
+          "lineHeight": "17.325px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "19.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "status": 6.29,
+        "toolState": 6.29,
+        "groupTime": 6.29,
+        "planCount": 6.29,
+        "planNow": 6.29
+      },
+      "composer": {
+        "width": 460,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      },
+      "planTop": 62.2
+    },
+    {
+      "name": "classic-after-light-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "light",
+      "thread": {
+        "width": 460,
+        "height": 1078.89,
+        "top": -259,
+        "bottom": 819.89,
+        "netWidth": 428,
+        "scrollWidth": 460,
+        "clientWidth": 460,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 18,
+        "paddingRight": 16,
+        "paddingBottom": 144,
+        "paddingLeft": 16,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": 0
+      },
+      "turnGap": 32,
+      "think": {
+        "marginTop": 0,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      },
+      "planHead": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 6,
+        "paddingRight": 8,
+        "paddingBottom": 6,
+        "paddingLeft": 8,
+        "fontSize": 12,
+        "lineHeight": 16.8,
+        "minHeight": 34,
+        "height": 34
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "groupTime": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "toolLabel": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "planCount": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "planNow": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "thread": 0,
+        "group": 0,
+        "plan": 0,
+        "planItem": 0,
+        "subagentLine": 0,
+        "subagentList": 0
+      },
+      "planItemText": "测量现有消息、思考、工具组与计划卡的实际留白",
+      "planItemWraps": true,
+      "subagentText": "reviewer-模块边界-中文长名称-用于窄屏换行成功provider/model-alpha-2026-11-16-very-long-name",
+      "usage": {
+        "text": "Token 1,234,567 · 推理 98,765（含在输出中）明细输入 12,345 Token · 输出 6,789 Token · 缓存读取 4,321 Token · 缓存写入 2,345 Token · 缓存写入（1小时） 1,200 Token · 推理 98,765 Token（含在输出中） · 总计 1,234,567 Token · 预估成本 0.1234",
+        "spacing": {
+          "marginTop": 6,
+          "marginBottom": 0,
+          "paddingTop": 0,
+          "paddingRight": 0,
+          "paddingBottom": 0,
+          "paddingLeft": 0,
+          "fontSize": 11.5,
+          "lineHeight": 18.98,
+          "minHeight": null,
+          "height": 18.97
+        },
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "status": 6.29,
+        "toolState": 6.29,
+        "groupTime": 6.29,
+        "planCount": 6.29,
+        "planNow": 6.29
+      },
+      "composer": {
+        "width": 460,
+        "height": 126,
+        "top": 474,
+        "bottom": 600,
+        "visible": true
+      },
+      "planTop": 62.2
+    },
+    {
+      "name": "classic-expanded-before",
+      "expandedBefore": {
+        "groupsOpen": 1,
+        "rowsOpen": 3,
+        "subagentCards": 1,
+        "subagentRows": 1
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 613.06
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      },
+      "overflow": {
+        "stream": 0,
+        "group": 0,
+        "out": 0,
+        "subagents": 0
+      },
+      "out": {
+        "width": 652,
+        "height": 33.25,
+        "top": 522.84,
+        "bottom": 556.09,
+        "maxHeight": "260px",
+        "scrollHeight": 31
+      },
+      "subagents": {
+        "width": 652,
+        "height": 59.69,
+        "top": 937.39,
+        "bottom": 997.08
+      },
+      "planTop": 225.52,
+      "openedRows": 3,
+      "anchorBefore": 225.52,
+      "anchorAfterExpandBefore": 225.52
+    },
+    {
+      "name": "classic-expanded-after",
+      "expandedAfter": {
+        "groupsOpen": 1,
+        "rowsOpen": 3,
+        "subagentCards": 1,
+        "subagentRows": 1
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 609.7
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 143.5
+      },
+      "overflow": {
+        "stream": 0,
+        "group": 0,
+        "out": 0,
+        "subagents": 0
+      },
+      "out": {
+        "width": 652,
+        "height": 33.25,
+        "top": 512.48,
+        "bottom": 545.73,
+        "maxHeight": "260px",
+        "scrollHeight": 31
+      },
+      "subagents": {
+        "width": 652,
+        "height": 59.69,
+        "top": 927.03,
+        "bottom": 986.72
+      },
+      "planTop": 223.52,
+      "openedRows": 3
+    },
+    {
+      "name": "classic-expanded-after-light-700",
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 627.09
+      },
+      "plan": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      },
+      "overflow": {
+        "stream": 0,
+        "group": 0,
+        "out": 0,
+        "subagents": 0
+      },
+      "out": {
+        "width": 384,
+        "height": 33.25,
+        "top": 183.45,
+        "bottom": 216.7,
+        "maxHeight": "260px",
+        "scrollHeight": 31
+      },
+      "subagents": {
+        "width": 384,
+        "height": 77.08,
+        "top": 598,
+        "bottom": 675.08
+      },
+      "planTop": -121.8,
+      "openedRows": 3
+    },
+    {
+      "name": "classic-expanded-before-light-700",
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 630.45
+      },
+      "plan": {
+        "marginTop": 6,
+        "marginBottom": 13,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 13,
+        "lineHeight": 21.45,
+        "minHeight": null,
+        "height": 159.78
+      },
+      "overflow": {
+        "stream": 0,
+        "group": 0,
+        "out": 0,
+        "subagents": 0
+      },
+      "out": {
+        "width": 384,
+        "height": 33.25,
+        "top": 186.81,
+        "bottom": 220.06,
+        "maxHeight": "260px",
+        "scrollHeight": 31
+      },
+      "subagents": {
+        "width": 384,
+        "height": 77.08,
+        "top": 601.36,
+        "bottom": 678.44
+      },
+      "planTop": -123.8,
+      "openedRows": 3
+    },
+    {
+      "name": "right-pane-dark-1320",
+      "open": true,
+      "paneWidth": 392,
+      "stageWidth": 653,
+      "threadWidth": 653,
+      "threadNet": 589
+    },
+    {
+      "name": "runtime-fixture",
+      "output": true,
+      "visible": true,
+      "blocks": 7,
+      "planCards": 1,
+      "groups": 1,
+      "thinking": 1,
+      "usage": 1
+    },
+    {
+      "name": "runtime-before-dark-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "dark",
+      "output": {
+        "width": 760,
+        "height": 498.25,
+        "top": 113.44,
+        "bottom": 611.69,
+        "netWidth": 686,
+        "clientWidth": 750,
+        "scrollWidth": 750,
+        "scrollHeight": 705,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 67.69
+      },
+      "userText": {
+        "width": 394,
+        "height": 41.69,
+        "top": -73.56,
+        "bottom": -31.87
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 10,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 54.94
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.2px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "15px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "toolState": 8.19,
+        "status": 8.19
+      },
+      "composer": {
+        "width": 760,
+        "height": 154.5,
+        "top": 649.5,
+        "bottom": 804,
+        "visible": true
+      },
+      "planTop": 210.44
+    },
+    {
+      "name": "runtime-after-dark-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "dark",
+      "output": {
+        "width": 760,
+        "height": 498.25,
+        "top": 113.44,
+        "bottom": 611.69,
+        "netWidth": 686,
+        "clientWidth": 750,
+        "scrollWidth": 750,
+        "scrollHeight": 698,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 67.69
+      },
+      "userText": {
+        "width": 394,
+        "height": 41.69,
+        "top": -66.56,
+        "bottom": -24.87
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "toolState": 8.19,
+        "status": 8.19
+      },
+      "composer": {
+        "width": 760,
+        "height": 154.5,
+        "top": 649.5,
+        "bottom": 804,
+        "visible": true
+      },
+      "planTop": 213.69
+    },
+    {
+      "name": "runtime-before-light-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "light",
+      "output": {
+        "width": 760,
+        "height": 498.25,
+        "top": 113.44,
+        "bottom": 611.69,
+        "netWidth": 686,
+        "clientWidth": 750,
+        "scrollWidth": 750,
+        "scrollHeight": 705,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 67.69
+      },
+      "userText": {
+        "width": 394,
+        "height": 41.69,
+        "top": -73.56,
+        "bottom": -31.87
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 10,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 54.94
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.2px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "15px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "toolState": 6.29,
+        "status": 6.29
+      },
+      "composer": {
+        "width": 760,
+        "height": 154.5,
+        "top": 649.5,
+        "bottom": 804,
+        "visible": true
+      },
+      "planTop": 210.44
+    },
+    {
+      "name": "runtime-after-light-1320",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "light",
+      "output": {
+        "width": 760,
+        "height": 498.25,
+        "top": 113.44,
+        "bottom": 611.69,
+        "netWidth": 686,
+        "clientWidth": 750,
+        "scrollWidth": 750,
+        "scrollHeight": 698,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 67.69
+      },
+      "userText": {
+        "width": 394,
+        "height": 41.69,
+        "top": -66.56,
+        "bottom": -24.87
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 143.5
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "toolState": 6.29,
+        "status": 6.29
+      },
+      "composer": {
+        "width": 760,
+        "height": 154.5,
+        "top": 649.5,
+        "bottom": 804,
+        "visible": true
+      },
+      "planTop": 213.69
+    },
+    {
+      "name": "runtime-before-dark-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "output": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 366,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 762,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 89.38
+      },
+      "userText": {
+        "width": 300.11,
+        "height": 63.38,
+        "top": -150.56,
+        "bottom": -87.19
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 10,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 54.94
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.2px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "15px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "toolState": 8.19,
+        "status": 8.19
+      },
+      "composer": {
+        "width": 440,
+        "height": 181.5,
+        "top": 408.5,
+        "bottom": 590,
+        "visible": true
+      },
+      "planTop": 155.13
+    },
+    {
+      "name": "runtime-after-dark-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "output": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 382,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 89.38
+      },
+      "userText": {
+        "width": 313.23,
+        "height": 63.38,
+        "top": -146.56,
+        "bottom": -83.19
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 8.19
+      },
+      "contrast": {
+        "groupHead": 9.45,
+        "toolState": 8.19,
+        "status": 8.19
+      },
+      "composer": {
+        "width": 440,
+        "height": 181.5,
+        "top": 408.5,
+        "bottom": 590,
+        "visible": true
+      },
+      "planTop": 155.38
+    },
+    {
+      "name": "runtime-before-light-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "light",
+      "output": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 366,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 762,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 32,
+        "paddingBottom": 20,
+        "paddingLeft": 32,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 89.38
+      },
+      "userText": {
+        "width": 300.11,
+        "height": 63.38,
+        "top": -150.56,
+        "bottom": -87.19
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 10,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "group": {
+        "marginTop": 9,
+        "marginBottom": 18,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 54.94
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "19.2px"
+        },
+        "toolState": {
+          "fontSize": "10.5px",
+          "lineHeight": "15.75px"
+        },
+        "status": {
+          "fontSize": "10px",
+          "lineHeight": "15px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "toolState": 6.29,
+        "status": 6.29
+      },
+      "composer": {
+        "width": 440,
+        "height": 181.5,
+        "top": 408.5,
+        "bottom": 590,
+        "visible": true
+      },
+      "planTop": 155.13
+    },
+    {
+      "name": "runtime-after-light-700",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "light",
+      "output": {
+        "width": 440,
+        "height": 247.25,
+        "top": 123.44,
+        "bottom": 370.69,
+        "netWidth": 382,
+        "clientWidth": 430,
+        "scrollWidth": 430,
+        "scrollHeight": 754,
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 20,
+        "paddingRight": 24,
+        "paddingBottom": 20,
+        "paddingLeft": 24,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0
+      },
+      "message": {
+        "marginTop": 0,
+        "marginBottom": 14,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 89.38
+      },
+      "userText": {
+        "width": 313.23,
+        "height": 63.38,
+        "top": -146.56,
+        "bottom": -83.19
+      },
+      "thinking": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 12,
+        "lineHeight": 19.8,
+        "minHeight": 0,
+        "height": 23.8
+      },
+      "thinkingWrap": null,
+      "planWrap": {
+        "marginTop": 8,
+        "marginBottom": 12,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "plan": {
+        "marginTop": 0,
+        "marginBottom": 0,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": 0,
+        "height": 177.97
+      },
+      "group": {
+        "marginTop": 8,
+        "marginBottom": 16,
+        "paddingTop": 2,
+        "paddingRight": 3,
+        "paddingBottom": 3,
+        "paddingLeft": 3,
+        "fontSize": 14,
+        "lineHeight": 22.4,
+        "minHeight": null,
+        "height": 52.19
+      },
+      "fonts": {
+        "groupHead": {
+          "fontSize": "12px",
+          "lineHeight": "16.8px"
+        },
+        "toolState": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        },
+        "status": {
+          "fontSize": "11px",
+          "lineHeight": "15.4px"
+        }
+      },
+      "overflow": {
+        "document": 0,
+        "output": 0,
+        "plan": 0,
+        "group": 0,
+        "userText": 0,
+        "message": 0
+      },
+      "usage": {
+        "text": "本轮 · Token 1,030明细输入 820 Token · 输出 210 Token · 总计 1,030 Token",
+        "contrast": 6.29
+      },
+      "contrast": {
+        "groupHead": 7.34,
+        "toolState": 6.29,
+        "status": 6.29
+      },
+      "composer": {
+        "width": 440,
+        "height": 181.5,
+        "top": 408.5,
+        "bottom": 590,
+        "visible": true
+      },
+      "planTop": 155.38
+    }
+  ]
+}

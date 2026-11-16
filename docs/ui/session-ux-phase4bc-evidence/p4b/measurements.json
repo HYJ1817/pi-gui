@@ -1,0 +1,739 @@
+{
+  "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "assertions": [
+    {
+      "name": "auth-wide-action-once",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 8.19,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "auth-wide-compact",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 8.19,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "auth-wide-near-error",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 8.19,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "auth-wide-no-red-card",
+      "pass": true,
+      "detail": {
+        "width": 696,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型认证失败，自动备用未执行",
+        "rawVisible": true
+      }
+    },
+    {
+      "name": "auth-wide-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      }
+    },
+    {
+      "name": "auth-wide-success-text",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "已打开供应商认证。",
+        "statusState": "success",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 9.45,
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px"
+        }
+      }
+    },
+    {
+      "name": "auth-wide-raw-kept",
+      "pass": true,
+      "detail": {
+        "width": 696,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型认证失败，自动备用未执行",
+        "rawVisible": true
+      }
+    },
+    {
+      "name": "auth-wide-focus-visible",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "已打开供应商认证。",
+        "statusState": "success",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 9.45,
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px"
+        }
+      }
+    },
+    {
+      "name": "auth-wide-contrast",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "已打开供应商认证。",
+        "statusState": "success",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 9.45,
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px"
+        }
+      }
+    },
+    {
+      "name": "model-wide-action",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 91,
+        "buttonText": "选择其他模型",
+        "buttonTitle": "打开现有的模型列表，由你选择可用模型；不会自动切换",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(86, 86, 86)",
+        "buttonContrast": 7.34,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 6.29,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "model-wide-contrast",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 91,
+        "buttonText": "选择其他模型",
+        "buttonTitle": "打开现有的模型列表，由你选择可用模型；不会自动切换",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(86, 86, 86)",
+        "buttonContrast": 7.34,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 6.29,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "model-wide-success-text",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 91,
+        "buttonText": "选择其他模型",
+        "buttonTitle": "打开现有的模型列表，由你选择可用模型；不会自动切换",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(86, 86, 86)",
+        "buttonContrast": 7.34,
+        "statusText": "已打开模型列表。",
+        "statusState": "success",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 7.34,
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px"
+        }
+      }
+    },
+    {
+      "name": "auth-narrow-action-once",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 8.19,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "auth-narrow-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      }
+    },
+    {
+      "name": "auth-narrow-compact",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 8.19,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "auth-narrow-raw-kept",
+      "pass": true,
+      "detail": {
+        "width": 428,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型认证失败，自动备用未执行。请检查供应商认证状态与 API Key 是否仍然有效；如果刚刚更换了账号，请重新完成登录后再发送请求。",
+        "rawVisible": true
+      }
+    },
+    {
+      "name": "auth-narrow-failure-text",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "设置没有打开，请重试。",
+        "statusState": "error",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 6.42,
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px"
+        }
+      }
+    },
+    {
+      "name": "auth-narrow-failure-raw-kept",
+      "pass": true,
+      "detail": {
+        "width": 428,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型认证失败，自动备用未执行。请检查供应商认证状态与 API Key 是否仍然有效；如果刚刚更换了账号，请重新完成登录后再发送请求。",
+        "rawVisible": true
+      }
+    },
+    {
+      "name": "auth-narrow-failure-contrast",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "设置没有打开，请重试。",
+        "statusState": "error",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 6.42,
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px"
+        }
+      }
+    },
+    {
+      "name": "model-narrow-no-overflow",
+      "pass": true,
+      "detail": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      }
+    },
+    {
+      "name": "model-narrow-contrast",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 91,
+        "buttonText": "选择其他模型",
+        "buttonTitle": "打开现有的模型列表，由你选择可用模型；不会自动切换",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(86, 86, 86)",
+        "buttonContrast": 7.34,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 6.29,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    }
+  ],
+  "failures": [],
+  "metrics": [
+    {
+      "name": "auth-wide-dark",
+      "viewport": [
+        1320,
+        820
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      },
+      "error": {
+        "width": 696,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型认证失败，自动备用未执行",
+        "rawVisible": true
+      },
+      "actions": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 8.19,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "auth-wide-success",
+      "viewport": [
+        1320,
+        820
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      },
+      "error": {
+        "width": 696,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型认证失败，自动备用未执行",
+        "rawVisible": true
+      },
+      "actions": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "已打开供应商认证。",
+        "statusState": "success",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 9.45,
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px"
+        }
+      },
+      "keyboardFocused": true
+    },
+    {
+      "name": "model-wide-light",
+      "viewport": [
+        1320,
+        820
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      },
+      "error": {
+        "width": 696,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型不可用，自动备用未执行",
+        "rawVisible": true
+      },
+      "actions": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 91,
+        "buttonText": "选择其他模型",
+        "buttonTitle": "打开现有的模型列表，由你选择可用模型；不会自动切换",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(86, 86, 86)",
+        "buttonContrast": 7.34,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 6.29,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "auth-narrow-dark",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      },
+      "error": {
+        "width": 428,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型认证失败，自动备用未执行。请检查供应商认证状态与 API Key 是否仍然有效；如果刚刚更换了账号，请重新完成登录后再发送请求。",
+        "rawVisible": true
+      },
+      "actions": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 8.19,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    },
+    {
+      "name": "auth-narrow-failure",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      },
+      "error": {
+        "width": 428,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "当前模型认证失败，自动备用未执行。请检查供应商认证状态与 API Key 是否仍然有效；如果刚刚更换了账号，请重新完成登录后再发送请求。",
+        "rawVisible": true
+      },
+      "actions": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 102.5,
+        "buttonText": "检查供应商认证",
+        "buttonTitle": "打开现有的「供应商与认证」设置，检查当前模型的登录或 API Key 状态",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(189, 189, 189)",
+        "buttonContrast": 9.45,
+        "statusText": "设置没有打开，请重试。",
+        "statusState": "error",
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 6.42,
+        "focused": true,
+        "focusVisible": true,
+        "outline": {
+          "style": "solid",
+          "width": "2px"
+        }
+      }
+    },
+    {
+      "name": "model-narrow-light",
+      "viewport": [
+        700,
+        600
+      ],
+      "overflow": {
+        "document": 0,
+        "stream": 0,
+        "error": 0,
+        "actions": 0
+      },
+      "error": {
+        "width": 428,
+        "background": "rgba(0, 0, 0, 0)",
+        "border": "0px",
+        "rawText": "Current model is unavailable. Check the provider model list and select another model before retrying.",
+        "rawVisible": true
+      },
+      "actions": {
+        "count": 1,
+        "gapAfterRaw": 8,
+        "buttonHeight": 28,
+        "buttonWidth": 91,
+        "buttonText": "选择其他模型",
+        "buttonTitle": "打开现有的模型列表，由你选择可用模型；不会自动切换",
+        "buttonClass": "btn tiny me-action",
+        "buttonBusy": null,
+        "buttonDisabled": false,
+        "buttonColor": "rgb(86, 86, 86)",
+        "buttonContrast": 7.34,
+        "statusText": "",
+        "statusState": null,
+        "statusRole": "status",
+        "statusLive": "polite",
+        "statusContrast": 6.29,
+        "focused": false,
+        "focusVisible": false,
+        "outline": {
+          "style": "none",
+          "width": "3px"
+        }
+      }
+    }
+  ]
+}
