@@ -1,0 +1,208 @@
+{
+  "measured": {
+    "syncMs": 149,
+    "totalMs": 306
+  },
+  "metricDeltas": {
+    "Timestamp": 0.474,
+    "JSEventListeners": -2946,
+    "LayoutObjects": -10862,
+    "Nodes": -64187,
+    "ContextLifecycleStateObservers": -2943,
+    "LayoutCount": 11,
+    "RecalcStyleCount": 16,
+    "LayoutDuration": 0.117,
+    "RecalcStyleDuration": 0.124,
+    "DevToolsCommandDuration": 0.118,
+    "ScriptDuration": 0.01,
+    "TaskDuration": 0.473,
+    "TaskOtherDuration": 0.104,
+    "ThreadTime": 0.439,
+    "ProcessTime": 0.672,
+    "JSHeapUsedSize": -13591344,
+    "JSHeapTotalSize": -3145728
+  },
+  "profilingMs": 467.2,
+  "top": [
+    {
+      "function": "(program)",
+      "url": "",
+      "line": 0,
+      "selfMs": 150.6
+    },
+    {
+      "function": "getClientRects",
+      "url": "",
+      "line": 0,
+      "selfMs": 88.8
+    },
+    {
+      "function": "buildFrom",
+      "url": "http://127.0.0.1:3515/conversation-nav.js",
+      "line": 140,
+      "selfMs": 83.9
+    },
+    {
+      "function": "reserve",
+      "url": "http://127.0.0.1:3515/composer.js",
+      "line": 58,
+      "selfMs": 62.3
+    },
+    {
+      "function": "grouped",
+      "url": "http://127.0.0.1:3515/message-meta.js",
+      "line": 19,
+      "selfMs": 10.6
+    },
+    {
+      "function": "layout",
+      "url": "http://127.0.0.1:3515/conversation-nav.js",
+      "line": 196,
+      "selfMs": 6.2
+    },
+    {
+      "function": "clearThread",
+      "url": "http://127.0.0.1:3515/messages.js",
+      "line": 117,
+      "selfMs": 6.1
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 5.7
+    },
+    {
+      "function": "(garbage collector)",
+      "url": "",
+      "line": 0,
+      "selfMs": 4.7
+    },
+    {
+      "function": "usageSummary",
+      "url": "http://127.0.0.1:3515/message-meta.js",
+      "line": 28,
+      "selfMs": 4.6
+    },
+    {
+      "function": "updateEntry",
+      "url": "http://127.0.0.1:3515/tool-view.js",
+      "line": 262,
+      "selfMs": 3.4
+    },
+    {
+      "function": "rebuildFromMessages",
+      "url": "http://127.0.0.1:3515/messages.js",
+      "line": 1043,
+      "selfMs": 3.1
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:3515/messages.js",
+      "line": 1004,
+      "selfMs": 2.3
+    },
+    {
+      "function": "revealMarker",
+      "url": "http://127.0.0.1:3515/conversation-nav.js",
+      "line": 239,
+      "selfMs": 2.2
+    },
+    {
+      "function": "updateTurnOutcome",
+      "url": "http://127.0.0.1:3515/turn-outcome.js",
+      "line": 122,
+      "selfMs": 1.8
+    },
+    {
+      "function": "iconMarkup",
+      "url": "http://127.0.0.1:3515/ui/icons.js",
+      "line": 85,
+      "selfMs": 1.8
+    },
+    {
+      "function": "thinkingBlock",
+      "url": "http://127.0.0.1:3515/messages.js",
+      "line": 369,
+      "selfMs": 1.7
+    },
+    {
+      "function": "updateCurrent",
+      "url": "http://127.0.0.1:3515/conversation-nav.js",
+      "line": 250,
+      "selfMs": 1.6
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.2
+    },
+    {
+      "function": "renderUsageMeta",
+      "url": "http://127.0.0.1:3515/message-meta.js",
+      "line": 46,
+      "selfMs": 1.1
+    },
+    {
+      "function": "renderBlocks",
+      "url": "http://127.0.0.1:3515/markdown.js",
+      "line": 245,
+      "selfMs": 1.1
+    },
+    {
+      "function": "getBoundingClientRect",
+      "url": "",
+      "line": 0,
+      "selfMs": 0.6
+    },
+    {
+      "function": "clampWidth",
+      "url": "http://127.0.0.1:3515/right-pane.js",
+      "line": 199,
+      "selfMs": 0.6
+    },
+    {
+      "function": "entryFromHistory",
+      "url": "http://127.0.0.1:3515/tool-model.js",
+      "line": 397,
+      "selfMs": 0.6
+    },
+    {
+      "function": "setDisclosure",
+      "url": "http://127.0.0.1:3515/messages.js",
+      "line": 364,
+      "selfMs": 0.6
+    },
+    {
+      "function": "selectionInside",
+      "url": "http://127.0.0.1:3515/tool-view.js",
+      "line": 438,
+      "selfMs": 0.6
+    },
+    {
+      "function": "setText",
+      "url": "http://127.0.0.1:3515/tool-view.js",
+      "line": 402,
+      "selfMs": 0.6
+    },
+    {
+      "function": "createElement",
+      "url": "",
+      "line": 0,
+      "selfMs": 0.6
+    },
+    {
+      "function": "browserActivity",
+      "url": "http://127.0.0.1:3515/browser-activity.js",
+      "line": 553,
+      "selfMs": 0.6
+    },
+    {
+      "function": "messageActions",
+      "url": "http://127.0.0.1:3515/ui/message-actions.js",
+      "line": 3,
+      "selfMs": 0.6
+    }
+  ]
+}

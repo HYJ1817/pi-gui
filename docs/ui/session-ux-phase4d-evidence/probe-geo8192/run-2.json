@@ -1,0 +1,1177 @@
+{
+  "run": 2,
+  "startedAt": "2026-11-16T16:21:11.399Z",
+  "durationMs": 22860,
+  "result": {
+    "samples": {
+      "navProbe": [
+        {
+          "count": 300,
+          "previewMs": 0.5999999046325684,
+          "clearMs": 0.7000000476837158,
+          "markerMs": 0.5999999046325684,
+          "appendMs": 0.10000014305114746,
+          "rebuildNavMs": 11.599999904632568,
+          "fullAfterPaintMs": 53.200000047683716
+        }
+      ],
+      "classicWarmup": [
+        {
+          "ms": 265.60000014305115,
+          "syncMs": 101.40000009536743,
+          "readyMs": 209.30000019073486,
+          "paintMs": 56.299999952316284,
+          "longTasks": {
+            "count": 2,
+            "max": 129,
+            "total": 197
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-0",
+          "heapBytes": 8067142
+        },
+        {
+          "ms": 260.69999980926514,
+          "syncMs": 84.39999985694885,
+          "readyMs": 198.59999990463257,
+          "paintMs": 62.09999990463257,
+          "longTasks": {
+            "count": 4,
+            "max": 115,
+            "total": 285
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-1",
+          "heapBytes": 9337653
+        },
+        {
+          "ms": 439.2999999523163,
+          "syncMs": 123.89999985694885,
+          "readyMs": 365.69999980926514,
+          "paintMs": 73.60000014305115,
+          "longTasks": {
+            "count": 4,
+            "max": 160,
+            "total": 451
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-2",
+          "heapBytes": 8489198
+        },
+        {
+          "ms": 285.40000009536743,
+          "syncMs": 125,
+          "readyMs": 235.90000009536743,
+          "paintMs": 49.5,
+          "longTasks": {
+            "count": 2,
+            "max": 165,
+            "total": 226
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-3",
+          "heapBytes": 9647205
+        },
+        {
+          "ms": 237.29999995231628,
+          "syncMs": 72.10000014305115,
+          "readyMs": 193.20000004768372,
+          "paintMs": 44.09999990463257,
+          "longTasks": {
+            "count": 2,
+            "max": 102,
+            "total": 171
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-4",
+          "heapBytes": 11066216
+        },
+        {
+          "ms": 274.5,
+          "syncMs": 62.299999952316284,
+          "readyMs": 231.90000009536743,
+          "paintMs": 42.59999990463257,
+          "longTasks": {
+            "count": 2,
+            "max": 123,
+            "total": 214
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-5",
+          "heapBytes": 9359566
+        },
+        {
+          "ms": 289.10000014305115,
+          "syncMs": 71.20000004768372,
+          "readyMs": 221.79999995231628,
+          "paintMs": 67.30000019073486,
+          "longTasks": {
+            "count": 3,
+            "max": 101,
+            "total": 253
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-6",
+          "heapBytes": 14201147
+        },
+        {
+          "ms": 367.89999985694885,
+          "syncMs": 104.20000004768372,
+          "readyMs": 287.5,
+          "paintMs": 80.39999985694885,
+          "longTasks": {
+            "count": 4,
+            "max": 145,
+            "total": 375
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-7",
+          "heapBytes": 11536885
+        },
+        {
+          "ms": 350.7000000476837,
+          "syncMs": 123.70000004768372,
+          "readyMs": 284.2000000476837,
+          "paintMs": 66.5,
+          "longTasks": {
+            "count": 3,
+            "max": 173,
+            "total": 317
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-8",
+          "heapBytes": 10696570
+        },
+        {
+          "ms": 338.90000009536743,
+          "syncMs": 100.79999995231628,
+          "readyMs": 254.40000009536743,
+          "paintMs": 84.5,
+          "longTasks": {
+            "count": 3,
+            "max": 139,
+            "total": 286
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-warmup-9",
+          "heapBytes": 7398795
+        }
+      ],
+      "classicLayoutProbe": [
+        {
+          "ms": 270.7000000476837,
+          "syncMs": 92.5,
+          "rectCalls": 0,
+          "rectCostMs": 0,
+          "longTasks": {
+            "count": 2,
+            "max": 130,
+            "total": 197
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          }
+        }
+      ],
+      "classicFirst810": [
+        {
+          "ms": 309.59999990463257,
+          "syncMs": 60.200000047683716,
+          "readyMs": 170.39999985694885,
+          "paintMs": 139.20000004768372,
+          "longTasks": {
+            "count": 2,
+            "max": 86,
+            "total": 143
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-first-810-0",
+          "heapBytes": 7259559
+        },
+        {
+          "ms": 233.09999990463257,
+          "syncMs": 68.59999990463257,
+          "readyMs": 176,
+          "paintMs": 57.09999990463257,
+          "longTasks": {
+            "count": 3,
+            "max": 125,
+            "total": 285
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-first-810-1",
+          "heapBytes": 12102545
+        },
+        {
+          "ms": 246.40000009536743,
+          "syncMs": 59.5,
+          "readyMs": 176.09999990463257,
+          "paintMs": 70.30000019073486,
+          "longTasks": {
+            "count": 2,
+            "max": 88,
+            "total": 159
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-first-810-2",
+          "heapBytes": 7292591
+        },
+        {
+          "ms": 230.29999995231628,
+          "syncMs": 71.79999995231628,
+          "readyMs": 177.89999985694885,
+          "paintMs": 52.40000009536743,
+          "longTasks": {
+            "count": 2,
+            "max": 126,
+            "total": 180
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-first-810-3",
+          "heapBytes": 12092537
+        },
+        {
+          "ms": 223.29999995231628,
+          "syncMs": 65.5,
+          "readyMs": 167.89999985694885,
+          "paintMs": 55.40000009536743,
+          "longTasks": {
+            "count": 2,
+            "max": 94,
+            "total": 149
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-first-810-4",
+          "heapBytes": 9321026
+        }
+      ],
+      "classicFirstLong": [
+        {
+          "ms": 560.0999999046326,
+          "syncMs": 163.29999995231628,
+          "readyMs": 376.59999990463257,
+          "paintMs": 183.5,
+          "longTasks": {
+            "count": 4,
+            "max": 195,
+            "total": 531
+          },
+          "dom": {
+            "documentNodes": 33949,
+            "streamNodes": 32229,
+            "messages": 1200,
+            "userMessages": 600,
+            "toolGroups": 85,
+            "toolRows": 320,
+            "planCards": 24,
+            "thinkingBlocks": 600,
+            "subagentRows": 60,
+            "scrollHeight": 266149
+          },
+          "sessionId": "p4d-first-long-0",
+          "heapBytes": 9171749
+        },
+        {
+          "ms": 462.10000014305115,
+          "syncMs": 134.79999995231628,
+          "readyMs": 361.2999999523163,
+          "paintMs": 100.80000019073486,
+          "longTasks": {
+            "count": 4,
+            "max": 203,
+            "total": 461
+          },
+          "dom": {
+            "documentNodes": 33949,
+            "streamNodes": 32229,
+            "messages": 1200,
+            "userMessages": 600,
+            "toolGroups": 85,
+            "toolRows": 320,
+            "planCards": 24,
+            "thinkingBlocks": 600,
+            "subagentRows": 60,
+            "scrollHeight": 266149
+          },
+          "sessionId": "p4d-first-long-1",
+          "heapBytes": 11113477
+        },
+        {
+          "ms": 500.5,
+          "syncMs": 143.89999985694885,
+          "readyMs": 394.69999980926514,
+          "paintMs": 105.80000019073486,
+          "longTasks": {
+            "count": 4,
+            "max": 206,
+            "total": 490
+          },
+          "dom": {
+            "documentNodes": 33949,
+            "streamNodes": 32229,
+            "messages": 1200,
+            "userMessages": 600,
+            "toolGroups": 85,
+            "toolRows": 320,
+            "planCards": 24,
+            "thinkingBlocks": 600,
+            "subagentRows": 60,
+            "scrollHeight": 266149
+          },
+          "sessionId": "p4d-first-long-2",
+          "heapBytes": 10295567
+        }
+      ],
+      "classicSwitch": [
+        {
+          "ms": 235.20000004768372,
+          "syncMs": 65.60000014305115,
+          "readyMs": 171.90000009536743,
+          "paintMs": 63.299999952316284,
+          "longTasks": {
+            "count": 2,
+            "max": 94,
+            "total": 156
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 131879
+          },
+          "sessionId": "p4d-switch-B",
+          "heapBytes": 25288042
+        },
+        {
+          "ms": 320.5,
+          "syncMs": 137.29999995231628,
+          "readyMs": 264.09999990463257,
+          "paintMs": 56.40000009536743,
+          "longTasks": {
+            "count": 3,
+            "max": 178,
+            "total": 297
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-switch-A",
+          "heapBytes": 9846280
+        },
+        {
+          "ms": 244.20000004768372,
+          "syncMs": 81.40000009536743,
+          "readyMs": 181.5,
+          "paintMs": 62.700000047683716,
+          "longTasks": {
+            "count": 2,
+            "max": 108,
+            "total": 167
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 131879
+          },
+          "sessionId": "p4d-switch-B",
+          "heapBytes": 14571507
+        },
+        {
+          "ms": 300.60000014305115,
+          "syncMs": 125,
+          "readyMs": 243,
+          "paintMs": 57.60000014305115,
+          "longTasks": {
+            "count": 3,
+            "max": 161,
+            "total": 268
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          },
+          "sessionId": "p4d-switch-A",
+          "heapBytes": 10363799
+        },
+        {
+          "ms": 236.40000009536743,
+          "syncMs": 70.60000014305115,
+          "readyMs": 183.79999995231628,
+          "paintMs": 52.60000014305115,
+          "longTasks": {
+            "count": 2,
+            "max": 109,
+            "total": 171
+          },
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 131879
+          },
+          "sessionId": "p4d-switch-B",
+          "heapBytes": 15079218
+        }
+      ],
+      "classicRapidSwitch": [
+        {
+          "ms": 1948.3000001907349,
+          "syncMs": 1710.5,
+          "longTasks": {
+            "count": 4,
+            "max": 1742,
+            "total": 1941
+          },
+          "sessionId": "p4d-rapid-A",
+          "leakedOther": false,
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          }
+        }
+      ],
+      "classicRapidSwitchInteractive": [
+        {
+          "ms": 6301.700000047684,
+          "longTasks": {
+            "count": 54,
+            "max": 192,
+            "total": 4765
+          },
+          "sessionId": "p4d-rapid-i-final",
+          "users": 300,
+          "leakedOther": false,
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          }
+        }
+      ],
+      "classicJump": [
+        {
+          "ms": 196.60000014305115,
+          "settleMs": 194.5,
+          "longTasks": {
+            "count": 0,
+            "max": 0,
+            "total": 0
+          },
+          "index": 0,
+          "ok": true,
+          "scrollTop": 3,
+          "navIndex": 0,
+          "scrollHeight": 132305,
+          "clientHeight": 620
+        },
+        {
+          "ms": 1509.5999999046326,
+          "settleMs": 1508.2999999523163,
+          "longTasks": {
+            "count": 1,
+            "max": 57,
+            "total": 57
+          },
+          "index": 150,
+          "ok": true,
+          "scrollTop": 64965,
+          "navIndex": 149,
+          "scrollHeight": 132305,
+          "clientHeight": 620
+        },
+        {
+          "ms": 1515.4000000953674,
+          "settleMs": 1511.2000000476837,
+          "longTasks": {
+            "count": 0,
+            "max": 0,
+            "total": 0
+          },
+          "index": 299,
+          "ok": true,
+          "scrollTop": 131680,
+          "navIndex": 298,
+          "scrollHeight": 132305,
+          "clientHeight": 620
+        }
+      ],
+      "classicBookmark": [
+        {
+          "ms": 310.89999985694885,
+          "syncMs": 132.89999985694885,
+          "longTasks": {
+            "count": 2,
+            "max": 165,
+            "total": 232
+          },
+          "deltaPx": 2.09375,
+          "bookmarkedTop": 83.78125,
+          "restoredTop": 85.875,
+          "scrollTop": 51523,
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          }
+        }
+      ],
+      "classicToggles": [
+        {
+          "group": [
+            {
+              "expandMs": 93.5,
+              "collapseMs": 60.10000014305115
+            },
+            {
+              "expandMs": 32.299999952316284,
+              "collapseMs": 33.39999985694885
+            },
+            {
+              "expandMs": 33.200000047683716,
+              "collapseMs": 45.39999985694885
+            }
+          ],
+          "thinking": [
+            {
+              "openMs": 34.10000014305115,
+              "closeMs": 32.39999985694885
+            },
+            {
+              "openMs": 33.60000014305115,
+              "closeMs": 33
+            },
+            {
+              "openMs": 38.19999980926514,
+              "closeMs": 45.80000019073486
+            }
+          ],
+          "dom": {
+            "documentNodes": 17285,
+            "streamNodes": 16165,
+            "messages": 600,
+            "userMessages": 300,
+            "toolGroups": 43,
+            "toolRows": 162,
+            "planCards": 12,
+            "thinkingBlocks": 300,
+            "subagentRows": 30,
+            "scrollHeight": 132305
+          }
+        }
+      ],
+      "runtimeHistory": [
+        {
+          "ms": 92,
+          "opened": true,
+          "longTasks": {
+            "count": 1,
+            "max": 99,
+            "total": 99
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 13192584
+          }
+        },
+        {
+          "ms": 48,
+          "opened": true,
+          "longTasks": {
+            "count": 0,
+            "max": 0,
+            "total": 0
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 15053276
+          }
+        },
+        {
+          "ms": 49.40000009536743,
+          "opened": true,
+          "longTasks": {
+            "count": 0,
+            "max": 0,
+            "total": 0
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 17001360
+          }
+        },
+        {
+          "ms": 49.40000009536743,
+          "opened": true,
+          "longTasks": {
+            "count": 0,
+            "max": 0,
+            "total": 0
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 18892688
+          }
+        },
+        {
+          "ms": 47.30000019073486,
+          "opened": true,
+          "longTasks": {
+            "count": 0,
+            "max": 0,
+            "total": 0
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 20809472
+          }
+        }
+      ],
+      "runtimeSwitch": [
+        {
+          "ms": 48.700000047683716,
+          "opened": true,
+          "longTasks": {
+            "count": 0,
+            "max": 0,
+            "total": 0
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 22381680
+          }
+        },
+        {
+          "ms": 83.20000004768372,
+          "opened": true,
+          "longTasks": {
+            "count": 1,
+            "max": 68,
+            "total": 68
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 24315368
+          }
+        },
+        {
+          "ms": 65.20000004768372,
+          "opened": true,
+          "longTasks": {
+            "count": 1,
+            "max": 62,
+            "total": 62
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 26170148
+          }
+        },
+        {
+          "ms": 82.79999995231628,
+          "opened": true,
+          "longTasks": {
+            "count": 1,
+            "max": 75,
+            "total": 75
+          },
+          "blocks": 240,
+          "messages": 151,
+          "scrolled": 0,
+          "notice": "",
+          "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+          "scrollTop": 0,
+          "scrollHeight": 30375,
+          "truncated": true,
+          "timelineTruncated": true,
+          "dom": {
+            "documentNodes": 20808,
+            "outputNodes": 3522,
+            "heapBytes": 11287848
+          }
+        }
+      ],
+      "runtimeLocate": [
+        {
+          "retained": {
+            "ms": 51.10000014305115,
+            "opened": true,
+            "longTasks": {
+              "count": 0,
+              "max": 0,
+              "total": 0
+            },
+            "blocks": 240,
+            "messages": 151,
+            "scrolled": 1,
+            "notice": "",
+            "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+            "scrollTop": 29849,
+            "scrollHeight": 30375,
+            "truncated": true,
+            "timelineTruncated": true,
+            "dom": {
+              "documentNodes": 20808,
+              "outputNodes": 3522,
+              "heapBytes": 13159273
+            }
+          },
+          "trimmed": {
+            "ms": 47.30000019073486,
+            "opened": true,
+            "longTasks": {
+              "count": 0,
+              "max": 0,
+              "total": 0
+            },
+            "blocks": 240,
+            "messages": 151,
+            "scrolled": 0,
+            "notice": "",
+            "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+            "scrollTop": 0,
+            "scrollHeight": 30375,
+            "truncated": true,
+            "timelineTruncated": true,
+            "dom": {
+              "documentNodes": 20808,
+              "outputNodes": 3522,
+              "heapBytes": 15006154
+            }
+          }
+        }
+      ],
+      "runtimeRapidSwitch": [
+        {
+          "finalText": "B 助手 225：已核对模块边界、离线验证和异常处理。长中文用于制造真实换行；inline code npm test 与列表：第一项第二项Long Engli",
+          "includesA": false,
+          "includesB": true,
+          "beforeIncludesB": true,
+          "dom": {
+            "documentNodes": 20808
+          }
+        }
+      ]
+    },
+    "fixture": {
+      "A": {
+        "messages": 829,
+        "users": 300
+      },
+      "B": {
+        "messages": 829,
+        "users": 300
+      },
+      "Long": {
+        "messages": 1653,
+        "users": 600
+      },
+      "toolCalls": 174,
+      "lastUserMessageId": "A-u299",
+      "firstUserMessageId": "A-u0"
+    },
+    "projection": {
+      "A": {
+        "blocks": 240,
+        "truncated": true,
+        "kinds": {
+          "assistant": 76,
+          "tools": 11,
+          "user": 75,
+          "thinking": 75,
+          "plan": 3
+        }
+      },
+      "B": {
+        "blocks": 240,
+        "truncated": true
+      }
+    },
+    "viewport": {
+      "width": 1298,
+      "height": 666
+    }
+  },
+  "search": {
+    "files": 3,
+    "linesPerFile": 810,
+    "bytes": 534999,
+    "rounds": [
+      {
+        "coldMs": 18.362499999999983,
+        "warmMs": 8.82989999999998,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 13.850999999999999,
+        "warmMs": 9.124800000000022,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 13.361899999999991,
+        "warmMs": 8.382800000000003,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 12.628800000000012,
+        "warmMs": 8.536100000000033,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 11.713000000000022,
+        "warmMs": 7.532000000000039,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 16.455300000000022,
+        "warmMs": 10.27619999999996,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 15.216400000000021,
+        "warmMs": 10.110900000000015,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      }
+    ]
+  },
+  "pageErrors": []
+}

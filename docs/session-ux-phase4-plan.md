@@ -83,7 +83,7 @@ P4-B 已实现并验收，P4-C 已按用户确认的方案落地正式 CSS，P4-
 
 **验收。** 1320×820 / 700×600 各深浅，补 699/701px 和默认及 125% 字体缩放，键盘聚焦、短/长中英文状态、运行/终态、Thinking 展开、详情、双 usage 和书签。普通文字至少 4.5:1，非文本控件与焦点 3:1，零横向溢出、Composer 无遮挡、锚点偏移 ≤1px。实施后 Runtime 窄窗净宽为 382px，现有阅读轴上同高度能容纳更多连续状态块且避免状态吞字。涉及 `public/styles.css`、`public/runtime-conversation.css`、`public/agent-execution.css`；`public/tokens.css` 作为现有变量提供者，优先在消费端映射。约 1–1.5 人日，按一个 CSS 提交回滚。 [唯一视觉验收规范](ui/design-system.md#视觉验收)
 
-## 6. P4-D 长会话性能｜有条件实施 Classic 优化，暂缓窗口化
+## 6. P4-D 长会话性能｜已实施
 
 ### 当次测量
 
@@ -116,6 +116,27 @@ P4-B 已实现并验收，P4-C 已按用户确认的方案落地正式 CSS，P4-
 | `content-visibility` | 可做局部实验。偏向减少离屏布局和 paint，DOM、事件和数据仍保留；当前连续滚动不足以支持启用。若 trace 指向布局，才对完整冷块试验，验证内在高度估算、Minimap 测高、滚动恢复、浏览器查找与 print。 |
 | 列表窗口化 | 暂缓。当前瓶颈集中在 Classic 重建，先证明分段不足。只有更大真实规模出现持续滚动或驻留 DOM/堆瓶颈，并可设计逻辑锚点、完整复制/打印和载入策略时再立项，保留原 240 block/1 MiB Runtime 限制。 |
 | 历史延迟加载 | Runtime 本身已有按需打开的有界只读历史。仅 D-1 若需要读取命中附近内容，评估以 locator 为边界的窄查询或分页；当前 3 文件搜索计时不足以支持通用分页。Classic 先保持全量数据语义。 |
+
+**实施记录（2026-11-17）。** 已按上述边界落地，记录与实测见
+[P4-D 验收](session-ux-phase4d-acceptance.md)。800 条消息以下的 Classic 仍同步
+重建；800 条起按顶层节点分块构建并挂载，批大小 160 起逐次翻倍到 1,024 封顶，
+过期批次按 `threadGeneration` 取消。真实 Chromium 5 轮（829 / 1,653 条夹具）：
+首屏同步段 141.9 → 26.4 ms、长会话 311.2 → 27.4 ms，最慢任务 211 → 88 ms /
+447 → 163 ms；after 的 65 个首屏/切换样本中没有 ≥100 ms 的同步段（最大
+82.3 ms）。总就绪与紧邻关闭分块的同步复测相比为 −15.8% / −7.4%；与更早
+冻结基线相比为 −2.1% / +6.8%，环境漂移已如实保留。总就绪未达到 30%
+改善，差额来自让出后的 rAF/入场动画尾部，未为此牺牲完整 DOM。未采用虚拟化、`content-visibility`、
+`contain:layout` 或更小批次，理由与实测见验收记录第 6 节。Runtime 裁剪命中
+改为显式 `trimmed` / `missing` 提示，助手命中按 `messageId` 落位，未扩大
+240 block / 1 MiB 保留上限。Minimap 在跳转时按目标节点的 `ui2-rise-in` 动画
+进度扣除入场动效 3px 位移，避免导航在最后一批动画结束前重建造成跳转偏移；
+只补偿被跳转的一个节点，不在 `layout()` 里逐条读 `getComputedStyle`（后者在
+动画并发时会把重建从约 130 ms 拖到约 4.8 s）。挂载窗口内的实时写入会先同步
+补齐剩余历史，保证实时消息不会插进历史中间或提前占用锚点序号；工具组与
+计划卡在 `tools.js` 的 `onToolStart` / `onToolEnd` 以及 `ensureThread` 入口
+同样先补齐（计划卡直接 append 到 thread，不经过 `ensureThread`）。取消挂载会
+清掉 `aria-busy` 并保留用户滚动位置（含无 `sessionId` 的降级路径）。
+分块与定位提示分提交，可分别回滚。
 
 **依赖与风险。** Classic `conversation-nav.js` 依据全部 `.msg.user` 的位置维护 Minimap，`sessions.js` 的旧历史命中通过 `userIndex` 和 `scrollToUserTurn` 落位。DOM 分段须等目标/索引准备好，再恢复书签、对齐 Minimap、接受 live 增量。Runtime 依赖 `conversationId + nativeSessionId + projectId/workspaceId/workspaceEpoch` 校验 locator，再在 `.rtc-output` 内滚动。展开键绑定会话和 block/tool ID；`ui/message-actions.js` 复制已捕获的消息全文，鼠选和浏览器页面打印依赖已呈现内容。审查范围未发现会话专用打印出口，按浏览器打印现状作基线，比较打印文字顺序和完整性。分段必须保证完整已加载范围可复制、可打印，或在处理完毕前把未完成状态说清。不得按当前可见 DOM 重写数据契约。
 

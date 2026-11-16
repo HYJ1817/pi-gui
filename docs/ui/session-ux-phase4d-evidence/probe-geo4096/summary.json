@@ -1,0 +1,452 @@
+{
+  "label": "probe-geo4096",
+  "measuredAt": "2026-11-16T16:20:26.407Z",
+  "environment": {
+    "platform": "win32",
+    "arch": "x64",
+    "node": "v24.22.1",
+    "cpus": "13th Gen Intel(R) Core(TM) i7-13620H",
+    "totalMemBytes": 16890519552,
+    "chrome": "Chrome/157.0.8103.78",
+    "viewport": {
+      "width": 1298,
+      "height": 666
+    }
+  },
+  "fixture": {
+    "A": {
+      "messages": 829,
+      "users": 300
+    },
+    "B": {
+      "messages": 829,
+      "users": 300
+    },
+    "Long": {
+      "messages": 1653,
+      "users": 600
+    },
+    "toolCalls": 174,
+    "lastUserMessageId": "A-u299",
+    "firstUserMessageId": "A-u0"
+  },
+  "projection": {
+    "A": {
+      "blocks": 240,
+      "truncated": true,
+      "kinds": {
+        "assistant": 76,
+        "tools": 11,
+        "user": 75,
+        "thinking": 75,
+        "plan": 3
+      }
+    },
+    "B": {
+      "blocks": 240,
+      "truncated": true
+    }
+  },
+  "runs": 3,
+  "metrics": {
+    "classic.warmup.ms": {
+      "n": 30,
+      "median": 247,
+      "p95": 352.39999985694885,
+      "min": 194,
+      "max": 443.09999990463257
+    },
+    "classic.warmup.syncMs": {
+      "n": 30,
+      "median": 75.30000019073486,
+      "p95": 125,
+      "min": 56.299999952316284,
+      "max": 132.79999995231628
+    },
+    "classic.layoutProbe.rectCalls": {
+      "n": 3,
+      "median": 0,
+      "p95": 0,
+      "min": 0,
+      "max": 0
+    },
+    "classic.layoutProbe.rectCostMs": {
+      "n": 3,
+      "median": 0,
+      "p95": 0,
+      "min": 0,
+      "max": 0
+    },
+    "classic.layoutProbe.syncMs": {
+      "n": 3,
+      "median": 114.39999985694885,
+      "p95": 177.39999985694885,
+      "min": 73.5,
+      "max": 177.39999985694885
+    },
+    "classic.first810.ms": {
+      "n": 15,
+      "median": 294.2000000476837,
+      "p95": 391.2999999523163,
+      "min": 236,
+      "max": 391.2999999523163
+    },
+    "classic.first810.syncMs": {
+      "n": 15,
+      "median": 89,
+      "p95": 136.59999990463257,
+      "min": 66.09999990463257,
+      "max": 136.59999990463257
+    },
+    "classic.first810.longTaskMax": {
+      "n": 15,
+      "median": 121,
+      "p95": 172,
+      "min": 97,
+      "max": 172
+    },
+    "classic.first810.dom.streamNodes": {
+      "n": 15,
+      "median": 16165,
+      "p95": 16165,
+      "min": 16165,
+      "max": 16165
+    },
+    "classic.firstLong.ms": {
+      "n": 9,
+      "median": 603.2000000476837,
+      "p95": 773.7999999523163,
+      "min": 507.2999999523163,
+      "max": 773.7999999523163
+    },
+    "classic.firstLong.syncMs": {
+      "n": 9,
+      "median": 151.79999995231628,
+      "p95": 243,
+      "min": 115.89999985694885,
+      "max": 243
+    },
+    "classic.firstLong.longTaskMax": {
+      "n": 9,
+      "median": 214,
+      "p95": 277,
+      "min": 178,
+      "max": 277
+    },
+    "classic.switch.ms": {
+      "n": 15,
+      "median": 268.5,
+      "p95": 376,
+      "min": 225.29999995231628,
+      "max": 376
+    },
+    "classic.switch.syncMs": {
+      "n": 15,
+      "median": 79.09999990463257,
+      "p95": 175.89999985694885,
+      "min": 54.799999952316284,
+      "max": 175.89999985694885
+    },
+    "classic.switch.longTaskMax": {
+      "n": 15,
+      "median": 114,
+      "p95": 211,
+      "min": 89,
+      "max": 211
+    },
+    "classic.rapid.totalMs": {
+      "n": 3,
+      "median": 1773.7999999523163,
+      "p95": 1811.5,
+      "min": 1705.1999998092651,
+      "max": 1811.5
+    },
+    "classic.rapid.syncMs": {
+      "n": 3,
+      "median": 1576.7000000476837,
+      "p95": 1612.4000000953674,
+      "min": 1528.8999998569489,
+      "max": 1612.4000000953674
+    },
+    "classic.rapid.longTaskMax": {
+      "n": 3,
+      "median": 1603,
+      "p95": 1634,
+      "min": 1549,
+      "max": 1634
+    },
+    "classic.rapidInteractive.totalMs": {
+      "n": 3,
+      "median": 5687.700000047684,
+      "p95": 5897.100000143051,
+      "min": 5376.300000190735,
+      "max": 5897.100000143051
+    },
+    "classic.rapidInteractive.longTaskMax": {
+      "n": 3,
+      "median": 166,
+      "p95": 194,
+      "min": 151,
+      "max": 194
+    },
+    "classic.rapidInteractive.users": {
+      "n": 3,
+      "median": 300,
+      "p95": 300,
+      "min": 300,
+      "max": 300
+    },
+    "classic.jump.ms": {
+      "n": 9,
+      "median": 231.29999995231628,
+      "p95": 1517.9000000953674,
+      "min": 53.799999952316284,
+      "max": 1517.9000000953674
+    },
+    "classic.jump.settleMs": {
+      "n": 9,
+      "median": 229.20000004768372,
+      "p95": 1516.3000001907349,
+      "min": 52.799999952316284,
+      "max": 1516.3000001907349
+    },
+    "classic.jump.longTaskMax": {
+      "n": 9,
+      "median": 0,
+      "p95": 0,
+      "min": 0,
+      "max": 0
+    },
+    "classic.bookmark.ms": {
+      "n": 3,
+      "median": 266.7000000476837,
+      "p95": 278,
+      "min": 243.5,
+      "max": 278
+    },
+    "classic.bookmark.deltaPx": {
+      "n": 3,
+      "median": 2.09765625,
+      "p95": 2.390625,
+      "min": 2.09375,
+      "max": 2.390625
+    },
+    "classic.toggle.groupExpandMs": {
+      "n": 9,
+      "median": 48,
+      "p95": 106.29999995231628,
+      "min": 31.09999990463257,
+      "max": 106.29999995231628
+    },
+    "classic.toggle.groupCollapseMs": {
+      "n": 9,
+      "median": 51.09999990463257,
+      "p95": 77,
+      "min": 32.59999990463257,
+      "max": 77
+    },
+    "classic.toggle.thinkingOpenMs": {
+      "n": 9,
+      "median": 34.19999980926514,
+      "p95": 83.59999990463257,
+      "min": 31.200000047683716,
+      "max": 83.59999990463257
+    },
+    "classic.toggle.thinkingCloseMs": {
+      "n": 9,
+      "median": 33.39999985694885,
+      "p95": 65.90000009536743,
+      "min": 32.5,
+      "max": 65.90000009536743
+    },
+    "runtime.history.ms": {
+      "n": 15,
+      "median": 49.299999952316284,
+      "p95": 128.90000009536743,
+      "min": 47.299999952316284,
+      "max": 128.90000009536743
+    },
+    "runtime.history.longTaskMax": {
+      "n": 15,
+      "median": 0,
+      "p95": 137,
+      "min": 0,
+      "max": 137
+    },
+    "runtime.history.dom.outputNodes": {
+      "n": 15,
+      "median": 3522,
+      "p95": 3522,
+      "min": 3522,
+      "max": 3522
+    },
+    "runtime.switch.ms": {
+      "n": 12,
+      "median": 64.5,
+      "p95": 80.79999995231628,
+      "min": 49.200000047683716,
+      "max": 80.79999995231628
+    },
+    "runtime.switch.longTaskMax": {
+      "n": 12,
+      "median": 57,
+      "p95": 72,
+      "min": 0,
+      "max": 72
+    },
+    "runtime.locate.retainedMs": {
+      "n": 3,
+      "median": 48.80000019073486,
+      "p95": 48.90000009536743,
+      "min": 48.299999952316284,
+      "max": 48.90000009536743
+    },
+    "runtime.locate.trimmedMs": {
+      "n": 3,
+      "median": 48.5,
+      "p95": 51.700000047683716,
+      "min": 47.80000019073486,
+      "max": 51.700000047683716
+    },
+    "search.coldMs": {
+      "n": 21,
+      "median": 14.341100000000012,
+      "p95": 18.685699999999997,
+      "min": 12.128199999999993,
+      "max": 18.685699999999997
+    },
+    "search.warmMs": {
+      "n": 21,
+      "median": 8.654200000000003,
+      "p95": 10.732799999999997,
+      "min": 8.1053,
+      "max": 10.732799999999997
+    }
+  },
+  "search": {
+    "files": 3,
+    "linesPerFile": 810,
+    "bytes": 534999,
+    "coldMs": 14.341100000000012,
+    "warmMs": 8.654200000000003,
+    "matches": 15,
+    "rounds": [
+      {
+        "coldMs": 18.685699999999997,
+        "warmMs": 9.181300000000022,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 15.414599999999979,
+        "warmMs": 8.654200000000003,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 14.341100000000012,
+        "warmMs": 8.487899999999996,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 12.128199999999993,
+        "warmMs": 10.732799999999997,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 14.15809999999999,
+        "warmMs": 9.734000000000037,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 13.50630000000001,
+        "warmMs": 8.1053,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      },
+      {
+        "coldMs": 14.504000000000019,
+        "warmMs": 8.221400000000017,
+        "sessions": 3,
+        "matches": 15,
+        "skipped": 0,
+        "truncated": false,
+        "warmMatches": 15
+      }
+    ]
+  },
+  "functional": [
+    {
+      "run": 1,
+      "rapidSessionId": "p4d-rapid-A",
+      "rapidLeakedOther": false,
+      "bookmarkDeltaPx": 2.390625,
+      "jumpOk": [
+        true,
+        true,
+        true
+      ],
+      "runtimeLocateRetainedScrolled": 1,
+      "runtimeLocateTrimmedScrolled": 0,
+      "runtimeLocateTrimmedNotice": "",
+      "runtimeRapidIncludesB": true,
+      "runtimeRapidIncludesA": false,
+      "pageErrors": []
+    },
+    {
+      "run": 2,
+      "rapidSessionId": "p4d-rapid-A",
+      "rapidLeakedOther": false,
+      "bookmarkDeltaPx": 2.09375,
+      "jumpOk": [
+        true,
+        true,
+        true
+      ],
+      "runtimeLocateRetainedScrolled": 1,
+      "runtimeLocateTrimmedScrolled": 0,
+      "runtimeLocateTrimmedNotice": "",
+      "runtimeRapidIncludesB": true,
+      "runtimeRapidIncludesA": false,
+      "pageErrors": []
+    },
+    {
+      "run": 3,
+      "rapidSessionId": "p4d-rapid-A",
+      "rapidLeakedOther": false,
+      "bookmarkDeltaPx": 2.09765625,
+      "jumpOk": [
+        true,
+        true,
+        true
+      ],
+      "runtimeLocateRetainedScrolled": 1,
+      "runtimeLocateTrimmedScrolled": 0,
+      "runtimeLocateTrimmedNotice": "",
+      "runtimeRapidIncludesB": true,
+      "runtimeRapidIncludesA": false,
+      "pageErrors": []
+    }
+  ]
+}

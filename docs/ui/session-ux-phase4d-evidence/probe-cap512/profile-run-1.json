@@ -1,0 +1,208 @@
+{
+  "measured": {
+    "syncMs": 60.89999985694885,
+    "totalMs": 318.69999980926514
+  },
+  "metricDeltas": {
+    "Timestamp": 0.628,
+    "JSEventListeners": 1553,
+    "LayoutObjects": 42080,
+    "Nodes": 27009,
+    "ContextLifecycleStateObservers": 600,
+    "LayoutCount": 13,
+    "RecalcStyleCount": 16,
+    "LayoutDuration": 0.215,
+    "RecalcStyleDuration": 0.17,
+    "DevToolsCommandDuration": 0.109,
+    "ScriptDuration": 0.003,
+    "TaskDuration": 0.624,
+    "TaskOtherDuration": 0.126,
+    "ThreadTime": 0.571,
+    "ProcessTime": 0.775,
+    "JSHeapUsedSize": -7121648,
+    "JSHeapTotalSize": -786432
+  },
+  "profilingMs": 661.2,
+  "top": [
+    {
+      "function": "getClientRects",
+      "url": "",
+      "line": 0,
+      "selfMs": 194.9
+    },
+    {
+      "function": "(program)",
+      "url": "",
+      "line": 0,
+      "selfMs": 144.5
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:6376/messages.js",
+      "line": 1306,
+      "selfMs": 115.9
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:6376/messages.js",
+      "line": 1306,
+      "selfMs": 34.8
+    },
+    {
+      "function": "reserve",
+      "url": "http://127.0.0.1:6376/composer.js",
+      "line": 58,
+      "selfMs": 28.1
+    },
+    {
+      "function": "layout",
+      "url": "http://127.0.0.1:6376/conversation-nav.js",
+      "line": 196,
+      "selfMs": 10.1
+    },
+    {
+      "function": "grouped",
+      "url": "http://127.0.0.1:6376/message-meta.js",
+      "line": 19,
+      "selfMs": 8.2
+    },
+    {
+      "function": "clearThread",
+      "url": "http://127.0.0.1:6376/messages.js",
+      "line": 151,
+      "selfMs": 7.7
+    },
+    {
+      "function": "iconMarkup",
+      "url": "http://127.0.0.1:6376/ui/icons.js",
+      "line": 85,
+      "selfMs": 6.8
+    },
+    {
+      "function": "(garbage collector)",
+      "url": "",
+      "line": 0,
+      "selfMs": 6.5
+    },
+    {
+      "function": "renderItem",
+      "url": "http://127.0.0.1:6376/messages.js",
+      "line": 1144,
+      "selfMs": 6.4
+    },
+    {
+      "function": "updateCurrent",
+      "url": "http://127.0.0.1:6376/conversation-nav.js",
+      "line": 250,
+      "selfMs": 6.1
+    },
+    {
+      "function": "grouped",
+      "url": "http://127.0.0.1:6376/message-meta.js",
+      "line": 19,
+      "selfMs": 5.1
+    },
+    {
+      "function": "usageSummary",
+      "url": "http://127.0.0.1:6376/message-meta.js",
+      "line": 28,
+      "selfMs": 5.1
+    },
+    {
+      "function": "renderBlocks",
+      "url": "http://127.0.0.1:6376/markdown.js",
+      "line": 245,
+      "selfMs": 4.4
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:6376/messages.js",
+      "line": 1038,
+      "selfMs": 3.7
+    },
+    {
+      "function": "layout",
+      "url": "http://127.0.0.1:6376/conversation-nav.js",
+      "line": 196,
+      "selfMs": 3.7
+    },
+    {
+      "function": "querySelector",
+      "url": "",
+      "line": 0,
+      "selfMs": 3.6
+    },
+    {
+      "function": "updateEntry",
+      "url": "http://127.0.0.1:6376/tool-view.js",
+      "line": 262,
+      "selfMs": 3.3
+    },
+    {
+      "function": "thinkingBlock",
+      "url": "http://127.0.0.1:6376/messages.js",
+      "line": 403,
+      "selfMs": 3.1
+    },
+    {
+      "function": "createElement",
+      "url": "",
+      "line": 0,
+      "selfMs": 3
+    },
+    {
+      "function": "usageSummary",
+      "url": "http://127.0.0.1:6376/message-meta.js",
+      "line": 28,
+      "selfMs": 2.9
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 2.9
+    },
+    {
+      "function": "renderItem",
+      "url": "http://127.0.0.1:6376/messages.js",
+      "line": 1144,
+      "selfMs": 2.6
+    },
+    {
+      "function": "toggle",
+      "url": "",
+      "line": 0,
+      "selfMs": 2
+    },
+    {
+      "function": "buildFrom",
+      "url": "http://127.0.0.1:6376/conversation-nav.js",
+      "line": 140,
+      "selfMs": 1.9
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.8
+    },
+    {
+      "function": "renderBlocks",
+      "url": "http://127.0.0.1:6376/markdown.js",
+      "line": 245,
+      "selfMs": 1.4
+    },
+    {
+      "function": "updateTurnOutcome",
+      "url": "http://127.0.0.1:6376/turn-outcome.js",
+      "line": 122,
+      "selfMs": 1.4
+    },
+    {
+      "function": "renderUsageMeta",
+      "url": "http://127.0.0.1:6376/message-meta.js",
+      "line": 46,
+      "selfMs": 1.4
+    }
+  ]
+}
