@@ -102,6 +102,9 @@ child Web 调用未必广播为父 RPC 独立事件，不读 transcript 或按�
   已知状态计数、实际显示数和 `inventoryComplete === false` 时的「清单不完整」。
 - 每个来源最多 24 项，事实权重预算 8000 字符；超限时按前缀截断，摘要显示「显示 N」，
   但仍继续统计后续已知项。原始 facts 仍按既有 8000 字符截断，现有 facts 字符串未改。
+- 父生命周期使用完整的 `details.results` 证据，不受 24 项展示上限截断：第 25 项之后的
+  失败、停止或中断也会反映在父工具状态，避免父状态显示成功而计数显示失败。workflow
+  的父状态仍以 producer 的 `workflowState` 为准。
 - 展开复用现有 `.tl-toggle`、`aria-expanded`、`aria-controls`；列表为
   `role=list` + `aria-label=子代理`，每项 `role=listitem`。不新增独立滚动区、
   子代理 Stop 按钮、编排/控制入口或第二套状态机。

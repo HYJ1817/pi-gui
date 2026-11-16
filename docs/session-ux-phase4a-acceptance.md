@@ -21,11 +21,12 @@ fixture，未读取用户真实项目做写操作。
   摘要和安全结果字段。缺失字段省略；不从工具数推算完成百分比；不把请求
   参数中的 `agent/task` 当作执行成功的事实。
 - 每个来源最多 24 项、8000 字符权重预算；超限按前缀截断，摘要显示实际
-  显示数，但仍继续统计后续已知状态。既有 `facts` 字符串保持原样。
+  显示数，但仍继续统计后续已知状态。父生命周期额外扫描完整 `results`，
+  第 25 项之后的失败/停止/中断也进入父工具状态。既有 `facts` 字符串保持原样。
 - Runtime 实时与历史工具投影没有增加 `args/details` 或子代理 facts；
   Runtime 的 `subagent` 工具行继续使用现有安全回退，不生成卡片。
-- 定向测试 880/880 通过，其中新增 `tests/session-ux-phase4a.cjs` 为
-  107/107；既有六个受影响套件为 773/773。真实 Chromium 验收 after 44/44、
+- 定向测试 883/883 通过，其中新增 `tests/session-ux-phase4a.cjs` 为
+  110/110；既有六个受影响套件为 773/773。真实 Chromium 验收 after 44/44、
   before 24/24 通过。
 - 完整 `npm test` **未运行**（按任务要求），因此不能把本轮结论当作完整
   canonical 证明。真实读屏软件、真实 pi 子代理执行也未运行。
@@ -37,7 +38,7 @@ fixture，未读取用户真实项目做写操作。
 | `public/subagent-activity.js` | 在既有 allowlist 投影上增加有界结构化子项；workflow 绑定校验、childId/runId+index 身份、前缀截断与计数 |
 | `public/tool-view.js` | 父行计数元信息、单列子项列表、状态文案、懒创建、既有 disclosure 与折叠优先契约 |
 | `public/styles.css` | 紧凑计数行、单列子项、状态色点、宽窗同行与 700px 第二行模型布局；无动画 |
-| `tests/session-ux-phase4a.cjs` | P4-A 行为、安全、身份、截断、回退、折叠与 Runtime 回归（107 条断言） |
+| `tests/session-ux-phase4a.cjs` | P4-A 行为、安全、身份、截断、状态一致、回退、折叠与 Runtime 回归（110 条断言） |
 | `tests/session-ux-phase4a-shots.cjs` | 真实 Chromium/CDP 的 before/after 截图、几何、键盘、焦点与 AX 树 |
 | `tests/cdp-shot.cjs` | P17 视觉场景改验结构化子项卡片；不再要求已由卡片取代的 `.tl-out` facts 文本 |
 | `package.json` | 把 `session-ux-phase4a.cjs` 加入 `test` 链并新增 `test:session-ux-phase4a` |
@@ -98,7 +99,8 @@ fixture，未读取用户真实项目做写操作。
 
 ### 预算与截断
 
-- 每个来源最多 24 项。
+- 每个来源最多展示 24 项；父生命周期单独扫描完整 `results`，确保后置失败、
+  停止或中断不会被展示上限掩盖。
 - 结构化事实权重预算 8000 字符；超过后保持前缀，不跳过超大行再展示后面的
   小行；摘要显示「显示 N」，但仍统计全部已知项。
 - 既有 `facts` 继续按原字符串和 8000 字符上限输出；本轮对 7 个代表夹具
@@ -140,19 +142,20 @@ fixture，未读取用户真实项目做写操作。
 | `node tests/session-ux-phase2.cjs` | 96/96，退出 0 |
 | `node tests/session-ux-phase3.cjs` | 128/128，退出 0 |
 | `node tests/runtime-conversation.cjs` | 106/106，退出 0 |
-| `node tests/session-ux-phase4a.cjs` | 107/107，退出 0 |
+| `node tests/session-ux-phase4a.cjs` | 110/110，退出 0 |
 
-合计 **880/880**。新增套件覆盖：同步与并行子代理、多模型、空 details、
-恶意额外字段、30 项/24 项上限、8000 字符预算与前缀截断、混合终态、未知
-后台完成状态、过期 workflow 帧、缺失/重复 producer 身份回退、绑定 workflow
-缺少 childId 时不混用 results、父子工具同时存在时 `gui_plan` 唯一、缺失
-事实回退、用户折叠优先、父组折叠优先、历史/实时一致、Runtime 缩减投影。
+合计 **883/883**。新增套件覆盖：同步与并行子代理、多模型、空 details、
+恶意额外字段、30 项/24 项上限、第 30 项失败与父状态一致、8000 字符预算与
+前缀截断、混合终态、未知后台完成状态、过期 workflow 帧、缺失/重复 producer
+身份回退、绑定 workflow 缺少 childId 时不混用 results、父子工具同时存在时
+`gui_plan` 唯一、缺失事实回退、用户折叠优先、父组折叠优先、历史/实时一致、
+Runtime 缩减投影。
 
-断言总数没有减少：既有六个套件保持原数量，新增套件从 97 增至 107（新增
+断言总数没有减少：既有六个套件保持原数量，新增套件从 97 增至 110（新增
 前缀截断断言，缺少 `runId`、缺少 `index`、`index` 重复三组各两条回退断言，
-以及绑定 workflow 无 `childId` 时的两条回退断言）。没有跳过断言计入分子。
-`tests/cdp-shot.cjs` 的 P17 场景属于人工视觉核对，不在本轮定向测试清单中，
-未单独重跑整套 `shots:harness`。
+绑定 workflow 无 `childId` 时的两条回退断言，以及第 30 项失败的三条一致性
+断言）。没有跳过断言计入分子。`tests/cdp-shot.cjs` 的 P17 场景属于人工
+视觉核对，不在本轮定向测试清单中，未单独重跑整套 `shots:harness`。
 
 `git diff --check` 无输出。
 
@@ -250,10 +253,9 @@ git worktree remove --force "$TMP"
 - 未运行真实 pi / 真实 pi-subagents 子代理；所有子代理结果都是固定
   fixture，未验证上游字段在真实会话中的漂移。
 - 未运行真实读屏软件；只验证了 Chromium AX 树、键盘和焦点环。
-- 计数扫描全部已知 `results` / `workflowChildren.children`，而父工具状态
-  仍由既有 `lifecycle` 的前 24 项与 `workflowState` 决定；超过 24 项且失败
-  出现在截断之后时，父状态与计数摘要可能表达不同层面的信息。本轮保留既有
-  父生命周期语义，没有改变这个边界。
+- `results` 的父生命周期已扫描完整数组，与子项计数使用同一份状态证据；
+  workflow 的父状态仍以 producer 的 `workflowState` 为准，不按子项状态重新
+  聚合。workflow 子项失败而 producer 报成功时，两者表达不同层面的信息。
 - 宽窗长 Model 用省略号，完整值在 `title` 中；窄窗完整换行。超长任务文本
   仍可能让单行卡片变高，但没有独立滚动区或横向溢出。
 - 本阶段只覆盖 Classic；Runtime 的 cards 是后续独立契约工作，不在本轮。
