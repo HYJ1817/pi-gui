@@ -3553,6 +3553,17 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .pj-runtime-dot.error{border-color:var(--err);background:var(--err);opacity:.85}
 .pj-runtime-dot.ready{border-color:var(--ok);opacity:.85}
 .pj-runtime-status{margin-left:auto;flex:0 0 auto;font-size:10.5px;color:var(--t3)}
+/* P4-E：终态只用一个语义点 + 一行小字；完成是安静的，失败/中断才用警示色。 */
+.pj-runtime-dot.outcome-completed{background:var(--ds-success);opacity:.8}
+.pj-runtime-dot.outcome-failed{background:var(--ds-error);opacity:1}
+.pj-runtime-dot.outcome-interrupted{background:var(--ds-warning);opacity:1}
+.pj-runtime-dot.outcome-unknown{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ds-text-muted)}
+/* 项目内只放一条聚合提示；具体是哪条会话由下面的行或既有 Runtime 列表展开。 */
+.pj-runtime-results{display:flex;align-items:center;gap:var(--ui-space-1);align-self:stretch;min-height:28px;margin:2px var(--ui-space-2) var(--ui-space-1);padding:var(--ui-space-1) var(--ui-space-2);border:1px solid var(--ds-border-subtle);border-radius:var(--radius-2xs);background:var(--ds-bg-chip);color:var(--ds-text-secondary);font:inherit;font-size:var(--text-xs);line-height:var(--leading-normal);text-align:left;cursor:pointer}
+.pj-runtime-results:hover{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
+.pj-runtime-results:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.pj-runtime-results-text{min-width:0;overflow-wrap:anywhere}
+.pj-runtime-results-hint{margin-left:auto;flex:0 0 auto;color:var(--ds-text-muted)}
 .pj-runtime-attention{flex:0 0 6px;width:6px;height:6px;margin-left:6px;border-radius:50%;background:var(--run)}
 .pj-runtime-new{display:flex;align-items:center;gap:6px;width:100%;background:transparent;border:0;text-align:left;font:inherit;cursor:pointer;color:var(--t3)}
 .pj-runtime-new:hover{color:var(--t1);background:var(--hover)}

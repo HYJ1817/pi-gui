@@ -162,6 +162,12 @@ button.pj-sess-primary { cursor: pointer; }
 .project-sidebar .pj-runtime-dot.ready { border: 0; background: transparent; }
 .project-sidebar .pj-sess[data-activity="running"] .pj-sess-time { display: inline; color: var(--ds-text-muted); font-size: var(--text-xs); }
 .project-sidebar .pj-runtime-status { font-size: var(--text-xs); color: var(--ds-text-muted); }
+.project-sidebar .pj-runtime-status.outcome-completed { color: var(--ds-text-secondary); }
+/* 11px 小字不能直接用浅色主题的 --ds-warning / --ds-error（对比度不足 4.5）；
+ * 与主文字混合后保留语义色相，同时满足阅读阈值。 */
+.project-sidebar .pj-runtime-status.outcome-failed { color: color-mix(in oklab, var(--ds-error) 72%, var(--ds-text-primary)); }
+.project-sidebar .pj-runtime-status.outcome-interrupted { color: color-mix(in oklab, var(--ds-warning) 72%, var(--ds-text-primary)); }
+.project-sidebar .pj-runtime-status.outcome-unknown { color: var(--ds-text-muted); }
 .pj-sess-more { display: block; width: 100%; border: 0; background: transparent; text-align: left; font: inherit; }
 .pj-sr-head,.pj-sr-hit { width: 100%; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
 .pj-sr-head:hover,.pj-sr-hit:hover { color: var(--ds-text-primary); }

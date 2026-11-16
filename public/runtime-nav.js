@@ -13,6 +13,7 @@
 import { fetchRuntimeSessions, fetchWorktrees, runtimeSessionAction, worktreeAction } from './api.js';
 import { runtimeStore as store, onRuntimeChange, seedRuntimeSnapshot } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
+import { openRuntimeSessions } from './runtime-sessions.js';
 import { openModal } from './ui/modal.js';
 import { feedbackContext, toast } from './ui/toast.js';
 import { samePath } from './util.js';
@@ -22,6 +23,13 @@ onRuntimeChange(() => repaintRuntimeNav());
 
 const LIFECYCLE = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中' };
 const ACTIVITY = { idle: '空闲', running: '运行中', stopping: '正在停止' };
+/* P4-E：只展示后端归一好的四种终态，不在前端按错误文本猜结果。 */
+const OUTCOME = {
+  completed: { text: '已完成', title: '后台运行已完成' },
+  failed: { text: '失败', title: '后台运行失败' },
+  interrupted: { text: '已中断', title: '后台运行已中断' },
+  unknown: { text: '已结束', title: '后台运行已结束，结果未确认' },
+};
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -119,22 +127,32 @@ function label(item) {
   return '并行会话';
 }
 
+function outcomeMeta(item) {
+  return item?.outcome && OUTCOME[item.outcome.kind] ? item.outcome.kind : null;
+}
+
 function statusText(item) {
   if (!item) return '';
   if (store.get(item.conversationId)?.approvals.length) return '待审批';
-  if (item.error === 'cleanup_pending') return '清理未完成';
-  if (item.lifecycle === 'error') return '错误';
   if (item.activity === 'stopping') return '正在停止';
   if (item.activity === 'running') return '运行中';
+  const kind = outcomeMeta(item);
+  const problem = item.error === 'cleanup_pending' ? '清理未完成' : item.lifecycle === 'error' ? '错误' : null;
+  /* 终态是这一轮的结果，lifecycle/error 是会话当前是否可用；两者同时存在时
+   * 都保留，避免后台完成把随后发生的空闲断线错误盖掉（P4-C 原有错误可见性）。 */
+  if (kind) return problem ? `${OUTCOME[kind].text} · ${problem}` : OUTCOME[kind].text;
+  if (problem) return problem;
   return LIFECYCLE[item.lifecycle] || item.lifecycle;
 }
 
 /* 视觉只用**一个**轻量状态点 + 一行文字，不加彩色 badge（P30 的信息密度）。 */
 function stateClass(item) {
   if (!item) return 'dormant';
-  if (item.lifecycle === 'error') return 'error';
   if (item.activity === 'stopping') return 'stopping';
   if (item.activity === 'running') return 'running';
+  const kind = outcomeMeta(item);
+  if (kind) return 'outcome-' + kind;
+  if (item.lifecycle === 'error') return 'error';
   return item.lifecycle;
 }
 
@@ -165,16 +183,21 @@ function row(member) {
   const item = store.get(member.conversationId)?.item || null;
   const rowEl = el('div', 'pj-sess pj-runtime' + (item?.focused ? ' on' : ''));
   rowEl.dataset.conversationId = member.conversationId;
+  const kind = outcomeMeta(item);
+  if (kind) rowEl.dataset.outcome = kind;
   if (item?.focused) rowEl.setAttribute('aria-current', 'true');
 
   const primary = el('button', 'pj-sess-primary');
   primary.type = 'button';
   const status = statusText(item);
   primary.setAttribute('aria-label', `并行会话：${label(item)}，${status}`);
+  if (kind) primary.title = OUTCOME[kind].title;
   const dot = el('span', 'pj-sess-dot pj-runtime-dot ' + stateClass(item));
   dot.setAttribute('aria-hidden', 'true');
   const title = el('span', 'pj-sess-title', label(item));
-  primary.append(dot, title, el('span', 'pj-runtime-status', status));
+  const statusEl = el('span', 'pj-runtime-status' + (kind ? ' outcome-' + kind : ''), status);
+  if (kind) statusEl.title = OUTCOME[kind].title;
+  primary.append(dot, title, statusEl);
   primary.onclick = () => { void focusConversation(member.conversationId); };
   primary.onkeydown = event => {
     if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
@@ -194,6 +217,41 @@ function row(member) {
     rowEl.append(attention);
   }
   return rowEl;
+}
+
+function resultMembers() {
+  return members
+    .map(member => ({ member, item: store.get(member.conversationId)?.item || null }))
+    .filter(entry => outcomeMeta(entry.item));
+}
+
+function resultBreakdown(results) {
+  const counts = { completed: 0, failed: 0, interrupted: 0, unknown: 0 };
+  for (const entry of results) counts[outcomeMeta(entry.item)]++;
+  return [['completed', '已完成'], ['failed', '失败'], ['interrupted', '已中断'], ['unknown', '已结束']]
+    .filter(([kind]) => counts[kind])
+    .map(([kind, text]) => `${text} ${counts[kind]}`)
+    .join('、');
+}
+
+/* P4-E：一个项目只放**一条**聚合提示，不按会话追加通知。单条结果直接去；
+ * 多条打开已有 Runtime 列表（不自动切换会话），由用户在那里选具体结果。 */
+function resultsRow(results) {
+  const result = el('button', 'pj-runtime-results');
+  result.type = 'button';
+  const breakdown = resultBreakdown(results);
+  result.setAttribute('aria-label', `${results.length} 个后台会话有结果：${breakdown}。查看结果`);
+  result.title = `后台会话结果：${breakdown}`;
+  result.append(
+    el('span', 'pj-runtime-results-text', `${results.length} 个后台会话有结果`),
+    el('span', 'pj-runtime-results-hint', '查看'),
+  );
+  result.onclick = () => {
+    if (results.length === 1) { void focusConversation(results[0].item.conversationId); return; }
+    const latest = [...results].sort((a, b) => (b.item.revision || 0) - (a.item.revision || 0))[0];
+    openRuntimeSessions({ path: currentProjectPath }, null, { selectedId: latest?.item?.conversationId });
+  };
+  return result;
 }
 
 function newConversationRow() {
@@ -282,6 +340,7 @@ function paint() {
   }
   const focused = host.contains(document.activeElement) ? document.activeElement.closest('[data-conversation-id]')?.dataset.conversationId : null;
   const newFocused = host.contains(document.activeElement) && document.activeElement.classList.contains('pj-runtime-new');
+  const resultsFocused = host.contains(document.activeElement) && document.activeElement.classList.contains('pj-runtime-results');
   host.replaceChildren();
   /* 只有确认了 Git 项目身份才给这块（含「新建并行会话」）：非 Git 项目没有
    * worktree，摆一个必然失败的入口比不摆更糟。 */
@@ -290,9 +349,17 @@ function paint() {
   const resources = el('div', 'runtime-resource-count', resourceText());
   resources.setAttribute('role', 'status');
   host.append(resources);
+  const results = resultMembers();
+  if (results.length) host.append(resultsRow(results));
   for (const member of members) host.append(row(member));
   host.append(newConversationRow());
-  if (focused) [...host.querySelectorAll('[data-conversation-id]')].find(row => row.dataset.conversationId === focused)?.querySelector('button')?.focus({ preventScroll: true });
+  if (resultsFocused) {
+    const aggregate = host.querySelector('.pj-runtime-results');
+    /* 单条结果激活后入口会被读掉并消失；焦点不能掉到 body，交给已经
+     * 切过去的会话行（没有则退回「新建并行会话」）。 */
+    (aggregate || host.querySelector('.pj-runtime.on .pj-sess-primary') || host.querySelector('.pj-runtime-new'))
+      ?.focus({ preventScroll: true });
+  } else if (focused) [...host.querySelectorAll('[data-conversation-id]')].find(row => row.dataset.conversationId === focused)?.querySelector('button')?.focus({ preventScroll: true });
   else if (newFocused) host.querySelector('.pj-runtime-new')?.focus({ preventScroll: true });
 }
 

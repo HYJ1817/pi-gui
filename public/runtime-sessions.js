@@ -7,6 +7,8 @@ const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
 const node = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const button = (text, action) => { const e = node('button', 'btn', text); e.type = 'button'; e.onclick = action; return e; };
 const labels = { dormant: '已关闭', starting: '启动中', ready: '就绪', error: '错误', disposing: '清理中', idle: '空闲', running: '运行中', stopping: '正在停止' };
+const OUTCOME = { completed: '已完成', failed: '失败', interrupted: '已中断', unknown: '已结束' };
+const outcomeOf = item => item?.outcome && OUTCOME[item.outcome.kind] ? item.outcome.kind : null;
 let pane, render = null, selected = null;
 let focusView = null, openBoundBrowser = null;
 /* P32.4：帧到达时统一由 runtime-state.js 广播；本模块只订阅自己的重画。 */
@@ -19,8 +21,13 @@ export function configureRuntimeSessions(options) {
 
 // A narrow phase-3 control surface. It never changes the legacy renderer's S or
 // guesses a target from the selected project. Every request captures its owner.
-export function openRuntimeSessions(project, workspace = null) {
+export function openRuntimeSessions(project, workspace = null, options = {}) {
   let alive = true, request = 0, busy = false, keepBrowser = false, approvalKey = '', renderedId = null;
+  /* 从侧栏聚合结果进入时，预选最近变化的那条；只是选中，不发送 focus，
+   * 不切换中央会话 —— 换不换由用户在列表里点。只应用一次：用户改选后，
+   * 后续 refresh 不得把他拽回预选项。 */
+  const initialSelected = typeof options?.selectedId === 'string' ? options.selectedId : null;
+  let initialSelectionPending = Boolean(initialSelected);
   openModal((card, close) => {
     card.classList.add('wide', 'runtime-dialog'); card.setAttribute('aria-label', '独立会话');
     const head = node('div', 'wt-head'); head.append(node('h3', '', '独立会话'), button('关闭', close)); card.append(head);
@@ -62,7 +69,9 @@ export function openRuntimeSessions(project, workspace = null) {
     async function refresh() {
       const n = ++request, snapshot = await fetchRuntimeSessions(); if (!alive || n !== request) return;
       if (!snapshot.ok) { notice.textContent = snapshot.error || '无法读取会话'; return; }
-      seedRuntimeSnapshot(snapshot); if (!store.get(selected)) selected = snapshot.items.find(i => i.workspace.projectId === workspace?.projectId)?.conversationId || snapshot.items[0]?.conversationId || null;
+      seedRuntimeSnapshot(snapshot);
+      if (initialSelectionPending && store.get(initialSelected)) { selected = initialSelected; initialSelectionPending = false; }
+      else if (!store.get(selected)) selected = snapshot.items.find(i => i.workspace.projectId === workspace?.projectId)?.conversationId || snapshot.items[0]?.conversationId || null;
       draw();
     }
     async function action(payload, after) {
@@ -83,7 +92,7 @@ export function openRuntimeSessions(project, workspace = null) {
     }
     async function owned(name, extra = {}) { const r = store.get(selected); if (r?.owner) await action({ action: name, owner: { ...r.owner }, ...extra }); }
     async function choose(id) {
-      selected = id; processBox.replaceChildren(); draw(); const r = store.get(id); if (!r?.owner) return;
+      selected = id; initialSelectionPending = false; processBox.replaceChildren(); draw(); const r = store.get(id); if (!r?.owner) return;
       const owner = { ...r.owner }; const focused = await runtimeSessionAction({ action: 'focus', owner });
       if (!alive || !same(store.get(id)?.owner, owner)) return;
       if (!focused.ok) { notice.textContent = focused.error; return; }
@@ -117,13 +126,21 @@ export function openRuntimeSessions(project, workspace = null) {
       const focused = document.activeElement, focusId = focused?.dataset.conversationId;
       list.replaceChildren();
       for (const r of store.values()) {
-        const b = button(`${r.item.workspace.branch || '工作区'} · ${labels[r.item.lifecycle !== 'ready' ? r.item.lifecycle : r.item.activity] || r.item.lifecycle}${r.item.attention ? ' · 未读' : ''}`, () => choose(r.item.conversationId));
-        b.dataset.conversationId = r.item.conversationId; b.setAttribute('aria-pressed', String(selected === r.item.conversationId)); list.append(b);
+        const kind = outcomeOf(r.item);
+        const runtimeState = labels[r.item.lifecycle !== 'ready' ? r.item.lifecycle : r.item.activity] || r.item.lifecycle;
+        const b = button(`${r.item.workspace.branch || '工作区'} · ${kind ? OUTCOME[kind] : runtimeState}${r.item.attention ? ' · 未读' : ''}`, () => choose(r.item.conversationId));
+        b.dataset.conversationId = r.item.conversationId; b.setAttribute('aria-pressed', String(selected === r.item.conversationId));
+        if (kind) b.dataset.outcome = kind;
+        list.append(b);
       }
       if (focusId) list.querySelector(`[data-conversation-id="${focusId}"]`)?.focus();
       const r = store.get(selected); body.hidden = !r;
       if (!r) { notice.textContent ||= '从工作区菜单启动独立会话。'; return; }
-      title.textContent = r.item.workspace.branch || '独立会话'; state.textContent = `${labels[r.item.lifecycle]} · ${labels[r.item.activity]}${r.item.error === 'generation_failed' ? ' · 生成失败，请重试或检查模型' : r.item.error ? ' · 运行异常' : ''}${r.truncated ? ' · 显示最近输出' : ''}`;
+      const kind = outcomeOf(r.item);
+      title.textContent = r.item.workspace.branch || '独立会话';
+      state.textContent = `${labels[r.item.lifecycle]} · ${labels[r.item.activity]}${kind ? ' · ' + OUTCOME[kind] : ''}`
+        + `${r.item.error === 'generation_failed' && kind !== 'interrupted' ? ' · 生成失败，请重试或检查模型' : r.item.error && kind !== 'interrupted' ? ' · 运行异常' : ''}`
+        + `${r.truncated ? ' · 显示最近输出' : ''}`;
       if (r.item.error === 'cleanup_pending') state.textContent = '清理未完成 · 运行名额仍被占用';
       output.textContent = r.text || '等待任务'; tools.textContent = r.tools.map(t => `${t.name} · ${t.state}`).join(' / ');
       if (renderedId !== selected || document.activeElement !== input) input.value = r.draft;
