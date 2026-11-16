@@ -1,10 +1,10 @@
-# 会话执行体验 P4-C 信息密度视觉方案
+# 会话执行体验 P4-C 信息密度方案与实施记录
 
-日期：2026-11-16。本文是**候选视觉方案**，不是已实施变更。正式 `public/styles.css`、
-`public/runtime-conversation.css`、`public/agent-execution.css` 与 `public/tokens.css`
-均未修改；对照用的临时覆盖只在证据页注入，产品没有入口加载它。
+日期：2026-11-16。本文记录用户确认后落地的 P4-C 信息密度调整。正式
+`public/styles.css`、`public/agent-execution.css`、`public/runtime-conversation.css`
+已按第 3 节修改；`public/tokens.css` 未改。第 2 节的旧值与截图保留为修改前基线。
 
-- 候选覆盖：[p4c-proposal-overrides.css](ui/session-ux-phase4bc-evidence/p4c-proposal-overrides.css)
+- 修改前回滚覆盖：[p4c-before-overrides.css](ui/session-ux-phase4bc-evidence/p4c-before-overrides.css)
 - 实测与断言：[measurements.json](ui/session-ux-phase4bc-evidence/p4c/measurements.json)
 - 截图目录：[p4c](ui/session-ux-phase4bc-evidence/p4c/)
 - 计划依据：[P4 技术审查与实施规划](session-ux-phase4-plan.md) 第 5 节
@@ -19,14 +19,16 @@
 - Runtime：真实 `runtime-state.js` 与 `runtime-conversation.js`，通过
   `runtime_event` 帧生成同形状的时间线（Thinking、工具组、Plan、正文、usage、
   第二个轮次）。
-- 每个视口先移除覆盖截“修改前”，再注入覆盖截“修改后”；截图的滚动锚点相同。
-- 尺寸：1320×820、700×600；主题：深色、浅色。
-- 断言：109/109 通过；覆盖样式未被 `public/` 任何文件引用。
+- 每个视口先注入回滚覆盖截“修改前”，再移除覆盖截“修改后”；修改后直接来自
+  产品 CSS，截图的滚动锚点相同。
+- 尺寸：1320×820、700×600；主题：深色、浅色；另补 699×600、701×600、
+  125% 字体缩放、reduced motion 与键盘焦点。
+- 断言：128/128 通过；回滚覆盖未被 `public/` 任何文件引用。
 
-本轮没有验证 699/701px、125% 字体缩放、reduced motion、真实 Electron 和长历史；
-这些保留到用户确认后的正式 CSS 验收。
+仍未在真实 Electron 打包应用、真实长历史或读屏下复验；这些不阻塞本次 CSS
+实施，但保留为后续验收项。
 
-## 2. 现状审计
+## 2. 现状审计（修改前）
 
 ### 2.1 阅读轴与窄窗净宽
 
@@ -64,12 +66,12 @@ Runtime 在窄窗比 Classic 少 62px，主要来自 64px 的左右内边距。�
 字体层级本身没有第二套系统：正文 14px / `--leading-prose`，主披露 12px，
 辅助信息 10–11.5px。问题主要是辅助信息的三档硬编码和两处未消费的 Token。
 
-## 3. 候选修改
+## 3. 实施值
 
-所有候选只消费现有 Token，不新增 Design Token，不缩小正文、点击目标或工具行
-最小高度。
+以下即正式落地的修改。全部只消费现有 Token，不新增 Design Token，不缩小正文、
+点击目标或工具行最小高度。
 
-| 候选 | 修改 | 理由 |
+| 修改 | 实施值 | 理由 |
 | --- | --- | --- |
 | 轮次 | `--turn-gap:36px → var(--ui-space-6)`（32px） | 统一到现有间距阶，仍保留轮次分隔 |
 | Classic Thinking | `.think` 外距 `7/14 → var(--ui-space-2/3)`（8/12） | 与 Runtime 统一；首块上边距仍由既有规则清零 |
@@ -100,6 +102,13 @@ Runtime 在窄窗比 Classic 少 62px，主要来自 64px 的左右内边距。�
 | 工具组外距 | 9/18px | 8/16px | 9/18px | 8/16px |
 | Plan 外距 | 8/16px（窄窗 6/13） | 8/12px | 8/16px | 8/12px |
 | Plan 头 | 7/11px，34px 高 | 6/8px，34px 高 | 同 Classic | 同 Classic |
+| 699px Runtime（仅修改后） | — | — | — | 24px 内边距，净宽 **381px** |
+| 701px Runtime（仅修改后） | — | — | — | 32px 内边距，净宽 339px |
+| 125% 字体缩放 | — | — | — | 主披露 15px、辅助 13.75px，零溢出 |
+
+701px 时 `.runtime-conversation-view` 也切回 24px 横向内边距，因此净宽 339px
+小于 700px 以内；这是既有断点行为，本轮只让 `≤700px` 的 `.rtc-output` 横向
+内边距与它衔接，不改变 701px 以上的布局。
 
 ### 4.2 布局与可读性
 
@@ -112,8 +121,16 @@ Runtime 在窄窗比 Classic 少 62px，主要来自 64px 的左右内边距。�
 - 展开工具详情时计划卡顶部 225.52 → 225.52px，阅读锚点偏移 0。
 - 文字对比度（深色 / 浅色）：工具组标题 9.45 / 7.34，工具状态 8.19 / 6.29，
   Plan 计数 8.19 / 6.29，usage 8.19 / 6.29，均 ≥ 4.5:1。
-- 右栏打开（1320×820）：右栏 392px、主干 653px、阅读列净宽 589px。候选不改变
-  该行为；正式 C 验收应把“右栏打开”纳入布局矩阵。
+- 右栏打开（1320×820）：右栏 392px、主干 653px、阅读列净宽 589px。本次不改
+  右栏行为，截图保留在矩阵中。
+- 699px 与 701px：Runtime 在 699px 使用 24px 横向内边距、净宽 381px；701px
+  回到 32px、净宽 339px，断点两侧均无横向溢出。Classic 的 900px 内边距断点
+  在 699/701px 均保持 16px，阅读列零溢出。
+- 125% 字体缩放（产品 `--font-scale:1.25`）：Classic 与 Runtime 的主披露字号
+  15px、辅助字号 13.75px，Plan 长任务与子代理长名称继续换行，横向溢出 0，
+  Composer 完整可见。
+- reduced motion：计划呼吸点 `animation:none`，回到底部按钮 `transition:0s`。
+- 键盘焦点：计划头 `:focus-visible` 为 2px `solid` 轮廓，焦点落点正确。
 
 ## 5. 截图
 
@@ -134,6 +151,10 @@ Runtime 在窄窗比 Classic 少 62px，主要来自 64px 的左右内边距。�
 | Classic 子代理卡 1320 | [前](ui/session-ux-phase4bc-evidence/p4c/classic-subagent-before-dark-1320.png) | [后](ui/session-ux-phase4bc-evidence/p4c/classic-subagent-after-dark-1320.png) |
 | Classic 子代理卡 700 | [前](ui/session-ux-phase4bc-evidence/p4c/classic-subagent-before-light-700.png) | [后](ui/session-ux-phase4bc-evidence/p4c/classic-subagent-after-light-700.png) |
 | Classic 右栏打开 1320 | — | [现状](ui/session-ux-phase4bc-evidence/p4c/classic-right-pane-dark-1320.png) |
+| Runtime 断点 699 浅色 | — | [修改后](ui/session-ux-phase4bc-evidence/p4c/runtime-boundary-699-light.png) |
+| Runtime 断点 701 浅色 | — | [修改后](ui/session-ux-phase4bc-evidence/p4c/runtime-boundary-701-light.png) |
+| Classic 125% 字体 700 深色 | — | [修改后](ui/session-ux-phase4bc-evidence/p4c/classic-font125-dark-700.png) |
+| Runtime 125% 字体 700 深色 | — | [修改后](ui/session-ux-phase4bc-evidence/p4c/runtime-font125-dark-700.png) |
 
 代表图：
 
@@ -145,11 +166,17 @@ Runtime 在窄窗比 Classic 少 62px，主要来自 64px 的左右内边距。�
 
 ![Runtime 深色 700 修改后](ui/session-ux-phase4bc-evidence/p4c/runtime-after-dark-700.png)
 
-## 6. 结论与等待确认
+## 6. 结论
 
-候选的收益集中在两处：Runtime 窄窗净宽 +16px（366 → 382），以及连续块序列的
+正式实施的收益集中在两处：Runtime 窄窗净宽 +16px（366 → 382），以及连续块序列的
 底部留白减少 7–16px。视觉上仍是同一套语言：没有改颜色、字号层级、卡片结构或
-交互密度，只把硬编码值收回现有 Token 阶。
+交互密度，只把硬编码值收回现有 Token 阶。`public/tokens.css` 未改，没有第二套
+Design Token。
 
-**本轮到此停止。** 正式 CSS 修改、Design Token 调整、699/701px 与 125% 字体缩放、
-reduced motion、键盘焦点和真实 Electron 验收，均等待用户确认后另行实施。
+`node tests/session-ux-phase4c-shots.cjs`：**128/128 通过**，在原有 25 张矩阵
+与展开截图基础上新增 699/701、125% 字体缩放、reduced motion 和键盘焦点检查。
+`node tests/ui2-visual.cjs`：57/57 通过，组状态字号预期已随 `--text-xs` 更新。
+
+未完成：真实 Electron 打包应用手测、真实长历史和读屏复验；这些不改变本次
+CSS 结论，保留为后续验收项。回滚边界是 CSS 消费端三处规则改动加测试与证据，
+不涉及消息数据或交互逻辑。
