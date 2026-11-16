@@ -144,6 +144,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
      * bridge 换代重新清空 claimed。 */
     if (live.outcomeClaimed) return;
     live.outcomeClaimed = true;
+    /* 失败状态属于这一轮，和会话是否在后台无关；与终态一样只收口一次，
+     * 否则重复/迟到的失败帧会在成功之后把 error 重新点亮。 */
+    if (kind === 'failed') live.error = 'generation_failed';
     /* 正在看的会话不需要「后台完成」提示，但这一轮已经处理过。 */
     if (focused === live.record.conversationId) { live.outcome = null; return; }
     live.outcome = { kind, reason, sequence: ++live.outcomeRevision };
@@ -204,6 +207,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (event.type === 'agent_start') {
       live.agentActive = true; live.runObserved = true;
       live.outcome = null; live.outcomeClaimed = false;
+      /* 自动重试/续跑会产生新的 agent_start，但不经过新的 prompt command；
+       * 上一轮的失败错误必须在这里清掉，否则重试成功后详情仍显示上次失败。 */
+      if (live.error === 'generation_failed') live.error = null;
       /* 自动重试/继续会产生新的 agent_start：上一轮的中断/停止证据不能
        * 带进这一轮，否则一次新的空 settled 会被误判成上一轮的取消。 */
       live.lastAssistantStop = null; live.abortRequested = false;
@@ -242,7 +248,6 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     if (event.type === 'bridge_status' && event.state !== 'ready') live.approvals.clear();
     if (event.type === 'extension_ui_request' || event.type === 'extension_error') live.attention = true;
-    if (event.generationResult?.outcome === 'failed') { live.error = 'generation_failed'; live.attention = true; }
     /* prompt preflight 失败没有 agent_start/agent_settled，但同一条 response
      * 已带有结构化 generationResult；它是该次提交的真实终态。 */
     if (event.type === 'response' && event.generationResult) {

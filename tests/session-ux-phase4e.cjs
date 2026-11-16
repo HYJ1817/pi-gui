@@ -206,6 +206,48 @@ const { JSDOM } = require('jsdom');
     emit({ type: 'message_end', message: { role: 'assistant', stopReason: 'stop' } });
     await registry.command(owner, { type: 'prompt', id: 'next', message: 'next' });
     ok('提交新任务立即清掉上一轮终态', item().outcome === null && item().activity === 'running');
+
+    /* 复审回归：失败结果也必须走 recordOutcome 的一次性收口。 */
+    emit({ type: 'agent_start' });
+    settle({ requestId: 'dup-fail', outcome: 'failed', failure: { class: 'server_error' }, hasVisibleOutput: false });
+    ok('后台失败同时记录终态、错误与未读', item().outcome?.kind === 'failed'
+      && item().error === 'generation_failed' && item().attention === true);
+
+    await registry.focus(owner);
+    ok('聚焦读掉失败终态与未读点，但保留详情错误', item().outcome === null
+      && item().attention === false && item().error === 'generation_failed');
+
+    settle({ requestId: 'dup-fail', outcome: 'failed', failure: { class: 'server_error' }, hasVisibleOutput: false });
+    ok('同一轮重复失败 settled 不重新点亮终态或 attention', item().outcome === null
+      && item().attention === false);
+
+    emit({ type: 'agent_start' });
+    settle({ requestId: 'focused-fail', outcome: 'failed', failure: { class: 'server_error' }, hasVisibleOutput: false });
+    ok('用户正看着的会话失败只记录详情错误，不产生未读点', item().outcome === null
+      && item().attention === false && item().error === 'generation_failed');
+
+    await registry.blur(owner);
+    emit({ type: 'agent_start' });
+    settle({ requestId: 'retry-fail', outcome: 'failed', failure: { class: 'server_error' }, hasVisibleOutput: false });
+    ok('后台失败在下一轮开始前保持可见', item().error === 'generation_failed'
+      && item().outcome?.kind === 'failed');
+
+    emit({ type: 'agent_start' });
+    ok('自动重试的新 agent_start 清掉上一轮失败错误', item().error === null
+      && item().outcome === null);
+
+    settle({ requestId: 'retry-success', outcome: 'success', hasVisibleOutput: true });
+    ok('自动重试成功后不再保留上次失败错误', item().error === null
+      && item().outcome?.kind === 'completed');
+
+    settle({ requestId: 'retry-fail', outcome: 'failed', failure: { class: 'server_error' }, hasVisibleOutput: false });
+    ok('新轮成功后迟到的旧失败帧不覆盖终态或 error', item().outcome?.kind === 'completed'
+      && item().error === null);
+
+    await registry.focus(owner);
+    settle({ requestId: 'retry-fail', outcome: 'failed', failure: { class: 'server_error' }, hasVisibleOutput: false });
+    ok('已读后迟到的失败帧不重新点亮 attention', item().outcome === null
+      && item().attention === false && item().error === null);
   } finally {
     try { await registry.dispose(); } catch {}
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}

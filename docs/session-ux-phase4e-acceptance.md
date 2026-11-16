@@ -48,6 +48,11 @@
 - `outcomeClaimed` 记住本轮终态已处理：同一轮后续 settled（包括迟到且带
   `generationResult` 的帧）不会重复计数、不会把 abort / preflight / bridge crash
   的终态降级或覆盖，也不会在用户聚焦读掉后重新点亮 outcome 或通用 attention 点。
+- 失败的 `generation_failed` 与终态在同一次 `recordOutcome` 中收口：重复/迟到的
+  失败帧不会在成功或已读之后重新写 error 或 attention。
+- 用户正看着的会话失败时不写 outcome、不点亮 attention，但详情错误仍保留；
+  自动重试/续跑的新 `agent_start` 会清掉上一轮 `generation_failed`，避免重试成功后
+  详情仍显示上次失败。
 - Stop 未被 adapter 确认成功（返回失败或请求异常）时清掉 `abortRequested`，避免后续
   正常完成被误报为已中断；若模型确实以 `aborted` 结束，仍由真实 stopReason /
   failure 证据判为中断。
@@ -83,6 +88,7 @@
 - 多条结果：打开既有「独立会话」列表，预选 revision 最新的一条；
   不自动 focus、不切换中央视图。用户点击具体行后才走现有 owner 校验 focus 并切换。
 - 列表行与详情状态行区分四种终态；中断不再显示「生成失败，请重试」文案。
+  前台失败只更新详情错误，不产生未读点；自动重试开始后旧失败提示清除。
 - 键盘焦点在重画后保留在聚合入口；聚合入口有 2px `:focus-visible` 轮廓。
   单条结果被激活、入口随已读消失时，焦点交给刚切到的会话行，不退到 `body`。
 - 颜色只消费现有 `--ds-*` / `--ui-space-*` / `--text-*` / `--radius-2xs`。
@@ -104,7 +110,7 @@
 
 | 套件 | 结果 |
 | --- | ---: |
-| `session-ux-phase4e` | 51/51 |
+| `session-ux-phase4e` | 60/60 |
 | `session-ux-phase4e-shots` | 43/43 |
 | `runtime-registry` | 36/36 |
 | `runtime-events` | 14/14 |
@@ -138,8 +144,9 @@
 
 `session-ux-phase4e` 覆盖：四种终态、成功 / 失败 / 中断 / 未知、assistant
 stopReason 回退、`agent_settled.aborted` 优先判中断、preflight、bridge 活跃崩溃与
-空闲断线、用户 abort、Stop 未被确认或请求异常时不误报中断、重复 settled / 迟到成功结果不覆盖
-或重新点亮已读终态与 attention、新任务清除旧终态、换代作废、focus 清除与失败保留、
+空闲断线、用户 abort、Stop 未被确认或请求异常时不误报中断、重复成功/失败 settled
+与迟到结果不覆盖或重新点亮已读终态、attention 和 error、前台失败不产生未读点、
+自动重试清掉上一轮失败错误、新任务清除旧终态、换代作废、focus 清除与失败保留、
 focus 期间新终态保留、终态与当前 runtime 错误同时可见、单条 / 多条聚合、列表预选、
 用户改选后 refresh 不回跳、点击定位、单条结果激活后焦点落到对应会话行、后台更新不切会话不抢焦点。
 
@@ -185,13 +192,21 @@ focus 期间新终态保留、终态与当前 runtime 错误同时可见、单�
 - 自动重试 / compaction 期间不提前产生中间结果；只在会话级运行结束时记录一次。
 - 本轮不合并、不发版；合并与发布需另行授权。
 
-## 9. 独立复审与处置
+## 9. 复审与处置
 
-独立 general-purpose agent 复审了最终工作树，范围包括 registry 终态状态机、
-focus 竞态、bridge / abort / preflight 边界、侧栏聚合与既有列表预选、键盘焦点和
-强约束；结论为**无确认遗留缺陷**。
+独立 general-purpose agent 复审了工作树，范围包括 registry 终态状态机、focus
+竞态、bridge / abort / preflight 边界、侧栏聚合与既有列表预选、键盘焦点和强约束；
+当时结论为无确认遗留缺陷。
 
-复审期间确认并修复 3 项：`agent_settled.aborted` 可能被成功摘要盖成已完成；
+随后用户复审确认 1 项状态缺陷：失败的 `generationResult` 在 `recordOutcome`
+之外无条件设置 `live.error` 和 `live.attention`，绕过了去重与已读保护。重复失败
+settled 会在用户读掉提示后重新点亮未读点，用户正看着会话时首次失败也会产生多余
+未读点；另外新 `agent_start` 未清上一轮 `generation_failed`，自动续跑成功后会继续
+显示旧失败。已通过最小复现确认并修复：失败错误与终态一起进入 `recordOutcome`
+一次性收口，`agent_start` 只清 `generation_failed`、不清 runtime 错误；新增 9 条
+断言，P4-E 60/60。
+
+此前独立复审确认并修复 3 项：`agent_settled.aborted` 可能被成功摘要盖成已完成；
 已读结果后的重复 settled 可能重新点亮 attention；单条结果激活后键盘焦点会掉到
 `body`。作者自审另修正了同一轮迟到 `generationResult` 的覆盖、Stop 未确认或请求
 异常的证据清理，以及终态与当前 runtime 错误同时可见。每项均以最小复现验证，
