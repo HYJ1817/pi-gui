@@ -218,6 +218,15 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   equal(n6.querySelector('.tl-subagent-meta').textContent, '子代理 · 30 项 · 成功 30 · 显示 24', '截断时保留真实总数和已显示数量');
   ok('facts 仍受 8000 字符预算约束', activity(many).facts.length <= 8000);
 
+  const lateFailure = finish(entry({}, 'late-failure'), {
+    runId: 'run-late-failure',
+    results: Array.from({ length: 30 }, (_, i) => result({ index: i, agent: 'agent-' + i, model: 'model-' + i, exitCode: i === 29 ? 1 : 0 })),
+  });
+  const n6b = mount(lateFailure);
+  equal(activity(lateFailure).status, 'error', '第 30 项失败参与父生命周期');
+  equal(n6b.querySelector('.tl-status').textContent, '失败', '父行状态与后置失败一致');
+  equal(n6b.querySelector('.tl-subagent-meta').textContent, '子代理 · 30 项 · 成功 29 · 失败 1 · 显示 24', '截断后子项统计仍使用完整结果');
+
   const huge = finish(entry({}, 'huge'), {
     runId: 'run-huge',
     results: Array.from({ length: 24 }, (_, i) => result({
