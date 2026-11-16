@@ -1,0 +1,207 @@
+{
+  "measured": {
+    "syncMs": 116.69999980926514,
+    "totalMs": 255.19999980926514
+  },
+  "metricDeltas": {
+    "Timestamp": 0.45,
+    "JSEventListeners": 217,
+    "LayoutObjects": -17122,
+    "Nodes": 14011,
+    "ContextLifecycleStateObservers": -564,
+    "LayoutCount": 12,
+    "RecalcStyleCount": 15,
+    "LayoutDuration": 0.134,
+    "RecalcStyleDuration": 0.105,
+    "DevToolsCommandDuration": 0.165,
+    "ScriptDuration": 0.002,
+    "TaskDuration": 0.449,
+    "TaskOtherDuration": 0.042,
+    "ThreadTime": 0.419,
+    "ProcessTime": 0.564,
+    "JSHeapUsedSize": -9765900
+  },
+  "profilingMs": 491.9,
+  "top": [
+    {
+      "function": "(program)",
+      "url": "",
+      "line": 0,
+      "selfMs": 137.1
+    },
+    {
+      "function": "getClientRects",
+      "url": "",
+      "line": 0,
+      "selfMs": 100.2
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:5578/messages.js",
+      "line": 1288,
+      "selfMs": 87
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:5578/messages.js",
+      "line": 1288,
+      "selfMs": 22.1
+    },
+    {
+      "function": "layout",
+      "url": "http://127.0.0.1:5578/conversation-nav.js",
+      "line": 196,
+      "selfMs": 18.9
+    },
+    {
+      "function": "grouped",
+      "url": "http://127.0.0.1:5578/message-meta.js",
+      "line": 19,
+      "selfMs": 14.2
+    },
+    {
+      "function": "messageActions",
+      "url": "http://127.0.0.1:5578/ui/message-actions.js",
+      "line": 3,
+      "selfMs": 11.2
+    },
+    {
+      "function": "reserve",
+      "url": "http://127.0.0.1:5578/composer.js",
+      "line": 58,
+      "selfMs": 9.5
+    },
+    {
+      "function": "rebuildFromMessages",
+      "url": "http://127.0.0.1:5578/messages.js",
+      "line": 1076,
+      "selfMs": 6.5
+    },
+    {
+      "function": "clearThread",
+      "url": "http://127.0.0.1:5578/messages.js",
+      "line": 150,
+      "selfMs": 5.7
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:5578/messages.js",
+      "line": 1037,
+      "selfMs": 5.1
+    },
+    {
+      "function": "usageSummary",
+      "url": "http://127.0.0.1:5578/message-meta.js",
+      "line": 28,
+      "selfMs": 4.8
+    },
+    {
+      "function": "createElement",
+      "url": "",
+      "line": 0,
+      "selfMs": 4.8
+    },
+    {
+      "function": "(garbage collector)",
+      "url": "",
+      "line": 0,
+      "selfMs": 4.7
+    },
+    {
+      "function": "thinkingBlock",
+      "url": "http://127.0.0.1:5578/messages.js",
+      "line": 402,
+      "selfMs": 4.7
+    },
+    {
+      "function": "updateCurrent",
+      "url": "http://127.0.0.1:5578/conversation-nav.js",
+      "line": 250,
+      "selfMs": 4.6
+    },
+    {
+      "function": "renderUsageMeta",
+      "url": "http://127.0.0.1:5578/message-meta.js",
+      "line": 46,
+      "selfMs": 4.5
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 3.4
+    },
+    {
+      "function": "buildFrom",
+      "url": "http://127.0.0.1:5578/conversation-nav.js",
+      "line": 140,
+      "selfMs": 3.2
+    },
+    {
+      "function": "updateEntry",
+      "url": "http://127.0.0.1:5578/tool-view.js",
+      "line": 262,
+      "selfMs": 2.8
+    },
+    {
+      "function": "syncGroup",
+      "url": "http://127.0.0.1:5578/tool-view.js",
+      "line": 477,
+      "selfMs": 2.4
+    },
+    {
+      "function": "insertBefore",
+      "url": "",
+      "line": 0,
+      "selfMs": 2.2
+    },
+    {
+      "function": "renderBlocks",
+      "url": "http://127.0.0.1:5578/markdown.js",
+      "line": 245,
+      "selfMs": 1.8
+    },
+    {
+      "function": "(anonymous)",
+      "url": "",
+      "line": 1,
+      "selfMs": 1.7
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.2
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.2
+    },
+    {
+      "function": "setText",
+      "url": "http://127.0.0.1:5578/tool-view.js",
+      "line": 402,
+      "selfMs": 1.1
+    },
+    {
+      "function": "querySelector",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.1
+    },
+    {
+      "function": "setAttribute",
+      "url": "",
+      "line": 0,
+      "selfMs": 0.7
+    },
+    {
+      "function": "syncTitle",
+      "url": "http://127.0.0.1:5578/tool-view.js",
+      "line": 176,
+      "selfMs": 0.7
+    }
+  ]
+}

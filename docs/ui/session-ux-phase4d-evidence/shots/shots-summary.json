@@ -1,0 +1,633 @@
+{
+  "generatedAt": "2026-11-16T18:00:31.340Z",
+  "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "viewports": [
+    [
+      1320,
+      820
+    ],
+    [
+      700,
+      600
+    ]
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "assertions": [
+    {
+      "name": "Classic 1320×820 dark: 300 条提问完整，Minimap 按既有响应式规则显示",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "dark",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": true,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": -285,
+        "streamWidth": 1045,
+        "threadWidth": 760,
+        "userContrast": 12.35,
+        "roleContrast": 8.19
+      }
+    },
+    {
+      "name": "Classic 1320×820 dark: 无横向溢出",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "dark",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": true,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": -285,
+        "streamWidth": 1045,
+        "threadWidth": 760,
+        "userContrast": 12.35,
+        "roleContrast": 8.19
+      }
+    },
+    {
+      "name": "Classic 1320×820 dark: 正文与角色标签对比度 ≥ 4.5",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "dark",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": true,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": -285,
+        "streamWidth": 1045,
+        "threadWidth": 760,
+        "userContrast": 12.35,
+        "roleContrast": 8.19
+      }
+    },
+    {
+      "name": "Runtime 1320×820 dark: 裁剪命中给出显式提示",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "dark",
+        "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+        "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+        "noticeVisible": true,
+        "noticeContrast": 8.67,
+        "noticeFontSize": "12px",
+        "scrolled": 0,
+        "rows": 151,
+        "documentOverflow": 0,
+        "outputOverflow": 0
+      }
+    },
+    {
+      "name": "Runtime 1320×820 dark: 提示可读且无横向溢出",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "dark",
+        "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+        "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+        "noticeVisible": true,
+        "noticeContrast": 8.67,
+        "noticeFontSize": "12px",
+        "scrolled": 0,
+        "rows": 151,
+        "documentOverflow": 0,
+        "outputOverflow": 0
+      }
+    },
+    {
+      "name": "Classic 1320×820 light: 300 条提问完整，Minimap 按既有响应式规则显示",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "light",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": true,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": -285,
+        "streamWidth": 1045,
+        "threadWidth": 760,
+        "userContrast": 13.26,
+        "roleContrast": 6.29
+      }
+    },
+    {
+      "name": "Classic 1320×820 light: 无横向溢出",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "light",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": true,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": -285,
+        "streamWidth": 1045,
+        "threadWidth": 760,
+        "userContrast": 13.26,
+        "roleContrast": 6.29
+      }
+    },
+    {
+      "name": "Classic 1320×820 light: 正文与角色标签对比度 ≥ 4.5",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "light",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": true,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": -285,
+        "streamWidth": 1045,
+        "threadWidth": 760,
+        "userContrast": 13.26,
+        "roleContrast": 6.29
+      }
+    },
+    {
+      "name": "Runtime 1320×820 light: 裁剪命中给出显式提示",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "light",
+        "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+        "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+        "noticeVisible": true,
+        "noticeContrast": 6.67,
+        "noticeFontSize": "12px",
+        "scrolled": 0,
+        "rows": 151,
+        "documentOverflow": 0,
+        "outputOverflow": 0
+      }
+    },
+    {
+      "name": "Runtime 1320×820 light: 提示可读且无横向溢出",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "theme": "light",
+        "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+        "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+        "noticeVisible": true,
+        "noticeContrast": 6.67,
+        "noticeFontSize": "12px",
+        "scrolled": 0,
+        "rows": 151,
+        "documentOverflow": 0,
+        "outputOverflow": 0
+      }
+    },
+    {
+      "name": "Classic 700×600 dark: 300 条提问完整，Minimap 按既有响应式规则隐藏",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "dark",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": false,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": 0,
+        "streamWidth": 460,
+        "threadWidth": 460,
+        "userContrast": 12.35,
+        "roleContrast": 8.19
+      }
+    },
+    {
+      "name": "Classic 700×600 dark: 无横向溢出",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "dark",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": false,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": 0,
+        "streamWidth": 460,
+        "threadWidth": 460,
+        "userContrast": 12.35,
+        "roleContrast": 8.19
+      }
+    },
+    {
+      "name": "Classic 700×600 dark: 正文与角色标签对比度 ≥ 4.5",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "dark",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": false,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": 0,
+        "streamWidth": 460,
+        "threadWidth": 460,
+        "userContrast": 12.35,
+        "roleContrast": 8.19
+      }
+    },
+    {
+      "name": "Runtime 700×600 dark: 裁剪命中给出显式提示",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "dark",
+        "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+        "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+        "noticeVisible": true,
+        "noticeContrast": 8.67,
+        "noticeFontSize": "12px",
+        "scrolled": 0,
+        "rows": 151,
+        "documentOverflow": 0,
+        "outputOverflow": 0
+      }
+    },
+    {
+      "name": "Runtime 700×600 dark: 提示可读且无横向溢出",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "dark",
+        "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+        "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+        "noticeVisible": true,
+        "noticeContrast": 8.67,
+        "noticeFontSize": "12px",
+        "scrolled": 0,
+        "rows": 151,
+        "documentOverflow": 0,
+        "outputOverflow": 0
+      }
+    },
+    {
+      "name": "Classic 700×600 light: 300 条提问完整，Minimap 按既有响应式规则隐藏",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "light",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": false,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": 0,
+        "streamWidth": 460,
+        "threadWidth": 460,
+        "userContrast": 13.26,
+        "roleContrast": 6.29
+      }
+    },
+    {
+      "name": "Classic 700×600 light: 无横向溢出",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "light",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": false,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": 0,
+        "streamWidth": 460,
+        "threadWidth": 460,
+        "userContrast": 13.26,
+        "roleContrast": 6.29
+      }
+    },
+    {
+      "name": "Classic 700×600 light: 正文与角色标签对比度 ≥ 4.5",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "light",
+        "users": 300,
+        "navEntries": 300,
+        "navMarkers": 300,
+        "navVisible": false,
+        "documentOverflow": 0,
+        "streamOverflow": 0,
+        "threadOverflow": 0,
+        "streamWidth": 460,
+        "threadWidth": 460,
+        "userContrast": 13.26,
+        "roleContrast": 6.29
+      }
+    },
+    {
+      "name": "Runtime 700×600 light: 裁剪命中给出显式提示",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "light",
+        "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+        "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+        "noticeVisible": true,
+        "noticeContrast": 6.67,
+        "noticeFontSize": "12px",
+        "scrolled": 0,
+        "rows": 151,
+        "documentOverflow": 0,
+        "outputOverflow": 0
+      }
+    },
+    {
+      "name": "Runtime 700×600 light: 提示可读且无横向溢出",
+      "pass": true,
+      "detail": {
+        "viewport": [
+          700,
+          600
+        ],
+        "theme": "light",
+        "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+        "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+        "noticeVisible": true,
+        "noticeContrast": 6.67,
+        "noticeFontSize": "12px",
+        "scrolled": 0,
+        "rows": 151,
+        "documentOverflow": 0,
+        "outputOverflow": 0
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "scene": "classic",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "dark",
+      "users": 300,
+      "navEntries": 300,
+      "navMarkers": 300,
+      "navVisible": true,
+      "documentOverflow": 0,
+      "streamOverflow": 0,
+      "threadOverflow": -285,
+      "streamWidth": 1045,
+      "threadWidth": 760,
+      "userContrast": 12.35,
+      "roleContrast": 8.19
+    },
+    {
+      "scene": "runtime-locate",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "dark",
+      "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+      "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+      "noticeVisible": true,
+      "noticeContrast": 8.67,
+      "noticeFontSize": "12px",
+      "scrolled": 0,
+      "rows": 151,
+      "documentOverflow": 0,
+      "outputOverflow": 0
+    },
+    {
+      "scene": "classic",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "light",
+      "users": 300,
+      "navEntries": 300,
+      "navMarkers": 300,
+      "navVisible": true,
+      "documentOverflow": 0,
+      "streamOverflow": 0,
+      "threadOverflow": -285,
+      "streamWidth": 1045,
+      "threadWidth": 760,
+      "userContrast": 13.26,
+      "roleContrast": 6.29
+    },
+    {
+      "scene": "runtime-locate",
+      "viewport": [
+        1320,
+        820
+      ],
+      "theme": "light",
+      "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+      "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+      "noticeVisible": true,
+      "noticeContrast": 6.67,
+      "noticeFontSize": "12px",
+      "scrolled": 0,
+      "rows": 151,
+      "documentOverflow": 0,
+      "outputOverflow": 0
+    },
+    {
+      "scene": "classic",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "users": 300,
+      "navEntries": 300,
+      "navMarkers": 300,
+      "navVisible": false,
+      "documentOverflow": 0,
+      "streamOverflow": 0,
+      "threadOverflow": 0,
+      "streamWidth": 460,
+      "threadWidth": 460,
+      "userContrast": 12.35,
+      "roleContrast": 8.19
+    },
+    {
+      "scene": "runtime-locate",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "dark",
+      "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+      "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+      "noticeVisible": true,
+      "noticeContrast": 8.67,
+      "noticeFontSize": "12px",
+      "scrolled": 0,
+      "rows": 151,
+      "documentOverflow": 0,
+      "outputOverflow": 0
+    },
+    {
+      "scene": "classic",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "light",
+      "users": 300,
+      "navEntries": 300,
+      "navMarkers": 300,
+      "navVisible": false,
+      "documentOverflow": 0,
+      "streamOverflow": 0,
+      "threadOverflow": 0,
+      "streamWidth": 460,
+      "threadWidth": 460,
+      "userContrast": 13.26,
+      "roleContrast": 6.29
+    },
+    {
+      "scene": "runtime-locate",
+      "viewport": [
+        700,
+        600
+      ],
+      "theme": "light",
+      "state": "只读历史 · 829 条（仅显示最近部分） · 历史按真实记录恢复计划、思考、工具、正文与用量；不含原始参数/输出；更早的执行记录已截断 · 未被启动，不占运行名额",
+      "notice": "搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。",
+      "noticeVisible": true,
+      "noticeContrast": 6.67,
+      "noticeFontSize": "12px",
+      "scrolled": 0,
+      "rows": 151,
+      "documentOverflow": 0,
+      "outputOverflow": 0
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "classic-1320x820-dark",
+      "file": "docs\\ui\\session-ux-phase4d-evidence\\shots\\classic-1320x820-dark.png",
+      "bytes": 68903
+    },
+    {
+      "name": "runtime-locate-1320x820-dark",
+      "file": "docs\\ui\\session-ux-phase4d-evidence\\shots\\runtime-locate-1320x820-dark.png",
+      "bytes": 67914
+    },
+    {
+      "name": "classic-1320x820-light",
+      "file": "docs\\ui\\session-ux-phase4d-evidence\\shots\\classic-1320x820-light.png",
+      "bytes": 71219
+    },
+    {
+      "name": "runtime-locate-1320x820-light",
+      "file": "docs\\ui\\session-ux-phase4d-evidence\\shots\\runtime-locate-1320x820-light.png",
+      "bytes": 69029
+    },
+    {
+      "name": "classic-700x600-dark",
+      "file": "docs\\ui\\session-ux-phase4d-evidence\\shots\\classic-700x600-dark.png",
+      "bytes": 47398
+    },
+    {
+      "name": "runtime-locate-700x600-dark",
+      "file": "docs\\ui\\session-ux-phase4d-evidence\\shots\\runtime-locate-700x600-dark.png",
+      "bytes": 51227
+    },
+    {
+      "name": "classic-700x600-light",
+      "file": "docs\\ui\\session-ux-phase4d-evidence\\shots\\classic-700x600-light.png",
+      "bytes": 49745
+    },
+    {
+      "name": "runtime-locate-700x600-light",
+      "file": "docs\\ui\\session-ux-phase4d-evidence\\shots\\runtime-locate-700x600-light.png",
+      "bytes": 52439
+    }
+  ],
+  "pageErrors": []
+}

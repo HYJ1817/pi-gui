@@ -29,7 +29,7 @@
  * 用户消息进来同样关组。 */
 
 import { S } from './state.js';
-import { addClassicToolEntry, createClassicToolGroup, ensureThread, moveWorkingToEnd, noteTurnTool, scrollBottom, syncToolWorking } from './messages.js';
+import { addClassicToolEntry, createClassicToolGroup, ensureThread, finishClassicHistoryBeforeLive, moveWorkingToEnd, noteTurnTool, scrollBottom, syncToolWorking } from './messages.js';
 import { recordToolChange } from './changes.js';
 import { scheduleGitRefresh, setGitStatusHook } from './git.js';
 import {
@@ -124,6 +124,9 @@ export function resetTimeline() {
 /* ---------- 事件 ---------- */
 
 export function onToolStart(evt) {
+  /* 计划卡直接 append 到 thread，且发生在 ensureThread 之前 —— 这里先把
+   * 未挂完的历史补完，工具组与计划卡才会落在完整历史之后。 */
+  finishClassicHistoryBeforeLive();
   /* 计划工具被消费成任务列表，不进入 Tool Timeline（否则同一件事出现两次）。 */
   if (handlePlanToolStart(evt)) { scrollBottom(); return; }
   const entry = registerEntry(makeEntry(evt));
@@ -160,6 +163,8 @@ export function onToolWait(evt) {
 }
 
 export function onToolEnd(evt) {
+  /* 计划结束事件也可能新建/改挂计划卡（handlePlanToolEnd），同样先补完历史。 */
+  finishClassicHistoryBeforeLive();
   /* end 事件不带 toolName，按 start 时记下的 callId 认领（见 plan-live.js）。 */
   if (handlePlanToolEnd(evt)) { scrollBottom(); return; }
   const rec = S.tools.get(evt.toolCallId);

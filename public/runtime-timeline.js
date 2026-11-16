@@ -241,7 +241,12 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
       }
       if (part.type === 'text' && typeof part.text === 'string') {
         if (kind !== 'assistant') {
-          current = add({ kind: 'assistant', text: '', state: 'complete', truncated: false });
+          /* messageId 只服务历史搜索定位：搜索索引的是 assistant 正文，
+           * 时间线也必须能按同一条原始消息 id 找到对应的正文行。 */
+          current = add({
+            kind: 'assistant', text: '', state: 'complete', truncated: false,
+            messageId: typeof meta.messageId === 'string' ? meta.messageId : null,
+          });
           owned.push(current);
           kind = 'assistant';
         }

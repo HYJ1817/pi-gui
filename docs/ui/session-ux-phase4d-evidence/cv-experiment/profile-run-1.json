@@ -1,0 +1,189 @@
+{
+  "measured": {
+    "syncMs": 67.09999990463257,
+    "totalMs": 68.79999995231628
+  },
+  "profilingMs": 133.1,
+  "top": [
+    {
+      "function": "(program)",
+      "url": "",
+      "line": 0,
+      "selfMs": 64
+    },
+    {
+      "function": "grouped",
+      "url": "http://127.0.0.1:9420/message-meta.js",
+      "line": 19,
+      "selfMs": 7.5
+    },
+    {
+      "function": "rebuildFromMessages",
+      "url": "http://127.0.0.1:9420/messages.js",
+      "line": 1043,
+      "selfMs": 6
+    },
+    {
+      "function": "usageSummary",
+      "url": "http://127.0.0.1:9420/message-meta.js",
+      "line": 28,
+      "selfMs": 4.6
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 4.3
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:9420/messages.js",
+      "line": 1004,
+      "selfMs": 3.6
+    },
+    {
+      "function": "iconMarkup",
+      "url": "http://127.0.0.1:9420/ui/icons.js",
+      "line": 85,
+      "selfMs": 3.5
+    },
+    {
+      "function": "querySelector",
+      "url": "",
+      "line": 0,
+      "selfMs": 2.5
+    },
+    {
+      "function": "updateEntry",
+      "url": "http://127.0.0.1:9420/tool-view.js",
+      "line": 262,
+      "selfMs": 2.3
+    },
+    {
+      "function": "renderBlocks",
+      "url": "http://127.0.0.1:9420/markdown.js",
+      "line": 245,
+      "selfMs": 2.3
+    },
+    {
+      "function": "clearThread",
+      "url": "http://127.0.0.1:9420/messages.js",
+      "line": 117,
+      "selfMs": 2.1
+    },
+    {
+      "function": "userBody",
+      "url": "http://127.0.0.1:9420/messages.js",
+      "line": 481,
+      "selfMs": 1.9
+    },
+    {
+      "function": "syncGroup",
+      "url": "http://127.0.0.1:9420/tool-view.js",
+      "line": 477,
+      "selfMs": 1.9
+    },
+    {
+      "function": "flushHistoryTurn",
+      "url": "http://127.0.0.1:9420/messages.js",
+      "line": 1078,
+      "selfMs": 1.7
+    },
+    {
+      "function": "createElement",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.7
+    },
+    {
+      "function": "renderUsageMeta",
+      "url": "http://127.0.0.1:9420/message-meta.js",
+      "line": 46,
+      "selfMs": 1.4
+    },
+    {
+      "function": "setText",
+      "url": "http://127.0.0.1:9420/tool-view.js",
+      "line": 402,
+      "selfMs": 1.2
+    },
+    {
+      "function": "pushText",
+      "url": "http://127.0.0.1:9420/messages.js",
+      "line": 493,
+      "selfMs": 1.2
+    },
+    {
+      "function": "buildFrom",
+      "url": "http://127.0.0.1:9420/conversation-nav.js",
+      "line": 140,
+      "selfMs": 1.2
+    },
+    {
+      "function": "addEventListener",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.1
+    },
+    {
+      "function": "thinkingBlock",
+      "url": "http://127.0.0.1:9420/messages.js",
+      "line": 369,
+      "selfMs": 1.1
+    },
+    {
+      "function": "sub",
+      "url": "http://127.0.0.1:9420/tool-view.js",
+      "line": 85,
+      "selfMs": 1.1
+    },
+    {
+      "function": "renderEntry",
+      "url": "http://127.0.0.1:9420/tool-view.js",
+      "line": 96,
+      "selfMs": 1
+    },
+    {
+      "function": "querySelector",
+      "url": "",
+      "line": 0,
+      "selfMs": 0.8
+    },
+    {
+      "function": "setThinkingState",
+      "url": "http://127.0.0.1:9420/messages.js",
+      "line": 396,
+      "selfMs": 0.7
+    },
+    {
+      "function": "createElement",
+      "url": "",
+      "line": 0,
+      "selfMs": 0.7
+    },
+    {
+      "function": "setAttribute",
+      "url": "",
+      "line": 0,
+      "selfMs": 0.7
+    },
+    {
+      "function": "renderBlocks",
+      "url": "http://127.0.0.1:9420/markdown.js",
+      "line": 245,
+      "selfMs": 0.7
+    },
+    {
+      "function": "inline",
+      "url": "http://127.0.0.1:9420/markdown.js",
+      "line": 47,
+      "selfMs": 0.7
+    },
+    {
+      "function": "renderTurnOutcome",
+      "url": "http://127.0.0.1:9420/turn-outcome.js",
+      "line": 103,
+      "selfMs": 0.7
+    }
+  ]
+}

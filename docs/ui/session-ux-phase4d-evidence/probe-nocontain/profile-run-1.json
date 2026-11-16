@@ -1,0 +1,208 @@
+{
+  "measured": {
+    "syncMs": 186.79999995231628,
+    "totalMs": 352.7999999523163
+  },
+  "metricDeltas": {
+    "Timestamp": 0.594,
+    "JSEventListeners": -755,
+    "LayoutObjects": 15831,
+    "Nodes": 24401,
+    "ContextLifecycleStateObservers": -2075,
+    "LayoutCount": 10,
+    "RecalcStyleCount": 13,
+    "LayoutDuration": 0.171,
+    "RecalcStyleDuration": 0.184,
+    "DevToolsCommandDuration": 0.144,
+    "ScriptDuration": 0.007,
+    "TaskDuration": 0.594,
+    "TaskOtherDuration": 0.088,
+    "ThreadTime": 0.552,
+    "ProcessTime": 0.786,
+    "JSHeapUsedSize": 380844,
+    "JSHeapTotalSize": -1048576
+  },
+  "profilingMs": 593.8,
+  "top": [
+    {
+      "function": "getClientRects",
+      "url": "",
+      "line": 0,
+      "selfMs": 157.6
+    },
+    {
+      "function": "(program)",
+      "url": "",
+      "line": 0,
+      "selfMs": 135.1
+    },
+    {
+      "function": "buildFrom",
+      "url": "http://127.0.0.1:14356/conversation-nav.js",
+      "line": 140,
+      "selfMs": 102
+    },
+    {
+      "function": "reserve",
+      "url": "http://127.0.0.1:14356/composer.js",
+      "line": 58,
+      "selfMs": 91.4
+    },
+    {
+      "function": "grouped",
+      "url": "http://127.0.0.1:14356/message-meta.js",
+      "line": 19,
+      "selfMs": 9.9
+    },
+    {
+      "function": "clearThread",
+      "url": "http://127.0.0.1:14356/messages.js",
+      "line": 150,
+      "selfMs": 7.6
+    },
+    {
+      "function": "layout",
+      "url": "http://127.0.0.1:14356/conversation-nav.js",
+      "line": 196,
+      "selfMs": 6.4
+    },
+    {
+      "function": "messageActions",
+      "url": "http://127.0.0.1:14356/ui/message-actions.js",
+      "line": 3,
+      "selfMs": 6.2
+    },
+    {
+      "function": "usageSummary",
+      "url": "http://127.0.0.1:14356/message-meta.js",
+      "line": 28,
+      "selfMs": 5.8
+    },
+    {
+      "function": "(anonymous)",
+      "url": "http://127.0.0.1:14356/messages.js",
+      "line": 1037,
+      "selfMs": 5.8
+    },
+    {
+      "function": "renderUsageMeta",
+      "url": "http://127.0.0.1:14356/message-meta.js",
+      "line": 46,
+      "selfMs": 4.6
+    },
+    {
+      "function": "appendChild",
+      "url": "",
+      "line": 0,
+      "selfMs": 4.3
+    },
+    {
+      "function": "(garbage collector)",
+      "url": "",
+      "line": 0,
+      "selfMs": 4.3
+    },
+    {
+      "function": "revealMarker",
+      "url": "http://127.0.0.1:14356/conversation-nav.js",
+      "line": 239,
+      "selfMs": 4.2
+    },
+    {
+      "function": "updateEntry",
+      "url": "http://127.0.0.1:14356/tool-view.js",
+      "line": 262,
+      "selfMs": 4.1
+    },
+    {
+      "function": "rebuildFromMessages",
+      "url": "http://127.0.0.1:14356/messages.js",
+      "line": 1076,
+      "selfMs": 2.8
+    },
+    {
+      "function": "renderBlocks",
+      "url": "http://127.0.0.1:14356/markdown.js",
+      "line": 245,
+      "selfMs": 2.4
+    },
+    {
+      "function": "thinkingBlock",
+      "url": "http://127.0.0.1:14356/messages.js",
+      "line": 402,
+      "selfMs": 2.1
+    },
+    {
+      "function": "updateCurrent",
+      "url": "http://127.0.0.1:14356/conversation-nav.js",
+      "line": 250,
+      "selfMs": 2
+    },
+    {
+      "function": "renderEntry",
+      "url": "http://127.0.0.1:14356/tool-view.js",
+      "line": 96,
+      "selfMs": 1.8
+    },
+    {
+      "function": "createElement",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.8
+    },
+    {
+      "function": "syncGroup",
+      "url": "http://127.0.0.1:14356/tool-view.js",
+      "line": 477,
+      "selfMs": 1.8
+    },
+    {
+      "function": "setAttribute",
+      "url": "",
+      "line": 0,
+      "selfMs": 1.4
+    },
+    {
+      "function": "revealMarker",
+      "url": "http://127.0.0.1:14356/conversation-nav.js",
+      "line": 239,
+      "selfMs": 1.1
+    },
+    {
+      "function": "setAttribute",
+      "url": "",
+      "line": 0,
+      "selfMs": 0.9
+    },
+    {
+      "function": "setThinkingState",
+      "url": "http://127.0.0.1:14356/messages.js",
+      "line": 429,
+      "selfMs": 0.8
+    },
+    {
+      "function": "getBoundingClientRect",
+      "url": "",
+      "line": 0,
+      "selfMs": 0.7
+    },
+    {
+      "function": "(anonymous)",
+      "url": "",
+      "line": 1,
+      "selfMs": 0.7
+    },
+    {
+      "function": "createClassicToolGroup",
+      "url": "http://127.0.0.1:14356/messages.js",
+      "line": 198,
+      "selfMs": 0.7
+    },
+    {
+      "function": "argsTextOf",
+      "url": "http://127.0.0.1:14356/tool-view.js",
+      "line": 408,
+      "selfMs": 0.7
+    }
+  ]
+}
