@@ -14,6 +14,9 @@ P3-A 至 P3-G：工具组信息收尾、Token 摘要统一、Classic/Runtime 视
   与 `tools.js` 本轮没有行为改动，只补了窄窗口下的紧凑排版。
 - P3-B、P3-D 已落地：Classic、Runtime 实时、Runtime 历史共用一套 usage 字段名、数字格式与
   “摘要 + 明细”语义；历史只在原生记录确有 usage 时显示，旧记录不补 0。
+- 验收整改补齐两处边界：`cloneBlock` 按 block 契约逐字段复制，非法顶层字段与工具原始载荷不再
+  进入 store；plan-only assistant 消息的真实 usage 可挂在 plan block 并只显示一次。P3 定向
+  测试增至 113/113。
 - P3-C 已用真实 Chromium 计算样式确认：Runtime 用户消息由“外层卡片 + 内层气泡”改为单层右对齐
   气泡，用户角色标签视觉隐藏但保留在无障碍树，助手标签保留；工具组、计划卡与消息元信息与
   Classic 对齐。
@@ -30,15 +33,15 @@ P3-A 至 P3-G：工具组信息收尾、Token 摘要统一、Classic/Runtime 视
 | --- | --- |
 | `public/message-meta.js` | 共用 usage 字段、摘要/明细、0 与缺失语义、Pi 成本原值、流式提示 |
 | `public/runtime-display.js` | `usageText` 复用同一摘要；只保留读取白名单，不再维护第二套标签 |
-| `public/runtime-conversation.js` | 实时/历史 usage 渲染；历史提示按实际字段生成；`role=log`；Thinking/工具组上的 usage |
-| `public/runtime-timeline.js` | 历史 usage 白名单投影；usage 归属；`blockChars` 计入 usage 预算 |
-| `public/runtime-store.js` | `cloneBlock` 对 assistant/thinking/tools 再走白名单，丢弃非白名单附加字段 |
+| `public/runtime-conversation.js` | 实时/历史 usage 渲染；历史提示按实际字段生成；`role=log`；Thinking/工具组/Plan 上的 usage |
+| `public/runtime-timeline.js` | 历史 usage 白名单投影；usage 归属（含 plan-only）；`blockChars` 计入 usage 预算 |
+| `public/runtime-store.js` | `cloneBlock` 按 block 契约逐字段复制；工具与 plan 子对象再走白名单；plan 可承载 usage |
 | `public/agent-execution.css` | 删除 Runtime 用户外层卡片；统一计划/工具/Thinking/用量间距；折叠任务摘要样式 |
 | `public/runtime-conversation.css` | 单层用户气泡兜底；用户标签视觉隐藏；历史消息用量间距 |
 | `public/styles.css` | 工具状态数字等宽、组状态可换行但不挤；消息元信息与提示样式 |
 | `public/plan-view.js` | 折叠摘要：完成计数 + 当前 `in_progress` 任务标题；stalled 用“未完成” |
 | `public/index.html` | Classic `#stream` 增加 `role=log`、`aria-live=off` 等语义 |
-| `tests/session-ux-phase3.cjs` | 新增 P3 定向行为与契约测试（78 条断言） |
+| `tests/session-ux-phase3.cjs` | 新增 P3 定向行为与契约测试（113 条断言，含整改回归） |
 | `tests/session-ux-phase3-shots.cjs` | 真实 Chromium 截图、几何、键盘、焦点、reduced-motion、AX 树 |
 | `tests/session-ux-phase3-perf.cjs` | 500+ 消息、200 次工具调用的 Classic/Runtime 性能测量 |
 | `tests/session-ux-phase1.cjs`、`tests/ui2-classic.cjs`、`tests/ui2-runtime-display.cjs` | 只对齐“推理”标签与新摘要格式的既有断言，未删除断言 |
@@ -113,16 +116,19 @@ P3-A 至 P3-G：工具组信息收尾、Token 摘要统一、Classic/Runtime 视
   `cacheWrite`、`cacheWrite1h`、`reasoning`、`totalTokens` 的**非负安全整数**，以及
   `costTotal` / `cost.total` 的非负有限数；其余字段（原始 `message`、工具参数、自由文本、
   `extra` 等）全部丢弃。
-- 单条 assistant 消息的 usage 只挂一次：优先最后一个正文 block，其次 Thinking，最后工具组。
-  因此只思考或只调工具的消息也有真实用量，但不会为它伪造空的 assistant 消息。
-- `cloneBlock` 对 assistant/thinking/tools 再执行一次白名单，防止来自其他进程或旧响应的附加字段
-  进入视图或后续序列化；`blockChars` 给携带 usage 的 block 计入固定 64 字符预算，既有
-  `MAX_BLOCKS`、`MAX_TIMELINE_CHARS` 与有界裁剪继续生效。
+- 单条 assistant 消息的 usage 只挂一次：优先最后一个正文 block，其次 Thinking，再次工具组，
+  最后 Plan。因此只思考、只调工具或只提交计划的消息也有真实用量，但不会为它伪造空的
+  assistant 消息；一条消息有正文时，usage 不会再重复挂到计划卡。
+- `cloneBlock` 不再对象展开整个 block，而是按 user/assistant/thinking/tools/plan 的既有契约
+  逐字段构造；工具条目只保留 id/name/state/waiting/durationMs，plan 再走 `normalizePlan`，
+  从入口排除 `message`、`args`、`secret`、`extra` 与工具原始输出。
+- `blockChars` 给携带 usage 的正文、Thinking、工具组与 plan block 都计入固定 64 字符预算；
+  既有 `MAX_BLOCKS`、`MAX_TIMELINE_CHARS` 与有界裁剪继续生效。
 - `server/session-history.js` 继续调用同一个 `timelineFromMessages`，本轮不需要另写一份投影；
   服务端读取 fixture 的测试确认响应只含白名单字段，不含 `SECRET`、原始 message 或 `args`。
 - 旧记录没有 usage 时不显示任何数字；历史提示改为“记录中无可显示的用量”，不再声称已恢复用量。
-  只要任一 block 带真实 usage（包括只有 Thinking/工具组的情况），提示仍为“正文与用量”。新增
-  断言覆盖 thinking-only 历史，避免提示与实际字段不符。
+  只要任一 block 带真实 usage（包括只有 Thinking/工具组/Plan 的情况），提示仍为“正文与用量”。
+  新增断言覆盖 thinking-only 与 plan-only 历史，避免提示与实际字段不符。
 - 历史与实时的事件顺序、block 归属和用户折叠状态不变；多会话隔离仍由 store 的 owner /
   eventSequence / generation 校验和既有隔离测试覆盖，本轮性能夹具也实测无跨会话正文串扰。
 
@@ -184,6 +190,59 @@ Classic 与 Runtime 各自测量。Runtime 仍受 `MAX_BLOCKS=240` / `MAX_TIMELI
 原始数据见 [after/performance.json](ui/session-ux-phase3-evidence/after/performance.json) 与
 [before/performance.json](ui/session-ux-phase3-evidence/before/performance.json)。
 
+## 验收整改（P3 收尾）
+
+本轮只修复两个边界问题，不扩大范围。
+
+### 1. `cloneBlock` 顶层白名单
+
+原实现用 `{ ...block }` 复制整个历史 block，只在事后过滤 `usage`；`message`、`args`、
+`secret`、`extra` 等附加属性仍会进入 store。现在按既有 block 契约逐字段构造：
+
+- user：`id/kind/text/truncated/messageId/userIndex`；
+- assistant/thinking：`id/kind/text/state/truncated/usage`；
+- tools：`id/kind/tools/truncated/usage`，每个工具只保留 `id/name/state/waiting/durationMs`；
+- plan：`id/kind/plan/usage`，plan 与任务再走 `normalizePlan` 白名单，保留 turnId、任务状态与
+  完成计数。
+- 只有 `assistant/thinking/tools/plan` 可以承载 usage；user 上的 usage 不会被带入。
+- block id、文本、状态、工具、Plan、历史定位（`messageId`/`userIndex`）与截断标记均保留；
+  实时事件路径不经过 `cloneBlock`，事件顺序不受影响。
+
+新增断言同时覆盖顶层字段集合、工具/计划子字段集合、非法值不可达，以及合法正文、工具耗时、
+计划标题/状态、usage 仍正常。测试中的 `TOP_SECRET`、`PLAN_SECRET`、`TOOL_SECRET`、
+`RAW_ARGS`、`RAW_OUTPUT` 均未出现在 store 序列化结果中。
+
+### 2. plan-only usage
+
+`gui_plan` 是唯一 content 的 assistant 消息，原先 usage 没有归属目标。现在：
+
+- `USAGE_BLOCK_KINDS = ['assistant', 'thinking', 'tools', 'plan']` 明确可用 block 类型与优先级；
+  一条消息只挂一次，正文存在时仍优先正文。
+- `timelineFromMessages` 的 plan-only 消息把 usage 挂到最后创建的 plan block，不新增 assistant
+  正文；plan + 正文的混合消息仍只出现一次 usage。
+- `cloneBlock` 的 plan 分支保留白名单 usage；`blockChars` 给 plan usage 增加 64 字符预算，
+  `boundTimeline` 会按 `maxChars` 正确淘汰更早的 plan block。
+- Runtime 历史 plan 视图在计划卡外层渲染同一套 `.ui2-msg-meta`；折叠计划列表不会隐藏用量，
+  计划折叠、`aria-expanded` 与既有 steer 归并逻辑不受影响。usage 不会进入计划列表内部，
+  也不会为 plan-only 历史伪造空的助手正文。
+
+### 整改测试
+
+按用户要求只复跑 P3 与 Runtime 历史投影相关套件，未运行完整 `npm test`：
+
+| 命令 | 结果 |
+| --- | --- |
+| `node tests/session-ux-phase3.cjs` | 113/113（原 78，新增 35 条） |
+| `node tests/runtime-store.cjs` | 34/34 |
+| `node tests/runtime-conversation.cjs` | 106/106 |
+| `node tests/history-tool-summary.cjs` | 38/38 cases；168/168 assertions（含 steer 归并） |
+| `node tests/history-tool-summary-http.cjs` | 14/14 cases；49/49 assertions |
+| `node tests/runtime-history-search.cjs` | 37/37 |
+| `node tests/ui2-runtime-display.cjs` | 83/83 |
+
+没有删除既有断言。没有修改思考动画、P2 阅读位置机制或任何 CSS；本轮未重跑视觉与性能脚本，
+因为它们对应的样式与性能路径未被整改改变，plan-only 用量的布局只做了 jsdom 行为验证。
+
 ## 真实视觉与 P2 回归
 
 修改前后使用**同一个** Chromium/CDP 脚本与固定 fixture，只把静态目录切换为 `origin/main`
@@ -221,7 +280,7 @@ Node 24.22.1、Chromium 157.0.8103.78。
 
 | 命令 | 结果 |
 | --- | --- |
-| `npm run test:session-ux-phase3` | 78/78 |
+| `npm run test:session-ux-phase3` | 113/113 |
 | `node tests/runtime-conversation.cjs` | 106/106 |
 | `node tests/runtime-store.cjs` | 34/34 |
 | `node tests/agent-execution-ui.cjs` | 221/221 |
@@ -247,7 +306,7 @@ Node 24.22.1、Chromium 157.0.8103.78。
 ## 构建与冻结动画
 
 - `npm run build:app -- --rebuild` 成功，产物为 `dist-app\Pi GUI-win32-x64`，整包 333.6 MB；
-  本轮没有发版，也没有安装/启动打包后的应用做二次验收。
+  P3 收尾整改后又执行了一次重建，退出 0。本轮没有发版，也没有安装/启动打包后的应用做二次验收。
 - 思考动画冻结文件没有任何改动：
 
 ```text
@@ -271,7 +330,7 @@ $ echo $?
 | --- | --- | --- |
 | O-04 单条消息 Token 摘要 + 明细 | 已完成 | 共用 `message-meta.js`；0/缺失/成本/流式语义均有测试 |
 | O-09 Runtime 与 Classic 消息视觉统一 | 已完成 | 单层用户气泡、隐藏用户标签、计划/工具/元信息对齐；真实计算样式与截图 |
-| O-10 Runtime 历史真实用量 | 已完成 | 白名单投影、归属、裁剪预算、旧记录兼容、服务端 fixture；仅真实 usage 显示 |
+| O-10 Runtime 历史真实用量 | 已完成 | 白名单投影、正文/Thinking/工具/Plan 归属、顶层与子对象过滤、裁剪预算、旧记录兼容；仅真实 usage 显示 |
 | O-11 工具组真实耗时与等待计数 | 已有实现，本轮验证 | `tool-view.js`/`tools.js` 未改；新增测试锁定并行耗时、缺失省略、停表与折叠 |
 | O-12 可访问性收口 | 已完成（AX/键盘）；真实读屏未验证 | `role=log` + `aria-live=off`；折叠控件、焦点环、reduced-motion 已实测 |
 | P3-E 任务列表折叠摘要 | 已完成 | 真实完成数 + 当前任务短标题；stalled 用“未完成” |
