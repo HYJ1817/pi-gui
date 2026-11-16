@@ -235,11 +235,11 @@ git worktree remove --force "$TMP"
 - 最终源码状态已用
   `node scripts/build-app.mjs --rebuild --output-root <临时绝对目录>` 打包通过：
   `Pi GUI.exe` 234.9 MB，整包 333.6 MB，退出 0。
-- 仓库内 `dist-app` 的原地重建被正在运行的 `Pi GUI.exe`（5 个进程，
-  路径为 `dist-app/Pi GUI-win32-x64/Pi GUI.exe`）占用，`clearDir` 报
-  `EPERM`；因此 `dist-app` 中现有产物不是最终 CSS。关闭应用后重跑
-  `npm run build:app -- --rebuild` 才会更新它；在此之前请运行源码版
-  （`npm run app` / `npm start`，以仓库脚本为准）查看最终排版。
+- 关闭占用进程后，仓库内 `dist-app` 已用
+  `npm run build:app -- --rebuild` 原地重建成功：退出 0，
+  `dist-app/Pi GUI-win32-x64/Pi GUI.exe` 为 246,324,736 字节
+  （234.9 MiB），整包 333.6 MB。包内 `public/subagent-activity.js` 与
+  `public/styles.css` 的 SHA-256 均与工作树一致，最终排版已在包内。
 - `git diff --exit-code origin/main -- public/thinking-dots.js public/thinking-dots.css`
   退出 0；思考动画未改动。
 - 构建产物位于 `.gitignore` 的 `build/`、`dist-app/`，不进入提交。
@@ -250,8 +250,6 @@ git worktree remove --force "$TMP"
 - 未运行真实 pi / 真实 pi-subagents 子代理；所有子代理结果都是固定
   fixture，未验证上游字段在真实会话中的漂移。
 - 未运行真实读屏软件；只验证了 Chromium AX 树、键盘和焦点环。
-- 仓库 `dist-app` 的原地重建被正在运行的 `Pi GUI.exe` 占用，当前放着的不是
-  最终 CSS；最终源码已用临时输出目录打包通过。关闭应用后需重建，或运行源码版。
 - 计数扫描全部已知 `results` / `workflowChildren.children`，而父工具状态
   仍由既有 `lifecycle` 的前 24 项与 `workflowState` 决定；超过 24 项且失败
   出现在截断之后时，父状态与计数摘要可能表达不同层面的信息。本轮保留既有
