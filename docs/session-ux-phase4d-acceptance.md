@@ -12,6 +12,9 @@
   141.9 → 26.4 ms，最慢任务 211 → 88 ms；长会话同步段 311.2 → 27.4 ms，
   最慢任务 447 → 163 ms。65 个首屏/切换样本中 0 个 ≥100 ms。
 - 真实 Chromium 视觉验收 20/20，1320×820 / 700×600、深色 / 浅色共 8 张截图。
+- PR CI 暴露的两处测试基线问题已修复：`smoke` 改等历史渲染完成信号而不是固定
+  30 ms；P4-D 第 3 项改为有动画 / 无动画 / 底部边界三种确定场景，并新增
+  “分块完成前不消费半截历史”用例。产品代码与性能实现未改。
 - 只运行相关定向测试，未运行完整 `npm test`；不自动合并、不发版。
   本记录不构成合并或发布授权。
 
@@ -221,14 +224,18 @@ P95 不一致，判为运行间噪声；没有功能回退，也没有为此调�
 
 ## 7. 回归与功能验证
 
-`tests/session-ux-phase4d.cjs`（真实 Chromium，13/13）覆盖：
+`tests/session-ux-phase4d.cjs`（真实 Chromium，14/14）覆盖：
 
 - 829 条消息分块首屏：首批可见时 DOM 未完整，结束后 300 用户 / 300 助手 /
   工具组 / 工具行 / 12 张 Plan / 300 Thinking / 子代理 / 轮次终态 / 300 个
   Minimap 条目齐全，正文顺序与锚点 ID 正确，最终贴底，不混入 B 会话。
 - 阅读位置在分块重建后恢复，布局偏移 0 px（扣掉 3 px 入场动效）。
-- Minimap 跳转挑一个**仍在播放入场动效**的提问，落到真实位置且偏移 ≤2 px；
-  当前项唯一，`.stage` 不滚动。不补偿时会稳定偏 3 px。
+- Minimap 跳转同时覆盖三种确定场景，落点、当前项与偏移断言不降级：
+  **有入场动画**（注入一个暂停在 0% 的 `ui2-rise-in`，随机找“环境里正好还在动”的节点，
+  证明 3 px 补偿生效，不补偿会稳定偏 3 px）、**无动画**（目标节点关闭动画，
+  补偿值为 0）、**底部边界**（最后一条不可能贴到顶部 20 px，落点必须等于
+  可滚动上界的真实位置，当前项按导航表与顶部判定带复算）。三种场景都要求
+  真实跳转位置与导航缓存一致（≤2 px）、当前标记唯一、`.stage` 不滚动。
 - Thinking 与工具详情在分块后仍可展开/收起。
 - 全选文本包含首尾消息、最后回答与 Plan 卡；折叠内容仍在 DOM。
 - 分块期间用户滚动后不被贴底或旧书签覆盖；`sessionId` 为 `null` 的降级
@@ -241,25 +248,32 @@ P95 不一致，判为运行间噪声；没有功能回退，也没有为此调�
   排在 300 条历史之后，用户序号 301 的锚点为 `user-301`，视口仍贴底；
   同一窗口内 `onToolStart` 的工具组与 `gui_plan` 计划卡也都落在完整历史之后。
 - 取消挂载后 `clearThread` 立即清掉 `aria-busy`，线程为空。
+- **分块完成前产品入口不消费半截历史**：挂载窗口内 Minimap 条目为 0、
+  `scrollToUserTurn` 返回 `false`、当前项为 `-1`、阅读位置不写入书签；
+  完成信号之后导航恢复 300 条，搜索落点与书签保存都正常。
 - 打印媒体下完整历史仍在 DOM，`printToPDF` 管线成功产出 >50 KB PDF。
 
 定向回归（逐项 `node tests/<套件>.cjs`）：
 
 | 套件 | 结果 |
 | --- | ---: |
-| `session-ux-phase4d` | 13/13 |
+| `session-ux-phase4d` | 14/14 |
 | `session-ux-phase4d-shots` | 20/20 |
-| `runtime-conversation` | 110/110 |
+| `smoke` | 1345/1345 |
+| `session-ux-phase1` | 81/81 |
+| `session-ux-phase2` | 96/96 |
 | `session-ux-phase3` | 128/128 |
 | `session-ux-phase4a` | 110/110 |
 | `session-ux-phase4b` | 108/108 |
 | `session-ux-phase4e` | 60/60 |
 | `ui2-classic` | 55/55 |
+| `runtime-conversation` | 110/110 |
 | `agent-execution-ui` | 221/221 |
 | `runtime-history-search` | 37/37 |
 | `history-tool-summary` | 38/38 cases；168/168 assertions |
 | `ui2-runtime-display` | 83/83 |
 | `high-risk-regressions` | 28/28 |
+| `sessions` | 91 passed / 0 failed |
 | `session-search` | 72/72 |
 | `ui-visual-finish-electron` | 28/32（见下） |
 
@@ -269,6 +283,38 @@ P95 不一致，判为运行间噪声；没有功能回退，也没有为此调�
 Thinking 选择态（`.ui3-think-item.on` 未命中、选择背景色断言），未归因于 P4-D，
 在此记录不隐瞒。该套件首次运行时 Electron 子进程无法在系统临时目录创建输出，
 改用仓库内 `VISUAL_FINISH_OUT` 后完成；临时目录已删除。
+
+为确认 4 项失败不是本分支引入，另在独立 worktree 检出 `origin/main` =
+`df102d1`（PR #94 合并提交）用同一套件复跑：两边都是 **28/32**，失败项名称
+逐条相同（light/dark 的 “flat model selection and full provider button”、
+“flat thinking selection”）。可核对证据：
+[branch-report.json](ui/session-ux-phase4d-evidence/electron-ui3/branch-report.json)、
+[main-report.json](ui/session-ux-phase4d-evidence/electron-ui3/main-report.json)。
+main 与分支的差异只出现在 P4-D 相关长列表用例，4 项 UI3 失败在两边一致，
+判为既有问题，不在本 PR 内修复。
+
+### PR #95 的 CI 失败与修复
+
+首次 PR CI（run `43925706939`）暴露两处**测试基线**问题，产品代码未改：
+
+- **Tests (ui)，job `133505132359`**：`tests/smoke.cjs` 的「导航 21」在 500 条
+  用户消息（1,000 条消息）进入分块渲染后失败，`navEntries` 为空。原因是
+  `rebuild()` 固定等 30 ms，CI 机器上早于最后一批挂载。修复为等待产品自己的
+  完成信号 `await window.waitForClassicRenderIdle()`，再等两帧（收尾的
+  `scrollBottom` 在下一帧执行）；不再依赖固定延时猜测完成时间。
+  修复后本地 `smoke` 1345/1345。
+- **Tests (core)，job `133505132280`**：`tests/session-ux-phase4d.cjs` 第 3 项
+  失败，CI 中 `animated=0`，原测试回退到“最后一条用户消息”，受滚动边界限制
+  无法满足距顶部 20 px（`finalTop=81.578`、`settled=false`）。修复为第 7 节
+  所述的三种确定场景（注入暂停动画 / 无动画 / 底部边界），断言保持
+  “真实落点、当前项唯一、偏移 ≤2 px”，未删除断言或放宽容差。
+  修复后本地 P4-D 14/14。
+- 同一提交下重跑 `session-ux-phase1/2/3/4a/4b/4e`、`ui2-classic`、`sessions`、
+  `runtime-conversation`、`runtime-history-search`、`history-tool-summary`、
+  `ui2-runtime-display`、`high-risk-regressions`、`session-search`、
+  `agent-execution-ui` 与 `smoke`，全部通过（数字见上表）。
+- 分块渲染、完成信号与性能实现均未改动；本轮只改测试就绪等待与目标选择，
+  以及本记录与 Electron 证据。
 
 独立复审（只读 diff + 真实 Chromium 复现）发现 1 项 Important：挂载窗口内
 到达的实时消息会插进历史中间，并提前占用 `user-55` 这类锚点序号；已在
@@ -322,7 +368,8 @@ Runtime 定位未发现问题。复审后按同一思路自查实时入口，发
 ## 10. 未验证与残余风险
 
 - 未运行完整 `npm test`；未在真实 Electron 打包应用、真实 Pi 长会话或真实读屏下
-  复验（Electron 渲染器套件见上，4 项 UI3 选择态失败未归因于本改动）。真实滚轮、触控板惯性滚动与连续多次 A→B→A 的长时间跟踪未做。
+  复验（Electron 渲染器套件见上，4 项 UI3 选择态失败已在 `origin/main` 同样复现，
+  未归因于本改动）。真实滚轮、触控板惯性滚动与连续多次 A→B→A 的长时间跟踪未做。
 - 未对真实模型调用做端到端历史搜索定位，只使用真实投影形状与真实视图。
 - 分块让出点之间仍可能有 >100 ms 的批次布局任务（after 中位 163 ms、
   P95 214 ms），但发生在首屏已可见、可交互之后，且低于冻结基线的 447 ms；
