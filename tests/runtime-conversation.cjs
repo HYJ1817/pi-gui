@@ -991,6 +991,67 @@ const { JSDOM } = require('jsdom');
   await tick();
   ok('20. 只读历史界面交互绝不产生工具、审批或 prompt 动作', requests.length === 0);
 
+  /* P4-D D-1：搜索目标被历史窗口裁掉时，不能把「历史已打开」当成「定位成功」。 */
+  const locateNote = () => host.querySelector('.rtc-history-locate');
+  const scrolledRows = () => [...host.querySelectorAll('.rtc-history-message[data-history-scrolled="true"]')];
+  zHistoryMock = {
+    ok: true, sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '窗口内保留的问题', messageId: 'kept-u', userIndex: 120 }],
+    truncated: true,
+    toolSummary: null
+  };
+  await z53bView.openHistory(zLocator('Z-1'), { messageId: 'trimmed-a' });
+  await tick();
+  ok('21. 命中被历史窗口裁剪时不滚动，并明确说明无法定位',
+    scrolledRows().length === 0 && output().dataset.historyMatchState === 'trimmed' &&
+    locateNote().textContent.includes('已裁剪') && locateNote().textContent.includes('无法定位'));
+
+  zHistoryMock = {
+    ok: true, sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '仍保留的问题', messageId: 'kept-u', userIndex: 120 }],
+    truncated: true,
+    toolSummary: null
+  };
+  await z53bView.openHistory(zLocator('Z-1'), { messageId: 'kept-u' });
+  await tick();
+  ok('22. 历史虽被裁剪但命中仍在窗口内时精确定位且清除失败提示',
+    scrolledRows().length === 1 && scrolledRows()[0].dataset.historyMessageId === 'kept-u' &&
+    output().dataset.historyMatchState === 'found' && locateNote().textContent === '');
+
+  zHistoryMock = {
+    ok: true, sessionId: 'native-Z-1',
+    messages: [{ role: 'user', text: '没有命中的历史', messageId: 'only-u' }],
+    truncated: false,
+    toolSummary: null
+  };
+  await z53bView.openHistory(zLocator('Z-1'), { messageId: 'missing-a' });
+  await tick();
+  ok('23. 未裁剪但目标不存在时说明可能已改写，不标记定位成功',
+    scrolledRows().length === 0 && output().dataset.historyMatchState === 'missing' &&
+    locateNote().textContent.includes('找不到') && !locateNote().textContent.includes('已裁剪'));
+
+  /* 执行时间线里的 assistant 正文同样带原始 messageId，否则搜索命中 assistant
+   * 文本时永远定位不到（即使内容仍在窗口内）。 */
+  zHistoryMock = {
+    ok: true, sessionId: 'native-Z-1',
+    messages: [],
+    truncated: false,
+    execution: {
+      timeline: [
+        { id: 'h1', kind: 'user', text: '时间线问题', messageId: 'tl-u', userIndex: 7 },
+        { id: 'h2', kind: 'assistant', text: '时间线回答', messageId: 'tl-a', state: 'complete' }
+      ],
+      truncated: false
+    },
+    toolSummary: null
+  };
+  await z53bView.openHistory(zLocator('Z-1'), { messageId: 'tl-a' });
+  await tick();
+  ok('24. 时间线 assistant 正文按 messageId 定位，不再落到缺失目标',
+    scrolledRows().length === 1 && scrolledRows()[0].dataset.historyMessageId === 'tl-a' &&
+    scrolledRows()[0].classList.contains('rtc-timeline-message') &&
+    output().dataset.historyMatchState === 'found' && locateNote().textContent === '');
+
   z53bView.dispose();
 
   // Refined renders one truthful live assistant surface, never invents turns.

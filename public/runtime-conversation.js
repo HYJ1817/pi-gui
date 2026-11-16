@@ -210,7 +210,9 @@ function el(tag, cls, text) {
   return node;
 }
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
-const EMPTY = { pending: false, notice: '', history: null, pendingHistory: false, historyToken: 0, draftRestored: false };
+const EMPTY = { pending: false, notice: '', locateNotice: '', history: null, pendingHistory: false, historyToken: 0, draftRestored: false };
+const HISTORY_TARGET_TRIMMED = '搜索命中位于已裁剪的只读历史之外，当前仅保留最近内容，无法定位。';
+const HISTORY_TARGET_MISSING = '当前只读历史中找不到这次搜索命中的内容（可能已被改写或删除）。';
 /* 执行时间线的 DOM 节点与展开状态是**每个会话自己的视图态**。节点缓存让流式
  * 更新只改变化的块；展开状态在切换会话后重建时按会话恢复。 */
 const EMPTY_TIMELINE_VIEW = () => ({
@@ -333,7 +335,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const thinkingPicker = createRuntimePicker({ select: thinkingSelect, label: '当前会话推理强度', className: 'rtc-thinking-trigger', scope: pickerScope, onOpen: () => modelPicker.close() });
   modelLabel.append(modelPicker.button); thinkingLabel.append(thinkingPicker.button);
 
-  const notice = el('p', 'rtc-notice'); notice.setAttribute('role', 'status'); root.append(notice);
+  const notice = el('p', 'rtc-notice'); notice.setAttribute('role', 'status');
+  /* 历史搜索定位的独立状态行：与读取/身份错误分开，避免一次定位失败
+   * 覆盖掉真正的错误，也避免把「历史已打开」误当成「目标已定位」。 */
+  const locateNotice = el('p', 'rtc-notice rtc-history-locate');
+  locateNotice.setAttribute('role', 'status');
+  root.append(notice, locateNotice);
   /* 类名**故意与 modal 的 `.runtime-output` 不同**：官方 modal 用的是全局选择器
    * （测试也这么取），中央再挂一个同名元素会让 `document.querySelector('.runtime-output')`
    * 命中中央那个（它在 DOM 里更靠前），看起来像「modal 的输出不更新」。
@@ -574,6 +581,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const view = viewOf(target);
     if (view.pendingHistory) return;
     if (expectedLocator) view.history = null;
+    view.locateNotice = '';
     const record = store.get(target), stamp = historyStamp(record);
     view.historyRecord = record; view.historyStamp = stamp;
     view.historyLocator = expectedLocator && { ...expectedLocator };
@@ -757,6 +765,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       const body = el('div', 'rtc-assistant-text');
       appendRuntimeContent(body, block.text);
       row.append(body);
+      if (block.messageId) row.dataset.historyMessageId = block.messageId;
       row.dataset.state = block.state || '';
       /* 历史 usage 与 Classic 同一条摘要/明细；同一消息的多段正文不会重复
        * 出现同一份用量（投影只把 usage 挂到该消息的一个 block 上）。 */
@@ -1064,6 +1073,47 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     }
   }
 
+  /** 只读历史里的搜索落点。
+   *
+   * 只有真的找到对应行才滚动并标记 found；目标被 240 block / 1 MiB 窗口裁掉时
+   * 明确说明「位于已裁剪范围之外」，不再把「历史打开了」当成「已定位」。
+   * 这里只读当前 history 投影和已渲染 DOM，不重读历史、不跨会话、不改保留上限。 */
+  function updateHistoryLocate(view, surfaceActive) {
+    const match = view.history?.match || null;
+    if (!match) {
+      view.locateNotice = '';
+      locateNotice.textContent = '';
+      delete output.dataset.historyMatch;
+      delete output.dataset.historyMatchState;
+      return;
+    }
+    /* 中央没显示 Runtime 时先不判定；等切回来再滚，避免后台视图偷偷改滚动位置。 */
+    if (!surfaceActive) return;
+    const messageId = match.messageId;
+    const index = match.userIndex;
+    const matchKey = JSON.stringify([messageId, index]);
+    if (output.dataset.historyMatch === matchKey) {
+      locateNotice.textContent = view.locateNotice || '';
+      return;
+    }
+    const rows = [...output.querySelectorAll('.rtc-history-message')];
+    const row = messageId ? rows.find(item => item.dataset.historyMessageId === messageId)
+      : Number.isInteger(index) && index >= 0 ? rows.find(item => item.dataset.historyUserIndex === String(index)) : null;
+    let state;
+    if (row) {
+      scrollRowIntoView(output, row, 'center');
+      view.locateNotice = '';
+      state = 'found';
+    } else {
+      const trimmed = view.history.truncated === true || view.history.execution?.truncated === true;
+      view.locateNotice = trimmed ? HISTORY_TARGET_TRIMMED : HISTORY_TARGET_MISSING;
+      state = trimmed ? 'trimmed' : 'missing';
+    }
+    output.dataset.historyMatch = matchKey;
+    output.dataset.historyMatchState = state;
+    locateNotice.textContent = view.locateNotice;
+  }
+
   function draw() {
     if (!host) return;
     const r = store.get(id), view = current();
@@ -1081,6 +1131,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     drawModels(r, view);
     resources.textContent = resourceText();
     notice.textContent = view.notice;
+    locateNotice.textContent = view.locateNotice || '';
     if (view.history) setState(formatHistoryState(view.history, r?.owner), false);
     else if (view.pendingHistory) setState('读取历史…', false);
     else {
@@ -1096,7 +1147,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       if (executionBlocks.length) {
         if (renderedHistory !== view.history || renderedId !== id) {
           delete output.dataset.renderedText;
-          renderedHistory = view.history; delete output.dataset.historyMatch;
+          renderedHistory = view.history; delete output.dataset.historyMatch; delete output.dataset.historyMatchState;
         }
         renderTimeline(executionBlocks, view, r, true);
       } else if (renderedHistory !== view.history || renderedId !== id || view.timeline.mode !== null) {
@@ -1164,10 +1215,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         } else if (!messages.length) {
           output.append(el('span', 'rtc-history-empty', '（没有可显示的正文）'));
         }
-        renderedHistory = view.history; delete output.dataset.historyMatch;
+        renderedHistory = view.history; delete output.dataset.historyMatch; delete output.dataset.historyMatchState;
       }
     } else {
       renderedHistory = null;
+      view.locateNotice = '';
+      locateNotice.textContent = '';
+      delete output.dataset.historyMatch;
+      delete output.dataset.historyMatchState;
       const blocks = Array.isArray(r?.timeline) ? r.timeline : [];
       if (blocks.length) {
         delete output.dataset.renderedText;
@@ -1282,15 +1337,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
      * jsdom 不派发 scroll 事件、也不做布局，靠事件判定的写法在测试里会假绿。
      */
     if (view.history) {
-      const match = view.history.match, index = match?.userIndex, messageId = match?.messageId;
-      const matchKey = JSON.stringify([messageId, index]);
-      if (active && match && output.dataset.historyMatch !== matchKey) {
-        const rows = [...output.querySelectorAll('.rtc-history-message')];
-        const row = messageId ? rows.find(r => r.dataset.historyMessageId === messageId)
-          : Number.isInteger(index) && index >= 0 ? rows.find(r => r.dataset.historyUserIndex === String(index)) : null;
-        if (row) scrollRowIntoView(output, row, 'center');
-        output.dataset.historyMatch = matchKey;
-      }
+      updateHistoryLocate(view, active);
     } else if (entered) {
       const top = scrollTops.get(id);
       output.scrollTop = top === undefined ? output.scrollHeight : top;
