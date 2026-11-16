@@ -828,6 +828,73 @@ export function captureTrailingError() {
   };
 }
 
+/* P4-B：只给**当前线程最后一条失败消息**挂恢复入口。
+ *
+ * 历史重建不会调用本函数，因此只读历史与 Runtime 保持原有展示。`run`
+ * 由装配层注入真正存在的设置入口；这里只负责按钮、执行中以及成功/失败
+ * 状态。原始错误块永远保留 —— 动作失败、重复点击和会话变化都不删除它。 */
+export function attachErrorRecovery(action, { run } = {}) {
+  if (!action?.id || !action.label || typeof run !== 'function') return null;
+  const body = S.current?.body
+    || [...document.querySelectorAll('#stream .thread .msg.assistant .msg-body')].pop();
+  const err = body?.querySelector('.msg-err');
+  if (!err) return null;
+
+  let box = err.querySelector('.me-actions');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'me-actions';
+    err.appendChild(box);
+  }
+  box.replaceChildren();
+  box.dataset.action = action.id;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn tiny me-action';
+  btn.textContent = action.label;
+  if (action.title) btn.title = action.title;
+
+  const status = document.createElement('span');
+  status.className = 'me-action-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+
+  box.append(btn, status);
+
+  let busy = false;
+  const setStatus = (text, state) => {
+    status.textContent = text || '';
+    if (state) status.dataset.state = state;
+    else delete status.dataset.state;
+  };
+  btn.addEventListener('click', async () => {
+    if (busy) return;
+    busy = true;
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    setStatus('正在打开…', 'pending');
+    let result;
+    try {
+      result = await run(action.id);
+    } catch {
+      result = { ok: false, message: '操作失败，请稍后重试。' };
+    }
+    busy = false;
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+    }
+    if (!result || result.ok !== true) {
+      setStatus(result?.message || '操作失败，请稍后重试。', 'error');
+      return;
+    }
+    setStatus(result.message || '已完成', 'success');
+  });
+
+  return box;
+}
+
 /**
  * 自动重试期间的紧凑错误摘要。
  *

@@ -22,6 +22,7 @@ import { renderModelPicker, renderThinkingPicker, thinkingAvailability, applyChi
 import { createInlineCommandMenu } from './ui/inline-command-menu.js';
 import { mountWorkPanelLauncher } from './ui/work-panel-launcher.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
+import { recoveryForFailure } from './error-recovery.js';
 import { sendCommand, runtimeSessionAction, setRequestFailureReporter, switchSession, fetchRuntimeSessions } from './api.js';
 import { installRendererLogging, logRendererEvent } from './log-client.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
@@ -61,6 +62,7 @@ import {
   submit,
 } from './rpc.js';
 import {
+  attachErrorRecovery,
   beginTurn,
   captureTrailingError,
   classicThreadSessionId,
@@ -449,6 +451,75 @@ function handle(evt) {
   return withNotificationSource(evt._replay ? 'history' : 'live', () => handleEvent(evt));
 }
 
+/* ---------- P4-B：结构化生成失败的恢复入口 ----------
+ *
+ * 失败证据只来自服务端 `model-generation.js` 的 `generationResult.failure`
+ * （类别、来源、状态码）。这里从不解析错误文本、不重发 prompt、不改模型、
+ * 不切会话；动作只复用已有的设置入口，并在点击时重新核对会话/模型身份。
+ * 历史重建与 Runtime 的 `generation_failed` 不经过这里，保持原展示。 */
+function recoveryIdentity() {
+  const model = S.state?.model || null;
+  return {
+    bridgeRun: S.bridgeRun,
+    workspaceGeneration: S.workspaceGeneration,
+    cwd: S.cwd,
+    session: S.state?.sessionId || S.state?.sessionFile || null,
+    model: model
+      ? `${model.providerId || model.provider || ''}/${model.modelId || model.id || ''}`
+      : '',
+  };
+}
+
+function recoveryActionAvailable(id) {
+  if (!S.hasProject || !['ready', 'maintenance'].includes(S.bridgeState)) return false;
+  /* 供应商设置是全局入口，不依赖当前模型身份 —— 认证错误本身已经可信。 */
+  if (id === 'provider_auth') return true;
+  if (id === 'model_picker') {
+    const model = S.state?.model;
+    return Boolean(model && (model.providerId || model.provider) && (model.modelId || model.id))
+      && Array.isArray(S.models) && S.models.length > 0
+      && !S.streaming && !S.stopping && !S.switching && !S.modelSwitchPending;
+  }
+  return false;
+}
+
+async function runRecoveryAction(id, expected) {
+  const now = recoveryIdentity();
+  if (!now.session) return { ok: false, message: '当前没有会话上下文，未执行操作。' };
+  if (['bridgeRun', 'workspaceGeneration', 'cwd', 'session', 'model'].some(key => now[key] !== expected[key])) {
+    return { ok: false, message: '会话或模型已变化，未执行操作。' };
+  }
+  if (!recoveryActionAvailable(id)) return { ok: false, message: '当前状态无法打开该设置，请稍后重试。' };
+  try {
+    if (id === 'provider_auth') {
+      openProviderAuthPanel();
+      if ($('modal').hidden) return { ok: false, message: '设置没有打开，请重试。' };
+      return { ok: true, message: '已打开供应商认证。' };
+    }
+    if (id === 'model_picker') {
+      openModelPicker();
+      if (!popVisible()) return { ok: false, message: '模型列表没有打开，请重试。' };
+      return { ok: true, message: '已打开模型列表。' };
+    }
+  } catch {
+    return { ok: false, message: '打开设置失败，请重试。' };
+  }
+  return { ok: false, message: '没有可用的恢复操作。' };
+}
+
+function attachGenerationRecovery(evt) {
+  if (evt?._replay || evt?.type !== 'agent_settled') return;
+  const result = evt.generationResult;
+  if (!result || result.outcome !== 'failed' || typeof result.requestId !== 'string') return;
+  /* 自动备用正在接管 model_unavailable 时，不并排再给一个手动入口。 */
+  if (S.fallbackActive && result.failure?.class === 'model_unavailable') return;
+  const action = recoveryForFailure(result.failure);
+  if (!action || !recoveryActionAvailable(action.id)) return;
+  const expected = recoveryIdentity();
+  if (!expected.session) return;
+  attachErrorRecovery(action, { run: id => runRecoveryAction(id, expected) });
+}
+
 function handleEvent(evt) {
   if (['runtime_event', 'runtime_state', 'runtime_closed'].includes(evt.type)) { observeRuntimeEvent(evt); return; }
   /* 环境安装是整机级任务，不属于任何项目/会话：在项目与 bridgeRun 的过滤之前
@@ -473,6 +544,7 @@ function handleEvent(evt) {
       workspaceId:S.legacyOwner?.workspaceId,workspaceEpoch:S.legacyOwner?.workspaceEpoch }}));
   if (evt.type !== 'bridge_status') { observeWebEvent(evt); observeSubagentEvent(evt); observeMemoryEvent(evt); observeBrowserEvent(evt); observeGuiBrowserEvent(evt); observeMcpEvent(evt); observeApprovalEvent(evt); }
   observeFallbackEvent(evt);
+  attachGenerationRecovery(evt);
   switch (evt.type) {
     case 'bridge_status':
       return onBridge(evt);
