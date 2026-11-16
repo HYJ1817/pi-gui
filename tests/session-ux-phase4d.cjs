@@ -128,6 +128,7 @@ async function pageChecks() {
   const M = await import('/messages.js');
   const N = await import('/conversation-nav.js');
   const T = await import('/tools.js');
+  const R = await import('/reading-position.js');
   const surface = await import('/ui/workspace-surface.js');
   surface.showChat();
   const stream = document.querySelector('#stream');
@@ -296,36 +297,112 @@ async function pageChecks() {
     return { ok: partial < 300 && delta <= 1 && after.users === 300 && Math.abs(after.scrollTop - before.scrollTop) <= 2, partial, delta, before, after };
   });
 
-  await check('3. Minimap/搜索跳转在完整挂载后落到真实位置', async () => {
-    /* 重建后立刻跳，挑一个仍在播放入场动效的提问：raw rect 会带 3px 位移，
-     * 必须由跳转时的动画进度补偿掉。不补偿时这个断言会稳定偏 3px。 */
+  await check('3. Minimap/搜索跳转：有入场动画、无动画与底部边界都落到真实位置', async () => {
     M.rebuildFromMessages(A, 'p4d-long-A');
     await M.waitForClassicRenderIdle();
-    const animating = [...users()].map((node, index) => ({ node, index }))
-      .filter(({ node }) => typeof node.getAnimations === 'function'
-        && node.getAnimations().some(animation => animation.animationName === 'ui2-rise-in'));
-    const targetIndex = animating.length ? animating[0].index : users().length - 1;
-    const target = users()[targetIndex];
-    stream.scrollTop = Math.max(0, stream.scrollTop + target.getBoundingClientRect().top - stream.getBoundingClientRect().top - 3000);
     await painted();
-    N.scrollToUserTurn(targetIndex);
-    const settled = await waitFor(() => {
-      const rect = users()[targetIndex].getBoundingClientRect();
-      return Math.abs(rect.top - stream.getBoundingClientRect().top - 20) <= 2;
+
+    const streamTop = () => stream.getBoundingClientRect().top;
+    const maxScroll = () => Math.max(0, stream.scrollHeight - stream.clientHeight);
+    const contentTopOf = node => node.getBoundingClientRect().top - streamTop() + stream.scrollTop;
+    const riseShift = (node) => {
+      const animation = node.getAnimations?.().find(item => item.animationName === 'ui2-rise-in');
+      const progress = animation?.effect?.getComputedTiming?.().progress;
+      return Number.isFinite(progress) ? 3 * (1 - Math.min(1, Math.max(0, progress))) : 0;
+    };
+    const currents = () => document.querySelectorAll('.cn-marker[aria-current="true"]').length;
+    const preScrollBelow = async (node) => {
+      const before = contentTopOf(node);
+      stream.scrollTop = Math.max(0, Math.min(maxScroll(), before - 3000));
+      await painted();
+      return before;
+    };
+    const waitTop = index => waitFor(() => {
+      const rect = users()[index].getBoundingClientRect();
+      return Math.abs(rect.top - streamTop() - 20) <= 2;
     }, 5000);
-    /* IO / debounce 的当前标记比滚动落点晚一拍；等它稳定后再断言。 */
+
+    /* A. 有入场动画：注入一个确定、暂停在 0% 的 ui2-rise-in（translateY(3px)）。
+     * 跳转时的缓存必须扣掉这 3px；若不做补偿，缓存会是 raw rect，随后差 3px。 */
+    const animatedIndex = 150;
+    const animatedTarget = users()[animatedIndex];
+    animatedTarget.style.animationName = 'ui2-rise-in';
+    animatedTarget.style.animationDuration = '10s';
+    animatedTarget.style.animationTimingFunction = 'linear';
+    animatedTarget.style.animationDelay = '0s';
+    animatedTarget.style.animationFillMode = 'both';
+    animatedTarget.style.animationPlayState = 'paused';
+    await painted();
+    const animatedShift = riseShift(animatedTarget);
+    const animatedRawTop = await preScrollBelow(animatedTarget);
+    const animatedStaticTop = animatedRawTop - animatedShift;
+    N.scrollToUserTurn(animatedIndex);
+    await painted();
+    const animatedEntry = N.navEntries()[animatedIndex];
+    const animatedCompensated = Math.abs(animatedEntry.topInContent - animatedStaticTop) <= 1;
+    animatedTarget.getAnimations()
+      .filter(item => item.animationName === 'ui2-rise-in')
+      .forEach(item => item.finish());
+    await painted();
+    const animatedSettled = await waitTop(animatedIndex);
     await wait(250);
-    const entry = N.navEntries()[targetIndex];
-    const actual = users()[targetIndex].getBoundingClientRect().top - stream.getBoundingClientRect().top + stream.scrollTop;
-    const currents = document.querySelectorAll('.cn-marker[aria-current="true"]').length;
+    const animatedActual = contentTopOf(animatedTarget);
+    const animatedFinal = animatedTarget.getBoundingClientRect().top - streamTop();
+    const animatedCurrent = N.currentNavIndex();
+    const animatedCurrents = currents();
+    animatedTarget.style.animationName = 'none';
+
+    /* B. 无动画：关闭目标节点的入场动画，验证 riseInShift=0 时同样精确。 */
+    const staticIndex = 200;
+    const staticTarget = users()[staticIndex];
+    staticTarget.style.animationName = 'none';
+    await painted();
+    const staticShift = riseShift(staticTarget);
+    await preScrollBelow(staticTarget);
+    N.scrollToUserTurn(staticIndex);
+    const staticSettled = await waitTop(staticIndex);
+    await wait(250);
+    const staticEntry = N.navEntries()[staticIndex];
+    const staticActual = contentTopOf(staticTarget);
+    const staticFinal = staticTarget.getBoundingClientRect().top - streamTop();
+    const staticCurrent = N.currentNavIndex();
+    const staticCurrents = currents();
+
+    /* C. 滚动边界：最后一条不可能贴到顶部 20px，落点必须等于可滚动上界的真实位置，
+     * 不能为了凑 20px 而谎报成功。 */
+    const last = users().length - 1;
+    stream.scrollTop = 0;
+    await painted();
+    N.scrollToUserTurn(last);
+    const boundaryClamped = await waitFor(() => Math.abs(stream.scrollTop - maxScroll()) <= 1, 5000);
+    await wait(250);
+    const boundaryActual = contentTopOf(users()[last]);
+    const boundaryExpected = boundaryActual - maxScroll();
+    const boundaryTop = users()[last].getBoundingClientRect().top - streamTop();
+    const boundaryCurrent = N.currentNavIndex();
+    const boundaryCurrents = currents();
+    /* 贴底时最后一条仍在顶部判定带之下，当前项按产品语义是它前一条；
+     * 用导航表复算期望值，避免把「最后一条」写死成当前项。 */
+    const band = stream.scrollTop + stream.clientHeight * 0.1;
+    let boundaryExpectedCurrent = 0;
+    N.navEntries().forEach((entry, index) => { if (entry.topInContent <= band) boundaryExpectedCurrent = index; });
     const stageScroll = document.querySelector('.stage')?.scrollTop;
-    const finalTop = users()[targetIndex].getBoundingClientRect().top - stream.getBoundingClientRect().top;
+
     return {
-      ok: animating.length > 0 && settled && Math.abs(entry.topInContent - actual) <= 2 && Math.abs(finalTop - 20) <= 2 &&
-        N.currentNavIndex() === targetIndex && currents === 1 && stageScroll === 0,
-      animated: animating.length, targetIndex, settled, entryTop: entry?.topInContent, actual, delta: Math.abs(entry.topInContent - actual),
-      current: N.currentNavIndex(), currents, scrollTop: stream.scrollTop, stageScroll, finalTop,
-      clientHeight: stream.clientHeight,
+      ok: animatedShift >= 2.9 && animatedCompensated && animatedSettled &&
+        Math.abs(animatedEntry.topInContent - animatedActual) <= 2 && Math.abs(animatedFinal - 20) <= 2 &&
+        animatedCurrent === animatedIndex && animatedCurrents === 1 &&
+        staticShift === 0 && staticSettled &&
+        Math.abs(staticEntry.topInContent - staticActual) <= 2 && Math.abs(staticFinal - 20) <= 2 &&
+        staticCurrent === staticIndex && staticCurrents === 1 &&
+        boundaryClamped && boundaryExpected > 22 && Math.abs(boundaryTop - boundaryExpected) <= 2 &&
+        boundaryCurrent === boundaryExpectedCurrent && boundaryCurrents === 1 && stageScroll === 0,
+      animatedIndex, animatedShift, animatedCompensated, animatedSettled,
+      animatedEntryTop: animatedEntry?.topInContent, animatedActual, animatedFinal, animatedCurrent, animatedCurrents,
+      staticIndex, staticShift, staticSettled, staticEntryTop: staticEntry?.topInContent, staticActual, staticFinal,
+      staticCurrent, staticCurrents,
+      last, boundaryClamped, boundaryExpected, boundaryTop, boundaryCurrent, boundaryExpectedCurrent,
+      boundaryCurrents, scrollTop: stream.scrollTop, maxScroll: maxScroll(), stageScroll, clientHeight: stream.clientHeight,
     };
   });
 
@@ -550,6 +627,37 @@ async function pageChecks() {
     };
   });
 
+  await check('13. 分块完成前 Minimap、搜索落点与书签都不消费半截历史', async () => {
+    M.rebuildFromMessages(A, 'p4d-unready');
+    const partial = users().length;
+    const navDuring = N.navEntries().length;
+    const searchDuring = N.scrollToUserTurn(0);
+    const currentDuring = N.currentNavIndex();
+    M.saveClassicReadingPosition('p4d-unready');
+    const bookmarkDuring = R.hasSessionBookmark('p4d-unready');
+    await M.waitForClassicRenderIdle();
+    await painted();
+    const navAfter = N.navEntries().length;
+    const searchAfter = N.scrollToUserTurn(5);
+    const searchSettled = await waitFor(() => {
+      const top = users()[5].getBoundingClientRect().top - stream.getBoundingClientRect().top;
+      return Math.abs(top - 20) <= 2 && N.currentNavIndex() === 5;
+    }, 5000);
+    await wait(250);
+    const currentAfter = N.currentNavIndex();
+    M.saveClassicReadingPosition('p4d-unready');
+    const bookmarkAfter = R.hasSessionBookmark('p4d-unready');
+    R.clearSessionBookmark('p4d-unready');
+    return {
+      ok: partial > 0 && partial < 300 && navDuring === 0 && searchDuring === false &&
+        currentDuring === -1 && bookmarkDuring === false &&
+        navAfter === 300 && searchAfter === true && searchSettled &&
+        currentAfter === 5 && bookmarkAfter === true,
+      partial, navDuring, searchDuring, currentDuring, bookmarkDuring, navAfter, searchAfter,
+      searchSettled, currentAfter, bookmarkAfter,
+    };
+  });
+
   /* 后面的真实打印检查依赖完整长历史作为最终 DOM 状态。 */
   M.rebuildFromMessages(LONG, 'p4d-longer');
   await M.waitForClassicRenderIdle();
@@ -607,12 +715,12 @@ async function pageChecks() {
       const pageCounts = (pdf.match(/\/Count\s+\d+/g) || []).slice(0, 4);
       const dom = printDom.result?.result?.value || {};
       results.push({
-        name: '13. 打印管线可执行且打印媒体下完整历史仍在 DOM',
+        name: '14. 打印管线可执行且打印媒体下完整历史仍在 DOM',
         ok: dom.users === 600 && dom.nodes > 10000 && dom.display !== 'none' && !dom.hidden && raw.length > 50000,
         detail: { bytes: raw.length, pageObjects, pageCounts, dom, ms: Date.now() - printStarted },
       });
     } catch (error) {
-      results.push({ name: '11. 打印管线可执行且打印媒体下完整历史仍在 DOM', ok: false, error: String(error) });
+      results.push({ name: '14. 打印管线可执行且打印媒体下完整历史仍在 DOM', ok: false, error: String(error) });
     }
     for (const result of results) {
       console.log(`  ${result.ok ? 'ok  ' : 'FAIL'} ${result.name}`);

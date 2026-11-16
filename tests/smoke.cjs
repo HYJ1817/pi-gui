@@ -4822,7 +4822,11 @@ staticCheck();
     };
     const rebuild = async (msgs) => {
       window.rebuildFromMessages({ messages: msgs });
-      await new Promise((r) => setTimeout(r, 30));
+      /* 长历史是分块挂载的：固定延时在 CI 上会早于最后一批，导航还是空的。
+       * 这里等产品自己的「历史渲染完成」信号，不靠时间猜测。信号只覆盖
+       * 历史/导航/书签就绪；收尾的 scrollBottom 在下一帧执行，所以再等一帧。 */
+      await window.waitForClassicRenderIdle();
+      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
     };
 
     // 1. 空会话 → 无 marker
