@@ -34,14 +34,10 @@
 
 <div class="app">
 
-  <nav class="global-rail" id="globalRail" aria-label="折叠的侧栏" hidden>
-    <button type="button" class="rail-icon" id="btnSidebarExpand" aria-label="展开项目侧栏" aria-controls="projectSidebar" aria-expanded="true" title="展开项目侧栏"><svg data-icon="sidebarExpand" aria-hidden="true" focusable="false"></svg></button>
-  </nav>
-
   <aside class="rail project-sidebar" id="projectSidebar" aria-label="项目与会话">
     <header class="rail-head">
       <div class="brand"><span class="brand-mark">π</span><span>pi-GUI</span></div>
-      <button type="button" class="icon-btn" id="btnSidebarCollapse" aria-label="折叠项目侧栏" aria-controls="projectSidebar" aria-expanded="true" title="折叠项目侧栏"><svg data-icon="sidebarCollapse" aria-hidden="true" focusable="false"></svg></button>
+      <button type="button" class="icon-btn" id="btnSidebarCollapse" aria-label="收起侧边栏" aria-controls="projectSidebar" aria-expanded="true" title="收起侧边栏"><svg data-icon="sidebarCollapse" aria-hidden="true" focusable="false"></svg></button>
     </header>
     <button type="button" class="settings-return nav-item" id="settingsReturn" hidden><svg class="return-ic" data-icon="chevronLeft" aria-hidden="true" focusable="false"></svg><span>返回应用</span></button>
     <nav class="rail-nav" aria-label="会话操作">
@@ -102,6 +98,12 @@
 
   <main class="stage" id="workspace">
     <header class="stage-head">
+      <!-- 侧栏折叠后的展开入口必须留在 .stage-head 的拖拽区**内部**，
+           并在自身反向声明 no-drag；放在顶栏外面做覆盖层时，原生标题栏
+           命中测试可能把点击当成拖拽起手，页面收不到事件。 -->
+      <nav class="global-rail" id="globalRail" aria-label="折叠的侧栏" hidden>
+        <button type="button" class="rail-icon" id="btnSidebarExpand" aria-label="展开侧边栏" aria-controls="projectSidebar" aria-expanded="true" title="展开侧边栏" hidden><svg data-icon="sidebarExpand" aria-hidden="true" focusable="false"></svg></button>
+      </nav>
 
       <div class="conversation-heading">
         <span class="title-project-context" id="titleProjectContext" hidden><span class="title-project"><svg data-icon="folder" aria-hidden="true" focusable="false"></svg><span id="titleProject"></span></span><span class="title-separator" aria-hidden="true">/</span></span>

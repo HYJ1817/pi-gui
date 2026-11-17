@@ -190,10 +190,16 @@ button.pj-sess-primary { cursor: pointer; }
 .project-sidebar .rail-foot .foot-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; font-size: var(--text-xs); }
 
 /* The collapsed affordance occupies the toolbar only; it must not leave a
- * full-height rail stealing 48px from the conversation like the old shell. */
-.global-rail { position: absolute; top: 0; left: 12px; z-index: 6; width: var(--ds-control-size); height: var(--ds-toolbar-height); display: flex; align-items: center; padding: 0; border: 0; background: transparent; }
-.global-rail .rail-icon { width: var(--ds-control-size); height: var(--ds-control-size); border-radius: var(--radius-md); -webkit-app-region: no-drag; }
-.global-rail .rail-icon svg { width: 15px; height: 15px; }
+ * full-height rail stealing 48px from the conversation like the old shell.
+ * It is a child of .stage-head (see index.html): the header is an
+ * app-region:drag region, so the affordance and its box must opt out of
+ * dragging explicitly. A sibling overlay sits outside that drag subtree,
+ * where the native hit test can treat the click as a caption drag instead of
+ * delivering it to the page. */
+.global-rail { position: absolute; top: calc((var(--ds-toolbar-height) - var(--ds-control-size)) / 2); left: 12px; z-index: 6; width: var(--ds-control-size); height: var(--ds-control-size); display: flex; align-items: center; padding: 0; border: 0; background: transparent; -webkit-app-region: no-drag; }
+.global-rail .rail-icon { width: var(--ds-control-size); height: var(--ds-control-size); border-radius: var(--radius-md); color: var(--ds-text-secondary); -webkit-app-region: no-drag; }
+.global-rail .rail-icon:hover { color: var(--ds-text-primary); background: var(--ds-bg-hover); }
+.global-rail .rail-icon svg { width: 16px; height: 16px; }
 .stage-head { height: var(--ds-toolbar-height); flex-basis: var(--ds-toolbar-height); gap: 8px; border-bottom: 0; background: var(--ds-bg-primary); }
 .sidebar-collapsed .stage-head { padding-left: 48px; }
 .conversation-heading { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
