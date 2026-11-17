@@ -543,7 +543,11 @@ function syncThroughputToLastTurn() {
 
 /** 新 Agent turn：开始计时（app.js 的 agent_start 调用）。 */
 export function beginUsageTurn() {
+  /* 新 turn = 新的一轮「最近一轮用量」。上一轮的 token/成本不能留下来
+   * 和这一轮的估算速度拼成一条记录；session 级累计统计不受影响。 */
+  S.localUsage.lastTurn = null;
   beginThroughputTurn();
+  refreshUsagePopover();
 }
 
 /** assistant message_start：记录单条响应的单调起点。 */
@@ -622,42 +626,29 @@ export function renderCtxChip() {
 /* 生成速度只从「本轮累计输出 / 本轮累计响应时长」算；任何一边缺证据
  * 都显示「—」，绝不把 0 或墙钟差当成速度。历史重建不会产生计时，因此
  * 老会话不会凭空出现一个看似精确的数字。 */
-function throughputDisplay(lt, snapshot) {
+function throughputDisplay(snapshot) {
   if (snapshot.generating) {
     return { value: '生成中…', title: '本轮仍在生成，结束后显示实测速度' };
   }
-  /* 本轮速度以 throughputSnapshot 为准：它按「响应」逐条配对输出与时长，
-   * 不要求 lastTurn 存在（中断响应没有最终 usage 时不会有 lastTurn）。
-   * 只有当前轮账本完全为空时，才退回 lastTurn 的兼容字段；两组数据不交叉
-   * 取值，避免出现「A 的输出配 B 的时长」。 */
-  let source;
-  if (snapshot.status === 'ready') {
-    source = {
-      output: snapshot.outputTokens,
-      duration: snapshot.durationMs,
-      estimated: snapshot.estimated,
-    };
-  } else if (lt && (lt.responseOutputTokens != null || lt.responseDurationMs != null)) {
-    source = {
-      output: lt.responseOutputTokens,
-      duration: lt.responseDurationMs,
-      estimated: Boolean(lt.responseOutputEstimated),
-    };
-  } else {
-    source = { output: null, duration: null, estimated: false };
-  }
-  const hasOutput = typeof source.output === 'number' && Number.isFinite(source.output) && source.output > 0;
-  const hasDuration = typeof source.duration === 'number' && Number.isFinite(source.duration) && source.duration > 0;
+  /* 本轮速度只读 throughputSnapshot：它按「响应」逐条配对输出与时长，
+   * 不要求 lastTurn 存在，也不回退到上一轮/上一模型的 lastTurn 字段。
+   * 这样换 turn、换模型或会话隔离后不会把旧速度重新显示出来；
+   * 中断响应没有最终 usage 时，仍然由当前账本的估算结果提供速度。 */
+  const output = snapshot.outputTokens;
+  const duration = snapshot.durationMs;
+  const estimated = Boolean(snapshot.estimated);
+  const hasOutput = typeof output === 'number' && Number.isFinite(output) && output > 0;
+  const hasDuration = typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
   if (!hasOutput || !hasDuration) {
     return { value: '—', title: '缺少本轮输出 Token 或响应时间' };
   }
-  const rate = Math.round(source.output / (source.duration / 1000));
+  const rate = Math.round(output / (duration / 1000));
   if (!(rate > 0)) return { value: '—', title: '缺少本轮输出 Token 或响应时间' };
   return {
-    value: `${source.estimated ? '≈ ' : ''}${rate} tokens/s`,
-    title: source.estimated
-      ? `按可见文本估算的输出 ${fmt(source.output)} token / 实测 ${(source.duration / 1000).toFixed(1)} 秒`
-      : `本轮输出 ${fmt(source.output)} token / 响应 ${(source.duration / 1000).toFixed(1)} 秒`,
+    value: `${estimated ? '≈ ' : ''}${rate} tokens/s`,
+    title: estimated
+      ? `按可见文本估算的输出 ${fmt(output)} token / 实测 ${(duration / 1000).toFixed(1)} 秒`
+      : `本轮输出 ${fmt(output)} token / 响应 ${(duration / 1000).toFixed(1)} 秒`,
   };
 }
 
@@ -767,7 +758,7 @@ export function openCtxTip() {
       turnSec.appendChild(row);
     }
 
-    const speed = throughputDisplay(lt, throughput);
+    const speed = throughputDisplay(throughput);
     const speedRow = document.createElement('div');
     speedRow.className = 'tip-row tip-speed-row';
     const speedName = document.createElement('span');

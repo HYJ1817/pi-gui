@@ -115,6 +115,13 @@ function positiveOutput(usage) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+/* usage.output 明确是数字 0 时，这是“拿到了最终 usage 且输出为 0”，
+ * 不是“没有最终 usage”；不能再用可见文本估算去覆盖它。 */
+function hasNumericUsageOutput(usage) {
+  const value = usage?.output;
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 /**
  * assistant message_end：结算这一条响应。
  * `at` 仅供测试注入；生产调用一律用单调时钟。
@@ -131,7 +138,9 @@ export function noteAssistantEnd(evt, at = monotonicNow()) {
 
   let output = positiveOutput(message.usage);
   let estimated = false;
-  if (output == null && message.stopReason === 'aborted') {
+  /* 只有“没有最终 usage 数字”的 aborted 响应才允许估算；
+   * usage.output === 0 仍是真实 usage，不能用启发式改写。 */
+  if (output == null && message.stopReason === 'aborted' && !hasNumericUsageOutput(message.usage)) {
     const estimate = estimateResponseOutputTokens(message);
     if (estimate != null) {
       output = estimate;
