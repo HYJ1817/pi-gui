@@ -53,15 +53,22 @@ const svgMarkup = mascot?.outerHTML || '';
 check('没有 <img> / <image> 外部图片', !/<img\b|<image\b/i.test(svgMarkup));
 check('没有 href/src 外链', !/\b(?:href|src)\s*=/i.test(svgMarkup));
 check('SVG 内没有硬编码颜色', !/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i.test(svgMarkup));
-check('线稿颜色继承 currentColor', /class="mascot-line"/.test(svgMarkup)
+check('线稿颜色继承 currentColor', /class="[^"]*\bmascot-line\b/.test(svgMarkup)
   && /\.welcome-mascot \.mascot-line\s*\{[^}]*stroke:\s*currentColor/s.test(css));
 
 console.log('=== 3. 动效与 reduced motion ===');
 check('CSS 定义了浮动动画', /@keyframes mascot-float/.test(css)
   && /\.welcome-mascot \.mascot-float\s*\{[^}]*animation:\s*mascot-float/s.test(css));
 check('CSS 定义了眨眼动画', /@keyframes mascot-blink/.test(css));
-check('CSS 定义了天线呼吸动画', /@keyframes mascot-antenna/.test(css));
-check('prefers-reduced-motion 下关闭全部动画', /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.welcome-mascot \.mascot-float[\s\S]*?animation:\s*none/.test(css)
+check('云朵轮廓是闭合 path，两只脚是独立 path', (() => {
+  const cloud = mascot?.querySelector('.mascot-cloud');
+  const feet = [...(mascot?.querySelectorAll('.mascot-foot') || [])];
+  if (!cloud || !/^M[\s\S]*Z$/.test(cloud.getAttribute('d') || '')) return '云朵轮廓不是闭合 path';
+  return feet.length === 2 || `feet=${feet.length}`;
+})());
+check('两只眼睛沿用 currentColor 并比轮廓更粗', mascot?.querySelectorAll('.mascot-eye').length === 2
+  && /\.welcome-mascot \.mascot-eye\s*\{[^}]*stroke:\s*currentColor[^}]*stroke-width:\s*3\.4/s.test(css));
+check('prefers-reduced-motion 下关闭全部动画', /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.welcome-mascot \.mascot-float[\s\S]*?\.welcome-mascot \.mascot-shadow[\s\S]*?\.welcome-mascot \.mascot-eye[\s\S]*?animation:\s*none/.test(css)
   && /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.welcome-mascot \.mascot-eye\s*\{[^}]*transform:\s*none/s.test(css));
 check('没有 hover 缩放/旋转', !/\.welcome-mascot[^,{]*:hover|\.welcome-mascot\s*:hover/.test(css));
 check('动画只用 transform / opacity（不改变布局）', (() => {

@@ -1,7 +1,8 @@
 /* 生成速度（TPS）专项测试（离线，纯内存 + jsdom）。
  *
- * 口径：TPS = 本轮 assistant 响应 usage.output 之和 / 各响应
- * message_start → message_end 的单调时长之和。工具等待不计入。
+ * 口径：TPS = Σ(有效响应的 usage.output) / Σ(对应响应的
+ * message_start → message_end 单调时长)。逐条配对，缺一项整条丢弃；
+ * 工具等待不计入。
  *
  * 这里用显式时间戳调用计时入口，避免 sleep 带来的抖动；业务层
  * （usage.onAssistantMessageEnd / onTurnUsage / openCtxTip）走真实路径。
@@ -86,6 +87,75 @@ function check(name, cond, extra) {
   usage.openCtxTip();
   check('浮层显示累计速度 150 tokens/s', speedText() === '150 tokens/s', String(speedText()));
 
+  console.log('=== 2b. 逐条响应配对：只有同一条响应两项都有效才计入 ===');
+  begin();
+  /* A 没有开始时间：输出 300 不能进入分子。B 有效：450 / 10s。 */
+  assistantEnd(2000, { usage: { output: 300 } });
+  assistantStart(1000);
+  assistantEnd(11000, { usage: { output: 450 } });
+  usage.onTurnUsage({ output: 450 }, { source: 'message_end' });
+  const pair1 = throughput.throughputSnapshot();
+  check('第一条缺开始时间：只采用第二条的 450/10s', pair1.outputTokens === 450
+    && pair1.durationMs === 10000 && pair1.tokensPerSecond === 45
+    && pair1.validResponses === 1 && pair1.attempts === 2, JSON.stringify(pair1));
+
+  begin();
+  /* A 有效：300 / 2s。B 无开始时间：150 不能进入分子。 */
+  assistantStart(1000);
+  assistantEnd(3000, { usage: { output: 300 } });
+  assistantEnd(5000, { usage: { output: 150 } });
+  usage.onTurnUsage({ output: 300 }, { source: 'message_end' });
+  const pair2 = throughput.throughputSnapshot();
+  check('第二条缺开始时间：只采用第一条的 300/2s', pair2.outputTokens === 300
+    && pair2.durationMs === 2000 && pair2.tokensPerSecond === 150
+    && pair2.validResponses === 1 && pair2.attempts === 2, JSON.stringify(pair2));
+
+  begin();
+  /* A 有时长但缺 output；B 有效：450 / 5s。A 的时长不能被 B 的输出借用。 */
+  assistantStart(1000);
+  assistantEnd(3000, { stopReason: 'stop', content: [{ type: 'text', text: '没有 usage' }] });
+  assistantStart(4000);
+  assistantEnd(9000, { usage: { output: 450 } });
+  usage.onTurnUsage({ output: 450 }, { source: 'message_end' });
+  const pair3 = throughput.throughputSnapshot();
+  check('某条缺 output：该条时长整条丢弃', pair3.outputTokens === 450
+    && pair3.durationMs === 5000 && pair3.tokensPerSecond === 90
+    && pair3.validResponses === 1 && pair3.attempts === 2, JSON.stringify(pair3));
+
+  begin();
+  /* 三条响应只有中间一条两项齐全：只计 200 / 2s。 */
+  assistantEnd(2000, { usage: { output: 900 } });                 // 无开始
+  assistantStart(3000);
+  assistantEnd(5000, { usage: { output: 200 } });                 // 有效
+  assistantStart(6000);
+  assistantEnd(9000, { stopReason: 'stop' });                     // 无 output
+  usage.onTurnUsage({ output: 200 }, { source: 'message_end' });
+  const pair4 = throughput.throughputSnapshot();
+  check('多条响应仅一条有效：只累计有效响应对', pair4.outputTokens === 200
+    && pair4.durationMs === 2000 && pair4.tokensPerSecond === 100
+    && pair4.validResponses === 1 && pair4.attempts === 3, JSON.stringify(pair4));
+
+  begin();
+  assistantEnd(5000, { usage: { output: 12 } });
+  assistantEnd(7000, { usage: { output: 30 } });
+  usage.onTurnUsage({ output: 30 }, { source: 'message_end' });
+  const pairNone = throughput.throughputSnapshot();
+  check('所有响应均无有效计时：输出/时长/速度都为 null', pairNone.outputTokens === null
+    && pairNone.durationMs === null && pairNone.tokensPerSecond === null
+    && pairNone.validResponses === 0 && pairNone.attempts === 2, JSON.stringify(pairNone));
+
+  begin();
+  /* 两次工具调用夹在两条有效响应之间：只累计两段响应时长，不含 90 秒空档。 */
+  assistantStart(1000);
+  assistantEnd(3000, { usage: { output: 300 } });
+  assistantStart(93000);
+  assistantEnd(95000, { usage: { output: 200 } });
+  usage.onTurnUsage({ output: 200 }, { source: 'message_end' });
+  const pairTools = throughput.throughputSnapshot();
+  check('工具调用夹在两条响应之间：只累计 4 秒响应时间', pairTools.outputTokens === 500
+    && pairTools.durationMs === 4000 && pairTools.tokensPerSecond === 125
+    && pairTools.validResponses === 2, JSON.stringify(pairTools));
+
   console.log('=== 3. 生成中：只显示「生成中…」，不编造实时速度 ===');
   begin();
   assistantStart(1000);
@@ -118,31 +188,82 @@ function check(name, cond, extra) {
   begin();
   assistantStart(1000);
   assistantEnd(5000, { stopReason: 'stop', content: [{ type: 'text', text: '没有 usage 的普通结束' }] });
-  usage.onTurnUsage({ output: 0 }, { source: 'message_end' });
   usage.openCtxTip();
-  check('非中断且无 usage → —（不按字符估算）', speedText() === '—', String(speedText()));
+  check('非中断且无 usage → —（不按字符估算，也不伪造 lastTurn）',
+    speedText() === '—' && S.localUsage.lastTurn === null, String(speedText()));
 
   begin();
   assistantEnd(5000, { usage: { output: 12 } });
-  usage.onTurnUsage({ output: 12 }, { source: 'message_end' });
   usage.openCtxTip();
-  check('没有 message_start 时 → —', speedText() === '—', String(speedText()));
+  check('没有 message_start 时 → —（无 lastTurn 也能显示）',
+    speedText() === '—' && S.localUsage.lastTurn === null, String(speedText()));
 
   console.log('=== 5. 被打断的响应：字符估算并标「≈」 ===');
+  /* 真实序列：message_start → message_end(aborted，无 usage) → agent_settled。
+   * 不调用 onTurnUsage，不伪造 lastTurn。 */
   begin();
   assistantStart(1000);
   assistantEnd(5000, {
     stopReason: 'aborted',
     content: [{ type: 'text', text: 'x'.repeat(40) }],
   });
-  usage.onTurnUsage({ output: 0 }, { source: 'message_update' });
+  usage.onTurnThroughputSettled();
   const snap5 = throughput.throughputSnapshot();
   check('估算输出 40 字 / 4 = 10 token', snap5.outputTokens === 10, JSON.stringify(snap5));
   check('估算时长仍用实测 4000ms', snap5.durationMs === 4000, JSON.stringify(snap5));
   check('估算标记为 true', snap5.estimated === true);
+  check('中断无 usage 时 lastTurn 保持 null（不伪造 usage）', S.localUsage.lastTurn === null);
   usage.openCtxTip();
-  check('估算显示「≈ 3 tokens/s」', speedText() === '≈ 3 tokens/s', String(speedText()));
-  check('lastTurn 保留估算标记', S.localUsage.lastTurn.responseOutputEstimated === true);
+  check('没有 lastTurn 也能显示估算速度「≈ 3 tokens/s」', speedText() === '≈ 3 tokens/s', String(speedText()));
+
+  console.log('=== 5b. 中断响应的边界：无开始/无文本/切会话/新任务 ===');
+  begin();
+  assistantEnd(5000, {
+    stopReason: 'aborted',
+    content: [{ type: 'text', text: 'y'.repeat(40) }],
+  });
+  usage.onTurnThroughputSettled();
+  usage.openCtxTip();
+  check('中断但没有开始时间 → —，不借用其他时长', speedText() === '—', String(speedText()));
+
+  begin();
+  assistantStart(1000);
+  assistantEnd(5000, { stopReason: 'aborted', content: [] });
+  usage.onTurnThroughputSettled();
+  usage.openCtxTip();
+  check('中断但没有可见文本 → —，不凭空估算', speedText() === '—', String(speedText()));
+
+  begin('session-abort');
+  assistantStart(1000);
+  assistantEnd(5000, {
+    stopReason: 'aborted',
+    content: [{ type: 'text', text: 'z'.repeat(40) }],
+  });
+  usage.onTurnThroughputSettled();
+  usage.openCtxTip();
+  check('中断估算先正常显示', speedText() === '≈ 3 tokens/s', String(speedText()));
+  S.state = { sessionId: 'session-next', model: { provider: 'deepseek', id: 'deepseek-v4-pro' } };
+  S.localUsage.sessionId = 'session-next';
+  usage.clearSessionUsage();
+  usage.openCtxTip();
+  check('中断后切换会话：旧估算消失', speedText() === null, String(speedText()));
+
+  begin('session-new-task');
+  assistantStart(1000);
+  assistantEnd(5000, {
+    stopReason: 'aborted',
+    content: [{ type: 'text', text: 'q'.repeat(40) }],
+  });
+  usage.onTurnThroughputSettled();
+  usage.beginUsageTurn();
+  usage.openCtxTip();
+  check('中断后开始新任务：先显示生成中，不沿用旧估算', speedText() === '生成中…', String(speedText()));
+  assistantStart(6000);
+  assistantEnd(8000, { usage: { output: 100 } });
+  usage.onTurnUsage({ output: 100 }, { source: 'message_end' });
+  usage.onTurnThroughputSettled();
+  usage.openCtxTip();
+  check('新任务的真实速度不被旧估算污染', speedText() === '50 tokens/s', String(speedText()));
 
   console.log('=== 6. 会话 / 工作区 / 清除后的隔离 ===');
   begin('session-A');
@@ -190,7 +311,10 @@ function check(name, cond, extra) {
   check('不使用 liveTurn.startedAt 计算 TPS', !/liveTurn/.test(stripComments(usageSource))
     && !/liveTurn/.test(stripComments(fs.readFileSync(path.join(ROOT, 'public/turn-throughput.js'), 'utf8'))));
   check('使用单调时钟 performance.now', /performance\.now\(\)/.test(fs.readFileSync(path.join(ROOT, 'public/turn-throughput.js'), 'utf8')));
-  check('openCtxTip 的生成速度行使用 lastTurn 单一来源', /const lt = S\.localUsage\?\.lastTurn/.test(usageSource));
+  check('生成速度行优先读取 throughputSnapshot，不要求 lastTurn',
+    /snapshot\.status === 'ready'/.test(usageSource) && /throughput\.attempts > 0/.test(usageSource));
+  check('ledger 逐条配对：duration 与 output 缺一即整条丢弃',
+    /duration == null \|\| output == null/.test(fs.readFileSync(path.join(ROOT, 'public/turn-throughput.js'), 'utf8')));
 
   console.log(`\n${pass}/${pass + fail} 通过`);
   dom.window.close();

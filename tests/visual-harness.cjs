@@ -524,6 +524,8 @@ const MODELS = [
 const BASE_MODELS = MODELS.map((model) => ({ ...model }));
 let composerModel = MODELS[0];
 let composerThinking = 'high';
+/* 真实拖动/失败回读验收用：只拒绝指定档位，不改变其他夹具行为。 */
+let thinkingFailLevel = null;
 
 // 实测 pi 只返回这三档（medium 会被静默映射成 high，所以不要放进夹具）
 const LEVELS = ['off', 'high', 'max'];
@@ -791,6 +793,12 @@ function replyFor(cmd) {
       composerThinking = model.provider === 'zhipu' ? 'medium' : 'high';
       return { type: 'response', command: cmd.type, success: true, data: model };
     }
+    case 'set_thinking_level':
+      if (thinkingFailLevel && cmd.level === thinkingFailLevel) {
+        return { type: 'response', command: cmd.type, success: false, error: '不支持的档位' };
+      }
+      composerThinking = cmd.level;
+      return { type: 'response', command: cmd.type, success: true, data: {} };
     default:
       return { type: 'response', command: cmd.type, success: true, data: {} };
   }
@@ -929,8 +937,15 @@ const server = http.createServer(async (req, res) => {
     MODELS.splice(0, MODELS.length, ...BASE_MODELS.map((model) => ({ ...model })));
     composerModel = MODELS[0];
     composerThinking = 'high';
+    thinkingFailLevel = null;
     for (const type of ['get_available_models', 'get_state', 'get_available_thinking_levels']) push(replyFor({ type }));
     return json(res, 200, { ok: true });
+  }
+  if (p === '/api/__thinking-mode' && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { /* 默认清空 */ }
+    thinkingFailLevel = typeof body.failLevel === 'string' && body.failLevel ? body.failLevel : null;
+    return json(res, 200, { ok: true, failLevel: thinkingFailLevel });
   }
 
   if (process.env.HARNESS_VERBOSE && p.startsWith('/api/')) console.log(`${req.method} ${p}`);

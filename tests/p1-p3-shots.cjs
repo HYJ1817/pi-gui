@@ -135,6 +135,26 @@ async function waitFor(cdp, expression, timeout = 8000) {
   throw new Error('等待超时: ' + expression + ' 最后值=' + JSON.stringify(last));
 }
 
+/* 真实鼠标拖动：按下后逐步移动，每一步都让测试有机会读 DOM；
+ * 释放后才算一次完整手势。 */
+async function dragMouse(cdp, from, to, fractions, onMove) {
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed', x: from.x, y: from.y, button: 'left', buttons: 1, clickCount: 1,
+  });
+  for (const fraction of fractions) {
+    const x = from.x + (to.x - from.x) * fraction;
+    const y = from.y + (to.y - from.y) * fraction;
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved', x, y, button: 'left', buttons: 1,
+    });
+    await sleep(90);
+    if (onMove) await onMove(fraction, x, y);
+  }
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0, clickCount: 1,
+  });
+}
+
 async function pageSetup(cdp) {
   return evaluate(cdp, `(async () => {
     window.__P = {};
@@ -145,7 +165,19 @@ async function pageSetup(cdp) {
     Object.assign(window.__P, {
       S: state.S, usage, sessions, theme, picker, messages,
       closePop: popover.closePop, currentAnchor: popover.currentAnchor, popVisible: popover.popVisible,
+      thinkCommands: [],
     });
+    /* 只记录测试关心的思考档位提交；不改产品路径。 */
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      try {
+        if (String(input).includes('/api/command') && typeof init?.body === 'string') {
+          const command = JSON.parse(init.body);
+          if (command.type === 'set_thinking_level') window.__P.thinkCommands.push(command.level);
+        }
+      } catch { /* 非 JSON 请求 */ }
+      return realFetch(input, init);
+    };
     return true;
   })()`);
 }
@@ -605,6 +637,96 @@ async function main() {
             && thinking.ticks.every((t) => t > 0), thinking.ticks);
         await shot(`p4-thinking-slider-${width}x${height}-${theme}`);
 
+        /* ---------- P4 思考滑杆：真实鼠标连续拖动 ---------- */
+        const setThinkingOff = async () => {
+          await evaluate(cdp, `(() => { const r = document.querySelector('.model-thinking-range'); r.focus(); return true; })()`);
+          await cdp.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', windowsVirtualKeyCode: 36, key: 'Home', code: 'Home' });
+          await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', windowsVirtualKeyCode: 36, key: 'Home', code: 'Home' });
+          await waitFor(cdp, `document.querySelector('.ui3-think-item.on')?.dataset.level === 'off'
+            && document.querySelector('.model-thinking-range')?.disabled === false`, 6000);
+        };
+        const dragToMax = async () => {
+          await evaluate(cdp, `__P.thinkCommands.length = 0`);
+          const geometry = await evaluate(cdp, `(() => {
+            const r = document.querySelector('.model-thinking-range');
+            const cs = getComputedStyle(r);
+            const b = r.getBoundingClientRect();
+            const thumb = document.querySelector('.model-thinking-thumb').getBoundingClientRect();
+            window.__dragRange = r;
+            return {
+              from: { x: thumb.left + thumb.width / 2, y: thumb.top + thumb.height / 2 },
+              to: { x: b.right - parseFloat(cs.paddingRight), y: b.top + b.height / 2 },
+              rect: [b.left, b.top, b.right, b.bottom], vw: innerWidth, vh: innerHeight,
+            };
+          })()`);
+          const previews = [];
+          let sameNode = true;
+          let commandsDuringDrag = 0;
+          await dragMouse(cdp, geometry.from, geometry.to, [0.15, 0.4, 0.65, 0.9, 1], async () => {
+            const state = await evaluate(cdp, `(() => ({
+              same: document.querySelector('.model-thinking-range') === window.__dragRange,
+              preview: document.querySelector('.model-thinking-current')?.textContent || '',
+              commands: __P.thinkCommands.length,
+            }))()`);
+            sameNode = sameNode && state.same;
+            previews.push(state.preview);
+            commandsDuringDrag = Math.max(commandsDuringDrag, state.commands);
+          });
+          return { geometry, previews, sameNode, commandsDuringDrag };
+        };
+        const finalThinking = () => evaluate(cdp, `(() => {
+          const slider = document.querySelector('.model-thinking-slider');
+          const b = slider.getBoundingClientRect();
+          return {
+            commands: __P.thinkCommands.slice(),
+            on: document.querySelector('.ui3-think-item.on')?.dataset.level || '',
+            state: __P.S.state?.thinkingLevel || '',
+            disabled: document.querySelector('.model-thinking-range')?.disabled,
+            inside: b.left >= 0 && b.right <= innerWidth + 1 && b.top >= 0 && b.bottom <= innerHeight + 1,
+          };
+        })()`);
+
+        await setThinkingOff();
+        const drag = await dragToMax();
+        await waitFor(cdp, `document.querySelector('.ui3-think-item.on')?.dataset.level === 'high'
+          && document.querySelector('.model-thinking-range')?.disabled === false`, 6000);
+        const dragFinal = await finalThinking();
+        metrics.push({ scene: 'p4-thinking-drag', width, height, theme, ...drag, final: dragFinal });
+        check(`P4 ${width}×${height} ${theme}: 真实拖动经过多个档位且 Range 节点不被替换`,
+          drag.sameNode && drag.previews.includes('high') && new Set(drag.previews).size >= 3
+            && drag.commandsDuringDrag === 0, drag);
+        check(`P4 ${width}×${height} ${theme}: 一次拖动只在释放时提交一次，回读后 high`,
+          dragFinal.commands.length === 1 && dragFinal.commands[0] === 'high'
+            && dragFinal.on === 'high' && dragFinal.state === 'high'
+            && dragFinal.disabled === false && dragFinal.inside, dragFinal);
+        await shot(`p4-thinking-drag-${width}x${height}-${theme}`);
+
+        /* 失败回读：Pi 拒绝 high，界面必须回到 off，且不能重复提交。 */
+        await fetch(new URL('/api/__thinking-mode', url), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ failLevel: 'high' }),
+        });
+        await setThinkingOff();
+        const dragFail = await dragToMax();
+        await waitFor(cdp, `document.querySelector('.ui3-think-item.on')?.dataset.level === 'off'
+          && document.querySelector('.model-thinking-range')?.disabled === false`, 6000);
+        const failFinal = await finalThinking();
+        metrics.push({ scene: 'p4-thinking-drag-fail', width, height, theme, ...dragFail, final: failFinal });
+        check(`P4 ${width}×${height} ${theme}: 失败回读后恢复 off，且只提交一次`,
+          dragFail.sameNode && dragFail.commandsDuringDrag === 0
+            && failFinal.commands.length === 1 && failFinal.on === 'off'
+            && failFinal.state === 'off' && failFinal.disabled === false, { dragFail, failFinal });
+        await fetch(new URL('/api/__thinking-mode', url), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ failLevel: null }),
+        });
+        /* 失败提示会停留几秒；清掉它再进入下一组，免得下一张「拖动成功」
+         * 截图里还挂着上一条错误 toast。 */
+        await evaluate(cdp, `(() => {
+          document.querySelectorAll('.ui4-feedback-toast-close').forEach((b) => b.click());
+          return true;
+        })()`);
+
         await switchModel('deepseek', 'deepseek-v4-pro');
         await evaluate(cdp, `__P.closePop()`);
 
@@ -629,6 +751,9 @@ async function main() {
             anim: getComputedStyle(float).animationName,
             duration: getComputedStyle(float).animationDuration,
             stroke: getComputedStyle(line).stroke,
+            cloud: Boolean(svg.querySelector('.mascot-cloud')),
+            feet: svg.querySelectorAll('.mascot-foot').length,
+            eyes: svg.querySelectorAll('.mascot-eye').length,
             external: svg.querySelectorAll('image, use, script, foreignObject').length,
             inRestore: Boolean(document.querySelector('#welcomeRestore .welcome-mascot')),
             hover: getComputedStyle(svg).transitionProperty,
@@ -638,9 +763,11 @@ async function main() {
         check(`P3 ${width}×${height} ${theme}: 欢迎页吉祥物 100×100 且只在 ready 态`,
           Math.abs(mascot.rect[0] - 100) < 0.6 && Math.abs(mascot.rect[1] - 100) < 0.6
             && mascot.viewBox === '0 0 100 100' && !mascot.inRestore, mascot);
-        check(`P3 ${width}×${height} ${theme}: 线稿动画在跑、无外链资源`,
-          mascot.anim === 'mascot-float' && mascot.duration !== '0s'
+        check(`P3 ${width}×${height} ${theme}: 云朵轮廓、两只脚、两只眼且无外链`,
+          mascot.cloud && mascot.feet === 2 && mascot.eyes === 2
             && mascot.external === 0 && mascot.stroke !== 'none', mascot);
+        check(`P3 ${width}×${height} ${theme}: 线稿动画在跑`,
+          mascot.anim === 'mascot-float' && mascot.duration !== '0s', mascot);
         await shot(`p3-welcome-mascot-${width}x${height}-${theme}`);
 
         await cdp.send('Emulation.setEmulatedMedia', {
@@ -649,14 +776,15 @@ async function main() {
         await sleep(240);
         const reduced = await evaluate(cdp, `(() => {
           const svg = document.querySelector('#welcomeReady .welcome-mascot');
+          const name = (sel) => getComputedStyle(svg.querySelector(sel)).animationName;
           return {
-            float: getComputedStyle(svg.querySelector('.mascot-float')).animationName,
-            eye: getComputedStyle(svg.querySelector('.mascot-eye')).animationName,
-            antenna: getComputedStyle(svg.querySelector('.mascot-antenna-dot')).animationName,
+            float: name('.mascot-float'),
+            shadow: name('.mascot-shadow'),
+            eye: name('.mascot-eye'),
           };
         })()`);
         check(`P3 ${width}×${height} ${theme}: prefers-reduced-motion 下全部动画停止`,
-          reduced.float === 'none' && reduced.eye === 'none' && reduced.antenna === 'none', reduced);
+          reduced.float === 'none' && reduced.shadow === 'none' && reduced.eye === 'none', reduced);
         await shot(`p3-welcome-mascot-reduced-${width}x${height}-${theme}`);
         await cdp.send('Emulation.setEmulatedMedia', { features: [] });
         await sleep(160);

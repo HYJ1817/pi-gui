@@ -2914,6 +2914,12 @@ staticCheck();
   const railCounts = () => [...pop().querySelectorAll('.model-rail-count')].map((n) => n.textContent);
   const modelRows = () => [...pop().querySelectorAll('.ui3-model-item')];
   const menuOpen = () => pop() && !pop().hidden && pop().classList.contains('model-menu');
+  const RECENT_KEY = 'pi-gui.recent-models.v1';
+  const recentStored = () => {
+    try { return JSON.parse(window.localStorage.getItem(RECENT_KEY) || '[]'); }
+    catch { return []; }
+  };
+  window.localStorage.removeItem(RECENT_KEY);
   const openMenu = () => {
     if (menuOpen()) return;
     if (pop() && !pop().hidden) window.closePop();
@@ -2937,6 +2943,7 @@ staticCheck();
   rail('provider:deepseek').click();
   const pickTarget = modelRows().find((n) => n.dataset.modelId === 'deepseek-chat');
   pickTarget.click();
+  check('点击模型先不写最近使用，等 Pi 确认', () => recentStored().length === 0);
   check('选择后菜单保持打开，等权威回读', () => menuOpen());
   const setModel = commands.filter((c) => c.type === 'set_model').pop();
   check('set_model 带 provider+modelId', () => setModel && setModel.provider === 'deepseek' && setModel.modelId === 'deepseek-chat');
@@ -2954,11 +2961,14 @@ staticCheck();
   check('pi 确认后仍等待权威回读', () => window.S.modelSwitchPending && ![...window.document.querySelectorAll('.toast')].some((x) => x.textContent.includes('已切换到')));
   const replyLatest = (type, data) => es.emit({ type: 'response', command: type, id: commands.filter((c) => c.type === type).at(-1).id, success: true, data });
   check('Pi 确认后回读状态和档位', () => commands.filter((c) => c.type === 'get_state').length === gsBefore + 1 && commands.at(-1).type === 'get_available_thinking_levels');
+  check('set_model 确认但权威回读未到，仍不写最近使用', () => recentStored().length === 0);
   replyLatest('get_available_thinking_levels', { levels: ['off', 'low', 'high'] });
   check('只回来档位时仍等待 state', () => window.S.modelSwitchPending && window.S.thinkingLevels.length === 0);
   replyLatest('get_state', { model: { provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat' }, thinkingLevel: 'high' });
   await new Promise((r) => setTimeout(r, 0));
   check('两份结果回来后结束等待', () => !window.S.modelSwitchPending);
+  check('回读身份完全一致后才写最近使用', () => JSON.stringify(recentStored())
+    === JSON.stringify([{ providerId: 'deepseek', modelId: 'deepseek-chat' }]));
   check('回读后 chip 与档位一起更新', () => $('modelText').textContent === 'DeepSeek Chat' && $('thinkText').textContent === '思考 high');
   check('菜单按回读刷新当前对勾与档位', () => modelRows().find((n) => n.classList.contains('on'))?.dataset.modelId === 'deepseek-chat'
     && [...pop().querySelectorAll('.ui3-think-item')].map((n) => n.dataset.level).join(',') === 'off,low,high'
@@ -3001,6 +3011,8 @@ staticCheck();
   replyLatest('get_available_thinking_levels', { levels: ['off', 'low', 'medium', 'high'] });
   await new Promise((r) => setTimeout(r, 0));
   check('B 的真实 state 与候选一起显示', () => $('modelText').textContent === 'GLM-4.6' && $('thinkText').textContent === '思考 medium' && window.S.thinkingLevels.join(',') === 'off,low,medium,high');
+  check('成功切换 B 后写入最近使用', () => JSON.stringify(recentStored()[0])
+    === JSON.stringify({ providerId: 'zhipu', modelId: 'glm-4.6' }));
   openMenu();
   check('B 的统一滑杆仅四项，没有 max', () => [...pop().querySelectorAll('.ui3-think-item')].map((n) => n.dataset.level).join(',') === 'off,low,medium,high');
   chooseModel('openrouter');
@@ -3009,6 +3021,7 @@ staticCheck();
   replyLatest('get_state', bState);
   await new Promise((r) => setTimeout(r, 0));
   check('set_model 失败回读模型与候选恢复 Pi 实际状态', () => !window.S.modelSwitchPending && window.S.state.model.provider === 'zhipu' && $('modelText').textContent === 'GLM-4.6' && window.S.thinkingLevels.length === 4);
+  check('失败切换不写最近使用', () => !recentStored().some((x) => x.providerId === 'openrouter' && x.modelId === 'deepseek-reasoner'));
   chooseModel('deepseek', 0); // reasoning=false，但不猜 off。
   modelReply(true, { provider: 'deepseek', id: 'deepseek-chat' });
   const cState = { model: { provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat' }, thinkingLevel: 'low' };
@@ -3016,21 +3029,48 @@ staticCheck();
   replyLatest('get_state', cState);
   await new Promise((r) => setTimeout(r, 0));
   check('reasoning=false 仍按 Pi 返回两档', () => window.S.thinkingLevels.join(',') === 'off,low');
+  check('已记录过的模型再次成功切换不产生重复条目', () => {
+    const recent = recentStored();
+    const count = recent.filter((x) => x.providerId === 'deepseek' && x.modelId === 'deepseek-chat').length;
+    return count === 1 || 'count=' + count;
+  });
   es.emit({ type: 'response', command: 'get_state', id: oldBState.id, success: true, data: bState });
   es.emit({ type: 'response', command: 'get_available_thinking_levels', id: oldBLevels.id, success: true, data: { levels: ['off', 'max'] } });
   check('B 延迟的 state 和 levels 不覆盖 C', () => window.S.state.model.id === 'deepseek-chat' && window.S.thinkingLevels.join(',') === 'off,low');
   es.emit({ type: 'response', command: 'get_state', id: oldThinkingState.id, success: true, data: bState });
   check('旧思考设置回读也不能覆盖新模型', () => window.S.state.model.id === 'deepseek-chat' && $('thinkText').textContent === '思考 low');
+  window.localStorage.removeItem(RECENT_KEY);
   chooseModel('zhipu');
   const inflightB = commands.filter((c) => c.type === 'set_model').at(-1);
   chooseModel('openrouter');
   check('连续切换等前一 set_model 确认后再发送', () => commands.filter((c) => c.type === 'set_model').at(-1) === inflightB);
   modelReply(true, bState.model);
+  check('被后一次选择顶掉的前一次不写最近使用', () => recentStored().length === 0);
   const inflightC = commands.filter((c) => c.type === 'set_model').at(-1);
   check('前一确认后发送最后选择的 Provider + id', () => inflightC.provider === 'openrouter' && inflightC.modelId === 'deepseek-reasoner');
   modelReply(true, { provider: 'openrouter', id: 'deepseek-reasoner' });
   replyLatest('get_state', { model: { provider: 'openrouter', id: 'deepseek-reasoner', name: 'Router 0' }, thinkingLevel: 'medium' });
   replyLatest('get_available_thinking_levels', { levels: ['off', 'medium'] });
+  await new Promise((r) => setTimeout(r, 0));
+  check('连续切换只记录最终成功的那一个', () => JSON.stringify(recentStored())
+    === JSON.stringify([{ providerId: 'openrouter', modelId: 'deepseek-reasoner' }]));
+
+  /* 超时窗口：Pi 已确认 set_model，但权威回读一直没回来。此时不能写；
+   * 等回读真正到达、身份核对成功后才写。 */
+  window.localStorage.removeItem(RECENT_KEY);
+  chooseModel('zhipu');
+  modelReply(true, bState.model);
+  check('确认后回读未到（超时窗口）不写最近使用', () => recentStored().length === 0);
+  replyLatest('get_available_thinking_levels', { levels: ['off', 'low', 'medium', 'high'] });
+  replyLatest('get_state', bState);
+  await new Promise((r) => setTimeout(r, 0));
+  check('回读到达并核对身份后才写最近使用', () => JSON.stringify(recentStored())
+    === JSON.stringify([{ providerId: 'zhipu', modelId: 'glm-4.6' }]));
+  /* 恢复后续上下文用例需要的 openrouter 当前模型。 */
+  chooseModel('openrouter');
+  modelReply(true, { provider: 'openrouter', id: 'deepseek-reasoner' });
+  replyLatest('get_available_thinking_levels', { levels: ['off', 'medium'] });
+  replyLatest('get_state', { model: { provider: 'openrouter', id: 'deepseek-reasoner', name: 'Router 0' }, thinkingLevel: 'medium' });
   await new Promise((r) => setTimeout(r, 0));
   openMenu();
   rail('provider:openrouter').click();

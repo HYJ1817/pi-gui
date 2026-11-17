@@ -288,14 +288,16 @@ async function main() {
     assert.deepEqual(picked, [['openrouter', 'deepseek-reasoner']]);
     assert.equal(pop().hidden, false, '切换未回读前保持菜单，等待权威状态');
   });
-  await check('选择后写入最近使用（只存身份，去重且封顶）', () => {
-    const recent = view.readRecentModelIdentities();
-    assert.deepEqual(recent[0], { providerId: 'openrouter', modelId: 'deepseek-reasoner' });
+  await check('点击模型本身不写最近使用，等 Pi 回读确认后再写', () => {
+    assert.deepEqual(view.readRecentModelIdentities(), [], '未确认的点击不能留下记录');
+    /* 存储层仍只保存身份：去重、封顶 6 条、新的在前。 */
     for (let i = 0; i < 8; i++) view.rememberRecentModel('p', 'm' + i);
+    view.rememberRecentModel('p', 'm7');
     const capped = view.readRecentModelIdentities();
     assert.equal(capped.length, 6);
     assert.deepEqual(capped[0], { providerId: 'p', modelId: 'm7' });
     assert.equal(new Set(capped.map((x) => x.providerId + '/' + x.modelId)).size, capped.length);
+    assert.deepEqual(Object.keys(capped[0]).sort(), ['modelId', 'providerId'], '不得保存凭据或元数据');
     w.localStorage.clear();
   });
   await check('pending 显示切换状态；连点仍交给 setModel 的既有队列', () => {
@@ -421,6 +423,114 @@ async function main() {
     assert.equal(pop().querySelector('.model-thinking-range').disabled, true, '提交未收口前禁止再次提交');
     openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'high' });
     assert.equal(pop().querySelector('.ui3-think-item.on').dataset.level, 'high');
+  });
+  await check('拖动 input 只预览：不提交、不替换 Range 节点', () => {
+    pickedThinking = [];
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium' });
+    const range = pop().querySelector('.model-thinking-range');
+    range.value = '3';
+    range.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.deepEqual(pickedThinking, [], 'input 不能发 RPC');
+    assert.equal(pop().querySelector('.model-thinking-range'), range, '拖动中 Range 节点被替换了');
+    assert.equal(range.value, '3');
+    assert.equal(range.getAttribute('aria-valuetext'), 'high');
+    assert.equal(pop().querySelector('.ui3-think-item.on').dataset.level, 'high', '预览档位未更新');
+    assert.equal(pop().querySelector('.model-thinking-current').textContent, 'high');
+  });
+  await check('一次指针拖动经过多个档位，change 只提交一次', () => {
+    pickedThinking = [];
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'off' });
+    const range = pop().querySelector('.model-thinking-range');
+    range.dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+    for (const value of ['1', '2', '3']) {
+      range.value = value;
+      range.dispatchEvent(new w.Event('input', { bubbles: true }));
+      assert.equal(pop().querySelector('.model-thinking-range'), range, `经过 ${value} 时节点被替换`);
+    }
+    range.dispatchEvent(new w.Event('change', { bubbles: true }));
+    range.dispatchEvent(new w.Event('pointerup', { bubbles: true }));
+    assert.deepEqual(pickedThinking, ['high'], '同一次拖动提交了多次');
+    assert.equal(pop().querySelector('.model-thinking-range').disabled, true, '提交后未进入短锁');
+  });
+  await check('pointerup 先于 change 也只提交一次', () => {
+    pickedThinking = [];
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'off' });
+    const range = pop().querySelector('.model-thinking-range');
+    range.dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+    range.value = '3';
+    range.dispatchEvent(new w.Event('input', { bubbles: true }));
+    range.dispatchEvent(new w.Event('pointerup', { bubbles: true }));
+    range.dispatchEvent(new w.Event('change', { bubbles: true }));
+    assert.deepEqual(pickedThinking, ['high']);
+  });
+  await check('键盘 change 可提交，同一档位重复选择不提交', () => {
+    pickedThinking = [];
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium' });
+    const range = pop().querySelector('.model-thinking-range');
+    range.value = '3';
+    range.dispatchEvent(new w.Event('input', { bubbles: true }));
+    range.dispatchEvent(new w.Event('change', { bubbles: true }));
+    assert.deepEqual(pickedThinking, ['high']);
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium' });
+    const again = pop().querySelector('.model-thinking-range');
+    again.value = '2';
+    again.dispatchEvent(new w.Event('input', { bubbles: true }));
+    again.dispatchEvent(new w.Event('change', { bubbles: true }));
+    assert.deepEqual(pickedThinking, ['high'], '同一档位重复选择又发了一次');
+  });
+  await check('拖动中失焦：退回权威档位，不提交', () => {
+    pickedThinking = [];
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium' });
+    const range = pop().querySelector('.model-thinking-range');
+    range.dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+    range.value = '3';
+    range.dispatchEvent(new w.Event('input', { bubbles: true }));
+    range.dispatchEvent(new w.Event('blur', { bubbles: false }));
+    assert.deepEqual(pickedThinking, []);
+    assert.equal(range.value, '2');
+    assert.equal(pop().querySelector('.ui3-think-item.on').dataset.level, 'medium');
+  });
+  await check('拖动中菜单重绘/模型变化：旧 Range 的 change 不再提交', () => {
+    pickedThinking = [];
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium' });
+    const range = pop().querySelector('.model-thinking-range');
+    range.dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+    range.value = '3';
+    range.dispatchEvent(new w.Event('input', { bubbles: true }));
+    /* 模型切换的外部回读会重绘菜单，旧节点已经脱离文档。 */
+    openModels(MODELS[1], MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium' });
+    range.dispatchEvent(new w.Event('change', { bubbles: true }));
+    range.dispatchEvent(new w.Event('pointerup', { bubbles: true }));
+    assert.deepEqual(pickedThinking, [], '脱离文档的旧滑杆仍提交了 RPC');
+  });
+  await check('拖动中菜单关闭：释放与 change 都不提交', () => {
+    pickedThinking = [];
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'off' });
+    const range = pop().querySelector('.model-thinking-range');
+    range.dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+    range.value = '3';
+    range.dispatchEvent(new w.Event('input', { bubbles: true }));
+    pop().hidden = true;
+    range.dispatchEvent(new w.Event('change', { bubbles: true }));
+    range.dispatchEvent(new w.Event('pointerup', { bubbles: true }));
+    assert.deepEqual(pickedThinking, [], '菜单已关闭仍提交了 RPC');
+    pop().hidden = false;
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'off' });
+  });
+  await check('快速连续拖动：每次完整手势各提交一次，旧节点不重复', () => {
+    pickedThinking = [];
+    const drag = (from, to) => {
+      openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: from });
+      const range = pop().querySelector('.model-thinking-range');
+      range.dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+      range.value = to;
+      range.dispatchEvent(new w.Event('input', { bubbles: true }));
+      range.dispatchEvent(new w.Event('pointerup', { bubbles: true }));
+      range.dispatchEvent(new w.Event('change', { bubbles: true }));
+    };
+    drag('off', '3');
+    drag('high', '0');
+    assert.deepEqual(pickedThinking, ['high', 'off'], '连续拖动提交次数不正确');
   });
   await check('档位不可用时画出来但不可提交，原因来自 availability', () => {
     pickedThinking = [];
