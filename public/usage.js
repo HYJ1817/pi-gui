@@ -29,15 +29,16 @@ function contextWindowMissing(c) {
 const positiveNumber = (v) => typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
 
 /** 两个模型身份是否能确认是同一个。
- *  只有 providerId + modelId 都齐全时才做等值判断；两边都缺身份时
- *  没有相反证据，视为同一未知上下文；一边齐全一边缺失则无法确认，
- *  一律按「不是同一个」处理，绝不拿未知身份去套旧容量。 */
+ *  只有两边都具备完整的 providerId + modelId，且两个字段逐一相等时，
+ *  才允许把统计载荷里的 contextWindow 当作当前模型的容量。
+ *  任意一边缺字段（哪怕两边缺得一模一样、或只剩 modelId 相同）都无法
+ *  证明是同一个模型，一律拒绝 —— 身份不完整时宁可显示「未知」，
+ *  也不能让旧模型的容量借着「都是未知身份」溜到新模型上。 */
 function identityCompatible(a, b) {
-  const af = Boolean(a?.providerId && a?.modelId);
-  const bf = Boolean(b?.providerId && b?.modelId);
-  if (af && bf) return a.providerId === b.providerId && a.modelId === b.modelId;
-  if (!af && !bf) return true;
-  return false;
+  const aComplete = Boolean(a?.providerId && a?.modelId);
+  const bComplete = Boolean(b?.providerId && b?.modelId);
+  if (!aComplete || !bComplete) return false;
+  return a.providerId === b.providerId && a.modelId === b.modelId;
 }
 
 /* 最近一次被接受的统计属于哪一代请求。`object` 用来识别外部直接
