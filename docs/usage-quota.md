@@ -94,10 +94,13 @@ TPS = Σ(第 i 条有效响应的 usage.output)
   工具执行、等待审批、下一轮请求前的空档都不计入。**不得**使用 `liveTurn.startedAt`：
   那是整个 Agent 任务的起点，包含工具时间，算出来会系统性偏低。
 - **没有证据就不猜。** 没有任何有效配对时显示 `—`。仍在生成时显示 `生成中…`，不显示实时速度。
-  浮层直接读取当前 `throughputSnapshot`，不要求 `lastTurn` 存在；`lastTurn` 只保留同一份
-  有效配对的兼容投影，不另算一套速度。
-- **中断的响应**若没有最终 `usage`，可按可见文本估算输出并在界面加 `≈`；只有
-  `stopReason === 'aborted'` 才走这条估算路径。
+  浮层只读当前 `throughputSnapshot`，不要求 `lastTurn` 存在，也不回退到上一轮或上一模型的
+  `lastTurn` 速度；`lastTurn` 只保留同一份有效配对的兼容投影，不参与 TPS 计算。
+- **新 turn 从干净的一轮开始。** `agent_start` 会清空上一轮的 `lastTurn`，避免旧轮输入/输出
+  token 与本轮中断估算的速度拼成同一条「最近一轮用量」。session 级累计统计不受影响。
+- **中断的响应**若没有最终 `usage` 数字，可按可见文本估算输出并在界面加 `≈`；只有
+  `stopReason === 'aborted'` 才走这条估算路径。`usage.output` 是数字（包括 `0`）时视为已有
+  最终 usage，不再估算；`0` 输出与有效时长也不能产生速度。
 - **隔离**：换会话、换模型、换工作区或清空线程都会丢弃本轮计时；迟到事件按会话 / 工作区
   身份拒绝。历史消息没有实时计时，重建时不会凭空生成 TPS。
 - 字段写在 `S.localUsage.lastTurn` 的 `responseDurationMs` / `responseOutputTokens` /

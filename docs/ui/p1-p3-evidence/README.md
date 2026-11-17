@@ -44,12 +44,14 @@ B 的 450 / 10 s = **45 tokens/s**，A 整条丢弃。另一例 A 有效 300 / 2
 时间（150 output）：旧口径 450 / 2 s = 225 tokens/s，新口径只取 **300 / 2 s =
 150 tokens/s**。工具调用之间的空档仍不计入。
 
-浮层直接读取当前 `throughputSnapshot`，不要求 `lastTurn` 存在；中断且无最终 usage
-的响应可按可见文本估算（显示 `≈`），普通结束无 usage 不估算，所有响应都没有有效
-配对时显示 `—`。历史消息不会生成 TPS。
+浮层只读当前 `throughputSnapshot`，不要求 `lastTurn` 存在，也不回退到上一轮/上一模型
+的旧速度。中断且**没有最终 usage 数字**的响应可按可见文本估算（显示 `≈`）；普通结束
+无 usage、或 `usage.output` 明确为 `0`，都不估算。新 turn 会清空上一轮 `lastTurn`，
+避免旧轮 token 与本轮估算速度拼在一起。所有响应都没有有效配对时显示 `—`；历史消息
+不会生成 TPS。
 
 口径、隔离与缺失值规则见 [usage-quota.md](../../usage-quota.md#生成速度-tps-口径)。
-专项测试：`node tests/usage-throughput.cjs`（44/44）。
+专项测试：`node tests/usage-throughput.cjs`（51/51）。
 
 截图：`shots/p2-tps-context-*`、`shots/p2-tps-unavailable-*`。
 
@@ -143,7 +145,7 @@ node tests/primitives.cjs
 
 | 套件 | 结果 |
 | --- | --- |
-| `tests/usage-throughput.cjs` | 44/44 |
+| `tests/usage-throughput.cjs` | 51/51 |
 | `tests/ui3-model.cjs` | 65/65 |
 | `tests/home-mascot.cjs` | 23/23 |
 | `tests/smoke.cjs` | 1365/1365 |
@@ -160,7 +162,7 @@ node tests/primitives.cjs
 | --- | --- |
 | `public/app.js` | `8fc7cc87d47d163ac98233852cb8a3f293fb659541ed3ded0374e97570a27556` |
 | `public/index.html` | `239fded57e82df8a698b88e7443ebb6a8d937bd8c1c9c6213e146788e3758ae7` |
-| `public/turn-throughput.js` | `3041ec4f4bd49defab771fd76b03e95de26dc97bc5afefc4b01632d48ad50ce0` |
+| `public/turn-throughput.js` | `b3f0b87c6ad9a504e29f9917491a25127ab087f1ac090b9c1d68ada770da4faa` |
 | `public/ui3-model-picker.js` | `79628db9330d0134c707fb392a758f53fe6906c9c982b5e774d3e0617973c8d0` |
 | `public/ui4-feedback.css` | `e74c08ce31e4bc86b1f3ce9015613ef4c0ed9fb195a968a0964cbcd836ff1a7c` |
-| `public/usage.js` | `e925b2746eea604aa2bff6b2b58594a8b750b3da786287372347914f11ab147c` |
+| `public/usage.js` | `484751e9c80b9cb5af7ab461e77b53732e12c06023f85895a2b5bfab80be2760` |

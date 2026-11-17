@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-17T17:48:00.381Z",
+  "generatedAt": "2026-11-17T18:01:54.999Z",
   "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
   "viewports": [
     [
@@ -2801,12 +2801,12 @@
     {
       "name": "p4-thinking-drag-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-drag-1320x820-dark.png",
-      "bytes": 58258
+      "bytes": 58266
     },
     {
       "name": "p3-welcome-mascot-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-1320x820-dark.png",
-      "bytes": 39727
+      "bytes": 39725
     },
     {
       "name": "p3-welcome-mascot-reduced-1320x820-dark",
@@ -2886,12 +2886,12 @@
     {
       "name": "p4-thinking-drag-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-drag-1320x820-light.png",
-      "bytes": 60102
+      "bytes": 60108
     },
     {
       "name": "p3-welcome-mascot-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-1320x820-light.png",
-      "bytes": 40191
+      "bytes": 40685
     },
     {
       "name": "p3-welcome-mascot-reduced-1320x820-light",
@@ -2976,7 +2976,7 @@
     {
       "name": "p3-welcome-mascot-700x600-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-700x600-dark.png",
-      "bytes": 34463
+      "bytes": 34473
     },
     {
       "name": "p3-welcome-mascot-reduced-700x600-dark",
@@ -3061,7 +3061,7 @@
     {
       "name": "p3-welcome-mascot-700x600-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-700x600-light.png",
-      "bytes": 35340
+      "bytes": 35328
     },
     {
       "name": "p3-welcome-mascot-reduced-700x600-light",
