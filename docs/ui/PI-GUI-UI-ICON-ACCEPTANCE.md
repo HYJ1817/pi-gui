@@ -68,7 +68,23 @@
 
 ## 后续变更：设置入口图标（2026-11-17）
 
+> 历史记录：本节描述 2026-11-17 的 `sliders-horizontal` 方案；该图形已于 2026-11-18
+> 按 PI-Desktop v0.22.0 恢复为 `settings` 齿轮，见下方「设置入口恢复齿轮」。
+
 全局栏底部「设置」入口改用 Lucide `sliders-horizontal` 的几何，替换原来的齿轮图形；按钮类名、命中区、位置、`title`、`aria-label`、`aria-controls` 与展开/收起行为保持不变。图形内嵌在 [public/ui/icons.js](../../public/ui/icons.js) 的受控映射中，不引入运行依赖、外部请求或运行时 SVG 注入。来源：[sliders-horizontal](https://lucide.dev/icons/sliders-horizontal)，许可 ISC，取得日期 2026-11-17。其余图形与上文盘点不变。
+
+## 后续变更：设置入口恢复齿轮（2026-11-18）
+
+与 PI-Desktop v0.22.0 对齐，全局栏底部「设置」入口改用 Lucide `settings`（齿轮）几何，
+替换 2026-11-17 引入的 `sliders-horizontal`。图形仍是 [public/ui/icons.js](../../public/ui/icons.js)
+受控映射中的本地内嵌 path，不引入运行依赖、外部请求或运行时 SVG 注入；按钮位置、命中区
+（28×28）、`title`、`aria-label`、`aria-controls` 与展开/收起行为不变，图形显示尺寸为 14×14。
+来源：[settings](https://lucide.dev/icons/settings)，许可 ISC，取得日期 2026-11-18。
+
+测试同步更新：`tests/primitives.cjs` 校验单 path + 圆形（`M12.22 2h-.44`、`r=3`，且不再出现
+`slidersHorizontal`）；`tests/smoke.cjs` 的设置入口断言改为 `svg[data-icon="settings"]`；
+`tests/p1-p3-shots.cjs` 在四种视口/主题组合下核对 path/circle 数量、14×14 图形、28×28 命中区、
+无障碍名称与键盘焦点。结果见 [P1–P4 证据](p1-p3-evidence/README.md)。
 
 ## 后续变更：侧栏切换图标（2026-11-17）
 

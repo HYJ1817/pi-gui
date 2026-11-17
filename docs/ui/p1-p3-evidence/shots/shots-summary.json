@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-17T12:10:29.601Z",
+  "generatedAt": "2026-11-17T16:41:11.529Z",
   "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
   "viewports": [
     [
@@ -17,19 +17,19 @@
   ],
   "assertions": [
     {
-      "name": "P1 1320×820 dark: 设置入口渲染 sliders-horizontal",
+      "name": "P1 1320×820 dark: 设置入口渲染 Lucide 齿轮",
       "pass": true,
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -38,19 +38,19 @@
       }
     },
     {
-      "name": "P1 1320×820 dark: 图标 18×18、按钮 28×28（既有角色尺寸）",
+      "name": "P1 1320×820 dark: 图标 14×14、按钮 28×28",
       "pass": true,
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -64,14 +64,14 @@
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -176,19 +176,233 @@
       }
     },
     {
-      "name": "P1 1320×820 light: 设置入口渲染 sliders-horizontal",
+      "name": "P2 1320×820 dark: 最近一轮显示实测生成速度",
+      "pass": true,
+      "detail": {
+        "text": "45 tokens/s",
+        "title": "本轮输出 450 token / 响应 10.0 秒",
+        "row": "生成速度45 tokens/s"
+      }
+    },
+    {
+      "name": "P2 1320×820 dark: 缺少响应时间时显示 —，不编造速度",
+      "pass": true,
+      "detail": "—"
+    },
+    {
+      "name": "P4 1320×820 dark: 两栏菜单在 Composer 上方且不溢出视口",
+      "pass": true,
+      "detail": {
+        "rect": [
+          714,
+          298,
+          1134,
+          685.96875,
+          420,
+          387.96875
+        ],
+        "composerTop": 694,
+        "vw": 1320,
+        "vh": 820,
+        "scroll": [
+          418,
+          418
+        ],
+        "listScroll": [
+          280,
+          280
+        ],
+        "rails": [
+          {
+            "name": "最近使用",
+            "count": "1",
+            "on": true
+          },
+          {
+            "name": "deepseek",
+            "count": "2",
+            "on": false
+          },
+          {
+            "name": "zhipu",
+            "count": "1",
+            "on": false
+          },
+          {
+            "name": "openrouter",
+            "count": "100",
+            "on": false
+          }
+        ],
+        "current": "deepseek-v4-pro",
+        "active": "deepseek-v4-pro",
+        "roving": 1,
+        "search": true,
+        "title": "最近使用"
+      }
+    },
+    {
+      "name": "P4 1320×820 dark: 左栏为最近使用 + 供应商与计数",
+      "pass": true,
+      "detail": [
+        {
+          "name": "最近使用",
+          "count": "1",
+          "on": true
+        },
+        {
+          "name": "deepseek",
+          "count": "2",
+          "on": false
+        },
+        {
+          "name": "zhipu",
+          "count": "1",
+          "on": false
+        },
+        {
+          "name": "openrouter",
+          "count": "100",
+          "on": false
+        }
+      ]
+    },
+    {
+      "name": "P4 1320×820 dark: 当前模型行获得焦点且 roving 唯一",
+      "pass": true,
+      "detail": {
+        "current": "deepseek-v4-pro",
+        "active": "deepseek-v4-pro",
+        "roving": 1
+      }
+    },
+    {
+      "name": "P4 1320×820 dark: 顶部搜索与底部滑杆同时在场",
+      "pass": true
+    },
+    {
+      "name": "P4 1320×820 dark: 最近使用跨供应商且当前项在首位",
+      "pass": true,
+      "detail": [
+        "deepseek/deepseek-v4-pro",
+        "zhipu/glm",
+        "openrouter/router-0-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-"
+      ]
+    },
+    {
+      "name": "P4 1320×820 dark: 100 个同 Provider 模型可滚动且长名截断",
+      "pass": true,
+      "detail": {
+        "count": 100,
+        "ellipsis": "ellipsis",
+        "truncated": true,
+        "inside": true,
+        "paneCount": "100"
+      }
+    },
+    {
+      "name": "P4 1320×820 dark: 搜索跨供应商、显示匹配数并保持焦点",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "paneCount": "1",
+        "railCount": "1",
+        "group": [
+          "openrouter"
+        ],
+        "active": true,
+        "overflow": true
+      }
+    },
+    {
+      "name": "P4 1320×820 dark: 思考滑杆档位来自 Pi 且当前项一致",
+      "pass": true,
+      "detail": {
+        "levels": [
+          "off",
+          "low",
+          "medium",
+          "high"
+        ],
+        "on": "medium",
+        "range": "2",
+        "valueText": "medium",
+        "inside": true,
+        "ticks": [
+          99.5,
+          99.5,
+          99.5,
+          99.5
+        ]
+      }
+    },
+    {
+      "name": "P4 1320×820 dark: 分段等宽且没有溢出",
+      "pass": true,
+      "detail": [
+        99.5,
+        99.5,
+        99.5,
+        99.5
+      ]
+    },
+    {
+      "name": "P3 1320×820 dark: 欢迎页吉祥物 100×100 且只在 ready 态",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(238, 238, 238)",
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 1320×820 dark: 线稿动画在跑、无外链资源",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(238, 238, 238)",
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 1320×820 dark: prefers-reduced-motion 下全部动画停止",
+      "pass": true,
+      "detail": {
+        "float": "none",
+        "eye": "none",
+        "antenna": "none"
+      }
+    },
+    {
+      "name": "P1 1320×820 light: 设置入口渲染 Lucide 齿轮",
       "pass": true,
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -197,19 +411,19 @@
       }
     },
     {
-      "name": "P1 1320×820 light: 图标 18×18、按钮 28×28（既有角色尺寸）",
+      "name": "P1 1320×820 light: 图标 14×14、按钮 28×28",
       "pass": true,
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -223,14 +437,14 @@
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -335,19 +549,233 @@
       }
     },
     {
-      "name": "P1 700×600 dark: 设置入口渲染 sliders-horizontal",
+      "name": "P2 1320×820 light: 最近一轮显示实测生成速度",
+      "pass": true,
+      "detail": {
+        "text": "45 tokens/s",
+        "title": "本轮输出 450 token / 响应 10.0 秒",
+        "row": "生成速度45 tokens/s"
+      }
+    },
+    {
+      "name": "P2 1320×820 light: 缺少响应时间时显示 —，不编造速度",
+      "pass": true,
+      "detail": "—"
+    },
+    {
+      "name": "P4 1320×820 light: 两栏菜单在 Composer 上方且不溢出视口",
+      "pass": true,
+      "detail": {
+        "rect": [
+          714,
+          298,
+          1134,
+          685.96875,
+          420,
+          387.96875
+        ],
+        "composerTop": 694,
+        "vw": 1320,
+        "vh": 820,
+        "scroll": [
+          418,
+          418
+        ],
+        "listScroll": [
+          280,
+          280
+        ],
+        "rails": [
+          {
+            "name": "最近使用",
+            "count": "1",
+            "on": true
+          },
+          {
+            "name": "deepseek",
+            "count": "2",
+            "on": false
+          },
+          {
+            "name": "zhipu",
+            "count": "1",
+            "on": false
+          },
+          {
+            "name": "openrouter",
+            "count": "100",
+            "on": false
+          }
+        ],
+        "current": "deepseek-v4-pro",
+        "active": "deepseek-v4-pro",
+        "roving": 1,
+        "search": true,
+        "title": "最近使用"
+      }
+    },
+    {
+      "name": "P4 1320×820 light: 左栏为最近使用 + 供应商与计数",
+      "pass": true,
+      "detail": [
+        {
+          "name": "最近使用",
+          "count": "1",
+          "on": true
+        },
+        {
+          "name": "deepseek",
+          "count": "2",
+          "on": false
+        },
+        {
+          "name": "zhipu",
+          "count": "1",
+          "on": false
+        },
+        {
+          "name": "openrouter",
+          "count": "100",
+          "on": false
+        }
+      ]
+    },
+    {
+      "name": "P4 1320×820 light: 当前模型行获得焦点且 roving 唯一",
+      "pass": true,
+      "detail": {
+        "current": "deepseek-v4-pro",
+        "active": "deepseek-v4-pro",
+        "roving": 1
+      }
+    },
+    {
+      "name": "P4 1320×820 light: 顶部搜索与底部滑杆同时在场",
+      "pass": true
+    },
+    {
+      "name": "P4 1320×820 light: 最近使用跨供应商且当前项在首位",
+      "pass": true,
+      "detail": [
+        "deepseek/deepseek-v4-pro",
+        "zhipu/glm",
+        "openrouter/router-0-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-"
+      ]
+    },
+    {
+      "name": "P4 1320×820 light: 100 个同 Provider 模型可滚动且长名截断",
+      "pass": true,
+      "detail": {
+        "count": 100,
+        "ellipsis": "ellipsis",
+        "truncated": true,
+        "inside": true,
+        "paneCount": "100"
+      }
+    },
+    {
+      "name": "P4 1320×820 light: 搜索跨供应商、显示匹配数并保持焦点",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "paneCount": "1",
+        "railCount": "1",
+        "group": [
+          "openrouter"
+        ],
+        "active": true,
+        "overflow": true
+      }
+    },
+    {
+      "name": "P4 1320×820 light: 思考滑杆档位来自 Pi 且当前项一致",
+      "pass": true,
+      "detail": {
+        "levels": [
+          "off",
+          "low",
+          "medium",
+          "high"
+        ],
+        "on": "medium",
+        "range": "2",
+        "valueText": "medium",
+        "inside": true,
+        "ticks": [
+          99.5,
+          99.5,
+          99.5,
+          99.5
+        ]
+      }
+    },
+    {
+      "name": "P4 1320×820 light: 分段等宽且没有溢出",
+      "pass": true,
+      "detail": [
+        99.5,
+        99.5,
+        99.5,
+        99.5
+      ]
+    },
+    {
+      "name": "P3 1320×820 light: 欢迎页吉祥物 100×100 且只在 ready 态",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(38, 38, 38)",
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 1320×820 light: 线稿动画在跑、无外链资源",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(38, 38, 38)",
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 1320×820 light: prefers-reduced-motion 下全部动画停止",
+      "pass": true,
+      "detail": {
+        "float": "none",
+        "eye": "none",
+        "antenna": "none"
+      }
+    },
+    {
+      "name": "P1 700×600 dark: 设置入口渲染 Lucide 齿轮",
       "pass": true,
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -356,19 +784,19 @@
       }
     },
     {
-      "name": "P1 700×600 dark: 图标 18×18、按钮 28×28（既有角色尺寸）",
+      "name": "P1 700×600 dark: 图标 14×14、按钮 28×28",
       "pass": true,
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -382,14 +810,14 @@
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -494,19 +922,233 @@
       }
     },
     {
-      "name": "P1 700×600 light: 设置入口渲染 sliders-horizontal",
+      "name": "P2 700×600 dark: 最近一轮显示实测生成速度",
+      "pass": true,
+      "detail": {
+        "text": "45 tokens/s",
+        "title": "本轮输出 450 token / 响应 10.0 秒",
+        "row": "生成速度45 tokens/s"
+      }
+    },
+    {
+      "name": "P2 700×600 dark: 缺少响应时间时显示 —，不编造速度",
+      "pass": true,
+      "detail": "—"
+    },
+    {
+      "name": "P4 700×600 dark: 两栏菜单在 Composer 上方且不溢出视口",
+      "pass": true,
+      "detail": {
+        "rect": [
+          212,
+          104,
+          632,
+          465.96875,
+          420,
+          361.96875
+        ],
+        "composerTop": 474,
+        "vw": 700,
+        "vh": 600,
+        "scroll": [
+          418,
+          418
+        ],
+        "listScroll": [
+          284,
+          284
+        ],
+        "rails": [
+          {
+            "name": "最近使用",
+            "count": "1",
+            "on": true
+          },
+          {
+            "name": "deepseek",
+            "count": "2",
+            "on": false
+          },
+          {
+            "name": "zhipu",
+            "count": "1",
+            "on": false
+          },
+          {
+            "name": "openrouter",
+            "count": "100",
+            "on": false
+          }
+        ],
+        "current": "deepseek-v4-pro",
+        "active": "deepseek-v4-pro",
+        "roving": 1,
+        "search": true,
+        "title": "最近使用"
+      }
+    },
+    {
+      "name": "P4 700×600 dark: 左栏为最近使用 + 供应商与计数",
+      "pass": true,
+      "detail": [
+        {
+          "name": "最近使用",
+          "count": "1",
+          "on": true
+        },
+        {
+          "name": "deepseek",
+          "count": "2",
+          "on": false
+        },
+        {
+          "name": "zhipu",
+          "count": "1",
+          "on": false
+        },
+        {
+          "name": "openrouter",
+          "count": "100",
+          "on": false
+        }
+      ]
+    },
+    {
+      "name": "P4 700×600 dark: 当前模型行获得焦点且 roving 唯一",
+      "pass": true,
+      "detail": {
+        "current": "deepseek-v4-pro",
+        "active": "deepseek-v4-pro",
+        "roving": 1
+      }
+    },
+    {
+      "name": "P4 700×600 dark: 顶部搜索与底部滑杆同时在场",
+      "pass": true
+    },
+    {
+      "name": "P4 700×600 dark: 最近使用跨供应商且当前项在首位",
+      "pass": true,
+      "detail": [
+        "deepseek/deepseek-v4-pro",
+        "zhipu/glm",
+        "openrouter/router-0-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-"
+      ]
+    },
+    {
+      "name": "P4 700×600 dark: 100 个同 Provider 模型可滚动且长名截断",
+      "pass": true,
+      "detail": {
+        "count": 100,
+        "ellipsis": "ellipsis",
+        "truncated": true,
+        "inside": true,
+        "paneCount": "100"
+      }
+    },
+    {
+      "name": "P4 700×600 dark: 搜索跨供应商、显示匹配数并保持焦点",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "paneCount": "1",
+        "railCount": "1",
+        "group": [
+          "openrouter"
+        ],
+        "active": true,
+        "overflow": true
+      }
+    },
+    {
+      "name": "P4 700×600 dark: 思考滑杆档位来自 Pi 且当前项一致",
+      "pass": true,
+      "detail": {
+        "levels": [
+          "off",
+          "low",
+          "medium",
+          "high"
+        ],
+        "on": "medium",
+        "range": "2",
+        "valueText": "medium",
+        "inside": true,
+        "ticks": [
+          99.5,
+          99.5,
+          99.5,
+          99.5
+        ]
+      }
+    },
+    {
+      "name": "P4 700×600 dark: 分段等宽且没有溢出",
+      "pass": true,
+      "detail": [
+        99.5,
+        99.5,
+        99.5,
+        99.5
+      ]
+    },
+    {
+      "name": "P3 700×600 dark: 欢迎页吉祥物 100×100 且只在 ready 态",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(238, 238, 238)",
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 700×600 dark: 线稿动画在跑、无外链资源",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(238, 238, 238)",
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 700×600 dark: prefers-reduced-motion 下全部动画停止",
+      "pass": true,
+      "detail": {
+        "float": "none",
+        "eye": "none",
+        "antenna": "none"
+      }
+    },
+    {
+      "name": "P1 700×600 light: 设置入口渲染 Lucide 齿轮",
       "pass": true,
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -515,19 +1157,19 @@
       }
     },
     {
-      "name": "P1 700×600 light: 图标 18×18、按钮 28×28（既有角色尺寸）",
+      "name": "P1 700×600 light: 图标 14×14、按钮 28×28",
       "pass": true,
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -541,14 +1183,14 @@
       "detail": {
         "icon": true,
         "paths": 1,
-        "circles": 0,
+        "circles": 1,
         "button": [
           28,
           28
         ],
         "svg": [
-          18,
-          18
+          14,
+          14
         ],
         "label": "设置",
         "title": "设置",
@@ -651,6 +1293,220 @@
         "note": "上下文 61.23k / 1M",
         "pct": "6%"
       }
+    },
+    {
+      "name": "P2 700×600 light: 最近一轮显示实测生成速度",
+      "pass": true,
+      "detail": {
+        "text": "45 tokens/s",
+        "title": "本轮输出 450 token / 响应 10.0 秒",
+        "row": "生成速度45 tokens/s"
+      }
+    },
+    {
+      "name": "P2 700×600 light: 缺少响应时间时显示 —，不编造速度",
+      "pass": true,
+      "detail": "—"
+    },
+    {
+      "name": "P4 700×600 light: 两栏菜单在 Composer 上方且不溢出视口",
+      "pass": true,
+      "detail": {
+        "rect": [
+          212,
+          104,
+          632,
+          465.96875,
+          420,
+          361.96875
+        ],
+        "composerTop": 474,
+        "vw": 700,
+        "vh": 600,
+        "scroll": [
+          418,
+          418
+        ],
+        "listScroll": [
+          284,
+          284
+        ],
+        "rails": [
+          {
+            "name": "最近使用",
+            "count": "1",
+            "on": true
+          },
+          {
+            "name": "deepseek",
+            "count": "2",
+            "on": false
+          },
+          {
+            "name": "zhipu",
+            "count": "1",
+            "on": false
+          },
+          {
+            "name": "openrouter",
+            "count": "100",
+            "on": false
+          }
+        ],
+        "current": "deepseek-v4-pro",
+        "active": "deepseek-v4-pro",
+        "roving": 1,
+        "search": true,
+        "title": "最近使用"
+      }
+    },
+    {
+      "name": "P4 700×600 light: 左栏为最近使用 + 供应商与计数",
+      "pass": true,
+      "detail": [
+        {
+          "name": "最近使用",
+          "count": "1",
+          "on": true
+        },
+        {
+          "name": "deepseek",
+          "count": "2",
+          "on": false
+        },
+        {
+          "name": "zhipu",
+          "count": "1",
+          "on": false
+        },
+        {
+          "name": "openrouter",
+          "count": "100",
+          "on": false
+        }
+      ]
+    },
+    {
+      "name": "P4 700×600 light: 当前模型行获得焦点且 roving 唯一",
+      "pass": true,
+      "detail": {
+        "current": "deepseek-v4-pro",
+        "active": "deepseek-v4-pro",
+        "roving": 1
+      }
+    },
+    {
+      "name": "P4 700×600 light: 顶部搜索与底部滑杆同时在场",
+      "pass": true
+    },
+    {
+      "name": "P4 700×600 light: 最近使用跨供应商且当前项在首位",
+      "pass": true,
+      "detail": [
+        "deepseek/deepseek-v4-pro",
+        "zhipu/glm",
+        "openrouter/router-0-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-long-model-id-"
+      ]
+    },
+    {
+      "name": "P4 700×600 light: 100 个同 Provider 模型可滚动且长名截断",
+      "pass": true,
+      "detail": {
+        "count": 100,
+        "ellipsis": "ellipsis",
+        "truncated": true,
+        "inside": true,
+        "paneCount": "100"
+      }
+    },
+    {
+      "name": "P4 700×600 light: 搜索跨供应商、显示匹配数并保持焦点",
+      "pass": true,
+      "detail": {
+        "count": 1,
+        "paneCount": "1",
+        "railCount": "1",
+        "group": [
+          "openrouter"
+        ],
+        "active": true,
+        "overflow": true
+      }
+    },
+    {
+      "name": "P4 700×600 light: 思考滑杆档位来自 Pi 且当前项一致",
+      "pass": true,
+      "detail": {
+        "levels": [
+          "off",
+          "low",
+          "medium",
+          "high"
+        ],
+        "on": "medium",
+        "range": "2",
+        "valueText": "medium",
+        "inside": true,
+        "ticks": [
+          99.5,
+          99.5,
+          99.5,
+          99.5
+        ]
+      }
+    },
+    {
+      "name": "P4 700×600 light: 分段等宽且没有溢出",
+      "pass": true,
+      "detail": [
+        99.5,
+        99.5,
+        99.5,
+        99.5
+      ]
+    },
+    {
+      "name": "P3 700×600 light: 欢迎页吉祥物 100×100 且只在 ready 态",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(38, 38, 38)",
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 700×600 light: 线稿动画在跑、无外链资源",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(38, 38, 38)",
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 700×600 light: prefers-reduced-motion 下全部动画停止",
+      "pass": true,
+      "detail": {
+        "float": "none",
+        "eye": "none",
+        "antenna": "none"
+      }
     }
   ],
   "metrics": [
@@ -661,14 +1517,14 @@
       "theme": "dark",
       "icon": true,
       "paths": 1,
-      "circles": 0,
+      "circles": 1,
       "button": [
         28,
         28
       ],
       "svg": [
-        18,
-        18
+        14,
+        14
       ],
       "label": "设置",
       "title": "设置",
@@ -687,20 +1543,89 @@
       "row": "README 测试补全（已改名）"
     },
     {
+      "scene": "p4-menu",
+      "width": 1320,
+      "height": 820,
+      "theme": "dark",
+      "rect": [
+        714,
+        298,
+        1134,
+        685.96875,
+        420,
+        387.96875
+      ],
+      "composerTop": 694,
+      "vw": 1320,
+      "vh": 820,
+      "scroll": [
+        418,
+        418
+      ],
+      "listScroll": [
+        280,
+        280
+      ],
+      "rails": [
+        {
+          "name": "最近使用",
+          "count": "1",
+          "on": true
+        },
+        {
+          "name": "deepseek",
+          "count": "2",
+          "on": false
+        },
+        {
+          "name": "zhipu",
+          "count": "1",
+          "on": false
+        },
+        {
+          "name": "openrouter",
+          "count": "100",
+          "on": false
+        }
+      ],
+      "current": "deepseek-v4-pro",
+      "active": "deepseek-v4-pro",
+      "roving": 1,
+      "search": true,
+      "title": "最近使用"
+    },
+    {
+      "scene": "p3-mascot",
+      "width": 1320,
+      "height": 820,
+      "theme": "dark",
+      "rect": [
+        100,
+        100
+      ],
+      "viewBox": "0 0 100 100",
+      "anim": "mascot-float",
+      "duration": "4.8s",
+      "stroke": "rgb(238, 238, 238)",
+      "external": 0,
+      "inRestore": false,
+      "hover": "all"
+    },
+    {
       "scene": "p1-settings-icon",
       "width": 1320,
       "height": 820,
       "theme": "light",
       "icon": true,
       "paths": 1,
-      "circles": 0,
+      "circles": 1,
       "button": [
         28,
         28
       ],
       "svg": [
-        18,
-        18
+        14,
+        14
       ],
       "label": "设置",
       "title": "设置",
@@ -717,6 +1642,75 @@
       "renameDone": true,
       "title": "README 测试补全（已改名）",
       "row": "README 测试补全（已改名）"
+    },
+    {
+      "scene": "p4-menu",
+      "width": 1320,
+      "height": 820,
+      "theme": "light",
+      "rect": [
+        714,
+        298,
+        1134,
+        685.96875,
+        420,
+        387.96875
+      ],
+      "composerTop": 694,
+      "vw": 1320,
+      "vh": 820,
+      "scroll": [
+        418,
+        418
+      ],
+      "listScroll": [
+        280,
+        280
+      ],
+      "rails": [
+        {
+          "name": "最近使用",
+          "count": "1",
+          "on": true
+        },
+        {
+          "name": "deepseek",
+          "count": "2",
+          "on": false
+        },
+        {
+          "name": "zhipu",
+          "count": "1",
+          "on": false
+        },
+        {
+          "name": "openrouter",
+          "count": "100",
+          "on": false
+        }
+      ],
+      "current": "deepseek-v4-pro",
+      "active": "deepseek-v4-pro",
+      "roving": 1,
+      "search": true,
+      "title": "最近使用"
+    },
+    {
+      "scene": "p3-mascot",
+      "width": 1320,
+      "height": 820,
+      "theme": "light",
+      "rect": [
+        100,
+        100
+      ],
+      "viewBox": "0 0 100 100",
+      "anim": "mascot-float",
+      "duration": "4.8s",
+      "stroke": "rgb(38, 38, 38)",
+      "external": 0,
+      "inRestore": false,
+      "hover": "all"
     },
     {
       "scene": "p1-settings-icon",
@@ -725,14 +1719,14 @@
       "theme": "dark",
       "icon": true,
       "paths": 1,
-      "circles": 0,
+      "circles": 1,
       "button": [
         28,
         28
       ],
       "svg": [
-        18,
-        18
+        14,
+        14
       ],
       "label": "设置",
       "title": "设置",
@@ -751,20 +1745,89 @@
       "row": "README 测试补全（已改名）"
     },
     {
+      "scene": "p4-menu",
+      "width": 700,
+      "height": 600,
+      "theme": "dark",
+      "rect": [
+        212,
+        104,
+        632,
+        465.96875,
+        420,
+        361.96875
+      ],
+      "composerTop": 474,
+      "vw": 700,
+      "vh": 600,
+      "scroll": [
+        418,
+        418
+      ],
+      "listScroll": [
+        284,
+        284
+      ],
+      "rails": [
+        {
+          "name": "最近使用",
+          "count": "1",
+          "on": true
+        },
+        {
+          "name": "deepseek",
+          "count": "2",
+          "on": false
+        },
+        {
+          "name": "zhipu",
+          "count": "1",
+          "on": false
+        },
+        {
+          "name": "openrouter",
+          "count": "100",
+          "on": false
+        }
+      ],
+      "current": "deepseek-v4-pro",
+      "active": "deepseek-v4-pro",
+      "roving": 1,
+      "search": true,
+      "title": "最近使用"
+    },
+    {
+      "scene": "p3-mascot",
+      "width": 700,
+      "height": 600,
+      "theme": "dark",
+      "rect": [
+        100,
+        100
+      ],
+      "viewBox": "0 0 100 100",
+      "anim": "mascot-float",
+      "duration": "4.8s",
+      "stroke": "rgb(238, 238, 238)",
+      "external": 0,
+      "inRestore": false,
+      "hover": "all"
+    },
+    {
       "scene": "p1-settings-icon",
       "width": 700,
       "height": 600,
       "theme": "light",
       "icon": true,
       "paths": 1,
-      "circles": 0,
+      "circles": 1,
       "button": [
         28,
         28
       ],
       "svg": [
-        18,
-        18
+        14,
+        14
       ],
       "label": "设置",
       "title": "设置",
@@ -781,13 +1844,82 @@
       "renameDone": true,
       "title": "README 测试补全（已改名）",
       "row": "README 测试补全（已改名）"
+    },
+    {
+      "scene": "p4-menu",
+      "width": 700,
+      "height": 600,
+      "theme": "light",
+      "rect": [
+        212,
+        104,
+        632,
+        465.96875,
+        420,
+        361.96875
+      ],
+      "composerTop": 474,
+      "vw": 700,
+      "vh": 600,
+      "scroll": [
+        418,
+        418
+      ],
+      "listScroll": [
+        284,
+        284
+      ],
+      "rails": [
+        {
+          "name": "最近使用",
+          "count": "1",
+          "on": true
+        },
+        {
+          "name": "deepseek",
+          "count": "2",
+          "on": false
+        },
+        {
+          "name": "zhipu",
+          "count": "1",
+          "on": false
+        },
+        {
+          "name": "openrouter",
+          "count": "100",
+          "on": false
+        }
+      ],
+      "current": "deepseek-v4-pro",
+      "active": "deepseek-v4-pro",
+      "roving": 1,
+      "search": true,
+      "title": "最近使用"
+    },
+    {
+      "scene": "p3-mascot",
+      "width": 700,
+      "height": 600,
+      "theme": "light",
+      "rect": [
+        100,
+        100
+      ],
+      "viewBox": "0 0 100 100",
+      "anim": "mascot-float",
+      "duration": "4.8s",
+      "stroke": "rgb(38, 38, 38)",
+      "external": 0,
+      "inRestore": false,
+      "hover": "all"
     }
   ],
   "screenshots": [
     {
       "name": "p1-settings-icon-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-icon-1320x820-dark.png",
-      "bytes": 78288
+      "bytes": 77983
     },
     {
       "name": "p1-settings-menu-1320x820-dark",
@@ -802,27 +1934,72 @@
     {
       "name": "p2-session-title-renamed-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-renamed-1320x820-dark.png",
-      "bytes": 38698
+      "bytes": 38313
     },
     {
       "name": "p3-context-1m-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-1m-1320x820-dark.png",
-      "bytes": 66024
+      "bytes": 65539
     },
     {
       "name": "p3-context-grok-256k-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-grok-256k-1320x820-dark.png",
-      "bytes": 58851
+      "bytes": 58687
     },
     {
       "name": "p3-context-unknown-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-unknown-1320x820-dark.png",
-      "bytes": 56569
+      "bytes": 56349
+    },
+    {
+      "name": "p2-tps-context-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-tps-context-1320x820-dark.png",
+      "bytes": 73323
+    },
+    {
+      "name": "p2-tps-unavailable-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-tps-unavailable-1320x820-dark.png",
+      "bytes": 69976
+    },
+    {
+      "name": "p4-model-menu-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-model-menu-1320x820-dark.png",
+      "bytes": 55276
+    },
+    {
+      "name": "p4-recent-models-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-recent-models-1320x820-dark.png",
+      "bytes": 61829
+    },
+    {
+      "name": "p4-multi-provider-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-multi-provider-1320x820-dark.png",
+      "bytes": 70940
+    },
+    {
+      "name": "p4-search-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-search-1320x820-dark.png",
+      "bytes": 55058
+    },
+    {
+      "name": "p4-thinking-slider-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-slider-1320x820-dark.png",
+      "bytes": 57429
+    },
+    {
+      "name": "p3-welcome-mascot-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-1320x820-dark.png",
+      "bytes": 38511
+    },
+    {
+      "name": "p3-welcome-mascot-reduced-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-reduced-1320x820-dark.png",
+      "bytes": 38575
     },
     {
       "name": "p1-settings-icon-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-icon-1320x820-light.png",
-      "bytes": 81793
+      "bytes": 81500
     },
     {
       "name": "p1-settings-menu-1320x820-light",
@@ -837,27 +2014,72 @@
     {
       "name": "p2-session-title-renamed-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-renamed-1320x820-light.png",
-      "bytes": 39776
+      "bytes": 39435
     },
     {
       "name": "p3-context-1m-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-1m-1320x820-light.png",
-      "bytes": 68176
+      "bytes": 67749
     },
     {
       "name": "p3-context-grok-256k-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-grok-256k-1320x820-light.png",
-      "bytes": 60106
+      "bytes": 59984
     },
     {
       "name": "p3-context-unknown-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-unknown-1320x820-light.png",
-      "bytes": 57801
+      "bytes": 57571
+    },
+    {
+      "name": "p2-tps-context-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-tps-context-1320x820-light.png",
+      "bytes": 75173
+    },
+    {
+      "name": "p2-tps-unavailable-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-tps-unavailable-1320x820-light.png",
+      "bytes": 72111
+    },
+    {
+      "name": "p4-model-menu-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-model-menu-1320x820-light.png",
+      "bytes": 56904
+    },
+    {
+      "name": "p4-recent-models-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-recent-models-1320x820-light.png",
+      "bytes": 63773
+    },
+    {
+      "name": "p4-multi-provider-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-multi-provider-1320x820-light.png",
+      "bytes": 73649
+    },
+    {
+      "name": "p4-search-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-search-1320x820-light.png",
+      "bytes": 56683
+    },
+    {
+      "name": "p4-thinking-slider-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-slider-1320x820-light.png",
+      "bytes": 59573
+    },
+    {
+      "name": "p3-welcome-mascot-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-1320x820-light.png",
+      "bytes": 39818
+    },
+    {
+      "name": "p3-welcome-mascot-reduced-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-reduced-1320x820-light.png",
+      "bytes": 39395
     },
     {
       "name": "p1-settings-icon-700x600-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-icon-700x600-dark.png",
-      "bytes": 58780
+      "bytes": 58586
     },
     {
       "name": "p1-settings-menu-700x600-dark",
@@ -872,27 +2094,72 @@
     {
       "name": "p2-session-title-renamed-700x600-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-renamed-700x600-dark.png",
-      "bytes": 33805
+      "bytes": 33452
     },
     {
       "name": "p3-context-1m-700x600-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-1m-700x600-dark.png",
-      "bytes": 49997
+      "bytes": 51488
     },
     {
       "name": "p3-context-grok-256k-700x600-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-grok-256k-700x600-dark.png",
-      "bytes": 41998
+      "bytes": 42536
     },
     {
       "name": "p3-context-unknown-700x600-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-unknown-700x600-dark.png",
-      "bytes": 43173
+      "bytes": 44259
+    },
+    {
+      "name": "p2-tps-context-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-tps-context-700x600-dark.png",
+      "bytes": 54834
+    },
+    {
+      "name": "p2-tps-unavailable-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-tps-unavailable-700x600-dark.png",
+      "bytes": 52545
+    },
+    {
+      "name": "p4-model-menu-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-model-menu-700x600-dark.png",
+      "bytes": 45327
+    },
+    {
+      "name": "p4-recent-models-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-recent-models-700x600-dark.png",
+      "bytes": 51254
+    },
+    {
+      "name": "p4-multi-provider-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-multi-provider-700x600-dark.png",
+      "bytes": 58268
+    },
+    {
+      "name": "p4-search-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-search-700x600-dark.png",
+      "bytes": 45189
+    },
+    {
+      "name": "p4-thinking-slider-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-slider-700x600-dark.png",
+      "bytes": 47137
+    },
+    {
+      "name": "p3-welcome-mascot-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-700x600-dark.png",
+      "bytes": 33785
+    },
+    {
+      "name": "p3-welcome-mascot-reduced-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-reduced-700x600-dark.png",
+      "bytes": 33546
     },
     {
       "name": "p1-settings-icon-700x600-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-icon-700x600-light.png",
-      "bytes": 47233
+      "bytes": 47058
     },
     {
       "name": "p1-settings-menu-700x600-light",
@@ -907,22 +2174,67 @@
     {
       "name": "p2-session-title-renamed-700x600-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-renamed-700x600-light.png",
-      "bytes": 34492
+      "bytes": 34158
     },
     {
       "name": "p3-context-1m-700x600-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-1m-700x600-light.png",
-      "bytes": 52614
+      "bytes": 53936
     },
     {
       "name": "p3-context-grok-256k-700x600-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-grok-256k-700x600-light.png",
-      "bytes": 43789
+      "bytes": 44368
     },
     {
       "name": "p3-context-unknown-700x600-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-unknown-700x600-light.png",
-      "bytes": 44657
+      "bytes": 45391
+    },
+    {
+      "name": "p2-tps-context-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-tps-context-700x600-light.png",
+      "bytes": 57290
+    },
+    {
+      "name": "p2-tps-unavailable-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-tps-unavailable-700x600-light.png",
+      "bytes": 55173
+    },
+    {
+      "name": "p4-model-menu-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-model-menu-700x600-light.png",
+      "bytes": 46725
+    },
+    {
+      "name": "p4-recent-models-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-recent-models-700x600-light.png",
+      "bytes": 53050
+    },
+    {
+      "name": "p4-multi-provider-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-multi-provider-700x600-light.png",
+      "bytes": 60797
+    },
+    {
+      "name": "p4-search-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-search-700x600-light.png",
+      "bytes": 46447
+    },
+    {
+      "name": "p4-thinking-slider-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-slider-700x600-light.png",
+      "bytes": 48908
+    },
+    {
+      "name": "p3-welcome-mascot-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-700x600-light.png",
+      "bytes": 34660
+    },
+    {
+      "name": "p3-welcome-mascot-reduced-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-reduced-700x600-light.png",
+      "bytes": 34257
     }
   ],
   "pageErrors": []
