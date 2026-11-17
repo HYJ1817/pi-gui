@@ -54,8 +54,10 @@ const glyphs = Object.freeze({
   search: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/>',
   server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
   settings: '<path d="M9 4h6l1 3 3 1v6l-3 1-1 3H9l-1-3-3-1V8l3-1z"/><circle cx="12" cy="11" r="3"/>',
-  sidebarCollapse: '<path d="M4 5h16v14H4zM10 5v14M17 12h-5m2-2-2 2 2 2"/>',
-  sidebarExpand: '<path d="M4 5h16v14H4zM10 5v14M13 12h5m-2-2 2 2-2 2"/>',
+  /* Lucide panel-left-close / panel-left-open (ISC, lucide.dev), embedded
+   * locally — no runtime icon service and no new dependency. */
+  sidebarCollapse: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
+  sidebarExpand: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>',
   sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/>',
   split: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/>',

@@ -1340,15 +1340,20 @@ for (const action of projectMenu.querySelectorAll('button')) action.addEventList
 });
 
 const sidebar = $('projectSidebar');
+const globalRail = $('globalRail');
 const expandSidebar = $('btnSidebarExpand');
 const collapseSidebar = $('btnSidebarCollapse');
+/* 侧栏可见性只在这里改：hidden、aria-expanded 与折叠后的展开入口必须同步。
+ * 展开入口是 .stage-head 拖拽区内的 no-drag 子元素（见 index.html），
+ * 否则原生标题栏命中测试可能把点击当成拖拽起手，按钮看着在却点不动。 */
 function setSidebarCollapsed(collapsed) {
+  const expanded = !collapsed;
   sidebar.closest('.app').classList.toggle('sidebar-collapsed', collapsed);
   sidebar.hidden = collapsed;
-  $('globalRail').hidden = !collapsed;
-  expandSidebar.hidden = !collapsed;
-  collapseSidebar.setAttribute('aria-expanded', String(!collapsed));
-  expandSidebar.setAttribute('aria-expanded', String(!collapsed));
+  globalRail.hidden = expanded;
+  expandSidebar.hidden = expanded;
+  collapseSidebar.setAttribute('aria-expanded', String(expanded));
+  expandSidebar.setAttribute('aria-expanded', String(expanded));
 }
 collapseSidebar.onclick = () => { setSidebarCollapsed(true); expandSidebar.focus(); };
 expandSidebar.onclick = () => { setSidebarCollapsed(false); collapseSidebar.focus(); };
