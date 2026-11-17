@@ -40,6 +40,8 @@ import { iconMarkup } from './ui/icons.js';
 import { fetchSessions, switchSession, renameSession, archiveSession, deleteSession } from './api.js';
 import { afterSessionSwitch } from './rpc.js';
 import { S, ownsWorkspace } from './state.js';
+import { setTitleText } from './shell.js';
+import { isNewSessionEntry, projectSessionTitle, sessionDisplayTitle } from './session-title.js';
 import { fmtTime } from './util.js';
 import { toast } from './ui/toast.js';
 import { confirmModal } from './ui/modal.js';
@@ -104,6 +106,32 @@ let dataRef = null;
 let loadToken = 0;
 let expanded = false;
 let archivedOpen = false;
+/* 用户刚切过去的那条会话（稳定 ID）。列表异步回来时只认它，
+ * 免得旧的 current 标记把顶部标题换成另一条会话。 */
+let expectedSessionKey = null;
+/* 新会话 / 分叉还没有稳定 ID。记住切换前的那条，列表如果仍把旧会话
+ * 标成 current，就不能拿它覆盖「新会话」。 */
+let awaitingNewSession = false;
+let newSessionPreviousKey = null;
+let newSessionKnownIds = new Set();
+
+/* rpc.js 不能 import 本模块（会成环），所以切换事件经 DOM 传过来。 */
+document.addEventListener('pi-gui:session-switch', (event) => {
+  const detail = event.detail || {};
+  if (detail.newSession) {
+    awaitingNewSession = true;
+    newSessionPreviousKey = expectedSessionKey;
+    /* 记下切换前已经见过的会话 ID：列表如果还没更新，current 仍是其中
+     * 一条旧会话 —— 不能把它当成新会话认领。 */
+    newSessionKnownIds = new Set((dataRef?.sessions || []).map((s) => s.id));
+    expectedSessionKey = null;
+    return;
+  }
+  expectedSessionKey = detail.sessionKey || null;
+  awaitingNewSession = false;
+  newSessionPreviousKey = null;
+  newSessionKnownIds = new Set();
+});
 
 /* ---------- 折叠（只折当前项目下面那块会话列表）----------
  *
@@ -330,6 +358,10 @@ export async function renderSidebarSessions(projectEl, project = {}) {
   dataRef = null;
   expanded = false;
   archivedOpen = false;
+  expectedSessionKey = null;
+  awaitingNewSession = false;
+  newSessionPreviousKey = null;
+  newSessionKnownIds = new Set();
   /* 每个项目记住自己的展开状态，并换上对应的折叠箭头。 */
   projectKey = project.path || projectEl.title;
   currentProject = project || {};
@@ -362,6 +394,20 @@ export async function refreshSidebarSessions() {
   const box = boxRef;
   if (!box || !box.isConnected) return;
   await fill(box, ++loadToken);
+}
+
+/** 顶部改名弹窗保存后立刻同步侧栏当前行。
+ *  只改已渲染的数据与标题，不重新扫会话文件 —— 文件落盘可能比这个
+ *  交互晚一拍，重扫反而会拿回旧标题。下一次 refresh 会以文件为准。 */
+export function applySessionRename(name) {
+  const value = String(name || '').trim();
+  if (!value || !dataRef || !Array.isArray(dataRef.sessions)) return;
+  const target = (expectedSessionKey && dataRef.sessions.find((s) => s.id === expectedSessionKey))
+    || dataRef.sessions.find((s) => s.current);
+  if (!target) return;
+  target.title = value;
+  paintList();
+  setTitleText(value);
 }
 
 async function fill(box, token) {
@@ -398,6 +444,36 @@ async function fill(box, token) {
    * 注意用 `s.sessionId`（pi 的 UUID）而不是 `s.id`（我们那个路径 sha1）：
    * 任务元数据里存的是前者，两者不是一回事。 */
   const cur = (data.sessions || []).find((s) => s.current);
+
+  /* 顶部标题与会话列表共用同一份数据。Pi 的实时 sessionName 优先
+   * （projectSessionTitle 在 liveName 非空时返回 null）；否则用列表里
+   * 当前会话的标题。expectedSessionKey 防止迟到的旧列表把标题改回
+   * 上一条会话。 */
+  const liveName = S.state?.sessionName;
+  if (!(typeof liveName === 'string' && liveName.trim()) && awaitingNewSession) {
+    /* 刚新建/分叉，等列表给出一个**不同于旧会话**的 current。旧列表
+     * 回来时保持「新会话」，不能把上一条的标题画上去。 */
+    const next = (data.sessions || []).find((s) => s.current);
+    if (isNewSessionEntry(next, newSessionPreviousKey, newSessionKnownIds)) {
+      awaitingNewSession = false;
+      newSessionPreviousKey = null;
+      newSessionKnownIds = new Set();
+      expectedSessionKey = next.id;
+      setTitleText(sessionDisplayTitle(next));
+    }
+  } else {
+    const projected = projectSessionTitle({
+      sessions: data.sessions,
+      currentId: data.currentId,
+      expectedKey: expectedSessionKey,
+      liveName,
+    });
+    if (projected) {
+      expectedSessionKey = projected.key;
+      setTitleText(projected.title);
+    }
+  }
+
   refreshSessionPlans(cur ? cur.sessionId : '');
   paint(box, data);
 }
@@ -542,6 +618,8 @@ function startRename(row, titleEl, s) {
         if (!r.ok) toast(r.error || '改名失败', 'error');
         else {
           s.title = v;
+          /* 行内改名改的就是当前会话：顶部必须同步，不能只重画侧栏。 */
+          setTitleText(v);
           toast('已改名：' + v, 'info');
         }
       } catch (err) {
@@ -592,7 +670,13 @@ async function doSwitch(s, locateUserIndex = null) {
       pendingLocate.sessionId = r.sessionId || pendingLocate.sessionId;
       pendingLocate.switched = true;
     }
-    afterSessionSwitch(previousSessionId);
+    /* switch_session 的应答已经带回目标会话的权威标题。先画上它，
+     * 再让 afterSessionSwitch 去重建历史；不要等 get_state 的
+     * sessionName —— 没有显式命名的会话那里是空的。 */
+    afterSessionSwitch(previousSessionId, {
+      title: sessionDisplayTitle({ ...s, title: r.title || s.title }),
+      sessionKey: r.id || s.id,
+    });
   } catch (err) {
     pendingLocate = null;
     toast('切换失败：' + err.message, 'error');

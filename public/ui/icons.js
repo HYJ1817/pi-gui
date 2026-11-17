@@ -59,6 +59,9 @@ const glyphs = Object.freeze({
   sidebarCollapse: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
   sidebarExpand: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>',
   sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  /* Lucide sliders-horizontal (ISC, lucide.dev/icons/sliders-horizontal),
+   * embedded locally — no runtime icon service and no new dependency. */
+  slidersHorizontal: '<path d="M21 4h-7M10 4H3M14 2v4M21 12h-9M8 12H3M8 10v4M21 20h-5M12 20H3M16 18v4"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/>',
   split: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',

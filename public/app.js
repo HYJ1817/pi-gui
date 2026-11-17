@@ -80,7 +80,8 @@ import {
 import { beginPlanTaskBoundary } from './plan-live.js';
 import { onToolEnd, onToolStart, onToolUpdate, onToolWait } from './tools.js';
 import { openBranchPanel, setForkHandler } from './tree.js';
-import { openCtxTip, renderCtxChip, onTurnUsage } from './usage.js';
+import { openCtxTip, renderCtxChip, onTurnUsage, contextUsage } from './usage.js';
+import { requestSessionStats } from './session-stats.js';
 import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker, setSessionsSlot, setProjectSessionActions, flushProjectSessionAction } from './projects.js';
 import { loadProviders, openProvidersPanel, openProviderAuthPanel, restartPi } from './providers.js';
@@ -91,7 +92,8 @@ import { openMcpSettings } from './mcp-settings.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner, setTaskSessionViewer } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
-import { renderSidebarSessions, refreshSidebarSessions, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions, applySessionRename, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
+import { sessionDisplayTitle } from './session-title.js';
 import { createSessionNavigation } from './session-navigation.js';
 import { initConversationNav } from './conversation-nav.js';
 import { createScrollButton } from './scroll-button.js';
@@ -237,7 +239,11 @@ const sessionNavigation = createSessionNavigation({
     const previousSessionId = classicThreadSessionId();
     const result = await switchSession(session.id);
     if (!result.ok) return false;
-    afterSessionSwitch(previousSessionId); return result;
+    afterSessionSwitch(previousSessionId, {
+      title: sessionDisplayTitle({ ...session, title: result.title || session.title }),
+      sessionKey: result.id || session.id,
+    });
+    return result;
   },
   newSession: async (project, _draft, requestId) => {
     if (!samePath(project.path, S.cwd)) return false;
@@ -962,7 +968,7 @@ syncThinkingInfo();
 
 function renderStatsPanel(card, s) {
   const t = s.tokens || {};
-  const ctx = s.contextUsage || {};
+  const ctx = contextUsage();
   const rows = [
     ['用户消息', s.userMessages],
     ['助手消息', s.assistantMessages],
@@ -971,7 +977,8 @@ function renderStatsPanel(card, s) {
     ['输出 token', t.output],
     ['缓存读取', t.cacheRead],
     ['缓存写入', t.cacheWrite],
-    ['上下文占用', ctx.tokens == null ? '—' : `${fmt(ctx.tokens)} / ${fmt(ctx.contextWindow)}`],
+    ['上下文占用', ctx.used == null ? '—'
+      : `${fmt(ctx.used)} / ${ctx.pending ? '同步中' : ctx.limit == null ? '未知' : fmt(ctx.limit)}`],
     ['累计成本', typeof s.cost === 'number' ? '$' + s.cost.toFixed(4) : '—'],
   ];
 
@@ -1047,7 +1054,7 @@ function openStatsPanel() {
     slot.innerHTML = '';
     renderStatsPanel(slot, d);
   };
-  sendCommand({ type: 'get_session_stats' });
+  requestSessionStats();
 }
 
 function renameSession() {
@@ -1080,6 +1087,7 @@ function renameSession() {
       if (!name) return;
       setSessionName(name);
       setTitleText(name);
+      applySessionRename(name);
       el.footName.textContent = name;
       toast('已重命名为 ' + name, 'info');
     };
