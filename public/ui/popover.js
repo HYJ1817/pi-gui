@@ -30,7 +30,7 @@ export function closePop({ restoreFocus = false } = {}) {
   clearHelpAnchor();
   pop.hidden = true;
   pop.innerHTML = '';
-  pop.classList.remove('tip-mode', 'model-mode', 'help-mode');
+  pop.classList.remove('tip-mode', 'model-mode', 'help-mode', 'model-menu');
   pop.style.maxHeight = '';
   pop.style.minWidth = '';
   pop.style.maxWidth = '';
@@ -83,9 +83,19 @@ export function openPop(target, { tip = false, model = false, help = false, alig
   pop.style.top = Math.round(top) + 'px';
   anchor = target;
   target.setAttribute('aria-expanded', 'true');
-  if (!tip && !help) (model
-    ? pop.querySelector('.pop-provider-models:not([hidden]) .pop-item.on') || pop.querySelector('.pop-provider')
-    : pop.querySelector('.pop-item.on') || pop.querySelector('.pop-item'))?.focus();
+  if (!tip && !help) {
+    /* 统一模型菜单：先把焦点落到当前模型行；它不存在时退到当前来源，
+     * 再退到搜索框。旧的 Provider 手风琴路径保留给兼容渲染。 */
+    const target = model
+      ? pop.querySelector('.ui3-model-item.on')
+        || pop.querySelector('.model-rail-item.on')
+        || pop.querySelector('.ui3-model-item')
+        || pop.querySelector('.ui3-model-search')
+        || pop.querySelector('.pop-provider-models:not([hidden]) .pop-item.on')
+        || pop.querySelector('.pop-provider')
+      : pop.querySelector('.pop-item.on') || pop.querySelector('.pop-item');
+    target?.focus();
+  }
 }
 
 export function toggleHelpPop(target, text) {

@@ -91,7 +91,7 @@
     </nav>
     <div class="rail-spacer"></div>
     <details class="quota" id="usageDetails"><summary class="quota-head"><svg class="quota-ic" data-icon="context" aria-hidden="true" focusable="false"></svg><span>上下文</span><b id="uPct">—</b></summary><div class="quota-detail"><div class="bar"><span id="uCtxBar"></span></div><div class="quota-note" id="uNote">上下文 —</div><div class="quota-rows"><div><span>输入 / 输出</span><b id="uTok">—</b></div><div><span>缓存读取</span><b id="uCache">—</b></div><div><span>累计成本</span><b id="uCost">—</b></div><div><span>远端额度</span><b id="uQuota">—</b></div></div></div></details>
-    <div class="sidebar-preferences"><button type="button" class="rail-icon nav-item" id="navGlobalMore" aria-label="设置" aria-controls="globalMoreMenu" aria-expanded="false" title="设置"><svg data-icon="slidersHorizontal" aria-hidden="true" focusable="false"></svg><span class="rp-dot" id="updateDot" hidden></span><span>设置</span></button><button type="button" class="icon-btn" id="btnTheme" aria-label="外观与主题" title="外观与主题"><svg data-icon="sun" aria-hidden="true" focusable="false"></svg></button>
+    <div class="sidebar-preferences"><button type="button" class="rail-icon nav-item" id="navGlobalMore" aria-label="设置" aria-controls="globalMoreMenu" aria-expanded="false" title="设置"><svg data-icon="settings" aria-hidden="true" focusable="false"></svg><span class="rp-dot" id="updateDot" hidden></span><span>设置</span></button><button type="button" class="icon-btn" id="btnTheme" aria-label="外观与主题" title="外观与主题"><svg data-icon="sun" aria-hidden="true" focusable="false"></svg></button>
     <footer class="rail-foot"><span class="avatar">π</span><span class="foot-name" id="footName">—</span><span class="grow"></span><span class="conn" id="conn"></span><span class="foot-state" id="connText">连接中</span></footer></div>
   </aside>
 
@@ -148,7 +148,23 @@
              尤其不能先显「Pi 已就绪」，首次启动的用户会以为已经能用了。 -->
         <!-- 形态 A：已选项目，pi 就绪 -->
         <div class="welcome-pane" id="welcomeReady" hidden>
-          <svg class="welcome-mark" viewBox="0 0 24 24"><path d="M4.5 8h15M9.5 8v11M15.5 8v8"/></svg>
+          <!-- 原创线稿吉祥物（MIT，随本仓库分发）：不引用上游 LGPL GIF，
+               也没有任何外部图片请求。颜色继承当前主题的 --ui-brand。 -->
+          <svg class="welcome-mark welcome-mascot" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            <g class="mascot-float">
+              <ellipse class="mascot-shadow" cx="50" cy="87" rx="16" ry="2.6"></ellipse>
+              <g class="mascot-line">
+                <path d="M50 30V20"></path>
+                <circle class="mascot-antenna-dot" cx="50" cy="16" r="3"></circle>
+                <rect x="28" y="30" width="44" height="40" rx="14"></rect>
+                <path d="M28 50H20M72 50H80"></path>
+                <path d="M40 70V80M60 70V80M36 81H44M56 81H64"></path>
+                <path class="mascot-eye" d="M41 46V53"></path>
+                <path class="mascot-eye" d="M59 46V53"></path>
+                <path d="M43 57Q50 62 57 57"></path>
+              </g>
+            </g>
+          </svg>
           <h2>开始一个任务</h2>
           <p>在下方输入你想完成的事。</p>
         </div>
@@ -191,11 +207,16 @@
               </svg>
               <span id="ctxPct">—</span>
             </button>
-            <button type="button" class="chip" id="btnModel" title="切换模型" aria-label="切换模型" aria-controls="composerPopover" aria-expanded="false">
+            <button type="button" class="chip model-chip" id="btnModel" title="切换模型与思考等级" aria-label="切换模型与思考等级" aria-controls="composerPopover" aria-expanded="false">
               <span class="chip-dot"></span>
               <span id="modelText">模型</span>
+              <span class="model-chip-badge" id="thinkBadge" hidden></span>
+              <svg class="model-chip-chevron" data-icon="chevronDown" aria-hidden="true" focusable="false"></svg>
             </button>
-            <button type="button" class="chip" id="btnThink" title="思考强度" aria-label="切换思考强度" aria-controls="composerPopover" aria-expanded="false">
+            <!-- 兼容/诊断镜像：真实的思考入口已合并进 #btnModel。
+                 保留隐藏节点是为了让既有状态读取（disabled / thinkText）与
+                 读屏之外的诊断路径继续看到 Pi 的权威值；它不可聚焦、不可见。 -->
+            <button type="button" class="chip" id="btnThink" hidden aria-hidden="true" tabindex="-1" title="思考强度" aria-label="思考强度" aria-controls="composerPopover" aria-expanded="false">
               <span id="thinkText">思考 —</span>
             </button>
             <button type="button" class="btn-stop" id="btnStop" title="停止" aria-label="停止" hidden>

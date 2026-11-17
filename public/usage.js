@@ -20,6 +20,15 @@ import { renderAttachments } from './attachments.js';
 import { observeFallbackState } from './fallback.js';
 import { logRendererEvent } from './log-client.js';
 import { requestSessionStats } from './session-stats.js';
+import {
+  beginThroughputTurn,
+  noteAssistantStart,
+  noteAssistantEnd,
+  settleThroughputTurn,
+  resetThroughput,
+  throughputSnapshot,
+  throughputFields,
+} from './turn-throughput.js';
 
 /* 能力未知只用于低频诊断日志；它不是业务判定，视图仍由 model-capabilities 决定。 */
 function contextWindowMissing(c) {
@@ -306,6 +315,7 @@ export function renderRemoteQuota() {
 /** 会话身份变了（new / switch / fork）→ 会话级用量必须**立刻**清掉。
  *  远端额度不在这里清：它归 Provider identity 管，换会话不等于换供应商。 */
 export function clearSessionUsage() {
+  resetThroughput();
   S.stats = null;
   statsRecord = null;
   Object.assign(S.localUsage, {
@@ -334,7 +344,12 @@ export function applyState(d) {
    * 当成同一次切换，旧容量/旧档位就留下来了。 */
   const changedModel = previousModel.modelId !== nextModel.modelId
     || previousModel.providerId !== nextModel.providerId;
-  if (changedModel) { S.thinkingLevels = []; S.thinkingReadStatus = 'unconfirmed'; }
+  if (changedModel) {
+    S.thinkingLevels = [];
+    S.thinkingReadStatus = 'unconfirmed';
+    /* 换模型就换了计时口径：旧模型未收尾的响应不能把时长记到新模型头上。 */
+    resetThroughput();
+  }
 
   /* 覆盖旧 state **之前**先比 sessionId：Session A 的统计绝不能留到 Session B。
    * 不等随后的 get_session_stats —— 那一刻界面就该已经干净了。 */
@@ -511,6 +526,45 @@ export function applyStats(d, meta = null) {
   }
 }
 
+/* ---------- 本轮生成速度（TPS） ----------
+ *
+ * 计时在 turn-throughput.js；这里只负责把它并进 lastTurn 这一份投影，
+ * 以及让已经打开的上下文浮层跟着刷新。 */
+
+function refreshUsagePopover() {
+  if (pop && pop.querySelector('.tip-quota-section')) openCtxTip();
+}
+
+function syncThroughputToLastTurn() {
+  const lt = S.localUsage?.lastTurn;
+  if (lt) Object.assign(lt, throughputFields());
+  refreshUsagePopover();
+}
+
+/** 新 Agent turn：开始计时（app.js 的 agent_start 调用）。 */
+export function beginUsageTurn() {
+  beginThroughputTurn();
+}
+
+/** assistant message_start：记录单条响应的单调起点。 */
+export function onAssistantMessageStart(evt, at) {
+  if (evt?._replay) return;
+  noteAssistantStart(evt, at);
+}
+
+/** assistant message_end：结算单条响应；没有 usage 时也保留估算/时长口径。 */
+export function onAssistantMessageEnd(evt, at) {
+  if (evt?._replay) return;
+  noteAssistantEnd(evt, at);
+  syncThroughputToLastTurn();
+}
+
+/** agent_settled：本轮收尾，界面不再显示「生成中…」。 */
+export function onTurnThroughputSettled() {
+  settleThroughputTurn();
+  syncThroughputToLastTurn();
+}
+
 /** 接收来自 message_update 或 message_end 的单轮真实 usage */
 export function onTurnUsage(usage, meta = {}) {
   if (!usage || typeof usage !== 'object') return;
@@ -524,12 +578,16 @@ export function onTurnUsage(usage, meta = {}) {
     reasoningTokens: usage.reasoning != null ? usage.reasoning : null,
     totalTokens: usage.totalTokens != null ? usage.totalTokens : null,
     estimatedCost: typeof usage.cost?.total === 'number' ? usage.cost.total : null,
+    /* 同一轮可能有多次 assistant 响应（中间夹工具调用），时间与输出都按
+     * 本轮累计；单条 usage 仍按 Pi 的原值展示。 */
+    ...throughputFields(),
   };
 
   if (meta.provider) S.localUsage.providerId = meta.provider;
   if (meta.model) S.localUsage.modelId = meta.model;
   S.localUsage.source = meta.source || 'message_end';
   S.localUsage.updatedAt = new Date().toISOString();
+  refreshUsagePopover();
 }
 
 /* ---------- 上下文占用指示器 ---------- */
@@ -559,6 +617,31 @@ export function renderCtxChip() {
   el.ctxRing.style.strokeDashoffset = String(RING_LEN * (1 - clamped / 100));
   el.btnCtx.className = 'ctx-chip' + (clamped > 85 ? ' hot' : clamped > 65 ? ' warn' : '');
   el.btnCtx.setAttribute('aria-label', `上下文占用：${Math.round(clamped)}%`);
+}
+
+/* 生成速度只从「本轮累计输出 / 本轮累计响应时长」算；任何一边缺证据
+ * 都显示「—」，绝不把 0 或墙钟差当成速度。历史重建不会产生计时，因此
+ * 老会话不会凭空出现一个看似精确的数字。 */
+function throughputDisplay(lt, snapshot) {
+  if (snapshot.generating) {
+    return { value: '生成中…', title: '本轮仍在生成，结束后显示实测速度' };
+  }
+  const output = lt?.responseOutputTokens ?? snapshot.outputTokens;
+  const duration = lt?.responseDurationMs ?? snapshot.durationMs;
+  const estimated = Boolean(lt?.responseOutputEstimated ?? snapshot.estimated);
+  const hasOutput = typeof output === 'number' && Number.isFinite(output) && output > 0;
+  const hasDuration = typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
+  if (!hasOutput || !hasDuration) {
+    return { value: '—', title: '缺少本轮输出 Token 或响应时间' };
+  }
+  const rate = Math.round(output / (duration / 1000));
+  if (!(rate > 0)) return { value: '—', title: '缺少本轮输出 Token 或响应时间' };
+  return {
+    value: `${estimated ? '≈ ' : ''}${rate} tokens/s`,
+    title: estimated
+      ? `按可见文本估算的输出 ${fmt(output)} token / 实测 ${(duration / 1000).toFixed(1)} 秒`
+      : `本轮输出 ${fmt(output)} token / 响应 ${(duration / 1000).toFixed(1)} 秒`,
+  };
 }
 
 /** 弹出上下文与额度明细 Tip */
@@ -633,7 +716,8 @@ export function openCtxTip() {
 
   // 3. 本轮 Turn 用量 (Last Turn Usage)
   const lt = S.localUsage?.lastTurn;
-  if (lt && (lt.inputTokens != null || lt.outputTokens != null)) {
+  const throughput = throughputSnapshot();
+  if (throughput.generating || (lt && (lt.inputTokens != null || lt.outputTokens != null))) {
     const turnSec = document.createElement('div');
     turnSec.className = 'tip-extra';
 
@@ -643,12 +727,12 @@ export function openCtxTip() {
     turnSec.appendChild(secTitle);
 
     const turnItems = [
-      ['本轮输入', lt.inputTokens == null ? null : fmt(lt.inputTokens)],
-      ['本轮输出', lt.outputTokens == null ? null : fmt(lt.outputTokens)],
-      ['本轮缓存读取', lt.cacheReadTokens == null ? null : fmt(lt.cacheReadTokens)],
-      ['本轮缓存写入', lt.cacheWriteTokens == null ? null : fmt(lt.cacheWriteTokens)],
-      ['思考 Token', lt.reasoningTokens == null ? null : fmt(lt.reasoningTokens)],
-      ['本轮预估成本', lt.estimatedCost == null ? null : '$' + lt.estimatedCost.toFixed(4)],
+      ['本轮输入', lt?.inputTokens == null ? null : fmt(lt.inputTokens)],
+      ['本轮输出', lt?.outputTokens == null ? null : fmt(lt.outputTokens)],
+      ['本轮缓存读取', lt?.cacheReadTokens == null ? null : fmt(lt.cacheReadTokens)],
+      ['本轮缓存写入', lt?.cacheWriteTokens == null ? null : fmt(lt.cacheWriteTokens)],
+      ['思考 Token', lt?.reasoningTokens == null ? null : fmt(lt.reasoningTokens)],
+      ['本轮预估成本', lt?.estimatedCost == null ? null : '$' + lt.estimatedCost.toFixed(4)],
     ].filter(([, v]) => v != null);
 
     for (const [label, value] of turnItems) {
@@ -661,6 +745,18 @@ export function openCtxTip() {
       row.append(name, amount);
       turnSec.appendChild(row);
     }
+
+    const speed = throughputDisplay(lt, throughput);
+    const speedRow = document.createElement('div');
+    speedRow.className = 'tip-row tip-speed-row';
+    const speedName = document.createElement('span');
+    speedName.textContent = '生成速度';
+    const speedValue = document.createElement('span');
+    speedValue.className = 'tip-speed';
+    speedValue.textContent = speed.value;
+    if (speed.title) speedValue.title = speed.title;
+    speedRow.append(speedName, speedValue);
+    turnSec.appendChild(speedRow);
     box.appendChild(turnSec);
   }
 

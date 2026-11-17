@@ -1564,6 +1564,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .tip-extra{margin-top:8px;padding-top:7px;border-top:1px solid var(--line)}
 .tip-row{display:flex;justify-content:space-between;gap:18px;font-size:11.5px;line-height:1.7;color:var(--t3)}
 .tip-row span:last-child{color:var(--t2);font-family:var(--mono)}
+.tip-row .tip-speed{color:var(--t1);font-variant-numeric:tabular-nums}
 .tip-sec-title{font-size:11px;font-weight:600;color:var(--t2);margin-bottom:4px;letter-spacing:0.2px}
 .tip-quota-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
 .tip-refresh-btn{background:transparent;border:1px solid var(--control-border);border-radius:4px;color:var(--t2);font-size:10.5px;padding:1px 6px;cursor:pointer}

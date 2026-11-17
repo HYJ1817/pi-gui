@@ -183,6 +183,8 @@ button.pj-sess-primary { cursor: pointer; }
 .quota-detail { padding: 0 8px 8px; }
 .sidebar-preferences { display: flex; align-items: center; gap: 4px; padding: 7px 8px 8px; }
 .sidebar-preferences #navGlobalMore { flex: 0 0 var(--ds-control-size); width: var(--ds-control-size); height: var(--ds-control-size); padding: 0; justify-content: center; }
+/* 设置入口与上游 v0.22.0 一致：14px 图形，点击区仍是 28×28。 */
+.sidebar-preferences #navGlobalMore svg { width: 14px; height: 14px; }
 .sidebar-preferences #navGlobalMore > span:not(.rp-dot) { display: none; }
 .sidebar-preferences .rail-icon .rp-dot { position: absolute; top: 1px; right: 1px; }
 .project-sidebar .rail-foot { border: 0; margin-left: auto; height: 28px; flex: 0 1 auto; min-width: 0; padding: 0 4px; gap: 6px; }

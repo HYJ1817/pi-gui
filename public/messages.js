@@ -21,6 +21,7 @@ import { createIcon, iconMarkup } from './ui/icons.js';
  * 两者渲染的是同一个 ToolEntry 结构，所以刷新前后语义一致。 */
 
 import { el, S } from './state.js';
+import { resetThroughput } from './turn-throughput.js';
 import { registerConversationAnchor, rebuildConversationNav, clearConversationNav } from './conversation-nav.js';
 import { workspaceView } from './ui/workspace-surface.js';
 import { icon, iconFor } from './util.js';
@@ -162,6 +163,7 @@ export function syncWelcome() {
 }
 
 export function clearThread() {
+  resetThroughput();
   ++threadGeneration;
   if (streamScrollRaf !== null) cancelAnimationFrame(streamScrollRaf);
   streamScrollRaf = null;
