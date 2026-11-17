@@ -109,9 +109,14 @@ async function runUiChecks() {
     w.onModels({ models: [{ provider: 'a', id: 'm', reasoning: true, input: ['text', 'image'], contextWindow: 400000, maxTokens: 8000 }, { provider: 'b', id: 'm' }] });
     assert.equal(w.S.models[0].providerId, 'a'); assert.equal(w.S.models[0].modelId, 'm');
     state(w.S.models[0]); w.applyProjectState(); w.document.getElementById('btnModel').click();
-    const text = w.document.querySelector('.pop-provider-models .pi-sub').textContent;
+    /* 统一菜单默认落在「最近使用」；行内保留 Provider + 正向能力事实。 */
+    const text = w.document.querySelector('.model-pane-list .pi-sub').textContent;
     assert.ok(text.includes('图片') && text.includes('推理') && text.includes('400K'));
-    assert.ok(!w.document.querySelector('.pop-model-group[data-provider="b"]').textContent.includes('不支持')); w.closePop();
+    /* 另一个 Provider 的同名模型：未知能力不能画成「不支持」。 */
+    [...w.document.querySelectorAll('.model-rail-item')]
+      .find((node) => node.dataset.section === 'provider:b').click();
+    assert.ok(!w.document.querySelector('.model-pane-list').textContent.includes('不支持'));
+    w.closePop();
   });
   await check('empty thinking response disables UI and clears old High', () => {
     w.onThinkingLevels({ levels: [] }); assert.equal(w.document.getElementById('btnThink').disabled, true);

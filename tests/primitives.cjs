@@ -122,27 +122,28 @@ const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadg
   console.log('✓ shared icon contract passed');
 }
 
-// 7. Settings entry uses the checked-in Lucide sliders-horizontal glyph.
+// 7. Settings entry uses the checked-in Lucide settings gear.
 {
   const dom = new JSDOM('<!doctype html>', { runScripts: 'outside-only' });
   const browser = dom.window;
   browser.eval(bundle(path.join(__dirname, '../public/ui/icons.js')).code);
 
-  const settingsGlyph = browser.iconMarkup('slidersHorizontal');
-  assert.match(settingsGlyph, /data-icon="slidersHorizontal"/);
-  assert.match(settingsGlyph, /M21 4h-7M10 4H3M14 2v4/);
-  assert.equal(settingsGlyph.includes('M9 4h6l1 3'), false, '设置入口不应退回齿轮图形');
-  assert.notEqual(settingsGlyph, browser.iconMarkup('sliders'));
+  const settingsGlyph = browser.iconMarkup('settings');
+  assert.match(settingsGlyph, /data-icon="settings"/);
+  assert.match(settingsGlyph, /M12\.22 2h-\.44/);
+  assert.match(settingsGlyph, /<circle cx="12" cy="12" r="3"\/>/);
+  assert.notEqual(settingsGlyph, browser.iconMarkup('slidersHorizontal'));
 
-  const icon = browser.createIcon('slidersHorizontal', { ownerDocument: browser.document });
-  assert.equal(icon.getAttribute('data-icon'), 'slidersHorizontal');
+  const icon = browser.createIcon('settings', { ownerDocument: browser.document });
+  assert.equal(icon.getAttribute('data-icon'), 'settings');
   assert.equal(icon.getAttribute('viewBox'), '0 0 24 24');
   assert.equal(icon.getAttribute('aria-hidden'), 'true');
   assert.equal(icon.getAttribute('focusable'), 'false');
   assert.equal(icon.querySelectorAll('path').length, 1);
-  assert.equal(browser.iconMarkup('slidersHorizontal'), browser.iconMarkup('slidersHorizontal'));
+  assert.equal(icon.querySelectorAll('circle').length, 1);
+  assert.equal(browser.iconMarkup('settings'), browser.iconMarkup('settings'));
   browser.close();
-  console.log('✓ sliders-horizontal settings icon passed');
+  console.log('✓ Lucide settings gear icon passed');
 }
 
 console.log('All primitive tests passed successfully!');

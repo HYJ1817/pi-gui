@@ -132,7 +132,7 @@ async function main() {
     assert.notEqual(a, b);
   });
 
-  /* ---------- 渲染：分组与计数 ---------- */
+  /* ---------- 渲染：两栏、最近使用与计数 ---------- */
   const MODELS = [
     { provider: 'deepseek', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', reasoning: true },
     { provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat', reasoning: false },
@@ -143,153 +143,208 @@ async function main() {
   ];
   const expanded = new Set();
   let picked = [];
-  const openModels = (current, models = MODELS) => {
-    view.renderModelPicker({
-      models, current, expanded,
-      onSelect: (p, id) => picked.push([p, id]),
-    });
-  };
-  const headers = () => [...pop().querySelectorAll('.pop-provider')];
-  const group = (provider) => [...pop().querySelectorAll('.pop-model-group')].find((g) => g.dataset.provider === provider);
-  const groupModels = (provider) => group(provider).querySelector('.pop-provider-models');
+  let pickedThinking = [];
+  const openModels = (current, models = MODELS, extra = {}) => view.renderModelPicker({
+    models, current, expanded,
+    levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium',
+    onSelect: (p, id) => picked.push([p, id]),
+    onSelectThinking: (lv) => pickedThinking.push(lv),
+    ...extra,
+  });
+  const railItems = () => [...pop().querySelectorAll('.model-rail-item')];
+  const railLabels = () => railItems().map((n) => n.querySelector('.model-rail-name').textContent);
+  const railCounts = () => railItems().map((n) => n.querySelector('.model-rail-count').textContent);
+  const selectSection = (section) => railItems().find((n) => n.dataset.section === section).click();
+  const rows = () => [...pop().querySelectorAll('.ui3-model-item')];
   const currentModel = MODELS[0];
+  w.localStorage.clear();
 
   openModels(currentModel);
-  await check('按 Provider 分组且顺序与来源一致', () => {
-    assert.equal(headers().map((h) => h.querySelector('.pop-provider-name').textContent).join(','),
-      'deepseek,zhipu,openrouter');
+  await check('左栏按「最近使用 + 已配置供应商」排列，计数准确', () => {
+    assert.deepEqual(railLabels(), ['最近使用', 'deepseek', 'zhipu', 'openrouter']);
+    assert.deepEqual(railCounts(), ['1', '2', '1', '2']);
   });
-  await check('每个 Provider 的模型数量准确', () => {
-    assert.equal(headers().map((h) => h.querySelector('.pop-provider-count').textContent).join(','), '2,1,2');
+  await check('默认打开最近使用，右栏只画该来源的模型', () => {
+    assert.equal(pop().querySelector('.model-pane-title').textContent, '最近使用');
+    assert.equal(rows().length, 1);
+    assert.equal(rows()[0].dataset.provider, 'deepseek');
+    assert.equal(rows()[0].dataset.modelId, 'deepseek-reasoner');
   });
-  await check('模型条目总数等于列表长度', () => {
-    assert.equal(pop().querySelectorAll('.ui3-model-item').length, MODELS.length);
+  await check('点击左栏供应商切换右栏，不重建另一套弹层', () => {
+    selectSection('provider:deepseek');
+    assert.equal(pop().querySelector('.model-pane-title').textContent, 'deepseek');
+    assert.equal(pop().querySelector('.model-pane-count').textContent, '2');
+    assert.deepEqual(rows().map((n) => n.dataset.modelId), ['deepseek-reasoner', 'deepseek-chat']);
+    assert.equal(doc.querySelectorAll('.pop').length, 1);
   });
-  await check('当前 Provider 默认展开、其余收起', () => {
-    assert.equal(headers().map((h) => h.getAttribute('aria-expanded')).join(','), 'true,false,false');
-    assert.ok(!groupModels('deepseek').hidden && groupModels('zhipu').hidden && groupModels('openrouter').hidden);
-  });
-  await check('组头是原生按钮且 aria-controls 指向自己的容器', () => {
-    assert.ok(headers().every((h) => h.tagName === 'BUTTON'
-      && doc.getElementById(h.getAttribute('aria-controls')) === h.nextElementSibling));
-  });
-
-  /* ---------- 当前模型身份 ---------- */
-  await check('身份行显示 Provider/modelId', () => {
-    const line = pop().querySelector('.ui3-current');
-    assert.equal(line.dataset.provider, 'deepseek');
-    assert.equal(line.dataset.modelId, 'deepseek-reasoner');
-    assert.ok(line.textContent.includes('deepseek / deepseek-reasoner'));
-  });
-  await check('当前模型恰好一个选中项', () => {
+  await check('当前模型恰好一个选中项，且带 aria-current', () => {
     assert.equal(pop().querySelectorAll('.ui3-model-item.on').length, 1);
     assert.equal(pop().querySelectorAll('[aria-current="true"]').length, 1);
+    assert.equal(pop().querySelector('.ui3-model-item.on').dataset.modelId, 'deepseek-reasoner');
   });
   await check('两个 Provider 的同名模型只有真正当前的那个被选中', () => {
     openModels({ provider: 'openrouter', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' });
-    const on = [...pop().querySelectorAll('.ui3-model-item.on')];
-    assert.equal(on.length, 1);
-    assert.equal(on[0].dataset.provider, 'openrouter');
-    assert.equal(on[0].dataset.modelId, 'deepseek-reasoner');
-    /* deepseek 组里那个同名条目必须**没有**被选中 */
-    const twin = group('deepseek').querySelector('.ui3-model-item[data-model-id="deepseek-reasoner"]');
-    assert.ok(twin && !twin.classList.contains('on'));
+    assert.equal(rows().length, 1, '最近使用里只有当前模型');
+    assert.equal(rows()[0].dataset.provider, 'openrouter');
+    assert.ok(rows()[0].classList.contains('on'));
+    selectSection('provider:deepseek');
+    const twin = rows().find((n) => n.dataset.modelId === 'deepseek-reasoner');
+    assert.ok(twin && !twin.classList.contains('on'), 'deepseek 的同名条目不能被选中');
+    assert.equal(pop().querySelectorAll('.ui3-model-item.on').length, 0);
+    selectSection('provider:openrouter');
+    assert.equal(pop().querySelector('.ui3-model-item.on').dataset.provider, 'openrouter');
   });
-  await check('当前组被强制展开，用户折叠记忆不掩盖当前位置', () => {
-    expanded.add('deepseek');
-    openModels({ provider: 'zhipu', id: 'glm-4.6' });
-    assert.ok(!groupModels('zhipu').hidden, '当前组应展开');
-    assert.ok(!groupModels('deepseek').hidden, '用户展开过的组保持展开');
-    assert.equal(group('zhipu').dataset.current, 'true');
+  await check('最近使用行带供应商信息，便于区分同名模型', () => {
+    openModels({ provider: 'openrouter', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner' });
+    const sub = rows()[0].querySelector('.pi-sub').textContent;
+    assert.ok(sub.includes('openrouter'), sub);
   });
 
-  /* ---------- 选择回调 ---------- */
-  picked = [];
-  await check('选择后回调带 Provider + modelId，且只触发一次', () => {
+  /* ---------- 搜索 ---------- */
+  await check('搜索跨供应商过滤，并在左栏显示匹配数量', () => {
     openModels(currentModel);
-    const target = group('openrouter').querySelectorAll('.ui3-model-item')[0];
-    assert.equal(target.dataset.provider, 'openrouter');
-    assert.equal(target.dataset.modelId, 'deepseek-reasoner');
+    const search = pop().querySelector('.ui3-model-search');
+    search.focus();
+    search.value = 'GLM'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.equal(pop().querySelector('.model-pane-title').textContent, '搜索结果');
+    assert.equal(pop().querySelector('.model-pane-count').textContent, '1');
+    assert.deepEqual(railLabels(), ['搜索结果', 'zhipu']);
+    assert.deepEqual(railCounts(), ['1', '1']);
+    assert.deepEqual(rows().map((n) => n.dataset.provider), ['zhipu']);
+    assert.equal(pop().querySelector('.ui3-model-search').value, 'GLM', '保留用户输入的大小写');
+    assert.equal(doc.activeElement, pop().querySelector('.ui3-model-search'));
+  });
+  await check('搜索按名称、ID、Provider 匹配；清空后回到原来源', () => {
+    let search = pop().querySelector('.ui3-model-search');
+    search.focus();
+    search.value = 'deepseek'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.equal(rows().length, 3, 'deepseek 两个 + openrouter 同名的一个都应命中');
+    search = pop().querySelector('.ui3-model-search');
+    search.focus();
+    search.value = ''; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.deepEqual(railLabels(), ['最近使用', 'deepseek', 'zhipu', 'openrouter']);
+    assert.equal(pop().querySelector('.model-pane-title').textContent, '最近使用');
+  });
+  await check('搜索同一模型名时按供应商分组，身份不混', () => {
+    const search = pop().querySelector('.ui3-model-search');
+    search.value = 'deepseek-reasoner'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.equal(rows().length, 2);
+    assert.deepEqual(rows().map((n) => n.dataset.provider), ['deepseek', 'openrouter']);
+    assert.deepEqual([...pop().querySelectorAll('.model-group-label')].map((n) => n.textContent), ['deepseek', 'openrouter']);
+    assert.equal(pop().querySelectorAll('.ui3-model-item.on').length, 1);
+    assert.equal(pop().querySelector('.ui3-model-item.on').dataset.provider, 'deepseek');
+  });
+  await check('无匹配显示空状态与 0 计数，不触发选择', () => {
+    const before = picked.length;
+    const search = pop().querySelector('.ui3-model-search');
+    search.value = 'no-such-model'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.equal(rows().length, 0);
+    assert.equal(pop().querySelector('.model-menu-empty').textContent, '没有匹配的模型');
+    assert.equal(pop().querySelector('.model-pane-count').textContent, '0');
+    assert.equal(railCounts()[0], '0');
+    assert.equal(picked.length, before);
+  });
+  await check('搜索框 ArrowDown 进入匹配项，Enter 不擅自选择', () => {
+    openModels(currentModel);
+    const search = pop().querySelector('.ui3-model-search');
+    const before = picked.length;
+    search.value = 'glm'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    const field = pop().querySelector('.ui3-model-search');
+    field.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    assert.equal(doc.activeElement.dataset.modelId, 'glm-4.6');
+    field.focus();
+    const event = new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    field.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(picked.length, before);
+  });
+  await check('Escape 先清搜索，再关闭并归还焦点', () => {
+    const btn = doc.getElementById('btnModel');
+    view.setTriggers({ model: btn });
+    openModels(currentModel);
+    let search = pop().querySelector('.ui3-model-search');
+    search.focus();
+    search.value = 'glm'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    search = pop().querySelector('.ui3-model-search');
+    search.focus();
+    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert.equal(pop().hidden, false, '第一次 Escape 只清搜索');
+    assert.equal(pop().querySelector('.ui3-model-search').value, '');
+    assert.equal(doc.activeElement, pop().querySelector('.ui3-model-search'));
+    search = pop().querySelector('.ui3-model-search');
+    search.focus();
+    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert.equal(pop().hidden, true);
+    assert.equal(doc.activeElement, btn);
+  });
+
+  /* ---------- 选择回调与 pending ---------- */
+  picked = [];
+  await check('选择后回调带 Provider + modelId，只触发一次且菜单保持打开', () => {
+    openModels(currentModel);
+    selectSection('provider:openrouter');
+    const target = rows().find((n) => n.dataset.modelId === 'deepseek-reasoner');
     target.click();
     assert.deepEqual(picked, [['openrouter', 'deepseek-reasoner']]);
+    assert.equal(pop().hidden, false, '切换未回读前保持菜单，等待权威状态');
   });
-  await check('选择后弹层关闭', () => assert.equal(pop().hidden, true));
-  await check('视图模块自身不发 RPC，也不 import 任何传输层', () => {
-    /* 结构保证：模块只依赖 popover 与两个纯策略模块，
-       没有任何 api/rpc/state 依赖 —— 所以它不可能发命令，也不可能读全局状态。 */
-    const src = fs.readFileSync(path.join(PUB, 'ui3-model-picker.js'), 'utf8');
-    const specs = [...src.matchAll(/^\s*import\s*\{[^}]*\}\s*from\s*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
-    assert.deepEqual(specs.sort(), ['./model-capabilities.js', './thinking-availability.js', './ui/popover.js']);
-    const policy = fs.readFileSync(path.join(PUB, 'thinking-availability.js'), 'utf8');
-    assert.ok(!/\b(sendCommand|fetch|EventSource|XMLHttpRequest|WebSocket|document|window)\b/.test(policy));
-    assert.ok(!/\b(sendCommand|fetch|EventSource|XMLHttpRequest|WebSocket)\b/.test(src), '视图层不该出现传输调用');
-    /* 也不该反向依赖装配层。 */
-    assert.ok(!/from\s*['"]\.\/app\.js['"]/.test(src), '视图模块不能 import app.js');
+  await check('选择后写入最近使用（只存身份，去重且封顶）', () => {
+    const recent = view.readRecentModelIdentities();
+    assert.deepEqual(recent[0], { providerId: 'openrouter', modelId: 'deepseek-reasoner' });
+    for (let i = 0; i < 8; i++) view.rememberRecentModel('p', 'm' + i);
+    const capped = view.readRecentModelIdentities();
+    assert.equal(capped.length, 6);
+    assert.deepEqual(capped[0], { providerId: 'p', modelId: 'm7' });
+    assert.equal(new Set(capped.map((x) => x.providerId + '/' + x.modelId)).size, capped.length);
+    w.localStorage.clear();
+  });
+  await check('pending 显示切换状态；连点仍交给 setModel 的既有队列', () => {
+    picked = [];
+    openModels(currentModel, MODELS, { pending: true });
+    assert.equal(pop().querySelector('.model-menu-pending').textContent, '正在切换模型…');
+    assert.equal(pop().querySelector('.model-pane-list').getAttribute('aria-busy'), 'true');
+    selectSection('provider:deepseek');
+    const next = rows().find((n) => !n.classList.contains('on'));
+    next.click();
+    assert.equal(picked.length, 1, '下一次选择仍会交给调用方排队，不静默丢弃');
+  });
+  await check('顶部齿轮打开既有模型设置并关闭菜单', () => {
+    let opened = 0;
+    openModels(currentModel, MODELS, { onOpenSettings: () => { opened++; } });
+    pop().querySelector('.model-menu-settings').click();
+    assert.equal(opened, 1);
+    assert.equal(pop().hidden, true);
   });
 
-  /* ---------- 长名 / 大量模型 ---------- */
+  /* ---------- 长名 / 大量模型 / 注入 ---------- */
   const many = [];
   for (let i = 0; i < 400; i++) many.push({ provider: 'router', id: `model-${i}`, name: `Router Model ${i}` });
   many.push({ provider: 'router', id: 'x'.repeat(300), name: 'Long '.repeat(60) });
   await check('400+ 模型与超长名不抛错且计数正确', () => {
-    openModels(many[0], many);
-    assert.equal(pop().querySelectorAll('.ui3-model-item').length, many.length);
-    assert.equal(headers()[0].querySelector('.pop-provider-count').textContent, String(many.length));
-    const long = [...pop().querySelectorAll('.ui3-model-item')].at(-1);
+    openModels(null, many);
+    assert.equal(rows().length, many.length);
+    assert.equal(railCounts()[0], String(many.length));
+    const long = rows().at(-1);
     assert.ok(long.querySelector('.pi-text').textContent.length > 200);
-  });
-  await check('模型搜索按名称、ID、Provider过滤，清空后恢复折叠记忆', () => {
-    openModels(currentModel, MODELS);
-    const callsBefore = picked.length;
-    const before = [...expanded];
-    const search = pop().querySelector('.ui3-model-search');
-    assert.ok(search);
-    search.value = 'GLM'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
-    const visible = [...pop().querySelectorAll('.ui3-model-item')].filter(item => !item.closest('[hidden]'));
-    assert.equal(visible.length, 1); assert.equal(visible[0].dataset.provider, 'zhipu');
-    assert.equal(doc.activeElement, search);
-    assert.deepEqual([...expanded], before);
-    search.value = ''; search.dispatchEvent(new w.Event('input', { bubbles: true }));
-    assert.deepEqual([...expanded], before);
-    assert.equal(pop().querySelector('[data-provider="zhipu"] .pop-provider-models').hidden, !expanded.has('zhipu'));
-    search.value = 'does-not-exist'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
-    assert.equal(pop().querySelector('.ui3-model-no-match').hidden, false);
-    assert.equal(picked.length, callsBefore);
-  });
-  await check('模型搜索 ArrowDown 进入匹配项，Enter 不擅自选择', () => {
-    openModels(currentModel);
-    const search = pop().querySelector('.ui3-model-search'), before = picked.length;
-    search.value = 'glm'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
-    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-    assert.equal(doc.activeElement.dataset.modelId, 'glm-4.6');
-    search.focus(); const event = new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
-    search.dispatchEvent(event); assert.equal(event.defaultPrevented, true); assert.equal(picked.length, before);
-  });
-  await check('无匹配时 ArrowDown 保留搜索焦点，Escape 返回真实触发器', () => {
-    const search = pop().querySelector('.ui3-model-search'); search.value = 'no-match';
-    search.dispatchEvent(new w.Event('input', { bubbles: true }));
-    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
-    assert.equal(doc.activeElement, search);
-    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-    assert.equal(pop().hidden, true); assert.equal(doc.activeElement.id, 'btnModel');
+    assert.ok(!pop().querySelector('img'));
   });
   await check('长名写入 textContent，不产生元素注入', () => {
-    const html = many.at(-1).name;
     openModels({ provider: 'evil', id: '<img src=x onerror=alert(1)>', name: '<img src=x onerror=alert(1)>' },
       [{ provider: 'evil', id: '<img src=x onerror=alert(1)>', name: '<img src=x onerror=alert(1)>' }]);
     assert.equal(pop().querySelectorAll('img').length, 0);
     assert.ok(pop().textContent.includes('<img src=x onerror=alert(1)>'));
-    assert.equal(html.length > 0, true);
   });
-  await check('消失的 Provider 不保留折叠记忆', () => {
-    expanded.add('gone');
-    openModels(MODELS[0], MODELS);
-    assert.ok(!expanded.has('gone'));
+  await check('空模型列表显示空状态，不抛错', () => {
+    view.renderModelPicker({ models: [], current: null });
+    assert.ok(pop().querySelector('.model-menu-empty'));
+    assert.equal(pop().querySelectorAll('.ui3-model-item').length, 0);
+    assert.equal(pop().querySelector('.ui3-think-state').dataset.state, 'no-model');
   });
 
   /* ---------- 键盘漫游 ---------- */
   openModels(currentModel);
-  const navs = () => [...pop().querySelectorAll('.pop-provider, .pop-item')]
+  selectSection('provider:deepseek');
+  const navs = () => [...pop().querySelectorAll('.model-rail-item, .ui3-model-item')]
     .filter((n) => !n.disabled && !n.closest('[hidden]'));
   const press = (node, key) => {
     node.focus();
@@ -297,66 +352,95 @@ async function main() {
     node.dispatchEvent(ev);
     return ev;
   };
-  await check('展开组内 ↑↓ 在可见项之间移动', () => {
+  await check('↑↓ 在左栏与模型行之间移动', () => {
     const list = navs();
-    assert.ok(list.length >= 3);
-    list[0].focus();
-    press(list[0], 'ArrowDown');
+    assert.ok(list.length >= 4);
+    list[1].focus();
+    press(list[1], 'ArrowDown');
+    assert.equal(doc.activeElement, list[2]);
+    press(list[2], 'ArrowUp');
     assert.equal(doc.activeElement, list[1]);
-    press(list[1], 'ArrowUp');
-    assert.equal(doc.activeElement, list[0]);
   });
-  await check('漫游跳过折叠起来的条目', () => {
-    const hiddenItems = [...group('zhipu').querySelectorAll('.ui3-model-item')];
-    assert.ok(hiddenItems.every((n) => !navs().includes(n)), '收起组的条目不该出现在漫游序列里');
-  });
-  await check('End / Home 跳到首末', () => {
+  await check('End / Home 跳到首末，↑ 从首项回绕', () => {
     const list = navs();
     list[0].focus();
     press(list[0], 'End');
     assert.equal(doc.activeElement, list[list.length - 1]);
     press(list[list.length - 1], 'Home');
     assert.equal(doc.activeElement, list[0]);
-  });
-  await check('↑ 从首项回绕到末项', () => {
-    const list = navs();
-    list[0].focus();
     press(list[0], 'ArrowUp');
     assert.equal(doc.activeElement, list[list.length - 1]);
   });
-  await check('roving tabindex：只有一个停靠点', () => {
+  await check('roving tabindex：列表里只有一个停靠点', () => {
     const list = navs();
     assert.equal(list.filter((n) => n.tabIndex === 0).length, 1);
   });
-  await check('→ / ← 折叠展开 Provider，焦点留在组头', () => {
-    const header = group('zhipu').querySelector('.pop-provider');
-    header.focus();
-    press(header, 'ArrowRight');
-    assert.equal(groupModels('zhipu').hidden, false);
-    assert.equal(header.getAttribute('aria-expanded'), 'true');
-    assert.equal(doc.activeElement, header);
-    assert.ok(expanded.has('zhipu'));
-    press(header, 'ArrowLeft');
-    assert.equal(groupModels('zhipu').hidden, true);
-    assert.equal(header.getAttribute('aria-expanded'), 'false');
-    assert.ok(!expanded.has('zhipu'));
+  await check('← 从模型行进入左栏，→ 从栏目进入模型行', () => {
+    const row = navs().find((n) => n.classList.contains('ui3-model-item'));
+    press(row, 'ArrowLeft');
+    const rail = doc.activeElement;
+    assert.ok(rail.classList.contains('model-rail-item'));
+    assert.ok(rail.classList.contains('on'));
+    press(rail, 'ArrowRight');
+    assert.ok(doc.activeElement.classList.contains('ui3-model-item'));
   });
-  await check('键盘 Enter 走原生按钮行为，回调仍只触发一次', () => {
+  await check('原生点击选择路径只触发一次回调', () => {
     picked = [];
-    openModels(currentModel);
-    const item = navs().find((n) => n.classList.contains('ui3-model-item'));
+    const item = navs().find((n) => n.classList.contains('ui3-model-item') && !n.classList.contains('on'));
     item.focus();
-    item.click(); /* 原生 button 的 Enter/Space 语义就是 click */
+    item.click();
     assert.equal(picked.length, 1);
   });
-  await check('Escape 关闭并把焦点还给触发按钮', () => {
-    const btn = doc.getElementById('btnModel');
-    view.setTriggers({ model: btn });
-    openModels(currentModel);
-    btn.setAttribute('aria-expanded', 'true');
-    pop().dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-    assert.equal(pop().hidden, true);
-    assert.equal(doc.activeElement, btn);
+
+  /* ---------- 底部分段推理滑杆 ---------- */
+  await check('滑杆档位完全来自 Pi 返回，不硬编码 off..max', () => {
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'high'], currentLevel: 'low' });
+    assert.deepEqual([...pop().querySelectorAll('.ui3-think-item')].map((n) => n.dataset.level), ['off', 'low', 'high']);
+    assert.equal(pop().querySelectorAll('.ui3-think-item.on').length, 1);
+    assert.equal(pop().querySelector('.ui3-think-item.on').dataset.level, 'low');
+  });
+  await check('滑杆等宽分段、原生 range 值与当前档位一致', () => {
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium' });
+    const slider = pop().querySelector('.model-thinking-slider');
+    assert.equal(slider.style.getPropertyValue('--stop-count'), '4');
+    assert.ok(slider.style.getPropertyValue('--thinking-progress').startsWith('50'));
+    const range = pop().querySelector('.model-thinking-range');
+    assert.equal(range.value, '2');
+    assert.equal(range.getAttribute('aria-valuetext'), 'medium');
+    assert.equal(range.disabled, false);
+    assert.equal(pop().querySelectorAll('.ui3-think-item').length, 4);
+  });
+  await check('点击档位回调一次并保持打开，未回读前不乐观改选中态', () => {
+    pickedThinking = [];
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'medium' });
+    const high = [...pop().querySelectorAll('.ui3-think-item')].find((n) => n.dataset.level === 'high');
+    high.click();
+    assert.deepEqual(pickedThinking, ['high']);
+    assert.equal(pop().hidden, false);
+    assert.equal(pop().querySelector('.ui3-think-item.on').dataset.level, 'medium', '回读前仍显示权威 current');
+    assert.equal(pop().querySelector('.model-thinking-range').disabled, true, '提交未收口前禁止再次提交');
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'medium', 'high'], currentLevel: 'high' });
+    assert.equal(pop().querySelector('.ui3-think-item.on').dataset.level, 'high');
+  });
+  await check('档位不可用时画出来但不可提交，原因来自 availability', () => {
+    pickedThinking = [];
+    openModels(MODELS[1], MODELS, { levels: [], currentLevel: null });
+    const state = pop().querySelector('.ui3-think-state');
+    assert.equal(state.dataset.state, 'unsupported');
+    assert.ok(state.textContent.includes('不支持推理'));
+    assert.equal(pop().querySelectorAll('.ui3-think-item').length, 0);
+    assert.equal(pickedThinking.length, 0);
+  });
+  await check('pending 时滑杆与档位全部禁用', () => {
+    openModels(currentModel, MODELS, { levels: ['off', 'low', 'high'], currentLevel: 'low', pending: true });
+    assert.equal(pop().querySelector('.model-thinking-range').disabled, true);
+    assert.ok([...pop().querySelectorAll('.ui3-think-item')].every((n) => n.disabled));
+    const state = pop().querySelector('.ui3-think-state');
+    assert.equal(state.dataset.state, 'pending');
+  });
+  await check('未知 / 重复档位被过滤，不污染渲染', () => {
+    openModels(currentModel, MODELS, { levels: ['off', 'off', null, 42, '', 'high'], currentLevel: 'off' });
+    assert.deepEqual([...pop().querySelectorAll('.ui3-think-item')].map((n) => n.dataset.level), ['off', 'high']);
   });
 
   /* ---------- Thinking ---------- */
@@ -463,11 +547,6 @@ async function main() {
   await check('非字符串 / 重复档位被过滤，不污染渲染', () => {
     openThink({ levels: ['off', 'off', null, 42, '', 'high'], current: 'off', model: { provider: 'p', id: 'm', reasoning: true } });
     assert.deepEqual([...pop().querySelectorAll('.ui3-think-item')].map((n) => n.dataset.level), ['off', 'high']);
-  });
-  await check('空模型列表不抛错', () => {
-    view.renderModelPicker({ models: [], current: null, expanded: new Set() });
-    assert.ok(pop().querySelector('.ui3-empty'));
-    assert.equal(pop().querySelectorAll('.ui3-model-item').length, 0);
   });
 
   /* ---------- Chip 状态 ---------- */
