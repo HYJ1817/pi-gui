@@ -1370,6 +1370,20 @@ staticCheck();
   $('btnSidebarExpand').click();
   check('展开项目侧栏仍保留当前项目', () => !$('projectSidebar').hidden && window.document.querySelectorAll('#projects .project.active').length === 1);
   check('侧栏展开按钮语义与侧栏状态一致', () => $('btnSidebarCollapse').getAttribute('aria-expanded') === 'true' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'true');
+  check('设置入口使用 sliders-horizontal 图标（不再是齿轮）', () => {
+    const svg = $('navGlobalMore').querySelector('svg[data-icon="slidersHorizontal"]');
+    return Boolean(svg && svg.querySelectorAll('path').length === 1 && !svg.querySelector('circle'))
+      || $('navGlobalMore').innerHTML.slice(0, 120);
+  });
+  check('设置入口保留原有按钮类名与可访问名称', () => {
+    const b = $('navGlobalMore');
+    return b.classList.contains('rail-icon') && b.classList.contains('nav-item')
+      && b.getAttribute('aria-label') === '设置' && b.title === '设置'
+      && b.getAttribute('aria-controls') === 'globalMoreMenu'
+      && b.getAttribute('aria-expanded') === 'false';
+  });
+  $('navGlobalMore').focus();
+  check('设置入口可通过键盘聚焦', () => window.document.activeElement === $('navGlobalMore'));
   $('navGlobalMore').click();
   check('More 展开并提供真实入口', () => !$('globalMoreMenu').hidden && $('navGlobalMore').getAttribute('aria-expanded') === 'true' && [...$('globalMoreMenu').querySelectorAll('button')].every((b) => typeof b.onclick === 'function'));
   $('settingsReturn').click();
@@ -3031,7 +3045,9 @@ staticCheck();
     type: 'response', command: 'get_session_stats', success: true,
     data: { tokens: { input: 61000, output: 1000, cacheRead: 0 }, cost: 0.12, contextUsage: { tokens: 61000, contextWindow: 258000, percent: 23 } },
   });
-  check('上下文圆环百分比', () => $('ctxPct').textContent === '23%');
+  /* 百分比按 used / 当前模型 contextWindow 计算：61000 / 258000 = 23.6% → 24%。
+   * 不再直接采用 Pi 载荷里的 percent（它可能基于另一个容量口径）。 */
+  check('上下文圆环百分比', () => $('ctxPct').textContent === '24%');
   check('圆环有进度', () => {
     const off = Number($('ctxRing').style.strokeDashoffset);
     return off > 0 && off < 97.4 ? true : 'dashoffset=' + off;
@@ -3042,7 +3058,7 @@ staticCheck();
   check('上下文提示已弹出', () => pop().classList.contains('tip-mode') && pop().hidden === false);
   check('提示文案对齐 Codex', () => {
     const t = pop().textContent;
-    return t.includes('背景信息窗口:') && t.includes('23% 已用 (剩余 77%)') && t.includes('已用 61k 标记, 共 258k')
+    return t.includes('背景信息窗口:') && t.includes('24% 已用 (剩余 76%)') && t.includes('已用 61k 标记, 共 258k')
       ? true
       : '实际：' + t;
   });
@@ -6068,12 +6084,39 @@ staticCheck();
 
     // 点另一条 → 切过去
     {
+      const savedSwitch = stubSwitch;
+      /* switch 应答故意不带 title：历史会话的标题要能从侧栏列表补上。 */
+      stubSwitch = { ok: true, id: 'bbbbbbbbbbbbbbbb' };
       const other = [...proj.querySelectorAll('.pj-sess')].find((r) => !r.classList.contains('on'));
       other.querySelector('.pj-sess-primary').click();
       await new Promise((r) => setTimeout(r, 80));
       const hit = sessionCalls.find((c) => /\/switch/.test(c.url));
       check('会话：点一条会调 /api/sessions/switch，且传的是 ID 不是路径', () =>
         Boolean(hit && hit.body && hit.body.id === 'bbbbbbbbbbbbbbbb') || JSON.stringify(sessionCalls.map((c) => c.url)));
+      check('会话：历史切换后顶栏立即显示列表里的历史标题', () =>
+        $('title').textContent === '帮我写个登录功能' || $('title').textContent);
+
+      /* 连续切换：第二次必须覆盖第一次，不能停在 bbbb。
+       * 先把夹具的 current 改成 bbbb，让 aaaa 变成可点的历史会话。 */
+      const savedCurrentId = stubSessions.currentId;
+      const savedCurrent = stubSessions.sessions.map((s) => s.current);
+      stubSessions.currentId = 'bbbbbbbbbbbbbbbb';
+      stubSessions.sessions.forEach((s) => { s.current = s.id === 'bbbbbbbbbbbbbbbb'; });
+      window.renderProjects();
+      await new Promise((r) => setTimeout(r, 80));
+      stubSwitch = { ok: true, id: 'aaaaaaaaaaaaaaaa', title: '你好' };
+      const back = [...$('projects').querySelectorAll('.pj-sess')].find((r) => !r.classList.contains('on'));
+      back?.querySelector('.pj-sess-primary').click();
+      await new Promise((r) => setTimeout(r, 80));
+      check('会话：连续切换后顶栏显示第二条（不残留上一条）', () =>
+        $('title').textContent === '你好' || $('title').textContent);
+
+      /* 恢复夹具：后续用例仍以 aaaa 为当前会话。 */
+      stubSessions.currentId = savedCurrentId;
+      stubSessions.sessions.forEach((s, i) => { s.current = savedCurrent[i]; });
+      stubSwitch = savedSwitch;
+      window.renderProjects();
+      await new Promise((r) => setTimeout(r, 80));
     }
 
     // 所有会话使用相同菜单；受限操作禁用并解释原因。
@@ -6117,6 +6160,8 @@ staticCheck();
         await new Promise((r) => setTimeout(r, 60));
         const hit = sessionCalls.find((c) => /\/name/.test(c.url));
         check('会话：回车保存 → 调 /api/sessions/name', () => Boolean(hit && hit.body.name === '我的登录功能开发') || JSON.stringify(sessionCalls.map((c) => c.url)));
+        check('会话：行内重命名同时更新顶栏标题', () =>
+          $('title').textContent === '我的登录功能开发' || $('title').textContent);
       } else {
         check('会话：回车保存 → 调 /api/sessions/name', () => '上一条已失败');
       }
@@ -7729,6 +7774,8 @@ staticCheck();
     check('会话：new_session 之后侧栏列表会重画（回归守卫）', () =>
       sessionCalls.some((c) => c.method === 'GET' && /\/api\/sessions$/.test(c.url)) ||
       JSON.stringify(sessionCalls.map((c) => c.method + ' ' + c.url)));
+    check('会话：new_session 后顶栏显示「新会话」（旧列表 current 不能覆盖）', () =>
+      $('title').textContent === '新会话' || $('title').textContent);
   }
 
   $('navPlanner').click();

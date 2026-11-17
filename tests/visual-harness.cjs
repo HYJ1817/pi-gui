@@ -512,8 +512,12 @@ const PLAN_GATE = {
 
 
 const MODELS = [
-  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek' },
-  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek', reasoning: true },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek', contextWindow: 1000000 },
+  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek', reasoning: true, contextWindow: 200000 },
+  /* 跨供应商同名/不同容量：截图要能证明容量跟着 (provider, model) 走。 */
+  { id: 'grok-4.7', name: 'Grok 4.7 · OpenCode Go', provider: 'opencode-go', contextWindow: 256000 },
+  /* 没有 contextWindow 的模型：容量必须显示「未知」，不能回退成旧值或 1M。 */
+  { id: 'mystery-model', name: 'Mystery Model', provider: 'mystery' },
 ];
 let composerModel = MODELS[0];
 let composerThinking = 'high';
@@ -674,6 +678,9 @@ let capabilityInstallHold = false;
 let capabilityInstallRelease = null;
 const capabilityInstallCalls = [];
 let harnessSessionId = 'aaaaaaaaaaaaaaaa';
+/* 真实 Pi 的 sessionName 只在用户明确命名后才有值；自动标题来自会话文件。
+ * 夹具默认保留原来的 'pi-GUI'，P2 取证时可显式清空，走列表标题投影。 */
+let harnessSessionName = 'pi-GUI';
 
 /* 真实 SSE 会给事件带上 bridgeRun：前端靠它丢弃旧 bridge run 的事件，
  * 也靠它认定「这次调用真的发生在当前 workspace / run」。
@@ -708,21 +715,29 @@ function replyFor(cmd) {
         data: {
           model: composerModel,
           thinkingLevel: composerThinking,
-          sessionName: 'pi-GUI',
+          sessionName: harnessSessionName,
           isStreaming: false,
         },
       };
-    case 'get_session_stats':
+    case 'get_session_stats': {
+      /* 容量跟当前模型走：切模型后夹具也必须换 contextWindow，
+       * 否则截图会把「旧容量」证明成正确行为。 */
+      const window = composerModel?.contextWindow ?? null;
       return {
         type: 'response',
         command: 'get_session_stats',
         success: true,
         data: {
-          contextUsage: { tokens: 61234, contextWindow: 1000000, percent: 6.1 },
+          contextUsage: {
+            tokens: 61234,
+            contextWindow: window,
+            percent: window ? (61234 / window) * 100 : null,
+          },
           tokens: { input: 18420, output: 3110, cacheRead: 40200 },
           cost: 0.0842,
         },
       };
+    }
     case 'get_tree':
       /* 照 pi 的真实条目形状造（消息体嵌在 entry.message 里，各类型字段不同），
        * 并且刻意混入操作类条目（model_change / thinking_level_change）+ 一个分叉点
@@ -1412,6 +1427,11 @@ const server = http.createServer(async (req, res) => {
   /* 会话列表（侧栏挂在当前项目那一行下面）。
    * 形状照抄后端真实返回 —— **不含任何绝对路径**，否则截图就没法用来看
    * 「界面上会不会漏出路径」。刻意混入一条已归档的，好让折叠组也出现在图里。 */
+  /* 会话改名：只用于 P2 的渲染验收，内存中回显名字，不写任何文件。 */
+  if (p === '/api/sessions/name' && req.method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    return json(res, 200, { ok: true, name: body.name || '' });
+  }
   if (p === '/api/sessions/switch' && req.method === 'POST') {
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     if (body.id !== 'bbbbbbbbbbbbbbbb' && !(uxMode && body.id === 'aaaaaaaaaaaaaaaa')) return json(res, 200, { ok: false, error: '夹具中没有该会话' });
@@ -1423,6 +1443,12 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/__work-surface/session-reset') {
     harnessSessionId = 'aaaaaaaaaaaaaaaa';
     return json(res, 200, { ok: true });
+  }
+  /* 仅供 P2 取证：把 Pi 的实时 sessionName 置空，验证自动标题来自会话列表。 */
+  if (p === '/api/__session-name' && req.method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    harnessSessionName = String(body.name || '');
+    return json(res, 200, { ok: true, name: harnessSessionName });
   }
   if (p === '/api/sessions') {
     if (url.searchParams.get('project') === 'C:\\work\\fermenter-notes') return json(res, 200, {
