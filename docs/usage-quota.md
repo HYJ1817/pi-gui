@@ -65,10 +65,10 @@ interface LocalUsage {
     totalTokens: number | null;
     estimatedCost: number | null;
     // 本轮生成速度（见下方「生成速度 TPS 口径」）
-    responseDurationMs: number | null;      // 本轮所有 assistant 响应的实测时长之和
-    responseOutputTokens: number | null;    // 本轮所有 assistant 响应的 usage.output 之和
-    responseOutputEstimated: boolean;       // 是否有响应按可见文本估算（界面加 ≈）
-    tokensPerSecond: number | null;         // 两项都有证据时才计算，否则 null
+    responseDurationMs: number | null;      // 本轮有效响应的实测时长之和
+    responseOutputTokens: number | null;    // 本轮有效响应的 usage.output 之和
+    responseOutputEstimated: boolean;       // 至少一条有效响应按可见文本估算（界面加 ≈）
+    tokensPerSecond: number | null;         // 至少一条有效响应时计算，否则 null
   } | null;
   source: 'session_stats' | 'message_end' | 'message_update' | 'none';
   updatedAt: string;             // ISO 8601
@@ -81,15 +81,21 @@ interface LocalUsage {
 [`public/turn-throughput.js`](../public/turn-throughput.js)，只做计时与聚合，不持有第二份用量状态。
 
 ```
-TPS = 本轮所有 assistant 响应的 usage.output 之和
-    / 这些响应各自 message_start → message_end 的单调时长之和
+TPS = Σ(第 i 条有效响应的 usage.output)
+    / Σ(第 i 条有效响应的 message_start → message_end 单调时长)
+
+有效响应 i：同一条响应同时具备有效 output 与有效响应时长。
 ```
 
-- **只统计模型真正在产出的时间。** 一个 Agent turn 里可能有多条 assistant 响应（中间夹工具调用）；
-  工具执行、等待审批、下一轮请求前的空档都不计入时长。**不得**使用 `liveTurn.startedAt`：
+- **逐条响应配对。** 一个 Agent turn 里可能有多条 assistant 响应（中间夹工具调用）。
+  只有同一条响应自己的输出与时长才能配对；不能把 A 的输出配 B 的时长，也不能分别求和后
+  再相除。缺任一项时整条响应丢弃，不填 0、不向其它响应借用数据。
+- **只统计模型真正在产出的时间。** 时长是各条有效响应自己的 `message_start → message_end`；
+  工具执行、等待审批、下一轮请求前的空档都不计入。**不得**使用 `liveTurn.startedAt`：
   那是整个 Agent 任务的起点，包含工具时间，算出来会系统性偏低。
-- **没有证据就不猜。** 缺 `usage.output` 或响应时长（或时长 ≤ 0）时显示 `—`，不把缺失填成 0。
-  仍在生成时显示 `生成中…`，不显示实时速度。
+- **没有证据就不猜。** 没有任何有效配对时显示 `—`。仍在生成时显示 `生成中…`，不显示实时速度。
+  浮层直接读取当前 `throughputSnapshot`，不要求 `lastTurn` 存在；`lastTurn` 只保留同一份
+  有效配对的兼容投影，不另算一套速度。
 - **中断的响应**若没有最终 `usage`，可按可见文本估算输出并在界面加 `≈`；只有
   `stopReason === 'aborted'` 才走这条估算路径。
 - **隔离**：换会话、换模型、换工作区或清空线程都会丢弃本轮计时；迟到事件按会话 / 工作区

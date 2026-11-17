@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-17T16:41:11.529Z",
+  "generatedAt": "2026-11-17T17:48:00.381Z",
   "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
   "viewports": [
     [
@@ -347,6 +347,96 @@
       ]
     },
     {
+      "name": "P4 1320×820 dark: 真实拖动经过多个档位且 Range 节点不被替换",
+      "pass": true,
+      "detail": {
+        "geometry": {
+          "from": {
+            "x": 774.75,
+            "y": 660.96875
+          },
+          "to": {
+            "x": 1080.25,
+            "y": 660.96875
+          },
+          "rect": [
+            725,
+            646.96875,
+            1123,
+            674.96875
+          ],
+          "vw": 1320,
+          "vh": 820
+        },
+        "previews": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "high"
+        ],
+        "sameNode": true,
+        "commandsDuringDrag": 0
+      }
+    },
+    {
+      "name": "P4 1320×820 dark: 一次拖动只在释放时提交一次，回读后 high",
+      "pass": true,
+      "detail": {
+        "commands": [
+          "high"
+        ],
+        "on": "high",
+        "state": "high",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
+      "name": "P4 1320×820 dark: 失败回读后恢复 off，且只提交一次",
+      "pass": true,
+      "detail": {
+        "dragFail": {
+          "geometry": {
+            "from": {
+              "x": 774.75,
+              "y": 660.96875
+            },
+            "to": {
+              "x": 1080.25,
+              "y": 660.96875
+            },
+            "rect": [
+              725,
+              646.96875,
+              1123,
+              674.96875
+            ],
+            "vw": 1320,
+            "vh": 820
+          },
+          "previews": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "high"
+          ],
+          "sameNode": true,
+          "commandsDuringDrag": 0
+        },
+        "failFinal": {
+          "commands": [
+            "high"
+          ],
+          "on": "off",
+          "state": "off",
+          "disabled": false,
+          "inside": true
+        }
+      }
+    },
+    {
       "name": "P3 1320×820 dark: 欢迎页吉祥物 100×100 且只在 ready 态",
       "pass": true,
       "detail": {
@@ -358,13 +448,16 @@
         "anim": "mascot-float",
         "duration": "4.8s",
         "stroke": "rgb(238, 238, 238)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
         "external": 0,
         "inRestore": false,
         "hover": "all"
       }
     },
     {
-      "name": "P3 1320×820 dark: 线稿动画在跑、无外链资源",
+      "name": "P3 1320×820 dark: 云朵轮廓、两只脚、两只眼且无外链",
       "pass": true,
       "detail": {
         "rect": [
@@ -375,6 +468,29 @@
         "anim": "mascot-float",
         "duration": "4.8s",
         "stroke": "rgb(238, 238, 238)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 1320×820 dark: 线稿动画在跑",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(238, 238, 238)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
         "external": 0,
         "inRestore": false,
         "hover": "all"
@@ -385,8 +501,8 @@
       "pass": true,
       "detail": {
         "float": "none",
-        "eye": "none",
-        "antenna": "none"
+        "shadow": "none",
+        "eye": "none"
       }
     },
     {
@@ -720,6 +836,96 @@
       ]
     },
     {
+      "name": "P4 1320×820 light: 真实拖动经过多个档位且 Range 节点不被替换",
+      "pass": true,
+      "detail": {
+        "geometry": {
+          "from": {
+            "x": 774.75,
+            "y": 660.96875
+          },
+          "to": {
+            "x": 1080.25,
+            "y": 660.96875
+          },
+          "rect": [
+            725,
+            646.96875,
+            1123,
+            674.96875
+          ],
+          "vw": 1320,
+          "vh": 820
+        },
+        "previews": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "high"
+        ],
+        "sameNode": true,
+        "commandsDuringDrag": 0
+      }
+    },
+    {
+      "name": "P4 1320×820 light: 一次拖动只在释放时提交一次，回读后 high",
+      "pass": true,
+      "detail": {
+        "commands": [
+          "high"
+        ],
+        "on": "high",
+        "state": "high",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
+      "name": "P4 1320×820 light: 失败回读后恢复 off，且只提交一次",
+      "pass": true,
+      "detail": {
+        "dragFail": {
+          "geometry": {
+            "from": {
+              "x": 774.75,
+              "y": 660.96875
+            },
+            "to": {
+              "x": 1080.25,
+              "y": 660.96875
+            },
+            "rect": [
+              725,
+              646.96875,
+              1123,
+              674.96875
+            ],
+            "vw": 1320,
+            "vh": 820
+          },
+          "previews": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "high"
+          ],
+          "sameNode": true,
+          "commandsDuringDrag": 0
+        },
+        "failFinal": {
+          "commands": [
+            "high"
+          ],
+          "on": "off",
+          "state": "off",
+          "disabled": false,
+          "inside": true
+        }
+      }
+    },
+    {
       "name": "P3 1320×820 light: 欢迎页吉祥物 100×100 且只在 ready 态",
       "pass": true,
       "detail": {
@@ -731,13 +937,16 @@
         "anim": "mascot-float",
         "duration": "4.8s",
         "stroke": "rgb(38, 38, 38)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
         "external": 0,
         "inRestore": false,
         "hover": "all"
       }
     },
     {
-      "name": "P3 1320×820 light: 线稿动画在跑、无外链资源",
+      "name": "P3 1320×820 light: 云朵轮廓、两只脚、两只眼且无外链",
       "pass": true,
       "detail": {
         "rect": [
@@ -748,6 +957,29 @@
         "anim": "mascot-float",
         "duration": "4.8s",
         "stroke": "rgb(38, 38, 38)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 1320×820 light: 线稿动画在跑",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(38, 38, 38)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
         "external": 0,
         "inRestore": false,
         "hover": "all"
@@ -758,8 +990,8 @@
       "pass": true,
       "detail": {
         "float": "none",
-        "eye": "none",
-        "antenna": "none"
+        "shadow": "none",
+        "eye": "none"
       }
     },
     {
@@ -1093,6 +1325,96 @@
       ]
     },
     {
+      "name": "P4 700×600 dark: 真实拖动经过多个档位且 Range 节点不被替换",
+      "pass": true,
+      "detail": {
+        "geometry": {
+          "from": {
+            "x": 272.75,
+            "y": 440.96875
+          },
+          "to": {
+            "x": 578.25,
+            "y": 440.96875
+          },
+          "rect": [
+            223,
+            426.96875,
+            621,
+            454.96875
+          ],
+          "vw": 700,
+          "vh": 600
+        },
+        "previews": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "high"
+        ],
+        "sameNode": true,
+        "commandsDuringDrag": 0
+      }
+    },
+    {
+      "name": "P4 700×600 dark: 一次拖动只在释放时提交一次，回读后 high",
+      "pass": true,
+      "detail": {
+        "commands": [
+          "high"
+        ],
+        "on": "high",
+        "state": "high",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
+      "name": "P4 700×600 dark: 失败回读后恢复 off，且只提交一次",
+      "pass": true,
+      "detail": {
+        "dragFail": {
+          "geometry": {
+            "from": {
+              "x": 272.75,
+              "y": 440.96875
+            },
+            "to": {
+              "x": 578.25,
+              "y": 440.96875
+            },
+            "rect": [
+              223,
+              426.96875,
+              621,
+              454.96875
+            ],
+            "vw": 700,
+            "vh": 600
+          },
+          "previews": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "high"
+          ],
+          "sameNode": true,
+          "commandsDuringDrag": 0
+        },
+        "failFinal": {
+          "commands": [
+            "high"
+          ],
+          "on": "off",
+          "state": "off",
+          "disabled": false,
+          "inside": true
+        }
+      }
+    },
+    {
       "name": "P3 700×600 dark: 欢迎页吉祥物 100×100 且只在 ready 态",
       "pass": true,
       "detail": {
@@ -1104,13 +1426,16 @@
         "anim": "mascot-float",
         "duration": "4.8s",
         "stroke": "rgb(238, 238, 238)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
         "external": 0,
         "inRestore": false,
         "hover": "all"
       }
     },
     {
-      "name": "P3 700×600 dark: 线稿动画在跑、无外链资源",
+      "name": "P3 700×600 dark: 云朵轮廓、两只脚、两只眼且无外链",
       "pass": true,
       "detail": {
         "rect": [
@@ -1121,6 +1446,29 @@
         "anim": "mascot-float",
         "duration": "4.8s",
         "stroke": "rgb(238, 238, 238)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 700×600 dark: 线稿动画在跑",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(238, 238, 238)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
         "external": 0,
         "inRestore": false,
         "hover": "all"
@@ -1131,8 +1479,8 @@
       "pass": true,
       "detail": {
         "float": "none",
-        "eye": "none",
-        "antenna": "none"
+        "shadow": "none",
+        "eye": "none"
       }
     },
     {
@@ -1466,6 +1814,96 @@
       ]
     },
     {
+      "name": "P4 700×600 light: 真实拖动经过多个档位且 Range 节点不被替换",
+      "pass": true,
+      "detail": {
+        "geometry": {
+          "from": {
+            "x": 272.75,
+            "y": 440.96875
+          },
+          "to": {
+            "x": 578.25,
+            "y": 440.96875
+          },
+          "rect": [
+            223,
+            426.96875,
+            621,
+            454.96875
+          ],
+          "vw": 700,
+          "vh": 600
+        },
+        "previews": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "high"
+        ],
+        "sameNode": true,
+        "commandsDuringDrag": 0
+      }
+    },
+    {
+      "name": "P4 700×600 light: 一次拖动只在释放时提交一次，回读后 high",
+      "pass": true,
+      "detail": {
+        "commands": [
+          "high"
+        ],
+        "on": "high",
+        "state": "high",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
+      "name": "P4 700×600 light: 失败回读后恢复 off，且只提交一次",
+      "pass": true,
+      "detail": {
+        "dragFail": {
+          "geometry": {
+            "from": {
+              "x": 272.75,
+              "y": 440.96875
+            },
+            "to": {
+              "x": 578.25,
+              "y": 440.96875
+            },
+            "rect": [
+              223,
+              426.96875,
+              621,
+              454.96875
+            ],
+            "vw": 700,
+            "vh": 600
+          },
+          "previews": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "high"
+          ],
+          "sameNode": true,
+          "commandsDuringDrag": 0
+        },
+        "failFinal": {
+          "commands": [
+            "high"
+          ],
+          "on": "off",
+          "state": "off",
+          "disabled": false,
+          "inside": true
+        }
+      }
+    },
+    {
       "name": "P3 700×600 light: 欢迎页吉祥物 100×100 且只在 ready 态",
       "pass": true,
       "detail": {
@@ -1477,13 +1915,16 @@
         "anim": "mascot-float",
         "duration": "4.8s",
         "stroke": "rgb(38, 38, 38)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
         "external": 0,
         "inRestore": false,
         "hover": "all"
       }
     },
     {
-      "name": "P3 700×600 light: 线稿动画在跑、无外链资源",
+      "name": "P3 700×600 light: 云朵轮廓、两只脚、两只眼且无外链",
       "pass": true,
       "detail": {
         "rect": [
@@ -1494,6 +1935,29 @@
         "anim": "mascot-float",
         "duration": "4.8s",
         "stroke": "rgb(38, 38, 38)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
+        "external": 0,
+        "inRestore": false,
+        "hover": "all"
+      }
+    },
+    {
+      "name": "P3 700×600 light: 线稿动画在跑",
+      "pass": true,
+      "detail": {
+        "rect": [
+          100,
+          100
+        ],
+        "viewBox": "0 0 100 100",
+        "anim": "mascot-float",
+        "duration": "4.8s",
+        "stroke": "rgb(38, 38, 38)",
+        "cloud": true,
+        "feet": 2,
+        "eyes": 2,
         "external": 0,
         "inRestore": false,
         "hover": "all"
@@ -1504,8 +1968,8 @@
       "pass": true,
       "detail": {
         "float": "none",
-        "eye": "none",
-        "antenna": "none"
+        "shadow": "none",
+        "eye": "none"
       }
     }
   ],
@@ -1595,6 +2059,90 @@
       "title": "最近使用"
     },
     {
+      "scene": "p4-thinking-drag",
+      "width": 1320,
+      "height": 820,
+      "theme": "dark",
+      "geometry": {
+        "from": {
+          "x": 774.75,
+          "y": 660.96875
+        },
+        "to": {
+          "x": 1080.25,
+          "y": 660.96875
+        },
+        "rect": [
+          725,
+          646.96875,
+          1123,
+          674.96875
+        ],
+        "vw": 1320,
+        "vh": 820
+      },
+      "previews": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "high"
+      ],
+      "sameNode": true,
+      "commandsDuringDrag": 0,
+      "final": {
+        "commands": [
+          "high"
+        ],
+        "on": "high",
+        "state": "high",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
+      "scene": "p4-thinking-drag-fail",
+      "width": 1320,
+      "height": 820,
+      "theme": "dark",
+      "geometry": {
+        "from": {
+          "x": 774.75,
+          "y": 660.96875
+        },
+        "to": {
+          "x": 1080.25,
+          "y": 660.96875
+        },
+        "rect": [
+          725,
+          646.96875,
+          1123,
+          674.96875
+        ],
+        "vw": 1320,
+        "vh": 820
+      },
+      "previews": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "high"
+      ],
+      "sameNode": true,
+      "commandsDuringDrag": 0,
+      "final": {
+        "commands": [
+          "high"
+        ],
+        "on": "off",
+        "state": "off",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
       "scene": "p3-mascot",
       "width": 1320,
       "height": 820,
@@ -1607,6 +2155,9 @@
       "anim": "mascot-float",
       "duration": "4.8s",
       "stroke": "rgb(238, 238, 238)",
+      "cloud": true,
+      "feet": 2,
+      "eyes": 2,
       "external": 0,
       "inRestore": false,
       "hover": "all"
@@ -1696,6 +2247,90 @@
       "title": "最近使用"
     },
     {
+      "scene": "p4-thinking-drag",
+      "width": 1320,
+      "height": 820,
+      "theme": "light",
+      "geometry": {
+        "from": {
+          "x": 774.75,
+          "y": 660.96875
+        },
+        "to": {
+          "x": 1080.25,
+          "y": 660.96875
+        },
+        "rect": [
+          725,
+          646.96875,
+          1123,
+          674.96875
+        ],
+        "vw": 1320,
+        "vh": 820
+      },
+      "previews": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "high"
+      ],
+      "sameNode": true,
+      "commandsDuringDrag": 0,
+      "final": {
+        "commands": [
+          "high"
+        ],
+        "on": "high",
+        "state": "high",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
+      "scene": "p4-thinking-drag-fail",
+      "width": 1320,
+      "height": 820,
+      "theme": "light",
+      "geometry": {
+        "from": {
+          "x": 774.75,
+          "y": 660.96875
+        },
+        "to": {
+          "x": 1080.25,
+          "y": 660.96875
+        },
+        "rect": [
+          725,
+          646.96875,
+          1123,
+          674.96875
+        ],
+        "vw": 1320,
+        "vh": 820
+      },
+      "previews": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "high"
+      ],
+      "sameNode": true,
+      "commandsDuringDrag": 0,
+      "final": {
+        "commands": [
+          "high"
+        ],
+        "on": "off",
+        "state": "off",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
       "scene": "p3-mascot",
       "width": 1320,
       "height": 820,
@@ -1708,6 +2343,9 @@
       "anim": "mascot-float",
       "duration": "4.8s",
       "stroke": "rgb(38, 38, 38)",
+      "cloud": true,
+      "feet": 2,
+      "eyes": 2,
       "external": 0,
       "inRestore": false,
       "hover": "all"
@@ -1795,6 +2433,90 @@
       "roving": 1,
       "search": true,
       "title": "最近使用"
+    },
+    {
+      "scene": "p4-thinking-drag",
+      "width": 700,
+      "height": 600,
+      "theme": "dark",
+      "geometry": {
+        "from": {
+          "x": 272.75,
+          "y": 440.96875
+        },
+        "to": {
+          "x": 578.25,
+          "y": 440.96875
+        },
+        "rect": [
+          223,
+          426.96875,
+          621,
+          454.96875
+        ],
+        "vw": 700,
+        "vh": 600
+      },
+      "previews": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "high"
+      ],
+      "sameNode": true,
+      "commandsDuringDrag": 0,
+      "final": {
+        "commands": [
+          "high"
+        ],
+        "on": "high",
+        "state": "high",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
+      "scene": "p4-thinking-drag-fail",
+      "width": 700,
+      "height": 600,
+      "theme": "dark",
+      "geometry": {
+        "from": {
+          "x": 272.75,
+          "y": 440.96875
+        },
+        "to": {
+          "x": 578.25,
+          "y": 440.96875
+        },
+        "rect": [
+          223,
+          426.96875,
+          621,
+          454.96875
+        ],
+        "vw": 700,
+        "vh": 600
+      },
+      "previews": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "high"
+      ],
+      "sameNode": true,
+      "commandsDuringDrag": 0,
+      "final": {
+        "commands": [
+          "high"
+        ],
+        "on": "off",
+        "state": "off",
+        "disabled": false,
+        "inside": true
+      }
     },
     {
       "scene": "p3-mascot",
@@ -1809,6 +2531,9 @@
       "anim": "mascot-float",
       "duration": "4.8s",
       "stroke": "rgb(238, 238, 238)",
+      "cloud": true,
+      "feet": 2,
+      "eyes": 2,
       "external": 0,
       "inRestore": false,
       "hover": "all"
@@ -1898,6 +2623,90 @@
       "title": "最近使用"
     },
     {
+      "scene": "p4-thinking-drag",
+      "width": 700,
+      "height": 600,
+      "theme": "light",
+      "geometry": {
+        "from": {
+          "x": 272.75,
+          "y": 440.96875
+        },
+        "to": {
+          "x": 578.25,
+          "y": 440.96875
+        },
+        "rect": [
+          223,
+          426.96875,
+          621,
+          454.96875
+        ],
+        "vw": 700,
+        "vh": 600
+      },
+      "previews": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "high"
+      ],
+      "sameNode": true,
+      "commandsDuringDrag": 0,
+      "final": {
+        "commands": [
+          "high"
+        ],
+        "on": "high",
+        "state": "high",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
+      "scene": "p4-thinking-drag-fail",
+      "width": 700,
+      "height": 600,
+      "theme": "light",
+      "geometry": {
+        "from": {
+          "x": 272.75,
+          "y": 440.96875
+        },
+        "to": {
+          "x": 578.25,
+          "y": 440.96875
+        },
+        "rect": [
+          223,
+          426.96875,
+          621,
+          454.96875
+        ],
+        "vw": 700,
+        "vh": 600
+      },
+      "previews": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "high"
+      ],
+      "sameNode": true,
+      "commandsDuringDrag": 0,
+      "final": {
+        "commands": [
+          "high"
+        ],
+        "on": "off",
+        "state": "off",
+        "disabled": false,
+        "inside": true
+      }
+    },
+    {
       "scene": "p3-mascot",
       "width": 700,
       "height": 600,
@@ -1910,6 +2719,9 @@
       "anim": "mascot-float",
       "duration": "4.8s",
       "stroke": "rgb(38, 38, 38)",
+      "cloud": true,
+      "feet": 2,
+      "eyes": 2,
       "external": 0,
       "inRestore": false,
       "hover": "all"
@@ -1987,14 +2799,19 @@
       "bytes": 57429
     },
     {
+      "name": "p4-thinking-drag-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-drag-1320x820-dark.png",
+      "bytes": 58258
+    },
+    {
       "name": "p3-welcome-mascot-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-1320x820-dark.png",
-      "bytes": 38511
+      "bytes": 39727
     },
     {
       "name": "p3-welcome-mascot-reduced-1320x820-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-reduced-1320x820-dark.png",
-      "bytes": 38575
+      "bytes": 39377
     },
     {
       "name": "p1-settings-icon-1320x820-light",
@@ -2067,14 +2884,19 @@
       "bytes": 59573
     },
     {
+      "name": "p4-thinking-drag-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-drag-1320x820-light.png",
+      "bytes": 60102
+    },
+    {
       "name": "p3-welcome-mascot-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-1320x820-light.png",
-      "bytes": 39818
+      "bytes": 40191
     },
     {
       "name": "p3-welcome-mascot-reduced-1320x820-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-reduced-1320x820-light.png",
-      "bytes": 39395
+      "bytes": 40014
     },
     {
       "name": "p1-settings-icon-700x600-dark",
@@ -2147,14 +2969,19 @@
       "bytes": 47137
     },
     {
+      "name": "p4-thinking-drag-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-drag-700x600-dark.png",
+      "bytes": 47708
+    },
+    {
       "name": "p3-welcome-mascot-700x600-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-700x600-dark.png",
-      "bytes": 33785
+      "bytes": 34463
     },
     {
       "name": "p3-welcome-mascot-reduced-700x600-dark",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-reduced-700x600-dark.png",
-      "bytes": 33546
+      "bytes": 34169
     },
     {
       "name": "p1-settings-icon-700x600-light",
@@ -2227,14 +3054,19 @@
       "bytes": 48908
     },
     {
+      "name": "p4-thinking-drag-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p4-thinking-drag-700x600-light.png",
+      "bytes": 49399
+    },
+    {
       "name": "p3-welcome-mascot-700x600-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-700x600-light.png",
-      "bytes": 34660
+      "bytes": 35340
     },
     {
       "name": "p3-welcome-mascot-reduced-700x600-light",
       "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-welcome-mascot-reduced-700x600-light.png",
-      "bytes": 34257
+      "bytes": 34798
     }
   ],
   "pageErrors": []
