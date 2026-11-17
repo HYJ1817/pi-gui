@@ -59,6 +59,10 @@ let activeOptions = null;
  * 用户重新打开菜单时从空状态开始。 */
 let menuState = null;
 let activeMenuOptions = null;
+/* 滑动提交后紧接着会重绘（滑杆短暂禁用并显示「同步中…」）。如果用户是用
+ * 键盘/拖动操作的，回读完成后的那次重绘要把焦点还给滑杆，否则下一次方向键
+ * 会落到模型行上。它只影响焦点，不持有任何档位状态。 */
+let focusThinkingSliderOnNextReady = false;
 
 /* 思考档位提交的短锁：读回前禁用滑杆，避免连续点击发出多条 set_thinking_level。
  * 回读到达（currentLevel 变成请求值）或超时后释放。 */
@@ -409,6 +413,8 @@ export function renderModelPicker({
   activeOptions = { model: true };
 
   const wasOpen = Boolean(preserve && !pop.hidden && pop.classList.contains('model-menu'));
+  /* 菜单关闭后重开是新的会话，别把上一次待恢复的滑杆焦点带过来。 */
+  if (!wasOpen) focusThinkingSliderOnNextReady = false;
   const previousFocus = wasOpen ? focusKeyOf(document.activeElement) : null;
   const previousSearch = wasOpen ? pop.querySelector('.ui3-model-search') : null;
   const previousCaret = previousSearch ? previousSearch.selectionStart : null;
@@ -622,9 +628,9 @@ export function renderModelPicker({
       on,
       onClick: () => {
         /* pending 时仍允许点下一个：setModel 自己维护 queuedModelSwitch，
-         * 这是既有行为，选择器不额外把连点变成静默丢弃。 */
+         * 这是既有行为，选择器不额外把连点变成静默丢弃。
+         * 最近使用不在这里写：调用方要等 Pi 回读确认身份一致后才记录。 */
         if (on) return;
-        rememberRecentModel(provider, id);
         onSelect(provider, id);
       },
     });
@@ -733,6 +739,7 @@ export function renderModelPicker({
     thinkSection.appendChild(state);
   }
 
+  let rangeEl = null;
   const sliderLevels = availability.levels;
   if (sliderLevels.length) {
     const selectedIndex = Math.max(0, sliderLevels.indexOf(currentLevel));
@@ -750,26 +757,7 @@ export function renderModelPicker({
     ticks.className = 'model-thinking-ticks';
     ticks.setAttribute('role', 'radiogroup');
     ticks.setAttribute('aria-label', '思考等级');
-
-    for (const level of sliderLevels) {
-      const tick = document.createElement('button');
-      tick.type = 'button';
-      tick.className = 'model-thinking-tick ui3-think-item' + (level === currentLevel ? ' on' : '');
-      tick.dataset.level = level;
-      tick.setAttribute('role', 'radio');
-      tick.setAttribute('aria-checked', String(level === currentLevel));
-      tick.tabIndex = -1;
-      tick.disabled = !canSelectThinking;
-      tick.textContent = level;
-      if (THINK_DESC[level]) tick.title = THINK_DESC[level];
-      tick.onclick = () => {
-        if (!canSelectThinking || level === currentLevel) return;
-        beginThinkingBusy(level);
-        onSelectThinking(level);
-        renderModelPicker({ ...activeMenuOptions, preserve: true, keepBusy: true });
-      };
-      ticks.appendChild(tick);
-    }
+    const tickNodes = new Map();
 
     const range = document.createElement('input');
     range.type = 'range';
@@ -782,12 +770,126 @@ export function renderModelPicker({
     range.setAttribute('aria-label', '思考等级');
     range.setAttribute('aria-valuetext', currentLevel || sliderLevels[selectedIndex] || '');
     markFocusable(range, 'slider');
-    range.addEventListener('input', () => {
-      const level = sliderLevels[Number(range.value)];
-      if (!canSelectThinking || !level || level === currentLevel) return;
+    rangeEl = range;
+
+    const menuLive = () => !pop.hidden && pop.classList.contains('model-menu')
+      && range.isConnected && pop.contains(range);
+
+    /* 拖动中的预览只改视觉：同一份 Range 节点、同一份 tick 节点，不重绘菜单。
+     * 档位是否可提交仍以调用方当前状态为准，预览不会写任何业务状态。 */
+    const paintPreview = (level) => {
+      const index = sliderLevels.indexOf(level);
+      if (index < 0) return;
+      slider.style.setProperty('--thinking-progress', `${(index / sliderLevels.length) * 100}%`);
+      for (const [name, node] of tickNodes) {
+        const on = name === level;
+        node.classList.toggle('on', on);
+        node.setAttribute('aria-checked', String(on));
+      }
+      thinkCurrent.textContent = level;
+      range.setAttribute('aria-valuetext', level);
+    };
+    const restorePreview = () => {
+      const level = currentLevel && sliderLevels.includes(currentLevel)
+        ? currentLevel
+        : sliderLevels[selectedIndex];
+      if (!level) return;
+      range.value = String(sliderLevels.indexOf(level));
+      paintPreview(level);
+    };
+
+    /* 提交瞬间再读一次调用方状态：拖动期间模型被切换、档位被回读、菜单被关闭
+     * 或进入 pending，都不能拿旧闭包里的 canSelectThinking 发 RPC。 */
+    const canCommitNow = (level) => {
+      if (!menuLive() || thinkingBusy) return false;
+      const opts = activeMenuOptions;
+      if (!opts || opts.pending) return false;
+      const now = thinkingAvailability({
+        model: opts.current, levels: opts.levels,
+        pending: opts.pending, readStatus: opts.readStatus,
+      });
+      return now.state === 'ready' && now.levels.includes(level) && level !== opts.currentLevel;
+    };
+
+    const commitLevel = (level, node) => {
+      if (!level || !canCommitNow(level)) {
+        if (menuLive()) restorePreview();
+        return false;
+      }
+      /* 键盘/拖动提交后马上会重绘并短锁；把焦点意图记到回读完成那次。 */
+      if (document.activeElement === range || document.activeElement === node) {
+        focusThinkingSliderOnNextReady = true;
+      }
       beginThinkingBusy(level);
       onSelectThinking(level);
       renderModelPicker({ ...activeMenuOptions, preserve: true, keepBusy: true });
+      return true;
+    };
+
+    for (const level of sliderLevels) {
+      const tick = document.createElement('button');
+      tick.type = 'button';
+      tick.className = 'model-thinking-tick ui3-think-item' + (level === currentLevel ? ' on' : '');
+      tick.dataset.level = level;
+      tick.setAttribute('role', 'radio');
+      tick.setAttribute('aria-checked', String(level === currentLevel));
+      tick.tabIndex = -1;
+      tick.disabled = !canSelectThinking;
+      tick.textContent = level;
+      if (THINK_DESC[level]) tick.title = THINK_DESC[level];
+      tick.onclick = () => commitLevel(level, tick);
+      tickNodes.set(level, tick);
+      ticks.appendChild(tick);
+    }
+
+    /* 拖动期间只走 input 预览；change / pointerup 才是提交时机。一次完整的
+     * 指针拖动只提交一次：pointerup 与随后的 change 用同一个 gesture 标记。 */
+    let pointerGesture = false;
+    let gestureCommitted = false;
+    range.addEventListener('pointerdown', () => {
+      pointerGesture = true;
+      gestureCommitted = false;
+    });
+    /* 键盘操作每次 keydown 都是一次新的意图；原生 range 随后会发 input/change。 */
+    range.addEventListener('keydown', () => {
+      pointerGesture = false;
+      gestureCommitted = false;
+    });
+    range.addEventListener('input', () => {
+      if (!menuLive() || !canSelectThinking) return;
+      const level = sliderLevels[Number(range.value)];
+      if (level) paintPreview(level);
+    });
+    const commitFromRange = () => {
+      if (!menuLive()) return false;
+      return commitLevel(sliderLevels[Number(range.value)], range);
+    };
+    range.addEventListener('change', () => {
+      if (!menuLive()) return;
+      if (pointerGesture) {
+        if (gestureCommitted) return;
+        gestureCommitted = true;
+      }
+      commitFromRange();
+    });
+    range.addEventListener('pointerup', () => {
+      if (!pointerGesture) return;
+      if (!gestureCommitted) {
+        gestureCommitted = true;
+        commitFromRange();
+      }
+      /* 不清 pointerGesture：change 可能晚于 pointerup 到达，不能再提交一次。 */
+    });
+    range.addEventListener('pointercancel', () => {
+      pointerGesture = false;
+      gestureCommitted = true;
+      if (menuLive()) restorePreview();
+    });
+    range.addEventListener('blur', () => {
+      /* 失焦不是提交时机：把预览退回权威档位，等用户重新操作。 */
+      if (pointerGesture && !gestureCommitted && menuLive()) restorePreview();
+      pointerGesture = false;
+      gestureCommitted = true;
     });
 
     railEl.append(thumb, ticks, range);
@@ -809,6 +911,16 @@ export function renderModelPicker({
       if (target === search && Number.isInteger(previousCaret)) {
         try { target.setSelectionRange(previousCaret, previousCaret); } catch { /* range 不支持时忽略 */ }
       }
+    }
+  }
+  /* 提交后的第一次重绘滑杆还是禁用的（等回读），此时保留意图；回读完成、
+   * 滑杆恢复可用后再把焦点还给用户，键盘可以继续用方向键/Home/End。 */
+  if (focusThinkingSliderOnNextReady) {
+    if (rangeEl && canSelectThinking && rangeEl.isConnected) {
+      focusNav(rangeEl);
+      focusThinkingSliderOnNextReady = false;
+    } else if (!wasOpen) {
+      focusThinkingSliderOnNextReady = false;
     }
   }
   if (previousScroll && listWrap) listWrap.scrollTop = previousScroll;

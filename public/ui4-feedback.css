@@ -318,7 +318,7 @@
 }
 .welcome-mark:not([data-icon]) { stroke-width: 1.5; }
 
-/* 空状态吉祥物：原创线稿，仅用 currentColor 适配深浅主题。
+/* 空状态吉祥物：原创云朵线稿，仅用 currentColor 适配深浅主题。
  * 动画只做位移/透明度和眼睛眨动，不响应 hover，也不改变布局。 */
 .welcome-mascot { overflow: visible; pointer-events: none; }
 .welcome-mascot .mascot-line {
@@ -328,16 +328,18 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.welcome-mascot .mascot-antenna-dot { fill: currentColor; stroke: none; }
-.welcome-mascot .mascot-shadow { fill: currentColor; opacity: .16; }
-.welcome-mascot .mascot-float { animation: mascot-float 4.8s ease-in-out infinite; }
-.welcome-mascot .mascot-shadow { animation: mascot-shadow 4.8s ease-in-out infinite; }
 .welcome-mascot .mascot-eye {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.4;
+  stroke-linecap: round;
   transform-box: fill-box;
   transform-origin: center;
   animation: mascot-blink 5.6s ease-in-out infinite;
 }
-.welcome-mascot .mascot-antenna-dot { animation: mascot-antenna 2.4s ease-in-out infinite; }
+.welcome-mascot .mascot-shadow { fill: currentColor; opacity: .16; }
+.welcome-mascot .mascot-float { animation: mascot-float 4.8s ease-in-out infinite; }
+.welcome-mascot .mascot-shadow { animation: mascot-shadow 4.8s ease-in-out infinite; }
 
 @keyframes mascot-float {
   0%, 100% { transform: translateY(0); }
@@ -351,16 +353,11 @@
   0%, 92%, 100% { transform: scaleY(1); }
   95% { transform: scaleY(.12); }
 }
-@keyframes mascot-antenna {
-  0%, 100% { opacity: .45; }
-  50% { opacity: 1; }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .welcome-mascot .mascot-float,
   .welcome-mascot .mascot-shadow,
-  .welcome-mascot .mascot-eye,
-  .welcome-mascot .mascot-antenna-dot { animation: none; }
+  .welcome-mascot .mascot-eye { animation: none; }
   .welcome-mascot .mascot-eye { transform: none; }
 }
 

@@ -1,8 +1,12 @@
 /* 本轮生成速度（TPS）的计时账本。
  *
  * 口径（与上游 PI-Desktop v0.22.0 一致）：
- *   TPS = 本轮所有 assistant 响应的 usage.output 之和
- *         / 这些响应各自的「开始 → message_end」时长之和
+ *   TPS = Σ(有效响应的 usage.output)
+ *         / Σ(这些有效响应各自的「开始 → message_end」时长)
+ *
+ * **逐条响应配对**：只有同一条响应同时拿到有效 output 与有效响应时长时，
+ * 才把它计入分子和分母。不能把 A 的输出配 B 的时长 —— 部分响应缺开始时间
+ * 或 usage 时，分别求和会让 TPS 系统性失真。
  *
  * 只统计模型真正在产出的时间：message_start 到 message_end 的区间，
  * 工具执行、等待审批、下一轮请求前的空档都不计入。**不能**拿
@@ -10,8 +14,8 @@
  * 里面包含工具时间，算出来会系统性偏低。
  *
  * 没有证据就不猜：
- *   - 没有 message_start（拿不到起点）→ 该响应不计时长；
- *   - usage.output 缺失或为 0 → 不拿 0 当分子；
+ *   - 没有 message_start（拿不到起点）→ 该响应不计入 TPS；
+ *   - usage.output 缺失或为 0 → 该响应不计入 TPS；
  *   - 只有被打断（stopReason=aborted）且没有最终 usage 时，才按可见文本
  *     估算输出，并标 estimated，界面显示「≈」；
  *   - 历史消息没有实时计时，重建时不会调用这里，因此不会凭空生成 TPS。
@@ -41,6 +45,8 @@ function newTurn() {
     sessionId: currentSessionId(),
     outputTokens: 0,
     durationMs: 0,
+    validResponses: 0,
+    attempts: 0,
     estimated: false,
     active: null,
     generating: false,
@@ -121,6 +127,7 @@ export function noteAssistantEnd(evt, at = monotonicNow()) {
   const duration = Number.isFinite(startedAt) && at > startedAt ? at - startedAt : null;
   t.active = null;
   t.generating = false;
+  t.attempts += 1;
 
   let output = positiveOutput(message.usage);
   let estimated = false;
@@ -132,10 +139,13 @@ export function noteAssistantEnd(evt, at = monotonicNow()) {
     }
   }
 
-  /* 时长与输出分别累加：上游的聚合口径也是这样。缺一项的响应仍然给
-   * 另一项贡献数据，但最终 TPS 只有两项都有值时才计算。 */
-  if (duration != null) t.durationMs += duration;
-  if (output != null) t.outputTokens += output;
+  /* 逐条响应结算：只有这条响应同时具备有效输出与有效时长，才成对进入
+   * 分子和分母。缺任何一项都整条丢弃 —— 不能拿 A 的输出配 B 的时长，
+   * 也不能用 0 补齐。工具等待不在这段区间里，因此天然不计入。 */
+  if (duration == null || output == null) return throughputSnapshot();
+  t.durationMs += duration;
+  t.outputTokens += output;
+  t.validResponses += 1;
   if (estimated) t.estimated = true;
   return throughputSnapshot();
 }
@@ -153,8 +163,9 @@ export function settleThroughputTurn() {
 export function throughputSnapshot() {
   if (!turn) {
     return {
-      status: 'none', generating: false, outputTokens: null,
-      durationMs: null, tokensPerSecond: null, estimated: false,
+      status: 'none', generating: false, hasTurn: false, attempts: 0,
+      validResponses: 0, outputTokens: null, durationMs: null,
+      tokensPerSecond: null, estimated: false,
     };
   }
   const outputTokens = turn.outputTokens > 0 ? turn.outputTokens : null;
@@ -165,6 +176,9 @@ export function throughputSnapshot() {
   return {
     status: turn.generating ? 'generating' : tokensPerSecond != null ? 'ready' : 'none',
     generating: Boolean(turn.generating),
+    hasTurn: true,
+    attempts: turn.attempts,
+    validResponses: turn.validResponses,
     outputTokens,
     durationMs,
     tokensPerSecond,

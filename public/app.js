@@ -18,7 +18,7 @@ import { initSettingsSurface } from './ui/settings-surface.js';
 
 import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
-import { renderModelPicker } from './ui3-model-picker.js';
+import { renderModelPicker, rememberRecentModel } from './ui3-model-picker.js';
 import { createInlineCommandMenu } from './ui/inline-command-menu.js';
 import { mountWorkPanelLauncher } from './ui/work-panel-launcher.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
@@ -917,7 +917,15 @@ function modelPickerOptions(overrides = {}) {
     levels: S.thinkingLevels,
     currentLevel: S.state?.thinkingLevel || null,
     readStatus: S.thinkingReadStatus,
-    onSelect: (provider, modelId) => setModel(provider, modelId),
+    /* 先走既有 setModel；只有 Pi 回读确认 provider + modelId 与目标完全一致
+     * （setModel 的 completion 才 resolve true）后才写入最近使用。失败、超时、
+     * 被后一次选择顶掉时 completion 为 false，不写。 */
+    onSelect: (provider, modelId) => {
+      const switched = setModel(provider, modelId);
+      Promise.resolve(switched).then((ok) => {
+        if (ok === true) rememberRecentModel(provider, modelId);
+      });
+    },
     onSelectThinking: (level) => setThinkingLevel(level),
     /* 齿轮走既有的「模型供应商」设置页，不新建第二套配置入口。 */
     onOpenSettings: () => $('navProviders').click(),

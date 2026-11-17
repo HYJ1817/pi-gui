@@ -626,21 +626,38 @@ function throughputDisplay(lt, snapshot) {
   if (snapshot.generating) {
     return { value: '生成中…', title: '本轮仍在生成，结束后显示实测速度' };
   }
-  const output = lt?.responseOutputTokens ?? snapshot.outputTokens;
-  const duration = lt?.responseDurationMs ?? snapshot.durationMs;
-  const estimated = Boolean(lt?.responseOutputEstimated ?? snapshot.estimated);
-  const hasOutput = typeof output === 'number' && Number.isFinite(output) && output > 0;
-  const hasDuration = typeof duration === 'number' && Number.isFinite(duration) && duration > 0;
+  /* 本轮速度以 throughputSnapshot 为准：它按「响应」逐条配对输出与时长，
+   * 不要求 lastTurn 存在（中断响应没有最终 usage 时不会有 lastTurn）。
+   * 只有当前轮账本完全为空时，才退回 lastTurn 的兼容字段；两组数据不交叉
+   * 取值，避免出现「A 的输出配 B 的时长」。 */
+  let source;
+  if (snapshot.status === 'ready') {
+    source = {
+      output: snapshot.outputTokens,
+      duration: snapshot.durationMs,
+      estimated: snapshot.estimated,
+    };
+  } else if (lt && (lt.responseOutputTokens != null || lt.responseDurationMs != null)) {
+    source = {
+      output: lt.responseOutputTokens,
+      duration: lt.responseDurationMs,
+      estimated: Boolean(lt.responseOutputEstimated),
+    };
+  } else {
+    source = { output: null, duration: null, estimated: false };
+  }
+  const hasOutput = typeof source.output === 'number' && Number.isFinite(source.output) && source.output > 0;
+  const hasDuration = typeof source.duration === 'number' && Number.isFinite(source.duration) && source.duration > 0;
   if (!hasOutput || !hasDuration) {
     return { value: '—', title: '缺少本轮输出 Token 或响应时间' };
   }
-  const rate = Math.round(output / (duration / 1000));
+  const rate = Math.round(source.output / (source.duration / 1000));
   if (!(rate > 0)) return { value: '—', title: '缺少本轮输出 Token 或响应时间' };
   return {
-    value: `${estimated ? '≈ ' : ''}${rate} tokens/s`,
-    title: estimated
-      ? `按可见文本估算的输出 ${fmt(output)} token / 实测 ${(duration / 1000).toFixed(1)} 秒`
-      : `本轮输出 ${fmt(output)} token / 响应 ${(duration / 1000).toFixed(1)} 秒`,
+    value: `${source.estimated ? '≈ ' : ''}${rate} tokens/s`,
+    title: source.estimated
+      ? `按可见文本估算的输出 ${fmt(source.output)} token / 实测 ${(source.duration / 1000).toFixed(1)} 秒`
+      : `本轮输出 ${fmt(source.output)} token / 响应 ${(source.duration / 1000).toFixed(1)} 秒`,
   };
 }
 
@@ -717,7 +734,11 @@ export function openCtxTip() {
   // 3. 本轮 Turn 用量 (Last Turn Usage)
   const lt = S.localUsage?.lastTurn;
   const throughput = throughputSnapshot();
-  if (throughput.generating || (lt && (lt.inputTokens != null || lt.outputTokens != null))) {
+  /* attempts 表示本轮已经结束过 assistant 响应。即使没有 lastTurn（中断且
+   * 没有最终 usage），也要把「生成速度 —」显示出来；不为显示 TPS 伪造 usage。
+   * 换会话/工作区/模型后 resetThroughput 会把 attempts 清零，页面不会残留。 */
+  if (throughput.generating || throughput.attempts > 0
+    || (lt && (lt.inputTokens != null || lt.outputTokens != null))) {
     const turnSec = document.createElement('div');
     turnSec.className = 'tip-extra';
 
