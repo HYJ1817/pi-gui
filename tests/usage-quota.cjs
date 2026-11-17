@@ -561,6 +561,10 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
   check('usage.js 注册了渲染钩子（state.js 不 import usage.js，避免成环）', typeof setUsageRenderHook === 'function');
 
   // 11.1 0 与 null
+  /* 统计直接赋值没有请求身份；给一个完整模型身份，容量才允许从统计回退
+   * （新规则：providerId + modelId 完整且相等）。这里验证的是 0 的渲染。 */
+  S.state = { ...(S.state || {}), model: { providerId: 'deepseek', modelId: 'deepseek-v4-flash' } };
+  S.models = [];
   usage.applyStats({ sessionId: 's1', tokens: { input: null, output: 10, cacheRead: 0 }, cost: 0, contextUsage: { tokens: 0, contextWindow: 1000, percent: 0 } });
   check('null 输入显示「—」，真实 0 显示 0：null → —', $('uTok').textContent.startsWith('—'));
   check('null 输入 + 真实输出：— / 10', $('uTok').textContent === '— / 10');
@@ -911,6 +915,84 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
     S.quotaLoading = false;
     S.currentProviderId = 'deepseek';
     S.remoteQuota = null;
+  }
+
+  // 11.10 容量回退：只有完整且相等的 providerId + modelId 才允许
+  {
+    console.log('=== 11.10 容量回退只认完整且相等的模型身份 ===');
+    const statsWithCapacity = (seq, identity, contextWindow = 200000) => {
+      usage.applyStats(
+        { sessionId: 'identity-session', tokens: { input: 60000, output: 18990 },
+          contextUsage: { tokens: 78990, contextWindow, percent: 39.495 } },
+        { seq, identity, workspace: S.workspaceGeneration, sessionId: 'identity-session' }
+      );
+    };
+    const setCurrent = (model) => {
+      /* 模型列表为空、模型自身不带 contextWindow：强制走 session-stats 回退路径。 */
+      S.models = [];
+      S.state = { ...(S.state || {}), sessionId: 'identity-session', model };
+      S.currentProviderId = model.providerId || null;
+      S.modelSwitchPending = false;
+      S.hasProject = false;
+      S.bridgeState = 'ready';
+      S.stats = null;
+      usage.renderUsageState();
+    };
+    let seq = 100;
+
+    // 1. 两边都缺 providerId、modelId 不同：不能因为「都不完整」就放行
+    setCurrent({ modelId: 'model-b', name: 'Model B' });
+    statsWithCapacity(++seq, { providerId: '', modelId: 'model-a' });
+    let view = usage.contextUsage();
+    check('不完整身份：两边缺 providerId、modelId 不同 → 容量未知',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 未知');
+
+    // 2. 两边都缺 providerId、modelId 相同：仍无法确认是同一个模型
+    setCurrent({ modelId: 'model-a', name: 'Model A' });
+    statsWithCapacity(++seq, { providerId: '', modelId: 'model-a' });
+    view = usage.contextUsage();
+    check('不完整身份：两边缺 providerId、modelId 相同 → 容量未知',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 未知');
+
+    // 3. 两边都缺 modelId：providerId 相同也不能回退
+    setCurrent({ providerId: 'deepseek', name: 'No Model Id' });
+    statsWithCapacity(++seq, { providerId: 'deepseek', modelId: '' });
+    view = usage.contextUsage();
+    check('不完整身份：两边缺 modelId → 容量未知',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uPct').textContent === '—'
+      && $('btnCtx').getAttribute('aria-label') === '上下文占用：容量未知');
+
+    // 4. 两边都没有任何身份信息
+    setCurrent({ name: 'Anonymous' });
+    statsWithCapacity(++seq, { providerId: '', modelId: '' });
+    view = usage.contextUsage();
+    check('不完整身份：两边都没有身份信息 → 容量未知',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 未知');
+
+    // 5. 完整身份相同：统计容量仍可作为回退证据
+    const proIdentity = { providerId: 'deepseek', modelId: 'deepseek-v4-pro' };
+    setCurrent({ ...proIdentity, name: 'DeepSeek V4 Pro' });
+    statsWithCapacity(++seq, { ...proIdentity }, 1000000);
+    view = usage.contextUsage();
+    check('完整身份相同：允许使用统计中的容量',
+      view.limit === 1000000 && view.source === 'session-stats' && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 1M');
+
+    // 6. 完整身份不同：旧统计的容量不得沿用
+    setCurrent({ providerId: 'deepseek', modelId: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' });
+    statsWithCapacity(++seq, { ...proIdentity }, 1000000);
+    view = usage.contextUsage();
+    check('完整身份不同：拒绝旧统计容量',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 未知');
+
+    S.stats = null;
+    S.models = [];
+    S.modelSwitchPending = false;
   }
 
   // 11.7 恶意币种/金额字符串：只当文本
