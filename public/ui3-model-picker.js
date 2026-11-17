@@ -1,41 +1,36 @@
-/* UI-3B：模型选择器与 Thinking 等级选择器的**视图层**。
+/* UI-3B：模型与思考的统一选择器（视图层）。
  *
  * ---------- 它是什么 ----------
  *
- * 一个把「调用方状态里已经存在的模型事实」排版成 DOM 的纯视图。它不持有模型状态、
- * 不缓存、不发任何 RPC —— 选择动作经注入的 onSelect 交回调用方，由既有的
- * setModel(provider, modelId) / setThinkingLevel(level) 执行。所以这里不存在第二份
- * 业务状态，也不存在第二个模型注册表。
+ * 一个把「调用方状态里已经存在的模型/档位事实」排版成 DOM 的纯视图。它不持有
+ * 模型状态、不缓存业务事实、不发任何 RPC —— 选择动作经注入的 onSelect /
+ * onSelectThinking 交回调用方，由既有的 setModel(provider, modelId) /
+ * setThinkingLevel(level) 执行。所以这里不存在第二份业务状态，也不存在第二个
+ * 模型注册表。
  *
  * ---------- 它复用什么 ----------
  *
  * 弹层外壳、位置管理与关闭行为全部来自 ui/popover.js：同一个 pop 单例、同一个
  * openPop/closePop，本模块不新建全局弹层。条目结构沿用 popItem 的类名契约
- * （.pop-item / .pi-text / .pi-sub / .pi-check）与既有 Provider 折叠契约
- * （.pop-model-group[data-provider] > .pop-provider + .pop-provider-models），
- * 所以既有样式和既有断言继续成立；本模块只在其上追加 ui3-* 类做增量表现。
+ * （.pop-item / .pi-text / .pi-sub / .pi-check），能力数据来自
+ * model-capabilities.js，档位来自 thinking-availability.js 与 Pi 的
+ * get_available_thinking_levels。
  *
- * ---------- 它比原内联实现多做什么 ----------
+ * ---------- 交互边界 ----------
  *
- *   1. 键盘导航：↑↓ 在可见项之间移动、Home/End 跳首末、←→ 折叠/展开 Provider，
- *      配 roving tabindex。原实现里 400+ 个模型每一项都是 Tab 停靠点，键盘基本没法用。
- *   2. Thinking 的四种「不可用」各有各的说法（同步中 / 不支持推理 / 推理能力未知 /
- *      Pi 未提供档位）。原实现把这四种都压成一句 toast，用户分不清是哪种。
- *   3. 能力摘要的三值呈现：unknown 渲染成中性的「能力未知」，既不是空白也不是
- *      「不支持」。
- *
- * ---------- 它刻意不做什么 ----------
- *
- *   - 不按模型名或供应商猜能力（无硬编码模型库）。
- *   - 不在 reasoning=false 时推翻 Pi 给出的档位：Pi 的实时清单优先于静态能力位，
- *     见 docs/model-capabilities.md「Pi 若给出了多个等级，以该列表为准」。
- *   - 不做乐观选择：点选后界面仍显示调用方传入的当前值，直到回读把它改掉。
- *     所以「设置失败后保留虚假的乐观选择」在结构上不可能发生。
- *   - 不从自己的 DOM 文本反推状态（原实现对 modelText/thinkText 有这种回退读法，
- *     视图模块读自己画出来的字当输入，等于把渲染结果变成事实源）。
+ *   - 左侧是「最近使用 + 已配置供应商」栏，右侧是当前来源的模型列表；
+ *     顶部搜索跨全部供应商，底部是等宽分段推理滑杆。
+ *   - 选择模型后菜单不关闭：等 Pi 回读确认，再刷新当前勾选与底部档位。
+ *     所有写操作仍由调用方的既有 RPC 路径完成，视图不做乐观选择。
+ *   - 推理滑杆的档位完全由 Pi 返回的列表决定；不硬编码 off..max。
+ *   - 档位不可用时仍画出来但不可提交，原因来自 thinking-availability。
+ *   - 能力三值：未知显示「能力未知」，不画成不支持。
+ *   - 最近使用只记 providerId + modelId，存 localStorage；模型清单本身仍以
+ *     S.models 为唯一来源，不在本地保存模型元数据。
  */
 
 import { pop, openPop, closePop, currentAnchor, popTitle, popItem } from './ui/popover.js';
+import { createIcon } from './ui/icons.js';
 import { modelIdentity, modelCapability, modelCapabilitySummary } from './model-capabilities.js';
 import { thinkingAvailability as sharedThinkingAvailability } from './thinking-availability.js';
 
@@ -52,11 +47,102 @@ export const THINK_DESC = {
 };
 
 const PROVIDER_FALLBACK = '默认';
+const RECENT_KEY = 'pi-gui.recent-models.v1';
+const RECENT_LIMIT = 6;
 
 /* 当前渲染的折叠记忆与弹层模式。pop 是单例，所以这里也只需要一份。
  * expanded 由调用方持有（跨次打开的记忆），本模块只在原地增删，不复制。 */
 let activeExpanded = null;
 let activeOptions = null;
+
+/* 统一菜单的重绘状态。只有 preserve 重绘（模型/档位回读刷新）会读它，
+ * 用户重新打开菜单时从空状态开始。 */
+let menuState = null;
+let activeMenuOptions = null;
+/* 滑动提交后紧接着会重绘（滑杆短暂禁用并显示「同步中…」）。如果用户是用
+ * 键盘/拖动操作的，回读完成后的那次重绘要把焦点还给滑杆，否则下一次方向键
+ * 会落到模型行上。它只影响焦点，不持有任何档位状态。 */
+let focusThinkingSliderOnNextReady = false;
+
+/* 思考档位提交的短锁：读回前禁用滑杆，避免连续点击发出多条 set_thinking_level。
+ * 回读到达（currentLevel 变成请求值）或超时后释放。 */
+let thinkingBusy = false;
+let thinkingRequestedLevel = null;
+let thinkingTimer = null;
+
+/* ---------- 最近使用（只有身份，没有模型元数据） ---------- */
+
+function modelStore() {
+  try {
+    return globalThis.window?.localStorage || globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+export function readRecentModelIdentities(store = modelStore()) {
+  try {
+    const raw = store?.getItem(RECENT_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    const out = [];
+    const seen = new Set();
+    for (const item of list) {
+      const providerId = typeof item?.providerId === 'string' ? item.providerId.trim() : '';
+      const modelId = typeof item?.modelId === 'string' ? item.modelId.trim() : '';
+      if (!providerId || !modelId) continue;
+      const key = providerId + '\u0000' + modelId;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ providerId, modelId });
+      if (out.length >= RECENT_LIMIT) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export function rememberRecentModel(providerId, modelId, store = modelStore()) {
+  if (!providerId || !modelId) return;
+  try {
+    const next = [
+      { providerId, modelId },
+      ...readRecentModelIdentities(store).filter((item) => item.providerId !== providerId || item.modelId !== modelId),
+    ].slice(0, RECENT_LIMIT);
+    store?.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    /* 隐私模式 / 存储被禁用：最近使用降级为空，不影响选择模型。 */
+  }
+}
+
+function modelKey(providerId, modelId) {
+  return providerId + '\u0000' + modelId;
+}
+
+function recentModelsFor(models, current) {
+  const byKey = new Map();
+  for (const model of models) {
+    const { providerId, modelId } = modelIdentity(model);
+    if (providerId && modelId) byKey.set(modelKey(providerId, modelId), model);
+  }
+  const out = [];
+  const seen = new Set();
+  const add = (providerId, modelId) => {
+    if (!providerId || !modelId) return;
+    const key = modelKey(providerId, modelId);
+    if (seen.has(key)) return;
+    const model = byKey.get(key);
+    if (!model) return;
+    seen.add(key);
+    out.push(model);
+  };
+  const currentIdentity = modelIdentity(current);
+  add(currentIdentity.providerId, currentIdentity.modelId);
+  for (const item of readRecentModelIdentities()) add(item.providerId, item.modelId);
+  return out.slice(0, RECENT_LIMIT);
+}
 
 /* ---------- 纯函数：三值能力 ---------- */
 
@@ -108,9 +194,9 @@ export function thinkingAvailability(input = {}) {
 /* ---------- 键盘导航 ---------- */
 
 /* 可见且可操作的节点：跳掉折叠起来的那几组，也跳掉 disabled 的。
- * closest('[hidden]') 对条目能找到收起的 .pop-provider-models，对组头返回 null。 */
+ * closest('[hidden]') 对条目能找到收起的容器，对独立按钮返回 null。 */
 function navigables() {
-  return [...pop.querySelectorAll('.pop-provider, .pop-item')]
+  return [...new Set(pop.querySelectorAll('.model-rail-item, .ui3-model-item, .pop-provider, .pop-item'))]
     .filter((node) => !node.disabled && !node.closest('[hidden]'));
 }
 
@@ -132,8 +218,7 @@ function syncRoving() {
   for (const node of list) node.tabIndex = node === active ? 0 : -1;
 }
 
-/* 展开/收起一组 Provider。折叠状态是纯 DOM + 调用方那个 Set，不重画整个列表 ——
- * 重画会把 400 个条目重建一遍，还会把焦点丢掉。 */
+/* 展开/收起一组 Provider（保留给旧的 renderThinkingPicker / 兼容路径）。 */
 function toggleProvider(header, force) {
   const group = header.closest('.pop-model-group');
   const container = group?.querySelector('.pop-provider-models');
@@ -162,7 +247,7 @@ function reposition() {
 }
 
 pop.addEventListener('keydown', (event) => {
-  const node = event.target?.closest?.('.pop-provider, .pop-item');
+  const node = event.target?.closest?.('.model-rail-item, .ui3-model-item, .pop-provider, .pop-item');
   if (!node || !pop.contains(node)) return;
   const list = navigables();
   const index = list.indexOf(node);
@@ -175,6 +260,18 @@ pop.addEventListener('keydown', (event) => {
   if (event.key === 'ArrowUp') return move(index - 1);
   if (event.key === 'Home') return move(0);
   if (event.key === 'End') return move(list.length - 1);
+  if (event.key === 'ArrowLeft' && node.classList.contains('ui3-model-item')) {
+    event.preventDefault();
+    const rail = pop.querySelector('.model-rail-item.on') || pop.querySelector('.model-rail-item');
+    if (rail) focusNav(rail);
+    return;
+  }
+  if (event.key === 'ArrowRight' && node.classList.contains('model-rail-item')) {
+    event.preventDefault();
+    const row = pop.querySelector('.ui3-model-item:not(:disabled)');
+    if (row) focusNav(row);
+    return;
+  }
   if (event.key === 'ArrowRight' && node.classList.contains('pop-provider')) {
     event.preventDefault();
     return toggleProvider(node, true);
@@ -187,6 +284,20 @@ pop.addEventListener('keydown', (event) => {
    * 免得手动派发 click 把「回调只触发一次」变成两次。 */
 });
 
+/* Escape 在搜索框有内容时先清搜索，再交给外壳关闭浮层。
+ * 只注册一次：重复注册会在每次回读重绘后叠加监听器。 */
+pop.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !pop.classList.contains('model-menu')) return;
+  const field = pop.querySelector('.ui3-model-search');
+  if (!field?.value) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  field.value = '';
+  menuState = { ...(menuState || {}), query: '', caret: 0 };
+  const view = renderModelPicker({ ...activeMenuOptions, preserve: true });
+  view?.search?.focus();
+}, true);
+
 /* ---------- Chip 状态 ---------- */
 
 /* 给 Chip 挂一个可供 CSS 选择的状态值。Chip 的文案与 disabled 仍由 composer.js 的
@@ -198,7 +309,7 @@ export function applyChipState(button, state) {
   else delete button.dataset.ui3State;
 }
 
-/* ---------- 模型选择器 ---------- */
+/* ---------- 模型 + 思考统一菜单 ---------- */
 
 function groupByProvider(models) {
   const groups = new Map();
@@ -210,210 +321,614 @@ function groupByProvider(models) {
   return groups;
 }
 
-/* 清掉已经消失的 Provider 的折叠记忆，否则它下次出现时会带着上一次的展开态回来。
- * 与既有实现同语义（smoke「消失后重新出现的非当前 Provider 恢复默认收起」）。 */
-function pruneExpanded(expanded, groups) {
-  if (!expanded) return;
-  for (const provider of [...expanded]) {
-    if (!groups.has(provider)) expanded.delete(provider);
-  }
+function focusKeyOf(node) {
+  if (!node) return null;
+  if (node.dataset?.menuKey) return node.dataset.menuKey;
+  return null;
 }
 
-function modelItem({ model, on, onPick, capabilitySummary }) {
+function markFocusable(node, key) {
+  node.dataset.menuKey = key;
+  return node;
+}
+
+function sectionExists(section, recentCount, groups) {
+  if (section === 'recent') return recentCount > 0;
+  if (typeof section === 'string' && section.startsWith('provider:')) {
+    return groups.has(section.slice('provider:'.length));
+  }
+  return false;
+}
+
+function matchesQuery(model, query) {
+  if (!query) return true;
   const { providerId, modelId } = modelIdentity(model);
-  const id = modelId || model?.name || '';
-  const provider = providerId || PROVIDER_FALLBACK;
-  const summary = capabilitySummary(model);
-  const facts = capabilityFacts(model);
-  /* 一条明确证据都没有时，说「能力未知」；有证据就照实列出，未知项不列。 */
-  const unknown = !summary.text && !facts.anyKnown;
-  const item = popItem({
-    label: model?.name || id,
-    sub: unknown ? '能力未知' : summary.text,
-    on,
-    onClick: onPick,
-  });
-  item.classList.add('ui3-model-item');
-  item.dataset.provider = provider;
-  item.dataset.modelId = id;
-  item.dataset.reasoning = facts.rows.find((r) => r.key === 'reasoning')?.state || 'unknown';
-  if (unknown) item.querySelector('.pi-sub')?.classList.add('ui3-cap-unknown');
-  /* 完整能力（含明确不支持项与 Max output）留在 title —— 行内只放正向事实，
-   * 未知绝不在行内显示成不支持（docs/model-capabilities.md）。 */
-  item.title = summary.title || (unknown ? 'Pi 未提供这个模型的能力信息' : '');
-  return item;
+  return `${model?.name || ''}\n${modelId}\n${providerId}`.toLocaleLowerCase().includes(query);
+}
+
+function clearThinkingBusy(refresh = false) {
+  clearTimeout(thinkingTimer);
+  thinkingTimer = null;
+  thinkingBusy = false;
+  thinkingRequestedLevel = null;
+  if (refresh) activeMenuOptions?.onRefresh?.();
+}
+
+function beginThinkingBusy(level) {
+  clearTimeout(thinkingTimer);
+  thinkingBusy = true;
+  thinkingRequestedLevel = level;
+  thinkingTimer = setTimeout(() => {
+    thinkingTimer = null;
+    thinkingBusy = false;
+    thinkingRequestedLevel = null;
+    if (activeMenuOptions?.onRefresh) activeMenuOptions.onRefresh();
+    else if (!pop.hidden && pop.classList.contains('model-menu')) {
+      renderModelPicker({ ...activeMenuOptions, preserve: true });
+    }
+  }, 2600);
 }
 
 /**
- * 把模型列表画进共享弹层并打开。参数全部显式注入，本函数不读任何全局状态。
+ * 把模型与思考画进共享弹层并打开。
+ * 参数全部显式注入，本函数不读任何全局业务状态。
+ *
  * @param {object}   o
  * @param {object[]} o.models           可用模型列表（S.models）
  * @param {object}   o.current          当前模型（S.state.model），原样传入即可
- * @param {Set}      o.expanded         Provider 折叠记忆，原地增删，调用方持有
  * @param {boolean}  o.pending          set_model 是否在途
- * @param {Function} o.onSelect         (providerId, modelId) => void，由调用方执行
- * @param {Function} o.onClose          本视图主动关闭时回调（外部点击/Esc 由外壳负责）
- * @param {Function} [o.capabilitySummary] 摘要函数，默认 modelCapabilitySummary
+ * @param {string[]} o.levels           Pi 返回的思考档位（S.thinkingLevels）
+ * @param {string}   o.currentLevel     当前档位（S.state.thinkingLevel）
+ * @param {string}   o.readStatus       档位读取状态（S.thinkingReadStatus）
+ * @param {Function} o.onSelect         (providerId, modelId) => void
+ * @param {Function} o.onSelectThinking (level) => void
+ * @param {Function} o.onClose          本视图主动关闭时回调
+ * @param {Function} [o.onOpenSettings] 顶部齿轮：打开现有的模型/供应商设置
+ * @param {Function} [o.onRefresh]      请求调用方用最新状态重绘本菜单
+ * @param {Function} [o.capabilitySummary]
  * @param {string}   [o.title]
+ * @param {boolean}  [o.preserve]       回读刷新用；不要由打开入口传 true
  */
 export function renderModelPicker({
   models = [],
   current = null,
   expanded = null,
   pending = false,
+  levels = [],
+  currentLevel = null,
+  readStatus = 'success',
   onSelect = () => {},
+  onSelectThinking = () => {},
   onClose = () => {},
+  onOpenSettings = null,
+  onRefresh = null,
   capabilitySummary = modelCapabilitySummary,
-  title = '选择模型',
+  title = '模型与思考',
+  preserve = false,
+  /* 只由本模块点击档位后的那次自绘传入：提交已发出、回读未到，短锁要继续；
+   * 任何外部刷新（回读/失败纠正）都应立即解锁，不能让失败把滑杆锁 2.6 秒。 */
+  keepBusy = false,
 } = {}) {
   activeExpanded = expanded;
   activeOptions = { model: true };
 
-  const { providerId: currentProvider, modelId: currentId } = modelIdentity(current);
-  const groups = groupByProvider(models);
-  pruneExpanded(expanded, groups);
+  const wasOpen = Boolean(preserve && !pop.hidden && pop.classList.contains('model-menu'));
+  /* 菜单关闭后重开是新的会话，别把上一次待恢复的滑杆焦点带过来。 */
+  if (!wasOpen) focusThinkingSliderOnNextReady = false;
+  const previousFocus = wasOpen ? focusKeyOf(document.activeElement) : null;
+  const previousSearch = wasOpen ? pop.querySelector('.ui3-model-search') : null;
+  const previousCaret = previousSearch ? previousSearch.selectionStart : null;
+  const previousScroll = wasOpen ? (pop.querySelector('.model-pane-list')?.scrollTop || 0) : 0;
+  const previousQuery = previousSearch ? previousSearch.value : '';
+  const previousSection = wasOpen ? menuState?.section : null;
 
-  pop.innerHTML = '';
-  pop.appendChild(popTitle(title));
+  /* 外部刷新（回读成功、失败纠正、模型切换）到达时释放短锁。
+   * 自己点完档位的那次重绘用 keepBusy 留住锁，避免回读前重复提交。 */
+  if (thinkingBusy && !keepBusy) clearThinkingBusy(false);
 
-  /* 当前身份单独一行。条目行显示的是 name，可能看不出到底是哪个 Provider 的哪个 id；
-   * 同名模型分属两个 Provider 时这一行就是唯一能把它们分开的地方。 */
-  const identityLine = document.createElement('div');
-  identityLine.className = 'ui3-current';
-  identityLine.dataset.provider = currentProvider || '';
-  identityLine.dataset.modelId = currentId || '';
-  identityLine.textContent = currentId
-    ? (currentProvider ? `${currentProvider} / ${currentId}` : currentId)
-    : '尚未读到当前模型';
-  if (pending) identityLine.classList.add('ui3-pending');
-  pop.appendChild(identityLine);
-
-  if (!groups.size) {
-    const empty = document.createElement('div');
-    empty.className = 'ui3-empty';
-    empty.textContent = '还没有可用的模型列表';
-    pop.appendChild(empty);
-    openPop(anchorFor('model'), { model: true });
-    syncRoving();
-    return;
-  }
-
-  const search = document.createElement('input');
-  search.className = 'ui3-model-search ds-readable-placeholder'; search.type = 'search';
-  search.placeholder = '搜索模型或供应商…'; search.setAttribute('aria-label', '搜索模型或供应商');
-  pop.appendChild(search);
-  const filterGroups = [];
-
-  const pick = (provider, id) => {
-    closePop({ restoreFocus: true });
-    onClose();
-    onSelect(provider, id);
+  activeMenuOptions = {
+    models, current, pending, levels, currentLevel, readStatus,
+    onSelect, onSelectThinking, onClose, onOpenSettings, onRefresh,
+    capabilitySummary, title,
   };
 
-  let groupIndex = 0;
-  for (const [provider, list] of groups) {
-    const isCurrentGroup = currentProvider
-      ? provider === currentProvider
-      : Boolean(currentId) && list.some((m) => modelIdentity(m).modelId === currentId);
-    /* 当前模型所在组每次打开都强制展开 —— 否则用户上次把它收起过，这次就找不到自己在哪。 */
-    if (isCurrentGroup && expanded) expanded.add(provider);
-    const isExpanded = expanded ? expanded.has(provider) : isCurrentGroup;
+  const list = Array.isArray(models) ? models.filter((model) => modelIdentity(model).modelId) : [];
+  const groups = groupByProvider(list);
+  const providerIds = [...groups.keys()];
+  const recent = recentModelsFor(list, current);
+  const { providerId: currentProvider, modelId: currentId } = modelIdentity(current);
+  const currentKey = currentProvider && currentId ? modelKey(currentProvider, currentId) : '';
 
-    const group = document.createElement('div');
-    group.className = 'pop-model-group';
-    group.dataset.provider = provider;
-    group.dataset.current = String(isCurrentGroup);
-
-    const models_ = document.createElement('div');
-    models_.className = 'pop-provider-models';
-    models_.id = 'model-provider-' + (++groupIndex);
-    models_.hidden = !isExpanded;
-
-    const header = document.createElement('button');
-    header.type = 'button';
-    header.className = 'pop-provider';
-    header.tabIndex = -1;
-    /* 组头也带 Provider 身份：它是键盘漫游序列里的一项，没有身份就没法断言
-     * 「焦点移到了哪一组」，样式也选不中具体某组。组容器上那份保持不变。 */
-    header.dataset.provider = provider;
-    header.setAttribute('aria-controls', models_.id);
-    header.setAttribute('aria-expanded', String(isExpanded));
-    const name = document.createElement('span');
-    name.className = 'pop-provider-name';
-    name.textContent = provider;
-    const count = document.createElement('span');
-    count.className = 'pop-provider-count';
-    count.textContent = String(list.length);
-    header.append(name, count);
-    header.addEventListener('click', () => toggleProvider(header));
-
-    group.append(header, models_);
-    pop.appendChild(group);
-    const rows = [];
-    filterGroups.push({ group, header, models: models_, rows, expanded: isExpanded });
-
-    for (const model of list) {
-      const { providerId, modelId } = modelIdentity(model);
-      const id = modelId || model?.name || '';
-      const rowProvider = providerId || PROVIDER_FALLBACK;
-      const on = currentProvider
-        ? rowProvider === currentProvider && id === currentId
-        : Boolean(currentId) && id === currentId;
-      const node = modelItem({
-        model,
-        on,
-        capabilitySummary,
-        onPick: () => pick(rowProvider, id),
-      });
-      models_.appendChild(node);
-      rows.push({ node, key: [rowProvider, id, model.name || ''].join(' ').toLocaleLowerCase() });
+  /* 输入框保留用户原样大小写与光标；匹配时才折叠大小写。
+   * menuState.query 也存原样，重绘回来才不会把「GLM」改写成「glm」。 */
+  const query = previousQuery.trim().toLocaleLowerCase();
+  let section = previousSection;
+  if (!query) {
+    if (!sectionExists(section, recent.length, groups)) {
+      section = recent.length
+        ? 'recent'
+        : currentProvider && groups.has(currentProvider)
+          ? 'provider:' + currentProvider
+          : providerIds[0] ? 'provider:' + providerIds[0] : 'recent';
     }
   }
+  menuState = { section, query: previousQuery };
 
-  const foot = document.createElement('div');
-  foot.className = 'pop-foot';
-  const total = document.createElement('span');
-  total.textContent = '共 ' + models.length + ' 个可用模型';
-  foot.appendChild(total);
-  pop.appendChild(foot);
+  pop.innerHTML = '';
+  /* 根标记：回读重绘要靠它判断「菜单还开着」，Escape 先清搜索也靠它。
+   * 搜索/左栏/右栏都只是它的子节点。 */
+  pop.classList.add('model-menu');
 
-  const noMatch = document.createElement('div'); noMatch.className = 'ui3-empty ui3-model-no-match';
-  noMatch.setAttribute('role', 'status'); noMatch.textContent = '没有匹配的模型'; noMatch.hidden = true;
-  pop.insertBefore(noMatch, foot);
+  /* ---------- 顶部：搜索 + 设置 ---------- */
+  const searchRow = document.createElement('div');
+  searchRow.className = 'model-menu-search';
+  searchRow.append(createIcon('search', { className: 'model-menu-search-ic' }));
+
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.className = 'ui3-model-search ds-readable-placeholder';
+  search.placeholder = '搜索模型';
+  search.setAttribute('aria-label', '搜索模型');
+  search.value = previousQuery;
+  markFocusable(search, 'search');
+  searchRow.appendChild(search);
+
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'model-search-clear';
+  clear.setAttribute('aria-label', '清除搜索');
+  clear.title = '清除搜索';
+  clear.hidden = !query;
+  clear.appendChild(createIcon('close', { size: 12, className: 'model-search-clear-ic' }));
+  markFocusable(clear, 'clear');
+  clear.onclick = () => {
+    /* 重绘从输入框读原样查询，所以清空也要写回 DOM，不能只改 menuState。 */
+    search.value = '';
+    menuState = { ...menuState, query: '', caret: 0 };
+    const view = renderModelPicker({ ...activeMenuOptions, preserve: true });
+    view?.search?.focus();
+  };
+  searchRow.appendChild(clear);
+
+  const gear = document.createElement('button');
+  gear.type = 'button';
+  gear.className = 'model-menu-settings';
+  gear.setAttribute('aria-label', '模型与供应商设置');
+  gear.title = '模型与供应商设置';
+  gear.appendChild(createIcon('settings', { size: 14, className: 'model-menu-settings-ic' }));
+  markFocusable(gear, 'settings');
+  gear.onclick = () => {
+    closePop();
+    onOpenSettings?.();
+  };
+  searchRow.appendChild(gear);
   search.addEventListener('input', () => {
-    const query = search.value.trim().toLocaleLowerCase();
-    let count = 0;
-    for (const entry of filterGroups) {
-      let matching = 0;
-      for (const row of entry.rows) {
-        row.node.hidden = Boolean(query) && !row.key.includes(query);
-        if (!row.node.hidden) matching++;
-      }
-      count += matching;
-      entry.group.hidden = matching === 0;
-      const open = query ? true : expanded ? expanded.has(entry.group.dataset.provider) : entry.expanded;
-      entry.models.hidden = !open;
-      entry.header.setAttribute('aria-expanded', String(open));
-    }
-    noMatch.hidden = count !== 0;
-    total.textContent = query ? `${count} 个匹配模型 / 共 ${models.length} 个` : `共 ${models.length} 个可用模型`;
-    reposition(); search.focus();
+    menuState = { ...menuState, query: search.value, caret: search.selectionStart };
+    renderModelPicker({ ...activeMenuOptions, preserve: true });
   });
-  search.addEventListener('keydown', event => {
+  search.addEventListener('keydown', (event) => {
     if (event.isComposing || event.keyCode === 229) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      const target = navigables().find(node => node.classList.contains('pop-item')) || navigables()[0];
-      if (target) focusNav(target);
+      const first = pop.querySelector('.ui3-model-item:not(:disabled)');
+      if (first) focusNav(first);
     }
     if (event.key === 'Enter') event.preventDefault();
   });
 
+  /* ---------- 主体：左栏 + 右列表 ---------- */
+  const body = document.createElement('div');
+  body.className = 'model-menu-body';
+
+  const rail = document.createElement('div');
+  rail.className = 'model-rail';
+  rail.setAttribute('role', 'tablist');
+  rail.setAttribute('aria-label', '模型来源');
+  rail.setAttribute('aria-orientation', 'vertical');
+
+  const matches = query ? list.filter((model) => matchesQuery(model, query)) : [];
+  const matchGroups = new Map();
+  for (const model of matches) {
+    const provider = modelIdentity(model).providerId || PROVIDER_FALLBACK;
+    if (!matchGroups.has(provider)) matchGroups.set(provider, []);
+    matchGroups.get(provider).push(model);
+  }
+
+  const railEntries = [];
+  if (query) {
+    railEntries.push({ section: 'search', label: '搜索结果', count: matches.length, active: true });
+    for (const provider of providerIds) {
+      const count = matchGroups.get(provider)?.length || 0;
+      if (count) railEntries.push({ section: 'provider:' + provider, label: provider, count, provider });
+    }
+  } else {
+    if (recent.length) {
+      railEntries.push({ section: 'recent', label: '最近使用', count: recent.length, active: section === 'recent' });
+    }
+    for (const provider of providerIds) {
+      railEntries.push({
+        section: 'provider:' + provider,
+        label: provider,
+        count: groups.get(provider).length,
+        active: section === 'provider:' + provider,
+        provider,
+      });
+    }
+  }
+
+  for (const entry of railEntries) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'model-rail-item' + (entry.active ? ' on' : '');
+    item.dataset.section = entry.section;
+    if (entry.provider) item.dataset.provider = entry.provider;
+    item.setAttribute('role', 'tab');
+    item.setAttribute('aria-selected', String(Boolean(entry.active)));
+    item.title = entry.label;
+    markFocusable(item, 'rail:' + entry.section);
+
+    const name = document.createElement('span');
+    name.className = 'model-rail-name pop-provider-name';
+    name.textContent = entry.label;
+    const count = document.createElement('span');
+    count.className = 'model-rail-count pop-provider-count';
+    count.textContent = String(entry.count);
+    item.append(name, count);
+
+    item.onclick = () => {
+      const nextQuery = entry.section === 'search' ? menuState.query : '';
+      menuState = { section: entry.section, query: nextQuery };
+      renderModelPicker({ ...activeMenuOptions, preserve: true });
+    };
+    rail.appendChild(item);
+  }
+
+  const pane = document.createElement('div');
+  pane.className = 'model-pane';
+  const paneHead = document.createElement('div');
+  paneHead.className = 'model-pane-head';
+  const paneTitle = document.createElement('span');
+  paneTitle.className = 'model-pane-title';
+  const paneCount = document.createElement('span');
+  paneCount.className = 'model-pane-count';
+  paneHead.append(paneTitle, paneCount);
+
+  const listWrap = document.createElement('div');
+  listWrap.className = 'model-pane-list';
+  listWrap.setAttribute('role', 'menu');
+  listWrap.setAttribute('aria-label', '模型列表');
+  listWrap.setAttribute('aria-busy', String(Boolean(pending)));
+
+  const addGroupLabel = (provider) => {
+    const label = document.createElement('div');
+    label.className = 'model-group-label';
+    label.textContent = provider;
+    listWrap.appendChild(label);
+  };
+
+  const addRow = (model, { showProvider }) => {
+    const { providerId, modelId } = modelIdentity(model);
+    const provider = providerId || PROVIDER_FALLBACK;
+    const id = modelId || model?.name || '';
+    const on = Boolean(currentKey) && modelKey(provider, id) === currentKey;
+    const name = typeof model?.name === 'string' && model.name.trim() ? model.name.trim() : id;
+    const summary = capabilitySummary(model);
+    const facts = capabilityFacts(model);
+    const unknown = !summary.text && !facts.anyKnown;
+    const bits = [];
+    if (showProvider) bits.push(provider);
+    if (summary.text) bits.push(summary.text);
+    else if (unknown) bits.push('能力未知');
+    if (!showProvider && name !== id) bits.push(id);
+    const sub = bits.join(' · ');
+
+    const item = popItem({
+      label: name,
+      sub,
+      on,
+      onClick: () => {
+        /* pending 时仍允许点下一个：setModel 自己维护 queuedModelSwitch，
+         * 这是既有行为，选择器不额外把连点变成静默丢弃。
+         * 最近使用不在这里写：调用方要等 Pi 回读确认身份一致后才记录。 */
+        if (on) return;
+        onSelect(provider, id);
+      },
+    });
+    item.classList.add('ui3-model-item');
+    item.dataset.provider = provider;
+    item.dataset.modelId = id;
+    item.dataset.reasoning = facts.rows.find((row) => row.key === 'reasoning')?.state || 'unknown';
+    item.setAttribute('role', 'menuitemradio');
+    item.setAttribute('aria-checked', String(on));
+    item.tabIndex = -1;
+    markFocusable(item, 'row:' + provider + '/' + id);
+    if (unknown) item.querySelector('.pi-sub')?.classList.add('ui3-cap-unknown');
+    /* 完整能力（含明确不支持项与 Max output）留在 title —— 行内只放正向事实，
+     * 未知绝不在行内显示成不支持（docs/model-capabilities.md）。 */
+    item.title = [
+      name,
+      `${provider} / ${id}`,
+      summary.title || (unknown ? 'Pi 未提供这个模型的能力信息' : ''),
+    ].filter(Boolean).join('\n');
+    listWrap.appendChild(item);
+    return item;
+  };
+
+  if (!list.length) {
+    paneTitle.textContent = '模型';
+    paneCount.textContent = '0';
+    const empty = document.createElement('div');
+    empty.className = 'model-menu-empty';
+    empty.textContent = '还没有可用的模型';
+    listWrap.appendChild(empty);
+  } else if (query) {
+    paneTitle.textContent = '搜索结果';
+    paneCount.textContent = String(matches.length);
+    if (!matches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'model-menu-empty';
+      empty.textContent = '没有匹配的模型';
+      listWrap.appendChild(empty);
+    } else {
+      for (const [provider, providerModels] of matchGroups) {
+        addGroupLabel(provider);
+        for (const model of providerModels) addRow(model, { showProvider: true });
+      }
+    }
+  } else if (section === 'recent') {
+    paneTitle.textContent = '最近使用';
+    paneCount.textContent = String(recent.length);
+    const recentGroups = new Map();
+    for (const model of recent) {
+      const provider = modelIdentity(model).providerId || PROVIDER_FALLBACK;
+      if (!recentGroups.has(provider)) recentGroups.set(provider, []);
+      recentGroups.get(provider).push(model);
+    }
+    for (const [provider, providerModels] of recentGroups) {
+      addGroupLabel(provider);
+      /* 最近使用可能混着多个 Provider：行内必须带 Provider，
+       * 同名模型才分得清是哪一个。 */
+      for (const model of providerModels) addRow(model, { showProvider: true });
+    }
+  } else {
+    const provider = section.slice('provider:'.length);
+    const providerModels = groups.get(provider) || [];
+    paneTitle.textContent = provider;
+    paneCount.textContent = String(providerModels.length);
+    for (const model of providerModels) addRow(model, { showProvider: false });
+  }
+
+  if (pending) {
+    const status = document.createElement('div');
+    status.className = 'model-menu-pending';
+    status.setAttribute('role', 'status');
+    status.textContent = '正在切换模型…';
+    paneHead.appendChild(status);
+  }
+
+  pane.append(paneHead, listWrap);
+  body.append(rail, pane);
+  pop.append(searchRow, body);
+
+  /* ---------- 底部：推理档位滑杆 ---------- */
+  const availability = thinkingAvailability({ model: current, levels, pending, readStatus });
+  const canSelectThinking = availability.state === 'ready' && !pending && !thinkingBusy;
+  const thinkSection = document.createElement('div');
+  thinkSection.className = 'model-thinking';
+
+  const thinkHead = document.createElement('div');
+  thinkHead.className = 'model-thinking-head';
+  const thinkLabel = document.createElement('span');
+  thinkLabel.className = 'model-thinking-label';
+  thinkLabel.textContent = '推理';
+  const thinkCurrent = document.createElement('span');
+  thinkCurrent.className = 'model-thinking-current';
+  thinkCurrent.textContent = thinkingBusy
+    ? '同步中…'
+    : availability.state === 'ready'
+      ? (currentLevel || '—')
+      : '不可用';
+  thinkHead.append(thinkLabel, thinkCurrent);
+  thinkSection.appendChild(thinkHead);
+
+  if (availability.state !== 'ready') {
+    const state = document.createElement('div');
+    state.className = 'ui3-think-state';
+    state.dataset.state = availability.state;
+    state.textContent = availability.detail;
+    thinkSection.appendChild(state);
+  }
+
+  let rangeEl = null;
+  const sliderLevels = availability.levels;
+  if (sliderLevels.length) {
+    const selectedIndex = Math.max(0, sliderLevels.indexOf(currentLevel));
+    const slider = document.createElement('div');
+    slider.className = 'model-thinking-slider';
+    slider.style.setProperty('--stop-count', String(sliderLevels.length));
+    slider.style.setProperty('--thinking-progress', `${(selectedIndex / sliderLevels.length) * 100}%`);
+
+    const railEl = document.createElement('div');
+    railEl.className = 'model-thinking-rail';
+    const thumb = document.createElement('span');
+    thumb.className = 'model-thinking-thumb';
+    thumb.setAttribute('aria-hidden', 'true');
+    const ticks = document.createElement('div');
+    ticks.className = 'model-thinking-ticks';
+    ticks.setAttribute('role', 'radiogroup');
+    ticks.setAttribute('aria-label', '思考等级');
+    const tickNodes = new Map();
+
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.className = 'model-thinking-range';
+    range.min = '0';
+    range.max = String(Math.max(0, sliderLevels.length - 1));
+    range.step = '1';
+    range.value = String(selectedIndex);
+    range.disabled = !canSelectThinking;
+    range.setAttribute('aria-label', '思考等级');
+    range.setAttribute('aria-valuetext', currentLevel || sliderLevels[selectedIndex] || '');
+    markFocusable(range, 'slider');
+    rangeEl = range;
+
+    const menuLive = () => !pop.hidden && pop.classList.contains('model-menu')
+      && range.isConnected && pop.contains(range);
+
+    /* 拖动中的预览只改视觉：同一份 Range 节点、同一份 tick 节点，不重绘菜单。
+     * 档位是否可提交仍以调用方当前状态为准，预览不会写任何业务状态。 */
+    const paintPreview = (level) => {
+      const index = sliderLevels.indexOf(level);
+      if (index < 0) return;
+      slider.style.setProperty('--thinking-progress', `${(index / sliderLevels.length) * 100}%`);
+      for (const [name, node] of tickNodes) {
+        const on = name === level;
+        node.classList.toggle('on', on);
+        node.setAttribute('aria-checked', String(on));
+      }
+      thinkCurrent.textContent = level;
+      range.setAttribute('aria-valuetext', level);
+    };
+    const restorePreview = () => {
+      const level = currentLevel && sliderLevels.includes(currentLevel)
+        ? currentLevel
+        : sliderLevels[selectedIndex];
+      if (!level) return;
+      range.value = String(sliderLevels.indexOf(level));
+      paintPreview(level);
+    };
+
+    /* 提交瞬间再读一次调用方状态：拖动期间模型被切换、档位被回读、菜单被关闭
+     * 或进入 pending，都不能拿旧闭包里的 canSelectThinking 发 RPC。 */
+    const canCommitNow = (level) => {
+      if (!menuLive() || thinkingBusy) return false;
+      const opts = activeMenuOptions;
+      if (!opts || opts.pending) return false;
+      const now = thinkingAvailability({
+        model: opts.current, levels: opts.levels,
+        pending: opts.pending, readStatus: opts.readStatus,
+      });
+      return now.state === 'ready' && now.levels.includes(level) && level !== opts.currentLevel;
+    };
+
+    const commitLevel = (level, node) => {
+      if (!level || !canCommitNow(level)) {
+        if (menuLive()) restorePreview();
+        return false;
+      }
+      /* 键盘/拖动提交后马上会重绘并短锁；把焦点意图记到回读完成那次。 */
+      if (document.activeElement === range || document.activeElement === node) {
+        focusThinkingSliderOnNextReady = true;
+      }
+      beginThinkingBusy(level);
+      onSelectThinking(level);
+      renderModelPicker({ ...activeMenuOptions, preserve: true, keepBusy: true });
+      return true;
+    };
+
+    for (const level of sliderLevels) {
+      const tick = document.createElement('button');
+      tick.type = 'button';
+      tick.className = 'model-thinking-tick ui3-think-item' + (level === currentLevel ? ' on' : '');
+      tick.dataset.level = level;
+      tick.setAttribute('role', 'radio');
+      tick.setAttribute('aria-checked', String(level === currentLevel));
+      tick.tabIndex = -1;
+      tick.disabled = !canSelectThinking;
+      tick.textContent = level;
+      if (THINK_DESC[level]) tick.title = THINK_DESC[level];
+      tick.onclick = () => commitLevel(level, tick);
+      tickNodes.set(level, tick);
+      ticks.appendChild(tick);
+    }
+
+    /* 拖动期间只走 input 预览；change / pointerup 才是提交时机。一次完整的
+     * 指针拖动只提交一次：pointerup 与随后的 change 用同一个 gesture 标记。 */
+    let pointerGesture = false;
+    let gestureCommitted = false;
+    range.addEventListener('pointerdown', () => {
+      pointerGesture = true;
+      gestureCommitted = false;
+    });
+    /* 键盘操作每次 keydown 都是一次新的意图；原生 range 随后会发 input/change。 */
+    range.addEventListener('keydown', () => {
+      pointerGesture = false;
+      gestureCommitted = false;
+    });
+    range.addEventListener('input', () => {
+      if (!menuLive() || !canSelectThinking) return;
+      const level = sliderLevels[Number(range.value)];
+      if (level) paintPreview(level);
+    });
+    const commitFromRange = () => {
+      if (!menuLive()) return false;
+      return commitLevel(sliderLevels[Number(range.value)], range);
+    };
+    range.addEventListener('change', () => {
+      if (!menuLive()) return;
+      if (pointerGesture) {
+        if (gestureCommitted) return;
+        gestureCommitted = true;
+      }
+      commitFromRange();
+    });
+    range.addEventListener('pointerup', () => {
+      if (!pointerGesture) return;
+      if (!gestureCommitted) {
+        gestureCommitted = true;
+        commitFromRange();
+      }
+      /* 不清 pointerGesture：change 可能晚于 pointerup 到达，不能再提交一次。 */
+    });
+    range.addEventListener('pointercancel', () => {
+      pointerGesture = false;
+      gestureCommitted = true;
+      if (menuLive()) restorePreview();
+    });
+    range.addEventListener('blur', () => {
+      /* 失焦不是提交时机：把预览退回权威档位，等用户重新操作。 */
+      if (pointerGesture && !gestureCommitted && menuLive()) restorePreview();
+      pointerGesture = false;
+      gestureCommitted = true;
+    });
+
+    railEl.append(thumb, ticks, range);
+    slider.appendChild(railEl);
+    thinkSection.appendChild(slider);
+  }
+
+  pop.appendChild(thinkSection);
+
   openPop(anchorFor('model'), { model: true });
+  pop.setAttribute('aria-label', title);
   syncRoving();
+
+  if (previousFocus) {
+    const target = [...pop.querySelectorAll('[data-menu-key]')]
+      .find((node) => node.dataset.menuKey === previousFocus);
+    if (target) {
+      focusNav(target);
+      if (target === search && Number.isInteger(previousCaret)) {
+        try { target.setSelectionRange(previousCaret, previousCaret); } catch { /* range 不支持时忽略 */ }
+      }
+    }
+  }
+  /* 提交后的第一次重绘滑杆还是禁用的（等回读），此时保留意图；回读完成、
+   * 滑杆恢复可用后再把焦点还给用户，键盘可以继续用方向键/Home/End。 */
+  if (focusThinkingSliderOnNextReady) {
+    if (rangeEl && canSelectThinking && rangeEl.isConnected) {
+      focusNav(rangeEl);
+      focusThinkingSliderOnNextReady = false;
+    } else if (!wasOpen) {
+      focusThinkingSliderOnNextReady = false;
+    }
+  }
+  if (previousScroll && listWrap) listWrap.scrollTop = previousScroll;
+
+  return { search };
 }
 
-/* ---------- Thinking 等级选择器 ---------- */
+/* ---------- Thinking 等级选择器（保留给只读说明 / 兼容路径） ---------- */
 
 /**
  * 把 Thinking 档位画进共享弹层并打开。档位只来自 Pi 的 get_available_thinking_levels。
@@ -440,6 +955,7 @@ export function renderThinkingPicker({
 } = {}) {
   activeExpanded = null;
   activeOptions = {};
+  pop.classList.remove('model-menu');
 
   const availability = thinkingAvailability({ model, levels, pending, readStatus });
 

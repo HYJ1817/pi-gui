@@ -135,13 +135,49 @@ async function waitFor(cdp, expression, timeout = 8000) {
   throw new Error('等待超时: ' + expression + ' 最后值=' + JSON.stringify(last));
 }
 
+/* 真实鼠标拖动：按下后逐步移动，每一步都让测试有机会读 DOM；
+ * 释放后才算一次完整手势。 */
+async function dragMouse(cdp, from, to, fractions, onMove) {
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed', x: from.x, y: from.y, button: 'left', buttons: 1, clickCount: 1,
+  });
+  for (const fraction of fractions) {
+    const x = from.x + (to.x - from.x) * fraction;
+    const y = from.y + (to.y - from.y) * fraction;
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved', x, y, button: 'left', buttons: 1,
+    });
+    await sleep(90);
+    if (onMove) await onMove(fraction, x, y);
+  }
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased', x: to.x, y: to.y, button: 'left', buttons: 0, clickCount: 1,
+  });
+}
+
 async function pageSetup(cdp) {
   return evaluate(cdp, `(async () => {
     window.__P = {};
-    const [state, usage, sessions, theme, popover] = await Promise.all([
-      import('/state.js'), import('/usage.js'), import('/sessions.js'), import('/theme.js'), import('/ui/popover.js'),
+    const [state, usage, sessions, theme, popover, picker, messages] = await Promise.all([
+      import('/state.js'), import('/usage.js'), import('/sessions.js'), import('/theme.js'),
+      import('/ui/popover.js'), import('/ui3-model-picker.js'), import('/messages.js'),
     ]);
-    Object.assign(window.__P, { S: state.S, usage, sessions, theme, closePop: popover.closePop });
+    Object.assign(window.__P, {
+      S: state.S, usage, sessions, theme, picker, messages,
+      closePop: popover.closePop, currentAnchor: popover.currentAnchor, popVisible: popover.popVisible,
+      thinkCommands: [],
+    });
+    /* 只记录测试关心的思考档位提交；不改产品路径。 */
+    const realFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      try {
+        if (String(input).includes('/api/command') && typeof init?.body === 'string') {
+          const command = JSON.parse(init.body);
+          if (command.type === 'set_thinking_level') window.__P.thinkCommands.push(command.level);
+        }
+      } catch { /* 非 JSON 请求 */ }
+      return realFetch(input, init);
+    };
     return true;
   })()`);
 }
@@ -186,6 +222,9 @@ async function main() {
     await evaluate(cdp, `(async () => { __P.closePop(); document.querySelector('#btnModel').click(); return true; })()`);
     await sleep(220);
     const clicked = await evaluate(cdp, `(() => {
+      const rail = [...document.querySelectorAll('.model-rail-item')]
+        .find((n) => n.dataset.section === 'provider:' + ${JSON.stringify(provider)});
+      if (rail) rail.click();
       const item = [...document.querySelectorAll('.ui3-model-item')]
         .find((n) => n.dataset.provider === ${JSON.stringify(provider)} && n.dataset.modelId === ${JSON.stringify(modelId)});
       if (!item) return false;
@@ -196,6 +235,9 @@ async function main() {
     await waitFor(cdp, `__P.S.state?.model?.providerId === ${JSON.stringify(provider)}
       && __P.S.state?.model?.modelId === ${JSON.stringify(modelId)} && __P.S.modelSwitchPending === false`, 10000);
     await sleep(500);
+    /* 统一菜单选择后保持打开等待回读；回读完成，验收助手负责收起，
+     * 免得后续上下文浮层被菜单挡住。 */
+    await evaluate(cdp, `__P.closePop()`);
   };
   const switchToHistorySession = async () => {
     const clicked = await evaluate(cdp, `(() => {
@@ -238,7 +280,7 @@ async function main() {
         /* ---------- P1 设置入口图标 ---------- */
         const icon = await evaluate(cdp, `(() => {
           const button = document.querySelector('#navGlobalMore');
-          const svg = button.querySelector('svg[data-icon="slidersHorizontal"]');
+          const svg = button.querySelector('svg[data-icon="settings"]');
           const br = button.getBoundingClientRect();
           const sr = svg && svg.getBoundingClientRect();
           return {
@@ -251,10 +293,10 @@ async function main() {
           };
         })()`);
         metrics.push({ scene: 'p1-settings-icon', width, height, theme, ...icon });
-        check(`P1 ${width}×${height} ${theme}: 设置入口渲染 sliders-horizontal`,
-          icon.icon && icon.paths === 1 && icon.circles === 0, icon);
-        check(`P1 ${width}×${height} ${theme}: 图标 18×18、按钮 28×28（既有角色尺寸）`,
-          Math.abs(icon.svg?.[0] - 18) < 0.6 && Math.abs(icon.svg?.[1] - 18) < 0.6
+        check(`P1 ${width}×${height} ${theme}: 设置入口渲染 Lucide 齿轮`,
+          icon.icon && icon.paths === 1 && icon.circles === 1, icon);
+        check(`P1 ${width}×${height} ${theme}: 图标 14×14、按钮 28×28`,
+          Math.abs(icon.svg?.[0] - 14) < 0.6 && Math.abs(icon.svg?.[1] - 14) < 0.6
             && Math.abs(icon.button[0] - 28) < 0.6 && Math.abs(icon.button[1] - 28) < 0.6, icon);
         check(`P1 ${width}×${height} ${theme}: tooltip / 无障碍名称 / 展开状态保留`,
           icon.label === '设置' && icon.title === '设置' && icon.expanded === 'false', icon);
@@ -398,6 +440,357 @@ async function main() {
           (await usageText()) === '上下文 61.23k / 1M' && (await pctText()) === '6%', {
             note: await usageText(), pct: await pctText(),
           });
+
+        /* ---------- P2 生成速度（TPS） ---------- */
+        await evaluate(cdp, `(() => {
+          __P.closePop();
+          __P.usage.clearSessionUsage();
+          __P.S.stats = {
+            contextUsage: { tokens: 61234, contextWindow: 1000000, percent: 6.1234 },
+            tokens: { input: 18420, output: 3110, cacheRead: 40200 }, cost: 0.0842,
+          };
+          __P.usage.beginUsageTurn();
+          __P.usage.onAssistantMessageStart({ type: 'message_start', message: { role: 'assistant' } }, 1000);
+          __P.usage.onAssistantMessageEnd({
+            type: 'message_end',
+            message: { role: 'assistant', usage: { output: 450 }, stopReason: 'stop' },
+          }, 11000);
+          __P.usage.onTurnUsage({ input: 18420, output: 450, cacheRead: 40200 });
+          __P.usage.onTurnThroughputSettled();
+          __P.usage.renderUsageState();
+          document.querySelector('#btnCtx').click();
+          return true;
+        })()`);
+        await waitFor(cdp, `!!document.querySelector('#composerPopover .tip-speed-row')`, 5000);
+        const tps = await evaluate(cdp, `(() => {
+          const speed = document.querySelector('#composerPopover .tip-speed');
+          return { text: speed?.textContent, title: speed?.title || '',
+            row: document.querySelector('#composerPopover .tip-speed-row')?.textContent || '' };
+        })()`);
+        check(`P2 ${width}×${height} ${theme}: 最近一轮显示实测生成速度`,
+          tps.text === '45 tokens/s' && tps.row.includes('生成速度')
+            && tps.title.includes('450') && tps.title.includes('10.0'), tps);
+        await shot(`p2-tps-context-${width}x${height}-${theme}`);
+        await evaluate(cdp, `__P.closePop()`);
+
+        await evaluate(cdp, `(() => {
+          __P.usage.clearSessionUsage();
+          __P.S.stats = {
+            contextUsage: { tokens: 61234, contextWindow: 1000000, percent: 6.1234 },
+            tokens: { input: 18420, output: 3110, cacheRead: 40200 }, cost: 0.0842,
+          };
+          __P.usage.beginUsageTurn();
+          __P.usage.onTurnThroughputSettled();
+          __P.usage.onTurnUsage({ input: 1200, output: 300 });
+          __P.usage.renderUsageState();
+          document.querySelector('#btnCtx').click();
+          return true;
+        })()`);
+        await waitFor(cdp, `!!document.querySelector('#composerPopover .tip-speed-row')`, 5000);
+        const tpsMissing = await evaluate(cdp, `document.querySelector('#composerPopover .tip-speed')?.textContent`);
+        check(`P2 ${width}×${height} ${theme}: 缺少响应时间时显示 —，不编造速度`,
+          tpsMissing === '—', tpsMissing);
+        await shot(`p2-tps-unavailable-${width}x${height}-${theme}`);
+        await evaluate(cdp, `__P.closePop()`);
+
+        /* ---------- P4 模型 + 思考统一菜单 ---------- */
+        await fetch(new URL('/api/__composer-models', url), { method: 'POST' });
+        await waitFor(cdp, `(__P.S.models || []).some((m) => (m.providerId || m.provider) === 'zhipu')
+          && (__P.S.models || []).filter((m) => (m.providerId || m.provider) === 'openrouter').length >= 100`, 8000);
+        /* 从确定的空「最近使用」开始，截图才可复核。 */
+        await evaluate(cdp, `(() => { localStorage.removeItem('pi-gui.recent-models.v1'); __P.closePop(); document.querySelector('#btnModel').click(); return true; })()`);
+        await waitFor(cdp, `!document.querySelector('#composerPopover').hidden
+          && document.querySelector('#composerPopover').classList.contains('model-menu')`, 5000);
+        const menuMetrics = await evaluate(cdp, `(() => {
+          const pop = document.querySelector('#composerPopover');
+          const list = pop.querySelector('.model-pane-list');
+          const rect = pop.getBoundingClientRect();
+          const composer = document.querySelector('#chatComposer').getBoundingClientRect();
+          return {
+            rect: [rect.left, rect.top, rect.right, rect.bottom, rect.width, rect.height],
+            composerTop: composer.top, vw: innerWidth, vh: innerHeight,
+            scroll: [pop.scrollWidth, pop.clientWidth],
+            listScroll: [list.scrollWidth, list.clientWidth],
+            rails: [...pop.querySelectorAll('.model-rail-item')].map((n) => ({
+              name: n.querySelector('.model-rail-name').textContent,
+              count: n.querySelector('.model-rail-count').textContent,
+              on: n.classList.contains('on'),
+            })),
+            current: document.querySelector('.ui3-model-item.on')?.dataset.modelId || '',
+            active: document.activeElement?.dataset?.modelId || document.activeElement?.className || '',
+            roving: [...pop.querySelectorAll('.ui3-model-item, .model-rail-item')].filter((n) => n.tabIndex === 0).length,
+            search: Boolean(pop.querySelector('.ui3-model-search')),
+            title: pop.querySelector('.model-pane-title')?.textContent || '',
+          };
+        })()`);
+        metrics.push({ scene: 'p4-menu', width, height, theme, ...menuMetrics });
+        check(`P4 ${width}×${height} ${theme}: 两栏菜单在 Composer 上方且不溢出视口`,
+          menuMetrics.rect[0] >= 7 && menuMetrics.rect[2] <= menuMetrics.vw - 7 && menuMetrics.rect[3] <= menuMetrics.composerTop - 4
+            && menuMetrics.rect[4] <= 420.5 && menuMetrics.rect[4] >= 300 && menuMetrics.scroll[0] <= menuMetrics.scroll[1] + 1
+            && menuMetrics.listScroll[0] <= menuMetrics.listScroll[1] + 1, menuMetrics);
+        check(`P4 ${width}×${height} ${theme}: 左栏为最近使用 + 供应商与计数`,
+          menuMetrics.rails.map((r) => r.name).join(',') === '最近使用,deepseek,zhipu,openrouter'
+            && menuMetrics.rails.map((r) => r.count).join(',') === '1,2,1,100', menuMetrics.rails);
+        check(`P4 ${width}×${height} ${theme}: 当前模型行获得焦点且 roving 唯一`,
+          menuMetrics.current === 'deepseek-v4-pro' && menuMetrics.active === 'deepseek-v4-pro' && menuMetrics.roving === 1,
+          { current: menuMetrics.current, active: menuMetrics.active, roving: menuMetrics.roving });
+        check(`P4 ${width}×${height} ${theme}: 顶部搜索与底部滑杆同时在场`,
+          menuMetrics.search && await evaluate(cdp, `!!document.querySelector('#composerPopover .model-thinking-range')`));
+        await shot(`p4-model-menu-${width}x${height}-${theme}`);
+
+        await evaluate(cdp, `(() => {
+          __P.picker.rememberRecentModel('openrouter', 'router-0-' + 'long-model-id-'.repeat(12));
+          __P.picker.rememberRecentModel('zhipu', 'glm');
+          __P.closePop();
+          document.querySelector('#btnModel').click();
+          return true;
+        })()`);
+        await waitFor(cdp, `document.querySelector('#composerPopover .model-pane-title')?.textContent === '最近使用'`, 5000);
+        const recent = await evaluate(cdp, `(() => {
+          const rows = [...document.querySelectorAll('#composerPopover .ui3-model-item')];
+          return rows.map((n) => n.dataset.provider + '/' + n.dataset.modelId);
+        })()`);
+        check(`P4 ${width}×${height} ${theme}: 最近使用跨供应商且当前项在首位`,
+          recent.length === 3 && recent[0] === 'deepseek/deepseek-v4-pro'
+            && recent.some((row) => row.startsWith('openrouter/router-0-')) && recent.includes('zhipu/glm'), recent);
+        await shot(`p4-recent-models-${width}x${height}-${theme}`);
+
+        await evaluate(cdp, `(() => {
+          [...document.querySelectorAll('#composerPopover .model-rail-item')]
+            .find((n) => n.dataset.section === 'provider:openrouter').click();
+          return true;
+        })()`);
+        await waitFor(cdp, `document.querySelector('#composerPopover .model-pane-title')?.textContent === 'openrouter'`, 5000);
+        const many = await evaluate(cdp, `(() => {
+          const pop = document.querySelector('#composerPopover');
+          const rows = [...pop.querySelectorAll('.ui3-model-item')];
+          const list = pop.querySelector('.model-pane-list').getBoundingClientRect();
+          const text = rows[0]?.querySelector('.pi-text');
+          const rect = text?.getBoundingClientRect();
+          return {
+            count: rows.length,
+            ellipsis: text ? getComputedStyle(text).textOverflow : '',
+            truncated: text ? text.scrollWidth > text.clientWidth : false,
+            inside: rect ? rect.right <= list.right + 1 : false,
+            paneCount: pop.querySelector('.model-pane-count')?.textContent,
+          };
+        })()`);
+        check(`P4 ${width}×${height} ${theme}: 100 个同 Provider 模型可滚动且长名截断`,
+          many.count === 100 && many.paneCount === '100' && many.ellipsis === 'ellipsis'
+            && many.inside, many);
+        await shot(`p4-multi-provider-${width}x${height}-${theme}`);
+
+        await evaluate(cdp, `(() => {
+          const input = document.querySelector('#composerPopover .ui3-model-search');
+          input.focus();
+          input.value = 'router-42';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          return true;
+        })()`);
+        await waitFor(cdp, `document.querySelector('#composerPopover .model-pane-title')?.textContent === '搜索结果'`, 5000);
+        const search = await evaluate(cdp, `(() => {
+          const pop = document.querySelector('#composerPopover');
+          return {
+            count: pop.querySelectorAll('.ui3-model-item').length,
+            paneCount: pop.querySelector('.model-pane-count')?.textContent,
+            railCount: pop.querySelector('.model-rail-count')?.textContent,
+            group: [...pop.querySelectorAll('.model-group-label')].map((n) => n.textContent),
+            active: document.activeElement === pop.querySelector('.ui3-model-search'),
+            overflow: pop.scrollWidth <= pop.clientWidth + 1,
+          };
+        })()`);
+        check(`P4 ${width}×${height} ${theme}: 搜索跨供应商、显示匹配数并保持焦点`,
+          search.count === 1 && search.paneCount === '1' && search.railCount === '1'
+            && search.group.join(',') === 'openrouter' && search.active && search.overflow, search);
+        await shot(`p4-search-${width}x${height}-${theme}`);
+
+        await evaluate(cdp, `(() => {
+          const input = document.querySelector('#composerPopover .ui3-model-search');
+          input.value = '';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          return true;
+        })()`);
+        await switchModel('zhipu', 'glm');
+        /* switchModel 在回读后收起菜单；验收要重新打开同一份统一菜单。 */
+        await evaluate(cdp, `document.querySelector('#btnModel').click()`);
+        await waitFor(cdp, `!document.querySelector('#composerPopover').hidden
+          && document.querySelector('#composerPopover').classList.contains('model-menu')`, 5000);
+        const thinking = await evaluate(cdp, `(() => {
+          const pop = document.querySelector('#composerPopover');
+          const slider = pop.querySelector('.model-thinking-slider');
+          const menuRect = pop.getBoundingClientRect();
+          const sr = slider?.getBoundingClientRect();
+          return {
+            levels: [...pop.querySelectorAll('.ui3-think-item')].map((n) => n.dataset.level),
+            on: pop.querySelector('.ui3-think-item.on')?.dataset.level || '',
+            range: pop.querySelector('.model-thinking-range')?.value,
+            valueText: pop.querySelector('.model-thinking-range')?.getAttribute('aria-valuetext'),
+            inside: sr ? sr.bottom <= menuRect.bottom + 1 && sr.width > 100 : false,
+            ticks: [...pop.querySelectorAll('.ui3-think-item')].map((n) => n.getBoundingClientRect().width),
+          };
+        })()`);
+        check(`P4 ${width}×${height} ${theme}: 思考滑杆档位来自 Pi 且当前项一致`,
+          thinking.levels.join(',') === 'off,low,medium,high' && thinking.on === 'medium'
+            && thinking.range === '2' && thinking.valueText === 'medium' && thinking.inside, thinking);
+        check(`P4 ${width}×${height} ${theme}: 分段等宽且没有溢出`,
+          new Set(thinking.ticks.map((t) => Math.round(t))).size === 1
+            && thinking.ticks.every((t) => t > 0), thinking.ticks);
+        await shot(`p4-thinking-slider-${width}x${height}-${theme}`);
+
+        /* ---------- P4 思考滑杆：真实鼠标连续拖动 ---------- */
+        const setThinkingOff = async () => {
+          await evaluate(cdp, `(() => { const r = document.querySelector('.model-thinking-range'); r.focus(); return true; })()`);
+          await cdp.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', windowsVirtualKeyCode: 36, key: 'Home', code: 'Home' });
+          await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', windowsVirtualKeyCode: 36, key: 'Home', code: 'Home' });
+          await waitFor(cdp, `document.querySelector('.ui3-think-item.on')?.dataset.level === 'off'
+            && document.querySelector('.model-thinking-range')?.disabled === false`, 6000);
+        };
+        const dragToMax = async () => {
+          await evaluate(cdp, `__P.thinkCommands.length = 0`);
+          const geometry = await evaluate(cdp, `(() => {
+            const r = document.querySelector('.model-thinking-range');
+            const cs = getComputedStyle(r);
+            const b = r.getBoundingClientRect();
+            const thumb = document.querySelector('.model-thinking-thumb').getBoundingClientRect();
+            window.__dragRange = r;
+            return {
+              from: { x: thumb.left + thumb.width / 2, y: thumb.top + thumb.height / 2 },
+              to: { x: b.right - parseFloat(cs.paddingRight), y: b.top + b.height / 2 },
+              rect: [b.left, b.top, b.right, b.bottom], vw: innerWidth, vh: innerHeight,
+            };
+          })()`);
+          const previews = [];
+          let sameNode = true;
+          let commandsDuringDrag = 0;
+          await dragMouse(cdp, geometry.from, geometry.to, [0.15, 0.4, 0.65, 0.9, 1], async () => {
+            const state = await evaluate(cdp, `(() => ({
+              same: document.querySelector('.model-thinking-range') === window.__dragRange,
+              preview: document.querySelector('.model-thinking-current')?.textContent || '',
+              commands: __P.thinkCommands.length,
+            }))()`);
+            sameNode = sameNode && state.same;
+            previews.push(state.preview);
+            commandsDuringDrag = Math.max(commandsDuringDrag, state.commands);
+          });
+          return { geometry, previews, sameNode, commandsDuringDrag };
+        };
+        const finalThinking = () => evaluate(cdp, `(() => {
+          const slider = document.querySelector('.model-thinking-slider');
+          const b = slider.getBoundingClientRect();
+          return {
+            commands: __P.thinkCommands.slice(),
+            on: document.querySelector('.ui3-think-item.on')?.dataset.level || '',
+            state: __P.S.state?.thinkingLevel || '',
+            disabled: document.querySelector('.model-thinking-range')?.disabled,
+            inside: b.left >= 0 && b.right <= innerWidth + 1 && b.top >= 0 && b.bottom <= innerHeight + 1,
+          };
+        })()`);
+
+        await setThinkingOff();
+        const drag = await dragToMax();
+        await waitFor(cdp, `document.querySelector('.ui3-think-item.on')?.dataset.level === 'high'
+          && document.querySelector('.model-thinking-range')?.disabled === false`, 6000);
+        const dragFinal = await finalThinking();
+        metrics.push({ scene: 'p4-thinking-drag', width, height, theme, ...drag, final: dragFinal });
+        check(`P4 ${width}×${height} ${theme}: 真实拖动经过多个档位且 Range 节点不被替换`,
+          drag.sameNode && drag.previews.includes('high') && new Set(drag.previews).size >= 3
+            && drag.commandsDuringDrag === 0, drag);
+        check(`P4 ${width}×${height} ${theme}: 一次拖动只在释放时提交一次，回读后 high`,
+          dragFinal.commands.length === 1 && dragFinal.commands[0] === 'high'
+            && dragFinal.on === 'high' && dragFinal.state === 'high'
+            && dragFinal.disabled === false && dragFinal.inside, dragFinal);
+        await shot(`p4-thinking-drag-${width}x${height}-${theme}`);
+
+        /* 失败回读：Pi 拒绝 high，界面必须回到 off，且不能重复提交。 */
+        await fetch(new URL('/api/__thinking-mode', url), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ failLevel: 'high' }),
+        });
+        await setThinkingOff();
+        const dragFail = await dragToMax();
+        await waitFor(cdp, `document.querySelector('.ui3-think-item.on')?.dataset.level === 'off'
+          && document.querySelector('.model-thinking-range')?.disabled === false`, 6000);
+        const failFinal = await finalThinking();
+        metrics.push({ scene: 'p4-thinking-drag-fail', width, height, theme, ...dragFail, final: failFinal });
+        check(`P4 ${width}×${height} ${theme}: 失败回读后恢复 off，且只提交一次`,
+          dragFail.sameNode && dragFail.commandsDuringDrag === 0
+            && failFinal.commands.length === 1 && failFinal.on === 'off'
+            && failFinal.state === 'off' && failFinal.disabled === false, { dragFail, failFinal });
+        await fetch(new URL('/api/__thinking-mode', url), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ failLevel: null }),
+        });
+        /* 失败提示会停留几秒；清掉它再进入下一组，免得下一张「拖动成功」
+         * 截图里还挂着上一条错误 toast。 */
+        await evaluate(cdp, `(() => {
+          document.querySelectorAll('.ui4-feedback-toast-close').forEach((b) => b.click());
+          return true;
+        })()`);
+
+        await switchModel('deepseek', 'deepseek-v4-pro');
+        await evaluate(cdp, `__P.closePop()`);
+
+        /* ---------- P3 欢迎吉祥物（无内容 ready 态） ---------- */
+        await evaluate(cdp, `(() => {
+          __P.S.thread.innerHTML = '';
+          __P.S.thread.removeAttribute('aria-busy');
+          __P.messages.syncWelcome();
+          return true;
+        })()`);
+        await waitFor(cdp, `!document.querySelector('#welcome').hidden
+          && !document.querySelector('#welcomeReady').hidden
+          && !!document.querySelector('#welcomeReady .welcome-mascot')`, 5000);
+        const mascot = await evaluate(cdp, `(() => {
+          const svg = document.querySelector('#welcomeReady .welcome-mascot');
+          const r = svg.getBoundingClientRect();
+          const float = svg.querySelector('.mascot-float');
+          const line = svg.querySelector('.mascot-line');
+          return {
+            rect: [r.width, r.height],
+            viewBox: svg.getAttribute('viewBox'),
+            anim: getComputedStyle(float).animationName,
+            duration: getComputedStyle(float).animationDuration,
+            stroke: getComputedStyle(line).stroke,
+            cloud: Boolean(svg.querySelector('.mascot-cloud')),
+            feet: svg.querySelectorAll('.mascot-foot').length,
+            eyes: svg.querySelectorAll('.mascot-eye').length,
+            external: svg.querySelectorAll('image, use, script, foreignObject').length,
+            inRestore: Boolean(document.querySelector('#welcomeRestore .welcome-mascot')),
+            hover: getComputedStyle(svg).transitionProperty,
+          };
+        })()`);
+        metrics.push({ scene: 'p3-mascot', width, height, theme, ...mascot });
+        check(`P3 ${width}×${height} ${theme}: 欢迎页吉祥物 100×100 且只在 ready 态`,
+          Math.abs(mascot.rect[0] - 100) < 0.6 && Math.abs(mascot.rect[1] - 100) < 0.6
+            && mascot.viewBox === '0 0 100 100' && !mascot.inRestore, mascot);
+        check(`P3 ${width}×${height} ${theme}: 云朵轮廓、两只脚、两只眼且无外链`,
+          mascot.cloud && mascot.feet === 2 && mascot.eyes === 2
+            && mascot.external === 0 && mascot.stroke !== 'none', mascot);
+        check(`P3 ${width}×${height} ${theme}: 线稿动画在跑`,
+          mascot.anim === 'mascot-float' && mascot.duration !== '0s', mascot);
+        await shot(`p3-welcome-mascot-${width}x${height}-${theme}`);
+
+        await cdp.send('Emulation.setEmulatedMedia', {
+          features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+        });
+        await sleep(240);
+        const reduced = await evaluate(cdp, `(() => {
+          const svg = document.querySelector('#welcomeReady .welcome-mascot');
+          const name = (sel) => getComputedStyle(svg.querySelector(sel)).animationName;
+          return {
+            float: name('.mascot-float'),
+            shadow: name('.mascot-shadow'),
+            eye: name('.mascot-eye'),
+          };
+        })()`);
+        check(`P3 ${width}×${height} ${theme}: prefers-reduced-motion 下全部动画停止`,
+          reduced.float === 'none' && reduced.shadow === 'none' && reduced.eye === 'none', reduced);
+        await shot(`p3-welcome-mascot-reduced-${width}x${height}-${theme}`);
+        await cdp.send('Emulation.setEmulatedMedia', { features: [] });
+        await sleep(160);
+        /* 恢复夹具模型清单，下一轮 P3 仍要看到 Grok / Mystery。 */
+        await fetch(new URL('/api/__composer-reset', url), { method: 'POST' });
+        await sleep(220);
       }
     }
   } finally {

@@ -18,7 +18,7 @@ import { initSettingsSurface } from './ui/settings-surface.js';
 
 import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
-import { renderModelPicker, renderThinkingPicker, thinkingAvailability, applyChipState, setTriggers } from './ui3-model-picker.js';
+import { renderModelPicker, rememberRecentModel } from './ui3-model-picker.js';
 import { createInlineCommandMenu } from './ui/inline-command-menu.js';
 import { mountWorkPanelLauncher } from './ui/work-panel-launcher.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
@@ -42,7 +42,7 @@ import { closeModal, openModal } from './ui/modal.js';
 import { applyProjectState, loadStatus, setBridgeState, setBridgeReconciler, setTransportOnline, setStatus, setTitleText, setRuntimeTitle } from './shell.js';
 import { createBridgeRecovery } from './bridge-recovery.js';
 import { samePath } from './util.js';
-import { autoGrow, initComposerLayout, updateSendState } from './composer.js';
+import { autoGrow, initComposerLayout, setModelControlsHook, updateSendState } from './composer.js';
 import {
   boot,
   compactNow,
@@ -80,7 +80,10 @@ import {
 import { beginPlanTaskBoundary } from './plan-live.js';
 import { onToolEnd, onToolStart, onToolUpdate, onToolWait } from './tools.js';
 import { openBranchPanel, setForkHandler } from './tree.js';
-import { openCtxTip, renderCtxChip, onTurnUsage, contextUsage } from './usage.js';
+import {
+  openCtxTip, renderCtxChip, onTurnUsage, contextUsage,
+  beginUsageTurn, onAssistantMessageStart, onAssistantMessageEnd, onTurnThroughputSettled,
+} from './usage.js';
 import { requestSessionStats } from './session-stats.js';
 import { handleFiles, renderAttachments } from './attachments.js';
 import { loadProjects, openDirPicker, setSessionsSlot, setProjectSessionActions, flushProjectSessionAction } from './projects.js';
@@ -588,6 +591,7 @@ function handleEvent(evt) {
       if (!evt._replay && !S.streaming) {
         beginPlanTaskBoundary();
         beginTurn();
+        beginUsageTurn();
       }
       return setStreaming(true);
     case 'agent_end':
@@ -600,6 +604,7 @@ function handleEvent(evt) {
       /* ⚠️ 这里**不动 S.stopping**。agent_settled 与 abort 应答的先后不确定；
        * 它先到时如果就把 stopping 落下去，用户能在屏障还挂着的时候发新消息
        * —— 那正是要修的 bug。停止的收口只有 stop_state 事件与 HTTP 应答。 */
+      onTurnThroughputSettled();
       onSettled();
       /* 恢复入口必须在 onSettled 收口 streaming / 当前消息之后判断：
        * agent_start 到 agent_settled 之间 S.streaming 为真，提前判断会把
@@ -611,11 +616,13 @@ function handleEvent(evt) {
        * 「HTTP 等超时了、屏障稍后才解除」那条路径。 */
       return onStopState(evt);
     case 'message_start':
+      onAssistantMessageStart(evt);
       return onMessageStart(evt);
     case 'message_update':
       if (evt.usage) onTurnUsage(evt.usage, { source: 'message_update' });
       return onMessageUpdate(evt);
     case 'message_end':
+      onAssistantMessageEnd(evt);
       if (evt.message?.usage) {
         onTurnUsage(evt.message.usage, {
           provider: evt.message.provider,
@@ -902,6 +909,49 @@ function openPalette(ctx = {}) {
   return showCommandPalette(ctx);
 }
 
+function modelPickerOptions(overrides = {}) {
+  return {
+    models: S.models,
+    current: S.state?.model || null,
+    pending: S.modelSwitchPending,
+    levels: S.thinkingLevels,
+    currentLevel: S.state?.thinkingLevel || null,
+    readStatus: S.thinkingReadStatus,
+    /* 先走既有 setModel；只有 Pi 回读确认 provider + modelId 与目标完全一致
+     * （setModel 的 completion 才 resolve true）后才写入最近使用。失败、超时、
+     * 被后一次选择顶掉时 completion 为 false，不写。 */
+    onSelect: (provider, modelId) => {
+      const switched = setModel(provider, modelId);
+      Promise.resolve(switched).then((ok) => {
+        if (ok === true) rememberRecentModel(provider, modelId);
+      });
+    },
+    onSelectThinking: (level) => setThinkingLevel(level),
+    /* 齿轮走既有的「模型供应商」设置页，不新建第二套配置入口。 */
+    onOpenSettings: () => $('navProviders').click(),
+    onRefresh: () => refreshOpenModelMenu(),
+    ...overrides,
+  };
+}
+
+function refreshOpenModelMenu(overrides = {}) {
+  if (!popVisible() || currentAnchor() !== el.btnModel || !pop.classList.contains('model-menu')) return;
+  renderModelPicker(modelPickerOptions({ preserve: true, ...overrides }));
+}
+
+/* renderModelControls 会在模型回读、档位回读、pending 变化时调用；合并到一次
+ * 微任务里重绘，避免同一个状态连续画两遍。 */
+let modelMenuRefreshTimer = null;
+function scheduleModelMenuRefresh() {
+  if (!popVisible() || currentAnchor() !== el.btnModel) return;
+  clearTimeout(modelMenuRefreshTimer);
+  modelMenuRefreshTimer = setTimeout(() => {
+    modelMenuRefreshTimer = null;
+    refreshOpenModelMenu();
+  }, 0);
+}
+setModelControlsHook(scheduleModelMenuRefresh);
+
 function openModelPicker() {
   inlineCommandMenu?.close();
   if (!S.models.length) {
@@ -909,60 +959,25 @@ function openModelPicker() {
     toast('正在获取模型列表…', 'info');
     return;
   }
-  renderModelPicker({
-    models: S.models, current: S.state?.model || null,
-    expanded: expandedModelProviders, pending: S.modelSwitchPending,
-    onSelect: (provider, modelId) => setModel(provider, modelId),
-  });
+  renderModelPicker(modelPickerOptions());
 }
 
-function openThinkPicker() {
-  inlineCommandMenu?.close();
-  renderThinkingPicker({
-    levels: S.thinkingLevels, current: S.state?.thinkingLevel || null,
-    model: S.state?.model || null, pending: S.modelSwitchPending,
-    readStatus: S.thinkingReadStatus,
-    onSelect: level => { if (!el.btnThink.disabled) setThinkingLevel(level); },
-  });
-}
-
-// The selection control stays disabled. Its sibling only explains Pi facts.
+/* 兼容/诊断镜像：真实入口已合并进 #btnModel。隐藏节点被程序化点击时
+ * 仍打开同一份统一菜单，避免出现第二套选择状态。 */
 const thinkingInfo = document.createElement('button');
 thinkingInfo.id = 'btnThinkInfo';
 thinkingInfo.type = 'button';
 thinkingInfo.className = 'chip ui3-thinking-info';
 thinkingInfo.textContent = '思考说明';
+thinkingInfo.hidden = true;
 thinkingInfo.setAttribute('aria-haspopup', 'dialog');
 thinkingInfo.setAttribute('aria-controls', 'composerPopover');
 thinkingInfo.setAttribute('aria-expanded', 'false');
 el.btnThink.after(thinkingInfo);
 thinkingInfo.onclick = () => {
-  if (popVisible() && currentAnchor() === thinkingInfo) return closePop();
-  setTriggers({ think: thinkingInfo });
-  openThinkPicker();
-  setTriggers({ think: el.btnThink });
+  if (popVisible() && currentAnchor() === el.btnModel) return closePop();
+  openModelPicker();
 };
-let thinkingInfoFacts = '';
-function syncThinkingInfo() {
-  const availability = thinkingAvailability({ model: S.state?.model, levels: S.thinkingLevels, pending: S.modelSwitchPending, readStatus: S.thinkingReadStatus });
-  applyChipState(el.btnThink, availability.state);
-  thinkingInfo.hidden = !el.btnThink.disabled || !S.hasProject || S.switching
-    || !['ready', 'maintenance'].includes(S.bridgeState);
-  thinkingInfo.title = availability.detail || availability.label;
-  thinkingInfo.setAttribute('aria-label', '思考能力说明：' + thinkingInfo.title);
-  const facts = JSON.stringify([availability.state, availability.detail, thinkingInfo.hidden,
-    S.state?.model?.providerId || S.state?.model?.provider, S.state?.model?.modelId || S.state?.model?.id]);
-  if (facts !== thinkingInfoFacts && popVisible() && currentAnchor() === thinkingInfo) {
-    const focused = pop.contains(document.activeElement) || document.activeElement === thinkingInfo;
-    closePop();
-    if (focused) (thinkingInfo.hidden ? el.btnThink.disabled ? el.btnModel : el.btnThink : thinkingInfo).focus();
-  }
-  thinkingInfoFacts = facts;
-}
-new MutationObserver(syncThinkingInfo).observe(el.composerBox, {
-  childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'],
-});
-syncThinkingInfo();
 
 /* ---------- 会话统计 / 重命名 / 更多 ---------- */
 
@@ -1185,8 +1200,8 @@ el.btnModel.onclick = () => {
   openModelPicker();
 };
 el.btnThink.onclick = () => {
-  if (popVisible() && currentAnchor() === el.btnThink) return closePop();
-  openThinkPicker();
+  if (popVisible() && currentAnchor() === el.btnModel) return closePop();
+  openModelPicker();
 };
 
 // 上下文占用：悬停出提示，带一点延迟避免扫过就闪

@@ -68,3 +68,42 @@
   #chatComposer .composer-box,#chatComposer #input {transition:none}
   #chatComposer .att-spin {animation:none}
 }
+
+/* P4：模型 + 思考统一 Chip（模型名 + 思考徽标 + chevron）。
+   真实入口只有一个；#btnThink 是隐藏的兼容镜像。 */
+#chatComposer .model-chip {
+  max-width: min(300px, 100%);
+  gap: 5px;
+  padding: 0 8px;
+}
+#chatComposer .model-chip #modelText {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#chatComposer .model-chip-badge {
+  flex: 0 0 auto;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--ds-tile);
+  color: var(--ui-text-secondary);
+  font-size: 10px;
+  font-weight: var(--font-weight-medium);
+  line-height: 16px;
+}
+#chatComposer .model-chip-badge[hidden] { display: none; }
+#chatComposer .model-chip-chevron {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  color: var(--ui-text-muted);
+  transition: transform var(--ui-duration-snap) var(--ui-ease-out);
+}
+#chatComposer .model-chip[aria-expanded="true"] .model-chip-chevron { transform: rotate(180deg); }

@@ -20,6 +20,7 @@ export const el = {
   title: $('title'),
   modelText: $('modelText'),
   thinkText: $('thinkText'),
+  thinkBadge: $('thinkBadge'),
   btnModel: $('btnModel'),
   btnThink: $('btnThink'),
   footName: $('footName'),

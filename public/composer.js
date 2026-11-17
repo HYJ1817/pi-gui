@@ -8,6 +8,14 @@
 import { el, S } from './state.js';
 import { modelCapability } from './model-capabilities.js';
 import { thinkingAvailability } from './thinking-availability.js';
+import { applyChipState } from './ui3-model-picker.js';
+
+let modelControlsHook = null;
+
+/** 装配层注册：模型/档位的权威状态刷新后，若统一菜单开着就用新状态重绘。 */
+export function setModelControlsHook(fn) {
+  modelControlsHook = typeof fn === 'function' ? fn : null;
+}
 
 export function imageInputBlocked() {
   return !S.modelSwitchPending && !S.switching && S.bridgeState === 'ready'
@@ -21,11 +29,29 @@ export function renderModelControls() {
   const levels = availability.levels;
   const available = availability.state === 'ready';
   el.btnThink.disabled = !canUse || S.modelSwitchPending || !available;
+  applyChipState(el.btnThink, availability.state);
+  applyChipState(el.btnModel, availability.state);
   const level = S.state?.thinkingLevel;
-  const label = availability.state === 'pending' ? '思考同步中…' : !available ? '思考不可用' : levels.includes(level) ? '思考 ' + level : '思考 —';
+  const knownLevel = available && levels.includes(level);
+  const label = availability.state === 'pending' ? '思考同步中…' : !available ? '思考不可用' : knownLevel ? '思考 ' + level : '思考 —';
   el.thinkText.textContent = label;
   el.btnThink.title = availability.detail || `思考强度：${level || '—'}`;
   el.btnThink.setAttribute('aria-label', el.btnThink.title);
+
+  /* 统一入口：模型名 + 思考徽标 + chevron。徽标只在实际有档位且不是 off 时出现
+   * （与上游一致）；完整状态仍写在按钮的 title / aria-label 里。 */
+  if (el.thinkBadge) {
+    const badge = knownLevel && level !== 'off' ? level : '';
+    el.thinkBadge.textContent = badge;
+    el.thinkBadge.hidden = !badge;
+  }
+  if (el.btnModel) {
+    const modelName = S.state?.model?.name || S.state?.model?.id || '模型';
+    const thinking = availability.state === 'ready' ? (knownLevel ? level : '—') : availability.label;
+    const chipLabel = `模型与思考等级：${modelName} · ${thinking}`;
+    el.btnModel.title = chipLabel;
+    el.btnModel.setAttribute('aria-label', chipLabel);
+  }
   const imageBlocked = imageInputBlocked();
   el.btnAttach.title = imageBlocked ? '添加文件：当前模型不支持图片，普通文件仍可用' : '添加文件：图片 / PDF / Word / 文本';
   el.btnAttach.setAttribute('aria-label', el.btnAttach.title);
@@ -33,6 +59,7 @@ export function renderModelControls() {
   // drop and paste are rejected together in handleFiles when explicitly false.
   el.fileInput.accept = '';
   updateSendState();
+  modelControlsHook?.();
 }
 
 export function bindComposerPointerFocus(input) {
