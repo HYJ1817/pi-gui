@@ -26,6 +26,7 @@ import { workspaceView } from './ui/workspace-surface.js';
 import { icon, iconFor } from './util.js';
 import { md } from './markdown.js';
 import { sendCommand } from './api.js';
+import { requestSessionStats } from './session-stats.js';
 import { updateSendState } from './composer.js';
 import { FILE_BLOCK_RE } from './attachments.js';
 import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
@@ -384,7 +385,7 @@ export function setStreaming(on) {
 export function onSettled() {
   interruptActive();
   finalizeTurn();
-  sendCommand({ type: 'get_session_stats' });
+  requestSessionStats();
   sendCommand({ type: 'get_state' });
   sendCommand({ type: 'get_tree' });
   if (workspaceView() === 'chat') el.input.focus();

@@ -38,6 +38,7 @@ import {
 } from './api.js';
 import { openModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
+import { sessionDisplayTitle } from './session-title.js';
 import { S, ownsWorkspace } from './state.js';
 import { afterSessionSwitch } from './rpc.js';
 import { classicThreadSessionId } from './messages.js';
@@ -1793,7 +1794,7 @@ export function openPlanner(focus = null) {
           return;
         }
         if (preview) { taskSessionViewer?.(r); return; }
-        afterSessionSwitch(previousSessionId);
+        afterSessionSwitch(previousSessionId, { title: sessionDisplayTitle({ title: r.title }), sessionKey: r.id || null });
         toast('已切到任务会话：' + (r.title || '（无标题）'), 'info');
       } catch (err) {
         toast('打开会话失败：' + err.message, 'error');

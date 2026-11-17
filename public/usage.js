@@ -13,16 +13,115 @@ import { setTitleText } from './shell.js';
 import { openPop, pop } from './ui/popover.js';
 import { setStreaming } from './messages.js';
 import { draftSync } from './draft.js';
-import { withModelCapability, modelIdentity } from './model-capabilities.js';
+import { withModelCapability, modelCapability, modelIdentity } from './model-capabilities.js';
 import { thinkingAvailability } from './thinking-availability.js';
 import { renderModelControls } from './composer.js';
 import { renderAttachments } from './attachments.js';
 import { observeFallbackState } from './fallback.js';
 import { logRendererEvent } from './log-client.js';
+import { requestSessionStats } from './session-stats.js';
 
 /* 能力未知只用于低频诊断日志；它不是业务判定，视图仍由 model-capabilities 决定。 */
 function contextWindowMissing(c) {
   return c?.contextWindow === null || c?.contextWindow === undefined;
+}
+
+const positiveNumber = (v) => typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+
+/** 两个模型身份是否能确认是同一个。
+ *  只有两边都具备完整的 providerId + modelId，且两个字段逐一相等时，
+ *  才允许把统计载荷里的 contextWindow 当作当前模型的容量。
+ *  任意一边缺字段（哪怕两边缺得一模一样、或只剩 modelId 相同）都无法
+ *  证明是同一个模型，一律拒绝 —— 身份不完整时宁可显示「未知」，
+ *  也不能让旧模型的容量借着「都是未知身份」溜到新模型上。 */
+function identityCompatible(a, b) {
+  const aComplete = Boolean(a?.providerId && a?.modelId);
+  const bComplete = Boolean(b?.providerId && b?.modelId);
+  if (!aComplete || !bComplete) return false;
+  return a.providerId === b.providerId && a.modelId === b.modelId;
+}
+
+/* 最近一次被接受的统计属于哪一代请求。`object` 用来识别外部直接
+ * 赋值 S.stats 的情况（测试 / 旧路径），此时没有请求身份可用。 */
+let statsRecord = null;
+
+function currentStatsRecord() {
+  if (!S.stats) {
+    statsRecord = null;
+    return null;
+  }
+  if (!statsRecord || statsRecord.object !== S.stats) {
+    statsRecord = {
+      object: S.stats,
+      identity: modelIdentity(S.state?.model),
+      seq: 0,
+      workspace: S.workspaceGeneration,
+      sessionId: S.stats.sessionId || null,
+    };
+  }
+  return statsRecord;
+}
+
+/** 当前模型可用的上下文容量。只认完整 providerId + modelId 的元数据；
+ *  先看 get_state 的模型（Pi 运行态），再按同一身份查可用模型列表。 */
+function modelContextWindow() {
+  const model = S.state?.model;
+  if (!model || typeof model !== 'object') return null;
+  const identity = modelIdentity(model);
+  if (!identity.providerId || !identity.modelId) return null;
+
+  const own = modelCapability(model);
+  if (own?.contextWindow != null) {
+    return { value: own.contextWindow, source: own.evidence?.contextWindow || 'model' };
+  }
+  const raw = positiveNumber(model.contextWindow);
+  if (raw != null) return { value: raw, source: 'model' };
+
+  const listed = (S.models || []).find((m) =>
+    m && m.providerId === identity.providerId && m.modelId === identity.modelId);
+  if (!listed) return null;
+  const cap = modelCapability(listed);
+  if (cap?.contextWindow != null) {
+    return { value: cap.contextWindow, source: cap.evidence?.contextWindow || 'model' };
+  }
+  const listedRaw = positiveNumber(listed.contextWindow);
+  return listedRaw != null ? { value: listedRaw, source: 'model' } : null;
+}
+
+/** 上下文用量的唯一投影：已用 token 来自当前会话统计；容量来自当前
+ *  已确认模型的 contextWindow。统计里的 contextWindow 只在它确实属于
+ *  同一模型时作为回退证据 —— 模型切换后旧统计的容量绝不沿用。
+ *
+ *  `pending` 表示 set_model / get_state 回读尚未完成：此时保留已用
+ *  token（同一会话不因换模型清零），但容量显示为「同步中」，不展示
+ *  上一模型的旧容量。 */
+export function contextUsage() {
+  const ctx = S.stats?.contextUsage || null;
+  const used = ctx && typeof ctx.tokens === 'number' && Number.isFinite(ctx.tokens) && ctx.tokens >= 0
+    ? ctx.tokens
+    : null;
+  const pending = S.modelSwitchPending === true;
+
+  let limit = null;
+  let source = null;
+  if (!pending) {
+    const fromModel = modelContextWindow();
+    if (fromModel) {
+      limit = fromModel.value;
+      source = fromModel.source;
+    } else {
+      const record = currentStatsRecord();
+      const fromStats = positiveNumber(ctx?.contextWindow);
+      if (fromStats != null && record
+        && identityCompatible(record.identity, modelIdentity(S.state?.model))) {
+        limit = fromStats;
+        source = 'session-stats';
+      }
+    }
+  }
+
+  const percent = used != null && limit != null ? (used / limit) * 100 : null;
+  return { used, limit, percent, pending, source };
 }
 
 /* ---------- 辅助工具 ---------- */
@@ -208,6 +307,7 @@ export function renderRemoteQuota() {
  *  远端额度不在这里清：它归 Provider identity 管，换会话不等于换供应商。 */
 export function clearSessionUsage() {
   S.stats = null;
+  statsRecord = null;
   Object.assign(S.localUsage, {
     inputTokens: null,
     outputTokens: null,
@@ -230,8 +330,10 @@ export function applyState(d) {
   S.ready = true;
   const previousModel = modelIdentity(S.state?.model);
   const nextModel = modelIdentity(d.model);
+  /* provider + model 才是身份。只比 modelId 会把两个供应商下的同名模型
+   * 当成同一次切换，旧容量/旧档位就留下来了。 */
   const changedModel = previousModel.modelId !== nextModel.modelId
-    || (previousModel.providerId && nextModel.providerId && previousModel.providerId !== nextModel.providerId);
+    || previousModel.providerId !== nextModel.providerId;
   if (changedModel) { S.thinkingLevels = []; S.thinkingReadStatus = 'unconfirmed'; }
 
   /* 覆盖旧 state **之前**先比 sessionId：Session A 的统计绝不能留到 Session B。
@@ -254,6 +356,13 @@ export function applyState(d) {
     }) };
   }
   S.state = d;
+
+  /* 模型变了：Pi 的统计缓存键包含当前模型，必须重新取一次，才能让
+   * 已用 token 与新的 contextWindow 对齐。请求会登记当前身份，迟到的
+   * 旧应答由 applyStats 的代次检查丢掉。 */
+  if (changedModel && S.hasProject && S.bridgeState === 'ready') {
+    requestSessionStats();
+  }
 
   if (nextSessionId) {
     S.localUsage.sessionId = nextSessionId;
@@ -304,6 +413,9 @@ export function applyState(d) {
   if (d.sessionName) setTitleText(d.sessionName);
   el.footName.textContent = d.sessionName || '本地会话';
   setStreaming(Boolean(d.isStreaming));
+  /* 模型/会话身份变化后立刻重画：侧栏、chip、浮层、统计面板都从
+   * contextUsage() 这一份投影取值，不各自缓存容量。 */
+  renderUsageState();
 }
 
 /**
@@ -314,12 +426,17 @@ export function applyState(d) {
  * 缺失一律显示「—」，**0 只可能来自真实数字 0**。
  */
 export function renderUsageState() {
-  const ctx = S.stats?.contextUsage || null;
   const t = S.stats?.tokens || null;
+  const view = contextUsage();
+  const pct = view.percent;
 
-  let pct = null;
-  if (ctx && typeof ctx.percent === 'number' && Number.isFinite(ctx.percent)) pct = ctx.percent;
-  else if (ctx && ctx.tokens != null && ctx.contextWindow) pct = (ctx.tokens / ctx.contextWindow) * 100;
+  /* LocalUsage 的上下文字段也跟同一份投影走。没有统计时保持 null，
+   * 不把「当前模型容量」冒充成「已经用掉的会话数据」。 */
+  if (S.stats) {
+    S.localUsage.contextUsed = view.used;
+    S.localUsage.contextLimit = view.limit;
+    S.localUsage.contextPercent = view.percent;
+  }
 
   if (el.uPct) el.uPct.textContent = pct == null ? '—' : Math.round(pct) + '%';
   if (el.uCtxBar) {
@@ -328,9 +445,10 @@ export function renderUsageState() {
     el.uCtxBar.style.background = pct == null ? 'var(--ui-text-muted)' : pct > 85 ? 'var(--err)' : pct > 65 ? 'var(--warn)' : 'var(--ui-text-muted)';
   }
   if (el.uNote) {
-    el.uNote.textContent = ctx && ctx.tokens != null && ctx.contextWindow
-      ? `上下文 ${fmt(ctx.tokens)} / ${fmt(ctx.contextWindow)}`
-      : '上下文 —';
+    if (view.used == null) el.uNote.textContent = '上下文 —';
+    else if (view.pending) el.uNote.textContent = `上下文 ${fmt(view.used)} / 同步中`;
+    else if (view.limit == null) el.uNote.textContent = `上下文 ${fmt(view.used)} / 未知`;
+    else el.uNote.textContent = `上下文 ${fmt(view.used)} / ${fmt(view.limit)}`;
   }
 
   if (el.uTok) {
@@ -343,11 +461,33 @@ export function renderUsageState() {
 
   renderCtxChip();
   renderRemoteQuota();
+  /* 明细浮层若正开着，内容也必须跟同一份投影一起刷新。 */
+  if (pop && pop.querySelector('.tip-quota-section')) openCtxTip();
 }
 
-export function applyStats(d) {
+export function applyStats(d, meta = null) {
+  if (!d || typeof d !== 'object') return;
+
+  /* 过期检查：换了工作区 / 会话之后，旧请求的统计不能再写进来。
+   * 模型身份不在这里拒绝 —— 同一会话换模型时已用 token 仍然有效，
+   * 只是容量不再采用旧统计的 contextWindow（见 contextUsage）。 */
+  if (meta?.stale) return;
+  if (meta && meta.workspace !== S.workspaceGeneration) return;
+  const currentSessionId = S.state?.sessionId || S.localUsage.sessionId || null;
+  if (!S.modelSwitchPending && d.sessionId && currentSessionId && d.sessionId !== currentSessionId) return;
+
+  const previous = currentStatsRecord();
+  if (meta && previous?.seq && meta.seq < previous.seq) return;
+
+  const identity = meta?.identity || modelIdentity(S.state?.model);
+  statsRecord = {
+    object: d,
+    identity,
+    seq: meta?.seq ?? 0,
+    workspace: meta?.workspace ?? S.workspaceGeneration,
+    sessionId: d.sessionId || meta?.sessionId || null,
+  };
   S.stats = d;
-  const ctx = d.contextUsage || {};
   const t = d.tokens || {};
 
   // 同步更新 LocalUsage（0 是真实 0；缺失保持 null）
@@ -357,9 +497,6 @@ export function applyStats(d) {
   S.localUsage.cacheReadTokens = t.cacheRead != null ? t.cacheRead : null;
   S.localUsage.cacheWriteTokens = t.cacheWrite != null ? t.cacheWrite : null;
   S.localUsage.totalTokens = t.total != null ? t.total : null;
-  S.localUsage.contextUsed = ctx.tokens != null ? ctx.tokens : null;
-  S.localUsage.contextLimit = ctx.contextWindow != null ? ctx.contextWindow : null;
-  S.localUsage.contextPercent = typeof ctx.percent === 'number' ? ctx.percent : null;
   S.localUsage.estimatedCost = typeof d.cost === 'number' ? d.cost : null;
   S.localUsage.source = 'session_stats';
   S.localUsage.updatedAt = new Date().toISOString();
@@ -400,19 +537,20 @@ export function onTurnUsage(usage, meta = {}) {
 const RING_LEN = 2 * Math.PI * 15.5;
 
 export function ctxPct() {
-  const ctx = S.stats?.contextUsage;
-  if (!ctx || ctx.tokens == null || !ctx.contextWindow) return null;
-  return typeof ctx.percent === 'number' ? ctx.percent : Math.round((ctx.tokens / ctx.contextWindow) * 100);
+  return contextUsage().percent;
 }
 
 export function renderCtxChip() {
-  const pct = ctxPct();
+  const view = contextUsage();
+  const pct = view.percent;
 
   if (pct == null) {
     el.ctxPct.textContent = '—';
     el.ctxRing.style.strokeDashoffset = String(RING_LEN);
     el.btnCtx.className = 'ctx-chip';
-    el.btnCtx.setAttribute('aria-label', '上下文占用：暂无数据');
+    el.btnCtx.setAttribute('aria-label', view.used == null
+      ? '上下文占用：暂无数据'
+      : view.pending ? '上下文占用：模型同步中' : '上下文占用：容量未知');
     return;
   }
 
@@ -425,48 +563,40 @@ export function renderCtxChip() {
 
 /** 弹出上下文与额度明细 Tip */
 export function openCtxTip() {
-  const ctx = S.stats?.contextUsage;
+  const view = contextUsage();
 
   pop.innerHTML = '';
   const box = document.createElement('div');
 
   // 1. 上下文背景信息 (Context Window)
-  if (!ctx || ctx.tokens == null || !ctx.contextWindow) {
-    const head = document.createElement('div');
-    head.className = 'tip-head';
-    head.textContent = '背景信息窗口:';
+  const head = document.createElement('div');
+  head.className = 'tip-head';
+  head.textContent = '背景信息窗口:';
+
+  if (view.used == null) {
     const dim = document.createElement('div');
     dim.className = 'tip-dim';
     dim.textContent = '暂无上下文数据';
     box.append(head, dim);
   } else {
-    const pctValue = ctxPct();
-    if (pctValue == null) {
-      /* 有上下文数据但算不出百分比（例如缺 contextWindow）：如实说没有，不按 0 显示。 */
-      const head = document.createElement('div');
-      head.className = 'tip-head';
-      head.textContent = '背景信息窗口:';
-      const dim = document.createElement('div');
-      dim.className = 'tip-dim';
-      dim.textContent = '暂无上下文数据';
-      box.append(head, dim);
+    const big = document.createElement('div');
+    big.className = 'tip-big';
+    const dim = document.createElement('div');
+    dim.className = 'tip-dim';
+
+    if (view.pending) {
+      big.textContent = `已用 ${fmt(view.used)}`;
+      dim.textContent = '正在同步新模型的上下文容量…';
+    } else if (view.limit == null) {
+      big.textContent = `已用 ${fmt(view.used)}`;
+      dim.textContent = '容量未知（当前模型未提供 contextWindow）';
     } else {
-      const pct = Math.round(pctValue);
+      const pct = Math.round(view.percent);
       const left = Math.max(0, 100 - pct);
-      const head = document.createElement('div');
-      head.className = 'tip-head';
-      head.textContent = '背景信息窗口:';
-
-      const big = document.createElement('div');
-      big.className = 'tip-big';
       big.textContent = `${pct}% 已用 (剩余 ${left}%)`;
-
-      const dim = document.createElement('div');
-      dim.className = 'tip-dim';
-      dim.textContent = `已用 ${fmt(ctx.tokens)} 标记, 共 ${fmt(ctx.contextWindow)}`;
-
-      box.append(head, big, dim);
+      dim.textContent = `已用 ${fmt(view.used)} 标记, 共 ${fmt(view.limit)}`;
     }
+    box.append(head, big, dim);
   }
 
   // 2. 会话累计用量 (Session Usage)
@@ -675,6 +805,9 @@ export function onModels(d) {
     return contextWindowMissing(c) && !['imageInput', 'reasoning', 'toolCalling'].some(k => c.capabilities?.[k] !== null && c.capabilities?.[k] !== undefined);
   }).length;
   if (unknownCapability) logRendererEvent('ui.model_capability_unknown', { count: unknownCapability });
+  /* 模型列表晚于 get_state 到达时，当前模型的 contextWindow 可能
+   * 这时才变得可解析 —— 用量视图要跟着刷新。 */
+  renderUsageState();
   if (modelWaiters.length) {
     const ws = modelWaiters;
     modelWaiters = [];

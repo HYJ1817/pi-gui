@@ -66,6 +66,10 @@
 
 回滚时依次回退报告提交、`bb2d642`，再重建同样的应用产物，无用户数据迁移。已具备人工验收材料。合并验收仍待当前分支 PR 的完整 CI 及人工确认。未运行完整本地 `npm test`、已打包应用启动和安装升级。
 
+## 后续变更：设置入口图标（2026-11-17）
+
+全局栏底部「设置」入口改用 Lucide `sliders-horizontal` 的几何，替换原来的齿轮图形；按钮类名、命中区、位置、`title`、`aria-label`、`aria-controls` 与展开/收起行为保持不变。图形内嵌在 [public/ui/icons.js](../../public/ui/icons.js) 的受控映射中，不引入运行依赖、外部请求或运行时 SVG 注入。来源：[sliders-horizontal](https://lucide.dev/icons/sliders-horizontal)，许可 ISC，取得日期 2026-11-17。其余图形与上文盘点不变。
+
 ## 后续变更：侧栏切换图标（2026-11-17）
 
 侧栏的收起/展开两个图标改用 Lucide `panel-left-close` / `panel-left-open` 的几何，仍内嵌在 [public/ui/icons.js](../../public/ui/icons.js) 的受控映射中，不引入运行依赖、外部请求或运行时 SVG 注入。来源：[panel-left-close](https://lucide.dev/icons/panel-left-close)、[panel-left-open](https://lucide.dev/icons/panel-left-open)，许可 ISC，取得日期 2026-11-17。其余图形与上文盘点不变；上文「未采用第三方图形」的结论仅对应原验收提交。

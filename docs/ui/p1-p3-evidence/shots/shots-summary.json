@@ -1,0 +1,929 @@
+{
+  "generatedAt": "2026-11-17T12:10:29.601Z",
+  "browser": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "viewports": [
+    [
+      1320,
+      820
+    ],
+    [
+      700,
+      600
+    ]
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "assertions": [
+    {
+      "name": "P1 1320×820 dark: 设置入口渲染 sliders-horizontal",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 1320×820 dark: 图标 18×18、按钮 28×28（既有角色尺寸）",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 1320×820 dark: tooltip / 无障碍名称 / 展开状态保留",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 1320×820 dark: 键盘可聚焦",
+      "pass": true
+    },
+    {
+      "name": "P1 1320×820 dark: 点击仍打开既有设置菜单",
+      "pass": true,
+      "detail": {
+        "open": true,
+        "expanded": "true",
+        "buttons": 14
+      }
+    },
+    {
+      "name": "P2 1320×820 dark: 历史会话打开时顶栏显示列表标题",
+      "pass": true,
+      "detail": "发酵罐空气分布器设计核算"
+    },
+    {
+      "name": "P2 1320×820 dark: 切换历史会话后顶栏显示目标标题",
+      "pass": true,
+      "detail": "帮我把 README 的测试那节补全"
+    },
+    {
+      "name": "P2 1320×820 dark: 行内重命名同时更新顶栏与侧栏",
+      "pass": true,
+      "detail": {
+        "renamed": true,
+        "renameReady": true,
+        "renameDone": true,
+        "title": "README 测试补全（已改名）",
+        "row": "README 测试补全（已改名）",
+        "currentRows": 1,
+        "menuItems": []
+      }
+    },
+    {
+      "name": "P3 1320×820 dark: 初始 1M 容量",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 1M",
+        "pct": "6%"
+      }
+    },
+    {
+      "name": "P3 1320×820 dark: 1M 浮层与侧栏同值",
+      "pass": true,
+      "detail": "背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (USD)$15.0000"
+    },
+    {
+      "name": "P3 1320×820 dark: 跨供应商切到 Grok 后容量变为 256k",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 256k",
+        "pct": "24%"
+      }
+    },
+    {
+      "name": "P3 1320×820 dark: 已用 token 不因换模型清零",
+      "pass": true,
+      "detail": "上下文 61.23k / 256k"
+    },
+    {
+      "name": "P3 1320×820 dark: Grok 浮层与侧栏同值（24% / 256k）",
+      "pass": true,
+      "detail": "背景信息窗口:24% 已用 (剩余 76%)已用 61.23k 标记, 共 256k会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (opencode-go)刷新unknown provider"
+    },
+    {
+      "name": "P3 1320×820 dark: 同供应商切到 Flash 后容量变为 200k",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 200k",
+        "pct": "31%"
+      }
+    },
+    {
+      "name": "P3 1320×820 dark: 未提供 contextWindow 时显示未知（不沿用 200k）",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 未知",
+        "pct": "—"
+      }
+    },
+    {
+      "name": "P3 1320×820 dark: 未知容量浮层明确说明，不显示旧容量",
+      "pass": true,
+      "detail": "背景信息窗口:已用 61.23k容量未知（当前模型未提供 contextWindow）会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (mystery)刷新unknown provider"
+    },
+    {
+      "name": "P3 1320×820 dark: 切回 Pro 后容量恢复 1M",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 1M",
+        "pct": "6%"
+      }
+    },
+    {
+      "name": "P1 1320×820 light: 设置入口渲染 sliders-horizontal",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 1320×820 light: 图标 18×18、按钮 28×28（既有角色尺寸）",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 1320×820 light: tooltip / 无障碍名称 / 展开状态保留",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 1320×820 light: 键盘可聚焦",
+      "pass": true
+    },
+    {
+      "name": "P1 1320×820 light: 点击仍打开既有设置菜单",
+      "pass": true,
+      "detail": {
+        "open": true,
+        "expanded": "true",
+        "buttons": 14
+      }
+    },
+    {
+      "name": "P2 1320×820 light: 历史会话打开时顶栏显示列表标题",
+      "pass": true,
+      "detail": "发酵罐空气分布器设计核算"
+    },
+    {
+      "name": "P2 1320×820 light: 切换历史会话后顶栏显示目标标题",
+      "pass": true,
+      "detail": "帮我把 README 的测试那节补全"
+    },
+    {
+      "name": "P2 1320×820 light: 行内重命名同时更新顶栏与侧栏",
+      "pass": true,
+      "detail": {
+        "renamed": true,
+        "renameReady": true,
+        "renameDone": true,
+        "title": "README 测试补全（已改名）",
+        "row": "README 测试补全（已改名）",
+        "currentRows": 1,
+        "menuItems": []
+      }
+    },
+    {
+      "name": "P3 1320×820 light: 初始 1M 容量",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 1M",
+        "pct": "6%"
+      }
+    },
+    {
+      "name": "P3 1320×820 light: 1M 浮层与侧栏同值",
+      "pass": true,
+      "detail": "背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (USD)$15.0000"
+    },
+    {
+      "name": "P3 1320×820 light: 跨供应商切到 Grok 后容量变为 256k",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 256k",
+        "pct": "24%"
+      }
+    },
+    {
+      "name": "P3 1320×820 light: 已用 token 不因换模型清零",
+      "pass": true,
+      "detail": "上下文 61.23k / 256k"
+    },
+    {
+      "name": "P3 1320×820 light: Grok 浮层与侧栏同值（24% / 256k）",
+      "pass": true,
+      "detail": "背景信息窗口:24% 已用 (剩余 76%)已用 61.23k 标记, 共 256k会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (opencode-go)刷新unknown provider"
+    },
+    {
+      "name": "P3 1320×820 light: 同供应商切到 Flash 后容量变为 200k",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 200k",
+        "pct": "31%"
+      }
+    },
+    {
+      "name": "P3 1320×820 light: 未提供 contextWindow 时显示未知（不沿用 200k）",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 未知",
+        "pct": "—"
+      }
+    },
+    {
+      "name": "P3 1320×820 light: 未知容量浮层明确说明，不显示旧容量",
+      "pass": true,
+      "detail": "背景信息窗口:已用 61.23k容量未知（当前模型未提供 contextWindow）会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (mystery)刷新unknown provider"
+    },
+    {
+      "name": "P3 1320×820 light: 切回 Pro 后容量恢复 1M",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 1M",
+        "pct": "6%"
+      }
+    },
+    {
+      "name": "P1 700×600 dark: 设置入口渲染 sliders-horizontal",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 700×600 dark: 图标 18×18、按钮 28×28（既有角色尺寸）",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 700×600 dark: tooltip / 无障碍名称 / 展开状态保留",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 700×600 dark: 键盘可聚焦",
+      "pass": true
+    },
+    {
+      "name": "P1 700×600 dark: 点击仍打开既有设置菜单",
+      "pass": true,
+      "detail": {
+        "open": true,
+        "expanded": "true",
+        "buttons": 14
+      }
+    },
+    {
+      "name": "P2 700×600 dark: 历史会话打开时顶栏显示列表标题",
+      "pass": true,
+      "detail": "发酵罐空气分布器设计核算"
+    },
+    {
+      "name": "P2 700×600 dark: 切换历史会话后顶栏显示目标标题",
+      "pass": true,
+      "detail": "帮我把 README 的测试那节补全"
+    },
+    {
+      "name": "P2 700×600 dark: 行内重命名同时更新顶栏与侧栏",
+      "pass": true,
+      "detail": {
+        "renamed": true,
+        "renameReady": true,
+        "renameDone": true,
+        "title": "README 测试补全（已改名）",
+        "row": "README 测试补全（已改名）",
+        "currentRows": 1,
+        "menuItems": []
+      }
+    },
+    {
+      "name": "P3 700×600 dark: 初始 1M 容量",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 1M",
+        "pct": "6%"
+      }
+    },
+    {
+      "name": "P3 700×600 dark: 1M 浮层与侧栏同值",
+      "pass": true,
+      "detail": "背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (USD)$15.0000"
+    },
+    {
+      "name": "P3 700×600 dark: 跨供应商切到 Grok 后容量变为 256k",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 256k",
+        "pct": "24%"
+      }
+    },
+    {
+      "name": "P3 700×600 dark: 已用 token 不因换模型清零",
+      "pass": true,
+      "detail": "上下文 61.23k / 256k"
+    },
+    {
+      "name": "P3 700×600 dark: Grok 浮层与侧栏同值（24% / 256k）",
+      "pass": true,
+      "detail": "背景信息窗口:24% 已用 (剩余 76%)已用 61.23k 标记, 共 256k会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (opencode-go)刷新unknown provider"
+    },
+    {
+      "name": "P3 700×600 dark: 同供应商切到 Flash 后容量变为 200k",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 200k",
+        "pct": "31%"
+      }
+    },
+    {
+      "name": "P3 700×600 dark: 未提供 contextWindow 时显示未知（不沿用 200k）",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 未知",
+        "pct": "—"
+      }
+    },
+    {
+      "name": "P3 700×600 dark: 未知容量浮层明确说明，不显示旧容量",
+      "pass": true,
+      "detail": "背景信息窗口:已用 61.23k容量未知（当前模型未提供 contextWindow）会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (mystery)刷新unknown provider"
+    },
+    {
+      "name": "P3 700×600 dark: 切回 Pro 后容量恢复 1M",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 1M",
+        "pct": "6%"
+      }
+    },
+    {
+      "name": "P1 700×600 light: 设置入口渲染 sliders-horizontal",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 700×600 light: 图标 18×18、按钮 28×28（既有角色尺寸）",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 700×600 light: tooltip / 无障碍名称 / 展开状态保留",
+      "pass": true,
+      "detail": {
+        "icon": true,
+        "paths": 1,
+        "circles": 0,
+        "button": [
+          28,
+          28
+        ],
+        "svg": [
+          18,
+          18
+        ],
+        "label": "设置",
+        "title": "设置",
+        "expanded": "false",
+        "stroke": "1.7px"
+      }
+    },
+    {
+      "name": "P1 700×600 light: 键盘可聚焦",
+      "pass": true
+    },
+    {
+      "name": "P1 700×600 light: 点击仍打开既有设置菜单",
+      "pass": true,
+      "detail": {
+        "open": true,
+        "expanded": "true",
+        "buttons": 14
+      }
+    },
+    {
+      "name": "P2 700×600 light: 历史会话打开时顶栏显示列表标题",
+      "pass": true,
+      "detail": "发酵罐空气分布器设计核算"
+    },
+    {
+      "name": "P2 700×600 light: 切换历史会话后顶栏显示目标标题",
+      "pass": true,
+      "detail": "帮我把 README 的测试那节补全"
+    },
+    {
+      "name": "P2 700×600 light: 行内重命名同时更新顶栏与侧栏",
+      "pass": true,
+      "detail": {
+        "renamed": true,
+        "renameReady": true,
+        "renameDone": true,
+        "title": "README 测试补全（已改名）",
+        "row": "README 测试补全（已改名）",
+        "currentRows": 1,
+        "menuItems": []
+      }
+    },
+    {
+      "name": "P3 700×600 light: 初始 1M 容量",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 1M",
+        "pct": "6%"
+      }
+    },
+    {
+      "name": "P3 700×600 light: 1M 浮层与侧栏同值",
+      "pass": true,
+      "detail": "背景信息窗口:6% 已用 (剩余 94%)已用 61.23k 标记, 共 1M会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (deepseek)刷新剩余额度 (CNY)¥110.0000赠送额度 (CNY)¥10.0000充值额度 (CNY)¥100.0000剩余额度 (USD)$15.0000"
+    },
+    {
+      "name": "P3 700×600 light: 跨供应商切到 Grok 后容量变为 256k",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 256k",
+        "pct": "24%"
+      }
+    },
+    {
+      "name": "P3 700×600 light: 已用 token 不因换模型清零",
+      "pass": true,
+      "detail": "上下文 61.23k / 256k"
+    },
+    {
+      "name": "P3 700×600 light: Grok 浮层与侧栏同值（24% / 256k）",
+      "pass": true,
+      "detail": "背景信息窗口:24% 已用 (剩余 76%)已用 61.23k 标记, 共 256k会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (opencode-go)刷新unknown provider"
+    },
+    {
+      "name": "P3 700×600 light: 同供应商切到 Flash 后容量变为 200k",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 200k",
+        "pct": "31%"
+      }
+    },
+    {
+      "name": "P3 700×600 light: 未提供 contextWindow 时显示未知（不沿用 200k）",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 未知",
+        "pct": "—"
+      }
+    },
+    {
+      "name": "P3 700×600 light: 未知容量浮层明确说明，不显示旧容量",
+      "pass": true,
+      "detail": "背景信息窗口:已用 61.23k容量未知（当前模型未提供 contextWindow）会话累计用量输入18.42k输出3.11k缓存读取40.2k累计成本$0.0842远端额度 (mystery)刷新unknown provider"
+    },
+    {
+      "name": "P3 700×600 light: 切回 Pro 后容量恢复 1M",
+      "pass": true,
+      "detail": {
+        "note": "上下文 61.23k / 1M",
+        "pct": "6%"
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "scene": "p1-settings-icon",
+      "width": 1320,
+      "height": 820,
+      "theme": "dark",
+      "icon": true,
+      "paths": 1,
+      "circles": 0,
+      "button": [
+        28,
+        28
+      ],
+      "svg": [
+        18,
+        18
+      ],
+      "label": "设置",
+      "title": "设置",
+      "expanded": "false",
+      "stroke": "1.7px"
+    },
+    {
+      "scene": "p2-rename",
+      "width": 1320,
+      "height": 820,
+      "theme": "dark",
+      "renamed": true,
+      "renameReady": true,
+      "renameDone": true,
+      "title": "README 测试补全（已改名）",
+      "row": "README 测试补全（已改名）"
+    },
+    {
+      "scene": "p1-settings-icon",
+      "width": 1320,
+      "height": 820,
+      "theme": "light",
+      "icon": true,
+      "paths": 1,
+      "circles": 0,
+      "button": [
+        28,
+        28
+      ],
+      "svg": [
+        18,
+        18
+      ],
+      "label": "设置",
+      "title": "设置",
+      "expanded": "false",
+      "stroke": "1.7px"
+    },
+    {
+      "scene": "p2-rename",
+      "width": 1320,
+      "height": 820,
+      "theme": "light",
+      "renamed": true,
+      "renameReady": true,
+      "renameDone": true,
+      "title": "README 测试补全（已改名）",
+      "row": "README 测试补全（已改名）"
+    },
+    {
+      "scene": "p1-settings-icon",
+      "width": 700,
+      "height": 600,
+      "theme": "dark",
+      "icon": true,
+      "paths": 1,
+      "circles": 0,
+      "button": [
+        28,
+        28
+      ],
+      "svg": [
+        18,
+        18
+      ],
+      "label": "设置",
+      "title": "设置",
+      "expanded": "false",
+      "stroke": "1.7px"
+    },
+    {
+      "scene": "p2-rename",
+      "width": 700,
+      "height": 600,
+      "theme": "dark",
+      "renamed": true,
+      "renameReady": true,
+      "renameDone": true,
+      "title": "README 测试补全（已改名）",
+      "row": "README 测试补全（已改名）"
+    },
+    {
+      "scene": "p1-settings-icon",
+      "width": 700,
+      "height": 600,
+      "theme": "light",
+      "icon": true,
+      "paths": 1,
+      "circles": 0,
+      "button": [
+        28,
+        28
+      ],
+      "svg": [
+        18,
+        18
+      ],
+      "label": "设置",
+      "title": "设置",
+      "expanded": "false",
+      "stroke": "1.7px"
+    },
+    {
+      "scene": "p2-rename",
+      "width": 700,
+      "height": 600,
+      "theme": "light",
+      "renamed": true,
+      "renameReady": true,
+      "renameDone": true,
+      "title": "README 测试补全（已改名）",
+      "row": "README 测试补全（已改名）"
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "p1-settings-icon-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-icon-1320x820-dark.png",
+      "bytes": 78288
+    },
+    {
+      "name": "p1-settings-menu-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-menu-1320x820-dark.png",
+      "bytes": 55254
+    },
+    {
+      "name": "p2-session-title-current-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-current-1320x820-dark.png",
+      "bytes": 55254
+    },
+    {
+      "name": "p2-session-title-renamed-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-renamed-1320x820-dark.png",
+      "bytes": 38698
+    },
+    {
+      "name": "p3-context-1m-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-1m-1320x820-dark.png",
+      "bytes": 66024
+    },
+    {
+      "name": "p3-context-grok-256k-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-grok-256k-1320x820-dark.png",
+      "bytes": 58851
+    },
+    {
+      "name": "p3-context-unknown-1320x820-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-unknown-1320x820-dark.png",
+      "bytes": 56569
+    },
+    {
+      "name": "p1-settings-icon-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-icon-1320x820-light.png",
+      "bytes": 81793
+    },
+    {
+      "name": "p1-settings-menu-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-menu-1320x820-light.png",
+      "bytes": 56136
+    },
+    {
+      "name": "p2-session-title-current-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-current-1320x820-light.png",
+      "bytes": 56136
+    },
+    {
+      "name": "p2-session-title-renamed-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-renamed-1320x820-light.png",
+      "bytes": 39776
+    },
+    {
+      "name": "p3-context-1m-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-1m-1320x820-light.png",
+      "bytes": 68176
+    },
+    {
+      "name": "p3-context-grok-256k-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-grok-256k-1320x820-light.png",
+      "bytes": 60106
+    },
+    {
+      "name": "p3-context-unknown-1320x820-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-unknown-1320x820-light.png",
+      "bytes": 57801
+    },
+    {
+      "name": "p1-settings-icon-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-icon-700x600-dark.png",
+      "bytes": 58780
+    },
+    {
+      "name": "p1-settings-menu-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-menu-700x600-dark.png",
+      "bytes": 30714
+    },
+    {
+      "name": "p2-session-title-current-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-current-700x600-dark.png",
+      "bytes": 30714
+    },
+    {
+      "name": "p2-session-title-renamed-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-renamed-700x600-dark.png",
+      "bytes": 33805
+    },
+    {
+      "name": "p3-context-1m-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-1m-700x600-dark.png",
+      "bytes": 49997
+    },
+    {
+      "name": "p3-context-grok-256k-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-grok-256k-700x600-dark.png",
+      "bytes": 41998
+    },
+    {
+      "name": "p3-context-unknown-700x600-dark",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-unknown-700x600-dark.png",
+      "bytes": 43173
+    },
+    {
+      "name": "p1-settings-icon-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-icon-700x600-light.png",
+      "bytes": 47233
+    },
+    {
+      "name": "p1-settings-menu-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p1-settings-menu-700x600-light.png",
+      "bytes": 31141
+    },
+    {
+      "name": "p2-session-title-current-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-current-700x600-light.png",
+      "bytes": 31141
+    },
+    {
+      "name": "p2-session-title-renamed-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p2-session-title-renamed-700x600-light.png",
+      "bytes": 34492
+    },
+    {
+      "name": "p3-context-1m-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-1m-700x600-light.png",
+      "bytes": 52614
+    },
+    {
+      "name": "p3-context-grok-256k-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-grok-256k-700x600-light.png",
+      "bytes": 43789
+    },
+    {
+      "name": "p3-context-unknown-700x600-light",
+      "file": "docs\\ui\\p1-p3-evidence\\shots\\p3-context-unknown-700x600-light.png",
+      "bytes": 44657
+    }
+  ],
+  "pageErrors": []
+}

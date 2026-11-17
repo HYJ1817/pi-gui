@@ -554,12 +554,17 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
 
   const { S, resetUsageState, beginWorkspaceSwitch, setUsageRenderHook } = await import('../public/state.js');
   const usage = await import('../public/usage.js');
+  const sessionStats = await import('../public/session-stats.js');
   const $ = (id) => document.getElementById(id);
   const tick = () => new Promise((r) => setTimeout(r, 0));
 
   check('usage.js 注册了渲染钩子（state.js 不 import usage.js，避免成环）', typeof setUsageRenderHook === 'function');
 
   // 11.1 0 与 null
+  /* 统计直接赋值没有请求身份；给一个完整模型身份，容量才允许从统计回退
+   * （新规则：providerId + modelId 完整且相等）。这里验证的是 0 的渲染。 */
+  S.state = { ...(S.state || {}), model: { providerId: 'deepseek', modelId: 'deepseek-v4-flash' } };
+  S.models = [];
   usage.applyStats({ sessionId: 's1', tokens: { input: null, output: 10, cacheRead: 0 }, cost: 0, contextUsage: { tokens: 0, contextWindow: 1000, percent: 0 } });
   check('null 输入显示「—」，真实 0 显示 0：null → —', $('uTok').textContent.startsWith('—'));
   check('null 输入 + 真实输出：— / 10', $('uTok').textContent === '— / 10');
@@ -713,6 +718,282 @@ const NEWAPI_KEY = 'sk-newapi-secret-key-88888';
   check('fmtBalanceShort(null 单位) 只输出数值', usage.fmtBalanceShort(75, null) === '75.00');
   check('fmtCurrency(null 单位) 只输出数值', usage.fmtCurrency(75, null) === '75.0000');
   check('fmtMaybeMoney(null 单位) 只输出数值', usage.fmtMaybeMoney(75, null) === '75.0000');
+
+  // 11.9 上下文容量：已用来自统计，容量只认当前模型身份
+  {
+    console.log('=== 11.9 上下文容量：当前模型身份是唯一容量来源 ===');
+    const flushAsync = () => new Promise((r) => setTimeout(r, 0));
+    const flash = { providerId: 'deepseek', modelId: 'deepseek-v4-flash', id: 'deepseek-v4-flash', provider: 'deepseek', name: 'DeepSeek V4 Flash' };
+    const pro = { providerId: 'deepseek', modelId: 'deepseek-v4-pro', id: 'deepseek-v4-pro', provider: 'deepseek', name: 'DeepSeek V4 Pro' };
+    const grok = { providerId: 'opencode-go', modelId: 'grok-4.7', id: 'grok-4.7', provider: 'opencode-go', name: 'Grok 4.7' };
+    const otherGrok = { providerId: 'other-provider', modelId: 'grok-4.7', id: 'grok-4.7', provider: 'other-provider', name: 'Grok 4.7' };
+    const mystery = { providerId: 'mystery', modelId: 'mystery-1', id: 'mystery-1', provider: 'mystery', name: 'Mystery' };
+    const CAP_MODELS = [
+      { ...flash, contextWindow: 200000 },
+      { ...pro, contextWindow: 1000000 },
+      { ...grok, contextWindow: 256000 },
+      { ...otherGrok, contextWindow: 512000 },
+      mystery,
+    ];
+    const useModel = (model, { pending = false } = {}) => {
+      S.models = CAP_MODELS;
+      S.state = { ...(S.state || {}), sessionId: 'cap-session', model };
+      S.currentProviderId = model.providerId;
+      S.modelSwitchPending = pending;
+      S.hasProject = false;
+      S.bridgeState = 'ready';
+      usage.renderUsageState();
+    };
+    const meta = (seq, identity) => ({
+      seq,
+      identity,
+      workspace: S.workspaceGeneration,
+      sessionId: 'cap-session',
+    });
+
+    // A. 初始：flash 的容量来自模型元数据（不是统计载荷里的旧值）
+    useModel(flash);
+    usage.applyStats(
+      { sessionId: 'cap-session', tokens: { input: 61000, output: 1000, cacheRead: 16990 }, cost: 0.42,
+        contextUsage: { tokens: 78990, contextWindow: 200000, percent: 39.495 } },
+      meta(1, { providerId: 'deepseek', modelId: 'deepseek-v4-flash' })
+    );
+    let view = usage.contextUsage();
+    check('容量：flash = 200k（来自模型元数据）', view.limit === 200000 && view.used === 78990);
+    check('容量：侧栏文字与圆环用同一份投影', $('uNote').textContent === '上下文 78.99k / 200k' && $('uPct').textContent === '39%');
+
+    // B. 同供应商换模型：容量立刻变，已用 token 不因换模型清零
+    useModel(pro);
+    usage.applyState({ sessionId: 'cap-session', model: pro });
+    view = usage.contextUsage();
+    check('同供应商换模型：容量立即变为 1M（不等 get_session_stats）', view.limit === 1000000);
+    check('同供应商换模型：已用 token 保留（规则 G）', view.used === 78990);
+    check('同供应商换模型：侧栏文字同步为 1M', $('uNote').textContent === '上下文 78.99k / 1M');
+    check('同供应商换模型：百分比 = used / 新容量', $('uPct').textContent === '8%');
+
+    // C. 跨供应商换模型：旧供应商的容量不能留下
+    useModel(grok);
+    usage.applyState({ sessionId: 'cap-session', model: grok });
+    view = usage.contextUsage();
+    check('跨供应商换模型：容量取新模型的 256k', view.limit === 256000 && view.used === 78990);
+    check('跨供应商换模型：百分比按 256k 重算', $('uPct').textContent === '31%');
+    check('跨供应商换模型：侧栏文字为 256k', $('uNote').textContent === '上下文 78.99k / 256k');
+
+    // D. 同名模型分属两个供应商：缓存键必须是 provider + model，不能只看名字
+    useModel(otherGrok);
+    usage.applyState({ sessionId: 'cap-session', model: otherGrok });
+    view = usage.contextUsage();
+    check('同名跨供应商：同 modelId 不同 provider 仍取各自容量 512k', view.limit === 512000);
+    check('同名跨供应商：没有沿用上一个供应商的 256k', view.limit !== 256000 && $('uNote').textContent.includes('/ 512k'));
+
+    // E. 当前模型未提供 contextWindow：显示未知，绝不回退到旧统计的 1M
+    useModel(mystery);
+    usage.applyState({ sessionId: 'cap-session', model: mystery });
+    view = usage.contextUsage();
+    check('未知容量：limit = null（不编造 1M）', view.limit === null && view.used === 78990);
+    check('未知容量：侧栏文字显示「未知」', $('uNote').textContent === '上下文 78.99k / 未知');
+    check('未知容量：圆环百分比为 —', $('uPct').textContent === '—');
+    check('未知容量：chip 的无障碍名称说明容量未知', $('btnCtx').getAttribute('aria-label') === '上下文占用：容量未知');
+    usage.openCtxTip();
+    const unknownTip = $('composerPopover').textContent;
+    check('未知容量：浮层说明当前模型未提供 contextWindow', unknownTip.includes('容量未知（当前模型未提供 contextWindow）'));
+    check('未知容量：浮层不显示旧容量 1M', !unknownTip.includes('共 1M') && !unknownTip.includes('78.99k / 1M'));
+
+    // F. set_model 回读期间：保留已用，容量显示同步中，不展示上一模型容量
+    useModel(pro, { pending: true });
+    view = usage.contextUsage();
+    check('同步中：pending = true 且容量为 null', view.pending === true && view.limit === null);
+    check('同步中：已用 token 仍保留', view.used === 78990);
+    check('同步中：侧栏文字为「同步中」', $('uNote').textContent === '上下文 78.99k / 同步中');
+    check('同步中：圆环百分比为 —', $('uPct').textContent === '—');
+    check('同步中：chip 的无障碍名称说明模型同步中', $('btnCtx').getAttribute('aria-label') === '上下文占用：模型同步中');
+    usage.openCtxTip();
+    check('同步中：浮层不显示上一模型的 1M', !$('composerPopover').textContent.includes('共 1M'));
+    check('同步中：浮层明确说明正在同步', $('composerPopover').textContent.includes('正在同步新模型的上下文容量…'));
+    S.modelSwitchPending = false;
+    usage.renderUsageState();
+
+    // G. 浮层 / 侧栏 / 圆环三处必须同值
+    useModel(pro);
+    usage.renderUsageState();
+    usage.openCtxTip();
+    const proTip = $('composerPopover').textContent;
+    check('浮层与侧栏一致：1M 场景', proTip.includes('8% 已用 (剩余 92%)')
+      && proTip.includes('已用 78.99k 标记, 共 1M')
+      && $('uNote').textContent === '上下文 78.99k / 1M'
+      && $('uPct').textContent === '8%');
+    check('侧栏进度条与同一百分比一致', Math.abs(parseFloat($('uCtxBar').style.width) - 7.899) < 0.01);
+    check('LocalUsage 缓存也同步同一份容量与百分比（统计面板同源）',
+      S.localUsage.contextLimit === 1000000 && Math.abs(S.localUsage.contextPercent - 7.899) < 0.01);
+
+    // H. 竞态：迟到的旧请求、旧工作区、旧会话都不能写回
+    useModel(mystery);
+    usage.applyStats(
+      { sessionId: 'cap-session', tokens: { input: 1, output: 2 }, contextUsage: { tokens: 111, contextWindow: null } },
+      meta(20, { providerId: 'mystery', modelId: 'mystery-1' })
+    );
+    check('竞态：新请求的已用 token 被接受', usage.contextUsage().used === 111);
+    usage.applyStats(
+      { sessionId: 'cap-session', tokens: { input: 9, output: 9 }, contextUsage: { tokens: 999999, contextWindow: 1000000 } },
+      meta(19, { providerId: 'deepseek', modelId: 'deepseek-v4-flash' })
+    );
+    check('竞态：seq 更小的迟到应答被丢弃（已用 token 不变）', usage.contextUsage().used === 111);
+    check('竞态：迟到的旧容量 1M 不会画到当前模型上', usage.contextUsage().limit === null && !$('uNote').textContent.includes('1M'));
+
+    usage.applyStats(
+      { sessionId: 'cap-session', tokens: { input: 3, output: 4 }, contextUsage: { tokens: 222, contextWindow: 1000000 } },
+      meta(21, { providerId: 'deepseek', modelId: 'deepseek-v4-flash' })
+    );
+    check('竞态：旧模型的统计可用于已用 token（同一会话）', usage.contextUsage().used === 222);
+    check('竞态：旧模型的 contextWindow 不用于新模型容量', usage.contextUsage().limit === null);
+
+    const generation = S.workspaceGeneration;
+    S.workspaceGeneration = generation + 1;
+    usage.applyStats(
+      { sessionId: 'cap-session', tokens: { input: 5, output: 6 }, contextUsage: { tokens: 333, contextWindow: null } },
+      { seq: 22, identity: { providerId: 'mystery', modelId: 'mystery-1' }, workspace: generation, sessionId: 'cap-session' }
+    );
+    check('竞态：旧工作区的统计被丢弃', usage.contextUsage().used === 222);
+    S.workspaceGeneration = generation;
+
+    usage.applyStats(
+      { sessionId: 'other-session', tokens: { input: 7, output: 8 }, contextUsage: { tokens: 444, contextWindow: null } },
+      meta(23, { providerId: 'mystery', modelId: 'mystery-1' })
+    );
+    check('竞态：其它会话的统计被丢弃', usage.contextUsage().used === 222);
+
+    // I. 请求账本：记录发出时的身份 / 工作区 / 会话，取走一次后失效
+    const realFetch = global.fetch;
+    const sent = [];
+    global.fetch = async (url, opts) => {
+      if (String(url) === '/api/command') {
+        try { sent.push(JSON.parse(opts.body)); } catch { /* ignore */ }
+        return { json: async () => ({ ok: true }) };
+      }
+      return realFetch(url, opts);
+    };
+    useModel(mystery);
+    const statsId = sessionStats.requestSessionStats();
+    const requestMeta = sessionStats.takeSessionStatsRequest(statsId);
+    check('请求账本：记录请求时的模型身份（provider + model）',
+      requestMeta && requestMeta.identity.providerId === 'mystery' && requestMeta.identity.modelId === 'mystery-1');
+    check('请求账本：记录工作区与会话', requestMeta.workspace === S.workspaceGeneration && requestMeta.sessionId === 'cap-session');
+    check('请求账本：取走一次后失效（迟到应答拿不到身份）', sessionStats.takeSessionStatsRequest(statsId) === null);
+
+    // 会话切换：切换前发出的统计应答即使迟到也不能写进新会话
+    const oldStatsId = sessionStats.requestSessionStats();
+    sessionStats.invalidateSessionStats();
+    const oldMeta = sessionStats.takeSessionStatsRequest(oldStatsId);
+    check('会话切换：切换前的统计请求被标记为 stale', oldMeta?.stale === true);
+    const usedBeforeStale = usage.contextUsage().used;
+    usage.applyStats(
+      { sessionId: 'cap-session', tokens: { input: 99, output: 99 }, contextUsage: { tokens: 999, contextWindow: null } },
+      oldMeta
+    );
+    check('会话切换：stale 应答不会覆盖新会话的已用 token', usage.contextUsage().used === usedBeforeStale);
+    const freshStatsId = sessionStats.requestSessionStats();
+    const freshMeta = sessionStats.takeSessionStatsRequest(freshStatsId);
+    check('会话切换：切换后的新请求不被标记 stale', freshMeta && !freshMeta.stale);
+
+    // J. 模型变化时主动重取统计（否则容量会停在旧模型）
+    useModel(mystery);
+    S.hasProject = true;
+    S.bridgeState = 'ready';
+    sent.length = 0;
+    usage.applyState({ sessionId: 'cap-session', model: flash });
+    await flushAsync();
+    check('模型变化：applyState 会重新请求 get_session_stats',
+      sent.some((cmd) => cmd.type === 'get_session_stats'));
+    check('模型变化：请求带上 id（供竞态账本关联）',
+      sent.some((cmd) => cmd.type === 'get_session_stats' && typeof cmd.id === 'string' && cmd.id.startsWith('session-stats-')));
+    S.hasProject = false;
+    global.fetch = realFetch;
+    S.modelSwitchPending = false;
+    S.stats = null;
+    /* applyState 跨 Provider 时可能已经发起额度请求；让它在下一段之前失效。 */
+    S.quotaEpoch++;
+    S.quotaLoading = false;
+    S.currentProviderId = 'deepseek';
+    S.remoteQuota = null;
+  }
+
+  // 11.10 容量回退：只有完整且相等的 providerId + modelId 才允许
+  {
+    console.log('=== 11.10 容量回退只认完整且相等的模型身份 ===');
+    const statsWithCapacity = (seq, identity, contextWindow = 200000) => {
+      usage.applyStats(
+        { sessionId: 'identity-session', tokens: { input: 60000, output: 18990 },
+          contextUsage: { tokens: 78990, contextWindow, percent: 39.495 } },
+        { seq, identity, workspace: S.workspaceGeneration, sessionId: 'identity-session' }
+      );
+    };
+    const setCurrent = (model) => {
+      /* 模型列表为空、模型自身不带 contextWindow：强制走 session-stats 回退路径。 */
+      S.models = [];
+      S.state = { ...(S.state || {}), sessionId: 'identity-session', model };
+      S.currentProviderId = model.providerId || null;
+      S.modelSwitchPending = false;
+      S.hasProject = false;
+      S.bridgeState = 'ready';
+      S.stats = null;
+      usage.renderUsageState();
+    };
+    let seq = 100;
+
+    // 1. 两边都缺 providerId、modelId 不同：不能因为「都不完整」就放行
+    setCurrent({ modelId: 'model-b', name: 'Model B' });
+    statsWithCapacity(++seq, { providerId: '', modelId: 'model-a' });
+    let view = usage.contextUsage();
+    check('不完整身份：两边缺 providerId、modelId 不同 → 容量未知',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 未知');
+
+    // 2. 两边都缺 providerId、modelId 相同：仍无法确认是同一个模型
+    setCurrent({ modelId: 'model-a', name: 'Model A' });
+    statsWithCapacity(++seq, { providerId: '', modelId: 'model-a' });
+    view = usage.contextUsage();
+    check('不完整身份：两边缺 providerId、modelId 相同 → 容量未知',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 未知');
+
+    // 3. 两边都缺 modelId：providerId 相同也不能回退
+    setCurrent({ providerId: 'deepseek', name: 'No Model Id' });
+    statsWithCapacity(++seq, { providerId: 'deepseek', modelId: '' });
+    view = usage.contextUsage();
+    check('不完整身份：两边缺 modelId → 容量未知',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uPct').textContent === '—'
+      && $('btnCtx').getAttribute('aria-label') === '上下文占用：容量未知');
+
+    // 4. 两边都没有任何身份信息
+    setCurrent({ name: 'Anonymous' });
+    statsWithCapacity(++seq, { providerId: '', modelId: '' });
+    view = usage.contextUsage();
+    check('不完整身份：两边都没有身份信息 → 容量未知',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 未知');
+
+    // 5. 完整身份相同：统计容量仍可作为回退证据
+    const proIdentity = { providerId: 'deepseek', modelId: 'deepseek-v4-pro' };
+    setCurrent({ ...proIdentity, name: 'DeepSeek V4 Pro' });
+    statsWithCapacity(++seq, { ...proIdentity }, 1000000);
+    view = usage.contextUsage();
+    check('完整身份相同：允许使用统计中的容量',
+      view.limit === 1000000 && view.source === 'session-stats' && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 1M');
+
+    // 6. 完整身份不同：旧统计的容量不得沿用
+    setCurrent({ providerId: 'deepseek', modelId: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' });
+    statsWithCapacity(++seq, { ...proIdentity }, 1000000);
+    view = usage.contextUsage();
+    check('完整身份不同：拒绝旧统计容量',
+      view.limit === null && view.source === null && view.used === 78990
+      && $('uNote').textContent === '上下文 78.99k / 未知');
+
+    S.stats = null;
+    S.models = [];
+    S.modelSwitchPending = false;
+  }
 
   // 11.7 恶意币种/金额字符串：只当文本
   S.remoteQuota = {

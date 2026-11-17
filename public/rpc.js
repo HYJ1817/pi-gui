@@ -12,10 +12,11 @@ import { el, S, confirmStop, invalidateStop } from './state.js';
 import { logRendererEvent } from './log-client.js';
 import { sendCommand, downloadSessionHtml } from './api.js';
 import { toast, withNotificationSource } from './ui/toast.js';
-import { setStatus } from './shell.js';
+import { setStatus, setTitleText } from './shell.js';
 import { classicThreadSessionId, clearThread, rebuildFromMessages, noteLoadFailure, saveClassicReadingPosition, setStreaming } from './messages.js';
 import { applyTree } from './tree.js';
-import { applyState, applyStats, onModels, onThinkingLevels } from './usage.js';
+import { applyState, applyStats, onModels, onThinkingLevels, renderUsageState } from './usage.js';
+import { invalidateSessionStats, requestSessionStats, takeSessionStatsRequest } from './session-stats.js';
 import { autoGrow, updateSendState, renderModelControls, imageInputBlocked } from './composer.js';
 import { attachmentImages, buildMessage, renderAttachments } from './attachments.js';
 import { clearChanges } from './changes.js';
@@ -38,7 +39,7 @@ export function boot() {
     stateId, messagesId: 'classic-history-' + (++historySequence),
     workspace: S.workspaceGeneration, bridgeRun: S.bridgeRun,
   };
-  sendCommand({ type: 'get_session_stats' });
+  requestSessionStats();
   sendCommand({ type: 'get_tree' });
   // 切换项目 / 重载配置后 pi 会恢复该目录的历史会话，用 get_messages 重建对话区
   sendCommand({ type: 'get_messages', id: load.messagesId }, { notify: false }).then(result => {
@@ -120,6 +121,8 @@ function pendingModel() {
   S.thinkingReadStatus = 'unconfirmed';
   S.modelSwitchPending = true;
   renderModelControls();
+  /* 容量进入「同步中」：已用 token 保留，旧模型容量不再冒充新模型。 */
+  renderUsageState();
   if (currentAnchor() === el.btnThink) closePop();
 }
 
@@ -230,7 +233,7 @@ export function onResponse(evt) {
     case 'get_state':
       return applyState(d);
     case 'get_session_stats':
-      return applyStats(d);
+      return applyStats(d, takeSessionStatsRequest(evt.id));
     case 'get_tree':
       return applyTree(d);
     case 'get_messages':
@@ -245,12 +248,12 @@ export function onResponse(evt) {
       return;
     case 'new_session':
       if (d.cancelled) return;
-      afterSessionSwitch(classicThreadSessionId());
+      afterSessionSwitch(classicThreadSessionId(), { title: '新会话', newSession: true });
       toast('已开始新会话（旧会话还在侧栏项目下面，点一下就能切回去）', 'info');
       return;
     case 'fork':
       if (d.cancelled) return;
-      afterSessionSwitch(classicThreadSessionId());
+      afterSessionSwitch(classicThreadSessionId(), { title: '新会话', newSession: true });
       toast('已从该节点分叉', 'info');
       return;
     case 'compact':
@@ -440,10 +443,19 @@ export function setSessionListRefresh(fn) {
  * 不在这里刷的话它会停在旧状态 —— 旧会话仍然带着 current 标记，而当前项是
  * 不给点的，用户就再也回不到那条对话（这正是「开新对话后旧对话消失」的根因）。
  */
-export function afterSessionSwitch(previousSessionId = classicThreadSessionId()) {
+export function afterSessionSwitch(previousSessionId = classicThreadSessionId(), options = {}) {
+  const title = options?.title || '新会话';
+  const sessionKey = options?.sessionKey || null;
+  const newSession = options?.newSession === true;
   saveClassicReadingPosition(previousSessionId);
   cancelHistoryLoad();
-  document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
+  /* 切换前发出的 get_session_stats 可能还在路上；它的已用 token
+   * 属于上一条会话，绝不能写进新会话。 */
+  invalidateSessionStats();
+  /* 顶部标题先落到目标会话的权威标题（或新会话的默认标题），
+   * 后面的异步 boot / 列表请求只做同一来源的校正。 */
+  setTitleText(title);
+  document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch', { detail: { title, sessionKey, newSession } }));
   cancelFallback('session-switch');
   pendingModel();
   modelRefresh = null;
