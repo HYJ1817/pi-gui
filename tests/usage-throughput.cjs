@@ -265,7 +265,52 @@ function check(name, cond, extra) {
   usage.openCtxTip();
   check('新任务的真实速度不被旧估算污染', speedText() === '50 tokens/s', String(speedText()));
 
+  console.log('=== 5c. aborted + 明确的 usage.output 0 不估算 ===');
+  begin('session-abort-zero');
+  assistantStart(1000);
+  assistantEnd(5000, {
+    stopReason: 'aborted',
+    usage: { output: 0 },
+    content: [{ type: 'text', text: 'x'.repeat(40) }],
+  });
+  usage.onTurnUsage({ output: 0 }, { source: 'message_end' });
+  usage.onTurnThroughputSettled();
+  usage.openCtxTip();
+  const zeroUsage = throughput.throughputSnapshot();
+  check('usage.output 0 是真实 usage，不被 aborted 文本估算覆盖',
+    zeroUsage.outputTokens === null && zeroUsage.estimated === false
+      && zeroUsage.tokensPerSecond === null && speedText() === '—', JSON.stringify(zeroUsage));
+  check('真实 0 仍保留在 lastTurn，但速度字段不编造',
+    S.localUsage.lastTurn?.outputTokens === 0 && S.localUsage.lastTurn?.responseOutputTokens === null);
+
+  console.log('=== 5d. 新 turn 清空上一轮用量，不拼接旧 token 与本轮估算 ===');
+  begin('session-turn-reset');
+  assistantStart(1000);
+  assistantEnd(3000, { usage: { output: 300 } });
+  usage.onTurnUsage({ input: 120, output: 300, cost: { total: 0.01 } }, { source: 'message_end' });
+  usage.onTurnThroughputSettled();
+  usage.openCtxTip();
+  const turnLabels = () => [...document.querySelectorAll('.tip-row')]
+    .map((row) => row.firstElementChild?.textContent);
+  check('第一轮正常显示输入/输出与 150 tokens/s',
+    speedText() === '150 tokens/s' && S.localUsage.lastTurn?.inputTokens === 120
+      && turnLabels().includes('本轮输入'), String(speedText()));
+  usage.beginUsageTurn();
+  check('新 turn 开始即清空上一轮 lastTurn', S.localUsage.lastTurn === null);
+  assistantStart(4000);
+  assistantEnd(8000, {
+    stopReason: 'aborted',
+    content: [{ type: 'text', text: 'z'.repeat(40) }],
+  });
+  usage.onTurnThroughputSettled();
+  usage.openCtxTip();
+  check('新 turn 只显示本轮估算速度，不显示上一轮 token',
+    speedText() === '≈ 3 tokens/s' && S.localUsage.lastTurn === null
+      && !turnLabels().includes('本轮输入'), String(speedText()));
+
   console.log('=== 6. 会话 / 工作区 / 清除后的隔离 ===');
+  /* 本节只验证 TPS 账本：迟到事件不能产生速度。lastTurn 的普通 token
+   * 字段仍由既有 usage 路径处理，本任务不改那套口径。 */
   begin('session-A');
   assistantStart(1000);
   S.state = { sessionId: 'session-B', model: { provider: 'deepseek', id: 'deepseek-v4-pro' } };
@@ -293,6 +338,21 @@ function check(name, cond, extra) {
   usage.openCtxTip();
   check('换模型后旧响应的时长不记到新模型', speedText() === '—', String(speedText()));
 
+  console.log('=== 6b. 换模型清空账本后，旧 TPS 不得从 lastTurn 回退 ===');
+  begin('session-old-speed');
+  assistantStart(1000);
+  assistantEnd(3000, { usage: { output: 300 } });
+  usage.onTurnUsage({ output: 300 }, { source: 'message_end' });
+  usage.onTurnThroughputSettled();
+  usage.openCtxTip();
+  check('换模型前显示 150 tokens/s', speedText() === '150 tokens/s', String(speedText()));
+  usage.applyState({
+    sessionId: 'session-old-speed',
+    model: { provider: 'deepseek', id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
+  });
+  usage.openCtxTip();
+  check('换模型后旧 TPS 不再显示（只信当前账本）', speedText() === '—', String(speedText()));
+
   console.log('=== 7. 回放事件不参与计时 ===');
   begin('session-E');
   usage.onAssistantMessageStart({ _replay: true, message: { role: 'assistant' } }, 1000);
@@ -311,8 +371,11 @@ function check(name, cond, extra) {
   check('不使用 liveTurn.startedAt 计算 TPS', !/liveTurn/.test(stripComments(usageSource))
     && !/liveTurn/.test(stripComments(fs.readFileSync(path.join(ROOT, 'public/turn-throughput.js'), 'utf8'))));
   check('使用单调时钟 performance.now', /performance\.now\(\)/.test(fs.readFileSync(path.join(ROOT, 'public/turn-throughput.js'), 'utf8')));
-  check('生成速度行优先读取 throughputSnapshot，不要求 lastTurn',
-    /snapshot\.status === 'ready'/.test(usageSource) && /throughput\.attempts > 0/.test(usageSource));
+  check('生成速度行只读 throughputSnapshot，不要求也不回退 lastTurn',
+    /function throughputDisplay\(snapshot\)/.test(usageSource)
+      && /const output = snapshot\.outputTokens/.test(usageSource)
+      && /throughput\.attempts > 0/.test(usageSource)
+      && !/responseOutputTokens \?\?/.test(usageSource));
   check('ledger 逐条配对：duration 与 output 缺一即整条丢弃',
     /duration == null \|\| output == null/.test(fs.readFileSync(path.join(ROOT, 'public/turn-throughput.js'), 'utf8')));
 
