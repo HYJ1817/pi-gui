@@ -2824,7 +2824,10 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   width: 100%;
   padding: 20px 48px 56px 40px;
   background: var(--ds-bg-primary);
-  min-height: 100%;
+  /* 与 .settings-detail 同一个坑：.stage 是纵向 flex，标题栏已占 46px。
+   * min-height:100% 按 .stage 整高解析会把滚动容器撑出可视区，底部被
+   * overflow:clip 裁掉；高度交给 flex:1。 */
+  min-height: 0;
   box-sizing: border-box;
   overflow-y: auto;
 }
@@ -2942,7 +2945,11 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   justify-content: center;
   padding: 20px 48px 56px 40px;
   background: var(--ds-bg-primary);
-  min-height: 100%;
+  /* .stage 是纵向 flex，标题栏已经占掉 46px。这里若写 min-height:100%，百分比
+   * 按 .stage 的整高解析，滚动容器会从标题栏下面再高出 46px，底部被
+   * .stage 的 overflow:clip 裁掉 —— 信息页因此永远差最后一行滚不出来。
+   * 高度交给 flex:1 分配，短页面照样铺满，长页面才能滚到底。 */
+  min-height: 0;
   box-sizing: border-box;
   overflow-y: auto;
 }
