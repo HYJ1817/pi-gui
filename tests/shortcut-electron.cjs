@@ -3,10 +3,11 @@
  * Drives the actual renderer with real CDP keyboard events: click a keycap,
  * press a combination, then close settings and prove the new combination
  * dispatches while the old one is dead. Covers conflict, Escape precedence,
- * disable/reset, reset-all, persistence across reload, rapid saves and the
- * input/terminal guards. No real project, Pi process or user data is touched;
- * the visual harness serves deterministic fixtures and localStorage lives in
- * a throwaway userData directory. Screenshots land in `.shots/shortcuts/`.
+ * disable/reset, reset-all, persistence across reload, rapid saves, legacy
+ * command-palette ids and the input/terminal guards. No real project, Pi
+ * process or user data is touched; the visual harness serves deterministic
+ * fixtures and localStorage lives in a throwaway userData directory.
+ * Screenshots land in `.shots/shortcuts/`.
  */
 'use strict';
 const { spawn } = require('node:child_process');
@@ -99,7 +100,7 @@ if (!process.versions.electron) {
         detail:document.querySelector('.shortcut-settings-page')?.innerText?.slice(0,300),
         rows:document.querySelectorAll('.shortcut-row').length,
         storage:localStorage.getItem(${JSON.stringify(STORAGE_KEY)}),
-        palette:document.querySelector('#paletteLayer')?.hidden,
+        view:document.querySelector('#workspace')?.dataset.workspaceView,
         menu:document.querySelector('#globalMoreMenu')?.hidden,
         errors:[...document.querySelectorAll('.shortcut-error:not([hidden])')].map(n=>n.textContent)
       }))()`).catch((error) => ({ error: String(error) }));
@@ -128,17 +129,29 @@ if (!process.versions.electron) {
       console.log('shot ' + name + ' ' + JSON.stringify(image.getSize()));
     }
 
+    async function openSettingsMenu() {
+      await read(`document.querySelector('#navGlobalMore').click()`);
+      await waitFor(`!document.querySelector('#globalMoreMenu').hidden && !!document.querySelector('.settings-grid')`, 'settings overview');
+    }
     async function openShortcuts() {
-      if (await read(`document.querySelector('#paletteLayer') && !document.querySelector('#paletteLayer').hidden`)) {
-        await key('Escape', 'Escape', 27);
-        await waitFor(`document.querySelector('#paletteLayer').hidden`, 'palette closed');
-      }
       if (await read(`document.querySelector('#globalMoreMenu').hidden`)) {
         await read(`document.querySelector('#navGlobalMore').click()`);
       }
       await waitFor(`!document.querySelector('#globalMoreMenu').hidden`, 'settings menu');
       await read(`document.querySelector('#navShortcutHelp').click()`);
-      await waitFor(`!!document.querySelector('.shortcut-settings-page') && document.querySelectorAll('.shortcut-row').length === 10`, 'shortcut page');
+      await waitFor(`!!document.querySelector('.shortcut-settings-page') && document.querySelectorAll('.shortcut-row').length === 8`, 'shortcut page');
+    }
+    async function openExtensionsPage() {
+      await openSettingsMenu();
+      await read(`document.querySelector('#navExtensions').click()`);
+      await waitFor(`!!document.querySelector('#extensionsTabExtensions') && !!document.querySelector('.ext-tabs')`, 'extensions page');
+      await read(`document.querySelector('#extensionsTabExtensions').click()`);
+      await waitFor(`!!document.querySelector('.ext-list')`, 'extensions tab');
+    }
+    async function openMcpPage() {
+      await openSettingsMenu();
+      await read(`document.querySelector('#navMcp').click()`);
+      await waitFor(`!!document.querySelector('.mcp-page')`, 'mcp page');
     }
     async function closeSettings() {
       await read(`document.querySelector('#navHome').click()`);
@@ -146,7 +159,6 @@ if (!process.versions.electron) {
     }
     const focusNav = () => read(`document.querySelector('#navHome').focus()`);
     const storage = async () => JSON.parse(await read(`localStorage.getItem(${JSON.stringify(STORAGE_KEY)})`) || 'null');
-    const paletteVisible = () => read(`document.querySelector('#paletteLayer') && !document.querySelector('#paletteLayer').hidden`);
     const rowExpr = (id) => `document.querySelector('.shortcut-row[data-shortcut-id=${JSON.stringify(id)}]')`;
     const recorderExpr = (id) => `${rowExpr(id)}.querySelector('.shortcut-recorder')`;
     async function rowState(id) {
@@ -192,12 +204,46 @@ if (!process.versions.electron) {
       await waitFor(`!document.querySelector('.pi-anchored-menu')`, 'theme menu closed');
       await waitFor(`document.documentElement.dataset.theme===${JSON.stringify(theme)}`, 'theme applied');
     }
+    const noPalette = () => read(`!document.querySelector('#paletteLayer') && !document.querySelector('.palette-card')`);
+    const workspaceView = () => read(`document.querySelector('#workspace').dataset.workspaceView`);
 
     try {
       await win.loadURL(origin);
       await waitFor(`document.querySelector('#connText')?.textContent==='已连接'`, 'fixture connected');
       win.showInactive();
       win.webContents.debugger.attach('1.3');
+
+      /* ---------- removed palette: Ctrl+K / Ctrl+Shift+P do nothing ---------- */
+      await focusNav();
+      await key('k', 'KeyK', 75, 2);
+      await key('P', 'KeyP', 80, 10);
+      await sleep(220);
+      check(await noPalette(), 'command palette layer no longer exists in the DOM');
+      check((await workspaceView()) === 'chat', 'Ctrl+K and Ctrl+Shift+P no longer open any palette or view');
+
+      /* ---------- settings navigation is trimmed ---------- */
+      await openSettingsMenu();
+      const nav = await read(`(()=>({
+        groups:[...document.querySelectorAll('#globalMoreMenu section h3')].map(n=>n.textContent),
+        capabilities:!!document.querySelector('#navCapabilities'),
+        palette:!!document.querySelector('#navPalette'),
+        navCapabilityStatus:[...document.querySelectorAll('#globalMoreMenu button')].some(b=>b.textContent.includes('能力状态')),
+        navPalette:[...document.querySelectorAll('#globalMoreMenu button')].some(b=>b.textContent.includes('命令面板'))
+      }))()`);
+      check(nav.groups.length === 6 && nav.groups.includes('扩展与 MCP') && !nav.groups.includes('Agent 能力'), 'settings navigation keeps six groups without the empty Agent 能力 group', nav.groups);
+      check(!nav.capabilities && !nav.palette && !nav.navCapabilityStatus && !nav.navPalette, 'removed capability-status and palette entries are gone from settings navigation', nav);
+      await shot('1320-dark-settings-nav');
+
+      await read(`(()=>{const i=document.querySelector('#settingsSearchInput');i.value='能力状态';i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      const searchRemoved = await read(`(()=>({
+        sectionsHidden:[...document.querySelectorAll('#globalMoreMenu section')].every(s=>s.hidden),
+        visible:[...document.querySelectorAll('#globalMoreMenu button')].filter(b=>!b.hidden&&!b.closest('section')?.hidden).length
+      }))()`);
+      check(searchRemoved.sectionsHidden && searchRemoved.visible === 0, 'settings search does not return the removed capability page', searchRemoved);
+      await read(`(()=>{const i=document.querySelector('#settingsSearchInput');i.value='快捷键';i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      const searchShortcut = await read(`[...document.querySelectorAll('#globalMoreMenu button')].filter(b=>!b.hidden&&!b.closest('section')?.hidden).map(b=>b.textContent.trim())`);
+      check(JSON.stringify(searchShortcut) === JSON.stringify(['快捷键']), 'settings search still finds the shortcut page', searchShortcut);
+      await read(`(()=>{const i=document.querySelector('#settingsSearchInput');i.value='';i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
 
       /* ---------- default list ---------- */
       await openShortcuts();
@@ -209,8 +255,8 @@ if (!process.versions.electron) {
           count:rows.length,
           ids:rows.map(row=>row.dataset.shortcutId),
           groups:[...document.querySelectorAll('.shortcut-map .shortcut-group-label')].map(n=>n.textContent),
-          paletteText:rec('palette').innerText.replace(/\\s+/g,' ').trim(),
-          paletteKeys:rec('palette').querySelectorAll('kbd').length,
+          helpText:rec('shortcut-help').innerText.replace(/\\s+/g,' ').trim(),
+          helpKeys:rec('shortcut-help').querySelectorAll('kbd').length,
           resetAllDisabled:document.querySelector('.shortcut-reset-all').disabled,
           rowResetsDisabled:[...document.querySelectorAll('.shortcut-reset')].every(b=>b.disabled),
           chipsHidden:[...document.querySelectorAll('.shortcut-state')].every(c=>c.hidden),
@@ -221,10 +267,10 @@ if (!process.versions.electron) {
           storage:localStorage.getItem(${JSON.stringify(STORAGE_KEY)})
         };
       })()`);
-      check(initial.count === 10, 'ten registered shortcuts are listed', initial.count);
+      check(initial.count === 8, 'eight registered shortcuts are listed', initial.count);
       check(JSON.stringify(initial.groups) === JSON.stringify(['通用', '视图', '工作面板']), 'shortcuts are grouped as 通用/视图/工作面板', initial.groups);
-      check(JSON.stringify(initial.ids) === JSON.stringify(['palette', 'palette-alt', 'shortcut-help', 'view-chat', 'view-planner', 'view-changes', 'view-extensions', 'work-changes', 'work-terminal', 'work-files']), 'stable shortcut ids are preserved in order', initial.ids);
-      check(initial.paletteText.includes('Ctrl') && initial.paletteText.includes('K') && initial.paletteKeys === 2, 'default Ctrl+K renders as two independent keycaps', initial);
+      check(JSON.stringify(initial.ids) === JSON.stringify(['shortcut-help', 'view-chat', 'view-planner', 'view-changes', 'view-extensions', 'work-changes', 'work-terminal', 'work-files']), 'stable shortcut ids are preserved in order', initial.ids);
+      check(initial.helpText.includes('Ctrl') && initial.helpText.includes('/') && initial.helpKeys === 2, 'default Ctrl+/ renders as two independent keycaps', initial);
       check(initial.resetAllDisabled && initial.rowResetsDisabled && initial.chipsHidden, 'fresh page offers no reset and shows no custom/disabled chip');
       check(initial.rowHeights.every((height) => Math.abs(height - initial.rowHeights[0]) <= 1) && initial.rowHeights[0] >= 48, 'all rows share one usable height', initial.rowHeights);
       check(initial.controlsWidth >= 240 && initial.controlsWidth <= 280, 'row controls reserve a stable right-side column', initial.controlsWidth);
@@ -234,17 +280,17 @@ if (!process.versions.electron) {
       await shot('1320-dark-default');
 
       /* ---------- record a real key combination ---------- */
-      await clickRecorder('palette');
-      const recording = await rowState('palette');
+      await clickRecorder('view-planner');
+      const recording = await rowState('view-planner');
       check(recording.recording && recording.text === '请按下快捷键', 'clicking a keycap enters recording', recording);
       await shot('1320-dark-recording');
       await key('k', 'KeyK', 75, 3); // Ctrl + Alt
       await waitFor(`localStorage.getItem(${JSON.stringify(STORAGE_KEY)})?.includes('ctrl+alt+k')`, 'binding persisted');
-      const custom = await rowState('palette');
+      const custom = await rowState('view-planner');
       check(!custom.recording && custom.rowState === 'custom' && custom.chipText === '自定义' && !custom.chipHidden, 'saved custom binding is marked 自定义', custom);
       check(custom.text.includes('Ctrl') && custom.text.includes('Alt') && custom.text.includes('K') && custom.keys === 3, 'row shows the new combination immediately', custom);
       check(custom.resetDisabled === false && custom.disableDisabled === false, 'custom row enables per-item reset and disable');
-      check(JSON.stringify(await storage()) === JSON.stringify({ palette: 'ctrl+alt+k' }), 'storage keeps the versioned three-state map', await storage());
+      check(JSON.stringify(await storage()) === JSON.stringify({ 'view-planner': 'ctrl+alt+k' }), 'storage keeps the versioned three-state map', await storage());
       check(await read(`document.querySelector('.shortcut-reset-all').disabled===false`), 'reset-all becomes available after an override');
       await shot('1320-dark-custom');
 
@@ -255,7 +301,7 @@ if (!process.versions.electron) {
       const cancelled = await rowState('work-terminal');
       check(cancelled.recording === false && cancelled.rowState === 'default' && cancelled.error === null, 'Escape cancels recording and leaves the row at its default', cancelled);
       check(await read(`!!document.querySelector('.shortcut-settings-page') && document.querySelector('.shortcut-settings-page h3')?.textContent==='键盘快捷键'`), 'Escape during recording does not close the settings page');
-      check(JSON.stringify(await storage()) === JSON.stringify({ palette: 'ctrl+alt+k' }), 'cancelled recording writes nothing', await storage());
+      check(JSON.stringify(await storage()) === JSON.stringify({ 'view-planner': 'ctrl+alt+k' }), 'cancelled recording writes nothing', await storage());
 
       /* ---------- conflict and reserved keys ---------- */
       await clickRecorder('view-chat');
@@ -264,7 +310,7 @@ if (!process.versions.electron) {
       const conflict = await rowState('view-chat');
       check(conflict.recording === true, 'conflict keeps the row in recording for an immediate retry', conflict);
       check(/冲突/.test(conflict.error) && /打开文件变更面板/.test(conflict.error), 'conflict names the owning action', conflict.error);
-      check(JSON.stringify(await storage()) === JSON.stringify({ palette: 'ctrl+alt+k' }), 'conflict does not write storage', await storage());
+      check(JSON.stringify(await storage()) === JSON.stringify({ 'view-planner': 'ctrl+alt+k' }), 'conflict does not write storage', await storage());
       await shot('1320-dark-conflict');
       await key('Escape', 'Escape', 27);
       await waitFor(`${recorderExpr('view-chat')}.getAttribute('aria-pressed')==='false'`, 'conflict recording cancelled');
@@ -276,55 +322,53 @@ if (!process.versions.electron) {
       await waitFor(`${rowExpr('view-chat')}.querySelector('.shortcut-error').hidden===false`, 'reserved error');
       const reserved = await rowState('view-chat');
       check(/保留/.test(reserved.error) && reserved.recording === true, 'system/terminal reserved combination is rejected in place', reserved.error);
-      check(JSON.stringify(await storage()) === JSON.stringify({ palette: 'ctrl+alt+k' }), 'reserved combination writes nothing', await storage());
+      check(JSON.stringify(await storage()) === JSON.stringify({ 'view-planner': 'ctrl+alt+k' }), 'reserved combination writes nothing', await storage());
       await key('Escape', 'Escape', 27);
       await waitFor(`${recorderExpr('view-chat')}.getAttribute('aria-pressed')==='false'`, 'reserved recording cancelled');
 
       /* ---------- runtime dispatch: new combo works, old combo is dead ---------- */
       await closeSettings();
       await focusNav();
-      await key('k', 'KeyK', 75, 2); // old Ctrl+K
+      await key('2', 'Digit2', 50, 1); // old Alt+2
       await sleep(220);
-      check((await paletteVisible()) === false, 'old Ctrl+K no longer opens the command palette');
+      check((await workspaceView()) === 'chat', 'old Alt+2 no longer switches to the planner');
       await key('k', 'KeyK', 75, 3); // new Ctrl+Alt+K
-      await waitFor(`!document.querySelector('#paletteLayer').hidden`, 'custom palette combo dispatches');
-      check(await read(`document.activeElement?.classList.contains('palette-input')`), 'custom combo opens the palette with its search focused');
-      const hint = await read(`document.querySelector('.palette-item[data-command-id="view.chat"] .palette-hint')?.textContent`);
-      check(hint === 'Alt+1', 'palette hints read the live registry', hint);
-      await key('Escape', 'Escape', 27);
-      await waitFor(`document.querySelector('#paletteLayer').hidden`, 'palette closed');
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='planner'`, 'custom planner combo dispatches');
+      check(await read(`document.querySelector('#workViewTitle')?.textContent==='任务与审阅'`), 'custom combo opens the planner surface');
+      await read(`document.querySelector('#navHome').click()`);
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='chat'`, 'back to chat');
 
       /* ---------- disable, verify dead, then per-item reset ---------- */
       await openShortcuts();
-      await clickAction('palette', 'disable');
-      await waitFor(`${rowExpr('palette')}.dataset.state==='disabled'`, 'palette disabled');
-      const disabled = await rowState('palette');
+      await clickAction('view-planner', 'disable');
+      await waitFor(`${rowExpr('view-planner')}.dataset.state==='disabled'`, 'planner disabled');
+      const disabled = await rowState('view-planner');
       check(disabled.text === '未绑定' && disabled.chipText === '已禁用' && disabled.chipHidden === false, 'disabled row reads 未绑定 with a 已禁用 chip', disabled);
       check(disabled.disableDisabled === true && disabled.resetDisabled === false, 'disabled row disables the power button but keeps reset available');
-      check(JSON.stringify(await storage()) === JSON.stringify({ palette: null }), 'disable persists explicit null, never an empty string', await storage());
+      check(JSON.stringify(await storage()) === JSON.stringify({ 'view-planner': null }), 'disable persists explicit null, never an empty string', await storage());
       await shot('1320-dark-disabled');
       await closeSettings();
       await focusNav();
       await key('k', 'KeyK', 75, 3);
       await sleep(220);
-      check((await paletteVisible()) === false, 'disabled custom combo no longer dispatches');
-      await key('k', 'KeyK', 75, 2);
+      check((await workspaceView()) === 'chat', 'disabled custom combo no longer dispatches');
+      await key('2', 'Digit2', 50, 1);
       await sleep(220);
-      check((await paletteVisible()) === false, 'disabled shortcut does not fall back to its default combo');
+      check((await workspaceView()) === 'chat', 'disabled shortcut does not fall back to its default combo');
 
       await openShortcuts();
-      await clickAction('palette', 'reset');
-      await waitFor(`${rowExpr('palette')}.dataset.state==='default'`, 'palette reset');
-      const reset = await rowState('palette');
-      check(reset.text.includes('Ctrl') && reset.text.includes('K') && reset.chipHidden === true, 'per-item reset restores the platform default', reset);
+      await clickAction('view-planner', 'reset');
+      await waitFor(`${rowExpr('view-planner')}.dataset.state==='default'`, 'planner reset');
+      const reset = await rowState('view-planner');
+      check(reset.text.includes('Alt') && reset.text.includes('2') && reset.chipHidden === true, 'per-item reset restores the platform default', reset);
       check(reset.resetDisabled === true && reset.disableDisabled === false, 'reset row returns to the default button states');
       check(JSON.stringify(await storage()) === JSON.stringify({}), 'per-item reset deletes the override');
       await closeSettings();
       await focusNav();
-      await key('k', 'KeyK', 75, 2);
-      await waitFor(`!document.querySelector('#paletteLayer').hidden`, 'default Ctrl+K dispatches after reset');
-      await key('Escape', 'Escape', 27);
-      await waitFor(`document.querySelector('#paletteLayer').hidden`, 'palette closed after reset');
+      await key('2', 'Digit2', 50, 1);
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='planner'`, 'default Alt+2 dispatches after reset');
+      await read(`document.querySelector('#navHome').click()`);
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='chat'`, 'back to chat after reset dispatch');
 
       /* ---------- reset conflict: never create a duplicate ---------- */
       await openShortcuts();
@@ -347,33 +391,33 @@ if (!process.versions.electron) {
       check(JSON.stringify(await storage()) === JSON.stringify({}), 'both overrides cleared after the blocker is removed');
 
       /* ---------- persistence across reload ---------- */
-      await clickRecorder('palette');
+      await clickRecorder('view-planner');
       await key('k', 'KeyK', 75, 3);
-      await waitFor(`${recorderExpr('palette')}.getAttribute('aria-pressed')==='false'`, 'palette custom before reload');
+      await waitFor(`${recorderExpr('view-planner')}.getAttribute('aria-pressed')==='false'`, 'planner custom before reload');
       await clickAction('work-terminal', 'disable');
       await waitFor(`${rowExpr('work-terminal')}.dataset.state==='disabled'`, 'work-terminal disabled before reload');
       const saved = await storage();
-      check(saved.palette === 'ctrl+alt+k' && saved['work-terminal'] === null, 'custom and disabled states are both persisted', saved);
+      check(saved['view-planner'] === 'ctrl+alt+k' && saved['work-terminal'] === null, 'custom and disabled states are both persisted', saved);
 
       await win.webContents.reload();
       await waitFor(`document.querySelector('#connText')?.textContent==='已连接'`, 'reload connected');
       await waitFor(`!!document.querySelector('#navShortcutHelp')`, 'app ready after reload');
       check(JSON.stringify(await storage()) === JSON.stringify(saved), 'localStorage survives reload', await storage());
       await openShortcuts();
-      const restoredPalette = await rowState('palette');
+      const restoredPlanner = await rowState('view-planner');
       const restoredTerminal = await rowState('work-terminal');
-      check(restoredPalette.rowState === 'custom' && restoredPalette.text.includes('Ctrl') && restoredPalette.text.includes('Alt') && restoredPalette.text.includes('K'), 'custom binding restores into the list', restoredPalette);
+      check(restoredPlanner.rowState === 'custom' && restoredPlanner.text.includes('Ctrl') && restoredPlanner.text.includes('Alt') && restoredPlanner.text.includes('K'), 'custom binding restores into the list', restoredPlanner);
       check(restoredTerminal.rowState === 'disabled' && restoredTerminal.text === '未绑定', 'disabled binding restores as 未绑定', restoredTerminal);
       await shot('1320-dark-restored');
       await closeSettings();
       await focusNav();
-      await key('k', 'KeyK', 75, 2);
+      await key('2', 'Digit2', 50, 1);
       await sleep(220);
-      check((await paletteVisible()) === false, 'restored custom binding still suppresses the old default');
+      check((await workspaceView()) === 'chat', 'restored custom binding still suppresses the old default');
       await key('k', 'KeyK', 75, 3);
-      await waitFor(`!document.querySelector('#paletteLayer').hidden`, 'restored custom binding dispatches after reload');
-      await key('Escape', 'Escape', 27);
-      await waitFor(`document.querySelector('#paletteLayer').hidden`, 'palette closed after reload check');
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='planner'`, 'restored custom binding dispatches after reload');
+      await read(`document.querySelector('#navHome').click()`);
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='chat'`, 'back to chat after reload check');
 
       /* ---------- reset all clears custom and disabled ---------- */
       await openShortcuts();
@@ -391,8 +435,29 @@ if (!process.versions.electron) {
       check(resetAll.resetAllDisabled === true && /已恢复全部默认快捷键/.test(resetAll.status), 'reset all disables itself and reports success', resetAll);
       await shot('1320-dark-reset-all');
 
-      /* ---------- old defaults survive the key-first/code-fallback change ---------- */
+      /* ---------- old palette storage ids are ignored safely ---------- */
       await closeSettings();
+      await read(`localStorage.setItem(${JSON.stringify(STORAGE_KEY)}, JSON.stringify({ palette: 'ctrl+alt+k', 'palette-alt': null, 'view-chat': 'alt+5' }))`);
+      await win.webContents.reload();
+      await waitFor(`document.querySelector('#connText')?.textContent==='已连接'`, 'legacy reload connected');
+      await waitFor(`!!document.querySelector('#navShortcutHelp')`, 'app ready after legacy reload');
+      await openShortcuts();
+      const legacy = await rowState('view-chat');
+      check(legacy.rowState === 'custom' && legacy.text.includes('Alt') && legacy.text.includes('5'), 'legacy palette ids are ignored while other overrides still load', legacy);
+      check(await read(`document.querySelectorAll('.shortcut-row').length===8 && !document.querySelector('.shortcut-row[data-shortcut-id="palette"]')`), 'legacy ids never create rows');
+      check(await read(`document.querySelectorAll('.shortcut-error:not([hidden])').length===0`), 'legacy ids do not surface an error');
+      await closeSettings();
+      await focusNav();
+      await key('k', 'KeyK', 75, 2);
+      await key('P', 'KeyP', 80, 10);
+      await sleep(220);
+      check(await noPalette(), 'legacy palette bindings still cannot open a palette');
+      await openShortcuts();
+      await read(`document.querySelector('.shortcut-reset-all').click()`);
+      await waitFor(`localStorage.getItem(${JSON.stringify(STORAGE_KEY)})==='{}'`, 'legacy cleanup reset all');
+      await closeSettings();
+
+      /* ---------- old defaults survive the key-first/code-fallback change ---------- */
       await focusNav();
       await key('/', 'Slash', 191, 2); // Ctrl+/
       await waitFor(`!!document.querySelector('.shortcut-settings-page')`, 'Ctrl+/ reopens shortcut settings');
@@ -400,58 +465,72 @@ if (!process.versions.electron) {
       await closeSettings();
 
       /* ---------- input and terminal guards (default bindings) ---------- */
-      await closeSettings();
       await read(`document.querySelector('#input').focus()`);
-      await key('k', 'KeyK', 75, 2); // Ctrl+K is allowed in the composer
-      await waitFor(`!document.querySelector('#paletteLayer').hidden`, 'Ctrl+K still opens the palette from the composer');
-      await key('Escape', 'Escape', 27);
-      await waitFor(`document.querySelector('#paletteLayer').hidden`, 'palette closed from composer');
+      await key('k', 'KeyK', 75, 2);
+      await key('P', 'KeyP', 80, 10);
+      await sleep(220);
+      check(await noPalette(), 'Ctrl+K and Ctrl+Shift+P do nothing inside the composer');
+      await key('/', 'Slash', 191, 2);
+      await waitFor(`!!document.querySelector('.shortcut-settings-page')`, 'Ctrl+/ still opens shortcut settings from the composer');
+      await closeSettings();
 
       await read(`(()=>{
         const host=document.createElement('div');host.className='xterm';
         const area=document.createElement('textarea');host.append(area);
         document.body.append(host);area.focus();window.__p24TerminalHost=host;
       })()`);
-      await key('k', 'KeyK', 75, 2);
+      await key('/', 'Slash', 191, 2);
       await sleep(220);
-      check((await paletteVisible()) === false, 'terminal focus keeps Ctrl+K for the terminal');
+      check(await read(`!document.querySelector('.shortcut-settings-page')`), 'terminal focus keeps Ctrl+/ for the terminal');
       await key('p', 'KeyP', 80, 2);
       await sleep(220);
       check(await read(`!document.querySelector('#rightPane') || document.querySelector('#rightPane').dataset.surface!=='files'`), 'terminal focus keeps Ctrl+P for the terminal');
       await key('P', 'KeyP', 80, 10); // Ctrl+Shift+P
-      await waitFor(`!document.querySelector('#paletteLayer').hidden`, 'Ctrl+Shift+P still opens the palette from the terminal');
-      await key('Escape', 'Escape', 27);
-      await waitFor(`document.querySelector('#paletteLayer').hidden`, 'palette closed from terminal');
+      await sleep(220);
+      check(await noPalette(), 'Ctrl+Shift+P does nothing from the terminal');
+      check((await workspaceView()) === 'chat', 'terminal Ctrl+Shift+P does not switch views');
       await read(`window.__p24TerminalHost.remove(); delete window.__p24TerminalHost`);
 
       /* ---------- rapid consecutive saves ---------- */
       await openShortcuts();
       for (const [letter, vk] of [['j', 74], ['h', 72], ['u', 85]]) {
-        await clickRecorder('palette');
+        await clickRecorder('view-planner');
         await key(letter, 'Key' + letter.toUpperCase(), vk, 3);
-        await waitFor(`${recorderExpr('palette')}.getAttribute('aria-pressed')==='false'`, 'rapid save ' + letter);
+        await waitFor(`${recorderExpr('view-planner')}.getAttribute('aria-pressed')==='false'`, 'rapid save ' + letter);
       }
       const rapid = await storage();
-      const rapidRow = await rowState('palette');
-      check(JSON.stringify(rapid) === JSON.stringify({ palette: 'ctrl+alt+u' }) && rapidRow.rowState === 'custom', 'rapid consecutive saves converge on the last binding', { rapid, rapidRow });
+      const rapidRow = await rowState('view-planner');
+      check(JSON.stringify(rapid) === JSON.stringify({ 'view-planner': 'ctrl+alt+u' }) && rapidRow.rowState === 'custom', 'rapid consecutive saves converge on the last binding', { rapid, rapidRow });
       await closeSettings();
       await focusNav();
       await key('j', 'KeyJ', 74, 3);
       await sleep(220);
-      check((await paletteVisible()) === false, 'superseded rapid binding does not dispatch');
+      check((await workspaceView()) === 'chat', 'superseded rapid binding does not dispatch');
       await key('u', 'KeyU', 85, 3);
-      await waitFor(`!document.querySelector('#paletteLayer').hidden`, 'last rapid binding dispatches');
-      await key('Escape', 'Escape', 27);
-      await waitFor(`document.querySelector('#paletteLayer').hidden`, 'palette closed after rapid check');
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='planner'`, 'last rapid binding dispatches');
+      await read(`document.querySelector('#navHome').click()`);
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='chat'`, 'back to chat after rapid check');
 
       /* ---------- light theme, custom + disabled ---------- */
       await setTheme('浅色');
+      await openSettingsMenu();
+      await shot('1320-light-settings-nav');
       await openShortcuts();
       check(await read(`document.documentElement.dataset.theme==='light'`), 'light theme applies to the shortcut page');
       await shot('1320-light-custom');
       await clickAction('work-terminal', 'disable');
       await waitFor(`${rowExpr('work-terminal')}.dataset.state==='disabled'`, 'light disabled row');
       await shot('1320-light-disabled');
+
+      /* P36：已知能力设置回到 Extensions 页；展开一项，截到真实的安装 / 观察布局。 */
+      await openExtensionsPage();
+      await waitFor(`document.querySelectorAll('.ext-known-item .cap-setup').length>=4`, 'known capability setups');
+      await read(`document.querySelector('.ext-known>summary').click();document.querySelector('.ext-known-item>summary').click()`);
+      await sleep(200);
+      await shot('1320-light-extensions');
+      await openMcpPage();
+      await shot('1320-light-mcp');
+      await openShortcuts();
 
       /* ---------- 700x600 narrow layout ---------- */
       win.setContentSize(700, 600);
@@ -478,9 +557,35 @@ if (!process.versions.electron) {
       check(Math.abs(narrow.controlWidth - (narrow.rowWidth - 28)) <= 10, 'narrow controls fill the row content width', narrow);
       await shot('700-light-custom');
 
+      await openSettingsMenu();
+      await shot('700-light-settings-nav');
+      await openExtensionsPage();
+      const extensions = await read(`(()=>({
+        tabs:[...document.querySelectorAll('.ext-tab')].map(n=>n.textContent),
+        removed:!!document.querySelector('#extensionsTabAll')||!!document.querySelector('#extensionsTabCapabilities'),
+        scrollWidth:document.documentElement.scrollWidth,
+        inner:innerWidth
+      }))()`);
+      check(JSON.stringify(extensions.tabs) === JSON.stringify(['Extensions', 'Skills', 'MCP']), 'extensions page exposes only Extensions / Skills / MCP tabs', extensions.tabs);
+      check(!extensions.removed, 'All / Capabilities tabs are gone');
+      check(extensions.scrollWidth <= extensions.inner + 1, '700px extensions page has no horizontal overflow', extensions);
+      await shot('700-light-extensions');
+      await openMcpPage();
+      const mcp = await read(`({scrollWidth:document.documentElement.scrollWidth,inner:innerWidth,title:document.querySelector('.mcp-page .settings-page-title')?.textContent})`);
+      check(mcp.title === 'MCP 服务器', 'MCP settings page still opens', mcp.title);
+      check(mcp.scrollWidth <= mcp.inner + 1, '700px MCP page has no horizontal overflow', mcp);
+      await shot('700-light-mcp');
+
       win.setContentSize(1320, 820);
       await sleep(350);
       await setTheme('深色');
+      await openSettingsMenu();
+      await shot('1320-dark-settings-nav-final');
+      await openExtensionsPage();
+      await shot('1320-dark-extensions');
+      await openMcpPage();
+      await shot('1320-dark-mcp');
+
       await openShortcuts();
       await read(`document.querySelector('.shortcut-reset-all').click()`);
       await waitFor(`localStorage.getItem(${JSON.stringify(STORAGE_KEY)})==='{}'`, 'cleanup reset all');
@@ -490,6 +595,12 @@ if (!process.versions.electron) {
       await shot('700-dark-default');
       const narrowDark = await read(`({scrollWidth:document.documentElement.scrollWidth,inner:innerWidth})`);
       check(narrowDark.scrollWidth <= narrowDark.inner + 1, '700px dark layout also has no horizontal overflow', narrowDark);
+      await openSettingsMenu();
+      await shot('700-dark-settings-nav');
+      await openExtensionsPage();
+      await shot('700-dark-extensions');
+      await openMcpPage();
+      await shot('700-dark-mcp');
       win.setContentSize(1320, 820);
       await sleep(300);
 

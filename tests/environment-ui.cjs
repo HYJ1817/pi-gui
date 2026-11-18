@@ -210,7 +210,6 @@ function makeJob(patch = {}) {
   const dom = new JSDOM(`<!doctype html><html><head></head><body>
     <div id="modal" hidden><div id="modalCard" class="modal-card"></div></div>
     <div id="confirmLayer" hidden><div id="confirmCard" class="modal-card"></div></div>
-    <div id="paletteLayer" hidden></div>
     <div id="toasts"></div>
     <span id="settingsEnvironmentDot" hidden></span>
   </body></html>`, { url: 'http://127.0.0.1/', pretendToBeVisual: true });

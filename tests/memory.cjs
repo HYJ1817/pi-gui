@@ -303,7 +303,6 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
     assert.doesNotMatch(pub('memory.js'), /restartBackend/);
   });
   check('restart failure retry available in shared component', () => assert.match(pub('ui/capability-setup.js'), /finally \{\s*button\.disabled = false/));
-  check('capability view renders memory capability', () => assert.match(pub('capability-view.js'), /memoryCapability\(/));
   check('app observes memory events', () => assert.match(pub('app.js'), /observeMemoryEvent\(evt\)/));
   check('timeline dispatches memory adapter', () => assert.match(pub('tool-view.js'), /memoryActivity\(entry\)/));
   check('memory tools are not mutating file tools', () => { for (const name of MEMORY_TOOLS) assert.equal(model.MUTATING_TOOLS.has(name), false); });

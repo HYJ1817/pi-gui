@@ -64,9 +64,9 @@ const NAMED_KEYS = new Set([
 
 const PUNCTUATION_KEYS = new Set(['`', '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/']);
 
-/* 终端（xterm）自己会消费的控制键。pi-GUI 的默认键位里 Ctrl+K / Ctrl+P /
- * Ctrl+/ 与 readline 冲突，所以焦点在终端里时让给终端；Ctrl+Shift+P 仍可
- * 打开命令面板。这里只挡这些明确的控制键，不挡 Alt+1..4 这类应用级视图键。 */
+/* 终端（xterm）自己会消费的控制键。pi-GUI 的默认键位里 Ctrl+P / Ctrl+/ 与
+ * readline 冲突，所以焦点在终端里时让给终端；Ctrl+K 没有任何应用绑定，同样
+ * 不该被应用层拦截。这里只挡这些明确的控制键，不挡 Alt+1..4 这类应用级视图键。 */
 const TERMINAL_CONTROLS = new Set([
   'ctrl+a', 'ctrl+b', 'ctrl+c', 'ctrl+d', 'ctrl+e', 'ctrl+f', 'ctrl+h', 'ctrl+k',
   'ctrl+l', 'ctrl+n', 'ctrl+p', 'ctrl+r', 'ctrl+u', 'ctrl+w', 'ctrl+y', 'ctrl+z',
@@ -99,8 +99,8 @@ const CODE_KEYS = new Map([
 ]);
 
 /* 保留组合：录制时直接拒绝。这里放的是**系统、编辑器、终端、Electron 主进程**
- * 已经占用的键位；pi-GUI 自己的默认键位（Ctrl+K / Ctrl+P / Ctrl+Shift+G /
- * Ctrl+/ / Ctrl+` / Alt+1..4 / Ctrl+Shift+P）**不在其中**。 */
+ * 已经占用的键位；pi-GUI 自己的默认键位（Ctrl+P / Ctrl+Shift+G /
+ * Ctrl+/ / Ctrl+` / Alt+1..4）**不在其中**。 */
 const RESERVED_COMMON = new Set([
   // 文本编辑 / 终端控制
   'ctrl+a', 'ctrl+c', 'ctrl+v', 'ctrl+shift+v', 'ctrl+x', 'ctrl+z', 'ctrl+shift+z', 'ctrl+y',
@@ -218,7 +218,7 @@ function keyFromCode(code) {
 /**
  * event → 规范键名 + 这个字符是否隐含 Shift。
  *
- * **以 event.key 为主**：Ctrl+/、Ctrl+`、Ctrl+Shift+P 这些旧默认在任何
+ * **以 event.key 为主**：Ctrl+/、Ctrl+` 这些默认键位在任何
  * 键盘布局下都保持用户按下的字符；event.code 只在 key 为
  * Unidentified / 空值时兜底，并用于提前挡掉修饰键、小键盘和死键。
  * 这样既不会因为 code 的物理键名把 Ctrl+/ 变成 Ctrl+Shift+7，
@@ -757,14 +757,14 @@ export function dispatchShortcut(event, scope = {}) {
     const effective = resolveShortcutCombo(def.id);
     if (!effective || effective !== combo) continue;
     /* 终端自己消费的控制键让给终端：xterm 的隐藏 textarea 也是 text entry，
-     * 但带修饰键的组合默认会穿透输入守卫，Ctrl+K / Ctrl+P / Ctrl+/ 就会
-     * 抢走 readline 的 kill-line / previous-history / undo。 */
+     * 但带修饰键的组合默认会穿透输入守卫，Ctrl+P / Ctrl+/ 就会
+     * 抢走 readline 的 previous-history / undo。 */
     if (isTerminalEntry(event.target) && TERMINAL_CONTROLS.has(effective)) return null;
     /* **不抢普通文本输入**：焦点在文本框里时，只有带 Ctrl/Alt/Meta 的组合才触发。
      * 不带修饰键的键位（`?`、字母、空格）是「打字」，一律让给输入框 ——
      * 除非那条键位显式声明 `inInput: true`，或者它是 F1–F12。
      *
-     * 注意：带修饰键的组合**在输入框里也要生效** —— Ctrl+K 打开面板、Alt+1 切视图
+     * 注意：带修饰键的组合**在输入框里也要生效** —— Ctrl+P 打开文件面板、Alt+1 切视图
      * 这些最常见的用法，恰恰是用户正在写消息的时候按的。所以这里判的是
      * 「有没有修饰键」，不是「在不在输入框」。 */
     if (isTextEntry(event.target)) {

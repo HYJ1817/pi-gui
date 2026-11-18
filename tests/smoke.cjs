@@ -3894,15 +3894,22 @@ staticCheck();
     await new Promise((r) => setTimeout(r, 30));
     const card = $('workSurface');
 
-    check('扩展面板：All / Capabilities / Extensions / Skills / MCP 五个过滤器各有独立 Tab', () => {
+    check('扩展面板：Extensions / Skills / MCP 三个过滤器各有独立 Tab', () => {
       const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.textContent);
-      return (labels.length === 5 && labels.join(',') === 'All,Capabilities,Extensions,Skills,MCP') || JSON.stringify(labels);
+      return (labels.length === 3 && labels.join(',') === 'Extensions,Skills,MCP') || JSON.stringify(labels);
     });
-    /* P22：默认落在 All（统一能力视图），它必须先给出结论行。 */
-    check('扩展面板：默认打开 All 能力视图并显示统一状态', () =>
-      card.querySelector('#extensionsTabAll')?.getAttribute('aria-selected') === 'true'
-      && card.querySelectorAll('.cap-view .ext-item').length > 0
-      && /状态/.test(card.querySelector('.cap-view')?.textContent || ''));
+    check('扩展面板：默认打开 Extensions 列表', () =>
+      card.querySelector('#extensionsTabExtensions')?.getAttribute('aria-selected') === 'true'
+      && !card.querySelector('#extensionsTabAll'));
+    check('P36 已知能力设置仍在 Extensions 页可达', () => {
+      const labels = [...card.querySelectorAll('.ext-known-item > summary')].map((s) => s.textContent);
+      const setups = card.querySelectorAll('.ext-known-item .cap-setup').length;
+      return (card.querySelector('.ext-known')
+        && labels.join(',') === 'Web Access,Subagents,Pi Memory,Browser Use,Approval / Permission'
+        && setups >= 4
+        && Boolean(card.querySelector('.ext-known-item .cap-install')))
+        || JSON.stringify({ labels, setups });
+    });
     card.querySelector('#extensionsTabExtensions')?.click();
     await new Promise((r) => setTimeout(r, 30));
     check('P15 Extension 列表分开显示加载状态与来源', () =>
@@ -4043,7 +4050,7 @@ staticCheck();
     $('modal').hidden = true;
     window.openExtensions();
     await new Promise((r) => setTimeout(r, 30));
-    // 先切回 Skills 页 —— 这两个断言问的是 Skills 列表，不是 All 能力视图。
+    // 先切到 Skills 页 —— 这两个断言问的是 Skills 列表，不是 Extensions 列表。
     $('workSurface').querySelector('#extensionsTabSkills')?.click();
     await new Promise((r) => setTimeout(r, 30));
     check('扩展面板：pi 没应答时显示「状态未知」，并说明原因', () =>
@@ -8480,283 +8487,6 @@ staticCheck();
     box.remove(); window.clearThread();
   }
 
-  /* P22: Capability 视图 —— 一条统一的界面回答「这个能力现在能不能用」。
-   * 这里量的是 DOM 语义（状态文案、六个字段、有没有假按钮）；
-   * 排版与横向溢出在 cdp-shot.cjs 的真实 Chrome 场景里量。 */
-  {
-    window.S.hasProject = true; window.S.switching = false;
-    window.S.bridgeState = 'ready';
-    window.clearThread();
-    const host = $('workSurface');
-    host.innerHTML = '';
-    window.openExtensions();
-    await new Promise(r => setTimeout(r, 60));
-    const card = host;
-    const capRows = () => [...card.querySelectorAll('.cap-view .ext-item')];
-    const capNames = () => capRows().map(r => r.querySelector('.ext-name')?.textContent || '');
-    const capStatuses = () => capRows().map(r => r.querySelector('.cap-status-line')?.textContent || '');
-    const pick = (name) => capRows().find(r => (r.querySelector('.ext-name')?.textContent || '').includes(name));
-    const detailKeys = () => [...card.querySelectorAll('.cap-view .cap-rows .ext-row')].map(r => r.dataset.k);
-    const detailValue = (k) => card.querySelector(`.cap-view .cap-rows [data-k="${k}"] .ext-row-v`)?.textContent || '';
-
-    check('P22 All 是默认过滤器，且每行都有统一状态行', () =>
-      card.querySelector('#extensionsTabAll')?.getAttribute('aria-selected') === 'true'
-      && capRows().length >= 8 && capRows().every(r => r.querySelector('.cap-status-line')));
-
-    check('P22 已知能力都在：Web / Subagents / Memory / Browser / Native MCP / Approval / Usage / Skills', () => {
-      const names = capNames().join(' | ');
-      const want = ['Web Access', 'Subagents', 'Pi Memory', 'Browser Use', 'Native MCP', 'Approval', 'Usage / Quota', 'Skills'];
-      return want.every(w => names.includes(w)) || names;
-    });
-
-    check('P22 All 里同时保留通用 Extension（含不认识 / 坏掉的那些）', () => {
-      const names = capNames();
-      return names.includes('Sample Extension') && names.includes('Broken Extension');
-    });
-
-    check('P22 built-in 用 builtin: 前缀，且详情说清它不来自目录扫描', () => {
-      const row = pick('builtin:mcp');
-      if (!row) return 'no builtin row: ' + capNames().join(' | ');
-      row.onclick();
-      const text = card.querySelector('.cap-view')?.textContent || '';
-      return text.includes('pi 内置扩展') && text.includes('不由 Extension Registry 的目录扫描发现') || text.slice(0, 160);
-    });
-
-    // 详情：只画**对这个能力适用**的字段（不再是六个格子 + 一串「不适用」）
-    pick('Web Access')?.onclick();
-    await new Promise(r => setTimeout(r, 20));
-    check('P22 详情只画适用的状态字段（第三方 Extension：五个）', () => {
-      const keys = detailKeys();
-      return JSON.stringify(keys) === JSON.stringify(['安装状态', '启用配置', '已加载', '运行观察', '需要重启']) || JSON.stringify(keys);
-    });
-    check('P22 diagnostic=null 时连「诊断」这一行都不画（不再写「诊断 无」）', () =>
-      !detailKeys().includes('诊断') || JSON.stringify(detailKeys()));
-    check('P22 第三方 Extension 给出固定官方命令与一键安装 / 复制 / 安装后重启', () => {
-      const code = card.querySelector('.cap-view code');
-      const buttons = [...card.querySelectorAll('.cap-view .ext-acts .btn')].map(b => b.textContent);
-      const install = card.querySelector('.cap-view .cap-install');
-      return code?.textContent === 'pi install npm:pi-web-access'
-        && install?.dataset.installState === 'install' && install?.textContent === '安装'
-        && buttons.includes('复制安装命令') && buttons.includes('安装后重启 Pi') || JSON.stringify(buttons);
-    });
-    // 一键安装：先确认，取消则一个请求都不发
-    {
-      const installCalls = [];
-      const baseFetchForInstall = window.fetch;
-      window.fetch = async (url, opts) => {
-        if (String(url).includes('/api/capabilities/install')) {
-          installCalls.push({ url: String(url), body: opts && opts.body });
-          return { json: async () => ({ ok: true, capabilityId: 'web', commandCompleted: true, loaded: null }) };
-        }
-        return baseFetchForInstall(url, opts);
-      };
-      card.querySelector('.cap-view .cap-install').click();
-      await new Promise(r => setTimeout(r, 20));
-      const confirmText = $('confirmCard').textContent;
-      const confirmed = $('confirmLayer').hidden === false;
-      $('confirmCard').querySelector('.btn').click(); // 取消
-      await new Promise(r => setTimeout(r, 20));
-      window.fetch = baseFetchForInstall;
-      check('P22 点「安装」先弹确认：命令 / 权限 / 用户级都写清楚', () =>
-        (confirmed && confirmText.includes('pi install npm:pi-web-access')
-          && confirmText.includes('用户级') && confirmText.includes('Pi 进程的权限')) || confirmText.slice(0, 120));
-      check('P22 确认框点「取消」→ 一个安装请求都不发', () =>
-        installCalls.length === 0 || JSON.stringify(installCalls));
-    }
-
-    /* 发现失败时 installed 只能是 null —— 这一格最容易糊弄成「未安装」。
-     * 换一个 ok:false 的 registry 桩，刷新后必须显示「未知（无法确认）」。 */
-    const savedForNull = stubExtensions;
-    stubExtensions = { ok: false };
-    [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
-    await new Promise(r => setTimeout(r, 40));
-    pick('Web Access')?.onclick();
-    await new Promise(r => setTimeout(r, 20));
-    check('P22 null 显示「未知（无法确认）」，不显示成「否」', () => {
-      const text = card.querySelector('.cap-view')?.textContent || '';
-      return detailValue('安装状态') === '未知（无法确认）'
-        && detailValue('已加载') === '未知（无法确认）'
-        && !text.includes('未安装') || `${detailValue('安装状态')} / ${detailValue('已加载')}`;
-    });
-    check('P22/P24 installed=null 时给的是「重新检查」，不是「安装」', () => {
-      const btn = card.querySelector('.cap-view .cap-install');
-      return (btn && btn.dataset.installState === 'recheck' && btn.textContent === '重新检查'
-        && ![...card.querySelectorAll('.cap-view .ext-acts .btn')].some(b => b.textContent === '安装'))
-        || (btn ? `${btn.dataset.installState}/${btn.textContent}` : '没有按钮');
-    });
-    stubExtensions = savedForNull;
-    [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
-    await new Promise(r => setTimeout(r, 40));
-
-    // Native MCP：进入统一体验，但不假装有 npm 安装命令
-    pick('Native MCP')?.onclick();
-    await new Promise(r => setTimeout(r, 20));
-    check('P22 Native MCP 不显示 npm 安装命令', () =>
-      card.querySelector('.cap-view code') === null
-      && (card.querySelector('.cap-view')?.textContent || '').includes('没有安装命令'));
-    check('P22 Native MCP 复用 P20.6 的原生状态词汇', () => {
-      const text = card.querySelector('.cap-view')?.textContent || '';
-      return text.includes('原生 MCP 生效中') && text.includes('built-in');
-    });
-    check('P22 Native MCP 明说「包里有」不等于「已启用」', () =>
-      (card.querySelector('.cap-view')?.textContent || '').includes('不等于'));
-    check('P22 Native MCP 详情不再是一串「不适用」', () =>
-      !(card.querySelector('.cap-view .cap-rows')?.textContent || '').includes('不适用') ||
-      (card.querySelector('.cap-view .cap-rows')?.textContent || '').slice(0, 120));
-
-    // 搜索
-    const capSearch = card.querySelector('.cap-view .ext-search');
-    capSearch.value = 'subagents';
-    capSearch.dispatchEvent(new window.Event('input'));
-    await new Promise(r => setTimeout(r, 10));
-    check('P22 搜索按名称过滤', () => {
-      const names = capNames();
-      return names.length === 1 && names[0] === 'Subagents' || JSON.stringify(names);
-    });
-    capSearch.value = '长期记忆';
-    capSearch.dispatchEvent(new window.Event('input'));
-    await new Promise(r => setTimeout(r, 10));
-    check('P22 搜索覆盖用途 / 描述', () => {
-      const names = capNames();
-      return names.length === 1 && names[0].includes('Pi Memory') || JSON.stringify(names);
-    });
-    capSearch.value = '未安装';
-    capSearch.dispatchEvent(new window.Event('input'));
-    await new Promise(r => setTimeout(r, 10));
-    check('P22 搜索覆盖状态文案', () => capRows().length > 0 && capStatuses().some(s => s.includes('未安装')));
-    capSearch.value = 'zzzz-no-match';
-    capSearch.dispatchEvent(new window.Event('input'));
-    await new Promise(r => setTimeout(r, 10));
-    check('P22 搜不到时给中性空态，不是空白页', () =>
-      (card.querySelector('.cap-view .ext-empty')?.textContent || '').includes('没有符合筛选条件'));
-    capSearch.value = '';
-    capSearch.dispatchEvent(new window.Event('input'));
-    await new Promise(r => setTimeout(r, 10));
-
-    // Capabilities 过滤器：只剩已知能力，扩展与 server 明细不在这里
-    card.querySelector('#extensionsTabCapabilities')?.click();
-    await new Promise(r => setTimeout(r, 40));
-    check('P22 Capabilities 过滤器只留已知能力', () => {
-      const names = capNames().join(' | ');
-      return names.includes('Web Access') && names.includes('Native MCP')
-        && !names.includes('Sample Extension') && !names.includes('builtin:') || names;
-    });
-
-    // Usage 入口：只读，点了打开既有上下文 Tip，不新建一套用量数据
-    pick('Usage / Quota')?.onclick();
-    await new Promise(r => setTimeout(r, 20));
-    check('P22 Usage 只给一个只读入口', () => {
-      const buttons = [...card.querySelectorAll('.cap-view .ext-acts .btn')].map(b => b.textContent);
-      return JSON.stringify(buttons) === JSON.stringify(['打开上下文与额度']) || JSON.stringify(buttons);
-    });
-    [...card.querySelectorAll('.cap-view .ext-acts .btn')].find(b => b.textContent === '打开上下文与额度')?.onclick();
-    await new Promise(r => setTimeout(r, 20));
-    check('P22 Usage 入口复用既有上下文 Tip，不复制数据', () =>
-      $('composerPopover').hidden === false && $('composerPopover').textContent.includes('背景信息窗口'));
-    window.closePop();
-    await new Promise(r => setTimeout(r, 10));
-
-    // restartRequired：配置改了没重启 → 结论行与状态行都要说
-    const savedExt = stubExtensions;
-    stubExtensions = { ok: true, piReachable: true, diagnostics: [],
-      extensions: [{ id: 'ext-web', name: 'pi-web-access', displayName: 'pi-web-access', version: '1.2.3',
-        description: 'web tools', source: { type: 'npm', location: 'C:/npm/pi-web-access' }, scope: 'global',
-        state: { installed: true, enabled: false, loaded: true, restartRequired: true, error: null },
-        capabilities: [], configurable: false }] };
-    card.querySelector('#extensionsTabAll')?.click();
-    await new Promise(r => setTimeout(r, 10));
-    // 面板是缓存的 —— 必须显式刷新才会重新取证据（这正是产品行为）。
-    [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
-    await new Promise(r => setTimeout(r, 40));
-    check('P22 restartRequired 进入统一状态（结论行 + 需要重启一行）', () => {
-      const row = capRows().find(r => (r.querySelector('.ext-name')?.textContent || '').includes('Web Access'));
-      if (!row) return 'no Web row: ' + capNames().join(' | ');
-      row.onclick();
-      const status = row.querySelector('.cap-status-line')?.textContent || '';
-      return (status.includes('需重启 Pi') && detailValue('需要重启') === '是'
-        && detailValue('启用配置') === '已停用' && detailValue('已加载') === '已确认加载') || `${status} / ${detailValue('需要重启')}`;
-    });
-    stubExtensions = savedExt;
-
-    /* 一键安装的完整链路（P24 收口）：
-     *   未安装 → 确认 → 发请求（body 只带 capabilityId）→ 重新取证据 →
-     *   按钮与状态行都按**重新发现的结果**重画。
-     * ⚠️ 安装命令跑完 ≠ 装上了 ≠ 已加载：这里刻意让 Registry 只给 installed=true、
-     * 不给 loaded 证据，界面就必须分开说「已安装」与「加载状态未知」。 */
-    {
-      const savedForInstall = stubExtensions;
-      const installCalls = [];
-      const baseFetchForFlow = window.fetch;
-      window.fetch = async (url, opts) => {
-        if (String(url).includes('/api/capabilities/install')) {
-          installCalls.push({ url: String(url), body: JSON.parse((opts && opts.body) || '{}') });
-          /* 官方命令跑完之后：Extension 出现在磁盘上，但**没有**加载证据。 */
-          stubExtensions = { ok: true, piReachable: true, diagnostics: [], extensions: [
-            { id: 'ext-web', name: 'pi-web-access', displayName: 'pi-web-access', version: '1.2.3',
-              description: 'web tools', source: { type: 'npm', location: 'C:/npm/pi-web-access' }, scope: 'global',
-              state: { installed: true, enabled: null, loaded: null, restartRequired: null, error: null },
-              capabilities: [], configurable: false }] };
-          return { json: async () => ({ ok: true, capabilityId: 'web', commandCompleted: true, loaded: null }) };
-        }
-        return baseFetchForFlow(url, opts);
-      };
-      stubExtensions = { ok: true, piReachable: true, diagnostics: [], extensions: [] };
-      card.querySelector('#extensionsTabAll')?.click();
-      await new Promise(r => setTimeout(r, 10));
-      [...card.querySelectorAll('.cap-view .ext-bar .btn')].find(b => b.textContent === '刷新')?.onclick();
-      await new Promise(r => setTimeout(r, 40));
-      pick('Web Access')?.onclick();
-      await new Promise(r => setTimeout(r, 20));
-      const beforeState = card.querySelector('.cap-view .cap-install')?.dataset.installState || '';
-      card.querySelector('.cap-view .cap-install')?.click();
-      await new Promise(r => setTimeout(r, 20));
-      $('confirmCard').querySelector('.btn.primary')?.click();
-      await new Promise(r => setTimeout(r, 150));
-      window.fetch = baseFetchForFlow;
-      const afterEl = card.querySelector('.cap-view .cap-install');
-      const afterState = afterEl ? afterEl.dataset.installState : '';
-      const afterLabel = afterEl ? afterEl.textContent : '';
-      check('P24 一键安装：未安装时按钮是「安装」', () => beforeState === 'install' || beforeState);
-      check('P24 一键安装：请求体只带 capabilityId（+ 确认与工作区守卫），没有包名 / 命令', () =>
-        (installCalls.length === 1 && installCalls[0].body.capabilityId === 'web'
-          && installCalls[0].body.confirm === true
-          && !('source' in installCalls[0].body) && !('command' in installCalls[0].body)
-          && !('args' in installCalls[0].body)) || JSON.stringify(installCalls));
-      check('P24 安装后按重新发现的证据重画：状态行写「已安装」，动作区不再摆一个按不动的按钮', () =>
-        (afterEl === null && detailValue('安装状态') === '已安装')
-        || JSON.stringify({ afterState, afterLabel, 安装状态: detailValue('安装状态') }));
-      check('P24 没有加载证据时如实说未知（已安装 / 已加载未知，不伪造已加载）', () =>
-        (detailValue('安装状态') === '已安装' && detailValue('已加载') === '未知（无法确认）')
-        || `${detailValue('安装状态')} / ${detailValue('已加载')}`);
-      stubExtensions = savedForInstall;
-    }
-
-    // 一键安装只出现在已知第三方 capability 上
-    check('P24 安装按钮只出现在第三方 Extension 上（Native MCP / built-in / Skills / Usage 都没有）', () => {
-      const withInstall = [];
-      for (const row of capRows()) {
-        const name = row.querySelector('.ext-name')?.textContent || '';
-        row.onclick();
-        if (card.querySelector('.cap-view .cap-install')) withInstall.push(name);
-      }
-      const allowed = ['Web Access', 'Subagents', 'Pi Memory', 'Browser Use'];
-      return (withInstall.length >= 1 && withInstall.every(n => allowed.some(a => n.startsWith(a))))
-        || JSON.stringify(withInstall);
-    });
-    check('P22/P24 Capability 视图没有任何自由输入（不提供任意包名入口）', () =>
-      !card.querySelector('.cap-view input:not([type="search"])'));
-
-    // stale workspace：结果回来时项目已经切了 → 不许落地
-    host.innerHTML = '';
-    window.openExtensions();
-    window.S.workspaceGeneration++;
-    await new Promise(r => setTimeout(r, 60));
-    check('P22 切项目后旧能力结果不落地', () =>
-      (card.querySelector('.cap-view .ext-empty')?.textContent || '').includes('项目已切换')
-      && card.querySelectorAll('.cap-view .ext-item').length === 0);
-    window.clearThread();
-  }
-
   /* P24 收口（本轮修复）：**安装真实性** —— 四个 feature 设置区
    * （Web / Subagents / Memory / Browser）与 Capability 页走同一条 recheck 路径。
    *
@@ -8998,159 +8728,97 @@ staticCheck();
     window.resetDrift();
   }
 
-  /* P24: 日常使用面 —— 命令面板、快捷键、草稿恢复、状态条。
+  /* P24: 日常使用面 —— 行内命令、快捷键、草稿恢复、状态条。
+   * 独立的命令面板已移除；命令注册表仍由 Composer 的 `/` 菜单使用。
    * 纯逻辑（注册表 / 搜索排序 / 文案映射）在 tests/daily-use.cjs；
    * 这里量的是 DOM 真的长出来了、点了真的会动、焦点真的回来了。 */
   {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    const layer = () => $('paletteLayer');
-    const items = () => [...layer().querySelectorAll('.palette-item')];
-    const paletteTitles = () => items().map((b) => b.querySelector('.palette-title').textContent);
     const press = (key, opts = {}) => {
       const e = new window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...opts });
       (opts.target || window.document.body).dispatchEvent(e);
       return e;
     };
+    const inlineItem = (id) => window.document.querySelector(`[data-command-id="${id}"]`);
 
     window.S.hasProject = true; window.S.switching = false; window.S.bridgeState = 'ready';
     window.S.streaming = false;
-    window.document.getElementById('paletteLayer').hidden = true;
     $('modal').hidden = true;
     $('modalCard').innerHTML = '';
 
     /* ---------- 快捷键注册表 ---------- */
     check('P24 快捷键：注册表无冲突（重复键位在装配时就炸）', () => window.assertNoConflicts() === true);
-    const paletteKey = window.IS_MAC ? { metaKey: true } : { ctrlKey: true };
-    check('P24 快捷键：面板 / 帮助 / 四个视图都在表里，且都带人看的 label', () => {
+    check('P24 快捷键：八条动作都在表里，旧命令面板键位已移除', () => {
       const list = window.listShortcuts();
       const ids = list.map((s) => s.id);
-      const want = ['palette', 'shortcut-help', 'view-chat', 'view-planner', 'view-changes', 'view-extensions'];
-      return (want.every((id) => ids.includes(id)) && list.every((s) => s.label && s.display)) || JSON.stringify(ids);
+      const want = ['shortcut-help', 'view-chat', 'view-planner', 'view-changes', 'view-extensions', 'work-changes', 'work-terminal', 'work-files'];
+      return (list.length === 8 && want.every((id) => ids.includes(id)) && !ids.includes('palette') && !ids.includes('palette-alt')
+        && list.every((s) => s.label && s.display)) || JSON.stringify(ids);
     });
-    check('P24 快捷键：在输入框里按 Ctrl+K 也能打开面板（边写边叫出来）', () => {
-      $('input').value = '正在写的半句话';
-      press('k', { ...paletteKey, target: $('input') });
-      const opened = !layer().hidden;
-      window.closePalette();
-      return opened || 'ctrl+k 在输入框里没打开面板';
+    check('P24 快捷键：Ctrl+K / Ctrl+Shift+P 不再打开任何面板或视图', () => {
+      press('k', { ctrlKey: true, target: $('input') });
+      press('P', { ctrlKey: true, shiftKey: true, target: $('input') });
+      return !$('paletteLayer') && !window.document.querySelector('.palette-card')
+        && $('workspace').dataset.workspaceView === 'chat';
     });
     check('P24 快捷键：不带修饰键的普通按键不会在输入框里被抢', () => {
       const before = $('input').value;
       const e = press('k', { target: $('input') });
-      return !e.defaultPrevented && layer().hidden && $('input').value === before;
+      return !e.defaultPrevented && $('input').value === before;
     });
 
-    /* ---------- 命令面板：打开 / 搜索 / 键盘 / 执行 / 焦点 ---------- */
+    /* ---------- 行内命令菜单：与设置共用同一份注册表 ---------- */
     $('input').focus();
-    press('k', { ...paletteKey, target: window.document.body });
+    $('input').value = '/MCP';
+    $('input').dispatchEvent(new window.Event('input', { bubbles: true }));
     await sleep(30);
-    check('P24 面板：快捷键能打开，且焦点在搜索框里', () =>
-      !layer().hidden && window.document.activeElement === layer().querySelector('.palette-input'));
-    check('P24 面板：常用动作默认就在列表里（不用先搜索）', () => {
-      const titles = paletteTitles().join(' | ');
-      const want = ['对话', '任务（Planner）', '文件变更', '扩展（Extensions）', '能力视图（Capabilities）', 'MCP', '用量与额度', '诊断'];
-      return want.every((w) => titles.includes(w)) || titles;
-    });
-    check('P24 面板：不可执行的动作**不出现**（没在流式就不给「停止生成」）', () =>
-      !paletteTitles().includes('停止生成'));
-    check('P24 面板：会话条目只在有查询时出现（不刷屏）', () => paletteTitles().filter((t) => t.startsWith('切换到会话：')).length === 0);
-
-    const input = layer().querySelector('.palette-input');
-    input.value = '能力';
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await sleep(20);
-    check('P24 面板：搜索按名称过滤', () => {
-      const titles = paletteTitles();
-      return titles.length >= 1 && titles[0].includes('能力') || JSON.stringify(titles);
-    });
-    input.value = '';
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await sleep(20);
-    const firstText = paletteTitles()[0];
-    press('ArrowDown', { target: input });
-    await sleep(20);
-    check('P24 面板：↓ 移动选中项（aria-selected 跟着走）', () => {
-      const on = items().findIndex((b) => b.classList.contains('on'));
-      return on === 1 && items()[1].getAttribute('aria-selected') === 'true' || `on=${on}`;
-    });
-    press('ArrowUp', { target: input });
-    await sleep(20);
-    check('P24 面板：↑ 回到第一项', () => items().findIndex((b) => b.classList.contains('on')) === 0);
-    check('P24 面板：第一项就是默认视图（顺序稳定）', () => paletteTitles()[0] === firstText);
-
-    /* 执行：MCP 命令 → 打开扩展工作区并停在 MCP 过滤器 */
-    input.value = 'MCP';
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
-    await sleep(20);
-    const mcpItem = items().find((b) => b.dataset.commandId === 'view.mcp');
-    mcpItem.onclick();
+    check('P24 行内命令：/MCP 候选来自共享注册表', () => Boolean(inlineItem('view.mcp')));
+    inlineItem('view.mcp').dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));
     await sleep(60);
-    check('P24 面板：执行后立刻关闭（不留面板挡结果）', () => layer().hidden);
-    check('P24 面板：MCP 命令打开独立的 MCP 管理页', () =>
+    check('P24 行内命令：执行后关闭菜单', () => window.document.querySelector('.ui3-inline-menu')?.hidden !== false);
+    check('P24 行内命令：MCP 命令打开独立的 MCP 管理页', () =>
       $('workspace').dataset.workspaceView === 'settings'
       && $('workViewTitle').textContent === 'MCP 服务器'
       && Boolean($('workSurface').querySelector('.mcp-page')));
 
-    /* Esc 关闭 + 焦点恢复 */
-    window.S.hasProject = true;
-    $('input').focus();
-    press('k', { ...paletteKey, target: window.document.body });
-    await sleep(30);
-    press('Escape', { target: layer().querySelector('.palette-input') });
-    await sleep(20);
-    check('P24 面板：Esc 关闭并把焦点还给打开它的元素', () =>
-      layer().hidden && window.document.activeElement === $('input'));
-
-    /* 面板不吃 Tab / 不在输入框里打字时抢键 */
-    press('k', { ...paletteKey, target: window.document.body });
-    await sleep(30);
-    const tabEvent = press('Tab', { target: layer().querySelector('.palette-input') });
-    check('P24 面板：Tab 留在搜索框上（aria-modal 语义）', () => tabEvent.defaultPrevented);
-    window.closePalette();
-    await sleep(10);
-
-    /* ---------- 可发现性：快捷键不能只写在文档里 ---------- */
-    check('P24 可发现：More 菜单里有「命令面板 / 键盘快捷键」两个可见入口', () => {
-      const p = $('navPalette');
-      const h = $('navShortcutHelp');
-      return Boolean(p && h) && p.tagName === 'BUTTON' && Boolean(p.title) && Boolean(h.title);
-    });
-    check('P24 可发现：点菜单里的「命令面板…」真的能打开面板', () => {
-      $('navPalette').onclick();
-      return !layer().hidden;
-    });
-    window.closePalette();
-    check('P24 可发现：点菜单里的「键盘快捷键…」真的能打开帮助', () => {
-      $('navShortcutHelp').onclick();
-      const open = $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && Boolean(window.document.querySelector('.settings-detail-card')?.textContent.includes('键盘快捷键'));
-      $('settingsReturn').click();
-      return open;
-    });
-    await sleep(20);
-
     /* ---------- 危险动作不能被绕过确认 ---------- */
+    $('navHome').click();
+    await sleep(30);
     window.S.hasProject = true;
     $('input').focus();
-    press('k', { ...paletteKey, target: window.document.body });
+    $('input').value = '/restart';
+    $('input').dispatchEvent(new window.Event('input', { bubbles: true }));
     await sleep(40);
-    const restartItem = items().find((b) => b.dataset.commandId === 'run.restart');
-    check('P24 危险动作：面板里有「重启 Pi」', () => Boolean(restartItem));
-    restartItem.onclick();
+    const restartItem = inlineItem('run.restart');
+    check('P24 危险动作：行内命令里有「重启 Pi」', () => Boolean(restartItem));
+    restartItem.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));
     await sleep(40);
-    check('P24 危险动作：从面板重启**必须先确认**（隐藏快捷键 / 面板都不是旁路）', () =>
+    check('P24 危险动作：行内命令重启**必须先确认**（没有旁路）', () =>
       $('confirmLayer').hidden === false && $('confirmCard').textContent.includes('重启'));
     $('confirmCard').querySelector('.btn').click(); // 第一个按钮 = 取消
     await sleep(40);
     check('P24 危险动作：取消之后什么都没发生（确认框收起、桥接状态不变）', () =>
       $('confirmLayer').hidden === true && window.S.bridgeState === 'ready');
 
+    /* ---------- 可发现性：快捷键不能只写在文档里 ---------- */
+    check('P24 可发现：设置里有「快捷键」入口，命令面板 / 能力状态入口已移除', () =>
+      Boolean($('navShortcutHelp')) && !$('navPalette') && !$('navCapabilities'));
+    check('P24 可发现：点设置里的「快捷键」真的能打开帮助', () => {
+      $('navShortcutHelp').onclick();
+      const open = $('modal').hidden && $('workspace').dataset.workspaceView === 'settings'
+        && Boolean(window.document.querySelector('.settings-detail-card')?.textContent.includes('键盘快捷键'));
+      $('settingsReturn').click();
+      return open;
+    });
+    await sleep(20);
+
     /* ---------- 快捷键帮助 ---------- */
     window.openShortcutHelp();
     await sleep(30);
-    check('P24 帮助：从注册表渲染，含分组与键位写法', () => {
+    check('P24 帮助：从注册表渲染，含分组与键位写法，且不再提命令面板', () => {
       const card = $('modalCard');
       const text = card.textContent;
-      return text.includes('键盘快捷键') && text.includes('命令面板') && text.includes('视图')
+      return text.includes('键盘快捷键') && text.includes('视图') && !text.includes('命令面板')
         && text.includes(window.IS_MAC ? '⌘' : 'Ctrl+') && Boolean(card.querySelector('.kb-keys'));
     });
     check('P24 帮助：也列出输入 / 弹层那几条既有键位', () => {
@@ -9282,7 +8950,6 @@ staticCheck();
     check('P24 维护态：回到 ready 之后 reason 被清掉（不留上一条的措辞）', () =>
       (window.S.maintenanceReason === null && $('connText').textContent === '已连接')
       || JSON.stringify({ reason: window.S.maintenanceReason, conn: $('connText').textContent }));
-    window.document.getElementById('paletteLayer').hidden = true;
     window.S.bridgeState = 'ready';
   }
 

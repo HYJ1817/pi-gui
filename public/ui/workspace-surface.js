@@ -31,7 +31,7 @@ function sync(view) {
 export function projectWorkSurface(view, { navigation = rail[view], title = titles[view] || '' } = {}) {
   if (current.view !== view) return;
   $('workViewTitle').textContent = title;
-  for (const id of new Set([...Object.values(rail), 'navMcp', 'navCapabilities'])) {
+  for (const id of new Set([...Object.values(rail), 'navMcp'])) {
     const button = $(id);
     const active = button.id === navigation;
     button.classList.toggle('is-active', active);

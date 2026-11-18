@@ -24,7 +24,7 @@
  * ---------- 为什么单独成文件 ----------
  *
  * 纯函数、不碰 `document`、不 import `state.js`，所以 node 单测可以直接 import
- * 它，不需要 jsdom。渲染在 `ui/capability-setup.js` 与 `capability-view.js`。
+ * 它，不需要 jsdom。渲染在 `ui/capability-setup.js` 等共用设置区。
  */
 
 /** 缺证据时的统一文案。**不允许**用「否」「未安装」代替它。 */

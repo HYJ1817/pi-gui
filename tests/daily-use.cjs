@@ -2,10 +2,10 @@
  *
  * 覆盖三块：
  *   A. 快捷键注册表（`public/shortcuts.js`）—— 组合解析、冲突检测、文本输入守卫
- *   B. 命令面板模型（`public/palette-model.js`）—— 注册、可执行性、搜索排序
+ *   B. 命令注册表（`public/palette-model.js`）—— 注册、可执行性、搜索排序
  *   C. 状态文案（`public/status-copy.js`）—— 哪些状态该常驻、给什么下一步
  *
- * DOM 行为（面板真的能开、草稿真的落到 localStorage、状态条真的渲染）在
+ * DOM 行为（快捷键设置页、草稿真的落到 localStorage、状态条真的渲染）在
  * `tests/smoke.cjs` 的 P24 段；真实排版在 `tests/cdp-shot.cjs` 的场景里量。
  */
 const assert = require('node:assert/strict');
@@ -156,8 +156,8 @@ const BUTTON = { tagName: 'BUTTON', isContentEditable: false };
     assert.equal(list[1].available, false);
   });
 
-  /* ================= B. 命令面板模型 ================= */
-  section('B. 命令面板模型');
+  /* ================= B. 命令注册表 ================= */
+  section('B. 命令注册表');
   const mk = (id, title, extra = {}) => ({ id, title, group: extra.group || '通用', keywords: extra.keywords || '', run: extra.run || (() => {}), ...extra });
 
   check('注册校验：缺 id / 缺 run / id 重复都抛', () => {

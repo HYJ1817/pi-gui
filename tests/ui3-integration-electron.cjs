@@ -56,9 +56,8 @@ async function run(){
   await input('普通消息');await key('Enter');check(await read(`calls.filter(c=>c.type==='prompt').length===1`),'ordinary real Enter reaches original submit');
   await read(`ST.S.submitting=false;ST.S.streaming=false;C.updateSendState()`);
   await input('/uniquefixture');await key('Escape');check(await read(`document.querySelector('.ui3-inline-menu').hidden&&!calls.some(c=>c.type==='abort')&&ST.el.input.value==='/uniquefixture'`),'real Escape only closes slash and preserves draft');
-  await input('/uniquefixture');await key('K',['control']);
-  check(await read(`!document.querySelector('#paletteLayer').hidden&&document.querySelector('.ui3-inline-menu').hidden`),'real Ctrl+K preserves independent panel and closes slash');
-  await key('Escape');
+  await input('/uniquefixture');await key('Escape');await key('K',['control']);
+  check(await read(`!document.getElementById('paletteLayer')&&document.querySelector('.ui3-inline-menu').hidden&&ST.el.input.value==='/uniquefixture'`),'real Ctrl+K no longer opens a palette and leaves slash closed');
   await input('草稿');const ime=await read(`(()=>{const n=calls.length;for(const options of [{isComposing:true},{keyCode:229}])ST.el.input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,...options}));ST.el.input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));ST.el.input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));ST.el.input.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));return calls.length===n})()`);check(ime,'synthetic IME signals inside real Chromium never submit (not real OS IME)');
   for(const type of ['pi-gui:session-switch','pi-gui:workspace-generation']){await input('/uniquefixture');await read(`document.dispatchEvent(new CustomEvent(${JSON.stringify(type)}))`);check(await read(`document.querySelector('.ui3-inline-menu').hidden&&ST.el.input.value==='/uniquefixture'`),type+' closes menu without draft mutation');}
   for(const view of ['planner','runtime']){await input('/uniquefixture');await read(`document.dispatchEvent(new CustomEvent('pi-gui:workspace-view',{detail:{view:${JSON.stringify(view)}}}))`);check(await read(`document.querySelector('.ui3-inline-menu').hidden&&ST.el.input.value==='/uniquefixture'`),view+' lifecycle closes menu');}

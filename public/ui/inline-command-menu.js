@@ -2,17 +2,16 @@
  *
  * ---------- 这个模块存在的理由 ----------
  *
- * P24 已经有一套**命令注册表**（`palette-model.js` 的 `allCommands(ctx)` /
- * `filterCommands`）和一套**动作**（每个 command 的 `run()`）。命令面板
- * （`palette.js`）是「弹一个居中卡片、单独搜索框」的形态；Claude Code 那种
- * **在输入框里直接打 `/`** 的形态，缺的只是「触发 + 列表 + 键盘」这一层。
+ * 仓库里已经有一套**命令注册表**（`palette-model.js` 的 `allCommands(ctx)` /
+ * `filterCommands`）和一套**动作**（每个 command 的 `run()`）。独立的命令面板
+ * 已在 P36 移除；Claude Code 那种**在输入框里直接打 `/`** 的形态保留下来，
+ * 它提供「触发 + 列表 + 键盘」这一层。
  *
  * 所以这里**只做增量**，绝不重新定义任何业务：
  *   - 候选来源永远是 `listCommands(ctx)`（默认 `allCommands`）——`when(ctx)` 为假
- *     的命令根本不会出现，和独立面板同一份真相；
+ *     的命令根本不会出现；
  *   - 执行永远是 `cmd.run(ctx)` —— 不拼 RPC、不复制 handler，危险动作该有的确认
  *     原样保留（本模块不提供任何 `skipConfirm`/bypass）。
- *   - 独立命令面板 `palette.js` 完整保留，两者共用同一份注册表。
  *
  * ---------- 与 app.js 现有 keydown 的契约（重要） ----------
  *

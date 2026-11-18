@@ -153,9 +153,11 @@ exports.run = async function run({ win, read, check, shot, key, click, closePane
   check(dragged.top >= -1 && dragged.right <= dragged.paneLeft + 1 && dragged.bottom <= dragged.composerTop + 1, 'actual pane drag repositions Toast without covering Composer or Browser', dragged);
   await shot('joint-pane-drag-feedback');
   await read(`document.getElementById('input').focus()`);
-  await key('k', 'KeyK', 75, 2);
-  check(await read(`!document.getElementById('paletteLayer').hidden`), 'Ctrl+K still opens the independent command palette');
+  await key('/', 'Slash', 191, 2);
+  await sleep(250);
+  check(await read(`!!document.querySelector('.shortcut-settings-page')`), 'Ctrl+/ still opens shortcut settings from the composer');
   await key('Escape', 'Escape', 27);
+  await read(`document.querySelector('#navHome').click()`); await sleep(120);
 
   for (const zoom of [0.8, 1.25, 1.5]) {
     win.webContents.setZoomFactor(zoom); await sleep(160);

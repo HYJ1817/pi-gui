@@ -151,7 +151,7 @@ async function waitReady(ms = 20000, base = BASE) {
       return (Number.isFinite(base) && Number.isFinite(confirm) && confirm > base) || `.modal=${base} .modal.confirm=${confirm}`;
     });
     /* 深色滚动条：这一轮把它收成了一条**全局**规则（以前是「一个容器一个补丁」，
-     * 命令面板 / 诊断 / 扩展与能力那几栏全都漏掉了，深色界面里冒出亮白滚动条）。
+     * 诊断 / 扩展与 Skills 那几栏全都漏掉了，深色界面里冒出亮白滚动条）。
      * jsdom 不套用外部样式表、也不画滚动条，所以只能在这里盯样式表本身。
      *
      * 先去掉注释再解析规则 —— 注释里写着「不要用 scrollbar-width:none」，

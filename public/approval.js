@@ -769,7 +769,7 @@ export function approvalSnapshot() {
   };
 }
 
-/* ---------- Extensions / Capabilities 页：能力报告（supported / unsupported 都必须说清） ---------- */
+/* ---------- Extensions 页：能力报告（supported / unsupported 都必须说清） ---------- */
 
 import { renderSetupSection } from './ui/capability-setup.js';
 import { setupViewModel, NA, TRI_UNKNOWN, statusOf } from './capability-model.js';

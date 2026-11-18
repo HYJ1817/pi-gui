@@ -294,15 +294,19 @@ export function renderSetupSection(model, { linkFactory = null, onRecheck = null
  *                 `(reg) => webCapability(reg, webObservation())`
  * @param registry 首次渲染用的 Registry 报告（调用方手上已经有，不必再取一次）
  * @param options.linkFactory 外链工厂（各 feature 复用既有的安全外链实现）
+ * @param options.onRegistry 可选：recheck 拿到新 Registry 后通知宿主（Extensions
+ *                列表用它同步刷新，避免安装完成后左栏还停在旧证据上）。
  * @returns box
  */
-export function renderFeatureSetup(box, build, registry, { linkFactory = null } = {}) {
+export function renderFeatureSetup(box, build, registry, { linkFactory = null, onRegistry = null } = {}) {
   async function recheck() {
     const generation = S.workspaceGeneration;
     const fresh = await fetchExtensions();
     /* 切了项目就不再往旧容器里画 —— 但也不谎报成功：返回 null 表示「没确认」。 */
     if (!ownsWorkspace(generation)) return null;
-    return paint(fresh);
+    const row = paint(fresh);
+    if (typeof onRegistry === 'function') onRegistry(fresh);
+    return row;
   }
   function paint(report) {
     const row = build(report);

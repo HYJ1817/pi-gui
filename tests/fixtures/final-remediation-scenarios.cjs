@@ -106,11 +106,11 @@ module.exports = async ({ read, click, key, shot, paint, check, win, waitFor }) 
   await waitFor(`document.querySelectorAll('.settings-detail-card > .modal-actions button').length >= 4`);
   check('R1 diagnostic export and refresh remain reachable', await read(`(()=>{let b=[...document.querySelectorAll('.settings-detail-card > .modal-actions button')];return b.length>=4&&b.every(e=>e.checkVisibility())})()`));
   await shot('r10-diagnostics-dark');
-  for(const [id,name] of [['navShortcutHelp','shortcuts'],['navProviderAuth','auth'],['navAppUpdates','updates'],['navMcp','mcp'],['navCapabilities','capabilities'],['navExtensions','skills']]){
+  for(const [id,name] of [['navShortcutHelp','shortcuts'],['navProviderAuth','auth'],['navAppUpdates','updates'],['navMcp','mcp'],['navExtensions','skills']]){
     if(!await read(`!!document.getElementById(${JSON.stringify(id)})`))throw Error('Unknown settings navigation '+id);
     await read(`document.getElementById(${JSON.stringify(id)}).scrollIntoView({block:'nearest'})`);await click('#'+id);await paint();
     await shot('r11-settings-'+name+'-dark');
-    if(['navMcp','navCapabilities','navExtensions'].includes(id))check('R1 '+name+' current navigation matches its real tab owner',await read(`document.getElementById(${JSON.stringify(id)}).getAttribute('aria-current')==='page'&&document.querySelectorAll('#globalMoreMenu [aria-current="page"]').length===1`));
+    if(['navMcp','navExtensions'].includes(id))check('R1 '+name+' current navigation matches its real tab owner',await read(`document.getElementById(${JSON.stringify(id)}).getAttribute('aria-current')==='page'&&document.querySelectorAll('#globalMoreMenu [aria-current="page"]').length===1`));
   }
   await click('#settingsReturn');
   await read(`(async()=>{await TH.setThemePreference('light');M.clearThread();M.setStreaming(false);let data={version:1,type:'line',title:'主题与键盘回归',labels:['A','B','C'],series:[{name:'数值',data:[1,2,3]}]};M.rebuildFromMessages([{role:'assistant',content:[{type:'text',text:String.fromCharCode(96).repeat(3)+'pi-gui-viz'+String.fromCharCode(10)+JSON.stringify(data)+String.fromCharCode(10)+String.fromCharCode(96).repeat(3)}]}])})()`);

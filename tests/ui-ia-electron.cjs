@@ -95,7 +95,9 @@ if (!process.versions.electron) {
       await push('/api/__push?what=settled'); await waitFor(`document.querySelector('#btnStop').hidden`, 'settled');
       await push('/api/__push?what=startup-error'); await waitFor(`!document.querySelector('#stageNotice').hidden`, 'error'); await shot('error', size);
       await win.loadURL(ORIGIN); await waitFor(`document.querySelector('#connText').textContent==='已连接'`, 'recover');
-      await pointer('#btnBrowser'); await waitFor(`!!document.querySelector('#browserAddress')`, 'Browser open');
+      await pointer('#btnWorkPanel'); await waitFor(`!!document.querySelector('.work-panel-launcher-row[data-tool="btnBrowser"]')`, 'work tools');
+      await pointer('.work-panel-launcher-more'); await waitFor(`!document.querySelector('.work-panel-launcher-extra').hidden`, 'more tools');
+      await pointer('.work-panel-launcher-row[data-tool="btnBrowser"]'); await waitFor(`!!document.querySelector('#browserAddress')`, 'Browser open');
       await read(`document.querySelector('#browserAddress').value=${JSON.stringify('http://127.0.0.1:')}+${fixture.address().port}`);
       await pointer('#browserAddress'); await key('Enter', 'Enter', 13); await sleep(350);
       for (let n = 0; n < 100 && controller.getWebContents()?.getTitle() !== 'P30 local preview'; n++) await sleep(50);
@@ -104,29 +106,38 @@ if (!process.versions.electron) {
       fs.writeFileSync(path.join(OUT, browserFile), (await controller.getWebContents().capturePage()).toPNG());
       screenshots.push(browserFile);
       await shot('browser-open', size);
-      await pointer('#navChanges'); await waitFor(`!!document.querySelector('#rightPane .chg-row')`, 'Changes open');
+      /* 原生 WebContentsView 挂上后，CDP 合成鼠标事件会被它接管；这里直接点真实按钮，
+       * 切换后原生视图会立即摘下去。 */
+      await read(`document.querySelector('#navChanges').click()`); await sleep(300);
+      await waitFor(`!!document.querySelector('#rightPane .chg-row')`, 'Changes open');
       check(await read(`!document.querySelector('#browserViewport') && document.querySelector('#chatComposer').hidden===false`), size + ' Browser switched to Changes without replacing chat');
       await pointer('#rightPane .chg-main'); await waitFor(`!!document.querySelector('#rightPane .chg-row.open')`, 'expanded Diff');
       await shot('changes-open', size); await pointer('#rightPaneClose');
-      check(await read(`document.querySelector('#rightPane').hidden && !document.querySelector('#rightPane .chg-row') && document.activeElement.id==='navChanges'`), size + ' close releases pane and returns focus');
+      check(await read(`document.querySelector('#rightPane').hidden && !document.querySelector('#rightPane .chg-row') && document.activeElement.id==='btnWorkPanel'`), size + ' close releases pane and returns focus');
       await shot('right-pane-closed', size);
     }
     win.setContentSize(1440, 900); await sleep(200);
     await pointer('#navGlobalMore'); await shot('settings', '1440x900');
-    await key('ArrowDown', 'ArrowDown', 40); check(await read(`document.activeElement.id==='navProviderAuth'`), 'Settings arrow navigation');
+    await key('ArrowDown', 'ArrowDown', 40); check(await read(`document.activeElement.id==='navAppearance'`), 'Settings arrow navigation');
     await key('Escape', 'Escape', 27); check(await read(`document.querySelector('#globalMoreMenu').hidden && document.activeElement.id==='navGlobalMore'`), 'Settings Escape focus');
-    await key('k', 'KeyK', 75, 2); await waitFor(`!document.querySelector('#paletteLayer').hidden`, 'Ctrl+K');
-    await key('Tab', 'Tab', 9); check(await read(`document.querySelector('#paletteLayer').contains(document.activeElement)`), 'Palette Tab stays inside');
-    await key('Tab', 'Tab', 9, 8); check(await read(`document.querySelector('#paletteLayer').contains(document.activeElement)`), 'Palette Shift+Tab stays inside');
-    await shot('palette', '1440x900'); await key('Escape', 'Escape', 27);
+    await key('k', 'KeyK', 75, 2); await sleep(220);
+    check(await read(`!document.querySelector('#paletteLayer') && document.querySelector('#globalMoreMenu').hidden`), 'Ctrl+K no longer opens a command palette');
+    await pointer('#navGlobalMore'); await waitFor(`!document.querySelector('#globalMoreMenu').hidden`, 'settings menu reopened');
+    await pointer('#navRestartPi'); await waitFor(`!document.querySelector('#confirmLayer').hidden`, 'confirm dialog');
+    await key('Tab', 'Tab', 9); check(await read(`document.querySelector('#confirmLayer').contains(document.activeElement)`), 'Confirm Tab stays inside');
+    await key('Tab', 'Tab', 9, 8); check(await read(`document.querySelector('#confirmLayer').contains(document.activeElement)`), 'Confirm Shift+Tab stays inside');
+    await shot('confirm-dialog', '1440x900'); await key('Escape', 'Escape', 27);
+    await waitFor(`document.querySelector('#confirmLayer').hidden`, 'confirm dialog closed');
     for (const method of ['click', 'Enter']) {
-      await pointer('#input'); await key('k', 'KeyK', 75, 2);
-      await waitFor(`!!document.querySelector('.palette-input')`, 'Settings palette query');
-      await win.webContents.debugger.sendCommand('Input.insertText', { text: '设置' });
+      await read(`document.querySelector('#navHome').click()`);
+      await waitFor(`!document.querySelector('#chatComposer').hidden`, 'chat composer');
+      await read(`document.querySelector('#input').value=''`);
+      await pointer('#input');
+      await win.webContents.debugger.sendCommand('Input.insertText', { text: '/settings' });
       await waitFor(`!!document.querySelector('[data-command-id="app.preferences"]')`, 'Settings command');
       if (method === 'click') await pointer('[data-command-id="app.preferences"]');
       else await key('Enter', 'Enter', 13);
-      check(await read(`!document.querySelector('#globalMoreMenu').hidden && document.activeElement.id==='navProviders'`), 'Palette Settings real ' + method + ' menu/focus handoff');
+      check(await read(`!document.querySelector('#globalMoreMenu').hidden && document.activeElement.id==='settingsSearchInput'`), 'Inline Settings real ' + method + ' menu/focus handoff');
       await key('Escape', 'Escape', 27);
     }
     await pointer('.project.active .pj-row-menu-trigger'); await waitFor(`!!document.querySelector('.action-menu:not([hidden])')`, 'project menu'); await key('Escape', 'Escape', 27);
@@ -141,13 +152,16 @@ if (!process.versions.electron) {
     await pointer('#groupHead'); const collapsed = await read(`document.querySelector('#groupHead').getAttribute('aria-expanded')==='false'`);
     check(collapsed, 'Group collapse'); await pointer('#groupHead');
     await pointer('#btnSidebarCollapse'); check(await read(`document.activeElement.id==='btnSidebarExpand'`), 'Sidebar collapse focus');
-    await key('Tab', 'Tab', 9, 8); check(await read(`document.activeElement.id==='navGlobalMore'`), 'Shift+Tab reaches Settings in collapsed shell');
+    /* 折叠后侧栏（含 Settings）整体收起，顶栏只留展开入口；设置仍可通过展开侧栏到达。 */
+    check(await read(`(()=>{const b=document.querySelector('#btnSidebarExpand');b.focus();return document.activeElement===b&&b.offsetParent!==null&&document.querySelector('#projectSidebar').hidden})()`), 'Collapsed shell keeps its expand control focusable');
     await pointer('#btnSidebarExpand'); check(await read(`document.activeElement.id==='btnSidebarCollapse'`), 'Sidebar expand focus');
-    await pointer('#navPlanner'); await sleep(350); await shot('planner-review', '1440x900');
-    await pointer('#navExtensions'); await waitFor(`document.querySelector('#extensionsTabSkills').getAttribute('aria-selected')==='true'`, 'Skills default'); await shot('skills', '1440x900');
-    await pointer('#navHome');
+    await pointer('#navGlobalMore'); await pointer('#navPlanner'); await sleep(350); await shot('planner-review', '1440x900');
+    await pointer('#settingsReturn'); await pointer('#navGlobalMore'); await pointer('#navExtensions'); await waitFor(`document.querySelector('#extensionsTabSkills').getAttribute('aria-selected')==='true'`, 'Skills default'); await shot('skills', '1440x900');
+    await pointer('#settingsReturn');
     for (const zoom of [0.8, 1.25, 1.5]) {
-      win.webContents.setZoomFactor(zoom); await sleep(250); await pointer('#navChanges'); await sleep(150);
+      win.webContents.setZoomFactor(zoom); await sleep(250);
+      await pointer('#btnWorkPanel'); await waitFor(`!!document.querySelector('.work-panel-launcher-row[data-tool="navChanges"]')`, 'work tools');
+      await pointer('.work-panel-launcher-row[data-tool="navChanges"]'); await sleep(150);
       check(await read(`document.documentElement.scrollWidth<=innerWidth+1 && document.querySelector('#rightPane').getBoundingClientRect().right<=innerWidth+1`), 'Zoom ' + zoom + ' no overlap/overflow');
       await shot('zoom-' + zoom, '1440x900'); await pointer('#rightPaneClose');
     }

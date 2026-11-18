@@ -1,8 +1,8 @@
 /* P22 Capability 投影层：离线单测。
  *
  * 这一套**全是纯函数**（`public/capability-model.js` 与各 `*-capabilities.js`），
- * 不需要 jsdom、不 spawn、不联网、不碰用户文件。DOM 层的断言在 `smoke.cjs` 的 P22 段，
- * 视觉与布局断言在 `cdp-shot.cjs` 的场景里。
+ * 不需要 jsdom、不 spawn、不联网、不碰用户文件。共享 setup 的 DOM 断言在
+ * `smoke.cjs` 与 `ui4-*` 套件里，视觉与布局断言在 `cdp-shot.cjs` 的场景里。
  *
  * 这一套要钉住的纪律（写错任何一条，界面就会开始撒谎）：
  *   1. `null` 只能显示「未知（无法确认）」，**绝不显示成 false**；
@@ -503,17 +503,10 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
   check('投影层是纯函数：同样输入永远同样输出', () => {
     assert.deepEqual(catalog().rows.map((r) => r.id), catalog().rows.map((r) => r.id));
   });
-  check('视图落地前同时过实例身份与 workspace generation', () => {
-    const view = read('public/capability-view.js');
-    assert.match(view, /ownsWorkspace\(generation\)/);
-    assert.match(view, /if \(!isCurrent\(\)\) return;/);
-    assert.ok(view.indexOf('!isCurrent()') < view.indexOf('catalog = buildCapabilityCatalog'), '身份守卫必须在落地之前');
-  });
-  check('视图不自己缓存观察（否则换项目会拿到旧 run 的结论）', () => {
-    const view = read('public/capability-view.js');
-    assert.doesNotMatch(view, /const\s+observed\s*=\s*\{/);
-    assert.match(view, /webObservation\(\)/);
-    assert.match(view, /snapshotMcpObservation\(\)/);
+  check('独立能力状态页面已移除，共享投影层保留', () => {
+    assert.equal(fs.existsSync(path.join(__dirname, '../public/capability-view.js')), false);
+    assert.match(read('public/capability-model.js'), /buildCapabilityCatalog/);
+    assert.match(read('public/ui/capability-setup.js'), /ownsWorkspace\(generation\)/);
   });
   check('共享重启流程带 stale 守卫（切项目后不对着新项目重启）', () => {
     const setup = read('public/ui/capability-setup.js');
@@ -535,8 +528,8 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
       assert.equal(setup.automaticInstall, false);
     }
   });
-  check('投影层与视图层都不执行安装（无 spawn / exec / child_process）', () => {
-    for (const file of ['public/capability-model.js', 'public/capability-view.js', 'public/ui/capability-setup.js']) {
+  check('投影层与共享 setup 都不执行安装（无 spawn / exec / child_process）', () => {
+    for (const file of ['public/capability-model.js', 'public/ui/capability-setup.js']) {
       assert.doesNotMatch(read(file), /child_process|execFile|\bspawn\(|node:fs/, file);
     }
   });
