@@ -57,6 +57,22 @@ test('install ordered after prepare and verified package; duplicate install deni
   const order=[];const {u}=setup(t,{prepare:async()=>{order.push('prepare');return {ok:true};},launch:async()=>{order.push('launch');},quit:async()=>order.push('quit')});
   await u.download({confirm:true});assert.equal((await u.install({confirm:true})).ok,true);assert.deepEqual(order,['prepare','launch','quit']);assert.equal((await u.install({confirm:true})).ok,false);
 });
+test('install authorization is rechecked after preparation and before launch',async t=>{
+  let allowed=true,launched=0,released=0;
+  const {u}=setup(t,{
+    prepare:async()=>{allowed=false;return {ok:true};},
+    launch:async()=>launched++,
+    release:async()=>released++,
+  });
+  await u.download({confirm:true});
+  const result=await u.install({confirm:true},{authorize:()=>allowed});
+  assert.equal(result.ok,false);
+  assert.equal(result.code,'revoked');
+  assert.equal(launched,0,'a revoked install must never launch the helper');
+  assert.equal(released,1,'prepared maintenance must be released');
+  assert.equal(u.state().phase,'ready','the verified package remains retryable');
+  assert.match(u.state().error,/更新资格已改变/);
+});
 test('portable/development never install and development never downloads',async t=>{
   for(const mode of ['portable','development']) {const {u,calls}=setup(t,{mode});assert.equal((await u.install({confirm:true})).ok,false);if(mode==='development'){assert.equal((await u.download({confirm:true})).ok,false);assert.equal(calls.length,0);}}
   assert.equal(detectMode({packaged:false}),'development');

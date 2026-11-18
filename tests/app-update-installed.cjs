@@ -26,7 +26,8 @@ async function cdp(port){
   const send=(method,params={})=>new Promise((resolve,reject)=>{const n=++id,timer=setTimeout(()=>{waiting.delete(n);reject(Error('CDP timeout '+method));},20000);
     waiting.set(n,result=>{clearTimeout(timer);result.error?reject(Error(result.error.message)):resolve(result.result);});ws.send(JSON.stringify({id:n,method,params}));});
   const read=async expression=>{const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.text);return r.result.value;};
-  return {ws,send,read,async click(label){const rect=await read(`(()=>{const b=[...document.querySelectorAll('.update-sec button')].find(b=>b.textContent===${JSON.stringify(label)});if(!b||b.disabled)return null;const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  return {ws,send,read,async ensureInfo(){for(let i=0;i<75;i++){const status=await read(`(()=>{const later=[...document.querySelectorAll('button')].find(b=>b.textContent==='稍后设置'&&b.offsetParent!==null);if(later){later.click();return 'dismissed';}if(document.querySelector('[data-about-update="app"]'))return 'ready';document.querySelector('#navGlobalMore')?.click();document.querySelector('#navInfo')?.click();return 'opening';})()`);if(status==='ready')return;await sleep(200);}throw Error('info page unavailable');},
+    async click(label){let rect=null;const deadline=Date.now()+8000;while(!rect&&Date.now()<deadline){rect=await read(`(()=>{const b=[...document.querySelectorAll('.update-sec button')].find(b=>b.textContent===${JSON.stringify(label)});if(!b||b.disabled)return null;b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);if(!rect){await this.ensureInfo();await sleep(100);}}
     if(!rect)throw Error('missing action '+label);await send('Input.dispatchMouseEvent',{type:'mousePressed',...rect,button:'left',clickCount:1});await send('Input.dispatchMouseEvent',{type:'mouseReleased',...rect,button:'left',clickCount:1});},
     async screenshot(name){const r=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(out,name),Buffer.from(r.data,'base64'));}};
 }
@@ -54,7 +55,7 @@ async function compile(appDir,version,setup){
     const initial=path.join(world,'initial-app');fs.cpSync(path.join(ROOT,'dist-app/Pi GUI-win32-x64'),initial,{recursive:true});
     check(require(path.join(initial,'resources/app/package.json')).version===CURRENT,'rebuilt starting Electron version is '+CURRENT);
     const source=path.join(world,'next-source');fs.mkdirSync(source);
-    for(const name of ['electron','extensions','lib','public','scripts','server','installer','server.js','package.json','package-lock.json','LICENSE'])fs.cpSync(path.join(ROOT,name),path.join(source,name),{recursive:true});
+    for(const name of ['electron','extensions','lib','public','scripts','server','installer','vendor','assets','server.js','package.json','package-lock.json','LICENSE'])fs.cpSync(path.join(ROOT,name),path.join(source,name),{recursive:true});
     for(const name of ['package.json','package-lock.json']){const file=path.join(source,name),pkg=JSON.parse(fs.readFileSync(file,'utf8'));pkg.version=NEXT;if(pkg.packages?.[''])pkg.packages[''].version=NEXT;fs.writeFileSync(file,JSON.stringify(pkg));}
     fs.symlinkSync(path.join(ROOT,'node_modules'),path.join(source,'node_modules'),'junction');
     await run(process.execPath,[path.join(source,'scripts/build-app.mjs'),'--rebuild'],{cwd:source,env:process.env,log:path.join(out,'next-build.log')});
@@ -80,6 +81,7 @@ async function compile(appDir,version,setup){
     const exited=new Promise(resolve=>old.once('exit',resolve));
     await until(()=>fs.existsSync(path.join(world,'window-'+CURRENT+'.json')),'initial packaged window');
     client=await until(()=>cdp(cdpPort),'initial CDP');
+    await client.ensureInfo();
     let state=await client.read('window.piGuiDesktop.appUpdate.state()');check(state.mode==='installed'&&state.currentVersion===CURRENT,'real updater recognizes owned installed shape and running version');
     await client.read("localStorage.setItem('pi-gui.update-fixture','preserve local settings')");
     await client.click('下载更新');
@@ -93,7 +95,7 @@ async function compile(appDir,version,setup){
     await client.click('重启以更新');await until(()=>fs.existsSync(path.join(world,'native-confirm-ready')),'native recovery confirmation');
     console.log((process.env.PI_UPDATE_E2E_AUTOMATED_CONFIRM==='1'?'CONFIRMATION_FIXTURE':'NATIVE_CONFIRM_REQUIRED')+' recovery '+world);
     await until(()=>JSON.parse(fs.readFileSync(path.join(world,'window-'+CURRENT+'.json'))).pid!==old.pid,'old application relaunched after failed handoff',180000);
-    await exited;client.ws.close();client=await until(()=>cdp(cdpPort),'recovery CDP');
+    await exited;client.ws.close();client=await until(()=>cdp(cdpPort),'recovery CDP');await sleep(800);await client.ensureInfo();
     state=await client.read('window.piGuiDesktop.appUpdate.state()');
     check(state.currentVersion===CURRENT&&state.completion?.phase==='failed','post-shutdown failure cancels helper and relaunches actual old version');
     check((await client.read('window.piGuiDesktop.browser.open()')).ok,'browser capability is usable after full old-app recovery');
@@ -104,7 +106,7 @@ async function compile(appDir,version,setup){
     console.log((process.env.PI_UPDATE_E2E_AUTOMATED_CONFIRM==='1'?'CONFIRMATION_FIXTURE':'NATIVE_CONFIRM_REQUIRED')+' install '+world);
     // A real native dialog is accepted through the Windows UI by the operator.
     await until(()=>fs.existsSync(path.join(world,'window-'+NEXT+'.json')),'installed newer Electron startup',180000);
-    client.ws.close();client=await until(()=>cdp(cdpPort),'restarted CDP');
+    client.ws.close();client=await until(()=>cdp(cdpPort),'restarted CDP');await sleep(1200);await client.ensureInfo();await sleep(300);await client.ensureInfo();
     state=await client.read('window.piGuiDesktop.appUpdate.state()');
     check(state.currentVersion===NEXT&&state.completion?.phase==='completed','restarted app.getVersion and recovery confirm actual target version');
     check((await(await fetch(`http://127.0.0.1:${httpPort}/api/health`)).json()).version===NEXT,'restarted compiled backend independently confirms target version');

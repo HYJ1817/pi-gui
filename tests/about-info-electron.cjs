@@ -30,11 +30,14 @@ async function main() {
   await app.whenReady();
 
   const preload = path.join(world, 'preload.cjs');
-  fs.writeFileSync(preload, `const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('piGuiDesktop',{appUpdate:{state:()=>ipcRenderer.invoke('state'),onState:cb=>{ipcRenderer.on('state',(_e,s)=>cb(s));},download:()=>ipcRenderer.invoke('download'),cancel:()=>ipcRenderer.invoke('cancel'),install:()=>ipcRenderer.invoke('install'),openFolder:()=>Promise.resolve({ok:true})},openExternal:url=>ipcRenderer.invoke('openExternal',url)});`);
+  fs.writeFileSync(preload, `const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('piGuiDesktop',{appUpdate:{state:()=>ipcRenderer.invoke('state'),onState:cb=>{ipcRenderer.on('state',(_e,s)=>cb(s));},setPreference:p=>ipcRenderer.invoke('preference',{preference:p}),ignore:()=>ipcRenderer.invoke('ignore'),unignore:()=>ipcRenderer.invoke('unignore'),download:()=>ipcRenderer.invoke('download'),cancel:()=>ipcRenderer.invoke('cancel'),install:()=>ipcRenderer.invoke('install'),openFolder:()=>Promise.resolve({ok:true})},openExternal:url=>ipcRenderer.invoke('openExternal',url)});`);
 
-  let state = { mode: 'installed', phase: 'idle', currentVersion: '0.15.0' };
-  let downloads = 0, installs = 0, external = [];
+  let state = { mode: 'installed', phase: 'idle', currentVersion: '0.15.0', preference: 'manual', storedPreference: 'manual', automaticSupported: true, automaticUnsupportedReason: null, discovery: { status: 'available', latestVersion: '0.16.0', release: { tag: 'v0.16.0', notes: '### 改进\n- 信息页统一版本、更新与重启入口。', url: 'https://github.com/HYJ1817/pi-gui/releases/tag/v0.16.0', assets: [{ kind: 'installer', name: 'Pi-GUI-Setup-0.16.0.exe', url: 'https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/Pi-GUI-Setup-0.16.0.exe' }] }, error: '', checkedAt: '' }, ignoredVersion: null, pausedVersion: null, ignored: false, paused: false, preferenceSaveFailed: false, installOnQuit: false };
+  let downloads = 0, installs = 0, external = [], preferenceCalls = 0;
   ipcMain.handle('state', () => state);
+  ipcMain.handle('preference', (_e, request) => { preferenceCalls++; state = { ...state, preference: request.preference, storedPreference: request.preference }; return { ok: true, persisted: true }; });
+  ipcMain.handle('ignore', () => ({ ok: true }));
+  ipcMain.handle('unignore', () => ({ ok: true }));
   ipcMain.handle('download', () => { downloads++; return { ok: true }; });
   ipcMain.handle('cancel', () => ({ ok: true }));
   ipcMain.handle('install', () => { installs++; return { ok: true }; });
@@ -68,9 +71,11 @@ async function main() {
   try {
     await win.loadURL(origin); await sleep(700);
     check(await read(`navigator.userAgent.includes('Electron/')`), 'real Electron renderer');
-    const bootScript = `(async()=>{try{window.__reqs=[];const original=window.fetch;window.fetch=(url,opts)=>{window.__reqs.push({url:String(url),method:(opts&&opts.method)||'GET'});if(String(url).includes('/api/update')&&(!opts||!opts.method||opts.method==='GET'))return Promise.resolve(new Response(JSON.stringify({ok:true,currentVersion:'0.15.0',latestVersion:'0.16.0',updateAvailable:true,release:{tag:'v0.16.0',notes:'### 改进\\n- 信息页统一版本、更新与重启入口。',url:'https://github.com/HYJ1817/pi-gui/releases/tag/v0.16.0',assets:[{kind:'installer',name:'Pi-GUI-Setup-0.16.0.exe',url:'https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/Pi-GUI-Setup-0.16.0.exe'},{kind:'portable',name:'Pi-GUI-0.16.0-portable.zip',url:'https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/Pi-GUI-0.16.0-portable.zip'},{kind:'checksums',name:'SHA256SUMS.txt',url:'https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/SHA256SUMS.txt'}]}}),{headers:{'content-type':'application/json'}}));return original(url,opts);};window.U=await import('/update.js');window.P=await import('/pi-update.js');U.cancelUpdateAuto();P.cancelPiUpdateAuto();return 'ok';}catch(e){return 'ERR:'+(e&&e.stack||e)}})()`;
+    const bootScript = `(async()=>{try{window.__reqs=[];const original=window.fetch;window.fetch=(url,opts)=>{window.__reqs.push({url:String(url),method:(opts&&opts.method)||'GET'});if(String(url).includes('/api/update')&&(!opts||!opts.method||opts.method==='GET'))return Promise.resolve(new Response(JSON.stringify({ok:true,currentVersion:'0.15.0',latestVersion:'0.16.0',updateAvailable:true,release:{tag:'v0.16.0',notes:'### 改进\\n- 信息页统一版本、更新与重启入口。',url:'https://github.com/HYJ1817/pi-gui/releases/tag/v0.16.0',assets:[{kind:'installer',name:'Pi-GUI-Setup-0.16.0.exe',url:'https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/Pi-GUI-Setup-0.16.0.exe'},{kind:'portable',name:'Pi-GUI-0.16.0-portable.zip',url:'https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/Pi-GUI-0.16.0-portable.zip'},{kind:'checksums',name:'SHA256SUMS.txt',url:'https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/SHA256SUMS.txt'}]}}),{headers:{'content-type':'application/json'}}));return original(url,opts);};window.U=await import('/update.js');window.P=await import('/pi-update.js');U.cancelUpdateAuto();P.cancelPiUpdateAuto();await U.checkForUpdate();return 'ok';}catch(e){return 'ERR:'+(e&&e.stack||e)}})()`;
     const boot = await read(bootScript);
     check(boot === 'ok', 'update/pi modules loaded with a deterministic fetch fixture: ' + boot);
+    const bootState = await read(`window.U.getUpdateState()`);
+    check(bootState.status === 'available' && !!bootState.release, 'startup discovery reaches available with release data: ' + JSON.stringify(bootState));
     check(await read(`!document.querySelector('#navAppUpdates')&&!document.querySelector('#navRestartPi')&&!!document.querySelector('#navInfo')`), 'old update/restart entries are gone, info entry exists');
 
     await openInfo();
@@ -80,6 +85,10 @@ async function main() {
     check(await read(`(()=>{const h=document.querySelector('.about-hero').getBoundingClientRect();const kids=[...document.querySelector('.about-hero').children].filter(c=>c.getClientRects().length);return kids.length>0&&kids.every(c=>{const r=c.getBoundingClientRect();return Math.abs((r.left+r.right)/2-(h.left+h.right)/2)<=2;})})()`), 'hero content is horizontally centered');
     check(await read(`!document.querySelector('.settings-detail').textContent.includes('开发者工具')&&!document.querySelector('.settings-detail').textContent.includes('DevTools')`), 'no unimplemented developer mode row');
     check(await read(`!!document.querySelector('${APP}')&&!!document.querySelector('${PI}')&&document.querySelector('${APP} .about-update-title').textContent==='软件更新'&&document.querySelector('${PI} .about-update-title').textContent==='Pi 运行时'`), 'two independent update cards');
+    check(await read(`(()=>{const r=document.querySelector('${APP} .update-pref-row');return !!r&&[...r.querySelectorAll('.ds-segment-item')].map(b=>b.textContent).join(',')==='自动,手动'&&!r.querySelector('.ds-segment-item').disabled})()`), 'update preference control is present and automatic is selectable on installed builds');
+    const preferenceClick = await clickIn(`${APP} .update-sec`, '自动'); check(preferenceClick, 'automatic preference can be clicked'); await sleep(200);
+    check(preferenceCalls === 1 && state.preference === 'automatic', 'preference reaches the trusted desktop capability once');
+    check(await read(`document.querySelector('${APP} .update-state').textContent.includes('发现新版本 v0.16.0')`), 'preference card carries a textual update status');
     check(await read(`document.querySelector('${PI} .update-sec').textContent.includes('Pi 0.99.2')&&document.querySelector('${PI} .update-sec').textContent.includes('新版本 1.0.0 可用')`), 'Pi runtime card checks the independent Pi endpoint');
     check(await read(`document.querySelector('${APP} .update-sec').textContent.includes('Pi GUI v0.15.0')&&!!document.querySelector('${APP} .update-sec')`), 'app card shows the running app version');
     check(await read(`!!document.querySelector('[data-about-action="restart-pi"]')&&document.querySelector('#aboutRestartRow').textContent.includes('重新加载 Pi 配置并重新连接运行时。')`), 'restart row uses the shared wording');
