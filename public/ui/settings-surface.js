@@ -4,6 +4,20 @@ import { iconMarkup } from './icons.js';
 import { $ } from '../state.js';
 import { openWorkSurface, showChat, workspaceView } from './workspace-surface.js';
 
+/* 旧设置页在迁移后可能还有调用方（命令、向导、测试夹具）按旧 id 点击。
+ * 目标不存在时统一落到「信息」而不是静默退回概览 —— 旧入口指向的内容
+ * （应用更新 / 重启）现在都在信息页里，回退到那里才是同一个意图。 */
+const DESTINATION_ALIASES = { navAppUpdates: 'navInfo', navRestartPi: 'navInfo' };
+
+function resolveDestination(destination) {
+  return DESTINATION_ALIASES[destination] || destination;
+}
+
+/** 旧目的地的解析结果（纯函数，供迁移审计与测试核对）。 */
+export function resolveSettingsDestination(destination) {
+  return resolveDestination(destination);
+}
+
 export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) {
   const menu = $('globalMoreMenu');
   const trigger = $('navGlobalMore');
@@ -94,7 +108,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
 
   function presentDetail(destination, build, onClose, options = {}) {
     if (sidebar.hidden) $('btnSidebarExpand').click();
-    const target = $(destination);
+    const target = $(resolveDestination(destination));
     /* 旧设置导航位置可能指向已经删除的页面。没有目标时安全回退到常规设置，
        而不是打开一张没有归属的详情卡。 */
     if (!target) {
@@ -146,7 +160,8 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
       for (const section of menu.querySelectorAll('section')) {
         let hasMatch = false;
         for (const btn of section.querySelectorAll('button')) {
-          const match = !q || btn.textContent.toLowerCase().includes(q);
+          const searchable = `${btn.dataset.search || ''} ${btn.textContent}`.toLowerCase();
+          const match = !q || searchable.includes(q);
           btn.hidden = !match;
           if (match) hasMatch = true;
         }

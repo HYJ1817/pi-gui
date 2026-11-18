@@ -133,7 +133,7 @@ import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane, readRestoredSurface } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
-import { openAppUpdates } from './settings.js';
+import { openAboutSettings } from './about.js';
 import { openAppearance } from './appearance.js';
 import { initVizIntegration } from './viz-integration.js';
 
@@ -1288,7 +1288,6 @@ function openMcpPage() {
   });
 }
 $('navMcp').onclick = openMcpPage;
-$('navRestartPi').onclick = restartPi;
 
 // 侧栏头部 / 项目
 // 「添加文件夹」在项目操作菜单和未选项目的欢迎块里共用目录选择器。
@@ -1317,14 +1316,22 @@ const settingsSurface = initSettingsSurface({
     };
   },
 });
+const presentSettingsDetail = (id) => (build, dispose, options) => settingsSurface.presentDetail(id, build, dispose, options);
 for (const [id, render] of [
   ['navProviders', openProvidersPanel], ['navProviderAuth', openProviderAuthPanel],
   ['navDiagnostics', openDiagnostics], ['navLogs', openLogs],
-  ['navAppUpdates', openAppUpdates], ['navAppearance', openAppearance],
+  ['navAppearance', openAppearance],
   ['navShortcutHelp', openShortcutHelp],
 ]) {
-  $(id).onclick = () => render({ present: (build, dispose, options) => settingsSurface.presentDetail(id, build, dispose, options) });
+  $(id).onclick = () => render({ present: presentSettingsDetail(id) });
 }
+/* 信息页把两类更新、重启、日志和诊断收在一个入口里；日志与诊断仍导航到
+ * 各自既有的设置详情页，不复制它们的实现。 */
+$('navInfo').onclick = () => openAboutSettings({
+  present: presentSettingsDetail('navInfo'),
+  openLogs: (initialTab) => openLogs({ initialTab, present: presentSettingsDetail('navLogs') }),
+  openDiagnostics: () => openDiagnostics({ present: presentSettingsDetail('navDiagnostics') }),
+});
 $('navEnvironment').onclick = () => openEnvironmentSettings();
 $('btnTheme').onclick = () => $('navAppearance').click();
 document.addEventListener('keydown', event => {
@@ -1442,7 +1449,7 @@ installShortcuts({});
 defineCommands([
   { id:'view.processes',title:'开发进程',group:'视图',keywords:'process dev server 服务 进程 日志',run:openProcessPanel },
   { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => settingsSurface.open() },
-  { id: 'app.updates', title: '应用与更新', group: '全局', keywords: 'update 更新 pi gui 版本', run: () => $('navAppUpdates').click() },
+  { id: 'app.info', title: '信息', group: '全局', keywords: 'about info 信息 更新 版本 重启 日志 update restart logs version pi gui', run: () => $('navInfo').click() },
   { id: 'app.environment', title: '环境与依赖', group: '全局', keywords: 'environment 环境 node npm pi git 安装 修复', run: () => openEnvironmentSettings() },
   { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', shortcutId: 'view-chat', run: goChat },
   { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', shortcutId: 'view-planner', run: () => openPlanner() },

@@ -18,6 +18,7 @@ import { activateProject } from './projects.js';
 import { projectWorkSurface, workspaceView } from './ui/workspace-surface.js';
 import { openModal, closeModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
+import { restartPi } from './providers.js';
 import {
   MCP_NAME_RE, badge, button, icon, node, relativeTime, runtimeServerFor,
   scopeLabel, serverStatus, statusDot, transportLabel,
@@ -1270,7 +1271,7 @@ function createPage(card, { reopen, present }) {
     };
     if (state.reloadNotice) {
       const restart = button('btn tiny', '重启 Pi…');
-      restart.onclick = () => document.getElementById('navRestartPi')?.click();
+      restart.onclick = () => { restartPi().catch(() => {}); };
       add('info', state.reloadNotice, [restart]);
     }
     if (state.runtimeError) add('warn', `运行时状态刷新失败：${state.runtimeError}`);
