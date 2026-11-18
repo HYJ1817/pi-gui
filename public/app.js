@@ -116,7 +116,7 @@ import { onRuntimeChange, runtimeStore, setRuntimeStoreRejectObserver, seedRunti
 /* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
-import { registerShortcut, installShortcuts, assertNoConflicts } from './shortcuts.js';
+import { registerShortcut, installShortcuts, assertNoConflicts, loadShortcutOverrides } from './shortcuts.js';
 import { openShortcutHelp } from './ui/shortcut-help.js';
 import { openPalette as showCommandPalette, paletteOpen } from './palette.js';
 import { defineCommands, setDynamicCommands } from './palette-model.js';
@@ -1448,8 +1448,11 @@ registerShortcut({ id: 'work-changes', combo: 'primary+shift+g', label: '打开�
 registerShortcut({ id: 'work-terminal', combo: 'primary+`', label: '打开终端面板', group: '工作面板', when: canRun, run: () => openTerminalPanel({ triggerId: 'btnTerminal' }) });
 registerShortcut({ id: 'work-files', combo: 'primary+p', label: '打开项目文件面板', group: '工作面板', when: canRun, run: () => openFilesPanel({ triggerId: 'btnFiles' }) });
 /* 冲突检查放在装配末尾：注册完立刻验，重复键位在启动时就炸出来，
- * 而不是等用户按下那个键才发现有两个功能抢。 */
+ * 而不是等用户按下那个键才发现有两个功能抢。
+ * 随后从 `pi-gui.keybindings.v1` 恢复用户覆盖值 —— 必须在注册之后，
+ * 否则加载时没有 id 可以校验。 */
 assertNoConflicts();
+loadShortcutOverrides();
 installShortcuts({});
 
 defineCommands([
@@ -1457,10 +1460,10 @@ defineCommands([
   { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => settingsSurface.open() },
   { id: 'app.updates', title: '应用与更新', group: '全局', keywords: 'update 更新 pi gui 版本', run: () => $('navAppUpdates').click() },
   { id: 'app.environment', title: '环境与依赖', group: '全局', keywords: 'environment 环境 node npm pi git 安装 修复', run: () => openEnvironmentSettings() },
-  { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', run: goChat },
-  { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', run: () => openPlanner() },
-  { id: 'view.changes', title: '文件变更', group: '视图', keywords: 'git diff changes 变更', run: () => openChangesPanel() },
-  { id: 'view.extensions', title: '扩展（Extensions）', group: '视图', keywords: 'extension 扩展 注册表', run: () => openExtensions() },
+  { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', shortcutId: 'view-chat', run: goChat },
+  { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', shortcutId: 'view-planner', run: () => openPlanner() },
+  { id: 'view.changes', title: '文件变更', group: '视图', keywords: 'git diff changes 变更', shortcutId: 'view-changes', run: () => openChangesPanel() },
+  { id: 'view.extensions', title: '扩展（Extensions）', group: '视图', keywords: 'extension 扩展 注册表', shortcutId: 'view-extensions', run: () => openExtensions() },
   /* 内置浏览器：只是**右栏的一个面板**，不是第四个一级视图 —— 所以它在这里，
    * 不进左侧全局导航栏。when 为假（网页版）时压根不进列表，不灰着骗人。 */
   { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.open() },
@@ -1483,7 +1486,7 @@ defineCommands([
   { id: 'app.diagnostics', title: '诊断', group: '全局', keywords: 'diagnostics 诊断 版本 兼容', run: () => $('navDiagnostics').click() },
   { id: 'app.logs', title: '日志与故障报告', group: '全局', keywords: 'logs 日志 故障报告 bug report zip 导出', run: () => $('navLogs').click() },
   { id: 'app.copy-diagnostics', title: '复制诊断摘要', group: '全局', keywords: 'copy diagnostics 复制 摘要 issue', run: () => copyDiagnosticsSummary() },
-  { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', run: () => $('navShortcutHelp').click() },
+  { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', shortcutId: 'shortcut-help', run: () => $('navShortcutHelp').click() },
 ]);
 
 /* 动态条目：已加载的会话列表（复用侧栏那一份数据，不重新拉）。

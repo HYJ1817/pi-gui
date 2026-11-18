@@ -46,6 +46,8 @@ const glyphs = Object.freeze({
   pending: '<circle cx="12" cy="12" r="6.5" stroke-dasharray="2.4 2.8"/>',
   pin: '<path d="M9 4h6M10 4v5l-3.5 4.5h11L14 9V4M12 13.5V20"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  /* Lucide power (ISC, lucide.dev/icons/power), embedded locally. */
+  power: '<path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/>',
   progress: '<circle cx="12" cy="12" r="6.5"/><circle class="plan-pulse-dot" cx="12" cy="12" r="2.1"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
   restore: '<path d="M3.5 5h17v4h-17z"/><path d="M5.5 9v9.5A1.5 1.5 0 0 0 7 20h10a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M12 16v-4.5"/><path d="M9.8 13.5l2.2-2.2 2.2 2.2"/>',
