@@ -200,6 +200,8 @@ idle → downloading → verifying → preparing → ready → installing
 
 ## 限制与残余风险
 
+- 当前应用版本必须是严格三段号（当前 `0.34.0` 满足），manager 才启用；若未来
+  发布 `-rc` 等 prerelease 构建，更新偏好/检查会安全降级为不可用而不是自动更新。
 - 自动安装只在确认的 Windows NSIS 安装版启用；未在本机真实用户安装位置执行，
   仅使用 TEMP 隔离副本和测试专用 exe 身份/NSIS 副本。不能据此声称正式签名发布包
   在原位置升级通过。
