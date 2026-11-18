@@ -16,9 +16,7 @@ Windows · 本地优先 · 多会话 · 可视化工作流
 
 [下载最新版](https://github.com/HYJ1817/pi-gui/releases/latest) · [快速开始](#快速开始) · [文档](docs/README.md) · [反馈问题](https://github.com/HYJ1817/pi-gui/issues)
 
-<img src="designs/ui-ux-2026-10-31/evidence/production-refined-verified/dark-1440-typical-chat.png" alt="Pi GUI 深色主题聊天界面" width="94%" />
 
-<sub>界面截图使用离线演示数据，展示的是已实现的桌面界面。</sub>
 
 </div>
 
