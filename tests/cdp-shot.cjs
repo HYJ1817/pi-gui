@@ -1671,16 +1671,19 @@ async function main() {
     ['草稿没被动过', `document.querySelector('#input').value === '写了一半的想法'`],
   ]);
 
-  /* 快捷键帮助：用**真实快捷键**打开（Ctrl+/），验证「注册表 → 界面」这条链路 */
+  /* 快捷键帮助：用**真实快捷键**打开（Ctrl+/），验证「注册表 → 设置详情」这条链路 */
   await pressCombo('/');
   await sleep(360);
-  await shotOf('#modalCard', '185-shortcut-help', 'P24：快捷键帮助（注册表渲染 + 当前平台映射 + 既有输入键位）', ['键盘快捷键', '输入与弹层'], [
+  const shortcutCard = `#workSurface .settings-detail-card`;
+  await shotOf(shortcutCard, '185-shortcut-help', 'P24：快捷键帮助（注册表渲染 + 当前平台映射 + 既有输入键位）', ['键盘快捷键', '输入与弹层'], [
     ['键位列不换行且不溢出', `(() => {const k=[...document.querySelectorAll('.kb-keys')];return k.length>0&&k.every(n=>getComputedStyle(n).whiteSpace==='nowrap')})()`],
-    ['帮助面板不越过视口', `(() => {const r=document.querySelector('#modalCard').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1})()`],
-    ['按平台显示修饰键', `document.querySelector('#modalCard').textContent.includes(${JSON.stringify(isMac ? '⌘' : 'Ctrl+')})`],
+    ['帮助面板不越过视口', `(() => {const r=document.querySelector(${JSON.stringify(shortcutCard)}).getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1})()`],
+    ['按平台显示修饰键', `document.querySelector(${JSON.stringify(shortcutCard)}).textContent.includes(${JSON.stringify(isMac ? '⌘' : 'Ctrl+')})`],
   ]);
-  await evalJs(`document.querySelector('#modalCard .btn.primary').click()`);
+  await evalJs(`document.querySelector(${JSON.stringify(shortcutCard + ' .modal-actions .btn')})?.click()`);
   await sleep(200);
+  await evalJs(`document.querySelector('#navHome').click()`);
+  await sleep(240);
 
   /* 草稿恢复：**真的刷新页面**再回来看输入框 —— 这是 localStorage 唯一有意义的验法 */
   await evalJs(`(() => { const i=document.querySelector('#input'); i.value='刷新之后我还在'; i.dispatchEvent(new Event('input',{bubbles:true})); })()`);
