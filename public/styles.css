@@ -2824,7 +2824,10 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   width: 100%;
   padding: 20px 48px 56px 40px;
   background: var(--ds-bg-primary);
-  min-height: 100%;
+  /* 与 .settings-detail 同一个坑：.stage 是纵向 flex，标题栏已占 46px。
+   * min-height:100% 按 .stage 整高解析会把滚动容器撑出可视区，底部被
+   * overflow:clip 裁掉；高度交给 flex:1。 */
+  min-height: 0;
   box-sizing: border-box;
   overflow-y: auto;
 }
@@ -2942,7 +2945,11 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   justify-content: center;
   padding: 20px 48px 56px 40px;
   background: var(--ds-bg-primary);
-  min-height: 100%;
+  /* .stage 是纵向 flex，标题栏已经占掉 46px。这里若写 min-height:100%，百分比
+   * 按 .stage 的整高解析，滚动容器会从标题栏下面再高出 46px，底部被
+   * .stage 的 overflow:clip 裁掉 —— 信息页因此永远差最后一行滚不出来。
+   * 高度交给 flex:1 分配，短页面照样铺满，长页面才能滚到底。 */
+  min-height: 0;
   box-sizing: border-box;
   overflow-y: auto;
 }
@@ -3760,6 +3767,14 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * hero + 更新卡。颜色/间距全部走 --ds-* 与 --radius-*，深色浅色自动成立。 */
 .settings-detail > .settings-detail-card.about-settings-card {
   max-width: 760px;
+}
+/* 卡片被 flex 压缩、内容 overflow:visible 时，卡片自身的 padding-bottom 不计入
+ * 滚动范围；滚到底时最后一张卡会贴着窗口底。用真正占据内容高度的伪元素补出
+ * 呼吸空间（实际约 52px：24px + 原本被最后子元素吞掉的下边距）。 */
+.about-settings-card::after {
+  content: '';
+  display: block;
+  height: 24px;
 }
 .about-hero {
   display: flex;
