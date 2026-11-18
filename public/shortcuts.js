@@ -559,7 +559,12 @@ export function subscribeShortcuts(listener) {
  *
  * 只认已注册 id；字符串必须是可规范化、允许且不保留的值；
  * 未知 id、坏 JSON、非对象、无效值都静默忽略（回退默认值）。
- * 两个自定义值互相冲突时按注册顺序保留第一个，后面的回退默认值。
+ *
+ * 冲突检查在**完整候选映射**上做，而不是边加载边比：互换键位时
+ * （A 用 B 的默认、B 用 A 的默认），先加载 A 时 B 还没进映射，
+ * 逐项检查会拿 B 的默认值误判冲突，把两项都丢掉。
+ * 最终生效集合没有重复就保留；真正重复的自定义值按注册顺序保留第一个，
+ * 后面的回退默认值，回退后若又冲突则继续消解直到稳定。
  * 禁用的 id 是 null，不参与冲突判断。
  *
  * 加载不写回存储：坏数据留在原处，下一次真正保存时会按注册表重新序列化。
@@ -595,11 +600,11 @@ export function loadShortcutOverrides(store = null) {
   }
 
   const next = new Map();
-  // 第一遍：明确禁用（null）先落地，后面的冲突检查就不会把禁用键位算进去。
+  // 第一遍：明确禁用（null）先落地。
   for (const [id, value] of Object.entries(parsed)) {
     if (registry.has(id) && value === null) next.set(id, null);
   }
-  // 第二遍：按注册顺序接收合法自定义值。
+  // 第二遍：先收下所有合法自定义值，**不做逐项冲突判断**。
   for (const def of registry.values()) {
     const value = parsed[def.id];
     if (typeof value !== 'string') continue;
@@ -607,8 +612,34 @@ export function loadShortcutOverrides(store = null) {
     if (!normalized) continue;
     if (!isAllowedKeybinding(normalized) || isReservedKeybinding(normalized)) continue;
     if (normalized === def.defaultCombo) continue;
-    if (findShortcutConflict(def.id, normalized, next)) continue;
     next.set(def.id, normalized);
+  }
+  // 第三遍：对完整候选映射整体消解冲突。两条冲突时优先保留注册顺序
+  // 靠前的自定义值，被丢弃的一方回退默认；回退可能又和别的自定义值
+  // 冲突，所以重复检查直到稳定。合法互换 / 循环交换在最终映射里
+  // 没有重复，不会被误删。
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const defs = [...registry.values()];
+    outer:
+    for (let i = 0; i < defs.length; i += 1) {
+      const left = defs[i];
+      const leftCombo = resolveShortcutCombo(left.id, next);
+      if (!leftCombo) continue;
+      for (let j = i + 1; j < defs.length; j += 1) {
+        const right = defs[j];
+        const rightCombo = resolveShortcutCombo(right.id, next);
+        if (!rightCombo || !keybindingsConflict(leftCombo, rightCombo)) continue;
+        const leftCustom = next.has(left.id) && next.get(left.id) !== null;
+        const rightCustom = next.has(right.id) && next.get(right.id) !== null;
+        const drop = rightCustom ? right.id : leftCustom ? left.id : null;
+        if (!drop) continue;
+        next.delete(drop);
+        changed = true;
+        break outer;
+      }
+    }
   }
   overrides = next;
   notifyShortcuts();
