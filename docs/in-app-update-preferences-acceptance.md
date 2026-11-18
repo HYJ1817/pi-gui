@@ -103,6 +103,20 @@ Renderer 的自动选项在不可用时禁用并展示原因；即使伪造 IPC 
 - 未修改 Pi 更新接口、Pi RPC、模型供应商、OAuth、项目/会话数据和用户配置结构。
 - 未更新用户正在使用的真实安装程序；未修改正式版本号；未创建 Release。
 
+### 与 PI-Desktop 的对照
+
+本实现参考 PI-Desktop 的**职责划分**，不移植它的 `electron-updater` 依赖或内部
+下载器；pi-GUI 继续使用既有固定 Release、SHA256、维护锁、安装助手和回滚。
+
+| PI-Desktop 的职责 | pi-GUI 的落地位置 |
+| --- | --- |
+| 更新控制器 / 策略：何时检查、是否自动下载 | `electron/app-update-manager.cjs`、`electron/app-update-policy.cjs` |
+| 手动提醒：每个版本只提醒一次 | manager 的 `lastNotifiedVersion` 与 `public/update.js` 的一次性通知 |
+| 更新偏好设置 | 信息页「软件更新」卡片内的自动/手动单选，主进程持久化到 userData |
+| 后台进度与状态展示 | 既有信息卡的文字状态、进度、取消与忽略，不新增第二套更新面板 |
+| 退出时安装策略 | `electron/app-update-quit.cjs` 前置闸门，复用 `electron/main.cjs` 退出流程 |
+| 下载、校验、安装、恢复 | 原有 `electron/app-update.cjs`、安装助手、维护锁与回滚，不替换 |
+
 ## 证据
 
 ### 测试结果
