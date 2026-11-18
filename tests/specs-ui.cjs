@@ -25,7 +25,7 @@ function makeDom() {
       <div id="rightPaneResizer"></div>
       <aside id="rightPane" class="right-pane" hidden><div class="rp-titlebar"></div><div class="rp-body"></div></aside>
       <div class="head-right"><button id="btnSpecs" aria-pressed="false"></button><button id="btnMore"></button></div>
-      <div id="modal" hidden></div><div id="confirmLayer" hidden></div><div id="paletteLayer" hidden></div>
+      <div id="modal" hidden></div><div id="confirmLayer" hidden></div>
       <div id="globalMoreMenu" hidden></div><div id="toasts"></div>
     </div>
   </body></html>`, { url: 'http://127.0.0.1/' });

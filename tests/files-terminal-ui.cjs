@@ -23,7 +23,7 @@ const until = async (fn, label = 'UI state') => {
 };
 
 function makeDom() {
-  const dom = new JSDOM('<!doctype html><html><body><div id="host"></div><div id="modal" hidden></div><div id="confirmLayer" hidden></div><div id="paletteLayer" hidden></div></body></html>', {
+  const dom = new JSDOM('<!doctype html><html><body><div id="host"></div><div id="modal" hidden></div><div id="confirmLayer" hidden></div></body></html>', {
     url: 'http://127.0.0.1/',
     pretendToBeVisual: true,
   });

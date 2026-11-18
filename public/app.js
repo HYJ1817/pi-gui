@@ -113,12 +113,11 @@ import { refreshRuntimeResources, launchRuntimeSession, runtimeLimitNotice } fro
 import { createRuntimeModels } from './runtime-models.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { onRuntimeChange, runtimeStore, setRuntimeStoreRejectObserver, seedRuntimeSnapshot, observeRuntimeFrame, refreshRuntimeViews } from './runtime-state.js';
-/* P24：日常使用面 —— 命令面板、快捷键注册表、草稿恢复、状态条。
+/* P24：日常使用面 —— 命令注册表、快捷键、草稿恢复、状态条。
  * 全部由这一层装配：它们要调的动作都在别的模块里，装配层是唯一同时认识
  * 「谁提供动作」与「谁需要动作」的地方。 */
 import { registerShortcut, installShortcuts, assertNoConflicts, loadShortcutOverrides } from './shortcuts.js';
 import { openShortcutHelp } from './ui/shortcut-help.js';
-import { openPalette as showCommandPalette, paletteOpen } from './palette.js';
 import { defineCommands, setDynamicCommands } from './palette-model.js';
 import { initDraft, draftSync, clearDraft } from './draft.js';
 import { startupNotice, NOTICE_ACTIONS } from './status-copy.js';
@@ -904,12 +903,6 @@ function onUiRequest(evt) {  switch (evt.method) {
 const expandedModelProviders = new Set();
 let inlineCommandMenu = null;
 
-function openPalette(ctx = {}) {
-  inlineCommandMenu?.close();
-  closePop();
-  return showCommandPalette(ctx);
-}
-
 function modelPickerOptions(overrides = {}) {
   return {
     models: S.models,
@@ -1272,7 +1265,7 @@ $('btnMore').onclick = openMoreMenu;
 $('navNew').onclick = newSession;
 $('navSearch').onclick = openSessionSearch;
 /* 「回到对话」的既有语义：关掉二级弹层与 More 菜单、切回 Chat、把焦点给输入框。
- * P24 起它被三处复用（侧栏 Home、命令面板、快捷键），所以抽成一个函数 ——
+ * P24 起它被两处复用（侧栏 Home、切到对话快捷键），所以抽成一个函数 ——
  * 各写一份迟早会出现「从某条路回去焦点不对」。 */
 function goChat() {
   if (!$('modal').hidden) closeModal();
@@ -1287,7 +1280,6 @@ document.addEventListener('pi-gui:right-pane', (event) => {
   $('navChanges').setAttribute('aria-pressed', String(open));
   $('navChanges').classList.toggle('is-active', open);
 });
-$('navCapabilities').onclick = () => openExtensions({ tab: 'capabilities' });
 /* MCP 现在是完整的设置页（管理 + 市场），不再借用扩展面板的旧标签页。
  * 旧标签页仍保留在扩展页里，供只读诊断使用。 */
 function openMcpPage() {
@@ -1297,10 +1289,6 @@ function openMcpPage() {
 }
 $('navMcp').onclick = openMcpPage;
 $('navRestartPi').onclick = restartPi;
-/* P24：More 菜单里的两个可见入口（快捷键要能被发现，不能只写在文档里）。 */
-$('navPalette').onclick = () => {
-  openPalette();
-};
 
 // 侧栏头部 / 项目
 // 「添加文件夹」在项目操作菜单和未选项目的欢迎块里共用目录选择器。
@@ -1402,15 +1390,15 @@ $('groupHead').onclick = () => {
   }
 };
 
-/* ---------- P24：命令面板 / 快捷键 / 草稿 ----------
+/* ---------- P24：命令注册表 / 快捷键 / 草稿 ----------
  *
  * **全部复用既有 handler**：这里不实现任何「切视图」「重启」「复制」的细节，
- * 只把「动作 → 名字 → 键位 / 面板条目」接起来。加一个动作 = 加一行，不是加一套逻辑。 */
+ * 只把「动作 → 名字 → 键位 / 行内命令」接起来。加一个动作 = 加一行，不是加一套逻辑。 */
 
 export { restartPi };
 
 /** 弹层开着时不要抢键位（弹层有自己的 Esc / Tab 处理）。 */
-const noOverlay = () => el.modal.hidden && el.confirmLayer.hidden && !paletteOpen();
+const noOverlay = () => el.modal.hidden && el.confirmLayer.hidden;
 const canRun = () => noOverlay();
 const canPrompt = () => S.hasProject && !S.switching && S.bridgeState === 'ready';
 
@@ -1434,15 +1422,11 @@ const openView = (view) => () => {
   return openExtensions({ tab: 'skills' });
 };
 
-registerShortcut({ id: 'palette', combo: 'primary+k', label: '打开命令面板', group: '通用', when: canRun, run: () => openPalette() });
-/* 第二个绑定：浏览器里 Ctrl+K 常被地址栏吃掉，Ctrl+Shift+P 是各编辑器通用的备选。
- * 两条绑同一个动作 —— 不是两个功能。 */
-registerShortcut({ id: 'palette-alt', combo: 'primary+shift+p', label: '打开命令面板（备用键）', group: '通用', when: canRun, run: () => openPalette() });
 registerShortcut({ id: 'shortcut-help', combo: 'primary+/', label: '键盘快捷键帮助', group: '通用', when: canRun, run: () => $('navShortcutHelp').click() });
 registerShortcut({ id: 'view-chat', combo: 'alt+1', label: '切到对话', group: '视图', when: canRun, run: openView('chat') });
 registerShortcut({ id: 'view-planner', combo: 'alt+2', label: '切到任务', group: '视图', when: canRun, run: openView('planner') });
 registerShortcut({ id: 'view-changes', combo: 'alt+3', label: '切到文件变更', group: '视图', when: canRun, run: openView('changes') });
-registerShortcut({ id: 'view-extensions', combo: 'alt+4', label: '切到扩展与能力', group: '视图', when: canRun, run: openView('extensions') });
+registerShortcut({ id: 'view-extensions', combo: 'alt+4', label: '切到扩展与 Skills', group: '视图', when: canRun, run: openView('extensions') });
 /* 起始页「变更」卡片显示的就是这一条 —— 提示从注册表读，不另写一份组合键。 */
 registerShortcut({ id: 'work-changes', combo: 'primary+shift+g', label: '打开文件变更面板', group: '工作面板', when: canRun, run: () => openChangesPanel() });
 registerShortcut({ id: 'work-terminal', combo: 'primary+`', label: '打开终端面板', group: '工作面板', when: canRun, run: () => openTerminalPanel({ triggerId: 'btnTerminal' }) });
@@ -1467,7 +1451,6 @@ defineCommands([
   /* 内置浏览器：只是**右栏的一个面板**，不是第四个一级视图 —— 所以它在这里，
    * 不进左侧全局导航栏。when 为假（网页版）时压根不进列表，不灰着骗人。 */
   { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.open() },
-  { id: 'view.capabilities', title: '能力视图（Capabilities）', group: '视图', keywords: 'capability 能力 状态 可用', run: () => openExtensions({ tab: 'capabilities' }) },
   { id: 'view.skills', title: 'Skills', group: '视图', keywords: 'skill 技能', run: () => openExtensions({ tab: 'skills' }) },
   { id: 'view.mcp', title: 'MCP 服务器', group: '视图', keywords: 'mcp server 原生 市场 配置', run: () => openMcpPage() },
   { id: 'view.usage', title: '用量与额度', group: '视图', keywords: 'usage quota 用量 额度 token 上下文', run: () => openCtxTip() },
@@ -1478,7 +1461,7 @@ defineCommands([
   { id: 'session.export', title: '导出会话为 HTML', group: '会话', keywords: 'export share 导出 分享', when: canPrompt, run: () => exportHtml() },
   { id: 'run.stop', title: '停止生成', group: '执行', keywords: 'stop abort 中断 取消', when: () => workspaceView() === 'chat' && S.streaming, run: () => stop() },
   { id: 'run.compact', title: '压缩上下文', group: '执行', keywords: 'compact 压缩 context', when: canPrompt, run: () => compactNow() },
-  /* 重启仍然走 restartPi()（唯一入口 + 确认）—— 面板不提供跳过确认的路径。 */
+  /* 重启仍然走 restartPi()（唯一入口 + 确认）—— 命令注册表不提供跳过确认的路径。 */
   { id: 'run.restart', title: '重启 Pi', group: '执行', keywords: 'restart 重载 reload pi', when: () => S.hasProject, run: () => restartPi() },
   { id: 'app.settings', title: '项目设置', group: '全局', keywords: 'settings 设置 配置', when: () => S.hasProject, run: () => openProjectSettings() },
   { id: 'app.providers', title: '模型供应商', group: '全局', keywords: 'provider 供应商 模型 key', run: () => $('navProviders').click() },
@@ -1490,7 +1473,7 @@ defineCommands([
 ]);
 
 /* 动态条目：已加载的会话列表（复用侧栏那一份数据，不重新拉）。
- * **只在有查询时才出现** —— 否则一打开面板就被十几条会话刷屏，
+ * **只在有查询时才出现** —— 否则 Composer 行内 `/` 菜单会被十几条会话刷屏，
  * 常用动作反而要往下找。 */
 setDynamicCommands((ctx = {}) => {
   const q = String(ctx.query || '').trim();

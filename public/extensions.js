@@ -1,4 +1,4 @@
-/* 扩展面板：Skills 与 MCP。
+/* 扩展面板：Extensions、Skills 与 MCP。
  *
  * ---------- 这个面板的立场 ----------
  *
@@ -25,15 +25,19 @@
  * 后端在自己的索引里按 ID 查真实路径。所以这里不需要、也不应该做路径校验。
  */
 import { S, ownsWorkspace } from './state.js';
-import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchMcpServers, refreshMcpStatus, mcpServerAction, fetchExtensions, restartBackend } from './api.js';
+import { fetchSkills, fetchSkillDetail, setSkillEnabled, fetchMcp, fetchMcpServers, refreshMcpStatus, mcpServerAction, fetchExtensions, restartBackend, fetchApprovalCapability } from './api.js';
 import { confirmModal } from './ui/modal.js';
 import { openWorkSurface, projectWorkSurface } from './ui/workspace-surface.js';
 import { toast } from './ui/toast.js';
-import { capabilityTab } from './capability-view.js';
 import { snapshotMcpObservation } from './mcp-observer.js';
 import { noteUnknownEnum } from './schema-drift.js';
 import { SURFACE_COPY } from './status-copy.js';
 import { renderExtensionNotices } from './extension-notices.js';
+import { renderWebSetup } from './web-access.js';
+import { renderSubagentSetup } from './subagents.js';
+import { renderMemorySetup } from './memory.js';
+import { renderBrowserSetup } from './browser.js';
+import { renderApprovalSetup } from './approval.js';
 
 /* 状态 → 展示用的圆点与文案。
  * 键必须与 server/skills.js 里 state 的取值一一对应，多一个少一个都会显示成原始英文。 */
@@ -855,12 +859,41 @@ function mcpAddForm(wrap, isCurrent, reload) {
 /* ---------- Extensions 标签页（P15 通用 Registry） ---------- */
 
 /* 这一页只做**通用 Registry**：磁盘上发现了哪些 Extension、各自什么状态，包括
- * 完全不认识的那些。它**没有**任何按包名分支的逻辑 —— Web / Subagents / Memory /
- * Browser 的设置区与 Native MCP 的结论都在 Capabilities / All 视图里，
- * 那些是 capability 投影，不是 Registry 的一部分。 */
+ * 完全不认识的那些。它**没有**任何按包名分支的 Registry 逻辑 —— Web / Subagents /
+ * Memory / Browser 的 setup 是 capability 投影，不是 Registry 的一部分。
+ * P36 移除独立能力状态页后，这些 setup 与 Approval 报告回到本页的「已知能力设置」
+ * 折叠区：保留安装 / 运行观察 / 协议探测，不再提供能力总览、筛选、计数或搜索。 */
 function extensionTab(card, isCurrent) {
   const wrap = el('div', 'ext-skills');
   card.appendChild(wrap);
+  const known = el('details', 'ext-known');
+  known.appendChild(el('summary', 'ext-known-summary', '已知能力设置（安装 / 运行观察）'));
+  const knownBody = el('div', 'ext-known-body');
+  knownBody.appendChild(note('Web Access / Subagents / Pi Memory / Browser Use 的安装与运行观察；Approval 是 Pi 的协议能力，没有安装命令。', 'dim'));
+  known.appendChild(knownBody);
+  wrap.appendChild(known);
+
+  const knownItems = [
+    { id: 'web', label: 'Web Access', render: renderWebSetup },
+    { id: 'subagents', label: 'Subagents', render: renderSubagentSetup },
+    { id: 'memory', label: 'Pi Memory', render: renderMemorySetup },
+    { id: 'browser', label: 'Browser Use', render: renderBrowserSetup },
+  ];
+  const knownBoxes = new Map();
+  for (const item of knownItems) {
+    const details = el('details', 'ext-known-item');
+    details.appendChild(el('summary', 'ext-known-item-summary', item.label));
+    const box = el('div', 'ext-known-item-body');
+    details.appendChild(box);
+    knownBody.appendChild(details);
+    knownBoxes.set(item.id, box);
+  }
+  const approvalDetails = el('details', 'ext-known-item');
+  approvalDetails.appendChild(el('summary', 'ext-known-item-summary', 'Approval / Permission'));
+  const approvalBox = el('div', 'ext-known-item-body');
+  approvalDetails.appendChild(approvalBox);
+  knownBody.appendChild(approvalDetails);
+
   const bar = el('div', 'ext-bar');
   const search = el('input', 'ext-search');
   search.type = 'search';
@@ -876,6 +909,28 @@ function extensionTab(card, isCurrent) {
   wrap.append(bar, summary, split);
   let selected = null;
   let data = null;
+
+  /** 一键安装的 recheck 拿到新 Registry 后，左栏也换成同一份新证据。 */
+  function refreshRegistry(fresh) {
+    if (!fresh || fresh.ok === false) return;
+    data = fresh;
+    render();
+  }
+
+  function renderKnownSetups(registry) {
+    for (const item of knownItems) {
+      item.render(knownBoxes.get(item.id), registry, { onRegistry: refreshRegistry });
+    }
+  }
+
+  let approvalToken = 0;
+  async function loadApproval() {
+    const generation = S.workspaceGeneration;
+    const token = ++approvalToken;
+    const report = await fetchApprovalCapability();
+    if (!isCurrent() || !ownsWorkspace(generation) || token !== approvalToken) return;
+    renderApprovalSetup(approvalBox, report);
+  }
 
   function showDetail(item) {
     detail.replaceChildren();
@@ -957,10 +1012,15 @@ function extensionTab(card, isCurrent) {
       retry.onclick = () => load();
       box.appendChild(retry);
       list.replaceChildren(box);
+      /* 设置区仍可打开：Registry 失败不代表安装状态可被猜成「未安装」。 */
+      renderKnownSetups(null);
+      loadApproval();
       return;
     }
     data = result;
     render();
+    renderKnownSetups(result);
+    loadApproval();
   }
   search.addEventListener('input', render);
   refresh.onclick = load;
@@ -986,17 +1046,13 @@ export async function loadExtensionsBadge() {
   node.title = `发现 ${total} 个 Skill（其中已加载 ${j.counts.enabled || 0} 个）`;
 }
 
-/* 五个标签页 = 五个过滤器（P22）。**一行都不新增导航** —— 复用已有的 tab 机制，
+/* 三个标签页 = 三个过滤器。**一行都不新增导航** —— 复用已有的 tab 机制，
  * 这样 Work Surface 的承载、aria 语义、实例生命周期都不用改。
  *
- *   All            —— 能力总览：已知 feature + pi 内置 + 通用 Extension + MCP server
- *   Capabilities   —— 只留已知 feature 与 Native MCP（「能不能用」这一问的答案）
  *   Extensions     —— 通用 Registry（**包括完全不认识的**，保持可浏览可诊断）
  *   Skills         —— pi 原生 Skills 的清单与启停（原有实现，未改语义）
  *   MCP            —— pi 原生 MCP 能力报告（原有实现；管理面在 navMcp） */
 const TABS = [
-  { id: 'all', label: 'All', domId: 'extensionsTabAll' },
-  { id: 'capabilities', label: 'Capabilities', domId: 'extensionsTabCapabilities' },
   { id: 'extensions', label: 'Extensions', domId: 'extensionsTabExtensions' },
   { id: 'skills', label: 'Skills', domId: 'extensionsTabSkills' },
   { id: 'mcp', label: 'MCP', domId: 'extensionsTabMcp' },
@@ -1005,22 +1061,21 @@ const TABS = [
 /**
  * 打开扩展工作区。
  *
- * @param options.tab 打开后停在哪个过滤器（P24：命令面板要能直接跳到
- *        Capabilities / MCP / Skills / Extensions）。**同一个 openExtensions**，
- *        不新增入口、不复制初始化逻辑；面板仍然是懒建的。
+ * @param options.tab 打开后停在哪个过滤器（Skills / Extensions / MCP）。
+ *        **同一个 openExtensions**，不新增入口、不复制初始化逻辑；面板仍然是懒建的。
  */
 export function openExtensions(options = {}) {
-  const wanted = TABS.some((tab) => tab.id === options.tab) ? options.tab : 'all';
+  const wanted = TABS.some((tab) => tab.id === options.tab) ? options.tab : 'extensions';
   openWorkSurface('extensions', (card, instance) => {
     card.classList.add('wide', 'ext', 'settings-resource-page');
 
-    const h = el('h3', 'settings-page-title', '扩展与能力');
+    const h = el('h3', 'settings-page-title', 'Skills 与扩展');
     card.appendChild(h);
     card.appendChild(
       el(
         'div',
         'modal-desc',
-        '能力状态全部来自 Extension Registry、各能力的运行观察与 Pi 自身的 built-in 探测；缺证据一律显示「未知（无法确认）」，不写成「否」。',
+        'Skills、Extension Registry 与 MCP 的状态都来自 pi 的真实证据；缺证据一律显示「无法确认」，不写成「否」。',
       ),
     );
 
@@ -1042,18 +1097,16 @@ export function openExtensions(options = {}) {
       /* MCP 管理页已独立到 navMcp；这个标签保留原生 MCP 能力报告，
        * 不能再把左侧导航投影成 navMcp —— 否则点的是报告，亮的是管理页。 */
       const destination = active === 'mcp' ? ['navExtensions', 'MCP 能力报告']
-        : active === 'capabilities' ? ['navCapabilities', '能力状态'] : ['navExtensions', 'Skills 与扩展'];
+        : ['navExtensions', 'Skills 与扩展'];
       projectWorkSurface('extensions', { navigation: destination[0], title: destination[1] });
-      h.textContent = active === 'all' || active === 'extensions' ? '扩展与能力' : destination[1];
+      h.textContent = active === 'mcp' ? 'MCP 能力报告' : active === 'skills' ? 'Skills' : '扩展';
       body.setAttribute('aria-labelledby', current.domId);
       body.innerHTML = '';
       if (!panels[active]) {
         const holder = el('div', 'ext-panel');
         panels[active] = holder;
         body.appendChild(holder);
-        if (active === 'all') capabilityTab(holder, instance.isCurrent, { filterId: 'all' });
-        else if (active === 'capabilities') capabilityTab(holder, instance.isCurrent, { filterId: 'capabilities' });
-        else if (active === 'extensions') extensionTab(holder, instance.isCurrent);
+        if (active === 'extensions') extensionTab(holder, instance.isCurrent);
         else if (active === 'skills') skillsTab(holder, instance.isCurrent);
         else mcpTab(holder, instance.isCurrent);
       } else {

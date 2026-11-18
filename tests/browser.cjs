@@ -301,7 +301,7 @@ const src = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
   });
 
   /* ---------- 能力与运行观察 ---------- */
-  console.log('\n--- J. 能力状态与运行观察 ---');
+  console.log('\n--- J. 能力与运行观察 ---');
   const o = createBrowserObservation();
   const registry = { extensions: [{ name: BROWSER_EXTENSION_NAME, state: { installed: true, enabled: true, loaded: null } }] };
   check('固定安装命令', () => assert.equal(BROWSER_INSTALL_COMMAND, 'pi install npm:pi-browser-harness'));

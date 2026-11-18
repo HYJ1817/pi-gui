@@ -583,7 +583,7 @@ export function openDiagnostics({ present = openModal } = {}) {
 }
 
 /**
- * P24：直接复制诊断摘要（命令面板用）。
+ * 直接复制诊断摘要（行内命令与设置页共用）。
  *
  * **复用同一条链路**：`/api/diagnostics` → `buildDiagnosticSummary` → 剪贴板。
  * 不重新拼一遍文本，也不新增数据源 —— 面板里那个按钮与这里拿到的是同一份东西。

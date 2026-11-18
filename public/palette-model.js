@@ -1,8 +1,10 @@
-/* P24 命令面板的**纯逻辑**：命令注册表 + 搜索排序。
+/* 命令注册表与搜索排序的**纯逻辑**。
  *
- * 与 `palette.js`（DOM 层）分开，理由与本仓库既有的
- * `capability-model.js` / `capability-view.js` 一致：**不碰 DOM 的部分要能离线单测**。
- * 这里没有 `document`、没有 `state.js` —— `tests/daily-use.cjs` 直接 import 它。
+ * 现在唯一的消费者是 Composer 内联 `/` 菜单（`ui/inline-command-menu.js`）——
+ * 独立的命令面板已在 P36 移除，但注册表本身是共用基础设施，不能跟着删。
+ * 与 DOM 层分开的理由与本仓库既有的 `capability-model.js` 一致：
+ * **不碰 DOM 的部分要能离线单测**。这里没有 `document`、没有 `state.js` ——
+ * `tests/daily-use.cjs` 直接 import 它。
  */
 
 /** 静态命令表（装配阶段由 app.js 填）。 */

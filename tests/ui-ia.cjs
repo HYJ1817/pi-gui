@@ -43,10 +43,11 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal(d.querySelector('.head-right #navChanges'), null);
     assert.ok(d.querySelector('.head-right #btnWorkPanel'));
   });
-  await check('Settings has all five logical groups and bound actions', () => {
+  await check('Settings has all six logical groups and bound actions', () => {
     $('navGlobalMore').click();
     const labels = [...d.querySelectorAll('#globalMoreMenu h3')].map(n => n.textContent);
-    for (const name of ['模型与账户', 'Agent 能力', '扩展与 MCP', '应用与更新', '诊断']) assert.ok(labels.includes(name), name);
+    for (const name of ['常规与界面', '工作区', '模型与账户', '扩展与 MCP', '应用与更新', '诊断']) assert.ok(labels.includes(name), name);
+    assert.equal(labels.includes('Agent 能力'), false);
     assert.ok([...$('globalMoreMenu').querySelectorAll('button')].every(b => typeof b.onclick === 'function'));
   });
   await check('MCP management has its own settings surface, not the extensions tab', async () => {
@@ -56,7 +57,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal($('workViewTitle').textContent, 'MCP 服务器');
   });
   await check('extension subpages project their real current navigation and title', async () => {
-    for (const [id, tab, title] of [['navCapabilities', 'capabilities', '能力状态'], ['navExtensions', 'skills', 'Skills 与扩展']]) {
+    for (const [id, tab, title] of [['navExtensions', 'skills', 'Skills 与扩展']]) {
       $(id).click(); await tick();
       assert.equal(d.querySelector('.ext-tab[aria-selected="true"]').dataset.tab, tab);
       assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, id);
@@ -128,6 +129,19 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal(disposed, 1); oldClose(); assert.equal(disposed, 1);
     assert.equal(isolated.window.document.querySelector('.settings-detail-card').textContent, 'current');
     module.showChat(); assert.equal(disposed, 1); isolated.window.close();
+  });
+  await check('Saved settings destination that no longer exists falls back to overview', () => {
+    const isolated = new JSDOM(fs.readFileSync(path.join(pub, 'index.html'), 'utf8'), { url: 'http://localhost:7788', runScripts: 'outside-only', pretendToBeVisual: true });
+    const module = isolated.window.eval(bundle(path.join(pub, 'ui/settings-surface.js')).code);
+    const surface = module.initSettingsSurface();
+    let disposed = 0;
+    const instance = surface.presentDetail('navCapabilities', () => { throw new Error('removed page must not build'); }, () => disposed++);
+    assert.equal(instance.isCurrent(), false);
+    assert.equal(isolated.window.document.querySelector('.settings-detail-card'), null);
+    assert.ok(isolated.window.document.querySelector('#workSurface .settings-grid'));
+    instance.dispose();
+    assert.equal(disposed, 0);
+    isolated.window.close();
   });
   await check('Late settings diagnostic result cannot replace the appearance page', async () => {
     const before = w.fetch; let release;
@@ -231,8 +245,8 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     d.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: '/', code: 'Slash', ctrlKey: true, bubbles: true }));
     assert.equal($('modal').hidden, true); assert.equal(previous.isConnected, false);
     assert.equal(d.querySelector('.settings-detail-card h3').textContent, '键盘快捷键');
-    w.openPalette(); const query = d.querySelector('.palette-input'); query.value = '诊断'; query.dispatchEvent(new w.Event('input', { bubbles: true }));
-    d.querySelector('[data-command-id="app.diagnostics"]').click(); await tick();
+    $('input').value = '/diagnostics'; $('input').dispatchEvent(new w.Event('input', { bubbles: true }));
+    d.querySelector('[data-command-id="app.diagnostics"]').dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true })); await tick();
     assert.equal($('modal').hidden, true); assert.equal(d.querySelectorAll('.settings-detail-card').length, 1);
     assert.equal($('navDiagnostics').getAttribute('aria-current'), 'page');
     $('settingsReturn').click();
@@ -278,12 +292,11 @@ const tick = () => new Promise(r => setTimeout(r, 40));
       assert.equal(d.querySelector('.settings-return-status').hidden, true);
     } finally { w.fetch = fetchBefore; $('navHome').click(); }
   });
-  for (const method of ['click', 'Enter']) await check('Palette Settings hands off menu and focus via ' + method, async () => {
-    $('input').focus(); w.openPalette();
-    const query = d.querySelector('.palette-input'); query.value = '设置';
-    query.dispatchEvent(new w.Event('input', { bubbles: true }));
-    if (method === 'click') d.querySelector('[data-command-id="app.preferences"]').click();
-    else query.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  for (const method of ['click', 'Enter']) await check('Inline command settings hands off menu and focus via ' + method, async () => {
+    $('input').focus();
+    $('input').value = '/settings'; $('input').dispatchEvent(new w.Event('input', { bubbles: true }));
+    if (method === 'click') d.querySelector('[data-command-id="app.preferences"]').dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true }));
+    else $('input').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await tick(); assert.equal($('globalMoreMenu').hidden, false);
     assert.equal(d.activeElement, $('settingsSearchInput'));
     d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

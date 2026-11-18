@@ -4,9 +4,9 @@
  *   1 输入 `/`         2 输入 `/query`      3 URL/路径不误触发
  *   4 when(ctx) 过滤   5 ArrowUp/Down       6 Enter/Tab
  *   7 Escape 只关菜单  8 中文 IME 组合       9 Enter 不发消息
- *  10 旧 Palette 仍在 11 会话/项目切换关闭  12 过期候选不可执行
- *  13 未知命令不发指令 14 destroy 无重复监听
- *  15 这里是 CSS/DOM 契约；真实 Electron（右栏 Browser / 明暗 / 窄屏）在
+ *  10 会话/项目切换关闭  11 过期候选不可执行
+ *  12 未知命令不发指令  13 destroy 无重复监听
+ *  14 这里是 CSS/DOM 契约；真实 Electron（右栏 Browser / 明暗 / 窄屏）在
  *     docs/claude-ui-redesign/ui3-c-evidence/ 的截图夹具里，截图才是排版证据。
  *
  * 本文件**不依赖真 pi、不联网、不写用户数据**：只 import public 下的真模块，
@@ -39,7 +39,6 @@ const section = (t) => console.log('\n--- ' + t + ' ---');
 
   const pm = await import('../public/palette-model.js');
   const { createInlineCommandMenu, parseSlashTrigger, ensureStylesheet } = await import('../public/ui/inline-command-menu.js');
-  const palette = await import('../public/palette.js');
 
   const input = dom.window.document.getElementById('input');
 
@@ -173,7 +172,7 @@ const section = (t) => console.log('\n--- ' + t + ' ---');
     assert.ok(items().includes('hidden'), 'when=true 出现');
     ctx.allow = false;
   });
-  check('与独立 Palette 用同一份 when 判定', () => {
+  check('与注册表用同一份 when 判定', () => {
     ctx.allow = false;
     setInput('/');
     assert.deepEqual(items(), pm.allCommands({ query: '' }).map((c) => c.id));
@@ -314,23 +313,8 @@ const section = (t) => console.log('\n--- ' + t + ' ---');
     assert.equal(submits, 1, '没有菜单时 Enter = 发送');
   });
 
-  /* ================= 10. 旧独立 Palette 仍可打开 ================= */
-  section('10. 独立命令面板完整保留');
-  check('palette.openPalette() 仍能打开、内容来自同一注册表', () => {
-    const layer = dom.window.document.getElementById('paletteLayer');
-    assert.equal(palette.paletteOpen(), false);
-    const ok = palette.openPalette({});
-    assert.equal(ok, true);
-    assert.equal(palette.paletteOpen(), true);
-    assert.equal(layer.hidden, false);
-    const rows = [...layer.querySelectorAll('.palette-item')].map((r) => r.dataset.commandId);
-    assert.ok(rows.includes('alpha'), '面板列出同一注册表的命令');
-    palette.closePalette({ restoreFocus: false });
-    assert.equal(palette.paletteOpen(), false);
-  });
-
-  /* ================= 11. 项目 / 会话切换关闭菜单 ================= */
-  section('11. 项目 / 会话切换关闭菜单并清上下文');
+  /* ================= 10. 项目 / 会话切换关闭菜单 ================= */
+  section('10. 项目 / 会话切换关闭菜单并清上下文');
   check('pi-gui:workspace-generation 事件关闭菜单', () => {
     reset();
     setInput('/al');
@@ -397,7 +381,7 @@ const section = (t) => console.log('\n--- ' + t + ' ---');
     assert.equal(controller.isOpen(), false);
   });
 
-  /* ================= 12/13. 过期 / 未知命令不执行、不伪造 ================= */
+  /* ================= 11/12. 过期 / 未知命令不执行、不伪造 ================= */
   section('12/13. 过期与未知候选不可执行、不发伪造指令');
   check('打开后命令变得不可用 → 接受时按 when 重新判定，不执行', () => {
     reset();
@@ -471,7 +455,7 @@ const section = (t) => console.log('\n--- ' + t + ' ---');
     assert.equal(controller.isOpen(), false);
   });
 
-  /* ================= 14. destroy 清理 ================= */
+  /* ================= 13. destroy 清理 ================= */
   section('14. destroy 后无重复监听 / 无残留 DOM');
   check('destroy 移除 DOM、监听与 aria；重挂后不重复', () => {
     const base = dom.window.document.querySelectorAll('.ui3-inline-menu').length;
@@ -543,7 +527,7 @@ const section = (t) => console.log('\n--- ' + t + ' ---');
     input.value = '';
   });
 
-  /* ================= 15. CSS 契约（真实排版看 Electron 截图） ================= */
+  /* ================= 14. CSS 契约（真实排版看 Electron 截图） ================= */
   section('15. 样式表类名契约（排版证据见 Electron 截图）');
   check('CSS 含约定类名与 reduced-motion 分支', () => {
     const css = fs.readFileSync(path.join(__dirname, '../public/ui3-inline-commands.css'), 'utf8');

@@ -28,7 +28,7 @@ const pause=()=>new Promise(r=>setTimeout(r,30));
  set('/uniquefixture');input.dispatchEvent(new w.CompositionEvent('compositionstart',{bubbles:true}));const n=calls.length;key('Enter');
  check('composition lifecycle closes menu and prevents submit',()=>{assert.equal(opened(),false);assert.equal(calls.length,n);});
  input.dispatchEvent(new w.CompositionEvent('compositionend',{bubbles:true}));
- set('/uniquefixture');key('k',{ctrlKey:true});check('Ctrl+K target opens independent panel with slash closed',()=>{assert.equal(d.getElementById('paletteLayer').hidden,false);assert.equal(opened(),false);});w.closePalette();
+ set('/uniquefixture');key('Escape');key('k',{ctrlKey:true});check('Ctrl+K no longer opens any palette and leaves the slash menu closed',()=>{assert.equal(d.getElementById('paletteLayer'),null);assert.equal(opened(),false);assert.equal(input.value,'/uniquefixture');});
  for(const event of [new w.CustomEvent('pi-gui:session-switch'),new w.CustomEvent('pi-gui:workspace-view',{detail:{view:'planner'}}),new w.CustomEvent('pi-gui:workspace-view',{detail:{view:'runtime'}})]){set('/uniquefixture');d.dispatchEvent(event);check('lifecycle '+event.type+' preserves draft and closes menu',()=>{assert.equal(opened(),false);assert.equal(input.value,'/uniquefixture');});}
  w.S.models=[{provider:'a',id:'same',name:'Same'},{provider:'b',id:'same',name:'Same'}];d.getElementById('btnModel').click();
  const search=d.querySelector('.ui3-model-search');search.value='same';search.dispatchEvent(new w.Event('input',{bubbles:true}));

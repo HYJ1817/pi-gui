@@ -363,10 +363,10 @@ Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接�
 展开的结果为准，耗时与执行状态以当次运行记录为准。
 [CI 性能优化审计](ci-optimization-audit.md) 记录当时的资源边界与优化背景，不是当前数量或耗时的证明。
 
-> `daily-use`（P24）是**纯逻辑**套件：快捷键注册表、命令面板模型、状态文案。
+> `daily-use`（P24）是**纯逻辑**套件：快捷键注册表、行内 `/` 命令注册表模型、状态文案。
 > 它不碰 DOM、不碰网络、不碰真 pi —— 所以这些规则在任何机器上结论都一样。
-> DOM 行为（面板真的能开、草稿真的落盘、状态条真的渲染）在 `smoke` 的 P24 段，
-> 真实排版在 `cdp-shot` 的 183–192 场景。
+> DOM 行为（行内菜单真的能开、草稿真的落盘、状态条真的渲染）在 `smoke` 的 P24 / P36 段，
+> 快捷键设置与真实排版在 `shortcut-settings` / `shortcut-electron`。
 
 > `reliability` / `interactions` / `port-owner` 是早期套件，只打印
 > `X: passed`、不报条数（断言失败就直接抛）。**没有数字不等于没有断言**，
@@ -1191,15 +1191,15 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   **代码方向取安全侧**：拿不到权威单位就不标单位、不猜、不转换 —— 这一侧的结论
   不依赖于该说明的具体细节是否逐字准确。
 
-## P22 Capability UX 验证
+## P22 / P36 Capability UX 验证
 
 三层，各管一段（**不要把 DOM 断言当排版证明**）：
 
 | 层 | 命令 | 条数 | 量什么 |
 |---|---|---|---|
-| 纯投影 | `npm run test:capability`（进 `npm test`） | 62 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、搜索与过滤、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
-| DOM（jsdom） | `npm run test:ui` 的 P22 段 | 21 | 五个过滤器、六个状态字段、统一文案、未知不写成否、restartRequired、stale 不落地、Usage 入口只读 |
-| 真实 Chrome | `npm run harness` + `npm run shots:harness` | 场景 171–192 | 布局宽度、列表项高度、横向溢出、四档宽度；P24 的命令面板 / 快捷键帮助 / 草稿刷新恢复 / 启动失败与断线 / 700×600 与 701×602 取整 |
+| 纯投影 | `npm run test:capability`（进 `npm test`） | 74 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
+| DOM（jsdom） | `npm run test:ui` 的 P36 段 | — | Extensions / Skills / MCP 三个标签、「已知能力设置」仍可从 Extensions 页到达、旧能力状态页不再渲染、Registry 仍可诊断、设置导航不再出现「能力状态」 |
+| 真实 Electron | `npm run test:shortcuts:electron` | 77 | 设置导航六组、快捷键八条、旧命令面板 ID 安全忽略、扩展与 MCP 在 1320×820 / 700×600 暗亮布局 |
 
 关键判定（写错任何一条，界面就开始撒谎）：
 
@@ -1213,7 +1213,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 - **built-in 不伪装成普通 Extension**：`builtin:` 前缀 + `pi 内置扩展` 来源徽标 +
   「不由 Extension Registry 的目录扫描发现」；「启用 / 加载」显示**不适用**而不是「否」。
 - **unknown Extension 不丢**：registry fixture 里放一个完全不认识的包，
-  断言它在 All 与 Extensions 里都在、状态是未知、坏掉的那条带自己的诊断。
+  断言它在 Extensions 标签里仍在、状态是未知、坏掉的那条带自己的诊断。
 - **运行观察随 bridge run 重置**：观察实例在 `bridge_status` 的
   starting / restarting / exited / error / no-project 上清空；换 workspace
   generation 也不沿用（纯测直接对 `createWebObservation()` 断言）。
@@ -1221,7 +1221,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   `S.workspaceGeneration` 加一，断言结果回来时列表为空并显示「项目已切换」。
 - **无自动安装**：四个 `*Setup()` 都声明 `automaticInstall === false`；
   投影层与视图层都不出现 `child_process` / `execFile` / `spawn(` / `node:fs`；
-  Capability 视图里没有任何按钮以「安装」开头。
+  「已知能力设置」里没有任意包名输入，主安装按钮只服务服务端 allowlist 的四项。
 - **Registry 无特化**：直接读 `server/extension-registry.js` 与
   `lib/extension-paths.js` 的源码，断言里面**不出现**任何 feature 包名
   （`pi-web-access` / `pi-subagents` / `pi-memory` / `pi-browser-harness`）、
@@ -1281,9 +1281,10 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 
 `mustTrue` 判据（一律是结构事实，不是像素值）：
 
-- **UX-01 / UX-02**：命令面板列表、诊断内容区 `getComputedStyle(el, '::-webkit-scrollbar')`
-  是 10px、滑块 `rgb(44,44,44)`、轨道透明，且这两个容器**真的能滚**
+- **UX-02**：诊断内容区 `getComputedStyle(el, '::-webkit-scrollbar')`
+  是 10px、滑块 `rgb(44,44,44)`、轨道透明，且这个容器**真的能滚**
   （判滚动条不能只看样式：不可滚的容器上有没有滚动条都无所谓）。
+  UX-01 原先量的是命令面板；面板在 P36 移除后这一条一并删除。
 - **UX-03 / UX-04**：`.project.active` 与 `.pj-sess` 的 `offsetHeight` 差 ≤ 2px、
   项目行 ≤ 36px、没有 `.pj-path`、路径在 `title` 上、箭头 `aria-expanded` /
   `aria-controls` 正确、会话块仍是项目行的 `nextElementSibling`；
@@ -1299,7 +1300,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 - **UX-07 / UX-08**：`.stage-head` 的 top=0、height=46、右边缘铺满、
   背景 = `rgb(13,13,13)` 且 `--titlebar === '#0d0d0d'`、底部分隔线 1px；
   拖拽区 `-webkit-app-region` 仍是 drag、顶栏按钮仍是 no-drag；
-  Chat / 任务 / 文件变更 / 扩展来回切换、长对话滚动、开关命令面板之后都重测一遍。
+  Chat / 任务 / 文件变更 / 扩展来回切换与长对话滚动之后都重测一遍。
 - **UX-09**：700×600、900×700、1200×800、1536×900 四档抽查顶栏稳定性、
   项目行与会话行高度接近、导航聚簇（窄窗口按既有策略隐藏则不判）、无横向溢出；
   另存一张 700×600 的顶栏截图。
@@ -1357,10 +1358,10 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
 
 | 命令 | 套件 | 条数 | 量什么 |
 |---|---|---|---|
-| `npm run test:capability` | `tests/capability.cjs` | **75** | 适用性收口（NA 不画 / 未声明不画 / **`null` 仍显示「未知（无法确认）」** / 诊断无错误不画）、一键安装的按钮形态与确认文案、四值投影与既有回归 |
+| `npm run test:capability` | `tests/capability.cjs` | **74** | 适用性收口（NA 不画 / 未声明不画 / **`null` 仍显示「未知（无法确认）」** / 诊断无错误不画）、一键安装的按钮形态与确认文案、四值投影与既有回归 |
 | `npm run test:capability-install` | `tests/capability-install.cjs` | **38** | 受控安装的全部边界（见下） |
-| `npm run test:sidebar-menu` | `tests/sidebar-menu.cjs` | **35** | 动作菜单的 DOM 行为 + 两个调用点的静态边界 |
-| `npm run test:ui` | `tests/smoke.cjs` | **1256** | 真实点击链路（jsdom 里的整个应用），含**项目菜单作用域**与**安装真实性**两组回归 |
+| `npm run test:sidebar-menu` | `tests/sidebar-menu.cjs` | **37** | 动作菜单的 DOM 行为 + 两个调用点的静态边界 |
+| `npm run test:ui` | `tests/smoke.cjs` | **1326** | 真实点击链路（jsdom 里的整个应用），含**项目菜单作用域**、**安装真实性**与**已知能力设置可达性**三组回归 |
 | `npm run shots:harness` | `tests/cdp-shot.cjs` | 场景 +8 | 真 Chrome 的排版与运行状态 |
 
 ### T1 Specs

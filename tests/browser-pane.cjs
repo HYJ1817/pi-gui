@@ -513,27 +513,34 @@ const HELPERS = `(() => {
       ['dock', 'overlay'].includes(atNarrow.mode) || atNarrow.mode
     );
 
-    /* ---------- 9. Modal / palette 遮挡（renderer 侧） ----------
+    /* ---------- 9. Modal 遮挡（renderer 侧） ----------
      * 原生视图真的被摘下去只证明得了在主进程里（tests/browser-session-check.cjs）。
-     * 这里证明**触发链**：弹层可见时右栏仍然在，且弹层盖在它上面。 */
-    await cdp.evalJs('document.getElementById("navPalette").click()');
+     * 这里证明**触发链**：弹层可见时右栏仍然在，且弹层盖在它上面。
+     *
+     * P36 删除了命令面板；设置菜单会切到 settings work surface，右栏按设计关闭。
+     * 所以这里直接调用共享的 `confirmModal`，只量「确认层 vs 右栏」这一条关系，
+     * 不把导航行为混进遮挡断言。 */
+    await cdp.evalJs(`import('/ui/modal.js').then((m) => {
+      m.confirmModal({ title: '遮挡探针', message: '确认层不应销毁右栏。', okText: '关闭' });
+      return true;
+    })`);
     await sleep(600);
-    const withPalette = JSON.parse(
+    const withConfirm = JSON.parse(
       await cdp.evalJs(
-        'JSON.stringify({paletteVisible: document.getElementById("paletteLayer").hidden === false, paneStillOpen: document.getElementById("rightPane").hidden === false})'
+        'JSON.stringify({confirmVisible: document.getElementById("confirmLayer").hidden === false, paneStillOpen: document.getElementById("rightPane").hidden === false})'
       )
     );
-    check('打开命令面板时右栏仍开着（底下的状态没被破坏）', () =>
-      withPalette.paneStillOpen === true || JSON.stringify(withPalette)
+    check('打开确认框时右栏仍开着（底下的状态没被破坏）', () =>
+      withConfirm.paneStillOpen === true || JSON.stringify(withConfirm)
     );
-    check('命令面板确实可见', () => withPalette.paletteVisible === true || JSON.stringify(withPalette));
-    await cdp.evalJs('document.getElementById("paletteLayer").click()');
+    check('确认框确实可见', () => withConfirm.confirmVisible === true || JSON.stringify(withConfirm));
+    await cdp.evalJs('document.querySelector("#confirmCard .modal-actions .btn").click()');
     await sleep(600);
-    const afterPalette = JSON.parse(
-      await cdp.evalJs('JSON.stringify({paletteHidden: document.getElementById("paletteLayer").hidden, addr: document.getElementById("browserAddress").value})')
+    const afterConfirm = JSON.parse(
+      await cdp.evalJs('JSON.stringify({confirmHidden: document.getElementById("confirmLayer").hidden, addr: document.getElementById("browserAddress").value})')
     );
-    check('关掉面板后右栏内容没有被重建（地址栏还是原来那个）', () =>
-      afterPalette.addr.includes('/page-a') || afterPalette.addr
+    check('关掉确认框后右栏内容没有被重建（地址栏还是原来那个）', () =>
+      afterConfirm.addr.includes('/page-a') || afterConfirm.addr
     );
 
     /* ---------- 10. Toast 必须让开原生视图 ----------

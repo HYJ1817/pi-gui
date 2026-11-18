@@ -243,10 +243,10 @@ setAfterHistoryRendered(sessionId => {
   return scrollToUserTurn(p.userIndex);
 });
 
-/* ---------- 供命令面板复用（P24）----------
+/* ---------- 供行内命令复用（P24）----------
  *
- * 面板要能「切到某个会话」，但它**不自己拉一遍会话列表** —— 那是第二份数据。
- * 这里把已经渲染出来的那份数据（`dataRef`）只读地暴露出去，面板拿到的就是
+ * 「切到某个会话」的命令**不自己拉一遍会话列表** —— 那是第二份数据。
+ * 这里把已经渲染出来的那份数据（`dataRef`）只读地暴露出去，命令拿到的就是
  * 用户此刻在侧栏看到的那几条。 */
 export function knownSessions() {
   const data = dataRef;

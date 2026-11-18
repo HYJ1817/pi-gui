@@ -390,7 +390,6 @@
 .dir-empty,
 .ext-empty,
 .ev-empty,
-.palette-empty,
 .ui3-empty {
   color: var(--ui-text-muted);
   line-height: 1.65;

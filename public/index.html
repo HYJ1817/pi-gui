@@ -63,7 +63,6 @@
       <section role="group" aria-labelledby="settingsAppearance"><h3 id="settingsAppearance">常规与界面</h3>
         <button type="button" id="navAppearance"><svg data-icon="sliders" aria-hidden="true" focusable="false"></svg><span>常规</span></button>
         <button type="button" id="navShortcutHelp" title="查看键盘快捷键"><svg data-icon="keyboard" aria-hidden="true" focusable="false"></svg><span>快捷键</span></button>
-        <button type="button" id="navPalette" title="打开命令面板"><svg data-icon="command" aria-hidden="true" focusable="false"></svg><span>命令面板</span></button>
       </section>
       <section role="group" aria-labelledby="settingsWorkspace"><h3 id="settingsWorkspace">工作区</h3>
         <button type="button" class="settings-destination" id="navPlanner" aria-label="任务" title="任务"><svg data-icon="task" aria-hidden="true" focusable="false"></svg><span>任务与审阅</span><span class="rail-badge" id="planCount"></span></button>
@@ -71,9 +70,6 @@
       <section role="group" aria-labelledby="settingsAccounts"><h3 id="settingsAccounts">模型与账户</h3>
         <button type="button" id="navProviders"><svg data-icon="package" aria-hidden="true" focusable="false"></svg><span>模型供应商</span><span class="rp-count" id="providerCount"></span></button>
         <button type="button" id="navProviderAuth"><svg data-icon="key" aria-hidden="true" focusable="false"></svg><span>供应商与认证</span></button>
-      </section>
-      <section role="group" aria-labelledby="settingsCapabilities"><h3 id="settingsCapabilities">Agent 能力</h3>
-        <button type="button" id="navCapabilities"><svg data-icon="chip" aria-hidden="true" focusable="false"></svg><span>能力状态</span></button>
       </section>
       <section role="group" aria-labelledby="settingsExtensions"><h3 id="settingsExtensions">扩展与 MCP</h3>
         <button type="button" class="settings-destination" id="navExtensions" aria-label="Skills 与扩展" title="Skills 与扩展"><svg data-icon="book" aria-hidden="true" focusable="false"></svg><span>Skills 与扩展</span><span class="rail-badge" id="extCount"></span></button>
@@ -282,12 +278,6 @@
 <div class="modal confirm" id="confirmLayer" hidden>
   <div class="modal-card" id="confirmCard"></div>
 </div>
-
-<!-- 命令面板层（P24）。
-     同样**不复用** #modal：面板可能在任何一个视图里被叫出来，也可能在关掉之后
-     立刻打开一个真正的弹层（例如「打开诊断」）。共用一层会让「先关面板再开弹层」
-     变成「弹层被自己清掉」。它只做一件事：一个输入框 + 一个命令列表。 -->
-<div class="modal palette-layer" id="paletteLayer" hidden></div>
 
 <div class="toasts" id="toasts"></div>
 

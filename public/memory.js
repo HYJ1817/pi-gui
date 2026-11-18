@@ -19,7 +19,7 @@ export function memoryObservation() {
   return memoryObservationState(observation, S.workspaceGeneration, S.bridgeRun);
 }
 
-export function renderMemorySetup(box, registry) {
+export function renderMemorySetup(box, registry, options = {}) {
   /* 一键安装成功后重新读 Registry，按新证据重画（命令完成 ≠ 装上）。 */
-  return renderFeatureSetup(box, (reg) => memoryCapability(reg, memoryObservation()), registry, { linkFactory: webSourceLink });
+  return renderFeatureSetup(box, (reg) => memoryCapability(reg, memoryObservation()), registry, { linkFactory: webSourceLink, ...options });
 }

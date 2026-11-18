@@ -23,7 +23,7 @@ export function webObservation() {
   return webObservationState(observation, S.workspaceGeneration, S.bridgeRun);
 }
 
-export function renderWebSetup(box, registry) {
+export function renderWebSetup(box, registry, options = {}) {
   /* 一键安装成功后重新读 Registry，按新证据重画（命令完成 ≠ 装上）。 */
-  return renderFeatureSetup(box, (reg) => webCapability(reg, webObservation()), registry, { linkFactory: webSourceLink });
+  return renderFeatureSetup(box, (reg) => webCapability(reg, webObservation()), registry, { linkFactory: webSourceLink, ...options });
 }

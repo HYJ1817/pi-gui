@@ -10,7 +10,7 @@
 
 .ui3-inline-menu {
   position: fixed;
-  z-index: 64; /* 高于 Composer(6) 与普通浮层，低于命令面板(65)/弹层(60+)/确认(70) */
+  z-index: 64; /* 高于 Composer(6) 与普通浮层，低于弹层(60+)/确认(70) */
   box-sizing: border-box;
   display: flex;
   flex-direction: column;

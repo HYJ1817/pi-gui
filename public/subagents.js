@@ -18,7 +18,7 @@ export function subagentObservation() {
   return subagentObservationState(observation, S.workspaceGeneration, S.bridgeRun);
 }
 
-export function renderSubagentSetup(box, registry) {
+export function renderSubagentSetup(box, registry, options = {}) {
   /* 一键安装成功后重新读 Registry，按新证据重画（命令完成 ≠ 装上）。 */
-  return renderFeatureSetup(box, (reg) => subagentCapability(reg, subagentObservation()), registry, { linkFactory: webSourceLink });
+  return renderFeatureSetup(box, (reg) => subagentCapability(reg, subagentObservation()), registry, { linkFactory: webSourceLink, ...options });
 }

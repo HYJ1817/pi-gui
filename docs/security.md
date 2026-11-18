@@ -264,15 +264,17 @@ Pi GUI 会用官方 `pi install` 装**四个已明确维护的第三方 Capabili
 
 ## P22 Capability 投影层边界
 
-Capability 视图是**只读投影**：它把已有的证据重新排版，**不新增任何事实、不新增任何动作**。
+Capability 投影层是**只读投影**：它把已有的证据重新排版，**不新增任何事实、不新增任何动作**。
+独立的能力状态页已在 P36 移除，投影仍服务 `ui/capability-setup.js` 与
+Extensions 标签顶部的「已知能力设置」折叠区。
 
-- **不联网、不安装、不执行**：`capability-model.js` / `capability-view.js` /
+- **不联网、不安装、不执行**：`capability-model.js` /
   `ui/capability-setup.js` 里没有 `child_process` / `execFile` / `spawn(` / `node:fs`；
   四个 feature 的 `*Setup()` 全部声明 `automaticInstall === false`。
   唯一的写动作是「安装后重启 Pi」—— 它走既有的 `POST /api/restart`，
   并且**先确认、再校验 workspace generation**，切换了项目就不重启。
-- **没有安装入口**：界面上没有「安装」按钮、没有任意包名输入框；
-  固定官方命令只以 `<code>` 文本 + 复制按钮出现，命令由用户在终端自己执行。
+- **没有任意包安装入口**：界面上没有任意包名输入框；一键安装只接受服务端固定
+  allowlist 里的 id，固定官方命令也可以复制到终端由用户自己执行。
 - **不伪造能力**：`null` 只显示「未知（无法确认）」。这一条是安全属性而不是文案问题 ——
   把「没探测到」说成「没有」，用户就会去做多余的安装或卸载。
   探测失败时 `installed` / `configured` / `loaded` 全部保持未知。

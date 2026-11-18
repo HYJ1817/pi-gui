@@ -86,7 +86,7 @@ async function run() {
     }
     await read(`document.getElementById('toasts').replaceChildren();for(let i=0;i<20;i++){T.toast('保存成功','success');E.handleExtensionNotification({message:'memory_search requires qmd. Install qmd',notifyType:'warning'})}`);
     check(await read(`document.querySelectorAll('.toast').length===0&&E.extensionNotices()[0].count===20`), 'routine operations and repeated optional dependency produce zero popups');
-    await read(`X.openExtensions({tab:'capabilities'})`); await sleep(300);
+    await read(`X.openExtensions({tab:'extensions'})`); await sleep(300);
     check(await read(`document.querySelector('.extension-notices').textContent.includes('memory_search requires qmd')`), 'dependency remains in live extension settings');
     await shot('extension-status');
     await read(`(async()=>{(await import('/ui/workspace-surface.js')).showChat();M.rebuildFromMessages(Array.from({length:500},(_,i)=>[{role:'user',content:[{type:'text',text:'问题 '+i}]},{role:'assistant',content:[{type:'text',text:'离线导航验证。'.repeat(60)}]}]).flat());await M.waitForClassicRenderIdle();N.rebuildConversationNav();ST.el.stream.style.scrollBehavior='auto';})()`); await sleep(250);

@@ -95,6 +95,12 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
   function presentDetail(destination, build, onClose, options = {}) {
     if (sidebar.hidden) $('btnSidebarExpand').click();
     const target = $(destination);
+    /* 旧设置导航位置可能指向已经删除的页面。没有目标时安全回退到常规设置，
+       而不是打开一张没有归属的详情卡。 */
+    if (!target) {
+      open();
+      return { isCurrent: () => false, dispose() {} };
+    }
     const instance = openWorkSurface('settings', (host, life) => {
       host.classList.add('settings-detail');
 
@@ -106,7 +112,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
       let disposed = false;
       const escape = event => {
         if (event.key !== 'Escape' || event.defaultPrevented || !life.isCurrent()) return;
-        if (!$('modal').hidden || !$('confirmLayer').hidden || !$('paletteLayer').hidden) return;
+        if (!$('modal').hidden || !$('confirmLayer').hidden) return;
         event.preventDefault(); event.stopPropagation(); close();
       };
       const close = () => {

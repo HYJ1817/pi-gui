@@ -78,4 +78,4 @@ Planner、Changes、Extensions 是一级 Stage 页面。危险操作确认继续
 
 P14-E 保留这套承载与滚动结构。Planner、Changes、Extensions 的按钮和选中行统一为灰阶，危险操作只用少量红色文字提示；状态文字、Git Diff 和执行结果继续使用语义色。Planner / Extensions Tab 的 `aria-selected` 与可见面板一致，并通过 `aria-controls` 指向对应面板。被替换的 Surface 内若持有焦点，统一生命周期会将焦点送到新视图的入口。
 
-P22 把 Extensions 的标签行扩成 **All / Capabilities / Extensions / Skills / MCP** 五个过滤器：**没有新增导航**，复用的还是这一套 tab 机制 —— 同样的 `role="tablist"` / `aria-selected` / `aria-controls="extensionsTabPanel"`，同样的懒建面板与实例身份守卫；All 与 Capabilities 两个过滤器由 `capability-view.js` 渲染（它自己再守一次 workspace generation）。详见 [capability-ux.md](capability-ux.md)。
+P22 曾把 Extensions 的标签行扩成 **All / Capabilities / Extensions / Skills / MCP** 五个过滤器。P36 移除了独立的能力状态页，All 与 Capabilities 两个过滤器一并删除；当前只剩 **Extensions / Skills / MCP** 三个标签，复用的仍是同一套 `role="tablist"` / `aria-selected` / `aria-controls="extensionsTabPanel"`、懒建面板与实例身份守卫。共享的 `capability-model.js` / `ui/capability-setup.js` 继续服务 Extensions 标签顶部的「已知能力设置」折叠区，详见 [capability-ux.md](capability-ux.md)。

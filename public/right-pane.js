@@ -285,11 +285,11 @@ export function initRightPane() {
    * WebContentsView 是**原生子视图**，z-index 对它无效 —— 弹层画得再高，
    * 它照样压在弹层上面。所以在任何一个全屏遮罩可见时，把 view 摘下去。
    *
-   * 用 MutationObserver 盯那三个遮罩层的 hidden 属性，而不是让每个弹层
-   * 各自去调一遍：弹层有三个（#modal / #confirmLayer / #paletteLayer），
-   * 而且以后还可能加新的。集中一处判断，就不会出现「新加的弹层忘了通知」。
+   * 用 MutationObserver 盯那两个遮罩层的 hidden 属性，而不是让每个弹层
+   * 各自去调一遍：弹层有 #modal 与 #confirmLayer，而且以后还可能加新的。
+   * 集中一处判断，就不会出现「新加的弹层忘了通知」。
    * 这也正是「一个事实只有一个 owner」。 */
-  const overlays = ['modal', 'confirmLayer', 'paletteLayer'].map(byId).filter(Boolean);
+  const overlays = ['modal', 'confirmLayer'].map(byId).filter(Boolean);
 
   function overlaysVisible() {
     return overlays.some((n) => !n.hidden);

@@ -111,8 +111,9 @@ P20.5 built-in 与 P20.6 原生状态）折成一张统一状态表。
 它不 import `state.js`、不碰 DOM、不缓存任何东西 —— 缓存就是会过期的第二份真相。
 `public/ui/capability-setup.js` 是唯一一套 setup 布局，也是全仓库唯一的
 「安装后重启 Pi」实现（`confirmModal` → `ownsWorkspace(generation)` → `restartBackend()`）。
-`public/capability-view.js` 只负责取数、落地前过实例身份与 workspace generation、
-以及渲染；`extensions.js` 的标签行就是 All / Capabilities / Extensions / Skills / MCP 五个过滤器。
+P36 移除了独立的 `capability-view.js`；`extensions.js` 现在只保留
+Extensions / Skills / MCP 三个标签，能力投影继续服务 Extensions 标签顶部的
+「已知能力设置」折叠区（四个 feature + Approval 的 setup 渲染）。
 `server/extension-registry.js` **一个字节都没为 P22 改**：它继续 generic。
 详见 [Capability UX](capability-ux.md)。
 
@@ -494,12 +495,11 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
 - `git.js` 变更面板 / `diff.js` unified diff 渲染 / `changes.js` 会话改动账本
 - `sessions.js` 侧栏会话列表 / `conversation-nav.js` 会话内提问导航 /
   `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）
-- `extensions.js` 扩展面板（五个过滤器 + 通用 Registry）/ `planner.js` 任务面板 /
-  `project-config.js` 项目设置
+- `extensions.js` 扩展面板（Extensions / Skills / MCP 三个标签 + 通用 Registry）/
+  `planner.js` 任务面板 / `project-config.js` 项目设置
 - `capability-model.js` 纯投影（四值状态、**适用性收口**、结论行、过滤器、
-  setup 视图模型）/ `capability-view.js` All 与 Capabilities 两个过滤器 /
-  `ui/capability-setup.js` 唯一一套 setup 布局 + 唯一的一键安装 +
-  唯一的「安装后重启 Pi」（P22 / P24）
+  setup 视图模型）/ `ui/capability-setup.js` 唯一一套 setup 布局 +
+  唯一的一键安装 + 唯一的「安装后重启 Pi」（P22 / P24；独立能力状态页已在 P36 移除）
 - `ui/action-menu.js` 侧栏行动作菜单（项目行与会话行**共用一套**）：单例、
   锚定 trigger、视口内翻转与夹紧、`role=menu` 语义、键盘导航、Escape 还焦点、
   点外部 / resize / 滚动关闭。与 composer 的 `ui/popover.js` 刻意分开
@@ -512,8 +512,9 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
   - `shortcuts.js` —— **唯一的键盘入口**：注册表 + 三态覆盖（默认 / 自定义 / 禁用）+
     `pi-gui.keybindings.v1` 持久化 + 冲突与保留键检查 + 平台显示；
     零 DOM 依赖（设置页在 `ui/shortcut-help.js`），所以能离线单测
-  - `palette-model.js` 命令注册与搜索排序（纯逻辑）/
-    `palette.js` 面板 DOM（输入框、列表、↑↓/Enter/Esc、焦点还原）
+  - `palette-model.js` 命令注册与搜索排序（纯逻辑），唯一消费者是
+    `ui/inline-command-menu.js` 的 Composer 行内 `/` 菜单；独立命令面板
+    与 `palette.js` 已在 P36 移除
   - `draft.js` —— 未发送草稿：key = workspace 哈希 + 会话哈希，**只存纯文本**
     （附件二进制 / 抽取正文 / 本机路径一律不进 `localStorage`）
   - `status-copy.js` 启动 / 连接 / 兼容状态的**唯一文案来源**（每条带可执行的下一步）/
