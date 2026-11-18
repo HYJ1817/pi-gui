@@ -68,6 +68,7 @@ const processIdentity = require(processIdentityPath);
 const { createBrowserController, isBrowserWebContents } = require('./browser-view.cjs');
 const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 const { createDesktopTheme } = require('./theme.cjs');
+const { createSystemFontIpc } = require('./system-fonts.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 const { installEnvironmentSetup } = require('./environment-setup.cjs');
@@ -98,6 +99,7 @@ const TOKEN_HEADER = 'X-Pi-Gui-Token';
 
 let win = null;
 let desktopTheme = null;
+let desktopFonts = null;
 let server = null;
 /* 本次实例真正 spawn 的后端身份：{ pid, expected }。expected 是启动后
  * 异步抓取的创建时间 + 映像路径，退出时用它校验 pid 没有被复用。 */
@@ -787,7 +789,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      additionalArguments: ['--pi-gui-theme-bridge'],
+      additionalArguments: ['--pi-gui-theme-bridge', '--pi-gui-font-bridge'],
       /* 只为「用系统默认程序打开文件」与「用系统浏览器打开 Release 链接」
        * 挂一个桥（见 preload.cjs）。contextIsolation 保持开启 —— 桥经
        * contextBridge 暴露，页面拿不到 ipcRenderer 本身，也拿不到任何凭据。 */
@@ -960,6 +962,8 @@ if (!app.requestSingleInstanceLock()) {
     desktopTheme = createDesktopTheme({ ipcMain, nativeTheme, getWindow: () => win, origin: ORIGIN,
       preferenceFile: path.join(app.getPath('userData'), 'theme-preferences.json') });
     desktopTheme.register();
+    desktopFonts = createSystemFontIpc({ ipcMain, getWindow: () => win, origin: ORIGIN });
+    desktopFonts.register();
     // 令牌头的注入必须赶在窗口发第一个请求之前装好
     installTokenHeader();
     // 「用系统默认程序打开文件」与「用系统浏览器打开链接」两个 IPC ——
@@ -1098,6 +1102,7 @@ if (!app.requestSingleInstanceLock()) {
     browserAgent?.stop();
     runtimeBrowserHost?.stop();
     credentialDesktop?.dispose();
+    desktopFonts?.dispose();
     killServer();
   });
 

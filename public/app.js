@@ -134,7 +134,8 @@ import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane, readRestoredSurface } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
-import { openAppUpdates, openAppearance } from './settings.js';
+import { openAppUpdates } from './settings.js';
+import { openAppearance } from './appearance.js';
 import { initVizIntegration } from './viz-integration.js';
 
 /* 日志只做观察：未捕获异常、网络失败与 SSE 断连在这里接入，

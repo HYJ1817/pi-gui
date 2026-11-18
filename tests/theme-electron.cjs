@@ -59,20 +59,24 @@ if (!process.versions.electron) {
   }
   async function openAppearance() {
     await pointer('#navGlobalMore'); await waitFor(`!document.querySelector('#globalMoreMenu').hidden`, 'settings menu');
-    await pointer('#navAppearance'); await waitFor(`!!document.querySelector('.appearance-body select')`, 'appearance modal');
-    check(await read(`document.activeElement.matches('.appearance-body select')`), 'appearance starts on theme select');
+    await pointer('#navAppearance'); await waitFor(`!!document.querySelector('.appearance-theme-row .settings-theme-trigger')`, 'appearance modal');
+    check(await read(`document.activeElement.matches('.settings-theme-trigger')`), 'appearance starts on theme picker');
   }
+  const THEME_LABELS = { dark: '深色', light: '浅色', system: '跟随系统' };
   async function selectTheme(mode, close = true) {
     await openAppearance();
-    // Actual key events on the native select; no JS assignment or synthetic change.
-    await key('Home', 'Home', 36);
-    for (let i = 0; i < ['dark', 'light', 'system'].indexOf(mode); i++) await key('ArrowDown', 'ArrowDown', 40);
+    // Real key events open the custom picker; search filters, Enter commits.
+    await key('Enter', 'Enter', 13);
+    await waitFor(`!!document.querySelector('.pi-anchored-menu input')`, 'theme menu');
+    await win.webContents.debugger.sendCommand('Input.insertText', { text: THEME_LABELS[mode] });
+    await sleep(100);
     await key('Enter', 'Enter', 13);
     await waitFor(`document.documentElement.dataset.themePreference===${JSON.stringify(mode)}`, 'theme selection ' + mode);
-    check(theme.snapshot().preference === mode, 'native controller receives real select ' + mode);
+    check(theme.snapshot().preference === mode, 'theme controller receives real picker choice ' + mode);
     if (close) {
       await key('Escape', 'Escape', 27);
-      check(await read(`document.querySelector('#modal').hidden && document.activeElement.id==='navGlobalMore'`), 'appearance Escape restores Settings focus');
+      const focusState = await read(`({modalHidden:document.querySelector('#modal').hidden,detailOpen:!!document.querySelector('.appearance-theme-row'),activeId:document.activeElement.id,activeClass:String(document.activeElement.className)})`);
+      check(focusState.modalHidden && !focusState.detailOpen, 'appearance Escape returns to the settings surface', focusState);
     }
   }
   async function setSidebar(open) {
@@ -237,11 +241,13 @@ try {$bitmap.Save('${destination}',[System.Drawing.Imaging.ImageFormat]::Png)} f
       }
       await closePane();await setSidebar(true);win.setContentSize(1200,900);
       await openAppearance();
-      await key('Tab','Tab',9);check(await read(`document.activeElement.matches('#modalCard .modal-actions button')`),mode+' Tab moves select to Close');
-      await key('Tab','Tab',9);check(await read(`document.activeElement.matches('.appearance-body select')`),mode+' Tab wraps to select');
-      await key('Tab','Tab',9,8);check(await read(`document.activeElement.matches('#modalCard .modal-actions button')`),mode+' Shift+Tab wraps to Close');
+      await key('Tab','Tab',9,8);
+      check(await read(`!!document.activeElement.closest('.settings-detail-card')`),mode+' Shift+Tab stays in the appearance detail surface');
+      let stayedInside = true;
+      for(let i=0;i<6;i++){await key('Tab','Tab',9);stayedInside=stayedInside&&await read(`!!document.activeElement.closest('.settings-detail-card')`);}
+      check(stayedInside,mode+' Tab keeps focus in the page-like appearance surface');
       await shot(mode+'-appearance-keyboard');await key('Escape','Escape',27);
-      check(await read(`document.querySelector('#modal').hidden&&document.activeElement.id==='navGlobalMore'`),mode+' Escape returns focus');
+      check(await read(`document.querySelector('#modal').hidden&&!document.querySelector('.appearance-theme-row')&&document.activeElement.id==='navAppearance'`),mode+' Escape returns focus to the Appearance entry');
       for(const zoom of [.8,1.25,1.5]) {
         win.webContents.setZoomFactor(zoom);await sleep(180);await pane('changes');
         await shot(`${mode}-zoom-${zoom}-changes`,{matrix:'additional-zoom',nativeWidth:1200});await closePane();

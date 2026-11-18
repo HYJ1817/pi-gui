@@ -16,6 +16,8 @@
  *
  *   4. 右栏内置浏览器的一组具名动作（browser.*）—— 同样只转发，
  *      放行规则在 electron/browser-policy.cjs，由主进程执行
+ *   5. 读取系统已安装字体族（fonts.list）—— 固定通道、零参数，
+ *      枚举、超时与缓存全部由主进程持有
  *
  * ---------- 这个文件里没有任何校验，这是故意的 ----------
  *
@@ -45,6 +47,7 @@ try {
   // The fixed display snapshot is read before the first document paint. Nothing
   // from it is an authority for files, Pi, Browser or approvals.
   const themeEnabled = process.argv.includes('--pi-gui-theme-bridge');
+  const fontsEnabled = process.argv.includes('--pi-gui-font-bridge');
   let themeLatest = themeEnabled ? ipcRenderer.sendSync('pi-gui:theme-snapshot') : null;
   const themeListeners = new Set();
   ipcRenderer.on('pi-gui:theme-changed', (_event, snapshot) => {
@@ -84,6 +87,11 @@ try {
         if (themeLatest) callback(themeLatest);
         return () => themeListeners.delete(callback);
       },
+    } } : {}),
+    /* Fixed channels only: no command, path or PowerShell argument crosses
+     * this bridge. The main process owns enumeration, timeout and cache. */
+    ...(fontsEnabled ? { fonts: {
+      list: () => ipcRenderer.invoke('pi-gui:fonts-list'),
     } } : {}),
     runtimeBrowser: {
       onOpen: callback => {

@@ -10,10 +10,12 @@
   min-height: 48px;
 }
 .appearance-status {
-  margin: 12px 0 0;
-  font-size: var(--text-sm);
+  display: block;
+  margin: 18px 0 0;
+  font-size: var(--text-xs);
   color: var(--ds-text-muted);
-  line-height: 1.4;
+  line-height: var(--leading-normal);
+  transition: color var(--motion-duration-fast) var(--motion-ease-out);
 }
 /* [hidden] 必须赢。
  *
@@ -2994,20 +2996,359 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   border: 0 !important;
   box-shadow: none !important;
 }
-.appearance-status {
-  display: block;
-  margin-top: 18px;
-  font-size: var(--text-xs);
-  color: var(--ds-text-muted);
-  line-height: var(--leading-normal);
-  transition: color var(--motion-duration-fast) var(--motion-ease-out);
-}
 .appearance-status.is-error {
   color: var(--ui-danger);
   font-weight: var(--font-weight-medium);
 }
 .appearance-status.is-warning {
   color: var(--ui-warning);
+}
+
+/* --------------------------------------------------------------------------
+ * Appearance pickers: theme and font.
+ *
+ * The menu portals to <body> (fixed layer, above the settings modal) so the
+ * settings card's scrolling/overflow cannot clip it. Visibility is gated by
+ * .is-open because the layer is measured while hidden before it is placed.
+ * -------------------------------------------------------------------------- */
+.pi-anchored-menu {
+  position: fixed;
+  z-index: 66;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.pi-anchored-menu.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.settings-picker {
+  position: relative;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.settings-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  height: var(--ds-settings-picker-height);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--ds-raised);
+  box-shadow: var(--ds-raised-shadow);
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: var(--text-sm-plus);
+  cursor: pointer;
+}
+
+.settings-picker-trigger:hover {
+  background: var(--ds-bg-hover);
+}
+
+.settings-picker-trigger:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+.settings-picker-trigger-label {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.settings-picker-chevron {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--ds-text-muted);
+}
+
+.settings-theme-menu-anchored,
+.settings-font-menu-anchored {
+  width: min(240px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--ds-bg-elevated-opaque);
+  box-shadow: var(--ds-shadow-dialog);
+  color: var(--ds-text-primary);
+}
+
+.settings-font-menu-anchored {
+  width: min(320px, calc(100vw - 32px));
+}
+
+.settings-theme-search,
+.settings-font-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 8px 8px 4px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  background: var(--ds-field-inset-bg);
+  color: var(--ds-text-muted);
+  box-sizing: border-box;
+}
+
+.settings-theme-search:focus-within,
+.settings-font-search:focus-within {
+  box-shadow: 0 0 0 2px var(--ds-focus);
+}
+
+.settings-theme-search-icon,
+.settings-font-search-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+
+.settings-theme-search input,
+.settings-font-search input {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.settings-theme-search input::placeholder,
+.settings-font-search input::placeholder {
+  color: var(--ds-text-secondary);
+  opacity: 1;
+}
+
+.settings-theme-list {
+  display: flex;
+  max-height: min(360px, calc(100vh - 160px));
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0 6px;
+  margin: 0;
+}
+
+.settings-theme-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 12px);
+  margin: 0 6px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: var(--text-sm-plus);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-theme-option:hover,
+.settings-theme-option.is-active {
+  background: var(--ds-bg-hover);
+}
+
+.settings-theme-option.is-current {
+  background: var(--ds-bg-active);
+}
+
+.settings-theme-option:focus-visible,
+.settings-font-option:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -1px;
+}
+
+.settings-theme-option-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-theme-check,
+.settings-font-check {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--ds-accent);
+}
+
+.settings-theme-empty,
+.settings-font-empty {
+  padding: 16px 10px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.settings-font-note {
+  padding: 2px 12px 6px;
+  color: var(--ds-text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.settings-font-list {
+  position: relative;
+  max-height: min(320px, calc(100vh - 190px));
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 0 6px;
+}
+
+.settings-font-viewport {
+  position: relative;
+}
+
+.settings-font-group {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  padding: 8px 8px 3px;
+  background: var(--ds-bg-elevated-opaque);
+  color: var(--ds-text-muted);
+  font-size: var(--text-xs-plus);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--tracking-wide);
+  box-sizing: border-box;
+}
+
+.settings-font-option {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.settings-font-option:hover,
+.settings-font-option.is-active {
+  background: var(--ds-bg-hover);
+}
+
+.settings-font-option.is-current {
+  background: var(--ds-bg-active);
+}
+
+.settings-font-option-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-font-option-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-full);
+  color: var(--ds-text-muted);
+  font-size: var(--text-2xs);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Keep the three appearance rows on one rhythm; the controls share a height. */
+.appearance-body .settings-row {
+  min-height: 64px;
+}
+
+.appearance-size-control {
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.appearance-size-control .ds-segmented {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.appearance-size-control .ds-slider-row {
+  width: 260px;
+}
+
+.ds-slider:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 4px;
+}
+
+.ds-slider-val {
+  min-width: 40px;
+}
+
+/* Product minimum width: let the control take its own line instead of
+ * squeezing the label or hiding the trigger. */
+@media (max-width: 900px) {
+  .appearance-body .settings-row {
+    flex-wrap: wrap;
+    gap: 10px 16px;
+  }
+
+  .appearance-body .settings-row-control {
+    flex: 1 1 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+  }
+
+  .appearance-body .settings-picker,
+  .appearance-body .settings-picker-trigger {
+    max-width: 100%;
+  }
+
+  .appearance-size-control {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .appearance-size-control .ds-segmented {
+    justify-content: flex-start;
+  }
+
+  .appearance-size-control .ds-slider-row {
+    width: 100%;
+  }
 }
 
 /* Page Level Title strictly scoped to top heading (not nested card headings) */

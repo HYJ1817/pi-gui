@@ -13,21 +13,29 @@
 
   try {
     const fontScale = localStorage.getItem('pi-gui.font-scale.v1');
-    if (fontScale && Number(fontScale)) {
-      const num = Number(fontScale);
-      if (num >= 50 && num <= 200) {
-        document.documentElement.style.setProperty('--font-scale', (num / 100).toFixed(2));
-      }
+    if (fontScale && Number.isFinite(Number(fontScale))) {
+      const num = Math.min(150, Math.max(80, Number(fontScale)));
+      const scale = Math.round(num / 5) * 5;
+      document.documentElement.style.setProperty('--font-scale', (scale / 100).toFixed(2));
     }
-    const fontFamily = localStorage.getItem('pi-gui.font-family.v1');
-    if (fontFamily === 'mono') {
-      const monoFont = 'ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
-      document.documentElement.style.setProperty('--font-sans', monoFont);
-      document.documentElement.style.setProperty('--ui-font-sans', monoFont);
-    } else if (fontFamily === 'sans') {
-      const sansFont = '"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
-      document.documentElement.style.setProperty('--font-sans', sansFont);
-      document.documentElement.style.setProperty('--ui-font-sans', sansFont);
+    /* Keep these stacks in sync with public/fonts.js. v2 stores the complete
+     * family list; v1 is the legacy token form kept for painless migration. */
+    const cjkFallback = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Microsoft YaHei UI", sans-serif';
+    const legacy = {
+      mono: `ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, "Liberation Mono", "Microsoft YaHei", monospace`,
+      sans: `"Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif`
+    };
+    let fontFamily = null;
+    try { fontFamily = localStorage.getItem('pi-gui.font-family.v2'); } catch { /* Storage may be disabled. */ }
+    if (typeof fontFamily !== 'string') {
+      try { fontFamily = legacy[localStorage.getItem('pi-gui.font-family.v1')] || ''; } catch { fontFamily = ''; }
+    }
+    fontFamily = String(fontFamily || '').trim();
+    if (fontFamily && fontFamily.length <= 512) {
+      const hasCjk = /pingfang sc|hiragino sans gb|microsoft yahei/i.test(fontFamily);
+      const stack = hasCjk ? fontFamily : `${fontFamily.replace(/,\s*(sans-serif|system-ui|ui-sans-serif)\s*$/i, '')}, ${cjkFallback}`;
+      document.documentElement.style.setProperty('--font-sans', stack);
+      document.documentElement.style.setProperty('--ui-font-sans', stack);
     }
   } catch { /* Storage may be disabled. */ }
 })();
