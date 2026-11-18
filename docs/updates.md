@@ -180,8 +180,8 @@ GitHub 上出现一个解析不了的 tag 时，结果是 `invalid-response`，�
 - **失败完全静默** —— 连状态都不留，回到 idle；用户没请求过的事不该显示成错误
 - **无更新完全静默**
 - **不自动弹 Modal** —— 只有真的发现新版时给**一次**轻提示
-  （`Pi GUI v0.12.0 已发布 —— 详情见侧栏「诊断」`），同一个版本不重复弹
-- 侧栏「诊断」入口上的小点会亮起，作为持久的提醒
+  （`Pi GUI v0.12.0 已发布 —— 详情见「设置 → 信息」`），同一个版本不重复弹
+- 侧栏「信息」入口上的小点会亮起，作为持久的提醒；诊断页仍显示版本事实
 
 自动检查与手动检查**共用同一套状态与缓存**：自动走普通请求（吃缓存、避开限流），
 手动走 `force=1`。
@@ -478,7 +478,7 @@ available。所以 `ok:false` 且 `running === false` 时同样要吸收并停�
 启动后**延迟 12 秒只检查一次**（比 Pi GUI 自己的 8 秒再晚一点：pi 的版本探测要走一次
 pi 包的读盘）。它**不阻塞启动、不轮询、绝不安装**，吃 TTL 缓存；自动那一次失败
 **完全静默**（连状态都不留），同一个 `latestVersion` 在整个应用生命周期里**只轻提示一次**
-（`Pi <版本> 可用 —— 在侧栏「诊断」里可以更新`），并点亮诊断入口上的小点。
+（`Pi <版本> 可用 —— 在「设置 → 信息」里可以更新`），并点亮「信息」入口上的小点。
 
 ### 离线
 
@@ -668,7 +668,7 @@ npm run test:pi-update        # 126 项（已纳入 npm test）
 
 - [architecture.md](architecture.md) — 模块地图
 - [security.md](security.md) — 安全边界（含外链、渲染进程权限与「Pi 运行时更新边界」）
-- [diagnostics.md](diagnostics.md) — 诊断面板里的「版本」小节与 `piUpdate` 快照
+- [diagnostics.md](diagnostics.md) — 诊断面板里的「版本」小节与 `piUpdate` 快照（信息页复用同一份状态，不另建容器）
 - [testing.md](testing.md) — 测试分层（`test:update` 与 `test:pi-update`）
 - [upgrade-playbook.md](upgrade-playbook.md) — 升级 pi 的完整流程（内置更新器只是它的便利层）
 - [pi-compatibility.md](pi-compatibility.md) — 更新之后「这个版本我们核过没有」
