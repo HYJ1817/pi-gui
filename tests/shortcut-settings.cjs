@@ -312,6 +312,68 @@ function plainEvent(init = {}) {
     sc.resetAllShortcutBindings();
     store.data.clear();
   });
+  await check('B10 键位互换：保存后重启，两项自定义都完整恢复', () => {
+    // 用户实际操作顺序：禁用「切到任务」→ 把「切到对话」改到 alt+2
+    // → 再把「切到任务」改到 alt+1。最终两项都启用，组合互换。
+    assert.equal(sc.commitShortcutBinding('view-planner', null).ok, true);
+    assert.equal(sc.commitShortcutBinding('view-chat', 'alt+2').ok, true);
+    assert.equal(sc.commitShortcutBinding('view-planner', 'alt+1').ok, true);
+    assert.equal(sc.shortcutState('view-chat').effectiveCombo, 'alt+2');
+    assert.equal(sc.shortcutState('view-planner').effectiveCombo, 'alt+1');
+    const saved = store.data.get(STORAGE_KEY);
+    registerAll(sc, runs);
+    sc.loadShortcutOverrides(store);
+    assert.equal(store.data.get(STORAGE_KEY), saved, '加载不写回存储');
+    assert.equal(sc.shortcutState('view-chat').effectiveCombo, 'alt+2');
+    assert.equal(sc.shortcutState('view-planner').effectiveCombo, 'alt+1');
+    assert.equal(sc.shortcutState('view-chat').customized, true);
+    assert.equal(sc.shortcutState('view-planner').customized, true);
+    assert.equal(sc.shortcutState('view-chat').disabled, false);
+    assert.equal(sc.shortcutState('view-planner').disabled, false);
+    assert.equal(sc.shortcutState('view-changes').effectiveCombo, 'alt+3', '无关键位保持默认');
+    sc.resetAllShortcutBindings();
+  });
+  await check('B11 三条键位循环交换：保存后重启，三项自定义都完整恢复', () => {
+    // 默认 chat=alt+1 / planner=alt+2 / changes=alt+3；
+    // 目标 chat=alt+2 / planner=alt+3 / changes=alt+1（三项循环）。
+    // 用 alt+5 作临时空位，逐步挪动，避免写入时产生瞬时重复。
+    assert.equal(sc.commitShortcutBinding('view-chat', 'alt+5').ok, true);
+    assert.equal(sc.commitShortcutBinding('view-changes', 'alt+1').ok, true);
+    assert.equal(sc.commitShortcutBinding('view-planner', 'alt+3').ok, true);
+    assert.equal(sc.commitShortcutBinding('view-chat', 'alt+2').ok, true);
+    const saved = store.data.get(STORAGE_KEY);
+    registerAll(sc, runs);
+    sc.loadShortcutOverrides(store);
+    assert.equal(store.data.get(STORAGE_KEY), saved, '加载不写回存储');
+    assert.equal(sc.shortcutState('view-chat').effectiveCombo, 'alt+2');
+    assert.equal(sc.shortcutState('view-planner').effectiveCombo, 'alt+3');
+    assert.equal(sc.shortcutState('view-changes').effectiveCombo, 'alt+1');
+    for (const key of Object.keys(runs)) delete runs[key];
+    assert.equal(sc.dispatchShortcut(plainEvent({ key: '2', code: 'Digit2', altKey: true })).id, 'view-chat');
+    assert.equal(sc.dispatchShortcut(plainEvent({ key: '3', code: 'Digit3', altKey: true })).id, 'view-planner');
+    assert.equal(sc.dispatchShortcut(plainEvent({ key: '1', code: 'Digit1', altKey: true })).id, 'view-changes');
+    assert.deepEqual(runs, { 'view-chat': 1, 'view-planner': 1, 'view-changes': 1 });
+    sc.resetAllShortcutBindings();
+  });
+  await check('B12 真正重复 / 损坏的配置仍然安全降级', () => {
+    store.data.set(STORAGE_KEY, JSON.stringify({
+      'view-chat': 'alt+5',
+      'view-planner': 'alt+5',
+      'view-changes': 'ctrl+c',
+      'view-extensions': 'not a combo',
+      'work-files': null,
+    }));
+    sc.loadShortcutOverrides(store);
+    assert.equal(sc.shortcutState('view-chat').effectiveCombo, 'alt+5', '注册顺序靠前的自定义保留');
+    assert.equal(sc.shortcutState('view-planner').effectiveCombo, 'alt+2', '重复的一方回退默认');
+    assert.equal(sc.shortcutState('view-changes').effectiveCombo, 'alt+3', '保留键回退默认');
+    assert.equal(sc.shortcutState('view-extensions').effectiveCombo, 'alt+4', '损坏值回退默认');
+    assert.equal(sc.shortcutState('work-files').disabled, true, '禁用值仍然生效');
+    const combos = sc.listShortcuts().map((item) => item.effectiveCombo).filter(Boolean);
+    assert.equal(new Set(combos).size, combos.length, '最终生效集合没有重复');
+    sc.resetAllShortcutBindings();
+    store.data.clear();
+  });
 
   /* ================= C. 设置页 ================= */
   console.log('\n--- C. 设置页 ---');
