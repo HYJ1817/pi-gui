@@ -3755,6 +3755,193 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   padding-top: 16px;
 }
 
+/* ---------- 信息（About）----------
+ * 页面只组合既有设置行与两块更新区块；布局参考 PI-Desktop 的居中
+ * hero + 更新卡。颜色/间距全部走 --ds-* 与 --radius-*，深色浅色自动成立。 */
+.settings-detail > .settings-detail-card.about-settings-card {
+  max-width: 760px;
+}
+.about-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 4px 0 28px;
+}
+.about-hero-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 14px;
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: 16px;
+  background: var(--ds-tile);
+  color: var(--ds-text-primary);
+  font-size: calc(26px * var(--font-scale));
+  font-weight: 600;
+  line-height: 1;
+}
+.about-hero-name {
+  color: var(--ds-text-primary);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.about-hero-version {
+  margin-top: 4px;
+  color: var(--ds-text-muted);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+}
+.about-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  width: min(100%, 580px);
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ds-border-subtle);
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.about-hero-sep {
+  color: var(--ds-text-faint);
+}
+.about-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.about-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--ds-text-faint);
+}
+.about-status.is-ok::before { background: var(--ds-success); }
+.about-status.is-warn::before { background: var(--ds-warning); }
+.about-status.is-err::before { background: var(--ds-error); }
+.about-hero-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+  color: var(--ds-warning);
+  font-size: var(--text-sm-plus);
+  line-height: 1.5;
+}
+.about-hero-error[hidden] { display: none; }
+.about-update-panel {
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+}
+.about-update-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.about-update-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--ds-info-surface);
+  color: var(--ds-text-secondary);
+}
+.about-update-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+}
+.about-update-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.about-update-panel .about-update-title {
+  margin: 0;
+  color: var(--ds-text-primary);
+  font-size: var(--text-md-plus);
+  font-weight: 600;
+  line-height: var(--leading-compact);
+}
+.about-update-desc {
+  margin: 2px 0 0;
+  color: var(--ds-text-muted);
+  font-size: var(--text-xs-plus);
+  line-height: var(--leading-normal);
+}
+.about-update-panel .update-sec {
+  margin: 0;
+}
+.about-update-panel .update-title {
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm-plus);
+}
+.about-update-panel .update-acts {
+  justify-content: flex-end;
+}
+/* 旧弹层里的固定操作条用 popover 底色；放进信息卡后要和卡片同色，
+ * 否则浅色主题下会在卡片中间浮出一条白带。两层背景 = 卡片色（tile 叠加在页面底色上）。 */
+.about-update-panel .update-fixed-actions {
+  background: linear-gradient(var(--ds-tile), var(--ds-tile)), var(--ds-bg-primary);
+}
+.about-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.about-restart-row .ds-settings-row-tail,
+.about-support-row .ds-settings-row-tail {
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .about-hero-meta {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .about-hero-sep { display: none; }
+  .about-support-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .about-support-row .ds-settings-row-tail {
+    width: 100%;
+  }
+  .about-row-actions {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 560px) {
+  .about-update-panel {
+    padding: 14px;
+  }
+  .about-update-head {
+    gap: 10px;
+  }
+  .about-update-icon {
+    flex-basis: 34px;
+    width: 34px;
+    height: 34px;
+  }
+}
+
 /* Providers Surface (Phase B / REF-007 & REF-008) */
 .settings-detail-header-row {
   display: flex;

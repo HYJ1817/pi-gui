@@ -106,7 +106,7 @@ module.exports = async ({ read, click, key, shot, paint, check, win, waitFor }) 
   await waitFor(`document.querySelectorAll('.settings-detail-card > .modal-actions button').length >= 4`);
   check('R1 diagnostic export and refresh remain reachable', await read(`(()=>{let b=[...document.querySelectorAll('.settings-detail-card > .modal-actions button')];return b.length>=4&&b.every(e=>e.checkVisibility())})()`));
   await shot('r10-diagnostics-dark');
-  for(const [id,name] of [['navShortcutHelp','shortcuts'],['navProviderAuth','auth'],['navAppUpdates','updates'],['navMcp','mcp'],['navExtensions','skills']]){
+  for(const [id,name] of [['navShortcutHelp','shortcuts'],['navProviderAuth','auth'],['navInfo','info'],['navMcp','mcp'],['navExtensions','skills']]){
     if(!await read(`!!document.getElementById(${JSON.stringify(id)})`))throw Error('Unknown settings navigation '+id);
     await read(`document.getElementById(${JSON.stringify(id)}).scrollIntoView({block:'nearest'})`);await click('#'+id);await paint();
     await shot('r11-settings-'+name+'-dark');

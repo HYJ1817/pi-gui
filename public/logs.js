@@ -20,6 +20,7 @@ import { logRendererEvent, setRendererLoggingEnabled } from './log-client.js';
 const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'];
 const SOURCES = ['app', 'electron', 'pi-bridge', 'runtime', 'renderer', 'browser', 'ui', 'network', 'logs', 'settings'];
 const LEVEL_TEXT = { DEBUG: '详细', INFO: '信息', WARN: '警告', ERROR: '错误', FATAL: '严重' };
+const LOG_TABS = [['overview', '概览'], ['logs', '日志查看'], ['export', '导出故障报告']];
 const SOURCE_TEXT = {
   app: '应用', electron: 'Electron', 'pi-bridge': 'Pi Bridge', runtime: 'Runtime', renderer: '界面',
   browser: '浏览器', ui: '界面', network: '网络', logs: '日志', settings: '设置',
@@ -97,11 +98,13 @@ function moduleLink(text, run) {
   return b;
 }
 
-export function openLogs({ present = openModal } = {}) {
+/** `initialTab` 让信息页的「导出故障报告」直接落到既有导出标签；
+ *  不复制日志页、也不在别处再实现一遍导出流程。 */
+export function openLogs({ present = openModal, initialTab = 'overview' } = {}) {
   let alive = true;
   let status = null;
   let statusError = null;
-  let tab = 'overview';
+  let tab = LOG_TABS.some(([id]) => id === initialTab) ? initialTab : 'overview';
   let entries = [];
   let cursor = null;
   let more = false;
@@ -123,7 +126,7 @@ export function openLogs({ present = openModal } = {}) {
     tabs.setAttribute('role', 'tablist');
     tabs.setAttribute('aria-label', '日志与故障报告');
     const tabButtons = {};
-    for (const [id, label] of [['overview', '概览'], ['logs', '日志查看'], ['export', '导出故障报告']]) {
+    for (const [id, label] of LOG_TABS) {
       const b = button(label, 'ui5-logs-tab');
       b.id = 'ui5-log-tab-' + id;
       b.setAttribute('role', 'tab');
@@ -662,8 +665,9 @@ export function openLogs({ present = openModal } = {}) {
       renderPreview();
     }
 
-    setTab('overview');
-    void loadStatus(true);
+    setTab(tab);
+    if (tab === 'logs') void loadEntries(true);
+    else void loadStatus(tab === 'overview');
 
     /* 关闭时停掉搜索防抖；不取消已经完成的只读读取，避免对后端发第二次请求。 */
     return () => {

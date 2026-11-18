@@ -22,6 +22,8 @@ test('desktop has one primary download with manual assets under an explicit disc
   const download=f.buttons().find(b=>b.textContent==='下载更新');assert.ok(download);await download.click();assert.equal(f.downloads(),1);
   const manual=f.container.querySelector('details.update-manual-downloads');assert.ok(manual);assert.equal(manual.open,false);
   assert.equal(manual.querySelectorAll('button').length,3);
+  assert.equal(f.w.document.getElementById('updateDot').hidden,false);
+  assert.equal(f.w.document.getElementById('menuUpdateDot').hidden,false);
 });
 test('ready package exposes restart as the sole primary action and displays the running Electron version',async t=>{
   const f=await fixture(t,{phase:'ready',mode:'installed',currentVersion:'0.29.1',version:'0.30.0'});

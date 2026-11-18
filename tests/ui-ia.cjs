@@ -48,6 +48,9 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     const labels = [...d.querySelectorAll('#globalMoreMenu h3')].map(n => n.textContent);
     for (const name of ['常规与界面', '工作区', '模型与账户', '扩展与 MCP', '应用与更新', '诊断']) assert.ok(labels.includes(name), name);
     assert.equal(labels.includes('Agent 能力'), false);
+    assert.ok($('navInfo'), 'unified info entry exists');
+    assert.equal($('navAppUpdates'), null, 'old updates entry removed');
+    assert.equal($('navRestartPi'), null, 'old restart entry removed');
     assert.ok([...$('globalMoreMenu').querySelectorAll('button')].every(b => typeof b.onclick === 'function'));
   });
   await check('MCP management has its own settings surface, not the extensions tab', async () => {
@@ -241,7 +244,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     } finally { w.fetch = before; $('settingsReturn').click(); }
   });
   await check('Keyboard and command settings share the central owner instead of overlapping modals', async () => {
-    $('navGlobalMore').click(); $('navAppUpdates').click(); const previous = d.querySelector('.settings-detail-card');
+    $('navGlobalMore').click(); $('navInfo').click(); const previous = d.querySelector('.settings-detail-card');
     d.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: '/', code: 'Slash', ctrlKey: true, bubbles: true }));
     assert.equal($('modal').hidden, true); assert.equal(previous.isConnected, false);
     assert.equal(d.querySelector('.settings-detail-card h3').textContent, '键盘快捷键');

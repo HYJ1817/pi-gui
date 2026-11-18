@@ -296,7 +296,7 @@ function renderCheck() {
   if (report.components && report.components.pi && report.components.pi.action === 'update-pi') {
     state.body.append(actionBox('找到了 Pi，但需要更新后才能稳定使用。', '打开 Pi 更新', () => {
       closeModal();
-      $('navAppUpdates')?.click();
+      $('navInfo')?.click();
     }));
   }
 
@@ -564,7 +564,7 @@ function renderVerifying() {
   if (pi && pi.action === 'update-pi') {
     state.body.append(actionBox('Pi 需要更新才能继续。', '打开 Pi 更新', () => {
       closeModal();
-      $('navAppUpdates')?.click();
+      $('navInfo')?.click();
     }));
   }
   if (report.requiredReady) state.footer.append(primaryButton('进入 Pi GUI', finish));

@@ -310,7 +310,7 @@ export function cancelPiUpdateAuto() {
 function notifyOnce(version) {
   if (!version || notifiedVersion === version) return;
   notifiedVersion = version;
-  toast(`Pi ${version} 可用 —— 在「设置 → 应用与更新」里可以更新`, 'info');
+  toast(`Pi ${version} 可用 —— 在「设置 → 信息」里可以更新`, 'info');
 }
 
 /* ---------- 执行更新 ---------- */
@@ -468,10 +468,11 @@ export async function confirmAndRunPiUpdate() {
 /** 把 Pi 运行时区块画进给定容器。诊断面板每次重绘都会调它。
  *
  *  `fallbackCurrentVersion` 是诊断快照里的 `pi.version`：这一块与「版本真值」
- *  说的是同一个东西，取不到接口数据时也该显示得出来。 */
-export function renderPiUpdateSection(container, fallbackCurrentVersion = '') {
+ *  说的是同一个东西，取不到接口数据时也该显示得出来。
+ *  `heading: false` 供信息页使用（该页卡片自带标题），诊断页行为不变。 */
+export function renderPiUpdateSection(container, fallbackCurrentVersion = '', { heading = true } = {}) {
   if (fallbackCurrentVersion) fallbackVersionText = str(fallbackCurrentVersion);
-  container.appendChild(node('div', 'ext-sec-head', 'Pi'));
+  if (heading) container.appendChild(node('div', 'ext-sec-head', 'Pi'));
   const box = node('div', 'update-sec');
   container.appendChild(box);
   mounted = box;

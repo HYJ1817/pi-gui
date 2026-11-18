@@ -92,10 +92,17 @@ function button(label, cls = 'btn') {
   return b;
 }
 
-/** 「诊断」侧栏项上的小点：有新版时亮一下，用户看得到入口在哪。 */
+/** 设置入口（齿轮）与「信息」页入口上的小点：有新版时亮一下。
+ *
+ *  两个点读的是**同一个** `status`，只是入口不同：齿轮在设置面板收起时
+ *  也看得见，信息入口在面板展开时指出具体落点。`menuUpdateDot` 过去只存在于
+ *  HTML 里、没有代码维护，迁移到信息页时一并接上。 */
 function applyDot() {
-  const dot = $('updateDot');
-  if (dot) dot.hidden = status !== 'available';
+  const hidden = status !== 'available';
+  for (const id of ['updateDot', 'menuUpdateDot']) {
+    const dot = $(id);
+    if (dot) dot.hidden = hidden;
+  }
 }
 
 function setState(next) {
@@ -285,17 +292,19 @@ export function cancelUpdateAuto() {
 function notifyOnce(version) {
   if (!version || notifiedVersion === version) return;
   notifiedVersion = version;
-  toast(`Pi GUI v${version} 已发布 —— 详情见「设置 → 应用与更新」`, 'info');
+  toast(`Pi GUI v${version} 已发布 —— 详情见「设置 → 信息」`, 'info');
 }
 
 /* ---------- 渲染 ---------- */
 
-/** 把「版本与更新」区块画进给定容器。诊断面板每次重绘都会调它。 */
-export function renderUpdateSection(container, fallbackVersion = '') {
+/** 把「版本与更新」区块画进给定容器。诊断面板每次重绘都会调它。
+ *  `heading: false` 供信息页使用：那一页有自己的卡片标题，不需要再重复一行
+ *  「版本」。诊断页保持原来的标题与调用方式。 */
+export function renderUpdateSection(container, fallbackVersion = '', { heading = true } = {}) {
   postponed = false;
   connectAppUpdate(() => { if(mounted?.isConnected) paint(mounted); });
   if (fallbackVersion) fallbackVersionText = fallbackVersion;
-  container.appendChild(node('div', 'ext-sec-head', '版本'));
+  if (heading) container.appendChild(node('div', 'ext-sec-head', '版本'));
   const box = node('div', 'update-sec');
   container.appendChild(box);
   mounted = box;

@@ -134,8 +134,8 @@ if (!process.versions.electron) {
     assert.ok(providers.top >= 46, `Providers H3 top (${providers.top}) must be below top titlebar`);
     console.log('✓ Providers H3 is completely visible at y=' + providers.top);
 
-    // 4. Check App Updates Page Title visibility
-    await win.webContents.executeJavaScript(`document.querySelector('#navAppUpdates').click()`);
+    // 4. Check Info Page Title visibility
+    await win.webContents.executeJavaScript(`document.querySelector('#navInfo').click()`);
     await new Promise(r => setTimeout(r, 500));
 
     const appUpdates = await win.webContents.executeJavaScript(`(()=>{
@@ -152,12 +152,12 @@ if (!process.versions.electron) {
       };
     })()`);
 
-    assert.ok(appUpdates, 'App Updates H3 must exist');
-    assert.equal(appUpdates.text, '应用与更新', 'App Updates H3 text must be 应用与更新');
+    assert.ok(appUpdates, 'Info H3 must exist');
+    assert.equal(appUpdates.text, '信息', 'Info H3 text must be 信息');
     assert.equal(appUpdates.display, 'block');
     assert.equal(appUpdates.visibility, 'visible');
-    assert.ok(appUpdates.top >= 46, `App Updates H3 top (${appUpdates.top}) must be below top titlebar`);
-    console.log('✓ App Updates H3 is completely visible at y=' + appUpdates.top);
+    assert.ok(appUpdates.top >= 46, `Info H3 top (${appUpdates.top}) must be below top titlebar`);
+    console.log('✓ Info H3 is completely visible at y=' + appUpdates.top);
 
     // 5. Verify Stage Head drag region and window controls integrity
     const stageHead = await win.webContents.executeJavaScript(`(()=>{

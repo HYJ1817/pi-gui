@@ -50,7 +50,7 @@ app.on('browser-window-created',(_event,win)=>{
       const original=window.fetch;
       window.fetch=(url,options)=>String(url).includes('/api/update')?Promise.resolve(new Response(${JSON.stringify(JSON.stringify(value))},{headers:{'content-type':'application/json'}})):original(url,options);
       const update=await import('/update.js');update.cancelUpdateAuto();await update.checkForUpdate();
-      const settings=await import('/settings.js');settings.openAppUpdates();
+      const about=await import('/about.js');about.openAboutSettings();
     })()`);
     win.show();win.focus();
     fs.writeFileSync(path.join(world,'window-'+app.getVersion()+'.json'),JSON.stringify({version:app.getVersion(),pid:process.pid,sandbox:!app.commandLine.hasSwitch('no-sandbox')}));
