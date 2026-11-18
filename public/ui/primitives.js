@@ -67,6 +67,10 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
     btn.setAttribute('role', 'radio');
     btn.setAttribute('aria-checked', String(opt.value === currentValue));
     btn.setAttribute('data-value', opt.value);
+    if (opt.disabled) {
+      btn.disabled = true;
+      btn.setAttribute('aria-disabled', 'true');
+    }
     if (opt.icon) {
       const iconSpan = document.createElement('span');
       iconSpan.className = 'ds-segment-icon';
@@ -80,7 +84,7 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
 
     btn.onclick = (e) => {
       e.preventDefault();
-      if (currentValue === opt.value) return;
+      if (btn.disabled || currentValue === opt.value) return;
       currentValue = opt.value;
       buttons.forEach(b => {
         const active = b.getAttribute('data-value') === currentValue;
@@ -105,6 +109,21 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
     },
     getValue() {
       return currentValue;
+    },
+    setDisabled(val) {
+      buttons.forEach(b => {
+        b.disabled = Boolean(val);
+        if (val) b.setAttribute('aria-disabled', 'true');
+        else b.removeAttribute('aria-disabled');
+      });
+    },
+    setOptionDisabled(optionValue, val) {
+      buttons.forEach(b => {
+        if (b.getAttribute('data-value') !== optionValue) return;
+        b.disabled = Boolean(val);
+        if (val) b.setAttribute('aria-disabled', 'true');
+        else b.removeAttribute('aria-disabled');
+      });
     }
   };
 }

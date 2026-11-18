@@ -34,7 +34,14 @@ import { fetchUpdate } from './api.js';
 import { md } from './markdown.js';
 import { $ } from './state.js';
 import { toast } from './ui/toast.js';
-import { connectAppUpdate, paintAppUpdate, appUpdateSnapshot } from './app-update.js';
+import {
+  connectAppUpdate,
+  connectAppUpdateNotices,
+  paintAppUpdate,
+  paintUpdatePreference,
+  requestAppUpdateCheck,
+  appUpdateSnapshot,
+} from './app-update.js';
 
 /** 与后端 server/update-check.js 的 MAX_NOTES_CHARS 一致（后端已截断，这里兜底）。 */
 const MAX_NOTES = 4000;
@@ -98,11 +105,40 @@ function button(label, cls = 'btn') {
  *  也看得见，信息入口在面板展开时指出具体落点。`menuUpdateDot` 过去只存在于
  *  HTML 里、没有代码维护，迁移到信息页时一并接上。 */
 function applyDot() {
-  const hidden = status !== 'available';
+  const desktop = appUpdateSnapshot();
+  const version = desktop?.version || desktop?.discovery?.latestVersion || '';
+  const ignored = Boolean(desktop?.ignoredVersion && desktop.ignoredVersion === version);
+  const hidden = status !== 'available' || ignored;
   for (const id of ['updateDot', 'menuUpdateDot']) {
     const dot = $(id);
     if (dot) dot.hidden = hidden;
   }
+}
+function hasDesktopCheck() {
+  return typeof globalThis.piGuiDesktop?.appUpdate?.check === 'function';
+}
+/** 主进程是桌面版的唯一状态源；网页版仍由本模块的 fetch 负责发现。 */
+function applyDesktopSnapshot(next) {
+  if (!next || typeof next.phase !== 'string') return;
+  const d = next.discovery;
+  if (d && typeof d.status === 'string') {
+    const nextStatus = d.status === 'available' ? 'available'
+      : d.status === 'latest' ? 'latest'
+      : d.status === 'error' ? 'error'
+      : d.status === 'checking' ? 'checking'
+      : status;
+    setState({
+      status: nextStatus,
+      currentVersion: next.currentVersion || currentVersion,
+      latestVersion: d.latestVersion || '',
+      release: d.release || null,
+      error: d.error || '',
+    });
+    return;
+  }
+  if (next.currentVersion && !currentVersion) currentVersion = next.currentVersion;
+  applyDot();
+  if (mounted && mounted.isConnected) paint(mounted);
 }
 
 function setState(next) {
@@ -229,6 +265,25 @@ async function runCheck({ auto = false, force = false } = {}) {
    * 后端还有一层 single-flight，两层各自独立有效。 */
   if (status === 'checking') return snapshot();
 
+  if (hasDesktopCheck()) {
+    const my = ++seq;
+    setState({ status: 'checking' });
+    let result;
+    try {
+      result = await requestAppUpdateCheck();
+    } catch {
+      result = { ok: false, error: '暂时无法检查更新' };
+    }
+    if (my !== seq) return snapshot();
+    applyDesktopSnapshot(result?.snapshot || appUpdateSnapshot());
+    if (result?.ok === false && !(auto && status !== 'error')) {
+      if (!auto || status === 'checking') {
+        setState({ status: 'error', error: result.error || '暂时无法检查更新' });
+      }
+    }
+    return snapshot();
+  }
+
   const my = ++seq;
   setState({ status: 'checking' });
 
@@ -265,8 +320,26 @@ export function checkForUpdate() {
   return runCheck({ auto: false, force: true });
 }
 
-/** 启动后的低打扰自动检查。只调一次；不阻塞启动。 */
+/** 启动后的低打扰自动检查。只调一次；不阻塞启动。
+ *
+ * 桌面版由主进程调度（启动后 15 秒、之后每 6 小时），Renderer 只订阅
+ * 状态与一次性通知；网页版没有主进程，继续用这里的 8 秒本地定时器。 */
 export function initUpdateAuto({ delayMs = AUTO_DELAY_MS } = {}) {
+  if (hasDesktopCheck()) {
+    connectAppUpdate(() => {
+      applyDesktopSnapshot(appUpdateSnapshot());
+    });
+    connectAppUpdateNotices(notice => {
+      if (!notice.version) return;
+      if (notice.kind === 'ready') {
+        toast(`Pi GUI v${notice.version} 已准备好更新 —— 将在正常安全退出应用时安装。`, 'info');
+      } else {
+        toast(`Pi GUI v${notice.version} 已发布 —— 详情见「设置 → 信息」`, 'info');
+      }
+    });
+    applyDesktopSnapshot(appUpdateSnapshot());
+    return;
+  }
   if (autoTimer) return;
   autoTimer = setTimeout(() => {
     autoTimer = null;
@@ -302,7 +375,11 @@ function notifyOnce(version) {
  *  「版本」。诊断页保持原来的标题与调用方式。 */
 export function renderUpdateSection(container, fallbackVersion = '', { heading = true } = {}) {
   postponed = false;
-  connectAppUpdate(() => { if(mounted?.isConnected) paint(mounted); });
+  // 这里必须继续把主进程发现结果映射进 status/latestVersion/release，而不只是
+  // 重绘。connectAppUpdate 只有一个 refresh 槽，信息页打开后会覆盖 init 时注册的
+  // 回调；若这里只 paint，15 秒/6 小时后台检查到达时状态行会更新，但版本、说明和
+  // 操作按钮仍停在 idle。
+  connectAppUpdate(() => { applyDesktopSnapshot(appUpdateSnapshot()); });
   if (fallbackVersion) fallbackVersionText = fallbackVersion;
   if (heading) container.appendChild(node('div', 'ext-sec-head', '版本'));
   const box = node('div', 'update-sec');
@@ -328,6 +405,7 @@ function paint(box, fallbackVersion = fallbackVersionText) {
   const busy = status === 'checking'||['downloading','verifying','preparing','recovering','installing'].includes(desktop?.phase);
   const btn = button(busy ? '检查中…' : status === 'error' ? '重试' : '检查更新');
   btn.disabled = busy;
+  btn.setAttribute('data-update-action','check');
   btn.onclick = () => {
     checkForUpdate().catch(() => {
       /* runCheck 内部已经把失败收成状态了，这里只兜底不抛 */
@@ -335,18 +413,19 @@ function paint(box, fallbackVersion = fallbackVersionText) {
   };
   head.appendChild(btn);
   box.appendChild(head);
+  const hasPreference = paintUpdatePreference(box);
   if(postponed) {
     const show=button('查看更新');show.onclick=()=>{postponed=false;paint(box);};box.appendChild(show);return;
   }
   if(status !== 'available') paintAppUpdate(box);
 
   if (status === 'checking') {
-    box.appendChild(node('div', 'update-hint', '正在检查更新…'));
+    if(!hasPreference)box.appendChild(node('div', 'update-hint', '正在检查更新…'));
     return;
   }
 
   if (status === 'error') {
-    box.appendChild(node('div', 'update-hint warn', '暂时无法检查更新'));
+    if(!hasPreference)box.appendChild(node('div', 'update-hint warn', '暂时无法检查更新'));
     if (errorText) box.appendChild(node('div', 'diag-note', errorText));
     box.appendChild(
       node('div', 'update-hint', 'Pi GUI 的其它功能不受影响。网络恢复后点「重试」即可。')
@@ -355,8 +434,10 @@ function paint(box, fallbackVersion = fallbackVersionText) {
   }
 
   if (status === 'latest') {
-    box.appendChild(node('div', 'update-hint', '当前已是最新版本'));
-    box.appendChild(node('div', 'update-sub', shown ? `v${shown}` : ''));
+    if(!hasPreference){
+      box.appendChild(node('div', 'update-hint', '当前已是最新版本'));
+      box.appendChild(node('div', 'update-sub', shown ? `v${shown}` : ''));
+    }
     return;
   }
 
@@ -367,13 +448,13 @@ function paint(box, fallbackVersion = fallbackVersionText) {
     return;
   }
 
-  paintAvailable(box, shown);
+  paintAvailable(box, shown, {compact: hasPreference});
   paintAppUpdate(box,{available:true,onLater:()=>{postponed=true;paint(box);}});
   const notesElement=box.querySelector('.update-notes');if(notesElement)notesElement.scrollTop=scroll;
 }
 
-function paintAvailable(box, shownVersion) {
-  box.appendChild(node('div', 'update-hint', `发现新版本 v${latestVersion || release.tag || ''}`));
+function paintAvailable(box, shownVersion, {compact=false}={}) {
+  if(!compact)box.appendChild(node('div', 'update-hint', `发现新版本 v${latestVersion || release.tag || ''}`));
   box.appendChild(node('div', 'update-sub', `当前版本 v${shownVersion || '未知'}`));
   if (release.publishedAt) {
     box.appendChild(node('div', 'update-sub', `发布时间：${formatTime(release.publishedAt)}`));

@@ -3,6 +3,9 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {spawn,execFileSync}=require('node:child_process');
 const {createAppUpdate,detectMode}=require('./app-update.cjs');
+const {createPreferenceStore}=require('./app-update-policy.cjs');
+const {createAppUpdateManager}=require('./app-update-manager.cjs');
+const {createAutoQuitCoordinator}=require('./app-update-quit.cjs');
 const {readUpdateRecovery}=require('./app-update-recovery.cjs');
 
 function startUpdateHelper(powershell,helper,request) {
@@ -22,10 +25,12 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
   inspectDesktop=()=>({ok:true,browsers:0}),prepareDesktop=async()=>{},resumeBackend=async()=>{}}) {
   const mode=process.platform==='win32'?detectMode({packaged:app.isPackaged,exe:process.execPath}):'development';
   const directory=path.join(app.getPath('temp'),'pi-gui-updates');
+  const currentVersion=app.getVersion();
   let seq=0,runDir=null,completion=null,updater=null,confirming=false,helperDone=null,helperReady=false,recovering=false;
+  let store=null,manager=null,coordinator=null,suppressAutoInstall=false,systemSessionEnding=false;
   async function waitForHelperRelease() {
     if(!helperReady){await helperDone;return;}
-    for(;;){
+    for(;;) {
       let handle;
       try{
         const lock=path.join(directory,'install.lock'),st=fs.lstatSync(lock);
@@ -47,7 +52,7 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
       child.send({type:'app-update',id,action},error=>{if(error)finish({ok:false,code:'backend_unavailable'});});
     });
   }
-  const options={directory,version:app.getVersion(),mode,readUpdate,
+  const options={directory,version:currentVersion,mode,readUpdate,
     prepare:async()=>{
       const status=inspectDesktop();if(!status.ok)return status;
       const result=await backend('prepare');if(!result.ok)return result;
@@ -66,7 +71,12 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
         if(helperDone)await waitForHelperRelease();
         recovering=false;publish();
       }
-      if(!getServer()?.connected)await resumeBackend();
+      if(!getServer()?.connected){
+        // The old backend was shut down. This is recovery, not a user-approved
+        // update: relaunching must never re-enter the quit-install path.
+        suppressAutoInstall=true;
+        await resumeBackend();
+      }
     },
     launch:async asset=>{
       helperReady=false;
@@ -99,6 +109,7 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
       fs.writeFileSync(path.join(runDir,'armed'),'armed',{flag:'wx'});
       const r=await backend('shutdown');
       if(!r.ok)throw Error('shutdown_unconfirmed');await exited;
+      coordinator?.markQuitIssued();
       await quit();
     },
   };
@@ -107,25 +118,102 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
     try {if(!allowed(event))return {ok:false,code:'forbidden'};return await fn(...args);}
     catch{return {ok:false,error:'更新操作失败，请重试或打开 Release 页面手动安装。'};}
   };
-  const snapshot=()=>({...updater?.state()||{phase:'failed',mode,currentVersion:app.getVersion(),code:'cache',
-    error:'更新缓存暂不可用。请检查临时目录的权限或空间，然后重试下载。'},...(completion?{completion}:{}),
+  function fallbackSnapshot() {
+    return {...updater?.state()||{phase:'failed',mode,currentVersion,code:'cache',
+      error:'更新缓存暂不可用。请检查临时目录的权限或空间，然后重试下载。'},
+      mode,currentVersion,preference:'manual',storedPreference:'manual',
+      automaticSupported:false,automaticUnsupportedReason:'unavailable',
+      discovery:{status:'idle',latestVersion:'',release:null,error:'',checkedAt:''},
+      ignoredVersion:null,pausedVersion:null,ignored:false,paused:false,
+      installOnQuit:false,installOnQuitBlockedReason:'unavailable'};
+  }
+  const snapshot=()=>({...(manager?manager.snapshot():fallbackSnapshot()),
+    ...(completion?{completion}:{}),
     ...(recovering?{phase:'recovering',error:'正在撤销更新准备并恢复应用，请保持应用打开。完成后可以重试。'}:{})});
   const publish=()=>{const wc=getWindow()?.webContents;if(wc&&!wc.isDestroyed())wc.send('pi-gui:app-update-state',snapshot());};
+  const notify=notice=>{
+    const wc=getWindow()?.webContents;
+    if(wc&&!wc.isDestroyed())wc.send('pi-gui:app-update-notice',{
+      kind:notice.kind==='ready'?'ready':'available',
+      version:typeof notice.version==='string'?notice.version:'',
+    });
+  };
+  async function autoPreflight() {
+    // No user confirmation exists on this path, so an open browser is treated
+    // as potential unsaved input and blocks auto-install. Explicit install
+    // keeps its native confirmation and existing browser warning.
+    if(!getWindow())return {ok:false,code:'no-window',error:'主窗口已关闭，跳过自动安装。'};
+    const desktop=inspectDesktop();
+    if(!desktop.ok)return desktop;
+    if(desktop.browsers>0)return {ok:false,code:'busy-browser',error:'仍有打开的浏览器页面，请先关闭后退出。'};
+    return backend('inspect');
+  }
   function initialize() {
     if(updater)return updater;
     try {
-      updater=createAppUpdate(options);updater.onChange(publish);
-      updater.restore().catch(()=>{});return updater;
-    } catch {return null;}
+      updater=createAppUpdate(options);
+      updater.onChange(()=>{if(!manager)publish();});
+      try {
+        store=createPreferenceStore({file:path.join(app.getPath('userData'),'app-update-preferences.json')});
+        manager=createAppUpdateManager({updater,store,mode,currentVersion,platform:process.platform,packaged:app.isPackaged,
+          readUpdate, publish, notify, isBlocked:()=>completion?.phase==='waiting'});
+      } catch {
+        store=null;manager=null;
+      }
+      coordinator=createAutoQuitCoordinator({manager,
+        install:options=>updater.install({confirm:true},
+          options&&typeof options.authorize==='function'?{authorize:options.authorize}:undefined),
+        preflight:autoPreflight,
+        quit:()=>quit(),
+        authorize:()=>Boolean(manager&&manager.autoInstallStillAllowed()
+          &&!systemSessionEnding&&!suppressAutoInstall),
+        isRecovering:()=>recovering,
+        isSuppressed:()=>suppressAutoInstall,
+        isSystemShutdown:()=>systemSessionEnding,
+      });
+      // Startup never downloads or launches an installer. Restored packages are
+      // only re-hashed; scheduling begins after that so an offline restore does
+      // not delay the first check beyond its intended delay.
+      Promise.resolve().then(()=>updater.restore()).catch(()=>{}).finally(()=>{
+        if(manager)manager.start();
+        publish();
+      });
+      return updater;
+    } catch {
+      updater=null;manager=null;coordinator=null;return null;
+    }
   }
   ipcMain.handle('pi-gui:app-update-state',guard(()=>snapshot()));
   const pending=()=>completion?.phase==='waiting'?{ok:false,code:'update_pending',error:'更新助手仍在运行，请等待更新完成后再试。'}:null;
+  ipcMain.handle('pi-gui:app-update-check',guard(()=>{
+    if(!initialize()||!manager)return {ok:false,code:'unavailable',error:'应用内更新服务暂不可用。'};
+    return manager.check({manual:true,force:true}).then(result=>({...result,snapshot:snapshot()}));
+  }));
+  ipcMain.handle('pi-gui:app-update-preference',guard(request=>{
+    if(!request||typeof request!=='object'||Array.isArray(request)||
+      Object.keys(request).length!==1||!Object.hasOwn(request,'preference'))return {ok:false,code:'untrusted'};
+    if(!initialize()||!manager)return {ok:false,code:'unavailable',error:'更新偏好暂不可用。'};
+    const result=manager.setPreference(request.preference);
+    return {...result,snapshot:snapshot()};
+  }));
+  ipcMain.handle('pi-gui:app-update-ignore',guard(()=>{
+    if(!initialize()||!manager)return {ok:false,code:'unavailable'};
+    return {...manager.ignore(),snapshot:snapshot()};
+  }));
+  ipcMain.handle('pi-gui:app-update-unignore',guard(()=>{
+    if(!initialize()||!manager)return {ok:false,code:'unavailable'};
+    return {...manager.unignore(),snapshot:snapshot()};
+  }));
   ipcMain.handle('pi-gui:app-update-download',guard(request=>{
     if(pending())return pending();
     if(request?.confirm!==true||Object.keys(request).some(k=>k!=='confirm'))return {ok:false,code:'untrusted'};
-    const current=initialize();return current?current.download(request):{ok:false,code:'cache',error:snapshot().error};
+    const current=initialize();if(!current)return {ok:false,code:'cache',error:snapshot().error};
+    return manager?manager.download(request):current.download(request);
   }));
-  ipcMain.handle('pi-gui:app-update-cancel',guard(()=>updater?.cancel()||{ok:true}));
+  ipcMain.handle('pi-gui:app-update-cancel',guard(()=>{
+    if(!initialize())return {ok:false,code:'cache'};
+    return manager?manager.cancel():updater?.cancel()||{ok:true};
+  }));
   ipcMain.handle('pi-gui:app-update-folder',guard(async()=>{
     if(updater?.state().phase!=='ready'||mode!=='portable')return {ok:false};
     const error=await shell.openPath(directory);return {ok:!error};
@@ -134,6 +222,8 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
     if(pending())return pending();
     if(request?.confirm!==true||Object.keys(request).some(k=>k!=='confirm'))return {ok:false,error:'需要确认更新。'};
     if(confirming||updater?.state().phase!=='ready'||mode!=='installed')return {ok:false,code:'busy',error:'请先完成更新包下载和校验。'};
+    const live=manager?manager.snapshot():snapshot();
+    if(live.ignored&&live.version===updater?.state().version)return {ok:false,code:'ignored',error:'此版本已被忽略，请先取消忽略再安装。'};
     confirming=true;
     try {
     const desktop=inspectDesktop(),status=desktop.ok?await backend('inspect'):desktop;
@@ -141,19 +231,27 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
     const choice=await dialog.showMessageBox(getWindow(),{type:'question',buttons:['稍后','重启以更新'],defaultId:0,cancelId:0,
       message:'重启以安装已验证的更新？',detail:`已检查所有会话、Agent、开发进程和待处理操作。${desktop.browsers?`将关闭 ${desktop.browsers} 个浏览器页面，页面中未提交的输入可能丢失。`:''}会话、项目与设置数据会保留。确认后会再次检查；仍有活动任务时拒绝更新，请先安全停止。`});
     if(choice.response!==1)return {ok:false,code:'cancelled'};
-    return updater.install({confirm:true});
+    if(!coordinator)return {ok:false,code:'unavailable',error:'更新安装服务暂不可用。'};
+    return coordinator.runExplicitInstall();
     } finally {confirming=false;}
   }));
   // Cache recognition is offline. Startup never downloads or launches an installer.
   initialize();
-  completion=readUpdateRecovery(directory,app.getVersion(),mode);
+  completion=readUpdateRecovery(directory,currentVersion,mode);
   if(completion?.phase==='waiting') {
     const timer=setInterval(()=>{
-      const next=readUpdateRecovery(directory,app.getVersion(),mode);
+      const next=readUpdateRecovery(directory,currentVersion,mode);
       if(next&&next.phase!=='waiting'){completion=next;clearInterval(timer);publish();}
     },500);
     timer.unref();app.once('before-quit',()=>clearInterval(timer));
   }
-  return {canQuit:()=>!recovering};
+  return {
+    canQuit:()=>coordinator?coordinator.canQuit():!recovering,
+    shouldDeferClose:()=>coordinator?coordinator.shouldDeferClose():false,
+    beforeQuit:event=>coordinator?coordinator.beforeQuit(event):(()=>{if(!recovering)return false;event?.preventDefault?.();return true;})(),
+    markSystemSessionEnding:()=>{systemSessionEnding=true;suppressAutoInstall=true;},
+    snapshot,
+    manager:()=>manager,
+  };
 }
 module.exports={installAppUpdate,startUpdateHelper};

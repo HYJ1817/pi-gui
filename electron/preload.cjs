@@ -67,6 +67,12 @@ try {
     },
     appUpdate: {
       state: () => ipcRenderer.invoke('pi-gui:app-update-state'),
+      check: () => ipcRenderer.invoke('pi-gui:app-update-check'),
+      setPreference: preference => ipcRenderer.invoke('pi-gui:app-update-preference', {
+        preference: typeof preference === 'string' ? preference : '',
+      }),
+      ignore: () => ipcRenderer.invoke('pi-gui:app-update-ignore'),
+      unignore: () => ipcRenderer.invoke('pi-gui:app-update-unignore'),
       download: () => ipcRenderer.invoke('pi-gui:app-update-download', {confirm:true}),
       cancel: () => ipcRenderer.invoke('pi-gui:app-update-cancel'),
       openFolder: () => ipcRenderer.invoke('pi-gui:app-update-folder'),
@@ -76,6 +82,12 @@ try {
         const listener=(_event,state)=>callback(state);
         ipcRenderer.on('pi-gui:app-update-state',listener);
         return ()=>ipcRenderer.removeListener('pi-gui:app-update-state',listener);
+      },
+      onNotice: callback => {
+        if(typeof callback !== 'function') return () => {};
+        const listener=(_event,notice)=>callback(notice);
+        ipcRenderer.on('pi-gui:app-update-notice',listener);
+        return ()=>ipcRenderer.removeListener('pi-gui:app-update-notice',listener);
       },
     },
     ...(themeEnabled ? { theme: {

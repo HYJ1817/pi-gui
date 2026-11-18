@@ -821,7 +821,19 @@ function createWindow() {
   /* 正常关闭（点 X、WM_CLOSE）时立刻落盘，不等防抖。
      注意这只是「快一步」，不是唯一保障 —— 窗口被 destroy 时这个事件不会发，
      真正兜底的是下面 before-quit / window-all-closed 那两处。 */
-  win.on('close', event=>{if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}saveWindowState();});
+  win.on('close', event=>{
+    if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
+    /* 自动安装需要保持窗口存活到预检结束：销毁窗口后再 app.quit 会让 Windows
+       的 query-session-end / session-end 无处投递，关机期间可能误走安装。
+       先阻止这次 close，改由 app.quit 进入同一套 before-quit 协调器；协调器
+       放行后会真正退出，普通手动/无候选路径仍直接关闭。 */
+    if(appUpdate?.shouldDeferClose?.()){event.preventDefault();app.quit();return;}
+    saveWindowState();
+  });
+  /* Windows 关机/注销会直接结束会话，不会给异步预检留时间。标记之后
+     退出安装协调器只走普通退出，不尝试自动安装、也不额外阻止关机。 */
+  win.on('query-session-end',()=>{appUpdate?.markSystemSessionEnding?.();});
+  win.on('session-end',()=>{appUpdate?.markSystemSessionEnding?.();});
 
   /* 渲染进程挂了必须说出来。
    *
@@ -985,8 +997,9 @@ if (!app.requestSingleInstanceLock()) {
       // A shutdown disposes Browser gateways. Restart the whole old application
       // after the helper has cancelled, so all capabilities are rebuilt.
       resumeBackend:()=>{app.relaunch();app.quit();},
-      readUpdate:async()=>{
-        const r=await getJson(`${ORIGIN}/api/update?force=1`,10000,{[TOKEN_HEADER]:AUTH_TOKEN});
+      readUpdate:async (options={})=>{
+        const force=options&&options.force===true?'?force=1':'';
+        const r=await getJson(`${ORIGIN}/api/update${force}`,10000,{[TOKEN_HEADER]:AUTH_TOKEN});
         return r.body;
       },
       quit:async()=>{
@@ -1081,7 +1094,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', event => {
-    if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
+    if(appUpdate&&appUpdate.beforeQuit(event))return;
     if (process.platform === 'win32' && server?.connected && environmentInstallQuit !== 'done') {
       event.preventDefault();
       if (environmentInstallQuit === null) {

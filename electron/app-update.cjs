@@ -12,6 +12,7 @@ const TEXT = {
   untrusted:'已拒绝不可信的更新请求。', checksum:'安装包 SHA256 校验失败，请重新下载。', network:'下载失败，请检查网络后重试，或打开 Release 页面手动安装。',
   busy:'仍有任务、审批或后台操作未结束，请等待完成，或先在对应会话安全停止任务。',
   cache:'更新缓存不可用，请重新下载。', install:'无法准备安装，应用和用户数据已保留，请重试或手动安装。',
+  revoked:'更新资格已改变，未启动安装；已校验的包保留，可稍后重试。',
 };
 function allowedDownload(value, redirect=false) {
   try {
@@ -117,7 +118,7 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
     job=(async()=>{
       let part=null,timer=setTimeout(()=>ctl?.abort(),30*60*1000);
       try {
-        const info=await readUpdate();const a=selectAsset(info,mode==='portable');
+        const info=await readUpdate({force:true});const a=selectAsset(info,mode==='portable');
         // Semantic comparison is owned by the existing checker; it must use this app version.
         if(info.currentVersion&&info.currentVersion!==version)throw fail('invalid_asset');
         set({version:a.version,total:a.size});
@@ -146,20 +147,32 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
       } finally {clearTimeout(timer);if(part)try{fs.rmSync(part,{force:true});}catch{}job=null;ctl=null;}
     })();return job;
   }
-  async function install(request={}) {
+  async function install(request={}, options={}) {
     if(request.confirm!==true||Object.keys(request).some(k=>k!=='confirm'))return error(fail('untrusted'));
     if(mode!=='installed')return error(fail('unsupported'));
     if(installing||job||state.phase!=='ready'||!asset)return error(fail('busy'));
+    const authorize=typeof options?.authorize==='function'?options.authorize:null;
+    const stillAuthorized=()=>{
+      if(!authorize)return true;
+      try{return authorize()===true;}catch{return false;}
+    };
+    if(!stillAuthorized())return error(fail('revoked'));
     installing=true;let preparing=false;
     set({phase:'preparing',error:''});
     try {
       const p=await verify(asset);
-      const info=await readUpdate();const fresh=selectAsset(info);
+      // 预检与下载校验之间用户可能改回手动、忽略或取消。每个异步步骤后
+      // 都重新确认资格；已经 armed 的安装无法撤回，所以在 launch 前再查一次。
+      if(!stillAuthorized())throw fail('revoked');
+      const info=await readUpdate({force:true});const fresh=selectAsset(info);
       if(fresh.version!==asset.version||fresh.size!==asset.size)throw fail('invalid_asset');
       if(await trustedDigest(info,fresh,AbortSignal.timeout(15000))!==asset.sha256)throw fail('checksum');
+      if(!stillAuthorized())throw fail('revoked');
       preparing=true;
       const r=await prepare();if(!r?.ok)throw Object.assign(fail(r?.code||'busy'),{publicError:r?.error||TEXT.busy});
+      if(!stillAuthorized())throw fail('revoked');
       await verify(asset);
+      if(!stillAuthorized())throw fail('revoked');
       await launch({...asset,path:p});await quit();set({phase:'installing'});return {ok:true};
     } catch(e){
       const r=error(e,'install');if(e?.publicError)r.error=e.publicError;
