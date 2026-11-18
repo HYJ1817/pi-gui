@@ -34,7 +34,7 @@
 | Browser 与 Electron | [Browser](browser.md)、[Agent Control](agent-browser.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)、[构建](development.md) |
 | 安全、路径及权限 | [安全](security.md)、[架构](architecture.md) | [审批](approvals.md)、相关功能的写入/恢复设计；历史 P33 材料见下文 |
 | CI 与测试 | [测试政策与分层](testing.md)、[开发构建](development.md) | 当前 `package.json`、`scripts/test-group-plan.mjs`、`scripts/run-test-group.mjs` 和相关 workflow/测试；不从旧验收报告抄测试清单 |
-| 安装、更新及发布 | [发版](releasing.md)、[更新](updates.md)、[应用内更新](windows-in-app-update.md)、[首次环境安装](environment-setup.md) | [构建](development.md)、[签名](code-signing.md)、[兼容升级](upgrade-playbook.md)、[安全](security.md) |
+| 安装、更新及发布 | [发版](releasing.md)、[更新](updates.md)、[应用内更新](windows-in-app-update.md)、[首次环境安装](environment-setup.md) | [构建](development.md)、[签名](code-signing.md)、[兼容升级](upgrade-playbook.md)、[安全](security.md)、[应用更新偏好验收](in-app-update-preferences-acceptance.md) |
 | Pi、供应商与扩展兼容 | [Pi 兼容](pi-compatibility.md)、[兼容升级](upgrade-playbook.md) | [供应商认证](provider-auth.md)、[MCP](mcp.md)、[扩展](extensions.md)、[项目配置](project-config.md) |
 
 ## 当前设计、历史方案和验收记录
@@ -43,6 +43,7 @@
 - **设计系统建立时的现状审查**保留当时的 Token、组件实现与历史发现，便于追溯规范来源。[设计系统现状审查](ui/design-system-audit.md)
 - **当前设计入口**是上表中的功能文档。文档若包含历史段落，先读其当前实现说明，再核对正在使用的代码与边界。
 - **历史方案**记录当时的设想，不代表已实现或已批准。例如 [P32 设计探索](p32-design-spike.md)、[T2-B 计划](T2-B-plan.md)、[Windows 更新计划](windows-in-app-update-plan.md)。
+- **更新偏好与安全退出安装**的当前实现、测试数字、隔离 Windows 安装/回滚证据和未验证边界见[应用更新偏好验收](in-app-update-preferences-acceptance.md)；正式发版仍只依 [releasing.md](releasing.md)。
 - **验收记录**绑定当时的提交、环境和验证范围。例如 [T2-A](T2-A-acceptance.md)、[T2-B](T2-B-acceptance.md)、[T3-A](T3-A-acceptance.md)、[终端 P2](terminal-p2-acceptance.md)、[终端 P3-A](terminal-p3-keep-alive-acceptance.md)、[终端 P3-B](terminal-p3b-termination-acceptance.md) 和 [CI 优化验收](ci-optimization-acceptance.md)。其中的数字和通过结论不能直接用于新的行为提交。
 - 终端 P3-B 的 [Windows 进程终止设计](terminal-p3-process-termination-design.md) 记录现状、威胁模型、候选方案与验证计划；身份门控 + 有界重试已在该阶段实现并单独验收，仍不是 PID 复用误杀的完整修复，可选的 P3-C Job 模式见 [Windows 终端 Job Object](terminal-job-object.md)。
 - **治理阶段记录**见 [G0-A](G0-A-acceptance.md)、[G0-B](G0-B-acceptance.md)、[G1](G1-acceptance.md)、[G2](G2-acceptance.md) 与 [G3 本地交付/待 PR 验收](G3-acceptance.md)；G2 [性能基线](G2-ci-baseline.md) 单列历史样本，G3 报告另列调度、文档分类与未启用的保护草案，当前规范以上方权威入口为准，阶段报告保留各自证据范围。

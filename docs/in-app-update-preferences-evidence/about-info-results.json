@@ -1,0 +1,196 @@
+{
+  "checks": [
+    {
+      "name": "real Electron renderer",
+      "pass": true
+    },
+    {
+      "name": "update/pi modules loaded with a deterministic fetch fixture: ok",
+      "pass": true
+    },
+    {
+      "name": "startup discovery reaches available with release data: {\"status\":\"available\",\"currentVersion\":\"0.15.0\",\"latestVersion\":\"0.16.0\",\"release\":{\"tag\":\"v0.16.0\",\"notes\":\"### 改进\\n- 信息页统一版本、更新与重启入口。\",\"url\":\"https://github.com/HYJ1817/pi-gui/releases/tag/v0.16.0\",\"assets\":[{\"kind\":\"installer\",\"name\":\"Pi-GUI-Setup-0.16.0.exe\",\"url\":\"https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/Pi-GUI-Setup-0.16.0.exe\"},{\"kind\":\"portable\",\"name\":\"Pi-GUI-0.16.0-portable.zip\",\"url\":\"https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/Pi-GUI-0.16.0-portable.zip\"},{\"kind\":\"checksums\",\"name\":\"SHA256SUMS.txt\",\"url\":\"https://github.com/HYJ1817/pi-gui/releases/download/v0.16.0/SHA256SUMS.txt\"}]},\"error\":\"\"}",
+      "pass": true
+    },
+    {
+      "name": "old update/restart entries are gone, info entry exists",
+      "pass": true
+    },
+    {
+      "name": "info page opens from settings",
+      "pass": true
+    },
+    {
+      "name": "hero shows the authoritative app version",
+      "pass": true
+    },
+    {
+      "name": "hero shows Pi version, platform, compatibility and runtime",
+      "pass": true
+    },
+    {
+      "name": "hero content is horizontally centered",
+      "pass": true
+    },
+    {
+      "name": "no unimplemented developer mode row",
+      "pass": true
+    },
+    {
+      "name": "two independent update cards",
+      "pass": true
+    },
+    {
+      "name": "update preference control is present and automatic is selectable on installed builds",
+      "pass": true
+    },
+    {
+      "name": "automatic preference can be clicked",
+      "pass": true
+    },
+    {
+      "name": "preference reaches the trusted desktop capability once",
+      "pass": true
+    },
+    {
+      "name": "preference card carries a textual update status",
+      "pass": true
+    },
+    {
+      "name": "Pi runtime card checks the independent Pi endpoint",
+      "pass": true
+    },
+    {
+      "name": "app card shows the running app version",
+      "pass": true
+    },
+    {
+      "name": "restart row uses the shared wording",
+      "pass": true
+    },
+    {
+      "name": "log, report, diagnostics and feedback entries exist",
+      "pass": true
+    },
+    {
+      "name": "update cards use the shared card surface",
+      "pass": true
+    },
+    {
+      "name": "light theme repaints the info page",
+      "pass": true
+    },
+    {
+      "name": "app update check is clickable",
+      "pass": true
+    },
+    {
+      "name": "app check shows the new version and one download action",
+      "pass": true
+    },
+    {
+      "name": "app download button is present",
+      "pass": true
+    },
+    {
+      "name": "download reaches the desktop capability once",
+      "pass": true
+    },
+    {
+      "name": "download busy state shows progress and no duplicate primary action",
+      "pass": true
+    },
+    {
+      "name": "download failure keeps a readable retry",
+      "pass": true
+    },
+    {
+      "name": "ready package exposes restart install",
+      "pass": true
+    },
+    {
+      "name": "Pi update opens its own confirmation",
+      "pass": true
+    },
+    {
+      "name": "Pi confirmation states current/target and the unverified warning",
+      "pass": true
+    },
+    {
+      "name": "opening the Pi confirmation sends no update request",
+      "pass": true
+    },
+    {
+      "name": "cancelling the Pi update sends no request",
+      "pass": true
+    },
+    {
+      "name": "confirmed Pi update sends exactly one POST",
+      "pass": true
+    },
+    {
+      "name": "rejected Pi update keeps a readable failure and retry path",
+      "pass": true
+    },
+    {
+      "name": "restart uses the existing confirmation",
+      "pass": true
+    },
+    {
+      "name": "cancelled restart sends no /api/restart",
+      "pass": true
+    },
+    {
+      "name": "confirmed restart sends exactly one /api/restart",
+      "pass": true
+    },
+    {
+      "name": "restart button is usable again after the action",
+      "pass": true
+    },
+    {
+      "name": "open logs lands on the existing overview tab",
+      "pass": true
+    },
+    {
+      "name": "export report lands on the existing export tab",
+      "pass": true
+    },
+    {
+      "name": "diagnostics quick entry replaces the info page",
+      "pass": true
+    },
+    {
+      "name": "reopening info preserves the ready update state in one container",
+      "pass": true
+    },
+    {
+      "name": "GitHub feedback uses the bridge with the exact issues URL",
+      "pass": true
+    },
+    {
+      "name": "feedback does not navigate the app window",
+      "pass": true
+    },
+    {
+      "name": "700x600 scrolls without horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "700x600 can scroll to the last row with bottom spacing",
+      "pass": true
+    },
+    {
+      "name": "font scaling keeps the page contained",
+      "pass": true
+    },
+    {
+      "name": "renderer has no console errors",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "external": [
+    "https://github.com/HYJ1817/pi-gui/issues"
+  ]
+}
