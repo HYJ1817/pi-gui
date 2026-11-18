@@ -203,7 +203,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   });
   await check('Settings leaf Escape returns to settings without losing chat draft', () => {
     $('input').value = 'page escape draft'; $('navGlobalMore').click(); $('navAppearance').click();
-    d.querySelector('.settings-detail-card select').focus();
+    d.querySelector('.settings-detail-card .settings-theme-trigger').focus();
     d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     assert.ok(d.querySelector('#workSurface .settings-section'));
     assert.equal(d.activeElement, $('navAppearance'));

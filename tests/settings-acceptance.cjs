@@ -291,12 +291,12 @@ const pub = path.join(root, 'public');
     trigger.remove();
   });
 
-  await checkAsync('real openAppearance displays status and reflects save error states', async () => {
+  await checkAsync('real openAppearance renders the custom theme picker and saves a theme', async () => {
     window.openAppearance({
       present: (build) => {
         const card = window.document.createElement('div');
-        build(card, () => {});
         window.document.body.appendChild(card);
+        build(card, () => {});
       }
     });
 
@@ -304,17 +304,28 @@ const pub = path.join(root, 'public');
     assert.ok(status, 'appearance-status element must be rendered');
     assert.equal(status.textContent, '');
     assert.doesNotMatch(status.closest('.appearance-card').textContent, /自定义界面主题与字体排版偏好/);
-    assert.ok(!status.classList.contains('is-error'), 'Initial status must not have error class');
 
-    // Trigger save failure by passing invalid theme mode to select onchange
-    const select = window.document.querySelector('.appearance-theme-row select');
-    assert.ok(select, 'Theme select must be rendered');
+    const trigger = window.document.querySelector('.appearance-theme-row .settings-theme-trigger');
+    assert.ok(trigger, 'Theme picker trigger must be rendered');
+    assert.equal(window.document.querySelector('.appearance-theme-row select'), null, 'native select must be gone');
+    assert.equal(window.document.activeElement, trigger, 'appearance starts on the theme trigger');
 
-    select.value = 'invalid-mode';
-    await select.onchange();
+    trigger.getBoundingClientRect = () => ({ x: 100, y: 100, top: 100, bottom: 132, left: 100, right: 320, width: 220, height: 32 });
+    trigger.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 30));
+    const menu = window.document.querySelector('.pi-anchored-menu');
+    assert.ok(menu, 'theme menu must be portaled outside the settings card');
+    assert.equal(menu.parentElement, window.document.body);
 
-    assert.ok(status.classList.contains('is-error'), 'Status must have .is-error class on failure');
-    assert.equal(status.textContent, '主题未能保存，请重试。', 'Status text must explain save failure');
+    const option = [...menu.querySelectorAll('[role="option"]')]
+      .find((node) => node.textContent.trim() === '浅色');
+    option.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 30));
+
+    assert.equal(window.document.documentElement.dataset.themePreference, 'light');
+    assert.equal(trigger.textContent.trim(), '浅色');
+    assert.equal(status.textContent, '主题偏好已保存。');
+    assert.ok(!status.classList.contains('is-error'));
   });
 
   // Verify CSS does not suppress appearance status
