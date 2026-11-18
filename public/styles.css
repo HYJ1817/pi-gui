@@ -3768,6 +3768,14 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .settings-detail > .settings-detail-card.about-settings-card {
   max-width: 760px;
 }
+/* 卡片被 flex 压缩、内容 overflow:visible 时，卡片自身的 padding-bottom 不计入
+ * 滚动范围；滚到底时最后一张卡会贴着窗口底。用真正占据内容高度的伪元素补出
+ * 呼吸空间（实际约 52px：24px + 原本被最后子元素吞掉的下边距）。 */
+.about-settings-card::after {
+  content: '';
+  display: block;
+  height: 24px;
+}
 .about-hero {
   display: flex;
   flex-direction: column;
