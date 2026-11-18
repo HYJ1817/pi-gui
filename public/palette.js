@@ -14,6 +14,7 @@
 import { el } from './state.js';
 import { toast } from './ui/toast.js';
 import { allCommands, filterCommands } from './palette-model.js';
+import { shortcutState } from './shortcuts.js';
 
 function node(tag, cls, text) {
   const n = document.createElement(tag);
@@ -107,7 +108,11 @@ export function openPalette(ctx = {}) {
       row.setAttribute('aria-selected', String(i === openState.index));
       row.dataset.commandId = cmd.id;
       row.append(node('span', 'palette-title', cmd.title));
-      if (cmd.hint) row.append(node('span', 'palette-hint', cmd.hint));
+      /* 命令的快捷键提示也从注册表读当前生效值：设置页改键、禁用之后，
+       * 面板里不会继续显示旧的默认键。显式 hint（例如会话归档）优先。 */
+      const shortcut = cmd.shortcutId ? shortcutState(cmd.shortcutId) : null;
+      const hint = cmd.hint || (shortcut ? shortcut.display : '');
+      if (hint) row.append(node('span', 'palette-hint', hint));
       row.onclick = (event) => { event?.stopPropagation(); run(cmd); };
       list.appendChild(row);
     });

@@ -11,8 +11,9 @@ import { createIcon } from './icons.js';
  *     { source: btnTree, label: '分支树', more: true },
  *   ])
  * `label` 省略时退回按钮的 aria-label / title；`shortcutId` 从 shortcuts.js
- * 的唯一注册表读取组合键，提示不会和真实按键漂移。 */
-import { formatCombo, shortcutFor } from '../shortcuts.js';
+ * 的唯一注册表读取**当前生效**的组合键，提示不会和真实按键漂移。
+ * 设置页改了键位后订阅回调会就地更新，不需要重挂载。 */
+import { shortcutFor, subscribeShortcuts } from '../shortcuts.js';
 
 let moreSerial = 0;
 
@@ -73,9 +74,12 @@ export function mountWorkPanelLauncher(host, tools, options = {}) {
     const label = span('work-panel-launcher-label');
     const shortcut = document.createElement('kbd');
     shortcut.className = 'work-panel-launcher-shortcut';
-    const registered = entry.shortcutId ? shortcutFor(entry.shortcutId) : null;
-    if (registered) shortcut.textContent = formatCombo(registered.combo);
-    else shortcut.hidden = true;
+    const syncShortcut = () => {
+      const registered = entry.shortcutId ? shortcutFor(entry.shortcutId) : null;
+      shortcut.hidden = !registered;
+      if (registered) shortcut.textContent = registered.display;
+    };
+    syncShortcut();
 
     const sync = () => {
       row.hidden = entry.source.hidden;
@@ -92,7 +96,7 @@ export function mountWorkPanelLauncher(host, tools, options = {}) {
       entry.source.click();
     };
     parent.append(row);
-    const binding = { entry, row, sync };
+    const binding = { entry, row, sync, syncShortcut };
     bindings.push(binding);
     sync();
   };
@@ -140,6 +144,9 @@ export function mountWorkPanelLauncher(host, tools, options = {}) {
   for (const { entry } of bindings) {
     observer.observe(entry.source, { attributes: true, attributeFilter: ['hidden', 'disabled', 'aria-label'] });
   }
+  const unsubscribeShortcuts = subscribeShortcuts(() => {
+    for (const binding of bindings) binding.syncShortcut();
+  });
   syncMore();
 
   root.append(title, grid);
@@ -148,6 +155,7 @@ export function mountWorkPanelLauncher(host, tools, options = {}) {
 
   return () => {
     observer.disconnect();
+    unsubscribeShortcuts();
     for (const { row } of bindings) {
       row.disabled = true;
       row.onclick = null;

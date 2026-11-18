@@ -20,6 +20,9 @@ export function normalizeCommand(item) {
     group: item.group || '通用',
     keywords: typeof item.keywords === 'string' ? item.keywords : '',
     hint: typeof item.hint === 'string' ? item.hint : '',
+    // 有 shortcutId 时提示由快捷键注册表实时解析（禁用显示「未绑定」），
+    // 不在注册表里再存一份静态文案。
+    shortcutId: typeof item.shortcutId === 'string' ? item.shortcutId : '',
     when: typeof item.when === 'function' ? item.when : null,
     run: item.run,
   };
