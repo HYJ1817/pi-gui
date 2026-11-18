@@ -29,6 +29,9 @@ const BROWSER_CANDIDATES = [
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/microsoft-edge',
 ];
 const CHROME = process.env.UI2C_CHROME || process.env.CHROME_PATH || BROWSER_CANDIDATES.find(file => fs.existsSync(file));
+/* CI runner 上 Chrome 启动可能超过 20 秒；失败路径会自行收掉子进程。
+ * P4D_CHROME_WAIT_MS 只用于验证超时清理，不改变正常路径。 */
+const CHROME_WAIT_MS = Math.max(200, Number(process.env.P4D_CHROME_WAIT_MS) || 60000);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function startHarness() {
@@ -37,7 +40,10 @@ async function startHarness() {
   });
   const url = await new Promise((resolve, reject) => {
     let buffer = '';
-    const timer = setTimeout(() => reject(new Error('夹具启动超时')), 15000);
+    const timer = setTimeout(() => {
+      try { harness.kill(); } catch { /* already gone */ }
+      reject(new Error('夹具启动超时'));
+    }, 15000);
     harness.stdout.on('data', chunk => {
       buffer += String(chunk);
       const match = buffer.match(/http:\/\/127\.0\.0\.1:(\d+)\//);
@@ -57,20 +63,35 @@ async function launchChrome() {
     '--hide-scrollbars', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
     `--user-data-dir=${profile}`, '--window-size=1320,820', 'about:blank',
   ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  let stderr = '';
+  let earlyExit = null;
+  chrome.stdout.resume();
+  chrome.stderr.on('data', chunk => { stderr = (stderr + String(chunk)).slice(-2000); });
+  chrome.once('exit', (code, signal) => { earlyExit = { code, signal }; });
+  chrome.once('error', error => { earlyExit = { error: error.code || error.message }; });
   const portFile = path.join(profile, 'DevToolsActivePort');
-  for (let attempt = 0; attempt < 100; attempt++) {
-    let port = 0;
-    try { port = Number(fs.readFileSync(portFile, 'utf8').split(/\r?\n/, 1)[0]); } catch { /* waiting */ }
-    if (port) {
-      try {
-        const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-        const page = targets.find(target => target.type === 'page');
-        if (page) return { chrome, page };
-      } catch { /* waiting */ }
+  try {
+    for (let attempt = 0; attempt < Math.ceil(CHROME_WAIT_MS / 200); attempt++) {
+      if (earlyExit) throw new Error(`Chrome 提前退出：${JSON.stringify(earlyExit)}${stderr ? `\n${stderr}` : ''}`);
+      let port = 0;
+      try { port = Number(fs.readFileSync(portFile, 'utf8').split(/\r?\n/, 1)[0]); } catch { /* waiting */ }
+      if (port) {
+        try {
+          const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+          const page = targets.find(target => target.type === 'page');
+          if (page) return { chrome, page };
+        } catch { /* waiting */ }
+      }
+      await sleep(200);
     }
-    await sleep(200);
+    throw new Error(`无法连接 Chrome DevTools（${CHROME_WAIT_MS}ms）${stderr ? `\n${stderr}` : ''}`);
+  } catch (error) {
+    /* 失败路径必须自己收掉 Chrome：调用方还没有拿到 chrome 句柄，
+     * 否则子进程的 stdio 管道会让测试进程一直不退出。 */
+    try { chrome.kill(); } catch { /* already gone */ }
+    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch { /* locked */ }
+    throw error;
   }
-  throw new Error('无法连接 Chrome DevTools');
 }
 
 function connect(page) {
