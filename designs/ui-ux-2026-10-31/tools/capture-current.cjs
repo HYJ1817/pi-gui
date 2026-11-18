@@ -5,7 +5,11 @@ const ROOT=path.resolve(__dirname,'../../..'),OUT=path.resolve(__dirname,'../evi
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 if(!process.versions.electron) parent().catch(e=>{console.error(e);process.exitCode=1});else desktop();
 async function parent(){
- const world=fs.mkdtempSync(path.join(os.tmpdir(),'pi-design-current-')); fs.mkdirSync(OUT,{recursive:true});let harness,proxy;
+ const world=fs.mkdtempSync(path.join(os.tmpdir(),'pi-design-current-')); fs.mkdirSync(OUT,{recursive:true});
+ /* 同 verify-production-ui：user-data 目录不存在时 Chromium 进程锁创建失败，
+    Electron 静默退出 0，截图一张也不会产生。 */
+ fs.mkdirSync(path.join(world,'user-data'),{recursive:true});
+ let harness,proxy;
  try{
  harness=spawn(process.execPath,[path.join(ROOT,'tests/visual-harness.cjs')],{cwd:world,env:{...process.env,HARNESS_PORT:'0',VISUAL_PUBLIC_ROOT:path.join(ROOT,'public'),VISUAL_UPLOAD_DIR:path.join(world,'uploads')},stdio:['ignore','pipe','pipe'],windowsHide:true});
  harness.stderr.on('data',b=>process.stderr.write(b));
@@ -32,7 +36,7 @@ function desktop(){
  if(process.env.DESIGN_CAPTURE_SUPPLEMENT==='1'){
   await read(`VF.M.clearThread();fetch('/api/__conversation?what=fixture')`);await sleep(800);await shot('dark-1440-full-fixture');
   await click('navChanges');await sleep(300);await read(`document.querySelector('.chg-main')?.click()`);await sleep(300);await shot('dark-1440-diff');await key('Escape');await read(`document.querySelector('#rightPaneClose,#browserClose')?.click()`);
-  for(const id of ['navAppUpdates','navMcp','navProviderAuth','navCapabilities','navAppearance']){await click(id);await sleep(350);await shot('dark-1440-'+id);await key('Escape')}
+  for(const id of ['navInfo','navMcp','navProviderAuth','navAppearance']){await click(id);await sleep(350);await shot('dark-1440-'+id);await key('Escape')}
   await click('navHome');await read(`document.querySelector('.pj-sess')?.click()`);await sleep(500);await shot('dark-1440-session-switch');return;
  }
  await read(`(()=>{const text='已核对现有的会话恢复路径。\\n\\n### 建议\\n\\n保持列表顺序稳定，按会话保存草稿与滚动位置。右侧面板只改变布局，不重建对话。\\n\\n| 场景 | 预期 |\\n|---|---|\\n| 切换会话 | 恢复草稿 |\\n| 展开面板 | 保留阅读位置 |\\n\\n~~~js\\nconst session = await restoreSession(id);\\nreturn session.draft;\\n~~~';VF.M.onMessageStart({message:{role:'user',content:'请核对会话恢复与右侧面板的交互。'}});VF.M.onMessageStart({message:{role:'assistant'}});VF.M.onMessageUpdate({assistantMessageEvent:{type:'text_delta',contentIndex:0,delta:text}});VF.M.onMessageEnd({message:{role:'assistant',content:[{type:'text',text}]}});})()`);await shot('dark-1440-chat');
@@ -41,7 +45,7 @@ function desktop(){
  for(const id of ['navChanges','btnBrowser','btnSpecs','btnCollabDocs']){await click(id);await sleep(400);await shot('dark-1440-'+id);await read(`document.querySelector('#rightPaneClose,#browserClose')?.click()`)}
  for(const id of ['navPlanner','navExtensions']){await click(id);await sleep(550);await shot('dark-1440-'+id)}await click('navHome');
  await click('navGlobalMore');await shot('dark-1440-settings-menu');await key('Escape');
- for(const id of ['navProviders','navDiagnostics','navLogs','navAppUpdate','navPiUpdate']){const exists=await read(`Boolean(document.getElementById(${JSON.stringify(id)}))`);if(!exists){observations.push({unavailable:id});continue;}await click(id);await sleep(350);await shot('dark-1440-'+id);await key('Escape')}
+ for(const id of ['navProviders','navDiagnostics','navLogs','navInfo']){const exists=await read(`Boolean(document.getElementById(${JSON.stringify(id)}))`);if(!exists){observations.push({unavailable:id});continue;}await click(id);await sleep(350);await shot('dark-1440-'+id);await key('Escape')}
  for(const theme of ['light','dark'])for(const [width,height] of [[1280,800],[1440,900],[1920,1080]]){win.setContentSize(width,height);await read(`(async()=>{await (await import('/theme.js')).setThemePreference(${JSON.stringify(theme)})})()`);await shot(theme+'-'+width+'-overview')}
  }
  const timer=setTimeout(()=>{console.error('capture timeout');app.exit(1)},120000);

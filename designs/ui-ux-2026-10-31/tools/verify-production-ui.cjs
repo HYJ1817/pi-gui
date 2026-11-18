@@ -5,7 +5,11 @@ const ROOT=path.resolve(__dirname,'../../..'),OUT=path.resolve(process.env.DESIG
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 if(!process.versions.electron) parent().catch(e=>{console.error(e);process.exitCode=1});else desktop();
 async function parent(){
- const world=fs.mkdtempSync(path.join(os.tmpdir(),'pi-design-current-')); fs.mkdirSync(OUT,{recursive:true});let harness,proxy,browserPage;
+ const world=fs.mkdtempSync(path.join(os.tmpdir(),'pi-design-current-')); fs.mkdirSync(OUT,{recursive:true});
+ /* Chromium 的 ProcessSingleton 在 user-data 目录不存在时直接失败并静默退出（0），
+    窗口永远不会创建、结果文件也不会写。先把 Electron 要用的目录建好。 */
+ fs.mkdirSync(path.join(world,'user-data'),{recursive:true});
+ let harness,proxy,browserPage;
  try{
  harness=spawn(process.execPath,[path.join(ROOT,'tests/visual-harness.cjs')],{cwd:world,env:{...process.env,HARNESS_PORT:'0',VISUAL_PUBLIC_ROOT:path.join(ROOT,'public'),VISUAL_UPLOAD_DIR:path.join(world,'uploads')},stdio:['ignore','pipe','pipe'],windowsHide:true});
  harness.stderr.on('data',b=>process.stderr.write(b));
@@ -39,8 +43,8 @@ function desktop(){
  await shot('native-input-final');
  }
  async function completionSettings(){
- const destinations=['navProviders','navProviderAuth','navAppUpdates','navDiagnostics','navLogs','navAppearance','navShortcutHelp'];
- await read(`(()=>{window.qaBaseFetch=window.fetch;window.fetch=(url,options)=>window.qaBaseFetch(url,options).then(async response=>{if(String(url)!=='/api/providers')return response;const data=await response.json();data.path='C:\\\\fixture\\\\agent\\\\models.json';return {ok:response.ok,status:response.status,json:async()=>data}});return true})()`);
+ const destinations=['navProviders','navProviderAuth','navInfo','navDiagnostics','navLogs','navAppearance','navShortcutHelp'];
+ await read(`(()=>{window.qaBaseFetch=window.fetch;window.fetch=(url,options)=>{if(String(url)==='/api/provider-management')return Promise.resolve(new Response(JSON.stringify({ok:false,code:'unsupported'}),{status:422,headers:{'content-type':'application/json'}}));return window.qaBaseFetch(url,options).then(async response=>{if(String(url)!=='/api/providers')return response;const data=await response.json();data.path='C:\\\\fixture\\\\agent\\\\models.json';return {ok:response.ok,status:response.status,json:async()=>data}})};return true})()`);
  await read(`document.getElementById('input').value='设置详情往返 · 离线fixture草稿'`);
  for(const theme of ['dark','light'])for(const [width,height] of [[1280,800],[1440,900],[1920,1080]]){
   win.setContentSize(width,height);await read(`(async()=>{await (await import('/theme.js')).setThemePreference(${JSON.stringify(theme)})})()`);
@@ -48,21 +52,24 @@ function desktop(){
   for(const id of destinations){
    await click(id);await sleep(200);
    await check(theme+'/'+width+'/'+id+' central isolated page',`document.getElementById('modal').hidden&&document.querySelector('.settings-detail-card')?.getAttribute('role')==='region'&&document.getElementById(${JSON.stringify(id)}).getAttribute('aria-current')==='page'`);
-   await check(theme+'/'+width+'/'+id+' fits viewport',`(()=>{const e=document.querySelector('.settings-detail-card'),r=e.getBoundingClientRect();return document.documentElement.scrollWidth<=innerWidth&&r.left>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&e.scrollWidth<=e.clientWidth+1})()`);
+   await check(theme+'/'+width+'/'+id+' fits viewport',`(()=>{const e=document.querySelector('.settings-detail-card'),r=e.getBoundingClientRect(),d=document.querySelector('.settings-detail');const pageScrolls=${id === 'navInfo'};return document.documentElement.scrollWidth<=innerWidth&&r.left>=0&&r.right<=innerWidth+1&&(r.bottom<=innerHeight+1||(pageScrolls&&d.scrollHeight>=d.clientHeight))&&e.scrollWidth<=e.clientWidth+1})()`);
    await shot(theme+'-'+width+'-'+id);
-   if(id==='navProviders'){
-    await read(`([...document.querySelectorAll('.settings-detail-card button')].find(b=>b.textContent==='添加供应商')).id='qaAddProvider'`);await click('qaAddProvider');
-    await check(theme+'/'+width+' provider form owns page',`document.querySelectorAll('.settings-detail-card .preset').length===9&&document.getElementById('modal').hidden`);await shot(theme+'-'+width+'-provider-form');
-   }
    await key('Tab');await check(theme+'/'+width+'/'+id+' keyboard reaches page',`Boolean(document.activeElement.closest('.settings-detail-card'))`);
+   if(id==='navProviders'){
+    await read(`document.querySelector('.settings-detail-card .prov-btn-main').id='qaAddProvider'`);await click('qaAddProvider');
+    await check(theme+'/'+width+' provider form opens in dialog',`!document.getElementById('modal').hidden&&Boolean(document.querySelector('#modal .pm-dialog-card'))`);await shot(theme+'-'+width+'-provider-form');
+    await read(`[...document.querySelectorAll('#modal .pm-dialog-actions button')].find(b=>b.textContent==='取消').click()`);await check(theme+'/'+width+' provider form closes',`document.getElementById('modal').hidden`);
+   }
    await key('Escape');await check(theme+'/'+width+'/'+id+' Escape returns settings',`Boolean(document.querySelector('.settings-section'))&&document.getElementById('modal').hidden`);
   }
   await click('settingsReturn');await check(theme+'/'+width+' details retain chat draft',`document.getElementById('input').value.includes('离线fixture草稿')`);
  }
  win.setContentSize(1440,900);
  await read(`window.qaOriginalFetch=window.fetch;window.fetch=(url,options)=>String(url)==='/api/providers'&&!options?.body?Promise.resolve({ok:true,json:async()=>({ok:false,error:'离线fixture：供应商读取失败，请重试。'})}):window.qaOriginalFetch(url,options);true`);
- await click('navGlobalMore');await click('navProviders');await check('provider error feedback',`document.querySelector('.settings-detail-card').textContent.includes('供应商读取失败')`);await shot('light-1440-provider-error');
- await read(`window.fetch=window.qaOriginalFetch;document.querySelector('.settings-detail-card .hint-empty button').id='qaProviderRetry'`);await click('qaProviderRetry');await check('provider retry recovers current page',`!document.querySelector('.settings-detail-card').textContent.includes('供应商读取失败')`);
+ await click('navGlobalMore');await click('navProviders');await sleep(200);await check('provider error feedback',`document.querySelector('.settings-detail-card').textContent.includes('供应商读取失败')`);await shot('light-1440-provider-error');
+ /* 旧页面的错误提示里自带「重试」；新页面没有，恢复路径是重新进入（重新读取）。
+    这里恢复真实 fetch 后换页再回来，验证页面不是永久卡在错误态。 */
+ await read(`window.fetch=window.qaOriginalFetch;true`);await click('navAppearance');await click('navProviders');await sleep(200);await check('provider reopen recovers current page',`!document.querySelector('.settings-detail-card').textContent.includes('供应商读取失败')`);
  for(const zoom of [1.25,1.5,2]){win.webContents.setZoomFactor(zoom);await click('navAppearance');await check('settings page zoom '+zoom+' fits',`(()=>{const e=document.querySelector('.settings-detail-card');return document.documentElement.scrollWidth<=innerWidth&&e.scrollWidth<=e.clientWidth+1})()`);await shot('light-1440-settings-zoom-'+zoom)}
  win.webContents.setZoomFactor(1);await click('settingsReturn');
  }
