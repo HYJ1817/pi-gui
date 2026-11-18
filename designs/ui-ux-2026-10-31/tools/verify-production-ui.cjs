@@ -52,7 +52,7 @@ function desktop(){
   for(const id of destinations){
    await click(id);await sleep(200);
    await check(theme+'/'+width+'/'+id+' central isolated page',`document.getElementById('modal').hidden&&document.querySelector('.settings-detail-card')?.getAttribute('role')==='region'&&document.getElementById(${JSON.stringify(id)}).getAttribute('aria-current')==='page'`);
-   await check(theme+'/'+width+'/'+id+' fits viewport',`(()=>{const e=document.querySelector('.settings-detail-card'),r=e.getBoundingClientRect(),d=document.querySelector('.settings-detail');const pageScrolls=${id === 'navInfo'};return document.documentElement.scrollWidth<=innerWidth&&r.left>=0&&r.right<=innerWidth+1&&(r.bottom<=innerHeight+1||(pageScrolls&&d.scrollHeight>=d.clientHeight))&&e.scrollWidth<=e.clientWidth+1})()`);
+   await check(theme+'/'+width+'/'+id+' fits viewport',`(()=>{const e=document.querySelector('.settings-detail-card'),r=e.getBoundingClientRect(),d=document.querySelector('.settings-detail'),pageScrolls=${id === 'navInfo'},db=d.getBoundingClientRect().bottom<=innerHeight+1;let reach=true;if(pageScrolls){d.scrollTop=d.scrollHeight;const last=document.getElementById('aboutFeedbackRow');reach=Boolean(last)&&last.getBoundingClientRect().bottom<=innerHeight+1;}const ok=document.documentElement.scrollWidth<=innerWidth&&r.left>=0&&r.right<=innerWidth+1&&db&&(r.bottom<=innerHeight+1||pageScrolls)&&reach&&e.scrollWidth<=e.clientWidth+1;if(pageScrolls)d.scrollTop=0;return ok})()`);
    await shot(theme+'-'+width+'-'+id);
    await key('Tab');await check(theme+'/'+width+'/'+id+' keyboard reaches page',`Boolean(document.activeElement.closest('.settings-detail-card'))`);
    if(id==='navProviders'){

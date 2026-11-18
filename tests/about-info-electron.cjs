@@ -154,6 +154,9 @@ async function main() {
     await read(`[...document.querySelectorAll('#toasts .ui4-feedback-toast-close')].forEach(b=>b.click())`); await sleep(300);
     win.setContentSize(700, 600); await sleep(400);
     check(await read(`(()=>{const d=document.querySelector('.settings-detail');const h=document.querySelector('.about-hero').getBoundingClientRect();return document.documentElement.scrollWidth<=innerWidth+1&&d.scrollWidth<=d.clientWidth+1&&h.right<=innerWidth+1&&d.scrollHeight>=d.clientHeight})()`), '700x600 scrolls without horizontal overflow');
+    /* 容器本身必须完整落在视口内：.stage 顶部有 46px 标题栏，滚动容器若被
+     * min-height:100% 撑高，最后一行会永远停在裁切区外。 */
+    check(await read(`(()=>{const d=document.querySelector('.settings-detail');const last=document.getElementById('aboutFeedbackRow');d.scrollTop=d.scrollHeight;const ok=d.getBoundingClientRect().bottom<=innerHeight+1&&last.getBoundingClientRect().bottom<=innerHeight+1;d.scrollTop=0;return ok})()`), '700x600 can scroll to the last feedback row');
     await shot('about-dark-700x600');
     await read(`document.documentElement.dataset.theme='light';document.documentElement.dataset.themePreference='light'`); await sleep(250);
     await shot('about-light-700x600');
