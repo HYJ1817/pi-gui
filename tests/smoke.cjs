@@ -1362,6 +1362,10 @@ staticCheck();
   check('供应商入口不在顶部导航里', () => window.document.querySelector('.rail-nav #navProviders') === null);
   check('供应商入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navProviders')));
   check('诊断入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navDiagnostics')));
+  check('信息入口统一承载更新与重启，旧入口已移除', () =>
+    Boolean(window.document.querySelector('#globalMoreMenu #navInfo')) &&
+    !window.document.querySelector('#globalMoreMenu #navAppUpdates') &&
+    !window.document.querySelector('#globalMoreMenu #navRestartPi'));
   check('Global Rail 入口都是可聚焦的真按钮且有名称', () => [...window.document.querySelectorAll('#globalRail .rail-icon')].every((b) => b.tagName === 'BUTTON' && b.getAttribute('aria-label')));
   check('Global Rail 初始激活项唯一', () => window.document.querySelectorAll('#projectSidebar [aria-current="page"]').length === 1 && $('navHome').getAttribute('aria-current') === 'page');
   $('btnSidebarCollapse').click();
@@ -7146,7 +7150,7 @@ staticCheck();
     check('更新：无更新时显示版本号', () => /v0\.11\.1/.test(card.textContent));
     check('更新：无更新时没有下载按钮（不给一个能点但没意义的入口）', () =>
       !card.querySelector('.update-acts') || card.querySelector('.update-acts').children.length === 0);
-    check('更新：无更新时侧栏小点不亮', () => $('updateDot').hidden === true);
+    check('更新：无更新时侧栏小点不亮', () => $('updateDot').hidden === true && $('menuUpdateDot').hidden === true);
 
     /* ④ error：「检查失败」绝不能显示成「已是最新版」 */
     /* 先把 currentVersion 清空 —— 来一次「成功但响应里没有 currentVersion」的
@@ -7184,6 +7188,7 @@ staticCheck();
       /v0\.12\.0/.test(card.textContent) && /当前版本 v0\.11\.1/.test(card.textContent) || card.textContent.slice(0, 200));
     check('更新：有更新时显示发布时间', () => /发布时间：2026-09-30/.test(card.textContent) || card.textContent.slice(0, 260));
     check('更新：有更新时侧栏「诊断」上的小点亮起', () => $('updateDot').hidden === false);
+    check('更新：信息入口上的小点与设置齿轮共用同一份状态', () => $('menuUpdateDot').hidden === false);
     check('更新：按钮里有「查看 Release」', () =>
       [...card.querySelectorAll('.update-acts .btn')].some((b) => b.textContent === '查看 Release') ||
       [...card.querySelectorAll('.update-acts .btn')].map((b) => b.textContent).join('|'));
@@ -7488,6 +7493,44 @@ staticCheck();
     updateCalls.length = 0;
     $('toasts').innerHTML = '';
     closeDiag();
+    await sleep(10);
+  }
+
+  /* --- 信息页：统一入口只做编排，更新/重启/日志仍走各自既有实现 --- */
+  async function aboutSection() {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const opens = [];
+    window.piGuiDesktop = { openExternal: async (url) => { opens.push(url); return { ok: true }; } };
+    $('navGlobalMore').click();
+    $('navInfo').click();
+    await sleep(60);
+    const card = $('workSurface').querySelector('.settings-detail-card');
+    check('信息：入口打开统一信息页', () => card && card.querySelector('h3').textContent === '信息');
+    check('信息：hero 的应用版本来自诊断快照', () =>
+      card.querySelector('.about-hero-version').textContent === '版本 0.11.1');
+    check('信息：hero 同时显示 Pi 版本与系统平台', () => {
+      const meta = card.querySelector('.about-hero-meta').textContent;
+      return /Pi 0\.87\.0/.test(meta) && /Windows_NT 10\.0\.26100/.test(meta) && /Pi 运行中/.test(meta);
+    });
+    check('信息：pi-GUI 与 Pi 是两块独立的更新区块', () =>
+      Boolean(card.querySelector('[data-about-update="app"] .update-sec')) &&
+      Boolean(card.querySelector('[data-about-update="pi"] .update-sec')) &&
+      card.querySelector('[data-about-update="app"] .update-title').textContent !==
+        card.querySelector('[data-about-update="pi"] .update-title').textContent);
+    check('信息：重启行直接复用 restartPi 的确认入口', () =>
+      typeof card.querySelector('[data-about-action="restart-pi"]').onclick === 'function');
+    card.querySelector('[data-about-action="open-github"]').click();
+    await sleep(20);
+    check('信息：反馈只打开既有的 GitHub Issues 安全外链', () =>
+      opens.length === 1 && opens[0] === 'https://github.com/HYJ1817/pi-gui/issues');
+    card.querySelector('[data-about-action="export-report"]').click();
+    await sleep(60);
+    check('信息：导出故障报告导航到既有日志页的导出标签', () =>
+      $('navLogs').getAttribute('aria-current') === 'page' &&
+      $('ui5-log-tab-export').getAttribute('aria-selected') === 'true' &&
+      Boolean($('workSurface').querySelector('.ui5-logs-export-form')));
+    $('settingsReturn').click();
+    delete window.piGuiDesktop;
     await sleep(10);
   }
 
@@ -7824,6 +7867,7 @@ staticCheck();
     await settle(80);
   }
   await updateSection();
+  await aboutSection();
   await piUpdateUiSection();
 
   /* --- 会话一变就要重画侧栏列表 ---

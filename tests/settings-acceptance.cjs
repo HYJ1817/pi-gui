@@ -185,6 +185,17 @@ const pub = path.join(root, 'public');
       assert.equal(btnProviders.closest('section').hidden, true, 'Model section must be hidden');
     });
 
+    check('real settings search finds the unified info entry by update/restart/log keywords', () => {
+      const btnInfo = window.document.querySelector('#navInfo');
+      for (const q of ['信息', '更新', '重启', '日志']) {
+        searchInput.value = q;
+        searchInput.oninput();
+        assert.equal(btnInfo.hidden, false, `navInfo must match ${q}`);
+      }
+      searchInput.value = '快捷';
+      searchInput.oninput();
+    });
+
     check('real keyboard navigation strictly skips hidden items during search', () => {
       // Focus the only visible item in preference section
       btnShortcuts.focus();
@@ -377,13 +388,13 @@ const pub = path.join(root, 'public');
       assert.equal(provH3.textContent, '模型配置');
       assert.equal(provH3.hidden, false);
 
-      // 4. App Updates heading
-      let updateCard = null;
-      window.openAppUpdates({ present: (build) => { updateCard = window.document.createElement('div'); build(updateCard, () => {}); } });
-      const updateH3 = updateCard.querySelector('h3');
-      assert.ok(updateH3, 'App updates h3 must exist');
-      assert.equal(updateH3.textContent, '应用与更新');
-      assert.equal(updateH3.hidden, false);
+      // 4. Info heading
+      let aboutCard = null;
+      window.openAboutSettings({ present: (build) => { aboutCard = window.document.createElement('div'); build(aboutCard, () => {}); } });
+      const aboutH3 = aboutCard.querySelector('h3');
+      assert.ok(aboutH3, 'Info page h3 must exist');
+      assert.equal(aboutH3.textContent, '信息');
+      assert.equal(aboutH3.hidden, false);
     });
   }
 

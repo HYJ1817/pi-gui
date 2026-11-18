@@ -123,7 +123,9 @@ if (!process.versions.electron) {
     await key('k', 'KeyK', 75, 2); await sleep(220);
     check(await read(`!document.querySelector('#paletteLayer') && document.querySelector('#globalMoreMenu').hidden`), 'Ctrl+K no longer opens a command palette');
     await pointer('#navGlobalMore'); await waitFor(`!document.querySelector('#globalMoreMenu').hidden`, 'settings menu reopened');
-    await pointer('#navRestartPi'); await waitFor(`!document.querySelector('#confirmLayer').hidden`, 'confirm dialog');
+    await pointer('#navInfo'); await waitFor(`!!document.querySelector('[data-about-action="restart-pi"]')`, 'info page');
+    await read(`document.querySelector('[data-about-action="restart-pi"]').scrollIntoView({block:'center'})`); await sleep(150);
+    await pointer('[data-about-action="restart-pi"]'); await waitFor(`!document.querySelector('#confirmLayer').hidden`, 'confirm dialog');
     await key('Tab', 'Tab', 9); check(await read(`document.querySelector('#confirmLayer').contains(document.activeElement)`), 'Confirm Tab stays inside');
     await key('Tab', 'Tab', 9, 8); check(await read(`document.querySelector('#confirmLayer').contains(document.activeElement)`), 'Confirm Shift+Tab stays inside');
     await shot('confirm-dialog', '1440x900'); await key('Escape', 'Escape', 27);
