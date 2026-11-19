@@ -35,7 +35,7 @@ export function openSpecsPanel(options = {}) {
   const triggerId = options.triggerId || 'btnSpecs';
   const split = button('分屏', requestSplit);
   split.id = 'btnSpecsSplit';
-  split.className += ' rp-btn';
+  split.className += ' ghost rp-btn';
   split.title = '同时显示 Specs 与文件变更';
   split.setAttribute('aria-label', '与文件变更分屏');
   return openSecondarySurface(
@@ -409,7 +409,7 @@ export function mountSpecsPanel(host, view, {
   {
     host.classList.add('specs-surface');
     refresh = button('刷新', () => void loadIndex());
-    refresh.className += ' rp-btn';
+    refresh.className += ' ghost rp-btn';
     refresh.id = 'btnSpecsRefresh';
     header = createPaneHeader({
       title: 'Specs',

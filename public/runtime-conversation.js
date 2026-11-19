@@ -324,7 +324,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   const modelSelect = el('select'); modelSelect.setAttribute('aria-label', '当前会话模型'); modelLabel.append(modelSelect);
   const thinkingLabel = el('div', 'rtc-model-field');
   const thinkingSelect = el('select'); thinkingSelect.setAttribute('aria-label', '当前会话推理强度'); thinkingLabel.append(thinkingSelect);
-  const modelRefresh = el('button', 'btn', '刷新模型'); modelRefresh.type = 'button';
+  const modelRefresh = el('button', 'btn ghost', '刷新模型'); modelRefresh.type = 'button';
   const modelNotice = el('span', 'rtc-model-notice'); modelNotice.setAttribute('role', 'status');
   modelRow.append(modelLabel, thinkingLabel, modelRefresh, modelNotice); root.append(modelRow);
   modelSelect.onchange = () => { const target = id, choice = modelSelect.value; draw(); if (target && choice) void models?.setModel(target, JSON.parse(choice)); };
@@ -457,16 +457,16 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   };
 
   const send = el('button', 'btn primary', '发送'); send.type = 'button';
-  const stop = el('button', 'btn', '停止'); stop.type = 'button';
+  const stop = el('button', 'btn ghost', '停止'); stop.type = 'button';
   send.classList.add('rtc-send'); send.setAttribute('aria-label', '发送消息'); send.title = '发送消息';
   stop.classList.add('rtc-stop'); stop.setAttribute('aria-label', '停止当前会话'); stop.title = '停止当前会话';
   send.innerHTML = iconMarkup('arrowUp') + '<span>发送</span>';
   stop.innerHTML = iconMarkup('stop') + '<span>停止</span>';
-  const restart = el('button', 'btn', '重启'); restart.type = 'button';
-  const end = el('button', 'btn', '关闭会话'); end.type = 'button';
-  const resume = el('button', 'btn', '恢复会话'); resume.type = 'button';
-  const historyBtn = el('button', 'btn', '打开历史'); historyBtn.type = 'button';
-  const liveBtn = el('button', 'btn', '返回实时会话'); liveBtn.type = 'button';
+  const restart = el('button', 'btn ghost', '重启'); restart.type = 'button';
+  const end = el('button', 'btn ghost', '关闭会话'); end.type = 'button';
+  const resume = el('button', 'btn ghost', '恢复会话'); resume.type = 'button';
+  const historyBtn = el('button', 'btn ghost', '打开历史'); historyBtn.type = 'button';
+  const liveBtn = el('button', 'btn ghost', '返回实时会话'); liveBtn.type = 'button';
   liveBtn.onclick = () => { if (id) { current().history = null; draw(); } };
   controls.append(restart, end, resume, historyBtn, liveBtn);
   const composer = el('div', 'rtc-composer ds-composer-field');
@@ -486,14 +486,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     running: () => showsWorkingDots(store.get(id)?.item, store.get(id), current()),
     label: '回到最新输出',
   });
-  const browserBtn = el('button', 'btn', 'Browser'), processBtn = el('button', 'btn', '开发进程');
+  const browserBtn = el('button', 'btn ghost', 'Browser'), processBtn = el('button', 'btn ghost', '开发进程');
   browserBtn.type = processBtn.type = 'button';
   browserBtn.hidden = !openBrowser || !window.piGuiDesktop?.runtimeBrowser;
   processBtn.hidden = !openProcesses;
   browserBtn.onclick = () => openBrowser?.(); processBtn.onclick = () => openProcesses?.();
   controls.append(browserBtn, processBtn);
   if(openSessionChanges){
-    const more=el('button','btn','更多');more.type='button';more.id='runtimeSessionMore';
+    const more=el('button','btn ghost','更多');more.type='button';more.id='runtimeSessionMore';
     more.onclick=()=>openModal((card,close)=>{
       card.append(el('h3','','会话操作'));
       const entry=el('button','modal-item','本会话变更');entry.type='button';
@@ -1315,10 +1315,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           row.querySelectorAll('button,textarea').forEach(control => { control.disabled = true; });
           return respondToRuntimeApproval(approvalOwner, a, () => action(approvalId, { action: 'command', owner: approvalOwner, command: { type: 'extension_ui_response', id: a.id, ...response } }));
         };
-        if (a.method === 'confirm') { const yes = el('button', 'btn', '确认'); const no = el('button', 'btn', '拒绝'); yes.type = no.type = 'button'; yes.onclick = () => respond({ confirmed: true }); no.onclick = () => respond({ confirmed: false }); row.append(yes, no); }
+        if (a.method === 'confirm') { const yes = el('button', 'btn primary', '确认'); const no = el('button', 'btn', '拒绝'); yes.type = no.type = 'button'; yes.onclick = () => respond({ confirmed: true }); no.onclick = () => respond({ confirmed: false }); row.append(yes, no); }
         else if (a.method === 'select') for (const value of a.options) { const b = el('button', 'btn', value); b.type = 'button'; b.onclick = () => respond({ value }); row.append(b); }
-        else { const value = el('textarea'); value.setAttribute('aria-label', a.title || '审批输入'); const submit = el('button', 'btn', '提交'); submit.type = 'button'; submit.onclick = () => respond({ value: value.value }); row.append(value, submit); }
-        const cancel = el('button', 'btn', '取消'); cancel.type = 'button'; cancel.onclick = () => respond({ cancelled: true }); row.append(cancel);
+        else { const value = el('textarea'); value.setAttribute('aria-label', a.title || '审批输入'); const submit = el('button', 'btn primary', '提交'); submit.type = 'button'; submit.onclick = () => respond({ value: value.value }); row.append(value, submit); }
+        const cancel = el('button', 'btn ghost', '取消'); cancel.type = 'button'; cancel.onclick = () => respond({ cancelled: true }); row.append(cancel);
         row.querySelectorAll('button,textarea').forEach(control => { control.disabled = a.submitting === true; });
         approvals.append(row);
       }

@@ -235,8 +235,8 @@ export function paintAppUpdate(container,{available=false,onLater=()=>{}}={}) {
   const acts=document.createElement('div');acts.className='update-acts update-fixed-actions';
   const feedback=document.createElement('div');feedback.className='update-action-error';feedback.hidden=true;
   feedback.setAttribute('role','alert');
-  const action=(text,fn,{primary=false,name=''}={})=>{
-    const b=document.createElement('button');b.type='button';b.className=primary?'btn primary':'btn';b.textContent=text;
+  const action=(text,fn,{primary=false,ghost=false,name=''}={})=>{
+    const b=document.createElement('button');b.type='button';b.className=primary?'btn primary':ghost?'btn ghost':'btn';b.textContent=text;
     if(name)b.setAttribute('data-update-action',name);
     b.onclick=async()=>{
       b.disabled=true;feedback.hidden=true;
@@ -286,11 +286,11 @@ export function paintAppUpdate(container,{available=false,onLater=()=>{}}={}) {
     const pct=s.total?Math.floor(s.received*100/s.total):0;
     note(`${pct}% · ${size(s.received)} / ${size(s.total)} · ${size(s.speed)}/s`);
     action('取消下载',()=>api.cancel(),{name:'cancel'});
-    if(target)action('忽略此版本',ignoreAction,{name:'ignore'});
+    if(target)action('忽略此版本',ignoreAction,{ghost:true,name:'ignore'});
   } else if(s.phase==='verifying') {
     note('正在校验安装包 SHA256…');
     action('取消下载',()=>api.cancel(),{name:'cancel'});
-    if(target)action('忽略此版本',ignoreAction,{name:'ignore'});
+    if(target)action('忽略此版本',ignoreAction,{ghost:true,name:'ignore'});
   }
   else if(s.phase==='preparing')note('正在进行安全退出检查，请稍候…');
   else if(s.phase==='recovering')note('正在安全撤销更新，请保持应用打开，完成后可以重试。');
@@ -309,19 +309,19 @@ export function paintAppUpdate(container,{available=false,onLater=()=>{}}={}) {
         action(`下载 v${latest}`,()=>api.download(),{primary:true,name:'download-newer'});
       }
       if(s.mode==='installed')action('重启以更新',()=>api.install(),{name:'install-older'});
-      action('稍后',async()=>{onLater();return {ok:true};},{name:'later'});
+      action('稍后',async()=>{onLater();return {ok:true};},{ghost:true,name:'later'});
       appendActions();
       return;
     }
     if(s.preference==='automatic'&&s.automaticSupported&&s.mode==='installed'&&s.installOnQuit===true&&s.automaticTrusted!==false)note('将在正常安全退出应用时自动安装；也可以立即重启更新。');
     if(s.mode==='installed')action('重启以更新',()=>api.install(),{primary:true,name:'install'});
     else {note('便携版请退出应用后手动替换文件。');action('打开下载目录',()=>api.openFolder(),{primary:true,name:'folder'});}
-    action('稍后',async()=>{onLater();return {ok:true};},{name:'later'});
-    if(target)action('忽略此版本',ignoreAction,{name:'ignore'});
+    action('稍后',async()=>{onLater();return {ok:true};},{ghost:true,name:'later'});
+    if(target)action('忽略此版本',ignoreAction,{ghost:true,name:'ignore'});
   } else {
     if(s.phase==='cancelled')note(s.paused?'下载已取消；在重新下载或发现新版本前，不会自动重试此版本。':'下载已取消，可以重新下载。');
     action(['failed','cancelled'].includes(s.phase)?'重新下载':s.mode==='portable'?'下载便携版':'下载更新',()=>api.download(),{primary:true,name:'download'});
-    if(target)action('忽略此版本',ignoreAction,{name:'ignore'});
+    if(target)action('忽略此版本',ignoreAction,{ghost:true,name:'ignore'});
   }
   appendActions();
 }

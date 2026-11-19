@@ -128,7 +128,7 @@ export function mountSplitWorkbench(host, view, {
   const changesTab = button('workbench-tab', 'Changes', '显示文件变更', () => selectFallback('changes'));
   changesTab.dataset.workbenchTab = 'changes';
   const modeGrow = node('span', 'workbench-grow');
-  const modeExit = button('btn tiny workbench-exit', '退出', '退出分屏，恢复单面板', () => exitSplit());
+  const modeExit = button('btn tiny ghost workbench-exit', '退出', '退出分屏，恢复单面板', () => exitSplit());
   modeExit.dataset.workbenchExit = 'true';
   const modeClose = button('icon-btn workbench-close', '', '关闭工作台', () => view.close());
   modeClose.append(createIcon('close'));
@@ -154,7 +154,7 @@ export function mountSplitWorkbench(host, view, {
   specsPane.style.flex = '0 0 calc(56% - 4px)';
   changesPane.style.flex = '1 1 0';
 
-  const exitAction = button('btn rp-btn workbench-exit', '退出', '退出分屏，恢复单面板', () => exitSplit());
+  const exitAction = button('btn ghost rp-btn workbench-exit', '退出', '退出分屏，恢复单面板', () => exitSplit());
   exitAction.dataset.workbenchExit = 'true';
   if (browserOptions) browserOptions.mount(specsPane, exitSplit);
   else mountSpecsPanel(specsPane, view, {

@@ -27,7 +27,7 @@ export function openProcessPanel({transport=null,isOwnerCurrent=()=>true}={}){
     host.classList.add('process-panel');
 
     /* ---------- 标题带：与「本会话变更」同一套外壳 ---------- */
-    const refreshBtn=element('button','btn tiny rp-btn','刷新');refreshBtn.type='button';refreshBtn.title='重新读取进程状态';refreshBtn.onclick=()=>void refresh();
+    const refreshBtn=element('button','btn tiny ghost rp-btn','刷新');refreshBtn.type='button';refreshBtn.title='重新读取进程状态';refreshBtn.onclick=()=>void refresh();
     const header=createPaneHeader({title:'开发进程',subtitle:'仅当前工作区 · 与 Browser 权限独立',actions:[refreshBtn]});
     host.append(header.el);
 
@@ -57,7 +57,7 @@ export function openProcessPanel({transport=null,isOwnerCurrent=()=>true}={}){
     function rowFor(p){
       if(rows.has(p.id))return rows.get(p.id);
       const row=element('section','process-row'),main=element('div','process-row-main'),title=element('h4','process-title'),meta=element('p','process-meta'),endpoint=element('p','process-endpoint');
-      const actions=element('div','process-actions'),stop=element('button','btn tiny','停止'),restart=element('button','btn tiny','重启'),logs=element('pre','process-logs');logs.setAttribute('aria-label','已脱敏的进程日志');logs.tabIndex=0;
+      const actions=element('div','process-actions'),stop=element('button','btn tiny ghost','停止'),restart=element('button','btn tiny ghost','重启'),logs=element('pre','process-logs');logs.setAttribute('aria-label','已脱敏的进程日志');logs.tabIndex=0;
       stop.type=restart.type='button';
       main.append(title,meta);actions.append(stop,restart);row.append(main,actions,endpoint,logs);list.append(row);hideEmpty();
       const state={row,title,meta,endpoint,stop,restart,logs,p,cursor:0,revision:p.revision,workspace:S.workspaceGeneration};rows.set(p.id,state);

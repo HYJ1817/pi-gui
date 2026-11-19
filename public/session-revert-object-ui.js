@@ -77,7 +77,7 @@ export function createObjectRevertUI({context,isCurrent,transport}) {
   const card=el('div','modal-card'),title=el('h3','',recovery?'重新备份 D 后恢复原始 C':'备份后恢复该文件（受限）');title.id='object-revert-title';
   const content=el('div','object-revert-body'),actions=el('div','modal-actions');card.append(title,content,actions);overlay.append(card);document.body.append(overlay);
   info(content,p,recovery);
-  const boxes=[];const cancel=btn('cancel','取消',()=>closeModal()),confirm=btn('confirm',recovery?'确认本次 D → C 恢复':'确认本次 C → R 恢复',()=>void submit(r,key));
+  const boxes=[];const cancel=btn('cancel','取消',()=>closeModal()),confirm=btn('confirm',recovery?'确认本次 D → C 恢复':'确认本次 C → R 恢复',()=>void submit(r,key));cancel.classList.add('ghost');confirm.classList.add('primary');
   const update=()=>confirm.disabled=submitted||!boxes.every(x=>x.checked);
   for(const [name,text] of RISKS){const label=el('label','object-revert-risk'),box=el('input');box.type='checkbox';box.dataset.objectRisk=name;box.checked=false;box.onchange=update;label.append(box,el('span','',text));boxes.push(box);content.append(label);}
   confirm.disabled=true;actions.append(cancel,confirm);document.addEventListener('keydown',keyHandler,true);cancel.focus();

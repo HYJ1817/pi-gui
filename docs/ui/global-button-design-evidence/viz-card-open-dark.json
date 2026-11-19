@@ -1,0 +1,12 @@
+{
+  "text": "打开可视化",
+  "cls": "btn tiny viz-open-btn",
+  "bg": "oklab(0.999994 0.0000455678 0.0000200868 / 0.06)",
+  "color": "rgb(255, 255, 255)",
+  "border": "0.666667px solid rgba(0, 0, 0, 0)",
+  "radius": "8px",
+  "height": 28,
+  "padding": "0px 10px",
+  "font": "11.5px/500",
+  "outline": "none 2.66667px"
+}

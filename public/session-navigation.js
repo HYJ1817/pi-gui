@@ -38,7 +38,7 @@ export function createSessionNavigation({ continueSession, newSession, createPar
     viewed = { session, project };
     openWorkSurface('history', (card, instance) => {
       const bar = node('div', 'ext-bar');
-      bar.append(node('h3', '', session?.title || '新会话草稿'), button('返回主会话', () => { viewed = null; showChat({ focusComposer: true }); }));
+      const backToMain = button('返回主会话', () => { viewed = null; showChat({ focusComposer: true }); }); backToMain.classList.add('ghost'); bar.append(node('h3', '', session?.title || '新会话草稿'), backToMain);
       card.append(bar, node('p', 'modal-desc', project.name));
       const status = node('p', 'cfg-note'); status.setAttribute('role', 'status');
       status.textContent = '其它会话继续在后台执行。此页只查看历史，不切换 Pi 的会话或工作目录。';
@@ -97,7 +97,7 @@ export function createSessionNavigation({ continueSession, newSession, createPar
         finally { if (instance.isCurrent()) resume.disabled = false; }
       });
       const parallel = button('在独立工作区新建并行会话', () => createParallel?.(project));
-      actions.append(resume, parallel); card.append(actions);
+      resume.classList.add('primary'); actions.append(resume, parallel); card.append(actions);
       if (!session) input.focus();
       if (openRuntime) queueMicrotask(()=>{if(instance.isCurrent())resume.click();});
     });
@@ -108,14 +108,19 @@ export function createSessionNavigation({ continueSession, newSession, createPar
     project = projectOf(project); viewed = { project, session: null };
     openWorkSurface('history', (card, instance) => {
       card.append(node('h3', '', project.name), node('p', 'cfg-note', '查看项目不会改变后台任务的工作目录。'),
-        button('返回主会话', () => showChat()), button('新会话草稿', () => showHistory(null, project)),
+        (()=>{const b=button('返回主会话', () => showChat());b.classList.add('ghost');return b;})(), button('新会话草稿', () => showHistory(null, project)),
         button('在独立工作区新建并行会话', () => createParallel?.(project)));
       const list = node('div', 'ext-list'); list.textContent = '正在读取会话…'; card.append(list);
       void readSessions(project.path).then(result => {
         if (!instance.isCurrent()) return;
         list.replaceChildren();
         if (!result?.ok) { list.textContent = '会话读取失败，请重新打开项目重试。'; return; }
-        for (const session of result.sessions || []) if (!session.pending) list.append(button(session.title || '未命名会话', () => showHistory(session, project)));
+        for (const session of result.sessions || []) {
+          if (session.pending) continue;
+          const item = button(session.title || '未命名会话', () => showHistory(session, project));
+          item.classList.add('ghost');
+          list.append(item);
+        }
         if (!list.childElementCount) list.textContent = '还没有会话';
       }).catch(() => { if (instance.isCurrent()) list.textContent = '会话读取失败'; });
     });

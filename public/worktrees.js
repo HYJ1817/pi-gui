@@ -22,7 +22,7 @@ export function openWorktreeManager(project, { activateWorkspace } = {}) {
     card.classList.add('wide', 'wt-manager');
     card.setAttribute('aria-label', '工作区管理');
     const head = node('div', 'wt-head');
-    head.append(node('h3', '', '工作区管理'), button('独立会话', () => { close(); openRuntimeSessions(project); }), button('关闭', close)); card.append(head);
+    const headRuntime=button('独立会话', () => { close(); openRuntimeSessions(project); }); headRuntime.classList.add('ghost'); const headClose=button('关闭', close); headClose.classList.add('ghost'); head.append(node('h3', '', '工作区管理'), headRuntime, headClose); card.append(head);
     card.append(node('p', 'modal-desc', `${project.name || '项目'} · 独立会话须使用不同工作区。`));
     const notice = node('div', 'wt-notice'); notice.setAttribute('role', 'status'); card.append(notice);
     const list = node('div', 'wt-list'); card.append(list);
@@ -83,7 +83,7 @@ export function openWorktreeManager(project, { activateWorkspace } = {}) {
             const expected = contextGeneration; close();
             await activateWorkspace(row, row.kind === 'main' ? undefined : () => worktreeAction('open', { id: row.id, epoch: row.epoch }, expected));
           });
-          open.dataset.unavailable = String(!usable); open.disabled = busy || !usable; item.append(open);
+          open.classList.add('ghost'); open.dataset.unavailable = String(!usable); open.disabled = busy || !usable; item.append(open);
           if (row.kind === 'managed') {
             const menu = button('', () => openActionMenu(menu, [
               { label: '独立会话', disabled: row.health !== 'healthy' || row.archived || row.current, onClick: () => { close(); openRuntimeSessions(project, row); } },

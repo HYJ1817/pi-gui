@@ -493,21 +493,21 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
   const btnRefresh = document.createElement('button');
   btnRefresh.type = 'button';
   btnRefresh.id = 'btnChangesRefresh';
-  btnRefresh.className = 'btn tiny';
+  btnRefresh.className = 'btn tiny ghost';
   btnRefresh.textContent = '刷新';
   btnRefresh.onclick = () => refreshGitNow();
 
   const btnReview = document.createElement('button');
   btnReview.type = 'button';
   btnReview.id = 'btnChangesReview';
-  btnReview.className = 'btn tiny';
+  btnReview.className = 'btn tiny ghost';
   btnReview.textContent = '审查意见';
   btnReview.title = '查看、复制或填入当前作用域的行级评论';
   btnReview.onclick = () => openReviewSummary();
   reviewButton = btnReview;
 
   const storage = document.createElement('button');
-  storage.type = 'button'; storage.id = 'btnReviewStorage'; storage.className = 'btn tiny';
+  storage.type = 'button'; storage.id = 'btnReviewStorage'; storage.className = 'btn tiny ghost';
   storage.setAttribute('aria-label', '重新加载评论');
   storage.onclick = () => restoreReviewComments(true);
   reviewStorageButton = storage;
@@ -757,7 +757,7 @@ function hint(text, kind) {
 function tinyBtn(text, onClick, kind) {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'btn tiny' + (kind ? ' ' + kind : '');
+  b.className = 'btn tiny ghost' + (kind ? ' ' + kind : '');
   b.textContent = text;
   // 行本身也是可点的（展开 diff），按钮不能把点击冒泡上去
   b.onclick = (e) => {
@@ -1143,11 +1143,11 @@ function openReviewEditor(row, { path, section, anchor, focus = true } = {}) {
   save.disabled = Boolean(occupied);
   const cancel = document.createElement('button');
   cancel.type = 'button';
-  cancel.className = 'btn tiny';
+  cancel.className = 'btn tiny ghost';
   cancel.textContent = '取消';
   const remove = document.createElement('button');
   remove.type = 'button';
-  remove.className = 'btn tiny danger';
+  remove.className = 'btn tiny danger ghost';
   remove.textContent = '删除';
   remove.hidden = !(existing || occupied);
   const hintNode = document.createElement('span');
@@ -1251,7 +1251,7 @@ function chooseReviewRange(block, row, path, section, rows, fingerprint) {
     item.classList.add('range-selected'); item.querySelector('.d-gutter')?.setAttribute('aria-pressed','true');
   }
   const action=document.createElement('span'); action.className='d-review-range-action';
-  const button=document.createElement('button'); button.type='button';button.className='btn tiny';button.textContent='添加区间评论';
+  const button=document.createElement('button'); button.type='button';button.className='btn tiny ghost';button.textContent='添加区间评论';
   button.setAttribute('aria-label',`添加区间评论：${lineLabel({anchor})}`);
   button.onclick=()=>{
     if (!action.isConnected || reviewScopeSuspended || start.scope !== currentReviewScope()) return;
@@ -1272,7 +1272,7 @@ function paintReviewRanges(block, path, section, rows, fingerprint) {
     }));
     if (selected.some(r=>!r)) continue;
     for (const row of selected) row.classList.add('has-range-comment');
-    const marker=document.createElement('button'); marker.type='button'; marker.className='btn tiny d-review-range-marker';
+    const marker=document.createElement('button'); marker.type='button'; marker.className='btn tiny ghost d-review-range-marker';
     marker.textContent=`区间评论 · ${lineLabel(comment)}`;
     marker.setAttribute('aria-label',`编辑区间评论：${lineLabel(comment)}`);
     marker.onclick=()=>{preserveReviewDrafts();openReviewEditor(selected[0],{path,section,anchor:comment.anchor});};
@@ -1535,7 +1535,7 @@ function openReviewSummary() {
             }
             const edit = document.createElement('button');
             edit.type = 'button';
-            edit.className = 'btn tiny';
+            edit.className = 'btn tiny ghost';
             edit.textContent = '编辑';
             edit.onclick = () => {
               close();
@@ -1543,7 +1543,7 @@ function openReviewSummary() {
             };
             const del = document.createElement('button');
             del.type = 'button';
-            del.className = 'btn tiny danger';
+            del.className = 'btn tiny danger ghost';
             del.textContent = '删除';
             del.disabled = ['saving', 'loading', 'unavailable', 'conflict', 'idle'].includes(reviewPersistenceState(scope).status);
             del.onclick = async () => {

@@ -87,6 +87,7 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
   const candidate=button('在隔离工作区生成修改',()=>{if(ensureFresh())void candidateFlow.open();});candidate.hidden=true;
   const history=button('候选修改',()=>void candidateFlow.history());
   const done=button('关闭',close);
+  all.classList.add('ghost'); none.classList.add('ghost'); back.classList.add('ghost'); history.classList.add('ghost'); done.classList.add('ghost');
   tools.append(back,all,none,next,copy,fill,candidate,history,done);
   root.append(title,note,warning,tools,status,counts,body,preview);card.append(root);
   const candidateFlow=createCandidateFlow({root,isCurrent:()=>active(),isFresh:()=>ensureFresh(),
