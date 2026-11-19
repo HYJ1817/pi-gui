@@ -95,8 +95,29 @@ function appendText(container,className,text){
   const n=document.createElement('div');n.className=className;n.textContent=text;container.appendChild(n);return n;
 }
 
+function preferenceProblem(s){
+  if(!s)return '';
+  if(s.overrideActive){
+    if(s.persistedPreference==='automatic'&&s.preference!=='automatic'){
+      return '上次更新设置未能可靠保存，自动更新已安全降级为手动；重启后仍会保持手动。请重试保存以确认选择。';
+    }
+    return '更新设置未能可靠写入，自动更新已保持关闭。请重试保存以确认选择。';
+  }
+  if(s.preferenceSaveFailed){
+    if(s.automaticTrusted===true&&s.preference==='automatic'){
+      return '更新提醒记录写入失败；已保存的自动更新设置仍然有效。';
+    }
+    return '更新设置写入失败；本次运行已安全降级为手动更新，重启后可能恢复为上一次设置。请重试保存。';
+  }
+  if(s.requestedPreference==='automatic'&&s.preference!=='automatic'){
+    return '自动更新设置尚未成功保存，当前按手动更新运行。请重试保存。';
+  }
+  return '';
+}
+
 /* 信息页里的偏好行。自动选项只在主进程确认「Windows NSIS 安装版」时可用；
- * 其它形态保持可见但禁用并解释原因，绝不显示一个点了也不会生效的开关。 */
+ * 其它形态保持可见但禁用并解释原因，绝不显示一个点了也不会生效的开关。
+ * 显示的是主进程当前有效策略，而不是用户点击后可能未落盘的内存值。 */
 export function paintUpdatePreference(container) {
   const api=globalThis.piGuiDesktop?.appUpdate;
   if(!api||typeof api.setPreference!=='function')return false;
@@ -115,6 +136,29 @@ export function paintUpdatePreference(container) {
   row.appendChild(copy);
 
   const tail=document.createElement('div');tail.className='update-pref-tail';
+  const feedback=document.createElement('div');
+  feedback.className='update-pref-error';
+  feedback.hidden=true;
+  const showMessage=(text,{alert=true}={})=>{
+    feedback.textContent=text;
+    feedback.hidden=!text;
+    feedback.setAttribute('role',alert?'alert':'status');
+    if(text){
+      const retry=document.createElement('button');retry.type='button';retry.className='btn';
+      retry.textContent='重试保存';retry.setAttribute('data-update-action','retry-preference');
+      retry.onclick=async()=>{
+        retry.disabled=true;
+        try{
+          const result=await saveAppUpdatePreference(latest?.requestedPreference||latest?.preference||'manual');
+          if(result?.snapshot&&typeof result.snapshot.phase==='string')latest=result.snapshot;
+          await readState();
+        }catch{
+          showMessage('更新设置保存失败，请重试。');
+        }finally{retry.disabled=false;}
+      };
+      feedback.appendChild(retry);
+    }
+  };
   let appliedValue=selected;
   const control=createSegmentedControl({
     ariaLabel:'更新偏好',
@@ -126,31 +170,37 @@ export function paintUpdatePreference(container) {
     onChange:async value=>{
       const previousValue=appliedValue;
       control.setDisabled(true);
-      let message='';
       try{
         const result=await saveAppUpdatePreference(value);
         if(result?.ok===false){
-          message=result.error||'更新偏好保存失败，请重试。';
           control.setValue(previousValue);
           applyHint(previousValue);
-        }else if(result?.persisted===false){
-          appliedValue=value;
-          applyHint(value);
-          message='偏好已在本次运行生效，但写入本地配置失败；重启后可能恢复为上一次设置。';
+          showMessage(result.error||'更新偏好保存失败，请重试。');
         }else{
-          appliedValue=value;
-          applyHint(value);
+          if(result?.snapshot&&typeof result.snapshot.phase==='string'){
+            latest=result.snapshot;
+            appliedValue=latest.preference==='automatic'&&support?'automatic':'manual';
+            control.setValue(appliedValue);
+            applyHint(appliedValue);
+            await readState();
+          }else if(result?.persisted===false){
+            // 旧桥只返回 persisted；无法确认有效策略时回退到上一次成功值。
+            appliedValue=previousValue;
+            control.setValue(previousValue);
+            applyHint(previousValue);
+            showMessage('更新设置未能写入；自动更新保持关闭。请重试保存。');
+          }else{
+            appliedValue=value;
+            applyHint(value);
+          }
         }
       }catch{
-        message='更新偏好保存失败，请重试。';
         control.setValue(previousValue);
         applyHint(previousValue);
+        showMessage('更新偏好保存失败，请重试。');
       }finally{
         control.setDisabled(false);
       }
-      feedback.textContent=message;
-      feedback.hidden=!message;
-      feedback.setAttribute('role',message?'alert':'status');
     },
   });
   if(!s)control.setDisabled(true);
@@ -170,14 +220,8 @@ export function paintUpdatePreference(container) {
   stateLine.textContent=`更新状态：${statusText(s)}`;
   container.appendChild(stateLine);
 
-  const feedback=document.createElement('div');
-  feedback.className='update-pref-error';
-  feedback.hidden=true;
-  if(s?.preferenceSaveFailed){
-    feedback.hidden=false;
-    feedback.setAttribute('role','alert');
-    feedback.textContent='上次更新设置写入失败；本次运行已按当前选择生效，但重启后可能恢复为上一次设置。';
-  }
+  const problem=preferenceProblem(s);
+  if(problem)showMessage(problem);
   container.appendChild(feedback);
   return true;
 }
@@ -237,6 +281,7 @@ export function paintAppUpdate(container,{available=false,onLater=()=>{}}={}) {
   if(!available&&!active)return;
   if(s.error)note(s.error);
   if(s.phase==='downloading') {
+    if(!strictVersion(s.version))note(`正在获取${s.discovery?.latestVersion?` v${s.discovery.latestVersion}`:''}的下载信息…`);
     const p=document.createElement('progress');p.max=s.total||1;p.value=s.received||0;p.setAttribute('aria-label','更新下载进度');container.appendChild(p);
     const pct=s.total?Math.floor(s.received*100/s.total):0;
     note(`${pct}% · ${size(s.received)} / ${size(s.total)} · ${size(s.speed)}/s`);
@@ -268,7 +313,7 @@ export function paintAppUpdate(container,{available=false,onLater=()=>{}}={}) {
       appendActions();
       return;
     }
-    if(s.preference==='automatic'&&s.automaticSupported&&s.mode==='installed'&&s.installOnQuit!==false)note('将在正常安全退出应用时自动安装；也可以立即重启更新。');
+    if(s.preference==='automatic'&&s.automaticSupported&&s.mode==='installed'&&s.installOnQuit===true&&s.automaticTrusted!==false)note('将在正常安全退出应用时自动安装；也可以立即重启更新。');
     if(s.mode==='installed')action('重启以更新',()=>api.install(),{primary:true,name:'install'});
     else {note('便携版请退出应用后手动替换文件。');action('打开下载目录',()=>api.openFolder(),{primary:true,name:'folder'});}
     action('稍后',async()=>{onLater();return {ok:true};},{name:'later'});

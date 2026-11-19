@@ -97,8 +97,15 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
       helperReady=true;
       fs.writeFileSync(path.join(directory,'pending.json'),JSON.stringify({run:path.basename(runDir),expectedVersion:asset.version,previousVersion:app.getVersion()}));
     },
-    quit:async()=>{
+    quit:async(options={})=>{
       const child=getServer();if(!child)throw Error('backend_unavailable');
+      // 自动安装的最后一道提交边界：授权检查与 armed 写入之间不允许有
+      // 任何 await。IPC 事件、偏好切换、关机标记都跑在同一事件循环里，
+      // 同步完成“复核 + 写入”才能消除这个竞态窗口。
+      if(typeof options?.authorize==='function'){
+        let allowed=false;try{allowed=options.authorize()===true;}catch{allowed=false;}
+        if(!allowed)throw Object.assign(Error('revoked'),{code:'revoked'});
+      }
       const exited=new Promise((resolve,reject)=>{
         const timer=setTimeout(()=>{child.removeListener('exit',done);reject(Error('backend_exit_timeout'));},30000);
         function done(){clearTimeout(timer);resolve();}child.once('exit',done);
@@ -107,10 +114,16 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
       exited.catch(()=>{});
       // The helper also requires this exact parent to exit and no cancellation.
       fs.writeFileSync(path.join(runDir,'armed'),'armed',{flag:'wx'});
-      const r=await backend('shutdown');
-      if(!r.ok)throw Error('shutdown_unconfirmed');await exited;
-      coordinator?.markQuitIssued();
-      await quit();
+      try {
+        const r=await backend('shutdown');
+        if(!r.ok)throw Error('shutdown_unconfirmed');await exited;
+        coordinator?.markQuitIssued();
+        await quit();
+      } catch(error) {
+        // armed 已落盘：后续失败也不能再走 cancelled/release 撤销路径。
+        error.committed=true;
+        throw error;
+      }
     },
   };
   const allowed=event=>event.sender===getWindow()?.webContents&&event.senderFrame===event.sender.mainFrame&&new URL(event.senderFrame.url).origin===origin;
@@ -121,8 +134,9 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
   function fallbackSnapshot() {
     return {...updater?.state()||{phase:'failed',mode,currentVersion,code:'cache',
       error:'更新缓存暂不可用。请检查临时目录的权限或空间，然后重试下载。'},
-      mode,currentVersion,preference:'manual',storedPreference:'manual',
-      automaticSupported:false,automaticUnsupportedReason:'unavailable',
+      mode,currentVersion,preference:'manual',requestedPreference:'manual',storedPreference:'manual',
+      persistedPreference:null,automaticSupported:false,automaticUnsupportedReason:'unavailable',
+      automaticTrusted:false,overrideActive:false,overridePersisted:false,
       discovery:{status:'idle',latestVersion:'',release:null,error:'',checkedAt:''},
       ignoredVersion:null,pausedVersion:null,ignored:false,paused:false,
       installOnQuit:false,installOnQuitBlockedReason:'unavailable'};
@@ -222,8 +236,10 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
     if(pending())return pending();
     if(request?.confirm!==true||Object.keys(request).some(k=>k!=='confirm'))return {ok:false,error:'需要确认更新。'};
     if(confirming||updater?.state().phase!=='ready'||mode!=='installed')return {ok:false,code:'busy',error:'请先完成更新包下载和校验。'};
+    const target=updater?.state().version;
+    if(!/^\d+\.\d+\.\d+$/.test(target||''))return {ok:false,code:'busy',error:'更新目标版本无效，请重新下载。'};
     const live=manager?manager.snapshot():snapshot();
-    if(live.ignored&&live.version===updater?.state().version)return {ok:false,code:'ignored',error:'此版本已被忽略，请先取消忽略再安装。'};
+    if(live.ignored&&live.version===target)return {ok:false,code:'ignored',error:'此版本已被忽略，请先取消忽略再安装。'};
     confirming=true;
     try {
     const desktop=inspectDesktop(),status=desktop.ok?await backend('inspect'):desktop;
@@ -232,7 +248,19 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
       message:'重启以安装已验证的更新？',detail:`已检查所有会话、Agent、开发进程和待处理操作。${desktop.browsers?`将关闭 ${desktop.browsers} 个浏览器页面，页面中未提交的输入可能丢失。`:''}会话、项目与设置数据会保留。确认后会再次检查；仍有活动任务时拒绝更新，请先安全停止。`});
     if(choice.response!==1)return {ok:false,code:'cancelled'};
     if(!coordinator)return {ok:false,code:'unavailable',error:'更新安装服务暂不可用。'};
-    return coordinator.runExplicitInstall();
+    // 原生对话框停留期间目标版本、忽略状态或运行阶段都可能变化。
+    // armed 前还要再用这个同步回调复核一次。
+    const stillAllowed=()=>{
+      if(systemSessionEnding||suppressAutoInstall||recovering)return false;
+      const state=updater?.state();
+      if(!state||state.version!==target)return false;
+      if(manager&&typeof manager.manualInstallStillAllowed==='function'){
+        return manager.manualInstallStillAllowed(target)===true;
+      }
+      const current=manager?manager.snapshot():snapshot();
+      return !(current.ignored&&current.version===target);
+    };
+    return coordinator.runExplicitInstall({authorize:stillAllowed});
     } finally {confirming=false;}
   }));
   // Cache recognition is offline. Startup never downloads or launches an installer.

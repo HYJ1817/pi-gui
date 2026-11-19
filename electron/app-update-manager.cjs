@@ -17,7 +17,6 @@ const {
   isNewerVersion,
   isStrictVersion,
   resolveAutomaticSupport,
-  resolveEffectivePreference,
 } = require('./app-update-policy.cjs');
 
 const ACTIVE_PHASES = new Set([
@@ -79,8 +78,9 @@ function createAppUpdateManager({
   let checkSeq = 0;
   let checkInflight = null;
   let checkForce = false;
-  let autoTask = null;
-  let downloadSource = null;
+  let downloadTask = null;
+  let downloadSeq = 0;
+  let supersedeRetries = 0;
   let noticeSeq = 0;
   const readyNotified = new Set();
   let discovery = {
@@ -95,8 +95,23 @@ function createAppUpdateManager({
     return store.snapshot();
   }
 
+  /* 有效策略不是“内存里选了 automatic”这么简单：偏好必须已经成功落盘，
+   * 且忽略/暂停等安全字段没有未确认的脏值。写入失败的 automatic 只能算
+   * 用户请求，不能获得自动下载或自动安装资格。 */
+  function automaticTrusted() {
+    const stored = storedState();
+    if (stored.preference !== 'automatic') return false;
+    if (typeof store.automaticTrusted === 'function') {
+      return store.automaticTrusted() === true;
+    }
+    return stored.saveFailed !== true && stored.corrupt !== true && stored.loaded !== false;
+  }
+
   function effectivePreference() {
-    return resolveEffectivePreference(storedState().preference, support);
+    const stored = storedState();
+    if (stored.preference !== 'automatic') return 'manual';
+    if (!support.supported) return 'manual';
+    return automaticTrusted() ? 'automatic' : 'manual';
   }
 
   function updaterState() {
@@ -111,6 +126,13 @@ function createAppUpdateManager({
    * 真正的安装动作仍会由 app-update.cjs 再次校验包、官方元数据和维护状态。 */
   function autoInstallCandidate() {
     if (disposed) return { ok: false, code: 'disposed' };
+    const stored = storedState();
+    if (stored.preference === 'automatic' && !support.supported) {
+      return { ok: false, code: support.code || 'unsupported' };
+    }
+    if (stored.preference === 'automatic' && !automaticTrusted()) {
+      return { ok: false, code: 'preference-unsaved' };
+    }
     if (effectivePreference() !== 'automatic') {
       return { ok: false, code: 'preference' };
     }
@@ -131,7 +153,6 @@ function createAppUpdateManager({
     if (compareVersions(state.version, currentVersion) !== 1) {
       return { ok: false, code: 'not-newer' };
     }
-    const stored = storedState();
     if (stored.ignoredVersion === state.version) {
       return { ok: false, code: 'ignored' };
     }
@@ -158,6 +179,22 @@ function createAppUpdateManager({
     return true;
   }
 
+  /* 显式安装的原生确认对话框会停留一段时间。确认期间目标版本、忽略状态
+   * 和安装形态仍可能变化；真正写入 armed 前必须按当前状态复核，而不是
+   * 把“用户点过确认”当成永久许可。手动安装不受自动偏好影响。 */
+  function manualInstallStillAllowed(expectedVersion) {
+    if (disposed) return false;
+    if (mode !== 'installed') return false;
+    if (!isStrictVersion(expectedVersion)) return false;
+    const state = updaterState();
+    if (!isStrictVersion(state.version) || state.version !== expectedVersion) return false;
+    if (state.phase !== 'ready' && state.phase !== 'preparing') return false;
+    const stored = storedState();
+    if (stored.ignoredVersion === expectedVersion) return false;
+    if (stored.corrupt && stored.loaded !== true) return false;
+    return true;
+  }
+
   function snapshot() {
     const state = updaterState();
     const stored = storedState();
@@ -172,15 +209,20 @@ function createAppUpdateManager({
       mode,
       currentVersion,
       version: isStrictVersion(state.version) ? state.version : null,
+      transactionId: Number.isSafeInteger(state.transactionId) ? state.transactionId : null,
       received: Number.isFinite(state.received) ? state.received : 0,
       total: Number.isFinite(state.total) ? state.total : 0,
       speed: Number.isFinite(state.speed) ? state.speed : 0,
       error: typeof state.error === 'string' ? state.error : '',
       code: typeof state.code === 'string' ? state.code : '',
       preference: effectivePreference(),
+      requestedPreference: stored.preference,
       storedPreference: stored.preference,
+      persistedPreference:
+        typeof stored.persistedPreference === 'string' ? stored.persistedPreference : null,
       automaticSupported: support.supported,
       automaticUnsupportedReason: support.code,
+      automaticTrusted: automaticTrusted(),
       discovery: {
         status: discovery.status,
         latestVersion: discovery.latestVersion,
@@ -194,6 +236,8 @@ function createAppUpdateManager({
       ignored: Boolean(stored.ignoredVersion && (!target || stored.ignoredVersion === target)),
       paused: Boolean(stored.pausedVersion && (!target || stored.pausedVersion === target)),
       preferenceSaveFailed: stored.saveFailed === true,
+      overrideActive: stored.overrideActive === true,
+      overridePersisted: stored.overridePersisted === true,
       installOnQuit: candidate.ok,
       installOnQuitBlockedReason: candidate.ok ? null : candidate.code,
     };
@@ -278,13 +322,135 @@ function createAppUpdateManager({
       patch.pausedVersion = null;
     }
     if (Object.keys(patch).length === 0) return stored;
-    const result = store.update(patch);
+    // This runs on a background check, not on a user save. Never let it write
+    // an unsaved automatic preference (or an ignore/pause) to disk; the old
+    // persisted suppression is harmless and is re-evaluated on every check.
+    const result = store.update(patch, { repair: false, transient: true });
     return result.ok ? result.state : stored;
+  }
+
+  function currentTask() {
+    if (!downloadTask) return null;
+    const state = updaterState();
+    if (
+      Number.isSafeInteger(state.transactionId) &&
+      state.transactionId !== downloadTask.id
+    ) {
+      // 更新器已经在跑另一个事务；旧任务的回调不能操作新事务。
+      return null;
+    }
+    return downloadTask;
+  }
+
+  /* 下载器重新读取官方 Release 后、真正拉安装包之前调用。这里的版本是
+   * 实际下载目标，不再拿发现层的旧版本猜测；偏好、忽略、暂停必须针对
+   * 这个实际版本重新检查。 */
+  function approveDownload(task, info) {
+    if (disposed || task.cancelled) return { ok: false, code: 'cancelled' };
+    const version = info?.version;
+    if (!isStrictVersion(version)) return { ok: false, code: 'invalid_asset' };
+    const state = updaterState();
+    if (Number.isSafeInteger(state.transactionId) && state.transactionId !== task.id) {
+      return { ok: false, code: 'stale' };
+    }
+    if (task.source === 'auto') {
+      if (effectivePreference() !== 'automatic' || !support.supported || mode !== 'installed') {
+        return { ok: false, code: 'revoked' };
+      }
+    }
+    const stored = storedState();
+    if (stored.ignoredVersion === version) return { ok: false, code: 'ignored' };
+    if (stored.pausedVersion === version) return { ok: false, code: 'paused' };
+
+    const latest = discovery.latestVersion;
+    if (isStrictVersion(latest)) {
+      const compared = compareVersions(version, latest);
+      if (compared === -1) {
+        // 发现层已经指向更高版本：旧下载目标作废，不能拿过期版本覆盖展示。
+        task.superseded = true;
+        task.supersededFor = latest;
+        return { ok: false, code: 'superseded' };
+      }
+      if (compared === 1) {
+        // 实际 Release 比发现层更新：把发现层收敛到实际可信目标。
+        discovery = {
+          ...discovery,
+          status: 'available',
+          latestVersion: version,
+          release: info.release && typeof info.release === 'object' ? info.release : discovery.release,
+          error: '',
+        };
+        supersedeRetries = 0;
+        publishNow();
+      }
+    }
+    task.targetVersion = version;
+    publishNow();
+    return { ok: true, version };
+  }
+
+  function startDownload(source, expectedVersion) {
+    if (downloadTask) return downloadTask.promise;
+    const task = {
+      id: (downloadSeq += 1),
+      source,
+      expectedVersion: isStrictVersion(expectedVersion) ? expectedVersion : null,
+      targetVersion: null,
+      supersededFor: null,
+      cancelled: false,
+      superseded: false,
+      promise: null,
+    };
+    downloadTask = task;
+    task.promise = Promise.resolve()
+      .then(() =>
+        updater.download({
+          confirm: true,
+          transactionId: task.id,
+          expectedVersion: task.expectedVersion,
+          approve: (info) => approveDownload(task, info),
+        }),
+      )
+      .then((result) => {
+        if (!result || result.ok !== true) {
+          // 后台下载失败不弹通知；状态已经由更新器发布，页面会显示原因。
+          logger('download', result && result.code ? result.code : 'failed');
+        }
+        return result;
+      })
+      .catch((error) => {
+        logger('download', error && error.message ? error.message : 'failed');
+        return null;
+      })
+      .finally(() => {
+        if (downloadTask === task) downloadTask = null;
+        publishNow();
+        if (task.superseded && !disposed && supersedeRetries < 2) {
+          supersedeRetries += 1;
+          // 让旧事务完全结束后再启动新目标，避免并行下载和过期回调。
+          void maybeAutoDownload();
+        }
+      });
+    return task.promise;
+  }
+
+  function convergeAutoDownload(latestVersion) {
+    const task = currentTask();
+    if (!task || task.source !== 'auto' || !isStrictVersion(latestVersion)) return;
+    if (task.targetVersion && compareVersions(latestVersion, task.targetVersion) === 1) {
+      task.superseded = true;
+      task.supersededFor = latestVersion;
+      try {
+        updater.cancel();
+      } catch {
+        // 更新器自行收敛；旧任务结束时不会再提交 ready。
+      }
+    }
   }
 
   function maybeAutoDownload() {
     if (disposed) return Promise.resolve(null);
-    if (autoTask) return autoTask;
+    if (downloadTask) return downloadTask.promise;
     const preference = effectivePreference();
     if (preference !== 'automatic' || !support.supported) {
       return Promise.resolve(null);
@@ -308,27 +474,7 @@ function createAppUpdateManager({
     if (state.phase === 'ready' && state.version === discovery.latestVersion) {
       return Promise.resolve(null);
     }
-
-    downloadSource = 'auto';
-    autoTask = Promise.resolve()
-      .then(() => updater.download({ confirm: true }))
-      .then((result) => {
-        if (!result || result.ok !== true) {
-          // 后台下载失败不弹通知；状态已经由更新器发布，页面会显示原因。
-          logger('auto-download', result && result.code ? result.code : 'failed');
-        }
-        return result;
-      })
-      .catch((error) => {
-        logger('auto-download', error && error.message ? error.message : 'failed');
-        return null;
-      })
-      .finally(() => {
-        if (downloadSource === 'auto') downloadSource = null;
-        autoTask = null;
-        publishNow();
-      });
-    return autoTask;
+    return startDownload('auto', discovery.latestVersion);
   }
 
   async function check({ manual = false, force = false } = {}) {
@@ -405,6 +551,7 @@ function createAppUpdateManager({
 
       let stored = storedState();
       stored = reconcileSuppression(normalized.latestVersion, stored);
+      const discoveryChanged = discovery.latestVersion !== normalized.latestVersion;
       discovery = {
         status: normalized.updateAvailable ? 'available' : 'latest',
         latestVersion: normalized.latestVersion,
@@ -412,9 +559,9 @@ function createAppUpdateManager({
         error: '',
         checkedAt: new Date(now()).toISOString(),
       };
+      if (discoveryChanged) supersedeRetries = 0;
 
-      const wantAutomatic =
-        resolveEffectivePreference(stored.preference, support) === 'automatic';
+      const wantAutomatic = effectivePreference() === 'automatic';
       if (
         normalized.updateAvailable &&
         !wantAutomatic &&
@@ -427,6 +574,8 @@ function createAppUpdateManager({
 
       publishNow();
       if (wantAutomatic) {
+        // 发现层已经出现更高版本时，先让旧事务作废，再启动新目标。
+        convergeAutoDownload(normalized.latestVersion);
         // 不阻塞检查响应：自动下载在后台进行，状态由更新器持续发布。
         void maybeAutoDownload();
       }
@@ -454,25 +603,41 @@ function createAppUpdateManager({
         snapshot: snapshot(),
       };
     }
-    const previous = effectivePreference();
     const result = store.setPreference(value);
     if (!result.ok) {
       return { ok: false, code: result.code, snapshot: snapshot() };
     }
-    if (value === 'manual' && previous === 'automatic' && downloadSource === 'auto') {
-      // 自动下载在切换后立即失效；已经校验完成的包保留，可手动安装。
-      downloadSource = null;
+    // Any switch to manual must stop an automatic transaction immediately,
+    // even if the previous effective policy had already degraded to manual
+    // because a safety field was unsaved. Already verified packages stay.
+    if (value === 'manual' && downloadTask?.source === 'auto') {
+      downloadTask.cancelled = true;
       try {
         updater.cancel();
       } catch {
         // 取消失败由更新器自行收敛，不能因此假装切换失败。
       }
     }
+    const effective = effectivePreference();
     publishNow();
-    if (value === 'automatic') void maybeAutoDownload();
+    if (effective === 'automatic') void maybeAutoDownload();
+    const stored = storedState();
+    let error = '';
+    if (result.persisted !== true) {
+      if (value === 'manual') {
+        error = stored.overridePersisted
+          ? '已立即关闭自动更新；设置写入失败，但重启后仍会保持手动。请稍后重试保存。'
+          : '已立即关闭自动更新，但设置未能写入；重启后可能恢复自动更新，请稍后重试。';
+      } else {
+        error = '自动更新设置未能写入，本次运行仍按手动更新。请重试保存。';
+      }
+    }
     return {
       ok: true,
       persisted: result.persisted === true,
+      preference: effective,
+      requestedPreference: value,
+      ...(error ? { error } : {}),
       snapshot: snapshot(),
     };
   }
@@ -480,10 +645,10 @@ function createAppUpdateManager({
   function download() {
     if (disposed) return Promise.resolve({ ok: false, code: 'disposed' });
     const stored = storedState();
-    const target = isStrictVersion(discovery.latestVersion)
+    const expected = isStrictVersion(discovery.latestVersion)
       ? discovery.latestVersion
-      : updaterState().version;
-    if (target && stored.ignoredVersion === target) {
+      : null;
+    if (expected && stored.ignoredVersion === expected) {
       return Promise.resolve({
         ok: false,
         code: 'ignored',
@@ -498,28 +663,13 @@ function createAppUpdateManager({
       return Promise.resolve({ ok: false, code: 'busy', error: '更新正在进行中。' });
     }
     // 用户主动下载等同于恢复这个版本：清除它的暂停标记，但不动其他版本。
-    if (target && stored.pausedVersion === target) {
+    if (expected && stored.pausedVersion === expected) {
       store.setPausedVersion(null);
     }
-    downloadSource = 'manual';
-    return Promise.resolve()
-      .then(() => updater.download({ confirm: true }))
-      .then((result) => {
-        if (!result || result.ok !== true) {
-          downloadSource = null;
-        }
-        publishNow();
-        return result || { ok: false, code: 'failed' };
-      })
-      .catch((error) => {
-        downloadSource = null;
-        publishNow();
-        return {
-          ok: false,
-          code: 'failed',
-          error: safeError(error && error.message, '下载更新失败'),
-        };
-      });
+    return startDownload('manual', expected).then((result) => {
+      publishNow();
+      return result || { ok: false, code: 'failed' };
+    });
   }
 
   function cancel() {
@@ -528,12 +678,17 @@ function createAppUpdateManager({
     if (state.phase !== 'downloading' && state.phase !== 'verifying') {
       return { ok: false, code: 'not_downloading', snapshot: snapshot() };
     }
-    const target = isStrictVersion(state.version)
-      ? state.version
-      : isStrictVersion(discovery.latestVersion)
-        ? discovery.latestVersion
-        : null;
-    downloadSource = null;
+    const task = currentTask();
+    if (task) task.cancelled = true;
+    // 只有本事务已经解析出目标版本时才记录暂停；元数据尚未返回时，
+    // 旧任务的 version 不属于当前下载，绝不能拿来写 pausedVersion。
+    const target = task
+      ? task.targetVersion
+      : Number.isSafeInteger(state.transactionId)
+        ? null
+        : isStrictVersion(state.version)
+          ? state.version
+          : null;
     if (target) {
       store.setPausedVersion(target);
       if (store.snapshot().ignoredVersion !== target) {
@@ -552,14 +707,22 @@ function createAppUpdateManager({
   function ignore() {
     if (disposed) return { ok: false, code: 'disposed', snapshot: snapshot() };
     const state = updaterState();
-    // 与 snapshot()/界面一致：先忽略当前已下载或下载中的那个版本；
-    // 只有更新器没有持有版本时，才忽略发现层显示的最新版本。
-    const target = isStrictVersion(state.version)
-      ? state.version
-      : isStrictVersion(discovery.latestVersion)
-        ? discovery.latestVersion
-        : null;
+    const task = currentTask();
+    const active = state.phase === 'downloading' || state.phase === 'verifying';
+    // 下载中优先使用本事务解析出的实际目标；尚未解析时，用户看到的是
+    // 发现层版本，就忽略那个版本并取消整个事务。绝不沿用旧任务的版本。
+    const target = (active ? task?.targetVersion : null)
+      || (isStrictVersion(state.version) && !active ? state.version : null)
+      || (isStrictVersion(discovery.latestVersion) ? discovery.latestVersion : null);
     if (!target) {
+      if (active) {
+        if (task) task.cancelled = true;
+        try {
+          updater.cancel();
+        } catch {
+          // 取消失败不影响“没有可忽略版本”的结果。
+        }
+      }
       return { ok: false, code: 'no_version', snapshot: snapshot() };
     }
     const result = store.update({
@@ -569,25 +732,23 @@ function createAppUpdateManager({
     if (!result.ok) {
       return { ok: false, code: result.code, snapshot: snapshot() };
     }
-    if (
-      (state.phase === 'downloading' ||
-        state.phase === 'verifying' ||
-        state.phase === 'ready') &&
-      state.version === target
-    ) {
+    if (active && (!task || task.id === state.transactionId)) {
+      if (task) task.cancelled = true;
       // 已下载/下载中的版本被忽略后，立即取消自动安装资格；
       // 若还在下载，同时中止网络请求并清理临时文件。
-      if (state.phase === 'downloading' || state.phase === 'verifying') {
-        downloadSource = null;
-        try {
-          updater.cancel();
-        } catch {
-          // 更新器会自行收敛；忽略状态已经生效。
-        }
+      try {
+        updater.cancel();
+      } catch {
+        // 更新器会自行收敛；忽略状态已经生效。
       }
     }
     publishNow();
-    return { ok: true, version: target, persisted: result.persisted === true, snapshot: snapshot() };
+    return {
+      ok: true,
+      version: target,
+      persisted: result.persisted === true,
+      snapshot: snapshot(),
+    };
   }
 
   function unignore() {
@@ -616,9 +777,6 @@ function createAppUpdateManager({
         readyNotified.add(state.version);
         emitNotice({ kind: 'ready', version: state.version });
       }
-    }
-    if (state.phase === 'failed' || state.phase === 'cancelled') {
-      downloadSource = null;
     }
     publishNow();
   }
@@ -680,9 +838,12 @@ function createAppUpdateManager({
     unignore,
     autoInstallCandidate,
     autoInstallStillAllowed,
+    manualInstallStillAllowed,
     maybeAutoDownload,
     whenIdle() {
-      return autoTask ? Promise.resolve(autoTask).then(() => undefined) : Promise.resolve();
+      return downloadTask
+        ? Promise.resolve(downloadTask.promise).then(() => undefined)
+        : Promise.resolve();
     },
     get support() {
       return support;

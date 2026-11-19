@@ -110,7 +110,10 @@ function createAutoQuitCoordinator({
       attempt = 'settled';
       if (!result || result.ok !== true) {
         // 安装没有启动（或准备阶段失败）：恢复普通退出，缓存保留给下次。
-        if (!quitIssued) requestQuit();
+        // armed 已落盘的失败不能撤销：首次 app.quit 已失败、进程还活着时，
+        // 必须补一次真实退出让助手完成；quitIssued 此时只代表“已尝试退出”，
+        // 不代表退出成功。
+        if ((result && result.committed === true) || !quitIssued) requestQuit();
       }
     } catch (error) {
       note(error);
@@ -146,18 +149,28 @@ function createAutoQuitCoordinator({
     return true;
   }
 
-  async function runExplicitInstall() {
+  async function runExplicitInstall(options={}) {
     if (disposed) return { ok: false, code: 'disposed' };
     if (installFlow || attempt === 'checking' || attempt === 'running') {
       return { ok: false, code: 'busy', error: '更新正在准备中。' };
     }
     quitIssued = false;
     installFlow = true;
+    let result;
     try {
-      return await install();
+      result = await install(options);
     } finally {
       installFlow = false;
     }
+    // armed 已落盘的事务不可撤销。若这次 app.quit 本身失败，主进程还活着，
+    // 助手会一直等待父进程退出；补一次真实退出请求，让已提交的安装有机会
+    // 完成。只请求一次，不递归、不重试成环。quitIssued 只代表“已尝试退出”，
+    // 不代表退出成功，因此这里不能把它当成已退出。
+    if (result && result.committed === true) {
+      attempt = 'settled';
+      requestQuit();
+    }
+    return result;
   }
 
   function dispose() {
