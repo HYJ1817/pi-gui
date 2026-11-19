@@ -7,10 +7,10 @@
   现有侧栏 / 顶栏 / 搜索的就地同步。未交付：模型供应商选择器（当前 Pi 没有
   可配置的独立标题模型，避免假入口）、历史会话批量补标题、真实模型 E2E。
 - 身份：before HEAD `1bb6bce87e47d8d9ccb507c2b82d1fc1cb8f96d1`；
-  after HEAD 为包含本报告的交付提交，可用
-  `git log -1 --format=%H -- docs/ai-session-title-acceptance.md` 解析；
-  分支 `feat/ai-session-title`。本文证据覆盖提交前工作区 diff；提交后的
-  canonical / CI 另行记录，不用旧运行代替。
+  功能提交 `104b6382c76e420431c947f7ce0b69dd4b7ff89f`，测试 / 文档提交为
+  本报告所在提交，可用 `git log -1 --format=%H -- docs/ai-session-title-acceptance.md`
+  解析；分支 `feat/ai-session-title` 已推送。本文证据覆盖提交前工作区 diff；
+  提交后的 canonical / CI 另行记录，不用旧运行代替。
 - 证据范围：`1bb6bce8` 之上的功能 diff（`git diff --name-status 1bb6bce8`）。
 - 修改文件：
   - 后端：`server/session-title-context.js`（有界上下文与输出校验）、
@@ -57,7 +57,7 @@
 | Electron 实测 | `npm run test:session-title:visual`（源码版 + 离线 harness） | **43/43**，exit 0；18 张截图；4 组实际 CSS 视口：1320×820 dark/light、700×600 light/dark，DPR=1；经典与 Runtime 行菜单均覆盖；0 条 renderer console error | `.shots/session-title/`（`results.json`、18 PNG） |
 | 真实浏览器视觉 | `node tests/cdp-shot.cjs --url=http://127.0.0.1:7789/ --tag=hv` | 会话菜单四档宽度截图全部通过结构判据（`UX-MENU-04`、`UX-SESSION-MENU-*`）；脚本其余既有的顶栏配色 / 机型判据仍报告失败，末尾还有一个被截断的 TypeError，均未作为本功能通过依据 | `.shots/hv-UX-MENU-04-session-menu-open.png`、`.shots/hv-UX-SESSION-MENU-*.png` |
 | 真实模型 E2E | 未运行。离线优先政策下不擅自调用模型；本轮没有可合法使用的隔离凭据。 | 未验证（未运行，原因：离线政策与无隔离凭据） | — |
-| PR CI | 未运行（分支尚未推送） | 未验证 | — |
+| PR CI | 未运行（分支已推送，未创建 PR；用户未要求创建） | 未验证 | — |
 
 - 失败与修复历史（均为开发期，已重跑通过）：
   1. 服务层测试最初只给夹具 `id`，与产品 `resolveClassic` 要求的
@@ -96,5 +96,5 @@
   `session-title-settings.json` 可清除标题元数据与开关，Pi 会话文件无需恢复
   （本功能从未写入）。不影响其他工作区改动。
 - 待用户决定：是否运行真实模型 E2E、是否合并、是否发版。当前均未授权。
-- 结论：开发完成（待本报告提交）；代码验收待独立审查与 PR CI；合并未授权；
-  发布未授权。
+- 结论：开发完成，功能与验收材料已提交并推送；独立审查发现均已处置；
+  完整 canonical / PR CI 未运行；合并未授权；发布未授权。
