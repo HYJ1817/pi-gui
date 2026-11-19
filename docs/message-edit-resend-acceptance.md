@@ -305,7 +305,7 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
 | `node tests/message-edit-target.cjs` | `Message edit target: 20/20` | 0 |
 | `node tests/message-edit-service.cjs` | `Message edit service: 49/49` | 0 |
 | `node tests/message-edit-http.cjs` | `Message edit HTTP: 10/10` | 0 |
-| `node tests/message-edit-ui.cjs` | `Message edit UI: 41/41` | 0 |
+| `node tests/message-edit-ui.cjs` | `Message edit UI: 42/42` | 0 |
 | `PI_GUI_MESSAGE_EDIT_FIXTURE=1 node tests/message-edit-real-pi.cjs` | `Message edit real Pi: 16/16` | 0 |
 | `PI_GUI_MESSAGE_EDIT_ELECTRON=1 node tests/message-edit-electron.cjs` | `Message edit Electron: 31/31` | 0 |
 | `node tests/runtime-registry.cjs` | `Runtime registry: 41/41` | 0 |
@@ -322,7 +322,7 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
   打印 SKIP 并以 0 退出（CI 不依赖真 Pi）。Electron 需要图形环境与真实 Electron，未加入
   `npm test` 链，按上面的环境变量单独运行。
 - 本轮未运行完整 `npm test`，按任务约定把全局回归交给 PR CI；已运行的定向套件没有断言数下降
-  （service 25 → 49、UI 26 → 41、real-Pi 12 → 16；新增 http 10 条、runtime registry 41 条、
+  （service 25 → 49、UI 26 → 42、real-Pi 12 → 16；新增 http 10 条、runtime registry 41 条、
   sessions 4 条）。
 - 产物重建：`npm run build:app -- --rebuild` 退出码 0；`dist-app\Pi GUI-win32-x64`
   整包 334.1 MB，入口 `Pi GUI.exe` 234.9 MB；同时生成 `build/Pi GUI.exe` 100.7 MB。
@@ -341,8 +341,10 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
 - `tests/message-edit-ui.cjs` 新增：status GET 携带 owner 头；未解决提交把 requestId 写入
   `sessionStorage`，刷新后重新打开编辑器会接回原事务并提供恢复入口；Classic
   `ok:false, code` 与 Runtime `ok:true, canEdit:false, reason` 两种真实形状都覆盖；不同消息
-  上打开编辑器仍能看到会话级恢复入口；不同作用域的记录互不覆盖；成功预检只清同一 native
-  session 的记录；`resumePendingMessageEdit` 对 accepted / failed / backend 换代分别收口。
+  上打开编辑器仍能看到会话级恢复入口；不同作用域的记录互不覆盖；后端明确返回
+  `state:'unknown'` 时清掉本地句柄并允许关闭，不留永久锁死的编辑器；成功预检只清同一
+  native session 的记录；`resumePendingMessageEdit` 对 accepted / failed / backend 换代
+  分别收口。
 - `tests/runtime-registry.cjs` 新增：目标 Runtime 的编辑事务阻止命令、关闭、重启、工作区失效；
   其它 Runtime 可继续写入 / 读取 / 关闭；`acceptance_unknown` 保留锁，`editRecover` 后仍保留，
   `accepted` 后才释放；bridge 掉线后原 `requestId` 仍可查询；生命周期进入 `error`（身份回读
@@ -369,8 +371,8 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
 生产后端（真实 `server.js`）+ 真实 Pi 1.5.2 + 回环确定性模型 + 真实 `BrowserWindow`，临时项目 /
 会话 / agent / userData 全部在 `os.tmpdir()`：
 
-- `sessionId=01a1f527-a7c6-7339-b740-02ae4e28a788`（第二轮最终运行）
-- 会话文件 1 个、17468 字节；侧栏条目编辑前 1、编辑后 1
+- `sessionId=01a1f52a-7c9f-76ac-a796-7131299af38c`（第二轮最终运行）
+- 会话文件 1 个、17467 字节；侧栏条目编辑前 1、编辑后 1
 - 5 次模型请求；编辑后的模型上下文只含 `["edited first question"]`
 - 标题：编辑前 `first question`（首条用户消息 fallback）；通过生产
   `/api/session-titles/rename` 设为 `手工标题·保留` 后，编辑重发与重新生成后仍为
@@ -403,7 +405,7 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
 
 | 指标 | 编辑 / 重发前 | 编辑 / 重发后 |
 | --- | --- | --- |
-| native `sessionId` | 真实 Pi `01a1f51f-…` / Electron `01a1f527-…` | 与各自编辑前完全相同 |
+| native `sessionId` | 真实 Pi `01a1f51f-…` / Electron `01a1f52a-…` | 与各自编辑前完全相同 |
 | 原生会话文件数 | 1 | 1 |
 | 侧栏条目数（Electron） | 1 | 1 |
 | 原生会话文件 | append-only，旧文本仍可检索 | 继续追加；旧分支离开 active path |
