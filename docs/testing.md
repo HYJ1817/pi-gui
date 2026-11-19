@@ -1275,7 +1275,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 
 | 层 | 命令 | 量什么 |
 |---|---|---|
-| DOM（jsdom） | `npm run test:ui` | 项目行没有常驻 `.pj-path`、路径进了 `title` / aria-label；折叠箭头的结构、`aria-expanded` / `aria-controls`、折叠-展开-换项目-搜索的交互与「点箭头 / 点删除不误触」；minimap 紧凑聚簇（跨度、等距、居中、顺序）、`scrollTo` 落点、**不许调用 `scrollIntoView`** |
+| DOM（jsdom） | `npm run test:ui` | 项目行没有常驻 `.pj-path`、路径进了 `title` / aria-label；标题区域（`.pj-select`，箭头是装饰）的结构、`aria-expanded` / `aria-controls`、折叠-展开-多项目-搜索的交互与「点标题 / 点加号 / 点三点互不误触」；minimap 紧凑聚簇（跨度、等距、居中、顺序）、`scrollTo` 落点、**不许调用 `scrollIntoView`** |
 | 样式表文本 | `npm run test:server` | 全局 `::-webkit-scrollbar`（10px / 深灰 `#2c2c2c` / 轨道透明 / 同时覆盖横向 / 有 `@supports` 兜底 / 没有 `scrollbar-width:none`）、删掉了旧的重复补丁、`.stage-head` 有显式背景且抬在正文之上、`.stage` 是 `overflow:clip`、**`--titlebar` 与 `electron/main.cjs` 的 `titleBarOverlay.color` 同值** |
 | 真实 Chrome | `npm run harness` + `npm run shots:harness` | 场景 UX-01 ～ UX-09（见下） |
 
@@ -1286,7 +1286,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   （判滚动条不能只看样式：不可滚的容器上有没有滚动条都无所谓）。
   UX-01 原先量的是命令面板；面板在 P36 移除后这一条一并删除。
 - **UX-03 / UX-04**：`.project.active` 与 `.pj-sess` 的 `offsetHeight` 差 ≤ 2px、
-  项目行 ≤ 36px、没有 `.pj-path`、路径在 `title` 上、箭头 `aria-expanded` /
+  项目行 ≤ 36px、没有 `.pj-path`、路径在 `title` 上、标题触发器 `aria-expanded` /
   `aria-controls` 正确、会话块仍是项目行的 `nextElementSibling`；
   折叠后会话块 `hidden`、`aria-expanded=false`、**会话行仍在 DOM 里**、项目行还在。
 - **UX-05**：24 次提问 → 24 条 marker；整组跨度 < 导航容器高的 1/3、
