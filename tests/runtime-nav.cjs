@@ -21,6 +21,7 @@ const { JSDOM } = require('jsdom');
   /* B 先创建、A 后创建：故意让「创建顺序」与「字母顺序」相反，
    * 否则「按 createdAt 排」和「按 id 排」区分不出来。 */
   const record = (id, createdAt, over = {}) => ({ conversationId: id, createdAt, revision: 1,
+    nativeSessionId: 'native-' + id,
     workspace: { branch: 'branch-' + id, projectId: 'project' }, owner: null, lifecycle: 'dormant', activity: 'idle',
     attention: false, focused: false, error: null, stop: null, ...over });
 
@@ -49,6 +50,18 @@ const { JSDOM } = require('jsdom');
   ok('dormant 会话也列出（不因休眠而隐藏）', rows().every(r => r.textContent.includes('已关闭')));
   ok('列表读取不 spawn Runtime', !requests.some(r => r.action === 'start'));
   ok('提供「新建并行会话」入口', !!list.querySelector('.pj-runtime-new'));
+
+  /* Runtime 行也必须能手动生成标题（与经典会话共用同一服务）。 */
+  const titleTrigger = rows().find(r => r.dataset.conversationId === 'A').querySelector('.pj-sess-menu-trigger');
+  ok('Runtime 行提供三点操作入口', Boolean(titleTrigger) && Boolean(titleTrigger.querySelector('svg')));
+  titleTrigger.click();
+  const titleMenu = document.querySelector('#actionMenu');
+  ok('Runtime 行菜单复用「AI 生成标题」', Boolean(titleMenu)
+    && titleMenu.textContent.includes('AI 生成标题')
+    && titleMenu.querySelectorAll('[role="menuitem"]').length === 1
+    && !titleMenu.querySelector('[role="menuitem"]').disabled);
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  ok('Escape 关闭 Runtime 标题菜单', !document.querySelector('#actionMenu'));
 
   /* dormant 行点了**不能**发 focus（没有 live owner 可校验），更不能 spawn。 */
   requests.length = 0;

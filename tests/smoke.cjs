@@ -6216,9 +6216,9 @@ staticCheck();
           `triggers=${triggers.length} rows=${rows.length}`;
       });
       await openRowMenu(cur.querySelector('.pj-sess-menu-trigger'));
-      check('会话：当前会话也显示完整三个菜单项', () => {
+      check('会话：当前会话也显示完整菜单项（含 AI 生成标题）', () => {
         const labels = rowMenuLabels();
-        return labels.join(',') === '重命名,归档,删除会话' || JSON.stringify(labels);
+        return labels.join(',') === 'AI 生成标题,重命名,归档,删除会话' || JSON.stringify(labels);
       });
       check('会话：当前会话的归档与删除禁用，说明需先切换', () =>
         rowMenuItem('归档').disabled && rowMenuItem('删除会话').disabled && /先切换/.test(rowMenuEl().textContent));
@@ -6257,9 +6257,9 @@ staticCheck();
       let proj3 = $('projects');
       const row = [...proj3.querySelectorAll('.pj-sess')].find((x) => !x.classList.contains('on'));
       await openRowMenu(row.querySelector('.pj-sess-menu-trigger'));
-      check('会话：非当前会话也显示完整三个菜单项', () => {
+      check('会话：非当前会话也显示完整菜单项（含 AI 生成标题）', () => {
         const labels = rowMenuLabels();
-        return labels.join(',') === '重命名,归档,删除会话' || JSON.stringify(labels);
+        return labels.join(',') === 'AI 生成标题,重命名,归档,删除会话' || JSON.stringify(labels);
       });
       const beforeDisabledRename = sessionCalls.length;
       rowMenuItem('重命名').click();
@@ -6309,7 +6309,7 @@ staticCheck();
         await openRowMenu(archivedRow.querySelector('.pj-sess-menu-trigger'));
       check('会话：已归档那条的统一菜单显示「取消归档」', () => {
           const labels = rowMenuLabels();
-        return labels.join(',') === '重命名,取消归档,删除会话' || JSON.stringify(labels);
+        return labels.join(',') === 'AI 生成标题,重命名,取消归档,删除会话' || JSON.stringify(labels);
         });
         window.closeActionMenu?.();
         await new Promise((r) => setTimeout(r, 10));
@@ -6713,13 +6713,18 @@ staticCheck();
     await window.loadStatus();
     window.renderProjects();
     await new Promise((r) => setTimeout(r, 80));
-    check('降级：sessionNaming 不可用 → 保留完整菜单且所有项禁用', () => {
+    check('降级：sessionNaming 不可用 → 保留完整菜单，改名/归档/删除按原因禁用', () => {
       const cur = proj().querySelector('.pj-sess.on');
       if (!cur) return '没有当前会话行';
       cur.querySelector('.pj-sess-menu-trigger')?.click();
       const menu = window.document.querySelector('#actionMenu');
-      const disabled = menu && [...menu.querySelectorAll('[role="menuitem"]')].length === 3
-        && [...menu.querySelectorAll('[role="menuitem"]')].every((b) => b.disabled)
+      const items = menu ? [...menu.querySelectorAll('[role="menuitem"]')] : [];
+      const byLabel = (text) => items.find((b) => b.querySelector('.action-menu-label')?.textContent === text);
+      /* AI 生成标题不依赖 sessionNaming：它只读会话文件、复用模型调用，
+       * 所以不能因为「Pi 不能改名」就一起禁掉（那是两件事）。 */
+      const disabled = menu && items.length === 4
+        && Boolean(byLabel('AI 生成标题'))
+        && ['重命名', '归档', '删除会话'].every((text) => byLabel(text)?.disabled)
         && /Pi 不支持会话重命名/.test(menu.textContent);
       window.closeActionMenu();
       /* 非当前会话不受影响：它还有归档 / 删除，所以三点照常。 */

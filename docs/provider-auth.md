@@ -79,6 +79,20 @@ P25.2 的原生额度查询使用同一个私有 Auth worker。ModelRuntime 确�
 OAuth。OpenRouter 显示 Key 限额；没有可靠 adapter 或凭据类型不适用时返回
 unsupported。详见 [状态恢复与稳定元数据](runtime-recovery.md)。
 
+### 会话标题的独立文本生成
+
+`server/session-title-sdk.js` 复用同一套 Pi 包解析（`resolveAuthSdk`）与
+`ModelRuntime.create({authPath, modelsPath})`，在独立 worker 里读取**同一份**
+auth / models，用让首条回复成功的那组 provider/model 调一次 `completeSimple`。
+它不登录、不改凭据、不要求额外 API Key；认证方式（API Key / OAuth / 订阅 /
+自定义 provider）与远端有效性仍由 Pi 决定，GUI 不复制供应商客户端。
+
+worker 只回传标题文本（≤512 字符，主进程再按标题规则校验）、`stopReason`
+与三个数字 usage；SDK 错误原文、stdout/stderr、凭据、完整回复都不跨线程。
+worker 环境会剥掉 `PI_GUI_TOKEN`。标题生成失败只影响标题，不改变供应商
+连接状态，也不阻断聊天。每次生成会消耗少量模型用量，设置页有说明；
+当前 Pi 不提供该能力时按三值降级（未知 ≠ 不支持）。
+
 ## 实现文件
 
 | 范围 | 文件 |

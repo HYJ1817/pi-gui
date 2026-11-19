@@ -432,6 +432,12 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
     入口与执行分别复用 `server.js` 的 `resolvePiCliEntry()` / `runPiCliCommand()`
     —— 与 Pi 更新同源，不可能各解析出不同的 pi。见 [security.md](security.md)
   - `sessions.js` — 会话列表 / 切换 / 改名 / 归档 / 删除。见 [sessions.md](sessions.md)
+  - `session-titles.js` — AI 标题的触发 / 生成 / 归属校验 / 降级；运行时不阻塞回复，
+    不写 Pi 的 JSONL。配套 `session-title-context.js`（纯解析与输出校验）、
+    `session-title-store.js`（Pi GUI 自己的标题与设置元数据）、
+    `session-title-sdk.js`（隔离 worker 里复用 Pi ModelRuntime 做一次有界文本生成）。
+    经典会话与 Runtime 并行会话都经注入触发，模块之间不互相 import。
+    见 [sessions.md](sessions.md#ai-自动标题与手动标题的优先级)
   - `update-check.js` — **版本检查**：只读公开 GitHub Release 元数据，判断有没有新版。
     自带 SemVer 纯函数、30 分钟内存缓存、single-flight 与错误分类；
     **不下载、不安装、不发 telemetry、请求不带任何凭据**，
@@ -495,6 +501,10 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
 - `git.js` 变更面板 / `diff.js` unified diff 渲染 / `changes.js` 会话改动账本
 - `sessions.js` 侧栏会话列表 / `conversation-nav.js` 会话内提问导航 /
   `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）
+- `session-title.js` 纯标题投影（当前项目 / 当前会话）/ `session-titles.js`
+  标题事件就地应用、设置缓存与手动「AI 生成标题」入口；经典会话行与
+  `runtime-nav.js` 的并行会话行共用该入口与同一个后端服务，
+  不重建列表、不改排序
 - `extensions.js` 扩展面板（Extensions / Skills / MCP 三个标签 + 通用 Registry）/
   `planner.js` 任务面板 / `project-config.js` 项目设置
 - `capability-model.js` 纯投影（四值状态、**适用性收口**、结论行、过滤器、

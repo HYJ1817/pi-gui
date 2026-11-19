@@ -686,6 +686,15 @@ let harnessSessionId = 'aaaaaaaaaaaaaaaa';
 /* 真实 Pi 的 sessionName 只在用户明确命名后才有值；自动标题来自会话文件。
  * 夹具默认保留原来的 'pi-GUI'，P2 取证时可显式清空，走列表标题投影。 */
 let harnessSessionName = 'pi-GUI';
+/* AI 会话标题（自动 / 手动）：设置页与侧栏菜单的真实排版取证需要一份
+ * 能力已确认的响应，否则入口按「未知」降级、截图里看不出按钮的常态。
+ * 只存在内存里，不读写任何文件。 */
+let harnessAutoTitle = true;
+let harnessTitleSettingsFail = false;
+/* 仅视觉取证：给 Runtime 并行会话行一份离线记录，验证新增的标题入口
+ * 与共用行/菜单排版。默认关闭，不影响其它既有截图。 */
+let harnessRuntimeTitleRow = false;
+const HARNESS_RUNTIME_TITLE_ID = '12121212-1212-4212-8212-121212121212';
 
 /* 真实 SSE 会给事件带上 bridgeRun：前端靠它丢弃旧 bridge run 的事件，
  * 也靠它认定「这次调用真的发生在当前 workspace / run」。
@@ -1469,11 +1478,77 @@ const server = http.createServer(async (req, res) => {
     harnessSessionId = 'aaaaaaaaaaaaaaaa';
     return json(res, 200, { ok: true });
   }
+  /* AI 会话标题：只回内存状态，供设置页与菜单截图。 */
+  if (p === '/api/session-titles/settings' && (req.method === 'GET' || req.method === 'PUT')) {
+    if (req.method === 'PUT') {
+      const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+      /* 真实磁盘写入不是瞬时的；留一个短延迟，让「保存中开关禁用」
+       * 这个状态能被真实截图看到。 */
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      if (harnessTitleSettingsFail) {
+        harnessTitleSettingsFail = false;
+        return json(res, 200, { ok: false, code: 'io_error', error: '设置未能保存，请重试' });
+      }
+      if (typeof body.autoEnabled === 'boolean') harnessAutoTitle = body.autoEnabled;
+    }
+    return json(res, 200, {
+      ok: true,
+      settings: { autoEnabled: harnessAutoTitle },
+      capability: { supported: true, reason: null },
+      model: { mode: 'current-session', label: '跟随当前会话' },
+    });
+  }
+  /* 仅供视觉取证：下一次标题设置保存失败，验证开关回滚与错误提示。 */
+  if (p === '/api/__title-settings-fail' && req.method === 'POST') {
+    harnessTitleSettingsFail = true;
+    return json(res, 200, { ok: true });
+  }
+  /* 仅供视觉取证：推一条自动标题事件，走真实 SSE → 就地更新链路。
+   * 用来在窄窗看英文/长标题在侧栏与顶部标题里的换行，不改会话夹具。 */
+  if (p === '/api/__title' && req.method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    const title = typeof body.title === 'string' ? body.title : '';
+    if (!title) return json(res, 400, { ok: false });
+    push({ type: 'session_title', scope: 'classic', sessionId: String(body.sessionId || ''), title, source: 'auto', at: new Date().toISOString() });
+    return json(res, 200, { ok: true, title });
+  }
   /* 仅供 P2 取证：把 Pi 的实时 sessionName 置空，验证自动标题来自会话列表。 */
   if (p === '/api/__session-name' && req.method === 'POST') {
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     harnessSessionName = String(body.name || '');
     return json(res, 200, { ok: true, name: harnessSessionName });
+  }
+  /* 仅视觉取证：打开 Runtime 标题行夹具（之后才返回 worktrees / runtime 行）。 */
+  if (p === '/api/__runtime-title-row' && req.method === 'POST') {
+    harnessRuntimeTitleRow = true;
+    return json(res, 200, { ok: true });
+  }
+  if (harnessRuntimeTitleRow && p === '/api/worktrees' && req.method === 'GET') {
+    return json(res, 200, { ok: true, projectId: 'project-title-row', contextGeneration: 1, items: [] });
+  }
+  if (harnessRuntimeTitleRow && p === '/api/runtime-sessions' && req.method === 'GET') {
+    return json(res, 200, {
+      ok: true,
+      backendInstance: 'backend',
+      items: [{
+        conversationId: HARNESS_RUNTIME_TITLE_ID,
+        createdAt: '2026-09-26T08:00:00.000Z',
+        kind: 'project',
+        workspace: { projectId: 'project-title-row', cwd: 'C:\\pi-GUI', branch: 'title-row' },
+        nativeSessionId: 'native-title-row',
+        sessionName: null,
+        title: '修复登录接口超时',
+        titleSource: 'auto',
+        revision: 1,
+        owner: null,
+        lifecycle: 'dormant',
+        activity: 'idle',
+        attention: false,
+        focused: false,
+        error: null,
+        stop: null,
+      }],
+    });
   }
   if (p === '/api/sessions') {
     if (url.searchParams.get('project') === 'C:\\work\\fermenter-notes') return json(res, 200, {
