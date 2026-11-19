@@ -16,6 +16,7 @@ function extensionEntry() {
 
 export function createMessageEditLaunch() {
   let command = null;
+  let token = null;
   let entry = null;
   let available = null;
   const resolveEntry = () => {
@@ -37,16 +38,24 @@ export function createMessageEditLaunch() {
       const file = resolveEntry();
       if (!file) return null;
       command = 'pi-gui-edit-' + randomUUID().replace(/-/g, '').slice(0, 12);
+      token = randomUUID();
       return {
         args: ['--extension', file],
-        env: { PI_GUI_EDIT_COMMAND: command },
+        env: { PI_GUI_EDIT_COMMAND: command, PI_GUI_EDIT_TOKEN: token },
       };
     },
     command() {
       return command;
     },
+    /* 随机命令名之外再带一个每次启动重生成的 token。命令名会出现在
+     * `get_commands` 里，只有名字不足以阻止其它入口直接调用内部导航；
+     * token 只交给当前 Pi 子进程与后端，二者缺一不可。 */
+    token() {
+      return token;
+    },
     invalidate() {
       command = null;
+      token = null;
     },
   };
 }

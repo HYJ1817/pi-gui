@@ -39,10 +39,10 @@ import { renderPlan } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
-import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance } from './ui/message-edit.js';
+import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance, rememberPendingMessageEdit, clearPendingMessageEdit, readPendingMessageEdit, isEditInProgress } from './ui/message-edit.js';
 import { confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
-import { messageEditPreflight, messageEditResend, messageEditStatus } from './api.js';
+import { messageEditPreflight, messageEditResend, messageEditStatus, messageEditRecover } from './api.js';
 import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
 import {
   saveSessionBookmark,
@@ -59,6 +59,10 @@ let userIndexSeq = 0;
 /* 一次编辑在提交时捕获的旧尾部节点。只删除这些引用，绝不按“目标之后的
  * 全部节点”删除 —— 新 run 的 assistant/工具节点可能在 HTTP 应答前就挂上来。 */
 let pendingEdit = null;
+/* 点击“编辑/重新生成”时，文章节点对应的**原始用户文本**。事务目标由首次
+ * preflight 锁定；这份文本只用于核对 preflight 的 userIndex 没有指到别的
+ * 消息上，不参与定位。 */
+const userTextByArticle = new WeakMap();
 let assistantSeq = 0;
 let outcomeSeq = 0;
 let toolGroupCallId = null;
@@ -609,6 +613,7 @@ function userMessageWithText(text, images) {
 function updateClassicUserArticle(article, text, images, userIndex) {
   if (!article?.isConnected) return;
   const msg = userMessageWithText(text, images);
+  userTextByArticle.set(article, text);
   const body = article.querySelector('.msg-body');
   if (body) body.replaceWith(userBody(msg));
   const actions = messageActions(text, { onEdit: () => openClassicEditor(article, msg, userIndex) });
@@ -691,6 +696,34 @@ function attachClassicRegenerate(article, userIndex) {
   return bar;
 }
 
+function showClassicEditRecovery(requestId, pending) {
+  const reload = () => document.dispatchEvent(new CustomEvent('pi-gui:reload-classic-history'));
+  const sync = async () => {
+    let status = null;
+    try { status = await messageEditRecover(requestId); } catch { status = null; }
+    if (status?.state === 'accepted') {
+      clearPendingMessageEdit(requestId);
+      if (pending) applyClassicEditResult({ ...(status.result || {}), ok: true }, pending);
+      else reload();
+      toast('已重新同步，会话已按新消息更新。', 'success', { important: true });
+      return;
+    }
+    if (status?.state === 'failed' || status?.state === 'recovery_required' || status?.state === 'stale_session') {
+      clearPendingMessageEdit(requestId);
+      if (pending && !pending.eventApplied && pendingEdit === pending) pendingEdit = null;
+      if (!pending) reload();
+      toast(messageEditErrorText(status.result?.code || status.state), 'error');
+      return;
+    }
+    toast(messageEditErrorText('recovery_pending'), 'error', {
+      action: { label: '重新同步', run: sync },
+    });
+  };
+  toast(messageEditErrorText('acceptance_unknown'), 'error', {
+    action: { label: '重新同步', run: sync },
+  });
+}
+
 async function regenerateClassicTurn(button, userIndex) {
   if (!Number.isInteger(userIndex) || button?.disabled) return;
   if (messageEditorBusy()) {
@@ -705,11 +738,36 @@ async function regenerateClassicTurn(button, userIndex) {
     toast(messageEditErrorText('unknown_user_message'), 'error');
     return;
   }
+  /* 点击时前端持有的原文；preflight 必须指向同一条消息，而不是另一个
+   * 恰好占着这个 userIndex 的节点。 */
+  const clickedText = userTextByArticle.get(article);
+  if (typeof clickedText !== 'string') {
+    toast(messageEditErrorText('stale_history'), 'error');
+    return;
+  }
   if (button) button.disabled = true;
   try {
     const pre = await messageEditPreflight({ userIndex, kind: 'regenerate' });
-    if (!pre?.ok) { toast(messageEditErrorText(pre?.code), 'error'); return; }
+    const busy = isEditInProgress(pre);
+    if (!pre?.ok || busy) {
+      if (busy) {
+        const pendingRecord = readPendingMessageEdit({
+          kind: 'classic',
+          ...(S.legacyOwner?.sessionId ? { sessionId: S.legacyOwner.sessionId } : {}),
+        });
+        if (pendingRecord && pendingRecord.scope?.kind === 'classic'
+          && (!pendingRecord.scope.sessionId || pendingRecord.scope.sessionId === S.legacyOwner?.sessionId)) {
+          showClassicEditRecovery(pendingRecord.requestId, null);
+          return;
+        }
+        toast(messageEditErrorText('edit_in_progress'), 'error');
+        return;
+      }
+      toast(messageEditErrorText(pre?.code), 'error');
+      return;
+    }
     if (pre.canEdit !== true) { toast(messageEditErrorText(pre.reason || 'edit_unavailable'), 'error'); return; }
+    if (pre.text !== clickedText) { toast(messageEditErrorText('stale_history'), 'error'); return; }
     if (pre.hasToolsAfter === true) {
       const confirmed = await confirmModal({
         title: '重新生成',
@@ -733,6 +791,14 @@ async function regenerateClassicTurn(button, userIndex) {
     };
     pendingEdit = pending;
     const requestId = messageEditRequestId();
+    rememberPendingMessageEdit({
+      requestId,
+      text: pre.text,
+      userIndex: pending.userIndex,
+      kind: 'regenerate',
+      scope: { kind: 'classic', sessionId: pre.sessionId, backendInstance: S.bridgeInstance },
+      at: Date.now(),
+    });
     let result;
     try {
       result = await messageEditResend({
@@ -740,7 +806,9 @@ async function regenerateClassicTurn(button, userIndex) {
         kind: 'regenerate',
         text: pre.text,
         expectedEntryId: pre.entryId,
+        expectedParentId: pre.parentId ?? null,
         expectedLeafId: pre.leafId,
+        expectedSessionId: pre.sessionId,
         requestId,
       });
     } catch {
@@ -751,10 +819,18 @@ async function regenerateClassicTurn(button, userIndex) {
       result = resolved || { ok: false, code: 'acceptance_unknown' };
     }
     if (!result?.ok) {
-      if (!pending.eventApplied && pendingEdit === pending) pendingEdit = null;
-      toast(messageEditErrorText(result?.code), 'error');
+      /* 结果未知时保留 pending：迟到的 message_start 仍应就地更新目标，
+       * 而不是再追加一条用户消息。 */
+      if (!result?.unresolved) clearPendingMessageEdit(requestId);
+      if (!result?.unresolved && !pending.eventApplied && pendingEdit === pending) pendingEdit = null;
+      if (result?.unresolved || result?.code === 'acceptance_unknown' || result?.code === 'recovery_pending') {
+        showClassicEditRecovery(requestId, pending);
+      } else {
+        toast(messageEditErrorText(result?.code), 'error');
+      }
       return;
     }
+    clearPendingMessageEdit(requestId);
     applyClassicEditResult(result, pending);
   } catch {
     toast(messageEditErrorText('network'), 'error');
@@ -769,6 +845,7 @@ function openClassicEditor(article, msg, userIndex) {
   const actions = article.querySelector('.message-actions');
   const text = textOf(msg);
   const images = imagesOf(msg);
+  let pendingRef = null;
   return openMessageEditor({
     text,
     userIndex,
@@ -777,6 +854,11 @@ function openClassicEditor(article, msg, userIndex) {
     mount: article,
     originals: [body, actions].filter(Boolean),
     returnFocus: actions?.querySelector('.message-edit'),
+    pendingScope: {
+      kind: 'classic',
+      backendInstance: S.bridgeInstance,
+      ...(S.legacyOwner?.sessionId ? { sessionId: S.legacyOwner.sessionId } : {}),
+    },
     preflight: ({ userIndex: index, kind }) => messageEditPreflight({ userIndex: index, kind }),
     resend: async payload => {
       const children = S.thread ? [...S.thread.children] : [];
@@ -791,6 +873,7 @@ function openClassicEditor(article, msg, userIndex) {
         eventApplied: false,
         accepted: false,
       };
+      pendingRef = pending;
       pendingEdit = pending;
       let result;
       try { result = await messageEditResend(payload); }
@@ -802,13 +885,26 @@ function openClassicEditor(article, msg, userIndex) {
         result = resolved || { ok: false, code: 'acceptance_unknown' };
       }
       if (!result?.ok) {
-        if (!pending.eventApplied && pendingEdit === pending) pendingEdit = null;
+        if (!result?.unresolved && !pending.eventApplied && pendingEdit === pending) pendingEdit = null;
         return result;
       }
       applyClassicEditResult(result, pending);
       return result;
     },
     readStatus: requestId => messageEditStatus(requestId),
+    recover: async requestId => {
+      let status = null;
+      try { status = await messageEditRecover(requestId); } catch { return null; }
+      const reload = () => document.dispatchEvent(new CustomEvent('pi-gui:reload-classic-history'));
+      if (status?.state === 'accepted') {
+        if (pendingRef) applyClassicEditResult({ ...(status.result || {}), ok: true }, pendingRef);
+        else reload();
+      } else if (status?.state === 'failed' || status?.state === 'recovery_required' || status?.state === 'stale_session') {
+        if (pendingRef && !pendingRef.eventApplied && pendingEdit === pendingRef) pendingEdit = null;
+        if (!pendingRef) reload();
+      }
+      return status;
+    },
   });
 }
 
@@ -835,6 +931,7 @@ function renderUser(msg, { userIndex = null } = {}) {
   role.className = 'msg-role';
   role.textContent = '你';
 
+  userTextByArticle.set(wrap, textOf(msg));
   wrap.append(role, userBody(msg), messageActions(textOf(msg), {
     onEdit: () => openClassicEditor(wrap, msg, index),
   }));
@@ -1439,6 +1536,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       wrap.dataset.anchorId = 'user-' + (++userSeq);
       wrap.dataset.userIndex = String(index);
       wrap.innerHTML = '<div class="msg-role">你</div>';
+      userTextByArticle.set(wrap, textOf(item.message));
       wrap.appendChild(userBody(item.message));
       wrap.appendChild(messageActions(textOf(item.message), {
         onEdit: () => openClassicEditor(wrap, item.message, index),

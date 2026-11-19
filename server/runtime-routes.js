@@ -9,6 +9,7 @@ const CODES = new Set(['stale_runtime', 'stale_workspace', 'unknown_workspace', 
   'navigate_failed', 'navigate_unverified', 'restore_unconfirmed', 'restore_unavailable', 'command_text_conflict',
   'attachments_unsupported', 'empty_message', 'message_too_large', 'prompt_rejected', 'prompt_handled', 'pi_request_failed',
   'pi_timeout', 'stale_session', 'session_streaming', 'session_compacting', 'session_queued', 'model_unavailable',
+  'missing_target_identity', 'prompt_unconfirmed', 'acceptance_unknown', 'recovery_pending', 'recovery_required',
   'invalid_user_index', 'unavailable']);
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
 const fail = () => { throw Object.assign(Error('invalid_request'), { code: 'invalid_request' }); };
@@ -50,6 +51,7 @@ export function createRuntimeRoutes({ registry, validateWorkspace = async () => 
         case 'edit-preflight': result = await registry.editPreflight(body.owner, body.edit); break;
         case 'edit-resend': result = await registry.editResend(body.owner, body.edit); break;
         case 'edit-status': result = await registry.editStatus(body.owner, body.requestId); break;
+        case 'edit-recover': result = await registry.editRecover(body.owner, body.requestId); break;
         case 'events': result = registry.events(body.owner, body.cursor ?? 0); break;
         case 'process': {
           const adapter = registry.getAdapter(body.owner), args = body.args;

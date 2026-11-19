@@ -6,9 +6,12 @@
  *
  * 关键约束：
  *   - 原消息位置就地展开，不跳到底部输入区，也不弹页面级对话框；
+ *   - 首次预检锁定的 nativeSessionId / entryId / parentId / leafId 就是本次
+ *     事务的目标；提交时只核对，绝不用新的 userIndex 投影替换目标；
  *   - Escape / 取消恢复原消息；组合输入期间不响应 Escape；
  *   - 空白消息不提交；提交中按钮禁用，双击不会发第二次；
  *   - 失败保留用户已经输入的全部文本，只有成功才关闭；
+ *   - 结果未知时保留 requestId，提供“重新同步会话状态”入口，不盲目重试；
  *   - 只有 preflight 确认后续历史含工具/文件操作时才显示“不会自动撤销”警告。
  */
 let active = null;
@@ -25,6 +28,7 @@ const ERROR_TEXT = {
   stale_runtime: '会话已经切换或重启，请关闭编辑器后重新操作。',
   stale_session: '会话已经切换，请刷新后重新操作。',
   stale_history: '会话历史已经变化，请关闭编辑器后重新打开这条消息。',
+  missing_target_identity: '无法确认要编辑的原始消息，请关闭编辑器后重新打开。',
   unknown_user_message: '这条消息已不在当前对话路径上，请刷新后重试。',
   history_unparsable: '无法解析当前会话历史，未发送。',
   navigate_unavailable: '当前 Pi 版本不支持在原会话内移动历史，未发送。',
@@ -39,9 +43,12 @@ const ERROR_TEXT = {
   model_unavailable: '当前会话没有可用模型，未发送。',
   prompt_handled: '这条消息被命令处理器接管，未产生新的回复。',
   prompt_rejected: 'Pi 拒绝了这次发送，已尝试恢复原对话。',
+  prompt_unconfirmed: 'Pi 没有接受这次发送，已尝试恢复原对话。',
   pi_timeout: 'Pi 没有及时应答，未发送。',
   pi_request_failed: 'Pi 没有接受这次操作，未发送。',
-  acceptance_unknown: '提交结果未确认，请刷新会话检查后再操作。',
+  acceptance_unknown: '提交结果未确认，请重新同步会话状态后再操作。',
+  recovery_pending: '事务结果尚未确认，请重新同步会话状态。',
+  recovery_required: '会话或运行时已经变化，无法继续确认这次事务；请刷新会话检查历史。',
 };
 
 function errorText(code) {
@@ -50,6 +57,16 @@ function errorText(code) {
 
 export const messageEditErrorText = errorText;
 
+/* 预检遇到「这个会话已有编辑事务」时，后端有两种真实形状：
+ *   - Classic 服务直接失败：{ ok:false, code:'edit_in_progress' }
+ *   - Runtime 走 busyReason：{ ok:true, canEdit:false, reason:'edit_in_progress' }
+ * 渲染器必须两种都认，否则刷新后只能看到一个无法解除的忙状态，拿不到
+ * 持久化的 requestId 恢复入口。 */
+export function isEditInProgress(result) {
+  return result?.code === 'edit_in_progress'
+    || (result?.ok === true && result.canEdit === false && result.reason === 'edit_in_progress');
+}
+
 export function messageEditRequestId() {
   try {
     if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -57,9 +74,123 @@ export function messageEditRequestId() {
   return 'edit-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
 }
 
+/* 未解决事务的 requestId 只存在内存里的话，渲染器一刷新就再也查不到结果，
+ * 服务端的锁却不会因此释放。用 sessionStorage 按标签页保留记录：
+ * 刷新/重连后仍能用原 requestId 调 status / recover；应用重启时 storage
+ * 自然清空，后端内存事务也已消失，不伪造“已恢复”。
+ *
+ * 存储是一个**按作用域区分的小数组**，不是单槽：Classic 与多个独立
+ * Runtime 会话可以同时各有一个未解决事务，后写入的记录不能把前一个
+ * 会话唯一的恢复句柄覆盖掉。 */
+const PENDING_KEY = 'pi-gui:message-edit-pending';
+const MAX_PENDING_RECORDS = 8;
+
+function pendingStore() {
+  try { return globalThis.sessionStorage || null; } catch { return null; }
+}
+
+function readPendingRecords() {
+  try {
+    const raw = pendingStore()?.getItem(PENDING_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    return list.filter(record => record && typeof record.requestId === 'string');
+  } catch { return []; }
+}
+
+function writePendingRecords(records) {
+  try {
+    if (!records.length) { pendingStore()?.removeItem(PENDING_KEY); return; }
+    pendingStore()?.setItem(PENDING_KEY, JSON.stringify(records.slice(-MAX_PENDING_RECORDS)));
+  } catch { /* storage unavailable */ }
+}
+
+function pendingScopeMatches(recordScope, currentScope) {
+  if (!recordScope || !currentScope) return true;
+  return Object.keys(currentScope).every(key => recordScope[key] === currentScope[key]);
+}
+
+/* 同一会话/对话的记录互相替换；不同作用域各自保留。 */
+function samePendingScope(a, b) {
+  if (!a || !b || a.kind !== b.kind) return false;
+  if (a.kind === 'runtime') return Boolean(a.conversationId) && a.conversationId === b.conversationId;
+  return Boolean(a.sessionId) && a.sessionId === b.sessionId;
+}
+
+/* scope 为空时返回最近一条（兼容旧调用与单记录场景）；有 scope 时只返回
+ * 匹配该作用域的记录，避免 Classic 读到另一个 Runtime 会话的句柄。 */
+export function readPendingMessageEdit(scope = null) {
+  const records = readPendingRecords();
+  if (!records.length) return null;
+  if (!scope) return records[records.length - 1];
+  const matches = records.filter(record => pendingScopeMatches(record.scope, scope));
+  return matches.length ? matches[matches.length - 1] : null;
+}
+
+export function rememberPendingMessageEdit(record) {
+  if (!record || typeof record.requestId !== 'string') return;
+  const records = readPendingRecords().filter(existing =>
+    existing.requestId !== record.requestId
+    && !samePendingScope(existing.scope, record.scope));
+  records.push(record);
+  writePendingRecords(records);
+}
+
+export function clearPendingMessageEdit(requestId = null) {
+  try {
+    if (!requestId) { writePendingRecords([]); return; }
+    writePendingRecords(readPendingRecords().filter(record => record.requestId !== requestId));
+  } catch { /* storage unavailable */ }
+}
+
+/* 渲染器刷新 / 重连后，用持久化的 requestId 查一次权威状态。
+ * - accepted / failed / recovery_required：事务已收口，清记录并让调用方刷新；
+ * - acceptance_unknown / recovery_pending：保留记录，返回状态供调用方展示恢复入口；
+ * - backendInstance 已经变化：后端内存事务随进程消失，清掉本地记录，不伪造结果。
+ * 作用域不匹配（用户切到了另一个会话）时原样保留，等回到目标会话再处理。 */
+export async function resumePendingMessageEdit({ scope = null, status, onSettled } = {}) {
+  let record = readPendingMessageEdit(scope);
+  if (!record && scope) {
+    /* 同一会话但 backendInstance 已换代：后端内存事务随旧进程消失，清掉
+     * 这条旧记录，不把新进程的“unknown”伪装成未确认。 */
+    const stale = readPendingRecords().filter(candidate => samePendingScope(candidate.scope, scope)).at(-1);
+    if (stale) { clearPendingMessageEdit(stale.requestId); return { record: stale, state: 'stale' }; }
+    return null;
+  }
+  if (!record) return null;
+  if (record.scope?.backendInstance && scope?.backendInstance
+    && record.scope.backendInstance !== scope.backendInstance) {
+    clearPendingMessageEdit(record.requestId);
+    return { record, state: 'stale' };
+  }
+  if (!pendingScopeMatches(record.scope, scope)) return null;
+  let result = null;
+  try { result = await status?.(record.requestId); } catch { return { record, state: 'unknown' }; }
+  if (!result) return { record, state: 'unknown' };
+  if (result.state === 'accepted') {
+    clearPendingMessageEdit(record.requestId);
+    onSettled?.({ ...(result.result || {}), ok: true, accepted: true, duplicate: true }, record);
+    return { record, state: 'accepted', result };
+  }
+  if (result.state === 'failed' || result.state === 'recovery_required' || result.state === 'stale_session') {
+    clearPendingMessageEdit(record.requestId);
+    onSettled?.({ ...(result.result || {}), ok: false }, record);
+    return { record, state: result.state, result };
+  }
+  if (result.state === 'acceptance_unknown' || result.state === 'recovery_pending') {
+    return { record, state: result.state, result };
+  }
+  if (result.ok === false && ['stale_runtime', 'stale_session', 'unavailable'].includes(result.code)) {
+    clearPendingMessageEdit(record.requestId);
+    return { record, state: 'stale', result };
+  }
+  return { record, state: 'unknown', result };
+}
+
 /* 传输层失败（断线、后端重启）不等于事务失败：后端可能已经接受 prompt。
  * 用 requestId 读一次权威状态；accepted 就按成功处理，failed 就按失败处理，
- * 仍然 unknown 时返回 null，由调用方决定“未确认”的呈现，绝不盲目重试。 */
+ * 未解决时返回带 `unresolved` 的结果，由调用方决定“未确认”的呈现，绝不盲目重试。 */
 export async function resolveEditAcceptance(status, requestId, { attempts = 5, delayMs = 120 } = {}) {
   if (typeof status !== 'function' || !requestId) return null;
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -67,6 +198,12 @@ export async function resolveEditAcceptance(status, requestId, { attempts = 5, d
     try { result = await status(requestId); } catch { /* transient */ }
     if (result?.state === 'accepted') return { ...(result.result || {}), ok: true, accepted: true, duplicate: true };
     if (result?.state === 'failed') return { ...(result.result || {}), ok: false };
+    if (result?.state === 'acceptance_unknown' || result?.state === 'recovery_pending') {
+      return { ...(result.result || {}), ok: false, code: 'acceptance_unknown', unresolved: true, state: result.state };
+    }
+    if (result?.state === 'recovery_required' || result?.state === 'stale_session') {
+      return { ...(result.result || {}), ok: false, code: result.result?.code || result.state, unresolved: false };
+    }
     if (attempt < attempts - 1) await new Promise(resolve => setTimeout(resolve, delayMs));
   }
   return null;
@@ -84,8 +221,23 @@ function autoGrow(textarea) {
   textarea.style.overflowY = max > 0 && (textarea.scrollHeight || 0) > max ? 'auto' : 'hidden';
 }
 
-function build({ text, kind, userIndex, hasImages: initialHasImages, mount, originals, preflight, resend, readStatus, onAccepted, onClose, returnFocus }) {
+function sameTarget(baseline, result) {
+  if (!baseline || !result) return false;
+  return baseline.sessionId === result.sessionId
+    && baseline.entryId === result.entryId
+    && (baseline.parentId ?? null) === (result.parentId ?? null)
+    && (baseline.leafId ?? null) === (result.leafId ?? null)
+    && baseline.userIndex === result.userIndex
+    && baseline.text === result.text
+    && Boolean(baseline.hasImages) === Boolean(result.hasImages)
+    && (baseline.imageCount || 0) === (result.imageCount || 0)
+    && Boolean(baseline.hasToolsAfter) === Boolean(result.hasToolsAfter);
+}
+
+function build({ text, kind, userIndex, hasImages: initialHasImages, imageStateKnown = true, textTruncated = false,
+  mount, originals, preflight, resend, readStatus, recover, onAccepted, onRecovered, onClose, returnFocus, pendingScope = null }) {
   let hasImages = initialHasImages === true;
+  const initialText = typeof text === 'string' ? text : '';
   const wrap = document.createElement('div');
   wrap.className = 'message-edit';
   wrap.setAttribute('role', 'group');
@@ -132,9 +284,13 @@ function build({ text, kind, userIndex, hasImages: initialHasImages, mount, orig
   let closed = false;
   let busy = false;
   let composing = false;
-  let expected = null;
+  let baseline = null;
+  let baselineSettled = false;
+  let baselinePromise = null;
+  let unresolved = false;
+  let lastRequest = null;
+  let recoverButton = null;
   let preflightState = 'pending'; // pending | ready | blocked | failed
-  let hasToolsAfter = false;
 
   const setStatus = (textValue, state) => {
     status.textContent = textValue || '';
@@ -143,25 +299,66 @@ function build({ text, kind, userIndex, hasImages: initialHasImages, mount, orig
   };
   const syncSubmit = () => {
     const blank = !textarea.value.trim() && !hasImages;
-    submit.disabled = closed || busy || preflightState === 'blocked' || preflightState === 'failed' || blank;
+    submit.disabled = closed || busy || unresolved || preflightState === 'blocked' || preflightState === 'failed' || blank;
     cancel.disabled = closed || busy;
     textarea.readOnly = busy;
   };
   const setWarning = value => {
-    hasToolsAfter = value === true;
-    warning.hidden = !hasToolsAfter;
+    warning.hidden = value !== true;
   };
 
-  const applyPreflight = result => {
+  /* 会话已有未解决事务：接回持久化的 requestId。恢复入口属于整个会话，
+   * 不要求用户点的正是记录所属的那条消息；只有文本回填要求 userIndex
+   * 一致，避免把 A 的编辑文本塞进 B。 */
+  const adoptPending = record => {
+    lastRequest = { requestId: record.requestId, text: record.text, userIndex: record.userIndex };
+    if (typeof record.text === 'string' && record.userIndex === userIndex) textarea.value = record.text;
+    unresolved = true;
+    preflightState = 'blocked';
+    setStatus(errorText('edit_in_progress'), 'error');
+    showRecover();
+    syncSubmit();
+  };
+
+  const captureBaseline = result => {
+    baselineSettled = true;
+    /* 刷新后原 requestId 仍在 sessionStorage 里。后端说明锁还没释放时，
+     * 把它接回编辑器，提供“重新同步会话状态”入口，而不是让用户面对
+     * 一个无法解除的忙状态。Classic 与 Runtime 的 preflight 形状不同，
+     * isEditInProgress 统一识别。 */
+    const pending = isEditInProgress(result) ? readPendingMessageEdit(pendingScope) : null;
+    if (pending && typeof recover === 'function' && pendingScopeMatches(pending.scope, pendingScope)) {
+      adoptPending(pending);
+      return false;
+    }
     if (!result || result.ok !== true) {
-      /* 传输/上游暂时失败不锁死编辑器：用户改完还能再点一次，提交前会重新
-       * preflight。真正“不能编辑”的原因走下面的 blocked 分支。 */
+      /* 首次预检失败就没有可信目标。允许用户继续输入，但提交前会要求先
+       * 成功锁定目标；不会拿提交时的 userIndex 投影临时替换。 */
       preflightState = 'pending';
       setStatus(errorText(result?.code), 'error');
       syncSubmit();
       return false;
     }
-    expected = result;
+    /* preflight 成功 = 当前目标会话没有未解决事务；只清理**同一作用域**
+     * 上次刷新遗留的记录，不能把另一个会话仍在进行的事务记录抹掉。 */
+    const leftover = readPendingMessageEdit(pendingScope);
+    if (leftover && pendingScopeMatches(leftover.scope, { ...(pendingScope || {}), sessionId: result.sessionId })) {
+      clearPendingMessageEdit(leftover.requestId);
+    }
+    /* 首次预检必须对应**被点击的那条消息**，而不是一个可能已经变化的
+     * DOM 序号。文本/图片是点击时前端独立持有的证据。Runtime 的 block 可能
+     * 被截断、也不携带图片投影，此时只核对“完整文本以已显示文本开头”。 */
+    const textOk = textTruncated
+      ? typeof result.text === 'string' && result.text.startsWith(initialText)
+      : result.text === initialText;
+    const imagesOk = !imageStateKnown || Boolean(result.hasImages) === initialHasImages;
+    if (!textOk || !imagesOk) {
+      preflightState = 'blocked';
+      setStatus(errorText('stale_history'), 'error');
+      syncSubmit();
+      return false;
+    }
+    baseline = { ...result };
     if (result.hasImages === true) hasImages = true;
     setWarning(result.hasToolsAfter === true);
     if (result.canEdit === false) {
@@ -175,6 +372,32 @@ function build({ text, kind, userIndex, hasImages: initialHasImages, mount, orig
     syncSubmit();
     return true;
   };
+
+  /* 提交预检只能核对首次捕获的目标；任何身份/leaf/文本/附件变化都拒绝，
+   * 不采用新结果里的 entryId/leafId。 */
+  const verifyBaseline = result => {
+    if (!result || result.ok !== true) {
+      preflightState = 'blocked';
+      setStatus(errorText(result?.code), 'error');
+      syncSubmit();
+      return false;
+    }
+    if (!sameTarget(baseline, result)) {
+      preflightState = 'blocked';
+      setStatus(errorText('stale_history'), 'error');
+      syncSubmit();
+      return false;
+    }
+    if (result.canEdit === false) {
+      preflightState = 'blocked';
+      setStatus(errorText(result.reason) || '当前无法编辑这条消息。', 'error');
+      syncSubmit();
+      return false;
+    }
+    return true;
+  };
+
+  const applyPreflight = result => baseline ? verifyBaseline(result) : captureBaseline(result);
 
   const close = ({ restore = true, focus = true } = {}) => {
     if (closed) return;
@@ -190,11 +413,71 @@ function build({ text, kind, userIndex, hasImages: initialHasImages, mount, orig
 
   const cancelEdit = () => {
     if (busy || closed) return;
+    /* 事务结果未知时不能把唯一的恢复入口（requestId）关掉；先要求重新同步。 */
+    if (unresolved && typeof recover === 'function') {
+      setStatus(errorText('acceptance_unknown'), 'error');
+      return;
+    }
     close({ restore: true });
   };
 
+  const showRecover = () => {
+    if (recoverButton || typeof recover !== 'function') return;
+    recoverButton = document.createElement('button');
+    recoverButton.type = 'button';
+    recoverButton.className = 'btn tiny ghost message-edit-recover';
+    recoverButton.textContent = '重新同步会话状态';
+    recoverButton.addEventListener('click', async () => {
+      if (!lastRequest || recoverButton.disabled) return;
+      recoverButton.disabled = true;
+      setStatus('正在重新同步…', 'pending');
+      let result = null;
+      try { result = await recover(lastRequest.requestId); } catch { result = null; }
+      if (closed) return;
+      if (result?.state === 'accepted') {
+        const accepted = { ...(result.result || {}), ok: true, accepted: true, duplicate: true };
+        unresolved = false;
+        clearPendingMessageEdit(lastRequest.requestId);
+        close({ restore: true });
+        try {
+          onRecovered?.(accepted, { text: lastRequest.text, userIndex: accepted.userIndex ?? lastRequest.userIndex, kind });
+        } catch { /* rendering failure must not resurrect the editor */ }
+        return;
+      }
+      recoverButton.disabled = false;
+      if (result?.state === 'failed') {
+        unresolved = false;
+        preflightState = 'pending';
+        clearPendingMessageEdit(lastRequest.requestId);
+        syncSubmit();
+        setStatus(errorText(result.result?.code || 'prompt_unconfirmed'), 'error');
+        return;
+      }
+      if (result?.state === 'recovery_required' || result?.state === 'stale_session') {
+        unresolved = false;
+        preflightState = 'blocked';
+        clearPendingMessageEdit(lastRequest.requestId);
+        syncSubmit();
+        setStatus(errorText(result.result?.code || result.state), 'error');
+        return;
+      }
+      /* 后端已经换代/没有这条事务（stale_runtime 等）：锁不可能再存在，
+       * 不能把用户永久困在“重新同步”里。清掉本地记录并允许重新开始。 */
+      if (result && result.ok === false && ['stale_runtime', 'stale_session', 'unavailable'].includes(result.code)) {
+        unresolved = false;
+        preflightState = 'pending';
+        clearPendingMessageEdit(lastRequest.requestId);
+        syncSubmit();
+        setStatus(errorText(result.code), 'error');
+        return;
+      }
+      setStatus(errorText('recovery_pending'), 'error');
+    });
+    actions.insertBefore(recoverButton, submit);
+  };
+
   const submitEdit = async () => {
-    if (busy || closed) return;
+    if (busy || closed || unresolved) return;
     const value = textarea.value;
     if (!value.trim() && !hasImages) {
       setStatus('消息不能为空。', 'error');
@@ -206,47 +489,88 @@ function build({ text, kind, userIndex, hasImages: initialHasImages, mount, orig
     setStatus('正在重新发送…', 'pending');
     const requestId = messageEditRequestId();
     let result;
+    let sendAttempted = false;
     try {
-      /* 提交前重新 preflight：点击编辑之后历史可能已经变化。用户输入永远
+      /* 首次预检可能还在飞；必须等它落定并锁定目标，不能拿提交时的投影
+       * 临时生成一个新的目标。 */
+      if (!baseline && baselinePromise) await baselinePromise;
+      if (!baseline) {
+        busy = false;
+        preflightState = 'blocked';
+        syncSubmit();
+        setStatus(errorText('missing_target_identity'), 'error');
+        return;
+      }
+      /* 提交前重新 preflight：只核对首次捕获的目标，不替换。用户输入永远
        * 以 textarea 为准，不被 preflight 返回的旧文本覆盖。 */
-      const fresh = await preflight({ userIndex, kind });
-      if (!applyPreflight(fresh)) {
+      const fresh = await preflight({ userIndex: baseline.userIndex, kind });
+      if (!verifyBaseline(fresh)) {
         busy = false;
         syncSubmit();
         return;
       }
+      lastRequest = { requestId, text: value, userIndex: baseline.userIndex };
+      /* 在真正发出前落盘：渲染器可能在应答回来之前刷新/崩溃，requestId
+       * 必须活过这次刷新，才能在后端锁未释放时重新查询并恢复。 */
+      rememberPendingMessageEdit({
+        requestId,
+        text: value,
+        userIndex: baseline.userIndex,
+        kind,
+        scope: { ...(pendingScope || {}), sessionId: baseline.sessionId },
+        at: Date.now(),
+      });
+      sendAttempted = true;
       result = await resend({
-        userIndex: fresh.userIndex,
+        userIndex: baseline.userIndex,
         kind,
         text: value,
-        expectedEntryId: fresh.entryId,
-        expectedLeafId: fresh.leafId,
+        expectedEntryId: baseline.entryId,
+        expectedParentId: baseline.parentId ?? null,
+        expectedLeafId: baseline.leafId,
+        expectedSessionId: baseline.sessionId,
         requestId,
       });
     } catch {
       result = { ok: false, code: 'network', network: true };
     }
     if (closed) return;
-    /* 传输失败不代表事务失败：先按 requestId 读权威状态。 */
-    if (result && result.ok !== true && (result.network === true || result.code === 'network')) {
+    /* 传输失败不代表事务失败：先按 requestId 读权威状态。只有 resend 真的
+     * 发出过才查询；preflight 阶段断网时服务端根本没有这次事务，不能把它
+     * 当成 acceptance_unknown（否则 lastRequest 为空，恢复按钮也无法工作）。 */
+    if (sendAttempted && result && result.ok !== true && (result.network === true || result.code === 'network')) {
       const resolved = await resolveEditAcceptance(readStatus, requestId);
       if (closed) return;
-      if (!resolved) {
-        busy = false;
-        preflightState = 'blocked';
-        syncSubmit();
-        setStatus('提交结果未确认，请刷新会话检查后再操作。', 'error');
-        return;
-      }
-      result = resolved;
+      result = resolved || { ok: false, code: 'acceptance_unknown', unresolved: true };
     }
     busy = false;
     if (!result || result.ok !== true) {
       syncSubmit();
+      if (result?.unresolved || result?.code === 'acceptance_unknown' || result?.code === 'recovery_pending') {
+        unresolved = true;
+        preflightState = 'blocked';
+        syncSubmit();
+        setStatus(errorText('acceptance_unknown'), 'error');
+        showRecover();
+        return;
+      }
+      /* 提交时才撞上锁（另一个窗口或另一个预览刚拿到事务）：持久化记录
+       * 可能属于同一会话。不要把用户困在纯错误提示里，接回那条记录的
+       * 恢复入口；本次提交的 requestId 不会被当成成功。 */
+      if (result?.code === 'edit_in_progress') {
+        const pending = readPendingMessageEdit(pendingScope);
+        if (pending && pending.requestId !== requestId && pendingScopeMatches(pending.scope, pendingScope)) {
+          adoptPending(pending);
+          return;
+        }
+      }
+      /* 普通失败（含已确认恢复）代表事务已经收口，requestId 不再需要。 */
+      clearPendingMessageEdit(requestId);
       setStatus(errorText(result?.code), 'error');
       /* 失败时文本原样保留，编辑器不关闭。 */
       return;
     }
+    clearPendingMessageEdit(requestId);
     close({ restore: true });
     try {
       onAccepted?.(result, { text: value, userIndex: result.userIndex, kind });
@@ -286,7 +610,7 @@ function build({ text, kind, userIndex, hasImages: initialHasImages, mount, orig
     setWarning,
     submit: submitEdit,
     cancel: cancelEdit,
-    expected: () => expected,
+    expected: () => baseline,
   };
 
   for (const node of originals) node.hidden = true;
@@ -294,11 +618,12 @@ function build({ text, kind, userIndex, hasImages: initialHasImages, mount, orig
   autoGrow(textarea);
   syncSubmit();
   /* 打开时先检查一次：拿到 entryId / leafId / 是否含工具操作，同时把
-   * “正在生成 / 不支持导航”这类不可编辑原因尽早告诉用户。 */
-  Promise.resolve()
+   * “正在生成 / 不支持导航”这类不可编辑原因尽早告诉用户。这个结果是本次
+   * 事务唯一的目标身份来源。 */
+  baselinePromise = Promise.resolve()
     .then(() => preflight({ userIndex, kind }))
-    .then(result => { if (!closed) applyPreflight(result); })
-    .catch(() => { if (!closed) applyPreflight({ ok: false, code: 'pi_request_failed' }); });
+    .then(result => { if (!closed) captureBaseline(result); })
+    .catch(() => { if (!closed) captureBaseline({ ok: false, code: 'pi_request_failed' }); });
   const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn => setTimeout(fn, 0));
   raf(() => { if (!closed) textarea.focus(); });
   return controller;

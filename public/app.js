@@ -23,7 +23,7 @@ import { createInlineCommandMenu } from './ui/inline-command-menu.js';
 import { mountWorkPanelLauncher } from './ui/work-panel-launcher.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
 import { recoveryForFailure } from './error-recovery.js';
-import { sendCommand, runtimeSessionAction, setRequestFailureReporter, switchSession, fetchRuntimeSessions } from './api.js';
+import { sendCommand, runtimeSessionAction, setRequestFailureReporter, switchSession, fetchRuntimeSessions, messageEditStatus, messageEditRecover } from './api.js';
 import { installRendererLogging, logRendererEvent } from './log-client.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
 import { observeWebEvent } from './web-access.js';
@@ -36,6 +36,7 @@ import { initEnvironmentSetup, observeEnvironmentEvent, openEnvironmentSettings 
 import { cancelPendingApprovals, expireAll, observeApprovalEvent, approvalSnapshot } from './approval.js';
 import { acceptSubagentEvent } from './subagent-capabilities.js';
 import { configureFeedbackContext, configureNotificationLogging, refreshFeedbackContext, toast, withNotificationSource } from './ui/toast.js';
+import { resumePendingMessageEdit, clearPendingMessageEdit, messageEditErrorText } from './ui/message-edit.js';
 import { handleExtensionNotification } from './extension-notices.js';
 import { closePop, currentAnchor, openPop, pop, popItem, popTitle, popVisible } from './ui/popover.js';
 import { closeModal, openModal } from './ui/modal.js';
@@ -550,8 +551,15 @@ function handleEvent(evt) {
     if (evt.bridgeRun !== S.bridgeRun) return;
   }
   if (evt.legacyOwner && evt.bridgeRun === S.bridgeRun) {
+    const previousSession = S.legacyOwner?.sessionId;
     S.legacyOwner = evt.legacyOwner;
     document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-context'));
+    /* bridge ready 可能先于会话身份到达，那时 resumeClassicPendingEdit
+     * 会因为没有 sessionId 直接返回。身份一确定就补一次查询，否则刷新后
+     * 持久化的 requestId 不会被接回，恢复入口永远不出现。 */
+    if (S.legacyOwner?.sessionId && S.legacyOwner.sessionId !== previousSession) {
+      void resumeClassicPendingEdit();
+    }
   }
   if (!evt._replay && ['agent_start','tool_execution_start','tool_execution_end','agent_settled'].includes(evt.type))
     document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-changed', {detail:{
@@ -729,6 +737,44 @@ const bridgeRecovery = createBridgeRecovery({
 });
 setBridgeReconciler(reconcileBridgeSnapshot);
 
+let resumedEditRequestId = null;
+/* 渲染器刷新后，sessionStorage 里还留着未解决事务的 requestId。这里用原
+ * requestId 查一次权威状态：已收口就重载历史；仍未解决就给出“重新同步”
+ * 入口。作用域（native session + backend instance）不匹配时原样保留。 */
+async function resumeClassicPendingEdit() {
+  const sessionId = S.legacyOwner?.sessionId;
+  if (!sessionId) return;
+  const resumed = await resumePendingMessageEdit({
+    scope: { kind: 'classic', sessionId, backendInstance: S.bridgeInstance },
+    status: requestId => messageEditStatus(requestId),
+    onSettled: () => { boot(); },
+  });
+  if (!resumed || !['acceptance_unknown', 'recovery_pending'].includes(resumed.state)) return;
+  if (resumedEditRequestId === resumed.record.requestId) return;
+  resumedEditRequestId = resumed.record.requestId;
+  const sync = async () => {
+    let result = null;
+    try { result = await messageEditRecover(resumed.record.requestId); } catch { result = null; }
+    if (result?.state === 'accepted' || result?.state === 'failed'
+      || result?.state === 'recovery_required' || result?.state === 'stale_session') {
+      clearPendingMessageEdit(resumed.record.requestId);
+      boot();
+      if (result.state === 'accepted') toast('已重新同步，会话已按新消息更新。', 'success', { important: true });
+      else toast(messageEditErrorText(result.result?.code || result.state), 'error');
+      return;
+    }
+    if (result && result.ok === false && ['stale_runtime', 'stale_session', 'unavailable'].includes(result.code)) {
+      clearPendingMessageEdit(resumed.record.requestId);
+      toast(messageEditErrorText(result.code), 'error');
+      return;
+    }
+    toast(messageEditErrorText('recovery_pending'), 'error', { action: { label: '重新同步', run: sync } });
+  };
+  toast(messageEditErrorText('acceptance_unknown'), 'error', { action: { label: '重新同步', run: sync } });
+}
+
+document.addEventListener('pi-gui:reload-classic-history', () => { boot(); });
+
 export function reconcileBridgeSnapshot(snapshot) {
   if (snapshot.bridgeInstance && S.bridgeInstance && snapshot.bridgeInstance !== S.bridgeInstance
     || Number.isInteger(snapshot.bridgeRun) && Number.isInteger(S.bridgeRun) && snapshot.bridgeRun !== S.bridgeRun
@@ -810,6 +856,7 @@ export function reconcileBridgeSnapshot(snapshot) {
       loadExtensionsBadge();
       loadPlannerBadge();
       boot();
+      void resumeClassicPendingEdit();
       /* 项目偏好要在 pi 起来之后再落到会话上。
        * 模型不能当启动参数传（过期引用会让 pi 退出，见 project-config.js 的说明），
        * 只能等 get_available_models 回来核对过再 set_model —— 所以它排在这里，

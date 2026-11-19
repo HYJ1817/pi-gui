@@ -112,6 +112,8 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       if (disposed || !context.isCurrent()) return;
       managed.observe(event); changes?.observe(event); activity.observe(event);
       toolGuard?.observe(event);
+      /* 编辑事务的接受证据：request 应答不广播，事件是超时后确认归属的补充。 */
+      try { messageEdit.observe(event, rpc.getState()?.sessionId || null); } catch { /* observation only */ }
       if (event.type === 'extension_ui_request' && typeof event.id === 'string') {
         if (approvals.size >= 32) approvals.delete(approvals.keys().next().value);
         approvals.set(event.id, event.method);
@@ -162,8 +164,9 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     abortAndWait: cmd => rpc.abortAndWait(cmd), activity, managed, changes, toolGuard,
     messageEdit,
     messageEditCommand: () => editLaunch.command(),
+    messageEditToken: () => editLaunch.token(),
     async messageEditRequest(cmd) {
-      if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime' };
+      if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime', unknown: true };
       const { __messageEditNav, ...wire } = cmd || {};
       const nav = __messageEditNav === true;
       /* 导航命令只是移动 leaf，不开 run；真正的重发 prompt 必须走与普通
@@ -181,9 +184,9 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
         return { ok: false, code: error?.code || 'edit_unavailable' };
       }
       const result = await rpc.request(wire);
-      if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime' };
-      if (result === null) return { ok: false, code: 'pi_timeout' };
-      if (Object.hasOwn(result, '__error')) return { ok: false, code: result.__code || 'pi_request_failed' };
+      if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime', unknown: true };
+      if (result === null) return { ok: false, code: 'pi_timeout', unknown: true };
+      if (Object.hasOwn(result, '__error')) return { ok: false, code: result.__code || 'pi_request_failed', unknown: false };
       if (!nav && wire?.type === 'prompt' && result.disposition === 'started') {
         generation.noteCommandAccepted(wire);
         activity.noteCommandAccepted(wire);

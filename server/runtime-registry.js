@@ -4,8 +4,17 @@ import { randomUUID } from 'node:crypto';
 import { runtimeWitnessCurrent } from './provider-config-sync.js';
 
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
-const COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'get_state', 'get_messages', 'get_tree', 'get_session_stats', 'get_available_models', 'get_commands', 'set_model', 'cycle_model', 'set_thinking_level', 'cycle_thinking_level', 'set_session_name', 'extension_ui_response', 'compact']);
+/* status / recover 允许 bridge 换代后的旧 owner 继续查询：runtimeId /
+ * runtimeGeneration / sessionId 是瞬时字段，事务的稳定归属是项目、工作区
+ * 与 conversation。native session 是否仍一致由 message-edit 服务回读
+ * get_state 后判定，不一致会走 recovery_required(stale_session)。 */
+const RECOVERY_OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId'];
+const COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'get_available_models', 'get_available_thinking_levels', 'get_commands', 'set_model', 'cycle_model', 'set_thinking_level', 'cycle_thinking_level', 'set_session_name', 'extension_ui_response', 'compact']);
 const TURNS = new Set(['prompt', 'steer', 'follow_up']);
+/* 编辑事务期间允许的只读命令与用户级控制：读状态、看历史、Stop、审批应答。
+ * 其余命令都会改变历史、owner 或运行代次，一律 edit_in_progress。 */
+const EDIT_READ_ONLY = new Set(['get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'get_available_models', 'get_available_thinking_levels', 'get_commands']);
+const EDIT_ALLOWED = new Set(['abort', 'extension_ui_response']);
 const MAX_PENDING_TURNS = 32;
 const fail = code => Object.assign(Error(code), { code });
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
@@ -78,6 +87,18 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const live = lives.get(expected.conversationId);
     if (!live || (!allowRetired && !belongs(live)) || OWNER_KEYS.some(k => owner(live)[k] !== expected[k])) {
       safeLog('runtime.owner_rejected', { operation: 'resolve', reason: 'owner_stale' });
+      throw fail('stale_runtime');
+    }
+    return live;
+  }
+  function resolveRecovery(expected) {
+    if (!closed(expected, OWNER_KEYS) || OWNER_KEYS.some(k => !Object.hasOwn(expected, k))) {
+      safeLog('runtime.owner_rejected', { operation: 'resolve_recovery', reason: 'owner_shape' });
+      throw fail('stale_runtime');
+    }
+    const live = lives.get(expected.conversationId);
+    if (!live || live.retired || RECOVERY_OWNER_KEYS.some(k => owner(live)[k] !== expected[k])) {
+      safeLog('runtime.owner_rejected', { operation: 'resolve_recovery', reason: 'owner_stale' });
       throw fail('stale_runtime');
     }
     return live;
@@ -227,7 +248,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
           changed(live);
         });
       }
-      else { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); live.editTurn = false; live.editing = null; if (!live.everReady) live.sessionId = null; }
+      else { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); live.editTurn = false; live.editUnresolved = false; live.editing = null; if (!live.everReady) live.sessionId = null; }
       if (['error', 'exited'].includes(event.state)) {
         live.error = 'runtime_unavailable'; live.attention = true;
         if (runActive) recordOutcome(live, 'interrupted', 'runtime_unavailable');
@@ -236,6 +257,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (event.type === 'agent_start') {
       live.agentActive = true; live.runObserved = true;
       live.editTurn = false;
+      live.editUnresolved = false;
       live.outcome = null; live.outcomeClaimed = false;
       /* 自动重试/续跑会产生新的 agent_start，但不经过新的 prompt command；
        * 上一轮的失败错误必须在这里清掉，否则重试成功后详情仍显示上次失败。 */
@@ -252,6 +274,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       const runEnded = live.runObserved || live.agentActive || live.pendingTurns.size > 0
         || Boolean(event.generationResult) || event.aborted === true;
       live.editTurn = false;
+      live.editUnresolved = false;
       live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); if (live.activity !== 'stopping') live.activity = 'idle';
       /* 有终态时由 recordOutcome 决定是否点亮 attention；重复 settled 和
        * 已读掉的终态不能把通用 attention 点重新点亮。没有任何终态证据时，
@@ -379,8 +402,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       lastAssistantStop: null, abortRequested: false,
       /* 历史消息编辑事务：`editing` 是当前 requestId（事务期间阻止普通 prompt），
        * `editTurn` 从 prompt 被接受保留到 agent_start/settled，堵住
-       * 「response 已到、agent_start 还没到」那段窗口。 */
-      editing: null, editTurn: false };
+       * 「response 已到、agent_start 还没到」那段窗口。`editUnresolved` 表示
+       * 结果未知：锁必须保留到状态查询 / recover 给出可核对结论。 */
+      editing: null, editTurn: false, editUnresolved: false };
     if (!leases.has(key)) leases.set(key, new Set());
     leases.get(key).add(live); lives.set(record.conversationId, live);
     live.adapterReady = Promise.resolve().then(async () => {
@@ -483,7 +507,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       live.abortRequested = false;
       changed(live); return result;
     }
-    if (TURNS.has(cmd.type) && (live.editing || live.editTurn)) throw fail('edit_in_progress');
+    if ((live.editing || live.editTurn || live.editUnresolved) && !EDIT_READ_ONLY.has(cmd.type) && !EDIT_ALLOWED.has(cmd.type)) throw fail('edit_in_progress');
     if (TURNS.has(cmd.type) && live.activity === 'stopping') throw fail('stop_in_progress');
     if (cmd.type === 'prompt' && (live.agentActive || live.pendingTurns.size)) throw fail('runtime_busy');
     if (TURNS.has(cmd.type)) {
@@ -509,7 +533,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     changed(live); return { ok: true };
   }
   async function read(expected, cmd) {
-    if (!['get_state', 'get_messages', 'get_session_stats', 'get_available_models', 'get_available_thinking_levels', 'get_commands'].includes(cmd?.type)) throw fail('invalid_command');
+    if (!['get_state', 'get_messages', 'get_entries', 'get_session_stats', 'get_available_models', 'get_available_thinking_levels', 'get_commands'].includes(cmd?.type)) throw fail('invalid_command');
     const live = resolve(expected); await validateWorkspace(live.record.workspace); resolve(expected);
     const result = await live.adapter.request(cmd); resolve(expected);
     if (cmd.type === 'get_state' && result?.sessionId === live.sessionId && typeof result.sessionName === 'string' && (result.sessionName.trim() || !projectWorkspace(live.record.workspace))) {
@@ -547,6 +571,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       sessionId: live.sessionId,
       conversationId: live.record.conversationId,
       commandName: () => live.adapter?.messageEditCommand?.() || null,
+      editToken: () => live.adapter?.messageEditToken?.() || null,
+      getBridgeRun: () => live.bridgeRun,
       request: cmd => live.adapter.messageEditRequest(cmd),
       validate: () => {
         const current = resolve(expected);
@@ -560,6 +586,50 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
         return null;
       },
     };
+  }
+
+  /* status / recover 不要求当前生命周期为 ready，也不要求 sessionId 与请求头
+   * 完全一致：bridge 异常重启后仍要用原 requestId 查询；是否 stale 由服务回读
+   * 到的 native sessionId 判断。 */
+  function recoveryEditIo(live, expected, requestId) {
+    return {
+      ...editIo(live, expected, requestId),
+      validate: () => {
+        const current = resolveRecovery(expected);
+        if (current !== live || live.retired) throw fail('stale_runtime');
+      },
+    };
+  }
+
+  function applyEditStatus(live, requestId, status) {
+    if (!belongs(live)) return;
+    /* 状态查询可能来自任意旧 requestId。只有**当前事务**的结论才能释放
+     * editing / editTurn / editUnresolved；否则一次迟到的旧查询会把正在进行的
+     * 事务锁清掉，在 prompt 应答与 agent_start 之间重新打开窗口。 */
+    const current = live.editing === requestId;
+    if (status?.state === 'accepted') {
+      /* prompt 已被接受：释放 requestId 锁，但保留 editTurn 直到 agent_start /
+       * settled，堵住「应答已到、run 还没开始」的窗口。 */
+      if (current) {
+        live.editing = null;
+        live.editUnresolved = false;
+      }
+      return;
+    }
+    if (status?.state === 'failed' || status?.state === 'recovery_required' || status?.state === 'stale_session') {
+      if (current) {
+        live.editing = null;
+        live.editUnresolved = false;
+        live.editTurn = false;
+      }
+      return;
+    }
+    if (status?.state === 'acceptance_unknown' || status?.state === 'recovery_pending') {
+      if (!live.editing || current) {
+        live.editing = requestId;
+        live.editUnresolved = true;
+      }
+    }
   }
 
   async function editPreflight(expected, input) {
@@ -578,7 +648,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live = resolve(expected);
     if (live.lifecycle !== 'ready') throw fail('runtime_not_ready');
     if (!live.sessionId) throw fail('stale_runtime');
-    if (live.editing) throw fail('edit_in_progress');
+    if (live.editing || live.editUnresolved) throw fail('edit_in_progress');
     if (live.editTurn || live.activity !== 'idle' || live.agentActive || live.pendingTurns.size || live.approvals.size
       || live.adapter?.getState?.().stop?.pending) throw fail('runtime_busy');
     if (typeof live.adapter?.messageEdit?.resend !== 'function') throw fail('edit_unavailable');
@@ -587,24 +657,48 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live.editing = requestId;
     live.editTurn = true;
     let accepted = false;
+    let result = null;
     try {
-      const result = await live.adapter.messageEdit.resend(editIo(live, expected, requestId), { ...input, requestId });
+      result = await live.adapter.messageEdit.resend(editIo(live, expected, requestId), { ...input, requestId });
       accepted = result?.ok === true;
       return result;
     } finally {
-      if (!accepted && belongs(live)) live.editTurn = false;
-      if (live.editing === requestId) live.editing = null;
+      if (belongs(live)) {
+        if (!accepted && result?.unresolved) {
+          /* 结果未知：保留 requestId 锁，禁止新的 prompt / 切换 / 重启，
+           * 直到状态查询或 recover 给出可核对结论。 */
+          live.editing = requestId;
+          live.editUnresolved = true;
+        } else {
+          if (!accepted && !live.agentActive) live.editTurn = false;
+          if (live.editing === requestId) live.editing = null;
+        }
+      }
     }
   }
+
   async function editStatus(expected, requestId) {
-    let live = resolve(expected);
+    let live = resolveRecovery(expected);
     await validateWorkspace(live.record.workspace);
-    live = resolve(expected);
-    if (live.lifecycle !== 'ready') throw fail('runtime_not_ready');
-    if (!live.sessionId) throw fail('stale_runtime');
+    live = resolveRecovery(expected);
+    if (live.retired || live.lifecycle === 'disposing') throw fail('stale_runtime');
     if (typeof requestId !== 'string') throw fail('invalid_request');
     if (typeof live.adapter?.messageEdit?.status !== 'function') throw fail('edit_unavailable');
-    return live.adapter.messageEdit.status(requestId);
+    const result = await live.adapter.messageEdit.status(recoveryEditIo(live, expected, requestId), requestId);
+    applyEditStatus(live, requestId, result);
+    return result;
+  }
+
+  async function editRecover(expected, requestId) {
+    let live = resolveRecovery(expected);
+    await validateWorkspace(live.record.workspace);
+    live = resolveRecovery(expected);
+    if (live.lifecycle !== 'ready' || live.retired) throw fail('runtime_not_ready');
+    if (typeof requestId !== 'string') throw fail('invalid_request');
+    if (typeof live.adapter?.messageEdit?.recover !== 'function') throw fail('edit_unavailable');
+    const result = await live.adapter.messageEdit.recover(recoveryEditIo(live, expected, requestId), requestId);
+    applyEditStatus(live, requestId, result);
+    return result;
   }
   function focus(expected) { return serialize(async () => { const live = resolve(expected), previous = focused;
     const prior = previous && previous !== live.record.conversationId ? lives.get(previous) : null;
@@ -657,10 +751,30 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       publish({ type: 'runtime_state', owner: owner(live), item: summary(live.record) }); throw fail('cleanup_pending'); });
     return live.retirePromise;
   }
-  function close(expected) { const live = resolve(expected, true); live.retired = true; return serialize(() => retire(live)); }
+  function close(expected) {
+    const live = resolve(expected, true);
+    /* 关闭/重启**仍然可用**的 Runtime 会销毁事务的 RPC 通道与恢复能力；
+     * 结果未知期间必须先经 recover 收口，不能靠关闭来“释放”锁。
+     * 生命周期已经不是 ready（bridge 已退出，或身份回读失败）时，通道无法
+     * 继续核对事务，允许用户显式关闭/重启；事务保持未确认，不会伪造成功。 */
+    if (live.lifecycle === 'ready' && (live.editing || live.editTurn || live.editUnresolved)) throw fail('edit_in_progress');
+    live.retired = true;
+    return serialize(() => retire(live));
+  }
   async function restart(expected) { const live = resolve(expected, true), id = live.record.conversationId; await close(expected); return resume(id, { allowThird: true }); }
-  async function invalidateWorkspace(id) { const results = await Promise.allSettled([...lives.values()].filter(l => l.record.workspace.workspaceId === id).map(l => retire(l))); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); }
-  async function healthCheck() { for (const live of [...lives.values()]) { try { await validateWorkspace(live.record.workspace); } catch { await retire(live).catch(() => {}); } } }
+  async function invalidateWorkspace(id) {
+    const targets = [...lives.values()].filter(l => l.record.workspace.workspaceId === id);
+    if (targets.some(l => l.editing || l.editTurn || l.editUnresolved)) throw fail('edit_in_progress');
+    const results = await Promise.allSettled(targets.map(l => retire(l)));
+    if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending');
+  }
+  async function healthCheck() {
+    for (const live of [...lives.values()]) {
+      /* 健康检查是后台路径，不能顺手退掉一个仍有编辑事务的 Runtime。 */
+      if (live.editing || live.editTurn || live.editUnresolved) continue;
+      try { await validateWorkspace(live.record.workspace); } catch { await retire(live).catch(() => {}); }
+    }
+  }
   async function dispose() { disposed = true; await queue.catch(() => {}); const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); }
   function providerSyncTargets() {
     return [...lives.values()].filter(belongs).map(live => {
@@ -683,13 +797,13 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     });
   }
   return { start, openProjectSession, resume, close, restart, command, read, focus, blur, events, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
-    editPreflight, editResend, editStatus,
+    editPreflight, editResend, editStatus, editRecover,
     providerSyncTargets,
     ownsNativeSession: id => Boolean(id) && [...lives.values()].some(l => l.sessionId === id || l.record.sessionId === id),
     contextRevision: () => contextRevision,
     inUse: root => leases.has(rootKey(root)), liveCount: () => lives.size, runningCount: () => [...lives.values()].filter(l => l.activity !== 'idle').length,
-    busy: () => [...lives.values()].some(l => l.activity !== 'idle' || l.lifecycle !== 'ready' || l.editing || l.editTurn),
-    updateBusy: () => [...lives.values()].some(l => l.approvals.size || l.editing || l.editTurn || l.adapter?.updateBusy?.()),
+    busy: () => [...lives.values()].some(l => l.activity !== 'idle' || l.lifecycle !== 'ready' || l.editing || l.editTurn || l.editUnresolved),
+    updateBusy: () => [...lives.values()].some(l => l.approvals.size || l.editing || l.editTurn || l.editUnresolved || l.adapter?.updateBusy?.()),
     async closeAll() { const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); },
     getAdapter: expected => resolve(expected).adapter, getOwner: id => lives.has(id) ? owner(lives.get(id)) : null,
     /* P32.4：只给**后端**用的历史定位 —— **不进 snapshot**，也不出现在任何 SSE 帧里。

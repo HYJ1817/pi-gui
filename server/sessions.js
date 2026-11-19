@@ -133,7 +133,11 @@ function compareCreation(a, b) {
   return ak < bk ? -1 : ak > bk ? 1 : 0;
 }
 
-export function createSessions({ runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null, extraSessionRoots = [], getProjects = () => [], readHistory = null, switchBlocked = () => false, titles = null } = {}) {
+export function createSessions({
+  runtime, rpc = null, env = process.env, homeDir = null, dataDir = null, compat = null,
+  extraSessionRoots = [], getProjects = () => [], readHistory = null,
+  switchBlocked = () => false, mutationBlocked = () => false, titles = null,
+} = {}) {
   const HOME = homeDir || env.HOME || os.homedir();
   const configuredAgentDir = env.PI_CODING_AGENT_DIR;
   const AGENT_DIR = configuredAgentDir === '~' ? HOME : configuredAgentDir?.startsWith('~/') || configuredAgentDir?.startsWith('~\\')
@@ -637,6 +641,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
   async function setArchived(id, archived) {
     const target = resolveId(id);
     if (!target) return { ok: false, error: '找不到这个会话（可能已被删除，或不属于当前项目）' };
+    if (mutationBlocked(target.sessionId)) return { ok: false, code: 'edit_in_progress', error: '该会话有编辑事务进行中，请稍候。' };
     if (archived) {
       const cur = await currentSessionId();
       if (cur && cur === sessionId(target.file)) {
@@ -669,6 +674,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
   async function remove(id) {
     const target = resolveId(id);
     if (!target) return { ok: false, error: '找不到这个会话（可能已被删除，或不属于当前项目）' };
+    if (mutationBlocked(target.sessionId)) return { ok: false, code: 'edit_in_progress', error: '该会话有编辑事务进行中，请稍候。' };
     const cur = await currentSessionId();
     if (cur && cur === sessionId(target.file)) {
       return { ok: false, error: '不能删除正在进行的会话 —— 先切到别的会话再删' };
@@ -726,7 +732,13 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
    * 逐渐分叉的代码路径，而分叉出来的那条迟早会漏掉某个收尾动作。
    */
   async function switchToTarget(target) {
-    if (switchBlocked(target)) return { ok: false, code: 'session_running', error: '该执行交接会影响正在运行的会话，请从所属会话入口继续。' };
+    const blocked = switchBlocked(target);
+    if (blocked) {
+      const code = typeof blocked === 'string' ? blocked : 'session_running';
+      return { ok: false, code, error: code === 'edit_in_progress'
+        ? '消息编辑事务进行中，请稍候。'
+        : '该执行交接会影响正在运行的会话，请从所属会话入口继续。' };
+    }
     if (!rpc || typeof rpc.request !== 'function') return { ok: false, code: 'no-rpc', error: 'pi 未连接，无法切换会话' };
     const res = await rpc.request({ type: 'switch_session', sessionPath: target.file });
     if (!res) return { ok: false, code: 'no-answer', error: 'pi 没有应答（可能正在忙，或子进程未运行）' };
@@ -773,6 +785,8 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     const clean = String(name || '').trim().slice(0, 120);
     if (!clean) return { ok: false, error: '名字不能为空' };
     if (!rpc || typeof rpc.request !== 'function') return { ok: false, error: 'pi 未连接' };
+    const cur = await currentSessionId();
+    if (cur && mutationBlocked(cur)) return { ok: false, code: 'edit_in_progress', error: '该会话有编辑事务进行中，请稍候。' };
     const res = await rpc.request({ type: 'set_session_name', name: clean });
     if (!res || res.__error) return { ok: false, error: (res && res.__error) || 'pi 没有应答' };
     return { ok: true, name: clean };

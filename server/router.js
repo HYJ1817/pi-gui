@@ -130,6 +130,7 @@ export function createRouter({
   legacyScope = null,
   requireLegacyScope = () => false,
   commandAdmission = async () => false,
+  restartGuard = async () => {},
 }) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
@@ -386,8 +387,16 @@ export function createRouter({
       return uploads.handle(req, res, url);
     }
     if (url.pathname === '/api/restart' && req.method === 'POST') {
-      rpc.restart();
-      return json(res, 200, { ok: true });
+      /* 编辑事务在飞时重启 bridge 会让导航后的目标会话失去可恢复通道；
+       * 与命令闸门使用同一套后端约束，不依赖 Renderer 禁用按钮。 */
+      Promise.resolve()
+        .then(() => restartGuard())
+        .then(() => {
+          rpc.restart();
+          json(res, 200, { ok: true });
+        })
+        .catch(err => json(res, 503, { ok: false, code: err?.code || 'edit_in_progress', error: String(err?.message || err) }));
+      return;
     }
     if (req.method !== 'GET') {
       res.writeHead(405).end('Method not allowed');
