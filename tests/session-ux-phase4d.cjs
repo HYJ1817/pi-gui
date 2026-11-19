@@ -154,6 +154,13 @@ async function pageChecks() {
   surface.showChat();
   const stream = document.querySelector('#stream');
   stream.style.scrollBehavior = 'auto';
+  /* 页面自己的 boot 会在异步 get_messages 返回后重建对话区。慢机上这次重建
+   * 可能落在任一断言中间（线程被整个换掉，滚动/书签读到刚清空的状态），
+   * 所以先等 boot 的历史渲染落定，再开始分块断言。 */
+  const bootRendered = await waitFor(() => stream.querySelectorAll('.msg').length > 0, 20000);
+  await M.waitForClassicRenderIdle();
+  await painted();
+  if (!bootRendered) throw new Error('页面 boot 历史在 20s 内没有渲染，夹具不可信');
   const thread = () => stream.querySelector('.thread');
   const users = () => [...stream.querySelectorAll('.msg.user')];
   const counts = () => ({

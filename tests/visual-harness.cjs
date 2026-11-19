@@ -981,7 +981,9 @@ const server = http.createServer(async (req, res) => {
     req.on('close', () => clients.delete(res));
 
     // 等前端把 onopen/onmessage 挂好，再推 bridge_status 触发 boot()
-    setTimeout(() => push({ type: 'bridge_status', state: 'ready' }), 250);
+    /* HARNESS_BOOT_DELAY_MS 只用于复现「boot 重建落在断言中间」的竞态
+     * （P4-D 慢机偶发），默认值不变。 */
+    setTimeout(() => push({ type: 'bridge_status', state: 'ready' }), Number(process.env.HARNESS_BOOT_DELAY_MS) || 250);
     return;
   }
 

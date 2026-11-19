@@ -158,6 +158,9 @@ DOCX XML 顺序、Classic 防抖草稿隔离、历史失效/最新 800 条/搜�
 `ui2-visual` 默认让浏览器分配 CDP 端口；首选 Chromium 连续两次未能暴露
 DevTools 时，会换用同机另一个 Chromium（例如 Edge）再试一次。这是对 CI
 冷启动 / 单一浏览器启动噪声的测试夹具兜底，不改变布局判据或产品行为。
+`session-ux-phase4d` 在开始断言前先等页面 boot 的历史渲染落定：慢机上 boot
+的异步重建可能落在断言中间并换掉线程。`HARNESS_BOOT_DELAY_MS` 只用于复现
+该竞态（默认 250ms 不变），不改变产品行为或断言判据。
 若沙箱阻止打包产物的子进程在仓库外新建数据目录，可仅对 `app-check` /
 `exe-check` 使用隔离的仓库内 TEMP；这是夹具放行，不是产品目录或 CI 默认路径。
 遇到 PowerShell 策略限制时先核实失败原因，测试进程策略不替代 SACL 权限，
