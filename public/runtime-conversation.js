@@ -285,6 +285,19 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     }
   }
   const unsubscribe = onRuntimeChange(() => { if (alive) { invalidateHistory(); focusResumed(); ensureModels(); draw(); } });
+  /* 标题就地更新（AI 自动标题 / 手动生成）：store 里已经 patch 过，但
+   * patchRuntimeTitle 刻意不广播（见 runtime-state.js），所以这里只改标题
+   * 文本与顶部标题 —— 不触发整块 draw，更不动滚动位置、草稿和审批状态。 */
+  const onTitleEvent = (e) => {
+    const detail = e && e.detail;
+    if (!alive || !detail || detail.conversationId !== id) return;
+    const next = store.get(id)?.item?.title || detail.title;
+    if (typeof next !== 'string' || !next || next === title.textContent) return;
+    title.textContent = next;
+    title.title = next;
+    if (active) onTitle(next, store.get(id)?.item?.workspace?.cwd || '');
+  };
+  document.addEventListener('pi-gui:runtime-title', onTitleEvent);
   function ensureModels() {
     const record = store.get(id);
     if (!active || !models || record?.item.lifecycle !== 'ready' || !record.owner?.sessionId) return;
@@ -1125,7 +1138,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const prevScrollHeight = output.scrollHeight || 0;
     root.hidden = !id;
     if (!id) return;
-    title.textContent = r?.item?.sessionName || models?.get(id)?.sessionName || r?.item?.workspace?.branch || '并行会话';
+    title.textContent = r?.item?.title || r?.item?.sessionName || models?.get(id)?.sessionName || r?.item?.workspace?.branch || '并行会话';
     title.title = title.textContent;
     if (active) onTitle(title.textContent, r?.item?.workspace?.cwd || '');
     drawModels(r, view);
@@ -1397,6 +1410,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         window.removeEventListener('beforeunload', unloadHandler);
       }
       unsubscribe(); root.remove();
+      document.removeEventListener('pi-gui:runtime-title', onTitleEvent);
       /* 只拆自己建的那一份投影；外部传进来的（`display`）归外部管。 */
       if (ownsProjection) projection.dispose();
     },

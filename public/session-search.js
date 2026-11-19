@@ -133,6 +133,33 @@ export function refreshSearch() {
   if (searchViewMode() === 'search') run(0);
 }
 
+/**
+ * 标题就地更新（AI 自动标题 / 手动重命名）。
+ *
+ * 搜索结果缓存里存的是发请求那一刻的标题；不更新它，下一次
+ * `refreshSearch()` 之前显示的还是旧标题。这里只改数据与已渲染节点，
+ * **不重排、不重新请求** —— 标题不属于排序键，也不该让搜索抖动。
+ * 返回 false 表示当前结果里没有这条会话（不在屏幕上就什么都不用做）。
+ */
+export function applySearchTitle(sessionId, title) {
+  if (typeof sessionId !== 'string' || !sessionId) return false;
+  if (typeof title !== 'string' || !title) return false;
+  let changed = false;
+  for (const r of results) {
+    if (r.sessionId !== sessionId) continue;
+    if (r.title !== title) { r.title = title; changed = true; }
+  }
+  for (const box of document.querySelectorAll('.pj-sr[data-native-session-id]')) {
+    if (box.dataset.nativeSessionId !== sessionId) continue;
+    const titleEl = box.querySelector('.pj-sr-title');
+    if (titleEl) titleEl.textContent = title;
+    const head = box.querySelector('.pj-sr-head');
+    if (head) head.setAttribute('aria-label', `打开会话：${title}`);
+    changed = true;
+  }
+  return changed;
+}
+
 /* ---------- 输入框 ---------- */
 
 export function createSearchBar() {
@@ -312,6 +339,7 @@ function statusLine(text, cls) {
 function makeResult(res, onPick) {
   const box = node('div', 'pj-sr');
   box.dataset.sessionId = res.id;
+  if (res.sessionId) box.dataset.nativeSessionId = res.sessionId;
   if (res.locator) box.dataset.conversationId = res.locator.conversationId;
   if (res.archived) box.classList.add('archived');
 

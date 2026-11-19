@@ -34,6 +34,11 @@ export async function respondToRuntimeApproval(owner, approval, send) {
 export function seedRuntimeSnapshot(snapshot) { if (runtimeStore.seed(snapshot)) broadcast(); }
 export function refreshRuntimeViews() { broadcast(); }
 
+/** 标题就地更新：不广播、不重排、不改 revision。 */
+export function patchRuntimeTitle(conversationId, title) {
+  return runtimeStore.patchTitle(conversationId, title);
+}
+
 /** SSE 帧入口：返回 true 表示这份帧真的改动了 store（视图据此重画）。 */
 export function observeRuntimeFrame(frame) {
   const id = frame.owner?.conversationId || frame.conversationId;

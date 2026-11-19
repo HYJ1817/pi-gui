@@ -119,6 +119,9 @@ import { cleanupStaleTemp } from './server/environment-download.js';
 import { createApprovalProbe } from './server/approval-probe.js';
 import { createSessions } from './server/sessions.js';
 import { createSessionSearch } from './server/session-search.js';
+import { createSessionTitleStore } from './server/session-title-store.js';
+import { createSessionTitleSdk } from './server/session-title-sdk.js';
+import { createSessionTitles } from './server/session-titles.js';
 import { createPiCompat } from './server/pi-compat.js';
 import { createPiProbes } from './server/pi-probes.js';
 import * as piCompatMatrix from './server/pi-compat-matrix.js';
@@ -404,6 +407,9 @@ let extensionRegistryRef = null;
  * 回调在那之前就装好了 —— 所以同样用「先声明、运行期回填」的引用占位。 */
 let probesRef = null;
 let providerAuthRef = null;
+/* 会话标题服务在 sessions / runtime registry 之后创建；rpc.publish 早于它们，
+ * 所以和 providerAuthRef 一样先留引用占位，运行期回填。 */
+let sessionTitlesRef = null;
 /* Z4-3：Agent 建议来源的事件 tap 与生成通道。collab 区块在后面才创建实例，
  * 这里先声明、运行期回填（与 probesRef 同一模式）。 */
 let collabProposalsRef = null;
@@ -509,9 +515,13 @@ const rpc = createRpcBridge({
     providerAuthRef?.observeRuntime(event);
     if (event.type === 'bridge_status' || event.type === 'agent_settled' ||
         event.type === 'response' && ['get_state','new_session','switch_session','fork'].includes(event.command)) providerConfigSync.observe();
-    sse.publish({ ...modelGeneration.observe(event?.type === 'extension_error'
+    const projected = modelGeneration.observe(event?.type === 'extension_error'
       ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
-      : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null)), legacyOwner: primaryOwner() });
+      : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null));
+    /* 自动标题只消费 model-generation 已归一化的终态；失败/中断/空回复
+     * 不会提交任务。这里不等待模型调用，也不改变任何 SSE 帧。 */
+    try { sessionTitlesRef?.observeClassic(projected); } catch { /* observation only */ }
+    sse.publish({ ...projected, legacyOwner: primaryOwner() });
   },
   piBin: PI_BIN,
   launch: piLaunch,
@@ -881,6 +891,14 @@ const PLANNER_SESSION_DIR = path.join(DATA_DIR, 'planner-sessions');
  *
  * P7：extraSessionRoots 把 Planner 的会话目录也交给它 —— 只用于「按会话 id
  * 精确定位」（从任务跳到会话），**不进侧栏的会话列表**。 */
+/* 会话标题的持久化与设置。先于 createSessions 创建：列表扫描时必须能同步
+ * 合并自动/手动标题；服务本身稍后再建（它要读 rpc 状态与 registry）。
+ * 只写 <DATA_DIR> 下自己的两个 JSON，不碰 Pi 的会话文件。 */
+const sessionTitleStore = createSessionTitleStore({
+  dataDir: DATA_DIR,
+  logEvent: (event, details) => logging.log('session-title', event, details),
+});
+
 const sessions = createSessions({
   runtime,
   rpc,
@@ -891,6 +909,33 @@ const sessions = createSessions({
   getProjects: () => projects.read().items,
   readHistory: (file, expected) => readSessionMessages(file, { expected }),
   switchBlocked: target => Boolean(piActivity.busy() || rpc.stopState()?.pending || runtimeRegistryRef?.ownsNativeSession(target?.sessionId)),
+  titles: sessionTitleStore,
+});
+
+/* 独立标题模型调用：与 provider-auth 共用 Pi 的公开 SDK、auth.json 与
+ * models.json；凭据只留在 worker，主进程只拿固定错误码与纯文本标题。 */
+const sessionTitleSdk = createSessionTitleSdk({
+  resolvePackageDir: piLaunch.packageDir,
+  identityKey: piLaunch.identityKey,
+  authPath: providerAuthPath,
+  modelsPath: MODELS_JSON,
+  env: process.env,
+});
+const sessionTitles = sessionTitlesRef = createSessionTitles({
+  store: sessionTitleStore,
+  sdk: sessionTitleSdk,
+  readSessionText,
+  /* 手动入口只接受当前经典项目内的 stable id；Runtime 只接受 registry 已
+   * 证明过的 conversationId。两者都走后端解析，不接受 Renderer 传路径。 */
+  resolveClassic: id => sessions.resolveProjectSession(id, runtime.getCurrentCwd()),
+  resolveRuntime: id => {
+    try { return runtimeRegistryRef?.historyTarget(id) || null; } catch { return null; }
+  },
+  rpcRequest: cmd => rpc.request(cmd),
+  getPrimarySessionId: () => primaryNativeSession,
+  getCurrentCwd: () => runtime.getCurrentCwd(),
+  publish: event => sse.publish(event),
+  logEvent: (event, details) => logging.log('session-title', event, details),
 });
 
 /* 会话全文搜索（P3）。**注入** sessions 实例而不是 import —— 模块之间不许互相
@@ -1196,6 +1241,12 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   dataDir: DATA_DIR, publish: event => { sse.publish(event); try { collabProposalsRef?.observeRuntime(event); } catch { /* observation only */ } void candidateRunsRef?.observe(event).catch(() => {}); },
   providerLifecycle: providerConfigSync.observe,
   logEvent: (event, details) => logging.log('runtime', event, details),
+  /* 标题的读取与触发都走注入：registry 不 import 标题模块，也不往会话
+   * 文件里写任何东西。 */
+  sessionTitle: {
+    resolve: record => sessionTitles.resolveRuntimeRecord(record),
+    observe: payload => sessionTitles.observeRuntimeTurn(payload),
+  },
   externalCount: () => Number(Boolean(runtime.getCurrentCwd())) + cliInFlight + Number(Boolean(plannerRef?.projectSwitchBlockReason())),
   beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
     || rpc.maintenanceState() || plannerRef?.projectSwitchBlockReason() || cliInFlight ? 'maintenance' : null,
@@ -1510,6 +1561,7 @@ const route = createRouter({
   extensions,
   sessions,
   sessionSearch,
+  sessionTitles,
   planner,
   gitRoutes,
   uploads,
@@ -1603,6 +1655,7 @@ async function shutdown() {
   await terminal.dispose();
   marketNetwork?.dispose();
   providerAuth.dispose();
+  try { sessionTitles.dispose(); } catch { /* 标题 worker 收尾失败不挡住退出 */ }
   providerCredentialBridge.dispose();
   void providerCredentials.dispose();
   clearInterval(runtimeHealthTimer);

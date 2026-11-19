@@ -43,6 +43,8 @@ export const MENU_ICONS = Object.freeze({
   restore: iconMarkup('restore'),
   /* 项目行菜单里的「切换到此项目」复用侧栏的项目图形。 */
   folder: iconMarkup('folder'),
+  /* 「AI 生成标题」—— 与其它菜单项一样是常量 SVG 模板。 */
+  spark: iconMarkup('spark'),
 });
 
 const MENU_ID = 'actionMenu';

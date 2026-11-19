@@ -97,6 +97,7 @@ import { loadPlannerBadge, openPlanner, setTaskSessionViewer } from './planner.j
 import { mountSessionPlans } from './session-plans.js';
 import { renderSidebarSessions, refreshSidebarSessions, applySessionRename, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
 import { sessionDisplayTitle } from './session-title.js';
+import { handleSessionTitleEvent, loadSessionTitleSettings } from './session-titles.js';
 import { createSessionNavigation } from './session-navigation.js';
 import { initSidebarSearch, openSessionSearch as openSessionSearchEntry, toggleSessionSearch, closeSessionSearch } from './sidebar-search.js';
 import { initConversationNav } from './conversation-nav.js';
@@ -532,6 +533,10 @@ function attachGenerationRecovery(evt) {
 
 function handleEvent(evt) {
   if (['runtime_event', 'runtime_state', 'runtime_closed'].includes(evt.type)) { observeRuntimeEvent(evt); return; }
+  /* 标题服务是**应用级**的：事件可能属于另一个项目、或侧栏里并非当前会话的
+   * 那一行。它必须在「没有项目」与 bridgeRun 的过滤之前到达，否则后台会话
+   * 生成的标题会被静默丢掉，用户切回去看到的还是旧标题。 */
+  if (evt.type === 'session_title' || evt.type === 'session_title_settings') { handleSessionTitleEvent(evt); return; }
   /* 环境安装是整机级任务，不属于任何项目/会话：在项目与 bridgeRun 的过滤之前
    * 就交给它，否则「还没选项目」时首次安装的进度会被静默丢掉。 */
   if (evt.type === 'environment_job') { observeEnvironmentEvent(evt); return; }
@@ -1530,6 +1535,9 @@ syncWelcome();
 
 loadProjects();
 loadProviders();
+/* 标题设置（自动生成开关 / 能力探测）。失败不阻塞启动：缓存为 null 时
+ * 设置页显示默认开启，手动入口按「未验证」照常显示。 */
+void loadSessionTitleSettings();
 /* 侧栏「扩展」右边那个数字：发现了几条 skill。
  * 只做展示，失败就留空 —— 这个数字不该在启动路径上弹任何错。 */
 loadExtensionsBadge();

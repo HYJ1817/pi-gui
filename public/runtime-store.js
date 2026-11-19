@@ -642,6 +642,14 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   }
 
   return { seed, apply, applyDetailed, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
+    /* 标题是显示字段，不参与 owner / revision / eventSequence 判据。
+     * 只就地改 item，**不广播** —— 标题更新不应触发整块列表重画。 */
+    patchTitle(id, title) {
+      const r = records.get(id);
+      if (!r || !r.item || typeof title !== 'string' || !title) return false;
+      r.item = { ...r.item, title };
+      return true;
+    },
     setRejectObserver(fn) { rejectObserver = typeof fn === 'function' ? fn : null; },
     reconcileApprovals(owner, approvals, cursor) {
       const r = records.get(owner?.conversationId);

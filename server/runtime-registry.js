@@ -17,7 +17,8 @@ const projectWorkspace = w => typeof w?.workspaceId === 'string' && w.workspaceI
 export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, validateWorkspace = async () => {},
   publish = () => {}, externalCount = () => 0, beforeStart = () => null, beforeCommand = () => null,
   admission = (_args, action) => action(), onFocus = async () => {}, maxEvents = 200, maxBytes = 1024 * 1024,
-  logEvent = null, providerLifecycle = () => {}, sharedAdmission = async () => { throw fail('tool_guard_unavailable'); } } = {}) {
+  logEvent = null, providerLifecycle = () => {}, sharedAdmission = async () => { throw fail('tool_guard_unavailable'); },
+  sessionTitle = null } = {}) {
   const diagLog = typeof logEvent === 'function' ? logEvent : () => {};
   const safeLog = (event, details = {}) => { try { diagLog(event, details); } catch { /* observation only */ } };
   const backendInstance = randomUUID(), records = new Map(), lives = new Map(), leases = new Map(), revisions = new Map();
@@ -152,14 +153,26 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live.outcome = { kind, reason, sequence: ++live.outcomeRevision };
     live.attention = true;
   }
+  function titleFor(record) {
+    try {
+      const value = sessionTitle?.resolve?.(record);
+      if (value && typeof value.title === 'string' && value.title) return value;
+    } catch { /* 标题解析失败退回原始字段，不影响 registry */ }
+    return {
+      title: record.sessionName || record.workspace.branch || '并行会话',
+      source: record.sessionName ? 'manual' : record.workspace.branch ? 'fallback' : 'default',
+    };
+  }
   function summary(record) {
     const live = lives.get(record.conversationId);
+    const title = titleFor(record);
     return { conversationId: record.conversationId, workspace: { ...record.workspace }, kind: projectWorkspace(record.workspace) ? 'project' : 'worktree',
       /* P32.4：侧栏要按**创建时间**排会话，且点击不得让行换位。排序键必须来自
        * 后端持久记录（record.createdAt），不能由前端按「最近活动」猜 ——
        * 那正是「点一下行就跳位置」的来源。 */
       createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
-      nativeSessionId: record.sessionId || null, sessionName: record.sessionName || null, title: record.sessionName || record.workspace.branch || '并行会话',
+      nativeSessionId: record.sessionId || null, sessionName: record.sessionName || null, title: title.title,
+      titleSource: title.source,
       revision: revisions.get(record.conversationId) || 0,
       owner: live ? owner(live) : null, lifecycle: live?.lifecycle || 'dormant', activity: live?.activity || 'idle',
       attention: live?.attention === true, focused: focused === record.conversationId, historyRequired: live?.historyRequired === true,
@@ -233,7 +246,36 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       }
       live.runObserved = false;
     }
-    if (event.type === 'agent_settled') void refreshSession(live).catch(()=>{if(belongs(live)){live.error='session_state_unconfirmed';changed(live);}});
+    /* refreshSession 负责把「原生会话文件已经落盘」这件事确认下来：新建的
+     * Runtime 会话在第一条消息之前 sessionLocator 还是 null。标题观察必须等
+     * 这次核对完成，否则首轮成功时拿不到 locator，自动标题永远不会生成。 */
+    const settledRefresh = event.type === 'agent_settled' ? refreshSession(live) : null;
+    if (settledRefresh) void settledRefresh.catch(()=>{if(belongs(live)){live.error='session_state_unconfirmed';changed(live);}});
+    /* 自动标题只观察**已确认成功且有可见输出**的终态。传的是后端持有的
+     * locator/身份，不是 Renderer 能伪造的字段；service 会再读一次文件核对。 */
+    if (event.type === 'agent_settled' && event.generationResult?.outcome === 'success'
+      && event.generationResult.hasVisibleOutput === true && event.aborted !== true) {
+      const generation = live.generation;
+      void (settledRefresh || Promise.resolve()).then(() => {
+        if (!belongs(live) || generation !== live.generation) return;
+        try {
+          sessionTitle?.observe?.({
+            conversationId: live.record.conversationId,
+            sessionId: live.sessionId || live.record.sessionId,
+            sessionLocator: live.record.sessionLocator,
+            sessionIdentity: live.record.sessionIdentity,
+            cwd: live.record.workspace.cwd,
+            sessionName: live.record.sessionName,
+            createdAt: live.record.createdAt,
+            aborted: false,
+            generationResult: event.generationResult,
+          });
+        } catch { /* observation only */ }
+      }, () => {
+        /* 刷新失败时 locator 尚未确认，不能拿可能过期的字段触发标题；
+         * 同时必须消费 rejection，否则会变成进程级 unhandledRejection。 */
+      });
+    }
     // A response settles only its captured request. Other requests may still be
     // awaiting acknowledgement, even before the first agent_start arrives.
     if (event.type === 'response' && typeof event.success === 'boolean' && TURNS.has(event.command) && live.pendingTurns.get(event.id) === event.command) {
@@ -556,9 +598,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
 
   function historyTarget(record) {
     const w = record.workspace;
+    const title = titleFor(record);
     return { sessionId: record.sessionId || null, sessionLocator: record.sessionLocator || null,
       sessionIdentity: record.sessionIdentity || null, cwd: w.cwd,
-      title: record.sessionName || w.branch || '并行会话', createdAt: record.createdAt,
+      title: title.title, titleSource: title.source, createdAt: record.createdAt,
       locator: { projectId: w.projectId, workspaceId: w.workspaceId, workspaceEpoch: w.workspaceEpoch,
         conversationId: record.conversationId, nativeSessionId: record.sessionId || null } };
   }

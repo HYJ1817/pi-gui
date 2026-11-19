@@ -771,6 +771,24 @@ export const archiveSession = (id, archived = true) => sendJSON('/api/sessions/a
 /** 删除会话（后端是软删除：文件移进 Pi GUI 的回收站目录，不是 unlink）。 */
 export const deleteSession = (id) => sendJSON('/api/sessions/delete', { body: { id } });
 
+/* ---------- 会话标题（AI） ---------- */
+
+/** 读取自动标题设置与当前 Pi 的独立模型调用能力。应用级，不属于某个项目。 */
+export const fetchSessionTitleSettings = () => getJSON('/api/session-titles/settings');
+
+/** 开启 / 关闭自动标题。重新开启只对之后新建的会话生效（后端记录 enabledAt）。 */
+export const updateSessionTitleSettings = (autoEnabled) =>
+  sendJSON('/api/session-titles/settings', { method: 'PUT', body: { autoEnabled }, applicationScoped: true });
+
+/** 手动生成标题。scope=classic 时传 stable id；scope=runtime 时传 conversationId。
+ *  两者都由后端解析归属，前端不传路径。 */
+export const generateSessionTitle = (target) =>
+  sendJSON('/api/session-titles/generate', { body: target, applicationScoped: true });
+
+/** 采纳一次需要确认的生成结果（当前标题是手动标题时）。 */
+export const applySessionTitle = (proposalId) =>
+  sendJSON('/api/session-titles/apply', { body: { proposalId }, applicationScoped: true });
+
 /** 在当前项目里搜会话标题与消息正文（P3）。
  *
  *  **只传关键词与范围，不传路径、不传会话 ID** —— 后端自己决定扫哪些文件，

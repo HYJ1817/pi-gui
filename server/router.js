@@ -106,6 +106,7 @@ export function createRouter({
   extensions,
   sessions,
   sessionSearch,
+  sessionTitles = null,
   planner,
   gitRoutes,
   uploads,
@@ -207,6 +208,12 @@ export function createRouter({
     if (url.pathname === '/api/candidate-runs') return candidateRuns ? candidateRuns.handle(req,res,url) : json(res,503,{ok:false,code:'candidate_unavailable'});
     if (url.pathname === '/api/session-change/evidence') return sessionChanges ? sessionChanges.handle(req, res, url) : json(res,503,{ok:false,code:'capture_unavailable'});
     if (url.pathname.startsWith('/api/session-revert/')) return sessionRevert ? sessionRevert.handle(req, res, url) : json(res,503,{ok:false,code:'preview_unavailable'});
+    /* 会话标题是**应用级**能力：自动开关与手动生成都可能针对非当前会话，
+     * 因此必须在 legacy owner 检查之前，且不能挂在 /api/sessions/ 前缀下
+     *（会被会话模块整个吃掉）。GET/PUT/POST 都有，也在 405 兜底之前。 */
+    if (url.pathname === '/api/session-titles' || url.pathname.startsWith('/api/session-titles/')) {
+      return sessionTitles ? sessionTitles.handle(req, res, url) : json(res, 503, { ok: false, code: 'title_unavailable' });
+    }
     if (req.method !== 'GET' && requireLegacyScope()) {
       let expected;
       try { expected = JSON.parse(req.headers['x-pi-gui-owner'] || 'null'); } catch { expected = null; }

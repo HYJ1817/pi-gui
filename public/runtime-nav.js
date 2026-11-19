@@ -14,6 +14,9 @@ import { fetchRuntimeSessions, fetchWorktrees, runtimeSessionAction, worktreeAct
 import { runtimeStore as store, onRuntimeChange, seedRuntimeSnapshot } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
 import { openRuntimeSessions } from './runtime-sessions.js';
+import { generateAiTitle, isTitleGenerating, titleCapability } from './session-titles.js';
+import { MENU_ICONS, openActionMenu } from './ui/action-menu.js';
+import { iconMarkup } from './ui/icons.js';
 import { openModal } from './ui/modal.js';
 import { feedbackContext, toast } from './ui/toast.js';
 import { samePath } from './util.js';
@@ -30,6 +33,23 @@ const OUTCOME = {
   interrupted: { text: '已中断', title: '后台运行已中断' },
   unknown: { text: '已结束', title: '后台运行已结束，结果未确认' },
 };
+
+/* 与经典会话行共用同一个三点图形常量来源（不是字符图标）。 */
+const SVG_MORE = iconMarkup('more');
+
+/** Runtime 行的手动标题入口：与经典会话共用 generateAiTitle / 后端服务。 */
+function runtimeTitleItems(conversationId, item) {
+  if (titleCapability().supported === false) return [];
+  const busy = isTitleGenerating('runtime:' + conversationId);
+  const noSession = !item?.nativeSessionId;
+  return [{
+    label: busy ? 'AI 生成标题中…' : 'AI 生成标题',
+    icon: MENU_ICONS.spark,
+    disabled: busy || noSession,
+    disabledReason: busy ? '正在生成标题，请稍候。' : '这条会话还没有可读取的 Pi 会话记录。',
+    onClick: () => { void generateAiTitle({ scope: 'runtime', conversationId }); },
+  }];
+}
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -208,6 +228,25 @@ function row(member) {
     event.preventDefault(); buttons[next]?.focus();
   };
   rowEl.append(primary);
+
+  const titleItems = runtimeTitleItems(member.conversationId, item);
+  if (titleItems.length) {
+    const acts = el('span', 'pj-sess-acts');
+    const trigger = el('button', 'pj-sess-menu-trigger row-action-trigger');
+    trigger.type = 'button';
+    trigger.title = '更多操作';
+    trigger.setAttribute('aria-label', `会话操作：${label(item)}`);
+    trigger.setAttribute('aria-haspopup', 'menu');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.innerHTML = SVG_MORE;
+    trigger.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openActionMenu(trigger, titleItems);
+    };
+    acts.append(trigger);
+    rowEl.append(acts);
+  }
 
   /* attention 只是一个很轻的小点，点了就清（focus 会让后端把 attention 置回 false）。 */
   if (item?.attention) {

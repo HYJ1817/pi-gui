@@ -6,9 +6,15 @@
  */
 import { openModal } from './ui/modal.js';
 import { themePreference, setThemePreference, onThemeChange } from './theme.js';
-import { createSettingsCard, createSettingsRow, createSegmentedControl } from './ui/primitives.js';
+import { createSettingsCard, createSettingsRow, createSegmentedControl, createSettingsToggle } from './ui/primitives.js';
 import { createThemePicker } from './ui/theme-picker.js';
 import { createFontPicker } from './ui/font-picker.js';
+import {
+  loadSessionTitleSettings,
+  onSessionTitleSettings,
+  sessionTitleSettingsSnapshot,
+  setAutoSessionTitle,
+} from './session-titles.js';
 import {
   FONT_SCALE_MAX,
   FONT_SCALE_MIN,
@@ -34,6 +40,7 @@ export function openAppearance({
     try { store = globalThis.localStorage; } catch { store = null; }
   }
   let unsubscribe = null;
+  let unsubscribeTitle = null;
   let themePicker = null;
   let fontPicker = null;
   let disposed = false;
@@ -183,6 +190,73 @@ export function openAppearance({
       extraClass: 'ds-settings-row-multiline appearance-size-row'
     });
 
+    // Session titles --------------------------------------------------------
+    /* 自动标题是**服务端设置**（跟着 Pi 走、跨窗口一致），不是 localStorage
+     * 偏好；这里只负责展示与提交。开关失败时拨回原值，绝不让界面显示一个
+     * 服务端其实没保存的状态。 */
+    let titleRequest = 0;
+    const initialTitle = sessionTitleSettingsSnapshot();
+    const autoTitleToggle = createSettingsToggle({
+      checked: initialTitle ? initialTitle.settings.autoEnabled !== false : true,
+      ariaLabel: '自动生成会话标题',
+      onChange: async (next) => {
+        const request = ++titleRequest;
+        autoTitleToggle.setDisabled(true);
+        let result;
+        try {
+          result = await setAutoSessionTitle(next);
+        } catch (err) {
+          result = { ok: false, error: '设置未能保存：' + (err?.message || err) };
+        }
+        if (disposed) return;
+        autoTitleToggle.setDisabled(false);
+        if (request !== titleRequest) return; // 连点时只认最后一次
+        if (!result.ok) {
+          autoTitleToggle.setChecked(!next);
+          setStatus(result.error || '会话标题设置未能保存，请重试。', 'error');
+          return;
+        }
+        setStatus(next ? '已开启自动会话标题。' : '已关闭自动会话标题。');
+      }
+    });
+
+    const autoTitleRow = createSettingsRow({
+      label: '自动生成会话标题',
+      detail: '根据首条提问与首条回复自动生成简短标题，会消耗少量模型用量。只对开启后新建的会话生效；已有标题与手动标题不会被改写。',
+      control: autoTitleToggle.element,
+      extraClass: 'appearance-title-row'
+    });
+
+    const modelValue = document.createElement('span');
+    modelValue.className = 'session-title-model-value';
+    modelValue.textContent = initialTitle?.model?.label || '跟随当前会话';
+    const modelRow = createSettingsRow({
+      label: '标题生成模型',
+      detail: '使用产生该会话首条回复的供应商与模型，复用现有 Pi 认证，不额外配置 API Key。',
+      control: modelValue,
+      extraClass: 'appearance-title-model-row'
+    });
+
+    const titleCard = createSettingsCard({
+      title: '会话标题',
+      children: [autoTitleRow, modelRow]
+    });
+    titleCard.classList.add('appearance-title-card');
+
+    function syncTitleSettings(snapshot) {
+      if (disposed || !snapshot) return;
+      autoTitleToggle.setChecked(snapshot.settings?.autoEnabled !== false);
+      modelValue.textContent = snapshot.capability?.supported === false
+        ? '当前 Pi 不支持独立模型调用'
+        : (snapshot.model?.label || '跟随当前会话');
+    }
+
+    syncTitleSettings(initialTitle);
+    unsubscribeTitle = onSessionTitleSettings(syncTitleSettings);
+    void loadSessionTitleSettings().then((snapshot) => {
+      if (!disposed) syncTitleSettings(snapshot);
+    });
+
     // Page assembly ---------------------------------------------------------
     const cardBlock = createSettingsCard({
       title: '外观',
@@ -206,11 +280,12 @@ export function openAppearance({
     done.onclick = close;
     actions.append(done);
 
-    card.append(heading, cardBlock, status, actions);
+    card.append(heading, cardBlock, titleCard, status, actions);
     themePicker.focus();
   }, () => {
     disposed = true;
     unsubscribe?.();
+    unsubscribeTitle?.();
     themePicker?.destroy();
     fontPicker?.destroy();
   });

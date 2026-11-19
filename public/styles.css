@@ -3312,6 +3312,19 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   min-width: 40px;
 }
 
+/* 会话标题：与外观三行同一个节奏；「标题生成模型」是只读值，
+ * 刻意不画成选择器 —— 现在没有可配置的模型，留一个假入口只会误导。 */
+.appearance-title-card .settings-row {
+  min-height: 64px;
+}
+
+.session-title-model-value {
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
 /* Product minimum width: let the control take its own line instead of
  * squeezing the label or hiding the trigger. */
 @media (max-width: 900px) {

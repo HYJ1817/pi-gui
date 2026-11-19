@@ -52,6 +52,7 @@ import { clearSessionPlans, refreshSessionPlans } from './session-plans.js';
 import { projectExpanded, setProjectExpanded } from './sidebar-expansion.js';
 import { showChat } from './ui/workspace-surface.js';
 import { runtimeStore } from './runtime-state.js';
+import { generateAiTitle, isTitleGenerating, titleCapability } from './session-titles.js';
 import {
   createSearchBar,
   renderSearchResults,
@@ -258,6 +259,7 @@ function sessionMenuItems(s, row, titleEl) {
   const namingUnavailable = capMissing('sessionNaming');
   const currentReason = '当前会话正在使用，请先切换到其它会话再归档或删除。';
   return [
+    ...aiTitleMenuItems(s),
     { label: '重命名', icon: MENU_ICONS.pencil, disabled: !s.current || namingUnavailable,
       disabledReason: namingUnavailable ? '当前 Pi 不支持会话重命名。' : '重命名：请先打开这条会话。',
       onClick: () => startRename(row, titleEl, s) },
@@ -266,6 +268,32 @@ function sessionMenuItems(s, row, titleEl) {
       : { label: '归档', icon: MENU_ICONS.archive, disabled: s.current, disabledReason: currentReason, onClick: () => doArchive(s, true) },
     { separator: true },
     { label: '删除会话', icon: MENU_ICONS.trash, danger: true, disabled: s.current, disabledReason: currentReason, onClick: () => doDelete(s) },
+  ];
+}
+
+/**
+ * 手动「AI 生成标题」：与自动标题共用同一个后端服务，**不另起一套生成器**。
+ *   - 能力探测明确为 false 时整项不出现（不留一个必然失败的入口）；
+ *   - 还没验证（null）时照常显示 —— 未验证不等于不支持，点了由后端给出结论；
+ *   - 正在生成时禁用，防止重复请求（后端还有一道 per-key 保护）；
+ *   - **自动开关关掉也能用**：这是用户明确发起的动作。
+ */
+function aiTitleMenuItems(s) {
+  if (titleCapability().supported === false) return [];
+  const key = 'classic:' + s.id;
+  const busy = isTitleGenerating(key);
+  const noId = !s.sessionId;
+  return [
+    {
+      label: busy ? 'AI 生成标题中…' : 'AI 生成标题',
+      icon: MENU_ICONS.spark,
+      disabled: busy || noId,
+      disabledReason: busy ? '正在生成标题，请稍候。' : '这条会话还没有可读取的 Pi 会话记录。',
+      onClick: () => {
+        void generateAiTitle({ scope: 'classic', id: s.id, sessionId: s.sessionId });
+      },
+    },
+    { separator: true },
   ];
 }
 
@@ -554,6 +582,9 @@ export async function openSidebarPreviewSession(s) {
 
 function makeRow(s, onPick = null) {
   const row = el('div', 'pj-sess' + (s.current ? ' on' : '') + (s.pending ? ' pending' : ''));
+  /* 标题就地更新按 **pi 的会话 id** 找行（`s.id` 是路径 sha1，只在本机列表里
+   * 稳定；标题事件带的是会话文件 header 的 UUID）。 */
+  if (s.sessionId) row.dataset.sessionId = s.sessionId;
   row.title = s.pending
     ? '新会话：还没有消息，pi 还没把它写到磁盘上'
     : `${s.messageCount} 条消息 · ${fmtTime(s.updatedAt)}${s.createdAt ? ' · 创建于 ' + fmtTime(Date.parse(s.createdAt)) : ''}`;
@@ -631,6 +662,56 @@ let busy = false;
 document.addEventListener('pi-gui:classic-activity', () => {
   for (const row of document.querySelectorAll('[data-classic-current]')) row.dataset.activity = S.streaming ? 'running' : 'idle';
   for (const time of document.querySelectorAll('[data-classic-current] .pj-sess-time')) time.textContent = S.streaming ? '运行中' : time.dataset.idleLabel || '';
+});
+
+/* AI / 手动标题落地后就地更新这一行与顶部标题。
+ * 刻意**不调 paintList()**：重画会丢焦点、抖滚动位置，还会把正在行内改名的
+ * 输入框换掉；标题也不属于排序键，没有任何理由重排列表。 */
+document.addEventListener('pi-gui:classic-title', (e) => {
+  const sessionId = e?.detail?.sessionId;
+  const title = e?.detail?.title;
+  if (typeof sessionId !== 'string' || !sessionId) return;
+  if (typeof title !== 'string' || !title) return;
+  if (dataRef && Array.isArray(dataRef.sessions)) {
+    for (const s of dataRef.sessions) {
+      if (s.sessionId === sessionId && s.title !== title) s.title = title;
+    }
+  }
+  for (const row of document.querySelectorAll('.pj-sess[data-session-id]')) {
+    if (row.dataset.sessionId !== sessionId) continue;
+    const titleEl = row.querySelector('.pj-sess-title');
+    if (titleEl) titleEl.textContent = title;
+    const primary = row.querySelector('.pj-sess-primary');
+    if (primary) primary.setAttribute('aria-label', `切换会话：${title}`);
+    const trigger = row.querySelector('.pj-sess-menu-trigger');
+    if (trigger) trigger.setAttribute('aria-label', `会话操作：${title}`);
+  }
+  /* 顶部标题只在这一条确实是当前会话时改；旁边的运行/空闲状态不受影响。 */
+  if (S.state?.sessionId === sessionId) setTitleText(title);
+});
+
+/* 首条用户消息发出后立刻把「新会话」换成临时兜底标题。
+ * 就地改这一行与顶部标题，**不重扫、不重画、不排序**；等 AI 标题回来时
+ * 再被同一条管线替换。已有手动/自动标题时一律不动 —— 它们比首条消息权威。 */
+document.addEventListener('pi-gui:classic-prompt-sent', (e) => {
+  const text = typeof e?.detail?.text === 'string' ? e.detail.text.replace(/\s+/g, ' ').trim() : '';
+  if (!text || !dataRef || !Array.isArray(dataRef.sessions)) return;
+  const target = dataRef.sessions.find((s) => s.current);
+  if (!target || target.titleSource !== 'default') return;
+  const title = text.slice(0, 80);
+  const sessionId = target.sessionId || '';
+  target.title = title;
+  target.titleSource = 'fallback';
+  for (const row of document.querySelectorAll('.pj-sess')) {
+    if (sessionId ? row.dataset.sessionId !== sessionId : !row.classList.contains('on')) continue;
+    if (row.classList.contains('pj-runtime')) continue;
+    const titleEl = row.querySelector('.pj-sess-title');
+    if (titleEl) titleEl.textContent = title;
+    const primary = row.querySelector('.pj-sess-primary');
+    if (primary) primary.setAttribute('aria-label', `切换会话：${title}`);
+    break;
+  }
+  if (S.state?.sessionId === sessionId || !sessionId) setTitleText(title);
 });
 
 /**
