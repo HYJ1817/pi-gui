@@ -372,13 +372,27 @@ async function runParent() {
   };
 
   let child = null;
+  /* Windows 上 Electron 退出后目录句柄可能晚一拍释放；清理失败不应把已经
+   * 通过的验收判成失败，但必须留下明确提示，不能静默吞掉。 */
+  const removeTree = async target => {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try { fs.rmSync(target, { recursive: true, force: true }); return true; }
+      catch (error) {
+        if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(error?.code) || attempt === 5) return false;
+        await sleep(250);
+      }
+    }
+    return false;
+  };
   const cleanup = async () => {
     if (child && child.exitCode === null) {
       try { child.kill(); } catch { /* gone */ }
     }
     stopBackend();
     await new Promise(resolve => modelServer.close(resolve));
-    if (process.env.ME_KEEP !== '1') fs.rmSync(root, { recursive: true, force: true });
+    if (process.env.ME_KEEP !== '1' && !(await removeTree(root))) {
+      console.log('NOTE temp directory left behind (locked): ' + root);
+    }
   };
 
   try {

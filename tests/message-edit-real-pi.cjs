@@ -16,6 +16,7 @@ const os = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
+const { randomUUID } = require('node:crypto');
 
 if (process.env.PI_GUI_MESSAGE_EDIT_FIXTURE !== '1') {
   console.log('SKIP message edit real Pi: set PI_GUI_MESSAGE_EDIT_FIXTURE=1 to run');
@@ -42,7 +43,7 @@ function sessionFiles(dir) {
   return found;
 }
 
-function createRpcClient(entryPath, args, { cwd, env }) {
+function createRpcClient(entryPath, args, { cwd, env, onEvent = null }) {
   const child = spawn(process.execPath, [entryPath, ...args], { cwd, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   let buffer = '';
   let nextId = 1;
@@ -50,6 +51,10 @@ function createRpcClient(entryPath, args, { cwd, env }) {
   const pending = new Map();
   const events = [];
   const stderr = [];
+  /* 故障注入证据：这些应答**真的到达了客户端**，只是被丢弃，用来模拟
+   * “Pi 已执行命令、但后端永远收不到应答”。丢弃后等待请求自身超时，因此
+   * 事务看到的一定是「结果未知」，而不是「明确未执行」。 */
+  const dropped = [];
 
   child.stdout.setEncoding('utf8');
   child.stdout.on('data', chunk => {
@@ -63,12 +68,18 @@ function createRpcClient(entryPath, args, { cwd, env }) {
       try { message = JSON.parse(line); } catch { continue; }
       if (message?.type === 'response' && pending.has(message.id)) {
         const waiter = pending.get(message.id);
+        if (waiter.dropResponse) {
+          waiter.dropped = true;
+          dropped.push({ command: message.command || waiter.command, success: message.success === true });
+          continue;
+        }
         pending.delete(message.id);
         clearTimeout(waiter.timer);
         waiter.resolve({ ok: message.success === true, data: message.data, error: message.error, command: message.command });
         continue;
       }
       events.push(message);
+      try { onEvent?.(message); } catch { /* observation only */ }
     }
   });
   child.stderr.setEncoding('utf8');
@@ -82,14 +93,14 @@ function createRpcClient(entryPath, args, { cwd, env }) {
     pending.clear();
   });
 
-  const request = (command, { timeoutMs = 30000 } = {}) => new Promise((resolve, reject) => {
+  const request = (command, { timeoutMs = 30000, dropResponse = false } = {}) => new Promise((resolve, reject) => {
     if (closed) { reject(Object.assign(new Error('pi_exited'), { code: 'pi_exited' })); return; }
     const id = nextId++;
     const timer = setTimeout(() => {
       pending.delete(id);
       reject(Object.assign(new Error('pi_timeout'), { code: 'pi_timeout' }));
     }, timeoutMs);
-    pending.set(id, { resolve, reject, timer });
+    pending.set(id, { resolve, reject, timer, dropResponse, command: command.type });
     try {
       child.stdin.write(JSON.stringify({ ...command, id }) + '\n');
     } catch (error) {
@@ -107,7 +118,7 @@ function createRpcClient(entryPath, args, { cwd, env }) {
     while (!closed && Date.now() < deadline) await sleep(20);
   };
 
-  return { request, stop, events, stderr, pid: () => child.pid, isClosed: () => closed };
+  return { request, stop, events, stderr, dropped, pid: () => child.pid, isClosed: () => closed };
 }
 
 (async () => {
@@ -174,6 +185,7 @@ function createRpcClient(entryPath, args, { cwd, env }) {
   fs.writeFileSync(path.join(agentDir, 'settings.json'), JSON.stringify({ defaultProvider: provider, defaultModel: modelId, retry: { enabled: false, maxRetries: 0 } }));
 
   const command = 'pi-gui-edit-' + Math.random().toString(36).slice(2, 12);
+  const token = randomUUID();
   const env = {
     ...process.env,
     PI_CODING_AGENT_DIR: agentDir,
@@ -183,6 +195,7 @@ function createRpcClient(entryPath, args, { cwd, env }) {
     PI_OFFLINE: '1',
     PI_TELEMETRY: '0',
     PI_GUI_EDIT_COMMAND: command,
+    PI_GUI_EDIT_TOKEN: token,
   };
   const extensionPath = path.join(__dirname, '..', 'extensions', 'pi-gui-edit', 'index.js');
   const baseArgs = [
@@ -197,7 +210,12 @@ function createRpcClient(entryPath, args, { cwd, env }) {
   let checks = 0;
   const pass = (name, fn) => { fn(); checks++; console.log('PASS ' + name); };
   const report = { platform: process.platform, piVersion: entry.version, root, sessionIds: [], files: [], modelRequests: 0 };
-  let rpc = createRpcClient(entry.entryPath, baseArgs, { cwd: project, env });
+  /* 事件证据要交给真实事务观察，和 session-runtime 的接线保持一致。 */
+  let onRpcEvent = () => {};
+  const startRpc = extraArgs => createRpcClient(entry.entryPath, [...baseArgs, ...extraArgs], {
+    cwd: project, env, onEvent: event => onRpcEvent(event),
+  });
+  let rpc = startRpc([]);
   const cleanup = async () => {
     await rpc.stop().catch(() => {});
     await new Promise(resolve => modelServer.close(resolve));
@@ -242,18 +260,33 @@ function createRpcClient(entryPath, args, { cwd, env }) {
 
     const { createMessageEditService } = await import('../server/message-edit.js');
     const service = createMessageEditService({ pollTimeoutMs: 5000, pollIntervalMs: 25 });
+    onRpcEvent = event => { try { service.observe(event, initial.sessionId); } catch { /* observation only */ } };
+    /* 故障注入开关：让真实 Pi 执行命令、真实应答到达客户端，然后丢弃应答，
+     * 由请求超时把事务推进「结果未知」。 */
+    let dropNavResponse = false;
+    let dropPromptResponse = false;
     const io = {
       scope: 'classic',
       sessionId: initial.sessionId,
       commandName: () => command,
+      editToken: () => token,
+      getBridgeRun: () => 1,
       busyReason: () => null,
       validate() { if (rpc.isClosed()) throw Object.assign(new Error('stale_runtime'), { code: 'stale_runtime' }); },
       async request(cmd) {
+        const nav = cmd.__messageEditNav === true;
         const { __messageEditNav, ...wire } = cmd;
-        const result = await rpc.request(wire);
-        return { ok: result.ok, data: result.data, code: result.error };
+        const drop = nav ? dropNavResponse : (wire.type === 'prompt' && dropPromptResponse);
+        try {
+          const result = await rpc.request(wire, { timeoutMs: drop ? 2500 : 30000, dropResponse: drop });
+          return { ok: result.ok, data: result.data, code: result.error };
+        } catch (error) {
+          /* 超时 / 进程退出都不能证明命令没有执行。 */
+          return { ok: false, code: error?.code || 'pi_request_failed', unknown: true };
+        }
       },
     };
+    const setDrop = ({ nav = false, prompt = false }) => { dropNavResponse = nav; dropPromptResponse = prompt; };
 
     const preflight = await service.preflight(io, { userIndex: 0, kind: 'edit' });
     pass('real Pi preflight exposes the native entry id and active leaf', () => {
@@ -270,7 +303,8 @@ function createRpcClient(entryPath, args, { cwd, env }) {
     const beforeEntriesCount = beforeEntries.entries.length;
     const edit = await service.resend(io, {
       userIndex: 0, kind: 'edit', text: 'edited first question',
-      expectedEntryId: preflight.entryId, expectedLeafId: preflight.leafId,
+      expectedEntryId: preflight.entryId, expectedParentId: preflight.parentId ?? null,
+      expectedLeafId: preflight.leafId, expectedSessionId: initial.sessionId,
       requestId: 'fixture-edit-request-1',
     });
     pass('edit is accepted inside the original native session', () => {
@@ -324,7 +358,8 @@ function createRpcClient(entryPath, args, { cwd, env }) {
     const regenPreflight = await service.preflight(io, { userIndex: 0, kind: 'regenerate' });
     const regenerate = await service.resend(io, {
       userIndex: 0, kind: 'regenerate',
-      expectedEntryId: regenPreflight.entryId, expectedLeafId: regenPreflight.leafId,
+      expectedEntryId: regenPreflight.entryId, expectedParentId: regenPreflight.parentId ?? null,
+      expectedLeafId: regenPreflight.leafId, expectedSessionId: initial.sessionId,
       requestId: 'fixture-regenerate-request-1',
     });
     pass('regenerate reuses the original user text in the same session', () => {
@@ -359,7 +394,7 @@ function createRpcClient(entryPath, args, { cwd, env }) {
     report.finalBytes = fs.statSync(initial.sessionFile).size;
 
     await rpc.stop();
-    rpc = createRpcClient(entry.entryPath, [...baseArgs, '--session', initial.sessionFile], { cwd: project, env });
+    rpc = startRpc(['--session', initial.sessionFile]);
     const restarted = (await rpc.request({ type: 'get_state' })).data;
     const restartedMessages = (await rpc.request({ type: 'get_messages' })).data.messages;
     const restartedUsers = restartedMessages.filter(message => message.role === 'user').map(message => textOf(message.content));
@@ -374,6 +409,100 @@ function createRpcClient(entryPath, args, { cwd, env }) {
 
     report.restartedUsers = restartedUsers;
 
+    /* ---------- 故障注入：命令真实执行，RPC 应答丢失 ----------
+     * 与 mock 超时不同：这里的命令在真实 Pi 里执行完毕，应答也确实到达了
+     * 客户端，只是被丢弃；事务只能靠回读与证据确认结果，不能当成“没发生”。 */
+    const settle = async (fromIndex, timeoutMs = 60000) => {
+      const settleDeadline = Date.now() + timeoutMs;
+      while (Date.now() < settleDeadline) {
+        if (rpc.events.slice(fromIndex).some(event => event.type === 'agent_settled')) return true;
+        await sleep(20);
+      }
+      return false;
+    };
+
+    const navPreflight = await service.preflight(io, { userIndex: 0, kind: 'edit' });
+    assert.equal(navPreflight.ok, true);
+    const navDropStart = rpc.dropped.length;
+    const navEventStart = rpc.events.length;
+    setDrop({ nav: true });
+    const navLost = await service.resend(io, {
+      userIndex: 0, kind: 'edit', text: 'edited after lost nav response',
+      expectedEntryId: navPreflight.entryId, expectedParentId: navPreflight.parentId ?? null,
+      expectedLeafId: navPreflight.leafId, expectedSessionId: initial.sessionId,
+      requestId: 'fixture-nav-lost-request-1',
+    });
+    setDrop({});
+    pass('a real navigation whose RPC response was lost is still confirmed and committed', () => {
+      assert.equal(navLost.ok, true);
+      assert.equal(navLost.accepted, true);
+      assert.equal(navLost.sessionId, initial.sessionId);
+      assert.equal(navLost.text, 'edited after lost nav response');
+      assert.equal(rpc.dropped.length, navDropStart + 1, 'nav response arrived and was discarded');
+      assert.equal(rpc.dropped.at(-1).command, 'prompt');
+      assert.equal(rpc.dropped.at(-1).success, true);
+    });
+    assert.equal(await settle(navEventStart), true, 'agent settled after lost-nav commit');
+    const navLostState = (await rpc.request({ type: 'get_state' })).data;
+    const navLostEntries = (await rpc.request({ type: 'get_entries' })).data;
+    const navLostMessages = (await rpc.request({ type: 'get_messages' })).data.messages;
+    const navLostUsers = navLostMessages.filter(message => message.role === 'user').map(message => textOf(message.content));
+    const navLostNew = navLostEntries.entries.find(entry => entry.id === navLost.newEntryId);
+    pass('the lost-nav transaction left exactly one new user entry in the same session', () => {
+      assert.equal(navLostState.sessionId, initial.sessionId);
+      assert.equal(navLostState.sessionFile, initial.sessionFile);
+      assert.equal(sessionFiles(sessionDir).length, 1);
+      assert.deepEqual(navLostUsers, ['edited after lost nav response']);
+      assert.ok(navLostNew, 'new user entry exists');
+      assert.equal(navLostNew.type, 'message');
+      assert.equal(navLostNew.message?.role, 'user');
+      assert.equal(navLostNew.parentId ?? null, navPreflight.parentId ?? null);
+      assert.equal(textOf(navLostNew.message?.content), 'edited after lost nav response');
+      assert.equal(modelRequests.filter(request => request.userTexts.includes('edited after lost nav response')).length, 1, 'no duplicate model run');
+    });
+
+    const promptPreflight = await service.preflight(io, { userIndex: 0, kind: 'edit' });
+    assert.equal(promptPreflight.ok, true);
+    const promptDropStart = rpc.dropped.length;
+    const promptEventStart = rpc.events.length;
+    const runsBefore = modelRequests.length;
+    setDrop({ prompt: true });
+    const promptLost = await service.resend(io, {
+      userIndex: 0, kind: 'edit', text: 'edited after lost prompt response',
+      expectedEntryId: promptPreflight.entryId, expectedParentId: promptPreflight.parentId ?? null,
+      expectedLeafId: promptPreflight.leafId, expectedSessionId: initial.sessionId,
+      requestId: 'fixture-prompt-lost-request-1',
+    });
+    setDrop({});
+    pass('a prompt accepted by real Pi while its RPC response was lost is confirmed, not restored', () => {
+      assert.equal(promptLost.ok, true);
+      assert.equal(promptLost.accepted, true);
+      assert.equal(promptLost.sessionId, initial.sessionId);
+      assert.equal(promptLost.text, 'edited after lost prompt response');
+      assert.equal(rpc.dropped.length, promptDropStart + 1, 'prompt response arrived and was discarded');
+      assert.equal(rpc.dropped.at(-1).command, 'prompt');
+      assert.equal(rpc.dropped.at(-1).success, true);
+    });
+    assert.equal(await settle(promptEventStart), true, 'agent settled after lost-prompt commit');
+    const promptLostState = (await rpc.request({ type: 'get_state' })).data;
+    const promptLostEntries = (await rpc.request({ type: 'get_entries' })).data;
+    const promptLostMessages = (await rpc.request({ type: 'get_messages' })).data.messages;
+    const promptLostUsers = promptLostMessages.filter(message => message.role === 'user').map(message => textOf(message.content));
+    const promptLostNew = promptLostEntries.entries.find(entry => entry.id === promptLost.newEntryId);
+    const promptRuns = modelRequests.slice(runsBefore).filter(request => request.userTexts.includes('edited after lost prompt response'));
+    const promptStatus = await service.status(io, 'fixture-prompt-lost-request-1');
+    pass('the lost-prompt transaction kept the new path and did not resend or restore', () => {
+      assert.equal(promptLostState.sessionId, initial.sessionId);
+      assert.equal(promptLostState.sessionFile, initial.sessionFile);
+      assert.equal(sessionFiles(sessionDir).length, 1);
+      assert.deepEqual(promptLostUsers, ['edited after lost prompt response']);
+      assert.ok(promptLostNew, 'new user entry exists');
+      assert.equal(promptLostNew.parentId ?? null, promptPreflight.parentId ?? null);
+      assert.equal(textOf(promptLostNew.message?.content), 'edited after lost prompt response');
+      assert.equal(promptRuns.length, 1, 'accepted prompt ran exactly once');
+      assert.equal(promptStatus.state, 'accepted');
+    });
+
     /* 旧 leaf 是用户消息时，扩展必须先追加 guard 才能精确回滚。真实 Pi 里
      * 这种状态出现在「用户消息已落盘、assistant 还没开始」时进程被结束。
      * 这里用慢模型 + 直接结束进程造出该状态，再从同一文件重启后编辑更早的
@@ -384,7 +513,7 @@ function createRpcClient(entryPath, args, { cwd, env }) {
     const userEventDeadline = Date.now() + 10000;
     while (Date.now() < userEventDeadline && !rpc.events.slice(slowIndex).some(event => event.type === 'message_start' && event.message?.role === 'user')) await sleep(20);
     await rpc.stop();
-    rpc = createRpcClient(entry.entryPath, [...baseArgs, '--session', initial.sessionFile], { cwd: project, env });
+    rpc = startRpc(['--session', initial.sessionFile]);
     const interrupted = (await rpc.request({ type: 'get_entries' })).data;
     const interruptedLeaf = interrupted.entries.find(entry => entry.id === interrupted.leafId);
     const leafIsUser = interruptedLeaf?.type === 'message' && interruptedLeaf.message?.role === 'user';
@@ -394,7 +523,8 @@ function createRpcClient(entryPath, args, { cwd, env }) {
       const guardPreflight = await service.preflight(io, { userIndex: 0, kind: 'edit' });
       const guarded = await service.resend(io, {
         userIndex: 0, kind: 'edit', text: 'edited after interruption',
-        expectedEntryId: guardPreflight.entryId, expectedLeafId: guardPreflight.leafId,
+        expectedEntryId: guardPreflight.entryId, expectedParentId: guardPreflight.parentId ?? null,
+        expectedLeafId: guardPreflight.leafId, expectedSessionId: initial.sessionId,
         requestId: 'fixture-guard-request-1',
       });
       const guardedEntries = (await rpc.request({ type: 'get_entries' })).data;
