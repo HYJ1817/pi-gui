@@ -1425,9 +1425,10 @@ async function main() {
     row?.querySelector('.pj-sess-menu-trigger')?.click();
   })()`);
   await sleep(300);
-  await shotOf('#actionMenu', 'UX-MENU-04-session-menu-open', 'P24 侧栏：统一会话菜单，历史会话的重命名禁用并解释', ['重命名', '归档', '删除会话', '请先打开'], [
+  await shotOf('#actionMenu', 'UX-MENU-04-session-menu-open', 'P24 侧栏：统一会话菜单，新增 AI 生成标题，历史会话的重命名禁用并解释', ['AI 生成标题', '重命名', '归档', '删除会话', '请先打开'], [
     ['菜单挂在 body 上且在视口内', `(() => {const m=document.querySelector('#actionMenu');const r=m.getBoundingClientRect();return m.parentElement===document.body&&r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1})()`],
-    ['三个 menuitem + 一条分隔线', `document.querySelectorAll('#actionMenu [role="menuitem"]').length===3&&Boolean(document.querySelector('#actionMenu [role="separator"]'))`],
+    ['四个 menuitem + 两条分隔线', `document.querySelectorAll('#actionMenu [role="menuitem"]').length===4&&document.querySelectorAll('#actionMenu [role="separator"]').length===2`],
+    ['首项是启用的 AI 生成标题', `(() => {const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')][0];return b.textContent==='AI 生成标题'&&!b.disabled})()`],
     ['删除项是 danger 层级', `(() => {const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('删除会话'));return b.classList.contains('danger')})()`],
     ['危险项静止时没有红底', `(() => {const b=[...document.querySelectorAll('#actionMenu .action-menu-item')].find(x=>x.textContent.includes('删除会话'));return getComputedStyle(b).backgroundColor==='rgba(0, 0, 0, 0)'})()`],
     ['菜单属于被点的那一行（当前会话那行没有被标记展开）', `document.querySelector('#projects .pj-sess.on .pj-sess-menu-trigger').getAttribute('aria-expanded')==='false'`],
@@ -1441,9 +1442,9 @@ async function main() {
     await sleep(300); // 等真实 resize 事件完成；菜单本来就应在 resize 时关闭。
     for (const current of [true,false]) {
       await evalJs(`document.querySelector('#projects .pj-sess${current ? '.on' : ':not(.on):not(.pending)'} .pj-sess-menu-trigger').click()`);
-      await shotOf('#actionMenu',`UX-SESSION-MENU-${current ? 'current' : 'history'}-${width}x${height}`,'统一菜单：当前与历史会话的受限操作有可见说明',['重命名','归档','删除会话',current ? '先切换' : '请先打开'],[
+      await shotOf('#actionMenu',`UX-SESSION-MENU-${current ? 'current' : 'history'}-${width}x${height}`,'统一菜单：当前与历史会话的受限操作有可见说明',['AI 生成标题','重命名','归档','删除会话',current ? '先切换' : '请先打开'],[
         ['菜单与说明在视口内，不产生横向溢出',`(() => { const m=document.querySelector('#actionMenu'),r=m.getBoundingClientRect();return r.left>=8&&r.right<=innerWidth-8&&r.top>=8&&r.bottom<=innerHeight-8&&m.scrollWidth<=m.clientWidth&&document.documentElement.scrollWidth<=innerWidth; })()`],
-        ['统一三个动作及正确禁用状态',`(() => {const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')];return b.length===3 && b.map(n=>n.disabled).join(',')==='${current ? 'false,true,true' : 'true,false,false'}';})()`],
+        ['统一四个动作及正确禁用状态',`(() => {const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')];return b.length===4 && b.map(n=>n.disabled).join(',')==='${current ? 'false,false,true,true' : 'false,true,false,false'}';})()`],
         ['禁用原因可访问、文字没有截断',`(() => { const n=document.querySelector('.action-menu-note');return !!n && n.scrollWidth<=n.clientWidth && [...document.querySelectorAll('#actionMenu button:disabled')].every(b=>b.getAttribute('aria-disabled')==='true' && b.getAttribute('aria-describedby')===n.id); })()`],
       ]);
       await pressKey('Escape','Escape',27);

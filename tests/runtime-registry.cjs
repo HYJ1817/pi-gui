@@ -246,6 +246,54 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         await reject(()=>failedTurn.instance.command(expected,{type:'prompt',message:'dead child'}),'runtime_not_ready');
       });
     } finally { await failedTurn.instance.dispose(); }
+    /* 回归：settled 后的 refreshSession 失败时，副作用的 .then 必须消费
+     * rejection，且不能拿未确认的 locator 触发标题。 */
+    {
+      const unhandled = [];
+      const onUnhandled = reason => unhandled.push(reason);
+      process.on('unhandledRejection', onUnhandled);
+      let f = null;
+      try {
+        const observed = [];
+        let child = null, getStateCalls = 0;
+        const w = { ...workspaces.get('A') };
+        f = createRuntimeRegistry({
+          dataDir: path.join(dir, 'title-settled-reject'),
+          resolveWorkspace: async () => ({ ...w }),
+          validateWorkspace: async () => {},
+          publish: () => {},
+          sessionTitle: { resolve: () => null, observe: payload => observed.push(payload) },
+          factory: async (context, emit) => {
+            child = { emit, context,
+              start: () => emit({ type: 'bridge_status', state: 'ready', bridgeRun: 1 }),
+              request: async cmd => {
+                if (cmd.type !== 'get_state') return {};
+                getStateCalls++;
+                if (getStateCalls >= 2) throw Object.assign(Error('unconfirmed'), { code: 'pi_request_unconfirmed' });
+                return { sessionId: 'native-title-A' };
+              },
+              getState: () => ({ state: 'ready', stop: null }), send() {},
+              sessionLocator: async () => null,
+              async dispose() {}, cleanupConfirmed: () => true };
+            return child;
+          }
+        });
+        await f.start({ id: 'A', epoch: 'epoch-A' });
+        await tick(); await tick();
+        assert.ok(child, 'child spawned');
+        child.emit({ type: 'agent_start', bridgeRun: 1 });
+        child.emit({ type: 'agent_settled', bridgeRun: 1, generationResult: { requestId: 'settle-1', outcome: 'success', hasVisibleOutput: true } });
+        await tick();
+        await new Promise(resolve => setTimeout(resolve, 30));
+        await check('settled 刷新失败不产生 unhandledRejection 也不触发标题', () => {
+          assert.deepEqual(unhandled, []);
+          assert.equal(observed.length, 0);
+        });
+      } finally {
+        process.off('unhandledRejection', onUnhandled);
+        await f?.dispose();
+      }
+    }
   } finally { await registry.dispose(); fs.rmSync(dir, { recursive: true, force: true }); }
   console.log(`Runtime registry: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

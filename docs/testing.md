@@ -155,6 +155,12 @@ DOCX XML 顺序、Classic 防抖草稿隔离、历史失效/最新 800 条/搜�
 但 Worktree 安全封装有意清除 Git 环境变量，因此完整验证不能统一使用仓库内 TEMP。
 本机可只为实际使用 esbuild 的套件单独指定可写 TEMP，其余 fixture 留在仓库外；
 不得放宽产品的环境清理或路径断言。并行验证应分别设置 HTTP 及 `UI2C_CDP_PORT`。
+`ui2-visual` 默认让浏览器分配 CDP 端口；首选 Chromium 连续两次未能暴露
+DevTools 时，会换用同机另一个 Chromium（例如 Edge）再试一次。这是对 CI
+冷启动 / 单一浏览器启动噪声的测试夹具兜底，不改变布局判据或产品行为。
+`session-ux-phase4d` 在开始断言前先等页面 boot 的历史渲染落定：慢机上 boot
+的异步重建可能落在断言中间并换掉线程。`HARNESS_BOOT_DELAY_MS` 只用于复现
+该竞态（默认 250ms 不变），不改变产品行为或断言判据。
 若沙箱阻止打包产物的子进程在仓库外新建数据目录，可仅对 `app-check` /
 `exe-check` 使用隔离的仓库内 TEMP；这是夹具放行，不是产品目录或 CI 默认路径。
 遇到 PowerShell 策略限制时先核实失败原因，测试进程策略不替代 SACL 权限，
@@ -1436,10 +1442,13 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
   不存在的功能；CSS 里 trigger 默认透明、hover / focus-within / `aria-expanded=true`
   时可见，菜单 `position:fixed` + `z-index:30`（弹层之下）、danger 只在 hover 变红。
 - **真实链路**在 `npm run test:ui`：点 `…` → 菜单 → 项目设置（走既有弹层）/
-  移除前的确认（文案说明不删磁盘文件）/ 重命名（仍是行内输入框）/ 归档 →
-  `POST /api/sessions/archive` / 删除前二次确认 → `POST /api/sessions/delete`；
-  以及「点三点不切项目、不折叠、不切会话」和 `sessionNaming` 不可用时
-  当前会话的重命名禁用且有可见原因。当前和历史会话统一显示三个动作，禁用操作不发送写请求；菜单键盘导航跳过禁用项。
+  移除前的确认（文案说明不删磁盘文件）/ 重命名（仍是行内输入框，立即进入编辑）/
+  归档 → `POST /api/sessions/archive` / 删除前二次确认 → `POST /api/sessions/delete`；
+  以及「点三点不切项目、不折叠、不切会话」。重命名走
+  `POST /api/session-titles/rename`，当前 / 未打开的历史 / 预览 / 已归档行都能用，
+  不激活会话；`sessionNaming` 不可用**不再**禁用重命名（它只写 pi-GUI 元数据）。
+  写入期间切到别的行，结果仍落在原目标；修订冲突会采纳后端权威值并允许重试；
+  失败恢复原标题。菜单键盘导航跳过禁用项。
 
 ### 真 Chrome（`npm run shots:harness`）
 

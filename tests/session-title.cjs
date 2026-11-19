@@ -17,11 +17,16 @@ const assert = require('node:assert/strict');
     { id: 'untitled', title: '', current: false, pending: false },
   ];
 
-  // 1. Pi 的实时名字优先；列表标题不能覆盖用户明确命名
-  assert.equal(projectSessionTitle({ sessions, liveName: '我命名的会话' }), null);
+  // 1. Pi 的实时名字**不再**直接投影：有列表时用列表里后端裁决过的标题，
+  //    没有列表时返回 null（调用方保留已有标题），原生名不能覆盖确认标题。
+  assert.deepEqual(
+    projectSessionTitle({ sessions, liveName: '我命名的会话' }),
+    { key: 'current', title: '你好' }
+  );
+  assert.equal(projectSessionTitle({ liveName: '我命名的会话' }), null);
   assert.equal(projectSessionTitle({ sessions, liveName: '   ' }).title, '你好');
 
-  // 2. 没有实时名字时，用当前会话的列表标题（历史会话恢复）
+  // 2. 用当前会话的列表标题（历史会话恢复）
   assert.deepEqual(
     projectSessionTitle({ sessions, currentId: 'current' }),
     { key: 'current', title: '你好' }

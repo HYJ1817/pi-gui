@@ -133,7 +133,7 @@ function attachPreview(item, p, index) {
       for (const s of rows) box.append(sessionActions.previewRow(s, async selected => {
         if (sessionActions.openBackgroundSession?.(selected, p)) return;
         await activateForSessionAction(p, () => sessionActions.openPreviewSession(selected));
-      }));
+      }, p.path));
       if (!rows.length) box.append(status('还没有会话'));
       loaded = true;
     } catch {

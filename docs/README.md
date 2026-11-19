@@ -31,6 +31,7 @@
 | 并行输入、思考等级与历史工具摘要 | [Z5 规划](Z5-roadmap.md)、[Z5 审计](Z5-0-product-audit.md) | [Z5-1 验收](Z5-1-acceptance.md)、[Z5-2 验收](Z5-2-acceptance.md)、[Z5-3 验收](Z5-3-acceptance.md)、[Z5-3B 验收](Z5-3B-acceptance.md)、[Z5-Final 验收](Z5-final-acceptance.md) |
 | Planner、Review、Verification | [Planner](planner.md)、[工作流与数据契约](workflows.md)、[人工审阅](reviews.md) | [审批](approvals.md)、[测试政策](testing.md#测试执行政策) |
 | Runtime、Worktree、多会话 | [会话](sessions.md)、[Worktree](worktrees.md)、[架构](architecture.md) | [运行恢复](runtime-recovery.md)、[进程管理](p31-managed-process.md)、[安全](security.md) |
+| AI 会话标题（自动 / 手动） | [会话：AI 自动标题](sessions.md#ai-自动标题与手动标题的优先级) | [供应商认证](provider-auth.md)、[架构](architecture.md)、[验收记录](ai-session-title-acceptance.md) |
 | Browser 与 Electron | [Browser](browser.md)、[Agent Control](agent-browser.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)、[构建](development.md) |
 | 安全、路径及权限 | [安全](security.md)、[架构](architecture.md) | [审批](approvals.md)、相关功能的写入/恢复设计；历史 P33 材料见下文 |
 | CI 与测试 | [测试政策与分层](testing.md)、[开发构建](development.md) | 当前 `package.json`、`scripts/test-group-plan.mjs`、`scripts/run-test-group.mjs` 和相关 workflow/测试；不从旧验收报告抄测试清单 |

@@ -34,6 +34,13 @@ export async function respondToRuntimeApproval(owner, approval, send) {
 export function seedRuntimeSnapshot(snapshot) { if (runtimeStore.seed(snapshot)) broadcast(); }
 export function refreshRuntimeViews() { broadcast(); }
 
+/** 标题就地更新：不广播、不重排、不改 revision。
+ *  payload：{title, source, revision}，revision 是后端标题修订号；
+ *  store 只接受不旧于当前 titleRevision 的值（旧 SSE 不能覆盖新标题）。 */
+export function patchRuntimeTitle(conversationId, payload) {
+  return runtimeStore.patchTitle(conversationId, payload);
+}
+
 /** SSE 帧入口：返回 true 表示这份帧真的改动了 store（视图据此重画）。 */
 export function observeRuntimeFrame(frame) {
   const id = frame.owner?.conversationId || frame.conversationId;

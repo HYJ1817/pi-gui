@@ -14,6 +14,9 @@ import { fetchRuntimeSessions, fetchWorktrees, runtimeSessionAction, worktreeAct
 import { runtimeStore as store, onRuntimeChange, seedRuntimeSnapshot } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
 import { openRuntimeSessions } from './runtime-sessions.js';
+import { generateAiTitle, isTitleGenerating, renameSessionTitle, titleCapability } from './session-titles.js';
+import { MENU_ICONS, openActionMenu } from './ui/action-menu.js';
+import { iconMarkup } from './ui/icons.js';
 import { openModal } from './ui/modal.js';
 import { feedbackContext, toast } from './ui/toast.js';
 import { samePath } from './util.js';
@@ -30,6 +33,101 @@ const OUTCOME = {
   interrupted: { text: '已中断', title: '后台运行已中断' },
   unknown: { text: '已结束', title: '后台运行已结束，结果未确认' },
 };
+
+/* 与经典会话行共用同一个三点图形常量来源（不是字符图标）。 */
+const SVG_MORE = iconMarkup('more');
+
+/** Runtime 行的手动标题入口：与经典会话共用同一套生成 / 改名服务。
+ *  Runtime 会话可能还在后台运行或已经关闭；改名只写 pi-GUI 元数据，
+ *  不 focus、不重启、不打断正在跑的回合。 */
+function runtimeTitleItems(conversationId, item, rowEl, titleEl) {
+  const busy = isTitleGenerating('runtime:' + conversationId);
+  const noSession = !item?.nativeSessionId;
+  const items = [];
+  if (titleCapability().supported !== false) {
+    items.push({
+      label: busy ? 'AI 生成标题中…' : 'AI 生成标题',
+      icon: MENU_ICONS.spark,
+      disabled: busy || noSession,
+      disabledReason: busy ? '正在生成标题，请稍候。' : '这条会话还没有可读取的 Pi 会话记录。',
+      onClick: () => { void generateAiTitle({ scope: 'runtime', conversationId }); },
+    });
+  }
+  items.push({
+    label: '重命名',
+    icon: MENU_ICONS.pencil,
+    disabled: !item || !rowEl || !titleEl,
+    disabledReason: '这条并行会话还没有可用的标题记录。',
+    onClick: () => startRuntimeRename(rowEl, titleEl, conversationId, item),
+  });
+  return items;
+}
+
+/** 行内改名：Enter 保存、Escape 取消、失焦保存合法改动。
+ *  不调用 focus，也不改变运行状态；失败恢复原标题并提示。 */
+function startRuntimeRename(rowEl, titleEl, conversationId, item) {
+  if (rowEl.querySelector('.pj-sess-input')) return;
+  /* 行元素捕获的 item 可能是上一次渲染的快照；标题修订号以 store 当前值为准，
+   * 否则连续第二次改名会拿旧修订反复撞 conflict。 */
+  const freshItem = () => store.get(conversationId)?.item || item || null;
+  const input = el('input', 'pj-sess-input');
+  input.type = 'text';
+  input.value = label(freshItem());
+  input.maxLength = 80;
+  input.setAttribute('aria-label', `重命名并行会话：${label(freshItem())}`);
+  titleEl.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const restore = () => { if (input.isConnected) input.replaceWith(titleEl); };
+  const finish = async (save) => {
+    if (done) return;
+    const value = input.value.replace(/\s+/g, ' ').trim();
+    const before = label(freshItem());
+    if (!save || !value || value === before) {
+      done = true;
+      restore();
+      return;
+    }
+    done = true;
+    input.disabled = true;
+    input.setAttribute('aria-busy', 'true');
+    try {
+      const res = await renameSessionTitle({
+        scope: 'runtime',
+        conversationId,
+        expectedRevision: freshItem()?.titleRevision || 0,
+      }, value);
+      if (res?.ok !== true) {
+        if (res?.code === 'revision_conflict' && typeof res.title === 'string' && res.title) {
+          titleEl.textContent = res.title;
+        }
+        restore();
+        toast((res && res.error) || '改名失败，已保留原标题', 'error');
+        return;
+      }
+      titleEl.textContent = res.title;
+      /* SSE / 事件门槛可能因为别的原因没有落到 store（例如测试里的短 id），
+       * 成功应答本身是权威的：就地记下新修订，连续第二次改名不会拿旧值。 */
+      if (Number.isSafeInteger(res.revision)) {
+        store.patchTitle(conversationId, { title: res.title, source: 'manual', revision: res.revision });
+      }
+      restore();
+      toast('已改名：' + res.title, 'info');
+    } catch (err) {
+      restore();
+      toast('改名失败：' + (err?.message || err), 'error');
+    }
+  };
+  input.onclick = (e) => e.stopPropagation();
+  input.onpointerdown = (e) => e.stopPropagation();
+  input.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  };
+  input.onblur = () => finish(true);
+}
 
 function el(tag, cls, text) {
   const node = document.createElement(tag);
@@ -208,6 +306,25 @@ function row(member) {
     event.preventDefault(); buttons[next]?.focus();
   };
   rowEl.append(primary);
+
+  const titleItems = runtimeTitleItems(member.conversationId, item, rowEl, title);
+  if (titleItems.length) {
+    const acts = el('span', 'pj-sess-acts');
+    const trigger = el('button', 'pj-sess-menu-trigger row-action-trigger');
+    trigger.type = 'button';
+    trigger.title = '更多操作';
+    trigger.setAttribute('aria-label', `会话操作：${label(item)}`);
+    trigger.setAttribute('aria-haspopup', 'menu');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.innerHTML = SVG_MORE;
+    trigger.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openActionMenu(trigger, titleItems);
+    };
+    acts.append(trigger);
+    rowEl.append(acts);
+  }
 
   /* attention 只是一个很轻的小点，点了就清（focus 会让后端把 attention 置回 false）。 */
   if (item?.attention) {

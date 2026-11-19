@@ -54,7 +54,6 @@ import {
   onResponse,
   onStopState,
   setModel,
-  setSessionName,
   setSessionListRefresh,
   setThinkingLevel,
   refreshModelState,
@@ -95,8 +94,9 @@ import { openMcpSettings } from './mcp-settings.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner, setTaskSessionViewer } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
-import { renderSidebarSessions, refreshSidebarSessions, applySessionRename, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions, currentSessionTitle, renameCurrentSession, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
 import { sessionDisplayTitle } from './session-title.js';
+import { handleSessionTitleEvent, loadSessionTitleSettings } from './session-titles.js';
 import { createSessionNavigation } from './session-navigation.js';
 import { initSidebarSearch, openSessionSearch as openSessionSearchEntry, toggleSessionSearch, closeSessionSearch } from './sidebar-search.js';
 import { initConversationNav } from './conversation-nav.js';
@@ -532,6 +532,10 @@ function attachGenerationRecovery(evt) {
 
 function handleEvent(evt) {
   if (['runtime_event', 'runtime_state', 'runtime_closed'].includes(evt.type)) { observeRuntimeEvent(evt); return; }
+  /* 标题服务是**应用级**的：事件可能属于另一个项目、或侧栏里并非当前会话的
+   * 那一行。它必须在「没有项目」与 bridgeRun 的过滤之前到达，否则后台会话
+   * 生成的标题会被静默丢掉，用户切回去看到的还是旧标题。 */
+  if (evt.type === 'session_title' || evt.type === 'session_title_settings') { handleSessionTitleEvent(evt); return; }
   /* 环境安装是整机级任务，不属于任何项目/会话：在项目与 bridgeRun 的过滤之前
    * 就交给它，否则「还没选项目」时首次安装的进度会被静默丢掉。 */
   if (evt.type === 'environment_job') { observeEnvironmentEvent(evt); return; }
@@ -1076,7 +1080,10 @@ function renameSession() {
     const input = document.createElement('input');
     input.className = 'modal-input';
     input.placeholder = '例如 my-feature-work';
-    input.value = S.state?.sessionName || '';
+    /* 预填「当前会话的权威标题」，不是 get_state.sessionName —— 顶部与
+     * 侧栏必须显示同一个答案，否则确认过的 AI 标题会被原生名盖掉。 */
+    input.value = currentSessionTitle() || S.state?.sessionName || '';
+    input.maxLength = 80;
     card.appendChild(input);
     setTimeout(() => input.focus(), 30);
 
@@ -1091,15 +1098,21 @@ function renameSession() {
     const ok = document.createElement('button');
     ok.className = 'btn primary';
     ok.textContent = '保存';
-    ok.onclick = () => {
+    ok.onclick = async () => {
       const name = input.value.trim();
+      if (!name || ok.disabled) return;
+      ok.disabled = true;
+      const res = await renameCurrentSession(name);
+      if (!res || res.ok !== true) {
+        ok.disabled = false;
+        toast((res && res.error) || '改名失败，已保留原标题', 'error');
+        return;
+      }
       close();
-      if (!name) return;
-      setSessionName(name);
-      setTitleText(name);
-      applySessionRename(name);
-      el.footName.textContent = name;
-      toast('已重命名为 ' + name, 'info');
+      /* 只有走 Pi 原生名（未落盘的新会话）才更新 footName；元数据改名不会
+       * 改变 Pi 的 sessionName，不能假装同步了。 */
+      if (res.native) el.footName.textContent = res.title;
+      toast('已重命名为 ' + res.title, 'info');
     };
 
     input.addEventListener('keydown', (e) => {
@@ -1530,6 +1543,9 @@ syncWelcome();
 
 loadProjects();
 loadProviders();
+/* 标题设置（自动生成开关 / 能力探测）。失败不阻塞启动：缓存为 null 时
+ * 设置页显示默认开启，手动入口按「未验证」照常显示。 */
+void loadSessionTitleSettings();
 /* 侧栏「扩展」右边那个数字：发现了几条 skill。
  * 只做展示，失败就留空 —— 这个数字不该在启动路径上弹任何错。 */
 loadExtensionsBadge();

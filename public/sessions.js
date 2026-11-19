@@ -53,6 +53,13 @@ import { projectExpanded, setProjectExpanded } from './sidebar-expansion.js';
 import { showChat } from './ui/workspace-surface.js';
 import { runtimeStore } from './runtime-state.js';
 import {
+  generateAiTitle,
+  isTitleGenerating,
+  reconcileTitleSnapshot,
+  renameSessionTitle,
+  titleCapability,
+} from './session-titles.js';
+import {
   createSearchBar,
   renderSearchResults,
   searchViewMode,
@@ -60,6 +67,7 @@ import {
   refreshSearch,
   setSearchChangeHandler,
 } from './session-search.js';
+import { forgetTitleSnapshot, titleKey } from './title-revision.js';
 import { clearRuntimeNav, loadRuntimeNav, repaintRuntimeNav, runtimeNavCount, setRuntimeNavParent } from './runtime-nav.js';
 
 /* P32.4：并行会话与经典会话共用同一块列表区，两边都要能独立决定这块存不存在。
@@ -249,23 +257,59 @@ function moreBtn(text, onclick, cls) {
 }
 
 /**
- * 已落盘会话统一显示三个动作，受限项禁用并解释原因。
- * 重命名只作用于当前会话；当前会话不可归档 / 删除。
- * pending 没有有效动作（文件还没落盘），不显示三点。
+ * 已落盘会话统一显示四个动作，受限项禁用并解释原因。
+ *
+ * **重命名不再要求先打开会话**：它调用 `/api/session-titles/rename`，只写
+ * pi-GUI 自己的标题元数据，不 switch_session、不重启 Pi、不碰 Pi 的 JSONL。
+ * 因此当前会话、历史会话、归档会话、其它项目的预览行都能直接改名。
+ * 归档 / 删除仍然只作用于当前项目且不能碰当前会话（后端判据不变）。
+ *
+ * pending 没有落盘文件，也没有可确认的修订号，不显示三点。
  */
-function sessionMenuItems(s, row, titleEl) {
+function sessionMenuItems(s, row, titleEl, project, preview = false) {
   if (s.pending) return [];
-  const namingUnavailable = capMissing('sessionNaming');
+  const renameUnavailable = !s.sessionId || !project;
   const currentReason = '当前会话正在使用，请先切换到其它会话再归档或删除。';
+  const previewReason = '请先打开这个项目的会话，再执行该操作。';
   return [
-    { label: '重命名', icon: MENU_ICONS.pencil, disabled: !s.current || namingUnavailable,
-      disabledReason: namingUnavailable ? '当前 Pi 不支持会话重命名。' : '重命名：请先打开这条会话。',
-      onClick: () => startRename(row, titleEl, s) },
+    ...aiTitleMenuItems(s, project),
+    { label: '重命名', icon: MENU_ICONS.pencil, disabled: renameUnavailable,
+      disabledReason: renameUnavailable ? '这条会话还没有可确认的 Pi 会话身份。' : '',
+      onClick: () => startRename(row, titleEl, s, project) },
     s.archived
-      ? { label: '取消归档', icon: MENU_ICONS.restore, disabled: s.current, disabledReason: currentReason, onClick: () => doArchive(s, false) }
-      : { label: '归档', icon: MENU_ICONS.archive, disabled: s.current, disabledReason: currentReason, onClick: () => doArchive(s, true) },
+      ? { label: '取消归档', icon: MENU_ICONS.restore, disabled: s.current || preview,
+        disabledReason: s.current ? currentReason : previewReason, onClick: () => doArchive(s, false) }
+      : { label: '归档', icon: MENU_ICONS.archive, disabled: s.current || preview,
+        disabledReason: s.current ? currentReason : previewReason, onClick: () => doArchive(s, true) },
     { separator: true },
-    { label: '删除会话', icon: MENU_ICONS.trash, danger: true, disabled: s.current, disabledReason: currentReason, onClick: () => doDelete(s) },
+    { label: '删除会话', icon: MENU_ICONS.trash, danger: true, disabled: s.current || preview,
+      disabledReason: s.current ? currentReason : previewReason, onClick: () => doDelete(s) },
+  ];
+}
+
+/**
+ * 手动「AI 生成标题」：与自动标题共用同一个后端服务，**不另起一套生成器**。
+ *   - 能力探测明确为 false 时整项不出现（不留一个必然失败的入口）；
+ *   - 还没验证（null）时照常显示 —— 未验证不等于不支持，点了由后端给出结论；
+ *   - 正在生成时禁用，防止重复请求（后端还有一道 per-key 保护）；
+ *   - **自动开关关掉也能用**：这是用户明确发起的动作。
+ */
+function aiTitleMenuItems(s, project) {
+  if (titleCapability().supported === false) return [];
+  const key = 'classic:' + s.id;
+  const busy = isTitleGenerating(key);
+  const noId = !s.sessionId;
+  return [
+    {
+      label: busy ? 'AI 生成标题中…' : 'AI 生成标题',
+      icon: MENU_ICONS.spark,
+      disabled: busy || noId,
+      disabledReason: busy ? '正在生成标题，请稍候。' : '这条会话还没有可读取的 Pi 会话记录。',
+      onClick: () => {
+        void generateAiTitle({ scope: 'classic', id: s.id, sessionId: s.sessionId, project });
+      },
+    },
+    { separator: true },
   ];
 }
 
@@ -274,9 +318,8 @@ function sessionMenuItems(s, row, titleEl) {
  * 全部收进这一个菜单；菜单项调用的仍然是既有的 `startRename` / `doArchive` /
  * `doDelete`，**没有第二套实现**。
  */
-function makeRowMenu(s, row, titleEl, preview = false) {
-  const items = sessionMenuItems(s, row, titleEl).map(item => preview && !item.separator
-    ? { ...item, disabled: true, disabledReason: '请先打开这个项目的会话，再执行操作。' } : item);
+function makeRowMenu(s, row, titleEl, preview = false, project = '') {
+  const items = sessionMenuItems(s, row, titleEl, project, preview);
   if (!items.length) return null; // 没有动作 → 连三点都不画（不留一个点了没反应的入口）
   const acts = el('span', 'pj-sess-acts');
   const trigger = el('button', 'pj-sess-menu-trigger row-action-trigger');
@@ -371,18 +414,64 @@ export async function refreshSidebarSessions() {
   await fill(box, ++loadToken);
 }
 
-/** 顶部改名弹窗保存后立刻同步侧栏当前行。
- *  只改已渲染的数据与标题，不重新扫会话文件 —— 文件落盘可能比这个
- *  交互晚一拍，重扫反而会拿回旧标题。下一次 refresh 会以文件为准。 */
-export function applySessionRename(name) {
-  const value = String(name || '').trim();
-  if (!value || !dataRef || !Array.isArray(dataRef.sessions)) return;
-  const target = (expectedSessionKey && dataRef.sessions.find((s) => s.id === expectedSessionKey))
-    || dataRef.sessions.find((s) => s.current);
-  if (!target) return;
-  target.title = value;
-  paintList();
-  setTitleText(value);
+/** 当前列表里的「当前会话」行：优先刚切过去的那条，其次带 current 标记的。 */
+function currentRow() {
+  if (!dataRef || !Array.isArray(dataRef.sessions)) return null;
+  return (expectedSessionKey && dataRef.sessions.find((s) => s.id === expectedSessionKey))
+    || dataRef.sessions.find((s) => s.current)
+    || null;
+}
+
+/** 顶部重命名弹窗的预填值：与侧栏同一个权威标题，不再读 get_state.sessionName。 */
+export function currentSessionTitle() {
+  const target = currentRow();
+  return target ? sessionDisplayTitle(target, '') : '';
+}
+
+/**
+ * 顶部「重命名会话」：复用与侧栏行完全相同的标题服务。
+ *
+ * - 已落盘会话：走 `/api/session-titles/rename`（只写 pi-GUI 元数据）；
+ * - 还没落盘的 pending 会话：没有文件可定位，退回 Pi 的 `set_session_name`
+ *   （这是唯一能给「未落盘会话」起名的方式，不是第二套标题存储）。
+ *
+ * 成功后标题事件已由服务层就地更新；返回 `native: true` 表示走的是 Pi 原生名，
+ * 调用方需要同步 footName（元数据改名不改变 Pi 原生名，不能假称改了）。
+ */
+export async function renameCurrentSession(title) {
+  const value = String(title || '').replace(/\s+/g, ' ').trim();
+  if (!value) return { ok: false, code: 'invalid_title', error: '标题不能为空' };
+  if (value.length > 80) return { ok: false, code: 'invalid_title', error: '标题不能超过 80 个字符' };
+  const target = currentRow();
+  if (!target) return { ok: false, code: 'no_session', error: '找不到当前会话' };
+  if (target.pending || !target.sessionId) {
+    try {
+      const res = await renameSession(value);
+      if (!res || res.ok !== true) {
+        return res || { ok: false, code: 'failed', error: '改名失败，请重试' };
+      }
+      target.title = value;
+      target.titleSource = 'manual';
+      paintList();
+      setTitleText(value);
+      return { ok: true, native: true, title: value };
+    } catch (err) {
+      return { ok: false, code: 'failed', error: '改名失败：' + (err?.message || err) };
+    }
+  }
+  const res = await renameSessionTitle({
+    scope: 'classic',
+    id: target.id,
+    sessionId: target.sessionId,
+    project: currentProject?.path || '',
+    expectedRevision: target.titleRevision || 0,
+  }, value);
+  if (res?.ok === true) {
+    target.title = res.title;
+    target.titleSource = 'manual';
+    target.titleRevision = res.revision;
+  }
+  return res;
 }
 
 async function fill(box, token) {
@@ -428,14 +517,23 @@ async function fill(box, token) {
    * 拉取与显隐由 session-plans.js 负责（它自己带 stale 保护）。
    * 注意用 `s.sessionId`（pi 的 UUID）而不是 `s.id`（我们那个路径 sha1）：
    * 任务元数据里存的是前者，两者不是一回事。 */
+  /* 列表响应可能比本地刚采纳的标题旧：逐条过修订权威。旧修订不覆盖新值，
+   * 同修订采用最新列表（首条消息 fallback 变化不递增修订，必须能看到）。 */
+  for (const s of data.sessions || []) {
+    const effective = reconcileTitleSnapshot('classic', s.sessionId, {
+      title: s.title, source: s.titleSource, revision: s.titleRevision,
+    });
+    if (!effective || !effective.title) continue;
+    s.title = effective.title;
+    s.titleSource = effective.source || s.titleSource;
+    s.titleRevision = effective.revision;
+  }
+
   const cur = (data.sessions || []).find((s) => s.current);
 
-  /* 顶部标题与会话列表共用同一份数据。Pi 的实时 sessionName 优先
-   * （projectSessionTitle 在 liveName 非空时返回 null）；否则用列表里
-   * 当前会话的标题。expectedSessionKey 防止迟到的旧列表把标题改回
-   * 上一条会话。 */
-  const liveName = S.state?.sessionName;
-  if (!(typeof liveName === 'string' && liveName.trim()) && awaitingNewSession) {
+  /* 顶部标题与会话列表共用同一份数据（同一权威标题）。expectedSessionKey
+   * 防止迟到的旧列表把标题改回上一条会话；不再读取 get_state.sessionName。 */
+  if (awaitingNewSession) {
     /* 刚新建/分叉，等列表给出一个**不同于旧会话**的 current。旧列表
      * 回来时保持「新会话」，不能把上一条的标题画上去。 */
     const next = (data.sessions || []).find((s) => s.current);
@@ -451,7 +549,6 @@ async function fill(box, token) {
       sessions: data.sessions,
       currentId: data.currentId,
       expectedKey: expectedSessionKey,
-      liveName,
     });
     if (projected) {
       expectedSessionKey = projected.key;
@@ -544,16 +641,19 @@ function paintList() {
   }
 }
 
-export function createSidebarPreviewRow(s, onPick) {
-  return makeRow(s, onPick);
+export function createSidebarPreviewRow(s, onPick, project = '') {
+  return makeRow(s, onPick, project);
 }
 
 export async function openSidebarPreviewSession(s) {
   return doSwitch(s);
 }
 
-function makeRow(s, onPick = null) {
+function makeRow(s, onPick = null, project = '') {
   const row = el('div', 'pj-sess' + (s.current ? ' on' : '') + (s.pending ? ' pending' : ''));
+  /* 标题就地更新按 **pi 的会话 id** 找行（`s.id` 是路径 sha1，只在本机列表里
+   * 稳定；标题事件带的是会话文件 header 的 UUID）。 */
+  if (s.sessionId) row.dataset.sessionId = s.sessionId;
   row.title = s.pending
     ? '新会话：还没有消息，pi 还没把它写到磁盘上'
     : `${s.messageCount} 条消息 · ${fmtTime(s.updatedAt)}${s.createdAt ? ' · 创建于 ' + fmtTime(Date.parse(s.createdAt)) : ''}`;
@@ -576,7 +676,7 @@ function makeRow(s, onPick = null) {
   primary.append(dot, title, time);
   row.append(primary);
 
-  const acts = makeRowMenu(s, row, title, Boolean(onPick));
+  const acts = makeRowMenu(s, row, title, Boolean(onPick), project || currentProject?.path || '');
   if (acts) row.append(acts);
 
   /* 切换会话要 pi 的 `switch_session`。它被证实不可用时不给点，并在 title 里
@@ -591,38 +691,79 @@ function makeRow(s, onPick = null) {
   return row;
 }
 
-function startRename(row, titleEl, s) {
+/**
+ * 行内改名：不激活目标会话、不切项目、不刷新列表。
+ *
+ * Enter 保存、Escape 取消、失焦保存合法改动；空白/未变化不提交；保存期间
+ * 输入框禁用防重复提交。失败恢复原标题并给出可重试的反馈 —— 输入框元素被
+ * 换成标题后，下一次点「重命名」就是重试。
+ *
+ * 改名请求只带稳定身份（id / project / expectedRevision），后端自行解析
+ * 真实文件；当前会话、历史会话、归档、其它项目预览全部走同一条路径。
+ */
+function startRename(row, titleEl, s, project) {
+  if (!project || !s.sessionId || row.querySelector('.pj-sess-input')) return;
   const input = el('input', 'pj-sess-input');
   input.type = 'text';
   input.value = s.title || '';
-  input.maxLength = 120;
+  input.maxLength = 80;
+  input.setAttribute('aria-label', `重命名会话：${s.title || '（无标题）'}`);
   titleEl.replaceWith(input);
   input.focus();
   input.select();
   let done = false;
+  const restore = () => {
+    if (input.isConnected) input.replaceWith(titleEl);
+  };
   const finish = async (save) => {
     if (done) return;
-    done = true;
-    const v = input.value.trim();
-    if (save && v && v !== s.title) {
-      try {
-        const r = await renameSession(v);
-        if (!r.ok) toast(r.error || '改名失败', 'error');
-        else {
-          s.title = v;
-          /* 行内改名改的就是当前会话：顶部必须同步，不能只重画侧栏。 */
-          setTitleText(v);
-          toast('已改名：' + v, 'info');
-        }
-      } catch (err) {
-        toast('改名失败：' + err.message, 'error');
-      }
+    const value = input.value.replace(/\s+/g, ' ').trim();
+    if (!save || !value || value === s.title) {
+      done = true;
+      restore();
+      return;
     }
-    paintList();
+    done = true;
+    input.disabled = true;
+    input.setAttribute('aria-busy', 'true');
+    try {
+      const res = await renameSessionTitle({
+        scope: 'classic',
+        id: s.id,
+        sessionId: s.sessionId,
+        project,
+        expectedRevision: s.titleRevision || 0,
+      }, value);
+      if (res?.ok !== true) {
+        /* 修订冲突说明别处已经改过：把权威值带回这一行，下一次重试用的
+         * 就是新修订，而不是拿旧修订反复撞墙。其余失败保留原标题。 */
+        if (res?.code === 'revision_conflict' && typeof res.title === 'string' && res.title) {
+          s.title = res.title;
+          s.titleRevision = Number.isSafeInteger(res.revision) ? res.revision : s.titleRevision;
+          titleEl.textContent = s.title;
+        }
+        restore();
+        toast((res && res.error) || '改名失败，已保留原标题', 'error');
+        return;
+      }
+      s.title = res.title;
+      s.titleSource = 'manual';
+      s.titleRevision = res.revision;
+      restore();
+      titleEl.textContent = res.title;
+      toast('已改名：' + res.title, 'info');
+    } catch (err) {
+      restore();
+      toast('改名失败：' + (err?.message || err), 'error');
+    }
   };
+  /* 输入框在按钮内部：拦掉点击/按键冒泡，避免“正在改名”被当成“切换会话”。 */
+  input.onclick = (e) => e.stopPropagation();
+  input.onpointerdown = (e) => e.stopPropagation();
   input.onkeydown = (e) => {
-    if (e.key === 'Enter') finish(true);
-    else if (e.key === 'Escape') finish(false);
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
   };
   input.onblur = () => finish(true);
 }
@@ -631,6 +772,68 @@ let busy = false;
 document.addEventListener('pi-gui:classic-activity', () => {
   for (const row of document.querySelectorAll('[data-classic-current]')) row.dataset.activity = S.streaming ? 'running' : 'idle';
   for (const time of document.querySelectorAll('[data-classic-current] .pj-sess-time')) time.textContent = S.streaming ? '运行中' : time.dataset.idleLabel || '';
+});
+
+/* AI / 手动标题落地后就地更新这一行与顶部标题。
+ * 刻意**不调 paintList()**：重画会丢焦点、抖滚动位置，还会把正在行内改名的
+ * 输入框换掉；标题也不属于排序键，没有任何理由重排列表。 */
+document.addEventListener('pi-gui:classic-title', (e) => {
+  const sessionId = e?.detail?.sessionId;
+  const title = e?.detail?.title;
+  if (typeof sessionId !== 'string' || !sessionId) return;
+  if (typeof title !== 'string' || !title) return;
+  const revision = Number.isSafeInteger(e?.detail?.revision) ? e.detail.revision : 0;
+  const source = typeof e?.detail?.source === 'string' ? e.detail.source : null;
+  if (dataRef && Array.isArray(dataRef.sessions)) {
+    for (const s of dataRef.sessions) {
+      if (s.sessionId !== sessionId) continue;
+      if (s.title !== title) s.title = title;
+      if (source) s.titleSource = source;
+      if (revision > (s.titleRevision || 0)) s.titleRevision = revision;
+    }
+  }
+  for (const row of document.querySelectorAll('.pj-sess[data-session-id]')) {
+    if (row.dataset.sessionId !== sessionId) continue;
+    const titleEl = row.querySelector('.pj-sess-title');
+    if (titleEl) titleEl.textContent = title;
+    const primary = row.querySelector('.pj-sess-primary');
+    if (primary) primary.setAttribute('aria-label', `切换会话：${title}`);
+    const trigger = row.querySelector('.pj-sess-menu-trigger');
+    if (trigger) trigger.setAttribute('aria-label', `会话操作：${title}`);
+  }
+  /* 顶部标题只在这一条确实是当前会话时改；旁边的运行/空闲状态不受影响。 */
+  if (S.state?.sessionId === sessionId) setTitleText(title);
+});
+
+/* Pi 原生会话名变化（用户在 Pi TUI / 其它入口改名，或 get_state 首次读到
+ * 一个新名字）。**不直接写顶部标题** —— 原生名只是后端裁决的输入之一，
+ * 重新拉一次权威列表，让顶部 / 侧栏 / 搜索拿到同一个答案。 */
+document.addEventListener('pi-gui:native-title', () => {
+  void refreshSidebarSessions();
+});
+
+/* 首条用户消息发出后立刻把「新会话」换成临时兜底标题。
+ * 就地改这一行与顶部标题，**不重扫、不重画、不排序**；等 AI 标题回来时
+ * 再被同一条管线替换。已有手动/自动标题时一律不动 —— 它们比首条消息权威。 */
+document.addEventListener('pi-gui:classic-prompt-sent', (e) => {
+  const text = typeof e?.detail?.text === 'string' ? e.detail.text.replace(/\s+/g, ' ').trim() : '';
+  if (!text || !dataRef || !Array.isArray(dataRef.sessions)) return;
+  const target = dataRef.sessions.find((s) => s.current);
+  if (!target || target.titleSource !== 'default') return;
+  const title = text.slice(0, 80);
+  const sessionId = target.sessionId || '';
+  target.title = title;
+  target.titleSource = 'fallback';
+  for (const row of document.querySelectorAll('.pj-sess')) {
+    if (sessionId ? row.dataset.sessionId !== sessionId : !row.classList.contains('on')) continue;
+    if (row.classList.contains('pj-runtime')) continue;
+    const titleEl = row.querySelector('.pj-sess-title');
+    if (titleEl) titleEl.textContent = title;
+    const primary = row.querySelector('.pj-sess-primary');
+    if (primary) primary.setAttribute('aria-label', `切换会话：${title}`);
+    break;
+  }
+  if (S.state?.sessionId === sessionId || !sessionId) setTitleText(title);
 });
 
 /**
@@ -662,11 +865,16 @@ async function doSwitch(s, locateUserIndex = null) {
       pendingLocate.sessionId = r.sessionId || pendingLocate.sessionId;
       pendingLocate.switched = true;
     }
-    /* switch_session 的应答已经带回目标会话的权威标题。先画上它，
-     * 再让 afterSessionSwitch 去重建历史；不要等 get_state 的
-     * sessionName —— 没有显式命名的会话那里是空的。 */
+    /* switch_session 的应答已经带回目标会话的权威标题与修订号。先并入
+     * 修订权威（防止更早发出的旧列表响应随后把它改回去），再画它。
+     * 不要等 get_state 的 sessionName —— 原生名只是后端裁决的输入之一。 */
+    const switched = reconcileTitleSnapshot('classic', r.sessionId || s.sessionId, {
+      title: r.title || s.title,
+      source: r.titleSource || s.titleSource || 'manual',
+      revision: r.titleRevision,
+    });
     afterSessionSwitch(previousSessionId, {
-      title: sessionDisplayTitle({ ...s, title: r.title || s.title }),
+      title: sessionDisplayTitle({ ...s, title: switched?.title || r.title || s.title }),
       sessionKey: r.id || s.id,
     });
   } catch (err) {
@@ -735,7 +943,11 @@ async function doDelete(s) {
       return;
     }
     toast('已删除：' + (s.title || '（无标题）'), 'info');
-    if (s.sessionId) clearClassicSessionView(s.sessionId);
+    if (s.sessionId) {
+      clearClassicSessionView(s.sessionId);
+      /* 会话已删除：清掉前端的标题修订快照，避免同 id 的迟到事件被旧修订挡住。 */
+      forgetTitleSnapshot(titleKey('classic', s.sessionId));
+    }
     await refreshSidebarSessions();
     // 删掉的东西不该再出现在搜索结果里
     refreshSearch();

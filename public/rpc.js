@@ -310,15 +310,23 @@ export async function submit() {
   try {
     if (!S.streaming && await startFallbackRequest({ type: 'prompt', ...cmd }, cleanup)) return;
     let result;
+    let promptSent = false;
     if (S.streaming) {
       // 运行中发送 → 作为引导消息插话
       result = await sendCommand({ type: 'steer', ...cmd });
       if (result.ok) toast('已作为引导消息排队', 'info');
     } else {
       result = await sendCommand({ type: 'prompt', ...cmd });
+      promptSent = result?.ok === true;
     }
     if (!result?.ok) return; // 失败时保留输入和附件，用户可以重试
     cleanup();
+    /* 首条消息已经交给 pi：让侧栏把「新会话」就地换成临时兜底标题。
+     * 走 DOM 事件而不是 import —— sessions.js 在上游，反向 import 会成环。
+     * 只在新会话（titleSource=default）上有可见效果，普通后续消息不改标题。 */
+    if (promptSent && text) {
+      document.dispatchEvent(new window.CustomEvent('pi-gui:classic-prompt-sent', { detail: { text } }));
+    }
     /* P24：这一条真的发出去了 → 当前身份的草稿作废（不然刷新之后
      * 会把已经发出去的内容再填回输入框，看起来像「发重了」）。 */
     if (!el.input.value.trim()) clearDraft();
