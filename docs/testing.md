@@ -1436,10 +1436,13 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
   不存在的功能；CSS 里 trigger 默认透明、hover / focus-within / `aria-expanded=true`
   时可见，菜单 `position:fixed` + `z-index:30`（弹层之下）、danger 只在 hover 变红。
 - **真实链路**在 `npm run test:ui`：点 `…` → 菜单 → 项目设置（走既有弹层）/
-  移除前的确认（文案说明不删磁盘文件）/ 重命名（仍是行内输入框）/ 归档 →
-  `POST /api/sessions/archive` / 删除前二次确认 → `POST /api/sessions/delete`；
-  以及「点三点不切项目、不折叠、不切会话」和 `sessionNaming` 不可用时
-  当前会话的重命名禁用且有可见原因。当前和历史会话统一显示三个动作，禁用操作不发送写请求；菜单键盘导航跳过禁用项。
+  移除前的确认（文案说明不删磁盘文件）/ 重命名（仍是行内输入框，立即进入编辑）/
+  归档 → `POST /api/sessions/archive` / 删除前二次确认 → `POST /api/sessions/delete`；
+  以及「点三点不切项目、不折叠、不切会话」。重命名走
+  `POST /api/session-titles/rename`，当前 / 未打开的历史 / 预览 / 已归档行都能用，
+  不激活会话；`sessionNaming` 不可用**不再**禁用重命名（它只写 pi-GUI 元数据）。
+  写入期间切到别的行，结果仍落在原目标；修订冲突会采纳后端权威值并允许重试；
+  失败恢复原标题。菜单键盘导航跳过禁用项。
 
 ### 真 Chrome（`npm run shots:harness`）
 

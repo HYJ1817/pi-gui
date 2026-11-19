@@ -431,11 +431,15 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
     **退出码 0 只回 `commandCompleted`，装没装由 Registry 重新发现回答**。
     入口与执行分别复用 `server.js` 的 `resolvePiCliEntry()` / `runPiCliCommand()`
     —— 与 Pi 更新同源，不可能各解析出不同的 pi。见 [security.md](security.md)
-  - `sessions.js` — 会话列表 / 切换 / 改名 / 归档 / 删除。见 [sessions.md](sessions.md)
-  - `session-titles.js` — AI 标题的触发 / 生成 / 归属校验 / 降级；运行时不阻塞回复，
-    不写 Pi 的 JSONL。配套 `session-title-context.js`（纯解析与输出校验）、
-    `session-title-store.js`（Pi GUI 自己的标题与设置元数据）、
-    `session-title-sdk.js`（隔离 worker 里复用 Pi ModelRuntime 做一次有界文本生成）。
+  - `sessions.js` — 会话列表 / 切换 / 归档 / 删除；标题读取按「头部 + 尾部确认
+    最新原生名」处理大文件，并提供受信的项目内会话解析（改名服务复用，
+    Renderer 不提交文件路径）。见 [sessions.md](sessions.md)
+  - `session-titles.js` — AI 标题的触发 / 生成 / 归属校验 / 降级，以及
+    **任意会话重命名**的权威服务（稳定身份 + 修订号，不激活会话、不写 Pi 的
+    JSONL）；运行时不阻塞回复。配套 `session-title-context.js`（纯解析与输出校验）、
+    `session-title-store.js`（Pi GUI 自己的标题、修订与设置元数据）、
+    `session-title-sdk.js`（隔离 worker 里复用 Pi ModelRuntime 做一次有界文本生成，
+    auth / models 配置变化会重建 worker）。
     经典会话与 Runtime 并行会话都经注入触发，模块之间不互相 import。
     见 [sessions.md](sessions.md#ai-自动标题与手动标题的优先级)
   - `update-check.js` — **版本检查**：只读公开 GitHub Release 元数据，判断有没有新版。
@@ -501,8 +505,10 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
 - `git.js` 变更面板 / `diff.js` unified diff 渲染 / `changes.js` 会话改动账本
 - `sessions.js` 侧栏会话列表 / `conversation-nav.js` 会话内提问导航 /
   `tree.js` 分支树 / `session-plans.js` 会话标题旁的「关联任务」窄条（P7）
-- `session-title.js` 纯标题投影（当前项目 / 当前会话）/ `session-titles.js`
-  标题事件就地应用、设置缓存与手动「AI 生成标题」入口；经典会话行与
+- `session-title.js` 纯标题投影（当前项目 / 当前会话）/
+  `title-revision.js` 前端标题修订权威（列表、切换应答、SSE、Runtime store
+  共用的低修订 / 同修订冲突门槛）/ `session-titles.js` 标题事件就地应用、
+  设置缓存、手动「AI 生成标题」与任意会话重命名入口；经典会话行与
   `runtime-nav.js` 的并行会话行共用该入口与同一个后端服务，
   不重建列表、不改排序
 - `extensions.js` 扩展面板（Extensions / Skills / MCP 三个标签 + 通用 Registry）/

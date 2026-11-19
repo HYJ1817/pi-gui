@@ -89,8 +89,11 @@ auth / models，用让首条回复成功的那组 provider/model 调一次 `comp
 
 worker 只回传标题文本（≤512 字符，主进程再按标题规则校验）、`stopReason`
 与三个数字 usage；SDK 错误原文、stdout/stderr、凭据、完整回复都不跨线程。
-worker 环境会剥掉 `PI_GUI_TOKEN`。标题生成失败只影响标题，不改变供应商
-连接状态，也不阻断聊天。每次生成会消耗少量模型用量，设置页有说明；
+worker 环境会剥掉 `PI_GUI_TOKEN`。worker 身份包含 auth / models 文件的
+`mtimeMs:size` 指纹：用户登录、登出、切换订阅或修改 provider 配置后，
+下一次标题调用会重建 worker，不继续持有过期的凭据或旧模型表。
+标题生成失败只影响标题，不改变供应商连接状态，也不阻断聊天。
+每次生成会消耗少量模型用量，设置页有说明；
 当前 Pi 不提供该能力时按三值降级（未知 ≠ 不支持）。
 
 ## 实现文件
