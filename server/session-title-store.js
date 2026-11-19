@@ -238,10 +238,17 @@ export function createSessionTitleStore({
     const current = entries.get(key) || {};
     const next = mutate({ ...current });
     if (!next) return null;
+    /* 先留一份写入前的内存态。saveTitles() 里的 prune() 也可能删条目，
+     * 所以回滚必须覆盖整个 Map，而不只是被写的 key。 */
+    const snapshot = new Map(entries);
     entries.set(key, next);
     try {
       saveTitles();
     } catch (err) {
+      /* 持久化失败必须回滚内存：否则界面提示改名失败，下一次 resolve
+       * 却返回新标题，重启后又变回旧值 —— 三处各说各话。 */
+      entries.clear();
+      for (const [k, value] of snapshot) entries.set(k, value);
       safeLog('session-title.store_write_failed', { code: 'store_write_failed' });
       throw err;
     }

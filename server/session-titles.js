@@ -441,6 +441,14 @@ export function createSessionTitles({
       safeLog('session-title.apply_discarded', { reason: 'identity_mismatch', mode: task.mode });
       return { ok: false, code: 'identity_mismatch', error: '会话已变化，标题未应用' };
     }
+    /* 生成期间文件可能继续增长，把最新的 session_info 推到尾部窗口之外。
+     * 自动标题是后台写入，无法证明原生名没变时不能赌「没有改名」；
+     * 手动生成 / 改名是用户显式动作，仍允许在未确认快照上写入（会记
+     * nativeNameConfirmed=false，后续确认时保守保留）。 */
+    if (task.mode === 'auto' && !read.nativeConfirmed) {
+      safeLog('session-title.apply_discarded', { reason: 'native_unconfirmed', mode: task.mode });
+      return { ok: false, code: 'stale_title', error: '会话文件正在变化，本次标题未应用' };
+    }
     /* 用户在生成期间改了名（或在 Pi 里改了名）：迟到的结果一律丢弃，
      * 原生手动名是用户明确表达，不能被后台结果覆盖。 */
     if (ctx.nativeName !== task.nativeName) {
