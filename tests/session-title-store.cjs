@@ -284,6 +284,46 @@ const section = (title) => console.log('\n--- ' + title + ' ---');
     check('8n. 快照补齐后再改名，manual 正常失效', () =>
       changedLater.title === 'Pi 新改的名' && changedLater.manualOverride === false && !s8.entry(k8f)?.manual);
 
+    /* ================= 9. 持久化失败回滚 ================= */
+    section('9. 持久化失败回滚内存');
+    const d9 = path.join(root, 'd9');
+    fs.mkdirSync(d9, { recursive: true });
+    const oldAt = new Date(clock + 1000).toISOString();
+    const midAt = new Date(clock + 2000).toISOString();
+    const newAt = new Date(clock + 3000).toISOString();
+    const k9a = 'classic:99999999-0000-4000-8000-00000000000a';
+    const k9b = 'classic:99999999-0000-4000-8000-00000000000b';
+    const k9c = 'classic:99999999-0000-4000-8000-00000000000c';
+    const k9new = 'classic:99999999-0000-4000-8000-00000000000d';
+    fs.writeFileSync(path.join(d9, 'session-titles.json'), JSON.stringify({
+      version: 1,
+      items: [
+        { key: k9a, attempt: { at: oldAt, revision: 1 }, updatedAt: oldAt },
+        { key: k9b, attempt: { at: midAt, revision: 1 }, updatedAt: midAt },
+        { key: k9c, attempt: { at: newAt, revision: 1 }, updatedAt: newAt },
+      ],
+    }), 'utf8');
+    /* maxEntries=1：下一次成功保存会挤掉两条最老的 attempt；失败时也必须还原，
+     * 不能因为「写盘失败」顺手把内存里的旧记录清掉。 */
+    const s9 = make(d9, { maxEntries: 1 });
+    const titles9 = s9.paths.titles;
+    fs.unlinkSync(titles9);
+    fs.mkdirSync(titles9);
+    let failedWrite = null;
+    try { s9.setManual(k9new, { title: '写不进去的标题', nativeNameAt: '' }); } catch (err) { failedWrite = err; }
+    check('9a. 磁盘写入失败会抛出（调用方据此提示失败）', () => Boolean(failedWrite));
+    check('9b. 失败后没有留下新标题 / 新修订', () =>
+      s9.entry(k9new) === null
+      && s9.resolve({ scope: 'classic', sessionId: '99999999-0000-4000-8000-00000000000d' }).revision === 0);
+    check('9c. 失败后旧的 attempt 记录与 prune 结果一起回滚', () =>
+      Boolean(s9.entry(k9a)?.attempt) && Boolean(s9.entry(k9b)?.attempt) && Boolean(s9.entry(k9c)?.attempt));
+    fs.rmdirSync(titles9);
+    const retried9 = s9.setManual(k9new, { title: '重试成功', nativeNameAt: '' });
+    check('9d. 回滚后同一修订号可以正常重试，结果落盘', () =>
+      retried9?.revision === 1
+      && s9.resolve({ scope: 'classic', sessionId: '99999999-0000-4000-8000-00000000000d' }).title === '重试成功'
+      && make(d9, { maxEntries: 1 }).resolve({ scope: 'classic', sessionId: '99999999-0000-4000-8000-00000000000d' }).title === '重试成功');
+
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exitCode = fail ? 1 : 0;
   } finally {

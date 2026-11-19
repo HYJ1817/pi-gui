@@ -715,6 +715,33 @@ async function waitFor(fn, ms = 3000) {
       w.service.dispose();
     }
     {
+      /* 开始生成时文件还可完整读取；生成期间会话继续增长，把最新的
+       * session_info 推进「头部 / 尾部都读不到」的中间段。自动标题必须
+       * 在最终写入前重新要求原生名可确认，不能拿旧快照赌「没改名」。 */
+      const w = makeWorld();
+      const s = writeSession('grow-during-generation', { entries: [
+        { role: 'user', content: '生成期间文件会变大的会话' },
+        { role: 'assistant', content: '首轮正常完成的回复。', provider: 'p', model: 'm' },
+      ] });
+      w.target({ ...s, sessionId: s.id });
+      w.hold();
+      trigger(w, 'req-grow');
+      await waitFor(() => w.calls.length === 1);
+      fs.appendFileSync(s.file, line({ type: 'message', id: 'grow1', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'user', content: [{ type: 'text', text: 'A'.repeat(600_000) }] } }), 'utf8');
+      fs.appendFileSync(s.file, line({ type: 'session_info', id: 'n-grow', parentId: null, timestamp: new Date(clock + 1000).toISOString(), name: '生成期间的新原生名' }), 'utf8');
+      fs.appendFileSync(s.file, line({ type: 'message', id: 'grow2', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'user', content: [{ type: 'text', text: 'B'.repeat(600_000) }] } }), 'utf8');
+      const applyRead = w.service._internals.readTarget({ file: s.file, sessionId: s.id, cwd }, null);
+      check('7r. 增长后的文件头尾都读不到最新原生名（未确认）', () =>
+        applyRead.ok === true && applyRead.truncated === true && applyRead.nativeConfirmed === false);
+      w.release({ ok: true, text: '不该写入的自动标题', usage: {} });
+      await waitFor(() => w.logs.some((x) => x.event === 'session-title.apply_discarded' && x.details?.reason === 'native_unconfirmed'));
+      check('7r2. 最终应用前原生名无法确认 → 放弃自动写入（不覆盖旧快照）', () =>
+        !w.store.entry('classic:' + s.id)?.auto
+        && !w.store.entry('classic:' + s.id)?.manual
+        && !w.events.some((x) => x.type === 'session_title' && x.source === 'auto'));
+      w.service.dispose();
+    }
+    {
       /* HTTP 路由边界：Renderer 只提交稳定身份，`file` / 路径字段一律不参与解析。 */
       const w = makeWorld();
       const s = writeSession('route', { id: '0123456789abcdef', entries: [
