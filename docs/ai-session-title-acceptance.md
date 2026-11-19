@@ -232,7 +232,7 @@ locator 时仍可只写显示标题（不落盘、不激活）。
 | UI 全链路 | `node tests/smoke.cjs` | **1338/1338 通过**，exit 0（含当前 / 历史行内改名、Escape、统一服务请求体、旧 get_state 不覆盖确认标题、`sessionNaming` 降级不再禁用改名） |
 | 真实 Electron 视觉 | `npm run test:session-title:visual` | **54/54 checks passed，exit 0**；26 张 PNG；4 组真实 CSS 视口（1320×820 dark/light、700×600 light/dark，DPR=1）；0 条 renderer console error |
 | 打包产物 | `npm run build:app -- --rebuild` | exit 0；`dist-app/Pi GUI-win32-x64/Pi GUI.exe` 234.9 MB，整包 334.0 MB（最终一次构建在全部源码改动之后） |
-| 完整 canonical / PR CI | 未运行 | 按本轮范围只跑定向与受影响套件；完整 `npm test` 交由 PR CI，结果出来前标记「待验证」 |
+| 完整 canonical / PR CI | PR #97，run `44528486618`（代码状态 `291b4b4`） | **8/8 checks passed**：Validate complete test plan、Tests (core / faults / native / security / ui)、Electron build check、CI gate；exit 0 |
 | 真实模型 E2E | 未运行 | 未授权 + 无隔离凭据；不能以 mock 冒充；本机步骤见上 |
 
 **关键实测输出**：
@@ -272,8 +272,9 @@ locator 时仍可只写显示标题（不落盘、不激活）。
 ## 六、未验证与残余风险
 
 - 真实 provider / OAuth / 订阅 / 自定义 provider 的标题调用未实测；离线测试
-  只证明 worker 投影、配置变化重建与错误边界。
-- 完整 `npm test` / PR CI 未运行；本轮只跑直接受影响套件与定向回归。
+  只证明 worker 投影、配置变化重建与错误边界；真实模型 E2E 仍标记「未验证」。
+- 完整 `npm test` 已由 PR #97 CI 覆盖（代码状态 `291b4b4`，8/8 checks passed）；
+  本报告后续的文档更新不含代码变更。
 - 真实 Electron 只覆盖 Windows 11 + Electron 源码 harness；未在打包后的
   `dist-app` 里执行真实项目 / 真实 Pi 流程（构建产物已重建，但没有以它做
   真实模型调用）。
@@ -318,6 +319,7 @@ locator 时仍可只写显示标题（不落盘、不激活）。
 ## 九、结论与合并建议
 
 开发与定向验收完成；统一标题权威、持久修订、任意会话重命名、首轮失败判定、
-容量与截断边界均有自动化回归和真实 Electron 视觉证据。真实模型 E2E 与完整
-PR CI 尚未验证，按「待验证」处理。**建议在 PR CI 通过、独立审查无阻断项后合并**；
-本报告不构成合并、发版或真实模型调用的授权。
+容量与截断边界均有自动化回归和真实 Electron 视觉证据。PR #97 CI 在代码状态
+`291b4b4` 上 **8/8 checks passed**；真实模型 E2E 尚未验证，按「未验证」处理。
+**建议在独立审查无阻断项、用户明确授权后合并**；本报告不构成合并、发版或
+真实模型调用的授权。
