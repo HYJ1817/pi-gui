@@ -549,6 +549,65 @@
   --tracking-normal: 0em;
   --tracking-wide: 0.02em;
 
+  /* ==========================================================================
+     Button semantic system
+     Pages consume these aliases and never hardcode height, radius, padding,
+     surface, ink or state colors for a shared button.
+     ========================================================================== */
+  --ds-button-height: 32px;
+  --ds-button-height-sm: 28px;
+  --ds-button-height-xs: 24px;
+  --ds-button-padding: 12px;
+  --ds-button-padding-sm: 10px;
+  --ds-button-padding-xs: 8px;
+  --ds-button-radius: var(--radius-sm);
+  --ds-button-radius-sm: var(--radius-xs);
+  --ds-button-radius-xs: var(--radius-xs);
+  --ds-button-font-size: var(--text-md);
+  --ds-button-font-size-sm: var(--text-xs-plus);
+  --ds-button-font-size-xs: var(--text-xs);
+  --ds-button-weight: var(--font-weight-medium);
+  --ds-button-weight-primary: var(--font-weight-strong);
+  --ds-button-gap: 6px;
+  --ds-button-focus-width: 2px;
+  --ds-button-focus-offset: 2px;
+  --ds-button-disabled-opacity: .45;
+  --ds-button-busy-opacity: .6;
+
+  /* Secondary: the default for an ordinary standalone button. The neutral
+     fill is deliberately one step above its card/surface; no visible border. */
+  --ds-button-secondary-bg: var(--ds-tile-hover);
+  --ds-button-secondary-bg-hover: var(--ds-tile-deep);
+  --ds-button-secondary-bg-active: var(--ds-bg-active);
+  --ds-button-secondary-ink: var(--ds-text-primary);
+
+  /* Primary: save / confirm / submit / install / apply. One per region. */
+  --ds-button-primary-bg: var(--ds-accent);
+  --ds-button-primary-bg-hover: var(--ds-accent-hover);
+  --ds-button-primary-bg-active: color-mix(in oklab, var(--ds-accent) 88%, var(--ds-bg-primary));
+  --ds-button-primary-ink: var(--ui-on-primary);
+
+  /* Ghost: toolbars, inline actions and low-priority auxiliary controls. */
+  --ds-button-ghost-ink: var(--ds-text-secondary);
+  --ds-button-ghost-ink-hover: var(--ds-text-primary);
+  --ds-button-ghost-bg-hover: var(--ds-bg-hover);
+  --ds-button-ghost-bg-active: var(--ds-bg-active);
+
+  /* Danger: low-emphasis destructive actions use a tint, never a large
+     saturated fill. Destructive confirmation switches to a neutral surface
+     with danger ink (see .modal-actions .btn.danger in primitives.css). */
+  --ds-button-danger-bg: var(--ui-danger-surface);
+  --ds-button-danger-bg-hover: color-mix(in srgb, var(--ui-danger) 16%, transparent);
+  --ds-button-danger-bg-active: color-mix(in srgb, var(--ui-danger) 22%, transparent);
+  --ds-button-danger-ink: var(--ui-danger);
+  --ds-button-danger-border: var(--ui-danger-border);
+
+  /* Outline: only when a business reason requires visible separation from a
+     card. Not a default; never mixed with Secondary in the same action group. */
+  --ds-button-outline-border: var(--ds-border-strong);
+  --ds-button-outline-ink: var(--ds-text-primary);
+  --ds-button-outline-bg-hover: var(--ds-bg-hover);
+
   --ui-success-surface: color-mix(in srgb, var(--ui-success) 10%, transparent);
   --ui-success-border: color-mix(in srgb, var(--ui-success) 35%, transparent);
   --ui-warning-surface: color-mix(in srgb, var(--ui-warning) 10%, transparent);

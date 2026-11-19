@@ -419,7 +419,7 @@ function render(card, close, payload) {
   if (!payload || payload.ok === false || !d) {
     card.appendChild(node('div', 'modal-desc', payload?.error || '无法读取诊断信息'));
     const actions = node('div', 'modal-actions');
-    const done = node('button', 'btn primary', '关闭');
+    const done = node('button', 'btn', '关闭');
     done.type = 'button';
     done.onclick = close;
     actions.appendChild(done);
@@ -560,7 +560,7 @@ function render(card, close, payload) {
   const refresh = node('button', 'btn', '刷新');
   refresh.type = 'button';
   refresh.onclick = () => loadInto(card, close);
-  const done = node('button', 'btn primary', '关闭');
+  const done = node('button', 'btn', '关闭');
   done.type = 'button';
   done.onclick = close;
   actions.append(copySummary, copy, download, refresh, done);

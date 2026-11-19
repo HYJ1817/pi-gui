@@ -88,7 +88,7 @@ async function copyText(text) {
 }
 
 function copyBtn(text, label = '复制路径') {
-  const b = el('button', 'btn tiny', label);
+  const b = el('button', 'btn tiny ghost', label);
   b.type = 'button';
   b.onclick = () => copyText(text);
   return b;
@@ -118,7 +118,7 @@ function skillsTab(card, isCurrent) {
     selState.appendChild(o);
   }
 
-  const btnRefresh = el('button', 'btn tiny', '刷新');
+  const btnRefresh = el('button', 'btn tiny ghost', '刷新');
   btnRefresh.type = 'button';
 
   bar.append(search, selScope, selState, btnRefresh);
@@ -554,7 +554,7 @@ async function mcpTabBody(wrap, isCurrent, reload) {
         if (rt.error) box.appendChild(el('pre', 'ext-code quote', String(rt.error).slice(0, 300)));
       }
       // 动作：login / logout / remove（add 在列表下方表单）。enable 等走 /mcp TUI。
-      const loginBtn = el('button', 'btn tiny', '登录');
+      const loginBtn = el('button', 'btn tiny ghost', '登录');
       loginBtn.type = 'button';
       loginBtn.title = '跑 pi mcp login（OAuth 由 pi 接管浏览器与 token，Pi GUI 不经手凭据）';
       loginBtn.onclick = async () => {
@@ -575,7 +575,7 @@ async function mcpTabBody(wrap, isCurrent, reload) {
         toast('登录成功，已刷新状态', 'info');
         reload();
       };
-      const logoutBtn = el('button', 'btn tiny', '退出登录');
+      const logoutBtn = el('button', 'btn tiny ghost', '退出登录');
       logoutBtn.type = 'button';
       logoutBtn.title = '跑 pi mcp logout（删掉 pi 存的 OAuth 凭据）';
       logoutBtn.onclick = async () => {
@@ -597,7 +597,7 @@ async function mcpTabBody(wrap, isCurrent, reload) {
         toast('已退出登录', 'info');
         reload();
       };
-      const rmBtn = el('button', 'btn tiny', '移除');
+      const rmBtn = el('button', 'btn tiny danger ghost', '移除');
       rmBtn.type = 'button';
       rmBtn.onclick = async () => {
         const ok = await confirmModal({
@@ -898,7 +898,7 @@ function extensionTab(card, isCurrent) {
   const search = el('input', 'ext-search');
   search.type = 'search';
   search.placeholder = '搜索名称 / 简介 / 状态…';
-  const refresh = el('button', 'btn tiny', '刷新');
+  const refresh = el('button', 'btn tiny ghost', '刷新');
   refresh.type = 'button';
   bar.append(search, refresh);
   const summary = el('div', 'ext-summary');

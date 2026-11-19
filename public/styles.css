@@ -823,7 +823,7 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
  * 用默认规则会直接撑破卡片。 */
 .modal.confirm .modal-desc{max-height:46vh;overflow:auto;overflow-wrap:anywhere}
 .modal.confirm .modal-actions{flex-wrap:wrap}
-.modal.confirm .modal-actions .btn{height:auto;min-height:30px;white-space:nowrap}
+.modal.confirm .modal-actions .btn{height:auto;min-height:var(--ds-button-height);white-space:nowrap}
 .modal-card{
   width:100%;max-width:440px;max-height:78vh;overflow:auto;background:var(--ui-popover-surface);
   border:1px solid var(--line);border-radius:14px;padding:18px;
@@ -843,31 +843,20 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 .modal-item:hover{background:var(--hover)}
 .modal-item.on{background:var(--control-active);border-color:var(--control-border);color:var(--t1)}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px}
-.btn,.pm-btn{
-  height:30px;padding:0 15px;border-radius:var(--ds-radius-8);border:1px solid var(--line);
-  background:transparent;color:var(--t2);font-size:12.5px;font-family:inherit;cursor:pointer;
+/* 窄窗或放大字体时，动作组允许换行并保持可读高度；不把按钮压成截断文字。 */
+@media (max-width:560px){
+  .modal-actions{flex-wrap:wrap}
+  .modal-actions .btn{height:auto;min-height:var(--ds-button-height);white-space:normal}
 }
-.btn:hover,.pm-btn:hover:not(:disabled){background:var(--hover);color:var(--t1)}
-.btn.primary,.pm-btn.pm-primary{background:var(--control-primary);border-color:var(--control-border);color:var(--ui-on-primary);font-weight:550}
-.btn.primary:hover,.pm-btn.pm-primary:hover:not(:disabled){background:var(--control-primary-hover)}
-:is(.mcp-page,.mcp-market-page,.appearance-card) .btn:not(.primary):not(.danger):active:not(:disabled),
-.pm-btn:not(.pm-primary):not(.pm-btn-danger-ghost):active:not(:disabled){background:var(--ds-bg-active)}
-:is(.mcp-page,.mcp-market-page,.appearance-card) .btn:focus-visible,
-:is(.pm-btn,.pm-icon-btn,.mcp-icon-btn):focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
+/* 文本按钮的共享实现见 ui/primitives.css；这里只保留图标按钮的焦点环。 */
+:is(.pm-icon-btn,.mcp-icon-btn):focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
 .modal-input{
   width:100%;background:var(--input);border:1px solid var(--line);border-radius:8px;
   padding:9px 11px;color:var(--t1);font-family:inherit;font-size:13px;
   outline:0;margin-bottom:14px;resize:vertical;
 }
 .modal-input:focus{border-color:var(--focus-ring)}
-.btn.danger{border-color:var(--control-border);color:var(--err)}
-.btn.danger:hover{background:var(--ui-danger-surface);color:var(--err)}
-/* 确认框里的第三条路径（「做到什么程度」的中间选项）。
- * 刻意比主按钮弱、又比「取消」显眼一点 —— 它是备选，不是推荐。 */
-.btn.alt{border-color:var(--control-border);color:var(--t1)}
-.btn.alt:hover{background:var(--hover)}
-.btn:disabled,.btn.primary:disabled,.btn.danger:disabled,.pm-btn:disabled{opacity:.45;cursor:not-allowed}
-.btn:disabled{pointer-events:none}
+/* .btn 的外观（含 danger / alt / disabled）由 ui/primitives.css 的共享按钮系统拥有。 */
 button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-visible{
   outline:2px solid var(--focus-ring);outline-offset:2px;
 }
@@ -1134,8 +1123,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * 特异性比单个类高，不加前缀的话行布局会被 display:block 打散。 */
 .field-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
 .field-head label{margin-bottom:0}
-.btn.tiny{height:28px;padding:0 10px;border-radius:7px;font-size:11.5px}
-.btn.tiny:disabled{opacity:.5;cursor:default}
+/* .btn.tiny 的尺寸由 ui/primitives.css 的共享按钮系统拥有。 */
 
 .fetch-panel{margin-top:9px;border:1px solid var(--line);border-radius:9px;background:var(--ui-code-surface);padding:9px}
 .fetch-bar{display:flex;gap:6px;align-items:center;margin-bottom:8px}
@@ -1412,7 +1400,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .modal-card:has(> .diag-body) .modal-desc,
 .modal-card:has(> .diag-body) .modal-actions{flex:0 0 auto}
 .modal-card:has(> .diag-body) .modal-actions{margin-top:12px;flex-wrap:wrap}
-.modal-card:has(> .diag-body) .modal-actions .btn{height:auto;min-height:30px;white-space:nowrap}
+.modal-card:has(> .diag-body) .modal-actions .btn{height:auto;min-height:var(--ds-button-height);white-space:nowrap}
 .modal-card:has(> .diag-body) > .diag-body{flex:1 1 auto;min-height:0;overflow:auto}
 
 /* 选 :has(> .diag-body) 而不是给卡片加一个类，是因为 openModal() 只清 innerHTML、
@@ -4003,43 +3991,12 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   align-items: center;
   gap: 10px;
 }
-.btn.ds-btn-secondary {
-  height: 32px;
-  padding: 0 14px;
-  background: var(--ds-tile);
-  border: 1px solid var(--ds-border-default);
-  border-radius: var(--radius-full);
-  color: var(--ds-text-primary);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: background var(--motion-duration-fast) var(--motion-ease-out);
-}
-.btn.ds-btn-secondary:hover {
-  background: var(--ds-tile-hover);
-  border-color: var(--ds-border-strong);
-}
+/* 供应商页曾有两套独立按钮（ds-btn-secondary / prov-btn-main）。
+ * 现在统一走 ui/primitives.css 的 Secondary / Primary；
+ * .prov-btn-main 只保留为测试与装配选择器，不再拥有自己的几何或配色。 */
 .btn.prov-reload-btn[aria-disabled="true"] {
   opacity: .45;
   cursor: not-allowed;
-}
-.btn.primary.prov-btn-main {
-  height: 32px;
-  padding: 0 16px;
-  background: var(--ds-accent);
-  border: 0;
-  border-radius: var(--radius-full);
-  color: var(--ui-on-primary);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity var(--motion-duration-fast) var(--motion-ease-out);
-}
-.btn.primary.prov-btn-main:hover {
-  opacity: 0.9;
 }
 .prov-empty-card {
   min-height: 280px;
@@ -4086,11 +4043,6 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   margin-top: 16px;
   font-size: 12.5px;
   color: var(--ds-text-secondary);
-}
-.prov-reload-btn {
-  height: 28px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
 }
 .btn-ic {
   width: 14px;
@@ -4539,16 +4491,16 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .session-change-history-file .session-change-actions { padding: 6px 0; }
 .session-change-preview { margin-top: 8px; min-width: 0; }
 .session-object-action { margin-top: 12px; min-width: 0; }
-.session-object-action .btn { white-space: normal; height: auto; min-height: 30px; max-width: 100%; }
+.session-object-action .btn { white-space: normal; height: auto; min-height: var(--ds-button-height); max-width: 100%; }
 .object-revert-modal { z-index: 1002; padding: 18px; }
 .object-revert-modal > .modal-card { max-width: min(820px, 100%); max-height: calc(100vh - 36px); display: flex; flex-direction: column; overflow: hidden; }
 .object-revert-modal .object-revert-body { min-height: 0; overflow: auto; margin: 8px 0 14px; }
 .object-revert-modal .modal-actions { flex: 0 0 auto; flex-wrap: wrap; }
-.object-revert-modal .modal-actions .btn { white-space: normal; height: auto; min-height: 32px; }
+.object-revert-modal .modal-actions .btn { white-space: normal; height: auto; min-height: var(--ds-button-height); }
 .object-revert-risk { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; font-size: 12px; line-height: 1.65; color: var(--t2); }
 .object-revert-risk input { flex: 0 0 auto; margin-top: 4px; }
 .object-revert-diff { max-height: 30vh; overflow: auto; }
-.object-revert-result .btn, .object-revert-recovery .btn { white-space: normal; height: auto; min-height: 32px; margin: 4px 6px 4px 0; max-width: 100%; }
+.object-revert-result .btn, .object-revert-recovery .btn { white-space: normal; height: auto; min-height: var(--ds-button-height); margin: 4px 6px 4px 0; max-width: 100%; }
 .object-revert-modal .btn:disabled, .session-object-action .btn:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ============ UI-2C 轻量动效 ============

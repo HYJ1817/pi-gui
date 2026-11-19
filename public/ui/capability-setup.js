@@ -66,7 +66,7 @@ export async function copyText(text) {
 }
 
 export function copyButton(text, label = '复制') {
-  const button = el('button', 'btn tiny', label);
+  const button = el('button', 'btn tiny ghost', label);
   button.type = 'button';
   button.onclick = () => copyText(text);
   return button;
@@ -77,7 +77,7 @@ export function copyButton(text, label = '复制') {
  * @param message 确认框正文（各 feature 用自己那句，因为要说明各自不做的事）
  */
 export function restartPiButton(message) {
-  const button = el('button', 'btn tiny', '安装后重启 Pi');
+  const button = el('button', 'btn tiny ghost', '安装后重启 Pi');
   button.type = 'button';
   button.onclick = async () => {
     const generation = S.workspaceGeneration;
@@ -186,7 +186,7 @@ function installAction(model, options) {
    * 没有真正的重读入口时**不画这个按钮**：点了没反应比没有更糟。 */
   if (model.installState === 'recheck' && !hasRecheck) return null;
 
-  const button = el('button', 'btn tiny cap-install', INSTALL_IDLE_LABEL[model.installState] || '安装');
+  const button = el('button', model.installState === 'recheck' ? 'btn tiny cap-install' : 'btn tiny primary cap-install', INSTALL_IDLE_LABEL[model.installState] || '安装');
   button.type = 'button';
   button.dataset.installState = model.installState;
   if (model.installState === 'recheck') {
@@ -253,7 +253,7 @@ export function renderSetupSection(model, { linkFactory = null, onRecheck = null
   if (model.restart) actions.appendChild(restartPiButton(model.restart.message));
   /* 「查看上下文与额度」这类只读入口：模型给出 handler，这一层不发明动作。 */
   if (typeof model.onOpen === 'function') {
-    const open = el('button', 'btn tiny', model.openLabel || '打开');
+    const open = el('button', 'btn tiny ghost', model.openLabel || '打开');
     open.type = 'button';
     open.onclick = () => model.onOpen();
     actions.appendChild(open);

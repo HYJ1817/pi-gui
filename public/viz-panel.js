@@ -261,13 +261,13 @@ export function openVizPanel(data, context = {}) {
     // 1. 顶部 Header
     const resetBtn = document.createElement('button');
     resetBtn.type = 'button';
-    resetBtn.className = 'btn tiny rp-btn';
+    resetBtn.className = 'btn tiny ghost rp-btn';
     resetBtn.textContent = '重置';
     resetBtn.title = '重置图表与参数配置';
 
     const quoteBtn = document.createElement('button');
     quoteBtn.type = 'button';
-    quoteBtn.className = 'btn tiny rp-btn viz-quote-btn';
+    quoteBtn.className = 'btn tiny ghost rp-btn viz-quote-btn';
     quoteBtn.textContent = '引用到对话';
     quoteBtn.title = '将当前图表参数与摘要填入会话输入框';
 
@@ -294,13 +294,13 @@ export function openVizPanel(data, context = {}) {
 
     const btnLine = document.createElement('button');
     btnLine.type = 'button';
-    btnLine.className = `btn tiny viz-toggle-btn${state.type === 'line' ? ' is-active' : ''}`;
+    btnLine.className = `btn tiny ghost viz-toggle-btn${state.type === 'line' ? ' is-active' : ''}`;
     btnLine.textContent = '折线图';
     btnLine.setAttribute('aria-pressed', state.type === 'line' ? 'true' : 'false');
 
     const btnBar = document.createElement('button');
     btnBar.type = 'button';
-    btnBar.className = `btn tiny viz-toggle-btn${state.type === 'bar' ? ' is-active' : ''}`;
+    btnBar.className = `btn tiny ghost viz-toggle-btn${state.type === 'bar' ? ' is-active' : ''}`;
     btnBar.textContent = '柱状图';
     btnBar.setAttribute('aria-pressed', state.type === 'bar' ? 'true' : 'false');
 

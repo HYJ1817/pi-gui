@@ -653,7 +653,7 @@ export function openPlanner(focus = null) {
       }
       const acts = el('div', 'ext-acts');
       acts.append(btn('重新生成', 'primary', () => { clearDiagnostics(); doGenerate(); }));
-      acts.append(btn('关闭诊断', '', () => clearDiagnostics()));
+      acts.append(btn('关闭诊断', 'ghost', () => clearDiagnostics()));
       diag.append(acts);
     }
     function clearDiagnostics() {
@@ -781,7 +781,7 @@ export function openPlanner(focus = null) {
         acts.append(lockBtn(btn('保存修改', dirty ? 'primary' : '', () => doSave())));
         acts.append(lockBtn(btn('删除计划', 'danger', () => doDelete())));
       }
-      acts.append(btn('刷新', '', () => refreshCurrent()));
+      acts.append(btn('刷新', 'ghost', () => refreshCurrent()));
       detailWrap.append(acts);
 
       /* 进度（规格 §23：状态清晰即可，不画节点连线图） */
@@ -928,7 +928,7 @@ export function openPlanner(focus = null) {
       detailWrap.append(tl);
 
       if (!running) {
-        const add = btn('+ 添加任务', '', () => {
+        const add = btn('+ 添加任务', 'ghost', () => {
           const n = current.tasks.length + 1;
           let id = 'task-' + n;
           let i = n;
@@ -1519,7 +1519,7 @@ export function openPlanner(focus = null) {
           }
           /* 50 个文件一次性展开会把几 MB 塞进 DOM —— 默认全收起（§二十六）。 */
           const acts = el('div', 'ext-acts');
-          const toggle = btn('全部展开', '', () => {
+          const toggle = btn('全部展开', 'ghost', () => {
             const open = all.some((d) => !d.open);
             for (const d of all) d.open = open;
             toggle.textContent = open ? '全部收起' : '全部展开';
@@ -1943,10 +1943,10 @@ export function openPlanner(focus = null) {
       }
       if (t.status === 'failed' || t.status === 'interrupted') {
         tacts.append(lockTaskBtn(btn('重试', 'primary', () => doTaskAction('retry', t.id))));
-        tacts.append(btn('跳过', '', () => doTaskAction('skip', t.id)));
+        tacts.append(btn('跳过', 'ghost', () => doTaskAction('skip', t.id)));
       }
       if (t.status === 'blocked' || t.status === 'pending' || t.status === 'ready') {
-        tacts.append(btn('跳过', '', () => doTaskAction('skip', t.id)));
+        tacts.append(btn('跳过', 'ghost', () => doTaskAction('skip', t.id)));
       }
       if (!settled && t.status !== 'blocked' && t.status !== 'pending') {
         tacts.append(btn('取消这个任务', 'danger', () => doTaskAction('cancel', t.id)));

@@ -268,7 +268,7 @@ export function openBranchPanel() {
     };
 
     const done = document.createElement('button');
-    done.className = 'btn primary';
+    done.className = 'btn';
     done.textContent = '关闭';
     done.onclick = close;
 

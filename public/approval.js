@@ -269,7 +269,7 @@ function suspend(entry) {
   closeSurface(entry); refreshPendingEntry();
 }
 function deferButton(entry) {
-  const button = document.createElement('button'); button.type = 'button'; button.className = 'btn';
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'btn ghost';
   button.textContent = '稍后处理'; button.onclick = () => suspend(entry);
   return button;
 }
@@ -441,7 +441,7 @@ export function renderRuntimeApproval(row, { approval, respond } = {}) {
   const textareaButton = (node) => { buttons.push(node); return node; };
 
   if (method === 'confirm') {
-    button('确认', 'btn', { confirmed: true });
+    button('确认', 'btn primary', { confirmed: true });
     button('拒绝', 'btn', { confirmed: false });
   } else if (method === 'select') {
     for (const value of approval.options || []) button(String(value), 'btn', { value: String(value) });
@@ -450,9 +450,9 @@ export function renderRuntimeApproval(row, { approval, respond } = {}) {
     value.setAttribute('aria-label', approval.title || '审批输入');
     row.appendChild(value);
     textareaButton(value);
-    button('提交', 'btn', () => ({ value: value.value }));
+    button('提交', 'btn primary', () => ({ value: value.value }));
   }
-  const cancel = button('取消', 'btn', { cancelled: true });
+  const cancel = button('取消', 'btn ghost', { cancelled: true });
   return { send, cancel, buttons };
 }
 

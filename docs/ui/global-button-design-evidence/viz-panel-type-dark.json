@@ -1,0 +1,12 @@
+{
+  "text": "折线图",
+  "cls": "btn tiny ghost viz-toggle-btn is-active",
+  "bg": "rgb(255, 255, 255)",
+  "color": "rgb(24, 24, 24)",
+  "border": "0.666667px solid rgba(0, 0, 0, 0)",
+  "radius": "8px",
+  "height": 28,
+  "padding": "0px 10px",
+  "font": "11.5px/500",
+  "outline": "none 2.66667px"
+}

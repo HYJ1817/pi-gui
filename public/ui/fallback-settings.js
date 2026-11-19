@@ -27,7 +27,7 @@ export function createFallbackSettings(initial,primary) {
       const detail=document.createElement('small');detail.textContent=!model?'模型不可用（运行时跳过）':sameModel(id,primary())?'当前主模型（不会重复尝试）':modelCapabilitySummary(model).text||'能力未确认';
       text.append(name,detail);row.appendChild(text);
       for(const [caption,delta] of [['arrowUp',-1],['arrowDown',1],['close',0]]){
-        const button=document.createElement('button');button.type='button';button.className='btn tiny';button.append(createIcon(caption));
+        const button=document.createElement('button');button.type='button';button.className=delta===0?'btn tiny danger ghost':'btn tiny ghost';button.append(createIcon(caption));
         button.setAttribute('aria-label',`${delta===0?'删除':delta<0?'上移':'下移'}备用模型 ${id.providerId}/${id.modelId}`);
         button.disabled=delta!==0 && (index+delta<0 || index+delta>=config.chain.length);
         button.onclick=()=>{if(delta===0)config.chain.splice(index,1);else [config.chain[index],config.chain[index+delta]]=[config.chain[index+delta],config.chain[index]];draw();};row.appendChild(button);

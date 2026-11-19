@@ -70,18 +70,8 @@
 
 /* ---------- 按钮与表单 ---------- */
 
-.pm-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-.pm-btn.pm-btn-ghost { background: transparent; border-color: transparent; }
-.pm-btn.pm-btn-ghost:hover:not(:disabled) { background: var(--ds-tile-hover); }
-.pm-btn.pm-btn-small { height: var(--ds-control-size); padding: 0 10px; font-size: 11.5px; border-radius: var(--radius-xs); }
-.pm-btn.pm-btn-danger-ghost { color: var(--ui-danger); background: transparent; border-color: transparent; }
-.pm-btn.pm-btn-danger-ghost:hover:not(:disabled) { background: var(--ui-danger-surface); border-color: var(--ui-danger-border); color: var(--ui-danger); }
+/* .pm-btn / .pm-btn-ghost / .pm-btn-danger-ghost / .pm-btn-small 的共享实现
+ * 在 ui/primitives.css；这里不再复制一份按钮基础样式。 */
 
 .pm-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .pm-field-label { font-size: 11.5px; font-weight: 500; color: var(--ds-text-secondary); }

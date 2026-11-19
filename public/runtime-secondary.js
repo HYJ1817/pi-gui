@@ -24,7 +24,7 @@ export function createRuntimeSecondary({pane}) {
       const note=document.createElement('p');note.className='process-message';note.setAttribute('role','status');note.textContent=text;host.append(note);
       if(action){const b=document.createElement('button');b.type='button';b.className='btn';b.textContent='打开 Browser';b.onclick=action;host.append(b);}
       if(kind==='runtime-browser'&&browserSplit){
-        const exit=document.createElement('button');exit.type='button';exit.className='btn tiny';exit.textContent='退出分屏';exit.onclick=()=>void mountBrowser(false,false);
+        const exit=document.createElement('button');exit.type='button';exit.className='btn tiny ghost';exit.textContent='退出分屏';exit.onclick=()=>void mountBrowser(false,false);
         const close=document.createElement('button');close.type='button';close.className='icon-btn';close.append(createIcon('close'));close.setAttribute('aria-label','关闭工作台');close.onclick=()=>pane.close();head.append(exit,close);
       }
     };

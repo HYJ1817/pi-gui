@@ -7,8 +7,7 @@
 .runtime-conversation .rtc-head>.rtc-state{font-size:11px}
 .runtime-conversation .rtc-head>.runtime-resource-count{margin-left:auto}
 .runtime-conversation .rtc-controls{gap:4px;padding-top:2px}
-.runtime-conversation .rtc-controls>.btn{min-height:28px;padding:3px 8px;font-size:11px;color:var(--t2);background:transparent;border-color:transparent}
-.runtime-conversation .rtc-controls>.btn:hover{color:var(--t1);background:var(--hover)}
+.runtime-conversation .rtc-controls>.btn{min-height:28px;height:28px;padding:0 8px;font-size:11px}
 .runtime-conversation .rtc-output{min-height:0;padding:20px 32px;white-space:normal;overscroll-behavior:contain;scrollbar-gutter:stable;font-size:var(--text-base);line-height:var(--leading-prose)}
 .rtc-markdown{min-width:0;white-space:normal;overflow-wrap:anywhere}
 .rtc-markdown p{margin:0 0 13px;white-space:pre-wrap}
@@ -63,7 +62,7 @@
 .rtc-markdown code{overflow-wrap:anywhere}
 .rtc-markdown a{color:var(--ds-text-primary);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:color-mix(in oklab,var(--ds-text-primary) 32%,transparent)}
 .rtc-markdown a:hover{text-decoration-color:color-mix(in oklab,var(--ds-text-primary) 85%,transparent)}
-.rtc-composer .rtc-models>.btn{font-size:10px;min-height:26px;white-space:nowrap;padding:3px 7px;color:var(--t3);background:transparent;border-color:transparent}
+.rtc-composer .rtc-models>.btn{font-size:10px;min-height:26px;height:26px;white-space:nowrap;padding:0 7px}
 .rtc-picker-trigger{display:flex;align-items:center;gap:6px;min-height:28px;max-width:100%;padding:4px 7px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--t2);font:inherit;font-size:11px;line-height:1.4;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .rtc-model-trigger{max-width:260px}
 .rtc-thinking-trigger{max-width:160px}

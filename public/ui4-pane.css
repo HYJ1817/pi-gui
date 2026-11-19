@@ -238,7 +238,7 @@
  * `#row > button` 取它，也仍然取得到），但视觉上它跟路径同一行。 */
 .session-change-info{order:1;display:flex;align-items:flex-start;gap:8px;flex:1 1 240px;min-width:0}
 .session-change-name{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto}
-.session-change-row > .btn{order:2;margin-left:auto;flex:0 0 auto;height:26px;padding:0 10px;font-size:11.5px;border-radius:7px;align-self:flex-start}
+.session-change-row > .btn{order:2;margin-left:auto;flex:0 0 auto;height:var(--ds-button-height-sm);padding:0 var(--ds-button-padding-sm);font-size:var(--ds-button-font-size-sm);border-radius:var(--ds-button-radius-sm);align-self:flex-start}
 .session-change-row > .session-change-note{order:3;flex:0 0 100%;margin:2px 0 0}
 .session-change-path,
 .session-change-meta{min-width:0}
@@ -395,7 +395,7 @@
 
 /* 焦点：面板里的每个可操作元素都要看得见键盘焦点（控件级的形状各面不变）。 */
 .right-pane :is(.rp-tab,.rp-btn,.secondary-close,.process-actions .btn,.session-change-row > .btn):focus-visible{
-  outline:2px solid var(--ui-focus);outline-offset:2px;
+  outline:2px solid var(--ds-focus);outline-offset:2px;
 }
 
 /* ================= Specs + Changes 分屏工作台 =================

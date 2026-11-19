@@ -1098,7 +1098,7 @@ export function openProvidersPanel({ present = openModal } = {}) {
     `;
     const reloadBtn = h('button', {
       type: 'button',
-      class: 'btn tiny ds-btn-secondary prov-reload-btn',
+      class: 'btn tiny prov-reload-btn',
       on: { click: async event => {
         const button = event.currentTarget;
         if (button.getAttribute('aria-busy') === 'true') return;

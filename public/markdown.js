@@ -106,7 +106,7 @@ export function renderVizCardHtml(code) {
     `</div>` +
     `<div class="viz-card-actions">` +
     `<button type="button" class="btn tiny viz-open-btn" data-viz-open aria-label="打开「${esc(res.data.title)}」可视化图表">打开可视化</button>` +
-    `<button type="button" class="btn tiny viz-toggle-raw" data-viz-toggle-raw aria-expanded="false" title="切换显示原始数据">JSON</button>` +
+    `<button type="button" class="btn tiny ghost viz-toggle-raw" data-viz-toggle-raw aria-expanded="false" title="切换显示原始数据">JSON</button>` +
     `</div>` +
     `</div>` +
     `<pre class="code viz-raw-code" data-lang="pi-gui-viz" hidden><code>${esc(code)}</code></pre>` +

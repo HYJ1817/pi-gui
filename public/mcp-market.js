@@ -562,7 +562,7 @@ function openSourceManager(state, { onChange } = {}) {
         row.append(icon('list', 'mcp-icon'), node('div', 'mcp-source-copy'));
         const copy = row.querySelector('.mcp-source-copy');
         copy.append(node('strong', '', source.name || source.url), node('span', '', source.url));
-        const remove = button('btn tiny danger', '移除');
+        const remove = button('btn tiny danger ghost', '移除');
         remove.disabled = busy;
         remove.onclick = async () => {
           const go = await confirmModal({

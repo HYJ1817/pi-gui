@@ -30,7 +30,7 @@ export function openRuntimeSessions(project, workspace = null, options = {}) {
   let initialSelectionPending = Boolean(initialSelected);
   openModal((card, close) => {
     card.classList.add('wide', 'runtime-dialog'); card.setAttribute('aria-label', '独立会话');
-    const head = node('div', 'wt-head'); head.append(node('h3', '', '独立会话'), button('关闭', close)); card.append(head);
+    const head = node('div', 'wt-head'); const headClose=button('关闭', close); headClose.classList.add('ghost'); head.append(node('h3', '', '独立会话'), headClose); card.append(head);
     card.append(node('p', 'modal-desc', '每个会话独占工作区。关闭会话会停止其 Browser 和开发进程；记录保留。'));
     const resources = node('p', 'runtime-resource-count'); resources.setAttribute('role', 'status'); card.append(resources);
     const notice = node('p', 'wt-notice'); notice.setAttribute('role', 'status'); card.append(notice);
@@ -52,19 +52,19 @@ export function openRuntimeSessions(project, workspace = null, options = {}) {
         }
       });
     }); send.classList.add('primary'); controls.append(send);
-    const stop = button('停止', () => owned('command', { command: { type: 'abort' } })); controls.append(stop);
-    const restart = button('重启', () => owned('restart')); controls.append(restart);
-    const end = button('关闭会话', () => owned('close')); controls.append(end);
+    const stop = button('停止', () => owned('command', { command: { type: 'abort' } })); stop.classList.add('ghost'); controls.append(stop);
+    const restart = button('重启', () => owned('restart')); restart.classList.add('ghost'); controls.append(restart);
+    const end = button('关闭会话', () => owned('close')); end.classList.add('ghost'); controls.append(end);
     const browse = button('Browser', async () => {
       const r = store.get(selected); if (!r?.owner || !pane || !openBoundBrowser || !window.piGuiDesktop?.runtimeBrowser) return;
       const owner = { ...r.owner }, result = await runtimeSessionAction({ action: 'focus', owner });
       if (!alive || !result.ok || !same(store.get(selected)?.owner, owner)) return;
       focusView?.(owner.conversationId);
       keepBrowser = true; close(); await openBoundBrowser();
-    }); browse.hidden = !window.piGuiDesktop?.runtimeBrowser; controls.append(browse);
-    const processes = button('开发进程', () => showProcesses()); controls.append(processes);
+    }); browse.hidden = !window.piGuiDesktop?.runtimeBrowser; browse.classList.add('ghost'); controls.append(browse);
+    const processes = button('开发进程', () => showProcesses()); processes.classList.add('ghost'); controls.append(processes);
     const processBox = node('div', 'runtime-processes'); body.append(processBox);
-    if (workspace) head.insertBefore(button('启动此工作区', () => launch({ action: 'start', args: { id: workspace.id, epoch: workspace.epoch } })), head.lastChild);
+    if (workspace) { const start=button('启动此工作区', () => launch({ action: 'start', args: { id: workspace.id, epoch: workspace.epoch } })); start.classList.add('primary'); head.insertBefore(start, head.lastChild); }
 
     async function refresh() {
       const n = ++request, snapshot = await fetchRuntimeSessions(); if (!alive || n !== request) return;
@@ -113,12 +113,17 @@ export function openRuntimeSessions(project, workspace = null, options = {}) {
       }));
       for (const p of result.processes || []) {
         const row = node('div', 'wt-row'); row.append(node('span', '', `${p.name || p.command || '开发进程'} · ${p.state}`));
-        for (const [label, command] of [['日志', 'logs'], ['停止', 'stop'], ['重启', 'restart']]) row.append(button(label, async () => {
-          const next = await runtimeSessionAction({ action: 'process', owner, args: { action: command, generation: result.generation, id: p.id, revision: p.revision, ...(command === 'logs' ? { cursor: 0 } : {}) } });
-          if (!alive || selected !== id || !same(store.get(id)?.owner, owner)) return;
-          if (!next.ok) { notice.textContent = next.error || next.code; return; }
-          if (command === 'logs') { processBox.querySelector('pre')?.remove(); const log = node('pre', 'runtime-output', (next.lines || []).map(l => l.text || '').join('\n')); processBox.append(log); } else await showProcesses();
-        })); processBox.append(row);
+        for (const [label, command] of [['日志', 'logs'], ['停止', 'stop'], ['重启', 'restart']]) {
+          const rowBtn = button(label, async () => {
+            const next = await runtimeSessionAction({ action: 'process', owner, args: { action: command, generation: result.generation, id: p.id, revision: p.revision, ...(command === 'logs' ? { cursor: 0 } : {}) } });
+            if (!alive || selected !== id || !same(store.get(id)?.owner, owner)) return;
+            if (!next.ok) { notice.textContent = next.error || next.code; return; }
+            if (command === 'logs') { processBox.querySelector('pre')?.remove(); const log = node('pre', 'runtime-output', (next.lines || []).map(l => l.text || '').join('\n')); processBox.append(log); } else await showProcesses();
+          });
+          rowBtn.classList.add('ghost');
+          row.append(rowBtn);
+        }
+        processBox.append(row);
       }
     }
     function draw() {
@@ -128,7 +133,7 @@ export function openRuntimeSessions(project, workspace = null, options = {}) {
       for (const r of store.values()) {
         const kind = outcomeOf(r.item);
         const runtimeState = labels[r.item.lifecycle !== 'ready' ? r.item.lifecycle : r.item.activity] || r.item.lifecycle;
-        const b = button(`${r.item.workspace.branch || '工作区'} · ${kind ? OUTCOME[kind] : runtimeState}${r.item.attention ? ' · 未读' : ''}`, () => choose(r.item.conversationId));
+        const b = button(`${r.item.workspace.branch || '工作区'} · ${kind ? OUTCOME[kind] : runtimeState}${r.item.attention ? ' · 未读' : ''}`, () => choose(r.item.conversationId)); b.classList.add('ghost');
         b.dataset.conversationId = r.item.conversationId; b.setAttribute('aria-pressed', String(selected === r.item.conversationId));
         if (kind) b.dataset.outcome = kind;
         list.append(b);
@@ -147,7 +152,7 @@ export function openRuntimeSessions(project, workspace = null, options = {}) {
       renderedId = selected;
       send.disabled = busy || r.item.lifecycle !== 'ready' || r.item.activity !== 'idle'; stop.disabled = busy || !r.owner || r.item.activity === 'idle';
       restart.disabled = end.disabled = processes.disabled = browse.disabled = busy || !r.owner;
-      if (!r.owner && !controls.querySelector('[data-resume]')) { const resume = button('恢复会话', () => launch({ action: 'resume', conversationId: selected })); resume.dataset.resume = 'true'; controls.append(resume); }
+      if (!r.owner && !controls.querySelector('[data-resume]')) { const resume = button('恢复会话', () => launch({ action: 'resume', conversationId: selected })); resume.dataset.resume = 'true'; resume.classList.add('primary'); controls.append(resume); }
       if (r.owner) controls.querySelector('[data-resume]')?.remove();
       const nextApprovalKey = JSON.stringify([selected, r.owner, r.approvals]);
       if (nextApprovalKey === approvalKey) return;
@@ -168,10 +173,10 @@ export function openRuntimeSessions(project, workspace = null, options = {}) {
           row.querySelectorAll('button,textarea').forEach(control => { control.disabled = true; });
           return respondToRuntimeApproval(approvalOwner, a, () => action({ action: 'command', owner: approvalOwner, command: { type: 'extension_ui_response', id: a.id, ...response } }));
         };
-        if (a.method === 'confirm') row.append(button('确认', () => respond({ confirmed: true })), button('拒绝', () => respond({ confirmed: false })));
+        if (a.method === 'confirm') { const yes=button('确认', () => respond({ confirmed: true })); yes.classList.add('primary'); row.append(yes, button('拒绝', () => respond({ confirmed: false }))); }
         else if (a.method === 'select') for (const value of a.options) row.append(button(value, () => respond({ value })));
-        else { const value = node('textarea'); value.setAttribute('aria-label', a.title || '审批输入'); row.append(value, button('提交', () => respond({ value: value.value }))); }
-        row.append(button('取消', () => respond({ cancelled: true })));
+        else { const value = node('textarea'); value.setAttribute('aria-label', a.title || '审批输入'); const submit=button('提交', () => respond({ value: value.value })); submit.classList.add('primary'); row.append(value, submit); }
+        const cancel=button('取消', () => respond({ cancelled: true })); cancel.classList.add('ghost'); row.append(cancel);
         row.querySelectorAll('button,textarea').forEach(control => { control.disabled = a.submitting === true; }); approvals.append(row);
       }
     }

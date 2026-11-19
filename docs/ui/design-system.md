@@ -6,7 +6,7 @@
 
 发现规范与现有实现冲突时，先定位层叠、继承和组件所有者，再在本次任务范围内通过共享入口处理。确需例外时，在变更说明中记录业务原因、受影响页面和状态、保留的公共规则、验收证据及后续处理方式。跨功能的例外按既有审查流程评估。
 
-[设计系统现状审查](design-system-audit.md) 保存规范建立时的实现证据和历史发现。[全项目 UI/UX 审计](PI-GUI-UI-FULL-AUDIT.md) 保存所审计代码基线的问题、截图、待验证项及整改顺序。
+[设计系统现状审查](design-system-audit.md) 保存规范建立时的实现证据和历史发现。[全项目 UI/UX 审计](PI-GUI-UI-FULL-AUDIT.md) 保存所审计代码基线的问题、截图、待验证项及整改顺序。本轮按钮语义系统的实现、迁移与实测证据见[按钮设计系统验收](global-button-design-acceptance.md)。
 
 ## 排版
 
@@ -44,7 +44,7 @@
 ## 间距、形状与布局
 
 - 优先复用 `--ui-space-1` 至 `--ui-space-6`（4/8/12/16/24/32 CSS px）。默认动作间隔 8、组内边距 12 或 16、相邻区块间距 24。设置原语保留现有 6px 行间距和对应内边距。局部图标光学校正、原生尺寸和特定布局尺寸由现有公共样式持有。
-- 工具栏紧凑控件按 `--ds-control-size`（28px）。默认独立动作复用 `.btn` 的 30px 基线，输入/选择器在同一排使用同一字段族的高度，通用设置 Select 实际为 34px。正文较大的字段复用 `--ds-field-height`，长文案、放大字体和窄窗允许高度增长。混排需对齐中心，并按组件角色选择密度。
+- 工具栏紧凑控件按 `--ds-control-size`（28px）。默认独立动作复用 `.btn` 的 32px 基线（紧凑 `.tiny` 为 28px，`.micro` 为 24px），输入/选择器在同一排使用同一字段族的高度，通用设置 Select 实际为 34px。正文较大的字段复用 `--ds-field-height`，长文案、放大字体和窄窗允许高度增长。混排需对齐中心，并按组件角色选择密度。
 - 基础控件及图标按钮默认 `--radius-xs`（8px），填充字段可沿用公共字段 8–10px 变体。卡片或菜单用 `--radius-md`（12px），现有设置卡片/行用 `--radius-md-plus`（14px）。Composer 复用 `--ds-composer-radius`（20px），开关和已有圆形发送动作使用 `--radius-full`。同一角色选定公共变体后保持一致。
 - 可见控件边界默认 1px，悬浮结构按层级使用公共阴影。内流区域以表面和留白分组。卡片、边框和阴影须有明确的分组、边界或层级作用。分割线、滚动或裁切由容器控制，给焦点轮廓、菜单和按钮留出空间。
 - 外壳、工作面板和阅读列复用现有布局 Token 和所有者。弹层在视口内约束宽高，长内容内部滚动，保留关闭与提交路径。窄窗先收次要动作、换行或采用原有 overlay；避免挤窄编辑区、遮住焦点或改变业务入口。
@@ -56,11 +56,48 @@
 
 公共组件的所有者负责外观、内部结构和交互状态，页面负责外部布局、组合及业务数据、权限、路由和生命周期。功能样式通过已有类、选项或 Token 选择变体，禁止越过组件边界改写内部选择器或用更高优先级压过公共规则。先复用语义 Token，避免硬编码颜色、通用尺寸或为页面维护独立样式体系。缺少公共实现时，先组合原生控件和已有类；需要跨页复用的变体由公共所有者定义一次。
 
+### 按钮语义系统
+
+所有文本按钮只有一个共享实现：[public/ui/primitives.css](../../public/ui/primitives.css) 中的 `.btn`。`.pm-btn` 是同源别名（供应商管理层仍使用这个类名，样式与 `.btn` 完全一致）。**基类 `.btn` 本身就是 Secondary**：普通独立操作直接写 `.btn`，不需要也不允许再引入第二个“次级按钮”类。页面只选择语义变体与尺寸；背景、文字色、圆角、内边距、Hover/Pressed/Focus/Disabled/Loading 由公共文件和 [tokens.css](../../public/tokens.css) 的 `--ds-button-*` Token 持有。
+
+| 变体 | 类名 | 何时使用 | 典型动作 | 不要用于 |
+| --- | --- | --- | --- | --- |
+| 主操作 | `.btn.primary` | 当前区域唯一推荐动作；用户完成这件事就算完成当前任务 | 保存、确认、提交、安装、应用、更新到 X、创建会话 | 关闭、取消、刷新、打开面板；同一区域出现第二个 primary |
+| 次操作（默认） | `.btn` | 普通独立文本按钮；需要被看见、但不抢主操作的动作 | 检查更新、打开日志、导出报告、重试、恢复默认、启动此工作区 | 工具栏图标按钮、行内弱动作（用 Ghost）；危险动作（用 Danger） |
+| 弱操作 | `.btn.ghost` | 工具栏、卡片/行内辅助动作、行内取消与“稍后/忽略”等低优先级路径 | 刷新、退出分屏、复制、行内取消、稍后、忽略此版本、面板关闭 | 确认框取消（用 Secondary）；表单主提交；页面上唯一的主要出口（此时用 Secondary） |
+| 危险操作 | `.btn.danger` | 删除、清空、移除、撤销等会造成数据损失的动作 | 删除服务、清理日志、全部撤销 | 普通取消；把大面积饱和红当背景 |
+| 危险弱操作 | `.btn.danger.ghost` | 行内或卡片内的删除/移除，需要保持低视觉重量 | 移除扩展、删除评论、移除模型 | 最终确认按钮（确认框用 `.danger`） |
+| 描边 | `.btn.outline` | **仅限**按钮所在表面与 Secondary 填充无法区分（如透明浮层、同色卡片）且有明确业务理由 | 例外记录在验收报告中 | 作为默认次级样式；与 Secondary 混用成两套体系；按页面批量启用 |
+
+几何与状态基线（数值来自 `tokens.css`，随 `--font-scale` 缩放）：
+
+| 项 | 基线 `.btn` | 紧凑 `.btn.tiny` | 更紧凑 `.btn.micro` |
+| --- | --- | --- | --- |
+| 高度 / 最小高度 | 32px | 28px | 24px |
+| 横向内边距 | 12px | 10px | 8px |
+| 圆角 | `--radius-sm`（10px） | `--radius-xs`（8px） | `--radius-xs`（8px） |
+| 字号 / 字重 | 13px / 500（primary 560） | 11.5px / 500 | 11px / 500 |
+| 图标与文字间距 | 6px | 6px | 6px |
+| 图标尺寸 | 14–16px，沿用各页面现有 SVG | 同左 | 同左 |
+
+- 同组按钮使用同一尺寸与高度，沿交叉轴居中，间距 8px；动作组靠右对齐（`modal-actions`、`about-row-actions` 等既有容器负责布局）。按钮不因文字长短改变高度。
+- 图标按钮继续使用 `.icon-btn` / `.pm-icon-btn`（28×28），不套用文本按钮的填充。Composer 的发送/停止、会话列表行内动作、侧栏图标按钮、紧凑工具栏图标按钮、Tabs、分段控件、开关、选择器、菜单项、帮助图标和原生窗口按钮保留各自已建立的设计；本轮只检查它们没有被 `.btn` 规则误伤。
+- 链接式控件与紧凑返回导航保留各自外观：环境向导的 `.env-link-button`（打开诊断、稍后设置）、MCP 市场的 `.mcp-back-btn`（我的服务）不套用文本按钮填充；图表卡片的「打开可视化」使用 Secondary，「JSON」和图表形态切换使用 Ghost，形态切换仅在选中时使用 accent。它们不是新的页面级按钮体系，也不得扩散到普通动作。
+- Default：Secondary 使用 `--ds-button-secondary-bg`（`--ds-tile-hover`）中性填充，1px 透明边框，主文字色。Ghost 透明、无可见边框，文字为次级色。Primary 使用 `--ds-accent` 与 `--ui-on-primary`。Danger 使用淡红表面与危险文字色；确认框内 `.modal-actions .btn.danger` 保持中性底 + 危险文字/边框，避免整块饱和红（P14-E）。
+- Hover：Secondary 到 `--ds-button-secondary-bg-hover`；Ghost 出现 `--ds-button-ghost-bg-hover` 并把文字提升到主文字色；Primary 到 `--ds-accent-hover`；Danger 到 16% 危险色叠层。所有 Hover 不改变尺寸。
+- Pressed：使用各自的 active Token，并 `transform: scale(.98)`；`prefers-reduced-motion` 下取消位移。
+- Focus-visible：统一 `2px solid var(--ds-focus)`、外偏移 2px。鼠标点击不额外加环。
+- Disabled：原生 `disabled` 或 `aria-disabled="true"`，透明度 `--ds-button-disabled-opacity`（.45），`cursor: not-allowed`，不响应指针；需要保留键盘序列时用 `aria-disabled` 并在事件入口阻止激活。
+- Loading：`aria-busy="true"`，透明度 .6，`cursor: progress`，`::before` 显示旋转指示；按钮尺寸、文字和可访问名称不变。业务代码仍负责防重复提交和恢复状态。
+- 深/浅主题只通过 Token 切换；不得在页面里为某一主题另写按钮配色。强制颜色模式下保留 `ButtonText` 边框和 `Highlight` 焦点。
+- 窄窗与字体缩放：优先保留按钮文字并允许换行/增高（`.modal.confirm`、对象恢复等已有 `height:auto; min-height` 规则），不要用固定高度裁掉文字；空间不足时把次要动作收入既有菜单或改为 Ghost，而不是缩成不可读的图标。
+- 旧类映射：`.ds-btn-secondary` 已删除，改用 `.btn`；`.pm-btn` → `.btn` 同源别名；`.pm-btn-ghost` → `.btn.ghost`；`.pm-btn-danger-ghost` → `.btn.danger.ghost`；`.btn.alt` 保留为 Ghost 的旧别名；`.prov-btn-main` 只保留测试/装配选择器，不再拥有独立几何或配色。禁止新增页面级按钮体系或为单个页面重写上述状态。
+
 尺寸单位为 CSS px。以下各族统一使用后文状态规则。
 
 | 组件 | 复用与实现标准 |
 | --- | --- |
-| Button / IconButton | 复用 `.btn`、`.primary`、`.danger`、`.alt`、`.icon-btn` 与现有工具栏变体。文本动作沿用公共横向内边距，同组高度一致。图标按钮默认 28×28、居中，使用可访问名称。提交、取消、危险操作区分角色，危险意图在可见文案中明确。 |
+| Button / IconButton | 文本按钮复用上节 `.btn` 语义系统：默认 `.btn`（Secondary）、`.primary`、`.ghost`、`.danger`、`.danger.ghost`，只有确有必要时才用 `.outline`；图标按钮复用 `.icon-btn`。同组高度一致（默认 32px，紧凑 28px），提交、取消、危险操作区分角色，危险意图在可见文案中明确。 |
 | Input / SearchInput / Textarea | 复用 `.ds-input`、已有表单字段与原生 `input`/`textarea`。字段有可访问标签，placeholder 仅提示；错误与字段关联。搜索组合用同一个外壳承载放大镜、输入及清除按钮，输入和图标基线对齐。多行字段可增高或内部滚动，保留 Composer 自有的输入与发送契约。 |
 | Select / Checkbox / Radio / Switch | 短选项复用 `.ds-select` 和原生 `select`。多选/单选优先原生 checkbox/radio 和可点标签，使用主题语义色。即时开关复用 `createSettingsToggle`（38×22 轨道，16px 滑块）；互斥设置可复用 `createSegmentedControl`（26px 项，公共容器）。切换需同步 checked、aria 状态和可见标记。 |
 | Dropdown / Menu / MenuItem | 动作菜单复用 `openActionMenu`，复杂选择保留现有 picker/listbox，内容浮层复用 Popover。动作菜单项沿用 32px 最小高度和 8px 间隔，前导图标与末尾快捷键/选中标记对齐。支持方向键、Enter/Space、Escape、回焦；相应角色决定 Tab 行为，分隔线只用于真实分组。 |

@@ -1052,7 +1052,7 @@ function openStatsPanel() {
     const actions = document.createElement('div');
     actions.className = 'modal-actions';
     const done = document.createElement('button');
-    done.className = 'btn primary';
+    done.className = 'btn';
     done.textContent = '关闭';
     done.onclick = close;
     actions.appendChild(done);
@@ -1150,7 +1150,7 @@ function openMoreMenu() {
     const actions = document.createElement('div');
     actions.className = 'modal-actions';
     const done = document.createElement('button');
-    done.className = 'btn primary';
+    done.className = 'btn';
     done.textContent = '关闭';
     done.onclick = close;
     actions.appendChild(done);

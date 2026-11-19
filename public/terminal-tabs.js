@@ -57,7 +57,7 @@ export function createTerminalTabs({ onActivate, onClose, onNew } = {}) {
   empty.hidden = true;
   const emptyTitle = node('p', 'terminal-empty-title');
   const emptyHint = node('p', 'terminal-empty-hint');
-  const emptyAction = button('btn tiny rp-btn terminal-empty-action', '新建终端');
+  const emptyAction = button('btn tiny ghost rp-btn terminal-empty-action', '新建终端');
   empty.append(emptyTitle, emptyHint, emptyAction);
   let emptyActionHandler = null;
   emptyAction.onclick = () => emptyActionHandler?.();

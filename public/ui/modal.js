@@ -376,7 +376,7 @@ export function confirmModal({
     if (deferText && typeof onDefer === 'function') {
       defer = document.createElement('button');
       defer.type = 'button';
-      defer.className = 'btn';
+      defer.className = 'btn ghost';
       defer.textContent = deferText;
       actions.appendChild(defer);
     }
