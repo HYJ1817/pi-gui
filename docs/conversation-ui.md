@@ -4,9 +4,20 @@ Conversation 使用工作区内居中的阅读列。PI-Desktop 阶段 D 将内�
 
 ## 消息层级
 
-- **User**：右对齐、内容自适应的柔和灰色 Bubble，最大为阅读列的 82% 与 600px 中较小值；18px 圆角（右下角 8px）、10/15px 内距。短消息不铺满，长路径和 URL 在 Bubble 内换行；换行、行内代码与附件仍按原消息内容展示。视觉隐藏「你」标签，DOM 仍保留身份信息。用户消息的复制栏在 hover、键盘 focus 或触屏显示，复制原始文本；失败可见且可重试，不修改会话。pi 没有对应的消息删除或编辑重发业务，不添加这些入口。
+- **User**：右对齐、内容自适应的柔和灰色 Bubble，最大为阅读列的 82% 与 600px 中较小值；18px 圆角（右下角 8px）、10/15px 内距。短消息不铺满，长路径和 URL 在 Bubble 内换行；换行、行内代码与附件仍按原消息内容展示。视觉隐藏「你」标签，DOM 仍保留身份信息。用户消息的复制栏在 hover、键盘 focus 或触屏显示，复制原始文本；失败可见且可重试，不修改会话。历史用户消息与 Assistant 回复的编辑 / 重新生成入口见下节。
 - **Assistant**：背景透明的开放正文。保留轻量「Pi」标记，以及现有 Markdown 的段落、标题、列表、代码、引用、表格和链接语义。每个 User Turn 与下一个 Turn 的间距由 `--turn-gap` 控制；Assistant 内段落沿用 Markdown 间距。
 - **状态反馈**：处理中、失败、空回复和中断继续走原有状态路径；正文优先，状态文字和 metadata 次之。没有真实功能的消息操作按钮不会出现。
+
+## 历史消息编辑与重新生成
+
+历史用户消息与每个 Turn 的 Assistant 回复在既有 action bar 里提供「编辑并重新发送」「重新生成」；入口复用现有 icon / tooltip / hover+focus 显现，不新增按钮系统。它们不是前端删除：后端先核对目标用户消息的稳定 entryId、当前 leaf 与原生 sessionId，再通过 Pi 的公开树导航（`ctx.navigateTree(targetId, { summarize: false })`）把活动 leaf 移到目标消息之前，随后在同一会话里发一次普通 `prompt`。原生 sessionId、会话文件、conversationId、项目 / 工作区、侧栏条目、创建时间与标题保持不变；不创建新会话、不 fork、不改写 JSONL、不改 Pi。
+
+- 目标投影只认 Pi 的 `get_entries` + `get_messages`：前端只传可见 userIndex 与期望身份，后端在提交时重新核对 entryId / leafId / sessionId / bridge 代次。过期或跨会话请求拒绝，不做 A→B 写入。
+- 只有目标会话空闲（非 streaming / compacting / queued / stopping）才允许提交；不自动停止 Agent，其他正在运行的会话不阻塞本会话编辑。
+- 被替换的后续历史确实含工具 / 文件动作时，编辑器显示「重新发送会替换后续对话，之前已经执行的文件修改和命令操作不会自动撤销。」；不自动回滚文件、git 或终端，也不重放旧工具。
+- 文本、Markdown、代码块与图片按原内容保留；不支持的附件类型在导航前拒绝，不退化成纯文本或旧本地路径。编辑文本若以已注册命令开头会被拒绝，避免被当成命令分发。
+- 提交前失败会导航回原 leaf（旧 leaf 是用户消息或 `custom_message` 时先追加内部 guard entry）；提交已被 Pi 接受后保留新路径并走正常生成失败流程。应答丢失用 requestId 查询事务状态，不盲目重试。
+- 刷新、切换会话和重启都从 Pi 原生活动路径恢复；渲染器只做乐观裁剪，不持久化第二份历史。完整实现与验收证据见 [message-edit-resend-acceptance.md](message-edit-resend-acceptance.md)。
 
 ## Thinking 与 Tool Timeline
 
