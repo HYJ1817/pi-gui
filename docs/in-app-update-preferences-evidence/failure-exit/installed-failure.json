@@ -1,13 +1,13 @@
 {
-  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-cflBFh",
-  "fault": "version",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-FEqklK",
+  "fault": "exit",
   "previousVersion": "0.34.1",
   "failedTargetVersion": "0.34.2",
   "confirmation": "test-only response fixture",
   "inventory": {
     "files": 489,
     "directories": 31,
-    "sha256": "3b2abff5d4b60a424d43eaac129734964a919bcec0cbeea40a6171eac9baeed8"
+    "sha256": "b345381cf3390d1871b9575b1a1d2836aecc1fe3bb970d0b9da48bcb97410763"
   },
   "checks": [
     {
@@ -19,7 +19,7 @@
       "pass": true
     },
     {
-      "name": "real NSIS zero exit with version mismatch restores backup and restarts",
+      "name": "real NSIS nonzero exit restores backup and restarts",
       "pass": true
     },
     {
@@ -67,6 +67,6 @@
     "phase": "rolled_back",
     "expectedVersion": "0.34.2",
     "previousVersion": "0.34.1",
-    "restartPid": 171376
+    "restartPid": 29660
   }
 }

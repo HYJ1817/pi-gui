@@ -17,15 +17,15 @@
       "pass": true
     },
     {
-      "name": "preference save failure is visible in the real renderer",
+      "name": "failed manual switch is visible and explains the cross-process safety state",
       "pass": true
     },
     {
-      "name": "failed save does not fake a manual selection",
+      "name": "failed save shows the real effective manual policy, not the stale automatic one",
       "pass": true
     },
     {
-      "name": "preference can be switched again after a visible failure",
+      "name": "automatic must be saved successfully before it is shown as active again",
       "pass": true
     },
     {

@@ -1,9 +1,9 @@
 {
-  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-cflBFh",
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-FEqklK",
   "previousVersion": "0.34.0",
   "targetVersion": "0.34.1",
-  "installerBytes": 150889154,
-  "installerSha256": "676f630a500505bbc0b15e3cd9ef18c10f5b78a79902695e93376fd24f6da57a",
+  "installerBytes": 150895978,
+  "installerSha256": "2d5db4279525c0433f1640ec54cee9e3dc8f771c86b7c8d18e0e3de3f4369ffe",
   "checks": [
     {
       "name": "rebuilt starting Electron version is 0.34.0",
@@ -26,15 +26,7 @@
       "pass": true
     },
     {
-      "name": "post-shutdown failure cancels helper and relaunches actual old version",
-      "pass": true
-    },
-    {
-      "name": "browser capability is usable after full old-app recovery",
-      "pass": true
-    },
-    {
-      "name": "restarted app.getVersion and recovery confirm actual target version",
+      "name": "armed transaction still completes after a one-shot quit failure",
       "pass": true
     },
     {
@@ -42,7 +34,11 @@
       "pass": true
     },
     {
-      "name": "new program payload was actually installed",
+      "name": "browser capability is usable after the committed transaction",
+      "pass": true
+    },
+    {
+      "name": "committed helper installed the accepted payload",
       "pass": true
     },
     {
