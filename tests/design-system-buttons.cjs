@@ -233,6 +233,12 @@ async function electronMain() {
     await sleep(150);
   };
   const removeProbe = () => read(`document.getElementById('dsButtonProbe')?.remove();document.getElementById('dsProbeAnchor')?.remove()`);
+  /* 探针固定在左上角；切主题/重建探针时鼠标若仍停在上一个探针的位置，
+   * 新探针会立即处于 :hover，基线就采不到默认填充。先把指针移到探针外。 */
+  const parkMouse = async () => {
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 });
+    await sleep(150);
+  };
 
   try {
     await win.loadURL(origin);
@@ -242,6 +248,7 @@ async function electronMain() {
     for (const theme of ['dark', 'light']) {
       await setTheme(theme);
       await injectProbe();
+      await parkMouse();
       const secondary = await styleOf('#dsProbeSecondary');
       const ghost = await styleOf('#dsProbeGhost');
       const primary = await styleOf('#dsProbePrimary');
