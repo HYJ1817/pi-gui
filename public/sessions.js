@@ -133,51 +133,49 @@ document.addEventListener('pi-gui:session-switch', (event) => {
   newSessionKnownIds = new Set();
 });
 
-/* ---------- 折叠（只折当前项目下面那块会话列表）----------
+/* ---------- 折叠（每个项目自己的会话列表）----------
  *
- * 用户要的是「项目 / 会话是一套紧凑层级」，而不是把「项目」分组整个折起来 ——
- * 所以这里只控制 `.pj-sessions` 这一块：箭头在**项目行内**，点了把列表隐藏，
- * 再点回来。位置状态就一个布尔值，默认展开（false）。
+ * 用户要的是「项目 / 会话是一套紧凑层级」，而不是把「项目」分组整个折起来。
+ * 项目标题区域（`.pj-select`）是唯一的折叠触发器：箭头、文件夹图标、名称和
+ * 右侧空白都属于它；点它只隐藏 / 恢复 `.pj-sessions`，不切换项目、不碰对话区。
  *
  * 三件必须守住的事：
  *   1. **折叠用 [hidden]，不删 DOM。** 搜索、重命名、归档、删除都靠查询现有
  *      行工作，把行删掉会让它们的状态全丢；[hidden] 有 display:none !important
  *      兜底（见 styles.css 顶部），不会像别处那样被 display:flex 盖掉。
- *   2. **点击不得误触。** 箭头自己 stopPropagation + preventDefault；
- *      项目行本身不可点（可点的是 .pj-select），行尾的三点入口
- *      （`.pj-sess-menu-trigger`）同样自己拦掉冒泡 —— 三条路互不影响。
+ *   2. **点击不得误触。** 标题按钮自己 stopPropagation；行尾的 + 与三点入口
+ *      （`.pj-header-action` / `.pj-row-menu-trigger`）是它的兄弟节点，同样
+ *      自己拦掉冒泡 —— 三条路互不影响。
  *   3. **项目展开状态按路径保留；重新进搜索会展开当前项目。**
- *      openSessionSearch()（app.js）会显式调用
+ *      openSessionSearch()（sidebar-search.js）会显式调用
  *      expandSidebarSessions()，否则用户点了「搜索会话」却看不到输入框。
  */
-const SVG_CHEV =
-  iconMarkup('chevronRight');
 /* 行尾的动作入口：三点（…）。**没有用 ✎ / ⤓ / ✕ / ↩ 这些字符当图标** ——
  * 字符图标在不同字体下大小与基线都不可控，换成自己画的三个圆。 */
 const SVG_MORE =
   iconMarkup('more');
 
 let collapsed = false;
-let chevRef = null;
-let chevName = '';
+let triggerRef = null;
 let projectKey = '';
-/** 折叠/展开：只碰 box.hidden 与箭头的 aria 状态，不动列表内容。 */
+/** 折叠/展开：只碰 box.hidden 与标题触发器的 aria 状态，不动列表内容。 */
 function toggleSessions() {
   if (!boxRef || !boxRef.isConnected) return;
   collapsed = !collapsed;
   setProjectExpanded(projectKey, !collapsed);
   applyCollapsed();
+  /* 搜索框就在这块列表里；把它折起来后 search-open 不能继续亮着，
+   * 否则用户再点搜索图标只会「关掉」一个已经看不见的搜索。统一交给
+   * sidebar-search 的关闭入口处理（本模块不直接改 search-open）。 */
+  if (collapsed) document.dispatchEvent(new CustomEvent('pi-gui:active-sessions-collapsed'));
 }
 
 function applyCollapsed() {
   const box = boxRef;
   if (!box || !box.isConnected) return;
   box.hidden = collapsed;
-  const chev = chevRef;
-  if (chev && chev.isConnected) {
-    chev.setAttribute('aria-expanded', String(!collapsed));
-    chev.setAttribute('aria-label', `${collapsed ? '展开' : '收起'}「${chevName}」的会话`);
-  }
+  const trigger = triggerRef;
+  if (trigger && trigger.isConnected) trigger.setAttribute('aria-expanded', String(!collapsed));
 }
 
 /** 展开当前项目的会话列表（搜索入口要用它）。已经是展开态就什么都不做。 */
@@ -192,35 +190,6 @@ export function expandSidebarSessions() {
 /** 供测试用：当前是不是折叠着。 */
 export function sessionsCollapsed() {
   return collapsed;
-}
-
-/** 这块列表没了（没有会话 / 读不到）→ 折叠箭头也一起撤掉。
- *  只撤属于**这一块**的箭头：迟到的响应不能把新项目那一行的箭头删掉。 */
-function dropChevron(box) {
-  if (boxRef !== box) return;
-  if (chevRef && chevRef.isConnected) chevRef.remove();
-  chevRef = null;
-}
-
-/** 建折叠箭头并插进当前项目那一行（行内第一个元素，图标之前）。 */
-function makeChevron(projectEl, label) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'pj-chev';
-  /* 只有固定图标，没有用户数据 —— 这里 innerHTML 是常量模板。 */
-  b.innerHTML = SVG_CHEV;
-  b.setAttribute('aria-controls', 'pjSessionsBox');
-  b.setAttribute('aria-expanded', String(!collapsed));
-  b.onclick = (e) => {
-    /* 别让点箭头顺带触发项目切换（行内的 .pj-select 才是切换入口）。 */
-    e.preventDefault();
-    e.stopPropagation();
-    toggleSessions();
-  };
-  chevName = label;
-  b.setAttribute('aria-label', `${collapsed ? '展开' : '收起'}「${label}」的会话`);
-  projectEl.insertBefore(b, projectEl.firstChild);
-  return b;
 }
 
 /* 点了搜索结果之后要跳到的那次提问。切会话是异步的（afterSessionSwitch 只是
@@ -362,15 +331,21 @@ export async function renderSidebarSessions(projectEl, project = {}) {
   awaitingNewSession = false;
   newSessionPreviousKey = null;
   newSessionKnownIds = new Set();
-  /* 每个项目记住自己的展开状态，并换上对应的折叠箭头。 */
+  /* 每个项目记住自己的展开状态；标题触发器由 projects.js 建好，这里只把
+   * 会话块的控制关系和当前状态接上去（箭头只是触发器里的装饰）。 */
   projectKey = project.path || projectEl.title;
   currentProject = project || {};
   /* 换了项目 → 并行会话的归属与列表必须整块丢掉重来，不能拿着 A 的
    * conversationId 去画 B 的侧栏。 */
   clearRuntimeNav();
   collapsed = !projectExpanded(projectKey, true);
-  if (chevRef && chevRef.isConnected) chevRef.remove();
-  chevRef = makeChevron(projectEl, projectEl.querySelector('.pj-name')?.textContent || '');
+  triggerRef = projectEl.querySelector('.pj-select');
+  if (triggerRef) {
+    triggerRef.setAttribute('aria-controls', box.id);
+    triggerRef.setAttribute('aria-expanded', String(!collapsed));
+  }
+  /* 行上的点击统一交给本模块的状态机；箭头 / 图标 / 名称 / 空白都走这一条。 */
+  projectEl.__pjToggle = toggleSessions;
   applyCollapsed();
   /* 换了项目就丢掉上一个项目的搜索状态。searchViewMode() 是模块级的，
    * 不清的话会拿着 A 的结果去画 B 的侧栏（迟到的响应虽然会被 generation
@@ -416,10 +391,20 @@ async function fill(box, token) {
   try {
     data = await fetchSessions();
   } catch {
-    // 读不到就整块不显示 —— 侧栏里挂一条红色报错只会碍事
+    /* 读取失败不再把整块列表和标题触发器一起删掉：那会让项目看起来
+     * 「不能展开」，也没有重试路径。保留块本身，就地显示错误与重试。 */
     if (token === loadToken && box.isConnected) {
-      box.remove();
-      dropChevron(box);
+      listRef = null;
+      dataRef = null;
+      const hint = el('div', 'pj-sess-hint', '读取会话失败。');
+      const retry = el('button', 'pj-sess-more pj-sess-retry', '重试');
+      retry.type = 'button';
+      retry.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void fill(box, ++loadToken);
+      };
+      box.replaceChildren(hint, retry);
     }
     return;
   }
@@ -433,10 +418,10 @@ async function fill(box, token) {
 
   if ((!data.hasProject || !(data.sessions || []).length) && !runtimeCount) {
     clearSessionPlans(); // 没有会话就没有关联可显示
-    box.remove();
-    /* 一个会话都没有 → 没有可折叠的东西，箭头必须跟着消失，
-     * 否则会留下一个点了没反应的控件。 */
-    dropChevron(box);
+    /* 空项目也要能展开：保留列表块并显示空态，而不是删掉块和折叠入口。
+     * 搜索框仍照常建出来，重试 / 后续新会话都会复用同一块。 */
+    dataRef = data;
+    paint(box, data);
     return;
   }
   /* P7 §8：会话标题旁的「关联任务」。这里只把**当前会话的 pi 会话 id** 递过去 ——
@@ -523,6 +508,13 @@ function paintList() {
   const all = (data.sessions || []).filter(s=>!s.sessionId||!owned.has(s.sessionId));
   const live = all.filter((s) => !s.archived);
   const arch = all.filter((s) => s.archived);
+
+  /* 空项目也要有可展开的内容：显示空态而不是空白，否则收起 / 展开
+   * 看起来都像没反应。并行会话也是内容，不能把它们判成空。 */
+  if (!all.length && runtimeNavCount() === 0) {
+    area.append(el('div', 'pj-sess-hint', '还没有会话'));
+    return;
+  }
 
   const shown = expanded ? live : live.slice(0, COLLAPSED);
   for (const s of shown) area.append(makeRow(s));

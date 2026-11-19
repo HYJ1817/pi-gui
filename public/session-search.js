@@ -59,6 +59,8 @@ let errorText = '';
 /** 递增的请求号：回来晚了的一律丢弃。 */
 let requestId = 0;
 let timer = null;
+/** 真实输入框只在列表区重建时替换；关闭搜索要把它一起清干净。 */
+let inputRef = null;
 /** 状态变化后请宿主重画列表区（由 sessions.js 注入）。 */
 let changeHandler = () => {};
 
@@ -88,9 +90,12 @@ export function searchViewMode() {
 /**
  * 清空搜索状态。
  *
- * **切项目时必须调**：否则会拿着 A 项目的结果去渲染 B 项目的侧栏。
+ * **切项目与关闭搜索时必须调**：否则会拿着 A 项目的结果去渲染 B 项目的侧栏。
  * （就算不调，generation 校验也会丢弃迟到的响应，但那是一个「刚好没出错」，
  * 不是「结构上不会错」。）
+ *
+ * 关闭搜索不是「CSS 藏起来」：这里同时取消 debounce、作废在途请求、
+ * 同步真实输入框，并请宿主把列表区重画回普通会话列表。
  */
 export function resetSearch() {
   if (timer) {
@@ -102,6 +107,8 @@ export function resetSearch() {
   status = 'idle';
   results = [];
   errorText = '';
+  if (inputRef && inputRef.isConnected && inputRef.value !== '') inputRef.value = '';
+  notify();
 }
 
 /** 会话变了（切会话 / 归档 / 删除）之后重搜一次，让结果跟上当前状态。 */
@@ -130,6 +137,7 @@ export function createSearchBar() {
   input.setAttribute('aria-label', '在当前项目里搜索会话');
   input.value = query;
   input.maxLength = MAX_QUERY;
+  inputRef = input;
   /* 点右上角的 ✕（type=search 自带）会触发 search 事件 */
   input.addEventListener('input', () => {
     query = input.value;
