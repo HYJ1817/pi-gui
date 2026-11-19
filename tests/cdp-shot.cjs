@@ -1648,23 +1648,23 @@ async function main() {
     ['项目行是紧凑的一行（≤ 36px，不再是两行卡片）', `(() => {const p=document.querySelector('.project.active');return (p&&p.offsetHeight<=36)||('h='+(p&&p.offsetHeight))})()`],
     ['没有常驻的绝对路径副标题', `document.querySelectorAll('#projects .pj-path').length === 0`],
     ['完整路径仍在 title 上（hover 看得到）', `(() => {const p=document.querySelector('.project.active');return Boolean(p&&p.title&&/[\\\\/]/.test(p.title))})()`],
-    ['折叠箭头 aria-expanded=true 且 aria-controls 指向会话块', `(() => {const c=document.querySelector('.project.active .pj-chev'),b=document.querySelector('.pj-sessions');return Boolean(c&&b&&b.id&&c.getAttribute('aria-expanded')==='true'&&c.getAttribute('aria-controls')===b.id)})()`],
+    ['折叠触发器 aria-expanded=true 且 aria-controls 指向会话块', `(() => {const c=document.querySelector('.project.active .pj-select'),b=document.querySelector('.pj-sessions');return Boolean(c&&b&&b.id&&c.getAttribute('aria-expanded')==='true'&&c.getAttribute('aria-controls')===b.id)})()`],
     ['会话块紧跟当前项目行（结构没被箭头破坏）', `(() => {const p=document.querySelector('.project.active');return Boolean(p&&p.nextElementSibling&&p.nextElementSibling.classList.contains('pj-sessions'))})()`],
     ['会话列表默认可见且有会话', `(() => {const b=document.querySelector('.pj-sessions');return Boolean(b&&b.hidden===false&&b.querySelectorAll('.pj-sess').length>0)})()`],
   ]);
 
   /* --- UX-04 侧栏：折叠 --- */
-  await evalJs(`document.querySelector('.project.active .pj-chev').click()`);
+  await evalJs(`document.querySelector('.project.active .pj-select').click()`);
   await sleep(320);
-  await shotOf('.project.active', 'UX-04-sidebar-project-collapsed', 'UX-04：点箭头折叠该项目的会话（只剩项目行，且箭头语义同步）', ['pi-GUI'], [
+  await shotOf('.project.active', 'UX-04-sidebar-project-collapsed', 'UX-04：点项目标题折叠该项目的会话（箭头、图标、名称共享同一触发区）', ['pi-GUI'], [
     ['会话块已隐藏', `document.querySelector('.pj-sessions').hidden === true`],
-    ['aria-expanded=false 且标签变成「展开」', `(() => {const c=document.querySelector('.project.active .pj-chev');return Boolean(c&&c.getAttribute('aria-expanded')==='false'&&/^展开/.test(c.getAttribute('aria-label')||''))})()`],
+    ['aria-expanded=false 且标签仍说明展开 / 收起', `(() => {const c=document.querySelector('.project.active .pj-select');return Boolean(c&&c.getAttribute('aria-expanded')==='false'&&/展开|收起/.test(c.getAttribute('aria-label')||''))})()`],
     ['会话行仍在 DOM 里（只是隐藏，搜索/改名还要用）', `document.querySelectorAll('.pj-sessions .pj-sess').length > 0`],
     ['项目行本身没被折掉（折的只是会话）', `(() => {const p=document.querySelector('.project.active');return Boolean(p&&p.isConnected&&p.offsetHeight>=28)})()`],
     ['折叠没有让侧栏整体位移（项目行顶部不变）', `(() => {const p=document.querySelector('.project.active').getBoundingClientRect();return p.top>0&&p.top<innerHeight})()`],
   ]);
   /* 展开回去，别把折叠态留给后面的场景 */
-  await evalJs(`document.querySelector('.project.active .pj-chev').click()`);
+  await evalJs(`document.querySelector('.project.active .pj-select').click()`);
   await sleep(240);
 
   /* --- UX-05 会话导航：紧凑聚簇 --- */
@@ -1960,7 +1960,7 @@ async function main() {
     const point = await evalJs(`(() => {
       const row=document.querySelector('.project:not(.active)');
       row.scrollIntoView({block:'nearest'});
-      const box=row.nextElementSibling,c=row.querySelector('.pj-chev');
+      const box=row.nextElementSibling,c=row.querySelector('.pj-select');
       window.__sidebarBefore={title:document.querySelector('#title').textContent,composer:document.querySelector('#composerBox').getBoundingClientRect().toJSON()};
       if(!box.hidden)return null;
       const r=c.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2};
@@ -1973,7 +1973,7 @@ async function main() {
     await sleep(350);
     await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:width-12,y:height-12});
     await shotOf('#projects','UX-SIDEBAR-project-sessions-'+width+'x'+height,'项目标题、圆点会话和独立展开；预览不切聊天',['简单问候','你好'],[
-      ['预览展开且没有当前会话标记',`(() => {const row=document.querySelector('.project:not(.active)'),box=row.nextElementSibling;return row.querySelector('.pj-chev').getAttribute('aria-expanded')==='true'&&!box.hidden&&box.querySelectorAll('.pj-sess').length===3&&!box.querySelector('[aria-current]')})()`],
+      ['预览展开且没有当前会话标记',`(() => {const row=document.querySelector('.project:not(.active)'),box=row.nextElementSibling;return row.querySelector('.pj-select').getAttribute('aria-expanded')==='true'&&!box.hidden&&box.querySelectorAll('.pj-sess').length===3&&!box.querySelector('[aria-current]')})()`],
       ['展开不切换聊天，Composer 不移动',`document.querySelector('#title').textContent===window.__sidebarBefore.title && ['x','y','width','height'].every(k=>Math.abs(document.querySelector('#composerBox').getBoundingClientRect()[k]-window.__sidebarBefore.composer[k])<.5)`],
       ['圆点、项目标题和单行文本无水平溢出',`[...document.querySelectorAll('.pj-sess')].every(r=>r.querySelector('.pj-sess-dot')&&r.scrollWidth<=r.clientWidth) && getComputedStyle(document.querySelector('.project .pj-icon')).display==='none' && getComputedStyle(document.querySelector('.pj-sess-time')).display==='none' && document.documentElement.scrollWidth<=innerWidth`],
     ]);

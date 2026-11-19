@@ -133,7 +133,7 @@ module.exports = async ({ read, click, key, shot, paint, check, win, waitFor }) 
   check('R5 usage tip uses reference 376px / 14px / 16px geometry',await read(`(()=>{const e=document.querySelector('#composerPopover'),r=e.getBoundingClientRect(),c=getComputedStyle(e);return r.width===376&&c.borderRadius==='14px'&&c.padding==='16px'})()`));
   await shot('r05-context-light');await key('ESC');
   await read(`(async()=>{shellExtraSessions=40;await SESS.refreshSidebarSessions();})()`);
-  if (await read(`document.querySelector('.project.active .pj-chev').getAttribute('aria-expanded')!=='true'`)) await click('.project.active .pj-chev');
+  if (await read(`document.querySelector('.project.active .pj-select').getAttribute('aria-expanded')!=='true'`)) await click('.project.active .pj-select');
   if (await read(`!!document.querySelector('#pjSessionsBox .pj-sess-more:not(.pj-sess-arch-toggle)')`)) await click('#pjSessionsBox .pj-sess-more:not(.pj-sess-arch-toggle)');
   const sticky=await read(`(()=>{const s=document.querySelector('.rail-group'),h=document.querySelector('#groupHead');s.scrollTop=0;const before=h.getBoundingClientRect().top;s.scrollTop=s.scrollHeight;return {scroll:s.scrollTop,before,after:h.getBoundingClientRect().top}})()`);
   check('R5 project heading stays visible in its existing long-list scroller',sticky.scroll>0&&Math.abs(sticky.after-sticky.before)<=1,sticky);

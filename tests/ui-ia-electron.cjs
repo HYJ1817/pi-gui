@@ -146,7 +146,33 @@ if (!process.versions.electron) {
     check(await read(`document.activeElement.classList.contains('pj-row-menu-trigger')`), 'Project menu Escape focus');
     await pointer('.pj-sess:not(.pending) .pj-sess-menu-trigger'); await key('Escape', 'Escape', 27);
     check(await read(`document.activeElement.classList.contains('pj-sess-menu-trigger')`), 'Session menu Escape focus');
+    /* 项目标题的真实点击：箭头 / 文件夹 / 名称 / 空白共用 .pj-select，
+     * 只折叠会话，不切项目、不动对话。 */
+    const projectTitleBefore = await read(`document.querySelector('#title').textContent`);
+    await pointer('.project.active .pj-select');
+    check(await read(`document.querySelector('#pjSessionsBox').hidden && document.querySelector('.project.active .pj-select').getAttribute('aria-expanded')==='false'`), 'Project title click collapses only sessions');
+    check(await read(`document.querySelector('#title').textContent===${JSON.stringify(projectTitleBefore)} && document.querySelector('.project.active').classList.contains('active')`), 'Project title click keeps chat and active project');
+    await shot('project-collapsed-dark', '1440x900');
+    await pointer('.project.active .pj-chev');
+    check(await read(`!document.querySelector('#pjSessionsBox').hidden && document.querySelector('.project.active .pj-select').getAttribute('aria-expanded')==='true'`), 'Decorative arrow shares the title trigger');
+    await pointer('.project.active .pj-name');
+    check(await read(`document.querySelector('#pjSessionsBox').hidden`), 'Project name shares the title trigger');
+    await pointer('.project.active .pj-name');
+    check(await read(`[...document.querySelectorAll('#projects .project')].every(r=>{const p=r.querySelector('.pj-header-action'),m=r.querySelector('.pj-row-menu-trigger');if(!p||!m)return false;const pr=p.getBoundingClientRect(),mr=m.getBoundingClientRect(),rr=r.getBoundingClientRect();return Math.abs(pr.width-22)<.5&&Math.abs(mr.width-22)<.5&&pr.right<=mr.left+1&&mr.right<=rr.right+1})`), 'Every project row has aligned plus and menu actions');
+    const otherTitle = await read(`document.querySelector('#title').textContent`);
+    await pointer('.project:not(.active) .pj-select');
+    await waitFor(`!document.querySelector('.project:not(.active)').nextElementSibling.hidden && document.querySelector('.project:not(.active)').nextElementSibling.querySelectorAll('.pj-sess').length>0`, 'other project preview');
+    check(await read(`document.querySelector('.project.active').classList.contains('active') && document.querySelector('#title').textContent===${JSON.stringify(otherTitle)}`), 'Other project title expands its sessions without switching chat');
+    await shot('project-other-expanded-dark', '1440x900');
+    await pointer('.project:not(.active) .pj-select');
+    check(await read(`document.querySelector('.project:not(.active)').nextElementSibling.hidden`), 'Other project title collapses its preview');
     await pointer('#navSearch'); await waitFor(`document.activeElement.classList.contains('pj-search-input')`, 'search focus');
+    check(await read(`document.querySelector('#navSearch').getAttribute('aria-expanded')==='true'&&document.querySelector('#navSearch').classList.contains('is-active')&&document.querySelector('#btnTopbarSearch').getAttribute('aria-expanded')==='true'&&getComputedStyle(document.querySelector('#navSearch')).backgroundColor!=='rgba(0, 0, 0, 0)'`), 'Search icon shows real selected state on both entries');
+    await shot('search-open-dark', '1440x900');
+    await pointer('#navSearch');
+    check(await read(`!document.querySelector('#projectSidebar').classList.contains('search-open')&&document.querySelector('#navSearch').getAttribute('aria-expanded')==='false'&&document.activeElement.id==='navSearch'`), 'Second search click closes and restores focus');
+    await pointer('#navSearch'); await waitFor(`document.activeElement.classList.contains('pj-search-input')`, 'search refocus');
+    check(await read(`document.querySelector('.pj-search-input').value===''`), 'Reopened search input is clean');
     await win.webContents.debugger.sendCommand('Input.insertText', { text: '设计' }); await sleep(350);
     check(await read(`document.querySelector('.pj-search-input').value==='设计' && document.querySelector('#projectSidebar').classList.contains('search-open')`), 'Search real input');
     await key('Escape', 'Escape', 27); check(await read(`document.querySelector('.pj-search-input').value===''`), 'Search first Escape clears query');
