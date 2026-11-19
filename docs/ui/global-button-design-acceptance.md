@@ -89,6 +89,8 @@
 
 执行结果（本轮实际运行）：
 
+首次 PR CI 在 `tests/diff-comments-ui.cjs` 捕获审查任务预览的 `done` 初始化顺序错误（TDZ `ReferenceError`）。已把 Ghost 变体设置移到 `done`/`history` 声明之后，并复跑该套件 51/51；其余受影响套件结果如下。
+
 | 命令 | 结果 | 退出码 |
 | --- | --- | --- |
 | `node tests/design-system-buttons.cjs` | phase A 5/5，phase B 34/34 | 0 |
@@ -101,6 +103,7 @@
 | `node --test tests/provider-management-ui.cjs` | 79/79 | 0 |
 | `node tests/mcp-management-ui.cjs` | 31 passed | 0 |
 | `node tests/ui4-approval.cjs` | 44/44 | 0 |
+| `node tests/diff-comments-ui.cjs` | 51/51 | 0 |
 | `node tests/ui4-feedback.cjs` | 27/27 | 0 |
 | `node tests/ui4-integration.cjs` | 57/57 | 0 |
 | `node tests/specs-ui.cjs` | 25/25 | 0 |
