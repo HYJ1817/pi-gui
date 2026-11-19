@@ -104,6 +104,12 @@ export async function sendCommand(cmd, { notify = true } = {}) {
   return j;
 }
 
+/* ---------- 历史用户消息编辑 ---------- */
+
+export const messageEditPreflight = body => sendJSON('/api/message-edit', { body: { action: 'preflight', ...body } });
+export const messageEditResend = body => sendJSON('/api/message-edit', { body: { action: 'resend', ...body } });
+export const messageEditStatus = requestId => getJSON('/api/message-edit/status?' + new URLSearchParams({ requestId }));
+
 /* ---------- 状态 / 项目 ---------- */
 
 export const fetchStatus = () => getJSON('/api/status');
@@ -119,6 +125,9 @@ export async function fetchRuntimeSessions() {
 /* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
 export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });
+export const runtimeEditPreflight = (owner, edit) => runtimeSessionAction({ action: 'edit-preflight', owner, edit });
+export const runtimeEditResend = (owner, edit) => runtimeSessionAction({ action: 'edit-resend', owner, edit });
+export const runtimeEditStatus = (owner, requestId) => runtimeSessionAction({ action: 'edit-status', owner, requestId });
 // Explicit content opt-in; preview/confirmation data is never persisted here.
 export const previewSessionRevert = ({ evidenceIds, mode = 'confirmed_limited', conversationId, owner, evidenceRevision, includeDiff = false }) =>
   sendJSON('/api/session-revert/preview', { body: { evidenceIds, mode, includeDiff,

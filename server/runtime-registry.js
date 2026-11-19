@@ -227,7 +227,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
           changed(live);
         });
       }
-      else { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); if (!live.everReady) live.sessionId = null; }
+      else { live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); live.editTurn = false; live.editing = null; if (!live.everReady) live.sessionId = null; }
       if (['error', 'exited'].includes(event.state)) {
         live.error = 'runtime_unavailable'; live.attention = true;
         if (runActive) recordOutcome(live, 'interrupted', 'runtime_unavailable');
@@ -235,6 +235,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     if (event.type === 'agent_start') {
       live.agentActive = true; live.runObserved = true;
+      live.editTurn = false;
       live.outcome = null; live.outcomeClaimed = false;
       /* 自动重试/续跑会产生新的 agent_start，但不经过新的 prompt command；
        * 上一轮的失败错误必须在这里清掉，否则重试成功后详情仍显示上次失败。 */
@@ -250,6 +251,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (event.type === 'agent_settled') {
       const runEnded = live.runObserved || live.agentActive || live.pendingTurns.size > 0
         || Boolean(event.generationResult) || event.aborted === true;
+      live.editTurn = false;
       live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear(); if (live.activity !== 'stopping') live.activity = 'idle';
       /* 有终态时由 recordOutcome 决定是否点亮 attention；重复 settled 和
        * 已读掉的终态不能把通用 attention 点重新点亮。没有任何终态证据时，
@@ -374,7 +376,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       /* P4-E：每轮运行至多一条后台终态；revision 单调递增，作为前端去重/排序的
        * 证据序号。runObserved 标记本轮确实观察到 agent_start 或提交成功。 */
       outcome: null, outcomeRevision: 0, outcomeClaimed: false, runObserved: false,
-      lastAssistantStop: null, abortRequested: false };
+      lastAssistantStop: null, abortRequested: false,
+      /* 历史消息编辑事务：`editing` 是当前 requestId（事务期间阻止普通 prompt），
+       * `editTurn` 从 prompt 被接受保留到 agent_start/settled，堵住
+       * 「response 已到、agent_start 还没到」那段窗口。 */
+      editing: null, editTurn: false };
     if (!leases.has(key)) leases.set(key, new Set());
     leases.get(key).add(live); lives.set(record.conversationId, live);
     live.adapterReady = Promise.resolve().then(async () => {
@@ -477,6 +483,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       live.abortRequested = false;
       changed(live); return result;
     }
+    if (TURNS.has(cmd.type) && (live.editing || live.editTurn)) throw fail('edit_in_progress');
     if (TURNS.has(cmd.type) && live.activity === 'stopping') throw fail('stop_in_progress');
     if (cmd.type === 'prompt' && (live.agentActive || live.pendingTurns.size)) throw fail('runtime_busy');
     if (TURNS.has(cmd.type)) {
@@ -523,6 +530,81 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       historyRequired: live.historyRequired || (live.events.length > 0 && cursor < live.events[0].frame.eventSequence - 1),
       events: live.events.filter(e => e.frame.eventSequence > cursor).map(e => e.frame),
       approvals: [...live.approvals.values()], item: summary(live.record) };
+  }
+  /* ---------- 历史用户消息编辑 ----------
+   *
+   * 事务本体在 adapter 自己的 `messageEdit` 服务里（同一个 Pi、同一个 session）。
+   * registry 只负责三件事：owner 逐字段核验、workspace 校验、以及一把按 live
+   * 实例的锁 —— 事务期间普通 prompt / steer / follow_up 一律 `edit_in_progress`。
+   *
+   * `editTurn` 在**发 prompt 之前**置位，由 agent_start / agent_settled /
+   * bridge 非 ready 清除。不能等 response 回来再置位：极快的失败 run 可能在
+   * 异步回调之前就 settled，迟到的置位会留下永久的忙锁。
+   */
+  function editIo(live, expected, requestId) {
+    return {
+      scope: 'runtime',
+      sessionId: live.sessionId,
+      conversationId: live.record.conversationId,
+      commandName: () => live.adapter?.messageEditCommand?.() || null,
+      request: cmd => live.adapter.messageEditRequest(cmd),
+      validate: () => {
+        const current = resolve(expected);
+        if (current !== live || live.lifecycle !== 'ready' || live.sessionId !== expected.sessionId) throw fail('stale_runtime');
+      },
+      busyReason: () => {
+        if (live.editTurn && live.editing !== requestId) return 'edit_in_progress';
+        if (live.editing && live.editing !== requestId) return 'edit_in_progress';
+        if (live.activity !== 'idle' || live.agentActive || live.pendingTurns.size || live.approvals.size
+          || live.adapter?.getState?.().stop?.pending) return 'runtime_busy';
+        return null;
+      },
+    };
+  }
+
+  async function editPreflight(expected, input) {
+    let live = resolve(expected);
+    await validateWorkspace(live.record.workspace);
+    live = resolve(expected);
+    if (live.lifecycle !== 'ready') throw fail('runtime_not_ready');
+    if (!live.sessionId) throw fail('stale_runtime');
+    if (typeof live.adapter?.messageEdit?.preflight !== 'function') throw fail('edit_unavailable');
+    return live.adapter.messageEdit.preflight(editIo(live, expected, null), input);
+  }
+
+  async function editResend(expected, input) {
+    let live = resolve(expected);
+    await validateWorkspace(live.record.workspace);
+    live = resolve(expected);
+    if (live.lifecycle !== 'ready') throw fail('runtime_not_ready');
+    if (!live.sessionId) throw fail('stale_runtime');
+    if (live.editing) throw fail('edit_in_progress');
+    if (live.editTurn || live.activity !== 'idle' || live.agentActive || live.pendingTurns.size || live.approvals.size
+      || live.adapter?.getState?.().stop?.pending) throw fail('runtime_busy');
+    if (typeof live.adapter?.messageEdit?.resend !== 'function') throw fail('edit_unavailable');
+    const requestId = typeof input?.requestId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(input.requestId)
+      ? input.requestId : randomUUID();
+    live.editing = requestId;
+    live.editTurn = true;
+    let accepted = false;
+    try {
+      const result = await live.adapter.messageEdit.resend(editIo(live, expected, requestId), { ...input, requestId });
+      accepted = result?.ok === true;
+      return result;
+    } finally {
+      if (!accepted && belongs(live)) live.editTurn = false;
+      if (live.editing === requestId) live.editing = null;
+    }
+  }
+  async function editStatus(expected, requestId) {
+    let live = resolve(expected);
+    await validateWorkspace(live.record.workspace);
+    live = resolve(expected);
+    if (live.lifecycle !== 'ready') throw fail('runtime_not_ready');
+    if (!live.sessionId) throw fail('stale_runtime');
+    if (typeof requestId !== 'string') throw fail('invalid_request');
+    if (typeof live.adapter?.messageEdit?.status !== 'function') throw fail('edit_unavailable');
+    return live.adapter.messageEdit.status(requestId);
   }
   function focus(expected) { return serialize(async () => { const live = resolve(expected), previous = focused;
     const prior = previous && previous !== live.record.conversationId ? lives.get(previous) : null;
@@ -601,12 +683,13 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     });
   }
   return { start, openProjectSession, resume, close, restart, command, read, focus, blur, events, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
+    editPreflight, editResend, editStatus,
     providerSyncTargets,
     ownsNativeSession: id => Boolean(id) && [...lives.values()].some(l => l.sessionId === id || l.record.sessionId === id),
     contextRevision: () => contextRevision,
     inUse: root => leases.has(rootKey(root)), liveCount: () => lives.size, runningCount: () => [...lives.values()].filter(l => l.activity !== 'idle').length,
-    busy: () => [...lives.values()].some(l => l.activity !== 'idle' || l.lifecycle !== 'ready'),
-    updateBusy: () => [...lives.values()].some(l => l.approvals.size || l.adapter?.updateBusy?.()),
+    busy: () => [...lives.values()].some(l => l.activity !== 'idle' || l.lifecycle !== 'ready' || l.editing || l.editTurn),
+    updateBusy: () => [...lives.values()].some(l => l.approvals.size || l.editing || l.editTurn || l.adapter?.updateBusy?.()),
     async closeAll() { const results = await Promise.allSettled([...lives.values()].map(retire)); if (results.some(r => r.status === 'rejected')) throw fail('cleanup_pending'); },
     getAdapter: expected => resolve(expected).adapter, getOwner: id => lives.has(id) ? owner(lives.get(id)) : null,
     /* P32.4：只给**后端**用的历史定位 —— **不进 snapshot**，也不出现在任何 SSE 帧里。

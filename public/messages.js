@@ -39,6 +39,10 @@ import { renderPlan } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
+import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance } from './ui/message-edit.js';
+import { confirmModal } from './ui/modal.js';
+import { toast } from './ui/toast.js';
+import { messageEditPreflight, messageEditResend, messageEditStatus } from './api.js';
 import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
 import {
   saveSessionBookmark,
@@ -49,6 +53,12 @@ import {
 
 /* 消息序号由历史重建和实时追加共用，clearThread 开启新序列。 */
 let userSeq = 0;
+/* Pi active path 里的用户消息序号（从 0 开始），与只用于 DOM 锚点的 userSeq
+ * 分开：编辑事务要的是稳定的历史序号，不是页面上的第几个节点。 */
+let userIndexSeq = 0;
+/* 一次编辑在提交时捕获的旧尾部节点。只删除这些引用，绝不按“目标之后的
+ * 全部节点”删除 —— 新 run 的 assistant/工具节点可能在 HTTP 应答前就挂上来。 */
+let pendingEdit = null;
 let assistantSeq = 0;
 let outcomeSeq = 0;
 let toolGroupCallId = null;
@@ -165,10 +175,13 @@ export function syncWelcome() {
 export function clearThread() {
   resetThroughput();
   ++threadGeneration;
+  try { closeMessageEditor({ restore: false }); } catch { /* editor may already be detached */ }
   if (streamScrollRaf !== null) cancelAnimationFrame(streamScrollRaf);
   streamScrollRaf = null;
   threadSessionId = null;
   userSeq = 0;
+  userIndexSeq = 0;
+  pendingEdit = null;
   assistantSeq = 0;
   outcomeSeq = 0;
   toolGroupCallId = null;
@@ -257,6 +270,11 @@ export function beginTurn() {
     toolIds: new Set(),
     toolSeqs: new Map(),
     lastAssistant: null,
+    /* 本轮由哪条用户消息触发：重新生成要回到这条消息重跑，而不是 steer
+     * 中途追加的那条。agent_start 早于用户的 message_start，所以这里留空，
+     * 由本轮第一条用户消息（或编辑事务的目标）填上。 */
+    userIndex: null,
+    lastAssistantNode: null,
     finalized: false,
   };
 }
@@ -311,8 +329,10 @@ function finalizeTurn() {
     startedAt: turn.startedAt,
     endedAt: Date.now(),
   });
-  if (!outcome) return;
   const t = ensureThread();
+  /* 轮次结束后才挂“重新生成”：运行中的回复不应允许把当前 turn 替换掉。 */
+  attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
+  if (!outcome) { scrollBottom(); return; }
   const outcomeNode = renderTurnOutcome(outcome);
   if (outcomeNode) outcomeNode.dataset.anchorId = 'outcome-' + (++outcomeSeq);
   t.appendChild(outcomeNode);
@@ -386,6 +406,7 @@ export function setStreaming(on) {
 
 export function onSettled() {
   interruptActive();
+  clearPendingClassicEdit();
   finalizeTurn();
   requestSessionStats();
   sendCommand({ type: 'get_state' });
@@ -394,6 +415,7 @@ export function onSettled() {
 }
 
 export function interruptActive() {
+  clearPendingClassicEdit();
   setStreaming(false);
   clearRetryNotice();
   /* 本次 run 已收尾：未消费的新任务边界到此失效，不能留给下一轮 steer。 */
@@ -574,7 +596,223 @@ export function textOf(msg) {
 /* resultText 搬去了 tool-model.js —— 它是「工具返回值长什么样」的协议知识，
  * 时间线（实时 + 历史）和消息渲染都要用，放在数据模型那一层更合适。 */
 
-function renderUser(msg) {
+function imagesOf(msg) {
+  return Array.isArray(msg?.content)
+    ? msg.content.filter(part => part?.type === 'image' && part.data).map(part => ({ type: 'image', data: part.data, mimeType: part.mimeType }))
+    : [];
+}
+
+function userMessageWithText(text, images) {
+  return { role: 'user', content: [{ type: 'text', text }, ...images] };
+}
+
+function updateClassicUserArticle(article, text, images, userIndex) {
+  if (!article?.isConnected) return;
+  const msg = userMessageWithText(text, images);
+  const body = article.querySelector('.msg-body');
+  if (body) body.replaceWith(userBody(msg));
+  const actions = messageActions(text, { onEdit: () => openClassicEditor(article, msg, userIndex) });
+  const oldActions = article.querySelector('.message-actions');
+  if (oldActions) oldActions.replaceWith(actions);
+  else article.appendChild(actions);
+  article.dataset.userIndex = String(userIndex);
+}
+
+function trimClassicTail(pending) {
+  if (!pending) return;
+  for (const node of pending.oldTail) {
+    if (node?.isConnected) node.remove();
+  }
+  if (S.current && pending.oldTail.has(S.current.wrap)) {
+    S.current = null;
+    S.blocks.clear();
+  }
+  if (S.working && pending.oldTail.has(S.working)) hideWorking();
+  if (S.tlGroup && pending.oldTail.has(S.tlGroup)) {
+    S.tlGroup = null;
+    toolGroupCallId = null;
+  }
+}
+
+function applyClassicEditResult(result, pending) {
+  if (!pending) return;
+  pending.accepted = true;
+  noteTurnUserIndex(pending.userIndex);
+  /* 重新生成不改变目标用户消息的正文；正文与附件由紧随其后的
+   * `message_start user` 事件校正，不能拿空 images 重画而丢掉附件。 */
+  if (pending.kind === 'regenerate') {
+    trimClassicTail(pending);
+    return;
+  }
+  const text = typeof result?.text === 'string' && result.text ? result.text : pending.text;
+  updateClassicUserArticle(pending.article, text, pending.images, pending.userIndex);
+  trimClassicTail(pending);
+}
+
+/* agent_start 先于用户的 message_start 到达，所以“本轮是哪条用户消息”要等
+ * 真正的用户消息出现（正常发送或编辑事务的回声）才确定；steer 不覆盖它。 */
+function noteTurnUserIndex(userIndex) {
+  if (liveTurn && !liveTurn.finalized && !Number.isInteger(liveTurn.userIndex) && Number.isInteger(userIndex)) {
+    liveTurn.userIndex = userIndex;
+  }
+}
+
+function applyClassicEditEvent(msg) {
+  const pending = pendingEdit;
+  if (!pending) return false;
+  noteTurnUserIndex(pending.userIndex);
+  /* 同一个用户消息可能先由 HTTP 结果处理、再由 SSE 的 message_start 补一次。
+   * 第二次只允许校正正文，绝不能再追加一条用户消息。 */
+  if (pending.eventApplied) return true;
+  const text = textOf(msg) || pending.text;
+  const images = imagesOf(msg);
+  pending.text = text;
+  pending.images = images.length ? images : pending.images;
+  updateClassicUserArticle(pending.article, text, pending.images, pending.userIndex);
+  trimClassicTail(pending);
+  pending.eventApplied = true;
+  return true;
+}
+
+function clearPendingClassicEdit() {
+  pendingEdit = null;
+}
+
+/* 给一轮里最后一条可见的助手消息挂“重新生成”。按钮属于既有 message-actions
+ * 体系（与复制/编辑同尺寸、同 hover/focus 规则），不新建按钮样式。 */
+function attachClassicRegenerate(article, userIndex) {
+  if (!article || !Number.isInteger(userIndex)) return null;
+  if (article.querySelector('.message-regenerate')) return null;
+  const text = article.querySelector('.msg-body')?.textContent || '';
+  const bar = messageActions(text, {
+    onRegenerate: event => regenerateClassicTurn(event?.currentTarget, userIndex),
+  });
+  article.append(bar);
+  return bar;
+}
+
+async function regenerateClassicTurn(button, userIndex) {
+  if (!Number.isInteger(userIndex) || button?.disabled) return;
+  if (messageEditorBusy()) {
+    toast('请先完成当前的编辑操作。', 'error');
+    return;
+  }
+  /* 重新生成会替换这条用户消息之后的对话；已经打开的就地编辑器必须先收起，
+   * 否则它会停留在一条即将被替换的旧路径上。 */
+  closeMessageEditor({ restore: true, focus: false });
+  const article = S.thread?.querySelector(`article.msg.user[data-user-index="${userIndex}"]`);
+  if (!article?.isConnected) {
+    toast(messageEditErrorText('unknown_user_message'), 'error');
+    return;
+  }
+  if (button) button.disabled = true;
+  try {
+    const pre = await messageEditPreflight({ userIndex, kind: 'regenerate' });
+    if (!pre?.ok) { toast(messageEditErrorText(pre?.code), 'error'); return; }
+    if (pre.canEdit !== true) { toast(messageEditErrorText(pre.reason || 'edit_unavailable'), 'error'); return; }
+    if (pre.hasToolsAfter === true) {
+      const confirmed = await confirmModal({
+        title: '重新生成',
+        message: '重新发送会替换后续对话，之前已经执行的文件修改和命令操作不会自动撤销。',
+        okText: '重新生成',
+        cancelText: '取消',
+      });
+      if (confirmed !== true) return;
+    }
+    const children = S.thread ? [...S.thread.children] : [];
+    const at = children.indexOf(article);
+    const pending = {
+      article,
+      userIndex: Number.isInteger(pre.userIndex) ? pre.userIndex : userIndex,
+      images: [],
+      text: pre.text,
+      kind: 'regenerate',
+      oldTail: new Set(at >= 0 ? children.slice(at + 1) : []),
+      eventApplied: false,
+      accepted: false,
+    };
+    pendingEdit = pending;
+    const requestId = messageEditRequestId();
+    let result;
+    try {
+      result = await messageEditResend({
+        userIndex: pending.userIndex,
+        kind: 'regenerate',
+        text: pre.text,
+        expectedEntryId: pre.entryId,
+        expectedLeafId: pre.leafId,
+        requestId,
+      });
+    } catch {
+      result = { ok: false, code: 'network', network: true };
+    }
+    if (!result?.ok && (result?.network === true || result?.code === 'network')) {
+      const resolved = await resolveEditAcceptance(id => messageEditStatus(id), requestId);
+      result = resolved || { ok: false, code: 'acceptance_unknown' };
+    }
+    if (!result?.ok) {
+      if (!pending.eventApplied && pendingEdit === pending) pendingEdit = null;
+      toast(messageEditErrorText(result?.code), 'error');
+      return;
+    }
+    applyClassicEditResult(result, pending);
+  } catch {
+    toast(messageEditErrorText('network'), 'error');
+  } finally {
+    if (button?.isConnected) button.disabled = false;
+  }
+}
+
+function openClassicEditor(article, msg, userIndex) {
+  if (!article?.isConnected || !Number.isInteger(userIndex)) return null;
+  const body = article.querySelector('.msg-body');
+  const actions = article.querySelector('.message-actions');
+  const text = textOf(msg);
+  const images = imagesOf(msg);
+  return openMessageEditor({
+    text,
+    userIndex,
+    hasImages: images.length > 0,
+    kind: 'edit',
+    mount: article,
+    originals: [body, actions].filter(Boolean),
+    returnFocus: actions?.querySelector('.message-edit'),
+    preflight: ({ userIndex: index, kind }) => messageEditPreflight({ userIndex: index, kind }),
+    resend: async payload => {
+      const children = S.thread ? [...S.thread.children] : [];
+      const at = children.indexOf(article);
+      const pending = {
+        article,
+        userIndex: Number.isInteger(payload.userIndex) ? payload.userIndex : userIndex,
+        images,
+        text: payload.text,
+        kind: 'edit',
+        oldTail: new Set(at >= 0 ? children.slice(at + 1) : []),
+        eventApplied: false,
+        accepted: false,
+      };
+      pendingEdit = pending;
+      let result;
+      try { result = await messageEditResend(payload); }
+      catch { result = { ok: false, code: 'network', network: true }; }
+      /* 传输失败不等于事务失败：后端可能已经接受 prompt。按 requestId 读
+       * 权威状态，避免把“已接受”误报成失败、再让用户重试造成双发。 */
+      if (!result?.ok && (result?.network === true || result?.code === 'network')) {
+        const resolved = await resolveEditAcceptance(id => messageEditStatus(id), payload.requestId);
+        result = resolved || { ok: false, code: 'acceptance_unknown' };
+      }
+      if (!result?.ok) {
+        if (!pending.eventApplied && pendingEdit === pending) pendingEdit = null;
+        return result;
+      }
+      applyClassicEditResult(result, pending);
+      return result;
+    },
+    readStatus: requestId => messageEditStatus(requestId),
+  });
+}
+
+function renderUser(msg, { userIndex = null } = {}) {
   finishClassicHistoryBeforeLive();
   const t = ensureThread();
   /* 用户消息是工具分组的硬边界：上一条 assistant 那批工具已经彻底结束了。
@@ -584,15 +822,22 @@ function renderUser(msg) {
   /* 新回合：上一张计划卡留在时间线里，但下一批 gui_plan 更新要开新卡。 */
   resetPlanLiveForUserTurn();
 
+  const index = Number.isInteger(userIndex) ? userIndex : userIndexSeq;
+  userIndexSeq = Math.max(userIndexSeq, index + 1);
+  noteTurnUserIndex(index);
+
   const wrap = document.createElement('article');
   wrap.className = 'msg user';
   wrap.dataset.anchorId = 'user-' + (++userSeq);
+  wrap.dataset.userIndex = String(index);
 
   const role = document.createElement('div');
   role.className = 'msg-role';
   role.textContent = '你';
 
-  wrap.append(role, userBody(msg), messageActions(textOf(msg)));
+  wrap.append(role, userBody(msg), messageActions(textOf(msg), {
+    onEdit: () => openClassicEditor(wrap, msg, index),
+  }));
   t.appendChild(wrap);
   /* 立刻注册导航点（§11）：不等 assistant 回复完 —— 用户刚发完就该能
    * 在左边看到自己这一条的位置。 */
@@ -628,7 +873,15 @@ function createAssistant() {
 export function onMessageStart(evt) {
   finishClassicHistoryBeforeLive();
   const msg = evt.message || {};
-  if (msg.role === 'user') return renderUser(msg);
+  if (msg.role === 'user') {
+    /* 编辑事务已经捕获了目标消息和旧尾部：Pi 把修改后的用户消息当成一条
+     * 新的 message_start 发回来，这里只就地更新目标，绝不再 append 一条。 */
+    if (pendingEdit) {
+      applyClassicEditEvent(msg);
+      return;
+    }
+    return renderUser(msg);
+  }
   if (msg.role !== 'assistant') return;
 
   /* 新的 assistant 消息开始 = 上一批工具调用已经跑完了（实测的事件顺序是
@@ -765,6 +1018,9 @@ export function onMessageEnd(evt) {
       else {
         const meta = renderMessageMeta(msg);
         if (meta) S.current.wrap.appendChild(meta);
+        /* 一轮里最后一条**有正文**的助手消息承载“重新生成”；后续只有工具
+         * 调用的空消息被收掉时，仍指回这条。 */
+        if (liveTurn && !liveTurn.finalized) liveTurn.lastAssistantNode = S.current.wrap;
       }
     }
   }
@@ -1118,6 +1374,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
   /* 每个用户回合最多一张计划卡，内容取该回合最后一次有效更新。 */
   const planTurns = collectPlanTurns(items);
   let planTurn = 0;
+  let historyUserIndex = 0;
 
   /* 历史轮次终态：只在 assistant / 工具证据存在时画；工具 isError 只计数，
    * 不把整轮判失败。时长来自消息/工具的真实时间戳，缺失就省略。 */
@@ -1126,12 +1383,14 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     if (!historyTurn || !Number.isFinite(ts)) return;
     if (historyTurn.endedAt === null || ts > historyTurn.endedAt) historyTurn.endedAt = ts;
   };
-  const startHistoryTurn = (msg) => {
+  const startHistoryTurn = (msg, userIndex = null) => {
     historyTurn = {
       startedAt: Number.isFinite(msg?.timestamp) ? msg.timestamp : null,
       endedAt: null,
       tools: [],
       lastAssistant: null,
+      userIndex: Number.isInteger(userIndex) ? userIndex : null,
+      lastAssistantNode: null,
       hasEvidence: false,
     };
   };
@@ -1139,6 +1398,9 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     if (!historyTurn) return;
     const turn = historyTurn;
     historyTurn = null;
+    /* 重新生成入口按轮挂在该轮最后一条可见助手消息上；历史重建也要有，
+     * 否则刷新/重开之后功能就消失了。 */
+    attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
     if (!turn.hasEvidence) return;
     const outcome = deriveTurnOutcome({
       tools: turn.tools,
@@ -1170,14 +1432,19 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     if (item.kind === 'user') {
       flushHistoryTurn();
       planTurn += 1;
+      const index = historyUserIndex++;
+      userIndexSeq = Math.max(userIndexSeq, index + 1);
       const wrap = document.createElement('article');
       wrap.className = 'msg user';
       wrap.dataset.anchorId = 'user-' + (++userSeq);
+      wrap.dataset.userIndex = String(index);
       wrap.innerHTML = '<div class="msg-role">你</div>';
       wrap.appendChild(userBody(item.message));
-      wrap.appendChild(messageActions(textOf(item.message)));
+      wrap.appendChild(messageActions(textOf(item.message), {
+        onEdit: () => openClassicEditor(wrap, item.message, index),
+      }));
       frag.appendChild(wrap);
-      startHistoryTurn(item.message);
+      startHistoryTurn(item.message, index);
       return;
     }
 
@@ -1203,7 +1470,10 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       /* 重建历史时同样不留空白「Pi」：只有工具调用的那轮没有正文可渲染，
        * 整条跳过。那次工具调用不会因此消失 —— 紧跟其后的 tools 计划项会画它。 */
       if (!rebuildAssistant(body, msg)) return;
-      if (historyTurn) historyTurn.hasEvidence = true;
+      if (historyTurn) {
+        historyTurn.hasEvidence = true;
+        historyTurn.lastAssistantNode = wrap;
+      }
       wrap.appendChild(body);
       const meta = renderMessageMeta(msg);
       if (meta) wrap.appendChild(meta);

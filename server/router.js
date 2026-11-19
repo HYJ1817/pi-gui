@@ -121,6 +121,7 @@ export function createRouter({
   processes = null,
   worktrees = null,
   runtimeSessions = null,
+  messageEdit = null,
   reviewComments = null,
   collabDocuments = null,
   candidateRuns = null,
@@ -203,6 +204,11 @@ export function createRouter({
       return environment.handle(req, res, url);
     }
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
+    /* 历史消息编辑必须绑定当前 Classic owner；路由自身逐字段核对 owner，
+     * 所以放在应用级接口之后、legacy owner 通用检查之前，GET status 也能用。 */
+    if (url.pathname === '/api/message-edit' || url.pathname.startsWith('/api/message-edit/')) {
+      return messageEdit ? messageEdit.handle(req, res, url) : json(res, 503, { ok: false, code: 'edit_unavailable' });
+    }
     if (url.pathname === '/api/review-comments') return reviewComments ? reviewComments.handle(req, res, url) : json(res,503,{ok:false,code:'comment_storage_unavailable'});
     if (url.pathname === '/api/collab-documents') return collabDocuments ? collabDocuments.handle(req,res,url) : json(res,503,{ok:false,code:'collab_storage_unavailable'});
     if (url.pathname === '/api/candidate-runs') return candidateRuns ? candidateRuns.handle(req,res,url) : json(res,503,{ok:false,code:'candidate_unavailable'});

@@ -4,7 +4,12 @@ const CODES = new Set(['stale_runtime', 'stale_workspace', 'unknown_workspace', 
   'runtime_limit', 'conversation_limit', 'unknown_conversation', 'invalid_request', 'invalid_command', 'invalid_cursor', 'runtime_not_ready',
   'runtime_start_failed', 'registry_unavailable', 'metadata_write_failed', 'cleanup_pending', 'pi_entry_unproven', 'session_unavailable',
   'stop_in_progress', 'runtime_busy', 'stale_approval', 'maintenance', 'auth_syncing', 'process_limit', 'process_control_disabled', 'cancelled',
-  'stale_generation', 'stale_process', 'invalid_permission', 'invalid_args', 'unknown_project', 'session_in_use', 'tool_guard_unavailable']);
+  'stale_generation', 'stale_process', 'invalid_permission', 'invalid_args', 'unknown_project', 'session_in_use', 'tool_guard_unavailable',
+  'edit_unavailable', 'edit_in_progress', 'stale_history', 'unknown_user_message', 'history_unparsable', 'navigate_unavailable',
+  'navigate_failed', 'navigate_unverified', 'restore_unconfirmed', 'restore_unavailable', 'command_text_conflict',
+  'attachments_unsupported', 'empty_message', 'message_too_large', 'prompt_rejected', 'prompt_handled', 'pi_request_failed',
+  'pi_timeout', 'stale_session', 'session_streaming', 'session_compacting', 'session_queued', 'model_unavailable',
+  'invalid_user_index', 'unavailable']);
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
 const fail = () => { throw Object.assign(Error('invalid_request'), { code: 'invalid_request' }); };
 export function createRuntimeRoutes({ registry, validateWorkspace = async () => {}, readHistory = null, openSession = null, beforeAction = () => {} } = {}) {
@@ -29,7 +34,7 @@ export function createRuntimeRoutes({ registry, validateWorkspace = async () => 
       }
       if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'invalid_request' });
       const body = JSON.parse((await readRawBody(req, 96 * 1024 * 1024)).toString('utf8'));
-      if (!closed(body, ['action', 'owner', 'args', 'conversationId', 'allowThird', 'command', 'cursor'])) fail();
+      if (!closed(body, ['action', 'owner', 'args', 'conversationId', 'allowThird', 'command', 'cursor', 'edit', 'requestId'])) fail();
       beforeAction(body);
       let result;
       switch (body.action) {
@@ -42,6 +47,9 @@ export function createRuntimeRoutes({ registry, validateWorkspace = async () => 
         case 'restart': result = await registry.restart(body.owner); break;
         case 'command': result = await registry.command(body.owner, body.command); break;
         case 'read': result = { ok: true, data: await registry.read(body.owner, body.command) }; break;
+        case 'edit-preflight': result = await registry.editPreflight(body.owner, body.edit); break;
+        case 'edit-resend': result = await registry.editResend(body.owner, body.edit); break;
+        case 'edit-status': result = await registry.editStatus(body.owner, body.requestId); break;
         case 'events': result = registry.events(body.owner, body.cursor ?? 0); break;
         case 'process': {
           const adapter = registry.getAdapter(body.owner), args = body.args;

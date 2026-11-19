@@ -71,6 +71,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       item, owner: item.owner, cursor: 0, text: '', tools: [], plan: null, planCalls: new Map(),
       draft: '', draftRevision: baseRevision, approvals: [], truncated: false,
       timeline: [], timelineSeq: 0, timelineChars: 0, timelineTruncated: false,
+      userIndexSeq: 0, pendingEdit: null,
       /* Pi 的回合边界：`agent_settled` 在整个 session 级 run 结束时发出（自动
        * 重试、压缩、steering/follow-up 都在它之前跑完）。下一次 `agent_start`
        * 若发生在 settled 之后，才是真正的新用户任务；运行中追加消息不会发
@@ -350,6 +351,74 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     r.plan = null; r.planCalls.clear(); r.planBlock = null;
   }
 
+  /* ---------- 历史消息编辑：只替换目标 block 和它之后的旧 block ----------
+   *
+   * 提交前由调用方 beginUserEdit 捕获旧 block 引用。之后无论 HTTP 结果先到
+   * 还是 message_start 先到，都只删除这些引用 —— 新 run 已经追加的 assistant/
+   * 工具 block 不在集合里，不会被误删。 */
+  function resetEditedTail(r, oldBlocks) {
+    const oldToolIds = new Set();
+    for (const block of oldBlocks) {
+      if (block.kind === 'tools') for (const tool of block.tools || []) oldToolIds.add(String(tool.id));
+    }
+    if (oldToolIds.size) r.tools = r.tools.filter(tool => !oldToolIds.has(String(tool.id)));
+    const assistantBlocks = r.assistant
+      ? [r.assistant.text, r.assistant.thinking, r.assistant.tools,
+        ...(r.assistant.texts || []), ...(r.assistant.thinkings || []), ...(r.assistant.toolGroups || [])].filter(Boolean)
+      : [];
+    if (!r.assistant || assistantBlocks.every(block => oldBlocks.has(block))) resetAssistant(r);
+    else if (r.assistant.tail && oldBlocks.has(r.assistant.tail)) r.assistant.tail = null;
+    if (r.planBlock && oldBlocks.has(r.planBlock)) { r.planBlock = null; r.plan = null; }
+    if (r.thinkingBlock && oldBlocks.has(r.thinkingBlock)) r.thinkingBlock = null;
+    for (const [callId, call] of [...r.planCalls]) {
+      if (call.block && oldBlocks.has(call.block)) r.planCalls.delete(callId);
+    }
+    r.settled = false;
+  }
+
+  function applyUserEditInternal(r, pending, text, entryId) {
+    if (!pending?.target || !r.timeline.includes(pending.target)) return false;
+    const bounded = boundText(String(text ?? ''), MAX_USER_TEXT);
+    if (!bounded.text) return false;
+    pending.target.text = bounded.text;
+    pending.target.truncated = pending.target.truncated || bounded.truncated;
+    if (typeof entryId === 'string' && entryId) pending.target.messageId = entryId;
+    for (const block of pending.oldBlocks) {
+      const index = r.timeline.indexOf(block);
+      if (index >= 0) r.timeline.splice(index, 1);
+    }
+    resetEditedTail(r, pending.oldBlocks);
+    r.userIndexSeq = Math.max(r.userIndexSeq, pending.userIndex + 1);
+    r.text = bounded.text;
+    recomputeTimelineChars(r);
+    pending.applied = true;
+    return true;
+  }
+
+  function beginUserEdit(id, expectedOwner, userIndex) {
+    const r = records.get(id);
+    if (!r || !same(r.owner, expectedOwner) || !Number.isInteger(userIndex)) return null;
+    const target = r.timeline.find(block => block.kind === 'user' && block.userIndex === userIndex);
+    if (!target) return null;
+    const index = r.timeline.indexOf(target);
+    const pending = { userIndex, target, oldBlocks: new Set(r.timeline.slice(index + 1)), applied: false, eventApplied: false };
+    r.pendingEdit = pending;
+    return pending;
+  }
+
+  function applyUserEdit(id, expectedOwner, pending, { text, entryId } = {}) {
+    const r = records.get(id);
+    if (!r || !same(r.owner, expectedOwner) || r.pendingEdit !== pending) return false;
+    return applyUserEditInternal(r, pending, text, entryId);
+  }
+
+  function cancelUserEdit(id, expectedOwner, pending) {
+    const r = records.get(id);
+    if (!r || !same(r.owner, expectedOwner) || r.pendingEdit !== pending) return false;
+    r.pendingEdit = null;
+    return true;
+  }
+
   function seed(snapshot) {
     if (!snapshot || snapshot.ok === false || typeof snapshot.backendInstance !== 'string' || !Array.isArray(snapshot.items)) return false;
     const sequence = snapshot._runtimeReadSequence;
@@ -469,10 +538,18 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       /* 运行中的 steer / follow-up 也走 message_start user，但不会发新的
        * agent_start（已核对 pi 1.5 的 runAgentLoop / runLoop），因此这里
        * 只记录用户输入，**不**切换计划。计划切换只发生在 agent_start 的真实
-       * 任务边界（见上）。 */
-      resetAssistant(r);
+       * 任务边界（见上）。
+       *
+       * 编辑事务在飞时，这条 message_start 是修改后消息的回声：就地更新目标
+       * block，绝不 append 第二条用户消息。 */
       const bounded = boundText(contentText(e.message.content), MAX_USER_TEXT);
-      if (bounded.text) appendBlock(r, { kind: 'user', text: bounded.text, truncated: bounded.truncated });
+      if (r.pendingEdit && bounded.text) {
+        applyUserEditInternal(r, r.pendingEdit, bounded.text, null);
+        r.pendingEdit.eventApplied = true;
+      } else if (bounded.text) {
+        resetAssistant(r);
+        appendBlock(r, { kind: 'user', text: bounded.text, truncated: bounded.truncated, userIndex: r.userIndexSeq++ });
+      }
     }
     if (e.type === 'message_update') {
       const update = e.assistantMessageEvent;
@@ -545,7 +622,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       r.approvals = [];
       stopRunningTools(r);
       if (r.assistant?.thinking?.state === 'streaming') r.assistant.thinking.state = 'interrupted';
-      if (e.type === 'agent_settled') r.settled = true;
+      if (e.type === 'agent_settled') { r.settled = true; r.pendingEdit = null; }
     }
     const bounded = bound(r.text); if (bounded !== r.text) { r.text = bounded; r.truncated = true; }
     return { ok: true };
@@ -628,6 +705,13 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     }
     r.timeline = bounded.map((block, index) => ({ ...block, id: 'h' + (index + 1) }));
     r.timelineSeq = bounded.length;
+    r.userIndexSeq = r.timeline.reduce((max, block) => block.kind === 'user'
+      ? Math.max(max, Number.isInteger(block.userIndex) ? block.userIndex + 1 : max)
+      : max, 0);
+    /* 旧响应可能没有 userIndex：按出现顺序兜底，保证后续实时用户消息接在
+     * 历史序号之后，而不是从 0 重来。 */
+    r.userIndexSeq = Math.max(r.userIndexSeq, r.timeline.filter(block => block.kind === 'user').length);
+    r.pendingEdit = null;
     recomputeTimelineChars(r);
     r.timelineTruncated = truncated === true;
     r.assistant = null;
@@ -695,8 +779,10 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       if (success && same(r.owner, owner)) r.approvals = r.approvals.filter(a => a !== approval);
       else delete approval.submitting;
     },
-    history(id, messages, expectedOwner, expectedCursor, execution = null) {
-      const r = records.get(id);
+    beginUserEdit,
+    applyUserEdit,
+    cancelUserEdit,
+    history(id, messages, expectedOwner, expectedCursor, execution = null) {      const r = records.get(id);
       if (!r || !same(r.owner, expectedOwner) || r.cursor !== expectedCursor) return false;
       const list = Array.isArray(messages) ? messages : [];
       const text = list.filter(m => ['user', 'assistant'].includes(m.role)).map(m => typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content : []).filter(c => c.type === 'text').map(c => c.text || '').join('')).join('\n\n');
