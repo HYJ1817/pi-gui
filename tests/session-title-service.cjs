@@ -11,6 +11,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { Readable } = require('node:stream');
 
 let pass = 0;
 let fail = 0;
@@ -59,6 +60,13 @@ async function waitFor(fn, ms = 3000) {
           role: e.role,
           content: typeof e.content === 'string' ? [{ type: 'text', text: e.content }] : e.content,
           ...(e.provider ? { provider: e.provider, model: e.model } : {}),
+          /* 真实 assistant 消息带终态。默认成功；测试显式传
+           * stopReason: 'aborted' / 'error' / 'toolUse' / 'length'，
+           * 或传 undefined（JSON 序列化时被省略）模拟旧格式。 */
+          ...(e.role === 'assistant'
+            ? { stopReason: Object.prototype.hasOwnProperty.call(e, 'stopReason') ? e.stopReason : 'stop' }
+            : {}),
+          ...(e.errorMessage ? { errorMessage: e.errorMessage } : {}),
         },
       });
     }
@@ -78,6 +86,7 @@ async function waitFor(fn, ms = 3000) {
     const logs = [];
     const store = createSessionTitleStore({ dataDir: path.join(dir, 'data'), now });
     let classic = null;
+    let runtimeTarget = null;
     const service = createSessionTitles({
       store,
       sdk: {
@@ -90,6 +99,11 @@ async function waitFor(fn, ms = 3000) {
       },
       readSessionText,
       resolveClassic: (id) => (classic && classic.id === id ? classic : null),
+      /* 任意会话改名的受信解析：只认当前测试项目路径，与后端
+       * sessions.resolveProjectSession 的边界一致。 */
+      resolveClassicProject: (id, project) =>
+        (classic && classic.id === id && path.resolve(project) === cwd ? classic : null),
+      resolveRuntime: (id) => (runtimeTarget && runtimeTarget.conversationId === id ? runtimeTarget : null),
       rpcRequest: async () => {
         if (stateGate) await stateGate;
         return { sessionId: classic?.id, sessionFile: classic?.file, isStreaming: false };
@@ -120,6 +134,7 @@ async function waitFor(fn, ms = 3000) {
         resolve?.();
       },
       target(t) { classic = t; },
+      runtime(t) { runtimeTarget = t; },
     };
   };
 
@@ -513,6 +528,229 @@ async function waitFor(fn, ms = 3000) {
       const results = await Promise.all(pending);
       check('6c. 三个任务最终都完成', () => results.every((r) => r.ok === true));
       svc.dispose();
+    }
+
+    /* ================= 7. 任意会话改名与修订 ================= */
+    section('7. 任意会话改名与修订');
+    {
+      const w = makeWorld();
+      const s = writeSession('rename-basic', { entries: [
+        { role: 'user', content: '用户问题' }, { role: 'assistant', content: '助手回答', provider: 'p', model: 'm' },
+      ] });
+      const stable = 'e'.repeat(16);
+      w.target({ ...s, id: stable, sessionId: s.id });
+      const renamed = await w.service.renameClassic(stable, cwd, '  手动   新标题  ', 0);
+      check('7a. 任意经典会话可直接改名，写入手动标题并发布修订', () =>
+        renamed.ok === true && renamed.revision === 1
+        && w.store.resolve({ scope: 'classic', sessionId: s.id }).title === '手动 新标题'
+        && w.events.some((e) => e.type === 'session_title' && e.source === 'manual' && e.revision === 1 && e.sessionId === s.id));
+      const stale = await w.service.renameClassic(stable, cwd, '旧修订的改名', 0);
+      check('7b. 旧修订的改名被拒，标题不变', () =>
+        stale.ok === false && stale.code === 'revision_conflict' && stale.revision === 1
+        && w.store.resolve({ scope: 'classic', sessionId: s.id }).title === '手动 新标题');
+      const wrongProject = await w.service.renameClassic(stable, path.join(root, 'other'), '越权项目', 1);
+      check('7c. 不属于受信项目列表的会话无法被改名', () =>
+        wrongProject.ok === false && wrongProject.code === 'not_found');
+      const tooLong = await w.service.renameClassic(stable, cwd, '长'.repeat(81), 1);
+      const blank = await w.service.renameClassic(stable, cwd, '   ', 1);
+      check('7d. 超长 / 空白标题被拒', () =>
+        tooLong.ok === false && tooLong.code === 'invalid_title' && blank.code === 'invalid_title');
+      w.service.dispose();
+    }
+    {
+      /* 生成任务在飞时用户手动改名：迟到结果必须丢弃，修订已经变了。 */
+      const w = makeWorld();
+      const s = writeSession('rename-race', { entries: [
+        { role: 'user', content: '用户问题' }, { role: 'assistant', content: '助手回答', provider: 'p', model: 'm' },
+      ] });
+      const stable = 'f'.repeat(16);
+      w.target({ ...s, id: stable, sessionId: s.id });
+      w.hold();
+      const triggerPromise = w.service.generateClassic(stable);
+      await waitFor(() => w.calls.length === 1);
+      await w.service.renameClassic(stable, cwd, '生成期间的手动标题', 0);
+      w.release({ ok: true, text: '迟到的 AI 标题' });
+      const result = await triggerPromise;
+      check('7e. 手动改名作废在途的 AI 生成结果', () =>
+        result.ok === false && result.code === 'stale_title'
+        && w.store.resolve({ scope: 'classic', sessionId: s.id }).title === '生成期间的手动标题');
+      w.service.dispose();
+    }
+    {
+      /* A → B（同一会话连续两次手动改名），拿最初修订的任务仍然输。 */
+      const w = makeWorld();
+      const s = writeSession('rename-aba', { entries: [
+        { role: 'user', content: '用户问题' }, { role: 'assistant', content: '助手回答', provider: 'p', model: 'm' },
+      ] });
+      const stable = '1'.repeat(16);
+      w.target({ ...s, id: stable, sessionId: s.id });
+      w.hold();
+      const pending = w.service.generateClassic(stable);
+      await waitFor(() => w.calls.length === 1);
+      await w.service.renameClassic(stable, cwd, '标题 A', 0);
+      await w.service.renameClassic(stable, cwd, '标题 B', 1);
+      w.release({ ok: true, text: '旧任务的标题' });
+      const result = await pending;
+      check('7f. A→B 连续改名后，旧修订的生成结果仍被拒', () =>
+        result.ok === false && w.store.resolve({ scope: 'classic', sessionId: s.id }).title === '标题 B');
+      w.service.dispose();
+    }
+    {
+      /* 手动生成的确认提案也不能覆盖更新后的手动标题。 */
+      const w = makeWorld();
+      const s = writeSession('proposal-stale', {
+        nativeName: '原生名',
+        entries: [{ role: 'user', content: '用户问题' }, { role: 'assistant', content: '助手回答', provider: 'p', model: 'm' }],
+      });
+      const stable = '2'.repeat(16);
+      w.target({ ...s, id: stable, sessionId: s.id });
+      /* 原生名会话在第一次解析时就建立修订锚点；客户端看到的 expectedRevision
+       * 就是列表返回的这个值，而不是硬编码 0。 */
+      const baseRevision = w.store.resolve({ scope: 'classic', sessionId: s.id, nativeName: '原生名' }).revision;
+      const generated = await w.service.generateClassic(stable);
+      check('7g. 手动标题场景返回待确认提案', () => generated.ok === true && generated.requiresConfirmation === true);
+      const renamed = await w.service.renameClassic(stable, cwd, '提案之后的新标题', baseRevision);
+      const applied = w.service.applyProposal(generated.proposal.id);
+      check('7h. 提案生成后用户又改名 → 确认动作失效', () =>
+        renamed.ok === true && applied.ok === false && applied.code === 'stale_title'
+        && w.store.resolve({ scope: 'classic', sessionId: s.id, nativeName: '原生名' }).title === '提案之后的新标题');
+      w.service.dispose();
+    }
+    {
+      const w = makeWorld();
+      const conversationId = crypto.randomUUID();
+      const s = writeSession('runtime-rename', { entries: [
+        { role: 'user', content: '并行问题' }, { role: 'assistant', content: '并行回答', provider: 'p', model: 'm' },
+      ] });
+      w.runtime({ conversationId, sessionId: s.id, sessionLocator: s.file, cwd, title: '并行会话' });
+      const renamed = await w.service.renameRuntime(conversationId, '后台运行中的新标题', 0);
+      check('7i. Runtime 会话可在不 focus / 不重启的情况下改名', () =>
+        renamed.ok === true && renamed.conversationId === conversationId
+        && w.store.resolve({ scope: 'runtime', conversationId }).title === '后台运行中的新标题');
+      const conflict = await w.service.renameRuntime(conversationId, '旧修订', 0);
+      check('7j. Runtime 改名同样受修订保护', () =>
+        conflict.ok === false && conflict.code === 'revision_conflict');
+      w.service.dispose();
+    }
+    {
+      const w = makeWorld();
+      const conversationId = crypto.randomUUID();
+      /* 还没落盘的 Runtime（无 locator）：仍可改显示标题，不触发读取。 */
+      w.runtime({ conversationId, sessionId: null, sessionLocator: null, cwd, sessionName: '' });
+      const renamed = await w.service.renameRuntime(conversationId, '未落盘会话的标题', 0);
+      check('7k. 未落盘的 Runtime 会话也能改名（仅元数据）', () =>
+        renamed.ok === true && w.store.resolve({ scope: 'runtime', conversationId }).title === '未落盘会话的标题');
+      w.service.dispose();
+    }
+    {
+      /* 大文件：头部读不到最新的 session_info，尾部能确认。 */
+      const w = makeWorld();
+      const bigId = crypto.randomUUID();
+      const file = path.join(cwd, 'sessions', 'big.jsonl');
+      let text = line({ type: 'session', version: 3, id: bigId, timestamp: new Date(clock + 1000).toISOString(), cwd });
+      text += line({ type: 'message', id: 'u1', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'user', content: [{ type: 'text', text: '大文件问题' }] } });
+      text += line({ type: 'message', id: 'a1', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: '大文件回复' }], stopReason: 'stop', provider: 'p', model: 'm' } });
+      text += line({ type: 'message', id: 'filler', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'user', content: [{ type: 'text', text: '填充'.repeat(200_000) }] } });
+      text += line({ type: 'session_info', id: 'n-late', parentId: null, timestamp: new Date(clock + 1000).toISOString(), name: '尾部最新名字' });
+      fs.writeFileSync(file, text, 'utf8');
+      const read = w.service._internals.readTarget({ file, sessionId: bigId, cwd }, null);
+      check('7l. 截断文件从尾部确认最新原生名', () =>
+        read.ok === true && read.truncated === true && read.nativeConfirmed === true
+        && read.ctx.nativeName === '尾部最新名字');
+      const noTailFile = path.join(cwd, 'sessions', 'big-noname.jsonl');
+      let noTail = line({ type: 'session', version: 3, id: crypto.randomUUID(), timestamp: new Date(clock + 1000).toISOString(), cwd });
+      noTail += line({ type: 'message', id: 'u2', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'user', content: [{ type: 'text', text: '截断文件里的问题' }] } });
+      /* 首轮正常完成：如果只看「有没有素材」，这个文件本来会触发自动标题。
+       * 让它不触发的唯一原因必须是 nativeConfirmed=false。 */
+      noTail += line({ type: 'message', id: 'a2', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: '截断文件里的回复' }], stopReason: 'stop', provider: 'p', model: 'm' } });
+      noTail += line({ type: 'message', id: 'u3', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'user', content: [{ type: 'text', text: '填充'.repeat(300_000) }] } });
+      fs.writeFileSync(noTailFile, noTail, 'utf8');
+      const noNameId = JSON.parse(noTail.split('\n')[0]).id;
+      const read2 = w.service._internals.readTarget({ file: noTailFile, sessionId: noNameId, cwd }, null);
+      check('7m. 尾部没有 session_info → nativeConfirmed=false（安全降级）', () =>
+        read2.ok === true && read2.nativeConfirmed === false);
+      /* 自动标题不能把「无法确认原生名」当成「没有原生名」。 */
+      w.target({ file: noTailFile, id: noNameId, cwd, sessionId: noNameId });
+      trigger(w, 'req-big-unconfirmed');
+      await sleep(80);
+      check('7m2. 原生名未确认的截断文件跳过自动标题（不赌「没改名」）', () =>
+        w.calls.length === 0 && !w.store.entry('classic:' + noNameId)?.auto);
+      w.service.dispose();
+    }
+    {
+      /* 512KB–4MB 的中间段：session_info 既不在服务头部 512KB，也不在文件
+       * 尾部 512KB。改名不能把「读不到」当成「原生名为空」，否则下一次
+       * 4MB 列表读取确认到旧原生名时，会把用户刚改的标题误判成过期删掉。 */
+      const w = makeWorld();
+      const midId = crypto.randomUUID();
+      const stable = 'f'.repeat(16);
+      const midFile = path.join(cwd, 'sessions', 'middle-band.jsonl');
+      let mid = line({ type: 'session', version: 3, id: midId, timestamp: new Date(clock + 1000).toISOString(), cwd });
+      mid += line({ type: 'message', id: 'm1', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'user', content: [{ type: 'text', text: 'x'.repeat(700_000) }] } });
+      mid += line({ type: 'session_info', id: 'n-mid', parentId: null, timestamp: new Date(clock + 1000).toISOString(), name: 'Pi 原生名' });
+      mid += line({ type: 'message', id: 'm2', timestamp: new Date(clock + 1000).toISOString(), message: { role: 'user', content: [{ type: 'text', text: 'y'.repeat(600_000) }] } });
+      fs.writeFileSync(midFile, mid, 'utf8');
+      w.target({ file: midFile, id: stable, sessionId: midId, cwd });
+      const midRead = w.service._internals.readTarget({ file: midFile, sessionId: midId, cwd }, null);
+      check('7q. 512KB–4MB 中间段的 session_info 不在头尾窗口内（未确认）', () =>
+        midRead.ok === true && midRead.truncated === true && midRead.nativeConfirmed === false);
+      const renamed = await w.service.renameClassic(stable, cwd, '用户手动标题', 0);
+      check('7q2. 原生名未确认的文件也能改名', () =>
+        renamed.ok === true && renamed.title === '用户手动标题' && renamed.revision === 1);
+      const listed = w.store.resolve({
+        scope: 'classic', sessionId: midId, nativeName: 'Pi 原生名', fallback: '', nativeConfirmed: true,
+      });
+      check('7q3. 后来列表确认到旧原生名，不删用户刚改的标题', () =>
+        listed.title === '用户手动标题' && listed.source === 'manual' && listed.manualOverride === true);
+      check('7q4. 确认后原生名快照被补齐（下次改名才有判据）', () => {
+        const manual = w.store.entry('classic:' + midId)?.manual;
+        return manual?.nativeNameAt === 'Pi 原生名' && manual?.nativeNameConfirmed === true;
+      });
+      const later = w.store.resolve({
+        scope: 'classic', sessionId: midId, nativeName: '后来改的原生名', fallback: '', nativeConfirmed: true,
+      });
+      check('7q5. 之后再在 Pi 改名，手动标题才失效（原生名获胜）', () =>
+        later.title === '后来改的原生名' && later.manualOverride === false
+        && !w.store.entry('classic:' + midId)?.manual);
+      w.service.dispose();
+    }
+    {
+      /* HTTP 路由边界：Renderer 只提交稳定身份，`file` / 路径字段一律不参与解析。 */
+      const w = makeWorld();
+      const s = writeSession('route', { id: '0123456789abcdef', entries: [
+        { role: 'user', content: '路由改名测试' },
+        { role: 'assistant', content: '好的。', provider: 'p', model: 'm' },
+      ] });
+      w.target({ ...s, sessionId: s.id });
+      const call = (body, method = 'POST') => new Promise((resolve, reject) => {
+        const req = Readable.from([Buffer.from(JSON.stringify(body || {}))]);
+        req.method = method;
+        let status = 0;
+        const res = {
+          writeHead(code) { status = code; },
+          end(text) {
+            try { resolve({ status, payload: JSON.parse(text) }); } catch (err) { reject(err); }
+          },
+        };
+        w.service.handle(req, res, new URL('http://x/api/session-titles/rename')).catch(reject);
+      });
+      const routed = await call({
+        scope: 'classic', id: s.id, project: cwd, title: '  路由   改名  ',
+        expectedRevision: 0, file: path.join(root, 'evil.jsonl'), path: '../evil.jsonl',
+      });
+      check('7n. POST /api/session-titles/rename 走稳定身份，忽略 Renderer 路径字段', () =>
+        routed.status === 200 && routed.payload.ok === true && routed.payload.title === '路由 改名'
+        && routed.payload.source === 'manual' && routed.payload.revision === 1
+        && !('file' in routed.payload) && !('path' in routed.payload) || JSON.stringify(routed));
+      const method = await call({}, 'GET');
+      check('7o. 改名路由只接受 POST', () => method.status === 405 && method.payload.ok === false);
+      const conflict = await call({
+        scope: 'classic', id: s.id, project: cwd, title: '另一次改名', expectedRevision: 0,
+      });
+      check('7p. 路由把修订冲突原样带回（含权威标题与修订）', () =>
+        conflict.payload.ok === false && conflict.payload.code === 'revision_conflict'
+        && conflict.payload.title === '路由 改名' && conflict.payload.revision === 1);
+      w.service.dispose();
     }
 
     console.log(`\n${pass} passed, ${fail} failed`);

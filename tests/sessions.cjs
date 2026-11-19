@@ -113,6 +113,38 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
     check('2e. 没有消息时给中性标题，不报错', () => (s && s.messageCount === 0 && /还没有消息/.test(s.title)) || JSON.stringify(s));
   }
   {
+    /* 大文件：头部只读前 4MB，最后一次 `session_info` 在尾部。
+     * 不能把「头里没读到」当成「用户没改过名」—— 那会让手动标题被旧标题盖掉。 */
+    const ts = '2026-09-25T09:30:00.000Z';
+    const f = mkSession(dirA, { id: 'sid-big', cwd: PROJ_A, ts, messages: 1, firstUser: '首条用户消息' });
+    fs.appendFileSync(f, JSON.stringify({
+      type: 'message', id: 'pad', timestamp: ts,
+      message: { role: 'user', content: [{ type: 'text', text: 'x'.repeat(4.2 * 1024 * 1024) }] },
+    }) + '\n' + JSON.stringify({ type: 'session_info', id: 'si-tail', timestamp: ts, name: '尾部最新名字' }) + '\n');
+    const s = I.summarize(f);
+    check('2e1. 超过 4MB 时从尾部确认最新原生名（不把截断当没改名）', () =>
+      (s && s.title === '尾部最新名字' && s.truncated === true) || JSON.stringify(s));
+  }
+  {
+    /* 尾部确认不到 session_info 时，必须把 nativeConfirmed=false 交给标题裁决，
+     * 而不是当作「没有任何原生名」。 */
+    const ts = '2026-09-25T09:31:00.000Z';
+    const f = mkSession(dirA, { id: 'sid-big-2', cwd: PROJ_A, ts, messages: 1, firstUser: '首条用户消息' });
+    fs.appendFileSync(f, JSON.stringify({
+      type: 'message', id: 'pad', timestamp: ts,
+      message: { role: 'user', content: [{ type: 'text', text: 'y'.repeat(4.2 * 1024 * 1024) }] },
+    }) + '\n');
+    let seen = null;
+    const probe = createSessions({
+      runtime: { getCurrentCwd: () => null },
+      env: { HOME: TMP, PI_CODING_AGENT_DIR: path.join(TMP, 'agent') },
+      titles: { resolve: (args) => { seen = args; return { title: args.fallback, source: 'fallback', revision: 0 }; } },
+    })._internals;
+    probe.summarize(f);
+    check('2e2. 尾部没有 session_info → nativeConfirmed=false（交给裁决，不猜）', () =>
+      (seen && seen.nativeConfirmed === false && seen.nativeName === '') || JSON.stringify(seen));
+  }
+  {
     // 顶层的 role/content 形状也要认（pi 换格式时不至于静默失效）
     const dir = path.join(ROOT, I.dirNameFor(PROJ_A));
     fs.mkdirSync(dir, { recursive: true });

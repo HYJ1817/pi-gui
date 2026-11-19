@@ -691,6 +691,13 @@ let harnessSessionName = 'pi-GUI';
  * 只存在内存里，不读写任何文件。 */
 let harnessAutoTitle = true;
 let harnessTitleSettingsFail = false;
+/* 视觉取证里手动改名的内存结果：按原生 sessionId / conversationId 记录，
+ * 列表和 Runtime 摘要都读它，这样 reload 后仍能看到改名后的标题。
+ * 只存在内存里，不读写任何文件。 */
+const harnessTitleOverrides = new Map();
+let harnessTitleRevision = 5;
+const harnessSessionIdFor = (id) => (id === 'bbbbbbbbbbbbbbbb' ? 'sid-b'
+  : id === 'dddddddddddddddd' ? 'sid-d' : 'sid-cur');
 /* 仅视觉取证：给 Runtime 并行会话行一份离线记录，验证新增的标题入口
  * 与共用行/菜单排版。默认关闭，不影响其它既有截图。 */
 let harnessRuntimeTitleRow = false;
@@ -1505,12 +1512,30 @@ const server = http.createServer(async (req, res) => {
   }
   /* 仅供视觉取证：推一条自动标题事件，走真实 SSE → 就地更新链路。
    * 用来在窄窗看英文/长标题在侧栏与顶部标题里的换行，不改会话夹具。 */
+  /* 手动改名：视觉取证走真实的「接口 → 修订 → 就地更新」链路。
+   * 只回内存结果，不写盘、不激活会话。 */
+  if (p === '/api/session-titles/rename' && req.method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    const title = typeof body.title === 'string' ? body.title.replace(/\s+/g, ' ').trim() : '';
+    if (!title) return json(res, 200, { ok: false, code: 'invalid_title', error: '标题不能为空' });
+    const runtime = body.scope === 'runtime';
+    const sessionId = runtime ? null : harnessSessionIdFor(body.id);
+    const key = runtime ? 'runtime:' + String(body.conversationId || '') : sessionId;
+    const previousRevision = harnessTitleOverrides.get(key)?.revision || 0;
+    const revision = Math.max(previousRevision + 1, (Number.isSafeInteger(body.expectedRevision) ? body.expectedRevision : 0) + 1);
+    harnessTitleOverrides.set(key, { title, revision });
+    return json(res, 200, {
+      ok: true, applied: true, title, source: 'manual', revision,
+      sessionId, ...(runtime ? { conversationId: body.conversationId } : {}),
+    });
+  }
   if (p === '/api/__title' && req.method === 'POST') {
     const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     const title = typeof body.title === 'string' ? body.title : '';
     if (!title) return json(res, 400, { ok: false });
-    push({ type: 'session_title', scope: 'classic', sessionId: String(body.sessionId || ''), title, source: 'auto', at: new Date().toISOString() });
-    return json(res, 200, { ok: true, title });
+    const revision = harnessTitleRevision++;
+    push({ type: 'session_title', scope: 'classic', sessionId: String(body.sessionId || ''), title, source: 'auto', revision, at: new Date().toISOString() });
+    return json(res, 200, { ok: true, title, revision });
   }
   /* 仅供 P2 取证：把 Pi 的实时 sessionName 置空，验证自动标题来自会话列表。 */
   if (p === '/api/__session-name' && req.method === 'POST') {
@@ -1527,6 +1552,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, projectId: 'project-title-row', contextGeneration: 1, items: [] });
   }
   if (harnessRuntimeTitleRow && p === '/api/runtime-sessions' && req.method === 'GET') {
+    const override = harnessTitleOverrides.get('runtime:' + HARNESS_RUNTIME_TITLE_ID);
     return json(res, 200, {
       ok: true,
       backendInstance: 'backend',
@@ -1540,6 +1566,7 @@ const server = http.createServer(async (req, res) => {
         title: '修复登录接口超时',
         titleSource: 'auto',
         revision: 1,
+        ...(override ? { title: override.title, titleSource: 'manual', titleRevision: override.revision } : {}),
         owner: null,
         lifecycle: 'dormant',
         activity: 'idle',
@@ -1558,6 +1585,10 @@ const server = http.createServer(async (req, res) => {
         { id: '9999999999999999', title: '你好', current: false, archived: false, messageCount: 2, updatedAt: Date.now() },
       ],
     });
+    const titled = (s) => {
+      const value = harnessTitleOverrides.get(s.sessionId);
+      return value ? { ...s, title: value.title, titleSource: 'manual', titleRevision: value.revision } : s;
+    };
     return json(res, 200, {
       ok: true,
       hasProject: true,
@@ -1568,7 +1599,7 @@ const server = http.createServer(async (req, res) => {
         { id: 'bbbbbbbbbbbbbbbb', title: '帮我把 README 的测试那节补全', sessionId: 'sid-b', createdAt: '2026-09-25T08:00:00.000Z', lastMessageAt: '2026-09-25T09:00:00.000Z', updatedAt: Date.now() - 5400000, messageCount: 8, current: harnessSessionId === 'bbbbbbbbbbbbbbbb', pending: false, archived: false, truncated: false },
         { id: 'dddddddddddddddd', title: '检查 server.js 的路由顺序', sessionId: 'sid-d', createdAt: '2026-09-25T07:00:00.000Z', lastMessageAt: '2026-09-25T07:30:00.000Z', updatedAt: Date.now() - 9000000, messageCount: 21, current: false, pending: false, archived: false, truncated: false },
         { id: 'cccccccccccccccc', title: '上周的排查记录', sessionId: 'sid-c', createdAt: '2026-09-20T07:00:00.000Z', lastMessageAt: '2026-09-20T08:00:00.000Z', updatedAt: Date.now() - 400000000, messageCount: 5, current: false, pending: false, archived: true, truncated: false },
-      ],
+      ].map(titled),
     });
   }
 

@@ -31,6 +31,9 @@ const { JSDOM } = require('jsdom');
     if (String(url).startsWith('/api/worktrees')) return { ok: true, projectId: 'project', contextGeneration: 1, items: [] };
     if (!opts.body) return { ok: true, backendInstance: 'backend', items };
     const body = JSON.parse(opts.body); requests.push(body);
+    if (String(url).includes('/api/session-titles/rename')) {
+      return { ok: true, applied: true, title: body.title, source: 'manual', revision: 2, conversationId: body.conversationId };
+    }
     if (body.action === 'focus') { items = items.map(i => ({ ...i, focused: i.conversationId === body.owner.conversationId })); return { ok: true }; }
     return { ok: true };
   } });
@@ -56,12 +59,49 @@ const { JSDOM } = require('jsdom');
   ok('Runtime 行提供三点操作入口', Boolean(titleTrigger) && Boolean(titleTrigger.querySelector('svg')));
   titleTrigger.click();
   const titleMenu = document.querySelector('#actionMenu');
-  ok('Runtime 行菜单复用「AI 生成标题」', Boolean(titleMenu)
+  ok('Runtime 行菜单复用「AI 生成标题」与「重命名」', Boolean(titleMenu)
     && titleMenu.textContent.includes('AI 生成标题')
-    && titleMenu.querySelectorAll('[role="menuitem"]').length === 1
-    && !titleMenu.querySelector('[role="menuitem"]').disabled);
+    && titleMenu.textContent.includes('重命名')
+    && titleMenu.querySelectorAll('[role="menuitem"]').length === 2
+    && [...titleMenu.querySelectorAll('[role="menuitem"]')].every((n) => !n.disabled));
   document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   ok('Escape 关闭 Runtime 标题菜单', !document.querySelector('#actionMenu'));
+
+  /* Runtime 行直接改名：只写 pi-GUI 元数据，不 focus、不 spawn、不打断。 */
+  requests.length = 0;
+  const runtimeRow = rows().find(r => r.dataset.conversationId === 'A');
+  runtimeRow.querySelector('.pj-sess-menu-trigger').click();
+  const renameMenu = document.querySelector('#actionMenu');
+  [...renameMenu.querySelectorAll('[role="menuitem"]')]
+    .find(b => b.querySelector('.action-menu-label').textContent === '重命名').click();
+  const renameInput = runtimeRow.querySelector('.pj-sess-input');
+  ok('Runtime 行重命名进入行内编辑（当前标题、选中全部）', Boolean(renameInput)
+    && document.activeElement === renameInput
+    && renameInput.selectionStart === 0 && renameInput.selectionEnd === renameInput.value.length);
+  renameInput.value = '并行会话新标题';
+  renameInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  for (let n = 0; n < 20 && !requests.length; n++) await new Promise(r => setImmediate(r));
+  const renameReq = requests.find(r => r.scope === 'runtime');
+  ok('Runtime 改名只发统一服务请求（带 conversationId / 修订，不带路径）', Boolean(renameReq
+    && renameReq.conversationId === 'A' && renameReq.title === '并行会话新标题'
+    && renameReq.expectedRevision === 0 && !('file' in renameReq) && !('path' in renameReq)));
+  ok('Runtime 改名不 focus / start / prompt，也不改排序', !requests.some(r => r.action === 'focus' || r.action === 'start' || r.command)
+    && order() === 'A,B');
+  ok('Runtime 改名就地更新该行标题', runtimeRow.querySelector('.pj-sess-title')?.textContent === '并行会话新标题');
+
+  /* 行元素手里的 item 是渲染时快照；连续第二次改名必须用 store 里的新修订，
+   * 否则会一直拿旧 expectedRevision 撞 conflict。 */
+  requests.length = 0;
+  runtimeRow.querySelector('.pj-sess-menu-trigger').click();
+  [...document.querySelector('#actionMenu').querySelectorAll('[role="menuitem"]')]
+    .find(b => b.querySelector('.action-menu-label').textContent === '重命名').click();
+  const renameInput2 = runtimeRow.querySelector('.pj-sess-input');
+  renameInput2.value = '并行会话再改一次';
+  renameInput2.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  for (let n = 0; n < 20 && !requests.length; n++) await new Promise(r => setImmediate(r));
+  const renameReq2 = requests.find(r => r.scope === 'runtime');
+  ok('Runtime 连续第二次改名使用新修订（不被旧 item 卡住）', Boolean(renameReq2
+    && renameReq2.expectedRevision === 2 && renameReq2.title === '并行会话再改一次'));
 
   /* dormant 行点了**不能**发 focus（没有 live owner 可校验），更不能 spawn。 */
   requests.length = 0;

@@ -137,7 +137,14 @@ if (!process.versions.electron) {
     async function leaveSettings() {
       if (!(await read(`!!document.querySelector('.appearance-title-card')`))) return;
       await key('Escape', 'Escape', 27);
-      await waitFor(`!document.querySelector('.appearance-title-card')`, 'settings detail closed');
+      try {
+        await waitFor(`!document.querySelector('.appearance-title-card')`, 'settings detail closed');
+      } catch {
+        /* reload 后第一次 Escape 偶尔落在焦点切换的间隙里；补按一次，
+         * 不改产品行为，只避免测试把偶发当回归。 */
+        await key('Escape', 'Escape', 27);
+        await waitFor(`!document.querySelector('.appearance-title-card')`, 'settings detail closed');
+      }
       await read(`document.querySelector('#navHome').click()`);
       await waitFor(`document.querySelector('.stage')?.dataset.workspaceView!=='settings' && !!document.querySelector('#projects .pj-sess')`, 'back to app');
       await sleep(220);
@@ -312,11 +319,11 @@ if (!process.versions.electron) {
       await openHistoryMenu();
       const menuDark = await menuState();
       check(JSON.stringify(menuDark?.labels) === JSON.stringify(['AI 生成标题', '重命名', '归档', '删除会话']), 'session menu puts AI 生成标题 first', menuDark?.labels);
-      check(JSON.stringify(menuDark?.disabled) === JSON.stringify([false, true, false, false]), 'history row keeps the same disabled matrix, AI item stays available', menuDark?.disabled);
+      check(JSON.stringify(menuDark?.disabled) === JSON.stringify([false, false, false, false]), 'history row exposes rename without activating the session', menuDark?.disabled);
       check(menuDark?.firstIcon && menuDark?.separators === 2, 'AI item carries the spark icon and its own separator', menuDark);
       check(menuDark?.focused && menuDark?.firstBg !== 'rgba(0, 0, 0, 0)', 'keyboard focus lands on the AI item with the shared hover surface', menuDark);
       check(menuDark?.inside && menuDark?.overflow, 'menu stays inside the 1320 viewport without page overflow', menuDark);
-      check(/请先打开/.test(menuDark?.note || ''), 'disabled rename still explains itself', menuDark?.note);
+      check(menuDark?.note === '', 'no disabled note when every action is available', menuDark?.note);
       await shot('1320-dark-session-menu');
       await hoverFirstMenuItem();
       await shot('1320-dark-session-menu-hover');
@@ -324,15 +331,44 @@ if (!process.versions.electron) {
       const afterEscape = await read(`(()=>({tag:document.activeElement?.tagName,cls:document.activeElement?.className,aria:document.activeElement?.getAttribute?.('aria-label'),connected:document.activeElement?.isConnected}))()`);
       check(afterEscape?.cls?.includes?.('pj-sess-menu-trigger'), 'Escape closes the menu and returns focus to the row trigger', afterEscape);
 
+      /* ---------- 1320 dark：历史会话行内改名（不激活会话） ---------- */
+      const topBeforeClassicRename = await read(`document.querySelector('#title')?.textContent`);
+      await openHistoryMenu();
+      const clickedClassicRename = await read(`(()=>{const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')].find(n=>n.textContent.trim()==='重命名');if(!b)return false;b.click();return true})()`);
+      check(clickedClassicRename, 'history row menu exposes the rename action');
+      await waitFor(`!!document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input')`, 'classic rename input');
+      const classicRenameInput = await read(`(()=>{const i=document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input');return {value:i.value,focused:document.activeElement===i,all:i.selectionStart===0&&i.selectionEnd===i.value.length,inside:i.getBoundingClientRect().right<=innerWidth+0.5};})()`);
+      check(classicRenameInput.value === englishTitle && classicRenameInput.focused && classicRenameInput.all && classicRenameInput.inside,
+        'rename opens an in-row editor with the current title selected', classicRenameInput);
+      await shot('1320-dark-session-rename-input');
+      const classicRenamed = '重命名后的 README 测试章节';
+      await win.webContents.insertText(classicRenamed);
+      await key('Enter', 'Enter', 13);
+      await waitFor(`document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-title')?.textContent===${JSON.stringify(classicRenamed)}`, 'classic rename applied');
+      check((await read(`document.querySelector('#title')?.textContent`)) === topBeforeClassicRename,
+        'renaming a history row does not touch the top title of the current session');
+      await shot('1320-dark-session-renamed');
+
       /* Runtime 行：同一套行尾入口与生成服务，目标不必是当前会话。 */
       await openRuntimeMenu();
       const runtimeMenu = await menuState();
-      check(JSON.stringify(runtimeMenu?.labels) === JSON.stringify(['AI 生成标题']) && runtimeMenu?.separators === 0,
-        'Runtime row exposes the same AI title action', runtimeMenu);
-      check(runtimeMenu?.disabled[0] === false && runtimeMenu?.inside && runtimeMenu?.firstIcon,
-        'Runtime title action is enabled, iconised and inside the viewport', runtimeMenu);
+      check(JSON.stringify(runtimeMenu?.labels) === JSON.stringify(['AI 生成标题', '重命名']) && runtimeMenu?.separators === 0,
+        'Runtime row exposes the same AI title and rename actions', runtimeMenu);
+      check(runtimeMenu?.disabled.every((value) => value === false) && runtimeMenu?.inside && runtimeMenu?.firstIcon,
+        'Runtime title actions are enabled, iconised and inside the viewport', runtimeMenu);
       await shot('1320-dark-runtime-title-menu');
-      await closeMenu();
+      const clickedRuntimeRename = await read(`(()=>{const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')].find(n=>n.textContent.trim()==='重命名');if(!b)return false;b.click();return true})()`);
+      check(clickedRuntimeRename, 'Runtime row menu exposes the rename action');
+      await waitFor(`!!document.querySelector('.pj-runtime[data-conversation-id="${runtimeId}"] .pj-sess-input')`, 'runtime rename input');
+      const runtimeRenameInput = await read(`(()=>{const i=document.querySelector('.pj-runtime[data-conversation-id="${runtimeId}"] .pj-sess-input');return {value:i.value,focused:document.activeElement===i,all:i.selectionStart===0&&i.selectionEnd===i.value.length};})()`);
+      check(runtimeRenameInput.value === '修复登录接口超时' && runtimeRenameInput.focused && runtimeRenameInput.all,
+        'Runtime rename opens the same in-row editor', runtimeRenameInput);
+      await shot('1320-dark-runtime-rename-input');
+      const runtimeRenamed = '并行会话改名示例';
+      await win.webContents.insertText(runtimeRenamed);
+      await key('Enter', 'Enter', 13);
+      await waitFor(`document.querySelector('.pj-runtime[data-conversation-id="${runtimeId}"] .pj-sess-title')?.textContent===${JSON.stringify(runtimeRenamed)}`, 'runtime rename applied');
+      await shot('1320-dark-runtime-renamed');
 
       /* ---------- 1320 light ---------- */
       await openSettings();
@@ -346,11 +382,25 @@ if (!process.versions.electron) {
       const menuLight = await menuState();
       check(menuLight?.inside && menuLight?.overflow, 'light menu stays inside the 1320 viewport', menuLight);
       await shot('1320-light-session-menu');
+      const lightRenameClicked = await read(`(()=>{const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')].find(n=>n.textContent.trim()==='重命名');if(!b)return false;b.click();return true})()`);
+      check(lightRenameClicked, 'light theme exposes the history rename action');
+      await waitFor(`!!document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input')`, 'light classic rename input');
+      const lightRename = await read(`(()=>{const i=document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input');const b=i.getBoundingClientRect();return {value:i.value,focused:document.activeElement===i,inside:b.right<=innerWidth+0.5&&b.left>=0};})()`);
+      check(lightRename.value === classicRenamed && lightRename.focused && lightRename.inside,
+        'light theme rename editor keeps the current title and stays inside the viewport', lightRename);
+      await shot('1320-light-session-rename-input');
+      await key('Escape', 'Escape', 27);
+      await waitFor(`!document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input')`, 'light rename cancelled');
       await closeMenu();
       await openRuntimeMenu();
       const runtimeLight = await menuState();
       check(runtimeLight?.inside && runtimeLight?.overflow, 'light Runtime title menu stays inside the 1320 viewport', runtimeLight);
       await shot('1320-light-runtime-title-menu');
+      await read(`(()=>{const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')].find(n=>n.textContent.trim()==='重命名');b?.click();return true})()`);
+      await waitFor(`!!document.querySelector('.pj-runtime[data-conversation-id="${runtimeId}"] .pj-sess-input')`, 'light runtime rename input');
+      await shot('1320-light-runtime-rename-input');
+      await key('Escape', 'Escape', 27);
+      await waitFor(`!document.querySelector('.pj-runtime[data-conversation-id="${runtimeId}"] .pj-sess-input')`, 'light runtime rename cancelled');
       await closeMenu();
 
       /* ---------- 700 light ---------- */
@@ -367,8 +417,15 @@ if (!process.versions.electron) {
       await openHistoryMenu();
       const menuNarrowLight = await menuState();
       check(menuNarrowLight?.inside && menuNarrowLight?.overflow, '700px light menu clamps inside the viewport', menuNarrowLight);
-      check((await read(`document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-title')?.textContent`)) === englishTitle, 'English AI title survives at 700px');
+      check((await read(`document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-title')?.textContent`)) === classicRenamed, 'renamed title survives at 700px');
       await shot('700-light-session-menu');
+      await read(`(()=>{const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')].find(n=>n.textContent.trim()==='重命名');b?.click();return true})()`);
+      await waitFor(`!!document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input')`, '700 light rename input');
+      const narrowRename = await read(`(()=>{const i=document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input');const b=i.getBoundingClientRect();return {value:i.value,inside:b.left>=0&&b.right<=innerWidth+0.5};})()`);
+      check(narrowRename.value === classicRenamed && narrowRename.inside, '700px light rename editor stays inside the viewport', narrowRename);
+      await shot('700-light-session-rename-input');
+      await key('Escape', 'Escape', 27);
+      await waitFor(`!document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input')`, '700 light rename cancelled');
       await closeMenu();
       await openRuntimeMenu();
       const runtimeNarrow = await menuState();
@@ -390,6 +447,14 @@ if (!process.versions.electron) {
       const menuNarrowDark = await menuState();
       check(menuNarrowDark?.inside && menuNarrowDark?.overflow, '700px dark menu clamps inside the viewport', menuNarrowDark);
       await shot('700-dark-session-menu');
+      await read(`(()=>{const b=[...document.querySelectorAll('#actionMenu [role="menuitem"]')].find(n=>n.textContent.trim()==='重命名');b?.click();return true})()`);
+      await waitFor(`!!document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input')`, '700 dark rename input');
+      const narrowDarkRename = await read(`(()=>{const i=document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input');const b=i.getBoundingClientRect();return {value:i.value,inside:b.left>=0&&b.right<=innerWidth+0.5,focused:document.activeElement===i};})()`);
+      check(narrowDarkRename.value === classicRenamed && narrowDarkRename.inside && narrowDarkRename.focused,
+        '700px dark rename editor stays inside the viewport with focus', narrowDarkRename);
+      await shot('700-dark-session-rename-input');
+      await key('Escape', 'Escape', 27);
+      await waitFor(`!document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-input')`, '700 dark rename cancelled');
       await closeMenu();
       await openRuntimeMenu();
       const runtimeNarrowDark = await menuState();
@@ -407,6 +472,12 @@ if (!process.versions.electron) {
       const restored = await titleCard();
       check(restored?.switch.checked === 'true' && restored?.model === '跟随当前会话', 'settings restore from the server after reload', restored && { switch: restored.switch, model: restored.model });
       check((await read(`document.documentElement.dataset.theme`)) === 'dark', 'theme preference restores after reload');
+      await leaveSettings();
+      await waitFor(`document.querySelector('#projects .pj-sess[data-session-id="sid-b"] .pj-sess-title')?.textContent===${JSON.stringify(classicRenamed)}`, 'renamed classic title restored');
+      check((await read(`document.querySelector('.pj-runtime[data-conversation-id="${runtimeId}"] .pj-sess-title')?.textContent`)) === runtimeRenamed,
+        'renamed Runtime title restores from the server after reload');
+      check((await read(`document.querySelector('#title')?.textContent`)) === '发酵罐空气分布器设计核算',
+        'reload keeps the current session top title, not a history rename');
 
       check(consoleErrors.length === 0, 'no renderer console errors', consoleErrors);
       console.log(`\nSession title visual: ${checks - failures.length}/${checks} checks passed; screenshots=${screenshots.length}`);

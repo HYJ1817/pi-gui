@@ -382,12 +382,13 @@ function section(title) {
     return (menu && confirm && reuse) || JSON.stringify({ menu, confirm, reuse });
   });
   check('D6. 会话菜单复用既有 startRename / doArchive / doDelete（没有第二套实现）', () => {
-    const ok = /startRename\(row, titleEl, s\)/.test(sessionsCode)
+    const ok = /startRename\(row, titleEl, s, project\)/.test(sessionsCode)
       && /doArchive\(s, false\)/.test(sessionsCode)
       && /doArchive\(s, true\)/.test(sessionsCode)
       && /doDelete\(s\)/.test(sessionsCode);
-    /* 重命名仍然只有那一个行内编辑器：没有第二个 input 工厂。 */
-    const inputs = [...sessionsCode.matchAll(/pj-sess-input/g)].length;
+    /* 重命名仍然只有那一个行内编辑器：没有第二个 input 工厂。
+     * （类名还会出现在「已有输入框就不要再开一个」的守卫里，所以数工厂调用而不是字符串。） */
+    const inputs = [...sessionsCode.matchAll(/el\('input', 'pj-sess-input'\)/g)].length;
     return (ok && inputs === 1) || `复用=${ok} inputs=${inputs}`;
   });
   check('D7. 会话菜单统一三个动作，受限动作禁用；pending 没有菜单', () => {

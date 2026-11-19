@@ -43,12 +43,12 @@ function jsonResponse(payload, status = 200) {
 function sessionFixture() {
   return [
     {
-      id: ID1, title: '旧标题', titleSource: 'auto', sessionId: S1,
+      id: ID1, title: '旧标题', titleSource: 'auto', titleRevision: 1, sessionId: S1,
       createdAt: '2030-01-01T00:00:00.000Z', lastMessageAt: '2030-01-01T00:00:00.000Z',
       updatedAt: 1, messageCount: 2, current: true, pending: false, archived: false, truncated: false,
     },
     {
-      id: ID2, title: '另一个会话', titleSource: 'auto', sessionId: S2,
+      id: ID2, title: '另一个会话', titleSource: 'auto', titleRevision: 1, sessionId: S2,
       createdAt: '2030-01-01T00:00:00.000Z', lastMessageAt: '2030-01-01T00:00:00.000Z',
       updatedAt: 1, messageCount: 2, current: false, pending: false, archived: false, truncated: false,
     },
@@ -225,7 +225,7 @@ async function makeSidebarWorld(handler = null) {
     const rowBefore = w.row(S1);
     const search = w.addSearchResult(S1);
     const topBefore = w.topTitle();
-    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S1, title: '修复登录 401', source: 'auto' });
+    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S1, title: '修复登录 401', source: 'auto', revision: 2 });
 
     check('B1. 侧栏行标题就地更新', () => w.titleText(S1) === '修复登录 401');
     check('B2. 行的无障碍名称同步更新', () =>
@@ -240,7 +240,7 @@ async function makeSidebarWorld(handler = null) {
     check('B6. 不重画列表：行元素还是同一个', () => w.row(S1) === rowBefore);
     check('B7. 其它会话不受影响', () => w.titleText(S2) === '另一个会话');
     check('B8. 重复事件是幂等的（不新增行）', () => {
-      w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S1, title: '修复登录 401', source: 'auto' });
+      w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S1, title: '修复登录 401', source: 'auto', revision: 2 });
       return w.win.document.querySelectorAll('.pj-sess').length === 2;
     });
     w.close();
@@ -248,7 +248,7 @@ async function makeSidebarWorld(handler = null) {
   {
     const w = await makeSidebarWorld();
     const topBefore = w.topTitle();
-    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S2, title: '后台会话标题', source: 'auto' });
+    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S2, title: '后台会话标题', source: 'auto', revision: 2 });
     check('B9. 后台会话的标题只更新自己的行，不动当前顶部', () =>
       w.topTitle() === topBefore && w.titleText(S2) === '后台会话标题' && w.titleText(S1) === '旧标题');
     w.close();
@@ -258,7 +258,7 @@ async function makeSidebarWorld(handler = null) {
     const events = [];
     w.win.document.addEventListener('pi-gui:runtime-title', (e) => events.push(e.detail));
     const runtimeRow = w.addRuntimeRow(C1);
-    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'runtime', sessionId: S1, conversationId: C1, title: '并行会话标题', source: 'auto' });
+    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'runtime', sessionId: S1, conversationId: C1, title: '并行会话标题', source: 'auto', revision: 2 });
 
     check('B10. Runtime 行标题就地更新', () =>
       runtimeRow.querySelector('.pj-sess-title').textContent === '并行会话标题');
@@ -288,7 +288,7 @@ async function makeSidebarWorld(handler = null) {
     const w = await makeSidebarWorld((call) => {
       if (call.url === '/api/session-titles/generate') {
         return new Promise((resolve) => { w.release = () => resolve(jsonResponse({
-          ok: true, applied: true, title: '手动生成标题', source: 'manual', sessionId: S1,
+          ok: true, applied: true, title: '手动生成标题', source: 'manual', sessionId: S1, revision: 2,
         })); });
       }
       return jsonResponse({ ok: true });
@@ -330,7 +330,7 @@ async function makeSidebarWorld(handler = null) {
         });
       }
       if (call.url === '/api/session-titles/apply') {
-        return jsonResponse({ ok: true, applied: true, title: 'AI 新标题', source: 'manual', sessionId: S1 });
+        return jsonResponse({ ok: true, applied: true, title: 'AI 新标题', source: 'manual', sessionId: S1, revision: 3 });
       }
       return jsonResponse({ ok: true });
     });
@@ -387,7 +387,7 @@ async function makeSidebarWorld(handler = null) {
     w.close();
   }
   {
-    const w = await makeSidebarWorld(() => jsonResponse({ ok: true, applied: true, title: '并行标题', source: 'manual', sessionId: S1 }));
+    const w = await makeSidebarWorld(() => jsonResponse({ ok: true, applied: true, title: '并行标题', source: 'manual', sessionId: S1, revision: 2 }));
     const runtimeRow = w.addRuntimeRow(C1);
     const result = await w.win.generateAiTitle({ scope: 'runtime', conversationId: C1 });
     const generateCall = w.calls.find((c) => c.url === '/api/session-titles/generate');
@@ -395,6 +395,231 @@ async function makeSidebarWorld(handler = null) {
       result.ok === true && JSON.stringify(generateCall.body) === JSON.stringify({ scope: 'runtime', conversationId: C1 }));
     check('C16. Runtime 手动结果同样就地更新', () =>
       runtimeRow.querySelector('.pj-sess-title').textContent === '并行标题');
+    w.close();
+  }
+
+  /* ================= E. 任意会话重命名与修订保护 ================= */
+  section('E. 任意会话重命名与修订保护');
+  {
+    /* 修订门槛：迟到的 SSE / 旧列表不能把已经采纳的新标题改回去。 */
+    const w = await makeSidebarWorld();
+    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S1, title: '新事件标题', source: 'manual', revision: 3 });
+    const top = w.topTitle();
+    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S1, title: '迟到的旧标题', source: 'auto', revision: 2 });
+    check('E1. 低修订的迟到 SSE 被丢弃（不改行、不改顶部）', () =>
+      w.titleText(S1) === '新事件标题' && w.topTitle() === top);
+    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S1, title: '同一修订的另一标题', source: 'auto', revision: 3 });
+    check('E2. 同修订不同内容的事件被丢弃（不是「同修订就幂等」）', () =>
+      w.titleText(S1) === '新事件标题');
+    w.win.handleSessionTitleEvent({ type: 'session_title', scope: 'classic', sessionId: S1, title: '新事件标题', source: 'manual', revision: 3 });
+    check('E3. 同修订同内容是幂等的', () => w.titleText(S1) === '新事件标题');
+    /* 旧列表响应（titleRevision 1）晚于事件回来：必须让位于已采纳的修订。 */
+    const projectEl = w.win.document.querySelector('.project');
+    await w.win.renderSidebarSessions(projectEl, { path: 'C:/p' });
+    check('E4. 旧列表快照不会覆盖更新的标题（含顶部）', () =>
+      w.titleText(S1) === '新事件标题' && w.topTitle() === '新事件标题');
+    w.close();
+  }
+  {
+    const w = await makeSidebarWorld((call) => {
+      if (call.url === '/api/session-titles/rename') {
+        const sessionId = call.body.id === ID2 ? S2 : S1;
+        return jsonResponse({
+          ok: true, applied: true, title: call.body.title, source: 'manual',
+          sessionId, revision: (call.body.expectedRevision || 0) + 1,
+        });
+      }
+      return jsonResponse({ ok: true });
+    });
+    const cur = w.row(S1);
+    const openRenameIn = async (world, row) => {
+      row.querySelector('.pj-sess-menu-trigger').click();
+      await tick();
+      const menu = world.win.document.getElementById('actionMenu');
+      const item = menu && [...menu.querySelectorAll('[role="menuitem"]')]
+        .find((b) => b.querySelector('.action-menu-label')?.textContent === '重命名');
+      item?.click();
+      await tick();
+      return row.querySelector('.pj-sess-input');
+    };
+    const openRename = (row) => openRenameIn(w, row);
+    const key = (input, name) => input.dispatchEvent(new input.ownerDocument.defaultView.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+
+    /* ---------- 当前会话：行内编辑的完整输入语义 ---------- */
+    let input = await openRename(cur);
+    check('E5. 三点菜单里的重命名直接进入行内编辑（当前标题、选中全部）', () =>
+      Boolean(input) && input.value === '旧标题' && w.win.document.activeElement === input
+      && input.selectionStart === 0 && input.selectionEnd === input.value.length);
+    input.value = '   ';
+    key(input, 'Enter');
+    await tick();
+    check('E6. 空白不提交：恢复原标题、不发请求', () =>
+      !cur.querySelector('.pj-sess-input') && w.calls.every((c) => c.url !== '/api/session-titles/rename'));
+
+    input = await openRename(cur);
+    input.value = '未保存的名字';
+    key(input, 'Escape');
+    await tick();
+    check('E7. Escape 取消：恢复原标题、不发请求', () =>
+      !cur.querySelector('.pj-sess-input') && w.titleText(S1) === '旧标题'
+      && w.calls.every((c) => c.url !== '/api/session-titles/rename'));
+
+    input = await openRename(cur);
+    input.value = '旧标题';
+    input.dispatchEvent(new w.win.Event('blur'));
+    await tick();
+    check('E8. 失焦但内容没变：不提交', () =>
+      !cur.querySelector('.pj-sess-input') && w.calls.every((c) => c.url !== '/api/session-titles/rename'));
+
+    input = await openRename(cur);
+    input.value = '  我的   新标题  ';
+    key(input, 'Enter');
+    await tick();
+    await tick();
+    const renameCall = w.calls.find((c) => c.url === '/api/session-titles/rename');
+    check('E9. 保存只带稳定身份 + 项目 + 修订，不带文件路径', () =>
+      JSON.stringify(renameCall?.body) === JSON.stringify({
+        scope: 'classic', id: ID1, project: 'C:/p', title: '我的 新标题', expectedRevision: 1,
+      }));
+    check('E10. 成功后原地更新行与顶部，不重画列表', () =>
+      w.row(S1) === cur && w.titleText(S1) === '我的 新标题' && w.topTitle() === '我的 新标题');
+    check('E11. 重命名不切换会话、不重启 Pi', () =>
+      !w.calls.some((c) => /\/api\/sessions\/(switch|new)/.test(c.url) || /restart/i.test(c.url)));
+
+    /* ---------- 变更保存期间再点别的行，也只作用于原目标 ---------- */
+    {
+      let release;
+      const slow = await makeSidebarWorld((call) => {
+        if (call.url === '/api/session-titles/rename') {
+          return new Promise((resolve) => {
+            release = () => resolve(jsonResponse({
+              ok: true, applied: true, title: call.body.title, source: 'manual',
+              sessionId: call.body.id === ID2 ? S2 : S1, revision: 2,
+            }));
+          });
+        }
+        return jsonResponse({ ok: true });
+      });
+      const row1 = slow.row(S1);
+      row1.querySelector('.pj-sess-menu-trigger').click();
+      await tick();
+      const slowMenu = slow.win.document.getElementById('actionMenu');
+      [...slowMenu.querySelectorAll('[role="menuitem"]')]
+        .find((b) => b.querySelector('.action-menu-label')?.textContent === '重命名')?.click();
+      await tick();
+      const input1 = row1.querySelector('.pj-sess-input');
+      input1.value = '改名中的标题';
+      key(input1, 'Enter');
+      slow.row(S2).querySelector('.pj-sess-primary').click();
+      await tick();
+      release();
+      await tick();
+      await tick();
+      check('E12. 保存期间切到别的行，结果仍落在原目标，不污染新行', () =>
+        slow.titleText(S1) === '改名中的标题' && slow.titleText(S2) === '另一个会话');
+      slow.close();
+    }
+
+    /* ---------- 修订冲突：采纳权威值，下一次重试带新修订 ---------- */
+    {
+      const conflict = await makeSidebarWorld((call) => {
+        if (call.url !== '/api/session-titles/rename') return jsonResponse({ ok: true });
+        if (call.body.expectedRevision === 1) {
+          return jsonResponse({
+            ok: false, code: 'revision_conflict', title: '别处改过的标题', revision: 5,
+            error: '标题已经被修改，请基于最新标题重试',
+          });
+        }
+        return jsonResponse({
+          ok: true, applied: true, title: call.body.title, source: 'manual', sessionId: S1, revision: 6,
+        });
+      });
+      const row = conflict.row(S1);
+      const first = await openRenameIn(conflict, row);
+      first.value = '我的标题';
+      key(first, 'Enter');
+      await tick();
+      await tick();
+      check('E13. 修订冲突时采纳后端的权威标题，并给出可重试反馈', () =>
+        conflict.titleText(S1) === '别处改过的标题' && !row.querySelector('.pj-sess-input')
+        && conflict.toastTexts().some((t) => t.includes('已经被修改')));
+      const second = await openRenameIn(conflict, row);
+      second.value = '我的标题';
+      key(second, 'Enter');
+      await tick();
+      await tick();
+      const retry = conflict.calls.filter((c) => c.url === '/api/session-titles/rename').pop();
+      check('E14. 重试使用冲突后返回的新修订，而不是旧修订', () =>
+        retry?.body.expectedRevision === 5 && conflict.titleText(S1) === '我的标题');
+      conflict.close();
+    }
+
+    /* ---------- 未打开的历史会话：直接改名，不激活 ---------- */
+    {
+      const other = w.row(S2);
+      const before = w.topTitle();
+      const histInput = await openRename(other);
+      histInput.value = '历史会话新标题';
+      key(histInput, 'Enter');
+      await tick();
+      await tick();
+      const histCall = w.calls.filter((c) => c.url === '/api/session-titles/rename').pop();
+      check('E15. 未打开的历史会话可直接改名（不 switch、不影响当前会话）', () =>
+        histCall?.body.id === ID2 && histCall?.body.project === 'C:/p'
+        && w.titleText(S2) === '历史会话新标题' && w.titleText(S1) === '我的 新标题'
+        && w.topTitle() === before
+        && !w.calls.some((c) => /\/api\/sessions\/switch/.test(c.url)));
+    }
+
+    /* ---------- 其它项目的预览行：项目身份由调用方给出 ---------- */
+    {
+      const previewSession = {
+        id: ID2, title: '预览旧标题', sessionId: S2, current: false, pending: false, archived: false,
+        messageCount: 1, updatedAt: 1,
+      };
+      const preview = w.win.createSidebarPreviewRow(previewSession, () => {}, 'C:/other');
+      w.win.document.getElementById('projects').append(preview);
+      const previewInput = await openRename(preview);
+      previewInput.value = '预览新标题';
+      key(previewInput, 'Enter');
+      await tick();
+      await tick();
+      const previewCall = w.calls.filter((c) => c.url === '/api/session-titles/rename').pop();
+      check('E16. 非当前项目的预览行可直接改名，项目身份来自可信调用参数', () =>
+        previewCall?.body.id === ID2 && previewCall?.body.project === 'C:/other'
+        && preview.querySelector('.pj-sess-title').textContent === '预览新标题');
+    }
+
+    /* ---------- 已归档会话：展开后同样可改名 ---------- */
+    {
+      w.sessions[1].archived = true;
+      w.sessions[1].title = '归档旧标题';
+      w.sessions[1].titleRevision = 1;
+      const projectEl = w.win.document.querySelector('.project');
+      await w.win.renderSidebarSessions(projectEl, { path: 'C:/p' });
+      const toggle = w.win.document.querySelector('.pj-sess-arch-toggle');
+      toggle?.click();
+      await tick();
+      const archivedRow = [...w.win.document.querySelectorAll('.pj-sessions .pj-sess[data-session-id]')]
+        .find((r) => r.dataset.sessionId === S2);
+      const archivedInput = archivedRow && await openRename(archivedRow);
+      check('E17. 已归档会话展开后有重命名入口', () => Boolean(archivedInput));
+      if (archivedInput) {
+        archivedInput.value = '归档后改名';
+        key(archivedInput, 'Enter');
+        await tick();
+        await tick();
+        const archivedCall = w.calls.filter((c) => c.url === '/api/session-titles/rename').pop();
+        const archivedTitleEl = [...w.win.document.querySelectorAll('.pj-sessions .pj-sess[data-session-id]')]
+          .find((r) => r.dataset.sessionId === S2)?.querySelector('.pj-sess-title');
+        check('E18. 已归档会话改名成功，仍不激活会话', () =>
+          archivedCall?.body.id === ID2
+          && archivedTitleEl?.textContent === '归档后改名'
+          && !w.calls.some((c) => /\/api\/sessions\/switch/.test(c.url)));
+      } else {
+        check('E18. 已归档会话改名成功，仍不激活会话', () => '上一条已失败');
+      }
+    }
     w.close();
   }
 
@@ -418,7 +643,7 @@ async function makeSidebarWorld(handler = null) {
       /void loadSessionTitleSettings\(\);/.test(appSrc)
       && /import \{ handleSessionTitleEvent, loadSessionTitleSettings \}/.test(appSrc));
     check('D3. 会话菜单复用 generateAiTitle，能力为否时整项隐藏', () =>
-      /function aiTitleMenuItems\(s\)[\s\S]{0,200}titleCapability\(\)\.supported === false\) return \[\]/.test(sessionsSrc)
+      /function aiTitleMenuItems\(s, project\)[\s\S]{0,200}titleCapability\(\)\.supported === false\) return \[\]/.test(sessionsSrc)
       && /generateAiTitle\(\{ scope: 'classic'/.test(sessionsSrc));
     check('D4. 生成中禁用入口（防重复点击）', () =>
       /isTitleGenerating\(key\)/.test(sessionsSrc)

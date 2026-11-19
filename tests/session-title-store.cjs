@@ -124,10 +124,22 @@ const section = (title) => console.log('\n--- ' + title + ' ---');
     s5.setAuto('classic:00000000-0000-4000-8000-000000000001', { title: '一' });
     s5.setAuto('classic:00000000-0000-4000-8000-000000000002', { title: '二' });
     s5.setAuto('classic:00000000-0000-4000-8000-000000000003', { title: '三' });
-    check('5a. 超出上限后保留最新的条目', () => {
+    check('5a. 有效标题（auto / manual）不因条数超限被删除', () => {
       const reloaded = make(path.join(root, 'd5'), { maxEntries: 2 });
-      return Boolean(reloaded.entry('classic:00000000-0000-4000-8000-000000000003'))
-        && !reloaded.entry('classic:00000000-0000-4000-8000-000000000001');
+      return Boolean(reloaded.entry('classic:00000000-0000-4000-8000-000000000001'))
+        && Boolean(reloaded.entry('classic:00000000-0000-4000-8000-000000000002'))
+        && Boolean(reloaded.entry('classic:00000000-0000-4000-8000-000000000003'));
+    });
+    check('5a2. 只有失败 attempt 会按上限清理', () => {
+      const d = path.join(root, 'd5b');
+      const s = make(d, { maxEntries: 2 });
+      for (const n of ['1', '2', '3']) {
+        s.recordAttempt(`classic:00000000-0000-4000-8000-00000000010${n}`, 1);
+      }
+      const reloaded = make(d, { maxEntries: 2 });
+      const attempts = ['1', '2', '3']
+        .filter((n) => reloaded.entry(`classic:00000000-0000-4000-8000-00000000010${n}`));
+      return attempts.length === 2 && !reloaded.entry('classic:00000000-0000-4000-8000-000000000101');
     });
     check('5b. 标题里的换行与控制字符被折成单行', () => {
       const k = 'classic:00000000-0000-4000-8000-00000000000f';
@@ -168,7 +180,7 @@ const section = (title) => console.log('\n--- ' + title + ' ---');
       fs.readdirSync(d6b).some((f) => f.startsWith('session-titles.json.corrupt-'))
       && s6b.resolve({ scope: 'classic', sessionId: '55555555-5555-4555-8555-555555555556' }).source === 'auto');
 
-    /* 容量上限按 updatedAt 保留新条目，不能因为旧条目在文件里靠前就丢掉新标题。 */
+    /* 旧版本数据没有 revision / nativeName：迁移时补 0，不能丢标题。 */
     const d6c = path.join(root, 'd6c');
     fs.mkdirSync(d6c, { recursive: true });
     const item = (id, at, title) => ({ key: 'classic:' + id, auto: { title, at }, updatedAt: at });
@@ -178,10 +190,11 @@ const section = (title) => console.log('\n--- ' + title + ' ---');
       item('33333333-3333-4333-8333-333333333333', '2030-03-01T00:00:00.000Z', '新标题'),
     ] }), 'utf8');
     const s6c = make(d6c, { maxEntries: 2 });
-    check('6f. 超过容量时按 updatedAt 保留较新的条目', () =>
+    check('6f. 旧数据（无 revision）迁移后保留全部有效标题，修订从 0 开始', () =>
       s6c.entry('classic:33333333-3333-4333-8333-333333333333')?.auto.title === '新标题'
       && s6c.entry('classic:22222222-2222-4222-8222-222222222222')?.auto.title === '中间标题'
-      && !s6c.entry('classic:11111111-1111-4111-8111-111111111111'));
+      && s6c.entry('classic:11111111-1111-4111-8111-111111111111')?.auto.title === '旧标题'
+      && s6c.resolve({ scope: 'classic', sessionId: '11111111-1111-4111-8111-111111111111' }).revision === 0);
 
     /* ================= 7. 跨重启持久化 ================= */
     section('7. 重启后恢复');
@@ -201,6 +214,75 @@ const section = (title) => console.log('\n--- ' + title + ' ---');
       return r.source === 'manual' && r.manualOverride === true && r.title === '手动采纳的标题';
     });
     check('7d. 关闭状态跨重启保留', () => s7b.settings().autoEnabled === false);
+
+    /* ================= 8. 修订号与并发裁决 ================= */
+    section('8. 修订号与并发裁决');
+    const d8 = path.join(root, 'd8');
+    const s8 = make(d8);
+    const k8 = 'classic:88888888-8888-4888-8888-888888888888';
+    const resolve8 = (extra = {}) => s8.resolve({ scope: 'classic', sessionId: '88888888-8888-4888-8888-888888888888', ...extra });
+    const manual8 = s8.setManual(k8, { title: '手动一', nativeNameAt: '' });
+    check('8a. setManual 递增 revision，并可从 resolve 读到', () =>
+      manual8 && manual8.revision === 1 && resolve8().revision === 1 && resolve8().title === '手动一');
+    const staleAuto = s8.setAuto(k8, { title: '迟到的自动标题', nativeName: '', expectedRevision: 0 });
+    check('8b. 旧修订的自动结果被拒，原标题不变', () =>
+      staleAuto && staleAuto.ok === false && staleAuto.code === 'revision_conflict'
+      && staleAuto.revision === 1 && resolve8().title === '手动一');
+    const manual8b = s8.setManual(k8, { title: '手动二', nativeNameAt: '', expectedRevision: 1 });
+    check('8c. 修订匹配的手动改名成功并继续递增', () =>
+      manual8b && manual8b.revision === 2 && resolve8().title === '手动二');
+    check('8d. 原生名变化使旧的 manual 覆盖失效并递增 revision', () => {
+      const r = resolve8({ nativeName: 'Pi 里改的名字' });
+      return r.title === 'Pi 里改的名字' && r.manualOverride === false && r.revision === 3
+        && !s8.entry(k8).manual;
+    });
+    const k8b = 'classic:99999999-9999-4999-8999-999999999999';
+    s8.setManual(k8b, { title: '手动覆盖', nativeNameAt: '原名字' });
+    const unresolved = s8.resolve({
+      scope: 'classic', sessionId: '99999999-9999-4999-8999-999999999999',
+      nativeName: '读取不完整时看到的旧名字', nativeConfirmed: false,
+    });
+    check('8e. 原生名未确认（截断读取）时不误删 manual 覆盖', () =>
+      unresolved.manualOverride === true && unresolved.title === '手动覆盖'
+      && s8.entry(k8b)?.manual?.title === '手动覆盖');
+    check('8f. revision 跨重启保留', () =>
+      make(d8).resolve({ scope: 'classic', sessionId: '88888888-8888-4888-8888-888888888888', nativeName: 'Pi 里改的名字' }).revision === 3);
+    const k8c = 'classic:aaaaaaaa-0000-4000-8000-000000000001';
+    s8.setManual(k8c, { title: '要被清除', nativeNameAt: '' });
+    const beforeClear = s8.resolve({ scope: 'classic', sessionId: 'aaaaaaaa-0000-4000-8000-000000000001' }).revision;
+    s8.clearManual(k8c);
+    check('8g. clearManual 也递增 revision', () =>
+      s8.resolve({ scope: 'classic', sessionId: 'aaaaaaaa-0000-4000-8000-000000000001' }).revision === beforeClear + 1);
+    const k8d = 'classic:bbbbbbbb-0000-4000-8000-000000000001';
+    s8.setManual(k8d, { title: 'A', nativeNameAt: '' });
+    s8.setManual(k8d, { title: 'B', nativeNameAt: '', expectedRevision: 1 });
+    const oldTask = s8.setAuto(k8d, { title: '旧任务结果', nativeName: '', expectedRevision: 0 });
+    check('8h. A→B→A 场景：拿旧修订的任务仍然被拒', () =>
+      oldTask && oldTask.ok === false
+      && s8.resolve({ scope: 'classic', sessionId: 'bbbbbbbb-0000-4000-8000-000000000001' }).title === 'B');
+    check('8i. 没有条目的会话 resolve 返回 revision 0（不臆造修订）', () => {
+      const r = s8.resolve({ scope: 'classic', sessionId: 'cccccccc-0000-4000-8000-000000000001', fallback: '首条消息' });
+      return r.source === 'fallback' && r.revision === 0;
+    });
+    const k8e = 'classic:dddddddd-0000-4000-8000-000000000001';
+    const nativeFirst = s8.resolve({ scope: 'classic', sessionId: 'dddddddd-0000-4000-8000-000000000001', nativeName: '原生 A' });
+    check('8j. 没有标题记录的原生名也建立修订锚点（rev 1）', () =>
+      nativeFirst.source === 'manual' && nativeFirst.title === '原生 A' && nativeFirst.revision === 1);
+    const nativeSecond = s8.resolve({ scope: 'classic', sessionId: 'dddddddd-0000-4000-8000-000000000001', nativeName: '原生 B' });
+    check('8k. 原生名再变时 revision 递增（同修订的旧响应不能顶回）', () =>
+      nativeSecond.title === '原生 B' && nativeSecond.revision === 2 && s8.entry(k8e)?.nativeName === '原生 B');
+    check('8l. 未确认的读取不会建立原生名锚点', () =>
+      s8.resolve({ scope: 'classic', sessionId: 'eeeeeeee-0000-4000-8000-000000000001', nativeName: '未确认', nativeConfirmed: false }).revision === 0);
+    const k8f = 'classic:ffffffff-0000-4000-8000-000000000001';
+    s8.setManual(k8f, { title: '截断时改的名', nativeNameAt: '', nativeName: '', nativeNameConfirmed: false });
+    const confirmedLater = s8.resolve({ scope: 'classic', sessionId: 'ffffffff-0000-4000-8000-000000000001', nativeName: '旧的原生名' });
+    check('8m. 写入时原生名未知的 manual，后续确认不误删（补快照并保留）', () =>
+      confirmedLater.title === '截断时改的名' && confirmedLater.manualOverride === true
+      && s8.entry(k8f)?.manual?.nativeNameAt === '旧的原生名'
+      && s8.entry(k8f)?.manual?.nativeNameConfirmed === true);
+    const changedLater = s8.resolve({ scope: 'classic', sessionId: 'ffffffff-0000-4000-8000-000000000001', nativeName: 'Pi 新改的名' });
+    check('8n. 快照补齐后再改名，manual 正常失效', () =>
+      changedLater.title === 'Pi 新改的名' && changedLater.manualOverride === false && !s8.entry(k8f)?.manual);
 
     console.log(`\n${pass} passed, ${fail} failed`);
     process.exitCode = fail ? 1 : 0;

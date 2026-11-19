@@ -235,6 +235,30 @@ const tick = () => new Promise((resolve) => setImmediate(resolve));
       await p2;
       sdk2.sdk.dispose();
     }
+    {
+      /* 用户登录 / 切换供应商会改写 auth.json / models.json。Worker 只在创建时
+       * 读一次，配置变了必须重建，不能一直拿着过期凭据或旧模型表。 */
+      const auth = path.join(root, 'auth-live.json');
+      const models = path.join(root, 'models-live.json');
+      fs.writeFileSync(auth, '{"token":"a"}', 'utf8');
+      fs.writeFileSync(models, '{}', 'utf8');
+      const sdk3 = makeSdk({ authPath: auth, modelsPath: models });
+      const p1 = sdk3.sdk.generate(generateArgs);
+      sdk3.workers[0].emit('message', { id: sdk3.workers[0].posted[0].id, type: 'result', ok: true, text: '标题' });
+      await p1;
+      fs.writeFileSync(auth, '{"token":"b","provider":"new"}', 'utf8');
+      const p2 = sdk3.sdk.generate(generateArgs);
+      const authRebuilt = sdk3.workers.length === 2 && sdk3.workers[0].terminated === true;
+      sdk3.workers[1].emit('message', { id: sdk3.workers[1].posted[0].id, type: 'result', ok: true, text: '标题2' });
+      await p2;
+      fs.writeFileSync(models, '{"models":[{"id":"m"}]}', 'utf8');
+      const p3 = sdk3.sdk.generate(generateArgs);
+      check('3h. auth.json / models.json 变化后重建 Worker（不持有过期配置）', () =>
+        authRebuilt && sdk3.workers.length === 3 && sdk3.workers[1].terminated === true);
+      sdk3.workers[2].emit('message', { id: sdk3.workers[2].posted[0].id, type: 'result', ok: true, text: '标题3' });
+      await p3;
+      sdk3.sdk.dispose();
+    }
 
     /* ================= 4. 环境与输入边界 ================= */
     section('4. 环境与输入边界');
