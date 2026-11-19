@@ -12,6 +12,10 @@ const TEXT = {
   untrusted:'已拒绝不可信的更新请求。', checksum:'安装包 SHA256 校验失败，请重新下载。', network:'下载失败，请检查网络后重试，或打开 Release 页面手动安装。',
   busy:'仍有任务、审批或后台操作未结束，请等待完成，或先在对应会话安全停止任务。',
   cache:'更新缓存不可用，请重新下载。', install:'无法准备安装，应用和用户数据已保留，请重试或手动安装。',
+  revoked:'更新资格已改变，未启动安装；已校验的包保留，可稍后重试。',
+  ignored:'此版本已被忽略，未开始下载。', paused:'此版本已暂停自动下载，请手动重新下载。',
+  superseded:'发现了更高版本，已停止旧版本的下载。', stale:'更新事务已变化，请重新检查。',
+  cancelled:'下载已取消，可重新下载。',
 };
 function allowedDownload(value, redirect=false) {
   try {
@@ -51,7 +55,7 @@ function detectMode({packaged,exe,readInstall:read=readInstall}) {
   return 'portable';
 }
 function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis.fetch,prepare,release=async()=>{},launch,quit}) {
-  let state={phase:'idle',mode,currentVersion:version,received:0,total:0,speed:0}, job=null,ctl=null,installing=false,asset=null;
+  let state={phase:'idle',mode,currentVersion:version,received:0,total:0,speed:0,transactionId:null}, job=null,ctl=null,installing=false,asset=null;
   const listeners=new Set();
   fs.mkdirSync(directory,{recursive:true});
   const root=fs.realpathSync(directory), identity=fs.statSync(root);
@@ -109,20 +113,48 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
     return view();
   }
   function download(request={}) {
-    if(request.confirm!==true||Object.keys(request).some(k=>k!=='confirm'))return Promise.resolve(error(fail('untrusted')));
+    if(
+      request.confirm!==true||
+      Object.keys(request).some(k=>!['confirm','transactionId','expectedVersion','approve'].includes(k))||
+      (request.transactionId!==undefined&&!Number.isSafeInteger(request.transactionId))||
+      (request.expectedVersion!==undefined&&request.expectedVersion!==null&&!VERSION.test(request.expectedVersion))||
+      (request.approve!==undefined&&typeof request.approve!=='function')
+    )return Promise.resolve(error(fail('untrusted')));
     if(mode==='development')return Promise.resolve(error(fail('unsupported')));
     if(job||installing)return Promise.resolve({ok:false,code:'busy',error:TEXT.busy});
+    const transactionId=Number.isSafeInteger(request.transactionId)?request.transactionId:null;
+    const expectedVersion=VERSION.test(request.expectedVersion)?request.expectedVersion:null;
+    const approve=typeof request.approve==='function'?request.approve:null;
     ctl=new AbortController();const signal=ctl.signal;
-    set({phase:'downloading',received:0,total:0,speed:0,error:''});
+    // Never keep the previous task's version visible in a new transaction:
+    // until the official metadata resolves, the target is explicitly unknown.
+    set({phase:'downloading',version:null,received:0,total:0,speed:0,error:'',transactionId});
     job=(async()=>{
       let part=null,timer=setTimeout(()=>ctl?.abort(),30*60*1000);
       try {
-        const info=await readUpdate();const a=selectAsset(info,mode==='portable');
+        const info=await readUpdate({force:true});
+        // 元数据读取期间可能已经被取消/替换。迟到的响应不能继续启动下载。
+        if(signal.aborted)throw fail('cancelled');
+        const a=selectAsset(info,mode==='portable');
         // Semantic comparison is owned by the existing checker; it must use this app version.
         if(info.currentVersion&&info.currentVersion!==version)throw fail('invalid_asset');
         set({version:a.version,total:a.size});
+        let approval=null;
+        if(approve){
+          let verdict;
+          try{verdict=approve({version:a.version,transactionId,expectedVersion});}
+          catch{verdict={ok:false,code:'revoked'};}
+          if(!verdict||verdict.ok!==true)throw fail(verdict?.code||'revoked');
+          approval=verdict;
+        }
+        // The official Release is the download authority. A stale expected
+        // version may only proceed when the approval is explicitly bound to
+        // the actual target (the manager converges the discovery version).
+        if(expectedVersion&&a.version!==expectedVersion&&approval?.version!==a.version)throw fail('superseded');
+        if(signal.aborted)throw fail('cancelled');
         const digest=await trustedDigest(info,a,signal);
         a.sha256=digest;
+        if(signal.aborted)throw fail('cancelled');
         part=file(a.name+'.part');fs.rmSync(part,{force:true});
         const out=fs.openSync(part,'wx');const h=createHash('sha256'),start=Date.now();let received=0;
         try {
@@ -141,32 +173,74 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
         const manifest=file('ready.json.tmp');fs.writeFileSync(manifest,JSON.stringify(a),{flag:'w'});fs.renameSync(manifest,file('ready.json'));
         asset=a;set({phase:'ready'});return {ok:true};
       } catch(e) {
-        const r=signal.aborted?{ok:false,code:'cancelled',error:'下载已取消，可重新下载。'}:error(e);
-        set({phase:r.code==='cancelled'?'cancelled':'failed',error:r.error,speed:0});return r;
-      } finally {clearTimeout(timer);if(part)try{fs.rmSync(part,{force:true});}catch{}job=null;ctl=null;}
+        const r=signal.aborted?{ok:false,code:'cancelled',error:TEXT.cancelled}:error(e);
+        const soft=['cancelled','superseded','ignored','paused','stale','revoked'].includes(r.code);
+        set({phase:soft?'cancelled':'failed',error:r.error,speed:0});
+        return r;
+      } finally {
+        clearTimeout(timer);if(part)try{fs.rmSync(part,{force:true});}catch{}
+        job=null;ctl=null;
+        if(state.transactionId===transactionId)set({transactionId:null});
+      }
     })();return job;
   }
-  async function install(request={}) {
+  async function install(request={}, options={}) {
     if(request.confirm!==true||Object.keys(request).some(k=>k!=='confirm'))return error(fail('untrusted'));
     if(mode!=='installed')return error(fail('unsupported'));
     if(installing||job||state.phase!=='ready'||!asset)return error(fail('busy'));
-    installing=true;let preparing=false;
+    const authorize=typeof options?.authorize==='function'?options.authorize:null;
+    const stillAuthorized=()=>{
+      if(!authorize)return true;
+      try{return authorize()===true;}catch{return false;}
+    };
+    if(!stillAuthorized())return error(fail('revoked'));
+    installing=true;let preparing=false,committed=false;
     set({phase:'preparing',error:''});
     try {
       const p=await verify(asset);
-      const info=await readUpdate();const fresh=selectAsset(info);
+      // 预检与下载校验之间用户可能改回手动、忽略或取消。每个异步步骤后
+      // 都重新确认资格。真正的最终检查在 quit() 写入 armed 之前同步执行。
+      if(!stillAuthorized())throw fail('revoked');
+      const info=await readUpdate({force:true});const fresh=selectAsset(info);
       if(fresh.version!==asset.version||fresh.size!==asset.size)throw fail('invalid_asset');
       if(await trustedDigest(info,fresh,AbortSignal.timeout(15000))!==asset.sha256)throw fail('checksum');
+      if(!stillAuthorized())throw fail('revoked');
       preparing=true;
       const r=await prepare();if(!r?.ok)throw Object.assign(fail(r?.code||'busy'),{publicError:r?.error||TEXT.busy});
+      if(!stillAuthorized())throw fail('revoked');
       await verify(asset);
-      await launch({...asset,path:p});await quit();set({phase:'installing'});return {ok:true};
+      // 安装助手可能已经启动并在等待 ready；这里失败会走 release() 的
+      // cancelled 标记，让尚未 armed 的助手安全退出并释放 OS 锁。
+      if(!stillAuthorized())throw fail('revoked');
+      await launch({...asset,path:p});
+      // 助手完成准备后必须再次确认；随后 quit() 在 armed 写入前同步复核。
+      if(!stillAuthorized())throw fail('revoked');
+      try {
+        await quit({authorize:stillAuthorized});
+        committed=true;
+      } catch(e) {
+        // quit() 在 armed 之后失败时，事务已经进入不可撤销阶段：
+        // 不能再写 cancelled、删除 armed 或强行终止安装。
+        if(e&&e.committed===true)committed=true;
+        throw e;
+      }
+      set({phase:'installing'});return {ok:true};
     } catch(e){
       const r=error(e,'install');if(e?.publicError)r.error=e.publicError;
+      if(committed){
+        // 已 armed：保持 installing，禁止再次下载/安装，也禁止撤销准备。
+        set({phase:'installing',error:r.error});
+        return {...r,committed:true};
+      }
       const damaged=['checksum','cache','invalid_asset','ENOENT','EACCES','EPERM'].includes(r.code);
       set({phase:damaged?'failed':'ready',error:r.error});return r;
     }
-    finally {if(state.phase!=='installing'){try{if(preparing)await release();}finally{installing=false;}}}
+    finally {
+      if(!committed){
+        try{if(preparing)await release();}finally{installing=false;}
+      }
+      // committed 事务保持 installing=true，直到应用退出。
+    }
   }
   return {state:view,download,restore,install,cancel(){ctl?.abort();return {ok:true};},onChange(cb){listeners.add(cb);return()=>listeners.delete(cb);}};
 }

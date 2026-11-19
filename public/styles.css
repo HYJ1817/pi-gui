@@ -1470,6 +1470,26 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .update-manual-downloads summary{cursor:pointer;width:fit-content;padding:4px 0}
 .update-manual-downloads summary:focus-visible{outline:2px solid var(--t1);outline-offset:2px}
 .update-fixed-actions{position:sticky;bottom:0;background:var(--ui-popover-surface);padding:12px 0 4px;margin-top:8px}
+/* 更新偏好行：复用 .ds-segmented（28px 控件体系），窄窗下换行而不横向溢出。
+ * 自动/手动是单选语义，状态由文字说明承担，不靠颜色单独传达。 */
+.update-pref-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 0;border-top:1px solid var(--line);margin-top:2px;
+}
+.update-pref-copy{flex:1 1 240px;min-width:0;display:flex;flex-direction:column;gap:3px}
+.update-pref-label{font-size:12.5px;color:var(--t1);font-weight:500}
+.update-pref-hint{font-size:11.5px;color:var(--t2);line-height:1.55}
+.update-pref-tail{flex:0 0 auto}
+.update-pref-note{font-size:11.5px;color:var(--t2);line-height:1.6;margin-top:6px}
+.update-state{font-size:11.5px;color:var(--t2);line-height:1.55;margin-top:8px}
+.update-pref-error{font-size:11.5px;color:var(--err);line-height:1.55;margin-top:6px}
+.update-action-error{font-size:11.5px;color:var(--err);line-height:1.55;margin-top:6px;flex-shrink:0}
+@media (max-width:560px){
+  .update-pref-row{align-items:flex-start;flex-direction:column}
+  .update-pref-tail{width:100%}
+  .update-pref-tail .ds-segmented{width:100%}
+  .update-pref-tail .ds-segment-item{flex:1}
+}
 .update-sec progress{display:block;width:100%;height:6px;margin:12px 0;accent-color:var(--t1)}
 .modal-card.app-updates-card{display:flex;flex-direction:column;overflow:hidden;max-width:640px;max-height:88vh}
 .app-updates-card>.update-sec{display:flex;flex-direction:column;min-height:0;overflow:hidden;margin-bottom:8px}
@@ -3913,6 +3933,12 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
  * 否则浅色主题下会在卡片中间浮出一条白带。两层背景 = 卡片色（tile 叠加在页面底色上）。 */
 .about-update-panel .update-fixed-actions {
   background: linear-gradient(var(--ds-tile), var(--ds-tile)), var(--ds-bg-primary);
+}
+/* 信息页整页滚动，说明区也已经独立限高；这里再粘一条操作栏，窄窗下会被
+ * 钉在滚动容器的下内边距之上，压住上面的版本行和更新偏好（700x600 实测
+ * 只露出标题顶部）。信息卡里让操作栏回到正常文档流，滚到卡片底部即可看到。 */
+.about-update-panel .update-fixed-actions {
+  position: static;
 }
 .about-row-actions {
   display: flex;

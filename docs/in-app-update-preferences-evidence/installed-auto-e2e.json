@@ -1,0 +1,255 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-RxpXdh",
+  "scenario": "automatic safe-quit install plus layered refusal scenarios",
+  "previousVersion": "0.34.0",
+  "targetVersion": "0.34.1",
+  "installerBytes": 150895974,
+  "installerSha256": "1c8bef38f952b0f33b4c0a12459fa5af3eb58bde0bef07b26b1cc6316b5a4389",
+  "checks": [
+    {
+      "name": "rebuilt starting Electron version is 0.34.0",
+      "pass": true
+    },
+    {
+      "name": "auto-success: real NSIS installed the fixture",
+      "pass": true
+    },
+    {
+      "name": "auto: real installed shape and version",
+      "pass": true
+    },
+    {
+      "name": "auto: offline official release discovered",
+      "pass": true
+    },
+    {
+      "name": "auto: automatic permission starts absent until the user opts in",
+      "pass": true
+    },
+    {
+      "name": "auto: automatic preference is really persisted",
+      "pass": true
+    },
+    {
+      "name": "auto: the downloaded target is the official release",
+      "pass": true
+    },
+    {
+      "name": "auto: full installer downloaded without a download click",
+      "pass": true
+    },
+    {
+      "name": "auto: ready package is eligible for installation on safe quit",
+      "pass": true
+    },
+    {
+      "name": "auto: no manual confirmation dialog was involved",
+      "pass": true
+    },
+    {
+      "name": "auto: renderer explains installation on normal safe quit",
+      "pass": true
+    },
+    {
+      "name": "auto: no helper before the real window close",
+      "pass": true
+    },
+    {
+      "name": "auto: real WM_CLOSE sent to the application window",
+      "pass": true
+    },
+    {
+      "name": "auto: normal quit entered the coordinator",
+      "pass": true
+    },
+    {
+      "name": "auto: helper prepared and the armed marker was written",
+      "pass": true
+    },
+    {
+      "name": "auto: exactly one install transaction",
+      "pass": true
+    },
+    {
+      "name": "auto: maintenance preflight started before helper preparation",
+      "pass": true
+    },
+    {
+      "name": "auto: helper readiness precedes the armed commit",
+      "pass": true
+    },
+    {
+      "name": "auto: backend shutdown began only after the armed commit",
+      "pass": true
+    },
+    {
+      "name": "auto: backend exited before the main process",
+      "pass": true
+    },
+    {
+      "name": "auto: the new version started only after the old process exited",
+      "pass": true
+    },
+    {
+      "name": "auto: helper reports the real NSIS install result",
+      "pass": true
+    },
+    {
+      "name": "auto: new version is a new process",
+      "pass": true
+    },
+    {
+      "name": "auto: normal sandbox used for the restarted application",
+      "pass": true
+    },
+    {
+      "name": "auto: restarted app reports the installed version and completion",
+      "pass": true
+    },
+    {
+      "name": "auto: automatic preference survives the upgrade",
+      "pass": true
+    },
+    {
+      "name": "auto: restarted backend independently confirms the target version",
+      "pass": true
+    },
+    {
+      "name": "auto: actual NSIS payload was replaced",
+      "pass": true
+    },
+    {
+      "name": "auto: Electron local settings survive the upgrade",
+      "pass": true
+    },
+    {
+      "name": "auto: synthetic user data is unchanged",
+      "pass": true
+    },
+    {
+      "name": "auto: persisted preference file survives the upgrade",
+      "pass": true
+    },
+    {
+      "name": "auto: no second install transaction after the upgrade",
+      "pass": true
+    },
+    {
+      "name": "auto: the old process never returns",
+      "pass": true
+    },
+    {
+      "name": "manual-ready: real NSIS installed the fixture",
+      "pass": true
+    },
+    {
+      "name": "manual: ready package is not eligible for quit installation",
+      "pass": true
+    },
+    {
+      "name": "manual: real WM_CLOSE sent",
+      "pass": true
+    },
+    {
+      "name": "manual: no helper or installation started",
+      "pass": true
+    },
+    {
+      "name": "manual: no armed marker",
+      "pass": true
+    },
+    {
+      "name": "manual: no new version started",
+      "pass": true
+    },
+    {
+      "name": "manual: installed version unchanged",
+      "pass": true
+    },
+    {
+      "name": "ignored: real NSIS installed the fixture",
+      "pass": true
+    },
+    {
+      "name": "ignored: real WM_CLOSE sent",
+      "pass": true
+    },
+    {
+      "name": "ignored: no helper or installation started",
+      "pass": true
+    },
+    {
+      "name": "ignored: no armed marker",
+      "pass": true
+    },
+    {
+      "name": "ignored: no new version started",
+      "pass": true
+    },
+    {
+      "name": "ignored: installed version unchanged",
+      "pass": true
+    },
+    {
+      "name": "busy-browser: real NSIS installed the fixture",
+      "pass": true
+    },
+    {
+      "name": "busy-browser: browser view opened",
+      "pass": true
+    },
+    {
+      "name": "busy-browser: an open page is visible to the preflight",
+      "pass": true
+    },
+    {
+      "name": "busy-browser: real WM_CLOSE sent",
+      "pass": true
+    },
+    {
+      "name": "busy-browser: preflight refused before helper preparation",
+      "pass": true
+    },
+    {
+      "name": "busy-browser: no armed marker",
+      "pass": true
+    },
+    {
+      "name": "busy-browser: no new version started",
+      "pass": true
+    },
+    {
+      "name": "busy-browser: installed version unchanged",
+      "pass": true
+    },
+    {
+      "name": "helper-failure: real NSIS installed the fixture",
+      "pass": true
+    },
+    {
+      "name": "helper-failure: real WM_CLOSE sent",
+      "pass": true
+    },
+    {
+      "name": "helper-failure: preparation was attempted once",
+      "pass": true
+    },
+    {
+      "name": "helper-failure: helper never became ready",
+      "pass": true
+    },
+    {
+      "name": "helper-failure: armed marker was never written",
+      "pass": true
+    },
+    {
+      "name": "helper-failure: no new version started",
+      "pass": true
+    },
+    {
+      "name": "helper-failure: old application remains installed and usable",
+      "pass": true
+    }
+  ],
+  "isolation": "TEMP-only real NSIS and packaged Electron; test copies remove registry/shortcut writes, use a unique exe, zlib compression, a local official transport fixture and owned installation lookup. No production version change, no sandbox override, no manual install IPC and no native confirmation dialog on the automatic path."
+}

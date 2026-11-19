@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "name": "new release does not automatically open modal",
+      "pass": true
+    },
+    {
+      "name": "preference control renders inside the existing update card",
+      "pass": true
+    },
+    {
+      "name": "automatic preference is saved through the trusted bridge",
+      "pass": true
+    },
+    {
+      "name": "automatic note is not shown before a package is ready",
+      "pass": true
+    },
+    {
+      "name": "failed manual switch is visible and explains the cross-process safety state",
+      "pass": true
+    },
+    {
+      "name": "failed save shows the real effective manual policy, not the stale automatic one",
+      "pass": true
+    },
+    {
+      "name": "automatic must be saved successfully before it is shown as active again",
+      "pass": true
+    },
+    {
+      "name": "version and initial download action",
+      "pass": true
+    },
+    {
+      "name": "info navigation owns the update page",
+      "pass": true
+    },
+    {
+      "name": "download is explicitly requested by click",
+      "pass": true
+    },
+    {
+      "name": "progress, percentage and speed",
+      "pass": true
+    },
+    {
+      "name": "cancel reaches desktop capability",
+      "pass": true
+    },
+    {
+      "name": "failure offers retry",
+      "pass": true
+    },
+    {
+      "name": "release notes scroll independently and the settings page stays contained",
+      "pass": true
+    },
+    {
+      "name": "small window scrolls the info page without horizontal overflow",
+      "pass": true
+    },
+    {
+      "name": "restart requires explicit click",
+      "pass": true
+    },
+    {
+      "name": "later postpones visible details",
+      "pass": true
+    },
+    {
+      "name": "reopening settings recognizes ready package",
+      "pass": true
+    },
+    {
+      "name": "portable manual replacement only",
+      "pass": true
+    },
+    {
+      "name": "development mode check only",
+      "pass": true
+    },
+    {
+      "name": "startup completion version displayed",
+      "pass": true
+    },
+    {
+      "name": "active helper shows waiting without download or restart actions",
+      "pass": true
+    },
+    {
+      "name": "terminal failure keeps understandable error and Release link",
+      "pass": true
+    }
+  ],
+  "bounds": {
+    "scrollable": true,
+    "stable": true,
+    "footer": true,
+    "pageScrolls": true,
+    "contained": true
+  }
+}

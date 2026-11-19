@@ -1,0 +1,59 @@
+{
+  "world": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-update-installed-e2e-FEqklK",
+  "previousVersion": "0.34.0",
+  "targetVersion": "0.34.1",
+  "installerBytes": 150895978,
+  "installerSha256": "2d5db4279525c0433f1640ec54cee9e3dc8f771c86b7c8d18e0e3de3f4369ffe",
+  "checks": [
+    {
+      "name": "rebuilt starting Electron version is 0.34.0",
+      "pass": true
+    },
+    {
+      "name": "real NSIS creates isolated installed program and uninstaller",
+      "pass": true
+    },
+    {
+      "name": "real updater recognizes owned installed shape and running version",
+      "pass": true
+    },
+    {
+      "name": "corrupted real installer bytes rejected; old application remains usable",
+      "pass": true
+    },
+    {
+      "name": "full installer downloaded and SHA256 verified",
+      "pass": true
+    },
+    {
+      "name": "armed transaction still completes after a one-shot quit failure",
+      "pass": true
+    },
+    {
+      "name": "restarted compiled backend independently confirms target version",
+      "pass": true
+    },
+    {
+      "name": "browser capability is usable after the committed transaction",
+      "pass": true
+    },
+    {
+      "name": "committed helper installed the accepted payload",
+      "pass": true
+    },
+    {
+      "name": "Electron local settings survive restart",
+      "pass": true
+    },
+    {
+      "name": "all seven synthetic user data digests unchanged",
+      "pass": true
+    },
+    {
+      "name": "normal sandbox used before and after restart",
+      "pass": true
+    }
+  ],
+  "confirmation": "explicit test-only dialog response fixture",
+  "isolation": "TEMP-only real NSIS and packaged Electron; test copy removes registry/shortcut writes, uses unique exe, zlib compression, local official transport fixture and owned installation lookup. Two separately built versions; no production version change. No sandbox override. Not official v0.29.0 to published v0.30.0 or user original-location qualification."
+}
