@@ -89,7 +89,7 @@
 
 执行结果（本轮实际运行）：
 
-首次 PR CI 在 `tests/diff-comments-ui.cjs` 捕获审查任务预览的 `done` 初始化顺序错误（TDZ `ReferenceError`）。已把 Ghost 变体设置移到 `done`/`history` 声明之后，并复跑该套件 51/51；其余受影响套件结果如下。
+首次 PR CI 在 `tests/diff-comments-ui.cjs` 捕获审查任务预览的 `done` 初始化顺序错误（TDZ `ReferenceError`）。已把 Ghost 变体设置移到 `done`/`history` 声明之后，并复跑该套件 51/51。随后 CI 又在新增 Electron 测试中暴露浅色主题误采到指针残留 hover 的基线；测试内先把指针移出探针后连续复跑 3 次通过。其余受影响套件结果如下。
 
 | 命令 | 结果 | 退出码 |
 | --- | --- | --- |
@@ -123,7 +123,7 @@
 | `node tests/environment-setup.cjs` | 21/21 | 0 |
 | `node tests/smoke.cjs` | 1335/1335 | 0 |
 
-未运行：完整 `npm test`（按用户要求交给当前 PR 的完整 CI；结果待 CI）。没有删除或跳过任何既有断言；本轮新增 39 项检查。
+本地未运行完整 `npm test`。PR [run 44461353359](https://github.com/HYJ1817/pi-gui/actions/runs/44461353359) 在代码提交 `196b8949` 上完成五组全量执行并通过，8/8 checks：Validate plan 26s、Electron build 1m42s、core 13m31s、ui 2m20s、security 18m58s、native 17m2s、faults 13m0s、CI gate 24s。本报告后续仅更新文档，不改变代码。没有删除或跳过任何既有断言；本轮新增 39 项检查。
 
 ## 8. 真实渲染证据
 
@@ -168,7 +168,7 @@
 
 ## 10. 未运行项与残余风险
 
-- 完整 `npm test` 与当前 PR CI 未运行/待验证；合并前以 CI 全量结果为准。
+- 本地未重跑完整 `npm test`；PR CI run 44461353359 已完成五组全量执行并通过（8/8 checks）。中间一轮 Electron build check 的打包应用 PTY 树杀用例出现一次冷启动计时失败（`子树子进程没有启动`），随后绿色 run 与本机 `npm run test:app` 27/27 均通过，未修改该测试或产品代码。
 - `about-info-electron`、`ui5-visual-electron` 等既有 Electron 专项本轮未重跑；已用新增 Electron 计算样式测试与视觉取证覆盖本轮改动面。
 - `.btn.outline` 目前无调用点，若后续启用须在验收中记录业务理由。
 - 页面仍保留少量只读几何修饰（`.rp-btn`、`.specs-error .btn` 等），这是既有布局合同；它们不再拥有背景/文字色。
