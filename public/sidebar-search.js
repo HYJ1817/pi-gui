@@ -9,7 +9,8 @@
  *     搜索框已经没了」这种半开状态。
  *   - 关闭必须是真关闭：取消 debounce、作废在途请求、清空真实输入框、
  *     把范围复位到默认，并把列表区重画回普通会话列表 —— 不能只用 CSS
- *     把搜索区藏起来。折叠整个「项目」分组或当前项目会话块时同理。
+ *     把搜索区藏起来。折叠整个「项目」分组、整个侧栏或当前项目
+ *     会话块时同理。
  */
 import { resetSearch } from './session-search.js';
 import { expandSidebarSessions } from './sessions.js';

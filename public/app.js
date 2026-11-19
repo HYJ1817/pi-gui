@@ -1366,6 +1366,12 @@ const collapseSidebar = $('btnSidebarCollapse');
  * 展开入口是 .stage-head 拖拽区内的 no-drag 子元素（见 index.html），
  * 否则原生标题栏命中测试可能把点击当成拖拽起手，按钮看着在却点不动。 */
 function setSidebarCollapsed(collapsed) {
+  /* 整个侧栏被收起时，搜索框也一起不可见；保留 search-open 会让顶栏图标
+   * 继续亮着，下一次点击只关掉一个看不见的搜索。关闭走统一入口，但不抢
+   * 焦点 —— 折叠动作本身要把焦点交给右侧的展开按钮。 */
+  if (collapsed && sidebar.classList.contains('search-open')) {
+    closeSessionSearch({ restoreFocus: false });
+  }
   const expanded = !collapsed;
   sidebar.closest('.app').classList.toggle('sidebar-collapsed', collapsed);
   sidebar.hidden = collapsed;
