@@ -1395,10 +1395,15 @@ $('groupHead').onclick = () => {
   } catch {
     /* 忽略隐私模式下的写入失败 */
   }
+  /* 整组收起会连搜索框一起藏掉；此时必须走搜索的统一关闭入口，
+   * 否则图标继续亮着，下一次点击只会「关掉」一个看不见的搜索。 */
+  if (!group.classList.contains('open')) {
+    document.dispatchEvent(new CustomEvent('pi-gui:project-group-collapsed'));
+  }
 };
 
-/* 搜索开关只有一个家：侧栏图标、顶栏图标、Escape 与折叠当前项目都走这里，
- * 不再由某个模块单独改 `search-open` 或 `aria-expanded`。 */
+/* 搜索开关只有一个家：侧栏图标、顶栏图标、Escape 与折叠项目分组 /
+ * 当前项目都走这里，不再由某个模块单独改 `search-open` 或 `aria-expanded`。 */
 initSidebarSearch({
   sidebar,
   navSearch: $('navSearch'),

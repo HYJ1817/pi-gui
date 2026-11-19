@@ -61,6 +61,8 @@ let requestId = 0;
 let timer = null;
 /** 真实输入框只在列表区重建时替换；关闭搜索要把它一起清干净。 */
 let inputRef = null;
+/** 范围按钮同样只建一次；复位范围时要更新这份 DOM，不能等下一次重建。 */
+let scopeButtons = null;
 /** 状态变化后请宿主重画列表区（由 sessions.js 注入）。 */
 let changeHandler = () => {};
 
@@ -78,6 +80,17 @@ const notify = () => {
 
 export const currentQuery = () => query;
 export const currentScope = () => scope;
+
+/** 范围按钮的选中态由 `scope` 唯一决定；复位时同步已有 DOM，避免
+ *  内部状态已是 active、界面上还亮着「已归档 / 全部」。 */
+function syncScopeButtons() {
+  if (!scopeButtons || !scopeButtons.isConnected) return;
+  for (const button of scopeButtons.children) {
+    const selected = button.dataset.scope === scope;
+    button.classList.toggle('on', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  }
+}
 
 /** list | hint | search —— 由宿主据此决定列表区画什么。 */
 export function searchViewMode() {
@@ -104,6 +117,10 @@ export function resetSearch() {
   }
   requestId++; // 让在途请求全部作废
   query = '';
+  /* 关闭 / 切项目后重新打开必须是默认范围。范围是搜索状态的一部分，
+   * 只清关键词不清它，会让下一次打开沿用上一次的「已归档 / 全部」。 */
+  scope = 'active';
+  syncScopeButtons();
   status = 'idle';
   results = [];
   errorText = '';
@@ -162,6 +179,7 @@ export function createSearchBar() {
 
   const scopes = document.createElement('div');
   scopes.className = 'pj-search-scopes';
+  scopeButtons = scopes;
   for (const s of SCOPES) {
     const b = document.createElement('button');
     b.type = 'button';
@@ -169,10 +187,11 @@ export function createSearchBar() {
     b.textContent = s.label;
     b.title = s.title;
     b.dataset.scope = s.id;
+    b.setAttribute('aria-pressed', String(s.id === scope));
     b.onclick = () => {
       if (scope === s.id) return;
       scope = s.id;
-      for (const other of scopes.children) other.classList.toggle('on', other.dataset.scope === scope);
+      syncScopeButtons();
       /* 换范围立刻重搜（不受 debounce 影响：这是明确的用户动作） */
       if (searchViewMode() === 'search') run(0);
       else notify();

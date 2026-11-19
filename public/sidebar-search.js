@@ -7,8 +7,9 @@
  *   - 侧栏图标、顶栏图标、Escape 与命令面板都会碰搜索；让每个入口各自
  *     改 `search-open`、`aria-expanded` 和搜索状态，迟早出现「图标还亮着、
  *     搜索框已经没了」这种半开状态。
- *   - 关闭必须是真关闭：取消 debounce、作废在途请求、清空真实输入框，
- *     并把列表区重画回普通会话列表 —— 不能只用 CSS 把搜索区藏起来。
+ *   - 关闭必须是真关闭：取消 debounce、作废在途请求、清空真实输入框、
+ *     把范围复位到默认，并把列表区重画回普通会话列表 —— 不能只用 CSS
+ *     把搜索区藏起来。折叠整个「项目」分组或当前项目会话块时同理。
  */
 import { resetSearch } from './session-search.js';
 import { expandSidebarSessions } from './sessions.js';
@@ -30,6 +31,11 @@ export function initSidebarSearch(options) {
    * search-open 必须一起结束，且走同一个关闭入口。 */
   document.addEventListener('pi-gui:active-sessions-collapsed', () => {
     if (sessionSearchOpen()) closeSessionSearch({ restoreFocus: false });
+  });
+  /* 整个「项目」分组被收起时，搜索框也一起不可见。与单个项目折叠走
+   * 同一个关闭入口，不能让图标停留在选中态、留下一个看不见的搜索。 */
+  document.addEventListener('pi-gui:project-group-collapsed', () => {
+    if (sessionSearchOpen()) closeSessionSearch({ focusTarget: refs.groupHead });
   });
 }
 
