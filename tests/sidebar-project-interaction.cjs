@@ -543,6 +543,37 @@ const tick = (ms = 40) => new Promise((r) => setTimeout(r, ms));
     await tick(40);
   });
 
+  await check('收起整个侧栏也会关闭搜索，展开后下一次点击直接打开', async () => {
+    click($('navSearch'));
+    await tick(60);
+    assert.equal($('projectSidebar').classList.contains('search-open'), true);
+    const before = searchCalls.length;
+    const input = activeBox().querySelector('.pj-search-input');
+    input.value = 'abc';
+    input.dispatchEvent(new w.Event('input', { bubbles: true }));
+
+    $('btnSidebarCollapse').click();
+    await tick(320);
+    assert.equal($('projectSidebar').hidden, true);
+    assert.equal($('projectSidebar').classList.contains('search-open'), false);
+    assert.equal($('navSearch').getAttribute('aria-expanded'), 'false');
+    assert.equal($('btnTopbarSearch').getAttribute('aria-expanded'), 'false');
+    assert.equal(input.value, '');
+    assert.equal(searchCalls.length, before, 'debounced search fired after sidebar collapse');
+    assert.equal(d.activeElement, $('btnSidebarExpand'));
+
+    $('btnSidebarExpand').click();
+    await tick(40);
+    click($('navSearch'));
+    await tick(60);
+    assert.equal($('projectSidebar').classList.contains('search-open'), true);
+    assert.equal($('groupHead').closest('.rail-group').classList.contains('open'), true);
+    assert.equal(d.activeElement, activeBox().querySelector('.pj-search-input'));
+    assert.equal(activeBox().querySelector('.pj-search-scope.on').textContent, '活跃');
+    click($('navSearch'));
+    await tick(40);
+  });
+
   await check('Escape 关闭搜索并归还焦点；有内容时先清空，再按一次关闭', async () => {
     click($('navSearch'));
     await tick(60);

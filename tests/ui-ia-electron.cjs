@@ -188,8 +188,8 @@ if (!process.versions.electron) {
     await shot('group-collapsed-search-closed-dark', '1440x900');
     await pointer('#navSearch'); await waitFor(`document.activeElement.classList.contains('pj-search-input')`, 'search open after group reopen');
     check(await read(`(()=>{const g=document.querySelector('#groupHead').closest('.rail-group');const a=document.querySelector('.pj-search-scope.on');return g.classList.contains('open')&&document.querySelector('#groupHead').getAttribute('aria-expanded')==='true'&&document.querySelector('#projectSidebar').classList.contains('search-open')&&a&&a.dataset.scope==='active'&&a.getAttribute('aria-pressed')==='true'&&document.querySelector('.pj-sess-list').dataset.view==='list'})()`), 'Search reopen expands group and resets scope to active');
-    await pointer('#navSearch');
-    await pointer('#btnSidebarCollapse'); check(await read(`document.activeElement.id==='btnSidebarExpand'`), 'Sidebar collapse focus');
+    await pointer('#btnSidebarCollapse');
+    check(await read(`(()=>{const s=document.querySelector('#projectSidebar');return s.hidden&&!s.classList.contains('search-open')&&document.querySelector('#navSearch').getAttribute('aria-expanded')==='false'&&document.querySelector('#btnTopbarSearch').getAttribute('aria-expanded')==='false'&&document.querySelector('.pj-search-input').value===''&&document.querySelector('.pj-sess-list').dataset.view==='list'&&document.activeElement.id==='btnSidebarExpand'})()`), 'Sidebar collapse closes hidden search and restores expand focus');
     /* 折叠后侧栏（含 Settings）整体收起，顶栏只留展开入口；设置仍可通过展开侧栏到达。 */
     check(await read(`(()=>{const b=document.querySelector('#btnSidebarExpand');b.focus();return document.activeElement===b&&b.offsetParent!==null&&document.querySelector('#projectSidebar').hidden})()`), 'Collapsed shell keeps its expand control focusable');
     await pointer('#btnSidebarExpand'); check(await read(`document.activeElement.id==='btnSidebarCollapse'`), 'Sidebar expand focus');
