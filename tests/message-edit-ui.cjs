@@ -570,6 +570,27 @@ const path = require('node:path');
     clearPendingMessageEdit();
   });
 
+  await pass('an unknown requestId releases the editor instead of locking it forever', async () => {
+    clearPendingMessageEdit();
+    rememberPendingMessageEdit({
+      requestId: 'unknown-1', text: 'persisted', userIndex: 0, kind: 'edit',
+      scope: { kind: 'classic', sessionId: 'native-1', backendInstance: 'be-1' },
+    });
+    const editor = await makeEditor({
+      pendingScope: { kind: 'classic', backendInstance: 'be-1' },
+      preflight: async () => ({ ok: false, code: 'edit_in_progress' }),
+      recover: async () => ({ ok: true, state: 'unknown' }),
+    });
+    const recover = editor.host.querySelector('.message-edit-recover');
+    assert.ok(recover, 'the persisted handle is shown');
+    recover.click();
+    assert.equal(await waitFor(() => readPendingMessageEdit() === null), true);
+    assert.equal(editor.host.querySelector('.message-edit-submit').disabled, false,
+      'submit is usable again once the backend proves there is no transaction');
+    editor.host.querySelector('.message-edit-cancel').click();
+    assert.equal(editor.host.querySelector('.message-edit'), null, 'the editor can be closed');
+  });
+
   await pass('pending records for different conversations do not overwrite each other', async () => {
     clearPendingMessageEdit();
     rememberPendingMessageEdit({
