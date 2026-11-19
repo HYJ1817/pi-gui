@@ -6,7 +6,7 @@ const {EventEmitter}=require('node:events');
 
 const DESKTOP=path.join(__dirname,'../electron/app-update-desktop.cjs');
 const tick=async()=>{for(let i=0;i<5;i+=1)await new Promise(resolve=>setImmediate(resolve));};
-function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,readLatest='0.35.0'}={}){
+function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,onDialog=null,readLatest='0.35.0'}={}){
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'pi-update-desktop-prefs-'));
   t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   const temp=path.join(root,'temp'),profile=userData||path.join(root,'userData');
@@ -30,7 +30,7 @@ function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,r
       restore:async()=>{},
       async download(){updater.downloads+=1;updater.state={...updater.state,phase:'downloading',version:'0.35.0',received:50,total:100,speed:10};updater.listener?.();return {ok:true};},
       cancel(){updater.cancels+=1;updater.state={...updater.state,phase:'cancelled'};updater.listener?.();return {ok:true};},
-      async install(){updater.installs+=1;return {ok:true};},
+      async install(request,options){updater.installCalls=(updater.installCalls||0)+1;if(options?.authorize&&options.authorize()!==true)return {ok:false,code:'revoked'};updater.installs+=1;return {ok:true};},
     };
   }};
   const req=name=>{
@@ -45,7 +45,7 @@ function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,r
     readUpdate:async options=>{readCalls.push(options);return {ok:true,currentVersion:'0.34.0',latestVersion:readLatest,updateAvailable:true,
       release:{tag:`v${readLatest}`,url:`https://github.com/HYJ1817/pi-gui/releases/tag/v${readLatest}`,notes:'notes',assets:[]}};},
     inspectDesktop:()=>({ok:true,browsers:browserCount}),prepareDesktop:async()=>{},resumeBackend:async()=>{},
-    dialog:{showMessageBox:async()=>({response:dialogResponse})},shell:{openPath:async()=>''},quit:()=>{updater.quits+=1;}});
+    dialog:{showMessageBox:async()=>{if(typeof onDialog==='function')await onDialog();return {response:dialogResponse};}},shell:{openPath:async()=>''},quit:()=>{updater.quits+=1;}});
   const call=(name,arg,event={sender:wc,senderFrame:frame})=>handlers.get(`pi-gui:app-update-${name}`)(event,arg);
   const ready=async version=>{updater.state={...updater.state,phase:'ready',version};updater.listener?.();await tick();};
   const preventEvent=()=>({prevented:false,preventDefault(){this.prevented=true;}});
@@ -179,6 +179,38 @@ test('quit auto-install requires automatic, passes preflight and falls back safe
     assert.equal(event.prevented,false);
     await tick();
     assert.equal(w.updater.installs,0,'system shutdown never starts a helper');
+  }
+});
+
+test('explicit install revalidates the target and ignore state after the native dialog',async t=>{
+  if(process.platform!=='win32'){t.skip('Windows NSIS install shape');return;}
+  {
+    let w;
+    w=world(t,{dialogResponse:1,onDialog:async()=>{w.updater.state={...w.updater.state,version:'0.36.0'};}});
+    await tick();await w.ready('0.35.0');
+    const changed=await w.call('install',{confirm:true});
+    assert.equal(changed.ok,false);
+    assert.equal(changed.code,'revoked');
+    assert.equal(w.updater.installCalls,1,'the native dialog result is rechecked before arming');
+    assert.equal(w.updater.installs,0,'a changed target is never installed');
+  }
+  {
+    let w;
+    w=world(t,{dialogResponse:1,onDialog:async()=>{await w.call('ignore');}});
+    await tick();await w.ready('0.35.0');
+    const ignored=await w.call('install',{confirm:true});
+    assert.equal(ignored.ok,false);
+    assert.equal(ignored.code,'revoked');
+    assert.equal(w.updater.installs,0,'ignoring during the dialog revokes the install');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(w.profile,'app-update-preferences.json'),'utf8')).ignoredVersion,'0.35.0');
+  }
+  {
+    let w;
+    w=world(t,{dialogResponse:1,onDialog:async()=>{w.updater.state={...w.updater.state,phase:'failed'};}});
+    await tick();await w.ready('0.35.0');
+    const failed=await w.call('install',{confirm:true});
+    assert.equal(failed.code,'revoked');
+    assert.equal(w.updater.installs,0,'a package that is no longer ready is not installed');
   }
 });
 

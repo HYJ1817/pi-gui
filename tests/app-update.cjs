@@ -128,3 +128,164 @@ test('modified fallback manifest and package must still match official checksum 
   let launched=0;const restored=createAppUpdate({...opts,launch:async()=>launched++});await restored.restore();
   assert.equal((await restored.install({confirm:true})).code,'checksum');assert.equal(launched,0);
 });
+
+function releaseFor(version,payload=bytes){
+  const base=`https://github.com/HYJ1817/pi-gui/releases/download/v${version}/`;
+  const digest=createHash('sha256').update(payload).digest('hex');
+  return {ok:true,updateAvailable:true,latestVersion:version,release:{tag:`v${version}`,assets:[
+    {name:`Pi-GUI-Setup-${version}.exe`,size:payload.length,url:base+`Pi-GUI-Setup-${version}.exe`,digest:'sha256:'+digest},
+  ]}};
+}
+
+test('a new download clears the old target until the official release resolves',async t=>{
+  let version='0.27.0';
+  const {u}=setup(t,{readUpdate:async()=>releaseFor(version)});
+  assert.equal((await u.download({confirm:true})).ok,true);
+  assert.equal(u.state().version,'0.27.0');
+  version='0.28.0';
+  const approved=[];
+  const result=await u.download({confirm:true,transactionId:7,expectedVersion:'0.28.0',
+    approve:info=>{approved.push(info.version);return {ok:true};}});
+  assert.equal(result.ok,true);
+  assert.deepEqual(approved,['0.28.0']);
+  assert.equal(u.state().version,'0.28.0','only the actual release target is exposed');
+  assert.equal(u.state().transactionId,null,'the transaction identity is cleared when it settles');
+});
+
+test('an official target newer than the expected version converges only with a target-bound approval',async t=>{
+  const first=setup(t,{readUpdate:async()=>releaseFor('0.28.0')});
+  const approved=[];
+  const converged=await first.u.download({confirm:true,transactionId:5,expectedVersion:'0.27.0',
+    approve:info=>{approved.push(info.version);return {ok:true,version:info.version};}});
+  assert.equal(converged.ok,true);
+  assert.deepEqual(approved,['0.28.0']);
+  assert.equal(first.u.state().version,'0.28.0','the actual official target wins');
+  assert.equal(first.calls.length,1,'only the verified package was fetched');
+
+  const second=setup(t,{readUpdate:async()=>releaseFor('0.28.0')});
+  const rejected=await second.u.download({confirm:true,expectedVersion:'0.27.0',approve:()=>({ok:true})});
+  assert.equal(rejected.code,'superseded','an unbound approval cannot authorize another version');
+  assert.equal(second.u.state().phase,'cancelled');
+  assert.equal(second.u.state().version,'0.28.0');
+});
+
+test('cancelling before metadata resolves never starts the late download',async t=>{
+  let resolveRead,approvals=0,calls=0;
+  const gate=new Promise(resolve=>{resolveRead=resolve;});
+  const {u,root}=setup(t,{readUpdate:async()=>{await gate;return releaseFor('0.28.0');},
+    fetchImpl:async()=>{calls+=1;return new Response(bytes);}});
+  const pending=u.download({confirm:true,transactionId:11,expectedVersion:'0.28.0',
+    approve:()=>{approvals+=1;return {ok:true};}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(u.state().version,null,'the previous task version is not reused');
+  assert.equal(u.state().phase,'downloading');
+  u.cancel();
+  resolveRead();
+  const result=await pending;
+  assert.equal(result.code,'cancelled');
+  assert.equal(u.state().phase,'cancelled');
+  assert.equal(u.state().version,null);
+  assert.equal(approvals,0,'a late release must not receive download approval');
+  assert.equal(calls,0,'no installer bytes are fetched after cancellation');
+  assert.ok(!fs.readdirSync(root).some(name=>name.endsWith('.part')));
+});
+
+test('download approval rejects ignored, paused, revoked and superseded targets before bytes',async t=>{
+  for(const code of ['ignored','paused','revoked','superseded']){
+    let calls=0;
+    const {u}=setup(t,{fetchImpl:async()=>{calls+=1;return new Response(bytes);}});
+    const result=await u.download({confirm:true,transactionId:3,expectedVersion:'0.27.0',
+      approve:()=>({ok:false,code})});
+    assert.equal(result.ok,false,code);
+    assert.equal(result.code,code,code);
+    assert.equal(u.state().phase,'cancelled',code);
+    assert.equal(calls,0,code);
+  }
+  const {u}=setup(t);
+  const mismatch=await u.download({confirm:true,expectedVersion:'0.28.0',approve:()=>({ok:true})});
+  assert.equal(mismatch.code,'superseded','the actual release must match the transaction target');
+});
+
+test('revocation during helper preparation releases the unarmed helper and keeps the package retryable',async t=>{
+  let allowed=true,launched=0,released=0;
+  const {u}=setup(t,{
+    launch:async()=>{launched+=1;allowed=false;},
+    release:async()=>{released+=1;},
+  });
+  await u.download({confirm:true});
+  const result=await u.install({confirm:true},{authorize:()=>allowed});
+  assert.equal(result.code,'revoked');
+  assert.equal(launched,1);
+  assert.equal(released,1,'an unarmed helper is cancelled through the existing release path');
+  assert.equal(u.state().phase,'ready');
+});
+
+test('authorization is rechecked synchronously at the armed boundary',async t=>{
+  let allowed=true,released=0,armed=false;
+  const {u}=setup(t,{
+    quit:async({authorize})=>{
+      allowed=false;
+      if(authorize()===true){armed=true;}
+      throw Object.assign(Error('revoked'),{code:'revoked'});
+    },
+    release:async()=>{released+=1;},
+  });
+  await u.download({confirm:true});
+  const result=await u.install({confirm:true},{authorize:()=>allowed});
+  assert.equal(result.code,'revoked');
+  assert.equal(armed,false,'the armed marker must never be written after the last check fails');
+  assert.equal(released,1);
+  assert.equal(u.state().phase,'ready');
+});
+
+test('a failure after the armed marker becomes an irreversible installing transaction',async t=>{
+  let released=0;
+  const {u}=setup(t,{
+    quit:async()=>{
+      const error=Error('shutdown_unconfirmed');
+      error.committed=true;
+      throw error;
+    },
+    release:async()=>{released+=1;},
+  });
+  await u.download({confirm:true});
+  const result=await u.install({confirm:true});
+  assert.equal(result.ok,false);
+  assert.equal(result.committed,true);
+  assert.equal(released,0,'an armed transaction is never cancelled or released by the parent');
+  assert.equal(u.state().phase,'installing');
+  assert.equal((await u.install({confirm:true})).code,'busy','no second install may start after arming');
+  assert.equal((await u.download({confirm:true})).code,'busy','no new download may start after arming');
+});
+
+test('internal download transaction fields are typed while renderer extras stay rejected',async t=>{
+  const {u,calls}=setup(t);
+  assert.equal((await u.download({confirm:true,transactionId:'7'})).code,'untrusted');
+  assert.equal((await u.download({confirm:true,expectedVersion:'0.28'})).code,'untrusted');
+  assert.equal((await u.download({confirm:true,approve:'yes'})).code,'untrusted');
+  assert.equal(calls.length,0);
+});
+
+test('a failed newer download never deletes the previously verified installer',async t=>{
+  let version='0.27.0',offline=false;
+  const {u,opts,root}=setup(t,{
+    readUpdate:async()=>releaseFor(version),
+    fetchImpl:async()=>{if(offline)throw Error('offline');return new Response(bytes);},
+  });
+  assert.equal((await u.download({confirm:true})).ok,true);
+  assert.equal(u.state().version,'0.27.0');
+  const oldFile=path.join(root,'Pi-GUI-Setup-0.27.0.exe'),manifest=path.join(root,'ready.json');
+  assert.equal(fs.existsSync(oldFile),true);
+  const oldManifest=fs.readFileSync(manifest,'utf8');
+  version='0.28.0';offline=true;
+  const failed=await u.download({confirm:true,transactionId:4,expectedVersion:'0.28.0',approve:()=>({ok:true})});
+  assert.equal(failed.ok,false);
+  assert.equal(u.state().phase,'failed');
+  assert.equal(fs.existsSync(oldFile),true,'the older verified package is retained for recovery');
+  assert.equal(fs.readFileSync(manifest,'utf8'),oldManifest,'a failed download must not overwrite the verified manifest');
+  assert.equal(fs.readdirSync(root).some(name=>name.endsWith('.part')),false);
+  const restored=createAppUpdate(opts);
+  await restored.restore();
+  assert.equal(restored.state().phase,'ready','the retained package is re-verified on next launch');
+  assert.equal(restored.state().version,'0.27.0');
+});

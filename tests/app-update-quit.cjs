@@ -232,3 +232,71 @@ test('explicit install failure leaves the app open and auto quit available later
   await flush();
   assert.equal(calls.preflight,1);
 });
+
+test('an explicit install that already armed requests one real quit when quitting failed',async()=>{
+  const {coordinator,calls}=setup({
+    installResult:{ok:false,committed:true,code:'shutdown_unconfirmed'},
+    // The desktop quit marks the intent before calling app.quit; the real
+    // quit may still fail, so the coordinator must not treat that as success.
+    onInstall:async self=>{self.markQuitIssued();},
+  });
+  const result=await coordinator.runExplicitInstall({authorize:()=>true});
+  assert.equal(result.ok,false);
+  assert.equal(result.committed,true);
+  assert.equal(calls.quit,1,'the app must still exit so the armed helper can finish');
+  assert.equal(coordinator.beforeQuit(quitEvent()),false,'the next quit must not start another install');
+  assert.equal(calls.install,1);
+  assert.equal(coordinator.canQuit(),true);
+});
+
+test('explicit install passes the live manual authorization into the updater',async()=>{
+  let allowed=true,seen=null;
+  const {coordinator,calls}=setup({
+    onInstall:async(_self,options)=>{
+      assert.equal(typeof options.authorize,'function');
+      allowed=false;
+      seen=options.authorize();
+    },
+  });
+  const result=await coordinator.runExplicitInstall({authorize:()=>allowed});
+  assert.equal(result.ok,true);
+  assert.equal(seen,false);
+  assert.equal(calls.install,1);
+});
+
+test('system shutdown during helper preparation revokes the auto install before arming',async()=>{
+  let shutdown=false;
+  const {coordinator,calls}=setup({
+    shutdown:()=>shutdown,
+    installResult:{ok:false,code:'revoked'},
+    onInstall:async(_self,options)=>{
+      shutdown=true;
+      assert.equal(options.authorize(),false,'the updater must see the shutdown marker');
+    },
+  });
+  const event=quitEvent();
+  assert.equal(coordinator.beforeQuit(event),true);
+  await flush();
+  assert.equal(calls.install,1);
+  assert.equal(calls.quit,1,'a revoked install resumes the normal quit');
+  assert.equal(coordinator.canQuit(),true);
+});
+
+test('an irreversible install result does not create a recursive quit loop',async()=>{
+  let release;
+  const gate=new Promise(resolve=>{release=resolve;});
+  const {coordinator,calls}=setup({
+    installResult:{ok:false,committed:true,code:'shutdown_unconfirmed'},
+    onInstall:async()=>{await gate;},
+  });
+  const event=quitEvent();
+  assert.equal(coordinator.beforeQuit(event),true);
+  assert.equal(coordinator.canQuit(),false);
+  release();
+  await flush();
+  assert.equal(calls.install,1);
+  assert.equal(calls.quit,1,'the committed transaction may still request one real quit');
+  assert.equal(coordinator.canQuit(),true);
+  assert.equal(coordinator.beforeQuit(quitEvent()),false,'the next quit is not another install attempt');
+  assert.equal(calls.install,1);
+});

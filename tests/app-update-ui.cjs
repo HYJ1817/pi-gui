@@ -24,7 +24,9 @@ function releaseFixture(overrides={}){
 }
 function desktopSnapshot(overrides={}){
   return {phase:'idle',mode:'installed',currentVersion:'0.29.0',version:null,received:0,total:0,speed:0,error:'',code:'',
-    preference:'manual',storedPreference:'manual',automaticSupported:true,automaticUnsupportedReason:null,
+    preference:'manual',requestedPreference:'manual',storedPreference:'manual',persistedPreference:'manual',
+    automaticSupported:true,automaticUnsupportedReason:null,automaticTrusted:true,
+    overrideActive:false,overridePersisted:false,
     discovery:{status:'available',latestVersion:'0.30.0',release:releaseFixture(),error:'',checkedAt:'2026-11-01T00:00:00.000Z'},
     ignoredVersion:null,pausedVersion:null,lastNotifiedVersion:'0.30.0',ignored:false,paused:false,
     preferenceSaveFailed:false,installOnQuit:false,installOnQuitBlockedReason:'preference',...overrides};
@@ -33,12 +35,13 @@ async function desktopFixture(t,{snapshot=desktopSnapshot(),checkResult=null,pre
   const dom=new JSDOM(fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8'),{url:'http://127.0.0.1:7788',runScripts:'outside-only'});
   t.after(()=>dom.window.close());const w=dom.window;let publish;
   const calls={check:0,preference:[],ignore:0,unignore:0,download:0,cancel:0};
+  let current=snapshot;
   w.piGuiDesktop={appUpdate:{
-    state:async()=>snapshot,
-    check:async()=>{calls.check++;return checkResult||{ok:true,snapshot};},
-    setPreference:async preference=>{calls.preference.push(preference);return preferenceResult||{ok:true,persisted:true,snapshot};},
-    ignore:async()=>{calls.ignore++;return ignoreResult||{ok:true,persisted:true,snapshot:{...snapshot,ignored:true,ignoredVersion:'0.30.0'}};},
-    unignore:async()=>{calls.unignore++;return unignoreResult||{ok:true,persisted:true,snapshot};},
+    state:async()=>current,
+    check:async()=>{calls.check++;const r=checkResult||{ok:true,snapshot:current};if(r?.snapshot)current=r.snapshot;return r;},
+    setPreference:async preference=>{calls.preference.push(preference);const r=preferenceResult||{ok:true,persisted:true,snapshot:current};if(r?.snapshot)current=r.snapshot;return r;},
+    ignore:async()=>{calls.ignore++;const r=ignoreResult||{ok:true,persisted:true,snapshot:{...current,ignored:true,ignoredVersion:'0.30.0'}};if(r?.snapshot)current=r.snapshot;return r;},
+    unignore:async()=>{calls.unignore++;const r=unignoreResult||{ok:true,persisted:true,snapshot:current};if(r?.snapshot)current=r.snapshot;return r;},
     download:async()=>{calls.download++;return {ok:true};},
     cancel:async()=>{calls.cancel++;return {ok:true};},
     install:async()=>({ok:true}),openFolder:async()=>({ok:true}),
@@ -162,17 +165,44 @@ test('preference save failure is visible and never claims success',async t=>{
   assert.match(error.textContent,/写入本地配置失败/);
   assert.equal(f.container.querySelectorAll('.update-pref-row .ds-segment-item')[1].getAttribute('aria-checked'),'true','failed save reverts the visual selection');
 });
-test('a non-persisted preference is reported as effective only for this run',async t=>{
-  const f=await desktopFixture(t,{preferenceResult:{ok:true,persisted:false,snapshot:desktopSnapshot({preference:'automatic'})}});
-  const automatic=f.container.querySelectorAll('.update-pref-row .ds-segment-item')[0];
-  await automatic.click();await new Promise(r=>setImmediate(r));
-  assert.match(f.container.querySelector('.update-pref-error').textContent,/本次运行生效/);
+test('a non-persisted automatic choice is shown as degraded manual, never as active',async t=>{
+  const effective=desktopSnapshot({preference:'manual',requestedPreference:'automatic',persistedPreference:'manual',
+    automaticTrusted:false,preferenceSaveFailed:true,installOnQuit:false});
+  const f=await desktopFixture(t,{snapshot:effective,preferenceResult:{ok:true,persisted:false,error:'自动更新设置未能写入，本次运行仍按手动更新。请重试保存。',snapshot:effective}});
+  const items=f.container.querySelectorAll('.update-pref-row .ds-segment-item');
+  await items[0].click();await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));
+  assert.equal(f.container.querySelectorAll('.update-pref-row .ds-segment-item')[1].getAttribute('aria-checked'),'true','the effective policy remains manual');
+  const error=f.container.querySelector('.update-pref-error');
+  assert.equal(error.hidden,false);
+  assert.match(error.textContent,/手动更新|降级|写入失败/);
+  assert.ok([...error.querySelectorAll('button')].some(b=>b.textContent==='重试保存'),'a retry entry is offered');
 });
 test('persisted write failure is surfaced on reopen',async t=>{
   const f=await desktopFixture(t,{snapshot:desktopSnapshot({preferenceSaveFailed:true})});
   const error=f.container.querySelector('.update-pref-error');
   assert.equal(error.hidden,false);
   assert.match(error.textContent,/重启后可能恢复/);
+});
+
+test('a cross-process manual override is rendered as manual with an honest retry',async t=>{
+  const f=await desktopFixture(t,{snapshot:desktopSnapshot({preference:'manual',requestedPreference:'manual',
+    persistedPreference:'automatic',automaticTrusted:false,overrideActive:true,overridePersisted:true,
+    preferenceSaveFailed:true,installOnQuit:false})});
+  const items=[...f.container.querySelectorAll('.update-pref-row .ds-segment-item')];
+  assert.equal(items[0].getAttribute('aria-checked'),'false');
+  assert.equal(items[1].getAttribute('aria-checked'),'true');
+  assert.match(f.container.querySelector('.update-pref-error').textContent,/手动|未能可靠保存/);
+  assert.ok([...f.container.querySelectorAll('.update-pref-error button')].some(b=>b.textContent==='重试保存'));
+});
+
+test('a successful save paints the persisted automatic policy instead of a stale manual view',async t=>{
+  const saved=desktopSnapshot({preference:'automatic',requestedPreference:'automatic',
+    persistedPreference:'automatic',automaticTrusted:true,installOnQuit:true});
+  const f=await desktopFixture(t,{snapshot:desktopSnapshot(),preferenceResult:{ok:true,persisted:true,snapshot:saved}});
+  const automatic=f.container.querySelectorAll('.update-pref-row .ds-segment-item')[0];
+  await automatic.click();await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));
+  assert.equal(f.container.querySelectorAll('.update-pref-row .ds-segment-item')[0].getAttribute('aria-checked'),'true');
+  assert.equal(f.container.querySelector('.update-pref-error').hidden,true);
 });
 test('ignored available version hides download, suppresses the dot and offers unignore',async t=>{
   const f=await desktopFixture(t,{snapshot:desktopSnapshot({ignored:true,ignoredVersion:'0.30.0'})});

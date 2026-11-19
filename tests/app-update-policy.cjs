@@ -108,7 +108,8 @@ test('corrupt or unknown configuration degrades to manual and is repaired only o
   assert.equal(unknown.ignoredVersion,null);
   assert.equal(unknown.pausedVersion,null);
   assert.equal(unknown.lastNotifiedVersion,null);
-  assert.equal(unknown.corrupt,false);
+  assert.equal(unknown.corrupt,true,'malformed ignore/pause fields cannot be trusted as safety state');
+  assert.equal(unknown.automaticTrusted,false);
 });
 
 test('unsupported schema and oversized or non-regular files are rejected',t=>{
@@ -162,4 +163,118 @@ test('a later explicit save wins over an older stored snapshot',t=>{
   store.setPreference('manual');
   assert.equal(createPreferenceStore({file}).snapshot().preference,'manual');
   assert.equal(store.snapshot().preference,'manual');
+});
+
+function preferenceFailFs(isFailing){
+  return {...fs,openSync(value,...args){
+    const name=path.basename(value);
+    if(isFailing()&&name.startsWith('.prefs.json')&&!name.includes('manual-override'))throw Error('disk full');
+    return fs.openSync(value,...args);
+  }};
+}
+
+test('a failed automatic save distinguishes requested from trusted policy',t=>{
+  const {file}=fileFor(t);
+  const store=createPreferenceStore({file,fsImpl:preferenceFailFs(()=>true),randomId:()=> 'fixed'});
+  const result=store.setPreference('automatic');
+  assert.equal(result.ok,true);
+  assert.equal(result.persisted,false);
+  const state=store.snapshot();
+  assert.equal(state.requestedPreference,'automatic');
+  assert.equal(state.persistedPreference,null);
+  assert.equal(state.automaticTrusted,false);
+  assert.equal(state.overrideActive,false,'nothing was persisted, so no manual override is needed');
+  assert.equal(fs.existsSync(file),false);
+});
+
+test('a failed manual switch leaves a cross-process override and a later save clears it',t=>{
+  const {file}=fileFor(t);
+  let fail=false;
+  const store=createPreferenceStore({file,fsImpl:preferenceFailFs(()=>fail),randomId:()=> 'fixed'});
+  assert.equal(store.setPreference('automatic').persisted,true,'a valid automatic baseline is persisted first');
+  fail=true;
+  const manual=store.setPreference('manual');
+  assert.equal(manual.ok,true);
+  assert.equal(manual.persisted,false);
+  assert.equal(store.snapshot().automaticTrusted,false);
+  assert.equal(store.snapshot().overrideActive,true);
+  assert.equal(store.snapshot().overridePersisted,true);
+  assert.equal(fs.existsSync(store.overrideFile),true);
+  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).preference,'automatic','the old file cannot be rewritten');
+
+  const reloaded=createPreferenceStore({file});
+  assert.equal(reloaded.snapshot().preference,'manual','the override forces manual after restart');
+  assert.equal(reloaded.snapshot().persistedPreference,'automatic');
+  assert.equal(reloaded.snapshot().automaticTrusted,false);
+  assert.equal(reloaded.snapshot().overrideActive,true);
+
+  fail=false;
+  const repaired=reloaded.setPreference('manual');
+  assert.equal(repaired.persisted,true);
+  assert.equal(reloaded.snapshot().overrideActive,false);
+  assert.equal(fs.existsSync(reloaded.overrideFile),false);
+  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).preference,'manual');
+});
+
+test('failed ignore or pause writes leave a manual override and revoke trust',t=>{
+  for(const kind of ['ignoredVersion','pausedVersion']){
+    const {file}=fileFor(t);
+    let fail=false;
+    const store=createPreferenceStore({file,fsImpl:preferenceFailFs(()=>fail),randomId:()=> 'fixed'});
+    store.setPreference('automatic');
+    fail=true;
+    const result=kind==='ignoredVersion'
+      ?store.setIgnoredVersion('0.35.0')
+      :store.setPausedVersion('0.35.0');
+    assert.equal(result.ok,true,kind);
+    assert.equal(result.persisted,false,kind);
+    assert.equal(store.snapshot()[kind],'0.35.0',kind);
+    assert.equal(store.automaticTrusted(),false,kind);
+    assert.equal(store.snapshot().overrideActive,true,kind);
+    const reloaded=createPreferenceStore({file}).snapshot();
+    assert.equal(reloaded.preference,'manual',kind);
+    assert.equal(reloaded.automaticTrusted,false,kind);
+  }
+});
+
+test('background bookkeeping never persists a requested automatic that failed to save',t=>{
+  const {file}=fileFor(t);
+  let fail=false;
+  const store=createPreferenceStore({file,fsImpl:preferenceFailFs(()=>fail),randomId:()=> 'fixed'});
+  store.setPreference('manual');
+  fail=true;
+  store.setPreference('automatic');
+  const bookmark=store.update({lastNotifiedVersion:'0.35.0'},{repair:false});
+  assert.equal(bookmark.skipped,true);
+  assert.equal(store.snapshot().lastNotifiedVersion,'0.35.0');
+  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).preference,'manual');
+  assert.equal(store.automaticTrusted(),false);
+});
+
+test('a corrupt safety field disables trust and the next user action repairs the file',t=>{
+  const {file}=fileFor(t);
+  fs.writeFileSync(file,JSON.stringify({schemaVersion:1,preference:'automatic',ignoredVersion:'not-a-version',pausedVersion:null,lastNotifiedVersion:null}));
+  const store=createPreferenceStore({file});
+  assert.equal(store.snapshot().corrupt,true);
+  assert.equal(store.snapshot().automaticTrusted,false);
+  assert.equal(store.snapshot().preference,'manual');
+  const bookmark=store.update({lastNotifiedVersion:'0.35.0'},{repair:false});
+  assert.equal(bookmark.skipped,true);
+  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).ignoredVersion,'not-a-version');
+  store.setPreference('automatic');
+  assert.equal(store.snapshot().corrupt,false);
+  assert.equal(store.snapshot().automaticTrusted,true);
+});
+
+test('an unreadable override marker conservatively forces manual',t=>{
+  const {file}=fileFor(t);
+  const store=createPreferenceStore({file});
+  store.setPreference('automatic');
+  fs.mkdirSync(store.overrideFile);
+  const reloaded=createPreferenceStore({file});
+  assert.equal(reloaded.snapshot().overrideActive,true);
+  assert.equal(reloaded.snapshot().preference,'manual');
+  assert.equal(reloaded.snapshot().automaticTrusted,false);
+  reloaded.setPreference('manual');
+  assert.equal(reloaded.snapshot().overrideActive,false,'a successful explicit save replaces the marker');
 });

@@ -11,6 +11,19 @@ function tempFile(t){
   t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
   return path.join(dir,'app-update-preferences.json');
 }
+function flakyFs(isFailing){
+  return {...fs,openSync(value,...args){
+    if(isFailing()&&path.basename(value).startsWith('.app-update-preferences'))throw Error('disk full');
+    return fs.openSync(value,...args);
+  }};
+}
+function preferenceFailFs(isFailing){
+  return {...fs,openSync(value,...args){
+    const name=path.basename(value);
+    if(isFailing()&&name.startsWith('.app-update-preferences')&&!name.includes('manual-override'))throw Error('disk full');
+    return fs.openSync(value,...args);
+  }};
+}
 function makeStore(t,{preference='manual',ignoredVersion=null,pausedVersion=null,lastNotifiedVersion=null}={}){
   const store=createPreferenceStore({file:tempFile(t)});
   store.update({preference,ignoredVersion,pausedVersion,lastNotifiedVersion});
@@ -24,18 +37,32 @@ function makeUpdater(initial={phase:'idle',mode:'installed',currentVersion:CURRE
   let state={...initial};
   const listeners=new Set();
   const calls={download:[],cancel:0,install:[]};
+  function begin(request,{version=request.expectedVersion||'0.35.0'}={}){
+    const transactionId=request.transactionId;
+    updater.emit({phase:'downloading',version:null,received:0,total:0,speed:0,transactionId});
+    const verdict=typeof request.approve==='function'
+      ?request.approve({version,transactionId,expectedVersion:request.expectedVersion})
+      :{ok:true};
+    if(!verdict||verdict.ok!==true){
+      updater.emit({phase:'cancelled',version,transactionId,error:verdict?.code||'cancelled'});
+      updater.emit({phase:'cancelled',version,transactionId:null});
+      return {ok:false,code:verdict?.code||'cancelled'};
+    }
+    updater.emit({phase:'downloading',version,transactionId});
+    return {ok:true,version};
+  }
   const updater={
     calls,
+    begin,
     state:()=>({...state}),
     onChange(fn){listeners.add(fn);return()=>listeners.delete(fn);},
     emit(next){state={...state,...next};for(const fn of [...listeners])fn({...state});},
     async download(request){
       calls.download.push(request);
       if(updater.onDownload)return updater.onDownload(request);
-      updater.emit({phase:'downloading',version:'0.35.0'});
-      return {ok:true};
+      return begin(request);
     },
-    cancel(){calls.cancel+=1;updater.emit({phase:'cancelled'});return {ok:true};},
+    cancel(){calls.cancel+=1;updater.emit({phase:'cancelled',transactionId:null});return {ok:true};},
     async install(request){calls.install.push(request);return {ok:true};},
   };
   return updater;
@@ -55,6 +82,38 @@ function makeManager({t,updater,store,readUpdate,mode='installed',platform='win3
   });
   return manager;
 }
+/* A controllable updater for races that happen between official metadata and
+ * the first installer byte. Each download stays pending until the test settles
+ * it, so cancellation, approval and late callbacks are observable in order. */
+function holdDownloads(updater){
+  const pending=[];
+  updater.download=request=>{
+    updater.calls.download.push(request);
+    updater.emit({phase:'downloading',version:null,received:0,total:0,speed:0,transactionId:request.transactionId});
+    return new Promise(resolve=>{pending.push({request,resolve,done:false});});
+  };
+  updater.cancel=()=>{
+    updater.calls.cancel+=1;
+    const entry=pending.find(item=>!item.done);
+    if(entry){
+      entry.done=true;
+      updater.emit({phase:'cancelled',version:null,transactionId:null});
+      entry.resolve({ok:false,code:'cancelled'});
+    }
+    return {ok:true};
+  };
+  updater.approve=(entry,version)=>entry.request.approve({
+    version,transactionId:entry.request.transactionId,expectedVersion:entry.request.expectedVersion,
+  });
+  updater.settle=(entry,result={ok:true})=>{
+    entry.done=true;
+    if(result.ok!==true)updater.emit({phase:'cancelled',version:null,transactionId:null});
+    entry.resolve(result);
+  };
+  updater.pending=pending;
+  return pending;
+}
+const flush=async()=>{for(let i=0;i<5;i+=1)await new Promise(resolve=>setImmediate(resolve));};
 
 test('manual preference checks, notifies once per version and never downloads',async t=>{
   const store=makeStore(t),updater=makeUpdater(),notifications=[];
@@ -94,7 +153,10 @@ test('automatic preference downloads once, reports progress and never notifies a
   await manager.whenIdle();
   assert.equal(read,1);
   assert.equal(updater.calls.download.length,1);
-  assert.deepEqual(updater.calls.download[0],{confirm:true});
+  assert.equal(updater.calls.download[0].confirm,true);
+  assert.equal(updater.calls.download[0].expectedVersion,'0.35.0');
+  assert.equal(typeof updater.calls.download[0].transactionId,'number');
+  assert.equal(typeof updater.calls.download[0].approve,'function');
   assert.equal(notifications.length,0);
   updater.emit({phase:'downloading',version:'0.35.0',received:512,total:1024,speed:128});
   await manager.check({manual:true,force:true});
@@ -245,7 +307,7 @@ test('unsupported installations reject automatic and still notify as manual',asy
 test('switching automatic to manual cancels an automatic download and keeps a ready package',async t=>{
   const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater(),notifications=[];
   let releaseDownload;
-  updater.onDownload=()=>{updater.emit({phase:'downloading',version:'0.35.0'});return new Promise(resolve=>{releaseDownload=resolve;});};
+  updater.onDownload=request=>{updater.begin(request);return new Promise(resolve=>{releaseDownload=resolve;});};
   const manager=makeManager({t,updater,store,notifications,readUpdate:async()=>updatePayload()});
   await manager.check({manual:true,force:true});
   await new Promise(resolve=>setImmediate(resolve));
@@ -309,7 +371,7 @@ test('ready emits one lightweight notice only in supported automatic mode',async
 
 test('cancel pauses the exact version, survives a restart and is cleared by an explicit download',async t=>{
   const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater();
-  updater.onDownload=()=>{updater.emit({phase:'downloading',version:'0.35.0',received:10,total:100});return new Promise(()=>{});};
+  updater.onDownload=request=>{updater.begin(request);updater.emit({phase:'downloading',version:'0.35.0',received:10,total:100});return new Promise(()=>{});};
   const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload()});
   await manager.check({manual:true,force:true});
   await new Promise(resolve=>setImmediate(resolve));
@@ -346,7 +408,7 @@ test('a newer release clears a pause and automatic delivery resumes',async t=>{
 
 test('ignore only suppresses the displayed version, persists and blocks auto install',async t=>{
   const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater(),notifications=[];
-  updater.onDownload=()=>{updater.emit({phase:'downloading',version:'0.35.0',received:1,total:2});return new Promise(()=>{});};
+  updater.onDownload=request=>{updater.begin(request);updater.emit({phase:'downloading',version:'0.35.0',received:1,total:2});return new Promise(()=>{});};
   const manager=makeManager({t,updater,store,notifications,readUpdate:async()=>updatePayload()});
   await manager.check({manual:true,force:true});
   await new Promise(resolve=>setImmediate(resolve));
@@ -455,16 +517,261 @@ test('download failure is reported without a notification loop or a pause',async
   manager.dispose();
 });
 
-test('a preference write failure is visible but still applies in memory',async t=>{
+test('automatic requested but not persisted never receives automatic permission',async t=>{
   const file=tempFile(t);
-  const broken={...fs,openSync(value,...args){if(path.basename(value).endsWith('.tmp'))throw Error('disk full');return fs.openSync(value,...args);}};
-  const store=createPreferenceStore({file,fsImpl:broken,randomId:()=> 'fixed'});
-  const updater=makeUpdater();
-  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload({available:false,version:CURRENT})});
+  const store=createPreferenceStore({file,fsImpl:flakyFs(()=>true),randomId:()=> 'fixed'});
+  const updater=makeUpdater({phase:'ready',mode:'installed',currentVersion:CURRENT,version:'0.35.0'});
+  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload({version:'0.35.0'})});
   const result=manager.setPreference('automatic');
   assert.equal(result.ok,true);
   assert.equal(result.persisted,false);
+  assert.equal(result.preference,'manual','effective policy degrades to manual');
+  const state=manager.snapshot();
+  assert.equal(state.preference,'manual');
+  assert.equal(state.requestedPreference,'automatic');
+  assert.equal(state.persistedPreference,null);
+  assert.equal(state.automaticTrusted,false);
+  assert.equal(state.preferenceSaveFailed,true);
+  assert.equal(state.installOnQuit,false);
+  assert.equal(manager.autoInstallCandidate().code,'preference-unsaved');
+  await manager.check({manual:true,force:true});
+  await manager.whenIdle();
+  assert.equal(updater.calls.download.length,0,'unsaved automatic cannot start a download');
+  assert.equal(manager.autoInstallStillAllowed(),false);
+  manager.dispose();
+});
+
+test('switching automatic to manual revokes auto install immediately even when the write fails',async t=>{
+  const file=tempFile(t);
+  let fail=false;
+  const store=createPreferenceStore({file,fsImpl:preferenceFailFs(()=>fail),randomId:()=> 'fixed'});
+  store.setPreference('automatic');
+  fail=true;
+  const updater=makeUpdater({phase:'ready',mode:'installed',currentVersion:CURRENT,version:'0.35.0'});
+  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload({version:'0.35.0'})});
+  assert.equal(manager.autoInstallCandidate().ok,true);
+  const result=manager.setPreference('manual');
+  assert.equal(result.ok,true);
+  assert.equal(result.persisted,false);
+  assert.equal(manager.snapshot().preference,'manual');
+  assert.equal(manager.autoInstallCandidate().code,'preference');
+  assert.equal(manager.autoInstallStillAllowed(),false);
+  assert.equal(manager.snapshot().overrideActive,true,'the failed manual choice gets a cross-process guard');
+  assert.equal(manager.snapshot().overridePersisted,true);
+  manager.dispose();
+
+  const reloaded=createPreferenceStore({file});
+  assert.equal(reloaded.snapshot().preference,'manual');
+  assert.equal(reloaded.snapshot().persistedPreference,'automatic');
+  assert.equal(reloaded.snapshot().automaticTrusted,false,'restart stays manual after a failed manual save');
+});
+
+test('ignore or pause write failures revoke automatic install and leave a manual override',async t=>{
+  for(const kind of ['ignoredVersion','pausedVersion']){
+    const file=tempFile(t);
+    let fail=false;
+    const store=createPreferenceStore({file,fsImpl:preferenceFailFs(()=>fail),randomId:()=> 'fixed'});
+    store.setPreference('automatic');
+    fail=true;
+    const updater=makeUpdater({phase:'ready',mode:'installed',currentVersion:CURRENT,version:'0.35.0'});
+    const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload({version:'0.35.0'})});
+    const result=kind==='ignoredVersion'?store.setIgnoredVersion('0.35.0'):store.setPausedVersion('0.35.0');
+    assert.equal(result.ok,true,kind);
+    assert.equal(result.persisted,false,kind);
+    assert.equal(store.snapshot()[kind],'0.35.0',kind);
+    assert.equal(store.snapshot().automaticTrusted,false,kind);
+    assert.equal(store.snapshot().overrideActive,true,kind);
+    assert.equal(manager.autoInstallCandidate().ok,false,kind);
+    assert.equal(manager.autoInstallStillAllowed(),false,kind);
+    manager.dispose();
+    const reloaded=createPreferenceStore({file}).snapshot();
+    assert.equal(reloaded.preference,'manual',kind);
+    assert.equal(reloaded.automaticTrusted,false,kind);
+  }
+});
+
+test('a successful re-save clears the failed state only when every condition allows automatic',async t=>{
+  const file=tempFile(t);
+  let fail=true;
+  const store=createPreferenceStore({file,fsImpl:flakyFs(()=>fail),randomId:()=>String(Math.random())});
+  const updater=makeUpdater({phase:'ready',mode:'installed',currentVersion:CURRENT,version:'0.35.0'});
+  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload({version:'0.35.0'})});
+  assert.equal(manager.setPreference('automatic').persisted,false);
+  assert.equal(manager.snapshot().automaticTrusted,false);
+  fail=false;
+  const retry=manager.setPreference('automatic');
+  assert.equal(retry.ok,true);
+  assert.equal(retry.persisted,true);
   assert.equal(manager.snapshot().preference,'automatic');
-  assert.equal(manager.snapshot().preferenceSaveFailed,true);
+  assert.equal(manager.snapshot().automaticTrusted,true);
+  assert.equal(manager.snapshot().overrideActive,false);
+  assert.equal(manager.autoInstallCandidate().ok,true);
+  manager.dispose();
+});
+
+test('background bookkeeping cannot persist an unsaved automatic choice',async t=>{
+  const file=tempFile(t);
+  let fail=false;
+  const store=createPreferenceStore({file,fsImpl:flakyFs(()=>fail),randomId:()=> 'fixed'});
+  assert.equal(store.setPreference('manual').persisted,true);
+  fail=true;
+  store.setPreference('automatic');
+  assert.equal(store.snapshot().automaticTrusted,false);
+  const bookmark=store.update({lastNotifiedVersion:'0.35.0'},{repair:false});
+  assert.equal(bookmark.skipped,true);
+  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).preference,'manual','a bookmark must not turn a failed automatic into a persisted one');
+  assert.equal(store.automaticTrusted(),false);
+});
+
+test('the actual official target is re-approved and may converge the discovery version upward',async t=>{
+  const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater(),notifications=[];
+  updater.onDownload=request=>{
+    updater.emit({phase:'downloading',version:null,transactionId:request.transactionId});
+    const verdict=request.approve({version:'0.36.0',transactionId:request.transactionId,expectedVersion:'0.35.0'});
+    updater.emit({phase:'ready',version:'0.36.0',transactionId:null});
+    return Promise.resolve({ok:verdict.ok,code:verdict.code});
+  };
+  const manager=makeManager({t,updater,store,notifications,readUpdate:async()=>updatePayload({version:'0.35.0'})});
+  await manager.check({manual:true,force:true});
+  await manager.whenIdle();
+  assert.equal(updater.calls.download.length,1);
+  assert.equal(updater.calls.download[0].expectedVersion,'0.35.0');
+  assert.equal(manager.snapshot().discovery.latestVersion,'0.36.0','the official target is now the displayed version');
+  assert.equal(manager.snapshot().version,'0.36.0');
+  assert.equal(manager.autoInstallCandidate().ok,true);
+  manager.dispose();
+});
+
+test('an official target older than discovery is superseded and retries are capped',async t=>{
+  const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater();
+  const pending=holdDownloads(updater);
+  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload({version:'0.35.0'})});
+  await manager.check({manual:true,force:true});
+  await flush();
+  assert.equal(pending.length,1);
+  for(let i=0;i<3;i+=1){
+    assert.equal(pending[i].request.expectedVersion,'0.35.0');
+    assert.deepEqual(updater.approve(pending[i],'0.34.9'),{ok:false,code:'superseded'});
+    updater.settle(pending[i],{ok:false,code:'superseded'});
+    await flush();
+  }
+  assert.equal(updater.calls.download.length,3,'supersede retries stop after two attempts');
+  assert.equal(pending.length,3,'no unbounded convergence loop');
+  manager.dispose();
+});
+
+test('cancelling before metadata resolves never writes a pause for a guessed version',async t=>{
+  const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater();
+  const pending=holdDownloads(updater);
+  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload()});
+  await manager.check({manual:true,force:true});
+  await flush();
+  assert.equal(manager.snapshot().version,null,'an unresolved download exposes no target');
+  const cancelled=manager.cancel();
+  assert.equal(cancelled.ok,true);
+  assert.equal(cancelled.version,null);
+  assert.equal(cancelled.paused,false);
+  assert.equal(store.snapshot().pausedVersion,null);
+  assert.equal(updater.calls.cancel,1);
+  assert.deepEqual(updater.approve(pending[0],'0.35.0'),{ok:false,code:'cancelled'},'a cancelled task cannot approve a late target');
+  manager.dispose();
+});
+
+test('ignore before metadata targets the displayed release and rejects its late approval',async t=>{
+  const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater();
+  const pending=holdDownloads(updater);
+  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload()});
+  await manager.check({manual:true,force:true});
+  await flush();
+  assert.equal(manager.snapshot().version,null);
+  store.setIgnoredVersion('0.35.0');
+  assert.deepEqual(updater.approve(pending[0],'0.35.0'),{ok:false,code:'ignored'});
+  store.setIgnoredVersion(null);
+  const ignored=manager.ignore();
+  assert.equal(ignored.ok,true);
+  assert.equal(ignored.version,'0.35.0','the version the user is looking at is the one ignored');
+  assert.equal(store.snapshot().ignoredVersion,'0.35.0');
+  assert.equal(updater.calls.cancel,1);
+  assert.deepEqual(updater.approve(pending[0],'0.35.0'),{ok:false,code:'cancelled'},'the cancelled transaction cannot be approved');
+  updater.settle(pending[0],{ok:false,code:'cancelled'});
+  await flush();
+  manager.dispose();
+});
+
+test('switching to manual or pausing during the network wait revokes the actual target approval',async t=>{
+  for(const action of ['store-manual','paused','manager-manual']){
+    const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater();
+    const pending=holdDownloads(updater);
+    const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload()});
+    await manager.check({manual:true,force:true});
+    await flush();
+    if(action==='store-manual')store.setPreference('manual');
+    else if(action==='paused')store.setPausedVersion('0.35.0');
+    else manager.setPreference('manual');
+    const verdict=updater.approve(pending[0],'0.35.0');
+    assert.equal(verdict.ok,false,action);
+    assert.equal(verdict.code,action==='manager-manual'?'cancelled':action==='paused'?'paused':'revoked',action);
+    assert.equal(manager.autoInstallCandidate().ok,false,action);
+    if(action==='manager-manual')assert.equal(updater.calls.cancel,1,'switching through the manager stops the in-flight transaction immediately');
+    updater.settle(pending[0],{ok:false,code:verdict.code});
+    await flush();
+    manager.dispose();
+  }
+});
+
+test('a late approval from an old transaction is stale once a newer download owns the updater',async t=>{
+  const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater();
+  const pending=holdDownloads(updater);
+  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload({version:'0.35.0'})});
+  await manager.check({manual:true,force:true});
+  await flush();
+  const old=pending[0];
+  assert.deepEqual(updater.approve(old,'0.35.0'),{ok:true,version:'0.35.0'});
+  updater.settle(old,{ok:false,code:'cancelled'});
+  await flush();
+  assert.equal(manager.snapshot().phase,'cancelled');
+  updater.emit({phase:'idle',version:null,transactionId:null});
+  const latest=updatePayload({version:'0.36.0'});
+  await manager.check({manual:true,force:true});
+  await flush();
+  assert.equal(updater.calls.download.length,2);
+  const fresh=pending[1];
+  assert.deepEqual(updater.approve(old,'0.36.0'),{ok:false,code:'stale'},'the old callback cannot approve the new target');
+  assert.deepEqual(updater.approve(fresh,'0.36.0'),{ok:true,version:'0.36.0'});
+  updater.settle(fresh,{ok:true});
+  updater.emit({phase:'ready',version:'0.36.0',transactionId:null});
+  await flush();
+  assert.equal(manager.snapshot().version,'0.36.0');
+  assert.equal(manager.autoInstallCandidate().ok,true);
+  manager.dispose();
+});
+
+test('consecutive releases supersede the old download and only the new task can become ready',async t=>{
+  const store=makeStore(t,{preference:'automatic'}),updater=makeUpdater();
+  const pending=holdDownloads(updater);
+  let latest='0.35.0';
+  const manager=makeManager({t,updater,store,readUpdate:async()=>updatePayload({version:latest})});
+  await manager.check({manual:true,force:true});
+  await flush();
+  const first=pending[0];
+  assert.deepEqual(updater.approve(first,'0.35.0'),{ok:true,version:'0.35.0'});
+  updater.emit({phase:'downloading',version:'0.35.0',transactionId:first.request.transactionId});
+  latest='0.36.0';
+  await manager.check({manual:true,force:true});
+  await flush();
+  assert.equal(updater.calls.cancel,1,'the old target is cancelled before the new one starts');
+  assert.equal(manager.snapshot().discovery.latestVersion,'0.36.0');
+  await flush();
+  assert.equal(updater.calls.download.length,2,'no parallel duplicate download');
+  const second=pending[1];
+  assert.equal(second.request.expectedVersion,'0.36.0');
+  assert.deepEqual(updater.approve(second,'0.36.0'),{ok:true,version:'0.36.0'});
+  updater.settle(second,{ok:true});
+  updater.emit({phase:'ready',version:'0.36.0',transactionId:null});
+  await flush();
+  assert.equal(manager.snapshot().phase,'ready');
+  assert.equal(manager.snapshot().version,'0.36.0');
+  assert.equal(manager.autoInstallCandidate().ok,true);
+  assert.equal(updater.calls.download.length,2);
   manager.dispose();
 });

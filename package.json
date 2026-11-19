@@ -26,6 +26,7 @@
     "test:app-update:windows": "node tests/app-update-windows.cjs",
     "test:app-update:windows-faults": "node tests/app-update-windows-faults.cjs",
     "test:app-update:installed": "node tests/app-update-installed.cjs",
+    "test:app-update:installed-auto": "node tests/app-update-installed.cjs --auto",
     "test:app-update:helper-startup": "node tests/app-update-helper-startup.cjs",
     "test:app-update:installed-failure": "node tests/app-update-installed-failure.cjs",
     "test:session-concurrency": "node tests/session-tool-scheduler.cjs && node tests/session-tool-bridge.cjs && node tests/ordinary-session-resolver.cjs && node tests/ordinary-session-runtime.cjs",
