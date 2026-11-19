@@ -177,8 +177,18 @@ if (!process.versions.electron) {
     check(await read(`document.querySelector('.pj-search-input').value==='设计' && document.querySelector('#projectSidebar').classList.contains('search-open')`), 'Search real input');
     await key('Escape', 'Escape', 27); check(await read(`document.querySelector('.pj-search-input').value===''`), 'Search first Escape clears query');
     await key('Escape', 'Escape', 27); check(await read(`document.activeElement.id==='navSearch'`), 'Search second Escape closes and restores focus');
-    await pointer('#groupHead'); const collapsed = await read(`document.querySelector('#groupHead').getAttribute('aria-expanded')==='false'`);
-    check(collapsed, 'Group collapse'); await pointer('#groupHead');
+    /* 折叠整个「项目」分组时，搜索框会一起不可见：搜索态与两个图标必须
+     * 同时结束，下一次点击搜索图标直接重新打开，而不是先关掉隐藏的旧搜索。 */
+    await pointer('#navSearch'); await waitFor(`document.activeElement.classList.contains('pj-search-input')`, 'search refocus for group test');
+    await pointer('.pj-search-scope[data-scope="all"]');
+    check(await read(`(()=>{const b=document.querySelector('.pj-search-scope[data-scope="all"]');return b.classList.contains('on')&&b.getAttribute('aria-pressed')==='true'})()`), 'Search scope selection has visible and pressed state');
+    await pointer('#groupHead');
+    check(await read(`(()=>{const g=document.querySelector('#groupHead').closest('.rail-group');return !g.classList.contains('open')&&document.querySelector('#groupHead').getAttribute('aria-expanded')==='false'&&!document.querySelector('#projectSidebar').classList.contains('search-open')&&document.querySelector('#navSearch').getAttribute('aria-expanded')==='false'&&!document.querySelector('#navSearch').classList.contains('is-active')&&document.querySelector('#btnTopbarSearch').getAttribute('aria-expanded')==='false'&&getComputedStyle(document.querySelector('#groupBody')).display==='none'})()`), 'Collapsing project group closes search and clears both icons');
+    check(await read(`document.activeElement.id==='groupHead'`), 'Group collapse keeps focus on its trigger');
+    await shot('group-collapsed-search-closed-dark', '1440x900');
+    await pointer('#navSearch'); await waitFor(`document.activeElement.classList.contains('pj-search-input')`, 'search open after group reopen');
+    check(await read(`(()=>{const g=document.querySelector('#groupHead').closest('.rail-group');const a=document.querySelector('.pj-search-scope.on');return g.classList.contains('open')&&document.querySelector('#groupHead').getAttribute('aria-expanded')==='true'&&document.querySelector('#projectSidebar').classList.contains('search-open')&&a&&a.dataset.scope==='active'&&a.getAttribute('aria-pressed')==='true'&&document.querySelector('.pj-sess-list').dataset.view==='list'})()`), 'Search reopen expands group and resets scope to active');
+    await pointer('#navSearch');
     await pointer('#btnSidebarCollapse'); check(await read(`document.activeElement.id==='btnSidebarExpand'`), 'Sidebar collapse focus');
     /* 折叠后侧栏（含 Settings）整体收起，顶栏只留展开入口；设置仍可通过展开侧栏到达。 */
     check(await read(`(()=>{const b=document.querySelector('#btnSidebarExpand');b.focus();return document.activeElement===b&&b.offsetParent!==null&&document.querySelector('#projectSidebar').hidden})()`), 'Collapsed shell keeps its expand control focusable');

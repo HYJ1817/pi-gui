@@ -449,17 +449,103 @@ const tick = (ms = 40) => new Promise((r) => setTimeout(r, ms));
     assert.equal(list.querySelector('.pj-sr'), null);
   });
 
-  await check('重新打开是干净的搜索框（关键词 / 结果 / 选中范围状态不残留）', async () => {
+  await check('关闭搜索会复位范围：已归档 / 全部不会留到下一次打开', async () => {
+    for (const scopeId of ['archived', 'all']) {
+      click($('navSearch'));
+      await tick(60);
+      let scope = activeBox().querySelector(`.pj-search-scope[data-scope="${scopeId}"]`);
+      click(scope);
+      await tick(20);
+      assert.equal(scope.classList.contains('on'), true);
+      assert.equal(scope.getAttribute('aria-pressed'), 'true');
+
+      let input = activeBox().querySelector('.pj-search-input');
+      input.value = 'B 的会话';
+      input.dispatchEvent(new w.Event('input', { bubbles: true }));
+      await tick(320);
+      assert.equal(searchCalls.at(-1).scope, scopeId, 'scope was not applied to the request');
+      assert.equal(activeBox().querySelector('.pj-sess-list').dataset.view, 'search');
+
+      click($('navSearch'));
+      await tick(60);
+      assert.equal($('projectSidebar').classList.contains('search-open'), false);
+      assert.equal(activeBox().querySelector('.pj-search-scope.on').textContent, '活跃', 'close did not reset the scope');
+
+      click($('navSearch'));
+      await tick(60);
+      input = activeBox().querySelector('.pj-search-input');
+      assert.equal(input.value, '');
+      assert.equal(d.activeElement, input);
+      assert.equal(activeBox().querySelector('.pj-sess-list').dataset.view, 'list');
+      assert.equal(activeBox().querySelector('.pj-search-scope.on').textContent, '活跃');
+      assert.equal(activeBox().querySelector('.pj-search-scope[data-scope="archived"]').getAttribute('aria-pressed'), 'false');
+      assert.equal(activeBox().querySelector('.pj-search-scope[data-scope="all"]').getAttribute('aria-pressed'), 'false');
+
+      /* 重新打开后的新请求也必须回到默认范围，不是只把按钮画回活跃。 */
+      input.value = 'B 的会话';
+      input.dispatchEvent(new w.Event('input', { bubbles: true }));
+      await tick(320);
+      assert.equal(searchCalls.at(-1).scope, 'active', 'reopened search reused the old scope');
+
+      click($('navSearch'));
+      await tick(40);
+    }
+  });
+
+  await check('收起整个「项目」分组会真正关闭搜索，下一次点击直接打开', async () => {
     click($('navSearch'));
     await tick(60);
+    const group = $('groupHead').closest('.rail-group');
+    assert.equal(group.classList.contains('open'), true);
     const input = activeBox().querySelector('.pj-search-input');
+
+    /* 先换到非默认范围，再挂起一个请求：折叠分组必须走完整关闭路径，
+     * 范围复位、在途响应作废、图标复原都要一起发生。 */
+    click(activeBox().querySelector('.pj-search-scope[data-scope="archived"]'));
+    await tick(20);
+    holdSearch = true;
+    input.value = 'abc';
+    input.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(320);
+    assert.ok(heldSearch, 'search request was not held');
+
+    $('groupHead').focus();
+    click($('groupHead'));
+    await tick(60);
+    assert.equal(group.classList.contains('open'), false);
+    assert.equal($('groupHead').getAttribute('aria-expanded'), 'false');
+    assert.equal(d.activeElement, $('groupHead'), 'focus was left inside the hidden group');
+    assert.equal($('projectSidebar').classList.contains('search-open'), false);
+    assert.equal($('navSearch').getAttribute('aria-expanded'), 'false');
+    assert.equal($('navSearch').classList.contains('is-active'), false);
+    assert.equal($('btnTopbarSearch').getAttribute('aria-expanded'), 'false');
+    assert.equal($('btnTopbarSearch').classList.contains('is-active'), false);
     assert.equal(input.value, '');
-    assert.equal(d.activeElement, input);
     assert.equal(activeBox().querySelector('.pj-sess-list').dataset.view, 'list');
     assert.equal(activeBox().querySelector('.pj-search-scope.on').textContent, '活跃');
+
+    heldSearch();
+    heldSearch = null;
+    await tick(80);
+    assert.equal(activeBox().querySelector('.pj-sess-list').dataset.view, 'list');
+    assert.equal(activeBox().querySelector('.pj-sr'), null);
+
+    /* 下一次点击必须直接重新打开，而不是先关掉一个看不见的旧搜索。 */
+    click($('navSearch'));
+    await tick(60);
+    assert.equal(group.classList.contains('open'), true);
+    assert.equal($('groupHead').getAttribute('aria-expanded'), 'true');
+    assert.equal($('projectSidebar').classList.contains('search-open'), true);
+    assert.equal($('navSearch').getAttribute('aria-expanded'), 'true');
+    assert.equal(d.activeElement, activeBox().querySelector('.pj-search-input'));
+    assert.equal(activeBox().querySelector('.pj-search-scope.on').textContent, '活跃');
+    click($('navSearch'));
+    await tick(40);
   });
 
   await check('Escape 关闭搜索并归还焦点；有内容时先清空，再按一次关闭', async () => {
+    click($('navSearch'));
+    await tick(60);
     const input = activeBox().querySelector('.pj-search-input');
     input.value = 'abc';
     input.dispatchEvent(new w.Event('input', { bubbles: true }));
