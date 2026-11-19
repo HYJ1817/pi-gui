@@ -461,6 +461,17 @@ function build({ text, kind, userIndex, hasImages: initialHasImages, imageStateK
         setStatus(errorText(result.result?.code || result.state), 'error');
         return;
       }
+      /* 后端明确没有这条 requestId（请求没到达，或状态已过普通 TTL）：
+       * 没有可恢复的事务，也没有服务端锁。清掉本地句柄并解除提交禁用，
+       * 明确提示刷新检查历史，而不是把编辑器永久锁死。 */
+      if (result?.state === 'unknown') {
+        unresolved = false;
+        preflightState = 'pending';
+        clearPendingMessageEdit(lastRequest.requestId);
+        syncSubmit();
+        setStatus(errorText('recovery_required'), 'error');
+        return;
+      }
       /* 后端已经换代/没有这条事务（stale_runtime 等）：锁不可能再存在，
        * 不能把用户永久困在“重新同步”里。清掉本地记录并允许重新开始。 */
       if (result && result.ok === false && ['stale_runtime', 'stale_session', 'unavailable'].includes(result.code)) {
