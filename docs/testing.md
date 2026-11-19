@@ -155,6 +155,9 @@ DOCX XML 顺序、Classic 防抖草稿隔离、历史失效/最新 800 条/搜�
 但 Worktree 安全封装有意清除 Git 环境变量，因此完整验证不能统一使用仓库内 TEMP。
 本机可只为实际使用 esbuild 的套件单独指定可写 TEMP，其余 fixture 留在仓库外；
 不得放宽产品的环境清理或路径断言。并行验证应分别设置 HTTP 及 `UI2C_CDP_PORT`。
+`ui2-visual` 默认让浏览器分配 CDP 端口；首选 Chromium 连续两次未能暴露
+DevTools 时，会换用同机另一个 Chromium（例如 Edge）再试一次。这是对 CI
+冷启动 / 单一浏览器启动噪声的测试夹具兜底，不改变布局判据或产品行为。
 若沙箱阻止打包产物的子进程在仓库外新建数据目录，可仅对 `app-check` /
 `exe-check` 使用隔离的仓库内 TEMP；这是夹具放行，不是产品目录或 CI 默认路径。
 遇到 PowerShell 策略限制时先核实失败原因，测试进程策略不替代 SACL 权限，
