@@ -41,6 +41,8 @@ export const MENU_ICONS = Object.freeze({
   trash: iconMarkup('trash'),
   archive: iconMarkup('archive'),
   restore: iconMarkup('restore'),
+  /* 项目行菜单里的「切换到此项目」复用侧栏的项目图形。 */
+  folder: iconMarkup('folder'),
 });
 
 const MENU_ID = 'actionMenu';

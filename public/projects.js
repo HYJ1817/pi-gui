@@ -93,45 +93,68 @@ function attachPreview(item, p, index) {
   box.id = 'pjPreview-' + index;
   box.hidden = !projectExpanded(p.path);
   item.after(box);
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'pj-chev';
-  toggle.innerHTML = SVG_CHEV;
-  toggle.setAttribute('aria-controls', box.id);
   let request = 0;
+  let loading = false;
+  let loaded = false;
+  const trigger = item.querySelector('.pj-select');
   function sync() {
-    toggle.setAttribute('aria-expanded', String(!box.hidden));
-    toggle.setAttribute('aria-label', `${box.hidden ? '展开' : '收起'}「${p.name || p.path}」的会话`);
+    if (trigger && trigger.isConnected) trigger.setAttribute('aria-expanded', String(!box.hidden));
+  }
+  function status(text) {
+    const hint = document.createElement('div');
+    hint.className = 'pj-sess-hint';
+    hint.textContent = text;
+    return hint;
+  }
+  function retryButton() {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'pj-sess-more pj-sess-retry';
+    retry.textContent = '重试';
+    retry.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      void load();
+    };
+    return retry;
   }
   async function load() {
     const token = ++request;
-    box.textContent = '读取会话…';
+    loading = true;
+    box.replaceChildren(status('读取会话…'));
     try {
       const result = await fetchSessions(p.path);
+      /* 迟到的响应只认自己这一次：重画 / 收起后已经换过 token 或节点
+       * 不再连接时，一律丢弃 —— 否则 A 的列表会盖到 B 的预览上。 */
       if (!box.isConnected || token !== request) return;
-      if (!result.ok) throw new Error();
+      if (!result || result.ok !== true) throw new Error();
       box.replaceChildren();
       const rows = (result.sessions || []).filter(s => !s.archived);
       for (const s of rows) box.append(sessionActions.previewRow(s, async selected => {
         if (sessionActions.openBackgroundSession?.(selected, p)) return;
         await activateForSessionAction(p, () => sessionActions.openPreviewSession(selected));
       }));
-      if (!rows.length) box.textContent = '还没有会话';
+      if (!rows.length) box.append(status('还没有会话'));
+      loaded = true;
     } catch {
-      if (box.isConnected && token === request) box.textContent = '读取失败，收起后再展开重试';
+      if (!box.isConnected || token !== request) return;
+      box.replaceChildren(status('读取会话失败。'), retryButton());
+    } finally {
+      if (token === request) loading = false;
     }
   }
-  toggle.onclick = e => {
-    e.preventDefault();
-    e.stopPropagation();
-    box.hidden = !box.hidden;
-    setProjectExpanded(p.path, !box.hidden);
+  function setExpanded(value) {
+    const next = Boolean(value);
+    box.hidden = !next;
+    setProjectExpanded(p.path, next);
     sync();
-    if (!box.hidden) load();
-  };
-  item.prepend(toggle);
+    if (next && !loaded && !loading) void load();
+  }
+  /* 项目行上唯一的折叠触发器（.pj-select）把点击交给这里。
+   * 非当前项目只读写自己的预览，不碰当前工作区。 */
+  item.__pjToggle = () => setExpanded(box.hidden);
   sync();
-  if (!box.hidden) load();
+  if (!box.hidden) void load();
 }
 
 function headerAction(action, label, onClick = null) {
@@ -201,6 +224,8 @@ export function renderProjects() {
   for (const p of projectData.items) {
     const isActive = samePath(p.path, projectData.active);
     const label = p.name || p.path;
+    const index = el.projects.querySelectorAll('.project').length;
+    const controls = isActive ? 'pjSessionsBox' : `pjPreview-${index}`;
 
     const item = document.createElement('div');
     item.className = 'project' + (isActive ? ' active' : '');
@@ -210,14 +235,30 @@ export function renderProjects() {
      * 现在行内显示项目名、展开箭头与操作入口。 */
     item.title = p.path;
 
-    const select = document.createElement(isActive ? 'span' : 'button');
-    if (!isActive) select.type = 'button';
+    /* 项目标题区域是**一个**折叠触发控件：箭头、文件夹图标、名称与右侧空白
+     * 都属于这个 button。这样 Enter / Space 与 aria-expanded 都只落在一个
+     * 语义节点上，也不会出现「箭头 button 套在标题 button 里」的嵌套交互。
+     * 点标题只展开 / 收起该项目的会话，不切项目、不碰对话区。 */
+    const select = document.createElement('button');
+    select.type = 'button';
     select.className = 'pj-select';
     /* 图标与名称都不含路径，所以把路径补进无障碍名字里 ——
      * 视觉上的副标题去掉之后，读屏仍能拿到完整路径。 */
     const ariaPath = p.name && p.path && p.path !== p.name ? `（${p.path}）` : '';
-    select.setAttribute('aria-label', `${isActive ? '当前项目' : '切换到项目'}：${label}${ariaPath}`);
+    select.setAttribute('aria-label', `${isActive ? '当前项目' : '项目'}：${label}${ariaPath}，展开或收起会话`);
+    select.setAttribute('aria-controls', controls);
+    select.setAttribute('aria-expanded', String(projectExpanded(p.path, isActive)));
     if (isActive) select.setAttribute('aria-current', 'true');
+    select.onclick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      item.__pjToggle?.();
+    };
+
+    const chev = document.createElement('span');
+    chev.className = 'pj-chev';
+    chev.setAttribute('aria-hidden', 'true');
+    chev.innerHTML = SVG_CHEV;
 
     const icon = document.createElement('span');
     icon.className = 'pj-icon';
@@ -230,14 +271,14 @@ export function renderProjects() {
     n.textContent = label;
     body.append(n);
 
-    /* 行尾是**一个**三点入口，不再是常驻的 ✕。
+    /* 行尾是**两个**独立点击区：新增对话（+）与三点（…），都是标题触发按钮的
+     * 兄弟节点，不在它里面；各自 stopPropagation，点它们不会顺带折叠。
      *
      * 三个行为必须完全隔离（点是点、折是折、切是切）：
-     *   点 name / folder（`.pj-select`）→ 原有项目切换
-     *   点 chevron（`.pj-chev`，由 sessions.js 插在行首）→ 原有会话折叠
+     *   点标题区域（`.pj-select`）→ 只展开 / 收起这个项目的会话
+     *   点 +（`.pj-header-action`）→ **只**在这个项目里开新会话 / 草稿
      *   点 …（`.pj-row-menu-trigger`）→ **只**打开动作菜单
-     * 所以这里自己 preventDefault + stopPropagation：事件不冒泡到行上，
-     * 也就不会顺带触发切换或折叠。 */
+     */
     const menuTrigger = document.createElement('button');
     menuTrigger.className = 'pj-row-menu-trigger row-action-trigger';
     menuTrigger.type = 'button';
@@ -249,23 +290,28 @@ export function renderProjects() {
     menuTrigger.onclick = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      /* 菜单只放**真实已有**的功能：项目设置（既有 openProjectSettings）
-       * 与移除项目（既有 removeProject，前面加一次确认）。
+      /* 菜单只放**真实已有**的功能：工作区管理、切换到此项目（非当前项目）、
+       * 项目设置（仅当前项目）与移除项目（前面加一次确认）。
        * 不发明置顶 / 分区 / 分支 / 打开资源管理器这些 Pi GUI 没有的东西。
        *
        * ⚠️「项目设置」**只对当前项目**出现：`openProjectSettings()` 读的是
        * 当前**激活**项目的配置，对一个非当前项目开放这个入口，等于「点 B 的
-       * 菜单、实际改的是 A 的设置」。要改 B 就先切到 B —— 但切换会重启 Pi、
-       * 清聊天，那是一个菜单动作不该顺手制造的副作用。
+       * 菜单、实际改的是 A 的设置」。要改 B 就先切到 B —— 切换会重启 Pi、
+       * 清聊天，所以它留在显式的菜单动作里，不再绑定普通标题点击。
        * 「移除项目」按**这一行的 path** 操作，与是不是当前项目无关。 */
       openActionMenu(menuTrigger, [
         { label: '工作区管理', icon: MENU_ICONS.archive, onClick: () => openWorktreeManager(p, {
           activateWorkspace: (workspace, run) => activateProject(workspace.cwd, `${label} · ${workspace.branch || '主工作区'}`, run),
         }) },
-        ...(isActive ? [
-          { label: '项目设置', icon: MENU_ICONS.pencil, onClick: () => openProjectSettings() },
-          { separator: true },
-        ] : []),
+        ...(isActive
+          ? [
+              { label: '项目设置', icon: MENU_ICONS.pencil, onClick: () => openProjectSettings() },
+              { separator: true },
+            ]
+          : [
+              { label: '切换到此项目', icon: MENU_ICONS.folder, onClick: () => activateProject(p.path, label) },
+              { separator: true },
+            ]),
         { label: '移除项目', icon: MENU_ICONS.trash, danger: true, onClick: () => confirmRemoveProject(p.path, label) },
       ]);
     };
@@ -275,25 +321,31 @@ export function renderProjects() {
       menuTrigger.click();
     };
 
-    select.append(icon, body);
+    select.append(chev, icon, body);
     item.append(select);
-    if (!isActive) item.append(headerAction('newSession', `在「${label}」中新对话`, async () => {
+    /* 每个项目（含当前项目）都有自己的新增对话入口。当前项目直接走既有
+     * newSession()（它内部已有「后台草稿 / 新会话」分支）；非当前项目先尝试
+     * 后台草稿，否则按既有会话动作路径激活该项目后再发 new_session。
+     * 加号是标题触发按钮的兄弟节点，不参与折叠。 */
+    item.append(headerAction('newSession', `在「${label}」中新对话`, async () => {
       if (sessionActions.newBackgroundSession?.(p)) return;
+      if (isActive) {
+        sessionActions.newSession?.();
+        return;
+      }
       await activateForSessionAction(p, () => sessionActions.newSession?.());
     }));
     item.append(menuTrigger);
-    if (!isActive) {
-      select.onclick = () => activateProject(p.path, label);
-    }
 
     el.projects.appendChild(item);
 
     /* 当前项目使用完整会话列表，其它项目按需加载只读预览。
-     * 当前项目的折叠箭头由 sessions.js 插进这一行：
-     * 箭头必须在 .project **行内**，否则会破坏「.pj-sessions 是当前项目行的
-     * 紧邻兄弟」这条被测试盯着的结构（smoke / cdp-shot 都有断言）。 */
+     * 当前项目的会话块由 sessions.js 建在行后，并把切换控制器挂到
+     * item.__pjToggle；非当前项目由 attachPreview() 做同样的事。
+     * 两种情况的展开状态都写 sidebar-expansion 的路径 Map，因此可以同时
+     * 展开多个项目，刷新后也保留。 */
     if (isActive && sessionsSlot) sessionsSlot(item, p);
-    if (!isActive) attachPreview(item, p, el.projects.querySelectorAll('.project').length);
+    if (!isActive) attachPreview(item, p, index);
   }
   syncTitleProject();
 }

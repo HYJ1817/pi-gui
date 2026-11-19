@@ -178,25 +178,33 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 }
 .project:hover{background:var(--hover)}
 .project.active{background:var(--control-active)}
+/* 项目标题区域是**一个**按钮（.pj-select）：箭头、文件夹图标、项目名和
+ * 名称后的空白都在它里面，点击语义只有「展开 / 收起本项目的会话」。
+ * 它不再是 span + 独立箭头按钮 —— 那样既有嵌套交互，也让「点空白」没有归属。 */
+.pj-select{
+  display:flex;align-items:center;gap:6px;flex:1;min-width:0;
+  padding:0;border:0;background:transparent;color:inherit;font:inherit;
+  text-align:left;cursor:pointer;border-radius:4px;
+}
+.pj-select:focus-visible{outline:2px solid var(--focus-ring);outline-offset:-2px}
 .project .pj-icon{flex:0 0 auto;color:var(--t3);display:flex}
 .project .pj-icon svg{width:13px;height:13px}
 .project.active .pj-icon{color:var(--t1)}
 .pj-body{flex:1;min-width:0;display:flex;align-items:center}
-.pj-name{display:block;font-size:12.5px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pj-name{display:block;min-width:0;font-size:12.5px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .project.active .pj-name{color:var(--t1)}
 
-/* 折叠箭头：只出现在「有会话可折叠」的那一行（当前项目）上。
- * aria-expanded 同时驱动图标方向和 aria 语义 —— 不给折叠态另起一个类，
- * 免得两者漂移。 */
+/* 折叠箭头是纯装饰：命中测试交给外层 .pj-select，键盘与 aria 也由它持有。
+ * 方向只由 .pj-select 的 aria-expanded 驱动，不另起折叠类，免得两者漂移。 */
 .pj-chev{
   width:16px;height:16px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-  padding:0;border:0;background:transparent;color:var(--t3);cursor:pointer;border-radius:4px;
+  padding:0;color:var(--t3);pointer-events:none;
   transition:color .12s;
 }
-.pj-chev:hover{color:var(--t1)}
+.pj-select:hover .pj-chev{color:var(--t1)}
 .pj-chev svg{width:12px;height:12px;transition:transform .16s}
 /* 展开（aria-expanded=true）→ 箭头朝下；折叠 → 朝右。 */
-.pj-chev[aria-expanded="true"] svg{transform:rotate(90deg)}
+.pj-select[aria-expanded="true"] .pj-chev svg{transform:rotate(90deg)}
 
 /* 项目行尾的三点入口（原来是常驻的 ✕）。
  * 参考 Codex 的做法：无边框、圆角、单色、**hover / focus-within 才显形**，

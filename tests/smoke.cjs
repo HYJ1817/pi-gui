@@ -3432,11 +3432,21 @@ staticCheck();
   $('groupHead').click();
   check('项目分组再次点击后容器与内容恢复', () => railGroup.classList.contains('open') && $('groupHead').getAttribute('aria-expanded') === 'true' && groupDisplay() !== 'none');
 
-  // --- 项目切换 ---
-  const items = [...window.document.querySelectorAll('#projects .project')];
-  items[1].querySelector('.pj-select').click();
-  await new Promise((r) => setTimeout(r, 10));
-  check('切换项目调用 activate', () => true);
+  // --- 项目标题：只折叠本项目的会话，不切换项目 ---
+  {
+    const rows = [...window.document.querySelectorAll('#projects .project')];
+    const activeRow = rows.find((r) => r.classList.contains('active'));
+    const sessionsBox = activeRow.nextElementSibling;
+    const beforeGen = window.S.workspaceGeneration;
+    const beforeHidden = sessionsBox.hidden;
+    activeRow.querySelector('.pj-select').click();
+    await new Promise((r) => setTimeout(r, 10));
+    check('点击当前项目标题只折叠会话，不切换工作区', () =>
+      (sessionsBox.hidden === !beforeHidden && window.S.workspaceGeneration === beforeGen)
+      || JSON.stringify({ hidden: sessionsBox.hidden, beforeHidden, gen: [beforeGen, window.S.workspaceGeneration] }));
+    activeRow.querySelector('.pj-select').click();
+    await new Promise((r) => setTimeout(r, 10));
+  }
 
   // --- 项目行尾的动作入口 ---
   check('项目行有一个三点入口（旧的常驻 ✕ 已移除）', () => {
@@ -6797,6 +6807,7 @@ staticCheck();
 
     const proj = () => $('projects');
     const row = () => proj().querySelector('.project.active');
+    const select = () => row() && row().querySelector('.pj-select');
     const chev = () => row() && row().querySelector('.pj-chev');
     const box = () => proj().querySelector('.pj-sessions');
     const rowCount = () => (box() ? box().querySelectorAll('.pj-sess').length : 0);
@@ -6804,59 +6815,69 @@ staticCheck();
     check('会话样式：每行都有装饰圆点，不进入读屏名称', () =>
       [...box().querySelectorAll('.pj-sess')].every(r => r.querySelector('.pj-sess-primary > .pj-sess-dot')?.getAttribute('aria-hidden') === 'true'));
 
-    check('折叠：每个项目都有独立展开箭头', () => {
+    check('折叠：每个项目都有独立的标题触发按钮与装饰箭头', () => {
       const rows = [...proj().querySelectorAll('.project')];
-      const withChev = rows.filter((r) => r.querySelector('.pj-chev'));
-      return withChev.length === rows.length || `有箭头的行数=${withChev.length}`;
+      const withSelect = rows.filter((r) => r.querySelector('.pj-select') && r.querySelector('.pj-select > .pj-chev'));
+      return withSelect.length === rows.length || `缺触发器的行数=${rows.length - withSelect.length}`;
     });
     check('折叠：默认展开（列表可见、aria-expanded=true）', () =>
-      Boolean(box() && box().hidden === false && chev() && chev().getAttribute('aria-expanded') === 'true') ||
-      JSON.stringify({ box: Boolean(box()), hidden: box() && box().hidden, aria: chev() && chev().getAttribute('aria-expanded') }));
-    check('折叠：箭头在项目行内、且是行内第一个元素（不新增兄弟节点）', () =>
-      Boolean(chev() && chev().parentElement === row() && row().firstElementChild === chev()) || '箭头不在行首');
-    check('折叠：aria-controls 指向会话块本身', () =>
-      Boolean(box() && box().id && chev() && chev().getAttribute('aria-controls') === box().id) ||
-      JSON.stringify({ controls: chev() && chev().getAttribute('aria-controls'), boxId: box() && box().id }));
-    check('折叠：箭头是可键盘操作的 button，带「展开 / 收起」标签', () => {
+      Boolean(box() && box().hidden === false && select() && select().getAttribute('aria-expanded') === 'true') ||
+      JSON.stringify({ box: Boolean(box()), hidden: box() && box().hidden, aria: select() && select().getAttribute('aria-expanded') }));
+    check('折叠：箭头、图标、名称、空白共用同一个标题按钮（没有嵌套交互）', () => {
+      const s = select();
       const c = chev();
-      return Boolean(c && c.tagName === 'BUTTON' && c.type === 'button' && /展开|收起/.test(c.getAttribute('aria-label') || '')) ||
-        (c ? c.outerHTML.slice(0, 120) : '没有箭头');
+      return Boolean(s && c && s.tagName === 'BUTTON' && s.parentElement === row() && row().firstElementChild === s
+        && c.parentElement === s && c.tagName === 'SPAN' && c.getAttribute('aria-hidden') === 'true'
+        && s.querySelector('.pj-icon') && s.querySelector('.pj-name')) || '标题区域结构不对';
     });
-    check('折叠：箭头没有破坏「会话块紧跟当前项目行」这条既有结构', () =>
+    check('折叠：aria-controls 指向会话块本身', () =>
+      Boolean(box() && box().id && select() && select().getAttribute('aria-controls') === box().id) ||
+      JSON.stringify({ controls: select() && select().getAttribute('aria-controls'), boxId: box() && box().id }));
+    check('折叠：标题触发器是可键盘操作的 button，带「展开 / 收起」标签', () => {
+      const s = select();
+      return Boolean(s && s.tagName === 'BUTTON' && s.type === 'button' && /展开|收起/.test(s.getAttribute('aria-label') || '')) ||
+        (s ? s.outerHTML.slice(0, 120) : '没有标题触发器');
+    });
+    check('折叠：触发器没有破坏「会话块紧跟当前项目行」这条既有结构', () =>
       box().previousElementSibling === row() || '会话块不在当前项目下面');
 
     const before = rowCount();
     check('折叠：折叠前列表里有会话', () => before > 0 || `rows=${before}`);
 
     // 折叠
-    chev().click();
+    select().click();
     await wait(20);
-    check('折叠：点箭头 → 会话块隐藏、aria-expanded=false、标签变「展开」', () =>
-      (box().hidden === true && chev().getAttribute('aria-expanded') === 'false' && /^展开/.test(chev().getAttribute('aria-label'))) ||
-      JSON.stringify({ hidden: box().hidden, aria: chev().getAttribute('aria-expanded'), label: chev().getAttribute('aria-label') }));
+    check('折叠：点标题 → 会话块隐藏、aria-expanded=false', () =>
+      (box().hidden === true && select().getAttribute('aria-expanded') === 'false') ||
+      JSON.stringify({ hidden: box().hidden, aria: select().getAttribute('aria-expanded') }));
     check('折叠：只是隐藏，会话行没有从 DOM 里消失（搜索 / 改名 / 归档还要用）', () =>
       rowCount() === before || `${before} → ${rowCount()}`);
     check('折叠：项目行本身没被折掉（折的只是这个项目的会话）', () =>
       Boolean(row() && row().isConnected) || '项目行不见了');
 
     // 展开
-    chev().click();
+    select().click();
     await wait(20);
     check('折叠：再点一次恢复展开', () =>
-      (box().hidden === false && chev().getAttribute('aria-expanded') === 'true') ||
-      JSON.stringify({ hidden: box().hidden, aria: chev().getAttribute('aria-expanded') }));
+      (box().hidden === false && select().getAttribute('aria-expanded') === 'true') ||
+      JSON.stringify({ hidden: box().hidden, aria: select().getAttribute('aria-expanded') }));
 
-    // 点箭头不误触项目切换（真事件、会冒泡 → 走的正是 stopPropagation 那条路）
-    check('折叠：点箭头不会误触项目切换', () => {
-      const select = row().querySelector('.pj-select');
-      let switched = 0;
-      const orig = select.onclick;
-      select.onclick = () => { switched++; };
-      chev().click();
-      chev().click();
-      select.onclick = orig;
-      return switched === 0 || `顺带切了 ${switched} 次项目`;
-    });
+    /* 点标题不切项目：整条路径只读写 sidebar-expansion，不碰工作区。
+     * 用 fetch 当判据（身份是请求 URL，不是调用序号）。 */
+    {
+      const originalFetch = window.fetch;
+      let activations = 0;
+      window.fetch = (url, opts) => {
+        if (String(url).includes('/api/projects/activate')) activations++;
+        return originalFetch(url, opts);
+      };
+      select().click();
+      select().click();
+      await wait(30);
+      window.fetch = originalFetch;
+      check('折叠：点标题不会触发项目切换请求', () =>
+        activations === 0 || `顺带发了 ${activations} 次 activate`);
+    }
     await wait(20);
     check('折叠：上面那两次点击之后状态仍然是展开（没被切换带乱）', () =>
       box().hidden === false || '折叠状态被带乱了');
@@ -6953,17 +6974,18 @@ staticCheck();
       let inactiveRow = [...proj().querySelectorAll('.project')].find((r) => !r.classList.contains('active'));
 
       const preview = inactiveRow.nextElementSibling;
-      check('项目展开：其它项目默认收起，controls 指向独立列表', () => preview.hidden && inactiveRow.querySelector('.pj-chev').getAttribute('aria-controls') === preview.id);
+      const inactiveSelect = inactiveRow.querySelector('.pj-select');
+      check('项目展开：其它项目默认收起，controls 指向独立列表', () => preview.hidden && inactiveSelect.getAttribute('aria-controls') === preview.id);
       const previewGen = window.S.workspaceGeneration;
-      inactiveRow.querySelector('.pj-chev').click();
+      inactiveSelect.click();
       await wait(40);
       check('项目展开：显示自己的会话，当前聊天不切换', () => !preview.hidden && preview.textContent.includes('B 的会话') && scopeCalls.activate === 0 && window.S.workspaceGeneration === previewGen);
       check('项目展开：多个项目可同时展开，当前标记不串项目', () => !activeRow.nextElementSibling.hidden && preview.querySelectorAll('[aria-current]').length === 0);
       window.renderProjects();
       await wait(40);
       const restored = [...proj().querySelectorAll('.project')].find(r => !r.classList.contains('active'));
-      check('项目展开：重画保留用户的展开状态', () => !restored.nextElementSibling.hidden && restored.querySelector('.pj-chev').getAttribute('aria-expanded') === 'true');
-      restored.querySelector('.pj-chev').click();
+      check('项目展开：重画保留用户的展开状态', () => !restored.nextElementSibling.hidden && restored.querySelector('.pj-select').getAttribute('aria-expanded') === 'true');
+      restored.querySelector('.pj-select').click();
       check('项目展开：再次点击只收起该项目', () => restored.nextElementSibling.hidden && !proj().querySelector('.project.active').nextElementSibling.hidden);
       await window.loadProjects();
       await wait(40);
@@ -6980,8 +7002,8 @@ staticCheck();
       const labels = menuLabels(inactiveMenu);
       check('项目菜单作用域：非当前项目**没有**「项目设置」', () =>
         !labels.includes('项目设置') || JSON.stringify(labels));
-      check('项目菜单作用域：非当前项目可管理工作区及移除项目', () =>
-        labels.join(',') === '工作区管理,移除项目' || JSON.stringify(labels));
+      check('项目菜单作用域：非当前项目可切换、管理工作区及移除项目', () =>
+        labels.join(',') === '工作区管理,切换到此项目,移除项目' || JSON.stringify(labels));
 
       // 点非当前项目的三点：只开菜单，不切项目、不重启 Pi
       const genBefore = window.S.workspaceGeneration;
@@ -7046,25 +7068,25 @@ staticCheck();
     }
 
     // 切项目（= 重新渲染侧栏）之后必须回到展开态
-    chev().click();
+    select().click();
     await wait(20);
     const folded = box().hidden === true;
     window.renderProjects();
     await wait(80);
     check('折叠：同一项目重新渲染后保留收起状态', () =>
-      (folded && box().hidden === true && chev().getAttribute('aria-expanded') === 'false') ||
-      JSON.stringify({ folded, hidden: box().hidden, aria: chev().getAttribute('aria-expanded') }));
+      (folded && box().hidden === true && select().getAttribute('aria-expanded') === 'false') ||
+      JSON.stringify({ folded, hidden: box().hidden, aria: select().getAttribute('aria-expanded') }));
 
     // 搜索入口：折叠着点「搜索会话」必须先把列表展开，否则输入框被藏住
-    chev().click();
+    select().click();
     await wait(20);
     $('navSearch').click();
     await wait(40);
     check('折叠：折叠状态下点「搜索会话」会自动展开（输入框不能被藏住）', () =>
-      (box().hidden === false && chev().getAttribute('aria-expanded') === 'true' &&
+      (box().hidden === false && select().getAttribute('aria-expanded') === 'true' &&
         $('projectSidebar').classList.contains('search-open') &&
         Boolean(proj().querySelector('.pj-search-input'))) ||
-      JSON.stringify({ hidden: box().hidden, aria: chev().getAttribute('aria-expanded'), open: $('projectSidebar').classList.contains('search-open') }));
+      JSON.stringify({ hidden: box().hidden, aria: select().getAttribute('aria-expanded'), open: $('projectSidebar').classList.contains('search-open') }));
 
     // search-open 状态下搜索照旧工作
     {
@@ -7834,7 +7856,7 @@ staticCheck();
     window.S.streaming = false;
     await window.loadProjects();
     let inactive = $('projects').querySelector('.project:not(.active)');
-    inactive.querySelector('.pj-chev').click();
+    inactive.querySelector('.pj-select').click();
     await settle(40);
     const switchCount = () => sessionCalls.filter(c => c.url.includes('/switch')).length;
     const before = switchCount();

@@ -59,6 +59,10 @@ let errorText = '';
 /** 递增的请求号：回来晚了的一律丢弃。 */
 let requestId = 0;
 let timer = null;
+/** 真实输入框只在列表区重建时替换；关闭搜索要把它一起清干净。 */
+let inputRef = null;
+/** 范围按钮同样只建一次；复位范围时要更新这份 DOM，不能等下一次重建。 */
+let scopeButtons = null;
 /** 状态变化后请宿主重画列表区（由 sessions.js 注入）。 */
 let changeHandler = () => {};
 
@@ -77,6 +81,17 @@ const notify = () => {
 export const currentQuery = () => query;
 export const currentScope = () => scope;
 
+/** 范围按钮的选中态由 `scope` 唯一决定；复位时同步已有 DOM，避免
+ *  内部状态已是 active、界面上还亮着「已归档 / 全部」。 */
+function syncScopeButtons() {
+  if (!scopeButtons || !scopeButtons.isConnected) return;
+  for (const button of scopeButtons.children) {
+    const selected = button.dataset.scope === scope;
+    button.classList.toggle('on', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  }
+}
+
 /** list | hint | search —— 由宿主据此决定列表区画什么。 */
 export function searchViewMode() {
   const q = query.trim();
@@ -88,9 +103,12 @@ export function searchViewMode() {
 /**
  * 清空搜索状态。
  *
- * **切项目时必须调**：否则会拿着 A 项目的结果去渲染 B 项目的侧栏。
+ * **切项目与关闭搜索时必须调**：否则会拿着 A 项目的结果去渲染 B 项目的侧栏。
  * （就算不调，generation 校验也会丢弃迟到的响应，但那是一个「刚好没出错」，
  * 不是「结构上不会错」。）
+ *
+ * 关闭搜索不是「CSS 藏起来」：这里同时取消 debounce、作废在途请求、
+ * 同步真实输入框，并请宿主把列表区重画回普通会话列表。
  */
 export function resetSearch() {
   if (timer) {
@@ -99,9 +117,15 @@ export function resetSearch() {
   }
   requestId++; // 让在途请求全部作废
   query = '';
+  /* 关闭 / 切项目后重新打开必须是默认范围。范围是搜索状态的一部分，
+   * 只清关键词不清它，会让下一次打开沿用上一次的「已归档 / 全部」。 */
+  scope = 'active';
+  syncScopeButtons();
   status = 'idle';
   results = [];
   errorText = '';
+  if (inputRef && inputRef.isConnected && inputRef.value !== '') inputRef.value = '';
+  notify();
 }
 
 /** 会话变了（切会话 / 归档 / 删除）之后重搜一次，让结果跟上当前状态。 */
@@ -130,6 +154,7 @@ export function createSearchBar() {
   input.setAttribute('aria-label', '在当前项目里搜索会话');
   input.value = query;
   input.maxLength = MAX_QUERY;
+  inputRef = input;
   /* 点右上角的 ✕（type=search 自带）会触发 search 事件 */
   input.addEventListener('input', () => {
     query = input.value;
@@ -154,6 +179,7 @@ export function createSearchBar() {
 
   const scopes = document.createElement('div');
   scopes.className = 'pj-search-scopes';
+  scopeButtons = scopes;
   for (const s of SCOPES) {
     const b = document.createElement('button');
     b.type = 'button';
@@ -161,10 +187,11 @@ export function createSearchBar() {
     b.textContent = s.label;
     b.title = s.title;
     b.dataset.scope = s.id;
+    b.setAttribute('aria-pressed', String(s.id === scope));
     b.onclick = () => {
       if (scope === s.id) return;
       scope = s.id;
-      for (const other of scopes.children) other.classList.toggle('on', other.dataset.scope === scope);
+      syncScopeButtons();
       /* 换范围立刻重搜（不受 debounce 影响：这是明确的用户动作） */
       if (searchViewMode() === 'search') run(0);
       else notify();

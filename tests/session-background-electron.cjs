@@ -136,15 +136,17 @@ async function run() {
     })()`);
     await click('.pj-runtime[data-conversation-id="RA"] .pj-sess-primary');
     await waitFor(`WS.workspaceView()==='runtime'&&document.querySelector('.rtc-title').textContent.includes('RA')`);
-    check(await read(`document.querySelector('.rtc-output').textContent==='RA output'&&document.querySelector('.ui2-runtime-usage').textContent.includes('输入 11')&&document.querySelector('.ui2-runtime-tools').textContent.includes('RA tool')&&document.querySelector('.rtc-approvals').textContent.includes('RA approval')`), 'RA output, tokens, tool and approval are owner-scoped');
+    const raScope = await read(`({out:document.querySelector('.rtc-output')?.textContent,usage:document.querySelector('.ui2-runtime-usage')?.textContent,tools:document.querySelector('.ui2-runtime-tools')?.textContent,approvals:document.querySelector('.rtc-approvals')?.textContent})`);
+    check(raScope.out?.includes('RA output')&&raScope.out?.includes('RA tool')&&!raScope.out?.includes('RB')&&raScope.usage?.includes('输入 11')&&raScope.tools?.includes('RA tool')&&raScope.approvals?.includes('RA approval'), 'RA output, tokens, tool and approval are owner-scoped', raScope);
     await read(`document.querySelectorAll('.rtc-composer-actions button').forEach(b=>{if(b.textContent==='停止')b.id='stopRA'})`); await click('#stopRA');
     await click('.pj-runtime[data-conversation-id="RB"] .pj-sess-primary');
-    check(await read(`runtimeActions.filter(a=>a.command?.type==='abort').length===1&&runtimeActions.find(a=>a.command?.type==='abort').owner.conversationId==='RA'&&RS.runtimeStore.get('RB').item.activity==='running'&&document.querySelector('.rtc-output').textContent==='RB output'&&document.querySelector('.ui2-runtime-usage').textContent.includes('输入 22')`), 'Stop RA does not stop or mix RB');
+    const stopScope = await read(`({aborts:runtimeActions.filter(a=>a.command?.type==='abort').length,owner:runtimeActions.find(a=>a.command?.type==='abort')?.owner?.conversationId,rbState:RS.runtimeStore.get('RB')?.item?.activity,out:document.querySelector('.rtc-output')?.textContent,usage:document.querySelector('.ui2-runtime-usage')?.textContent})`);
+    check(stopScope.aborts===1&&stopScope.owner==='RA'&&stopScope.rbState==='running'&&stopScope.out?.includes('RB output')&&!stopScope.out?.includes('RA output')&&stopScope.usage?.includes('输入 22'), 'Stop RA does not stop or mix RB', stopScope);
     await read(`document.querySelectorAll('.rtc-approvals button').forEach(b=>{if(b.textContent==='确认')b.id='allowRB'})`); await click('#allowRB');
     check(await read(`runtimeActions.filter(a=>a.command?.type==='extension_ui_response').length===1&&runtimeActions.find(a=>a.command?.type==='extension_ui_response').owner.conversationId==='RB'&&RS.runtimeStore.get('RA').approvals.length===1`), 'equal approval IDs remain scoped to RB while RA stays pending');
     await shot('runtime-B-owner-isolation');
     await read(`document.querySelectorAll('.project:not(.active) .pj-select')[0]?.click()`);
-    check(await read(`WS.workspaceView()==='history'&&ST.S.cwd===fixtureCwd&&!otherWrites.includes('/api/projects/activate')`), 'project navigation preserves original execution cwd');
+    check(await read(`WS.workspaceView()==='runtime'&&ST.S.cwd===fixtureCwd&&!otherWrites.includes('/api/projects/activate')&&!document.querySelector('.project:not(.active)').nextElementSibling.hidden`), 'project title expands its preview without switching workspace or leaving the running view');
     check(await read(`!commands.some(c=>['abort','switch_session','new_session'].includes(c.type))&&!document.querySelector('#toasts').textContent.includes('正在生成回答')`), 'normal background navigation emits no destructive classic command or old restriction notice');
     const restored = await read(`(()=>{const items=snapshot.items.map(item=>({...item,revision:10,activity:'idle',nativeSessionId:item.owner.sessionId,lifecycle:item.conversationId==='RA'?'dormant':'ready',owner:item.conversationId==='RA'?null:item.owner}));return {...snapshot,items}})()`);
     // Install fixture transport before ES modules execute on a real page reload.

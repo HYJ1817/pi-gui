@@ -79,6 +79,12 @@
 }
 .project-sidebar #navHome::before { content: none; }
 .project-sidebar #navSearch { width: 22px; height: 22px; }
+/* 搜索开启时两个入口（侧栏 / 顶栏）保持同一选中态。aria-expanded 是状态源，
+ * `is-active` 只负责视觉，不反过来当逻辑判断。 */
+#navSearch[aria-expanded="true"],
+#btnTopbarSearch[aria-expanded="true"],
+.project-sidebar #navSearch.is-active,
+.head-right #btnTopbarSearch.is-active { background: var(--ds-bg-active); color: var(--ds-text-primary); }
 .project-sidebar:not(.settings-mode) .rail-group {
   flex: 1 1 0;
   min-height: 0;
@@ -121,8 +127,9 @@
   background: transparent;
 }
 .project-sidebar .project:hover { background: var(--ds-bg-hover); }
-.pj-select { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
-.project.active .pj-select { cursor: default; }
+/* 项目标题区域整体是一颗按钮：箭头 / 图标 / 名称 / 空白共用同一个点击语义。
+ * 行尾的 + 与 … 是它的兄弟按钮，各自独立命中区域。 */
+.pj-select { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; min-height: 24px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
 .project-sidebar .project .pj-icon { display: flex; color: var(--ds-text-muted); }
 .project-sidebar .project .pj-icon svg { width: 12px; height: 12px; }
 .project-sidebar .pj-name { color: var(--ds-text-secondary); font-size: var(--text-md); font-weight: var(--font-weight-medium); }
@@ -135,8 +142,11 @@
   border-radius: 50%;
   background: var(--ds-text-primary);
 }
-.project-sidebar .pj-chev { position: static; width: 20px; height: 24px; opacity: 1; color: var(--ds-text-muted); }
+.project-sidebar .pj-chev { position: static; width: 20px; height: 24px; opacity: 1; color: var(--ds-text-muted); pointer-events: none; }
+.project-sidebar .project:hover .pj-chev,
+.project-sidebar .project:focus-within .pj-chev { color: var(--ds-text-primary); }
 .project-sidebar .pj-chev svg { width: 12px; height: 12px; }
+.project-sidebar .pj-select[aria-expanded="true"] .pj-chev svg { transform: rotate(90deg); }
 .pj-header-action { display: flex; align-items: center; justify-content: center; flex: 0 0 22px; width: 22px; height: 22px; padding: 3px; border: 0; border-radius: var(--ds-radius-4); background: transparent; color: var(--ds-text-muted); cursor: pointer; }
 .pj-header-action svg { width: 15px; height: 15px; }
 .pj-header-action:hover { color: var(--ds-text-primary); background: var(--ds-bg-hover); }
@@ -169,6 +179,7 @@ button.pj-sess-primary { cursor: pointer; }
 .project-sidebar .pj-runtime-status.outcome-interrupted { color: color-mix(in oklab, var(--ds-warning) 72%, var(--ds-text-primary)); }
 .project-sidebar .pj-runtime-status.outcome-unknown { color: var(--ds-text-muted); }
 .pj-sess-more { display: block; width: 100%; border: 0; background: transparent; text-align: left; font: inherit; }
+.pj-sess-retry { display: inline-block; width: auto; margin: 2px 7px 4px; color: var(--ds-text-primary); text-decoration: underline; text-underline-offset: 2px; }
 .pj-sr-head,.pj-sr-hit { width: 100%; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
 .pj-sr-head:hover,.pj-sr-hit:hover { color: var(--ds-text-primary); }
 .project-sidebar .pj-sess-acts { opacity: 0; }

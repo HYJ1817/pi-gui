@@ -131,7 +131,7 @@ async function run() {
     win.webContents.session.webRequest.onBeforeRequest((details, callback) => callback({ cancel: !details.url.startsWith(origin + '/') && !details.url.startsWith('devtools:') }));
     win.webContents.on('render-process-gone', (_event, details) => errors.push(details.reason));
     await win.loadURL(origin); win.focus(); win.webContents.focus();
-    await waitFor(`document.querySelector('.project.active .pj-chev') && document.querySelector('.pj-sess-title')`);
+    await waitFor(`document.querySelector('.project.active .pj-select') && document.querySelector('.pj-sess-title')`);
     // Finish the fixture's delayed boot RPC before installing a new scenario.
     await sleep(1800);
     await read(`(async()=>{
@@ -166,14 +166,14 @@ async function run() {
     check('28px project and session rows', initial.project.height === 28 && initial.session.height === 28, { project: initial.project, session: initial.session });
     check('reference row and toolbar corner aliases are preserved', await read(`getComputedStyle(document.querySelector('.project.active')).borderRadius==='10px'&&getComputedStyle(document.querySelector('.pj-sess')).borderRadius==='10px'&&getComputedStyle(document.querySelector('#btnTopbarNew')).borderRadius==='12px'`));
     const order = await read(`[...document.querySelectorAll('#pjSessionsBox .pj-sess-title')].map(e=>e.textContent)`);
-    await click('.project.active .pj-chev'); await shot('01-dark-expanded'); await nativeShot('01-dark-expanded');
+    await click('.project.active .pj-select'); await shot('01-dark-expanded'); await nativeShot('01-dark-expanded');
     await click('#btnSidebarCollapse'); const collapsed = await geometry();
     check('collapsed sidebar consumes zero width; restore uses reference 12px inset', !collapsed.sidebar && collapsed.workspace.x === 0 && collapsed.expand.x === 12 && collapsed.expand.y >= 0 && collapsed.expand.bottom <= 46, collapsed);
     check('collapsed restore excludes native titlebar dragging', collapsed.expand.region === 'no-drag', collapsed.expand);
     await shot('02-dark-collapsed');
     await click('#btnSidebarExpand');
-    check('restore retains project expansion state', await read(`document.querySelector('.project.active .pj-chev').getAttribute('aria-expanded')==='false'`));
-    await click('.project.active .pj-chev');
+    check('restore retains project expansion state', await read(`document.querySelector('.project.active .pj-select').getAttribute('aria-expanded')==='false'`));
+    await click('.project.active .pj-select');
     await shot('03-project-sessions');
     check('sidebar owns scrolling without horizontal document overflow', initial.scroll.overflow === 'auto' && !initial.bodyOverflow);
     await read('shellWrites.length=0'); await click('.project.active .pj-select', 'right');
@@ -194,7 +194,21 @@ async function run() {
     const light = await geometry();
     check('light palette also updates real native titlebar', light.head.bg === 'rgb(255, 255, 255)' && light.sidebar.bg === 'rgb(243, 243, 243)' && theme.windowOptions().titleBarOverlay.color === '#ffffff');
     await shot('07-light-expanded'); await nativeShot('07-light-expanded');
+    /* 浅色下同样只折叠会话；箭头与加号/三点保持可见，行尾按钮不被挤出。 */
+    const lightTitle = await read(`document.querySelector('#title').textContent`);
+    await click('.project.active .pj-select');
+    check('light project title collapses sessions only', await read(`document.querySelector('#pjSessionsBox').hidden && document.querySelector('.project.active .pj-select').getAttribute('aria-expanded')==='false' && document.querySelector('#title').textContent===${JSON.stringify(lightTitle)}`));
+    check('light rows keep plus and menu inside the row', await read(`[...document.querySelectorAll('#projects .project')].every(r=>{const p=r.querySelector('.pj-header-action'),m=r.querySelector('.pj-row-menu-trigger'),rr=r.getBoundingClientRect();if(!p||!m)return false;const pr=p.getBoundingClientRect(),mr=m.getBoundingClientRect();return pr.width>0&&mr.width>0&&mr.right<=rr.right+1})`));
+    await shot('07b-light-project-collapsed');
+    await click('.project.active .pj-chev');
+    const lightOtherTitle = await read(`document.querySelector('#title').textContent`);
+    await click('.project:not(.active) .pj-select');
+    await waitFor(`!document.querySelector('.project:not(.active)').nextElementSibling.hidden && document.querySelector('.project:not(.active)').nextElementSibling.querySelectorAll('.pj-sess').length>0`);
+    check('light other-project preview does not switch chat', await read(`document.querySelector('.project.active').classList.contains('active') && document.querySelector('#title').textContent===${JSON.stringify(lightOtherTitle)}`));
+    await shot('07c-light-other-project-expanded');
+    await click('.project:not(.active) .pj-select');
     win.setContentSize(700, 650); await paint(); await shot('08-narrow-light');
+    check('narrow rows keep both row actions visible', await read(`[...document.querySelectorAll('#projects .project')].every(r=>{const p=r.querySelector('.pj-header-action'),m=r.querySelector('.pj-row-menu-trigger'),rr=r.getBoundingClientRect();if(!p||!m)return false;const pr=p.getBoundingClientRect(),mr=m.getBoundingClientRect();return pr.width>0&&mr.width>0&&pr.left>=rr.left&&mr.right<=rr.right+1&&document.documentElement.scrollWidth<=innerWidth+1})`));
     const narrow = await geometry();
     check('narrow header controls remain before the native buttons', narrow.actions.right <= narrow.viewport.width - 138 && !narrow.bodyOverflow && narrow.heading.width > 0, narrow);
     await click('#btnTopbarSearch');

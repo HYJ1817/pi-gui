@@ -333,8 +333,14 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     await w.refreshGitNow(); assert.equal(d.querySelector('#rightPane .chg-row'), null);
     assert.equal($('navChanges').getAttribute('aria-pressed'), 'false');
   });
-  await check('Only one current-project New and Search action', async () => {
-    await w.loadProjects(); assert.equal(d.querySelectorAll('.project.active .pj-header-action').length, 0);
+  await check('Every project row has its own New action', async () => {
+    await w.loadProjects();
+    const rows = [...d.querySelectorAll('#projects .project')];
+    assert.ok(rows.length >= 1, 'fixture project missing');
+    /* 加号是**每个项目行**的入口：当前项目不再独占，也不再因此把
+     * 「新对话」从这一行拿走。全局 navNew / navSearch 仍然存在。 */
+    assert.equal(d.querySelectorAll('#projects .pj-header-action').length, rows.length);
+    for (const row of rows) assert.ok(row.querySelector('.pj-header-action[aria-label^="在「"]'), 'row missing new action');
     assert.ok($('navNew')); assert.ok($('navSearch'));
   });
   await check('Sidebar collapse hands focus to expand, and back', () => {

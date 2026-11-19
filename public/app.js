@@ -98,6 +98,7 @@ import { mountSessionPlans } from './session-plans.js';
 import { renderSidebarSessions, refreshSidebarSessions, applySessionRename, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
 import { sessionDisplayTitle } from './session-title.js';
 import { createSessionNavigation } from './session-navigation.js';
+import { initSidebarSearch, openSessionSearch as openSessionSearchEntry, toggleSessionSearch, closeSessionSearch } from './sidebar-search.js';
 import { initConversationNav } from './conversation-nav.js';
 import { createScrollButton } from './scroll-button.js';
 import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
@@ -1263,7 +1264,7 @@ $('btnMore').onclick = openMoreMenu;
 
 // 侧栏导航
 $('navNew').onclick = newSession;
-$('navSearch').onclick = openSessionSearch;
+$('navSearch').onclick = () => toggleSessionSearch($('navSearch'));
 /* 「回到对话」的既有语义：关掉二级弹层与 More 菜单、切回 Chat、把焦点给输入框。
  * P24 起它被两处复用（侧栏 Home、切到对话快捷键），所以抽成一个函数 ——
  * 各写一份迟早会出现「从某条路回去焦点不对」。 */
@@ -1341,9 +1342,8 @@ document.addEventListener('keydown', event => {
     projectMenuButton.focus();
   }
   if (event.key === 'Escape' && $('projectSidebar').classList.contains('search-open') && $('projectSidebar').contains(document.activeElement)) {
-    $('projectSidebar').classList.remove('search-open');
-    $('navSearch').setAttribute('aria-expanded', 'false');
-    $('navSearch').focus();
+    /* 关闭走统一入口：清空搜索、作废在途请求、重画列表并把焦点还给入口。 */
+    closeSessionSearch({ focusTarget: $('navSearch') });
   }
 });
 
@@ -1366,6 +1366,12 @@ const collapseSidebar = $('btnSidebarCollapse');
  * 展开入口是 .stage-head 拖拽区内的 no-drag 子元素（见 index.html），
  * 否则原生标题栏命中测试可能把点击当成拖拽起手，按钮看着在却点不动。 */
 function setSidebarCollapsed(collapsed) {
+  /* 整个侧栏被收起时，搜索框也一起不可见；保留 search-open 会让顶栏图标
+   * 继续亮着，下一次点击只关掉一个看不见的搜索。关闭走统一入口，但不抢
+   * 焦点 —— 折叠动作本身要把焦点交给右侧的展开按钮。 */
+  if (collapsed && sidebar.classList.contains('search-open')) {
+    closeSessionSearch({ restoreFocus: false });
+  }
   const expanded = !collapsed;
   sidebar.closest('.app').classList.toggle('sidebar-collapsed', collapsed);
   sidebar.hidden = collapsed;
@@ -1377,7 +1383,7 @@ function setSidebarCollapsed(collapsed) {
 collapseSidebar.onclick = () => { setSidebarCollapsed(true); expandSidebar.focus(); };
 expandSidebar.onclick = () => { setSidebarCollapsed(false); collapseSidebar.focus(); };
 $('btnTopbarNew').onclick = () => $('navNew').click();
-$('btnTopbarSearch').onclick = () => $('navSearch').click();
+$('btnTopbarSearch').onclick = () => toggleSessionSearch($('btnTopbarSearch'));
 
 // 项目分组折叠状态记忆
 const group = $('groupHead').closest('.rail-group');
@@ -1395,7 +1401,23 @@ $('groupHead').onclick = () => {
   } catch {
     /* 忽略隐私模式下的写入失败 */
   }
+  /* 整组收起会连搜索框一起藏掉；此时必须走搜索的统一关闭入口，
+   * 否则图标继续亮着，下一次点击只会「关掉」一个看不见的搜索。 */
+  if (!group.classList.contains('open')) {
+    document.dispatchEvent(new CustomEvent('pi-gui:project-group-collapsed'));
+  }
 };
+
+/* 搜索开关只有一个家：侧栏图标、顶栏图标、Escape 与折叠项目分组 /
+ * 当前项目都走这里，不再由某个模块单独改 `search-open` 或 `aria-expanded`。 */
+initSidebarSearch({
+  sidebar,
+  navSearch: $('navSearch'),
+  topbarSearch: $('btnTopbarSearch'),
+  group,
+  groupHead: $('groupHead'),
+  ensureSidebarExpanded: () => setSidebarCollapsed(false),
+});
 
 /* ---------- P24：命令注册表 / 快捷键 / 草稿 ----------
  *
@@ -1409,17 +1431,10 @@ const noOverlay = () => el.modal.hidden && el.confirmLayer.hidden;
 const canRun = () => noOverlay();
 const canPrompt = () => S.hasProject && !S.switching && S.bridgeState === 'ready';
 
-/* 侧栏的「搜索会话」那一条路径（展开分组 + 聚焦搜索框）也在这里复用。 */
+/* 明确要求「打开搜索」的路径（命令 / 快捷键 / 项目菜单）只开不关，
+ * 因此不会被 toggle 逻辑误关；聚焦前先把侧栏、项目分组和会话列表展开。 */
 function openSessionSearch() {
-  setSidebarCollapsed(false);
-  group.classList.add('open');
-  $('groupHead').setAttribute('aria-expanded', 'true');
-  $('projectSidebar').classList.add('search-open');
-  $('navSearch').setAttribute('aria-expanded', 'true');
-  /* 会话列表可能被用户折叠着 —— 输入框就在那块列表里，不先展开的话
-   * 「搜索会话」点下去什么都不会发生（focus 一个隐藏元素是空操作）。 */
-  expandSidebarSessions();
-  $('projectSidebar').querySelector('.pj-search-input')?.focus();
+  openSessionSearchEntry();
 }
 
 const openView = (view) => () => {
