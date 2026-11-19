@@ -139,19 +139,19 @@ export function mountTerminalPanel(host, view, options = {}) {
   const activeMeta = () => (activeId ? tabs.get(activeId) || null : null);
   const activeController = () => activeMeta()?.controller || null;
 
-  const clearButtonNode = node('button', 'btn tiny rp-btn', '清屏');
+  const clearButtonNode = node('button', 'btn tiny ghost rp-btn', '清屏');
   clearButtonNode.type = 'button';
   clearButtonNode.title = '只清除当前显示，不结束后台终端';
   clearButtonNode.onclick = () => activeController()?.clearScreen();
   clearButton = clearButtonNode;
 
-  const keepAliveButtonNode = node('button', 'btn tiny rp-btn terminal-keepalive');
+  const keepAliveButtonNode = node('button', 'btn tiny ghost rp-btn terminal-keepalive');
   keepAliveButtonNode.type = 'button';
   keepAliveButtonNode.innerHTML = `${KEEP_ALIVE_ICON}<span>保持</span>`;
   keepAliveButtonNode.onclick = () => { void toggleKeepAlive(); };
   keepAliveButton = keepAliveButtonNode;
 
-  control = node('button', 'btn tiny rp-btn', '启动');
+  control = node('button', 'btn tiny ghost rp-btn', '启动');
   control.type = 'button';
   control.onclick = () => {
     if (disabled) return;

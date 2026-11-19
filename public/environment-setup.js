@@ -270,7 +270,7 @@ function secondaryButton(text, onClick) {
 }
 
 function textButton(text, onClick) {
-  const button = h('button', 'env-link-button', text);
+  const button = h('button', 'btn tiny ghost env-link-button', text);
   button.type = 'button';
   button.onclick = onClick;
   return button;

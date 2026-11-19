@@ -278,7 +278,7 @@ export function mountFilesPanel(host, view, options = {}) {
     document.removeEventListener('pi-gui:git-scope', resetForWorkspace);
   });
 
-  refresh = node('button', 'btn tiny rp-btn', '刷新');
+  refresh = node('button', 'btn tiny ghost rp-btn', '刷新');
   refresh.type = 'button';
   refresh.title = '重新读取项目文件';
   refresh.onclick = () => {
@@ -288,7 +288,7 @@ export function mountFilesPanel(host, view, options = {}) {
     renderEmptyPreview('选择文件预览', '文件内容只读，不会在这里修改。');
     void loadRoot();
   };
-  hiddenToggle = node('button', 'btn tiny rp-btn', '隐藏项');
+  hiddenToggle = node('button', 'btn tiny ghost rp-btn', '隐藏项');
   hiddenToggle.type = 'button';
   hiddenToggle.setAttribute('aria-pressed', 'false');
   hiddenToggle.title = '显示或隐藏以点开头的文件';

@@ -106,7 +106,7 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
     if(!result.files?.length){
       /* 空态不得读成「文件没被改过」—— 没证据不等于没改动，这句话必须原样保留。 */
       body.append(emptyState('没有已捕获的修改证据','没有已捕获的修改证据；这不代表文件没有被修改。'));
-      if(result.nextCursor)body.append(button('下一页',()=>void load(result.nextCursor)));
+      if(result.nextCursor){const next=button('下一页',()=>void load(result.nextCursor));next.classList.add('ghost');body.append(next);}
       return;
     }
     const list=node('div','session-change-list');body.append(list);
@@ -130,11 +130,11 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
       if(file.evidenceIds?.length) {
         const target=node('div','session-change-preview');
         /* 动作按钮仍是 .session-change-row 的直接子元素（既有验收脚本按这个结构取它）。 */
-        const action=button('查看撤销预览',()=>void preview(file,target,action));action.classList.add('rp-row-action');
+        const action=button('查看撤销预览',()=>void preview(file,target,action));action.classList.add('rp-row-action','ghost');
         row.append(action,target);
       }
     }
-    if(result.nextCursor)body.append(button('下一页',()=>void load(result.nextCursor)));
+    if(result.nextCursor){const next=button('下一页',()=>void load(result.nextCursor));next.classList.add('ghost');body.append(next);}
   }
   async function compare(plan,file,host,trigger) {
     objectUI.invalidate();
@@ -163,14 +163,14 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
         row.append(node('div','session-change-path',file.relativePath));hint(STATES[file.state] || '历史状态未知',row);
         if(!file.backupAvailable){hint('没有可导出的备份。',row);continue;}
         const target=node('div','session-change-preview'),tools=node('div','session-change-actions');
-        const view=button('比较备份',()=>void compare(plan,file,target,view));
+        const view=button('比较备份',()=>void compare(plan,file,target,view));view.classList.add('ghost');
         const download=button('导出备份',async()=>{
           const generation=viewGeneration,key=fingerprint(context());download.disabled=true;
           const exportCurrent=()=>alive&&instance.isCurrent()&&generation===viewGeneration&&key===fingerprint(context());
           const result=await api.export({...wire(context()),sourcePlanId:plan.planId,fileId:file.fileId,exportName:'session-backup-'+file.fileId+'.bin'},exportCurrent);
           if(alive&&key===fingerprint(context())&&download.isConnected)download.disabled=false;
           if(!exportCurrent())return;hint(result.ok?'备份已导出。':sessionRevertReason(result.code),target);
-        });tools.append(view,download);row.append(tools,target);
+        });download.classList.add('ghost');tools.append(view,download);row.append(tools,target);
       }
     }
   }
@@ -183,7 +183,7 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
       hint('历史记录仅显示状态，不会恢复确认或自动提交。正式产品恢复仍关闭。',row);
       if(record.completion==='recovery_required'||record.state==='recovery_required') {
         const target=node('div','session-change-preview');
-        row.append(button('查看对象恢复材料',()=>objectUI.openRecovery(record,target)),target);
+        const inspect=button('查看对象恢复材料',()=>objectUI.openRecovery(record,target));inspect.classList.add('ghost');row.append(inspect,target);
       }
     }
   }
@@ -231,7 +231,7 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
   instance=openSecondarySurface('session-changes',(host,view)=>{
     /* 面板外壳与「开发进程」共用 createPaneHeader：标题 + 一行说明 + 工具按钮，
      * 关闭按钮由 ui/secondary-surface.js 追加在本标题带最右端。 */
-    const refresh=button('刷新',()=>void load());refresh.classList.add('rp-btn');
+    const refresh=button('刷新',()=>void load());refresh.classList.add('ghost','rp-btn');
     const header=createPaneHeader({title:'本会话变更',subtitle:'只读证据 · 撤销预览',actions:[refresh]});
     head=header.el;host.append(head);
     /* 页签独占第二行：两个中文标签加按钮在 320px 的右栏里放不进标题带。 */

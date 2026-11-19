@@ -148,7 +148,7 @@ function discoveryNote(state, { onRefresh, onAuthorize, onTest, onCancel }) {
   if (busy || testing) {
     actions.push(h('button', {
       type: 'button',
-      class: 'pm-btn-ghost pm-btn-small pm-cancel-discovery',
+      class: 'pm-btn pm-btn-ghost pm-btn-small pm-cancel-discovery',
       'data-cancel-discovery': 'true',
       on: { click: () => onCancel?.() },
     }, '取消'));
@@ -314,7 +314,7 @@ function chosenRow(model, index, total, draft, dispatch, errors, expanded, reord
   remove.dataset.modelRemove = model.modelId;
   const advancedToggle = h('button', {
     type: 'button',
-    class: 'pm-btn-ghost pm-btn-small pm-advanced-toggle',
+    class: 'pm-btn pm-btn-ghost pm-btn-small pm-advanced-toggle',
     'aria-expanded': expanded ? 'true' : 'false',
     'aria-controls': `pmModelAdvanced-${model.modelId}`,
     'data-model-advanced-toggle': model.modelId,

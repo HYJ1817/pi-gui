@@ -142,7 +142,7 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
     const actions = node('div', 'modal-actions');
     const refresh = button('刷新');
     refresh.onclick = () => { void reloadAll(); };
-    const done = button('关闭', 'btn primary');
+    const done = button('关闭', 'btn');
     done.onclick = close;
     actions.append(refresh, done);
 
@@ -412,9 +412,9 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
       const entryStatus = node('span', 'ui5-log-ref-status');
       entryStatus.setAttribute('role', 'status');
       const actions = node('div', 'ui5-log-actions');
-      const copy = button('复制这一条', 'btn ui5-log-copy');
+      const copy = button('复制这一条', 'btn ghost ui5-log-copy');
       copy.onclick = () => void safeCopy(safeEntryText(entry), '已复制脱敏日志摘要');
-      const reference = button('引用到对话', 'btn ui5-log-copy');
+      const reference = button('引用到对话', 'btn ghost ui5-log-copy');
       reference.title = '把脱敏摘要追加到当前会话输入框；不会自动发送';
       reference.onclick = () => referenceEntryToComposer(entry, entryStatus);
       actions.append(copy, reference, entryStatus);
@@ -435,7 +435,7 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
         const feedback = node('span', 'ui5-log-ref-status');
         feedback.setAttribute('role', 'status');
         feedback.setAttribute('aria-live', 'polite');
-        const reference = button('引用', 'btn tiny ui5-log-ref');
+        const reference = button('引用', 'btn tiny ghost ui5-log-ref');
         reference.title = '把脱敏摘要追加到当前会话输入框；不会自动发送';
         reference.onclick = () => referenceEntryToComposer(entry, feedback);
         const actions = node('div', 'ui5-log-actions');
@@ -467,7 +467,7 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
       search.value = filters.q;
       const searchWrap = node('label', 'ui5-logs-search');
       searchWrap.appendChild(search);
-      const refresh = button('刷新');
+      const refresh = button('刷新', 'btn ghost');
       refresh.onclick = () => void loadEntries(true);
       level.onchange = () => { filters.level = level.value; void loadEntries(true); };
       source.onchange = () => { filters.source = source.value; void loadEntries(true); };

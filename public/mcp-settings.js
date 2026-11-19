@@ -1198,7 +1198,7 @@ function createPage(card, { reopen, present }) {
     head.appendChild(copy);
     const actions = node('div', 'mcp-page-actions');
 
-    const refresh = button('btn mcp-btn-ghost', '');
+    const refresh = button('btn ghost', '');
     refresh.dataset.focusKey = 'refresh';
     refresh.appendChild(icon('refresh', 'mcp-icon'));
     refresh.appendChild(node('span', '', '刷新状态'));
@@ -1207,7 +1207,7 @@ function createPage(card, { reopen, present }) {
     refresh.onclick = refreshRuntime;
     actions.appendChild(refresh);
 
-    const market = button('btn mcp-btn-ghost', '');
+    const market = button('btn ghost', '');
     market.dataset.focusKey = 'market';
     market.appendChild(icon('market', 'mcp-icon'));
     market.appendChild(node('span', '', '市场'));
@@ -1270,7 +1270,7 @@ function createPage(card, { reopen, present }) {
       wrap.appendChild(banner);
     };
     if (state.reloadNotice) {
-      const restart = button('btn tiny', '重启 Pi…');
+      const restart = button('btn tiny ghost', '重启 Pi…');
       restart.onclick = () => { restartPi().catch(() => {}); };
       add('info', state.reloadNotice, [restart]);
     }
@@ -1362,7 +1362,7 @@ function createPage(card, { reopen, present }) {
     projectLabel.appendChild(select);
     bar.appendChild(projectLabel);
 
-    const scan = button('btn mcp-btn-ghost', '');
+    const scan = button('btn ghost', '');
     scan.dataset.focusKey = 'scan';
     scan.appendChild(icon('scan', 'mcp-icon'));
     scan.appendChild(node('span', '', '从其他工具扫描'));
@@ -1408,7 +1408,7 @@ function createPage(card, { reopen, present }) {
     const headActs = node('div', 'mcp-group-actions');
     if (rows.length !== all.length) headActs.appendChild(node('span', 'mcp-group-filtered', `${rows.length} / ${all.length}`));
     if (scope === 'user' || (state.projectPath && trust() === true)) {
-      const add = button('btn tiny mcp-group-add', '');
+      const add = button('btn tiny ghost mcp-group-add', '');
       add.dataset.focusKey = `add:${scope}`;
       add.appendChild(icon('plus', 'mcp-icon-xs'));
       add.appendChild(node('span', '', '新增'));
@@ -1519,7 +1519,7 @@ function createPage(card, { reopen, present }) {
     ops.appendChild(sw);
 
     if (status.state === 'needs-auth') {
-      const auth = button('btn tiny mcp-auth-btn', '');
+      const auth = button('btn tiny ghost mcp-auth-btn', '');
       auth.dataset.focusKey = `auth:${server.scope}:${server.name}`;
       auth.appendChild(icon('key', 'mcp-icon-xs'));
       auth.appendChild(node('span', '', '授权'));

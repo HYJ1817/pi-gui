@@ -61,6 +61,7 @@ export function mountReviewTaskPreview({card, scope, close, onVisibility}) {
     preview.focus();preview.setSelectionRange(0,0);preview.scrollTop=0;
   });
   next.classList.add('primary');
+  all.classList.add('ghost'); none.classList.add('ghost'); back.classList.add('ghost'); done.classList.add('ghost');
   function ensureFresh() {
     const result=active() && !invalidated ? validateReviewTask(task,{comments:source(),context:context()}) : {ok:false};
     if (!result.ok) {invalidate();return false;}

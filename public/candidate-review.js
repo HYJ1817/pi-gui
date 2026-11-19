@@ -16,7 +16,7 @@ export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,ac
   function button(text,fn,cls=''){const n=element('button','btn '+cls,text);n.type='button';n.onclick=fn;return n;}
   function back(){cancelPlan();epoch++;clearTimer();pane.hidden=true;delete root.dataset.candidate;root.querySelector('button:not([hidden])')?.focus();}
   function shell(title){pane.replaceChildren(element('h4','',title));const status=element('p','review-summary-status');status.setAttribute('role','status');pane.append(status);
-    const bar=element('div','review-summary-actions');bar.append(button('返回修改任务',back));pane.append(bar);return{status,bar};}
+    const bar=element('div','review-summary-actions');bar.append(button('返回修改任务',back,'ghost'));pane.append(bar);return{status,bar};}
   async function open(){
     if(!isFresh())return;
     const token=begin(),{status,bar}=shell('执行前检查');status.textContent='正在核对当前评论、文件内容和执行状态…';
@@ -92,7 +92,7 @@ export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,ac
   async function checkAdoption(){
     if(checkingAdoption||!alive()||!runId)return;
     checkingAdoption=true;const id=runId,sourceHeaders=headers(),token=begin(),{status,bar}=shell('采纳条件检查');
-    bar.replaceChildren(button('返回候选 Diff',()=>{cancelPlan();epoch++;void refresh();}),button('取消',back));
+    bar.replaceChildren(button('返回候选 Diff',()=>{cancelPlan();epoch++;void refresh();},'ghost'),button('取消',back,'ghost'));
     status.textContent='正在只读核对来源和候选，尚未采纳…';
     try{
       const result=await action({action:'adoption-prepare',id},sourceHeaders);
@@ -111,16 +111,16 @@ export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,ac
   function offerConfirmation(nonce,kind,label,sourceHeaders,token,status,bar){
     preparedNonce=nonce;preparedHeaders=sourceHeaders;preparedCancel='adoption-cancel';let sent=false;
     const confirm=button(label,async()=>{if(sent||!alive()||token!==epoch)return;sent=true;preparedNonce=null;confirm.disabled=true;status.textContent='正在执行并校验，请勿重复提交…';
-      try{const result=await action({action:kind,nonce},sourceHeaders);if(token!==epoch||!alive())return;if(!result.ok){status.textContent=result.error||'结果无法确认，请重新打开候选查看事务状态。';bar.replaceChildren(button('返回候选 Diff',()=>{epoch++;void refresh();}));return;}
+      try{const result=await action({action:kind,nonce},sourceHeaders);if(token!==epoch||!alive())return;if(!result.ok){status.textContent=result.error||'结果无法确认，请重新打开候选查看事务状态。';bar.replaceChildren(button('返回候选 Diff',()=>{epoch++;void refresh();},'ghost'));return;}
         const labels={applied:'已采纳',recovered:'恢复完成',failed_no_write:'采纳失败，未发生源码写入',recovery_required:'部分写入或结果无法确认，需要恢复'};
         status.textContent=`${labels[result.state]||'结果无法确认'} · 已验证 ${result.files||0} 个文件 · 事务 ${result.id}`;
-        bar.replaceChildren(button('返回候选 Diff',()=>{epoch++;void refresh();}));
+        bar.replaceChildren(button('返回候选 Diff',()=>{epoch++;void refresh();},'ghost'));
         if(result.state==='recovery_required')pane.append(element('p','review-summary-note','保留候选及事务材料。请返回候选 Diff 检查恢复条件；外部内容变化时只能人工恢复，不提供强制覆盖。'));
       }catch{if(token===epoch&&alive())status.textContent='请求结果未知，请重新打开候选核对事务，不能重复采纳。';}
     },'primary');bar.append(confirm);confirm.focus();
   }
   async function prepareRecovery(id){
-    const token=begin(),sourceHeaders=headers(),{status,bar}=shell('恢复预检');bar.replaceChildren(button('返回候选 Diff',()=>{cancelPlan();epoch++;void refresh();}),button('取消',back));
+    const token=begin(),sourceHeaders=headers(),{status,bar}=shell('恢复预检');bar.replaceChildren(button('返回候选 Diff',()=>{cancelPlan();epoch++;void refresh();},'ghost'),button('取消',back,'ghost'));
     status.textContent='正在核对事务、文件身份和外部变化，尚未恢复…';
     try{const result=await action({action:'adoption-recovery-prepare',id},sourceHeaders);if(token!==epoch||!alive()){if(result.nonce)void action({action:'adoption-cancel',nonce:result.nonce},sourceHeaders).catch(()=>{});return;}
       if(!result.ok){status.textContent=result.error||'无法安全恢复，请保留材料并人工检查。';return;}

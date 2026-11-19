@@ -4,6 +4,275 @@
  */
 
 /* ==========================================================================
+   Button semantic system (.btn / .pm-btn)
+   --------------------------------------------------------------------------
+   One shared implementation for every text button. The base class is the
+   Secondary variant: an ordinary standalone action gets a neutral filled
+   surface and no visible outline. Variants are opt-in and mutually exclusive:
+
+     .btn                  Secondary (default)
+     .btn.primary          Primary action (save / confirm / install / apply)
+     .btn.ghost            Toolbar or inline low-priority action
+     .btn.danger           Low-emphasis destructive action (tinted red)
+     .btn.outline          Only when a matching surface would otherwise vanish
+
+   Sizes: .tiny (28px) / base (32px). Pages only choose a variant and a size;
+   surface, ink, radius and states stay owned by this file and tokens.css.
+   ========================================================================== */
+.btn,
+.pm-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-button-gap);
+  height: var(--ds-button-height);
+  min-height: var(--ds-button-height);
+  max-width: 100%;
+  margin: 0;
+  padding: 0 var(--ds-button-padding);
+  border: 1px solid transparent;
+  border-radius: var(--ds-button-radius);
+  background: var(--ds-button-secondary-bg);
+  color: var(--ds-button-secondary-ink);
+  font-family: inherit;
+  font-size: var(--ds-button-font-size);
+  font-weight: var(--ds-button-weight);
+  line-height: 1;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-app-region: no-drag;
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-out),
+    border-color var(--motion-duration-fast) var(--motion-ease-out),
+    color var(--motion-duration-fast) var(--motion-ease-out),
+    opacity var(--motion-duration-fast) var(--motion-ease-out),
+    transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.btn:hover:not(:disabled):not([aria-disabled="true"]),
+.pm-btn:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-secondary-bg-hover);
+  color: var(--ds-button-secondary-ink);
+}
+
+.btn:active:not(:disabled):not([aria-disabled="true"]),
+.pm-btn:active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-secondary-bg-active);
+  transform: scale(.98);
+}
+
+.btn:focus-visible,
+.pm-btn:focus-visible {
+  outline: var(--ds-button-focus-width) solid var(--ds-focus);
+  outline-offset: var(--ds-button-focus-offset);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"],
+.pm-btn:disabled,
+.pm-btn[aria-disabled="true"] {
+  opacity: var(--ds-button-disabled-opacity);
+  cursor: not-allowed;
+  transform: none;
+  pointer-events: none;
+}
+
+.btn[aria-busy="true"],
+.pm-btn[aria-busy="true"] {
+  cursor: progress;
+  opacity: var(--ds-button-busy-opacity);
+}
+
+.btn[aria-busy="true"]::before,
+.pm-btn[aria-busy="true"]::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ds-button-spin 750ms linear infinite;
+}
+
+@keyframes ds-button-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Secondary ----------
+   The base .btn/.pm-btn rule above *is* Secondary. No extra class is needed;
+   .secondary is intentionally not a second styling path. */
+
+/* ---------- Primary ---------- */
+.btn.primary,
+.pm-btn.pm-primary {
+  background: var(--ds-button-primary-bg);
+  color: var(--ds-button-primary-ink);
+  border-color: transparent;
+  font-weight: var(--ds-button-weight-primary);
+}
+
+.btn.primary:hover:not(:disabled):not([aria-disabled="true"]),
+.pm-btn.pm-primary:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-primary-bg-hover);
+  color: var(--ds-button-primary-ink);
+}
+
+.btn.primary:active:not(:disabled):not([aria-disabled="true"]),
+.pm-btn.pm-primary:active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-primary-bg-active);
+  transform: scale(.98);
+}
+
+/* ---------- Ghost ---------- */
+.btn.ghost,
+.pm-btn.pm-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ds-button-ghost-ink);
+}
+
+.btn.ghost:hover:not(:disabled):not([aria-disabled="true"]),
+.pm-btn.pm-btn-ghost:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-ghost-bg-hover);
+  color: var(--ds-button-ghost-ink-hover);
+}
+
+.btn.ghost:active:not(:disabled):not([aria-disabled="true"]),
+.pm-btn.pm-btn-ghost:active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-ghost-bg-active);
+  color: var(--ds-button-ghost-ink-hover);
+}
+
+/* Legacy middle path in confirmation dialogs: a quiet alternative action. */
+.btn.alt {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ds-button-ghost-ink);
+}
+
+.btn.alt:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-ghost-bg-hover);
+  color: var(--ds-button-ghost-ink-hover);
+}
+
+/* ---------- Danger ---------- */
+.btn.danger,
+.pm-btn.pm-btn-danger {
+  background: var(--ds-button-danger-bg);
+  border-color: transparent;
+  color: var(--ds-button-danger-ink);
+}
+
+.btn.danger:hover:not(:disabled):not([aria-disabled="true"]),
+.pm-btn.pm-btn-danger:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-danger-bg-hover);
+  color: var(--ds-button-danger-ink);
+}
+
+.btn.danger:active:not(:disabled):not([aria-disabled="true"]),
+.pm-btn.pm-btn-danger:active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-danger-bg-active);
+  transform: scale(.98);
+}
+
+/* Ghost danger: inline row actions (delete / remove) stay quiet. */
+.btn.danger.ghost,
+.pm-btn.pm-btn-danger-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ds-button-danger-ink);
+}
+
+.btn.danger.ghost:hover:not(:disabled):not([aria-disabled="true"]),
+.pm-btn.pm-btn-danger-ghost:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-danger-bg);
+  color: var(--ds-button-danger-ink);
+}
+
+/* Destructive confirmation: neutral surface + danger ink. This preserves the
+   existing P14-E rule that a confirm action must not become a large red block,
+   while keeping the destructive intent legible. */
+.modal-actions .btn.danger {
+  background: var(--ds-tile-deep);
+  border-color: var(--ds-button-danger-border);
+  color: var(--ds-button-danger-ink);
+}
+
+.modal-actions .btn.danger:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-danger-bg-hover);
+  border-color: var(--ds-button-danger-border);
+  color: var(--ds-button-danger-ink);
+}
+
+/* ---------- Outline (exception only) ---------- */
+.btn.outline {
+  background: transparent;
+  border-color: var(--ds-button-outline-border);
+  color: var(--ds-button-outline-ink);
+}
+
+.btn.outline:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--ds-button-outline-bg-hover);
+  color: var(--ds-button-outline-ink);
+}
+
+/* ---------- Sizes ---------- */
+.btn.tiny,
+.pm-btn.pm-btn-small {
+  height: var(--ds-button-height-sm);
+  min-height: var(--ds-button-height-sm);
+  padding: 0 var(--ds-button-padding-sm);
+  border-radius: var(--ds-button-radius-sm);
+  font-size: var(--ds-button-font-size-sm);
+}
+
+.btn.micro {
+  height: var(--ds-button-height-xs);
+  min-height: var(--ds-button-height-xs);
+  padding: 0 var(--ds-button-padding-xs);
+  border-radius: var(--ds-button-radius-xs);
+  font-size: var(--ds-button-font-size-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .pm-btn {
+    transition: none;
+  }
+  .btn:active:not(:disabled),
+  .pm-btn:active:not(:disabled),
+  .btn[aria-busy="true"]::before,
+  .pm-btn[aria-busy="true"]::before {
+    transform: none;
+    animation: none;
+  }
+  .btn[aria-busy="true"]::before,
+  .pm-btn[aria-busy="true"]::before {
+    border-right-color: currentColor;
+    opacity: .6;
+  }
+}
+
+@media (forced-colors: active) {
+  .btn,
+  .pm-btn {
+    border-color: ButtonText;
+  }
+  .btn:focus-visible,
+  .pm-btn:focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+/* ==========================================================================
    Switch Toggle (.ds-switch)
    ========================================================================== */
 .ds-switch {
