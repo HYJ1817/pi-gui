@@ -33,14 +33,19 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       const value = JSON.parse(fs.readFileSync(manifest, 'utf8'));
       if (value.version !== 1 || !Array.isArray(value.items) || value.items.length > 256) throw Error();
       for (const r of value.items) {
-        if (!closed(r, ['conversationId', 'workspace', 'sessionId', 'sessionLocator', 'sessionIdentity', 'sessionName', 'createdAt', 'requestId']) || typeof r.conversationId !== 'string'
+        if (!closed(r, ['conversationId', 'workspace', 'sessionId', 'sessionLocator', 'sessionIdentity', 'sessionName', 'nameSource', 'createdAt', 'requestId']) || typeof r.conversationId !== 'string'
           || !/^[\da-f-]{36}$/.test(r.conversationId) || records.has(r.conversationId)
           || !closed(r.workspace, ['projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'cwd', 'root', 'branch'])
           || (r.sessionName !== undefined && (typeof r.sessionName !== 'string' || r.sessionName.length > 200))
+          || (r.nameSource !== undefined && !['native', 'seed'].includes(r.nameSource))
           || (r.requestId !== undefined && (typeof r.requestId !== 'string' || !/^[\da-f-]{36}$/.test(r.requestId)))
           || (r.sessionIdentity != null && (!closed(r.sessionIdentity, ['dev', 'ino', 'birthtimeMs'])
             || !['dev', 'ino', 'birthtimeMs'].every(k => typeof r.sessionIdentity[k] === 'number' && Number.isFinite(r.sessionIdentity[k]))))
           || !['projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'cwd', 'root'].every(k => typeof r.workspace[k] === 'string')) throw Error();
+        /* 旧记录没有 nameSource：`openProjectSession` 曾把显示标题写进
+         * sessionName，无法证明它是 Pi 原生名。按 seed 保守处理，等一次
+         * get_state 明确读到原生名后再升级为 native。 */
+        r.nameSource = r.nameSource === 'native' ? 'native' : 'seed';
         records.set(r.conversationId, r);
       }
     }
@@ -154,13 +159,21 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live.attention = true;
   }
   function titleFor(record) {
+    const live = lives.get(record.conversationId);
     try {
-      const value = sessionTitle?.resolve?.(record);
+      /* dormant 记录的 sessionName 可能只是打开经典会话时写入的显示标题，
+       * 不是 Pi 的原生名；只有 get_state 明确读到过原生名（nameSource=native）
+       * 且 child 已 ready 时，才把它当作「已确认的原生名」。否则标题存储会
+       * 保守地保留已有 manual 覆盖，而不是把显示种子误判成改名。 */
+      const value = sessionTitle?.resolve?.(record, {
+        nativeConfirmed: live?.everReady === true && record.nameSource === 'native',
+      });
       if (value && typeof value.title === 'string' && value.title) return value;
     } catch { /* 标题解析失败退回原始字段，不影响 registry */ }
     return {
       title: record.sessionName || record.workspace.branch || '并行会话',
       source: record.sessionName ? 'manual' : record.workspace.branch ? 'fallback' : 'default',
+      revision: 0,
     };
   }
   function summary(record) {
@@ -173,6 +186,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
       nativeSessionId: record.sessionId || null, sessionName: record.sessionName || null, title: title.title,
       titleSource: title.source,
+      /* titleRevision 是**标题**的修订号（持久化，跨重启），与下面的
+       * `revision`（runtime 事件序号，仅进程内）不是一个东西。 */
+      titleRevision: Number.isSafeInteger(title.revision) ? title.revision : 0,
       revision: revisions.get(record.conversationId) || 0,
       owner: live ? owner(live) : null, lifecycle: live?.lifecycle || 'dormant', activity: live?.activity || 'idle',
       attention: live?.attention === true, focused: focused === record.conversationId, historyRequired: live?.historyRequired === true,
@@ -328,7 +344,12 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live.record.sessionIdentity = null;
     if (locator) try { const st = fs.statSync(locator); live.record.sessionIdentity = { dev: st.dev, ino: st.ino, birthtimeMs: st.birthtimeMs }; } catch {}
     live.providerSessionIdentity ??= live.record.sessionIdentity;
-    if (typeof state.sessionName === 'string' && (state.sessionName.trim() || !projectWorkspace(live.record.workspace))) live.record.sessionName = state.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
+    if (typeof state.sessionName === 'string' && (state.sessionName.trim() || !projectWorkspace(live.record.workspace))) {
+      /* 这条名字来自 get_state，是 Pi 的原生名；与打开会话时写入的显示种子
+       * 区分开，标题裁决才知道它可以用来判定「用户是否改过名」。 */
+      live.record.sessionName = state.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
+      live.record.nameSource = 'native';
+    }
     try { save(); } catch { live.error = 'metadata_write_failed'; }
     changed(live);
     providerLifecycle();
@@ -380,7 +401,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     return serialize(() => admission(args, async admitted => {
       guardStore(); if (records.size >= 256) throw fail('conversation_limit');
       const workspace = admitted || await resolveWorkspace(args);
-      const record = { conversationId: randomUUID(), workspace, sessionId: null, sessionLocator: null, createdAt: new Date().toISOString() };
+      const record = { conversationId: randomUUID(), workspace, sessionId: null, sessionLocator: null, nameSource: 'seed', createdAt: new Date().toISOString() };
       records.set(record.conversationId, record); save();
       try { return await launchRecord(record, { ...args, workspaceChecked: Boolean(admitted) }); }
       catch (e) { if (!lives.has(record.conversationId)) records.delete(record.conversationId); save(); throw e; }
@@ -403,7 +424,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       const fresh = !record;
       if (fresh) {
         if (records.size >= 256) throw fail('conversation_limit');
-        record = {conversationId:randomUUID(),workspace,sessionId,sessionLocator,sessionIdentity,sessionName:String(sessionName).slice(0,200),createdAt:new Date().toISOString(),...(requestId?{requestId}:{})};
+        record = {conversationId:randomUUID(),workspace,sessionId,sessionLocator,sessionIdentity,sessionName:String(sessionName).slice(0,200),nameSource:'seed',createdAt:new Date().toISOString(),...(requestId?{requestId}:{})};
         records.set(record.conversationId,record); save();
       }
       try { return await launchRecord(record,options); }
@@ -487,6 +508,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (cmd.type === 'get_state' && result?.sessionId === live.sessionId && typeof result.sessionName === 'string' && (result.sessionName.trim() || !projectWorkspace(live.record.workspace))) {
       const name = result.sessionName.trim().replace(/\s+/g, ' ').slice(0, 200);
       if (live.record.sessionName !== name) { live.record.sessionName = name; save(); changed(live); }
+      /* 即便名字与显示种子相同，这条也是 get_state 读到的原生名。 */
+      if (live.record.nameSource !== 'native') { live.record.nameSource = 'native'; save(); changed(live); }
     }
     return result;
   }
@@ -601,7 +624,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     const title = titleFor(record);
     return { sessionId: record.sessionId || null, sessionLocator: record.sessionLocator || null,
       sessionIdentity: record.sessionIdentity || null, cwd: w.cwd,
-      title: title.title, titleSource: title.source, createdAt: record.createdAt,
+      title: title.title, titleSource: title.source,
+      titleRevision: Number.isSafeInteger(title.revision) ? title.revision : 0,
+      createdAt: record.createdAt,
       locator: { projectId: w.projectId, workspaceId: w.workspaceId, workspaceEpoch: w.workspaceEpoch,
         conversationId: record.conversationId, nativeSessionId: record.sessionId || null } };
   }

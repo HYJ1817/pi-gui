@@ -9,6 +9,7 @@
  * 纯数字的 usage。
  */
 import { Worker } from 'node:worker_threads';
+import fs from 'node:fs';
 import { resolveAuthSdk } from './provider-auth-sdk.js';
 
 const WORKER_SOURCE = String.raw`
@@ -103,6 +104,24 @@ export function createSessionTitleSdk({
 
   const publicCapability = () => ({ ...capability });
 
+  /* auth.json / models.json 会在用户登录、切换供应商、添加自定义模型时被改写。
+   * worker 只在创建时读一次这两份文件，因此身份键必须带上它们的指纹：
+   * 配置变了就重建 worker，而不是一直持有过期的认证或模型表。 */
+  function fileFingerprint(file) {
+    if (!file) return '-';
+    try {
+      const stat = fs.statSync(file);
+      return `${stat.mtimeMs}:${stat.size}`;
+    } catch {
+      return 'missing';
+    }
+  }
+
+  function workerIdentity() {
+    const base = typeof identityKey === 'function' ? identityKey() : '';
+    return `${base}\u0000${fileFingerprint(authPath)}\u0000${fileFingerprint(modelsPath)}`;
+  }
+
   function finishAll(code) {
     for (const task of pending.values()) task.finish({ ok: false, code });
     pending.clear();
@@ -117,7 +136,7 @@ export function createSessionTitleSdk({
   }
 
   function ensure() {
-    const key = typeof identityKey === 'function' ? identityKey() : '';
+    const key = workerIdentity();
     if (worker && workerKey === key) return true;
     dispose();
     const resolved = resolveAuthSdk(typeof resolvePackageDir === 'function' ? resolvePackageDir() : resolvePackageDir);

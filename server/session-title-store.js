@@ -4,21 +4,27 @@
  *
  * 自动标题看起来「写进会话文件最自然」，但 Pi 正在往同一个文件追加内容。
  * 在 Pi 或 Agent 持有写句柄时改 JSONL，既不安全，也会把 Pi 自己的 session
- * schema 变成第二个真相。用户手动改名已经由 Pi 的 `set_session_name` 负责，
- * 我们只保存**自己产生的**自动标题与显式采纳的覆盖标题，按原生会话 id 关联。
+ * schema 变成第二个真相。用户手动改名由 Pi 的 `set_session_name` 负责时，
+ * 我们只读它写下的 `session_info`；pi-GUI 自己的改名与 AI 标题保存在
+ * `<DATA_DIR>/session-titles.json`，按原生会话 id 关联。
  *
- * ---------- 优先级 ----------
+ * ---------- 优先级与版本 ----------
  *
- *   Pi GUI 显式覆盖（用户确认采纳） > 原生手动名 > 自动标题 > 首条消息 > 默认
+ *   Pi GUI 手动标题（用户输入 / 确认采纳） > 原生手动名 > 自动标题 > 首条消息 > 默认
  *
- * 原生手动名永远不覆盖：自动结果迟到时会被丢弃；显式覆盖也只在「采纳时的
- * 原生名没有变化」期间有效，用户之后在 Pi 里改名，原生名重新获胜。
+ * 每条记录有单调递增的 `revision`。生成任务、改名请求、确认提案都捕获
+ * revision，应用前再核对；revision 不一致就丢弃，字符串相同也不能绕过。
+ * `nativeName` 是最后一次确认过的原生名：用户在 Pi 里改名后，revision 也会
+ * 增长，旧的 manual 覆盖失效，原生名重新获胜。
  *
  * ---------- 文件与失败边界 ----------
  *
  * `<DATA_DIR>/session-titles.json` + `<DATA_DIR>/session-title-settings.json`，
  * 原子写（同目录临时文件 + rename，0600）。坏文件不拖垮启动：先把原文件
  * 备份成 `.corrupt-<时间>`，再以空状态继续；宁可丢标题，也不能让侧栏打不开。
+ *
+ * 记录容量只清理「没有正式标题」的失败 attempt。manual / auto 属于仍然有效的
+ * 会话标题，不因记录数量超限被删除；永久删除会话时由上层显式 forget。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -29,6 +35,7 @@ const SETTINGS_FILE = 'session-title-settings.json';
 const MAX_TITLE = 80;
 const MAX_NATIVE = 80;
 const MAX_ENTRIES = 1000;
+const MAX_STORE_BYTES = 16 * 1024 * 1024;
 const KEY_RE = /^(?:classic|runtime):[A-Za-z0-9._-]{1,128}$/;
 
 function cleanText(value, max = MAX_TITLE) {
@@ -61,12 +68,20 @@ function entryShape(value) {
       title,
       at: iso(value.manual.at) || new Date(0).toISOString(),
       nativeNameAt: cleanText(value.manual.nativeNameAt, MAX_NATIVE) || null,
+      /* 旧记录没有这个字段：当时的手动标题只会在完整读取或已知原生名时写入，
+       * 按已确认处理。新写入若来自截断且尾部未能确认的文件，会显式记 false。 */
+      nativeNameConfirmed: value.manual.nativeNameConfirmed !== false,
     };
   }
   if (value.attempt && typeof value.attempt === 'object' && !Array.isArray(value.attempt)) {
     const at = iso(value.attempt.at);
     if (at) out.attempt = { at, revision: Number.isSafeInteger(value.attempt.revision) ? value.attempt.revision : 0 };
   }
+  out.revision = Number.isSafeInteger(value.revision) && value.revision >= 0 ? value.revision : 0;
+  /* 旧数据没有 nativeName：manual 的 nativeNameAt 就是当时的原生名快照。
+   * 没有 manual 的旧记录保持空快照，等第一次确认到真实原生名时再迁移。 */
+  out.nativeName = cleanText(value.nativeName, MAX_NATIVE)
+    || out.manual?.nativeNameAt || '';
   out.updatedAt = iso(value.updatedAt) || out.manual?.at || out.auto?.at || out.attempt?.at || new Date(0).toISOString();
   return out;
 }
@@ -118,7 +133,7 @@ export function createSessionTitleStore({
   function readJson(file) {
     try {
       const stat = fs.statSync(file);
-      if (!stat.isFile() || stat.size > 4 * 1024 * 1024) throw new Error('too_large');
+      if (!stat.isFile() || stat.size > MAX_STORE_BYTES) throw new Error('too_large');
       return JSON.parse(fs.readFileSync(file, 'utf8'));
     } catch (err) {
       if (err && err.code === 'ENOENT') return null;
@@ -189,13 +204,9 @@ export function createSessionTitleStore({
       }
       return;
     }
-    /* 文件最多 4MB；先按 updatedAt 从新到旧排序，再截到上限，
-     * 不能因为文件里旧条目排在前面就把新标题丢掉。 */
-    const ordered = raw.items
-      .filter((item) => item && typeof item === 'object')
-      .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
-      .slice(0, maxEntries);
-    for (const item of ordered) {
+    /* 不按记录数截断正式标题：旧会话的 manual / auto 仍然有效。
+     * attempt-only 记录由 prune() 单独限额。 */
+    for (const item of raw.items) {
       if (!item || typeof item !== 'object' || !KEY_RE.test(item.key || '')) continue;
       const shape = entryShape(item);
       if (shape) entries.set(item.key, shape);
@@ -203,9 +214,13 @@ export function createSessionTitleStore({
   }
 
   function prune() {
-    if (entries.size <= maxEntries) return;
-    const ordered = [...entries.entries()].sort((a, b) => String(a[1].updatedAt).localeCompare(String(b[1].updatedAt)));
-    for (const [key] of ordered.slice(0, entries.size - maxEntries)) entries.delete(key);
+    /* 只清理没有正式标题的失败 attempt。manual / auto 属于用户可见标题，
+     * 不能因为条数超限被静默删除 —— 那会让旧会话重新显示成首条消息。 */
+    const expendable = [...entries.entries()]
+      .filter(([, value]) => !value.manual && !value.auto)
+      .sort((a, b) => String(a[1].updatedAt).localeCompare(String(b[1].updatedAt)));
+    const overflow = expendable.length - maxEntries;
+    for (let i = 0; i < overflow; i++) entries.delete(expendable[i][0]);
   }
 
   function saveTitles() {
@@ -245,30 +260,93 @@ export function createSessionTitleStore({
   };
 
   /**
+   * 原生名变化时让旧的 manual 覆盖永久失效。只在 nativeConfirmed 时调用。
+   *
+   * 不能把「头部读不到 nativeName」当成「用户删掉了名字」：大头文件后部可能
+   * 还有更新的 session_info。读不完整时 resolve 会保守地继续使用旧快照。
+   */
+  function reconcileNative(key, current, native) {
+    if ((current.nativeName || '') === native) return current;
+    const at = stamp();
+    if (current.manual && current.manual.nativeNameConfirmed === false) {
+      /* 手动标题写入时文件被截断、尾部没能确认原生名：这份 manual 的
+       * nativeNameAt 是「未知」而不是「空」。后来确认到的原生名不能当成
+       * 「用户在 Pi 里改名」—— 那会把用户刚改的标题删掉。这里把确认到的
+       * 原生名补成新快照，保留手动标题；之后再改名仍按正常规则失效。 */
+      const next = {
+        ...current,
+        nativeName: native,
+        manual: { ...current.manual, nativeNameAt: native, nativeNameConfirmed: true },
+        updatedAt: at,
+        revision: (current.revision || 0) + 1,
+      };
+      entries.set(key, next);
+      try {
+        saveTitles();
+      } catch {
+        safeLog('session-title.store_write_failed', { code: 'store_write_failed' });
+      }
+      return next;
+    }
+    const next = { ...current, nativeName: native, updatedAt: at, revision: (current.revision || 0) + 1 };
+    delete next.manual;
+    entries.set(key, next);
+    try {
+      saveTitles();
+    } catch {
+      safeLog('session-title.store_write_failed', { code: 'store_write_failed' });
+    }
+    return next;
+  }
+
+  /**
    * 解析显示标题。同步、无 IO —— 会话列表每次扫描都会调用它。
    *
+   * @param nativeConfirmed 原生名是否来自完整文件或文件尾部的最新 session_info。
+   *   读取被截断且尾部没有确认时传 false：旧的 manual 不会被误判过期。
    * @returns {{title:string, source:'manual'|'auto'|'fallback'|'default', key:string|null,
-   *            native:boolean, manualOverride:boolean}}
+   *            native:boolean, manualOverride:boolean, revision:number}}
    */
-  function resolve({ scope, sessionId, conversationId, nativeName = '', fallback = '', defaultTitle = '（还没有消息）' } = {}) {
+  function resolve({
+    scope, sessionId, conversationId, nativeName = '', fallback = '',
+    defaultTitle = '（还没有消息）', nativeConfirmed = true,
+  } = {}) {
     const id = scope === 'runtime' ? conversationId : sessionId;
     const key = keyFor(scope, id);
-    const entry = key ? entries.get(key) : null;
+    let entry = key ? entries.get(key) : null;
     const native = cleanText(nativeName, MAX_NATIVE);
     const first = cleanText(fallback);
     const def = cleanText(defaultTitle) || '（还没有消息）';
 
-    if (entry?.manual) {
-      const atApply = entry.manual.nativeNameAt || '';
-      if (atApply === native) {
-        return { title: entry.manual.title, source: 'manual', key, native: Boolean(native), manualOverride: true };
-      }
-      /* 采纳之后用户又在 Pi 里改了名：原生名重新获胜，覆盖自然失效。 */
+    /* 没有任何标题记录的会话也要跟踪原生名快照：原生改名是权威标题变化，
+     * revision 必须递增，否则「旧列表 / 旧切换应答」会在同修订下把新原生名
+     * 顶回去。只登记在内存里、不单独落盘（列表扫描不能为每个会话各写一次
+     * 存储），下一次任何标题写入会顺带保存它。 */
+    if (key && !entry && nativeConfirmed && native) {
+      entry = { nativeName: native, revision: 1, updatedAt: stamp() };
+      entries.set(key, entry);
     }
-    if (native) return { title: native, source: 'manual', key, native: true, manualOverride: false };
-    if (entry?.auto) return { title: entry.auto.title, source: 'auto', key, native: false, manualOverride: false };
-    if (first) return { title: first, source: 'fallback', key, native: false, manualOverride: false };
-    return { title: def, source: 'default', key, native: false, manualOverride: false };
+
+    if (entry && nativeConfirmed) entry = reconcileNative(key, entry, native);
+
+    const manual = entry?.manual;
+    const snapshot = entry ? (entry.nativeName || '') : '';
+    const manualActive = Boolean(manual) && (
+      nativeConfirmed ? native === (manual.nativeNameAt || '') : snapshot === (manual.nativeNameAt || '')
+    );
+
+    if (manualActive) {
+      return { title: manual.title, source: 'manual', key, native: Boolean(native), manualOverride: true,
+        revision: entry.revision || 0 };
+    }
+    if (native) return { title: native, source: 'manual', key, native: true, manualOverride: false,
+      revision: entry?.revision || 0 };
+    if (entry?.auto) return { title: entry.auto.title, source: 'auto', key, native: false, manualOverride: false,
+      revision: entry.revision || 0 };
+    if (first) return { title: first, source: 'fallback', key, native: false, manualOverride: false,
+      revision: entry?.revision || 0 };
+    return { title: def, source: 'default', key, native: false, manualOverride: false,
+      revision: entry?.revision || 0 };
   }
 
   function entry(key) {
@@ -288,26 +366,58 @@ export function createSessionTitleStore({
     });
   }
 
-  function setAuto(key, { title, providerId = '', modelId = '' } = {}) {
+  function setAuto(key, { title, providerId = '', modelId = '', nativeName = '', expectedRevision = null } = {}) {
     const value = cleanText(title);
     if (!value) return null;
     const at = stamp();
-    return writeEntry(key, (current) => ({
-      ...current,
-      auto: { title: value, at, providerId: cleanText(providerId, 200), modelId: cleanText(modelId, 200) },
-      updatedAt: at,
-    }));
+    let conflict = null;
+    const result = writeEntry(key, (current) => {
+      if (Number.isSafeInteger(expectedRevision) && (current.revision || 0) !== expectedRevision) {
+        conflict = { revision: current.revision || 0 };
+        return null;
+      }
+      return {
+        ...current,
+        auto: { title: value, at, providerId: cleanText(providerId, 200), modelId: cleanText(modelId, 200) },
+        nativeName: cleanText(nativeName, MAX_NATIVE) || current.nativeName || '',
+        revision: (current.revision || 0) + 1,
+        updatedAt: at,
+      };
+    });
+    if (!result && conflict) return { ok: false, code: 'revision_conflict', revision: conflict.revision };
+    return result;
   }
 
-  function setManual(key, { title, nativeNameAt = '' } = {}) {
+  function setManual(key, {
+    title, nativeNameAt = '', nativeName = undefined, nativeNameConfirmed = true, expectedRevision = null,
+  } = {}) {
     const value = cleanText(title);
     if (!value) return null;
     const at = stamp();
-    return writeEntry(key, (current) => ({
-      ...current,
-      manual: { title: value, at, nativeNameAt: cleanText(nativeNameAt, MAX_NATIVE) || null },
-      updatedAt: at,
-    }));
+    let conflict = null;
+    const result = writeEntry(key, (current) => {
+      if (Number.isSafeInteger(expectedRevision) && (current.revision || 0) !== expectedRevision) {
+        conflict = { revision: current.revision || 0 };
+        return null;
+      }
+      return {
+        ...current,
+        manual: {
+          title: value, at,
+          nativeNameAt: cleanText(nativeNameAt, MAX_NATIVE) || null,
+          /* false 表示写入时未能确认原生名（文件截断且尾部也没读到）；
+           * 这样的快照是「未知」，不能拿来判定用户后来有没有改名。 */
+          nativeNameConfirmed: nativeNameConfirmed !== false,
+        },
+        nativeName: nativeName === undefined
+          ? (cleanText(nativeNameAt, MAX_NATIVE) || current.nativeName || '')
+          : cleanText(nativeName, MAX_NATIVE),
+        revision: (current.revision || 0) + 1,
+        updatedAt: at,
+      };
+    });
+    if (!result && conflict) return { ok: false, code: 'revision_conflict', revision: conflict.revision };
+    return result;
   }
 
   /** 用户显式清除覆盖（例如采纳后又想回到原生名）。 */
@@ -315,7 +425,7 @@ export function createSessionTitleStore({
     if (!entry(key)?.manual) return true;
     const at = stamp();
     return Boolean(writeEntry(key, (current) => {
-      const next = { ...current, updatedAt: at };
+      const next = { ...current, updatedAt: at, revision: (current.revision || 0) + 1 };
       delete next.manual;
       return next;
     }));
@@ -331,6 +441,11 @@ export function createSessionTitleStore({
   function forgetClassic(sessionId) {
     if (typeof sessionId !== 'string' || !sessionId) return false;
     return forget(`classic:${sessionId}`);
+  }
+
+  function forgetRuntime(conversationId) {
+    if (typeof conversationId !== 'string' || !conversationId) return false;
+    return forget(`runtime:${conversationId}`);
   }
 
   function updateSettings({ autoEnabled } = {}) {
@@ -367,9 +482,10 @@ export function createSessionTitleStore({
     clearManual,
     forget,
     forgetClassic,
+    forgetRuntime,
     settings: () => ({ ...settings }),
     updateSettings,
     paths: { titles: titlesPath, settings: settingsPath },
-    _internals: { cleanText, entryShape, KEY_RE },
+    _internals: { cleanText, entryShape, KEY_RE, MAX_TITLE, prune },
   };
 }

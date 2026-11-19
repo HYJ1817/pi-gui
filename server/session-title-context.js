@@ -64,14 +64,65 @@ export function capText(value, max) {
 }
 
 /**
+ * 从文件尾部文本里取最后一条 `session_info`。尾部读取可能从一行中间开始，
+ * JSON.parse 失败的那一行会被跳过，不影响后面完整的行。
+ *
+ * @returns {{name:string, at:string|null}|null}
+ */
+export function parseLatestNativeName(text) {
+  if (typeof text !== 'string' || !text) return null;
+  let latest = null;
+  for (const line of text.split('\n')) {
+    if (!line || line.indexOf('"session_info"') === -1) continue;
+    let entry;
+    try { entry = JSON.parse(line); } catch { continue; }
+    if (entry?.type !== 'session_info' || typeof entry.name !== 'string') continue;
+    const name = entry.name.replace(/\s+/g, ' ').trim();
+    if (!name) continue;
+    latest = {
+      name: name.slice(0, MAX_NATIVE_CHARS),
+      at: typeof entry.timestamp === 'string' ? entry.timestamp : null,
+    };
+  }
+  return latest;
+}
+
+/** 一条 assistant 消息是否是「正常完成的最终回复」。 */
+export function isTerminalSuccess(body) {
+  if (!body || body.role !== 'assistant') return false;
+  if (body.errorMessage) return false;
+  const reason = typeof body.stopReason === 'string' ? body.stopReason.trim().toLowerCase()
+    : typeof body.stop_reason === 'string' ? body.stop_reason.trim().toLowerCase() : '';
+  /* 只认 stop。toolUse 是中间过程，length 是截断输出，error / aborted 是失败；
+   * 缺终态字段的旧消息按未知处理，不能当成成功（保守策略）。 */
+  return reason === 'stop';
+}
+
+function assistantReply(body, text) {
+  if (!isTerminalSuccess(body) || !text) return null;
+  return {
+    text,
+    providerId: safeId(body.provider),
+    modelId: safeId(body.model),
+  };
+}
+
+/**
  * 解析会话文件（JSONL 文本）。
+ *
+ * 只把**正常完成**的 assistant 消息作为标题素材。工具调用过程、错误、中断、
+ * 截断输出与缺失 stopReason 的旧消息都不算有效回复。
  *
  * @returns {null | {
  *   header:{id:string,cwd:string,createdAt:string|null},
  *   nativeName:string, nativeNameAt:string|null,
- *   userText:string, assistantText:string, lastAssistantText:string,
+ *   userText:string, assistantText:string, firstAssistantText:string, lastAssistantText:string,
+ *   firstAssistantUserText:string, lastAssistantUserText:string,
  *   userCount:number, assistantBeforeFirstUser:boolean,
- *   providerId:string, modelId:string, truncated:boolean
+ *   providerId:string, modelId:string,
+ *   firstAssistantProvider:string, firstAssistantModel:string,
+ *   lastAssistantProvider:string, lastAssistantModel:string,
+ *   fallbackProviderId:string, fallbackModelId:string
  * }}
  */
 export function parseSessionTitleContext(text) {
@@ -91,17 +142,8 @@ export function parseSessionTitleContext(text) {
   let firstUserText = '';
   let userCount = 0;
   let assistantBeforeFirstUser = false;
-  let inFirstTurn = false;
-  let firstTurnDone = false;
-  const firstTurnParts = [];
-  let firstTurnProvider = '';
-  let firstTurnModel = '';
-  let firstAssistantText = '';
-  let firstAssistantProvider = '';
-  let firstAssistantModel = '';
-  let lastAssistantText = '';
-  let lastAssistantProvider = '';
-  let lastAssistantModel = '';
+  const turns = [];
+  let current = null;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
@@ -128,40 +170,29 @@ export function parseSessionTitleContext(text) {
     if (body.role === 'user') {
       if (!value) continue;
       userCount++;
-      if (userCount === 1) {
-        firstUserText = value;
-        inFirstTurn = true;
-      } else {
-        /* 第二条用户消息：首轮到此为止，后面不再算首轮回复。 */
-        inFirstTurn = false;
-        firstTurnDone = true;
-      }
+      if (userCount === 1) firstUserText = value;
+      current = { userText: value, replies: [] };
+      turns.push(current);
       continue;
     }
     /* assistant */
-    if (!value) continue;
     if (!firstUserText) {
       assistantBeforeFirstUser = true;
       continue;
     }
-    lastAssistantText = value;
-    lastAssistantProvider = safeId(body.provider);
-    lastAssistantModel = safeId(body.model);
-    if (!firstAssistantText) {
-      firstAssistantText = value;
-      firstAssistantProvider = lastAssistantProvider;
-      firstAssistantModel = lastAssistantModel;
-    }
-    if (inFirstTurn && !firstTurnDone) {
-      firstTurnParts.push(value);
-      /* 首轮可能因为工具调用出现多条 assistant 消息；模型取最后一条，
-       * 那才是最终回复实际使用的模型。 */
-      firstTurnProvider = safeId(body.provider);
-      firstTurnModel = safeId(body.model);
-    }
+    if (!current) continue;
+    const reply = assistantReply(body, value);
+    if (reply) current.replies.push(reply);
   }
 
-  const assistantText = firstTurnParts.join('\n').trim();
+  const finalReply = (turn) => turn?.replies?.[turn.replies.length - 1] || null;
+  const firstTurn = turns[0] || null;
+  const firstTurnFinal = finalReply(firstTurn);
+  const laterTurn = turns.slice(1).find((turn) => finalReply(turn));
+  const laterFinal = finalReply(laterTurn);
+  const lastTurnWithReply = [...turns].reverse().find((turn) => finalReply(turn));
+  const lastFinal = finalReply(lastTurnWithReply);
+
   return {
     header: {
       id: header.id,
@@ -171,18 +202,27 @@ export function parseSessionTitleContext(text) {
     nativeName,
     nativeNameAt,
     userText: firstUserText,
-    assistantText,
-    firstAssistantText,
-    firstAssistantProvider,
-    firstAssistantModel,
-    lastAssistantText,
+    /* 首轮正常完成的最终回复。首轮失败 / 中断时为空，等后续有效回复。 */
+    assistantText: firstTurnFinal?.text || '',
+    /* 首轮之后第一条正常完成的最终回复；自动标题在首轮失败时用它。 */
+    firstAssistantText: laterFinal?.text || '',
+    firstAssistantUserText: laterTurn?.userText || '',
+    /* 手动生成在没有任何首轮有效回复时，允许使用最后一条有效回复。 */
+    lastAssistantText: lastFinal?.text || '',
+    /* 与 lastAssistantText 属于同一轮；最后一轮没有有效回复时不能把
+     * 那一轮的用户消息配给更早的回复。 */
+    lastAssistantUserText: lastTurnWithReply?.userText || '',
     userCount,
     assistantBeforeFirstUser,
-    providerId: firstTurnProvider || (assistantText ? '' : lastAssistantProvider),
-    modelId: firstTurnModel || (assistantText ? '' : lastAssistantModel),
-    /* 首轮没有回复时，给手动生成留一条退路；自动生成不会用它。 */
-    fallbackProviderId: lastAssistantProvider,
-    fallbackModelId: lastAssistantModel,
+    providerId: firstTurnFinal?.providerId || '',
+    modelId: firstTurnFinal?.modelId || '',
+    firstAssistantProvider: laterFinal?.providerId || '',
+    firstAssistantModel: laterFinal?.modelId || '',
+    lastAssistantProvider: lastFinal?.providerId || '',
+    lastAssistantModel: lastFinal?.modelId || '',
+    /* 兼容旧字段：首轮没有有效回复时的后续退路。 */
+    fallbackProviderId: lastFinal?.providerId || '',
+    fallbackModelId: lastFinal?.modelId || '',
   };
 }
 

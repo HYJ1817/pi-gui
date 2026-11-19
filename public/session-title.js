@@ -1,17 +1,16 @@
 /* 顶部会话标题的投影规则（纯函数，无 DOM / 无状态）。
  *
- * 标题有两个权威来源，优先级固定：
- *   1. Pi 当前会话的 `get_state.sessionName`（用户明确命名后由 Pi 持有）；
- *   2. 会话列表里**当前这条**会话的标题（会话文件里的 session_info.name，
- *      没有名字时取第一条用户消息）。
+ * 标题只有一个权威来源：后端 `sessions` 列表里**当前这条**会话的标题。
+ * 那一条已经由后端按统一优先级裁决过（pi-GUI 手动标题 / 确认采纳 > Pi 原生
+ * 手动名 > 自动标题 > 首条用户消息 > 默认），并带 `titleRevision`。
  *
- * 侧栏已经用第 2 条渲染，顶部不能再用另一份可能过期的副本。`expectedKey`
- * 是用户刚刚切过去的那条会话的稳定 ID：列表请求可能比 switch_session
- * 晚回来、甚至带回旧的 current 标记，这时只能认 expectedKey 那一条；
- * 找不到就保持切换应答里的标题，绝不把另一条会话的标题画到顶部。
+ * 顶部**不再**用 `get_state.sessionName` 覆盖它：原生名只是后端裁决的输入
+ * 之一，用户确认过的 AI 标题可以合法地压过原生名，前端再按「原生名优先」
+ * 画一次就会让顶栏与侧栏分叉，刷新后旧标题还会回来。
  *
- * `liveName` 非空时返回 null —— 调用方保留 Pi 的实时名字，列表标题不能
- * 覆盖它。新建/空会话的 pending 记录统一显示「新会话」。
+ * `expectedKey` 是用户刚刚切过去的那条会话的稳定 ID：列表请求可能比
+ * switch_session 晚回来、甚至带回旧的 current 标记，这时只能认 expectedKey
+ * 那一条；找不到就保持切换应答里的标题，绝不把另一条会话的标题画到顶部。
  */
 const BLANK_TITLES = new Set(['（还没有消息）', '新会话（还没有消息）']);
 
@@ -41,11 +40,8 @@ export function projectSessionTitle({
   sessions,
   currentId = null,
   expectedKey = null,
-  liveName = '',
   fallback = '新会话',
 } = {}) {
-  if (typeof liveName === 'string' && liveName.trim()) return null;
-
   const list = Array.isArray(sessions) ? sessions : [];
   let key = expectedKey;
   let target = expectedKey ? list.find((s) => s?.id === expectedKey) : null;

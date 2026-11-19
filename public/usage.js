@@ -9,7 +9,6 @@
 
 import { el, S, setUsageRenderHook } from './state.js';
 import { fmt } from './util.js';
-import { setTitleText } from './shell.js';
 import { openPop, pop } from './ui/popover.js';
 import { setStreaming } from './messages.js';
 import { draftSync } from './draft.js';
@@ -19,6 +18,8 @@ import { renderModelControls } from './composer.js';
 import { renderAttachments } from './attachments.js';
 import { observeFallbackState } from './fallback.js';
 import { logRendererEvent } from './log-client.js';
+import { setTitleText } from './shell.js';
+import { titleKey, titleSnapshot } from './title-revision.js';
 import { requestSessionStats } from './session-stats.js';
 import {
   beginThroughputTurn,
@@ -355,6 +356,10 @@ export function applyState(d) {
    * 不等随后的 get_session_stats —— 那一刻界面就该已经干净了。 */
   const previousSessionId = S.localUsage.sessionId || S.state?.sessionId || null;
   const nextSessionId = typeof d?.sessionId === 'string' && d.sessionId ? d.sessionId : null;
+  /* 原生会话名只是标题裁决的输入之一。这里只观察「同一个会话的原生名变了」，
+   * 交给侧栏刷新去问后端的权威标题 —— **不直接写顶部标题**，否则用户确认过
+   * 的 AI 标题会被 get_state.sessionName 覆盖。 */
+  const previousSessionName = typeof S.state?.sessionName === 'string' ? S.state.sessionName.trim() : '';
   if (previousSessionId && nextSessionId && previousSessionId !== nextSessionId) {
     S.thinkingLevels = [];
     S.thinkingReadStatus = 'unconfirmed';
@@ -371,6 +376,23 @@ export function applyState(d) {
     }) };
   }
   S.state = d;
+
+  /* 同一个会话的原生名变化 = 用户在 Pi 那边改了名。刷新权威列表，由后端
+   * 统一裁决（原生名可能输给已确认的 pi-GUI 手动标题）。切换会话不在这里
+   * 触发 —— switch 路径已经带回了目标会话的标题与修订号。 */
+  const nextSessionName = typeof d.sessionName === 'string' ? d.sessionName.trim() : '';
+  if (nextSessionId && nextSessionName) {
+    /* 首次加载还没有侧栏快照时，用 Pi 原生名占位；一旦已有权威快照
+     *（列表 / 切换应答 / SSE 给过的标题），就不许 get_state 再覆盖 ——
+     * 否则旧的原生名会把用户确认过的标题顶回去。 */
+    const known = titleSnapshot(titleKey('classic', nextSessionId));
+    if (!known) setTitleText(nextSessionName);
+  }
+  if (nextSessionId && previousSessionId === nextSessionId && nextSessionName !== previousSessionName) {
+    document.dispatchEvent(new CustomEvent('pi-gui:native-title', {
+      detail: { sessionId: nextSessionId, name: nextSessionName },
+    }));
+  }
 
   /* 模型变了：Pi 的统计缓存键包含当前模型，必须重新取一次，才能让
    * 已用 token 与新的 contextWindow 对齐。请求会登记当前身份，迟到的
@@ -425,7 +447,6 @@ export function applyState(d) {
   renderModelControls();
   renderAttachments();
 
-  if (d.sessionName) setTitleText(d.sessionName);
   el.footName.textContent = d.sessionName || '本地会话';
   setStreaming(Boolean(d.isStreaming));
   /* 模型/会话身份变化后立刻重画：侧栏、chip、浮层、统计面板都从

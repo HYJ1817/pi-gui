@@ -789,6 +789,13 @@ export const generateSessionTitle = (target) =>
 export const applySessionTitle = (proposalId) =>
   sendJSON('/api/session-titles/apply', { body: { proposalId }, applicationScoped: true });
 
+/** 任意会话的手动改名（不切会话、不重启 Pi、不写 Pi 的 JSONL）。
+ *  classic：scope + id（稳定 ID）+ project（项目路径）+ title + expectedRevision；
+ *  runtime：scope + conversationId + title + expectedRevision。
+ *  真实目标由后端用受信项目列表 / registry 解析，前端不传文件路径。 */
+export const renameSessionTitle = (target) =>
+  sendJSON('/api/session-titles/rename', { body: target, applicationScoped: true });
+
 /** 在当前项目里搜会话标题与消息正文（P3）。
  *
  *  **只传关键词与范围，不传路径、不传会话 ID** —— 后端自己决定扫哪些文件，

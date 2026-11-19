@@ -54,7 +54,6 @@ import {
   onResponse,
   onStopState,
   setModel,
-  setSessionName,
   setSessionListRefresh,
   setThinkingLevel,
   refreshModelState,
@@ -95,7 +94,7 @@ import { openMcpSettings } from './mcp-settings.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner, setTaskSessionViewer } from './planner.js';
 import { mountSessionPlans } from './session-plans.js';
-import { renderSidebarSessions, refreshSidebarSessions, applySessionRename, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
+import { renderSidebarSessions, refreshSidebarSessions, currentSessionTitle, renameCurrentSession, expandSidebarSessions, createSidebarPreviewRow, openSidebarPreviewSession, setRuntimeHistoryHandler, setSessionOpenHandler } from './sessions.js';
 import { sessionDisplayTitle } from './session-title.js';
 import { handleSessionTitleEvent, loadSessionTitleSettings } from './session-titles.js';
 import { createSessionNavigation } from './session-navigation.js';
@@ -1081,7 +1080,10 @@ function renameSession() {
     const input = document.createElement('input');
     input.className = 'modal-input';
     input.placeholder = '例如 my-feature-work';
-    input.value = S.state?.sessionName || '';
+    /* 预填「当前会话的权威标题」，不是 get_state.sessionName —— 顶部与
+     * 侧栏必须显示同一个答案，否则确认过的 AI 标题会被原生名盖掉。 */
+    input.value = currentSessionTitle() || S.state?.sessionName || '';
+    input.maxLength = 80;
     card.appendChild(input);
     setTimeout(() => input.focus(), 30);
 
@@ -1096,15 +1098,21 @@ function renameSession() {
     const ok = document.createElement('button');
     ok.className = 'btn primary';
     ok.textContent = '保存';
-    ok.onclick = () => {
+    ok.onclick = async () => {
       const name = input.value.trim();
+      if (!name || ok.disabled) return;
+      ok.disabled = true;
+      const res = await renameCurrentSession(name);
+      if (!res || res.ok !== true) {
+        ok.disabled = false;
+        toast((res && res.error) || '改名失败，已保留原标题', 'error');
+        return;
+      }
       close();
-      if (!name) return;
-      setSessionName(name);
-      setTitleText(name);
-      applySessionRename(name);
-      el.footName.textContent = name;
-      toast('已重命名为 ' + name, 'info');
+      /* 只有走 Pi 原生名（未落盘的新会话）才更新 footName；元数据改名不会
+       * 改变 Pi 的 sessionName，不能假装同步了。 */
+      if (res.native) el.footName.textContent = res.title;
+      toast('已重命名为 ' + res.title, 'info');
     };
 
     input.addEventListener('keydown', (e) => {

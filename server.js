@@ -926,8 +926,10 @@ const sessionTitles = sessionTitlesRef = createSessionTitles({
   sdk: sessionTitleSdk,
   readSessionText,
   /* 手动入口只接受当前经典项目内的 stable id；Runtime 只接受 registry 已
-   * 证明过的 conversationId。两者都走后端解析，不接受 Renderer 传路径。 */
+   * 证明过的 conversationId。两者都走后端解析，不接受 Renderer 传路径。
+   * 任意会话改名 / 生成还要求项目身份，由 sessions 的受信项目列表核对。 */
   resolveClassic: id => sessions.resolveProjectSession(id, runtime.getCurrentCwd()),
+  resolveClassicProject: (id, project) => sessions.resolveProjectSession(id, project),
   resolveRuntime: id => {
     try { return runtimeRegistryRef?.historyTarget(id) || null; } catch { return null; }
   },
@@ -1244,7 +1246,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   /* 标题的读取与触发都走注入：registry 不 import 标题模块，也不往会话
    * 文件里写任何东西。 */
   sessionTitle: {
-    resolve: record => sessionTitles.resolveRuntimeRecord(record),
+    resolve: (record, options) => sessionTitles.resolveRuntimeRecord(record, options),
     observe: payload => sessionTitles.observeRuntimeTurn(payload),
   },
   externalCount: () => Number(Boolean(runtime.getCurrentCwd())) + cliInFlight + Number(Boolean(plannerRef?.projectSwitchBlockReason())),

@@ -20,9 +20,12 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { json, readBody } from './http-utils.js';
-import { buildTitlePrompt, normalizeGeneratedTitle, parseSessionTitleContext } from './session-title-context.js';
+import { buildTitlePrompt, normalizeGeneratedTitle, parseLatestNativeName, parseSessionTitleContext } from './session-title-context.js';
 
 const MAX_READ_BYTES = 512 * 1024;
+/* 只用来确认「文件后部有没有更新的 session_info」。不完整读取时不能把
+ * 头部找不到名字当成「用户没改过名」——那会错误地让自动结果覆盖手动标题。 */
+const NATIVE_TAIL_BYTES = 512 * 1024;
 const MAX_BODY_BYTES = 64 * 1024;
 const PROPOSAL_TTL_MS = 10 * 60 * 1000;
 const MAX_PROPOSALS = 20;
@@ -50,6 +53,7 @@ export function createSessionTitles({
   sdk,
   readSessionText,
   resolveClassic = () => null,
+  resolveClassicProject = null,
   resolveRuntime = () => null,
   rpcRequest = null,
   getPrimarySessionId = () => null,
@@ -89,7 +93,7 @@ export function createSessionTitles({
     publish({ type: 'session_title_settings', ...settingsPayload() });
   }
 
-  function publishTitle({ scope, sessionId, conversationId = null, title, source }) {
+  function publishTitle({ scope, sessionId, conversationId = null, title, source, revision }) {
     publish({
       type: 'session_title',
       scope,
@@ -97,6 +101,7 @@ export function createSessionTitles({
       ...(scope === SCOPE_RUNTIME && conversationId ? { conversationId } : {}),
       title,
       source,
+      revision: Number.isSafeInteger(revision) ? revision : 0,
       at: new Date(now()).toISOString(),
     });
   }
@@ -143,7 +148,23 @@ export function createSessionTitles({
     const ctx = parseSessionTitleContext(read.text);
     if (!ctx) return { ok: false, code: 'session_unparsable' };
     if (ctx.header.id !== target.sessionId) return { ok: false, code: 'identity_mismatch' };
-    return { ok: true, ctx, truncated: read.truncated === true };
+    let truncated = read.truncated === true;
+    let nativeConfirmed = !truncated;
+    if (truncated) {
+      /* 头部读不到最新的 `session_info` 是正常的：用户可能在文件后部改过名。
+       * 尾部能读到就采用最新一条并视为已确认；读不到则明确标记未知，
+       * 由 store.resolve 保守地保留已有 manual 覆盖。 */
+      const tail = readSessionText(file, { maxBytes: NATIVE_TAIL_BYTES, expected, tail: true });
+      if (tail?.ok) {
+        const latest = parseLatestNativeName(tail.text);
+        if (latest) {
+          ctx.nativeName = latest.name;
+          ctx.nativeNameAt = latest.at;
+          nativeConfirmed = true;
+        }
+      }
+    }
+    return { ok: true, ctx, truncated, nativeConfirmed };
   }
 
   function targetKey(scope, id) {
@@ -228,8 +249,10 @@ export function createSessionTitles({
       .catch(() => safeLog('session-title.auto_failed', { reason: 'internal', requestId: result.requestId || null }));
   }
 
-  /** registry 的 summary/historyTarget 用它同步解析显示标题。 */
-  function resolveRuntimeRecord(record) {
+  /** registry 的 summary/historyTarget 用它同步解析显示标题。
+   *  dormant 记录的 sessionName 可能落后于文件，nativeConfirmed=false 时
+   *  store 会保守地保留 manual 覆盖，等运行时 get_state 确认后再裁决。 */
+  function resolveRuntimeRecord(record, { nativeConfirmed = true } = {}) {
     if (!record || !record.conversationId) return null;
     return store.resolve({
       scope: SCOPE_RUNTIME,
@@ -237,6 +260,7 @@ export function createSessionTitles({
       nativeName: record.sessionName || '',
       fallback: record.workspace?.branch || '',
       defaultTitle: '并行会话',
+      nativeConfirmed,
     });
   }
 
@@ -266,6 +290,13 @@ export function createSessionTitles({
       safeLog('session-title.auto_skipped', { reason: read.code, requestId: meta.requestId || null });
       return;
     }
+    /* 头部截断且尾部没有确认到最新原生名：无法证明用户没有改过名。
+     * 自动标题是后台写入，不能在这种情况下赌「没有改名」—— 跳过，
+     * 等一次完整读取或用户显式手动生成。 */
+    if (read.truncated && !read.nativeConfirmed) {
+      safeLog('session-title.auto_skipped', { reason: 'native_unconfirmed', requestId: meta.requestId || null });
+      return;
+    }
     const ctx = read.ctx;
     const reason = autoBlockedReason(target.key, ctx, settings);
     if (reason) return;
@@ -287,6 +318,14 @@ export function createSessionTitles({
       return;
     }
     if (!recorded) return;
+    const baseRevision = store.resolve({
+      scope: target.scope,
+      sessionId: target.sessionId,
+      conversationId: target.conversationId,
+      nativeName: ctx.nativeName,
+      fallback: ctx.userText,
+      nativeConfirmed: read.nativeConfirmed,
+    }).revision || 0;
     void schedule({
       mode: 'auto',
       key: target.key,
@@ -296,11 +335,13 @@ export function createSessionTitles({
       target,
       identity: target.sessionIdentity,
       nativeName: ctx.nativeName,
+      nativeConfirmed: read.nativeConfirmed,
       providerId: context.providerId,
       modelId: context.modelId,
       userText: ctx.userText,
       assistantText: context.text,
       revision: settings.revision,
+      baseRevision,
       timeoutMs: DEFAULT_TIMEOUT_MS,
     });
   }
@@ -372,6 +413,18 @@ export function createSessionTitles({
     return applied;
   }
 
+  function resolveTaskTitle(task, ctx, read) {
+    return store.resolve({
+      scope: task.scope,
+      sessionId: task.sessionId,
+      conversationId: task.conversationId,
+      nativeName: ctx.nativeName,
+      fallback: ctx.userText,
+      defaultTitle: '（还没有消息）',
+      nativeConfirmed: read.nativeConfirmed,
+    });
+  }
+
   function applyGenerated(task, title, meta) {
     if (disposed) return { ok: false, code: 'cancelled' };
     if (task.mode === 'auto') {
@@ -394,55 +447,68 @@ export function createSessionTitles({
       safeLog('session-title.apply_discarded', { reason: 'native_title_changed', mode: task.mode });
       return { ok: false, code: 'stale_title', error: '会话标题已被修改，本次结果已丢弃' };
     }
+    const resolved = resolveTaskTitle(task, ctx, read);
+    if ((resolved.revision || 0) !== (task.baseRevision || 0)) {
+      safeLog('session-title.apply_discarded', { reason: 'revision_changed', mode: task.mode });
+      return { ok: false, code: 'stale_title', error: '会话标题已被修改，本次结果已丢弃' };
+    }
     if (task.mode === 'auto') {
-      const entry = store.entry(task.key);
-      if (entry?.manual || entry?.auto) {
-        safeLog('session-title.apply_discarded', { reason: entry?.manual ? 'manual_title' : 'already_titled', mode: task.mode });
+      if (resolved.manualOverride || store.entry(task.key)?.manual || store.entry(task.key)?.auto) {
+        safeLog('session-title.apply_discarded', { reason: store.entry(task.key)?.manual ? 'manual_title' : 'already_titled', mode: task.mode });
         return { ok: false, code: 'stale_title' };
       }
+      let saved;
       try {
-        store.setAuto(task.key, { title, providerId: task.providerId, modelId: task.modelId });
+        saved = store.setAuto(task.key, {
+          title, providerId: task.providerId, modelId: task.modelId,
+          nativeName: ctx.nativeName, expectedRevision: task.baseRevision,
+        });
       } catch {
         return { ok: false, code: 'store_write_failed', error: '标题未能保存' };
       }
-      publishTitle({ scope: task.scope, sessionId: task.sessionId, conversationId: task.conversationId, title, source: 'auto' });
+      if (!saved || saved.ok === false) return { ok: false, code: 'stale_title' };
+      publishTitle({ scope: task.scope, sessionId: task.sessionId, conversationId: task.conversationId, title, source: 'auto', revision: saved.revision });
       safeLog('session-title.generated', {
         scope: task.scope, mode: task.mode, durationMs: meta.durationMs,
         inputTokens: meta.usage?.input ?? null, outputTokens: meta.usage?.output ?? null,
       });
-      return { ok: true, applied: true, title, source: 'auto', sessionId: task.sessionId };
+      return { ok: true, applied: true, title, source: 'auto', revision: saved.revision, sessionId: task.sessionId };
     }
 
-    const resolved = store.resolve({
-      scope: task.scope,
-      sessionId: task.sessionId,
-      conversationId: task.conversationId,
-      nativeName: ctx.nativeName,
-      fallback: ctx.userText,
-      defaultTitle: '（还没有消息）',
-    });
     if (resolved.source === 'manual' && task.forceApply !== true) {
-      const proposal = createProposal(task, title, ctx.nativeName);
+      const proposal = createProposal(task, title, ctx.nativeName, resolved.revision);
       return {
         ok: true,
         requiresConfirmation: true,
         proposal: { id: proposal.id, title, currentTitle: resolved.title },
       };
     }
+    let saved;
     try {
-      store.setManual(task.key, { title, nativeNameAt: ctx.nativeName });
+      saved = store.setManual(task.key, {
+        title, nativeNameAt: ctx.nativeName, nativeName: ctx.nativeName,
+        nativeNameConfirmed: read.nativeConfirmed,
+        expectedRevision: task.baseRevision,
+      });
     } catch {
       return { ok: false, code: 'store_write_failed', error: '标题未能保存' };
     }
-    publishTitle({ scope: task.scope, sessionId: task.sessionId, conversationId: task.conversationId, title, source: 'manual' });
+    if (!saved || saved.ok === false) {
+      safeLog('session-title.apply_discarded', { reason: 'revision_changed', mode: task.mode });
+      return { ok: false, code: 'stale_title', error: '会话标题已被修改，本次结果已丢弃' };
+    }
+    publishTitle({
+      scope: task.scope, sessionId: task.sessionId, conversationId: task.conversationId,
+      title, source: 'manual', revision: saved.revision,
+    });
     safeLog('session-title.generated', {
       scope: task.scope, mode: task.mode, durationMs: meta.durationMs,
       inputTokens: meta.usage?.input ?? null, outputTokens: meta.usage?.output ?? null,
     });
-    return { ok: true, applied: true, title, source: 'manual', sessionId: task.sessionId };
+    return { ok: true, applied: true, title, source: 'manual', revision: saved.revision, sessionId: task.sessionId };
   }
 
-  function createProposal(task, title, nativeNameAt) {
+  function createProposal(task, title, nativeNameAt, baseRevision) {
     pruneProposals();
     const id = randomUUID();
     proposals.set(id, {
@@ -455,6 +521,8 @@ export function createSessionTitles({
       identity: task.identity,
       title,
       nativeNameAt,
+      baseRevision,
+      nativeConfirmed: task.nativeConfirmed === true,
       createdAt: now(),
     });
     return proposals.get(id);
@@ -483,10 +551,31 @@ export function createSessionTitles({
       proposals.delete(proposalId);
       return { ok: false, code: 'stale_title', error: '会话标题已被修改，请重新生成' };
     }
+    const current = store.resolve({
+      scope: proposal.scope,
+      sessionId: proposal.sessionId,
+      conversationId: proposal.conversationId,
+      nativeName: ctx.nativeName,
+      fallback: ctx.userText,
+      nativeConfirmed: read.nativeConfirmed,
+    });
+    if ((current.revision || 0) !== (proposal.baseRevision || 0)) {
+      proposals.delete(proposalId);
+      return { ok: false, code: 'stale_title', error: '会话标题已被修改，请重新生成' };
+    }
+    let saved;
     try {
-      store.setManual(proposal.key, { title: proposal.title, nativeNameAt: ctx.nativeName });
+      saved = store.setManual(proposal.key, {
+        title: proposal.title, nativeNameAt: ctx.nativeName, nativeName: ctx.nativeName,
+        nativeNameConfirmed: read.nativeConfirmed,
+        expectedRevision: proposal.baseRevision,
+      });
     } catch {
       return { ok: false, code: 'store_write_failed', error: '标题未能保存' };
+    }
+    if (!saved || saved.ok === false) {
+      proposals.delete(proposalId);
+      return { ok: false, code: 'stale_title', error: '会话标题已被修改，请重新生成' };
     }
     publishTitle({
       scope: proposal.scope,
@@ -494,21 +583,24 @@ export function createSessionTitles({
       conversationId: proposal.conversationId,
       title: proposal.title,
       source: 'manual',
+      revision: saved.revision,
     });
     proposals.delete(proposalId);
-    return { ok: true, applied: true, title: proposal.title, source: 'manual', sessionId: proposal.sessionId };
+    return { ok: true, applied: true, title: proposal.title, source: 'manual', revision: saved.revision, sessionId: proposal.sessionId };
   }
 
-  async function generateClassic(id) {
+  async function generateClassic(id, project = null) {
     if (typeof id !== 'string' || !/^[a-f0-9]{16}$/.test(id)) return { ok: false, code: 'invalid_request', error: '缺少合法的会话 ID' };
     let target;
     try {
-      target = resolveClassic(id);
+      target = project
+        ? (typeof resolveClassicProject === 'function' ? resolveClassicProject(id, project) : null)
+        : resolveClassic(id);
     } catch {
       target = null;
     }
     if (!target || !target.file || !target.sessionId || !target.cwd) {
-      return { ok: false, code: 'not_found', error: '找不到这个会话（可能已被删除，或不属于当前项目）' };
+      return { ok: false, code: 'not_found', error: '找不到这个会话（可能已被删除，或不属于指定项目）' };
     }
     return generateManual({
       scope: SCOPE_CLASSIC,
@@ -554,6 +646,14 @@ export function createSessionTitles({
     if (!context.providerId || !context.modelId) {
       return { ok: false, code: 'model_missing', error: '无法确定该会话使用的模型，标题未生成' };
     }
+    const resolved = store.resolve({
+      scope: target.scope,
+      sessionId: target.sessionId,
+      conversationId: target.conversationId,
+      nativeName: ctx.nativeName,
+      fallback: ctx.userText,
+      nativeConfirmed: read.nativeConfirmed,
+    });
     return schedule({
       mode: 'manual',
       key: target.key,
@@ -563,13 +663,147 @@ export function createSessionTitles({
       target,
       identity: target.sessionIdentity,
       nativeName: ctx.nativeName,
+      nativeConfirmed: read.nativeConfirmed,
       providerId: context.providerId,
       modelId: context.modelId,
       userText: ctx.userText,
       assistantText: context.text,
       revision: store.settings().revision,
+      baseRevision: resolved.revision || 0,
       timeoutMs: DEFAULT_TIMEOUT_MS,
     });
+  }
+
+  /** 任意会话的手动重命名：只写 pi-GUI 元数据，不切会话、不重启 Pi、
+   *  不直接改 Pi 正在写的 JSONL。 */
+  async function renameClassic(id, project, title, expectedRevision) {
+    if (typeof project !== 'string' || !project.trim()) {
+      return { ok: false, code: 'invalid_request', error: '缺少项目身份' };
+    }
+    if (typeof id !== 'string' || !/^[a-f0-9]{16}$/.test(id)) {
+      return { ok: false, code: 'invalid_request', error: '缺少合法的会话 ID' };
+    }
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      return { ok: false, code: 'invalid_request', error: '缺少标题修订版本' };
+    }
+    let target;
+    try {
+      target = typeof resolveClassicProject === 'function' ? resolveClassicProject(id, project) : null;
+    } catch {
+      target = null;
+    }
+    if (!target || !target.file || !target.sessionId || !target.cwd) {
+      return { ok: false, code: 'not_found', error: '找不到这个会话（可能已被删除，或不属于指定项目）' };
+    }
+    return renameTarget({
+      scope: SCOPE_CLASSIC,
+      sessionId: target.sessionId,
+      file: target.file,
+      cwd: target.cwd,
+      sessionIdentity: statIdentity(target.file),
+      key: targetKey(SCOPE_CLASSIC, target.sessionId),
+    }, title, expectedRevision);
+  }
+
+  async function renameRuntime(conversationId, title, expectedRevision) {
+    if (!uuidish(conversationId)) return { ok: false, code: 'invalid_request', error: '缺少合法的并行会话 ID' };
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      return { ok: false, code: 'invalid_request', error: '缺少标题修订版本' };
+    }
+    let target;
+    try {
+      target = resolveRuntime(conversationId);
+    } catch {
+      target = null;
+    }
+    if (!target) return { ok: false, code: 'not_found', error: '找不到这个并行会话' };
+    /* 还没落盘的 Runtime 仍可修改显示标题；有 locator 时顺便确认原生名。 */
+    if (!target.sessionLocator || !target.sessionId) {
+      return renameTarget({
+        scope: SCOPE_RUNTIME,
+        conversationId,
+        sessionId: null,
+        file: null,
+        cwd: target.cwd || '',
+        nativeName: target.sessionName || '',
+        key: targetKey(SCOPE_RUNTIME, conversationId),
+      }, title, expectedRevision);
+    }
+    return renameTarget({
+      scope: SCOPE_RUNTIME,
+      conversationId,
+      sessionId: target.sessionId,
+      file: target.sessionLocator,
+      cwd: target.cwd,
+      sessionIdentity: target.sessionIdentity || statIdentity(target.sessionLocator),
+      key: targetKey(SCOPE_RUNTIME, conversationId),
+    }, title, expectedRevision);
+  }
+
+  async function renameTarget(target, rawTitle, expectedRevision) {
+    if (disposed) return { ok: false, code: 'cancelled', error: '标题服务已关闭' };
+    if (!target.key) return { ok: false, code: 'invalid_request', error: '缺少合法的会话 ID' };
+    const title = normalizeRenameTitle(rawTitle);
+    if (!title) return { ok: false, code: 'invalid_title', error: '标题不能为空，且不能超过 80 个字符' };
+
+    let ctx = null;
+    /* 没有文件（未落盘的 Runtime）时没有任何原生名证据；有文件时以读取结果为准。
+     * 截断且尾部未确认的文件不能被当成「原生名为空」。 */
+    let nativeConfirmed = false;
+    if (target.file) {
+      const read = readTarget(target, target.sessionIdentity);
+      if (!read.ok) return { ok: false, code: read.code, error: '读取会话失败，标题未修改' };
+      ctx = read.ctx;
+      nativeConfirmed = read.nativeConfirmed;
+    }
+    const nativeName = ctx?.nativeName ?? (typeof target.nativeName === 'string' ? target.nativeName : '');
+    const current = store.resolve({
+      scope: target.scope,
+      sessionId: target.sessionId,
+      conversationId: target.conversationId,
+      nativeName,
+      fallback: ctx?.userText || '',
+      nativeConfirmed,
+    });
+    if ((current.revision || 0) !== expectedRevision) {
+      return {
+        ok: false, code: 'revision_conflict',
+        error: '会话标题已被修改，请刷新后重试',
+        title: current.title, revision: current.revision || 0,
+      };
+    }
+    let saved;
+    try {
+      saved = store.setManual(target.key, {
+        title, nativeNameAt: nativeName, nativeName,
+        nativeNameConfirmed: nativeConfirmed,
+        expectedRevision,
+      });
+    } catch {
+      return { ok: false, code: 'store_write_failed', error: '标题未能保存' };
+    }
+    if (!saved || saved.ok === false) {
+      return { ok: false, code: 'revision_conflict', error: '会话标题已被修改，请刷新后重试', revision: saved?.revision ?? 0 };
+    }
+    publishTitle({
+      scope: target.scope,
+      sessionId: target.sessionId,
+      conversationId: target.conversationId || null,
+      title, source: 'manual', revision: saved.revision,
+    });
+    safeLog('session-title.renamed', { scope: target.scope, revision: saved.revision, nativeConfirmed });
+    return {
+      ok: true, applied: true, title, source: 'manual',
+      revision: saved.revision, sessionId: target.sessionId || null,
+      ...(target.scope === SCOPE_RUNTIME ? { conversationId: target.conversationId } : {}),
+    };
+  }
+
+  function normalizeRenameTitle(value) {
+    if (typeof value !== 'string') return '';
+    const title = value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!title || title.length > 80) return '';
+    return title;
   }
 
   async function handle(req, res, url) {
@@ -591,9 +825,22 @@ export function createSessionTitles({
       const body = await readJsonBody(req);
       if (body.err) return json(res, body.err.status, body.err.body);
       const scope = body.value.scope;
+      const project = typeof body.value.project === 'string' ? body.value.project : null;
       const result = scope === SCOPE_RUNTIME
         ? await generateRuntime(body.value.conversationId)
-        : await generateClassic(body.value.id);
+        : await generateClassic(body.value.id, project);
+      return json(res, 200, result);
+    }
+    if (p === '/api/session-titles/rename') {
+      if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed' });
+      const body = await readJsonBody(req);
+      if (body.err) return json(res, body.err.status, body.err.body);
+      const { scope, id, project, conversationId, title, expectedRevision } = body.value;
+      /* Renderer 只提交**稳定身份**（项目路径 + 会话 id / conversationId），
+       * 不做任何文件路径解析；真实目标由后端受信解析器证明。 */
+      const result = scope === SCOPE_RUNTIME
+        ? await renameRuntime(conversationId, title, expectedRevision)
+        : await renameClassic(id, project, title, expectedRevision);
       return json(res, 200, result);
     }
     if (p === '/api/session-titles/apply') {
@@ -644,10 +891,13 @@ export function createSessionTitles({
     setAutoEnabled,
     generateClassic,
     generateRuntime,
+    renameClassic,
+    renameRuntime,
     applyProposal,
     dispose,
     _internals: {
       maybeAuto, autoBlockedReason, autoContext, manualContext, readTarget,
+      normalizeRenameTitle,
       proposalCount: () => proposals.size,
       inFlightCount: () => inFlight.size,
     },

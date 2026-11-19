@@ -1,4 +1,5 @@
 import { normalizePlan, PLAN_TOOL_NAME } from './plan-model.js';
+import { resolveTitleSnapshot, titleKey } from './title-revision.js';
 import {
   MAX_BLOCK_TEXT,
   MAX_THINKING_TEXT,
@@ -362,7 +363,22 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (['liveCount', 'totalCount', 'limit', 'hardLimit'].every(k => Number.isInteger(snapshot[k]) && snapshot[k] >= 0)) {
       resources = { liveCount: snapshot.liveCount, totalCount: snapshot.totalCount, limit: snapshot.limit, hardLimit: snapshot.hardLimit };
     }
-    for (const item of snapshot.items || []) {
+    for (const rawItem of snapshot.items || []) {
+      /* 快照 / runtime_state 都可能迟到。标题按持久修订号裁决：旧数据里的
+       * 标题不会覆盖已经采纳的新标题（同一修订才允许被刷新）。 */
+      const effective = resolveTitleSnapshot(titleKey('runtime', rawItem?.conversationId), {
+        title: rawItem?.title,
+        source: rawItem?.titleSource,
+        revision: rawItem?.titleRevision,
+      });
+      const item = effective && effective.title
+        ? {
+          ...rawItem,
+          title: effective.title,
+          titleSource: effective.source || rawItem.titleSource,
+          titleRevision: effective.revision,
+        }
+        : rawItem;
       const prior = records.get(item.conversationId);
       if (prior && Number.isInteger(item.revision) && item.revision < (prior.item.revision || 0)) { reject('stale_revision'); continue; }
       // 两次没有 owner 的快照仍是同一条关闭记录；只读资源预检不能换掉它。
@@ -643,11 +659,18 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
 
   return { seed, apply, applyDetailed, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
     /* 标题是显示字段，不参与 owner / revision / eventSequence 判据。
-     * 只就地改 item，**不广播** —— 标题更新不应触发整块列表重画。 */
-    patchTitle(id, title) {
+     * 只就地改 item，**不广播** —— 标题更新不应触发整块列表重画。
+     * titleRevision 是后端持久化的标题修订号；比当前旧的一律丢弃，
+     * 这样迟到的 SSE / 旧快照都不能把用户刚改的名字改回去。 */
+    patchTitle(id, payload) {
       const r = records.get(id);
+      const value = payload && typeof payload === 'object' ? payload : null;
+      const title = typeof payload === 'string' ? payload : value?.title;
+      const revision = Number.isSafeInteger(value?.revision) && value.revision >= 0 ? value.revision : 0;
       if (!r || !r.item || typeof title !== 'string' || !title) return false;
-      r.item = { ...r.item, title };
+      if (revision < (r.item.titleRevision || 0)) return false;
+      const source = typeof value?.source === 'string' && value.source ? value.source : r.item.titleSource;
+      r.item = { ...r.item, title, ...(source ? { titleSource: source } : {}), titleRevision: revision };
       return true;
     },
     setRejectObserver(fn) { rejectObserver = typeof fn === 'function' ? fn : null; },

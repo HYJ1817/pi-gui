@@ -13,12 +13,14 @@ import {
   applySessionTitle,
   fetchSessionTitleSettings,
   generateSessionTitle,
+  renameSessionTitle as renameSessionTitleApi,
   updateSessionTitleSettings,
 } from './api.js';
 import { S } from './state.js';
 import { setTitleText } from './shell.js';
 import { applySearchTitle } from './session-search.js';
 import { patchRuntimeTitle } from './runtime-state.js';
+import { acceptTitleEvent, resolveTitleSnapshot, titleKey } from './title-revision.js';
 import { confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 
@@ -92,15 +94,27 @@ function safeConversationId(value) {
   return typeof value === 'string' && /^[\da-f-]{36}$/i.test(value) ? value : null;
 }
 
-/** 把标题事件就地应用到所有看得到该会话的位置。 */
+/** 把标题事件就地应用到所有看得到该会话的位置。
+ *
+ * 事件先过 `title-revision` 的门槛：旧 SSE（或与本地已采纳标题同修订但内容
+ * 不同的迟到帧）直接丢弃，一行 DOM 都不碰。 */
 export function applyTitleEvent(event) {
   if (!event || typeof event.title !== 'string' || !event.title) return;
-  const title = event.title;
   const sessionId = typeof event.sessionId === 'string' ? event.sessionId : '';
   const conversationId = event.scope === 'runtime' ? safeConversationId(event.conversationId) : null;
+  const key = event.scope === 'runtime'
+    ? titleKey('runtime', conversationId)
+    : titleKey('classic', sessionId);
+  const accepted = acceptTitleEvent(key, {
+    title: event.title,
+    source: event.source,
+    revision: Number.isSafeInteger(event.revision) ? event.revision : 0,
+  });
+  if (!accepted) return;
+  const title = accepted.title;
 
   if (event.scope === 'runtime' && conversationId) {
-    patchRuntimeTitle(conversationId, title);
+    patchRuntimeTitle(conversationId, accepted);
     for (const row of document.querySelectorAll('.pj-runtime[data-conversation-id]')) {
       if (row.dataset.conversationId !== conversationId) continue;
       const titleEl = row.querySelector('.pj-sess-title');
@@ -110,20 +124,74 @@ export function applyTitleEvent(event) {
         const status = primary.querySelector('.pj-runtime-status')?.textContent || '';
         primary.setAttribute('aria-label', `并行会话：${title}${status ? '，' + status : ''}`);
       }
+      const trigger = row.querySelector('.pj-sess-menu-trigger');
+      if (trigger) trigger.setAttribute('aria-label', `会话操作：${title}`);
     }
     document.dispatchEvent(new CustomEvent('pi-gui:runtime-title', {
-      detail: { conversationId, title, projectPath: event.projectPath || '' },
+      detail: { conversationId, title, revision: accepted.revision, projectPath: event.projectPath || '' },
     }));
   } else if (sessionId) {
     document.dispatchEvent(new CustomEvent('pi-gui:classic-title', {
-      detail: { sessionId, title, source: event.source || null },
+      detail: { sessionId, title, source: accepted.source, revision: accepted.revision },
     }));
-    const liveName = typeof S.state?.sessionName === 'string' ? S.state.sessionName.trim() : '';
-    if (!liveName && S.state?.sessionId === sessionId) setTitleText(title);
+    /* 顶部标题只在**确实是当前会话**时更新。优先看 state 的 sessionId；
+     * switch 刚回来、get_state 还没到时，侧栏的当前行标记同样可信。
+     * 是否允许覆盖由修订裁决，不再看 get_state.sessionName。 */
+    const isCurrentRow = [...document.querySelectorAll('.pj-sess[data-classic-current]')]
+      .some((row) => row.dataset.sessionId === sessionId);
+    if (S.state?.sessionId === sessionId || isCurrentRow) setTitleText(title);
   }
 
   /* 搜索结果里同一条会话的标题也要更新；当前关键词的结果缓存由该模块维护。 */
   applySearchTitle(sessionId || null, title);
+}
+
+/**
+ * 任意会话的手动改名（侧栏行、非当前项目预览、归档、Runtime 共用）。
+ * 成功后立即按返回的修订就地更新；失败时保留原标题并返回错误，调用方给反馈。
+ */
+export async function renameSessionTitle(target = {}, title = '') {
+  const scope = target.scope === 'runtime' ? 'runtime' : 'classic';
+  const body = scope === 'runtime'
+    ? {
+      scope, conversationId: target.conversationId, title,
+      expectedRevision: Number.isSafeInteger(target.expectedRevision) ? target.expectedRevision : 0,
+    }
+    : {
+      scope, id: target.id, project: target.project, title,
+      expectedRevision: Number.isSafeInteger(target.expectedRevision) ? target.expectedRevision : 0,
+    };
+  const res = await renameSessionTitleApi(body);
+  if (!res || res.ok !== true) {
+    /* 修订冲突说明别处已经改过标题。把后端给出的权威标题/修订并入本地，
+     * 下一次重试就不会继续拿旧修订撞墙；不改用户刚输入的值。 */
+    if (res?.code === 'revision_conflict' && typeof res.title === 'string' && res.title
+      && Number.isSafeInteger(res.revision)) {
+      applyTitleEvent({
+        scope,
+        sessionId: res.sessionId || target.sessionId || null,
+        ...(scope === 'runtime' ? { conversationId: target.conversationId } : {}),
+        title: res.title,
+        source: 'manual',
+        revision: res.revision,
+      });
+    }
+    return res || { ok: false, code: 'failed', error: '改名失败，请重试' };
+  }
+  applyTitleEvent({
+    scope,
+    sessionId: res.sessionId || target.sessionId || null,
+    ...(scope === 'runtime' ? { conversationId: target.conversationId } : {}),
+    title: res.title,
+    source: 'manual',
+    revision: res.revision,
+  });
+  return res;
+}
+
+/** 记录一份可信快照（切换应答 / 列表行），返回裁决后的标题与修订。 */
+export function reconcileTitleSnapshot(scope, id, snapshot) {
+  return resolveTitleSnapshot(titleKey(scope, id), snapshot);
 }
 
 /** SSE 入口（app.js 在 bridgeRun 过滤之前调用）。 */
@@ -148,7 +216,7 @@ export async function generateAiTitle(target = {}) {
   try {
     const body = scope === 'runtime'
       ? { scope, conversationId: target.conversationId }
-      : { scope, id: target.id };
+      : { scope, id: target.id, ...(target.project ? { project: target.project } : {}) };
     const res = await generateSessionTitle(body);
     if (!res || res.ok !== true) {
       if (res?.code === 'unsupported') void loadSessionTitleSettings({ force: true });
@@ -173,7 +241,7 @@ export async function generateAiTitle(target = {}) {
       applyTitleEvent({
         scope, sessionId: applied.sessionId || target.sessionId || null,
         ...(scope === 'runtime' ? { conversationId: target.conversationId } : {}),
-        title: applied.title, source: 'manual',
+        title: applied.title, source: 'manual', revision: applied.revision,
       });
       toast('会话标题已更新', 'info');
       return applied;
@@ -184,7 +252,7 @@ export async function generateAiTitle(target = {}) {
       applyTitleEvent({
         scope, sessionId: res.sessionId || target.sessionId || null,
         ...(scope === 'runtime' ? { conversationId: target.conversationId } : {}),
-        title: res.title, source: 'manual',
+        title: res.title, source: 'manual', revision: res.revision,
       });
       toast('会话标题已更新', 'info');
     }

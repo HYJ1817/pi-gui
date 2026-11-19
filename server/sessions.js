@@ -31,8 +31,15 @@ import path from 'node:path';
 import { isSafeSessionId } from '../lib/session-id.js';
 import { json, readBody } from './http-utils.js';
 import { piState, sessionMessageBody } from './pi-compat.js';
+import { parseLatestNativeName } from './session-title-context.js';
 
 const MAX_READ_BYTES = 4 * 1024 * 1024;
+/* 头部读满 4MB 仍被截断时，从文件尾部再读一段确认「最后一次改名」。
+ * 只读尾部而不是全文：列表扫描对每个大文件都要跑，全文重读会把侧栏刷新
+ * 变成磁盘风暴。尾部没有 session_info 时按「未知」处理（nativeConfirmed
+ * = false），由标题存储保守保留已有 manual 覆盖 —— 宁可显示旧标题，
+ * 也不能把用户没改过的标题误判成过期。 */
+const NATIVE_TAIL_BYTES = 512 * 1024;
 const MAX_TITLE = 80;
 const MAX_SESSIONS = 200;
 const MAX_FLAGS = 5000;
@@ -62,6 +69,25 @@ function readCapped(file, maxBytes = MAX_READ_BYTES) {
       const buf = Buffer.alloc(len);
       const n = fs.readSync(fd, buf, 0, len, 0);
       return { text: buf.subarray(0, n).toString('utf8'), truncated: stat.size > maxBytes, size: stat.size };
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
+/** 读文件结尾若干字节。开头可能从一行中间切入，交给解析器跳过。 */
+function readTail(file, maxBytes = NATIVE_TAIL_BYTES) {
+  try {
+    const stat = fs.statSync(file);
+    const len = Math.min(stat.size, maxBytes);
+    if (len <= 0) return '';
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(len);
+      const n = fs.readSync(fd, buf, 0, len, stat.size - len);
+      return buf.subarray(0, n).toString('utf8');
     } finally {
       fs.closeSync(fd);
     }
@@ -217,10 +243,28 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       /* 读不到时间就按 0 排最后 */
     }
 
+    /* 头部被截断时，真正的最后一次 `session_info` 可能在文件后部。
+     * 尾部确认到就采用；确认不到就标记「未知」，绝不把截断当成「没有改名」。
+     * （`readCapped` 返回 truncated 只在文件超过 4MB 时发生。） */
+    let nativeConfirmed = !r.truncated;
+    if (r.truncated) {
+      const tail = readTail(file);
+      if (tail !== null) {
+        const latest = parseLatestNativeName(tail);
+        if (latest && latest.name) {
+          named = latest.name.slice(0, MAX_TITLE);
+          nativeConfirmed = true;
+        }
+      }
+    }
+
     /* 标题归属在**读取列表时**合并，不往回写会话文件。自动标题与显式采纳的
      * 覆盖存在 Pi GUI 自己的存储里；原生 session_info.name 仍然由本循环读，
      * 优先级由 store 统一裁决。 */
-    const resolved = resolveTitle({ scope: 'classic', sessionId: String(header.id), nativeName: named, fallback: firstUserText });
+    const resolved = resolveTitle({
+      scope: 'classic', sessionId: String(header.id), nativeName: named,
+      fallback: firstUserText, nativeConfirmed,
+    });
 
     return {
       id: sessionId(file),
@@ -233,6 +277,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       messageCount,
       title: resolved.title,
       titleSource: resolved.source,
+      titleRevision: Number.isSafeInteger(resolved.revision) ? resolved.revision : 0,
       truncated: r.truncated,
       bytes: r.size,
       /* 下面两个是**给兼容层看的内部标记**，不进任何接口响应
@@ -388,6 +433,7 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
         messageCount: typeof curState.messageCount === 'number' ? curState.messageCount : 0,
         title: pendingTitle.title,
         titleSource: pendingTitle.source,
+        titleRevision: Number.isSafeInteger(pendingTitle.revision) ? pendingTitle.revision : 0,
         truncated: false,
         bytes: 0,
         pending: true,
@@ -409,6 +455,9 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
         id: s.id,
         title: s.title,
         titleSource: s.titleSource,
+        /* 标题修订号：前端用它拒绝迟到的列表 / SSE 标题，避免旧数据
+         * 覆盖用户刚改的名字。 */
+        titleRevision: s.titleRevision || 0,
         sessionId: s.sessionId,
         createdAt: s.createdAt,
         lastMessageAt: s.lastMessageAt,
@@ -683,7 +732,12 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
     if (!res) return { ok: false, code: 'no-answer', error: 'pi 没有应答（可能正在忙，或子进程未运行）' };
     if (res.__error) return { ok: false, code: 'failed', error: String(res.__error) };
     if (res.cancelled) return { ok: false, code: 'cancelled', error: '切换被扩展取消了' };
-    return { ok: true, id: target.id, title: target.title, sessionId: target.sessionId };
+    return {
+      ok: true, id: target.id, title: target.title,
+      titleSource: target.titleSource || null,
+      titleRevision: Number.isSafeInteger(target.titleRevision) ? target.titleRevision : 0,
+      sessionId: target.sessionId,
+    };
   }
 
   async function switchTo(id) {
@@ -707,7 +761,11 @@ export function createSessions({ runtime, rpc = null, env = process.env, homeDir
       const result = await readHistory(target.file, { cwd: target.cwd, sessionId: target.sessionId,
         sessionIdentity: { dev: stat.dev, ino: stat.ino, birthtimeMs: stat.birthtimeMs } });
       if (!result?.ok) return { ok: false, code: 'history_unavailable' };
-      return { ok: true, id: target.id, sessionId: target.sessionId, title: target.title, messages: result.messages, truncated: result.truncated === true };
+      return {
+        ok: true, id: target.id, sessionId: target.sessionId, title: target.title,
+        titleRevision: Number.isSafeInteger(target.titleRevision) ? target.titleRevision : 0,
+        messages: result.messages, truncated: result.truncated === true,
+      };
     } catch { return { ok: false, code: 'history_unavailable' }; }
   }
 
