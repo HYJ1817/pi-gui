@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { activePath } from './session-edit-target.js';
 import { safeToolName } from '../public/runtime-timeline.js';
-import { diffStatOf, labelFor, summarize, subagentActivity } from '../lib/execution-tool-contract.js';
+import { createExecutionCallIndex, diffStatOf, labelFor, summarize, subagentActivity } from '../lib/execution-tool-contract.js';
 
 const MAX_NATIVE_ENTRIES = 4096;
 const MAX_PARTS = 200;
@@ -114,33 +114,34 @@ function activitySummary(name, event, previous = {}) {
 
 export function createExecutionToolProjection() {
   let bridgeRun = null;
-  const calls = new Map();
+  const calls = createExecutionCallIndex(MAX_ACTIVITY_CALLS);
   return {
     observe(event) {
       if (Number.isSafeInteger(event?.bridgeRun) && event.bridgeRun !== bridgeRun) {
         if (bridgeRun !== null && event.bridgeRun < bridgeRun) return null;
-        bridgeRun = event.bridgeRun; calls.clear();
+        bridgeRun = event.bridgeRun; calls.reset();
       }
-      if (event?.type === 'agent_settled' || event?.type === 'bridge_status' && event.state !== 'ready') {
-        for (const id of calls.keys()) calls.set(id, null);
+      if (event?.type === 'execution_branch') calls.reset();
+      if (['agent_settled', 'auto_retry_start'].includes(event?.type)
+          || event?.type === 'bridge_status' && event.state !== 'ready'
+          || event?.type === 'stop_state' && event.pending === false && ['stopped', 'reset'].includes(event.state)) {
+        calls.retireAll();
       }
       if (['compaction_start', 'compaction_end'].includes(event?.type)) return { kind: 'compaction', title: '上下文压缩' };
       if (!['tool_execution_start', 'tool_execution_update', 'tool_execution_end'].includes(event?.type) || !validId(event.toolCallId)) return null;
       const callId = event.toolCallId;
       if (event.type === 'tool_execution_start') {
-        const name = safeToolName(event.toolName);
-        if (name === 'gui_plan') return null;
-        if (calls.has(callId)) { calls.set(callId, null); return null; }
-        if (calls.size >= MAX_ACTIVITY_CALLS) return null;
-        const summary = activitySummary(name, event);
-        calls.set(callId, { name, summary });
-        return summary;
+        const current = { name: safeToolName(event.toolName) };
+        if (calls.begin(callId, current) !== 'started' || current.name === 'gui_plan') return null;
+        current.summary = activitySummary(current.name, event);
+        return current.summary;
       }
       const current = calls.get(callId);
       if (!current || event.toolName != null && event.toolName !== current.name) return null;
-      const summary = activitySummary(current.name, event, current.summary);
-      calls.set(callId, event.type === 'tool_execution_end' ? null : { name: current.name, summary });
-      return summary;
+      if (event.type === 'tool_execution_end') calls.retire(callId);
+      if (current.name === 'gui_plan') return null;
+      current.summary = activitySummary(current.name, event, current.summary);
+      return current.summary;
     },
   };
 }

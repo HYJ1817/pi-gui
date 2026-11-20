@@ -56,7 +56,7 @@ function compare(value) {
 async function main() {
   const { createExecutionStream, sameExecutionScope } = await import('../public/execution-timeline-adapter.js');
   const { projectRuntimeEvent } = await import('../server/session-runtime.js');
-  const { bindExecutionEntries, readExecutionBranch } = await import('../server/execution-timeline.js');
+  const { bindExecutionEntries, createExecutionToolProjection, readExecutionBranch } = await import('../server/execution-timeline.js');
   const { observeRuntimeFrame, seedRuntimeSnapshot } = await import('../public/runtime-state.js');
   const { getRuntimeExecutionTimeline, runtimeExecutionCursor } = await import('../public/execution-timeline-state.js');
   const programs = [createExecutionStream(classic), createExecutionStream(runtime, { startSequence: 40 })];
@@ -168,7 +168,7 @@ async function main() {
     assert.equal(stream.snapshot().turns[0].completeness, 'partial');
     assert.equal(stream.snapshot().turns[0].status, 'unknown');
   });
-  check('Tombstone rollover treats late completions as ambiguous', () => {
+  check('An earlier ID remains ambiguous after more than 2048 completions', () => {
     const stream = createExecutionStream(classic);
     let seq = 0;
     const emit = event => stream.observe(event, { sequence: ++seq, observedAt: seq });
@@ -184,6 +184,91 @@ async function main() {
     const snapshot = stream.snapshot();
     assert.equal(snapshot.items.at(-1).status, 'incomplete');
     assert.equal(snapshot.turns[0].completeness, 'partial');
+  });
+  check('Fresh terminal activity survives retirement eviction in one Classic and Runtime stream', () => {
+    for (const scope of [classic, runtime]) {
+      const stream = createExecutionStream(scope);
+      const toolProjection = createExecutionToolProjection();
+      let sequence = 0;
+      const emit = (event, seq = ++sequence) => {
+        const native = { ...event, bridgeRun: 1 };
+        const activity = toolProjection.observe(native);
+        const projected = scope.kind === 'runtime'
+          ? projectRuntimeEvent(native, activity)
+          : { ...native, activity: activity || undefined };
+        return stream.observe(projected, { sequence: seq, observedAt: seq });
+      };
+      emit(submitting('long-run'));
+      emit(start(firstInput));
+      for (let i = 0; i < 4608; i++) {
+        const id = 'sequential-' + i;
+        emit({ ...toolStart(id, 'read'), args: { path: 'src/sample.js' } });
+        const end = toolEnd(id, i === 4607);
+        emit(end);
+        if ([512, 2048, 2049, 4096, 4607].includes(i)) {
+          const item = stream.snapshot().items.at(-1);
+          assert.equal(item.callId, id);
+          assert.equal(item.summary.fileName, 'sample.js');
+          assert.equal(item.status, i === 4607 ? 'failed' : 'completed', scope.kind + ' index ' + i);
+          assert.equal(item.timing.durationMs, 15);
+          assert.equal(emit({ ...end, isError: !end.isError }, sequence), false);
+        }
+      }
+      emit(settle);
+      emit(submitting('next-run'));
+      emit(start(firstInput));
+      emit(toolEnd('sequential-4607'));
+      emit(toolStart('sequential-4607', 'read'));
+      emit(toolStart('sequential-4607', 'read'));
+      emit(toolStart('sequential-4607', 'read'));
+      emit(toolEnd('sequential-4607'));
+      emit(toolStart('brand-new', 'read'));
+      emit(toolEnd('brand-new'));
+      emit(settle);
+      const final = stream.snapshot();
+      const lastTurnId = final.turns.at(-1).id;
+      assert.deepEqual(final.items.filter(item => item.turnId === lastTurnId).map(item => [item.callId, item.status]), [
+        ['sequential-4607', 'incomplete'], ['brand-new', 'completed'],
+      ]);
+    }
+  });
+  check('Adapter drops ambiguous tool completions after concurrent overflow and conflicting starts', () => {
+    const stream = createExecutionStream(classic);
+    let sequence = 0;
+    const emit = event => stream.observe(event, { sequence: ++sequence, observedAt: sequence });
+    emit(submitting('overflow-run'));
+    emit(start(firstInput));
+    for (let i = 0; i < 256; i++) emit(toolStart('active-' + i, 'read'));
+    emit(toolStart('skipped', 'read'));
+    emit(toolEnd('active-0'));
+    emit(toolEnd('skipped'));
+    emit(toolStart('skipped', 'read'));
+    emit(toolEnd('skipped'));
+    emit(toolStart('conflicted', 'read'));
+    emit(toolStart('conflicted', 'write'));
+    emit(toolEnd('conflicted'));
+    emit(toolStart('conflicted', 'read'));
+    emit(toolStart('fresh', 'read'));
+    emit(toolEnd('fresh'));
+    emit({ ...toolEnd('fresh'), isError: true });
+    emit(settle);
+    const snapshot = stream.snapshot();
+    const status = id => snapshot.items.find(item => item.callId === id)?.status;
+    assert.equal(status('active-0'), 'completed');
+    assert.equal(status('skipped'), 'incomplete');
+    assert.equal(status('conflicted'), 'incomplete');
+    assert.equal(snapshot.items.filter(item => item.callId === 'conflicted').length, 1);
+    assert.equal(status('fresh'), 'completed');
+    assert.equal(snapshot.turns[0].completeness, 'partial');
+  });
+  check('Retry and conflicting orphan ends retain only proven activity facts', () => {
+    const stream = drive(classic, [submitting('retry-run'), start(firstInput), toolStart('before-retry', 'read'),
+      { type: 'auto_retry_start', attempt: 1 }, toolEnd('before-retry'),
+      toolEnd('orphan'), { ...toolEnd('orphan'), isError: true }, toolStart('orphan', 'read'),
+      toolStart('after-retry', 'read'), toolEnd('after-retry')]);
+    assert.deepEqual(stream.snapshot().items.map(item => [item.callId, item.status]), [
+      ['before-retry', 'incomplete'], ['orphan', 'incomplete'], ['after-retry', 'completed'],
+    ]);
   });
   check('Runtime side path receives low-sequence fills rejected by old store', () => {
     const execution = { branchEpoch: 1, startSequence: 40, observedAt: 1000 };

@@ -1,11 +1,11 @@
 import { createExecutionTimeline, executionBoundText as boundText, executionTextBytes } from './execution-timeline-model.js';
+import { createExecutionCallIndex } from './execution-call-index.js';
 import { normalizePlan, PLAN_TOOL_NAME } from './plan-model.js';
 import { MAX_CONTENT_SEGMENTS, MAX_BLOCK_TEXT, MAX_THINKING_TEXT, MAX_USER_TEXT, safeToolName } from './runtime-timeline.js';
 
 const MAX_PENDING = 200;
 const MAX_PENDING_BYTES = 1024 * 1024;
 const MAX_TRACKED = 256;
-const MAX_TOMBSTONES = 2048;
 const MAX_WAIT_MS = 2000;
 const MAX_MESSAGES = 32;
 const MAX_MESSAGE_BYTES = 512 * 1024;
@@ -83,9 +83,8 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
   const source = scope.kind === 'runtime' ? 'runtime-frame' : 'classic-rpc';
   const continuous = scope.kind === 'runtime';
   const submissions = new Map();
-  const calls = new Map();
+  const calls = createExecutionCallIndex(MAX_TRACKED);
   const earlyEnd = new Map();
-  const tombstones = new Map();
   const pending = new Map();
   const messages = new Map();
   const nativeWitnesses = new Map();
@@ -93,7 +92,6 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
   let pendingBytes = 0;
   let messageBytes = 0;
   let holeSince = null;
-  let tombstonesOverflow = false;
   let active = null;
   let recentUnattributed = null;
   let response = null;
@@ -157,11 +155,11 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
   function partial(turnId) {
     fact({ type: 'coverage.partial' }, turnId);
   }
-  function boundedSet(map, key, value, max = MAX_TRACKED) {
-    if (!map.has(key) && map.size >= max) {
+  function boundedSet(map, key, value) {
+    if (!map.has(key) && map.size >= MAX_TRACKED) {
       const oldest = map.keys().next().value;
       map.delete(oldest);
-      if (map === tombstones) tombstonesOverflow = true;
+      if (map === earlyEnd) calls.retire(oldest);
       partial();
     }
     map.set(key, value);
@@ -313,35 +311,50 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
   }
   function callStart(event) {
     const callId = idOf(event.toolCallId);
-    if (!callId || calls.has(callId)) return;
-    if (calls.size >= MAX_TRACKED) { partial(); return; }
+    if (!callId) return;
     const toolName = safeToolName(event.toolName);
     const itemId = active.id + ':tool:' + frame.sequence;
-    const call = { id: itemId, name: toolName, time: frame.at, turnId: active.id,
-      reused: tombstonesOverflow || tombstones.has(callId) };
-    calls.set(callId, call);
+    const call = { id: itemId, name: toolName, time: frame.at, turnId: active.id };
+    const previous = calls.get(callId);
+    const decision = calls.begin(callId, call);
+    const end = earlyEnd.get(callId);
+    earlyEnd.delete(callId);
+    if (decision !== 'started') partial();
+    if (decision === 'conflict') {
+      calls.claimRetired(callId, active.id);
+      abandonCall(callId, previous);
+      return;
+    }
+    if (decision === 'overflow' || (decision === 'retired' && !calls.claimRetired(callId, active.id))) return;
     if (toolName === PLAN_TOOL_NAME) {
+      if (decision !== 'started') return;
       const plan = normalizePlan(event.plan || event.args);
       if (plan) fact({ type: 'plan', callId, plan: planFact(plan), state: 'proposed' });
     } else {
-      const summary = event.activity;
-      fact({ type: 'activity.start', item: { ...scoped(itemId, active.id + ':activity', 'running', timing(frame.at)),
+      const summary = decision === 'started' ? event.activity : null;
+      fact({ type: 'activity.start', item: { ...scoped(itemId, active.id + ':activity',
+        decision === 'started' ? 'running' : 'incomplete', timing(frame.at)),
         kind: summary?.kind === 'subagent' ? 'subagent' : 'tool', toolName, callId, attemptId: active.attempt.id,
         responseId: response?.calls.has(callId) ? response.id : undefined, childIds: [],
-        title: summary?.title || toolName, summary, detailRef: safePayloadRef(event.detailRef) || {
+        title: summary?.title || toolName, summary, detailRef: (decision === 'started' && safePayloadRef(event.detailRef)) || {
           id: itemId, source: 'live-buffer', state: scope.kind === 'runtime' ? 'restricted' : 'unavailable',
         } } });
     }
-    const end = earlyEnd.get(callId);
-    earlyEnd.delete(callId);
-    if (end && !call.reused) finishCall(end.event, end.at);
+    if (end && decision === 'started') finishCall(end.event, end.at);
   }
   function finishCall(event, at = frame.at) {
     const callId = idOf(event.toolCallId);
     if (!callId) return;
     const call = calls.get(callId);
     if (!call) {
-      if (!tombstones.has(callId)) boundedSet(earlyEnd, callId, { event: {
+      if (calls.isRetired(callId)) return;
+      if (earlyEnd.has(callId)) {
+        earlyEnd.delete(callId);
+        calls.retire(callId);
+        partial();
+        return;
+      }
+      boundedSet(earlyEnd, callId, { event: {
         toolCallId: callId, toolName: idOf(event.toolName), isError: event.isError === true, durationMs: durationOf(event.durationMs),
         plan: planResult(event), activity: event.activity, detailRef: safePayloadRef(event.detailRef),
       }, at });
@@ -349,12 +362,11 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
     }
     // An end frame carries no response identifier in older Pi. A reused ID
     // can be recovered from an authoritative native result, not this frame.
-    if (call.reused || call.turnId !== active.id || (event.toolName != null && event.toolName !== call.name)) {
+    if (call.turnId !== active.id || (event.toolName != null && event.toolName !== call.name)) {
       partial();
       return;
     }
-    calls.delete(callId);
-    boundedSet(tombstones, callId, call.turnId, MAX_TOMBSTONES);
+    calls.retire(callId);
     if (call.name === PLAN_TOOL_NAME) {
       const plan = planResult(event);
       fact({ type: 'plan', callId, plan: planFact(plan), state: event.isError || !plan ? 'rejected' : 'applied' });
@@ -372,7 +384,7 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
   }
   function updateCall(event) {
     const call = calls.get(idOf(event.toolCallId));
-    if (!call || call.reused || call.name === PLAN_TOOL_NAME) return;
+    if (!call || call.turnId !== active.id || call.name === PLAN_TOOL_NAME) return;
     if (event.toolName != null && event.toolName !== call.name) { partial(); return; }
     const detailRef = safePayloadRef(event.detailRef);
     const patch = {
@@ -402,10 +414,7 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
     if (event.type === 'agent_settled' && active.stop && status === 'unknown') return;
     const issue = status === 'failed' ? { code: 'generation_failed' } : status === 'interrupted' ? { code: 'run_interrupted' } : undefined;
     closeAttempt(status);
-    if (earlyEnd.size) partial();
-    for (const [callId, call] of calls) boundedSet(tombstones, callId, call.turnId, MAX_TOMBSTONES);
-    calls.clear();
-    earlyEnd.clear();
+    retireCalls();
     for (const id of active.submissions) {
       const entry = submissions.get(id);
       if (!entry) continue;
@@ -420,6 +429,21 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
     active = null;
     response = null;
     userEcho = null;
+  }
+
+  function abandonCall(callId, call) {
+    if (call.name === PLAN_TOOL_NAME) {
+      fact({ type: 'plan', callId, plan: null, state: 'rejected' });
+    } else {
+      fact({ type: 'activity.update', itemId: call.id, patch: { status: 'incomplete' } });
+    }
+  }
+
+  function retireCalls(onRetire) {
+    if (earlyEnd.size) partial();
+    calls.retireAll(onRetire);
+    for (const id of earlyEnd.keys()) calls.retire(id);
+    earlyEnd.clear();
   }
 
   function consume(event) {
@@ -467,6 +491,7 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
       const retryId = Number.isSafeInteger(event.attempt) ? event.attempt : frame.sequence;
       if (active.retryId === retryId) return;
       active.retryId = retryId;
+      retireCalls(abandonCall);
       closeAttempt('failed');
       active.stopReason = null;
       return attempt('auto-retry', active.id + ':retry:' + frame.sequence);

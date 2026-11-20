@@ -93,6 +93,60 @@ export async function runBackendUnit() {
       args: { path: 'C:/secret.md' } });
     assert.equal(unknown.fileName, undefined);
   });
+  await check('sequential summaries survive both legacy thresholds and retirement eviction', () => {
+    const tool = createExecutionToolProjection();
+    const wire = { bridgeRun: 1, toolName: 'read' };
+    for (let index = 0; index < 4608; index++) {
+      const toolCallId = 'sequential-' + index;
+      const start = tool.observe({ ...wire, type: 'tool_execution_start', toolCallId, args: { path: 'src/sample.js' } });
+      assert.equal(start?.fileName, 'sample.js', 'start index ' + index);
+      const end = tool.observe({ ...wire, type: 'tool_execution_end', toolCallId,
+        result: { content: [{ type: 'text', text: 'CANARY_OUTPUT' }],
+          details: { truncation: { truncated: true, outputLines: 2 } } } });
+      assert.deepEqual(end?.lineRange, { start: 1, end: 2 });
+      assert.doesNotMatch(JSON.stringify(end), /CANARY_/);
+    }
+    const toolCallId = 'sequential-4607';
+    assert.equal(tool.observe({ ...wire, type: 'tool_execution_end', toolCallId }), null);
+    assert.equal(tool.observe({ ...wire, type: 'agent_settled' }), null);
+    assert.equal(tool.observe({ ...wire, type: 'tool_execution_start', toolCallId }), null);
+    assert.equal(tool.observe({ ...wire, type: 'tool_execution_end', toolCallId }), null);
+  });
+  await check('simultaneous summary overflow, ID conflicts and old bridge frames fail closed', () => {
+    const projection = createExecutionToolProjection();
+    const event = (type, id, extra = {}) =>
+      projection.observe({ type: 'tool_execution_' + type, bridgeRun: 3, toolCallId: id, toolName: 'read', ...extra });
+    for (let i = 0; i < 512; i++) assert.ok(event('start', 'live-' + i));
+    assert.equal(event('start', 'overflow'), null);
+    assert.ok(event('end', 'live-0'));
+    assert.equal(event('end', 'overflow'), null);
+    assert.equal(event('start', 'overflow'), null);
+    assert.ok(event('start', 'fresh'));
+    assert.equal(event('start', 'fresh', { toolName: 'write' }), null);
+    assert.equal(event('end', 'fresh'), null);
+    assert.equal(event('end', 'fresh', { toolName: 'write' }), null);
+    assert.ok(event('start', 'later'));
+    projection.observe({ type: 'agent_settled', bridgeRun: 3 });
+    assert.equal(event('end', 'later'), null);
+    assert.equal(event('start', 'later'), null);
+    assert.ok(event('start', 'later', { bridgeRun: 4 }));
+    assert.equal(event('end', 'later'), null);
+    assert.ok(event('end', 'later', { bridgeRun: 4 }));
+    assert.ok(event('start', 'plan-collision', { bridgeRun: 4 }));
+    assert.equal(event('start', 'plan-collision', { bridgeRun: 4, toolName: 'gui_plan' }), null);
+    assert.equal(event('end', 'plan-collision', { bridgeRun: 4, toolName: undefined }), null);
+    for (const boundary of [{ type: 'auto_retry_start' },
+      { type: 'stop_state', pending: false, state: 'stopped' }]) {
+      assert.ok(event('start', boundary.type, { bridgeRun: 4 }));
+      projection.observe({ ...boundary, bridgeRun: 4 });
+      assert.equal(event('end', boundary.type, { bridgeRun: 4 }), null);
+    }
+    assert.ok(event('start', 'edited-branch', { bridgeRun: 4 }));
+    projection.observe({ type: 'execution_branch', bridgeRun: 4 });
+    assert.equal(event('end', 'edited-branch', { bridgeRun: 4 }), null);
+    assert.ok(event('start', 'edited-branch', { bridgeRun: 4 }));
+    assert.ok(event('end', 'edited-branch', { bridgeRun: 4 }));
+  });
   await check('private native branch reader is bounded and follows parent/leaf, not physical tail', async () => {
     const branch = await readBranch();
     const checkpoint = await readBranch({ readEntries: async () => ({ ...setup, leafId: 'initial' }) });

@@ -297,7 +297,11 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
         return { ok: false, code: error?.code || 'edit_unavailable' };
       }
       // A lost navigation response cannot prove the old leaf is still active.
-      if (nav) emit({ type: 'execution_branch', bridgeRun: rpc.getState().bridgeRun });
+      if (nav) {
+        const boundary = { type: 'execution_branch', bridgeRun: rpc.getState().bridgeRun };
+        executionTools.observe(boundary);
+        emit(boundary);
+      }
       const result = await rpc.request(wire);
       if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime', unknown: true };
       if (result === null) return { ok: false, code: 'pi_timeout', unknown: true };
