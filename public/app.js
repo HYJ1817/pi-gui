@@ -136,6 +136,7 @@ import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
 import { configureSecondaryPane, readRestoredSurface } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
 import { openAboutSettings } from './about.js';
+import { openSystemSettings } from './system-settings.js';
 import { openAppearance } from './appearance.js';
 import { initVizIntegration } from './viz-integration.js';
 
@@ -1383,6 +1384,7 @@ for (const [id, render] of [
   ['navDiagnostics', openDiagnostics], ['navLogs', openLogs],
   ['navAppearance', openAppearance],
   ['navShortcutHelp', openShortcutHelp],
+  ['navSystem', openSystemSettings],
 ]) {
   $(id).onclick = () => render({ present: presentSettingsDetail(id) });
 }
@@ -1524,6 +1526,7 @@ installShortcuts({});
 defineCommands([
   { id:'view.processes',title:'开发进程',group:'视图',keywords:'process dev server 服务 进程 日志',run:openProcessPanel },
   { id: 'app.preferences', title: '设置', group: '全局', keywords: 'settings 偏好 账户 updates 更新', run: () => settingsSurface.open() },
+  { id: 'app.system', title: '系统', group: '全局', keywords: '系统 网络 代理 存储 缓存 电源 唤醒 休眠 托盘 关闭 退出 system network storage cache power tray quit', run: () => $('navSystem').click() },
   { id: 'app.info', title: '信息', group: '全局', keywords: 'about info 信息 更新 版本 重启 日志 update restart logs version pi gui', run: () => $('navInfo').click() },
   { id: 'app.environment', title: '环境与依赖', group: '全局', keywords: 'environment 环境 node npm pi git 安装 修复', run: () => openEnvironmentSettings() },
   { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', shortcutId: 'view-chat', run: goChat },

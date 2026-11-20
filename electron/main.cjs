@@ -25,7 +25,7 @@ if (process.env.ELECTRON_RUN_AS_NODE && process.versions.electron) {
   return;
 }
 
-const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain, nativeTheme, protocol } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, dialog, screen, session, ipcMain, nativeTheme, protocol, powerSaveBlocker } = require('electron');
 
 if (!app || typeof app.whenReady !== 'function') {
   console.error(
@@ -69,6 +69,8 @@ const { createBrowserController, isBrowserWebContents } = require('./browser-vie
 const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 const { createDesktopTheme } = require('./theme.cjs');
 const { createSystemFontIpc } = require('./system-fonts.cjs');
+const { createSystemSettings } = require('./system-settings.cjs');
+const { PARTITION: BROWSER_PARTITION } = require('./browser-policy.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 const { installEnvironmentSetup } = require('./environment-setup.cjs');
@@ -100,6 +102,7 @@ const TOKEN_HEADER = 'X-Pi-Gui-Token';
 let win = null;
 let desktopTheme = null;
 let desktopFonts = null;
+let systemSettings = null;
 let server = null;
 /* 本次实例真正 spawn 的后端身份：{ pid, expected }。expected 是启动后
  * 异步抓取的创建时间 + 映像路径，退出时用它校验 pid 没有被复用。 */
@@ -238,6 +241,7 @@ async function ensureServer() {
       // 装在 Program Files 下会写不进去，所以指到用户数据目录。
       // 允许外部用 PI_GUI_DATA 覆盖 —— 自动化测试靠它把数据隔离到临时目录。
       PI_GUI_DATA: process.env.PI_GUI_DATA || app.getPath('userData'),
+      PI_GUI_DATA_SOURCE: process.env.PI_GUI_DATA ? 'environment' : 'electron-user-data',
       // 启动后后台预取官方 Registry 完整目录：第一次打开市场不用等数分钟。
       // 预取不阻塞后端启动，失败也不影响其它功能；网页版不设置这个变量。
       PI_GUI_PREFETCH_REGISTRY: '1',
@@ -789,7 +793,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      additionalArguments: ['--pi-gui-theme-bridge', '--pi-gui-font-bridge'],
+      backgroundThrottling: false, // Hidden-to-tray must retain renderer timers/state.
+      additionalArguments: ['--pi-gui-theme-bridge', '--pi-gui-font-bridge', '--pi-gui-system-bridge'],
       /* 只为「用系统默认程序打开文件」与「用系统浏览器打开 Release 链接」
        * 挂一个桥（见 preload.cjs）。contextIsolation 保持开启 —— 桥经
        * contextBridge 暴露，页面拿不到 ipcRenderer 本身，也拿不到任何凭据。 */
@@ -822,18 +827,31 @@ function createWindow() {
      注意这只是「快一步」，不是唯一保障 —— 窗口被 destroy 时这个事件不会发，
      真正兜底的是下面 before-quit / window-all-closed 那两处。 */
   win.on('close', event=>{
-    if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
+    if(!systemSettings?.isSystemEnding() && appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
+    saveWindowState();
+    // Ordinary X/Alt+F4 hides the SAME window. Do this before considering an
+    // automatic install: hiding is not an application exit or update consent.
+    if (!quitting && systemSettings?.hideOnClose(event)) return;
+    if (systemSettings?.deferQuit(event)) return;
     /* 自动安装需要保持窗口存活到预检结束：销毁窗口后再 app.quit 会让 Windows
        的 query-session-end / session-end 无处投递，关机期间可能误走安装。
        先阻止这次 close，改由 app.quit 进入同一套 before-quit 协调器；协调器
        放行后会真正退出，普通手动/无候选路径仍直接关闭。 */
-    if(appUpdate?.shouldDeferClose?.()){event.preventDefault();app.quit();return;}
-    saveWindowState();
+    if(!systemSettings?.isSystemEnding() && appUpdate?.shouldDeferClose?.()){event.preventDefault();app.quit();return;}
   });
   /* Windows 关机/注销会直接结束会话，不会给异步预检留时间。标记之后
      退出安装协调器只走普通退出，不尝试自动安装、也不额外阻止关机。 */
-  win.on('query-session-end',()=>{appUpdate?.markSystemSessionEnding?.();});
-  win.on('session-end',()=>{appUpdate?.markSystemSessionEnding?.();});
+  // A query may be cancelled by Windows or another application. Preserve the
+  // updater's existing conservative suppression, but do not terminally disable
+  // the tray/IPC until Windows confirms the session has actually ended.
+  win.on('query-session-end', () => { appUpdate?.markSystemSessionEnding?.(); });
+  win.on('session-end', () => {
+    markSystemEnding();
+    systemSettings?.dispose();
+    // Release native resources immediately without running the bounded Windows
+    // process-tree cleanup inside the session notification callback itself.
+    setImmediate(finishQuit);
+  });
 
   /* 渲染进程挂了必须说出来。
    *
@@ -939,6 +957,33 @@ function createWindow() {
   });
 }
 
+function applicationIcon() {
+  // Windows Tray accepts an .ico path; use the existing artwork in source
+  // mode and the same generated .ico staged as an app resource in the bundle.
+  const file = app.isPackaged ? path.join(__dirname, 'icon.ico') : path.join(ROOT, 'assets', 'icon-src.png');
+  return fs.existsSync(file) ? file : null;
+}
+
+function markSystemEnding() {
+  systemSettings?.markSystemEnding();
+  appUpdate?.markSystemSessionEnding?.();
+}
+
+function finishQuit() {
+  if (quitting) return;
+  saveWindowState();
+  quitting = true;
+  systemSettings?.beginQuit();
+  systemSettings?.dispose();
+  try { mainLog?.close('quit'); } catch { /* noop */ }
+  if (browser) browser.destroy();
+  browserAgent?.stop();
+  runtimeBrowserHost?.stop();
+  credentialDesktop?.dispose();
+  desktopFonts?.dispose();
+  killServer();
+}
+
 /* ---------- 生命周期 ---------- */
 
 // 第二次双击：聚焦已有窗口，而不是开第二个实例
@@ -949,8 +994,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('second-instance', () => {
     if (!win) return;
+    if (systemSettings) { systemSettings.restore(); return; }
     if (win.isMinimized()) win.restore();
-    win.focus();
+    win.show(); win.focus();
   });
 
   /* 所有 webContents 的导航规则统一在这里钉死（见 hardenWebContents 的说明）。
@@ -1044,6 +1090,12 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     try {
+      systemSettings = await createSystemSettings({ ipcMain, origin: ORIGIN, getWindow: () => win,
+        directory: app.getPath('userData'),
+        // Only the existing non-persistent Browser HTTP bucket is clearable.
+        session: session.fromPartition(BROWSER_PARTITION), browserDirectory: session.defaultSession.getStoragePath(),
+        powerSaveBlocker, Tray, Menu, icon: applicationIcon(), quit: () => app.quit() });
+      systemSettings.register();
       createWindow();
       mlog('electron', 'electron.window_created', { windowCount: 1, durationMs: Date.now() - bootAt });
     } catch (error) {
@@ -1082,7 +1134,8 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  // 关掉窗口就是退出程序 —— 桌面应用不该留个后台进程偷偷活着
+  // A hidden window still exists. Actual destruction (including renderer
+  // window.close/destroy paths) must never leave an inaccessible tray-only app.
   app.on('window-all-closed', () => {
     /* 兜底保存一次。
      *
@@ -1094,8 +1147,9 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', event => {
+    if (systemSettings?.deferQuit(event)) return;
     if(appUpdate&&appUpdate.beforeQuit(event))return;
-    if (process.platform === 'win32' && server?.connected && environmentInstallQuit !== 'done') {
+    if (!systemSettings?.isSystemEnding() && process.platform === 'win32' && server?.connected && environmentInstallQuit !== 'done') {
       event.preventDefault();
       if (environmentInstallQuit === null) {
         environmentInstallQuit = 'waiting';
@@ -1106,18 +1160,9 @@ if (!app.requestSingleInstanceLock()) {
       }
       return;
     }
-    // 再兜一层：Ctrl+Q、系统关机等直接触发 quit 的情况，窗口可能还活着也可能已经没了
-    saveWindowState();
-    quitting = true;
-    try { mainLog?.close('quit'); } catch { /* noop */ }
-    // 浏览器 view 先于后端收掉：它的 webContents 不随窗口自动销毁
-    if (browser) browser.destroy();
-    browserAgent?.stop();
-    runtimeBrowserHost?.stop();
-    credentialDesktop?.dispose();
-    desktopFonts?.dispose();
-    killServer();
+    finishQuit();
   });
+  app.on('will-quit', () => { systemSettings?.dispose(); });
 
   app.on('child-process-gone', (_event, details) => {
     mlog('electron', 'electron.child_process_gone', {
@@ -1129,6 +1174,7 @@ if (!app.requestSingleInstanceLock()) {
 
   process.on('exit', () => {
     try { mainLog?.flushSync(); } catch { /* noop */ }
+    systemSettings?.dispose();
     if (!quitting) killServer();
   });
 }

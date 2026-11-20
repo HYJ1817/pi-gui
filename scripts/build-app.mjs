@@ -85,6 +85,7 @@ fs.writeFileSync(
 for (const f of fs.readdirSync(path.join(ROOT, 'electron')).filter((n) => n.endsWith('.cjs') || n === 'update-helper.ps1')) {
   fs.copyFileSync(path.join(ROOT, 'electron', f), path.join(STAGE, f));
 }
+fs.copyFileSync(ICON, path.join(STAGE, 'icon.ico')); // Native Tray uses the same artwork as the exe.
 fs.copyFileSync(serverCjs, path.join(STAGE, 'server.cjs'));
 fs.mkdirSync(path.join(STAGE, 'private'), { recursive: true });
 fs.copyFileSync(credentialWorker, path.join(STAGE, 'private/provider-credentials.cjs'));

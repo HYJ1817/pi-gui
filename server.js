@@ -148,6 +148,7 @@ import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
 import { json } from './server/http-utils.js';
 import { resolveDataDir, isSeaRuntime, isPiGuiSourceRepo, getProtectedRoots } from './server/data-dir.js';
+import { createSystemStorage } from './server/system-storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 7788);
@@ -1544,6 +1545,8 @@ const messageEditRoutes = createMessageEditRoutes({
   },
 });
 const route = createRouter({
+  systemStorage: createSystemStorage({ dataDir: DATA_DIR, piAgentDir: path.dirname(MODELS_JSON), env: process.env,
+    executionMode: process.env.PI_GUI_DESKTOP === '1' ? 'electron' : runningInSea ? 'portable-sea' : 'source-web' }),
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
     /* 只有 Classic 生成需要 capture 就绪检查（与 authority 同锁，必须前置）。
      * Runtime 生成（带已验证会话头）复用 registry.command 的既有 admission、

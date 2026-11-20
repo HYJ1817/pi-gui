@@ -112,6 +112,7 @@ export function createRouter({
   uploads,
   diagnostics,
   environment = null,
+  systemStorage = null,
   logging = null,
   updateCheck,
   piUpdate = null,
@@ -184,6 +185,12 @@ export function createRouter({
       if (denied) return json(res, denied.code, { ok: false, error: denied.error });
     }
 
+    // App-level, read-only path metadata; independent of Classic/Runtime owners.
+    if (url.pathname === '/api/system/storage') {
+      const denied = auth.denyLocalHost?.(req);
+      if (denied) return json(res, denied.code, { ok: false, error: denied.error });
+      return systemStorage ? systemStorage.handle(req, res) : json(res, 503, { ok: false, code: 'storage_unavailable' });
+    }
     if (url.pathname === '/api/events' && req.method === 'GET') return sse.subscribe(req, res);
     if (['/api/provider-management','/api/providers','/api/provider-auth'].some(prefix => url.pathname === prefix || url.pathname.startsWith(prefix + '/'))) {
       const denied = auth.denyLocalHost?.(req);
