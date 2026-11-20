@@ -137,7 +137,10 @@ async function unit() {
     Object.defineProperty(w.navigator, 'clipboard', { configurable: true, value: { writeText: async value => copied.push(value) } });
     const userText = '原始 **Markdown**\n<img src=x onerror=alert(1)>';
     w.rebuildFromMessages([{ role: 'user', content: [text(userText)] }]);
-    check('history user exposes only a real copy action', () => equal(all('.msg.user .message-actions button').length, 1));
+    check('history user exposes copy and edit actions', () => {
+      equal(all('.msg.user .message-copy').length, 1);
+      equal(all('.msg.user .message-edit').length, 1);
+    });
     one('.message-copy')?.click(); await pause();
     check('copy uses original message text without rendered labels or markup changes', () => equal(copied[0], userText));
     w.onMessageStart({ message: { role: 'user', content: [text('live user text')] } });
@@ -151,9 +154,11 @@ async function unit() {
       equal(one('.message-copy')?.disabled, false);
     });
     w.rebuildFromMessages([{ role: 'user', content: [{ type: 'image', mimeType: 'image/png', data: 'fixture' }] }]);
-    check('image-only message has no empty-text copy action', () => {
+    check('image-only message exposes edit but no empty-text copy action', () => {
       equal(all('.message-copy').length, 0);
-      equal(one('.message-actions')?.hidden, true);
+      equal(one('.message-actions')?.hidden, false);
+      equal(all('.message-actions .message-edit').length, 1);
+      equal(all('.message-actions button').length, 1);
     });
     console.log(`UI-2A Classic ${passed}/${passed + failed}; failed=${failed}; skipped=0; DOM/fixture, not layout evidence`);
     return failed ? 1 : 0;
