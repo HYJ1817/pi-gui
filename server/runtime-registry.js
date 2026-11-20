@@ -670,7 +670,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
           live.editing = requestId;
           live.editUnresolved = true;
         } else {
-          if (!accepted && !live.agentActive) live.editTurn = false;
+          /* 重复提交**已完成**事务时，服务端直接返回缓存的成功结果
+           * （duplicate: true），不会再发 prompt，也就不会有 agent_start /
+           * settled 来释放 editTurn。这里必须当场清掉，否则一次网络重试就把
+           * Runtime 永久锁在 runtime_busy（prompt / close / restart 全被拒）。 */
+          if ((!accepted || result?.duplicate === true) && !live.agentActive) live.editTurn = false;
           if (live.editing === requestId) live.editing = null;
         }
       }
