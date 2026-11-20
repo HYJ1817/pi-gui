@@ -8,8 +8,8 @@ P5-A 将同一个任务级模型接到 Classic 和 Runtime 的现有事件路径
 | --- | --- |
 | 基线 | `origin/main` 的 `c444b7c8d1df6735bd998d24b111559b99d63e93` |
 | 分支 | `feat/session-ux-p5a-execution-model`，独立 worktree |
-| 基线 CI | 当前 main 精确 SHA 的 CI 已取消。上一条成功运行属于 `66586aa`。按要求先推送分支，暂缓 PR。完整 canonical 待对应 PR CI 运行。 |
-| 行为提交 | `499c22689fa2b2dfd474497c85553aaa6c39af55`。本报告为独立文档提交。 |
+| 基线 CI | main 精确 SHA 的 CI 第 1 次取消，第 2 次成功。P5-A 的完整 canonical 使用本次 PR CI。 |
+| 行为提交 | 初版 `499c22689fa2b2dfd474497c85553aaa6c39af55`，最终整改 `738f0772ba0bcb087430937b68ec169409e31ff7`。 |
 | P5-0 输入 | 四份规划文档从系统页工作树按名称复制，逐文件对照 SHA-256。 |
 
 [精确基线 CI](https://github.com/HYJ1817/pi-gui/actions/runs/44673633963) · [先前成功的 main CI](https://github.com/HYJ1817/pi-gui/actions/runs/44547191813) · [P5-0 架构](session-ux-p5-architecture.md)
@@ -59,7 +59,7 @@ Runtime 起始游标取服务器声明的该代前置水位，允许首帧大于
 
 - 工具摘要只保留允许的文件名、证实的行范围/命中、受限命令类别、真实耗时、每次调用 diff 计数及结构化子代理事实。详情从同一分支中匹配的原生 assistant/toolResult 条目提取，查找键不授予访问权限。未知、敏感或原始 stdout/文件内容保持受限。
 - Runtime 的 `agent_end.messages`、`turn_end.toolResults`、`entry_appended`、`message_update` 和 entries/tree 回复原本有较宽结构。动态 canary 验证了专用工具投影之外的路径，现按对应封装重建消息和可展示字段。Classic 的既有工具载荷继续由原渲染路径拥有，P5 摘要由服务端重新生成。
-- Runtime 补帧预算 200 帧 / 1 MiB / 2 秒的事件时间窗口，超限标记 partial。调用、提交和消息见证索引有界，tombstone 上限 2048，超限的完成证据保守处理。归约器保留至多 240 个任务和全局 240 个响应、2000 条活动、8192 个去重事件键及 1 MiB 正文预算；逐响应最多 100 个分段。
+- Runtime 补帧预算 200 帧 / 1 MiB / 2 秒的事件时间窗口，超限标记 partial。调用、提交和消息见证索引有界，活动调用和终态索引预算见最终整改。归约器保留至多 240 个任务和全局 240 个响应、2000 条活动、8192 个去重事件键及 1 MiB 正文预算。逐响应最多 100 个分段。
 - 用户富内容临时缓存每个流 32 条 / 512 KiB；受控 Runtime 详情索引 64 条 / 1 MiB / 120 秒，绑定 owner、workspace、runtimeGeneration、branch epoch、leaf、响应/结果条目及调用。从原生读取得到的原文未写入新增索引或广播。P5-0 的 32 KiB 输出预览是后续内容准入上限，本阶段的详情不提供原始输出。
 
 ## 本地验证和复审
@@ -83,3 +83,20 @@ P5-B 可按任务、组和明细 ID 更新 DOM，结合已有 Markdown、附件�
 P5-C 实施持久化元数据索引、生产快照与 cut 生成、负载下完整重连和跨进程恢复、历史分页与旧分支回退。没有可验证原生 ID 的多用户/无工具消息保持 partial。在 P5-A 的受控样例中，合并接口接受已证实映射，历史读取不会自动替换现有 UI。
 
 `server.js`、`public/app.js`、`package.json` 与系统页并行开发共享，P5-A 分别只接入观察、追加 P5 测试叶。系统页分支及其变更由原工作树保有。回滚时撤销 P5-A 行为和 canonical 注册的同一提交即可，P5-0 规划可继续保留。Pi 原生历史无需迁移，产物按目标代码状态重建。
+
+## 最终验收整改
+
+复现基点为 `78c95ef3`。后端第 513 个连续完成的调用丢失摘要，前端超过原 2048 个 tombstone 后的新调用无法可靠收尾。新增测试先在该版本失败，修复后实际 Classic 和 Runtime 投影都通过同一 bridge **4,608 次**连续调用。测试跨越 512、2048 和新终态窗口 4096，验证有界窗口发生实际淘汰后，新 ID 仍有摘要、耗时和正确终态。
+
+- 两端共享一个有界调用索引。服务端预算为 512 个并发活跃调用，适配器为 256 个。正常完成立即释放活跃槽位。最近 4,096 个退休 ID 单独保留去重证据，仅含 ID 和同轮占位标记。淘汰旧记录后继续识别新调用。
+- 活跃槽位超限的 ID 也进入退休记录。同 ID 冲突、重复结束、同轮重复开始、冲突的孤立结束、旧 bridge 帧及跨任务迟到结果均有回归。已确认的 Stop、重试、任务终态或受信编辑分支边界清理其所属活跃调用。编辑分支切换沿用独立 scope，向编辑分支新发的调用可使用新分支内的 ID。
+- 旧 Pi 结束帧可只带 callId。精确识别复用的保证覆盖最近退休记录和仍有效的 owner、branch、序号证据。对已经淘汰且来自同一有效流、又复用同一 ID 的上游帧，旧协议没有可供永久区分的发生标识。该窗口不用于授权 Runtime 读取。权限校验和敏感数据白名单保持原路径。
+- 独立安全复审收口为 Blocker 0、未处置 Important 0。复审复现的同轮重复占位和私有导航分支不一致均已修复并独立重验。工具参数/输出 canary、跨 owner 拒绝及测试专用详情读取继续通过。
+
+| 最终整改验证 | 结果 |
+| --- | --- |
+| `node tests/session-ux-p5-model.cjs` | 25 组适配器场景、61 条纯模型断言、7 组后端场景 |
+| 直接回归 | Runtime events 14/14、store 34/34、registry 42/42、session-runtime 7/7、HTTP 12/12、modules 121/121 |
+| Canonical 清单 | 288 个叶命令，五组完整覆盖。本地只跑定向验证，完整结果以本 PR CI 为准。 |
+| 冻结与打包 | 原渲染器、回到底部及 Thinking 文件相对 main 无差异。独立输出目录重建的 EXE 为 105,724,416 字节，manifest 含新静态模块。SHA-256 `ea00dfbdedb3db1ba9a23d6080065f4457a93acb918fd1392a065775f70580b8`。本轮未重复完整 EXE smoke，PR CI 含打包检查。 |
+| 系统页分支 | 只读 `git merge-tree --write-tree --name-only` 比对已提交的 `feat/system-settings@9d1fd4e7`。仅 `package.json` 的 canonical 测试链文本冲突，`public/app.js`、`server.js` 自动合并。系统页工作树的 `package.json`、`server.js` 还存在本地修改。后续集成需从两边保留测试入口并重新校验计划。 |
