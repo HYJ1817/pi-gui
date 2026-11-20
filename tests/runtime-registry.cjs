@@ -223,6 +223,48 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
       });
     }
 
+    /* 网络重试会带同一个 requestId 再次提交。后端返回缓存的成功结果
+     * （duplicate:true），不会启动新 Agent；Registry 不能重新占用 editTurn，
+     * 否则没有 agent_start / settled 来释放，Runtime 永久 runtime_busy。 */
+    await check('重复提交已完成事务：缓存结果不重新占用执行锁', async () => {
+      const accepted = { ok: true, accepted: true, newEntryId: 'entry-2', newLeafId: 'leaf-2', acceptance: 'started' };
+      const f = controlled('edit-duplicate-replay', {
+        adapterExtra: {
+          messageEditCommand: () => 'pi-gui-edit-fixture',
+          messageEditToken: () => 'edit-token-fixture',
+          messageEdit: {
+            preflight: async () => ({ ok: true, canEdit: true }),
+            resend: async () => ({ ...accepted, duplicate: true }),
+            status: async () => ({ ok: true, state: 'accepted', result: accepted }),
+            recover: async () => ({ ok: true, state: 'accepted', result: accepted }),
+          },
+          messageEditRequest: async cmd => cmd?.type === 'get_state'
+            ? { sessionId: 'native-controlled-A', isStreaming: false, model: {} }
+            : { entries: [], leafId: null },
+        },
+      });
+      try {
+        const started = await f.instance.start({ id: 'A', epoch: 'epoch-A' });
+        await tick();
+        const owner = f.instance.getOwner(started.conversationId);
+        const input = {
+          userIndex: 0, kind: 'edit', text: 'edited fixture',
+          expectedEntryId: 'entry-1', expectedParentId: null, expectedLeafId: 'leaf-1',
+          expectedSessionId: 'native-controlled-A', requestId: 'runtime-edit-replay-1',
+        };
+        const replay = await f.instance.editResend(owner, input);
+        assert.equal(replay.ok, true);
+        assert.equal(replay.duplicate, true);
+        /* 没有新 run 就没有 agent 事件：同一个 requestId 还能再重试一次。 */
+        const replayAgain = await f.instance.editResend(owner, input);
+        assert.equal(replayAgain.duplicate, true);
+        /* prompt / close 都被 editTurn 拦截；能通过就证明锁已经释放。 */
+        await f.instance.command(owner, { type: 'prompt', message: 'usable after replay', id: 'after-replay' });
+        await f.instance.close(owner);
+        assert.equal(f.instance.getOwner(started.conversationId), null);
+      } finally { await f.instance.dispose(); }
+    });
+
     /* 结果未知且生命周期已不可用：显式关闭/重启必须是唯一逃生口。
      * 工作正常的 Runtime 仍不能靠关闭“释放”事务锁；一旦 bridge 身份无法
      * 确认（refreshSession 失败进入 error），通道已不可核对，允许用户关闭。 */
