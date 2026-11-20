@@ -23,6 +23,11 @@ owner 或 bridge 代次的命令；RPC 超时被当成「没有发生」；提�
 不是核对首次预检锁定的身份。修复后真实 Pi 故障注入（导航 / prompt 已执行、应答被丢弃）与
 Electron 验收均通过，详见第 5A–6B 节与第 11 节。
 
+第三轮（合并前复审）：Runtime 重复提交**已完成**事务时，服务端返回缓存的成功结果
+（`duplicate:true`）且不会启动新 Agent；Registry 原先仍会为这次调用重新占用 `editTurn`，
+而没有 `agent_start` / `settled` 来释放，导致该 Runtime 永久 `runtime_busy`（prompt、close、
+restart 全被拒）。现在缓存结果当场释放执行锁，同一 requestId 可安全重试。
+
 ## 1A. 第二轮三个 P1 的根因
 
 1. **事务互斥不完整**：第一轮只在 `/api/command` 与 Runtime `command` 入口拦截了
@@ -169,8 +174,11 @@ pi-GUI 有意不照搬第 2 步的 **Host transcript 截断 + sidecar 重启**�
 | `stale_session` | 状态查询来自另一个 native session | 按 `recovery_required` 处理 |
 
 `requestId` 在服务端去重：同一请求重复提交只执行一次；未解决事务的重复提交返回原状态且
-不会再次导航 / 发送。`pending`、`acceptance_unknown`、`recovery_pending` 不受普通 TTL 清理；
-状态查询与显式 `recover` 才继续核对。状态 JSON 只含状态、身份与结果摘要，不返回消息正文。
+不会再次导航 / 发送。重复提交**已完成**的事务时返回缓存结果（`duplicate:true`），不启动
+新 Agent；Runtime Registry 不会为这种缓存结果重新占用 `editTurn`，否则没有
+`agent_start` / `settled` 来释放，会把该 Runtime 永久锁在 `runtime_busy`。`pending`、
+`acceptance_unknown`、`recovery_pending` 不受普通 TTL 清理；状态查询与显式 `recover` 才
+继续核对。状态 JSON 只含状态、身份与结果摘要，不返回消息正文。
 
 ### 5.1 事务互斥范围（第二轮）
 
@@ -186,7 +194,9 @@ pi-GUI 有意不照搬第 2 步的 **Host transcript 截断 + sidecar 重启**�
 - Runtime：registry 的 `editing` / `editTurn` / `editUnresolved` 三个标志在 `command` 入口
   拦截同一组命令；`close`、`restart`、`invalidateWorkspace`、`healthCheck` 不会退掉仍有
   编辑事务的 Runtime。只有**当前事务 requestId** 的状态结论才能释放锁；迟到的旧 requestId
-  查询不会清掉正在生效的 `editTurn`。只影响该 `conversationId`；其它独立 Runtime 的
+  查询不会清掉正在生效的 `editTurn`。真正发出 prompt 并成功的提交保留 `editTurn` 到
+  `agent_start` / `settled`；重复提交命中已完成事务的缓存结果时当场释放，不等待永远不会
+  到来的 Agent 事件。只影响该 `conversationId`；其它独立 Runtime 的
   prompt、读取、关闭与重启不受影响。生命周期已经不是 `ready`（bridge 退出或 native 身份
   回读失败）时，通道已无法继续核对，允许用户显式关闭/重启；事务保持未确认，不会把关闭
   当成成功或已恢复。
@@ -298,7 +308,7 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
 - 一次会话只允许一个编辑事务；Composer 草稿不受影响；取消恢复原文。
 - 重新生成复用同一事务与导航机制，不打开编辑器；成功后只保留一个用户消息与一条新回复。
 
-## 11. 测试命令、退出码与结果（第二轮实际运行）
+## 11. 测试命令、退出码与结果（第二轮 + 第三轮实际运行）
 
 | 命令 | 结果 | 退出码 |
 | --- | --- | --- |
@@ -308,7 +318,7 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
 | `node tests/message-edit-ui.cjs` | `Message edit UI: 42/42` | 0 |
 | `PI_GUI_MESSAGE_EDIT_FIXTURE=1 node tests/message-edit-real-pi.cjs` | `Message edit real Pi: 16/16` | 0 |
 | `PI_GUI_MESSAGE_EDIT_ELECTRON=1 node tests/message-edit-electron.cjs` | `Message edit Electron: 31/31` | 0 |
-| `node tests/runtime-registry.cjs` | `Runtime registry: 41/41` | 0 |
+| `node tests/runtime-registry.cjs` | `Runtime registry: 42/42` | 0 |
 | `node tests/sessions.cjs` | `97 passed, 0 failed` | 0 |
 | `node tests/runtime-http.cjs` | `Runtime HTTP: 12/12` | 0 |
 | `node tests/session-runtime.cjs` | `Session runtime: 7/7` | 0 |
@@ -322,8 +332,11 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
   打印 SKIP 并以 0 退出（CI 不依赖真 Pi）。Electron 需要图形环境与真实 Electron，未加入
   `npm test` 链，按上面的环境变量单独运行。
 - 本轮未运行完整 `npm test`，按任务约定把全局回归交给 PR CI；已运行的定向套件没有断言数下降
-  （service 25 → 49、UI 26 → 42、real-Pi 12 → 16；新增 http 10 条、runtime registry 41 条、
+  （service 25 → 49、UI 26 → 42、real-Pi 12 → 16；新增 http 10 条、runtime registry 42 条、
   sessions 4 条）。
+- 第三轮（重复提交释放执行锁）改动后重跑受影响的定向套件：`runtime-registry` 42/42、
+  `runtime-http` 12/12、`session-runtime` 7/7、`runtime-nav` 46/46、`smoke` 1338/1338，
+  退出码均为 0。
 - 产物重建：`npm run build:app -- --rebuild` 退出码 0；`dist-app\Pi GUI-win32-x64`
   整包 334.1 MB，入口 `Pi GUI.exe` 234.9 MB；同时生成 `build/Pi GUI.exe` 100.7 MB。
 - `tests/message-edit-http.cjs` 覆盖：bridge 换代后仍可用原 `requestId` 查询 status /
@@ -349,7 +362,9 @@ RPC 超时、传输断开、bridge 换代、恢复命令自身超时，都不能
   其它 Runtime 可继续写入 / 读取 / 关闭；`acceptance_unknown` 保留锁，`editRecover` 后仍保留，
   `accepted` 后才释放；bridge 掉线后原 `requestId` 仍可查询；生命周期进入 `error`（身份回读
   失败）时，显式关闭是唯一逃生口，不会留下永久忙锁；`get_entries` /
-  `get_available_thinking_levels` 在事务期间仍可读。
+  `get_available_thinking_levels` 在事务期间仍可读；重复提交已完成事务拿到
+  `duplicate:true` 缓存结果时不重新占用 `editTurn`，同一 requestId 可连续重试，随后
+  prompt 与 close 都可用（没有 Agent 事件也不会永久 `runtime_busy`）。
 - `tests/sessions.cjs` 新增：编辑事务期间切换会话返回 `edit_in_progress`，归档 / 删除被编辑
   会话被拒绝，其它会话照常归档。
 
