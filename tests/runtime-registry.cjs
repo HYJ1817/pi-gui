@@ -28,7 +28,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
   let registry = createRuntimeRegistry(options);
   const reject = (fn, code) => assert.rejects(fn, e => e.code === code);
   const start = (id, extra = {}) => registry.start({ id, epoch: 'epoch-' + id, ...extra });
-  function controlled(name, { locator = () => null, cleanup = async () => {}, beforeAdapter = async () => {}, admission } = {}) {
+  function controlled(name, { locator = () => null, cleanup = async () => {}, beforeAdapter = async () => {}, admission, adapterExtra = null } = {}) {
     const scopedEvents = [], children = [];
     const w = { ...workspaces.get('A') };
     const instance = createRuntimeRegistry({ dataDir: path.join(dir, name), resolveWorkspace: async () => ({ ...w }),
@@ -41,7 +41,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
           getState: () => ({ state: 'ready', stop: null }), send() {},
           sessionLocator: () => locator(index),
           async dispose() { adapter.disposeCalls++; await cleanup(index); disposed = true; },
-          cleanupConfirmed: () => disposed };
+          cleanupConfirmed: () => disposed, ...(adapterExtra || {}) };
         children.push(adapter); await beforeAdapter(index); return adapter;
       } });
     return { instance, children, events: scopedEvents, workspace: w };
@@ -131,6 +131,184 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     await check('close 后 late callback 不发布', () => assert.equal(events.length, before));
     const restarted = await registry.resume(a.conversationId, { allowThird: true }); await tick();
     await check('恢复 conversation 生新 generation，旧 scope拒绝', async () => { assert.notEqual(restarted.owner.runtimeGeneration, ao.runtimeGeneration); await reject(() => registry.command(ao, { type: 'abort' }), 'stale_runtime'); });
+
+    /* ---------- 编辑事务互斥：只锁目标 Runtime ---------- */
+    {
+      const editAdapter = adapters.at(-1);
+      const editOwner = registry.getOwner(restarted.conversationId);
+      const otherOwner = registry.getOwner(b.conversationId);
+      let releaseEdit = null;
+      let statusResult = { ok: true, state: 'pending' };
+      editAdapter.messageEditCommand = () => 'pi-gui-edit-fixture';
+      editAdapter.messageEditToken = () => 'edit-token-fixture';
+      editAdapter.messageEdit = {
+        preflight: async () => ({ ok: true, canEdit: true }),
+        resend: async () => editGate,
+        status: async () => statusResult,
+        recover: async () => statusResult,
+      };
+      editAdapter.messageEditRequest = async cmd => cmd?.type === 'get_state'
+        ? { sessionId: 'native-A', isStreaming: false, model: {} }
+        : { entries: [], leafId: null };
+      let editGate;
+      const gate = new Promise(resolve => { releaseEdit = resolve; });
+      editGate = gate;
+      const pending = registry.editResend(editOwner, {
+        userIndex: 0, kind: 'edit', text: 'edited fixture',
+        expectedEntryId: 'entry-1', expectedParentId: null, expectedLeafId: 'leaf-1',
+        expectedSessionId: 'native-A', requestId: 'runtime-edit-lock-1',
+      });
+      await tick();
+      await check('导航事务在飞时：改变历史/owner/代次的命令与关闭/重启目标 Runtime 一律 edit_in_progress', async () => {
+        for (const type of ['compact', 'set_session_name', 'prompt', 'steer', 'follow_up', 'set_model', 'cycle_model']) {
+          await reject(() => registry.command(editOwner, { type, message: 'x', id: 'blocked-' + type }), 'edit_in_progress');
+        }
+        /* new_session / fork / switch_session 在 Runtime 通道本来就被白名单拒绝。 */
+        for (const type of ['new_session', 'fork', 'switch_session']) {
+          await reject(() => registry.command(editOwner, { type, sessionPath: '/tmp/other', id: 'blocked-' + type }), 'invalid_command');
+        }
+        assert.throws(() => registry.close(editOwner), e => e.code === 'edit_in_progress');
+        await reject(() => registry.restart(editOwner), 'edit_in_progress');
+        await reject(() => registry.invalidateWorkspace('A'), 'edit_in_progress');
+        assert.equal(editAdapter.commands.some(cmd => cmd.type === 'prompt'), false, 'no user prompt entered Pi');
+      });
+      await check('导航事务在飞时：读取、Stop 与其它独立 Runtime 不受影响', async () => {
+        for (const type of ['get_state', 'get_messages', 'get_entries', 'get_session_stats', 'get_available_models', 'get_available_thinking_levels', 'get_commands']) {
+          await registry.read(editOwner, { type });
+        }
+        await registry.command(editOwner, { type: 'get_tree' });
+        await registry.command(editOwner, { type: 'get_entries' });
+        await registry.command(editOwner, { type: 'abort' });
+        assert.equal(editAdapter.commands.at(-1).type, 'abort');
+        await registry.command(otherOwner, { type: 'set_session_name', name: 'B stays usable' });
+        await registry.read(otherOwner, { type: 'get_state' });
+        await registry.close(otherOwner);
+        assert.equal(registry.getOwner(b.conversationId), null);
+      });
+      releaseEdit({ ok: false, unresolved: true, state: 'acceptance_unknown' });
+      const unresolvedResult = await pending;
+      await check('结果未知保留锁：未解决事务期间仍禁止 prompt / close，也不永久忙', async () => {
+        assert.equal(unresolvedResult.unresolved, true);
+        await reject(() => registry.command(editOwner, { type: 'prompt', message: 'must stay blocked' }), 'edit_in_progress');
+        assert.throws(() => registry.close(editOwner), e => e.code === 'edit_in_progress');
+        statusResult = { ok: true, state: 'acceptance_unknown', result: { ok: false, unresolved: true } };
+        const recovered = await registry.editRecover(editOwner, 'runtime-edit-lock-1');
+        assert.equal(recovered.state, 'acceptance_unknown');
+        await reject(() => registry.command(editOwner, { type: 'prompt', message: 'still blocked' }), 'edit_in_progress');
+        statusResult = { ok: true, state: 'accepted', result: { ok: true, accepted: true, newEntryId: 'entry-2' } };
+        const status = await registry.editStatus(editOwner, 'runtime-edit-lock-1');
+        assert.equal(status.state, 'accepted');
+        /* 旧 requestId 的失败状态不能清掉当前事务的 editTurn。 */
+        statusResult = { ok: true, state: 'failed', result: { ok: false, code: 'prompt_rejected' } };
+        assert.equal((await registry.editStatus(editOwner, 'old-request-9')).state, 'failed');
+        statusResult = { ok: true, state: 'accepted', result: { ok: true, accepted: true, newEntryId: 'entry-2' } };
+        /* bridge 换代后，旧 owner 仍能用原 requestId 查询：runtimeId /
+         * runtimeGeneration 是瞬时字段，稳定归属没有变。 */
+        editAdapter.emit({ type: 'bridge_status', state: 'ready', bridgeRun: 2 });
+        await tick();
+        const statusAfterRestart = await registry.editStatus(editOwner, 'runtime-edit-lock-1');
+        assert.equal(statusAfterRestart.state, 'accepted');
+        const afterRestartOwner = registry.getOwner(restarted.conversationId);
+        /* accepted 后 editTurn 仍保留到 agent_start/settled，堵住应答与开跑之间的窗口。 */
+        await reject(() => registry.command(afterRestartOwner, { type: 'prompt', message: 'not yet' }), 'edit_in_progress');
+        editAdapter.emit({ type: 'agent_start', bridgeRun: 2 });
+        editAdapter.emit({ type: 'agent_settled', bridgeRun: 2 });
+        await registry.command(afterRestartOwner, { type: 'get_tree' });
+        /* bridge 掉线后仍能用原 requestId 查询已提交事务。 */
+        editAdapter.emit({ type: 'bridge_status', state: 'exited', bridgeRun: 2 });
+        const afterExit = await registry.editStatus(editOwner, 'runtime-edit-lock-1');
+        assert.equal(afterExit.state, 'accepted');
+        await registry.close(afterRestartOwner);
+        assert.equal(registry.getOwner(restarted.conversationId), null);
+      });
+    }
+
+    /* 网络重试会带同一个 requestId 再次提交。后端返回缓存的成功结果
+     * （duplicate:true），不会启动新 Agent；Registry 不能重新占用 editTurn，
+     * 否则没有 agent_start / settled 来释放，Runtime 永久 runtime_busy。 */
+    await check('重复提交已完成事务：缓存结果不重新占用执行锁', async () => {
+      const accepted = { ok: true, accepted: true, newEntryId: 'entry-2', newLeafId: 'leaf-2', acceptance: 'started' };
+      const f = controlled('edit-duplicate-replay', {
+        adapterExtra: {
+          messageEditCommand: () => 'pi-gui-edit-fixture',
+          messageEditToken: () => 'edit-token-fixture',
+          messageEdit: {
+            preflight: async () => ({ ok: true, canEdit: true }),
+            resend: async () => ({ ...accepted, duplicate: true }),
+            status: async () => ({ ok: true, state: 'accepted', result: accepted }),
+            recover: async () => ({ ok: true, state: 'accepted', result: accepted }),
+          },
+          messageEditRequest: async cmd => cmd?.type === 'get_state'
+            ? { sessionId: 'native-controlled-A', isStreaming: false, model: {} }
+            : { entries: [], leafId: null },
+        },
+      });
+      try {
+        const started = await f.instance.start({ id: 'A', epoch: 'epoch-A' });
+        await tick();
+        const owner = f.instance.getOwner(started.conversationId);
+        const input = {
+          userIndex: 0, kind: 'edit', text: 'edited fixture',
+          expectedEntryId: 'entry-1', expectedParentId: null, expectedLeafId: 'leaf-1',
+          expectedSessionId: 'native-controlled-A', requestId: 'runtime-edit-replay-1',
+        };
+        const replay = await f.instance.editResend(owner, input);
+        assert.equal(replay.ok, true);
+        assert.equal(replay.duplicate, true);
+        /* 没有新 run 就没有 agent 事件：同一个 requestId 还能再重试一次。 */
+        const replayAgain = await f.instance.editResend(owner, input);
+        assert.equal(replayAgain.duplicate, true);
+        /* prompt / close 都被 editTurn 拦截；能通过就证明锁已经释放。 */
+        await f.instance.command(owner, { type: 'prompt', message: 'usable after replay', id: 'after-replay' });
+        await f.instance.close(owner);
+        assert.equal(f.instance.getOwner(started.conversationId), null);
+      } finally { await f.instance.dispose(); }
+    });
+
+    /* 结果未知且生命周期已不可用：显式关闭/重启必须是唯一逃生口。
+     * 工作正常的 Runtime 仍不能靠关闭“释放”事务锁；一旦 bridge 身份无法
+     * 确认（refreshSession 失败进入 error），通道已不可核对，允许用户关闭。 */
+    await check('结果未知且身份不可确认时，显式关闭是唯一逃生口', async () => {
+      let failRefresh = false;
+      const f = controlled('edit-unconfirmed-lifecycle', {
+        adapterExtra: {
+          messageEditCommand: () => 'pi-gui-edit-fixture',
+          messageEditToken: () => 'edit-token-fixture',
+          messageEdit: {
+            preflight: async () => ({ ok: true, canEdit: true }),
+            resend: async () => ({ ok: false, unresolved: true, state: 'acceptance_unknown' }),
+            status: async () => ({ ok: true, state: 'acceptance_unknown', result: { ok: false, unresolved: true } }),
+            recover: async () => ({ ok: true, state: 'acceptance_unknown', result: { ok: false, unresolved: true } }),
+          },
+          messageEditRequest: async () => null,
+          request: async cmd => {
+            if (failRefresh && cmd?.type === 'get_state') throw Object.assign(Error('fixture read failure'), { code: 'fixture' });
+            return cmd?.type === 'get_state' ? { sessionId: 'native-controlled-A' } : { messages: [] };
+          },
+        },
+      });
+      try {
+        const started = await f.instance.start({ id: 'A', epoch: 'epoch-A' });
+        await tick();
+        const owner = f.instance.getOwner(started.conversationId);
+        const result = await f.instance.editResend(owner, {
+          userIndex: 0, kind: 'edit', text: 'edited fixture',
+          expectedEntryId: 'entry-1', expectedParentId: null, expectedLeafId: 'leaf-1',
+          expectedSessionId: 'native-controlled-A', requestId: 'runtime-edit-dead-1',
+        });
+        assert.equal(result.unresolved, true);
+        assert.throws(() => f.instance.close(owner), e => e.code === 'edit_in_progress',
+          'a working Runtime must not be closed to shed the transaction lock');
+        failRefresh = true;
+        f.children[0].emit({ type: 'bridge_status', state: 'ready', bridgeRun: 2 });
+        await tick();
+        assert.equal(f.instance.snapshot().items[0].lifecycle, 'error');
+        const current = f.instance.getOwner(started.conversationId);
+        await f.instance.close(current);
+        assert.equal(f.instance.getOwner(started.conversationId), null);
+      } finally { await f.instance.dispose(); }
+    });
+
     await registry.dispose(); registry = createRuntimeRegistry(options);
     await check('应用重启只重发现记录，不 spawn、不认旧child', () => { assert.equal(registry.snapshot().liveCount, 0); assert.equal(registry.snapshot().items.length, 3); assert.equal(spawnCount, 4); });
     blocked = true;

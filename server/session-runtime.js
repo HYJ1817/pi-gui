@@ -5,6 +5,8 @@ import { createRuntime } from './runtime.js';
 import { createPiLaunch } from './pi-launch.js';
 import { createRpcBridge } from './rpc-bridge.js';
 import { createPlanBridge } from './plan-bridge.js';
+import { createMessageEditLaunch } from './message-edit-launch.js';
+import { createMessageEditService } from './message-edit.js';
 import { projectPlanArgs, projectPlanResult } from './plan-projection.js';
 import { createPiSupervisor } from './pi-supervisor.js';
 import { createProjectConfig } from './project-config.js';
@@ -78,6 +80,8 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   const toolGuard = toolScheduler ? createSessionToolBridge({scheduler:toolScheduler,launch,getCwd:()=>context.cwd,getRoot:()=>context.workspace.root,
     readState:()=>rpc.request({type:'get_state'}),onEvent:emit,audit:candidateAudit}) : null;
   const planBridge = createPlanBridge();
+  const editLaunch = createMessageEditLaunch();
+  const messageEdit = createMessageEditService({ publish: event => emit(event) });
   const managed = createProcessBridge({ runtime, launch, getRpcState: () => rpc?.getState() || {}, guiPort, processAdmission, mutationAdmission });
   const changes = createChanges?.({ runtime, launch, context, requestState: () => rpc.request({ type: 'get_state' }) }) || null;
   // Another session may be writing this same project. Its launch must not
@@ -100,6 +104,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     autoRestart: false,
     env: { ...env, ELECTRON_RUN_AS_NODE: '1', PI_NO_CONTINUE: '1' }, projectLaunch: launchOptions,
     browserLaunch: browser, processLaunch: managed, sessionChangeLaunch: changes, toolLaunch: toolGuard, planLaunch: planBridge,
+    editLaunch,
     spawnProcess: (_command, args, opts) => supervisor.spawnProcess(node, [...entry.baseArgs, ...args], { ...opts, shell: false }),
     killProcessTree: supervisor.killProcessTree,
     captureProviderLaunch: captureProviderLaunch && (scope => captureProviderLaunch(scope, launch, entry)),
@@ -107,6 +112,8 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       if (disposed || !context.isCurrent()) return;
       managed.observe(event); changes?.observe(event); activity.observe(event);
       toolGuard?.observe(event);
+      /* 编辑事务的接受证据：request 应答不广播，事件是超时后确认归属的补充。 */
+      try { messageEdit.observe(event, rpc.getState()?.sessionId || null); } catch { /* observation only */ }
       if (event.type === 'extension_ui_request' && typeof event.id === 'string') {
         if (approvals.size >= 32) approvals.delete(approvals.keys().next().value);
         approvals.set(event.id, event.method);
@@ -155,6 +162,38 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       return result;
     },
     abortAndWait: cmd => rpc.abortAndWait(cmd), activity, managed, changes, toolGuard,
+    messageEdit,
+    messageEditCommand: () => editLaunch.command(),
+    messageEditToken: () => editLaunch.token(),
+    async messageEditRequest(cmd) {
+      if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime', unknown: true };
+      const { __messageEditNav, ...wire } = cmd || {};
+      const nav = __messageEditNav === true;
+      /* 导航命令只是移动 leaf，不开 run；真正的重发 prompt 必须走与普通
+       * prompt 相同的工具闸门、变更采集闸门与互斥写入闸门，不能借编辑通道
+       * 绕过权限/审批或与文件撤销并发。 */
+      try {
+        if (!nav && wire?.type === 'prompt') {
+          if (context.workspace?.workspaceId?.startsWith('project-') && toolGuard) await toolGuard.assertReady();
+          if (context.workspace?.workspaceId?.startsWith('project-') && !toolGuard) return { ok: false, code: 'tool_guard_unavailable' };
+          await changes?.assertReady?.();
+          generation.guardCommand(wire);
+          mutationAdmission?.assertAllowed(context.cwd);
+        }
+      } catch (error) {
+        return { ok: false, code: error?.code || 'edit_unavailable' };
+      }
+      const result = await rpc.request(wire);
+      if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime', unknown: true };
+      if (result === null) return { ok: false, code: 'pi_timeout', unknown: true };
+      if (Object.hasOwn(result, '__error')) return { ok: false, code: result.__code || 'pi_request_failed', unknown: false };
+      if (!nav && wire?.type === 'prompt' && result.disposition === 'started') {
+        generation.noteCommandAccepted(wire);
+        activity.noteCommandAccepted(wire);
+        toolGuard?.resume();
+      }
+      return { ok: true, data: result };
+    },
     async sessionLocator(state) {
       const target = sessions.resolveByUuid(state.sessionId);
       return target && (!state.sessionFile || path.resolve(target.file) === path.resolve(state.sessionFile)) ? fs.realpathSync(target.file) : null;
@@ -164,6 +203,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     dispose() {
       if (disposal) return disposal;
       disposed = true; runtime.setShuttingDown(true); rpc.stop();
+      try { messageEdit.dispose(); } catch { /* observation only */ }
       disposal = (async () => {
         await Promise.all([supervisor.dispose(), managed.dispose(), browser?.dispose?.(), changes?.dispose(), toolGuard?.dispose()]);
         changes?.confirmWritersStopped();

@@ -588,10 +588,13 @@ export function createProjectConfig({ runtime, env = process.env, restartPi = nu
 
           if (!sync.ok && sync.error) warnings.push(sync.error);
 
+          let restarted = false;
           if (restartRequired && restartPi) {
             try {
               restartPi();
+              restarted = true;
             } catch (err) {
+              /* 编辑事务等守卫会拒绝重启；配置已经保存，但绝不能回报“已重启”。 */
               warnings.push(`重启 pi 失败：${err.message}`);
             }
           }
@@ -602,7 +605,7 @@ export function createProjectConfig({ runtime, env = process.env, restartPi = nu
             config: saved.config,
             warnings,
             restartRequired,
-            restarted: Boolean(restartRequired && restartPi),
+            restarted,
           });
         })
         .catch((err) => json(res, 500, { ok: false, error: `保存失败：${err.message}` }));

@@ -171,6 +171,8 @@ async function main() {
   const { createCollabProposalSource } = await import('../server/collab-proposal-source.js');
   const { createProposalQueue } = await import('../server/collab-proposal-queue.js');
   const { createCollabRoutes } = await import('../server/collab-routes.js');
+  const { createMessageEditRoutes } = await import('../server/message-edit-routes.js');
+  const { createMessageEditService } = await import('../server/message-edit.js');
 
   const cwd = os.tmpdir();
   const pi = createFakePi();
@@ -202,6 +204,13 @@ async function main() {
     createCollabStore, createCollabAuthority, createCollabService, createCollabRoutes,
     createCollabProposalSource, createProposalQueue,
     createEnvironmentRoutes,
+    /* 生产装配现在也构造历史消息编辑路由与 collab 的编辑闸门。本 fixture
+     * 不进入编辑或 collab 生成，但使用真实工厂保持生产形状，不让 VM 的
+     * 隐式全局掩盖装配引用漂移。 */
+    createMessageEditRoutes,
+    messageEditService: createMessageEditService(),
+    messageEditLaunch: { command: () => null, token: () => null },
+    primaryNativeSession: null,
     desktopEnvironment: false,
     environmentSetup: { check: async () => ({ requiredReady: false }) },
     environmentInstall: { getJob: () => null },

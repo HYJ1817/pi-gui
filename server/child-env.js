@@ -16,6 +16,8 @@ export const INTERNAL_ENV_KEYS = Object.freeze([
   'PI_GUI_PROCESS_TOKEN',
   'PI_GUI_RUNTIME_BROWSER_URL',
   'PI_GUI_RUNTIME_BROWSER_TOKEN',
+  'PI_GUI_EDIT_COMMAND',
+  'PI_GUI_EDIT_TOKEN',
 ]);
 
 export function scrubInternalEnv(env) {

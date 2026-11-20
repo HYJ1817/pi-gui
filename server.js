@@ -84,6 +84,9 @@ import { createSessionEvidenceAdmission } from './server/session-evidence-admiss
 import { createSessionToolScheduler } from './server/session-tool-scheduler.js';
 import { createSessionToolBridge } from './server/session-tool-bridge.js';
 import { createPlanBridge } from './server/plan-bridge.js';
+import { createMessageEditLaunch } from './server/message-edit-launch.js';
+import { createMessageEditService } from './server/message-edit.js';
+import { createMessageEditRoutes } from './server/message-edit-routes.js';
 import { createOrdinarySessions, isProjectWorkspace, rootsOverlap, toolWorkspaceRoot } from './server/ordinary-sessions.js';
 import { createSessionRevertAuthority, createSessionRevertMutationAuthority } from './server/session-revert-authority.js';
 import { createSessionRevertAdmission } from './server/session-revert-admission.js';
@@ -286,7 +289,14 @@ const auth = createAuth({
 const projectConfig = createProjectConfig({
   runtime,
   env: process.env,
-  restartPi: () => rpc.restart(),
+  restartPi: () => {
+    /* 配置保存触发的自动重启同样要服从编辑事务锁：事务的 RPC 通道被换掉
+     * 之后，导航/prompt 的应答就再也无法核对。 */
+    if (messageEditService.busy(primaryNativeSession, rpc.getState().bridgeRun)) {
+      throw Object.assign(Error('消息编辑事务进行中，请稍候。'), { code: 'edit_in_progress' });
+    }
+    rpc.restart();
+  },
 });
 
 /* Pi 版本真值（P20.5）。
@@ -433,6 +443,7 @@ const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
 const planBridge = createPlanBridge();
+const messageEditLaunch = createMessageEditLaunch();
 const managedProcesses = createProcessBridge({runtime,launch:piLaunch,getRpcState:()=>rpc.getState(),guiPort:()=>server.address()?.port,processAdmission,mutationAdmission});
 let evidenceStore = null;
 const getEvidenceStore = () => evidenceStore ||= createSessionChangeStore({ dataDir: DATA_DIR });
@@ -476,6 +487,17 @@ function observeForStructuredLog(event) {
   }
 }
 
+/* 历史消息编辑事务是**应用级**状态机，按 native sessionId 串行；Classic 与
+ * 各 Runtime 各自持有一份实例，互不共享锁。只发布 requestId/entry id/错误码，
+ * 不发布消息正文或图片。
+ *
+ * 必须在 rpc 之前创建：bridge 的 publish 要用它收集 prompt 接受证据，而
+ * `get_state` / `get_entries` 这类 request 应答不会广播给 Renderer。 */
+const messageEditService = createMessageEditService({
+  publish: event => sse.publish(event),
+  logEvent: (event, details) => logging.log('message-edit', event, details),
+});
+
 const rpc = createRpcBridge({
   runtime,
   captureProviderLaunch: scope => captureProviderLaunch(scope, piLaunch, piLaunch.cliEntry()),
@@ -512,6 +534,8 @@ const rpc = createRpcBridge({
      * 这里只转发，规则只有一份（可测）。 */
     piActivity.observe(event);
     primaryToolGuard.observe(event);
+    /* 编辑事务只把 user message / agent_start 当补充证据，不改变任何 SSE 帧。 */
+    try { messageEditService.observe(event, primaryNativeSession); } catch { /* observation only */ }
     providerAuthRef?.observeRuntime(event);
     if (event.type === 'bridge_status' || event.type === 'agent_settled' ||
         event.type === 'response' && ['get_state','new_session','switch_session','fork'].includes(event.command)) providerConfigSync.observe();
@@ -531,6 +555,7 @@ const rpc = createRpcBridge({
   compat: piCompat,
   toolLaunch: primaryToolGuard,
   planLaunch: planBridge,
+  editLaunch: messageEditLaunch,
 });
 
 /* 安装完成后重新解析入口。start 合并已在启动或运行的桥；没有项目就延迟。 */
@@ -570,7 +595,9 @@ const projects = createProjects({
    * P9 收口：**独立验证也算「正在这个工作区里干活」**，规则与两条文案都在
    * planner 那边（`projectSwitchBlockReason`）—— 放那边才测得到，
    * 这里只做一行透传，规则只有一份。 */
-  beforeActivate: () => runtimeRegistryRef?.liveCount() ? '请先关闭独立会话，再切换经典聊天工作区。' : piBusyReason(false)?.error || null,
+  beforeActivate: () => runtimeRegistryRef?.liveCount() ? '请先关闭独立会话，再切换经典聊天工作区。'
+    : messageEditService.busy(primaryNativeSession, rpc.getState().bridgeRun) ? '消息编辑事务进行中，请稍候。'
+      : piBusyReason(false)?.error || null,
   getWorkspaceProject: cwd => worktreesRef?.projectFor(cwd),
   withActivation: (cwd, action) => worktreesRef ? worktreesRef.withActivation(cwd, action) : action(),
 });
@@ -908,7 +935,10 @@ const sessions = createSessions({
   extraSessionRoots: [PLANNER_SESSION_DIR],
   getProjects: () => projects.read().items,
   readHistory: (file, expected) => readSessionMessages(file, { expected }),
-  switchBlocked: target => Boolean(piActivity.busy() || rpc.stopState()?.pending || runtimeRegistryRef?.ownsNativeSession(target?.sessionId)),
+  switchBlocked: target => piActivity.busy() || rpc.stopState()?.pending || runtimeRegistryRef?.ownsNativeSession(target?.sessionId)
+    ? 'session_running'
+    : messageEditService.busy(primaryNativeSession, rpc.getState().bridgeRun) ? 'edit_in_progress' : false,
+  mutationBlocked: sessionId => Boolean(sessionId && messageEditService.busyForSession(sessionId)),
   titles: sessionTitleStore,
 });
 
@@ -1163,6 +1193,11 @@ function piBusyReason(includeAuth = true) {
   if (includeAuth && providerAuthRef?.inFlight()) return { code: 'busy-auth', error: '供应商认证或模型同步正在进行，请稍后再试' };
   const turn = piActivity.busy();
   if (turn) return turn;
+  /* 编辑事务期间不允许更新 Pi、安装扩展、应用更新或任何会重启当前 Pi 的
+   * 维护动作：它们会销毁事务的 RPC 通道与恢复能力。 */
+  if (messageEditService.busy(primaryNativeSession, rpc.getState().bridgeRun)) {
+    return { code: 'busy-edit', error: '消息编辑事务进行中，请稍候。' };
+  }
   if (runtimeRegistryRef?.busy()) return { code: 'busy-runtime', error: '独立会话仍在运行、停止或清理，请先完成该操作。' };
   if (cliInFlight > 0) return { code: 'busy-cli', error: '有一个 Pi CLI 动作正在执行（例如 MCP 登录），请稍后再试' };
   if (piUpdate && piUpdate.isRunning()) return { code: 'busy-pi-update', error: 'Pi 更新正在进行中，请稍后再试' };
@@ -1413,6 +1448,12 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
         }
         if (status.stop?.pending) throw Object.assign(Error(), { code: 'collab_agent_busy' });
         if (candidateRunsRef?.busy()) throw Object.assign(Error(), { code: 'collab_agent_busy' });
+        /* 编辑事务拥有这个 native session 时，collab 生成不能绕过 /api/command
+         * 的闸门直接往同一 Pi 写 prompt：它会插在导航与重发之间，或把重发挤成
+         * queued，让事务在错误的历史上收口。 */
+        if (messageEditService.blocksCommand(primaryNativeSession, 'prompt', { bridgeRun: status.bridgeRun })) {
+          throw Object.assign(Error(), { code: 'edit_in_progress' });
+        }
         verify?.();
         const runAtStart = status.bridgeRun;
         // capture 就绪检查由 collab 路由的 beforeAuthority 在取工作区锁之前完成，
@@ -1427,6 +1468,12 @@ const collabProposals = collabProposalsRef = createCollabProposalSource({
         if (state.isStreaming || state.isCompacting) throw Object.assign(Error(), { code: 'collab_agent_busy' });
         // 写 stdin 前的最后一次 Owner 生命周期验证。
         verify?.();
+        /* get_state 是异步边界；在真正写 prompt 前再查一次编辑事务，避免
+         * 事务在这段窗口里拿到锁后仍被插入一条 collab prompt。检查与写入之间
+         * 没有 await，单线程下不会被其它 HTTP 处理器插队。 */
+        if (messageEditService.blocksCommand(primaryNativeSession, 'prompt', { bridgeRun: rpc.getState().bridgeRun })) {
+          throw Object.assign(Error(), { code: 'edit_in_progress' });
+        }
         const response = await rpc.request({ type: 'prompt', message }, { timeoutMs: 30000 });
         if (!response || response.__error) throw Object.assign(Error(), { code: 'collab_generate_rejected' });
         // 应答后再次复核：prompt 已接受但 bridge 换代 = 事件归属不可判定，按失败收口。
@@ -1465,6 +1512,37 @@ const candidateRuns=candidateRunsRef=createCandidateRuns({dataDir:DATA_DIR,workt
   projectFor:cwd=>worktrees.projectFor(cwd)||projects.read().items.find(p=>samePath(p.path,cwd))?.path,
   admission:mutationAdmission,contextGeneration:()=>runtime.getWorkspaceGeneration(),busy:(ownAdmission=false)=>Boolean(piBusyReason()||rpc.stopState()?.pending||rpc.maintenanceState()||toolScheduler.busy()||!ownAdmission&&mutationAdmission.busy()),
   protectedRoots:resolveStoreProtectedRoots});
+const messageEditRoutes = createMessageEditRoutes({
+  service: messageEditService,
+  getOwner: primaryOwner,
+  request: async cmd => {
+    const result = await rpc.request(cmd);
+    /* null 只代表“没等到应答”，不能证明命令没执行；__error 是 Pi 明确拒绝。 */
+    if (result === null) return { ok: false, code: 'pi_timeout', unknown: true };
+    if (Object.hasOwn(result, '__error')) return { ok: false, code: result.__code || 'pi_request_failed', unknown: false };
+    return { ok: true, data: result };
+  },
+  commandName: () => messageEditLaunch.command(),
+  editToken: () => messageEditLaunch.token(),
+  getSessionId: () => primaryNativeSession,
+  busyReason: () => piActivity.busy() ? 'session_streaming' : rpc.stopState()?.pending ? 'stop_in_progress' : null,
+  getBridgeRun: () => rpc.getState().bridgeRun,
+  getWorkspaceGeneration: () => runtime.getWorkspaceGeneration(),
+  getCwd: () => runtime.getCurrentCwd(),
+  /* 重发 prompt 与普通 prompt 走同一组前置闸门：候选任务互斥、变更采集就绪、
+   * 工作区写入互斥、模型代际；导航命令不开 run，不走这里。 */
+  beforePrompt: async cmd => {
+    if (candidateRuns.busy()) throw Object.assign(Error('候选任务正在执行，请先完成或停止。'), { code: 'runtime_busy' });
+    await sessionChanges.assertReady();
+    if (runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
+    modelGeneration.guardCommand(cmd);
+  },
+  afterPrompt: cmd => {
+    modelGeneration.noteCommandAccepted(cmd);
+    piActivity.noteCommandAccepted(cmd);
+    primaryToolGuard.resume();
+  },
+});
 const route = createRouter({
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
     /* 只有 Classic 生成需要 capture 就绪检查（与 authority 同锁，必须前置）。
@@ -1485,6 +1563,11 @@ const route = createRouter({
     if (cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') { await sessionChanges.disable(); return true; }
     if (['prompt', 'steer', 'follow_up'].includes(cmd.type)) await sessionChanges.assertReady();
     return false;
+  },
+  restartGuard: async () => {
+    if (messageEditService.busy(primaryNativeSession, rpc.getState().bridgeRun)) {
+      throw Object.assign(Error('消息编辑事务进行中，请稍候。'), { code: 'edit_in_progress' });
+    }
   },
   sessionChanges: { async handle(req, res) {
     if (req.method !== 'GET') return json(res, 405, { ok: false, code: 'method_not_allowed' });
@@ -1510,6 +1593,7 @@ const route = createRouter({
     } catch { return json(res, 409, { ok: false, code: 'capture_unavailable' }); }
   } },
   runtimeSessions: runtimeRoutes,
+  messageEdit: messageEditRoutes,
   legacyScope: primaryOwner,
   requireLegacyScope: () => runtimeRegistry.liveCount() > 0,
   worktrees,
@@ -1529,6 +1613,13 @@ const route = createRouter({
     getState: () => ({ ...rpc.getState(), legacyOwner: primaryOwner() }),
     send: (cmd) => {
       if (['new_session', 'switch_session', 'fork'].includes(cmd.type) && (piActivity.busy() || rpc.stopState()?.pending || cmd.type==='switch_session'&&runtimeRegistry.liveCount())) throw new Error('session_running');
+      /* 编辑事务在飞时不允许任何会改变目标历史、owner 或 bridge 代次的命令。
+       * 事务自己的导航 / prompt 走 `rpc.request`，不经过这里。读取、Stop 与
+       * 审批应答显式放行；前端 disabled 之外的这层保护同样重要：双击、旧标签页、
+       * 手工 HTTP 都不能在导航和重发之间插进一条消息或切换会话。 */
+      if (messageEditService.blocksCommand(primaryNativeSession, cmd.type, { bridgeRun: rpc.getState().bridgeRun })) {
+        throw Object.assign(Error('消息编辑事务进行中，请稍候。'), { code: 'edit_in_progress' });
+      }
       if (['prompt', 'steer', 'follow_up'].includes(cmd.type) && runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
       modelGeneration.guardCommand(cmd);
       const { __fallbackOwner, ...wire } = cmd;

@@ -121,6 +121,7 @@ export function createRouter({
   processes = null,
   worktrees = null,
   runtimeSessions = null,
+  messageEdit = null,
   reviewComments = null,
   collabDocuments = null,
   candidateRuns = null,
@@ -129,6 +130,7 @@ export function createRouter({
   legacyScope = null,
   requireLegacyScope = () => false,
   commandAdmission = async () => false,
+  restartGuard = async () => {},
 }) {
   function handleCommand(req, res) {
     // 必须按 Buffer 累积再一次性解码：逐块 body += chunk 会在 chunk 边界
@@ -203,6 +205,11 @@ export function createRouter({
       return environment.handle(req, res, url);
     }
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
+    /* 历史消息编辑必须绑定当前 Classic owner；路由自身逐字段核对 owner，
+     * 所以放在应用级接口之后、legacy owner 通用检查之前，GET status 也能用。 */
+    if (url.pathname === '/api/message-edit' || url.pathname.startsWith('/api/message-edit/')) {
+      return messageEdit ? messageEdit.handle(req, res, url) : json(res, 503, { ok: false, code: 'edit_unavailable' });
+    }
     if (url.pathname === '/api/review-comments') return reviewComments ? reviewComments.handle(req, res, url) : json(res,503,{ok:false,code:'comment_storage_unavailable'});
     if (url.pathname === '/api/collab-documents') return collabDocuments ? collabDocuments.handle(req,res,url) : json(res,503,{ok:false,code:'collab_storage_unavailable'});
     if (url.pathname === '/api/candidate-runs') return candidateRuns ? candidateRuns.handle(req,res,url) : json(res,503,{ok:false,code:'candidate_unavailable'});
@@ -380,8 +387,16 @@ export function createRouter({
       return uploads.handle(req, res, url);
     }
     if (url.pathname === '/api/restart' && req.method === 'POST') {
-      rpc.restart();
-      return json(res, 200, { ok: true });
+      /* 编辑事务在飞时重启 bridge 会让导航后的目标会话失去可恢复通道；
+       * 与命令闸门使用同一套后端约束，不依赖 Renderer 禁用按钮。 */
+      Promise.resolve()
+        .then(() => restartGuard())
+        .then(() => {
+          rpc.restart();
+          json(res, 200, { ok: true });
+        })
+        .catch(err => json(res, 503, { ok: false, code: err?.code || 'edit_in_progress', error: String(err?.message || err) }));
+      return;
     }
     if (req.method !== 'GET') {
       res.writeHead(405).end('Method not allowed');

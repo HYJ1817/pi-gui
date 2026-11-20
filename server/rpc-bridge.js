@@ -101,6 +101,7 @@ export function createRpcBridge({
   sessionChangeLaunch = null,
   toolLaunch = null,
   planLaunch = null,
+  editLaunch = null,
   compat = null,
   captureProviderLaunch = null,
   providerSessionChanged = null,
@@ -393,7 +394,13 @@ export function createRpcBridge({
         if (generation !== launchGeneration || runtime.isShuttingDown() || maintenance || runtime.getCurrentCwd() !== cwd) return;
         starting = false;
       }
-      child = spawnPi(launchBin, [...args,...(browser?.args||[]),...(managed?.args||[]),...(changes?.args||[]),...(tools?.args||[]),...(plans?.args||[])], {env:{...(browser?.env||{}),...(managed?.env||{}),...(changes?.env||{}),...(tools?.env||{}),...(plans?.env||{})}});
+      let edit = null;
+      if (editLaunch?.available()) {
+        starting = true; edit = await editLaunch.prepare();
+        if (generation !== launchGeneration || runtime.isShuttingDown() || maintenance || runtime.getCurrentCwd() !== cwd) return;
+        starting = false;
+      }
+      child = spawnPi(launchBin, [...args,...(browser?.args||[]),...(managed?.args||[]),...(changes?.args||[]),...(tools?.args||[]),...(plans?.args||[]),...(edit?.args||[])], {env:{...(browser?.env||{}),...(managed?.env||{}),...(changes?.env||{}),...(tools?.env||{}),...(plans?.env||{}),...(edit?.env||{})}});
       pi = child;
     } catch (err) {
       starting = false;
@@ -402,6 +409,7 @@ export function createRpcBridge({
       sessionChangeLaunch?.invalidate().catch(()=>{});
       toolLaunch?.invalidate();
       planLaunch?.invalidate();
+      editLaunch?.invalidate();
       restartRequested = false;
       safeLog('bridge.start_failed', { phase: 'spawn', reason: 'spawn_error' });
       publish({ type: 'bridge_status', state: 'error', error: '无法启动 pi。', hint: '确认 pi 已安装并在 PATH 中，或检查 PI_BIN 配置。', cwd, bridgeRun: run });
@@ -424,6 +432,7 @@ export function createRpcBridge({
       sessionChangeLaunch?.invalidate().catch(()=>{});
       toolLaunch?.invalidate();
       planLaunch?.invalidate();
+      editLaunch?.invalidate();
       restartRequested = false;
       safeLog('bridge.start_failed', { phase: 'process', reason: 'process_error' });
       publish({
@@ -553,6 +562,7 @@ export function createRpcBridge({
       sessionChangeLaunch?.invalidate().catch(()=>{});
       toolLaunch?.invalidate();
       planLaunch?.invalidate();
+      editLaunch?.invalidate();
       pi = null;
       /* 进程没了：旧 run 不可能还在跑，停止屏障随之作废
        * （否则一次没等到应答的停止会把界面永久锁死）。 */

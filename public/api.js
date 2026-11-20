@@ -104,6 +104,19 @@ export async function sendCommand(cmd, { notify = true } = {}) {
   return j;
 }
 
+/* ---------- 历史用户消息编辑 ---------- */
+
+export const messageEditPreflight = body => sendJSON('/api/message-edit', { body: { action: 'preflight', ...body } });
+export const messageEditResend = body => sendJSON('/api/message-edit', { body: { action: 'resend', ...body } });
+/* status 是 GET，不会经过 sendJSON 的 owner 头注入；路由同样要求逐字段
+ * owner 核对，缺头会得到 409 stale_runtime，让“断线后按 requestId 查询”
+ * 永远查不到真实状态。这里必须显式带上当前 owner。 */
+export const messageEditStatus = requestId => getJSON(
+  '/api/message-edit/status?' + new URLSearchParams({ requestId }),
+  S.legacyOwner ? { 'X-Pi-Gui-Owner': JSON.stringify(S.legacyOwner) } : undefined,
+);
+export const messageEditRecover = requestId => sendJSON('/api/message-edit', { body: { action: 'recover', requestId } });
+
 /* ---------- 状态 / 项目 ---------- */
 
 export const fetchStatus = () => getJSON('/api/status');
@@ -119,6 +132,10 @@ export async function fetchRuntimeSessions() {
 /* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
 export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });
+export const runtimeEditPreflight = (owner, edit) => runtimeSessionAction({ action: 'edit-preflight', owner, edit });
+export const runtimeEditResend = (owner, edit) => runtimeSessionAction({ action: 'edit-resend', owner, edit });
+export const runtimeEditStatus = (owner, requestId) => runtimeSessionAction({ action: 'edit-status', owner, requestId });
+export const runtimeEditRecover = (owner, requestId) => runtimeSessionAction({ action: 'edit-recover', owner, requestId });
 // Explicit content opt-in; preview/confirmation data is never persisted here.
 export const previewSessionRevert = ({ evidenceIds, mode = 'confirmed_limited', conversationId, owner, evidenceRevision, includeDiff = false }) =>
   sendJSON('/api/session-revert/preview', { body: { evidenceIds, mode, includeDiff,

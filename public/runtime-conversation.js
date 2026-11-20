@@ -43,13 +43,15 @@ import { iconMarkup } from './ui/icons.js';
  * 工具原始 args/result、环境变量与凭据不进入历史。旧响应没有 `execution` 时
  * 退回原来的「只含正文」路径，状态行如实说明缺了什么。
  */
-import { runtimeSessionAction, fetchRuntimeHistory } from './api.js';
-import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval } from './runtime-state.js';
+import { runtimeSessionAction, fetchRuntimeHistory, runtimeEditPreflight, runtimeEditResend, runtimeEditStatus, runtimeEditRecover } from './api.js';
+import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval, refreshRuntimeViews } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeDisplay, shouldFollow } from './runtime-display.js';
 import { renderUsageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
-import { openModal } from './ui/modal.js';
+import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance, rememberPendingMessageEdit, clearPendingMessageEdit, readPendingMessageEdit, resumePendingMessageEdit, isEditInProgress } from './ui/message-edit.js';
+import { openModal, confirmModal } from './ui/modal.js';
+import { toast } from './ui/toast.js';
 import { md, renderVizCardHtml } from './markdown.js';
 import { createRuntimePicker } from './runtime-picker.js';
 import { bindComposerPointerFocus } from './composer.js';
@@ -759,7 +761,221 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     for (const meta of host._planUsageMetas) host.append(meta);
   }
 
-  function createTimelineBlockNode(block, view, record, history) {
+  function runtimeOwnerOf(record) {
+    return record?.owner && typeof record.owner === 'object' ? { ...record.owner } : null;
+  }
+
+  /* 结果未知时的事务恢复：先按原 requestId 向**当前 owner** 读权威状态。
+   * accepted 才应用新消息；failed 才释放 UI 里的 pending；其余保持未确认，
+   * 不伪造“已发送”或“已恢复”。 */
+  async function recoverRuntimeEdit(owner, conversationId, requestId, pending) {
+    let status = null;
+    try { status = await runtimeEditRecover(owner, requestId); } catch { return null; }
+    if (status?.state === 'accepted') {
+      clearPendingMessageEdit(requestId);
+      if (pending) {
+        const text = pending?.editText ?? pending?.target?.text ?? '';
+        store.applyUserEdit(conversationId, owner, pending, { text, entryId: status.result?.newEntryId });
+      }
+      refreshRuntimeViews();
+    } else if (status?.state === 'failed' || status?.state === 'recovery_required' || status?.state === 'stale_session') {
+      clearPendingMessageEdit(requestId);
+      if (pending) store.cancelUserEdit(conversationId, owner, pending);
+      if (!pending) refreshRuntimeViews();
+    }
+    return status;
+  }
+
+  function showRuntimeEditRecovery(owner, conversationId, requestId, pending, notify) {
+    const sync = async () => {
+      const status = await recoverRuntimeEdit(owner, conversationId, requestId, pending);
+      if (status?.state === 'accepted') { notify(''); return; }
+      if (status?.state === 'failed' || status?.state === 'recovery_required' || status?.state === 'stale_session') {
+        notify(messageEditErrorText(status.result?.code || status.state));
+        return;
+      }
+      notify(messageEditErrorText('recovery_pending'));
+    };
+    toast(messageEditErrorText('acceptance_unknown'), 'error', {
+      action: { label: '重新同步', run: sync },
+    });
+  }
+
+  let resumedEditRequestId = null;
+  /* 渲染器刷新后，未解决事务的 requestId 还在 sessionStorage 里。切回目标
+   * conversation 时用原 requestId 查一次；仍未解决就显示“重新同步”入口。
+   * 作用域不匹配（别的会话、别的 backend 代次）时不动记录。 */
+  async function resumeRuntimePendingEdit(conversationId) {
+    if (!conversationId) return;
+    const record = readPendingMessageEdit({ kind: 'runtime', conversationId });
+    if (!record || record.scope?.kind !== 'runtime' || record.scope.conversationId !== conversationId) return;
+    const owner = runtimeOwnerOf(store.get(conversationId));
+    if (!owner) return;
+    const resumed = await resumePendingMessageEdit({
+      scope: { kind: 'runtime', conversationId, sessionId: owner.sessionId, backendInstance: owner.backendInstance },
+      status: requestId => runtimeEditStatus(owner, requestId),
+      onSettled: () => refreshRuntimeViews(),
+    });
+    if (!resumed || !['acceptance_unknown', 'recovery_pending'].includes(resumed.state)) return;
+    if (resumedEditRequestId === record.requestId) return;
+    resumedEditRequestId = record.requestId;
+    const notify = text => {
+      const target = viewOf(conversationId);
+      if (!target) return;
+      target.notice = text || '';
+      draw();
+    };
+    showRuntimeEditRecovery(owner, conversationId, record.requestId, null, notify);
+  }
+
+  function openRuntimeUserEdit(row, block, record, notify) {
+    const owner = runtimeOwnerOf(record);
+    if (!owner || !Number.isInteger(block.userIndex)) return null;
+    const conversationId = record.item.conversationId;
+    const textEl = row.querySelector('.rtc-history-user-text');
+    const actions = row.querySelector('.message-actions');
+    let pendingRef = null;
+    return openMessageEditor({
+      text: block.text,
+      userIndex: block.userIndex,
+      hasImages: block.hasImages === true,
+      /* Runtime 时间线不投影图片，文本也可能被截断；身份仍由首次 preflight
+       * 的 entryId/parentId/leafId/sessionId 锁定，这里只放宽文本/图片的
+       * 前端交叉核对，不放宽事务目标。 */
+      imageStateKnown: false,
+      textTruncated: block.truncated === true,
+      kind: 'edit',
+      mount: row,
+      originals: [textEl, actions].filter(Boolean),
+      returnFocus: actions?.querySelector('.message-edit'),
+      pendingScope: { kind: 'runtime', conversationId, backendInstance: owner.backendInstance },
+      preflight: ({ userIndex, kind }) => runtimeEditPreflight(owner, { userIndex, kind }),
+      resend: async payload => {
+        const pending = store.beginUserEdit(conversationId, owner, block.userIndex);
+        if (!pending) return { ok: false, code: 'stale_history' };
+        pending.editText = payload.text;
+        pendingRef = pending;
+        let result;
+        try { result = await runtimeEditResend(owner, payload); }
+        catch { result = { ok: false, code: 'network', network: true }; }
+        /* 传输失败不等于事务失败：按 requestId 读权威状态，避免双发。 */
+        if (!result?.ok && (result?.network === true || result?.code === 'network')) {
+          const resolved = await resolveEditAcceptance(id => runtimeEditStatus(owner, id), payload.requestId);
+          result = resolved || { ok: false, code: 'acceptance_unknown' };
+        }
+        if (!result?.ok) {
+          /* 未确认时保留 pending：迟到的 message_start 仍应就地更新目标，
+           * 而不是再追加一条用户消息。 */
+          if (!result?.unresolved) store.cancelUserEdit(conversationId, owner, pending);
+          return result;
+        }
+        store.applyUserEdit(conversationId, owner, pending, { text: result.text || block.text, entryId: result.newEntryId });
+        refreshRuntimeViews();
+        return result;
+      },
+      readStatus: requestId => runtimeEditStatus(owner, requestId),
+      recover: requestId => recoverRuntimeEdit(owner, conversationId, requestId, pendingRef),
+    });
+  }
+
+  async function regenerateRuntimeTurn(button, userIndex, record, notify) {
+    const owner = runtimeOwnerOf(record);
+    if (!owner || !Number.isInteger(userIndex) || button?.disabled) return;
+    if (messageEditorBusy()) { notify('请先完成当前的编辑操作。'); return; }
+    /* 同一时刻只允许一个编辑事务：先收起已打开的就地编辑器。 */
+    closeMessageEditor({ restore: true, focus: false });
+    const conversationId = record.item.conversationId;
+    /* 点击时这一轮对应的用户 block；preflight 必须指向同一条消息。 */
+    const target = Array.isArray(record?.timeline)
+      ? record.timeline.find(block => block?.kind === 'user' && block.userIndex === userIndex)
+      : null;
+    if (!target) { notify(messageEditErrorText('stale_history')); return; }
+    if (button) button.disabled = true;
+    try {
+      const pre = await runtimeEditPreflight(owner, { userIndex, kind: 'regenerate' });
+      const busy = isEditInProgress(pre);
+      if (!pre?.ok || busy) {
+        if (busy) {
+          const pendingRecord = readPendingMessageEdit({ kind: 'runtime', conversationId });
+          if (pendingRecord && pendingRecord.scope?.kind === 'runtime'
+            && pendingRecord.scope.conversationId === conversationId) {
+            showRuntimeEditRecovery(owner, conversationId, pendingRecord.requestId, null, notify);
+            return;
+          }
+          notify(messageEditErrorText('edit_in_progress'));
+          return;
+        }
+        notify(messageEditErrorText(pre?.code)); return;
+      }
+      if (pre.canEdit !== true) { notify(messageEditErrorText(pre.reason)); return; }
+      const textOk = target.truncated === true
+        ? typeof pre.text === 'string' && pre.text.startsWith(target.text)
+        : pre.text === target.text;
+      if (!textOk) { notify(messageEditErrorText('stale_history')); return; }
+      if (pre.hasToolsAfter === true) {
+        const confirmed = await confirmModal({
+          title: '重新生成',
+          message: '重新发送会替换后续对话，之前已经执行的文件修改和命令操作不会自动撤销。',
+          okText: '重新生成',
+          cancelText: '取消',
+        });
+        if (confirmed !== true) return;
+      }
+      const pending = store.beginUserEdit(conversationId, owner, userIndex);
+      if (!pending) { notify(messageEditErrorText('stale_history')); return; }
+      pending.editText = target.text;
+      const requestId = messageEditRequestId();
+      rememberPendingMessageEdit({
+        requestId,
+        text: target.text,
+        userIndex,
+        kind: 'regenerate',
+        scope: { kind: 'runtime', conversationId, sessionId: pre.sessionId, backendInstance: owner.backendInstance },
+        at: Date.now(),
+      });
+      let result;
+      try {
+        result = await runtimeEditResend(owner, {
+          userIndex,
+          kind: 'regenerate',
+          text: pre.text,
+          expectedEntryId: pre.entryId,
+          expectedParentId: pre.parentId ?? null,
+          expectedLeafId: pre.leafId,
+          expectedSessionId: pre.sessionId,
+          requestId,
+        });
+      } catch {
+        result = { ok: false, code: 'network', network: true };
+      }
+      if (!result?.ok && (result?.network === true || result?.code === 'network')) {
+        const resolved = await resolveEditAcceptance(id => runtimeEditStatus(owner, id), requestId);
+        result = resolved || { ok: false, code: 'acceptance_unknown' };
+      }
+      if (!result?.ok) {
+        if (!result?.unresolved) {
+          clearPendingMessageEdit(requestId);
+          store.cancelUserEdit(conversationId, owner, pending);
+        }
+        if (result?.unresolved || result?.code === 'acceptance_unknown' || result?.code === 'recovery_pending') {
+          showRuntimeEditRecovery(owner, conversationId, requestId, pending, notify);
+        } else {
+          notify(messageEditErrorText(result?.code));
+        }
+        return;
+      }
+      clearPendingMessageEdit(requestId);
+      store.applyUserEdit(conversationId, owner, pending, { text: result.text || pre.text, entryId: result.newEntryId });
+      notify('');
+      refreshRuntimeViews();
+    } catch {
+      notify(messageEditErrorText('network'));
+    } finally {
+      if (button?.isConnected) button.disabled = false;
+    }
+  }
+
+  function createTimelineBlockNode(block, view, record, history, options = {}) {
     /* 展开状态按「模式 + block/tool id」存：历史与实时各有一份，互不覆盖；
      * 切换会话、切换模式后都能恢复用户自己的选择。 */
     const openKey = key => (history ? 'history:' : 'live:') + key;
@@ -770,16 +986,30 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       row.dataset.roleLabel = block.kind === 'user' ? '你' : 'Pi';
       if (block.kind === 'user') {
         row.append(el('div', 'rtc-history-user-text', block.text));
-        row.append(messageActions(block.text));
+        const editAction = history || !Number.isInteger(block.userIndex)
+          ? null
+          : () => openRuntimeUserEdit(row, block, record, options.notify);
+        let actionBar = messageActions(block.text, editAction ? { onEdit: editAction } : {});
+        row.append(actionBar);
         if (block.messageId) row.dataset.historyMessageId = block.messageId;
         if (Number.isInteger(block.userIndex)) row.dataset.historyUserIndex = String(block.userIndex);
-        return { node: row, update(next) { row.querySelector('.rtc-history-user-text').textContent = next.text; } };
+        return { node: row, update(next) {
+          row.querySelector('.rtc-history-user-text').textContent = next.text;
+          const fresh = messageActions(next.text, editAction ? { onEdit: editAction } : {});
+          actionBar.replaceWith(fresh);
+          actionBar = fresh;
+        } };
       }
       const body = el('div', 'rtc-assistant-text');
       appendRuntimeContent(body, block.text);
       row.append(body);
       if (block.messageId) row.dataset.historyMessageId = block.messageId;
       row.dataset.state = block.state || '';
+      const regenerate = !history && Number.isInteger(options.regenerateUserIndex)
+        ? () => regenerateRuntimeTurn(row.querySelector('.message-regenerate'), options.regenerateUserIndex, record, options.notify)
+        : null;
+      let actionBar = messageActions(block.text, regenerate ? { onRegenerate: regenerate } : {});
+      if (regenerate) row.append(actionBar);
       /* 历史 usage 与 Classic 同一条摘要/明细；同一消息的多段正文不会重复
        * 出现同一份用量（投影只把 usage 挂到该消息的一个 block 上）。 */
       const syncMeta = next => syncUsageMeta(row, next);
@@ -790,6 +1020,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         body.replaceChildren();
         appendRuntimeContent(body, next.text);
         row.dataset.state = next.state || '';
+        if (regenerate) {
+          const fresh = messageActions(next.text, { onRegenerate: regenerate });
+          actionBar.replaceWith(fresh);
+          actionBar = fresh;
+        }
         syncMeta(next);
       } };
     }
@@ -1015,12 +1250,35 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const turnOutcomes = timelineTurnOutcomes(blocks, record);
     const outcomeByLastBlock = new Map();
     for (const turn of turnOutcomes) outcomeByLastBlock.set(turn.lastBlockId, turn);
+    /* 每一轮只在最后一条 assistant 正文上放“重新生成”：它代表该轮回复的
+     * 可见终点，点它重跑的是这一轮的用户消息。 */
+    const regenerateByBlock = new Map();
+    let turnUserIndex = null, turnLastAssistant = null;
+    for (const block of blocks) {
+      if (block?.kind === 'user') {
+        if (turnLastAssistant && Number.isInteger(turnUserIndex)) regenerateByBlock.set(turnLastAssistant.id, turnUserIndex);
+        turnUserIndex = Number.isInteger(block.userIndex) ? block.userIndex : null;
+        turnLastAssistant = null;
+      } else if (block?.kind === 'assistant') {
+        turnLastAssistant = block;
+      }
+    }
+    if (turnLastAssistant && Number.isInteger(turnUserIndex)) regenerateByBlock.set(turnLastAssistant.id, turnUserIndex);
+    const notify = text => {
+      const target = viewOf(record?.item?.conversationId);
+      if (!target) return;
+      target.notice = text || '';
+      draw();
+    };
     const wanted = [];
     for (const block of blocks) {
       if (!block || typeof block.id !== 'string') continue;
       let info = view.timeline.nodes.get(block.id);
       if (!info) {
-        info = createTimelineBlockNode(block, view, record, history);
+        info = createTimelineBlockNode(block, view, record, history, {
+          regenerateUserIndex: regenerateByBlock.get(block.id),
+          notify,
+        });
         if (!info) continue;
         info.kind = block.kind;
         info.signature = '';
@@ -1133,6 +1391,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     /* 「这一次 draw 是不是刚切到这条会话」——必须在下面写 renderedId 之前取。
      * 滚动策略要用它区分「用户主动切过来」与「同一条会话内的流式更新」。 */
     const entered = renderedId !== id;
+    /* 切换会话/视图时，旧的就地编辑器不能留在 detached DOM 里继续持有
+     * “正在编辑”状态；恢复原节点，但不抢新视图的焦点。 */
+    if (entered) { try { closeMessageEditor({ restore: true, focus: false }); } catch { /* editor may be detached */ } }
     // Capture intent before text/thinking/tool changes can increase scrollHeight.
     const wasNearBottom = !entered && !view.history && shouldFollow(output);
     const prevScrollHeight = output.scrollHeight || 0;
@@ -1372,7 +1633,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       modelPicker.close(); thinkingPicker.close();
       active = true;
       composing = false;
-      if (next === id) { ensureModels(); draw(); return; }
+      if (next === id) { ensureModels(); draw(); void resumeRuntimePendingEdit(id); return; }
       flushCurrentDraft(id);
       saveScroll();
       if (id) viewOf(id).focusOnReady = null;
@@ -1381,12 +1642,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       ensureModels();
       approvalKey = ''; renderedId = null; renderedLocatorKey = null;
       draw();
+      void resumeRuntimePendingEdit(id);
     },
     draw,
     async openHistory(locator, match = null) {
       if (!matchesLocator(store.get(locator?.conversationId)?.item, locator)) return false;
       this.show(locator.conversationId);
       await loadHistory(locator, match);
+      void resumeRuntimePendingEdit(locator.conversationId);
       return alive && id === locator.conversationId && Boolean(current().history);
     },
     /** 离开中央视图时记下滚动位置。 */

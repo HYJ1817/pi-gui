@@ -1,0 +1,121 @@
+/* 历史消息就地编辑器。
+ *
+ * 只用既有设计 Token / .btn 语义，不引入第二套按钮或消息排版。
+ * 背景取中性灰面（--ds-bg-secondary），不跟随用户气泡的强调色；
+ * 焦点只加一圈克制的 --ds-focus，不做整块高亮。 */
+.message-edit {
+  width: 100%;
+  max-width: 100%;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 10px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ds-bg-secondary);
+  color: var(--ds-text-primary);
+  box-sizing: border-box;
+}
+
+.message-edit-label {
+  font-size: var(--text-xs);
+  color: var(--ds-text-muted);
+  line-height: var(--leading-compact);
+}
+
+.message-edit-input {
+  width: 100%;
+  min-height: calc(3 * var(--leading-chat) * 1em);
+  max-height: calc(12 * var(--leading-chat) * 1em);
+  box-sizing: border-box;
+  resize: none;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--ds-field-inset-bg);
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: var(--text-base);
+  line-height: var(--leading-chat);
+  outline: none;
+  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.message-edit-input:hover {
+  border-color: var(--ds-border-default);
+}
+.message-edit-input:focus {
+  border-color: var(--ds-focus);
+  box-shadow: 0 0 0 1px var(--ds-focus);
+  background: var(--ds-field-inset-focus-bg);
+}
+.message-edit-input[readonly] {
+  opacity: .78;
+}
+
+.message-edit-warning {
+  font-size: var(--text-xs);
+  line-height: var(--leading-compact);
+  color: var(--ds-text-secondary);
+}
+.message-edit-warning[hidden] { display: none; }
+
+.message-edit-status {
+  min-height: 1.2em;
+  font-size: var(--text-xs);
+  line-height: var(--leading-compact);
+  color: var(--ds-text-muted);
+}
+.message-edit-status[data-state="error"] { color: var(--ui-danger); }
+.message-edit-status[data-state="pending"] { color: var(--ds-text-secondary); }
+
+.message-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 消息动作条：编辑 / 重新生成与复制共用 24px 图标按钮。 */
+:is(#stream .msg.assistant, #runtimeView .rtc-history-message, #runtimeView .rtc-timeline-message):is(:hover,:focus-within) .message-actions {
+  opacity: 1;
+}
+:is(#stream,#runtimeView) .message-action-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ds-text-muted);
+  cursor: pointer;
+}
+:is(#stream,#runtimeView) .message-action-btn:hover:not(:disabled) {
+  background: var(--ds-bg-hover);
+  color: var(--ds-text-primary);
+}
+:is(#stream,#runtimeView) .message-action-btn:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+:is(#stream,#runtimeView) .message-action-btn:disabled {
+  opacity: .45;
+  cursor: default;
+}
+:is(#stream,#runtimeView) .message-action-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 560px) {
+  .message-edit { padding: 9px 10px; }
+  .message-edit-actions { gap: 6px; }
+}

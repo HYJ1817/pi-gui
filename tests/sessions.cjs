@@ -335,6 +335,35 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
       (r5.ok && seen && seen.type === 'switch_session' && seen.sessionPath === files.a1) || JSON.stringify({ r5, seen }));
   }
 
+  /* ================= 4g. 编辑事务互斥 ================= */
+  {
+    /* 互斥必须在后端：切换、归档、删除都走同一份 session 表，不能只靠
+     * Renderer 禁用按钮。switchBlocked 返回字符串时保留 edit_in_progress，
+     * 不能一律降级成 session_running。 */
+    const locked = createSessions({
+      runtime: { getCurrentCwd: () => PROJ_A },
+      rpc: { request: async () => ({ cancelled: false }) },
+      env: { HOME: TMP, PI_CODING_AGENT_DIR: AGENT },
+      dataDir: path.join(TMP, 'data'),
+      getProjects: () => [{ path: PROJ_A }, { path: PROJ_B }],
+      switchBlocked: () => 'edit_in_progress',
+      mutationBlocked: sessionId => sessionId === 'a1',
+    });
+    const list = await locked.list();
+    const a1 = list.sessions.find((s) => s.sessionId === 'a1');
+    const a2 = list.sessions.find((s) => s.sessionId === 'a2');
+    const sw = await locked.switchTo(a1.id);
+    check('4g. 编辑事务期间切换会话 → edit_in_progress', () =>
+      (!sw.ok && sw.code === 'edit_in_progress' && /编辑/.test(sw.error)) || JSON.stringify(sw));
+    const archived = await locked.setArchived(a1.id, true);
+    check('4h. 编辑中的会话不能被归档', () => (!archived.ok && archived.code === 'edit_in_progress') || JSON.stringify(archived));
+    const removed = await locked.remove(a1.id);
+    check('4i. 编辑中的会话不能被删除', () => (!removed.ok && removed.code === 'edit_in_progress') || JSON.stringify(removed));
+    const other = await locked.setArchived(a2.id, true);
+    check('4j. 互斥只针对被编辑的会话，其它会话照常归档', () => other.ok === true || JSON.stringify(other));
+    if (other.ok) await locked.setArchived(a2.id, false);
+  }
+
   /* ================= 5. switch / rename 的降级 ================= */
   section('5. 切换与改名的降级');
 
