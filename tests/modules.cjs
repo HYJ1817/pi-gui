@@ -548,11 +548,12 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
     hit('GET', '/api/events', authHeaders);
     return calls[0] === 'sse' || calls.join(',');
   });
-  check('/api/restart 命中 rpc.restart', () => {
-    calls.length = 0;
-    hit('POST', '/api/restart', authHeaders);
-    return calls[0] === 'rpc.restart' || calls.join(',');
-  });
+  /* /api/restart 先 await restartGuard 再调用 rpc.restart（编辑事务互斥），
+   * 因此必须等一个事件循环，不能按同步分发断言。 */
+  calls.length = 0;
+  hit('POST', '/api/restart', authHeaders);
+  await new Promise(resolve => setImmediate(resolve));
+  check('/api/restart 命中 rpc.restart', () => calls[0] === 'rpc.restart' || calls.join(','));
 
   /* 项目配置刻意用了独立的顶层路径而不是 /api/projects/config ——
    * 后者会被上面那条 /api/projects/ 前缀匹配吃掉（前缀在它之前），
