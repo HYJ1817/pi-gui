@@ -191,7 +191,7 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
     if (active) return;
     const id = entry?.turnId || 'turn:' + frame.sequence;
     const fallback = Boolean(entry?.fallbackOf && entry.turnId);
-    active = { id, startedAt: frame.at, input: fallback, stop: false, stopReason: null,
+    active = { id, startedAt: frame.at, input: fallback, inputSequence: entry?.inputSequence, stop: false, stopReason: null,
       attempt: null, compaction: null, retryId: null, hadFallback: fallback, submissions: new Set() };
     response = null;
     responseEnded = false;
@@ -208,7 +208,7 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
     const previous = fallbackOf && submissions.get(fallbackOf);
     const entry = { id, command: event.command, fallbackOf: previous?.settled && previous.canFallback ? fallbackOf : null,
       turnId: previous?.settled && previous.canFallback ? previous.turnId : null, delivered: false, replied: false,
-      editOf: idOf(event.editOf), inputId: null };
+      editOf: idOf(event.editOf), inputId: null, inputSequence: previous?.inputSequence };
     // Private edit RPC replies may resolve after their user echo in the same
     // stdout chunk. The successful navigation created a fresh branch stream;
     // only its one otherwise unattributed initial input is eligible.
@@ -231,10 +231,11 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
       active.submissions.add(entry.id);
     }
     const id = active.id + ':input:' + frame.sequence;
-    userEcho = { id, skipped: Boolean(entry?.fallbackOf && active.input) };
+    userEcho = { id, sequence: frame.sequence, skipped: Boolean(entry?.fallbackOf && active.input) };
     if (userEcho.skipped) return;
     const role = active.input ? 'additional' : 'initial';
     active.input = true;
+    if (role === 'initial') active.inputSequence = frame.sequence;
     userEcho.role = role;
     boundedSet(nativeWitnesses, id, { id, role: 'user', turnId: active.id });
     if (role === 'initial' && entry?.editOf) entry.inputId = id;
@@ -419,6 +420,7 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
       const entry = submissions.get(id);
       if (!entry) continue;
       entry.settled = true;
+      entry.inputSequence = active.inputSequence;
       entry.canFallback = status === 'failed' && event.generationResult?.requestId === id
         && event.generationResult?.hasVisibleOutput === false;
     }
@@ -593,6 +595,11 @@ export function createExecutionStream(initialScope, { startSequence = 0, maxPend
       overflow(sequence, timeOf(observedAt));
     },
     cursor: () => cursor,
+    fallbackEcho(sequence) {
+      if (sequence !== cursor || sequence !== userEcho?.sequence || !userEcho.skipped
+          || !Number.isSafeInteger(active?.inputSequence)) return null;
+      return { turnId: active.id, inputSequence: active.inputSequence };
+    },
     nativeWitnesses(turnId) {
       return [...nativeWitnesses.values()].filter(entry => entry.turnId === turnId)
         .map(({ turnId: _turnId, toolCalls, ...entry }) => ({

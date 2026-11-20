@@ -1,7 +1,5 @@
-/* Claude 风格执行过程的视觉层：任务列表 + 回到底部按钮。
- *
- * 只放这两块。工具时间线与 Thinking 的样式仍在 styles.css / thinking-dots.css，
- * 避免出现第二套同名规则。所有颜色走 tokens.css 的 ds 变量，深色/浅色自动跟随。 */
+/* 会话执行视觉层：任务列表、统一时间线与回到底部按钮。
+ * 原有工具详情和 Thinking 样式分别由 styles.css / thinking-dots.css 管理。 */
 
 /* ---------- 任务列表 ---------- */
 
@@ -294,4 +292,172 @@
 @media (prefers-reduced-motion: reduce) {
   .scroll-bottom, .plan-chev svg { transition: none; }
   .plan-pulse-dot { animation: none; opacity: .7; }
+}
+
+/* ---------- 统一执行时间线 ---------- */
+
+.execution-turn {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--ui-space-2);
+  margin-block-end: var(--ui-space-3);
+  color: var(--ds-text-primary);
+}
+
+.thread > .execution-turn:not(:first-child) { margin-block-start: var(--turn-gap); }
+.execution-turn [data-execution-part] { min-inline-size: 0; }
+.execution-turn .msg.user,
+.runtime-conversation .execution-turn .rtc-history-message[data-role="user"] { margin-block-end: 0; }
+.execution-turn .plan-card { margin: 0; }
+.execution-turn .plan-list:not([hidden]) { padding-inline: var(--ui-space-2); }
+.execution-turn .plan-item { font-size: var(--text-md); }
+.execution-plan-parallel {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--ds-text-secondary);
+}
+.execution-task-content { min-inline-size: 0; }
+.execution-task-more { display: block; margin-inline-start: auto; }
+.execution-task-clip {
+  max-block-size: var(--execution-task-height);
+  overflow: clip;
+}
+.execution-plan-more { margin: 0 var(--ui-space-2) var(--ui-space-2); }
+
+.execution-activity-group {
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-md);
+  background: var(--ds-tile);
+}
+.execution-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ui-space-2);
+  inline-size: 100%;
+  min-block-size: var(--ds-control-size);
+  min-inline-size: 0;
+  padding: 5px var(--ui-space-2);
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--ds-text-primary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  text-align: start;
+  cursor: pointer;
+}
+.execution-head:hover, .execution-head:active { background: var(--ds-tile-hover); }
+.execution-head:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; }
+.execution-chevron {
+  flex: 0 0 auto;
+  inline-size: 6px;
+  block-size: 6px;
+  margin-inline: 2px 3px;
+  margin-block-end: 1px;
+  border-block-start: 1.5px solid currentColor;
+  border-inline-end: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.execution-head[aria-expanded="true"] > .execution-chevron { transform: rotate(135deg); }
+.execution-head-title {
+  overflow: hidden;
+  min-inline-size: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.execution-activity-group > .execution-head > .execution-head-title { font-weight: 600; }
+.execution-activity-status, .execution-activity-count, .execution-time {
+  flex: 0 0 auto;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.execution-activity-status { margin-inline-start: auto; }
+.execution-time { white-space: nowrap; }
+.execution-activity-status::before {
+  display: inline-block;
+  inline-size: 6px;
+  block-size: 6px;
+  margin-inline-end: 5px;
+  margin-block-end: 1px;
+  border-radius: 50%;
+  background: var(--ds-info);
+  content: '';
+}
+.execution-turn [data-status="failed"] > .execution-head > .execution-activity-status::before {
+  background: var(--ds-error);
+}
+.execution-turn [data-status="completed"] > .execution-head > .execution-activity-status::before {
+  background: var(--ds-success);
+}
+.execution-turn :is([data-status="running"], [data-status="stopping"]) > .execution-head > .execution-activity-status::before {
+  background: var(--ds-accent);
+}
+.execution-turn :is([data-status="waiting"], [data-status="incomplete"], [data-status="interrupted"]) > .execution-head > .execution-activity-status::before {
+  background: var(--ds-warning);
+}
+.execution-activity-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: 0 var(--ui-space-2) 4px;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text-secondary);
+}
+.execution-activity-range { margin-inline: auto; }
+.execution-activity-list > .execution-activity-item {
+  border-block-start: 1px solid var(--ds-border-default);
+}
+.execution-activity-item > .execution-head {
+  padding-inline-start: var(--ui-space-3);
+}
+.execution-activity-facts {
+  flex: 1 1 12ch;
+  overflow: hidden;
+  min-inline-size: 0;
+  color: var(--ds-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.execution-activity-facts:empty, .execution-time:empty { display: none; }
+.execution-activity-item > .execution-body {
+  padding: 0 var(--ui-space-2) var(--ui-space-2) var(--ui-space-4);
+  overflow-wrap: anywhere;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+}
+.execution-detail-note { margin: var(--ui-space-2) 0 0; }
+.execution-detail-children { margin-block: var(--ui-space-2); }
+.execution-tool-native:empty { display: none; }
+.execution-tool-native > .tl-item,
+.execution-tool-native > .tl-item:hover,
+.execution-tool-native > .tl-item.open {
+  padding: 0;
+  background: transparent;
+}
+.execution-tool-native .tl-body { min-inline-size: 0; }
+.execution-tool-native > .tl-item > .tl-dot,
+.execution-tool-native > .tl-item > .tl-body > .tl-head { display: none; }
+.execution-tool-native .tl-more { background: var(--ds-surface-input); }
+.execution-progress > .execution-body { padding-inline: var(--ui-space-2); }
+.execution-progress > .execution-head,
+.execution-usage > .execution-head { color: var(--ds-text-secondary); }
+.execution-usage > .execution-body {
+  padding: 0 var(--ui-space-2) var(--ui-space-2);
+  font-size: var(--text-sm);
+  color: var(--ds-text-secondary);
+}
+.execution-usage-entry + .execution-usage-entry {
+  margin-block-start: var(--ui-space-2);
+  padding-block-start: var(--ui-space-2);
+  border-block-start: 1px solid var(--ds-border-default);
+}
+.execution-usage-model { overflow-wrap: anywhere; }
+
+@media (max-width: 700px) {
+  .execution-activity-group > .execution-head { flex-wrap: wrap; }
+  .execution-activity-group > .execution-head > .execution-head-title { flex: 1 1 30%; }
 }

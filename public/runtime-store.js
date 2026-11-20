@@ -51,6 +51,7 @@ function canInheritDraft(prior, nextItem) {
 }
 export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   let backend = null, resources = null, resourceReadSequence = 0; const records = new Map();
+  const executionWitnesses = new WeakMap();
   let rejectObserver = null;
   const reject = (reason, extra = {}) => { try { rejectObserver?.(reason, extra); } catch { /* observation only */ } };
   const bound = text => {
@@ -72,6 +73,8 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       draft: '', draftRevision: baseRevision, approvals: [], truncated: false,
       timeline: [], timelineSeq: 0, timelineChars: 0, timelineTruncated: false,
       userIndexSeq: 0, pendingEdit: null,
+      executionRevision: 0,
+      executionLive: { frame: null, input: null, echo: null, responseSequence: null },
       /* Pi 的回合边界：`agent_settled` 在整个 session 级 run 结束时发出（自动
        * 重试、压缩、steering/follow-up 都在它之前跑完）。下一次 `agent_start`
        * 若发生在 settled 之后，才是真正的新用户任务；运行中追加消息不会发
@@ -102,7 +105,40 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (r.timelineChars > MAX_TIMELINE_CHARS) r.timelineTruncated = true;
   }
 
+  function sameExecutionMetadata(a, b) {
+    return Number.isSafeInteger(a?.branchEpoch) && a.branchEpoch === b?.branchEpoch
+      && Number.isSafeInteger(a.startSequence) && a.startSequence === b.startSequence;
+  }
+
+  function witness(r, value, initialInput = false) {
+    const { frame, input, responseSequence } = r.executionLive;
+    if (!frame) return;
+    if (initialInput) r.executionLive.input = value;
+    const inputSequence = initialInput ? frame.sequence : executionWitnesses.get(input)?.inputSequence;
+    if (inputSequence == null) return;
+    executionWitnesses.set(value, { ...frame, inputSequence, responseSequence });
+    if (value.kind === 'user') r.executionLive.echo = value;
+  }
+
+  function observeExecutionFrame(r, frame, previousCursor) {
+    const live = r.executionLive;
+    const meta = frame.execution;
+    const verified = sameExecutionMetadata(meta, r.item.execution)
+      && Number.isSafeInteger(frame.eventSequence) && frame.eventSequence > meta.startSequence;
+    if (live.input && (!verified || frame.eventSequence > previousCursor + 1
+        || !sameExecutionMetadata(executionWitnesses.get(live.input), meta))) {
+      executionWitnesses.delete(live.input);
+      live.input = null;
+      live.echo = null;
+      live.responseSequence = null;
+    }
+    live.frame = verified ? { branchEpoch: meta.branchEpoch, startSequence: meta.startSequence,
+      sequence: frame.eventSequence } : null;
+    if (frame.event.type !== 'message_update') r.executionRevision++;
+  }
+
   function appendBlock(r, block, keep = true) {
+    witness(r, block, block.kind === 'user' && !r.executionLive.input);
     block.id = 'b' + (++r.timelineSeq);
     r.timeline.push(block);
     r.timelineChars += blockChars(block);
@@ -117,6 +153,17 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     block.truncated = block.truncated || bounded.truncated;
     r.timelineChars += blockChars(block) - before;
     trimTimeline(r, block);
+  }
+
+  function reconcileExecutionInput(r, message) {
+    const { echo, frame } = r.executionLive;
+    r.executionLive.echo = null;
+    if (!frame || !echo || !r.timeline.includes(echo)) return;
+    const proof = executionWitnesses.get(echo);
+    if (!sameExecutionMetadata(proof, frame)) return;
+    proof.contentSequence = frame.sequence;
+    setTimelineText(r, echo, contentText(message.content), MAX_USER_TEXT);
+    echo.hasImages = Array.isArray(message.content) && message.content.some(part => part?.type === 'image');
   }
 
   function ensureAssistant(r) {
@@ -184,6 +231,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   }
 
   function insertBlockAt(r, block, anchor, afterAnchor = false) {
+    witness(r, block);
     block.id = 'b' + (++r.timelineSeq);
     const index = anchor ? r.timeline.indexOf(anchor) : -1;
     if (index >= 0) r.timeline.splice(index + (afterAnchor ? 1 : 0), 0, block);
@@ -376,11 +424,13 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     r.settled = false;
   }
 
-  function applyUserEditInternal(r, pending, text, entryId) {
+  function applyUserEditInternal(r, pending, text, entryId, hasImages = pending?.target?.hasImages === true) {
     if (!pending?.target || !r.timeline.includes(pending.target)) return false;
     const bounded = boundText(String(text ?? ''), MAX_USER_TEXT);
-    if (!bounded.text) return false;
+    if (!bounded.text && !hasImages) return false;
+    if (!pending.eventApplied) executionWitnesses.delete(pending.target);
     pending.target.text = bounded.text;
+    if (hasImages) pending.target.hasImages = true;
     pending.target.truncated = pending.target.truncated || bounded.truncated;
     if (typeof entryId === 'string' && entryId) pending.target.messageId = entryId;
     for (const block of pending.oldBlocks) {
@@ -388,7 +438,9 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       if (index >= 0) r.timeline.splice(index, 1);
     }
     resetEditedTail(r, pending.oldBlocks);
-    r.userIndexSeq = Math.max(r.userIndexSeq, pending.userIndex + 1);
+    // A replacement prunes native user entries, including any fallback echo
+    // with no visible block. Only the first acknowledgment resets the index.
+    if (!pending.applied) r.userIndexSeq = pending.userIndex + 1;
     r.text = bounded.text;
     recomputeTimelineChars(r);
     pending.applied = true;
@@ -479,7 +531,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     }
     return true;
   }
-  function applyDetailed(frame) {
+  function applyDetailed(frame, { fallbackInputSequence = null } = {}) {
     if (frame._replay) { reject('replay'); return { ok: false, reason: 'replay' }; }
     if (frame.type === 'runtime_state' && frame.owner?.backendInstance === backend) {
       const record = records.get(frame.owner.conversationId);
@@ -516,6 +568,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       return { ok: false, reason: 'sequence_not_advanced' };
     }
     if (frame.eventSequence > r.cursor + 1) r.truncated = true;
+    observeExecutionFrame(r, frame, r.cursor);
     r.cursor = frame.eventSequence; const e = frame.event;
 
     /* ---------- 回合边界：只认 Pi 的真实 agent_start / agent_settled ---------- */
@@ -533,6 +586,8 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       r.text += '\n';
       resetAssistant(r);
       r.thinkingBlock = null;
+      r.executionLive.echo = null;
+      r.executionLive.responseSequence = r.executionLive.frame?.sequence ?? null;
     }
     if (e.type === 'message_start' && e.message?.role === 'user') {
       /* 运行中的 steer / follow-up 也走 message_start user，但不会发新的
@@ -543,12 +598,31 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
        * 编辑事务在飞时，这条 message_start 是修改后消息的回声：就地更新目标
        * block，绝不 append 第二条用户消息。 */
       const bounded = boundText(contentText(e.message.content), MAX_USER_TEXT);
-      if (r.pendingEdit && bounded.text) {
-        applyUserEditInternal(r, r.pendingEdit, bounded.text, null);
-        r.pendingEdit.eventApplied = true;
-      } else if (bounded.text) {
+      r.executionLive.echo = null;
+      r.executionLive.responseSequence = null;
+      const hasImages = Boolean(r.executionLive.frame && Array.isArray(e.message.content)
+        && e.message.content.some(part => part?.type === 'image'));
+      const fallbackInput = r.executionLive.frame && Number.isSafeInteger(fallbackInputSequence)
+        ? r.timeline.find(block => {
+          const proof = executionWitnesses.get(block);
+          return block.kind === 'user' && proof?.sequence === fallbackInputSequence
+            && proof.inputSequence === fallbackInputSequence && sameExecutionMetadata(proof, frame.execution);
+        }) : null;
+      if (r.pendingEdit && !r.pendingEdit.eventApplied && (bounded.text || hasImages)) {
+        if (applyUserEditInternal(r, r.pendingEdit, bounded.text, null, hasImages || r.pendingEdit.target.hasImages === true)) {
+          witness(r, r.pendingEdit.target, true);
+          r.pendingEdit.eventApplied = true;
+        }
+      } else if (fallbackInput) {
+        // P5-A verified this echo against an already owned user input. Preserve
+        // the original block, keeping the native index for later edits.
+        r.userIndexSeq++;
         resetAssistant(r);
-        appendBlock(r, { kind: 'user', text: bounded.text, truncated: bounded.truncated, userIndex: r.userIndexSeq++ });
+        r.executionLive.input = fallbackInput;
+      } else if (bounded.text || hasImages) {
+        resetAssistant(r);
+        appendBlock(r, { kind: 'user', text: bounded.text, truncated: bounded.truncated,
+          userIndex: r.userIndexSeq++, ...(hasImages ? { hasImages } : {}) });
       }
     }
     if (e.type === 'message_update') {
@@ -567,6 +641,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         setTimelineText(r, block, update.content, MAX_THINKING_TEXT);
       }
     }
+    if (e.type === 'message_end' && e.message?.role === 'user') reconcileExecutionInput(r, e.message);
     if (e.type === 'message_end' && e.message?.role === 'assistant') {
       const message = e.message;
       const state = message.stopReason === 'aborted' ? 'interrupted'
@@ -590,7 +665,9 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       const group = assistantToolGroup(r);
       if (group.tools.length >= MAX_TOOLS_PER_GROUP) group.truncated = true;
       else {
-        group.tools.push({ id: e.toolCallId, name: e.toolName, state: 'running', waiting: false, durationMs: null });
+        const activity = { id: e.toolCallId, name: e.toolName, state: 'running', waiting: false, durationMs: null };
+        witness(r, activity);
+        group.tools.push(activity);
         r.timelineChars += 24;
         trimTimeline(r, group);
       }
@@ -624,10 +701,16 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       if (r.assistant?.thinking?.state === 'streaming') r.assistant.thinking.state = 'interrupted';
       if (e.type === 'agent_settled') { r.settled = true; r.pendingEdit = null; }
     }
+    if (e.type === 'agent_settled') {
+      r.executionLive.input = null;
+      r.executionLive.echo = null;
+      r.executionLive.responseSequence = null;
+    }
+    r.executionLive.frame = null;
     const bounded = bound(r.text); if (bounded !== r.text) { r.text = bounded; r.truncated = true; }
     return { ok: true };
   }
-  function apply(frame) { return applyDetailed(frame).ok; }
+  function apply(frame, execution) { return applyDetailed(frame, execution).ok; }
 
   /* 工具条目也只复制渲染真正需要的字段；args/output/result 等原始载荷
    * 不得随历史 block 进入 store。 */
@@ -712,6 +795,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
      * 历史序号之后，而不是从 0 重来。 */
     r.userIndexSeq = Math.max(r.userIndexSeq, r.timeline.filter(block => block.kind === 'user').length);
     r.pendingEdit = null;
+    r.executionLive = { frame: null, input: null, echo: null, responseSequence: null };
     recomputeTimelineChars(r);
     r.timelineTruncated = truncated === true;
     r.assistant = null;
@@ -742,6 +826,12 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
   }
 
   return { seed, apply, applyDetailed, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
+    /* Appended blocks alone carry accepted live provenance. History copies, stale
+     * branch frames and obsolete generations cannot acquire a Timeline binding. */
+    executionWitness(record, value) {
+      const evidence = executionWitnesses.get(value);
+      return sameExecutionMetadata(evidence, record?.item?.execution) ? evidence : null;
+    },
     /* 标题是显示字段，不参与 owner / revision / eventSequence 判据。
      * 只就地改 item，**不广播** —— 标题更新不应触发整块列表重画。
      * titleRevision 是后端持久化的标题修订号；比当前旧的一律丢弃，

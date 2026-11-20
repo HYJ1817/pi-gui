@@ -5,6 +5,7 @@ import { fetchProjectConfig, sendCommand } from './api.js';
 import { toast } from './ui/toast.js';
 import { updateSendState } from './composer.js';
 import { modelIdentity } from './model-capabilities.js';
+import { refreshClassicExecutionView } from './classic-execution-view.js';
 import { normalizeFallbackConfig, sameModel, safeFallbackFailure, safeFallbackTransition, nextFallbackCandidate, createFallbackRuntime } from './model-fallback.js';
 let active=null,epoch=0,sequence=0,switchModel=null;
 const requestPrefix='composer-generation-'+Math.random().toString(36).slice(2)+'-';
@@ -13,7 +14,13 @@ function identity(){return {workspace:S.workspaceGeneration,cwd:S.cwd,session:se
 function owns(s){const i=identity();return active===s && s.epoch===epoch && !S.switching && S.bridgeState==='ready'
   && Object.keys(i).every(k=>i[k]===s.identity[k]);}
 export function setFallbackModelSwitcher(fn){switchModel=fn;}
-function publish(s){S.fallbackRuntime=s.runtime.snapshot();S.fallbackActive=S.fallbackRuntime.active;renderFallbackStatus();updateSendState();}
+function publish(s){
+  S.fallbackRuntime=s.runtime.snapshot();
+  S.fallbackActive=S.fallbackRuntime.active;
+  renderFallbackStatus();
+  updateSendState();
+  refreshClassicExecutionView();
+}
 function finish(s,result,{cleanup=false,notice=''}={}) {
   if(active!==s)return;
   if(cleanup && owns(s))s.cleanup();

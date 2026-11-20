@@ -1,4 +1,4 @@
-import { createIcon, iconMarkup } from './ui/icons.js';
+import { iconMarkup } from './ui/icons.js';
 /* 对话渲染。
  *
  * 这里处理 pi 事件流里最麻烦的两条约定（见 pi docs/rpc.md）：
@@ -22,14 +22,14 @@ import { createIcon, iconMarkup } from './ui/icons.js';
 
 import { el, S } from './state.js';
 import { resetThroughput } from './turn-throughput.js';
-import { registerConversationAnchor, rebuildConversationNav, clearConversationNav } from './conversation-nav.js';
+import { registerConversationAnchor, registerConversationAnchorAlias, clearConversationAnchorAliases,
+  rebuildConversationNav, clearConversationNav } from './conversation-nav.js';
 import { workspaceView } from './ui/workspace-surface.js';
-import { icon, iconFor } from './util.js';
 import { md } from './markdown.js';
 import { sendCommand } from './api.js';
 import { requestSessionStats } from './session-stats.js';
 import { updateSendState } from './composer.js';
-import { FILE_BLOCK_RE } from './attachments.js';
+import { textOf, userBody } from './ui/user-message-body.js';
 import { clearLiveEntries, hasRunning, settleRunning } from './tool-model.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { planHistory } from './tool-history.js';
@@ -44,6 +44,8 @@ import { confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { messageEditPreflight, messageEditResend, messageEditStatus, messageEditRecover } from './api.js';
 import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
+import { classicNativeThreadChildren, releaseClassicExecutionTail, resetClassicExecutionView,
+  resumeClassicExecutionFallback, settleClassicExecutionView, trackClassicExecutionMessage } from './classic-execution-view.js';
 import {
   saveSessionBookmark,
   restoreSessionBookmark,
@@ -59,6 +61,7 @@ let userIndexSeq = 0;
 /* 一次编辑在提交时捕获的旧尾部节点。只删除这些引用，绝不按“目标之后的
  * 全部节点”删除 —— 新 run 的 assistant/工具节点可能在 HTTP 应答前就挂上来。 */
 let pendingEdit = null;
+let pendingFallbackUserIndex = null;
 /* 点击“编辑/重新生成”时，文章节点对应的**原始用户文本**。事务目标由首次
  * preflight 锁定；这份文本只用于核对 preflight 的 userIndex 没有指到别的
  * 消息上，不参与定位。 */
@@ -178,6 +181,7 @@ export function syncWelcome() {
 
 export function clearThread() {
   resetThroughput();
+  resetClassicExecutionView();
   ++threadGeneration;
   try { closeMessageEditor({ restore: false }); } catch { /* editor may already be detached */ }
   if (streamScrollRaf !== null) cancelAnimationFrame(streamScrollRaf);
@@ -186,6 +190,7 @@ export function clearThread() {
   userSeq = 0;
   userIndexSeq = 0;
   pendingEdit = null;
+  pendingFallbackUserIndex = null;
   assistantSeq = 0;
   outcomeSeq = 0;
   toolGroupCallId = null;
@@ -277,10 +282,11 @@ export function beginTurn() {
     /* 本轮由哪条用户消息触发：重新生成要回到这条消息重跑，而不是 steer
      * 中途追加的那条。agent_start 早于用户的 message_start，所以这里留空，
      * 由本轮第一条用户消息（或编辑事务的目标）填上。 */
-    userIndex: null,
+    userIndex: pendingFallbackUserIndex,
     lastAssistantNode: null,
     finalized: false,
   };
+  pendingFallbackUserIndex = null;
 }
 
 /** 工具行进入本轮统计；gui_plan 等不进入工具时间线的调用不会走到这里。 */
@@ -336,10 +342,15 @@ function finalizeTurn() {
   const t = ensureThread();
   /* 轮次结束后才挂“重新生成”：运行中的回复不应允许把当前 turn 替换掉。 */
   attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
-  if (!outcome) { scrollBottom(); return; }
+  if (!outcome) {
+    settleClassicExecutionView(null);
+    scrollBottom();
+    return;
+  }
   const outcomeNode = renderTurnOutcome(outcome);
   if (outcomeNode) outcomeNode.dataset.anchorId = 'outcome-' + (++outcomeSeq);
   t.appendChild(outcomeNode);
+  settleClassicExecutionView(outcomeNode);
   scrollBottom();
 }
 
@@ -499,104 +510,6 @@ function syncMessageChildren(body, nodes) {
   }
 }
 
-function fileBlockCard(name, meta, content) {
-  const d = document.createElement('div');
-  d.className = 'msg-file';
-
-  const head = document.createElement('button');
-  head.className = 'msg-file-head';
-  head.type = 'button';
-  head.appendChild(icon(iconFor(name)));
-
-  const n = document.createElement('span');
-  n.textContent = name;
-  head.appendChild(n);
-
-  const mt = document.createElement('span');
-  mt.className = 'msg-file-meta';
-  mt.textContent = meta || '';
-  head.appendChild(mt);
-
-  const chev = document.createElement('span');
-  chev.className = 'mf-chev';
-  chev.appendChild(createIcon('chevronRight'));
-  head.appendChild(chev);
-
-  const inner = document.createElement('div');
-  inner.className = 'msg-file-body';
-  inner.id = 'file-detail-' + ++disclosureId;
-  inner.hidden = true;
-  inner.textContent = content;
-
-  head.setAttribute('aria-controls', inner.id);
-  head.setAttribute('aria-expanded', 'false');
-  head.onclick = () => {
-    const open = inner.hidden;
-    d.classList.toggle('open', open);
-    setDisclosure(head, inner, open);
-  };
-  d.append(head, inner);
-  return d;
-}
-
-/* 图片附件的缩略图行。数据取自消息 content 里的 image 部分，
- * 所以刷新页面后从历史重建也能还原，不依赖内存里的 S.attachments。 */
-function attChips(imgs) {
-  const row = document.createElement('div');
-  row.className = 'msg-att-chips';
-  for (const c of imgs) {
-    const chip = document.createElement('div');
-    chip.className = 'msg-att-chip';
-    chip.title = '图片附件';
-    const img = document.createElement('img');
-    img.src = `data:${c.mimeType || 'image/png'};base64,${c.data}`;
-    img.alt = '图片附件';
-    chip.appendChild(img);
-    row.appendChild(chip);
-  }
-  return row;
-}
-
-/* 用户消息体：把附件正文切成折叠卡片，否则一份长 PDF 会把对话整个铺满。
- * 实时渲染和历史重建共用，避免刷新后裸标签直接暴露出来。 */
-export function userBody(msg) {
-  const body = document.createElement('div');
-  body.className = 'msg-body';
-
-  const raw = textOf(msg) || '(空消息)';
-
-  const imgs = Array.isArray(msg?.content) ? msg.content.filter((c) => c?.type === 'image' && c.data) : [];
-  if (imgs.length) body.appendChild(attChips(imgs));
-
-  FILE_BLOCK_RE.lastIndex = 0;
-  let last = 0;
-  let m;
-  const pushText = (s) => {
-    const v = s.trim();
-    if (!v) return;
-    const seg = document.createElement('div');
-    seg.innerHTML = md(v);
-    body.appendChild(seg);
-  };
-
-  while ((m = FILE_BLOCK_RE.exec(raw))) {
-    pushText(raw.slice(last, m.index));
-    body.appendChild(fileBlockCard(m[1], m[2], m[3]));
-    last = m.index + m[0].length;
-  }
-  pushText(raw.slice(last));
-
-  if (!body.childNodes.length) body.textContent = raw;
-  return body;
-}
-
-export function textOf(msg) {
-  const c = msg?.content;
-  if (typeof c === 'string') return c;
-  if (Array.isArray(c)) return c.filter((x) => x.type === 'text').map((x) => x.text).join('\n');
-  return '';
-}
-
 /* resultText 搬去了 tool-model.js —— 它是「工具返回值长什么样」的协议知识，
  * 时间线（实时 + 历史）和消息渲染都要用，放在数据模型那一层更合适。 */
 
@@ -625,6 +538,14 @@ function updateClassicUserArticle(article, text, images, userIndex) {
 
 function trimClassicTail(pending) {
   if (!pending) return;
+  if (!pending.tailTrimmed) {
+    // Accepted replacement starts a new native tail. Subsequent HTTP/echo
+    // acknowledgments must not rewind the cursor again.
+    pending.tailTrimmed = true;
+    userIndexSeq = pending.userIndex + 1;
+    clearConversationAnchorAliases(pending.article);
+  }
+  releaseClassicExecutionTail(pending.article, pending.oldTail);
   for (const node of pending.oldTail) {
     if (node?.isConnected) node.remove();
   }
@@ -777,7 +698,7 @@ async function regenerateClassicTurn(button, userIndex) {
       });
       if (confirmed !== true) return;
     }
-    const children = S.thread ? [...S.thread.children] : [];
+    const children = classicNativeThreadChildren(S.thread);
     const at = children.indexOf(article);
     const pending = {
       article,
@@ -861,7 +782,7 @@ function openClassicEditor(article, msg, userIndex) {
     },
     preflight: ({ userIndex: index, kind }) => messageEditPreflight({ userIndex: index, kind }),
     resend: async payload => {
-      const children = S.thread ? [...S.thread.children] : [];
+      const children = classicNativeThreadChildren(S.thread);
       const at = children.indexOf(article);
       const pending = {
         article,
@@ -941,6 +862,7 @@ function renderUser(msg, { userIndex = null } = {}) {
   registerConversationAnchor(wrap);
   moveWorkingToEnd();
   scrollBottom(true);
+  return wrap;
 }
 
 function createAssistant() {
@@ -977,7 +899,21 @@ export function onMessageStart(evt) {
       applyClassicEditEvent(msg);
       return;
     }
-    return renderUser(msg);
+    const retryInput = resumeClassicExecutionFallback(evt);
+    if (retryInput) {
+      // Pi persists the fallback prompt in the native path. Keep the original
+      // task's edit target and reserve the echo's native position for search.
+      registerConversationAnchorAlias(retryInput, userIndexSeq++);
+      const index = Number(retryInput.dataset.userIndex);
+      if (Number.isInteger(index)) {
+        if (liveTurn && !liveTurn.finalized) noteTurnUserIndex(index);
+        else pendingFallbackUserIndex = index;
+      }
+      return;
+    }
+    const node = renderUser(msg);
+    trackClassicExecutionMessage(node, evt);
+    return;
   }
   if (msg.role !== 'assistant') return;
 
@@ -986,7 +922,7 @@ export function onMessageStart(evt) {
    * 这是**真实边界**：消息本身就是边界。 */
   S.tlGroup = null;
   toolGroupCallId = null;
-  createAssistant();
+  trackClassicExecutionMessage(createAssistant().wrap, evt);
 }
 
 /* ---------- 流式块组装 ---------- */
