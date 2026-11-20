@@ -172,6 +172,7 @@ async function main() {
     },
     piActivity: { noteCommandAccepted: (command) => activityAccepted.push(command) },
     primaryToolGuard: { resume() {} },
+    observeClassicSubmission() {},
     createSessionExport: () => null, runtime: { getCurrentCwd: () => os.tmpdir() }, piLaunch: { packageDir: () => null },
   };
   for (const name of ['providers', 'projects', 'projectConfig', 'skills', 'mcp', 'mcpNative', 'mcpManager',

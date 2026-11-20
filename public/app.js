@@ -26,6 +26,8 @@ import { recoveryForFailure } from './error-recovery.js';
 import { sendCommand, runtimeSessionAction, setRequestFailureReporter, switchSession, fetchRuntimeSessions, messageEditStatus, messageEditRecover } from './api.js';
 import { installRendererLogging, logRendererEvent } from './log-client.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
+import { acknowledgeRuntimeExecutionReplay, markClassicExecutionDisconnected, observeClassicExecution,
+  retireClassicExecution, runtimeExecutionCursor } from './execution-timeline-state.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
 import { observeMemoryEvent } from './memory.js';
@@ -423,6 +425,7 @@ let sseWasDown = false;
 let sseDownAt = 0;
 const recoverRuntimes = createRuntimeRecovery({ readSnapshot: fetchRuntimeSessions, read: runtimeSessionAction,
   seed: seedRuntimeSnapshot, store: runtimeStore, observe: observeRuntimeFrame, changed: refreshRuntimeViews,
+  executionCursor: runtimeExecutionCursor, executionReplay: acknowledgeRuntimeExecutionReplay,
   failed: () => logRendererEvent('ui.action_failed', { action: 'runtime_resync', reason: 'read_failed' }) });
 function connect() {
   const es = new EventSource('/api/events');
@@ -439,6 +442,7 @@ function connect() {
     if (!sseWasDown) {
       sseWasDown = true;
       sseDownAt = Date.now();
+      try { markClassicExecutionDisconnected(); } catch { /* observation only */ }
       logRendererEvent('network.sse_disconnect', { reason: 'error' });
     }
   };
@@ -560,6 +564,9 @@ function handleEvent(evt) {
     if (S.legacyOwner?.sessionId && S.legacyOwner.sessionId !== previousSession) {
       void resumeClassicPendingEdit();
     }
+  }
+  if (!S.switching && evt.legacyOwner?.runtimeId === S.bridgeInstance) {
+    try { observeClassicExecution(evt); } catch { /* observation only */ }
   }
   if (!evt._replay && ['agent_start','tool_execution_start','tool_execution_end','agent_settled'].includes(evt.type))
     document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-changed', {detail:{
@@ -801,6 +808,9 @@ export function reconcileBridgeSnapshot(snapshot) {
   if (Number.isInteger(evt.bridgeRevision) && Number.isInteger(S.bridgeRevision) && evt.bridgeRevision < S.bridgeRevision) return;
   if (!S.hasProject && S.desiredCwd === null && evt.cwd) return;
   if (S.switching && evt.cwd && !samePath(evt.cwd, S.desiredCwd)) return;
+  if (evt.state !== 'ready' || evt.bridgeInstance && evt.bridgeInstance !== S.bridgeInstance || evt.bridgeRun !== S.bridgeRun) {
+    try { retireClassicExecution(); } catch { /* observation only */ }
+  }
   if (Number.isInteger(evt.bridgeRun)) S.bridgeRun = evt.bridgeRun;
   if (Number.isInteger(evt.bridgeRevision)) S.bridgeRevision = evt.bridgeRevision;
   if (typeof evt.cwd === 'string') S.cwd = evt.cwd;

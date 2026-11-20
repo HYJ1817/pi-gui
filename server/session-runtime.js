@@ -21,11 +21,66 @@ import { isSea } from '../lib/assets.js';
 import { randomUUID } from 'node:crypto';
 import { createSessionToolBridge } from './session-tool-bridge.js';
 import { runtimeSessionWitness } from './provider-config-sync.js';
+import { createExecutionToolProjection, executionSubmission, readExecutionBranch,
+  projectRuntimeEntry, projectRuntimeEntryRead } from './execution-timeline.js';
+import { safeToolName, usageProjection } from '../public/runtime-timeline.js';
+import { safeFallbackFailure } from '../lib/model-fallback.js';
 
 const fail = code => Object.assign(Error(code), { code });
 // This narrow surface projects tool activity. Raw args/result/worker diagnostics
 // stay in Pi; message text is intentional conversation content, not diagnostics.
-export function projectRuntimeEvent(event) {
+const EXECUTION_OBSERVATIONS = new Set(['execution_submission', 'execution_branch', 'execution_stop']);
+const REPORTED_TEXT_PARTS = new Set(['text', 'thinking']);
+const MESSAGE_ROLES = new Set(['assistant', 'user', 'toolResult', 'system', 'custom', 'bashExecution', 'compactionSummary', 'branchSummary']);
+const ID = /^[A-Za-z0-9_.:/#-]{1,160}$/;
+const validWireId = value => typeof value === 'string' && ID.test(value);
+function projectedGenerationResult(result) {
+  if (!validWireId(result?.requestId) || !['success', 'failed', 'unknown'].includes(result.outcome)) return null;
+  return { requestId: result.requestId, outcome: result.outcome, hasVisibleOutput: result.hasVisibleOutput === true,
+    ...(result.outcome === 'failed' ? { failure: safeFallbackFailure(result.failure) } : {}) };
+}
+function projectedMessage(msg) {
+  if (!msg || typeof msg !== 'object' || Array.isArray(msg) || !MESSAGE_ROLES.has(msg.role)) return null;
+  if (msg.role === 'toolResult') {
+    return { role: msg.role, toolCallId: validWireId(msg.toolCallId) ? msg.toolCallId : undefined,
+      toolName: safeToolName(msg.toolName), isError: msg.isError === true, content: [] };
+  }
+  const out = { role: msg.role };
+  if (msg.role !== 'assistant' && msg.role !== 'user') return out;
+  if (typeof msg.content === 'string') out.content = msg.content;
+  if (Array.isArray(msg.content)) out.content = msg.content.map(part => {
+    const type = part?.type;
+    if (type === 'toolCall' && validWireId(part.id)) return { type, id: part.id, name: safeToolName(part.name) };
+    if (REPORTED_TEXT_PARTS.has(type) && typeof part[type] === 'string') return { type, [type]: part[type] };
+    if (type === 'image' && typeof part.data === 'string' && /^image\/[a-z0-9.+-]{1,40}$/i.test(part.mimeType)) {
+      return { type, data: part.data, mimeType: part.mimeType };
+    }
+    return null; // preserve source content indices for native anchors
+  });
+  /* Consumer model identity and the P3 usage fields remain available. Opaque
+   * provider parameters, thinking signatures and worker-only fields do not. */
+  for (const key of ['api', 'provider', 'model', 'stopReason', 'errorMessage']) {
+    if (typeof msg[key] === 'string') out[key] = msg[key];
+  }
+  if (typeof msg.timestamp === 'number' && Number.isFinite(msg.timestamp)) out.timestamp = msg.timestamp;
+  const usage = usageProjection(msg.usage);
+  if (usage) {
+    const cost = {};
+    for (const key of ['input', 'output', 'cacheRead', 'cacheWrite', 'cacheWrite1h']) {
+      const value = msg.usage?.cost?.[key];
+      if (Number.isFinite(value) && value >= 0) cost[key] = value;
+    }
+    if (Object.hasOwn(usage, 'costTotal')) {
+      cost.total = usage.costTotal;
+      delete usage.costTotal;
+    }
+    if (Object.keys(cost).length) usage.cost = cost;
+    out.usage = usage;
+  }
+  if (validWireId(msg.id)) out.id = msg.id;
+  return out;
+}
+export function projectRuntimeEvent(event, activity = null) {
   if (event?.type === 'response' && event.success === false && ['set_thinking_level', 'cycle_thinking_level'].includes(event.command)) {
     const response = { type: 'response', command: event.command, success: false, error: 'Pi 未能完成思考级别操作；请检查模型配置后重试。' };
     if (typeof event.id === 'string' || typeof event.id === 'number') response.id = event.id;
@@ -35,31 +90,77 @@ export function projectRuntimeEvent(event) {
   if (['bridge_stderr', 'bridge_parse_error'].includes(event?.type)) return { type: event.type, bridgeRun: event.bridgeRun };
   if (event?.type === 'extension_error') return { type: event.type, error: '扩展执行或加载失败', bridgeRun: event.bridgeRun };
   if (event?.type?.startsWith('tool_execution_')) {
-    const out = { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName,
+    const out = { type: event.type, toolCallId: validWireId(event.toolCallId) ? event.toolCallId : undefined,
+      toolName: typeof event.toolName === 'string' ? safeToolName(event.toolName) : undefined,
       isError: event.isError === true, bridgeRun: event.bridgeRun };
-    /* Pi 的 tool_execution_end 带真实 durationMs；只转发非负有限数，
-     * 不补 0，也不从时间戳猜。 */
     if (event.type === 'tool_execution_end' && Number.isFinite(event.durationMs) && event.durationMs >= 0) {
       out.durationMs = Math.min(event.durationMs, 24 * 60 * 60 * 1000);
     }
-    /* 唯一放行的工具 payload：gui_plan 的窄字段投影（见 plan-projection.js）。
-     * 其它工具仍然只有名字与状态，args / result 一律不出后端。 */
+    /* Structured plan fields and P5 tool facts are independent allowlists. */
     const plan = event.type === 'tool_execution_start'
       ? projectPlanArgs(event.toolName, event.args)
       : event.type === 'tool_execution_end' ? projectPlanResult(event.result) : null;
     if (plan) out.plan = plan;
+    if (activity) out.activity = activity;
     return out;
   }
-  function message(m) {
-    if (!m || typeof m !== 'object') return m;
-    if (m.role === 'toolResult') return { role: m.role, toolCallId: m.toolCallId, toolName: m.toolName, isError: m.isError === true, content: [] };
-    return { ...m, content: Array.isArray(m.content) ? m.content.map(c => c?.type === 'toolCall' ? { type: c.type, id: c.id, name: c.name } : c) : m.content };
+  if (['agent_start', 'agent_end', 'agent_settled', 'turn_start', 'turn_end', 'message_start', 'message_update', 'message_end'].includes(event?.type)) {
+    const out = { type: event.type, bridgeRun: event.bridgeRun };
+    if (validWireId(event.generationRequestId)) out.generationRequestId = event.generationRequestId;
+    if (validWireId(event.parentToolCallId)) out.parentToolCallId = event.parentToolCallId;
+    if (event.type === 'agent_settled') {
+      if (typeof event.aborted === 'boolean') out.aborted = event.aborted;
+      const result = projectedGenerationResult(event.generationResult);
+      if (result) out.generationResult = result;
+    }
+    if (typeof event.willRetry === 'boolean') out.willRetry = event.willRetry;
+    if (event.message) out.message = projectedMessage(event.message);
+    if (event.type === 'agent_end' && Array.isArray(event.messages)) out.messages = event.messages.map(projectedMessage);
+    if (event.type === 'turn_end' && Array.isArray(event.toolResults)) out.toolResults = event.toolResults.map(projectedMessage);
+    if (event.type === 'message_update') {
+      const next = event.assistantMessageEvent;
+      if (typeof next?.type === 'string' && /^(?:start|done|error|(?:text|thinking|toolcall)_(?:start|delta|end))$/.test(next.type)) {
+        const update = { type: next.type };
+        if (Number.isSafeInteger(next.contentIndex) && next.contentIndex >= 0) update.contentIndex = next.contentIndex;
+        if (next.type.startsWith('toolcall_')) {
+          if (validWireId(next.id)) update.id = next.id;
+          if (typeof next.toolName === 'string') update.toolName = safeToolName(next.toolName);
+        } else {
+          if (typeof next.delta === 'string') update.delta = next.delta;
+          if (typeof next.content === 'string') update.content = next.content;
+          if (next.partial) update.partial = projectedMessage(next.partial);
+          if (next.error) update.error = projectedMessage(next.error);
+        }
+        out.assistantMessageEvent = update;
+      }
+      const usage = usageProjection(event.usage);
+      if (usage) out.usage = usage;
+    }
+    return out;
+  }
+  if (['compaction_start', 'compaction_end'].includes(event?.type)) {
+    const type = event.type, reason = ['manual', 'threshold', 'overflow'].includes(event.reason) ? event.reason : undefined;
+    return { type, reason, bridgeRun: event.bridgeRun, ...(activity ? { activity } : {}),
+      ...(type === 'compaction_end' ? { aborted: event.aborted === true, willRetry: event.willRetry === true,
+        ...(typeof event.success === 'boolean' ? { success: event.success } : {}),
+        ...(event.errorMessage || event.error ? { errorMessage: '上下文压缩失败' } : {}) } : {}) };
   }
   const out = { ...event };
-  if (out.message) out.message = message(out.message);
-  if (out.assistantMessageEvent?.partial) out.assistantMessageEvent = { ...out.assistantMessageEvent, partial: message(out.assistantMessageEvent.partial) };
-  if (out.assistantMessageEvent?.type?.startsWith('toolcall_')) out.assistantMessageEvent = { type: out.assistantMessageEvent.type, contentIndex: out.assistantMessageEvent.contentIndex };
-  if (Array.isArray(out.data?.messages)) out.data = { ...out.data, messages: out.data.messages.map(message) };
+  /* Older nested envelopes did not pass through the same tool-aware map. */
+  delete out.activity;
+  delete out.detailRef;
+  delete out.execution;
+  if (Object.hasOwn(out, 'generationResult')) {
+    const result = projectedGenerationResult(out.generationResult);
+    if (result) out.generationResult = result;
+    else delete out.generationResult;
+  }
+  if (out.message) out.message = projectedMessage(out.message);
+  if (Array.isArray(out.messages)) out.messages = out.messages.map(projectedMessage);
+  if (Array.isArray(out.toolResults)) out.toolResults = out.toolResults.map(projectedMessage);
+  if (out.type === 'entry_appended') return { type: out.type, bridgeRun: out.bridgeRun, entry: projectRuntimeEntry(out.entry) };
+  if (out.type === 'response' && ['get_entries', 'get_tree'].includes(out.command)) out.data = projectRuntimeEntryRead(out.command, out.data);
+  else if (Array.isArray(out.data?.messages)) out.data = { ...out.data, messages: out.data.messages.map(projectedMessage) };
   return out;
 }
 
@@ -76,6 +177,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   const node = isSea() ? resolveExecutable('node', [], env).command : process.execPath;
   const supervisor = supervisorFactory({ node });
   const activity = createPiActivity(), generation = createModelGeneration(), approvals = new Map();
+  const executionTools = createExecutionToolProjection();
   let rpc, disposed = false, cleanup = false, disposal = null;
   const toolGuard = toolScheduler ? createSessionToolBridge({scheduler:toolScheduler,launch,getCwd:()=>context.cwd,getRoot:()=>context.workspace.root,
     readState:()=>rpc.request({type:'get_state'}),onEvent:emit,audit:candidateAudit}) : null;
@@ -109,7 +211,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     killProcessTree: supervisor.killProcessTree,
     captureProviderLaunch: captureProviderLaunch && (scope => captureProviderLaunch(scope, launch, entry)),
     publish(event) {
-      if (disposed || !context.isCurrent()) return;
+      if (disposed || !context.isCurrent() || EXECUTION_OBSERVATIONS.has(event.type)) return;
       managed.observe(event); changes?.observe(event); activity.observe(event);
       toolGuard?.observe(event);
       /* 编辑事务的接受证据：request 应答不广播，事件是超时后确认归属的补充。 */
@@ -119,8 +221,11 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
         approvals.set(event.id, event.method);
       }
       if (event.type === 'agent_settled' || event.type === 'bridge_status' && event.state !== 'ready') approvals.clear();
-      emit(projectRuntimeEvent(generation.observe(sanitizeModelEvent(projectProcessEvent(event),
-        event.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? readModelsConfig() : null))));
+      // Ownership fields are generated on this side of the child protocol.
+      const projected = projectProcessEvent(event);
+      const { generationRequestId: _request, generationResult: _result, ...native } = projected;
+      emit(projectRuntimeEvent(generation.observe(sanitizeModelEvent(native,
+        event.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? readModelsConfig() : null)), executionTools.observe(event)));
     },
   });
   return {
@@ -129,6 +234,12 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     providerRead: type => rpc.request({ type }, { timeoutMs: 3000, strict: true }),
     providerSession: (state, identity) => runtimeSessionWitness(state, sessions.resolveByUuid, identity),
     start: () => resumeFile ? rpc.restart({ sessionPath: resumeFile }) : rpc.start(),
+    executionBranch: (scope, branchEpoch, detailTarget) => readExecutionBranch({ scope, branchEpoch, detailTarget,
+      readState: () => rpc.request({ type: 'get_state' }, { timeoutMs: 3000, strict: true }),
+      readEntries: () => rpc.request({ type: 'get_entries' }, { timeoutMs: 3000, strict: true }),
+      isCurrent: expected => !disposed && context.isCurrent() && expected.kind === 'runtime' &&
+        Object.entries(expected.owner).every(([key, value]) => context.getOwner?.()?.[key] === value),
+    }),
     getState: rpc.getState, request: async cmd => {
       if (disposed || !context.isCurrent()) throw fail('stale_runtime');
       const result = await rpc.request(cmd);
@@ -158,6 +269,8 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       if (['prompt', 'steer', 'follow_up'].includes(cmd.type)) mutationAdmission?.assertAllowed(context.cwd);
       const { __fallbackOwner, ...wire } = cmd;
       const result = rpc.send(wire); generation.noteCommandAccepted(cmd); activity.noteCommandAccepted(cmd);
+      const submission = executionSubmission(cmd);
+      if (submission) emit({ ...submission, bridgeRun: rpc.getState().bridgeRun });
       if (['prompt','steer','follow_up'].includes(cmd.type)) toolGuard?.resume();
       return result;
     },
@@ -165,7 +278,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     messageEdit,
     messageEditCommand: () => editLaunch.command(),
     messageEditToken: () => editLaunch.token(),
-    async messageEditRequest(cmd) {
+    async messageEditRequest(cmd, executionEdit = null) {
       if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime', unknown: true };
       const { __messageEditNav, ...wire } = cmd || {};
       const nav = __messageEditNav === true;
@@ -183,11 +296,19 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       } catch (error) {
         return { ok: false, code: error?.code || 'edit_unavailable' };
       }
+      // A lost navigation response cannot prove the old leaf is still active.
+      if (nav) {
+        const boundary = { type: 'execution_branch', bridgeRun: rpc.getState().bridgeRun };
+        executionTools.observe(boundary);
+        emit(boundary);
+      }
       const result = await rpc.request(wire);
       if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime', unknown: true };
       if (result === null) return { ok: false, code: 'pi_timeout', unknown: true };
       if (Object.hasOwn(result, '__error')) return { ok: false, code: result.__code || 'pi_request_failed', unknown: false };
       if (!nav && wire?.type === 'prompt' && result.disposition === 'started') {
+        const submission = executionSubmission({ ...wire, id: executionEdit?.requestId }, executionEdit?.targetEntryId);
+        if (submission) emit({ ...submission, bridgeRun: rpc.getState().bridgeRun });
         generation.noteCommandAccepted(wire);
         activity.noteCommandAccepted(wire);
         toolGuard?.resume();
