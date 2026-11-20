@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runtimeWitnessCurrent } from './provider-config-sync.js';
+import { createExecutionDetailIndex } from './execution-timeline.js';
 
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 /* status / recover 允许 bridge 换代后的旧 owner 继续查询：runtimeId /
@@ -27,11 +28,21 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   publish = () => {}, externalCount = () => 0, beforeStart = () => null, beforeCommand = () => null,
   admission = (_args, action) => action(), onFocus = async () => {}, maxEvents = 200, maxBytes = 1024 * 1024,
   logEvent = null, providerLifecycle = () => {}, sharedAdmission = async () => { throw fail('tool_guard_unavailable'); },
-  sessionTitle = null } = {}) {
+  sessionTitle = null, executionValidation = false } = {}) {
   const diagLog = typeof logEvent === 'function' ? logEvent : () => {};
   const safeLog = (event, details = {}) => { try { diagLog(event, details); } catch { /* observation only */ } };
   const backendInstance = randomUUID(), records = new Map(), lives = new Map(), leases = new Map(), revisions = new Map();
   let revision = 0, contextRevision = 0;
+  const details = executionValidation === true ? createExecutionDetailIndex({
+    isCurrent: async (scope, branchEpoch) => {
+      try {
+        const live = resolve(scope.owner);
+        await validateWorkspace(live.record.workspace);
+        return live === resolve(scope.owner) && live.executionBranchEpoch === branchEpoch;
+      } catch { return false; }
+    },
+    readBranch: scope => executionBranch(scope.owner),
+  }) : null;
   fs.mkdirSync(dataDir, { recursive: true });
   const dataRoot = fs.realpathSync(dataDir), manifest = path.join(dataRoot, 'conversations.json');
   const rootIdentity = fs.statSync(dataRoot);
@@ -197,6 +208,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       revision: 0,
     };
   }
+  function executionMetadata(live) {
+    return { startSequence: live.executionStartSequence, observedAt: Date.now(), branchEpoch: live.executionBranchEpoch,
+      ...(live.executionBoundAt === null ? {} : { sessionBound: true, previousSessionId: null, sessionBoundAtSequence: live.executionBoundAt }) };
+  }
   function summary(record) {
     const live = lives.get(record.conversationId);
     const title = titleFor(record);
@@ -214,7 +229,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       owner: live ? owner(live) : null, lifecycle: live?.lifecycle || 'dormant', activity: live?.activity || 'idle',
       attention: live?.attention === true, focused: focused === record.conversationId, historyRequired: live?.historyRequired === true,
       outcome: live?.outcome ? { kind: live.outcome.kind, reason: live.outcome.reason, sequence: live.outcome.sequence } : null,
-      error: live?.error || null, stop: live?.adapter?.getState().stop || null };
+      error: live?.error || null, stop: live?.adapter?.getState().stop || null,
+      ...(live ? { execution: executionMetadata(live) } : {}) };
   }
   function snapshot() { return { ok: !invalid, backendInstance, focusedConversationId: focused, liveCount: lives.size,
     totalCount: lives.size + externalCount(), limit: 2, hardLimit: 3, items: [...records.values()].map(summary) }; }
@@ -222,14 +238,25 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   function changed(live) { if (belongs(live)) { touch(live); publish({ type: 'runtime_state', owner: owner(live), item: summary(live.record) }); } }
   function emit(live, event) {
     if (!belongs(live) || !event || typeof event.type !== 'string') return;
+    let executionBoundary = false;
     if (Number.isInteger(event.bridgeRun)) {
       if (event.bridgeRun < live.bridgeRun) return;
       if (event.bridgeRun > live.bridgeRun) { live.bridgeRun = event.bridgeRun; if (live.everReady) {
+        details?.invalidate({ kind: 'runtime', owner: owner(live) });
         live.generation = randomUUID();
+        live.executionStartSequence = live.sequence;
+        live.executionBoundAt = null;
+        executionBoundary = true;
         live.outcome = null; live.outcomeClaimed = false; live.runObserved = false;
         live.lastAssistantStop = null; live.abortRequested = false;
         settleResources(live);
       } }
+    }
+    if (event.type === 'execution_branch') {
+      live.executionBranchEpoch += 1;
+      live.executionStartSequence = live.sequence;
+      details?.invalidate({ kind: 'runtime', owner: owner(live) });
+      executionBoundary = true;
     }
     if (event.type === 'bridge_status') {
       /* 只有 bridge 在**一次已观察/已提交的运行**中退出，才是「中断」；
@@ -339,12 +366,16 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     // Diagnostic raw lines are never retained in parallel conversation buffers.
     if (event.type === 'bridge_stderr' || event.type === 'bridge_parse_error') { changed(live); return; }
-    const frame = { type: 'runtime_event', owner: owner(live), eventSequence: ++live.sequence, event };
+    const frame = { type: 'runtime_event', owner: owner(live), eventSequence: ++live.sequence, event, execution: executionMetadata(live) };
     const bytes = Buffer.byteLength(JSON.stringify(frame));
     if (bytes <= maxBytes) { live.events.push({ frame, bytes }); live.bytes += bytes; }
     else live.historyRequired = true;
     while (live.events.length > maxEvents || live.bytes > maxBytes) { live.bytes -= live.events.shift().bytes; live.historyRequired = true; }
-    publish(frame); changed(live);
+    // Seed authoritative scope before the first frame of a new generation or
+    // branch, so receivers need not infer a predecessor from a sequence gap.
+    if (executionBoundary) changed(live);
+    publish(frame);
+    if (!executionBoundary) changed(live);
   }
   async function refreshSession(live) {
     const generation = live.generation;
@@ -361,7 +392,12 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       safeLog('runtime.session_switch_failed', { phase: 'binding', code: 'session_in_use' });
       void close(owner(live)).catch(() => {}); return;
     }
+    const firstBinding = live.sessionId === null;
     live.sessionId = state.sessionId;
+    if (firstBinding) {
+      live.executionBoundAt = live.sequence;
+      changed(live);
+    }
     // The factory must prove any path against the scanner/header before persistence.
     const locator = live.adapter.sessionLocator ? await live.adapter.sessionLocator(state) : null;
     if (!belongs(live) || generation !== live.generation) return;
@@ -395,6 +431,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
       providerSessionIdentity: record.sessionIdentity,
+      executionStartSequence: 0, executionBoundAt: null, executionBranchEpoch: 0,
       sequence: 0, events: [], bytes: 0, bridgeRun: 0, everReady: false, attention: false, historyRequired: false, error: null, retired: false, key, resources: new Set(), approvals: new Map(),
       /* P4-E：每轮运行至多一条后台终态；revision 单调递增，作为前端去重/排序的
        * 证据序号。runObserved 标记本轮确实观察到 agent_start 或提交成功。 */
@@ -484,7 +521,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     if (cmd.type === 'abort') {
       const runActive = live.agentActive || live.pendingTurns.size > 0;
-      const seenOutcome = live.outcome;
+      const seenOutcome = live.outcome, priorOutcomeRevision = live.outcomeRevision;
       if (runActive) live.abortRequested = true;
       live.activity = 'stopping'; changed(live);
       let result;
@@ -499,7 +536,13 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
         live.activity = 'idle'; live.agentActive = false; live.pendingTurns.clear(); live.approvals.clear();
         /* 有些 adapter 的 abort 不保证补发 agent_settled；成功停下且此前确有
          * 运行，就由命令结果收口。若期间已收到真实终态，不覆盖它。 */
+        const noTerminal = live.outcomeRevision === priorOutcomeRevision && !live.outcomeClaimed;
         if (runActive && live.outcome === seenOutcome) recordOutcome(live, 'interrupted', 'user_cancelled');
+        // Focused conversations have no persisted sidebar outcome. Publish
+        // confirmed Stop evidence for the shadow reducer, not another state change.
+        if (runActive && noTerminal) {
+          emit(live, { type: 'execution_stop', bridgeRun: live.bridgeRun });
+        }
       }
       /* Stop 无论是否确认成功，都不再把这次请求留成后续终态的取消证据：
        * 失败时运行可能仍在继续，成功时终态已由上面的命令结果收口。
@@ -544,6 +587,34 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     return result;
   }
+  /** Backend-owned verification call. No Runtime action exposes this witness
+   * or the validation-only detail reader. Never use the public get_entries. */
+  async function executionBranch(expected, detailTarget = null) {
+    try {
+      const live = resolve(expected), branchEpoch = live.executionBranchEpoch;
+      if (!live.sessionId || live.lifecycle !== 'ready' || typeof live.adapter.executionBranch !== 'function') return null;
+      await validateWorkspace(live.record.workspace);
+      resolve(expected);
+      const branch = await live.adapter.executionBranch({ kind: 'runtime', owner: owner(live) }, branchEpoch, detailTarget);
+      await validateWorkspace(live.record.workspace);
+      return resolve(expected) === live && live.executionBranchEpoch === branchEpoch ? branch : null;
+    } catch { return null; }
+  }
+  async function captureExecutionDetail(expected, evidence) {
+    if (!details) return null;
+    const { responseEntryId, resultEntryId, callId } = evidence || {};
+    const target = { responseEntryId, resultEntryId, callId };
+    const branch = await executionBranch(expected, target);
+    if (!branch) return null;
+    try {
+      if (resolve(expected).executionBranchEpoch !== branch.branchEpoch) return null;
+      return details.capture({ ...target, branch, scope: { kind: 'runtime', owner: expected } });
+    } catch { return null; }
+  }
+  function readExecutionDetail(expected, ref, callId) {
+    return details?.read({ scope: { kind: 'runtime', owner: expected }, ref, callId })
+      || Promise.resolve({ ok: false, code: 'execution_detail_unavailable' });
+  }
   function events(expected, cursor = 0) {
     const live = resolve(expected);
     if (!Number.isSafeInteger(cursor) || cursor < 0) {
@@ -565,7 +636,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
    * bridge 非 ready 清除。不能等 response 回来再置位：极快的失败 run 可能在
    * 异步回调之前就 settled，迟到的置位会留下永久的忙锁。
    */
-  function editIo(live, expected, requestId) {
+  function editIo(live, expected, requestId, targetEntryId = null) {
     return {
       scope: 'runtime',
       sessionId: live.sessionId,
@@ -573,7 +644,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       commandName: () => live.adapter?.messageEditCommand?.() || null,
       editToken: () => live.adapter?.messageEditToken?.() || null,
       getBridgeRun: () => live.bridgeRun,
-      request: cmd => live.adapter.messageEditRequest(cmd),
+      request: cmd => live.adapter.messageEditRequest(cmd, { requestId, targetEntryId }),
       validate: () => {
         const current = resolve(expected);
         if (current !== live || live.lifecycle !== 'ready' || live.sessionId !== expected.sessionId) throw fail('stale_runtime');
@@ -659,7 +730,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     let accepted = false;
     let result = null;
     try {
-      result = await live.adapter.messageEdit.resend(editIo(live, expected, requestId), { ...input, requestId });
+      result = await live.adapter.messageEdit.resend(editIo(live, expected, requestId, input?.expectedEntryId), { ...input, requestId });
       accepted = result?.ok === true;
       return result;
     } finally {
@@ -732,7 +803,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   function retire(live) {
     if (live.retirePromise) return live.retirePromise;
     live.closedOwner ||= owner(live);
-    if (!live.retired) { live.retired = true; live.generation = randomUUID(); }
+    if (!live.retired) {
+      details?.invalidate({ kind: 'runtime', owner: owner(live) });
+      live.retired = true; live.generation = randomUUID();
+    }
     live.lifecycle = 'disposing';
     live.retirePromise = (async () => {
       // Invalidation can arrive while the factory is still acquiring resources.
@@ -800,7 +874,8 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       };
     });
   }
-  return { start, openProjectSession, resume, close, restart, command, read, focus, blur, events, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
+  return { start, openProjectSession, resume, close, restart, command, read, focus, blur, events, executionBranch,
+    captureExecutionDetail, readExecutionDetail, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
     editPreflight, editResend, editStatus, editRecover,
     providerSyncTargets,
     ownsNativeSession: id => Boolean(id) && [...lives.values()].some(l => l.sessionId === id || l.record.sessionId === id),

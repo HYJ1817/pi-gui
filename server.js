@@ -97,6 +97,7 @@ import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createRuntimeRegistry } from './server/runtime-registry.js';
+import { createExecutionToolProjection, executionSubmission } from './server/execution-timeline.js';
 import { createRuntimeRoutes } from './server/runtime-routes.js';
 import { createSessionRuntime } from './server/session-runtime.js';
 import { createCandidateRuns } from './server/candidate-runs.js';
@@ -433,13 +434,43 @@ const piActivity = createPiActivity();
 const modelGeneration = createModelGeneration();
 let primaryNativeSession = null;
 let primarySessionWitnessEpoch = null;
+let classicExecutionEpoch = 0;
+let classicExecutionWitness = null;
+let classicExecutionTools = createExecutionToolProjection();
+
+function publishClassicExecution(event) {
+  const legacyOwner = primaryOwner();
+  const nativeEpoch = rpc.providerSessionEpoch();
+  const previous = classicExecutionWitness;
+  if (previous && (previous.nativeEpoch !== nativeEpoch || previous.bridgeRun !== legacyOwner.runtimeGeneration)) {
+    classicExecutionEpoch++;
+    classicExecutionWitness = null;
+    classicExecutionTools = createExecutionToolProjection();
+  }
+  const sessionId = primarySessionWitnessEpoch === nativeEpoch ? legacyOwner.sessionId : null;
+  const sessionBound = classicExecutionWitness?.sessionId === null && Boolean(sessionId);
+  classicExecutionWitness = { nativeEpoch, bridgeRun: legacyOwner.runtimeGeneration, sessionId };
+  let activity = null;
+  try { activity = classicExecutionTools.observe(event); } catch { /* observation only */ }
+  sse.publish({ ...event, activity: activity || undefined, detailRef: undefined,
+    legacyOwner, executionClassic: { branchEpoch: classicExecutionEpoch, sessionId,
+    observedAt: Date.now(), ...(sessionBound ? { sessionBound: true } : {}) } });
+}
+
+function observeClassicSubmission(command, edit = null) {
+  try {
+    const id = edit?.requestId || (typeof command.id === 'string' ? command.id : randomUUID());
+    const event = executionSubmission({ ...command, id }, edit?.targetEntryId);
+    if (event) publishClassicExecution({ ...event, bridgeRun: rpc.getState().bridgeRun });
+  } catch { /* observation only */ }
+}
 let cliInFlight = 0;
 const processManagers = new Set();
 const mutationAdmission = createSessionRevertAdmission();
 const toolScheduler = createSessionToolScheduler({admission:mutationAdmission});
 const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch:piLaunch,getCwd:()=>runtime.getCurrentCwd(),
   getRoot:()=>toolWorkspaceRoot(runtime.getCurrentCwd()),readState:()=>rpc.request({type:'get_state'}),
-  onEvent:event=>sse.publish({...event,legacyOwner:primaryOwner()})});
+  onEvent:publishClassicExecution});
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
 const planBridge = createPlanBridge();
@@ -494,7 +525,7 @@ function observeForStructuredLog(event) {
  * 必须在 rpc 之前创建：bridge 的 publish 要用它收集 prompt 接受证据，而
  * `get_state` / `get_entries` 这类 request 应答不会广播给 Renderer。 */
 const messageEditService = createMessageEditService({
-  publish: event => sse.publish(event),
+  publish: event => publishClassicExecution({ ...event, bridgeRun: rpc.getState().bridgeRun }),
   logEvent: (event, details) => logging.log('message-edit', event, details),
 });
 
@@ -539,13 +570,16 @@ const rpc = createRpcBridge({
     providerAuthRef?.observeRuntime(event);
     if (event.type === 'bridge_status' || event.type === 'agent_settled' ||
         event.type === 'response' && ['get_state','new_session','switch_session','fork'].includes(event.command)) providerConfigSync.observe();
+    // Only the generation coordinator may author these fields.
+    const { generationRequestId: _requestId, generationResult: _result, ...observed } = event;
     const projected = modelGeneration.observe(event?.type === 'extension_error'
-      ? { ...event, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
-      : sanitizeModelEvent(event, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null));
+      ? { ...observed, error: '扩展执行或加载错误；详情请查看本机 Pi 日志。' }
+      : sanitizeModelEvent(observed, event?.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? providers.readModelsConfig() : null));
     /* 自动标题只消费 model-generation 已归一化的终态；失败/中断/空回复
      * 不会提交任务。这里不等待模型调用，也不改变任何 SSE 帧。 */
     try { sessionTitlesRef?.observeClassic(projected); } catch { /* observation only */ }
-    sse.publish({ ...projected, legacyOwner: primaryOwner() });
+    // This event is minted only after the GUI's own command admission succeeds.
+    if (projected.type !== 'execution_submission') publishClassicExecution(projected);
   },
   piBin: PI_BIN,
   launch: piLaunch,
@@ -1537,11 +1571,13 @@ const messageEditRoutes = createMessageEditRoutes({
     if (runtime.getCurrentCwd()) mutationAdmission.assertAllowed(runtime.getCurrentCwd());
     modelGeneration.guardCommand(cmd);
   },
-  afterPrompt: cmd => {
+  afterPrompt: (cmd, edit) => {
     modelGeneration.noteCommandAccepted(cmd);
     piActivity.noteCommandAccepted(cmd);
+    observeClassicSubmission(cmd, edit);
     primaryToolGuard.resume();
   },
+  beforeNavigation: () => { classicExecutionEpoch++; classicExecutionTools = createExecutionToolProjection(); },
 });
 const route = createRouter({
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
@@ -1626,6 +1662,7 @@ const route = createRouter({
       const result = rpc.send(wire);
       modelGeneration.noteCommandAccepted(cmd);
       piActivity.noteCommandAccepted(cmd);
+      observeClassicSubmission(cmd);
       if (['prompt','steer','follow_up'].includes(cmd.type)) primaryToolGuard.resume();
       return result;
     },

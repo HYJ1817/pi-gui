@@ -1,15 +1,18 @@
 /* Reconnect/reload only reads captured owners. Replayed approvals are reconciled
  * against backend pending state; no response, Stop, resume or prompt is sent. */
-export function createRuntimeRecovery({ readSnapshot, read, seed, store, observe, changed = () => {}, failed = () => {} }) {
+export function createRuntimeRecovery({ readSnapshot, read, seed, store, observe, executionCursor = () => null,
+  executionReplay = () => {}, changed = () => {}, failed = () => {} }) {
   let pending = null;
   const same = (a, b) => a && b && Object.keys(a).every(key => a[key] === b[key]) && Object.keys(b).every(key => a[key] === b[key]);
   async function restore(record) {
     const fresh = record.cursor === 0;
     const owner = { ...record.owner }, id = owner.conversationId;
-    const result = await read({ action: 'events', owner, cursor: record.cursor });
+    const p5Cursor = executionCursor(owner);
+    const result = await read({ action: 'events', owner, cursor: p5Cursor === null ? record.cursor : Math.min(record.cursor, p5Cursor) });
     if (!result?.ok || !same(store.get(id)?.owner, owner) || !same(result.owner, owner)) return;
     for (const frame of result.events || []) observe(frame);
     if (!same(store.get(id)?.owner, owner)) return;
+    try { executionReplay(result); } catch { /* observation only */ }
     store.reconcileApprovals(owner, result.approvals, result.cursor);
     // If the bounded event ring missed body chunks, use Pi's native messages.
     // Cursor equality refuses a history response overtaken by newer streaming.
