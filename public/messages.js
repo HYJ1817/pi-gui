@@ -1643,7 +1643,7 @@ function finishHistoryRender(t, sessionId, generation, { userScrolled = false } 
 
 /** 历史分块构建并挂载。
  *
- * 每批只渲染约 HISTORY_CHUNK_NODES 个顶层节点就挂上去并让出主线程：
+ * 每批按顶层节点预算挂载后让出主线程：
  *  - 首屏只需一小段同步工作就能看到内容；
  *  - 构建与布局成本被拆到多个任务，避免一次 >100ms 的长任务；
  *  - `clearThread` 或下一次重建递增 threadGeneration 后，旧任务在下一批前退出，
@@ -1704,7 +1704,10 @@ function mountHistoryInChunks(t, items, sessionId, generation, { frag, renderIte
     try {
       let chunkSize = HISTORY_CHUNK_NODES;
       while (index < items.length && current() && !completed) {
-        while (index < items.length && frag.childNodes.length < chunkSize && current() && !completed) {
+        // Large histories share the first task with indexing. Yield sooner;
+        // subsequent batches keep the existing cadence and upper bound.
+        const budget = index === 0 && items.length > HISTORY_CHUNK_MAX_NODES ? chunkSize / 2 : chunkSize;
+        while (index < items.length && frag.childNodes.length < budget && current() && !completed) {
           renderItem(items[index], index);
           index += 1;
         }
