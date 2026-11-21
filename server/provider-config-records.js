@@ -58,6 +58,7 @@ function checkNewId(providerId, credential) {
 
 export function applyLegacyProvider(snapshot, providerId, next, credential) {
   const previous = own(snapshot.config.providers, providerId);
+  if (next.baseUrl.startsWith('http:') && next.apiKey && next.apiKey !== previous?.apiKey) providerFailure('credential_target_conflict');
   if (previous !== undefined && !isRecord(previous)) providerFailure('config_invalid');
   if (previous) guardExistingTarget(providerId, previous, next, credential);
   else {
@@ -168,6 +169,11 @@ export function applyProviderCommit(snapshot, request, draft, credential) {
   const id = draft?.providerId ?? request.serviceId;
   const previous = own(config.providers, id);
   const previousMeta = own(metadata.services, id);
+  // A compatibility grant for a credential-free HTTP directory is not an
+  // authorization to publish an env key for Pi's later inference requests.
+  if (draft?.connection?.baseUrl.startsWith('http:') && (request.credentialAction?.type === 'env' || draft.piRegistrationReference)) {
+    providerFailure('credential_target_conflict');
+  }
   const exists = previous !== undefined || previousMeta !== undefined;
   const builtin = isBuiltinProvider(id, credential) || previousMeta?.kind === 'builtin';
   if (request.action === 'delete') {

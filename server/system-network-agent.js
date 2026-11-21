@@ -15,12 +15,30 @@ let backendProxy;
 
 // Consume the bootstrap secret before the backend constructs any spawn owner.
 // Configure this process's transport, not the environment inherited by tools.
-export function startSystemNetwork(env = process.env) {
+export function startSystemNetwork(env = process.env, { onEndpointPolicyChange = () => {} } = {}) {
   const proxy = env[PRIVATE_PROXY_KEY];
   const desktop = env.PI_GUI_DESKTOP === '1';
   const relaxed = desktop && env.PI_GUI_NETWORK_RELAXED === '1';
   for (const key of Object.keys(env)) if (isPrivateProxyEnvironment(key, env[key])) delete env[key];
   if (desktop) delete env.PI_GUI_NETWORK_RELAXED;
+  const state = { desktop, relaxed, endpointGeneration: 0, controlPorts: privateProxy(proxy) ? [+privateProxy(proxy).port] : [] };
+  if (desktop && process.send && process.connected) process.on('message', message => {
+    // Only the directly attached Main process owns this private IPC. Routing
+    // stays frozen; this updates only eligibility for extra endpoint grants.
+    if (message?.type !== 'system-endpoint-policy' || typeof message.relaxed !== 'boolean'
+      || typeof message.requestId !== 'string' || !/^[a-f0-9-]{36}$/u.test(message.requestId)) return;
+    let ok = true;
+    const disabling = state.relaxed && !message.relaxed;
+    if (disabling) state.endpointGeneration++;
+    state.relaxed = message.relaxed;
+    if (!state.relaxed) {
+      // Revocation is idempotent. A retried disable must finish it before ACK,
+      // even when the earlier attempt already flipped the eligibility bit.
+      try { onEndpointPolicyChange(); } catch { ok = false; }
+    }
+    try { process.send({ type: 'system-endpoint-policy-ack', requestId: message.requestId, ok,
+      relaxed: state.relaxed, endpointGeneration: state.endpointGeneration }, () => {}); } catch { /* Parent exited. */ }
+  });
   if (proxy && desktop) {
     if (!process.send || !process.connected || !privateProxy(proxy) || typeof http.setGlobalProxyFromEnv !== 'function') {
       throw Error('network_transport_unsupported');
@@ -28,7 +46,7 @@ export function startSystemNetwork(env = process.env) {
     http.setGlobalProxyFromEnv({ HTTP_PROXY: proxy, HTTPS_PROXY: proxy, NO_PROXY: LOOPBACK.join(',') });
     backendProxy = proxy;
   }
-  return { desktop, relaxed };
+  return state;
 }
 export function hasSystemProxyCapability(env) { return privateProxy(env?.[PRIVATE_PROXY_KEY]) !== null; }
 export function systemWorkerProxy(env) {

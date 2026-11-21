@@ -152,7 +152,10 @@ import { createSystemStorage } from './server/system-storage.js';
 import { startSystemNetwork } from './server/system-network-agent.js';
 import systemNetworkPolicy from './lib/system-network-policy.cjs';
 
-const systemNetworkStartup = startSystemNetwork();
+let providerDiscoveryConsents = null;
+const systemNetworkStartup = startSystemNetwork(process.env, {
+  onEndpointPolicyChange: () => providerDiscoveryConsents?.revokeLocalEndpoints(),
+});
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 7788);
 const PI_BIN = process.env.PI_BIN || 'pi';
@@ -664,7 +667,11 @@ function captureProviderLaunch({ cwd, agentDir, args }, launch, entry) {
   if (path.relative(path.dirname(MODELS_JSON), agent)) return null;
   return providerConfigSync.capture({ identity: launch.identityKey(), version: entry.version, agent });
 }
-const providerDiscoveryConsents = createDiscoveryConsentStore({ strict: true, identityKey: piLaunch.identityKey });
+const endpointNetworkPolicy = () => ({ relaxed: systemNetworkStartup?.relaxed === true,
+  generation: systemNetworkStartup?.endpointGeneration,
+  controlPorts: [PORT, ...(systemNetworkStartup?.controlPorts || [])] });
+providerDiscoveryConsents = createDiscoveryConsentStore({ strict: true, identityKey: piLaunch.identityKey,
+  networkPolicy: endpointNetworkPolicy });
 const storedDiscoveryTarget = draft => {
   if (!draft || draft.authMode !== 'pi-credential') return false;
   try {
@@ -855,6 +862,7 @@ const mcpConfigStore = createMcpConfigStore({
   runtime,
   env: process.env,
   readTrust: async () => (await skills.readIndex()).trust,
+  networkPolicy: endpointNetworkPolicy,
 });
 /* 只有 Electron 直属子进程才有这条 IPC 通道；网页版 / SEA 独立运行时为 null，
  * 市场网络层会据此退回「没有可信代理栈」的 fail-closed 行为。 */

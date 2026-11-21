@@ -54,11 +54,15 @@ export function createSystemNetworkCard({ desktop, call, current }) {
     custom.hidden = draft.mode !== 'custom';
     address.value = draft.proxy; bypass.value = draft.bypass;
     address.disabled = bypass.disabled = !available || saving || draft.mode !== 'custom';
-    save.disabled = !available || saving || testing || !dirty;
+    const retryPermission = snapshot?.endpointPermissions === 'unconfirmed';
+    save.disabled = !available || saving || testing || (!dirty && !retryPermission);
     test.disabled = !available || saving || testing;
     save.textContent = saving ? '正在保存…' : '保存网络设置'; test.textContent = testing ? '正在测试…' : '测试连接';
     const mode = { system: '系统代理', direct: '应用直连', custom: '自定义代理' }[snapshot?.settings?.mode];
-    effective.textContent = mode ? `当前已保存：${mode}。${snapshot.restartRequired ? '部分网络设置将在重启后生效。' : ''}` : '';
+    const label = value => ({ system: '系统代理', direct: '应用直连', custom: '自定义代理' }[value] || '未确认');
+    effective.textContent = mode ? `已保存：${mode}；Chromium：${label(snapshot.effective?.electron?.mode || snapshot.settings.mode)}；`
+      + `Node 启动时：${label(snapshot.effective?.backendStartup?.mode)}。${snapshot.effective?.pi?.note || 'Pi 实际线路尚未确认。'}`
+      + (snapshot.restartRequired ? ' 后端/新 Pi 的代理变更在正常重启后生效；不会中断当前 Agent。' : '') : '';
   }
   async function saveDraft() {
     if (save.disabled) return;
@@ -88,7 +92,7 @@ export function createSystemNetworkCard({ desktop, call, current }) {
       detail: '仅调整应用网络策略，不修改系统代理、VPN、TUN 或路由；已运行的 Agent 保持原网络环境。' }),
     custom,
     createSettingsRow({ label: '网络宽松模式', control: relaxed,
-      detail: '独立于代理模式。仅在可证明的代理线路上兼容 Fake-IP；不会关闭 TLS，也不会授权任意内网、回环或重定向访问。' }),
+      detail: '兼容可证明代理线路的 Fake-IP，并允许在供应商或 MCP 配置中单独授权无凭据的本地端点。不会自动授权内网、明文密钥或重定向，也不会关闭 TLS；Pi 原生请求仍由其客户端管理。' }),
     effective, actions, feedback,
   ] });
   paint();

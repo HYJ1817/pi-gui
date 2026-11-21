@@ -2,12 +2,14 @@
 
 const path = require('node:path');
 const os = require('node:os');
-const { absolute, overlaps, samePath, fail, parseJson, object } = require('./system-storage-fs.cjs');
+const { pathToFileURL } = require('node:url');
+const { absolute, overlaps, samePath, fail, parseJson, object, exact } = require('./system-storage-fs.cjs');
 
 // Names come from their owning stores, not the legacy repository mover's list.
 const FILES = new Set([
   'projects.json', 'session-flags.json', 'session-titles.json', 'session-title-settings.json',
   'conversations.json', 'mcp-market-sources.json', 'mcp-registry-catalog.json.gz', 'environment.json',
+  'provider-management.json', 'worktrees.json',
 ]);
 const DIRECTORIES = new Set(['plans', 'planner-sessions', 'trash-sessions', 'review-comments', 'collab-documents', '.uploads']);
 const OWNED = new Map([...FILES].map(name => [name, 'file']).concat([...DIRECTORIES].map(name => [name, 'directory'])));
@@ -26,15 +28,16 @@ const DESKTOP = new Set([
 const EXCLUDED = Object.freeze(['system_preferences', 'theme_preferences', 'update_preferences', 'window_state',
   'electron_chromium', 'logs', 'installation_runtime', 'pi_agent', 'projects_on_disk', 'bootstrap']);
 const TRANSACTION = /(?:^|[.\-_])(?:lock|tmp|pending|transaction|transactions)(?:[.\-_]|$)|^\.stage-mig-/iu;
-const PROVIDER_STATE = new Set(['provider-management.json', 'models.json.pi-gui-operations.json',
+const PROVIDER_STATE = new Set(['models.json.pi-gui-operations.json',
   'models.json.pi-gui-transaction', 'models.json.pi-gui-lock']);
-const WORKTREE_STATE = new Set(['worktrees', 'worktrees.json', 'candidate-runs', 'candidate-transactions']);
+const WORKTREE_STATE = new Set(['worktrees', 'candidate-runs', 'candidate-transactions']);
 const REVERT_STATE = new Set(['revert-evidence', 'review-evidence']);
 
 function classifyTop(name, mixed, destination) {
   if (OWNED.has(name)) return OWNED.get(name);
   if (destination) fail('verification_failed');
-  if (WORKTREE_STATE.has(name)) fail('worktree_or_candidate_present');
+  // Only inventory's exact, physically empty owner skeletons may be omitted.
+  if (WORKTREE_STATE.has(name)) return 'empty-worktree';
   if (PROVIDER_STATE.has(name)) fail('provider_authority_present');
   // session-change-store creates this exact empty skeleton at every startup.
   // Inventory may exclude it only after proving that it has no records/objects.
@@ -61,7 +64,51 @@ function classifyChild(store, name, depth, candidateIsDirectory) {
 
 function obtainPiAgentDirectory(value = process.env.PI_CODING_AGENT_DIR) {
   if (!value) return path.join(os.homedir(), '.pi', 'agent');
-  return path.resolve(value.replace(/^~(?=[\\/]|$)/u, () => os.homedir()));
+  const expanded = value.replace(/^~(?=[\\/]|$)/u, () => os.homedir());
+  // Main's cwd need not be the backend's cwd. Never inspect a guessed agent
+  // directory (including Windows drive/root-relative paths) for authority.
+  if (!path.isAbsolute(expanded) || (process.platform === 'win32' && !/^(?:[A-Za-z]:[\\/]|[\\/]{2})/u.test(expanded))) fail('pi_agent_path_relative');
+  const resolved = path.resolve(expanded);
+  if (path.dirname(resolved) === resolved) fail('invalid_path');
+  return resolved;
+}
+
+let metadataModule;
+async function loadMetadata() {
+  if (!metadataModule) metadataModule = (async () => {
+    let bundled;
+    try { bundled = require.resolve('./provider-management-metadata.cjs'); }
+    catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
+    // Packaged Main has no ESM source tree. Its CJS resource is generated from
+    // the same pure module by build-app, not a second handwritten validator.
+    return bundled ? require(bundled) : import(pathToFileURL(path.join(__dirname, '../lib/provider-management-metadata.mjs')).href);
+  })();
+  return metadataModule;
+}
+
+async function providerMetadataFacts(bytes) {
+  if (!bytes) return;
+  const doc = parseJson(bytes, 'provider_metadata_invalid');
+  let schema;
+  try { schema = await loadMetadata(); } catch { fail('provider_metadata_unavailable'); }
+  try { schema.validateMetadata(doc); }
+  catch (error) { fail(error.code === 'config_unsupported' ? 'provider_metadata_unsupported' : 'provider_metadata_invalid'); }
+  // Migration deliberately accepts only the owner's original serialization.
+  // JSON.parse alone hides duplicate keys (including overwritten secrets).
+  // Reject rather than rewrite; the store's normal read keeps its existing
+  // whitespace/ordering compatibility and is not restricted by this check.
+  if (!bytes.equals(Buffer.from(JSON.stringify(doc, null, 2) + '\n'))) fail('provider_metadata_format_unsupported');
+}
+
+function emptyWorktreeFacts(bytes) {
+  if (!bytes) return;
+  const doc = parseJson(bytes, 'worktree_or_candidate_present');
+  if (!exact(doc, ['version', 'entries']) || doc.version !== 1 || !Array.isArray(doc.entries) || doc.entries.length) fail('worktree_or_candidate_present');
+  // An exact empty manifest has only two fixed keys and no string values.
+  // This small grammar permits whitespace/key order, but not duplicate keys
+  // hiding active/history records, escaped keys, or unknown fields.
+  const compact = bytes.toString('utf8').replace(/[ \t\r\n]/gu, '');
+  if (!['{"version":1,"entries":[]}', '{"entries":[],"version":1}'].includes(compact)) fail('worktree_or_candidate_present');
 }
 
 // Resolve aliases of *protected* roots/locators, never of copy/boot targets.
@@ -136,8 +183,19 @@ function createStoragePolicy({ storage, anchor, legacy, protectedRoots, getProte
     if (!Array.isArray(protectedRoots) || !Array.isArray(dynamic) || protectedRoots.length + dynamic.length + added.length > 4096) {
       fail('protected_roots_unavailable');
     }
-    const piParent = path.dirname(piAgent);
-    const configured = new Set([piAgent, ...(path.basename(piParent) === '.pi' ? [piParent] : []), ...protectedRoots, ...dynamic, ...added]);
+    let piRoots = [];
+    try {
+      const piDirectory = obtainPiAgentDirectory(piAgent);
+      const piParent = path.dirname(piDirectory);
+      piRoots = [piDirectory, ...(path.basename(piParent) === '.pi' ? [piParent] : [])];
+    } catch (error) {
+      // Opening an existing identity-bound root performs no relocation. Keep
+      // all other overlap/identity/runtime checks, but do not guess a relative
+      // Pi path against Main's cwd. Any new copy still requires an absolute Pi
+      // authority and is refused by the source-bearing guard below.
+      if (source || error.code !== 'pi_agent_path_relative') throw error;
+    }
+    const configured = new Set([...piRoots, ...protectedRoots, ...dynamic, ...added]);
     // When the installation fallback is explicitly pinned to the legacy
     // runtime subfolder, preserve it there without walking it.
     const allowLegacyRuntime = source && runtimeDirectory && samePath(source, legacy) && samePath(runtimeDirectory, path.join(legacy, 'runtime'));
@@ -152,9 +210,11 @@ function createStoragePolicy({ storage, anchor, legacy, protectedRoots, getProte
 
   async function checkProvider() {
     // The ledger lives beside Pi's models, not DATA_DIR, but its authority
-    // includes DATA_DIR/provider-management.json. Existence alone blocks P2.
+    // includes DATA_DIR/provider-management.json. Even finished operations or
+    // authGeneration retain that authority: do not delete or rewrite a ledger.
+    const piDirectory = obtainPiAgentDirectory(piAgent);
     for (const name of ['models.json.pi-gui-operations.json', 'models.json.pi-gui-transaction', 'models.json.pi-gui-lock']) {
-      if (await storage.lstat(path.join(piAgent, name))) fail('provider_authority_present');
+      if (await storage.lstat(path.join(piDirectory, name))) fail('provider_authority_present');
     }
   }
 
@@ -168,6 +228,8 @@ function createStoragePolicy({ storage, anchor, legacy, protectedRoots, getProte
       }
     }
     environmentFacts(inventory.facts.get('environment.json'), inventory.hasRuntime, runtimeDirectory);
+    await providerMetadataFacts(inventory.facts.get('provider-management.json'));
+    emptyWorktreeFacts(inventory.facts.get('worktrees.json'));
     await checkProvider();
   }
 

@@ -539,7 +539,7 @@ export function createDiscoveryController({
         ...(supportedChanged ? { test: { status: 'idle', facts: null, error: '', reason: '', operationId: null } } : {}),
       });
     },
-    async authorize({ rememberTarget = false } = {}) {
+    async authorize({ rememberTarget = false, allowLocalEndpoint = false } = {}) {
       clearTimer();
       if (disposed) return state;
       const seq = ++activeRequest;
@@ -555,6 +555,7 @@ export function createDiscoveryController({
           draftRevision: state.draftRevision,
           confirm: true,
           rememberTarget: Boolean(rememberTarget),
+          ...(allowLocalEndpoint ? { allowLocalEndpoint: true } : {}),
         });
       } catch {
         result = { ok: false, network: true, code: 'network_failed' };

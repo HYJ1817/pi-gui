@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { isModelId, isOpaqueId, isProviderId, validateModelValues } from '../public/provider-management/contract.js';
+import { isModelId, isOpaqueId, isProviderId } from '../public/provider-management/contract.js';
+import { defaultMetadata, safeReceipt, validateMetadata, RECEIPT_LIMIT } from '../lib/provider-management-metadata.mjs';
 
 const LIMIT = 16 * 1024 * 1024;
-const RECEIPT_LIMIT = 128;
 const OPERATIONS_LIMIT = 128 * 1024;
 const credentialActions = new Set(['apply-staged', 'clear-native']);
 const credentialOutcomes = new Set(['saved', 'cleared', 'saved-credential-error', 'credential-unconfirmed', 'credential-unconfirmed-stopped']);
@@ -19,7 +19,6 @@ const bytes = v => Buffer.from(JSON.stringify(v, null, 2) + '\n');
 const fail = code => { throw Object.assign(Error(code), { code }); };
 const knownCodes = new Set(['config_conflict','request_id_conflict','config_invalid','config_unreadable',
   'config_unsupported','config_unsafe','config_busy','config_recovery_required','config_write_failed']);
-const defaultMetadata = () => ({ schemaVersion: 1, services: {}, receipts: {} });
 
 // Windows' mode argument does not set a DACL. Protect the empty journal
 // directory before creating files, and the empty install file before writing.
@@ -104,49 +103,6 @@ function windowsAcl(targets, verifyOnly = false) {
   if (result.status !== 0) {
     if (process.env.PI_GUI_ACL_DEBUG) console.error('acl check failed:', String(result.stderr || result.error || ''));
     fail('config_unsafe');
-  }
-}
-
-function safeReceipt(value) {
-  const id = v => typeof v === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(v);
-  if (!record(value) || value.ok !== true || !id(value.serviceId) || value.saved !== true || value.credentialSaved !== null ||
-      value.credentialState !== 'none' || value.operationId !== null || value.sync?.state !== 'pending' ||
-      value.sync?.reason !== 'runtime_sync_pending' || !/^[a-f0-9]{64}$/.test(value.revision)) fail('config_invalid');
-  return { ok: true, serviceId: value.serviceId, saved: true, credentialSaved: null, credentialState: 'none', operationId: null,
-    sync: { state: 'pending', reason: 'runtime_sync_pending' }, revision: value.revision };
-}
-
-function validateMetadata(value) {
-  if (!record(value) || !record(value.services) || !record(value.receipts)) fail('config_invalid');
-  if (value.schemaVersion !== 1 || Object.keys(value).some(key => !['schemaVersion','services','receipts','syncRequired','syncGeneration','syncRemoved'].includes(key))) fail('config_unsupported');
-  if (Object.hasOwn(value, 'syncRequired') && typeof value.syncRequired !== 'boolean') fail('config_invalid');
-  if (Object.hasOwn(value, 'syncGeneration') && !isOpaqueId(value.syncGeneration)) fail('config_invalid');
-  if (Object.hasOwn(value, 'syncRemoved') && (!Array.isArray(value.syncRemoved) || value.syncRemoved.length > 3000 ||
-      !value.syncRemoved.every(item => Array.isArray(item) && item.length === 2 && isProviderId(item[0]) && isModelId(item[1])))) fail('config_invalid');
-  for (const [id, service] of Object.entries(value.services)) {
-    if (!isProviderId(id) || !record(service) || Object.keys(service).some(key => !['providerId','catalogId','displayName','enabled','selectedModelIds','modelOrder','kind','ownedOverrides'].includes(key))) fail('config_invalid');
-    if (Object.hasOwn(service,'providerId') && service.providerId !== id) fail('config_invalid');
-    if (Object.hasOwn(service,'catalogId') && !isOpaqueId(service.catalogId)) fail('config_invalid');
-    if (Object.hasOwn(service,'displayName') && (typeof service.displayName !== 'string' || service.displayName.length > 200 || /[\u0000-\u001f\u007f]/u.test(service.displayName))) fail('config_invalid');
-    if (Object.hasOwn(service,'enabled') && typeof service.enabled !== 'boolean') fail('config_invalid');
-    if (Object.hasOwn(service,'kind') && !['custom','builtin'].includes(service.kind)) fail('config_invalid');
-    for (const field of ['selectedModelIds','modelOrder']) {
-      if (Object.hasOwn(service,field) && (!Array.isArray(service[field]) || service[field].length > 3000 || !service[field].every(isModelId) || new Set(service[field]).size !== service[field].length)) fail('config_invalid');
-    }
-    if (Object.hasOwn(service,'ownedOverrides')) {
-      if (!record(service.ownedOverrides)) fail('config_invalid');
-      for (const [modelId, fields] of Object.entries(service.ownedOverrides)) {
-        if (!isModelId(modelId)) fail('config_invalid');
-        try { validateModelValues(fields); } catch { fail('config_invalid'); }
-      }
-    }
-  }
-  const receipts = Object.entries(value.receipts);
-  if (receipts.length > RECEIPT_LIMIT) fail('config_invalid');
-  for (const [id, item] of receipts) {
-    if (!isOpaqueId(id) || !record(item) || Object.keys(item).some(key => !['fingerprint','result'].includes(key)) || !/^[a-f0-9]{64}$/.test(item.fingerprint)) fail('config_invalid');
-    const safe = safeReceipt(item.result);
-    if (Object.keys(item.result).some(key => !Object.hasOwn(safe,key)) || Object.keys(item.result.sync).some(key => !Object.hasOwn(safe.sync,key))) fail('config_invalid');
   }
 }
 

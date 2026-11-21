@@ -5,7 +5,7 @@ const { randomUUID, randomBytes } = require('node:crypto');
 const { constants } = require('node:fs');
 const { performance } = require('node:perf_hooks');
 const { createStorageFs, absolute, samePath, exact, fail, failureCode } = require('./system-storage-fs.cjs');
-const { createStoragePolicy, obtainPiAgentDirectory, EXCLUDED } = require('./system-storage-policy.cjs');
+const { createStoragePolicy, EXCLUDED } = require('./system-storage-policy.cjs');
 const { createStorageInventory } = require('./system-storage-inventory.cjs');
 const { createStorageBoot, PENDING, FAILURE_REASONS } = require('./system-storage-boot.cjs');
 
@@ -19,15 +19,17 @@ const unavailable = reason => ({ dataDirectory: null, source: null, phase: 'unav
 // `writersStopped` is an assertion by that trusted host, not a PID probe or
 // authorization supplied by renderer. There is no HTTP/IPC in this module.
 function createSystemStorage({ directory, defaultDataDirectory = directory, explicitDataDirectory,
-  protectedRoots = [], getProtectedRoots = () => [], piAgentDirectory = obtainPiAgentDirectory(),
+  protectedRoots = [], getProtectedRoots = () => [], piAgentDirectory = process.env.PI_CODING_AGENT_DIR || null,
   runtimeDirectory = null, io, inspectWindows, hook = () => {}, now = () => performance.now() } = {}) {
   // Honor the existing operator override, including Windows UNC, without
   // opening or validating any managed path. Native migration stays stricter.
   const explicit = explicitDataDirectory ? path.resolve(explicitDataDirectory) : null;
   const anchorPath = explicit ? directory : absolute(directory), legacy = explicit ? defaultDataDirectory : absolute(defaultDataDirectory);
-  const piAgent = path.resolve(piAgentDirectory);
+  // Resolve only at the policy boundary. A relative Pi override must disable
+  // migration, not guess Main's cwd or prevent an unchanged idle root opening.
+  const piAgent = piAgentDirectory;
   const runtime = runtimeDirectory == null ? null : path.resolve(runtimeDirectory);
-  if ([anchorPath, legacy, piAgent, runtime].some(value => value && path.dirname(value) === value)) fail('invalid_path');
+  if ([anchorPath, legacy, runtime].some(value => value && path.dirname(value) === value)) fail('invalid_path');
   const storage = createStorageFs({ io, inspectWindows });
   const policy = createStoragePolicy({ storage, anchor: anchorPath, legacy, piAgent, protectedRoots, getProtectedRoots, runtimeDirectory: runtime });
   const inventory = createStorageInventory(storage);

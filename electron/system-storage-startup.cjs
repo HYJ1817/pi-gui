@@ -2,7 +2,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createSystemStorage } = require('./system-storage-migration.cjs');
-const { obtainPiAgentDirectory } = require('./system-storage-policy.cjs');
 
 async function initializeSystemStorage({ directory, appRoot, executable, probe, env = process.env } = {}) {
   fs.mkdirSync(directory, { recursive: true });
@@ -12,7 +11,7 @@ async function initializeSystemStorage({ directory, appRoot, executable, probe, 
     : env.LOCALAPPDATA && path.isAbsolute(env.LOCALAPPDATA)
       ? path.join(env.LOCALAPPDATA, 'pi-gui', 'runtime') : path.join(directory, 'runtime');
   const storage = createSystemStorage({ directory, defaultDataDirectory: directory,
-    explicitDataDirectory: explicit, piAgentDirectory: obtainPiAgentDirectory(env.PI_CODING_AGENT_DIR), runtimeDirectory,
+    explicitDataDirectory: explicit, piAgentDirectory: env.PI_CODING_AGENT_DIR || null, runtimeDirectory,
     protectedRoots: [appRoot, path.dirname(executable), ...['SystemRoot', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramData']
       .map(key => env[key]).filter(value => value && path.isAbsolute(value))] });
   let result = await storage.initialize();

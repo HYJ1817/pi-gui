@@ -9,7 +9,8 @@ const { classifyTop, classifyChild } = require('./system-storage-policy.cjs');
 const MAX_ENTRIES = 12_000;
 const MAX_BYTES = 16 * 1024 ** 3;
 const MAX_FILE_BYTES = 2 * 1024 ** 3;
-const FACT_LIMITS = new Map([['projects.json', 1024 ** 2], ['conversations.json', 1024 ** 2], ['environment.json', 64 * 1024]]);
+const FACT_LIMITS = new Map([['projects.json', 1024 ** 2], ['conversations.json', 1024 ** 2], ['environment.json', 64 * 1024],
+  ['provider-management.json', 16 * 1024 ** 2], ['worktrees.json', 1024 ** 2]]);
 const BLOCK_SIZE = 256 * 1024;
 const sortRelative = (a, b) => a.relative < b.relative ? -1 : a.relative > b.relative ? 1 : 0;
 const shapeRows = entries => entries.map(row => [row.relative, row.kind, row.binding || row.stamp]);
@@ -24,22 +25,31 @@ function createStorageInventory(storage) {
     if (dirIdentity(rootStat) !== rootObject.ids.at(-1)) fail('path_changed');
     let next = [{ parent: rootObject, store: '', depth: 0 }];
 
-    async function emptyEvidence(file, depth = 0) {
-      // No journal, even an empty one, and no object/unknown name is omitted.
-      // Only the eagerly-created revert-evidence[/v1[/objects]] skeleton can
-      // be recreated by its owner at the new root without relocating authority.
+    async function emptySkeleton(file, parent, store, depth = 0) {
+      // Only these exact owner skeletons may be recreated at the new root.
+      // No UUID worktree, run, transaction, lock, or even 0-byte evidence is
+      // ignored. Check every level before enumerating it, not just its name.
+      const reason = store === 'revert-evidence' ? 'revert_evidence_present' : 'worktree_or_candidate_present';
+      const stat = await storage.lstat(file);
+      if (!stat) fail('inventory_changed');
+      if (stat.isSymbolicLink() || stat.dev !== rootStat.dev) fail('unsafe_entry');
+      if (!stat.isDirectory()) fail(reason);
+      const id = dirIdentity(stat);
       const reference = await storage.directory(file);
+      if (reference.ids.at(-1) !== id || reference.ids.at(-2) !== parent.ids.at(-1)) fail('path_changed');
       await storage.native([{ path: file, directory: true }]);
       const cursor = await storage.io.opendir(file);
-      const allowed = ['v1', 'objects'][depth];
       try {
         for (let item; (item = await cursor.read());) {
           if (++visited > MAX_ENTRIES) fail('inventory_limit');
-          if (!allowed || item.name !== allowed) fail('revert_evidence_present');
-          await emptyEvidence(path.join(file, item.name), depth + 1);
+          const allowed = store === 'revert-evidence' ? item.name === ['v1', 'objects'][depth]
+            : store === 'worktrees' && depth === 0 && /^[a-f0-9]{24}$/u.test(item.name);
+          if (!allowed) fail(reason);
+          await emptySkeleton(path.join(file, item.name), reference, store, depth + 1);
         }
       } finally { await cursor.close(); }
       await storage.guard(reference);
+      await storage.guard(parent);
     }
 
     async function walk({ parent, store, depth }) {
@@ -55,8 +65,8 @@ function createStorageInventory(storage) {
           if (names.has(key)) fail('name_collision');
           names.add(key);
           const topKind = depth === 0 ? classifyTop(name, options.mixed, options.destination) : null;
-          if (depth === 0 && topKind === 'empty-evidence') {
-            await emptyEvidence(path.join(parent.path, name));
+          if (depth === 0 && ['empty-evidence', 'empty-worktree'].includes(topKind)) {
+            await emptySkeleton(path.join(parent.path, name), parent, name);
             continue;
           }
           if (depth === 0 && topKind === null) {

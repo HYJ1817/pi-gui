@@ -4,15 +4,44 @@ const fs = require('node:fs');
 const policyFile = [path.join(__dirname, 'system-network-policy.cjs'), path.join(__dirname, '../lib/system-network-policy.cjs')].find(file => fs.existsSync(file));
 const { DEFAULTS, normalize, validNetworkSettings, electronProxy } = require(policyFile);
 const { createSystemPreferenceFile } = require('./system-settings-store.cjs');
+const { randomUUID } = require('node:crypto');
+
+function updateEndpointPolicy(child, relaxed, timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    if (!child || !child.connected) return reject(Error('endpoint_policy_unconfirmed'));
+    const requestId = randomUUID();
+    const finish = error => {
+      clearTimeout(timer);
+      child.removeListener('message', reply);
+      child.removeListener('exit', exited);
+      child.removeListener('disconnect', exited);
+      error ? reject(error) : resolve();
+    };
+    const reply = message => {
+      if (message?.type !== 'system-endpoint-policy-ack' || message.requestId !== requestId) return;
+      if (message.ok !== true || message.relaxed !== relaxed || !Number.isSafeInteger(message.endpointGeneration) || message.endpointGeneration < 0) {
+        finish(Error('endpoint_policy_unconfirmed'));
+        return;
+      }
+      finish();
+    };
+    const exited = () => finish(Error('endpoint_policy_unconfirmed'));
+    const timer = setTimeout(exited, timeoutMs);
+    child.on('message', reply); child.once('exit', exited); child.once('disconnect', exited);
+    try { child.send({ type: 'system-endpoint-policy', requestId, relaxed }, error => { if (error) finish(error); }); }
+    catch { exited(); }
+  });
+}
 
 // One authority for stored policy and the actually configured Chromium sessions.
 // Existing Pi processes keep their original environment until their next start.
 async function createSystemNetwork({ directory, getSessions = () => [], store: injectedStore,
-  testConnection, now = Date.now } = {}) {
+  testConnection, onEndpointPolicy = async () => {}, now = Date.now } = {}) {
   const store = injectedStore || await createSystemPreferenceFile({ directory, fileName: 'system-network.json',
     defaults: DEFAULTS, validate: validNetworkSettings, maxBytes: 8192 });
   const startup = normalize(store.snapshot().settings) || { ...DEFAULTS };
-  let active = { ...startup }, operation = null, testing = false, revision = 0, disposed = false, error = '';
+  let active = { ...startup }, confirmedRelaxed = startup.relaxed, endpointPolicyUnconfirmed = false;
+  let operation = null, testing = false, revision = 0, disposed = false, error = '';
   const configured = new Set(), registering = new Map();
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   async function configure(ses, value) {
@@ -27,6 +56,13 @@ async function createSystemNetwork({ directory, getSessions = () => [], store: i
     const saved = store.snapshot();
     return { settings: { ...active }, saved: { ...saved.settings }, persistence: saved.status,
       revision, busy: Boolean(operation), testing, restartRequired: !same(active, startup),
+      effective: { electron: { ...active }, backendStartup: { ...startup },
+        pi: { configuredMode: startup.mode, inheritedPolicy: startup.mode === 'system' ? 'ambient' : 'explicit',
+          routeVerified: false, note: startup.mode === 'system'
+            ? 'Pi 保留其启动环境和自身配置；未接入应用系统代理/PAC。'
+            : 'Pi 继承本次启动的无认证代理环境；实际使用由 Pi 客户端决定，已运行进程不热改。' } },
+      endpointPermissions: endpointPolicyUnconfirmed || confirmedRelaxed !== active.relaxed ? 'unconfirmed'
+        : active.relaxed ? 'explicit-consent-required' : 'strict',
       error: [error, saved.error].filter(Boolean).join(' '),
       protocols: ['http', 'https', 'socks5', 'socks5h'], authentication: 'unsupported',
       note: '部分网络设置将在重启后生效。正在运行的 Agent 不会被中断；系统直连不能绕过 VPN、TUN 或系统路由。' };
@@ -67,13 +103,30 @@ async function createSystemNetwork({ directory, getSessions = () => [], store: i
         const result = await store.save(value);
         if (!result.ok) throw Error('network_save_failed');
         committed = true; active = { ...value }; revision++; error = '';
+        // A failed ACK leaves the backend state unknown even if the child may
+        // have applied the request. Retry the exact effective policy on every
+        // later save until an ACK confirms it; never infer success from `active`.
+        if (endpointPolicyUnconfirmed || confirmedRelaxed !== value.relaxed) {
+          try {
+            // If disable delivery was uncertain, re-enabling must first prove
+            // a strict barrier so grants from the previous epoch cannot revive.
+            if (endpointPolicyUnconfirmed && value.relaxed) await onEndpointPolicy(false);
+            await onEndpointPolicy(value.relaxed);
+            confirmedRelaxed = value.relaxed;
+            endpointPolicyUnconfirmed = false;
+          } catch {
+            endpointPolicyUnconfirmed = true;
+            throw Error('endpoint_policy_unconfirmed');
+          }
+        }
         return { ok: true, snapshot: snapshot() };
       } catch {
         let restored = !committed;
         if (!committed) for (const ses of touched) {
           try { await configure(ses, previous); } catch { restored = false; }
         }
-        error = restored ? '网络设置未保存，已恢复原策略。请检查代理地址、磁盘权限后重试。'
+        if (committed) error = '后端端点权限尚未确认。请暂停新的本地端点操作，重试保存网络设置；若仍未确认，请重启应用。';
+        else error = restored ? '网络设置未保存，已恢复原策略。请检查代理地址、磁盘权限后重试。'
           : '网络策略恢复未能确认。请停止发起新的网络操作，并重新启动应用。';
         return { ok: false, code: restored ? 'network_not_saved' : 'network_recovery_required', snapshot: snapshot() };
       }
@@ -106,4 +159,4 @@ async function createSystemNetwork({ directory, getSessions = () => [], store: i
   return { snapshot, save, test, registerSession, unregisterSession: forget, startup: () => ({ ...startup }),
     pending: () => operation, dispose() { disposed = true; configured.clear(); registering.clear(); } };
 }
-module.exports = { createSystemNetwork };
+module.exports = { createSystemNetwork, updateEndpointPolicy };

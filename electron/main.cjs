@@ -70,7 +70,7 @@ const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 const { createDesktopTheme } = require('./theme.cjs');
 const { createSystemFontIpc } = require('./system-fonts.cjs');
 const { createSystemSettings } = require('./system-settings.cjs');
-const { createSystemNetwork } = require('./system-network.cjs');
+const { createSystemNetwork, updateEndpointPolicy } = require('./system-network.cjs');
 const { createSystemProxy } = require('./system-proxy.cjs');
 const { createSystemConnectionTest } = require('./system-network-test.cjs');
 const { createSessionFetch } = require('./app-update-fetch.cjs');
@@ -1056,7 +1056,8 @@ if (!app.requestSingleInstanceLock()) {
       systemNetwork = await createSystemNetwork({ directory: app.getPath('userData'),
         getSessions: () => [session.defaultSession, session.fromPartition(BROWSER_PARTITION),
           ...[...(runtimeBrowserHost?.records.values() || [])].map(record => session.fromPartition(record.partition))],
-        testConnection: createSystemConnectionTest({ createSession: partition => session.fromPartition(partition) }) });
+        testConnection: createSystemConnectionTest({ createSession: partition => session.fromPartition(partition) }),
+        onEndpointPolicy: relaxed => updateEndpointPolicy(server, relaxed) });
       if (!['default', 'saved'].includes(systemNetwork.snapshot().persistence)) throw Error('network_preferences_unconfirmed');
       const initialNetwork = systemNetwork.startup();
       backendNetworkEnvironment = systemNetworkPolicy.externalEnvironment(initialNetwork, process.env);

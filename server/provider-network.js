@@ -20,6 +20,7 @@ import https from 'node:https';
 import { isIP } from 'node:net';
 import { buildCandidates } from '../lib/models-api.js';
 import { createPinnedSystemAgent } from './system-network-agent.js';
+import localEndpoints from '../lib/local-endpoint-policy.cjs';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TOTAL_MS = 30_000;
@@ -142,8 +143,9 @@ function insideBasePath(target, root) {
  *  - 公共地址：必须 HTTPS；http 一律拒绝（旧 LAN 配置不自动发现）。
  *  - loopback（名字或解析地址）：必须显式 loopback 授权且无秘密。
  *  - 其他私网 / 链路本地 / 元数据 / 未指定地址：一律拒绝。 */
-export function targetPolicy({ target, addressClass, credentialAttached, loopbackAuthorized }) {
+export function targetPolicy({ target, addressClass, credentialAttached, loopbackAuthorized, endpointAuthorized = false }) {
   if (!isRecord(target) || typeof addressClass !== 'string') return 'invalid_target';
+  if (endpointAuthorized && credentialAttached === false && ['public', 'private', 'loopback'].includes(addressClass)) return null;
   if (target.isLoopbackName && addressClass !== 'loopback') return 'private_address';
   if (addressClass === 'loopback' || target.isLoopbackName) {
     return loopbackAuthorized === true && credentialAttached === false ? null : 'loopback_requires_consent';
@@ -252,7 +254,7 @@ function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxB
 }
 
 /** 解析并校验目标的全部地址。任何一段解析到非授权类别即整体拒绝。 */
-export async function resolveTargetAddresses({ host, lookup = dns.promises.lookup, signal }) {
+export async function resolveTargetAddresses({ host, lookup = dns.promises.lookup, signal, endpoint = null, controlPorts = [] }) {
   const cancelled = Promise.withResolvers();
   const onAbort = () => cancelled.resolve(null);
   try {
@@ -265,8 +267,13 @@ export async function resolveTargetAddresses({ host, lookup = dns.promises.looku
     if (signal?.aborted) return fail('aborted');
     const list = Array.isArray(entries) ? Array.from(entries, entry => entry?.address) : [];
     if (!list.length) return { ok: false, ...fail('dns_failed') };
+    if (list.some(localEndpoints.metadataAddress)) return fail('private_address');
     const classes = list.map(address => classifyAddress(address));
     const loopback = classes.every(classOf => classOf === 'loopback');
+    if (endpoint) {
+      if (!localEndpoints.permitsAddresses(endpoint, list, { controlPorts })) return fail('private_address');
+      return { ok: true, addresses: list, addressClass: loopback ? 'loopback' : classes.every(kind => kind === 'public') ? 'public' : 'private' };
+    }
     if (!loopback && classes.some(classOf => classOf !== 'public')) return { ok: false, ...fail('private_address') };
     return { ok: true, addresses: list, addressClass: loopback ? 'loopback' : 'public' };
   } catch (error) {
@@ -469,12 +476,15 @@ export function createDiscoveryTransport({ consentStore, timeoutMs = DEFAULT_TIM
         if (!release) throw new DOMException('Discovery revoked', 'AbortError');
         try { return resolve(...args); } finally { release(); }
       } : resolve;
-      const resolved = await resolveTargetAddresses({ host: target.host, lookup: authorizedLookup, signal: operationSignal });
+      const endpoint = consent.localEndpoint ? localEndpoints.endpoint(consent.target.href) : null;
+      const resolved = await resolveTargetAddresses({ host: target.host, lookup: authorizedLookup, signal: operationSignal,
+        endpoint, controlPorts: consent.controlPorts });
       const afterDns = check(url);
       if (afterDns) return afterDns;
       if (!resolved.ok) return resolved;
+      if (localEndpoints.protectedLocal({ port: target.port }, resolved.addresses, consent.controlPorts || [7788])) return fail('private_address');
       const policy = targetPolicy({ target: { ...target, protocol: target.protocol }, addressClass: resolved.addressClass,
-        credentialAttached, loopbackAuthorized: consent.loopback === true });
+        credentialAttached, loopbackAuthorized: consent.loopback === true, endpointAuthorized: Boolean(endpoint) });
       if (policy) return fail(policy);
       const headers = {};
       if (credentialAttached) {

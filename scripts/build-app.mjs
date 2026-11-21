@@ -20,6 +20,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
+import * as esbuild from 'esbuild';
 // 删目录 / 算体积 / 拷文件这套东西安装程序脚本也要用，统一放 scripts/util.mjs
 import { sizeOf, mb, copyInto, removePaths, clearDir, COPYRIGHT } from './util.mjs';
 import { stageNodePty } from './node-pty-package.mjs';
@@ -95,6 +96,11 @@ for (const f of ['log-core.cjs', 'log-contract.cjs', 'zip.cjs', 'market-network-
   fs.copyFileSync(path.join(ROOT, 'lib', f), path.join(STAGE, f));
 }
 fs.copyFileSync(path.join(BUILD, 'asset-manifest.json'), path.join(STAGE, 'asset-manifest.json'));
+// Main's cold-migration schema is generated from the store's single ESM
+// authority. A packaged app must not depend on the development source tree.
+const metadataBundle = esbuild.buildSync({ entryPoints: [path.join(ROOT, 'lib/provider-management-metadata.mjs')],
+  bundle: true, platform: 'node', format: 'cjs', target: 'node22', write: false });
+fs.writeFileSync(path.join(STAGE, 'provider-management-metadata.cjs'), metadataBundle.outputFiles[0].contents);
 
 /* xterm is served as browser-native ESM from public/vendor/xterm. Refresh the
  * vendor copy before staging so a package upgrade cannot ship a stale parser. */

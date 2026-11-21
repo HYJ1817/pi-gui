@@ -424,6 +424,17 @@ function openServerForm({
         save.textContent = '正在保存…';
         let result = await mcpConfigAction(built.payload);
         if (!isCurrent()) return;
+        if (result?.needsEndpointAuthorization === true) {
+          const authorization = result.endpointChallenge;
+          const target = result.targetSummary;
+          const go = await confirmModal({ title: '授权此 MCP 本地端点',
+            message: `仅为 ${target?.name || draft.name}（${target?.scope || draft.scope}）保存 ${target?.url || ''}。此兼容仅用于无凭据端点，不授权其他服务；原生 Pi 的连接与重定向由 Pi 自己管理。`,
+            okText: '授权并保存' });
+          if (!isCurrent()) return;
+          if (!go) { save.disabled = false; save.textContent = old; return; }
+          result = await mcpConfigAction({ ...built.payload, endpointAuthorization: authorization });
+          if (!isCurrent()) return;
+        }
         /* 只有服务端明确说“可以覆盖”（canReplace）或“需要确认跨 scope
          * 覆盖”（canOverride）时才弹确认。重命名撞到已有名字也返回
          * name-conflict，但服务端不会允许覆盖，重试 allowReplace 只会
