@@ -1206,7 +1206,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 | 纯投影 | `npm run test:capability`（进 `npm test`） | 74 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
 | DOM（jsdom） | `npm run test:ui` 的「Agent 能力」段 | — | 扩展 / 技能 / MCP 配置三个入口、「已知能力设置」仍可从扩展页「已安装」到达、旧能力状态页不再渲染、Registry 仍可诊断、设置导航不再出现「能力状态」 |
 | 拆分边界（jsdom） | `npm run test:agent-capabilities`（进 `npm test`） | 42 | 见下方「三入口拆分」 |
-| 真实 Electron | `npm run test:shortcuts:electron` | 99 | 设置导航七组（「Agent 能力」只有技能，扩展在主导航）、快捷键八条、旧命令面板 ID 安全忽略、扩展两个页签 / 技能 / MCP 配置在 1320×820 / 700×600 暗亮布局、主导航「扩展」选中态的计算样式（暗亮两套）、两个页面的实测排版（见下方「版式」） |
+| 真实 Electron | `npm run test:shortcuts:electron` | 100 | 设置导航七组（「Agent 能力」只有技能，扩展在主导航）、快捷键八条、旧命令面板 ID 安全忽略、扩展两个页签 / 技能 / MCP 配置在 1320×820 / 700×600 暗亮布局、主导航「扩展」选中态的计算样式（暗亮两套）、两个页面的实测排版（见下方「版式」） |
 
 关键判定（写错任何一条，界面就开始撒谎）：
 
@@ -1284,10 +1284,13 @@ Work Surface 自身保持 `overflow:hidden`（`scrollTop` 为 0，与 Planner / 
 `tests/primitives.cjs` 直接断言：没声明 `count` 的项不生成节点、`0` 照常显示、`null` 留空、
 只隐藏指定项、两者都不触发 `onChange`。
 
-`tests/cdp-shot.cjs`（`npm run shots`，手动、不进 `npm test`）的 115 / 118 / 155 三步跟到新结构：
+`tests/cdp-shot.cjs`（`npm run shots`，手动、不进 `npm test`）的 115 / 118 / 132 / 155 四步跟到新结构：
 状态徽标改由分组承载（改写后的断言不会落成空集上的 `every`）、MCP 截图改到「MCP 配置」页并展开页尾
 「MCP 能力报告」、扩展详情点卡片里的「详情」。原 118 里「启停只能走 /mcp」一条已被 P20.7 的受控启停取代，
 改为断言开关写的是 pi 自己的 `mcp.json`。
+132（技能页灰阶）现在是设置详情页，设置页的契约是画布 `.work-surface.settings-detail` 自身 `overflow-y:auto`，
+所以这一步把通用的「内部滚动容器承担滚动」换成「设置详情画布承担滚动」（同时断言画布里就是技能页），
+其余视口判据不变；扩展页的 142 / 145 / 155 照旧过通用判据（滚动在 `.extensions-scroll` 里）。
 
 ⚠️ **测试占用的固定端口别去蹲**：`visual-harness` 默认 7789、`dev-server` 7791、
 `git.cjs` 7799；CDP 9222–9225。跑截图 harness 用表外端口
