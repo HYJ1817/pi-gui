@@ -1,12 +1,17 @@
 /* 扩展（应用主导航）—— Pi 原生 Extension 的独立工作区页面。
  *
- * 两个页签：「已安装」（只读 Registry + 已知能力设置）与「插件市场」（第一阶段仅预留）。
- * 页签面板懒建、建好后复用；每个面板返回自己的 dispose，页面实例销毁时统一调用 ——
+ * 版式对照 PI-Desktop 扩展页（PluginsPage）：页头（图标块 + 标题 + 当前页签的动作）→
+ * 页签行（已安装 / 插件市场 + 当前页签的工具栏）→ 扩展提示 → 页签面板。
+ * 页面自己画「扩展」标题，工作区标题栏里的同名标题在本页隐藏（extensions.css），不出现两个标题。
+ *
+ * 页签面板懒建、建好后复用；每个面板返回自己的 dispose，以及可选的 toolbar / actions 节点，
+ * 由页面壳挂进页签行与页头的插槽 —— 切页签只换插槽里的节点，节点本身复用（搜索词、焦点状态不丢）。
  * Work Surface 的 onDispose 是单槽位（后注册覆盖先注册），所以这里只注册一次。
  * 本模块不 import 技能页或 MCP 页的任何 UI。 */
 
 import { openWorkSurface } from '../ui/workspace-surface.js';
 import { renderExtensionNotices } from '../extension-notices.js';
+import { createIcon } from '../ui/icons.js';
 import { resourceEl as el } from '../ui/resource-dom.js';
 import { renderInstalledExtensions } from './installed.js';
 import { renderExtensionMarket } from './market.js';
@@ -35,18 +40,31 @@ export function openExtensions(options = {}) {
       }
     });
 
-    const tablist = el('div', 'ext-tabs extensions-tabs');
+    const inner = el('div', 'extensions-inner');
+    const head = el('header', 'extensions-head');
+    const heading = el('div', 'extensions-heading');
+    const headingIcon = el('span', 'extensions-heading-icon');
+    headingIcon.append(createIcon('box', { size: 14 }));
+    heading.append(headingIcon, el('h2', 'extensions-title', '扩展'));
+    const actionsSlot = el('div', 'extensions-head-actions');
+    head.append(heading, actionsSlot);
+
+    const toolbarRow = el('div', 'extensions-toolbar-row');
+    const tablist = el('div', 'ds-segmented extensions-tabs');
     tablist.setAttribute('role', 'tablist');
     tablist.setAttribute('aria-label', '扩展视图');
+    const toolbarSlot = el('div', 'extensions-toolbar-slot');
+    toolbarRow.append(tablist, toolbarSlot);
+
     const notices = el('section', 'extension-notices');
-    const panel = el('div', 'ext-body extensions-panel');
+    const panel = el('div', 'extensions-panel');
     panel.id = 'extensionsTabPanel';
     panel.setAttribute('role', 'tabpanel');
     const buttons = new Map();
-    const panels = new Map();
+    const panels = new Map(); // id → { holder, toolbar, actions }
     let active = initial;
 
-    const installedCount = el('span', 'extensions-tab-count');
+    const installedCount = el('span', 'ds-segment-count extensions-tab-count');
     const setInstalledCount = (count) => { installedCount.textContent = Number.isInteger(count) ? String(count) : ''; };
 
     function select(id, { focus = false } = {}) {
@@ -54,33 +72,36 @@ export function openExtensions(options = {}) {
       for (const tab of TABS) {
         const button = buttons.get(tab.id);
         const on = tab.id === active;
-        button.classList.toggle('on', on);
+        button.classList.toggle('is-active', on);
         button.setAttribute('aria-selected', String(on));
         button.tabIndex = on ? 0 : -1;
       }
       const current = TABS.find((tab) => tab.id === active);
       panel.setAttribute('aria-labelledby', current.domId);
-      let holder = panels.get(active);
-      if (holder) {
-        panel.replaceChildren(holder);
+      let entry = panels.get(active);
+      if (entry) {
+        panel.replaceChildren(entry.holder);
       } else {
-        holder = el('div', 'ext-panel extensions-tab-' + active);
-        panels.set(active, holder);
+        const holder = el('div', 'extensions-tab-panel extensions-tab-' + active);
         panel.replaceChildren(holder);
-        const handle = current.render(holder, { isLive: instance.isCurrent, onCount: setInstalledCount });
-        if (typeof handle?.dispose === 'function') disposers.push(() => handle.dispose());
+        const handle = current.render(holder, { isLive: instance.isCurrent, onCount: setInstalledCount }) || {};
+        if (typeof handle.dispose === 'function') disposers.push(() => handle.dispose());
+        entry = { holder, toolbar: handle.toolbar || null, actions: handle.actions || null };
+        panels.set(active, entry);
       }
+      toolbarSlot.replaceChildren(...(entry.toolbar ? [entry.toolbar] : []));
+      actionsSlot.replaceChildren(...(entry.actions ? [entry.actions] : []));
       if (focus) buttons.get(active).focus();
     }
 
     for (const tab of TABS) {
-      const button = el('button', 'ext-tab extensions-tab');
+      const button = el('button', 'ds-segment-item extensions-tab');
       button.type = 'button';
       button.id = tab.domId;
       button.dataset.tab = tab.id;
       button.setAttribute('role', 'tab');
       button.setAttribute('aria-controls', panel.id);
-      button.append(el('span', '', tab.label));
+      button.append(el('span', 'extensions-tab-label', tab.label));
       if (tab.id === 'installed') button.append(installedCount);
       button.onclick = () => { if (active !== tab.id) select(tab.id); };
       buttons.set(tab.id, button);
@@ -101,7 +122,11 @@ export function openExtensions(options = {}) {
     for (const type of NOTICE_EVENTS) document.addEventListener(type, refreshNotices);
     disposers.push(() => { for (const type of NOTICE_EVENTS) document.removeEventListener(type, refreshNotices); });
 
-    card.append(tablist, notices, panel);
+    inner.append(head, toolbarRow, notices, panel);
+    /* Work Surface 本身不滚动（.work-surface 的 overflow:hidden 契约），整页内容由这一层内部滚动容器承担。 */
+    const scroller = el('div', 'extensions-scroll');
+    scroller.append(inner);
+    card.append(scroller);
     refreshNotices();
     select(initial);
   });

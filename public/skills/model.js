@@ -3,21 +3,24 @@
  * 不碰 DOM、不发请求、不缓存。事实只有一份 —— server/skills.js 的 `/api/skills`
  * 返回值；这里只把它变成页面要显示的样子。未知状态保持「状态未知」，不猜。 */
 
+/** dot = 行图标角上的状态点（.ext-dot 的变体）；tone = 状态徽标的 .ds-badge 语气。 */
 export const SKILL_STATE_META = Object.freeze({
-  enabled: Object.freeze({ dot: 'on', label: '已启用' }),
-  disabled: Object.freeze({ dot: 'off', label: '已停用' }),
-  untrusted: Object.freeze({ dot: 'warn', label: '未加载（项目未信任）' }),
-  invalid: Object.freeze({ dot: 'err', label: '无法加载' }),
-  shadowed: Object.freeze({ dot: 'warn', label: '被同名覆盖' }),
-  'not-loaded': Object.freeze({ dot: 'warn', label: 'pi 未加载' }),
-  unknown: Object.freeze({ dot: 'dim', label: '状态未知' }),
+  enabled: Object.freeze({ dot: 'on', tone: 'success', label: '已启用' }),
+  disabled: Object.freeze({ dot: 'off', tone: 'neutral', label: '已停用' }),
+  untrusted: Object.freeze({ dot: 'warn', tone: 'warning', label: '未加载（项目未信任）' }),
+  invalid: Object.freeze({ dot: 'err', tone: 'error', label: '无法加载' }),
+  shadowed: Object.freeze({ dot: 'warn', tone: 'warning', label: '被同名覆盖' }),
+  'not-loaded': Object.freeze({ dot: 'warn', tone: 'warning', label: 'pi 未加载' }),
+  unknown: Object.freeze({ dot: 'dim', tone: 'neutral', label: '状态未知' }),
 });
 
 /** user = pi 的用户级目录（~/.pi/agent/skills 等），对用户来说就是「全局」。 */
 export const SKILL_SCOPE_LABEL = Object.freeze({ project: '项目', user: '全局', temporary: '临时' });
 
-/** 与 server/skills.js 的排序一致：项目级优先（它会覆盖同名的全局技能）。 */
-export const SKILL_SCOPE_ORDER = Object.freeze(['project', 'user', 'temporary']);
+/** 页面分组顺序，对照 PI-Desktop 技能页：全局级在前、项目级在后。
+ *  这只是展示顺序：同名时谁生效由 server/skills.js 按 pi 的规则核对（项目级优先），
+ *  结果体现在行上的「被同名覆盖」状态，不靠分组先后表达。 */
+export const SKILL_SCOPE_ORDER = Object.freeze(['user', 'project', 'temporary']);
 
 export const SKILL_STATE_FILTERS = Object.freeze([
   Object.freeze({ value: '', label: '全部状态' }),
@@ -91,6 +94,16 @@ export function groupSkillsByScope(skills) {
 /** 分组标题旁显示的来源目录：取这一组实际出现过的 rootLabel，去重保序。 */
 export function skillGroupRoots(items) {
   return [...new Set(items.map((skill) => skill.rootLabel).filter(Boolean))];
+}
+
+/** 分组标题旁的发现目录（来自 `/api/skills` 的 roots）：这一作用域里磁盘上存在的根；
+ *  一个都不存在时只给第一个（pi 的默认位置），让空分组也说得清「放在哪里会被发现」。
+ *  label 是服务端给的展示名（可能带 ~ 或 <项目> 缩写），dir 是全路径，供悬停查看。 */
+export function skillScopeRoots(roots, scope) {
+  const own = (Array.isArray(roots) ? roots : []).filter((root) => root && root.scope === scope && root.label);
+  const existing = own.filter((root) => root.exists === true);
+  return (existing.length ? existing : own.slice(0, 1))
+    .map((root) => ({ label: String(root.label), dir: String(root.dir || root.label) }));
 }
 
 /** 启停确认文案：说清楚写哪个文件、加 / 删哪条规则，以及不动 skill 文件本身。 */

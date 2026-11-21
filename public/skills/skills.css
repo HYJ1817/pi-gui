@@ -1,103 +1,97 @@
 /* 设置 › Agent 能力 › 技能（public/skills/）。
- * 只用设计系统 Token 与既有公共类（.ds-segmented / .ds-select / .ds-search-control /
- * .ds-switch / .ext-dot / .ext-badge / .ext-rows / .cfg-note），不引入新的视觉语言；
- * 列表形态与 MCP 配置页一致（分组标题 + 12px 圆角行卡片）。 */
+ * 版式对照 PI-Desktop 技能页：工具栏 → 分组标题（名称 + 发现目录 + 条数）→ 行瓦片 → 空状态瓦片。
+ * 尺寸、颜色、圆角全部取 pi-GUI Token；控件是公共原语（.ds-segmented / .ds-search-control /
+ * .ds-select / .ds-switch / .ds-badge / .btn / .ext-dot / .ext-rows / .cfg-note），这里只管排布。 */
 
 .skills-page { width: 100%; max-width: 1160px; margin: 0 auto; }
 
-.skills-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 20px;
-}
-.skills-head-copy { min-width: 0; }
-.skills-page .settings-page-title { margin-bottom: 8px !important; }
-.skills-page .settings-page-desc { margin-bottom: 0 !important; max-width: 780px; }
-.skills-head-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
-.skills-action { display: inline-flex; align-items: center; gap: 6px; }
-.skills-action-icon { flex: 0 0 auto; }
+.skills-head { margin-bottom: 20px; }
+.skills-page .settings-page-title { margin-bottom: 0 !important; }
 
+/* ---------- 工具栏 ---------- */
 .skills-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 16px;
 }
-.skills-status { width: auto; }
+.skills-scope { flex: 0 0 auto; }
 .skills-search { flex: 1 1 220px; max-width: 360px; }
 .skills-search-icon { flex: 0 0 auto; }
+.skills-status { width: auto; flex: 0 0 auto; }
+.skills-toolbar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.skills-action { display: inline-flex; align-items: center; gap: 6px; }
+.skills-action-icon { flex: 0 0 auto; }
 
 .skills-notes { display: grid; gap: 8px; margin-bottom: 16px; }
 .skills-notes:empty { display: none; }
 
-.skills-body { display: grid; gap: 24px; }
-.skills-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 28px 14px;
-  border: 1px dashed var(--ds-border-default);
-  border-radius: var(--ds-radius-12);
-  font-size: var(--text-sm);
-  color: var(--ds-text-muted);
-}
-
+/* ---------- 分组 ---------- */
+.skills-body { display: grid; gap: 20px; }
+.skills-group { display: grid; gap: 8px; min-width: 0; }
 .skills-group-head {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  margin-bottom: 10px;
+  min-height: 24px;
+  padding: 0 4px;
 }
 .skills-group-title {
   margin: 0;
-  font-size: var(--text-md-plus);
-  font-weight: 600;
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-compact);
   color: var(--ds-text-primary);
+  white-space: nowrap;
 }
-.skills-group-count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: var(--ds-radius-full);
-  background: var(--ds-bg-inset);
-  color: var(--ds-text-muted);
-  font-size: var(--text-3xs);
-  line-height: 17px;
-  text-align: center;
-}
-.skills-group-roots {
+.skills-group-path {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--ui-font-mono);
-  font-size: var(--text-2xs);
-  color: var(--ds-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ds-text-muted);
+}
+.skills-group-count {
+  flex: 0 0 auto;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--ds-bg-chip);
+  color: var(--ds-text-secondary);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
 }
 
-.skills-rows { display: grid; gap: 8px; }
+/* ---------- 行瓦片 ---------- */
+.skills-rows { display: grid; gap: 6px; }
 .skill-row {
-  border: 1px solid var(--ds-border-default);
-  border-radius: var(--ds-radius-12);
-  background: var(--ds-surface-card);
-  transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
+  min-width: 0;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+  transition: background var(--motion-duration-fast) var(--motion-ease-out);
 }
 .skill-row:hover,
-.skill-row.is-open { border-color: var(--ds-border-strong); }
-.skill-row-line { display: flex; align-items: center; gap: 12px; padding: 0 14px 0 0; }
+.skill-row.is-open { background: var(--ds-tile-hover); }
+.skill-row-line { display: flex; align-items: center; gap: 8px; padding-right: 14px; }
 .skill-row-main {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  flex: 1;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 auto;
   min-width: 0;
-  padding: 12px 0 12px 14px;
+  padding: 11px 0 11px 14px;
   border: 0;
-  border-radius: var(--ds-radius-12);
+  border-radius: var(--radius-md-plus);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -105,33 +99,111 @@
   cursor: pointer;
 }
 .skill-row-main:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; }
-.skill-row-main > .ext-dot { margin-top: 6px; }
-.skill-row-text { display: grid; gap: 3px; min-width: 0; }
-.skill-row-title { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+.skill-glyph {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  color: var(--ds-text-muted);
+}
+.skill-row:hover .skill-glyph,
+.skill-row.is-open .skill-glyph { color: var(--ds-text-secondary); }
+/* 状态点贴在图标右下角，描边取行底色，看起来像「挂」在图标上。 */
+.skill-glyph > .ext-dot {
+  position: absolute;
+  right: 2px;
+  bottom: 3px;
+  box-shadow: 0 0 0 2px var(--ds-bg-primary);
+}
+.skill-row-text { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 0; }
+.skill-row-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .skill-name {
-  font-size: var(--text-md-plus);
-  font-weight: 600;
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--leading-compact);
   color: var(--ds-text-primary);
   overflow-wrap: anywhere;
 }
 .skill-row-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--text-sm);
-  line-height: 1.5;
+  line-height: var(--leading-normal);
+  color: var(--ds-text-secondary);
+}
+.skill-row-note {
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
   color: var(--ds-text-secondary);
   overflow-wrap: anywhere;
 }
-.skill-row-note { font-size: var(--text-xs); line-height: 1.5; color: var(--ui-warning); overflow-wrap: anywhere; }
+/* 11px 小字直接用语义色在浅色主题对比度不足；与主文字混合后保留色相（同 app-shell 的做法）。 */
+.skill-row-note.is-warn { color: color-mix(in oklab, var(--ds-warning) 72%, var(--ds-text-primary)); }
+.skill-row-note.is-err { color: color-mix(in oklab, var(--ds-error) 72%, var(--ds-text-primary)); }
+.skill-row-chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--ds-text-muted);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+.skill-row-main[aria-expanded="true"] .skill-row-chevron { transform: rotate(180deg); }
+.skill-row-actions { display: flex; align-items: center; justify-content: flex-end; flex: 0 0 38px; }
 .skill-toggle { flex: 0 0 auto; }
 
+/* 展开的详情：行瓦片里的一块浮起面板，左缘与名称对齐。 */
 .skill-detail {
-  padding: 12px 14px 14px 31px;
-  border-top: 1px solid var(--ds-border-subtle);
+  margin: 0 14px 14px 54px;
+  padding: 10px 12px 12px;
+  border-radius: var(--radius-md);
+  background: var(--ds-raised);
+  box-shadow: var(--ds-raised-shadow);
 }
 .skill-detail .ext-row { font-size: var(--text-xs); }
 .skill-detail .ext-code { max-height: 320px; }
 
+/* ---------- 空状态 ---------- */
+.skills-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 32px 20px;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  text-align: center;
+}
+.skills-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--ds-bg-chip);
+  color: var(--ds-text-muted);
+}
+.skills-empty-text { max-width: 520px; overflow-wrap: anywhere; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skill-row,
+  .skill-row-chevron { transition: none; }
+}
+
 @media (max-width: 720px) {
-  .skills-head { flex-direction: column; gap: 12px; }
-  .skills-search { max-width: none; flex-basis: 100%; }
-  .skill-detail { padding-left: 14px; }
+  .skills-search { max-width: none; flex-basis: 100%; order: 3; }
+  .skills-toolbar-actions { margin-left: auto; }
+  .skills-group-path { display: none; }
+  .skills-group-count { margin-left: auto; }
+  .skill-detail { margin-left: 14px; }
 }
