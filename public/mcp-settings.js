@@ -20,10 +20,11 @@ import { openModal, closeModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { restartPi } from './providers.js';
 import {
-  MCP_NAME_RE, badge, button, icon, node, relativeTime, runtimeServerFor,
+  MCP_NAME_RE, badge, button, icon, node, relativeTime, runtimeLabel, runtimeServerFor,
   scopeLabel, serverStatus, statusDot, transportLabel,
 } from './mcp-shared.js';
 import { openMcpMarket } from './mcp-market.js';
+import { createMcpReport } from './mcp-report.js';
 
 /* ---------- 输入校验（与 server/mcp-config.js 的同一套判据） ---------- */
 
@@ -1082,6 +1083,10 @@ function createPage(card, { reopen, present }) {
 
   projectWorkSurface('settings', { navigation: 'navMcp', title: 'MCP 服务器' });
   const onDispose = (fn) => onDisposeHandlers.push(fn);
+  /* 能力报告（原「Skills 与扩展 › MCP」标签的证据部分）：整页只建一次，
+   * 每次 render 重新挂回页尾，展开状态与已读结果跨重绘保留；页面关闭时一并销毁。 */
+  const report = createMcpReport();
+  onDispose(() => report.dispose());
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -1112,10 +1117,12 @@ function createPage(card, { reopen, present }) {
     state.loading = false;
     if (!serversResult || serversResult.ok === false) {
       state.error = errorText(serversResult) || '读取 MCP 配置失败';
+      report.setNative(null); // 这次没读到：页尾报告不沿用上一次的原生结论
       render();
       return;
     }
     state.data = serversResult;
+    report.setNative(serversResult.native);
     if (configResult && configResult.ok === true && configResult.revisions) {
       state.revisions = {
         user: String(configResult.revisions.user || ''),
@@ -1190,6 +1197,7 @@ function createPage(card, { reopen, present }) {
     }
     if (state.error) {
       page.appendChild(renderError());
+      page.appendChild(report.element);
       return;
     }
     page.appendChild(renderBanners());
@@ -1197,6 +1205,7 @@ function createPage(card, { reopen, present }) {
     const groups = renderGroups();
     page.appendChild(groups);
     if (!groups.childElementCount) page.appendChild(renderEmpty());
+    page.appendChild(report.element);
     restoreFocus(focus, advancedFocus);
   }
 
@@ -1287,6 +1296,10 @@ function createPage(card, { reopen, present }) {
     }
     if (state.runtimeError) add('warn', `运行时状态刷新失败：${state.runtimeError}`);
     if (state.statusNote) add('info', state.statusNote);
+    /* 上次 pi mcp list 附带的说明（如「项目 mcp.json 因未信任被忽略」）随摘要返回，
+     * 不必等用户再点刷新才看到。 */
+    const runtimeNote = typeof state.data?.runtime?.note === 'string' ? state.data.runtime.note.slice(0, 300) : '';
+    if (runtimeNote && runtimeNote !== state.statusNote) add('warn', runtimeNote);
     const native = state.data?.native;
     if (native && native.state && native.state !== 'active' && native.state !== 'unknown') {
       const labels = {
@@ -1296,9 +1309,13 @@ function createPage(card, { reopen, present }) {
       };
       add('warn', labels[native.state] || `Pi 原生 MCP 状态：${native.state}`);
     }
+    /* 信任三值：服务端拿不到信任状态时整个字段是 null（server/mcp-native.js 的摘要），
+     * 不是 {trusted:null}。两种形状都按未确证说明（fail closed）；没有打开项目时
+     * 没有项目级配置可言，不出这条提示。旧「Skills 与扩展 › MCP」标签移除后由本页承接。 */
     const tr = state.data?.trust;
-    if (tr && tr.trusted !== true) {
-      const text = tr.trusted === false
+    const hasProject = Boolean(state.data?.files?.project) || state.data?.files === undefined;
+    if ((tr && tr.trusted !== true) || (tr === null && hasProject)) {
+      const text = tr && tr.trusted === false
         ? '当前项目未被信任：Pi 不会读取项目级 .pi/mcp.json，项目条目不会生效，项目级写入也会被拒绝。用户级配置不受影响。'
         : '读不到当前项目的信任状态：按“未确证”处理，项目条目不会标记为生效，项目级写入会被拒绝。';
       add('warn', text);
@@ -1774,9 +1791,10 @@ function createPage(card, { reopen, present }) {
           if (rt) {
             const rtBox = node('div', 'mcp-detail-runtime');
             rtBox.appendChild(node('div', 'mcp-detail-label', '上次运行时报告'));
-            const bits = [rt.state === 'connected' ? '已连接' : rt.state || '状态未知'];
+            const bits = [runtimeLabel(rt.state)]; // 闭集外的 state 不回显上游原文
             if (typeof rt.toolCount === 'number') bits.push(`${rt.toolCount} 个工具`);
             if (typeof rt.resources === 'number') bits.push(`${rt.resources} 个资源`);
+            if (typeof rt.resourceTemplates === 'number') bits.push(`${rt.resourceTemplates} 个资源模板`);
             rtBox.appendChild(node('p', '', bits.join(' · ')));
             if (rt.error) rtBox.appendChild(node('pre', 'mcp-code-block', rt.error));
             body.appendChild(rtBox);

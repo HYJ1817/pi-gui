@@ -1130,3 +1130,25 @@
 @media (prefers-reduced-motion: reduce) {
   .mcp-skeleton, .mcp-icon-btn.is-busy, .mcp-modal-loading::before { animation: none; }
 }
+
+/* ---------- 能力报告（页尾折叠区，public/mcp-report.js） ---------- */
+
+.mcp-report {
+  margin-top: 28px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: 12px;
+  background: var(--mcp-card-bg);
+}
+.mcp-report-summary {
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ds-text-primary);
+  cursor: pointer;
+}
+.mcp-report-summary:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; border-radius: 12px; }
+.mcp-report-body {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--ds-border-subtle);
+}
+.mcp-report-body .ext-code { max-height: 220px; }
