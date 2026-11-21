@@ -61,7 +61,48 @@ const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadg
   assert.equal(seg.getValue(), 'light');
   assert.equal(seg.element.children[0].classList.contains('is-active'), false);
   assert.equal(seg.element.children[1].classList.contains('is-active'), true);
+  // 没声明 count 的项不生成计数节点；setCount 对它们无效果，也不会凭空插入节点。
+  assert.equal(seg.element.querySelector('.ds-segment-count'), null);
+  seg.setCount('dark', 3);
+  assert.equal(seg.element.querySelector('.ds-segment-count'), null);
   console.log('✓ createSegmentedControl passed');
+}
+
+// 2b. Segmented Control：可选条数与隐藏项（技能页作用域分段「全部 5」、无条目时隐藏「临时」）
+{
+  const changes = [];
+  const seg = createSegmentedControl({
+    options: [
+      { value: '', label: '全部', count: 5 },
+      { value: 'project', label: '项目', count: 0 },
+      { value: 'temporary', label: '临时', count: null },
+      { value: 'plain', label: '无计数' },
+    ],
+    value: '',
+    onChange: (val) => changes.push(val),
+    ariaLabel: '作用域',
+  });
+  const item = (value) => seg.element.querySelector(`.ds-segment-item[data-value="${value}"]`);
+  const count = (value) => item(value).querySelector('.ds-segment-count');
+  assert.equal(item('').querySelector('.ds-segment-label').textContent, '全部');
+  assert.equal(count('').textContent, '5');
+  assert.equal(count('project').textContent, '0', '0 是一个真实计数，不能被当成「没有」清空');
+  assert.equal(count('temporary').textContent, '', 'null 计数留空节点（CSS 里 :empty 不占位），不写成 0');
+  assert.equal(count('plain'), null);
+  seg.setCount('project', 2);
+  assert.equal(count('project').textContent, '2');
+  seg.setCount('', undefined);
+  assert.equal(count('').textContent, '');
+  seg.setCount('missing', 9); // 不存在的值：静默忽略
+  assert.equal(seg.element.querySelectorAll('.ds-segment-count').length, 3);
+
+  seg.setOptionHidden('temporary', true);
+  assert.equal(item('temporary').hidden, true);
+  assert.equal(item('project').hidden, false, '只隐藏指定的那一项');
+  seg.setOptionHidden('temporary', false);
+  assert.equal(item('temporary').hidden, false);
+  assert.deepEqual(changes, [], 'setCount / setOptionHidden 不触发 onChange');
+  console.log('✓ createSegmentedControl count / hidden passed');
 }
 
 // 3. Help Icon

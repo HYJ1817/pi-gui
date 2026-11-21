@@ -341,6 +341,22 @@ function createWorld(label, entry) {
     assert.ok(pkg.scripts.test.includes('node tests/agent-capability-pages.cjs'), 'missing from the npm test chain');
   });
 
+  /* 真实画面由 shortcut-electron 量计算样式；这里守住规则本身，CI 的 npm test 也能发现它被删。 */
+  await check('the 扩展 main-nav item paints aria-current as selected and the current session row yields it', () => {
+    const css = stripComments(fs.readFileSync(path.join(PUB, 'app-shell.css'), 'utf8'));
+    const rule = (selector) => {
+      const at = css.indexOf(selector + ' {');
+      assert.ok(at >= 0, `missing rule ${selector}`);
+      return css.slice(at, css.indexOf('}', at));
+    };
+    assert.match(rule('.project-sidebar:not(.settings-mode) .rail-nav > .nav-item[aria-current="page"]'), /background:\s*var\(--ds-bg-active\)/);
+    assert.match(rule('.project-sidebar .pj-sess.on'), /background:\s*var\(--ds-bg-active\)/, 'nav and session share one selected token');
+    assert.match(rule('.project-sidebar:has(.rail-nav > .nav-item[aria-current="page"]) .pj-sess.on'), /background:\s*transparent/);
+    const html = fs.readFileSync(path.join(PUB, 'index.html'), 'utf8');
+    assert.match(html, /<nav class="rail-nav"[^>]*>(?:(?!<\/nav>)[\s\S])*?<button[^>]*id="navExtensions"/, '扩展 sits in the rail nav');
+    assert.match(html, /<div class="sidebar-session-heading">\s*<button[^>]*id="navHome"/, '会话 heading is not a direct rail-nav item, so it never matches');
+  });
+
   console.log('agent capability pages: data projections');
   const SM = vm.runInNewContext(bundle(path.join(SKILLS_DIR, 'model.js')).code, { window: {} });
   const EM = vm.runInNewContext(bundle(path.join(EXT_DIR, 'model.js')).code, { window: {} });
@@ -374,10 +390,27 @@ function createWorld(label, entry) {
     assert.deepEqual(ids(SM.filterSkills(list, {})), [1, 2, 3, 4]);
     assert.deepEqual(plain(SM.skillScopeCounts(list)), { all: 4, project: 1, user: 1, temporary: 1 });
     const groups = SM.groupSkillsByScope(list);
-    assert.deepEqual(plain(groups.map((group) => group.scope)), ['project', 'user', 'temporary', 'other']);
+    assert.deepEqual(plain(groups.map((group) => group.scope)), ['user', 'project', 'temporary', 'other'], 'global before project, like PI-Desktop');
     assert.deepEqual(ids(groups[3].items), [4], 'an unknown scope is grouped last, not dropped');
     assert.equal(SM.skillScopeLabel('user'), '全局');
     assert.equal(SM.skillScopeLabel('a-future-scope'), 'a-future-scope');
+  });
+
+  await check('a group header names the discovery dirs that exist, else the default one, never another scope', () => {
+    const roots = [
+      { label: '~/.pi/agent/skills', dir: 'C:/h/.pi/agent/skills', scope: 'user', exists: false },
+      { label: '~/.agents/skills', dir: 'C:/h/.agents/skills', scope: 'user', exists: true },
+      { label: '<项目>/.pi/skills', dir: 'C:/p/.pi/skills', scope: 'project', exists: false },
+      { label: 'C:/p/.agents/skills', dir: 'C:/p/.agents/skills', scope: 'project', exists: false },
+    ];
+    assert.deepEqual(plain(SM.skillScopeRoots(roots, 'user')), [{ label: '~/.agents/skills', dir: 'C:/h/.agents/skills' }]);
+    assert.deepEqual(plain(SM.skillScopeRoots(roots, 'project')), [{ label: '<项目>/.pi/skills', dir: 'C:/p/.pi/skills' }],
+      'nothing exists yet: show where pi would look first');
+    assert.deepEqual(plain(SM.skillScopeRoots(roots, 'temporary')), []);
+    assert.deepEqual(plain(SM.skillScopeRoots(undefined, 'user')), [], 'an older answer without roots is not an error');
+    assert.equal(SM.skillStateMeta('invalid').tone, 'error');
+    assert.equal(SM.skillStateMeta('untrusted').tone, 'warning');
+    assert.equal(SM.skillStateMeta('a-future-state').tone, 'neutral', 'unknown never borrows a warning colour');
   });
 
   await check('the toggle confirmation names the settings file and rule, never the skill file', () => {
@@ -403,6 +436,20 @@ function createWorld(label, entry) {
     assert.equal(EM.extensionStateLabel({ state: { loaded: false } }), '未加载');
     assert.equal(EM.extensionStateLabel({ state: { loaded: null } }), '加载未知');
     assert.equal(EM.extensionScopeLabel('a-future-scope'), '未知');
+  });
+
+  await check('extension cards group by evidence: problems first, unknown never folded into 未加载', () => {
+    const unknown = { ...EXT_OK, id: 'ext-3', state: { ...EXT_OK.state, loaded: null } };
+    const unloaded = { ...EXT_OK, id: 'ext-4', state: { ...EXT_OK.state, loaded: false } };
+    const groups = EM.groupExtensions([unknown, EXT_OK, unloaded, EXT_BROKEN]);
+    assert.deepEqual(plain(groups.map((group) => [group.id, group.items.map((item) => item.id)])),
+      [['problem', ['ext-2']], ['loaded', ['ext-1']], ['unloaded', ['ext-4']], ['unknown', ['ext-3']]]);
+    assert.deepEqual(plain(EM.groupExtensions([])), []);
+    assert.equal(EM.extensionCardMeta(EXT_OK), 'v1.0.0 · 本地 · 全局');
+    assert.equal(EM.extensionCardMeta({ source: {}, scope: 'a-future-scope' }), '版本未知 · 未知来源 · 作用域未知');
+    assert.deepEqual(plain(EM.extensionCardTags({ state: { enabled: false, restartRequired: true } })),
+      [{ text: '已停用', tone: 'neutral' }, { text: '需要重启', tone: 'warning' }]);
+    assert.deepEqual(plain(EM.extensionCardTags({ state: { enabled: null, restartRequired: null } })), [], 'null is not a tag');
   });
 
   await check('extension search uses the same state wording as the list', () => {
@@ -451,7 +498,7 @@ function createWorld(label, entry) {
     A.release('GET /api/skills', SKILLS);
     await tick();
     assert.equal(page.card.querySelectorAll('.skill-row').length, 0, 'closed page must not render the late list');
-    assert.match(page.card.textContent, /正在读取 Skills/);
+    assert.match(page.card.textContent, /正在读取技能/);
     assert.equal(A.$('skillCount').textContent, '', 'closed page must not update the menu badge');
   });
 
@@ -463,7 +510,7 @@ function createWorld(label, entry) {
     await tick();
     const body = page.card.querySelector('.skills-body');
     assert.equal(page.card.querySelectorAll('.skill-row').length, 0, 'old project rows must not render');
-    assert.match(body.textContent, /项目已切换，刷新后查看当前项目的 Skills/);
+    assert.match(body.textContent, /项目已切换，刷新后查看当前项目的技能/);
     const refresh = [...body.querySelectorAll('button')].find((button) => button.textContent === '刷新');
     assert.ok(refresh, 'the prompt offers 刷新');
     A.answer('GET /api/skills', SKILLS);
@@ -607,6 +654,134 @@ function createWorld(label, entry) {
     assert.equal(A.listenerCount(GEN), SKILL_GEN_BASE);
   });
 
+  await skillsCheck('Skills: one title and one toolbar, then 全局级 before 项目级, each with its discovery dir and count', async () => {
+    A.answer('GET /api/skills', SKILLS);
+    const page = mountSkills();
+    await tick();
+    assert.deepEqual([...page.card.querySelectorAll('h1, h2, h3')].map((node) => node.textContent), ['技能'],
+      'one page title, no second heading');
+    assert.equal(page.card.querySelector('.skills-head').childElementCount, 1, 'no description banner under the title');
+    assert.equal(page.card.querySelectorAll('.ext-tabs, .ext-tab').length, 0, 'the old mixed tab strip is gone');
+    assert.deepEqual([...page.card.querySelector('.skills-toolbar').children].map((node) => node.classList[0]),
+      ['ds-segmented', 'skills-search', 'ds-select', 'skills-toolbar-actions']);
+    const seg = (value) => page.card.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
+    const segText = (value) => [seg(value).querySelector('.ds-segment-label').textContent, seg(value).querySelector('.ds-segment-count').textContent];
+    assert.deepEqual(['', 'user', 'project'].map(segText), [['全部', '3'], ['全局', '2'], ['项目', '1']]);
+    assert.equal(seg('temporary').hidden, true, 'no --skill entries: the 临时 tab stays hidden');
+    const groups = [...page.card.querySelectorAll('.skills-group')].map((group) => [
+      group.dataset.scope,
+      group.querySelector('.skills-group-title').textContent,
+      group.querySelector('.skills-group-path').textContent,
+      group.querySelector('.skills-group-path').title,
+      group.querySelector('.skills-group-count').textContent,
+      [...group.querySelectorAll('.skill-name')].map((node) => node.textContent),
+    ]);
+    assert.deepEqual(groups, [
+      ['user', '全局级', '~/.pi/agent/skills', AGENT + '\\skills', '2', ['code-review', 'pdf-tools']],
+      ['project', '项目级', '<项目>/.pi/skills', PROJECT + '\\.pi\\skills', '1', ['proj-lint']],
+    ], 'server order inside each group; the group path is the discovery dir, its title the full dir');
+    const badges = (name) => [...rowOf(page.card, name).querySelectorAll('.ds-badge')].map((node) => [node.textContent, node.className]);
+    assert.deepEqual(badges('code-review'), [['全局', 'ds-badge ds-badge-neutral']], 'an enabled skill carries its scope; the switch says it is on');
+    assert.deepEqual(badges('pdf-tools'), [['全局', 'ds-badge ds-badge-neutral'], ['已停用', 'ds-badge ds-badge-neutral']]);
+    const pdf = rowOf(page.card, 'pdf-tools');
+    assert.equal(pdf.querySelector('.skill-row-note').textContent, '被 settings 里的 -skills/pdf-tools/SKILL.md 关掉了', 'why it is off sits under the name');
+    assert.ok(pdf.querySelector('.skill-glyph .ext-dot').classList.contains('off'));
+    const review = rowOf(page.card, 'code-review');
+    assert.equal(review.querySelector('.skill-row-note'), null);
+    assert.equal(review.querySelector('.skill-row-desc').textContent, 'Review source code for bugs');
+    const main = review.querySelector('.skill-row-main');
+    assert.equal(main.getAttribute('aria-expanded'), 'false');
+    assert.equal(main.getAttribute('aria-controls'), 'skillDetail-a000000000000001');
+    assert.equal(main.contains(review.querySelector('.skill-toggle')), false, 'the switch is not nested inside the row button');
+    page.close();
+  });
+
+  await skillsCheck('Skills: an empty group says what is missing; a filter with no match shows one empty state, not one per group', async () => {
+    const userOnly = { ...SKILLS, skills: SKILLS.skills.filter((item) => item.scope === 'user'), counts: { total: 2, enabled: 1, project: 0, user: 2 } };
+    A.answer('GET /api/skills', userOnly);
+    const page = mountSkills();
+    await tick();
+    const group = (scope) => page.card.querySelector(`.skills-group[data-scope="${scope}"]`);
+    assert.equal(group('project').querySelector('.skills-empty').textContent, '此目录中没有技能');
+    assert.equal(group('project').querySelector('.skills-group-count').textContent, '0');
+    assert.equal(group('project').querySelector('.skills-group-path').textContent, '<项目>/.pi/skills', 'an empty group still says where pi looks');
+    const input = page.card.querySelector('.skills-search-input');
+    const type = (text) => { input.value = text; input.dispatchEvent(new A.w.Event('input', { bubbles: true })); };
+    type('no-such-skill');
+    assert.equal(page.card.querySelectorAll('.skills-group').length, 0);
+    assert.deepEqual([...page.card.querySelectorAll('.skills-empty')].map((node) => node.textContent), ['没有符合筛选条件的技能']);
+    type('pdf');
+    assert.deepEqual([...page.card.querySelectorAll('.skills-group')].map((node) => node.dataset.scope), ['user'],
+      'while searching only groups with matches remain');
+    type('');
+    const status = page.card.querySelector('.skills-status');
+    status.value = 'problem';
+    status.dispatchEvent(new A.w.Event('change', { bubbles: true }));
+    assert.deepEqual([...page.card.querySelectorAll('.skills-empty')].map((node) => node.textContent), ['没有符合筛选条件的技能']);
+    page.close();
+
+    A.answer('GET /api/skills', { ...userOnly, hasProject: false, cwd: '', projectSettings: null, roots: SKILLS.roots.filter((root) => root.scope === 'user') });
+    const noProject = mountSkills();
+    await tick();
+    const project = noProject.card.querySelector('.skills-group[data-scope="project"]');
+    assert.equal(project.querySelector('.skills-empty').textContent, '还没有打开项目');
+    assert.equal(project.querySelector('.skills-group-path').textContent, '', 'no project: no made-up project dir');
+    noProject.close();
+  });
+
+  await skillsCheck('Skills: --skill entries bring up the 临时 tab and group; the tab falls back to 全部 once they are gone', async () => {
+    /* 形状照抄 server/skills.js 里「pi 报了但磁盘没枚举到」的补录分支（--skill 走这里）。 */
+    const temporary = {
+      id: 't000000000000001', name: 'one-off', description: 'Loaded with --skill', scope: 'temporary', source: 'auto',
+      origin: 'top-level', mode: 'pi', rootLabel: 'C:\\fixture\\one-off', path: 'C:\\fixture\\one-off\\SKILL.md',
+      dir: 'C:\\fixture\\one-off', file: 'SKILL.md', rel: '', baseDir: 'C:\\fixture\\one-off', loaded: true, state: 'enabled',
+      stateNote: '由 pi 报告为已加载（Pi GUI 未在磁盘发现它，可能来自 package）', disablePattern: '', settingsPath: null,
+      toggleable: false, blockedByTrust: false, disabledBy: '', disableModelInvocation: false, license: '', compatibility: '', bytes: null, errors: [],
+    };
+    A.answer('GET /api/skills', { ...SKILLS, skills: [...SKILLS.skills, temporary], counts: { ...SKILLS.counts, total: 4 } });
+    const page = mountSkills();
+    await tick();
+    const seg = (value) => page.card.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
+    assert.equal(seg('temporary').hidden, false);
+    assert.equal(seg('temporary').querySelector('.ds-segment-count').textContent, '1');
+    const temp = page.card.querySelector('.skills-group[data-scope="temporary"]');
+    assert.equal(temp.querySelector('.skills-group-title').textContent, '临时（--skill）');
+    assert.equal(temp.querySelector('.skills-group-path').textContent, 'C:\\fixture\\one-off', "no discovery root: the entry's own root label");
+    assert.equal(rowOf(page.card, 'one-off').querySelector('.skill-toggle'), null, 'a --skill entry has no switch');
+    seg('temporary').click();
+    assert.deepEqual([...page.card.querySelectorAll('.skills-group')].map((node) => node.dataset.scope), ['temporary']);
+    A.answer('GET /api/skills', SKILLS);
+    [...page.card.querySelectorAll('.skills-toolbar button')].find((button) => button.textContent === '刷新').click();
+    await tick();
+    assert.equal(seg('temporary').hidden, true);
+    assert.equal(seg('').getAttribute('aria-checked'), 'true', 'a hidden tab cannot stay selected');
+    assert.deepEqual([...page.card.querySelectorAll('.skills-group')].map((node) => node.dataset.scope), ['user', 'project']);
+    page.close();
+  });
+
+  await skillsCheck('Skills: an untrusted project marks its rows with a warning badge and one trust note above the list', async () => {
+    const untrusted = {
+      ...SKILLS,
+      trust: { ...SKILLS.trust, trusted: false, reason: 'untrusted' },
+      roots: SKILLS.roots.map((root) => (root.scope === 'project' ? { ...root, blockedByTrust: true } : root)),
+      skills: SKILLS.skills.map((item) => (item.scope === 'project'
+        ? { ...item, state: 'untrusted', loaded: false, blockedByTrust: true, stateNote: '项目未被信任：pi 在非交互模式下不加载项目级资源' }
+        : item)),
+    };
+    A.answer('GET /api/skills', untrusted);
+    const page = mountSkills();
+    await tick();
+    const notes = [...page.card.querySelectorAll('.skills-notes .cfg-note')].map((node) => node.textContent);
+    assert.equal(notes.length, 1);
+    assert.match(notes[0], /当前项目未被信任/);
+    const lint = rowOf(page.card, 'proj-lint');
+    assert.deepEqual([...lint.querySelectorAll('.ds-badge')].map((node) => [node.textContent, node.className]),
+      [['项目', 'ds-badge ds-badge-neutral'], ['未加载（项目未信任）', 'ds-badge ds-badge-warning']]);
+    assert.equal(lint.querySelector('.skill-row-note').textContent, '项目未被信任：pi 在非交互模式下不加载项目级资源');
+    assert.ok(lint.querySelector('.skill-row-note').classList.contains('is-warn'));
+    page.close();
+  });
+
   console.log('agent capability pages: Extensions page lifecycle');
   const B = createWorld('extensions', path.join(EXT_DIR, 'page.js'));
   B.w.S.hasProject = true;
@@ -704,7 +879,7 @@ function createWorld(label, entry) {
     B.release('GET /api/extensions', registry([EXT_OK, EXT_BROKEN]));
     await tick();
     assert.equal(extItems().length, 0, 'the old project list must not render');
-    assert.match(B.d.querySelector('#extensionsTabPanel .ext-list').textContent, /项目已切换，刷新后查看当前项目的扩展/);
+    assert.match(B.d.querySelector('#extensionsTabPanel .extensions-list').textContent, /项目已切换，刷新后查看当前项目的扩展/);
     assert.equal(B.d.querySelector('.extensions-tab-count').textContent, '');
     assert.equal(B.count('GET', '/api/approvals/capability'), approvals, 'no follow-up request for the old project');
   });
@@ -737,7 +912,7 @@ function createWorld(label, entry) {
     const count = () => B.d.querySelector('.extensions-tab-count').textContent;
     assert.equal(count(), '2');
     B.w.beginWorkspaceSwitch('C:\\fixture\\other');
-    const list = B.d.querySelector('#extensionsTabPanel .ext-list');
+    const list = B.d.querySelector('#extensionsTabPanel .extensions-list');
     assert.match(list.textContent, /项目已切换，刷新后查看当前项目的扩展/);
     assert.equal(extItems().length, 0);
     assert.equal(count(), '', 'an unknown count is blank, not the old number');
@@ -766,6 +941,137 @@ function createWorld(label, entry) {
     assert.equal(B.d.querySelector('.extensions-tab-count').textContent, '1');
     B.w.showChat();
     assert.deepEqual(deltas(), [0, 0, 0]);
+  });
+
+  await extCheck('Extensions: one 扩展 title; the tabs share a row with the search, 刷新 sits in the header; cards group by evidence', async () => {
+    B.answer('GET /api/extensions', registry([EXT_OK, EXT_BROKEN]));
+    B.w.openExtensions();
+    await tick();
+    const surface = B.$('workSurface');
+    assert.deepEqual([...surface.querySelectorAll('h1, h2')].map((node) => node.textContent), ['扩展'], 'the page draws one title');
+    assert.equal(surface.querySelectorAll('.ext-tabs, .ext-tab, .ext-body').length, 0, 'the old mixed tab strip is gone');
+    const head = surface.querySelector('.extensions-head');
+    const actions = head.querySelector('.extensions-head-actions');
+    const refresh = actions.querySelector('.extensions-refresh');
+    assert.ok(refresh, '刷新 sits in the page header');
+    const slot = surface.querySelector('.extensions-toolbar-row > .extensions-toolbar-slot');
+    const input = slot.querySelector('.extensions-search-input');
+    assert.ok(input, 'the search shares the row with the tabs');
+    assert.deepEqual([...surface.querySelectorAll('.extensions-tab')].map((button) => [
+      button.querySelector('.extensions-tab-label').textContent, button.querySelector('.ds-segment-count')?.textContent ?? null,
+    ]), [['已安装', '2'], ['插件市场', null]]);
+    assert.deepEqual([...surface.querySelectorAll('.extensions-group')].map((group) => [
+      group.dataset.group,
+      group.querySelector('.extensions-group-title').textContent,
+      group.querySelector('.extensions-group-count').textContent,
+      [...group.querySelectorAll('.extensions-card')].map((card) => card.dataset.extensionId),
+    ]), [['problem', '需要处理', '1', ['ext-2']], ['loaded', '已加载', '1', ['ext-1']]], 'a load error is listed first, never mixed into 未加载');
+    const ok = surface.querySelector('.extensions-card[data-extension-id="ext-1"]');
+    assert.equal(ok.querySelector('.ext-name').textContent, 'Sample Extension');
+    assert.equal(ok.querySelector('.extensions-card-meta').textContent, 'v1.0.0 · 本地 · 全局');
+    assert.equal(ok.querySelector('.extensions-card-desc').textContent, 'Fixture extension');
+    assert.deepEqual([...ok.querySelectorAll('.extensions-cap')].map((chip) => [chip.textContent, chip.title]), [['hello', 'command: hello']]);
+    assert.equal(ok.querySelectorAll('.ds-badge').length, 0, 'enabled: true and restartRequired: null add no tag');
+    const broken = surface.querySelector('.extensions-card[data-extension-id="ext-2"]');
+    assert.ok(broken.classList.contains('is-error'));
+    assert.equal(broken.querySelector('.extensions-card-meta').textContent, '版本未知 · 本地 · 项目');
+    assert.equal(broken.querySelector('.extensions-card-desc').textContent, '（没有简介）');
+    assert.equal(broken.querySelector('.extensions-card-error').textContent, '加载失败：Pi 报告扩展加载错误');
+
+    const toggle = ok.querySelector('.extensions-card-toggle');
+    const details = B.$(toggle.getAttribute('aria-controls'));
+    assert.ok(details && ok.contains(details), 'the toggle controls the details inside its own card');
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(details.hidden, true);
+    assert.equal(details.childElementCount, 0, 'facts are built on first open, not for every card up front');
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(details.hidden, false);
+    const facts = Object.fromEntries([...details.querySelectorAll('.ext-row')].map((node) => [node.firstChild.textContent, node.lastChild.textContent]));
+    assert.equal(facts['位置'], 'C:/fixture/extensions/sample.ts');
+    assert.equal(facts['需要重启'], '未知', 'null stays 未知 in the facts');
+    assert.match(details.textContent, /已确认的能力.*command: hello/);
+    assert.equal(details.textContent.includes('Fixture extension'), false, 'the description is on the card, not repeated in the details');
+    assert.ok(ok.classList.contains('is-open'), 'an open card lifts the two-line clamp on its description');
+    const brokenToggle = broken.querySelector('.extensions-card-toggle');
+    brokenToggle.click();
+    const brokenDetails = B.$(brokenToggle.getAttribute('aria-controls'));
+    const brokenFacts = Object.fromEntries([...brokenDetails.querySelectorAll('.ext-row')].map((node) => [node.firstChild.textContent, node.lastChild.textContent]));
+    assert.equal(brokenFacts['错误阶段'], 'load', 'the raw Registry phase stays visible');
+    assert.equal(brokenDetails.textContent.includes('Pi 报告扩展加载错误'), false, 'the error message is on the card once, not repeated');
+    brokenToggle.click();
+    toggle.click();
+    assert.equal(details.hidden, true);
+    assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+    toggle.click();
+    assert.equal(details.querySelectorAll('.ext-row').length, 8, 'reopening shows the same facts once, not appended again');
+
+    input.value = 'sample';
+    input.dispatchEvent(new B.w.Event('input', { bubbles: true }));
+    assert.equal(slot.querySelector('.extensions-result-count').textContent, '找到 1 个，共 2 个');
+    assert.deepEqual([...surface.querySelectorAll('.extensions-card')].map((card) => card.dataset.extensionId), ['ext-1']);
+    const reopened = surface.querySelector('.extensions-card[data-extension-id="ext-1"] .extensions-card-toggle');
+    assert.equal(reopened.getAttribute('aria-expanded'), 'true', 'an open card stays open across a search re-render');
+    assert.equal(reopened.getAttribute('aria-controls'), toggle.getAttribute('aria-controls'), 'the details id is stable per extension');
+    assert.equal(B.$(reopened.getAttribute('aria-controls')).hidden, false);
+
+    B.$('extensionsTabMarket').click();
+    assert.equal(slot.childElementCount, 0, 'the market tab has no search in phase 1');
+    assert.equal(actions.childElementCount, 0, 'the market tab has no header action in phase 1');
+    B.$('extensionsTabInstalled').click();
+    assert.equal(slot.querySelector('.extensions-search-input'), input, 'the same search box comes back');
+    assert.equal(input.value, 'sample', 'with its text');
+    assert.equal(actions.querySelector('.extensions-refresh'), refresh);
+
+    input.value = 'no-such-extension';
+    input.dispatchEvent(new B.w.Event('input', { bubbles: true }));
+    assert.equal(surface.querySelectorAll('.extensions-group').length, 0);
+    assert.deepEqual([...surface.querySelectorAll('.extensions-list .extensions-empty-title')].map((node) => node.textContent), ['没有符合搜索条件的扩展']);
+    assert.equal(slot.querySelector('.extensions-result-count').textContent, '找到 0 个，共 2 个');
+    input.value = '';
+    input.dispatchEvent(new B.w.Event('input', { bubbles: true }));
+    assert.equal(slot.querySelector('.extensions-result-count').textContent, '', 'no count line without a search');
+
+    const reads = B.count('GET', '/api/extensions');
+    refresh.click();
+    assert.equal(refresh.disabled, true, '刷新 is disabled while the Registry is read');
+    await tick();
+    assert.equal(B.count('GET', '/api/extensions'), reads + 1);
+    assert.equal(refresh.disabled, false);
+    B.w.showChat();
+  });
+
+  await extCheck('Extensions: an empty Registry and a failed read are tiles with a real next step; 已知能力 stays available', async () => {
+    B.answer('GET /api/extensions', registry([{ ...EXT_OK, id: 'ext-3', state: { ...EXT_OK.state, loaded: null } }]));
+    B.w.openExtensions();
+    await tick();
+    const list = () => B.d.querySelector('#extensionsTabPanel .extensions-list');
+    assert.deepEqual([...list().querySelectorAll('.extensions-group')].map((group) => group.dataset.group), ['unknown'],
+      'loaded: null is its own group, not 未加载');
+    assert.equal(list().querySelector('.extensions-group-title').textContent, '加载状态未知');
+    B.answer('GET /api/extensions', registry([]));
+    const refresh = B.d.querySelector('.extensions-head-actions .extensions-refresh');
+    refresh.click();
+    await tick();
+    assert.deepEqual([...list().querySelectorAll('.extensions-empty-title')].map((node) => node.textContent), ['还没有发现已安装的扩展']);
+    assert.equal(B.d.querySelector('.extensions-tab-count').textContent, '0');
+    B.answer('GET /api/extensions', { ok: false, error: 'fixture: registry failed' });
+    refresh.click();
+    await tick();
+    assert.equal(list().querySelector('.extensions-empty-title').textContent, '扩展读取失败。');
+    assert.equal(B.d.querySelector('.extensions-tab-count').textContent, '', 'a failed read leaves the count unknown, not 0');
+    const retry = [...list().querySelectorAll('button')].find((button) => button.textContent === '重试');
+    assert.ok(retry, 'the failure tile offers the real retry path');
+    assert.deepEqual([...B.d.querySelectorAll('#extensionsTabPanel .ext-known-item > summary')].map((node) => node.textContent),
+      ['Web Access', 'Subagents', 'Pi Memory', 'Browser Use', 'Approval / Permission'], 'known capabilities stay reachable after a failure');
+    assert.equal(B.d.querySelector('#extensionsKnownTitle').textContent, '已知能力');
+    B.answer('GET /api/extensions', registry([EXT_OK]));
+    const reads = B.count('GET', '/api/extensions');
+    retry.click();
+    await tick();
+    assert.equal(B.count('GET', '/api/extensions'), reads + 1);
+    assert.equal(extItems().length, 1);
+    B.w.showChat();
   });
 
   console.log('agent capability pages: MCP report lifecycle');

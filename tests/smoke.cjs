@@ -3967,8 +3967,8 @@ staticCheck();
     const card = $('workSurface');
 
     check('扩展页：只有「已安装 / 插件市场」两个页签（Skills / MCP 已拆成各自的页面）', () => {
-      const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.firstChild.textContent);
-      return (labels.join(',') === '已安装,插件市场'
+      const labels = [...card.querySelectorAll('.extensions-tab')].map((b) => b.querySelector('.extensions-tab-label').textContent);
+      return (labels.join(',') === '已安装,插件市场' && !card.querySelector('.ext-tab')
         && !card.querySelector('#extensionsTabSkills') && !card.querySelector('#extensionsTabMcp'))
         || JSON.stringify(labels);
     });
@@ -3990,16 +3990,21 @@ staticCheck();
     check('P15 Extension 列表分开显示加载状态与来源', () =>
       card.textContent.includes('Sample Extension') && card.textContent.includes('Broken Extension') &&
       card.textContent.includes('已加载') && card.textContent.includes('加载失败') && card.textContent.includes('本地'));
-    card.querySelector('.ext-extension-item')?.click();
-    check('P15 Extension 详情显示命令并说明 tool registry 限制', () =>
-      card.textContent.includes('hello') && card.textContent.includes('Pi RPC 未提供已注册工具列表'));
+    card.querySelector('.ext-extension-item[data-extension-id="ext-1"] .extensions-card-toggle')?.click();
+    check('P15 Extension 详情显示命令并说明 tool registry 限制', () => {
+      const details = card.querySelector('.ext-extension-item[data-extension-id="ext-1"] .extensions-card-details');
+      const text = details && !details.hidden ? details.textContent : '';
+      return (text.includes('command: hello') && text.includes('Pi RPC 未提供已注册工具列表')) || text.slice(0, 200) || '详情没有展开';
+    });
     const extSearch = card.querySelector('.extensions-search-input');
     extSearch.value = 'broken';
     extSearch.dispatchEvent(new window.Event('input'));
     check('扩展页：搜索只筛选投影（只剩 Broken Extension，总数仍按 Registry 写 2）', () => {
       const names = [...card.querySelectorAll('.ext-extension-item .ext-name')].map((n) => n.textContent);
-      return (names.join(',') === 'Broken Extension' && /发现 2 个 Extension · 当前筛选 1/.test(card.textContent))
-        || JSON.stringify(names);
+      const result = card.querySelector('.extensions-result-count')?.textContent;
+      const tabCount = card.querySelector('#extensionsTabInstalled .extensions-tab-count')?.textContent;
+      return (names.join(',') === 'Broken Extension' && result === '找到 1 个，共 2 个' && tabCount === '2')
+        || JSON.stringify({ names, result, tabCount });
     });
     {
       /* 插件市场第一阶段只预留布局：打开它不能发任何市场 / 安装请求。 */
@@ -4063,7 +4068,8 @@ staticCheck();
     });
     check('技能页：作用域分段带真实计数（全部 5 / 项目 1 / 全局 4，没有临时项就不显示「临时」）', () => {
       const seg = (value) => skillsCard.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
-      return (seg('').textContent === '全部 5' && seg('project').textContent === '项目 1' && seg('user').textContent === '全局 4'
+      const text = (value) => `${seg(value).querySelector('.ds-segment-label').textContent} ${seg(value).querySelector('.ds-segment-count').textContent}`;
+      return (text('') === '全部 5' && text('project') === '项目 1' && text('user') === '全局 4'
         && seg('temporary').hidden === true)
         || [...skillsCard.querySelectorAll('.skills-scope .ds-segment-item')].map((b) => `${b.textContent}${b.hidden ? '(hidden)' : ''}`).join(',');
     });
@@ -8407,7 +8413,7 @@ staticCheck();
     check('P30 Changes 在右栏且 Planner 保持原实例', () => $('workspace').dataset.workspaceView === 'planner' && $('rightPane').querySelector('.chg-body') && host.querySelector('.planner-pane') && $('navChanges').getAttribute('aria-pressed') === 'true');
     $('navExtensions').click();
     check('P14-D Extensions 替换 Changes 并清掉 Git 容器', () => $('workspace').dataset.workspaceView === 'extensions' && !host.querySelector('.chg-body') && window.panels.changes === null);
-    check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
+    check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('is-active')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
     /* 拆分前「Skills 与扩展」挂在设置目录下，进入扩展工作区时设置目录保持展开；
      * 现在「扩展」是应用主导航目的地：设置目录收起、「返回应用」隐藏，侧栏只有它一处高亮。 */
     check('扩展是主导航目的地：设置目录收起，侧栏唯一高亮是「扩展」', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1 && $('globalMoreMenu').hidden && $('settingsReturn').hidden && !$('globalMoreMenu').contains($('navExtensions')));

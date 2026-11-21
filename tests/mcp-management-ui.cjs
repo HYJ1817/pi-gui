@@ -325,7 +325,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal($('workspace').dataset.workspaceView, 'settings');
     assert.equal($('workViewTitle').textContent, 'MCP 服务器');
     assert.ok(page());
-    assert.equal(d.querySelector('.ext-tab[aria-selected="true"]'), null);
+    assert.equal(d.querySelector('.ext-tab[aria-selected="true"], .extensions-tab[aria-selected="true"]'), null);
   });
 
   await check('全局 / 项目分组、路径、状态与操作都来自真实摘要', () => {

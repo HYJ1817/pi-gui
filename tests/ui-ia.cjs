@@ -94,15 +94,15 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   });
   await check('MCP management has its own settings surface, not the extensions tab', async () => {
     $('navMcp').click(); await tick();
-    assert.equal(d.querySelector('.ext-tab[aria-selected="true"]'), null);
+    assert.equal(d.querySelector('.ext-tab[aria-selected="true"], .extensions-tab[aria-selected="true"]'), null);
     assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, 'navMcp');
     assert.equal($('workViewTitle').textContent, 'MCP 服务器');
   });
   await check('Extensions is a primary destination with installed and market tabs; Skills is a settings page', async () => {
     $('navExtensions').click(); await tick();
     assert.equal($('workspace').dataset.workspaceView, 'extensions');
-    assert.deepEqual([...d.querySelectorAll('#workSurface .ext-tab')].map(tab => tab.dataset.tab), ['installed', 'market']);
-    assert.equal(d.querySelector('.ext-tab[aria-selected="true"]').dataset.tab, 'installed');
+    assert.deepEqual([...d.querySelectorAll('#workSurface .extensions-tab')].map(tab => tab.dataset.tab), ['installed', 'market']);
+    assert.equal(d.querySelector('.extensions-tab[aria-selected="true"]').dataset.tab, 'installed');
     assert.equal($('extensionsTabSkills'), null); assert.equal($('extensionsTabMcp'), null);
     assert.equal($('navExtensions').getAttribute('aria-current'), 'page');
     assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]'), null);
@@ -110,7 +110,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal($('workViewTitle').textContent, '扩展');
     /* 页签切换只改页面内状态，导航高亮与标题不跟着漂。 */
     $('extensionsTabMarket').click();
-    assert.equal(d.querySelector('.ext-tab[aria-selected="true"]').dataset.tab, 'market');
+    assert.equal(d.querySelector('.extensions-tab[aria-selected="true"]').dataset.tab, 'market');
     assert.equal($('navExtensions').getAttribute('aria-current'), 'page');
     assert.equal($('workViewTitle').textContent, '扩展');
     $('navGlobalMore').click();
@@ -121,7 +121,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     const skills = d.querySelector('#workSurface .settings-detail-card.skills-page');
     assert.equal(skills.getAttribute('aria-label'), '技能');
     assert.equal(skills.querySelector('h3.settings-page-title').textContent, '技能');
-    assert.equal(d.querySelector('#workSurface .ext-tab'), null, 'no extension tabs inside the Skills page');
+    assert.equal(d.querySelector('#workSurface .ext-tab, #workSurface .extensions-tab'), null, 'no extension tabs inside the Skills page');
     $('navGlobalMore').click();
   });
   await check('Settings Escape returns focus to its visible trigger', () => {

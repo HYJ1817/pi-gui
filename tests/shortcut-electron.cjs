@@ -144,10 +144,37 @@ if (!process.versions.electron) {
     /* 扩展是应用主导航目的地（不再挂在设置目录下）；技能在「设置 › Agent 能力」。 */
     async function openExtensionsPage() {
       await read(`document.querySelector('#navExtensions').click()`);
-      await waitFor(`!!document.querySelector('#extensionsTabInstalled') && !!document.querySelector('.ext-tabs')`, 'extensions page');
+      await waitFor(`!!document.querySelector('#extensionsTabInstalled') && !!document.querySelector('.extensions-tabs')`, 'extensions page');
       await read(`document.querySelector('#extensionsTabInstalled').click()`);
-      await waitFor(`!!document.querySelector('.ext-list')`, 'installed tab');
+      await waitFor(`document.querySelectorAll('.extensions-list .extensions-card').length >= 1`, 'installed tab');
     }
+    /* 主导航选中态要真的画出来：jsdom 不套外部样式表，aria-current 对了也证明不了画面。
+     * 这里量真实计算样式，并与同一主题下 --ds-bg-active 的解析值比较。 */
+    const CLEAR = 'rgba(0, 0, 0, 0)';
+    /* .nav-item / .pj-sess 的底色有 120ms 过渡：先等两者没有进行中的动画再量，
+     * 否则视图一切换就量，读到的是过渡起点（不把期望值写进等待条件，断言仍由 check 做）。 */
+    const navSelection = async () => {
+      await sleep(50);
+      await waitFor(`['#navExtensions','#projectSidebar .pj-sess.on'].every(s=>{const n=document.querySelector(s);return !n||n.getAnimations().length===0;})`, 'nav transitions settle');
+      return readNavSelection();
+    };
+    const readNavSelection = () => read(`(()=>{
+      const bg = (node) => node ? getComputedStyle(node).backgroundColor : null;
+      const probe = document.createElement('div');
+      probe.style.backgroundColor = 'var(--ds-bg-active)';
+      document.body.append(probe);
+      const active = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      const nav = document.querySelector('#navExtensions');
+      return {
+        view: document.querySelector('#workspace').dataset.workspaceView,
+        active,
+        nav: bg(nav),
+        navCurrent: nav.getAttribute('aria-current'),
+        session: bg(document.querySelector('#projectSidebar .pj-sess.on')),
+        sessionCurrent: document.querySelector('#projectSidebar .pj-sess.on')?.getAttribute('aria-current') || null
+      };
+    })()`);
     async function openSkillsPage() {
       await openSettingsMenu();
       await read(`document.querySelector('#navSkills').click()`);
@@ -534,14 +561,78 @@ if (!process.versions.electron) {
       /* P36：已知能力设置回到 Extensions 页；展开一项，截到真实的安装 / 观察布局。 */
       await openExtensionsPage();
       await waitFor(`document.querySelectorAll('.ext-known-item .cap-setup').length>=4`, 'known capability setups');
-      await read(`document.querySelector('.ext-known>summary').click();document.querySelector('.ext-known-item>summary').click()`);
-      await sleep(200);
+      const extLayout = await read(`(()=>{
+        const box=(s)=>{const n=document.querySelector(s);if(!n)return null;const r=n.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right};};
+        const visible=(n)=>n.getClientRects().length>0&&getComputedStyle(n).visibility!=='hidden';
+        const loaded=[...document.querySelectorAll('.extensions-group[data-group="loaded"] .extensions-card')].map(n=>n.getBoundingClientRect());
+        const cards=[...document.querySelectorAll('.extensions-card')].map(n=>n.getBoundingClientRect());
+        return {
+          titles:[...document.querySelectorAll('#workViewTitle, #workSurface h1, #workSurface h2')].filter(n=>n.textContent.trim()==='扩展'&&visible(n)).length,
+          workTitleDisplay:getComputedStyle(document.querySelector('#workViewTitle')).display,
+          groups:[...document.querySelectorAll('.extensions-group')].map(n=>n.dataset.group),
+          tabs:box('.extensions-tabs'), search:box('.extensions-toolbar-slot .extensions-search'),
+          refresh:box('.extensions-head-actions .extensions-refresh'), title:box('.extensions-title'),
+          sideBySide:loaded.length>=2&&Math.abs(loaded[0].top-loaded[1].top)<1&&loaded[1].left>loaded[0].right,
+          cardsInside:cards.every(r=>r.left>=-0.5&&r.right<=innerWidth+0.5),
+          scrollWidth:document.documentElement.scrollWidth, inner:innerWidth
+        };
+      })()`);
+      check(extLayout.titles === 1 && extLayout.workTitleDisplay === 'none', 'extensions page paints exactly one 扩展 title (the work-surface title bar copy is hidden)', extLayout);
+      check(JSON.stringify(extLayout.groups) === JSON.stringify(['problem', 'loaded', 'unknown']), 'extension cards group as 需要处理 / 已加载 / 加载状态未知 (unknown is not 未加载)', extLayout.groups);
+      check(Boolean(extLayout.tabs && extLayout.search && extLayout.search.top < extLayout.tabs.bottom && extLayout.search.bottom > extLayout.tabs.top && extLayout.search.left > extLayout.tabs.right), '1320: the search sits on the tab row, right of 已安装 / 插件市场', extLayout);
+      check(Boolean(extLayout.refresh && extLayout.title && Math.abs((extLayout.refresh.top + extLayout.refresh.bottom) / 2 - (extLayout.title.top + extLayout.title.bottom) / 2) < 4), '1320: 刷新 sits in the page header, level with the title', extLayout);
+      check(extLayout.sideBySide && extLayout.cardsInside && extLayout.scrollWidth <= extLayout.inner + 1, '1320: extension cards form a multi-column grid without horizontal overflow', extLayout);
       await shot('1320-light-extensions');
+      await read(`document.querySelector('.extensions-group[data-group="loaded"] .extensions-card-toggle').click()`);
+      await waitFor(`!document.querySelector('.extensions-group[data-group="loaded"] .extensions-card-details').hidden`, 'card details open');
+      const extDetails = await read(`(()=>{
+        const card=document.querySelector('.extensions-group[data-group="loaded"] .extensions-card');
+        const next=document.querySelectorAll('.extensions-group[data-group="loaded"] .extensions-card')[1];
+        const a=card.getBoundingClientRect(), b=next.getBoundingClientRect(), d=card.querySelector('.extensions-card-details').getBoundingClientRect();
+        return { detailsInside:d.left>=a.left&&d.right<=a.right&&d.bottom<=a.bottom, neighbourTop:Math.round(b.top-a.top), expanded:card.querySelector('.extensions-card-toggle').getAttribute('aria-expanded') };
+      })()`);
+      check(extDetails.expanded === 'true' && extDetails.detailsInside && extDetails.neighbourTop === 0, 'opening a card shows its facts inside that card without moving its neighbour', extDetails);
+      await shot('1320-light-extensions-details');
+      await read(`document.querySelector('.extensions-group[data-group="loaded"] .extensions-card-toggle').click();document.querySelector('.ext-known-item>summary').click();document.querySelector('.ext-known').scrollIntoView({block:'start'})`);
+      await sleep(200);
+      const extScroll = await read(`(()=>{const surface=document.querySelector('#workSurface'),scroller=document.querySelector('#workSurface > .extensions-scroll');return {surfaceOverflow:getComputedStyle(surface).overflowY,surfaceScrollTop:surface.scrollTop,scrollerOverflow:scroller?getComputedStyle(scroller).overflowY:null,scrollerScrollTop:scroller?Math.round(scroller.scrollTop):null,knownVisible:(()=>{if(!scroller)return false;const k=document.querySelector('.ext-known').getBoundingClientRect(),r=scroller.getBoundingClientRect();return k.top>=r.top-1&&k.top<r.bottom;})()};})()`);
+      check(extScroll.surfaceOverflow === 'hidden' && extScroll.surfaceScrollTop === 0 && extScroll.scrollerOverflow === 'auto' && extScroll.scrollerScrollTop > 0 && extScroll.knownVisible, 'extensions page scrolls inside .extensions-scroll; the Work Surface itself keeps overflow hidden', extScroll);
+      await shot('1320-light-extensions-known');
+      await read(`document.querySelector('#workSurface > .extensions-scroll').scrollTop=0`);
       await read(`document.querySelector('#extensionsTabMarket').click()`);
       await waitFor(`!!document.querySelector('.extensions-market-empty')`, 'market placeholder');
       await shot('1320-light-extensions-market');
+      const lightNav = await navSelection();
+      check(lightNav.view === 'extensions' && lightNav.navCurrent === 'page' && lightNav.active !== CLEAR && lightNav.nav === lightNav.active, 'light: the 扩展 nav item is painted selected while its page is open', lightNav);
+      check(lightNav.sessionCurrent === 'true' && lightNav.session === CLEAR, 'light: the current session row yields its highlight while 扩展 is open (still aria-current)', lightNav);
+      await read(`document.querySelector('#navHome').click()`);
+      await waitFor(`document.querySelector('#workspace').dataset.workspaceView==='chat'`, 'back to chat');
+      const lightChat = await navSelection();
+      check(lightChat.navCurrent === null && lightChat.nav === CLEAR && lightChat.session === lightChat.active, 'light: back in chat the highlight returns to the current session row', lightChat);
       await openSkillsPage();
+      const skillsLayout = await read(`(()=>{
+        const card=document.querySelector('.skills-page');
+        const rows=[...card.querySelectorAll('.skill-row')];
+        const mids=[...card.querySelector('.skills-toolbar').children].map(n=>{const r=n.getBoundingClientRect();return (r.top+r.bottom)/2;});
+        return {
+          groups:[...card.querySelectorAll('.skills-group')].map(n=>n.dataset.scope),
+          paths:[...card.querySelectorAll('.skills-group-path')].map(n=>({text:n.textContent,width:Math.round(n.getBoundingClientRect().width)})),
+          toolbarSpread:Math.round(Math.max(...mids)-Math.min(...mids)),
+          switches:rows.map(r=>{const t=r.querySelector('.skill-toggle');if(!t)return null;const a=t.getBoundingClientRect(),b=r.getBoundingClientRect();return {inside:a.left>=b.left&&a.right<=b.right&&a.top>=b.top&&a.bottom<=b.bottom,rightGap:Math.round(b.right-a.right)};}),
+          dotOnGlyph:rows.every(r=>{const d=r.querySelector('.skill-glyph .ext-dot'),g=r.querySelector('.skill-glyph');if(!d||!g)return false;const a=d.getBoundingClientRect(),b=g.getBoundingClientRect();return a.right<=b.right+0.5&&a.bottom<=b.bottom+0.5&&a.left>=b.left+b.width/2-1;}),
+          scrollWidth:document.documentElement.scrollWidth, inner:innerWidth
+        };
+      })()`);
+      check(JSON.stringify(skillsLayout.groups) === JSON.stringify(['user', 'project']), 'skills page groups 全局级 before 项目级', skillsLayout.groups);
+      check(skillsLayout.paths.length === 2 && skillsLayout.paths.every((item) => item.text && item.width > 0), '1320: each skill group header shows its discovery dir', skillsLayout.paths);
+      check(skillsLayout.toolbarSpread < 2, '1320: scope tabs, search, status filter and 刷新 share one toolbar row', skillsLayout);
+      check(skillsLayout.switches.length === 3 && skillsLayout.switches.every((item) => item && item.inside && item.rightGap >= 10 && item.rightGap <= 18), 'skill switches sit inside their rows at the right edge', skillsLayout.switches);
+      check(skillsLayout.dotOnGlyph, 'each skill state dot sits on the bottom-right of its icon', skillsLayout);
+      check(skillsLayout.scrollWidth <= skillsLayout.inner + 1, '1320 skills page has no horizontal overflow', skillsLayout);
       await shot('1320-light-skills');
+      await read(`document.querySelector('.skills-page .skill-row .skill-row-main').click()`);
+      await waitFor(`(document.querySelector('.skills-page .skill-detail .ext-code')?.textContent||'').includes('name: code-review')`, 'skill detail');
+      await shot('1320-light-skills-detail');
       await openMcpPage();
       /* 浏览器在 open 变化后自己派发 toggle；不再手动补发，免得重复请求。 */
       await read(`document.querySelector('.mcp-report').open=true`);
@@ -581,7 +672,9 @@ if (!process.versions.electron) {
       await shot('700-light-settings-nav');
       await openExtensionsPage();
       const extensions = await read(`(()=>({
-        tabs:[...document.querySelectorAll('.ext-tab')].map(n=>n.firstChild.textContent),
+        tabs:[...document.querySelectorAll('.extensions-tab .extensions-tab-label')].map(n=>n.textContent),
+        titles:[...document.querySelectorAll('#workViewTitle, #workSurface h1, #workSurface h2')].filter(n=>n.textContent.trim()==='扩展'&&n.getClientRects().length>0).length,
+        cardsInside:[...document.querySelectorAll('.extensions-card')].every(n=>{const r=n.getBoundingClientRect();return r.left>=-0.5&&r.right<=innerWidth+0.5}),
         removed:['#extensionsTabAll','#extensionsTabCapabilities','#extensionsTabSkills','#extensionsTabMcp'].some(id=>!!document.querySelector(id)),
         title:document.querySelector('#workViewTitle').textContent,
         scrollWidth:document.documentElement.scrollWidth,
@@ -591,6 +684,7 @@ if (!process.versions.electron) {
       check(!extensions.removed, 'All / Capabilities / Skills / MCP tabs are gone from the extensions page');
       check(extensions.title === '扩展', 'extensions work surface is titled 扩展', extensions.title);
       check(extensions.scrollWidth <= extensions.inner + 1, '700px extensions page has no horizontal overflow', extensions);
+      check(extensions.titles === 1 && extensions.cardsInside, '700px extensions page keeps one visible title and every card inside the viewport', extensions);
       await shot('700-light-extensions');
       await read(`document.querySelector('#extensionsTabMarket').click()`);
       await waitFor(`!!document.querySelector('.extensions-market-empty')`, 'market placeholder');
@@ -626,6 +720,8 @@ if (!process.versions.electron) {
       await openSettingsMenu();
       await shot('1320-dark-settings-nav-final');
       await openExtensionsPage();
+      const darkNav = await navSelection();
+      check(darkNav.navCurrent === 'page' && darkNav.active !== CLEAR && darkNav.nav === darkNav.active && darkNav.session === CLEAR, 'dark: only the 扩展 nav item is painted selected while its page is open', darkNav);
       await shot('1320-dark-extensions');
       await openSkillsPage();
       await shot('1320-dark-skills');
