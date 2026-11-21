@@ -1,5 +1,7 @@
 # 系统设置 P1 + P2 联合验收
 
+> **后续收尾状态（2026-11-21）**：[P2 最终定向修复](system-settings-p2-final-fix.md) 单列 `b2acedc7` 后新增的显式端点授权、供应商元数据迁移、Pi 实际线路 fixture 与准确覆盖限制。修复、独立审查与两版桌面专项已完成；完整 canonical 按用户要求在 293/300 个命令正常退出后停止，未通过完整验收。下文旧证据不继承到本轮新行为；仅获当前 P2 提交和推送授权，不含合并或发布。
+
 - **范围**：P1 电源、关闭/托盘与系统页，加 P2 应用内网络配置、冷迁移、多桶缓存。详细实现、安全矩阵与恢复策略见 [P2 验收](system-settings-p2-acceptance.md)；[P1 历史记录](system-settings-p1-acceptance.md) 仅证明其当时提交，不把当时的“等待 P2”当作当前状态。
 - **身份**：`feat/system-settings`；P1 基线 `9d1fd4e76b6cb2fb412a4a447b2ba6043c58e15e`（P1 产品提交 `6aa09da0`）。本轮测试在该 HEAD 加 P2 工作区进行；随后按相同文件字节拆为产品提交 `1ab11970db392abf2b2685973eec598e5b94de33` 与测试提交 `9cd9c39f0fc42980ebf153c8bd9efa9448f4f975`。用 `git log -1 --format=%H -- docs/system-settings-final-acceptance.md` 定位本报告交付提交；文档提交不改变已验证行为，不把本地运行称为新提交 CI。
 - **版本**：仍为 `0.34.0`。不创建 PR、不合并、不打 tag、不发版；只在专项与审查收敛后按用户原授权提交/推送当前分支。

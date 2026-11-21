@@ -1,5 +1,7 @@
 # 系统设置 P2 验收记录
 
+> **后续收尾状态（2026-11-21）**：[P2 最终定向修复](system-settings-p2-final-fix.md) 记录 `b2acedc7` 之后的本地端点授权、供应商元数据迁移与外部 Pi 代理边界。修复、独立审查与两版桌面专项已完成；完整 canonical 按用户要求在 293/300 个命令正常退出后停止，未通过完整验收。下文仍是 `b2acedc7` 的历史证据，当前结果与限制以上述报告为准；本次仅获 P2 提交和推送授权。
+
 - **目标**：在 P1 上实现应用内网络配置、冷启动数据迁移和多桶缓存；保留电源、托盘、同窗口恢复、后台任务及更新退出协调。没有新增依赖、修改 Pi 本体、正式版本号或 CI 配置。
 - **身份**：分支 `feat/system-settings`；before HEAD `9d1fd4e76b6cb2fb412a4a447b2ba6043c58e15e`。产品提交 `1ab11970db392abf2b2685973eec598e5b94de33`，测试提交 `9cd9c39f0fc42980ebf153c8bd9efa9448f4f975`；测试时的 P2 文件字节与这两项提交一致。本报告交付提交用 `git log -1 --format=%H -- docs/system-settings-p2-acceptance.md` 定位，最终 SHA 在交付消息中另列。不把基线 CI 或文档提交当作新行为的完整证明。
 - **远端核对**：开发中已 fetch；`origin/main` 为 `af0432a0bc3b04c717a63ede3cc457e859401833`，P1 基线相对其 ahead 2 / behind 6。该 main SHA 的 [CI run 44753076800](https://github.com/HYJ1817/pi-gui/actions/runs/44753076800) 已完成且 success（push，attempt 1），只证明 main，不证明本轮 P2。main 新增 P5-A；本任务没有依赖其新执行模型，未在含其他未提交工作的工作区强行合并、覆盖同名未跟踪文档或清理其他产物。后续统一 PR 仍须核对合并结果与 CI。
