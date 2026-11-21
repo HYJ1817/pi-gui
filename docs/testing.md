@@ -359,7 +359,7 @@ P15 的 `tests/extensions.cjs` 使用 `os.tmpdir()` 中的 Pi 目录和假 RPC�
 settings 目录解析、override 优先级、package filter、空 filter、manifest glob 与路径保护
 的 parity fixture，以及纯 helper 直接测试（包括空 manifest 与 filter 回退的源码差异）。
 符号链接 fixture 若无系统权限会跳过并单独报告，不计入通过数量。`tests/smoke.cjs` 检查
-Extensions 独立标签及列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
+扩展页「已安装」的列表与详情渲染。它们不启动真 Pi、不安装包、不访问网络。
 Pi RPC 没有 tool registry，真实 tool 来源需要上游新增可验证接口后才能做 live 对拍。
 （P20.5 在 **0.99.1** 上再次确认、P20.6-Fix 在 **0.99.2** 上第三次确认：
 33 条 RPC 命令里没有一条返回已注册工具清单，`rpc-types.d.ts` 两版 diff 为空。
@@ -1204,8 +1204,9 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 | 层 | 命令 | 条数 | 量什么 |
 |---|---|---|---|
 | 纯投影 | `npm run test:capability`（进 `npm test`） | 74 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
-| DOM（jsdom） | `npm run test:ui` 的 P36 段 | — | Extensions / Skills / MCP 三个标签、「已知能力设置」仍可从 Extensions 页到达、旧能力状态页不再渲染、Registry 仍可诊断、设置导航不再出现「能力状态」 |
-| 真实 Electron | `npm run test:shortcuts:electron` | 77 | 设置导航六组、快捷键八条、旧命令面板 ID 安全忽略、扩展与 MCP 在 1320×820 / 700×600 暗亮布局 |
+| DOM（jsdom） | `npm run test:ui` 的「Agent 能力」段 | — | 扩展 / 技能 / MCP 配置三个入口、「已知能力设置」仍可从扩展页「已安装」到达、旧能力状态页不再渲染、Registry 仍可诊断、设置导航不再出现「能力状态」 |
+| 拆分边界（jsdom） | `npm run test:agent-capabilities`（进 `npm test`） | 33 | 见下方「三入口拆分」 |
+| 真实 Electron | `npm run test:shortcuts:electron` | 82 | 设置导航七组（「Agent 能力」只有技能，扩展在主导航）、快捷键八条、旧命令面板 ID 安全忽略、扩展两个页签 / 技能 / MCP 配置在 1320×820 / 700×600 暗亮布局 |
 
 关键判定（写错任何一条，界面就开始撒谎）：
 
@@ -1219,12 +1220,12 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 - **built-in 不伪装成普通 Extension**：`builtin:` 前缀 + `pi 内置扩展` 来源徽标 +
   「不由 Extension Registry 的目录扫描发现」；「启用 / 加载」显示**不适用**而不是「否」。
 - **unknown Extension 不丢**：registry fixture 里放一个完全不认识的包，
-  断言它在 Extensions 标签里仍在、状态是未知、坏掉的那条带自己的诊断。
+  断言它在扩展页「已安装」里仍在、状态是未知、坏掉的那条带自己的诊断。
 - **运行观察随 bridge run 重置**：观察实例在 `bridge_status` 的
   starting / restarting / exited / error / no-project 上清空；换 workspace
   generation 也不沿用（纯测直接对 `createWebObservation()` 断言）。
-- **stale workspace**：smoke 在 `openExtensions()` 之后**同步**把
-  `S.workspaceGeneration` 加一，断言结果回来时列表为空并显示「项目已切换」。
+- **stale workspace**：`tests/agent-capability-pages.cjs` 在 Registry 读取途中与读完之后
+  各调一次 `beginWorkspaceSwitch()`，断言列表与计数清空并显示「项目已切换」，刷新后才重读。
 - **无自动安装**：四个 `*Setup()` 都声明 `automaticInstall === false`；
   投影层与视图层都不出现 `child_process` / `execFile` / `spawn(` / `node:fs`；
   「已知能力设置」里没有任意包名输入，主安装按钮只服务服务端 allowlist 的四项。
@@ -1232,6 +1233,29 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   `lib/extension-paths.js` 的源码，断言里面**不出现**任何 feature 包名
   （`pi-web-access` / `pi-subagents` / `pi-memory` / `pi-browser-harness`）、
   工具名（`web_search` / `memory_search` / `browser_navigate`）或 `nativeState`。
+
+### 三入口拆分（`tests/agent-capability-pages.cjs`，33 条）
+
+技能 / 扩展 / MCP 从同一个工作区拆成三个入口后的边界（入口说明见
+[agent-capabilities.md](agent-capabilities.md)）。jsdom + 注入的 `fetch`，可以挂起任一请求
+再手动放行，所以「迟到结果」是真的迟到，不靠计时器碰运气：
+
+- **静态边界**：三方互不 import、页面只被 `app.js`（能力报告只被 `mcp-settings.js`）引用、
+  只经 `api.js` 读各自的接口（无 `fetch(` / `'/api/` 字面量 / 动态 import / 浏览器存储）、
+  无模块级可变状态也不写 `S`、市场没有安装路径、导出名在整张图里唯一、样式表各链接一次；
+- **纯投影**：技能 state / loaded 三值、筛选与计数、未知作用域归入「其他」；扩展事实行
+  `null` 显示「未知 / 无法确认」；
+- **生命周期**：关闭后 document 监听净增为 0、迟到的清单 / 详情 / 报告不写进页面、
+  读取途中与读完后换项目都只给「项目已切换」提示（不自动重读）、确认框在换项目或关页后
+  才被点下不发写请求、页签切换与筛选不重复请求（展开项的 `SKILL.md` 不重读）、
+  展开另一条技能后再展开原来那条会重读、被取代的迟到详情不写进页面，
+  本次运行的扩展提示显示在页签之上、切页签仍在；
+- **相邻套件**：`tests/mcp-management-ui.cjs` 断言 `/api/mcp/servers` 读取失败时页尾报告写
+  「读不到原生 MCP 摘要」、不沿用上一次的「生效中」，重试读到后恢复；`tests/ui-ia.cjs` 断言
+  设置搜索按「技能 / skill / Agent 能力 / 扩展 / mcp / 能力报告」各自落到技能或 MCP 配置。
+
+17 个定向变异（去掉某条守卫）中 16 个被杀死；剩下的「能力报告忽略 dispose」是等价变异
+（dispose 同时让请求序号失效，迟到结果已被序号挡住），行为上不可区分。
 
 ⚠️ **测试占用的固定端口别去蹲**：`visual-harness` 默认 7789、`dev-server` 7791、
 `git.cjs` 7799；CDP 9222–9225。跑截图 harness 用表外端口

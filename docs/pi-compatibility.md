@@ -122,7 +122,7 @@ runtime probe 只读已有观察（`pi-compat` 的能力三值、`mcp-native` �
   记 `{category: 'schema', operation: 来源, field: 我们自己代码里的字段路径, actual: typeof}`。
   **对象键名都不记**（用 `driftType()`），更不记值。
 - 前端：`public/schema-drift.js` 的小环（上限 20，同一条去重），
-  由 `browser-activity` / `memory-activity` / `tool-view` / `extensions.js` 上报
+  由 `browser-activity` / `memory-activity` / `tool-view` / `mcp-shared.js` 上报
   「闭集外的 `details.kind`」「不认识的 `snapshotMode`」「一个适配器都不认识的工具名」
   「闭集外的 MCP 运行状态」。进诊断面板与「复制诊断摘要」。
 
@@ -140,7 +140,7 @@ generic fallback（那是 P15 的既有行为，且内容是折叠区里的、�
 |---|---|---|---|
 | **历史验证基线** | P15–P19 当时的验收对象：**0.87.0**；P20.5 的对照物 0.99.1；P20.6-Fix 与 P22/P23 的对照物 0.99.2 | 已固定的历史事实，不会变 | 各 feature 文档的「当时基线」句 |
 | **当前验证基线** | 本轮逐项核对并 live 复核的对象：**1.0.0**（2026-10-02） | 本轮的核对结果 | 本节 + `server/pi-compat-matrix.js` + `tests/pi-probes.cjs` |
-| **运行中版本** | 你这台机器上**实际跑的那个 pi** | 由 `server/pi-version.js` 探测 | Extensions 页 MCP 标签页 / Diagnostics |
+| **运行中版本** | 你这台机器上**实际跑的那个 pi** | 由 `server/pi-version.js` 探测 | MCP 配置页的「MCP 能力报告」/ Diagnostics |
 | **未知能力** | 探测拿不到证据的能力 | 一律 `unknown`，**不猜** | 同左 |
 
 **运行中版本**是一个规范状态，不是一个字符串：

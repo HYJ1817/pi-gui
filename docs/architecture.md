@@ -111,9 +111,10 @@ P20.5 built-in 与 P20.6 原生状态）折成一张统一状态表。
 它不 import `state.js`、不碰 DOM、不缓存任何东西 —— 缓存就是会过期的第二份真相。
 `public/ui/capability-setup.js` 是唯一一套 setup 布局，也是全仓库唯一的
 「安装后重启 Pi」实现（`confirmModal` → `ownsWorkspace(generation)` → `restartBackend()`）。
-P36 移除了独立的 `capability-view.js`；`extensions.js` 现在只保留
-Extensions / Skills / MCP 三个标签，能力投影继续服务 Extensions 标签顶部的
-「已知能力设置」折叠区（四个 feature + Approval 的 setup 渲染）。
+P36 移除了独立的 `capability-view.js`；之后 `extensions.js` 的 Extensions / Skills / MCP
+三个标签又拆成三个独立入口（`public/extensions/`、`public/skills/`、MCP 配置页页尾的
+`mcp-report.js`，见 [agent-capabilities.md](agent-capabilities.md)），能力投影继续服务
+扩展页「已安装」顶部的「已知能力设置」折叠区（四个 feature + Approval 的 setup 渲染）。
 `server/extension-registry.js` **一个字节都没为 P22 改**：它继续 generic。
 详见 [Capability UX](capability-ux.md)。
 
@@ -354,7 +355,7 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
 
 `tool-view.js` 一次 `innerHTML` 都不用（除自己写死的 SVG 图标常量），
 所有文本走 `textContent` —— 「记得转义」这件事不需要被记住。
-`extensions.js` / `planner.js` 同样如此。理由见 [security.md](security.md)。
+`extensions/`、`skills/`、`mcp-report.js` / `planner.js` 同样如此。理由见 [security.md](security.md)。
 
 ## 七、模块地图
 
@@ -511,7 +512,9 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
   设置缓存、手动「AI 生成标题」与任意会话重命名入口；经典会话行与
   `runtime-nav.js` 的并行会话行共用该入口与同一个后端服务，
   不重建列表、不改排序
-- `extensions.js` 扩展面板（Extensions / Skills / MCP 三个标签 + 通用 Registry）/
+- `extensions/` 扩展页（「已安装」通用 Registry +「插件市场」占位）/ `skills/` 技能设置页 /
+  `mcp-report.js` MCP 配置页页尾的能力报告 / `ui/resource-dom.js` 三者共用的造节点工具
+  （入口与归属见 [agent-capabilities.md](agent-capabilities.md)）/
   `planner.js` 任务面板 / `project-config.js` 项目设置
 - `capability-model.js` 纯投影（四值状态、**适用性收口**、结论行、过滤器、
   setup 视图模型）/ `ui/capability-setup.js` 唯一一套 setup 布局 +
@@ -749,7 +752,7 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 - **不 import pi 的任何模块、不 spawn、不 require** —— 只有几个限长的 `readFileSync`。
 
 两者的结论都汇进 `server/mcp.js` 的 `/api/mcp` 报告（`version` / `builtins` /
-`extensionApi` / `rpc` / `mcpConfig` / `mcpCli`），前端在 Extensions 页的 MCP 标签页渲染。
+`extensionApi` / `rpc` / `mcpConfig` / `mcpCli`），前端在 MCP 配置页页尾的「MCP 能力报告」（`public/mcp-report.js`）渲染。
 `server/pi-compat.js` 的报告多一个 `versionSource`（版本值的出处），
 让 Diagnostics 能区分「文档里的基线」与「你机器上跑的那个」。
 
@@ -759,7 +762,7 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 
 ## P20.6 Native MCP 集成
 
-用 pi 原生的 MCP，不自建 client runtime（`server/mcp-native.js` + MCP 标签页
+用 pi 原生的 MCP，不自建 client runtime（`server/mcp-native.js` + MCP 配置页
 管理面 + `mcp-activity.js` 语义行，见 [mcp.md](mcp.md)）：
 
 - 状态真相只有两条官方路 —— `pi mcp list --json`（显式刷新才跑，会启动用户的
