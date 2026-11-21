@@ -130,6 +130,11 @@ export function getClassicExecutionTimeline() {
   return classic?.stream.snapshot() || null;
 }
 
+export function classicExecutionBranchEpoch(owner) {
+  const scope = classicScope(owner, { branchEpoch: classic?.scope.branchEpoch, sessionId: owner?.sessionId });
+  return sameExecutionScope(classic?.scope, scope) ? scope.branchEpoch : null;
+}
+
 export function classicExecutionFallbackEcho(event) {
   if (event._replay || event.type !== 'message_start' || event.message?.role !== 'user') return null;
   const scope = classicScope(event.legacyOwner, event.executionClassic);

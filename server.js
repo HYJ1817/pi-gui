@@ -97,7 +97,10 @@ import { projectProcessEvent } from './server/process-activity.js';
 import { createExtensionRegistry } from './server/extension-registry.js';
 import { createRuntime } from './server/runtime.js';
 import { createRuntimeRegistry } from './server/runtime-registry.js';
-import { createExecutionToolProjection, executionSubmission } from './server/execution-timeline.js';
+import { createExecutionToolProjection, executionSubmission, readExecutionBranch } from './server/execution-timeline.js';
+import { createExecutionTimelineCapture } from './server/execution-timeline-capture.js';
+import { createExecutionTimelineStore } from './server/execution-timeline-store.js';
+import { projectExecutionHistory, readStoredExecutionHistory, runtimeExecutionIdentity } from './server/execution-timeline-history.js';
 import { createRuntimeRoutes } from './server/runtime-routes.js';
 import { createSessionRuntime } from './server/session-runtime.js';
 import { createCandidateRuns } from './server/candidate-runs.js';
@@ -147,7 +150,7 @@ import { runShellCommand, runCli, killTree } from './server/agents/cli.js';
 import { gitStatus, worktreeTree, treeDiff, treeNumstat } from './lib/git.js';
 import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
-import { json } from './server/http-utils.js';
+import { json, readRawBody } from './server/http-utils.js';
 import { resolveDataDir, isSeaRuntime, isPiGuiSourceRepo, getProtectedRoots } from './server/data-dir.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -437,6 +440,35 @@ let primarySessionWitnessEpoch = null;
 let classicExecutionEpoch = 0;
 let classicExecutionWitness = null;
 let classicExecutionTools = createExecutionToolProjection();
+let classicHistoryRevision = 0;
+const executionTimelineStore = createExecutionTimelineStore({ dataDir: DATA_DIR });
+const classicExecutionIdentity = scope => ({ kind: 'classic', workspaceId: scope.workspaceKey, sessionId: scope.sessionId });
+const classicExecutionCapture = createExecutionTimelineCapture({
+  store: executionTimelineStore,
+  identity: classicExecutionIdentity,
+  readBranch: () => classicExecutionBranch(primaryOwner()),
+});
+
+function sameClassicOwner(expected, current) {
+  return expected && typeof expected === 'object' && !Array.isArray(expected)
+    && Object.keys(expected).length === Object.keys(current).length
+    && Object.keys(current).every(key => Object.hasOwn(expected, key) && expected[key] === current[key]);
+}
+
+function classicExecutionBranch(expected, onVerifiedPath = null) {
+  const branchEpoch = classicExecutionEpoch;
+  const nativeEpoch = rpc.providerSessionEpoch();
+  return readExecutionBranch({
+    scope: { kind: 'classic', bridgeInstance: expected.runtimeId, bridgeRun: Number(expected.runtimeGeneration),
+      workspaceKey: expected.workspaceId, workspaceGeneration: Number(expected.workspaceEpoch),
+      sessionId: expected.sessionId },
+    branchEpoch, onVerifiedPath,
+    readState: () => rpc.request({ type: 'get_state' }, { strict: true, timeoutMs: 3000 }),
+    readEntries: () => rpc.request({ type: 'get_entries' }, { strict: true, timeoutMs: 3000 }),
+    isCurrent: () => classicExecutionEpoch === branchEpoch && rpc.providerSessionEpoch() === nativeEpoch
+      && primarySessionWitnessEpoch === nativeEpoch && sameClassicOwner(expected, primaryOwner()),
+  });
+}
 
 function publishClassicExecution(event) {
   const legacyOwner = primaryOwner();
@@ -446,15 +478,25 @@ function publishClassicExecution(event) {
     classicExecutionEpoch++;
     classicExecutionWitness = null;
     classicExecutionTools = createExecutionToolProjection();
+    classicExecutionCapture.reset();
   }
   const sessionId = primarySessionWitnessEpoch === nativeEpoch ? legacyOwner.sessionId : null;
   const sessionBound = classicExecutionWitness?.sessionId === null && Boolean(sessionId);
   classicExecutionWitness = { nativeEpoch, bridgeRun: legacyOwner.runtimeGeneration, sessionId };
   let activity = null;
   try { activity = classicExecutionTools.observe(event); } catch { /* observation only */ }
-  sse.publish({ ...event, activity: activity || undefined, detailRef: undefined,
+  const observedAt = Date.now();
+  if (['execution_submission', 'message_start', 'message_end', 'agent_start', 'agent_settled',
+    'bridge_status', 'execution_branch'].includes(event.type)) classicHistoryRevision++;
+  const frame = { ...event, activity: activity || undefined, detailRef: undefined,
     legacyOwner, executionClassic: { branchEpoch: classicExecutionEpoch, sessionId,
-    observedAt: Date.now(), ...(sessionBound ? { sessionBound: true } : {}) } });
+      observedAt, ...(sessionBound ? { sessionBound: true } : {}) } };
+  sse.publish(frame);
+  try {
+    classicExecutionCapture.observe(event, { observedAt, sequence: frame._seq });
+    if (sessionId && !piActivity.busy() && (!previous || sessionBound
+        || event.type === 'response' && event.command === 'get_state')) void classicExecutionCapture.checkpoint();
+  } catch { /* history evidence cannot gate the Classic bridge */ }
 }
 
 function observeClassicSubmission(command, edit = null) {
@@ -1309,7 +1351,8 @@ function withWorkspaceIdentity(identity, action) {
 }
 const conversationWorkspaces = {withWorkspace:withWorkspaceIdentity};
 const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
-  dataDir: DATA_DIR, publish: event => { sse.publish(event); try { collabProposalsRef?.observeRuntime(event); } catch { /* observation only */ } void candidateRunsRef?.observe(event).catch(() => {}); },
+  dataDir: DATA_DIR, executionStore: executionTimelineStore,
+  publish: event => { sse.publish(event); try { collabProposalsRef?.observeRuntime(event); } catch { /* observation only */ } void candidateRunsRef?.observe(event).catch(() => {}); },
   providerLifecycle: providerConfigSync.observe,
   logEvent: (event, details) => logging.log('runtime', event, details),
   /* 标题的读取与触发都走注入：registry 不 import 标题模块，也不往会话
@@ -1393,7 +1436,8 @@ const runtimeRoutes = createRuntimeRoutes({ registry: runtimeRegistry,
   validateWorkspace: owner => withWorkspaceIdentity({ id: owner.workspaceId, epoch: owner.workspaceEpoch }, () => {}),
   /* P32.4：只读历史。目标路径来自 registry 记录（后端持有、绑定时已证明），
    * Renderer 只给 conversationId —— 不接受任何来自前端的路径。 */
-  readHistory: (locator, target) => readSessionMessages(locator, { expected: target }) });
+  readHistory: (locator, target) => readStoredExecutionHistory(locator, target,
+    executionTimelineStore.list(runtimeExecutionIdentity(target.locator))) || readSessionMessages(locator, { expected: target }) });
 const runtimeHealthTimer = setInterval(() => { void runtimeRegistry.healthCheck().catch(() => {}); }, 5000);
 runtimeHealthTimer.unref();
 
@@ -1403,6 +1447,38 @@ function primaryOwner() {
   return { backendInstance: runtimeRegistryRef?.snapshot().backendInstance || state.bridgeInstance,
     projectId: workspace, repoId: null, workspaceId: workspace, workspaceEpoch: String(runtime.getWorkspaceGeneration()),
     conversationId: 'classic-chat', runtimeId: state.bridgeInstance, runtimeGeneration: String(state.bridgeRun), sessionId: primaryNativeSession };
+}
+
+async function serveClassicExecutionHistory(req, res) {
+  const unavailable = () => json(res, 409, { ok: false, code: 'history_unavailable' });
+  if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'invalid_request' });
+  try {
+    const body = JSON.parse((await readRawBody(req, 8192)).toString('utf8'));
+    if (!body || Object.keys(body).length !== 2 || !Number.isSafeInteger(body.branchEpoch)) return unavailable();
+    const expected = body.owner;
+    const branchEpoch = classicExecutionEpoch;
+    const revision = classicHistoryRevision;
+    const current = () => expected?.sessionId && sameClassicOwner(expected, primaryOwner())
+      && branchEpoch === body.branchEpoch && classicExecutionEpoch === branchEpoch
+      && classicHistoryRevision === revision && !piActivity.busy() && !rpc.stopState()?.pending;
+    if (!current()) return unavailable();
+    const records = executionTimelineStore.list({ kind: 'classic',
+      workspaceId: expected.workspaceId, sessionId: expected.sessionId });
+    if (!records.length) return unavailable();
+    await worktrees.validateCurrent();
+    if (!current()) return unavailable();
+    let history = null;
+    const branch = await classicExecutionBranch(expected, (entries, witness) => {
+      history = projectExecutionHistory(entries, records, { sessionId: expected.sessionId, leafId: witness.leafId, classic: true });
+    });
+    if (!branch || !history || !current()) return unavailable();
+    const raw = await rpc.request({ type: 'get_messages' }, { strict: true, timeoutMs: 3000 });
+    // The old response is the content boundary, including its compaction semantics.
+    // Equality fences the complete native interval; no individual message is paired by text.
+    if (!current() || !Array.isArray(raw?.messages)
+        || JSON.stringify(raw.messages) !== JSON.stringify(history.messages)) return unavailable();
+    return json(res, 200, { ...history, owner: primaryOwner(), branchEpoch, messages: raw.messages });
+  } catch { return unavailable(); }
 }
 
 function classicProviderTargets() {
@@ -1577,7 +1653,11 @@ const messageEditRoutes = createMessageEditRoutes({
     observeClassicSubmission(cmd, edit);
     primaryToolGuard.resume();
   },
-  beforeNavigation: () => { classicExecutionEpoch++; classicExecutionTools = createExecutionToolProjection(); },
+  beforeNavigation: () => {
+    classicExecutionEpoch++;
+    classicExecutionTools = createExecutionToolProjection();
+    classicExecutionCapture.reset();
+  },
 });
 const route = createRouter({
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
@@ -1629,6 +1709,7 @@ const route = createRouter({
     } catch { return json(res, 409, { ok: false, code: 'capture_unavailable' }); }
   } },
   runtimeSessions: runtimeRoutes,
+  classicExecutionHistory: serveClassicExecutionHistory,
   messageEdit: messageEditRoutes,
   legacyScope: primaryOwner,
   requireLegacyScope: () => runtimeRegistry.liveCount() > 0,

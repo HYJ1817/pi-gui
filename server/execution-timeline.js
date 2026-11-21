@@ -148,7 +148,8 @@ export function createExecutionToolProjection() {
 
 /* Closed intra-server branch witness. get_entries is the private Pi read;
  * callers never supply a locator, and any identity drift returns null. */
-export async function readExecutionBranch({ scope, readState, readEntries, isCurrent, branchEpoch = 0, detailTarget = null }) {
+export async function readExecutionBranch({ scope, readState, readEntries, isCurrent, branchEpoch = 0,
+  detailTarget = null, onVerifiedPath = null }) {
   const expected = normalizeScope(scope);
   if (!expected || number(branchEpoch) === undefined || typeof isCurrent !== 'function') return null;
   try {
@@ -198,6 +199,7 @@ export async function readExecutionBranch({ scope, readState, readEntries, isCur
       const detail = projectNativeDetail(branch, path, detailTarget);
       if (detail) nativeDetails.set(branch, detail);
     }
+    onVerifiedPath?.(path, branch);
     return branch;
   } catch { return null; }
 }

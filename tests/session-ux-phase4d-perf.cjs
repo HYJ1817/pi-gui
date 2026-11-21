@@ -26,7 +26,8 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const LABEL = process.env.P4D_PERF_LABEL || 'after';
 const RUNS = Math.max(1, Number(process.env.P4D_PERF_RUNS || 5));
-const OUT = path.join(ROOT, 'docs', 'ui', 'session-ux-phase4d-evidence', LABEL);
+const OUT = process.env.P4D_PERF_OUT ? path.resolve(process.env.P4D_PERF_OUT)
+  : path.join(ROOT, 'docs', 'ui', 'session-ux-phase4d-evidence', LABEL);
 const BROWSER_CANDIDATES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',

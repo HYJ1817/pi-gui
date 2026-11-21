@@ -57,6 +57,7 @@ import {
   setNewSessionNavigator,
   onResponse,
   onStopState,
+  recoverClassicExecutionHistory,
   setModel,
   setSessionListRefresh,
   setThinkingLevel,
@@ -436,6 +437,7 @@ function connect() {
     if (sseWasDown) {
       logRendererEvent('network.sse_reconnect', {}, { durationMs: Date.now() - sseDownAt });
       sseWasDown = false;
+      void recoverClassicExecutionHistory();
     }
   };
   es.onerror = () => {

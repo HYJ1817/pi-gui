@@ -133,11 +133,11 @@ function makeDisclosure(make, part, heading, className) {
   return { node, head, title, body, setOpen };
 }
 
-function taskPreview(host, toggle) {
+function taskPreview(host, toggle, preferences) {
   const win = host.ownerDocument.defaultView;
   let body = null;
   let segments = [];
-  let expanded = false;
+  let expanded = preferences?.get('task') === true;
   let job = null;
   const inert = new Set();
 
@@ -199,6 +199,7 @@ function taskPreview(host, toggle) {
   bodyChange?.observe(host, { childList: true, characterData: true, subtree: true });
   toggle.addEventListener('click', () => preserveScrollAround(toggle, () => {
     expanded = !expanded;
+    preferences?.set('task', expanded);
     layout();
   }));
 
@@ -241,7 +242,7 @@ function taskPreview(host, toggle) {
   };
 }
 
-function supportPlan(make) {
+function supportPlan(make, preferences) {
   const state = new WeakMap();
   let current = null;
 
@@ -263,10 +264,15 @@ function supportPlan(make) {
       const more = make('button', 'btn tiny ghost execution-plan-more');
       more.type = 'button';
       const parallel = make('span', 'execution-plan-parallel');
-      const choice = state.get(node) ?? { all: false, manuallyToggled: false, automatic: false };
+      const preferred = preferences?.get('plan');
+      const choice = state.get(node) ?? { all: preferences?.get('plan-all') === true,
+        manuallyToggled: typeof preferred === 'boolean', automatic: false };
       state.set(node, choice);
       const onToggle = () => {
-        if (!choice.automatic) choice.manuallyToggled = true;
+        if (!choice.automatic) {
+          choice.manuallyToggled = true;
+          preferences?.set('plan', !list.hidden);
+        }
         if (current) current.more.hidden = list.hidden || choice.all || list.children.length <= PLAN_PAGE;
       };
       current = { node, head, list, choice, more, parallel, onToggle, turn };
@@ -274,10 +280,16 @@ function supportPlan(make) {
       head.insertBefore(parallel, head.querySelector('.plan-chev'));
       more.addEventListener('click', () => preserveScrollAround(head, () => {
         choice.all = true;
+        preferences?.set('plan-all', true);
         update(node, current.turn);
         head.focus({ preventScroll: true });
       }));
       head.addEventListener('click', onToggle);
+      if (typeof preferred === 'boolean' && preferred === list.hidden) {
+        choice.automatic = true;
+        head.click();
+        choice.automatic = false;
+      }
     }
     if (!current) return;
     current.turn = turn;
@@ -401,7 +413,7 @@ function makeActivityRow(make, item, expanded, onToggle) {
   };
 }
 
-export function createExecutionTurnView({ document = globalThis.document, now = Date.now } = {}) {
+export function createExecutionTurnView({ document = globalThis.document, now = Date.now, preferences } = {}) {
   function make(tag, className, value = '') {
     const element = document.createElement(tag);
     if (className) element.className = className;
@@ -424,9 +436,9 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   taskToggle.type = 'button';
   taskToggle.hidden = true;
   task.append(taskContent, taskToggle);
-  const preview = taskPreview(taskContent, taskToggle);
+  const preview = taskPreview(taskContent, taskToggle, preferences);
   const planSlot = section('plan');
-  const planControl = supportPlan(make);
+  const planControl = supportPlan(make, preferences);
   const activity = makeDisclosure(make, 'activity', '执行活动', 'execution-activity-group');
   const groupStatus = make('span', 'execution-activity-status');
   const groupMeta = make('span', 'execution-activity-count');
@@ -447,6 +459,10 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   const answer = section('answer');
   const outcomes = section('outcome');
   const usage = makeDisclosure(make, 'usage', '用量与耗时', 'execution-usage');
+  const preferredProgress = preferences?.get('progress');
+  activity.setOpen(preferences?.get('activity') === true);
+  progress.setOpen(preferredProgress ?? !activity.body.hidden);
+  usage.setOpen(preferences?.get('usage') === true);
   node.append(task, planSlot, activity.node, progress.node, thinking, answer, outcomes, usage.node);
 
   const rows = new Map();
@@ -461,7 +477,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   let pageLength = ACTIVITY_PAGE;
   const openRows = new Set();
   let timer = null;
-  let explicitProgress = false;
+  let explicitProgress = typeof preferredProgress === 'boolean';
 
   function tick() {
     if (!node.isConnected) {
@@ -486,6 +502,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   }
 
   function setOpenRow(id, open) {
+    preferences?.set('activity-item:' + id, open);
     openRows.delete(id);
     if (!open) return;
     openRows.add(id);
@@ -511,7 +528,8 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
     }
     const instant = now();
     const ordered = subset.map(item => {
-      if (!rows.has(item.id)) rows.set(item.id, makeActivityRow(make, item, openRows.has(item.id),
+      if (!rows.has(item.id)) rows.set(item.id, makeActivityRow(make, item,
+        openRows.has(item.id) || preferences?.get('activity-item:' + item.id) === true,
         open => setOpenRow(item.id, open)));
       const row = rows.get(item.id);
       row.update(item, currentDetails.get(item.id), instant);
@@ -544,6 +562,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   activity.head.addEventListener('click', () => preserveScrollAround(activity.head, () => {
     const opening = activity.body.hidden;
     activity.setOpen(opening);
+    preferences?.set('activity', opening);
     if (!explicitProgress) progress.setOpen(opening);
     if (opening) renderRows();
     else removeRows();
@@ -553,8 +572,12 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   progress.head.addEventListener('click', () => preserveScrollAround(progress.head, () => {
     explicitProgress = true;
     progress.setOpen(progress.body.hidden);
+    preferences?.set('progress', !progress.body.hidden);
   }));
-  usage.head.addEventListener('click', () => preserveScrollAround(usage.head, () => usage.setOpen(usage.body.hidden)));
+  usage.head.addEventListener('click', () => preserveScrollAround(usage.head, () => {
+    usage.setOpen(usage.body.hidden);
+    preferences?.set('usage', !usage.body.hidden);
+  }));
 
   function update({
     turn, group, items = EMPTY_NODES, input, plan, progress: process = EMPTY_NODES, thinking: activeThinking = EMPTY_NODES,
@@ -637,6 +660,9 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
 
   return {
     node, update,
+    reveal(messageNode) {
+      if (progress.body.hidden && progress.body.contains(messageNode)) progress.setOpen(true);
+    },
     release() {
       stopClock();
       preview.stop();

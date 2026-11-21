@@ -224,6 +224,18 @@ async function main() {
     const same = await jsonReq('/api/status', { headers: { 'X-Pi-Gui-Token': TOKEN, Origin: ORIGIN } });
     check('同源 Origin + 正确令牌 → 200', () => same.status === 200 || `状态 ${same.status}`);
 
+    const timelineRequest = { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ owner: { sessionId: 'foreign' }, branchEpoch: 0 }) };
+    const noHistoryToken = await jsonReq('/api/execution-history', timelineRequest);
+    check('Classic 执行历史沿用令牌认证', () => noHistoryToken.status === 401);
+    const crossHistory = await jsonReq('/api/execution-history', { ...timelineRequest,
+      headers: { ...timelineRequest.headers, 'X-Pi-Gui-Token': TOKEN, Origin: 'http://evil.example' } });
+    check('Classic 执行历史沿用同源限制', () => crossHistory.status === 403);
+    const foreignHistory = await jsonReq('/api/execution-history', { ...timelineRequest,
+      headers: { ...timelineRequest.headers, 'X-Pi-Gui-Token': TOKEN, Origin: ORIGIN } });
+    check('Classic 执行历史拒绝伪造 owner 且不回显数据', () => foreignHistory.status === 409
+      && JSON.stringify(foreignHistory.body) === JSON.stringify({ ok: false, code: 'history_unavailable' }));
+
     const localhostOrigin = await jsonReq('/api/status', {
       headers: { 'X-Pi-Gui-Token': TOKEN, Origin: `http://localhost:${PORT}` },
     });
