@@ -47,6 +47,7 @@ async function waitFor(what, fn, timeoutMs = 4000) {
 async function main() {
   const { createRpcBridge } = await import('../server/rpc-bridge.js');
   const { createRouter } = await import('../server/router.js');
+  const { createSystemStorage } = await import('../server/system-storage.js');
   const { createEnvironmentRoutes } = await import('../server/environment-routes.js');
   const { createReviewCommentStore } = await import('../server/review-comment-store.js');
   const { createReviewCommentAuthority } = await import('../server/review-comment-authority.js');
@@ -133,7 +134,8 @@ async function main() {
     // without scanning a shared TEMP data directory; candidate Stop has its own
     // isolated lifecycle and real Electron coverage.
     createCandidateRuns: () => ({busy: () => false}), createCandidateRoutes: () => null, candidateRunsRef: null,
-    DATA_DIR: os.tmpdir(), __dirname: ROOT,
+    DATA_DIR: os.tmpdir(), MODELS_JSON: path.join(os.tmpdir(), 'fixture-agent', 'models.json'), __dirname: ROOT,
+    path, process: { env: {} }, runningInSea: false, createSystemStorage,
     withWorkspaceIdentity: (...args) => context.conversationWorkspaces.withWorkspace(...args),
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
@@ -172,7 +174,8 @@ async function main() {
     },
     piActivity: { noteCommandAccepted: (command) => activityAccepted.push(command) },
     primaryToolGuard: { resume() {} },
-    createSessionExport: () => null, runtime: { getCurrentCwd: () => os.tmpdir() }, piLaunch: { packageDir: () => null },
+    createSessionExport: () => null,
+    runtime: { getCurrentCwd: () => os.tmpdir() }, piLaunch: { packageDir: () => null },
   };
   for (const name of ['providers', 'projects', 'projectConfig', 'skills', 'mcp', 'mcpNative', 'mcpManager',
     'approvalProbe', 'extensions', 'sessions', 'sessionSearch', 'sessionTitles', 'planner', 'gitRoutes',

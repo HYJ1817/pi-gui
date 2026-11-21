@@ -84,6 +84,19 @@ async function stage(sdk, key, context = binding, confirmOAuthReplacement = fals
   return sdk.stageNativeLogin(context, key, { expectedCredentialRevision: state.credentialRevision, confirmOAuthReplacement });
 }
 
+test('private discovery worker preserves only the validated main proxy capability, not ambient proxies or GUI secrets', async t => {
+  const gateway = 'http://pi-gui:pi-proxy-token-' + 'a'.repeat(64) + '@127.0.0.1:1234';
+  let workerEnv, workerData;
+  const { sdk } = await setup(t, { env: { ...process.env, PI_GUI_TOKEN: 'SECRET', PI_GUI_SYSTEM_PROXY: gateway,
+    HTTPS_PROXY: 'http://ambient:SECRET@example.invalid', NODE_TLS_REJECT_UNAUTHORIZED: '0' },
+    workerFactory(entry, options) { ({ env: workerEnv, workerData } = options); return new Worker(entry, options); } });
+  await sdk.inspect('builtin-fixture');
+  assert.equal(workerData.systemProxy, gateway); assert.equal(workerEnv.PI_OFFLINE, '1');
+  for (const key of ['PI_GUI_SYSTEM_PROXY', 'PI_GUI_TOKEN', 'HTTPS_PROXY', 'NODE_TLS_REJECT_UNAUTHORIZED']) assert.equal(workerEnv[key], undefined);
+  const { systemWorkerProxy } = await import('../server/system-network-agent.js');
+  assert.equal(systemWorkerProxy({ PI_GUI_SYSTEM_PROXY: 'http://not-a-main-capability' }), undefined);
+});
+
 test('the private discovery worker admits no requester after revocation even if its cancel frame is delayed', async t => {
   const counts = new Int32Array(new SharedArrayBuffer(4 * Int32Array.BYTES_PER_ELEMENT));
   const testModule = String.raw`

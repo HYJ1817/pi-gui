@@ -18,7 +18,7 @@ let win, cacheWindow, pageServer, exitReady = false, deadline;
 const update = { eligible: true, preflights: 0, installs: 0, veto: false, release: null };
 const read = code => win.webContents.executeJavaScript(code, true);
 async function until(test, name) {
-  for (let i = 0; i < 250; i++) { if (await test()) return; await sleep(50); }
+  for (let i = 0; i < 1500; i++) { if (await test()) return; await sleep(50); }
   throw Error('timeout: ' + name);
 }
 function check(name, value) { assert.ok(value, name); report.checks.push(name); console.log('PASS ' + phase + ': ' + name); }
@@ -137,10 +137,11 @@ async function main() {
   check('normal sandbox, context isolation and no Node integration', report.sandbox.sandbox && report.sandbox.contextIsolation && !report.sandbox.nodeIntegration && !app.commandLine.hasSwitch('no-sandbox'));
   // Fixed state only, not preload internals or command lines in evidence.
   report.sandbox = { sandbox: report.sandbox.sandbox, contextIsolation: report.sandbox.contextIsolation, nodeIntegration: report.sandbox.nodeIntegration, backgroundThrottling: report.sandbox.backgroundThrottling };
-  check('offline guard active in exactly one bundled or source backend', globalThis.__systemOfflineGuard === true
-    && report.offlineBackendPreloads === 1 && fs.existsSync(path.join(world, phase + '-offline-backend')));
+  check('fetch, DNS and raw socket guards active in main and exactly one backend', globalThis.__systemOfflineGuard === true
+    && globalThis.__systemRawNetworkGuard === true && report.offlineBackendPreloads === 1
+    && fs.readFileSync(path.join(world, phase + '-offline-backend'), 'utf8') === 'active-raw');
   win.webContents.on('render-process-gone', (_event, detail) => { report.failed++; report.errors.push(detail.reason); });
-  check('production bridge only exposes named system operations', await read("typeof require==='undefined' && !window.ipcRenderer && Object.keys(window.piGuiDesktop.systemSettings).sort().join(',')==='clearCache,measureCache,quit,set,state'"));
+  check('production bridge only exposes named system operations', await read("typeof require==='undefined' && !window.ipcRenderer && Object.keys(window.piGuiDesktop.systemSettings).sort().join(',')==='clearCache,measureCache,migrateData,pickDataDirectory,quit,saveNetwork,set,state,testNetwork'"));
   const initial = (await state()).snapshot;
   if (phase === 'exercise') {
     check('first run defaults off/off/quit without creating preferences', initial.effective.keepAwake === false && initial.effective.preventDisplaySleep === false && initial.effective.closeBehavior === 'quit' && !fs.existsSync(path.join(process.env.SYSTEM_PROFILE, 'system-settings.json')));
@@ -172,41 +173,67 @@ async function main() {
     await cacheWindow.loadURL(cacheOrigin);
     await cacheWindow.webContents.executeJavaScript(`(async()=>{document.cookie='fixture=preserve;SameSite=Lax';localStorage.setItem('fixture','preserve');const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('fixture',1);r.onupgradeneeded=()=>r.result.createObjectStore('values');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(Error('db'))});await new Promise((resolve,reject)=>{const tx=db.transaction('values','readwrite');tx.objectStore('values').put('preserve','fixture');tx.oncomplete=resolve;tx.onerror=()=>reject(Error('write'))});db.close()})()`);
     await until(async () => (await bucket.getCacheSize()) > 0, 'actual cache seeded');
-    const preview = await read('window.piGuiDesktop.systemSettings.measureCache()'); report.cacheBefore = preview.bytes;
-    check('real getCacheSize matches preview', preview.ok && preview.bytes > 0 && preview.bytes === await bucket.getCacheSize());
-    const clear = await read(`window.piGuiDesktop.systemSettings.clearCache(${JSON.stringify(preview.ticket)})`); report.cacheAfter = clear;
-    check('real Chromium cache clears and independently remeasures zero', clear.status === 'cleared' && clear.bytes === 0 && await bucket.getCacheSize() === 0);
+    // Reopening the production page starts its own native multi-bucket scan.
+    // Wait for its real completion instead of racing a second IPC against it.
+    await until(() => read("!document.querySelector('#system-cache-actions button:first-child').disabled"), 'initial native cache statistics complete');
+    let preview;
+    // Earlier visual pages can have an authorized scan finishing after unmount;
+    // Chromium can also finish writing its HTTP tree during a strict scan. Only
+    // retry read-only measurements, bounded to three completed attempts. Never
+    // turn unknown disk bytes into zero or skip the original equality assertion.
+    const measurements = []; let completed = 0;
+    await until(async () => {
+      preview = await read('window.piGuiDesktop.systemSettings.measureCache()');
+      if (preview.code === 'cache_busy') return false;
+      measurements.push(preview); completed++;
+      return preview.ok || completed >= 3 || preview.code !== 'cache_measure_failed';
+    }, 'stable main cache statistics after visual page scans');
+    report.cacheMeasurements = measurements;
+    report.cacheBefore = preview;
+    check('real getCacheSize matches its exact P2 memory bucket', preview.ok && preview.bytes > 0 && preview.buckets.find(b => b.id === 'browser-memory-http-cache').memoryBytes === await bucket.getCacheSize());
+    let clear;
+    for (let n = 0; n < 3; n++) {
+      clear = await read('(async()=>{const a=window.piGuiDesktop.systemSettings;const p=await a.measureCache();return a.clearCache(p.ticket)})()');
+      if (clear.code !== 'cache_changed') break;
+      await sleep(1500);
+    }
+    report.cacheAfter = clear;
+    check('real Chromium memory bucket clears and independently remeasures zero; disk result is truthful', ['cleared', 'partial'].includes(clear.status) && clear.buckets.find(b => b.id === 'browser-memory-http-cache').memoryBytes === 0 && await bucket.getCacheSize() === 0);
     const preserved = await cacheWindow.webContents.executeJavaScript(`(async()=>{const db=await new Promise(resolve=>{const r=indexedDB.open('fixture');r.onsuccess=()=>resolve(r.result)});const value=await new Promise(resolve=>{const r=db.transaction('values').objectStore('values').get('fixture');r.onsuccess=()=>resolve(r.result)});db.close();return document.cookie==='fixture=preserve'&&localStorage.getItem('fixture')==='preserve'&&value==='preserve'})()`);
     check('real cookies, LocalStorage and IndexedDB preserved', preserved);
     check('untrusted Browser page has no desktop/preload bridge', await cacheWindow.webContents.executeJavaScript("typeof window.piGuiDesktop==='undefined' && typeof require==='undefined'"));
     // Reseed the same real Chromium bucket for the complete pointer/dialog path.
     await cacheWindow.loadURL(cacheOrigin + '/pointer');
     await until(async () => (await bucket.getCacheSize()) > 0, 'real pointer cache seed');
-    await click('.system-actions button:first-child');
-    await until(() => read("!document.querySelector('.system-actions .danger').disabled"), 'pointer cache available');
+    await click('#system-cache-actions button:first-child');
+    await until(() => read("!document.querySelector('#system-cache-actions .danger').disabled"), 'pointer cache available');
     const pointerBytes = await bucket.getCacheSize();
-    await click('.system-actions .danger');
+    await click('#system-cache-actions .danger');
     await until(() => read("!document.querySelector('#confirmLayer').hidden"), 'real cache confirmation');
     check('real cache confirmation states size and protected data', await read("document.querySelector('#confirmCard').textContent.includes('预计清理') && document.querySelector('#confirmCard').textContent.includes('聊天记录、设置、凭据、附件、模型和插件数据均会保留')"));
     await click('#confirmCard .modal-actions button:first-child');
-    await until(() => read("document.querySelector('#confirmLayer').hidden && !document.querySelector('.system-actions .danger').disabled"), 'pointer cancellation');
-    check('pointer cancellation preserves native cache and returns usable focus', await bucket.getCacheSize() === pointerBytes && await read("document.activeElement===document.querySelector('.system-actions .danger')"));
-    await click('.system-actions .danger'); await key('Escape');
-    await until(() => read("document.querySelector('#confirmLayer').hidden && !document.querySelector('.system-actions .danger').disabled"), 'Escape cancellation');
+    await until(() => read("document.querySelector('#confirmLayer').hidden && !document.querySelector('#system-cache-actions .danger').disabled"), 'pointer cancellation');
+    check('pointer cancellation preserves native cache and returns usable focus', await bucket.getCacheSize() === pointerBytes && await read("document.activeElement===document.querySelector('#system-cache-actions .danger')"));
+    await click('#system-cache-actions .danger');
+    await until(() => read("!document.querySelector('#confirmLayer').hidden"), 'Escape confirmation after fresh native statistics');
+    await key('Escape');
+    await until(() => read("document.querySelector('#confirmLayer').hidden && !document.querySelector('#system-cache-actions .danger').disabled"), 'Escape cancellation');
     check('real Escape cancels cache deletion without clearing', await bucket.getCacheSize() === pointerBytes);
-    await click('.system-actions .danger');
+    await click('#system-cache-actions .danger');
     await until(() => read("!document.querySelector('#confirmLayer').hidden"), 'pointer confirmation retry');
     await click('#confirmCard .modal-actions .danger');
-    await until(() => read("document.querySelector('#system-cache-feedback').textContent==='缓存已清理。'"), 'pointer clear result');
+    await until(async () => await bucket.getCacheSize() === 0 && await read("!document.querySelector('#system-cache-actions button:first-child').disabled"), 'pointer clear result');
+    check('pointer result reports verified success or a specifically identified partial clear', await read("(()=>{const e=document.querySelector('#system-cache-feedback');return (e.textContent.startsWith('缓存已清理。')||e.textContent.startsWith('缓存已清理；未确认磁盘占用下降'))&&!e.classList.contains('is-error') || e.textContent.startsWith('清理未完全确认。')&&e.classList.contains('is-error')})()"));
     report.pointerCache = { beforeBytes: pointerBytes, afterBytes: await bucket.getCacheSize() };
-    check('real pointer confirmation clears, remeasures and refocuses retry', report.pointerCache.afterBytes === 0 && await read("document.querySelector('#confirmLayer').hidden && document.activeElement===document.querySelector('.system-actions button:first-child')"));
+    check('real pointer confirmation clears its memory bucket, remeasures and refocuses the valid remaining action', report.pointerCache.afterBytes === 0 && await read("(()=>{const a=document.querySelector('#system-cache-actions');return document.querySelector('#confirmLayer').hidden && document.activeElement===a.querySelector(a.querySelector('.danger').disabled?'button:first-child':'.danger')})()"));
     const image = await win.webContents.capturePage();
     fs.writeFileSync(path.join(out, 'system-cache-pointer-success.png'), image.toPNG());
     report.screenshots.push({ file: 'system-cache-pointer-success.png', fixture: 'real-native-cache-pointer', pixels: image.getSize() });
     cacheWindow.destroy(); cacheWindow = null; await new Promise(resolve => pageServer.close(resolve)); pageServer = null;
-    await click('.system-actions button:first-child');
-    await until(() => read("document.querySelector('#system-cache-size').textContent==='0 B'"), 'empty UI');
-    check('actual empty cache disables deletion without hiding retry', await read("document.querySelector('.system-actions .danger').disabled && !document.querySelector('.system-actions button').disabled"));
+    await click('#system-cache-actions button:first-child');
+    await until(() => read("!document.querySelector('#system-cache-actions button:first-child').disabled"), 'remeasured multi-bucket UI');
+    const emptyPreview = await read('window.piGuiDesktop.systemSettings.measureCache()');
+    check('actual empty memory bucket is shown separately; aggregate delete follows actual remaining capacity', emptyPreview.buckets.find(b => b.id === 'browser-memory-http-cache').status === 'empty' && await read(`document.querySelector('#system-cache-size').textContent.includes('内存 0 B') && !document.querySelector('#system-cache-actions button').disabled && (${JSON.stringify(emptyPreview.status)}!=='empty' || document.querySelector('#system-cache-actions .danger').disabled)`));
 
     await set('closeBehavior', 'tray'); await set('closeBehavior', 'tray');
     check('one native Tray and fixed native menu after repeated enable', trays.length === 1 && !trays[0].isDestroyed() && trays[0].fixtureMenu.items.filter(item => item.type !== 'separator').map(item => item.label).join('|') === '显示 pi-GUI|退出应用');
@@ -321,7 +348,9 @@ async function main() {
   }
 }
 
-deadline = setTimeout(() => { report.failed++; report.errors.push('bounded_scenario_timeout'); console.error('System desktop timeout: ' + phase); app.exit(1); }, 110000);
+// P2 revalidates disk allocation before and after each native clear. Keep the
+// scenario bounded while allowing the real Windows metadata probes to finish.
+deadline = setTimeout(() => { report.failed++; report.errors.push('bounded_scenario_timeout'); console.error('System desktop timeout: ' + phase); app.exit(1); }, 240000);
 main().catch(async error => {
   report.failed++; console.error(error.stack); report.errors.push(error.message);
   if (win && !win.isDestroyed()) { try { fs.writeFileSync(path.join(out, phase + '-failure.png'), (await win.webContents.capturePage()).toPNG()); } catch { /* no fake screenshot */ } }

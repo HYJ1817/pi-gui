@@ -241,7 +241,7 @@ test('main owner: trust/arity/schema, native rollback, restart, concurrent save 
   const options = { ...fixture, ipcMain, origin: 'http://127.0.0.1:7788', directory, browserDirectory: directory,
     powerSaveBlocker: native, session: memoryCache().session, platform: 'win32', quit() {}, store };
   let owner = await createSystemSettings(options); owner.register(); owner.register();
-  assert.equal(handlers.size, 5);
+  assert.equal(handlers.size, 9); // P1's five plus fixed network save/test and native storage pick/migrate.
   const event = { sender: fixture.win.webContents, senderFrame: fixture.win.webContents.mainFrame };
   const call = (key, ...args) => handlers.get(CHANNELS[key])(event, ...args);
   for (const bad of [{ sender: {}, senderFrame: event.senderFrame }, { sender: event.sender, senderFrame: { url: event.senderFrame.url } },
@@ -341,6 +341,25 @@ test('main owner: repeated close/quit waits for one pending save and re-enters t
   assert.equal(quits, 1); assert.equal(committedAtQuit, true);
   assert.equal(owner.deferQuit({ preventDefault() { assert.fail('no pending save'); } }), false);
 });
+test('main owner: slow cache statistics exclude migration and quit, not unrelated power preferences', async t => {
+  const directory = await world(t), fixture = trayFixture(), handlers = new Map(), cache = memoryCache();
+  let finish, quits = 0, picked = 0;
+  cache.session.getCacheSize = () => new Promise(resolve => finish = resolve);
+  const owner = await createSystemSettings({ ...fixture, directory, platform: 'win32', quit() { quits++; },
+    ipcMain: { handle: (name, fn) => handlers.set(name, fn), removeHandler: name => handlers.delete(name) },
+    origin: 'http://127.0.0.1:7788', powerSaveBlocker: nativePower(), session: cache.session,
+    storage: { state: () => ({}), pick: async () => { picked++; return { ok: true }; } } });
+  t.after(() => owner.dispose()); owner.register();
+  const event = { sender: fixture.win.webContents, senderFrame: fixture.win.webContents.mainFrame };
+  const invoke = (name, ...args) => handlers.get(CHANNELS[name])(event, ...args);
+  const pending = invoke('measure'); await Promise.resolve();
+  assert.equal((await invoke('set', { key: 'keepAwake', value: true })).ok, true);
+  assert.equal((await invoke('state')).snapshot.effective.keepAwake, true);
+  assert.equal((await invoke('storagePick')).ok, false); assert.equal(picked, 0);
+  assert.equal(owner.deferQuit({ preventDefault() {} }), true); assert.equal(quits, 0);
+  finish(0); await pending; await new Promise(resolve => setImmediate(resolve)); assert.equal(quits, 1);
+});
+
 test('storage metadata: actual resolver output, explicit environment, Electron source and authenticated router', async t => {
   const { createSystemStorage } = await import('../server/system-storage.js');
   const { resolveDataDir } = await import('../server/data-dir.js');

@@ -55,7 +55,7 @@ async function runSystemStates({ BrowserWindow, origin, out, report, check }) {
     report.screenshots.push({ file, fixture: 'synthetic-bridge-production-css', pixels: image.getSize() });
   }
   const sample = (selector, property, outside) => read(`(${contrastSample.toString()})(${JSON.stringify(selector)},${JSON.stringify(property || 'color')},${Boolean(outside)})`);
-  const awake = 'button[aria-label="保持电脑唤醒"]', refresh = '.system-actions button:first-child';
+  const awake = 'button[aria-label="保持电脑唤醒"]', refresh = '#system-cache-actions button:first-child';
   report.presentation = { contrasts: [], states: [], sharedComparison: [], nonTextObservations: [] };
   try {
     await window.loadURL(origin);
@@ -75,7 +75,7 @@ async function runSystemStates({ BrowserWindow, origin, out, report, check }) {
     for (const theme of ['dark', 'light']) {
       await read(`document.documentElement.dataset.theme=${JSON.stringify(theme)};systemFixture.failMeasure=false;systemFixture.failSave=false;systemFixture.bytes=4096;`);
       await click(refresh);
-      for (const selector of ['.system-heading h2', '.system-heading p', '.ds-settings-row-label', '.system-path', '.system-path-detail span', '.system-actions .danger']) {
+      for (const selector of ['.system-heading h2', '.system-heading p', '.ds-settings-row-label', '.system-path', '.system-path-detail span', '#system-cache-actions .danger']) {
         const value = { theme, state: 'default', ...await sample(selector) }; report.presentation.contrasts.push(value);
         check(theme + ' composited text AA ' + selector, value.ratio >= 4.5);
       }
@@ -107,9 +107,9 @@ async function runSystemStates({ BrowserWindow, origin, out, report, check }) {
       check(theme + ' persistent Error has text AA and retry', error.ratio >= 4.5 && await read(`!document.querySelector(${JSON.stringify(awake)}).disabled && document.querySelector(${JSON.stringify(awake)}).getAttribute('aria-checked')==='false'`));
       await shot('system-' + theme + '-error'); await read('systemFixture.failSave=false');
       await read('systemFixture.failMeasure=true'); await click(refresh);
-      check(theme + ' failed statistics is unknown, not empty', await read("document.querySelector('#system-cache-size').textContent==='大小未知' && document.querySelector('.system-actions .danger').disabled"));
+      check(theme + ' failed statistics is unknown, not empty', await read("document.querySelector('#system-cache-size').textContent==='大小未知' && document.querySelector('#system-cache-actions .danger').disabled"));
       await read('systemFixture.failMeasure=false;systemFixture.bytes=0'); await click(refresh);
-      check(theme + ' Empty and Disabled retain retry', await read("document.querySelector('#system-cache-size').textContent==='0 B' && document.querySelector('.system-actions .danger').disabled && !document.querySelector('.system-actions button').disabled"));
+      check(theme + ' Empty and Disabled retain retry', await read("document.querySelector('#system-cache-size').textContent==='0 B' && document.querySelector('#system-cache-actions .danger').disabled && !document.querySelector('#system-cache-actions button').disabled"));
       report.presentation.states.push({ theme, covered: ['default','hover','pressed','pointer-focus','focus-visible','disabled','loading','error','empty','success','selected'] });
     }
     // Explicit offline English labels, not a claim of product localization.
@@ -117,10 +117,10 @@ async function runSystemStates({ BrowserWindow, origin, out, report, check }) {
       await read(`{document.documentElement.dataset.theme=${JSON.stringify(theme)};
         document.querySelector('.system-heading h2').textContent='System';
         document.querySelector('.system-heading p').textContent='Network, storage, power, and local window behavior.';
-        const labels=['Proxy configuration','Relaxed network mode','Application data storage location','Clearable browser memory cache','Electron browser profile directory','Pi Agent configuration directory','User project directories','Keep this computer awake','Prevent automatic display sleep','When closing the main window','Quit the application'];
-        document.querySelectorAll('.ds-settings-row-label > span:first-child').forEach((e,i)=>e.textContent=labels[i]||e.textContent);
-        document.querySelector('.system-actions button').textContent='Recalculate cache size';
-        document.querySelector('.system-actions .danger').textContent='Clear cache…';
+        const labels=new Map([['代理','Proxy configuration'],['代理地址','Custom proxy address'],['绕过列表','Proxy bypass addresses'],['网络宽松模式','Relaxed network mode'],['数据保存路径','Application data storage location'],['可清理缓存','Clearable browser cache'],['Electron 浏览器数据目录','Electron browser profile directory'],['Pi Agent 配置目录','Pi Agent configuration directory'],['用户项目目录','User project directories'],['保持电脑唤醒','Keep this computer awake'],['阻止屏幕休眠','Prevent automatic display sleep'],['关闭主窗口时','When closing the main window']]);
+        document.querySelectorAll('.ds-settings-row-label > span:first-child').forEach(e=>{e.textContent=labels.get(e.textContent)||e.textContent});
+        document.querySelector('#system-cache-actions button').textContent='Recalculate cache size';
+        document.querySelector('#system-cache-actions .danger').textContent='Clear cache…';
         document.querySelector('[data-value="tray"] .ds-segment-label').textContent='Close to tray';
         document.querySelector('[data-value="quit"] .ds-segment-label').textContent='Quit application';
         document.querySelector('.settings-detail').scrollTop=0;}`);

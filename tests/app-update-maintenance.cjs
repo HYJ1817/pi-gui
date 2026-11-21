@@ -13,6 +13,20 @@ test('private maintenance refuses active work, drains and freezes atomically',as
   releaseClose();assert.equal((await p).ok,true);assert.deepEqual(order,['close','pause']);
   await gate.release();assert.equal(gate.locked(),false);assert.deepEqual(order,['close','pause','resume']);
 });
+test('an idle user shell blocks storage only, and maintenance owners cannot release each other',async()=>{
+  const {createAppUpdateMaintenance}=await import('../server/app-update-maintenance.js');
+  const gate=createAppUpdateMaintenance({busyReason:()=>null,storageBusy:()=>true,pause:async()=>({ok:true}),
+    closeSessions:async()=>{},resume:async()=>{}});
+  assert.equal(gate.inspect('storage').ok,false);
+  assert.equal((await gate.prepare('storage')).ok,false);
+  assert.equal((await gate.prepare()).ok,true);
+  assert.equal(gate.owns('storage'),false);
+  assert.equal(gate.owns('update'),true);
+  assert.equal((await gate.release('storage')).code,'maintenance_owner');
+  assert.equal(gate.locked(),true);
+  assert.equal((await gate.release()).ok,true);
+  assert.equal(gate.locked(),false);
+});
 test('cleanup failure unlocks and resumes without claiming shutdown',async()=>{
   const {createAppUpdateMaintenance}=await import('../server/app-update-maintenance.js');let resumed=0;
   const gate=createAppUpdateMaintenance({busyReason:()=>null,pause:async()=>({ok:false}),closeSessions:async()=>{},resume:()=>resumed++});

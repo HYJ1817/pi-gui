@@ -6,7 +6,7 @@ const {EventEmitter}=require('node:events');
 
 const DESKTOP=path.join(__dirname,'../electron/app-update-desktop.cjs');
 const tick=async()=>{for(let i=0;i<5;i+=1)await new Promise(resolve=>setImmediate(resolve));};
-function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,onDialog=null,readLatest='0.35.0'}={}){
+function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,onDialog=null,readLatest='0.35.0',fetchImpl,unavailable=false}={}){
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'pi-update-desktop-prefs-'));
   t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   const temp=path.join(root,'temp'),profile=userData||path.join(root,'userData');
@@ -23,6 +23,7 @@ function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,o
   };
   const updater={state:{phase:'idle',mode:'installed',currentVersion:'0.34.0'},downloads:0,cancels:0,installs:0,quits:0,inspects:0,options:null,listener:null};
   const fakeModule={detectMode:()=> 'installed',createAppUpdate:options=>{
+    if(unavailable)throw Error('fixture update cache unavailable');
     updater.options=options;
     return {
       state:()=>({...updater.state}),
@@ -41,7 +42,7 @@ function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,o
   const module={exports:{}};
   vm.runInNewContext(fs.readFileSync(DESKTOP,'utf8'),{require:req,module,exports:module.exports,__dirname:path.dirname(DESKTOP),process,setTimeout,clearTimeout,setInterval,clearInterval,URL,Promise,Buffer});
   const controller=module.exports.installAppUpdate({app,ipcMain:{handle:(name,fn)=>handlers.set(name,fn)},origin:'http://127.0.0.1:7788',
-    getWindow:()=>({webContents:wc}),getServer:()=>server,
+    getWindow:()=>({webContents:wc}),getServer:()=>server,fetchImpl,
     readUpdate:async options=>{readCalls.push(options);return {ok:true,currentVersion:'0.34.0',latestVersion:readLatest,updateAvailable:true,
       release:{tag:`v${readLatest}`,url:`https://github.com/HYJ1817/pi-gui/releases/tag/v${readLatest}`,notes:'notes',assets:[]}};},
     inspectDesktop:()=>({ok:true,browsers:browserCount}),prepareDesktop:async()=>{},resumeBackend:async()=>{},
@@ -51,6 +52,17 @@ function world(t,{userData=null,backendOk=true,browserCount=0,dialogResponse=1,o
   const preventEvent=()=>({prevented:false,preventDefault(){this.prevented=true;}});
   return {root,temp,profile,handlers,sent,readCalls,updater,controller,call,ready,preventEvent,app};
 }
+
+test('unavailable updater cache does not prevent an unrelated storage maintenance lease',async t=>{
+  const w=world(t,{unavailable:true});
+  const lease=w.controller.reserveMaintenance();
+  assert.ok(lease);
+  assert.equal(w.controller.reserveMaintenance(),null);
+  assert.equal((await w.call('check')).code,'storage_maintenance');
+  assert.equal(w.controller.beforeQuit(w.preventEvent()),false);
+  w.controller.releaseMaintenance(lease);
+  assert.ok(w.controller.reserveMaintenance());
+});
 
 test('desktop preference IPC accepts only a fixed automatic/manual request and persists in userData',async t=>{
   if(process.platform!=='win32'){t.skip('Windows NSIS install shape');return;}
@@ -236,4 +248,44 @@ test('explicit install keeps confirmation, rejects ignored packages and still wo
 
   assert.equal((await w.call('cancel')).code,'not_downloading');
   assert.equal((await w.call('state')).preference,'manual');
+});
+
+test('desktop updater retains its main-owned fetch adapter without giving the renderer a transport selector',async t=>{
+  if(process.platform!=='win32'){t.skip('Windows desktop integration');return;}
+  const fetchImpl=async()=>({status:200});
+  const w=world(t,{fetchImpl});await tick();
+  assert.equal(w.updater.options.fetchImpl,fetchImpl);
+  assert.equal((await w.call('download',{confirm:true,fetchImpl:'renderer-choice'})).code,'untrusted');
+  w.controller.manager().dispose();
+});
+
+test('storage maintenance lease blocks updater mutations and install-on-quit, not authenticated state',async t=>{
+  if(process.platform!=='win32'){t.skip('Windows desktop integration');return;}
+  const w=world(t);await tick();await w.call('preference',{preference:'automatic'});await w.ready('0.35.0');
+  const lease=w.controller.reserveMaintenance();assert.equal(typeof lease,'symbol');
+  assert.equal(w.controller.reserveMaintenance(),null);
+  assert.equal((await w.call('state')).phase,'ready','ready package remains readable and untouched');
+  assert.equal((await w.call('state')).installOnQuit,false);
+  for(const [action,arg] of [['check'],['download',{confirm:true}],['install',{confirm:true}],
+    ['preference',{preference:'manual'}],['cancel'],['ignore'],['unignore']]){
+    assert.equal((await w.call(action,arg)).code,'storage_maintenance',action);
+  }
+  assert.equal(w.controller.beforeQuit(w.preventEvent()),false,'storage relaunch is not authorization to install');
+  assert.equal(w.updater.installs,0);assert.equal(w.updater.downloads,0);
+  w.controller.releaseMaintenance(Symbol('wrong-owner'));
+  assert.equal((await w.call('check')).code,'storage_maintenance');
+  w.controller.releaseMaintenance(lease);
+  assert.equal((await w.call('state')).installOnQuit,true);
+  w.controller.manager().dispose();
+});
+test('storage lease rejects active checking, pending downloads, and every installer preparation phase',async t=>{
+  if(process.platform!=='win32'){t.skip('Windows desktop integration');return;}
+  const w=world(t);await tick();
+  for(const phase of ['checking','downloading','verifying','preparing','installing']){
+    w.updater.state.phase=phase;assert.equal(w.controller.reserveMaintenance(),null,phase);
+  }
+  w.updater.state.phase='idle';
+  const pending=w.controller.manager().download({confirm:true});
+  assert.equal(w.controller.reserveMaintenance(),null,'download task exists before its first microtask');
+  await pending;w.controller.manager().dispose();
 });

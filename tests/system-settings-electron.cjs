@@ -9,11 +9,12 @@ const assert = require('node:assert/strict');
 const { spawn, spawnSync, execFileSync } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 const packaged = process.argv.includes('--packaged');
+const p2 = process.argv.includes('--p2-only');
 const world = fs.mkdtempSync(path.join(os.tmpdir(), packaged ? 'pi-system-packaged-' : 'pi-system-desktop-'));
 const out = path.join(world, 'evidence'); fs.mkdirSync(out);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const profile = path.join(world, 'profile');
-const data = path.join(world, 'data-中文-long-system-settings-location-'.repeat(3));
+const data = p2 ? profile : path.join(world, 'data-中文-long-system-settings-location-'.repeat(3));
 const repo = path.join(world, 'project');
 let child;
 function processes() {
@@ -57,7 +58,7 @@ async function run() {
   // Node backend auto-update probes fail offline. The Electron fixture separately
   // rejects non-loopback Chromium requests; no remote endpoint is contacted.
   const offline = path.join(world, 'offline.cjs');
-  fs.writeFileSync(offline, `globalThis.__systemOfflineGuard=true;const base=global.fetch;global.fetch=(input,options)=>{const u=new URL(typeof input==='string'||input instanceof URL?String(input):input.url);if(!['127.0.0.1','localhost','[::1]'].includes(u.hostname))return Promise.reject(Error('offline_fixture'));return base(input,options)};if(/[\\\\/]server\\.(?:cjs|js)$/.test(process.argv[1]||''))require('node:fs').writeFileSync(require('node:path').join(process.env.SYSTEM_WORLD,process.env.SYSTEM_PHASE+'-offline-backend'),'active');`);
+  fs.writeFileSync(offline, `require(${JSON.stringify(path.join(ROOT, 'tests/fixtures/system-settings-offline.cjs'))});globalThis.__systemOfflineGuard=true;const base=global.fetch;global.fetch=(input,options)=>{const u=new URL(typeof input==='string'||input instanceof URL?String(input):input.url);if(!['127.0.0.1','localhost','[::1]'].includes(u.hostname))return Promise.reject(Error('offline_fixture'));return base(input,options)};if(/[\\\\/]server\\.(?:cjs|js)$/.test(process.argv[1]||''))require('node:fs').writeFileSync(require('node:path').join(process.env.SYSTEM_WORLD,process.env.SYSTEM_PHASE+'-offline-backend'),globalThis.__systemRawNetworkGuard?'active-raw':'missing-raw');`);
   const env = {};
   for (const key of ['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'ELECTRON_OVERRIDE_DIST_PATH']) if (process.env[key]) env[key] = process.env[key];
   Object.assign(env, { SYSTEM_WORLD: world, SYSTEM_OUTPUT: out, SYSTEM_PROFILE: profile, SYSTEM_DATA: data, SYSTEM_FIXTURE_NODE: process.execPath,
@@ -66,8 +67,14 @@ async function run() {
     HOME: path.join(world, 'home'), USERPROFILE: path.join(world, 'home'), APPDATA: path.join(world, 'roaming'), LOCALAPPDATA: path.join(world, 'local'),
     TEMP: path.join(world, 'tmp'), TMP: path.join(world, 'tmp'), NODE_OPTIONS: '--require="' + offline.replaceAll('\\', '/') + '"',
   });
+  if (p2) {
+    delete env.PI_GUI_DATA;
+    env.SYSTEM_TARGET = path.join(world, '新 数据（迁移）'); fs.mkdirSync(env.SYSTEM_TARGET);
+    fs.mkdirSync(path.join(profile, '.uploads')); fs.writeFileSync(path.join(profile, '.uploads/sample.bin'), Buffer.alloc(262144, 73));
+    fs.writeFileSync(path.join(profile, 'session-titles.json'), JSON.stringify({ version: 1, items: [] }));
+  }
   let executable = packaged ? null : require('electron'), appRoot, artifact = null;
-  const entry = path.join(ROOT, 'tests/fixtures/system-settings-desktop.cjs');
+  const entry = path.join(ROOT, p2 ? 'tests/fixtures/system-settings-p2-desktop.cjs' : 'tests/fixtures/system-settings-desktop.cjs');
   if (packaged) {
     // Never alter dist-app. Copy the built package to a fresh TEMP directory;
     // only its manifest entry is redirected to the observation bootstrap.
@@ -81,7 +88,7 @@ async function run() {
       assert.equal(digest(path.join(appRoot, file)), digest(path.join(ROOT, 'electron', file)), 'packaged module ' + file);
       identities[file] = digest(path.join(appRoot, file));
     }
-    for (const file of ['system-settings.js', 'system-settings.css', 'index.html', 'app.js', 'api.js', 'ui/icons.js']) {
+    for (const file of ['system-settings.js', 'system-settings-network.js', 'system-settings-storage.js', 'system-settings.css', 'index.html', 'app.js', 'api.js', 'ui/icons.js']) {
       assert.equal(digest(path.join(appRoot, 'public', file)), digest(path.join(ROOT, 'public', file)), 'packaged resource ' + file);
       identities['public/' + file] = digest(path.join(appRoot, 'public', file));
     }
@@ -96,7 +103,8 @@ async function run() {
       backendDigest: digest(path.join(appRoot, 'server.cjs')), trayIconDigest: digest(path.join(appRoot, 'icon.ico')) };
   }
   const reports = [];
-  const phases = process.argv.includes('--visual-only') ? ['visual-states']
+  const phases = p2 ? ['network-cache', 'prepare-migration', 'verify-migration']
+    : process.argv.includes('--visual-only') ? ['visual-states']
     : process.argv.includes('--lifecycle-only') ? ['pending-save-quit', 'session-end', 'update-gates']
     : ['exercise', 'restart-tray-quit', 'default-close', 'ctrl-q', 'session-end', 'update-gates', 'pending-save-quit', 'visual-states'];
   for (const phase of phases) {
@@ -108,7 +116,7 @@ async function run() {
     const exited = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', (code, signal) => resolve({ code, signal })); });
     child.stdout.on('data', data => process.stdout.write(data)); child.stderr.on('data', data => process.stderr.write(data));
     const ready = path.join(world, phase + '-ready'), ack = path.join(world, phase + '-ack');
-    const deadline = Date.now() + 120000;
+    const deadline = Date.now() + 300000;
     while (!fs.existsSync(ready) && child.exitCode === null && Date.now() < deadline) await sleep(50);
     assert.ok(fs.existsSync(ready), phase + ' did not reach explicit cleanup; exit=' + child.exitCode + '; signal=' + child.signalCode);
     const identities = descendants(processes(), child.pid);
