@@ -1,7 +1,13 @@
 # 扩展（Skills / Extensions / MCP）
 
-侧栏的**扩展**是 Skills、Extensions 与 MCP 三个标签页。P36 移除了独立的
-能力状态页与 All / Capabilities 两个能力过滤器；Extensions 标签顶部保留一个
+Skills、Extensions 与 MCP 现在是**三个独立入口**（入口、模块归属与并行开发边界见
+[agent-capabilities.md](agent-capabilities.md)）：
+
+- 应用主导航的**扩展**：「已安装」（只读 Registry）与「插件市场」（第一阶段占位）两个页签；
+- 设置 › Agent 能力 › **技能**：pi 原生 Skills 的清单、详情与启停；
+- 设置 › 扩展与 MCP › **MCP 配置**：pi 原生 MCP 管理面，页尾折叠「MCP 能力报告」。
+
+P36 移除了独立的能力状态页与 All / Capabilities 两个能力过滤器；「已安装」顶部保留一个
 默认折叠的**「已知能力设置（安装 / 运行观察）」**区，承载 Web Access / Subagents /
 Pi Memory / Browser Use 的受控一键安装与运行观察，以及 Approval / Permission
 的只读协议探测。
@@ -18,17 +24,19 @@ MCP 这类能力按**本机实际装着的那个 pi 包**检测后如实报告�
 > [Capability UX](capability-ux.md)：统一状态字段（**只画适用的那些**）、
 > `null` 一律显示「未知（无法确认）」、Native MCP 原样搬运 P20.6 的原生状态、
 > 唯一一套 setup 布局与唯一的「安装后重启 Pi」实现。独立能力状态页已在 P36 移除，
-> 投影继续服务 Extensions 页的设置区。
+> 投影继续服务扩展页「已安装」的设置区。
 
-## 三个标签 + 已知能力设置（P36）
+## 三个入口 + 已知能力设置
 
-标签行仍然复用 Work Surface tab 机制，没有新增导航：
+拆分前三者是同一个 Work Surface 的三个标签（`public/extensions.js`）；现在各自独立，
+服务端接口与判定逻辑不变：
 
-| 标签 | 内容 |
+| 入口 | 内容 |
 |---|---|
-| Extensions（默认） | 通用 Registry（**包括完全不认识的**）+ 顶部「已知能力设置」折叠区 |
-| Skills | pi 原生 Skills 的清单、详情与启停（原有实现） |
-| MCP | pi 原生 MCP 管理面 + Native MCP / built-in 状态（原有实现） |
+| 扩展 › 已安装（默认） | 通用 Registry（**包括完全不认识的**）+ 顶部「已知能力设置」折叠区（`public/extensions/`） |
+| 扩展 › 插件市场 | 第一阶段只预留布局：不发请求、不安装（2B 边界见 [agent-capabilities.md](agent-capabilities.md)） |
+| 设置 › 技能 | pi 原生 Skills 的清单、行内详情与启停（`public/skills/`，同一套 `/api/skills`） |
+| 设置 › MCP 配置 | pi 原生 MCP 管理面；Native MCP / built-in 等证据在页尾「MCP 能力报告」（`public/mcp-report.js`） |
 
 「已知能力设置」只保留仍然有动作或独有证据的五项：Web Access、Subagents、
 Pi Memory、Browser Use、Approval / Permission。它**没有**能力总览、计数、搜索、
@@ -38,7 +46,7 @@ Pi Memory、Browser Use、Approval / Permission。它**没有**能力总览、�
 一键安装（若有）/ 复制、安装后重启、运行观察、限制、出处。
 Approval 没有安装命令，只显示 `tool_call` 阻断等四项探测结果。
 Native MCP 与 built-in **没有安装命令** —— 它们来自 Pi 自己的 built-in capability，
-不是 npm 包；它们继续在 MCP 标签里显示，不在设置区重复一份。
+不是 npm 包；它们继续在 MCP 配置页（页尾「MCP 能力报告」）里显示，不在设置区重复一份。
 
 ## 受控一键安装（P24 收口）
 
@@ -63,7 +71,7 @@ Native MCP 与 built-in **没有安装命令** —— 它们来自 Pi 自己的 
 
 P16 的 Web Access、P17 的 Subagents、P18 的 Pi Memory、P20 的 Browser Use 原来各自
 在 Extensions 页占一段设置区；P22 曾把它们统一进独立的能力状态页，**P36 移除该页后
-回到 Extensions 标签顶部的「已知能力设置」折叠区**，共用
+回到扩展页「已安装」顶部的「已知能力设置」折叠区**，共用
 `public/ui/capability-setup.js` 那一套布局与同一套措辞。
 通用 Registry 页只留**发现**这一件事：磁盘上有什么、各自什么状态、能不能诊断。
 详情见 [Web Access](web-access.md)、[Subagents](subagents.md)、
@@ -247,22 +255,26 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
   `llama.cpp` 在 0.87.0 里甚至是 `hidden: true`。
   所以页面只报「**包里带了它**」，不报「当前启用了它」。
 
-### MCP 标签页是 pi 原生集成的管理面（P20.6）
+### MCP 配置页是 pi 原生集成的管理面（P20.6 / P20.7）
 
-完整说明见 [mcp.md](mcp.md)，这里只留与本页相关的三句：
+完整说明见 [mcp.md](mcp.md)，这里只留与本页相关的几条：
 
-- 能力报告部分不变：**运行中版本**（`value` + `source` + `status` + `updatedAt`）
+- 能力报告在「设置 › 扩展与 MCP › MCP 配置」页尾的折叠区「MCP 能力报告」
+  （第一次展开才读 `/api/mcp`），内容不变：**运行中版本**（`value` + `source` + `status` + `updatedAt`）
   与 built-in 清单（带原文出处）+ **RPC 事实**（33 条命令里没有已注册工具清单）
   + pi 官方替代路径（两处 extensions 目录与 settings 声明）。检测不出来时
   如实说「无法确定」，**不猜成不支持**。
-- Server 部分是真实集成：原生状态（active / replaced / disabled / unknown）+
+- Server 部分由 MCP 配置页承接：原生状态（active / replaced / disabled / unknown）+
   两处 `mcp.json` 的安全结构解析 + `pi mcp list --json` 的运行时状态
-  （点刷新才跑）+ 受控动作（add / remove / login / logout）。
+  （点刷新才跑）+ 受控动作（新增 / 编辑 / 启停 / 删除写 Pi 原生 `mcp.json`，
+  login / logout 走 pi）。拆分前旧 MCP 标签里那份 server 列表 / 刷新 / 移除 / 添加
+  与配置页重复，没有搬第二份。
   `server/mcp.js` 的同步报告里 `servers` 继续是空数组（运行时要 spawn，
   明细走 `/api/mcp/servers`，前端结构约定保持）。
 - 仍然不做的三件事（做了就是撒谎）：不在 `.pi-gui/` 里自己存一份 MCP 配置；
   不显示没有数据支撑的状态（「运行：」前缀只出现在有 `list --json` 证据时）；
-  enable / disable / reconnect / 改 exposure 没有官方自动化接口，不伪造开关。
+  没有官方接口的动作（如 reconnect）不伪造按钮 —— 启停与 exposure 是 P20.7 起
+  对 `mcp.json` 的受控写入，不是视觉假开关。
 - **`pi mcp list --json` 看不见 extension 注册的 server**：shell 命令不加载
   extensions（0.99.2 `docs/mcp.md` 原文），所以 CLI 状态源只可能产出
   `global` / `project`。用 `pi.registerMcpServer()` 注册的 server 只活在
@@ -270,7 +282,8 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
   详见 [mcp.md](mcp.md) 的「`scope`：类型上有三值，CLI 实际只产两个」。
 - **P22：这几条原生状态曾被 Capability 视图投影**（`active` / `replaced` /
   `disabled` / `unsupported` / `unknown` 原样搬运，不重新判断）。P36 移除独立
-  能力状态页后，它们继续在 MCP 标签里显示；`replaced` 仍然不等于「MCP 不可用」。
+  能力状态页后，它们继续在 MCP 页显示（拆分后在 MCP 配置页与页尾能力报告）；
+  `replaced` 仍然不等于「MCP 不可用」。
 
 `server/mcp.js` **不硬编码「某个版本没有 MCP」**：它去读本机装的 pi 包
 （定版本、扫 `dist/core` 找 mcp 模块、从 docs 截原文当证据）。`supported`
@@ -303,16 +316,17 @@ P22 增加统一 Capability 投影；P36 移除独立能力状态页，投影继
 **`server/extension-registry.js` 无特化**）；
 `npm run test:capability-install`（38 条，离线、fake runner：allowlist、固定 argv、
 闸门、维护暂停 / 恢复、退出码 0 ≠ 已加载、脱敏与隐私）；
-`npm run test:ui` 的 P36 段（三个标签、「已知能力设置」仍可从 Extensions 页到达、
+`npm run test:ui` 的 P36 段（「已知能力设置」仍可从扩展页「已安装」到达、
 一键安装的确认与重新发现后的重画、旧能力状态页不再渲染）与
-`npm run test:sidebar-menu`（37 条 jsdom）；
-截图随设置页与 Extensions 页验收覆盖。
+`npm run test:sidebar-menu`（37 条 jsdom）；三个入口的拆分边界与生命周期见
+`npm run test:agent-capabilities`（[agent-capabilities.md](agent-capabilities.md)）；
+截图随设置页与扩展页验收覆盖。
 
 P19 在 Extensions 页增加 **Approval / Permission** 能力块（只读报告，不是新标签页）：
 报告 `tool_call` 能否阻断、对话框子协议是否可用、核心有没有自带审批、
 RPC 下 `ctx.ui.custom()` 是否退化，每项带出处；见 [approvals.md](approvals.md)。
 它不改 Registry 的发现/启用/加载判定，也不往 Registry 里塞 permission 专用逻辑。
-P36 起这份报告回到 Extensions 标签的「已知能力设置」折叠区（同一份探测结果，
+P36 起这份报告回到扩展页「已安装」的「已知能力设置」折叠区（同一份探测结果，
 不重新探测、不重新判断）。
 
 P17 增加 Conversation Subagent Activity 与手动安装提示，见 [subagents.md](subagents.md)。
@@ -341,7 +355,7 @@ Registry 的 tools/unknown 语义同样不变。`npm run test:memory`（236 条�
 P20.6 增加 MCP 原生集成（见 [mcp.md](mcp.md)）：`npm run test:mcp`（52 条，
 安全解析、入口派生、scope/信任/状态机、list 合并与脱敏、动作 argv 与校验、
 stale、unsupported、secret 不回显、语义投影与运行观察），`npm run test:ui`
-另有 MCP 标签页的界面行为。全程离线；真机流程手工走，不进 CI。
+另有 MCP 配置页与页尾能力报告的界面行为。全程离线；真机流程手工走，不进 CI。
 
 `npm run test:skills-live`（32 条，**要真 pi**，约 2-3 分钟，不在 `npm test` 里）：
 拉起真的 pi 子进程，用真的 `get_commands` 对拍 —— 项目级默认不加载 /

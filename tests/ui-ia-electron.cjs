@@ -194,8 +194,10 @@ if (!process.versions.electron) {
     check(await read(`(()=>{const b=document.querySelector('#btnSidebarExpand');b.focus();return document.activeElement===b&&b.offsetParent!==null&&document.querySelector('#projectSidebar').hidden})()`), 'Collapsed shell keeps its expand control focusable');
     await pointer('#btnSidebarExpand'); check(await read(`document.activeElement.id==='btnSidebarCollapse'`), 'Sidebar expand focus');
     await pointer('#navGlobalMore'); await pointer('#navPlanner'); await sleep(350); await shot('planner-review', '1440x900');
-    await pointer('#settingsReturn'); await pointer('#navGlobalMore'); await pointer('#navExtensions'); await waitFor(`document.querySelector('#extensionsTabSkills').getAttribute('aria-selected')==='true'`, 'Skills default'); await shot('skills', '1440x900');
-    await pointer('#settingsReturn');
+    /* 技能是「设置 › Agent 能力」下的设置页；扩展是主导航页面（默认「已安装」）。 */
+    await pointer('#settingsReturn'); await pointer('#navGlobalMore'); await pointer('#navSkills'); await waitFor(`!!document.querySelector('.skills-page .skill-row') && document.querySelector('#navSkills').getAttribute('aria-current')==='page'`, 'Skills settings page'); await shot('skills', '1440x900');
+    await pointer('#settingsReturn'); await pointer('#navExtensions'); await waitFor(`document.querySelector('#extensionsTabInstalled')?.getAttribute('aria-selected')==='true' && document.querySelector('#globalMoreMenu').hidden`, 'Extensions installed default'); await shot('extensions', '1440x900');
+    await pointer('#navHome');
     for (const zoom of [0.8, 1.25, 1.5]) {
       win.webContents.setZoomFactor(zoom); await sleep(250);
       await pointer('#btnWorkPanel'); await waitFor(`!!document.querySelector('.work-panel-launcher-row[data-tool="navChanges"]')`, 'work tools');

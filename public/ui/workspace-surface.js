@@ -2,7 +2,7 @@
 import { $ } from '../state.js';
 
 const rail = { chat: 'navHome', settings: 'navGlobalMore', planner: 'navPlanner', extensions: 'navExtensions', runtime: 'navHome', history: 'navHome' };
-const titles = { settings: '设置', planner: '任务与审阅', extensions: 'Skills 与扩展', history: '会话' };
+const titles = { settings: '设置', planner: '任务与审阅', extensions: '扩展', history: '会话' };
 let current = { view: 'chat', token: 0, dispose: null };
 let chatScroll = { top: 0, atBottom: true };
 

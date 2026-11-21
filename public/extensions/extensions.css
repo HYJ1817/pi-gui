@@ -1,0 +1,302 @@
+/* 扩展页（public/extensions/）。
+ * 版式对照 PI-Desktop 扩展页：页头（图标块 + 标题 + 动作）→ 页签行（分段页签 + 工具栏）→
+ * 按状态分组的卡片网格 → 已知能力。颜色、字号、圆角全部取 pi-GUI Token；页签用 .ds-segmented 的外观，
+ * 状态徽标用 .ds-badge，按钮用 .btn，详情事实行沿用 .ext-rows / .cfg-note。 */
+
+/* 页面自己画「扩展」标题；工作区标题栏里的同名标题在本页隐藏，避免一屏两个标题。 */
+.stage[data-workspace-view="extensions"] #workViewTitle { display: none; }
+
+/* Work Surface 保持 overflow:hidden（与 Planner / Changes 同一契约），滚动交给内部的 .extensions-scroll。
+ * 内边距随之移进滚动容器：滚动条贴着工作区边缘，焦点轮廓也不会被滚动裁切吃掉。 */
+.work-surface.extensions-page { padding: 0; }
+.extensions-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--work-surface-padding);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.extensions-inner {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 1160px;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+/* ---------- 页头 ---------- */
+.extensions-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
+.extensions-heading { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.extensions-heading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-xs);
+  background: var(--ds-tile-deep);
+  color: var(--ds-text-secondary);
+}
+.extensions-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
+  color: var(--ds-text-primary);
+}
+.extensions-head-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.extensions-head-actions:empty { display: none; }
+.extensions-refresh { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- 页签行 ---------- */
+.extensions-toolbar-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.extensions-tabs { flex: none; }
+.extensions-toolbar-slot { display: flex; justify-content: flex-end; flex: 1 1 260px; min-width: 0; }
+.extensions-toolbar-slot:empty { display: none; }
+.extensions-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1 1 auto; min-width: 0; }
+.extensions-result-count { flex: none; font-size: var(--text-xs); color: var(--ds-text-muted); white-space: nowrap; }
+.extensions-result-count:empty { display: none; }
+.extensions-search { flex: 0 1 280px; min-width: 160px; }
+.extensions-search-icon { flex: none; }
+
+.extensions-inner > .extension-notices { margin-top: 0; }
+
+/* ---------- 面板与分组 ---------- */
+.extensions-panel { min-width: 0; }
+.extensions-tab-panel { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.extensions-notes { display: grid; gap: 8px; }
+.extensions-notes:empty { display: none; }
+.extensions-list { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.extensions-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.extensions-group-head { display: flex; align-items: center; gap: 8px; min-height: 20px; padding: 0 2px; }
+.extensions-group-title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-compact);
+  color: var(--ds-text-secondary);
+}
+.extensions-group-count {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--ds-bg-chip);
+  color: var(--ds-text-secondary);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+
+/* ---------- 卡片网格 ---------- */
+.extensions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 12px;
+}
+.extensions-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--ds-tile);
+  transition: background var(--motion-duration-fast) var(--motion-ease-out);
+}
+.extensions-card:hover,
+.extensions-card:focus-within { background: var(--ds-tile-hover); }
+.extensions-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.extensions-card-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  background: var(--ds-tile-deep);
+  color: var(--ds-text-secondary);
+}
+.extensions-card.is-error .extensions-card-glyph {
+  background: color-mix(in oklab, var(--ds-error) 14%, transparent);
+  color: var(--ds-error);
+}
+.extensions-card-heading { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.extensions-card .ext-name {
+  flex: none;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: var(--text-md-plus);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--leading-compact);
+  color: var(--ds-text-primary);
+}
+.extensions-card-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--ds-text-muted);
+}
+.extensions-card-desc {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--ds-text-secondary);
+  overflow-wrap: anywhere;
+}
+/* 展开详情时简介给全文（详情里不再重复一遍）。 */
+.extensions-card.is-open .extensions-card-desc { display: block; overflow: visible; -webkit-line-clamp: unset; }
+.extensions-card-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.extensions-cap {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  height: 20px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--ds-bg-chip);
+  color: var(--ds-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.extensions-cap.is-more { font-family: inherit; color: var(--ds-text-muted); }
+/* 11–12px 小字直接用 --ds-error 在浅色主题对比度不足；与主文字混合后保留色相（同 app-shell 的做法）。 */
+.extensions-card-error {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: color-mix(in oklab, var(--ds-error) 72%, var(--ds-text-primary));
+  overflow-wrap: anywhere;
+}
+.extensions-card-foot { display: flex; align-items: center; margin-top: auto; }
+.extensions-card-toggle { display: inline-flex; align-items: center; gap: 4px; margin-left: -8px; }
+.extensions-card-chevron { transition: transform var(--motion-duration-fast) var(--motion-ease-out); }
+.extensions-card-toggle[aria-expanded="true"] .extensions-card-chevron { transform: rotate(180deg); }
+.extensions-card-details {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: var(--radius-xs);
+  background: var(--ds-raised);
+  box-shadow: var(--ds-raised-shadow);
+}
+.extensions-card-details .ext-rows { margin-bottom: 8px; }
+.extensions-card-details .ext-row-k { flex: 0 0 64px; }
+.extensions-card-details .cfg-note + .cfg-note { margin-top: 6px; }
+
+/* ---------- 已知能力：每项一块可展开的瓦片（覆盖 styles.css 里拆分前的折叠框样式） ---------- */
+.extensions-page .ext-known {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: none;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.extensions-page .ext-known-body { display: grid; gap: 6px; padding: 0; }
+.extensions-page .ext-known-item {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--ds-tile);
+}
+.extensions-page .ext-known-item > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-md);
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--ds-text-primary);
+}
+.extensions-page .ext-known-item > summary::-webkit-details-marker { display: none; }
+/* 折叠箭头用边框画，不进文本内容（summary 的文字就是这一项的名字）。 */
+.extensions-page .ext-known-item > summary::after {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: -3px 2px 0 0;
+  border-right: 1.5px solid var(--ds-text-muted);
+  border-bottom: 1.5px solid var(--ds-text-muted);
+  transform: rotate(45deg);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+.extensions-page .ext-known-item[open] > summary::after { margin-top: 3px; transform: rotate(225deg); }
+.extensions-page .ext-known-item > summary:hover { background: var(--ds-tile-hover); }
+.extensions-page .ext-known-item > summary:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; }
+.extensions-page .ext-known-item-body { padding: 4px 14px 14px; }
+
+/* ---------- 空状态（已安装为空 / 失败 / 项目已切换 / 插件市场占位） ---------- */
+.extensions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 38px 20px;
+  border-radius: var(--radius-md);
+  background: var(--ds-tile);
+  color: var(--ds-text-secondary);
+  text-align: center;
+}
+.extensions-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--ds-bg-chip);
+  color: var(--ds-text-muted);
+}
+.extensions-empty-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-compact);
+  color: var(--ds-text-primary);
+}
+.extensions-empty-text { max-width: 440px; margin: 0; font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--ds-text-secondary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .extensions-card,
+  .extensions-card-chevron,
+  .extensions-page .ext-known-item > summary::after { transition: none; }
+}
+
+@media (max-width: 720px) {
+  .extensions-toolbar-slot { flex-basis: 100%; }
+  .extensions-search { flex: 1 1 auto; min-width: 0; }
+}

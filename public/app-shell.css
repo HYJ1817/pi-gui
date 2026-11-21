@@ -68,6 +68,11 @@
   text-align: left;
 }
 .project-sidebar:not(.settings-mode) .nav-item:hover { color: var(--ds-text-primary); background: var(--ds-bg-hover); }
+/* 主导航目的地（扩展）打开时画出选中态，与当前会话行用同一个 Token。
+ * 状态源是 workspace-surface.js 写的 aria-current="page"，CSS 只做投影；
+ * 「会话」标题 #navHome 嵌在 .sidebar-session-heading 里，不是 .rail-nav 的直接子项，不受影响。 */
+.project-sidebar:not(.settings-mode) .rail-nav > .nav-item[aria-current="page"] { color: var(--ds-text-primary); background: var(--ds-bg-active); }
+.project-sidebar:not(.settings-mode) .rail-nav > .nav-item[aria-current="page"] .ni-ic { color: var(--ds-text-primary); }
 .project-sidebar #navHome {
   flex: 1;
   height: 24px;
@@ -165,6 +170,10 @@ button.pj-sess-primary { cursor: pointer; }
 .pj-sess-dot { width: 5px; height: 5px; flex: 0 0 5px; border: 0; border-radius: 50%; background: transparent; }
 .project-sidebar .pj-sess:hover { color: var(--ds-text-primary); background: var(--ds-bg-hover); }
 .project-sidebar .pj-sess.on { color: var(--ds-text-primary); background: var(--ds-bg-active); }
+/* 侧栏同一时间只画一处选中：主导航目的地打开时，当前会话行退回普通行的样子
+ * （aria-current、运行中圆点与点击回到会话都保留）。 */
+.project-sidebar:has(.rail-nav > .nav-item[aria-current="page"]) .pj-sess.on { color: var(--ds-text-secondary); background: transparent; }
+.project-sidebar:has(.rail-nav > .nav-item[aria-current="page"]) .pj-sess.on:hover { color: var(--ds-text-primary); background: var(--ds-bg-hover); }
 .project-sidebar .pj-sess-time { display: none; }
 .project-sidebar .pj-sess[data-activity="running"] .pj-sess-dot,
 .project-sidebar .pj-runtime-dot.running,

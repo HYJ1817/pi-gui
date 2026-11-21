@@ -43,12 +43,20 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal(d.querySelector('.head-right #navChanges'), null);
     assert.ok(d.querySelector('.head-right #btnWorkPanel'));
   });
-  await check('Settings has all six logical groups and bound actions', () => {
+  await check('Settings has all seven logical groups, none empty, and bound actions', () => {
     $('navGlobalMore').click();
     const labels = [...d.querySelectorAll('#globalMoreMenu h3')].map(n => n.textContent);
-    for (const name of ['常规与界面', '工作区', '模型与账户', '扩展与 MCP', '系统与应用', '诊断']) assert.ok(labels.includes(name), name);
+    assert.deepEqual(labels, ['常规与界面', '工作区', '模型与账户', 'Agent 能力', '扩展与 MCP', '系统与应用', '诊断']);
     assert.equal($('navSystem').nextElementSibling, $('navInfo'));
-    assert.equal(labels.includes('Agent 能力'), false);
+    /* 「Agent 能力」重新出现时只承载「技能」；29d4054f 移除的能力状态页不回来。
+     * 「扩展与 MCP」只剩 MCP 配置 —— 扩展本身是应用主导航目的地。 */
+    const group = id => $(id).closest('section');
+    assert.deepEqual([...group('navSkills').querySelectorAll('button')].map(b => b.id), ['navSkills']);
+    assert.equal(group('navSkills').querySelector('h3').textContent, 'Agent 能力');
+    assert.deepEqual([...group('navMcp').querySelectorAll('button')].map(b => b.id), ['navMcp']);
+    assert.equal(group('navMcp').querySelector('h3').textContent, '扩展与 MCP');
+    assert.equal($('navCapabilities'), null, 'removed capability status page stays removed');
+    assert.ok([...$('globalMoreMenu').querySelectorAll('section')].every(section => section.querySelector('button')), 'no empty settings group');
     assert.ok($('navInfo'), 'unified info entry exists');
     assert.equal($('navAppUpdates'), null, 'old updates entry removed');
     assert.equal($('navRestartPi'), null, 'old restart entry removed');
@@ -71,23 +79,49 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.ok($('navSystem').querySelector('svg[data-icon="monitor"] path'));
     search.value = ''; search.dispatchEvent(new w.Event('input', { bubbles: true }));
   });
+  await check('Settings search finds 技能 and MCP 配置 by their own words and group headings', async () => {
+    const search = $('settingsSearchInput');
+    const visible = () => [...$('globalMoreMenu').querySelectorAll('button')]
+      .filter(b => !b.hidden && !b.closest('section')?.hidden).map(b => b.id);
+    for (const [term, ids] of [
+      ['技能', ['navSkills']], ['skill', ['navSkills']], ['Agent 能力', ['navSkills']],
+      ['扩展', ['navMcp']], ['mcp', ['navMcp']], ['能力报告', ['navMcp']], ['能力', ['navSkills', 'navMcp']],
+    ]) {
+      search.value = term; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+      assert.deepEqual(visible(), ids, term);
+    }
+    search.value = ''; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+  });
   await check('MCP management has its own settings surface, not the extensions tab', async () => {
     $('navMcp').click(); await tick();
-    assert.equal(d.querySelector('.ext-tab[aria-selected="true"]'), null);
+    assert.equal(d.querySelector('.ext-tab[aria-selected="true"], .extensions-tab[aria-selected="true"]'), null);
     assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, 'navMcp');
     assert.equal($('workViewTitle').textContent, 'MCP 服务器');
   });
-  await check('extension subpages project their real current navigation and title', async () => {
-    for (const [id, tab, title] of [['navExtensions', 'skills', 'Skills 与扩展']]) {
-      $(id).click(); await tick();
-      assert.equal(d.querySelector('.ext-tab[aria-selected="true"]').dataset.tab, tab);
-      assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, id);
-      assert.equal($('workViewTitle').textContent, title);
-    }
-    /* 旧 MCP 标签还在，但它是能力报告，不再冒充管理页的导航。 */
-    $('extensionsTabMcp').click();
-    assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, 'navExtensions');
-    assert.equal($('workViewTitle').textContent, 'MCP 能力报告');
+  await check('Extensions is a primary destination with installed and market tabs; Skills is a settings page', async () => {
+    $('navExtensions').click(); await tick();
+    assert.equal($('workspace').dataset.workspaceView, 'extensions');
+    assert.deepEqual([...d.querySelectorAll('#workSurface .extensions-tab')].map(tab => tab.dataset.tab), ['installed', 'market']);
+    assert.equal(d.querySelector('.extensions-tab[aria-selected="true"]').dataset.tab, 'installed');
+    assert.equal($('extensionsTabSkills'), null); assert.equal($('extensionsTabMcp'), null);
+    assert.equal($('navExtensions').getAttribute('aria-current'), 'page');
+    assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]'), null);
+    assert.equal($('globalMoreMenu').hidden, true);
+    assert.equal($('workViewTitle').textContent, '扩展');
+    /* 页签切换只改页面内状态，导航高亮与标题不跟着漂。 */
+    $('extensionsTabMarket').click();
+    assert.equal(d.querySelector('.extensions-tab[aria-selected="true"]').dataset.tab, 'market');
+    assert.equal($('navExtensions').getAttribute('aria-current'), 'page');
+    assert.equal($('workViewTitle').textContent, '扩展');
+    $('navGlobalMore').click();
+    $('navSkills').click(); await tick();
+    assert.equal($('workspace').dataset.workspaceView, 'settings');
+    assert.equal(d.querySelector('#globalMoreMenu [aria-current="page"]').id, 'navSkills');
+    assert.equal($('navExtensions').getAttribute('aria-current'), null);
+    const skills = d.querySelector('#workSurface .settings-detail-card.skills-page');
+    assert.equal(skills.getAttribute('aria-label'), '技能');
+    assert.equal(skills.querySelector('h3.settings-page-title').textContent, '技能');
+    assert.equal(d.querySelector('#workSurface .ext-tab, #workSurface .extensions-tab'), null, 'no extension tabs inside the Skills page');
     $('navGlobalMore').click();
   });
   await check('Settings Escape returns focus to its visible trigger', () => {
@@ -101,7 +135,10 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     $('navGlobalMore').click();
     assert.equal($('workspace').dataset.workspaceView, 'settings');
     assert.ok($('globalMoreMenu').contains($('navPlanner')));
-    assert.ok($('globalMoreMenu').contains($('navExtensions')));
+    assert.ok($('globalMoreMenu').contains($('navSkills')));
+    assert.ok($('globalMoreMenu').contains($('navMcp')));
+    assert.equal($('globalMoreMenu').contains($('navExtensions')), false);
+    assert.ok(d.querySelector('#projectSidebar .rail-nav').contains($('navExtensions')));
     $('navPlanner').click(); await tick();
     assert.equal($('workspace').dataset.workspaceView, 'planner');
     assert.equal($('navPlanner').getAttribute('aria-current'), 'page');
@@ -109,6 +146,22 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     $('settingsReturn').click();
     assert.equal($('chatView'), chat); assert.equal($('input').value, 'settings round trip');
     assert.equal($('stream').scrollTop, 83); assert.equal($('globalMoreMenu').hidden, true);
+  });
+  await check('Extensions round trip is a primary view: no settings mode, chat draft and page disposal hold', async () => {
+    const chat = $('chatView'); $('input').value = 'extensions round trip';
+    $('navExtensions').click(); await tick();
+    assert.equal($('workspace').dataset.workspaceView, 'extensions');
+    assert.equal($('settingsReturn').hidden, true);
+    assert.equal($('projectSidebar').classList.contains('settings-mode'), false);
+    assert.ok($('workSurface').classList.contains('extensions-page'));
+    assert.ok($('workSurface').querySelector('#extensionsTabPanel[role="tabpanel"]'));
+    $('navHome').click();
+    assert.equal($('workspace').dataset.workspaceView, 'chat');
+    assert.equal($('chatView'), chat); assert.equal($('input').value, 'extensions round trip');
+    assert.equal($('workSurface').classList.contains('extensions-page'), false);
+    assert.equal($('workSurface').childElementCount, 0, 'extensions page disposed with its host content');
+    assert.equal($('navHome').getAttribute('aria-current'), 'page');
+    $('input').value = '';
   });
   await check('Work panel launcher contains only live registered tools and preserves chat', () => {
     $('btnWorkPanel').click();

@@ -53,6 +53,63 @@ const recoveryBus = recoveryMode ? import('../server/sse.js').then(({ createEven
   return bus;
 }) : null;
 
+/* /api/skills 的夹具：字段照抄 server/skills.js 的 listPayload 与 skills.push({...})。
+ * 3 条：全局已启用 / 全局被 settings 停用 / 项目级（项目未信任）—— cdp-shot 依赖这三条与未信任说明。 */
+const SKILL_HOME = 'C:\\Users\\me';
+const SKILL_AGENT = SKILL_HOME + '\\.pi\\agent';
+const SKILL_PROJECT = 'C:\\fixture\\project';
+function harnessSkill(over) {
+  const project = over.scope === 'project';
+  const baseDir = project ? SKILL_PROJECT + '\\.pi' : SKILL_AGENT;
+  const rel = `skills/${over.name}/SKILL.md`;
+  return {
+    description: '', scope: 'user', source: 'auto', origin: 'top-level', mode: 'pi',
+    rootLabel: project ? '<项目>/.pi/skills' : '~/.pi/agent/skills',
+    path: `${baseDir}\\skills\\${over.name}\\SKILL.md`, dir: `${baseDir}\\skills\\${over.name}`, file: 'SKILL.md', rel, baseDir,
+    loaded: true, state: 'enabled', stateNote: '', shadowedBy: null, disablePattern: '-' + rel,
+    settingsPath: baseDir + '\\settings.json', toggleable: true, blockedByTrust: false, disabledBy: '',
+    disableModelInvocation: false, license: '', compatibility: '', bytes: 412, errors: [],
+    ...over,
+  };
+}
+const HARNESS_SKILLS = Object.freeze([
+  harnessSkill({ id: 'a1c0de0000000001', name: 'code-review', description: '审查源代码中的问题，给出可执行的修改建议' }),
+  harnessSkill({
+    id: 'b2bdf00000000002', name: 'pdf-tools', description: '读取与整理 PDF', state: 'disabled', loaded: false,
+    disabledBy: '-skills/pdf-tools/SKILL.md', stateNote: '被 settings 里的 -skills/pdf-tools/SKILL.md 关掉了',
+  }),
+  harnessSkill({
+    id: 'c3a0be0000000003', name: 'proj-only', description: '当前项目的技能', scope: 'project', state: 'untrusted', loaded: false,
+    blockedByTrust: true, stateNote: '项目未被信任：pi 在非交互模式下不加载项目级资源',
+  }),
+]);
+function harnessSkillsPayload() {
+  const skills = HARNESS_SKILLS;
+  return {
+    ok: true, hasProject: true, cwd: SKILL_PROJECT, agentDir: SKILL_AGENT, homeDir: SKILL_HOME,
+    globalSettings: SKILL_AGENT + '\\settings.json', projectSettings: SKILL_PROJECT + '\\.pi\\settings.json',
+    trust: { trustFile: SKILL_AGENT + '\\trust.json', trustOverride: null, trusted: false, reason: 'default-never', requiresTrust: true },
+    piReachable: true,
+    roots: [
+      { label: '~/.pi/agent/skills', dir: SKILL_AGENT + '\\skills', scope: 'user', mode: 'pi', exists: true, blockedByTrust: false },
+      { label: '~/.agents/skills', dir: SKILL_HOME + '\\.agents\\skills', scope: 'user', mode: 'agents', exists: false, blockedByTrust: false },
+      { label: '<项目>/.pi/skills', dir: SKILL_PROJECT + '\\.pi\\skills', scope: 'project', mode: 'pi', exists: true, blockedByTrust: true },
+    ],
+    diagnostics: [],
+    counts: {
+      total: skills.length,
+      enabled: skills.filter((skill) => skill.state === 'enabled').length,
+      project: skills.filter((skill) => skill.scope === 'project').length,
+      user: skills.filter((skill) => skill.scope === 'user').length,
+    },
+    /* 服务端排序：项目级 → 全局 → 其它，同组按名称。 */
+    skills: [...skills].sort((a, b) => {
+      const rank = (skill) => (skill.scope === 'project' ? 0 : skill.scope === 'user' ? 1 : 2);
+      return rank(a) - rank(b) || a.name.localeCompare(b.name);
+    }),
+  };
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -1073,16 +1130,17 @@ const server = http.createServer(async (req, res) => {
     working: 'diff --git a/public/app.js b/public/app.js\n@@ -1,2 +1,2 @@\n-old line\n+new line\n',
     staged: '', truncated: false, limit: 524288, notice: '', context: null,
   });
-  if (p === '/api/skills') return json(res, 200, {
-    ok: true, hasProject: true, piReachable: true, trust: { trusted: false, requiresTrust: true },
-    roots: [], diagnostics: [], counts: { total: 3, enabled: 1, project: 1, user: 2 },
-    skills: [
-      { id: 'skill-code', name: 'code-review', description: '审查源代码中的问题', scope: 'user', source: 'pi', state: 'enabled', loaded: true, path: 'skills/code-review/SKILL.md', toggleable: false },
-      { id: 'skill-pdf', name: 'pdf-tools', description: '读取与整理 PDF', scope: 'user', source: 'pi', state: 'disabled', loaded: false, path: 'skills/pdf-tools/SKILL.md', toggleable: false, stateNote: '已停用' },
-      { id: 'skill-project', name: 'proj-only', description: '当前项目的技能', scope: 'project', source: 'pi', state: 'untrusted', loaded: false, path: '.pi/skills/proj-only/SKILL.md', toggleable: false, blockedByTrust: true, stateNote: '项目未被信任' },
-    ],
-  });
-  if (p.startsWith('/api/skills/') && req.method === 'GET') return json(res, 200, { ok: true, content: '# Skill\n\n这是可复现的 SKILL.md 详情。', files: [], note: '' });
+  if (p === '/api/skills') return json(res, 200, harnessSkillsPayload());
+  if (p.startsWith('/api/skills/') && req.method === 'GET') {
+    /* 详情形状照抄 server/skills.js 的 handleDetail；只读，夹具没有写接口。 */
+    const rec = HARNESS_SKILLS.find((skill) => skill.id === decodeURIComponent(p.slice('/api/skills/'.length)));
+    if (!rec) return json(res, 404, { ok: false, error: '找不到这个 skill，刷新一下列表' });
+    const content = `---\nname: ${rec.name}\ndescription: ${rec.description}\n---\n# ${rec.name}\n\n这是可复现的 SKILL.md 详情。\n`;
+    return json(res, 200, {
+      ok: true, skill: rec, readable: true, truncated: false, bytes: Buffer.byteLength(content), content,
+      files: [{ name: 'SKILL.md', dir: false, size: Buffer.byteLength(content) }, { name: 'scripts', dir: true, size: 0 }], note: '',
+    });
+  }
   /* P22：Capability 视图的夹具。三种证据同时存在才有意义：
    * 装好且已加载的 Web、装了但被停用的 Memory、以及一个**完全不认识**的 Extension
    * —— 最后这条是「unknown Extension 不能丢」的视觉证据。 */

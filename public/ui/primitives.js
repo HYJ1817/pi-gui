@@ -81,6 +81,13 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
     labelSpan.className = 'ds-segment-label';
     labelSpan.textContent = opt.label;
     btn.appendChild(labelSpan);
+    // 可选的条数（PI-Desktop 筛选分段「全部 5」的弱化数字）；只有传了 count 的项才有这个节点。
+    if ('count' in opt) {
+      const countSpan = document.createElement('span');
+      countSpan.className = 'ds-segment-count';
+      countSpan.textContent = opt.count === null || opt.count === undefined ? '' : String(opt.count);
+      btn.appendChild(countSpan);
+    }
 
     btn.onclick = (e) => {
       e.preventDefault();
@@ -123,6 +130,20 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
         b.disabled = Boolean(val);
         if (val) b.setAttribute('aria-disabled', 'true');
         else b.removeAttribute('aria-disabled');
+      });
+    },
+    /** 更新某一项的条数；null / undefined 清空（空节点不占位）。只作用于创建时声明了 count 的项。 */
+    setCount(optionValue, count) {
+      buttons.forEach(b => {
+        if (b.getAttribute('data-value') !== optionValue) return;
+        const countSpan = b.querySelector('.ds-segment-count');
+        if (countSpan) countSpan.textContent = count === null || count === undefined ? '' : String(count);
+      });
+    },
+    /** 隐藏 / 恢复某一项（例如没有条目的可选分类）。隐藏当前选中项由调用方先改值。 */
+    setOptionHidden(optionValue, val) {
+      buttons.forEach(b => {
+        if (b.getAttribute('data-value') === optionValue) b.hidden = Boolean(val);
       });
     }
   };

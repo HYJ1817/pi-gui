@@ -51,7 +51,7 @@ export function initSettingsSurface({ captureRuntimeReturn = () => null } = {}) 
     returnRequest++;
     back.removeAttribute('aria-busy'); returnStatus.hidden = true;
     const view = workspaceView();
-    const open = ['settings', 'planner', 'extensions'].includes(view);
+    const open = ['settings', 'planner'].includes(view);
     if (open && previousView === 'runtime') resumeRuntime = captureRuntimeReturn();
     if (!open) returnView = view === 'runtime' ? 'runtime' : 'chat';
     previousView = view;
