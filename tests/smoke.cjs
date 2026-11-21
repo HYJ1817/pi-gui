@@ -331,6 +331,9 @@ let stubMcpServers = {
 };
 const mcpServerCalls = [];
 const mcpStatusCalls = [];
+/* MCP 配置页的 GET（revision）与 POST（受控写入）：只记录、不执行。
+ * 形状照 server/mcp-manager.js 的 configDetail / handleConfig。 */
+const mcpConfigCalls = [];
 
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://127.0.0.1:7788/' });
 const { window } = dom;
@@ -1127,6 +1130,35 @@ window.fetch = async (url, opts) => {
   if (u.includes('/api/mcp/status')) {
     mcpStatusCalls.push(true);
     return { json: async () => ({ ok: true, ...(stubMcpServers.runtime || {}), cached: false }) };
+  }
+  if (u.split('?')[0] === '/api/mcp/config') {
+    const isPost = Boolean(opts && opts.method === 'POST');
+    const body = isPost && opts && typeof opts.body === 'string' ? JSON.parse(opts.body) : null;
+    mcpConfigCalls.push({ method: isPost ? 'POST' : 'GET', body, url: u });
+    const revisions = { user: 'rev-user', project: 'rev-project' };
+    if (isPost) return { json: async () => ({ ok: true, scope: body && body.scope, name: body && body.name, backup: null, revision: 'rev-next', reloadRequired: true, revisions }) };
+    const query = new URL(u, 'http://127.0.0.1').searchParams;
+    const detailName = query.get('name');
+    if (detailName) {
+      /* 单条详情：形状照 server/mcp-config.js 的 getDetail（普通条目分支）。
+       * 只给 fs 一条真实形状；其它名字按 not-found 返回，与真实服务端一致。 */
+      const server = stubMcpServers.servers.find((s) => s.name === detailName && s.scope === (query.get('scope') || 'user'));
+      if (!server || server.transportType !== 'stdio') {
+        return { json: async () => ({ ok: false, code: 'not-found', error: `mcp.json 里没有 “${detailName}”`, revisions }) };
+      }
+      return { json: async () => ({
+        ok: true, scope: server.scope, name: server.name, revision: revisions[server.scope],
+        trust: server.scope === 'project' ? stubMcpServers.trust : { trusted: null, requiresTrust: null },
+        overrideOnly: false,
+        entry: {
+          type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem'], argsProtected: false, argsCount: 2,
+          url: null, urlPreview: null, urlProtected: false, cwd: null, env: [], headers: [], oauth: false, auth: false,
+          description: server.description, timeout: null, exposure: server.exposure, toolExposure: server.toolExposure, enabled: server.enabled,
+        },
+        revisions,
+      }) };
+    }
+    return { json: async () => ({ ok: true, revisions, limits: {} }) };
   }
   if (u.includes('/api/mcp')) {
     mcpCalls.push(true);
@@ -3914,31 +3946,36 @@ staticCheck();
     window.S.state = savedState;
   }
 
-  /* --- 扩展面板（Skills / MCP） ---
+  /* --- Agent 能力：扩展页 / 技能页 / MCP 配置页 ---
    *
-   * 这一段的重点是**诚实性**与**降级能力**，不是「功能多」：
+   * 拆分后三处各有自己的入口：扩展（应用主导航）、设置 › Agent 能力 › 技能、
+   * 设置 › 扩展与 MCP › MCP 配置（页尾带「MCP 能力报告」）。
+   * 这一段的重点仍是**诚实性**与**降级能力**，不是「功能多」：
    *   - 状态必须区分「磁盘上有」和「pi 加载了」；
    *   - pi 没应答时必须说「无法确认」，不许显示成「未启用」；
    *   - 项目未信任必须显式说明，否则用户只会觉得配置丢了；
    *   - 一条坏 skill 不能带塌整页；
-   *   - MCP 必须说清 pi 没有原生支持，而不是给一个假列表。 */
+   *   - MCP 必须给出可核对的证据，而不是一个假列表。 */
   async function extSection() {
     skillsCalls.length = 0;
     mcpCalls.length = 0;
     $('toasts').innerHTML = '';
 
+    /* ---------- 扩展（应用主导航）：已安装 / 插件市场 ---------- */
     window.openExtensions();
     await new Promise((r) => setTimeout(r, 30));
     const card = $('workSurface');
 
-    check('扩展面板：Extensions / Skills / MCP 三个过滤器各有独立 Tab', () => {
-      const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.textContent);
-      return (labels.length === 3 && labels.join(',') === 'Extensions,Skills,MCP') || JSON.stringify(labels);
+    check('扩展页：只有「已安装 / 插件市场」两个页签（Skills / MCP 已拆成各自的页面）', () => {
+      const labels = [...card.querySelectorAll('.ext-tab')].map((b) => b.firstChild.textContent);
+      return (labels.join(',') === '已安装,插件市场'
+        && !card.querySelector('#extensionsTabSkills') && !card.querySelector('#extensionsTabMcp'))
+        || JSON.stringify(labels);
     });
-    check('扩展面板：默认打开 Extensions 列表', () =>
-      card.querySelector('#extensionsTabExtensions')?.getAttribute('aria-selected') === 'true'
+    check('扩展页：默认打开「已安装」', () =>
+      card.querySelector('#extensionsTabInstalled')?.getAttribute('aria-selected') === 'true'
       && !card.querySelector('#extensionsTabAll'));
-    check('P36 已知能力设置仍在 Extensions 页可达', () => {
+    check('P36 已知能力设置仍在「已安装」页可达', () => {
       const labels = [...card.querySelectorAll('.ext-known-item > summary')].map((s) => s.textContent);
       const setups = card.querySelectorAll('.ext-known-item .cap-setup').length;
       return (card.querySelector('.ext-known')
@@ -3947,132 +3984,191 @@ staticCheck();
         && Boolean(card.querySelector('.ext-known-item .cap-install')))
         || JSON.stringify({ labels, setups });
     });
-    card.querySelector('#extensionsTabExtensions')?.click();
-    await new Promise((r) => setTimeout(r, 30));
+    check('扩展页：「已安装」页签的数字来自 Registry（2 个）', () =>
+      card.querySelector('#extensionsTabInstalled .extensions-tab-count')?.textContent === '2'
+      || card.querySelector('#extensionsTabInstalled')?.textContent);
     check('P15 Extension 列表分开显示加载状态与来源', () =>
       card.textContent.includes('Sample Extension') && card.textContent.includes('Broken Extension') &&
       card.textContent.includes('已加载') && card.textContent.includes('加载失败') && card.textContent.includes('本地'));
     card.querySelector('.ext-extension-item')?.click();
     check('P15 Extension 详情显示命令并说明 tool registry 限制', () =>
       card.textContent.includes('hello') && card.textContent.includes('Pi RPC 未提供已注册工具列表'));
-    card.querySelector('#extensionsTabSkills')?.click();
-    await new Promise((r) => setTimeout(r, 30));
-    check('扩展面板：Skills 列表渲染出名称与状态', () => {
-      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
-      return names.includes('code-review') || JSON.stringify(names);
+    const extSearch = card.querySelector('.extensions-search-input');
+    extSearch.value = 'broken';
+    extSearch.dispatchEvent(new window.Event('input'));
+    check('扩展页：搜索只筛选投影（只剩 Broken Extension，总数仍按 Registry 写 2）', () => {
+      const names = [...card.querySelectorAll('.ext-extension-item .ext-name')].map((n) => n.textContent);
+      return (names.join(',') === 'Broken Extension' && /发现 2 个 Extension · 当前筛选 1/.test(card.textContent))
+        || JSON.stringify(names);
     });
-    check('扩展面板：已启用的那条有绿色圆点，被停用的那条有灰圆点', () => {
-      const items = [...card.querySelectorAll('.ext-item')];
-      const on = items.find((i) => i.textContent.includes('code-review'));
-      const off = items.find((i) => i.textContent.includes('pdf-tools'));
+    {
+      /* 插件市场第一阶段只预留布局：打开它不能发任何市场 / 安装请求。 */
+      const installedPanel = card.querySelector('.extensions-tab-installed');
+      const baseMarketFetch = window.fetch;
+      const marketRequests = [];
+      window.fetch = (url, opts) => {
+        if (/market|catalog|plugin|install|\/api\/extensions/i.test(String(url))) marketRequests.push(String(url));
+        return baseMarketFetch(url, opts);
+      };
+      card.querySelector('#extensionsTabMarket').click();
+      await new Promise((r) => setTimeout(r, 30));
+      window.fetch = baseMarketFetch;
+      check('扩展页 › 插件市场：只预留布局，不发请求、也没有安装按钮', () => {
+        const panel = card.querySelector('.extensions-tab-market');
+        return (panel && /插件市场尚未开放/.test(panel.textContent) && marketRequests.length === 0
+          && card.querySelector('#extensionsTabMarket').getAttribute('aria-selected') === 'true'
+          && ![...panel.querySelectorAll('button')].some((b) => /安装/.test(b.textContent)))
+          || JSON.stringify({ text: panel && panel.textContent, marketRequests });
+      });
+      card.querySelector('#extensionsTabInstalled').click();
+      check('扩展页：切回「已安装」复用同一个面板（搜索词还在，不重新挂载）', () =>
+        (card.querySelector('.extensions-tab-installed') === installedPanel && extSearch.value === 'broken') || '面板被重建了');
+      extSearch.value = '';
+      extSearch.dispatchEvent(new window.Event('input'));
+    }
+
+    /* ---------- 设置 › Agent 能力 › 技能 ---------- */
+    $('navGlobalMore').click();
+    $('navSkills').click();
+    await new Promise((r) => setTimeout(r, 30));
+    let skillsCard = $('workSurface').querySelector('.skills-page');
+    const skillRows = () => [...skillsCard.querySelectorAll('.skill-row')];
+    const skillRow = (name) => skillRows().find((row) => row.querySelector('.skill-name')?.textContent === name);
+    const skillNames = () => skillRows().map((row) => row.querySelector('.skill-name').textContent);
+
+    check('技能页：作为「Agent 能力 › 技能」设置详情打开（目录高亮、不是弹窗）', () =>
+      (skillsCard && $('workspace').dataset.workspaceView === 'settings' && $('navSkills').getAttribute('aria-current') === 'page'
+        && $('modal').hidden && skillsCard.getAttribute('aria-label') === '技能')
+      || JSON.stringify({ view: $('workspace').dataset.workspaceView, current: $('navSkills').getAttribute('aria-current') }));
+    check('技能页：列表渲染出名称与状态', () => skillNames().includes('code-review') || JSON.stringify(skillNames()));
+    check('技能页：已启用的那条有绿色圆点，被停用的那条有灰圆点', () => {
+      const on = skillRow('code-review');
+      const off = skillRow('pdf-tools');
       const ok = Boolean(on && on.querySelector('.ext-dot.on') && off && off.querySelector('.ext-dot.off'));
       return ok || `${on ? on.innerHTML.slice(0, 80) : 'no on'} | ${off ? off.innerHTML.slice(0, 80) : 'no off'}`;
     });
-    check('扩展面板：一条坏 skill 只影响它自己（其余四条仍在）', () => {
-      const n = card.querySelectorAll('.ext-item').length;
+    check('技能页：一条坏 skill 只影响它自己（其余四条仍在）', () => {
+      const n = skillRows().length;
       return n === 5 || `渲染了 ${n} 条，应该是 5 条`;
     });
-    check('扩展面板：坏 skill 的错误就地显示，不是整页报错', () => {
-      const item = [...card.querySelectorAll('.ext-item')].find((i) => i.textContent.includes('broken-skill'));
-      return (item && /没有 description/.test(item.textContent)) || (item ? item.textContent : '没找到这条');
+    check('技能页：坏 skill 的错误就地显示，不是整页报错', () => {
+      const row = skillRow('broken-skill');
+      return (row && /没有 description/.test(row.textContent)) || (row ? row.textContent : '没找到这条');
     });
-    check('扩展面板：项目未信任时显式说明原因（否则用户以为配置丢了）', () =>
-      /项目未被信任/.test(card.textContent) || card.textContent.slice(0, 200));
-    check('扩展面板：未信任那条自己也带说明', () => {
-      const item = [...card.querySelectorAll('.ext-item')].find((i) => i.textContent.includes('proj-only'));
-      return (item && /项目未被信任/.test(item.textContent)) || (item ? item.textContent : '没找到这条');
+    check('技能页：项目未信任时在页首显式说明原因（否则用户以为配置丢了）', () =>
+      /项目未被信任/.test(skillsCard.querySelector('.skills-notes').textContent) || skillsCard.textContent.slice(0, 200));
+    check('技能页：未信任那条自己也带说明', () => {
+      const row = skillRow('proj-only');
+      return (row && /项目未被信任/.test(row.textContent)) || (row ? row.textContent : '没找到这条');
     });
-    check('扩展面板：DOM 里没有密钥样式的字符串', () =>
-      !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(card.innerHTML) || '出现了疑似密钥');
+    check('技能页：作用域分段带真实计数（全部 5 / 项目 1 / 全局 4，没有临时项就不显示「临时」）', () => {
+      const seg = (value) => skillsCard.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
+      return (seg('').textContent === '全部 5' && seg('project').textContent === '项目 1' && seg('user').textContent === '全局 4'
+        && seg('temporary').hidden === true)
+        || [...skillsCard.querySelectorAll('.skills-scope .ds-segment-item')].map((b) => `${b.textContent}${b.hidden ? '(hidden)' : ''}`).join(',');
+    });
+    check('技能页：DOM 里没有密钥样式的字符串', () =>
+      !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(skillsCard.innerHTML) || '出现了疑似密钥');
 
     // 搜索
-    const search = card.querySelector('.ext-search');
+    const search = skillsCard.querySelector('.skills-search-input');
     search.value = 'pdf';
     search.dispatchEvent(new window.Event('input'));
     await new Promise((r) => setTimeout(r, 10));
-    check('扩展面板：搜索能过滤（只剩 pdf-tools）', () => {
-      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
+    check('技能页：搜索能过滤（只剩 pdf-tools）', () => {
+      const names = skillNames();
       return (names.length === 1 && names[0] === 'pdf-tools') || JSON.stringify(names);
     });
     search.value = 'SKILL.md';
     search.dispatchEvent(new window.Event('input'));
     await new Promise((r) => setTimeout(r, 10));
-    check('扩展面板：搜索也覆盖路径（否则「按文件找」做不到）', () => {
-      const n = card.querySelectorAll('.ext-item').length;
+    check('技能页：搜索也覆盖路径（否则「按文件找」做不到）', () => {
+      const n = skillRows().length;
       return n === 5 || `路径搜索命中 ${n} 条，应该是 5 条`;
     });
     search.value = 'zzzz-no-match';
     search.dispatchEvent(new window.Event('input'));
     await new Promise((r) => setTimeout(r, 10));
-    check('扩展面板：搜不到时给中性文案，不是空白', () =>
-      /没有符合筛选条件/.test(card.textContent) || card.textContent.slice(0, 120));
+    check('技能页：搜不到时给中性文案，不是空白', () =>
+      /没有符合筛选条件/.test(skillsCard.textContent) || skillsCard.textContent.slice(0, 120));
     search.value = '';
     search.dispatchEvent(new window.Event('input'));
     await new Promise((r) => setTimeout(r, 10));
 
     // 作用域筛选
-    const selScope = card.querySelectorAll('.ext-sel')[0];
-    selScope.value = 'project';
-    selScope.dispatchEvent(new window.Event('change'));
+    skillsCard.querySelector('.skills-scope .ds-segment-item[data-value="project"]').click();
     await new Promise((r) => setTimeout(r, 10));
-    check('扩展面板：作用域筛选（项目）只剩项目级那条', () => {
-      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
+    check('技能页：作用域筛选（项目）只剩项目级那条', () => {
+      const names = skillNames();
       return (names.length === 1 && names[0] === 'proj-only') || JSON.stringify(names);
     });
-    selScope.value = '';
-    selScope.dispatchEvent(new window.Event('change'));
+    skillsCard.querySelector('.skills-scope .ds-segment-item[data-value=""]').click();
 
     // 状态筛选
-    const selState = card.querySelectorAll('.ext-sel')[1];
+    const selState = skillsCard.querySelector('select.skills-status');
     selState.value = 'enabled';
     selState.dispatchEvent(new window.Event('change'));
     await new Promise((r) => setTimeout(r, 10));
-    check('扩展面板：状态筛选（已启用）只剩已加载那条', () => {
-      const names = [...card.querySelectorAll('.ext-name')].map((n) => n.textContent);
+    check('技能页：状态筛选（已启用）只剩已加载那条', () => {
+      const names = skillNames();
       return (names.length === 1 && names[0] === 'code-review') || JSON.stringify(names);
     });
     selState.value = '';
     selState.dispatchEvent(new window.Event('change'));
     await new Promise((r) => setTimeout(r, 10));
 
-    // 详情
-    const item = [...card.querySelectorAll('.ext-item')].find((i) => i.textContent.includes('code-review'));
-    item.onclick();
+    // 详情（行内展开）
+    skillRow('code-review').querySelector('.skill-row-main').click();
     await new Promise((r) => setTimeout(r, 30));
-    check('扩展面板：点一条能看详情，且带 SKILL.md 正文（只读）', () => {
-      const code = card.querySelector('.ext-code');
+    check('技能页：点一条能看详情，且带 SKILL.md 正文（只读）', () => {
+      const code = skillsCard.querySelector('.skill-detail .ext-code');
       return (code && /# code-review/.test(code.textContent)) || (code ? code.textContent : '没有正文区');
     });
-    check('扩展面板：详情里列出了同目录文件', () => {
-      const files = [...card.querySelectorAll('.ext-file')].map((f) => f.textContent);
+    check('技能页：详情里列出了同目录文件', () => {
+      const files = [...skillsCard.querySelectorAll('.skill-detail .ext-file')].map((f) => f.textContent);
       return (files.includes('SKILL.md') && files.includes('scripts/')) || JSON.stringify(files);
     });
-    check('扩展面板：详情里区分「pi 是否加载」与「磁盘上有」', () =>
-      /pi 是否加载/.test(card.textContent) || card.textContent.slice(-200));
+    check('技能页：详情里区分「pi 是否加载」与「磁盘上有」', () =>
+      /pi 是否加载/.test(skillsCard.querySelector('.skill-detail')?.textContent || '') || skillsCard.textContent.slice(-200));
 
-    // 启停
-    const btnToggle = [...card.querySelectorAll('.ext-acts .btn')].find((b) => b.textContent === '停用');
-    check('扩展面板：可启停的那条给了「停用」按钮', () => Boolean(btnToggle) || '没有按钮');
-    if (btnToggle) {
-      btnToggle.onclick();
+    // 启停（行尾开关）
+    const toggle = skillRow('code-review').querySelector('.skill-toggle');
+    check('技能页：可启停的那条给了开关，且当前是「开」', () =>
+      (toggle && toggle.getAttribute('role') === 'switch' && toggle.getAttribute('aria-checked') === 'true')
+      || (toggle ? toggle.outerHTML.slice(0, 120) : '没有开关'));
+    if (toggle) {
+      toggle.click();
       await new Promise((r) => setTimeout(r, 30));
       const confirmOk = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '停用');
-      check('扩展面板：停用前先二次确认（且说明不会动 skill 文件）', () =>
+      check('技能页：停用前先二次确认（且说明不会动 skill 文件）', () =>
         (confirmOk && /不会删除或移动/.test($('confirmCard').textContent)) || $('confirmCard').textContent);
       confirmOk.onclick();
       await new Promise((r) => setTimeout(r, 40));
       const put = skillsCalls.find((c) => c.method === 'PUT');
-      check('扩展面板：确认后发 PUT，且 enabled=false', () => (put && put.body && put.body.enabled === false) || JSON.stringify(put));
-      check('扩展面板：PUT 走的是 ID 路径，不发绝对路径', () => (put && /\/api\/skills\/[0-9a-f]{16}$/.test(put.url)) || (put ? put.url : '没有 PUT'));
+      check('技能页：确认后发 PUT，且 enabled=false', () => (put && put.body && put.body.enabled === false) || JSON.stringify(put));
+      check('技能页：PUT 走的是 ID 路径，不发绝对路径', () => (put && /\/api\/skills\/[0-9a-f]{16}$/.test(put.url)) || (put ? put.url : '没有 PUT'));
     }
     // 重启提示（改 settings 必须重启 pi）
     await new Promise((r) => setTimeout(r, 40));
-    check('扩展面板：改完提示需要重启 pi 才生效', () =>
+    check('技能页：改完提示需要重启 pi 才生效', () =>
       /需要重启 pi/.test($('confirmCard').textContent + $('toasts').textContent) || $('confirmCard').textContent.slice(0, 120));
     // 关掉重启确认框
     const cancelRestart = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '取消');
     if (cancelRestart) cancelRestart.onclick();
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 40));
+    {
+      /* 开关先在视觉上翻转再问确认：取消时必须翻回去，也不能发 PUT。 */
+      const putsBefore = skillsCalls.filter((c) => c.method === 'PUT').length;
+      const again = skillRow('code-review').querySelector('.skill-toggle');
+      again.click();
+      await new Promise((r) => setTimeout(r, 30));
+      const cancel = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '取消');
+      if (cancel) cancel.onclick();
+      await new Promise((r) => setTimeout(r, 30));
+      check('技能页：取消确认时开关回到原状态，且不写 settings', () =>
+        (again.getAttribute('aria-checked') === 'true' && skillsCalls.filter((c) => c.method === 'PUT').length === putsBefore)
+        || JSON.stringify({ checked: again.getAttribute('aria-checked'), puts: skillsCalls.filter((c) => c.method === 'PUT').length - putsBefore }));
+    }
 
     /* pi 没应答时：loaded 是 null → 必须显示「无法确认」，不能显示成「未启用」。
      * 这是最容易糊弄过去的一条 —— 把 null 当成 false 显示，用户会以为 skill 坏了。 */
@@ -4083,140 +4179,174 @@ staticCheck();
       counts: { ...savedSkills.counts, enabled: 0 },
       skills: savedSkills.skills.map((s) => ({ ...s, loaded: null, state: 'unknown', stateNote: 'pi 未运行，无法确认加载状态' })),
     };
-    $('workSurface').innerHTML = '';
-    $('modal').hidden = true;
-    window.openExtensions();
+    $('navSkills').click(); // 同一目标再点一次 = 新的页面实例，重新读取
     await new Promise((r) => setTimeout(r, 30));
-    // 先切到 Skills 页 —— 这两个断言问的是 Skills 列表，不是 Extensions 列表。
-    $('workSurface').querySelector('#extensionsTabSkills')?.click();
-    await new Promise((r) => setTimeout(r, 30));
-    check('扩展面板：pi 没应答时显示「状态未知」，并说明原因', () =>
-      /无法确认/.test($('workSurface').textContent) || $('workSurface').textContent.slice(0, 200));
+    skillsCard = $('workSurface').querySelector('.skills-page');
+    check('技能页：pi 没应答时显示「状态未知」，并说明原因', () =>
+      /无法确认/.test(skillsCard.textContent) || skillsCard.textContent.slice(0, 200));
     // 点一条看详情：这里必须写「无法确认（pi 未运行）」，
     // 把 loaded=null 显示成「否」会让用户以为 skill 坏了
-    const firstItem = $('workSurface').querySelector('.ext-list .ext-item');
-    if (firstItem) firstItem.onclick();
+    const firstItem = skillsCard.querySelector('.skill-row-main');
+    if (firstItem) firstItem.click();
     await new Promise((r) => setTimeout(r, 30));
-    check('扩展面板：pi 没应答时详情里写「无法确认」而不是「否」', () =>
-      /无法确认（pi 未运行）/.test($('workSurface').textContent) || $('workSurface').textContent.slice(-300));
+    check('技能页：pi 没应答时详情里写「无法确认」而不是「否」', () =>
+      /无法确认（pi 未运行）/.test(skillsCard.textContent) || skillsCard.textContent.slice(-300));
     stubSkills = savedSkills;
 
-    // 切到 MCP
-    const mcpTab = [...$('workSurface').querySelectorAll('.ext-tab')].find((b) => b.textContent === 'MCP');
-    mcpTab.onclick();
+    /* ---------- 设置 › 扩展与 MCP › MCP 配置（页尾「MCP 能力报告」） ----------
+     * 拆分前这些断言打在「Skills 与扩展」的 MCP 标签上。那个标签里的服务器行 / 刷新 / 移除 /
+     * 添加表单是 MCP 配置页的旧副本，随标签一起移除；同样的语义改在唯一的 MCP 配置页上验证，
+     * 文案以该页为准。能力证据（版本 / 出处 / built-in / RPC / 扩展目录）搬进页尾报告。 */
+    const mcpRow = (page, name, scope) => [...page.querySelectorAll('article.mcp-server')]
+      .find((row) => row.dataset.name === name && (!scope || row.dataset.scope === scope));
+    const openMcpPage = async () => {
+      $('navMcp').click();
+      await new Promise((r) => setTimeout(r, 60));
+      return $('workSurface').querySelector('.mcp-page');
+    };
+    mcpCalls.length = 0;
+    const mcpPage = await openMcpPage();
+    check('MCP 配置页：从「扩展与 MCP › MCP 配置」打开，服务器明细来自原生摘要（不是空页也不是假列表）', () => {
+      const rows = [...(mcpPage ? mcpPage.querySelectorAll('article.mcp-server') : [])].map((r) => `${r.dataset.scope}:${r.dataset.name}`);
+      return (rows.join(',') === 'user:fs,project:docs' && $('navMcp').getAttribute('aria-current') === 'page') || JSON.stringify(rows);
+    });
+    check('MCP 配置页：凭据只标「含凭据引用」，值不进页面', () =>
+      (/含凭据引用/.test(mcpRow(mcpPage, 'docs').textContent) && !/Bearer/.test(mcpPage.textContent)) || '没说明');
+    check('MCP 配置页：server 行带传输面与 0.99.2 的 description', () => {
+      const fs = mcpRow(mcpPage, 'fs').textContent;
+      return (/stdio/.test(fs) && /Local filesystem access/.test(fs) && /HTTP/.test(mcpRow(mcpPage, 'docs').textContent)) || fs.slice(0, 200);
+    });
+    check('MCP 配置页：运行时状态（connected / needs-auth + 工具数）', () =>
+      (/已连接 · 2 个工具/.test(mcpRow(mcpPage, 'fs').textContent) && /需要授权/.test(mcpRow(mcpPage, 'docs').textContent))
+      || mcpPage.textContent.slice(0, 400));
+    check('MCP 配置页：「已连接」只出现在有运行时证据的那条', () =>
+      !/已连接/.test(mcpRow(mcpPage, 'docs').textContent) || mcpRow(mcpPage, 'docs').textContent);
+    check('MCP 配置页：启停是真实写入 Pi mcp.json 的开关（不伪造）', () => {
+      const sw = mcpRow(mcpPage, 'fs').querySelector('[role="switch"]');
+      return (sw && sw.title === '启用 / 停用（写入 Pi 的 mcp.json）' && !sw.disabled) || (sw ? sw.outerHTML.slice(0, 160) : '没有开关');
+    });
+    {
+      /* 详情弹层：exposure / description / 0.99.2 的资源数（有才显示）。 */
+      const configGetsBefore = mcpConfigCalls.filter((c) => c.method === 'GET').length;
+      mcpPage.querySelector('[data-focus-key="detail:user:fs"]').click();
+      await new Promise((r) => setTimeout(r, 40));
+      const detailCard = $('modalCard');
+      const detailText = detailCard.textContent;
+      check('MCP 配置页：详情带 exposure / description 与 0.99.2 的资源数（有才显示）', () =>
+        (!$('modal').hidden && detailCard.classList.contains('mcp-detail-modal')
+          && /exposure\s*direct/.test(detailText) && /Local filesystem access/.test(detailText)
+          && /已连接 · 2 个工具 · 3 个资源 · 1 个资源模板/.test(detailText)
+          && mcpConfigCalls.filter((c) => c.method === 'GET').length === configGetsBefore + 1)
+        || detailText.slice(0, 400));
+      const closeDetail = [...detailCard.querySelectorAll('button')].find((b) => b.textContent.trim() === '关闭');
+      if (closeDetail) closeDetail.click();
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    check('MCP 能力报告：并入 MCP 配置页页尾的折叠区，展开前不读取', () => {
+      const inner = mcpPage.querySelector('.mcp-page-inner');
+      const last = inner && inner.lastElementChild;
+      return (last && last.matches('details.mcp-report') && !last.open && mcpPage.querySelectorAll('details.mcp-report').length === 1 && mcpCalls.length === 0)
+        || JSON.stringify({ last: last && last.className, mcpCalls: mcpCalls.length });
+    });
+    const report = mcpPage.querySelector('details.mcp-report');
+    report.open = true;
+    report.dispatchEvent(new window.Event('toggle'));
     await new Promise((r) => setTimeout(r, 40));
-    const mcpCard = $('workSurface');
-    check('MCP 标签页：如实说这个 pi 带 MCP 能力（不再写死「没有原生 MCP」）', () =>
-      /带 MCP 能力/.test(mcpCard.textContent) && !/没有原生 MCP 支持/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
-    check('MCP 标签页：给出可核对的出处（不是空口断言）', () =>
-      /dist\/extensions\/index\.js/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
-    check('MCP 标签页：显示运行中的 pi 版本与来源', () =>
-      /检测到的 pi 版本：0\.99\.2/.test(mcpCard.textContent) && /来源 package\.json/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 240));
-    check('MCP 标签页：列出 built-in 能力并说明它不是扫目录扫到的', () => {
-      const text = mcpCard.textContent;
+    const reportText = () => report.textContent;
+    check('MCP 能力报告：如实说这个 pi 带 MCP 能力（不再写死「没有原生 MCP」）', () =>
+      (mcpCalls.length >= 1 && /带 MCP 能力/.test(reportText()) && !/没有原生 MCP 支持/.test(reportText())) || reportText().slice(0, 200));
+    check('MCP 能力报告：给出可核对的出处（不是空口断言）', () =>
+      /dist\/extensions\/index\.js/.test(reportText()) || reportText().slice(0, 200));
+    check('MCP 能力报告：显示运行中的 pi 版本与来源', () =>
+      (/检测到的 pi 版本：0\.99\.2/.test(reportText()) && /来源 package\.json/.test(reportText())) || reportText().slice(0, 240));
+    check('MCP 能力报告：列出 built-in 能力并说明它不是扫目录扫到的', () => {
+      const text = reportText();
       return (['builtin:llama.cpp', 'builtin:codemode', 'builtin:tool-search', 'builtin:mcp'].every((x) => text.includes(x))
         && /不由 Extension Registry 的目录扫描发现/.test(text)) || text.slice(0, 300);
     });
-    check('MCP 标签页：说清 RPC 没有工具清单命令（不伪造工具注册表）', () =>
-      /没有一条返回已注册工具清单/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 300));
-    check('MCP 标签页：区分 ExtensionAPI 与 RPC（getAllTools 拿不到）', () =>
-      /getAllTools 有/.test(mcpCard.textContent) && /RPC 客户端拿不到/.test(mcpCard.textContent) || '没区分');
-    check('MCP 标签页：Server 明细走原生摘要（不是空页也不是假列表）', () =>
-      /MCP Servers（pi 原生）/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 240));
-    check('MCP 标签页：MCP 配置只取结构，凭据值不进页面', () =>
-      /含凭据引用/.test(mcpCard.textContent) && !/Bearer/.test(mcpCard.textContent) || '没说明');
-    check('MCP 标签页：指出官方替代路径是 extension 并列出本机已有的', () => {
-      const names = [...mcpCard.querySelectorAll('.ext-name')].map((n) => n.textContent);
-      return (/extension/.test(mcpCard.textContent) && names.includes('my-ext')) || JSON.stringify(names);
+    check('MCP 能力报告：说清 RPC 没有工具清单命令（不伪造工具注册表）', () =>
+      /没有一条返回已注册工具清单/.test(reportText()) || reportText().slice(0, 300));
+    check('MCP 能力报告：区分 ExtensionAPI 与 RPC（getAllTools 拿不到）', () =>
+      (/getAllTools 有/.test(reportText()) && /RPC 客户端拿不到/.test(reportText())) || '没区分');
+    check('MCP 能力报告：指出官方替代路径是 extension 并列出本机已有的', () => {
+      const names = [...report.querySelectorAll('.ext-name')].map((n) => n.textContent);
+      return (/extension/.test(reportText()) && names.includes('my-ext')) || JSON.stringify(names);
     });
-    check('MCP 标签页：声明不安装 / 不执行扩展（边界说清楚）', () =>
-      /不安装、不启用、也不执行/.test(mcpCard.textContent) || '没写边界');
-    check('MCP 标签页：连接状态只以「运行：」为前缀出现（有运行时证据才说）', () =>
-      /运行：/.test(mcpCard.textContent) && !/(^|[^行])已连接/.test(mcpCard.textContent.replace(/运行：已连接/g, '')) || mcpCard.textContent.slice(-300));
-    check('MCP 标签页：DOM 里没有密钥样式的字符串', () =>
-      !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(mcpCard.innerHTML) || '出现了疑似密钥');
-    /* P20.6 原生集成：状态横幅、server 行、运行时、动作 wiring。 */
-    check('MCP 标签页：原生状态横幅（active + 原因）', () =>
-      /原生 MCP 生效中/.test(mcpCard.textContent) || mcpCard.textContent.slice(0, 200));
-    check('MCP 标签页：server 行带 exposure / 传输面 / 生效徽标', () => {
-      const text = mcpCard.textContent;
-      return (/fs/.test(text) && /exposure：direct/.test(text) && /生效中/.test(text)
-        && /单工具 exposure 1 条/.test(text)) || text.slice(0, 300);
-    });
-    check('MCP 标签页：运行时状态（connected / needs-auth + 工具数）', () =>
-      /运行：已连接/.test(mcpCard.textContent) && /运行：需要登录/.test(mcpCard.textContent)
-      && /2 个工具/.test(mcpCard.textContent) || mcpCard.textContent.slice(-400));
-    check('MCP 标签页：声明 enable 等走 /mcp（不伪造开关）', () =>
-      /启用 \/ 停用 \/ 重连 \/ 改 exposure 没有官方自动化接口/.test(mcpCard.textContent) || '没声明');
-    check('MCP 标签页：运行观察行（没调用过≠不支持）', () =>
-      /尚未观察到 MCP 工具调用/.test(mcpCard.textContent) || '没观察行');
+    check('MCP 能力报告：声明不安装 / 不执行扩展（边界说清楚）', () =>
+      /不安装、不启用、也不执行/.test(reportText()) || '没写边界');
+    check('MCP 能力报告：原生状态横幅（active + 原因）与服务器列表同源', () =>
+      (/原生 MCP 生效中/.test(reportText()) && /builtin:mcp 在包里、未被禁用、未被接管/.test(reportText())) || reportText().slice(0, 200));
+    check('MCP 能力报告：运行观察行（没调用过≠不支持）', () =>
+      /尚未观察到 MCP 工具调用/.test(reportText()) || '没观察行');
+    check('MCP 配置页 + 能力报告：DOM 里没有密钥样式的字符串', () =>
+      !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(mcpPage.innerHTML) || '出现了疑似密钥');
+
     mcpStatusCalls.length = 0;
+    mcpPage.querySelector('[data-focus-key="refresh"]').click();
+    await new Promise((r) => setTimeout(r, 60));
+    check('MCP 配置页：「刷新状态」发出 POST /api/mcp/status，报告折叠区保持展开', () =>
+      (mcpStatusCalls.length === 1 && mcpPage.querySelector('details.mcp-report') === report && report.open) || `刷新请求 ${mcpStatusCalls.length} 次`);
     {
-      const btn = [...mcpCard.querySelectorAll('.btn')].find((b) => b.textContent === '刷新状态');
-      if (btn) {
-        btn.onclick();
+      const del = mcpPage.querySelector('[data-focus-key="delete:user:fs"]');
+      if (del) {
+        del.click();
         await new Promise((r) => setTimeout(r, 30));
       }
+      const confirmText = $('confirmCard').textContent;
+      const ok = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '删除');
+      if (ok) {
+        ok.onclick();
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      check('MCP 配置页：删除走确认框，确认后发 delete（带 scope 与 revision 守卫）', () => {
+        const posts = mcpConfigCalls.filter((c) => c.method === 'POST');
+        const last = posts[posts.length - 1];
+        return (/删除 fs/.test(confirmText) && last && last.body && last.body.action === 'delete' && last.body.name === 'fs'
+          && last.body.scope === 'user' && last.body.expectedRevision === 'rev-user') || JSON.stringify({ confirmText: confirmText.slice(0, 80), last });
+      });
     }
-    check('MCP 标签页：刷新按钮发出 POST /api/mcp/status', () => mcpStatusCalls.length === 1 || '没发出刷新请求');
-    mcpServerCalls.length = 0;
     {
-      const btn = [...mcpCard.querySelectorAll('.btn')].find((b) => b.textContent === '移除');
-      if (btn) {
-        btn.onclick();
+      const writesBefore = mcpConfigCalls.filter((c) => c.method === 'POST').length;
+      const page = $('workSurface').querySelector('.mcp-page');
+      const add = page.querySelector('[data-focus-key="add"]');
+      if (add) {
+        add.click();
         await new Promise((r) => setTimeout(r, 30));
-        const ok = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '移除');
-        if (ok) {
-          ok.onclick();
-          await new Promise((r) => setTimeout(r, 40));
-        }
       }
+      let form = window.document.querySelector('.mcp-form-modal');
+      const name = form && form.querySelector('[data-field="name"]');
+      if (name) {
+        name.value = 'bad name!';
+        name.dispatchEvent(new window.Event('input', { bubbles: true }));
+        form.querySelector('[data-field="save"]').click();
+        await new Promise((r) => setTimeout(r, 30));
+      }
+      form = window.document.querySelector('.mcp-form-modal');
+      check('MCP 配置页：新增表单拒绝坏名字且不发写请求，凭据只收 ${VAR} 引用', () => {
+        const text = form ? form.textContent : '';
+        return (/名称只能包含字母、数字、下划线和连字符/.test(text) && /\$\{环境变量名\}/.test(text)
+          && mcpConfigCalls.filter((c) => c.method === 'POST').length === writesBefore)
+          || JSON.stringify({ text: text.slice(0, 200), writes: mcpConfigCalls.filter((c) => c.method === 'POST').length - writesBefore });
+      });
+      const cancel = form && [...form.querySelectorAll('button')].find((b) => b.textContent.trim() === '取消');
+      if (cancel) cancel.click();
+      await new Promise((r) => setTimeout(r, 30));
     }
-    check('MCP 标签页：移除走确认框，确认后发 remove（带 scope）', () => {
-      const posts = mcpServerCalls.filter((c) => c.method === 'POST');
-      const last = posts[posts.length - 1];
-      return (last && last.body && last.body.action === 'remove' && typeof last.body.name === 'string'
-        && typeof last.body.scope === 'string') || JSON.stringify(last);
-    });
     {
-      const nameInput = mcpCard.querySelector('input[placeholder*="名字"]');
-      if (nameInput) {
-        nameInput.value = 'bad name!';
-        const add = [...mcpCard.querySelectorAll('.btn')].find((b) => b.textContent === '添加');
-        if (add) {
-          add.onclick();
-          await new Promise((r) => setTimeout(r, 30));
-        }
+      const auth = $('workSurface').querySelector('[data-focus-key="auth:project:docs"]');
+      if (auth) {
+        auth.click();
+        await new Promise((r) => setTimeout(r, 30));
       }
+      const text = $('confirmCard').textContent;
+      check('MCP 配置页：OAuth 归 pi，GUI 不接收任何凭据值', () =>
+        (/授权与 token 都由 Pi 接管/.test(text) && /Pi GUI 看不到任何凭据/.test(text)) || text.slice(0, 200));
+      const cancel = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '取消');
+      if (cancel) cancel.onclick();
+      await new Promise((r) => setTimeout(r, 30));
     }
-    check('MCP 标签页：添加表单拒绝坏名字，且没有凭据字段', () => {
-      if (/Authorization|clientSecret|password/i.test(mcpCard.innerHTML)) return '表单里出现了凭据字段';
-      return /只允许字母/.test($('toasts').textContent) || $('toasts').textContent.slice(-200);
-    });
 
-    /* ---- P20.6-Fix：0.99.2 新字段 / 信任闸门 / workspace 隔离 / secret contract ---- */
-
-    check('MCP 标签页：显示 0.99.2 的 description 与资源数（有才显示）', () => {
-      const t = mcpCard.textContent;
-      return (/Local filesystem access/.test(t) && /3 个资源/.test(t) && /1 个资源模板/.test(t)) || t.slice(0, 400);
-    });
-    check('MCP 标签页：说清运行时状态属于当前项目（切项目不沿用）', () =>
-      /运行时状态属于当前项目/.test(mcpCard.textContent) || mcpCard.textContent.slice(-500));
-    check('MCP 标签页：声明 GUI 不接收任何凭据值 + OAuth 归 pi', () => {
-      const t = mcpCard.textContent;
-      return (/不接收任何凭据值/.test(t) && /OAuth/.test(t) && /pi 自己管理/.test(t)) || t.slice(-500);
-    });
-
-    /** 换一套桩重新开一次 MCP 页（openWorkSurface 每次都是新的挂载）。 */
-    const reopenMcp = async () => {
-      $('workSurface').innerHTML = '';
-      window.openExtensions();
-      await new Promise((r) => setTimeout(r, 40));
-      const tab = [...$('workSurface').querySelectorAll('.ext-tab')].find((b) => b.textContent === 'MCP');
-      if (tab) tab.onclick();
-      await new Promise((r) => setTimeout(r, 50));
-      return $('workSurface');
-    };
+    /* 换一套桩重新开一次 MCP 配置页（presentDetail 每次都是新的挂载）。 */
     {
       const saved = stubMcpServers;
       // 未信任项目：读被忽略 + 写被拒绝
@@ -4225,11 +4355,13 @@ staticCheck();
         trust: { trusted: false, requiresTrust: true },
         servers: saved.servers.map((s) => (s.scope === 'project' ? { ...s, effective: { active: false, reason: 'untrusted' } } : s)),
       };
-      const c = await reopenMcp();
-      check('MCP 标签页：项目未信任时明确说明「读被忽略 + 写被拒绝」', () =>
-        /当前项目未被信任/.test(c.textContent) && /项目级的新增\/移除也会被拒绝/.test(c.textContent) || c.textContent.slice(0, 500));
-      check('MCP 标签页：未信任的项目条目显示「未生效（项目未信任）」', () =>
-        /未生效（项目未信任）/.test(c.textContent) || c.textContent.slice(0, 500));
+      const c = await openMcpPage();
+      check('MCP 配置页：项目未信任时明确说明「读被忽略 + 写被拒绝」', () =>
+        (/当前项目未被信任/.test(c.textContent) && /项目级写入也会被拒绝/.test(c.textContent)) || c.textContent.slice(0, 500));
+      check('MCP 配置页：未信任的项目条目显示「项目未信任」，开关不可写', () => {
+        const row = mcpRow(c, 'docs', 'project');
+        return (row && /项目未信任/.test(row.textContent) && row.querySelector('[role="switch"]').disabled) || (row ? row.textContent : '没找到这条');
+      });
 
       // 信任状态未知：fail closed
       stubMcpServers = {
@@ -4237,30 +4369,30 @@ staticCheck();
         trust: null,
         servers: saved.servers.map((s) => (s.scope === 'project' ? { ...s, effective: { active: false, reason: 'trust-unknown' } } : s)),
       };
-      const c2 = await reopenMcp();
-      check('MCP 标签页：信任未知时 fail closed（提示 + 条目未生效）', () =>
-        /读不到这个项目的信任状态/.test(c2.textContent) && /未生效（信任状态未知）/.test(c2.textContent) || c2.textContent.slice(0, 500));
+      const c2 = await openMcpPage();
+      check('MCP 配置页：信任未知时 fail closed（提示 + 条目未生效）', () =>
+        (/读不到当前项目的信任状态/.test(c2.textContent) && /信任未知 · 未生效/.test(mcpRow(c2, 'docs', 'project').textContent)) || c2.textContent.slice(0, 500));
 
       // 运行时未刷新
       stubMcpServers = { ...saved, runtime: null };
-      const c3 = await reopenMcp();
-      check('MCP 标签页：没有运行时证据时说「尚未获取」（未知≠没有）', () =>
-        /尚未获取运行时状态/.test(c3.textContent) || c3.textContent.slice(0, 400));
+      const c3 = await openMcpPage();
+      check('MCP 配置页：没有运行时证据时说「未测试」（未知≠没有），也不写「已连接」', () =>
+        (/未测试/.test(mcpRow(c3, 'fs').textContent) && !/已连接/.test(c3.textContent)) || c3.textContent.slice(0, 400));
 
       // 闭集外的 state 不原样进 DOM
-      stubMcpServers = { ...saved, runtime: { ...saved.runtime, servers: [{ ...saved.runtime.servers[0], state: 'unknown' }] } };
-      const c4 = await reopenMcp();
-      check('MCP 标签页：闭集外的 state 显示「无法识别」，不打印上游原文', () =>
-        /运行：无法识别/.test(c4.textContent) || c4.textContent.slice(0, 400));
+      stubMcpServers = { ...saved, runtime: { ...saved.runtime, servers: [{ ...saved.runtime.servers[0], state: 'zz-upstream-raw' }] } };
+      const c4 = await openMcpPage();
+      check('MCP 配置页：闭集外的 state 显示「状态未知」，不打印上游原文', () =>
+        (/状态未知/.test(mcpRow(c4, 'fs').textContent) && !/zz-upstream-raw/.test(c4.innerHTML)) || c4.textContent.slice(0, 400));
 
       // pi 给的 note（项目未信任导致 mcp.json 被忽略）如实显示
       stubMcpServers = { ...saved, runtime: { ...saved.runtime, note: '<project> is ignored because the project is not trusted.' } };
-      const c5 = await reopenMcp();
-      check('MCP 标签页：把 pi 关于「项目 mcp.json 被忽略」的说明显示出来', () =>
+      const c5 = await openMcpPage();
+      check('MCP 配置页：把 pi 关于「项目 mcp.json 被忽略」的说明显示出来', () =>
         /is ignored because the project is not trusted/.test(c5.textContent) || c5.textContent.slice(0, 400));
 
       /* P20.6-Fix-2 Blocker A：未信任时同名项不覆盖用户级 ——
-       * 用户级那条必须显示「生效中」，且**不能**出现「被项目同名覆盖」。 */
+       * 用户级那条**不能**标成「被项目覆盖」，项目那条标「项目未信任」。 */
       const dup = (overridden, projectEffective) => ({
         ...saved,
         trust: { trusted: false, requiresTrust: true },
@@ -4270,22 +4402,24 @@ staticCheck();
         ],
       });
       stubMcpServers = dup(false, { active: false, reason: 'untrusted' });
-      const c6 = await reopenMcp();
-      check('MCP 标签页：未信任项目里同名 server 不覆盖用户级（用户级仍「生效中」）', () => {
-        const t = c6.textContent;
-        if (!/生效中/.test(t)) return '用户级没显示生效中：' + t.slice(0, 400);
-        if (/被项目同名覆盖/.test(t)) return '错误地标成了被覆盖';
-        return /未生效（项目未信任）/.test(t) || '项目条目没标未生效';
+      const c6 = await openMcpPage();
+      check('MCP 配置页：未信任项目里同名 server 不覆盖用户级', () => {
+        const user = mcpRow(c6, 'github', 'user');
+        const project = mcpRow(c6, 'github', 'project');
+        if (!user || !project) return '少了一条：' + c6.textContent.slice(0, 300);
+        if (/被项目覆盖/.test(user.textContent)) return '错误地标成了被覆盖';
+        return /项目未信任/.test(project.textContent) || '项目条目没标未信任';
       });
-      // 反向：已信任时同一份数据必须显示「被项目同名覆盖」（证明上面那条不是恒真）
+      // 反向：已信任时同一份数据必须显示「被项目覆盖」（证明上面那条不是恒真）
       stubMcpServers = { ...dup(true, { active: true, reason: '' }), trust: { trusted: true, requiresTrust: true } };
-      const c7 = await reopenMcp();
-      check('MCP 标签页：已信任时同名项正确显示「被项目同名覆盖」', () =>
-        /被项目同名覆盖/.test(c7.textContent) || c7.textContent.slice(0, 400));
+      const c7 = await openMcpPage();
+      check('MCP 配置页：已信任时同名项正确显示「被项目覆盖」', () =>
+        /被项目覆盖/.test(mcpRow(c7, 'github', 'user')?.textContent || '') || c7.textContent.slice(0, 400));
 
       stubMcpServers = saved;
     }
 
+    $('settingsReturn').click();
     $('modal').hidden = true;
     $('workSurface').innerHTML = '';
     $('confirmLayer').hidden = true;
@@ -6436,7 +6570,7 @@ staticCheck();
   {
     const baseFetch = window.fetch;
     const delayed = {};
-    const oldBadge = $('extCount').textContent;
+    const oldBadge = $('skillCount').textContent;
     const oldGitFiles = window.S.changes.files.length;
     window.fetch = (url, opts) => {
       const u = String(url);
@@ -6447,7 +6581,7 @@ staticCheck();
     };
     const oldGit = window.loadGitStatus();
     const oldConfig = window.loadProjectConfig();
-    const oldSkills = window.loadExtensionsBadge();
+    const oldSkills = window.loadSkillsBadge();
     window.beginWorkspaceSwitch('C:\\project-final');
     delayed.git({ json: async () => ({ ok: true, isRepo: true, files: [{ path: 'OLD.txt' }] }) });
     delayed.config({ json: async () => ({ ok: true, hasProject: true, cwd: 'C:\\old', config: { ...CFG_DEFAULTS } }) });
@@ -6456,7 +6590,7 @@ staticCheck();
     await Promise.all([oldGit, oldSkills]);
     check('旧 Project Config 响应被丢弃', () => staleConfig === null);
     check('旧 Git refresh 被丢弃', () => window.S.changes.files.length === oldGitFiles);
-    check('旧 Skills badge 响应被丢弃', () => $('extCount').textContent === oldBadge);
+    check('旧 Skills badge 响应被丢弃', () => $('skillCount').textContent === oldBadge && oldBadge !== '99');
 
     const activated = [];
     window.fetch = (url, opts) => {
@@ -8274,7 +8408,9 @@ staticCheck();
     $('navExtensions').click();
     check('P14-D Extensions 替换 Changes 并清掉 Git 容器', () => $('workspace').dataset.workspaceView === 'extensions' && !host.querySelector('.chg-body') && window.panels.changes === null);
     check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('on')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
-    check('设置目录在扩展工作区持续可达', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1);
+    /* 拆分前「Skills 与扩展」挂在设置目录下，进入扩展工作区时设置目录保持展开；
+     * 现在「扩展」是应用主导航目的地：设置目录收起、「返回应用」隐藏，侧栏只有它一处高亮。 */
+    check('扩展是主导航目的地：设置目录收起，侧栏唯一高亮是「扩展」', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1 && $('globalMoreMenu').hidden && $('settingsReturn').hidden && !$('globalMoreMenu').contains($('navExtensions')));
     $('navDiagnostics').click();
     check('P14-D 诊断由中央设置详情承载', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && $('navDiagnostics').getAttribute('aria-current') === 'page');
     $('navExtensions').click();

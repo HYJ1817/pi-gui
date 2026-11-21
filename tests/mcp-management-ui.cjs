@@ -56,6 +56,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     },
   };
   const calls = [];
+  let serversFail = false;
   let forceArgsProtected = false;
   let forceUrlProtected = false;
   let testResponse = null;
@@ -172,7 +173,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
     if (target === '/api/status') return ok({ ok: true, cwd: 'C:\\workspace', hasProject: true });
     if (target === '/api/projects') return ok({ ok: true, active: 'C:\\workspace', items: [{ name: 'Workspace', path: 'C:\\workspace' }] });
-    if (target === '/api/mcp/servers' && method === 'GET') return ok(summary);
+    if (target === '/api/mcp/servers' && method === 'GET') return ok(serversFail ? { ok: false, error: '读取 MCP 摘要失败（fixture）' } : summary);
     if (target === '/api/mcp/servers' && method === 'POST') return ok({ ok: true, action: body?.action, name: body?.name });
     if (pathOnly === '/api/mcp/config' && method === 'POST') {
       const action = body?.action;
@@ -1245,6 +1246,29 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(installScope.querySelector('option[value="project"]').disabled, true);
     assert.ok(install.textContent.includes('当前项目未信任'));
     assert.ok(install.textContent.includes('已回退到全局'));
+  });
+
+  await check('页尾能力报告：摘要读取失败时说「读不到原生 MCP 摘要」，不沿用上一次的原生结论', async () => {
+    w.closeModal();
+    summary.trust = { trusted: true, requiresTrust: false };
+    $('navMcp').click();
+    await tick(160);
+    const report = page().querySelector('details.mcp-report');
+    report.open = true;
+    await tick(80);
+    const native = () => page().querySelector('details.mcp-report .mcp-report-native')?.textContent || '';
+    assert.match(native(), /原生 MCP 生效中/);
+    serversFail = true;
+    d.querySelector('[data-focus-key="refresh"]').click();
+    await tick(160);
+    assert.ok(page().querySelector('.mcp-empty.is-error'), '管理页显示读取失败');
+    assert.equal(page().querySelector('details.mcp-report'), report, '报告仍挂在页尾，展开状态保留');
+    assert.match(native(), /读不到原生 MCP 摘要/);
+    assert.doesNotMatch(native(), /生效中/, '读取失败不能沿用上一次的「生效中」');
+    serversFail = false;
+    clickText(page(), 'button', '重试');
+    await tick(160);
+    assert.match(native(), /原生 MCP 生效中/, '重试读到后恢复');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

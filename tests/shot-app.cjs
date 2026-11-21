@@ -88,7 +88,7 @@ function connect(url) {
   if (VIEW === 'extensions') {
     await evaluate(`document.querySelector('#navExtensions').click()`);
     await sleep(250);
-    await evaluate(`document.querySelector('#extensionsTabExtensions').click()`);
+    await evaluate(`document.querySelector('#extensionsTabInstalled').click()`);
     await sleep(450);
   }
 
