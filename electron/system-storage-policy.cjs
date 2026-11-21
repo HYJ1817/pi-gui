@@ -9,7 +9,7 @@ const { absolute, overlaps, samePath, fail, parseJson, object, exact } = require
 const FILES = new Set([
   'projects.json', 'session-flags.json', 'session-titles.json', 'session-title-settings.json',
   'conversations.json', 'mcp-market-sources.json', 'mcp-registry-catalog.json.gz', 'environment.json',
-  'provider-management.json', 'worktrees.json',
+  'provider-management.json', 'worktrees.json', 'execution-timeline.json',
 ]);
 const DIRECTORIES = new Set(['plans', 'planner-sessions', 'trash-sessions', 'review-comments', 'collab-documents', '.uploads']);
 const OWNED = new Map([...FILES].map(name => [name, 'file']).concat([...DIRECTORIES].map(name => [name, 'directory'])));
@@ -98,6 +98,25 @@ async function providerMetadataFacts(bytes) {
   // Reject rather than rewrite; the store's normal read keeps its existing
   // whitespace/ordering compatibility and is not restricted by this check.
   if (!bytes.equals(Buffer.from(JSON.stringify(doc, null, 2) + '\n'))) fail('provider_metadata_format_unsupported');
+}
+
+let executionTimelineSchema;
+function loadExecutionTimelineSchema() {
+  if (executionTimelineSchema) return executionTimelineSchema;
+  let bundled;
+  try { bundled = require.resolve('./execution-timeline-schema.cjs'); }
+  catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
+  // Source builds use the shared lib file. build-app stages that same authority
+  // beside Main's copied migration modules; neither side has a handwritten copy.
+  executionTimelineSchema = bundled ? require(bundled) : require(path.join(__dirname, '../lib/execution-timeline-schema.cjs'));
+  return executionTimelineSchema;
+}
+
+function executionTimelineFacts(bytes) {
+  if (!bytes) return;
+  let schema;
+  try { schema = loadExecutionTimelineSchema(); } catch { fail('execution_timeline_unavailable'); }
+  if (!schema.validateExecutionTimelineBytes(bytes)) fail('execution_timeline_invalid');
 }
 
 function emptyWorktreeFacts(bytes) {
@@ -229,6 +248,7 @@ function createStoragePolicy({ storage, anchor, legacy, protectedRoots, getProte
     }
     environmentFacts(inventory.facts.get('environment.json'), inventory.hasRuntime, runtimeDirectory);
     await providerMetadataFacts(inventory.facts.get('provider-management.json'));
+    executionTimelineFacts(inventory.facts.get('execution-timeline.json'));
     emptyWorktreeFacts(inventory.facts.get('worktrees.json'));
     await checkProvider();
   }

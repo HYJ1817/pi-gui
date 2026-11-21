@@ -16,7 +16,7 @@ const FAILURE_REASONS = new Set([
   'source_target_overlap', 'protected_overlap', 'protected_roots_unavailable', 'target_not_empty', 'inventory_changed',
   'insufficient_space', 'space_unavailable', 'name_collision', 'inventory_limit', 'unknown_data', 'unknown_transaction',
   'worktree_or_candidate_present', 'provider_authority_present', 'revert_evidence_present', 'invalid_projects',
-  'provider_metadata_invalid', 'provider_metadata_unsupported', 'provider_metadata_format_unsupported', 'provider_metadata_unavailable', 'pi_agent_path_relative',
+  'provider_metadata_invalid', 'provider_metadata_unsupported', 'provider_metadata_format_unsupported', 'provider_metadata_unavailable', 'execution_timeline_invalid', 'execution_timeline_unavailable', 'pi_agent_path_relative',
   'invalid_conversations', 'runtime_locator_bound', 'invalid_environment', 'runtime_not_pinned',
   'copy_failed', 'verification_failed', 'storage_io_failed',
 ]);

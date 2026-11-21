@@ -9,8 +9,15 @@ const { classifyTop, classifyChild } = require('./system-storage-policy.cjs');
 const MAX_ENTRIES = 12_000;
 const MAX_BYTES = 16 * 1024 ** 3;
 const MAX_FILE_BYTES = 2 * 1024 ** 3;
+let executionTimelineSchema;
+try { executionTimelineSchema = require('./execution-timeline-schema.cjs'); }
+catch (error) {
+  if (error.code !== 'MODULE_NOT_FOUND') throw error;
+  executionTimelineSchema = require('../lib/execution-timeline-schema.cjs');
+}
+const { MAX_EXECUTION_TIMELINE_BYTES } = executionTimelineSchema;
 const FACT_LIMITS = new Map([['projects.json', 1024 ** 2], ['conversations.json', 1024 ** 2], ['environment.json', 64 * 1024],
-  ['provider-management.json', 16 * 1024 ** 2], ['worktrees.json', 1024 ** 2]]);
+  ['provider-management.json', 16 * 1024 ** 2], ['worktrees.json', 1024 ** 2], ['execution-timeline.json', MAX_EXECUTION_TIMELINE_BYTES]]);
 const BLOCK_SIZE = 256 * 1024;
 const sortRelative = (a, b) => a.relative < b.relative ? -1 : a.relative > b.relative ? 1 : 0;
 const shapeRows = entries => entries.map(row => [row.relative, row.kind, row.binding || row.stamp]);
@@ -204,4 +211,4 @@ function createStorageInventory(storage) {
   return { scan, copy };
 }
 
-module.exports = { createStorageInventory };
+module.exports = { createStorageInventory, MAX_EXECUTION_TIMELINE_BYTES };

@@ -7,6 +7,8 @@ const REASONS = Object.freeze({
   provider_metadata_unsupported: '供应商管理数据版本或字段不受迁移支持；请保留原文件，不要删除账本或凭据。',
   provider_metadata_format_unsupported: '迁移仅接受供应商管理保存的原始 JSON 排版，以排除重复字段；未改写文件，请先在供应商管理中检查并重新保存。',
   provider_metadata_unavailable: '无法加载供应商数据校验组件；请修复应用安装后重试，原数据未修改。',
+  execution_timeline_invalid: '执行历史索引格式无效或版本不受支持；原文件未修改，请保留数据目录并联系维护人员。',
+  execution_timeline_unavailable: '无法加载执行历史索引校验组件；请修复应用安装后重试，原数据未修改。',
   pi_agent_path_relative: 'PI_CODING_AGENT_DIR 使用相对路径，无法确认实际 Pi 目录；请将其改为绝对路径后重启，勿删除授权账本。',
   revert_evidence_present: '存在文件回退证据或原对象恢复依赖，当前不支持安全重定位。',
   unknown_data: '数据目录包含未识别的数据，未略过或删除；请先核对目录内容。',
