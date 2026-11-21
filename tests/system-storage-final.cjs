@@ -74,6 +74,58 @@ async function unchanged(file, before) {
 
 // The normal case is authored by the real transaction owner, not an invented
 // metadata fixture. No credential qualification, real Pi, network, or model.
+test('P5 execution history index is a validated, byte-exact cold-migration business file', async t => {
+  const w = await fixture(t);
+  const { createExecutionTimelineStore } = await import('../server/execution-timeline-store.js');
+  const identity = { kind: 'classic', workspaceId: 'workspace-fixture', sessionId: 'session-fixture' };
+  const record = { inputId: 'entry-input', beforeLeafId: null, leafId: 'entry-input',
+    entries: [{ id: 'entry-input', role: 'user' }], status: 'unknown',
+    timing: { startedAt: 100, endedAt: null }, finalResponseId: null, tools: [] };
+  assert.equal(createExecutionTimelineStore({ dataDir: w.source }).record(identity, record), true);
+  const file = path.join(w.source, 'execution-timeline.json');
+  const original = await witness(file);
+  const schema = require('../lib/execution-timeline-schema.cjs');
+  assert.equal(schema.validateExecutionTimelineBytes(original.bytes), true);
+  const core = await w.open();
+  const preview = succeeds(await core.preview(w.target));
+  assert.ok(preview.summary.included.includes('execution-timeline.json'));
+  assert.equal(preview.summary.files, 3);
+  assert.equal(preview.summary.bytes, original.bytes.length
+    + Buffer.byteLength('{"active":"","items":[]}\n')
+    + (await fs.stat(w.metadataPath)).size);
+  const committed = await core.commit({ ticket: preview.ticket, confirm: true });
+  const saved = succeeds(committed);
+  succeeds(await core.arm({ transactionId: saved.intentId }));
+  succeeds(await core.runPendingCold(STOPPED));
+  const copied = path.join(w.target, 'execution-timeline.json');
+  assert.deepEqual(await fs.readFile(copied), original.bytes);
+  assert.equal(hash(await fs.readFile(copied)), hash(original.bytes));
+  assert.deepEqual(createExecutionTimelineStore({ dataDir: w.target }).list(identity), [record]);
+  await unchanged(file, original);
+});
+
+test('malformed, noncanonical, future and oversized P5 indices fail closed before migration', async t => {
+  const schema = require('../lib/execution-timeline-schema.cjs');
+  const { MAX_EXECUTION_TIMELINE_BYTES } = require('../electron/system-storage-inventory.cjs');
+  assert.equal(schema.MAX_EXECUTION_TIMELINE_BYTES, MAX_EXECUTION_TIMELINE_BYTES);
+  const invalid = [
+    Buffer.from('{"version":2,"buckets":[]}'),
+    Buffer.from('{"version":1,"buckets":[],"extra":true}'),
+    Buffer.from('{"version":1,"version":1,"buckets":[]}'),
+    Buffer.alloc(schema.MAX_EXECUTION_TIMELINE_BYTES + 1, 0x20),
+  ];
+  for (const [index, bytes] of invalid.entries()) await t.test(`invalid index ${index + 1}`, async sub => {
+    const w = await fixture(sub);
+    assert.equal(schema.validateExecutionTimelineBytes(bytes), false);
+    await w.write('execution-timeline.json', bytes);
+    const core = await w.open();
+    refuses(await core.preview(w.target), index === 3 ? 'inventory_limit' : 'execution_timeline_invalid');
+    assert.deepEqual(await fs.readdir(w.target), []);
+    await assert.rejects(fs.stat(w.boot), { code: 'ENOENT' });
+    assert.deepEqual(await fs.readFile(path.join(w.source, 'execution-timeline.json')), bytes);
+  });
+});
+
 test('real provider-store metadata cold-migrates byte-exactly; Pi models/auth and source stay at their original authority', async t => {
   const w = await fixture(t, { metadata: false });
   const owner = await w.provider();
@@ -389,16 +441,17 @@ test('relative Pi override permits an identity-bound managed startup but still r
 });
 
 test('new migration refusal codes persist in boot and project actionable messages without payloads', async t => {
-  for (const code of ['provider_metadata_invalid', 'provider_metadata_unsupported', 'provider_metadata_format_unsupported', 'provider_metadata_unavailable', 'pi_agent_path_relative']) {
+  for (const code of ['provider_metadata_invalid', 'provider_metadata_unsupported', 'provider_metadata_format_unsupported', 'provider_metadata_unavailable', 'execution_timeline_invalid', 'execution_timeline_unavailable', 'pi_agent_path_relative']) {
     assert.ok(FAILURE_REASONS.has(code)); assert.equal(typeof REASONS[code], 'string'); assert.ok(REASONS[code].length > 15);
   }
   assert.match(REASONS.provider_authority_present, /勿删除或修改账本/);
   assert.match(REASONS.pi_agent_path_relative, /绝对路径/);
-  for (const code of ['provider_metadata_invalid', 'provider_metadata_unsupported', 'provider_metadata_format_unsupported', 'pi_agent_path_relative']) await t.test(code, async sub => {
+  for (const code of ['provider_metadata_invalid', 'provider_metadata_unsupported', 'provider_metadata_format_unsupported', 'execution_timeline_invalid', 'pi_agent_path_relative']) await t.test(code, async sub => {
     const w = await fixture(sub), core = await w.open(); await intent(core, w.target);
     if (code === 'provider_metadata_invalid') await fs.writeFile(w.metadataPath, SECRET);
     if (code === 'provider_metadata_unsupported') await fs.writeFile(w.metadataPath, json({ ...document(), schemaVersion: 2 }));
     if (code === 'provider_metadata_format_unsupported') await fs.writeFile(w.metadataPath, JSON.stringify(document()));
+    if (code === 'execution_timeline_invalid') await w.write('execution-timeline.json', '{"version":2,"buckets":[]}');
     const cold = await w.open(code === 'pi_agent_path_relative' ? { piAgentDirectory: './agent' } : {});
     const result = refuses(await cold.runPendingCold(STOPPED), code);
     assert.equal(result.state.reason, code); assert.equal(result.state.dataDirectory, w.source);
@@ -415,6 +468,7 @@ test('packaged policy loads generated CJS schema with no source tree and preserv
   const bundle = esbuild.buildSync({ entryPoints: [path.join(ROOT, 'lib/provider-management-metadata.mjs')],
     bundle: true, platform: 'node', format: 'cjs', target: 'node22', write: false });
   const resource = path.join(stage, 'provider-management-metadata.cjs'); await fs.writeFile(resource, bundle.outputFiles[0].contents);
+  await fs.copyFile(path.join(ROOT, 'lib/execution-timeline-schema.cjs'), path.join(stage, 'execution-timeline-schema.cjs'));
   for (const name of ['system-storage-policy.cjs', 'system-storage-fs.cjs', 'system-storage-windows.cjs']) await fs.copyFile(path.join(ROOT, 'electron', name), path.join(stage, name));
   const schema = require(resource), esm = await import(pathToFileURL(path.join(ROOT, 'lib/provider-management-metadata.mjs')).href);
   assert.deepEqual(schema.defaultMetadata(), esm.defaultMetadata());
@@ -422,10 +476,26 @@ test('packaged policy loads generated CJS schema with no source tree and preserv
   valid.receipts['save-fixture'].fingerprint = [hash('request')];
   for (const validator of [schema.validateMetadata, esm.validateMetadata]) assert.throws(() => validator(valid), { code: 'config_invalid' });
   const storage = createStorageFs({ inspectWindows: async () => 'ok' });
+  const history = await import('../server/execution-timeline-store.js');
+  assert.equal(history.createExecutionTimelineStore({ dataDir: w.source }).record(
+    { kind: 'classic', workspaceId: 'workspace-fixture', sessionId: 'session-fixture' },
+    { inputId: 'entry-input', beforeLeafId: null, leafId: 'entry-input', entries: [{ id: 'entry-input', role: 'user' }],
+      status: 'unknown', timing: { startedAt: 1, endedAt: null }, finalResponseId: null, tools: [] }), true);
   const facts = await createStorageInventory(storage).scan(await storage.directory(w.source));
   const options = { storage, anchor: w.source, legacy: w.source, piAgent: w.pi, protectedRoots: [], getProtectedRoots: () => [], runtimeDirectory: null };
-  await require(path.join(stage, 'system-storage-policy.cjs')).createStoragePolicy(options).verifyBusiness(w.source, w.target, facts);
-  // A missing generated resource cannot silently accept unvalidated metadata.
+  const packagedPolicy = path.join(stage, 'system-storage-policy.cjs');
+  await require(packagedPolicy).createStoragePolicy(options).verifyBusiness(w.source, w.target, facts);
+  // Both policy and inventory must load the packaged authority next to Main, not
+  // silently fall back to a missing development source tree.
+  const timelineSchema = path.join(stage, 'execution-timeline-schema.cjs');
+  const timelineBytes = await fs.readFile(timelineSchema);
+  delete require.cache[require.resolve(timelineSchema)];
+  await fs.unlink(timelineSchema);
+  delete require.cache[require.resolve(packagedPolicy)];
+  await assert.rejects(require(packagedPolicy).createStoragePolicy(options).verifyBusiness(w.source, w.target, facts), { code: 'execution_timeline_unavailable' });
+  await fs.writeFile(timelineSchema, timelineBytes);
+  delete require.cache[require.resolve(packagedPolicy)];
+  // A missing generated metadata resource cannot silently accept invalid data.
   await fs.unlink(resource);
   delete require.cache[require.resolve(resource)]; delete require.cache[require.resolve(path.join(stage, 'system-storage-policy.cjs'))];
   await assert.rejects(require(path.join(stage, 'system-storage-policy.cjs')).createStoragePolicy(options).verifyBusiness(w.source, w.target, facts), { code: 'provider_metadata_unavailable' });
