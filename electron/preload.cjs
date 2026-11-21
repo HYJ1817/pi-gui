@@ -105,6 +105,18 @@ try {
     ...(fontsEnabled ? { fonts: {
       list: () => ipcRenderer.invoke('pi-gui:fonts-list'),
     } } : {}),
+    // No caller-supplied path, Session, window ID or generic IPC channel.
+    ...(process.argv.includes('--pi-gui-system-bridge') ? { systemSettings: {
+      state: () => ipcRenderer.invoke('pi-gui:system-state'),
+      set: (key, value) => ipcRenderer.invoke('pi-gui:system-set', { key, value }),
+      saveNetwork: value => ipcRenderer.invoke('pi-gui:system-network-save', value),
+      testNetwork: value => ipcRenderer.invoke('pi-gui:system-network-test', value),
+      pickDataDirectory: () => ipcRenderer.invoke('pi-gui:system-storage-pick'),
+      migrateData: ticket => ipcRenderer.invoke('pi-gui:system-storage-migrate', { confirm: true, ticket }),
+      measureCache: () => ipcRenderer.invoke('pi-gui:system-cache-measure'),
+      clearCache: ticket => ipcRenderer.invoke('pi-gui:system-cache-clear', { confirm: true, ticket }),
+      quit: () => ipcRenderer.invoke('pi-gui:system-quit'),
+    } } : {}),
     runtimeBrowser: {
       onOpen: callback => {
         const listener = (_event, frame) => callback(frame);

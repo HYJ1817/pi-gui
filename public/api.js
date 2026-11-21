@@ -26,6 +26,8 @@ function reportRequestFailure(url, status) {
   try { requestFailureReporter(requestRoute(url), status === 0 ? 'network' : 'http', Number.isFinite(status) ? status : 0); } catch { /* logging only */ }
 }
 
+/* App-wide read-only metadata, independent of workspace generations. */
+export const fetchSystemStorage = () => getJSON('/api/system/storage');
 /* 用户级认证不携带 workspace/model generation。 */
 export const fetchProviderAuth = () => getJSON('/api/provider-auth');
 export const loginProviderAuth = (providerId) => sendJSON('/api/provider-auth/login', { body: { providerId, authType: 'oauth' } });

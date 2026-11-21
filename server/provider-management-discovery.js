@@ -207,7 +207,7 @@ export function createProviderManagementDiscovery({ draftLookup, draftFrozen = (
     }
     const loopback = target.isLoopbackName || classifyAddress(target.host) === 'loopback';
     const result = consentStore.issue({ ...draft, api: draft.connection.api, credentialSource, credentialRevision: secret?.revision,
-      rememberTarget: request.rememberTarget, loopback });
+      rememberTarget: request.rememberTarget, loopback, localEndpoint: request.allowLocalEndpoint === true });
     if (!result.ok) providerFailure(result.code);
     return { ok: true, consentId: result.consentId, expiresAt: result.expiresAt, targetSummary, requiresDesktopConfirmation: false };
   }

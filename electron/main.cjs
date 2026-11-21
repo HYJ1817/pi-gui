@@ -25,7 +25,7 @@ if (process.env.ELECTRON_RUN_AS_NODE && process.versions.electron) {
   return;
 }
 
-const { app, BrowserWindow, Menu, shell, dialog, screen, session, ipcMain, nativeTheme, protocol } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, dialog, screen, session, ipcMain, nativeTheme, protocol, powerSaveBlocker } = require('electron');
 
 if (!app || typeof app.whenReady !== 'function') {
   console.error(
@@ -69,6 +69,17 @@ const { createBrowserController, isBrowserWebContents } = require('./browser-vie
 const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 const { createDesktopTheme } = require('./theme.cjs');
 const { createSystemFontIpc } = require('./system-fonts.cjs');
+const { createSystemSettings } = require('./system-settings.cjs');
+const { createSystemNetwork, updateEndpointPolicy } = require('./system-network.cjs');
+const { createSystemProxy } = require('./system-proxy.cjs');
+const { createSystemConnectionTest } = require('./system-network-test.cjs');
+const { createSessionFetch } = require('./app-update-fetch.cjs');
+const { initializeSystemStorage } = require('./system-storage-startup.cjs');
+const { createSystemStorageDesktop } = require('./system-storage-desktop.cjs');
+const { createSystemMaintenance } = require('./system-maintenance.cjs');
+const systemNetworkPolicy = require([path.join(__dirname, 'system-network-policy.cjs'),
+  path.join(__dirname, '../lib/system-network-policy.cjs')].find(file => fs.existsSync(file)));
+const { PARTITION: BROWSER_PARTITION } = require('./browser-policy.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 const { installEnvironmentSetup } = require('./environment-setup.cjs');
@@ -100,6 +111,17 @@ const TOKEN_HEADER = 'X-Pi-Gui-Token';
 let win = null;
 let desktopTheme = null;
 let desktopFonts = null;
+let systemSettings = null;
+let systemNetwork = null;
+let systemProxy = null;
+let backendNetworkSession = null;
+let backendNetworkEnvironment = null;
+let systemStorage = null;
+let systemStorageDesktop = null;
+let systemMaintenance = null;
+let resolvedDataDirectory = null;
+let resolvedDataSource = null;
+let resolvedRuntimeDirectory = null;
 let server = null;
 /* 本次实例真正 spawn 的后端身份：{ pid, expected }。expected 是启动后
  * 异步抓取的创建时间 + 映像路径，退出时用它校验 pid 没有被复用。 */
@@ -224,7 +246,7 @@ async function ensureServer() {
   server = spawn(cmd, args, {
     cwd,
     env: {
-      ...process.env,
+      ...(backendNetworkEnvironment || process.env),
       ELECTRON_RUN_AS_NODE: '1', // 让 electron.exe 以纯 Node 身份跑后端
       PI_GUI_OPEN: '0', // 桌面版自己有窗口，别再去开浏览器
       PORT: String(PORT),
@@ -237,7 +259,9 @@ async function ensureServer() {
       // projects.json 和上传缓存要写到可写的地方。默认是应用安装目录，
       // 装在 Program Files 下会写不进去，所以指到用户数据目录。
       // 允许外部用 PI_GUI_DATA 覆盖 —— 自动化测试靠它把数据隔离到临时目录。
-      PI_GUI_DATA: process.env.PI_GUI_DATA || app.getPath('userData'),
+      PI_GUI_DATA: resolvedDataDirectory,
+      PI_GUI_DATA_SOURCE: resolvedDataSource,
+      PI_GUI_RUNTIME_DIR: resolvedRuntimeDirectory,
       // 启动后后台预取官方 Registry 完整目录：第一次打开市场不用等数分钟。
       // 预取不阻塞后端启动，失败也不影响其它功能；网页版不设置这个变量。
       PI_GUI_PREFETCH_REGISTRY: '1',
@@ -266,7 +290,9 @@ async function ensureServer() {
   }
 
   const collect = (buf) => {
-    log.push(buf.toString('utf8'));
+    // Child output can echo credentials split across arbitrary stream chunks.
+    // Keep structure only; sanitizing each raw chunk cannot prove non-disclosure.
+    log.push(`后端输出：${buf.length} 字节。\n`);
     if (log.length > 200) log.shift();
   };
   server.stdout.on('data', collect);
@@ -275,7 +301,7 @@ async function ensureServer() {
    * renderer 也拿不到这个通道。应答固定字段，代理地址与认证信息不出主进程。 */
   try {
     marketNetwork = createMarketNetworkBridge({
-      session: session.defaultSession,
+      session: backendNetworkSession,
       log: (event, details) => mlog('electron', event, details),
     });
   } catch {
@@ -549,7 +575,9 @@ const STATE_VERSION = 3;
  * 早先这里写死 app.getPath('userData')，结果是自动化测试没法隔离 ——
  * 它会去改用户真实的窗口状态，而且测试自己也找不到写出来的文件。 */
 function stateFile() {
-  return path.join(process.env.PI_GUI_DATA || app.getPath('userData'), 'window-state.json');
+  // Window state remains a fixed desktop preference after business relocation;
+  // explicit overrides retain their previous fixture/operator isolation.
+  return path.join(process.env.PI_GUI_DATA ? path.resolve(process.env.PI_GUI_DATA) : app.getPath('userData'), 'window-state.json');
 }
 
 function loadWindowState() {
@@ -789,7 +817,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      additionalArguments: ['--pi-gui-theme-bridge', '--pi-gui-font-bridge'],
+      backgroundThrottling: false, // Hidden-to-tray must retain renderer timers/state.
+      additionalArguments: ['--pi-gui-theme-bridge', '--pi-gui-font-bridge', '--pi-gui-system-bridge'],
       /* 只为「用系统默认程序打开文件」与「用系统浏览器打开 Release 链接」
        * 挂一个桥（见 preload.cjs）。contextIsolation 保持开启 —— 桥经
        * contextBridge 暴露，页面拿不到 ipcRenderer 本身，也拿不到任何凭据。 */
@@ -822,18 +851,35 @@ function createWindow() {
      注意这只是「快一步」，不是唯一保障 —— 窗口被 destroy 时这个事件不会发，
      真正兜底的是下面 before-quit / window-all-closed 那两处。 */
   win.on('close', event=>{
-    if(appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
+    const closingWindow = win;
+    if (!systemSettings?.isSystemEnding() && systemMaintenance?.deferQuit(event, () => {
+      if (closingWindow && !closingWindow.isDestroyed()) closingWindow.close();
+    })) return;
+    if(!systemSettings?.isSystemEnding() && appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
+    saveWindowState();
+    // Ordinary X/Alt+F4 hides the SAME window. Do this before considering an
+    // automatic install: hiding is not an application exit or update consent.
+    if (!quitting && systemSettings?.hideOnClose(event)) return;
+    if (systemSettings?.deferQuit(event)) return;
     /* 自动安装需要保持窗口存活到预检结束：销毁窗口后再 app.quit 会让 Windows
        的 query-session-end / session-end 无处投递，关机期间可能误走安装。
        先阻止这次 close，改由 app.quit 进入同一套 before-quit 协调器；协调器
        放行后会真正退出，普通手动/无候选路径仍直接关闭。 */
-    if(appUpdate?.shouldDeferClose?.()){event.preventDefault();app.quit();return;}
-    saveWindowState();
+    if(!systemSettings?.isSystemEnding() && appUpdate?.shouldDeferClose?.()){event.preventDefault();app.quit();return;}
   });
   /* Windows 关机/注销会直接结束会话，不会给异步预检留时间。标记之后
      退出安装协调器只走普通退出，不尝试自动安装、也不额外阻止关机。 */
-  win.on('query-session-end',()=>{appUpdate?.markSystemSessionEnding?.();});
-  win.on('session-end',()=>{appUpdate?.markSystemSessionEnding?.();});
+  // A query may be cancelled by Windows or another application. Preserve the
+  // updater's existing conservative suppression, but do not terminally disable
+  // the tray/IPC until Windows confirms the session has actually ended.
+  win.on('query-session-end', () => { appUpdate?.markSystemSessionEnding?.(); });
+  win.on('session-end', () => {
+    markSystemEnding();
+    systemSettings?.dispose();
+    // Release native resources immediately without running the bounded Windows
+    // process-tree cleanup inside the session notification callback itself.
+    setImmediate(finishQuit);
+  });
 
   /* 渲染进程挂了必须说出来。
    *
@@ -939,6 +985,36 @@ function createWindow() {
   });
 }
 
+function applicationIcon() {
+  // Windows Tray accepts an .ico path; use the existing artwork in source
+  // mode and the same generated .ico staged as an app resource in the bundle.
+  const file = app.isPackaged ? path.join(__dirname, 'icon.ico') : path.join(ROOT, 'assets', 'icon-src.png');
+  return fs.existsSync(file) ? file : null;
+}
+
+function markSystemEnding() {
+  systemSettings?.markSystemEnding();
+  appUpdate?.markSystemSessionEnding?.();
+  systemMaintenance?.dispose();
+}
+
+function finishQuit() {
+  if (quitting) return;
+  saveWindowState();
+  quitting = true;
+  systemSettings?.beginQuit();
+  systemSettings?.dispose();
+  try { mainLog?.close('quit'); } catch { /* noop */ }
+  if (browser) browser.destroy();
+  browserAgent?.stop();
+  runtimeBrowserHost?.stop();
+  credentialDesktop?.dispose();
+  desktopFonts?.dispose();
+  killServer();
+  systemNetwork?.dispose(); systemStorageDesktop?.dispose(); systemMaintenance?.dispose();
+  void systemProxy?.stop().catch(() => {});
+}
+
 /* ---------- 生命周期 ---------- */
 
 // 第二次双击：聚焦已有窗口，而不是开第二个实例
@@ -949,8 +1025,9 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('second-instance', () => {
     if (!win) return;
+    if (systemSettings) { systemSettings.restore(); return; }
     if (win.isMinimized()) win.restore();
-    win.focus();
+    win.show(); win.focus();
   });
 
   /* 所有 webContents 的导航规则统一在这里钉死（见 hardenWebContents 的说明）。
@@ -959,6 +1036,43 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    // Before any business/log/browser writer, resolve or recover the one root.
+    try {
+      const cold = await initializeSystemStorage({ directory: app.getPath('userData'), appRoot: ROOT,
+        executable: process.execPath, probe: () => probePort(900) });
+      systemStorage = cold.storage;
+      resolvedDataDirectory = cold.dataDirectory;
+      resolvedDataSource = cold.source;
+      resolvedRuntimeDirectory = cold.runtimeDirectory;
+    } catch {
+      dialog.showErrorBox('Pi GUI 启动失败', '无法确认安全的数据目录或旧写者已停止，未启动后端。请保留原目录及迁移目标，修复引导配置或恢复目录权限后重试。');
+      app.exit(1); return;
+    }
+    // Policy is initialized before any browser, backend or SDK worker exists.
+    // The backend gets a startup-frozen resolver: saving a different policy
+    // never reroutes an already running Agent through a changed proxy.
+    try {
+      fs.mkdirSync(app.getPath('userData'), { recursive: true });
+      systemNetwork = await createSystemNetwork({ directory: app.getPath('userData'),
+        getSessions: () => [session.defaultSession, session.fromPartition(BROWSER_PARTITION),
+          ...[...(runtimeBrowserHost?.records.values() || [])].map(record => session.fromPartition(record.partition))],
+        testConnection: createSystemConnectionTest({ createSession: partition => session.fromPartition(partition) }),
+        onEndpointPolicy: relaxed => updateEndpointPolicy(server, relaxed) });
+      if (!['default', 'saved'].includes(systemNetwork.snapshot().persistence)) throw Error('network_preferences_unconfirmed');
+      const initialNetwork = systemNetwork.startup();
+      backendNetworkEnvironment = systemNetworkPolicy.externalEnvironment(initialNetwork, process.env);
+      backendNetworkEnvironment.PI_GUI_NETWORK_RELAXED = initialNetwork.relaxed ? '1' : '0';
+      const startupSession = backendNetworkSession = session.fromPartition('pi-gui-network-startup');
+      await startupSession.setProxy(systemNetworkPolicy.electronProxy(initialNetwork));
+      if (initialNetwork.mode !== 'direct') {
+        systemProxy = createSystemProxy({ resolveProxy: url => startupSession.resolveProxy(url), relaxed: initialNetwork.relaxed });
+        await systemProxy.start();
+        backendNetworkEnvironment[systemNetworkPolicy.PRIVATE_PROXY_KEY] = systemProxy.bootstrapURL();
+      }
+    } catch {
+      dialog.showErrorBox('Pi GUI 启动失败', '无法确认网络策略，未启动后端。请检查固定用户资料目录中的 system-network.json 格式及权限，保留原文件后修复并重新启动。');
+      app.exit(1); return;
+    }
     try {
       mainLog = createMainLogging({
         dir: defaultMainLogDir({ app }),
@@ -984,13 +1098,17 @@ if (!app.requestSingleInstanceLock()) {
     installOpenPathHandler();
     installOpenExternalHandler();
     installEnvironmentSetup({ ipcMain, dialog, getWindow: () => win, getServer: () => server, origin: ORIGIN });
+    const desktopResources = {};
     try { appUpdate=installAppUpdate({app,ipcMain,origin:ORIGIN,getWindow:()=>win,getServer:()=>server,dialog,shell,
-      inspectDesktop:()=>{
+      // Use the frozen, dedicated Session rather than main's global Node fetch;
+      // update redirects, host allowlists, size and SHA checks remain its owner.
+      fetchImpl:createSessionFetch({ session: backendNetworkSession }),
+      inspectDesktop:desktopResources.inspect=()=>{
         const states=[browserAgent?.agent.status(),...[...(runtimeBrowserHost?.records.values()||[])].map(r=>r.agent.status())].filter(Boolean);
         return states.some(s=>s.busy||s.loading)?{ok:false,code:'busy-browser',error:'浏览器仍在执行操作或加载页面，请等待完成后重试。'}
           :{ok:true,browsers:states.filter(s=>s.open).length};
       },
-      prepareDesktop:async()=>{
+      prepareDesktop:desktopResources.prepare=async()=>{
         await browserAgent?.bridge.invalidate(true);
         await runtimeBrowserHost?.prepareUpdate();
       },
@@ -1008,6 +1126,16 @@ if (!app.requestSingleInstanceLock()) {
     }); } catch {
       mlog('electron','electron.update_unavailable',{code:'UPDATE_CACHE_UNAVAILABLE'});
     }
+    systemMaintenance = createSystemMaintenance({ getServer: () => server, updates: appUpdate,
+      inspectDesktop: () => {
+        const state = desktopResources.inspect?.();
+        return !state?.ok || state.browsers > 0
+          ? { ok: false, code: 'busy-browser', error: '请先关闭内置浏览器页面，保留未提交输入后再迁移。' } : state;
+      },
+      prepareDesktop: () => desktopResources.prepare?.(),
+      relaunch: () => app.relaunch(), quit: () => app.quit() });
+    systemStorageDesktop = createSystemStorageDesktop({ storage: systemStorage, dialog, getWindow: () => win,
+      maintenance: systemMaintenance, ownsBackend: () => Boolean(server?.connected) });
     /* 右栏内置浏览器。与上面两个 handler 同一时机 —— 必须在 createWindow()
      * 之前注册，否则页面首帧调用会拿到 "No handler registered"。
      * WebContentsView 本身是惰性创建的：页面加载时不建，用户真打开右栏才建。 */
@@ -1020,6 +1148,11 @@ if (!app.requestSingleInstanceLock()) {
         'extensions', 'pi-gui-browser', 'index.js') });
     await browserAgent.start();
     runtimeBrowserHost = createRuntimeBrowserHost({ origin: ORIGIN, getWindow: () => win, ipcMain,
+      prepareSession: async partition => {
+        const selected = session.fromPartition(partition);
+        await systemNetwork.registerSession(selected);
+        return () => systemNetwork.unregisterSession(selected);
+      },
       onFocus: active => browser.setOccluded(active),
       logEvent: (event, details) => mlog('electron', event, details),
       extensionPath: path.join(fs.existsSync(path.join(__dirname, 'server.cjs')) ? __dirname : ROOT,
@@ -1033,10 +1166,23 @@ if (!app.requestSingleInstanceLock()) {
     }
     try {
       await ensureServer();
+      const storageState = systemStorage.state();
+      if (storageState.switched) {
+        const metadata = await getJson(`${ORIGIN}/api/system/storage`, 5000, { [TOKEN_HEADER]: AUTH_TOKEN });
+        const actual = metadata.body?.storage?.dataDirectory;
+        const confirmed = await systemStorage.markStarted({ transactionId: storageState.transactionId,
+          dataDirectory: resolvedDataDirectory, ok: actual === resolvedDataDirectory });
+        if (actual !== resolvedDataDirectory || !confirmed.ok) throw Error('storage_start_unconfirmed');
+      }
     } catch (err) {
       /* 注意：走到这里绝不能再去 loadURL。
        * 端口被别的程序占用时把窗口指向那个端口，用户会看到一个陌生的页面
        * 加一堆查不出原因的 API 报错 —— 那比直接报错难排查得多。 */
+      const failedStorage = systemStorage?.state();
+      if (failedStorage?.switched && failedStorage.phase === 'committed') {
+        await systemStorage.markStarted({ transactionId: failedStorage.transactionId,
+          dataDirectory: resolvedDataDirectory, ok: false }).catch(() => {});
+      }
       mlog('electron', 'electron.backend_start_failed', { phase: 'startup', code: 'BACKEND_UNAVAILABLE' });
       try { mainLog?.close('backend_start_failed'); } catch { /* noop */ }
       dialog.showErrorBox('Pi GUI 启动失败', String(err.message || err));
@@ -1044,6 +1190,13 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
     try {
+      systemSettings = await createSystemSettings({ ipcMain, origin: ORIGIN, getWindow: () => win,
+        directory: app.getPath('userData'), network: systemNetwork, storage: systemStorageDesktop,
+        session: session.fromPartition(BROWSER_PARTITION), browserDirectory: session.defaultSession.getStoragePath(),
+        cacheProviders: { defaultSession: session.defaultSession, codeCache: true,
+          getBuckets: () => [...(runtimeBrowserHost?.records.values() || [])].map(record => session.fromPartition(record.partition)) },
+        powerSaveBlocker, Tray, Menu, icon: applicationIcon(), quit: () => app.quit() });
+      systemSettings.register();
       createWindow();
       mlog('electron', 'electron.window_created', { windowCount: 1, durationMs: Date.now() - bootAt });
     } catch (error) {
@@ -1082,7 +1235,8 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
 
-  // 关掉窗口就是退出程序 —— 桌面应用不该留个后台进程偷偷活着
+  // A hidden window still exists. Actual destruction (including renderer
+  // window.close/destroy paths) must never leave an inaccessible tray-only app.
   app.on('window-all-closed', () => {
     /* 兜底保存一次。
      *
@@ -1094,8 +1248,10 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', event => {
+    if (!systemSettings?.isSystemEnding() && systemMaintenance?.deferQuit(event)) return;
+    if (systemSettings?.deferQuit(event)) return;
     if(appUpdate&&appUpdate.beforeQuit(event))return;
-    if (process.platform === 'win32' && server?.connected && environmentInstallQuit !== 'done') {
+    if (!systemSettings?.isSystemEnding() && process.platform === 'win32' && server?.connected && environmentInstallQuit !== 'done') {
       event.preventDefault();
       if (environmentInstallQuit === null) {
         environmentInstallQuit = 'waiting';
@@ -1106,18 +1262,9 @@ if (!app.requestSingleInstanceLock()) {
       }
       return;
     }
-    // 再兜一层：Ctrl+Q、系统关机等直接触发 quit 的情况，窗口可能还活着也可能已经没了
-    saveWindowState();
-    quitting = true;
-    try { mainLog?.close('quit'); } catch { /* noop */ }
-    // 浏览器 view 先于后端收掉：它的 webContents 不随窗口自动销毁
-    if (browser) browser.destroy();
-    browserAgent?.stop();
-    runtimeBrowserHost?.stop();
-    credentialDesktop?.dispose();
-    desktopFonts?.dispose();
-    killServer();
+    finishQuit();
   });
+  app.on('will-quit', () => { systemSettings?.dispose(); });
 
   app.on('child-process-gone', (_event, details) => {
     mlog('electron', 'electron.child_process_gone', {
@@ -1129,6 +1276,7 @@ if (!app.requestSingleInstanceLock()) {
 
   process.on('exit', () => {
     try { mainLog?.flushSync(); } catch { /* noop */ }
+    systemSettings?.dispose();
     if (!quitting) killServer();
   });
 }

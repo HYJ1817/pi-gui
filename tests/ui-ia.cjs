@@ -46,12 +46,30 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   await check('Settings has all six logical groups and bound actions', () => {
     $('navGlobalMore').click();
     const labels = [...d.querySelectorAll('#globalMoreMenu h3')].map(n => n.textContent);
-    for (const name of ['常规与界面', '工作区', '模型与账户', '扩展与 MCP', '应用与更新', '诊断']) assert.ok(labels.includes(name), name);
+    for (const name of ['常规与界面', '工作区', '模型与账户', '扩展与 MCP', '系统与应用', '诊断']) assert.ok(labels.includes(name), name);
+    assert.equal($('navSystem').nextElementSibling, $('navInfo'));
     assert.equal(labels.includes('Agent 能力'), false);
     assert.ok($('navInfo'), 'unified info entry exists');
     assert.equal($('navAppUpdates'), null, 'old updates entry removed');
     assert.equal($('navRestartPi'), null, 'old restart entry removed');
     assert.ok([...$('globalMoreMenu').querySelectorAll('button')].every(b => typeof b.onclick === 'function'));
+  });
+  await check('Settings search resolves system keywords into the central System destination', async () => {
+    const search = $('settingsSearchInput');
+    for (const term of ['缓存', 'tray', 'proxy']) {
+      search.value = term; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+      assert.equal($('navSystem').hidden, false);
+      assert.equal($('navInfo').hidden, true);
+    }
+    search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+    assert.equal(d.activeElement, $('navSystem'));
+    $('navSystem').click(); await tick();
+    const card = d.querySelector('#workSurface .system-settings-card');
+    assert.equal(card.querySelector('h2').textContent, '系统');
+    assert.deepEqual([...card.querySelectorAll('h3')].map(h => h.textContent), ['网络', '存储', '电源', '关闭行为']);
+    assert.equal($('navSystem').getAttribute('aria-current'), 'page');
+    assert.ok($('navSystem').querySelector('svg[data-icon="monitor"] path'));
+    search.value = ''; search.dispatchEvent(new w.Event('input', { bubbles: true }));
   });
   await check('MCP management has its own settings surface, not the extensions tab', async () => {
     $('navMcp').click(); await tick();

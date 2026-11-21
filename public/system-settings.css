@@ -1,0 +1,74 @@
+/* Composition only; settings rows, switches and actions use shared primitives. */
+.settings-detail > .settings-detail-card.system-settings-card {
+  max-width: 760px;
+}
+
+.system-heading {
+  margin-bottom: var(--ui-space-5);
+}
+
+.system-heading h2 {
+  margin: 0 0 var(--ui-space-2);
+  color: var(--ds-text-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
+}
+
+.system-heading p {
+  margin: 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+}
+
+.system-path-detail {
+  display: grid;
+  gap: var(--ui-space-1);
+  overflow-wrap: anywhere;
+}
+
+.system-path {
+  font-family: var(--font-mono);
+  color: var(--ds-text-primary);
+  user-select: text;
+}
+
+.system-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+
+.system-status {
+  margin: var(--ui-space-2) 0 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.system-network-field {
+  width: 100%;
+  min-width: 0;
+  max-width: 22rem;
+  box-sizing: border-box;
+}
+textarea.system-network-field { resize: vertical; }
+.system-network-custom[hidden] { display: none; }
+
+.system-status:empty { display: none; }
+.system-status.is-error { color: var(--ui-danger); }
+
+/* Allow narrow layouts and large text without clipping the last row or path. */
+.system-settings-card::after {
+  content: '';
+  display: block;
+  height: var(--ui-space-5);
+}
+
+@media (max-width: 900px) {
+  .settings-detail:has(> .system-settings-card) {
+    padding-inline: var(--ui-space-4);
+  }
+}

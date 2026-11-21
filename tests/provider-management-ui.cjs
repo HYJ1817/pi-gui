@@ -289,6 +289,18 @@ test('clone strips credentials and always uses a new provider id', async () => {
   assert.ok(s.validateDraft(draft).errors.piRegistrationReference);
 });
 
+test('the local registration reference field rejects HTTP and preserves HTTPS loopback compatibility', async () => {
+  const s = await import('../public/provider-management/state.js');
+  const snapshot = clone(fixture.live.snapshot);
+  const draft = s.draftFromClone(snapshot.services[0], snapshot, 'local-registration');
+  draft.mode = 'create';
+  draft.piRegistrationReference = '$FIXTURE_KEY';
+  draft.connection.baseUrl = 'http://localhost:11434/v1';
+  assert.match(s.validateDraft(draft).errors.piRegistrationReference, /HTTP/u);
+  draft.connection.baseUrl = 'https://localhost:11434/v1';
+  assert.equal(s.validateDraft(draft).errors.piRegistrationReference, undefined);
+});
+
 test('inherited selection uses modelOrder as ordering hint, not as the selected set', async () => {
   const s = await import('../public/provider-management/state.js');
   const snapshot = clone(fixture.live.snapshot);
@@ -933,6 +945,10 @@ test('raw key in the env field is blocked before any write', async () => {
   assert.equal(calls.drafts.length, 0, 'must not send draft with invalid env reference');
   assert.equal(calls.commits.length, 0);
   assert.ok(card.querySelector('.pm-status-banner').textContent.includes('环境变量引用'));
+  const retry = card.querySelector('.pm-dialog-actions .pm-primary');
+  assert.equal(retry.textContent, '保存服务');
+  assert.equal(retry.disabled, false);
+  assert.equal(card.hasAttribute('aria-busy'), false);
   assert.equal(card.querySelectorAll('input[type=password]').length, 0);
 });
 

@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseMcpServers } from './mcp-native.js';
+import mcpEndpoints from '../lib/mcp-endpoint-permission.cjs';
 
 const MAX_CONFIG_BYTES = 512 * 1024;
 const MAX_BACKUPS = 5;
@@ -313,11 +314,15 @@ export function queryLooksSensitive(u) {
   return u.pathname.split('/').some((part) => valuesLikeSecret(part));
 }
 
+function urlLooksSensitive(u) {
+  return Boolean(u.username || u.password) || queryLooksSensitive(u);
+}
+
 function inspectUrl(value) {
   if (typeof value !== 'string') return { full: null, preview: null, sensitive: false };
   try {
     const u = new URL(value);
-    const sensitive = Boolean(u.username || u.password) || queryLooksSensitive(u);
+    const sensitive = urlLooksSensitive(u);
     const preview = sensitive ? u.origin : `${u.origin}${u.pathname}`;
     return { full: sensitive ? null : value, preview, sensitive };
   } catch {
@@ -449,9 +454,9 @@ function normalizeInput(input, { scope, existingEntry = null } = {}) {
     if (!envResult.ok) return envResult;
     if (input.env !== undefined) config.env = envResult.record;
   } else {
-    /* 含凭据的 URL 不会回填到表单（详情接口只给 origin 预览）。此时前端
-     * 用 keepUrl 表示“这次不改地址”；服务端从原条目取回，不重新做敏感
-     * 检查（值本来就是用户配置里已有的），但仍校验可解析与协议。 */
+    /* 含凭据的 URL 不会回填到表单（详情接口只给 origin 预览）。keepUrl
+     * 从原条目保留地址，不按新输入拒绝历史 HTTPS 配置；最终的本地端点
+     * 许可仍会做敏感检查，不会给受保护地址签发确认。 */
     const keepUrl = input.keepUrl === true && input.url === undefined;
     if (keepUrl) {
       const kept = existingEntry && typeof existingEntry.url === 'string' ? existingEntry.url : '';
@@ -639,7 +644,9 @@ export function createMcpConfigStore({
   env = process.env,
   readTrust = null,
   now = () => Date.now(),
+  networkPolicy = () => ({ relaxed: false }),
 } = {}) {
+  const endpointPermission = mcpEndpoints.createMcpEndpointPermission({ networkPolicy, urlLooksSensitive, now });
   function cwd() {
     const v = runtime && typeof runtime.getCurrentCwd === 'function' ? runtime.getCurrentCwd() : null;
     return typeof v === 'string' && v ? v : null;
@@ -964,6 +971,9 @@ export function createMcpConfigStore({
       }
       const parsed = validateAgainstParser(name, normalized.config, scope);
       if (!parsed.ok) return parsed;
+      const endpointError = endpointPermission({ config: normalized.config, scope, name, file,
+        revision: state.revision, authorization: input.endpointAuthorization });
+      if (endpointError) return endpointError;
       /* 跨文件 namespace 冲突：Pi 读取项目文件时会把全局已接受的名字
        * 作为累积集合。这里只对**本次写入的条目**做这项检查，避免让一条
        * 历史遗留的冲突条目阻塞其它无关编辑。 */
@@ -1185,6 +1195,10 @@ export function createMcpConfigStore({
       }
       const parsed = validateAgainstParser(name, normalized.config, scope);
       if (!parsed.ok) return parsed;
+      // Remote catalog/import content cannot inherit the manual editor's grant.
+      if (endpointPermission({ config: normalized.config, scope, name, file, revision: state.revision })) {
+        return resultError('endpoint-policy', '导入和市场内容不能授权本地端点；请核对目标后在 MCP 配置中手动添加。', 'url');
+      }
       if (scope === 'project') {
         const cross = parseMcpServers(
           { mcpServers: { [name]: normalized.config } },

@@ -20,6 +20,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { packager } from '@electron/packager';
+import * as esbuild from 'esbuild';
 // 删目录 / 算体积 / 拷文件这套东西安装程序脚本也要用，统一放 scripts/util.mjs
 import { sizeOf, mb, copyInto, removePaths, clearDir, COPYRIGHT } from './util.mjs';
 import { stageNodePty } from './node-pty-package.mjs';
@@ -85,15 +86,21 @@ fs.writeFileSync(
 for (const f of fs.readdirSync(path.join(ROOT, 'electron')).filter((n) => n.endsWith('.cjs') || n === 'update-helper.ps1')) {
   fs.copyFileSync(path.join(ROOT, 'electron', f), path.join(STAGE, f));
 }
+fs.copyFileSync(ICON, path.join(STAGE, 'icon.ico')); // Native Tray uses the same artwork as the exe.
 fs.copyFileSync(serverCjs, path.join(STAGE, 'server.cjs'));
 fs.mkdirSync(path.join(STAGE, 'private'), { recursive: true });
 fs.copyFileSync(credentialWorker, path.join(STAGE, 'private/provider-credentials.cjs'));
 /* 主进程日志核心与后端共用同一份实现；打包后平铺在 resources/app/ 下，
  * 与 electron/logging.cjs 的候选路径一致。 */
-for (const f of ['log-core.cjs', 'log-contract.cjs', 'zip.cjs', 'market-network-policy.cjs', 'process-identity.cjs']) {
+for (const f of ['log-core.cjs', 'log-contract.cjs', 'zip.cjs', 'market-network-policy.cjs', 'system-network-policy.cjs', 'process-identity.cjs', 'execution-timeline-schema.cjs']) {
   fs.copyFileSync(path.join(ROOT, 'lib', f), path.join(STAGE, f));
 }
 fs.copyFileSync(path.join(BUILD, 'asset-manifest.json'), path.join(STAGE, 'asset-manifest.json'));
+// Main's cold-migration schema is generated from the store's single ESM
+// authority. A packaged app must not depend on the development source tree.
+const metadataBundle = esbuild.buildSync({ entryPoints: [path.join(ROOT, 'lib/provider-management-metadata.mjs')],
+  bundle: true, platform: 'node', format: 'cjs', target: 'node22', write: false });
+fs.writeFileSync(path.join(STAGE, 'provider-management-metadata.cjs'), metadataBundle.outputFiles[0].contents);
 
 /* xterm is served as browser-native ESM from public/vendor/xterm. Refresh the
  * vendor copy before staging so a package upgrade cannot ship a stale parser. */

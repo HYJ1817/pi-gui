@@ -10,6 +10,7 @@
  * 重授权状态机与磁盘持久化由 P3 接线。P2 不持久化任何 consentId。
  */
 import { randomUUID } from 'node:crypto';
+import localEndpoints from '../lib/local-endpoint-policy.cjs';
 import { classifyAddress, parseTarget, planCandidates, planScopedCandidates } from './provider-network.js';
 import { isOpaqueId, isProviderId, validateConnection } from '../public/provider-management/contract.js';
 
@@ -19,7 +20,8 @@ const DEFAULT_TTL_MS = 15 * 60_000;
 
 const rememberKey = (id, target) => `${id}\n${target.protocol}\n${target.host}\n${target.port}\n${target.basePath}`;
 
-export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date.now, strict = false, identityKey = () => null } = {}) {
+export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date.now, strict = false,
+  identityKey = () => null, networkPolicy = () => ({ relaxed: false, controlPorts: [7788] }) } = {}) {
   const active = new Map();
   const remembered = new Map();
 
@@ -43,12 +45,22 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
     if (!credentialSource) return { ok: false, code: 'invalid_request', message: '请求字段无效。' };
     const credentialAttached = credentialSource !== 'none';
     const loopback = request.loopback === true;
-    if (loopback && credentialAttached) return { ok: false, code: 'policy_rejected', message: '该目标不允许携带凭据或不在已授权的路径策略内。' };
+    const policy = networkPolicy();
+    const controlPorts = Object.freeze([...new Set([7788, ...(policy?.controlPorts || [])])]);
+    const endpoint = localEndpoints.endpoint(connection.baseUrl);
+    const localEndpoint = request.localEndpoint === true;
+    if (localEndpoint && (policy?.relaxed !== true || credentialAttached || !localEndpoints.eligible(endpoint))) {
+      return { ok: false, code: 'policy_rejected' };
+    }
+    if ((loopback && credentialAttached) || endpoint && localEndpoints.protectedLocal(endpoint,
+      [endpoint.host === 'localhost' ? '127.0.0.1' : endpoint.host], controlPorts)) {
+      return { ok: false, code: 'policy_rejected', message: '该目标不允许携带凭据或不在已授权的路径策略内。' };
+    }
     if (strict && (request.api !== connection.api || !isOpaqueId(request.draftId) || !isProviderId(request.providerId) ||
         (credentialAttached ? !isOpaqueId(request.credentialRevision) : request.credentialRevision != null) ||
         (['staged', 'stored'].includes(credentialSource) && !isOpaqueId(request.workerEpoch)) ||
         (loopback && !target.isLoopbackName && classifyAddress(target.host) !== 'loopback') ||
-        (target.protocol !== 'https' && !loopback))) return { ok: false, code: 'policy_rejected' };
+        (target.protocol !== 'https' && !loopback && !localEndpoint))) return { ok: false, code: 'policy_rejected' };
     const candidatePaths = (strict ? planScopedCandidates(connection) : planCandidates(connection, request.api)).slice(0, 8);
     if (!candidatePaths.length) return { ok: false, code: 'invalid_request', message: '请求字段无效。' };
     if (strict) revokeDraft(request.draftId);
@@ -61,7 +73,7 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
       credentialRevision: request.credentialRevision ?? null, expires, rememberTarget: request.rememberTarget === true,
       workerEpoch: request.workerEpoch ?? null,
       launchIdentity: identityKey(),
-      scoped: strict,
+      scoped: strict, localEndpoint, endpointGeneration: localEndpoint ? policy?.generation ?? 0 : null, controlPorts,
     };
     const controller = new AbortController();
     const timer = setTimeout(() => revoke(consentId), ttlMs);
@@ -72,6 +84,7 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
       remembered.set(rememberKey(request.providerId, target), {
         consentId, providerId: request.providerId, api: request.api, target, credentialSource,
         credentialRevision: record.credentialRevision, createdAt: now(),
+        localEndpoint, endpointGeneration: record.endpointGeneration,
       });
     }
     return { ok: true, consentId, expiresAt: expires,
@@ -83,7 +96,11 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
     if (!isOpaqueId(consentId)) return null;
     const record = active.get(consentId)?.record;
     if (!record) return null;
-    if (record.expires <= at() || record.launchIdentity !== identityKey()) { revoke(consentId); return null; }
+    const policy = networkPolicy();
+    if (record.expires <= at() || record.launchIdentity !== identityKey() ||
+        record.localEndpoint && (policy?.relaxed !== true || record.endpointGeneration !== (policy?.generation ?? 0))) {
+      revokeAndForget(consentId); return null;
+    }
     return record;
   }
 
@@ -105,6 +122,13 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
     const key = record ? rememberKey(record.providerId, record.target) : [...remembered].find(([, item]) => item.consentId === consentId)?.[0];
     const forgotten = key && remembered.get(key)?.consentId === consentId ? remembered.delete(key) : false;
     return revoke(consentId) || forgotten;
+  }
+
+  function revokeLocalEndpoints() {
+    let removed = 0;
+    for (const [id, { record }] of active) if (record.localEndpoint && revokeAndForget(id)) removed++;
+    for (const [key, record] of remembered) if (record.localEndpoint) remembered.delete(key);
+    return removed;
   }
 
   function forDraft(draftId) {
@@ -135,6 +159,11 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
     const record = remembered.get(rememberKey(providerId, target));
     if (!record || record.api !== api || record.credentialSource !== credentialSource ||
         (record.credentialRevision ?? null) !== (credentialRevision ?? null)) return null;
+    const policy = networkPolicy();
+    if (record.localEndpoint && (policy?.relaxed !== true || record.endpointGeneration !== (policy?.generation ?? 0))) {
+      remembered.delete(rememberKey(providerId, target));
+      return null;
+    }
     return { ...record, remembered: true };
   }
 
@@ -147,6 +176,6 @@ export function createDiscoveryConsentStore({ ttlMs = DEFAULT_TTL_MS, now = Date
     remembered.clear();
   }
 
-  return { issue, get, forDraft, signalFor, revoke, revokeAndForget, revokeDraft, revokeDraftConnection, matchRemembered, forgetDraft, dispose,
+  return { issue, get, forDraft, signalFor, revoke, revokeAndForget, revokeLocalEndpoints, revokeDraft, revokeDraftConnection, matchRemembered, forgetDraft, dispose,
     get size() { prune(); return active.size; } };
 }

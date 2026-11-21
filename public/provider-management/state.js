@@ -472,8 +472,9 @@ export function validateDraft(draft) {
     else if (effectiveAuthMode(draft) !== 'none') errors.piRegistrationReference = '本机注册引用只用于无凭据的本地服务';
     else {
       try {
-        const host = new URL(String(draft.connection?.baseUrl || '').trim()).hostname;
-        if (!['127.0.0.1', 'localhost', '[::1]'].includes(host)) errors.piRegistrationReference = '本机注册引用只支持本机端点';
+        const { hostname, protocol } = new URL(String(draft.connection?.baseUrl || '').trim());
+        if (protocol === 'http:') errors.piRegistrationReference = 'HTTP 端点不得使用本机注册引用，请清空此字段';
+        else if (!['127.0.0.1', 'localhost', '[::1]'].includes(hostname)) errors.piRegistrationReference = '本机注册引用只支持本机端点';
       } catch { errors.piRegistrationReference = '请先填写有效的 Base URL'; }
     }
   }

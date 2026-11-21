@@ -152,7 +152,14 @@ import { createUploads } from './server/uploads.js';
 import { probeOccupiedPort } from './server/port-owner.js';
 import { json, readRawBody } from './server/http-utils.js';
 import { resolveDataDir, isSeaRuntime, isPiGuiSourceRepo, getProtectedRoots } from './server/data-dir.js';
+import { createSystemStorage } from './server/system-storage.js';
+import { startSystemNetwork } from './server/system-network-agent.js';
+import systemNetworkPolicy from './lib/system-network-policy.cjs';
 
+let providerDiscoveryConsents = null;
+const systemNetworkStartup = startSystemNetwork(process.env, {
+  onEndpointPolicyChange: () => providerDiscoveryConsents?.revokeLocalEndpoints(),
+});
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 7788);
 const PI_BIN = process.env.PI_BIN || 'pi';
@@ -736,7 +743,11 @@ function captureProviderLaunch({ cwd, agentDir, args }, launch, entry) {
   if (path.relative(path.dirname(MODELS_JSON), agent)) return null;
   return providerConfigSync.capture({ identity: launch.identityKey(), version: entry.version, agent });
 }
-const providerDiscoveryConsents = createDiscoveryConsentStore({ strict: true, identityKey: piLaunch.identityKey });
+const endpointNetworkPolicy = () => ({ relaxed: systemNetworkStartup?.relaxed === true,
+  generation: systemNetworkStartup?.endpointGeneration,
+  controlPorts: [PORT, ...(systemNetworkStartup?.controlPorts || [])] });
+providerDiscoveryConsents = createDiscoveryConsentStore({ strict: true, identityKey: piLaunch.identityKey,
+  networkPolicy: endpointNetworkPolicy });
 const storedDiscoveryTarget = draft => {
   if (!draft || draft.authMode !== 'pi-credential') return false;
   try {
@@ -927,14 +938,19 @@ const mcpConfigStore = createMcpConfigStore({
   runtime,
   env: process.env,
   readTrust: async () => (await skills.readIndex()).trust,
+  networkPolicy: endpointNetworkPolicy,
 });
 /* 只有 Electron 直属子进程才有这条 IPC 通道；网页版 / SEA 独立运行时为 null，
  * 市场网络层会据此退回「没有可信代理栈」的 fail-closed 行为。 */
 const marketNetwork = createParentMarketNetwork();
+// The desktop market is governed by the Main bridge, not the environment
+// projection for external Pi/npm/Git clients. Standalone behavior is unchanged.
+const desktopMarketPolicy = desktopEnvironment && marketNetwork && typeof systemNetworkStartup?.relaxed === 'boolean';
 const mcpMarket = createMcpMarket({
   dataDir: DATA_DIR,
   configStore: mcpConfigStore,
-  env: process.env,
+  env: desktopMarketPolicy ? { ...systemNetworkPolicy.withoutProxyEnvironment(process.env),
+    PI_GUI_NETWORK_RELAXED: systemNetworkStartup?.relaxed ? '1' : '0' } : process.env,
   network: marketNetwork,
 });
 /* 桌面版主进程会打开这个开关：启动后就在后台预取完整 Registry 目录，
@@ -1660,6 +1676,8 @@ const messageEditRoutes = createMessageEditRoutes({
   },
 });
 const route = createRouter({
+  systemStorage: createSystemStorage({ dataDir: DATA_DIR, piAgentDir: path.dirname(MODELS_JSON), env: process.env,
+    executionMode: process.env.PI_GUI_DESKTOP === '1' ? 'electron' : runningInSea ? 'portable-sea' : 'source-web' }),
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
     /* 只有 Classic 生成需要 capture 就绪检查（与 authority 同锁，必须前置）。
      * Runtime 生成（带已验证会话头）复用 registry.command 的既有 admission、
@@ -1793,6 +1811,7 @@ const updateMaintenance = createAppUpdateMaintenance({
     || candidateRuns.busy()
     || toolScheduler.busy() || mutationAdmission.busy() || environmentInstall.busy()
     || [...processManagers].some(manager => manager.snapshot().activeCount || manager.snapshot().cleanupPending),
+  storageBusy: () => terminal.maintenanceBusy(),
   closeSessions: () => runtimeRegistry.closeAll(),
   pause: () => rpc.pauseForMaintenance('app-update', { graceful: true }),
   resume: () => rpc.resumeFromMaintenance(),
@@ -1825,12 +1844,15 @@ if (desktopEnvironment && process.send) process.on('message', async message => {
 // Only the Electron parent owns this channel. No token, path or command payload.
 if (process.send) process.on('message', async message => {
   if (!message || message.type !== 'app-update' || !Number.isSafeInteger(message.id)) return;
+  const owner = message.id < 0 ? 'storage' : 'update';
   let result={ok:false,code:'invalid_action'};
   try {
-    if(message.action==='inspect') result=updateMaintenance.inspect();
-    if(message.action==='prepare') result=await updateMaintenance.prepare();
-    if(message.action==='release') result=await updateMaintenance.release();
-    if(message.action==='shutdown' && updateMaintenance.locked()) {
+    if (!runtime.isShuttingDown()) {
+      if(message.action==='inspect') result=updateMaintenance.inspect(owner);
+      if(message.action==='prepare') result=await updateMaintenance.prepare(owner);
+      if(message.action==='release') result=await updateMaintenance.release(owner);
+    }
+    if(message.action==='shutdown' && updateMaintenance.owns(owner) && !runtime.isShuttingDown()) {
       process.send?.({type:'app-update',id:message.id,ok:true});
       await shutdown();return;
     }

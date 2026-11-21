@@ -663,7 +663,22 @@ export function openProviderDialog({
     }
     errorState = null;
     renderStatus();
-    await discovery.authorize({ rememberTarget: false });
+    let target;
+    try { target = new URL(draft.connection.baseUrl); } catch { /* Contract validation reports invalid targets. */ }
+    if (target && (target.username || target.password || target.search || target.hash)) {
+      errorState = { title: '目标地址无效', message: '请移除 URL 中的用户名、密码、查询参数或片段，再授权当前端点。' };
+      renderStatus(); return;
+    }
+    const localTarget = target && (target.protocol === 'http:' || target.hostname === 'localhost' ||
+      /^(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|\[::1\]|\[f[cd])/iu.test(target.hostname));
+    if (localTarget) {
+      const epoch = lifecycleEpoch, signature = targetSignature;
+      const confirmed = await confirmModal({ title: '授权此模型目录端点',
+        message: `只为当前供应商读取 ${target.href} 的模型目录，不发送对话或密钥。需要启用网络宽松模式；其他服务、重定向及 Pi 实际推理不继承此授权。`,
+        okText: '授权只读目录' });
+      if (!confirmed || disposed || lifecycleEpoch !== epoch || targetSignature !== signature) return;
+    }
+    await discovery.authorize({ rememberTarget: false, allowLocalEndpoint: Boolean(localTarget) });
   }
 
   async function testConnection() {
@@ -1173,7 +1188,7 @@ export function openProviderDialog({
 
   function validationFailure(validation) {
     currentErrors = validation;
-    saveButton.disabled = false;
+    refreshHeader();
     if (panes) panes.setErrors(validation.modelErrors);
     rebuildConnection();
     const modelCount = Object.keys(validation.modelErrors || {}).length;

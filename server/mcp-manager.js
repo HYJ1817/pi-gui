@@ -251,6 +251,7 @@ export function createMcpManager({ runtime, mcpNative, configStore, market, impo
         exposure: body.exposure,
         toolExposure: body.toolExposure,
         enabled: body.enabled,
+        endpointAuthorization: body.endpointAuthorization,
       });
       if (result.ok) mcpNative?.reset?.();
     } else if (action === 'delete') {

@@ -11,6 +11,8 @@
 import { Worker } from 'node:worker_threads';
 import fs from 'node:fs';
 import { resolveAuthSdk } from './provider-auth-sdk.js';
+import { systemWorkerProxy, systemWorkerProxyPrelude } from './system-network-agent.js';
+import { scrubInternalEnv } from './child-env.js';
 
 const WORKER_SOURCE = String.raw`
 const { parentPort, workerData } = require('node:worker_threads');
@@ -148,12 +150,13 @@ export function createSessionTitleSdk({
     if (!resolved) return false;
     capability = { supported: null, reason: null, piVersion: resolved.version };
     const entry = { ...resolved, ...(authPath ? { authPath } : {}), ...(modelsPath ? { modelsPath } : {}) };
-    const childEnv = { ...env };
-    /* Renderer / Electron 的令牌不能出现在 SDK 子线程里。 */
-    delete childEnv.PI_GUI_TOKEN;
+    const childEnv = scrubInternalEnv(env);
+    const systemProxy = systemWorkerProxy(env);
+    const data = systemProxy ? { ...entry, systemProxy } : entry;
+    const source = systemWorkerProxyPrelude(systemProxy) + WORKER_SOURCE;
     worker = workerFactory
-      ? workerFactory(WORKER_SOURCE, entry, childEnv)
-      : new Worker(WORKER_SOURCE, { eval: true, workerData: entry, env: childEnv, stdout: true, stderr: true });
+      ? workerFactory(source, data, childEnv)
+      : new Worker(source, { eval: true, workerData: data, env: childEnv, stdout: true, stderr: true });
     workerKey = key;
     worker.stdout?.resume();
     worker.stderr?.resume();

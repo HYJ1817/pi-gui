@@ -7,7 +7,8 @@ import { field, h, icon } from './dom.js';
 
 function isLoopback(value) {
   try {
-    return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(String(value || '')).hostname);
+    const { protocol, hostname } = new URL(String(value || ''));
+    return protocol === 'https:' && ['127.0.0.1', 'localhost', '[::1]'].includes(hostname);
   } catch { return false; }
 }
 
@@ -54,8 +55,8 @@ export function renderAdvanced({ draft, snapshot, legacy = false, errors = {}, o
     : draft.mode === 'clone'
       ? '复制不会携带本机注册引用；保存后可在新服务的凭据配置中重新设置。'
       : piApplicable
-        ? '仅本机端点可用；只在没有其他凭据时作为 Pi 的注册引用，不会写入密钥。'
-        : '本机注册引用只用于本机端点（127.0.0.1 / localhost / [::1]）。';
+        ? '仅 HTTPS 本机端点可用；引用由 Pi 在运行时解析，不写入密钥原文。'
+        : '本机注册引用只用于 HTTPS 本机端点；HTTP 端点须清空此字段。';
 
   const compatibility = draft.compatibility
     ? `兼容性：${draft.compatibility === 'unknown' ? '未知（不推断为可用）' : String(draft.compatibility)}`

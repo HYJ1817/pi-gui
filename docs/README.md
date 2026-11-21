@@ -34,6 +34,7 @@
 | AI 会话标题（自动 / 手动） | [会话：AI 自动标题](sessions.md#ai-自动标题与手动标题的优先级) | [供应商认证](provider-auth.md)、[架构](architecture.md)、[验收记录](ai-session-title-acceptance.md) |
 | 历史消息编辑 / 重新发送 / 重新生成 | [会话界面：历史消息编辑](conversation-ui.md#历史消息编辑与重新生成)、[验收记录](message-edit-resend-acceptance.md) | [会话](sessions.md)、[安全](security.md)、[测试政策](testing.md#测试执行政策) |
 | Browser 与 Electron | [Browser](browser.md)、[Agent Control](agent-browser.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)、[构建](development.md) |
+| 系统设置：电源、托盘、网络、数据与缓存 | [P2 最终定向修复](system-settings-p2-final-fix.md)、[P2 实现与安全边界](system-settings-p2-acceptance.md)、[P1 + P2 联合验收](system-settings-final-acceptance.md) | [P1 历史验收](system-settings-p1-acceptance.md)、[真实截图与最小证据](ui/system-settings-p2-evidence/README.md)、[全局 UI/UX 设计规范](ui/design-system.md)、[测试政策](testing.md#测试执行政策) |
 | 安全、路径及权限 | [安全](security.md)、[架构](architecture.md) | [审批](approvals.md)、相关功能的写入/恢复设计；历史 P33 材料见下文 |
 | CI 与测试 | [测试政策与分层](testing.md)、[开发构建](development.md) | 当前 `package.json`、`scripts/test-group-plan.mjs`、`scripts/run-test-group.mjs` 和相关 workflow/测试；不从旧验收报告抄测试清单 |
 | 安装、更新及发布 | [发版](releasing.md)、[更新](updates.md)、[应用内更新](windows-in-app-update.md)、[首次环境安装](environment-setup.md) | [构建](development.md)、[签名](code-signing.md)、[兼容升级](upgrade-playbook.md)、[安全](security.md)、[应用更新偏好验收](in-app-update-preferences-acceptance.md) |

@@ -21,13 +21,14 @@ function startUpdateHelper(powershell,helper,request) {
   child.unref();return child;
 }
 
-function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,quit,dialog,shell,
+function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,quit,dialog,shell,fetchImpl,
   inspectDesktop=()=>({ok:true,browsers:0}),prepareDesktop=async()=>{},resumeBackend=async()=>{}}) {
   const mode=process.platform==='win32'?detectMode({packaged:app.isPackaged,exe:process.execPath}):'development';
   const directory=path.join(app.getPath('temp'),'pi-gui-updates');
   const currentVersion=app.getVersion();
   let seq=0,runDir=null,completion=null,updater=null,confirming=false,helperDone=null,helperReady=false,recovering=false;
   let store=null,manager=null,coordinator=null,suppressAutoInstall=false,systemSessionEnding=false;
+  let maintenanceLease=null;
   async function waitForHelperRelease() {
     if(!helperReady){await helperDone;return;}
     for(;;) {
@@ -52,7 +53,7 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
       child.send({type:'app-update',id,action},error=>{if(error)finish({ok:false,code:'backend_unavailable'});});
     });
   }
-  const options={directory,version:currentVersion,mode,readUpdate,
+  const options={directory,version:currentVersion,mode,readUpdate,...(fetchImpl?{fetchImpl}:{}),
     prepare:async()=>{
       const status=inspectDesktop();if(!status.ok)return status;
       const result=await backend('prepare');if(!result.ok)return result;
@@ -127,8 +128,10 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
     },
   };
   const allowed=event=>event.sender===getWindow()?.webContents&&event.senderFrame===event.sender.mainFrame&&new URL(event.senderFrame.url).origin===origin;
-  const guard=fn=>async(event,...args)=>{
-    try {if(!allowed(event))return {ok:false,code:'forbidden'};return await fn(...args);}
+  const guard=(fn,readOnly=false)=>async(event,...args)=>{
+    try {if(!allowed(event))return {ok:false,code:'forbidden'};
+      if(maintenanceLease&&!readOnly)return {ok:false,code:'storage_maintenance',error:'正在准备存储维护，请稍后重试。'};
+      return await fn(...args);}
     catch{return {ok:false,error:'更新操作失败，请重试或打开 Release 页面手动安装。'};}
   };
   function fallbackSnapshot() {
@@ -170,7 +173,7 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
       try {
         store=createPreferenceStore({file:path.join(app.getPath('userData'),'app-update-preferences.json')});
         manager=createAppUpdateManager({updater,store,mode,currentVersion,platform:process.platform,packaged:app.isPackaged,
-          readUpdate, publish, notify, isBlocked:()=>completion?.phase==='waiting'});
+          readUpdate, publish, notify, isBlocked:()=>completion?.phase==='waiting'||Boolean(maintenanceLease)});
       } catch {
         store=null;manager=null;
       }
@@ -180,9 +183,9 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
         preflight:autoPreflight,
         quit:()=>quit(),
         authorize:()=>Boolean(manager&&manager.autoInstallStillAllowed()
-          &&!systemSessionEnding&&!suppressAutoInstall),
+          &&!systemSessionEnding&&!suppressAutoInstall&&!maintenanceLease),
         isRecovering:()=>recovering,
-        isSuppressed:()=>suppressAutoInstall,
+        isSuppressed:()=>suppressAutoInstall||Boolean(maintenanceLease),
         isSystemShutdown:()=>systemSessionEnding,
       });
       // Startup never downloads or launches an installer. Restored packages are
@@ -197,7 +200,7 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
       updater=null;manager=null;coordinator=null;return null;
     }
   }
-  ipcMain.handle('pi-gui:app-update-state',guard(()=>snapshot()));
+  ipcMain.handle('pi-gui:app-update-state',guard(()=>snapshot(),true));
   const pending=()=>completion?.phase==='waiting'?{ok:false,code:'update_pending',error:'更新助手仍在运行，请等待更新完成后再试。'}:null;
   ipcMain.handle('pi-gui:app-update-check',guard(()=>{
     if(!initialize()||!manager)return {ok:false,code:'unavailable',error:'应用内更新服务暂不可用。'};
@@ -279,6 +282,15 @@ function installAppUpdate({app,ipcMain,origin,getWindow,getServer,readUpdate,qui
     beforeQuit:event=>coordinator?coordinator.beforeQuit(event):(()=>{if(!recovering)return false;event?.preventDefault?.();return true;})(),
     markSystemSessionEnding:()=>{systemSessionEnding=true;suppressAutoInstall=true;},
     snapshot,
+    // Main-only lease: no installer, download or update preflight may enter
+    // while a cold storage restart is being prepared. Ready packages survive.
+    reserveMaintenance:()=>{
+      if(maintenanceLease||systemSessionEnding||recovering||confirming||completion?.phase==='waiting'
+        ||manager?.maintenanceBusy?.()||(coordinator&&!coordinator.canQuit())
+        ||['checking','downloading','verifying','preparing','installing'].includes(updater?.state().phase))return null;
+      maintenanceLease=Symbol('storage');return maintenanceLease;
+    },
+    releaseMaintenance:lease=>{if(maintenanceLease===lease)maintenanceLease=null;},
     manager:()=>manager,
   };
 }

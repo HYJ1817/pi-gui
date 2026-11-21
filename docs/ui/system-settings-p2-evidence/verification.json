@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "beforeHead": "9d1fd4e76b6cb2fb412a4a447b2ba6043c58e15e",
+  "codeState": "beforeHead plus the pre-remediation P2 product/test workspace; does not cover subsequent review fixes",
+  "evidenceStatus": "historical-baseline-and-first-remediation-with-finalFixes-current-results-appended",
+  "qualification": "packaged-bytes-observation-bootstrap-normal-sandbox",
+  "version": "0.34.0",
+  "environment": { "os": "Windows 11 10.0.26200", "node": "24.22.1", "npm": "11.19.1", "electron": "44.4.3", "embeddedNode": "24.21.0" },
+  "sandbox": { "sandbox": true, "contextIsolation": true, "nodeIntegration": false, "remoteDebugging": false },
+  "artifact": {
+    "path": "dist-app/Pi GUI-win32-x64 (historical pre-remediation artifact; see revalidation.rebuiltArtifact)",
+    "verifiedModuleAndResourceCount": 53,
+    "bootstrapManifestOverrideInTempCopyOnly": true,
+    "executableBytes": 246324736,
+    "executableSha256": "0b57af703a66e11a07e51645847cde933c48954f7ca6c83326b5a7499af63b89",
+    "mainSha256": "3c14c38d49efd9b701f37c2c51cd1a54f2d0347c6945c95a2fc86d70b6eac8e2",
+    "backendSha256": "c7e41c1bc31a43642d9c4f54df0ab83ba34ac48571b9b1d6312481469aa573ae",
+    "preloadSha256": "8a7f8b94cce74e0c4334ddc7cc1e8aeb53ac5a95c28799c244f98802efd2b462",
+    "iconSha256": "131e06d54b20b26cc61efea22bef8a0371f2956d809f914ecb0a6a8f7f96a484",
+    "buildExitCode": 0,
+    "resourceCount": 416,
+    "packageApproximateMB": 334.5,
+    "signedBuildQualification": false
+  },
+  "p1": {
+    "fixture": "pi-system-packaged-HIG45R",
+    "checks": 120,
+    "launches": 8,
+    "phases": [
+      { "phase": "exercise", "checks": 48, "exit": 0, "observedIdentities": 8, "residual": 0, "powerRemaining": 0, "trayRemaining": 0 },
+      { "phase": "restart-tray-quit", "checks": 5, "exit": 0, "observedIdentities": 19, "residual": 0, "powerRemaining": 0, "trayRemaining": 0 },
+      { "phase": "default-close", "checks": 5, "exit": 0, "observedIdentities": 16, "residual": 0, "powerRemaining": 0, "trayRemaining": 0 },
+      { "phase": "ctrl-q", "checks": 5, "exit": 0, "observedIdentities": 18, "residual": 0, "powerRemaining": 0, "trayRemaining": 0 },
+      { "phase": "session-end", "checks": 7, "exit": 0, "observedIdentities": 15, "residual": 0, "powerRemaining": 0, "trayRemaining": 0 },
+      { "phase": "update-gates", "checks": 8, "exit": 0, "observedIdentities": 19, "residual": 0, "powerRemaining": 0, "trayRemaining": 0 },
+      { "phase": "pending-save-quit", "checks": 7, "exit": 0, "observedIdentities": 18, "residual": 0, "powerRemaining": 0, "trayRemaining": 0 },
+      { "phase": "visual-states", "checks": 35, "exit": 0, "observedIdentities": 8, "residual": 0, "powerRemaining": 0, "trayRemaining": 0 }
+    ],
+    "memoryCache": { "beforeBytes": 480575, "afterBytes": 0, "pointerBeforeBytes": 323, "pointerAfterBytes": 0, "cookiesPreserved": true, "localStoragePreserved": true, "indexedDbPreserved": true }
+  },
+  "p2": {
+    "fixture": "pi-system-packaged-bgyzNS",
+    "checks": 19,
+    "launches": 3,
+    "phases": [
+      { "phase": "network-cache", "checks": 9, "exit": 0, "observedIdentities": 8, "residual": 0 },
+      { "phase": "prepare-migration", "checks": 5, "exit": 0, "observedIdentities": 8, "residual": 0 },
+      { "phase": "verify-migration", "checks": 5, "exit": 0, "observedIdentities": 8, "residual": 0 }
+    ],
+    "diskCache": { "beforeBytes": 6999230, "afterBytes": 837980, "releasedBytes": 6161250, "status": "partial", "diskReleaseConfirmed": true, "noVolumeFreeSpacePromise": true },
+    "migration": { "oldBackendExitedBeforeRelaunchIntent": true, "targetEmptyBeforeColdStart": true, "managedActiveAfterVerification": true, "sourceRetained": true, "fixedNetworkAndBootstrapNotRelocated": true, "attachmentBytes": 262144, "attachmentSha256": "bb30230b4a79b25f8db24b49b7e3b385d8e9b623a74f7be79fcc6e2a9d44fb3e", "realOsRelaunchTested": false }
+  },
+  "ui": {
+    "geometry": [
+      { "theme": "dark", "cssWidth": 1320, "cssHeight": 820, "pixelWidth": 1980, "pixelHeight": 1230, "dpr": 1.5, "overflow": false },
+      { "theme": "dark", "cssWidth": 701, "cssHeight": 602, "pixelWidth": 1052, "pixelHeight": 903, "dpr": 1.5, "overflow": false },
+      { "theme": "light", "cssWidth": 1320, "cssHeight": 820, "pixelWidth": 1980, "pixelHeight": 1230, "dpr": 1.5, "overflow": false },
+      { "theme": "light", "cssWidth": 701, "cssHeight": 602, "pixelWidth": 1052, "pixelHeight": 903, "dpr": 1.5, "overflow": false }
+    ],
+    "shared": { "buttonHeight": 32, "switchHeight": 22, "segmentHeight": 26, "titleFont": "20px", "titleWeight": "600", "switchFont": "13.3333px", "switchRadius": "9999px", "segmentFont": "12.5px", "segmentWeight": "560", "segmentRadius": "8px", "systemEqualsGeneral": true },
+    "input": { "realPointer": true, "tabAndShiftTab": true, "arrowEnterEscape": true, "focusRestoration": true, "fontScale120Percent": true, "narrowEnglishLongLabelFixture": true },
+    "contrastSamples": [
+      { "theme": "dark", "state": "default", "selector": ".system-heading h2", "foreground": [255,255,255], "background": [24,24,24], "ratio": 17.76 },
+      { "theme": "dark", "state": "default", "selector": ".system-heading p", "foreground": [185.25,185.25,185.25], "background": [24,24,24], "ratio": 9.07 },
+      { "theme": "dark", "state": "default", "selector": ".ds-settings-row-label", "foreground": [255,255,255], "background": [32.15,32.15,32.15], "ratio": 16.26 },
+      { "theme": "dark", "state": "default", "selector": ".system-path-detail span", "foreground": [187.71,187.71,187.71], "background": [32.15,32.15,32.15], "ratio": 8.54 },
+      { "theme": "dark", "state": "danger", "selector": "#system-cache-actions .danger", "foreground": [248,113,113], "background": [32.15,32.15,32.15], "ratio": 5.88 },
+      { "theme": "dark", "state": "hover", "selector": "#system-cache-actions button:first-child", "foreground": [255,255,255], "background": [45.26,45.26,45.26], "ratio": 13.72 },
+      { "theme": "dark", "state": "pressed", "selector": "#system-cache-actions button:first-child", "foreground": [255,255,255], "background": [54.87,54.87,54.87], "ratio": 11.93 },
+      { "theme": "dark", "state": "keyboard-focus", "selector": "path-help-button", "foreground": [255,255,255], "background": [32.15,32.15,32.15], "ratio": 16.26 },
+      { "theme": "dark", "state": "error", "selector": "#system-preference-feedback", "foreground": [248,113,113], "background": [24,24,24], "ratio": 6.42 },
+      { "theme": "light", "state": "default", "selector": ".system-heading h2", "foreground": [26,28,31], "background": [255,255,255], "ratio": 17.08 },
+      { "theme": "light", "state": "default", "selector": ".system-heading p", "foreground": [85.27,86.75,88.98], "background": [255,255,255], "ratio": 7.27 },
+      { "theme": "light", "state": "default", "selector": ".ds-settings-row-label", "foreground": [26,28,31], "background": [246.99,246.99,246.99], "ratio": 15.94 },
+      { "theme": "light", "state": "default", "selector": ".system-path-detail span", "foreground": [83.2,84.68,86.9], "background": [246.99,246.99,246.99], "ratio": 7.01 },
+      { "theme": "light", "state": "danger", "selector": "#system-cache-actions .danger", "foreground": [185,28,28], "background": [246.99,246.99,246.99], "ratio": 6.04 },
+      { "theme": "light", "state": "hover", "selector": "#system-cache-actions button:first-child", "foreground": [26,28,31], "background": [235.42,235.42,236.38], "ratio": 14.39 },
+      { "theme": "light", "state": "pressed", "selector": "#system-cache-actions button:first-child", "foreground": [26,28,31], "background": [229.66,229.66,229.66], "ratio": 13.64 },
+      { "theme": "light", "state": "keyboard-focus", "selector": "path-help-button", "foreground": [26,28,31], "background": [246.99,246.99,246.99], "ratio": 15.94 },
+      { "theme": "light", "state": "error", "selector": "#system-preference-feedback", "foreground": [185,28,28], "background": [255,255,255], "ratio": 6.47 }
+    ],
+    "preExistingNonTextIssues": [
+      { "theme": "dark", "state": "shared-switch-off-border", "foreground": [81.09,81.09,81.09], "background": [32.15,32.15,32.15], "ratio": 2.05, "meetsAA": false },
+      { "theme": "light", "state": "shared-switch-off-border", "foreground": [202.59,203.59,203.59], "background": [246.99,246.99,246.99], "ratio": 1.51, "meetsAA": false }
+    ]
+  },
+  "targeted": {
+    "systemSettings": { "task": "b9zm7rkt5", "passed": 165, "skipped": 1, "failed": 0, "exit": 0, "includesRealHttpsRegression": true },
+    "appUpdate": { "task": "b83b8df5h", "suites": 11, "passed": 145, "exit": 0 },
+    "sessionTitle": { "task": "bgovph247", "suites": 5, "passed": 273, "exit": 0 },
+    "credentialDesktop": { "task": "bme9bp75t", "moduleAssertions": 43, "desktopPassed": 50, "exit": 0, "fixture": "pi-cred-desktop-2TwXvW", "privateFreshFixtureDaclOnly": true, "productionQualificationCodeUnchanged": true, "harnessControllerQualificationStubPreExisting": true, "completeProductionQualificationE2e": false, "initialDefaultTempFailureTask": "bnocj3c0r" }
+  },
+  "baselineMainCi": { "sha": "af0432a0bc3b04c717a63ede3cc457e859401833", "runUrl": "https://github.com/HYJ1817/pi-gui/actions/runs/44753076800", "event": "push", "attempt": 1, "status": "completed", "conclusion": "success", "coversP2": false },
+  "revalidation": {
+    "scope": "first-remediation-before-final-PAC-and-updater-fixes; see finalFixes for current results",
+    "sourceElectron": {
+      "p1": { "task": "bxjcgyrk5", "checks": 120, "launches": 8, "exit": 0, "fixture": "pi-system-desktop-HhZbUA" },
+      "p2": { "task": "b5wme7k0j", "checks": 24, "launches": 3, "exit": 0, "fixture": "pi-system-desktop-Ee6N0L",
+        "cacheBeforeDiskBytes": 6999159, "cacheAfterDiskBytes": 837908, "releasedDiskBytes": 6161251, "status": "partial", "diskReleaseConfirmed": true,
+        "migrationIntentArmRequired": true, "confirmedTargetBytes": 262144, "confirmedTargetSha256": "bb30230b4a79b25f8db24b49b7e3b385d8e9b623a74f7be79fcc6e2a9d44fb3e",
+        "migrationModalScreenshots": ["migration-dark-wide.png", "migration-dark-narrow.png", "migration-light-wide.png", "migration-light-narrow.png"],
+        "ambiguousBootstrapCommitTest": "tests/system-storage-p2-crash.cjs:135", "ambiguousCommitRecoveryGateRetained": true }
+    },
+    "packagedElectron": {
+      "p1": { "task": "bxjcgyrk5", "checks": 120, "launches": 8, "exit": 0, "fixture": "pi-system-packaged-V4LblI",
+        "priorRetry": { "task": "bm5a0zfzi", "exit": 0 }, "earlierAttempt": { "task": "bub9sspvn", "exit": 1, "residualCapturedIdentities": 10 } },
+      "p2": { "task": "bghryoqvq", "checks": 24, "launches": 3, "exit": 0, "fixture": "pi-system-packaged-h15ylv",
+        "cacheBeforeDiskBytes": 6999407, "cacheAfterDiskBytes": 837980, "releasedDiskBytes": 6161427, "status": "partial", "diskReleaseConfirmed": true,
+        "migrationTargetBytes": 262144, "migrationTargetSha256": "bb30230b4a79b25f8db24b49b7e3b385d8e9b623a74f7be79fcc6e2a9d44fb3e",
+        "migrationModalScreenshots": ["migration-dark-wide.png", "migration-dark-narrow.png", "migration-light-wide.png", "migration-light-narrow.png"] }
+    },
+    "targeted": { "systemSettings": { "task": "bgo2lhmnn", "passed": 183, "skipped": 1, "failed": 0, "exit": 0 },
+      "appUpdateSuites": 12, "appUpdatePassed": 151, "appUpdateExit": 0,
+      "sessionTitleSuites": 5, "sessionTitlePassed": 273, "sessionTitleExit": 0,
+      "mcpExit": 0, "terminalChecks": 113, "modulesChecks": 121, "canonicalPlanCheckExit": 0, "planLeaves": 297,
+      "stopFixtures": { "task": "bb1zyysd3", "browserStop": 13, "stopBarrier": 17, "exit": 0 },
+      "workspaceAndRollback": { "task": "b6ggp1e53", "worktree": 56, "revertStore": 14, "revertAdmission": 15, "startup": 11, "exit": 0 },
+      "credentialDesktop": { "task": "bme9bp75t", "bridgeAssertions": 43, "desktopChecks": 50, "exit": 0,
+        "fixture": "pi-cred-desktop-2TwXvW", "privateFreshFixtureDaclOnly": true, "completeProductionQualificationE2e": false,
+        "precedingFailure": { "task": "bnocj3c0r", "passed": 2, "executed": 4, "exit": 1, "code": "key_input_unqualified" } } },
+    "rebuiltArtifact": { "buildTask": "b829548pb", "exit": 0, "verifiedModuleAndResourceCount": 54, "resourceCount": 416, "packageApproximateMB": 334.5,
+      "storageMigrationSha256": "7a0aca311d4d82d3535ffb8d743f1d3e114405ac5cae302aa5d2831133b298a6",
+      "executableBytes": 246324736, "executableSha256": "0b57af703a66e11a07e51645847cde933c48954f7ca6c83326b5a7499af63b89",
+      "mainSha256": "e87bbde3e9cad3cd87b8b638de2acb3b4cba892ff1b9556b310eabdb759cfd91",
+      "backendSha256": "947ef4bee3e7c532b6569e492fd202ffbf29b3faeb3a30fc63fdc7a8b1d2af85",
+      "updaterTransportSha256": "edcdb2f0cdc93f14b02c4148878ce4509158e5cb11a7b68e4677385af1286dd3",
+      "signedBuildQualification": false },
+    "archivedScreenshotSha256": {
+      "dark-wide.png": "778d4c80fb877458ac4eab8450593a34f48c0a834ccfeb25871020bf8892b234",
+      "light-narrow.png": "c73b342a0c047e02107b09fd5846654811ee18555a8023ad5262bb03752e82fc",
+      "cache-disk.png": "28e189022eaccb3902a82555c813047a60f14b31a8d9868415ba215bba7176ad",
+      "migration-dark-wide.png": "77648094ce8710d186ccd2b2ebb5c17cac978c8824351f7dac92f1b203e9c4b4",
+      "migration-dark-narrow.png": "27848188bd42a87bfd0ac572bff7475d0f1446c0b64ec33c6342cd1b4ee664f3",
+      "migration-light-wide.png": "cd2316bc0490000fe159d268f02f52e8b9bc0a505c2ce4a0f6cfc05652457606",
+      "migration-light-narrow.png": "ef723accaa5220af476f93c9f054cb489abd3e152f09fe7ebaa3d40059e98c90"
+    }
+  },
+  "finalFixes": {
+    "date": "2026-11-21",
+    "codeState": "tested beforeHead plus P2 workspace bytes, then committed unchanged as productCommit and testCommit; includes PAC public-only compatibility and updater response disposal",
+    "productCommit": "1ab11970db392abf2b2685973eec598e5b94de33",
+    "testCommit": "9cd9c39f0fc42980ebf153c8bd9efa9448f4f975",
+    "beforeFixRegression": { "executed": 6, "passed": 1, "failed": 5, "exit": 1 },
+    "afterFixFocused": { "command": "node --test tests/system-proxy-p2.cjs tests/app-update-fetch.cjs tests/app-update.cjs", "passed": 49, "failed": 0, "exit": 0 },
+    "targeted": {
+      "task": "buc09u7xi",
+      "systemSettings": { "passed": 185, "skipped": 1, "failed": 0, "exit": 0 },
+      "appUpdate": { "suites": 12, "passed": 155, "skipped": 0, "failed": 0, "exit": 0 },
+      "marketNetwork": { "passed": 19, "exit": 0 },
+      "providerNetworkPolicy": { "passed": 40, "exit": 0 },
+      "canonicalPlan": { "leaves": 297, "groups": 5, "coverage": "exact", "exit": 0 },
+      "migrationDoubleIoFailure": { "realStorageMaintenanceIntegration": true, "backendBarrierRetained": true, "updaterLeaseRetained": true, "targetEmpty": true }
+    },
+    "sourceElectron": { "fixture": "pi-system-desktop-sd9kZJ", "checks": 26, "launches": 3, "exit": 0,
+      "observedIdentitiesPerPhase": [8, 8, 8], "residualIdentitiesPerPhase": [0, 0, 0],
+      "cacheBeforeDiskBytes": 6999334, "cacheAfterDiskBytes": 837908, "releasedDiskBytes": 6161426, "status": "partial", "diskReleaseConfirmed": true },
+    "packagedElectron": { "fixture": "pi-system-packaged-Fqc5LH", "checks": 26, "launches": 3, "exit": 0,
+      "observedIdentitiesPerPhase": [8, 8, 8], "residualIdentitiesPerPhase": [0, 0, 0],
+      "cacheBeforeDiskBytes": 6999230, "cacheAfterDiskBytes": 837980, "releasedDiskBytes": 6161250, "status": "partial", "diskReleaseConfirmed": true },
+    "nativeUpdateEarlyRejection": { "sourceAndPackaged": true, "code": "checksum", "phase": "failed", "bodyDestroyed": true,
+      "serverObservedConnectionClosed": true, "cacheFiles": 0, "syntheticLateBodyErrorHandled": true, "realAssetDownloaded": false, "installerExecuted": false },
+    "nativeFixtureInitialFailures": [
+      { "fixture": "pi-system-desktop-lQa3se", "exit": 1, "cause": "missing MIME let Chromium wait for content sniffing; fixture deadline" },
+      { "fixture": "pi-system-desktop-zowC4m", "exit": 1, "cause": "no response before fixture timeout; diagnostic accessed absent body" }
+    ],
+    "rebuiltArtifact": { "buildTask": "bv7vk39hd", "exit": 0, "verifiedModuleAndResourceCount": 54, "resourceCount": 416, "packageApproximateMB": 334.5,
+      "executableBytes": 246324736, "executableSha256": "0b57af703a66e11a07e51645847cde933c48954f7ca6c83326b5a7499af63b89",
+      "mainSha256": "e87bbde3e9cad3cd87b8b638de2acb3b4cba892ff1b9556b310eabdb759cfd91",
+      "backendSha256": "947ef4bee3e7c532b6569e492fd202ffbf29b3faeb3a30fc63fdc7a8b1d2af85",
+      "proxySha256": "db3bf37ecc82e4a568e21a6a4159ab3e55f462d27d1925e66b4bc3c4462c280c",
+      "updaterOwnerSha256": "06e46c878b787d6ecf0063f4ceb54407f301414296bdfc5ef3fa65307dd544df",
+      "updaterTransportSha256": "06e6fead42235811e253cab888ada38c53c5393a3042330509e99b59826ad92b",
+      "storageMigrationSha256": "7a0aca311d4d82d3535ffb8d743f1d3e114405ac5cae302aa5d2831133b298a6",
+      "signedBuildQualification": false },
+    "incrementalIndependentReview": { "modelRequested": "xingchiapi/gpt-6.1-sol", "executedModel": "xingchiapi/gpt-6.1-sol", "status": "completed", "confirmedBlocker": 0, "confirmedImportant": 0, "originalFindingsFixed": 3, "testsRunByReviewer": false, "scope": "two fixes and migration integration only; not full P2 or canonical qualification" },
+    "archivedScreenshotsFromEarlierRun": true,
+    "p1FullRerunAfterTheseTwoTransportFixes": false
+  },
+  "canonical": { "fullLocalRun": false, "fullPrCi": "pending", "planLeaves": 297, "planGroups": 5, "planCoverage": "exact" }
+}

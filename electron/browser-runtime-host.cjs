@@ -15,7 +15,8 @@ function scopeKey(scope){
 /** Private backend lifecycle gateway. Each owner gets its own existing Browser bridge. */
 function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
   createController=options=>require('./browser-view.cjs').createBrowserController(options),
-  createAgent=createBrowserAgent,createBridge=createBrowserAgentBridge,onFocus=()=>{},logEvent=null}){
+  createAgent=createBrowserAgent,createBridge=createBrowserAgentBridge,onFocus=()=>{},logEvent=null,
+  prepareSession=async()=>null}){
   const safeLog=(event,details)=>{try{logEvent?.(event,details);}catch{}};
   const token=randomUUID(),records=new Map(),retired=new Set();let focused=null,server=null,url='',disposed=false,chain=Promise.resolve(),stopPromise=null;
   const send=(channel,value)=>{const w=getWindow();if(w&&!w.isDestroyed())try{w.webContents.send(channel,value);}catch{}};
@@ -35,8 +36,12 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
   async function allocate(scope){
     const key=scopeKey(scope);if(retired.has(key)||retired.size>=256)throw Error('stale_runtime');if(records.has(key)){const r=records.get(key);return {ok:true,connection:r.bridge.connection(),extensionPath};}
     if(records.size>=2)throw Error('browser_limit');
-    const owner=Object.freeze({...scope}),r={key,scope:owner};
-    r.controller=createController({origin,getWindow,ipcMain,partition:`pi-gui-runtime-${randomUUID()}`,isVisible:()=>focused===key,
+    const owner=Object.freeze({...scope}),r={key,scope:owner,partition:`pi-gui-runtime-${randomUUID()}`};
+    // Set proxy policy before a renderer or Browser bridge can start requests.
+    // This main-only callback never accepts a partition from the renderer.
+    r.releaseSession=await prepareSession(r.partition);
+    try {
+    r.controller=createController({origin,getWindow,ipcMain,partition:r.partition,isVisible:()=>focused===key,
       send:(channel,state)=>send(channel==='pi-gui:browser-notice'?'pi-gui:runtime-browser-notice':'pi-gui:runtime-browser-state',{scope:owner,state})});
     r.agent=createAgent({browser:r.controller,origin,onState:()=>{if(r.bridge)send('pi-gui:runtime-browser-agent-state',{scope:owner,state:project(r)});}});
     const executor={status:()=>r.agent.status(),invalidate:(...args)=>r.agent.invalidate(...args),setEnabled:v=>r.agent.setEnabled(v),
@@ -46,11 +51,12 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
       }};
     r.bridge=createBridge({agent:executor,onAvailability:()=>send('pi-gui:runtime-browser-agent-state',{scope:owner,state:project(r)})});
     records.set(key,r);
-    try{await r.bridge.start();}catch{safeLog('runtime.browser_failed',{operation:'allocate',code:'browser_unavailable'});records.delete(key);r.agent.dispose();r.controller.destroy();throw Error('browser_unavailable');}
+    await r.bridge.start();
+    }catch{safeLog('runtime.browser_failed',{operation:'allocate',code:'browser_unavailable'});records.delete(key);r.agent?.dispose();r.controller?.destroy();r.releaseSession?.();throw Error('browser_unavailable');}
     return {ok:true,connection:r.bridge.connection(),extensionPath};
   }
   async function disposeScope(scope){
-    try{const r=lookup(scope);await r.bridge.stop();r.agent.dispose();r.controller.destroy();records.delete(r.key);retired.add(r.key);
+    try{const r=lookup(scope);await r.bridge.stop();r.agent.dispose();r.controller.destroy();r.releaseSession?.();records.delete(r.key);retired.add(r.key);
       if(focused===r.key){focused=null;onFocus(false);}return {ok:true};}
     catch(error){safeLog('runtime.browser_failed',{operation:'dispose',code:'cleanup_failed'});throw error;}
   }

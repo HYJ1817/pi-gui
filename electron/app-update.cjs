@@ -54,6 +54,13 @@ function detectMode({packaged,exe,readInstall:read=readInstall}) {
   } catch { /* Unknown packaging always degrades to portable. */ }
   return 'portable';
 }
+async function disposeResponse(response) {
+  try {
+    if (typeof response?.dispose === 'function') await response.dispose();
+    else if (typeof response?.body?.cancel === 'function') await response.body.cancel();
+    else response?.body?.destroy?.();
+  } catch { /* Cleanup must not mask the original validation or network failure. */ }
+}
 function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis.fetch,prepare,release=async()=>{},launch,quit}) {
   let state={phase:'idle',mode,currentVersion:version,received:0,total:0,speed:0,transactionId:null}, job=null,ctl=null,installing=false,asset=null;
   const listeners=new Set();
@@ -76,8 +83,12 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
     for(let i=0;i<5;i++) {
       if(!allowedDownload(url,i>0))throw fail('untrusted');
       const r=await fetchImpl(url,{signal,redirect:'manual',headers:{'User-Agent':`pi-gui/${version}`,'Accept':'application/octet-stream'}});
-      if([301,302,303,307,308].includes(r.status)){url=new URL(r.headers.get('location'),url).href;continue;}
-      if(!r.ok||!r.body)throw fail('network');return r;
+      let admitted=false;
+      try {
+        if([301,302,303,307,308].includes(r.status)){url=new URL(r.headers.get('location'),url).href;continue;}
+        if(!r.ok||!r.body)throw fail('network');
+        admitted=true;return r;
+      } finally {if(!admitted)await disposeResponse(r);}
     }
     throw fail('untrusted');
   }
@@ -92,7 +103,9 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
     const sums=info.release.assets.filter(x=>x.name==='SHA256SUMS.txt');
     if(sums.length!==1||sums[0].url!==`${REPO}v${a.version}/SHA256SUMS.txt`)throw fail('invalid_asset');
     const r=await response(sums[0].url,signal);let text='';
-    for await(const c of r.body){text+=Buffer.from(c).toString('utf8');if(text.length>16384)throw fail('invalid_asset');}
+    try {
+      for await(const c of r.body){text+=Buffer.from(c).toString('utf8');if(text.length>16384)throw fail('invalid_asset');}
+    } finally {await disposeResponse(r);}
     const matches=text.split(/\r?\n/).map(s=>/^([a-fA-F0-9]{64}) [ *](.+)$/.exec(s)).filter(m=>m?.[2]===a.name);
     if(matches.length!==1)throw fail('checksum');return matches[0][1].toLowerCase();
   }
@@ -157,15 +170,16 @@ function createAppUpdate({directory,version,mode,readUpdate,fetchImpl=globalThis
         if(signal.aborted)throw fail('cancelled');
         part=file(a.name+'.part');fs.rmSync(part,{force:true});
         const out=fs.openSync(part,'wx');const h=createHash('sha256'),start=Date.now();let received=0;
+        let r;
         try {
-          const r=await response(a.url,signal);
+          r=await response(a.url,signal);
           const len=r.headers.get('content-length');if(len!==null&&Number(len)!==a.size)throw fail('checksum');
           for await(const c of r.body){
             if(signal.aborted)throw fail('cancelled');const b=Buffer.from(c);received+=b.length;
             if(received>a.size)throw fail('checksum');fs.writeFileSync(out,b);h.update(b);
             set({received,speed:Math.round(received*1000/Math.max(1,Date.now()-start))});
           }
-        } finally {fs.closeSync(out);}
+        } finally {await disposeResponse(r);fs.closeSync(out);}
         set({phase:'verifying',speed:0});
         if(signal.aborted)throw fail('cancelled');
         if(received!==a.size||h.digest('hex')!==digest)throw fail('checksum');

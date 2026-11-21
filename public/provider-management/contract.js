@@ -172,7 +172,7 @@ function credentialAction(action) {
 const requests = Object.freeze({
   drafts: [['requestId','expectedRevision','draft'], ['serviceId','draftId','expectedDraftRevision']],
   commit: [['requestId','expectedRevision','action'], ['draftId','draftRevision','serviceId','credentialAction']],
-  authorize: [['requestId','draftId','draftRevision','confirm','rememberTarget'], []],
+  authorize: [['requestId','draftId','draftRevision','confirm','rememberTarget'], ['allowLocalEndpoint']],
   revoke: [['requestId','consentId'], []],
   discover: [['requestId','draftId','draftRevision','consentId','dialogGeneration','requestSeq','force'], []],
   test: [['requestId','draftId','draftRevision','consentId','dialogGeneration','requestSeq','force'], []],
@@ -199,7 +199,8 @@ export function validateProviderRequest(kind, value) {
       credentialAction(value.credentialAction);
     }
   }
-  if (kind === 'authorize') need(value.confirm === true && bool(value.rememberTarget), 'confirm');
+  if (kind === 'authorize') need(value.confirm === true && bool(value.rememberTarget) &&
+    (!has(value, 'allowLocalEndpoint') || bool(value.allowLocalEndpoint)), 'confirm');
   if (['discover','test'].includes(kind)) need(counter(value.dialogGeneration) && counter(value.requestSeq) && bool(value.force), 'operation');
   return value;
 }
