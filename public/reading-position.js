@@ -14,6 +14,16 @@
 const MAX_BOOKMARKS = 100;
 const bookmarks = new Map();
 
+function* readingAnchors(content) {
+  for (const child of content?.children || []) {
+    if (child.hasAttribute('data-execution-turn')) {
+      yield* child.querySelectorAll('[data-anchor-id]');
+    } else {
+      yield child;
+    }
+  }
+}
+
 function readingTop(node, rect) {
   // Classic 入场动效带有 3px 的位移。书签记录静止布局，动效仍按原样播放。
   if (!node.getAnimations?.().some(animation => animation.animationName === 'ui2-rise-in')) return rect.top;
@@ -62,9 +72,9 @@ export function captureReadingPosition(scroller, content, options = {}) {
       ? scroller.getBoundingClientRect()
       : { top: 0, bottom: clientHeight, height: clientHeight };
 
-    for (const child of content.children) {
+    for (const child of readingAnchors(content)) {
       if (!child || child.nodeType !== 1) continue;
-      if (child.hidden || child.classList?.contains('working')) continue;
+      if (child.closest('[hidden]') || child.classList?.contains('working')) continue;
 
       const r = child.getBoundingClientRect ? child.getBoundingClientRect() : null;
       if (!r) continue;
@@ -116,8 +126,13 @@ export function restoreReadingPosition(scroller, content, bookmark) {
   // 2. 尝试通过锚点恢复
   let anchor = null;
   if (bookmark.anchorId && content) {
-    anchor = Array.from(content.children).find(child =>
-      (child.dataset.anchorId || child.dataset.navId || child.id) === bookmark.anchorId);
+    for (const child of readingAnchors(content)) {
+      if ((child.dataset.anchorId || child.dataset.navId || child.id) === bookmark.anchorId
+          && !child.closest('[hidden]')) {
+        anchor = child;
+        break;
+      }
+    }
   }
 
   if (anchor && anchor.getBoundingClientRect && scroller.getBoundingClientRect) {

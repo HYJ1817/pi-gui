@@ -45,6 +45,7 @@ import {
 import { updateEntry } from './tool-view.js';
 import { subagentNeedsGitRefresh } from './subagent-activity.js';
 import { handlePlanToolEnd, handlePlanToolStart } from './plan-live.js';
+import { trackClassicExecutionTool } from './classic-execution-view.js';
 
 /* 会改动磁盘、因而值得重读 Git 状态的工具。
  *
@@ -139,6 +140,7 @@ export function onToolStart(evt) {
     t.appendChild(S.tlGroup);
   }
   const node = addClassicToolEntry(S.tlGroup, entry);
+  trackClassicExecutionTool(node, S.tlGroup, evt);
 
   S.tools.set(entry.id, { entry, node });
 

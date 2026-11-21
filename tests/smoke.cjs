@@ -5184,7 +5184,7 @@ staticCheck();
 
     // 25. DOM 不使用 raw user content innerHTML
     check('导航 25. 预览走 textContent，没有把用户正文拼进 innerHTML', () => {
-      const src = sources;
+      const src = fs.readFileSync(path.join(PUB, 'conversation-nav.js'), 'utf8');
       const block = src.slice(src.indexOf('function previewOf'), src.indexOf('function makeMarker'));
       return !/innerHTML/.test(block) || '预览路径里出现了 innerHTML';
     });

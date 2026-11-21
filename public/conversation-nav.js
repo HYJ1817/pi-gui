@@ -55,6 +55,7 @@ let seq = 0;
 let observedRoot = null;
 let observedThread = null;
 let rafPending = false;
+const nativeAliases = new WeakMap();
 
 /** 运行环境有没有 IntersectionObserver。
  *  jsdom 没有（smoke 测试跑在里面），老环境也可能没有 —— 缺了不能让整个
@@ -172,6 +173,17 @@ export function registerConversationAnchor(element) {
   const all = collectAnchors();
   if (!all.includes(element)) return;
   buildFrom(all);
+}
+
+/** A verified fallback prompt can add a native user entry to the same visible task. */
+export function registerConversationAnchorAlias(element, userIndex) {
+  let aliases = nativeAliases.get(element);
+  if (!aliases) { aliases = new Set(); nativeAliases.set(element, aliases); }
+  aliases.add(userIndex);
+}
+
+export function clearConversationAnchorAliases(element) {
+  nativeAliases.delete(element);
 }
 
 export function clearConversationNav() {
@@ -367,6 +379,9 @@ function scrollToEntry(entry) {
   if (!entry || !entry.element.isConnected) return;
   const stream = el.stream;
   if (!stream) return;
+  const process = entry.element.closest('[data-execution-part="progress"]');
+  const collapsed = process?.querySelector(':scope > button[aria-expanded="false"]');
+  collapsed?.click();
   const max = Math.max(0, stream.scrollHeight - stream.clientHeight);
   const rect = entry.element.getBoundingClientRect();
   const contentTop = Math.max(0, rect.top - riseInShift(entry.element)
@@ -395,11 +410,14 @@ function scrollToEntry(entry) {
  */
 export function scrollToUserTurn(index) {
   const i = Number(index);
-  if (!Number.isInteger(i) || i < 0 || i >= entries.length) return false;
-  const e = entries[i];
+  if (!Number.isInteger(i) || i < 0) return false;
+  const at = entries.findIndex(entry => Number(entry.element.dataset.userIndex) === i
+    || nativeAliases.get(entry.element)?.has(i));
+  const position = at >= 0 ? at : entries[i]?.element.dataset.userIndex === undefined ? i : -1;
+  const e = entries[position];
   if (!e || !e.element || !e.element.isConnected) return false;
   scrollToEntry(e);
-  setCurrent(i);
+  setCurrent(position);
   return true;
 }
 

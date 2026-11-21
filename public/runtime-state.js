@@ -10,7 +10,7 @@
  * 本模块只负责「只建一次」并把它暴露出去。
  */
 import { createRuntimeStore } from './runtime-store.js';
-import { observeRuntimeExecution, retireRuntimeExecution, seedRuntimeExecution } from './execution-timeline-state.js';
+import { observeRuntimeExecution, retireRuntimeExecution, runtimeExecutionFallbackEcho, seedRuntimeExecution } from './execution-timeline-state.js';
 
 export const runtimeStore = createRuntimeStore();
 
@@ -53,8 +53,12 @@ export function observeRuntimeFrame(frame) {
   const id = frame.owner?.conversationId || frame.conversationId;
   const prior = runtimeStore.get(id);
   const lifecycle = prior?.item?.lifecycle, owner = prior?.owner, error = prior?.item?.error;
-  try { observeRuntimeExecution(frame, prior); } catch { /* observation only */ }
-  if (!runtimeStore.apply(frame)) return false;
+  let fallbackInputSequence = null;
+  try {
+    observeRuntimeExecution(frame, prior);
+    fallbackInputSequence = runtimeExecutionFallbackEcho(frame, prior)?.inputSequence ?? null;
+  } catch { /* Legacy rendering remains available without the execution hint. */ }
+  if (!runtimeStore.apply(frame, { fallbackInputSequence })) return false;
   const next = runtimeStore.get(id);
   try {
     if (frame.type === 'runtime_state') seedRuntimeExecution(next?.item);

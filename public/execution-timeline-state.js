@@ -73,6 +73,17 @@ export function getRuntimeExecutionTimeline(owner) {
   return sameExecutionScope(record?.scope, runtimeScope(owner, record?.scope.branchEpoch)) ? record.stream.snapshot() : null;
 }
 
+export function runtimeExecutionFallbackEcho(frame, current) {
+  if (frame._replay || frame.type !== 'runtime_event' || frame.event?.type !== 'message_start'
+      || frame.event.message?.role !== 'user') return null;
+  const scope = runtimeScope(frame.owner, frame.execution?.branchEpoch);
+  const record = runtime.get(frame.owner?.conversationId);
+  if (!sameExecutionScope(scope, record?.scope)
+      || !sameExecutionScope(scope, runtimeScope(current?.owner, current?.item?.execution?.branchEpoch))
+      || frame.execution?.startSequence !== current?.item?.execution?.startSequence) return null;
+  return record.stream.fallbackEcho(frame.eventSequence);
+}
+
 export function resolveRuntimeExecutionMessage(scope, ref) {
   const record = runtime.get(scope?.owner?.conversationId);
   return sameExecutionScope(record?.scope, scope) ? record.stream.resolveMessage(ref) : null;
@@ -117,6 +128,12 @@ export function markClassicExecutionDisconnected() {
 
 export function getClassicExecutionTimeline() {
   return classic?.stream.snapshot() || null;
+}
+
+export function classicExecutionFallbackEcho(event) {
+  if (event._replay || event.type !== 'message_start' || event.message?.role !== 'user') return null;
+  const scope = classicScope(event.legacyOwner, event.executionClassic);
+  return sameExecutionScope(classic?.scope, scope) ? classic.stream.fallbackEcho(event._seq) : null;
 }
 
 export function resolveClassicExecutionMessage(scope, ref) {

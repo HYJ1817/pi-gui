@@ -28,6 +28,7 @@ import { installRendererLogging, logRendererEvent } from './log-client.js';
 import { configureRuntimeSessions, observeRuntimeEvent } from './runtime-sessions.js';
 import { acknowledgeRuntimeExecutionReplay, markClassicExecutionDisconnected, observeClassicExecution,
   retireClassicExecution, runtimeExecutionCursor } from './execution-timeline-state.js';
+import { resetClassicExecutionView, scheduleClassicExecutionView } from './classic-execution-view.js';
 import { observeWebEvent } from './web-access.js';
 import { observeSubagentEvent } from './subagents.js';
 import { observeMemoryEvent } from './memory.js';
@@ -566,7 +567,10 @@ function handleEvent(evt) {
     }
   }
   if (!S.switching && evt.legacyOwner?.runtimeId === S.bridgeInstance) {
-    try { observeClassicExecution(evt); } catch { /* observation only */ }
+    try {
+      observeClassicExecution(evt);
+      scheduleClassicExecutionView(evt);
+    } catch { /* optional projection; native rendering stays available */ }
   }
   if (!evt._replay && ['agent_start','tool_execution_start','tool_execution_end','agent_settled'].includes(evt.type))
     document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-changed', {detail:{
@@ -810,6 +814,7 @@ export function reconcileBridgeSnapshot(snapshot) {
   if (S.switching && evt.cwd && !samePath(evt.cwd, S.desiredCwd)) return;
   if (evt.state !== 'ready' || evt.bridgeInstance && evt.bridgeInstance !== S.bridgeInstance || evt.bridgeRun !== S.bridgeRun) {
     try { retireClassicExecution(); } catch { /* observation only */ }
+    resetClassicExecutionView({ restore: true });
   }
   if (Number.isInteger(evt.bridgeRun)) S.bridgeRun = evt.bridgeRun;
   if (Number.isInteger(evt.bridgeRevision)) S.bridgeRevision = evt.bridgeRevision;
