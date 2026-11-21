@@ -43,7 +43,7 @@
     "test:session-background:electron": "node tests/session-background-electron.cjs",
     "test:shell:electron": "node tests/app-shell-electron.cjs",
     "test:settings:electron": "node tests/settings-headings-electron.cjs",
-    "test:system-settings": "node tests/system-settings.cjs && node tests/system-settings-ui.cjs && node tests/system-maintenance-p2.cjs && node tests/system-network-p2.cjs && node tests/system-proxy-p2.cjs && node tests/system-network-agent-p2.cjs && node tests/system-cache-p2.cjs && node --test tests/system-storage-p2.cjs tests/system-storage-p2-crash.cjs && node tests/system-storage-desktop-p2.cjs",
+    "test:system-settings": "node tests/system-settings.cjs && node tests/system-settings-ui.cjs && node tests/system-maintenance-p2.cjs && node tests/system-network-p2.cjs && node tests/system-proxy-p2.cjs && node tests/system-network-agent-p2.cjs && node tests/system-endpoint-final.cjs && node tests/system-network-final.cjs && node tests/system-pi-network-final.cjs && node tests/system-cache-p2.cjs && node --test tests/system-storage-p2.cjs tests/system-storage-p2-crash.cjs tests/system-storage-final.cjs && node tests/system-storage-desktop-p2.cjs",
     "test:system-settings:electron": "node tests/system-settings-electron.cjs",
     "test:system-settings:p2:electron": "node tests/system-settings-electron.cjs --p2-only",
     "test:system-settings:packaged": "node tests/system-settings-electron.cjs --packaged && node tests/system-settings-electron.cjs --packaged --p2-only",

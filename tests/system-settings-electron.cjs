@@ -10,6 +10,9 @@ const { spawn, spawnSync, execFileSync } = require('node:child_process');
 const ROOT = path.resolve(__dirname, '..');
 const packaged = process.argv.includes('--packaged');
 const p2 = process.argv.includes('--p2-only');
+const outputAt = process.argv.indexOf('--output-root');
+const buildRoot = outputAt < 0 ? ROOT : process.argv[outputAt + 1];
+assert.ok(buildRoot && path.isAbsolute(buildRoot), '--output-root requires an absolute build directory');
 const world = fs.mkdtempSync(path.join(os.tmpdir(), packaged ? 'pi-system-packaged-' : 'pi-system-desktop-'));
 const out = path.join(world, 'evidence'); fs.mkdirSync(out);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -72,6 +75,13 @@ async function run() {
     env.SYSTEM_TARGET = path.join(world, '新 数据（迁移）'); fs.mkdirSync(env.SYSTEM_TARGET);
     fs.mkdirSync(path.join(profile, '.uploads')); fs.writeFileSync(path.join(profile, '.uploads/sample.bin'), Buffer.alloc(262144, 73));
     fs.writeFileSync(path.join(profile, 'session-titles.json'), JSON.stringify({ version: 1, items: [] }));
+    const { defaultMetadata, validateMetadata } = await import('../lib/provider-management-metadata.mjs');
+    const metadata = { ...defaultMetadata(), services: { 'local-final': { providerId: 'local-final', displayName: 'Local migration fixture', kind: 'custom' } } };
+    validateMetadata(metadata);
+    fs.writeFileSync(path.join(profile, 'provider-management.json'), JSON.stringify(metadata, null, 2) + '\n');
+    fs.mkdirSync(env.PI_CODING_AGENT_DIR, { recursive: true });
+    fs.writeFileSync(path.join(env.PI_CODING_AGENT_DIR, 'models.json'), '{"providers":{}}\n');
+    fs.writeFileSync(path.join(env.PI_CODING_AGENT_DIR, 'auth.json'), '{}\n');
   }
   let executable = packaged ? null : require('electron'), appRoot, artifact = null;
   const entry = path.join(ROOT, p2 ? 'tests/fixtures/system-settings-p2-desktop.cjs' : 'tests/fixtures/system-settings-desktop.cjs');
@@ -81,18 +91,24 @@ async function run() {
     // Main/preload/backend/public/icon bytes remain exactly those shipped.
     appRoot = path.join(world, 'application/resources/app');
     const { copyInto } = await import('../scripts/util.mjs');
-    copyInto(world, path.join(ROOT, 'dist-app/Pi GUI-win32-x64'), 'application');
+    copyInto(world, path.join(buildRoot, 'dist-app/Pi GUI-win32-x64'), 'application');
     const digest = file => require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex');
     const identities = {};
     for (const file of fs.readdirSync(path.join(ROOT, 'electron')).filter(file => file.endsWith('.cjs'))) {
       assert.equal(digest(path.join(appRoot, file)), digest(path.join(ROOT, 'electron', file)), 'packaged module ' + file);
       identities[file] = digest(path.join(appRoot, file));
     }
-    for (const file of ['system-settings.js', 'system-settings-network.js', 'system-settings-storage.js', 'system-settings.css', 'index.html', 'app.js', 'api.js', 'ui/icons.js']) {
+    for (const file of ['system-settings.js', 'system-settings-network.js', 'system-settings-storage.js', 'system-settings.css',
+      'provider-management/contract.js', 'provider-management/dialog.js', 'provider-management/discovery.js',
+      'provider-management/state.js', 'provider-management/advanced.js', 'mcp-settings.js',
+      'index.html', 'app.js', 'api.js', 'ui/icons.js']) {
       assert.equal(digest(path.join(appRoot, 'public', file)), digest(path.join(ROOT, 'public', file)), 'packaged resource ' + file);
       identities['public/' + file] = digest(path.join(appRoot, 'public', file));
     }
-    assert.equal(digest(path.join(appRoot, 'icon.ico')), digest(path.join(ROOT, 'build/icon.ico')), 'packaged Tray icon');
+    const metadataResource = 'provider-management-metadata.cjs';
+    assert.equal(digest(path.join(appRoot, metadataResource)), digest(path.join(buildRoot, 'build/electron-app', metadataResource)), 'packaged generated metadata schema');
+    identities[metadataResource] = digest(path.join(appRoot, metadataResource));
+    assert.equal(digest(path.join(appRoot, 'icon.ico')), digest(path.join(buildRoot, 'build/icon.ico')), 'packaged Tray icon');
     const manifest = path.join(appRoot, 'package.json'), config = JSON.parse(fs.readFileSync(manifest, 'utf8'));
     config.main = 'system-settings-observer.cjs';
     fs.writeFileSync(path.join(appRoot, config.main), `require(${JSON.stringify(entry)});\n`, { flag: 'wx' });
@@ -103,7 +119,7 @@ async function run() {
       backendDigest: digest(path.join(appRoot, 'server.cjs')), trayIconDigest: digest(path.join(appRoot, 'icon.ico')) };
   }
   const reports = [];
-  const phases = p2 ? ['network-cache', 'prepare-migration', 'verify-migration']
+  const phases = p2 ? process.argv.includes('--network-only') ? ['network-cache'] : ['network-cache', 'prepare-migration', 'verify-migration']
     : process.argv.includes('--visual-only') ? ['visual-states']
     : process.argv.includes('--lifecycle-only') ? ['pending-save-quit', 'session-end', 'update-gates']
     : ['exercise', 'restart-tray-quit', 'default-close', 'ctrl-q', 'session-end', 'update-gates', 'pending-save-quit', 'visual-states'];

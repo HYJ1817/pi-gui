@@ -342,7 +342,8 @@ test('real Node HTTP, fetch and an explicitly initialized worker use the private
         worker.once('exit', exit => exit === 0 && value === 'fixture-response' ? resolve() : reject(Error('worker_failed')));
       });
       console.log('http/fetch/worker:3');
-    })().catch(() => { console.error('probe_failed:' + stage); process.exitCode = 1; });`;
+    })().catch(() => { console.error('probe_failed:' + stage); process.exitCode = 1; })
+      .finally(() => { if (process.connected) process.disconnect(); });`;
   const { withoutProxyEnvironment } = require('../lib/system-network-policy.cjs');
   const env = { ...withoutProxyEnvironment(process.env), PI_GUI_DESKTOP: '1', PI_GUI_SYSTEM_PROXY: gateway.bootstrapURL(), PI_GUI_NETWORK_RELAXED: '1' };
   for (const key of Object.keys(env)) if (key.toUpperCase() === 'NODE_OPTIONS') delete env[key];

@@ -138,4 +138,4 @@ async function runSystemStates({ BrowserWindow, origin, out, report, check }) {
     check('System and General reuse equal switch/segment geometry and typography', JSON.stringify(systemSwitch) === JSON.stringify(otherSwitch) && JSON.stringify(systemSegment) === JSON.stringify(otherSegment));
   } finally { window.destroy(); }
 }
-module.exports = { runSystemStates };
+module.exports = { runSystemStates, contrastSample };

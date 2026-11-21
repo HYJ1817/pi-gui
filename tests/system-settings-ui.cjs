@@ -81,6 +81,29 @@ test('network UI: draft mode, independent relaxed flag, named save and authorita
   assert.match(p.d.getElementById('system-network-effective').textContent, /重启后生效/);
   assert.equal(p.toggle('保持电脑唤醒').getAttribute('aria-checked'), 'false');
 });
+test('network UI: an unconfirmed backend permission can be retried after reopening without changing the saved value', async t => {
+  const state = snapshot(), saved = [];
+  state.network.endpointPermissions = 'unconfirmed';
+  state.network.error = '后端权限未确认。';
+  const bridge = desktop({ state: async () => ({ ok: true, snapshot: state }), saveNetwork: async value => {
+    saved.push({ ...value });
+    if (saved.length === 1) return { ok: false, snapshot: state };
+    state.network.endpointPermissions = 'strict'; state.network.error = '';
+    return { ok: true, snapshot: state };
+  } });
+  const p = page(t, { bridge });
+  const feedback = p.d.getElementById('system-network-feedback');
+  await until(() => feedback.textContent.includes('后端权限未确认'));
+  assert.equal(p.button('保存网络设置').disabled, false);
+  p.button('保存网络设置').click();
+  await until(() => p.button('保存网络设置')?.disabled === false);
+  assert.equal(feedback.classList.contains('is-error'), true);
+  assert.doesNotMatch(feedback.textContent, /已保存/);
+  p.button('保存网络设置').click();
+  await until(() => feedback.textContent.includes('已保存'));
+  assert.deepEqual(saved, [state.network.settings, state.network.settings]);
+  assert.equal(p.button('保存网络设置').disabled, true);
+});
 test('network UI: testing a draft never saves, old results do not overwrite changed drafts or another page', async t => {
   let finish, saves = 0;
   const p = page(t, { bridge: desktop({ testNetwork: () => new Promise(resolve => finish = resolve), saveNetwork: async () => { saves++; } }) });

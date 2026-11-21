@@ -7,7 +7,9 @@ const certificate = require('./fixtures/system-network-tls.cjs');
 const moduleUrl = require('node:url').pathToFileURL(require.resolve('../server/system-network-agent.js')).href;
 function spawnBackendProbe(body, env) {
   const { spawn } = require('node:child_process');
-  const bootstrap = `(async()=>{(await import(${JSON.stringify(moduleUrl)})).startSystemNetwork();${body}})().catch(()=>process.exitCode=1);`;
+  // The probe owns its IPC channel; finish it after the now-live policy
+  // listener has served its purpose, without extending the process deadline.
+  const bootstrap = `(async()=>{(await import(${JSON.stringify(moduleUrl)})).startSystemNetwork();${body}})().catch(()=>process.exitCode=1).finally(()=>{if(process.connected)process.disconnect()});`;
   return spawn(process.execPath, ['-e', bootstrap], { env: { ...env, PI_GUI_DESKTOP: '1' },
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true });
 }
@@ -89,7 +91,7 @@ test('pinned system agent: trusted certificate with the wrong IP SAN is rejected
 test('backend startup consumes the relaxed-policy marker before downstream child construction', async () => {
   const { startSystemNetwork } = await import('../server/system-network-agent.js');
   const env = { PI_GUI_DESKTOP: '1', PI_GUI_NETWORK_RELAXED: '1' };
-  assert.deepEqual(startSystemNetwork(env), { desktop: true, relaxed: true });
+  assert.deepEqual(startSystemNetwork(env), { desktop: true, relaxed: true, endpointGeneration: 0, controlPorts: [] });
   assert.equal(env.PI_GUI_NETWORK_RELAXED, undefined);
   assert.throws(() => startSystemNetwork({ PI_GUI_DESKTOP: '1', PI_GUI_SYSTEM_PROXY: 'broken' }), /network_transport_unsupported/);
 });

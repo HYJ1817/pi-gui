@@ -161,7 +161,7 @@ test('same, both nestings, occupied targets, traversal and protected roots are r
 test('failed preflights redact fail-closed business refusals and do not omit unknown data', async t => {
   const cases = [
     ['worktrees.json', 'worktree_or_candidate_present'], ['candidate-runs', 'worktree_or_candidate_present'],
-    ['candidate-transactions', 'worktree_or_candidate_present'], ['provider-management.json', 'provider_authority_present'],
+    ['candidate-transactions', 'worktree_or_candidate_present'], ['provider-management.json', 'provider_metadata_invalid'],
     ['models.json.pi-gui-operations.json', 'provider_authority_present', true],
     ['models.json.pi-gui-transaction', 'provider_authority_present', true],
     ['revert-evidence/v1/journal.jsonl', 'revert_evidence_present'],
