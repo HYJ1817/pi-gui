@@ -40,9 +40,10 @@ function callsOf(msg) {
  *
  * @returns {Array<{kind:string}>}
  */
-export function planHistory(messages) {
+export function planHistory(messages, { withPosition = false } = {}) {
   const list = Array.isArray(messages) ? messages : [];
   const out = [];
+  const append = (item, sourceIndex) => out.push(withPosition ? { ...item, sourceIndex } : item);
 
   /* 先收一遍「哪些 toolCallId 有对应的 toolCall」。
    * 用途是识别孤儿 result：它的 id 不在这个集合里，说明配对不上，
@@ -62,11 +63,11 @@ export function planHistory(messages) {
     if (id && !results.has(id)) results.set(id, m);
   }
 
-  for (const m of list) {
+  for (const [sourceIndex, m] of list.entries()) {
     if (!m || typeof m !== 'object') continue;
 
     if (m.role === 'user') {
-      out.push({ kind: 'user', message: m });
+      append({ kind: 'user', message: m }, sourceIndex);
       continue;
     }
 
@@ -75,12 +76,12 @@ export function planHistory(messages) {
        * 造一条只有 result 的 entry：名字用 toolResult.toolName，参数是空的。
        * 它不该消失 —— 消失会让用户以为「什么都没发生」。 */
       if (!m.toolCallId || known.has(m.toolCallId)) continue;
-      out.push({ kind: 'tools', entries: [entryFromHistory(null, m, null)] });
+      append({ kind: 'tools', entries: [entryFromHistory(null, m, null)] }, sourceIndex);
       continue;
     }
 
     if (m.role === 'assistant') {
-      out.push({ kind: 'assistant', message: m });
+      append({ kind: 'assistant', message: m }, sourceIndex);
 
       const calls = callsOf(m);
       if (!calls.length) continue;
@@ -88,7 +89,7 @@ export function planHistory(messages) {
       /* 这条 assistant 消息的 toolCall 全部挂在它自己后面，顺序不变。
        * 缺 result 的会拿到 status:'incomplete'（entryFromHistory 内部判定）。 */
       const entries = calls.map((c) => entryFromHistory(c, results.get(c.id) || null, m));
-      out.push({ kind: 'tools', entries });
+      append({ kind: 'tools', entries }, sourceIndex);
       continue;
     }
 

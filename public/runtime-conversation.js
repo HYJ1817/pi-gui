@@ -73,6 +73,7 @@ import {
 } from './tool-view.js';
 import { getRuntimeExecutionTimeline, resolveRuntimeExecutionMessage } from './execution-timeline-state.js';
 import { createExecutionTurnView, executionTurnForInput } from './execution-timeline-view.js';
+import { executionLivePreferenceKey, executionViewPreferences } from './execution-view-preferences.js';
 import { deriveTurnOutcome, renderTurnOutcome, updateTurnOutcome } from './turn-outcome.js';
 import { createScrollButton } from './scroll-button.js';
 import { findScrollContainer } from './reading-position.js';
@@ -283,14 +284,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   /* store 一变就重画。本模块只**订阅**、不自己 apply —— 各视图各自 apply 会把
    * eventSequence 游标吃两遍，第二个视图就再也看不到那一帧。 */
   const historyStamp = record => JSON.stringify([record?.owner, record?.item?.lifecycle, record?.item?.revision,
-    record?.item?.nativeSessionId, record?.item?.workspace, record?.cursor]);
+    record?.item?.nativeSessionId, record?.item?.workspace, record?.item?.execution?.branchEpoch, record?.cursor]);
   function invalidateHistory() {
     for (const [target, view] of views) {
       if (!view.history && !view.pendingHistory) continue;
       const record = store.get(target);
       if (record === view.historyRecord && historyStamp(record) === view.historyStamp) continue;
       if (view.historyLocator && !matchesLocator(record?.item, view.historyLocator)) view.notice = '会话历史身份已变化，请重新搜索。';
-      view.history = null; view.pendingHistory = false; view.historyToken++;
+      view.history = null; view.historyPosition = null; view.pendingHistory = false; view.historyToken++;
     }
   }
   const unsubscribe = onRuntimeChange(() => { if (alive) { invalidateHistory(); focusResumed(); ensureModels(); draw(); } });
@@ -621,10 +622,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         view.notice = result.code === 'history_unavailable' ? '这条会话没有可读的历史（原生记录已失效），只能新建会话。' : '读取历史失败。';
         return;
       }
-      const payload = { messages: result.messages || [], truncated: result.truncated === true,
+      const payload = { messages: result.messages || [], truncated: result.truncated === true, sessionId: result.sessionId,
         toolSummary: result.toolSummary || null, execution: result.execution || null, match };
       /* 只写 **target** 的历史：中央已经切到别的会话时，B 的 DOM 一个字都不动。 */
       view.history = payload;
+      view.historyPosition = null;
     } catch { if (alive && view.historyToken === token) view.notice = '读取历史失败。'; }
     finally {
       if (view.historyToken === token) view.pendingHistory = false;
@@ -662,7 +664,16 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     startThinkingDotsCycle(stateDots, { immediate: restart, restart });
   }
 
-  function saveScroll() { if (id && !current().history) scrollTops.set(id, output.scrollTop); }
+  function saveScroll() {
+    if (!id) return;
+    const view = current();
+    if (!view.history) {
+      scrollTops.set(id, output.scrollTop);
+      return;
+    }
+    view.historyPosition = { history: view.history, top: output.scrollTop,
+      match: output.dataset.historyMatch, state: output.dataset.historyMatchState };
+  }
   function matchesLocator(item, locator) {
     return item?.conversationId === locator.conversationId && item.nativeSessionId === locator.nativeSessionId
       && ['projectId', 'workspaceId', 'workspaceEpoch'].every(key => item.workspace?.[key] === locator[key]);
@@ -835,6 +846,18 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     showRuntimeEditRecovery(owner, conversationId, record.requestId, null, notify);
   }
 
+  function currentEditBlock(record, owner, block) {
+    return store.get(owner.conversationId) === record && same(owner, record.owner) && record.timeline.includes(block);
+  }
+
+  async function preflightRuntimeMessage(record, owner, block, kind) {
+    const targetEntryId = block.messageId;
+    const result = await runtimeEditPreflight(owner, { userIndex: block.userIndex, kind });
+    if (!currentEditBlock(record, owner, block) || result?.ok && result.canEdit === true
+        && targetEntryId && result.entryId !== targetEntryId) return { ok: false, code: 'stale_history' };
+    return result;
+  }
+
   function openRuntimeUserEdit(row, block, record, notify) {
     const owner = runtimeOwnerOf(record);
     if (!owner || !Number.isInteger(block.userIndex)) return null;
@@ -856,8 +879,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       originals: [textEl, actions].filter(Boolean),
       returnFocus: actions?.querySelector('.message-edit'),
       pendingScope: { kind: 'runtime', conversationId, backendInstance: owner.backendInstance },
-      preflight: ({ userIndex, kind }) => runtimeEditPreflight(owner, { userIndex, kind }),
+      preflight: ({ kind }) => preflightRuntimeMessage(record, owner, block, kind),
       resend: async payload => {
+        if (!currentEditBlock(record, owner, block)) return { ok: false, code: 'stale_history' };
         const pending = store.beginUserEdit(conversationId, owner, block.userIndex);
         if (!pending) return { ok: false, code: 'stale_history' };
         pending.editText = payload.text;
@@ -900,7 +924,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     if (!target) { notify(messageEditErrorText('stale_history')); return; }
     if (button) button.disabled = true;
     try {
-      const pre = await runtimeEditPreflight(owner, { userIndex, kind: 'regenerate' });
+      const pre = await preflightRuntimeMessage(record, owner, target, 'regenerate');
       const busy = isEditInProgress(pre);
       if (!pre?.ok || busy) {
         if (busy) {
@@ -929,6 +953,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         });
         if (confirmed !== true) return;
       }
+      if (!currentEditBlock(record, owner, target)) { notify(messageEditErrorText('stale_history')); return; }
       const pending = store.beginUserEdit(conversationId, owner, userIndex);
       if (!pending) { notify(messageEditErrorText('stale_history')); return; }
       pending.editText = target.text;
@@ -1016,10 +1041,17 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         };
         return {
           node: row,
-          update(next) {
+          update(next, _, recovered) {
             contentKey = '';
-            if (history) {
-              textBody.textContent = next.text;
+            if (history || recovered) {
+              textBody.hidden = !next.text;
+              missingAttachment.hidden = next.hasImages !== true;
+              if (recovered && next.text) {
+                const body = userBody({ role: 'user', content: next.text });
+                textBody.replaceChildren(...body.childNodes);
+              } else {
+                textBody.textContent = next.text;
+              }
               updateActions(next.text);
             }
           },
@@ -1030,6 +1062,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
             if (key === contentKey) return;
             contentKey = key;
             const resolved = ref?.state === 'available' ? resolveRuntimeExecutionMessage(snapshot?.scope, ref) : null;
+            textBody.hidden = !resolved && !block.text;
             if (resolved) {
               const body = userBody(resolved);
               textBody.replaceChildren(...body.childNodes);
@@ -1050,11 +1083,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       let actionBar = null;
       /* 历史 usage 与 Classic 同一条摘要/明细；同一消息的多段正文不会重复
        * 出现同一份用量（投影只把 usage 挂到该消息的一个 block 上）。 */
-      const syncMeta = next => syncUsageMeta(row, next);
+      const syncMeta = (next, recovered) => syncUsageMeta(row, recovered ? null : next);
       syncMeta(block);
       /* 正文文本本身就是 output.textContent 的主体：角色标签用 CSS 伪元素，
        * 不额外插入文本节点，避免把「助手」混进正文复制/断言。 */
-      return { node: row, update(next, regenerateUserIndex) {
+      return { node: row, update(next, regenerateUserIndex, recovered) {
         body.replaceChildren();
         appendRuntimeContent(body, next.text);
         row.dataset.state = next.state || '';
@@ -1068,7 +1101,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           actionBar.remove();
           actionBar = null;
         }
-        syncMeta(next);
+        syncMeta(next, recovered);
       } };
     }
 
@@ -1108,7 +1141,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       if (wrap) syncUsageMeta(wrap, block);
       return {
         node: wrap || details,
-        update(next) {
+        update(next, _, recovered) {
           /* 当前 assistant 消息的思考仍经过展示投影的 maxThinkingBytes 上限；
            * 更早的消息已由 store / 历史投影各自按 64KiB 有界，不再二次裁剪。 */
           const viewed = record && record.thinkingBlock === next ? projection.thinkingOf(id) : null;
@@ -1119,7 +1152,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           details.dataset.state = state || '';
           body.textContent = text;
           head.textContent = `思考过程 · ${text.length} 字${truncated ? '（已截断）' : ''}${stateLabel ? ' · ' + stateLabel : ''}`;
-          if (wrap) syncUsageMeta(wrap, next);
+          if (wrap) syncUsageMeta(wrap, recovered ? null : next);
         },
       };
     }
@@ -1130,7 +1163,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       let signature = '';
       return {
         node: wrapper,
-        update(next) {
+        update(next, _, recovered) {
           const nextSignature = JSON.stringify(next.tools);
           if (nextSignature !== signature) {
             signature = nextSignature;
@@ -1162,7 +1195,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
              * 用户展开过，否则第二个工具一到就永远展开。 */
             if (view.timeline.groupOpen.has(openKey(next.id))) setGroupExpanded(group, view.timeline.groupOpen.get(openKey(next.id)));
           }
-          syncUsageMeta(wrapper, next);
+          syncUsageMeta(wrapper, recovered ? null : next);
         },
       };
     }
@@ -1173,7 +1206,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       let signature = '';
       return {
         node: host,
-        update(next) {
+        update(next, _, recovered) {
           const plan = normalizePlan(next.plan);
           if (!plan) {
             host.replaceChildren();
@@ -1190,10 +1223,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
             || (record?.item?.lifecycle === 'ready' && (record.item.activity === 'running' || (record?.approvals?.length || 0) > 0));
           /* 旧回合的计划不再呼吸；当前回合按真实运行态决定。 */
           const currentPlan = record?.planBlock?.id === next.id;
-          setPlanStalled(card, !currentPlan || !activeRun);
+          setPlanStalled(card, history || recovered || !currentPlan || !activeRun);
           /* plan-only 消息的真实 usage 挂在计划 block 上；放在卡片外层，
            * 折叠计划列表不会把用量一起藏掉。 */
-          syncPlanUsages(host, next);
+          syncPlanUsages(host, recovered ? null : next);
         },
       };
     }
@@ -1297,13 +1330,94 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     return source;
   }
 
-  function composeExecutionRows(rows, timeline, record) {
-    const { snapshot, groups, items: itemsByTurn } = executionSource(timeline, record);
+  function recoveredExecutions(blocks, record, history) {
+    const restored = record?.recoveredExecution;
+    const packet = history
+      ? history.execution?.p5
+      : restored?.scope.branchEpoch === record?.item?.execution?.branchEpoch ? restored?.data : null;
+    if (!packet) return null;
+    const locator = extractStableLocator(record?.item, record?.owner);
+    const sessionId = locator?.nativeSessionId;
+    if (!sessionId || packet?.version !== 1 || packet.sessionId !== sessionId || !packet.leafId
+        || history && history.sessionId !== sessionId || !Array.isArray(packet.turns)) return null;
+    const byStart = new Map();
+    const members = new Set();
+    const positions = new Map(blocks.map((block, index) => [block?.id, index]));
+    const ids = new Set();
+    for (const turn of packet.turns) {
+      if (typeof turn?.id !== 'string' || ids.has(turn.id) || turn.sessionId !== sessionId
+          || !['completed', 'failed', 'interrupted', 'cancelled'].includes(turn.status)
+          || turn.completeness !== 'complete' || !Array.isArray(turn.blockIds) || !turn.blockIds.length
+          || !Array.isArray(turn.additionalInputs) || !Array.isArray(turn.items) || !Array.isArray(turn.usage)
+          || turn.usage.some(row => typeof row?.responseId !== 'string' || !row.recorded)) continue;
+      const start = positions.get(turn.blockIds[0]);
+      if (start === undefined || turn.blockIds.some((id, offset) => blocks[start + offset]?.id !== id || members.has(id))) continue;
+      const owned = blocks.slice(start, start + turn.blockIds.length);
+      const inputs = [turn.input, ...turn.additionalInputs];
+      const users = owned.filter(block => block.kind === 'user');
+      if (owned[0].kind !== 'user' || users.length !== inputs.length
+          || users.some((block, index) => block.messageId !== inputs[index]?.id
+            || block.userIndex !== inputs[index]?.userIndex)) continue;
+      if (turn.finalResponseId && !owned.some(block => block.kind === 'assistant' && block.messageId === turn.finalResponseId)) continue;
+      if (owned.filter(block => block.kind === 'plan').length > 1
+          || turn.items.length && (turn.group?.turnId !== turn.id || !turn.group?.id
+            || turn.items.some(item => item?.turnId !== turn.id || item.parentId !== turn.group.id
+              || !Number.isSafeInteger(item.position?.sequence) || !Number.isSafeInteger(item.position?.part)))) continue;
+      const nativeNames = owned.filter(block => block.kind === 'tools')
+        .flatMap(block => block.tools?.map(tool => tool.name) ?? []).sort();
+      const toolNames = turn.items.filter(item => item.callId).map(item => item.toolName).sort();
+      if (nativeNames.length !== toolNames.length || nativeNames.some((name, index) => name !== toolNames[index])) continue;
+      ids.add(turn.id);
+      turn.blockIds.forEach(id => members.add(id));
+      byStart.set(turn.blockIds[0], turn);
+    }
+    return byStart.size ? { byStart, members, locator } : null;
+  }
+
+  function recoveredTurnView(timeline, turn, rows, locator) {
+    const cut = turn.id + ':' + (turn.entryIds?.at(-1) ?? turn.finalResponseId ?? turn.input.id);
+    const key = 'history:' + cut;
+    let execution = timeline.execution.get(key);
+    if (!execution) {
+      const preferences = executionViewPreferences({ kind: 'runtime', sessionId: locator.nativeSessionId,
+        workspaceId: locator.workspaceId, conversationId: locator.conversationId }, cut,
+      { alias: turn.viewAlias, items: turn.items });
+      execution = createExecutionTurnView({ document, preferences });
+      const tools = turn.items.filter(item => item.callId)
+        .map(item => ({ status: item.status === 'failed' ? 'error' : item.status }));
+      const lastAssistant = { failed: turn.status === 'failed', interrupted: turn.status === 'interrupted',
+        stopped: turn.status === 'cancelled' };
+      execution.outcome = renderTurnOutcome(deriveTurnOutcome({ tools, lastAssistant }));
+      timeline.execution.set(key, execution);
+    }
+    const progress = [], answer = [];
+    let plan = null;
+    for (const { block, info } of rows.slice(1)) {
+      if (block.kind === 'plan') plan = info.node;
+      else if (block.kind === 'assistant' && block.messageId === turn.finalResponseId) answer.push(info.node);
+      else if (block.kind !== 'tools') progress.push(info.node);
+    }
+    execution.update({ turn, group: turn.group, items: turn.items, input: rows[0].info.node,
+      plan, progress, answer, outcomes: execution.outcome ? [execution.outcome] : [] });
+    return { key, node: execution.node };
+  }
+
+  function composeExecutionRows(rows, timeline, record, recovered, history) {
+    const { snapshot, groups, items: itemsByTurn } = history ? {} : executionSource(timeline, record);
     const used = new Set();
     const nodes = [];
     let usageInTimeline = false;
     for (let index = 0; index < rows.length;) {
       const row = rows[index];
+      const restored = recovered?.byStart.get(row.block.id);
+      if (restored) {
+        const through = index + restored.blockIds.length;
+        const view = recoveredTurnView(timeline, restored, rows.slice(index, through), recovered.locator);
+        nodes.push(view.node);
+        used.add(view.key);
+        index = through;
+        continue;
+      }
       const proof = store.executionWitness(record, row.block);
       const turn = row.block.kind === 'user' && proof?.sequence === proof?.inputSequence
         ? executionTurnForInput(snapshot, proof?.sequence) : null;
@@ -1358,7 +1472,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       }
       let execution = timeline.execution.get(turn.id);
       if (!execution) {
-        execution = createExecutionTurnView({ document });
+        const scope = snapshot.scope;
+        const preferences = executionViewPreferences({ kind: 'runtime', sessionId: scope.owner.sessionId,
+          workspaceId: scope.owner.workspaceId, conversationId: scope.owner.conversationId },
+        executionLivePreferenceKey(scope, proof.sequence));
+        execution = createExecutionTurnView({ document, preferences });
         timeline.execution.set(turn.id, execution);
       }
       const usage = [];
@@ -1408,14 +1526,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       : 'none';
     const historyChanged = history && view.timeline.historyRef !== view.history;
     const recordChanged = !history && view.timeline.recordRef !== record;
-    if (view.timeline.mode !== mode || recordChanged) {
+    if (view.timeline.mode !== mode || recordChanged || historyChanged) {
       clearExecutionViews(view.timeline);
       output.replaceChildren();
       view.timeline.nodes.clear();
       view.timeline.outcomeNodes.clear();
       view.timeline.settledTurns.clear();
       view.timeline.mode = mode;
-    } else if (view.timeline.ownerKey !== ownerKey || historyChanged) {
+    } else if (view.timeline.ownerKey !== ownerKey) {
       /* 换 runtime / 换一份历史时，旧终态的 block id 可能被复用；
        * 不清掉会把上一代运行的终态误挂到新记录上。 */
       view.timeline.outcomeNodes.clear();
@@ -1424,8 +1542,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     view.timeline.ownerKey = ownerKey;
     view.timeline.recordRef = record;
     view.timeline.historyRef = history ? view.history : null;
+    const recovered = recoveredExecutions(blocks, record, history ? view.history : null);
     const supplemental = history ? new Set() : supplementalInputs(blocks, record,
       executionSource(view.timeline, record).snapshot);
+    if (recovered) {
+      for (const block of blocks) if (block.kind === 'user' && recovered.members.has(block.id)
+        && !recovered.byStart.has(block.id)) supplemental.add(block);
+    }
     const turnOutcomes = timelineTurnOutcomes(blocks, record, supplemental);
     const outcomeByLastBlock = new Map();
     for (const turn of turnOutcomes) outcomeByLastBlock.set(turn.lastBlockId, turn);
@@ -1449,29 +1572,37 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       target.notice = text || '';
       draw();
     };
-    const rows = [];
+    const rows = history && !recovered ? null : [];
     const wanted = new Set();
     for (const block of blocks) {
       if (!block || typeof block.id !== 'string') continue;
       let info = view.timeline.nodes.get(block.id);
+      if (info && info.block !== block) {
+        info.node.remove();
+        view.timeline.nodes.delete(block.id);
+        info = null;
+      }
       if (!info) {
         info = createTimelineBlockNode(block, view, record, history, { notify });
         if (!info) continue;
+        info.block = block;
         info.kind = block.kind;
         info.signature = '';
         view.timeline.nodes.set(block.id, info);
       }
       const regenerateUserIndex = regenerateByBlock.get(block.id);
-      const signature = JSON.stringify(block) + (block.kind === 'assistant' ? '|regen:' + (regenerateUserIndex ?? '') : '')
+      const recoveredBlock = recovered?.members.has(block.id) === true;
+      const signature = JSON.stringify(block) + (recoveredBlock ? '|recovered' : '')
+        + (block.kind === 'assistant' ? '|regen:' + (regenerateUserIndex ?? '') : '')
         + (block.kind === 'plan'
         ? `|${record?.item?.lifecycle || ''}|${record?.item?.activity || ''}|${record?.approvals?.length || 0}|${record?.planBlock?.id || ''}`
         : '');
       if (info.signature !== signature) {
         info.signature = signature;
-        info.update(block, regenerateUserIndex);
+        info.update(block, regenerateUserIndex, recoveredBlock);
       }
-      const row = { block, info, outcome: null };
-      rows.push(row);
+      const row = rows && { block, info, outcome: null };
+      if (row) rows.push(row);
       wanted.add(info.node);
 
       const turn = outcomeByLastBlock.get(block.id);
@@ -1493,7 +1624,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         outcomeInfo.signature = outcomeSignature;
         updateTurnOutcome(outcomeInfo.node, turn.outcome);
       }
-      row.outcome = outcomeInfo.node;
+      if (row) row.outcome = outcomeInfo.node;
       wanted.add(outcomeInfo.node);
     }
     for (const [key, info] of [...view.timeline.nodes]) {
@@ -1514,9 +1645,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const turnKeys = new Set(blocks.filter(block => block && block.kind === 'user').map(block => block.id));
     for (const key of view.timeline.settledTurns) if (!turnKeys.has(key)) view.timeline.settledTurns.delete(key);
     /* 顺序由数据决定；这里只是把 DOM 对齐到数据，不猜测事件先后。 */
-    const { nodes, usageInTimeline } = history
-      ? { nodes: [...wanted], usageInTimeline: false }
-      : composeExecutionRows(rows, view.timeline, record);
+    const { nodes, usageInTimeline } = rows
+      ? composeExecutionRows(rows, view.timeline, record, recovered, history)
+      : { nodes: [...wanted], usageInTimeline: false };
     const topLevel = new Set(nodes);
     let cursor = output.firstChild;
     for (const node of nodes) {
@@ -1559,6 +1690,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       : Number.isInteger(index) && index >= 0 ? rows.find(item => item.dataset.historyUserIndex === String(index)) : null;
     let state;
     if (row) {
+      for (const execution of view.timeline.execution.values()) {
+        if (execution.node.contains(row)) { execution.reveal(row); break; }
+      }
       scrollRowIntoView(output, row, 'center');
       view.locateNotice = '';
       state = 'found';
@@ -1801,6 +1935,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
      * jsdom 不派发 scroll 事件、也不做布局，靠事件判定的写法在测试里会假绿。
      */
     if (view.history) {
+      const position = view.historyPosition;
+      if (entered && position?.history === view.history) {
+        output.scrollTop = position.top;
+        if (position.match) {
+          output.dataset.historyMatch = position.match;
+          output.dataset.historyMatchState = position.state;
+        }
+      }
       updateHistoryLocate(view, active);
     } else if (entered) {
       const top = scrollTops.get(id);

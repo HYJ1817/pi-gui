@@ -40,7 +40,8 @@ const key = value => process.platform === 'win32' ? path.resolve(value).toLowerC
 const sameFile = (a, b) => a.dev === b.dev && a.ino === b.ino && a.birthtimeMs === b.birthtimeMs;
 
 /** Same-fd bounded read. Expected fields are backend proof, never renderer paths. */
-export function readSessionText(file, { expected = null, maxBytes = DEFAULT_MAX_BYTES, tail = false } = {}) {
+export function readSessionText(file, { expected = null, maxBytes = DEFAULT_MAX_BYTES, tail = false,
+  stable = false } = {}) {
   if (typeof file !== 'string' || !file) return { ok: false, code: 'invalid_target' };
   let fd;
   try {
@@ -64,7 +65,11 @@ export function readSessionText(file, { expected = null, maxBytes = DEFAULT_MAX_
     // An in-place rewrite keeps the inode. Prove native header ownership again
     // after the body read; ordinary Pi appends preserve this header.
     validateHeader();
-    if (!sameFile(stat, fs.fstatSync(fd)) || !sameFile(stat, fs.statSync(real)) || key(fs.realpathSync(file)) !== key(real)) throw Error();
+    const after = fs.fstatSync(fd), named = fs.statSync(real);
+    if (!sameFile(stat, after) || !sameFile(stat, named) || key(fs.realpathSync(file)) !== key(real)) throw Error();
+    // A P5 cut needs one stable tip. Legacy tail reads may return a prefix of an append.
+    if (stable && (n !== size || ['size', 'mtimeMs', 'ctimeMs'].some(field =>
+      stat[field] !== after[field] || stat[field] !== named[field]))) throw Error();
     return { ok: true, text: buffer.subarray(0, n).toString('utf8'), size: stat.size, truncated: stat.size > maxBytes };
   } catch { return { ok: false, code: 'history_unavailable' }; }
   finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }

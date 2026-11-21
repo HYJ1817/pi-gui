@@ -35,7 +35,7 @@ import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './t
 import { planHistory } from './tool-history.js';
 import { addToGroup, createGroup, groupCount, renderEntry, setEntryExpanded, setGroupExpanded } from './tool-view.js';
 import { collectPlanTurns, isPlanTool } from './plan-model.js';
-import { renderPlan } from './plan-view.js';
+import { renderPlan, setPlanStalled } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
@@ -44,7 +44,7 @@ import { confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { messageEditPreflight, messageEditResend, messageEditStatus, messageEditRecover } from './api.js';
 import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
-import { classicNativeThreadChildren, releaseClassicExecutionTail, resetClassicExecutionView,
+import { classicNativeThreadChildren, indexClassicHistoryTurns, mountClassicHistoryTurn, releaseClassicExecutionTail, resetClassicExecutionView,
   resumeClassicExecutionFallback, settleClassicExecutionView, trackClassicExecutionMessage } from './classic-execution-view.js';
 import {
   saveSessionBookmark,
@@ -72,6 +72,8 @@ let toolGroupCallId = null;
 const toolGroupCounts = new Map();
 let threadSessionId = null;
 let threadGeneration = 0;
+let historyFence = 0;
+let lastHydratedFence = 0;
 let streamScrollBound = false;
 let streamScrollRaf = null;
 
@@ -88,6 +90,9 @@ let streamScrollRaf = null;
 const HISTORY_CHUNK_MESSAGES = 800;
 const HISTORY_CHUNK_NODES = 160;
 const HISTORY_CHUNK_MAX_NODES = 1024;
+const HISTORY_OUTCOME = { completed: ['completed', '已完成'], failed: ['failed', '失败'],
+  interrupted: ['stopped', '已中断'], cancelled: ['stopped', '已取消'],
+  incomplete: ['unsettled', '记录不完整'], unknown: ['unsettled', '状态未知'] };
 
 /* 当前正在分块挂载的历史。generation 用于让 clearThread / 新重建取消旧任务；
  * promise 供测试与需要完整 DOM 的调用方等待。 */
@@ -114,6 +119,15 @@ function yieldToMainThread() {
 
 export function classicThreadSessionId() {
   return threadSessionId;
+}
+
+/** Asynchronous history reads cannot replace content painted after launch. */
+export function classicHistoryFence() {
+  return historyFence;
+}
+
+export function classicHistoryHasLiveChanges() {
+  return historyFence !== lastHydratedFence;
 }
 
 /** 等当前长历史挂载完成（没有挂载时立即完成）。 */
@@ -183,6 +197,7 @@ export function clearThread() {
   resetThroughput();
   resetClassicExecutionView();
   ++threadGeneration;
+  lastHydratedFence = ++historyFence;
   try { closeMessageEditor({ restore: false }); } catch { /* editor may already be detached */ }
   if (streamScrollRaf !== null) cancelAnimationFrame(streamScrollRaf);
   streamScrollRaf = null;
@@ -273,6 +288,7 @@ export function scrollBottom(force) {
 
 /** 真正的 session 级 run 开始。由 app.js 在 agent_start 且上一轮已 settled 时调用。 */
 export function beginTurn() {
+  ++historyFence;
   liveTurn = {
     startedAt: Date.now(),
     seq: 0,
@@ -291,6 +307,7 @@ export function beginTurn() {
 
 /** 工具行进入本轮统计；gui_plan 等不进入工具时间线的调用不会走到这里。 */
 export function noteTurnTool(id) {
+  ++historyFence;
   if (!liveTurn || liveTurn.finalized || id == null) return;
   const key = String(id);
   liveTurn.toolIds.add(key);
@@ -538,6 +555,7 @@ function updateClassicUserArticle(article, text, images, userIndex) {
 
 function trimClassicTail(pending) {
   if (!pending) return;
+  ++historyFence;
   if (!pending.tailTrimmed) {
     // Accepted replacement starts a new native tail. Subsequent HTTP/echo
     // acknowledgments must not rewind the cursor again.
@@ -892,6 +910,7 @@ function createAssistant() {
 export function onMessageStart(evt) {
   finishClassicHistoryBeforeLive();
   const msg = evt.message || {};
+  if (msg.role === 'user' || msg.role === 'assistant') ++historyFence;
   if (msg.role === 'user') {
     /* 编辑事务已经捕获了目标消息和旧尾部：Pi 把修改后的用户消息当成一条
      * 新的 message_start 发回来，这里只就地更新目标，绝不再 append 一条。 */
@@ -989,6 +1008,7 @@ function setBlockText(idx, kind, text) {
 export function onMessageUpdate(evt) {
   const d = evt.assistantMessageEvent;
   if (!d) return;
+  ++historyFence;
   const idx = d.contentIndex ?? 0;
 
   switch (d.type) {
@@ -1023,6 +1043,7 @@ export function onMessageUpdate(evt) {
 export function onMessageEnd(evt) {
   const msg = evt.message;
   if (msg?.role === 'assistant') {
+    ++historyFence;
     // 与历史按同一条 assistant 声明的首个普通工具定位，实际工具启动顺序可以不同。
     toolGroupCallId = Array.isArray(msg.content)
       ? msg.content.find(part => part?.type === 'toolCall' && !isPlanTool(part.name))?.id
@@ -1403,7 +1424,10 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
   /* 配对规则全部在 tool-history.js 里（纯函数，可单独测）：
    * toolCall + 对应 toolResult → 一条完整的时间线条目；
    * 缺 result → 「未完成」；孤儿 result → 就地降级显示，不丢也不崩。 */
-  const items = planHistory(msgs);
+  const p5 = data?.execution?.p5;
+  const hasRecovery = p5?.sessionId === sessionId;
+  const items = hasRecovery ? planHistory(msgs, { withPosition: true }) : planHistory(msgs);
+  const owners = hasRecovery ? indexClassicHistoryTurns(p5, msgs, items, sessionId) : null;
   /* 每个用户回合最多一张计划卡，内容取该回合最后一次有效更新。 */
   const planTurns = collectPlanTurns(items);
   let planTurn = 0;
@@ -1416,7 +1440,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     if (!historyTurn || !Number.isFinite(ts)) return;
     if (historyTurn.endedAt === null || ts > historyTurn.endedAt) historyTurn.endedAt = ts;
   };
-  const startHistoryTurn = (msg, userIndex = null) => {
+  const startHistoryTurn = (msg, userIndex, record, input) => {
     historyTurn = {
       startedAt: Number.isFinite(msg?.timestamp) ? msg.timestamp : null,
       endedAt: null,
@@ -1425,6 +1449,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       userIndex: Number.isInteger(userIndex) ? userIndex : null,
       lastAssistantNode: null,
       hasEvidence: false,
+      ...(record && { record, nodes: { input, additional: [], responses: [], tools: new Map(), plan: null, outcomes: [] } }),
     };
   };
   const flushHistoryTurn = () => {
@@ -1434,18 +1459,26 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     /* 重新生成入口按轮挂在该轮最后一条可见助手消息上；历史重建也要有，
      * 否则刷新/重开之后功能就消失了。 */
     attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
-    if (!turn.hasEvidence) return;
-    const outcome = deriveTurnOutcome({
-      tools: turn.tools,
-      lastAssistant: turn.lastAssistant,
+    const recovered = turn.record;
+    if (!turn.hasEvidence && !recovered) return;
+    let outcome = turn.hasEvidence && deriveTurnOutcome({
+      tools: turn.tools, lastAssistant: turn.lastAssistant,
       interruptedToolTerminal: interruptedToolTerminal(turn.tools, turn.lastAssistant),
-      startedAt: turn.startedAt,
-      endedAt: turn.endedAt,
+      startedAt: turn.startedAt, endedAt: turn.endedAt,
     });
+    if (recovered) {
+      const [state, label] = HISTORY_OUTCOME[recovered.status];
+      outcome = { ...outcome, state, label, durationMs: null };
+    }
     if (outcome) {
       const outcomeNode = renderTurnOutcome(outcome);
-      if (outcomeNode) outcomeNode.dataset.anchorId = 'outcome-' + (++outcomeSeq);
+      outcomeNode.dataset.anchorId = 'outcome-' + (++outcomeSeq);
       frag.appendChild(outcomeNode);
+      turn.nodes?.outcomes.push(outcomeNode);
+    }
+    if (recovered && !turn.nodes.ambiguousPlan) {
+      if (turn.nodes.plan) setPlanStalled(turn.nodes.plan, true);
+      mountClassicHistoryTurn(recovered, turn.nodes);
     }
   };
 
@@ -1462,8 +1495,11 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
   };
 
   const renderItem = (item, index) => {
+    const owner = owners?.get(item.sourceIndex);
+    if (historyTurn?.record && historyTurn.record !== owner) flushHistoryTurn();
     if (item.kind === 'user') {
-      flushHistoryTurn();
+      const supplemental = owner && historyTurn?.record === owner;
+      if (!supplemental) flushHistoryTurn();
       planTurn += 1;
       const index = historyUserIndex++;
       userIndexSeq = Math.max(userIndexSeq, index + 1);
@@ -1478,7 +1514,8 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
         onEdit: () => openClassicEditor(wrap, item.message, index),
       }));
       frag.appendChild(wrap);
-      startHistoryTurn(item.message, index);
+      if (supplemental) historyTurn.nodes.additional.push({ node: wrap, sequence: item.sourceIndex });
+      else startHistoryTurn(item.message, index, owner, wrap);
       return;
     }
 
@@ -1506,7 +1543,9 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       if (!rebuildAssistant(body, msg)) return;
       if (historyTurn) {
         historyTurn.hasEvidence = true;
-        historyTurn.lastAssistantNode = wrap;
+        const responseId = owner?.entryIds[item.sourceIndex - owner.from];
+        if (!owner?.finalResponseId || responseId === owner.finalResponseId) historyTurn.lastAssistantNode = wrap;
+        historyTurn.nodes?.responses.push({ node: wrap, sequence: item.sourceIndex, responseId });
       }
       wrap.appendChild(body);
       const meta = renderMessageMeta(msg);
@@ -1521,6 +1560,10 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
         const planNode = renderPlan(turnPlan.plan);
         if (planNode) planNode.dataset.anchorId = nextPlanAnchorId(turnPlan.firstCallId);
         frag.appendChild(planNode);
+        if (historyTurn?.nodes) {
+          if (historyTurn.nodes.plan) historyTurn.nodes.ambiguousPlan = true;
+          historyTurn.nodes.plan = planNode;
+        }
       }
       /* gui_plan 的调用行由上面的任务列表承担，不再重复画成工具记录。 */
       const entries = item.entries.filter(entry => !isPlanTool(entry.name));
@@ -1538,7 +1581,10 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
           }
         }
         const g = createClassicToolGroup(entries[0].id);
-        for (const entry of entries) addClassicToolEntry(g, entry);
+        for (const entry of entries) {
+          const node = addClassicToolEntry(g, entry);
+          historyTurn?.nodes?.tools.set(entry.id, { node, group: g, callId: entry.id });
+        }
         frag.appendChild(g);
       }
     }
@@ -1597,7 +1643,7 @@ function finishHistoryRender(t, sessionId, generation, { userScrolled = false } 
 
 /** 历史分块构建并挂载。
  *
- * 每批只渲染约 HISTORY_CHUNK_NODES 个顶层节点就挂上去并让出主线程：
+ * 每批按顶层节点预算挂载后让出主线程：
  *  - 首屏只需一小段同步工作就能看到内容；
  *  - 构建与布局成本被拆到多个任务，避免一次 >100ms 的长任务；
  *  - `clearThread` 或下一次重建递增 threadGeneration 后，旧任务在下一批前退出，
@@ -1658,7 +1704,10 @@ function mountHistoryInChunks(t, items, sessionId, generation, { frag, renderIte
     try {
       let chunkSize = HISTORY_CHUNK_NODES;
       while (index < items.length && current() && !completed) {
-        while (index < items.length && frag.childNodes.length < chunkSize && current() && !completed) {
+        // Large histories share the first task with indexing. Yield sooner;
+        // subsequent batches keep the existing cadence and upper bound.
+        const budget = index === 0 && items.length > HISTORY_CHUNK_MAX_NODES ? chunkSize / 2 : chunkSize;
+        while (index < items.length && frag.childNodes.length < budget && current() && !completed) {
           renderItem(items[index], index);
           index += 1;
         }

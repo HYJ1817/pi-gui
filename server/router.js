@@ -122,6 +122,7 @@ export function createRouter({
   processes = null,
   worktrees = null,
   runtimeSessions = null,
+  classicExecutionHistory = null,
   messageEdit = null,
   reviewComments = null,
   collabDocuments = null,
@@ -212,6 +213,9 @@ export function createRouter({
       return environment.handle(req, res, url);
     }
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
+    if (url.pathname === '/api/execution-history') {
+      return classicExecutionHistory ? classicExecutionHistory(req, res) : json(res, 409, { ok: false, code: 'history_unavailable' });
+    }
     /* 历史消息编辑必须绑定当前 Classic owner；路由自身逐字段核对 owner，
      * 所以放在应用级接口之后、legacy owner 通用检查之前，GET status 也能用。 */
     if (url.pathname === '/api/message-edit' || url.pathname.startsWith('/api/message-edit/')) {

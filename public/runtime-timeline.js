@@ -170,9 +170,10 @@ function durationOf(assistant, result) {
  * messageMeta 可选，与 messages 一一对应：{ messageId, userIndex }。
  * 它只服务于历史搜索定位，不参与内容判断。
  */
-export function timelineFromMessages(messages, { messageMeta = null } = {}) {
+export function timelineFromMessages(messages, { messageMeta = null, onBlock = null, nativePath = false } = {}) {
   const list = Array.isArray(messages) ? messages : [];
   const results = new Map();
+  const byResponse = nativePath ? nativeToolResults(list) : null;
   for (const message of list) {
     if (message?.role !== 'toolResult' || typeof message.toolCallId !== 'string') continue;
     results.set(message.toolCallId, message);
@@ -180,6 +181,7 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
 
   const blocks = [];
   let id = 0;
+  let index = 0;
   let userSequence = 0;
   /* V1 记录没有运行边界，只能按用户消息归并（legacyTurnPlan）。带 turnId 的
    * 计划来自扩展在真实新回合写入的 details，可跨 steer 的用户消息归并到同一张
@@ -189,10 +191,11 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
   const add = block => {
     block.id = 'h' + (++id);
     blocks.push(block);
+    onBlock?.(block.id, index);
     return block;
   };
 
-  for (let index = 0; index < list.length; index++) {
+  for (; index < list.length; index++) {
     const message = list[index];
     if (!message || typeof message !== 'object') continue;
     const meta = messageMeta?.[index] || {};
@@ -201,13 +204,16 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
       const userIndex = Number.isInteger(meta.userIndex) ? meta.userIndex : userSequence;
       userSequence += 1;
       const bounded = boundText(contentText(message.content), MAX_USER_TEXT);
-      if (!bounded.text) continue;
+      const hasImages = nativePath && Array.isArray(message.content)
+        && message.content.some(part => part?.type === 'image');
+      if (!bounded.text && !hasImages) continue;
       add({
         kind: 'user',
         text: bounded.text,
         truncated: bounded.truncated,
         messageId: typeof meta.messageId === 'string' ? meta.messageId : null,
         userIndex,
+        ...(hasImages ? { hasImages } : {}),
       });
       legacyTurnPlan = null;
       continue;
@@ -259,7 +265,7 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
       if (part.type !== 'toolCall' || typeof part.id !== 'string' || seenTools.has(part.id)) continue;
       seenTools.add(part.id);
       const name = safeToolName(part.name);
-      const result = results.get(part.id) || null;
+      const result = (byResponse ? byResponse.get(message)?.get(part.id) : results.get(part.id)) || null;
       if (name === PLAN_TOOL_NAME) {
         const plan = planFromToolEntry({ name: PLAN_TOOL_NAME, args: part.arguments, details: result?.details });
         if (!plan) continue;
@@ -340,6 +346,32 @@ export function timelineFromMessages(messages, { messageMeta = null } = {}) {
   const verified = plans.filter(block => typeof block.plan?.turnId === 'string' && block.plan.turnId).length;
   const planBoundary = !plans.length ? null : verified === plans.length ? 'verified' : verified ? 'mixed' : 'unknown';
   return { ...bounded, planBoundary };
+}
+
+function nativeToolResults(messages) {
+  const results = new Map();
+  let declared = new Map();
+  let current = null;
+  for (const message of messages) {
+    if (message?.role === 'assistant') {
+      declared = new Map();
+      current = new Map();
+      results.set(message, current);
+      for (const part of Array.isArray(message.content) ? message.content : []) {
+        if (part?.type !== 'toolCall' || typeof part.id !== 'string') continue;
+        declared.set(part.id, declared.has(part.id) ? null : safeToolName(part.name));
+      }
+    } else if (message?.role === 'toolResult' && current) {
+      const name = declared.get(message.toolCallId);
+      if (name && name === safeToolName(message.toolName)) current.set(message.toolCallId, message);
+      else if (current.has(message.toolCallId)) current.delete(message.toolCallId);
+      declared.delete(message.toolCallId);
+    } else if (message?.role === 'user') {
+      declared.clear();
+      current = null;
+    }
+  }
+  return results;
 }
 
 /** 实时 store 用的小工具：把一个 block 的文本改掉并同步 truncated 标记。 */

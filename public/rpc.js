@@ -10,10 +10,11 @@
 
 import { el, S, confirmStop, invalidateStop } from './state.js';
 import { logRendererEvent } from './log-client.js';
-import { sendCommand, downloadSessionHtml } from './api.js';
+import { sendCommand, downloadSessionHtml, getClassicExecutionHistory } from './api.js';
 import { toast, withNotificationSource } from './ui/toast.js';
 import { setStatus, setTitleText } from './shell.js';
-import { classicThreadSessionId, clearThread, rebuildFromMessages, noteLoadFailure, saveClassicReadingPosition, setStreaming } from './messages.js';
+import { classicHistoryFence, classicHistoryHasLiveChanges, classicThreadSessionId, clearThread, rebuildFromMessages, noteLoadFailure,
+  saveClassicReadingPosition, setStreaming } from './messages.js';
 import { applyTree } from './tree.js';
 import { applyState, applyStats, onModels, onThinkingLevels, renderUsageState } from './usage.js';
 import { invalidateSessionStats, requestSessionStats, takeSessionStatsRequest } from './session-stats.js';
@@ -25,6 +26,8 @@ import { clearDraft, draftSync } from './draft.js';
 import { closePop, currentAnchor } from './ui/popover.js';
 import { thinkingAvailability } from './thinking-availability.js';
 import { startFallbackRequest, cancelFallback, setFallbackModelSwitcher } from './fallback.js';
+import { classicExecutionBranchEpoch } from './execution-timeline-state.js';
+import { activeMessageEditor } from './ui/message-edit.js';
 
 /** pi 就绪后拉一遍初始状态。切换项目 / 重载配置也会走这里。 */
 export function boot() {
@@ -37,7 +40,8 @@ export function boot() {
   const stateId = refreshModelState({ pending: false });
   const load = historyLoad = {
     stateId, messagesId: 'classic-history-' + (++historySequence),
-    workspace: S.workspaceGeneration, bridgeRun: S.bridgeRun,
+    workspace: S.workspaceGeneration, bridgeRun: S.bridgeRun, bridgeInstance: S.bridgeInstance,
+    fence: classicHistoryFence(),
   };
   requestSessionStats();
   sendCommand({ type: 'get_tree' });
@@ -59,10 +63,16 @@ let stateReadSequence = 0;
 let historyLoad = null;
 let historySequence = 0;
 let sessionBootTimer = null;
+let reconnectRead = null;
+const HISTORY_SUPPLEMENT_TIMEOUT = 650;
 
 function cancelHistoryLoad() {
   clearTimeout(historyLoad?.timer);
+  clearTimeout(historyLoad?.supplementTimer);
+  historyLoad?.controller?.abort();
   historyLoad = null;
+  reconnectRead?.abort();
+  reconnectRead = null;
 }
 
 function historyReadFailed(error) {
@@ -72,13 +82,84 @@ function historyReadFailed(error) {
 }
 
 function isCurrentHistoryLoad(load) {
-  return historyLoad === load && load.workspace === S.workspaceGeneration && load.bridgeRun === S.bridgeRun;
+  return historyLoad === load && load.workspace === S.workspaceGeneration
+    && load.bridgeRun === S.bridgeRun && load.bridgeInstance === S.bridgeInstance;
+}
+
+function sameOwner(left, right) {
+  return Boolean(left && right && Object.keys(left).length === Object.keys(right).length
+    && Object.keys(left).every(key => left[key] === right[key]));
+}
+
+function recoveryAuthority(sessionId) {
+  const owner = S.legacyOwner;
+  if (!sessionId || owner?.sessionId !== sessionId || owner.runtimeId !== S.bridgeInstance
+      || Number(owner.runtimeGeneration) !== S.bridgeRun || S.streaming || S.current || activeMessageEditor()) return null;
+  const branchEpoch = classicExecutionBranchEpoch(owner);
+  if (!Number.isSafeInteger(branchEpoch)) return null;
+  return { owner: { ...owner }, branchEpoch, workspace: S.workspaceGeneration, fence: classicHistoryFence() };
+}
+
+function authorityStillCurrent(authority) {
+  return !S.streaming && !S.current && !activeMessageEditor() && authority.workspace === S.workspaceGeneration
+    && authority.owner.runtimeId === S.bridgeInstance && Number(authority.owner.runtimeGeneration) === S.bridgeRun
+    && authority.fence === classicHistoryFence() && sameOwner(authority.owner, S.legacyOwner)
+    && classicExecutionBranchEpoch(authority.owner) === authority.branchEpoch;
+}
+
+function useRecoveredHistory(response, authority) {
+  const p5 = response?.execution?.p5;
+  return response?.ok === true && sameOwner(response.owner, authority.owner)
+    && response.branchEpoch === authority.branchEpoch && response.sessionId === authority.owner.sessionId
+    && Array.isArray(response.messages) && p5?.version === 1 && p5.sessionId === response.sessionId
+    && Array.isArray(p5.turns) && p5.turns.length > 0;
+}
+
+function finishLoadedHistory(load, data = load.messages, authority = null) {
+  if (!isCurrentHistoryLoad(load)) return;
+  cancelHistoryLoad();
+  if (load.fence !== classicHistoryFence() || authority && !authorityStillCurrent(authority)) return;
+  withNotificationSource('history', () => rebuildFromMessages(data, load.sessionId || null));
 }
 
 function renderLoadedHistory(load) {
-  if (!isCurrentHistoryLoad(load)) return;
-  cancelHistoryLoad();
-  withNotificationSource('history', () => rebuildFromMessages(load.messages, load.sessionId || null));
+  if (!isCurrentHistoryLoad(load) || load.controller) return;
+  clearTimeout(load.timer);
+  const activeBranch = classicExecutionBranchEpoch(S.legacyOwner);
+  if (load.nativeAuthority && (!sameOwner(load.nativeAuthority.owner, S.legacyOwner)
+      || activeBranch !== null && load.nativeAuthority.branchEpoch !== activeBranch)) {
+    cancelHistoryLoad();
+    return;
+  }
+  const authority = recoveryAuthority(load.sessionId);
+  if (!authority || load.fence !== authority.fence) return finishLoadedHistory(load);
+  load.controller = new AbortController();
+  load.supplementTimer = setTimeout(() => finishLoadedHistory(load, load.messages, authority), HISTORY_SUPPLEMENT_TIMEOUT);
+  void getClassicExecutionHistory(authority, { signal: load.controller.signal }).then(response => {
+    finishLoadedHistory(load, useRecoveredHistory(response, authority) ? response : load.messages, authority);
+  });
+}
+
+/** Reconnect reads the existing idle owner, without booting, replaying writes
+ * or clearing the current DOM when a newer event wins the read race. */
+export async function recoverClassicExecutionHistory() {
+  const sessionId = classicThreadSessionId();
+  const authority = recoveryAuthority(sessionId);
+  // A reconnect snapshot has no certified aliases for already-mounted live
+  // nodes. Keep them intact until normal session-history hydration.
+  if (!authority || historyLoad || reconnectRead || S.switching || classicHistoryHasLiveChanges()) return false;
+  const controller = reconnectRead = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HISTORY_SUPPLEMENT_TIMEOUT);
+  try {
+    const response = await getClassicExecutionHistory(authority, { signal: controller.signal });
+    if (controller.signal.aborted || reconnectRead !== controller || historyLoad || S.switching
+        || !authorityStillCurrent(authority) || !useRecoveredHistory(response, authority)) return false;
+    withNotificationSource('history', () => rebuildFromMessages(response, sessionId));
+    return true;
+  } finally {
+    clearTimeout(timer);
+    if (reconnectRead === controller) reconnectRead = null;
+  }
 }
 
 /* get_messages 只有消息数组。用同次 boot 的 get_state 确定线程归属，
@@ -100,6 +181,10 @@ function acceptHistoryResponse(evt) {
     return true;
   }
   load.messages = evt.data || [];
+  const { legacyOwner: owner, executionClassic: source } = evt;
+  if (owner?.sessionId && owner.sessionId === source?.sessionId && Number.isSafeInteger(source.branchEpoch)) {
+    load.nativeAuthority = { owner, branchEpoch: source.branchEpoch };
+  }
   if (load.sessionId !== undefined) renderLoadedHistory(load);
   else if (load.timer === undefined) {
     // 旧构建若不回 get_state，仍显示历史，但不给无明确归属的线程恢复书签。

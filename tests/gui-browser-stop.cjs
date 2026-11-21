@@ -175,6 +175,7 @@ async function main() {
     piActivity: { noteCommandAccepted: (command) => activityAccepted.push(command) },
     primaryToolGuard: { resume() {} },
     observeClassicSubmission() {},
+    serveClassicExecutionHistory() { assert.fail('Stop test routed to execution history'); },
     createSessionExport: () => null,
     runtime: { getCurrentCwd: () => os.tmpdir() }, piLaunch: { packageDir: () => null },
   };
