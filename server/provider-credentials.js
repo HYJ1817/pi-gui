@@ -4,8 +4,10 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { createDiscoveryTransport } from './provider-network.js';
+import { createPinnedSystemAgent } from './system-network-agent.js';
 import { isLiteralKeyInput } from '../public/provider-management/contract.js';
-const { authPath, entry, ttlMs } = workerData;
+const { authPath, entry, ttlMs, systemProxy } = workerData;
+delete workerData.systemProxy;
 const stages = new Map();
 const active = new Map();
 const nativeActive = new Map();
@@ -253,7 +255,8 @@ async function discoverWithCredential(message, signal) {
     if (performance.now() >= deadline || !current() || Atomics.compareExchange(permit, 0, 0, 1) !== 0) return null;
     return () => Atomics.compareExchange(permit, 0, 1, 0);
   };
-  const result = await createDiscoveryTransport({ consentStore: view })({ consentId: grant.consentId,
+  const result = await createDiscoveryTransport({ consentStore: view,
+    io: { createSystemAgent: options => createPinnedSystemAgent({ ...options, proxy: systemProxy }) } })({ consentId: grant.consentId,
     url: grant.candidatePaths[0], key, credentialRevision: grant.credentialRevision, signal, deadline, admit });
   return !current() ? refused() : performance.now() >= deadline ? { ok: false, code: 'timeout' } : result;
 }

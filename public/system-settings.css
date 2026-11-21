@@ -48,6 +48,15 @@
   line-height: var(--leading-body);
 }
 
+.system-network-field {
+  width: 100%;
+  min-width: 0;
+  max-width: 22rem;
+  box-sizing: border-box;
+}
+textarea.system-network-field { resize: vertical; }
+.system-network-custom[hidden] { display: none; }
+
 .system-status:empty { display: none; }
 .system-status.is-error { color: var(--ui-danger); }
 

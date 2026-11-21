@@ -3,12 +3,17 @@
 const { randomUUID } = require('node:crypto');
 const SCOPE = 'browser-memory-http-cache';
 
-// Precise P1 allowlist: the existing pi-gui-browser NON-persistent Session's HTTP
-// cache, and nothing else. Chromium's official APIs count/clear the same bucket.
-// Persistent defaultSession, Runtime partitions, files and storage data are NOT
-// candidates. No traversal/deletion/path API exists here, so filesystem links,
-// reparse points, hardlinks and target substitution cannot widen this authority.
-function createSystemCache({ session, now = Date.now } = {}) {
+// No providers => the exact P1 allowlist and result contract, including SCOPE.
+// P2 is opt-in and receives main-owned Session references only; see its module's
+// integration contract. Neither branch accepts renderer paths/partition ids.
+function createSystemCache(options = {}) {
+  if (options.providers !== undefined) return require('./system-cache-p2.cjs').createProviderCache(options);
+  return createLegacyCache(options);
+}
+
+// P1's existing pi-gui-browser NON-persistent HTTP memory cache only. Keep this
+// path independent of all filesystem probes and optional P2 providers.
+function createLegacyCache({ session, now = Date.now } = {}) {
   let pending = false, disposed = false, ticket = null;
   function qualified() {
     try {

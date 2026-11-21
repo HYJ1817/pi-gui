@@ -1067,5 +1067,9 @@ export function createTerminal({
     return disposePromise;
   }
 
-  return { handle, dispose, _sessions: sessions };
+  return { handle, dispose,
+    // A cold storage transaction must not terminate a user shell as a side
+    // effect. Finished tabs hold no writer; starting/closing/unconfirmed do.
+    maintenanceBusy: () => [...sessions.values()].some(session => !FINISHED_STATES.has(session.state)),
+    _sessions: sessions };
 }

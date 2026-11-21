@@ -19,10 +19,20 @@ function validSettings(value) {
     && Object.keys(value).length === KEYS.length && KEYS.every(key => validSetting(key, value[key]));
 }
 
-async function createSystemSettingsStore({ directory, io = fs } = {}) {
-  if (!path.isAbsolute(directory || '')) throw new TypeError('absolute data directory required');
-  const root = path.resolve(directory), file = path.join(root, 'system-settings.json');
-  let settings = { ...DEFAULTS }, status = 'default', error = '', rootIdentity = null;
+async function createSystemSettingsStore(options = {}) {
+  return createSystemPreferenceFile({ ...options, fileName: 'system-settings.json', defaults: DEFAULTS, validate: validSettings });
+}
+
+// Main-only helper shared by the two fixed system preference files. No IPC
+// caller can supply these options; in particular it is not an arbitrary writer.
+async function createSystemPreferenceFile({ directory, io = fs, fileName, defaults, validate, maxBytes = 4096 } = {}) {
+  if (!path.isAbsolute(directory || '') || !/^[a-z][a-z-]+\.json$/.test(fileName || '')
+    || typeof validate !== 'function' || !validate(defaults) || !Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 16384) {
+    throw new TypeError('invalid main-owned preference file');
+  }
+  const root = path.resolve(directory), file = path.join(root, fileName);
+  const prefix = fileName.slice(0, -5);
+  let settings = { ...defaults }, status = 'default', error = '', rootIdentity = null;
 
   async function guard() {
     let current = root;
@@ -42,7 +52,7 @@ async function createSystemSettingsStore({ directory, io = fs } = {}) {
   async function regularFile() {
     try {
       const stat = await io.lstat(file);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 4096) throw Error('unsafe_settings_file');
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > maxBytes) throw Error('unsafe_settings_file');
       return stat;
     } catch (err) { if (err.code === 'ENOENT') return null; throw err; }
   }
@@ -55,13 +65,13 @@ async function createSystemSettingsStore({ directory, io = fs } = {}) {
       handle = await io.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
       if (identity(await handle.stat()) !== identity(stat)) throw Error('settings_file_changed');
       const text = await handle.readFile('utf8');
-      if (Buffer.byteLength(text) > 4096) throw Error('unsafe_settings_file');
+      if (Buffer.byteLength(text) > maxBytes) throw Error('unsafe_settings_file');
       await guard();
       if (identity(await regularFile()) !== identity(stat)) throw Error('settings_file_changed');
       let document;
       try { document = JSON.parse(text); } catch { status = 'corrupt'; error = '系统设置损坏，已使用默认值。重新保存可恢复。'; return; }
       const { schemaVersion, ...values } = document || {};
-      if (schemaVersion !== 1 || !validSettings(values)) {
+      if (schemaVersion !== 1 || !validate(values)) {
         status = 'corrupt'; error = '系统设置格式不受支持，已使用默认值。重新保存可恢复。'; return;
       }
       settings = { ...values }; status = 'saved'; error = '';
@@ -72,9 +82,9 @@ async function createSystemSettingsStore({ directory, io = fs } = {}) {
   await load();
 
   async function save(next) {
-    if (!validSettings(next)) return { ok: false, code: 'invalid_settings' };
+    if (!validate(next) || Buffer.byteLength(JSON.stringify({ schemaVersion: 1, ...next }, null, 2) + '\n') > maxBytes) return { ok: false, code: 'invalid_settings' };
     if (status === 'unavailable') return { ok: false, code: 'settings_unavailable', error };
-    const temporary = path.join(root, `.system-settings-${randomUUID()}.tmp`);
+    const temporary = path.join(root, `.${prefix}-${randomUUID()}.tmp`);
     let handle;
     try {
       await guard();
@@ -99,4 +109,4 @@ async function createSystemSettingsStore({ directory, io = fs } = {}) {
   }
   return { save, snapshot: () => ({ settings: { ...settings }, status, error }) };
 }
-module.exports = { createSystemSettingsStore, DEFAULTS, validSetting, validSettings };
+module.exports = { createSystemSettingsStore, createSystemPreferenceFile, DEFAULTS, validSetting, validSettings };

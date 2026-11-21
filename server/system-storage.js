@@ -5,9 +5,10 @@ import { json } from './http-utils.js';
 export function createSystemStorage({ dataDir, piAgentDir, env = process.env, executionMode }) {
   const desktopDefault = executionMode === 'electron' && env.PI_GUI_DESKTOP === '1'
     && env.PI_GUI_DATA_SOURCE === 'electron-user-data';
+  const managed = executionMode === 'electron' && env.PI_GUI_DESKTOP === '1' && env.PI_GUI_DATA_SOURCE === 'managed';
   const storage = {
     dataDirectory: dataDir,
-    source: env.PI_GUI_DATA ? desktopDefault ? 'electron-user-data' : 'environment' : 'resolver-default',
+    source: env.PI_GUI_DATA ? managed ? 'managed' : desktopDefault ? 'electron-user-data' : 'environment' : 'resolver-default',
     executionMode,
     piAgentDirectory: piAgentDir,
     piAgentSource: env.PI_CODING_AGENT_DIR ? 'environment' : 'pi-default',

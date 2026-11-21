@@ -1,11 +1,14 @@
 import { fetchSystemStorage } from './api.js';
 import { confirmModal } from './ui/modal.js';
 import { createSettingsCard, createSettingsRow, createSettingsToggle, createSegmentedControl } from './ui/primitives.js';
+import { createSystemNetworkCard } from './system-settings-network.js';
+import { createSystemStorageControl, createCacheBreakdown } from './system-settings-storage.js';
 
 const PRESERVED = '聊天记录、设置、凭据、附件、模型和插件数据均会保留。';
 const SOURCE_LABELS = {
   'electron-user-data': 'Electron 默认用户数据目录',
   environment: '由 PI_GUI_DATA 指定',
+  managed: '由固定启动引导配置管理',
   'resolver-default': '应用默认目录',
 };
 
@@ -53,21 +56,6 @@ function directoryValue(initial) {
   return { detail, update(value, origin = '') { path.textContent = value; source.textContent = origin; } };
 }
 
-// P2 owns network policy/proxy configuration; these rows intentionally have
-// neither an effective value nor a persistence/network hook.
-function networkCard() {
-  const proxy = createSegmentedControl({ ariaLabel: '代理', options: [
-    { value: 'system', label: '系统', disabled: true },
-    { value: 'direct', label: '直连', disabled: true },
-    { value: 'custom', label: '自定义', disabled: true },
-  ] });
-  const relaxed = createSettingsToggle({ disabled: true, ariaLabel: '网络宽松模式' });
-  return createSettingsCard({ title: '网络', children: [
-    createSettingsRow({ label: '代理', detail: '暂不支持在此配置代理。', control: proxy }),
-    createSettingsRow({ label: '网络宽松模式', detail: '当前版本不支持。', control: relaxed }),
-  ] });
-}
-
 function storageCard({ desktop, call, current, fetchStorage }) {
   const data = directoryValue('正在读取…');
   const browser = directoryValue(desktop ? '正在读取…' : '当前为网页版，无 Electron 浏览器数据目录。');
@@ -76,19 +64,25 @@ function storageCard({ desktop, call, current, fetchStorage }) {
   cacheSize.id = 'system-cache-size';
   cacheSize.setAttribute('role', 'status');
   const feedback = status('system-cache-feedback');
-  let supported = false, busy = false, bytes = null;
+  const migration = createSystemStorageControl({ desktop, call, current, sizeText });
+  const breakdown = createCacheBreakdown(sizeText);
+  let supported = false, busy = false, bytes = null, cleanable = false;
   const refreshButton = button('重新统计', 'btn ghost', refresh, true);
   const clearButton = button('清理缓存…', 'btn danger ghost', clear, true);
   clearButton.setAttribute('aria-describedby', `${cacheSize.id} ${feedback.id}`);
   const actions = node('div', '', 'system-actions');
+  actions.id = 'system-cache-actions';
   actions.append(refreshButton, clearButton);
   function paint() {
     refreshButton.disabled = busy || !supported;
-    clearButton.disabled = busy || !supported || !(bytes > 0);
+    clearButton.disabled = busy || !supported || !cleanable;
   }
   function renderSize(result) {
     bytes = Number.isSafeInteger(result?.bytes) && result.bytes >= 0 ? result.bytes : null;
-    cacheSize.textContent = sizeText(bytes);
+    cleanable = bytes > 0 || result?.ok === true && result?.buckets?.some(bucket => bucket.cacheBytes > 0);
+    cacheSize.textContent = result?.scope === 'system-cache-p2'
+      ? `磁盘 ${sizeText(result.diskBytes)} · 内存 ${sizeText(result.memoryBytes)}` : sizeText(bytes);
+    breakdown.update(result);
   }
   async function measure() {
     const result = await call('measureCache');
@@ -109,7 +103,7 @@ function storageCard({ desktop, call, current, fetchStorage }) {
     message(feedback, result.ok ? '' : result.error || '缓存统计失败，请重试。', result.ok ? '' : 'error');
   }
   async function clear() {
-    if (!supported || busy || !(bytes > 0)) return;
+    if (!supported || busy || !cleanable) return;
     // Re-read immediately before asking for consent. The main-process ticket
     // expires and can only clear this fixed bucket once.
     busy = true;
@@ -122,7 +116,7 @@ function storageCard({ desktop, call, current, fetchStorage }) {
         message(feedback, preview.error || '缓存统计失败，请重试。', 'error');
         return;
       }
-      if (preview.bytes === 0) { message(feedback, '当前没有可清理缓存。'); return; }
+      if (preview.status === 'empty' || preview.bytes === 0 && !preview.buckets?.some(bucket => bucket.cacheBytes > 0)) { message(feedback, '当前没有可清理缓存。'); return; }
       // Don't overwrite another confirmation opened while measurement awaited.
       if (document.getElementById('confirmLayer')?.hidden === false) {
         message(feedback, '请先处理当前确认，再重试清理。');
@@ -131,7 +125,9 @@ function storageCard({ desktop, call, current, fetchStorage }) {
       message(feedback, '');
       let result;
       await confirmModal({ title: '清理缓存？', danger: true, okText: '清理缓存',
-        message: `预计清理 ${sizeText(preview.bytes)} 内置浏览器 HTTP 内存缓存。${PRESERVED}`,
+        message: preview.scope === 'system-cache-p2'
+          ? `预计清理磁盘 ${sizeText(preview.diskBytes)}、内存 ${sizeText(preview.memoryBytes)} 的已验证缓存。容量可能在运行时再生，磁盘释放以清理后实测为准。${PRESERVED}`
+          : `预计清理 ${sizeText(preview.bytes)} 内置浏览器 HTTP 内存缓存。${PRESERVED}`,
         onDecide: async decision => {
           if (decision === true && current()) result = await call('clearCache', preview.ticket);
           // The ticket is one-shot; results belong beside the cache row, not
@@ -141,9 +137,11 @@ function storageCard({ desktop, call, current, fetchStorage }) {
       });
       if (!current() || !result) return;
       renderSize(result);
-      if (result.status === 'cleared') message(feedback, '缓存已清理。');
+      if (result.status === 'cleared') message(feedback, result.scope === 'system-cache-p2'
+        ? result.diskReleaseConfirmed ? `缓存已清理。实测磁盘文件占用减少 ${sizeText(result.releasedDiskBytes)}。`
+          : '缓存已清理；未确认磁盘占用下降，不宣称释放磁盘空间。' : '缓存已清理。');
       else if (result.status === 'empty') message(feedback, '当前没有可清理缓存。');
-      else if (result.status === 'partial') message(feedback, `清理未完全确认。${result.error || ''}`, 'error');
+      else if (result.status === 'partial') message(feedback, `清理未完全确认。${result.diskReleaseConfirmed ? `实测磁盘文件占用减少 ${sizeText(result.releasedDiskBytes)}。` : ''}${result.error || ''}`, 'error');
       else message(feedback, result.error || '清理缓存失败，请重试。', 'error');
     } finally {
       if (current()) {
@@ -157,10 +155,11 @@ function storageCard({ desktop, call, current, fetchStorage }) {
   }
   const card = createSettingsCard({ title: '存储', children: [
     createSettingsRow({ label: '数据保存路径', detail: data.detail,
-      control: button('更改路径…', 'btn', null, true), help: '这里仅显示 pi-GUI 数据目录；当前版本不支持迁移。' }),
+      control: migration.change, help: '原生选择空目录，停写重启后白名单复制并逐文件校验；旧目录保留。受路径授权、工作树或回退证据绑定的数据会拒绝迁移。' }),
+    migration.feedback,
     createSettingsRow({ label: '可清理缓存', detail: cacheSize, control: actions,
-      help: '只包含内置浏览器 HTTP 内存缓存，不含 Runtime 浏览器缓存，不释放磁盘空间，也不清除登录状态。' }),
-    feedback,
+      help: '仅清理已验证的主窗口 HTTP / Code Cache 与内置及 Runtime 浏览器 HTTP 内存缓存。不清除 Cookie 或登录状态；磁盘释放仅按实测下降报告。' }),
+    breakdown.detail, feedback,
     createSettingsRow({ label: 'Electron 浏览器数据目录', detail: browser.detail }),
     createSettingsRow({ label: 'Pi Agent 配置目录', detail: agent.detail, help: '由 Pi 管理，不属于可清理缓存。' }),
     createSettingsRow({ label: '用户项目目录', detail: '由各工作区管理，不在此处读取、迁移或清理。' }),
@@ -178,6 +177,7 @@ function storageCard({ desktop, call, current, fetchStorage }) {
     if (!desktop) return;
     browser.update(snapshot?.browserDirectory || '无法读取 Electron 浏览器数据目录。',
       snapshot?.browserDirectory ? '主窗口 Session · 由 Electron 管理' : '');
+    migration.adopt(snapshot?.storage);
     supported = snapshot?.capabilities?.cache === true;
     if (supported) void refresh();
     else { cacheSize.textContent = '当前环境不支持缓存管理。'; paint(); }
@@ -286,11 +286,13 @@ export function openSystemSettings({ present, fetchStorage = fetchSystemStorage 
     head.append(node('h2', '系统'), node('p', '网络、存储、电源，以及本机的窗口行为。'));
     const storage = storageCard({ desktop, call, current, fetchStorage });
     const settings = desktopCards({ desktop, call, current });
-    card.append(head, networkCard(), storage.card, settings.power, settings.close, settings.feedback);
+    const network = createSystemNetworkCard({ desktop, call, current });
+    card.append(head, network.card, storage.card, settings.power, settings.close, settings.feedback);
     void storage.loadPaths();
     void call('state').then(result => {
       if (!current()) return;
       settings.adopt(result);
+      network.adopt(result.ok ? result.snapshot : null);
       storage.adoptDesktop(result.ok ? result.snapshot : null);
     });
   }, () => { active = false; }, { className: 'system-settings-card' });

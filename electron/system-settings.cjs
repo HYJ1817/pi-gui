@@ -8,17 +8,19 @@ const { createSystemCache } = require('./system-cache.cjs');
 const CHANNELS = Object.freeze({
   state: 'pi-gui:system-state', set: 'pi-gui:system-set', measure: 'pi-gui:system-cache-measure',
   clear: 'pi-gui:system-cache-clear', quit: 'pi-gui:system-quit',
+  networkSave: 'pi-gui:system-network-save', networkTest: 'pi-gui:system-network-test',
+  storagePick: 'pi-gui:system-storage-pick', storageMigrate: 'pi-gui:system-storage-migrate',
 });
 
 // One main-process owner. A tray hide never reaches Pi, Runtime or maintenance.
 async function createSystemSettings({ ipcMain, getWindow, origin, directory, session,
   browserDirectory, powerSaveBlocker, Tray, Menu, icon, quit, platform = process.platform,
-  store: injectedStore } = {}) {
+  network = null, storage = null, cacheProviders, store: injectedStore } = {}) {
   const store = injectedStore || await createSystemSettingsStore({ directory });
   const power = createSystemPower({ powerSaveBlocker });
   const tray = createSystemTray({ Tray, Menu, icon, getWindow, quit, platform });
-  const cache = createSystemCache({ session });
-  let registered = false, disposed = false, saving = null, drainingQuit = false, error = '';
+  const cache = createSystemCache({ session, ...(cacheProviders ? { providers: cacheProviders } : {}) });
+  let registered = false, disposed = false, saving = null, cachePending = null, drainingQuit = false, error = '';
   const warnings = new Map();
   const saved = store.snapshot().settings;
   for (const key of Object.keys(TYPES)) {
@@ -31,7 +33,8 @@ async function createSystemSettings({ ipcMain, getWindow, origin, directory, ses
     return {
       persistence: persisted.status,
       effective: { ...power.snapshot(), closeBehavior: tray.behavior() },
-      capabilities: { power: power.supported, tray: tray.supported, cache: cache.supported },
+      capabilities: { power: power.supported, tray: tray.supported, cache: cache.supported, network: Boolean(network), storage: Boolean(storage) },
+      network: network?.snapshot(), storage: storage?.state(),
       browserDirectory, error: [error, ...new Set(warnings.values()), persisted.error].filter(Boolean).join(' '),
     };
   }
@@ -94,7 +97,7 @@ async function createSystemSettings({ ipcMain, getWindow, origin, directory, ses
   // Ordinary quits wait for the one already-authorized atomic save. Do not
   // admit another save into that gap or bypass the updater on the retry.
   function deferQuit(event) {
-    if (disposed || tray.isSystemEnding() || event.defaultPrevented || (!saving && !drainingQuit)) return false;
+    if (disposed || tray.isSystemEnding() || event.defaultPrevented || (!saving && !cachePending && !drainingQuit)) return false;
     event.preventDefault();
     if (!drainingQuit) {
       drainingQuit = true;
@@ -102,7 +105,8 @@ async function createSystemSettings({ ipcMain, getWindow, origin, directory, ses
         drainingQuit = false;
         if (!disposed && !tray.isSystemEnding()) quit();
       };
-      void saving.then(resume, resume);
+      const pending = saving && cachePending ? Promise.all([saving, cachePending]) : saving || cachePending;
+      void pending.then(resume, resume);
     }
     return true;
   }
@@ -116,8 +120,35 @@ async function createSystemSettings({ ipcMain, getWindow, origin, directory, ses
     });
     handle(CHANNELS.state, 0, async () => { await saving; return { ok: true, snapshot: snapshot() }; });
     handle(CHANNELS.set, 1, set);
-    handle(CHANNELS.measure, 0, cache.measure);
-    handle(CHANNELS.clear, 1, cache.clear);
+    handle(CHANNELS.networkSave, 1, request => {
+      if (!network) return { ok: false, code: 'network_unavailable' };
+      if (saving || drainingQuit) return { ok: false, code: 'settings_busy' };
+      saving = network.save(request).then(result => ({ ...result, snapshot: snapshot() })).finally(() => { saving = null; });
+      return saving;
+    });
+    handle(CHANNELS.networkTest, 1, request => {
+      if (!network || saving || drainingQuit) return { ok: false, code: 'network_unavailable' };
+      return network.test(request);
+    });
+    handle(CHANNELS.storagePick, 0, () => {
+      if (!storage || saving || cachePending || drainingQuit) return { ok: false, code: 'storage_unavailable' };
+      saving = storage.pick().finally(() => { saving = null; });
+      return saving;
+    });
+    handle(CHANNELS.storageMigrate, 1, request => {
+      if (!storage || saving || cachePending || drainingQuit) return { ok: false, code: 'storage_unavailable' };
+      saving = storage.migrate(request).finally(() => { saving = null; });
+      return saving;
+    });
+    const cacheOperation = run => {
+      if (saving || cachePending || drainingQuit) return { ok: false, code: 'cache_busy', bytes: null };
+      // Native disk statistics are slower than P1's memory query. They exclude
+      // migration/exit, but must not disable unrelated power/tray preferences.
+      cachePending = Promise.resolve().then(run).finally(() => { cachePending = null; });
+      return cachePending;
+    };
+    handle(CHANNELS.measure, 0, () => cacheOperation(cache.measure));
+    handle(CHANNELS.clear, 1, request => cacheOperation(() => cache.clear(request)));
     handle(CHANNELS.quit, 0, () => { setImmediate(quit); return { ok: true }; });
   }
   function dispose() {

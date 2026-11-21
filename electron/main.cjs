@@ -70,6 +70,15 @@ const { createBrowserAgentHost } = require('./browser-agent-host.cjs');
 const { createDesktopTheme } = require('./theme.cjs');
 const { createSystemFontIpc } = require('./system-fonts.cjs');
 const { createSystemSettings } = require('./system-settings.cjs');
+const { createSystemNetwork } = require('./system-network.cjs');
+const { createSystemProxy } = require('./system-proxy.cjs');
+const { createSystemConnectionTest } = require('./system-network-test.cjs');
+const { createSessionFetch } = require('./app-update-fetch.cjs');
+const { initializeSystemStorage } = require('./system-storage-startup.cjs');
+const { createSystemStorageDesktop } = require('./system-storage-desktop.cjs');
+const { createSystemMaintenance } = require('./system-maintenance.cjs');
+const systemNetworkPolicy = require([path.join(__dirname, 'system-network-policy.cjs'),
+  path.join(__dirname, '../lib/system-network-policy.cjs')].find(file => fs.existsSync(file)));
 const { PARTITION: BROWSER_PARTITION } = require('./browser-policy.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
@@ -103,6 +112,16 @@ let win = null;
 let desktopTheme = null;
 let desktopFonts = null;
 let systemSettings = null;
+let systemNetwork = null;
+let systemProxy = null;
+let backendNetworkSession = null;
+let backendNetworkEnvironment = null;
+let systemStorage = null;
+let systemStorageDesktop = null;
+let systemMaintenance = null;
+let resolvedDataDirectory = null;
+let resolvedDataSource = null;
+let resolvedRuntimeDirectory = null;
 let server = null;
 /* 本次实例真正 spawn 的后端身份：{ pid, expected }。expected 是启动后
  * 异步抓取的创建时间 + 映像路径，退出时用它校验 pid 没有被复用。 */
@@ -227,7 +246,7 @@ async function ensureServer() {
   server = spawn(cmd, args, {
     cwd,
     env: {
-      ...process.env,
+      ...(backendNetworkEnvironment || process.env),
       ELECTRON_RUN_AS_NODE: '1', // 让 electron.exe 以纯 Node 身份跑后端
       PI_GUI_OPEN: '0', // 桌面版自己有窗口，别再去开浏览器
       PORT: String(PORT),
@@ -240,8 +259,9 @@ async function ensureServer() {
       // projects.json 和上传缓存要写到可写的地方。默认是应用安装目录，
       // 装在 Program Files 下会写不进去，所以指到用户数据目录。
       // 允许外部用 PI_GUI_DATA 覆盖 —— 自动化测试靠它把数据隔离到临时目录。
-      PI_GUI_DATA: process.env.PI_GUI_DATA || app.getPath('userData'),
-      PI_GUI_DATA_SOURCE: process.env.PI_GUI_DATA ? 'environment' : 'electron-user-data',
+      PI_GUI_DATA: resolvedDataDirectory,
+      PI_GUI_DATA_SOURCE: resolvedDataSource,
+      PI_GUI_RUNTIME_DIR: resolvedRuntimeDirectory,
       // 启动后后台预取官方 Registry 完整目录：第一次打开市场不用等数分钟。
       // 预取不阻塞后端启动，失败也不影响其它功能；网页版不设置这个变量。
       PI_GUI_PREFETCH_REGISTRY: '1',
@@ -270,7 +290,9 @@ async function ensureServer() {
   }
 
   const collect = (buf) => {
-    log.push(buf.toString('utf8'));
+    // Child output can echo credentials split across arbitrary stream chunks.
+    // Keep structure only; sanitizing each raw chunk cannot prove non-disclosure.
+    log.push(`后端输出：${buf.length} 字节。\n`);
     if (log.length > 200) log.shift();
   };
   server.stdout.on('data', collect);
@@ -279,7 +301,7 @@ async function ensureServer() {
    * renderer 也拿不到这个通道。应答固定字段，代理地址与认证信息不出主进程。 */
   try {
     marketNetwork = createMarketNetworkBridge({
-      session: session.defaultSession,
+      session: backendNetworkSession,
       log: (event, details) => mlog('electron', event, details),
     });
   } catch {
@@ -553,7 +575,9 @@ const STATE_VERSION = 3;
  * 早先这里写死 app.getPath('userData')，结果是自动化测试没法隔离 ——
  * 它会去改用户真实的窗口状态，而且测试自己也找不到写出来的文件。 */
 function stateFile() {
-  return path.join(process.env.PI_GUI_DATA || app.getPath('userData'), 'window-state.json');
+  // Window state remains a fixed desktop preference after business relocation;
+  // explicit overrides retain their previous fixture/operator isolation.
+  return path.join(process.env.PI_GUI_DATA ? path.resolve(process.env.PI_GUI_DATA) : app.getPath('userData'), 'window-state.json');
 }
 
 function loadWindowState() {
@@ -827,6 +851,10 @@ function createWindow() {
      注意这只是「快一步」，不是唯一保障 —— 窗口被 destroy 时这个事件不会发，
      真正兜底的是下面 before-quit / window-all-closed 那两处。 */
   win.on('close', event=>{
+    const closingWindow = win;
+    if (!systemSettings?.isSystemEnding() && systemMaintenance?.deferQuit(event, () => {
+      if (closingWindow && !closingWindow.isDestroyed()) closingWindow.close();
+    })) return;
     if(!systemSettings?.isSystemEnding() && appUpdate&&!appUpdate.canQuit()){event.preventDefault();return;}
     saveWindowState();
     // Ordinary X/Alt+F4 hides the SAME window. Do this before considering an
@@ -967,6 +995,7 @@ function applicationIcon() {
 function markSystemEnding() {
   systemSettings?.markSystemEnding();
   appUpdate?.markSystemSessionEnding?.();
+  systemMaintenance?.dispose();
 }
 
 function finishQuit() {
@@ -982,6 +1011,8 @@ function finishQuit() {
   credentialDesktop?.dispose();
   desktopFonts?.dispose();
   killServer();
+  systemNetwork?.dispose(); systemStorageDesktop?.dispose(); systemMaintenance?.dispose();
+  void systemProxy?.stop().catch(() => {});
 }
 
 /* ---------- 生命周期 ---------- */
@@ -1005,6 +1036,42 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    // Before any business/log/browser writer, resolve or recover the one root.
+    try {
+      const cold = await initializeSystemStorage({ directory: app.getPath('userData'), appRoot: ROOT,
+        executable: process.execPath, probe: () => probePort(900) });
+      systemStorage = cold.storage;
+      resolvedDataDirectory = cold.dataDirectory;
+      resolvedDataSource = cold.source;
+      resolvedRuntimeDirectory = cold.runtimeDirectory;
+    } catch {
+      dialog.showErrorBox('Pi GUI 启动失败', '无法确认安全的数据目录或旧写者已停止，未启动后端。请保留原目录及迁移目标，修复引导配置或恢复目录权限后重试。');
+      app.exit(1); return;
+    }
+    // Policy is initialized before any browser, backend or SDK worker exists.
+    // The backend gets a startup-frozen resolver: saving a different policy
+    // never reroutes an already running Agent through a changed proxy.
+    try {
+      fs.mkdirSync(app.getPath('userData'), { recursive: true });
+      systemNetwork = await createSystemNetwork({ directory: app.getPath('userData'),
+        getSessions: () => [session.defaultSession, session.fromPartition(BROWSER_PARTITION),
+          ...[...(runtimeBrowserHost?.records.values() || [])].map(record => session.fromPartition(record.partition))],
+        testConnection: createSystemConnectionTest({ createSession: partition => session.fromPartition(partition) }) });
+      if (!['default', 'saved'].includes(systemNetwork.snapshot().persistence)) throw Error('network_preferences_unconfirmed');
+      const initialNetwork = systemNetwork.startup();
+      backendNetworkEnvironment = systemNetworkPolicy.externalEnvironment(initialNetwork, process.env);
+      backendNetworkEnvironment.PI_GUI_NETWORK_RELAXED = initialNetwork.relaxed ? '1' : '0';
+      const startupSession = backendNetworkSession = session.fromPartition('pi-gui-network-startup');
+      await startupSession.setProxy(systemNetworkPolicy.electronProxy(initialNetwork));
+      if (initialNetwork.mode !== 'direct') {
+        systemProxy = createSystemProxy({ resolveProxy: url => startupSession.resolveProxy(url), relaxed: initialNetwork.relaxed });
+        await systemProxy.start();
+        backendNetworkEnvironment[systemNetworkPolicy.PRIVATE_PROXY_KEY] = systemProxy.bootstrapURL();
+      }
+    } catch {
+      dialog.showErrorBox('Pi GUI 启动失败', '无法确认网络策略，未启动后端。请检查固定用户资料目录中的 system-network.json 格式及权限，保留原文件后修复并重新启动。');
+      app.exit(1); return;
+    }
     try {
       mainLog = createMainLogging({
         dir: defaultMainLogDir({ app }),
@@ -1030,13 +1097,17 @@ if (!app.requestSingleInstanceLock()) {
     installOpenPathHandler();
     installOpenExternalHandler();
     installEnvironmentSetup({ ipcMain, dialog, getWindow: () => win, getServer: () => server, origin: ORIGIN });
+    const desktopResources = {};
     try { appUpdate=installAppUpdate({app,ipcMain,origin:ORIGIN,getWindow:()=>win,getServer:()=>server,dialog,shell,
-      inspectDesktop:()=>{
+      // Use the frozen, dedicated Session rather than main's global Node fetch;
+      // update redirects, host allowlists, size and SHA checks remain its owner.
+      fetchImpl:createSessionFetch({ session: backendNetworkSession }),
+      inspectDesktop:desktopResources.inspect=()=>{
         const states=[browserAgent?.agent.status(),...[...(runtimeBrowserHost?.records.values()||[])].map(r=>r.agent.status())].filter(Boolean);
         return states.some(s=>s.busy||s.loading)?{ok:false,code:'busy-browser',error:'浏览器仍在执行操作或加载页面，请等待完成后重试。'}
           :{ok:true,browsers:states.filter(s=>s.open).length};
       },
-      prepareDesktop:async()=>{
+      prepareDesktop:desktopResources.prepare=async()=>{
         await browserAgent?.bridge.invalidate(true);
         await runtimeBrowserHost?.prepareUpdate();
       },
@@ -1054,6 +1125,16 @@ if (!app.requestSingleInstanceLock()) {
     }); } catch {
       mlog('electron','electron.update_unavailable',{code:'UPDATE_CACHE_UNAVAILABLE'});
     }
+    systemMaintenance = createSystemMaintenance({ getServer: () => server, updates: appUpdate,
+      inspectDesktop: () => {
+        const state = desktopResources.inspect?.();
+        return !state?.ok || state.browsers > 0
+          ? { ok: false, code: 'busy-browser', error: '请先关闭内置浏览器页面，保留未提交输入后再迁移。' } : state;
+      },
+      prepareDesktop: () => desktopResources.prepare?.(),
+      relaunch: () => app.relaunch(), quit: () => app.quit() });
+    systemStorageDesktop = createSystemStorageDesktop({ storage: systemStorage, dialog, getWindow: () => win,
+      maintenance: systemMaintenance, ownsBackend: () => Boolean(server?.connected) });
     /* 右栏内置浏览器。与上面两个 handler 同一时机 —— 必须在 createWindow()
      * 之前注册，否则页面首帧调用会拿到 "No handler registered"。
      * WebContentsView 本身是惰性创建的：页面加载时不建，用户真打开右栏才建。 */
@@ -1066,6 +1147,11 @@ if (!app.requestSingleInstanceLock()) {
         'extensions', 'pi-gui-browser', 'index.js') });
     await browserAgent.start();
     runtimeBrowserHost = createRuntimeBrowserHost({ origin: ORIGIN, getWindow: () => win, ipcMain,
+      prepareSession: async partition => {
+        const selected = session.fromPartition(partition);
+        await systemNetwork.registerSession(selected);
+        return () => systemNetwork.unregisterSession(selected);
+      },
       onFocus: active => browser.setOccluded(active),
       logEvent: (event, details) => mlog('electron', event, details),
       extensionPath: path.join(fs.existsSync(path.join(__dirname, 'server.cjs')) ? __dirname : ROOT,
@@ -1079,10 +1165,23 @@ if (!app.requestSingleInstanceLock()) {
     }
     try {
       await ensureServer();
+      const storageState = systemStorage.state();
+      if (storageState.switched) {
+        const metadata = await getJson(`${ORIGIN}/api/system/storage`, 5000, { [TOKEN_HEADER]: AUTH_TOKEN });
+        const actual = metadata.body?.storage?.dataDirectory;
+        const confirmed = await systemStorage.markStarted({ transactionId: storageState.transactionId,
+          dataDirectory: resolvedDataDirectory, ok: actual === resolvedDataDirectory });
+        if (actual !== resolvedDataDirectory || !confirmed.ok) throw Error('storage_start_unconfirmed');
+      }
     } catch (err) {
       /* 注意：走到这里绝不能再去 loadURL。
        * 端口被别的程序占用时把窗口指向那个端口，用户会看到一个陌生的页面
        * 加一堆查不出原因的 API 报错 —— 那比直接报错难排查得多。 */
+      const failedStorage = systemStorage?.state();
+      if (failedStorage?.switched && failedStorage.phase === 'committed') {
+        await systemStorage.markStarted({ transactionId: failedStorage.transactionId,
+          dataDirectory: resolvedDataDirectory, ok: false }).catch(() => {});
+      }
       mlog('electron', 'electron.backend_start_failed', { phase: 'startup', code: 'BACKEND_UNAVAILABLE' });
       try { mainLog?.close('backend_start_failed'); } catch { /* noop */ }
       dialog.showErrorBox('Pi GUI 启动失败', String(err.message || err));
@@ -1091,9 +1190,10 @@ if (!app.requestSingleInstanceLock()) {
     }
     try {
       systemSettings = await createSystemSettings({ ipcMain, origin: ORIGIN, getWindow: () => win,
-        directory: app.getPath('userData'),
-        // Only the existing non-persistent Browser HTTP bucket is clearable.
+        directory: app.getPath('userData'), network: systemNetwork, storage: systemStorageDesktop,
         session: session.fromPartition(BROWSER_PARTITION), browserDirectory: session.defaultSession.getStoragePath(),
+        cacheProviders: { defaultSession: session.defaultSession, codeCache: true,
+          getBuckets: () => [...(runtimeBrowserHost?.records.values() || [])].map(record => session.fromPartition(record.partition)) },
         powerSaveBlocker, Tray, Menu, icon: applicationIcon(), quit: () => app.quit() });
       systemSettings.register();
       createWindow();
@@ -1147,6 +1247,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on('before-quit', event => {
+    if (!systemSettings?.isSystemEnding() && systemMaintenance?.deferQuit(event)) return;
     if (systemSettings?.deferQuit(event)) return;
     if(appUpdate&&appUpdate.beforeQuit(event))return;
     if (!systemSettings?.isSystemEnding() && process.platform === 'win32' && server?.connected && environmentInstallQuit !== 'done') {

@@ -5,8 +5,12 @@
  * inherit these capabilities. Keep the list in one place: a key missing here is
  * a silent privilege leak that is easy to overlook in either call site.
  */
+import policy from '../lib/system-network-policy.cjs';
+const { PRIVATE_PROXY_KEY, isPrivateProxyEnvironment } = policy;
+
 export const INTERNAL_ENV_KEYS = Object.freeze([
   'PI_GUI_TOKEN',
+  'PI_GUI_NETWORK_RELAXED',
   'PI_GUI_BROWSER_BRIDGE_URL',
   'PI_GUI_BROWSER_BRIDGE_TOKEN',
   'PI_GUI_BROWSER_EXTENSION',
@@ -18,10 +22,12 @@ export const INTERNAL_ENV_KEYS = Object.freeze([
   'PI_GUI_RUNTIME_BROWSER_TOKEN',
   'PI_GUI_EDIT_COMMAND',
   'PI_GUI_EDIT_TOKEN',
+  PRIVATE_PROXY_KEY,
 ]);
 
 export function scrubInternalEnv(env) {
   const childEnv = { ...env };
   for (const key of INTERNAL_ENV_KEYS) delete childEnv[key];
+  for (const key of Object.keys(childEnv)) if (isPrivateProxyEnvironment(key, childEnv[key])) delete childEnv[key];
   return childEnv;
 }

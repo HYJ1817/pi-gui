@@ -840,6 +840,8 @@ function createAppUpdateManager({
     autoInstallStillAllowed,
     manualInstallStillAllowed,
     maybeAutoDownload,
+    // Includes the microtask gap before the updater publishes downloading.
+    maintenanceBusy: () => Boolean(checkInflight || downloadTask),
     whenIdle() {
       return downloadTask
         ? Promise.resolve(downloadTask.promise).then(() => undefined)

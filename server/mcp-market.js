@@ -20,6 +20,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import zlib from 'node:zlib';
+import { hasSystemProxyCapability } from './system-network-agent.js';
 import {
   argsContainSecret, queryLooksSensitive, settingNeedsReference, writeJsonAtomic,
 } from './mcp-config.js';
@@ -309,7 +310,7 @@ function checkMarketUrl(rawUrl) {
  *     代理会把它解析到哪里）
  */
 async function inspectMarketTarget(parsed, {
-  route = 'direct', allowFakeIp = false, lookupImpl = dns.promises.lookup,
+  route = 'direct', allowFakeIp = false, allowProxiedFakeIp = true, lookupImpl = dns.promises.lookup,
 } = {}) {
   const hostname = hostnameOf(parsed);
   const addresses = [];
@@ -343,7 +344,7 @@ async function inspectMarketTarget(parsed, {
       const family = net.isIP(address);
       const kind = family ? classifyAddress(address) : 'invalid';
       if (kind === 'benchmark') fakeIp = true;
-      if (!isAcceptableResolvedAddress(kind, route, { allowFakeIp })) {
+      if (kind === 'benchmark' && !allowProxiedFakeIp || !isAcceptableResolvedAddress(kind, route, { allowFakeIp })) {
         if (kind === 'benchmark') {
           return codeError(
             'proxy-blocked',
@@ -439,8 +440,11 @@ async function resolveMarketRoute(parsed, { network = null, env = process.env } 
   if (noProxyMatches(host, port, safeEnv.NO_PROXY || safeEnv.no_proxy)) {
     return { route: 'direct', source: 'no-proxy' };
   }
-  const envKeys = proxyEnvKeys(safeEnv);
   const bridge = usableNetworkBridge(network) ? network : null;
+  // Main's own compatibility gateway is not a second user proxy intent. Its
+  // upstream can legitimately be DIRECT or a PAC bypass for this hostname.
+  const internal = Boolean(bridge && safeEnv.PI_GUI_DESKTOP === '1' && hasSystemProxyCapability(safeEnv));
+  const envKeys = proxyEnvKeys(safeEnv).filter(key => !internal || safeEnv[key] !== safeEnv.PI_GUI_SYSTEM_PROXY);
   if (!bridge) {
     if (network) {
       return {
@@ -753,10 +757,13 @@ async function fetchJson(rawUrl, {
    * 只有两侧能力都在（判定线路 + 代理取数）才算可信桥，避免半截对象
    * 让直连 fake-IP 被误放行。 */
   const networkUsable = usableNetworkBridge(network);
-  const fakeIpAllowed = allowFakeIp === true || (allowFakeIp === undefined && networkUsable);
+  const desktopPolicy = env?.PI_GUI_DESKTOP === '1' && ['0', '1'].includes(env.PI_GUI_NETWORK_RELAXED);
+  const fakeIpAllowed = desktopPolicy ? env.PI_GUI_NETWORK_RELAXED === '1' && routeInfo.route === 'proxied'
+    : allowFakeIp === true || (allowFakeIp === undefined && networkUsable);
   const safe = await inspectMarketTarget(parsed, {
     route: routeInfo.route,
     allowFakeIp: fakeIpAllowed,
+    allowProxiedFakeIp: !desktopPolicy || fakeIpAllowed,
     lookupImpl,
   });
   if (!safe.ok) return { ...safe, network: safe.network || networkMeta(routeInfo) };

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { resolveAuthSdk } from './provider-auth-sdk.js';
+import { systemWorkerProxy } from './system-network-agent.js';
 import { hasBundledAssets, readAsset } from '../lib/assets.js';
 import { isLiteralKeyInput, isOpaqueId, isProviderId, isRecord, validateConnection } from '../public/provider-management/contract.js';
 
@@ -70,10 +71,13 @@ export function createProviderCredentialSdk({ resolvePackageDir, identityKey, au
       if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) return false;
       const workerEnv = Object.fromEntries(['SystemRoot','SYSTEMROOT','WINDIR','PATH','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','TEMP','TMP'].filter(key => typeof env[key] === 'string').map(key => [key, env[key]]));
       workerEnv.PI_OFFLINE = '1';
+      // The private pinned transport takes a capability via workerData, not
+      // the worker's environment or global HTTP agents.
+      const systemProxy = systemWorkerProxy(env);
       const bundled = hasBundledAssets();
       const workerEntry = bundled ? readAsset('private/provider-credentials.cjs').toString('utf8') : new URL('./provider-credentials.js', import.meta.url);
       const current = worker = workerFactory(workerEntry, { eval: bundled, execArgv: [], env: workerEnv, stdout: true, stderr: true,
-        workerData: { entry: resolved.entry, authPath: location, ttlMs } });
+        workerData: { entry: resolved.entry, authPath: location, ttlMs, ...(systemProxy && { systemProxy }) } });
       workerIdentity = identity;
       workerEpoch = randomUUID();
       current.stdout.resume();

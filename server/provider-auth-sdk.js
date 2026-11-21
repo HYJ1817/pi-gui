@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { nativeQuotaWorkerSource } from './quota.js';
 import { mergeModelCapabilities } from '../lib/model-capabilities.js';
+import { systemWorkerProxy, systemWorkerProxyPrelude } from './system-network-agent.js';
+import { scrubInternalEnv } from './child-env.js';
 
 export function safeAuthUrl(value) {
   if (typeof value !== 'string' || value.length > 8192 || /[\u0000-\u0020\u007f]/.test(value)) return null;
@@ -263,8 +265,11 @@ export function createAuthSdk({ resolvePackageDir, identityKey = () => '', env =
     if (!entry) return false;
     // Workers do not get Electron's HTTP token. SDK diagnostics are private,
     // drained immediately and never copied to the backend log or SSE backlog.
-    const childEnv = { ...env }; delete childEnv.PI_GUI_TOKEN;
-    worker = workerFactory ? workerFactory(WORKER_SOURCE, entry, childEnv) : new Worker(WORKER_SOURCE, { eval: true, workerData: entry, env: childEnv, stdout: true, stderr: true });
+    const childEnv = scrubInternalEnv(env);
+    const systemProxy = systemWorkerProxy(env);
+    const data = systemProxy ? { ...entry, systemProxy } : entry;
+    const source = systemWorkerProxyPrelude(systemProxy) + WORKER_SOURCE;
+    worker = workerFactory ? workerFactory(source, data, childEnv) : new Worker(source, { eval: true, workerData: data, env: childEnv, stdout: true, stderr: true });
     workerKey = key;
     worker.stdout?.resume(); worker.stderr?.resume();
     const instance = worker;

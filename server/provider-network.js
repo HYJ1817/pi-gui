@@ -19,6 +19,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { isIP } from 'node:net';
 import { buildCandidates } from '../lib/models-api.js';
+import { createPinnedSystemAgent } from './system-network-agent.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TOTAL_MS = 30_000;
@@ -173,13 +174,14 @@ function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxB
   }
   const timer = setTimeout(() => abort('timeout'), timeoutMs);
   return new Promise(resolve => {
-    let settled = false;
+    let settled = false, systemAgent = null;
     const finish = value => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       controller.signal.removeEventListener('abort', onInternalAbort);
       signal?.removeEventListener('abort', onOuterAbort);
+      systemAgent?.destroy();
       resolve(value);
     };
     /* 无论底层实现是否把 abort 转成 error，本 promise 都必须 settle：
@@ -208,6 +210,11 @@ function restrictedFetch({ url, headers = {}, addresses, timeoutMs, signal, maxB
     try {
       release = admit?.();
       if (admit && !release) return finish(fail('aborted'));
+      if (!io.requester && target.protocol === 'https' && classifyAddress(addresses[0]) === 'public') {
+        systemAgent = (io.createSystemAgent || createPinnedSystemAgent)({ host: target.host, port: target.port, address: addresses[0],
+          signal: controller.signal, timeoutMs });
+        if (systemAgent) options.agent = systemAgent;
+      }
       req = (io.requester ?? pickRequester(`${target.protocol}:`))(options);
     }
     catch { return finish(fail('network_failed')); }
