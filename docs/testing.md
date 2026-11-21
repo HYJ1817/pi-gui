@@ -1205,8 +1205,8 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 |---|---|---|---|
 | 纯投影 | `npm run test:capability`（进 `npm test`） | 74 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
 | DOM（jsdom） | `npm run test:ui` 的「Agent 能力」段 | — | 扩展 / 技能 / MCP 配置三个入口、「已知能力设置」仍可从扩展页「已安装」到达、旧能力状态页不再渲染、Registry 仍可诊断、设置导航不再出现「能力状态」 |
-| 拆分边界（jsdom） | `npm run test:agent-capabilities`（进 `npm test`） | 33 | 见下方「三入口拆分」 |
-| 真实 Electron | `npm run test:shortcuts:electron` | 82 | 设置导航七组（「Agent 能力」只有技能，扩展在主导航）、快捷键八条、旧命令面板 ID 安全忽略、扩展两个页签 / 技能 / MCP 配置在 1320×820 / 700×600 暗亮布局 |
+| 拆分边界（jsdom） | `npm run test:agent-capabilities`（进 `npm test`） | 42 | 见下方「三入口拆分」 |
+| 真实 Electron | `npm run test:shortcuts:electron` | 99 | 设置导航七组（「Agent 能力」只有技能，扩展在主导航）、快捷键八条、旧命令面板 ID 安全忽略、扩展两个页签 / 技能 / MCP 配置在 1320×820 / 700×600 暗亮布局、主导航「扩展」选中态的计算样式（暗亮两套）、两个页面的实测排版（见下方「版式」） |
 
 关键判定（写错任何一条，界面就开始撒谎）：
 
@@ -1234,7 +1234,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   （`pi-web-access` / `pi-subagents` / `pi-memory` / `pi-browser-harness`）、
   工具名（`web_search` / `memory_search` / `browser_navigate`）或 `nativeState`。
 
-### 三入口拆分（`tests/agent-capability-pages.cjs`，33 条）
+### 三入口拆分（`tests/agent-capability-pages.cjs`，42 条）
 
 技能 / 扩展 / MCP 从同一个工作区拆成三个入口后的边界（入口说明见
 [agent-capabilities.md](agent-capabilities.md)）。jsdom + 注入的 `fetch`，可以挂起任一请求
@@ -1242,7 +1242,9 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 
 - **静态边界**：三方互不 import、页面只被 `app.js`（能力报告只被 `mcp-settings.js`）引用、
   只经 `api.js` 读各自的接口（无 `fetch(` / `'/api/` 字面量 / 动态 import / 浏览器存储）、
-  无模块级可变状态也不写 `S`、市场没有安装路径、导出名在整张图里唯一、样式表各链接一次；
+  无模块级可变状态也不写 `S`、市场没有安装路径、导出名在整张图里唯一、样式表各链接一次，
+  主导航「扩展」的 `aria-current` 有画出来的选中态、当前会话行同时让出高亮（规则本身；
+  真实画面由 `shortcut-electron` 量计算样式）；
 - **纯投影**：技能 state / loaded 三值、筛选与计数、未知作用域归入「其他」；扩展事实行
   `null` 显示「未知 / 无法确认」；
 - **生命周期**：关闭后 document 监听净增为 0、迟到的清单 / 详情 / 报告不写进页面、
@@ -1254,8 +1256,38 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   「读不到原生 MCP 摘要」、不沿用上一次的「生效中」，重试读到后恢复；`tests/ui-ia.cjs` 断言
   设置搜索按「技能 / skill / Agent 能力 / 扩展 / mcp / 能力报告」各自落到技能或 MCP 配置。
 
-17 个定向变异（去掉某条守卫）中 16 个被杀死；剩下的「能力报告忽略 dispose」是等价变异
+- **版式（8 条：组头发现目录与扩展分组的纯投影 2 条 + DOM 结构 6 条）**：技能页只有一个标题与一条工具栏、全局级在项目级之前且组头带
+  发现目录（`roots` 里存在的根，一个都不存在时给默认位置，不借别的作用域）与条数、空组说清缺什么、
+  筛选无结果只出一个空状态、`--skill` 条目出现才显示「临时」页签（条目消失后回落到「全部」）、
+  未信任项目的行带警告徽标且只有一条信任说明；扩展页只有一个「扩展」标题、页签与搜索同一行、
+  刷新在页头、卡片按「需要处理 / 已加载 / 未加载 / 加载状态未知」分组（`loaded: null` 不并进「未加载」）、
+  详情懒建且重开不重建、详情里不重复简介与错误、搜索计数「找到 N 个，共 M 个」只在搜索时出现、
+  插件市场页签不带「已安装」的搜索、空 Registry / 读取失败是带下一步的瓦片（失败时页签计数是空不是 0）。
+
+19 个定向变异（去掉某条守卫或规则）中 18 个被杀死；剩下的「能力报告忽略 dispose」是等价变异
 （dispose 同时让请求序号失效，迟到结果已被序号挡住），行为上不可区分。
+版式另做 15 个定向变异（分组顺序、「临时」页签隐藏与回落、筛选空状态、未开项目文案、启用行的徽标、
+组头发现目录、错误并进「未加载」、详情提前建 / 每次重建、市场沿用搜索、无搜索时的计数、
+失败计成 0、展开态类名、错误阶段丢失），全部被杀死。
+主导航选中态的两条 CSS 规则另在真实 Electron 里各删一次，`shortcut-electron` 都各有两条断言失败。
+
+`shortcut-electron` 里与版式相关的实测（jsdom 不做布局，只能在这里量）：扩展页一屏只有一个可见的
+「扩展」（工作区标题栏那份 `display:none`）、分组顺序、1320 下搜索在页签行右侧、刷新与标题同一水平线、
+卡片多列且不横向溢出、展开详情只撑高自己那张卡（邻卡不动）、整页在 `.extensions-scroll` 里滚动而
+Work Surface 自身保持 `overflow:hidden`（`scrollTop` 为 0，与 Planner / Changes 同一契约）；技能页分组顺序、组头路径有宽度、
+工具栏四件同一行、开关在行内且距右缘 10–18px、状态点在图标右下、无横向溢出；700px 下仍只有一个标题、
+卡片都在视口内。`tests/visual-harness.cjs` 的 `/api/skills` 夹具照 `server/skills.js` 的 `listPayload`
+造（roots / rootLabel / settingsPath / disablePattern / toggleable，详情带 skill / readable / bytes），
+否则截图里看不到开关与组头路径。
+
+公共原语的新增能力（`createSegmentedControl` 的 `count` / `setCount` / `setOptionHidden`）在
+`tests/primitives.cjs` 直接断言：没声明 `count` 的项不生成节点、`0` 照常显示、`null` 留空、
+只隐藏指定项、两者都不触发 `onChange`。
+
+`tests/cdp-shot.cjs`（`npm run shots`，手动、不进 `npm test`）的 115 / 118 / 155 三步跟到新结构：
+状态徽标改由分组承载（改写后的断言不会落成空集上的 `every`）、MCP 截图改到「MCP 配置」页并展开页尾
+「MCP 能力报告」、扩展详情点卡片里的「详情」。原 118 里「启停只能走 /mcp」一条已被 P20.7 的受控启停取代，
+改为断言开关写的是 pi 自己的 `mcp.json`。
 
 ⚠️ **测试占用的固定端口别去蹲**：`visual-harness` 默认 7789、`dev-server` 7791、
 `git.cjs` 7799；CDP 9222–9225。跑截图 harness 用表外端口
