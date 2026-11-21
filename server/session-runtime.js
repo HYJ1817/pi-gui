@@ -234,7 +234,8 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     providerRead: type => rpc.request({ type }, { timeoutMs: 3000, strict: true }),
     providerSession: (state, identity) => runtimeSessionWitness(state, sessions.resolveByUuid, identity),
     start: () => resumeFile ? rpc.restart({ sessionPath: resumeFile }) : rpc.start(),
-    executionBranch: (scope, branchEpoch, detailTarget) => readExecutionBranch({ scope, branchEpoch, detailTarget,
+    executionBranch: (scope, branchEpoch, detailTarget, onVerifiedPath) => readExecutionBranch({
+      scope, branchEpoch, detailTarget, onVerifiedPath,
       readState: () => rpc.request({ type: 'get_state' }, { timeoutMs: 3000, strict: true }),
       readEntries: () => rpc.request({ type: 'get_entries' }, { timeoutMs: 3000, strict: true }),
       isCurrent: expected => !disposed && context.isCurrent() && expected.kind === 'runtime' &&

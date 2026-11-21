@@ -73,7 +73,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       draft: '', draftRevision: baseRevision, approvals: [], truncated: false,
       timeline: [], timelineSeq: 0, timelineChars: 0, timelineTruncated: false,
       userIndexSeq: 0, pendingEdit: null,
-      executionRevision: 0,
+      executionRevision: 0, recoveredExecution: null,
       executionLive: { frame: null, input: null, echo: null, responseSequence: null },
       /* Pi 的回合边界：`agent_settled` 在整个 session 级 run 结束时发出（自动
        * 重试、压缩、steering/follow-up 都在它之前跑完）。下一次 `agent_start`
@@ -734,6 +734,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     let copy;
     if (block.kind === 'user') {
       copy = { kind: 'user', text: typeof block.text === 'string' ? block.text : '', truncated: block.truncated === true };
+      if (block.hasImages === true) copy.hasImages = true;
       if (typeof block.messageId === 'string') copy.messageId = block.messageId;
       if (Number.isInteger(block.userIndex)) copy.userIndex = block.userIndex;
     } else if (block.kind === 'assistant' || block.kind === 'thinking') {
@@ -743,6 +744,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         state: typeof block.state === 'string' ? block.state : '',
         truncated: block.truncated === true,
       };
+      if (block.kind === 'assistant' && typeof block.messageId === 'string') copy.messageId = block.messageId;
     } else if (block.kind === 'tools') {
       copy = {
         kind: 'tools',
@@ -772,12 +774,12 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     return copy;
   }
 
-  function setHistoryTimeline(r, timeline, truncated) {
+  function setHistoryTimeline(r, timeline, truncated, preserveIds = false) {
     const list = Array.isArray(timeline) ? timeline.filter(block => block && typeof block.kind === 'string') : [];
     const bounded = [];
     for (const block of list) {
       if (block.kind === 'user' || block.kind === 'assistant' || block.kind === 'thinking') {
-        if (typeof block.text !== 'string' || !block.text) continue;
+        if (typeof block.text !== 'string' || !block.text && !(block.kind === 'user' && block.hasImages === true)) continue;
       } else if (block.kind === 'tools') {
         if (!Array.isArray(block.tools) || !block.tools.length) continue;
       } else if (block.kind === 'plan') {
@@ -786,7 +788,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       const copy = cloneBlock(block);
       if (copy) bounded.push(copy);
     }
-    r.timeline = bounded.map((block, index) => ({ ...block, id: 'h' + (index + 1) }));
+    r.timeline = preserveIds ? bounded : bounded.map((block, index) => ({ ...block, id: 'h' + (index + 1) }));
     r.timelineSeq = bounded.length;
     r.userIndexSeq = r.timeline.reduce((max, block) => block.kind === 'user'
       ? Math.max(max, Number.isInteger(block.userIndex) ? block.userIndex + 1 : max)
@@ -795,6 +797,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
      * 历史序号之后，而不是从 0 重来。 */
     r.userIndexSeq = Math.max(r.userIndexSeq, r.timeline.filter(block => block.kind === 'user').length);
     r.pendingEdit = null;
+    r.recoveredExecution = null;
     r.executionLive = { frame: null, input: null, echo: null, responseSequence: null };
     recomputeTimelineChars(r);
     r.timelineTruncated = truncated === true;
@@ -825,7 +828,78 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     trimTimeline(r, null);
   }
 
+  function canRecoverExecutionHistory(record, expected) {
+    const { owner, cursor, branchEpoch, serverCursor = cursor, revision, idleItem } = expected;
+    const ownedCut = record && owner?.sessionId && Number.isSafeInteger(branchEpoch)
+      && Number.isSafeInteger(serverCursor) && serverCursor >= cursor
+      && records.get(owner.conversationId) === record && same(record.owner, owner)
+      && record.cursor === cursor && record.item.execution?.branchEpoch === branchEpoch
+      && (revision === undefined || revision === record.item.revision)
+      && record.item.lifecycle === 'ready' && record.item.activity === 'idle'
+      && !record.approvals.length && !record.pendingEdit;
+    if (!ownedCut) return false;
+    // The owner-scoped events response describes the authoritative idle state
+    // at its cursor, even when the ring omitted the final settle or body frame.
+    if (same(idleItem?.owner, owner) && idleItem.execution?.branchEpoch === branchEpoch
+        && idleItem.lifecycle === 'ready' && idleItem.activity === 'idle') return true;
+    return serverCursor === cursor && record.settled !== false && !record.executionLive.input
+      && !record.assistant?.texts.some(block => block.state === 'streaming')
+      && record.thinkingBlock?.state !== 'streaming'
+      && !record.tools.some(tool => tool.state === 'running' || tool.state === 'waiting');
+  }
+
+  function recoverExecutionHistory(record, expected, payload) {
+    if (!canRecoverExecutionHistory(record, expected) || payload?.ok !== true
+        || payload.cursor !== (expected.serverCursor ?? expected.cursor) || payload.branchEpoch !== expected.branchEpoch
+        || !same(payload.owner, expected.owner) || payload.sessionId !== expected.owner.sessionId
+        || payload.locator?.nativeSessionId !== payload.sessionId
+        || ['conversationId', 'projectId', 'workspaceId', 'workspaceEpoch']
+          .some(key => payload.locator[key] !== expected.owner[key])) return false;
+    const execution = payload.execution;
+    if (!Array.isArray(execution?.timeline) || !Array.isArray(payload.messages)) return false;
+    const ids = new Set();
+    for (const block of execution.timeline) {
+      if (typeof block?.id !== 'string' || !/^h[1-9][0-9]*$/.test(block.id) || ids.has(block.id)) return false;
+      ids.add(block.id);
+    }
+    stopRunningTools(record);
+    setHistoryTimeline(record, execution.timeline, execution.truncated === true, true);
+    const plain = payload.messages.filter(message => ['user', 'assistant'].includes(message?.role))
+      .map(message => typeof message.text === 'string' ? message.text : contentText(message.content)).join('\n\n');
+    record.text = bound(plain);
+    record.truncated = payload.truncated === true || record.text !== plain;
+    record.cursor = payload.cursor;
+    record.recoveredExecution = { scope: expected, data: execution.p5 ?? null };
+    return true;
+  }
+
+  function loadHistory(id, messages, expectedOwner, expectedCursor, execution = null) {
+    const r = records.get(id);
+    if (!r || !same(r.owner, expectedOwner) || r.cursor !== expectedCursor) return false;
+    const list = Array.isArray(messages) ? messages : [];
+    const text = list.filter(m => ['user', 'assistant'].includes(m.role)).map(m => contentText(m.content)).join('\n\n');
+    r.text = bound(text);
+    if (r.text !== text) r.truncated = true;
+    const projected = execution?.timeline;
+    if (Array.isArray(projected)) {
+      setHistoryTimeline(r, projected, execution.truncated === true);
+    } else {
+      const built = timelineFromMessages(list);
+      setHistoryTimeline(r, built.blocks, built.truncated);
+    }
+    return true;
+  }
+
+  function recoverLegacyExecutionHistory(record, expected, messages) {
+    if (!canRecoverExecutionHistory(record, expected)) return false;
+    stopRunningTools(record);
+    if (!loadHistory(expected.owner.conversationId, messages, expected.owner, expected.cursor)) return false;
+    record.cursor = expected.serverCursor ?? expected.cursor;
+    return true;
+  }
+
   return { seed, apply, applyDetailed, resources: () => resources && { ...resources }, get: id => records.get(id), values: () => [...records.values()],
+    canRecoverExecutionHistory, recoverExecutionHistory, recoverLegacyExecutionHistory,
     /* Appended blocks alone carry accepted live provenance. History copies, stale
      * branch frames and obsolete generations cannot acquire a Timeline binding. */
     executionWitness(record, value) {
@@ -872,21 +946,6 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     beginUserEdit,
     applyUserEdit,
     cancelUserEdit,
-    history(id, messages, expectedOwner, expectedCursor, execution = null) {      const r = records.get(id);
-      if (!r || !same(r.owner, expectedOwner) || r.cursor !== expectedCursor) return false;
-      const list = Array.isArray(messages) ? messages : [];
-      const text = list.filter(m => ['user', 'assistant'].includes(m.role)).map(m => typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content : []).filter(c => c.type === 'text').map(c => c.text || '').join('')).join('\n\n');
-      r.text = bound(text); if (r.text !== text) r.truncated = true;
-      const projected = execution?.timeline;
-      if (Array.isArray(projected)) {
-        setHistoryTimeline(r, projected, execution.truncated === true);
-      } else {
-        /* get_messages 的原生消息同样走 timelineFromMessages，保持与只读历史
-         * 同一条投影路径；没有 toolResult 时它只会退化成正文，不会编造工具。 */
-        const built = timelineFromMessages(list);
-        setHistoryTimeline(r, built.blocks, built.truncated);
-      }
-      return true;
-    },
+    history: loadHistory,
   };
 }

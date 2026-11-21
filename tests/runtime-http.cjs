@@ -24,6 +24,15 @@ let checks = 0; const check = async (name, fn) => { await fn(); checks++; consol
     const started = await post({ action: 'start', args: { id: 'w', epoch: 'e' } }); assert.equal(started.body.ok, true);
     const snapshot = await (await fetch(base + '/api/runtime-sessions', { headers: { 'X-Pi-Gui-Token': 'fixture-auth' } })).json(); const owner = snapshot.items[0].owner;
     await check('启动/快照 owner齐全，不按activeUI路由', () => { assert.ok(owner.sessionId); assert.equal(owner.workspaceId, 'w'); assert.ok(owner.runtimeId); });
+    await check('执行历史只接受当前原生 owner 和封闭请求体', async () => {
+      const request = { action: 'execution-history', owner };
+      assert.equal((await post(request, { 'X-Pi-Gui-Token': '' })).status, 401);
+      assert.equal((await post(request, { Origin: 'https://foreign.invalid' })).status, 403);
+      assert.equal((await post({ ...request, owner: { ...owner, sessionId: 'foreign' } })).body.code, 'stale_runtime');
+      assert.equal((await post({ ...request, args: { path: 'foreign.jsonl' } })).body.code, 'invalid_request');
+      assert.deepEqual((await post(request)).body, { ok: false, code: 'history_unavailable' });
+      assert.equal(wire.length, 0);
+    });
     await check('command缺身份拒绝', async () => assert.equal((await post({ action: 'command', command: { type: 'prompt', message: 'x' } })).body.code, 'stale_runtime'));
     await check('经典写入口在并行时缺scope拒绝', async () => assert.equal((await post({ type: 'prompt', message: 'x' }, {}, '/api/command')).body.code, 'stale_runtime'));
     await check('经典 owner不能发独立会话命令', async () => assert.equal((await post({ action: 'command', owner: legacy, command: { type: 'prompt', message: 'x' } })).body.code, 'stale_runtime'));

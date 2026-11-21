@@ -7,7 +7,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { once } = require('node:events');
 
-const out = path.resolve(process.env.P5B_SCREENSHOTS || '.shots/session-ux-p5b');
+const historyOut = process.env.P5C_SCREENSHOTS;
+const out = path.resolve(historyOut || process.env.P5B_SCREENSHOTS || '.shots/session-ux-p5b');
 const chromePath = process.env.CHROME_PATH || [
   'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome', '/usr/bin/chromium',
 ].find(file => fs.existsSync(file));
@@ -130,6 +131,109 @@ async function seedSurface(mode) {
   };
 }
 
+async function makeHistoryFixture() {
+  const { projectExecutionHistory } = await import('../server/execution-timeline-history.js');
+  const locator = { projectId: 'fixture', workspaceId: 'fixture-w', workspaceEpoch: '1',
+    conversationId: 'fixture-p5c', nativeSessionId: 'fixture-session' };
+  const text = text => ({ type: 'text', text });
+  const specs = [['read-state', 'read', { path: 'src/state.js', offset: 31, limit: 8 }],
+    ['read-contract', 'read', { path: 'src/contract.js', offset: 4, limit: 12 }],
+    ['read-missing', 'read', { path: 'src/missing.js' }]];
+  const messages = [
+    { role: 'user', content: [text('请核对会话恢复后，执行记录是否仍按实际开始顺序排列。')] },
+    { role: 'assistant', stopReason: 'toolUse', model: 'fixture-review', usage: { input: 48, output: 12 },
+      content: [text('先核对会话状态和读取边界。'), { type: 'thinking', thinking: '离线夹具的公开思考内容。' },
+        ...specs.map(([id, name, arguments_]) => ({ type: 'toolCall', id, name, arguments: arguments_ }))] },
+    ...specs.map(([id, name], index) => ({ role: 'toolResult', toolCallId: id, toolName: name,
+      isError: index === 2, content: [text(index === 2 ? '找不到夹具文件' : 'const history = readFixture();')] })),
+    { role: 'assistant', stopReason: 'stop', model: 'fixture-answer', usage: { input: 51, output: 24 },
+      content: [text('已核对 **历史恢复**。三个活动的状态和原有用量记录均已保留。')] },
+  ];
+  const native = messages.map((message, i) => ({ type: 'message', id: 'entry-' + i,
+    parentId: i ? 'entry-' + (i - 1) : null, message }));
+  const leafId = native.at(-1).id;
+  const record = { inputId: 'entry-0', beforeLeafId: null, leafId, status: 'completed', finalResponseId: leafId,
+    timing: { startedAt: 500, endedAt: 2500 }, entries: native.map(row => ({ id: row.id, role: row.message.role })),
+    tools: [1, 0, 2].map((i, start) => ({ callId: specs[i][0], responseId: 'entry-1', resultId: 'entry-' + (i + 2),
+      startedAt: 700 + 100 * start, endedAt: 1700 + 100 * start, durationMs: 1000,
+      status: i === 2 ? 'failed' : 'completed' })) };
+  const read = classic => projectExecutionHistory(native, [record], { sessionId: locator.nativeSessionId, leafId, classic });
+  return { locator, classic: read(true), runtime: read(false) };
+}
+
+async function seedHistory(mode, packet, locator) {
+  if (mode === 'classic') {
+    const [messages, { S }] = await Promise.all([import('/messages.js'), import('/state.js')]);
+    S.state = { ...S.state, sessionId: packet.sessionId };
+    messages.rebuildFromMessages(packet, packet.sessionId);
+    return;
+  }
+  const [runtime, { createRuntimeConversation }, surface] = await Promise.all([
+    import('/runtime-state.js'), import('/runtime-conversation.js'), import('/ui/workspace-surface.js'),
+  ]);
+  surface.showRuntimeConversation();
+  const host = document.querySelector('#runtimeView');
+  host.replaceChildren();
+  const view = createRuntimeConversation({ host });
+  runtime.seedRuntimeSnapshot({ backendInstance: 'fixture', items: [{ conversationId: locator.conversationId,
+    owner: null, nativeSessionId: locator.nativeSessionId, workspace: locator,
+    title: '历史验收会话', lifecycle: 'dormant', activity: 'idle' }] });
+  const original = globalThis.fetch;
+  globalThis.fetch = (url, options) => new URL(url, location.href).pathname === '/api/runtime-sessions'
+    && new URL(url, location.href).searchParams.get('conversationId') === locator.conversationId
+    ? Promise.resolve(new Response(JSON.stringify({ ...packet, locator }))) : original(url, options);
+  try { return await view.openHistory(locator); }
+  finally { globalThis.fetch = original; }
+}
+
+async function measureActivityWindow() {
+  const { createExecutionTurnView } = await import('/execution-timeline-view.js');
+  const stream = document.querySelector('#stream');
+  const makeSpacer = () => Object.assign(document.createElement('div'), { style: 'height:1000px; flex-shrink:0' });
+  const turn = { id: 'stress', status: 'completed' };
+  const group = { id: 'group', turnId: turn.id, status: 'completed' };
+  const items = Array.from({ length: 2000 }, (_, sequence) => ({ id: 'item-' + sequence, turnId: turn.id,
+    parentId: group.id, position: { sequence, part: 0 }, kind: 'tool', status: 'completed',
+    title: '读取 fixture-' + sequence + '.js', detailRef: { state: 'pending' } }));
+  const view = createExecutionTurnView({ document });
+  view.update({ turn, group, items });
+  stream.replaceChildren(makeSpacer(), view.node, makeSpacer());
+  const head = view.node.querySelector('.execution-activity-group > button');
+  head.scrollIntoView({ block: 'center', behavior: 'instant' });
+  const frame = () => new Promise(resolve => requestAnimationFrame(resolve));
+  await frame();
+  await frame();
+  const closedRows = view.node.querySelectorAll('.execution-activity-item').length;
+  const closedDetail = view.node.querySelectorAll('.execution-tool-native').length;
+  const before = head.getBoundingClientRect().top;
+  const start = performance.now();
+  head.click();
+  await frame();
+  const firstFrameMs = performance.now() - start;
+  await frame();
+  const afterOpen = head.getBoundingClientRect().top;
+  const openRows = view.node.querySelectorAll('.execution-activity-item').length;
+  const row = view.node.querySelector('.execution-activity-item > button');
+  const rowBefore = row.getBoundingClientRect().top;
+  row.click();
+  await frame();
+  const native = document.createElement('div');
+  native.style.height = '220px';
+  native.textContent = '已返回的夹具详情';
+  view.update({ turn, group, items, details: new Map([[items[0].id, native]]) });
+  await frame();
+  await frame();
+  const detailMounted = view.node.contains(native);
+  const detailDelta = Math.abs(row.getBoundingClientRect().top - rowBefore);
+  head.click();
+  await frame();
+  await frame();
+  const closeDelta = Math.abs(head.getBoundingClientRect().top - before);
+  const rowsAfterClose = view.node.querySelectorAll('.execution-activity-item').length;
+  return { itemCount: items.length, closedRows, closedDetail, openRows, detailMounted, detailDelta,
+    firstFrameMs, openDelta: Math.abs(afterOpen - before), closeDelta, rowsAfterClose };
+}
+
 function measure(root, scroller) {
   const pixel = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
   function rgba(color) {
@@ -229,6 +333,45 @@ async function main() {
     await send('Page.navigate', { url });
     await until(() => evaluate("document.readyState === 'complete' && Boolean(document.querySelector('#stream .thread'))"), 'application did not boot');
     await wait(500);
+    if (historyOut) {
+      const fixture = await makeHistoryFixture();
+      for (const mode of ['classic', 'runtime']) {
+        const scroller = mode === 'classic' ? '#stream' : '#runtimeView .rtc-output';
+        const select = 'document.querySelector(' + JSON.stringify(scroller + ' .execution-turn') + ')';
+        await send('Emulation.setDeviceMetricsOverride', { width: 1320, height: 820, deviceScaleFactor: 1, mobile: false });
+        await evaluate('(' + seedHistory.toString() + ')(' + [mode, fixture[mode], fixture.locator].map(value => JSON.stringify(value)).join(',') + ')');
+        await until(() => evaluate('Boolean(' + select + '?.querySelector("[data-execution-part=answer] strong"))'), mode + ' recovered answer missing');
+        await evaluate(select + '.querySelector(".execution-activity-group > button").click()');
+        assert.equal(await evaluate(select + '.querySelectorAll(".execution-activity-item").length'), 3);
+        assert.match(await evaluate(select + '.querySelector(".execution-activity-item").textContent'), /contract\.js/);
+        await evaluate(select + '.querySelector(".execution-activity-item > button").click()');
+        const detail = await evaluate(select + '.querySelector(".execution-activity-item").textContent');
+        assert.match(detail, mode === 'classic' ? /const history = readFixture/ : /当前视图无权读取详情/);
+        if (mode === 'runtime') assert.doesNotMatch(detail, /const history = readFixture/);
+        for (const [theme, width, height] of [['dark', 1320, 820], ['light', 700, 640]]) {
+          const name = [mode, 'restored', theme, width].join('-');
+          await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await evaluate('document.documentElement.dataset.theme = ' + JSON.stringify(theme) + '; document.querySelector('
+            + JSON.stringify(scroller) + ').scrollTop = 0');
+          await wait(140);
+          const metric = await evaluate('(' + measure.toString() + ')(' + select + ', document.querySelector(' + JSON.stringify(scroller) + '))');
+          assert.ok(metric.overflow <= 1 && metric.textContrast >= 4.5, JSON.stringify(metric));
+          assert.ok(metric.rows.every(height => height >= 24 && height < 51), JSON.stringify(metric));
+          results.push({ name, ...metric });
+          await shot(name);
+        }
+        if (mode === 'classic') {
+          const activity = await evaluate('(' + measureActivityWindow.toString() + ')()');
+          assert.deepEqual([activity.closedRows, activity.closedDetail, activity.openRows, activity.rowsAfterClose], [0, 0, 40, 0]);
+          assert.ok(activity.detailMounted && [activity.openDelta, activity.closeDelta, activity.detailDelta].every(delta => delta <= 2),
+            JSON.stringify(activity));
+          results.push(activity);
+        }
+      }
+      fs.writeFileSync(path.join(out, 'measurements.json'), JSON.stringify(results, null, 2) + '\n');
+      console.log('P5-C Chromium: four restored layouts and 2,000 activities verified; ' + out);
+      return;
+    }
     for (const mode of ['classic', 'runtime']) {
       const selector = mode === 'classic' ? '#stream' : '#runtimeView .rtc-output';
       const view = selector + ' .execution-turn';

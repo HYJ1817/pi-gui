@@ -64,10 +64,11 @@ export async function getJSON(url, headers) {
 }
 
 /** POST / DELETE 一个 JSON 接口。网络层失败同样返回结构化结果，不抛。 */
-export async function sendJSON(url, { method = 'POST', body, contentType, headers, applicationScoped = false } = {}) {
+export async function sendJSON(url, { method = 'POST', body, contentType, headers, applicationScoped = false, signal } = {}) {
   if (url === '/api/restart' || url === '/api/sessions/switch' || url.includes('/open-session')
     || (url === '/api/command' && ['abort', 'new_session', 'fork', 'switch_session', 'steer', 'follow_up'].includes(body?.type))) S.cancelFallback?.('user-operation');
   const opts = { method };
+  if (signal) opts.signal = signal;
   if (contentType) {
     opts.headers = { 'Content-Type': contentType };
     opts.body = body;
@@ -131,6 +132,8 @@ export async function fetchRuntimeSessions() {
 }
 /* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
 export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
+export const getClassicExecutionHistory = ({ owner, branchEpoch }, { signal } = {}) =>
+  sendJSON('/api/execution-history', { body: { owner, branchEpoch }, applicationScoped: true, signal });
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });
 export const runtimeEditPreflight = (owner, edit) => runtimeSessionAction({ action: 'edit-preflight', owner, edit });
 export const runtimeEditResend = (owner, edit) => runtimeSessionAction({ action: 'edit-resend', owner, edit });

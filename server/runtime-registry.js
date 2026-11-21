@@ -3,6 +3,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runtimeWitnessCurrent } from './provider-config-sync.js';
 import { createExecutionDetailIndex } from './execution-timeline.js';
+import { createExecutionTimelineCapture } from './execution-timeline-capture.js';
+import { projectExecutionHistory, runtimeExecutionIdentity } from './execution-timeline-history.js';
 
 const OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 /* status / recover 允许 bridge 换代后的旧 owner 继续查询：runtimeId /
@@ -28,7 +30,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   publish = () => {}, externalCount = () => 0, beforeStart = () => null, beforeCommand = () => null,
   admission = (_args, action) => action(), onFocus = async () => {}, maxEvents = 200, maxBytes = 1024 * 1024,
   logEvent = null, providerLifecycle = () => {}, sharedAdmission = async () => { throw fail('tool_guard_unavailable'); },
-  sessionTitle = null, executionValidation = false } = {}) {
+  sessionTitle = null, executionValidation = false, executionStore = null } = {}) {
   const diagLog = typeof logEvent === 'function' ? logEvent : () => {};
   const safeLog = (event, details = {}) => { try { diagLog(event, details); } catch { /* observation only */ } };
   const backendInstance = randomUUID(), records = new Map(), lives = new Map(), leases = new Map(), revisions = new Map();
@@ -258,6 +260,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       details?.invalidate({ kind: 'runtime', owner: owner(live) });
       executionBoundary = true;
     }
+    if (executionBoundary || event.type === 'bridge_status' && event.state !== 'ready') live.executionCapture?.reset();
     if (event.type === 'bridge_status') {
       /* 只有 bridge 在**一次已观察/已提交的运行**中退出，才是「中断」；
        * 空闲时连接断开沿用原有 error/attention，不伪造任务终态。 */
@@ -367,6 +370,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     // Diagnostic raw lines are never retained in parallel conversation buffers.
     if (event.type === 'bridge_stderr' || event.type === 'bridge_parse_error') { changed(live); return; }
     const frame = { type: 'runtime_event', owner: owner(live), eventSequence: ++live.sequence, event, execution: executionMetadata(live) };
+    try {
+      live.executionCapture?.observe(event, { sequence: frame.eventSequence, observedAt: frame.execution.observedAt });
+    } catch { /* history evidence can never gate event publication */ }
     const bytes = Buffer.byteLength(JSON.stringify(frame));
     if (bytes <= maxBytes) { live.events.push({ frame, bytes }); live.bytes += bytes; }
     else live.historyRequired = true;
@@ -398,6 +404,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       live.executionBoundAt = live.sequence;
       changed(live);
     }
+    if (live.activity === 'idle') void live.executionCapture?.checkpoint();
     // The factory must prove any path against the scanner/header before persistence.
     const locator = live.adapter.sessionLocator ? await live.adapter.sessionLocator(state) : null;
     if (!belongs(live) || generation !== live.generation) return;
@@ -442,6 +449,10 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
        * 「response 已到、agent_start 还没到」那段窗口。`editUnresolved` 表示
        * 结果未知：锁必须保留到状态查询 / recover 给出可核对结论。 */
       editing: null, editTurn: false, editUnresolved: false };
+    if (executionStore) live.executionCapture = createExecutionTimelineCapture({
+      store: executionStore, identity: scope => runtimeExecutionIdentity(scope.owner),
+      readBranch: () => executionBranch(owner(live)),
+    });
     if (!leases.has(key)) leases.set(key, new Set());
     leases.get(key).add(live); lives.set(record.conversationId, live);
     live.adapterReady = Promise.resolve().then(async () => {
@@ -589,16 +600,33 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   }
   /** Backend-owned verification call. No Runtime action exposes this witness
    * or the validation-only detail reader. Never use the public get_entries. */
-  async function executionBranch(expected, detailTarget = null) {
+  async function executionBranch(expected, detailTarget = null, onVerifiedPath = null) {
     try {
       const live = resolve(expected), branchEpoch = live.executionBranchEpoch;
       if (!live.sessionId || live.lifecycle !== 'ready' || typeof live.adapter.executionBranch !== 'function') return null;
       await validateWorkspace(live.record.workspace);
       resolve(expected);
-      const branch = await live.adapter.executionBranch({ kind: 'runtime', owner: owner(live) }, branchEpoch, detailTarget);
+      const branch = await live.adapter.executionBranch({ kind: 'runtime', owner: owner(live) }, branchEpoch,
+        detailTarget, onVerifiedPath);
       await validateWorkspace(live.record.workspace);
       return resolve(expected) === live && live.executionBranchEpoch === branchEpoch ? branch : null;
     } catch { return null; }
+  }
+  async function executionHistory(expected) {
+    const unavailable = { ok: false, code: 'history_unavailable' };
+    const live = resolve(expected);
+    const idle = () => live.lifecycle === 'ready' && live.activity === 'idle' && !live.agentActive
+      && !live.pendingTurns.size && !live.approvals.size && !live.editing && !live.editTurn && !live.editUnresolved;
+    if (!executionStore || !idle() || !live.sessionId) return unavailable;
+    const records = executionStore.list(runtimeExecutionIdentity(expected));
+    if (!records.length) return unavailable;
+    const cursor = live.sequence, branchEpoch = live.executionBranchEpoch;
+    let history = null;
+    const branch = await executionBranch(expected, null, (entries, witness) => {
+      history = projectExecutionHistory(entries, records, { sessionId: live.sessionId, leafId: witness.leafId, editable: true });
+    });
+    if (!branch || !history || live.sequence !== cursor || live.executionBranchEpoch !== branchEpoch || !idle()) return unavailable;
+    return { ...history, owner: owner(live), cursor, branchEpoch, locator: historyTarget(live.record).locator };
   }
   async function captureExecutionDetail(expected, evidence) {
     if (!details) return null;
@@ -802,6 +830,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   }); }
   function retire(live) {
     if (live.retirePromise) return live.retirePromise;
+    live.executionCapture?.reset();
     live.closedOwner ||= owner(live);
     if (!live.retired) {
       details?.invalidate({ kind: 'runtime', owner: owner(live) });
@@ -874,7 +903,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       };
     });
   }
-  return { start, openProjectSession, resume, close, restart, command, read, focus, blur, events, executionBranch,
+  return { start, openProjectSession, resume, close, restart, command, read, focus, blur, events, executionBranch, executionHistory,
     captureExecutionDetail, readExecutionDetail, snapshot, dispose, healthCheck, invalidateWorkspace, bindResource,
     editPreflight, editResend, editStatus, editRecover,
     providerSyncTargets,

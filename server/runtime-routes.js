@@ -48,6 +48,10 @@ export function createRuntimeRoutes({ registry, validateWorkspace = async () => 
         case 'restart': result = await registry.restart(body.owner); break;
         case 'command': result = await registry.command(body.owner, body.command); break;
         case 'read': result = { ok: true, data: await registry.read(body.owner, body.command) }; break;
+        case 'execution-history':
+          if (!closed(body, ['action', 'owner']) || !registry.executionHistory) fail();
+          result = await registry.executionHistory(body.owner);
+          break;
         case 'edit-preflight': result = await registry.editPreflight(body.owner, body.edit); break;
         case 'edit-resend': result = await registry.editResend(body.owner, body.edit); break;
         case 'edit-status': result = await registry.editStatus(body.owner, body.requestId); break;

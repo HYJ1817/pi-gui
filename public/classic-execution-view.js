@@ -1,8 +1,11 @@
-/* DOM ownership for Classic live turns. Sequence and bridge scope come from
- * the same accepted frame that produced each native node. History stays flat. */
+/* DOM ownership for Classic turns. Live attribution comes from accepted
+ * frames; restored turns use the same server-verified native message range. */
 import { S } from './state.js';
 import { classicExecutionFallbackEcho, getClassicExecutionTimeline } from './execution-timeline-state.js';
 import { createExecutionTurnView, executionTurnForInput } from './execution-timeline-view.js';
+import { executionLivePreferenceKey, executionViewPreferences } from './execution-view-preferences.js';
+import { isPlanTool } from './plan-model.js';
+import { safeToolName } from './runtime-timeline.js';
 
 const UPDATE = new Set([
   'agent_start', 'agent_settled', 'message_start', 'message_end', 'tool_execution_start',
@@ -33,7 +36,7 @@ function release(round) {
   for (const outcome of round.outcomes) outcome.hidden = false;
   for (const response of round.responses) response.usageLabel?.remove();
   for (const [node, marker] of round.markers) {
-    if (node.isConnected) marker.replaceWith(node);
+    if (node.parentNode) marker.replaceWith(node);
     else marker.remove();
   }
   round.markers.clear();
@@ -78,6 +81,87 @@ export function releaseClassicExecutionTail(article, oldTail) {
     dirty.delete(round);
     if (active === round) active = null;
   }
+}
+
+const historyStatus = new Set(['completed', 'failed', 'interrupted', 'cancelled', 'incomplete', 'unknown']);
+const historyId = value => typeof value === 'string' && value.length > 0 && value.length <= 256;
+
+/** Select complete native ranges from the authorized response. A malformed
+ * or unconfirmed range remains in the regular history renderer. */
+export function indexClassicHistoryTurns(p5, messages, items, sessionId) {
+  const owners = new Map();
+  if (!sessionId || p5?.version !== 1 || p5.sessionId !== sessionId || !historyId(p5.leafId)
+      || !Array.isArray(p5.turns) || p5.turns.length > 240) return owners;
+  const toolCounts = new Map();
+  for (const item of items) {
+    if (item.kind !== 'tools') continue;
+    for (const { id } of item.entries) toolCounts.set(id, (toolCounts.get(id) ?? 0) + 1);
+  }
+  const toolsByPosition = new Map(items.filter(item => item.kind === 'tools').map(item => [item.sourceIndex, item.entries]));
+  const ordinals = new Map();
+  const toolResults = new Map();
+  let userIndex = 0;
+  for (const [index, message] of messages.entries()) {
+    if (message?.role === 'user') ordinals.set(index, userIndex++);
+    if (message?.role === 'toolResult' && historyId(message.toolCallId)) {
+      toolResults.set(message.toolCallId, toolResults.has(message.toolCallId) ? -1 : index);
+    }
+  }
+  const seen = new Set();
+  const seenEntries = new Set();
+  let end = -1;
+  for (const turn of p5.turns) {
+    const { from, through, input, additionalInputs, entryIds, finalResponseId, group, items: activities } = turn ?? {};
+    if (!Number.isSafeInteger(from) || !Number.isSafeInteger(through) || from <= end || through < from
+        || through >= messages.length || !historyId(turn.id) || seen.has(turn.id)
+        || turn.sessionId !== sessionId || !historyStatus.has(turn.status)
+        || !Array.isArray(entryIds) || entryIds.length !== through - from + 1
+        || !entryIds.every(id => historyId(id) && !seenEntries.has(id)) || new Set(entryIds).size !== entryIds.length
+        || input?.id !== entryIds[0] || !ordinals.has(from) || ordinals.get(from) !== input.userIndex
+        || !Array.isArray(additionalInputs) || !Array.isArray(activities)
+        || !Array.isArray(turn.usage)
+        || finalResponseId != null && (!entryIds.includes(finalResponseId)
+          || messages[from + entryIds.indexOf(finalResponseId)]?.role !== 'assistant')) continue;
+    const groupedUsers = [];
+    const allTools = new Map();
+    let ambiguousTool = false;
+    for (let index = from; index <= through; index++) {
+      if (index > from && ordinals.has(index)) groupedUsers.push({ id: entryIds[index - from], userIndex: ordinals.get(index) });
+      for (const entry of toolsByPosition.get(index) ?? []) {
+        const resultIndex = toolResults.get(entry.id);
+        if (toolCounts.get(entry.id) !== 1
+          || resultIndex !== undefined && (resultIndex < from || resultIndex > through)) ambiguousTool = true;
+        if (!isPlanTool(entry.name)) allTools.set(entry.id, { index, name: safeToolName(entry.name) });
+      }
+    }
+    const activityTools = activities.filter(item => item?.callId).map(item => item.callId);
+    if (ambiguousTool || groupedUsers.length !== additionalInputs.length
+        || !groupedUsers.every((user, index) => user.id === additionalInputs[index]?.id
+          && user.userIndex === additionalInputs[index].userIndex)
+        || activities.length && (!group || group.turnId !== turn.id || !historyStatus.has(group.status))
+        || activities.some(item => !item || item.turnId !== turn.id || item.parentId !== group.id
+          || item.position?.domain !== 'history' || !Number.isSafeInteger(item.position.sequence) || !historyStatus.has(item.status)
+          || item.callId && (allTools.get(item.callId)?.index !== item.position.sequence
+            || allTools.get(item.callId)?.name !== item.toolName))
+        || activityTools.length !== allTools.size || new Set(activityTools).size !== activityTools.length
+        || activityTools.some(callId => !allTools.has(callId))) continue;
+    seen.add(turn.id);
+    for (const id of entryIds) seenEntries.add(id);
+    end = through;
+    for (let index = from; index <= through; index++) owners.set(index, turn);
+  }
+  return owners;
+}
+
+export function mountClassicHistoryTurn(turn, nodes) {
+  const round = { ...nodes, historical: true, settled: true, markers: new Map(), groups: new Map(), view: null };
+  try {
+    if (renderRound(round, turn, turn.group, turn.items)) {
+      rounds.add(round);
+      return;
+    }
+  } catch { /* The verified read is optional for the existing native UI. */ }
+  release(round);
 }
 
 export function scheduleClassicExecutionView(event) {
@@ -194,7 +278,7 @@ function flush() {
       continue;
     }
     try {
-      if (!renderRound(round, turn, groups.get(turn.id), items)) release(round);
+      if (!renderRound(round, turn, groups.get(turn.id), items, scope)) release(round);
     } catch {
       // A failed presentation must return all adopted native nodes.
       release(round);
@@ -202,24 +286,24 @@ function flush() {
   }
 }
 
-function renderRound(round, turn, group, items) {
+function renderRound(round, turn, group, items, scope = null) {
   const details = new Map();
   for (const item of items) {
     if (!item.callId) continue;
-    const tool = round.tools.get(item.position.sequence);
+    const tool = round.tools.get(round.historical ? item.callId : item.position.sequence);
     if (tool?.callId !== item.callId) return false;
     details.set(item.id, tool.node);
   }
 
-  const plan = turn.plan && round.plan?.isConnected ? round.plan : null;
-  if (Boolean(turn.plan) !== Boolean(plan) || (!plan && round.plan?.isConnected)) return false;
+  const plan = round.historical ? round.plan : turn.plan && round.plan?.isConnected ? round.plan : null;
+  if (!round.historical && (Boolean(turn.plan) !== Boolean(plan) || (!plan && round.plan?.isConnected))) return false;
   const progress = [];
   const answer = [];
   const usage = [];
   const nativeUsageIds = new Set();
   const recordedUsage = new Map(turn.usage.map(row => [row.responseId, row]));
   const kindsByResponse = new Map();
-  for (const part of turn.parts) {
+  for (const part of turn.parts ?? []) {
     if (!kindsByResponse.has(part.message.id)) kindsByResponse.set(part.message.id, new Set());
     kindsByResponse.get(part.message.id).add(part.kind);
   }
@@ -228,8 +312,8 @@ function renderRound(round, turn, group, items) {
   const ordered = [...round.additional];
   for (const response of round.responses) {
     const { node, sequence } = response;
-    if (!node.isConnected) continue;
-    const responseId = turn.id + ':response:' + sequence;
+    if (round.historical ? !node.parentNode : !node.isConnected) continue;
+    const responseId = response.responseId ?? turn.id + ':response:' + sequence;
     const kinds = kindsByResponse.get(responseId);
     const meta = response.meta || node.querySelector(':scope > .ui2-msg-meta');
     if (meta) {
@@ -243,12 +327,12 @@ function renderRound(round, turn, group, items) {
           response.usageLabel.className = 'execution-usage-model';
         }
         response.usageLabel.textContent = [model.provider, model.id].filter(Boolean).join(' / ');
-        if (!response.usageLabel.isConnected) meta.prepend(response.usageLabel);
+        if (response.usageLabel.parentNode !== meta) meta.prepend(response.usageLabel);
       }
     }
     // A streaming block may still be empty at its first frame. Leave that
     // original host visible until the model can classify its public parts.
-    if (kinds?.has('answer') || kinds?.has('partial-answer')
+    if (round.historical ? responseId === turn.finalResponseId : kinds?.has('answer') || kinds?.has('partial-answer')
         || (!waitingForFallback && tail === response && node.querySelector('.msg-err'))
         || (!round.settled && (!kinds || !kinds.has('progress-text')) && tail === response)) {
       answer.push(node);
@@ -258,7 +342,12 @@ function renderRound(round, turn, group, items) {
   for (const response of ordered) progress.push(response.node);
 
   if (!round.view) {
-    round.view = createExecutionTurnView({ document: round.input.ownerDocument });
+    const preferenceId = round.historical ? turn.id + ':' + turn.entryIds.at(-1)
+      : executionLivePreferenceKey(scope, round.sequence);
+    const preferences = executionViewPreferences({
+      kind: 'classic', workspaceId: scope?.workspaceKey ?? S.legacyOwner?.workspaceId, sessionId: turn.sessionId,
+    }, preferenceId, { alias: turn.viewAlias, items });
+    round.view = createExecutionTurnView({ document: round.input.ownerDocument, preferences });
     round.input.before(round.view.node);
   }
   for (const node of [round.input, plan, ...progress, ...answer, ...usage, ...round.outcomes]) {
