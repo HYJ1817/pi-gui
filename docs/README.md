@@ -39,6 +39,7 @@
 | CI 与测试 | [测试政策与分层](testing.md)、[开发构建](development.md) | 当前 `package.json`、`scripts/test-group-plan.mjs`、`scripts/run-test-group.mjs` 和相关 workflow/测试；不从旧验收报告抄测试清单 |
 | 安装、更新及发布 | [发版](releasing.md)、[更新](updates.md)、[应用内更新](windows-in-app-update.md)、[首次环境安装](environment-setup.md) | [构建](development.md)、[签名](code-signing.md)、[兼容升级](upgrade-playbook.md)、[安全](security.md)、[应用更新偏好验收](in-app-update-preferences-acceptance.md) |
 | Pi、供应商与扩展兼容 | [Pi 兼容](pi-compatibility.md)、[兼容升级](upgrade-playbook.md) | [供应商认证](provider-auth.md)、[MCP](mcp.md)、[扩展](extensions.md)、[项目配置](project-config.md) |
+| 技能 / 扩展 / MCP 页面与并行开发 | [Agent 能力入口与边界](agent-capabilities.md)（文件归属、共享文件、2A / 2B 边界） | [扩展](extensions.md)、[能力展示](capability-ux.md)、[MCP](mcp.md)、[工作区与生命周期](work-surfaces.md) |
 
 ## 当前设计、历史方案和验收记录
 

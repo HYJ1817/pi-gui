@@ -990,19 +990,20 @@ async function main() {
   await sleep(350);
   await shotOf('#rightPane', '114-workspace-changes-clean', 'P14-D：干净工作区中性空态', ['没有文件变更'], [['无文件行', `document.querySelectorAll('#rightPane .chg-row').length===0`]]);
   await evalJs(`fetch('/api/__work-surface/git-clean?value=0').then(r=>r.ok)`);
-  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabExtensions').click()`);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabInstalled').click()`);
   await sleep(550);
-  /* P36：独立的能力状态页已移除，Extensions 标签回到 Registry 本身。 */
+  /* P36：独立的能力状态页已移除；扩展是主导航页面，「已安装」页签就是 Registry 本身。 */
   await shotOf('#workSurface', '115-workspace-extensions', 'P14-D / P36：扩展工作区默认落在 Extension Registry', ['pi-web-access', 'acme-toolkit', '加载失败'], [...surfaceChecks('extensions'), ['Registry 行与状态徽标都在', `document.querySelectorAll('#workSurface .ext-extension-item').length>=5 && [...document.querySelectorAll('#workSurface .ext-extension-item .ext-badge')].every(e=>e.textContent.trim().length>0)`], ['不认识的 Extension 仍在列表里', `[...document.querySelectorAll('#workSurface .ext-name')].some(e=>e.textContent==='acme-toolkit')`], ['旧的能力状态视图不再渲染', `document.querySelector('#workSurface .cap-view')===null`]]);
-  await evalJs(`document.querySelector('#extensionsTabSkills').click()`);
+  /* 技能拆到「设置 › Agent 能力 › 技能」：行内展开详情，不再是扩展页里的标签。 */
+  await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navSkills').click()`);
   await sleep(400);
-  await shotOf('#workSurface', '115b-workspace-skills', 'P14-D：Skills Stage 工作区', ['Skills', 'code-review'], [['Skill 列表可见', `document.querySelectorAll('#workSurface .ext-list .ext-item').length===3`]]);
-  await evalJs(`document.querySelector('#workSurface .ext-list .ext-item')?.click()`);
+  await shotOf('#workSurface', '115b-workspace-skills', 'P14-D：技能设置页', ['技能', 'code-review'], [['Skill 列表可见', `document.querySelectorAll('#workSurface .skills-page .skill-row').length===3`], ['目录高亮落在「技能」', `document.querySelector('#navSkills').getAttribute('aria-current')==='page'`]]);
+  await evalJs(`document.querySelector('#workSurface .skill-row .skill-row-main')?.click()`);
   await sleep(250);
-  await shotOf('#workSurface .ext-detail', '116-workspace-skill-detail', 'P14-D：Skill 详情', ['code-review'], [['唯一选中 Skill', `document.querySelectorAll('#workSurface .ext-list .ext-item[aria-current="true"]').length===1`]]);
-  await evalJs(`[...document.querySelectorAll('#workSurface .ext-list .ext-item')].find(x=>x.textContent.includes('proj-only'))?.click()`);
+  await shotOf('#workSurface .skill-row.is-open', '116-workspace-skill-detail', 'P14-D：Skill 行内详情', ['code-review'], [['唯一展开的 Skill', `document.querySelectorAll('#workSurface .skill-row-main[aria-expanded="true"]').length===1 && !!document.querySelector('#workSurface .skill-detail')`]]);
+  await evalJs(`[...document.querySelectorAll('#workSurface .skill-row')].find(x=>x.textContent.includes('proj-only'))?.querySelector('.skill-row-main')?.click()`);
   await sleep(220);
-  await shotOf('#workSurface', '117-workspace-skill-untrusted', 'P14-D：未信任 Skill 状态', ['项目未被信任'], [['状态有文字', `document.querySelector('#workSurface .ext-list .ext-item.on')?.textContent.includes('项目未被信任')`]]);
+  await shotOf('#workSurface', '117-workspace-skill-untrusted', 'P14-D：未信任 Skill 状态', ['项目未被信任'], [['状态有文字', `[...document.querySelectorAll('#workSurface .skill-row')].find(x=>x.textContent.includes('proj-only'))?.textContent.includes('项目未被信任')`]]);
   await evalJs(`[...document.querySelectorAll('#workSurface .ext-tab')].find(x=>x.textContent==='MCP')?.click()`);
   await sleep(250);
   await shotOf('#workSurface', '118-workspace-mcp', 'P14-D / P20.6：MCP 原生集成（版本真值 + built-in + Server 管理面）', ['这个 pi 带 MCP 能力', 'builtin:mcp', '0.99.1'], [
@@ -1070,12 +1071,12 @@ async function main() {
   await evalJs(`document.querySelector('#navChanges').click()`);
   await sleep(350);
   await shotOf('#rightPane', '131-neutral-changes', 'P30：右栏 Git 过滤与危险按钮主体中性', ['文件变更'], [['右栏无横向溢出', `document.querySelector('#rightPane').scrollWidth<=document.querySelector('#rightPane').clientWidth+1`], ['计算后的交互色为中性', neutralControls]]);
-  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabSkills').click()`);
+  await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navSkills').click()`);
   await sleep(350);
-  /* 这一张量的是 Skill 选中行的中性色。 */
+  /* 这一张量的是 Skill 展开行与作用域分段控件的中性色。 */
   await sleep(350);
-  await evalJs(`document.querySelector('#workSurface .ext-list .ext-item')?.click()`);
-  await shotOf('#workSurface', '132-neutral-extensions', 'P14-E：Skill 选中与 Tabs 为灰阶', ['code-review'], [...viewportChecks('#workSurface')]);
+  await evalJs(`document.querySelector('#workSurface .skill-row .skill-row-main')?.click()`);
+  await shotOf('#workSurface', '132-neutral-extensions', 'P14-E：Skill 展开行与分段控件为灰阶', ['code-review'], [...viewportChecks('#workSurface')]);
   await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navProviders').click()`);
   await sleep(200);
   await shotOf('#modal', '133-neutral-modal', 'P14-E：供应商 Modal 按钮为灰阶', ['模型供应商'], [['计算后的交互色为中性', neutralControls], ['Modal 位于视口内', `(() => {const r=document.querySelector('#modal .modal-card').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight})()`]]);
@@ -1171,7 +1172,7 @@ async function main() {
   ]);
 
   /* P15: 在真浏览器布局中检查 Extension 列表和详情。 */
-  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabExtensions').click()`);
+  await evalJs(`document.querySelector('#navExtensions').click(); document.querySelector('#extensionsTabInstalled').click()`);
   for (let i=0; i<40 && !await evalJs(`document.querySelector('#workSurface .ext-extension-item')`); i++) await sleep(50);
   /* P22 夹具里 registry 有多条（Web / Memory / example-tools / 两条未知），
    * 所以按名字点，不按位置点 —— 位置会随夹具顺序漂。 */
@@ -1179,7 +1180,7 @@ async function main() {
   for (let i=0; i<40 && !(await evalJs(`document.querySelector('#workSurface .ext-detail')?.textContent.includes('command: example')`)); i++) await sleep(50);
   await shotOf('#workSurface', '155-extension-registry', 'P15：Extension 发现列表和只读详情', ['example-tools', '1.2.3', 'command: example'], [
     ...viewportChecks('#workSurface'),
-    ['Extensions 标签选中', `document.querySelector('#extensionsTabExtensions').getAttribute('aria-selected')==='true'`],
+    ['「已安装」标签选中', `document.querySelector('#extensionsTabInstalled').getAttribute('aria-selected')==='true'`],
     ['工具来源未知有明确说明', `document.querySelector('#workSurface .ext-detail').textContent.includes('未提供已注册工具列表')`],
   ]);
 

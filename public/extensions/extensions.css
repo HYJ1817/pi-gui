@@ -1,0 +1,63 @@
+/* 扩展页（public/extensions/）。
+ * 页签沿用既有 .ext-tabs / .ext-tab tablist 样式，已安装清单沿用 .ext-split / .ext-item /
+ * .ext-known 的 Work Surface 布局；这里只补页签计数、工具栏与市场空状态。 */
+
+.extensions-page > .extensions-tabs { margin-bottom: 14px; }
+.extensions-tab { display: inline-flex; align-items: center; gap: 6px; }
+.extensions-tab:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; border-radius: var(--ds-radius-6); }
+.extensions-tab-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-bg-inset);
+  color: var(--ds-text-muted);
+  font-size: var(--text-3xs);
+  line-height: 17px;
+  text-align: center;
+}
+.extensions-tab-count:empty { display: none; }
+
+.extensions-page > .extension-notices { flex: 0 0 auto; margin-bottom: 12px; }
+
+.extensions-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-bottom: 10px;
+}
+.extensions-search { flex: 1 1 240px; max-width: 420px; }
+.extensions-search-icon { flex: 0 0 auto; }
+.extensions-refresh { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+
+.extensions-market-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 440px;
+  margin: 56px auto 0;
+  text-align: center;
+  color: var(--ds-text-muted);
+}
+.extensions-market-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--ds-radius-12);
+  background: var(--ds-bg-secondary);
+  color: var(--ds-text-secondary);
+}
+.extensions-market-title {
+  margin: 4px 0 0;
+  font-size: var(--text-md-plus);
+  font-weight: 600;
+  color: var(--ds-text-primary);
+}
+.extensions-market-desc { margin: 0; font-size: var(--text-sm); line-height: 1.6; }
+
+@media (max-width: 720px) {
+  .extensions-search { max-width: none; }
+}

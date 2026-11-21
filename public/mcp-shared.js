@@ -1,4 +1,5 @@
 import { createIcon } from './ui/icons.js';
+import { noteUnknownEnum } from './schema-drift.js';
 /* MCP 管理页与市场页共用的展示层工具。
  *
  * 这个模块只做三件事：把后端的安全投影翻译成人能读的状态、生成静态图标、
@@ -23,8 +24,12 @@ const RUNTIME_LABELS = {
   unknown: '状态未知',
 };
 
+/** 闭集外的运行状态显示「状态未知」，同时记一条 schema 漂移（只记来源 / 字段 / 类型，不记值）。
+ *  这条上报原在旧「Skills 与扩展 › MCP」标签里，标签移除后由管理页承接。 */
 export function runtimeLabel(state) {
-  return RUNTIME_LABELS[state] || '状态未知';
+  if (RUNTIME_LABELS[state]) return RUNTIME_LABELS[state];
+  if (state) noteUnknownEnum('mcp-runtime', 'server.state', state);
+  return '状态未知';
 }
 
 export function scopeLabel(scope) {
@@ -186,5 +191,6 @@ export function serverStatus(server, runtime, { trust } = {}) {
   if (state === 'closed' || state === 'disconnected') {
     return { tone: 'err', label: runtimeLabel(state), detail: entry.error || '没有活动的连接', state, entry };
   }
-  return { tone: 'dim', label: '状态未知', detail: '', state, entry };
+  // 闭集外的值经 runtimeLabel：仍显示「状态未知」，同时留一条漂移记录（不回显上游原文）。
+  return { tone: 'dim', label: runtimeLabel(state), detail: '', state, entry };
 }

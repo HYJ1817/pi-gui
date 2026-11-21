@@ -94,7 +94,8 @@ import { loadProjects, openDirPicker, setSessionsSlot, setProjectSessionActions,
 import { loadProviders, openProvidersPanel, openProviderAuthPanel, restartPi } from './providers.js';
 import { applyProjectPreferences, openProjectSettings } from './project-config.js';
 import { loadGitStatus, openChangesPanel, refreshGitNow } from './git.js';
-import { loadExtensionsBadge, openExtensions } from './extensions.js';
+import { openExtensions } from './extensions/page.js';
+import { loadSkillsBadge, openSkillsSettings } from './skills/page.js';
 import { openMcpSettings } from './mcp-settings.js';
 import { resetDrift } from './schema-drift.js';
 import { loadPlannerBadge, openPlanner, setTaskSessionViewer } from './planner.js';
@@ -871,7 +872,7 @@ export function reconcileBridgeSnapshot(snapshot) {
       /* pi 起来了 → 会话身份可能刚变（新 cwd / 新会话），草稿要对齐。
        * 这个调用与「会话 id 变化时」那一条是同一个函数，重复调用无副作用。 */
       draftSync();
-      loadExtensionsBadge();
+      loadSkillsBadge();
       loadPlannerBadge();
       boot();
       void resumeClassicPendingEdit();
@@ -1359,8 +1360,8 @@ document.addEventListener('pi-gui:right-pane', (event) => {
   $('navChanges').setAttribute('aria-pressed', String(open));
   $('navChanges').classList.toggle('is-active', open);
 });
-/* MCP 现在是完整的设置页（管理 + 市场），不再借用扩展面板的旧标签页。
- * 旧标签页仍保留在扩展页里，供只读诊断使用。 */
+/* MCP 是完整的设置页（管理 + 市场）；原扩展面板 MCP 标签里的能力报告
+ * 已并入该页页尾的折叠区（public/mcp-report.js）。 */
 function openMcpPage() {
   return openMcpSettings({
     present: (build, dispose, options) => settingsSurface.presentDetail('navMcp', build, dispose, options),
@@ -1374,8 +1375,8 @@ $('btnAddProject').onclick = openDirPicker;
 $('btnPickProject').onclick = openDirPicker;
 $('btnProjectSettings').onclick = openProjectSettings;
 
-// 扩展能力（Skills / MCP）保留全局入口；模型供应商位于 More 菜单。
-$('navExtensions').onclick = () => openExtensions({ tab: 'skills' });
+// 扩展是应用主导航里的独立页面；技能与 MCP 在设置里（Agent 能力 / 扩展与 MCP）。
+$('navExtensions').onclick = () => openExtensions();
 $('navPlanner').onclick = () => openPlanner();
 
 const globalMenu = $('globalMoreMenu');
@@ -1402,6 +1403,7 @@ for (const [id, render] of [
   ['navAppearance', openAppearance],
   ['navShortcutHelp', openShortcutHelp],
   ['navSystem', openSystemSettings],
+  ['navSkills', openSkillsSettings],
 ]) {
   $(id).onclick = () => render({ present: presentSettingsDetail(id) });
 }
@@ -1520,14 +1522,14 @@ const openView = (view) => () => {
   if (view === 'chat') return goChat();
   if (view === 'planner') return openPlanner();
   if (view === 'changes') return openChangesPanel();
-  return openExtensions({ tab: 'skills' });
+  return openExtensions();
 };
 
 registerShortcut({ id: 'shortcut-help', combo: 'primary+/', label: '键盘快捷键帮助', group: '通用', when: canRun, run: () => $('navShortcutHelp').click() });
 registerShortcut({ id: 'view-chat', combo: 'alt+1', label: '切到对话', group: '视图', when: canRun, run: openView('chat') });
 registerShortcut({ id: 'view-planner', combo: 'alt+2', label: '切到任务', group: '视图', when: canRun, run: openView('planner') });
 registerShortcut({ id: 'view-changes', combo: 'alt+3', label: '切到文件变更', group: '视图', when: canRun, run: openView('changes') });
-registerShortcut({ id: 'view-extensions', combo: 'alt+4', label: '切到扩展与 Skills', group: '视图', when: canRun, run: openView('extensions') });
+registerShortcut({ id: 'view-extensions', combo: 'alt+4', label: '切到扩展', group: '视图', when: canRun, run: openView('extensions') });
 /* 起始页「变更」卡片显示的就是这一条 —— 提示从注册表读，不另写一份组合键。 */
 registerShortcut({ id: 'work-changes', combo: 'primary+shift+g', label: '打开文件变更面板', group: '工作面板', when: canRun, run: () => openChangesPanel() });
 registerShortcut({ id: 'work-terminal', combo: 'primary+`', label: '打开终端面板', group: '工作面板', when: canRun, run: () => openTerminalPanel({ triggerId: 'btnTerminal' }) });
@@ -1549,11 +1551,11 @@ defineCommands([
   { id: 'view.chat', title: '对话', group: '视图', keywords: 'chat 会话 首页 home', shortcutId: 'view-chat', run: goChat },
   { id: 'view.planner', title: '任务（Planner）', group: '视图', keywords: 'planner 计划 任务 plan', shortcutId: 'view-planner', run: () => openPlanner() },
   { id: 'view.changes', title: '文件变更', group: '视图', keywords: 'git diff changes 变更', shortcutId: 'view-changes', run: () => openChangesPanel() },
-  { id: 'view.extensions', title: '扩展（Extensions）', group: '视图', keywords: 'extension 扩展 注册表', shortcutId: 'view-extensions', run: () => openExtensions() },
+  { id: 'view.extensions', title: '扩展（Extensions）', group: '视图', keywords: 'extension 扩展 注册表 已安装 插件 市场', shortcutId: 'view-extensions', run: () => openExtensions() },
   /* 内置浏览器：只是**右栏的一个面板**，不是第四个一级视图 —— 所以它在这里，
    * 不进左侧全局导航栏。when 为假（网页版）时压根不进列表，不灰着骗人。 */
   { id: 'view.browser', title: '打开内置浏览器', group: '视图', keywords: 'browser 浏览器 web preview localhost 预览 网页 内置', when: () => Boolean(browserPane), run: () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.open() },
-  { id: 'view.skills', title: 'Skills', group: '视图', keywords: 'skill 技能', run: () => openExtensions({ tab: 'skills' }) },
+  { id: 'view.skills', title: '技能（Skills）', group: '视图', keywords: 'skill skills 技能 SKILL.md', run: () => $('navSkills').click() },
   { id: 'view.mcp', title: 'MCP 服务器', group: '视图', keywords: 'mcp server 原生 市场 配置', run: () => openMcpPage() },
   { id: 'view.usage', title: '用量与额度', group: '视图', keywords: 'usage quota 用量 额度 token 上下文', run: () => openCtxTip() },
   { id: 'session.new', title: '新对话', group: '会话', keywords: 'new session 新会话', when: canPrompt, run: () => newSession() },
@@ -1613,9 +1615,9 @@ loadProviders();
 /* 标题设置（自动生成开关 / 能力探测）。失败不阻塞启动：缓存为 null 时
  * 设置页显示默认开启，手动入口按「未验证」照常显示。 */
 void loadSessionTitleSettings();
-/* 侧栏「扩展」右边那个数字：发现了几条 skill。
+/* 设置菜单「技能」右边那个数字：发现了几条 skill。
  * 只做展示，失败就留空 —— 这个数字不该在启动路径上弹任何错。 */
-loadExtensionsBadge();
+loadSkillsBadge();
 
 /* Git 工作区状态先拉一次，把侧栏的「文件变更 N」填上。
  * 失败也无所谓 —— 不是 Git 仓库、没装 git、还没选项目都是正常情况，

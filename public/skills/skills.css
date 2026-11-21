@@ -1,0 +1,137 @@
+/* 设置 › Agent 能力 › 技能（public/skills/）。
+ * 只用设计系统 Token 与既有公共类（.ds-segmented / .ds-select / .ds-search-control /
+ * .ds-switch / .ext-dot / .ext-badge / .ext-rows / .cfg-note），不引入新的视觉语言；
+ * 列表形态与 MCP 配置页一致（分组标题 + 12px 圆角行卡片）。 */
+
+.skills-page { width: 100%; max-width: 1160px; margin: 0 auto; }
+
+.skills-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.skills-head-copy { min-width: 0; }
+.skills-page .settings-page-title { margin-bottom: 8px !important; }
+.skills-page .settings-page-desc { margin-bottom: 0 !important; max-width: 780px; }
+.skills-head-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.skills-action { display: inline-flex; align-items: center; gap: 6px; }
+.skills-action-icon { flex: 0 0 auto; }
+
+.skills-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.skills-status { width: auto; }
+.skills-search { flex: 1 1 220px; max-width: 360px; }
+.skills-search-icon { flex: 0 0 auto; }
+
+.skills-notes { display: grid; gap: 8px; margin-bottom: 16px; }
+.skills-notes:empty { display: none; }
+
+.skills-body { display: grid; gap: 24px; }
+.skills-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 14px;
+  border: 1px dashed var(--ds-border-default);
+  border-radius: var(--ds-radius-12);
+  font-size: var(--text-sm);
+  color: var(--ds-text-muted);
+}
+
+.skills-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 10px;
+}
+.skills-group-title {
+  margin: 0;
+  font-size: var(--text-md-plus);
+  font-weight: 600;
+  color: var(--ds-text-primary);
+}
+.skills-group-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-bg-inset);
+  color: var(--ds-text-muted);
+  font-size: var(--text-3xs);
+  line-height: 17px;
+  text-align: center;
+}
+.skills-group-roots {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ui-font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ds-text-faint);
+}
+
+.skills-rows { display: grid; gap: 8px; }
+.skill-row {
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--ds-radius-12);
+  background: var(--ds-surface-card);
+  transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
+}
+.skill-row:hover,
+.skill-row.is-open { border-color: var(--ds-border-strong); }
+.skill-row-line { display: flex; align-items: center; gap: 12px; padding: 0 14px 0 0; }
+.skill-row-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 0 12px 14px;
+  border: 0;
+  border-radius: var(--ds-radius-12);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.skill-row-main:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; }
+.skill-row-main > .ext-dot { margin-top: 6px; }
+.skill-row-text { display: grid; gap: 3px; min-width: 0; }
+.skill-row-title { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; }
+.skill-name {
+  font-size: var(--text-md-plus);
+  font-weight: 600;
+  color: var(--ds-text-primary);
+  overflow-wrap: anywhere;
+}
+.skill-row-desc {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ds-text-secondary);
+  overflow-wrap: anywhere;
+}
+.skill-row-note { font-size: var(--text-xs); line-height: 1.5; color: var(--ui-warning); overflow-wrap: anywhere; }
+.skill-toggle { flex: 0 0 auto; }
+
+.skill-detail {
+  padding: 12px 14px 14px 31px;
+  border-top: 1px solid var(--ds-border-subtle);
+}
+.skill-detail .ext-row { font-size: var(--text-xs); }
+.skill-detail .ext-code { max-height: 320px; }
+
+@media (max-width: 720px) {
+  .skills-head { flex-direction: column; gap: 12px; }
+  .skills-search { max-width: none; flex-basis: 100%; }
+  .skill-detail { padding-left: 14px; }
+}

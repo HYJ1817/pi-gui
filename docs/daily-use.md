@@ -263,7 +263,7 @@ SURFACE_COPY            // 七个页面共用的 loading / empty / failed / retr
 ### Native MCP 的 disabled / replaced / unknown
 
 这三个状态**不在这条状态条里** —— 它们是 MCP 这一个子系统的状态，说明在
-MCP 标签页与扩展 / Skills 页面里（原生状态 + 两处 mcp.json 的结构 + 运行时状态），
+设置 › MCP 配置页与页尾的「MCP 能力报告」里（原生状态 + 两处 mcp.json 的结构 + 运行时状态），
 诊断面板里也有一份。放进全局状态条只会让「pi 起不来」这种真问题被淹没。
 统一的只是**措辞与视觉**，不是把所有状态挤进一个组件。
 

@@ -8,21 +8,23 @@
 > —— Extension Registry、各 feature 的运行观察、P20.5 / P20.6 的能力探测。
 > Capability 层连一个缓存都不留（缓存就是会过期的第二份真相）。
 
-## 一、当前信息架构（P36）
+## 一、当前信息架构（P36 → 三入口拆分）
 
 P36 移除了独立的能力状态页，以及它原有的 **All / Capabilities** 两个过滤器。
-扩展工作区（`#navExtensions`）现在只有三个标签：
+之后 Skills / Extensions / MCP 又从同一个工作区的三个标签拆成三个独立入口
+（入口、模块归属与并行开发边界见 [agent-capabilities.md](agent-capabilities.md)）：
 
-| 标签 | 内容 | 事实来源 |
+| 入口 | 内容 | 事实来源 |
 |---|---|---|
-| **Extensions** | 通用 Extension Registry，**包括完全不认识的**；顶部另有「已知能力设置」折叠区 | `GET /api/extensions` |
-| **Skills** | pi 原生 Skills 清单、详情与启停（原有实现，语义未改） | `GET /api/skills` |
-| **MCP** | pi 原生 MCP 管理面 + Native MCP / built-in 状态（原有实现，语义未改） | `/api/mcp`、`/api/mcp/servers` |
+| 应用主导航 **扩展**（`#navExtensions`）›「已安装」 | 通用 Extension Registry，**包括完全不认识的**；顶部另有「已知能力设置」折叠区 | `GET /api/extensions` |
+| 扩展 ›「插件市场」 | 第一阶段只预留布局，不发请求、不安装 | 无 |
+| 设置 › Agent 能力 › **技能** | pi 原生 Skills 清单、详情与启停（语义未改） | `GET /api/skills` |
+| 设置 › 扩展与 MCP › **MCP 配置** | pi 原生 MCP 管理面 + 页尾「MCP 能力报告」（Native MCP / built-in 状态，语义未改） | `/api/mcp/config`、`/api/mcp/servers`、`/api/mcp` |
 
-默认落在 **Extensions**。三个标签复用同一套 `role="tablist"` / `aria-selected` /
-`aria-controls="extensionsTabPanel"`、懒建面板与实例身份守卫。
+扩展页默认落在「已安装」。两个页签用 `role="tablist"` / `aria-selected` /
+`aria-controls="extensionsTabPanel"`，面板懒建后复用，异步结果过实例身份守卫。
 
-**「已知能力设置（安装 / 运行观察）」**是 Extensions 标签顶部的一个默认折叠区，
+**「已知能力设置（安装 / 运行观察）」**是「已安装」顶部的一个默认折叠区，
 只保留旧能力状态页里**仍然有动作或独有证据**的五项：
 
 - Web Access
@@ -107,7 +109,7 @@ Capability 层**不新增来源**，只把下面这些搬进设置区：
 | Skills | `GET /api/skills` + RPC `get_commands` | 不适用 | pi 原生能力 |
 | Usage / Quota | 不适用（**入口**，不是可安装能力） | 不适用 | Pi RPC 会话统计 + Provider 官方接口 |
 
-Native MCP 与 built-in 继续在 **MCP 标签**里显示；它们没有安装命令，也不在
+Native MCP 与 built-in 继续在 **MCP 配置页**（页尾「MCP 能力报告」）里显示；它们没有安装命令，也不在
 「已知能力设置」里重复一份。Approval 不是 Extension 包，没有安装命令，只在设置区
 显示协议探测结果。
 
@@ -190,10 +192,10 @@ Capability 层只把它们翻成界面文案，并且把 `replaced`（被扩展�
   但那只是 **setup metadata**（「磁盘上有没有它」这一条证据的键）。
 - **built-in 能力不进 filesystem Extension discovery。** 它们编译在 pi 包里
   （`dist/extensions/`），不属于 `~/.pi/agent/extensions` 的扫描范围；
-  在 MCP 标签里用 `builtin:` 前缀、`pi 内置扩展` 的来源徽标与一句
-  「不由 Extension Registry 的目录扫描发现」把自己和普通 Extension 分开。
-- **unknown Extension 不丢**：我们完全不认识的 Extension 照样出现在 Extensions
-  标签里，六个字段保持未知，错误就地显示，仍然可以在 Extensions 页诊断。
+  在 MCP 能力报告里用 `builtin:` 前缀与「built-in 能力（pi 自带）」小标题
+  把自己和普通 Extension 分开。
+- **unknown Extension 不丢**：我们完全不认识的 Extension 照样出现在扩展页
+  「已安装」里，六个字段保持未知，错误就地显示，仍然可以在那里诊断。
 
 ## 八、重启与 stale
 
@@ -223,7 +225,8 @@ Memory browser、Browser manager、第二套 MCP runtime、**任意包安装 / n
 |---|---|
 | `public/capability-model.js` | 纯投影：四值状态、适用性收口、结论行、setup 视图模型 |
 | `public/ui/capability-setup.js` | 唯一一套 setup 布局 + 唯一的一键安装 + 唯一的「安装后重启 Pi」实现 |
-| `public/extensions.js` | Extensions / Skills / MCP 三个标签 + 通用 Registry 页 + 「已知能力设置」折叠区 |
+| `public/extensions/` | 扩展页：「已安装」通用 Registry 页 + 「已知能力设置」折叠区，「插件市场」占位 |
+| `public/skills/`、`public/mcp-report.js` | 技能设置页；MCP 配置页页尾的能力报告（拆分前与扩展页同在 `public/extensions.js`） |
 | `public/*-capabilities.js` | 各 feature 的事实与 descriptor（Registry 证据 → 三值；`installId` 指向服务端 allowlist） |
 | `server/capability-install.js` | 受控安装：固定 allowlist、固定 argv、闸门、维护暂停 / 恢复、脱敏错误 |
 | `lib/redact.js` | 脱敏唯一实现（Pi 更新与 Capability 安装共用） |
@@ -239,9 +242,9 @@ Memory browser、Browser manager、第二套 MCP runtime、**任意包安装 / n
   （没有 `-l` / `--local` / `--approve`）、闸门（确认 / 单飞 / 忙 / 过期 / 入口）、
   暂停失败与超时、只 resume 自己的维护态、失败也恢复、退出码 0 ≠ 已加载、
   脱敏与「原始输出不出后端」、HTTP 层、server.js 装配的共享原语。
-- `npm run test:ui` 的 P36 段：Extensions / Skills / MCP 三个标签、
-  「已知能力设置」仍可从 Extensions 页到达、一键安装的确认与重新发现后的重画、
-  旧能力状态页不再渲染。
+- `npm run test:ui` 的「Agent 能力」段：扩展 / 技能 / MCP 配置三个入口、
+  「已知能力设置」仍可从扩展页「已安装」到达、一键安装的确认与重新发现后的重画、
+  旧能力状态页不再渲染；`npm run test:agent-capabilities`：拆分边界与三个页面的生命周期。
 - `npm run test:sidebar-menu`（37 条，jsdom）：菜单单例、锚定 / 翻转 / 夹紧、
   键盘导航、Escape 还焦点、点外部 / resize / 滚动关闭、role 语义，
   以及两个调用点的静态边界（旧类名与字符图标不再出现）。

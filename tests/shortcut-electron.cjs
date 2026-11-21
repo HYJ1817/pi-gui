@@ -141,17 +141,23 @@ if (!process.versions.electron) {
       await read(`document.querySelector('#navShortcutHelp').click()`);
       await waitFor(`!!document.querySelector('.shortcut-settings-page') && document.querySelectorAll('.shortcut-row').length === 8`, 'shortcut page');
     }
+    /* 扩展是应用主导航目的地（不再挂在设置目录下）；技能在「设置 › Agent 能力」。 */
     async function openExtensionsPage() {
-      await openSettingsMenu();
       await read(`document.querySelector('#navExtensions').click()`);
-      await waitFor(`!!document.querySelector('#extensionsTabExtensions') && !!document.querySelector('.ext-tabs')`, 'extensions page');
-      await read(`document.querySelector('#extensionsTabExtensions').click()`);
-      await waitFor(`!!document.querySelector('.ext-list')`, 'extensions tab');
+      await waitFor(`!!document.querySelector('#extensionsTabInstalled') && !!document.querySelector('.ext-tabs')`, 'extensions page');
+      await read(`document.querySelector('#extensionsTabInstalled').click()`);
+      await waitFor(`!!document.querySelector('.ext-list')`, 'installed tab');
+    }
+    async function openSkillsPage() {
+      await openSettingsMenu();
+      await read(`document.querySelector('#navSkills').click()`);
+      await waitFor(`!!document.querySelector('.skills-page') && document.querySelectorAll('.skills-page .skill-row').length >= 1`, 'skills page');
     }
     async function openMcpPage() {
       await openSettingsMenu();
       await read(`document.querySelector('#navMcp').click()`);
-      await waitFor(`!!document.querySelector('.mcp-page')`, 'mcp page');
+      /* 读取中只画页头与加载态；读完才挂服务器分组与页尾能力报告。 */
+      await waitFor(`!!document.querySelector('.mcp-page .mcp-report')`, 'mcp page');
     }
     async function closeSettings() {
       await read(`document.querySelector('#navHome').click()`);
@@ -225,12 +231,15 @@ if (!process.versions.electron) {
       await openSettingsMenu();
       const nav = await read(`(()=>({
         groups:[...document.querySelectorAll('#globalMoreMenu section h3')].map(n=>n.textContent),
+        agentGroup:[...(document.querySelector('#navSkills')?.closest('section')?.querySelectorAll('button')||[])].map(b=>b.id),
+        emptyGroups:[...document.querySelectorAll('#globalMoreMenu section')].filter(s=>!s.querySelector('button')).length,
+        extensionsInMenu:!!document.querySelector('#globalMoreMenu #navExtensions'),
         capabilities:!!document.querySelector('#navCapabilities'),
         palette:!!document.querySelector('#navPalette'),
         navCapabilityStatus:[...document.querySelectorAll('#globalMoreMenu button')].some(b=>b.textContent.includes('能力状态')),
         navPalette:[...document.querySelectorAll('#globalMoreMenu button')].some(b=>b.textContent.includes('命令面板'))
       }))()`);
-      check(nav.groups.length === 6 && nav.groups.includes('扩展与 MCP') && !nav.groups.includes('Agent 能力'), 'settings navigation keeps six groups without the empty Agent 能力 group', nav.groups);
+      check(nav.groups.length === 7 && nav.groups.includes('扩展与 MCP') && nav.groups.includes('Agent 能力') && JSON.stringify(nav.agentGroup) === '["navSkills"]' && nav.emptyGroups === 0 && !nav.extensionsInMenu, 'settings navigation has seven non-empty groups; Agent 能力 holds only 技能 and 扩展 lives in the main nav', nav);
       check(!nav.capabilities && !nav.palette && !nav.navCapabilityStatus && !nav.navPalette, 'removed capability-status and palette entries are gone from settings navigation', nav);
       await shot('1320-dark-settings-nav');
 
@@ -528,8 +537,19 @@ if (!process.versions.electron) {
       await read(`document.querySelector('.ext-known>summary').click();document.querySelector('.ext-known-item>summary').click()`);
       await sleep(200);
       await shot('1320-light-extensions');
+      await read(`document.querySelector('#extensionsTabMarket').click()`);
+      await waitFor(`!!document.querySelector('.extensions-market-empty')`, 'market placeholder');
+      await shot('1320-light-extensions-market');
+      await openSkillsPage();
+      await shot('1320-light-skills');
       await openMcpPage();
-      await shot('1320-light-mcp');
+      /* 浏览器在 open 变化后自己派发 toggle；不再手动补发，免得重复请求。 */
+      await read(`document.querySelector('.mcp-report').open=true`);
+      await waitFor(`(document.querySelector('.mcp-report')?.textContent||'').includes('带 MCP 能力')`, 'mcp report expanded');
+      /* 报告在页尾，滚到视口里再截，截图才能证明展开后的排版。 */
+      await read(`document.querySelector('.mcp-report').scrollIntoView({block:'start'})`);
+      await sleep(150);
+      await shot('1320-light-mcp-report');
       await openShortcuts();
 
       /* ---------- 700x600 narrow layout ---------- */
@@ -561,15 +581,39 @@ if (!process.versions.electron) {
       await shot('700-light-settings-nav');
       await openExtensionsPage();
       const extensions = await read(`(()=>({
-        tabs:[...document.querySelectorAll('.ext-tab')].map(n=>n.textContent),
-        removed:!!document.querySelector('#extensionsTabAll')||!!document.querySelector('#extensionsTabCapabilities'),
+        tabs:[...document.querySelectorAll('.ext-tab')].map(n=>n.firstChild.textContent),
+        removed:['#extensionsTabAll','#extensionsTabCapabilities','#extensionsTabSkills','#extensionsTabMcp'].some(id=>!!document.querySelector(id)),
+        title:document.querySelector('#workViewTitle').textContent,
         scrollWidth:document.documentElement.scrollWidth,
         inner:innerWidth
       }))()`);
-      check(JSON.stringify(extensions.tabs) === JSON.stringify(['Extensions', 'Skills', 'MCP']), 'extensions page exposes only Extensions / Skills / MCP tabs', extensions.tabs);
-      check(!extensions.removed, 'All / Capabilities tabs are gone');
+      check(JSON.stringify(extensions.tabs) === JSON.stringify(['已安装', '插件市场']), 'extensions page exposes only 已安装 / 插件市场 tabs', extensions.tabs);
+      check(!extensions.removed, 'All / Capabilities / Skills / MCP tabs are gone from the extensions page');
+      check(extensions.title === '扩展', 'extensions work surface is titled 扩展', extensions.title);
       check(extensions.scrollWidth <= extensions.inner + 1, '700px extensions page has no horizontal overflow', extensions);
       await shot('700-light-extensions');
+      await read(`document.querySelector('#extensionsTabMarket').click()`);
+      await waitFor(`!!document.querySelector('.extensions-market-empty')`, 'market placeholder');
+      const market = await read(`({scrollWidth:document.documentElement.scrollWidth,inner:innerWidth})`);
+      check(market.scrollWidth <= market.inner + 1, '700px extensions market tab has no horizontal overflow', market);
+      await shot('700-light-extensions-market');
+      await openSkillsPage();
+      const skills = await read(`(()=>{
+        const card=document.querySelector('.skills-page');
+        const rows=[...card.querySelectorAll('.skill-row')];
+        return {
+          title:card.querySelector('.settings-page-title')?.textContent,
+          headings:[...card.querySelectorAll('h2,h3')].filter(h=>h.textContent==='技能').length,
+          rows:rows.length,
+          rowsInside:rows.every(r=>{const b=r.getBoundingClientRect();return b.left>=-0.5&&b.right<=innerWidth+0.5}),
+          scrollWidth:document.documentElement.scrollWidth,
+          inner:innerWidth
+        };
+      })()`);
+      check(skills.title === '技能' && skills.headings === 1, 'skills page shows a single 技能 heading', skills);
+      check(skills.rows >= 1 && skills.rowsInside, 'skill rows stay inside the 700px viewport', skills);
+      check(skills.scrollWidth <= skills.inner + 1, '700px skills page has no horizontal overflow', skills);
+      await shot('700-light-skills');
       await openMcpPage();
       const mcp = await read(`({scrollWidth:document.documentElement.scrollWidth,inner:innerWidth,title:document.querySelector('.mcp-page .settings-page-title')?.textContent})`);
       check(mcp.title === 'MCP 服务器', 'MCP settings page still opens', mcp.title);
@@ -583,6 +627,8 @@ if (!process.versions.electron) {
       await shot('1320-dark-settings-nav-final');
       await openExtensionsPage();
       await shot('1320-dark-extensions');
+      await openSkillsPage();
+      await shot('1320-dark-skills');
       await openMcpPage();
       await shot('1320-dark-mcp');
 
@@ -599,6 +645,8 @@ if (!process.versions.electron) {
       await shot('700-dark-settings-nav');
       await openExtensionsPage();
       await shot('700-dark-extensions');
+      await openSkillsPage();
+      await shot('700-dark-skills');
       await openMcpPage();
       await shot('700-dark-mcp');
       win.setContentSize(1320, 820);

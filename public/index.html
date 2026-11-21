@@ -10,6 +10,8 @@
 <link rel="stylesheet" href="/styles.css">
 <link rel="stylesheet" href="/message-edit.css">
 <link rel="stylesheet" href="/mcp.css">
+<link rel="stylesheet" href="/skills/skills.css">
+<link rel="stylesheet" href="/extensions/extensions.css">
 <link rel="stylesheet" href="/thinking-dots.css">
 <link rel="stylesheet" href="/agent-execution.css">
 <link rel="stylesheet" href="/app-shell.css">
@@ -48,6 +50,7 @@
         <button type="button" class="icon-btn" id="navSearch" aria-label="搜索会话" title="搜索会话" aria-controls="groupBody" aria-expanded="false"><svg data-icon="search" aria-hidden="true" focusable="false"></svg></button>
       </div>
       <button type="button" class="nav-item" id="navNew"><svg class="ni-ic" data-icon="conversation" aria-hidden="true" focusable="false"></svg><span class="ni-label">新对话</span><svg class="ni-add-ic" data-icon="plus" aria-hidden="true" focusable="false"></svg></button>
+      <button type="button" class="nav-item" id="navExtensions"><svg class="ni-ic" data-icon="box" aria-hidden="true" focusable="false"></svg><span class="ni-label">扩展</span></button>
     </nav>
     <div class="rail-group open">
       <div class="group-bar"><button type="button" class="group-head" id="groupHead" aria-controls="groupBody" aria-expanded="true"><span>项目</span><svg class="chev" data-icon="chevronRight" aria-hidden="true" focusable="false"></svg></button><button type="button" class="icon-btn project-actions-toggle" id="btnProjectMenu" aria-label="项目操作" aria-controls="projectActions" aria-expanded="false" title="项目操作"><svg data-icon="more" aria-hidden="true" focusable="false"></svg></button></div>
@@ -73,9 +76,11 @@
         <button type="button" id="navProviders"><svg data-icon="package" aria-hidden="true" focusable="false"></svg><span>模型供应商</span><span class="rp-count" id="providerCount"></span></button>
         <button type="button" id="navProviderAuth"><svg data-icon="key" aria-hidden="true" focusable="false"></svg><span>供应商与认证</span></button>
       </section>
+      <section role="group" aria-labelledby="settingsAgent"><h3 id="settingsAgent">Agent 能力</h3>
+        <button type="button" class="settings-destination" id="navSkills" data-search="技能 skill skills SKILL.md 启用 停用 全局 项目 agent 能力"><svg data-icon="book" aria-hidden="true" focusable="false"></svg><span>技能</span><span class="rail-badge" id="skillCount"></span></button>
+      </section>
       <section role="group" aria-labelledby="settingsExtensions"><h3 id="settingsExtensions">扩展与 MCP</h3>
-        <button type="button" class="settings-destination" id="navExtensions" aria-label="Skills 与扩展" title="Skills 与扩展"><svg data-icon="book" aria-hidden="true" focusable="false"></svg><span>Skills 与扩展</span><span class="rail-badge" id="extCount"></span></button>
-        <button type="button" id="navMcp"><svg data-icon="layers" aria-hidden="true" focusable="false"></svg><span>MCP 配置</span></button>
+        <button type="button" id="navMcp" data-search="mcp server 服务器 能力报告 built-in 内置 extension 扩展"><svg data-icon="layers" aria-hidden="true" focusable="false"></svg><span>MCP 配置</span></button>
       </section>
       <section role="group" aria-labelledby="settingsApp"><h3 id="settingsApp">系统与应用</h3>
         <button type="button" id="navEnvironment"><svg data-icon="terminal" aria-hidden="true" focusable="false"></svg><span>环境与依赖</span><span class="rp-dot" id="settingsEnvironmentDot" hidden></span></button>

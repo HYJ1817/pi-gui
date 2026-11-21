@@ -89,7 +89,8 @@ function nodePhase() {
   });
   check('pages no longer own a competing button implementation', () => {
     const sources = [];
-    for (const dir of ['public', path.join('public', 'ui')]) {
+    /* 技能页与扩展页拆到各自的子目录后同样纳入扫描（见 docs/agent-capabilities.md）。 */
+    for (const dir of ['public', path.join('public', 'ui'), path.join('public', 'skills'), path.join('public', 'extensions')]) {
       for (const name of fs.readdirSync(path.join(ROOT, dir))) {
         if (name.endsWith('.css') || name.endsWith('.js')) sources.push(fs.readFileSync(path.join(ROOT, dir, name), 'utf8'));
       }
@@ -101,6 +102,15 @@ function nodePhase() {
     assert.ok(!/\.btn\.danger\s*\{/.test(styles), 'styles.css redefines .btn.danger');
     assert.ok(!/\.btn\.alt\s*\{/.test(styles), 'styles.css redefines .btn.alt');
     assert.ok(!/^\.pm-btn\s*\{/m.test(provider), 'provider-management.css redefines .pm-btn');
+  });
+  check('skills and extensions pages reuse shared controls instead of restyling them', () => {
+    const strip = css => css.replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const file of ['public/skills/skills.css', 'public/extensions/extensions.css']) {
+      const css = strip(read(file));
+      assert.ok(!/(^|[\s,}])\.btn(?![\w-])/m.test(css), file + ' restyles .btn');
+      assert.ok(!/\.ds-(switch|segment|segmented|select|search)/.test(css), file + ' restyles a shared ds- control');
+      assert.ok(!/#[0-9a-fA-F]{3,8}\b|rgba?\(/.test(css), file + ' hard-codes a color instead of using tokens');
+    }
   });
 
   console.log(`phase A: ${passed} checks passed`);
