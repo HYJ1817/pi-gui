@@ -7,7 +7,7 @@ import { matchExecutionTimelineRecords } from './execution-timeline-store.js';
 import { createExecutionToolProjection } from './execution-timeline.js';
 import { boundText, contentText, MAX_BLOCK_TEXT, MAX_CONTENT_SEGMENTS, MAX_USER_TEXT,
   safeToolName, timelineFromMessages, usageProjection } from '../public/runtime-timeline.js';
-import { PLAN_TOOL_NAME } from '../public/plan-model.js';
+import { PLAN_TOOL_NAME } from '../lib/execution-timeline-contract.js';
 
 const MAX_ENTRIES = 4096;
 const MAX_MESSAGES = 800;

@@ -1,20 +1,15 @@
 /* Renderer preferences contain only opaque identity and booleans. Execution
  * evidence, rendered text and tool details remain outside browser storage. */
+import { executionLivePreferenceKey, isExecutionViewKey as opaque } from './execution-view-key.js';
+
+export { executionLivePreferenceKey };
+
 const KEY = 'pi-gui.execution-view.v1';
 const MAX_SCOPES = 100;
 const MAX_CHOICES = 200;
 const MAX_SERIALIZED = 1024 * 1024;
-const opaque = value => typeof value === 'string' && /^[a-zA-Z0-9_.:#@-]{1,320}$/.test(value);
 const stores = new WeakMap();
 const memory = new Map();
-
-export function executionLivePreferenceKey(scope, sequence) {
-  const values = scope?.kind === 'classic'
-    ? [scope.bridgeInstance, scope.bridgeRun, scope.workspaceGeneration, scope.branchEpoch, sequence]
-    : [scope?.owner?.runtimeId, scope?.owner?.runtimeGeneration, scope?.branchEpoch, sequence];
-  if (!Number.isSafeInteger(sequence) || values.some(value => !opaque(String(value)) || value == null)) return null;
-  return 'live:' + values.join(':');
-}
 
 function readChoices(storage) {
   const scopes = new Map();

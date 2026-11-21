@@ -71,4 +71,10 @@
 - `git merge-tree --write-tree --name-only HEAD feat/system-settings` 的只读试合并报告 `package.json` 和 `tests/gui-browser-stop.cjs` 冲突。基线 `a7cb5c70` 试合并命中同样两项。本阶段没有修改系统设置分支。
 - 回滚先反向应用首批挂载优化，再回退恢复实现。应用侧可选索引保持旁置，旧版本会忽略它，原生会话与设置继续由已有组件读取。
 
-本地实现、定向回归、独立复审、浏览器、性能和产物检查已完成。完整 canonical 尚待当前代码提交的 CI 验证。分支仅在本地提交，远端操作保持待授权状态。
+首次本地交付完成了实现、定向回归、独立复审、浏览器、性能和产物检查，完整 canonical 留待 PR CI 验证。
+
+## PR #101 CI 修复
+
+首轮 CI 在 `68c01ce5` 的 core 组发现后端模块直接依赖前端模块，在 faults 组发现 Stop 测试的生产装配夹具缺少 Classic 历史路由的依赖。同一夹具问题也在本地 `stop-barrier.cjs` 复现。 [首轮 CI](https://github.com/HYJ1817/pi-gui/actions/runs/44881451152)
+
+修复复用 `lib/` 的共享入口，将偏好键计算与浏览器存储分开，并为两个 Stop 夹具补齐路由依赖。原有模块边界、Stop 断言和历史读取权限保持原样。定向复验通过模块边界 121/121、浏览器 Stop 13/13、Stop 屏障 17/17、P5-C 20/20、服务端安全 44/44、Smoke 1338/1338。桌面包在 `build-ci-fix/` 独立重建，使用包内资源复验四种 Chromium 历史布局和 2,000 条活动。

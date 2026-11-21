@@ -1,7 +1,6 @@
-import { createExecutionStream } from '../public/execution-timeline-adapter.js';
+import { createExecutionStream, executionLivePreferenceKey } from '../lib/execution-timeline-contract.js';
 import { MAX_CONTENT_SEGMENTS } from '../public/runtime-timeline.js';
 import { bindExecutionEntries } from './execution-timeline.js';
-import { executionLivePreferenceKey } from '../public/execution-view-preferences.js';
 
 const SAVE_INTERVAL_MS = 1500;
 const TERMINAL = new Set(['unknown', 'completed', 'failed', 'interrupted', 'cancelled']);
