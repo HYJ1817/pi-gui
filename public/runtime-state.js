@@ -10,6 +10,7 @@
  * 本模块只负责「只建一次」并把它暴露出去。
  */
 import { createRuntimeStore } from './runtime-store.js';
+import { observeRuntimeExecution, retireRuntimeExecution, runtimeExecutionFallbackEcho, seedRuntimeExecution } from './execution-timeline-state.js';
 
 export const runtimeStore = createRuntimeStore();
 
@@ -31,7 +32,13 @@ export async function respondToRuntimeApproval(owner, approval, send) {
   try { result = await send(); return result; }
   finally { runtimeStore.finishApproval(owner, approval, result?.ok === true); broadcast(); }
 }
-export function seedRuntimeSnapshot(snapshot) { if (runtimeStore.seed(snapshot)) broadcast(); }
+export function seedRuntimeSnapshot(snapshot) {
+  if (!runtimeStore.seed(snapshot)) return;
+  try {
+    for (const item of snapshot.items || []) seedRuntimeExecution(runtimeStore.get(item.conversationId)?.item);
+  } catch { /* The shadow projection cannot gate the existing store. */ }
+  broadcast();
+}
 export function refreshRuntimeViews() { broadcast(); }
 
 /** 标题就地更新：不广播、不重排、不改 revision。
@@ -46,9 +53,18 @@ export function observeRuntimeFrame(frame) {
   const id = frame.owner?.conversationId || frame.conversationId;
   const prior = runtimeStore.get(id);
   const lifecycle = prior?.item?.lifecycle, owner = prior?.owner, error = prior?.item?.error;
-  if (!runtimeStore.apply(frame)) return false;
-  broadcast(frame);
+  let fallbackInputSequence = null;
+  try {
+    observeRuntimeExecution(frame, prior);
+    fallbackInputSequence = runtimeExecutionFallbackEcho(frame, prior)?.inputSequence ?? null;
+  } catch { /* Legacy rendering remains available without the execution hint. */ }
+  if (!runtimeStore.apply(frame, { fallbackInputSequence })) return false;
   const next = runtimeStore.get(id);
+  try {
+    if (frame.type === 'runtime_state') seedRuntimeExecution(next?.item);
+    else if (frame.type === 'runtime_closed') retireRuntimeExecution(frame.owner);
+  } catch { /* observation only */ }
+  broadcast(frame);
   if (frame.type === 'runtime_closed' || frame.type === 'runtime_state' &&
       (lifecycle !== next?.item?.lifecycle || owner?.runtimeGeneration !== next?.owner?.runtimeGeneration || error !== next?.item?.error)) {
     for (const fn of [...lifecycleListeners]) fn();

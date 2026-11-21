@@ -246,6 +246,7 @@ async function main() {
     },
     piActivity: { noteCommandAccepted: (command) => activityAccepted.push(command) },
     primaryToolGuard: { resume() {} },
+    observeClassicSubmission() {},
     createSessionExport: () => null,
     runtime: { getCurrentCwd: () => cwd },
     sessionChanges: { assertReady: async () => {}, disable: async () => ({ ok: true }) },

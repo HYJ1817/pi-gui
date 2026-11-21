@@ -37,7 +37,7 @@
  *   2. edit 的 +N −M 先用 details.diff 算（这是工具当场给的，不是从参数推算），
  *      等 Git 状态刷新回来再用 Git 的数字覆盖 —— Git 是最终权威（见 tools.js）。 */
 
-import { toProjectRel } from './util.js';
+import { toProjectRel } from './project-relative-path.js';
 
 /* ---------- 工具名映射 ---------- */
 

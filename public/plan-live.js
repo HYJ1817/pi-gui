@@ -17,6 +17,7 @@
 import { S } from './state.js';
 import { isPlanTool, normalizePlan, planAnchorId } from './plan-model.js';
 import { renderPlan, setPlanStalled, updatePlan } from './plan-view.js';
+import { trackClassicExecutionPlan } from './classic-execution-view.js';
 
 let current = null;              // { node, plan } —— 本回合当前卡
 const calls = new Map();         // toolCallId -> { previous, created }
@@ -31,12 +32,13 @@ function thread() {
   return S.thread;
 }
 
-function appendCard(plan, toolCallId) {
+function appendCard(plan, toolCallId, event) {
   const t = thread();
   if (!t) return null;
   const node = renderPlan(plan);
   node.dataset.anchorId = planAnchorId(toolCallId, t);
   t.appendChild(node);
+  trackClassicExecutionPlan(node, event);
   if (S.working) t.appendChild(S.working);
   return node;
 }
@@ -84,7 +86,7 @@ export function handlePlanToolStart(evt) {
 
   if (!plan) return true;   // 参数还不合法：等结束事件；失败时什么都不画
   if (!current?.node) {
-    const node = appendCard(plan, id);
+    const node = appendCard(plan, id, evt);
     if (!node) return true;
     current = { node, plan };
     calls.get(id).created = true;
@@ -107,7 +109,7 @@ export function handlePlanToolEnd(evt) {
 
   const plan = normalizePlan(evt?.result?.details);
   if (plan) {
-    current = { node: current?.node || appendCard(plan, id), plan };
+    current = { node: current?.node || appendCard(plan, id, evt), plan };
     if (current.node) {
       setPlanStalled(current.node, false);
       updatePlan(current.node, plan);

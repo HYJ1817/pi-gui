@@ -57,6 +57,7 @@ export function createMessageEditRoutes({
   getCwd,
   beforePrompt = null,
   afterPrompt = null,
+  beforeNavigation = null,
 } = {}) {
   async function ownerOk(req) {
     return sameOwner(parseOwner(req), getOwner());
@@ -66,7 +67,7 @@ export function createMessageEditRoutes({
     return sameRecoveryOwner(parseOwner(req), getOwner());
   }
 
-  function makeIo({ sessionId = null, bindBridge = false } = {}) {
+  function makeIo({ sessionId = null, bindBridge = false, edit = null } = {}) {
     const bridgeRun = getBridgeRun();
     const workspaceGeneration = getWorkspaceGeneration();
     const cwd = getCwd();
@@ -87,12 +88,15 @@ export function createMessageEditRoutes({
         if (!nav && wire?.type === 'prompt' && typeof beforePrompt === 'function') {
           try { await beforePrompt(wire); } catch (error) { return { ok: false, code: error?.code || 'edit_unavailable' }; }
         }
+        if (nav) {
+          try { beforeNavigation?.(); } catch { /* observation only */ }
+        }
         const result = await request(wire);
         if (!result) return { ok: false, code: 'pi_timeout', unknown: true };
         if (result.ok !== true) return { ok: false, code: result.code || 'pi_request_failed', unknown: result.unknown === true };
         /* 只把**真正开跑**的 prompt 记成活动；导航命令的 handled 应答不算。 */
         if (!nav && wire?.type === 'prompt' && result.data?.disposition === 'started') {
-          try { afterPrompt?.(wire); } catch { /* observation only */ }
+          try { afterPrompt?.(wire, edit); } catch { /* observation only */ }
         }
         return result;
       },
@@ -132,7 +136,8 @@ export function createMessageEditRoutes({
       if (!stateRead?.ok || typeof stateRead.data?.sessionId !== 'string' || !stateRead.data.sessionId) {
         return json(res, 409, { ok: false, code: stateRead?.code || 'stale_session' });
       }
-      const io = makeIo({ sessionId: stateRead.data.sessionId, bindBridge: true });
+      const edit = body.action === 'resend' ? { requestId: body.requestId, targetEntryId: body.expectedEntryId } : null;
+      const io = makeIo({ sessionId: stateRead.data.sessionId, bindBridge: true, edit });
       const result = body.action === 'preflight'
         ? await service.preflight(io, body)
         : await service.resend(io, body);

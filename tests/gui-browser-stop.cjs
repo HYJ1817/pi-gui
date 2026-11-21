@@ -174,6 +174,7 @@ async function main() {
     },
     piActivity: { noteCommandAccepted: (command) => activityAccepted.push(command) },
     primaryToolGuard: { resume() {} },
+    observeClassicSubmission() {},
     createSessionExport: () => null,
     runtime: { getCurrentCwd: () => os.tmpdir() }, piLaunch: { packageDir: () => null },
   };
