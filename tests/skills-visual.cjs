@@ -10,7 +10,7 @@
  *
  * 用法：node tests/skills-visual.cjs
  *       CHROME_PATH=... CDP_PORT=9233 node tests/skills-visual.cjs
- * 产物：.shots/skills-phase2a/*.png 与 manifest.json（.shots/ 已被 gitignore）
+ * 产物：.shots/skills-phase2a/*.png 与 manifest.json，可用 SKILLS_SHOTS_DIR 指定单次取证目录。
  * 只用于验收取证，不属于 npm test 的 canonical 链。 */
 'use strict';
 
@@ -21,7 +21,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const ROOT = path.resolve(__dirname, '..');
-const OUT = path.join(ROOT, '.shots', 'skills-phase2a');
+const OUT = process.env.SKILLS_SHOTS_DIR || path.join(ROOT, '.shots', 'skills-phase2a');
 const CHROME = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const FIXED_PORT = process.env.CDP_PORT ? Number(process.env.CDP_PORT) : 0;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -145,6 +145,7 @@ async function main() {
     width, height, deviceScaleFactor: 1, mobile: false,
   });
   const shots = [];
+  const metrics = [];
   const shot = async (name) => {
     await sleep(300);
     const result = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
@@ -257,6 +258,8 @@ async function main() {
     await clickText('.skills-page .skills-actions-bar button', '市场');
     await waitFor(`!!document.querySelector('.skills-market')`, '技能市场');
     await waitFor(`document.querySelectorAll('.skills-market-card').length >= 24`, '市场卡片');
+    await expect(`[...document.querySelectorAll('.skills-page h2')].map((h) => h.textContent).join() === '技能市场'
+      && !document.querySelector('.skills-page .skills-head')`, '市场只应有一个页面标题');
     await scrollTop();
     await sleep(250);
   }
@@ -265,6 +268,51 @@ async function main() {
     await click('.skills-market-back');
     await waitFor(`!document.querySelector('.skills-market') && !document.querySelector('.skills-page .skills-toolbar').hidden`, '返回技能列表');
     await sleep(200);
+  }
+
+  async function openEdit() {
+    await click('.skills-page .skill-row[data-skill-id="a1c0de0000000001"] .skill-row-main');
+    await waitFor(`!!document.querySelector('.skills-page .skill-detail')`, '技能详情');
+    await clickText('.skills-page .skill-detail-actions button', '编辑');
+    await waitFor(
+      `(document.querySelector('.skills-editor-dialog textarea[aria-label="描述"]')?.value || '').includes('审查源代码')`,
+      '编辑表单回填',
+    );
+    await expect(`!document.querySelector('.skills-editor-dialog select[aria-label="保存位置"]')`, '编辑弹窗不应提供保存位置');
+  }
+
+  async function openExternal() {
+    await clickText('.skills-page .skills-actions-bar button', '扫描');
+    await waitFor(`document.querySelectorAll('.skills-external-dialog .skills-external-list .skills-external-row').length >= 4`, '扫描候选');
+    await expect(`[...document.querySelectorAll('.skills-external-group-title')].every((node) =>
+      getComputedStyle(node).fontSize === '16px' && getComputedStyle(node).lineHeight === '20px')`, '扫描分组标题使用公共字号与行高');
+  }
+
+  async function measureList(theme) {
+    const result = await evalJs(`(() => {
+      const measure = (selector) => {
+        const nodes = [...document.querySelectorAll(selector)];
+        return nodes.map((node) => {
+          const style = getComputedStyle(node);
+          const box = node.getBoundingClientRect();
+          return { text: node.textContent.trim(), font: style.fontSize, leading: style.lineHeight, height: box.height };
+        });
+      };
+      return {
+        viewport: [innerWidth, innerHeight, devicePixelRatio],
+        pageHeading: measure('.skills-page h2'),
+        groupHeadings: measure('.skills-group-title'),
+        rows: measure('.skill-row-line'),
+        buttons: measure('.skills-actions-bar .btn'),
+        badges: [...document.querySelectorAll('.skill-row-title')].map((row) =>
+          [...row.querySelectorAll('.ds-badge')].map((badge) => badge.textContent)),
+      };
+    })()`);
+    assert(result.groupHeadings.length === 2 && result.groupHeadings.every(({ font, leading }) => font === '16px' && leading === '20px'),
+      '列表分组标题使用公共字号与行高');
+    assert(result.badges.length === 3 && result.badges.every((items) => items.length === 1), '每行只有一个必要状态');
+    assert(result.buttons.length === 3 && result.buttons.every(({ height }) => height === 32), '同行动作使用同高的标准按钮');
+    metrics.push({ theme, ...result });
   }
 
   async function captureDesktop(theme) {
@@ -280,6 +328,7 @@ async function main() {
       `[...document.querySelectorAll('.skills-page .skills-group-path')].every((node) => node.textContent.trim())`,
       '分组头缺少发现目录',
     );
+    await measureList(theme);
     await shot(`1320-${theme}-01-list`);
 
     await click('.skills-page .skill-row[data-skill-id="a1c0de0000000001"] .skill-row-main');
@@ -294,15 +343,7 @@ async function main() {
     await closeModal('取消');
 
     /* 编辑既有技能：详情里的「编辑」打开同一份弹窗，表单已被回填。 */
-    await click('.skills-page .skill-row[data-skill-id="a1c0de0000000001"] .skill-row-main');
-    await waitFor(`!!document.querySelector('.skills-page .skill-detail')`, '技能详情');
-    await clickText('.skills-page .skill-detail-actions button', '编辑');
-    await waitFor(`!!document.querySelector('.skills-editor-dialog')`, '编辑弹窗');
-    await waitFor(
-      `(document.querySelector('.skills-editor-dialog textarea[aria-label="描述"]')?.value || '').includes('审查源代码')`,
-      '编辑表单回填',
-    );
-    await expect(`!!document.querySelector('.skills-editor-dialog select[aria-label="保存位置"]') === false`, '编辑弹窗不应提供保存位置');
+    await openEdit();
     await shot(`1320-${theme}-03b-editor-edit`);
     await closeModal('取消');
     await click('.skills-page .skill-row[data-skill-id="a1c0de0000000001"] .skill-row-main');
@@ -337,9 +378,7 @@ async function main() {
     await closeModal('关闭');
     await closeMarket();
 
-    await clickText('.skills-page .skills-actions-bar button', '扫描');
-    await waitFor(`!!document.querySelector('.skills-external-dialog')`, '扫描弹窗');
-    await waitFor(`document.querySelectorAll('.skills-external-dialog .skills-external-list .skills-external-row').length >= 4`, '扫描候选');
+    await openExternal();
     await shot(`1320-${theme}-08-external`);
     await closeModal('关闭');
 
@@ -385,6 +424,7 @@ async function main() {
       `document.documentElement.scrollWidth <= window.innerWidth + 1`,
       '700 宽度出现横向滚动',
     );
+    await measureList(theme);
     await shot(`700-${theme}-01-list`);
 
     await openEditor();
@@ -407,6 +447,12 @@ async function main() {
     await shot(`700-${theme}-02b-editor-bottom`);
     await closeModal('取消');
 
+    await openEdit();
+    await shot(`700-${theme}-02c-editor-edit`);
+    await closeModal('取消');
+    await click('.skills-page .skill-row[data-skill-id="a1c0de0000000001"] .skill-row-main');
+    await waitFor(`!document.querySelector('.skills-page .skill-detail')`, '详情收起');
+
     await openImport();
     await shot(`700-${theme}-03-import`);
     await closeModal('取消');
@@ -418,6 +464,10 @@ async function main() {
     );
     await shot(`700-${theme}-04-market`);
     await closeMarket();
+
+    await openExternal();
+    await shot(`700-${theme}-04b-external`);
+    await closeModal('关闭');
 
     await setMode({ empty: true });
     await refreshList();
@@ -453,6 +503,8 @@ async function main() {
       generatedAt: new Date().toISOString(),
       viewports: ['1320x820', '700x600'],
       themes: ['light', 'dark'],
+      browser: (await send('Browser.getVersion')).result.product,
+      metrics,
       shots,
       pageErrors,
     }, null, 2) + '\n', 'utf8');
