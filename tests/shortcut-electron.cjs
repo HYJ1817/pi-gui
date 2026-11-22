@@ -709,7 +709,7 @@ if (!process.versions.electron) {
       check(skills.scrollWidth <= skills.inner + 1, '700px skills page has no horizontal overflow', skills);
       await shot('700-light-skills');
       await openMcpPage();
-      const mcp = await read(`({scrollWidth:document.documentElement.scrollWidth,inner:innerWidth,title:document.querySelector('.mcp-page .settings-page-title')?.textContent})`);
+      const mcp = await read(`({scrollWidth:document.documentElement.scrollWidth,inner:innerWidth,title:document.querySelector('.mcp-page .mcp-page-head h3')?.textContent})`);
       check(mcp.title === 'MCP 服务器', 'MCP settings page still opens', mcp.title);
       check(mcp.scrollWidth <= mcp.inner + 1, '700px MCP page has no horizontal overflow', mcp);
       await shot('700-light-mcp');

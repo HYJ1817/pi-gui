@@ -593,6 +593,14 @@ const listTmp = (dir) => {
     check('F4. shadowed 的说明里点出「同名」与赢家', () => /同名/.test(user.stateNote) && user.stateNote.includes(projFile) || user.stateNote);
     check('F5. user 那条仍然 toggleable（能被用户自己关掉，免得一直被抢）', () => user.toggleable === true || '不可切换');
     check('F6. 两条的 path 各自指向自己的文件', () => (proj.path === projFile && user.path === userFile) || JSON.stringify({ p: proj.path, u: user.path }));
+    check('F7. 已加载事实只归于 Pi 报告的那份文件', () => proj.loaded === true && user.loaded === false);
+
+    fs.unlinkSync(projFile);
+    const after = (await call(sk, 'GET', '/api/skills')).jsonBody().skills;
+    const running = after.find((s) => s.path === projFile);
+    const onDisk = after.find((s) => s.path === userFile);
+    check('F8. 同名赢家被删除且尚未重启时，仍显示 Pi 实际加载的文件', () =>
+      running?.loaded === true && onDisk?.loaded === false && onDisk.shadowedBy === projFile);
   }
 
   /* ================= G. 被 settings 关掉 ================= */
@@ -758,7 +766,7 @@ const listTmp = (dir) => {
   }
 
   {
-    // 未信任的项目：写盘允许，但要警告「信任之后才生效」
+    // 未信任的项目仍可读发现结果，但不能改项目 settings。
     const w = mkWorld('toggle-untrusted');
     writeSkill(path.join(w.proj, '.pi', 'skills'), 'p-one', { description: 'Project one' });
     const sk = mkSkills(w, w.proj, { rpc: mkRpc([]) });
@@ -767,12 +775,74 @@ const listTmp = (dir) => {
     check('I20. 未信任时 state=untrusted', () => pOne.state === 'untrusted' || pOne.state);
     const off = await putJSON(sk, '/api/skills/' + pOne.id, { enabled: false });
     const offB = off.jsonBody();
-    check('I21. 未信任时仍可写（写的是用户自己的偏好），但带警告', () =>
-      (off.code === 200 && offB.ok === true && offB.warnings.some((x) => /未被信任/.test(x))) || JSON.stringify(offB));
+    check('I21. 未信任项目没有启停开关，写入被拒且不创建配置', () =>
+      pOne.toggleable === false && off.code === 403 && offB.code === 'project-untrusted' &&
+      !fs.existsSync(path.join(w.proj, '.pi', 'settings.json')));
   }
 
   /* ================= J. 写盘失败 / 非法 settings 的降级 ================= */
   section('J. 写盘失败与非法 settings 的降级');
+
+  {
+    const w = mkWorld('agents-toggle');
+    writeSkill(path.join(w.proj, '.agents', 'skills'), 'p-agents', { description: 'Project agents skill' });
+    fs.mkdirSync(path.join(w.proj, '.pi'), { recursive: true });
+    fs.writeFileSync(path.join(w.proj, '.pi', 'skills'), 'unrelated file');
+    const sk = mkSkills(w, w.proj, { rpc: mkRpc([]), approve: true });
+    const row = (await call(sk, 'GET', '/api/skills')).jsonBody().skills.find((skill) => skill.name === 'p-agents');
+    const result = await putJSON(sk, '/api/skills/' + row.id, { enabled: false });
+    check('J0. 启停 .agents 技能只依赖实际的 .pi/settings.json 写入目标', () =>
+      result.code === 200 && result.jsonBody().changed === true &&
+      fs.readFileSync(path.join(w.proj, '.pi', 'skills'), 'utf8') === 'unrelated file');
+    check('J0-1. 写进去的是项目自己的 .pi/settings.json，且只有我们那一条模式', () => {
+      const onDisk = JSON.parse(fs.readFileSync(path.join(w.proj, '.pi', 'settings.json'), 'utf8'));
+      const pattern = result.jsonBody().pattern;
+      return (/^-.*p-agents/.test(pattern) && JSON.stringify(onDisk) === JSON.stringify({ skills: [pattern] })) || JSON.stringify(onDisk);
+    });
+  }
+
+  {
+    // 真正要写的 .pi 被链接到项目之外：拒绝，链接指向的目录一个字节都不动
+    const w = mkWorld('toggle-linked-pi');
+    const outside = path.join(w.base, 'outside');
+    writeJson(path.join(outside, 'settings.json'), { keep: 1 });
+    const outsideBefore = fs.readFileSync(path.join(outside, 'settings.json'), 'utf8');
+    writeSkill(path.join(w.proj, '.agents', 'skills'), 'p-agents', { description: 'Project agents skill' });
+    // Windows 上用 junction（不需要管理员权限），其余平台用目录符号链接
+    fs.symlinkSync(outside, path.join(w.proj, '.pi'), process.platform === 'win32' ? 'junction' : 'dir');
+    const sk = mkSkills(w, w.proj, { rpc: mkRpc([]), approve: true });
+    const row = (await call(sk, 'GET', '/api/skills')).jsonBody().skills.find((skill) => skill.name === 'p-agents');
+    const result = await putJSON(sk, '/api/skills/' + row.id, { enabled: false });
+    check('J0-2. .pi 是指向项目之外的链接 → 403 unsafe-root，并说明原因', () =>
+      (result.code === 403 && result.jsonBody().code === 'unsafe-root' && /\.pi 是一个链接/.test(result.jsonBody().error)) ||
+      JSON.stringify(result.jsonBody()));
+    check('J0-3. 链接指向的目录里：settings.json 原样，也没有多出临时文件', () =>
+      (fs.readFileSync(path.join(outside, 'settings.json'), 'utf8') === outsideBefore &&
+        fs.readdirSync(outside).join(',') === 'settings.json') || fs.readdirSync(outside).join(','));
+  }
+
+  {
+    // settings.json 的位置上不是普通文件：项目级、全局级都拒绝，不删也不改
+    const w = mkWorld('toggle-settings-not-file');
+    writeSkill(path.join(w.proj, '.pi', 'skills'), 'p-one', { description: 'Project one' });
+    writeSkill(path.join(w.agent, 'skills'), 'u-one', { description: 'User one' });
+    const projectSettings = path.join(w.proj, '.pi', 'settings.json');
+    const globalSettings = path.join(w.agent, 'settings.json');
+    for (const dir of [projectSettings, globalSettings]) {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'keep.txt'), 'keep');
+    }
+    const sk = mkSkills(w, w.proj, { rpc: mkRpc([]), approve: true });
+    const list = (await call(sk, 'GET', '/api/skills')).jsonBody().skills;
+    const untouched = (dir) => fs.statSync(dir).isDirectory() && fs.readdirSync(dir).join(',') === 'keep.txt' &&
+      listTmp(path.dirname(dir)).length === 0;
+    for (const [label, name, dir] of [['项目级', 'p-one', projectSettings], ['全局', 'u-one', globalSettings]]) {
+      const row = list.find((skill) => skill.name === name);
+      const result = await putJSON(sk, '/api/skills/' + row.id, { enabled: false });
+      check(`J0-4. ${label} settings.json 的位置上是个目录 → 403 unsafe-settings，原样保留`, () =>
+        (result.code === 403 && result.jsonBody().code === 'unsafe-settings' && untouched(dir)) || JSON.stringify(result.jsonBody()));
+    }
+  }
 
   {
     const w = mkWorld('bad-skills-field');

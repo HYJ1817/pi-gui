@@ -19,6 +19,7 @@ const { bundle } = require('./esm-bundle.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const PUB = path.join(ROOT, 'public');
 const GEN = 'pi-gui:workspace-generation';
+const BRIDGE_READY = 'pi-gui:capability-bridge-ready';
 let passed = 0;
 let failed = 0;
 async function check(name, run) {
@@ -407,7 +408,8 @@ function createWorld(label, entry) {
     assert.equal(SM.isSkillOn({ state: 'enabled' }), true);
     assert.equal(SM.isSkillOn({ state: 'unknown', loaded: true, disabledBy: '' }), true);
     assert.equal(SM.isSkillOn({ state: 'disabled', loaded: true, disabledBy: '-skills/x/SKILL.md' }), false);
-    assert.equal(SM.isSkillOn({ state: 'unknown', loaded: null }), false);
+    assert.equal(SM.isSkillOn({ state: 'unknown', loaded: null, disabledBy: '' }), true);
+    assert.equal(SM.isSkillOn({ state: 'shadowed', loaded: false, disabledBy: '' }), true);
   });
 
   await check('skill filters, counts and groups keep every entry and the server order', () => {
@@ -624,6 +626,23 @@ function createWorld(label, entry) {
     await tick();
     assert.match(details[0].textContent, /Fixture body of code-review/);
     assert.doesNotMatch(details[0].textContent, /读取中…/);
+    page.close();
+  });
+
+  await skillsCheck('Skills: a new Pi run refreshes load evidence and supersedes the previous read', async () => {
+    A.w.S.switching = false;
+    A.hold('GET /api/skills');
+    const page = mountSkills();
+    await tick();
+    A.w.document.dispatchEvent(new A.w.CustomEvent(BRIDGE_READY));
+    await tick();
+    assert.equal(A.pendingCount('GET /api/skills'), 2);
+    A.release('GET /api/skills', SKILLS);
+    await tick();
+    assert.equal(page.card.querySelectorAll('.skill-row').length, 0);
+    A.release('GET /api/skills', SKILLS);
+    await tick();
+    assert.ok(rowOf(page.card, 'code-review'));
     page.close();
   });
 
@@ -1021,6 +1040,28 @@ function createWorld(label, entry) {
     assert.equal(B.count('POST', '/api/extensions/packages'), before);
   });
 
+  await extCheck('Extensions: leaving a market context dismisses network consent and sends no action', async () => {
+    for (const leave of [
+      () => B.w.showChat(),
+      () => B.w.beginWorkspaceSwitch('C:\\fixture\\other'),
+      () => B.$('extensionsTabInstalled').click(),
+    ]) {
+      B.w.S.switching = false;
+      B.answer(marketRoute, marketResponse());
+      const before = B.count('POST', '/api/extensions/market');
+      B.w.openExtensions({ tab: 'market' });
+      await tick();
+      const enable = [...B.d.querySelectorAll('.extensions-notes button')].find((button) => button.textContent === '启用在线目录');
+      assert.ok(enable);
+      enable.click();
+      assert.equal(B.$('confirmLayer').hidden, false);
+      leave();
+      await tick();
+      assert.equal(B.$('confirmLayer').hidden, true);
+      assert.equal(B.count('POST', '/api/extensions/market'), before);
+    }
+  });
+
   await extCheck('Extensions: legacy entry parameters land on 已安装; 插件市场 can be opened directly', async () => {
     B.answer('GET /api/extensions', registry([EXT_OK]));
     for (const [tab, expected] of [[undefined, 'installed'], ['extensions', 'installed'], ['skills', 'installed'], ['mcp', 'installed'], ['market', 'market']]) {
@@ -1297,6 +1338,25 @@ function createWorld(label, entry) {
     assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/, 'loaded evidence of the old project is replaced');
     report.dispose();
     report.element.remove();
+  });
+
+  await reportCheck('MCP report: a new Pi run invalidates observation without opening a collapsed report', async () => {
+    C.answer('GET /api/mcp', MCP_REPORT);
+    const report = mountReport();
+    report.element.open = true;
+    await tick();
+    const reads = C.count('GET', '/api/mcp');
+    C.hold('GET /api/mcp');
+    C.d.dispatchEvent(new C.w.CustomEvent(BRIDGE_READY));
+    assert.equal(C.count('GET', '/api/mcp'), reads + 1);
+    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/);
+    report.element.open = false;
+    await tick();
+    C.d.dispatchEvent(new C.w.CustomEvent(BRIDGE_READY));
+    assert.equal(C.count('GET', '/api/mcp'), reads + 1);
+    C.release('GET /api/mcp', MCP_REPORT);
+    await tick();
+    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/);
   });
 
   await reportCheck('MCP report: dispose drops a late report and removes its listener', async () => {
