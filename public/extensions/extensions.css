@@ -47,7 +47,45 @@
 .extensions-search { flex: 0 1 280px; min-width: 160px; }
 .extensions-search-icon { flex: none; }
 
-.extensions-inner > .extension-notices { margin-top: 0; }
+/* 提示由 Pi 按运行归集，不是某个包的加载错误。摘要常驻，原文仅在展开后占空间。 */
+.extensions-inner > .extension-notices {
+  margin: 0;
+  min-width: 0;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--ds-bg-secondary);
+}
+.extensions-notice-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-height: var(--ui-space-6);
+  padding: var(--ui-space-1) var(--ui-space-3);
+  border-radius: inherit;
+  list-style: none;
+  cursor: pointer;
+  color: var(--ds-text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+.extensions-notice-summary::-webkit-details-marker { display: none; }
+.extensions-notice-summary:hover { background: var(--ds-bg-hover); }
+.extensions-notice-summary:focus-visible,
+.extensions-notice-body:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; }
+.extensions-notice-summary > svg { flex: none; }
+.extensions-notice-summary[data-kind="warning"] > svg:first-child { color: var(--ds-warning); }
+.extensions-notice-summary[data-kind="error"] > svg:first-child { color: var(--ds-error); }
+.extensions-notice-counts { min-width: 0; color: var(--ds-text-secondary); font-weight: var(--font-weight-normal); }
+.extensions-notice-chevron { margin-inline-start: auto; color: var(--ds-text-secondary); }
+.extension-notices[open] .extensions-notice-chevron { transform: rotate(180deg); }
+.extensions-notice-body {
+  padding: var(--ui-space-3);
+  border-top: 1px solid var(--ds-border-default);
+  max-height: min(32vh, 17rem);
+  overflow: auto;
+}
+.extensions-notice-body .ext-sec-head { margin: 0; padding: 0; border: 0; }
+.extensions-notice-body .extension-notice { margin: var(--ui-space-2) 0 0; }
 
 /* ---------- 面板与分组 ---------- */
 .extensions-panel { min-width: 0; }
@@ -93,10 +131,13 @@
 .extensions-tab-installed .extensions-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 8px 12px;
+  align-items: center;
+  gap: var(--ui-space-2) var(--ui-space-3);
 }
-.extensions-tab-installed .extensions-card-head { align-items: flex-start; }
+.extensions-installed-title { display: flex; align-items: center; gap: var(--ui-space-2); flex-wrap: wrap; min-width: 0; }
+.extensions-installed-title > .ext-name { max-width: 100%; }
+.extensions-tab-installed .extensions-card:not(.is-open) .extensions-card-desc { -webkit-line-clamp: 1; }
+.extensions-tab-installed .extensions-card-head { align-items: center; }
 .extensions-tab-installed .extensions-card-glyph { width: 36px; height: 36px; }
 .extensions-tab-installed .extensions-card-heading { gap: 4px; }
 .extensions-tab-installed .extensions-card-foot { justify-content: flex-end; margin-top: 0; }
@@ -165,23 +206,6 @@
 /* 展开详情时简介给全文（详情里不再重复一遍）。 */
 .extensions-card.is-open .extensions-card-desc { display: block; overflow: visible; -webkit-line-clamp: unset; }
 .extensions-card-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
-.extensions-cap {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  height: 20px;
-  padding: 0 8px;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--ds-bg-chip);
-  color: var(--ds-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  box-sizing: border-box;
-}
-.extensions-cap.is-more { font-family: inherit; color: var(--ds-text-muted); }
 /* 11–12px 小字直接用 --ds-error 在浅色主题对比度不足；与主文字混合后保留色相（同 app-shell 的做法）。 */
 .extensions-card-error {
   margin: 0;

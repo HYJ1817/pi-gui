@@ -134,7 +134,10 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
     const heading = el('div', 'extensions-card-heading');
     const title = el('h4', 'ext-name', name);
     title.title = name;
-    heading.append(title, el('div', 'extensions-card-meta', extensionUnitMeta(unit)));
+    const titleLine = el('div', 'extensions-installed-title');
+    titleLine.append(title);
+    for (const tag of extensionUnitTags(unit)) titleLine.append(createBadge(tag));
+    heading.append(titleLine, el('div', 'extensions-card-meta', extensionUnitMeta(unit)));
     head.append(extensionGlyph(name, { error: !!error }), heading);
     const description = extensionUnitDescription(unit);
     if (description) {
@@ -144,16 +147,6 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
     }
     card.append(head);
 
-    const tags = el('div', 'extensions-card-tags');
-    for (const tag of extensionUnitTags(unit)) tags.append(createBadge(tag));
-    const chips = extensionUnitChips(unit);
-    for (const chip of chips.slice(0, 3)) {
-      const node = el('span', 'extensions-cap' + (chip.mono ? '' : ' is-more'), chip.text);
-      node.title = chip.title;
-      tags.append(node);
-    }
-    if (chips.length > 3) tags.append(el('span', 'extensions-cap is-more', `另有 ${chips.length - 3} 项`));
-    if (tags.childElementCount) heading.append(tags);
     if (error) heading.append(el('p', 'extensions-card-error', error));
 
     if (!detailIds.has(unit.id)) detailIds.set(unit.id, `extensionDetail-${++detailSeq}`);
