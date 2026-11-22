@@ -552,7 +552,7 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     A.answer('POST /api/skills/external/import', EXTERNAL_OK);
     const page = mount();
     await tick();
-    cardButton(page.card, '扫描').click();
+    cardButton(page.card, '从其他工具扫描').click();
     await tick();
     assert.equal(A.lastCall('GET', '/api/skills/external').url, '/api/skills/external?project=' + PROJECT_ID);
     assert.ok(modal().classList.contains('skills-external-dialog'));
@@ -602,9 +602,9 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     assert.equal(A.calls.length, 2, 'the only requests are the list and the local market state');
     search.value = '';
     search.dispatchEvent(new A.w.Event('input', { bubbles: true }));
-    page.card.querySelector('.skills-market-toolbar .ds-segment-item[data-value="docs"]').click();
+    page.card.querySelector('.skills-market-filters .ds-segment-item[data-value="docs"]').click();
     assert.ok(page.card.querySelectorAll('.skills-market-card').length < 25);
-    page.card.querySelector('.skills-market-toolbar .ds-segment-item[data-value=""]').click();
+    page.card.querySelector('.skills-market-filters .ds-segment-item[data-value=""]').click();
     page.card.querySelector('.skills-page-number[aria-label="第 2 页"]').click();
     assert.equal(page.card.querySelectorAll('.skills-market-card').length, 1);
     assert.equal(page.card.querySelector('.skills-market-card-title').textContent, 'Entry 25');
@@ -614,6 +614,39 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     assert.ok(page.card.querySelector('.skills-toolbar'), 'back returns to the list');
     assert.deepEqual([...page.card.querySelectorAll('h2')].map((heading) => heading.textContent), ['技能']);
     assert.equal(A.d.activeElement, cardButton(page.card, '市场'));
+    page.close();
+    A.reset();
+    await tick();
+  });
+
+  await check('market: failed cache read has one recovery action; refreshing preserves the category control and selection', async () => {
+    A.answer('GET /api/skills', SKILLS);
+    A.answer('GET /api/skills/market', { ok: false, error: 'fixture: cache unavailable' });
+    const page = mount();
+    await tick();
+    cardButton(page.card, '市场').click();
+    await tick();
+    const retries = [...page.card.querySelectorAll('.skills-market .btn')].filter((b) => b.textContent === '重试');
+    assert.equal(retries.length, 1);
+    assert.match(page.card.querySelector('.skills-market-grid').textContent, /fixture: cache unavailable/);
+    assert.equal(cardButton(page.card, '加载目录').disabled, true);
+    A.answer('GET /api/skills/market', MARKET);
+    retries[0].click();
+    await tick();
+    const filter = (value) => page.card.querySelector(`.skills-market-filters [data-value="${value}"]`);
+    const docs = filter('docs');
+    docs.click();
+    A.answer('POST /api/skills/market/refresh', { ok: true });
+    const refresh = cardButton(page.card, '刷新目录');
+    refresh.click();
+    assert.equal(refresh.disabled, true);
+    assert.equal(refresh.getAttribute('aria-busy'), 'true');
+    await tick(80);
+    assert.equal(filter('docs'), docs);
+    assert.equal(docs.getAttribute('aria-checked'), 'true');
+    assert.equal(filter('').getAttribute('aria-checked'), 'false');
+    assert.equal(page.card.querySelectorAll('.skills-market-card').length, MARKET.entries.filter((item) => item.categories.includes('docs')).length);
+    assert.equal(refresh.disabled, false);
     page.close();
     A.reset();
     await tick();
@@ -876,9 +909,9 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
       await tick(100);
       modalButton('导入').click();
     }],
-    ['scan', 'GET /api/skills/external', EXTERNAL, async (page) => cardButton(page.card, '扫描').click()],
+    ['scan', 'GET /api/skills/external', EXTERNAL, async (page) => cardButton(page.card, '从其他工具扫描').click()],
     ['scan import', 'POST /api/skills/external/import', EXTERNAL_OK, async (page) => {
-      cardButton(page.card, '扫描').click();
+      cardButton(page.card, '从其他工具扫描').click();
       await tick();
       modal().querySelector('.skills-external-row .skills-checkbox').click();
       modalButton('导入所选').click();

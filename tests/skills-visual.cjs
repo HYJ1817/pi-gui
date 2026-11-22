@@ -19,6 +19,7 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { contrastSample } = require('./fixtures/system-settings-states.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = process.env.SKILLS_SHOTS_DIR || path.join(ROOT, '.shots', 'skills-phase2a');
@@ -261,6 +262,14 @@ async function main() {
     await expect(`[...document.querySelectorAll('.skills-page h2')].map((h) => h.textContent).join() === '技能市场'
       && !document.querySelector('.skills-page .skills-head')`, '市场只应有一个页面标题');
     await scrollTop();
+    const layout = await evalJs(`(() => {
+      const grid = document.querySelector('.skills-market-grid');
+      const inner = document.querySelector('.skills-inner');
+      return { viewport: [innerWidth, innerHeight], columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+        overflow: inner.scrollWidth - inner.clientWidth, theme: document.documentElement.dataset.theme };
+    })()`);
+    assert(layout.columns === (layout.viewport[0] === 700 ? 1 : 2) && layout.overflow <= 1, '技能市场列数或内容溢出：' + JSON.stringify(layout));
+    metrics.push({ market: layout });
     await sleep(250);
   }
 
@@ -282,7 +291,7 @@ async function main() {
   }
 
   async function openExternal() {
-    await clickText('.skills-page .skills-actions-bar button', '扫描');
+    await click('.skills-toolbar .skills-scan');
     await waitFor(`document.querySelectorAll('.skills-external-dialog .skills-external-list .skills-external-row').length >= 4`, '扫描候选');
     await expect(`[...document.querySelectorAll('.skills-external-group-title')].every((node) =>
       getComputedStyle(node).fontSize === '16px' && getComputedStyle(node).lineHeight === '20px')`, '扫描分组标题使用公共字号与行高');
@@ -290,6 +299,8 @@ async function main() {
 
   async function measureList(theme) {
     const result = await evalJs(`(() => {
+      const inner = document.querySelector('.skills-inner');
+      const title = inner.querySelector('h2');
       const measure = (selector) => {
         const nodes = [...document.querySelectorAll(selector)];
         return nodes.map((node) => {
@@ -300,19 +311,25 @@ async function main() {
       };
       return {
         viewport: [innerWidth, innerHeight, devicePixelRatio],
-        pageHeading: measure('.skills-page h2'),
+        pageHeading: measure('.skills-page h2'), titleWeight: getComputedStyle(title).fontWeight,
+        overflow: inner.scrollWidth - inner.clientWidth,
         groupHeadings: measure('.skills-group-title'),
         rows: measure('.skill-row-line'),
-        buttons: measure('.skills-actions-bar .btn'),
-        badges: [...document.querySelectorAll('.skill-row-title')].map((row) =>
+        buttons: measure('.skills-head .skills-actions-bar .btn'),
+        badges: [...document.querySelectorAll('.skill-row-actions')].map((row) =>
           [...row.querySelectorAll('.ds-badge')].map((badge) => badge.textContent)),
       };
     })()`);
+    assert(result.pageHeading.length === 1 && result.pageHeading[0].font === '30px' && result.titleWeight === '700', '标题应与原版 MCP 设置页一致');
+    assert(result.overflow <= 1, '技能列表内容区出现横向溢出：' + result.overflow);
     assert(result.groupHeadings.length === 2 && result.groupHeadings.every(({ font, leading }) => font === '16px' && leading === '20px'),
       '列表分组标题使用公共字号与行高');
     assert(result.badges.length === 3 && result.badges.every((items) => items.length === 1), '每行只有一个必要状态');
     assert(result.buttons.length === 3 && result.buttons.every(({ height }) => height === 32), '同行动作使用同高的标准按钮');
-    metrics.push({ theme, ...result });
+    const labels = ['.skills-group-path', '.skill-name', '.skill-row-desc', '.skill-row .ds-badge-success', '.skill-row .ds-badge-neutral'];
+    const contrasts = await evalJs(`${JSON.stringify(labels)}.map(selector => (${contrastSample.toString()})(selector))`);
+    for (const sample of contrasts) assert(sample.ratio >= 4.5, `${theme} ${sample.selector} 文字对比度 ${sample.ratio.toFixed(2)}:1`);
+    metrics.push({ theme, ...result, contrasts });
   }
 
   async function captureDesktop(theme) {

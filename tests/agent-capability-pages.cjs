@@ -724,13 +724,14 @@ function createWorld(label, entry) {
     await tick();
     assert.equal(page.card.querySelectorAll('h1, h2').length, 1, 'one page title');
     assert.equal(page.card.querySelector('.skills-title').textContent, '技能');
-    assert.equal(page.card.querySelector('.settings-page-title'), null, 'the page uses its own title, not the 30px settings title');
-    assert.equal(page.card.querySelector('.skills-head-count').textContent, '3 个技能');
+    assert.equal(page.card.querySelector('.skills-head .settings-page-title'), page.card.querySelector('h2'), 'use the same plain heading as MCP');
+    assert.ok(!page.card.querySelector('.skills-head svg:not(button svg)'), 'no decorative tile before the page title');
     assert.equal(page.card.querySelectorAll('.ext-tabs, .ext-tab').length, 0, 'the old mixed tab strip is gone');
     assert.deepEqual([...page.card.querySelector('.skills-toolbar').children].map((node) => node.classList[0]),
-      ['ds-segmented', 'skills-search', 'skills-project']);
-    assert.deepEqual([...page.card.querySelectorAll('.skills-actions-bar .btn span')].map((node) => node.textContent),
-      ['扫描', '新建', '市场']);
+      ['ds-segmented', 'skills-search', 'skills-project', 'btn']);
+    assert.equal(page.card.querySelector('.skills-toolbar .skills-scan').textContent, '从其他工具扫描');
+    assert.deepEqual([...page.card.querySelectorAll('.skills-head .skills-actions-bar .btn span')].map((node) => node.textContent),
+      ['刷新', '市场', '新建']);
     assert.equal(page.card.querySelector('.skills-project-select').value, 'c000000000000099');
     const seg = (value) => page.card.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
     const segText = (value) => [seg(value).querySelector('.ds-segment-label').textContent, seg(value).querySelector('.ds-segment-count').textContent];
@@ -815,7 +816,7 @@ function createWorld(label, entry) {
     seg('temporary').click();
     assert.deepEqual([...page.card.querySelectorAll('.skills-group')].map((node) => node.dataset.scope), ['temporary']);
     A.answer('GET /api/skills', SKILLS);
-    page.card.querySelector('.skills-head .skills-icon-btn[aria-label="刷新技能列表"]').click();
+    page.card.querySelector('.skills-head button[aria-label="刷新技能列表"]').click();
     await tick();
     assert.equal(seg('temporary').hidden, true);
     assert.equal(seg('').getAttribute('aria-checked'), 'true', 'a hidden tab cannot stay selected');
@@ -1180,7 +1181,7 @@ function createWorld(label, entry) {
     const broken = surface.querySelector('.extensions-card[data-extension-id="ext-2"]');
     assert.ok(broken.classList.contains('is-error'));
     assert.equal(broken.querySelector('.extensions-card-meta').textContent, '版本未知 · 本地 · 项目');
-    assert.equal(broken.querySelector('.extensions-card-desc').textContent, '（没有简介）');
+    assert.equal(broken.querySelector('.extensions-card-desc'), null, 'no placeholder competes with the actionable load error');
     assert.equal(broken.querySelector('.extensions-card-error').textContent, '加载失败：Pi 报告扩展加载错误');
 
     const toggle = ok.querySelector('.extensions-card-toggle');

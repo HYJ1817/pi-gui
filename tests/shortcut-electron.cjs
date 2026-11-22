@@ -566,13 +566,14 @@ if (!process.versions.electron) {
         const visible=(n)=>n.getClientRects().length>0&&getComputedStyle(n).visibility!=='hidden';
         const loaded=[...document.querySelectorAll('.extensions-group[data-group="loaded"] .extensions-card')].map(n=>n.getBoundingClientRect());
         const cards=[...document.querySelectorAll('.extensions-card')].map(n=>n.getBoundingClientRect());
+        const list=box('.extensions-list');
         return {
           titles:[...document.querySelectorAll('#workViewTitle, #workSurface h1, #workSurface h2')].filter(n=>n.textContent.trim()==='扩展'&&visible(n)).length,
           workTitleDisplay:getComputedStyle(document.querySelector('#workViewTitle')).display,
           groups:[...document.querySelectorAll('.extensions-group')].map(n=>n.dataset.group),
           tabs:box('.extensions-tabs'), search:box('.extensions-toolbar-slot .extensions-search'),
           refresh:box('.extensions-head-actions .extensions-refresh'), title:box('.extensions-title'),
-          sideBySide:loaded.length>=2&&Math.abs(loaded[0].top-loaded[1].top)<1&&loaded[1].left>loaded[0].right,
+          fullRows:loaded.length>=2&&loaded.every((r,i)=>Math.abs(r.left-list.left)<1&&Math.abs(r.right-list.right)<1&&(!i||r.top>=loaded[i-1].bottom)),
           cardsInside:cards.every(r=>r.left>=-0.5&&r.right<=innerWidth+0.5),
           scrollWidth:document.documentElement.scrollWidth, inner:innerWidth
         };
@@ -581,7 +582,7 @@ if (!process.versions.electron) {
       check(JSON.stringify(extLayout.groups) === JSON.stringify(['problem', 'loaded', 'unknown']), 'extension cards group as 需要处理 / 已加载 / 加载状态未知 (unknown is not 未加载)', extLayout.groups);
       check(Boolean(extLayout.tabs && extLayout.search && extLayout.search.top < extLayout.tabs.bottom && extLayout.search.bottom > extLayout.tabs.top && extLayout.search.left > extLayout.tabs.right), '1320: the search sits on the tab row, right of 已安装 / 插件市场', extLayout);
       check(Boolean(extLayout.refresh && extLayout.title && Math.abs((extLayout.refresh.top + extLayout.refresh.bottom) / 2 - (extLayout.title.top + extLayout.title.bottom) / 2) < 4), '1320: 刷新 sits in the page header, level with the title', extLayout);
-      check(extLayout.sideBySide && extLayout.cardsInside && extLayout.scrollWidth <= extLayout.inner + 1, '1320: extension cards form a multi-column grid without horizontal overflow', extLayout);
+      check(extLayout.fullRows && extLayout.cardsInside && extLayout.scrollWidth <= extLayout.inner + 1, '1320: installed extensions fill the list in non-overlapping rows without horizontal overflow', extLayout);
       await shot('1320-light-extensions');
       await read(`document.querySelector('.extensions-group[data-group="loaded"] .extensions-card-toggle').click()`);
       await waitFor(`!document.querySelector('.extensions-group[data-group="loaded"] .extensions-card-details').hidden`, 'card details open');
@@ -589,9 +590,9 @@ if (!process.versions.electron) {
         const card=document.querySelector('.extensions-group[data-group="loaded"] .extensions-card');
         const next=document.querySelectorAll('.extensions-group[data-group="loaded"] .extensions-card')[1];
         const a=card.getBoundingClientRect(), b=next.getBoundingClientRect(), d=card.querySelector('.extensions-card-details').getBoundingClientRect();
-        return { detailsInside:d.left>=a.left&&d.right<=a.right&&d.bottom<=a.bottom, neighbourTop:Math.round(b.top-a.top), expanded:card.querySelector('.extensions-card-toggle').getAttribute('aria-expanded') };
+        return { detailsInside:d.left>=a.left&&d.right<=a.right&&d.bottom<=a.bottom, nextRowGap:b.top-a.bottom, expanded:card.querySelector('.extensions-card-toggle').getAttribute('aria-expanded') };
       })()`);
-      check(extDetails.expanded === 'true' && extDetails.detailsInside && extDetails.neighbourTop === 0, 'opening a card shows its facts inside that card without moving its neighbour', extDetails);
+      check(extDetails.expanded === 'true' && extDetails.detailsInside && extDetails.nextRowGap >= 0, 'opening a row keeps its facts inside it and the next row below the expanded details', extDetails);
       await shot('1320-light-extensions-details');
       await read(`document.querySelector('.extensions-group[data-group="loaded"] .extensions-card-toggle').click();document.querySelector('.ext-known-item>summary').click();document.querySelector('.ext-known').scrollIntoView({block:'start'})`);
       await sleep(200);
@@ -633,7 +634,22 @@ if (!process.versions.electron) {
       await read(`document.querySelector('.skills-page .skill-row .skill-row-main').click()`);
       await waitFor(`(document.querySelector('.skills-page .skill-detail .ext-code')?.textContent||'').includes('name: code-review')`, 'skill detail');
       await shot('1320-light-skills-detail');
+      // 同一窗口：技能导入失败后，确认状态不能泄漏到扩展或 MCP。文件只存在于内存。
+      await read(`document.querySelector('.skills-group[data-scope="user"] .skills-group-actions button').click()`);
+      await waitFor(`!!document.querySelector('.skills-import-dialog .skills-file-input')`, 'skill import dialog');
+      await read(`(() => {const transfer=new DataTransfer();transfer.items.add(new File(['fixture'], 'notes.txt'));
+        const input=document.querySelector('.skills-import-dialog .skills-file-input');input.files=transfer.files;
+        input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await waitFor(`document.querySelector('.skills-import-status')?.textContent.includes('请选择一个 .md 文件')`, 'skill import rejected');
+      check(await read(`document.querySelector('.skills-import-dialog .skills-dialog-foot .primary').disabled`), 'invalid import cannot be committed');
+      await read(`[...document.querySelectorAll('.skills-import-dialog button')].find(b=>b.textContent==='取消').click()`);
+      await waitFor(`document.querySelector('#modal').hidden`, 'invalid import dismissed');
+      await read(`document.querySelector('#navHome').click()`);
+      await openExtensionsPage();
+      await read(`document.querySelector('.extensions-list .extensions-card-toggle').click()`);
+      check(await read(`!!document.querySelector('.extensions-card-details:not([hidden]) .ext-row')`), 'after failed skill import, installed extension details still open');
       await openMcpPage();
+      check(await read(`!!document.querySelector('.mcp-page [data-focus-key="add:user"]') && !document.querySelector('.skills-import-status')`), 'MCP management remains available without a stale skill error');
       /* 浏览器在 open 变化后自己派发 toggle；不再手动补发，免得重复请求。 */
       await read(`document.querySelector('.mcp-report').open=true`);
       await waitFor(`(document.querySelector('.mcp-report')?.textContent||'').includes('带 MCP 能力')`, 'mcp report expanded');

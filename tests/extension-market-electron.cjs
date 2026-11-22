@@ -6,9 +6,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { createInterface } = require('node:readline');
+const { contrastSample } = require('./fixtures/system-settings-states.cjs');
 
 const root = path.resolve(__dirname, '..');
-const out = path.join(root, '.shots', 'extensions-phase2b');
+const out = path.join(root, '.shots', 'extensions-facelift');
 
 if (!process.versions.electron) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-extensions-electron-'));
@@ -103,6 +104,24 @@ if (!process.versions.electron) {
           const prefix = `${width}-${theme}`;
           await click('#navExtensions');
           await wait(`document.querySelectorAll('.extensions-list .extensions-card').length>=3`);
+          const installed = await js(`(() => {
+            const title = document.querySelector('.extensions-title');
+            const titleStyle = getComputedStyle(title);
+            const groups = [...document.querySelectorAll('.extensions-grid')];
+            const broken = document.querySelector('[data-extension-id="ext-broken"]');
+            return {
+              plainTitle: titleStyle.fontSize === '30px' && titleStyle.fontWeight === '700'
+                && !document.querySelector('.extensions-head svg:not(.extensions-head-actions svg)'),
+              fullRows: groups.every(group => [...group.children].every(row =>
+                Math.abs(row.getBoundingClientRect().width - group.getBoundingClientRect().width) < 1)),
+              descriptionOmitted: !!broken?.querySelector('.extensions-card-error') && !broken.querySelector('.extensions-card-desc'),
+            };
+          })()`);
+          verify(installed.plainTitle, prefix + ' plain 30px title');
+          verify(installed.fullRows && installed.descriptionOmitted, prefix + ' full-width rows without placeholder descriptions');
+          const labels = ['.extensions-list .ext-name', '.extensions-card-meta', '.extensions-card-error', '.extensions-list .ds-badge-success', '.extensions-list .ds-badge-warning'];
+          const contrasts = await js(`${JSON.stringify(labels)}.map(selector => (${contrastSample.toString()})(selector))`);
+          verify(contrasts.every(sample => sample.ratio >= 4.5), prefix + ' installed labels and status text meet 4.5:1');
           await shot(prefix + '-installed', width, height);
           await click('#extensionsTabMarket');
           await wait(`document.querySelectorAll('.extensions-market-card').length===7`);
@@ -120,9 +139,9 @@ if (!process.versions.electron) {
               button: Math.round(grid.querySelector('.btn').getBoundingClientRect().height),
               radius: getComputedStyle(grid.firstElementChild).borderRadius, cards };
           })()`);
-          metrics.push({ theme, ...layout });
+          metrics.push({ theme, ...layout, contrasts });
           const firstRow = layout.cards.filter((item) => item.top === layout.cards[0].top);
-          verify(layout.cols === (width === 1320 ? 3 : 1), prefix + ' market column count');
+          verify(layout.cols === (width === 1320 ? 2 : 1), prefix + ' market column count');
           verify(layout.scrollWidth <= layout.scrollInner + 1 && layout.cards.every(({ left, right }) => left >= 0 && right <= width), prefix + ' no horizontal overflow');
           verify(new Set(firstRow.map(({ foot }) => foot)).size === 1, prefix + ' aligned action row');
           verify(layout.button === 28, prefix + ' compact card button height');
