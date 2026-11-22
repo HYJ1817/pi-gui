@@ -60,6 +60,25 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
   let currentValue = value;
   const buttons = [];
 
+  /**
+   * radiogroup 的 Tab 语义：整组只有一个停靠点，落在当前选中项；
+   * 当前项被禁用 / 隐藏时退到第一个可用的项。方向键在组内移动并选中。
+   */
+  function tabStop() {
+    const visible = (b) => !b.disabled && !b.hidden;
+    return buttons.find((b) => b.getAttribute('data-value') === currentValue && visible(b))
+      || buttons.find(visible)
+      || null;
+  }
+  function syncTabStops() {
+    const stop = tabStop();
+    for (const b of buttons) b.tabIndex = b === stop ? 0 : -1;
+  }
+  function rememberTabStop(btn) {
+    /* 聚焦中的项就是后续 Tab 的进入点；选中项换了以后由 setValue / 点击重新同步。 */
+    for (const b of buttons) b.tabIndex = b === btn ? 0 : -1;
+  }
+
   options.forEach(opt => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -89,20 +108,51 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
       btn.appendChild(countSpan);
     }
 
-    btn.onclick = (e) => {
-      e.preventDefault();
-      if (btn.disabled || currentValue === opt.value) return;
+    const select = ({ focus = false } = {}) => {
+      if (btn.disabled) return;
+      const changed = currentValue !== opt.value;
       currentValue = opt.value;
       buttons.forEach(b => {
         const active = b.getAttribute('data-value') === currentValue;
         b.classList.toggle('is-active', active);
         b.setAttribute('aria-checked', String(active));
       });
-      onChange(currentValue);
+      rememberTabStop(btn);
+      /* 先聚焦再通知：使用方可能在 onChange 里重建整组（如 MCP 工具栏），
+       * 它需要从 activeElement 读到当前项并把焦点还原到新节点。 */
+      if (focus) btn.focus();
+      if (changed) onChange(currentValue);
+    };
+
+    btn.onclick = (e) => {
+      e.preventDefault();
+      select();
     };
     buttons.push(btn);
     group.appendChild(btn);
   });
+
+  /* WAI-ARIA radiogroup：Tab 进组一次，方向键 / Home / End 在可用项之间移动并选中。 */
+  group.addEventListener('keydown', (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const from = event.target instanceof Element ? event.target.closest('.ds-segment-item') : null;
+    const enabled = buttons.filter((b) => !b.disabled && !b.hidden);
+    if (!enabled.length) return;
+    const index = from ? enabled.indexOf(from) : enabled.indexOf(tabStop());
+    let next = null;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = enabled[(index + 1 + enabled.length) % enabled.length];
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = enabled[(index - 1 + enabled.length) % enabled.length];
+    else if (event.key === 'Home') next = enabled[0];
+    else if (event.key === 'End') next = enabled[enabled.length - 1];
+    if (!next) return;
+    event.preventDefault();
+    if (next === from) return;
+    /* 先聚焦再触发 click：使用方在 onChange 里重建整组时，能从 activeElement 记住新项。 */
+    next.focus();
+    next.click();
+  });
+
+  syncTabStops();
 
   return {
     element: group,
@@ -113,6 +163,7 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
         b.classList.toggle('is-active', active);
         b.setAttribute('aria-checked', String(active));
       });
+      syncTabStops();
     },
     getValue() {
       return currentValue;
@@ -123,6 +174,7 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
         if (val) b.setAttribute('aria-disabled', 'true');
         else b.removeAttribute('aria-disabled');
       });
+      syncTabStops();
     },
     setOptionDisabled(optionValue, val) {
       buttons.forEach(b => {
@@ -131,6 +183,7 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
         if (val) b.setAttribute('aria-disabled', 'true');
         else b.removeAttribute('aria-disabled');
       });
+      syncTabStops();
     },
     /** 更新某一项的条数；null / undefined 清空（空节点不占位）。只作用于创建时声明了 count 的项。 */
     setCount(optionValue, count) {
@@ -145,6 +198,7 @@ export function createSegmentedControl({ options = [], value = '', onChange = ()
       buttons.forEach(b => {
         if (b.getAttribute('data-value') === optionValue) b.hidden = Boolean(val);
       });
+      syncTabStops();
     }
   };
 }
