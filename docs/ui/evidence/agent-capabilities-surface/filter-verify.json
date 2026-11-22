@@ -1,0 +1,469 @@
+{
+  "generatedAt": "2026-11-22T17:54:45.388Z",
+  "cases": [
+    {
+      "label": "tab-enter-dark-1320",
+      "state": {
+        "role": "radiogroup",
+        "label": "按范围筛选",
+        "items": [
+          {
+            "value": "all",
+            "name": "全部4",
+            "role": "radio",
+            "checked": "true",
+            "tabIndex": 0,
+            "focused": true,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "user",
+            "name": "全局3",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "project",
+            "name": "项目1",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          }
+        ],
+        "groupW": 193,
+        "groupH": 32,
+        "scrollW": 193,
+        "clientW": 193,
+        "scrollH": 32,
+        "clientH": 32,
+        "active": "all",
+        "focusKey": "filter:all",
+        "rows": [
+          "filesystem",
+          "github",
+          "linear",
+          "sentry"
+        ]
+      }
+    },
+    {
+      "label": "arrow-right-dark-1320",
+      "state": {
+        "role": "radiogroup",
+        "label": "按范围筛选",
+        "items": [
+          {
+            "value": "all",
+            "name": "全部4",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "user",
+            "name": "全局3",
+            "role": "radio",
+            "checked": "true",
+            "tabIndex": 0,
+            "focused": true,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "project",
+            "name": "项目1",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          }
+        ],
+        "groupW": 193,
+        "groupH": 32,
+        "scrollW": 193,
+        "clientW": 193,
+        "scrollH": 32,
+        "clientH": 32,
+        "active": "user",
+        "focusKey": "filter:user",
+        "rows": [
+          "filesystem",
+          "github",
+          "linear"
+        ]
+      }
+    },
+    {
+      "label": "tab-out-dark-1320",
+      "state": {
+        "role": "radiogroup",
+        "label": "按范围筛选",
+        "items": [
+          {
+            "value": "all",
+            "name": "全部4",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "user",
+            "name": "全局3",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "project",
+            "name": "项目1",
+            "role": "radio",
+            "checked": "true",
+            "tabIndex": 0,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          }
+        ],
+        "groupW": 193,
+        "groupH": 32,
+        "scrollW": 193,
+        "clientW": 193,
+        "scrollH": 32,
+        "clientH": 32,
+        "active": "mcpServerSearch",
+        "rows": [
+          "sentry"
+        ]
+      }
+    },
+    {
+      "label": "ax-tree",
+      "ax": {
+        "radiogroups": [
+          {
+            "role": "radiogroup",
+            "name": "按范围筛选",
+            "checked": "undefined"
+          }
+        ],
+        "radios": [
+          {
+            "role": "radio",
+            "name": "全部 4",
+            "checked": "false",
+            "focusable": true
+          },
+          {
+            "role": "radio",
+            "name": "全局 3",
+            "checked": "false",
+            "focusable": true
+          },
+          {
+            "role": "radio",
+            "name": "项目 1",
+            "checked": "true",
+            "focusable": true
+          }
+        ]
+      }
+    },
+    {
+      "label": "click-dark-1320",
+      "state": {
+        "role": "radiogroup",
+        "label": "按范围筛选",
+        "items": [
+          {
+            "value": "all",
+            "name": "全部4",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "user",
+            "name": "全局3",
+            "role": "radio",
+            "checked": "true",
+            "tabIndex": 0,
+            "focused": true,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "project",
+            "name": "项目1",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          }
+        ],
+        "groupW": 193,
+        "groupH": 32,
+        "scrollW": 193,
+        "clientW": 193,
+        "scrollH": 32,
+        "clientH": 32,
+        "active": "user",
+        "focusKey": "filter:user",
+        "rows": [
+          "filesystem",
+          "github",
+          "linear"
+        ]
+      }
+    },
+    {
+      "label": "light-700-arrow-right",
+      "state": {
+        "role": "radiogroup",
+        "label": "按范围筛选",
+        "items": [
+          {
+            "value": "all",
+            "name": "全部4",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "user",
+            "name": "全局3",
+            "role": "radio",
+            "checked": "true",
+            "tabIndex": 0,
+            "focused": true,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          },
+          {
+            "value": "project",
+            "name": "项目1",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 61,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 16
+          }
+        ],
+        "groupW": 193,
+        "groupH": 32,
+        "scrollW": 193,
+        "clientW": 193,
+        "scrollH": 32,
+        "clientH": 32,
+        "active": "user",
+        "focusKey": "filter:user",
+        "rows": [
+          "filesystem",
+          "github",
+          "linear"
+        ]
+      }
+    },
+    {
+      "label": "font-150-1320",
+      "state": {
+        "role": "radiogroup",
+        "label": "按范围筛选",
+        "items": [
+          {
+            "value": "all",
+            "name": "全部4",
+            "role": "radio",
+            "checked": "true",
+            "tabIndex": 0,
+            "focused": false,
+            "w": 77,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 25
+          },
+          {
+            "value": "user",
+            "name": "全局3",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 77,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 25
+          },
+          {
+            "value": "project",
+            "name": "项目1",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 77,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 25
+          }
+        ],
+        "groupW": 240,
+        "groupH": 32,
+        "scrollW": 240,
+        "clientW": 240,
+        "scrollH": 32,
+        "clientH": 32,
+        "active": "modal-card settings-detail-card mcp-page",
+        "rows": [
+          "filesystem",
+          "github",
+          "linear",
+          "sentry"
+        ]
+      }
+    },
+    {
+      "label": "font-150-700",
+      "state": {
+        "role": "radiogroup",
+        "label": "按范围筛选",
+        "items": [
+          {
+            "value": "all",
+            "name": "全部4",
+            "role": "radio",
+            "checked": "true",
+            "tabIndex": 0,
+            "focused": false,
+            "w": 77,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 25
+          },
+          {
+            "value": "user",
+            "name": "全局3",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 77,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 25
+          },
+          {
+            "value": "project",
+            "name": "项目1",
+            "role": "radio",
+            "checked": "false",
+            "tabIndex": -1,
+            "focused": false,
+            "w": 77,
+            "h": 26,
+            "sh": 26,
+            "ch": 26,
+            "labelH": 25
+          }
+        ],
+        "groupW": 240,
+        "groupH": 32,
+        "scrollW": 240,
+        "clientW": 240,
+        "scrollH": 32,
+        "clientH": 32,
+        "active": "modal-card settings-detail-card mcp-page",
+        "rows": [
+          "filesystem",
+          "github",
+          "linear",
+          "sentry"
+        ]
+      }
+    },
+    {
+      "label": "font-150-700-toolbar",
+      "toolbar": {
+        "sw": 337,
+        "cw": 337
+      }
+    }
+  ]
+}

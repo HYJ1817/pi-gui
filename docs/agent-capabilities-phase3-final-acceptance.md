@@ -109,7 +109,7 @@ Windows，Pi 1.6.0。`tests/skills-live.cjs`、`tests/agent-capabilities-live.cj
 | --- | --- |
 | 表面与边框 | 行 / 卡片改用 `--ds-tile` + `--radius-md-plus`，去掉整圈边框；Hover / 键盘焦点 / 展开改在同一层底色上升一级。展开详情用 `--ds-raised` + 阴影，代码块保留 `--ds-bg-inset`。列内行距统一 6px。 |
 | 分组头 | 图标片去掉边框（`--ds-tile-deep`），分组标题统一 `--text-lg` / 600 / 主文字，条数统一为 18px 胶囊，路径统一 `--text-xs` + 次级文字。 |
-| 工具栏 | 技能、扩展、MCP 的搜索 / 选择 / 分段 / 开关继续复用公共原语。MCP 的私有筛选实现改为共享 `createSegmentedControl`，项目选择器改为 `.ds-select`；MCP 表单里的原生字段仍走原有 `.mcp-input` / `.mcp-select`。 |
+| 工具栏 | 技能、扩展、MCP 的搜索 / 选择 / 分段 / 开关继续复用公共原语。MCP 的私有筛选实现改为共享 `createSegmentedControl`，项目选择器改为 `.ds-select`；共享分段控件补齐 radiogroup 键盘语义（一个 Tab 停靠点、方向键 / Home / End、禁用项跳过），MCP 表单里的原生字段仍走原有 `.mcp-input` / `.mcp-select`。 |
 | 语义提示与空态 | 保留语义底色与 2px 左缘标记，去掉整圈边框；空态从虚线框改为瓦片。可操作控件（搜索、选择、开关）仍保留设计系统规定的低对比度边框，没有用 `border: none` 抹平，也没有降低文字对比度。 |
 | 按钮语义 | 「刷新插件市场」由 Primary 改为 Ghost（设计系统把刷新列在 Ghost 下），卡片安装 / 更新仍是 Primary；MCP 读取失败的「重试」由 Primary 改为默认 Secondary。 |
 | 技能加载状态 | 停用只写 settings，pi 重启前仍会加载。行徽标改为「已停用 · 重启前仍加载」（warning），详情写明「重启 pi 之后才会停止加载」；pi 已不再加载时仍是中性的「已停用」。 |
@@ -149,14 +149,34 @@ Pressed 状态用 CDP 按住「新建」实测：`transform` 从 `none` 到 `mat
 | 命令 | 结果 |
 | --- | --- |
 | `node tests/agent-capability-pages.cjs` | **55/55**（原 51；新增失败读取过期、停用待重启、市场重启同步、按钮语义 4 项） |
-| `node tests/mcp-management-ui.cjs` | **35/35**（范围筛选改为共享分段控件，项目选择器 `.ds-select`） |
+| `node tests/mcp-management-ui.cjs` | **36/36**（新增范围筛选 radiogroup 键盘、焦点与读屏状态 1 项） |
 | `node tests/skills-ui.cjs` | **43/43** |
 | `npm run test:skills` | **1130 passed / 0 failed**（5 条环境 skip 未计入：2 个 POSIX 权限位、3 个无文件符号链接权限） |
 | `npm run test:extensions` | **310**（52 + 119 + 139） |
-| `npm run test:mcp` | **411**（44 + 24 + 72 + 19 + 14 + 35 + 203） |
+| `npm run test:mcp` | **412**（44 + 24 + 72 + 19 + 14 + 36 + 203） |
 | `node tests/smoke.cjs` | **1346/1346** |
-| `npm run test:primitives` | primitives 全过；design-system 阶段 A **6** + 阶段 B **34 PASS**；settings acceptance **19**；font picker **49/49** |
+| `node tests/ui-ia.cjs` | **32/32** |
+| `node tests/app-update-ui.cjs` / `node tests/system-settings.cjs` | **22/22** / **21/21**（共享分段控件的其它调用面） |
+| `npm run test:primitives` | primitives 全过（含新增 radiogroup 键盘用例）；design-system 阶段 A **6** + 阶段 B **34 PASS**；settings acceptance **19**；font picker **49/49** |
 | 完整 PR CI | 提交推送后触发，结果出来前记「待验证」 |
+
+### 共享分段控件：键盘、焦点与兼容性复验（2026-11-23 追加）
+
+MCP 范围筛选保留共享实现；审计发现公共 `createSegmentedControl` 只有鼠标点击，没有 roving tabindex、方向键或 Home/End。按「公共组件的问题在其所有者处解决」补在 `public/ui/primitives.js`，并同步写进设计规范。真实 Chromium 实测（离线夹具，`filter-verify.json`）：
+
+| 项 | 实测 |
+| --- | --- |
+| 计数与切换 | 全部 4 / 全局 3 / 项目 1；点选或方向键切换后行数 4 → 3 → 1，切回 4；搜索时计数仍是全量 |
+| Tab | 整组一个停靠点，落在当前选中项（`tabIndex=0`，其余 `-1`）；Tab 离开后进入搜索框，不再逐个停留 |
+| 方向键 / Home / End | ArrowRight 依次 全部 → 全局 → 项目 → 回绕；ArrowLeft 反向回绕；Home/End 到首/末项；均同步 `aria-checked` 与列表 |
+| 焦点 | 键盘或鼠标切换后，重绘完成时焦点仍在同一筛选（`data-focus-key="filter:user"`）；`setValue` 不抢焦点 |
+| 读屏 | AX 树：`radiogroup` 名称「按范围筛选」；三个 `radio` 名称「全部 4 / 全局 3 / 项目 1」；任一时刻只有一个 `checked=true` |
+| 主题与窄窗 | 深 / 浅色、1320×820 与 700×600 均可操作；700 浅色方向键切换正常，分段控件横向溢出 0 |
+| 150% 字体 | 分段组 240×32、单项 77×26、文字行高 25px（未裁切）；700 窄窗工具栏 `scrollWidth = clientWidth = 337` |
+| 其它调用面 | 技能作用域 / 市场分类 / 编辑器页签、外观字号、应用更新偏好、系统关闭行为共用该控件；对应套件 1130 / 43 / 22 / 21 / 1346 / 32 全部通过 |
+| MCP 配置与服务器管理 | `npm run test:mcp` 七套件 412 项全过（配置读写、启停、测试连接、详情、导入、市场、原生契约） |
+
+证据：[键盘焦点](ui/evidence/agent-capabilities-surface/after/filter-tab-focus-1320x820-dark.png) · [方向键选中全局](ui/evidence/agent-capabilities-surface/after/filter-arrow-user-1320x820-dark.png) · [700 浅色](ui/evidence/agent-capabilities-surface/after/filter-keyboard-700x600-light.png) · [150% 字体](ui/evidence/agent-capabilities-surface/after/filter-font150-700x600-dark.png) · [逐项数据](ui/evidence/agent-capabilities-surface/filter-verify.json)。
 
 截图：[修改前](ui/evidence/agent-capabilities-surface/before/) · [修改后](ui/evidence/agent-capabilities-surface/after/) · [Electron DPR 1.5](ui/evidence/agent-capabilities-surface/electron/)；逐项度量与哈希见 [render.json](ui/evidence/agent-capabilities-surface/render.json)。完整 55 张修改后截图（36 页面 + 19 状态）与 manifest 留在本地 `.shots/capability-pages/`，仓库只保留 71 张代表图（含 MCP 市场 700×600 的修改前后）。
 
