@@ -643,14 +643,15 @@ function createWorld(label, entry) {
     page.close();
   });
 
-  await skillsCheck('Skills: a confirmation answered after closing the page or switching projects writes nothing', async () => {
+  await skillsCheck('Skills: closing the page or switching workspaces dismisses confirmation and writes nothing', async () => {
     A.answer('GET /api/skills', SKILLS);
     let page = mountSkills();
     await tick();
     rowOf(page.card, 'code-review').querySelector('.skill-toggle').click();
     await tick();
+    assert.ok(A.confirmButton('停用'));
     page.close();
-    A.confirmButton('停用').click();
+    assert.equal(A.$('confirmLayer').hidden, true);
     await tick();
     assert.equal(A.count('PUT', '/api/skills/*'), 0, 'closed page must not write');
 
@@ -658,8 +659,9 @@ function createWorld(label, entry) {
     await tick();
     rowOf(page.card, 'code-review').querySelector('.skill-toggle').click();
     await tick();
+    assert.ok(A.confirmButton('停用'));
     A.w.beginWorkspaceSwitch('C:\\fixture\\fourth');
-    A.confirmButton('停用').click();
+    assert.equal(A.$('confirmLayer').hidden, true);
     await tick();
     assert.equal(A.count('PUT', '/api/skills/*'), 0, 'a switch to another project must not write the old settings');
     assert.match(page.card.querySelector('.skills-content').textContent, /项目已切换/);
@@ -728,12 +730,8 @@ function createWorld(label, entry) {
       ['project', '项目级', '<项目>/.pi/skills', PROJECT + '\\.pi\\skills', '1', ['proj-lint']],
     ], 'server order inside each group; the group path is the discovery dir, its title the full dir');
     const badges = (name) => [...rowOf(page.card, name).querySelectorAll('.ds-badge')].map((node) => [node.textContent, node.className]);
-    assert.deepEqual(badges('code-review'), [
-      ['全局', 'ds-badge ds-badge-neutral'],
-      ['已启用', 'ds-badge ds-badge-success'],
-      ['已加载', 'ds-badge ds-badge-success'],
-    ], 'scope, enabled and actually loaded stay separate');
-    assert.deepEqual(badges('pdf-tools'), [['全局', 'ds-badge ds-badge-neutral'], ['已停用', 'ds-badge ds-badge-neutral']]);
+    assert.deepEqual(badges('code-review'), [['已加载', 'ds-badge ds-badge-success']], 'only the confirmed runtime status is shown');
+    assert.deepEqual(badges('pdf-tools'), [['已停用', 'ds-badge ds-badge-neutral']]);
     const pdf = rowOf(page.card, 'pdf-tools');
     assert.equal(pdf.querySelector('.skill-row-note'), null, 'why it is off is technical detail: it belongs in the expanded detail');
     assert.ok(pdf.querySelector('.skill-glyph .ext-dot').classList.contains('off'));
@@ -824,7 +822,7 @@ function createWorld(label, entry) {
     assert.match(notes[0], /当前项目未被信任/);
     const lint = rowOf(page.card, 'proj-lint');
     assert.deepEqual([...lint.querySelectorAll('.ds-badge')].map((node) => [node.textContent, node.className]),
-      [['项目', 'ds-badge ds-badge-neutral'], ['未加载（项目未信任）', 'ds-badge ds-badge-warning']]);
+      [['未加载（项目未信任）', 'ds-badge ds-badge-warning']]);
     assert.equal(lint.querySelector('.skill-row-note'), null, 'the trust reason is technical detail, not row noise');
     lint.querySelector('.skill-row-main').click();
     await tick();

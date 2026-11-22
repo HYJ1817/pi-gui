@@ -14,7 +14,7 @@ import {
   refreshSkillMarket, skillMarketSources,
 } from '../api.js';
 import { createIcon } from '../ui/icons.js';
-import { confirmModal, openModal } from '../ui/modal.js';
+import { confirmModal, confirmSurfaceMeta, dismissConfirm, openModal } from '../ui/modal.js';
 import { createBadge, createSegmentedControl } from '../ui/primitives.js';
 import { resourceEl as el, resourceNote as note } from '../ui/resource-dom.js';
 import {
@@ -64,9 +64,13 @@ function selectField(labelText, select) {
  * @param options.onInstalled 安装成功后的回调（含 undo / restartRequired / warnings）
  */
 export function renderSkillsMarket(holder, {
-  project = 'none', listData = null, installedNames = new Set(), onBack = () => {}, onInstalled = () => {},
+  project = 'none', listData = null, installedNames = new Set(), isCurrent = () => true,
+  onBack = () => {}, onInstalled = () => {},
 } = {}) {
   let disposed = false;
+  let closeDialog = null;
+  const confirmOwner = {};
+  const isActive = () => !disposed && isCurrent();
   let stateToken = 0;
   let busyToken = 0;
   let data = null;
@@ -88,9 +92,7 @@ export function renderSkillsMarket(holder, {
   back.type = 'button';
   back.append(createIcon('chevronLeft', { size: 14 }), el('span', '', '我的技能'));
   back.onclick = () => onBack();
-  const titleBox = el('div', 'skills-market-heading');
-  titleBox.append(el('h3', 'skills-market-title', '技能市场'));
-  titleBox.append(el('p', 'skills-market-sub', '安装前可预览技能全文。'));
+  const title = el('h2', 'skills-title skills-market-title', '技能市场');
   const headActions = el('div', 'skills-market-head-actions');
   const sourceButton = button('目录源', 'ghost tiny', 'server');
   const sourceLabel = sourceButton.querySelector('span');
@@ -105,7 +107,7 @@ export function renderSkillsMarket(holder, {
   headActions.append(sourceButton, loadAll, search);
   const headTop = el('div', 'skills-market-head-top');
   headTop.append(back);
-  headRow.append(titleBox, headActions);
+  headRow.append(title, headActions);
   root.append(headTop, headRow);
 
   const categoryControl = createSegmentedControl({
@@ -147,7 +149,7 @@ export function renderSkillsMarket(holder, {
     busyText = statusMessage;
     renderNotices();
     const result = await fetchSkillMarket();
-    if (disposed || token !== stateToken) return;
+    if (!isActive() || token !== stateToken) return;
     loading = false;
     busyText = '';
     if (!result || result.ok === false) {
@@ -272,7 +274,7 @@ export function renderSkillsMarket(holder, {
     glyph.append(createIcon(CATEGORY_ICON[entry.categories?.[0]] || 'book', { size: 16 }));
     const main = el('div', 'skills-market-card-main');
     const titleRow = el('div', 'skills-market-card-title-row');
-    const title = el('h4', 'skills-market-card-title', entry.title || entry.slug || entry.dir);
+    const title = el('h3', 'skills-market-card-title', entry.title || entry.slug || entry.dir);
     title.title = entry.title || entry.slug || entry.dir;
     titleRow.append(title);
     if (entry.official) titleRow.append(createBadge({ text: '官方', tone: 'success' }));
@@ -399,7 +401,9 @@ export function renderSkillsMarket(holder, {
     if (!data) return;
     let localToken = 0;
     let localBusy = false;
+    let closed = false;
     openModal((card, close) => {
+      closeDialog = close;
       card.classList.add('skills-dialog', 'skills-market-sources-dialog');
       card.setAttribute('aria-label', '技能市场目录源');
       const head = el('header', 'skills-dialog-head');
@@ -415,6 +419,9 @@ export function renderSkillsMarket(holder, {
       const list = el('div', 'skills-sources-list');
       const status = el('div', 'skills-dialog-status');
       status.setAttribute('aria-live', 'polite');
+      if (data.hosts?.length) {
+        body.append(note(`联网主机：${data.hosts.join('、')}`, 'dim'));
+      }
       const addRow = el('div', 'skills-sources-add');
       const addInput = el('input', 'ds-input skills-input');
       addInput.type = 'text';
@@ -482,8 +489,9 @@ export function renderSkillsMarket(holder, {
           message: `会从列表里移除 ${marketSourceName(source)}，并清掉它的本机缓存。技能本身不会被删除。`,
           okText: '移除',
           danger: true,
+          meta: { owner: confirmOwner },
         });
-        if (!ok) return;
+        if (!ok || closed || !isActive()) return;
         const token = ++localToken;
         localBusy = true;
         render();
@@ -521,19 +529,24 @@ export function renderSkillsMarket(holder, {
       });
 
       render();
+    }, () => {
+      closed = true;
+      localToken += 1;
+      if (confirmSurfaceMeta()?.owner === confirmOwner) dismissConfirm();
+      closeDialog = null;
     });
   }
 
   /* ---------- 预览与安装 ---------- */
 
   async function openPreview(entry, buttonNode) {
-    if (previewId) return;
+    if (previewId || !isActive()) return;
     previewId = entry.id;
     buttonNode.disabled = true;
     buttonNode.setAttribute('aria-busy', 'true');
     const result = await previewSkillMarketEntry({ entryId: entry.id });
     previewId = '';
-    if (disposed) return;
+    if (!isActive()) return;
     renderGrid();
     if (!result || result.ok === false) {
       error = `${entry.title || entry.slug}：${(result && result.error) || '预览失败'}`;
@@ -545,7 +558,6 @@ export function renderSkillsMarket(holder, {
   }
 
   function showPreview(entry, preview) {
-    let closeModal = null;
     let disposedPreview = false;
     let fileToken = 0;
     let installToken = 0;
@@ -557,7 +569,7 @@ export function renderSkillsMarket(holder, {
     const origin = preview.source || {};
 
     openModal((card, close) => {
-      closeModal = close;
+      closeDialog = close;
       card.classList.add('skills-dialog', 'skills-preview-dialog');
       card.setAttribute('aria-label', '预览技能');
 
@@ -686,7 +698,7 @@ export function renderSkillsMarket(holder, {
         const token = ++fileToken;
         node.setAttribute('aria-busy', 'true');
         const result = await fetchSkillMarketFile(preview.previewId, path);
-        if (disposedPreview || token !== fileToken) return;
+        if (!isActive() || disposedPreview || token !== fileToken) return;
         node.removeAttribute('aria-busy');
         if (!result || result.ok === false) {
           pre.textContent = (result && result.error) || '读不到这个文件';
@@ -699,7 +711,7 @@ export function renderSkillsMarket(holder, {
       }
 
       installButton.onclick = async () => {
-        if (installing) return;
+        if (installing || disposedPreview || !isActive()) return;
         const name = nameInput.value.trim();
         if (!name) { installError.replaceChildren(note('请填写名称', 'err')); nameInput.focus(); return; }
         if (!targetKey) { installError.replaceChildren(note('没有可写的位置', 'err')); return; }
@@ -711,7 +723,7 @@ export function renderSkillsMarket(holder, {
         const result = await installSkillMarketEntry(project, {
           previewId: preview.previewId, target: targetKey, name, onConflict: conflict, allowPartial,
         });
-        if (disposedPreview || token !== installToken) return;
+        if (!isActive() || disposedPreview || token !== installToken) return;
         installing = false;
         installButton.removeAttribute('aria-busy');
         installButton.disabled = preview.installable === false || !previewTargets.length;
@@ -765,11 +777,11 @@ export function renderSkillsMarket(holder, {
 
       return;
     }, () => {
+      closeDialog = null;
       disposedPreview = true;
       fileToken += 1;
       installToken += 1;
     });
-    return { close: () => { if (closeModal) closeModal(); } };
   }
 
   /* ---------- 生命周期 ---------- */
@@ -780,6 +792,7 @@ export function renderSkillsMarket(holder, {
     dispose() {
       if (disposed) return;
       disposed = true;
+      closeDialog?.();
       stateToken += 1;
       busyToken += 1;
       previewId = '';

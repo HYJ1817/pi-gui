@@ -47,7 +47,6 @@
   white-space: nowrap;
 }
 .skills-head .skills-icon-btn { margin-left: auto; }
-.skills-head.is-market { margin-bottom: 8px; }
 
 /* ---------- 工具栏 ---------- */
 .skills-toolbar {
@@ -138,12 +137,13 @@
 }
 /* .skills-page 同时也是 .modal-card，共享样式里的 `.modal-card h3`（14/500 +
  * 6px 下边距）会盖掉分组标题；用两级选择器把语义标题的规格拿回来。 */
-.skills-page .skills-group-title {
+.skills-page .skills-group-title,
+.skills-external-group-title {
   margin: 0;
   flex: 0 0 auto;
-  font-size: var(--text-base);
+  font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
-  line-height: var(--leading-compact);
+  line-height: var(--leading-tight);
   color: var(--ds-text-primary);
   white-space: nowrap;
 }
@@ -232,8 +232,6 @@
   color: var(--ds-text-primary);
   overflow-wrap: anywhere;
 }
-.skill-row-badges { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
-.skill-row-badges .ds-badge { height: 18px; padding: 0 6px; }
 .skill-row-desc {
   min-width: 0;
   overflow: hidden;
@@ -504,7 +502,7 @@
 .skills-external-list { display: grid; gap: 14px; min-width: 0; }
 .skills-external-group { display: grid; gap: 6px; min-width: 0; }
 .skills-external-group-head { display: flex; align-items: baseline; gap: 8px; }
-.skills-external-group-title { margin: 0; font-size: var(--text-sm); font-weight: var(--font-weight-semibold); color: var(--ds-text-primary); }
+.skills-external-group-title { flex: 0 1 auto; white-space: normal; overflow-wrap: anywhere; }
 .skills-external-group-count { font-size: var(--text-xs); color: var(--ds-text-muted); font-variant-numeric: tabular-nums; }
 .skills-external-rows { display: grid; gap: 4px; }
 .skills-external-row {
@@ -568,16 +566,6 @@
   gap: 16px;
   min-width: 0;
 }
-.skills-market-heading { display: grid; gap: 3px; min-width: 0; }
-.skills-page .skills-market-title {
-  margin: 0;
-  font-size: var(--text-xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--leading-tight);
-  letter-spacing: -0.01em;
-  color: var(--ds-text-primary);
-}
-.skills-market-sub { margin: 0; font-size: var(--text-sm); color: var(--ds-text-secondary); }
 .skills-market-head-actions {
   display: flex;
   align-items: center;
@@ -639,7 +627,7 @@
 }
 .skills-market-card-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
 .skills-market-card-title-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.skills-market-card-title {
+.skills-page .skills-market-card-title {
   margin: 0;
   min-width: 0;
   font-size: var(--text-md);

@@ -11,7 +11,7 @@ import { fetchSkillDetail } from '../api.js';
 import { copyButton } from '../ui/capability-setup.js';
 import { createIcon } from '../ui/icons.js';
 import { resourceEl as el, resourceRow as row, resourceNote as note } from '../ui/resource-dom.js';
-import { formatSkillBytes, skillLoadedText } from './model.js';
+import { formatSkillBytes, skillLoadedText, skillStateMeta } from './model.js';
 
 function factRows(skill) {
   const rows = el('div', 'ext-rows');
@@ -19,8 +19,11 @@ function factRows(skill) {
     row('路径', skill.path || '（未定位）'),
     row('发现来源', skill.rootLabel),
     row('作用域基准', skill.baseDir),
+    row('技能状态', skillStateMeta(skill.state).label),
     row('pi 是否加载', skillLoadedText(skill)),
   );
+  if (skill.source === 'local') rows.append(row('加载配置', '来自 settings'));
+  if (skill.disableModelInvocation) rows.append(row('系统提示词', '不自动加入'));
   if (skill.rel) rows.append(row('停用模式', skill.disablePattern));
   if (skill.settingsPath) rows.append(row('设置写入', skill.settingsPath));
   if (skill.license) rows.append(row('许可证', skill.license));

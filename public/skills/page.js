@@ -22,7 +22,7 @@ import {
   deleteSkill, fetchSkills, restartBackend, setSkillEnabled, undoSkillChange,
 } from '../api.js';
 import { createIcon } from '../ui/icons.js';
-import { confirmModal } from '../ui/modal.js';
+import { confirmModal, confirmSurfaceMeta, dismissConfirm } from '../ui/modal.js';
 import { createBadge, createSegmentedControl, createSettingsToggle } from '../ui/primitives.js';
 import { resourceEl as el, resourceNote as note } from '../ui/resource-dom.js';
 import { renderSkillDetail } from './detail.js';
@@ -125,7 +125,38 @@ function createSkillsPage(card) {
   let detailSeq = 0;
   let openDetail = null; // { id, data, node }：当前展开项的详情节点
   let market = null;
-  const alive = () => !disposed;
+  let projectEpoch = 0;
+  let closeProjectDialog = null;
+  const confirmOwner = {};
+
+  function projectOperation() {
+    const project = state.project;
+    const epoch = projectEpoch;
+    const generation = state.loadedGeneration;
+    return {
+      project,
+      isCurrent: () => !disposed && !state.stale && project === state.project
+        && epoch === projectEpoch && ownsWorkspace(generation),
+    };
+  }
+
+  function invalidateProjectOperations() {
+    projectEpoch += 1;
+    state.busyIds.clear();
+    if (confirmSurfaceMeta()?.owner === confirmOwner) dismissConfirm();
+    closeProjectDialog?.();
+    closeProjectDialog = null;
+    setNotice(null);
+    state.needsReload = false;
+  }
+
+  function openProjectDialog(open, options, onCompleted) {
+    const operation = projectOperation();
+    if (!operation.isCurrent() || !state.data) return;
+    closeProjectDialog = open({
+      ...options, project: operation.project, data: state.data,
+    }, (result) => { if (operation.isCurrent()) onCompleted(result); }).close;
+  }
 
   /* ---------- 骨架：只建一次，筛选与刷新不重建输入框（焦点和输入法状态不丢） ---------- */
   const head = el('header', 'skills-head');
@@ -204,10 +235,12 @@ function createSkillsPage(card) {
     const actions = el('div', 'skills-notice-actions');
     if (notice.undo) {
       const undo = actionButton('撤销', 'refresh', 'ghost tiny', async () => {
+        const operation = projectOperation();
+        if (!operation.isCurrent() || state.notice !== notice) return;
         undo.disabled = true;
         undo.setAttribute('aria-busy', 'true');
         const result = await undoSkillChange(notice.undo);
-        if (!alive()) return;
+        if (!operation.isCurrent() || state.notice !== notice) return;
         if (!result || result.ok === false) {
           setNotice({ tone: 'error', text: (result && result.error) || '撤销失败' });
           return;
@@ -218,16 +251,18 @@ function createSkillsPage(card) {
           details: result.warnings || [],
           restart: result.restartRequired === true,
         });
-        await load(state.project ?? undefined);
+        await load(operation.project ?? undefined);
       });
       actions.append(undo);
     }
     if (notice.restart) {
       const restart = actionButton('重启 pi', 'refresh', 'tiny', async () => {
+        const operation = projectOperation();
+        if (!operation.isCurrent() || state.notice !== notice) return;
         restart.disabled = true;
         restart.setAttribute('aria-busy', 'true');
         const result = await restartBackend();
-        if (!alive()) return;
+        if (!operation.isCurrent() || state.notice !== notice) return;
         if (!result || result.ok === false) {
           setNotice({ tone: 'error', text: (result && result.error) || '重启失败' });
           return;
@@ -389,19 +424,6 @@ function createSkillsPage(card) {
     return section;
   }
 
-  function rowBadges(skill, meta) {
-    const badges = el('span', 'skill-row-badges');
-    badges.append(createBadge({ text: SKILL_SCOPE_LABEL[skill.scope] || '其他', tone: 'neutral' }));
-    if (skill.state !== 'enabled') badges.append(createBadge({ text: meta.label, tone: meta.tone }));
-    else {
-      badges.append(createBadge({ text: '已启用', tone: 'success' }));
-      if (skill.loaded === true) badges.append(createBadge({ text: '已加载', tone: 'success' }));
-    }
-    if (skill.source === 'local') badges.append(createBadge({ text: '来自 settings' }));
-    if (skill.disableModelInvocation) badges.append(createBadge({ text: '不进系统提示词' }));
-    return badges;
-  }
-
   function renderRow(skill) {
     const meta = skillStateMeta(skill.state);
     const open = skill.id === state.openId;
@@ -417,11 +439,12 @@ function createSkillsPage(card) {
     const glyph = el('span', 'skill-glyph');
     glyph.append(createIcon('book', { size: 16 }));
     const dot = el('span', 'ext-dot ' + meta.dot);
-    dot.title = meta.label;
+    dot.setAttribute('aria-hidden', 'true');
     glyph.append(dot);
     const text = el('span', 'skill-row-text');
     const titleLine = el('span', 'skill-row-title');
-    titleLine.append(el('span', 'skill-name', skill.name), rowBadges(skill, meta));
+    const status = skill.state === 'enabled' && skill.loaded === true ? '已加载' : meta.label;
+    titleLine.append(el('span', 'skill-name', skill.name), createBadge({ text: status, tone: meta.tone }));
     const desc = el('span', 'skill-row-desc', skill.description || '（没有描述）');
     if (skill.description) desc.title = skill.description;
     text.append(titleLine, desc);
@@ -447,9 +470,9 @@ function createSkillsPage(card) {
     const node = el('div', 'skill-detail');
     node.id = detailId;
     const seq = ++detailSeq;
-    const generation = state.loadedGeneration;
+    const operation = projectOperation();
     renderSkillDetail(node, skill, {
-      isLive: () => alive() && seq === detailSeq && ownsWorkspace(generation) && !state.stale
+      isLive: () => operation.isCurrent() && seq === detailSeq
         && state.openId === skill.id && state.data === openDetail?.data,
       project: state.project ?? undefined,
       onEdit: (target) => openEdit(target),
@@ -472,16 +495,16 @@ function createSkillsPage(card) {
 
   /* ---------- 启停：确认 → 写 settings → 内联提示（含重启）→ 重读 ---------- */
   async function toggleSkill(skill, want, control) {
-    const generation = state.loadedGeneration;
-    const ok = await confirmModal(skillToggleCopy(skill, want));
-    if (!alive()) return;
+    const operation = projectOperation();
+    if (!operation.isCurrent()) return;
+    const ok = await confirmModal({ ...skillToggleCopy(skill, want), meta: { owner: confirmOwner } });
+    if (!operation.isCurrent()) return;
     if (!ok) { control.setChecked(!want); return; }
-    if (state.stale || !ownsWorkspace(generation)) { control.setChecked(!want); markStale(); return; }
     state.busyIds.add(skill.id);
     control.setDisabled(true);
-    const result = await setSkillEnabled(skill.id, want, state.project ?? undefined);
+    const result = await setSkillEnabled(skill.id, want, operation.project);
+    if (!operation.isCurrent()) return;
     state.busyIds.delete(skill.id);
-    if (!alive()) return;
     control.setDisabled(false);
     if (!result || result.ok === false) {
       control.setChecked(!want);
@@ -494,42 +517,35 @@ function createSkillsPage(card) {
       details: result.warnings || [],
       restart: result.restartRequired === true,
     });
-    await load(state.project ?? undefined);
+    await load(operation.project);
   }
 
   /* ---------- 创建 / 编辑 / 删除 / 导入 / 扫描 ---------- */
   function openCreate() {
-    if (!state.data) return;
-    openSkillEditor({
-      mode: 'create',
-      project: state.project ?? undefined,
-      data: state.data,
-      onSaved: (result) => afterMutation(result, result.name ? `已创建 ${result.name}。` : '已创建技能。'),
-    });
+    openProjectDialog((options, onSaved) => openSkillEditor({ ...options, onSaved }), { mode: 'create' },
+      (result) => afterMutation(result, result.name ? `已创建 ${result.name}。` : '已创建技能。'));
   }
 
   function openEdit(skill) {
     if (!skill) return;
-    openSkillEditor({
-      mode: 'edit',
-      skill,
-      project: state.project ?? undefined,
-      data: state.data,
-      onSaved: (result) => afterMutation(result, result.name ? `已保存 ${result.name}。` : '已保存。'),
-    });
+    openProjectDialog((options, onSaved) => openSkillEditor({ ...options, onSaved }), { mode: 'edit', skill },
+      (result) => afterMutation(result, result.name ? `已保存 ${result.name}。` : '已保存。'));
   }
 
   async function removeSkill(skill) {
+    const operation = projectOperation();
+    if (!operation.isCurrent()) return;
     const target = skill.manage?.target || skill.path || '技能目录';
     const ok = await confirmModal({
       title: `删除技能「${skill.name}」？`,
       message: `会把这个技能从 ${target} 移进 pi-GUI 的回收站（如果可用），不是直接抹掉。pi 重启后才会停止加载它。`,
       okText: '删除',
       danger: true,
+      meta: { owner: confirmOwner },
     });
-    if (!ok || !alive()) return;
-    const result = await deleteSkill(skill.id, state.project ?? undefined);
-    if (!alive()) return;
+    if (!ok || !operation.isCurrent()) return;
+    const result = await deleteSkill(skill.id, operation.project);
+    if (!operation.isCurrent()) return;
     if (!result || result.ok === false) {
       setNotice({ tone: 'error', text: (result && result.error) || '删除失败' });
       return;
@@ -540,34 +556,26 @@ function createSkillsPage(card) {
   }
 
   function openImport(targetPreset = '') {
-    if (!state.data) return;
-    openSkillImport({
-      project: state.project ?? undefined,
-      data: state.data,
-      targetPreset,
-      onImported: (result) => afterMutation(result, result.name
+    openProjectDialog((options, onImported) => openSkillImport({ ...options, onImported }), { targetPreset },
+      (result) => afterMutation(result, result.name
         ? `已导入 ${result.name}（${result.fileCount || 1} 个文件）。`
-        : '已导入技能。'),
-    });
+        : '已导入技能。'));
   }
 
   function openScan() {
-    if (!state.data) return;
-    openSkillExternal({
-      project: state.project ?? undefined,
-      data: state.data,
-      onImported: (result) => afterMutation(result, `已导入 ${result.imported} 个技能。`),
-    });
+    openProjectDialog((options, onImported) => openSkillExternal({ ...options, onImported }), {},
+      (result) => afterMutation(result, `已导入 ${result.imported} 个技能。`));
   }
 
   /* ---------- 市场子视图 ---------- */
   function openMarket() {
-    if (!state.data || state.view === 'market') return;
+    const operation = projectOperation();
+    if (!operation.isCurrent() || !state.data || state.view === 'market') return;
     state.view = 'market';
     state.openId = '';
     setNotice(null);
-    head.classList.add('is-market');
-    refresh.hidden = true;
+    head.remove();
+    card.setAttribute('aria-label', '技能市场');
     toolbar.hidden = true;
     actionsBar.hidden = true;
     notes.hidden = true;
@@ -576,12 +584,14 @@ function createSkillsPage(card) {
     const host = el('div', 'skills-market-host');
     content.append(host);
     market = renderSkillsMarket(host, {
-      project: state.project ?? (state.data ? skillContextProject(state.data) : 'none'),
+      project: operation.project,
+      isCurrent: operation.isCurrent,
       listData: state.data,
       installedNames: marketInstalledNames(state.data.skills),
-      onBack: closeMarket,
-      onInstalled: () => { state.needsReload = true; },
+      onBack: () => { closeMarket(); marketButton.focus(); },
+      onInstalled: () => { if (operation.isCurrent()) state.needsReload = true; },
     });
+    host.querySelector('.skills-market-back').focus();
   }
 
   function closeMarket() {
@@ -589,8 +599,8 @@ function createSkillsPage(card) {
     state.view = 'list';
     market?.dispose();
     market = null;
-    head.classList.remove('is-market');
-    refresh.hidden = false;
+    card.prepend(head);
+    card.setAttribute('aria-label', '技能');
     toolbar.hidden = false;
     actionsBar.hidden = false;
     notes.hidden = false;
@@ -606,11 +616,14 @@ function createSkillsPage(card) {
   /* ---------- 项目上下文 ---------- */
   async function switchProject(value) {
     if (value === state.project) return;
+    invalidateProjectOperations();
     state.project = value;
+    if (state.view === 'market') closeMarket();
     state.openId = '';
     openDetail = null;
     state.data = null;
     state.error = '';
+    state.diagnostics = [];
     state.stale = false;
     detailSeq += 1;
     syncScopeCounts();
@@ -624,6 +637,7 @@ function createSkillsPage(card) {
   function markStale() {
     if (disposed) return;
     state.stale = true;
+    invalidateProjectOperations();
     if (state.view === 'market') closeMarket();
     syncProjects();
     renderBody();
@@ -678,6 +692,7 @@ function createSkillsPage(card) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      invalidateProjectOperations();
       loadToken += 1;
       detailSeq += 1;
       openDetail = null;

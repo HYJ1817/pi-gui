@@ -46,6 +46,64 @@ const skippedEntry = (rawPath, reason) => ({ path: displayPath(rawPath), reason,
 
 export const sha256Hex = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
+/** 保存安装时的文件摘要和隐含目录，不保留包字节。 */
+function installedBundleManifest(stagedDir, files) {
+  const realDir = fs.realpathSync.native(stagedDir);
+  const manifest = new Map();
+  for (const file of files) {
+    const written = fs.realpathSync.native(path.join(stagedDir, file.path));
+    const relative = path.relative(realDir, written).split(path.sep).join('/');
+    if (!classifyBundlePath(relative).ok) throw codeError('unsafe-path', '安装暂存文件的位置已变化');
+    const mode = fs.lstatSync(written).mode & 0o777;
+    manifest.set(relative, { bytes: file.bytes.length, hash: sha256Hex(file.bytes), mode });
+    for (let dir = path.posix.dirname(relative); dir !== '.'; dir = path.posix.dirname(dir)) {
+      manifest.set(dir, null);
+    }
+  }
+  return manifest;
+}
+
+/** 只遍历清单内的目录，只读清单内等长的普通文件。新增、删除和替换类型都算改动。 */
+export function matchesInstalledBundle(root, manifest) {
+  let seen = 0;
+  function visit(relative) {
+    const dir = fs.opendirSync(path.join(root, relative));
+    try {
+      for (let item = dir.readSync(); item; item = dir.readSync()) {
+        const key = path.posix.join(relative, item.name);
+        if (!manifest.has(key)) return false;
+        const expected = manifest.get(key);
+        const file = path.join(root, key);
+        const stat = fs.lstatSync(file);
+        seen += 1;
+        if (expected === null) {
+          if (!stat.isDirectory() || !visit(key)) return false;
+        } else {
+          if (!stat.isFile() || stat.nlink !== 1 || stat.size !== expected.bytes
+            || (process.platform !== 'win32' && (stat.mode & 0o777) !== expected.mode)) return false;
+          const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+          try {
+            const opened = fs.fstatSync(fd);
+            if (!opened.isFile() || opened.dev !== stat.dev || opened.ino !== stat.ino) return false;
+            const bytes = Buffer.alloc(expected.bytes + 1);
+            if (fs.readSync(fd, bytes) !== expected.bytes || sha256Hex(bytes.subarray(0, expected.bytes)) !== expected.hash) return false;
+          } finally {
+            fs.closeSync(fd);
+          }
+        }
+      }
+      return true;
+    } finally {
+      dir.closeSync();
+    }
+  }
+  try {
+    return fs.lstatSync(root).isDirectory() && visit('') && seen === manifest.size;
+  } catch {
+    return false;
+  }
+}
+
 export function codeError(code, message, extra = {}) {
   return Object.assign(new Error(message), { skillCode: code, ...extra });
 }
@@ -271,7 +329,7 @@ function sweepStaleTemp(rootDir, now = Date.now()) {
  * 先写进同一目录下的临时目录（点开头，pi 的扫描会跳过），全部写完再 rename ——
  * 任何一步失败都把临时目录删掉，目标位置要么是完整的技能，要么什么都没有。
  */
-export async function installBundle({ rootDir, name, files }) {
+export async function installBundle({ rootDir, name, files, onStaged }) {
   fs.mkdirSync(rootDir, { recursive: true });
   sweepStaleTemp(rootDir);
   const dest = path.join(rootDir, name);
@@ -283,6 +341,10 @@ export async function installBundle({ rootDir, name, files }) {
       const target = path.join(temp, ...file.path.split('/'));
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, file.bytes, { flag: 'wx', mode: file.executable ? 0o755 : 0o644 });
+    }
+    if (onStaged) {
+      const { dev, ino } = fs.lstatSync(temp);
+      onStaged({ dev, ino, manifest: installedBundleManifest(temp, files) });
     }
     if (lstatOrNull(dest)) throw codeError('exists', `「${name}」已经存在`);
     await renameWithRetry(temp, dest);
@@ -349,10 +411,14 @@ export function createSkillsTrash({ dataDir = null, now = () => new Date(), rena
   }
 
   /** 跨盘时 rename 会 EXDEV：先完整拷进回收站，再把原件改成隐藏名后删除。 */
-  async function moveAcrossDevices(source, payload) {
+  async function moveAcrossDevices(source, payload, verify) {
+    verify?.();
     fs.cpSync(source, payload, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
     const hidden = path.join(path.dirname(source), `.pi-gui-del-${crypto.randomBytes(6).toString('hex')}`);
-    await renameWithRetry(source, hidden);
+    await renameWithRetry(source, hidden, (from, to) => {
+      verify?.();
+      fs.renameSync(from, to);
+    });
     try {
       fs.rmSync(hidden, { recursive: true, force: true, maxRetries: 3 });
     } catch {
@@ -360,20 +426,23 @@ export function createSkillsTrash({ dataDir = null, now = () => new Date(), rena
     }
   }
 
-  async function moveInto(source, payload) {
+  async function moveInto(source, payload, verify) {
     try {
-      await renameWithRetry(source, payload, rename);
+      await renameWithRetry(source, payload, (from, to) => {
+        verify?.();
+        rename(from, to);
+      });
     } catch (err) {
       if (!err || err.code !== 'EXDEV') throw err;
-      await moveAcrossDevices(source, payload);
+      await moveAcrossDevices(source, payload, verify);
     }
   }
 
   /** 把一个技能目录或单文件技能挪进回收站。 */
-  async function put({ source, kind, meta }) {
+  async function put({ source, kind, meta, verify }) {
     const entry = newEntry('del', { kind, ...meta });
     try {
-      await moveInto(source, entry.payload);
+      await moveInto(source, entry.payload, verify);
     } catch (err) {
       fs.rmSync(entry.dir, { recursive: true, force: true });
       throw err;
@@ -419,15 +488,23 @@ export function createSkillsTrash({ dataDir = null, now = () => new Date(), rena
   }
 
   /** 把回收站里的条目放回 dest（dest 必须是空位），成功后条目消失。 */
-  async function restore(id, dest) {
+  async function restore(id, dest, verify) {
     const entry = read(id);
     if (!entry) throw codeError('trash-missing', '回收站里已经没有这一项了');
-    if (lstatOrNull(dest)) throw codeError('exists', '原来的位置已经有别的东西了');
+    const verifyDestination = () => {
+      verify?.();
+      if (lstatOrNull(dest)) throw codeError('exists', '原来的位置已经有别的东西了');
+    };
+    verifyDestination();
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     try {
-      await renameWithRetry(entry.payload, dest, rename);
+      await renameWithRetry(entry.payload, dest, (from, to) => {
+        verifyDestination();
+        rename(from, to);
+      });
     } catch (err) {
       if (!err || err.code !== 'EXDEV') throw err;
+      verifyDestination();
       fs.cpSync(entry.payload, dest, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
     }
     fs.rmSync(entry.dir, { recursive: true, force: true });

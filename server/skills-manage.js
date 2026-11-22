@@ -25,7 +25,10 @@ import {
   splitSkillDocument,
   summarizeSkillText,
 } from './skills-document.js';
-import { createSkillsTrash, createTokenStore, describeError, formatBytes, installBundle, sha256Hex, writeFileAtomic } from './skills-files.js';
+import {
+  codeError, createSkillsTrash, createTokenStore, describeError, formatBytes, installBundle,
+  matchesInstalledBundle, sha256Hex, writeFileAtomic,
+} from './skills-files.js';
 
 const SKILL_FILE = 'SKILL.md';
 const UNDO_TTL_MS = 30 * 60 * 1000;
@@ -56,6 +59,11 @@ function statOrNull(target) {
   } catch {
     return null;
   }
+}
+
+function directoryIdentity(dir) {
+  const stat = statOrNull(dir);
+  return stat?.isDirectory() ? JSON.stringify([canonicalPath(dir), stat.dev, stat.ino]) : null;
 }
 
 /** canonical(target) 是否正好等于 canonical(root) + 两者的字面相对路径 —— 即 root 之下没有任何链接。 */
@@ -394,6 +402,7 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
     if (bytes.equals(read.bytes)) return { ok: true, changed: false, hash: read.hash, bytes: bytes.length, warnings: verdict.warnings, restartRequired: false };
 
     let backupId;
+    const rootIdentity = directoryIdentity(target.dir);
     try {
       backupId = trash.putBackup({
         bytes: read.bytes,
@@ -410,9 +419,8 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
     const metaChanged = before.hasFrontmatter !== after.hasFrontmatter || before.yaml !== after.yaml;
     const restartRequired = metaChanged && restartNeeded(context, rec.scope);
     const afterHash = sha256Hex(bytes);
-    // rootDir / scope / cwd 留给撤销时复核：保存之后技能目录可能被换成链接
     const undo = journal.put({
-      kind: 'edit', name: rec.name, file: rec.path, rootDir: target.dir, scope: rec.scope, cwd: context.cwd || '',
+      kind: 'edit', name: rec.name, file: rec.path, rootDir: target.dir, rootIdentity, scope: target.scope, cwd: context.cwd || '',
       backupId, afterHash, restartRequired,
     });
     return { ok: true, changed: true, hash: afterHash, bytes: bytes.length, warnings: verdict.warnings, metaChanged, restartRequired, undo };
@@ -524,11 +532,14 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
     }
 
     const finalDest = path.join(target.dir, finalName);
+    let rootIdentity;
+    let installed;
     try {
       fs.mkdirSync(target.dir, { recursive: true });
       // 目录刚建出来，再确认一次它没有落到链接上
       const rootProblem = target.scope === 'project' ? projectRootProblem(context.cwd, target.dir) : userRootProblem(target);
       if (rootProblem) return fail(403, 'unsafe-root', rootProblem);
+      rootIdentity = directoryIdentity(target.dir);
       if (onConflict === 'replace' && lstatOrNull(dest)) {
         replacedTrashId = await trash.put({
           source: dest,
@@ -536,7 +547,10 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
           meta: { name, scope: target.scope, originalPath: dest, rootDir: target.dir, reason: 'replace' },
         });
       }
-      await installBundle({ rootDir: target.dir, name: finalName, files: bundle });
+      await installBundle({
+        rootDir: target.dir, name: finalName, files: bundle,
+        onStaged: trash.available ? (identity) => { installed = identity; } : null,
+      });
     } catch (err) {
       let recovery = '';
       if (replacedTrashId) {
@@ -562,7 +576,9 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
       scope: target.scope,
       cwd: context.cwd || '',
       rootDir: target.dir,
+      rootIdentity,
       path: finalDest,
+      installed,
       replacedTrashId,
       restartRequired,
     });
@@ -604,6 +620,7 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
     const { rec, managed, target } = hit;
     if (!managed.deletable) return fail(403, 'read-only', managed.reason || '这个技能不能在这里删除');
     let trashId;
+    const rootIdentity = directoryIdentity(target.dir);
     try {
       trashId = await trash.put({
         source: managed.unit,
@@ -618,9 +635,10 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
     const undo = journal.put({
       kind: 'delete',
       name: rec.name,
-      scope: rec.scope,
+      scope: target.scope,
       cwd: context.cwd || '',
       rootDir: target.dir,
+      rootIdentity,
       path: managed.unit,
       trashId,
       restartRequired,
@@ -628,15 +646,25 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
     return { ok: true, name: rec.name, scope: rec.scope, restartRequired, undo };
   }
 
-  /** 撤销要把东西放回原处：原处所在的根目录必须仍然是当初那个真实位置。 */
-  function restorePlaceProblem(entry) {
-    if (!entry.rootDir) return '';
+  /** 撤销只接受令牌签发时的物理根目录，并重新判断原项目的信任。 */
+  function restorePlaceFailure(entry) {
     const target = entry.path || entry.file;
     if (entry.scope === 'project') {
       const problem = projectRootProblem(entry.cwd, entry.rootDir);
-      if (problem) return problem;
+      if (problem) return fail(409, 'undo-blocked', problem);
+      const trust = trustVerdict(core.paths(entry.cwd));
+      if (!trust.allowed) return fail(403, 'project-untrusted', trust.reason);
     }
-    return sameRealLayout(entry.rootDir, target) ? '' : '原来的位置现在经由链接指向别处';
+    if (!entry.rootIdentity || entry.rootIdentity !== directoryIdentity(entry.rootDir)
+      || !sameRealLayout(entry.rootDir, target)) {
+      return fail(409, 'undo-blocked', '原来的技能目录已移动或经由链接指向别处');
+    }
+    return null;
+  }
+
+  function requireUndoPlace(entry) {
+    const blocked = restorePlaceFailure(entry);
+    if (blocked) throw codeError(blocked.code, blocked.error, { undoFailure: blocked });
   }
 
   async function undoEntry(entry) {
@@ -651,10 +679,18 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
       if (failures.length) return fail(409, 'undo-partial', `有 ${failures.length} 项没能撤销：${failures.join('；')}`);
       return { ok: true, kind: 'batch', count: entry.items.length, restartRequired };
     }
+    try {
+      return await undoItem(entry);
+    } catch (err) {
+      if (err.undoFailure) return err.undoFailure;
+      throw err;
+    }
+  }
+
+  async function undoItem(entry) {
+    const verifyPlace = () => requireUndoPlace(entry);
+    verifyPlace();
     if (entry.kind === 'edit') {
-      // 先看位置：技能目录若被换成了链接，写备份就会写到链接指向的别处
-      const place = restorePlaceProblem(entry);
-      if (place) return fail(409, 'undo-blocked', place);
       const stat = lstatOrNull(entry.file);
       if (!stat || !stat.isFile()) return fail(409, 'undo-blocked', '文件已经不在原处，没有改动');
       if (sha256Hex(fs.readFileSync(entry.file)) !== entry.afterHash) {
@@ -666,23 +702,34 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
       trash.discard(entry.backupId);
       return { ok: true, kind: 'edit', name: entry.name, restartRequired: entry.restartRequired };
     }
-    const problem = restorePlaceProblem(entry);
-    if (problem) return fail(409, 'undo-blocked', problem);
     if (entry.kind === 'delete') {
-      await trash.restore(entry.trashId, entry.path);
+      await trash.restore(entry.trashId, entry.path, verifyPlace);
       return { ok: true, kind: 'delete', name: entry.name, restartRequired: entry.restartRequired };
     }
     // install：把刚装进去的挪进回收站（不是真删），再把被覆盖的那个放回来
-    const stat = lstatOrNull(entry.path);
-    if (stat && !stat.isDirectory()) return fail(409, 'undo-blocked', '安装的位置已经变成了别的东西，没有改动');
-    if (stat) {
-      await trash.put({
+    if (entry.replacedTrashId && !trash.read(entry.replacedTrashId)) {
+      return fail(410, 'trash-missing', '回收站里已经没有安装前的版本，没有改动');
+    }
+    if (!entry.undoTrashId) {
+      // 放进回收站之前检查，rename 遇到重试或跨盘时也重新检查。
+      entry.undoTrashId = await trash.put({
         source: entry.path,
         kind: 'dir',
         meta: { name: entry.name, scope: entry.scope, originalPath: entry.path, rootDir: entry.rootDir, reason: 'undo-install' },
+        verify() {
+          verifyPlace();
+          const stat = lstatOrNull(entry.path);
+          const { dev, ino, manifest } = entry.installed;
+          if (!stat?.isDirectory() || stat.dev !== dev || stat.ino !== ino || !matchesInstalledBundle(entry.path, manifest)) {
+            const changed = fail(409, 'changed-on-disk', '技能目录在安装后发生了改动，没有撤销');
+            throw codeError(changed.code, changed.error, { undoFailure: changed });
+          }
+        },
       });
     }
-    if (entry.replacedTrashId) await trash.restore(entry.replacedTrashId, entry.path);
+    if (entry.replacedTrashId) {
+      await trash.restore(entry.replacedTrashId, entry.path, verifyPlace);
+    }
     return { ok: true, kind: 'install', name: entry.name, restored: Boolean(entry.replacedTrashId), restartRequired: entry.restartRequired };
   }
 

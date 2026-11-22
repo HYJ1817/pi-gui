@@ -4118,10 +4118,10 @@ staticCheck();
     skillsCard.querySelector('.skills-scope .ds-segment-item[data-value=""]').click();
 
     // 状态徽标（旧的状态下拉收进了行内徽标：每行只说自己的状态，筛选交给作用域与搜索）
-    check('技能页：启用的那条带「已启用 · 已加载」两个徽标', () => {
+    check('技能页：已确认加载的行仅有一个「已加载」徽标', () => {
       const row = skillRow('code-review');
-      const text = row ? row.textContent : '';
-      return (/已启用/.test(text) && /已加载/.test(text)) || text;
+      const badges = [...(row?.querySelectorAll('.ds-badge') || [])].map((badge) => badge.textContent);
+      return (badges.length === 1 && badges[0] === '已加载') || JSON.stringify(badges);
     });
     check('技能页：停用的那条只说「已停用」，不冒充已加载', () => {
       const row = skillRow('pdf-tools');

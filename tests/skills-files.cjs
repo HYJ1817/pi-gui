@@ -309,6 +309,55 @@ const tempNames = (dir) => H.listDir(dir).filter((name) => name.startsWith('.pi-
         check('F4. EXDEV：放回时同样退回到拷贝，内容一致、条目消失', H.snapshotTree(source, { withMtime: false }) === original && trash.read(id) === null && entriesOf(trash).length === 0);
       }
 
+      for (const failure of ['EPERM', 'EXDEV']) {
+        const dataDir = path.join(w.base, 'data-restore-' + failure);
+        const source = path.join(skillsRoot, 'restore-' + failure + '.md');
+        fs.writeFileSync(source, 'saved');
+        let restoring = false;
+        let authorized = true;
+        const trash = createSkillsTrash({
+          dataDir,
+          rename(from, to) {
+            if (!restoring) { fs.renameSync(from, to); return; }
+            authorized = false;
+            fs.writeFileSync(to, 'new user file');
+            throw errno(failure);
+          },
+        });
+        const id = await trash.put({ source, kind: 'file', meta: { originalPath: source } });
+        restoring = true;
+        const rejected = await codeOf(() => trash.restore(id, source, () => {
+          if (!authorized) throw codeError('undo-blocked', 'restore context changed');
+        }));
+        check(`F4a. ${failure} 恢复前重新核对授权，保留用户文件与回收站备份`,
+          rejected === 'undo-blocked' && fs.readFileSync(source, 'utf8') === 'new user file'
+          && fs.readFileSync(trash.read(id).payload, 'utf8') === 'saved', rejected);
+      }
+
+      {
+        const dataDir = path.join(w.base, 'data-restore-occupied');
+        const source = path.join(skillsRoot, 'restore-occupied.md');
+        fs.writeFileSync(source, 'saved');
+        let restoring = false;
+        let attempts = 0;
+        const trash = createSkillsTrash({
+          dataDir,
+          rename(from, to) {
+            if (restoring && ++attempts === 1) {
+              fs.writeFileSync(to, 'new user file');
+              throw errno('EPERM');
+            }
+            fs.renameSync(from, to);
+          },
+        });
+        const id = await trash.put({ source, kind: 'file', meta: { originalPath: source } });
+        restoring = true;
+        const rejected = await codeOf(() => trash.restore(id, source));
+        check('F4b. EPERM 重试前原位置被占用 → 保留用户文件与回收站备份',
+          rejected === 'exists' && attempts === 1 && fs.readFileSync(source, 'utf8') === 'new user file'
+          && fs.readFileSync(trash.read(id).payload, 'utf8') === 'saved', rejected);
+      }
+
       // I/O 错误：不可重试 → 原样抛出，原件不动，回收站不留空壳
       {
         const dataDir = path.join(w.base, 'data-eio');

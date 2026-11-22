@@ -156,7 +156,7 @@ const MARKET = {
   sources: MARKET_SOURCES,
   entries: Array.from({ length: 25 }, (_, index) => marketEntry(index + 1)),
   categories: [{ id: 'docs', label: '文档' }, { id: 'writing', label: '写作' }, { id: 'coding', label: '编程' }],
-  hosts: ['api.github.com', 'cdn.jsdelivr.net'],
+  hosts: ['api.github.com', 'cdn.jsdelivr.net', 'data.jsdelivr.com', 'raw.githubusercontent.com'],
   persistent: true,
   limits: { maxCustomSources: 20, pageSize: 24 },
 };
@@ -200,6 +200,8 @@ function createWorld(entry) {
   const pending = new Map();
   const pathOf = (url) => String(url).split('?')[0];
   const matchRoute = (method, url) => {
+    const exact = `${method} ${url}`;
+    if (routes.has(exact)) return exact;
     const target = `${method} ${pathOf(url)}`;
     if (routes.has(target)) return target;
     for (const key of routes.keys()) if (key.endsWith('*') && target.startsWith(key.slice(0, -1))) return key;
@@ -588,6 +590,9 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     assert.equal(A.count('GET', '/api/skills/market'), 1);
     assert.equal(A.count('POST', '/api/skills/market/refresh'), 0, 'opening the market is not a refresh gesture');
     assert.equal(page.card.querySelector('.skills-market-title').textContent, '技能市场');
+    assert.deepEqual([...page.card.querySelectorAll('h2')].map((heading) => heading.textContent), ['技能市场']);
+    assert.equal(page.card.querySelector('.skills-head'), null);
+    assert.equal(A.d.activeElement, page.card.querySelector('.skills-market-back'));
     assert.equal(page.card.querySelectorAll('.skills-market-card').length, 24);
     assert.match(page.card.querySelector('.skills-market-pagination').textContent, /第 1 \/ 2 页/);
     const search = page.card.querySelector('.skills-market-search-input');
@@ -607,6 +612,8 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     page.card.querySelector('.skills-market-back').click();
     await tick();
     assert.ok(page.card.querySelector('.skills-toolbar'), 'back returns to the list');
+    assert.deepEqual([...page.card.querySelectorAll('h2')].map((heading) => heading.textContent), ['技能']);
+    assert.equal(A.d.activeElement, cardButton(page.card, '市场'));
     page.close();
     A.reset();
     await tick();
@@ -756,6 +763,8 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     page.card.querySelector('.skills-market-head-actions .btn').click();
     await tick();
     assert.ok(modal().classList.contains('skills-market-sources-dialog'));
+    assert.ok(modal().textContent.includes(MARKET.hosts.join('、')), 'the dialog renders the server whitelist in full');
+    assert.doesNotMatch(modal().textContent, /data\.jsdelivr\.net/);
     assert.equal(modal().querySelectorAll('.skills-sources-row').length, 3);
     assert.equal([...modal().querySelectorAll('.skills-sources-row')][0].querySelectorAll('.btn').length, 1, 'built-in sources have no remove action');
     const add = modal().querySelector('.skills-sources-add input');
@@ -775,6 +784,158 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     A.reset();
     await tick();
   });
+
+  const projectB = 'c000000000000098';
+  const projectAList = { ...SKILLS, projects: [...SKILLS.projects, { id: projectB, name: 'Project B' }] };
+  const projectBList = {
+    ...projectAList, context: { project: projectB, live: false }, skills: [skill({ id: 'b001', name: 'only-b', scope: 'project' })],
+  };
+  const listFor = (project) => 'GET /api/skills?project=' + project;
+  function switchView(page, project) {
+    const select = fieldValue(page.card, '查看哪个项目的技能');
+    select.value = project;
+    select.dispatchEvent(new A.w.Event('change', { bubbles: true }));
+  }
+  async function projectPage() {
+    A.answer('GET /api/skills', projectAList);
+    A.answer(listFor(PROJECT_ID), projectAList);
+    A.answer(listFor(projectB), projectBList);
+    A.answer('GET /api/skills/a000000000000001', DETAIL);
+    A.answer('GET /api/skills/a000000000000001/source', SOURCE);
+    A.answer('POST /api/skills/check', CHECK_OK);
+    A.answer('POST /api/skills/import/stage', IMPORT_PLAN);
+    A.answer('GET /api/skills/external', EXTERNAL);
+    A.answer('GET /api/skills/market', MARKET);
+    A.answer('POST /api/skills/market/preview', PREVIEW);
+    const page = mount();
+    await tick();
+    return page;
+  }
+  async function openDetail(page) {
+    rowOf(page.card, 'code-review').querySelector('.skill-row-main').click();
+    await tick();
+  }
+  function closeProjectPage(page) {
+    page.close();
+    A.reset();
+  }
+
+  for (const action of ['删除', '停用']) {
+    await check(`project switch while confirming ${action} cancels the old action`, async () => {
+      const page = await projectPage();
+      try {
+        if (action === '删除') {
+          await openDetail(page);
+          cardButton(page.card.querySelector('.skill-detail'), action).click();
+        } else {
+          rowOf(page.card, 'code-review').querySelector('.skill-toggle').click();
+        }
+        assert.ok(A.confirmButton(action));
+        switchView(page, projectB);
+        await tick();
+        A.confirmButton(action)?.click();
+        await tick();
+        assert.equal(A.$('confirmLayer').hidden, true);
+        assert.equal(A.count(action === '删除' ? 'DELETE' : 'PUT', '/api/skills/a000000000000001'), 0);
+        assert.ok(rowOf(page.card, 'only-b'));
+      } finally {
+        closeProjectPage(page);
+      }
+    });
+  }
+
+  const inFlight = [
+    ['create', 'POST /api/skills/create', CREATE_OK, async (page) => {
+      cardButton(page.card, '新建').click();
+      fieldValue(modal(), '技能名称').value = 'demo-skill';
+      fieldValue(modal(), '描述').value = 'Demo';
+      modalButton('创建').click();
+    }],
+    ['edit', 'PUT /api/skills/a000000000000001/source', { ok: true, changed: true }, async (page) => {
+      await openDetail(page);
+      cardButton(page.card.querySelector('.skill-detail'), '编辑').click();
+      await tick();
+      fieldValue(modal(), '描述').value = 'Updated description';
+      modalButton('保存').click();
+    }],
+    ['delete', 'DELETE /api/skills/a000000000000001', { ok: true, name: 'code-review' }, async (page) => {
+      await openDetail(page);
+      cardButton(page.card.querySelector('.skill-detail'), '删除').click();
+      A.confirmButton('删除').click();
+    }],
+    ['toggle', 'PUT /api/skills/a000000000000001', { ok: true }, async (page) => {
+      rowOf(page.card, 'code-review').querySelector('.skill-toggle').click();
+      A.confirmButton('停用').click();
+    }],
+    ['import', 'POST /api/skills/import/commit', IMPORT_OK, async (page) => {
+      cardButton(page.card.querySelector('.skills-group[data-scope="user"]'), '导入文件').click();
+      const input = modal().querySelector('.skills-file-input');
+      const file = new A.w.File(['fixture'], 'SKILL.md');
+      Object.defineProperty(input, 'files', { value: [file] });
+      input.dispatchEvent(new A.w.Event('change', { bubbles: true }));
+      await tick(100);
+      modalButton('导入').click();
+    }],
+    ['scan', 'GET /api/skills/external', EXTERNAL, async (page) => cardButton(page.card, '扫描').click()],
+    ['scan import', 'POST /api/skills/external/import', EXTERNAL_OK, async (page) => {
+      cardButton(page.card, '扫描').click();
+      await tick();
+      modal().querySelector('.skills-external-row .skills-checkbox').click();
+      modalButton('导入所选').click();
+    }],
+    ['market install', 'POST /api/skills/market/install', INSTALL_OK, async (page) => {
+      cardButton(page.card, '市场').click();
+      await tick();
+      cardButton(page.card.querySelector('.skills-market-card'), '安装').click();
+      await tick();
+      cardButton(modal().querySelector('.skills-preview-install'), '安装').click();
+    }],
+  ];
+  for (const [label, route, result, launch] of inFlight) {
+    for (const [order, responseFirst, reply] of [
+      ['old success before B', true, result],
+      ['old success after return to A', false, result],
+      ['old error after return to A', false, { ok: false, error: 'late A error' }],
+    ]) {
+      await check(`project switch isolates ${label} (${order})`, async () => {
+        const page = await projectPage();
+        const request = route + '?project=' + PROJECT_ID;
+        A.hold(request);
+        try {
+          await launch(page);
+          await tick(80);
+          assert.equal(A.pendingCount(request), 1, 'the pending request is bound to A');
+          A.hold(listFor(projectB));
+          if (label === 'market install') page.card.querySelector('.skills-market-back').click();
+          switchView(page, projectB);
+          if (!responseFirst) {
+            A.release(listFor(projectB), projectBList);
+            await tick();
+            assert.ok(rowOf(page.card, 'only-b'));
+            switchView(page, PROJECT_ID);
+            await tick();
+            assert.ok(rowOf(page.card, 'proj-lint'));
+          }
+          const reads = A.count('GET', '/api/skills');
+          A.release(request, reply);
+          await tick();
+          assert.equal(A.count('GET', '/api/skills'), reads, 'old completion must not trigger a list reload');
+          assert.equal(page.card.querySelector('.skills-notice'), null);
+          assert.equal(A.$('modal').hidden, true);
+          if (responseFirst) {
+            A.release(listFor(projectB), projectBList);
+            await tick();
+            assert.ok(rowOf(page.card, 'only-b'));
+          } else {
+            assert.ok(rowOf(page.card, 'proj-lint'));
+          }
+        } finally {
+          A.answer(request, result);
+          closeProjectPage(page);
+        }
+      });
+    }
+  }
 
   await check('no uncaught errors or console errors in the skills UI world', async () => {
     assert.deepEqual(A.pageErrors, []);

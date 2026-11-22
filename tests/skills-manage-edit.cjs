@@ -552,6 +552,90 @@ const leftovers = (dir) => H.listDir(dir).filter((name) => name.startsWith('.pi-
       check('F37. 装到另一个根目录、与已有技能同名 → 成功并提醒会被覆盖', shadowing.ok === true && shadowing.warnings.length >= 1 && /已有同名技能「dup」/.test(shadowing.warnings[0]), JSON.stringify(shadowing.warnings));
       const mismatched = await install({ name: 'dir-name', files: [{ path: 'SKILL.md', bytes: Buffer.from('---\nname: inner-name\ndescription: mismatch\n---\n') }] });
       check('F38. 目录名与 frontmatter 的 name 不一致 → 成功并提醒 pi 以后者为准', mismatched.ok === true && mismatched.warnings.some((text) => /目录名是 dir-name，但 frontmatter 里的 name 是 inner-name/.test(text)), JSON.stringify(mismatched.warnings));
+
+      const asset = { path: 'assets/data.bin', bytes: Buffer.from([1, 2, 3]) };
+      const changes = [
+        ['edited', (dir) => fs.writeFileSync(path.join(dir, asset.path), Buffer.from([1, 2, 4]))],
+        ['added', (dir) => fs.writeFileSync(path.join(dir, '.user-note'), 'keep')],
+        ['removed', (dir) => fs.unlinkSync(path.join(dir, asset.path))],
+        ['folder', (dir) => fs.mkdirSync(path.join(dir, 'empty'))],
+      ];
+      for (const [kind, change] of changes) {
+        const name = 'undo-' + kind;
+        await install({ name, files: pack(name, 'old') });
+        const newer = await install({ name, files: pack(name, 'new', [asset]), onConflict: 'replace' });
+        const dir = path.join(userRoot, name);
+        change(dir);
+        const before = H.snapshotTree(dir, { withMtime: false });
+        const trashBeforeUndo = H.trashEntries(w, 'del-');
+        const result = await manager.undo(newer.undo);
+        check(`F39. 撤销覆盖遇到 ${kind} 后续改动 → 拒绝，目录和替换备份不动`,
+          verdict(result) === '409:changed-on-disk' && H.snapshotTree(dir, { withMtime: false }) === before
+          && H.trashEntries(w, 'del-').join() === trashBeforeUndo.join(), JSON.stringify(result));
+      }
+
+      const linked = await install({ name: 'undo-linked', files: pack('undo-linked', 'v1', [asset]) });
+      const linkedAssets = path.join(linked.path, 'assets');
+      const otherAssets = path.join(w.base, 'other-assets');
+      fs.renameSync(linkedAssets, otherAssets);
+      fs.symlinkSync(otherAssets, linkedAssets, 'junction');
+      const refusedLink = await manager.undo(linked.undo);
+      check('F40. 资源目录变成链接 → 拒绝，即使链接目标字节相同', verdict(refusedLink) === '409:changed-on-disk'
+        && fs.lstatSync(linkedAssets).isSymbolicLink() && fs.readFileSync(path.join(otherAssets, 'data.bin')).equals(asset.bytes),
+        JSON.stringify(refusedLink));
+
+      const gone = await install({ name: 'undo-gone', files: pack('undo-gone', 'old') });
+      const replacedGone = await install({ name: gone.name, files: pack(gone.name, 'new'), onConflict: 'replace' });
+      fs.renameSync(replacedGone.path, path.join(w.base, 'moved-by-user'));
+      const refusedGone = await manager.undo(replacedGone.undo);
+      check('F41. 用户挪走新安装目录 → 拒绝恢复旧安装', verdict(refusedGone) === '409:changed-on-disk' && !fs.existsSync(replacedGone.path),
+        JSON.stringify(refusedGone));
+
+      const trustFile = path.join(w.agent, 'trust.json');
+      const trustedManager = createSkillsManager({ core: S.realCore(sk), dataDir: w.data });
+      H.writeJson(trustFile, { [path.resolve(w.proj)]: true });
+      const managed = await trustedManager.install(ctx, { targetKey: 'project-pi', name: 'undo-trust', files: pack('undo-trust', 'v1') });
+      H.writeJson(trustFile, { [path.resolve(w.proj)]: false });
+      const denied = await trustedManager.undo(managed.undo);
+      check('F42. 原项目信任被撤销 → 拒绝，已安装文件保留', verdict(denied) === '403:project-untrusted'
+        && fs.readFileSync(path.join(managed.path, 'SKILL.md'), 'utf8') === md('undo-trust', 'v1'), JSON.stringify(denied));
+      H.writeJson(trustFile, { [path.resolve(w.proj)]: true });
+      const restoredTrust = await trustedManager.undo(managed.undo);
+      check('F43. 恢复原项目信任后可重试，原包进入回收站', restoredTrust.ok && !fs.existsSync(managed.path), JSON.stringify(restoredTrust));
+
+      const untouched = await install({ name: 'undo-batch-clean', files: pack('undo-batch-clean', 'v1') });
+      const changed = await install({ name: 'undo-batch-edited', files: pack('undo-batch-edited', 'v1') });
+      const batch = manager.mergeUndo([untouched.undo, changed.undo]);
+      fs.writeFileSync(path.join(changed.path, 'SKILL.md'), md(changed.name, 'changed after import'));
+      const partial = await manager.undo(batch);
+      check('F44. 批量撤销保留改过的技能，并继续撤销未改动的技能',
+        verdict(partial) === '409:undo-partial' && !fs.existsSync(untouched.path)
+        && fs.readFileSync(path.join(changed.path, 'SKILL.md'), 'utf8') === md(changed.name, 'changed after import'), JSON.stringify(partial));
+      check('F45. 批量撤销部分成功后，令牌不能再用', verdict(await manager.undo(batch)) === '410:undo-expired');
+
+      const foldCase = await install({ name: 'undo-case', files: pack('undo-case', 'v1', [
+        { path: 'Assets/one', bytes: Buffer.from('1') }, { path: 'assets/two', bytes: Buffer.from('2') },
+      ]) });
+      const folded = await manager.undo(foldCase.undo);
+      check('F46. 按实际文件系统记录大小写不同的目录，未经修改仍可撤销', folded.ok && !fs.existsSync(foldCase.path), JSON.stringify(folded));
+
+      const fresh = worlds.mkWorld('undo-first-project-skill');
+      const freshCtx = { cwd: fresh.proj, explicit: true };
+      const freshPath = path.join(fresh.proj, '.pi', 'skills', 'first-skill');
+      const freshCore = {
+        ...S.fakeCore(fresh),
+        readTrustState({ assumeResources }) {
+          return assumeResources || fs.existsSync(freshPath)
+            ? { trusted: false, reason: 'ask-no-ui' }
+            : { trusted: true, reason: 'no-project-resources' };
+        },
+      };
+      const freshManager = createSkillsManager({ core: freshCore, dataDir: fresh.data });
+      const firstSkill = await freshManager.install(freshCtx, { targetKey: 'project-pi', name: 'first-skill', files: pack('first-skill', 'v1') });
+      const firstUndo = await freshManager.undo(firstSkill.undo);
+      check('F47. 第一个项目级技能安装后仍待信任，撤销也先复核信任',
+        firstSkill.ok && verdict(firstUndo) === '403:project-untrusted'
+        && fs.readFileSync(path.join(freshPath, 'SKILL.md'), 'utf8') === md('first-skill', 'v1'), JSON.stringify(firstUndo));
     }
 
     /* ============================================================ */
