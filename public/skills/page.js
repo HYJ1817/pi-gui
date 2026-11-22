@@ -30,7 +30,7 @@ import { renderSkillsMarket } from './market.js';
 import {
   SKILL_SCOPE_LABEL, SKILL_SCOPE_ORDER, filterSkills, groupSkillsByScope, isSkillOn,
   marketInstalledNames, skillContextProject, skillGroupRoots, skillProjectOptions, skillScopeCounts,
-  skillScopeRoots, skillScopeTitle, skillStateMeta, skillToggleCopy, skillWritableTargets,
+  skillDisplayStatus, skillScopeRoots, skillScopeTitle, skillToggleCopy, skillWritableTargets,
 } from './model.js';
 
 /** 全部视图里即使为空也要出现的分组（空分组显示空状态，说明「这里没有」而不是「没读到」）。 */
@@ -325,6 +325,8 @@ function createSkillsPage(card) {
 
   function renderNotes() {
     notes.replaceChildren();
+    /* 列表已过期时，旧项目的信任状态 / 诊断也不再代表任何东西。 */
+    if (state.stale) return;
     const data = state.data;
     if (!data) {
       for (const d of state.diagnostics) notes.append(note(d.message, 'warn'));
@@ -424,7 +426,7 @@ function createSkillsPage(card) {
   }
 
   function renderRow(skill) {
-    const meta = skillStateMeta(skill.state);
+    const display = skillDisplayStatus(skill);
     const open = skill.id === state.openId;
     const item = el('div', 'skill-row' + (open ? ' is-open' : ''));
     item.setAttribute('role', 'listitem');
@@ -437,7 +439,7 @@ function createSkillsPage(card) {
     main.setAttribute('aria-controls', detailId);
     const glyph = el('span', 'skill-glyph');
     glyph.append(createIcon('book', { size: 16 }));
-    const dot = el('span', 'ext-dot ' + meta.dot);
+    const dot = el('span', 'ext-dot ' + display.dot);
     dot.setAttribute('aria-hidden', 'true');
     glyph.append(dot);
     const text = el('span', 'skill-row-text');
@@ -451,8 +453,7 @@ function createSkillsPage(card) {
         ?.querySelector('.skill-row-main')?.focus();
     };
     const actions = el('div', 'skill-row-actions');
-    const status = skill.state === 'enabled' && skill.loaded === true ? '已加载' : meta.label;
-    const badge = createBadge({ text: status, tone: meta.tone });
+    const badge = createBadge({ text: display.label, tone: display.tone });
     badge.id = `skillStatus-${skill.id}`;
     main.setAttribute('aria-describedby', badge.id);
     actions.append(badge);
@@ -639,9 +640,16 @@ function createSkillsPage(card) {
   function markStale() {
     if (disposed) return;
     state.stale = true;
+    state.loading = false;
+    content.classList.remove('is-loading');
+    /* 旧项目 / 旧工作区的读取错误必须跟着一起过期。即使刚才的读取失败了
+     * （state.data 为空），也不能把上一次的错误当成当前项目的结论继续显示。 */
+    state.error = '';
+    state.diagnostics = [];
     invalidateProjectOperations();
     if (state.view === 'market') closeMarket();
     syncProjects();
+    renderNotes();
     renderBody();
   }
 
@@ -684,7 +692,9 @@ function createSkillsPage(card) {
     writeSkillBadge(result); // 页面刚读到的数字顺手同步给菜单徽标，省一次请求
   }
 
-  const onGeneration = () => { if (!disposed && state.data) markStale(); };
+  /* 工作区换代（切项目 / 重启 pi）后旧清单一律作废，无论上次读取成功与否。
+   * 只在上次成功时标记过期，会让一次失败之后切换项目的页面继续停在旧错误上。 */
+  const onGeneration = () => { if (!disposed) markStale(); };
   const refreshAfterRestart = () => {
     if (!disposed && !state.stale && ownsWorkspace(state.loadedGeneration)) {
       void load(state.project ?? undefined);

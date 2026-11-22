@@ -171,7 +171,9 @@ export function openExtensions(options = {}) {
     const refreshAfterRestart = () => {
       if (!instance.isCurrent()) return;
       refreshNotices();
-      void panels.get('installed')?.reload();
+      /* pi 重启后包清单与运行时状态都可能变了：已挂载的页签（含正开着的插件市场）
+       * 都要按同一份清单重读，而不是只刷新「已安装」。 */
+      for (const entry of panels.values()) void entry.reload?.();
     };
     document.addEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
     disposers.push(() => document.removeEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart));

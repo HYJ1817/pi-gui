@@ -38,6 +38,23 @@ export function skillStateMeta(state) {
   return SKILL_STATE_META[state] || SKILL_STATE_META.unknown;
 }
 
+/**
+ * 行上的状态：配置状态与 pi 的实际加载状态分开说。
+ * 刚停用的技能在 pi 重启前仍会被加载 —— 这时只写「已停用」会让人以为它已经不生效了，
+ * 所以把「重启前仍加载」写进同一枚徽标，角标也用警示色。
+ * loaded 是三值：true / false / null（pi 没在运行，无法确认）。
+ */
+export function skillDisplayStatus(skill) {
+  const meta = skillStateMeta(skill?.state);
+  if (skill?.state === 'disabled' && skill.loaded === true) {
+    return { label: '已停用 · 重启前仍加载', tone: 'warning', dot: 'warn' };
+  }
+  if (skill?.state === 'enabled' && skill.loaded === true) {
+    return { label: '已加载', tone: meta.tone, dot: meta.dot };
+  }
+  return { label: meta.label, tone: meta.tone, dot: meta.dot };
+}
+
 export function skillScopeLabel(scope) {
   return SKILL_SCOPE_LABEL[scope] || String(scope || '未知');
 }
