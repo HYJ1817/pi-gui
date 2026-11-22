@@ -1205,7 +1205,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 |---|---|---|---|
 | 纯投影 | `npm run test:capability`（进 `npm test`） | 74 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
 | DOM（jsdom） | `npm run test:ui` 的「Agent 能力」段 | — | 扩展 / 技能 / MCP 配置三个入口、「已知能力设置」仍可从扩展页「已安装」到达、旧能力状态页不再渲染、Registry 仍可诊断、设置导航不再出现「能力状态」 |
-| 拆分边界（jsdom） | `npm run test:agent-capabilities`（进 `npm test`） | 42 | 见下方「三入口拆分」 |
+| 拆分边界（jsdom） | `npm run test:agent-capabilities`（进 `npm test`） | 46 | 见下方「三入口拆分」 |
 | 真实 Electron | `npm run test:shortcuts:electron` | 100 | 设置导航七组（「Agent 能力」只有技能，扩展在主导航）、快捷键八条、旧命令面板 ID 安全忽略、扩展两个页签 / 技能 / MCP 配置在 1320×820 / 700×600 暗亮布局、主导航「扩展」选中态的计算样式（暗亮两套）、两个页面的实测排版（见下方「版式」） |
 
 关键判定（写错任何一条，界面就开始撒谎）：
@@ -1234,7 +1234,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   （`pi-web-access` / `pi-subagents` / `pi-memory` / `pi-browser-harness`）、
   工具名（`web_search` / `memory_search` / `browser_navigate`）或 `nativeState`。
 
-### 三入口拆分（`tests/agent-capability-pages.cjs`，42 条）
+### 三入口拆分（`tests/agent-capability-pages.cjs`，46 条；含扩展市场 2B 的 4 条）
 
 技能 / 扩展 / MCP 从同一个工作区拆成三个入口后的边界（入口说明见
 [agent-capabilities.md](agent-capabilities.md)）。jsdom + 注入的 `fetch`，可以挂起任一请求
@@ -1318,7 +1318,7 @@ Work Surface 自身保持 `overflow:hidden`（`scrollTop` 为 0，与 Planner / 
 
 页面级回归另在 `tests/smoke.cjs`（1346 条；技能页新增启用 / 加载徽标分离、坏技能行内报错、
 未信任行、重启提示走页内、PUT 只走 ID 路径；原状态筛选的 2 条改成 2 条徽标断言，总数不变）、
-`tests/ui-ia.cjs`（32 条）与 `tests/agent-capability-pages.cjs`（42 条）。
+`tests/ui-ia.cjs`（32 条）与 `tests/agent-capability-pages.cjs`（46 条）。
 
 真实渲染三层（都不进默认 CI）：`tests/skills-visual.cjs` 截 40 张（1320×820 / 700×600，
 深浅色，列表 / 空 / 错误 / 成功 / 新建 / 编辑 / 导入 / 市场 / 预览 / 扫描）；

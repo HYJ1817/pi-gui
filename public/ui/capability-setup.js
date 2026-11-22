@@ -111,6 +111,10 @@ function row(label, value) {
 
 /* ---------- 一键安装 ---------- */
 
+/** 嵌入档只保留的状态行：安装 / 启用 / 加载 / 重启这四格由宿主（包卡片）按同一份
+ *  Registry 证据给出，这里再画一遍就是两处状态。 */
+const EMBEDDED_STATE_ROWS = new Set(['运行观察', '诊断']);
+
 /** 按钮的静止文案。`data-install-state` 才是判据（文案会变，状态名不会）。
  *  **没有 `installed` 这一档** —— 已安装不是动作，状态行已经写了，见 installAction()。 */
 const INSTALL_IDLE_LABEL = { install: '安装', recheck: '重新检查' };
@@ -214,43 +218,56 @@ function installAction(model, options) {
  *                那条路径）。它**必须返回重算后的 descriptor**，`runInstall()`
  *                据此判断 Registry 是否真的确认了 installed。
  *                **没有它就不假装已确认**，也不给一个点了没反应的「重新检查」按钮。
+ * @param options.embedded    可选：嵌在「已安装的包」详情里时为 true。包卡片已经给出名称、
+ *                安装 / 加载事实与卸载更新动作，所以这一档**只画包卡片给不出的部分**
+ *                （运行观察、诊断、说明、限制、出处、外链），不重复标题、结论、状态行与安装区。
+ *                默认 false：独立设置区的版式一格不变。
  */
-export function renderSetupSection(model, { linkFactory = null, onRecheck = null } = {}) {
+export function renderSetupSection(model, { linkFactory = null, onRecheck = null, embedded = false } = {}) {
   const options = { linkFactory, onRecheck };
-  const box = el('section', 'cap-setup');
+  const box = el('section', embedded ? 'cap-setup is-embedded' : 'cap-setup');
 
-  box.appendChild(el('h4', '', model.name));
-  if (model.purpose) box.appendChild(el('p', 'cap-purpose', model.purpose));
+  if (!embedded) {
+    box.appendChild(el('h4', '', model.name));
+    if (model.purpose) box.appendChild(el('p', 'cap-purpose', model.purpose));
 
-  const verdict = el('div', 'cap-verdict');
-  verdict.appendChild(el('span', 'ext-dot ' + (model.status?.dot || 'dim')));
-  verdict.appendChild(el('span', 'cap-verdict-text', model.status?.label || ''));
-  verdict.appendChild(el('span', 'ext-badge', model.originLabel));
-  box.appendChild(verdict);
+    const verdict = el('div', 'cap-verdict');
+    verdict.appendChild(el('span', 'ext-dot ' + (model.status?.dot || 'dim')));
+    verdict.appendChild(el('span', 'cap-verdict-text', model.status?.label || ''));
+    verdict.appendChild(el('span', 'ext-badge', model.originLabel));
+    box.appendChild(verdict);
+  }
 
   /* 状态行**只含对这个能力适用的字段**（`'n/a'` 与未声明的字段不画；
    * `null` 照旧画成「未知（无法确认）」）。判断全在模型层。 */
   const rows = el('div', 'ext-rows cap-rows');
-  for (const [label, value] of model.stateRows) rows.appendChild(row(label, value));
-  box.appendChild(rows);
+  for (const [label, value] of model.stateRows) {
+    if (embedded && !EMBEDDED_STATE_ROWS.has(label)) continue;
+    rows.appendChild(row(label, value));
+  }
+  if (!embedded || rows.childElementCount) box.appendChild(rows);
 
   /* 安装 / 内置状态。**Native MCP 与 built-in 到不了这里** —— 它们的
    * installCommand 是 null，只会走下面那条「它从哪来」的说明。 */
-  box.appendChild(el('div', 'ext-sec-head', model.installCommand ? '安装' : '来源'));
-  box.appendChild(el('p', 'cap-note', model.installNote || ''));
+  if (!embedded) {
+    box.appendChild(el('div', 'ext-sec-head', model.installCommand ? '安装' : '来源'));
+    box.appendChild(el('p', 'cap-note', model.installNote || ''));
 
-  if (model.installCommand) {
-    const code = el('code', '', model.installCommand);
-    box.appendChild(code);
+    if (model.installCommand) {
+      const code = el('code', '', model.installCommand);
+      box.appendChild(code);
+    }
   }
 
   const actions = el('div', 'ext-acts');
-  /* 主按钮：一键安装（只在有 installId 的已知 capability 上出现）。 */
-  const install = installAction(model, options);
-  if (install) actions.appendChild(install);
-  /* 高级 / 故障恢复入口：复制固定官方命令，用户仍可在终端自己执行。 */
-  if (model.installCommand) actions.appendChild(copyButton(model.installCommand, model.copyLabel));
-  if (model.restart) actions.appendChild(restartPiButton(model.restart.message));
+  if (!embedded) {
+    /* 主按钮：一键安装（只在有 installId 的已知 capability 上出现）。 */
+    const install = installAction(model, options);
+    if (install) actions.appendChild(install);
+    /* 高级 / 故障恢复入口：复制固定官方命令，用户仍可在终端自己执行。 */
+    if (model.installCommand) actions.appendChild(copyButton(model.installCommand, model.copyLabel));
+    if (model.restart) actions.appendChild(restartPiButton(model.restart.message));
+  }
   /* 「查看上下文与额度」这类只读入口：模型给出 handler，这一层不发明动作。 */
   if (typeof model.onOpen === 'function') {
     const open = el('button', 'btn tiny ghost', model.openLabel || '打开');
@@ -296,9 +313,10 @@ export function renderSetupSection(model, { linkFactory = null, onRecheck = null
  * @param options.linkFactory 外链工厂（各 feature 复用既有的安全外链实现）
  * @param options.onRegistry 可选：recheck 拿到新 Registry 后通知宿主（Extensions
  *                列表用它同步刷新，避免安装完成后左栏还停在旧证据上）。
+ * @param options.embedded   可选：见 `renderSetupSection()` 的同名参数。
  * @returns box
  */
-export function renderFeatureSetup(box, build, registry, { linkFactory = null, onRegistry = null } = {}) {
+export function renderFeatureSetup(box, build, registry, { linkFactory = null, onRegistry = null, embedded = false } = {}) {
   async function recheck() {
     const generation = S.workspaceGeneration;
     const fresh = await fetchExtensions();
@@ -310,7 +328,7 @@ export function renderFeatureSetup(box, build, registry, { linkFactory = null, o
   }
   function paint(report) {
     const row = build(report);
-    box.replaceChildren(renderSetupSection(setupViewModel(row), { linkFactory, onRecheck: recheck }));
+    box.replaceChildren(renderSetupSection(setupViewModel(row), { linkFactory, onRecheck: recheck, embedded }));
     /* 返回**刚算出来的** descriptor（不是缓存），`runInstall()` 用它读
      * `state.installed` 判断 Registry 到底确认了没有。 */
     return row;

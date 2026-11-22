@@ -3,7 +3,7 @@
 Skills、Extensions 与 MCP 现在是**三个独立入口**（入口、模块归属与并行开发边界见
 [agent-capabilities.md](agent-capabilities.md)）：
 
-- 应用主导航的**扩展**：「已安装」（只读 Registry）与「插件市场」（第一阶段占位）两个页签；
+- 应用主导航的**扩展**：「已安装」管理 Pi 原生包和扩展入口，「插件市场」浏览和安装原生 Pi 包。见 [第二阶段 B 实现与验收](extensions-market-phase2b.md)；
 - 设置 › Agent 能力 › **技能**：pi 原生 Skills 的清单、详情与启停；
 - 设置 › 扩展与 MCP › **MCP 配置**：pi 原生 MCP 管理面，页尾折叠「MCP 能力报告」。
 

@@ -1,0 +1,17 @@
+{
+  "pi": "1.6.0",
+  "commands": [
+    "install",
+    "update",
+    "remove"
+  ],
+  "tarballs": 2,
+  "versions": [
+    "1.0.0",
+    "1.1.0"
+  ],
+  "rpcBeforeRemove": true,
+  "rpcAfterRemove": false,
+  "projectSettingsUnchanged": true,
+  "userThemePreserved": true
+}

@@ -1,0 +1,299 @@
+{
+  "checks": 21,
+  "metrics": [
+    {
+      "theme": "dark",
+      "cols": 3,
+      "width": 1320,
+      "height": 820,
+      "scrollWidth": 1035,
+      "scrollInner": 1035,
+      "button": 28,
+      "radius": "14px",
+      "cards": [
+        {
+          "width": 321,
+          "height": 176,
+          "top": 260,
+          "left": 299,
+          "right": 620,
+          "foot": 436
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 260,
+          "left": 632,
+          "right": 953,
+          "foot": 436
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 260,
+          "left": 965,
+          "right": 1286,
+          "foot": 436
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 448,
+          "left": 299,
+          "right": 620,
+          "foot": 624
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 448,
+          "left": 632,
+          "right": 953,
+          "foot": 624
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 448,
+          "left": 965,
+          "right": 1286,
+          "foot": 624
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 636,
+          "left": 299,
+          "right": 620,
+          "foot": 812
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "cols": 3,
+      "width": 1320,
+      "height": 820,
+      "scrollWidth": 1035,
+      "scrollInner": 1035,
+      "button": 28,
+      "radius": "14px",
+      "cards": [
+        {
+          "width": 321,
+          "height": 176,
+          "top": 260,
+          "left": 299,
+          "right": 620,
+          "foot": 436
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 260,
+          "left": 632,
+          "right": 953,
+          "foot": 436
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 260,
+          "left": 965,
+          "right": 1286,
+          "foot": 436
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 448,
+          "left": 299,
+          "right": 620,
+          "foot": 624
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 448,
+          "left": 632,
+          "right": 953,
+          "foot": 624
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 448,
+          "left": 965,
+          "right": 1286,
+          "foot": 624
+        },
+        {
+          "width": 321,
+          "height": 176,
+          "top": 636,
+          "left": 299,
+          "right": 620,
+          "foot": 812
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "cols": 1,
+      "width": 700,
+      "height": 600,
+      "scrollWidth": 450,
+      "scrollInner": 450,
+      "button": 28,
+      "radius": "14px",
+      "cards": [
+        {
+          "width": 426,
+          "height": 176,
+          "top": 326,
+          "left": 252,
+          "right": 678,
+          "foot": 502
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 514,
+          "left": 252,
+          "right": 678,
+          "foot": 690
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 702,
+          "left": 252,
+          "right": 678,
+          "foot": 878
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 890,
+          "left": 252,
+          "right": 678,
+          "foot": 1066
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1078,
+          "left": 252,
+          "right": 678,
+          "foot": 1254
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1266,
+          "left": 252,
+          "right": 678,
+          "foot": 1442
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1454,
+          "left": 252,
+          "right": 678,
+          "foot": 1630
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "cols": 1,
+      "width": 700,
+      "height": 600,
+      "scrollWidth": 450,
+      "scrollInner": 450,
+      "button": 28,
+      "radius": "14px",
+      "cards": [
+        {
+          "width": 426,
+          "height": 176,
+          "top": 326,
+          "left": 252,
+          "right": 678,
+          "foot": 502
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 514,
+          "left": 252,
+          "right": 678,
+          "foot": 690
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 702,
+          "left": 252,
+          "right": 678,
+          "foot": 878
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 890,
+          "left": 252,
+          "right": 678,
+          "foot": 1066
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1078,
+          "left": 252,
+          "right": 678,
+          "foot": 1254
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1266,
+          "left": 252,
+          "right": 678,
+          "foot": 1442
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1454,
+          "left": 252,
+          "right": 678,
+          "foot": 1630
+        }
+      ]
+    }
+  ],
+  "shots": [
+    "1320-dark-installed",
+    "1320-dark-market",
+    "1320-dark-filtered",
+    "1320-dark-detail",
+    "1320-dark-confirm",
+    "1320-dark-installing",
+    "1320-dark-install-failed",
+    "1320-dark-empty",
+    "1320-light-installed",
+    "1320-light-market",
+    "700-dark-installed",
+    "700-dark-market",
+    "700-light-installed",
+    "700-light-market",
+    "700-light-filtered",
+    "700-light-detail",
+    "700-light-confirm",
+    "700-light-installing",
+    "700-light-install-failed",
+    "700-light-empty"
+  ]
+}

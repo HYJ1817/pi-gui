@@ -225,6 +225,7 @@ async function main() {
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
     managedProcesses: { manager: null }, worktrees: null, specs: null,
+    extensionPackages: null, extensionMarket: null,
     /* Stop-only facade fixture; Files/Terminal have their own route suites. */
     files: null, terminal: null,
     /* 路由装配把经典会话和普通项目统一交给 conversationWorkspaces。

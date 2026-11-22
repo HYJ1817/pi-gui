@@ -164,6 +164,8 @@ key、绝对路径、原型链上的名字一律 400。
 
 ## 2B 边界：扩展市场
 
+第二阶段 B 的市场数据、受控操作和验证结果见 [扩展市场实现与验收](extensions-market-phase2b.md)。
+
 范围：插件市场浏览、安装、卸载、更新、启用。
 
 - 替换 `public/extensions/market.js` 的占位；目录与安装逻辑放在**新的**服务端模块，
@@ -192,7 +194,7 @@ Pi 原生 Extension 由 pi 自己加载：`~/.pi/agent/extensions`、`<项目>/.
 
 ## 测试
 
-- `tests/agent-capability-pages.cjs`（在 `npm test` 里，42 条）：静态边界（无互相 import、只经 `api.js`
+- `tests/agent-capability-pages.cjs`（在 `npm test` 里，46 条；其中 4 条是扩展市场 2B 的用例）：静态边界（无互相 import、只经 `api.js`
   读各自的接口、无模块级状态、市场无安装路径、导出名唯一）、纯投影的三值语义、
   三个页面的生命周期（迟到结果丢弃、换项目提示、监听器净增为 0、页签复用不重复请求）、
   两个页面的版式结构（单标题、分组顺序与组头路径、空状态、「临时」页签、未信任提示、卡片分组与详情）。

@@ -3,7 +3,7 @@
  * 全部离线：不启动服务、不碰真 pi、不写盘（jsdom + 注入的 fetch，形状照抄服务端真实返回）。
  *   1. 静态边界：旧的混合模块已删除；三个入口之间没有 UI 互相 import；页面只经 api.js
  *      取数且各自只读自己的事实来源；页面状态不放模块全局、不写共享 store；
- *      插件市场占位没有安装路径；新模块的具名导出在整张模块图里唯一。
+ *      插件市场只经受控接口读目录及管理包；新模块的具名导出在整张模块图里唯一。
  *   2. 纯数据投影：未知保持未知（null 不折算成「否」），筛选 / 分组 / 计数不丢条目。
  *   3. 生命周期：迟到的异步结果丢弃、工作区换代给「项目已切换」提示、关闭后监听器净增为 0、
  *      页签面板复用不重复请求、展开项的 SKILL.md 不随筛选重复请求。
@@ -41,7 +41,7 @@ const SKILLS_DIR = path.join(PUB, 'skills');
 const EXT_DIR = path.join(PUB, 'extensions');
 const SKILL_FILES = ['model.js', 'detail.js', 'editor.js', 'import.js', 'external.js', 'market.js', 'page.js']
   .map((name) => path.join(SKILLS_DIR, name));
-const EXT_FILES = ['model.js', 'installed.js', 'market.js', 'page.js'].map((name) => path.join(EXT_DIR, name));
+const EXT_FILES = ['model.js', 'installed.js', 'market.js', 'page.js', 'market-model.js', 'operations.js', 'package-detail.js', 'parts.js'].map((name) => path.join(EXT_DIR, name));
 const REPORT = path.join(PUB, 'mcp-report.js');
 const MCP_PAGE = path.join(PUB, 'mcp-settings.js');
 const RESOURCE_DOM = path.join(PUB, 'ui', 'resource-dom.js');
@@ -215,7 +215,13 @@ function createWorld(label, entry) {
   const routes = new Map();
   const pending = new Map();
   const matchRoute = (method, url) => {
-    /* 路由只按路径匹配：页面现在会带 ?project=<id>，查询参数不该逼每个用例把 URL 抄全。 */
+    /* 完整 URL 优先（扩展市场的用例按完整查询串注册），再回退到裸路径
+     * （技能页会带 ?project=<id>，不要求每个用例把查询参数抄全）。 */
+    const full = `${method} ${String(url)}`;
+    if (routes.has(full)) return full;
+    for (const key of routes.keys()) {
+      if (key.endsWith('*') && full.startsWith(key.slice(0, -1))) return key;
+    }
     const target = `${method} ${String(url).split('?')[0]}`;
     if (routes.has(target)) return target;
     for (const key of routes.keys()) {
@@ -256,9 +262,17 @@ function createWorld(label, entry) {
     },
     pendingCount: (key) => (pending.get(key) || []).length,
     count(method, url) {
-      const want = String(url).split('?')[0];
-      return calls.filter((call) => call.method === method
-        && (want.endsWith('*') ? call.url.split('?')[0].startsWith(want.slice(0, -1)) : call.url.split('?')[0] === want)).length;
+      const want = String(url);
+      const wantPath = want.split('?')[0];
+      return calls.filter((call) => {
+        if (call.method !== method) return false;
+        if (want.endsWith('*')) {
+          const base = want.slice(0, -1);
+          return call.url.startsWith(base) || (!base.includes('?') && call.url.split('?')[0].startsWith(base));
+        }
+        // 带查询串的期望必须完整相等；裸路径期望允许页面附加 ?project=。
+        return call.url === want || (!want.includes('?') && call.url.split('?')[0] === wantPath);
+      }).length;
     },
     listenerCount: (type) => listeners.get(type)?.size || 0,
     confirmButton(label) { return [...d.querySelectorAll('#confirmCard .btn')].find((button) => button.textContent === label); },
@@ -306,7 +320,11 @@ function createWorld(label, entry) {
       [path.join(SKILLS_DIR, 'import.js'), ['commitSkillImport', 'stageSkillImport']],
       [path.join(SKILLS_DIR, 'external.js'), ['importExternalSkills', 'scanExternalSkills']],
       [path.join(SKILLS_DIR, 'market.js'), ['fetchSkillMarket', 'fetchSkillMarketFile', 'installSkillMarketEntry', 'previewSkillMarketEntry', 'refreshSkillMarket', 'skillMarketSources']],
-      [path.join(EXT_DIR, 'installed.js'), ['fetchApprovalCapability', 'fetchExtensions']],
+      [path.join(EXT_DIR, 'installed.js'), ['fetchApprovalCapability', 'fetchExtensionPackages', 'fetchExtensions']],
+      [path.join(EXT_DIR, 'market.js'), ['extensionMarketAction', 'fetchExtensionMarket']],
+      [path.join(EXT_DIR, 'operations.js'), ['extensionPackageAction']],
+      [path.join(EXT_DIR, 'package-detail.js'), ['fetchExtensionMarketItem', 'fetchExtensionPackages']],
+
       [REPORT, ['fetchMcp']],
     ]);
     for (const file of NEW_MODULES) {
@@ -328,13 +346,12 @@ function createWorld(label, entry) {
     }
   });
 
-  await check('the market placeholder has no installer path in phase 1', () => {
+  await check('the market uses controlled APIs and does not execute host plugins', () => {
     const market = path.join(EXT_DIR, 'market.js');
-    assert.deepEqual(importsOf(market).map((item) => rel(item.target)).sort(), ['public/ui/icons.js', 'public/ui/resource-dom.js']);
     const code = stripComments(fs.readFileSync(market, 'utf8'));
-    assert.ok(!/\binstall/i.test(code), 'market.js mentions an install action');
+    assert.ok(code.includes('fetchExtensionMarket'), 'market reads the controlled directory');
     assert.ok(!/piplug/i.test(code), 'market.js handles .piplug packages');
-    assert.ok(!/['"]button['"]|onclick|addEventListener/.test(code), 'market.js wires an action');
+    assert.ok(!/node:child_process|execFile|spawn\(/.test(code), 'renderer cannot execute packages');
   });
 
   await check('split modules are reachable from app.js and their export names are unique in the module graph', () => {
@@ -817,8 +834,24 @@ function createWorld(label, entry) {
 
   console.log('agent capability pages: Extensions page lifecycle');
   const B = createWorld('extensions', path.join(EXT_DIR, 'page.js'));
+  const marketItem = {
+    id: 'npm:pi-fixture', name: 'pi-fixture', version: '1.2.3', maintainer: 'project-fixture',
+    description: 'A fixture package', category: 'devtools', tags: ['devtools'],
+    installed: { state: 'none' }, install: { allowed: true },
+  };
+  const marketResponse = (items = [marketItem], overrides = {}) => ({
+    ok: true, items, total: items.length, catalogTotal: items.length,
+    consent: { remote: false }, snapshot: { state: 'none' }, operations: { available: true, running: false },
+    categories: [{ id: 'all', label: '全部', count: items.length }, { id: 'devtools', label: '开发工具', count: items.length }],
+    sorts: [{ id: 'recommended', label: '推荐', available: true }, { id: 'name', label: '名称', available: true }],
+    query: { sort: 'recommended' }, ...overrides,
+  });
+  const marketRoute = 'GET /api/extensions/market?*';
   B.w.S.hasProject = true;
   B.answer('GET /api/approvals/capability', APPROVAL);
+  B.answer('GET /api/extensions/packages', { ok: true, packages: [], installRoot: 'C:/fixture/pi/npm/node_modules' });
+  B.answer(marketRoute, marketResponse());
+  B.answer('GET /api/extensions/market/item?*', { ok: true, item: marketItem, detailState: 'no-consent' });
   const NOTICE_TYPES = ['pi-gui:extension-notices', GEN, 'pi-gui:feedback-context'];
   const EXT_BASE = Object.fromEntries(NOTICE_TYPES.map((type) => [type, B.listenerCount(type)]));
   const extItems = () => B.d.querySelectorAll('#extensionsTabPanel .ext-extension-item');
@@ -826,6 +859,7 @@ function createWorld(label, entry) {
   const extCheck = (name, run) => check(name, async () => {
     try { await run(); } finally {
       B.w.showChat();
+      B.w.S.switching = false;
       B.reset();
       await tick();
     }
@@ -835,29 +869,30 @@ function createWorld(label, entry) {
     B.answer('GET /api/extensions', registry([EXT_OK, EXT_BROKEN]));
     B.w.openExtensions();
     await tick();
-    assert.deepEqual(deltas(), [1, 2, 1], 'notices listen to three events; the installed panel adds one generation listener');
+    assert.deepEqual(deltas(), [1, 1, 1], 'the page shares a single workspace-generation listener');
     B.w.openExtensions();
     await tick();
-    assert.deepEqual(deltas(), [1, 2, 1], 'reopening replaces the old page instead of stacking listeners');
+    assert.deepEqual(deltas(), [1, 1, 1], 'reopening replaces the old page instead of stacking listeners');
     B.w.showChat();
     assert.deepEqual(deltas(), [0, 0, 0]);
     assert.equal(B.$('workSurface').childElementCount, 0);
   });
 
-  await extCheck('Extensions: tabs reuse the installed panel without re-reading the Registry; the market sends nothing', async () => {
+  await extCheck('Extensions: tabs reuse the installed panel; opening the market only reads its directory', async () => {
     B.answer('GET /api/extensions', registry([EXT_OK, EXT_BROKEN]));
     B.w.openExtensions();
     await tick();
     const reads = B.count('GET', '/api/extensions');
     const holder = B.d.querySelector('#extensionsTabPanel .extensions-tab-installed');
     assert.equal(extItems().length, 2);
+    B.answer(marketRoute, marketResponse());
     const callsBefore = B.calls.length;
     B.$('extensionsTabMarket').click();
     await tick();
     const panel = B.$('extensionsTabPanel');
-    assert.ok(panel.querySelector('.extensions-market-empty'));
-    assert.equal(B.calls.length, callsBefore, 'the market placeholder sends no request');
-    assert.equal(panel.querySelectorAll('button').length, 0, 'the market has no install action in phase 1');
+    assert.ok(panel.querySelector('.extensions-market-card'));
+    assert.equal(B.calls.length, callsBefore + 1, 'opening only reads the local directory endpoint');
+    assert.equal(B.calls.at(-1).method, 'GET');
     B.$('extensionsTabInstalled').click();
     await tick();
     assert.equal(B.d.querySelector('#extensionsTabPanel .extensions-tab-installed'), holder, 'the installed panel is reused');
@@ -889,6 +924,103 @@ function createWorld(label, entry) {
     B.w.handleExtensionNotification({ message: 'memory_search requires qmd. Install qmd', notifyType: 'warning' });
     assert.ok(notices().textContent.includes('重复 2 次'), 'a repeated notice updates the same row');
     B.w.showChat();
+  });
+
+  await extCheck('Extensions: new searches outrank late responses and reset pagination', async () => {
+    B.w.S.switching = false;
+    B.answer(marketRoute, marketResponse([marketItem], { total: 2, nextOffset: 1 }));
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const input = B.d.querySelector('[aria-label="搜索插件市场"]');
+    const queryTail = '&category=all&sort=recommended&limit=24&offset=0';
+    const old = 'GET /api/extensions/market?q=old' + queryTail;
+    const fresh = 'GET /api/extensions/market?q=fresh' + queryTail;
+    B.hold(old);
+    B.hold(fresh);
+    input.value = 'old';
+    input.dispatchEvent(new B.w.Event('input'));
+    await tick(210);
+    input.value = 'fresh';
+    input.dispatchEvent(new B.w.Event('input'));
+    await tick(210);
+    B.release(fresh, marketResponse([]));
+    B.release(old, marketResponse());
+    await tick();
+    assert.match(B.d.querySelector('.extensions-market-grid').textContent, /没有符合条件/);
+    assert.ok(new URL(B.calls.at(-1).url, 'http://localhost').searchParams.get('offset') === '0');
+  });
+
+  await extCheck('Extensions: failed search cannot use the previous result offset', async () => {
+    B.w.S.switching = false;
+    B.answer(marketRoute, marketResponse([marketItem], { total: 2, nextOffset: 1 }));
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const input = B.d.querySelector('[aria-label="搜索插件市场"]');
+    const more = B.d.querySelector('.extensions-pager .btn');
+    B.answer(marketRoute, { ok: false });
+    input.value = 'failed';
+    input.dispatchEvent(new B.w.Event('input'));
+    await tick(210);
+    const before = B.calls.length;
+    more.click();
+    await tick();
+    assert.equal(more.hidden, true);
+    assert.equal(B.calls.length, before);
+    assert.equal(B.d.querySelector('.extensions-market-card'), null);
+  });
+
+  await extCheck('Extensions: install requires confirmation and settles once without asserting load', async () => {
+    B.w.S.switching = false;
+    B.answer(marketRoute, marketResponse());
+    B.answer('GET /api/extensions/market/item?*', { ok: true, item: marketItem, detailState: 'no-consent' });
+    B.hold('POST /api/extensions/packages');
+    const writes = () => B.count('POST', '/api/extensions/packages');
+    const before = writes();
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    B.d.querySelector('.extensions-card-hit').click();
+    await tick();
+    B.d.querySelector('#modalCard [data-action="install"]').click();
+    assert.match(B.$('confirmCard').textContent, /npm:pi-fixture/);
+    assert.equal(writes(), before);
+    B.confirmButton('取消').click();
+    await tick();
+    assert.equal(writes(), before);
+    B.d.querySelector('#modalCard [data-action="install"]').click();
+    B.confirmButton('安装').click();
+    await tick();
+    assert.equal(writes(), before + 1);
+    assert.deepEqual(B.calls.findLast((call) => call.method === 'POST').body, {
+      action: 'install', id: marketItem.id, confirm: true, __expectedCwd: B.w.S.cwd,
+    });
+    assert.equal(B.d.querySelector('#modalCard [data-action="install"]').disabled, true);
+    assert.match(B.d.querySelector('#modalCard [data-action="install"]').textContent, /安装中/);
+    const installed = { ...marketItem, installed: { state: 'installed', version: '1.2.3' } };
+    B.answer(marketRoute, marketResponse([installed]));
+    B.answer('GET /api/extensions/market/item?*', { ok: true, item: installed, detailState: 'no-consent' });
+    B.release('POST /api/extensions/packages', { ok: true, code: 'installed', after: { version: '1.2.3' }, loaded: null });
+    await tick();
+    assert.equal(B.d.querySelector('#modalCard [data-action="install"]'), null);
+    assert.match(B.d.querySelector('#modalCard .extensions-outcome').textContent, /已安装 v1.2.3/);
+    assert.doesNotMatch(B.d.querySelector('#modalCard .extensions-outcome').textContent, /已加载/);
+  });
+
+  await extCheck('Extensions: switching projects cancels an open package confirmation', async () => {
+    B.w.S.switching = false;
+    B.answer(marketRoute, marketResponse());
+    B.answer('GET /api/extensions/market/item?*', { ok: true, item: marketItem, detailState: 'no-consent' });
+    const before = B.count('POST', '/api/extensions/packages');
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    B.d.querySelector('.extensions-card-hit').click();
+    await tick();
+    B.d.querySelector('#modalCard [data-action="install"]').click();
+    assert.equal(B.$('confirmLayer').hidden, false);
+    B.w.beginWorkspaceSwitch('C:\\fixture\\other');
+    await tick();
+    assert.equal(B.$('confirmLayer').hidden, true);
+    assert.equal(B.$('modal').hidden, true);
+    assert.equal(B.count('POST', '/api/extensions/packages'), before);
   });
 
   await extCheck('Extensions: legacy entry parameters land on 已安装; 插件市场 can be opened directly', async () => {
@@ -950,6 +1082,7 @@ function createWorld(label, entry) {
     assert.equal(extItems().length, 0);
     assert.equal(count(), '', 'an unknown count is blank, not the old number');
     B.answer('GET /api/extensions', registry([EXT_OK]));
+    B.w.S.switching = false;
     [...list.querySelectorAll('button')].find((button) => button.textContent === '刷新').click();
     await tick();
     assert.equal(extItems().length, 1);
@@ -992,7 +1125,7 @@ function createWorld(label, entry) {
     assert.ok(input, 'the search shares the row with the tabs');
     assert.deepEqual([...surface.querySelectorAll('.extensions-tab')].map((button) => [
       button.querySelector('.extensions-tab-label').textContent, button.querySelector('.ds-segment-count')?.textContent ?? null,
-    ]), [['已安装', '2'], ['插件市场', null]]);
+    ]), [['已安装', '2'], ['插件市场', '']]);
     assert.deepEqual([...surface.querySelectorAll('.extensions-group')].map((group) => [
       group.dataset.group,
       group.querySelector('.extensions-group-title').textContent,
@@ -1037,7 +1170,7 @@ function createWorld(label, entry) {
     assert.equal(details.hidden, true);
     assert.equal(toggle.getAttribute('aria-expanded'), 'false');
     toggle.click();
-    assert.equal(details.querySelectorAll('.ext-row').length, 8, 'reopening shows the same facts once, not appended again');
+    assert.equal(details.querySelectorAll('.ext-row').length, 9, 'reopening shows the same facts once, not appended again');
 
     input.value = 'sample';
     input.dispatchEvent(new B.w.Event('input', { bubbles: true }));
@@ -1049,8 +1182,8 @@ function createWorld(label, entry) {
     assert.equal(B.$(reopened.getAttribute('aria-controls')).hidden, false);
 
     B.$('extensionsTabMarket').click();
-    assert.equal(slot.childElementCount, 0, 'the market tab has no search in phase 1');
-    assert.equal(actions.childElementCount, 0, 'the market tab has no header action in phase 1');
+    assert.ok(slot.querySelector('[aria-label="搜索插件市场"]'), 'the market has its own search');
+    assert.ok(actions.querySelector('.extensions-refresh'), 'the market has its own refresh');
     B.$('extensionsTabInstalled').click();
     assert.equal(slot.querySelector('.extensions-search-input'), input, 'the same search box comes back');
     assert.equal(input.value, 'sample', 'with its text');
@@ -1089,6 +1222,7 @@ function createWorld(label, entry) {
     assert.deepEqual([...list().querySelectorAll('.extensions-empty-title')].map((node) => node.textContent), ['还没有发现已安装的扩展']);
     assert.equal(B.d.querySelector('.extensions-tab-count').textContent, '0');
     B.answer('GET /api/extensions', { ok: false, error: 'fixture: registry failed' });
+    B.answer('GET /api/extensions/packages', { ok: false, error: 'fixture: package list failed' });
     refresh.click();
     await tick();
     assert.equal(list().querySelector('.extensions-empty-title').textContent, '扩展读取失败。');

@@ -4007,20 +4007,27 @@ staticCheck();
         || JSON.stringify({ names, result, tabCount });
     });
     {
-      /* 插件市场第一阶段只预留布局：打开它不能发任何市场 / 安装请求。 */
+      /* 打开市场只读本机目录接口；在线目录与包操作都等用户确认。 */
       const installedPanel = card.querySelector('.extensions-tab-installed');
       const baseMarketFetch = window.fetch;
       const marketRequests = [];
       window.fetch = (url, opts) => {
-        if (/market|catalog|plugin|install|\/api\/extensions/i.test(String(url))) marketRequests.push(String(url));
+        if (String(url).startsWith('/api/extensions/market?')) {
+          marketRequests.push({ method: opts?.method || 'GET', url: String(url) });
+          return Promise.resolve({ json: async () => ({
+            ok: true, consent: { remote: false }, snapshot: { state: 'none' }, query: { sort: 'recommended' },
+            items: [], total: 0, catalogTotal: 0, categories: [], sorts: [], nextOffset: null,
+          }) });
+        }
+        if (/market|catalog|plugin|install|\/api\/extensions/i.test(String(url))) marketRequests.push({ method: opts?.method || 'GET', url: String(url) });
         return baseMarketFetch(url, opts);
       };
       card.querySelector('#extensionsTabMarket').click();
       await new Promise((r) => setTimeout(r, 30));
       window.fetch = baseMarketFetch;
-      check('扩展页 › 插件市场：只预留布局，不发请求、也没有安装按钮', () => {
+      check('扩展页 › 插件市场：只读本机目录，未确认时不写入', () => {
         const panel = card.querySelector('.extensions-tab-market');
-        return (panel && /插件市场尚未开放/.test(panel.textContent) && marketRequests.length === 0
+        return (panel && /启用在线目录/.test(panel.textContent) && marketRequests.length === 1 && marketRequests[0].method === 'GET'
           && card.querySelector('#extensionsTabMarket').getAttribute('aria-selected') === 'true'
           && ![...panel.querySelectorAll('button')].some((b) => /安装/.test(b.textContent)))
           || JSON.stringify({ text: panel && panel.textContent, marketRequests });
