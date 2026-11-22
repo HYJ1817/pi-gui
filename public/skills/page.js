@@ -3,11 +3,8 @@
  * 事实来源只有 `/api/skills`（server/skills.js：扫描 + pi get_commands 交叉核对）。
  * 本页不缓存第二份清单：每次 load 整体替换 `state.data`，筛选只是对它的投影。
  *
- * 版式对照 PI-Desktop 的 AgentSkillsPage：
- *   标题（图标 + 技能 + 数量）
- *   第一行：全部 / 全局 / 项目分段 + 搜索 + 项目选择
- *   第二行：扫描 / 新建 / 市场
- *   分组：名称 + 发现目录 + 数量 + 导入文件 / 导入目录 → 行瓦片（图标 + 名称 + 必要徽标 + 一行描述 + 开关）
+ * 页面以 MCP 管理页为版式参照；分组、发现目录、导入及行尾开关对照 PI-Desktop AgentSkillsPage。
+ * 页头放刷新、市场和新建；下方工具栏只负责范围、搜索、项目和外部扫描。
  * 技术细节（路径、停用规则、加载状态、SKILL.md 全文）只收在展开详情里。
  *
  * 启停写的是 pi 自己的 settings.json；创建 / 编辑 / 删除 / 导入都落在服务端枚举过的写入目标里。
@@ -160,13 +157,13 @@ function createSkillsPage(card) {
 
   /* ---------- 骨架：只建一次，筛选与刷新不重建输入框（焦点和输入法状态不丢） ---------- */
   const head = el('header', 'skills-head');
-  const headGlyph = el('span', 'skills-head-glyph');
-  headGlyph.append(createIcon('book', { size: 18 }));
-  const headText = el('div', 'skills-head-text');
-  headText.append(el('h2', 'skills-title', '技能'));
-  const headCount = el('span', 'skills-head-count');
-  const refresh = iconButton('refresh', '刷新技能列表', () => { void load(state.project ?? undefined); });
-  head.append(headGlyph, headText, headCount, refresh);
+  const refresh = actionButton('刷新', 'refresh', 'ghost', () => { void load(state.project ?? undefined); });
+  refresh.setAttribute('aria-label', '刷新技能列表');
+  const marketButton = actionButton('市场', 'market', 'ghost', openMarket);
+  const createButton = actionButton('新建', 'plus', 'primary', openCreate);
+  const actionsBar = el('div', 'skills-actions-bar');
+  actionsBar.append(refresh, marketButton, createButton);
+  head.append(el('h2', 'skills-title settings-page-title', '技能'), actionsBar);
 
   const toolbar = el('div', 'skills-toolbar');
   const scopeControl = createSegmentedControl({
@@ -195,19 +192,16 @@ function createSkillsPage(card) {
   projectSelect.setAttribute('aria-label', '查看哪个项目的技能');
   projectSelect.onchange = () => { void switchProject(projectSelect.value); };
   projectField.append(projectSelect);
-  toolbar.append(scopeControl.element, search, projectField);
-
-  const actionsBar = el('div', 'skills-actions-bar');
-  const scanButton = actionButton('扫描', 'scan', 'ghost', openScan);
-  const createButton = actionButton('新建', 'plus', 'primary', openCreate);
-  const marketButton = actionButton('市场', 'market', 'ghost', openMarket);
-  actionsBar.append(scanButton, createButton, marketButton);
+  const scanButton = actionButton('从其他工具扫描', 'scan', 'ghost skills-scan', openScan);
+  toolbar.append(scopeControl.element, search, projectField, scanButton);
 
   const noticeHost = el('div', 'skills-notice-host');
   noticeHost.setAttribute('aria-live', 'polite');
   const notes = el('div', 'skills-notes');
   const content = el('div', 'skills-content');
-  card.append(head, toolbar, actionsBar, noticeHost, notes, content);
+  const inner = el('div', 'skills-inner');
+  inner.append(head, noticeHost, notes, toolbar, content);
+  card.append(inner);
 
   /* ---------- 操作结果：内联提示（成功不弹 Toast） ---------- */
   function setNotice(notice) {
@@ -305,7 +299,6 @@ function createSkillsPage(card) {
       state.scope = '';
       scopeControl.setValue('');
     }
-    headCount.textContent = state.data ? `${counts.all} 个技能` : '';
   }
 
   function syncProjects() {
@@ -396,14 +389,20 @@ function createSkillsPage(card) {
     const labels = roots.length ? roots.map((root) => root.label) : skillGroupRoots(items);
     const path = el('span', 'skills-group-path', labels.join(' · '));
     path.title = roots.length ? roots.map((root) => root.dir).join('\n') : labels.join('\n');
-    groupHead.append(title, path, el('span', 'skills-group-count', String(items.length)));
+    const glyph = el('span', 'skills-group-glyph');
+    glyph.append(createIcon(scope === 'user' ? 'globe' : scope === 'project' ? 'folder' : 'book', { size: 16 }));
+    const heading = el('div', 'skills-group-heading');
+    const titleLine = el('div', 'skills-group-title-line');
+    titleLine.append(title, el('span', 'skills-group-count', String(items.length)));
+    heading.append(titleLine, path);
+    groupHead.append(glyph, heading);
     if (scope === 'user' || scope === 'project') {
       const target = importTargetFor(scope);
       const importActions = el('div', 'skills-group-actions');
       for (const [label, icon] of [['导入文件', 'fileText'], ['导入目录', 'folder']]) {
         const button = actionButton(label, icon, 'ghost tiny', () => openImport(target ? target.key : ''));
         button.disabled = !target;
-        // 窄窗只留图标（.skills-group-actions .btn span 被隐藏），按钮必须另有可读名字。
+        // 两组都有导入入口，读屏时也要能区分目标目录。
         button.setAttribute('aria-label', target ? `${label}到 ${target.label}` : label);
         button.title = target ? `${label} · ${target.label}` : '这个作用域没有可写的目录';
         importActions.append(button);
@@ -442,12 +441,8 @@ function createSkillsPage(card) {
     dot.setAttribute('aria-hidden', 'true');
     glyph.append(dot);
     const text = el('span', 'skill-row-text');
-    const titleLine = el('span', 'skill-row-title');
-    const status = skill.state === 'enabled' && skill.loaded === true ? '已加载' : meta.label;
-    titleLine.append(el('span', 'skill-name', skill.name), createBadge({ text: status, tone: meta.tone }));
-    const desc = el('span', 'skill-row-desc', skill.description || '（没有描述）');
-    if (skill.description) desc.title = skill.description;
-    text.append(titleLine, desc);
+    text.append(el('span', 'skill-name', skill.name));
+    if (skill.description) text.append(el('span', 'skill-row-desc', skill.description));
     main.append(glyph, text);
     main.onclick = () => {
       state.openId = open ? '' : skill.id;
@@ -456,6 +451,8 @@ function createSkillsPage(card) {
         ?.querySelector('.skill-row-main')?.focus();
     };
     const actions = el('div', 'skill-row-actions');
+    const status = skill.state === 'enabled' && skill.loaded === true ? '已加载' : meta.label;
+    actions.append(createBadge({ text: status, tone: meta.tone }));
     if (skill.toggleable) actions.append(renderToggle(skill));
     line.append(main, actions);
     item.append(line);
@@ -577,7 +574,6 @@ function createSkillsPage(card) {
     head.remove();
     card.setAttribute('aria-label', '技能市场');
     toolbar.hidden = true;
-    actionsBar.hidden = true;
     notes.hidden = true;
     noticeHost.hidden = true;
     content.replaceChildren();
@@ -599,10 +595,9 @@ function createSkillsPage(card) {
     state.view = 'list';
     market?.dispose();
     market = null;
-    card.prepend(head);
+    inner.prepend(head);
     card.setAttribute('aria-label', '技能');
     toolbar.hidden = false;
-    actionsBar.hidden = false;
     notes.hidden = false;
     noticeHost.hidden = false;
     if (state.needsReload) {

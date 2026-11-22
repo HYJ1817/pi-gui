@@ -75,9 +75,6 @@ export function renderSkillDetail(host, skill, { isLive, project, onEdit, onDele
   host.replaceChildren();
   if (skill.stateNote) host.append(note(skill.stateNote, skill.state === 'enabled' ? 'dim' : 'warn'));
   for (const error of skill.errors || []) host.append(note(error.message, error.level === 'error' ? 'warn' : 'dim'));
-  if (skill.description && skill.description.length > 120) {
-    host.append(el('p', 'skill-detail-desc', skill.description));
-  }
 
   const columns = el('div', 'skill-detail-columns');
   const facts = el('div', 'skill-detail-facts');

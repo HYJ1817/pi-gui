@@ -87,16 +87,15 @@ export function renderSkillsMarket(holder, {
   const targets = skillWritableTargets(listData);
 
   const root = el('section', 'skills-market');
-  const headRow = el('div', 'skills-market-head');
   const back = el('button', 'btn ghost tiny skills-market-back');
   back.type = 'button';
   back.append(createIcon('chevronLeft', { size: 14 }), el('span', '', '我的技能'));
   back.onclick = () => onBack();
-  const title = el('h2', 'skills-title skills-market-title', '技能市场');
+  const title = el('h2', 'skills-title settings-page-title skills-market-title', '技能市场');
   const headActions = el('div', 'skills-market-head-actions');
-  const sourceButton = button('目录源', 'ghost tiny', 'server');
+  const sourceButton = button('目录源', 'ghost', 'server');
   const sourceLabel = sourceButton.querySelector('span');
-  const loadAll = button('加载目录', 'tiny', 'refresh');
+  const loadAll = button('加载目录', '', 'refresh');
   const search = el('label', 'skills-market-search ds-search-field ds-search-control');
   search.append(createIcon('search', { size: 14, className: 'skills-market-search-icon' }));
   const searchInput = el('input', 'skills-market-search-input');
@@ -104,24 +103,17 @@ export function renderSkillsMarket(holder, {
   searchInput.placeholder = '搜索技能';
   searchInput.setAttribute('aria-label', '搜索技能市场');
   search.append(searchInput);
-  headActions.append(sourceButton, loadAll, search);
-  const headTop = el('div', 'skills-market-head-top');
-  headTop.append(back);
-  headRow.append(title, headActions);
-  root.append(headTop, headRow);
+  headActions.append(sourceButton, loadAll);
+  const head = el('header', 'skills-market-head-top');
+  head.append(title, headActions);
+  root.append(back, head);
 
-  const categoryControl = createSegmentedControl({
-    ariaLabel: '按分类筛选',
-    value: '',
-    options: [{ value: '', label: '全部' }],
-    onChange: (value) => { category = value; page = 1; renderGrid(); },
-  });
+  const filters = el('div', 'skills-market-filter-slot');
   const toolbar = el('div', 'skills-market-toolbar');
-  toolbar.append(categoryControl.element);
   const resultCount = el('span', 'skills-market-count');
   resultCount.setAttribute('aria-live', 'polite');
-  toolbar.append(resultCount);
-  root.append(toolbar);
+  toolbar.append(search, resultCount);
+  root.append(toolbar, filters);
 
   const notices = el('div', 'skills-market-notices');
   root.append(notices);
@@ -164,29 +156,23 @@ export function renderSkillsMarket(holder, {
   }
 
   function syncControls() {
-    const categories = [{ value: '', label: '全部' }].concat((data?.categories || []).map((item) => ({ value: item.id, label: item.label })));
-    /* 分类项在第一次同步时补齐；之后不重建节点，避免丢焦点。 */
-    if (categoryControl.element.querySelectorAll('.ds-segment-item').length !== categories.length) {
-      const next = createSegmentedControl({
-        ariaLabel: '按分类筛选',
-        value: category,
-        options: categories,
+    // 服务端的 MARKET_CATEGORIES 是固定目录。首次成功读取后装配，刷新不重建焦点目标。
+    if (!filters.firstElementChild) {
+      const control = createSegmentedControl({
+        ariaLabel: '按分类筛选', value: category,
+        options: [{ value: '', label: '全部' }, ...(data.categories || []).map(({ id, label }) => ({ value: id, label }))],
         onChange: (value) => { category = value; page = 1; renderGrid(); },
       });
-      categoryControl.element.replaceWith(next.element);
-      categoryControl.element = next.element;
-      categoryControl.setValue = next.setValue;
-      categoryControl.setOptionHidden = next.setOptionHidden;
-      categoryControl.setCount = next.setCount;
+      control.element.classList.add('skills-market-filters');
+      filters.append(control.element);
     }
-    categoryControl.setValue(category);
     const sources = data?.sources || [];
     sourceLabel.textContent = `目录源·${sources.length}`;
   }
 
   function renderAll() {
     if (disposed) return;
-    loadAll.disabled = busyAll || loading;
+    loadAll.disabled = !data || busyAll || loading;
     loadAll.setAttribute('aria-busy', String(busyAll));
     const sources = data?.sources || [];
     const allLoaded = sources.length > 0 && sources.every((source) => source.loaded && !source.error);
@@ -207,7 +193,7 @@ export function renderSkillsMarket(holder, {
       box.append(dismiss);
       notices.append(box);
     }
-    if (error) {
+    if (error && data) { // 首次读取失败已在网格空态提供原因和重试。
       const box = el('div', 'skills-market-banner is-error');
       box.append(el('span', 'skills-market-banner-text', error));
       const retry = button('重试', 'tiny ghost', 'refresh');
@@ -221,9 +207,6 @@ export function renderSkillsMarket(holder, {
       const box = el('div', 'skills-market-banner');
       box.append(el('span', 'skills-market-banner-text',
         `还有 ${unloaded.length} 个目录没有加载。加载会读取 GitHub / jsDelivr 上的公开文件清单；预览时才会下载技能文件。`));
-      const load = button('加载目录', 'tiny', 'refresh');
-      load.onclick = () => { void refreshAll(); };
-      box.append(load);
       notices.append(box);
     }
     for (const source of data.sources || []) {
@@ -280,23 +263,20 @@ export function renderSkillsMarket(holder, {
     if (entry.official) titleRow.append(createBadge({ text: '官方', tone: 'success' }));
     if (marketEntryInstalled(entry, installed)) titleRow.append(createBadge({ text: '已安装', tone: 'neutral' }));
     if (entry.listed === false) titleRow.append(createBadge({ text: '未加载清单', tone: 'neutral' }));
+    for (const id of entry.categories || []) titleRow.append(el('span', 'skills-market-tag', marketCategoryLabel(data?.categories, id)));
     main.append(titleRow);
-    const tags = el('div', 'skills-market-card-tags');
-    for (const id of entry.categories || []) tags.append(el('span', 'skills-market-tag', marketCategoryLabel(data?.categories, id)));
-    tags.append(el('span', 'skills-market-repo', entry.repo));
-    main.append(tags);
-    const desc = el('p', 'skills-market-card-desc', entry.description || '（没有描述；预览后可以看到全文）');
-    main.append(desc);
+    if (entry.repo) main.append(el('span', 'skills-market-repo', entry.repo));
+    if (entry.description) main.append(el('p', 'skills-market-card-desc', entry.description));
     const meta = el('div', 'skills-market-card-meta');
     if (Number.isFinite(entry.fileCount)) meta.append(el('span', '', `${entry.fileCount} 个文件`));
     if (Number.isFinite(entry.bytes)) meta.append(el('span', '', formatSkillBytes(entry.bytes)));
     if (entry.installable === false) meta.append(el('span', 'skills-market-blocked', entry.reason || '不可安装'));
-    main.append(meta);
+    if (meta.childElementCount) main.append(meta);
     const actions = el('div', 'skills-market-card-actions');
     const isInstalled = marketEntryInstalled(entry, installed);
     const actionLabel = isInstalled || entry.installable === false ? '查看' : '安装';
     /* 卡片的动作一律是有底色的按钮：ghost 文字在窄窗里会和描述混在一起。 */
-    const preview = button(actionLabel, 'tiny', isInstalled ? null : 'arrowDown');
+    const preview = button(actionLabel, actionLabel === '安装' ? 'primary tiny' : 'tiny', null);
     preview.disabled = previewId === entry.id;
     preview.setAttribute('aria-label', `${actionLabel} ${entry.title || entry.slug}`);
     preview.onclick = () => { void openPreview(entry, preview); };
@@ -359,6 +339,7 @@ export function renderSkillsMarket(holder, {
     const token = ++busyToken;
     busyAll = true;
     successText = '';
+    renderAll();
     const failures = [];
     for (let index = 0; index < list.length; index += 1) {
       if (disposed || token !== busyToken) return;
