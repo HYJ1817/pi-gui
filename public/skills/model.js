@@ -46,9 +46,9 @@ export function skillScopeTitle(scope) {
   return SKILL_SCOPE_TITLE[scope] || SKILL_SCOPE_TITLE.other;
 }
 
-/** 开关显示的「当前是否开着」：与旧实现同一判据（loaded 为真且没有停用规则也算开）。 */
+/** 开关反映配置；运行时是否加载由状态徽标和详情单独显示。 */
 export function isSkillOn(skill) {
-  return skill?.state === 'enabled' || (skill?.loaded === true && !skill?.disabledBy);
+  return skill?.state === 'enabled' || (skill?.state !== 'disabled' && skill?.disabledBy === '');
 }
 
 /** loaded 是三值：true / false / null（pi 没在跑，无法确认）。 */

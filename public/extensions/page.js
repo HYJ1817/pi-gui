@@ -80,6 +80,7 @@ export function openExtensions(options = {}) {
     };
 
     function select(id, { focus = false } = {}) {
+      if (active !== id) panels.get(active)?.deactivate?.();
       active = id;
       for (const tab of TABS) {
         const button = buttons.get(tab.id);
@@ -148,8 +149,8 @@ export function openExtensions(options = {}) {
     const refreshAfterRestart = () => {
       if (instance.isCurrent()) void panels.get('installed')?.reload();
     };
-    document.addEventListener('pi-gui:extension-bridge-ready', refreshAfterRestart);
-    disposers.push(() => document.removeEventListener('pi-gui:extension-bridge-ready', refreshAfterRestart));
+    document.addEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
+    disposers.push(() => document.removeEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart));
 
     inner.append(head, toolbarRow, notices, panel);
     /* Work Surface 本身不滚动（.work-surface 的 overflow:hidden 契约），整页内容由这一层内部滚动容器承担。 */

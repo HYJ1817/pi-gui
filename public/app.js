@@ -868,7 +868,7 @@ export function reconcileBridgeSnapshot(snapshot) {
       bridgeHintText = '';
       setStatus('');
       setBridgeState('ready');
-      document.dispatchEvent(new CustomEvent('pi-gui:extension-bridge-ready'));
+      document.dispatchEvent(new CustomEvent('pi-gui:capability-bridge-ready'));
       hideNotice();
       /* pi 起来了 → 会话身份可能刚变（新 cwd / 新会话），草稿要对齐。
        * 这个调用与「会话 id 变化时」那一条是同一个函数，重复调用无副作用。 */

@@ -1087,6 +1087,13 @@ function createPage(card, { reopen, present }) {
    * 每次 render 重新挂回页尾，展开状态与已读结果跨重绘保留；页面关闭时一并销毁。 */
   const report = createMcpReport();
   onDispose(() => report.dispose());
+  const refreshAfterRestart = () => {
+    if (disposed) return;
+    state.statusNote = '';
+    void load({ silent: true });
+  };
+  document.addEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
+  onDispose(() => document.removeEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart));
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -1121,6 +1128,7 @@ function createPage(card, { reopen, present }) {
       render();
       return;
     }
+    state.error = '';
     state.data = serversResult;
     report.setNative(serversResult.native);
     if (configResult && configResult.ok === true && configResult.revisions) {

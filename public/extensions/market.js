@@ -2,7 +2,7 @@
 import { S, ownsWorkspace } from '../state.js';
 import { extensionMarketAction, fetchExtensionMarket } from '../api.js';
 import { openActionMenu } from '../ui/action-menu.js';
-import { confirmModal } from '../ui/modal.js';
+import { confirmModal, confirmSurfaceMeta, dismissConfirm } from '../ui/modal.js';
 import { createBadge } from '../ui/primitives.js';
 import { resourceEl as el } from '../ui/resource-dom.js';
 import {
@@ -54,8 +54,13 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
   let changing = false;
   let error = '';
   let stale = false;
+  const consentOwner = {};
   const current = () => !disposed && isLive();
   const live = () => current() && ownsWorkspace(generation);
+
+  function dismissConsent() {
+    if (confirmSurfaceMeta()?.owner === consentOwner) dismissConfirm();
+  }
 
   function showDetail(item) {
     detail = openExtensionPackageDetail(item, {
@@ -250,6 +255,7 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
           ? 'Pi GUI 将通过网络设置访问 registry.npmjs.org。仅在点「在 npm 搜索更多」时发送搜索词。'
           : '将清除缓存的在线目录。已安装的扩展仍可管理。',
         okText: consent ? '启用' : '关闭在线目录',
+        meta: { owner: consentOwner },
       });
       if (confirmed !== true || !live() || !ownsWorkspace(owner) || S.switching) return;
     }
@@ -292,6 +298,7 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
     ++request;
     clearTimeout(timer);
     clearTimeout(snapshotTimer);
+    dismissConsent();
     detail?.close();
     detail = null;
     response = null;
@@ -311,6 +318,7 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
     activate() {
       if ((response?.snapshot?.refreshing || response?.operations?.running) && !loading) void load();
     },
+    deactivate: dismissConsent,
     sync: () => { render(); detail?.sync(); },
     reload: () => Promise.all([load(), detail?.refresh()]),
     invalidate,
@@ -318,6 +326,7 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
       disposed = true;
       clearTimeout(timer);
       clearTimeout(snapshotTimer);
+      dismissConsent();
       detail?.close();
     },
   };

@@ -184,8 +184,16 @@ export function createMcpReport() {
     token += 1;
     retryState('项目已切换，刷新后查看当前项目的 MCP 能力报告。', '刷新');
   };
+  const onBridgeReady = () => {
+    if (disposed) return;
+    loaded = false;
+    token += 1;
+    if (details.open) void load();
+    else body.replaceChildren();
+  };
   details.addEventListener('toggle', () => { if (details.open && !loaded && !disposed) void load(); });
   document.addEventListener('pi-gui:workspace-generation', onGeneration);
+  document.addEventListener('pi-gui:capability-bridge-ready', onBridgeReady);
 
   return {
     element: details,
@@ -201,6 +209,7 @@ export function createMcpReport() {
       disposed = true;
       token += 1;
       document.removeEventListener('pi-gui:workspace-generation', onGeneration);
+      document.removeEventListener('pi-gui:capability-bridge-ready', onBridgeReady);
     },
   };
 }

@@ -683,7 +683,13 @@ function createSkillsPage(card) {
   }
 
   const onGeneration = () => { if (!disposed && state.data) markStale(); };
+  const refreshAfterRestart = () => {
+    if (!disposed && !state.stale && ownsWorkspace(state.loadedGeneration)) {
+      void load(state.project ?? undefined);
+    }
+  };
   document.addEventListener('pi-gui:workspace-generation', onGeneration);
+  document.addEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
   syncScopeCounts();
   syncProjects();
   void load(undefined);
@@ -699,6 +705,7 @@ function createSkillsPage(card) {
       market?.dispose();
       market = null;
       document.removeEventListener('pi-gui:workspace-generation', onGeneration);
+      document.removeEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
     },
   };
 }
