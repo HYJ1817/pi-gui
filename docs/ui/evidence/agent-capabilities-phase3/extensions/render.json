@@ -1,5 +1,5 @@
 {
-  "checks": 33,
+  "checks": 45,
   "metrics": [
     {
       "theme": "dark",
@@ -14,58 +14,58 @@
         {
           "width": 488,
           "height": 176,
-          "top": 266,
+          "top": 314,
           "left": 299,
           "right": 787,
-          "foot": 441
+          "foot": 489
         },
         {
           "width": 488,
           "height": 176,
-          "top": 266,
+          "top": 314,
           "left": 799,
           "right": 1286,
-          "foot": 441
+          "foot": 489
         },
         {
           "width": 488,
           "height": 176,
-          "top": 454,
+          "top": 502,
           "left": 299,
           "right": 787,
-          "foot": 629
+          "foot": 677
         },
         {
           "width": 488,
           "height": 176,
-          "top": 454,
+          "top": 502,
           "left": 799,
           "right": 1286,
-          "foot": 629
+          "foot": 677
         },
         {
           "width": 488,
           "height": 176,
-          "top": 642,
+          "top": 690,
           "left": 299,
           "right": 787,
-          "foot": 817
+          "foot": 865
         },
         {
           "width": 488,
           "height": 176,
-          "top": 642,
+          "top": 690,
           "left": 799,
           "right": 1286,
-          "foot": 817
+          "foot": 865
         },
         {
           "width": 488,
           "height": 176,
-          "top": 830,
+          "top": 878,
           "left": 299,
           "right": 787,
-          "foot": 1005
+          "foot": 1053
         }
       ],
       "contrasts": [
@@ -159,7 +159,10 @@
           ],
           "ratio": 7.110743860549025
         }
-      ]
+      ],
+      "noticeHeight": 34,
+      "firstInstalledTop": 254.5,
+      "expandedNoticeHeight": 261
     },
     {
       "theme": "light",
@@ -174,58 +177,58 @@
         {
           "width": 488,
           "height": 176,
-          "top": 266,
+          "top": 314,
           "left": 299,
           "right": 787,
-          "foot": 441
+          "foot": 489
         },
         {
           "width": 488,
           "height": 176,
-          "top": 266,
+          "top": 314,
           "left": 799,
           "right": 1286,
-          "foot": 441
+          "foot": 489
         },
         {
           "width": 488,
           "height": 176,
-          "top": 454,
+          "top": 502,
           "left": 299,
           "right": 787,
-          "foot": 629
+          "foot": 677
         },
         {
           "width": 488,
           "height": 176,
-          "top": 454,
+          "top": 502,
           "left": 799,
           "right": 1286,
-          "foot": 629
+          "foot": 677
         },
         {
           "width": 488,
           "height": 176,
-          "top": 642,
+          "top": 690,
           "left": 299,
           "right": 787,
-          "foot": 817
+          "foot": 865
         },
         {
           "width": 488,
           "height": 176,
-          "top": 642,
+          "top": 690,
           "left": 799,
           "right": 1286,
-          "foot": 817
+          "foot": 865
         },
         {
           "width": 488,
           "height": 176,
-          "top": 830,
+          "top": 878,
           "left": 299,
           "right": 787,
-          "foot": 1005
+          "foot": 1053
         }
       ],
       "contrasts": [
@@ -294,12 +297,12 @@
             1
           ],
           "background": [
-            219.00000000000003,
-            242.01176470588237,
-            228.03529411764708,
+            210.32419838523646,
+            233.3359630911188,
+            219.3594925028835,
             1
           ],
-          "ratio": 6.0242385833221865
+          "ratio": 5.563254089860067
         },
         {
           "selector": ".extensions-list .ds-badge-warning",
@@ -319,7 +322,10 @@
           ],
           "ratio": 6.552104805291767
         }
-      ]
+      ],
+      "noticeHeight": 34,
+      "firstInstalledTop": 254.5,
+      "expandedNoticeHeight": 261
     },
     {
       "theme": "dark",
@@ -334,58 +340,58 @@
         {
           "width": 426,
           "height": 176,
-          "top": 336,
+          "top": 384,
           "left": 252,
           "right": 678,
-          "foot": 511
+          "foot": 559
         },
         {
           "width": 426,
           "height": 176,
-          "top": 524,
+          "top": 572,
           "left": 252,
           "right": 678,
-          "foot": 699
+          "foot": 747
         },
         {
           "width": 426,
           "height": 176,
-          "top": 712,
+          "top": 760,
           "left": 252,
           "right": 678,
-          "foot": 887
+          "foot": 935
         },
         {
           "width": 426,
           "height": 176,
-          "top": 900,
+          "top": 948,
           "left": 252,
           "right": 678,
-          "foot": 1075
+          "foot": 1123
         },
         {
           "width": 426,
           "height": 176,
-          "top": 1088,
+          "top": 1136,
           "left": 252,
           "right": 678,
-          "foot": 1263
+          "foot": 1311
         },
         {
           "width": 426,
           "height": 176,
-          "top": 1276,
+          "top": 1324,
           "left": 252,
           "right": 678,
-          "foot": 1451
+          "foot": 1499
         },
         {
           "width": 426,
           "height": 176,
-          "top": 1464,
+          "top": 1512,
           "left": 252,
           "right": 678,
-          "foot": 1639
+          "foot": 1687
         }
       ],
       "contrasts": [
@@ -454,12 +460,12 @@
             1
           ],
           "background": [
-            43.38823529411765,
-            62.30588235294118,
-            51.294117647058826,
+            40.94648212226067,
+            59.864129181084195,
+            48.852364475201846,
             1
           ],
-          "ratio": 7.425650751248033
+          "ratio": 7.7040027573309695
         },
         {
           "selector": ".extensions-list .ds-badge-warning",
@@ -479,7 +485,10 @@
           ],
           "ratio": 7.110743860549025
         }
-      ]
+      ],
+      "noticeHeight": 34,
+      "firstInstalledTop": 284.5,
+      "expandedNoticeHeight": 191
     },
     {
       "theme": "light",
@@ -494,58 +503,58 @@
         {
           "width": 426,
           "height": 176,
-          "top": 336,
+          "top": 384,
           "left": 252,
           "right": 678,
-          "foot": 511
+          "foot": 559
         },
         {
           "width": 426,
           "height": 176,
-          "top": 524,
+          "top": 572,
           "left": 252,
           "right": 678,
-          "foot": 699
+          "foot": 747
         },
         {
           "width": 426,
           "height": 176,
-          "top": 712,
+          "top": 760,
           "left": 252,
           "right": 678,
-          "foot": 887
+          "foot": 935
         },
         {
           "width": 426,
           "height": 176,
-          "top": 900,
+          "top": 948,
           "left": 252,
           "right": 678,
-          "foot": 1075
+          "foot": 1123
         },
         {
           "width": 426,
           "height": 176,
-          "top": 1088,
+          "top": 1136,
           "left": 252,
           "right": 678,
-          "foot": 1263
+          "foot": 1311
         },
         {
           "width": 426,
           "height": 176,
-          "top": 1276,
+          "top": 1324,
           "left": 252,
           "right": 678,
-          "foot": 1451
+          "foot": 1499
         },
         {
           "width": 426,
           "height": 176,
-          "top": 1464,
+          "top": 1512,
           "left": 252,
           "right": 678,
-          "foot": 1639
+          "foot": 1687
         }
       ],
       "contrasts": [
@@ -614,12 +623,12 @@
             1
           ],
           "background": [
-            219.00000000000003,
-            242.01176470588237,
-            228.03529411764708,
+            210.32419838523646,
+            233.3359630911188,
+            219.3594925028835,
             1
           ],
-          "ratio": 6.0242385833221865
+          "ratio": 5.563254089860067
         },
         {
           "selector": ".extensions-list .ds-badge-warning",
@@ -639,11 +648,15 @@
           ],
           "ratio": 6.552104805291767
         }
-      ]
+      ],
+      "noticeHeight": 34,
+      "firstInstalledTop": 284.5,
+      "expandedNoticeHeight": 191
     }
   ],
   "shots": [
     "1320-dark-installed",
+    "1320-dark-run-notices",
     "1320-dark-market",
     "1320-dark-filtered",
     "1320-dark-detail",
@@ -656,6 +669,7 @@
     "700-dark-installed",
     "700-dark-market",
     "700-light-installed",
+    "700-light-run-notices",
     "700-light-market",
     "700-light-filtered",
     "700-light-detail",
