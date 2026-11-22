@@ -106,7 +106,14 @@ export class DeviceStore {
     const existing = this.devices.get(deviceId);
     if (!existing && this.devices.size >= L.maxDevices) return null;
     const boundTo = this.deviceIdForKey(devicePublicKey);
-    if (boundTo !== null && boundTo !== deviceId) return null;   // key already bound elsewhere
+    if (boundTo !== null && boundTo !== deviceId) {
+      // Contract deviceLifecycle.rotation: re-pairing an already-bound device
+      // key atomically revokes the prior binding in the same transaction —
+      // the old deviceId is revoked (its streams die on the next recheck)
+      // rather than leaving two records or rejecting the re-pair.
+      const prior = this.devices.get(boundTo);
+      if (prior) { prior.revoked = true; prior.active = false; this.keyIndex.delete(devicePublicKey); }
+    }
     const replayEpoch = isRecord(existing) && Number.isSafeInteger(existing.replayEpoch) ? existing.replayEpoch + 1 : 1;
     if (existing) this.keyIndex.delete(existing.devicePublicKey);
     const grants = {};

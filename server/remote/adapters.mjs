@@ -299,11 +299,13 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     }
   }
 
-  async function chatStop({ device, pathParameters }) {
+  async function chatStop({ device, pathParameters, owner }) {
     const conv = conversationIndex().get(pathParameters.conversationId);
     if (!conv) return deny('unknown_resource');
     try {
-      const out = await domain.stop({ owner: resolveOwner({ pathParameters }), conversationId: pathParameters.conversationId });
+      // Reuse the owner resolved+committed at admission — re-resolving here
+      // could drift between commitAdmission and dispatch (TOCTOU).
+      const out = await domain.stop({ owner, conversationId: pathParameters.conversationId });
       return okResult({ stopped: out?.stopped === true, ownerRevision: conv.revision ?? 0 });
     } catch (e) {
       const code = e?.code;

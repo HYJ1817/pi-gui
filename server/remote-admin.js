@@ -54,14 +54,28 @@ export function createRemoteAdmin({ getRemote, log = () => {} }) {
       if (typeof id !== 'string' || !id) return json(res, 400, { ok: false, code: 'invalid_request' });
       return json(res, 200, { ok: true, cancelled: r.admin.cancelPairing(id) });
     }
+    if (path === '/api/remote/pairing/pending' && req.method === 'GET') {
+      // The verified-but-unconfirmed exchange transcripts the desktop UI shows
+      // (deviceName + key fingerprint + requested scopes). pairCode and the
+      // raw proof transcript never leave the server.
+      return json(res, 200, { ok: true, pending: r.admin.listPendingConfirmations() });
+    }
     if (path === '/api/remote/pairing/approve' && req.method === 'POST') {
-      // 桌面用户确认：把完整 canonical 转录+scope 集合绑成一次性 approvalId。
-      const transcript = await readBody(req).then(s => { try { return JSON.parse(s || '{}'); } catch { return null; } });
-      if (!transcript || typeof transcript !== 'object' || !transcript.pairingSessionId) {
-        return json(res, 400, { ok: false, code: 'invalid_request' });
-      }
-      const approvalId = r.admin.approvePairing(transcript);
-      return json(res, 200, { ok: true, approvalId });
+      // 桌面用户确认：按 pairingSessionId 绑定**服务端已核验**的转录——
+      // 回环 UI 不能伪造 devicePublicKey/clientNonce/proofTranscript，只对
+      // 网关已验证的转录说「批准」。批准生成一次性 approvalId，设备用同一
+      // 签名请求重试即原子完成注册。
+      const body = await readBody(req).then(s => { try { return JSON.parse(s || '{}'); } catch { return null; } });
+      const id = body?.pairingSessionId;
+      if (typeof id !== 'string' || !id) return json(res, 400, { ok: false, code: 'invalid_request' });
+      const approvalId = r.admin.approvePendingConfirmation(id);
+      return json(res, approvalId ? 200 : 404, { ok: !!approvalId, ...(approvalId ? { approvalId } : { code: 'unknown_pending' }) });
+    }
+    if (path === '/api/remote/pairing/decline' && req.method === 'POST') {
+      const body = await readBody(req).then(s => { try { return JSON.parse(s || '{}'); } catch { return null; } });
+      const id = body?.pairingSessionId;
+      if (typeof id !== 'string' || !id) return json(res, 400, { ok: false, code: 'invalid_request' });
+      return json(res, 200, { ok: true, declined: r.admin.declinePendingConfirmation(id) });
     }
     if (path === '/api/remote/devices' && req.method === 'GET') {
       return json(res, 200, { ok: true, devices: r.admin.listDevices() });

@@ -358,6 +358,10 @@ async function main() {
       body = JSON.parse(r.body);
       assert.equal(body.result.status, 'idle');
       assert.equal(body.result.messages[0].role, 'assistant');
+      // snapshotWatermark: the returned cursor+generation+sequence is a real,
+      // resumable device-stream watermark (never the fabricated g1_s0_ stub).
+      assert.ok(/^g\d+_s\d+_[A-Za-z0-9_-]{22}$/.test(body.result.cursor), `snapshot cursor ${body.result.cursor} not resumable`);
+      assert.ok(body.result.streamGeneration >= 1 && body.result.sequence >= 1);
     } finally { await ctx.cleanup(); }
   });
 
@@ -538,6 +542,88 @@ async function main() {
       const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', query: { cursor: 'bad cursor!' } });
       const r = await ctx.pinnedRequest('GET', '/remote/v1/events?cursor=bad%20cursor!', { headers: x.headers });
       assert.equal(r.status, 401);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('valid cursor resume replays backlog in the SAME generation (no reset)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      const deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = deviceId;
+      const subscribe = (query) => new Promise(resolve => {
+        const path = '/remote/v1/events' + (query ? `?cursor=${encodeURIComponent(query)}` : '');
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', query: query ? { cursor: query } : {}, accept: 'text/event-stream' });
+        const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path, headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          let buf = '';
+          res.on('data', c => {
+            buf += c.toString('utf8');
+            if (buf.includes('event:')) { req.destroy(); resolve(buf); }
+          });
+          res.on('end', () => resolve(buf));
+        });
+        req.on('error', () => resolve(buf));
+        req.end();
+      });
+      // Publish two frames, capture the second's cursor from a live subscribe.
+      const p1 = subscribe();                            // opens stream 1
+      await new Promise(r => setTimeout(r, 150));
+      ctx.remote.stream.publish('conv_fixture_001', 1, 'message.append', { messageId: 'msg_00000001', role: 'assistant', text: 'a' }, [deviceId]);
+      const buf1 = await p1;
+      const env1 = JSON.parse(buf1.split('\n').find(l => l.startsWith('data:')).slice(5));
+      const cursor = env1.cursor;
+      assert.ok(/^g\d+_s\d+_[A-Za-z0-9_-]{22}$/.test(cursor), `cursor ${cursor} not contract-shaped`);
+      const gen = env1.streamGeneration;
+      // Publish a third frame AFTER stream1 closed, then RESUME with its cursor.
+      ctx.remote.stream.publish('conv_fixture_001', 1, 'message.append', { messageId: 'msg_00000002', role: 'assistant', text: 'b' }, [deviceId]);
+      const buf2 = await subscribe(cursor);
+      assert.ok(!buf2.includes('event: reset'), `resume emitted reset: ${buf2.slice(0, 200)}`);
+      const env2 = JSON.parse(buf2.split('\n').find(l => l.startsWith('data:')).slice(5));
+      assert.equal(env2.event, 'message.append');
+      assert.equal(env2.streamGeneration, gen, 'resume did not continue the same generation');
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('production pairing completes: pending -> approve -> same-request retry', async () => {
+    // No injected confirmLocally: the loopback admin approves a server-verified
+    // pending transcript and the device retries the SAME signed request.
+    const ctx = await boot();
+    try {
+      const session = ctx.remote.admin.issuePairing();
+      assert.ok(session);
+      const device = keypair();
+      const body = {
+        pairCode: session.code,
+        deviceName: 'fixture-phone',
+        devicePublicKey: device.publicKeyRaw,
+        clientNonce: b64(crypto.randomBytes(32)),
+        serviceFingerprint: ctx.fingerprint,
+        proofSignature: '',
+        pairingSessionId: session.pairingSessionId,
+        requestedScopes: ['projects.read', 'sessions.read', 'chat.send', 'chat.stop', 'approvals.read', 'approvals.respond', 'sessions.create'],
+      };
+      const { buildPairProofMessage } = await import(MODULES.protocol);
+      body.proofSignature = crypto.sign(null, Buffer.from(buildPairProofMessage(body), 'utf8'), device.privateKey).toString('base64url');
+      const rawBody = canonicalJson(body);
+      const headers = { 'content-type': 'application/json; charset=utf-8', 'accept': 'application/json' };
+      // 1) First attempt fails closed (awaiting local confirmation).
+      let r = await ctx.pinnedRequest('POST', '/remote/v1/pair/exchange', { rawBody, headers });
+      assert.equal(r.status, 503, `expected unavailable, got ${r.status}: ${r.body}`);
+      // 2) The verified transcript is surfaced to the local UI.
+      const pending = ctx.remote.admin.listPendingConfirmations();
+      assert.equal(pending.length, 1);
+      assert.equal(pending[0].pairingSessionId, session.pairingSessionId);
+      // 3) Local admin approves BY sessionId (cannot fabricate device fields).
+      const approvalId = ctx.remote.admin.approvePendingConfirmation(session.pairingSessionId);
+      assert.ok(approvalId);
+      // 4) Device retries the SAME signed request -> atomic registration.
+      r = await ctx.pinnedRequest('POST', '/remote/v1/pair/exchange', { rawBody, headers });
+      assert.equal(r.status, 200, `retry failed: ${r.status} ${r.body}`);
+      const out = JSON.parse(r.body);
+      assert.ok(out.deviceId && out.serverSignature, 'registration incomplete');
+      assert.equal(ctx.remote.deviceStore.list().length, 1);
     } finally { await ctx.cleanup(); }
   });
 

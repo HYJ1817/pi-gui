@@ -82,8 +82,16 @@ export function startRemote({
   // ---- stores + domain ----
   const deviceStore = new DeviceStore(dataDir, m => log(`remote: ${m}`));
   const resolvedDomain = domain ?? buildDomain({ runtime, runtimeRegistry, projects, ordinarySessions });
-  const adapters = buildAdapters({ domain: resolvedDomain, dataDir, deviceStore });
-  const stream = new EventStream({
+  // stream and adapters are mutually dependent (adapters.authorizeResource is
+  // called by the stream; adapters.runtimeSnapshot needs stream.watermark).
+  // Break the cycle with a forward reference — adapters sees a callable that
+  // delegates to the stream once it's built.
+  let stream;
+  const adapters = buildAdapters({
+    domain: resolvedDomain, dataDir, deviceStore,
+    streamWatermark: id => stream.watermark(id),
+  });
+  stream = new EventStream({
     serviceKey, serviceFingerprint, deviceStore,
     authorizeResource: adapters.authorizeResource,
   });
@@ -112,6 +120,9 @@ export function startRemote({
     issuePairing: () => pairManager.issuePairing(),
     cancelPairing: id => pairManager.cancelPairing(id),
     approvePairing: transcript => pairManager.issueApproval(transcript),
+    listPendingConfirmations: () => pairManager.listPendingConfirmations(),
+    approvePendingConfirmation: id => pairManager.approvePendingConfirmation(id),
+    declinePendingConfirmation: id => pairManager.declinePendingConfirmation(id),
     listDevices: () => deviceStore.list(),
     revokeDevice: id => { const done = deviceStore.revoke(id); if (done) stream.dropDevice(id); return done; },
     // Removing a grant revokes access immediately: reset the device's

@@ -134,20 +134,25 @@ export class RemoteGateway {
 
   /** Build the validator-shaped request for a signed route. */
   async _requestShape(req, transport) {
-    let rawBody = '';
+    // rawBody is handed to the validator as a Buffer so bodySha256 binds the
+    // EXACT wire bytes (contract transportAdapter.body/bodyDigest). A lossy
+    // utf8 decode would make the signature bind U+FFFD-re-encoded bytes instead
+    // — the validator's strictUtf8 + canonical checks still reject bad input,
+    // but the signature must commit to what actually crossed the wire.
+    let rawBody = Buffer.alloc(0);
     if (req.method !== 'GET') {
-      try { rawBody = (await readRawBody(req, L.maxRequestBytes)).toString('utf8'); }
+      try { rawBody = await readRawBody(req, L.maxRequestBytes); }
       catch (e) { return { fail: e.code === 'request_too_large' ? 'request_too_large' : 'body_bytes_required' }; }
     } else {
       // GET must not carry a body; anything present is still read to check.
-      let getBytes = Buffer.alloc(0);
-      try { getBytes = await readRawBody(req, L.maxRequestBytes); } catch { return { fail: 'request_too_large' }; }
-      rawBody = getBytes.toString('utf8');
+      // The validator treats '' as absent but a (even empty) Buffer as a
+      // present body, so an empty GET must pass '' not Buffer.alloc(0).
+      try { rawBody = await readRawBody(req, L.maxRequestBytes); } catch { return { fail: 'request_too_large' }; }
       if (rawBody.length === 0) rawBody = '';
     }
     let body;
     if (req.method !== 'GET' && rawBody.length) {
-      try { body = JSON.parse(rawBody); } catch { body = undefined; }
+      try { body = JSON.parse(rawBody.toString('utf8')); } catch { body = undefined; }
       if (!isRecord(body)) body = undefined;
     }
     return { method: req.method, path: transport.path, query: transport.query, headers: transport.headers, body, rawBody };
@@ -167,11 +172,12 @@ export class RemoteGateway {
       try { body = JSON.parse(rawBody.toString('utf8')); } catch { body = undefined; }
       if (!isRecord(body)) body = undefined;
       // The pair validator whitelists only content-type/accept — pass exactly
-      // the transport surface it evaluates, never socket-level headers.
+      // the transport surface it evaluates, never socket-level headers. rawBody
+      // goes through as a Buffer so the signed proof binds the exact wire bytes.
       const pairHeaders = {};
       if (headers['content-type'] !== undefined) pairHeaders['content-type'] = headers['content-type'];
       if (headers['accept'] !== undefined) pairHeaders['accept'] = headers['accept'];
-      const request = { method: req.method, path, query, headers: pairHeaders, body, rawBody: rawBody.toString('utf8') };
+      const request = { method: req.method, path, query, headers: pairHeaders, body, rawBody };
       const peerId = req.socket.remoteAddress ?? 'unknown';
       const out = this.pair.exchangeToWire(request, { peerId });
       if (!out.ok) return this._wire(res, ZERO_UUID, out.wire);
@@ -224,6 +230,13 @@ export class RemoteGateway {
       resolveOwner: this.adapters.resolveOwner, nowMs,
     });
     if (!commit.ok) return this._wire(res, admission.requestId, wireErrorCode(commit.code));
+
+    /* Post-commit liveness: a revoke/expiry that lands between admission and
+     * dispatch must fail closed (contract deviceLifecycle.revocation — "reject
+     * all new requests"). Re-read the live record right before dispatch; a
+     * revoked or inactive device never reaches the adapter. */
+    const live = this.deviceStore.active(device.deviceId);
+    if (!live) return this._wire(res, admission.requestId, 'device_inactive');
 
     const dispatch = this.adapters.dispatch[admission.operation];
     if (!dispatch) return this._wire(res, admission.requestId, 'operation_rejected');

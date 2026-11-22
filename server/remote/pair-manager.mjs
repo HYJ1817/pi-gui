@@ -61,7 +61,13 @@ export class PairManager {
     this.sessions = new Map();        // pairingSessionId -> session
     this.peerAttempts = new Map();    // peerId -> [timestamps]
     this.globalAttempts = [];         // timestamps
-    this.pendingApprovals = new Map(); // approvalId -> {transcriptHash, scopeSet}
+    this.pendingApprovals = new Map(); // approvalId -> {transcript fields, at}
+    // Verified exchange transcripts surfaced for local confirmation. The
+    // remote device cannot complete pairing on its first POST (desktop
+    // confirmation is synchronous in the contract); its verified transcript
+    // is stashed here so the loopback UI can list it and bind an approval,
+    // and the device then retries the SAME signed request to finish.
+    this.pendingConfirmations = new Map(); // pairingSessionId -> {confirmation, at}
     this._installSecret = this._loadInstallSecret();
   }
   _loadInstallSecret() {
@@ -112,6 +118,41 @@ export class PairManager {
       if (kept.length) this.peerAttempts.set(peer, kept); else this.peerAttempts.delete(peer);
     }
     this.globalAttempts = this.globalAttempts.filter(t => t > now - ATTEMPT_WINDOW_MS);
+    // Bound the confirmation/approval stores: nothing accumulates past the
+    // pairing window, and dead-capacity entries can't grow unboundedly.
+    const PENDING_TTL = CODE_TTL_MS;
+    for (const [id, c] of this.pendingConfirmations) if (now - c.at > PENDING_TTL) this.pendingConfirmations.delete(id);
+    for (const [id, a] of this.pendingApprovals) if (now - a.at > PENDING_TTL) this.pendingApprovals.delete(id);
+    while (this.pendingApprovals.size > MAX_PENDING) this.pendingApprovals.delete(this.pendingApprovals.keys().next().value);
+    while (this.pendingConfirmations.size > MAX_PENDING) this.pendingConfirmations.delete(this.pendingConfirmations.keys().next().value);
+  }
+  /** Pending confirmations for the local admin surface (safe projection). */
+  listPendingConfirmations() {
+    this._gc();
+    return [...this.pendingConfirmations.values()].map(({ confirmation, at }) => ({
+      pairingSessionId: confirmation.pairingSessionId,
+      deviceName: confirmation.deviceName,
+      deviceKeyFingerprint: confirmation.deviceKeyFingerprint,
+      requestedScopes: confirmation.requestedScopes,
+      at: new Date(at).toISOString(),
+    }));
+  }
+  /**
+   * Local-admin approves a pending exchange BY pairingSessionId. The approval
+   * binds the STASHED verified transcript — the loopback caller cannot
+   * fabricate devicePublicKey/clientNonce/proofTranscript, it only says "yes"
+   * to a transcript the gateway already cryptographically verified.
+   */
+  approvePendingConfirmation(pairingSessionId) {
+    const entry = this.pendingConfirmations.get(pairingSessionId);
+    if (!entry) return null;
+    const approvalId = this.issueApproval(entry.confirmation);
+    this.pendingConfirmations.delete(pairingSessionId);
+    return approvalId;
+  }
+  /** Local-admin declines a pending exchange (drops the stashed transcript). */
+  declinePendingConfirmation(pairingSessionId) {
+    return this.pendingConfirmations.delete(pairingSessionId);
   }
   _charge(map, key, max) {
     const list = map.get(key) ?? [];
@@ -145,6 +186,11 @@ export class PairManager {
     const confirm = typeof this.confirmLocally === 'function'
       ? this.confirmLocally
       : (confirmation) => {
+          // Stash the cryptographically-verified transcript for the loopback
+          // UI (pending list -> approve). If an approvalId was already minted
+          // for this exact transcript (device retried after approval), return
+          // it so the same exchange completes atomically. Otherwise stash and
+          // return null -> this attempt fails closed as 'unavailable'.
           for (const [approvalId, a] of this.pendingApprovals) {
             if (a.pairingSessionId === confirmation.pairingSessionId
               && a.pairCode === confirmation.pairCode
@@ -153,6 +199,8 @@ export class PairManager {
               && a.serviceFingerprint === confirmation.serviceFingerprint
               && a.proofTranscript === confirmation.proofTranscript) return approvalId;
           }
+          this._gc();
+          this.pendingConfirmations.set(confirmation.pairingSessionId, { confirmation, at: Date.now() });
           return null;
         };
     const grantedScopesFor = this.grantedScopesFor ?? ((body) => body.requestedScopes);
