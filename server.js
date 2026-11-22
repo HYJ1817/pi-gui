@@ -137,6 +137,8 @@ import { createUpdateCheck } from './server/update-check.js';
 import { createAppUpdateMaintenance } from './server/app-update-maintenance.js';
 import { createPiUpdate } from './server/pi-update.js';
 import { createCapabilityInstall } from './server/capability-install.js';
+import { createExtensionMarket } from './server/extension-market.js';
+import { createExtensionPackages } from './server/extension-packages.js';
 import { createPiActivity } from './server/pi-activity.js';
 import { createAgentRegistry } from './server/agents/index.js';
 import { createPlanStore } from './server/planner/store.js';
@@ -946,11 +948,14 @@ const marketNetwork = createParentMarketNetwork();
 // The desktop market is governed by the Main bridge, not the environment
 // projection for external Pi/npm/Git clients. Standalone behavior is unchanged.
 const desktopMarketPolicy = desktopEnvironment && marketNetwork && typeof systemNetworkStartup?.relaxed === 'boolean';
+/* 市场网络层看到的环境。MCP 市场与 Extension 插件市场共用这一份，
+ * 两个市场的代理 / 内网判定因此不可能各走各的。 */
+const marketEnv = desktopMarketPolicy ? { ...systemNetworkPolicy.withoutProxyEnvironment(process.env),
+  PI_GUI_NETWORK_RELAXED: systemNetworkStartup?.relaxed ? '1' : '0' } : process.env;
 const mcpMarket = createMcpMarket({
   dataDir: DATA_DIR,
   configStore: mcpConfigStore,
-  env: desktopMarketPolicy ? { ...systemNetworkPolicy.withoutProxyEnvironment(process.env),
-    PI_GUI_NETWORK_RELAXED: systemNetworkStartup?.relaxed ? '1' : '0' } : process.env,
+  env: marketEnv,
   network: marketNetwork,
 });
 /* 桌面版主进程会打开这个开关：启动后就在后台预取完整 Registry 目录，
@@ -1241,16 +1246,22 @@ function runPiCliCommand(args, opts = {}) {
   if (!entry || !entry.ok) {
     return Promise.resolve({ ok: false, spawnFailed: true, error: '没有证明到这份 Pi 的官方入口' });
   }
+  /* npm 在 Windows 上会搜索当前目录。受控扩展操作用空目录启动，
+   * 让项目内的 npm.cmd 和 .npmrc 无法改变这次操作。 */
+  const packageCwd = opts.agentDir ? fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-package-')) : null;
   cliInFlight += 1;
   return Promise.resolve(runCli({
     entry,
     args,
-    cwd: runtime.getCurrentCwd() || undefined,
-    env: {},
+    cwd: packageCwd || runtime.getCurrentCwd() || undefined,
+    env: opts.agentDir ? { PI_CODING_AGENT_DIR: opts.agentDir } : {},
     timeoutMs: (opts && opts.timeoutMs) || 5 * 60 * 1000,
     maxStdoutBytes: (opts && opts.maxStdoutBytes) || 4000,
   })).finally(() => {
     cliInFlight -= 1;
+    if (packageCwd) {
+      try { fs.rmdirSync(packageCwd); } catch { /* Pi may still hold a handle or have written files here. */ }
+    }
   });
 }
 
@@ -1293,7 +1304,7 @@ function piBusyReason(includeAuth = true) {
   if (runtimeRegistryRef?.busy()) return { code: 'busy-runtime', error: '独立会话仍在运行、停止或清理，请先完成该操作。' };
   if (cliInFlight > 0) return { code: 'busy-cli', error: '有一个 Pi CLI 动作正在执行（例如 MCP 登录），请稍后再试' };
   if (piUpdate && piUpdate.isRunning()) return { code: 'busy-pi-update', error: 'Pi 更新正在进行中，请稍后再试' };
-  if (capabilityInstall && capabilityInstall.isRunning()) return { code: 'busy-install', error: '另一个扩展安装正在进行中，请稍后再试' };
+  if (capabilityInstall && capabilityInstall.isRunning()) return { code: 'busy-install', error: '另一个扩展安装、卸载或更新正在进行中，请稍后再试' };
   if (plannerRef) {
     /* 规则只有一份（planner 的 projectSwitchBlockReason：计划在跑 / 独立验证在跑） */
     const reason = plannerRef.projectSwitchBlockReason();
@@ -1341,6 +1352,32 @@ const capabilityInstall = createCapabilityInstall({
   pauseBridge: async reason => { await runtimeRegistryRef?.closeAll(); return rpc.pauseForMaintenance(reason); },
   resumeBridge: () => rpc.resumeFromMaintenance(),
   invalidateCaches: invalidatePiCaches,
+});
+
+/* Extension 插件市场与包管理（第二阶段 B）。
+ *
+ * 市场只读目录：网络层就是 MCP 市场那一套（同一个 fetchJson、同一份 marketEnv、
+ * 同一条主进程代理桥），所以 HTTPS:443 / 固定 DNS / 不跟重定向 / 代理与内网判定
+ * 都不另写一份。它没有启动预取，没有用户同意就不发任何请求。
+ *
+ * 包管理不自己执行任何东西：安装 / 卸载 / 更新都交给上面的 `capabilityInstall`
+ * （同一把锁、同一份忙判据、同一条 runCli 出口、固定 argv）。
+ * 两者互相引用（市场要标「已安装」，包管理要问「目录里有没有这个包」），
+ * 所以包管理这一侧用运行期回填的引用。 */
+let extensionPackagesRef = null;
+const extensionMarket = createExtensionMarket({
+  dataDir: DATA_DIR,
+  fetchJson: (url, opts) => mcpMarket._internals.fetchJson(url, { ...opts, env: marketEnv, network: marketNetwork }),
+  readPiVersion: () => piVersion.read()?.value ?? null,
+  readInstalled: () => extensionPackagesRef?.installedIndex() ?? null,
+  canManage: () => extensionPackagesRef?.canManageAgentDir() === true,
+  operations: capabilityInstall,
+});
+const extensionPackages = extensionPackagesRef = createExtensionPackages({
+  runtime,
+  env: process.env,
+  operations: capabilityInstall,
+  catalog: extensionMarket,
 });
 
 const providerAuth = providerAuthRef = createProviderAuth({
@@ -1800,6 +1837,8 @@ const route = createRouter({
   updateCheck,
   piUpdate,
   capabilityInstall,
+  extensionPackages,
+  extensionMarket,
   quota,
   compat: piCompat,
 });
