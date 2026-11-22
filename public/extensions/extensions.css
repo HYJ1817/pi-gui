@@ -1,8 +1,4 @@
-/* 扩展页（public/extensions/）。
- * 版式对照 PI-Desktop 扩展页：页头（图标块 + 标题 + 动作）→ 页签行（分段页签 + 工具栏）→
- * 按状态分组的卡片网格 → 已知能力。颜色、字号、圆角全部取 pi-GUI Token；页签用 .ds-segmented 的外观，
- * 状态徽标用 .ds-badge，按钮用 .btn，详情事实行沿用 .ext-rows / .cfg-note。 */
-
+/* Extensions work surface and package dialog. */
 /* 页面自己画「扩展」标题；工作区标题栏里的同名标题在本页隐藏，避免一屏两个标题。 */
 .stage[data-workspace-view="extensions"] #workViewTitle { display: none; }
 
@@ -29,22 +25,10 @@
 
 /* ---------- 页头 ---------- */
 .extensions-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
-.extensions-heading { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.extensions-heading-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-xs);
-  background: var(--ds-tile-deep);
-  color: var(--ds-text-secondary);
-}
 .extensions-title {
   margin: 0;
-  font-size: var(--text-xl);
-  font-weight: var(--font-weight-semibold);
+  font-size: 30px;
+  font-weight: 700;
   line-height: var(--leading-heading);
   color: var(--ds-text-primary);
 }
@@ -67,17 +51,17 @@
 
 /* ---------- 面板与分组 ---------- */
 .extensions-panel { min-width: 0; }
-.extensions-tab-panel { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.extensions-tab-panel { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .extensions-notes { display: grid; gap: 8px; }
 .extensions-notes:empty { display: none; }
-.extensions-list { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.extensions-list { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .extensions-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .extensions-group-head { display: flex; align-items: center; gap: 8px; min-height: 20px; padding: 0 2px; }
 .extensions-group-title {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
-  line-height: var(--leading-compact);
+  line-height: var(--leading-tight);
   color: var(--ds-text-secondary);
 }
 .extensions-group-count {
@@ -95,19 +79,37 @@
 }
 
 /* ---------- 卡片网格 ---------- */
-.extensions-grid {
+.extensions-grid { display: flex; flex-direction: column; gap: 8px; }
+.extensions-group-icon {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
-  gap: 12px;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ds-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--ds-bg-chip);
 }
+.extensions-tab-installed .extensions-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 12px;
+}
+.extensions-tab-installed .extensions-card-head { align-items: flex-start; }
+.extensions-tab-installed .extensions-card-glyph { width: 36px; height: 36px; }
+.extensions-tab-installed .extensions-card-heading { gap: 4px; }
+.extensions-tab-installed .extensions-card-foot { justify-content: flex-end; margin-top: 0; }
+.extensions-tab-installed .extensions-card-details { grid-column: 1 / -1; }
 .extensions-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
   padding: 14px;
-  border-radius: var(--radius-md);
-  background: var(--ds-tile);
+  border: 1px solid var(--ds-border-default);
+  border-radius: 12px;
+  background: var(--ds-surface-elevated);
   transition: background var(--motion-duration-fast) var(--motion-ease-out);
 }
 .extensions-card:hover,
@@ -296,13 +298,13 @@
   .extensions-page .ext-known-item > summary::after { transition: none; }
 }
 
-@media (max-width: 720px) {
+@container extensions (max-width: 620px) {
   .extensions-toolbar-slot { flex-basis: 100%; }
   .extensions-search { flex: 1 1 auto; min-width: 0; }
 }
 
 /* 市场控件与卡片。按页面实际可用宽度切换列数，避免侧栏挤压卡片。 */
-.extensions-inner { container-type: inline-size; }
+.extensions-inner { container: extensions / inline-size; }
 .extensions-head-buttons, .extensions-package-actions, .extensions-pager {
   display: flex;
   flex-wrap: wrap;
@@ -310,9 +312,8 @@
   gap: 8px;
 }
 .extensions-toolbar-slot > .extensions-search { flex-basis: 320px; }
-.extensions-group-title { font-size: var(--text-lg); }
 .extensions-card-foot { justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.extensions-package-actions { margin-inline-start: auto; }
+.extensions-package-actions:empty { display: none; }
 .extensions-market-filters { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
 .extensions-categories { flex: 1 1 440px; flex-wrap: wrap; min-width: 0; }
 .extensions-sorts { flex: none; max-width: 100%; }
@@ -320,7 +321,7 @@
 .extensions-market-result:empty { display: none; }
 .extensions-market-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 .extensions-market-grid > .extensions-empty { grid-column: 1 / -1; }
@@ -330,7 +331,6 @@
   gap: 0;
   min-height: 176px;
   overflow: hidden;
-  border-radius: var(--radius-md-plus);
 }
 .extensions-market-card-main { display: flex; flex-direction: column; gap: 9px; padding: 14px; }
 .extensions-market-card .extensions-card-glyph { width: 34px; height: 34px; font-weight: var(--font-weight-semibold); }
@@ -341,7 +341,6 @@
   min-height: 48px;
   padding: 6px 12px;
   margin-top: auto;
-  background: var(--ds-tile-deep);
 }
 .extensions-market-card-action { position: relative; z-index: 1; }
 .extensions-card-hit {
@@ -396,9 +395,7 @@
 .extensions-detail-footer { flex-wrap: wrap; justify-content: flex-end; border-top: 1px solid var(--ds-border); }
 .extensions-detail-footer:empty { display: none; }
 
-@container (max-width: 870px) {
-  .extensions-market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@container (max-width: 570px) {
+@container extensions (max-width: 620px) {
   .extensions-market-grid { grid-template-columns: minmax(0, 1fr); }
+  .extensions-tab-installed .extensions-card { grid-template-columns: minmax(0, 1fr); }
 }

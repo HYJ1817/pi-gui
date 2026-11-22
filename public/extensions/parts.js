@@ -13,7 +13,9 @@ export function extensionGroupHead(title, count, titleId) {
   const head = el('header', 'extensions-group-head');
   const heading = el('h3', 'extensions-group-title', title);
   if (titleId) heading.id = titleId;
-  head.append(heading, el('span', 'extensions-group-count', String(count)));
+  const icon = el('span', 'extensions-group-icon');
+  icon.append(createIcon('box', { size: 14 }));
+  head.append(icon, heading, el('span', 'extensions-group-count', String(count)));
   return head;
 }
 

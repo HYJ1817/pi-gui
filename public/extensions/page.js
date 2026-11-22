@@ -11,7 +11,6 @@
 
 import { openWorkSurface } from '../ui/workspace-surface.js';
 import { renderExtensionNotices } from '../extension-notices.js';
-import { createIcon } from '../ui/icons.js';
 import { resourceEl as el } from '../ui/resource-dom.js';
 import { renderInstalledExtensions } from './installed.js';
 import { renderExtensionMarket } from './market.js';
@@ -43,10 +42,7 @@ export function openExtensions(options = {}) {
 
     const inner = el('div', 'extensions-inner');
     const head = el('header', 'extensions-head');
-    const heading = el('div', 'extensions-heading');
-    const headingIcon = el('span', 'extensions-heading-icon');
-    headingIcon.append(createIcon('box', { size: 14 }));
-    heading.append(headingIcon, el('h2', 'extensions-title', '扩展'));
+    const heading = el('h2', 'extensions-title', '扩展');
     const actionsSlot = el('div', 'extensions-head-actions');
     head.append(heading, actionsSlot);
 

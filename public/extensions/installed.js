@@ -137,9 +137,12 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
     heading.append(title, el('div', 'extensions-card-meta', extensionUnitMeta(unit)));
     head.append(extensionGlyph(name, { error: !!error }), heading);
     const description = extensionUnitDescription(unit);
-    const desc = el('p', 'extensions-card-desc', description || '（没有简介）');
-    if (description) desc.title = description;
-    card.append(head, desc);
+    if (description) {
+      const desc = el('p', 'extensions-card-desc', description);
+      desc.title = description;
+      heading.append(desc);
+    }
+    card.append(head);
 
     const tags = el('div', 'extensions-card-tags');
     for (const tag of extensionUnitTags(unit)) tags.append(createBadge(tag));
@@ -150,8 +153,8 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
       tags.append(node);
     }
     if (chips.length > 3) tags.append(el('span', 'extensions-cap is-more', `另有 ${chips.length - 3} 项`));
-    if (tags.childElementCount) card.append(tags);
-    if (error) card.append(el('p', 'extensions-card-error', error));
+    if (tags.childElementCount) heading.append(tags);
+    if (error) heading.append(el('p', 'extensions-card-error', error));
 
     if (!detailIds.has(unit.id)) detailIds.set(unit.id, `extensionDetail-${++detailSeq}`);
     const details = el('div', 'extensions-card-details');
