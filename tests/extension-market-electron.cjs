@@ -9,7 +9,7 @@ const { createInterface } = require('node:readline');
 const { contrastSample } = require('./fixtures/system-settings-states.cjs');
 
 const root = path.resolve(__dirname, '..');
-const out = path.join(root, '.shots', 'extensions-facelift');
+const out = process.env.EXTENSIONS_SHOTS_DIR || path.join(root, '.shots', 'extensions-facelift');
 
 if (!process.versions.electron) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-gui-extensions-electron-'));
@@ -88,13 +88,21 @@ if (!process.versions.electron) {
       }
       async function key(keyName, code, windowsVirtualKeyCode) {
         for (const type of ['keyDown', 'keyUp']) {
-          await window.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type, key: keyName, code, windowsVirtualKeyCode });
+          const text = type === 'keyDown' && keyName === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {};
+          await window.webContents.debugger.sendCommand('Input.dispatchKeyEvent', { type, key: keyName, code, windowsVirtualKeyCode, ...text });
         }
       }
       await window.loadURL(origin);
       await wait(`document.querySelector('#connText')?.textContent==='已连接'`);
       window.showInactive();
       window.webContents.debugger.attach('1.3');
+      // Feed multiline diagnostics through the production notification path, not the DOM or a real installation.
+      const warnings = [
+        'Optional index unavailable.\n\n离线验收：索引未就绪。\n' + ' Check the local fixture settings.\n'.repeat(12) + 'End of fixture.',
+        'Fixture connection unavailable.\nDetail: ' + 'offline-'.repeat(45),
+      ];
+      await js(`(async () => { const { handleExtensionNotification } = await import('/extension-notices.js');
+        for (const message of ${JSON.stringify(warnings)}) handleExtensionNotification({ message, notifyType:'warning' }); })()`);
 
       for (const [width, height] of [[1320, 820], [700, 600]]) {
         window.setContentSize(width, height);
@@ -122,7 +130,32 @@ if (!process.versions.electron) {
           const labels = ['.extensions-list .ext-name', '.extensions-card-meta', '.extensions-card-error', '.extensions-list .ds-badge-success', '.extensions-list .ds-badge-warning'];
           const contrasts = await js(`${JSON.stringify(labels)}.map(selector => (${contrastSample.toString()})(selector))`);
           verify(contrasts.every(sample => sample.ratio >= 4.5), prefix + ' installed labels and status text meet 4.5:1');
+          const notices = await js(`(() => {
+            const details = document.querySelector('.extension-notices'), summary = details.querySelector('summary');
+            return { height: details.getBoundingClientRect().height, closed: !details.open,
+              summary: summary.innerText, firstRowTop: document.querySelector('.extensions-list .extensions-card').getBoundingClientRect().top };
+          })()`);
+          verify(notices.closed && notices.summary.includes('2 条警告') && notices.height <= 44 && notices.firstRowTop < height / 2,
+            prefix + ' long diagnostics take one row; first installed extension is visible');
           await shot(prefix + '-installed', width, height);
+          await js(`document.querySelector('.extensions-notice-summary').focus()`);
+          await key('Enter', 'Enter', 13);
+          await wait(`document.querySelector('.extension-notices').open`);
+          const detail = await js(`(() => {const b=document.querySelector('.extensions-notice-body');
+            return {top:b.getBoundingClientRect().top, height:b.clientHeight, contentHeight:b.scrollHeight, overflow:b.scrollWidth-b.clientWidth,
+              fullText:b.innerText.includes('End of fixture.'), focus:document.activeElement.matches('.extensions-notice-summary')};})()`);
+          verify(detail.focus && detail.fullText && detail.contentHeight > detail.height && detail.height <= height / 3 && detail.overflow <= 1,
+            prefix + ' keyboard opens a bounded panel; the full multiline text fits horizontally');
+          if (prefix === '1320-dark' || prefix === '700-light') await shot(prefix + '-run-notices', width, height);
+          await key('Tab', 'Tab', 9);
+          await wait(`document.activeElement.matches('.extensions-notice-body')`);
+          const pageScroll = await js(`document.querySelector('.extensions-scroll').scrollTop`);
+          await key('PageDown', 'PageDown', 34);
+          await wait(`document.querySelector('.extensions-notice-body').scrollTop > 0`);
+          verify(await js(`document.querySelector('.extensions-scroll').scrollTop`) === pageScroll, prefix + ' keyboard scroll stays inside the diagnostic text');
+          await js(`document.querySelector('.extensions-notice-summary').focus()`);
+          await key('Enter', 'Enter', 13);
+          await wait(`!document.querySelector('.extension-notices').open`);
           await click('#extensionsTabMarket');
           await wait(`document.querySelectorAll('.extensions-market-card').length===7`);
           const layout = await js(`(() => {
@@ -139,7 +172,7 @@ if (!process.versions.electron) {
               button: Math.round(grid.querySelector('.btn').getBoundingClientRect().height),
               radius: getComputedStyle(grid.firstElementChild).borderRadius, cards };
           })()`);
-          metrics.push({ theme, ...layout, contrasts });
+          metrics.push({ theme, ...layout, contrasts, noticeHeight: notices.height, firstInstalledTop: notices.firstRowTop, expandedNoticeHeight: detail.height });
           const firstRow = layout.cards.filter((item) => item.top === layout.cards[0].top);
           verify(layout.cols === (width === 1320 ? 2 : 1), prefix + ' market column count');
           verify(layout.scrollWidth <= layout.scrollInner + 1 && layout.cards.every(({ left, right }) => left >= 0 && right <= width), prefix + ' no horizontal overflow');

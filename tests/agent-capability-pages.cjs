@@ -932,22 +932,49 @@ function createWorld(label, entry) {
     B.w.showChat();
   });
 
-  await extCheck('Extensions: live extension notices render above the tabs and follow tab switches', async () => {
-    B.w.S.switching = false; // 切换中的提示会被丢弃；这里验证的是正常运行时的提示
+  await extCheck('Extensions: long run notices start collapsed, retain severity and full inert text, and clear on a new run', async () => {
+    B.w.S.switching = false;
     B.answer('GET /api/extensions', registry([EXT_OK]));
     B.w.openExtensions();
     await tick();
-    const notices = () => B.d.querySelector('#workSurface .extension-notices');
-    assert.equal(notices().hidden, true, 'no notices yet: the section stays hidden');
-    B.w.handleExtensionNotification({ message: 'memory_search requires qmd. Install qmd', notifyType: 'warning' });
-    assert.equal(notices().hidden, false);
-    assert.ok(notices().textContent.includes('memory_search requires qmd'), 'the notice reaches the open page');
+    const notices = B.d.querySelector('#workSurface .extension-notices');
+    assert.equal(notices.hidden, true);
+    const warn = { message: 'Optional integration unavailable.\n\nSetup notes:\n<em>fixture only</em>\n' + 'A'.repeat(300), notifyType: 'warning' };
+    B.w.handleExtensionNotification(warn);
+    assert.equal(notices.hidden, false);
+    assert.equal(notices.tagName, 'DETAILS');
+    assert.equal(notices.open, false, 'new messages do not expand diagnostics');
+    const summary = notices.querySelector('summary');
+    assert.match(summary.textContent, /1 条警告/);
+    assert.doesNotMatch(summary.textContent, /Setup notes/);
+    assert.ok(notices.textContent.includes(warn.message));
+    assert.equal(notices.querySelector('em'), null, 'notification markup remains plain text');
+    summary.click();
     B.$('extensionsTabMarket').click();
     await tick();
-    assert.ok(notices().textContent.includes('memory_search requires qmd'), 'notices sit above the tabs, not inside one panel');
-    assert.equal(B.$('extensionsTabPanel').contains(notices()), false);
-    B.w.handleExtensionNotification({ message: 'memory_search requires qmd. Install qmd', notifyType: 'warning' });
-    assert.ok(notices().textContent.includes('重复 2 次'), 'a repeated notice updates the same row');
+    assert.equal(B.$('extensionsTabPanel').contains(notices), false);
+    assert.equal(notices.open, true, 'list and market share this run’s disclosure');
+    summary.focus();
+    B.w.handleExtensionNotification(warn);
+    B.w.handleExtensionNotification({ message: 'Fixture connection failed', notifyType: 'error' });
+    assert.equal(B.d.activeElement, summary, 'live updates keep the disclosure focus');
+    assert.equal(notices.open, true);
+    assert.match(summary.textContent, /1 条错误/);
+    assert.match(summary.textContent, /1 条警告/);
+    assert.equal(notices.querySelectorAll('.extension-notice').length, 2);
+    assert.ok(notices.textContent.includes('重复 2 次'), 'repeated notifications are still identifiable');
+    B.w.S.bridgeRun = (B.w.S.bridgeRun || 0) + 1;
+    B.d.dispatchEvent(new B.w.Event('pi-gui:capability-bridge-ready'));
+    assert.equal(notices.hidden, true);
+    assert.equal(notices.open, false);
+    assert.doesNotMatch(notices.textContent, /Setup notes|Fixture connection failed/);
+    B.w.handleExtensionNotification({ message: 'Fixture ready', notifyType: 'info' });
+    assert.equal(notices.open, false);
+    assert.match(summary.textContent, /1 条提示/);
+    summary.click();
+    B.w.beginWorkspaceSwitch('C:\\fixture\\another');
+    assert.equal(notices.hidden, true, 'workspace change also clears the old notices');
+    assert.equal(notices.open, false);
     B.w.showChat();
   });
 
@@ -1183,7 +1210,7 @@ function createWorld(label, entry) {
     assert.equal(ok.querySelector('.ext-name').textContent, 'Sample Extension');
     assert.equal(ok.querySelector('.extensions-card-meta').textContent, 'v1.0.0 · 本地 · 全局');
     assert.equal(ok.querySelector('.extensions-card-desc').textContent, 'Fixture extension');
-    assert.deepEqual([...ok.querySelectorAll('.extensions-cap')].map((chip) => [chip.textContent, chip.title]), [['hello', 'command: hello']]);
+    assert.ok(!ok.textContent.includes('hello'), 'command inventories belong in the expandable details, not every list row');
     assert.equal(ok.querySelectorAll('.ds-badge').length, 0, 'enabled: true and restartRequired: null add no tag');
     const broken = surface.querySelector('.extensions-card[data-extension-id="ext-2"]');
     assert.ok(broken.classList.contains('is-error'));
