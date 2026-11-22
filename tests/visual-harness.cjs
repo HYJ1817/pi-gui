@@ -53,11 +53,16 @@ const recoveryBus = recoveryMode ? import('../server/sse.js').then(({ createEven
   return bus;
 }) : null;
 
-/* /api/skills 的夹具：字段照抄 server/skills.js 的 listPayload 与 skills.push({...})。
- * 3 条：全局已启用 / 全局被 settings 停用 / 项目级（项目未信任）—— cdp-shot 依赖这三条与未信任说明。 */
+/* /api/skills 的夹具：字段照抄 server/skills.js 的 listPayload 与 skills.push({...})，
+ * 附加字段（context / projects / targets / manage）照抄 server/skills-routes.js 的 listExtras。
+ * 默认 3 条：全局已启用 / 全局被 settings 停用 / 项目级（项目未信任）—— cdp-shot 依赖这三条与未信任说明。
+ * 技能视觉脚本（tests/skills-visual.cjs）用 /api/__skills/mode 改成受信任 / 空列表 / 读取失败，
+ * 只改内存里的夹具，不写任何真实目录。 */
 const SKILL_HOME = 'C:\\Users\\me';
 const SKILL_AGENT = SKILL_HOME + '\\.pi\\agent';
 const SKILL_PROJECT = 'C:\\fixture\\project';
+const SKILL_PROJECT_ID = 'c000000000000099';
+const skillsMode = { trusted: false, empty: false, error: false };
 function harnessSkill(over) {
   const project = over.scope === 'project';
   const baseDir = project ? SKILL_PROJECT + '\\.pi' : SKILL_AGENT;
@@ -83,17 +88,43 @@ const HARNESS_SKILLS = Object.freeze([
     blockedByTrust: true, stateNote: '项目未被信任：pi 在非交互模式下不加载项目级资源',
   }),
 ]);
+function harnessTargets(trusted) {
+  return [
+    { key: 'user-pi', scope: 'user', mode: 'pi', dir: SKILL_AGENT + '\\skills', label: '~/.pi/agent/skills', exists: true, writable: true, blockedCode: '', blockedReason: '', notice: '' },
+    { key: 'user-agents', scope: 'user', mode: 'agents', dir: SKILL_HOME + '\\.agents\\skills', label: '~/.agents/skills', exists: false, writable: true, blockedCode: '', blockedReason: '', notice: '' },
+    trusted
+      ? { key: 'project-pi', scope: 'project', mode: 'pi', dir: SKILL_PROJECT + '\\.pi\\skills', label: '<项目>/.pi/skills', exists: true, writable: true, blockedCode: '', blockedReason: '', notice: '项目技能只对当前项目生效；pi 重启后加载。' }
+      : { key: 'project-pi', scope: 'project', mode: 'pi', dir: SKILL_PROJECT + '\\.pi\\skills', label: '<项目>/.pi/skills', exists: true, writable: false, blockedCode: 'project-untrusted', blockedReason: '项目未被信任：pi 不加载项目级资源', notice: '' },
+  ];
+}
+function harnessManage(skill, trusted) {
+  if (skill.scope === 'project' && !trusted) {
+    return { target: null, editable: false, deletable: false, reason: '项目未被信任：pi 不加载项目级资源' };
+  }
+  return { target: skill.scope === 'project' ? 'project-pi' : 'user-pi', editable: true, deletable: true, reason: '' };
+}
 function harnessSkillsPayload() {
-  const skills = HARNESS_SKILLS;
+  const trusted = skillsMode.trusted === true;
+  const base = HARNESS_SKILLS.map((skill) => (trusted && skill.scope === 'project'
+    ? { ...skill, state: 'enabled', loaded: true, blockedByTrust: false, stateNote: '' }
+    : skill));
+  const skills = skillsMode.empty ? [] : base;
   return {
     ok: true, hasProject: true, cwd: SKILL_PROJECT, agentDir: SKILL_AGENT, homeDir: SKILL_HOME,
     globalSettings: SKILL_AGENT + '\\settings.json', projectSettings: SKILL_PROJECT + '\\.pi\\settings.json',
-    trust: { trustFile: SKILL_AGENT + '\\trust.json', trustOverride: null, trusted: false, reason: 'default-never', requiresTrust: true },
+    trust: { trustFile: SKILL_AGENT + '\\trust.json', trustOverride: null, trusted, reason: trusted ? 'trusted' : 'default-never', requiresTrust: true },
     piReachable: true,
+    context: { project: SKILL_PROJECT_ID, live: true },
+    projects: [
+      { id: SKILL_PROJECT_ID, name: 'fixture-project', path: SKILL_PROJECT, active: true },
+      { id: 'c000000000000098', name: 'pi-gui', path: 'C:\\pi-GUI', active: false },
+    ],
+    targets: harnessTargets(trusted),
+    trashAvailable: true,
     roots: [
       { label: '~/.pi/agent/skills', dir: SKILL_AGENT + '\\skills', scope: 'user', mode: 'pi', exists: true, blockedByTrust: false },
       { label: '~/.agents/skills', dir: SKILL_HOME + '\\.agents\\skills', scope: 'user', mode: 'agents', exists: false, blockedByTrust: false },
-      { label: '<项目>/.pi/skills', dir: SKILL_PROJECT + '\\.pi\\skills', scope: 'project', mode: 'pi', exists: true, blockedByTrust: true },
+      { label: '<项目>/.pi/skills', dir: SKILL_PROJECT + '\\.pi\\skills', scope: 'project', mode: 'pi', exists: true, blockedByTrust: !trusted },
     ],
     diagnostics: [],
     counts: {
@@ -106,9 +137,153 @@ function harnessSkillsPayload() {
     skills: [...skills].sort((a, b) => {
       const rank = (skill) => (skill.scope === 'project' ? 0 : skill.scope === 'user' ? 1 : 2);
       return rank(a) - rank(b) || a.name.localeCompare(b.name);
-    }),
+    }).map((skill) => ({ ...skill, manage: harnessManage(skill, trusted) })),
   };
 }
+
+/* 编辑器读取的源文件：形状照抄 server/skills-manage.js 的 readSource。 */
+function harnessSkillSource(rec) {
+  const description = rec.description || '';
+  const body = `# ${rec.name}\n\n## 什么时候用\n\n${description}\n\n## 步骤\n\n1. 先确认改动范围与涉及的文件。\n2. 逐项对照仓库约定，标出与本次改动相关的风险。\n3. 给出可以执行的修改建议，并注明验证方式。\n`;
+  const content = `---\nname: ${rec.name}\ndescription: ${description}\nlicense: MIT\n---\n${body}`;
+  return {
+    ok: true, id: rec.id, name: rec.name, dirName: rec.name, scope: rec.scope,
+    target: rec.scope === 'project' ? 'project-pi' : 'user-pi', targetLabel: rec.rootLabel,
+    path: rec.path, content, hash: 'sha256:4f2a9c1e77b3d0a5', eol: '\n', bom: false, bytes: Buffer.byteLength(content),
+    form: {
+      available: true, generated: '', name: rec.name, description,
+      body, extraKeys: ['license'], reason: '',
+    },
+    limits: { maxBytes: 262144, maxDescription: 1024 },
+  };
+}
+
+/* ---------- 技能市场夹具（形状照抄 server/skills-market.js 的 state() / preview()） ---------- */
+const MARKET_CATEGORIES = Object.freeze([
+  { id: 'coding', label: '编程' }, { id: 'writing', label: '写作' }, { id: 'docs', label: '文档' },
+  { id: 'data', label: '数据' }, { id: 'workflow', label: '工作流' },
+]);
+const MARKET_SHA = '4f9c1d2e8a7b6c5d4e3f20112233445566778899';
+const MARKET_ENTRY_SEEDS = [
+  ['code-review', 'coding', '对改动做一次结构化的代码审查：先划范围，再列风险，最后给可执行的修改建议。'],
+  ['pdf-tools', 'docs', '读取、拆分与整理 PDF，把表格和批注提取成 Markdown。'],
+  ['commit-messages', 'coding', '根据改动内容写提交信息：一句话说清动机，正文只放必要的背景。'],
+  ['changelog-writer', 'docs', '把一段提交历史整理成面向用户的更新日志，按影响分组。'],
+  ['meeting-notes', 'writing', '把会议记录整理成结论、待办与负责人，去掉重复的讨论过程。'],
+  ['api-designer', 'coding', '设计 HTTP 接口前先对齐资源、状态码和错误形状，输出可评审的契约。'],
+  ['data-cleaning', 'data', '检查表格里的缺失值、重复行和类型不一致，给出可复现的清洗步骤。'],
+  ['release-notes', 'docs', '从 PR 与 Issue 里挑出用户能感知的变化，写成发布说明。'],
+  ['test-planner', 'coding', '为一段改动列出该补的测试：边界、失败路径、回归面。'],
+  ['doc-translator', 'writing', '在保留术语表的前提下翻译技术文档，标记无法确定的译法。'],
+  ['sql-explainer', 'data', '逐段解释 SQL 在做什么，指出可能的全表扫描和索引失效。'],
+  ['incident-postmortem', 'writing', '把故障时间线整理成复盘：影响、根因、处置、后续动作。'],
+  ['refactor-guide', 'coding', '在保持行为不变的前提下拆解重构步骤，每一步都可以单独验证。'],
+  ['spreadsheet-formulas', 'data', '写表格公式并解释每个参数，优先用不依赖易失函数的写法。'],
+  ['pr-description', 'coding', '把一次改动写成评审者能快速读懂的 PR 描述：改了什么、为什么、怎么验证。'],
+  ['onboarding-guide', 'docs', '为新同事写一篇可执行的入门文档：环境、运行、常见坑。'],
+  ['prompt-review', 'writing', '审查提示词的歧义、缺失的约束与失败时的降级路径。'],
+  ['log-triage', 'data', '从日志里按时间线还原一次请求，区分噪音与真正的错误。'],
+  ['dependency-audit', 'coding', '核对新增依赖的必要性、体积与许可证，给出替代方案。'],
+  ['migration-plan', 'docs', '把一次数据或接口迁移拆成可回滚的阶段，写清每一步的验证。'],
+  ['slide-outline', 'writing', '把材料整理成演示大纲：每页一个观点，证据与结论分开。'],
+  ['chart-picker', 'data', '按数据类型和分析目的推荐图表，说明为什么不用别的类型。'],
+  ['regex-helper', 'coding', '写正则并给出它能匹配与不能匹配的例子，避免灾难性回溯。'],
+  ['glossary-builder', 'writing', '从文档里收集术语，统一中英文写法并生成术语表。'],
+  ['repo-tour', 'docs', '给一个陌生仓库画导览：入口、模块边界、数据流和测试入口。'],
+];
+const MARKET_SOURCES = Object.freeze([
+  { id: 'src-anthropics', repo: 'anthropics/skills', ref: 'main', builtin: true, removable: false, loaded: true, fetchedAt: 1764000000000, resolvedRef: MARKET_SHA, mode: 'pinned', count: 12, truncated: false, error: '', errorCode: '' },
+  { id: 'src-official', repo: 'anthropics/claude-plugins-official', ref: 'main', builtin: true, removable: false, loaded: true, fetchedAt: 1764000000000, resolvedRef: '9a8b7c6d5e4f30211203344556677889900aabbc', mode: 'pinned', count: 8, truncated: false, error: '', errorCode: '' },
+  { id: 'src-team', repo: 'HYJ1817/team-skills', ref: 'main', builtin: false, removable: true, loaded: true, fetchedAt: 1764000000000, resolvedRef: '3c2b1a0f9e8d7c6b5a4938271605142332415060', mode: 'pinned', count: 5, truncated: false, error: '', errorCode: '' },
+]);
+const MARKET_ENTRIES = Object.freeze(MARKET_ENTRY_SEEDS.map(([slug, category, description], index) => {
+  const source = MARKET_SOURCES[index < 12 ? 0 : index < 20 ? 1 : 2];
+  const dir = index < 12 ? `skills/${slug}` : index < 20 ? `plugins/${slug}` : `team/${slug}`;
+  const blocked = index === 19;
+  return {
+    id: 'e' + String(index + 1).padStart(15, '0'),
+    sourceId: source.id,
+    repo: source.repo,
+    dir,
+    slug,
+    title: slug,
+    description,
+    categories: [category],
+    official: source.repo.startsWith('anthropics/'),
+    listed: true,
+    fileCount: 2 + (index % 4),
+    bytes: 1200 + index * 340,
+    installable: !blocked,
+    reason: blocked ? 'SKILL.md 超过 256 KB，不能在这里安装' : '',
+    homepage: `https://github.com/${source.repo}/tree/${encodeURIComponent(source.ref)}/${dir}`,
+  };
+}));
+const MARKET_PREVIEW_ID = 'f'.repeat(24);
+function harnessMarketPreview(entryId) {
+  const entry = MARKET_ENTRIES.find((item) => item.id === entryId) || MARKET_ENTRIES[0];
+  const content = [
+    '# code-review', '',
+    '对改动做一次结构化的代码审查。先划范围，再列风险，最后给可执行的修改建议。', '',
+    '## 什么时候用', '',
+    '- 用户要求审查一次改动、一个 PR 或一段实现；',
+    '- 改动涉及权限、文件写入或并发时，先看这些边界。', '',
+    '## 步骤', '',
+    '1. 用 `git diff --stat` 确认改动范围，读完整的相关文件而不是只看 diff。',
+    '2. 对照仓库约定检查：状态由谁持有、错误怎么恢复、失败路径是否可观测。',
+    '3. 每条发现都写清位置、触发条件和影响；没有证据的猜测不列为问题。',
+    '4. 最后给出验证方式：跑哪个测试、看哪个日志、怎么回滚。', '',
+    '## 输出', '',
+    '按严重程度排序，先说阻断项；格式偏好不阻塞验收。',
+  ].join('\n');
+  const files = [
+    { path: 'SKILL.md', size: Buffer.byteLength(content), status: 'ok', note: '' },
+    { path: 'references/checklist.md', size: 1820, status: 'ok', note: '' },
+    { path: 'scripts/report.mjs', size: 640, status: 'ok', note: '' },
+  ];
+  return {
+    ok: true, previewId: MARKET_PREVIEW_ID, entry,
+    name: entry.title, suggestedName: entry.slug, description: entry.description,
+    content, files, skipped: [], totalBytes: files.reduce((sum, file) => sum + file.size, 0),
+    problems: [], partial: false, installable: entry.installable, reason: entry.reason,
+    source: { repo: entry.repo, dir: entry.dir, ref: MARKET_SHA, mode: 'pinned', homepage: entry.homepage },
+  };
+}
+
+/* 从其他工具扫描的夹具：形状照抄 server/skills-external.js 的 scan()。 */
+const EXTERNAL_SCAN = Object.freeze({
+  ok: true,
+  sources: [
+    { id: 'claude-user', tool: 'Claude Code', label: '~/.claude/skills', dir: SKILL_HOME + '\\.claude\\skills', exists: true, count: 3, truncated: false, error: '' },
+    { id: 'claude-project', tool: 'Claude Code', label: '<项目>/.claude/skills', dir: SKILL_PROJECT + '\\.claude\\skills', exists: true, count: 1, truncated: false, error: '' },
+    { id: 'codex-user', tool: 'Codex', label: '~/.codex/skills', dir: SKILL_HOME + '\\.codex\\skills', exists: false, count: 0, truncated: false, error: '' },
+  ],
+  candidates: [
+    {
+      id: 'd000000000000001', sourceId: 'claude-user', tool: 'Claude Code', sourceLabel: '~/.claude/skills',
+      dirName: 'portable', dir: SKILL_HOME + '\\.claude\\skills\\portable', name: 'portable',
+      description: 'Portable Claude skill', bytes: 128, suggestedName: 'portable',
+      importable: true, reason: '', problems: [], present: 'none', presentIn: '',
+    },
+    {
+      id: 'd000000000000002', sourceId: 'claude-user', tool: 'Claude Code', sourceLabel: '~/.claude/skills',
+      dirName: 'code-review', dir: SKILL_HOME + '\\.claude\\skills\\code-review', name: 'code-review',
+      description: '审查源代码中的问题，给出可执行的修改建议', bytes: 96, suggestedName: 'code-review',
+      importable: true, reason: '', problems: [], present: 'same', presentIn: '~/.pi/agent/skills',
+    },
+    {
+      id: 'd000000000000003', sourceId: 'claude-user', tool: 'Claude Code', sourceLabel: '~/.claude/skills',
+      dirName: 'legacy-notes', dir: SKILL_HOME + '\\.claude\\skills\\legacy-notes', name: 'legacy-notes',
+      description: '旧版会议笔记整理', bytes: 240, suggestedName: 'legacy-notes',
+      importable: true, reason: '', problems: [], present: 'different', presentIn: '~/.pi/agent/skills',
+    },
+    {
+      id: 'd000000000000004', sourceId: 'claude-project', tool: 'Claude Code', sourceLabel: '<项目>/.claude/skills',
+      dirName: 'release-notes', dir: SKILL_PROJECT + '\\.claude\\skills\\release-notes', name: 'release-notes',
+      description: '从提交历史整理发布说明', bytes: 180, suggestedName: 'release-notes',
+      importable: false, reason: '它已经链接在 pi 的技能目录里，不需要导入', problems: [], present: 'linked', presentIn: '',
+    },
+  ],
+});
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -1133,9 +1308,142 @@ const server = http.createServer(async (req, res) => {
     working: 'diff --git a/public/app.js b/public/app.js\n@@ -1,2 +1,2 @@\n-old line\n+new line\n',
     staged: '', truncated: false, limit: 524288, notice: '', context: null,
   });
-  if (p === '/api/skills') return json(res, 200, harnessSkillsPayload());
+  /* 技能视觉验收的形态开关：只改内存夹具，不写任何目录。 */
+  if (p === '/api/__skills/mode' && req.method === 'POST') {
+    let mode = {};
+    try { mode = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { mode = {}; }
+    for (const key of ['trusted', 'empty', 'error']) if (typeof mode[key] === 'boolean') skillsMode[key] = mode[key];
+    return json(res, 200, { ok: true, ...skillsMode });
+  }
+  if (p === '/api/skills' && req.method === 'GET') {
+    if (skillsMode.error) return json(res, 500, { ok: false, code: 'fixture', error: '读取技能失败（视觉夹具模拟）' });
+    return json(res, 200, harnessSkillsPayload());
+  }
+  if (p === '/api/skills/check' && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { body = {}; }
+    const content = body.kind === 'create'
+      ? `---\nname: ${String(body.name || 'new-skill')}\ndescription: ${String(body.description || '')}\n---\n${String(body.body || '')}`
+      : '';
+    return json(res, 200, {
+      ok: true, errors: [], warnings: [], content,
+      bytes: Buffer.byteLength(content || String(body.content || '')),
+    });
+  }
+  if (p === '/api/skills/create' && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { body = {}; }
+    const name = String(body.name || 'new-skill');
+    return json(res, 200, {
+      ok: true, id: 'a0000000000000aa', name, requestedName: name, renamed: false, replaced: false,
+      target: body.target || 'user-pi', targetLabel: '~/.pi/agent/skills', scope: 'user',
+      path: SKILL_AGENT + '\\skills\\' + name + '\\SKILL.md', fileCount: 1, warnings: [],
+      notice: `已创建 ${name}。`, restartRequired: true, undo: 'a'.repeat(24),
+    });
+  }
+  if (p === '/api/skills/import/stage' && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { body = {}; }
+    const files = Array.isArray(body.files) && body.files.length ? body.files : [{ path: 'SKILL.md', data: '' }];
+    const sizeOf = (file) => Math.max(1, Math.round(String((file && file.data) || '').length * 3 / 4));
+    return json(res, 200, {
+      ok: true, stageId: 'b'.repeat(24),
+      plan: {
+        kind: body.kind === 'dir' ? 'dir' : 'file',
+        suggestedName: 'claude-notes', declaredName: 'claude-notes',
+        description: '把会议记录整理成结构化笔记：结论、待办、负责人。',
+        fileCount: files.length, totalBytes: files.reduce((sum, file) => sum + sizeOf(file), 0),
+        files: files.map((file) => ({ path: String(file.path || 'SKILL.md'), size: sizeOf(file) })),
+        skipped: body.kind === 'dir' ? [{ path: '.DS_Store', reason: '隐藏文件' }] : [],
+        problems: [],
+      },
+    });
+  }
+  if (p === '/api/skills/import/commit' && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { body = {}; }
+    const name = String(body.name || 'claude-notes');
+    return json(res, 200, {
+      ok: true, id: 'a0000000000000bb', name, target: body.target || 'user-pi', targetLabel: '~/.pi/agent/skills',
+      fileCount: 1, warnings: [], notice: `已导入 ${name}。`, restartRequired: false, undo: 'c'.repeat(24),
+    });
+  }
+  if (p === '/api/skills/external' && req.method === 'GET') return json(res, 200, EXTERNAL_SCAN);
+  if (p === '/api/skills/external/import' && req.method === 'POST') {
+    await readBody(req);
+    return json(res, 200, {
+      ok: true, imported: 1, skipped: 0, failed: 0, target: 'user-pi', targetLabel: '~/.pi/agent/skills',
+      restartRequired: false, undo: 'e'.repeat(24), notice: '已导入 1 个技能。',
+      results: [{ id: 'd000000000000001', name: 'portable', status: 'imported', error: '' }],
+    });
+  }
+  if (p === '/api/skills/market' && req.method === 'GET') {
+    return json(res, 200, {
+      ok: true, sources: MARKET_SOURCES, entries: MARKET_ENTRIES, categories: MARKET_CATEGORIES,
+      hosts: ['api.github.com', 'cdn.jsdelivr.net', 'data.jsdelivr.com', 'raw.githubusercontent.com'],
+      persistent: true, limits: { maxCustomSources: 20, pageSize: 24 },
+    });
+  }
+  if (p === '/api/skills/market/refresh' && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { body = {}; }
+    const source = MARKET_SOURCES.find((item) => item.id === body.sourceId) || MARKET_SOURCES[0];
+    return json(res, 200, { ok: true, refreshed: true, source });
+  }
+  if (p === '/api/skills/market/sources' && req.method === 'POST') {
+    await readBody(req);
+    return json(res, 200, { ok: true, sources: MARKET_SOURCES });
+  }
+  if (p === '/api/skills/market/preview' && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { body = {}; }
+    return json(res, 200, harnessMarketPreview(body.entryId));
+  }
+  if (p.startsWith('/api/skills/market/preview/') && req.method === 'GET') {
+    const rest = p.slice('/api/skills/market/preview/'.length).split('/');
+    if (rest.length === 2 && rest[1] === 'file') {
+      const relPath = url.searchParams.get('path') || 'SKILL.md';
+      const text = relPath === 'SKILL.md' ? harnessMarketPreview('').content
+        : relPath.endsWith('.md') ? '# 审查清单\n\n- 边界与失败路径\n- 状态由谁持有\n- 回滚方式\n'
+          : 'export const report = () => {};\n';
+      return json(res, 200, { ok: true, path: relPath, binary: false, text, size: Buffer.byteLength(text), truncated: false });
+    }
+    return json(res, 404, { ok: false, error: '找不到这个预览' });
+  }
+  if (p === '/api/skills/market/install' && req.method === 'POST') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { body = {}; }
+    const name = String(body.name || 'code-review');
+    return json(res, 200, {
+      ok: true, id: 'a0000000000000cc', name, target: body.target || 'user-pi', targetLabel: '~/.pi/agent/skills',
+      fileCount: 3, warnings: [], notice: `已安装 ${name}。`, restartRequired: false,
+      undo: '1'.repeat(24), partial: false,
+    });
+  }
+  if (p.startsWith('/api/skills/undo/') && req.method === 'POST') {
+    return json(res, 200, { ok: true, name: 'code-review', warnings: [], restartRequired: false });
+  }
+  if (p.startsWith('/api/skills/') && p.endsWith('/source') && (req.method === 'GET' || req.method === 'PUT')) {
+    const id = decodeURIComponent(p.slice('/api/skills/'.length, p.length - '/source'.length)).replace(/\/$/, '');
+    const rec = HARNESS_SKILLS.find((skill) => skill.id === id);
+    if (!rec) return json(res, 404, { ok: false, error: '找不到这个 skill，刷新一下列表' });
+    if (req.method === 'GET') return json(res, 200, harnessSkillSource(rec));
+    await readBody(req);
+    return json(res, 200, {
+      ok: true, id: rec.id, name: rec.name, notice: `已保存 ${rec.name}。`,
+      warnings: [], restartRequired: true, undo: 'a'.repeat(24),
+    });
+  }
+  if (p.startsWith('/api/skills/') && req.method === 'DELETE') {
+    const id = decodeURIComponent(p.slice('/api/skills/'.length));
+    const rec = HARNESS_SKILLS.find((skill) => skill.id === id);
+    return json(res, 200, {
+      ok: true, id, name: rec ? rec.name : 'skill', notice: `已删除 ${rec ? rec.name : '技能'}。`,
+      warnings: [], restartRequired: true, undo: 'd'.repeat(24),
+    });
+  }
   if (p.startsWith('/api/skills/') && req.method === 'GET') {
-    /* 详情形状照抄 server/skills.js 的 handleDetail；只读，夹具没有写接口。 */
+    /* 详情形状照抄 server/skills.js 的 handleDetail；只读。 */
     const rec = HARNESS_SKILLS.find((skill) => skill.id === decodeURIComponent(p.slice('/api/skills/'.length)));
     if (!rec) return json(res, 404, { ok: false, error: '找不到这个 skill，刷新一下列表' });
     const content = `---\nname: ${rec.name}\ndescription: ${rec.description}\n---\n# ${rec.name}\n\n这是可复现的 SKILL.md 详情。\n`;

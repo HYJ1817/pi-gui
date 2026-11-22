@@ -625,7 +625,7 @@ if (!process.versions.electron) {
       })()`);
       check(JSON.stringify(skillsLayout.groups) === JSON.stringify(['user', 'project']), 'skills page groups 全局级 before 项目级', skillsLayout.groups);
       check(skillsLayout.paths.length === 2 && skillsLayout.paths.every((item) => item.text && item.width > 0), '1320: each skill group header shows its discovery dir', skillsLayout.paths);
-      check(skillsLayout.toolbarSpread < 2, '1320: scope tabs, search, status filter and 刷新 share one toolbar row', skillsLayout);
+      check(skillsLayout.toolbarSpread < 2, '1320: scope tabs, search and project selector share one toolbar row', skillsLayout);
       check(skillsLayout.switches.length === 3 && skillsLayout.switches.every((item) => item && item.inside && item.rightGap >= 10 && item.rightGap <= 18), 'skill switches sit inside their rows at the right edge', skillsLayout.switches);
       check(skillsLayout.dotOnGlyph, 'each skill state dot sits on the bottom-right of its icon', skillsLayout);
       check(skillsLayout.scrollWidth <= skillsLayout.inner + 1, '1320 skills page has no horizontal overflow', skillsLayout);
@@ -696,7 +696,7 @@ if (!process.versions.electron) {
         const card=document.querySelector('.skills-page');
         const rows=[...card.querySelectorAll('.skill-row')];
         return {
-          title:card.querySelector('.settings-page-title')?.textContent,
+          title:card.querySelector('.skills-title')?.textContent,
           headings:[...card.querySelectorAll('h2,h3')].filter(h=>h.textContent==='技能').length,
           rows:rows.length,
           rowsInside:rows.every(r=>{const b=r.getBoundingClientRect();return b.left>=-0.5&&b.right<=innerWidth+0.5}),

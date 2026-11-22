@@ -120,7 +120,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal($('navExtensions').getAttribute('aria-current'), null);
     const skills = d.querySelector('#workSurface .settings-detail-card.skills-page');
     assert.equal(skills.getAttribute('aria-label'), '技能');
-    assert.equal(skills.querySelector('h3.settings-page-title').textContent, '技能');
+    assert.equal(skills.querySelector('.skills-title').textContent, '技能');
     assert.equal(d.querySelector('#workSurface .ext-tab, #workSurface .extensions-tab'), null, 'no extension tabs inside the Skills page');
     $('navGlobalMore').click();
   });

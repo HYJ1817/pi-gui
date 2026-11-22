@@ -39,7 +39,8 @@ const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|
 
 const SKILLS_DIR = path.join(PUB, 'skills');
 const EXT_DIR = path.join(PUB, 'extensions');
-const SKILL_FILES = ['model.js', 'detail.js', 'page.js'].map((name) => path.join(SKILLS_DIR, name));
+const SKILL_FILES = ['model.js', 'detail.js', 'editor.js', 'import.js', 'external.js', 'market.js', 'page.js']
+  .map((name) => path.join(SKILLS_DIR, name));
 const EXT_FILES = ['model.js', 'installed.js', 'market.js', 'page.js', 'market-model.js', 'operations.js', 'package-detail.js', 'parts.js'].map((name) => path.join(EXT_DIR, name));
 const REPORT = path.join(PUB, 'mcp-report.js');
 const MCP_PAGE = path.join(PUB, 'mcp-settings.js');
@@ -104,6 +105,13 @@ const SKILLS = {
   globalSettings: AGENT + '\\settings.json', projectSettings: PROJECT + '\\.pi\\settings.json',
   trust: { trusted: true, requiresTrust: true, reason: 'trusted', trustFile: AGENT + '\\trust.json' },
   piReachable: true,
+  context: { project: 'c000000000000099', live: true },
+  projects: [{ id: 'c000000000000099', name: 'Fixture project', path: PROJECT, active: true }],
+  targets: [
+    { key: 'user-pi', scope: 'user', mode: 'pi', dir: AGENT + '\\skills', label: '~/.pi/agent/skills', exists: true, writable: true, blockedCode: '', blockedReason: '', notice: '' },
+    { key: 'project-pi', scope: 'project', mode: 'pi', dir: PROJECT + '\\.pi\\skills', label: '<项目>/.pi/skills', exists: true, writable: true, blockedCode: '', blockedReason: '', notice: '' },
+  ],
+  trashAvailable: true,
   roots: [
     { label: '~/.pi/agent/skills', dir: AGENT + '\\skills', scope: 'user', mode: 'pi', exists: true, blockedByTrust: false },
     { label: '<项目>/.pi/skills', dir: PROJECT + '\\.pi\\skills', scope: 'project', mode: 'pi', exists: true, blockedByTrust: false },
@@ -207,9 +215,17 @@ function createWorld(label, entry) {
   const routes = new Map();
   const pending = new Map();
   const matchRoute = (method, url) => {
-    if (routes.has(`${method} ${url}`)) return `${method} ${url}`;
+    /* 完整 URL 优先（扩展市场的用例按完整查询串注册），再回退到裸路径
+     * （技能页会带 ?project=<id>，不要求每个用例把查询参数抄全）。 */
+    const full = `${method} ${String(url)}`;
+    if (routes.has(full)) return full;
     for (const key of routes.keys()) {
-      if (key.endsWith('*') && `${method} ${url}`.startsWith(key.slice(0, -1))) return key;
+      if (key.endsWith('*') && full.startsWith(key.slice(0, -1))) return key;
+    }
+    const target = `${method} ${String(url).split('?')[0]}`;
+    if (routes.has(target)) return target;
+    for (const key of routes.keys()) {
+      if (key.endsWith('*') && target.startsWith(key.slice(0, -1))) return key;
     }
     return null;
   };
@@ -245,7 +261,19 @@ function createWorld(label, entry) {
       queue.shift()(clone(value));
     },
     pendingCount: (key) => (pending.get(key) || []).length,
-    count: (method, url) => calls.filter((call) => call.method === method && (url.endsWith('*') ? call.url.startsWith(url.slice(0, -1)) : call.url === url)).length,
+    count(method, url) {
+      const want = String(url);
+      const wantPath = want.split('?')[0];
+      return calls.filter((call) => {
+        if (call.method !== method) return false;
+        if (want.endsWith('*')) {
+          const base = want.slice(0, -1);
+          return call.url.startsWith(base) || (!base.includes('?') && call.url.split('?')[0].startsWith(base));
+        }
+        // 带查询串的期望必须完整相等；裸路径期望允许页面附加 ?project=。
+        return call.url === want || (!want.includes('?') && call.url.split('?')[0] === wantPath);
+      }).length;
+    },
     listenerCount: (type) => listeners.get(type)?.size || 0,
     confirmButton(label) { return [...d.querySelectorAll('#confirmCard .btn')].find((button) => button.textContent === label); },
     /** 用例之间清场：上一条失败留下的挂起请求与确认框不能串到下一条。 */
@@ -286,12 +314,17 @@ function createWorld(label, entry) {
 
   await check('each page reads only its own fact source, only through api.js', () => {
     const allowed = new Map([
-      [path.join(SKILLS_DIR, 'page.js'), ['fetchSkills', 'restartBackend', 'setSkillEnabled']],
+      [path.join(SKILLS_DIR, 'page.js'), ['deleteSkill', 'fetchSkills', 'restartBackend', 'setSkillEnabled', 'undoSkillChange']],
       [path.join(SKILLS_DIR, 'detail.js'), ['fetchSkillDetail']],
+      [path.join(SKILLS_DIR, 'editor.js'), ['checkSkill', 'createSkill', 'fetchSkillSource', 'saveSkill']],
+      [path.join(SKILLS_DIR, 'import.js'), ['commitSkillImport', 'stageSkillImport']],
+      [path.join(SKILLS_DIR, 'external.js'), ['importExternalSkills', 'scanExternalSkills']],
+      [path.join(SKILLS_DIR, 'market.js'), ['fetchSkillMarket', 'fetchSkillMarketFile', 'installSkillMarketEntry', 'previewSkillMarketEntry', 'refreshSkillMarket', 'skillMarketSources']],
       [path.join(EXT_DIR, 'installed.js'), ['fetchApprovalCapability', 'fetchExtensionPackages', 'fetchExtensions']],
       [path.join(EXT_DIR, 'market.js'), ['extensionMarketAction', 'fetchExtensionMarket']],
       [path.join(EXT_DIR, 'operations.js'), ['extensionPackageAction']],
       [path.join(EXT_DIR, 'package-detail.js'), ['fetchExtensionMarketItem', 'fetchExtensionPackages']],
+
       [REPORT, ['fetchMcp']],
     ]);
     for (const file of NEW_MODULES) {
@@ -510,7 +543,7 @@ function createWorld(label, entry) {
     A.w.beginWorkspaceSwitch('C:\\fixture\\other');
     A.release('GET /api/skills', SKILLS);
     await tick();
-    const body = page.card.querySelector('.skills-body');
+    const body = page.card.querySelector('.skills-content');
     assert.equal(page.card.querySelectorAll('.skill-row').length, 0, 'old project rows must not render');
     assert.match(body.textContent, /项目已切换，刷新后查看当前项目的技能/);
     const refresh = [...body.querySelectorAll('button')].find((button) => button.textContent === '刷新');
@@ -530,7 +563,7 @@ function createWorld(label, entry) {
     assert.equal(page.card.querySelectorAll('.skill-toggle').length, 3);
     A.w.beginWorkspaceSwitch('C:\\fixture\\third');
     assert.equal(page.card.querySelectorAll('.skill-row, .skill-toggle').length, 0, 'no switch may act on the old project');
-    assert.match(page.card.querySelector('.skills-body').textContent, /项目已切换/);
+    assert.match(page.card.querySelector('.skills-content').textContent, /项目已切换/);
     page.close();
   });
 
@@ -610,14 +643,15 @@ function createWorld(label, entry) {
     page.close();
   });
 
-  await skillsCheck('Skills: a confirmation answered after closing the page or switching projects writes nothing', async () => {
+  await skillsCheck('Skills: closing the page or switching workspaces dismisses confirmation and writes nothing', async () => {
     A.answer('GET /api/skills', SKILLS);
     let page = mountSkills();
     await tick();
     rowOf(page.card, 'code-review').querySelector('.skill-toggle').click();
     await tick();
+    assert.ok(A.confirmButton('停用'));
     page.close();
-    A.confirmButton('停用').click();
+    assert.equal(A.$('confirmLayer').hidden, true);
     await tick();
     assert.equal(A.count('PUT', '/api/skills/*'), 0, 'closed page must not write');
 
@@ -625,17 +659,19 @@ function createWorld(label, entry) {
     await tick();
     rowOf(page.card, 'code-review').querySelector('.skill-toggle').click();
     await tick();
+    assert.ok(A.confirmButton('停用'));
     A.w.beginWorkspaceSwitch('C:\\fixture\\fourth');
-    A.confirmButton('停用').click();
+    assert.equal(A.$('confirmLayer').hidden, true);
     await tick();
     assert.equal(A.count('PUT', '/api/skills/*'), 0, 'a switch to another project must not write the old settings');
-    assert.match(page.card.querySelector('.skills-body').textContent, /项目已切换/);
+    assert.match(page.card.querySelector('.skills-content').textContent, /项目已切换/);
     page.close();
   });
 
-  await skillsCheck('Skills: a confirmed toggle writes once, asks before restarting pi, then re-reads the list', async () => {
+  await skillsCheck('Skills: a confirmed toggle writes once, offers restart inline, then re-reads the list', async () => {
     A.answer('GET /api/skills', SKILLS);
     A.answer('PUT /api/skills/*', { ok: true, restartRequired: true, warnings: [] });
+    A.answer('POST /api/restart', { ok: true });
     const page = mountSkills();
     await tick();
     const reads = A.count('GET', '/api/skills');
@@ -645,12 +681,19 @@ function createWorld(label, entry) {
     await tick();
     const puts = A.calls.filter((call) => call.method === 'PUT');
     assert.equal(puts.length, 1);
-    assert.equal(puts[0].url, '/api/skills/a000000000000001');
+    assert.equal(puts[0].url, '/api/skills/a000000000000001?project=c000000000000099');
     assert.deepEqual(puts[0].body, { enabled: false });
-    assert.match(A.$('confirmCard').textContent, /需要重启 pi 才生效/);
-    A.confirmButton('取消').click();
+    const notice = page.card.querySelector('.skills-notice');
+    assert.ok(notice, 'the result is inline, not a toast');
+    assert.match(notice.textContent, /已停用 code-review/);
+    assert.match(notice.textContent, /重启后生效/);
+    assert.equal(A.count('POST', '/api/restart'), 0, 'restart waits for an explicit click');
+    const restart = [...notice.querySelectorAll('button')].find((button) => button.textContent === '重启 pi');
+    assert.ok(restart, 'the notice offers 重启 pi');
+    restart.click();
     await tick();
-    assert.equal(A.count('POST', '/api/restart'), 0, 'declining the restart sends no restart');
+    assert.equal(A.count('POST', '/api/restart'), 1, 'clicking 重启 pi sends the restart');
+    assert.match(page.card.querySelector('.skills-notice').textContent, /已请求重启 pi/);
     assert.equal(A.count('GET', '/api/skills'), reads + 1, 'the list is re-read once after the write');
     page.close();
     assert.equal(A.listenerCount(GEN), SKILL_GEN_BASE);
@@ -660,12 +703,16 @@ function createWorld(label, entry) {
     A.answer('GET /api/skills', SKILLS);
     const page = mountSkills();
     await tick();
-    assert.deepEqual([...page.card.querySelectorAll('h1, h2, h3')].map((node) => node.textContent), ['技能'],
-      'one page title, no second heading');
-    assert.equal(page.card.querySelector('.skills-head').childElementCount, 1, 'no description banner under the title');
+    assert.equal(page.card.querySelectorAll('h1, h2').length, 1, 'one page title');
+    assert.equal(page.card.querySelector('.skills-title').textContent, '技能');
+    assert.equal(page.card.querySelector('.settings-page-title'), null, 'the page uses its own title, not the 30px settings title');
+    assert.equal(page.card.querySelector('.skills-head-count').textContent, '3 个技能');
     assert.equal(page.card.querySelectorAll('.ext-tabs, .ext-tab').length, 0, 'the old mixed tab strip is gone');
     assert.deepEqual([...page.card.querySelector('.skills-toolbar').children].map((node) => node.classList[0]),
-      ['ds-segmented', 'skills-search', 'ds-select', 'skills-toolbar-actions']);
+      ['ds-segmented', 'skills-search', 'skills-project']);
+    assert.deepEqual([...page.card.querySelectorAll('.skills-actions-bar .btn span')].map((node) => node.textContent),
+      ['扫描', '新建', '市场']);
+    assert.equal(page.card.querySelector('.skills-project-select').value, 'c000000000000099');
     const seg = (value) => page.card.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
     const segText = (value) => [seg(value).querySelector('.ds-segment-label').textContent, seg(value).querySelector('.ds-segment-count').textContent];
     assert.deepEqual(['', 'user', 'project'].map(segText), [['全部', '3'], ['全局', '2'], ['项目', '1']]);
@@ -683,13 +730,12 @@ function createWorld(label, entry) {
       ['project', '项目级', '<项目>/.pi/skills', PROJECT + '\\.pi\\skills', '1', ['proj-lint']],
     ], 'server order inside each group; the group path is the discovery dir, its title the full dir');
     const badges = (name) => [...rowOf(page.card, name).querySelectorAll('.ds-badge')].map((node) => [node.textContent, node.className]);
-    assert.deepEqual(badges('code-review'), [['全局', 'ds-badge ds-badge-neutral']], 'an enabled skill carries its scope; the switch says it is on');
-    assert.deepEqual(badges('pdf-tools'), [['全局', 'ds-badge ds-badge-neutral'], ['已停用', 'ds-badge ds-badge-neutral']]);
+    assert.deepEqual(badges('code-review'), [['已加载', 'ds-badge ds-badge-success']], 'only the confirmed runtime status is shown');
+    assert.deepEqual(badges('pdf-tools'), [['已停用', 'ds-badge ds-badge-neutral']]);
     const pdf = rowOf(page.card, 'pdf-tools');
-    assert.equal(pdf.querySelector('.skill-row-note').textContent, '被 settings 里的 -skills/pdf-tools/SKILL.md 关掉了', 'why it is off sits under the name');
+    assert.equal(pdf.querySelector('.skill-row-note'), null, 'why it is off is technical detail: it belongs in the expanded detail');
     assert.ok(pdf.querySelector('.skill-glyph .ext-dot').classList.contains('off'));
     const review = rowOf(page.card, 'code-review');
-    assert.equal(review.querySelector('.skill-row-note'), null);
     assert.equal(review.querySelector('.skill-row-desc').textContent, 'Review source code for bugs');
     const main = review.querySelector('.skill-row-main');
     assert.equal(main.getAttribute('aria-expanded'), 'false');
@@ -716,10 +762,7 @@ function createWorld(label, entry) {
     assert.deepEqual([...page.card.querySelectorAll('.skills-group')].map((node) => node.dataset.scope), ['user'],
       'while searching only groups with matches remain');
     type('');
-    const status = page.card.querySelector('.skills-status');
-    status.value = 'problem';
-    status.dispatchEvent(new A.w.Event('change', { bubbles: true }));
-    assert.deepEqual([...page.card.querySelectorAll('.skills-empty')].map((node) => node.textContent), ['没有符合筛选条件的技能']);
+    assert.deepEqual([...page.card.querySelectorAll('.skills-group')].map((node) => node.dataset.scope), ['user', 'project']);
     page.close();
 
     A.answer('GET /api/skills', { ...userOnly, hasProject: false, cwd: '', projectSettings: null, roots: SKILLS.roots.filter((root) => root.scope === 'user') });
@@ -753,7 +796,7 @@ function createWorld(label, entry) {
     seg('temporary').click();
     assert.deepEqual([...page.card.querySelectorAll('.skills-group')].map((node) => node.dataset.scope), ['temporary']);
     A.answer('GET /api/skills', SKILLS);
-    [...page.card.querySelectorAll('.skills-toolbar button')].find((button) => button.textContent === '刷新').click();
+    page.card.querySelector('.skills-head .skills-icon-btn[aria-label="刷新技能列表"]').click();
     await tick();
     assert.equal(seg('temporary').hidden, true);
     assert.equal(seg('').getAttribute('aria-checked'), 'true', 'a hidden tab cannot stay selected');
@@ -771,6 +814,7 @@ function createWorld(label, entry) {
         : item)),
     };
     A.answer('GET /api/skills', untrusted);
+    A.answer('GET /api/skills/*', { ...SKILL_DETAIL, skill: untrusted.skills[0], content: 'Fixture body of proj-lint' });
     const page = mountSkills();
     await tick();
     const notes = [...page.card.querySelectorAll('.skills-notes .cfg-note')].map((node) => node.textContent);
@@ -778,9 +822,11 @@ function createWorld(label, entry) {
     assert.match(notes[0], /当前项目未被信任/);
     const lint = rowOf(page.card, 'proj-lint');
     assert.deepEqual([...lint.querySelectorAll('.ds-badge')].map((node) => [node.textContent, node.className]),
-      [['项目', 'ds-badge ds-badge-neutral'], ['未加载（项目未信任）', 'ds-badge ds-badge-warning']]);
-    assert.equal(lint.querySelector('.skill-row-note').textContent, '项目未被信任：pi 在非交互模式下不加载项目级资源');
-    assert.ok(lint.querySelector('.skill-row-note').classList.contains('is-warn'));
+      [['未加载（项目未信任）', 'ds-badge ds-badge-warning']]);
+    assert.equal(lint.querySelector('.skill-row-note'), null, 'the trust reason is technical detail, not row noise');
+    lint.querySelector('.skill-row-main').click();
+    await tick();
+    assert.match(page.card.querySelector('.skill-detail').textContent, /项目未被信任：pi 在非交互模式下不加载项目级资源/);
     page.close();
   });
 

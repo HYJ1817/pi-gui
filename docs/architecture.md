@@ -395,7 +395,11 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
   - `quota.js` — 供应商远端额度 (`RemoteQuota`) 与官方适配器 (OpenRouter / DeepSeek / NewAPI)，TTL 缓存，密钥脱敏，按需刷新。无官方公开端点一律 unsupported。见 [usage-quota.md](usage-quota.md)
   - `skills.js` — Skill 的发现 / 详情 / 启停。**移植 pi 自己的规则**（发现位置、
     两种 collect 模式、同名优先级、信任闸门、override 语法），每条都注明源码出处。
-    见 [extensions.md](extensions.md)
+    2A 的写入侧拆在同级模块：`skills-routes.js`（`/api/skills/*` 路由）、`skills-manage.js`
+    （新建 / 编辑 / 删除 / 撤销与信任判定）、`skills-document.js`（SKILL.md 解析与合成）、
+    `skills-files.js`（原子落盘、回收站）、`skills-import.js` / `skills-external.js`（导入与扫描）、
+    `skills-market*.js`（目录、网络与预览令牌）。`skills.js` 仍是加载状态的唯一事实来源。
+    见 [agent-capabilities.md](agent-capabilities.md)
    - `mcp.js` — MCP **能力报告**（不是 MCP 管理器）。去读**与 launch identity
      绑定的**那份 pi 包、给出「支不支持」的结论与原文证据，并列出官方替代路径
      extension 下已有哪些东西。**只读名字，不读内容、不执行**。
@@ -512,8 +516,9 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
   设置缓存、手动「AI 生成标题」与任意会话重命名入口；经典会话行与
   `runtime-nav.js` 的并行会话行共用该入口与同一个后端服务，
   不重建列表、不改排序
-- `extensions/` 扩展页（「已安装」通用 Registry +「插件市场」占位）/ `skills/` 技能设置页 /
-  `mcp-report.js` MCP 配置页页尾的能力报告 / `ui/resource-dom.js` 三者共用的造节点工具
+- `extensions/` 扩展页（「已安装」通用 Registry +「插件市场」占位）/ `skills/` 技能页
+  （列表、行内详情、新建 / 编辑、导入、扫描、市场）/ `mcp-report.js` MCP 配置页页尾的能力报告 /
+  `ui/resource-dom.js` 三者共用的造节点工具
   （入口与归属见 [agent-capabilities.md](agent-capabilities.md)）/
   `planner.js` 任务面板 / `project-config.js` 项目设置
 - `capability-model.js` 纯投影（四值状态、**适用性收口**、结论行、过滤器、
@@ -615,7 +620,9 @@ anthropic/claude-sonnet-4|Claude Sonnet 4|contextWindow=200000|maxTokens=64000|r
 | `<项目>/.pi-gui/config.json` | 项目偏好 | Pi GUI（跟着项目走） |
 | `~/.pi/agent/models.json` | 模型供应商与 API Key | pi（Pi GUI 代写，不额外存） |
 | `~/.pi/agent/sessions/<cwd 编码>/` | 会话 `.jsonl` | **pi** |
-| `~/.pi/agent/skills/`、`<项目>/.pi/skills/` | Skills | 用户 |
+| `~/.pi/agent/skills/`、`~/.agents/skills/`、`<项目>/.pi/skills/`、`<项目>/.agents/skills/` | Skills | 用户；Pi GUI 在确认后写入（可撤销） |
+| `<PI_GUI_DATA>/skills-trash/` | 删除 / 覆盖 / 编辑前的技能备份（撤销令牌在内存里，30 分钟） | Pi GUI |
+| `<PI_GUI_DATA>/skills-market/` | 市场目录缓存与自定义目录源 | Pi GUI |
 
 `PI_GUI_DATA` 缺省是「代码/exe 所在目录」：开发时是项目根，单文件 exe 是便携模式，
 Electron 版由主进程指到 `%APPDATA%\Pi GUI`（装在 Program Files 下时那里不可写）。

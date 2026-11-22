@@ -56,6 +56,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { json, readBody } from './http-utils.js';
+import { readFrontmatterScalar } from './skills-document.js';
+import { createSkillsRoutes } from './skills-routes.js';
 
 const CONFIG_DIR = '.pi';
 const SKILL_FILE = 'SKILL.md';
@@ -133,8 +135,18 @@ function parseFrontmatter(text) {
       (value.startsWith('"') && value.endsWith('"') && value.length >= 2) ||
       (value.startsWith("'") && value.endsWith("'") && value.length >= 2)
     ) {
+      const quoted = value;
       value = value.slice(1, -1);
-      if (m[2].trim().startsWith('"')) value = value.replace(/\\"/g, '"').replace(/\\n/g, '\n');
+      if (quoted.startsWith('"')) {
+        // 双引号标量先按 JSON 读（技能编辑器写出去的就是这种写法，含 \\ 与 \"）；读不了再退回宽松处理
+        let parsed;
+        try {
+          parsed = JSON.parse(quoted);
+        } catch {
+          parsed = undefined;
+        }
+        value = typeof parsed === 'string' ? parsed : value.replace(/\\"/g, '"').replace(/\\n/g, '\n');
+      }
     }
     out[key] = value;
   }
@@ -314,8 +326,11 @@ function nearestTrustDecision(trustFile, cwd) {
  *
  * 这里**不**模拟扩展的 project_trust 事件（那要跑扩展，代价与风险都不值）。
  * 真到那一步时结论会偏保守（显示未信任），不会把没生效的说成生效。
+ *
+ * assumeResources：按「项目里已经有需要信任的资源」来判定 —— 写入项目级技能之前，
+ * 用它预知「写完之后 pi 还信不信任这个项目」。
  */
-function readTrustState({ cwd, agentDir, homeDir, trustOverride }) {
+function readTrustState({ cwd, agentDir, homeDir, trustOverride, assumeResources = false }) {
   const trustFile = path.join(agentDir, 'trust.json');
   const settingsFile = path.join(agentDir, 'settings.json');
   const base = { trustFile, trustOverride: trustOverride ?? null };
@@ -325,7 +340,7 @@ function readTrustState({ cwd, agentDir, homeDir, trustOverride }) {
   if (trustOverride === true || trustOverride === false) {
     return { ...base, trusted: trustOverride, reason: trustOverride ? 'approve-flag' : 'no-approve-flag', requiresTrust: true };
   }
-  const requiresTrust = hasTrustRequiringProjectResources(cwd, homeDir);
+  const requiresTrust = assumeResources || hasTrustRequiringProjectResources(cwd, homeDir);
   if (!requiresTrust) {
     return { ...base, trusted: true, reason: 'no-project-resources', requiresTrust: false };
   }
@@ -452,6 +467,17 @@ function skillId(absPath) {
   return crypto.createHash('sha1').update(pathKey(absPath)).digest('hex').slice(0, 16);
 }
 
+/**
+ * frontmatter 里的某个键是不是 YAML 的布尔 true。
+ * pi 用 `=== true` 判定，所以带引号的 "true" 不算；列表解析把值都读成字符串，判断不了这个。
+ */
+function frontmatterFlag(text, key) {
+  if (typeof text !== 'string') return false;
+  const normalized = (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).replace(/\r\n?/g, '\n');
+  const scalar = readFrontmatterScalar(normalized, key);
+  return Boolean(scalar.found && scalar.ok && scalar.style === 'plain' && /^(?:true|True|TRUE)$/.test(scalar.value));
+}
+
 function readSettings(file) {
   try {
     const raw = fs.readFileSync(file, 'utf8');
@@ -489,13 +515,19 @@ function writeSettingsAtomic(file, data) {
  * @param env     环境变量来源，默认 process.env（读 PI_CODING_AGENT_DIR）。
  * @param homeDir 用户主目录，默认 process.env.HOME || os.homedir()（与 pi 的 getHomeDir 一致）。
  * @param approve 是否以 `--approve` 启动 pi（决定项目级资源的信任 override）。默认 null = 不由我们决定。
+ * @param dataDir Pi GUI 的数据目录：技能回收站与市场缓存放在它下面。不传时删除 / 覆盖 / 编辑一律拒绝。
+ * @param getProjects 返回项目列表 [{ path, name }]；技能页的项目选择器只能在这些项目里选。
+ * @param marketFetcher 市场的取数实现，测试注入（生产环境用真实的网络层）。
  */
-export function createSkills({ runtime, rpc = null, env = process.env, homeDir = null, approve = null }) {
+export function createSkills({
+  runtime, rpc = null, env = process.env, homeDir = null, approve = null, dataDir = null, getProjects = null, marketFetcher = null,
+}) {
   const HOME = homeDir || env.HOME || os.homedir();
   const AGENT_DIR = env.PI_CODING_AGENT_DIR || path.join(HOME, CONFIG_DIR, 'agent');
 
-  function paths() {
-    const cwd = runtime.getCurrentCwd();
+  /** cwdOverride：技能页查看 / 管理的项目（不一定是当前工作区）；不传就是当前工作区。 */
+  function paths(cwdOverride) {
+    const cwd = cwdOverride === undefined ? runtime.getCurrentCwd() : cwdOverride;
     return {
       cwd,
       agentDir: AGENT_DIR,
@@ -645,7 +677,7 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
       source: root.source,
       mode: root.mode,
       rootLabel: root.label,
-      disableModelInvocation: Boolean(fm && fm['disable-model-invocation'] === true),
+      disableModelInvocation: frontmatterFlag(text, 'disable-model-invocation'),
       license: fm && typeof fm.license === 'string' ? fm.license : '',
       compatibility: fm && typeof fm.compatibility === 'string' ? fm.compatibility : '',
       errors,
@@ -657,11 +689,13 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
    * 组装完整列表。**一次 RPC 往返 + 一次文件系统扫描**，之后所有按 ID 的操作
    * 都在这份索引里查 —— 这也是「前端传不了路径」的实现基础。
    */
-  async function buildIndex() {
-    const p = paths();
+  async function buildIndex(context = null) {
+    const p = paths(context ? context.cwd : undefined);
     const trust = readTrustState({ cwd: p.cwd, agentDir: p.agentDir, homeDir: HOME, trustOverride: approve });
     const { roots, byPath } = enumerate(p);
-    const piSide = await loadFromPi();
+    // 查看的不是 pi 正在运行的那个工作区时，pi 报的加载集与它无关 —— 不问，加载状态如实标为未知
+    const live = !context || context.live !== false;
+    const piSide = live ? await loadFromPi() : { reachable: false, skills: null };
 
     const globalSettingsRead = readSettings(p.globalSettings);
     const projectSettingsRead = p.projectSettings ? readSettings(p.projectSettings) : { exists: false, data: {}, error: '' };
@@ -749,7 +783,7 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
         }
       } else if (loaded === null) {
         state = 'unknown';
-        stateNote = 'pi 未运行，无法确认加载状态';
+        stateNote = live ? 'pi 未运行，无法确认加载状态' : '查看的不是 pi 正在运行的那个工作区，无法确认加载状态';
       }
 
       skills.push({
@@ -792,6 +826,8 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
       for (const [name, cmd] of piSide.skills) {
         if (seen.has(name)) continue;
         const si = cmd.sourceInfo || {};
+        // 刚被删掉（或挪走）的技能：pi 还加载着启动时读到的那一份，直到重启
+        const gone = Boolean(si.path) && !fs.existsSync(String(si.path));
         skills.push({
           id: skillId(String(si.path || `pi:${name}`)),
           name,
@@ -808,7 +844,9 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
           baseDir: si.baseDir || '',
           loaded: true,
           state: 'enabled',
-          stateNote: '由 pi 报告为已加载（Pi GUI 未在磁盘发现它，可能来自 package）',
+          stateNote: gone
+            ? 'pi 仍然加载着它，但它的文件已经不在磁盘上了；重启 pi 之后它会从列表里消失'
+            : '由 pi 报告为已加载（Pi GUI 未在磁盘发现它，可能来自 package）',
           disablePattern: '',
           settingsPath: null,
           toggleable: false,
@@ -888,10 +926,10 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
     };
   }
 
-  async function handleList(res) {
+  async function handleList(res, context) {
     try {
-      const idx = await buildIndex();
-      return json(res, 200, listPayload(idx));
+      const idx = await buildIndex(context);
+      return json(res, 200, routes.listExtras(listPayload(idx), idx, context));
     } catch (err) {
       // 整页打不开是最糟的结果，所以这里兜底成 200 + 空列表 + 一条诊断
       return json(res, 200, {
@@ -903,8 +941,8 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
     }
   }
 
-  async function handleDetail(res, id) {
-    const idx = await buildIndex();
+  async function handleDetail(res, id, context) {
+    const idx = await buildIndex(context);
     const rec = idx.index.get(id);
     if (!rec) {
       return json(res, 404, { ok: false, error: '找不到这个 skill（可能刚被删掉或改名，刷新一下列表）' });
@@ -953,8 +991,8 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
   }
 
   /** 启停：往 pi 官方的 settings.json 里增删**我们自己那一条精确模式**。 */
-  async function handleToggle(res, id, payload) {
-    const idx = await buildIndex();
+  async function handleToggle(res, id, payload, context) {
+    const idx = await buildIndex(context);
     const rec = idx.index.get(id);
     if (!rec) return json(res, 404, { ok: false, error: '找不到这个 skill，刷新一下列表' });
     if (!rec.toggleable || !rec.settingsPath || !rec.disablePattern) {
@@ -1017,6 +1055,8 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
     }
     if (!changed) warnings.push('设置本来就是这个样子，没有改动文件');
 
+    // 改的是另一个项目自己的 settings.json：pi 没有为它运行，没有什么可重启的
+    const affectsRunningPi = rec.scope !== 'project' || context.live !== false;
     return json(res, 200, {
       ok: true,
       path: rec.settingsPath,
@@ -1025,19 +1065,55 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
       changed,
       warnings,
       // 改的是 pi 的 settings，而 pi 只在启动时读它（没有文件监听）→ 必须重启
-      restartRequired: changed,
-      note: changed ? '已保存。pi 只在启动时读 settings.json，需要重启 pi 才会生效。' : '',
+      restartRequired: changed && affectsRunningPi,
+      note: !changed ? '' : affectsRunningPi
+        ? '已保存。pi 只在启动时读 settings.json，需要重启 pi 才会生效。'
+        : '已保存。下次在这个项目里启动 pi 时生效。',
     });
   }
 
+  /* 新建 / 编辑 / 删除 / 导入 / 扫描 / 市场的路由在 skills-routes.js；
+   * 它需要的只读能力从这里注入（它不能反过来 import 本模块）。 */
+  const routes = createSkillsRoutes({
+    core: {
+      paths,
+      buildIndex,
+      readTrustState,
+      approve,
+      // 只有 pi 确实在运行，才谈得上「需要重启才生效」
+      isPiRunning: () => {
+        try {
+          return Boolean(rpc && typeof rpc.getState === 'function' && rpc.getState().piRunning);
+        } catch {
+          return false;
+        }
+      },
+      skillId,
+      pathKey,
+      validateName,
+      maxSkillBytes: MAX_SKILL_BYTES,
+      maxDescriptionLength: MAX_DESCRIPTION_LENGTH,
+      currentCwd: () => runtime.getCurrentCwd() || '',
+      getProjects,
+    },
+    dataDir,
+    env,
+    fetcher: marketFetcher,
+  });
+
   async function handle(req, res, url) {
+    // 这次请求针对哪个项目（?project=）。不合法时 contextOf 已经应答
+    const context = routes.contextOf(res, url);
+    if (!context) return undefined;
+    if (routes.owns(req, url)) return routes.handle(req, res, url, context);
+
     const rest = url.pathname.replace(/^\/api\/skills\/?/, '');
     const id = rest ? decodeURIComponent(rest) : '';
 
-    if (req.method === 'GET' && !id) return handleList(res);
+    if (req.method === 'GET' && !id) return handleList(res, context);
     if (req.method === 'GET' && id) {
       if (id.length > 64) return json(res, 400, { ok: false, error: 'ID 不合法' });
-      return handleDetail(res, id);
+      return handleDetail(res, id, context);
     }
     if (req.method === 'PUT' && id) {
       if (id.length > 64) return json(res, 400, { ok: false, error: 'ID 不合法' });
@@ -1053,7 +1129,7 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
         return json(res, 400, { ok: false, error: 'enabled 必须是布尔值' });
       }
       try {
-        return await handleToggle(res, id, payload);
+        return await handleToggle(res, id, payload, context);
       } catch (err) {
         return json(res, 500, { ok: false, error: `操作失败：${err.message}` });
       }
@@ -1063,8 +1139,10 @@ export function createSkills({ runtime, rpc = null, env = process.env, homeDir =
 
   return {
     handle,
-    // 供测试与其它模块使用
-    readIndex: buildIndex,
+    // 供测试与其它模块使用。不接受参数：读的永远是当前工作区（它也是全仓库项目信任的唯一来源）
+    readIndex: () => buildIndex(),
+    /** 把桌面端的代理线路接进技能市场（server.js 在网络桥就绪后调用一次）。 */
+    configureMarket: (options) => routes.configureMarket(options),
     _internals: {
       parseFrontmatter,
       collectSkillEntries,

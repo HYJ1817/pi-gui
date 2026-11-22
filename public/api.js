@@ -595,20 +595,62 @@ export const restoreAllGitPaths = ({ deleteUntracked = false, unstage = false, p
 /** 只做校验并拿回绝对路径；真正「用系统默认程序打开」由 Electron 侧完成。 */
 export const resolveGitOpenTarget = (path) => sendJSON('/api/git/open', { headers: gitScopeHeaders(), body: { path } });
 
-/* ---------- 扩展能力（Skills / MCP） ---------- */
+/* ---------- Skills（列表 / 详情 / 启停 + 第二阶段 A 的管理接口） ----------
+ *
+ * 管理接口显式带 `?project=<项目 ID>|none`：技能页的项目选择器只是换一个
+ * **查看 / 管理** 的对象，不切换真实工作区。写操作缺这个参数，服务端直接 400；
+ * 页面看到的项目与服务端写入的项目因此不会对不上。 */
+const skillsUrl = (path, project) => path + (project ? '?project=' + encodeURIComponent(project) : '');
 
 /** 当前可用的 Skills。后端会自己去问 pi（get_commands）确认哪些真的加载了，
  *  所以这个接口可能比普通 GET 慢一点（一次 RPC 往返）。 */
-export const fetchSkills = () => getJSON('/api/skills');
+export const fetchSkills = (project) => getJSON(skillsUrl('/api/skills', project));
 
-/** 单个 Skill 的详情（含 SKILL.md 正文）。id 是后端给的稳定 ID ——
+/** 单个 Skill 的详情（含 SKILL.md 正文供编辑器读取）。id 是后端给的稳定 ID ——
  *  前端**不传路径**，路径由后端在自己的索引里查。 */
-export const fetchSkillDetail = (id) => getJSON('/api/skills/' + encodeURIComponent(id));
+export const fetchSkillDetail = (id, project) => getJSON(skillsUrl('/api/skills/' + encodeURIComponent(id), project));
+
+/** 编辑器读取可写的 SKILL.md 源文件：正文、表单投影、换行 / BOM、baseHash。
+ *  只有落在可写技能目录里的技能才有这个接口的结果；只读技能会返回 403 与原因。 */
+export const fetchSkillSource = (id, project) =>
+  getJSON(skillsUrl('/api/skills/' + encodeURIComponent(id) + '/source', project));
 
 /** 启用 / 停用。后端会写进 pi 官方的 settings.json（用户级写全局、项目级写项目），
  *  返回里带 restartRequired —— pi 只在启动时读 settings，所以要重启才生效。 */
-export const setSkillEnabled = (id, enabled) =>
-  sendJSON('/api/skills/' + encodeURIComponent(id), { method: 'PUT', body: { enabled } });
+export const setSkillEnabled = (id, enabled, project) =>
+  sendJSON(skillsUrl('/api/skills/' + encodeURIComponent(id), project), { method: 'PUT', body: { enabled } });
+
+/** 新建：{ name, description, body, target, ... }，服务端校验名称与 frontmatter。 */
+export const createSkill = (project, body) => sendJSON(skillsUrl('/api/skills/create', project), { body });
+/** 只校验、不落盘（编辑器实时提示用）。project 决定「同名检查」看的是哪个项目。 */
+export const checkSkill = (project, body) => sendJSON(skillsUrl('/api/skills/check', project), { body });
+/** 保存编辑（表单 mode:form 或源文件 mode:raw，带 baseHash 防覆盖别人的修改）。 */
+export const saveSkill = (id, project, body) =>
+  sendJSON(skillsUrl('/api/skills/' + encodeURIComponent(id) + '/source', project), { method: 'PUT', body });
+/** 删除：进回收站，返回可撤销令牌。 */
+export const deleteSkill = (id, project) =>
+  sendJSON(skillsUrl('/api/skills/' + encodeURIComponent(id), project), { method: 'DELETE' });
+/** 撤销一次写入（安装 / 编辑 / 删除 / 导入）。令牌由服务端发。 */
+export const undoSkillChange = (token) => sendJSON('/api/skills/undo/' + encodeURIComponent(token), {});
+
+/** 导入暂存：把选中的文件（base64）交给服务端生成计划；这一步什么都不写。 */
+export const stageSkillImport = (body) => sendJSON('/api/skills/import/stage', { body });
+/** 导入提交：带上计划令牌与目标位置，服务端重新校验后落盘。 */
+export const commitSkillImport = (project, body) => sendJSON(skillsUrl('/api/skills/import/commit', project), { body });
+
+/** 扫描其他 Agent 工具的技能目录（只读）。 */
+export const scanExternalSkills = (project) => getJSON(skillsUrl('/api/skills/external', project));
+/** 导入扫描结果里勾选的技能。 */
+export const importExternalSkills = (project, body) => sendJSON(skillsUrl('/api/skills/external/import', project), { body });
+
+/** 技能市场：状态只读本机缓存；下面三个动作才会联网，全部由用户手势触发。 */
+export const fetchSkillMarket = () => getJSON('/api/skills/market');
+export const refreshSkillMarket = (body) => sendJSON('/api/skills/market/refresh', { body });
+export const skillMarketSources = (body) => sendJSON('/api/skills/market/sources', { body });
+export const previewSkillMarketEntry = (body) => sendJSON('/api/skills/market/preview', { body });
+export const fetchSkillMarketFile = (previewId, path) =>
+  getJSON('/api/skills/market/preview/' + encodeURIComponent(previewId) + '/file?' + new URLSearchParams({ path }));
+export const installSkillMarketEntry = (project, body) => sendJSON(skillsUrl('/api/skills/market/install', project), { body });
 
 /** MCP 能力报告。能力由**检测本机装着的那个 pi 包**决定（历史基线 0.87.0 没有原生 MCP，
  *  当前基线 0.99.2 自带 builtin:mcp），所以这里返回的是「带出处的结论 + 怎么配置 +

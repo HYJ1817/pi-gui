@@ -1,34 +1,41 @@
-/* 设置 › Agent 能力 › 技能 —— Pi 原生 Skills 的列表页。
+/* 设置 › Agent 能力 › 技能 —— 技能列表、创建 / 编辑 / 导入 / 扫描、以及市场入口。
  *
  * 事实来源只有 `/api/skills`（server/skills.js：扫描 + pi get_commands 交叉核对）。
  * 本页不缓存第二份清单：每次 load 整体替换 `state.data`，筛选只是对它的投影。
- * 启停写的是 pi 自己的 settings.json（`-<rel>` 停用规则），pi 只在启动时读它，
- * 所以写完要不要重启由用户在确认框里决定 —— 与拆分前的行为一致。
  *
- * 版式对照 PI-Desktop 技能页（AgentSkillsPage）：工具栏（作用域分段 + 搜索）→ 按作用域分组
- * （组标题 + 发现目录 + 条数）→ 行瓦片（图标 + 名称徽标 + 一行描述 + 开关）；空分组给空状态。
- * 控件全部复用 pi-GUI 公共原语，PI-Desktop 的「新建 / 导入 / 扫描 / 市场」在 pi-GUI
- * 没有对应能力，不放占位按钮。
+ * 版式对照 PI-Desktop 的 AgentSkillsPage：
+ *   标题（图标 + 技能 + 数量）
+ *   第一行：全部 / 全局 / 项目分段 + 搜索 + 项目选择
+ *   第二行：扫描 / 新建 / 市场
+ *   分组：名称 + 发现目录 + 数量 + 导入文件 / 导入目录 → 行瓦片（图标 + 名称 + 必要徽标 + 一行描述 + 开关）
+ * 技术细节（路径、停用规则、加载状态、SKILL.md 全文）只收在展开详情里。
+ *
+ * 启停写的是 pi 自己的 settings.json；创建 / 编辑 / 删除 / 导入都落在服务端枚举过的写入目标里。
+ * 所有迟到结果都由「页面未关 + 工作区代数未变 + 请求令牌」三重校验丢弃。
  *
  * 生命周期：设置详情卡关闭（返回、切到别的设置页、Esc）时 presentDetail 调 onClose，
  * 这里置 disposed 并摘掉监听；之后所有迟到的异步结果都会被丢弃。
- * 工作区换代时不自动重读（切换过程中后端可能还没就绪），而是把列表换成「项目已切换」
- * 的提示，避免对着旧项目的数据启停。 */
+ * 工作区换代时不自动重读，而是把列表换成「项目已切换」的提示，避免对着旧项目的数据启停。 */
 
 import { S, ownsWorkspace } from '../state.js';
-import { fetchSkills, setSkillEnabled, restartBackend } from '../api.js';
-import { confirmModal } from '../ui/modal.js';
-import { toast } from '../ui/toast.js';
+import {
+  deleteSkill, fetchSkills, restartBackend, setSkillEnabled, undoSkillChange,
+} from '../api.js';
 import { createIcon } from '../ui/icons.js';
+import { confirmModal, confirmSurfaceMeta, dismissConfirm } from '../ui/modal.js';
 import { createBadge, createSegmentedControl, createSettingsToggle } from '../ui/primitives.js';
 import { resourceEl as el, resourceNote as note } from '../ui/resource-dom.js';
 import { renderSkillDetail } from './detail.js';
+import { openSkillEditor } from './editor.js';
+import { openSkillExternal } from './external.js';
+import { openSkillImport } from './import.js';
+import { renderSkillsMarket } from './market.js';
 import {
-  SKILL_SCOPE_LABEL, SKILL_SCOPE_ORDER, SKILL_STATE_FILTERS, filterSkills, groupSkillsByScope, isSkillOn,
-  skillGroupRoots, skillScopeCounts, skillScopeLabel, skillScopeRoots, skillStateMeta, skillToggleCopy,
+  SKILL_SCOPE_LABEL, SKILL_SCOPE_ORDER, filterSkills, groupSkillsByScope, isSkillOn,
+  marketInstalledNames, skillContextProject, skillGroupRoots, skillProjectOptions, skillScopeCounts,
+  skillScopeRoots, skillScopeTitle, skillStateMeta, skillToggleCopy, skillWritableTargets,
 } from './model.js';
 
-const GROUP_TITLE = Object.freeze({ user: '全局级', project: '项目级', temporary: '临时（--skill）', other: '其他' });
 /** 全部视图里即使为空也要出现的分组（空分组显示空状态，说明「这里没有」而不是「没读到」）。 */
 const ALWAYS_SHOWN = Object.freeze(['user', 'project']);
 const TRUST_NOTE = '当前项目未被信任，pi 不会加载项目级技能，项目里的技能显示为「未加载（项目未信任）」。这是 pi 的默认行为，不是配置丢了。';
@@ -75,27 +82,34 @@ export function openSkillsSettings({ present }) {
   }, { className: 'skills-page' });
 }
 
-function textButton(label, iconName, onClick) {
-  const button = el('button', 'btn ghost skills-action');
+function actionButton(label, iconName, className, onClick) {
+  const button = el('button', 'btn' + (className ? ' ' + className : ''));
   button.type = 'button';
-  if (iconName) button.append(createIcon(iconName, { size: 14, className: 'skills-action-icon' }));
+  if (iconName) button.append(createIcon(iconName, { size: 14 }));
   button.append(el('span', '', label));
   button.onclick = onClick;
   return button;
 }
 
-/** 空状态瓦片：图标片 + 一句话 + 可选动作（重试 / 刷新）。 */
-function emptyState(text, { icon = 'book', action = null } = {}) {
-  const box = el('div', 'skills-empty');
+function iconButton(iconName, label, onClick) {
+  /* 只挂共享的 .icon-btn：再叠 .btn 会被 32px 最小高度和左右内边距挤成一条竖线。 */
+  const button = el('button', 'icon-btn skills-icon-btn');
+  button.type = 'button';
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  button.append(createIcon(iconName, { size: 15 }));
+  button.onclick = onClick;
+  return button;
+}
+
+/** 空状态瓦片：图标片 + 一句话 + 可选说明与动作（重试 / 刷新）。 */
+function emptyState(text, { icon = 'book', hint = '', action = null, className = '' } = {}) {
+  const box = el('div', 'skills-empty' + (className ? ' ' + className : ''));
   const chip = el('span', 'skills-empty-icon');
   chip.append(createIcon(icon, { size: 16 }));
-  box.append(chip, el('span', 'skills-empty-text', text));
-  if (action) {
-    const button = el('button', 'btn tiny', action.label);
-    button.type = 'button';
-    button.onclick = action.onClick;
-    box.append(button);
-  }
+  box.append(chip, el('div', 'skills-empty-title', text));
+  if (hint) box.append(el('div', 'skills-empty-text', hint));
+  if (action) box.append(actionButton(action.label, action.icon || null, 'tiny', action.onClick));
   return box;
 }
 
@@ -103,17 +117,56 @@ function createSkillsPage(card) {
   const state = {
     data: null, loading: false, stale: false, error: '', diagnostics: [],
     loadedGeneration: S.workspaceGeneration,
-    scope: '', status: '', query: '', openId: '', busyIds: new Set(),
+    scope: '', query: '', openId: '', busyIds: new Set(),
+    project: null, view: 'list', notice: null, needsReload: false,
   };
   let disposed = false;
   let loadToken = 0;
   let detailSeq = 0;
   let openDetail = null; // { id, data, node }：当前展开项的详情节点
-  const alive = () => !disposed;
+  let market = null;
+  let projectEpoch = 0;
+  let closeProjectDialog = null;
+  const confirmOwner = {};
+
+  function projectOperation() {
+    const project = state.project;
+    const epoch = projectEpoch;
+    const generation = state.loadedGeneration;
+    return {
+      project,
+      isCurrent: () => !disposed && !state.stale && project === state.project
+        && epoch === projectEpoch && ownsWorkspace(generation),
+    };
+  }
+
+  function invalidateProjectOperations() {
+    projectEpoch += 1;
+    state.busyIds.clear();
+    if (confirmSurfaceMeta()?.owner === confirmOwner) dismissConfirm();
+    closeProjectDialog?.();
+    closeProjectDialog = null;
+    setNotice(null);
+    state.needsReload = false;
+  }
+
+  function openProjectDialog(open, options, onCompleted) {
+    const operation = projectOperation();
+    if (!operation.isCurrent() || !state.data) return;
+    closeProjectDialog = open({
+      ...options, project: operation.project, data: state.data,
+    }, (result) => { if (operation.isCurrent()) onCompleted(result); }).close;
+  }
 
   /* ---------- 骨架：只建一次，筛选与刷新不重建输入框（焦点和输入法状态不丢） ---------- */
   const head = el('header', 'skills-head');
-  head.append(el('h3', 'settings-page-title', '技能'));
+  const headGlyph = el('span', 'skills-head-glyph');
+  headGlyph.append(createIcon('book', { size: 18 }));
+  const headText = el('div', 'skills-head-text');
+  headText.append(el('h2', 'skills-title', '技能'));
+  const headCount = el('span', 'skills-head-count');
+  const refresh = iconButton('refresh', '刷新技能列表', () => { void load(state.project ?? undefined); });
+  head.append(headGlyph, headText, headCount, refresh);
 
   const toolbar = el('div', 'skills-toolbar');
   const scopeControl = createSegmentedControl({
@@ -136,25 +189,112 @@ function createSkillsPage(card) {
   searchInput.setAttribute('aria-label', '搜索技能');
   searchInput.oninput = () => { state.query = searchInput.value; renderBody(); };
   search.append(searchInput);
-  const statusSelect = el('select', 'ds-select skills-status');
-  statusSelect.setAttribute('aria-label', '按状态筛选');
-  for (const option of SKILL_STATE_FILTERS) {
-    const item = el('option', '', option.label);
-    item.value = option.value;
-    statusSelect.append(item);
-  }
-  statusSelect.onchange = () => { state.status = statusSelect.value; renderBody(); };
-  const actionsBox = el('div', 'skills-toolbar-actions');
-  const refresh = textButton('刷新', 'refresh', () => load());
-  actionsBox.append(refresh);
-  toolbar.append(scopeControl.element, search, statusSelect, actionsBox);
+  const projectField = el('label', 'skills-project');
+  projectField.append(el('span', 'skills-project-label', '项目'));
+  const projectSelect = el('select', 'ds-select skills-project-select');
+  projectSelect.setAttribute('aria-label', '查看哪个项目的技能');
+  projectSelect.onchange = () => { void switchProject(projectSelect.value); };
+  projectField.append(projectSelect);
+  toolbar.append(scopeControl.element, search, projectField);
 
+  const actionsBar = el('div', 'skills-actions-bar');
+  const scanButton = actionButton('扫描', 'scan', 'ghost', openScan);
+  const createButton = actionButton('新建', 'plus', 'primary', openCreate);
+  const marketButton = actionButton('市场', 'market', 'ghost', openMarket);
+  actionsBar.append(scanButton, createButton, marketButton);
+
+  const noticeHost = el('div', 'skills-notice-host');
+  noticeHost.setAttribute('aria-live', 'polite');
   const notes = el('div', 'skills-notes');
-  const body = el('div', 'skills-body');
-  body.setAttribute('aria-live', 'polite');
-  card.append(head, toolbar, notes, body);
+  const content = el('div', 'skills-content');
+  card.append(head, toolbar, actionsBar, noticeHost, notes, content);
 
-  /* ---------- 渲染 ---------- */
+  /* ---------- 操作结果：内联提示（成功不弹 Toast） ---------- */
+  function setNotice(notice) {
+    if (notice && notice.restart) {
+      const details = notice.details || [];
+      if (!details.some((line) => /重启/.test(line))) {
+        notice = { ...notice, details: [...details, 'pi 只在启动时读 settings.json，重启后生效。'] };
+      }
+    }
+    state.notice = notice && (notice.text || (notice.details || []).length) ? notice : null;
+    renderNotice();
+  }
+
+  function renderNotice() {
+    if (disposed) return;
+    noticeHost.replaceChildren();
+    const notice = state.notice;
+    if (!notice) return;
+    const box = el('div', 'skills-notice is-' + (notice.tone || 'success'));
+    const glyph = el('span', 'skills-notice-icon');
+    glyph.append(createIcon(notice.tone === 'error' ? 'warning' : notice.tone === 'warn' ? 'warning' : 'check', { size: 14 }));
+    const body = el('div', 'skills-notice-body');
+    body.append(el('div', 'skills-notice-text', notice.text || '完成'));
+    for (const detail of notice.details || []) body.append(el('div', 'skills-notice-detail', detail));
+    const actions = el('div', 'skills-notice-actions');
+    if (notice.undo) {
+      const undo = actionButton('撤销', 'refresh', 'ghost tiny', async () => {
+        const operation = projectOperation();
+        if (!operation.isCurrent() || state.notice !== notice) return;
+        undo.disabled = true;
+        undo.setAttribute('aria-busy', 'true');
+        const result = await undoSkillChange(notice.undo);
+        if (!operation.isCurrent() || state.notice !== notice) return;
+        if (!result || result.ok === false) {
+          setNotice({ tone: 'error', text: (result && result.error) || '撤销失败' });
+          return;
+        }
+        setNotice({
+          tone: 'success',
+          text: result.name ? `已撤销：${result.name}` : '已撤销这次改动。',
+          details: result.warnings || [],
+          restart: result.restartRequired === true,
+        });
+        await load(operation.project ?? undefined);
+      });
+      actions.append(undo);
+    }
+    if (notice.restart) {
+      const restart = actionButton('重启 pi', 'refresh', 'tiny', async () => {
+        const operation = projectOperation();
+        if (!operation.isCurrent() || state.notice !== notice) return;
+        restart.disabled = true;
+        restart.setAttribute('aria-busy', 'true');
+        const result = await restartBackend();
+        if (!operation.isCurrent() || state.notice !== notice) return;
+        if (!result || result.ok === false) {
+          setNotice({ tone: 'error', text: (result && result.error) || '重启失败' });
+          return;
+        }
+        setNotice({ tone: 'success', text: '已请求重启 pi，稍等一下。' });
+      });
+      actions.append(restart);
+    }
+    const close = iconButton('close', '关闭提示', () => setNotice(null));
+    close.classList.add('skills-notice-close');
+    actions.append(close);
+    box.append(glyph, body, actions);
+    noticeHost.append(box);
+  }
+
+  /**
+   * 写入类操作成功后的统一收尾：内联提示 + 撤销 / 重启入口 + 重读列表。
+   * 市场视图里不重建列表（市场自己会更新已安装徽标），回到列表时再重读。
+   */
+  function afterMutation(result, fallbackText) {
+    setNotice({
+      tone: 'success',
+      text: result.notice || fallbackText,
+      details: result.warnings || [],
+      undo: typeof result.undo === 'string' ? result.undo : '',
+      restart: result.restartRequired === true,
+    });
+    state.needsReload = true;
+    if (state.view !== 'market') void load(state.project ?? undefined);
+  }
+
+  /* ---------- 读取 ---------- */
   function syncScopeCounts() {
     const counts = skillScopeCounts(state.data?.skills);
     for (const value of ['', 'user', 'project', 'temporary']) {
@@ -165,6 +305,29 @@ function createSkillsPage(card) {
       state.scope = '';
       scopeControl.setValue('');
     }
+    headCount.textContent = state.data ? `${counts.all} 个技能` : '';
+  }
+
+  function syncProjects() {
+    const options = state.data ? skillProjectOptions(state.data) : [];
+    const value = state.project ?? (state.data ? skillContextProject(state.data) : 'none');
+    // 读取失败时 data 为空、state.project 还留着上次的项目：补一条同值选项，
+    // 否则 select 的值在选项里找不到，会显示成空白。
+    if (!options.some((option) => option.value === value)) options.push({ value, label: '当前项目' });
+    projectSelect.replaceChildren();
+    for (const option of options) {
+      const item = el('option', '', option.label);
+      item.value = option.value;
+      projectSelect.append(item);
+    }
+    projectSelect.value = value;
+    projectSelect.disabled = state.loading || state.stale;
+  }
+
+  /** 没有清单 / 工作区已切换时，动作按钮不能假装还能用：它们都依赖当前清单里的写入目标。 */
+  function syncActions() {
+    const ready = Boolean(state.data) && !state.stale;
+    for (const button of [scanButton, createButton, marketButton]) button.disabled = !ready;
   }
 
   function renderNotes() {
@@ -180,28 +343,51 @@ function createSkillsPage(card) {
   }
 
   function renderBody() {
-    if (disposed) return;
-    body.replaceChildren();
-    if (state.loading && !state.data) { body.append(emptyState('正在读取技能…', { icon: 'refresh' })); return; }
-    if (state.stale) { body.append(emptyState(STALE_TEXT, { icon: 'refresh', action: { label: '刷新', onClick: () => load() } })); return; }
-    if (state.error) { body.append(emptyState(state.error, { icon: 'warning', action: { label: '重试', onClick: () => load() } })); return; }
+    if (disposed || state.view === 'market') return;
+    syncActions();
+    content.replaceChildren();
+    if (state.loading && !state.data) {
+      content.append(emptyState('正在读取技能…', { icon: 'refresh', className: 'is-loading' }));
+      return;
+    }
+    if (state.stale) {
+      content.append(emptyState(STALE_TEXT, {
+        icon: 'refresh',
+        action: { label: '刷新', icon: 'refresh', onClick: () => { state.project = null; void load(undefined); } },
+      }));
+      return;
+    }
+    if (state.error) {
+      content.append(emptyState(state.error, {
+        icon: 'warning',
+        action: { label: '重试', icon: 'refresh', onClick: () => { void load(state.project ?? undefined); } },
+      }));
+      return;
+    }
     const all = state.data?.skills || [];
-    const filtering = Boolean(state.query.trim() || state.status);
-    const items = filterSkills(all, { scope: state.scope, state: state.status, query: state.query });
-    if (filtering && !items.length) { body.append(emptyState(EMPTY_FILTERED, { icon: 'search' })); return; }
+    const filtering = Boolean(state.query.trim() || state.scope);
+    const items = filterSkills(all, { scope: state.scope, query: state.query });
+    if (filtering && !items.length) {
+      content.append(emptyState(EMPTY_FILTERED, { icon: 'search' }));
+      return;
+    }
     const shown = new Map(groupSkillsByScope(items).map((group) => [group.scope, group.items]));
     // 全部视图：全局级 / 项目级常驻（为空时给空状态），临时 / 其他只在有条目时出现；
-    // 搜索或按状态筛选时只留有匹配的分组，免得一屏都是「没有匹配」。
+    // 搜索或按作用域筛选时只留有匹配的分组，免得一屏都是「没有匹配」。
     const scopes = state.scope
       ? [state.scope]
       : [...SKILL_SCOPE_ORDER, 'other'].filter((scope) => shown.has(scope) || (!filtering && ALWAYS_SHOWN.includes(scope)));
-    for (const scope of scopes) body.append(renderGroup(scope, shown.get(scope) || []));
+    for (const scope of scopes) content.append(renderGroup(scope, shown.get(scope) || []));
+  }
+
+  function importTargetFor(scope) {
+    return skillWritableTargets(state.data, scope)[0] || null;
   }
 
   function renderGroup(scope, items) {
     const section = el('section', 'skills-group');
     section.dataset.scope = scope;
-    const title = el('h4', 'skills-group-title', GROUP_TITLE[scope] || GROUP_TITLE.other);
+    const title = el('h3', 'skills-group-title', skillScopeTitle(scope));
     title.id = `skillsGroup-${scope}`;
     section.setAttribute('aria-labelledby', title.id);
     const groupHead = el('header', 'skills-group-head');
@@ -211,11 +397,24 @@ function createSkillsPage(card) {
     const path = el('span', 'skills-group-path', labels.join(' · '));
     path.title = roots.length ? roots.map((root) => root.dir).join('\n') : labels.join('\n');
     groupHead.append(title, path, el('span', 'skills-group-count', String(items.length)));
+    if (scope === 'user' || scope === 'project') {
+      const target = importTargetFor(scope);
+      const importActions = el('div', 'skills-group-actions');
+      for (const [label, icon] of [['导入文件', 'fileText'], ['导入目录', 'folder']]) {
+        const button = actionButton(label, icon, 'ghost tiny', () => openImport(target ? target.key : ''));
+        button.disabled = !target;
+        // 窄窗只留图标（.skills-group-actions .btn span 被隐藏），按钮必须另有可读名字。
+        button.setAttribute('aria-label', target ? `${label}到 ${target.label}` : label);
+        button.title = target ? `${label} · ${target.label}` : '这个作用域没有可写的目录';
+        importActions.append(button);
+      }
+      groupHead.append(importActions);
+    }
     section.append(groupHead);
     if (!items.length) {
       section.append(scope === 'project' && state.data?.hasProject === false
-        ? emptyState(EMPTY_NO_PROJECT, { icon: 'folder' })
-        : emptyState(EMPTY_DIR));
+        ? emptyState(EMPTY_NO_PROJECT, { icon: 'folder', className: 'skills-empty-group' })
+        : emptyState(EMPTY_DIR, { className: 'skills-empty-group' }));
       return section;
     }
     const list = el('div', 'skills-rows');
@@ -240,28 +439,20 @@ function createSkillsPage(card) {
     const glyph = el('span', 'skill-glyph');
     glyph.append(createIcon('book', { size: 16 }));
     const dot = el('span', 'ext-dot ' + meta.dot);
-    dot.title = meta.label;
+    dot.setAttribute('aria-hidden', 'true');
     glyph.append(dot);
     const text = el('span', 'skill-row-text');
     const titleLine = el('span', 'skill-row-title');
-    titleLine.append(el('span', 'skill-name', skill.name), createBadge({ text: skillScopeLabel(skill.scope) }));
-    if (skill.state !== 'enabled') titleLine.append(createBadge({ text: meta.label, tone: meta.tone }));
-    if (skill.source === 'local') titleLine.append(createBadge({ text: '来自 settings' }));
-    if (skill.disableModelInvocation) titleLine.append(createBadge({ text: '不进系统提示词' }));
+    const status = skill.state === 'enabled' && skill.loaded === true ? '已加载' : meta.label;
+    titleLine.append(el('span', 'skill-name', skill.name), createBadge({ text: status, tone: meta.tone }));
     const desc = el('span', 'skill-row-desc', skill.description || '（没有描述）');
     if (skill.description) desc.title = skill.description;
     text.append(titleLine, desc);
-    // 徽标只写状态名；为什么会这样（被哪条规则关掉、被谁覆盖）由这一行补上，与徽标重复时不写。
-    if (skill.state !== 'enabled' && skill.stateNote && skill.stateNote !== meta.label) {
-      text.append(el('span', 'skill-row-note is-' + meta.dot, skill.stateNote));
-    }
-    const chevron = el('span', 'skill-row-chevron');
-    chevron.append(createIcon('chevronDown', { size: 14 }));
-    main.append(glyph, text, chevron);
+    main.append(glyph, text);
     main.onclick = () => {
       state.openId = open ? '' : skill.id;
       renderBody(); // 行会重建：把焦点还给同一行，键盘用户不丢位置
-      [...body.querySelectorAll('.skill-row')].find((row) => row.dataset.skillId === skill.id)
+      [...content.querySelectorAll('.skill-row')].find((row) => row.dataset.skillId === skill.id)
         ?.querySelector('.skill-row-main')?.focus();
     };
     const actions = el('div', 'skill-row-actions');
@@ -273,14 +464,20 @@ function createSkillsPage(card) {
   }
 
   /* 筛选 / 输入搜索词会整表重绘；展开项的详情（含已读到的 SKILL.md）原样挪进新行，
-   * 只有换了展开项或重读了清单才重建并重新请求 —— 与拆分前「只在选中时读详情」一致。 */
+   * 只有换了展开项或重读了清单才重建并重新请求。 */
   function openDetailFor(skill, detailId) {
     if (openDetail && openDetail.id === skill.id && openDetail.data === state.data) return openDetail.node;
     const node = el('div', 'skill-detail');
     node.id = detailId;
     const seq = ++detailSeq;
-    const generation = state.loadedGeneration;
-    renderSkillDetail(node, skill, () => alive() && seq === detailSeq && ownsWorkspace(generation) && !state.stale);
+    const operation = projectOperation();
+    renderSkillDetail(node, skill, {
+      isLive: () => operation.isCurrent() && seq === detailSeq
+        && state.openId === skill.id && state.data === openDetail?.data,
+      project: state.project ?? undefined,
+      onEdit: (target) => openEdit(target),
+      onDelete: (target) => { void removeSkill(target); },
+    });
     openDetail = { id: skill.id, data: state.data, node };
     return node;
   }
@@ -289,61 +486,177 @@ function createSkillsPage(card) {
     const control = createSettingsToggle({
       checked: isSkillOn(skill),
       disabled: state.busyIds.has(skill.id),
-      ariaLabel: `启用技能 ${skill.name}`,
+      ariaLabel: `${isSkillOn(skill) ? '停用' : '启用'}技能 ${skill.name}`,
       onChange: (want) => { void toggleSkill(skill, want, control); },
     });
     control.element.classList.add('skill-toggle');
     return control.element;
   }
 
-  /* ---------- 启停：确认 → 写 settings → 询问是否重启 pi → 重读 ---------- */
+  /* ---------- 启停：确认 → 写 settings → 内联提示（含重启）→ 重读 ---------- */
   async function toggleSkill(skill, want, control) {
-    const generation = state.loadedGeneration;
-    const ok = await confirmModal(skillToggleCopy(skill, want));
-    if (!alive()) return;
+    const operation = projectOperation();
+    if (!operation.isCurrent()) return;
+    const ok = await confirmModal({ ...skillToggleCopy(skill, want), meta: { owner: confirmOwner } });
+    if (!operation.isCurrent()) return;
     if (!ok) { control.setChecked(!want); return; }
-    if (state.stale || !ownsWorkspace(generation)) { control.setChecked(!want); markStale(); return; }
     state.busyIds.add(skill.id);
     control.setDisabled(true);
-    const result = await setSkillEnabled(skill.id, want);
+    const result = await setSkillEnabled(skill.id, want, operation.project);
+    if (!operation.isCurrent()) return;
     state.busyIds.delete(skill.id);
-    if (!alive()) return;
     control.setDisabled(false);
-    if (!result || !result.ok) {
+    if (!result || result.ok === false) {
       control.setChecked(!want);
-      toast((result && result.error) || '操作失败', 'error');
+      setNotice({ tone: 'error', text: (result && result.error) || '操作失败' });
       return;
     }
-    for (const warning of result.warnings || []) toast(warning, 'warn');
-    if (result.restartRequired) {
-      const go = await confirmModal(RESTART_COPY);
-      if (go && alive() && ownsWorkspace(generation)) {
-        await restartBackend();
-        toast('已请求重启 pi，稍等一下', 'info');
-      }
-    } else {
-      toast('设置没有变化', 'info');
+    setNotice({
+      tone: 'success',
+      text: result.notice || (want ? `已启用 ${skill.name}。` : `已停用 ${skill.name}。`),
+      details: result.warnings || [],
+      restart: result.restartRequired === true,
+    });
+    await load(operation.project);
+  }
+
+  /* ---------- 创建 / 编辑 / 删除 / 导入 / 扫描 ---------- */
+  function openCreate() {
+    openProjectDialog((options, onSaved) => openSkillEditor({ ...options, onSaved }), { mode: 'create' },
+      (result) => afterMutation(result, result.name ? `已创建 ${result.name}。` : '已创建技能。'));
+  }
+
+  function openEdit(skill) {
+    if (!skill) return;
+    openProjectDialog((options, onSaved) => openSkillEditor({ ...options, onSaved }), { mode: 'edit', skill },
+      (result) => afterMutation(result, result.name ? `已保存 ${result.name}。` : '已保存。'));
+  }
+
+  async function removeSkill(skill) {
+    const operation = projectOperation();
+    if (!operation.isCurrent()) return;
+    const target = skill.manage?.target || skill.path || '技能目录';
+    const ok = await confirmModal({
+      title: `删除技能「${skill.name}」？`,
+      message: `会把这个技能从 ${target} 移进 pi-GUI 的回收站（如果可用），不是直接抹掉。pi 重启后才会停止加载它。`,
+      okText: '删除',
+      danger: true,
+      meta: { owner: confirmOwner },
+    });
+    if (!ok || !operation.isCurrent()) return;
+    const result = await deleteSkill(skill.id, operation.project);
+    if (!operation.isCurrent()) return;
+    if (!result || result.ok === false) {
+      setNotice({ tone: 'error', text: (result && result.error) || '删除失败' });
+      return;
     }
-    if (alive()) await load();
+    state.openId = '';
+    openDetail = null;
+    afterMutation(result, result.name ? `已删除 ${result.name}。` : '已删除。');
+  }
+
+  function openImport(targetPreset = '') {
+    openProjectDialog((options, onImported) => openSkillImport({ ...options, onImported }), { targetPreset },
+      (result) => afterMutation(result, result.name
+        ? `已导入 ${result.name}（${result.fileCount || 1} 个文件）。`
+        : '已导入技能。'));
+  }
+
+  function openScan() {
+    openProjectDialog((options, onImported) => openSkillExternal({ ...options, onImported }), {},
+      (result) => afterMutation(result, `已导入 ${result.imported} 个技能。`));
+  }
+
+  /* ---------- 市场子视图 ---------- */
+  function openMarket() {
+    const operation = projectOperation();
+    if (!operation.isCurrent() || !state.data || state.view === 'market') return;
+    state.view = 'market';
+    state.openId = '';
+    setNotice(null);
+    head.remove();
+    card.setAttribute('aria-label', '技能市场');
+    toolbar.hidden = true;
+    actionsBar.hidden = true;
+    notes.hidden = true;
+    noticeHost.hidden = true;
+    content.replaceChildren();
+    const host = el('div', 'skills-market-host');
+    content.append(host);
+    market = renderSkillsMarket(host, {
+      project: operation.project,
+      isCurrent: operation.isCurrent,
+      listData: state.data,
+      installedNames: marketInstalledNames(state.data.skills),
+      onBack: () => { closeMarket(); marketButton.focus(); },
+      onInstalled: () => { if (operation.isCurrent()) state.needsReload = true; },
+    });
+    host.querySelector('.skills-market-back').focus();
+  }
+
+  function closeMarket() {
+    if (state.view !== 'market') return;
+    state.view = 'list';
+    market?.dispose();
+    market = null;
+    card.prepend(head);
+    card.setAttribute('aria-label', '技能');
+    toolbar.hidden = false;
+    actionsBar.hidden = false;
+    notes.hidden = false;
+    noticeHost.hidden = false;
+    if (state.needsReload) {
+      state.needsReload = false;
+      void load(state.project ?? undefined);
+      return;
+    }
+    renderBody();
+  }
+
+  /* ---------- 项目上下文 ---------- */
+  async function switchProject(value) {
+    if (value === state.project) return;
+    invalidateProjectOperations();
+    state.project = value;
+    if (state.view === 'market') closeMarket();
+    state.openId = '';
+    openDetail = null;
+    state.data = null;
+    state.error = '';
+    state.diagnostics = [];
+    state.stale = false;
+    detailSeq += 1;
+    syncScopeCounts();
+    renderNotes();
+    state.loading = true;
+    renderBody();
+    await load(value);
   }
 
   /* ---------- 读取 ---------- */
   function markStale() {
     if (disposed) return;
     state.stale = true;
+    invalidateProjectOperations();
+    if (state.view === 'market') closeMarket();
+    syncProjects();
     renderBody();
   }
 
-  async function load() {
+  async function load(project) {
     const token = ++loadToken;
     const generation = S.workspaceGeneration;
     state.loading = true;
     refresh.disabled = true;
+    projectSelect.disabled = true;
+    content.classList.add('is-loading');
     if (!state.data) renderBody();
-    const result = await fetchSkills();
+    const result = await fetchSkills(project === null ? undefined : project);
     if (disposed || token !== loadToken) return;
     state.loading = false;
     refresh.disabled = false;
+    projectSelect.disabled = false;
+    content.classList.remove('is-loading');
     if (!ownsWorkspace(generation)) { markStale(); return; }
     state.stale = false;
     state.loadedGeneration = generation;
@@ -351,13 +664,19 @@ function createSkillsPage(card) {
       state.data = null;
       state.error = (result && result.error) || '读取技能失败';
       state.diagnostics = (result && result.diagnostics) || [];
+      if (result && result.code === 'project-gone') state.project = null;
     } else {
       state.data = result;
       state.error = '';
       state.diagnostics = [];
-      if (state.openId && !(result.skills || []).some((skill) => skill.id === state.openId)) state.openId = '';
+      state.project = skillContextProject(result);
+      if (state.openId && !(result.skills || []).some((skill) => skill.id === state.openId)) {
+        state.openId = '';
+        openDetail = null;
+      }
     }
     syncScopeCounts();
+    syncProjects();
     renderNotes();
     renderBody();
     writeSkillBadge(result); // 页面刚读到的数字顺手同步给菜单徽标，省一次请求
@@ -366,15 +685,19 @@ function createSkillsPage(card) {
   const onGeneration = () => { if (!disposed && state.data) markStale(); };
   document.addEventListener('pi-gui:workspace-generation', onGeneration);
   syncScopeCounts();
-  void load();
+  syncProjects();
+  void load(undefined);
 
   return {
     dispose() {
       if (disposed) return;
       disposed = true;
+      invalidateProjectOperations();
       loadToken += 1;
       detailSeq += 1;
       openDetail = null;
+      market?.dispose();
+      market = null;
       document.removeEventListener('pi-gui:workspace-generation', onGeneration);
     },
   };

@@ -4065,13 +4065,13 @@ staticCheck();
     });
     check('技能页：坏 skill 的错误就地显示，不是整页报错', () => {
       const row = skillRow('broken-skill');
-      return (row && /没有 description/.test(row.textContent)) || (row ? row.textContent : '没找到这条');
+      return (row && /无法加载/.test(row.textContent)) || (row ? row.textContent : '没找到这条');
     });
     check('技能页：项目未信任时在页首显式说明原因（否则用户以为配置丢了）', () =>
       /项目未被信任/.test(skillsCard.querySelector('.skills-notes').textContent) || skillsCard.textContent.slice(0, 200));
     check('技能页：未信任那条自己也带说明', () => {
       const row = skillRow('proj-only');
-      return (row && /项目未被信任/.test(row.textContent)) || (row ? row.textContent : '没找到这条');
+      return (row && /未加载（项目未信任）/.test(row.textContent)) || (row ? row.textContent : '没找到这条');
     });
     check('技能页：作用域分段带真实计数（全部 5 / 项目 1 / 全局 4，没有临时项就不显示「临时」）', () => {
       const seg = (value) => skillsCard.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
@@ -4117,18 +4117,17 @@ staticCheck();
     });
     skillsCard.querySelector('.skills-scope .ds-segment-item[data-value=""]').click();
 
-    // 状态筛选
-    const selState = skillsCard.querySelector('select.skills-status');
-    selState.value = 'enabled';
-    selState.dispatchEvent(new window.Event('change'));
-    await new Promise((r) => setTimeout(r, 10));
-    check('技能页：状态筛选（已启用）只剩已加载那条', () => {
-      const names = skillNames();
-      return (names.length === 1 && names[0] === 'code-review') || JSON.stringify(names);
+    // 状态徽标（旧的状态下拉收进了行内徽标：每行只说自己的状态，筛选交给作用域与搜索）
+    check('技能页：已确认加载的行仅有一个「已加载」徽标', () => {
+      const row = skillRow('code-review');
+      const badges = [...(row?.querySelectorAll('.ds-badge') || [])].map((badge) => badge.textContent);
+      return (badges.length === 1 && badges[0] === '已加载') || JSON.stringify(badges);
     });
-    selState.value = '';
-    selState.dispatchEvent(new window.Event('change'));
-    await new Promise((r) => setTimeout(r, 10));
+    check('技能页：停用的那条只说「已停用」，不冒充已加载', () => {
+      const row = skillRow('pdf-tools');
+      const text = row ? row.textContent : '';
+      return (/已停用/.test(text) && !/已加载/.test(text)) || text;
+    });
 
     // 详情（行内展开）
     skillRow('code-review').querySelector('.skill-row-main').click();
@@ -4159,16 +4158,13 @@ staticCheck();
       await new Promise((r) => setTimeout(r, 40));
       const put = skillsCalls.find((c) => c.method === 'PUT');
       check('技能页：确认后发 PUT，且 enabled=false', () => (put && put.body && put.body.enabled === false) || JSON.stringify(put));
-      check('技能页：PUT 走的是 ID 路径，不发绝对路径', () => (put && /\/api\/skills\/[0-9a-f]{16}$/.test(put.url)) || (put ? put.url : '没有 PUT'));
+      check('技能页：PUT 走的是 ID 路径，不发绝对路径', () => (put && /^\/api\/skills\/[0-9a-f]{16}(\?project=[\w-]+)?$/.test(put.url)) || (put ? put.url : '没有 PUT'));
     }
-    // 重启提示（改 settings 必须重启 pi）
+    // 重启提示（改 settings 必须重启 pi）：结果进页内提示，不再弹第二个确认框
     await new Promise((r) => setTimeout(r, 40));
-    check('技能页：改完提示需要重启 pi 才生效', () =>
-      /需要重启 pi/.test($('confirmCard').textContent + $('toasts').textContent) || $('confirmCard').textContent.slice(0, 120));
-    // 关掉重启确认框
-    const cancelRestart = [...$('confirmCard').querySelectorAll('.btn')].find((b) => b.textContent === '取消');
-    if (cancelRestart) cancelRestart.onclick();
-    await new Promise((r) => setTimeout(r, 40));
+    check('技能页：改完在页内提示需要重启 pi 才生效', () =>
+      /重启 pi/.test(skillsCard.querySelector('.skills-notice')?.textContent || '')
+        || skillsCard.querySelector('.skills-notice')?.textContent);
     {
       /* 开关先在视觉上翻转再问确认：取消时必须翻回去，也不能发 PUT。 */
       const putsBefore = skillsCalls.filter((c) => c.method === 'PUT').length;

@@ -1,7 +1,7 @@
-/* 技能页的纯数据投影：状态文案、作用域、筛选、分组、计数。
+/* 技能页的纯数据投影：状态文案、作用域、筛选、分组、计数、市场分页。
  *
- * 不碰 DOM、不发请求、不缓存。事实只有一份 —— server/skills.js 的 `/api/skills`
- * 返回值；这里只把它变成页面要显示的样子。未知状态保持「状态未知」，不猜。 */
+ * 不碰 DOM、不发请求、不缓存。事实只有一份 —— 服务端 `/api/skills` 等接口的返回值；
+ * 这里只把它变成页面要显示的样子。未知状态保持「状态未知」，不猜。 */
 
 /** dot = 行图标角上的状态点（.ext-dot 的变体）；tone = 状态徽标的 .ds-badge 语气。 */
 export const SKILL_STATE_META = Object.freeze({
@@ -16,6 +16,9 @@ export const SKILL_STATE_META = Object.freeze({
 
 /** user = pi 的用户级目录（~/.pi/agent/skills 等），对用户来说就是「全局」。 */
 export const SKILL_SCOPE_LABEL = Object.freeze({ project: '项目', user: '全局', temporary: '临时' });
+export const SKILL_SCOPE_TITLE = Object.freeze({
+  user: '全局级', project: '项目级', temporary: '临时（--skill）', other: '其他',
+});
 
 /** 页面分组顺序，对照 PI-Desktop 技能页：全局级在前、项目级在后。
  *  这只是展示顺序：同名时谁生效由 server/skills.js 按 pi 的规则核对（项目级优先），
@@ -39,6 +42,10 @@ export function skillScopeLabel(scope) {
   return SKILL_SCOPE_LABEL[scope] || String(scope || '未知');
 }
 
+export function skillScopeTitle(scope) {
+  return SKILL_SCOPE_TITLE[scope] || SKILL_SCOPE_TITLE.other;
+}
+
 /** 开关显示的「当前是否开着」：与旧实现同一判据（loaded 为真且没有停用规则也算开）。 */
 export function isSkillOn(skill) {
   return skill?.state === 'enabled' || (skill?.loaded === true && !skill?.disabledBy);
@@ -60,7 +67,7 @@ export function skillMatchesState(skill, state) {
 export function skillMatchesQuery(skill, query) {
   const q = String(query || '').trim().toLowerCase();
   if (!q) return true;
-  return [skill.name, skill.description, skill.path, skill.rootLabel]
+  return [skill.name, skill.description, skill.path, skill.rootLabel, skill.stateNote]
     .some((value) => String(value ?? '').toLowerCase().includes(q));
 }
 
@@ -115,4 +122,131 @@ export function skillToggleCopy(skill, want) {
       : `会往 ${skill.settingsPath} 里加一条规则（${skill.disablePattern}）。不会删除或移动 skill 文件 —— 只是让 pi 不再加载它。`,
     okText: want ? '启用' : '停用',
   };
+}
+
+/* ---------- 项目上下文与写入目标 ---------- */
+
+/** 列表返回的上下文：'none' 表示「只看全局」。 */
+export function skillContextProject(data) {
+  return data && data.context && typeof data.context.project === 'string' ? data.context.project : 'none';
+}
+
+/** 项目选择器的选项。active 表示它正是 pi 当前运行的工作区。 */
+export function skillProjectOptions(data) {
+  const options = (Array.isArray(data?.projects) ? data.projects : []).map((project) => ({
+    value: project.id,
+    label: project.active ? `${project.name}（当前）` : project.name,
+  }));
+  options.push({ value: 'none', label: '不指定项目（只看全局）' });
+  return options;
+}
+
+/** 当前上下文里可写的目标；scope 为空 = 全部。 */
+export function skillWritableTargets(data, scope = '') {
+  return (Array.isArray(data?.targets) ? data.targets : [])
+    .filter((target) => target && target.writable === true && (!scope || target.scope === scope));
+}
+
+/** 某个目标 key 的展示名；找不到时原样返回。 */
+export function skillTargetLabel(data, key) {
+  const hit = (Array.isArray(data?.targets) ? data.targets : []).find((target) => target && target.key === key);
+  return hit ? hit.label : String(key || '');
+}
+
+/** 按作用域选的默认导入目标：先项目级，再全局的第一个。 */
+export function skillDefaultTarget(data, scope) {
+  const preferred = skillWritableTargets(data, scope);
+  return (preferred[0] || skillWritableTargets(data)[0] || null)?.key || '';
+}
+
+/** 列表里已有技能的名字集合（小写），用于市场卡片标「已安装」。 */
+export function marketInstalledNames(skills) {
+  const names = new Set();
+  for (const skill of Array.isArray(skills) ? skills : []) {
+    if (!skill) continue;
+    if (skill.name) names.add(String(skill.name).toLowerCase());
+    const dirName = String(skill.path || '').replace(/[\\/]+$/, '').split(/[\\/]/).slice(-2, -1)[0];
+    if (dirName && dirName !== 'skills') names.add(String(dirName).toLowerCase());
+  }
+  return names;
+}
+
+/* ---------- 市场投影 ---------- */
+
+export function formatSkillBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function marketCategoryLabel(categories, id) {
+  if (!id) return '';
+  const hit = (Array.isArray(categories) ? categories : []).find((category) => category && category.id === id);
+  return hit ? hit.label : String(id);
+}
+
+export function marketSourceName(source) {
+  if (!source) return '';
+  return `${source.repo}${source.ref ? `@${source.ref}` : ''}`;
+}
+
+/** 市场条目筛选：来源、分类、搜索（名称 / 描述 / 仓库 / 目录）。 */
+export function filterMarketEntries(entries, { query = '', category = '', sourceId = '' } = {}) {
+  const q = String(query || '').trim().toLowerCase();
+  return (Array.isArray(entries) ? entries : []).filter((entry) => {
+    if (!entry) return false;
+    if (sourceId && entry.sourceId !== sourceId) return false;
+    if (category && !(Array.isArray(entry.categories) && entry.categories.includes(category))) return false;
+    if (!q) return true;
+    return [entry.title, entry.slug, entry.description, entry.repo, entry.dir, marketSourceName({ repo: entry.repo })]
+      .some((value) => String(value ?? '').toLowerCase().includes(q));
+  });
+}
+
+export function marketPageCount(total, pageSize) {
+  const size = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 24;
+  return Math.max(1, Math.ceil((Array.isArray(total) ? total.length : Number(total) || 0) / size));
+}
+
+export function marketPageItems(entries, page, pageSize) {
+  const size = Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 24;
+  const list = Array.isArray(entries) ? entries : [];
+  const pages = Math.max(1, Math.ceil(list.length / size));
+  const current = Math.min(Math.max(1, Number(page) || 1), pages);
+  return list.slice((current - 1) * size, current * size);
+}
+
+/** 页码窗口：1 … 4 5 6 … 67。返回数字或 '…'。 */
+export function marketPageWindow(page, total, radius = 1) {
+  const pages = Math.max(1, Math.trunc(total) || 1);
+  const current = Math.min(Math.max(1, Math.trunc(page) || 1), pages);
+  const out = [];
+  const push = (value) => { if (out[out.length - 1] !== value) out.push(value); };
+  const from = Math.max(1, current - radius);
+  const to = Math.min(pages, current + radius);
+  if (pages <= 7) {
+    for (let n = 1; n <= pages; n += 1) push(n);
+    return out;
+  }
+  push(1);
+  if (from > 2) push('…');
+  for (let n = from; n <= to; n += 1) push(n);
+  if (to < pages - 1) push('…');
+  push(pages);
+  return out;
+}
+
+/** 条目是否已在当前上下文中：按市场显示名与目录名匹配。 */
+export function marketEntryInstalled(entry, installedNames) {
+  if (!entry || !(installedNames instanceof Set)) return false;
+  return [entry.slug, entry.title].some((name) => name && installedNames.has(String(name).toLowerCase()));
+}
+
+/** 外部扫描候选项的「已有状态」徽标。 */
+export function externalPresentMeta(present) {
+  if (present === 'same') return { label: '已有同名（内容相同）', tone: 'neutral' };
+  if (present === 'different') return { label: '已有同名（内容不同）', tone: 'warning' };
+  if (present === 'linked') return { label: '已链接', tone: 'success' };
+  return { label: '未导入', tone: 'neutral' };
 }
