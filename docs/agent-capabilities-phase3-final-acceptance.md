@@ -16,7 +16,7 @@
 | Extensions | 关闭或切走市场时，在线目录确认可能留在页面。安装、启用、运行观察不可混为一个状态。 | 旧确认随所属页面释放；取消不发写请求。更新、重复安装、卸载、离线目录、网络错误、恢复及维护锁分层验证。原生启停继续交由 `pi config`，不造 GUI 开关。 |
 | MCP 运行状态（先前修复，不是本轮改版） | 同目录重启及 A→B→A 后，旧连接观测不应继续显示；展开的能力报告不应沿用旧 Pi 的数据。 | `df983dba` 绑定运行身份，`05b5cdd1` 在 Pi 就绪后重读已有状态。只读刷新不等于自动测试连接。`f08bff84` 补齐报告先返回时旧原生摘要的失效。相对 main，两个前端脚本共新增 19 行就绪处理（含注释），另有 `server/mcp-native.js` 缓存修复；未改市场、代理、配置或页面布局。 |
 | 技能页和市场 | 原页头很小、操作单独占一行，列表与设置里的 MCP 不是同一种版式。市场首次读取失败有两处重试，未读取到目录也能点「加载目录」。 | 纯文字标题和页头动作、独立工具栏、作用域及路径、行尾状态和开关；缺少描述不填占位文字。市场保留一次只读恢复入口，加载与确认仍是显式手势；刷新保留分类节点和选中态。 |
-| 扩展页和市场 | 安装清单按小卡片铺开，只有一个条目的分组留下大块横向空白；旧市场三列卡片和独立色带与参照不符。 | 已安装项使用整宽行，分组、错误、更新/卸载、详情在自己的条目内；空简介不挤占错误说明。市场宽窗两列、窄窗一列，保留下方操作和包管理原有确认。 |
+| 扩展页和市场 | 安装清单按小卡片铺开，单条分组留下横向空白。市场一度套用 MCP 双列，但这与用户提供的 PI-Desktop v0.23.0 插件市场不同。 | 已安装仍是整宽管理行。市场按对应版本的源码改为自适应卡片、可换行的独立分类和同排贴底操作；保留原有 npm 数据、网络同意与安装确认。 |
 
 ## 真实 Pi 与跨模块矩阵
 
@@ -35,16 +35,16 @@ Windows，Pi 1.6.0。`tests/skills-live.cjs`、`tests/agent-capabilities-live.cj
 
 ## 视觉依据：分别看原图和对应源码
 
-PI-Desktop 对照锁定到 [`7b8c3169`](https://github.com/vastsa/PI-Desktop/tree/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba)。这是本次核验时的 upstream main；**仓库里保存的图片不等于这一提交重新运行的截图**。
+技能和已安装扩展的早期对照锁定到 [`7b8c3169`](https://github.com/vastsa/PI-Desktop/tree/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba)；**仓库归档图片不等于这一提交重新运行的截图**。本次插件市场以用户提供的 **v0.23.0** 实际页面为准，已核对该 tag 指向 [`95df2e0f`](https://github.com/vastsa/PI-Desktop/tree/95df2e0f9d124ba281fc99e6700ca6649766c77e)，不使用其它版本的归档图代替。市场行为提交 `8979698f`，夹具与验证提交 `7a78093b`；生产侧未增加网络请求或依赖，也未更换主导航入口。
 
 | 对照对象 | 阅读的原图、源码 | 借鉴与有意不同 |
 | --- | --- | --- |
 | 技能管理 | [上游技能列表原图](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/.github/pr-assets/skill-market/06-skill-list.png)、本地 [REF-008](ui/pi-desktop-reference/01-screenshot-inventory.md)；[AgentSkillsPage](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/apps/desktop/src/components/settings/AgentSkillsPage.tsx#L661-L695) | 保留作用域、项目选择、发现路径、分组导入、名称/描述与行尾开关。按 pi-GUI 原版 MCP 的主次顺序把「市场 / 新建」收入页头，扫描与项目选择相邻；不造上游产品的内置技能。 |
 | 技能市场 | [市场原图](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/.github/pr-assets/skill-market/01-skill-browse.png)、本地 REF-009；[SkillMarketPanel](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/apps/desktop/src/components/settings/SkillMarketPanel.tsx#L767-L841) | 按原图核对返回、来源、搜索、分类、两列图标卡片与预览。只保留一个市场标题；标签不伪造「已验证」。已装条目仍可查看，安装须先预览。 |
 | 已安装扩展 | [上游已安装原图](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/docs/public/screenshots/app/zh/plugins-live.webp)；[PluginsPage](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/apps/desktop/src/pages/PluginsPage.tsx#L49-L181) | 对照分页签、搜索、整宽分组行、异常文字、尾部操作。标题跟 pi-GUI MCP；不复制上游宿主的作用域菜单或自动更新。 |
-| 插件市场 | [上游市场原图](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/docs/public/screenshots/app/zh/plugins-market.webp)；[MarketplacePanel](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/apps/desktop/src/features/plugins/MarketplacePanel.tsx)、[网格 CSS](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/apps/desktop/src/styles/plugins.css#L1101-L1105) | 上游归档图是旧版三列，源码以可用宽度排网格；这里对齐本项目 MCP 市场的双列/单列。保留作者、版本、类别、详情和同意流程，不添加 npm 数据不能证明的评分/宿主权限。 |
+| 插件市场 | 用户的 v0.23.0 深色截图（不发布其个人侧栏）；同版本 [PluginsPage 页头](https://github.com/vastsa/PI-Desktop/blob/95df2e0f9d124ba281fc99e6700ca6649766c77e/apps/desktop/src/pages/PluginsPage.tsx#L49-L75)、[MarketplacePanel](https://github.com/vastsa/PI-Desktop/blob/95df2e0f9d124ba281fc99e6700ca6649766c77e/apps/desktop/src/features/plugins/MarketplacePanel.tsx#L51-L109)、[网格、正文与底栏 CSS](https://github.com/vastsa/PI-Desktop/blob/95df2e0f9d124ba281fc99e6700ca6649766c77e/apps/desktop/src/styles/plugins.css#L1101-L1242) | 每列最小 272px、间距 12px、正文最多四行；圆形分类可再次点选取消，卡片和底栏按钮是独立焦点目标。复用 pi-GUI 的扩展图标和控件；npm 月下载数不等于安装数，关键词不等于权限，评分/评论无数据则不显示。 |
 
-原版 MCP 标题的实际值为 30px/700，大于设计系统一般页面的 20px/600。按用户指定的参照，仅这两个目标页面沿用大标题；不为统一而倒改 MCP，也不新增全局覆盖。控件沿用 `.btn`、Segmented、Select、Badge 和 Switch。实测浅色下旧成功徽标仅 2.86:1，故共享 Badge 提供可选文字色混合，**仅由技能、扩展及相应技能弹层选用**，其他调用点及 MCP 原色不变。合成真实前景与祖先底色后，「已加载」浅色为 6.02:1、深色为 7.43:1；技能 5 种和扩展 5 种常见标签在四组分别断言至少 4.5:1，详见下方测量，不外推到所有状态。
+原版 MCP 标题的实际值为 30px/700，大于设计系统一般页面的 20px/600。技能及已安装扩展沿用大标题；插件市场按 v0.23.0 的独立页签设计采用 16px 标题、24px 图标块和页头右侧刷新；不为统一而倒改 MCP，也不新增全局覆盖。控件沿用 `.btn`、Segmented、Select、Badge 和 Switch。实测浅色下旧成功徽标仅 2.86:1，故共享 Badge 提供可选文字色混合，**仅由技能、扩展及相应技能弹层选用**，其他调用点及 MCP 原色不变。合成真实前景与祖先底色后，「已加载」浅色为 6.02:1、深色为 7.43:1；技能 5 种和扩展 5 种常见标签在四组分别断言至少 4.5:1，详见下方测量，不外推到所有状态。
 
 ### 本次真实渲染（离线夹具、DPR 1）
 
@@ -56,7 +56,7 @@ PI-Desktop 对照锁定到 [`7b8c3169`](https://github.com/vastsa/PI-Desktop/tre
 | 700×600 浅 | [列表](ui/evidence/agent-capabilities-phase3/skills/700-light-list.png) · [市场](ui/evidence/agent-capabilities-phase3/skills/700-light-04-market.png) | [已安装](ui/evidence/agent-capabilities-phase3/extensions/700-light-installed.png) · [市场](ui/evidence/agent-capabilities-phase3/extensions/700-light-market.png) | [管理](ui/evidence/agent-capabilities-phase3/mcp/700-light-management.png) · [市场](ui/evidence/agent-capabilities-phase3/mcp/700-light-market.png) |
 
 - Skills：Chrome 真实 Renderer，44 张、0 页面异常；[测量](ui/evidence/agent-capabilities-phase3/skills/render.json)。各组技能标题 30px/700，分组 16px，页头按钮 32px，列表和市场内容区横向溢出 0px。[编辑](ui/evidence/agent-capabilities-phase3/skills/700-dark-02c-editor-edit.png) · [导入](ui/evidence/agent-capabilities-phase3/skills/700-light-03-import.png) · [扫描](ui/evidence/agent-capabilities-phase3/skills/700-dark-04b-external.png) · [预览](ui/evidence/agent-capabilities-phase3/skills/1320-dark-07-preview.png) · [成功](ui/evidence/agent-capabilities-phase3/skills/1320-dark-11-notice.png) · [空组](ui/evidence/agent-capabilities-phase3/skills/700-dark-05-empty.png) · [错误](ui/evidence/agent-capabilities-phase3/skills/700-light-06-error.png)。
-- Extensions：Electron 离线真实窗口，22 张；[测量](ui/evidence/agent-capabilities-phase3/extensions/render.json)。补测使用扩展通知真实入口注入两条合成长诊断，不含用户截图里的实际路径或消息。四组默认只占 **34px**；首条扩展从桌面 y=254.5px / 窄窗 y=284.5px 开始。Enter 展开原文、Tab 进入正文、PageDown 只滚正文，收起后不丢全文；没有提示时不占位。[桌面展开](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-run-notices.png) · [窄窗展开](ui/evidence/agent-capabilities-phase3/extensions/700-light-run-notices.png)。两列/一列，市场卡片高 176px、圆角 12px、紧凑按钮 28px，横向溢出 0px。[筛选](ui/evidence/agent-capabilities-phase3/extensions/700-light-filtered.png) · [空结果](ui/evidence/agent-capabilities-phase3/extensions/700-light-empty.png) · [详情](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-detail.png) · [确认](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-confirm.png) · [安装中](ui/evidence/agent-capabilities-phase3/extensions/700-light-installing.png) · [安装失败](ui/evidence/agent-capabilities-phase3/extensions/700-light-install-failed.png)。
+- Extensions：Electron 离线真实窗口，23 张，含[参考缩放下的市场实拍](ui/evidence/agent-capabilities-phase3/extensions/reference-scale-dark-market.png)（CSS 1204×804、DPR 1.5、PNG 1806×1206）；[测量](ui/evidence/agent-capabilities-phase3/extensions/render.json)。补测使用扩展通知真实入口注入两条合成长诊断，不含用户截图里的实际路径或消息。四组默认只占 **34px**；首条扩展从桌面 y=254.5px / 窄窗 y=284.5px 开始。Enter 展开原文、Tab 进入正文、PageDown 只滚正文，收起后不丢全文；没有提示时不占位。[桌面展开](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-run-notices.png) · [窄窗展开](ui/evidence/agent-capabilities-phase3/extensions/700-light-run-notices.png)。常规浏览截图在新运行、无提示时拍摄；数据是 13 个隔离夹具包，不将参考截图中的计数写入产品。市场在 1320/1010/700px 分别为三/二/一列，卡片圆角 16px、操作按钮 32px；桌面首排卡片宽 321px、高 221px，高度随文字变化。四组横向溢出 0px，六类市场文字的最低实测对比度深色 5.39:1、浅色 6.15:1。[筛选](ui/evidence/agent-capabilities-phase3/extensions/700-light-filtered.png) · [空结果](ui/evidence/agent-capabilities-phase3/extensions/700-light-empty.png) · [详情](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-detail.png) · [确认](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-confirm.png) · [安装中](ui/evidence/agent-capabilities-phase3/extensions/700-light-installing.png) · [安装失败](ui/evidence/agent-capabilities-phase3/extensions/700-light-install-failed.png)。
 - MCP：`MCP_VISUAL_MATRIX=1 MCP_MARKET_PAGINATION=1 MCP_MARKET_PROGRESS=1 node tests/mcp-visual.cjs`。原版管理页四组标题 **30px/700**、按钮 32px、管理页溢出 0px；[测量](ui/evidence/agent-capabilities-phase3/mcp/render.json) · [新增](ui/evidence/agent-capabilities-phase3/mcp/700-dark-add.png) · [分页](ui/evidence/agent-capabilities-phase3/mcp/05d-market-narrow.png) · [安装预览](ui/evidence/agent-capabilities-phase3/mcp/04-install-preview.png) · [加载](ui/evidence/agent-capabilities-phase3/mcp/06-market-loading.png) · [不匹配](ui/evidence/agent-capabilities-phase3/mcp/700-light-empty-search.png) · [读取失败](ui/evidence/agent-capabilities-phase3/mcp/700-light-read-error.png)。管理页的测量不证明 MCP 市场在所有数据下无溢出。
 
 ## 测试、构建与审查
@@ -66,10 +66,10 @@ PI-Desktop 对照锁定到 [`7b8c3169`](https://github.com/vastsa/PI-Desktop/tre
 | `npm run test:skills`，8 套件 | 1130 | 0 | 5 个环境 skip 不计入分母：2 个 POSIX 权限位、3 个无文件符号链接权限；UI 43/43 |
 | `npm run test:extensions`，3 套件 | 310 | 0 | 0 |
 | `npm run test:mcp`，7 套件 | 411 | 0 | 0（44+24+72+19+14+35+203） |
-| `node tests/agent-capability-pages.cjs` | 49 | 0 | 三页结构、状态和生命周期 |
+| `node tests/agent-capability-pages.cjs` | 51 | 0 | 三页结构、状态和生命周期；新增市场元信息、底栏回焦和分类回退 |
 | `npm run test:primitives`，4 套件 | 116 | 0 | 具名检查；包括真实 Electron 样式 |
 | `node tests/server-security.cjs` / `capability-install.cjs` / `high-risk-regressions.cjs` | 44 / 83 / 28 | 0 | 隔离夹具 |
-| `node tests/extension-market-electron.cjs` / `node tests/shortcut-electron.cjs` | 48 / 103 | 0 | 22 / 35 张图，测试窗口不作为正常原生沙箱证明 |
+| `node tests/extension-market-electron.cjs` / `node tests/shortcut-electron.cjs` | 70 / 103 | 0 | 23 / 35 张图，测试窗口不作为正常原生沙箱证明 |
 | `PI_BIN=… node tests/skills-live.cjs` | 32 | 0 | 真实 Pi 1.6.0，仅临时数据 |
 | `PI_BIN=… node tests/agent-capabilities-live.cjs` | 27 | 0 | 源码 HTTP 后端；另指定 `PI_GUI_LIVE_BACKEND` 实测打包后的 `server.cjs` |
 | `npm run build:app -- --rebuild` | — | 0 | 本机 Electron 44.4.3 ZIP 离线重建；Windows x64 整包 335.3 MB |
@@ -95,7 +95,7 @@ PI-Desktop 对照锁定到 [`7b8c3169`](https://github.com/vastsa/PI-Desktop/tre
 
 **运行提示增量复审（Important，已修复）。** 对 `74955f2e..618c6c95` 的独立静态审查指出：提示区持有焦点时若因 Pi 重启而隐藏，焦点不再落在可见控件上。作者在真实 Electron 中复现；页面回归修前 48/49。`221b92b3` 只在提示区持有焦点时将其交还当前页签；`82b350c6` 覆盖摘要、正文、搜索三条路径以及切换项目。修后页面回归 49/49、真实 Electron 48/48（22 张图）、通知行为 10/10；没有改版式或全局通知路由。桌面重新构建后资源比对 23/23，打包后端 27/27、SEA 50/50。
 
-**完整证明待验证。** 首次本地 `npm test` 停在 `tests/high-risk-regressions.cjs` 的普通文件名 `report%20final.txt`：断言 `result.ok` 为 `false`（27/28）。上传模块、路由和该用例均不在分支 diff 内；单独复跑为 28/28。失败日志未给出具体请求错误，不能推定根因，也不能把重跑单套件当作全量通过。本地第二次 `npm test` 启动于复审增量之前，在 `tests/provider-config-store.cjs` 的 3 项 Windows 原生凭据文件保护断言失败，不记作通过。[完整 PR CI 45033732461](https://github.com/HYJ1817/pi-gui/actions/runs/45033732461) 对 `74955f2e` 已成功，但不替代随后「运行提示折叠及已安装列表精简」的完整证明。后者已通过本地定向和真实渲染，最终提交的完整 CI 另记。
+**完整证明待验证。** 首次本地 `npm test` 停在 `tests/high-risk-regressions.cjs` 的普通文件名 `report%20final.txt`：断言 `result.ok` 为 `false`（27/28）。上传模块、路由和该用例均不在分支 diff 内；单独复跑为 28/28。失败日志未给出具体请求错误，不能推定根因，也不能把重跑单套件当作全量通过。本地第二次 `npm test` 启动于复审增量之前，在 `tests/provider-config-store.cjs` 的 3 项 Windows 原生凭据文件保护断言失败，不记作通过。`66bd1b95` 的[完整 PR CI 45037241940](https://github.com/HYJ1817/pi-gui/actions/runs/45037241940) 已成功，包含运行提示和回焦修复，但不替代本次 v0.23.0 市场增量的证明。后者已通过定向和桌面渲染，最终提交的完整 CI 另记。v0.23.0 首轮高分屏截图验收识别到 `capturePage()` 返回逻辑尺寸 1204×804，改用 Chromium 物理像素截图并校验 PNG 尺寸；未放宽断言。
 
 边界：没有真实远端模型、OAuth、外部 Registry 安装、第三方 MCP 或安装程序升级测试；未在同版本上实际操作 PI-Desktop（使用了上游原图与当前源码）；未逐项覆盖任意字体放大、所有瞬时交互或所有可见颜色的 WCAG 对比度。Windows 文件符号链接的跳过项仍待有权限的环境复验。文件系统对象的外部并发替换保留[安全规范](security.md#技能写入与市场2a)所述边界。
 
