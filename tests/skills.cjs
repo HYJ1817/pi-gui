@@ -646,8 +646,10 @@ const listTmp = (dir) => {
 
     const post = await call(sk, 'POST', '/api/skills');
     check('H11. POST /api/skills → 405', () => post.code === 405 || post.code);
+    // 删除本身在 tests/skills-manage.cjs 里测；这里只守住「没说清是哪个项目就不动手」
     const del = await call(sk, 'DELETE', '/api/skills/' + uOne.id);
-    check('H12. DELETE → 405（第一版不提供删除）', () => del.code === 405 || del.code);
+    check('H12. DELETE 不带 project 参数 → 400 project-required，磁盘上什么都没动', () =>
+      (del.code === 400 && del.jsonBody().code === 'project-required' && fs.existsSync(uOne.path)) || JSON.stringify({ code: del.code, body: del.jsonBody() }));
   }
 
   {

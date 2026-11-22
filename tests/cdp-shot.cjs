@@ -1003,7 +1003,7 @@ async function main() {
   await shotOf('#workSurface .skill-row.is-open', '116-workspace-skill-detail', 'P14-D：Skill 行内详情', ['code-review'], [['唯一展开的 Skill', `document.querySelectorAll('#workSurface .skill-row-main[aria-expanded="true"]').length===1 && !!document.querySelector('#workSurface .skill-detail')`]]);
   await evalJs(`[...document.querySelectorAll('#workSurface .skill-row')].find(x=>x.textContent.includes('proj-only'))?.querySelector('.skill-row-main')?.click()`);
   await sleep(220);
-  await shotOf('#workSurface', '117-workspace-skill-untrusted', 'P14-D：未信任 Skill 状态', ['项目未被信任'], [['状态有文字', `[...document.querySelectorAll('#workSurface .skill-row')].find(x=>x.textContent.includes('proj-only'))?.textContent.includes('项目未被信任')`]]);
+  await shotOf('#workSurface', '117-workspace-skill-untrusted', 'P14-D：未信任 Skill 状态', ['未加载（项目未信任）'], [['状态有文字', `[...document.querySelectorAll('#workSurface .skill-row')].find(x=>x.textContent.includes('proj-only'))?.textContent.includes('未加载（项目未信任）')`]]);
   /* MCP 不再是扩展页的标签：它是「设置 › 扩展与 MCP › MCP 配置」。服务器管理在页面主体，
    * 原 MCP 标签里的证据（版本出处 / built-in / 原生状态 / RPC 事实）并入页尾的「MCP 能力报告」折叠区。 */
   await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navMcp').click()`);
