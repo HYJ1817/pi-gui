@@ -186,6 +186,8 @@ export function createMcpReport() {
   };
   const onBridgeReady = () => {
     if (disposed) return;
+    // /mcp 与 /mcp/servers 独立返回；新摘要到达前不能沿用上一轮的原生状态。
+    native = {};
     loaded = false;
     token += 1;
     if (details.open) void load();
