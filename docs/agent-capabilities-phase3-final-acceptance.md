@@ -69,7 +69,7 @@ PI-Desktop 对照锁定到 [`7b8c3169`](https://github.com/vastsa/PI-Desktop/tre
 | `node tests/agent-capability-pages.cjs` | 49 | 0 | 三页结构、状态和生命周期 |
 | `npm run test:primitives`，4 套件 | 116 | 0 | 具名检查；包括真实 Electron 样式 |
 | `node tests/server-security.cjs` / `capability-install.cjs` / `high-risk-regressions.cjs` | 44 / 83 / 28 | 0 | 隔离夹具 |
-| `node tests/extension-market-electron.cjs` / `node tests/shortcut-electron.cjs` | 45 / 103 | 0 | 22 / 35 张图，测试窗口不作为正常原生沙箱证明 |
+| `node tests/extension-market-electron.cjs` / `node tests/shortcut-electron.cjs` | 48 / 103 | 0 | 22 / 35 张图，测试窗口不作为正常原生沙箱证明 |
 | `PI_BIN=… node tests/skills-live.cjs` | 32 | 0 | 真实 Pi 1.6.0，仅临时数据 |
 | `PI_BIN=… node tests/agent-capabilities-live.cjs` | 27 | 0 | 源码 HTTP 后端；另指定 `PI_GUI_LIVE_BACKEND` 实测打包后的 `server.cjs` |
 | `npm run build:app -- --rebuild` | — | 0 | 本机 Electron 44.4.3 ZIP 离线重建；Windows x64 整包 335.3 MB |
@@ -91,7 +91,9 @@ PI-Desktop 对照锁定到 [`7b8c3169`](https://github.com/vastsa/PI-Desktop/tre
 
 新增回归提交 `24fbc2b9`；独立审查不等同于合并批准。
 
-运行提示增量（产品 `2b04c3c1`、测试 `5523c8cb`）：旧页面的长消息用例先红（页面回归 48/49，期望折叠控件、实际是平铺 section）；改后 49/49，另外通知路由/生命周期 10/10、扩展三套件 310/310、共享原语 116 项通过。Electron 首轮键盘驱动只发送键码，没有模拟原生 Enter 的字符事件，未能展开；与仓库已有原生 `summary` 测试对齐输入方式，不更改产品键盘语义，最终四组 45/45。
+运行提示增量（产品 `2b04c3c1`、测试 `5523c8cb`）：旧页面的长消息用例先红（页面回归 48/49，期望折叠控件、实际是平铺 section）；改后 49/49，另外通知路由/生命周期 10/10、扩展三套件 310/310、共享原语 116 项通过。Electron 首轮键盘驱动只发送键码，没有模拟原生 Enter 的字符事件，未能展开；与仓库已有原生 `summary` 测试对齐输入方式，不更改产品键盘语义，该轮四组 45/45。
+
+**运行提示增量复审（Important，已修复）。** 对 `74955f2e..618c6c95` 的独立静态审查指出：提示区持有焦点时若因 Pi 重启而隐藏，焦点不再落在可见控件上。作者在真实 Electron 中复现；页面回归修前 48/49。`221b92b3` 只在提示区持有焦点时将其交还当前页签；`82b350c6` 覆盖摘要、正文、搜索三条路径以及切换项目。修后页面回归 49/49、真实 Electron 48/48（22 张图）、通知行为 10/10；没有改版式或全局通知路由。桌面重新构建后资源比对 23/23，打包后端 27/27、SEA 50/50。
 
 **完整证明待验证。** 首次本地 `npm test` 停在 `tests/high-risk-regressions.cjs` 的普通文件名 `report%20final.txt`：断言 `result.ok` 为 `false`（27/28）。上传模块、路由和该用例均不在分支 diff 内；单独复跑为 28/28。失败日志未给出具体请求错误，不能推定根因，也不能把重跑单套件当作全量通过。本地第二次 `npm test` 启动于复审增量之前，在 `tests/provider-config-store.cjs` 的 3 项 Windows 原生凭据文件保护断言失败，不记作通过。[完整 PR CI 45033732461](https://github.com/HYJ1817/pi-gui/actions/runs/45033732461) 对 `74955f2e` 已成功，但不替代随后「运行提示折叠及已安装列表精简」的完整证明。后者已通过本地定向和真实渲染，最终提交的完整 CI 另记。
 
