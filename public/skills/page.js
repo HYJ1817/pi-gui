@@ -199,7 +199,7 @@ function createSkillsPage(card) {
   noticeHost.setAttribute('aria-live', 'polite');
   const notes = el('div', 'skills-notes');
   const content = el('div', 'skills-content');
-  const inner = el('div', 'skills-inner');
+  const inner = el('div', 'skills-inner ds-readable-badges');
   inner.append(head, noticeHost, notes, toolbar, content);
   card.append(inner);
 

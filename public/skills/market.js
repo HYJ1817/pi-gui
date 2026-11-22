@@ -551,7 +551,7 @@ export function renderSkillsMarket(holder, {
 
     openModal((card, close) => {
       closeDialog = close;
-      card.classList.add('skills-dialog', 'skills-preview-dialog');
+      card.classList.add('skills-dialog', 'skills-preview-dialog', 'ds-readable-badges');
       card.setAttribute('aria-label', '预览技能');
 
       const head = el('header', 'skills-dialog-head');

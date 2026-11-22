@@ -471,22 +471,30 @@
 
 .ds-badge-success {
   background: color-mix(in srgb, var(--ds-success) 14%, transparent);
-  color: var(--ds-success);
+  color: var(--ds-badge-success-ink, var(--ds-success));
 }
 
 .ds-badge-warning {
   background: color-mix(in srgb, var(--ds-warning) 14%, transparent);
-  color: var(--ds-warning);
+  color: var(--ds-badge-warning-ink, var(--ds-warning));
 }
 
 .ds-badge-error {
   background: color-mix(in srgb, var(--ds-error) 14%, transparent);
-  color: var(--ds-error);
+  color: var(--ds-badge-error-ink, var(--ds-error));
 }
 
 .ds-badge-purple {
   background: color-mix(in srgb, var(--ds-purple) 14%, transparent);
-  color: var(--ds-purple);
+  color: var(--ds-badge-purple-ink, var(--ds-purple));
+}
+
+/* Opt-in for small status text on tinted surfaces. Other consumers keep their original ink. */
+.ds-readable-badges {
+  --ds-badge-success-ink: color-mix(in srgb, var(--ds-success) 55%, var(--ds-text-primary));
+  --ds-badge-warning-ink: color-mix(in srgb, var(--ds-warning) 55%, var(--ds-text-primary));
+  --ds-badge-error-ink: color-mix(in srgb, var(--ds-error) 55%, var(--ds-text-primary));
+  --ds-badge-purple-ink: color-mix(in srgb, var(--ds-purple) 55%, var(--ds-text-primary));
 }
 
 /* ==========================================================================

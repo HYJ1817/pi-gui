@@ -40,7 +40,7 @@ export function openExtensions(options = {}) {
       }
     });
 
-    const inner = el('div', 'extensions-inner');
+    const inner = el('div', 'extensions-inner ds-readable-badges');
     const head = el('header', 'extensions-head');
     const heading = el('h2', 'extensions-title', '扩展');
     const actionsSlot = el('div', 'extensions-head-actions');
