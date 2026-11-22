@@ -761,6 +761,13 @@ function createWorld(label, entry) {
     assert.equal(main.getAttribute('aria-expanded'), 'false');
     assert.equal(main.getAttribute('aria-controls'), 'skillDetail-a000000000000001');
     assert.equal(main.contains(review.querySelector('.skill-toggle')), false, 'the switch is not nested inside the row button');
+    for (const row of page.card.querySelectorAll('.skill-row')) {
+      const badge = row.querySelector('.skill-row-actions .ds-badge');
+      for (const focusTarget of row.querySelectorAll('.skill-row-main, .skill-toggle')) {
+        const ref = focusTarget.getAttribute('aria-describedby');
+        assert.equal(A.d.getElementById(ref), badge, 'keyboard focus exposes the runtime status of this row, independently of the switch state');
+      }
+    }
     page.close();
   });
 

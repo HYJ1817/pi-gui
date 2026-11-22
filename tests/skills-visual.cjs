@@ -332,6 +332,18 @@ async function main() {
     metrics.push({ theme, ...result, contrasts });
   }
 
+  // CDP 读取真实 Chromium 暴露的可访问描述，不只检查 DOM 里是否有 ARIA 属性。
+  async function verifyRowStatus() {
+    const row = '.skill-row[data-skill-id="a1c0de0000000001"]';
+    const doc = (await send('DOM.getDocument')).result.root.nodeId;
+    for (const [selector, role] of [['.skill-row-main', 'button'], ['.skill-toggle', 'switch']]) {
+      const { nodeId } = (await send('DOM.querySelector', { nodeId: doc, selector: row + ' ' + selector })).result;
+      const tree = (await send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })).result;
+      const action = tree.nodes.find(node => !node.ignored && node.role?.value === role);
+      assert(action?.description?.value === '已加载', `${role} 缺少独立于启停配置的加载状态`);
+    }
+  }
+
   async function captureDesktop(theme) {
     await setViewport(1320, 820);
     await applyTheme(theme);
@@ -346,6 +358,7 @@ async function main() {
       '分组头缺少发现目录',
     );
     await measureList(theme);
+    await verifyRowStatus();
     await shot(`1320-${theme}-01-list`);
 
     await click('.skills-page .skill-row[data-skill-id="a1c0de0000000001"] .skill-row-main');

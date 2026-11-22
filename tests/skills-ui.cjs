@@ -641,7 +641,10 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     refresh.click();
     assert.equal(refresh.disabled, true);
     assert.equal(refresh.getAttribute('aria-busy'), 'true');
+    docs.focus(); // Keyboard user has already moved away from the refresh action.
+    assert.equal(A.d.activeElement, docs);
     await tick(80);
+    assert.equal(A.d.activeElement, docs, 'catalog completion must not steal keyboard focus');
     assert.equal(filter('docs'), docs);
     assert.equal(docs.getAttribute('aria-checked'), 'true');
     assert.equal(filter('').getAttribute('aria-checked'), 'false');

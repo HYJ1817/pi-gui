@@ -57,6 +57,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   };
   const calls = [];
   let serversFail = false;
+  let serversGate = null;
   let forceArgsProtected = false;
   let forceUrlProtected = false;
   let testResponse = null;
@@ -173,7 +174,10 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
     if (target === '/api/status') return ok({ ok: true, cwd: 'C:\\workspace', hasProject: true });
     if (target === '/api/projects') return ok({ ok: true, active: 'C:\\workspace', items: [{ name: 'Workspace', path: 'C:\\workspace' }] });
-    if (target === '/api/mcp/servers' && method === 'GET') return ok(serversFail ? { ok: false, error: '读取 MCP 摘要失败（fixture）' } : summary);
+    if (target === '/api/mcp/servers' && method === 'GET') {
+      if (serversGate) await serversGate;
+      return ok(serversFail ? { ok: false, error: '读取 MCP 摘要失败（fixture）' } : summary);
+    }
     if (target === '/api/mcp/servers' && method === 'POST') return ok({ ok: true, action: body?.action, name: body?.name });
     if (pathOnly === '/api/mcp/config' && method === 'POST') {
       const action = body?.action;
@@ -382,6 +386,36 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
       assert.equal(postBodies('/api/mcp/status').length, statusReads);
     } finally {
       summary.runtime = previousRuntime;
+      $('navMcp').click();
+      await tick();
+    }
+  });
+
+  await check('展开报告先于新运行的服务器摘要返回时，原生状态保持未知，不混用旧证据', async () => {
+    const previous = summary.native;
+    const report = page().querySelector('.mcp-report');
+    const nativeText = () => report.querySelector('.mcp-report-native')?.textContent || '';
+    let release;
+    try {
+      report.open = true;
+      await tick();
+      assert.match(nativeText(), /原生 MCP 生效中/);
+      serversGate = new Promise((resolve) => { release = resolve; });
+      summary.native = { state: 'replaced', reason: '来自新一轮的摘要' };
+      const writes = calls.filter((c) => c.method === 'POST').length;
+      d.dispatchEvent(new w.CustomEvent('pi-gui:capability-bridge-ready'));
+      await tick(); // 报告已返回；/servers 仍由测试闸门扣住。
+      assert.match(nativeText(), /未知/);
+      assert.doesNotMatch(nativeText(), /生效中|被扩展接管/);
+      release();
+      await tick();
+      assert.match(nativeText(), /内置 MCP 被扩展接管/);
+      assert.doesNotMatch(nativeText(), /未知|生效中/);
+      assert.equal(calls.filter((c) => c.method === 'POST').length, writes, '就绪更新不能发起连接或写配置');
+    } finally {
+      release?.();
+      serversGate = null;
+      summary.native = previous;
       $('navMcp').click();
       await tick();
     }
