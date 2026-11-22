@@ -1,0 +1,1417 @@
+{
+  "contractVersion": 1,
+  "protocolName": "pi-gui-remote",
+  "status": "frozen-v1",
+  "transport": {
+    "scheme": "https",
+    "defaultEnabled": false,
+    "existingLocalApiForwarding": false,
+    "pairing": {
+      "codeFormat": "6-digit decimal CSPRNG code; never logged or stored in plaintext",
+      "ttlSeconds": 120,
+      "maxAttemptsPerWindow": 5,
+      "singleUse": true,
+      "requiresDesktopLocalConfirmation": true,
+      "defaultScopes": [
+        "projects.read",
+        "sessions.read"
+      ],
+      "attemptWindowSeconds": 600,
+      "codeEntropyBits": 19.93,
+      "verification": "rate limited and single use; code is shown locally and is not credential by itself; exact TLS service fingerprint plus device key possession proof and desktop confirmation required",
+      "pairingSessionId": {
+        "encoding": "base64url-no-padding-16-random-bytes",
+        "carriedInQrAndExchangeBody": true,
+        "expiresWithPairCode": true
+      },
+      "codeGeneration": "CSPRNG; six decimal digits; display once in trusted desktop UI and QR; never include in logs",
+      "pairingCodeStorage": "HMAC-SHA256(installation-secret, pairingSessionId || pairingCode); secret created locally with restrictive file ACL; compare using constant-time equality; never persist plaintext pairing code",
+      "perSessionAttemptLimit": 5,
+      "maxPendingSessions": 8
+    },
+    "tls": {
+      "minimum": "TLS 1.2",
+      "desktopServiceFingerprintRequired": true,
+      "redirects": "forbidden",
+      "authentication": "pinned-fingerprint",
+      "pinning": "Client MUST verify the TLS peer certificate SHA-256 fingerprint byte-exactly equals the bootstrap fingerprint carried in the desktop QR/local UI, on the pair exchange and on every subsequent connection. Hostname matching alone is never sufficient and no CA path validation substitutes for the pin.",
+      "serviceKeyBinding": "The QR bootstrap carries BOTH the TLS certificate fingerprint and the desktop Ed25519 service public key. The pairing response signature is verified against that pinned service public key; a valid TLS pin without the matching service key is a hard failure.",
+      "rotation": "Any certificate or service-key change requires a new pairing exchange after local desktop confirmation; existing pins are never silently updated. Clients present the pinned fingerprint in serviceFingerprint during pairing and fail closed on mismatch.",
+      "bootstrapChannel": "Fingerprint and service public key reach the client only through the trusted desktop UI/QR channel, never over the remote endpoint itself (no TOFU over the same channel being authenticated)."
+    }
+  },
+  "signedRequestHeaders": [
+    "x-pi-remote-device",
+    "x-pi-remote-epoch",
+    "x-pi-remote-request-id",
+    "x-pi-remote-timestamp",
+    "x-pi-remote-nonce",
+    "x-pi-remote-body-sha256",
+    "x-pi-remote-signature"
+  ],
+  "requestEnvelope": {
+    "type": "object",
+    "required": [
+      "protocolVersion",
+      "operation",
+      "payload"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "protocolVersion": {
+        "type": "integer",
+        "const": 1
+      },
+      "operation": {
+        "type": "string",
+        "enum": [
+          "projects.list",
+          "sessions.list",
+          "runtime.create",
+          "runtime.snapshot",
+          "chat.send",
+          "chat.stop",
+          "approvals.list",
+          "approvals.respond"
+        ]
+      },
+      "ownerRevision": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "payload": {
+        "type": "object"
+      }
+    }
+  },
+  "pairExchange": {
+    "method": "POST",
+    "path": "/remote/v1/pair/exchange",
+    "body": {
+      "type": "object",
+      "required": [
+        "pairCode",
+        "deviceName",
+        "devicePublicKey",
+        "clientNonce",
+        "serviceFingerprint",
+        "proofSignature",
+        "pairingSessionId",
+        "requestedScopes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pairCode": {
+          "type": "string",
+          "pattern": "^[0-9]{6}$"
+        },
+        "deviceName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        },
+        "devicePublicKey": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43,
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "clientNonce": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43,
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "serviceFingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "proofSignature": {
+          "type": "string",
+          "minLength": 86,
+          "maxLength": 86,
+          "pattern": "^[A-Za-z0-9_-]{86}$"
+        },
+        "pairingSessionId": {
+          "type": "string",
+          "minLength": 22,
+          "maxLength": 22,
+          "pattern": "^[A-Za-z0-9_-]{22}$"
+        },
+        "requestedScopes": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string",
+            "enum": [
+              "projects.read",
+              "sessions.read",
+              "sessions.create",
+              "approvals.read",
+              "chat.send",
+              "chat.stop",
+              "approvals.respond"
+            ]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "authorization": "TLS peer certificate fingerprint must match the desktop QR/bootstrap fingerprint; client proves possession of device private key; desktop locally confirms device and scopes",
+    "responseFields": [
+      "deviceId",
+      "serverNonce",
+      "grantedScopes",
+      "expiresAt",
+      "serverSignature",
+      "replayEpoch"
+    ],
+    "defaultScopes": [
+      "projects.read",
+      "sessions.read"
+    ],
+    "publicKeyAlgorithm": "Ed25519-raw-public-key",
+    "responseSchema": {
+      "type": "object",
+      "required": [
+        "deviceId",
+        "serverNonce",
+        "grantedScopes",
+        "expiresAt",
+        "serverSignature",
+        "replayEpoch"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{8,128}$"
+        },
+        "serverNonce": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43,
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "grantedScopes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "projects.read",
+              "sessions.read",
+              "sessions.create",
+              "approvals.read",
+              "chat.send",
+              "chat.stop",
+              "approvals.respond"
+            ]
+          }
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "serverSignature": {
+          "type": "string",
+          "minLength": 86,
+          "maxLength": 86,
+          "pattern": "^[A-Za-z0-9_-]{86}$",
+          "description": "Ed25519 signature over remote-v1-pair-response, clientNonce and canonical unsigned response; clientNonce from request is the correlation binding"
+        },
+        "replayEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The device record replayEpoch committed by the registration transaction; the client must send it in x-pi-remote-epoch until the next re-pair."
+        }
+      }
+    },
+    "bodyEncoding": "UTF-8 canonical JSON with sorted keys; reject duplicate keys and non-canonical bodies",
+    "proofMessage": "remote-v1-pair + newline + pairingSessionId + newline + pairCode + newline + deviceName + newline + devicePublicKey + newline + clientNonce + newline + serviceFingerprint + newline + canonical(requestedScopes)",
+    "liveSessionPrevalidation": "Server MUST validate the pairingSessionId exists, is unexpired and not consumed, and that pairCode matches its stored HMAC BEFORE any local confirmation prompt. Unknown or expired sessions are rejected without prompting and without allocating confirmation state.",
+    "attemptBudgets": {
+      "perPairingSession": "5 attempts before invalidation",
+      "perPeer": "rate-limited per server-derived peer (connection source IP/socket) within attemptWindowSeconds; charged on EVERY submitted code, including wrong ones",
+      "serviceWide": "bounded global in-flight pairing exchanges (maxPendingSessions) AND a global code-attempt budget per window; new sessions or attempts beyond budget rejected"
+    },
+    "desktopApprovalBinding": "Local confirmation binds the one-time approval to the exact pairingSessionId, pairCode, devicePublicKey, deviceName and the granted scope set displayed. Confirmation consumed atomically with code consumption and device registration in a single transaction; approval cannot be reused across a different proof or scope set.",
+    "clientResponseVerification": "Client verifies the pairing response serverSignature with the pinned desktop service public key, checks expiresAt is in the future relative to its own clock, matches the echoed requestId/clientNonce and grantedScopes to its outstanding exchange, then retires that outstanding exchange. Any mismatch discards the registration.",
+    "keyUniqueness": "A registered devicePublicKey must not already be bound to a different deviceId; duplicate keys across registrations are rejected. Rotation creates a new pairing exchange and revokes the prior binding atomically.",
+    "expiresAtValidation": "Server validates expiresAt is a well-formed RFC3339/ISO instant and strictly in the future BEFORE signing or registering; a response that fails its own responseSchema is never produced.",
+    "responseScopeParity": "grantedScopes in the response must equal exactly the scope set the desktop confirmation approved; a subset or superset is a contract violation.",
+    "queryParameters": [],
+    "budgetReservation": "Server reserves per-peer and service-wide attempt budget BEFORE validating the session or code, using server-derived peer identity (connection source), never client-supplied fields. Every failed guess against a live session consumes budget; budget exhaustion rejects before any session lookup detail is revealed.",
+    "approvalBinding": "Local confirmation produces a one-time approvalId bound to the FULL verified transcript (pairingSessionId, pairCode, deviceName, devicePublicKey, clientNonce, serviceFingerprint, proofSignature) and the exact approved scope set. Registration consumes (approvalId + code + session) atomically, rechecking expiry, capacity and device-key uniqueness in the same transaction.",
+    "responseConsumption": "Client verification requires a live outstanding exchange for the pinned service: the echoed requestId must equal the outstanding clientNonce, grantedScopes must equal the approved set, expiresAt must be future, then the outstanding exchange is retired atomically. A valid unexpired response presented twice is rejected the second time.",
+    "expiresAtFormat": "RFC3339 UTC instant YYYY-MM-DDTHH:MM:SS[.fff]Z (fractional seconds permitted) with strict calendar validation; impossible dates are rejected before normalization or comparison.",
+    "approvedScopeSource": "The desktop approval binds the exact scope set; the client-side expected set for response comparison is its own requestedScopes from the outstanding exchange (server never widens beyond what confirmation approved).",
+    "scopeAgreement": "Exact canonical set agreement: request.requestedScopes, the scopes shown at local confirmation, the registered grants and response.grantedScopes are byte-identical sets. Subset/widened/duplicate-containing sets are rejected before registration.",
+    "outstandingExchange": "verifyPairExchangeResponse resolves a LIVE outstanding exchange from trusted server-issued state: it must carry the pinned serviceFingerprint, an expiresAtMs still in the future, the device public key presented, and the unique requestedScopes set; the exchange is atomically retired in the same transaction that registers the device and commits replayEpoch.",
+    "registration": "The atomic registration transaction binds deviceId+publicKey, the exact approved scope set, expiresAt and the freshly allocated replayEpoch; a second presentation, expired exchange, wrong-service exchange or conflicting registration fails closed."
+  },
+  "responseEnvelope": {
+    "successRequired": [
+      "protocolVersion",
+      "requestId",
+      "operation",
+      "serverRevision",
+      "result"
+    ],
+    "errorRequired": [
+      "protocolVersion",
+      "requestId",
+      "error"
+    ],
+    "errorFields": [
+      "code",
+      "retryable"
+    ],
+    "rawErrorMessage": false,
+    "errorCodePattern": "^(?:unauthorized|pairing_required|pairing_expired|pairing_rejected|rate_limited|scope_denied|stale_owner|stale_revision|unknown_resource|operation_rejected|replay_rejected|sequence_gap|server_busy|unavailable|invalid_request|payload_invalid|internal_error)$",
+    "errorCodes": [
+      "unauthorized",
+      "pairing_required",
+      "pairing_expired",
+      "pairing_rejected",
+      "rate_limited",
+      "scope_denied",
+      "stale_owner",
+      "stale_revision",
+      "unknown_resource",
+      "operation_rejected",
+      "replay_rejected",
+      "sequence_gap",
+      "server_busy",
+      "unavailable",
+      "invalid_request",
+      "payload_invalid",
+      "internal_error"
+    ],
+    "internalCodeMapping": {
+      "preAuthentication": "Any failure before signature verification (route, transport header, body parse, fingerprint, replay-store unavailable) maps uniformly to 'unauthorized'; internal codes never reach the wire.",
+      "postAuthentication": {
+        "request_replayed": "replay_rejected",
+        "scope_denied": "scope_denied",
+        "stale_owner": "stale_owner",
+        "stale_revision": "stale_revision",
+        "unknown_resource": "unknown_resource",
+        "sequence_gap": "sequence_gap",
+        "rate_limited": "rate_limited",
+        "server_busy": "server_busy",
+        "unavailable": "unavailable",
+        "payload_invalid": "payload_invalid",
+        "invalid_request": "invalid_request",
+        "relay_failed": "unavailable",
+        "operation_rejected": "operation_rejected",
+        "frame_invalid": "invalid_request",
+        "frame_context_required": "unavailable",
+        "frame_signature_invalid": "unauthorized"
+      },
+      "preAuthenticationDetail": "Internal codes such as signature_expired, signature_invalid, device_identity_mismatch, replay_store_unavailable, body_parse_mismatch are NEVER sent; they map per internalCodeMapping to a closed wire code.",
+      "pairExchange": {
+        "route_mismatch": "unauthorized",
+        "pair_headers_invalid": "unauthorized",
+        "pair_payload_invalid": "payload_invalid",
+        "service_fingerprint_mismatch": "unauthorized",
+        "pair_rate_limited": "rate_limited",
+        "pairing_session_invalid": "pairing_expired",
+        "pairing_rejected": "pairing_rejected",
+        "pair_proof_invalid": "unauthorized",
+        "scopes_invalid": "payload_invalid",
+        "desktop_confirmation_required": "unavailable",
+        "pair_response_invalid": "internal_error",
+        "pair_signing_failed": "internal_error",
+        "pair_store_unavailable": "unavailable",
+        "pair_code_consumed_or_limited": "pairing_rejected",
+        "pair_rate_limiter_unavailable": "unavailable",
+        "query_invalid": "unauthorized"
+      },
+      "preAuthenticationNote": "Codes emitted before authentication completes (route/signature/device/grant/owner_revision/query/envelope/cursor) uniformly map to 'unauthorized' with no internal detail. See PRE_AUTHENTICATION_CODES in the reference validator."
+    },
+    "requestIdCorrelation": "When a signed request fails before a valid requestId is established, or a pairing exchange has no request UUID, the wire error echoes a fixed all-zero UUID (00000000-0000-0000-0000-000000000000) in requestId; internal correlation uses the attempt log, never a reflected attacker value.",
+    "requestIdPolicy": "requestId is a required string UUID echoing the signed request. The all-zero UUID is permitted ONLY on pre-authentication failures where the wire code is 'unauthorized' (correlation impossible); success responses and authenticated errors always echo the real request id. Non-string or array requestId values are rejected before matching.",
+    "wireErrorStageAware": "wireErrorCode(code, stage): for stage 'preauth' every failure maps to 'unauthorized'; for stage 'authenticated' the internal-to-wire closed map applies via own-property lookup with 'internal_error' fallback."
+  },
+  "scopeVocabulary": [
+    "projects.read",
+    "sessions.read",
+    "sessions.create",
+    "approvals.read",
+    "chat.send",
+    "chat.stop",
+    "approvals.respond"
+  ],
+  "operations": [
+    {
+      "id": "projects.list",
+      "method": "GET",
+      "path": "/remote/v1/projects",
+      "scope": "projects.read",
+      "payload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "projects",
+          "registryRevision"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "projects": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "type": "object",
+              "required": [
+                "projectId",
+                "displayName"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "projectId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{8,128}$"
+                },
+                "displayName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                }
+              }
+            }
+          },
+          "registryRevision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Monotonic revision of the whole project registry at read time; it is the runtime.create precondition for every project in this response."
+          }
+        }
+      },
+      "registryRevision": "The registry revision a runtime.create on any listed project must echo as ownerRevision; the only sanctioned source of the create precondition.",
+      "ownerRequirement": "collection",
+      "ownerNamespaces": []
+    },
+    {
+      "id": "sessions.list",
+      "method": "GET",
+      "path": "/remote/v1/projects/{projectId}/sessions",
+      "scope": "sessions.read",
+      "payload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "pathParameters": {
+        "projectId": "opaque-id"
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "sessions"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "required": [
+                "sessionId",
+                "displayName",
+                "updatedAt",
+                "projectId"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "sessionId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{8,128}$"
+                },
+                "displayName": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "projectId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{8,128}$"
+                },
+                "activeConversations": {
+                  "type": "array",
+                  "maxItems": 64,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "conversationId"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "conversationId": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{8,128}$"
+                      }
+                    }
+                  },
+                  "description": "Live conversation handles this session currently owns; the only supported way to rediscover a conversation id."
+                }
+              }
+            }
+          }
+        }
+      },
+      "ownerRequirement": "project",
+      "ownerNamespaces": [
+        "runtime"
+      ],
+      "projectionNote": "Every returned item.projectId MUST equal the signed {projectId} path parameter the request addressed (grant check AND address match); the gateway must not mix sessions across projects. filterGrantedResources validates grant presence; the projection layer additionally enforces this address equality."
+    },
+    {
+      "id": "runtime.create",
+      "method": "POST",
+      "path": "/remote/v1/projects/{projectId}/conversations",
+      "scope": "sessions.create",
+      "ownerRevisionRequired": true,
+      "payload": {
+        "type": "object",
+        "required": [
+          "clientConversationId"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "clientConversationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "pathParameters": {
+        "projectId": "opaque-id"
+      },
+      "effect": "create-independent-runtime-conversation-without-changing-classic-cwd",
+      "result": {
+        "type": "object",
+        "required": [
+          "conversationId",
+          "ownerRevision"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{8,128}$"
+          },
+          "ownerRevision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "precondition": {
+        "ownerRevision": "For a create, ownerRevision is the revision of the parent project's runtime registry, not of a conversation that does not yet exist. The server reads the registry revision for the granted project and requires it to match, so a create cannot be admitted against a stale or replaced runtime generation.",
+        "source": "projects.list.result.registryRevision: the single registry revision covering every listed project at read time. A live conversation id is rediscovered only via sessions.list[].activeConversations."
+      },
+      "identityMapping": {
+        "clientConversationId": "client-generated idempotency key for the create, not a server identity",
+        "conversationId": "server-issued opaque id returned in the create result; the only handle usable in /conversations/{conversationId}/...",
+        "sessionId": "sessions.list returns historical session records for read-only listing; a listed sessionId is NOT a conversationId and cannot be used in conversation routes. In v1, only conversations created through runtime.create (or listed as active) are addressable; opening an existing listed session as a live conversation is not part of v1."
+      },
+      "ownerRequirement": "project",
+      "ownerNamespaces": [
+        "runtime"
+      ]
+    },
+    {
+      "id": "runtime.snapshot",
+      "method": "GET",
+      "path": "/remote/v1/conversations/{conversationId}/snapshot",
+      "scope": "sessions.read",
+      "payload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "pathParameters": {
+        "conversationId": "opaque-id"
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "ownerRevision",
+          "status",
+          "messages",
+          "cursor",
+          "streamGeneration",
+          "sequence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ownerRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "stopping",
+              "error",
+              "unknown"
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "type": "object",
+              "required": [
+                "messageId",
+                "role",
+                "text"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "messageId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{8,128}$"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "maxSerializedJsonBytes": 8192
+                }
+              }
+            }
+          },
+          "cursor": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,128}$"
+          },
+          "streamGeneration": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "snapshotTruncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "watermark": "cursor+streamGeneration+sequence are the atomic watermark of the returned state; the client resumes the event stream from this cursor and expects the same logical generation to continue on reconnect.",
+      "ownerRequirement": "conversation",
+      "ownerNamespaces": [
+        "runtime"
+      ]
+    },
+    {
+      "id": "chat.send",
+      "method": "POST",
+      "path": "/remote/v1/conversations/{conversationId}/messages",
+      "scope": "chat.send",
+      "ownerRevisionRequired": true,
+      "payload": {
+        "type": "object",
+        "required": [
+          "clientMessageId",
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxSerializedJsonBytes": 8192
+          }
+        }
+      },
+      "pathParameters": {
+        "conversationId": "opaque-id"
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "clientMessageId",
+          "accepted",
+          "ownerRevision"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "ownerRevision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ownerRequirement": "conversation",
+      "ownerNamespaces": [
+        "runtime"
+      ]
+    },
+    {
+      "id": "chat.stop",
+      "method": "POST",
+      "path": "/remote/v1/conversations/{conversationId}/stop",
+      "scope": "chat.stop",
+      "ownerRevisionRequired": true,
+      "payload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "pathParameters": {
+        "conversationId": "opaque-id"
+      },
+      "effect": "reuse-desktop-stop-barrier",
+      "result": {
+        "type": "object",
+        "required": [
+          "stopped",
+          "ownerRevision"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "stopped": {
+            "type": "boolean"
+          },
+          "ownerRevision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ownerRequirement": "conversation",
+      "ownerNamespaces": [
+        "runtime"
+      ]
+    },
+    {
+      "id": "approvals.list",
+      "method": "GET",
+      "path": "/remote/v1/conversations/{conversationId}/approvals",
+      "scope": "approvals.read",
+      "payload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "pathParameters": {
+        "conversationId": "opaque-id"
+      },
+      "result": {
+        "type": "object",
+        "required": [
+          "approvals"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "approvals": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "requestId",
+                "method",
+                "title",
+                "message"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "requestId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{8,128}$"
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "select",
+                    "confirm",
+                    "input",
+                    "editor"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "message": {
+                  "type": "string",
+                  "maxLength": 600
+                },
+                "options": {
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "optionId",
+                      "label"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "optionId": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 200
+                      }
+                    }
+                  },
+                  "uniqueItemsBy": "optionId"
+                }
+              }
+            }
+          }
+        }
+      },
+      "ownerRequirement": "conversation",
+      "ownerNamespaces": [
+        "runtime"
+      ]
+    },
+    {
+      "id": "approvals.respond",
+      "method": "POST",
+      "path": "/remote/v1/conversations/{conversationId}/approvals/{requestId}/respond",
+      "scope": "approvals.respond",
+      "ownerRevisionRequired": true,
+      "payload": {
+        "type": "object",
+        "required": [
+          "method",
+          "decision"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "select",
+              "confirm",
+              "input",
+              "editor"
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "deny",
+              "cancel",
+              "answer"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "maxUtf8Bytes": 2000
+          }
+        }
+      },
+      "pathParameters": {
+        "conversationId": "opaque-id",
+        "requestId": "opaque-id"
+      },
+      "effect": "relay-only-to-current-pi-pending-extension-ui-request",
+      "result": {
+        "type": "object",
+        "required": [
+          "accepted",
+          "ownerRevision"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          },
+          "ownerRevision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "decisionMatrix": {
+        "select": {
+          "decision": [
+            "answer"
+          ],
+          "valueOn": {
+            "answer": "required"
+          }
+        },
+        "confirm": {
+          "decision": [
+            "allow",
+            "deny"
+          ],
+          "valueOn": {
+            "allow": "forbidden",
+            "deny": "forbidden"
+          }
+        },
+        "input": {
+          "decision": [
+            "answer",
+            "cancel"
+          ],
+          "valueOn": {
+            "answer": "required",
+            "cancel": "forbidden"
+          }
+        },
+        "editor": {
+          "decision": [
+            "answer",
+            "cancel"
+          ],
+          "valueOn": {
+            "answer": "required",
+            "cancel": "forbidden"
+          }
+        }
+      },
+      "settlementRule": "At settlement the server matches requestId + current owner to the live Pi dialog, validates method/decision/value against its authoritative method and offered options, and admits exactly one response; a second, stale-owner, expired or mismatched submission is rejected.",
+      "settlement": {
+        "admission": "At settlement the server atomically resolves the live Pi dialog: requestId must match a currently-pending extension_ui_request, the owner must be current and match, the revision must match, and the method must equal the dialog's authoritative method.",
+        "values": "For select, value must be one of the dialog's offered option ids; confirm/input/editor follow the decisionMatrix value rules.",
+        "consume": "Exactly one response is admitted; consuming the dialog and relaying are one transaction. A stale, already-settled, cancelled or owner-changed dialog rejects with stale_owner, and the rejection never reaches Pi.",
+        "optionId": "For select, payload.value is an opaque optionId (never the display label); the server matches it against the live dialog's offered option ids.",
+        "transaction": "settleApproval performs ONE atomic claim-and-enqueue transaction: recheck live dialog pending + expiry + exact option set + typed owner + dialog revision, then consume AND enqueue the exact {requestId,owner,method,decision,value} tuple to Pi. It succeeds only when the response is durably enqueued; a relay failure leaves the dialog pending and resolves unavailable (retryable). A consumed-but-undelivered state cannot exist.",
+        "dialogRecord": "The pendingDialog record must carry requestId, typed owner (namespace+identity+projectId), method, pending=true, a finite expiresAtMs and a monotonic revision; options are opaque {optionId,label} records (never bare labels).",
+        "expiry": "A dialog with missing or malformed expiry is treated as unavailable, not live.",
+        "optionIds": "For select, value matches an optionId exactly; display labels are never accepted as answers."
+      },
+      "ownerRequirement": "approval",
+      "ownerNamespaces": [
+        "runtime"
+      ]
+    }
+  ],
+  "eventStream": {
+    "method": "GET",
+    "path": "/remote/v1/events",
+    "scope": "sessions.read",
+    "queryParameters": [
+      "cursor"
+    ],
+    "cursorMaxLength": 128,
+    "perDeviceBacklog": true,
+    "mustFilterByCurrentResourceOwner": true,
+    "mustRevalidateAuthorizationBeforeReplay": true,
+    "gapBehavior": "explicit-reset-snapshot",
+    "rawDesktopSseForwarding": false,
+    "events": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "enum": [
+          "snapshot",
+          "message.append",
+          "conversation.status",
+          "approval.pending",
+          "approval.settled",
+          "reset"
+        ]
+      }
+    },
+    "eventEnvelope": {
+      "type": "object",
+      "required": [
+        "protocolVersion",
+        "sequence",
+        "conversationId",
+        "ownerRevision",
+        "event",
+        "payload",
+        "streamGeneration",
+        "cursor",
+        "frameSignature"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "protocolVersion": {
+          "type": "integer",
+          "const": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "conversationId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{8,128}$"
+        },
+        "event": {
+          "type": "string",
+          "enum": [
+            "snapshot",
+            "message.append",
+            "conversation.status",
+            "approval.pending",
+            "approval.settled",
+            "reset"
+          ]
+        },
+        "payload": {
+          "type": "object"
+        },
+        "ownerRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "streamGeneration": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cursor": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+        },
+        "frameSignature": {
+          "type": "string",
+          "minLength": 86,
+          "maxLength": 86,
+          "pattern": "^[A-Za-z0-9_-]{86}$"
+        }
+      },
+      "resetConversationId": "For event='reset' the conversationId is the literal 'stream-reset' (matches the opaque-id pattern) because a stream-wide reset has no single conversation.",
+      "reservedConversationId": "'stream-reset' is reserved for event='reset' only and is rejected in every other event and in all request path parameters."
+    },
+    "eventPayloadSchemas": {
+      "snapshot": {
+        "type": "object",
+        "required": [
+          "status",
+          "messages"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "stopping",
+              "error",
+              "unknown"
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "type": "object",
+              "required": [
+                "messageId",
+                "role",
+                "text"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "messageId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{8,128}$"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "maxSerializedJsonBytes": 8192
+                }
+              }
+            }
+          },
+          "snapshotTruncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "message.append": {
+        "type": "object",
+        "required": [
+          "messageId",
+          "role",
+          "text"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{8,128}$"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "maxSerializedJsonBytes": 8192
+          }
+        }
+      },
+      "conversation.status": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "stopping",
+              "error",
+              "unknown"
+            ]
+          }
+        }
+      },
+      "approval.pending": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "method",
+          "title",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{8,128}$"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "select",
+              "confirm",
+              "input",
+              "editor"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 600
+          },
+          "options": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "required": [
+                "optionId",
+                "label"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "optionId": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                },
+                "label": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              }
+            },
+            "uniqueItemsBy": "optionId"
+          }
+        }
+      },
+      "approval.settled": {
+        "type": "object",
+        "required": [
+          "requestId",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{8,128}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "allowed",
+              "denied",
+              "cancelled",
+              "answered",
+              "expired"
+            ]
+          }
+        }
+      },
+      "reset": {
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "cursor_expired",
+              "sequence_gap",
+              "authorization_changed",
+              "owner_changed"
+            ]
+          }
+        }
+      }
+    },
+    "cursorPattern": "^[A-Za-z0-9_-]{1,128}$",
+    "perEventScopes": {
+      "snapshot": "sessions.read",
+      "message.append": "sessions.read",
+      "conversation.status": "sessions.read",
+      "reset": "sessions.read",
+      "approval.pending": "approvals.read",
+      "approval.settled": "approvals.read"
+    },
+    "frameAuthentication": {
+      "signed": true,
+      "algorithm": "Ed25519 (desktop service key)",
+      "frameMessage": "protocolVersion + newline + deviceId + newline + serviceId + newline + streamGeneration + newline + sequence + newline + conversationId + newline + ownerRevision + newline + cursor + newline + event + newline + payload-digest",
+      "streamGeneration": "Server-issued per-subscription monotonically increasing generation bound to the authenticated device; frames carry it and clients reject frames for other generations or devices.",
+      "cursorBinding": "Cursor encodes (deviceId, streamGeneration, lastSequence); it is validated only for THIS subscription. Stale/foreign cursors produce a new-generation reset, malformed cursors reject the subscribe.",
+      "authorizationRecheck": "Server revalidates device-active, per-event scope and current resource owner immediately before delivering each frame and each replayed/backlog frame; a frame whose scope or owner changed is dropped and the stream reset.",
+      "acceptance": "Structural validity is necessary but not sufficient: a frame is applied only if verified with the PINNED service key for the authenticated device, the device's scope covers the event's per-event scope, streamGeneration and sequence equal the expected values, and the current grant+owner still authorize the resource. Otherwise the frame is dropped and the stream reset.",
+      "resetMonotonic": "A reset frame is accepted only when it advances the expected position: fresh subscribe (no expected position) or streamGeneration strictly greater than expectedStreamGeneration. A stale or duplicate reset is rejected.",
+      "resourceAuthorization": "authorizeResource is MANDATORY for every ordinary frame and receives {deviceId, serviceId, conversationId, ownerRevision, event}; it re-verifies current grant+owner+revision immediately before the frame is applied. A reset frame does not carry it but must satisfy resetMonotonic.",
+      "resetSequence": "A reset frame occupies its own sequence within the new streamGeneration; after accepting a reset the next ordinary frame MUST carry sequence = reset.sequence + 1 (acceptEventFrame stores expected = reset.sequence). The only fresh-subscribe condition is expectedStreamGeneration===undefined; there is no separate freshSubscribe flag."
+    },
+    "budgets": {
+      "maxEventFrameBytes": 65536,
+      "maxBacklogEventsPerDevice": 256,
+      "maxBacklogBytesPerDevice": 1048576,
+      "maxBacklogAgeSeconds": 300,
+      "onLimitReached": "drop-oldest-with-reset-marker or close stream; never grow unboundedly"
+    },
+    "cursorDelivery": {
+      "source": "The server issues a cursor in every event frame (envelope.cursor) and in every snapshot result; the client supplies the latest cursor it durably observed to resume.",
+      "format": "Opaque, bound to (deviceId, streamGeneration, lastSequence). Clients treat it as an opaque token and never construct one.",
+      "replay": "On subscribe with a valid cursor the server replays backlog newer than it (after per-event scope + owner recheck); a gap, expired or foreign cursor yields an explicit reset event before any new frames, while a malformed/oversized cursor rejects the subscribe (invalid_request, wire unauthorized) and opens no stream. See cursorTransitionTable / cursorGrammar.",
+      "resetScope": "A reset applies to the whole device stream, not a single conversation. When no conversation remains authorized the stream delivers reset followed by only frames for currently-authorized resources; it never delivers frames for revoked/ungranted resources."
+    },
+    "ownerRevisionAuthority": "The envelope-level ownerRevision is the single authoritative owner revision; payloads never carry a competing value.",
+    "generationSemantics": "A reconnect with a valid cursor CONTINUES the prior streamGeneration and replays backlog newer than the cursor (after scope+owner recheck); a fresh subscription or an emitted reset starts a new streamGeneration. Ordinary frames are accepted only at the expected (generation, sequence); a reset frame establishes the new expected position and is not itself subject to a prior expected check.",
+    "frameBudget": "canonical serialized frame must be <= maxEventFrameBytes; an oversized event is never signed, queued or delivered - the stream emits reset instead.",
+    "cursorFailure": "Unified rule: malformed/oversized -> invalid_request (wire unauthorized); well-formed but stale/foreign/expired -> new generation + one reset event. See cursorTransitionTable.",
+    "transcriptBounds": "chat.send text, message text and snapshot text are all bounded by maxTranscriptSerializedBytes measured on their JSON-serialized UTF-8 representation (the same bytes carried inside a frame), guaranteeing an accepted message always fits maxEventFrameBytes and a recovery snapshot. Oversized submissions are rejected, never silently truncated.",
+    "cursorTransitionTable": {
+      "absent": "Fresh subscribe: open a new streamGeneration for this subscription, start at the live head (or backlog head), no reset.",
+      "valid": "Cursor bound to this device AND this live streamGeneration: continue the SAME generation, replay backlog newer than cursor.",
+      "wellformedStale": "Well-formed cursor bound to this device but expired, generation-dead or below the retained floor: open a NEW greater streamGeneration and deliver exactly one reset event (reason=cursor_expired) before live frames.",
+      "foreign": "Well-formed but bound to another device: treated exactly like wellformedStale - new generation + reset; never a cross-device error leak.",
+      "malformed": "Pattern/length/encoding-invalid or oversized cursor: subscribe rejected invalid_request (wire unauthorized); stream never opens."
+    },
+    "concurrency": "Each subscription owns an isolated (streamGeneration, sequence, cursor) space; generations are per-subscription monotonic. Backlog budgets are shared per device. A reset applies to its own subscription only; device/grant/owner revocation resets every subscription for that resource or device.",
+    "errorCodes": null,
+    "snapshotWindow": "runtime.snapshot returns the newest messages within result.messages.maxItems (500) AND the snapshot serialized-byte budget; if older history does not fit it is omitted from the head and the returned watermark (cursor+streamGeneration+sequence) still always permits forward recovery. A truncated snapshot sets snapshotTruncated=true."
+  },
+  "forbiddenCapabilities": [
+    "generic-rpc",
+    "shell",
+    "terminal",
+    "filesystem",
+    "arbitrary-path",
+    "provider-credentials",
+    "raw-desktop-token",
+    "arbitrary-url-proxy",
+    "public-relay"
+  ],
+  "admissionRules": {
+    "order": "strict-UTF8+transport -> route match -> signature verify -> scope check -> device-grant check -> owner+revision recheck -> dispatch. Earlier failures never reach later stages and never dispatch.",
+    "deviceRecord": "The active key, granted scopes, resource grants, expiry, replayEpoch and revocation state are loaded from a single authoritative device record; caller-supplied grants, keys or scope lists are never trusted.",
+    "singleTransaction": "Device-active check, scope check, resource-grant check, full-owner resolution and revision recheck happen inside ONE admission transaction; a concurrent revocation/owner change cannot interleave between them.",
+    "typedResource": "The opaque resource id is resolved to a typed resource under an authorized project and the correct owner namespace (Classic cwd+session-header or Runtime backend+workspace-epoch+conversation+generation); a syntactically valid id of the wrong type/namespace is unknown_resource.",
+    "ownerProof": "resolveOwner must return a fully-typed owner (namespace + identity + revision) proved from desktop state, never a bare current flag; owner-less or untyped results reject.",
+    "listFiltering": "projects.list and sessions.list filter each returned item through the same device grants; an ungranted item is absent, not redacted.",
+    "ownerRequirement": "Each operation names an admission class: 'collection' (device+scope only; items are filtered per-grant - projects.list, events.subscribe), 'project' (owner resolved to the signed projectId), 'conversation' (owner resolved to the signed conversationId AND its owning project grant), 'approval' (owner resolved to the signed conversationId and the live dialog requestId). resolveOwner must return the full typed owner including projectId and the target conversationId/dialogId; admission compares those identities against the signed path and rejects mismatches or a namespace outside ownerNamespaces.",
+    "collectionAdmission": "projects.list and events.subscribe have no single resource owner: admission is device+scope only. projects.list rows and event frames are each authorized/filtered individually against current grants and owner before projection/delivery; an ungranted item is absent, not redacted.",
+    "admissionToken": "Admission produces a versioned admission token binding (deviceId, replayEpoch, scope, ownerEpoch, ownerRevision, projectId, resourceId, requestId, issuedAtMs). The effect must commit through commitAdmission which re-resolves the CURRENT owner/device and compares the token fields in a second atomic recheck at dispatch; a revoked device/grant or rolled owner between admission and dispatch rejects (stale_owner/stale_revision)."
+  },
+  "securityInvariants": [
+    "remote-default-disabled",
+    "separate-listener-and-authentication-boundary",
+    "server-resolves-project-and-session-ownership",
+    "device-revocation-closes-live-stream-and-rejects-new-requests",
+    "unknown-version-operation-field-owner-or-replay-state-fails-closed",
+    "no-raw-pi-rpc-sse-errors-config-or-credentials-in-mobile-projection",
+    "approval-is-only-a-single-response-to-a-live-pi-request",
+    "independent-security-review-before-enable-or-acceptance"
+  ],
+  "signedRequest": {
+    "algorithm": "Ed25519",
+    "devicePublicKeyEncoding": "base64url-no-padding-32-byte-key",
+    "timestampFormat": "unix-milliseconds-decimal",
+    "maximumClockSkewSeconds": 60,
+    "nonceEncoding": "base64url-no-padding-32-random-bytes",
+    "signatureEncoding": "base64url-no-padding-64-byte-signature",
+    "bodyDigest": "SHA-256 over exact canonical UTF-8 JSON body bytes; GET signs empty body",
+    "contentType": "application/json; charset=utf-8",
+    "bodyEncoding": "UTF-8 canonical JSON: lexicographically sorted object keys, compact separators, JSON escaping, array order preserved; reject duplicate keys and non-canonical bodies",
+    "signedMessage": "protocolVersion + newline + deviceId + newline + serviceId + newline + replayEpoch + newline + requestId + newline + method + newline + canonical path-and-query + newline + timestamp + newline + nonce + newline + lowercase-hex-body-sha256",
+    "replayStore": "atomic per-device nonce store; reject reused nonce and timestamp outside skew window",
+    "validationNote": "Client utility verifies message construction and Ed25519 in fixtures only. Gateway must independently enforce TLS/service pinning, Ed25519, timestamp skew and atomic replay persistence before route dispatch.",
+    "rawPayloadExposedToErrorsOrLogs": false,
+    "serviceId": "'svc-' + lowercase-hex(certFingerprint)[0:16], derived by the validator from the active trusted certificate pin; never accepted from the request.",
+    "replay": {
+      "model": "Atomic per-device nonce store consulted and written in one transaction before dispatch; a rejected or missing store fails closed.",
+      "retentionSeconds": 180,
+      "retentionRule": "A nonce is retained while its signed timestamp is >= acceptedTimestampFloor OR still inside the skew window. A nonce may be evicted only when timestamp < floor AND timestamp < effectiveNow - retentionSeconds; a nonce at the floor is never evicted while it could still pass the floor check.",
+      "acceptanceClock": "acceptedTimestampFloor is strictly monotonic max(seen); a request with timestamp STRICTLY below the floor is rejected even inside skew. Requests with timestamp equal to the floor still need a live nonce match, which is guaranteed by retentionRule.",
+      "atCapacity": "fail_closed - new requests rejected with replay_rejected, never evict-live-nonce",
+      "stateLoss": "Intact persisted replay state (nonces + acceptedTimestampFloor) is required for admission. On lost or corrupt state the device's authentication epoch is bumped (replayEpoch++); nonces and timestamps from the prior epoch are invalid and the device must re-pair before new requests are admitted - no silent accumulation.",
+      "clockChange": "Skew is measured against the server-accepted window; a wall-clock jump cannot extend admissible lifetime beyond retentionSeconds nor move the persisted floor backward.",
+      "effectiveClock": "Server admission uses an effective clock = max(wallNow, persisted acceptedTimestampFloor); a wall-clock rollback can never widen the admissible window."
+    },
+    "rawTarget": {
+      "utf8": "strict - request-target and body decoded with strict UTF-8; malformed or overlong byte sequences are rejected before normalization, never lossy-decoded then compared.",
+      "duplicateQueryParameter": "reject - the raw request-target is parsed and any repeated parameter name, blank name, or ambiguous percent-encoding is rejected; signing and routing use the same single parsed target.",
+      "duplicateHeader": "reject - repeated signed-header names are rejected before verification.",
+      "cursorGrammar": "Malformed/oversized cursor on subscribe -> invalid_request (unauthorized wire). Well-formed but stale, expired or FOREIGN cursor -> new generation + exactly one reset event (no cross-device disclosure). See eventStream.cursorTransitionTable."
+    },
+    "replayEpochBinding": "x-pi-remote-epoch carries the device record's replayEpoch; a signature under an older epoch is rejected. re-pair and replay-state loss bump the epoch.",
+    "deviceRecordRequirements": "The device record must be complete and consistent BEFORE signature work: active===true, revoked!==true, expiresAt present+strictly future, replayEpoch present+safe-integer>=1, grantedScopes subset of vocabulary. serviceId must equal canonicalServiceId(serviceFingerprint) = 'svc-'+fingerprint[0:16] derived from the trusted pin - a caller-supplied noncanonical id is rejected."
+  },
+  "limits": {
+    "maxRequestBytes": 262144,
+    "maxResponseBytes": 1048576,
+    "maxOperationsPerMinutePerDevice": 120,
+    "maxConcurrentStreamsPerDevice": 2,
+    "maxConcurrentStreamsTotal": 8,
+    "signatureClockSkewSeconds": 60,
+    "maxNonceEntriesPerDevice": 4096,
+    "maxPendingPairings": 8,
+    "maxDevices": 32,
+    "maxEventFrameBytes": 65536,
+    "maxEventBacklogEventsPerDevice": 256,
+    "maxEventBacklogBytesPerDevice": 1048576,
+    "maxEventBacklogAgeSeconds": 300,
+    "maxJsonDepth": 16,
+    "maxSerializedResponseBytes": 1048576,
+    "maxApprovalValueUtf8Bytes": 2000,
+    "maxGrantedScopes": 7,
+    "maxTranscriptSerializedBytes": 8192
+  },
+  "remoteSetting": {
+    "defaultEnabled": false,
+    "storage": "desktop userData private metadata; permissions/ACL platform-specific and independently tested",
+    "listener": "independent TLS listener; exact bind/advertisement address not frozen until M0 platform threat review",
+    "pairingQr": "contains service endpoint, certificate fingerprint, short-lived code; never contains device private key or desktop local token"
+  },
+  "localAdminControl": {
+    "listener": "existing authenticated loopback desktop UI only",
+    "remoteAccessible": false,
+    "operations": [
+      "remote.status",
+      "remote.enable",
+      "remote.pairing.create",
+      "remote.pairing.cancel",
+      "remote.devices.list",
+      "remote.devices.revoke"
+    ],
+    "pairCodePlaintextPersistence": false,
+    "devicePrivateKeyStoredOnDesktop": false
+  },
+  "deviceGrants": {
+    "model": "Server-owned map deviceId -> set of authorized projectIds; default-deny. A scope permits the operation class; a grant permits the specific resource. Both required.",
+    "resolution": "Every opaque resource id is resolved through the authorized project and the correct owner namespace (Classic or Runtime); a syntactically valid id outside the device's grants or the wrong namespace is unknown_resource, never admitted.",
+    "listFiltering": "projects.list and sessions.list return only resources covered by the device's grants; granting a device a project does not reveal ungranted resources.",
+    "revocation": "Revoking a grant or device atomically invalidates in-flight admission, live streams and outstanding approvals bound to it.",
+    "admissionAtomicity": "At operation admission the server atomically rechecks: device active and not revoked, scope present, resource grant present, full owner identity (Classic cwd+session header OR Runtime backend/workspace-epoch/conversation/generation) current, and ownerRevision match. Any stale element is rejected before dispatch."
+  },
+  "projectionPolicy": {
+    "fields": "Every remotely visible free-text field (project/session display names, message text, approval title/message/options, error surfaces) has a defined permitted source.",
+    "valueScan": "In addition to forbidden key names, serialized response and event STRING VALUES are scanned for forbidden value patterns before emission: absolute filesystem paths (drive-letter, UNC, POSIX root), PI_GUI_TOKEN, API-key/bearer patterns, raw Pi RPC/error payloads, environment dumps.",
+    "onMatch": "omit-field-or-redact - never reflect the raw value; a response that cannot be safely projected is replaced by a fixed safe placeholder or fails closed.",
+    "test": "Synthetic secret/path/error markers must be asserted absent from responses, events and logs.",
+    "fieldSources": {
+      "project.displayName": "desktop project registry display name; redact on forbidden-value match",
+      "message.text": "user/assistant transcript text; permitted raw conversation content but scanned for credential/token patterns before emission",
+      "approval.title": "Pi dialog title; redact on forbidden-value match",
+      "approval.message": "Pi dialog message; redact on forbidden-value match",
+      "approval.options": "Pi dialog option labels; redact each on forbidden-value match",
+      "error": "fixed closed code + retryable only; never a message field",
+      "enforcement": "Projection is applied to every response and event BEFORE signing, queueing or emission; a field that fails policy is omitted/redacted, never reflected.",
+      "session.displayName": "session metadata title; redact on forbidden-value match",
+      "session.updatedAt": "derived RFC3339 instant emitted by the desktop session record; normalized to UTC Z",
+      "transcriptException": "The raw-conversation-content exception applies ONLY to these projected field paths: message.append.payload.text and runtime.snapshot.messages[].text. Even there, credential/token value patterns are still scanned and redacted; every other field gets full forbidden-value scanning (paths, credentials, env dumps, raw diagnostics)."
+    },
+    "optionConsistency": "One approval option schema and bound (20) applies to approval.pending, approvals.list and respond; select always has >=1 options with unique optionIds ({1,128} chars). A select answer matches an offered optionId by the same {1,128} rule - the answer is no stricter than the option.",
+    "valueScanPatterns": "absolute POSIX path (leading '/', '~/', or '/.../' segment), drive path [A-Za-z]:[\\/], UNC \\\\, PI_GUI_TOKEN, api[_-]?key|token|secret|password values, Bearer <token>, private-key PEM markers, raw Pi RPC payload, environment dumps",
+    "transcriptException": "The raw-conversation-content exception applies ONLY to: message.append.payload.text, runtime.snapshot.result.messages[].text, and event snapshot.payload.messages[].text. Even there credential/token value patterns are still scanned and redacted; every other field gets full forbidden-value scanning.",
+    "valueScanOutOfScope": "Intentionally not scanned (declared out of projection scan scope): drive-relative paths 'C:relative' and POSIX home-expansion '~user/x'. A bare authority with NO path segment is also allowed: 'scheme://host', 'scheme://host/', 'scheme://host:port', '//host' (an authority, not a filesystem path). Everything else IS scanned scheme-agnostically and rejected: 'scheme://host/path', 'scheme://userinfo@host/path', 'scheme://host:port/path', '//host/path', '//host:port/path', 'file:///path', 'file:///C:/x', 'smb://host/share'. Absolute POSIX, drive-absolute, UNC and credential/env-dump shapes are scanned everywhere outside transcript text."
+  },
+  "idempotency": {
+    "clientIds": "runtime.create uses clientConversationId; chat.send uses clientMessageId. Both are idempotency keys within the enclosing resource, not server identities.",
+    "namespace": "A mutation outcome is namespaced under (deviceId, resourceId, ownerEpoch). A retry is recognized ONLY under the same ownerEpoch resolved from the CURRENT owner record; under a rolled owner epoch the client id is simply a fresh key, never ambiguous.",
+    "mutationRecord": "{operationId, resourceId, clientId, payloadSha256, admittedOwnerEpoch, outcome, at} recorded in the same transaction as dispatch; a retry (fresh nonce, same client id, same epoch) returns the recorded outcome or joins the in-flight operation; same id + different payload -> payload_invalid.",
+    "evictionRule": "Outcomes are NEVER evicted while their ownerEpoch is live. Store capacity overflow refuses NEW mutations with operation_rejected (fail closed) rather than evicting a live tombstone; tombstones retire only with the owner epoch itself.",
+    "underAuthorization": "Idempotent resolution happens under CURRENT device authorization (grant+scope+owner still valid); a replay of a now-unauthorized mutation resolves to the current authorization failure.",
+    "epochRolled": "After an owner-epoch roll the old outcome is unreachable (fresh namespace); this is by construction, not a retained-tombstone race."
+  },
+  "versionNegotiation": "v1 uses versioned routes (/remote/v1/...) only; there is no manifest endpoint. An unknown major version or path is rejected fail-closed; no silent downgrade or best-match routing.",
+  "deviceLifecycle": {
+    "expiresAt": "A registered device carries expiresAt (the pairing response value). Signed requests from a device at/past expiry are rejected (device_inactive); expiry never auto-extends.",
+    "rotation": "Rotating the TLS certificate or desktop service key invalidates all device bindings minted under the old pin and closes their live streams; devices must re-pair against the new bootstrap. Prior pins are never silently updated.",
+    "revocation": "Device revocation is an authoritative transaction: mark revoked, reject all new requests, close that device's streams, and invalidate in-flight admission and outstanding approvals.",
+    "replayEpoch": "Every device record carries replayEpoch, bumped on replay-state loss or re-pair; requests signed under an older epoch are rejected."
+  },
+  "transportAdapter": {
+    "stage": "Runs BEFORE object construction: the raw request-target string and raw header list are validated before any parsed {headers,query} object exists.",
+    "rawTarget": "The wire target is validated BEFORE route matching: strict UTF-8 percent-decoding, single '?', no duplicate or blank query names, ASCII-printable path characters only (rejects non-ASCII, control chars, '#', DEL, U+FFFD), then the closed route template. Nothing reaches a route matcher un-validated.",
+    "rawHeaders": "Repeated header names are rejected before folding into an object; signed-header presence is checked on the raw list.",
+    "body": "rawBody must be the exact bytes used for bodySha256; strict UTF-8, no BOM, canonical JSON (sorted keys, no duplicate keys) before schema checks.",
+    "streamResetReserved": "The literal 'stream-reset' is rejected as a path-parameter value on every route."
+  }
+}
