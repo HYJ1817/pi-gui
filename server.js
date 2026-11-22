@@ -872,7 +872,12 @@ const terminal = createTerminal({
  * env 传 process.env 是有意的：pi 的 agent 目录（PI_CODING_AGENT_DIR）与主目录
  * （HOME）决定了去哪找 skill，必须和 spawn pi 时用的是同一份环境，否则会出现
  * 「界面说有一堆 skill、pi 一个都没加载」。 */
-const skills = createSkills({ runtime, rpc, env: process.env });
+const skills = createSkills({
+  runtime, rpc, env: process.env,
+  // 写入类操作需要数据目录（回收站、撤销令牌、市场缓存）与项目列表（显式选择写入哪个项目）
+  dataDir: DATA_DIR,
+  getProjects: () => projects.read().items,
+});
 /* P20.6 Native MCP 状态与受控动作。
  *
  * 状态真相只有两条官方路：`pi mcp list --json`（显式刷新才跑，会启动用户
@@ -952,6 +957,13 @@ const mcpMarket = createMcpMarket({
   env: desktopMarketPolicy ? { ...systemNetworkPolicy.withoutProxyEnvironment(process.env),
     PI_GUI_NETWORK_RELAXED: systemNetworkStartup?.relaxed ? '1' : '0' } : process.env,
   network: marketNetwork,
+});
+/* 技能市场与 MCP 市场共用同一条主进程代理桥，线路与策略口径保持一致；
+ * 网页版 / 测试没有桥，市场层会按「没有可信代理栈」拒绝代理线路。 */
+skills.configureMarket({
+  network: marketNetwork,
+  env: desktopMarketPolicy ? { ...systemNetworkPolicy.withoutProxyEnvironment(process.env),
+    PI_GUI_NETWORK_RELAXED: systemNetworkStartup?.relaxed ? '1' : '0' } : process.env,
 });
 /* 桌面版主进程会打开这个开关：启动后就在后台预取完整 Registry 目录，
  * 第一次打开市场不必等数分钟。不阻塞启动；失败静默，打开市场时会重试
