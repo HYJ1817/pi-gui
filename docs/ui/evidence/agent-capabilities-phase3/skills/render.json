@@ -1,0 +1,937 @@
+{
+  "generatedAt": "2026-11-22T14:22:26.669Z",
+  "viewports": [
+    "1320x820",
+    "700x600"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "browser": "Chrome/157.0.8103.79",
+  "metrics": [
+    {
+      "theme": "light",
+      "viewport": [
+        1320,
+        820,
+        1
+      ],
+      "pageHeading": [
+        {
+          "text": "技能",
+          "font": "30px",
+          "leading": "37.5px",
+          "height": 37.5
+        }
+      ],
+      "titleWeight": "700",
+      "overflow": 0,
+      "groupHeadings": [
+        {
+          "text": "全局级",
+          "font": "16px",
+          "leading": "20px",
+          "height": 20
+        },
+        {
+          "text": "项目级",
+          "font": "16px",
+          "leading": "20px",
+          "height": 20
+        }
+      ],
+      "rows": [
+        {
+          "text": "code-review审查源代码中的问题，给出可执行的修改建议已加载",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        },
+        {
+          "text": "pdf-tools读取与整理 PDF已停用",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        },
+        {
+          "text": "proj-only当前项目的技能已加载",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        }
+      ],
+      "buttons": [
+        {
+          "text": "刷新",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        },
+        {
+          "text": "市场",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        },
+        {
+          "text": "新建",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        }
+      ],
+      "badges": [
+        [
+          "已加载"
+        ],
+        [
+          "已停用"
+        ],
+        [
+          "已加载"
+        ]
+      ],
+      "contrasts": [
+        {
+          "selector": ".skills-group-path",
+          "property": "color",
+          "css": "rgb(93, 93, 93)",
+          "foreground": [
+            93,
+            93,
+            93,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 6.584652797685219
+        },
+        {
+          "selector": ".skill-name",
+          "property": "color",
+          "css": "rgb(26, 28, 31)",
+          "foreground": [
+            26,
+            28,
+            31,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 17.07581164489872
+        },
+        {
+          "selector": ".skill-row-desc",
+          "property": "color",
+          "css": "oklab(0.22559 -0.00131416 -0.00642684 / 0.74)",
+          "foreground": [
+            85.2705882352941,
+            86.75294117647057,
+            88.97647058823529,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 7.270808805238802
+        },
+        {
+          "selector": ".skill-row .ds-badge-success",
+          "property": "color",
+          "css": "color(srgb 0.0458824 0.398824 0.192745)",
+          "foreground": [
+            12,
+            102,
+            49,
+            1
+          ],
+          "background": [
+            219.00000000000003,
+            242.01176470588237,
+            228.03529411764708,
+            1
+          ],
+          "ratio": 6.0242385833221865
+        },
+        {
+          "selector": ".skill-row .ds-badge-neutral",
+          "property": "color",
+          "css": "oklab(0.22559 -0.00131416 -0.00642684 / 0.74)",
+          "foreground": [
+            80.62191464821223,
+            82.1042675893887,
+            84.3277970011534,
+            1
+          ],
+          "background": [
+            237.03921568627453,
+            237.03921568627453,
+            237.03921568627453,
+            1
+          ],
+          "ratio": 6.681373083119803
+        }
+      ]
+    },
+    {
+      "market": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "columns": 2,
+        "overflow": 0,
+        "theme": "light"
+      }
+    },
+    {
+      "theme": "light",
+      "viewport": [
+        700,
+        600,
+        1
+      ],
+      "pageHeading": [
+        {
+          "text": "技能",
+          "font": "30px",
+          "leading": "37.5px",
+          "height": 37.5
+        }
+      ],
+      "titleWeight": "700",
+      "overflow": 0,
+      "groupHeadings": [
+        {
+          "text": "全局级",
+          "font": "16px",
+          "leading": "20px",
+          "height": 20
+        },
+        {
+          "text": "项目级",
+          "font": "16px",
+          "leading": "20px",
+          "height": 20
+        }
+      ],
+      "rows": [
+        {
+          "text": "code-review审查源代码中的问题，给出可执行的修改建议已加载",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 82.578125
+        },
+        {
+          "text": "pdf-tools读取与整理 PDF已停用",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        },
+        {
+          "text": "proj-only当前项目的技能已加载",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        }
+      ],
+      "buttons": [
+        {
+          "text": "刷新",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        },
+        {
+          "text": "市场",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        },
+        {
+          "text": "新建",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        }
+      ],
+      "badges": [
+        [
+          "已加载"
+        ],
+        [
+          "已停用"
+        ],
+        [
+          "已加载"
+        ]
+      ],
+      "contrasts": [
+        {
+          "selector": ".skills-group-path",
+          "property": "color",
+          "css": "rgb(93, 93, 93)",
+          "foreground": [
+            93,
+            93,
+            93,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 6.584652797685219
+        },
+        {
+          "selector": ".skill-name",
+          "property": "color",
+          "css": "rgb(26, 28, 31)",
+          "foreground": [
+            26,
+            28,
+            31,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 17.07581164489872
+        },
+        {
+          "selector": ".skill-row-desc",
+          "property": "color",
+          "css": "oklab(0.22559 -0.00131416 -0.00642684 / 0.74)",
+          "foreground": [
+            85.2705882352941,
+            86.75294117647057,
+            88.97647058823529,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 7.270808805238802
+        },
+        {
+          "selector": ".skill-row .ds-badge-success",
+          "property": "color",
+          "css": "color(srgb 0.0458824 0.398824 0.192745)",
+          "foreground": [
+            12,
+            102,
+            49,
+            1
+          ],
+          "background": [
+            219.00000000000003,
+            242.01176470588237,
+            228.03529411764708,
+            1
+          ],
+          "ratio": 6.0242385833221865
+        },
+        {
+          "selector": ".skill-row .ds-badge-neutral",
+          "property": "color",
+          "css": "oklab(0.22559 -0.00131416 -0.00642684 / 0.74)",
+          "foreground": [
+            80.62191464821223,
+            82.1042675893887,
+            84.3277970011534,
+            1
+          ],
+          "background": [
+            237.03921568627453,
+            237.03921568627453,
+            237.03921568627453,
+            1
+          ],
+          "ratio": 6.681373083119803
+        }
+      ]
+    },
+    {
+      "market": {
+        "viewport": [
+          700,
+          600
+        ],
+        "columns": 1,
+        "overflow": 0,
+        "theme": "light"
+      }
+    },
+    {
+      "theme": "dark",
+      "viewport": [
+        1320,
+        820,
+        1
+      ],
+      "pageHeading": [
+        {
+          "text": "技能",
+          "font": "30px",
+          "leading": "37.5px",
+          "height": 37.5
+        }
+      ],
+      "titleWeight": "700",
+      "overflow": 0,
+      "groupHeadings": [
+        {
+          "text": "全局级",
+          "font": "16px",
+          "leading": "20px",
+          "height": 20
+        },
+        {
+          "text": "项目级",
+          "font": "16px",
+          "leading": "20px",
+          "height": 20
+        }
+      ],
+      "rows": [
+        {
+          "text": "code-review审查源代码中的问题，给出可执行的修改建议已加载",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        },
+        {
+          "text": "pdf-tools读取与整理 PDF已停用",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        },
+        {
+          "text": "proj-only当前项目的技能已加载",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        }
+      ],
+      "buttons": [
+        {
+          "text": "刷新",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        },
+        {
+          "text": "市场",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        },
+        {
+          "text": "新建",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        }
+      ],
+      "badges": [
+        [
+          "已加载"
+        ],
+        [
+          "已停用"
+        ],
+        [
+          "已加载"
+        ]
+      ],
+      "contrasts": [
+        {
+          "selector": ".skills-group-path",
+          "property": "color",
+          "css": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52)",
+          "foreground": [
+            144.48235294117646,
+            144.48235294117646,
+            144.48235294117646,
+            1
+          ],
+          "background": [
+            24,
+            24,
+            24,
+            1
+          ],
+          "ratio": 5.596465717142942
+        },
+        {
+          "selector": ".skill-name",
+          "property": "color",
+          "css": "rgb(255, 255, 255)",
+          "foreground": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 14.743254567235402
+        },
+        {
+          "selector": ".skill-row-desc",
+          "property": "color",
+          "css": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+          "foreground": [
+            190.07843137254903,
+            190.07843137254903,
+            190.07843137254903,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 7.938791312747069
+        },
+        {
+          "selector": ".skill-row .ds-badge-success",
+          "property": "color",
+          "css": "color(srgb 0.588039 0.883529 0.706667)",
+          "foreground": [
+            150,
+            225,
+            180,
+            1
+          ],
+          "background": [
+            43.38823529411765,
+            62.30588235294118,
+            51.294117647058826,
+            1
+          ],
+          "ratio": 7.425650751248033
+        },
+        {
+          "selector": ".skill-row .ds-badge-neutral",
+          "property": "color",
+          "css": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+          "foreground": [
+            195.1703191080354,
+            195.1703191080354,
+            195.1703191080354,
+            1
+          ],
+          "background": [
+            56.86274509803922,
+            56.86274509803922,
+            56.86274509803922,
+            1
+          ],
+          "ratio": 6.5779855648320025
+        }
+      ]
+    },
+    {
+      "market": {
+        "viewport": [
+          1320,
+          820
+        ],
+        "columns": 2,
+        "overflow": 0,
+        "theme": "dark"
+      }
+    },
+    {
+      "theme": "dark",
+      "viewport": [
+        700,
+        600,
+        1
+      ],
+      "pageHeading": [
+        {
+          "text": "技能",
+          "font": "30px",
+          "leading": "37.5px",
+          "height": 37.5
+        }
+      ],
+      "titleWeight": "700",
+      "overflow": 0,
+      "groupHeadings": [
+        {
+          "text": "全局级",
+          "font": "16px",
+          "leading": "20px",
+          "height": 20
+        },
+        {
+          "text": "项目级",
+          "font": "16px",
+          "leading": "20px",
+          "height": 20
+        }
+      ],
+      "rows": [
+        {
+          "text": "code-review审查源代码中的问题，给出可执行的修改建议已加载",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 82.578125
+        },
+        {
+          "text": "pdf-tools读取与整理 PDF已停用",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        },
+        {
+          "text": "proj-only当前项目的技能已加载",
+          "font": "13px",
+          "leading": "21.45px",
+          "height": 63.734375
+        }
+      ],
+      "buttons": [
+        {
+          "text": "刷新",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        },
+        {
+          "text": "市场",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        },
+        {
+          "text": "新建",
+          "font": "13px",
+          "leading": "13px",
+          "height": 32
+        }
+      ],
+      "badges": [
+        [
+          "已加载"
+        ],
+        [
+          "已停用"
+        ],
+        [
+          "已加载"
+        ]
+      ],
+      "contrasts": [
+        {
+          "selector": ".skills-group-path",
+          "property": "color",
+          "css": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52)",
+          "foreground": [
+            144.48235294117646,
+            144.48235294117646,
+            144.48235294117646,
+            1
+          ],
+          "background": [
+            24,
+            24,
+            24,
+            1
+          ],
+          "ratio": 5.596465717142942
+        },
+        {
+          "selector": ".skill-name",
+          "property": "color",
+          "css": "rgb(255, 255, 255)",
+          "foreground": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 14.743254567235402
+        },
+        {
+          "selector": ".skill-row-desc",
+          "property": "color",
+          "css": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+          "foreground": [
+            190.07843137254903,
+            190.07843137254903,
+            190.07843137254903,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 7.938791312747069
+        },
+        {
+          "selector": ".skill-row .ds-badge-success",
+          "property": "color",
+          "css": "color(srgb 0.588039 0.883529 0.706667)",
+          "foreground": [
+            150,
+            225,
+            180,
+            1
+          ],
+          "background": [
+            43.38823529411765,
+            62.30588235294118,
+            51.294117647058826,
+            1
+          ],
+          "ratio": 7.425650751248033
+        },
+        {
+          "selector": ".skill-row .ds-badge-neutral",
+          "property": "color",
+          "css": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+          "foreground": [
+            195.1703191080354,
+            195.1703191080354,
+            195.1703191080354,
+            1
+          ],
+          "background": [
+            56.86274509803922,
+            56.86274509803922,
+            56.86274509803922,
+            1
+          ],
+          "ratio": 6.5779855648320025
+        }
+      ]
+    },
+    {
+      "market": {
+        "viewport": [
+          700,
+          600
+        ],
+        "columns": 1,
+        "overflow": 0,
+        "theme": "dark"
+      }
+    }
+  ],
+  "shots": [
+    {
+      "name": "1320-light-01-list",
+      "bytes": 65160
+    },
+    {
+      "name": "1320-light-02-detail",
+      "bytes": 94035
+    },
+    {
+      "name": "1320-light-03-editor",
+      "bytes": 78057
+    },
+    {
+      "name": "1320-light-03b-editor-edit",
+      "bytes": 89158
+    },
+    {
+      "name": "1320-light-04-import",
+      "bytes": 83840
+    },
+    {
+      "name": "1320-light-05-market",
+      "bytes": 111833
+    },
+    {
+      "name": "1320-light-05b-market-bottom",
+      "bytes": 120486
+    },
+    {
+      "name": "1320-light-06-sources",
+      "bytes": 112181
+    },
+    {
+      "name": "1320-light-07-preview",
+      "bytes": 112967
+    },
+    {
+      "name": "1320-light-08-external",
+      "bytes": 94688
+    },
+    {
+      "name": "1320-light-09-empty",
+      "bytes": 54231
+    },
+    {
+      "name": "1320-light-10-error",
+      "bytes": 43535
+    },
+    {
+      "name": "1320-light-11-notice",
+      "bytes": 72753
+    },
+    {
+      "name": "700-light-01-list",
+      "bytes": 48548
+    },
+    {
+      "name": "700-light-02-editor",
+      "bytes": 34623
+    },
+    {
+      "name": "700-light-02b-editor-bottom",
+      "bytes": 34578
+    },
+    {
+      "name": "700-light-02c-editor-edit",
+      "bytes": 42753
+    },
+    {
+      "name": "700-light-03-import",
+      "bytes": 44126
+    },
+    {
+      "name": "700-light-04-market",
+      "bytes": 52176
+    },
+    {
+      "name": "700-light-04b-external",
+      "bytes": 51265
+    },
+    {
+      "name": "700-light-05-empty",
+      "bytes": 40514
+    },
+    {
+      "name": "700-light-06-error",
+      "bytes": 34777
+    },
+    {
+      "name": "1320-dark-01-list",
+      "bytes": 64257
+    },
+    {
+      "name": "1320-dark-02-detail",
+      "bytes": 93099
+    },
+    {
+      "name": "1320-dark-03-editor",
+      "bytes": 70441
+    },
+    {
+      "name": "1320-dark-03b-editor-edit",
+      "bytes": 80972
+    },
+    {
+      "name": "1320-dark-04-import",
+      "bytes": 75489
+    },
+    {
+      "name": "1320-dark-05-market",
+      "bytes": 108994
+    },
+    {
+      "name": "1320-dark-05b-market-bottom",
+      "bytes": 118260
+    },
+    {
+      "name": "1320-dark-06-sources",
+      "bytes": 101263
+    },
+    {
+      "name": "1320-dark-07-preview",
+      "bytes": 104269
+    },
+    {
+      "name": "1320-dark-08-external",
+      "bytes": 86095
+    },
+    {
+      "name": "1320-dark-09-empty",
+      "bytes": 53859
+    },
+    {
+      "name": "1320-dark-10-error",
+      "bytes": 43247
+    },
+    {
+      "name": "1320-dark-11-notice",
+      "bytes": 71829
+    },
+    {
+      "name": "700-dark-01-list",
+      "bytes": 47481
+    },
+    {
+      "name": "700-dark-02-editor",
+      "bytes": 30716
+    },
+    {
+      "name": "700-dark-02b-editor-bottom",
+      "bytes": 30630
+    },
+    {
+      "name": "700-dark-02c-editor-edit",
+      "bytes": 38504
+    },
+    {
+      "name": "700-dark-03-import",
+      "bytes": 39485
+    },
+    {
+      "name": "700-dark-04-market",
+      "bytes": 51010
+    },
+    {
+      "name": "700-dark-04b-external",
+      "bytes": 45650
+    },
+    {
+      "name": "700-dark-05-empty",
+      "bytes": 40033
+    },
+    {
+      "name": "700-dark-06-error",
+      "bytes": 34125
+    }
+  ],
+  "pageErrors": []
+}

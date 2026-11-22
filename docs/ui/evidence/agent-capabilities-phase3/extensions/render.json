@@ -1,0 +1,667 @@
+{
+  "checks": 33,
+  "metrics": [
+    {
+      "theme": "dark",
+      "cols": 2,
+      "width": 1320,
+      "height": 820,
+      "scrollWidth": 1035,
+      "scrollInner": 1035,
+      "button": 28,
+      "radius": "12px",
+      "cards": [
+        {
+          "width": 488,
+          "height": 176,
+          "top": 266,
+          "left": 299,
+          "right": 787,
+          "foot": 441
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 266,
+          "left": 799,
+          "right": 1286,
+          "foot": 441
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 454,
+          "left": 299,
+          "right": 787,
+          "foot": 629
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 454,
+          "left": 799,
+          "right": 1286,
+          "foot": 629
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 642,
+          "left": 299,
+          "right": 787,
+          "foot": 817
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 642,
+          "left": 799,
+          "right": 1286,
+          "foot": 817
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 830,
+          "left": 299,
+          "right": 787,
+          "foot": 1005
+        }
+      ],
+      "contrasts": [
+        {
+          "selector": ".extensions-list .ext-name",
+          "property": "color",
+          "css": "rgb(255, 255, 255)",
+          "foreground": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 14.743254567235402
+        },
+        {
+          "selector": ".extensions-card-meta",
+          "property": "color",
+          "css": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52)",
+          "foreground": [
+            152.13725490196077,
+            152.13725490196077,
+            152.13725490196077,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 5.11958899700219
+        },
+        {
+          "selector": ".extensions-card-error",
+          "property": "color",
+          "css": "oklab(0.787837 0.122399 0.0550776)",
+          "foreground": [
+            255,
+            150,
+            143,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 7.028441230941338
+        },
+        {
+          "selector": ".extensions-list .ds-badge-success",
+          "property": "color",
+          "css": "color(srgb 0.588039 0.883529 0.706667)",
+          "foreground": [
+            150,
+            225,
+            180,
+            1
+          ],
+          "background": [
+            43.38823529411765,
+            62.30588235294118,
+            51.294117647058826,
+            1
+          ],
+          "ratio": 7.425650751248033
+        },
+        {
+          "selector": ".extensions-list .ds-badge-warning",
+          "property": "color",
+          "css": "color(srgb 1 0.736863 0.607451)",
+          "foreground": [
+            255,
+            188,
+            155,
+            1
+          ],
+          "background": [
+            70.3529411764706,
+            53.41176470588236,
+            44.3764705882353,
+            1
+          ],
+          "ratio": 7.110743860549025
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "cols": 2,
+      "width": 1320,
+      "height": 820,
+      "scrollWidth": 1035,
+      "scrollInner": 1035,
+      "button": 28,
+      "radius": "12px",
+      "cards": [
+        {
+          "width": 488,
+          "height": 176,
+          "top": 266,
+          "left": 299,
+          "right": 787,
+          "foot": 441
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 266,
+          "left": 799,
+          "right": 1286,
+          "foot": 441
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 454,
+          "left": 299,
+          "right": 787,
+          "foot": 629
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 454,
+          "left": 799,
+          "right": 1286,
+          "foot": 629
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 642,
+          "left": 299,
+          "right": 787,
+          "foot": 817
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 642,
+          "left": 799,
+          "right": 1286,
+          "foot": 817
+        },
+        {
+          "width": 488,
+          "height": 176,
+          "top": 830,
+          "left": 299,
+          "right": 787,
+          "foot": 1005
+        }
+      ],
+      "contrasts": [
+        {
+          "selector": ".extensions-list .ext-name",
+          "property": "color",
+          "css": "rgb(26, 28, 31)",
+          "foreground": [
+            26,
+            28,
+            31,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 17.07581164489872
+        },
+        {
+          "selector": ".extensions-card-meta",
+          "property": "color",
+          "css": "rgb(93, 93, 93)",
+          "foreground": [
+            93,
+            93,
+            93,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 6.584652797685219
+        },
+        {
+          "selector": ".extensions-card-error",
+          "property": "color",
+          "css": "oklab(0.487896 0.135741 0.0695754)",
+          "foreground": [
+            165,
+            49,
+            44,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 6.828021548316386
+        },
+        {
+          "selector": ".extensions-list .ds-badge-success",
+          "property": "color",
+          "css": "color(srgb 0.0458824 0.398824 0.192745)",
+          "foreground": [
+            12,
+            102,
+            49,
+            1
+          ],
+          "background": [
+            219.00000000000003,
+            242.01176470588237,
+            228.03529411764708,
+            1
+          ],
+          "ratio": 6.0242385833221865
+        },
+        {
+          "selector": ".extensions-list .ds-badge-warning",
+          "property": "color",
+          "css": "color(srgb 0.533333 0.232745 0.0698039)",
+          "foreground": [
+            136,
+            59,
+            18,
+            1
+          ],
+          "background": [
+            251.04705882352943,
+            231.00000000000003,
+            219.9882352941177,
+            1
+          ],
+          "ratio": 6.552104805291767
+        }
+      ]
+    },
+    {
+      "theme": "dark",
+      "cols": 1,
+      "width": 700,
+      "height": 600,
+      "scrollWidth": 450,
+      "scrollInner": 450,
+      "button": 28,
+      "radius": "12px",
+      "cards": [
+        {
+          "width": 426,
+          "height": 176,
+          "top": 336,
+          "left": 252,
+          "right": 678,
+          "foot": 511
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 524,
+          "left": 252,
+          "right": 678,
+          "foot": 699
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 712,
+          "left": 252,
+          "right": 678,
+          "foot": 887
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 900,
+          "left": 252,
+          "right": 678,
+          "foot": 1075
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1088,
+          "left": 252,
+          "right": 678,
+          "foot": 1263
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1276,
+          "left": 252,
+          "right": 678,
+          "foot": 1451
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1464,
+          "left": 252,
+          "right": 678,
+          "foot": 1639
+        }
+      ],
+      "contrasts": [
+        {
+          "selector": ".extensions-list .ext-name",
+          "property": "color",
+          "css": "rgb(255, 255, 255)",
+          "foreground": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 14.743254567235402
+        },
+        {
+          "selector": ".extensions-card-meta",
+          "property": "color",
+          "css": "oklab(0.999994 0.0000455678 0.0000200868 / 0.52)",
+          "foreground": [
+            152.13725490196077,
+            152.13725490196077,
+            152.13725490196077,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 5.11958899700219
+        },
+        {
+          "selector": ".extensions-card-error",
+          "property": "color",
+          "css": "oklab(0.787837 0.122399 0.0550776)",
+          "foreground": [
+            255,
+            150,
+            143,
+            1
+          ],
+          "background": [
+            40,
+            40,
+            40,
+            1
+          ],
+          "ratio": 7.028441230941338
+        },
+        {
+          "selector": ".extensions-list .ds-badge-success",
+          "property": "color",
+          "css": "color(srgb 0.588039 0.883529 0.706667)",
+          "foreground": [
+            150,
+            225,
+            180,
+            1
+          ],
+          "background": [
+            43.38823529411765,
+            62.30588235294118,
+            51.294117647058826,
+            1
+          ],
+          "ratio": 7.425650751248033
+        },
+        {
+          "selector": ".extensions-list .ds-badge-warning",
+          "property": "color",
+          "css": "color(srgb 1 0.736863 0.607451)",
+          "foreground": [
+            255,
+            188,
+            155,
+            1
+          ],
+          "background": [
+            70.3529411764706,
+            53.41176470588236,
+            44.3764705882353,
+            1
+          ],
+          "ratio": 7.110743860549025
+        }
+      ]
+    },
+    {
+      "theme": "light",
+      "cols": 1,
+      "width": 700,
+      "height": 600,
+      "scrollWidth": 450,
+      "scrollInner": 450,
+      "button": 28,
+      "radius": "12px",
+      "cards": [
+        {
+          "width": 426,
+          "height": 176,
+          "top": 336,
+          "left": 252,
+          "right": 678,
+          "foot": 511
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 524,
+          "left": 252,
+          "right": 678,
+          "foot": 699
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 712,
+          "left": 252,
+          "right": 678,
+          "foot": 887
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 900,
+          "left": 252,
+          "right": 678,
+          "foot": 1075
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1088,
+          "left": 252,
+          "right": 678,
+          "foot": 1263
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1276,
+          "left": 252,
+          "right": 678,
+          "foot": 1451
+        },
+        {
+          "width": 426,
+          "height": 176,
+          "top": 1464,
+          "left": 252,
+          "right": 678,
+          "foot": 1639
+        }
+      ],
+      "contrasts": [
+        {
+          "selector": ".extensions-list .ext-name",
+          "property": "color",
+          "css": "rgb(26, 28, 31)",
+          "foreground": [
+            26,
+            28,
+            31,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 17.07581164489872
+        },
+        {
+          "selector": ".extensions-card-meta",
+          "property": "color",
+          "css": "rgb(93, 93, 93)",
+          "foreground": [
+            93,
+            93,
+            93,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 6.584652797685219
+        },
+        {
+          "selector": ".extensions-card-error",
+          "property": "color",
+          "css": "oklab(0.487896 0.135741 0.0695754)",
+          "foreground": [
+            165,
+            49,
+            44,
+            1
+          ],
+          "background": [
+            255,
+            255,
+            255,
+            1
+          ],
+          "ratio": 6.828021548316386
+        },
+        {
+          "selector": ".extensions-list .ds-badge-success",
+          "property": "color",
+          "css": "color(srgb 0.0458824 0.398824 0.192745)",
+          "foreground": [
+            12,
+            102,
+            49,
+            1
+          ],
+          "background": [
+            219.00000000000003,
+            242.01176470588237,
+            228.03529411764708,
+            1
+          ],
+          "ratio": 6.0242385833221865
+        },
+        {
+          "selector": ".extensions-list .ds-badge-warning",
+          "property": "color",
+          "css": "color(srgb 0.533333 0.232745 0.0698039)",
+          "foreground": [
+            136,
+            59,
+            18,
+            1
+          ],
+          "background": [
+            251.04705882352943,
+            231.00000000000003,
+            219.9882352941177,
+            1
+          ],
+          "ratio": 6.552104805291767
+        }
+      ]
+    }
+  ],
+  "shots": [
+    "1320-dark-installed",
+    "1320-dark-market",
+    "1320-dark-filtered",
+    "1320-dark-detail",
+    "1320-dark-confirm",
+    "1320-dark-installing",
+    "1320-dark-install-failed",
+    "1320-dark-empty",
+    "1320-light-installed",
+    "1320-light-market",
+    "700-dark-installed",
+    "700-dark-market",
+    "700-light-installed",
+    "700-light-market",
+    "700-light-filtered",
+    "700-light-detail",
+    "700-light-confirm",
+    "700-light-installing",
+    "700-light-install-failed",
+    "700-light-empty"
+  ]
+}
