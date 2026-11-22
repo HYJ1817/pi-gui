@@ -101,8 +101,15 @@ if (!process.versions.electron) {
         'Optional index unavailable.\n\n离线验收：索引未就绪。\n' + ' Check the local fixture settings.\n'.repeat(12) + 'End of fixture.',
         'Fixture connection unavailable.\nDetail: ' + 'offline-'.repeat(45),
       ];
-      await js(`(async () => { const { handleExtensionNotification } = await import('/extension-notices.js');
+      const seedWarnings = () => js(`(async () => { const { handleExtensionNotification } = await import('/extension-notices.js');
         for (const message of ${JSON.stringify(warnings)}) handleExtensionNotification({ message, notifyType:'warning' }); })()`);
+      const freshRun = () => js(`(async () => {
+        const { S } = await import('/state.js'); S.bridgeRun = (S.bridgeRun || 0) + 1;
+        document.dispatchEvent(new Event('pi-gui:capability-bridge-ready'));
+        await new Promise(requestAnimationFrame);
+        return { hidden: document.querySelector('.extension-notices').hidden, focus: document.activeElement.id,
+          search: document.activeElement.getAttribute('aria-label') };
+      })()`);
 
       for (const [width, height] of [[1320, 820], [700, 600]]) {
         window.setContentSize(width, height);
@@ -110,6 +117,7 @@ if (!process.versions.electron) {
         for (const theme of ['dark', 'light']) {
           await js(`document.documentElement.dataset.theme = '${theme}'`);
           const prefix = `${width}-${theme}`;
+          await seedWarnings();
           await click('#navExtensions');
           await wait(`document.querySelectorAll('.extensions-list .extensions-card').length>=3`);
           const installed = await js(`(() => {
@@ -119,7 +127,7 @@ if (!process.versions.electron) {
             const broken = document.querySelector('[data-extension-id="ext-broken"]');
             return {
               plainTitle: titleStyle.fontSize === '30px' && titleStyle.fontWeight === '700'
-                && !document.querySelector('.extensions-head svg:not(.extensions-head-actions svg)'),
+                && ![...document.querySelectorAll('.extensions-head svg:not(.extensions-head-actions svg)')].some(svg => svg.getClientRects().length),
               fullRows: groups.every(group => [...group.children].every(row =>
                 Math.abs(row.getBoundingClientRect().width - group.getBoundingClientRect().width) < 1)),
               descriptionOmitted: !!broken?.querySelector('.extensions-card-error') && !broken.querySelector('.extensions-card-desc'),
@@ -156,8 +164,12 @@ if (!process.versions.electron) {
           await js(`document.querySelector('.extensions-notice-summary').focus()`);
           await key('Enter', 'Enter', 13);
           await wait(`!document.querySelector('.extension-notices').open`);
-          await click('#extensionsTabMarket');
-          await wait(`document.querySelectorAll('.extensions-market-card').length===7`);
+          await freshRun(); // Normal browsing screenshot, without hiding real notices via CSS.
+          const tabPoint = await js(`(() => {const r=document.querySelector('#extensionsTabMarket').getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+          for (const type of ['mousePressed', 'mouseReleased']) await window.webContents.debugger.sendCommand('Input.dispatchMouseEvent', {
+            type, ...tabPoint, button:'left', clickCount:1,
+          });
+          await wait(`document.querySelectorAll('.extensions-market-card').length===13`);
           const layout = await js(`(() => {
             const grid = document.querySelector('.extensions-market-grid');
             const cards = [...grid.children].map((node) => {
@@ -170,24 +182,65 @@ if (!process.versions.electron) {
             return { cols: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
               width: innerWidth, height: innerHeight, scrollWidth: scroll.scrollWidth, scrollInner: scroll.clientWidth,
               button: Math.round(grid.querySelector('.btn').getBoundingClientRect().height),
-              radius: getComputedStyle(grid.firstElementChild).borderRadius, cards };
+              radius: getComputedStyle(grid.firstElementChild).borderRadius, cards,
+              footerBackground: getComputedStyle(grid.querySelector('.extensions-market-card-foot')).backgroundColor,
+              descriptionClamp: getComputedStyle(grid.querySelector('.extensions-card-desc')).webkitLineClamp,
+              title: getComputedStyle(document.querySelector('.extensions-title')).fontSize,
+              titleGlyph: document.querySelector('.extensions-market-title-glyph').getBoundingClientRect().width,
+              primaryRefresh: document.querySelector('.extensions-head-actions .extensions-refresh').classList.contains('primary'),
+              facetRows: new Set([...document.querySelectorAll('.extensions-categories button')].map(b=>Math.round(b.getBoundingClientRect().top))).size,
+              facetRadius: getComputedStyle(document.querySelector('.extensions-categories button')).borderTopLeftRadius,
+              sortBounds: document.querySelector('.extensions-sorts').getBoundingClientRect().toJSON(),
+              facetBounds: document.querySelector('.extensions-categories').getBoundingClientRect().toJSON() };
           })()`);
-          metrics.push({ theme, ...layout, contrasts, noticeHeight: notices.height, firstInstalledTop: notices.firstRowTop, expandedNoticeHeight: detail.height });
           const firstRow = layout.cards.filter((item) => item.top === layout.cards[0].top);
-          verify(layout.cols === (width === 1320 ? 2 : 1), prefix + ' market column count');
+          verify(layout.cols === (width === 1320 ? 3 : 1), prefix + ' market column count');
           verify(layout.scrollWidth <= layout.scrollInner + 1 && layout.cards.every(({ left, right }) => left >= 0 && right <= width), prefix + ' no horizontal overflow');
           verify(new Set(firstRow.map(({ foot }) => foot)).size === 1, prefix + ' aligned action row');
-          verify(layout.button === 28, prefix + ' compact card button height');
+          verify(layout.button === 32, prefix + ' standard market card action height');
+          const marketLabels = ['.extensions-categories [aria-pressed="true"]','.extensions-categories [aria-pressed="false"]','.extensions-market-card .ext-name','.extensions-market-card .extensions-card-meta','.extensions-market-card .extensions-card-desc','.extensions-market-card-action'];
+          layout.marketContrasts = await js(`${JSON.stringify(marketLabels)}.map(selector => (${contrastSample.toString()})(selector))`);
+          verify(layout.marketContrasts.every(sample=>sample.ratio >= 4.5), prefix + ' composited market text and filter labels meet 4.5:1');
+          verify(layout.radius === '16px' && layout.descriptionClamp === '4' && layout.footerBackground !== 'rgba(0, 0, 0, 0)', prefix + ' soft tiles, four-line descriptions and toned footers');
+          verify(layout.title === '16px' && layout.titleGlyph === 24 && layout.primaryRefresh, prefix + ' compact market header, icon and refresh action');
+          verify(layout.facetRows >= 2 && parseFloat(layout.facetRadius) >= 100 && (width === 1320
+            ? layout.sortBounds.left >= layout.facetBounds.right && Math.abs(layout.sortBounds.top - layout.facetBounds.top) < 1
+            : layout.sortBounds.top >= layout.facetBounds.bottom), prefix + ' rounded facets wrap separately from sort');
+          metrics.push({ theme, ...layout, contrasts, noticeHeight: notices.height, firstInstalledTop: notices.firstRowTop, expandedNoticeHeight: detail.height });
           await shot(prefix + '-market', width, height);
+          if (prefix === '1320-dark') {
+            await window.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {width:1204,height:804,deviceScaleFactor:1.5,mobile:false});
+            await wait(`innerWidth===1204 && devicePixelRatio===1.5`);
+            verify(await js(`getComputedStyle(document.querySelector('.extensions-market-grid')).gridTemplateColumns.split(' ').length === 3`), 'reference scale 1204×804 CSS at DPR 1.5: three columns');
+            // capturePage() returns DIP here; CDP captures the renderer's physical pixels at the emulated DPR.
+            const physical = await window.webContents.debugger.sendCommand('Page.captureScreenshot', {format:'png',captureBeyondViewport:false});
+            const png = Buffer.from(physical.data, 'base64');
+            assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1806, 1206]);
+            await emit('reference-scale-dark-market.png', png);
+            shots.push('reference-scale-dark-market');
+            await window.webContents.debugger.sendCommand('Emulation.clearDeviceMetricsOverride');
+            window.setContentSize(1010, 700);
+            await wait('innerWidth===1010');
+            verify(await js(`getComputedStyle(document.querySelector('.extensions-market-grid')).gridTemplateColumns.split(' ').length === 2`), '1010px: intermediate viewport has two columns');
+            window.setContentSize(width,height);
+            await wait(`innerWidth===${width} && innerHeight===${height}`);
+          }
 
           if (prefix === '1320-dark' || prefix === '700-light') {
+            const footerTrigger = '[data-market-id="npm:pi-project-notes"] .extensions-market-card-action';
+            await js(`document.querySelector('${footerTrigger}').focus()`);
+            await key('Enter', 'Enter', 13);
+            await wait(`!!document.querySelector('#modalCard [data-action="install"]:not(:disabled)')`);
+            await key('Escape', 'Escape', 27);
+            await wait(`document.querySelector('#modal').hidden`);
+            verify(await js(`document.activeElement.matches('${footerTrigger}')`), prefix + ' footer opens details and Escape returns to that action');
             await click('[data-filter="devtools"]');
             await wait(`document.querySelectorAll('.extensions-market-card').length===3`);
             await click('[data-filter="name"]');
             await wait(`document.querySelector('.extensions-market-card .ext-name')?.textContent==='pi-change-timeline'`);
             await shot(prefix + '-filtered', width, height);
             await click('[data-filter="all"]');
-            await wait(`document.querySelectorAll('.extensions-market-card').length===7`);
+            await wait(`document.querySelectorAll('.extensions-market-card').length===13`);
             const trigger = '[data-market-id="npm:pi-project-notes"] .extensions-card-hit';
             await js(`document.querySelector('${trigger}').focus()`);
             await click(trigger);
@@ -211,23 +264,20 @@ if (!process.versions.electron) {
             })()`);
             await wait(`document.querySelector('.extensions-market-grid').textContent.includes('没有符合条件')`);
             await shot(prefix + '-empty', width, height);
+            await click('.extensions-market-grid .extensions-empty-actions button');
+            await wait(`document.querySelectorAll('.extensions-market-card').length===13`);
+            verify(await js(`document.activeElement.matches('[aria-label="搜索插件市场"]') && !document.activeElement.value`), prefix + ' clear filters restores catalog and search focus');
           }
           await click('#navHome');
         }
       }
       // Scope changes are isolated fixture events. Assert the settled browser focus, not just a call to focus().
       await click('#navExtensions');
+      await seedWarnings();
       await wait(`!document.querySelector('.extension-notices').hidden`);
-      const nextRun = () => js(`(async () => {
-        const { S } = await import('/state.js'); S.bridgeRun = (S.bridgeRun || 0) + 1;
-        document.dispatchEvent(new Event('pi-gui:capability-bridge-ready'));
-        await new Promise(requestAnimationFrame);
-        return { hidden: document.querySelector('.extension-notices').hidden, focus: document.activeElement.id,
-          search: document.activeElement.getAttribute('aria-label') };
-      })()`);
       const newNotice = () => js(`import('/extension-notices.js').then(m => m.handleExtensionNotification({message:'Offline focus fixture', notifyType:'info'}))`);
       await js(`document.querySelector('.extensions-notice-summary').focus()`);
-      const fromSummary = await nextRun();
+      const fromSummary = await freshRun();
       verify(fromSummary.hidden && fromSummary.focus === 'extensionsTabInstalled', 'restart restores focused notice summary to Installed; actual focus: ' + fromSummary.focus);
       await click('#extensionsTabMarket');
       await newNotice();
@@ -235,11 +285,11 @@ if (!process.versions.electron) {
       await key('Enter', 'Enter', 13);
       await key('Tab', 'Tab', 9);
       await wait(`document.activeElement.matches('.extensions-notice-body')`);
-      const fromBody = await nextRun();
+      const fromBody = await freshRun();
       verify(fromBody.hidden && fromBody.focus === 'extensionsTabMarket', 'restart restores focused notice text to Market');
       await newNotice();
       await js(`document.querySelector('[aria-label="搜索插件市场"]').focus()`);
-      const fromSearch = await nextRun();
+      const fromSearch = await freshRun();
       verify(fromSearch.hidden && fromSearch.search === '搜索插件市场', 'clearing notices leaves the focused search untouched');
       verify(errors.length === 0, 'renderer has no console errors ' + JSON.stringify(errors));
       await emit('measurements.json', Buffer.from(JSON.stringify({ checks, metrics, shots }, null, 2) + '\n'));

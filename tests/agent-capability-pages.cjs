@@ -993,6 +993,57 @@ function createWorld(label, entry) {
     B.w.showChat();
   });
 
+  await extCheck('Extensions market: cards present only known npm facts; body and footer are separate focus targets', async () => {
+    const unknown = { ...marketItem, id: 'npm:another-fixture', name: 'another-fixture', downloadsMonthly: null,
+      flagged: true, install: { allowed: false, reason: 'fixture: blocked' } };
+    B.answer(marketRoute, marketResponse([{ ...marketItem, downloadsMonthly: 0 }, unknown]));
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const first = B.d.querySelector('.extensions-market-card');
+    const view = first.querySelector('.extensions-card-hit');
+    const action = first.querySelector('.extensions-market-card-action');
+    const body = first.querySelector('.extensions-market-card-body');
+    assert.equal(body.querySelector('h4').textContent, 'pi-fixture');
+    assert.match(body.querySelector('.extensions-card-meta').textContent, /月下载 0/);
+    assert.ok(body.contains(view) && !body.contains(action), 'separate the detail hit area from the footer action');
+    assert.equal(view.contains(body.querySelector('.extensions-card-desc')), false, 'named buttons must not mask the visible description');
+    assert.equal(view.contains(action), false);
+    assert.ok(first.querySelector('.extensions-market-card-foot').contains(action));
+    assert.equal(action.getAttribute('aria-label'), '安装 pi-fixture');
+    const blocked = B.d.querySelector('[data-market-id="npm:another-fixture"]');
+    assert.doesNotMatch(blocked.querySelector('.extensions-card-meta').textContent, /月下载/);
+    assert.match(blocked.textContent, /npm 安全警告/);
+    assert.equal(blocked.querySelector('.extensions-market-card-action'), null);
+    const writeCount = () => B.calls.filter(call => call.method === 'POST').length;
+    const before = writeCount();
+    action.focus(); action.click();
+    await tick();
+    assert.ok(!B.$('modal').hidden && B.$('confirmLayer').hidden, 'the footer opens details, never installs directly');
+    B.d.querySelector('.extensions-detail-head button').click();
+    await tick();
+    assert.equal(B.d.activeElement, B.d.querySelector('.extensions-market-card-action'));
+    assert.equal(writeCount(), before);
+  });
+
+  await extCheck('Extensions market: a selected category toggles back to All without changing sort or losing focus', async () => {
+    B.answer(marketRoute, marketResponse());
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const facet = () => B.d.querySelector('.extensions-categories [data-filter="devtools"]');
+    const query = () => new URL(B.calls.filter(c => c.url.startsWith('/api/extensions/market?')).at(-1).url, 'http://localhost').searchParams;
+    assert.equal(B.d.querySelector('.extensions-categories [data-filter="all"]').textContent, '全部');
+    facet().focus(); facet().click();
+    await tick();
+    assert.equal(query().get('category'), 'devtools');
+    assert.equal(facet().getAttribute('aria-pressed'), 'true');
+    facet().click();
+    await tick();
+    assert.equal(query().get('category'), 'all');
+    assert.equal(query().get('sort'), 'recommended');
+    assert.equal(facet().getAttribute('aria-pressed'), 'false');
+    assert.equal(B.d.activeElement, facet());
+  });
+
   await extCheck('Extensions: new searches outrank late responses and reset pagination', async () => {
     B.w.S.switching = false;
     B.answer(marketRoute, marketResponse([marketItem], { total: 2, nextOffset: 1 }));
