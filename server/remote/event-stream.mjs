@@ -87,12 +87,23 @@ export class EventStream {
     for (const s of [...(this.subscribers.get(deviceId) ?? [])]) this._close(s);
     this.timeline.delete(deviceId);
   }
-  /** Emit a stream-wide reset to every subscriber of the device (new generation). */
+  /**
+   * Emit a stream-wide reset to every subscriber of the device (new
+   * generation). Re-entrancy-guarded: _deliver can call resetDevice when a
+   * frame's pre-delivery recheck fails, and the reset frame it emits is itself
+   * subject to that same check — without the guard a failing recheck would
+   * re-enter resetDevice unboundedly. A subscriber already inside a reset
+   * attempt is closed instead of reset again.
+   */
   resetDevice(deviceId, reason) {
     const t = this._tl(deviceId);
     t.generation += 1;
-    for (const s of this._subs(deviceId) ?? []) {
-      this._emit(s, { conversationId: 'stream-reset', ownerRevision: 0, event: 'reset', payload: { reason } });
+    for (const s of [...(this._subs(deviceId) ?? [])]) {
+      if (s.resetting) { this._close(s); continue; }
+      s.resetting = true;
+      try {
+        this._emit(s, { conversationId: 'stream-reset', ownerRevision: 0, event: 'reset', payload: { reason } });
+      } finally { s.resetting = false; }
     }
   }
 

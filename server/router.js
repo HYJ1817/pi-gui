@@ -118,6 +118,7 @@ export function createRouter({
   piUpdate = null,
   capabilityInstall = null,
   quota = null,
+  remoteAdmin = null,
   compat = null,
   processes = null,
   worktrees = null,
@@ -203,6 +204,12 @@ export function createRouter({
     /* 日志是应用级能力：认证已完成，但不能因为并行会话活着就要求经典 owner。 */
     if (url.pathname === '/api/logs' || url.pathname.startsWith('/api/logs/')) {
       return logging ? logging.handle(req, res, url) : json(res, 503, { ok: false, code: 'logs_unavailable' });
+    }
+    /* remote/v1 本机管理面（contract localAdminControl）：remoteAccessible:false，
+     * 只在本机 /api/remote/* 上，已过的 token+Origin 鉴权保护；远程签名设备
+     * 走另一个独立 listener，到不了这里。 */
+    if (url.pathname === '/api/remote' || url.pathname.startsWith('/api/remote/')) {
+      return remoteAdmin ? remoteAdmin.handle(req, res, url) : json(res, 503, { ok: false, code: 'remote_admin_unavailable' });
     }
     /* 首次环境检测与安装也是**应用级**能力：它回答的是「这台机器能不能跑 Pi」，
      * 与当前聊天会话无关。所以必须在 legacy owner 检查**之前**——

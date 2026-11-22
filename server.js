@@ -64,6 +64,7 @@ import { createProviderConfigSync, runtimeSessionWitness, runtimeWitnessCurrent 
 import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
 import { startRemote } from './server/remote/index.mjs';
+import { createRemoteAdmin } from './server/remote-admin.js';
 import { createReviewCommentStore } from './server/review-comment-store.js';
 import { createReviewCommentAuthority } from './server/review-comment-authority.js';
 import { createReviewCommentRoutes } from './server/review-comment-routes.js';
@@ -1802,6 +1803,7 @@ const route = createRouter({
   piUpdate,
   capabilityInstall,
   quota,
+  remoteAdmin,
   compat: piCompat,
 });
 
@@ -1817,6 +1819,11 @@ const updateMaintenance = createAppUpdateMaintenance({
   pause: () => rpc.pauseForMaintenance('app-update', { graceful: true }),
   resume: () => rpc.resumeFromMaintenance(),
 });
+/* remote/v1 本机管理面（contract localAdminControl）：只接在已认证的
+ * 127.0.0.1 /api/remote/* 上，远程设备到不了。
+ * `remoteInstance` 在监听器成功启动后才赋值；管理面据此回答 enabled:false。 */
+let remoteInstance = null;
+const remoteAdmin = createRemoteAdmin({ getRemote: () => remoteInstance, log: m => console.log(`  → remote: ${m}`) });
 const server = http.createServer((req,res) => {
   if (updateMaintenance.locked() && req.method !== 'GET' && req.method !== 'HEAD') {
     const denied = auth.denyRequest(req);
@@ -1994,8 +2001,12 @@ server.listen(PORT, '127.0.0.1', async () => {
       const remote = startRemote({
         dataDir: DATA_DIR, runtime, runtimeRegistry, projects, ordinarySessions,
         host: remoteHost, port: remotePort, log: m => console.log(`  → remote: ${m}`),
+        /* default-deny：新配对设备注册时不自动带任何项目授权，授权由桌面
+         * 管理面 remote.devices.grants 显式下发（contract deviceGrants）。 */
+        grantsFor: () => [],
       });
       const addr = await remote.listen();
+      remoteInstance = remote;
       console.log(`  → remote/v1: ${remoteHost}:${addr.port}  (fingerprint ${remote.serviceFingerprint.slice(0, 16)}…)`);
       process.env.PI_GUI_REMOTE_FINGERPRINT = remote.serviceFingerprint;
     } catch (e) {

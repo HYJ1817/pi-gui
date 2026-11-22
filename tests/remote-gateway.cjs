@@ -201,6 +201,53 @@ async function main() {
     } finally { await ctx.cleanup(); }
   });
 
+  await t('service fingerprint is stable across restarts (persisted cert+key)', async () => {
+    // Rotation must be an explicit lifecycle event, not a side-effect of a
+    // routine reboot: a second startRemote on the same dataDir must reuse the
+    // persisted key+cert so the pinned serviceFingerprint does not move.
+    const fs = require('node:fs');
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'remote-persist-'));
+    try {
+      const { startRemote } = await import(MODULES.index);
+      const domain = { projects: () => [], conversations: () => [], sessionRecords: () => [], openConversation: async () => ({}), sendMessage: async () => ({}), stop: async () => ({}), pendingDialogs: () => [], consumeApproval: () => true };
+      const r1 = startRemote({ dataDir, domain, host: '127.0.0.1', port: 0 });
+      const fp1 = r1.serviceFingerprint;
+      await r1.close();
+      const r2 = startRemote({ dataDir, domain, host: '127.0.0.1', port: 0 });
+      const fp2 = r2.serviceFingerprint;
+      await r2.close();
+      assert.equal(fp2, fp1, 'serviceFingerprint rotated on routine restart');
+    } finally { fs.rmSync(dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('grant removal resets the device event stream (authorization_changed)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      const deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = deviceId;
+      const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+      const got = await new Promise(resolve => {
+        const req = https.request({
+          host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events',
+          headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }),
+        }, res => {
+          let buf = '';
+          res.on('data', c => {
+            buf += c.toString('utf8');
+            if (buf.includes('event: reset')) { req.destroy(); resolve(buf); }
+          });
+        });
+        req.on('error', () => resolve(''));
+        req.end();
+        setTimeout(() => ctx.remote.admin.setGrants(deviceId, []), 250);   // remove every grant
+      });
+      assert.ok(got.includes('"reason":"authorization_changed"') || got.includes('event: reset'), 'grant removal did not reset the stream');
+    } finally { await ctx.cleanup(); }
+  });
+
   await t('unsigned non-pair routes and unknown targets are closed unauthorized', async () => {
     const ctx = await boot();
     try {

@@ -33,33 +33,51 @@ export function startRemote({
   log = () => {},
 }) {
   // ---- service identity (persisted Ed25519 key + self-signed TLS cert) ----
+  // The TLS certificate SHA-256 IS the contract serviceFingerprint that every
+  // client pins. A self-signed cert embeds a serial + notBefore/notAfter, so
+  // regenerating it yields a DIFFERENT fingerprint each boot — which would
+  // invalidate every paired device's pin on restart (deviceLifecycle.rotation
+  // is for EXPLICIT rotation, not routine reboots). Key and cert are therefore
+  // persisted together and only ever minted on first boot or explicit rotation.
   const keyPath = path.join(dataDir, 'remote-service-key.der');
   const certPath = path.join(dataDir, 'remote-service-cert.pem');
-  let privateKeyDer;
+  let privateKeyDer, certPem;
   try { privateKeyDer = fs.readFileSync(keyPath); } catch {}
+  try { certPem = fs.readFileSync(certPath, 'utf8'); } catch {}
   let publicKeyRaw = privateKeyDer ? ed25519PublicFromPrivate(privateKeyDer) : null;
   if (!privateKeyDer || !publicKeyRaw) {
     const generated = ed25519Generate();
     privateKeyDer = generated.privateKeyDer;
     publicKeyRaw = generated.publicKeyRaw;
+    certPem = null;                                            // never bind a stale cert to a new key
     try {
       fs.writeFileSync(keyPath, privateKeyDer, { mode: 0o600 });
       fs.chmodSync(keyPath, 0o600);
     } catch (e) { log(`remote service key persist failed: ${e.code}`); }
   }
-  const certDer = selfSignedCert({
-    publicKeyDer: crypto.createPublicKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' }).export({ format: 'der', type: 'spki' }),
-    privateKeyDer,
-    commonName: 'pi-gui-remote',
-    hosts: [host, 'localhost', '127.0.0.1', '::1'],
-  });
+  let certDer;
+  if (typeof certPem === 'string' && certPem.includes('BEGIN CERTIFICATE')) {
+    try { certDer = Buffer.from(certPem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, ''), 'base64'); } catch { certDer = null; }
+  }
+  if (!certDer || certDer.length === 0) {
+    certDer = selfSignedCert({
+      publicKeyDer: crypto.createPublicKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' }).export({ format: 'der', type: 'spki' }),
+      privateKeyDer,
+      commonName: 'pi-gui-remote',
+      hosts: [host, 'localhost', '127.0.0.1', '::1'],
+    });
+    certPem = pem('CERTIFICATE', certDer);
+    try {
+      fs.writeFileSync(certPath, certPem, { mode: 0o600 });
+      fs.chmodSync(certPath, 0o600);
+    } catch (e) { log(`remote service cert persist failed: ${e.code}`); }
+  }
   const serviceFingerprint = sha256hex(certDer);
   const serviceKey = {
     privateKey: crypto.createPrivateKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' }),
     privateKeyDer,
     publicKeyRaw,
   };
-  try { fs.writeFileSync(certPath, pem('CERTIFICATE', certDer), { mode: 0o600 }); } catch {}
 
   // ---- stores + domain ----
   const deviceStore = new DeviceStore(dataDir, m => log(`remote: ${m}`));
@@ -77,7 +95,7 @@ export function startRemote({
     port, host,
     tlsOptions: {
       key: pem('PRIVATE KEY', privateKeyDer),
-      cert: pem('CERTIFICATE', certDer),
+      cert: certPem,
       minVersion: 'TLSv1.2',
       honorCipherOrder: true,
     },
@@ -96,7 +114,15 @@ export function startRemote({
     approvePairing: transcript => pairManager.issueApproval(transcript),
     listDevices: () => deviceStore.list(),
     revokeDevice: id => { const done = deviceStore.revoke(id); if (done) stream.dropDevice(id); return done; },
-    setGrants: (id, projectIds) => deviceStore.setGrants(id, projectIds),
+    // Removing a grant revokes access immediately: reset the device's
+    // streams (authorization_changed) so no live/replayed frame for the
+    // revoked resource can still be delivered (contract resetScope +
+    // mustRevalidateAuthorizationBeforeReplay).
+    setGrants: (id, projectIds) => {
+      const done = deviceStore.setGrants(id, projectIds);
+      if (done) stream.resetDevice(id, 'authorization_changed');
+      return done;
+    },
   };
 
   return {
