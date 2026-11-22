@@ -158,7 +158,7 @@ Pressed 状态用 CDP 按住「新建」实测：`transform` 从 `none` 到 `mat
 | `npm run test:primitives` | primitives 全过；design-system 阶段 A **6** + 阶段 B **34 PASS**；settings acceptance **19**；font picker **49/49** |
 | 完整 PR CI | 提交推送后触发，结果出来前记「待验证」 |
 
-截图：[修改前](ui/evidence/agent-capabilities-surface/before/) · [修改后](ui/evidence/agent-capabilities-surface/after/) · [Electron DPR 1.5](ui/evidence/agent-capabilities-surface/electron/)；逐项度量与哈希见 [render.json](ui/evidence/agent-capabilities-surface/render.json)。完整 55 张修改后截图（36 页面 + 19 状态）与 manifest 留在本地 `.shots/capability-pages/`，仓库只保留 67 张代表图。
+截图：[修改前](ui/evidence/agent-capabilities-surface/before/) · [修改后](ui/evidence/agent-capabilities-surface/after/) · [Electron DPR 1.5](ui/evidence/agent-capabilities-surface/electron/)；逐项度量与哈希见 [render.json](ui/evidence/agent-capabilities-surface/render.json)。完整 55 张修改后截图（36 页面 + 19 状态）与 manifest 留在本地 `.shots/capability-pages/`，仓库只保留 71 张代表图（含 MCP 市场 700×600 的修改前后）。
 
 构建与产物：`npm run build:app -- --rebuild` 成功（Electron 44.4.3，Windows x64，整包 335.3 MB，版本 0.34.0）；`dist-app/Pi GUI-win32-x64/resources/app/public` 与源码 `public/` **243/243 逐字节相同**（缺失 0、多余 0、内容不同 0）。没有改 `server/`，未重跑打包后端专项。Electron 取证窗口用 `--no-sandbox` 在离线夹具上渲染，**不作为正常原生沙箱或安装/升级证明**。本轮定向验证通过；完整 PR CI 结果出来前记「待验证」。本地未跑完整 `npm test`（按测试政策以 PR CI 作为 canonical 证明）；`test:exe` 也未单独运行。
 

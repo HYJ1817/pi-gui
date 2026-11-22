@@ -1006,6 +1006,30 @@
       "name": "mcp-list-700x600-dark.png",
       "bytes": 78905,
       "sha256": "0d7f73e90424898a"
+    },
+    {
+      "group": "before",
+      "name": "mcp-market-700x600-dark.png",
+      "bytes": 50761,
+      "sha256": "934b63d746969416"
+    },
+    {
+      "group": "after",
+      "name": "mcp-market-700x600-dark.png",
+      "bytes": 50629,
+      "sha256": "d3c028f0ac7edde3"
+    },
+    {
+      "group": "after",
+      "name": "mcp-market-700x600-light.png",
+      "bytes": 50025,
+      "sha256": "c2d9cd391c4ef96d"
+    },
+    {
+      "group": "electron",
+      "name": "mcp-market-700x600-dark.png",
+      "bytes": 79938,
+      "sha256": "b04549b5f89420bf"
     }
   ]
 }
