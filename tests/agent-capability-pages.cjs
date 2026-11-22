@@ -569,6 +569,63 @@ function createWorld(label, entry) {
     page.close();
   });
 
+  await skillsCheck('Skills: a failed read is cleared by a project switch; 刷新 reads the new project', async () => {
+    A.answer('GET /api/skills', { ok: false, error: '读取技能失败（fixture）', diagnostics: [{ level: 'warn', message: '旧项目的诊断' }] });
+    const page = mountSkills();
+    await tick();
+    assert.match(page.card.textContent, /读取技能失败（fixture）/);
+    assert.match(page.card.textContent, /旧项目的诊断/);
+    assert.equal(page.card.querySelectorAll('.skill-row').length, 0);
+
+    A.w.beginWorkspaceSwitch('C:\\fixture\\other');
+    await tick();
+    const body = page.card.querySelector('.skills-content');
+    assert.match(body.textContent, /项目已切换，刷新后查看当前项目的技能/);
+    assert.doesNotMatch(page.card.textContent, /读取技能失败（fixture）/, 'the old failure is not this project\'s state');
+    assert.doesNotMatch(page.card.textContent, /旧项目的诊断/, 'old diagnostics become stale with the project');
+    assert.equal(page.card.querySelector('.skills-notes').childElementCount, 0);
+
+    A.answer('GET /api/skills', SKILLS);
+    const refresh = [...body.querySelectorAll('button')].find((button) => button.textContent === '刷新');
+    assert.ok(refresh, 'the switched prompt still offers 刷新');
+    refresh.click();
+    await tick();
+    assert.equal(page.card.querySelectorAll('.skill-row').length, SKILLS.skills.length);
+    assert.doesNotMatch(page.card.textContent, /读取技能失败/);
+    page.close();
+  });
+
+  await skillsCheck('Skills: a disabled skill that pi still loads says both things, never just 已停用', async () => {
+    const pending = {
+      ...SKILLS,
+      skills: SKILLS.skills.map((item) => (item.name === 'pdf-tools'
+        ? { ...item, state: 'disabled', loaded: true, disableModelInvocation: false }
+        : item)),
+    };
+    A.answer('GET /api/skills', pending);
+    const page = mountSkills();
+    await tick();
+    const row = rowOf(page.card, 'pdf-tools');
+    const badge = row.querySelector('.skill-row-actions .ds-badge');
+    assert.equal(badge.textContent, '已停用 · 重启前仍加载', 'config state and runtime state are both visible');
+    assert.match(badge.className, /ds-badge-warning/);
+    assert.match(row.querySelector('.ext-dot').className, /\bwarn\b/, 'the row dot warns about the pending restart');
+    assert.equal(row.querySelector('.skill-toggle').getAttribute('aria-checked'), 'false', 'the switch still reflects settings.json');
+    row.querySelector('.skill-row-main').click();
+    await tick();
+    assert.match(page.card.querySelector('.skill-detail').textContent, /配置已停用，但 pi 仍加载着它/);
+    assert.match(page.card.querySelector('.skill-detail').textContent, /pi 是否加载\s*是/);
+    page.close();
+
+    A.answer('GET /api/skills', SKILLS);
+    const off = mountSkills();
+    await tick();
+    const offBadge = rowOf(off.card, 'pdf-tools').querySelector('.skill-row-actions .ds-badge');
+    assert.equal(offBadge.textContent, '已停用', 'a disabled skill pi no longer loads stays a plain neutral badge');
+    assert.match(offBadge.className, /ds-badge-neutral/);
+    off.close();
+  });
+
   await skillsCheck('Skills: filtering keeps the search box and listeners, and never re-reads the open SKILL.md', async () => {
     A.answer('GET /api/skills', SKILLS);
     A.answer('GET /api/skills/*', SKILL_DETAIL);
@@ -929,6 +986,53 @@ function createWorld(label, entry) {
     tablist.dispatchEvent(new B.w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     assert.equal(B.$('extensionsTabInstalled').getAttribute('aria-selected'), 'true', 'arrow keys wrap around');
     assert.equal(B.count('GET', '/api/extensions'), reads);
+    B.w.showChat();
+  });
+
+  await extCheck('Extensions market: a Pi restart re-reads the open market and the installed list from the same manifest', async () => {
+    B.answer('GET /api/extensions', registry([EXT_OK]));
+    B.answer(marketRoute, marketResponse());
+    B.w.openExtensions();
+    await tick();
+    B.$('extensionsTabMarket').click();
+    await tick();
+    assert.ok(B.$('extensionsTabPanel').querySelector('.extensions-market-card-action'), 'fixture starts as installable');
+
+    const search = B.d.querySelector('[aria-label="搜索插件市场"]');
+    search.value = 'pi-fixture';
+    search.dispatchEvent(new B.w.Event('input', { bubbles: true }));
+    await tick(260); // 180ms debounce
+    const reads = B.count('GET', '/api/extensions/market?*');
+    const registryReads = B.count('GET', '/api/extensions');
+    search.focus();
+
+    /* pi 重启后包清单变了：市场与已安装页签都必须按新清单重读。 */
+    B.answer(marketRoute, marketResponse([{ ...marketItem, installed: { state: 'installed', version: '1.2.3' } }]));
+    B.answer('GET /api/extensions', registry([EXT_OK, EXT_BROKEN]));
+    B.d.dispatchEvent(new B.w.Event('pi-gui:capability-bridge-ready'));
+    await tick(60);
+    assert.equal(B.count('GET', '/api/extensions/market?*'), reads + 1, 'the open market re-reads its directory');
+    assert.equal(B.count('GET', '/api/extensions'), registryReads + 1, 'the mounted installed tab re-reads the Registry');
+    assert.equal(B.d.querySelector('[aria-label="搜索插件市场"]').value, 'pi-fixture', 'the query survives the restart');
+    assert.equal(B.d.activeElement, search, 'a background restart does not steal search focus');
+    assert.match(B.d.querySelector('.extensions-market-card-foot').textContent, /已安装/, 'the card settles on the new manifest');
+    B.$('extensionsTabInstalled').click();
+    await tick();
+    assert.equal(extItems().length, 2, 'the installed tab shows the same new manifest');
+    B.w.showChat();
+  });
+
+  await extCheck('Extensions market: 刷新 is the Ghost weak action; the card 安装 keeps the Primary role', async () => {
+    B.answer('GET /api/extensions', registry([EXT_OK]));
+    B.answer(marketRoute, marketResponse());
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const refresh = B.d.querySelector('.extensions-refresh');
+    assert.ok(refresh, 'the market header owns the refresh action');
+    assert.match(refresh.className, /\bbtn\b/);
+    assert.match(refresh.className, /\bghost\b/, '刷新 is listed under Ghost in the design system');
+    assert.doesNotMatch(refresh.className, /\bprimary\b/, 'the header must not compete with the card install action');
+    assert.match(B.d.querySelector('.extensions-market-card-action').className, /\bprimary\b/, '安装 is the primary action of this surface');
     B.w.showChat();
   });
 

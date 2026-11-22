@@ -347,10 +347,19 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   });
 
   await check('筛选计数、项目筛选与搜索保持一致', async () => {
-    const counts = [...d.querySelectorAll('.mcp-filter-count')].map((n) => n.textContent);
+    /* 范围筛选与技能页共用 createSegmentedControl：条数在 .ds-segment-count。 */
+    const scope = d.querySelector('.mcp-toolbar .ds-segmented');
+    assert.ok(scope, '范围筛选是共享分段控件');
+    assert.equal(scope.getAttribute('role'), 'radiogroup');
+    const projectSelect = d.querySelector('.mcp-toolbar select');
+    assert.ok(projectSelect.classList.contains('ds-select'), '项目选择器使用共享的 .ds-select');
+    assert.equal(projectSelect.classList.contains('ds-input'), false, 'no second field system on the same control');
+    const counts = [...scope.querySelectorAll('.ds-segment-count')].map((n) => n.textContent);
     assert.deepEqual(counts, ['3', '2', '1']);
+    assert.equal(scope.querySelector('[data-value="all"]').getAttribute('aria-checked'), 'true');
     d.querySelector('[data-focus-key="filter:user"]').click();
     await tick(20);
+    assert.equal(d.querySelector('.mcp-toolbar .ds-segmented [data-value="user"]').getAttribute('aria-checked'), 'true');
     assert.equal(cards().length, 2);
     d.querySelector('[data-focus-key="filter:project"]').click();
     await tick(20);

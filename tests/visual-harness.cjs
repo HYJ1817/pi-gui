@@ -62,7 +62,7 @@ const SKILL_HOME = 'C:\\Users\\me';
 const SKILL_AGENT = SKILL_HOME + '\\.pi\\agent';
 const SKILL_PROJECT = 'C:\\fixture\\project';
 const SKILL_PROJECT_ID = 'c000000000000099';
-const skillsMode = { trusted: false, empty: false, error: false };
+const skillsMode = { trusted: false, empty: false, error: false, restartPending: false };
 function harnessSkill(over) {
   const project = over.scope === 'project';
   const baseDir = project ? SKILL_PROJECT + '\\.pi' : SKILL_AGENT;
@@ -105,7 +105,11 @@ function harnessManage(skill, trusted) {
 }
 function harnessSkillsPayload() {
   const trusted = skillsMode.trusted === true;
-  const base = HARNESS_SKILLS.map((skill) => (trusted && skill.scope === 'project'
+  /* 停用刚写进 settings、pi 还没重启：配置已停用，运行时仍加载着它。 */
+  const withPending = skillsMode.restartPending
+    ? HARNESS_SKILLS.map((skill) => (skill.name === 'pdf-tools' ? { ...skill, state: 'disabled', loaded: true } : skill))
+    : HARNESS_SKILLS;
+  const base = withPending.map((skill) => (trusted && skill.scope === 'project'
     ? { ...skill, state: 'enabled', loaded: true, blockedByTrust: false, stateNote: '' }
     : skill));
   const skills = skillsMode.empty ? [] : base;
@@ -1312,7 +1316,7 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/__skills/mode' && req.method === 'POST') {
     let mode = {};
     try { mode = JSON.parse((await readBody(req)).toString('utf8') || '{}'); } catch { mode = {}; }
-    for (const key of ['trusted', 'empty', 'error']) if (typeof mode[key] === 'boolean') skillsMode[key] = mode[key];
+    for (const key of ['trusted', 'empty', 'error', 'restartPending']) if (typeof mode[key] === 'boolean') skillsMode[key] = mode[key];
     return json(res, 200, { ok: true, ...skillsMode });
   }
   if (p === '/api/skills' && req.method === 'GET') {
