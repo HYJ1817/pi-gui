@@ -363,7 +363,7 @@
   transition: all var(--motion-duration-fast) var(--motion-ease-out);
 }
 
-.ds-segment-item:hover:not(.is-active) {
+.ds-segment-item:hover:not(.is-active):not(:disabled) {
   color: var(--ds-text-primary);
   background: var(--ds-bg-hover);
 }
@@ -378,6 +378,11 @@
   background: var(--ds-raised);
   box-shadow: var(--ds-raised-shadow);
   font-weight: var(--font-weight-strong);
+}
+
+.ds-segment-item:disabled {
+  opacity: var(--ds-button-disabled-opacity);
+  cursor: not-allowed;
 }
 
 /* 可选条数：与标签同一行的弱化数字，不另起徽标。 */

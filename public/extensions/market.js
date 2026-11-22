@@ -23,7 +23,7 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
 
   const notices = el('div', 'extensions-notes');
   const filters = el('div', 'extensions-market-filters');
-  const categories = el('div', 'extensions-categories');
+  const categories = el('div', 'ds-segmented extensions-categories');
   categories.setAttribute('role', 'group');
   categories.setAttribute('aria-label', '插件分类');
   const sorts = el('div', 'ds-segmented extensions-sorts');
@@ -99,7 +99,7 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
     const state = extensionMarketCardState(item);
     const isAction = state.kind === 'install' || state.kind === 'update';
     if (isAction) {
-      const action = extensionActionButton('btn primary tiny', state.label);
+      const action = extensionActionButton('btn primary tiny extensions-market-card-action', state.label);
       action.onclick = () => showDetail(item);
       const id = state.kind === 'install' ? item.id : item.installed.packageId;
       extensionSyncActionButton(action, operations.busyFor(id, response?.operations?.running), state.kind, {
@@ -132,13 +132,13 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
     filters.hidden = !response;
     const focus = document.activeElement;
     const focused = filters.contains(focus) ? focus.dataset.filter : null;
-    const buttons = (values, value, onChange, css) => values.map((option) => {
-      const button = el('button', css, option.label);
+    const buttons = (values, value, onChange) => values.map((option) => {
+      const button = el('button', 'ds-segment-item', option.label);
       button.type = 'button';
       button.dataset.filter = option.id;
       button.disabled = option.available === false;
       button.setAttribute('aria-pressed', String(option.id === value));
-      if (option.id === value && css === 'ds-segment-item') button.classList.add('is-active');
+      button.classList.toggle('is-active', option.id === value);
       if (Number.isInteger(option.count)) button.append(el('span', 'ds-segment-count', String(option.count)));
       button.onclick = () => {
         if (option.id !== value) onChange(option.id);
@@ -148,11 +148,11 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
     categories.replaceChildren(...buttons(response?.categories || [], category, (value) => {
       category = value;
       void load();
-    }, 'btn tiny ghost extensions-category'));
+    }));
     sorts.replaceChildren(...buttons(response?.sorts || [], sort, (value) => {
       sort = value;
       void load();
-    }, 'ds-segment-item'));
+    }));
     if (focused) [...filters.querySelectorAll('button')].find((button) => button.dataset.filter === focused)?.focus();
   }
 
