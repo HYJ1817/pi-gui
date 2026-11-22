@@ -1256,7 +1256,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   「读不到原生 MCP 摘要」、不沿用上一次的「生效中」，重试读到后恢复；`tests/ui-ia.cjs` 断言
   设置搜索按「技能 / skill / Agent 能力 / 扩展 / mcp / 能力报告」各自落到技能或 MCP 配置。
 
-- **版式（8 条：组头发现目录与扩展分组的纯投影 2 条 + DOM 结构 6 条）**：技能页只有一个标题与一条工具栏、全局级在项目级之前且组头带
+- **版式（8 条：组头发现目录与扩展分组的纯投影 2 条 + DOM 结构 6 条）**：技能页只有一个标题，作用域分段 / 搜索 / 项目选择在第一行，扫描 / 新建 / 市场在第二行、全局级在项目级之前且组头带
   发现目录（`roots` 里存在的根，一个都不存在时给默认位置，不借别的作用域）与条数、空组说清缺什么、
   筛选无结果只出一个空状态、`--skill` 条目出现才显示「临时」页签（条目消失后回落到「全部」）、
   未信任项目的行带警告徽标且只有一条信任说明；扩展页只有一个「扩展」标题、页签与搜索同一行、
@@ -1275,7 +1275,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 「扩展」（工作区标题栏那份 `display:none`）、分组顺序、1320 下搜索在页签行右侧、刷新与标题同一水平线、
 卡片多列且不横向溢出、展开详情只撑高自己那张卡（邻卡不动）、整页在 `.extensions-scroll` 里滚动而
 Work Surface 自身保持 `overflow:hidden`（`scrollTop` 为 0，与 Planner / Changes 同一契约）；技能页分组顺序、组头路径有宽度、
-工具栏四件同一行、开关在行内且距右缘 10–18px、状态点在图标右下、无横向溢出；700px 下仍只有一个标题、
+作用域分段 / 搜索 / 项目选择同一行（中线差 < 2px）、开关在行内且距右缘 10–18px、状态点在图标右下、无横向溢出；700px 下仍只有一个标题、
 卡片都在视口内。`tests/visual-harness.cjs` 的 `/api/skills` 夹具照 `server/skills.js` 的 `listPayload`
 造（roots / rootLabel / settingsPath / disablePattern / toggleable，详情带 skill / readable / bytes），
 否则截图里看不到开关与组头路径。
@@ -1299,6 +1299,35 @@ Work Surface 自身保持 `overflow:hidden`（`scrollTop` 为 0，与 Planner / 
 ⚠️ **同一个 harness 进程不要连着跑两次 `cdp-shot`**：harness 的内存夹具是有状态的
 （会话、Git 干净开关、对话推送），第二轮会看到第一轮留下的世界，
 表现为 59 / 125 这类**与本次改动无关**的取景失败。每轮截图前重启 harness。
+
+### Skills 2A（管理功能与版式重建）
+
+服务端与页面套件由 `npm run test:skills` 串起（已进 `npm test`）。本轮实跑 **1080 通过、
+5 条因环境跳过**（符号链接权限 / 跨盘回收站一类，跳过不计入分子分母）：
+
+| 套件 | 条数 | 量什么 |
+|---|---|---|
+| `tests/skills.cjs` | 196 | 发现顺序、同名优先级、启停规则、项目信任、加载三值；MCP 段沿用 |
+| `tests/skills-document.cjs` | 53 | frontmatter 逐字解析、BOM / 换行、表单合成与 `rewriteFrontmatterKey` |
+| `tests/skills-files.cjs` | 181 | 包校验（穿越 / 链接 / 大小 / 非法名）、原子落盘、回收站与令牌 |
+| `tests/skills-manage.cjs` | 218 | 四个写入目标、信任判定表、新建 / 安装冲突、撤销、路由与方法 |
+| `tests/skills-manage-edit.cjs` | 180 | 编辑 `baseHash`、备份保留、删除 / 覆盖撤销、链接交换 G1–G20、写操作串行 |
+| `tests/skills-import.cjs` | 123 | 暂存 / 提交两步、冲突重试、未信任项目拒绝 |
+| `tests/skills-market.cjs` | 113 | 目录解析、缓存与刷新、预览令牌、完整性、安装不联网、主机白名单 |
+| `tests/skills-ui.cjs` | 16 | jsdom：列表 / 编辑器 / 导入 / 扫描 / 市场的迟到结果与网络手势 |
+
+页面级回归另在 `tests/smoke.cjs`（1346 条；技能页新增启用 / 加载徽标分离、坏技能行内报错、
+未信任行、重启提示走页内、PUT 只走 ID 路径；原状态筛选的 2 条改成 2 条徽标断言，总数不变）、
+`tests/ui-ia.cjs`（32 条）与 `tests/agent-capability-pages.cjs`（42 条）。
+
+真实渲染三层（都不进默认 CI）：`tests/skills-visual.cjs` 截 40 张（1320×820 / 700×600，
+深浅色，列表 / 空 / 错误 / 成功 / 新建 / 编辑 / 导入 / 市场 / 预览 / 扫描）；
+`npm run test:shortcuts:electron` 100 条，其中技能页实测分组顺序、组头路径宽度、第一行三件
+中线差 < 2px、开关距右缘 10–18px、状态点在图标右下、700px 无横向溢出；
+`npm run shots`（`tests/cdp-shot.cjs`）的未信任技能步骤断言行内「未加载（项目未信任）」。
+
+未运行（如实记录）：完整 `npm test`（以 PR CI 为准）、`npm run test:skills-live`（真 pi）、
+`npm run shots` 全矩阵、`npm run test:exe`。
 
 ## P23 Long-term Compatibility / Upgrade Safety 验证
 

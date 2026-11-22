@@ -9,18 +9,27 @@ Pi 原生 MCP 协议都**没有改**，变的只是前端承载。
 
 | 入口 | 位置 | 前端模块 | 唯一事实来源 |
 |---|---|---|---|
-| 技能 | 设置 › **Agent 能力** › 技能（`#navSkills`，菜单徽标 `#skillCount`） | `public/skills/`：`model.js` 纯投影、`detail.js` 行内详情、`page.js` 页面、`skills.css` | `/api/skills`、`/api/skills/<id>`（`server/skills.js`） |
+| 技能 | 设置 › **Agent 能力** › 技能（`#navSkills`，菜单徽标 `#skillCount`） | `public/skills/`：`model.js` 纯投影、`page.js` 页面、`detail.js` 行内详情、`editor.js` 新建 / 编辑、`import.js` 导入、`external.js` 扫描、`market.js` 市场、`skills.css` | 扫描 / 启停：`/api/skills`、`/api/skills/<id>`（`server/skills.js`）；管理：`/api/skills/*`（`server/skills-routes.js` → `skills-manage.js` / `skills-import.js` / `skills-external.js` / `skills-market.js`） |
 | 扩展 | 应用主导航 **扩展**（`#navExtensions`，Work Surface `extensions`，标题「扩展」） | `public/extensions/`：`model.js`、`installed.js`「已安装」、`market.js`「插件市场」、`page.js` 页签壳、`extensions.css` | `/api/extensions`（`server/extension-registry.js`，只读）、`/api/approvals/capability` |
 | MCP | 设置 › 扩展与 MCP › **MCP 配置**（`#navMcp`） | `public/mcp-settings.js` 管理页 + 页尾折叠区 `public/mcp-report.js`「MCP 能力报告」 | 管理：`/api/mcp/config`、`/api/mcp/servers`；报告：`/api/mcp` |
 
-- **技能页**（列表型）：一条工具栏（作用域分段带计数 · 搜索 · 状态筛选 · 刷新；没有临时技能时隐藏「临时」）→
-  按作用域分组（全局级 / 项目级 / 临时（--skill）/ 其他），组头是标题 + 发现目录（`/api/skills` 的 `roots`：
-  磁盘上存在的根，一个都不存在时给 pi 的默认位置）+ 条数 → 行（图标与角上的状态点、名称、状态徽标、
-  一行描述、行尾开关）。全局级与项目级即使为空也出现，空组写「此目录中没有技能」/「还没有打开项目」；
-  筛选没有结果时只出一个空状态，不是每组一个。项目未信任时项目行带警告徽标，列表上方一条说明。
-  搜索覆盖名称 / 描述 / 路径 / 来源目录。行内展开看事实行与只读 `SKILL.md`；
-  开关 → 确认（写哪个 settings.json、加 / 删哪条规则）→ 写入 → 询问是否重启 pi → 重读。
-  筛选只是对同一份数据的投影；展开项的详情在重绘时原样复用，不重复请求。
+- **技能页**（列表型，2A 重做）：标题「技能」+ 条数 + 刷新；第一行是作用域分段（全部 / 全局 / 项目 /
+  临时，带计数，没有临时技能时隐藏「临时」）+ 搜索 + 项目选择；第二行是扫描 / 新建 / 市场
+  （宽窗时两组同一工具栏，窄窗换行）。列表按作用域分组（全局级 / 项目级 / 临时（--skill）/ 其他），
+  组头是标题 + 发现目录（`/api/skills` 的 `roots`：磁盘上存在的根，一个都不存在时给 pi 的默认位置）+
+  条数，全局级与项目级组头另带「导入文件 / 导入目录」；组内行 = 图标与角上的状态点 + 名称 + 必要徽标 +
+  一行描述 + 行尾开关。徽标把四个事实分开：已安装（作用域）、已启用 / 已停用、已加载 / 未加载、
+  状态未知；同名时显示「被同名覆盖」，项目未信任时显示「未加载（项目未信任）」，坏技能在行内显示
+  「无法加载」。技术细节（路径、写入目标、源文件）收进行内展开，行上只留一句话。
+  全局级与项目级即使为空也出现，空组写「此目录中没有技能」/「还没有打开项目」；筛选没有结果时只出
+  一个空状态，不是每组一个。搜索覆盖名称 / 描述 / 路径 / 来源目录。展开项的详情在重绘时原样复用，
+  不重复请求。
+- **技能页的写入交互**：开关 → 确认（写哪个 settings.json、加 / 删哪条规则）→ 写入 → 页内提示
+  「重启 pi 后生效」（可撤销、可重启），不再连续弹确认框；成功反馈留在页内，不弹 Toast。
+  新建 / 编辑是表单与源文件双模式对话框，边输入边校验、带 `baseHash` 防覆盖、保存后提示撤销；
+  删除先说明删的是哪个目录、进回收站而不是抹掉；导入分两步（选择文件 / 目录 → 服务端校验出的计划 →
+  确认名称、位置、同名策略）；扫描只读列出 Claude Code / Codex 的技能，勾选后再导入；
+  市场是页内子视图，先「预览」全文再确认安装。危险操作都有确认，迟到请求不写进新页面。
 - **扩展页**：页头（图标块 + 唯一的「扩展」标题 + 当前页签的动作，「已安装」是刷新）→ 页签行
   （已安装 · 插件市场，右侧挂当前页签的工具栏，「已安装」是搜索与「找到 N 个，共 M 个」）→ 页签面板。
   工作区标题栏里的同名标题在本页隐藏，一屏只有一个「扩展」。
@@ -52,7 +61,8 @@ Pi 原生 MCP 协议都**没有改**，变的只是前端承载。
 
 | PI-Desktop | pi-GUI | 原因 |
 |---|---|---|
-| 技能页的「新建 / 导入 / 扫描 / 市场」 | 不放 | pi-GUI 没有这些能力（属于 2A），占位按钮是假入口 |
+| 技能页的「新建 / 导入 / 扫描 / 市场」 | 2A 已实现，入口、分组与密度对齐 | 能力范围按 pi-GUI 的边界收窄：扫描只读 Claude Code / Codex 的已确认目录；市场只读公开 GitHub 目录源，联网只在「加载 / 刷新」与「预览」两个手势上发生，安装不执行远端脚本；导入先出计划再落盘 |
+| 技能编辑器直接写文件 | 表单 + 源文件双模式，服务端再校验一遍，保存带 `baseHash` | 前端表单无法保证磁盘上的字节；同名覆盖、路径逃逸与链接必须由服务端拒绝 |
 | 扩展卡片的「安装 / 卸载」 | 卡片底部是「详情」 | 本阶段不实现安装器（属于 2B）；「已知能力」里既有的一键安装照常可用 |
 | 插件市场的分类、排序与卡片 | 一块空状态 | 同上；市场还意味着新的网络行为，须先征得同意 |
 | 技能页标题前的图标块 | 只有文字标题 | pi-GUI 的设置详情页统一用文字标题；扩展是主导航页，标题带图标块 |
@@ -105,18 +115,52 @@ Pi 原生 MCP 协议都**没有改**，变的只是前端承载。
 | `public/styles.css` | 拆分前的 `.ext-*` 旧规则仍在（扩展页按 `.extensions-page` 作用域覆盖）；谁要清理先协调 |
 | 本文件、`docs/testing.md`、`docs/README.md` | 文档索引与测试清单 |
 
-## 2A 边界：技能管理
+## 2A 已实现：技能完整管理
 
-范围：全局 / 项目 / 内置技能的管理、增删改、导入、扫描、市场与诊断。
+第一阶段只有列表、详情与启停；2A 补齐新建、编辑、导入、扫描与市场，并按 PI-Desktop 重做版式。
+**原有扫描规则、项目信任与加载状态判定没有改**，写入侧都建在 `server/skills.js` 的索引之上。
 
-- 只在 A 的独占文件里实现；需要新接口时在 `api.js` / `router.js`（及 `server.js` 装配）各加一处（按上表串行）。
-- 扫描与启停规则继续以 `server/skills.js` 为准（每条规则都注明了 pi 源码出处），不另写一套；
-  启停仍然只写 pi 的 settings.json（`-<rel>` 规则），pi 只在启动时读它。
-- 「内置技能」先从 pi 上游源码确认是否存在、从哪里来；确认前按「未知」处理，不硬编码。
-- 增删改与导入会写用户的真实目录：前端只传稳定 ID 不传路径；写入限定在 pi 的发现根之内，
-  原子写、保留未知字段；项目未信任时拒绝项目级写入；导入要防路径逃逸与超大文件。
-  测试一律在 `os.tmpdir()` 里造世界。
-- 市场意味着新的网络行为：先征得用户同意，离线时明确降级。
+服务端模块（除 `skills.js` 外都是 2A 新增）：
+
+| 模块 | 职责 |
+|---|---|
+| `skills.js` | 发现 / 详情 / 启停（唯一事实来源）；`buildIndex(context)` 支持查看非当前项目，`listExtras` 注入写入目标与可管理标记 |
+| `skills-routes.js` | `/api/skills/*` 的收窄路由：解析 `?project=<16 位 ID>|none`，写操作必须显式项目，错误只带错误码 |
+| `skills-manage.js` | 新建 / 编辑 / 删除 / 安装（导入、扫描、市场共用）与撤销；信任判定、写入目标、回收站、撤销令牌 |
+| `skills-document.js` | SKILL.md 的逐字解析与合成：YAML frontmatter、BOM、换行、表单与源文件两种模式 |
+| `skills-files.js` | 包的校验与原子落盘、读树、回收站、短期令牌；上限 200 个文件 / 单文件 2 MB / 合计 12 MB |
+| `skills-import.js` | 本机导入两步协议：暂存（内存，15 分钟）→ 确认后落盘；失败保留暂存以便处理同名冲突 |
+| `skills-external.js` | 只读扫描 Claude Code / Codex 的技能目录，按候选 ID 重新扫描后导入 |
+| `skills-market-catalog.js` | 目录解析：GitHub 仓库（owner/repo、@ref、GitHub URL）、SKILL.md 目录识别、分类与上限 |
+| `skills-market-network.js` | 唯一联网层：仅 HTTPS / 443、主机白名单、无凭据、不跟随重定向；直连钉 IP，代理走既有桥 |
+| `skills-market.js` | 市场状态（离线缓存）、用户手势触发的刷新、预览令牌（15 分钟）、只认预览令牌的安装、目录源管理 |
+
+端点（列表 / 详情 / 启停仍是第一阶段的 `/api/skills`、`/api/skills/<id>`）：
+
+- `POST /api/skills/create`、`POST /api/skills/check`、`GET|PUT /api/skills/<id>/source`、
+  `DELETE /api/skills/<id>`、`POST /api/skills/undo/<token>`
+- `POST /api/skills/import/stage`、`POST /api/skills/import/commit`
+- `GET /api/skills/external`、`POST /api/skills/external/import`
+- `GET /api/skills/market`、`POST …/market/refresh|sources|preview|install`、
+  `GET …/market/preview/<token>/file`
+
+写操作一律显式带项目（`create` / `import/commit` / `external/import` / `market/install`）；
+前端只传写入目标的 key 与技能 ID，不传绝对路径，后端从 `listTargets` 解析目录并做项目信任与链接检查。
+写入目标是固定四个（`user-pi` / `user-agents` / `project-pi` / `project-agents`），不在列表里的
+key、绝对路径、原型链上的名字一律 400。
+
+**恢复**：删除、覆盖、撤销安装都是「挪进 `<dataDir>/skills-trash`」，编辑前备份旧字节（每文件保留
+最近 5 份）；撤销令牌 30 分钟有效、只存在内存、单次使用；编辑撤销带 `afterHash`，文件在此期间被改过
+就拒绝；保存或删除之后技能目录被换成链接时，撤销同样拒绝，不跟着链接去动别处。
+
+**市场**：内置来源取自 PI-Desktop 公开目录，另可添加公开 GitHub 仓库；打开市场、搜索、分类、分页
+只读本机缓存，联网只发生在「加载 / 刷新」与「预览」两个手势上，安装不联网（写的就是预览核对过的
+字节）。完整性：固定提交用 git blob sha1，分支用 sha256；缺文件默认拒绝，明确勾选后才允许装不完整
+的版本。不执行任何远端脚本；主机白名单只有 `api.github.com`、`cdn.jsdelivr.net`、
+`data.jsdelivr.net`、`raw.githubusercontent.com`。`pi` 没有内置技能，界面不造「内置」条目。
+
+**内置技能**：按 pi 上游源码（@v1.6.0）确认不存在内置技能目录；来源不明或加载状态未知的条目显示
+「状态未知」，不折算成「未安装 / 未加载」。
 
 ## 2B 边界：扩展市场
 
@@ -152,11 +196,23 @@ Pi 原生 Extension 由 pi 自己加载：`~/.pi/agent/extensions`、`<项目>/.
   读各自的接口、无模块级状态、市场无安装路径、导出名唯一）、纯投影的三值语义、
   三个页面的生命周期（迟到结果丢弃、换项目提示、监听器净增为 0、页签复用不重复请求）、
   两个页面的版式结构（单标题、分组顺序与组头路径、空状态、「临时」页签、未信任提示、卡片分组与详情）。
+- Skills 2A（`npm run test:skills`，8 个套件，1080 条通过 + 5 条因环境跳过）：
+  `skills.cjs` 196（索引 / 启停 / 信任 / 加载三值）、`skills-document.cjs` 53、
+  `skills-files.cjs` 181、`skills-manage.cjs` 218、`skills-manage-edit.cjs` 180、
+  `skills-import.cjs` 123、`skills-market.cjs` 113、`skills-ui.cjs` 16。
+  服务端套件全部在 `os.tmpdir()` 里造世界；`skills-ui.cjs` 用 jsdom 驱动页面，断言打开市场只读缓存、
+  预览之后才安装、迟到的扫描 / 预览结果不写进新页面。
 - `tests/smoke.cjs` 的「Agent 能力：扩展页 / 技能页 / MCP 配置页」段与 `tests/ui-ia.cjs`：
-  导航、选中态、标题、设置搜索、返回会话；`tests/mcp-management-ui.cjs`：摘要读取失败时的页尾报告；
-  `tests/primitives.cjs`：分段控件的计数与隐藏项。
+  导航、选中态、标题、设置搜索、返回会话；技能页断言新徽标（已启用 / 已加载 / 停用不冒充加载）、
+  坏技能与未信任都在行内、重启提示是页内提示、PUT 只走 ID 路径；`tests/mcp-management-ui.cjs`：
+  摘要读取失败时的页尾报告；`tests/primitives.cjs`：分段控件的计数与隐藏项。
 - 真实渲染：`npm run test:shortcuts:electron`（不在 `npm test` 里）在 1320×820 / 700×600、
   深 / 浅色下截图，并实测版式：一屏一个「扩展」、页签与搜索同一行、卡片多列不溢出、展开详情不推邻卡、
-  扩展页在内部滚动容器里滚动（Work Surface 保持 `overflow:hidden`）、技能行开关与状态点的位置、700px 无横向溢出。
-  夹具 `tests/visual-harness.cjs` 的 `/api/skills` 照 `server/skills.js` 的真实形状造。
-- 手动截图 `npm run shots`（`tests/cdp-shot.cjs`）的扩展 / 技能 / MCP 步骤已跟到三入口的新结构。
+  扩展页在内部滚动容器里滚动（Work Surface 保持 `overflow:hidden`）；技能页分组顺序、组头路径有宽度、
+  作用域分段 / 搜索 / 项目选择在同一行（中线差 < 2px）、开关在行内且距右缘 10–18px、状态点在图标右下、
+  700px 无横向溢出。夹具 `tests/visual-harness.cjs` 的 `/api/skills` 照 `server/skills.js` 的真实形状造。
+- 视觉：`tests/skills-visual.cjs`（不在 `npm test`）用真实 Chromium 在 1320×820 / 700×600、
+  深 / 浅色下截 40 张，覆盖列表 / 空 / 错误 / 成功提示 / 新建 / 编辑 / 导入 / 市场 / 预览 / 扫描，
+  产物与 manifest 在 `.shots/skills-phase2a/`。
+- 手动截图 `npm run shots`（`tests/cdp-shot.cjs`）的扩展 / 技能 / MCP 步骤已跟到新结构；
+  技能未信任那一步改为断言行内「未加载（项目未信任）」。
