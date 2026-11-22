@@ -46,12 +46,27 @@
 
 .mcp-page-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 20px;
+  gap: var(--ui-space-5);
+  margin-bottom: var(--ui-space-5);
 }
-.mcp-page-head-copy { min-width: 0; }
+.mcp-page-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-width: 0;
+}
+.mcp-page-glyph {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--ds-bg-chip);
+  color: var(--ds-text-secondary);
+}
 .mcp-page-actions {
   display: flex;
   align-items: center;
@@ -69,14 +84,13 @@
 }
 .mcp-page-actions .btn .mcp-icon { width: 14px; height: 14px; }
 
-.mcp-page .settings-page-title,
-.mcp-market-page .settings-page-title {
-  margin-bottom: 8px !important;
-}
-.mcp-page .settings-page-desc,
-.mcp-market-page .settings-page-desc {
-  margin-bottom: 0 !important;
-  max-width: 780px;
+.mcp-page-heading > .mcp-page-title,
+.mcp-market-head-copy > .mcp-page-title {
+  margin: 0;
+  color: var(--ds-text-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
 }
 
 /* ---------- 提示条 ---------- */
@@ -108,49 +122,10 @@
 .mcp-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-2);
   flex-wrap: wrap;
-  margin-bottom: 22px;
+  margin-bottom: var(--ui-space-5);
 }
-.mcp-filter {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px;
-  border-radius: 9px;
-  background: var(--ds-bg-tertiary);
-  border: 1px solid var(--ds-border-subtle);
-}
-.mcp-filter-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--ds-text-muted);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.mcp-filter-btn:hover { color: var(--ds-text-primary); background: var(--ds-tile-hover); }
-.mcp-filter-btn.on {
-  background: var(--ds-settings-nav-active);
-  color: var(--ds-text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-.mcp-filter-count {
-  min-width: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--ds-bg-inset);
-  color: var(--ds-text-muted);
-  font-size: 10px;
-  line-height: 16px;
-  text-align: center;
-}
-.mcp-filter-btn.on .mcp-filter-count { background: var(--ds-bg-primary); color: var(--ds-text-secondary); }
 
 .mcp-search { width: 240px; max-width: 100%; }
 .mcp-toolbar-spacer { flex: 1 1 auto; }
@@ -164,12 +139,11 @@
 .mcp-project-picker-label { white-space: nowrap; }
 .mcp-input { width: 100%; }
 .mcp-select { appearance: none; padding-right: 28px; cursor: pointer; }
-.mcp-project-select { width: auto; max-width: 220px; height: 32px; min-height: 32px; padding-top: 0; padding-bottom: 0; }
-.mcp-project-select:disabled { opacity: 0.6; cursor: default; }
+.mcp-project-select { width: auto; max-width: 220px; }
 
 /* ---------- 分组 ---------- */
 
-.mcp-groups { display: grid; gap: 28px; }
+.mcp-groups { display: grid; gap: var(--ui-space-5); }
 .mcp-group-head {
   display: flex;
   align-items: center;
@@ -194,8 +168,9 @@
 .mcp-group-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mcp-group-title h4 {
   margin: 0;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
   color: var(--ds-text-primary);
 }
 .mcp-group-count {
@@ -224,7 +199,6 @@
 }
 .mcp-group-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
 .mcp-group-filtered { font-size: 11px; color: var(--ds-text-muted); }
-.mcp-group-add { height: 26px; padding: 0 8px; font-size: 11px; }
 
 .mcp-server-list {
   display: grid;
@@ -275,8 +249,9 @@
   background: transparent;
   color: var(--ds-text-primary);
   font: inherit;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: var(--text-md);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-compact);
   cursor: pointer;
   text-align: left;
   overflow-wrap: anywhere;
@@ -284,22 +259,11 @@
 .mcp-server-name:hover { text-decoration: underline; text-underline-offset: 3px; }
 .mcp-server-desc {
   margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
   color: var(--ds-text-secondary);
   overflow-wrap: anywhere;
 }
-.mcp-server-desc.is-muted { color: var(--ds-text-faint); }
-.mcp-server-meta {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-  margin-top: 7px;
-  min-height: 16px;
-}
-.mcp-server-meta-item { font-size: 10.5px; color: var(--ds-text-faint); }
-.mcp-server-status-text { font-size: 10.5px; color: var(--ds-text-faint); }
 .mcp-code-inline {
   max-width: 520px;
   padding: 1px 6px;
@@ -359,9 +323,6 @@
 .mcp-status-dot.is-err { background: var(--ui-danger); }
 .mcp-status-dot.is-run { background: var(--ui-running); }
 .mcp-status-dot.is-dim { background: var(--ds-text-faint); }
-.mcp-server-status-text.is-ok { color: var(--ui-success); }
-.mcp-server-status-text.is-warn { color: var(--ui-warning); }
-.mcp-server-status-text.is-err { color: var(--ui-danger); }
 
 .mcp-icon-btn.is-danger:hover:not(:disabled) { color: var(--ui-danger); background: var(--ui-danger-surface); }
 .mcp-icon-btn.is-busy { animation: mcp-pulse 1.2s ease-in-out infinite; }
@@ -1101,7 +1062,7 @@
 }
 
 @media (max-width: 820px) {
-  .mcp-page-head, .mcp-market-head { flex-direction: column; gap: 14px; }
+  .mcp-page-head, .mcp-market-head { flex-direction: column; align-items: flex-start; gap: var(--ui-space-3); }
   .mcp-page-actions, .mcp-market-head-actions { justify-content: flex-start; }
   .mcp-search { width: 100%; }
   .mcp-toolbar .mcp-search { flex: 1 1 100%; }

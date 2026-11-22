@@ -17,6 +17,7 @@ import {
 import { activateProject } from './projects.js';
 import { projectWorkSurface, workspaceView } from './ui/workspace-surface.js';
 import { openModal, closeModal, confirmModal } from './ui/modal.js';
+import { createSegmentedControl } from './ui/primitives.js';
 import { toast } from './ui/toast.js';
 import { restartPi } from './providers.js';
 import {
@@ -1219,11 +1220,11 @@ function createPage(card, { reopen, present }) {
 
   function renderHeader() {
     const head = node('header', 'mcp-page-head');
-    const copy = node('div', 'mcp-page-head-copy');
-    copy.appendChild(node('h3', 'settings-page-title', 'MCP 服务器'));
-    copy.appendChild(node('p', 'settings-page-desc',
-      '管理 Pi 原生的全局与项目级 MCP 配置。列表状态来自配置文件和 pi mcp list 的真实结果；保存配置不等于已经连接。'));
-    head.appendChild(copy);
+    const heading = node('div', 'mcp-page-heading');
+    const glyph = node('span', 'mcp-page-glyph');
+    glyph.appendChild(icon('server', 'mcp-icon'));
+    heading.append(glyph, node('h3', 'mcp-page-title', 'MCP 服务器'));
+    head.appendChild(heading);
     const actions = node('div', 'mcp-page-actions');
 
     const refresh = button('btn ghost', '');
@@ -1341,24 +1342,23 @@ function createPage(card, { reopen, present }) {
 
   function renderToolbar() {
     const bar = node('div', 'mcp-toolbar');
-    const seg = node('div', 'mcp-filter');
-    seg.setAttribute('role', 'group');
-    seg.setAttribute('aria-label', '按范围筛选');
     const counts = { all: currentServers().length, user: 0, project: 0 };
     for (const s of currentServers()) {
       if (s.scope === 'project') counts.project++;
       else counts.user++;
     }
-    for (const [value, label, count] of [['all', '全部', counts.all], ['user', '全局', counts.user], ['project', '项目', counts.project]]) {
-      const b = button('mcp-filter-btn' + (state.filter === value ? ' on' : ''), '');
-      b.dataset.focusKey = `filter:${value}`;
-      b.setAttribute('aria-pressed', String(state.filter === value));
-      b.appendChild(node('span', '', label));
-      b.appendChild(node('span', 'mcp-filter-count', String(count)));
-      b.onclick = () => { state.filter = value; render(); };
-      seg.appendChild(b);
-    }
-    bar.appendChild(seg);
+    const filter = createSegmentedControl({
+      ariaLabel: '按范围筛选',
+      value: state.filter,
+      options: [
+        { value: 'all', label: '全部', count: counts.all },
+        { value: 'user', label: '全局', count: counts.user },
+        { value: 'project', label: '项目', count: counts.project },
+      ],
+      onChange: (value) => { state.filter = value; render(); },
+    });
+    for (const item of filter.element.children) item.dataset.focusKey = `filter:${item.dataset.value}`;
+    bar.appendChild(filter.element);
 
     const search = node('label', 'mcp-search ds-search-field ds-search-control');
     search.appendChild(icon('search', 'mcp-icon'));
@@ -1376,7 +1376,7 @@ function createPage(card, { reopen, present }) {
 
     const projectLabel = node('label', 'mcp-project-picker');
     projectLabel.appendChild(node('span', 'mcp-project-picker-label', '项目'));
-    const select = node('select', 'mcp-input ds-input mcp-select mcp-project-select');
+    const select = node('select', 'ds-select mcp-project-select');
     select.setAttribute('aria-label', '切换当前项目');
     if (state.switching) select.disabled = true;
     const current = state.projectPath || '';
@@ -1415,7 +1415,7 @@ function createPage(card, { reopen, present }) {
       const all = currentServers().filter((s) => (scope === 'project' ? s.scope === 'project' : s.scope !== 'project'));
       const rows = servers.filter((s) => (scope === 'project' ? s.scope === 'project' : s.scope !== 'project'));
       if (state.filter === 'all' && all.length === 0) {
-        // 全局组即使为空也显示（新增入口在组头）；项目组没有配置时不抢空间。
+        // 全局组即使为空也显示。项目组没有配置时可用项目筛选查看。
         if (scope === 'project') continue;
       }
       wrap.appendChild(renderGroup(scope, all, rows));
@@ -1443,7 +1443,7 @@ function createPage(card, { reopen, present }) {
     head.appendChild(copy);
     const headActs = node('div', 'mcp-group-actions');
     if (rows.length !== all.length) headActs.appendChild(node('span', 'mcp-group-filtered', `${rows.length} / ${all.length}`));
-    if (scope === 'user' || (state.projectPath && trust() === true)) {
+    if (scope === 'project' && state.filter !== 'project' && state.projectPath && trust() === true) {
       const add = button('btn tiny ghost mcp-group-add', '');
       add.dataset.focusKey = `add:${scope}`;
       add.appendChild(icon('plus', 'mcp-icon-xs'));
@@ -1461,9 +1461,6 @@ function createPage(card, { reopen, present }) {
         empty.appendChild(node('p', '', '项目级 mcp.json 里还没有条目；当前项目未信任，项目配置不会生效，写入也会被拒绝。'));
       } else {
         empty.appendChild(node('p', '', scope === 'project' ? '项目级 mcp.json 里还没有条目。' : '全局 mcp.json 里还没有条目。'));
-        const add = button('btn', scope === 'project' ? '新增项目服务器' : '新增全局服务器');
-        add.onclick = () => openForm('add', null, null, scope);
-        empty.appendChild(add);
       }
       list.appendChild(empty);
     } else if (!rows.length) {
@@ -1499,30 +1496,15 @@ function createPage(card, { reopen, present }) {
     if (server.overrideOnly) titleRow.appendChild(badge('项目覆盖', 'info'));
     if (server.hasSecrets) titleRow.appendChild(badge('含凭据引用', 'dim'));
     if (server.scope === 'user' && server.overridden) titleRow.appendChild(badge('被项目覆盖', 'warn'));
-    if (server.effective && server.effective.active === false && server.enabled !== false && server.scope !== 'project') {
-      // effective 的其它原因已在状态区说明，这里不重复堆徽标。
-    }
     body.appendChild(titleRow);
-    body.appendChild(node('p', 'mcp-server-desc' + (server.description ? '' : ' is-muted'),
-      server.description || (server.overrideOnly ? '项目覆盖条目：transport 与凭据继承全局配置。' : '未填写描述。')));
-    const meta = node('div', 'mcp-server-meta');
-    if (server.overrideOnly) {
-      meta.appendChild(node('span', 'mcp-server-meta-item', server.inheritedFrom ? `继承自 ${scopeLabel(server.inheritedFrom)}` : '继承全局'));
-    } else if (server.transportType === 'http') {
-      meta.appendChild(node('span', 'mcp-server-meta-item', 'HTTP 端点'));
-    } else if (server.argsCount) {
-      meta.appendChild(node('span', 'mcp-server-meta-item', `${server.argsCount} 个参数`));
-    }
-    const statusText = node('span', `mcp-server-status-text ${statusToneClass(status.tone)}`,
-      status.detail ? `${status.label} · ${status.detail}` : status.label);
-    meta.appendChild(statusText);
-    body.appendChild(meta);
+    if (server.description) body.appendChild(node('p', 'mcp-server-desc', server.description));
     row.appendChild(body);
 
     const ops = node('div', 'mcp-server-ops');
     const statusPill = node('span', `mcp-status-pill ${statusToneClass(status.tone)}`);
-    statusPill.appendChild(statusDot(status.tone));
-    statusPill.appendChild(node('span', '', status.label));
+    const pillDot = statusDot(status.tone);
+    const pillLabel = node('span', '', status.label);
+    statusPill.append(pillDot, pillLabel);
     statusPill.title = status.detail || '';
     ops.appendChild(statusPill);
 
@@ -1571,7 +1553,12 @@ function createPage(card, { reopen, present }) {
       state.busyKeys.add(key);
       test.disabled = true;
       test.classList.add('is-busy');
-      statusText.textContent = '正在测试连接…';
+      /* 进行中的状态写在这一行自己的徽标上。行里已经没有单独的状态文字，
+       * 不带声明的 statusText 会经由「带 id 的元素即全局属性」落到外壳的全局状态栏。 */
+      statusPill.className = `mcp-status-pill ${statusToneClass('run')}`;
+      pillDot.className = `mcp-status-dot ${statusToneClass('run')}`;
+      pillLabel.textContent = '测试中…';
+      statusPill.title = '正在运行 pi mcp list --json';
       const result = await mcpConfigAction({ action: 'test', name: server.name, scope: server.scope });
       if (disposed) return;
       state.busyKeys.delete(key);

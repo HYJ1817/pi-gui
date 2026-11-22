@@ -808,9 +808,7 @@ function createMarketPage(card, {
     back.appendChild(node('span', '', '我的服务'));
     back.onclick = () => { if (disposed) return; onBack?.(); };
     copy.appendChild(back);
-    copy.appendChild(node('h3', 'settings-page-title', 'MCP 市场'));
-    copy.appendChild(node('p', 'settings-page-desc',
-      '挑选可用的 MCP server，安装到 Pi 原生的 mcp.json。安装只写配置，不会在安装时执行命令；连接需要单独测试，运行中的会话需要重载。'));
+    copy.appendChild(node('h3', 'mcp-page-title', 'MCP 市场'));
     const meta = node('div', 'mcp-market-meta');
     meta.appendChild(icon('market', 'mcp-icon-xs'));
     meta.appendChild(node('span', '', `${sourceCount(state)} 个市场源`));
