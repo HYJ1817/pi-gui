@@ -335,7 +335,7 @@ async function main() {
           await waitFor(`!!document.querySelector('.mcp-server')`, '服务器列表');
           const layout = await evalJs(`(() => {
             const page = document.querySelector('.mcp-page-inner');
-            const title = page.querySelector('.mcp-page-title');
+            const title = page.querySelector('.settings-page-title');
             const button = page.querySelector('.mcp-page-actions .btn');
             return {
               viewport: [innerWidth, innerHeight, devicePixelRatio],
@@ -346,7 +346,8 @@ async function main() {
               button: button.getBoundingClientRect().height,
             };
           })()`);
-          if (layout.overflow > 1 || layout.title !== '20px' || layout.titleWeight !== '600' || layout.button !== 32) {
+          /* MCP 页面保持 main 上的样子：标题沿用设置页的 .settings-page-title（30px / 700）。 */
+          if (layout.overflow > 1 || layout.title !== '30px' || layout.titleWeight !== '700' || layout.button !== 32) {
             throw new Error('MCP 布局不符合基线：' + JSON.stringify(layout));
           }
           metrics.push(layout);
