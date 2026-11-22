@@ -148,6 +148,8 @@ export function openExtensions(options = {}) {
         for (const entry of panels.values()) entry.invalidate?.();
       }
       const items = extensionNotices(); // 当前运行的去重快照；折叠状态只属于这一个页面。
+      // 隐藏后 Chromium 会释放焦点；仅当焦点在即将消失的提示区时交还当前页签。
+      if (!items.length && notices.contains(document.activeElement)) buttons.get(active).focus();
       notices.hidden = !items.length;
       if (!items.length) notices.open = false;
       const byKind = { error: 0, warning: 0, info: 0 };
