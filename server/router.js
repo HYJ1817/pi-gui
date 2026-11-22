@@ -73,6 +73,8 @@ const MAX_COMMAND_BYTES = Number(process.env.PI_GUI_MAX_COMMAND_BYTES || 96 * 10
  * @param mcpNative     P20.6 原生 MCP 状态与受控动作（handleServers / handleStatus）
  * @param mcpManager    P20.7 配置编辑 / 市场 / 外部导入（config / market / import）
  * @param extensions    Extension 只读注册表（handle）
+ * @param extensionPackages 已安装的 Pi 包清单与受控操作（handle；GET/POST）
+ * @param extensionMarket   Extension 插件市场目录（handle；GET/POST）
  * @param sessions      会话列表与切换（handle）
  * @param sessionSearch 会话全文搜索（handle）
  * @param planner       Planner / Agent 编排（handle）
@@ -104,6 +106,8 @@ export function createRouter({
   mcpManager = null,
   approvalProbe,
   extensions,
+  extensionPackages = null,
+  extensionMarket = null,
   sessions,
   sessionSearch,
   sessionTitles = null,
@@ -366,6 +370,18 @@ export function createRouter({
     }
     if (url.pathname === '/api/extensions') {
       return extensions.handle(req, res, url);
+    }
+    /* Extension 包管理与插件市场（第二阶段 B）。都是**精确路径**，不做前缀匹配，
+     * 所以与上面的 /api/extensions 没有顺序约束；GET 与 POST 都有，必须排在 405
+     * 兜底之前。这两条会触发安装 / 联网，额外要求 Host 也是本机自身
+     * （与供应商、系统存储接口同一条 denyLocalHost）。 */
+    if (url.pathname === '/api/extensions/packages'
+      || url.pathname === '/api/extensions/market' || url.pathname === '/api/extensions/market/item') {
+      const denied = auth.denyLocalHost?.(req);
+      if (denied) return json(res, denied.code, { ok: false, error: denied.error });
+      const target = url.pathname === '/api/extensions/packages' ? extensionPackages : extensionMarket;
+      if (target) return target.handle(req, res, url);
+      return json(res, 503, { ok: false, code: 'not-wired', error: 'Extension 包管理模块未装配' });
     }
     /* 会话全文搜索（P3）。
      * **必须排在下面 `/api/sessions/` 前缀匹配之前** —— 否则会被会话模块整个吃掉，

@@ -152,7 +152,7 @@ async function main() {
       return lastSendResult;
     } },
     auth: { denyRequest: () => null }, sse: {}, managedProcesses: { manager: null }, worktrees: null,
-    specs: null,
+    specs: null, extensionPackages: null, extensionMarket: null,
     /* This Stop fixture never enters the Files or Terminal routes; their real
      * handlers have isolated suites. The Router facade still needs the
      * composition identifiers to exist. */

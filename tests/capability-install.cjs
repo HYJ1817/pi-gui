@@ -18,6 +18,18 @@
  *   8. **原始输出不出后端**：只留一句脱敏摘要，响应里没有 stdout / 路径 / 环境。
  *
  * 全程离线：`runInstall` 是替身，**测试绝不真的 npm install / pi install**。
+ *
+ * ---------- 第二阶段 B：受控包操作（I 段起） ----------
+ *
+ * 同一个模块多了第二条入口 `startOperation`（安装 / 卸载 / 更新一个**服务端解析好**的
+ * npm 包）。它与已知能力安装共用锁、闸门、暂停与恢复，所以上面八条纪律原样适用，
+ * 另外再钉三件事：
+ *
+ *   9. **source 的形状由这里独立校验** —— 不带版本、不带选项、不含路径段，
+ *      调用方（extension-packages）解析错了也过不了这一关；
+ *  10. **三个动作各只有一种 argv**，renderer 的请求体对 argv 没有任何影响；
+ *  11. **复核在锁里** —— `finish` 钩子在 resume 之后、解锁之前跑，
+ *      所以读盘读到的一定是「这一次命令之后」的状态。
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -77,6 +89,8 @@ const jsonRecorder = (res) => (r, code, payload) => {
   const {
     createCapabilityInstall, CAPABILITY_SOURCES, capabilitySource, buildInstallArgs,
     DEFAULT_INSTALL_TIMEOUT_MS,
+    buildRemoveArgs, buildUpdateArgs, isControlledSource, PACKAGE_OPERATIONS, packageOperation,
+    updateOutcome, failureCause,
   } = await import('../server/capability-install.js');
 
   const KNOWN = {
@@ -359,10 +373,11 @@ const jsonRecorder = (res) => (r, code, payload) => {
     return (!/capability-install|installAndPersist|--no-approve/.test(registry)
       && /actions:\s*\{\s*install:\s*false/.test(registry)) || 'Registry 被改成了安装器';
   });
-  await check('F4. 共享的 CLI 出口只传 env:{}（令牌由 runCli 剔除，这一层不拼环境）', () => {
+  await check('F4. 共享 CLI 只允许覆盖服务端校验过的 Pi 配置目录', () => {
     const body = /function runPiCliCommand\([\s\S]*?\n\}/.exec(read('server.js'));
     if (!body) return '找不到 runPiCliCommand';
-    return (/env:\s*\{\s*\}/.test(body[0]) && !/PI_GUI_TOKEN/.test(body[0])) || 'runPiCliCommand 在拼环境';
+    return (/env:\s*opts\.agentDir\s*\?\s*\{ PI_CODING_AGENT_DIR: opts\.agentDir \}\s*:\s*\{\}/.test(body[0])
+      && !/PI_GUI_TOKEN/.test(body[0])) || 'runPiCliCommand 引入了额外环境字段';
   });
 
   /* ================= G. 装配 ================= */
@@ -448,6 +463,510 @@ const jsonRecorder = (res) => (r, code, payload) => {
     release();
     await running;
     return (during === true && install.isRunning() === false) || JSON.stringify({ during, after: install.isRunning() });
+  });
+
+  /* ================= I. 受控包操作：source 形状与固定 argv ================= */
+  section('I. 受控包操作：source 形状与固定 argv');
+
+  /* 不可见 / 形近字符一律用 charCode 造，源码里不出现它们的字面量。 */
+  const ZWSP = String.fromCharCode(0x200b);
+  const CYRILLIC_O = String.fromCharCode(0x043e);
+  const NUL = String.fromCharCode(0);
+  const ESC = String.fromCharCode(27);
+  const rejected = (list) => {
+    const hit = list.filter((value) => isControlledSource(value));
+    return hit.length === 0 || '放行了：' + hit.map((value) => JSON.stringify(value)).join(' | ');
+  };
+  const deepSame = (got, want) => {
+    try {
+      require('node:assert/strict').deepEqual(got, want);
+      return true;
+    } catch {
+      return JSON.stringify(got);
+    }
+  };
+  /** 结果里所有字符串值（递归）。用来查「某段原文有没有出后端」，不受 JSON 转义影响。 */
+  const stringsOf = (value, out = []) => {
+    if (typeof value === 'string') out.push(value);
+    else if (value && typeof value === 'object') for (const v of Object.values(value)) stringsOf(v, out);
+    return out;
+  };
+
+  await check('I1. 严格包名（可带 scope）通过', () => {
+    const ok = ['npm:pi-memory', 'npm:a', 'npm:0day', 'npm:a.b_c-d', 'npm:@scope/pkg', 'npm:@a1/b2.c',
+      'npm:@pi-tools/web_search', 'npm:' + 'a'.repeat(214)];
+    const bad = ok.filter((value) => !isControlledSource(value));
+    return bad.length === 0 || '被拒：' + bad.join(' | ');
+  });
+  await check('I2. 带版本 / 标签 / 区间的一律拒绝（版本只由 Pi 自己解析）', () =>
+    rejected(['npm:foo@1.2.3', 'npm:foo@latest', 'npm:foo@^1.0.0', 'npm:@a/b@1.0.0', 'npm:foo@', 'npm:@a/b@']));
+  await check('I3. 选项形态、以 - . _ 开头的名字拒绝（哪一层都不可能把它当成选项或隐藏目录）', () =>
+    rejected(['npm:--registry=https://evil.example', 'npm:-l', 'npm:-foo', 'npm:.foo', 'npm:_foo', 'npm:@-a/b',
+      'npm:@a/-b', 'npm:@a/.b', 'npm:@.a/b', 'npm:@a/_b', '--no-approve', '-l', '--extension']));
+  await check('I4. 路径段 / 目录穿越拒绝', () =>
+    rejected(['npm:../x', 'npm:..', 'npm:.', 'npm:a/b', 'npm:@a/b/c', 'npm:@a/../b', 'npm:@a/..', 'npm:@a/', 'npm:@/b',
+      'npm:@a', 'npm:a\\b', 'npm:/abs', 'npm:C:\\x', 'npm:@a//b', 'npm:@a\\b']));
+  await check('I5. 空白 / 换行 / NUL / shell 元字符 / 引号拒绝', () =>
+    rejected(['npm:foo bar', ' npm:foo', 'npm:foo ', 'npm: foo', 'npm:foo\n', 'npm:foo\nbar', 'npm:foo\r', 'npm:foo\t',
+      'npm:foo' + NUL, 'npm:foo;rm', 'npm:foo&&x', 'npm:foo|x', 'npm:$(x)', 'npm:`x`', 'npm:foo>x', 'npm:foo<x',
+      'npm:foo"x', "npm:foo'x", 'npm:foo%20x', 'npm:foo*', 'npm:foo?', 'npm:foo#x', 'npm:foo=x', 'npm:foo,x',
+      'npm:foo:x', 'npm:foo~x', 'npm:foo!x', 'npm:foo^x', 'npm:foo(x)', 'npm:foo{x}', 'npm:foo[x]']));
+  await check('I6. 大写 / 非 ASCII / 零宽字符拒绝（看起来像另一个包的名字进不来）', () =>
+    rejected(['npm:Foo', 'npm:PI-MEMORY', 'npm:@Scope/pkg', 'NPM:foo', 'Npm:foo', 'npm:pi-mem' + CYRILLIC_O + 'ry',
+      'npm:pi' + ZWSP + '-memory', 'npm:' + String.fromCharCode(0x5305)]));
+  await check('I7. 别的来源种类拒绝（git / https / github / file / 裸包名 / 本地路径 / builtin）', () =>
+    rejected(['git:github.com/a/b', 'https://github.com/a/b', 'github:a/b', 'file:../x', 'pi-memory', './x', 'C:\\x',
+      'ssh://git@github.com/a/b', 'builtin:x', 'npm', 'npm:']));
+  await check('I8. 空值 / 非字符串 / 超长拒绝', () =>
+    rejected(['', null, undefined, 42, true, {}, ['npm:foo'], { toString: () => 'npm:foo' }, 'npm:' + 'a'.repeat(215)]));
+  await check('I9. 三个动作各只有一种 argv（没有 -l / --approve / --all / --self / --force）', () => {
+    const want = {
+      install: ['install', 'npm:x', '--no-approve'],
+      remove: ['remove', 'npm:x', '--no-approve'],
+      update: ['update', '--extension', 'npm:x', '--no-approve'],
+    };
+    const direct = { install: buildInstallArgs('npm:x'), remove: buildRemoveArgs('npm:x'), update: buildUpdateArgs('npm:x') };
+    if (deepSame(direct, want) !== true) return JSON.stringify(direct);
+    const banned = ['-l', '--local', '--approve', '-a', '--all', '--self', '--extensions', '--models', '--force', 'self', 'pi'];
+    for (const [action, def] of Object.entries(PACKAGE_OPERATIONS)) {
+      const args = def.buildArgs('npm:x');
+      if (deepSame(args, want[action]) !== true) return `${action}: ${JSON.stringify(args)}`;
+      const bad = args.filter((arg) => banned.includes(arg));
+      if (bad.length) return `${action}: ${bad.join(',')}`;
+    }
+    return Object.keys(PACKAGE_OPERATIONS).join(',') === 'install,remove,update' || Object.keys(PACKAGE_OPERATIONS).join(',');
+  });
+  await check('I10. 动作表：未知动作 / 原型键 → null；三个动作的维护原因各不相同；表是冻结的', () => {
+    const none = ['toggle', 'enable', 'disable', 'config', 'list', '', null, undefined, 1, '__proto__', 'constructor',
+      'toString', 'hasOwnProperty', 'INSTALL', ' install'];
+    const hit = none.filter((action) => packageOperation(action) !== null);
+    if (hit.length) return '认了：' + hit.join(',');
+    return (packageOperation('install').reason === 'capability-install' && packageOperation('remove').reason === 'extension-remove'
+      && packageOperation('update').reason === 'extension-update'
+      && Object.isFrozen(PACKAGE_OPERATIONS) && Object.isFrozen(PACKAGE_OPERATIONS.remove)) || JSON.stringify(PACKAGE_OPERATIONS);
+  });
+
+  /* ================= J. 受控包操作：闸门 ================= */
+  section('J. 受控包操作：闸门');
+
+  const op = (action = 'install', source = 'npm:demo-ext', extra = {}) => ({ action, source, ...extra });
+  const yes = { confirm: true, __expectedCwd: '' };
+  const untouched = (state) => state.paused.length === 0 && state.runArgs.length === 0 && state.resumed === 0;
+
+  await check('J1. 未知动作（含原型键、缺省）→ unknown-action，不暂停、不执行', async () => {
+    for (const action of ['toggle', 'enable', '__proto__', 'constructor', '', null, undefined]) {
+      const { install, state } = harness();
+      const r = await install.startOperation(yes, { action, source: 'npm:demo-ext' });
+      if (!(r.ok === false && r.code === 'unknown-action')) return `${String(action)} → ${JSON.stringify(r)}`;
+      if (!untouched(state)) return `${String(action)} 竟然动了 Pi`;
+    }
+    const { install, state } = harness();
+    const none = await install.startOperation(yes);
+    const nullOp = await install.startOperation(yes, null);
+    return (none.code === 'unknown-action' && nullOp.code === 'unknown-action' && untouched(state)) || JSON.stringify({ none, nullOp });
+  });
+  await check('J2. 没有显式确认 → confirm-required（confirm 必须是布尔 true）', async () => {
+    for (const body of [{}, { confirm: 'true' }, { confirm: 1 }, null, undefined, 'x', [{ confirm: true }]]) {
+      const { install, state } = harness();
+      const r = await install.startOperation(body, op());
+      if (!(r.ok === false && r.code === 'confirm-required')) return `${JSON.stringify(body)} → ${JSON.stringify(r)}`;
+      if (!untouched(state)) return `${JSON.stringify(body)} 竟然动了 Pi`;
+    }
+    return true;
+  });
+  await check('J3. source 形状不对 → source-rejected（调用方解析错了也过不了这一关）', async () => {
+    const bad = ['npm:demo-ext@1.0.0', 'npm:../x', 'npm:--registry=https://evil.example', 'git:github.com/a/b',
+      'demo-ext', '', null, undefined, ['npm:demo-ext'], 'npm:demo-ext\n--all'];
+    for (const action of ['install', 'remove', 'update']) {
+      for (const source of bad) {
+        const { install, state } = harness();
+        const r = await install.startOperation(yes, { action, source });
+        if (!(r.ok === false && r.code === 'source-rejected')) return `${action}/${JSON.stringify(source)} → ${JSON.stringify(r)}`;
+        if (!untouched(state)) return `${action}/${JSON.stringify(source)} 竟然动了 Pi`;
+      }
+    }
+    return true;
+  });
+  await check('J4. 工作区过期 / 忙 / 忙判据抛错 / 没有官方入口 → 各自的 code，都不动 Pi', async () => {
+    const cases = () => [
+      [harness({ currentCwd: () => 'C:\\new' }), { confirm: true, __expectedCwd: 'C:\\old' }, 'workspace-stale'],
+      [harness({ currentCwd: () => 'C:\\new' }), { confirm: true, expectedCwd: 'C:\\old' }, 'workspace-stale'],
+      [harness({ busy: { code: 'busy-turn', error: '正在生成' } }), yes, 'busy-turn'],
+      [harness({ busy: { code: 'busy-pi-update', error: 'Pi 正在更新' } }), yes, 'busy-pi-update'],
+      [harness({ busy: { code: 'busy-install', error: '另一个操作' } }), yes, 'busy-install'],
+      [harness({ busy: () => { throw new Error('probe 坏了'); } }), yes, 'busy-unknown'],
+      [harness({ resolveOk: false }), yes, 'unsupported'],
+    ];
+    for (const action of ['install', 'remove', 'update']) {
+      for (const [h, body, code] of cases()) {
+        const r = await h.install.startOperation(body, op(action));
+        if (!(r.ok === false && r.code === code)) return `${action}/${code} → ${JSON.stringify(r)}`;
+        if (!untouched(h.state)) return `${action}/${code} 竟然动了 Pi`;
+      }
+    }
+    return true;
+  });
+  await check('J5. 工作区没变就放行（__expectedCwd 只用于比较）', async () => {
+    const { install, state } = harness({ currentCwd: () => 'C:\\same' });
+    const r = await install.startOperation({ confirm: true, __expectedCwd: 'C:\\same' }, op('update'));
+    return (r.ok === true && state.runArgs.length === 1 && !JSON.stringify(state.runArgs).includes('same')) || JSON.stringify(r);
+  });
+  await check('J6. 拒绝文案里的动词跟着动作走（卸载不会被说成安装）', async () => {
+    const a = await harness({ resolveOk: false }).install.startOperation(yes, op('remove'));
+    const b = await harness().install.startOperation({}, op('update'));
+    const c = await harness({ currentCwd: () => 'C:\\new' }).install.startOperation({ confirm: true, __expectedCwd: 'C:\\old' }, op('remove'));
+    return (a.error.includes('卸载') && !a.error.includes('安装') && b.error.includes('更新') && c.error.includes('卸载'))
+      || JSON.stringify({ a: a.error, b: b.error, c: c.error });
+  });
+  await check('J7. 请求体对 argv 没有任何影响（source / args / command / action 一概不读）', async () => {
+    for (const action of ['install', 'remove', 'update']) {
+      const { install, state } = harness();
+      const r = await install.startOperation({
+        confirm: true, action: 'install', source: 'npm:evil-package', id: 'npm:evil-package', name: 'evil',
+        args: ['--all', '--self'], command: 'rm', flags: ['-l'], registry: 'https://evil.example', capabilityId: 'memory',
+      }, op(action, 'npm:demo-ext'));
+      if (r.ok !== true) return `${action} → ${JSON.stringify(r)}`;
+      if (state.runArgs.length !== 1) return `${action}: runner 调了 ${state.runArgs.length} 次`;
+      if (deepSame(state.runArgs[0], PACKAGE_OPERATIONS[action].buildArgs('npm:demo-ext')) !== true) {
+        return `${action}: ${JSON.stringify(state.runArgs[0])}`;
+      }
+      if (r.source !== 'npm:demo-ext' || r.action !== action || 'capabilityId' in r) return `${action}: ${JSON.stringify(r)}`;
+    }
+    return true;
+  });
+
+  /* ================= K. 受控包操作：单飞 ================= */
+  section('K. 受控包操作：与已知能力安装共用一把锁');
+
+  await check('K1. 已知能力安装在跑 → 包操作被拒（operation-running）；runner 只跑一次', async () => {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const { install, state } = harness({ runGate: gate });
+    const first = install.start(good('web'));
+    const second = await install.startOperation(yes, op('remove'));
+    release();
+    const r1 = await first;
+    return (r1.ok === true && second.ok === false && second.code === 'operation-running' && state.runArgs.length === 1)
+      || JSON.stringify({ r1, second, runs: state.runArgs.length });
+  });
+  await check('K2. 包操作在跑 → 已知能力安装被拒（install-running，P24 的 code 不变）', async () => {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const { install, state } = harness({ runGate: gate });
+    const first = install.startOperation(yes, op('update'));
+    const second = await install.start(good('web'));
+    release();
+    const r1 = await first;
+    return (r1.ok === true && second.ok === false && second.code === 'install-running' && state.runArgs.length === 1)
+      || JSON.stringify({ r1, second, runs: state.runArgs.length });
+  });
+  await check('K3. 包操作在跑 → 另一个包操作被拒；跑完后锁释放', async () => {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const { install, state } = harness({ runGate: gate });
+    const first = install.startOperation(yes, op('update'));
+    const during = install.isRunning();
+    const second = await install.startOperation(yes, op('install', 'npm:other-ext'));
+    release();
+    await first;
+    const after = install.isRunning();
+    const third = await install.startOperation(yes, op('install', 'npm:other-ext'));
+    return (during === true && second.code === 'operation-running' && after === false && third.ok === true
+      && state.runArgs.length === 2) || JSON.stringify({ during, second, after, third, runs: state.runArgs.length });
+  });
+  await check('K4. 上锁是同步的：同一个 tick 里发两次，第二次一定被拒', async () => {
+    const { install, state } = harness();
+    const [a, b] = await Promise.all([install.startOperation(yes, op('install')), install.startOperation(yes, op('install'))]);
+    return (a.ok === true && b.ok === false && b.code === 'operation-running' && state.runArgs.length === 1)
+      || JSON.stringify({ a, b, runs: state.runArgs.length });
+  });
+
+  /* ================= L. 受控包操作：执行、失败与恢复 ================= */
+  section('L. 受控包操作：执行、失败与恢复');
+
+  await check('L1. 维护原因跟着动作走（前端据此选措辞）', async () => {
+    const want = { install: 'capability-install', remove: 'extension-remove', update: 'extension-update' };
+    for (const [action, reason] of Object.entries(want)) {
+      const { install, state } = harness();
+      await install.startOperation(yes, op(action));
+      if (state.paused.length !== 1 || state.paused[0] !== reason) return `${action}: ${state.paused.join(',')}`;
+    }
+    return true;
+  });
+  await check('L2. 成功：pause → run → 清缓存 → resume；只回「命令跑完了」，loaded=null', async () => {
+    const { install, state } = harness({ runResult: { ok: true, exitCode: 0, stdout: 'Installed npm:demo-ext\n', stderr: '' } });
+    const r = await install.startOperation(yes, op('install'));
+    const seq = state.sequence.join('>');
+    if (seq !== 'pause>run>invalidate>resume') return seq;
+    return deepSame(r, { ok: true, code: 'command-completed', action: 'install', source: 'npm:demo-ext', commandCompleted: true,
+      commandStarted: true, exitCode: 0, restarted: true, outcome: null, loaded: null });
+  });
+  await check('L3. runner 只拿到：闸门检查过的那份入口 + 超时 + 输出上限', async () => {
+    const { install, state } = harness();
+    await install.startOperation(yes, op('update'));
+    const opts = state.runOpts[0];
+    return (opts.entry === entry && opts.timeoutMs === DEFAULT_INSTALL_TIMEOUT_MS && opts.maxStdoutBytes === 4000
+      && Object.keys(opts).sort().join(',') === 'entry,maxStdoutBytes,timeoutMs') || JSON.stringify(Object.keys(opts));
+  });
+  await check('L4. update 的 stdout 结论：四种都认（含带 ANSI 着色的），认不出就是 null', () => {
+    const cases = [
+      ['Skipped package updates (offline mode)\n', 'skipped-offline'],
+      ['Updated 1 package:\n  npm:demo-ext\n', 'updated'],
+      ['Updated 12 packages:\n  a\n  b\n', 'updated'],
+      ['npm:demo-ext was not updated, see the warnings above\n', 'not-updated'],
+      ['npm:demo-ext is already up to date\n', 'up-to-date'],
+      [`${ESC}[32mnpm:demo-ext is already up to date${ESC}[39m\n`, 'up-to-date'],
+      [`${ESC}[33mSkipped package updates (offline mode)${ESC}[39m`, 'skipped-offline'],
+      [`${ESC}[32mUpdated 2 packages:${ESC}[39m\n  a\n  b\n`, 'updated'],
+      ['a sentence a later Pi might print instead', null],
+      ['', null],
+    ];
+    for (const [text, want] of cases) if (updateOutcome(text) !== want) return `${JSON.stringify(text)} → ${updateOutcome(text)}`;
+    return (updateOutcome(null) === null && updateOutcome(undefined) === null && updateOutcome({}) === null) || '非字符串没有回 null';
+  });
+  await check('L5. outcome 只出现在 update 的成功结果里（install / remove 恒为 null）', async () => {
+    const out = { ok: true, exitCode: 0, stdout: 'npm:demo-ext is already up to date\n', stderr: '' };
+    const a = await harness({ runResult: out }).install.startOperation(yes, op('update'));
+    const b = await harness({ runResult: out }).install.startOperation(yes, op('install'));
+    const c = await harness({ runResult: out }).install.startOperation(yes, op('remove'));
+    return (a.outcome === 'up-to-date' && b.outcome === null && c.outcome === null) || JSON.stringify([a.outcome, b.outcome, c.outcome]);
+  });
+  await check('L6. 失败 code 以动作名开头：-failed / -timeout / -spawn-failed，并带回身份', async () => {
+    for (const action of ['install', 'remove', 'update']) {
+      const failed = await harness({ runResult: { ok: false, exitCode: 1, stdout: '', stderr: 'boom' } }).install.startOperation(yes, op(action));
+      const timedOut = await harness({ runResult: { ok: false, timedOut: true, error: '超时（600s）' } }).install.startOperation(yes, op(action));
+      const spawn = await harness({ runResult: { ok: false, spawnFailed: true, error: '无法启动' } }).install.startOperation(yes, op(action));
+      const threw = await harness({ runResult: new Error('runner 炸了') }).install.startOperation(yes, op(action));
+      const got = [failed.code, timedOut.code, spawn.code, threw.code].join(',');
+      const want = [`${action}-failed`, `${action}-timeout`, `${action}-spawn-failed`, `${action}-spawn-failed`].join(',');
+      if (got !== want) return got;
+      if (![failed, timedOut, spawn, threw].every((r) => r.ok === false && r.action === action && r.source === 'npm:demo-ext')) {
+        return `${action}: 身份字段不对`;
+      }
+      const started = [failed.commandStarted, timedOut.commandStarted, spawn.commandStarted, threw.commandStarted].join(',');
+      if (started !== 'true,true,false,false') return `${action}: commandStarted = ${started}`;
+    }
+    return true;
+  });
+  await check('L7. 起来过的失败要清缓存（可能已经动了磁盘）；没起来的不清；两种都恢复 bridge', async () => {
+    const ran = harness({ runResult: { ok: false, exitCode: 1, stderr: 'boom' } });
+    await ran.install.startOperation(yes, op('install'));
+    const killed = harness({ runResult: { ok: false, timedOut: true, error: '超时' } });
+    await killed.install.startOperation(yes, op('update'));
+    const never = harness({ runResult: { ok: false, spawnFailed: true, error: '无法启动' } });
+    await never.install.startOperation(yes, op('install'));
+    return (ran.state.sequence.join('>') === 'pause>run>invalidate>resume'
+      && killed.state.invalidated === 1 && killed.state.resumed === 1
+      && never.state.invalidated === 0 && never.state.resumed === 1)
+      || JSON.stringify({ ran: ran.state.sequence, killed: killed.state.sequence, never: never.state.sequence });
+  });
+  await check('L8. 暂停失败三种：都不执行、不 resume、commandStarted=false', async () => {
+    const want = { 'pause-failed': 'pause-failed', 'pause-timeout': 'pause-timeout', 'already-in-maintenance': 'operation-running' };
+    for (const [code, expected] of Object.entries(want)) {
+      const { install, state } = harness({ pause: { ok: false, code } });
+      const r = await install.startOperation(yes, op('remove'));
+      if (!(r.ok === false && r.code === expected && r.commandStarted === false && r.action === 'remove')) {
+        return `${code} → ${JSON.stringify(r)}`;
+      }
+      if (state.runArgs.length || state.resumed || state.invalidated) return `${code} 竟然动了 Pi`;
+    }
+    return true;
+  });
+  await check('L9. 暂停自己 reject / 同步抛错 → 失败，不执行、不 resume（不当成暂停成功）', async () => {
+    const counts = { ran: 0, resumed: 0 };
+    const make = (pauseBridge) => createCapabilityInstall({
+      resolveInstallTarget: () => ({ ok: true, entry }),
+      runInstall: async () => { counts.ran += 1; return { ok: true, exitCode: 0 }; },
+      pauseBridge,
+      resumeBridge: () => { counts.resumed += 1; },
+      busyReason: () => null,
+    });
+    const a = await make(async () => { throw new Error('bridge 坏了'); }).startOperation(yes, op('install'));
+    const b = await make(() => { throw new Error('bridge 坏了'); }).startOperation(yes, op('install'));
+    return (a.ok === false && a.code === 'pause-failed' && b.ok === false && b.commandStarted === false
+      && counts.ran === 0 && counts.resumed === 0) || JSON.stringify({ a, b, counts });
+  });
+  await check('L10. resume 自己抛错不会盖掉结果（成功仍是成功，失败仍是那个失败）', async () => {
+    const make = (runResult) => createCapabilityInstall({
+      resolveInstallTarget: () => ({ ok: true, entry }),
+      runInstall: async () => runResult,
+      pauseBridge: async () => ({ ok: true }),
+      resumeBridge: () => { throw new Error('resume 炸了'); },
+      busyReason: () => null,
+    });
+    const good2 = await make({ ok: true, exitCode: 0 }).startOperation(yes, op('remove'));
+    const bad2 = await make({ ok: false, exitCode: 1, stderr: 'npm error code ENOSPC' }).startOperation(yes, op('remove'));
+    return (good2.ok === true && good2.code === 'command-completed' && bad2.code === 'remove-failed' && bad2.cause === 'disk-full')
+      || JSON.stringify({ good2, bad2 });
+  });
+  await check('L11. 失败原因的粗分类只回枚举；认不出就是 null', () => {
+    const cases = [
+      [{ stderr: 'No matching package found for npm:demo-ext' }, 'not-configured'],
+      [{ stderr: `${ESC}[31mNo matching package found for npm:demo-ext${ESC}[39m` }, 'not-configured'],
+      [{ stderr: 'npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/demo-ext' }, 'package-not-found'],
+      [{ stderr: "npm error 404  'demo-ext@*' is not in this registry." }, 'package-not-found'],
+      [{ stderr: 'npm error code ENOTFOUND\nnpm error network request to https://registry.npmjs.org/demo-ext failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org' }, 'network'],
+      [{ stderr: 'npm error code ETIMEDOUT' }, 'network'],
+      [{ stderr: 'npm error code ECONNRESET' }, 'network'],
+      [{ stderr: 'npm error code EAI_AGAIN' }, 'network'],
+      [{ stderr: 'npm error code EPERM\nnpm error syscall rename' }, 'permission'],
+      [{ stderr: 'Error: EACCES: permission denied, mkdir' }, 'permission'],
+      [{ stderr: 'npm error code EBUSY' }, 'permission'],
+      [{ stderr: 'npm error code ENOSPC\nnpm error nospc ENOSPC: no space left on device' }, 'disk-full'],
+      [{ stderr: 'npm error code EINTEGRITY' }, 'integrity'],
+      [{ stderr: 'npm error code ETARGET\nnpm error notarget No matching version found for demo-ext@^9' }, 'version-unresolved'],
+      [{ stderr: 'Error: spawn npm ENOENT' }, 'package-manager-missing'],
+      [{ stderr: "'npm' is not recognized as an internal or external command" }, 'package-manager-missing'],
+      [{ stdout: 'npm error code ENOTFOUND', stderr: '' }, 'network'],
+      [{ stderr: 'a failure nobody has seen before' }, null],
+      [{ stderr: '', stdout: '' }, null],
+      [{}, null],
+      [null, null],
+    ];
+    for (const [raw, want] of cases) if (failureCause(raw) !== want) return `${JSON.stringify(raw)} → ${failureCause(raw)}`;
+    return true;
+  });
+  await check('L12. 失败结果：cause 是枚举、error 是一行脱敏摘要；stdout / stderr 原文不出后端', async () => {
+    const { install } = harness({ runResult: { ok: false, exitCode: 1, stdout: 'SECRET-OUT-LINE',
+      stderr: 'npm error code ENOTFOUND at C:\\Users\\me\\AppData\\npm-cache token=abcdef\nSECOND-LINE-SECRET' } });
+    const r = await install.startOperation(yes, op('install'));
+    const all = stringsOf(r).join('\n');
+    return (r.cause === 'network' && !('stdout' in r) && !('stderr' in r) && !all.includes('SECRET-OUT-LINE')
+      && !all.includes('SECOND-LINE-SECRET') && !all.includes('C:\\Users\\me') && !all.includes('abcdef')
+      && r.error.includes('<path>') && !r.error.includes('\n')) || JSON.stringify(r);
+  });
+  await check('L13. 成功结果里同样没有 stdout / stderr / 入口路径 / 命令', async () => {
+    const { install } = harness({ runResult: { ok: true, exitCode: 0, stdout: 'SECRET-OUT', stderr: 'SECRET-ERR' } });
+    const r = await install.startOperation(yes, op('update'));
+    const all = stringsOf(r).join('\n');
+    const hit = ['SECRET-OUT', 'SECRET-ERR', '/pkg/dist/bundle/cli.js', process.execPath, '--no-approve'].filter((t) => all.includes(t));
+    const keys = ['stdout', 'stderr', 'entry', 'args', 'argv', 'command', 'env'].filter((key) => key in r);
+    return (hit.length === 0 && keys.length === 0) || `${hit.join(',')} | ${keys.join(',')}`;
+  });
+
+  /* ================= M. 受控包操作：锁内复核 ================= */
+  section('M. 受控包操作：锁内复核（finish）');
+
+  await check('M1. finish 在 resume 之后、解锁之前跑，拿到的是命令的结果', async () => {
+    const { install, state } = harness();
+    const seen = { result: null, running: null, seq: null };
+    const r = await install.startOperation(yes, op('install', 'npm:demo-ext', {
+      finish: (result) => {
+        seen.result = result;
+        seen.running = install.isRunning();
+        seen.seq = state.sequence.join('>');
+      },
+    }));
+    return (seen.result && seen.result.code === 'command-completed' && seen.running === true
+      && seen.seq === 'pause>run>invalidate>resume' && install.isRunning() === false && r === seen.result)
+      || JSON.stringify({ seen, after: install.isRunning() });
+  });
+  await check('M2. finish 可以替换结果（同步或异步）；替换后的才是最终结果与 snapshot', async () => {
+    const { install } = harness();
+    const a = await install.startOperation(yes, op('install', 'npm:demo-ext', {
+      finish: (result) => ({ ...result, code: 'installed', verified: true }),
+    }));
+    const b = await install.startOperation(yes, op('remove', 'npm:demo-ext', {
+      finish: async (result) => {
+        await null;
+        return { ...result, ok: false, code: 'unverified', verified: false };
+      },
+    }));
+    const snap = install.snapshot();
+    return (a.code === 'installed' && a.verified === true && b.ok === false && b.code === 'unverified'
+      && snap.ok === false && snap.code === 'unverified' && snap.action === 'remove' && snap.capabilityId === null
+      && snap.running === false) || JSON.stringify({ a, b, snap });
+  });
+  await check('M3. finish 还没回来时锁没放：第二个操作（两条入口都算）被拒', async () => {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const { install, state } = harness();
+    const first = install.startOperation(yes, op('install', 'npm:demo-ext', {
+      finish: async (result) => {
+        await gate;
+        return result;
+      },
+    }));
+    /* 等命令跑完、Pi 已恢复、进入 finish：判据是「已经 resume」，不是时间。 */
+    while (state.resumed === 0) await new Promise((r) => setImmediate(r));
+    const second = await install.startOperation(yes, op('install', 'npm:other-ext'));
+    const legacy = await install.start(good('web'));
+    const during = install.isRunning();
+    release();
+    await first;
+    return (second.code === 'operation-running' && legacy.code === 'install-running' && during === true
+      && state.runArgs.length === 1 && install.isRunning() === false)
+      || JSON.stringify({ second, legacy, during, runs: state.runArgs.length });
+  });
+  await check('M4. finish 抛错 / reject → 命令的结论照旧，只是 verified=null；锁照样放', async () => {
+    const { install } = harness();
+    const thrown = await install.startOperation(yes, op('update', 'npm:demo-ext', { finish: () => { throw new Error('读盘炸了'); } }));
+    const rejected2 = await install.startOperation(yes, op('update', 'npm:demo-ext', { finish: async () => { throw new Error('读盘炸了'); } }));
+    return (thrown.ok === true && thrown.code === 'command-completed' && thrown.verified === null && thrown.commandStarted === true
+      && rejected2.ok === true && rejected2.verified === null && install.isRunning() === false)
+      || JSON.stringify({ thrown, rejected2 });
+  });
+  await check('M5. 闸门拒绝的不调 finish；真正执行过的（含命令失败、暂停失败）都调', async () => {
+    let calls = 0;
+    const finish = (result) => {
+      calls += 1;
+      return result;
+    };
+    await harness().install.startOperation({}, op('install', 'npm:demo-ext', { finish }));
+    await harness({ busy: { code: 'busy-turn', error: 'x' } }).install.startOperation(yes, op('install', 'npm:demo-ext', { finish }));
+    await harness({ resolveOk: false }).install.startOperation(yes, op('install', 'npm:demo-ext', { finish }));
+    await harness({ currentCwd: () => 'C:\\new' }).install.startOperation({ confirm: true, __expectedCwd: 'C:\\old' }, op('install', 'npm:demo-ext', { finish }));
+    await harness().install.startOperation(yes, { action: 'install', source: 'npm:bad@1', finish });
+    await harness().install.startOperation(yes, { action: 'toggle', source: 'npm:demo-ext', finish });
+    if (calls !== 0) return `闸门拒绝也调了 finish：${calls}`;
+    await harness({ runResult: { ok: false, exitCode: 1, stderr: 'boom' } }).install.startOperation(yes, op('install', 'npm:demo-ext', { finish }));
+    await harness({ pause: { ok: false, code: 'pause-timeout' } }).install.startOperation(yes, op('install', 'npm:demo-ext', { finish }));
+    await harness().install.startOperation(yes, op('install', 'npm:demo-ext', { finish }));
+    return calls === 3 || calls;
+  });
+  await check('M6. 已知能力安装那条入口不受影响：没有复核钩子，形状还是 P24 的', async () => {
+    const { install } = harness();
+    const r = await install.start(good('memory'));
+    return deepSame(r, { ok: true, code: 'installed', phase: 'installed', capabilityId: 'memory', source: 'npm:pi-memory',
+      commandCompleted: true, exitCode: 0, restarted: true, loaded: null });
+  });
+
+  /* ================= N. 受控包操作：可用性与装配 ================= */
+  section('N. 受控包操作：可用性与装配');
+
+  await check('N1. available() 跟着「有没有可证明的官方入口」走（判断不了 = 不可用）', () =>
+    (harness().install.available() === true && harness({ resolveOk: false }).install.available() === false
+      && createCapabilityInstall({}).available() === false
+      && createCapabilityInstall({ resolveInstallTarget: () => { throw new Error('x'); } }).available() === false
+      && createCapabilityInstall({ resolveInstallTarget: () => ({ ok: true }) }).available() === false) || 'available() 判断不对');
+  await check('N2. server.js：包清单与市场接在同一个执行器上（后端没有第二条安装路径）', () => {
+    const src = read('server.js');
+    const want = ['createExtensionPackages({', 'createExtensionMarket({', 'catalog: extensionMarket',
+      'readInstalled: () => extensionPackagesRef?.installedIndex() ?? null'];
+    const miss = want.filter((t) => !src.includes(t));
+    const ops = [...src.matchAll(/operations:\s*capabilityInstall\b/g)].length;
+    return (miss.length === 0 && ops === 2) || `缺少：${miss.join(', ')}；operations 接了 ${ops} 处`;
+  });
+  await check('N3. router：三条新路由是精确路径、排在 405 兜底之前、先过本机 Host 检查', () => {
+    const router = read('server/router.js');
+    const block = /if \(url\.pathname === '\/api\/extensions\/packages'[\s\S]*?\n    \}/.exec(router);
+    if (!block) return '找不到新路由';
+    const fallback = router.indexOf("if (req.method !== 'GET')");
+    return (router.indexOf(block[0]) < fallback && block[0].includes("=== '/api/extensions/market'")
+      && block[0].includes("=== '/api/extensions/market/item'") && !/startsWith/.test(block[0])
+      && block[0].indexOf('denyLocalHost') < block[0].indexOf('.handle(')) || block[0];
+  });
+  await check('N4. 两个新模块自己不起进程、不拼命令行（只有 capability-install 这一条出口）', () => {
+    for (const rel of ['server/extension-packages.js', 'server/extension-market.js', 'server/extension-market-catalog.js']) {
+      const src = read(rel).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      if (/child_process|spawn\(|execFile|execSync|runCli|runPiCliCommand/.test(src)) return `${rel} 出现了进程启动`;
+    }
+    return true;
+  });
+  await check('N5. 忙判据的措辞覆盖三个动作（不再只说「安装」），code 不变', () => {
+    const body = /function piBusyReason\([^)]*\)\s*\{([\s\S]*?)\n\}/.exec(read('server.js'));
+    return (body && /capabilityInstall\.isRunning\(\)\) return \{ code: 'busy-install', error: '[^']*安装、卸载或更新/.test(body[1]))
+      || '措辞或 code 变了';
   });
 
   console.log('');

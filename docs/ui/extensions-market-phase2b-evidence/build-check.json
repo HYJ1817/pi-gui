@@ -1,0 +1,19 @@
+{
+  "version": "0.34.0",
+  "backendSha256": "fd1e547fc89f13f2109513dc7c20029cf8e269880b4200597cadce0e774d0455",
+  "frontend": {
+    "api.js": "bd5ceb23c91ebe5905f95c81538dc7e3c4f4fae7beac85c6632c94908a0c6033",
+    "app.js": "676c08d9c5876dc1ac85c96560354470c562d637493a6e5c104d721438855213",
+    "status-copy.js": "93539da6be4e5327af9da2616bc200b51a0c56bb3a7321e9214841e6f13b88df",
+    "ui/capability-setup.js": "17d15741bdf7deb7ad17acb7d889f505c61aa6b86bda5b71c81f3563dc207163",
+    "extensions/extensions.css": "bf02a04b420d84ec06ff4c7aec5717d2a3b57691e40d369b3866b85c6311e2d7",
+    "extensions/installed.js": "155ca2e6282609348890c0e90acc29d84e7738242f358edbd98d2171374ac1ec",
+    "extensions/market-model.js": "a5979e80b99a40b6b19f19b384258d2e8e790b935d42705cec9a754f8f0eba4d",
+    "extensions/market.js": "0f5181e39d71d58e842d737790b41fe5330362fe37a67fd9338b4548e638d73f",
+    "extensions/model.js": "9ca81c07b8e3ee1758f50e359c63281dded2d976fe95d8dc67c78a2465869fc7",
+    "extensions/operations.js": "58810109d7bc0a7fe4f0884616602a32fbfc0cf69824600129d8a3a287d26c34",
+    "extensions/package-detail.js": "f633fe19687d2b96f4ce5ef73b81807c66d52207777d8f12675ee1260acc92a7",
+    "extensions/page.js": "36de7023c5436bc246494d71525eaee3c4d41cafc13c6f094f09bd538625d63e",
+    "extensions/parts.js": "9669ebf2037aa5c1409ae4427cf9c94b9ab22b7fe9a9fbd34cebc002324148b5"
+  }
+}
