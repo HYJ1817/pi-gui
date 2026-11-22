@@ -963,18 +963,33 @@ function createWorld(label, entry) {
     assert.match(summary.textContent, /1 条警告/);
     assert.equal(notices.querySelectorAll('.extension-notice').length, 2);
     assert.ok(notices.textContent.includes('重复 2 次'), 'repeated notifications are still identifiable');
-    B.w.S.bridgeRun = (B.w.S.bridgeRun || 0) + 1;
-    B.d.dispatchEvent(new B.w.Event('pi-gui:capability-bridge-ready'));
+    const nextRun = () => {
+      B.w.S.bridgeRun = (B.w.S.bridgeRun || 0) + 1;
+      B.d.dispatchEvent(new B.w.Event('pi-gui:capability-bridge-ready'));
+    };
+    nextRun();
     assert.equal(notices.hidden, true);
     assert.equal(notices.open, false);
+    assert.equal(B.d.activeElement, B.$('extensionsTabMarket'), 'clearing the focused summary returns to the selected tab');
     assert.doesNotMatch(notices.textContent, /Setup notes|Fixture connection failed/);
     B.w.handleExtensionNotification({ message: 'Fixture ready', notifyType: 'info' });
     assert.equal(notices.open, false);
     assert.match(summary.textContent, /1 条提示/);
+    const search = B.d.querySelector('[aria-label="搜索插件市场"]');
+    search.focus();
+    nextRun();
+    assert.equal(notices.hidden, true);
+    assert.equal(B.d.activeElement, search, 'a background restart does not steal search focus');
+    B.$('extensionsTabInstalled').click();
+    B.w.handleExtensionNotification(warn);
     summary.click();
+    const body = notices.querySelector('.extensions-notice-body');
+    body.focus();
+    assert.equal(B.d.activeElement, body);
     B.w.beginWorkspaceSwitch('C:\\fixture\\another');
     assert.equal(notices.hidden, true, 'workspace change also clears the old notices');
     assert.equal(notices.open, false);
+    assert.equal(B.d.activeElement, B.$('extensionsTabInstalled'), 'clearing the focused body returns to the selected tab');
     B.w.showChat();
   });
 

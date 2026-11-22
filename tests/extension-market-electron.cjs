@@ -215,6 +215,32 @@ if (!process.versions.electron) {
           await click('#navHome');
         }
       }
+      // Scope changes are isolated fixture events. Assert the settled browser focus, not just a call to focus().
+      await click('#navExtensions');
+      await wait(`!document.querySelector('.extension-notices').hidden`);
+      const nextRun = () => js(`(async () => {
+        const { S } = await import('/state.js'); S.bridgeRun = (S.bridgeRun || 0) + 1;
+        document.dispatchEvent(new Event('pi-gui:capability-bridge-ready'));
+        await new Promise(requestAnimationFrame);
+        return { hidden: document.querySelector('.extension-notices').hidden, focus: document.activeElement.id,
+          search: document.activeElement.getAttribute('aria-label') };
+      })()`);
+      const newNotice = () => js(`import('/extension-notices.js').then(m => m.handleExtensionNotification({message:'Offline focus fixture', notifyType:'info'}))`);
+      await js(`document.querySelector('.extensions-notice-summary').focus()`);
+      const fromSummary = await nextRun();
+      verify(fromSummary.hidden && fromSummary.focus === 'extensionsTabInstalled', 'restart restores focused notice summary to Installed; actual focus: ' + fromSummary.focus);
+      await click('#extensionsTabMarket');
+      await newNotice();
+      await js(`document.querySelector('.extensions-notice-summary').focus()`);
+      await key('Enter', 'Enter', 13);
+      await key('Tab', 'Tab', 9);
+      await wait(`document.activeElement.matches('.extensions-notice-body')`);
+      const fromBody = await nextRun();
+      verify(fromBody.hidden && fromBody.focus === 'extensionsTabMarket', 'restart restores focused notice text to Market');
+      await newNotice();
+      await js(`document.querySelector('[aria-label="搜索插件市场"]').focus()`);
+      const fromSearch = await nextRun();
+      verify(fromSearch.hidden && fromSearch.search === '搜索插件市场', 'clearing notices leaves the focused search untouched');
       verify(errors.length === 0, 'renderer has no console errors ' + JSON.stringify(errors));
       await emit('measurements.json', Buffer.from(JSON.stringify({ checks, metrics, shots }, null, 2) + '\n'));
       console.log(`${checks}/${checks} passed, ${shots.length} captures in ${out}`);
