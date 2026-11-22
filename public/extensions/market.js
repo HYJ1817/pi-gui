@@ -18,7 +18,8 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
   const { field: toolbar, input } = extensionSearchField({ placeholder: '搜索插件', label: '搜索插件市场' });
   toolbar.classList.add('is-rounded');
   const actions = el('div', 'extensions-head-buttons');
-  const refresh = extensionActionButton('btn primary extensions-refresh', '刷新插件市场', 'refresh');
+  /* 刷新是弱操作（设计系统把「刷新」列在 Ghost 下）；卡片里的安装 / 更新才是本页的 Primary。 */
+  const refresh = extensionActionButton('btn ghost extensions-refresh', '刷新插件市场', 'refresh');
   const more = extensionMoreButton('插件市场选项');
   actions.append(refresh, more);
 

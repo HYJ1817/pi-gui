@@ -60,7 +60,7 @@
   align-items: flex-start;
   gap: 9px;
   padding: 9px 10px;
-  border: 1px solid var(--ds-border-subtle);
+  border: 0;
   border-left: 2px solid var(--ds-success);
   border-radius: var(--radius-md);
   background: var(--ds-success-surface);
@@ -103,12 +103,12 @@
   width: 36px;
   height: 36px;
   box-sizing: border-box;
-  border: 1px solid var(--ds-border-subtle);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--ds-bg-secondary);
+  background: var(--ds-tile-deep);
   color: var(--ds-text-secondary);
 }
-.skills-group-glyph { width: 34px; height: 34px; border-color: var(--ds-border-default); }
+.skills-group-glyph { width: 34px; height: 34px; }
 /* .skills-page 同时也是 .modal-card，共享样式里的 `.modal-card h3`（14/500 +
  * 6px 下边距）会盖掉分组标题；用两级选择器把语义标题的规格拿回来。 */
 .skills-page .skills-group-title,
@@ -145,18 +145,20 @@
 }
 .skills-group-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space-2); }
 
-/* ---------- 整宽列表；状态和开关与展开详情的按钮为兄弟节点 ---------- */
-.skills-rows { display: grid; gap: var(--ui-space-2); }
+/* ---------- 整宽列表；状态和开关与展开详情的按钮为兄弟节点 ----------
+ * 行是设计系统的内流瓦片（与设置行/.settings-row 同一表面）：只用底色和留白分组，
+ * 不画整圈边框；悬停与展开都在同一层底色上升一级。 */
+.skills-rows { display: grid; gap: 6px; }
 .skill-row, .skills-market-card {
   min-width: 0;
-  border: 1px solid var(--ds-border-default);
-  border-radius: var(--radius-md);
-  background: var(--ds-surface-elevated);
-  transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
+  border: 0;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
+  transition: background var(--motion-duration-fast) var(--motion-ease-out);
 }
-.skill-row:hover, .skill-row:focus-within, .skill-row.is-open,
-.skills-market-card:focus-within { border-color: var(--ds-border-strong); }
-.skill-row-line { display: flex; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-3) 14px; }
+.skill-row:hover, .skill-row:focus-within, .skills-market-card:focus-within { background: var(--ds-tile-hover); }
+.skill-row.is-open { background: var(--ds-tile-hover); }
+.skill-row-line { display: flex; align-items: center; gap: var(--ui-space-3); padding: 14px 16px; }
 .skill-row-main {
   display: flex;
   align-items: center;
@@ -178,7 +180,7 @@
   position: absolute;
   right: 1px;
   bottom: 2px;
-  box-shadow: 0 0 0 2px var(--ds-surface-elevated);
+  box-shadow: 0 0 0 2px var(--ds-tile-deep);
 }
 .skill-row-text { display: grid; gap: var(--ui-space-1); flex: 1 1 auto; min-width: 0; }
 .skill-name {
@@ -208,7 +210,8 @@
   margin: 0 14px 14px 62px;
   padding: var(--ui-space-3);
   border-radius: var(--radius-sm);
-  background: var(--ds-bg-secondary);
+  background: var(--ds-raised);
+  box-shadow: var(--ds-raised-shadow);
 }
 .skill-detail .ext-row { font-size: var(--text-xs); }
 .skill-detail .ext-code { max-height: 320px; }
@@ -250,9 +253,9 @@
   justify-content: center;
   gap: 9px;
   padding: var(--ui-space-6) var(--ui-space-4);
-  border: 1px dashed var(--ds-border-strong);
-  border-radius: var(--radius-md);
-  background: var(--ds-bg-secondary);
+  border: 0;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
   color: var(--ds-text-secondary);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
@@ -427,7 +430,7 @@
   display: grid;
   gap: 8px;
   padding: 10px;
-  border: 1px solid var(--ds-border-subtle);
+  border: 0;
   border-left: 2px solid var(--ds-warning);
   border-radius: var(--radius-md);
   background: var(--ds-warning-surface);
@@ -521,7 +524,7 @@
   align-items: center;
   gap: 9px;
   padding: 8px 10px;
-  border: 1px solid var(--ds-border-subtle);
+  border: 0;
   border-left: 2px solid var(--ds-info);
   border-radius: var(--radius-md);
   background: var(--ds-info-surface);

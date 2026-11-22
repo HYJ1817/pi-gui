@@ -19,6 +19,7 @@ import { projectWorkSurface, workspaceView } from './ui/workspace-surface.js';
 import { openModal, closeModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { restartPi } from './providers.js';
+import { createSegmentedControl } from './ui/primitives.js';
 import {
   MCP_NAME_RE, badge, button, icon, node, relativeTime, runtimeLabel, runtimeServerFor,
   scopeLabel, serverStatus, statusDot, transportLabel,
@@ -1276,7 +1277,7 @@ function createPage(card, { reopen, present }) {
     const detail = node('p', '', state.error);
     detail.setAttribute('role', 'alert');
     box.appendChild(detail);
-    const retry = button('btn primary', '重试');
+    const retry = button('btn', '重试');
     retry.onclick = () => load();
     box.appendChild(retry);
     return box;
@@ -1341,24 +1342,27 @@ function createPage(card, { reopen, present }) {
 
   function renderToolbar() {
     const bar = node('div', 'mcp-toolbar');
-    const seg = node('div', 'mcp-filter');
-    seg.setAttribute('role', 'group');
-    seg.setAttribute('aria-label', '按范围筛选');
     const counts = { all: currentServers().length, user: 0, project: 0 };
     for (const s of currentServers()) {
       if (s.scope === 'project') counts.project++;
       else counts.user++;
     }
-    for (const [value, label, count] of [['all', '全部', counts.all], ['user', '全局', counts.user], ['project', '项目', counts.project]]) {
-      const b = button('mcp-filter-btn' + (state.filter === value ? ' on' : ''), '');
-      b.dataset.focusKey = `filter:${value}`;
-      b.setAttribute('aria-pressed', String(state.filter === value));
-      b.appendChild(node('span', '', label));
-      b.appendChild(node('span', 'mcp-filter-count', String(count)));
-      b.onclick = () => { state.filter = value; render(); };
-      seg.appendChild(b);
+    /* 与技能页同一套共享分段控件；条数走 .ds-segment-count。 */
+    const scopeControl = createSegmentedControl({
+      ariaLabel: '按范围筛选',
+      value: state.filter,
+      options: [
+        { value: 'all', label: '全部', count: counts.all },
+        { value: 'user', label: '全局', count: counts.user },
+        { value: 'project', label: '项目', count: counts.project },
+      ],
+      onChange: (value) => { state.filter = value; render(); },
+    });
+    scopeControl.element.classList.add('mcp-scope');
+    for (const item of scopeControl.element.querySelectorAll('.ds-segment-item')) {
+      item.dataset.focusKey = `filter:${item.dataset.value}`;
     }
-    bar.appendChild(seg);
+    bar.appendChild(scopeControl.element);
 
     const search = node('label', 'mcp-search ds-search-field ds-search-control');
     search.appendChild(icon('search', 'mcp-icon'));
@@ -1376,7 +1380,7 @@ function createPage(card, { reopen, present }) {
 
     const projectLabel = node('label', 'mcp-project-picker');
     projectLabel.appendChild(node('span', 'mcp-project-picker-label', '项目'));
-    const select = node('select', 'mcp-input ds-input mcp-select mcp-project-select');
+    const select = node('select', 'ds-select mcp-project-select');
     select.setAttribute('aria-label', '切换当前项目');
     if (state.switching) select.disabled = true;
     const current = state.projectPath || '';

@@ -70,9 +70,9 @@
 .extensions-inner > .extension-notices {
   margin: 0;
   min-width: 0;
-  border: 1px solid var(--ds-border-default);
-  border-radius: var(--radius-sm);
-  background: var(--ds-bg-secondary);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--ds-tile);
 }
 .extensions-notice-summary {
   display: flex;
@@ -119,7 +119,7 @@
   font-size: var(--text-lg);
   font-weight: var(--font-weight-semibold);
   line-height: var(--leading-tight);
-  color: var(--ds-text-secondary);
+  color: var(--ds-text-primary);
 }
 .extensions-group-count {
   min-width: 20px;
@@ -136,16 +136,16 @@
 }
 
 /* ---------- 卡片网格 ---------- */
-.extensions-grid { display: flex; flex-direction: column; gap: 8px; }
+.extensions-grid { display: flex; flex-direction: column; gap: 6px; }
 .extensions-group-icon {
   display: grid;
   place-items: center;
   flex: none;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--ds-border-default);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--ds-bg-chip);
+  background: var(--ds-tile-deep);
 }
 .extensions-tab-installed .extensions-card {
   display: grid;
@@ -166,10 +166,10 @@
   flex-direction: column;
   gap: 10px;
   min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--ds-border-default);
-  border-radius: 12px;
-  background: var(--ds-surface-elevated);
+  padding: 14px 16px;
+  border: 0;
+  border-radius: var(--radius-md-plus);
+  background: var(--ds-tile);
   transition: background var(--motion-duration-fast) var(--motion-ease-out);
 }
 .extensions-card:hover,
