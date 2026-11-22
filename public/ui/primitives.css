@@ -385,6 +385,31 @@
   cursor: not-allowed;
 }
 
+/* Opt-in rounded chrome. The tab/segment/search keep their existing semantics and focus states. */
+.ds-segmented.is-rounded,
+.ds-segmented.is-rounded > .ds-segment-item { border-radius: var(--radius-full); }
+
+/* Independent filter pills can wrap onto separate lines without a single filled track. */
+.ds-filter-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ds-filter-chips > .ds-segment-item {
+  height: auto;
+  min-height: 26px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-full);
+  background: var(--ds-tile);
+}
+.ds-filter-chips > .ds-segment-item.is-active {
+  background: var(--ds-bg-active);
+  box-shadow: none;
+}
+
 /* 可选条数：与标签同一行的弱化数字，不另起徽标。 */
 .ds-segment-count {
   color: var(--ds-text-muted);
@@ -695,6 +720,8 @@
   background: var(--ds-field-inset-bg);
   color: var(--ds-text-muted);
 }
+
+.ds-search-control.is-rounded { border-radius: var(--radius-full); }
 
 .ds-search-control > input {
   flex: 1;

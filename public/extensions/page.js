@@ -43,8 +43,12 @@ export function openExtensions(options = {}) {
     const inner = el('div', 'extensions-inner ds-readable-badges');
     const head = el('header', 'extensions-head');
     const heading = el('h2', 'extensions-title', '扩展');
+    const titleGlyph = el('span', 'extensions-market-title-glyph');
+    titleGlyph.append(createIcon('box', { size: 14 }));
+    const titleBlock = el('div', 'extensions-title-block');
+    titleBlock.append(titleGlyph, heading);
     const actionsSlot = el('div', 'extensions-head-actions');
-    head.append(heading, actionsSlot);
+    head.append(titleBlock, actionsSlot);
 
     const toolbarRow = el('div', 'extensions-toolbar-row');
     const tablist = el('div', 'ds-segmented extensions-tabs');
@@ -87,6 +91,9 @@ export function openExtensions(options = {}) {
     function select(id, { focus = false } = {}) {
       if (active !== id) panels.get(active)?.deactivate?.();
       active = id;
+      inner.dataset.tab = id;
+      titleGlyph.hidden = id !== 'market';
+      tablist.classList.toggle('is-rounded', id === 'market');
       for (const tab of TABS) {
         const button = buttons.get(tab.id);
         const on = tab.id === active;

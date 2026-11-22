@@ -16,17 +16,18 @@ const PAGE_SIZE = 24;
 
 export function renderExtensionMarket(holder, { isLive, operations, onCount = () => {} }) {
   const { field: toolbar, input } = extensionSearchField({ placeholder: '搜索插件', label: '搜索插件市场' });
+  toolbar.classList.add('is-rounded');
   const actions = el('div', 'extensions-head-buttons');
-  const refresh = extensionActionButton('btn ghost extensions-refresh', '刷新插件市场', 'refresh');
+  const refresh = extensionActionButton('btn primary extensions-refresh', '刷新插件市场', 'refresh');
   const more = extensionMoreButton('插件市场选项');
   actions.append(refresh, more);
 
   const notices = el('div', 'extensions-notes');
   const filters = el('div', 'extensions-market-filters');
-  const categories = el('div', 'ds-segmented extensions-categories');
+  const categories = el('div', 'ds-filter-chips extensions-categories');
   categories.setAttribute('role', 'group');
   categories.setAttribute('aria-label', '插件分类');
-  const sorts = el('div', 'ds-segmented extensions-sorts');
+  const sorts = el('div', 'ds-segmented is-rounded extensions-sorts');
   sorts.setAttribute('role', 'group');
   sorts.setAttribute('aria-label', '插件排序');
   filters.append(categories, sorts);
@@ -62,7 +63,8 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
     if (confirmSurfaceMeta()?.owner === consentOwner) dismissConfirm();
   }
 
-  function showDetail(item) {
+  function showDetail(item, trigger) {
+    const fromAction = trigger.classList.contains('extensions-market-card-action');
     detail = openExtensionPackageDetail(item, {
       operations, isLive: live,
       onClose() {
@@ -71,7 +73,8 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
         queueMicrotask(() => {
           if (!live() || !holder.isConnected || document.activeElement !== document.body) return;
           const card = [...grid.children].find((node) => node.dataset.marketId === item.id);
-          (card?.querySelector('.extensions-card-hit') || input).focus();
+          const action = fromAction && card?.querySelector('.extensions-market-card-action:not(:disabled)');
+          (action || card?.querySelector('.extensions-card-hit') || input).focus();
         });
       },
     });
@@ -80,32 +83,40 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
   function cardFor(item) {
     const card = el('article', 'extensions-card extensions-market-card');
     card.dataset.marketId = item.id;
-    const main = el('div', 'extensions-market-card-main');
+    const main = el('div', 'extensions-market-card-body');
+    const view = el('button', 'extensions-card-hit');
+    view.type = 'button';
+    view.setAttribute('aria-label', `${item.name} 详情`);
+    view.onclick = () => showDetail(item, view);
     const head = el('div', 'extensions-card-head');
     const heading = el('div', 'extensions-card-heading');
     const title = el('h4', 'ext-name', item.name);
     title.title = item.name;
-    const meta = el('div', 'extensions-card-meta', extensionMarketMeta(item));
+    const meta = el('span', 'extensions-card-meta', extensionMarketMeta(item));
     meta.title = meta.textContent;
     heading.append(title, meta);
     head.append(extensionGlyph(item.name), heading);
     main.append(head);
     if (item.description) main.append(el('p', 'extensions-card-desc', item.description));
-    if (item.tags?.length) {
-      const tags = el('div', 'extensions-card-tags extensions-market-tags');
-      for (const tag of item.tags) tags.append(createBadge({ text: tag, tone: 'neutral' }));
+    if (item.tags?.length || item.flagged) {
+      const tags = el('span', 'extensions-card-tags extensions-market-tags');
+      // npm 关键词不是声明式权限；只有注册表明确给出的警告才用警示色。
+      if (item.flagged) tags.append(createBadge({ text: 'npm 安全警告', tone: 'warning' }));
+      for (const tag of item.tags || []) tags.append(createBadge({ text: tag, tone: 'neutral' }));
       main.append(tags);
     }
-    const view = el('button', 'extensions-card-hit');
-    view.type = 'button';
-    view.setAttribute('aria-label', `${item.name} 详情`);
-    view.onclick = () => showDetail(item);
+    // Keep the heading, description and npm facts readable outside the named button. Its hit area covers only the body.
+    main.append(view);
     const foot = el('div', 'extensions-market-card-foot');
     const state = extensionMarketCardState(item);
     const isAction = state.kind === 'install' || state.kind === 'update';
     if (isAction) {
-      const action = extensionActionButton('btn primary tiny extensions-market-card-action', state.label);
-      action.onclick = () => showDetail(item);
+      if (state.kind === 'update' && item.installed.version) {
+        foot.append(el('span', 'extensions-card-meta', `已安装 v${item.installed.version}`));
+      }
+      const action = extensionActionButton('btn primary extensions-market-card-action', state.label);
+      action.setAttribute('aria-label', `${state.label} ${item.name}`);
+      action.onclick = () => showDetail(item, action);
       const id = state.kind === 'install' ? item.id : item.installed.packageId;
       extensionSyncActionButton(action, operations.busyFor(id, response?.operations?.running), state.kind, {
         label: state.label, disabled: stale || S.switching,
@@ -117,7 +128,7 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
       badge.title = state.reason;
       foot.append(badge);
     }
-    card.append(main, view, foot);
+    card.append(main, foot);
     return card;
   }
 
@@ -137,23 +148,24 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
     filters.hidden = !response;
     const focus = document.activeElement;
     const focused = filters.contains(focus) ? focus.dataset.filter : null;
-    const buttons = (values, value, onChange) => values.map((option) => {
+    const buttons = (values, value, onChange, reset = null) => values.map((option) => {
       const button = el('button', 'ds-segment-item', option.label);
       button.type = 'button';
       button.dataset.filter = option.id;
       button.disabled = option.available === false;
       button.setAttribute('aria-pressed', String(option.id === value));
       button.classList.toggle('is-active', option.id === value);
-      if (Number.isInteger(option.count)) button.append(el('span', 'ds-segment-count', String(option.count)));
+      if (option.id !== 'all' && Number.isInteger(option.count)) button.append(el('span', 'ds-segment-count', String(option.count)));
       button.onclick = () => {
         if (option.id !== value) onChange(option.id);
+        else if (reset !== null && reset !== value) onChange(reset);
       };
       return button;
     });
     categories.replaceChildren(...buttons(response?.categories || [], category, (value) => {
       category = value;
       void load();
-    }));
+    }, 'all'));
     sorts.replaceChildren(...buttons(response?.sorts || [], sort, (value) => {
       sort = value;
       void load();
@@ -188,9 +200,12 @@ export function renderExtensionMarket(holder, { isLive, operations, onCount = ()
       const message = stale ? '项目已切换，刷新后查看当前项目的扩展。'
         : changing || loading ? '正在读取插件市场…'
           : error ? '无法读取插件市场' : '没有符合条件的插件';
+      const canClear = !stale && !loading && !changing && !error && (input.value.trim() || category !== 'all');
       grid.replaceChildren(extensionStateTile(message, {
         icon: stale ? 'refresh' : 'search',
-        actions: stale ? [{ label: '刷新', onClick: () => load() }] : [],
+        actions: stale ? [{ label: '刷新', onClick: () => load() }] : canClear ? [{
+          label: '清除筛选', onClick() { input.value = ''; category = 'all'; input.focus(); void load(); },
+        }] : [],
       }));
     } else {
       const focused = grid.contains(document.activeElement) ? document.activeElement : null;
