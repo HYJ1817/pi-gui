@@ -452,8 +452,15 @@ function createSkillsPage(card) {
     };
     const actions = el('div', 'skill-row-actions');
     const status = skill.state === 'enabled' && skill.loaded === true ? '已加载' : meta.label;
-    actions.append(createBadge({ text: status, tone: meta.tone }));
-    if (skill.toggleable) actions.append(renderToggle(skill));
+    const badge = createBadge({ text: status, tone: meta.tone });
+    badge.id = `skillStatus-${skill.id}`;
+    main.setAttribute('aria-describedby', badge.id);
+    actions.append(badge);
+    if (skill.toggleable) {
+      const toggle = renderToggle(skill);
+      toggle.setAttribute('aria-describedby', badge.id);
+      actions.append(toggle);
+    }
     line.append(main, actions);
     item.append(line);
     if (open) item.append(openDetailFor(skill, detailId));
