@@ -105,6 +105,97 @@ const { createSettingsToggle, createSegmentedControl, createHelpIcon, createBadg
   console.log('✓ createSegmentedControl count / hidden passed');
 }
 
+// 2c. Segmented Control：radiogroup 键盘语义（roving tabindex + 方向键 / Home / End）
+{
+  const changes = [];
+  const seg = createSegmentedControl({
+    options: [
+      { value: 'a', label: '全部', count: 4 },
+      { value: 'b', label: '全局', count: 3 },
+      { value: 'c', label: '项目', count: 1 },
+    ],
+    value: 'b',
+    onChange: (val) => changes.push(val),
+    ariaLabel: '按范围筛选',
+  });
+  dom.window.document.body.appendChild(seg.element);
+  const item = (value) => seg.element.querySelector(`.ds-segment-item[data-value="${value}"]`);
+  const checked = () => [...seg.element.querySelectorAll('.ds-segment-item')]
+    .filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.dataset.value);
+  const tabStops = () => [...seg.element.querySelectorAll('.ds-segment-item')]
+    .filter((b) => b.tabIndex === 0).map((b) => b.dataset.value);
+  const press = (key, target = dom.window.document.activeElement) => {
+    target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  };
+
+  assert.equal(seg.element.getAttribute('role'), 'radiogroup');
+  assert.equal(seg.element.getAttribute('aria-label'), '按范围筛选');
+  assert.deepEqual([...seg.element.querySelectorAll('.ds-segment-item')].map((b) => b.getAttribute('role')),
+    ['radio', 'radio', 'radio']);
+  assert.deepEqual(checked(), ['b']);
+  assert.deepEqual(tabStops(), ['b'], '整组只有一个 Tab 停靠点，落在当前选中项');
+
+  item('b').focus();
+  press('ArrowRight');
+  assert.equal(seg.getValue(), 'c', 'ArrowRight 选中下一项');
+  assert.deepEqual(checked(), ['c']);
+  assert.deepEqual(tabStops(), ['c']);
+  assert.equal(dom.window.document.activeElement, item('c'));
+  press('ArrowRight');
+  assert.equal(seg.getValue(), 'a', '末项 ArrowRight 回绕到首项');
+  assert.equal(dom.window.document.activeElement, item('a'));
+  press('ArrowLeft');
+  assert.equal(seg.getValue(), 'c', '首项 ArrowLeft 回绕到末项');
+  press('Home');
+  assert.equal(seg.getValue(), 'a');
+  assert.equal(dom.window.document.activeElement, item('a'));
+  press('End');
+  assert.equal(seg.getValue(), 'c');
+  assert.equal(dom.window.document.activeElement, item('c'));
+  press('ArrowDown');
+  assert.equal(seg.getValue(), 'a', 'ArrowDown 与 ArrowRight 等价');
+  press('ArrowUp');
+  assert.equal(seg.getValue(), 'c', 'ArrowUp 与 ArrowLeft 等价');
+  assert.deepEqual(changes, ['c', 'a', 'c', 'a', 'c', 'a', 'c']);
+
+  /* 点击仍然有效；点当前项不重复通知，但会把它留在 Tab 停靠点。 */
+  item('b').click();
+  assert.equal(seg.getValue(), 'b');
+  assert.deepEqual(tabStops(), ['b']);
+  assert.deepEqual(checked(), ['b']);
+  item('b').click();
+  assert.equal(changes.at(-1), 'b', '重复点击同一项不重复触发 onChange');
+  assert.equal(changes.length, 8);
+
+  /* 禁用项被方向键跳过；当前项被禁用时，Tab 停靠点退到第一个可用项。 */
+  seg.setOptionDisabled('c', true);
+  item('b').focus();
+  press('ArrowRight');
+  assert.equal(seg.getValue(), 'a', 'ArrowRight 跳过禁用的「项目」');
+  seg.setValue('c');
+  assert.deepEqual(tabStops(), ['a'], '当前项不可用时，停靠点退到第一个可用项');
+  seg.setOptionDisabled('c', false);
+  seg.setValue('b');
+
+  /* 外部 setValue 只更新选中与停靠点，不抢焦点。 */
+  item('b').focus();
+  seg.setValue('a');
+  assert.equal(dom.window.document.activeElement, item('b'), 'setValue 不移动焦点');
+  assert.deepEqual(tabStops(), ['a']);
+
+  /* 隐藏当前项后同样不会留下不可达的 Tab 停靠点。 */
+  seg.setOptionHidden('a', true);
+  assert.deepEqual(tabStops(), ['b']);
+  seg.setOptionHidden('a', false);
+
+  /* 修饰键不劫持，交给浏览器/系统。 */
+  const before = seg.getValue();
+  item(before).dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', ctrlKey: true, bubbles: true, cancelable: true }));
+  assert.equal(seg.getValue(), before, 'Ctrl+ArrowRight 不切换分段');
+  seg.element.remove();
+  console.log('✓ createSegmentedControl radiogroup keyboard passed');
+}
+
 // 3. Help Icon
 {
   const icon = createHelpIcon({ tooltipText: '此处用于配置思维链推理预算' });

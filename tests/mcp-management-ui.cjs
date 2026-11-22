@@ -382,6 +382,88 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(cards().length, 3);
   });
 
+  await check('范围筛选：radiogroup 键盘语义、焦点与读屏状态', async () => {
+    const group = () => d.querySelector('.mcp-toolbar .ds-segmented');
+    const item = (value) => group().querySelector(`.ds-segment-item[data-value="${value}"]`);
+    const active = () => [...group().querySelectorAll('.ds-segment-item')]
+      .filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.dataset.value);
+    const tabStops = () => [...group().querySelectorAll('.ds-segment-item')]
+      .filter((b) => b.tabIndex === 0).map((b) => b.dataset.value);
+    const key = (value, keyName, init = {}) => item(value)
+      .dispatchEvent(new w.KeyboardEvent('keydown', { key: keyName, bubbles: true, cancelable: true, ...init }));
+    const counts = () => [...group().querySelectorAll('.ds-segment-count')].map((n) => n.textContent);
+
+    /* 读屏与 Tab：组有名字、三项都是 radio、只有选中项在 Tab 顺序里。 */
+    assert.equal(group().getAttribute('role'), 'radiogroup');
+    assert.equal(group().getAttribute('aria-label'), '按范围筛选');
+    assert.deepEqual([...group().querySelectorAll('.ds-segment-item')].map((b) => b.getAttribute('role')), ['radio', 'radio', 'radio']);
+    assert.deepEqual([...group().querySelectorAll('.ds-segment-item')].map((b) => b.textContent.trim()), ['全部3', '全局2', '项目1']);
+    assert.deepEqual(active(), ['all']);
+    assert.deepEqual(tabStops(), ['all'], '整组只有一个 Tab 停靠点');
+
+    /* 方向键：选中下一项、列表跟着变、重绘后焦点回到同一筛选项。 */
+    item('all').focus();
+    key('all', 'ArrowRight');
+    await tick(20);
+    assert.deepEqual(active(), ['user']);
+    assert.deepEqual(cards().map((c) => c.dataset.name), ['memory', 'remote']);
+    assert.deepEqual(tabStops(), ['user']);
+    assert.equal(d.activeElement?.dataset.focusKey, 'filter:user', '重绘后焦点回到新选中项');
+    assert.deepEqual(counts(), ['3', '2', '1'], '切换筛选不改变计数');
+
+    key('user', 'End');
+    await tick(20);
+    assert.deepEqual(active(), ['project']);
+    assert.deepEqual(cards().map((c) => c.dataset.name), ['proj']);
+    assert.equal(d.activeElement?.dataset.focusKey, 'filter:project');
+
+    key('project', 'ArrowRight'); // 末项回绕
+    await tick(20);
+    assert.deepEqual(active(), ['all'], 'wrap right selects all');
+    assert.equal(cards().length, 3, 'wrap right shows all rows: '
+      + cards().map((c) => c.dataset.name).join(',')
+      + ' filter=' + (d.querySelector('.mcp-toolbar .ds-segmented .is-active')?.dataset.value || 'none'));
+    key('all', 'ArrowLeft'); // 首项回绕
+    await tick(20);
+    assert.deepEqual(active(), ['project']);
+    key('project', 'Home');
+    await tick(20);
+    assert.deepEqual(active(), ['all']);
+    assert.equal(cards().length, 3);
+
+    /* 鼠标点击同样保留焦点（jsdom 的 click 不自动聚焦，先 focus 模拟真实按钮）。 */
+    item('user').focus();
+    item('user').click();
+    await tick(20);
+    assert.deepEqual(active(), ['user']);
+    assert.equal(d.activeElement?.dataset.focusKey, 'filter:user');
+
+    /* 搜索与筛选组合：计数是全量，行只显示匹配项；工具栏重绘后要重新取输入框。 */
+    const inputField = () => d.querySelector('#mcpServerSearch');
+    let search = inputField();
+    search.value = 'remote';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(20);
+    assert.deepEqual(cards().map((c) => c.dataset.name), ['remote']);
+    assert.deepEqual(counts(), ['3', '2', '1'], '搜索不改变全量计数');
+    search = inputField();
+    search.value = '';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(20);
+    assert.equal(cards().length, 2, '清空搜索后仍停留在「全局」筛选');
+    assert.deepEqual(tabStops(), ['user']);
+    key('user', 'Home');
+    await tick(20);
+    assert.deepEqual(active(), ['all']);
+    assert.equal(cards().length, 3);
+    assert.deepEqual(tabStops(), ['all']);
+
+    /* 修饰键不劫持，留给浏览器 / 系统。 */
+    key('all', 'ArrowRight', { ctrlKey: true });
+    await tick(20);
+    assert.deepEqual(active(), ['all']);
+  });
+
   await check('Pi 重启后重新读取 MCP 状态且不主动连接 server', async () => {
     const previousRuntime = summary.runtime;
     const statusReads = postBodies('/api/mcp/status').length;
