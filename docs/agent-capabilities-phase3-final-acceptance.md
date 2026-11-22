@@ -158,7 +158,7 @@ Pressed 状态用 CDP 按住「新建」实测：`transform` 从 `none` 到 `mat
 | `node tests/ui-ia.cjs` | **32/32** |
 | `node tests/app-update-ui.cjs` / `node tests/system-settings.cjs` | **22/22** / **21/21**（共享分段控件的其它调用面） |
 | `npm run test:primitives` | primitives 全过（含新增 radiogroup 键盘用例）；design-system 阶段 A **6** + 阶段 B **34 PASS**；settings acceptance **19**；font picker **49/49** |
-| 完整 PR CI | 提交推送后触发，结果出来前记「待验证」 |
+| 完整 PR CI | `b4e19e68`（表面、四项修复与证据）8/8 通过；本次键盘增量的最终提交在报告更新后推送，CI 结果出来前记「待验证」。 |
 
 ### 共享分段控件：键盘、焦点与兼容性复验（2026-11-23 追加）
 
