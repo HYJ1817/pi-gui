@@ -15,6 +15,7 @@ import { createIcon } from '../ui/icons.js';
 import { resourceEl as el } from '../ui/resource-dom.js';
 import { renderInstalledExtensions } from './installed.js';
 import { renderExtensionMarket } from './market.js';
+import { createExtensionOperations } from './operations.js';
 
 const TABS = Object.freeze([
   Object.freeze({ id: 'installed', label: '已安装', domId: 'extensionsTabInstalled', render: renderInstalledExtensions }),
@@ -63,9 +64,20 @@ export function openExtensions(options = {}) {
     const buttons = new Map();
     const panels = new Map(); // id → { holder, toolbar, actions }
     let active = initial;
+    const operations = createExtensionOperations({
+      isLive: instance.isCurrent,
+      async onChange({ reload = false } = {}) {
+        const mounted = [...panels.values()];
+        if (reload) await Promise.all(mounted.map((entry) => entry.reload?.()));
+        else for (const entry of mounted) entry.sync?.();
+      },
+    });
+    disposers.push(operations.invalidate);
 
-    const installedCount = el('span', 'ds-segment-count extensions-tab-count');
-    const setInstalledCount = (count) => { installedCount.textContent = Number.isInteger(count) ? String(count) : ''; };
+    const counts = new Map(TABS.map(({ id }) => [id, el('span', 'ds-segment-count extensions-tab-count')]));
+    const setCount = (id, count) => {
+      counts.get(id).textContent = Number.isInteger(count) ? String(count) : '';
+    };
 
     function select(id, { focus = false } = {}) {
       active = id;
@@ -81,12 +93,17 @@ export function openExtensions(options = {}) {
       let entry = panels.get(active);
       if (entry) {
         panel.replaceChildren(entry.holder);
+        entry.activate?.();
       } else {
         const holder = el('div', 'extensions-tab-panel extensions-tab-' + active);
         panel.replaceChildren(holder);
-        const handle = current.render(holder, { isLive: instance.isCurrent, onCount: setInstalledCount }) || {};
+        const handle = current.render(holder, {
+          isLive: instance.isCurrent,
+          operations,
+          onCount: (count) => setCount(id, count),
+        }) || {};
         if (typeof handle.dispose === 'function') disposers.push(() => handle.dispose());
-        entry = { holder, toolbar: handle.toolbar || null, actions: handle.actions || null };
+        entry = { holder, ...handle };
         panels.set(active, entry);
       }
       toolbarSlot.replaceChildren(...(entry.toolbar ? [entry.toolbar] : []));
@@ -102,7 +119,7 @@ export function openExtensions(options = {}) {
       button.setAttribute('role', 'tab');
       button.setAttribute('aria-controls', panel.id);
       button.append(el('span', 'extensions-tab-label', tab.label));
-      if (tab.id === 'installed') button.append(installedCount);
+      button.append(counts.get(tab.id));
       button.onclick = () => { if (active !== tab.id) select(tab.id); };
       buttons.set(tab.id, button);
       tablist.append(button);
@@ -118,9 +135,21 @@ export function openExtensions(options = {}) {
       select(TABS[next].id, { focus: true });
     });
 
-    const refreshNotices = () => { if (instance.isCurrent()) renderExtensionNotices(notices); };
+    const refreshNotices = (event) => {
+      if (!instance.isCurrent()) return;
+      if (event?.type === 'pi-gui:workspace-generation') {
+        operations.invalidate();
+        for (const entry of panels.values()) entry.invalidate?.();
+      }
+      renderExtensionNotices(notices);
+    };
     for (const type of NOTICE_EVENTS) document.addEventListener(type, refreshNotices);
     disposers.push(() => { for (const type of NOTICE_EVENTS) document.removeEventListener(type, refreshNotices); });
+    const refreshAfterRestart = () => {
+      if (instance.isCurrent()) void panels.get('installed')?.reload();
+    };
+    document.addEventListener('pi-gui:extension-bridge-ready', refreshAfterRestart);
+    disposers.push(() => document.removeEventListener('pi-gui:extension-bridge-ready', refreshAfterRestart));
 
     inner.append(head, toolbarRow, notices, panel);
     /* Work Surface 本身不滚动（.work-surface 的 overflow:hidden 契约），整页内容由这一层内部滚动容器承担。 */

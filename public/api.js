@@ -656,6 +656,30 @@ export const fetchExtensions = () => getJSON('/api/extensions');
 export const installCapability = (capabilityId) =>
   sendJSON('/api/capabilities/install', { body: { capabilityId, confirm: true, __expectedCwd: S.cwd } });
 
+/* ---------- Extension 包管理与插件市场（第二阶段 B） ---------- */
+
+/** 已安装的 Pi 包清单：两级 settings.json 里登记的包 + 盘上读到的事实（只读，不联网）。 */
+export const fetchExtensionPackages = () => getJSON('/api/extensions/packages');
+
+/** 受控包操作：`install` / `remove` / `update`。
+ *
+ *  body **只送动作名与受控 id**：安装送市场条目 id（`npm:<包名>`），卸载 / 更新送清单里的
+ *  `pkg_…`。实际来源与命令参数全部由后端解析，renderer 送不进任何命令片段。
+ *  调用前必须已经过用户确认（`confirm: true` 是后端闸门的一格，不是确认本身）。
+ *
+ *  一次请求会暂停并重启 Pi，可能持续几分钟；`ok:true` 只说明后端在命令结束后
+ *  **重新读盘确认过**结果（`code` 给出结论），加载状态仍以随后的 Registry 为准。 */
+export const extensionPackageAction = (action, id) =>
+  sendJSON('/api/extensions/packages', { body: { action, id, confirm: true, __expectedCwd: S.cwd } });
+
+/** 插件市场目录的一页。没有用户同意时后端只回内置条目，不发任何网络请求。 */
+export const fetchExtensionMarket = (params = {}) =>
+  getJSON('/api/extensions/market?' + new URLSearchParams(params));
+export const fetchExtensionMarketItem = (id) =>
+  getJSON('/api/extensions/market/item?' + new URLSearchParams({ id }));
+/** 市场动作：`consent`（同意读取在线目录）/ `revoke`（撤回并清缓存）/ `refresh`（重新读取目录）。 */
+export const extensionMarketAction = (action) => sendJSON('/api/extensions/market', { body: { action } });
+
 /* ---------- 附件上传 ---------- */
 
 /** 上传走裸二进制（文件名放 query），省掉 multipart 解析。 */

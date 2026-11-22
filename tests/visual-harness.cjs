@@ -958,6 +958,9 @@ function mcpMarketFixture() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   const p = url.pathname;
+  if (p === '/api/extensions/packages' || p === '/api/extensions/market' || p === '/api/extensions/market/item') {
+    return json(res, 200, await require('./fixtures/extension-market-ui.cjs')(req, url));
+  }
   if (uxMode && p === '/api/__ux/stats') return json(res, 200, { ok: true, switchCount: uxSwitchCount, sessionId: harnessSessionId });
   if (uxMode && p === '/api/__ux/live-warning' && req.method === 'POST') {
     push({ type: 'extension_ui_request', method: 'notify', notifyType: 'warning', message: '实时验收警告，仅出现一次' });

@@ -33,6 +33,22 @@ export function maintenanceCopy(reason) {
       busy: 'Pi 正在安装扩展，完成后可继续…',
     };
   }
+  /* 扩展包的卸载 / 更新与安装走同一条受控出口（server/capability-install.js 的
+   * PACKAGE_OPERATIONS），各带自己的维护原因 —— 说成「正在安装」就是在说错话。 */
+  if (reason === 'extension-remove') {
+    return {
+      label: 'Pi 正在卸载扩展（短暂停机）',
+      detail: 'Pi GUI 正在用官方命令卸载扩展；卸载期间发不出消息，完成后会自动重新启动。会话与草稿都还在。',
+      busy: 'Pi 正在卸载扩展，完成后可继续…',
+    };
+  }
+  if (reason === 'extension-update') {
+    return {
+      label: 'Pi 正在更新扩展（短暂停机）',
+      detail: 'Pi GUI 正在用官方命令更新扩展；更新期间发不出消息，完成后会自动重新启动。会话与草稿都还在。',
+      busy: 'Pi 正在更新扩展，完成后可继续…',
+    };
+  }
   if (reason === 'pi-update') {
     return {
       label: 'Pi 正在更新（短暂停机）',

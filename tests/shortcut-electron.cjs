@@ -600,7 +600,7 @@ if (!process.versions.electron) {
       await shot('1320-light-extensions-known');
       await read(`document.querySelector('#workSurface > .extensions-scroll').scrollTop=0`);
       await read(`document.querySelector('#extensionsTabMarket').click()`);
-      await waitFor(`!!document.querySelector('.extensions-market-empty')`, 'market placeholder');
+      await waitFor(`!!document.querySelector('.extensions-market-card')`, 'market cards');
       await shot('1320-light-extensions-market');
       const lightNav = await navSelection();
       check(lightNav.view === 'extensions' && lightNav.navCurrent === 'page' && lightNav.active !== CLEAR && lightNav.nav === lightNav.active, 'light: the 扩展 nav item is painted selected while its page is open', lightNav);
@@ -687,7 +687,7 @@ if (!process.versions.electron) {
       check(extensions.titles === 1 && extensions.cardsInside, '700px extensions page keeps one visible title and every card inside the viewport', extensions);
       await shot('700-light-extensions');
       await read(`document.querySelector('#extensionsTabMarket').click()`);
-      await waitFor(`!!document.querySelector('.extensions-market-empty')`, 'market placeholder');
+      await waitFor(`!!document.querySelector('.extensions-market-card')`, 'market cards');
       const market = await read(`({scrollWidth:document.documentElement.scrollWidth,inner:innerWidth})`);
       check(market.scrollWidth <= market.inner + 1, '700px extensions market tab has no horizontal overflow', market);
       await shot('700-light-extensions-market');
