@@ -647,7 +647,7 @@ export function createMcpNative({
    * 是「刚切过去的项目 MCP 全是已连接」，而 B 其实一个都没探过。
    *
    * 修法只有一套真值逻辑：**每次读写前算一次 key，key 不符就当没有缓存**。
-   * key = cwd（规范化）+ launch identity 的不透明串。两者任一变化即失效：
+   * key = cwd（规范化）+ workspace 代号 + launch identity + bridge 运行身份。
    *   - 换项目 → cwd 变 → 旧 runtime/replaced 结论不可见（回到「未刷新」）；
    *   - 换 pi 实例（PI_BIN 改了 / 换了包）→ identity 变 → 同上，且不再复用
    *     「A 的 pi 里 builtin:mcp 被接管」这类结论。
@@ -656,6 +656,7 @@ export function createMcpNative({
   let statusCache = null; // {key, at, data}
   let commandsCache = null; // {key, at, data}
   let summaryCache = null; // {key, at, data}
+  let cacheEpoch = 0;
 
   function canonCwd(v) {
     if (typeof v !== 'string' || !v) return '';
@@ -676,9 +677,13 @@ export function createMcpNative({
     }
   }
 
-  /** 当前 (cwd, launch identity)。**所有缓存读写都必须先算它。** */
+  /** 所有缓存读写都使用同一份工作区与当前 Pi 运行身份。 */
   function workspaceKey() {
-    return `${canonCwd(runtime.getCurrentCwd())}\u0000${launchIdentity()}`;
+    const bridge = rpc?.getState?.();
+    return JSON.stringify([
+      canonCwd(runtime.getCurrentCwd()), runtime.getWorkspaceGeneration?.(), launchIdentity(),
+      bridge?.bridgeRun, bridge?.bridgeState, cacheEpoch,
+    ]);
   }
 
   function cacheHit(entry, key, t) {
@@ -868,6 +873,7 @@ export function createMcpNative({
     } catch {
       data = { replaced: null, checked: false };
     }
+    if (key !== workspaceKey()) return { replaced: null, checked: false };
     commandsCache = { key, at: t, data };
     return data;
   }
@@ -995,13 +1001,13 @@ export function createMcpNative({
   /** 跑一次 `pi mcp list --json`（官方结构化输出）。只允许显式刷新调用。 */
   async function runListJson() {
     const e = entry();
-    const cwd = runtime.getCurrentCwd();
+    const f = files();
     if (!e || typeof runCli !== 'function') {
       return { ok: false, code: !e ? 'no-proven-entry' : 'no-runner', error: !e ? '证明不了 bridge 正在跑哪份 pi，不代它执行（未知≠没有）' : '执行器不可用' };
     }
     let r;
     try {
-      r = await runCli(e, ['mcp', 'list', '--json'], { cwd, timeoutMs: TIMEOUT_LIST_MS });
+      r = await runCli(e, ['mcp', 'list', '--json'], { cwd: f.cwd, timeoutMs: TIMEOUT_LIST_MS });
     } catch (err) {
       return { ok: false, code: 'spawn-failed', error: clip(String((err && err.message) || err), 200) };
     }
@@ -1016,7 +1022,6 @@ export function createMcpNative({
     if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.servers)) {
       return { ok: false, code: 'bad-shape', error: 'pi 的输出形状不认识（不猜）' };
     }
-    const f = files();
     const servers = parsed.servers.map((s) => projectRuntimeServer(s, f)).filter(Boolean);
     const errors = Array.isArray(parsed.errors)
       ? parsed.errors.filter((x) => typeof x === 'string').slice(0, 20).map((x) => redactPaths(clip(x), { cwd: f.cwd, agentDir, homeDir }))
@@ -1039,6 +1044,7 @@ export function createMcpNative({
     const cfg = readConfigs();
     const tr = await trust();
     const nat = await nativeState(tr);
+    if (key !== workspaceKey()) throw new Error('工作区或 Pi 已切换，请重新读取 MCP 配置');
     /* ---------- 覆盖关系（effective truth，受 trust 约束） ----------
      *
      * 上游 `loadMcpConfig`（0.99.2 `mcp/config.ts`）：
@@ -1118,6 +1124,9 @@ export function createMcpNative({
     const cfg = readConfigs();
     const byKey = new Map(cfg.servers.map((s) => [`${s.scope}:${s.name}`, s]));
     const r = await runListJson();
+    if (key !== workspaceKey()) {
+      return { ok: false, code: 'workspace-stale', error: '工作区或 Pi 已切换，请重新刷新 MCP 状态' };
+    }
     const data = {
       at: new Date(t).toISOString(),
       cached: false,
@@ -1151,6 +1160,7 @@ export function createMcpNative({
 
   /** 清空所有派生结论（runtime / replaced / 摘要）。动作成功与显式 reset 都走这里。 */
   function reset() {
+    cacheEpoch += 1;
     statusCache = null;
     commandsCache = null;
     summaryCache = null;
