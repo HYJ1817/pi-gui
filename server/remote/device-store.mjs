@@ -1,40 +1,65 @@
 /**
- * Remote device registry — paired mobile devices, their identity, scope grants,
- * replay/nonces and revocation. File-backed under the desktop DATA_DIR so a
- * restart does not silently re-admit devices; access is gated by the OS file
- * ACL on the data dir (same trust level as every other desktop secret).
+ * Remote v1 device registry — paired mobile devices: identity, granted scopes,
+ * per-project grants, replay state (nonces + acceptedTimestampFloor) and
+ * revocation. File-backed under the desktop DATA_DIR so a restart cannot
+ * silently re-admit devices; access relies on the OS ACL of the data dir (same
+ * trust level as every other desktop secret).
  *
- * This is the single writer of device truth; every signed request re-reads the
- * record, never a cached copy, so revocation takes effect on the next request.
+ * Contract replay rules implemented here (signedRequest.replay):
+ *   - nonce retained while timestamp >= acceptedTimestampFloor OR inside skew
+ *   - timestamp STRICTLY below the floor is rejected even inside skew
+ *   - capacity overflow rejects NEW nonces (never evict a live nonce)
+ *   - corrupt/missing replay state bumps replayEpoch (device must re-pair)
+ *   - effective clock = max(wallNow, persisted floor); a wall-clock rollback
+ *     can never widen the admissible window
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { sha256, isRecord, HEX_SHA256, OPAQUE_ID, decodeB64url, timingSafe } from './contract.mjs';
+import crypto from 'node:crypto';
+import { isRecord, decodeB64url } from './keys.mjs';
+import { REMOTE_V1 } from './protocol.mjs';
 
 const FILE = 'remote-devices.json';
-const MAX_DEVICES = 32;
+const L = REMOTE_V1.limits;
+const SKEW_MS = REMOTE_V1.signedRequest.maximumClockSkewSeconds * 1000;
+const RETENTION_MS = REMOTE_V1.signedRequest.replay.retentionSeconds * 1000;
 
-function nowIso() { return new Date().toISOString(); }
+const nowIso = () => new Date().toISOString();
 
 export class DeviceStore {
   constructor(dataDir, log = () => {}) {
     this.dir = dataDir;
     this.path = path.join(dataDir, FILE);
     this.log = log;
-    this.devices = new Map();   // deviceId -> record
+    this.devices = new Map();      // deviceId -> record
+    this.keyIndex = new Map();     // devicePublicKey -> deviceId
     this._load();
   }
   _load() {
+    let corrupt = false;
     try {
-      const raw = fs.readFileSync(this.path, 'utf8');
-      const data = JSON.parse(raw);
+      const data = JSON.parse(fs.readFileSync(this.path, 'utf8'));
       if (isRecord(data) && Array.isArray(data.devices)) {
-        for (const d of data.devices) if (isRecord(d) && typeof d.deviceId === 'string') this.devices.set(d.deviceId, d);
+        for (const d of data.devices) {
+          if (!isRecord(d) || typeof d.deviceId !== 'string') { corrupt = true; continue; }
+          // Replay state must be intact; corruption bumps the epoch (fail closed).
+          if (!isRecord(d.nonces) || !Number.isSafeInteger(d.timestampFloor)) {
+            d.nonces = {}; d.timestampFloor = 0;
+            if (Number.isSafeInteger(d.replayEpoch)) d.replayEpoch += 1;
+            corrupt = true;
+          }
+          this.devices.set(d.deviceId, d);
+          if (typeof d.devicePublicKey === 'string') {
+            if (this.keyIndex.has(d.devicePublicKey)) { // key uniqueness — fail closed
+              d.revoked = true; d.active = false; corrupt = true;
+            } else this.keyIndex.set(d.devicePublicKey, d.deviceId);
+          }
+        }
       }
-      this.log(`loaded ${this.devices.size} remote device record(s)`);
     } catch (e) {
-      if (e.code !== 'ENOENT') this.log(`device store load failed (starting empty): ${e.code}`);
+      if (e.code !== 'ENOENT') { this.log(`device store load failed (starting empty): ${e.code}`); corrupt = true; }
     }
+    if (corrupt) this._persist();
   }
   _persist() {
     const tmp = this.path + '.tmp';
@@ -42,17 +67,23 @@ export class DeviceStore {
     try { fs.chmodSync(tmp, 0o600); } catch { /* Windows */ }
     fs.renameSync(tmp, this.path);
   }
+
   count() { return this.devices.size; }
-  get(deviceId) {
-    const d = this.devices.get(deviceId);
-    return isRecord(d) ? d : null;
+  get(deviceId) { const d = this.devices.get(deviceId); return isRecord(d) ? d : null; }
+  /** devicePublicKey must be unique across live registrations (contract). */
+  deviceIdForKey(devicePublicKey) {
+    const id = this.keyIndex.get(devicePublicKey);
+    const d = id ? this.devices.get(id) : null;
+    return d && !d.revoked ? id : null;
   }
-  // Full record completeness check (same gate as the mobile contract validator).
+
+  /** Full completeness gate — same fields the validator requires before signature work. */
   recordComplete(d, nowMs = Date.now()) {
     return isRecord(d)
-      && OPAQUE_ID.test(d.deviceId)
+      && typeof d.deviceId === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(d.deviceId)
       && typeof d.devicePublicKey === 'string' && decodeB64url(d.devicePublicKey, 32) !== null
-      && Array.isArray(d.grantedScopes) && d.grantedScopes.length > 0
+      && Array.isArray(d.grantedScopes) && d.grantedScopes.length >= 2
+      && d.grantedScopes.every(s => REMOTE_V1.scopeVocabulary.includes(s))
       && d.active === true && d.revoked !== true
       && Number.isSafeInteger(d.replayEpoch) && d.replayEpoch >= 1
       && typeof d.expiresAt === 'string' && Number.isFinite(Date.parse(d.expiresAt)) && Date.parse(d.expiresAt) > nowMs
@@ -62,58 +93,108 @@ export class DeviceStore {
     const d = this.get(deviceId);
     return this.recordComplete(d, nowMs) ? d : null;
   }
-  serviceId(d) { return d.serviceId; }
-  // Register a device atomically (called by the pair transaction). Allocates
-  // replayEpoch: re-pairs bump it so stale signed requests die with the epoch.
-  register({ deviceId, devicePublicKey, grantedScopes, serviceFingerprint, expiresAt, deviceName }) {
-    if (this.devices.size >= MAX_DEVICES && !this.devices.has(deviceId)) return null;
+
+  /**
+   * Atomic registration transaction for the pair exchange. Consumes the
+   * approval + session + code atomically ONLY if the store callback confirms;
+   * re-checks capacity, expiry and device-key uniqueness inside the transaction.
+   * Returns { replayEpoch, deviceId } or null (caller maps to pair_code_consumed_or_limited).
+   */
+  register({ deviceId, devicePublicKey, grantedScopes, serviceFingerprint, expiresAt, deviceName, grantedProjectIds = [] }) {
+    const expiryMs = Date.parse(expiresAt ?? '');
+    if (!Number.isFinite(expiryMs) || expiryMs <= Date.now()) return null;
     const existing = this.devices.get(deviceId);
+    if (!existing && this.devices.size >= L.maxDevices) return null;
+    const boundTo = this.deviceIdForKey(devicePublicKey);
+    if (boundTo !== null && boundTo !== deviceId) return null;   // key already bound elsewhere
     const replayEpoch = isRecord(existing) && Number.isSafeInteger(existing.replayEpoch) ? existing.replayEpoch + 1 : 1;
+    if (existing) this.keyIndex.delete(existing.devicePublicKey);
+    const grants = {};
+    for (const pid of grantedProjectIds) if (typeof pid === 'string' && pid) grants[pid] = true;
     const rec = {
       deviceId, deviceName: String(deviceName ?? ''), devicePublicKey,
-      serviceFingerprint,
-      serviceId: `svc-${serviceFingerprint.slice(0, 16)}`,
+      serviceFingerprint, serviceId: `svc-${serviceFingerprint.slice(0, 16)}`,
       grantedScopes: [...grantedScopes],
-      grants: {},
+      grants,
       active: true, revoked: false,
       replayEpoch,
       expiresAt,
       registeredAt: nowIso(),
-      nonces: {},           // nonce -> seenAtMs
-      timestampFloor: 0,    // monotonic accepted timestamp floor
-      subscriptions: {},
+      nonces: {},
+      timestampFloor: 0,
     };
     this.devices.set(deviceId, rec);
+    this.keyIndex.set(devicePublicKey, deviceId);
     this._persist();
-    return rec;
+    return { replayEpoch, deviceId };
   }
+
+  /**
+   * Revocation is an authoritative transaction: mark revoked + inactive,
+   * drop the key binding, persist. Live streams are closed by the caller
+   * (the gateway subscribes this list).
+   */
   revoke(deviceId) {
     const d = this.devices.get(deviceId);
-    if (!d) return false;
+    if (!d || d.revoked) return false;
     d.revoked = true; d.active = false;
+    if (typeof d.devicePublicKey === 'string' && this.keyIndex.get(d.devicePublicKey) === deviceId) this.keyIndex.delete(d.devicePublicKey);
     this._persist();
     return true;
   }
-  setGrants(deviceId, grants) {
+  list() {
+    return [...this.devices.values()].map(d => ({
+      deviceId: d.deviceId, deviceName: d.deviceName, grantedScopes: d.grantedScopes,
+      grants: Object.keys(d.grants ?? {}), expiresAt: d.expiresAt, registeredAt: d.registeredAt,
+      revoked: d.revoked === true,
+    }));
+  }
+  setGrants(deviceId, projectIds) {
     const d = this.devices.get(deviceId);
     if (!d) return false;
-    d.grants = { ...grants };
+    d.grants = {};
+    for (const pid of projectIds ?? []) if (typeof pid === 'string' && pid) d.grants[pid] = true;
     this._persist();
     return true;
   }
-  // Per-device replay state: nonce set (capped) + monotonic timestamp floor.
-  seenNonce(d, nonce, nowMs) {
-    if (d.nonces[nonce]) return true;
-    d.nonces[nonce] = nowMs;
-    const keys = Object.keys(d.nonces);
-    if (keys.length > 4096) {
-      // evict oldest beyond floor window; keep recent to bound memory
-      keys.sort((a, b) => d.nonces[a] - d.nonces[b]);
-      for (const k of keys.slice(0, keys.length - 4096)) delete d.nonces[k];
+
+  /**
+   * consumeNonce(deviceId, nonce, timestamp) for verifyRemoteSignature.
+   * Enforces: effective clock, strict timestamp floor, nonce uniqueness,
+   * retention pruning and capacity fail-closed. Persists on accept.
+   */
+  consumeNonce = (deviceId, nonce, timestamp) => {
+    const d = this.devices.get(deviceId);
+    if (!isRecord(d) || !isRecord(d.nonces) || !Number.isSafeInteger(d.timestampFloor)) return false;
+    if (!Number.isSafeInteger(timestamp)) return false;
+    // Effective clock never moves backward with the wall clock.
+    const now = Math.max(Date.now(), d.timestampFloor);
+    // STRICT floor: a signed timestamp below the floor is rejected even in-skew.
+    if (timestamp < d.timestampFloor) return false;
+    if (timestamp > now + SKEW_MS) return false;
+    if (d.nonces[nonce] !== undefined) return false;
+    // Prune: evictable only when < floor AND older than retention.
+    for (const [n, ts] of Object.entries(d.nonces)) {
+      if (ts < d.timestampFloor && ts < now - RETENTION_MS) delete d.nonces[n];
     }
-    return false;
+    if (Object.keys(d.nonces).length >= L.maxNonceEntriesPerDevice) return false; // fail closed
+    d.nonces[nonce] = timestamp;
+    if (timestamp > d.timestampFloor) d.timestampFloor = timestamp;
+    this._persist();
+    return true;
+  };
+
+  /** Bump replayEpoch when persisted replay state is lost/corrupt (contract). */
+  bumpReplayEpoch(deviceId) {
+    const d = this.devices.get(deviceId);
+    if (!d) return false;
+    d.replayEpoch = (Number.isSafeInteger(d.replayEpoch) ? d.replayEpoch : 0) + 1;
+    d.nonces = {}; d.timestampFloor = 0;
+    this._persist();
+    return true;
   }
-  bumpTimestampFloor(d, ts) {
-    if (Number.isSafeInteger(ts) && ts > (d.timestampFloor || 0)) d.timestampFloor = ts;
-  }
+}
+
+export function newDeviceId() {
+  return 'dev_' + crypto.randomBytes(16).toString('base64url').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 22);
 }

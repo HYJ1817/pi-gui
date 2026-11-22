@@ -1,212 +1,371 @@
 /**
- * Remote v1 domain adapters — the project/conversation/approval surface the
- * gateway dispatches to. These wrap the desktop's existing stores and the
- * runtimeRegistry; they never fabricate a domain truth — every handler re-reads
- * the live store so a local mutation (remove a project, close a conversation,
- * resolve an approval) is reflected in the next remote call.
+ * Remote v1 domain adapters — map the desktop domain to contract-shaped
+ * results. All desktop state enters through the injected `domain` facade so
+ * tests can drive synthetic fixtures and production can bind the real
+ * registry/projects/stores without this layer knowing which is which.
  *
- * Owner resolution: a remote conversationId is a registry conversation; the
- * adapters re-resolve it to the registry's typed `owner` object (projectId,
- * workspaceId, workspaceEpoch, conversationId, sessionId, runtimeId,
- * runtimeGeneration) via `snapshot()` before invoking a registry action. That
- * typed owner is the same authority the local UI uses, so owner/namespace
- * checks are one mechanism, not two.
+ * Contract rules implemented here:
+ *  - resolveOwner returns a FULLY TYPED owner {namespace, identity, epoch,
+ *    revision, projectId, conversationId?, dialogId?, current} proven from
+ *    live domain state — never a bare flag, never caller input
+ *  - list operations filter each item through the device grant map; an
+ *    ungranted item is absent, not redacted
+ *  - every projected result is schema-validated and forbidden-value-scanned
+ *    (validateRemoteResponse does both at the listener boundary; adapters
+ *    additionally guarantee structural shape)
+ *  - mutations are idempotent under (deviceId, resourceId, ownerEpoch):
+ *    retry returns the recorded outcome; same client id + different payload
+ *    is payload_invalid; outcomes are never evicted while the epoch is live
+ *  - approvals.settle relays exactly one response to the LIVE Pi dialog via
+ *    settleApproval + domain.consumeApproval (atomic claim-and-enqueue)
+ *
+ * domain facade (injected):
+ *   projects()                 -> [{path, name?}]
+ *   conversations()            -> [{conversationId, workspace:{cwd?,workspaceId?,workspaceEpoch?},
+ *                                  sessionId?, title?, createdAt?, lifecycle?, activity?,
+ *                                  pendingApprovals:[PendingDialog]}]
+ *   sessionRecords(projectKey) -> [{sessionId, displayName, updatedAt, conversationIds?}]
+ *   openConversation(projectPath, {clientConversationId}) -> {conversationId}
+ *   sendMessage(owner, text, {clientMessageId}) -> {accepted}
+ *   stop(owner)                -> {stopped}
+ *   pendingDialogs()           -> [PendingDialog]  (all live dialogs)
+ *   consumeApproval({requestId, owner, namespace, method, decision, value, dialogRevision}) -> bool
+ *   PendingDialog = {requestId, conversationId, owner(identity), namespace, projectId,
+ *                    method, pending, expiresAtMs, revision, options:[{optionId,label}],
+ *                    title, message}
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import crypto from 'node:crypto';
-import { isRecord } from './contract.mjs';
-import { requiredEventScope } from './contract.mjs';
+import { REMOTE_V1, settleApproval, authorizeRemoteOperation, commitAdmission } from './protocol.mjs';
+import { isRecord, canonicalJson, sha256hex } from './keys.mjs';
 
-function deny(status, code, retryable = false) { return { denied: { status, code, retryable } }; }
-function ok(body, status = 200) { return { status, body }; }
+const L = REMOTE_V1.limits;
+const OPAQUE_ID = /^[A-Za-z0-9_-]{8,128}$/;
 
-export function buildAdapters({ projects, runtimeRegistry, ordinarySessions, stream }) {
-  // projectId (remote opaque) -> { workspaceId, epoch, path }
-  // Populated by the pairing/grants step; re-verified per call against the live
-  // projects.read() list so a removed project stops resolving.
-  const projectIndex = new Map();
-  const pathIndex = new Map();
-  function projectIdFor(path, workspaceId, epoch) {
-    if (pathIndex.has(path)) return pathIndex.get(path);
-    const id = 'p-' + crypto.createHash('sha256').update(path).digest('base64url').slice(0, 12);
-    projectIndex.set(id, { workspaceId, epoch, path });
-    pathIndex.set(path, id);
-    return id;
+const deny = code => ({ ok: false, code, wire: code });
+const denyWire = (code, wire) => ({ ok: false, code, wire });
+const okResult = result => ({ ok: true, result });
+
+/** Deterministic projectId from the project path (stable across restarts). */
+export function projectIdFor(projectPath) {
+  return 'p-' + crypto.createHash('sha256').update(String(projectPath)).digest('base64url').slice(0, 22);
+}
+
+/**
+ * Registry revision+epoch store — the ownerRevision an operation must echo.
+ * Persisted in dataDir so a restart cannot silently roll revisions back.
+ */
+export class RegistryClock {
+  constructor(dataDir) {
+    this.path = path.join(dataDir, 'remote-registry.json');
+    try {
+      const s = JSON.parse(fs.readFileSync(this.path, 'utf8'));
+      this.revision = Number.isSafeInteger(s.revision) ? s.revision : 0;
+      this.fingerprint = typeof s.fingerprint === 'string' ? s.fingerprint : null;
+    } catch { this.revision = 0; this.fingerprint = null; }
+    this.epochs = new Map();      // ownerIdentity -> epoch counter
   }
-  function projectEntry(projectId) { return projectIndex.get(projectId) ?? null; }
-  function grantedPaths(device) {
-    const out = [];
-    for (const p of (projects.read().items ?? [])) {
-      const id = pathIndex.get(p.path) ?? projectIdFor(p.path, p.workspaceId ?? p.path, p.workspaceEpoch ?? 0);
-      if ((device.grants ?? {})[id]) out.push({ projectId: id, project: p });
+  _persist() {
+    const tmp = this.path + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ revision: this.revision, fingerprint: this.fingerprint }), 'utf8');
+    fs.renameSync(tmp, this.path);
+  }
+  /** Registry revision: bumps whenever the conversation/project set changes. */
+  registryRevision(items) {
+    const fp = sha256hex(canonicalJson((items ?? []).map(i => [i.conversationId ?? null, i.sessionId ?? null, i.title ?? null]).sort()) ?? '[]');
+    if (fp !== this.fingerprint) { this.revision += 1; this.fingerprint = fp; this._persist(); }
+    return this.revision;
+  }
+  /** Per-owner epoch: bumps when the owner identity string changes. */
+  epochFor(identity) {
+    let e = this.epochs.get(identity);
+    if (!e) { e = 1; this.epochs.set(identity, e); }
+    return e;
+  }
+}
+
+/** Idempotency records keyed (deviceId, resourceId, ownerEpoch) -> outcome. */
+export class IdempotencyStore {
+  constructor(dataDir) {
+    this.path = path.join(dataDir, 'remote-idempotency.json');
+    this.records = new Map();
+    try {
+      const data = JSON.parse(fs.readFileSync(this.path, 'utf8'));
+      if (isRecord(data)) for (const [k, v] of Object.entries(data)) this.records.set(k, v);
+    } catch {}
+  }
+  _persist() {
+    const tmp = this.path + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(this.records)), 'utf8');
+    fs.renameSync(tmp, this.path);
+  }
+  _key(deviceId, resourceId, ownerEpoch, clientId) {
+    return `${deviceId}|${resourceId}|${ownerEpoch}|${clientId}`;
+  }
+  /**
+   * resolve() -> the recorded outcome or null. record() -> persists.
+   * Capacity overflow refuses NEW mutations (never evicts a live record).
+   */
+  resolve(deviceId, resourceId, ownerEpoch, clientId, payloadSha256) {
+    const rec = this.records.get(this._key(deviceId, resourceId, ownerEpoch, clientId));
+    if (!rec) return null;
+    return rec.payloadSha256 === payloadSha256 ? rec.outcome : { conflict: true };
+  }
+  record(deviceId, resourceId, ownerEpoch, clientId, payloadSha256, outcome) {
+    if (this.records.size >= 4096) return false;     // fail closed
+    this.records.set(this._key(deviceId, resourceId, ownerEpoch, clientId), { payloadSha256, outcome, at: Date.now() });
+    this._persist();
+    return true;
+  }
+}
+
+export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataDir), idem = new IdempotencyStore(dataDir), deviceStore = null, streamWatermark = null }) {
+  const nowMs = () => Date.now();
+
+  const projectIndex = () => {
+    const map = new Map();
+    for (const p of domain.projects() ?? []) if (p && typeof p.path === 'string') map.set(projectIdFor(p.path), p);
+    return map;
+  };
+  const conversationIndex = () => {
+    const map = new Map();
+    for (const c of domain.conversations() ?? []) if (c && typeof c.conversationId === 'string') map.set(c.conversationId, c);
+    return map;
+  };
+  const projectOfConversation = conv => {
+    const ws = conv?.workspace ?? {};
+    for (const p of domain.projects() ?? []) {
+      if (!p || typeof p.path !== 'string') continue;
+      if (ws.cwd === p.path || (ws.workspaceId && ws.workspaceId === p.workspaceId)) return p;
     }
-    return out;
-  }
-  // Resolve a conversationId to its current owner record (or null).
-  function ownerFor(conversationId) {
-    const snap = runtimeRegistry.snapshot();
-    const item = (snap.items ?? []).find(i => i.conversationId === conversationId);
-    return item ? { item, owner: item.owner } : null;
-  }
-  function deviceOwnsConversation(device, conversationId) {
-    const o = ownerFor(conversationId);
-    if (!o) return false;
-    const ws = o.item.workspace ?? {};
-    // A project grant maps to a path; the conversation must live under a granted path.
-    for (const { projectId } of grantedPaths(device)) {
-      const entry = projectEntry(projectId);
-      if (entry && entry.workspaceId && ws.workspaceId === entry.workspaceId) return true;
-      if (entry && ws.cwd && ws.cwd === entry.path) return true;
+    return null;
+  };
+
+  /**
+   * resolveOwner — the contract's ownerProof entry point.
+   * Handles BOTH call shapes (admission: pathParameters+ownerRevision;
+   * commitAdmission: projectId+resourceId) and returns the full typed owner:
+   *   {current:true, namespace:'runtime'|'classic', identity, epoch, revision,
+   *    projectId, conversationId?, dialogId?}
+   */
+  function resolveOwner({ pathParameters, projectId, resourceId } = {}) {
+    const convs = conversationIndex();
+    const projects = projectIndex();
+    if (projectId !== undefined && resourceId !== undefined) {
+      // commitAdmission re-resolution path.
+      if (projectId === resourceId) {
+        const proj = projects.get(projectId);
+        if (!proj) return null;
+        const identity = `project:${projectId}`;
+        return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(identity), revision: clock.registryRevision(domain.conversations()), projectId, conversationId: undefined };
+      }
+      const conv = convs.get(resourceId);
+      if (!conv) return null;
+      const proj = projectOfConversation(conv);
+      if (!proj || projectIdFor(proj.path) !== projectId) return null;
+      const ws = conv.workspace ?? {};
+      const identity = `runtime:${ws.backendInstance ?? ''}:${ws.workspaceId ?? ''}:${ws.workspaceEpoch ?? 0}:${conv.conversationId}`;
+      return { current: true, namespace: 'runtime', identity, epoch: ws.workspaceEpoch ?? clock.epochFor(identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId, conversationId: conv.conversationId };
     }
-    return false;
-  }
-  function conversationProjectId(conversationId) {
-    const o = ownerFor(conversationId);
-    if (!o) return null;
-    const ws = o.item.workspace ?? {};
-    for (const [id, entry] of projectIndex.entries()) {
-      if (entry.workspaceId === ws.workspaceId || entry.path === ws.cwd) return id;
+    const params = pathParameters ?? {};
+    if (params.projectId !== undefined && params.conversationId === undefined && params.requestId === undefined) {
+      const proj = projects.get(params.projectId);
+      if (!proj) return null;
+      const identity = `project:${params.projectId}`;
+      return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(identity), revision: clock.registryRevision(domain.conversations()), projectId: params.projectId };
+    }
+    if (params.conversationId !== undefined) {
+      const conv = convs.get(params.conversationId);
+      if (!conv) return null;
+      const proj = projectOfConversation(conv);
+      if (!proj) return null;
+      const ws = conv.workspace ?? {};
+      const identity = `runtime:${ws.backendInstance ?? ''}:${ws.workspaceId ?? ''}:${ws.workspaceEpoch ?? 0}:${conv.conversationId}`;
+      const base = { current: true, namespace: 'runtime', identity, epoch: ws.workspaceEpoch ?? clock.epochFor(identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId: projectIdFor(proj.path), conversationId: conv.conversationId };
+      if (params.requestId !== undefined) {
+        const dialog = (conv.pendingApprovals ?? []).find(d => d.requestId === params.requestId && d.pending === true);
+        if (!dialog) return null;
+        return { ...base, dialogId: dialog.requestId };
+      }
+      return base;
     }
     return null;
   }
 
-  async function invokeOwner(conversationId, fn) {
-    const o = ownerFor(conversationId);
-    if (!o || !o.owner) return deny(404, 'unknown_resource');
-    try { return await fn(o); }
-    catch (e) {
+  /** authorizeResource for the event stream: grant+owner must still hold. */
+  function authorizeResource({ deviceId, conversationId, ownerRevision }) {
+    if (!OPAQUE_ID.test(conversationId ?? '')) return false;
+    const conv = conversationIndex().get(conversationId);
+    if (!conv) return false;
+    const proj = projectOfConversation(conv);
+    if (!proj) return false;
+    const device = deviceStore?.get(deviceId);
+    if (device && device.grants && device.grants[projectIdFor(proj.path)] !== true) return false;
+    if (ownerRevision !== undefined && conv.revision !== undefined && conv.revision !== ownerRevision) return false;
+    return true;
+  }
+
+  /* ---------- operations ---------- */
+
+  async function projectsList({ device }) {
+    const idx = projectIndex();
+    const projects = [];
+    for (const [id, p] of idx) {
+      if (device.grants?.[id] !== true) continue;
+      projects.push({ projectId: id, displayName: p.name || p.path.split(/[\\/]/).pop() || p.path });
+    }
+    return okResult({ projects, registryRevision: clock.registryRevision(domain.conversations()) });
+  }
+
+  async function sessionsList({ device, pathParameters }) {
+    const projectId = pathParameters.projectId;
+    const proj = projectIndex().get(projectId);
+    if (!proj || device.grants?.[projectId] !== true) return deny('unknown_resource');
+    const sessions = (domain.sessionRecords?.(proj.path) ?? [])
+      .filter(s => OPAQUE_ID.test(s.sessionId ?? ''))
+      .map(s => ({
+        sessionId: s.sessionId,
+        displayName: String(s.displayName ?? '').slice(0, 120),
+        updatedAt: String(s.updatedAt ?? new Date().toISOString()).slice(0, 40),
+        projectId,
+        ...(Array.isArray(s.conversationIds)
+          ? { activeConversations: s.conversationIds.filter(c => OPAQUE_ID.test(c ?? '')).map(c => ({ conversationId: c })).slice(0, 64) }
+          : {}),
+      }));
+    return okResult({ sessions });
+  }
+
+  async function runtimeCreate({ device, pathParameters, body, owner, requestId }) {
+    const projectId = pathParameters.projectId;
+    const proj = projectIndex().get(projectId);
+    if (!proj || device.grants?.[projectId] !== true) return deny('unknown_resource');
+    const clientId = body.payload.clientConversationId;
+    const payloadHash = sha256hex(canonicalJson(body.payload) ?? '');
+    const prior = idem.resolve(device.deviceId, projectId, owner.epoch, clientId, payloadHash);
+    if (prior?.conflict) return deny('payload_invalid');
+    if (prior) return okResult(prior);
+    try {
+      const out = await domain.openConversation(proj.path, { clientConversationId: clientId });
+      if (!OPAQUE_ID.test(out?.conversationId ?? '')) return deny('unavailable');
+      const ownerRevision = clock.registryRevision(domain.conversations());
+      const result = { conversationId: out.conversationId, ownerRevision };
+      if (!idem.record(device.deviceId, projectId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
+      return okResult(result);
+    } catch (e) {
       const code = e?.code;
-      if (code === 'stale_runtime' || code === 'stale_workspace' || code === 'unknown_conversation') return deny(404, 'unknown_resource');
-      if (code === 'runtime_busy' || code === 'edit_in_progress' || code === 'stop_in_progress' || code === 'maintenance') return deny(409, 'operation_rejected', true);
-      return deny(503, 'unavailable', true);
+      if (code === 'workspace_in_use' || code === 'stale_workspace') return deny('stale_owner');
+      return deny('unavailable');
     }
   }
 
+  async function runtimeSnapshot({ device, pathParameters, owner }) {
+    const conv = conversationIndex().get(pathParameters.conversationId);
+    if (!conv) return deny('unknown_resource');
+    const messages = (conv.messages ?? [])
+      .filter(m => OPAQUE_ID.test(m.messageId ?? '') && ['user', 'assistant'].includes(m.role))
+      .map(m => ({ messageId: m.messageId, role: m.role, text: String(m.text ?? '') }))
+      .slice(-500);
+    const wm = typeof streamWatermark === 'function' ? streamWatermark(device.deviceId) : null;
+    return okResult({
+      ownerRevision: conv.revision ?? 0,
+      status: ['idle', 'running', 'stopping', 'error'].includes(conv.lifecycle) ? conv.lifecycle : 'unknown',
+      messages,
+      cursor: wm?.cursor ?? 'g1_s0_0000000000000000000000',
+      streamGeneration: wm?.generation ?? 1,
+      sequence: wm?.sequence ?? 1,
+      ...(conv.truncated === true ? { snapshotTruncated: true } : {}),
+    });
+  }
+
+  async function chatSend({ device, pathParameters, body, owner }) {
+    const conv = conversationIndex().get(pathParameters.conversationId);
+    if (!conv) return deny('unknown_resource');
+    const clientId = body.payload.clientMessageId;
+    const payloadHash = sha256hex(canonicalJson(body.payload) ?? '');
+    const prior = idem.resolve(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash);
+    if (prior?.conflict) return deny('payload_invalid');
+    if (prior) return okResult(prior);
+    try {
+      const out = await domain.sendMessage({ owner, text: body.payload.text, clientMessageId: clientId });
+      const result = { clientMessageId: clientId, accepted: out?.accepted === true, ownerRevision: conv.revision ?? 0 };
+      if (!idem.record(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
+      return okResult(result);
+    } catch (e) {
+      const code = e?.code;
+      if (code === 'stale_owner' || code === 'owner_stale') return deny('stale_owner');
+      if (code === 'busy' || code === 'in_progress') return deny('operation_rejected');
+      return deny('unavailable');
+    }
+  }
+
+  async function chatStop({ device, pathParameters }) {
+    const conv = conversationIndex().get(pathParameters.conversationId);
+    if (!conv) return deny('unknown_resource');
+    try {
+      const out = await domain.stop({ owner: resolveOwner({ pathParameters }), conversationId: pathParameters.conversationId });
+      return okResult({ stopped: out?.stopped === true, ownerRevision: conv.revision ?? 0 });
+    } catch (e) {
+      const code = e?.code;
+      if (code === 'stale_owner' || code === 'owner_stale') return deny('stale_owner');
+      return deny('unavailable');
+    }
+  }
+
+  async function approvalsList({ pathParameters }) {
+    const conv = conversationIndex().get(pathParameters.conversationId);
+    if (!conv) return deny('unknown_resource');
+    const approvals = (conv.pendingApprovals ?? [])
+      .filter(d => d.pending === true)
+      .map(d => ({
+        requestId: d.requestId,
+        method: d.method,
+        title: String(d.title ?? '').slice(0, 200),
+        message: String(d.message ?? '').slice(0, 600),
+        ...(Array.isArray(d.options) ? {
+          options: d.options.slice(0, 20).map(o => ({ optionId: String(o.optionId ?? ''), label: String(o.label ?? '').slice(0, 200) })),
+        } : {}),
+      }));
+    return okResult({ approvals });
+  }
+
+  /**
+   * approvals.respond — delegates the entire admission + settlement to the
+   * vendored settleApproval (atomic claim-and-enqueue to the live Pi dialog).
+   */
+  async function approvalsRespond({ request, device, serviceId, serviceFingerprint, consumeNonce }) {
+    const params = {};
+    // pendingDialog resolution: live dialog for this conversation+requestId.
+    const convId = /\/conversations\/([^/]+)\//.exec(request.path)?.[1];
+    const rid = /\/approvals\/([^/]+)\/respond$/.exec(request.path)?.[1];
+    const conv = conversationIndex().get(convId);
+    const pendingDialog = (conv?.pendingApprovals ?? []).find(d => d.requestId === rid);
+    const result = settleApproval({
+      request, device, serviceId, serviceFingerprint,
+      deviceResolveOwner: resolveOwner,
+      pendingDialog,
+      consumeDialog: ({ requestId, owner, namespace, method, decision, value, dialogRevision }) => {
+        try {
+          return domain.consumeApproval({ requestId, conversationId: convId, owner, namespace, method, decision, value, dialogRevision }) === true;
+        } catch { return false; }
+      },
+      consumeNonce,
+    });
+    if (!result.ok) return result;
+    return { ok: true, operation: result.operation, result: { accepted: true, ownerRevision: pendingDialog?.revision ?? 0 }, requestId: result.requestId };
+  }
+
   return {
-    // Remote-visible surface the gateway can introspect for contract conformance.
-    projectIdFor, ownerFor, deviceOwnsConversation, conversationProjectId,
-    projects: {
-      list: async ({ device }) => {
-        const items = [];
-        for (const { projectId, project } of grantedPaths(device)) {
-          items.push({
-            projectId,
-            path: project.path,
-            displayName: project.name ?? project.path.split(/[\\/]/).pop() ?? project.path,
-            ownerEpoch: 0,
-            lastSeen: new Date().toISOString(),
-          });
-        }
-        return ok({ items, projectionNote: 'items are filtered by this device\'s project grants' });
-      },
-    },
-    sessions: {
-      list: async ({ device, params }) => {
-        const entry = projectEntry(params.projectId);
-        if (!entry || !(device.grants ?? {})[params.projectId]) return deny(403, 'scope_denied');
-        const snap = runtimeRegistry.snapshot();
-        const items = (snap.items ?? [])
-          .filter(i => i.kind === 'project' && (i.workspace?.cwd === entry.path || i.workspace?.workspaceId === entry.workspaceId))
-          .map(i => ({
-            sessionId: i.conversationId,
-            projectId: params.projectId,
-            displayName: i.title ?? i.conversationId,
-            updatedAt: i.createdAt ?? new Date().toISOString(),
-            activeConversations: [i.conversationId],
-            projectionNote: 'item.projectId===path projectId; a project conversation is its own active entry',
-          }));
-        return ok({ items });
-      },
-    },
-    conversations: {
-      // runtime.create — open (or resume) a project conversation under the grant.
-      create: async ({ device, params, body }) => {
-        const entry = projectEntry(params.projectId);
-        if (!entry || !(device.grants ?? {})[params.projectId]) return deny(403, 'scope_denied');
-        // Reuse an existing conversation for this workspace if one is registered.
-        const snap = runtimeRegistry.snapshot();
-        const existing = (snap.items ?? []).find(i => i.workspace?.workspaceId === entry.workspaceId);
-        if (existing && existing.owner) {
-          return ok({ conversationId: existing.conversationId, ownerRevision: existing.revision ?? 1, reused: true });
-        }
-        try {
-          const out = await ordinarySessions.open({ project: entry.path, requestId: crypto.randomUUID(), allowThird: false });
-          return ok({ conversationId: out.conversationId, ownerRevision: out.item?.revision ?? 1 }, 201);
-        } catch (e) {
-          const code = e?.code;
-          if (code === 'runtime_limit' || code === 'runtime_start_failed' || code === 'session_in_use') return deny(503, 'unavailable', true);
-          if (code === 'workspace_in_use' || code === 'stale_workspace') return deny(409, 'operation_rejected', true);
-          return deny(503, 'unavailable', true);
-        }
-      },
-      // runtime.snapshot — latest state for one owned conversation.
-      snapshot: async ({ device, params }) => {
-        if (!deviceOwnsConversation(device, params.conversationId)) return deny(404, 'unknown_resource');
-        return invokeOwner(params.conversationId, async ({ item }) => ok({
-          conversationId: params.conversationId,
-          ownerRevision: item.revision ?? 1,
-          status: item.lifecycle ?? 'unknown',
-          activity: item.activity ?? 'idle',
-          attention: item.attention === true,
-          lastActivityAt: item.createdAt ?? new Date().toISOString(),
-          title: item.title ?? null,
-          result: {
-            lifecycle: item.lifecycle ?? 'unknown',
-            activity: item.activity ?? 'idle',
-            focused: item.focused === true,
-            error: item.error ?? null,
-            ...(item.outcome ? { outcome: item.outcome } : {}),
-          },
-        }));
-      },
-      send: async ({ device, params, body, requestId }) => {
-        if (!deviceOwnsConversation(device, params.conversationId)) return deny(404, 'unknown_resource');
-        const text = typeof body?.text === 'string' ? body.text : null;
-        if (!text || !text.trim()) return deny(400, 'payload_invalid');
-        return invokeOwner(params.conversationId, async ({ owner }) => {
-          await runtimeRegistry.command(owner, { type: 'prompt', prompt: text, id: requestId });
-          stream?.publish(params.conversationId, 0, 'message.append', { requestId, role: 'user' });
-          stream?.publish(params.conversationId, 0, 'conversation.status', { status: 'running' });
-          return ok({ accepted: true, conversationId: params.conversationId, ownerRevision: 1 }, 202);
-        });
-      },
-      stop: async ({ device, params }) => {
-        if (!deviceOwnsConversation(device, params.conversationId)) return deny(404, 'unknown_resource');
-        return invokeOwner(params.conversationId, async ({ owner }) => {
-          await runtimeRegistry.command(owner, { type: 'abort' });
-          stream?.publish(params.conversationId, 0, 'conversation.status', { status: 'stopped' });
-          return ok({ accepted: true, conversationId: params.conversationId, ownerRevision: 1 });
-        });
-      },
-    },
-    approvals: {
-      list: async ({ device, params }) => {
-        if (!deviceOwnsConversation(device, params.conversationId)) return deny(404, 'unknown_resource');
-        const out = runtimeRegistry.events(ownerFor(params.conversationId).owner, 0);
-        const items = (out.approvals ?? []).map(a => ({
-          requestId: a.id ?? a.requestId,
-          conversationId: params.conversationId,
-          type: a.type ?? a.commandName ?? 'unknown',
-          createdAt: a.receivedAt ?? a.createdAt ?? new Date().toISOString(),
-          ...(a.toolCall ? { toolCall: a.toolCall } : {}),
-        }));
-        return ok({ items, ownerRevision: 1 });
-      },
-      respond: async ({ device, params, body }) => {
-        if (!isRecord(body) || typeof body.method !== 'string' || typeof body.decision !== 'string') return deny(400, 'payload_invalid');
-        // approvals respond via extension_ui_response on the owning conversation
-        const snap = runtimeRegistry.snapshot();
-        const item = (snap.items ?? []).find(i => i.conversationId && deviceOwnsConversation(device, i.conversationId));
-        if (!item || !item.owner) return deny(404, 'unknown_resource');
-        try {
-          await runtimeRegistry.command(item.owner, { type: 'extension_ui_response', id: params.requestId, response: { method: body.method, decision: body.decision, ...(body.value !== undefined ? { value: body.value } : {}) } });
-          stream?.publish(item.conversationId, 0, 'approval.settled', { requestId: params.requestId, decision: body.decision });
-          return ok({ accepted: true, ownerRevision: 1 });
-        } catch (e) {
-          const code = e?.code;
-          if (code === 'stale_approval' || code === 'stale_runtime') return deny(409, 'operation_rejected');
-          return deny(503, 'unavailable', true);
-        }
-      },
+    resolveOwner, authorizeResource, clock, idem,
+    dispatch: {
+      'projects.list': projectsList,
+      'sessions.list': sessionsList,
+      'runtime.create': runtimeCreate,
+      'runtime.snapshot': runtimeSnapshot,
+      'chat.send': chatSend,
+      'chat.stop': chatStop,
+      'approvals.list': approvalsList,
+      'approvals.respond': approvalsRespond,
     },
   };
 }

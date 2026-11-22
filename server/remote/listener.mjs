@@ -1,61 +1,107 @@
 /**
- * Remote v1 listener — the second authenticated HTTP surface for mobile.
+ * Remote v1 gateway listener — the ONLY remote-facing surface.
  *
- * It is a SELF-CONTAINED request handler (own http server, own port, own
- * access control) — the mobile contract's isolation requirement forbids
- * widening the existing 127.0.0.1 router to a remote path. The listener can be
- * bound loopback-only for development or on the LAN for Tailscale/LAN reach.
- *
- * Every request (except /remote/v1/pair/exchange) carries an Ed25519 signature
- * over the signed tuple; this handler verifies signature, replay/epoch, scope
- * grants and resource ownership before dispatching to the domain adapters.
+ *  - independent HTTPS server (own port, own TLS cert) — never widens the
+ *    existing 127.0.0.1 router, never forwards /api/*
+ *  - transport adapter runs BEFORE parsing: strict UTF-8 raw-target, single
+ *    '?', no duplicate/blank query names, ASCII-printable path, no duplicate
+ *    header names, closed transport header whitelist
+ *  - every request except POST /remote/v1/pair/exchange is a signed request;
+ *    admission order per contract: transport -> route -> signature -> scope ->
+ *    grant -> owner+revision -> dispatch; earlier failures never dispatch
+ *  - wire errors are the closed 17-code vocabulary; internal codes never leak;
+ *    pre-auth failures echo the all-zero requestId
+ *  - success responses are schema + forbidden-value validated BEFORE writing
  */
-import http from 'node:http';
+import https from 'node:https';
+import { URL } from 'node:url';
 import crypto from 'node:crypto';
 import {
-  REMOTE_V1, UUID, ZERO_UUID, OPAQUE_ID, CURSOR_PATTERN,
-  canonicalServiceId, sha256, b64url, decodeB64url, timingSafe, isRecord,
-  ed25519Verify, buildSignatureMessage, canonicalizeQuery, wireErrorBodyFor,
-} from './contract.mjs';
-import { EventStream } from './event-stream.mjs';
+  REMOTE_V1, validateRawTarget, authorizeRemoteOperation, commitAdmission,
+  validateRemoteResponse, wireErrorCode, requiredEventScope,
+} from './protocol.mjs';
+import { canonicalJson, isRecord } from './keys.mjs';
 
 const L = REMOTE_V1.limits;
+const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function json(res, code, body, extra) {
-  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', ...extra });
-  res.end(JSON.stringify(body));
-}
+// Hop/transport headers the client cannot avoid; everything else outside the
+// signed whitelist is rejected (strict transport).
+const TRANSPORT_NOISE = new Set(['host', 'connection', 'keep-alive', 'transfer-encoding', 'content-length', 'te', 'upgrade', 'via']);
+const PAIR_HEADERS = new Set(['content-type', 'accept']);
+const SIGNED_HEADERS = new Set(REMOTE_V1.signedRequestHeaders);
 
-function readBody(req, maxBytes) {
+const WIRE_STATUS = {
+  unauthorized: 401,
+  pairing_required: 401,
+  pairing_expired: 401,
+  pairing_rejected: 403,
+  rate_limited: 429,
+  scope_denied: 403,
+  stale_owner: 409,
+  stale_revision: 409,
+  unknown_resource: 404,
+  operation_rejected: 409,
+  replay_rejected: 409,
+  sequence_gap: 409,
+  server_busy: 503,
+  unavailable: 503,
+  invalid_request: 400,
+  payload_invalid: 400,
+  internal_error: 500,
+};
+const RETRYABLE = new Set(['rate_limited', 'server_busy', 'unavailable', 'internal_error', 'sequence_gap']);
+
+function readRawBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
-    req.on('data', c => { size += c.length; if (size > maxBytes) { reject(new Error('request_too_large')); req.destroy(); } else chunks.push(c); });
+    req.on('data', c => {
+      size += c.length;
+      if (size > maxBytes) { const e = new Error('request_too_large'); e.code = 'request_too_large'; reject(e); req.destroy(); return; }
+      chunks.push(c);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
 }
 
 export class RemoteGateway {
-  constructor({ port = 0, host = '127.0.0.1', serviceKey, serviceFingerprint,
-                deviceStore, pairManager, adapters, log = console.log }) {
+  /**
+   * @param tlsOptions  {key, cert, minVersion} for https.createServer
+   * @param serviceFingerprint  sha256 hex of the TLS cert DER
+   * @param deviceStore / pairManager / eventStream / adapters (buildAdapters result)
+   * @param consumeNonce  DeviceStore.consumeNonce
+   */
+  constructor({ port = 0, host = '127.0.0.1', tlsOptions, serviceFingerprint,
+                deviceStore, pairManager, eventStream, adapters, log = () => {} }) {
     this.port = port; this.host = host;
-    this.serviceKey = serviceKey;
     this.serviceFingerprint = serviceFingerprint;
-    this.serviceId = canonicalServiceId(serviceFingerprint);
+    this.serviceId = `svc-${serviceFingerprint.slice(0, 16)}`;
     this.deviceStore = deviceStore;
     this.pair = pairManager;
-    this.adapters = adapters;         // { projects, sessions, conversations, approvals }
+    this.stream = eventStream;
+    this.adapters = adapters;
     this.log = log;
-    this.stream = new EventStream({ serviceKey, serviceFingerprint, deviceStore });
-    this.rate = new Map();            // deviceId -> [timestamps]
-    this.server = http.createServer((req, res) => this._handle(req, res));
+    this.rate = new Map();                    // deviceId -> [ms]
+    this.server = https.createServer(tlsOptions, (req, res) => {
+      this._handle(req, res).catch(e => {
+        this.log(`remote request failed: ${e?.message ?? e}`);
+        try { this._wire(res, ZERO_UUID, 'internal_error'); } catch {}
+      });
+    });
   }
-  listen() {
-    return new Promise(resolve => this.server.listen(this.port, this.host, () => resolve(this.server.address())));
-  }
-  close() { this.server.close(); this.stream.close(); }
+  listen() { return new Promise(resolve => this.server.listen(this.port, this.host, () => resolve(this.server.address()))); }
+  close() { return new Promise(resolve => this.server.close(resolve)); }
 
+  _wire(res, requestId, code, extraHeaders) {
+    const body = { protocolVersion: 1, requestId, error: { code, retryable: RETRYABLE.has(code) } };
+    try {
+      res.writeHead(WIRE_STATUS[code] ?? 500, { 'content-type': 'application/json; charset=utf-8', ...extraHeaders });
+      res.end(JSON.stringify(body));
+    } catch {}
+  }
   _rateLimit(deviceId, nowMs) {
     let bucket = this.rate.get(deviceId);
     if (!bucket) { bucket = []; this.rate.set(deviceId, bucket); }
@@ -65,166 +111,157 @@ export class RemoteGateway {
     return true;
   }
 
-  _wire(res, status, requestId, code, retryable = false) {
-    return json(res, status, wireErrorBodyFor(code, requestId, retryable));
+  /** Raw transport gates shared by every route (before parsing). */
+  _transportCheck(req) {
+    // Duplicate header names are rejected before folding (contract).
+    const seen = new Set();
+    const headers = {};
+    for (let i = 0; i < req.rawHeaders.length; i += 2) {
+      const name = String(req.rawHeaders[i]).toLowerCase();
+      if (seen.has(name)) return { ok: false, code: 'duplicate_header' };
+      seen.add(name);
+      headers[name] = req.rawHeaders[i + 1];
+    }
+    for (const name of seen) {
+      if (!SIGNED_HEADERS.has(name) && !PAIR_HEADERS.has(name) && !TRANSPORT_NOISE.has(name)) {
+        return { ok: false, code: 'header_not_allowed' };
+      }
+    }
+    const target = validateRawTarget(req.url);
+    if (!target.ok) return { ok: false, code: target.code };
+    return { ok: true, headers, path: target.path, query: target.query };
   }
 
-  // Verify the signed request headers + replay/epoch + device completeness.
-  // Returns { device } on success, or { deny: {status,code} }.
-  _verifySigned(req, bodyBytes, nowMs) {
-    const h = req.headers;
-    const deviceId = h['x-pi-device-id'];
-    const signature = h['x-pi-signature'];
-    const timestamp = Number(h['x-pi-timestamp']);
-    const nonce = h['x-pi-nonce'];
-    const requestId = h['x-pi-request-id'];
-    const protocolVersion = Number(h['x-pi-protocol-version']);
-    const epoch = Number(h['x-pi-remote-epoch']);
-    const bodySha256Header = h['x-pi-body-sha256'];
-
-    if (protocolVersion !== REMOTE_V1.protocolMajor) return { deny: { status: 401, code: 'unauthorized' } };
-    if (typeof deviceId !== 'string' || !OPAQUE_ID.test(deviceId)) return { deny: { status: 401, code: 'unauthorized' } };
-    if (!UUID.test(requestId)) return { deny: { status: 400, code: 'invalid_request' } };
-    if (!decodeB64url(signature, 64)) return { deny: { status: 401, code: 'unauthorized' } };
-    if (!decodeB64url(nonce, 16)) return { deny: { status: 401, code: 'unauthorized' } };
-    if (!Number.isSafeInteger(timestamp) || !Number.isSafeInteger(epoch)) return { deny: { status: 400, code: 'invalid_request' } };
-    if (Math.abs(nowMs / 1000 - timestamp) > L.signatureClockSkewSeconds) return { deny: { status: 401, code: 'unauthorized' } };
-    const bodySha256 = sha256(bodyBytes);
-    if (bodySha256Header !== bodySha256) return { deny: { status: 400, code: 'payload_invalid' } };
-
-    const device = this.deviceStore.active(deviceId, nowMs);
-    if (!device) return { deny: { status: 401, code: 'unauthorized' } };
-    if (epoch !== device.replayEpoch) return { deny: { status: 409, code: 'replay_rejected' } };
-
-    // signature over the signed tuple
-    const u = new URL(req.url, 'http://x');
-    const path = u.pathname;
-    const query = {};
-    for (const [k, v] of u.searchParams) query[k] = v;
-    const msg = buildSignatureMessage({
-      protocolVersion, deviceId, serviceId: this.serviceId,
-      replayEpoch: epoch, requestId, method: req.method, path, query,
-      timestamp, nonce, bodySha256,
-    });
-    if (msg === null || !ed25519Verify(device.devicePublicKey, signature, Buffer.from(msg, 'utf8'))) {
-      return { deny: { status: 401, code: 'unauthorized' } };
+  /** Build the validator-shaped request for a signed route. */
+  async _requestShape(req, transport) {
+    let rawBody = '';
+    if (req.method !== 'GET') {
+      try { rawBody = (await readRawBody(req, L.maxRequestBytes)).toString('utf8'); }
+      catch (e) { return { fail: e.code === 'request_too_large' ? 'request_too_large' : 'body_bytes_required' }; }
+    } else {
+      // GET must not carry a body; anything present is still read to check.
+      let getBytes = Buffer.alloc(0);
+      try { getBytes = await readRawBody(req, L.maxRequestBytes); } catch { return { fail: 'request_too_large' }; }
+      rawBody = getBytes.toString('utf8');
+      if (rawBody.length === 0) rawBody = '';
     }
-    // replay protection (per device): nonce reuse or non-monotonic timestamp
-    if (this.deviceStore.seenNonce(device, nonce, nowMs)) return { deny: { status: 409, code: 'replay_rejected' } };
-    this.deviceStore.bumpTimestampFloor(device, timestamp);
-    if (timestamp <= device.timestampFloor && this.deviceStore.seenNonce(device, nonce, nowMs)) {
-      return { deny: { status: 409, code: 'replay_rejected' } };
+    let body;
+    if (req.method !== 'GET' && rawBody.length) {
+      try { body = JSON.parse(rawBody); } catch { body = undefined; }
+      if (!isRecord(body)) body = undefined;
     }
-    if (!this._rateLimit(deviceId, nowMs)) return { deny: { status: 429, code: 'rate_limited', retryable: true } };
-    return { device, requestId };
+    return { method: req.method, path: transport.path, query: transport.query, headers: transport.headers, body, rawBody };
   }
 
   async _handle(req, res) {
-    const u = new URL(req.url, 'http://x');
+    const t = this._transportCheck(req);
+    if (!t.ok) return this._wire(res, ZERO_UUID, 'unauthorized');
+    const { path, query, headers } = t;
+
+    /* ---- unsigned surface: pair exchange ---- */
+    if (path === REMOTE_V1.pairExchange.path && req.method === REMOTE_V1.pairExchange.method) {
+      let rawBody;
+      try { rawBody = await readRawBody(req, L.maxRequestBytes); }
+      catch { return this._wire(res, ZERO_UUID, 'unauthorized'); }
+      let body;
+      try { body = JSON.parse(rawBody.toString('utf8')); } catch { body = undefined; }
+      if (!isRecord(body)) body = undefined;
+      // The pair validator whitelists only content-type/accept — pass exactly
+      // the transport surface it evaluates, never socket-level headers.
+      const pairHeaders = {};
+      if (headers['content-type'] !== undefined) pairHeaders['content-type'] = headers['content-type'];
+      if (headers['accept'] !== undefined) pairHeaders['accept'] = headers['accept'];
+      const request = { method: req.method, path, query, headers: pairHeaders, body, rawBody: rawBody.toString('utf8') };
+      const peerId = req.socket.remoteAddress ?? 'unknown';
+      const out = this.pair.exchangeToWire(request, { peerId });
+      if (!out.ok) return this._wire(res, ZERO_UUID, out.wire);
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      return res.end(canonicalJson(out.response) ?? JSON.stringify(out.response));
+    }
+    if (path === REMOTE_V1.pairExchange.path || path.startsWith('/remote/v1/pair/')) {
+      return this._wire(res, ZERO_UUID, 'unauthorized');
+    }
+
+    /* ---- signed surface ---- */
+    const shaped = await this._requestShape(req, t);
+    if (shaped.fail) return this._wire(res, ZERO_UUID, 'unauthorized');
+    const request = shaped;
+    const echoId = UUID.test(headers['x-pi-remote-request-id'] ?? '') ? headers['x-pi-remote-request-id'] : ZERO_UUID;
+
+    // The validator whitelists the signed headers + content-type/accept —
+    // pass exactly that surface; socket headers (host, connection, ...) never
+    // reach signature evaluation.
+    const signedHeaders = {};
+    for (const name of REMOTE_V1.signedRequestHeaders) if (headers[name] !== undefined) signedHeaders[name] = headers[name];
+    if (headers['content-type'] !== undefined) signedHeaders['content-type'] = headers['content-type'];
+    if (headers['accept'] !== undefined) signedHeaders['accept'] = headers['accept'];
+    request.headers = signedHeaders;
+    const deviceId = headers['x-pi-remote-device'];
+    const device = typeof deviceId === 'string' ? this.deviceStore.get(deviceId) : null;
     const nowMs = Date.now();
-    const requestId = UUID.test(req.headers['x-pi-request-id']) ? req.headers['x-pi-request-id'] : ZERO_UUID;
-    const path = u.pathname;
 
-    // Local operator endpoint: mints a pairing code for the UI to display.
-    // Loopback + the desktop's local token only — a remote caller never sees it.
-    if (path === '/remote/v1/pair/code' && req.method === 'POST') {
-      const host = req.headers.host || '';
-      const loopback = host.startsWith('127.0.0.1') || host.startsWith('localhost') || host === '::1' || host.startsWith('[::1]');
-      const token = process.env.PI_GUI_TOKEN;
-      const okToken = !token || req.headers['x-pi-gui-token'] === token;
-      if (!loopback || !okToken) return this._wire(res, 401, requestId, 'unauthorized');
-      const out = this.pair.issuePairingCode();
-      if (!out) return this._wire(res, 429, requestId, 'rate_limited', true);
-      return json(res, 200, { ok: true, code: out.code, challenge: out.challenge, expiresAt: out.expiresAt, serviceFingerprint: this.serviceFingerprint });
+    // Admission: signature -> scope -> grant -> owner+revision (one transaction).
+    const admission = authorizeRemoteOperation({
+      request, device, serviceFingerprint: this.serviceFingerprint,
+      resolveOwner: this.adapters.resolveOwner,
+      nowMs, consumeNonce: this.deviceStore.consumeNonce,
+    });
+    if (!admission.ok) return this._wire(res, echoId, admission.wire ?? wireErrorCode(admission.code));
+    if (!this._rateLimit(device.deviceId, nowMs)) return this._wire(res, admission.requestId, 'rate_limited');
+
+    // Event stream: long-lived SSE; subscribe handles its own authorization
+    // rechecks and cursor semantics.
+    if (admission.operation === 'events.stream') {
+      const rejected = this.stream.handleSubscribe(req, res, device, request.query);
+      if (rejected) return this._wire(res, admission.requestId, rejected.body.code);
+      return;
     }
 
-    // Pair exchange is the only unsigned remote surface.
-    if (path === REMOTE_V1.pairExchange.path && req.method === 'POST') {
-      let bodyBytes;
-      try { bodyBytes = await readBody(req, L.maxRequestBytes); } catch { return this._wire(res, 413, requestId, 'request_too_large'); }
-      let body; try { body = JSON.parse(bodyBytes.toString('utf8')); } catch { return this._wire(res, 400, requestId, 'payload_invalid'); }
-      const out = this.pair.exchange(body, nowMs);
-      if (out.error) return this._wire(res, out.status, requestId, out.error);
-      return json(res, 200, out.response);
-    }
-    if (path !== '/remote/v1/events' && !(path.startsWith('/remote/v1/'))) {
-      return this._wire(res, 404, requestId, 'unknown_resource');
-    }
+    // Commit recheck: re-read CURRENT device + owner and compare every bound field.
+    const deviceNow = this.deviceStore.get(device.deviceId);
+    const commit = commitAdmission({
+      admissionToken: admission.admissionToken, device: deviceNow,
+      resolveOwner: this.adapters.resolveOwner, nowMs,
+    });
+    if (!commit.ok) return this._wire(res, admission.requestId, wireErrorCode(commit.code));
 
-    let bodyBytes = Buffer.alloc(0);
-    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-      try { bodyBytes = await readBody(req, L.maxRequestBytes); } catch { return this._wire(res, 413, requestId, 'request_too_large'); }
-    }
-    const v = this._verifySigned(req, bodyBytes, nowMs);
-    if (v.deny) return this._wire(res, v.deny.status, requestId, v.deny.code, v.deny.retryable);
-    const device = v.device;
+    const dispatch = this.adapters.dispatch[admission.operation];
+    if (!dispatch) return this._wire(res, admission.requestId, 'operation_rejected');
 
-    // event stream
-    if (path === REMOTE_V1.eventStream.path && req.method === 'GET') {
-      return this.stream.handleSubscribe(req, res, device, u, this.adapters);
-    }
-
-    // dispatch to a registered operation
-    const op = this._match(path, req.method);
-    if (!op) return this._wire(res, 404, requestId, 'unknown_resource');
-    if (!device.grantedScopes.includes(op.scope)) return this._wire(res, 403, requestId, 'scope_denied');
-
-    let body = {};
-    if (bodyBytes.length) {
-      try { body = JSON.parse(bodyBytes.toString('utf8')); } catch { return this._wire(res, 400, requestId, 'payload_invalid'); }
-      if (!isRecord(body)) return this._wire(res, 400, requestId, 'payload_invalid');
-    }
-    // idempotency key: headers request-id is the wire id; body must not carry it
-    if (own(body, 'requestId') || own(body, 'request_id')) return this._wire(res, 400, requestId, 'invalid_request');
-
+    let out;
     try {
-      const result = await op.invoke({ device, body, params: op.params, requestId, adapters: this.adapters, nowMs });
-      if (result.denied) return this._wire(res, result.denied.status, requestId, result.denied.code, result.denied.retryable);
-      return json(res, result.status ?? 200, result.body ?? {});
+      if (admission.operation === 'approvals.respond') {
+        out = await dispatch({
+          request, device, serviceId: this.serviceId, serviceFingerprint: this.serviceFingerprint,
+          consumeNonce: () => true,   // nonce already consumed in admission
+        });
+      } else {
+        out = await dispatch({
+          device, pathParameters: admission.pathParameters, body: request.body,
+          owner: admission.owner, requestId: admission.requestId, request, nowMs,
+        });
+      }
     } catch (e) {
-      this.log(`remote op ${op.id} failed: ${e?.message ?? e}`);
-      return this._wire(res, 500, requestId, 'internal_error', true);
+      this.log(`remote op ${admission.operation} failed: ${e?.message ?? e}`);
+      return this._wire(res, admission.requestId, 'internal_error');
     }
-  }
+    if (!out.ok) return this._wire(res, admission.requestId, out.wire ?? wireErrorCode(out.code));
 
-  _match(path, method) {
-    for (const op of REMOTE_V1.operations) {
-      if (op.method !== method) continue;
-      const params = matchPath(op.path, path);
-      if (params) return { ...op, params, invoke: this._op(op.id) };
+    // Success envelope — schema + forbidden-value validated before write.
+    const response = {
+      protocolVersion: 1,
+      requestId: admission.requestId,
+      operation: admission.operation,
+      serverRevision: admission.owner?.revision ?? 0,
+      result: out.result,
+    };
+    if (!validateRemoteResponse(response, admission.operation, admission.requestId)) {
+      this.log(`remote op ${admission.operation} produced an unsafe result (projection refused)`);
+      return this._wire(res, admission.requestId, 'internal_error');
     }
-    return null;
-  }
-
-  _op(id) {
-    switch (id) {
-      case 'projects.list': return this.adapters.projects.list;
-      case 'sessions.list': return this.adapters.sessions.list;
-      case 'runtime.create': return this.adapters.conversations.create;
-      case 'runtime.snapshot': return this.adapters.conversations.snapshot;
-      case 'chat.send': return this.adapters.conversations.send;
-      case 'chat.stop': return this.adapters.conversations.stop;
-      case 'approvals.list': return this.adapters.approvals.list;
-      case 'approvals.respond': return this.adapters.approvals.respond;
-    }
-    return async () => ({ denied: { status: 404, code: 'unknown_resource' } });
+    const bytes = canonicalJson(response);
+    if (!bytes) return this._wire(res, admission.requestId, 'internal_error');
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(bytes);
   }
 }
-
-function matchPath(template, path) {
-  const t = template.split('/').filter(Boolean);
-  const p = path.split('/').filter(Boolean);
-  if (t.length !== p.length) return null;
-  const params = {};
-  for (let i = 0; i < t.length; i++) {
-    const seg = t[i];
-    if (seg.startsWith('{')) {
-      const name = seg.slice(1, -1);
-      const val = decodeURIComponent(p[i]);
-      if (!OPAQUE_ID.test(val) && name !== 'projectId' && name !== 'conversationId' && name !== 'requestId') return null;
-      params[name] = val;
-    } else if (seg !== p[i]) return null;
-  }
-  return params;
-}
-function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
