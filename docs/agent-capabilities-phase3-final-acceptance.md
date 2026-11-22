@@ -100,3 +100,65 @@ Windows，Pi 1.6.0。`tests/skills-live.cjs`、`tests/agent-capabilities-live.cj
 边界：没有真实远端模型、OAuth、外部 Registry 安装、第三方 MCP 或安装程序升级测试；未在同版本上实际操作 PI-Desktop（使用了上游原图与当前源码）；未逐项覆盖任意字体放大、所有瞬时交互或所有可见颜色的 WCAG 对比度。Windows 文件符号链接的跳过项仍待有权限的环境复验。文件系统对象的外部并发替换保留[安全规范](security.md#技能写入与市场2a)所述边界。
 
 回滚：页面、UI 测试和材料可按提交分别反向回退；全分支撤销时在相同基线重新构建 `npm run build:app -- --rebuild`。不单独反转 MCP 的 `8afeb76a`（否则会把已撤销的外观重新引入）。代码回退不会修改用户已用 Pi 完成的包操作或技能文件。未经用户明确许可，不合并、不打 tag、不发布。
+
+## 2026-11-23 表面统一与四项验收
+
+用户在 Windows 桌面版实拍技能、扩展、MCP 三页后指出：分组、列表行和工具栏大量使用整圈 1px 边框和更亮的独立卡片表面，与设置里的「常规 / 快捷键 / 信息」不是同一种视觉语言。本轮以那三个页面为内部参照，在同一套共享 Token 与原语上整改；不引入第二套样式体系，不覆盖共享控件内部规则，也不改三个页面的后端业务实现。
+
+| 项 | 处置 |
+| --- | --- |
+| 表面与边框 | 行 / 卡片改用 `--ds-tile` + `--radius-md-plus`，去掉整圈边框；Hover / 键盘焦点 / 展开改在同一层底色上升一级。展开详情用 `--ds-raised` + 阴影，代码块保留 `--ds-bg-inset`。列内行距统一 6px。 |
+| 分组头 | 图标片去掉边框（`--ds-tile-deep`），分组标题统一 `--text-lg` / 600 / 主文字，条数统一为 18px 胶囊，路径统一 `--text-xs` + 次级文字。 |
+| 工具栏 | 技能、扩展、MCP 的搜索 / 选择 / 分段 / 开关继续复用公共原语。MCP 的私有筛选实现改为共享 `createSegmentedControl`，项目选择器改为 `.ds-select`；MCP 表单里的原生字段仍走原有 `.mcp-input` / `.mcp-select`。 |
+| 语义提示与空态 | 保留语义底色与 2px 左缘标记，去掉整圈边框；空态从虚线框改为瓦片。可操作控件（搜索、选择、开关）仍保留设计系统规定的低对比度边框，没有用 `border: none` 抹平，也没有降低文字对比度。 |
+| 按钮语义 | 「刷新插件市场」由 Primary 改为 Ghost（设计系统把刷新列在 Ghost 下），卡片安装 / 更新仍是 Primary；MCP 读取失败的「重试」由 Primary 改为默认 Secondary。 |
+| 技能加载状态 | 停用只写 settings，pi 重启前仍会加载。行徽标改为「已停用 · 重启前仍加载」（warning），详情写明「重启 pi 之后才会停止加载」；pi 已不再加载时仍是中性的「已停用」。 |
+| 旧错误残留 | 工作区换代时无条件作废旧清单与旧错误 / 诊断，即使上一次读取失败（`state.data === null`）也不再让上一个项目的错误留在页面上；「刷新」按新项目重新读取。 |
+| 扩展市场同步 | Pi 重启事件下，已挂载的每个页签都按新包清单重读；正开着的插件市场会更新已安装状态，保留搜索词与键盘焦点。新增回归覆盖重启与包清单变化。 |
+| MCP 市场窄窗溢出 | 700×600 的真实 Electron 渲染发现 MCP 市场卡片不收缩：网格项按 min-content 撑到 424px，超出 337px 的内容区（**既有缺陷**，不是本轮表面修改引入；修前截图可见右侧被裁）。 | `.mcp-market-card` 补 `min-width: 0`，卡片随网格收缩；修后表面滚动宽度 = 容器宽度（425 = 425），四组窗口无横向溢出。卡内信任来源仍按既有约定省略号截断，`title` 保留全文。 |
+
+### 复验
+
+真实渲染（离线夹具；Chromium DPR 1 与 Electron 44.4.3 DPR 1.5）：
+
+| 覆盖 | 结果 |
+| --- | --- |
+| 1320×820 / 700×600 × 深 / 浅，9 个页面 | 修改前 36 张、修改后 36 张；页面异常 0 |
+| 状态：Default / Hover / 键盘 Focus-visible / 指针 Focus / Pressed / Disabled / Loading / Empty / Error / Success / Selected | 修改后 19 张，含停用待重启（1320 与 700）、MCP 未信任禁用、市场选中分类与成功提示 |
+| 参照页 | 常规 / 快捷键 / 信息 × 深 / 浅共 6 张，修改前后 SHA-256 **逐字节相同（6/6）**，参照页面未被改动 |
+| 实际桌面窗口 | Electron 44.4.3，`force-device-scale-factor=1.5`；6 个页面 × 2 尺寸 × 2 主题 = 24 张；实测 `devicePixelRatio=1.5`，PNG 为物理像素（如 1320×820 → 1980×1230）；文档与 Work Surface 横向溢出 0，页面异常 0 |
+
+**表面度量（computed style，1320×820 深色，真实 Chromium）**
+
+| 元素 | 修改前 | 修改后 | 参照 |
+| --- | --- | --- | --- |
+| 技能行 `.skill-row` | 1px `--ds-border-default`，`rgb(40,40,40)`，12px | 0，`--ds-tile`（3.5%），14px | `.settings-row`：0，3.5%，14px |
+| MCP 行 `.mcp-server` | 同上 | 同上 | 同上 |
+| 扩展行 `.extensions-card` | 同上 | 同上 | 同上 |
+| 分组图标（三页） | 1px 边框，`rgb(33,33,33)` / 6% | 0，`--ds-tile-deep`（8%） | — |
+| MCP 分组标题 | 13.5px / 600 | 16px / 600 / 主文字 | 技能与扩展 16px |
+| 扩展分组标题颜色 | 70% 次级文字 | 主文字 | 技能与 MCP 主文字 |
+| MCP 项目选择器 | 32px，字段族 | 34px `.ds-select` | 设计系统通用 Select 34px |
+| 插件市场「刷新」 | 白底 Primary（`rgb(255,255,255)` / `rgb(24,24,24)`） | 透明 Ghost（70% 次级文字） | 设计系统把刷新列在 Ghost |
+| 技能 / MCP 搜索框 | 1px `--ds-border-input`，34px | 不变 | 公共搜索原语（控件边界保留） |
+
+Pressed 状态用 CDP 按住「新建」实测：`transform` 从 `none` 到 `matrix(0.980042, …)`，底色从 `rgb(255,255,255)` 到 `oklab(0.9051 …)`，松开后复原；鼠标点击不额外加焦点环。键盘 Focus-visible、指针 Focus、Disabled、Loading、Empty、Error、Success、Selected 均有截图。
+
+**测试**
+
+| 命令 | 结果 |
+| --- | --- |
+| `node tests/agent-capability-pages.cjs` | **55/55**（原 51；新增失败读取过期、停用待重启、市场重启同步、按钮语义 4 项） |
+| `node tests/mcp-management-ui.cjs` | **35/35**（范围筛选改为共享分段控件，项目选择器 `.ds-select`） |
+| `node tests/skills-ui.cjs` | **43/43** |
+| `npm run test:skills` | **1130 passed / 0 failed**（5 条环境 skip 未计入：2 个 POSIX 权限位、3 个无文件符号链接权限） |
+| `npm run test:extensions` | **310**（52 + 119 + 139） |
+| `npm run test:mcp` | **411**（44 + 24 + 72 + 19 + 14 + 35 + 203） |
+| `node tests/smoke.cjs` | **1346/1346** |
+| `npm run test:primitives` | primitives 全过；design-system 阶段 A **6** + 阶段 B **34 PASS**；settings acceptance **19**；font picker **49/49** |
+| 完整 PR CI | 提交推送后触发，结果出来前记「待验证」 |
+
+截图：[修改前](ui/evidence/agent-capabilities-surface/before/) · [修改后](ui/evidence/agent-capabilities-surface/after/) · [Electron DPR 1.5](ui/evidence/agent-capabilities-surface/electron/)；逐项度量与哈希见 [render.json](ui/evidence/agent-capabilities-surface/render.json)。完整 55 张修改后截图（36 页面 + 19 状态）与 manifest 留在本地 `.shots/capability-pages/`，仓库只保留 67 张代表图。
+
+构建与产物：`npm run build:app -- --rebuild` 成功（Electron 44.4.3，Windows x64，整包 335.3 MB，版本 0.34.0）；`dist-app/Pi GUI-win32-x64/resources/app/public` 与源码 `public/` **243/243 逐字节相同**（缺失 0、多余 0、内容不同 0）。没有改 `server/`，未重跑打包后端专项。本轮定向验证通过；完整 PR CI 结果出来前记「待验证」。
+
