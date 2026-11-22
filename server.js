@@ -63,6 +63,7 @@ import { createProviderAuth } from './server/provider-auth.js';
 import { createProviderConfigSync, runtimeSessionWitness, runtimeWitnessCurrent } from './server/provider-config-sync.js';
 import { createQuotaManager } from './server/quota.js';
 import { createRouter } from './server/router.js';
+import { startRemote } from './server/remote/index.mjs';
 import { createReviewCommentStore } from './server/review-comment-store.js';
 import { createReviewCommentAuthority } from './server/review-comment-authority.js';
 import { createReviewCommentRoutes } from './server/review-comment-routes.js';
@@ -1975,7 +1976,7 @@ worktrees.validateCurrent().then(() => rpc.start(), () => { runtime.setCurrentCw
  * 不要依赖 Node 的默认行为，也不要写 '0.0.0.0' —— 这个服务能驱动 pi 执行
  * 任意命令，一旦暴露到局域网就是一台无认证的远程 shell。
  * 日志里也只用 127.0.0.1，不给任何「可以从别的机器访问」的暗示。 */
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, '127.0.0.1', async () => {
   const currentCwd = runtime.getCurrentCwd();
   console.log('');
   console.log('  Pi GUI 已启动');
@@ -1983,6 +1984,24 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`  → 数据目录: ${DATA_DIR}`);
   console.log(`  → 工作目录: ${currentCwd || '（未选择 —— 在界面里「添加文件夹」）'}`);
   if (currentCwd) console.log(`  → pi 子进程: ${PI_BIN} ${rpc.buildArgs().join(' ')}`);
+  /* 移动端 remote/v1 网关——独立的已签名 HTTP 表面，绑定在自己的端口上，
+   * 绝不拓宽上面那个 127.0.0.1 主服务。只在 PI_GUI_REMOTE_PORT 设置时启动
+   * （LAN/Tailscale 需要时用户显式打开；默认 loopback 供开发）。 */
+  if (process.env.PI_GUI_REMOTE_PORT) {
+    try {
+      const remotePort = Number(process.env.PI_GUI_REMOTE_PORT) || 7789;
+      const remoteHost = process.env.PI_GUI_REMOTE_HOST || '127.0.0.1';
+      const remote = startRemote({
+        dataDir: DATA_DIR, runtime, runtimeRegistry, projects, ordinarySessions,
+        host: remoteHost, port: remotePort, log: m => console.log(`  → remote: ${m}`),
+      });
+      const addr = await remote.listen();
+      console.log(`  → remote/v1: ${remoteHost}:${addr.port}  (fingerprint ${remote.serviceFingerprint.slice(0, 16)}…)`);
+      process.env.PI_GUI_REMOTE_FINGERPRINT = remote.serviceFingerprint;
+    } catch (e) {
+      console.log(`  ! remote/v1 启动失败: ${e?.message ?? e}`);
+    }
+  }
   if (currentCwd) {
     // 配置读不出来不是致命问题（会退回默认值），但启动日志里得看得见，
     // 否则用户只会觉得「我设的模型怎么没生效」。
