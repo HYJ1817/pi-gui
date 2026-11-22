@@ -44,6 +44,7 @@ Pi 1.6.0 的帮助及本机包源码 `dist/package-manager-cli.js`、`dist/core/
 | `node tests/agent-capability-pages.cjs` | 46/46 |
 | `node tests/server-security.cjs` | 44/44 |
 | `node tests/ui-ia.cjs` | 32/32 |
+| `node tests/gui-browser-stop.cjs`、`node tests/stop-barrier.cjs` | 13/13、17/17 |
 | `node tests/smoke.cjs` | 1345/1345 |
 | `npm run test:extensions:electron` | 21/21，实际打开展示页面，20 张截图 |
 | 真实 Pi 1.6.0 | 本地 npm Registry 夹具，安装 1.0.0 → 更新 1.1.0 → 卸载。两次 tarball 读取。卸载前 RPC 发现命令，卸载后不再发现。项目配置字节一致，用户主题保留 |
@@ -52,6 +53,8 @@ Pi 1.6.0 的帮助及本机包源码 `dist/package-manager-cli.js`、`dist/core/
 | `npm run test:app` | 打包后端 27/27 |
 | `npm run test:exe` | SEA 后端 50/50 |
 | 打包市场端点 | 离线目录 4 项，详情无联网同意，空包清单。未确认的安装返回 `confirm-required`，未创建配置。[端点实测](ui/extensions-market-phase2b-evidence/packaged-api.json) |
+
+PR 首轮 [CI 44980047221，attempt 1](https://github.com/HYJ1817/pi-gui/actions/runs/44980047221/job/137078464192) 的故障注入组在第 5 项提前退出。两份 Stop VM 夹具直接执行 Router 装配片段，却未声明新增的扩展端点依赖。本地复现两份夹具的 `ReferenceError`，补齐占位后原断言全部通过。完整证明由当前 PR 的 CI 提供。
 
 视觉证据来自 Electron 的真实应用源页面及离线夹具。Electron 验收进程使用 `--no-sandbox`，正常沙箱启动、真实在线第三方包安装和已安装 Windows GUI 交互未验证。
 
@@ -73,6 +76,6 @@ Pi 1.6.0 的帮助及本机包源码 `dist/package-manager-cli.js`、`dist/core/
 
 ## 接线、集成和回滚
 
-- 生产共享文件为 `server.js`、`server/router.js`、`public/api.js`、`public/app.js`、`public/status-copy.js`、`public/ui/capability-setup.js` 和 `package.json`。测试共享接线为 `tests/agent-capability-pages.cjs`、`tests/smoke.cjs`、`tests/shortcut-electron.cjs` 与 `tests/visual-harness.cjs`。
+- 生产共享文件为 `server.js`、`server/router.js`、`public/api.js`、`public/app.js`、`public/status-copy.js`、`public/ui/capability-setup.js` 和 `package.json`。测试共享接线为 `tests/agent-capability-pages.cjs`、`tests/smoke.cjs`、`tests/shortcut-electron.cjs`、`tests/visual-harness.cjs`、`tests/gui-browser-stop.cjs` 与 `tests/stop-barrier.cjs`。
 - 与 2A 集成时优先核对 `server.js`、`server/router.js`、`public/api.js`、`package.json` 的邻近接线，以及能力页联合测试，保留两侧各自的入口和测试链。此次基于主干单独验收，尚无 2A 集成实测。
 - 如需回退，按相反顺序 revert 验收材料、前端页面与测试接线、后端包与市场模块，再用 `npm run build:app -- --rebuild` 重建。Pi 已执行的包操作由 Pi 配置和包管理命令管理，代码回退不会改变它们。
