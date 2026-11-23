@@ -31,6 +31,20 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   });
   const w = dom.window;
   const d = w.document;
+  /* document 级监听账本：MCP 页的 Pi 就绪监听必须在关闭时摘掉。 */
+  const docListeners = new Map();
+  const addDocListener = d.addEventListener.bind(d);
+  const removeDocListener = d.removeEventListener.bind(d);
+  d.addEventListener = (type, fn, options) => {
+    if (!docListeners.has(type)) docListeners.set(type, new Set());
+    docListeners.get(type).add(fn);
+    return addDocListener(type, fn, options);
+  };
+  d.removeEventListener = (type, fn, options) => {
+    docListeners.get(type)?.delete(fn);
+    return removeDocListener(type, fn, options);
+  };
+  const listenerCount = (type) => docListeners.get(type)?.size || 0;
   const $ = (id) => d.getElementById(id);
   w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   w.ResizeObserver = class { observe() {} disconnect() {} };
@@ -56,6 +70,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     },
   };
   const calls = [];
+  let projectItems = [{ name: 'Workspace', path: 'C:\\workspace' }];
   let serversFail = false;
   let serversGate = null;
   let forceArgsProtected = false;
@@ -173,7 +188,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     const pathOnly = target.split('?')[0];
 
     if (target === '/api/status') return ok({ ok: true, cwd: 'C:\\workspace', hasProject: true });
-    if (target === '/api/projects') return ok({ ok: true, active: 'C:\\workspace', items: [{ name: 'Workspace', path: 'C:\\workspace' }] });
+    if (target === '/api/projects') return ok({ ok: true, active: 'C:\\workspace', items: projectItems });
     if (target === '/api/mcp/servers' && method === 'GET') {
       if (serversGate) await serversGate;
       return ok(serversFail ? { ok: false, error: '读取 MCP 摘要失败（fixture）' } : summary);
@@ -332,6 +347,20 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(d.querySelector('.ext-tab[aria-selected="true"], .extensions-tab[aria-selected="true"]'), null);
   });
 
+  await check('重开 / 关闭 MCP 页不会累积 Pi 就绪监听', async () => {
+    const ready = 'pi-gui:capability-bridge-ready';
+    const openCount = listenerCount(ready);
+    $('navMcp').click();
+    await tick(80);
+    assert.equal(listenerCount(ready), openCount, 'reopening replaces the old page listener');
+    $('settingsReturn').click();
+    await tick(80);
+    assert.equal(listenerCount(ready), openCount - 1, 'closing the page removes its listener');
+    $('navMcp').click();
+    await tick(80);
+    assert.equal(listenerCount(ready), openCount, 'reopening restores exactly one');
+  });
+
   await check('全局 / 项目分组、路径、状态与操作都来自真实摘要', () => {
     assert.equal(cards().length, 3);
     assert.ok(page().textContent.includes('~/.pi/agent/mcp.json'));
@@ -351,9 +380,13 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     const scope = d.querySelector('.mcp-toolbar .ds-segmented');
     assert.ok(scope, '范围筛选是共享分段控件');
     assert.equal(scope.getAttribute('role'), 'radiogroup');
-    const projectSelect = d.querySelector('.mcp-toolbar select');
-    assert.ok(projectSelect.classList.contains('ds-select'), '项目选择器使用共享的 .ds-select');
-    assert.equal(projectSelect.classList.contains('ds-input'), false, 'no second field system on the same control');
+    const projectPicker = d.querySelector('.mcp-toolbar .project-picker');
+    assert.ok(projectPicker, '项目切换使用共享 project picker，而不是原生 select');
+    assert.equal(d.querySelector('.mcp-toolbar select'), null);
+    const projectTrigger = projectPicker.querySelector('.project-picker-trigger');
+    assert.equal(projectTrigger.getAttribute('aria-label'), '切换当前项目');
+    assert.equal(projectTrigger.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(projectTrigger.textContent.trim(), 'Workspace');
     const counts = [...scope.querySelectorAll('.ds-segment-count')].map((n) => n.textContent);
     assert.deepEqual(counts, ['3', '2', '1']);
     assert.equal(scope.querySelector('[data-value="all"]').getAttribute('aria-checked'), 'true');
@@ -380,6 +413,130 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     d.querySelector('#mcpServerSearch').dispatchEvent(new w.Event('input', { bubbles: true }));
     await tick(20);
     assert.equal(cards().length, 3);
+  });
+
+  await check('项目选择器：主题 listbox、键盘与选中状态', async () => {
+    projectItems = [
+      { name: 'Workspace', path: 'C:\\workspace' },
+      { name: 'Second', path: 'C:\\second' },
+    ];
+    try {
+      $('navMcp').click();
+      await tick();
+      const trigger = () => d.querySelector('.mcp-toolbar .project-picker-trigger');
+      const options = () => [...d.querySelectorAll('.ds-picker-menu [role="option"]')];
+      const key = (name) => d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', {
+        key: name, bubbles: true, cancelable: true,
+      }));
+      assert.ok(trigger(), 'the toolbar has the shared project picker');
+      /* jsdom has no layout: the anchored layer needs a real anchor rect. */
+      trigger().getBoundingClientRect = () => ({
+        x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+      });
+      trigger().click();
+      await tick();
+      const menu = d.querySelector('.pi-anchored-menu.ds-picker-menu');
+      assert.ok(menu, 'the options are a themed listbox, not a native select popup');
+      assert.equal(menu.parentElement, d.body, 'the menu is portaled above the settings card');
+      assert.equal(menu.getAttribute('role'), 'listbox');
+      assert.equal(trigger().getAttribute('aria-expanded'), 'true');
+      assert.deepEqual(options().map((node) => node.textContent.trim()), ['Workspace', 'Second']);
+      assert.equal(d.activeElement?.textContent.trim(), 'Workspace', 'opening starts on the current project');
+      key('ArrowDown');
+      assert.equal(d.activeElement?.textContent.trim(), 'Second');
+      key('Home');
+      assert.equal(d.activeElement?.textContent.trim(), 'Workspace');
+      key('End');
+      assert.equal(d.activeElement?.textContent.trim(), 'Second');
+      key('Escape');
+      await tick();
+      assert.equal(d.querySelector('.pi-anchored-menu'), null);
+      assert.equal(d.activeElement, trigger(), 'Escape returns focus to the trigger');
+      trigger().click();
+      await tick();
+      key('Tab');
+      await tick();
+      assert.equal(d.querySelector('.pi-anchored-menu'), null);
+      assert.equal(d.activeElement, trigger(), 'Tab closes without leaking focus');
+
+      const switches = calls.filter((call) => call.target === '/api/projects/activate').length;
+      trigger().click();
+      await tick();
+      options().find((node) => node.textContent.trim() === 'Second').click();
+      await tick(40);
+      const activation = calls.filter((call) => call.target === '/api/projects/activate');
+      assert.equal(activation.length, switches + 1, '选择项目仍走既有的 activateProject');
+      assert.equal(activation.at(-1).body?.path, 'C:\\second');
+    } finally {
+      projectItems = [{ name: 'Workspace', path: 'C:\\workspace' }];
+      $('navMcp').click();
+      await tick(80);
+    }
+  });
+
+  await check('项目选择器：没有项目列表时显示当前项目且不可打开', async () => {
+    projectItems = [];
+    try {
+      $('navMcp').click();
+      await tick();
+      const trigger = d.querySelector('.mcp-toolbar .project-picker-trigger');
+      assert.ok(trigger);
+      assert.equal(trigger.disabled, true, 'a missing project list cannot pretend to switch');
+      assert.match(trigger.textContent.trim(), /workspace|Workspace|未选择项目/);
+      trigger.click();
+      await tick();
+      assert.equal(d.querySelector('.pi-anchored-menu'), null);
+    } finally {
+      projectItems = [{ name: 'Workspace', path: 'C:\\workspace' }];
+      $('navMcp').click();
+      await tick(80);
+    }
+  });
+
+  await check('项目选择器：页面重绘会关闭旧菜单并归还焦点', async () => {
+    projectItems = [
+      { name: 'Workspace', path: 'C:\\workspace' },
+      { name: 'Second', path: 'C:\\second' },
+    ];
+    try {
+      $('navMcp').click();
+      await tick();
+      const open = () => {
+        const trigger = d.querySelector('.mcp-toolbar .project-picker-trigger');
+        trigger.getBoundingClientRect = () => ({
+          x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+        });
+        trigger.click();
+        return trigger;
+      };
+      const first = open();
+      await tick();
+      assert.ok(d.querySelector('.pi-anchored-menu.ds-picker-menu'));
+      /* A background Pi restart re-renders the page while focus is inside the
+       * portaled menu: the old menu must go and focus returns to the new trigger. */
+      d.dispatchEvent(new w.CustomEvent('pi-gui:capability-bridge-ready'));
+      await tick(40);
+      assert.equal(d.querySelector('.pi-anchored-menu'), null, 'the old portaled menu does not outlive its trigger');
+      const next = d.querySelector('.mcp-toolbar .project-picker-trigger');
+      assert.notEqual(next, first, 'the toolbar was rebuilt');
+      assert.equal(d.activeElement, next, 'focus returns to the project trigger instead of body');
+
+      /* If the user is typing in the search box, that focus must win over the
+       * rebuild (the menu closes, search keeps the caret). */
+      open();
+      await tick();
+      const input = d.querySelector('#mcpServerSearch');
+      input.focus();
+      input.value = 'mem';
+      input.dispatchEvent(new w.Event('input', { bubbles: true }));
+      await tick();
+      assert.equal(d.querySelector('.pi-anchored-menu'), null);
+      assert.equal(d.activeElement, d.querySelector('#mcpServerSearch'), 'search focus is preserved');
+    } finally {
+      projectItems = [{ name: 'Workspace', path: 'C:\\workspace' }];
+      $('navMcp').click();
+      await tick(80);
+    }
   });
 
   await check('范围筛选：radiogroup 键盘语义、焦点与读屏状态', async () => {
@@ -482,30 +639,49 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     }
   });
 
-  await check('展开报告先于新运行的服务器摘要返回时，原生状态保持未知，不混用旧证据', async () => {
-    const previous = summary.native;
-    const report = page().querySelector('.mcp-report');
-    const nativeText = () => report.querySelector('.mcp-report-native')?.textContent || '';
-    let release;
+  await check('运行时刷新失败只在页顶说一次，行内标未验证', async () => {
+    const previous = summary.runtime;
     try {
-      report.open = true;
+      summary.runtime = { ok: false, error: 'fixture runtime down' };
+      $('navMcp').click();
       await tick();
-      assert.match(nativeText(), /原生 MCP 生效中/);
-      serversGate = new Promise((resolve) => { release = resolve; });
-      summary.native = { state: 'replaced', reason: '来自新一轮的摘要' };
-      const writes = calls.filter((c) => c.method === 'POST').length;
-      d.dispatchEvent(new w.CustomEvent('pi-gui:capability-bridge-ready'));
-      await tick(); // 报告已返回；/servers 仍由测试闸门扣住。
-      assert.match(nativeText(), /未知/);
-      assert.doesNotMatch(nativeText(), /生效中|被扩展接管/);
-      release();
-      await tick();
-      assert.match(nativeText(), /内置 MCP 被扩展接管/);
-      assert.doesNotMatch(nativeText(), /未知|生效中/);
-      assert.equal(calls.filter((c) => c.method === 'POST').length, writes, '就绪更新不能发起连接或写配置');
+      const banners = [...page().querySelectorAll('.mcp-banner.is-warn')].map((node) => node.textContent);
+      assert.equal(banners.filter((text) => text.includes('运行时状态刷新失败')).length, 1, 'the reason appears once');
+      const pills = [...page().querySelectorAll('.mcp-status-pill')].map((node) => node.textContent.trim());
+      assert.ok(pills.length && pills.every((text) => text === '未验证'), pills.join(','));
+      for (const row of page().querySelectorAll('.mcp-server')) {
+        assert.doesNotMatch(row.textContent, /刷新失败/, 'the per-row status does not repeat the page-level failure');
+      }
     } finally {
-      release?.();
-      serversGate = null;
+      summary.runtime = previous;
+      $('navMcp').click();
+      await tick();
+    }
+  });
+
+  await check('原生 MCP 被扩展接管：只在页头说一次，不复制到每行，也不再请求能力报告', async () => {
+    const previous = summary.native;
+    try {
+      summary.native = { state: 'replaced', reason: '扩展注册了 /mcp' };
+      $('navMcp').click();
+      await tick();
+      assert.equal(page().querySelector('.mcp-report'), null, '页尾能力报告已移除');
+      assert.equal(calls.filter((call) => call.target === '/api/mcp').length, 0, '不再请求 /api/mcp');
+      const statusLines = page().querySelectorAll('.mcp-page-status');
+      assert.equal(statusLines.length, 1, '只保留一条运行状态');
+      assert.match(statusLines[0].textContent, /内置 MCP 由扩展接管/);
+      const banners = [...page().querySelectorAll('.mcp-banner')].map((node) => node.textContent);
+      assert.ok(!banners.some((text) => text.includes('内置 MCP')), '不再用黄色横幅重复同一条状态');
+      for (const row of page().querySelectorAll('.mcp-server')) {
+        assert.doesNotMatch(row.textContent, /内置 MCP 被扩展接管/);
+        assert.doesNotMatch(row.querySelector('.mcp-status-pill')?.textContent || '', /接管/);
+      }
+      assert.equal(d.querySelector('[data-name="memory"] .mcp-status-pill').textContent.trim(), '已连接');
+      assert.equal(d.querySelector('[data-name="proj"] .mcp-status-pill').textContent.trim(), '未加载');
+      const memoryMeta = d.querySelector('[data-name="memory"] .mcp-server-meta').textContent;
+      assert.match(memoryMeta, /3 个工具/);
+      assert.doesNotMatch(memoryMeta, /已连接/, 'the status label is not repeated in the meta line');
+    } finally {
       summary.native = previous;
       $('navMcp').click();
       await tick();
@@ -1407,29 +1583,6 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(installScope.querySelector('option[value="project"]').disabled, true);
     assert.ok(install.textContent.includes('当前项目未信任'));
     assert.ok(install.textContent.includes('已回退到全局'));
-  });
-
-  await check('页尾能力报告：摘要读取失败时说「读不到原生 MCP 摘要」，不沿用上一次的原生结论', async () => {
-    w.closeModal();
-    summary.trust = { trusted: true, requiresTrust: false };
-    $('navMcp').click();
-    await tick(160);
-    const report = page().querySelector('details.mcp-report');
-    report.open = true;
-    await tick(80);
-    const native = () => page().querySelector('details.mcp-report .mcp-report-native')?.textContent || '';
-    assert.match(native(), /原生 MCP 生效中/);
-    serversFail = true;
-    d.querySelector('[data-focus-key="refresh"]').click();
-    await tick(160);
-    assert.ok(page().querySelector('.mcp-empty.is-error'), '管理页显示读取失败');
-    assert.equal(page().querySelector('details.mcp-report'), report, '报告仍挂在页尾，展开状态保留');
-    assert.match(native(), /读不到原生 MCP 摘要/);
-    assert.doesNotMatch(native(), /生效中/, '读取失败不能沿用上一次的「生效中」');
-    serversFail = false;
-    clickText(page(), 'button', '重试');
-    await tick(160);
-    assert.match(native(), /原生 MCP 生效中/, '重试读到后恢复');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

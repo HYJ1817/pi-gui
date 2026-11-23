@@ -79,7 +79,15 @@ if (!process.versions.electron) {
         if (level >= 3 && !message.includes('Electron Security Warning')) errors.push(message);
       });
       window.showInactive();
+      window.webContents.debugger.attach('1.3');
       const js = (code) => window.webContents.executeJavaScript(code);
+      const key = async (keyName, code, windowsVirtualKeyCode) => {
+        for (const type of ['keyDown', 'keyUp']) {
+          await window.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
+            type, key: keyName, code, windowsVirtualKeyCode,
+          });
+        }
+      };
       const click = (selector) => js(`document.querySelector(${JSON.stringify(selector)}).click()`)
         .catch((error) => { throw new Error('Unable to click ' + selector, { cause: error }); });
       const clickText = (selector, text) => js(`(() => {
@@ -157,11 +165,11 @@ if (!process.versions.electron) {
       }
 
       const pages = [
-        { name: 'skills-list', open: openSkills },
+        { name: 'skills-list', open: openSkills, menu: '.skills-project .project-picker-trigger', fontScale: true },
         { name: 'skills-market', open: async () => { await openSkills(); await clickText('.skills-actions-bar button', '市场'); await wait(`!!document.querySelector('.skills-market')`, 'skills market'); await sleep(450); } },
-        { name: 'extensions-installed', open: () => openExtensions('installed') },
+        { name: 'extensions-installed', open: () => openExtensions('installed'), fontScale: true },
         { name: 'extensions-market', open: () => openExtensions('market') },
-        { name: 'mcp-list', open: openMcp },
+        { name: 'mcp-list', open: openMcp, menu: '.mcp-project-picker .project-picker-trigger', fontScale: true },
         { name: 'mcp-market', open: async () => { await openMcp(); await clickText('.mcp-page-actions button', '市场'); await wait(`!!document.querySelector('.mcp-market-page')`, 'mcp market'); await sleep(450); } },
       ];
 
@@ -183,6 +191,26 @@ if (!process.versions.electron) {
             await measure(`${page.name}-${dims.width}x${dims.height}-${theme}`);
             await shot(`${page.name}-${dims.width}x${dims.height}-${theme}`, dims.width, dims.height);
             console.log('shot', page.name, dims.width, theme);
+            /* Project switchers: real anchored listbox, opened by pointer and
+             * moved with a real ArrowDown key, in both themes and window sizes. */
+            if (page.menu) {
+              await click(page.menu);
+              await wait(`!!document.querySelector('.pi-anchored-menu.ds-picker-menu [role="option"]')`, page.name + ' project menu');
+              await key('ArrowDown', 'ArrowDown', 40);
+              await shot(`${page.name}-project-menu-${dims.width}x${dims.height}-${theme}`, dims.width, dims.height);
+              await key('Escape', 'Escape', 27);
+              await wait(`!document.querySelector('.pi-anchored-menu')`, page.name + ' project menu closed');
+            }
+            /* Font scaling is the app's --font-scale, not window zoom. */
+            if (page.fontScale && !limit) {
+              for (const font of [125, 150]) {
+                await js(`document.documentElement.style.setProperty('--font-scale', '${(font / 100).toFixed(2)}')`);
+                await sleep(220);
+                await measure(`${page.name}-font-${font}-${dims.width}x${dims.height}-${theme}`);
+                await shot(`${page.name}-font-${font}-${dims.width}x${dims.height}-${theme}`, dims.width, dims.height);
+              }
+              await js(`document.documentElement.style.removeProperty('--font-scale')`);
+            }
           }
         }
       }

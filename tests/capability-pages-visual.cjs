@@ -305,6 +305,10 @@ async function main() {
     }
     throw new Error('键盘 Tab 没有到达：' + selector);
   }
+  async function pressKey(key, code, windowsVirtualKeyCode) {
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode });
+  }
   async function openSkillsMarket(theme) {
     await openSkills(theme);
     await clickText('.skills-actions-bar button', '市场');
@@ -360,11 +364,19 @@ async function main() {
   await record('skills-row-default', '.skill-row', ['border-top-width', 'border-top-color', 'background-color', 'border-radius']);
   await record('skills-group-icon-default', '.skills-group-glyph', ['border-top-width', 'border-top-color', 'background-color']);
   await record('skills-search-default', '.skills-search', ['border-top-width', 'border-top-color', 'background-color', 'height']);
-  await record('skills-project-select-default', '.skills-project-select', ['border-top-width', 'border-top-color', 'background-color', 'height']);
+  await record('skills-project-picker-default', '.skills-project .project-picker-trigger', ['border-top-width', 'border-top-color', 'background-color', 'height']);
   await record('skills-title', '.skills-title', ['font-size', 'font-weight']);
   await record('skills-group-title', '.skills-group-title', ['font-size', 'font-weight', 'color']);
   await hover('.skill-row');
   await shot('state-skills-row-hover-1320x820-dark');
+
+  await openSkills('dark');
+  await click('.skills-project .project-picker-trigger');
+  await waitFor(`!!document.querySelector('.pi-anchored-menu.ds-picker-menu [role="option"]')`, '技能项目菜单');
+  await pressKey('ArrowDown', 'ArrowDown', 40);
+  await shot('state-skills-project-menu-1320x820-dark');
+  await pressKey('Escape', 'Escape', 27);
+  await sleep(160);
 
   await reload('dark');
   await openSettings('dark');
@@ -432,10 +444,17 @@ async function main() {
   await record('mcp-row-default', '.mcp-server', ['border-top-width', 'border-top-color', 'background-color', 'border-radius']);
   await record('mcp-group-icon-default', '.mcp-group-icon', ['border-top-width', 'border-top-color', 'background-color']);
   await record('mcp-search-default', '.mcp-search', ['border-top-width', 'border-top-color', 'background-color', 'height']);
-  await record('mcp-project-select-default', '.mcp-project-select', ['border-top-width', 'border-top-color', 'background-color', 'height']);
+  await record('mcp-project-picker-default', '.mcp-project-picker .project-picker-trigger', ['border-top-width', 'border-top-color', 'background-color', 'height']);
   await record('mcp-group-title', '.mcp-group-title h4', ['font-size', 'font-weight', 'color']);
   await hover('.mcp-server');
   await shot('state-mcp-row-hover-1320x820-dark');
+  await openMcp('dark');
+  await click('.mcp-project-picker .project-picker-trigger');
+  await waitFor(`!!document.querySelector('.pi-anchored-menu.ds-picker-menu [role="option"]')`, 'MCP 项目菜单');
+  await pressKey('ArrowDown', 'ArrowDown', 40);
+  await shot('state-mcp-project-menu-1320x820-dark');
+  await pressKey('Escape', 'Escape', 27);
+  await sleep(160);
   await openMcp('dark', { patch: { trust: { trusted: false, requiresTrust: true } } });
   await shot('state-mcp-disabled-1320x820-dark');
 

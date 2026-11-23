@@ -183,8 +183,8 @@ if (!process.versions.electron) {
     async function openMcpPage() {
       await openSettingsMenu();
       await read(`document.querySelector('#navMcp').click()`);
-      /* 读取中只画页头与加载态；读完才挂服务器分组与页尾能力报告。 */
-      await waitFor(`!!document.querySelector('.mcp-page .mcp-report')`, 'mcp page');
+      /* 读取中只画页头与加载态；读完才挂服务器分组与共享项目选择器。 */
+      await waitFor(`!!document.querySelector('.mcp-page .mcp-server') && !!document.querySelector('.mcp-toolbar .project-picker-trigger')`, 'mcp page');
     }
     async function closeSettings() {
       await read(`document.querySelector('#navHome').click()`);
@@ -558,9 +558,9 @@ if (!process.versions.electron) {
       await waitFor(`${rowExpr('work-terminal')}.dataset.state==='disabled'`, 'light disabled row');
       await shot('1320-light-disabled');
 
-      /* P36：已知能力设置回到 Extensions 页；展开一项，截到真实的安装 / 观察布局。 */
+      /* P36：扩展页只保留 Registry；已知能力的 setup 只在对应已安装包的详情里出现。 */
       await openExtensionsPage();
-      await waitFor(`document.querySelectorAll('.ext-known-item .cap-setup').length>=4`, 'known capability setups');
+      await waitFor(`document.querySelectorAll('.extensions-card').length>=1`, 'extensions cards');
       const extLayout = await read(`(()=>{
         const box=(s)=>{const n=document.querySelector(s);if(!n)return null;const r=n.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right};};
         const visible=(n)=>n.getClientRects().length>0&&getComputedStyle(n).visibility!=='hidden';
@@ -594,11 +594,11 @@ if (!process.versions.electron) {
       })()`);
       check(extDetails.expanded === 'true' && extDetails.detailsInside && extDetails.nextRowGap >= 0, 'opening a row keeps its facts inside it and the next row below the expanded details', extDetails);
       await shot('1320-light-extensions-details');
-      await read(`document.querySelector('.extensions-group[data-group="loaded"] .extensions-card-toggle').click();document.querySelector('.ext-known-item>summary').click();document.querySelector('.ext-known').scrollIntoView({block:'start'})`);
+      await read(`document.querySelector('.extensions-group[data-group="loaded"] .extensions-card-toggle').click();document.querySelector('#workSurface > .extensions-scroll').scrollTop=document.querySelector('#workSurface > .extensions-scroll').scrollHeight`);
       await sleep(200);
-      const extScroll = await read(`(()=>{const surface=document.querySelector('#workSurface'),scroller=document.querySelector('#workSurface > .extensions-scroll');return {surfaceOverflow:getComputedStyle(surface).overflowY,surfaceScrollTop:surface.scrollTop,scrollerOverflow:scroller?getComputedStyle(scroller).overflowY:null,scrollerScrollTop:scroller?Math.round(scroller.scrollTop):null,knownVisible:(()=>{if(!scroller)return false;const k=document.querySelector('.ext-known').getBoundingClientRect(),r=scroller.getBoundingClientRect();return k.top>=r.top-1&&k.top<r.bottom;})()};})()`);
-      check(extScroll.surfaceOverflow === 'hidden' && extScroll.surfaceScrollTop === 0 && extScroll.scrollerOverflow === 'auto' && extScroll.scrollerScrollTop > 0 && extScroll.knownVisible, 'extensions page scrolls inside .extensions-scroll; the Work Surface itself keeps overflow hidden', extScroll);
-      await shot('1320-light-extensions-known');
+      const extScroll = await read(`(()=>{const surface=document.querySelector('#workSurface'),scroller=document.querySelector('#workSurface > .extensions-scroll');return {surfaceOverflow:getComputedStyle(surface).overflowY,surfaceScrollTop:surface.scrollTop,scrollerOverflow:scroller?getComputedStyle(scroller).overflowY:null,scrollerScrollTop:scroller?Math.round(scroller.scrollTop):null,knownSection:!!document.querySelector('.ext-known')};})()`);
+      check(extScroll.surfaceOverflow === 'hidden' && extScroll.surfaceScrollTop === 0 && extScroll.scrollerOverflow === 'auto' && extScroll.knownSection === false, 'extensions page keeps scrolling inside .extensions-scroll; the Work Surface stays hidden and the old known-capability section is gone', extScroll);
+      await shot('1320-light-extensions-scrolled');
       await read(`document.querySelector('#workSurface > .extensions-scroll').scrollTop=0`);
       await read(`document.querySelector('#extensionsTabMarket').click()`);
       await waitFor(`!!document.querySelector('.extensions-market-card')`, 'market cards');
@@ -650,13 +650,15 @@ if (!process.versions.electron) {
       check(await read(`!!document.querySelector('.extensions-card-details:not([hidden]) .ext-row')`), 'after failed skill import, installed extension details still open');
       await openMcpPage();
       check(await read(`!!document.querySelector('.mcp-page [data-focus-key="add:user"]') && !document.querySelector('.skills-import-status')`), 'MCP management remains available without a stale skill error');
-      /* 浏览器在 open 变化后自己派发 toggle；不再手动补发，免得重复请求。 */
-      await read(`document.querySelector('.mcp-report').open=true`);
-      await waitFor(`(document.querySelector('.mcp-report')?.textContent||'').includes('带 MCP 能力')`, 'mcp report expanded');
-      /* 报告在页尾，滚到视口里再截，截图才能证明展开后的排版。 */
-      await read(`document.querySelector('.mcp-report').scrollIntoView({block:'start'})`);
+      /* 项目切换是真实主题 listbox；亮色下截一次打开态，再按 Escape 收回焦点。 */
+      await read(`document.querySelector('.mcp-project-picker .project-picker-trigger').click()`);
+      await waitFor(`!!document.querySelector('.pi-anchored-menu.ds-picker-menu [role="option"]')`, 'mcp project menu');
+      await key('ArrowDown', 'ArrowDown', 40);
       await sleep(150);
-      await shot('1320-light-mcp-report');
+      await shot('1320-light-mcp-project-menu');
+      await key('Escape', 'Escape', 27);
+      await waitFor(`!document.querySelector('.pi-anchored-menu')`, 'mcp project menu closed');
+      check(await read(`document.querySelector('.mcp-page .mcp-report')===null`), 'MCP page no longer carries a capability report panel');
       await openShortcuts();
 
       /* ---------- 700x600 narrow layout ---------- */

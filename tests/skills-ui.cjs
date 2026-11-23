@@ -828,9 +828,16 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
   };
   const listFor = (project) => 'GET /api/skills?project=' + project;
   function switchView(page, project) {
-    const select = fieldValue(page.card, '查看哪个项目的技能');
-    select.value = project;
-    select.dispatchEvent(new A.w.Event('change', { bubbles: true }));
+    const trigger = page.card.querySelector('.skills-project .project-picker-trigger');
+    /* jsdom has no layout: the anchored layer needs a plausible anchor rect. */
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    trigger.click();
+    const option = [...A.d.querySelectorAll('.ds-picker-menu .ds-picker-option')]
+      .find((node) => node.dataset.value === project);
+    assert.ok(option, 'missing project option ' + project);
+    option.click();
   }
   async function projectPage() {
     A.answer('GET /api/skills', projectAList);

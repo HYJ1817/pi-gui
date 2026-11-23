@@ -3975,15 +3975,9 @@ staticCheck();
     check('扩展页：默认打开「已安装」', () =>
       card.querySelector('#extensionsTabInstalled')?.getAttribute('aria-selected') === 'true'
       && !card.querySelector('#extensionsTabAll'));
-    check('P36 已知能力设置仍在「已安装」页可达', () => {
-      const labels = [...card.querySelectorAll('.ext-known-item > summary')].map((s) => s.textContent);
-      const setups = card.querySelectorAll('.ext-known-item .cap-setup').length;
-      return (card.querySelector('.ext-known')
-        && labels.join(',') === 'Web Access,Subagents,Pi Memory,Browser Use,Approval / Permission'
-        && setups >= 4
-        && Boolean(card.querySelector('.ext-known-item .cap-install')))
-        || JSON.stringify({ labels, setups });
-    });
+    check('扩展页：不再有独立的「已知能力」说明区', () =>
+      !card.querySelector('.ext-known') && !card.querySelector('#extensionsKnownTitle')
+      && !/已知能力/.test(card.textContent));
     check('扩展页：「已安装」页签的数字来自 Registry（2 个）', () =>
       card.querySelector('#extensionsTabInstalled .extensions-tab-count')?.textContent === '2'
       || card.querySelector('#extensionsTabInstalled')?.textContent);
@@ -4226,7 +4220,8 @@ staticCheck();
       return (/stdio/.test(fs) && /Local filesystem access/.test(fs) && /HTTP/.test(mcpRow(mcpPage, 'docs').textContent)) || fs.slice(0, 200);
     });
     check('MCP 配置页：运行时状态（connected / needs-auth + 工具数）', () =>
-      (/已连接 · 2 个工具/.test(mcpRow(mcpPage, 'fs').textContent) && /需要授权/.test(mcpRow(mcpPage, 'docs').textContent))
+      (/已连接/.test(mcpRow(mcpPage, 'fs').textContent) && /2 个工具/.test(mcpRow(mcpPage, 'fs').textContent)
+        && /需要授权/.test(mcpRow(mcpPage, 'docs').textContent))
       || mcpPage.textContent.slice(0, 400));
     check('MCP 配置页：「已连接」只出现在有运行时证据的那条', () =>
       !/已连接/.test(mcpRow(mcpPage, 'docs').textContent) || mcpRow(mcpPage, 'docs').textContent);
@@ -4251,50 +4246,21 @@ staticCheck();
       if (closeDetail) closeDetail.click();
       await new Promise((r) => setTimeout(r, 30));
     }
-    check('MCP 能力报告：并入 MCP 配置页页尾的折叠区，展开前不读取', () => {
-      const inner = mcpPage.querySelector('.mcp-page-inner');
-      const last = inner && inner.lastElementChild;
-      return (last && last.matches('details.mcp-report') && !last.open && mcpPage.querySelectorAll('details.mcp-report').length === 1 && mcpCalls.length === 0)
-        || JSON.stringify({ last: last && last.className, mcpCalls: mcpCalls.length });
+    check('MCP 配置页：不再渲染「能力报告」面板，也不请求 /api/mcp', () =>
+      (!mcpPage.querySelector('.mcp-report') && !/MCP 能力报告/.test(mcpPage.textContent) && mcpCalls.length === 0)
+      || JSON.stringify({ report: Boolean(mcpPage.querySelector('.mcp-report')), mcpCalls: mcpCalls.length }));
+    check('MCP 配置页：原生 MCP 状态只在必要位置说明一次', () => {
+      const texts = [...mcpPage.querySelectorAll('.mcp-page-status, .mcp-banner')].map((node) => node.textContent);
+      return texts.filter((text) => text.includes('内置 MCP')).length <= 1 || JSON.stringify(texts);
     });
-    const report = mcpPage.querySelector('details.mcp-report');
-    report.open = true;
-    report.dispatchEvent(new window.Event('toggle'));
-    await new Promise((r) => setTimeout(r, 40));
-    const reportText = () => report.textContent;
-    check('MCP 能力报告：如实说这个 pi 带 MCP 能力（不再写死「没有原生 MCP」）', () =>
-      (mcpCalls.length >= 1 && /带 MCP 能力/.test(reportText()) && !/没有原生 MCP 支持/.test(reportText())) || reportText().slice(0, 200));
-    check('MCP 能力报告：给出可核对的出处（不是空口断言）', () =>
-      /dist\/extensions\/index\.js/.test(reportText()) || reportText().slice(0, 200));
-    check('MCP 能力报告：显示运行中的 pi 版本与来源', () =>
-      (/检测到的 pi 版本：0\.99\.2/.test(reportText()) && /来源 package\.json/.test(reportText())) || reportText().slice(0, 240));
-    check('MCP 能力报告：列出 built-in 能力并说明它不是扫目录扫到的', () => {
-      const text = reportText();
-      return (['builtin:llama.cpp', 'builtin:codemode', 'builtin:tool-search', 'builtin:mcp'].every((x) => text.includes(x))
-        && /不由 Extension Registry 的目录扫描发现/.test(text)) || text.slice(0, 300);
-    });
-    check('MCP 能力报告：说清 RPC 没有工具清单命令（不伪造工具注册表）', () =>
-      /没有一条返回已注册工具清单/.test(reportText()) || reportText().slice(0, 300));
-    check('MCP 能力报告：区分 ExtensionAPI 与 RPC（getAllTools 拿不到）', () =>
-      (/getAllTools 有/.test(reportText()) && /RPC 客户端拿不到/.test(reportText())) || '没区分');
-    check('MCP 能力报告：指出官方替代路径是 extension 并列出本机已有的', () => {
-      const names = [...report.querySelectorAll('.ext-name')].map((n) => n.textContent);
-      return (/extension/.test(reportText()) && names.includes('my-ext')) || JSON.stringify(names);
-    });
-    check('MCP 能力报告：声明不安装 / 不执行扩展（边界说清楚）', () =>
-      /不安装、不启用、也不执行/.test(reportText()) || '没写边界');
-    check('MCP 能力报告：原生状态横幅（active + 原因）与服务器列表同源', () =>
-      (/原生 MCP 生效中/.test(reportText()) && /builtin:mcp 在包里、未被禁用、未被接管/.test(reportText())) || reportText().slice(0, 200));
-    check('MCP 能力报告：运行观察行（没调用过≠不支持）', () =>
-      /尚未观察到 MCP 工具调用/.test(reportText()) || '没观察行');
-    check('MCP 配置页 + 能力报告：DOM 里没有密钥样式的字符串', () =>
+    check('MCP 配置页：DOM 里没有密钥样式的字符串', () =>
       !/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN/.test(mcpPage.innerHTML) || '出现了疑似密钥');
 
     mcpStatusCalls.length = 0;
     mcpPage.querySelector('[data-focus-key="refresh"]').click();
     await new Promise((r) => setTimeout(r, 60));
-    check('MCP 配置页：「刷新状态」发出 POST /api/mcp/status，报告折叠区保持展开', () =>
-      (mcpStatusCalls.length === 1 && mcpPage.querySelector('details.mcp-report') === report && report.open) || `刷新请求 ${mcpStatusCalls.length} 次`);
+    check('MCP 配置页：「刷新状态」发出 POST /api/mcp/status，页面保持可用', () =>
+      (mcpStatusCalls.length === 1 && Boolean(mcpPage.querySelector('.mcp-page-inner'))) || `刷新请求 ${mcpStatusCalls.length} 次`);
     {
       const del = mcpPage.querySelector('[data-focus-key="delete:user:fs"]');
       if (del) {

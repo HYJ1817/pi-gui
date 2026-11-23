@@ -43,11 +43,10 @@ const EXT_DIR = path.join(PUB, 'extensions');
 const SKILL_FILES = ['model.js', 'detail.js', 'editor.js', 'import.js', 'external.js', 'market.js', 'page.js']
   .map((name) => path.join(SKILLS_DIR, name));
 const EXT_FILES = ['model.js', 'installed.js', 'market.js', 'page.js', 'market-model.js', 'operations.js', 'package-detail.js', 'parts.js'].map((name) => path.join(EXT_DIR, name));
-const REPORT = path.join(PUB, 'mcp-report.js');
 const MCP_PAGE = path.join(PUB, 'mcp-settings.js');
 const RESOURCE_DOM = path.join(PUB, 'ui', 'resource-dom.js');
 const API = path.join(PUB, 'api.js');
-const NEW_MODULES = [...SKILL_FILES, ...EXT_FILES, REPORT, RESOURCE_DOM];
+const NEW_MODULES = [...SKILL_FILES, ...EXT_FILES, RESOURCE_DOM];
 
 const IMPORT_RE = /^[ \t]*import\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/gm;
 function importsOf(file) {
@@ -107,7 +106,10 @@ const SKILLS = {
   trust: { trusted: true, requiresTrust: true, reason: 'trusted', trustFile: AGENT + '\\trust.json' },
   piReachable: true,
   context: { project: 'c000000000000099', live: true },
-  projects: [{ id: 'c000000000000099', name: 'Fixture project', path: PROJECT, active: true }],
+  projects: [
+    { id: 'c000000000000099', name: 'Fixture project', path: PROJECT, active: true },
+    { id: 'c000000000000098', name: 'pi-gui', path: 'C:\\pi-GUI', active: false },
+  ],
   targets: [
     { key: 'user-pi', scope: 'user', mode: 'pi', dir: AGENT + '\\skills', label: '~/.pi/agent/skills', exists: true, writable: true, blockedCode: '', blockedReason: '', notice: '' },
     { key: 'project-pi', scope: 'project', mode: 'pi', dir: PROJECT + '\\.pi\\skills', label: '<项目>/.pi/skills', exists: true, writable: true, blockedCode: '', blockedReason: '', notice: '' },
@@ -149,37 +151,6 @@ const registry = (extensions) => ({
   ok: true, piReachable: true, actions: { install: false, toggle: false, remove: false, refresh: true, restart: true },
   diagnostics: [], capabilityRegistry: { commands: [], tools: [], toolRegistryAvailable: false }, extensions,
 });
-const APPROVAL = {
-  ok: true, piVersion: '0.99.2',
-  checks: {
-    toolCallHook: { supported: true, evidence: 'dist/core/extensions/types.d.ts: block?: boolean' },
-    uiPromptDialog: { supported: true, evidence: 'docs/rpc.md: block until the client sends back an extension_ui_response' },
-    coreApproval: { supported: false, evidence: 'docs/usage.md: no permission popups' },
-    customUiOverRpc: { supported: false, evidence: 'dist/modes/rpc/rpc-mode.js: Custom UI not supported in RPC mode' },
-  },
-};
-const MCP_REPORT = {
-  ok: true, supported: true,
-  reason: '这个 pi 包自带 built-in 扩展 `mcp`（配置走 pi 自己的 mcp.json，命令行是 pi mcp add / remove）',
-  evidence: 'dist/extensions/index.js: { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }',
-  piVersion: '0.99.2', version: { value: '0.99.2', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' },
-  piPackageFound: true, servers: [],
-  builtins: {
-    known: true, source: 'dist/extensions/index.js',
-    entries: [{ id: 'mcp', replaceable: true, hidden: false, evidence: '{ name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }' }],
-    evidence: 'export const builtInExtensions = [ … ]', note: 'built-in 扩展编译在 pi 包里。',
-  },
-  extensionApi: { available: true, registerMcpServer: true, getMcpServers: true, getAllTools: true, evidence: 'registerMcpServer(name: string, config: McpServerConfig): void;' },
-  rpc: { commandCount: 33, commands: ['abort', 'prompt', 'get_state'], toolListCommand: false, note: 'Pi RPC 没有已注册工具清单命令。' },
-  mcpConfig: { user: { exists: false }, project: { exists: true } },
-  extensionRoute: {
-    note: 'pi 官方建议把 MCP 这类能力做成 extension 或 package。',
-    userDir: AGENT + '\\extensions', projectDir: PROJECT + '\\.pi\\extensions',
-    user: { exists: false, entries: [], count: 0, error: '' },
-    project: { exists: true, entries: [{ name: 'my-ext', kind: 'file', size: 1200, mtime: 1 }], count: 1, error: '' },
-    fromSettings: [], packages: [],
-  },
-};
 
 /* ---------- 隔离的页面世界：每个入口一份 index.html + 自己的模块图 ---------- */
 const pageErrors = [];
@@ -302,13 +273,12 @@ function createWorld(label, entry) {
     for (const file of EXT_FILES) {
       for (const { target } of importsOf(file)) assert.ok(!inside(target, SKILLS_DIR) && !isMcpUi(target), `${rel(file)} imports ${rel(target)}`);
     }
-    for (const file of [REPORT, MCP_PAGE]) {
+    for (const file of [MCP_PAGE]) {
       for (const { target } of importsOf(file)) assert.ok(!inside(target, SKILLS_DIR) && !inside(target, EXT_DIR), `${rel(file)} imports ${rel(target)}`);
     }
     const importers = (target) => listJs(PUB).filter((file) => importsOf(file).some((item) => item.target === target)).map(rel).sort();
     assert.deepEqual(importers(path.join(SKILLS_DIR, 'page.js')), ['public/app.js']);
     assert.deepEqual(importers(path.join(EXT_DIR, 'page.js')), ['public/app.js']);
-    assert.deepEqual(importers(REPORT), ['public/mcp-settings.js']);
     assert.deepEqual(importsOf(RESOURCE_DOM), [], 'the shared DOM helper imports nothing');
     assert.deepEqual(exportsOf(RESOURCE_DOM).sort(), ['resourceEl', 'resourceNote', 'resourceRow']);
   });
@@ -321,12 +291,10 @@ function createWorld(label, entry) {
       [path.join(SKILLS_DIR, 'import.js'), ['commitSkillImport', 'stageSkillImport']],
       [path.join(SKILLS_DIR, 'external.js'), ['importExternalSkills', 'scanExternalSkills']],
       [path.join(SKILLS_DIR, 'market.js'), ['fetchSkillMarket', 'fetchSkillMarketFile', 'installSkillMarketEntry', 'previewSkillMarketEntry', 'refreshSkillMarket', 'skillMarketSources']],
-      [path.join(EXT_DIR, 'installed.js'), ['fetchApprovalCapability', 'fetchExtensionPackages', 'fetchExtensions']],
+      [path.join(EXT_DIR, 'installed.js'), ['fetchExtensionPackages', 'fetchExtensions']],
       [path.join(EXT_DIR, 'market.js'), ['extensionMarketAction', 'fetchExtensionMarket']],
       [path.join(EXT_DIR, 'operations.js'), ['extensionPackageAction']],
       [path.join(EXT_DIR, 'package-detail.js'), ['fetchExtensionMarketItem', 'fetchExtensionPackages']],
-
-      [REPORT, ['fetchMcp']],
     ]);
     for (const file of NEW_MODULES) {
       const code = stripComments(fs.readFileSync(file, 'utf8'));
@@ -789,7 +757,8 @@ function createWorld(label, entry) {
     assert.equal(page.card.querySelector('.skills-toolbar .skills-scan').textContent, '从其他工具扫描');
     assert.deepEqual([...page.card.querySelectorAll('.skills-head .skills-actions-bar .btn span')].map((node) => node.textContent),
       ['刷新', '市场', '新建']);
-    assert.equal(page.card.querySelector('.skills-project-select').value, 'c000000000000099');
+    assert.equal(page.card.querySelector('.skills-project .project-picker-trigger')?.textContent.trim(), 'Fixture project（当前）');
+    assert.equal(page.card.querySelector('.skills-project .project-picker-trigger')?.getAttribute('aria-label'), '查看哪个项目的技能');
     const seg = (value) => page.card.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
     const segText = (value) => [seg(value).querySelector('.ds-segment-label').textContent, seg(value).querySelector('.ds-segment-count').textContent];
     assert.deepEqual(['', 'user', 'project'].map(segText), [['全部', '3'], ['全局', '2'], ['项目', '1']]);
@@ -826,6 +795,110 @@ function createWorld(label, entry) {
       }
     }
     page.close();
+  });
+
+  await skillsCheck('Skills: the project picker is a themed listbox with pointer and full keyboard support', async () => {
+    A.answer('GET /api/skills', ({ url }) => {
+      const project = new URL(url, 'http://localhost').searchParams.get('project');
+      return { ...clone(SKILLS), context: { ...SKILLS.context, project: project || 'c000000000000099' } };
+    });
+    const page = mountSkills();
+    await tick();
+    const trigger = page.card.querySelector('.skills-project .project-picker-trigger');
+    assert.ok(trigger, 'the project switcher is the shared picker, not a native select');
+    assert.equal(page.card.querySelector('.skills-project select'), null);
+    assert.equal(trigger.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    /* jsdom has no layout: give the anchor a plausible rect so the anchored
+     * layer does not treat it as scrolled out of the viewport. */
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    const key = (keyName) => A.d.activeElement.dispatchEvent(new A.w.KeyboardEvent('keydown', {
+      key: keyName, bubbles: true, cancelable: true,
+    }));
+
+    trigger.click();
+    await tick();
+    const menu = A.d.querySelector('.pi-anchored-menu.ds-picker-menu');
+    assert.ok(menu, 'the options render in the shared anchored layer');
+    assert.equal(menu.parentElement, A.d.body, 'the menu is portaled out of the scrolling settings card');
+    assert.equal(menu.getAttribute('role'), 'listbox');
+    assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+    const labels = [...menu.querySelectorAll('[role="option"]')].map((node) => node.textContent.trim());
+    assert.deepEqual(labels, ['Fixture project（当前）', 'pi-gui', '不指定项目（只看全局）']);
+    assert.equal(A.d.activeElement.getAttribute('aria-selected'), 'true', 'opening starts on the current project');
+    key('ArrowDown');
+    assert.equal(A.d.activeElement.textContent.trim(), 'pi-gui');
+    key('End');
+    assert.equal(A.d.activeElement.textContent.trim(), '不指定项目（只看全局）');
+    key('Home');
+    assert.equal(A.d.activeElement.textContent.trim(), 'Fixture project（当前）');
+    key('Escape');
+    await tick();
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null);
+    assert.equal(A.d.activeElement, trigger, 'Escape closes and returns focus to the trigger');
+
+    const reads = A.count('GET', '/api/skills');
+    trigger.click();
+    await tick();
+    [...A.d.querySelectorAll('.ds-picker-option')].find((node) => node.textContent.trim() === 'pi-gui').click();
+    await tick();
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null, 'choosing closes the menu');
+    assert.equal(A.count('GET', '/api/skills'), reads + 1, 'choosing re-reads the selected project');
+    assert.equal(A.calls.at(-1).url, '/api/skills?project=c000000000000098');
+    assert.equal(trigger.textContent.trim(), 'pi-gui');
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+
+    trigger.click();
+    await tick();
+    key('Tab');
+    await tick();
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null);
+    assert.equal(A.d.activeElement, trigger, 'Tab also closes the menu without leaking focus');
+  });
+
+  await skillsCheck('Skills: switching projects disables the picker until the new list arrives', async () => {
+    A.answer('GET /api/skills', SKILLS);
+    A.hold('GET /api/skills?project=c000000000000098');
+    const page = mountSkills();
+    await tick();
+    const trigger = page.card.querySelector('.skills-project .project-picker-trigger');
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    trigger.click();
+    await tick();
+    [...A.d.querySelectorAll('.ds-picker-option')].find((node) => node.textContent.trim() === 'pi-gui').click();
+    await tick();
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null, 'the menu closes as soon as a project is chosen');
+    assert.equal(trigger.disabled, true, 'the picker is disabled while the new list is in flight');
+    assert.equal(trigger.textContent.trim(), 'pi-gui', 'the chosen project is visible during the switch');
+    A.release('GET /api/skills?project=c000000000000098', {
+      ...clone(SKILLS),
+      context: { ...SKILLS.context, project: 'c000000000000098', live: false },
+      skills: [SKILLS.skills[0]],
+    });
+    await tick();
+    assert.equal(trigger.disabled, false);
+    assert.equal(A.d.activeElement, trigger, 'focus stays on the picker after the switch');
+  });
+
+  await skillsCheck('Skills: a background reload closes the project menu and returns focus to the picker', async () => {
+    A.answer('GET /api/skills', SKILLS);
+    const page = mountSkills();
+    await tick();
+    const trigger = page.card.querySelector('.skills-project .project-picker-trigger');
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    trigger.click();
+    await tick();
+    assert.ok(A.d.querySelector('.pi-anchored-menu.ds-picker-menu'));
+    A.d.dispatchEvent(new A.w.CustomEvent('pi-gui:capability-bridge-ready'));
+    await tick(40);
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null, 'the menu does not survive the reload');
+    assert.equal(A.d.activeElement, trigger, 'focus returns to the picker after the background read');
   });
 
   await skillsCheck('Skills: an empty group says what is missing; a filter with no match shows one empty state, not one per group', async () => {
@@ -930,7 +1003,6 @@ function createWorld(label, entry) {
   });
   const marketRoute = 'GET /api/extensions/market?*';
   B.w.S.hasProject = true;
-  B.answer('GET /api/approvals/capability', APPROVAL);
   B.answer('GET /api/extensions/packages', { ok: true, packages: [], installRoot: 'C:/fixture/pi/npm/node_modules' });
   B.answer(marketRoute, marketResponse());
   B.answer('GET /api/extensions/market/item?*', { ok: true, item: marketItem, detailState: 'no-consent' });
@@ -1451,7 +1523,7 @@ function createWorld(label, entry) {
     B.w.showChat();
   });
 
-  await extCheck('Extensions: an empty Registry and a failed read are tiles with a real next step; 已知能力 stays available', async () => {
+  await extCheck('Extensions: an empty Registry and a failed read are tiles with a real next step; no separate 已知能力 section', async () => {
     B.answer('GET /api/extensions', registry([{ ...EXT_OK, id: 'ext-3', state: { ...EXT_OK.state, loaded: null } }]));
     B.w.openExtensions();
     await tick();
@@ -1473,9 +1545,8 @@ function createWorld(label, entry) {
     assert.equal(B.d.querySelector('.extensions-tab-count').textContent, '', 'a failed read leaves the count unknown, not 0');
     const retry = [...list().querySelectorAll('button')].find((button) => button.textContent === '重试');
     assert.ok(retry, 'the failure tile offers the real retry path');
-    assert.deepEqual([...B.d.querySelectorAll('#extensionsTabPanel .ext-known-item > summary')].map((node) => node.textContent),
-      ['Web Access', 'Subagents', 'Pi Memory', 'Browser Use', 'Approval / Permission'], 'known capabilities stay reachable after a failure');
-    assert.equal(B.d.querySelector('#extensionsKnownTitle').textContent, '已知能力');
+    assert.equal(B.d.querySelector('#extensionsTabPanel .ext-known'), null, 'the old known-capability section is gone');
+    assert.equal(B.d.querySelector('#extensionsKnownTitle'), null);
     B.answer('GET /api/extensions', registry([EXT_OK]));
     const reads = B.count('GET', '/api/extensions');
     retry.click();
@@ -1485,128 +1556,64 @@ function createWorld(label, entry) {
     B.w.showChat();
   });
 
-  console.log('agent capability pages: MCP report lifecycle');
-  const C = createWorld('mcp-report', REPORT);
-  const REPORT_GEN_BASE = C.listenerCount(GEN);
-  const openReports = [];
-  const mountReport = () => {
-    const report = C.w.createMcpReport();
-    C.d.body.append(report.element);
-    openReports.push(report);
-    return report;
-  };
-  const reportCheck = (name, run) => check(name, async () => {
-    try { await run(); } finally {
-      for (const report of openReports.splice(0)) { report.dispose(); report.element.remove(); }
-      C.reset();
-      await tick();
+  await extCheck('Extensions: an installed capability keeps its setup inside its own package detail', async () => {
+    const webPackage = {
+      id: 'npm:pi-web-access', name: 'pi-web-access', version: '0.7.0', kind: 'npm',
+      source: 'npm:pi-web-access', location: 'C:/fixture/pi/npm/node_modules/pi-web-access',
+      scope: 'user', installed: true, enabled: true, capabilityId: 'web',
+      extensionIds: ['ext-1'], updateAvailable: false,
+      actions: { update: { allowed: false, reason: '' }, remove: { allowed: true, reason: '' } },
+      manual: {}, resources: { declared: true, extensions: 1 }, problem: null,
+    };
+    B.answer('GET /api/extensions', registry([EXT_OK]));
+    B.answer('GET /api/extensions/packages', { ok: true, packages: [webPackage], installRoot: 'C:/fixture/pi/npm/node_modules' });
+    B.w.openExtensions();
+    await tick();
+    assert.equal(B.d.querySelector('#extensionsTabPanel .ext-known'), null, 'no standalone setup section');
+    const card = B.d.querySelector('#extensionsTabPanel .ext-extension-item');
+    assert.ok(card, 'the package has its own card');
+    assert.match(card.textContent, /Web Access/);
+    card.querySelector('.extensions-card-toggle').click();
+    await tick();
+    const setup = card.querySelector('.extensions-embedded-setup .cap-setup.is-embedded');
+    assert.ok(setup, 'the capability setup stays reachable inside the installed package detail');
+    assert.match(setup.textContent, /运行观察/);
+    assert.doesNotMatch(setup.textContent, /安装命令/, 'embedded setup does not repeat the package install flow');
+    B.w.showChat();
+  });
+
+  await extCheck('Extensions market: the four known capabilities remain installable from the catalog', async () => {
+    const known = [
+      ['npm:pi-web-access', 'pi-web-access'],
+      ['npm:pi-subagents', 'pi-subagents'],
+      ['npm:pi-memory', 'pi-memory'],
+      ['npm:pi-browser-harness', 'pi-browser-harness'],
+    ].map(([id, name]) => ({
+      id, name, version: '1.0.0', maintainer: 'fixture', description: `${name} fixture`,
+      category: 'devtools', tags: [], installed: { state: 'none' }, install: { allowed: true },
+    }));
+    B.answer('GET /api/extensions', registry([]));
+    B.answer('GET /api/extensions/packages', { ok: true, packages: [], installRoot: 'C:/fixture/pi/npm/node_modules' });
+    B.answer(marketRoute, marketResponse(known));
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const cards = [...B.d.querySelectorAll('#extensionsTabPanel .extensions-market-card')];
+    assert.deepEqual(cards.map((card) => card.querySelector('.ext-name').textContent).sort(),
+      ['pi-browser-harness', 'pi-memory', 'pi-subagents', 'pi-web-access']);
+    for (const card of cards) {
+      const action = card.querySelector('.extensions-market-card-action');
+      assert.equal(action?.textContent, '安装', `${card.querySelector('.ext-name').textContent} keeps an install entry`);
+      assert.match(action.className, /\bprimary\b/);
     }
-  });
-  const reportBody = (report) => report.element.querySelector('.mcp-report-body');
-
-  await reportCheck('MCP report: no request until expanded, and reopening does not re-read', async () => {
-    C.hold('GET /api/mcp');
-    const report = mountReport();
-    await tick();
-    assert.equal(C.count('GET', '/api/mcp'), 0, 'collapsed report sends nothing');
-    report.element.open = true;
-    await tick();
-    assert.equal(C.count('GET', '/api/mcp'), 1);
-    C.release('GET /api/mcp', MCP_REPORT);
-    await tick();
-    assert.match(reportBody(report).textContent, /这个 pi 带 MCP 能力/);
-    report.element.open = false;
-    await tick();
-    report.element.open = true;
-    await tick();
-    assert.equal(C.count('GET', '/api/mcp'), 1, 'reopening keeps the loaded report');
-    report.dispose();
-    report.element.remove();
+    B.w.showChat();
   });
 
-  await reportCheck('MCP report: a project switch shows the switched prompt during and after a read; 刷新 reads again', async () => {
-    C.hold('GET /api/mcp');
-    const report = mountReport();
-    report.element.open = true;
-    await tick();
-    C.w.beginWorkspaceSwitch('C:\\fixture\\other');
-    C.release('GET /api/mcp', MCP_REPORT);
-    await tick();
-    assert.match(reportBody(report).textContent, /项目已切换，刷新后查看当前项目的 MCP 能力报告/);
-    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/);
-    C.answer('GET /api/mcp', MCP_REPORT);
-    [...reportBody(report).querySelectorAll('button')].find((button) => button.textContent === '刷新').click();
-    await tick();
-    assert.match(reportBody(report).textContent, /这个 pi 带 MCP 能力/);
-    C.w.beginWorkspaceSwitch('C:\\fixture\\third');
-    assert.match(reportBody(report).textContent, /项目已切换/);
-    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/, 'loaded evidence of the old project is replaced');
-    report.dispose();
-    report.element.remove();
-  });
 
-  await reportCheck('MCP report: a new Pi run invalidates observation without opening a collapsed report', async () => {
-    C.answer('GET /api/mcp', MCP_REPORT);
-    const report = mountReport();
-    report.element.open = true;
-    await tick();
-    const reads = C.count('GET', '/api/mcp');
-    C.hold('GET /api/mcp');
-    C.d.dispatchEvent(new C.w.CustomEvent(BRIDGE_READY));
-    assert.equal(C.count('GET', '/api/mcp'), reads + 1);
-    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/);
-    report.element.open = false;
-    await tick();
-    C.d.dispatchEvent(new C.w.CustomEvent(BRIDGE_READY));
-    assert.equal(C.count('GET', '/api/mcp'), reads + 1);
-    C.release('GET /api/mcp', MCP_REPORT);
-    await tick();
-    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/);
-  });
-
-  await reportCheck('MCP report: dispose drops a late report and removes its listener', async () => {
-    C.hold('GET /api/mcp');
-    const report = mountReport();
-    assert.equal(C.listenerCount(GEN), REPORT_GEN_BASE + 1);
-    report.element.open = true;
-    await tick();
-    report.dispose();
-    assert.equal(C.listenerCount(GEN), REPORT_GEN_BASE);
-    C.release('GET /api/mcp', MCP_REPORT);
-    await tick();
-    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/);
-    report.element.remove();
-  });
-
-  await reportCheck('MCP report: native state follows the MCP page without another request', async () => {
-    C.answer('GET /api/mcp', MCP_REPORT);
-    const report = mountReport();
-    const reads = C.count('GET', '/api/mcp');
-    report.setNative({ state: 'active', reason: 'fixture native reason' });
-    report.element.open = true;
-    await tick();
-    const native = () => report.element.querySelector('.mcp-report-native').textContent;
-    assert.match(native(), /原生 MCP 生效中/);
-    assert.match(native(), /fixture native reason/);
-    report.setNative({ state: 'a-future-state' });
-    assert.match(native(), /原生状态未知/, 'an unknown native state is not guessed');
-    report.setNative({ state: 'active' });
-    report.setNative(undefined);
-    assert.match(native(), /原生状态未知/, 'a summary without a native object stays unknown');
-    report.setNative({ state: 'active' });
-    report.setNative(null);
-    assert.match(native(), /读不到原生 MCP 摘要/, 'a failed summary read says so');
-    assert.equal(report.element.querySelector('.mcp-report-native h4'), null, 'no verdict headline is kept from the previous read');
-    assert.equal(C.count('GET', '/api/mcp'), reads + 1, 'native updates reuse the MCP page data');
-    report.dispose();
-    report.element.remove();
-  });
-
-  await check('no uncaught errors or console errors in the three page worlds', () => {
+  await check('no uncaught errors or console errors in the two page worlds', () => {
     assert.deepEqual(pageErrors, []);
   });
 
-  for (const world of [A, B, C]) world.w.close();
+  for (const world of [A, B]) world.w.close();
   console.log(`\n${passed}/${passed + failed} passed`);
   process.exit(failed ? 1 : 0);
 })().catch((error) => {
