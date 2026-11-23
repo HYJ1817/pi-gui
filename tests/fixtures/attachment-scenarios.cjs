@@ -3,7 +3,7 @@
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
-const { documentFiles } = require('./attachment-files.cjs');
+const { documentFiles, audioFiles } = require('./attachment-files.cjs');
 module.exports = async function ({ read, waitFor, paint, shot, click, key, check, win, facts, commands, world, uploads }) {
   const files = documentFiles();
   const inputs = path.join(world, 'inputs'); fs.mkdirSync(inputs);
@@ -107,6 +107,18 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
   await shot('mp4-preview-failure'); await key('ESC');
   await click('#btnSend'); await waitFor('ST.S.attachments.length===0');
   check('unsupported MP4 still sends its preserved file reference without image content', commands.at(-1).message.includes('不支持的编码.mp4') && commands.at(-1).message.includes('本机路径：') && !commands.at(-1).images);
+
+  await reset();
+  const audio = audioFiles().find(item => item.name === '示例音频.mp3');
+  await read(`A.handleFiles([new File([Uint8Array.from(atob('${audio.body.toString('base64')}'),c=>c.charCodeAt(0))],${JSON.stringify(audio.name)},{type:${JSON.stringify(audio.type)}})])`);
+  await settle(1);
+  const audioRow = await read(`(()=>{const row=ST.el.attachTray.querySelector('.att-file');return {type:row.dataset.fileType,icon:row.querySelector('.att-ic [data-icon]')?.dataset.icon,infoTag:row.querySelector('.att-info').tagName,title:row.querySelector('.att-info').title,hasPreview:!!row.querySelector('.att-preview')}})()`);
+  facts.push({ audio: audioRow });
+  check('audio row uses the audio icon/label and has no media preview', audioRow.type === 'audio' && audioRow.icon === 'audio' && audioRow.infoTag === 'DIV' && audioRow.title.includes('音频') && audioRow.title.includes(audio.name) && !audioRow.hasPreview, audioRow);
+  check('audio upload preserves exact source bytes as a file reference', fs.readFileSync(await read('ST.S.attachments[0].path')).equals(audio.body));
+  await shot('single-audio');
+  await click('#btnSend'); await waitFor('ST.S.attachments.length===0');
+  check('audio sends as a file reference without image content', commands.at(-1).message.includes(audio.name) && commands.at(-1).message.includes('本机路径：') && !commands.at(-1).images);
 
   await reset();
   await read(`(()=>{const data=new DataTransfer();data.items.add(fixtureMedia.image);document.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));})()`);
