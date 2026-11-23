@@ -122,8 +122,12 @@ export function runtimeServerFor(runtime, name, scope) {
  *   configured → 文件里写了（summary 一定为真）
  *   connected  → 只有 runtime state === 'connected' 才是
  *   loaded     → 本界面拿不到 Agent 会话的加载状态，永远单独说明
+ *
+ * 原生层的全局状态（replaced / disabled / unsupported）属于整页事实：
+ * 页面只在页头或一条横幅里说一次。这里不再把它复制到每一行 ——
+ * `replaced` 尤其不是错误，server 仍按运行时事实显示。
  */
-export function serverStatus(server, runtime, { trust } = {}) {
+export function serverStatus(server, runtime, { trust, nativeState = null } = {}) {
   if (!server || typeof server !== 'object') {
     return { tone: 'dim', label: '状态未知', detail: '', state: 'unknown' };
   }
@@ -144,20 +148,21 @@ export function serverStatus(server, runtime, { trust } = {}) {
       state: 'overridden',
     };
   }
-  if (server.enabled === false || eff.reason === 'disabled') {
+  if (server.enabled === false) {
     return { tone: 'dim', label: '已停用', detail: '配置仍在，Pi 不会加载它', state: 'disabled' };
   }
-  if (eff.reason === 'replaced') {
-    return { tone: 'warn', label: '内置 MCP 被扩展接管', detail: 'pi 的 /mcp 被扩展注册替换', state: 'replaced' };
-  }
-  if (eff.reason === 'unsupported') {
-    return { tone: 'warn', label: 'Pi 不支持原生 MCP', detail: '当前 pi 包没有 builtin:mcp', state: 'unsupported' };
+  /* 原生层整体不可用时，每一行都显示同一条原因只是重复。页头/横幅已经
+   * 说明「这里的配置不会被加载」，这里只给一个安静的结果标记。 */
+  if (nativeState === 'disabled' || nativeState === 'unsupported') {
+    return { tone: 'dim', label: '未生效', detail: '', state: nativeState };
   }
   if (!runtime) {
     return { tone: 'dim', label: '未测试', detail: '连接状态未知；点「测试连接」或「刷新状态」', state: 'untested' };
   }
   if (runtime.ok === false) {
-    return { tone: 'warn', label: '刷新失败', detail: runtime.error || 'pi mcp list 没有成功返回', state: 'refresh-failed' };
+    /* 整次刷新失败是页面级事实（页顶一条横幅带原因）；逐行再写“刷新失败”
+     * 只是把同一条错误复制 N 遍。行内只保留“这台的连接状态未验证”。 */
+    return { tone: 'dim', label: '未验证', detail: '', state: 'refresh-failed' };
   }
   const entry = runtimeServerFor(runtime, server.name, server.scope);
   if (!entry) {

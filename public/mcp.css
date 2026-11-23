@@ -76,6 +76,13 @@
   margin-bottom: 0 !important;
   max-width: 780px;
 }
+/* 原生 MCP 的运行方式（如被扩展接管）：一行静态事实，不用警告条。 */
+.mcp-page-status {
+  margin: 6px 0 0 !important;
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--ds-text-muted);
+}
 
 /* ---------- 提示条 ---------- */
 
@@ -122,11 +129,10 @@
   font-size: 12px;
 }
 .mcp-project-picker-label { white-space: nowrap; }
+.mcp-project-picker .project-picker { min-width: 0; max-width: 220px; }
 .mcp-input { width: 100%; }
-/* 弹层表单里的原生选择器沿用字段族外观；工具栏的项目选择器走共享 .ds-select。 */
+/* 弹层表单里的原生选择器沿用字段族外观；工具栏的项目切换走共享 .project-picker。 */
 .mcp-select { appearance: none; padding-right: 28px; cursor: pointer; }
-.mcp-project-select { width: auto; max-width: 220px; }
-.mcp-project-select:disabled { opacity: 0.6; cursor: default; }
 
 /* ---------- 分组 ---------- */
 
@@ -1074,7 +1080,7 @@
   .mcp-search { width: 100%; }
   .mcp-toolbar .mcp-search { flex: 1 1 100%; }
   .mcp-project-picker { flex: 1 1 100%; }
-  .mcp-project-select { flex: 1; max-width: none; }
+  .mcp-project-picker .project-picker { flex: 1; max-width: none; }
   .mcp-server { flex-wrap: wrap; }
   .mcp-server-ops { width: 100%; justify-content: flex-start; padding-left: 48px; }
   .mcp-detail-grid { grid-template-columns: 1fr; gap: 2px; }
@@ -1098,25 +1104,3 @@
 @media (prefers-reduced-motion: reduce) {
   .mcp-skeleton, .mcp-icon-btn.is-busy, .mcp-modal-loading::before { animation: none; }
 }
-
-/* ---------- 能力报告（页尾折叠区，public/mcp-report.js） ---------- */
-
-.mcp-report {
-  margin-top: 24px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--mcp-card-bg);
-}
-.mcp-report-summary {
-  padding: 12px 14px;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ds-text-primary);
-  cursor: pointer;
-}
-.mcp-report-summary:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; border-radius: 12px; }
-.mcp-report-body {
-  padding: 12px 14px 14px;
-  border-top: 1px solid var(--ds-border-subtle);
-}
-.mcp-report-body .ext-code { max-height: 220px; }

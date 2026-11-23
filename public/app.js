@@ -1361,8 +1361,8 @@ document.addEventListener('pi-gui:right-pane', (event) => {
   $('navChanges').setAttribute('aria-pressed', String(open));
   $('navChanges').classList.toggle('is-active', open);
 });
-/* MCP 是完整的设置页（管理 + 市场）；原扩展面板 MCP 标签里的能力报告
- * 已并入该页页尾的折叠区（public/mcp-report.js）。 */
+/* MCP 是完整的设置页（管理 + 市场）。原生能力证据留在服务端诊断，
+ * 管理页只负责服务器、配置与运行状态。 */
 function openMcpPage() {
   return openMcpSettings({
     present: (build, dispose, options) => settingsSurface.presentDetail('navMcp', build, dispose, options),

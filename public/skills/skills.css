@@ -46,7 +46,7 @@
   color: var(--ds-text-muted);
   white-space: nowrap;
 }
-.skills-project-select { min-width: 0; max-width: 220px; }
+.skills-project .project-picker { flex: 1 1 auto; min-width: 0; max-width: 220px; }
 
 .skills-notes { display: grid; gap: 8px; margin-bottom: 14px; }
 .skills-notes:empty { display: none; }
@@ -714,7 +714,7 @@
   .skills-toolbar { gap: var(--ui-space-2); }
   .skills-search { flex: 1 1 100%; }
   .skills-project { flex: 1 1 150px; margin-left: 0; }
-  .skills-project-select { width: 100%; max-width: none; }
+  .skills-project .project-picker { width: 100%; max-width: none; }
   .skills-market-search { flex: 1 1 150px; }
   .skill-row-line { flex-wrap: wrap; }
   .skill-row-main { flex-basis: 155px; }

@@ -21,6 +21,7 @@ import {
 import { createIcon } from '../ui/icons.js';
 import { confirmModal, confirmSurfaceMeta, dismissConfirm } from '../ui/modal.js';
 import { createBadge, createSegmentedControl, createSettingsToggle } from '../ui/primitives.js';
+import { createProjectPicker } from '../ui/project-picker.js';
 import { resourceEl as el, resourceNote as note } from '../ui/resource-dom.js';
 import { renderSkillDetail } from './detail.js';
 import { openSkillEditor } from './editor.js';
@@ -186,12 +187,17 @@ function createSkillsPage(card) {
   searchInput.setAttribute('aria-label', '搜索技能');
   searchInput.oninput = () => { state.query = searchInput.value; renderBody(); };
   search.append(searchInput);
-  const projectField = el('label', 'skills-project');
+  const projectField = el('div', 'skills-project');
   projectField.append(el('span', 'skills-project-label', '项目'));
-  const projectSelect = el('select', 'ds-select skills-project-select');
-  projectSelect.setAttribute('aria-label', '查看哪个项目的技能');
-  projectSelect.onchange = () => { void switchProject(projectSelect.value); };
-  projectField.append(projectSelect);
+  const projectPicker = createProjectPicker({
+    value: '',
+    options: [],
+    label: '查看哪个项目的技能',
+    fallbackLabel: '当前项目',
+    disabled: true,
+    onSelect: (value) => { void switchProject(value); return true; },
+  });
+  projectField.append(projectPicker.element);
   const scanButton = actionButton('从其他工具扫描', 'scan', 'ghost skills-scan', openScan);
   toolbar.append(scopeControl.element, search, projectField, scanButton);
 
@@ -305,16 +311,9 @@ function createSkillsPage(card) {
     const options = state.data ? skillProjectOptions(state.data) : [];
     const value = state.project ?? (state.data ? skillContextProject(state.data) : 'none');
     // 读取失败时 data 为空、state.project 还留着上次的项目：补一条同值选项，
-    // 否则 select 的值在选项里找不到，会显示成空白。
+    // 否则控件找不到当前值，会显示成空白。
     if (!options.some((option) => option.value === value)) options.push({ value, label: '当前项目' });
-    projectSelect.replaceChildren();
-    for (const option of options) {
-      const item = el('option', '', option.label);
-      item.value = option.value;
-      projectSelect.append(item);
-    }
-    projectSelect.value = value;
-    projectSelect.disabled = state.loading || state.stale;
+    projectPicker.setOptions(options, { value, disabled: state.loading || state.stale });
   }
 
   /** 没有清单 / 工作区已切换时，动作按钮不能假装还能用：它们都依赖当前清单里的写入目标。 */
@@ -619,8 +618,13 @@ function createSkillsPage(card) {
   /* ---------- 项目上下文 ---------- */
   async function switchProject(value) {
     if (value === state.project) return;
+    /* 用户是从这个控件选的：真实浏览器在 loading 禁用按钮时会丢焦点；
+     * 读完后只在焦点确实落到 body（没人接手）时还回触发器。 */
+    const restorePickerFocus = document.activeElement === projectPicker.trigger
+      || projectPicker.element.contains(document.activeElement);
     invalidateProjectOperations();
     state.project = value;
+    projectPicker.setValue(value);
     if (state.view === 'market') closeMarket();
     state.openId = '';
     openDetail = null;
@@ -634,6 +638,10 @@ function createSkillsPage(card) {
     state.loading = true;
     renderBody();
     await load(value);
+    if (restorePickerFocus && !disposed && !state.stale
+      && (document.activeElement === document.body || document.activeElement === null)) {
+      projectPicker.focus();
+    }
   }
 
   /* ---------- 读取 ---------- */
@@ -656,16 +664,19 @@ function createSkillsPage(card) {
   async function load(project) {
     const token = ++loadToken;
     const generation = S.workspaceGeneration;
+    /* 背景重读（Pi 就绪、刷新）可能正好发生在项目菜单打开时：菜单会因
+     * loading 禁用而收起，读完后把焦点还给触发器，而不是丢到 body。 */
+    const restorePickerFocus = projectPicker.isOpen();
     state.loading = true;
     refresh.disabled = true;
-    projectSelect.disabled = true;
+    projectPicker.setDisabled(true);
     content.classList.add('is-loading');
     if (!state.data) renderBody();
     const result = await fetchSkills(project === null ? undefined : project);
     if (disposed || token !== loadToken) return;
     state.loading = false;
     refresh.disabled = false;
-    projectSelect.disabled = false;
+    projectPicker.setDisabled(false);
     content.classList.remove('is-loading');
     if (!ownsWorkspace(generation)) { markStale(); return; }
     state.stale = false;
@@ -690,6 +701,7 @@ function createSkillsPage(card) {
     renderNotes();
     renderBody();
     writeSkillBadge(result); // 页面刚读到的数字顺手同步给菜单徽标，省一次请求
+    if (restorePickerFocus && !state.stale) projectPicker.focus();
   }
 
   /* 工作区换代（切项目 / 重启 pi）后旧清单一律作废，无论上次读取成功与否。
@@ -716,6 +728,7 @@ function createSkillsPage(card) {
       openDetail = null;
       market?.dispose();
       market = null;
+      projectPicker.destroy();
       document.removeEventListener('pi-gui:workspace-generation', onGeneration);
       document.removeEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
     },

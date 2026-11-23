@@ -20,12 +20,12 @@ import { openModal, closeModal, confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { restartPi } from './providers.js';
 import { createSegmentedControl } from './ui/primitives.js';
+import { createProjectPicker } from './ui/project-picker.js';
 import {
   MCP_NAME_RE, badge, button, icon, node, relativeTime, runtimeLabel, runtimeServerFor,
   scopeLabel, serverStatus, statusDot, transportLabel,
 } from './mcp-shared.js';
 import { openMcpMarket } from './mcp-market.js';
-import { createMcpReport } from './mcp-report.js';
 
 /* ---------- 输入校验（与 server/mcp-config.js 的同一套判据） ---------- */
 
@@ -1080,14 +1080,15 @@ function createPage(card, { reopen, present }) {
   };
   let disposed = false;
   let loadToken = 0;
+  /* 工具栏每次 render 重建；旧的共享 picker 必须先销毁，否则它打开的
+   * 浮层还挂在 body 上，而锚点已经随着旧工具栏被移除。 */
+  let toolbarPicker = null;
   const onDisposeHandlers = [];
 
   projectWorkSurface('settings', { navigation: 'navMcp', title: 'MCP 服务器' });
   const onDispose = (fn) => onDisposeHandlers.push(fn);
-  /* 能力报告（原「Skills 与扩展 › MCP」标签的证据部分）：整页只建一次，
-   * 每次 render 重新挂回页尾，展开状态与已读结果跨重绘保留；页面关闭时一并销毁。 */
-  const report = createMcpReport();
-  onDispose(() => report.dispose());
+  /* Pi 重启后，上次 pi mcp list 的运行状态已经不属于这一次运行。
+   * 页面只重读自己的摘要，不再触发能力报告之类的额外请求。 */
   const refreshAfterRestart = () => {
     if (disposed) return;
     state.statusNote = '';
@@ -1098,6 +1099,8 @@ function createPage(card, { reopen, present }) {
   const dispose = () => {
     if (disposed) return;
     disposed = true;
+    toolbarPicker?.destroy();
+    toolbarPicker = null;
     loadToken++;
     for (const fn of onDisposeHandlers) { try { fn(); } catch { /* 清理隔离 */ } }
   };
@@ -1125,13 +1128,11 @@ function createPage(card, { reopen, present }) {
     state.loading = false;
     if (!serversResult || serversResult.ok === false) {
       state.error = errorText(serversResult) || '读取 MCP 配置失败';
-      report.setNative(null); // 这次没读到：页尾报告不沿用上一次的原生结论
       render();
       return;
     }
     state.error = '';
     state.data = serversResult;
-    report.setNative(serversResult.native);
     if (configResult && configResult.ok === true && configResult.revisions) {
       state.revisions = {
         user: String(configResult.revisions.user || ''),
@@ -1170,7 +1171,11 @@ function createPage(card, { reopen, present }) {
 
   function captureFocus() {
     const active = document.activeElement;
-    if (!active || !card.contains(active)) return { key: null, searchFocused: false, selection: null };
+    if (!active || !card.contains(active)) {
+      /* 项目菜单在 body 的浮层里，不在 card 内：把焦点记到重建后的 trigger。 */
+      if (active?.closest?.('.project-picker-menu')) return { key: 'project', searchFocused: false, selection: null };
+      return { key: null, searchFocused: false, selection: null };
+    }
     return {
       key: active.dataset?.focusKey || null,
       searchFocused: active.id === 'mcpServerSearch',
@@ -1196,6 +1201,8 @@ function createPage(card, { reopen, present }) {
   function render({ advancedFocus = '' } = {}) {
     if (disposed) return;
     const focus = captureFocus();
+    toolbarPicker?.destroy();
+    toolbarPicker = null;
     card.replaceChildren();
     const page = node('div', 'mcp-page-inner');
     card.appendChild(page);
@@ -1206,7 +1213,6 @@ function createPage(card, { reopen, present }) {
     }
     if (state.error) {
       page.appendChild(renderError());
-      page.appendChild(report.element);
       return;
     }
     page.appendChild(renderBanners());
@@ -1214,7 +1220,6 @@ function createPage(card, { reopen, present }) {
     const groups = renderGroups();
     page.appendChild(groups);
     if (!groups.childElementCount) page.appendChild(renderEmpty());
-    page.appendChild(report.element);
     restoreFocus(focus, advancedFocus);
   }
 
@@ -1223,7 +1228,12 @@ function createPage(card, { reopen, present }) {
     const copy = node('div', 'mcp-page-head-copy');
     copy.appendChild(node('h3', 'settings-page-title', 'MCP 服务器'));
     copy.appendChild(node('p', 'settings-page-desc',
-      '管理 Pi 原生的全局与项目级 MCP 配置。列表状态来自配置文件和 pi mcp list 的真实结果；保存配置不等于已经连接。'));
+      '管理 Pi 的全局与项目级 MCP 配置。保存配置不等于已经连接。'));
+    /* 原生 MCP 被扩展接管是运行方式，不是错误：只在页头留一条静态说明，
+     * 不再给每个 server 和页顶横幅重复黄色警告。 */
+    if (state.data?.native?.state === 'replaced') {
+      copy.appendChild(node('p', 'mcp-page-status', '内置 MCP 由扩展接管（/mcp 由扩展注册提供）。'));
+    }
     head.appendChild(copy);
     const actions = node('div', 'mcp-page-actions');
 
@@ -1310,14 +1320,10 @@ function createPage(card, { reopen, present }) {
     const runtimeNote = typeof state.data?.runtime?.note === 'string' ? state.data.runtime.note.slice(0, 300) : '';
     if (runtimeNote && runtimeNote !== state.statusNote) add('warn', runtimeNote);
     const native = state.data?.native;
-    if (native && native.state && native.state !== 'active' && native.state !== 'unknown') {
-      const labels = {
-        replaced: '内置 MCP 被扩展接管，Pi 的 /mcp 不再由原生实现提供。',
-        disabled: '内置 MCP 在 Pi 设置里被停用。',
-        unsupported: '当前安装的 pi 不带原生 MCP，配置可能不会生效。',
-      };
-      add('warn', labels[native.state] || `Pi 原生 MCP 状态：${native.state}`);
-    }
+    /* replaced 是工作方式说明（页头一行），不是需要用户处理的警告。
+     * disabled / unsupported 意味着这里的配置不会加载，保留一条真实警告。 */
+    if (native?.state === 'disabled') add('warn', '内置 MCP 已在 Pi 设置里停用，这里的配置不会被加载。');
+    else if (native?.state === 'unsupported') add('warn', '当前安装的 pi 不带原生 MCP，这里的配置不会被加载。');
     /* 信任三值：服务端拿不到信任状态时整个字段是 null（server/mcp-native.js 的摘要），
      * 不是 {trusted:null}。两种形状都按未确证说明（fail closed）；没有打开项目时
      * 没有项目级配置可言，不出这条提示。旧「Skills 与扩展 › MCP」标签移除后由本页承接。 */
@@ -1378,29 +1384,36 @@ function createPage(card, { reopen, present }) {
 
     bar.appendChild(node('span', 'mcp-toolbar-spacer'));
 
-    const projectLabel = node('label', 'mcp-project-picker');
-    projectLabel.appendChild(node('span', 'mcp-project-picker-label', '项目'));
-    const select = node('select', 'ds-select mcp-project-select');
-    select.setAttribute('aria-label', '切换当前项目');
-    if (state.switching) select.disabled = true;
-    const current = state.projectPath || '';
-    if (!state.projects.length) {
-      const o = node('option', '', state.projectName || '未选择项目');
-      o.value = current;
-      select.appendChild(o);
-      select.disabled = true;
-    } else {
-      for (const p of state.projects) {
-        const o = node('option', '', p.name || basename(p.path) || p.path);
-        o.value = p.path;
-        if (p.path === current) o.selected = true;
-        select.appendChild(o);
-      }
+    const projectField = node('div', 'mcp-project-picker');
+    projectField.appendChild(node('span', 'mcp-project-picker-label', '项目'));
+    const currentProject = state.projectPath || '';
+    const projectOptions = state.projects.length
+      ? state.projects.map((p) => ({
+        value: p.path,
+        label: p.name || basename(p.path) || p.path,
+        title: p.path,
+      }))
+      : [{ value: currentProject, label: state.projectName || '未选择项目' }];
+    if (currentProject && !projectOptions.some((option) => option.value === currentProject)) {
+      // 项目列表与当前会话不同步时，至少把当前项目显示出来，不画成空白。
+      projectOptions.push({ value: currentProject, label: state.projectName || '当前项目', title: currentProject });
     }
-    select.title = current || '';
-    select.onchange = () => switchProject(select.value);
-    projectLabel.appendChild(select);
-    bar.appendChild(projectLabel);
+    const projectPicker = createProjectPicker({
+      value: currentProject,
+      options: projectOptions,
+      label: '切换当前项目',
+      fallbackLabel: state.projectName || '当前项目',
+      disabled: state.switching || !state.projects.length,
+      onSelect: (value) => {
+        if (value === state.projectPath) return false;
+        void switchProject(value);
+        return true;
+      },
+    });
+    toolbarPicker = projectPicker;
+    projectPicker.trigger.dataset.focusKey = 'project';
+    projectField.appendChild(projectPicker.element);
+    bar.appendChild(projectField);
 
     const scan = button('btn ghost', '');
     scan.dataset.focusKey = 'scan';
@@ -1481,7 +1494,8 @@ function createPage(card, { reopen, present }) {
 
   function renderServer(server) {
     const runtime = state.data?.runtime || null;
-    const status = serverStatus(server, runtime, { trust: trust() });
+    const nativeState = typeof state.data?.native?.state === 'string' ? state.data.native.state : null;
+    const status = serverStatus(server, runtime, { trust: trust(), nativeState });
     const row = node('article', 'mcp-server');
     row.dataset.name = server.name;
     row.dataset.scope = server.scope;
@@ -1503,9 +1517,6 @@ function createPage(card, { reopen, present }) {
     if (server.overrideOnly) titleRow.appendChild(badge('项目覆盖', 'info'));
     if (server.hasSecrets) titleRow.appendChild(badge('含凭据引用', 'dim'));
     if (server.scope === 'user' && server.overridden) titleRow.appendChild(badge('被项目覆盖', 'warn'));
-    if (server.effective && server.effective.active === false && server.enabled !== false && server.scope !== 'project') {
-      // effective 的其它原因已在状态区说明，这里不重复堆徽标。
-    }
     body.appendChild(titleRow);
     body.appendChild(node('p', 'mcp-server-desc' + (server.description ? '' : ' is-muted'),
       server.description || (server.overrideOnly ? '项目覆盖条目：transport 与凭据继承全局配置。' : '未填写描述。')));
@@ -1517,9 +1528,11 @@ function createPage(card, { reopen, present }) {
     } else if (server.argsCount) {
       meta.appendChild(node('span', 'mcp-server-meta-item', `${server.argsCount} 个参数`));
     }
-    const statusText = node('span', `mcp-server-status-text ${statusToneClass(status.tone)}`,
-      status.detail ? `${status.label} · ${status.detail}` : status.label);
-    meta.appendChild(statusText);
+    /* 状态标签在右侧 pill 里只出现一次；这里补 pill 放不下的具体信息
+     * （工具数、连接错误、停用原因），不再重复标签本身。 */
+    if (status.detail) {
+      meta.appendChild(node('span', `mcp-server-status-text ${statusToneClass(status.tone)}`, status.detail));
+    }
     body.appendChild(meta);
     row.appendChild(body);
 
