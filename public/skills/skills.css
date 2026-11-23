@@ -365,6 +365,9 @@
 .skills-field-hint { flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--ds-text-muted); overflow-wrap: anywhere; }
 .skills-field .ds-input:not(textarea),
 .skills-field .skills-select { width: 100%; }
+/* 保存位置 / 安装位置改用共享 listbox；宽度跟着字段走。 */
+.skills-field .skills-picker { display: flex; width: 100%; }
+.skills-field .skills-picker-trigger { width: 100%; }
 .skills-field .skills-counter { flex: 0 0 auto; font-size: var(--text-xs); color: var(--ds-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .skills-textarea {
   width: 100%;
@@ -689,7 +692,8 @@
   background: var(--ds-bg-inset);
 }
 .skills-preview-install .skills-field { gap: 3px; }
-.skills-preview-install .skills-select { height: 30px; font-size: var(--text-sm); }
+.skills-preview-install .skills-select,
+.skills-preview-install .skills-picker-trigger { height: 30px; min-height: 30px; font-size: var(--text-sm); }
 .skills-preview-install .skills-input { height: 30px; font-size: var(--text-sm); }
 .skills-preview-install > button { justify-self: stretch; }
 .skills-preview-install .cfg-note { margin: 0; }

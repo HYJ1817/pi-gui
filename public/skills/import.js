@@ -13,13 +13,16 @@ import { createIcon } from '../ui/icons.js';
 import { openModal } from '../ui/modal.js';
 import { resourceEl as el, resourceNote as note } from '../ui/resource-dom.js';
 import { formatSkillBytes, skillDefaultTarget, skillWritableTargets } from './model.js';
+import { createTargetPicker } from './target-picker.js';
 
 const MAX_FILES = 200;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 12 * 1024 * 1024;
 
 function field(labelText, control, hint = '') {
-  const wrap = el('label', 'skills-field');
+  /* 共享 picker 的根是 div；不要把它放进 <label>，否则标签点击会被浏览器
+   * 转发给里面的按钮，和按钮自己的点击叠成两次开合。 */
+  const wrap = el(control.classList?.contains('ds-picker') ? 'div' : 'label', 'skills-field');
   const head = el('span', 'skills-field-head');
   head.append(el('span', 'skills-field-label', labelText));
   if (hint) head.append(el('span', 'skills-field-hint', hint));
@@ -107,6 +110,7 @@ export function openSkillImport({ project = 'none', data = null, targetPreset = 
     ? targetPreset
     : skillDefaultTarget(data, '');
   let conflict = 'fail';
+  let targetPicker = null;
 
   openModal((card, close) => {
     closeModal = close;
@@ -166,21 +170,14 @@ export function openSkillImport({ project = 'none', data = null, targetPreset = 
     const nameField = field('名称', nameInput, '小写字母、数字和连字符，也是目录名');
     planBox.append(planSummary, nameField);
 
-    const targetSelect = el('select', 'ds-select skills-select');
-    targetSelect.setAttribute('aria-label', '保存位置');
-    for (const target of targets) {
-      const option = el('option', '', `${target.scope === 'project' ? '项目' : '全局'} · ${target.label}`);
-      option.value = target.key;
-      targetSelect.append(option);
-    }
-    if (!targets.length) {
-      const option = el('option', '', '没有可写的位置');
-      option.value = '';
-      targetSelect.append(option);
-    }
-    targetSelect.value = targetKey || '';
-    targetSelect.onchange = () => { targetKey = targetSelect.value; renderTargetNote(); };
-    planBox.append(field('保存到', targetSelect));
+    targetPicker = createTargetPicker({
+      targets,
+      value: targetKey || '',
+      label: '保存位置',
+      field: 'target',
+      onChange: (next) => { targetKey = next; renderTargetNote(); },
+    });
+    planBox.append(field('保存到', targetPicker.element));
     const targetNote = note('', 'dim');
     targetNote.hidden = true;
     planBox.append(targetNote);
@@ -388,7 +385,12 @@ export function openSkillImport({ project = 'none', data = null, targetPreset = 
         : '当前没有可写的位置。', 'err');
     }
     pickFile.focus();
-  }, () => { disposed = true; busyToken += 1; });
+  }, () => {
+    disposed = true;
+    busyToken += 1;
+    targetPicker?.destroy();
+    targetPicker = null;
+  });
 
   return { close: () => { if (closeModal) closeModal(); } };
 }

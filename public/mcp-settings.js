@@ -21,6 +21,7 @@ import { toast } from './ui/toast.js';
 import { restartPi } from './providers.js';
 import { createSegmentedControl } from './ui/primitives.js';
 import { createProjectPicker } from './ui/project-picker.js';
+import { createPicker } from './ui/picker.js';
 import {
   MCP_NAME_RE, badge, button, icon, node, relativeTime, runtimeLabel, runtimeServerFor,
   scopeLabel, serverStatus, statusDot, transportLabel,
@@ -80,8 +81,10 @@ function textInput({ value = '', placeholder = '', field = '', ariaLabel = '', t
 function labeledField(labelText, control, hint = '') {
   const id = control.id || fieldId();
   control.id = id;
-  const wrap = node('label', 'mcp-field');
-  wrap.htmlFor = id;
+  /* 共享 picker 的根是 div：放进 <label> 会让标签点击与按钮点击叠成两次开合。 */
+  const picker = control.classList?.contains('ds-picker');
+  const wrap = node(picker ? 'div' : 'label', 'mcp-field');
+  if (!picker) wrap.htmlFor = id;
   wrap.appendChild(node('span', 'mcp-field-label', labelText));
   wrap.appendChild(control);
   if (hint) wrap.appendChild(node('span', 'mcp-field-hint', hint));
@@ -102,19 +105,23 @@ function iconButton(name, label, title, className = 'mcp-icon-btn') {
 }
 
 function exposureSelect(value, onChange, { inherit = false } = {}) {
-  const select = node('select', 'mcp-input ds-input mcp-select');
-  select.dataset.field = 'exposure';
-  const blank = node('option', '', inherit ? '继承全局（不覆盖）' : '不显式设置（Pi 默认 codemode）');
-  blank.value = '';
-  select.appendChild(blank);
-  for (const [key, label] of EXPOSURE_OPTIONS) {
-    const option = node('option', '', label);
-    option.value = key;
-    select.appendChild(option);
-  }
-  select.value = EXPOSURES.has(value) ? value : '';
-  select.onchange = () => onChange(select.value);
-  return select;
+  const blankLabel = inherit ? '继承全局（不覆盖）' : '不显式设置（Pi 默认 codemode）';
+  const picker = createPicker({
+    value: EXPOSURES.has(value) ? value : '',
+    options: [
+      { value: '', label: blankLabel },
+      ...EXPOSURE_OPTIONS.map(([key, label]) => ({ value: key, label })),
+    ],
+    label: '工具暴露方式（exposure）',
+    fallbackLabel: blankLabel,
+    align: 'start',
+    field: 'exposure',
+    className: 'mcp-picker',
+    triggerClassName: 'mcp-picker-trigger',
+    menuClassName: 'mcp-picker-menu',
+    onSelect: (next) => onChange(next),
+  });
+  return picker;
 }
 
 function makeSwitch(checked, label, { disabled = false, title = '' } = {}) {
@@ -323,6 +330,13 @@ function openServerForm({
   let draft = null;
   let fetchError = '';
   const my = ++token;
+  /* 表单每次 renderForm 都会重建节点；上一个 picker 的锚点若被摘掉，
+   * 它 portaled 到 body 的菜单不会自己消失。跟着表单一起销毁。 */
+  const formPickers = new Set();
+  const releasePickers = () => {
+    for (const picker of formPickers) picker.destroy();
+    formPickers.clear();
+  };
 
   openModal((card, close) => {
     card.classList.add('mcp-form-modal');
@@ -330,6 +344,7 @@ function openServerForm({
     const isCurrent = () => !disposed && my === token;
 
     const renderLoading = (message) => {
+      releasePickers();
       card.replaceChildren();
       const head = node('div', 'mcp-modal-head');
       const h = node('h3', '', mode === 'edit' ? '编辑 MCP 服务器' : '新增 MCP 服务器');
@@ -343,6 +358,7 @@ function openServerForm({
     };
 
     const renderFailure = (message) => {
+      releasePickers();
       card.replaceChildren();
       const head = node('div', 'mcp-modal-head');
       head.appendChild(node('h3', '', '无法打开编辑表单'));
@@ -377,6 +393,7 @@ function openServerForm({
 
     const renderForm = (focusField = '') => {
       if (!isCurrent() || !draft) return;
+      releasePickers();
       card.replaceChildren();
       const head = node('div', 'mcp-modal-head');
       const titleWrap = node('div', 'mcp-modal-title');
@@ -507,7 +524,8 @@ function openServerForm({
       enabledRow.append(text, sw);
       sec.appendChild(enabledRow);
       const exposure = exposureSelect(draft.exposure, (value) => { draft.exposure = value; }, { inherit: true });
-      sec.appendChild(labeledField('工具暴露方式（exposure）', exposure,
+      formPickers.add(exposure);
+      sec.appendChild(labeledField('工具暴露方式（exposure）', exposure.element,
         '留空表示继承全局配置；选择具体值会在这个项目里覆盖全局 exposure。'));
       if (draft.inherited) {
         const box = node('div', 'mcp-inherit-box');
@@ -716,7 +734,8 @@ function openServerForm({
     const renderAdvanced = () => {
       const sec = formSection('高级');
       const exposure = exposureSelect(draft.exposure, (value) => { draft.exposure = value; });
-      sec.appendChild(labeledField('工具暴露方式（exposure）', exposure,
+      formPickers.add(exposure);
+      sec.appendChild(labeledField('工具暴露方式（exposure）', exposure.element,
         'Pi 默认 codemode；direct 会把工具直接暴露给 Agent，hidden 会隐藏。保存后需要 /reload 或重启 Pi 才会应用到运行中的会话。'));
 
       const timeout = textInput({ value: String(draft.timeout ?? ''), field: 'timeout', ariaLabel: '超时秒数', type: 'number', placeholder: '留空使用 Pi 默认值' });
@@ -740,7 +759,7 @@ function openServerForm({
     };
 
     bootstrap();
-  }, () => { token++; });
+  }, () => { releasePickers(); token++; });
 }
 
 /* ---------- 导入其他工具 ---------- */

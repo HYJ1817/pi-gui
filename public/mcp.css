@@ -133,6 +133,9 @@
 .mcp-input { width: 100%; }
 /* 弹层表单里的原生选择器沿用字段族外观；工具栏的项目切换走共享 .project-picker。 */
 .mcp-select { appearance: none; padding-right: 28px; cursor: pointer; }
+/* exposure 改用共享 listbox：占满字段宽度，字号与同表单的 ds-input 一致。 */
+.mcp-field .mcp-picker { display: flex; width: 100%; }
+.mcp-field .mcp-picker .ds-picker-trigger { font-size: var(--text-sm); }
 
 /* ---------- 分组 ---------- */
 

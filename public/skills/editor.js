@@ -14,6 +14,7 @@ import { openModal } from '../ui/modal.js';
 import { createSegmentedControl } from '../ui/primitives.js';
 import { resourceEl as el, resourceNote as note } from '../ui/resource-dom.js';
 import { formatSkillBytes, skillTargetLabel, skillWritableTargets } from './model.js';
+import { createTargetPicker } from './target-picker.js';
 
 const CHECK_DEBOUNCE_MS = 350;
 
@@ -35,7 +36,8 @@ function debounce(fn, ms) {
 }
 
 function field(labelText, control, { hint = '', extra = null } = {}) {
-  const wrap = el('label', 'skills-field');
+  /* 共享 picker 的根是 div：放进 <label> 会让标签点击与按钮点击叠成两次开合。 */
+  const wrap = el(control.classList?.contains('ds-picker') ? 'div' : 'label', 'skills-field');
   const head = el('span', 'skills-field-head');
   head.append(el('span', 'skills-field-label', labelText));
   if (hint) head.append(el('span', 'skills-field-hint', hint));
@@ -72,6 +74,7 @@ export function openSkillEditor({ mode = 'edit', skill = null, project = 'none',
   let saving = false;
   let touched = false;
   let lastCheck = null;
+  let targetPicker = null;
 
   const targets = skillWritableTargets(data);
   let targetKey = (creating ? targets[0]?.key : skill?.manage?.target) || targets[0]?.key || '';
@@ -177,24 +180,18 @@ export function openSkillEditor({ mode = 'edit', skill = null, project = 'none',
     /* ---------- 目标位置 ---------- */
     let targetSelect = null;
     if (creating) {
-      targetSelect = el('select', 'ds-select skills-select');
-      targetSelect.setAttribute('aria-label', '保存位置');
-      for (const target of targets) {
-        const option = el('option', '', `${target.scope === 'project' ? '项目' : '全局'} · ${target.label}`);
-        option.value = target.key;
-        targetSelect.append(option);
-      }
-      if (!targets.length) {
-        const option = el('option', '', '没有可写的位置');
-        option.value = '';
-        targetSelect.append(option);
-      }
-      targetSelect.value = targetKey;
-      targetSelect.onchange = () => {
-        targetKey = targetSelect.value;
-        renderTargetNotice();
-        scheduleCheck(0);
-      };
+      targetPicker = createTargetPicker({
+        targets,
+        value: targetKey,
+        label: '保存位置',
+        field: 'target',
+        onChange: (next) => {
+          targetKey = next;
+          renderTargetNotice();
+          scheduleCheck(0);
+        },
+      });
+      targetSelect = targetPicker.element;
       const targetField = field('保存到', targetSelect, { hint: '全局技能对所有项目可用；项目技能只属于当前项目' });
       formPanel.append(targetField);
     }
@@ -489,6 +486,8 @@ export function openSkillEditor({ mode = 'edit', skill = null, project = 'none',
     checkToken += 1;
     loadToken += 1;
     saveToken += 1;
+    targetPicker?.destroy();
+    targetPicker = null;
   });
 
   return {

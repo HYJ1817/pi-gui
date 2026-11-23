@@ -21,6 +21,7 @@ import {
   filterMarketEntries, formatSkillBytes, marketCategoryLabel, marketEntryInstalled, marketPageCount,
   marketPageItems, marketPageWindow, marketSourceName, skillWritableTargets,
 } from './model.js';
+import { createTargetPicker } from './target-picker.js';
 
 const CATEGORY_ICON = Object.freeze({
   workflow: 'task', writing: 'edit', coding: 'terminal', data: 'chart', docs: 'fileText',
@@ -49,7 +50,8 @@ function stateTile(text, { icon = 'market', hint = '', action = null } = {}) {
 }
 
 function selectField(labelText, select) {
-  const wrap = el('label', 'skills-field');
+  /* 共享 picker 的根是 div：放进 <label> 会让标签点击与按钮点击叠成两次开合。 */
+  const wrap = el(select.classList?.contains('ds-picker') ? 'div' : 'label', 'skills-field');
   const head = el('span', 'skills-field-head');
   head.append(el('span', 'skills-field-label', labelText));
   wrap.append(head, select);
@@ -546,6 +548,7 @@ export function renderSkillsMarket(holder, {
     let allowPartial = false;
     const previewTargets = skillWritableTargets(listData);
     let targetKey = previewTargets[0]?.key || '';
+    let targetPicker = null;
     let conflict = 'fail';
     const origin = preview.source || {};
 
@@ -618,21 +621,14 @@ export function renderSkillsMarket(holder, {
       /* 安装区 */
       const installBox = el('div', 'skills-preview-install');
       installBox.append(el('div', 'skills-preview-side-title', '安装'));
-      const targetSelect = el('select', 'ds-select skills-select');
-      targetSelect.setAttribute('aria-label', '安装到');
-      for (const target of previewTargets) {
-        const option = el('option', '', `${target.scope === 'project' ? '项目' : '全局'} · ${target.label}`);
-        option.value = target.key;
-        targetSelect.append(option);
-      }
-      if (!previewTargets.length) {
-        const option = el('option', '', '没有可写的位置');
-        option.value = '';
-        targetSelect.append(option);
-      }
-      targetSelect.value = targetKey;
-      targetSelect.onchange = () => { targetKey = targetSelect.value; };
-      installBox.append(selectField('安装到', targetSelect));
+      targetPicker = createTargetPicker({
+        targets: previewTargets,
+        value: targetKey,
+        label: '安装到',
+        field: 'install-target',
+        onChange: (next) => { targetKey = next; },
+      });
+      installBox.append(selectField('安装到', targetPicker.element));
       const nameInput = el('input', 'ds-input skills-input');
       nameInput.type = 'text';
       nameInput.value = preview.suggestedName || preview.entry?.slug || '';
@@ -762,6 +758,8 @@ export function renderSkillsMarket(holder, {
       disposedPreview = true;
       fileToken += 1;
       installToken += 1;
+      targetPicker?.destroy();
+      targetPicker = null;
     });
   }
 
