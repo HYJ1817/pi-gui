@@ -85,7 +85,8 @@ export async function sendJSON(url, { method = 'POST', body, contentType, header
     if (r.status >= 500) reportRequestFailure(url, r.status);
     return await r.json();
   } catch (err) {
-    reportRequestFailure(url, 0);
+    // Intentional cancellation (pagehide, removal, switch) is not a network fault.
+    if (err?.name !== 'AbortError') reportRequestFailure(url, 0);
     return { ok: false, error: err.message, network: true };
   }
 }
@@ -721,10 +722,11 @@ export const extensionMarketAction = (action) => sendJSON('/api/extensions/marke
 /* ---------- 附件上传 ---------- */
 
 /** 上传走裸二进制（文件名放 query），省掉 multipart 解析。 */
-export const uploadFile = (file, name) =>
+export const uploadFile = (file, name, { signal } = {}) =>
   sendJSON('/api/upload?name=' + encodeURIComponent(name), {
     body: file,
     contentType: 'application/octet-stream',
+    signal,
   });
 
 
