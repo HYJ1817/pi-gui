@@ -3,6 +3,7 @@
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
 const assert = require('node:assert/strict');
 const ROOT = path.resolve(__dirname, '..');
+const { TINY_PNG_BASE64 } = require('./fixtures/attachment-files.cjs');
 const OUT = path.join(ROOT, 'docs/claude-ui-redesign/ui3a-evidence');
 const checks = [];
 function check(name, fn) {
@@ -39,10 +40,10 @@ async function unit() {
   check('empty composer disabled', () => assert.equal(send.disabled, true));
   for (const attachment of [{ id: 'load', name: 'upload.txt', loading: true }, { id: 'err', name: 'bad.pdf', error: '提取失败' }]) {
     w.S.attachments = [attachment]; w.renderAttachments(); w.updateSendState();
-    check('attachment send policy distinguishes pending and failed: ' + attachment.id, () => assert.equal(send.disabled, attachment.loading === true));
+    check('attachment send policy blocks pending or failed uploads without a reference: ' + attachment.id, () => assert.equal(send.disabled, true));
   }
   const fixtures = [
-    { id: 'img', name: 'image.png', size: 1024, kind: 'image', dataUrl: 'data:image/png;base64,YQ==' },
+    { id: 'img', name: 'image.png', size: 1024, kind: 'image', dataUrl: 'data:image/png;base64,' + TINY_PNG_BASE64 },
     { id: 'txt', name: '长文件名'.repeat(40) + '.txt', path: 'C:/fixture/long/file.txt', size: 2048, kind: 'text', chars: 3, text: '原文', truncated: true },
     { id: 'load', name: 'loading.pdf', size: 10, loading: true },
     { id: 'err', name: '<img src=x onerror=alert(1)>.docx', size: 30, error: '<b>提取失败</b>' },
@@ -51,11 +52,11 @@ async function unit() {
   w.S.attachments = fixtures; const original = JSON.stringify(fixtures);
   w.renderAttachments();
   check('all attachments render without content mutation', () => { assert.equal(tray.children.length, 5); assert.equal(JSON.stringify(fixtures), original); });
-  check('explicit states distinguish ready/loading/error/unreadable', () => assert.equal([...tray.children].map(e => e.dataset.state).join(','), 'ready,truncated,loading,error,unreadable'));
-  check('thumbnail and size shown, long filename retains full path', () => { assert.equal(tray.querySelector('img').getAttribute('src'), fixtures[0].dataUrl); assert.equal(tray.querySelectorAll('.ui3-attachment-size').length, 5); assert.equal(tray.children[1].querySelector('.att-name').title, fixtures[1].path); });
+  check('explicit states distinguish ready/loading/error/reference', () => assert.equal([...tray.children].map(e => e.dataset.state).join(','), 'ready,truncated,loading,error,reference'));
+  check('thumbnail and size shown, long filename retains its full original name', () => { assert.equal(tray.querySelector('img').getAttribute('src'), fixtures[0].dataUrl); assert.equal(tray.querySelectorAll('.ui3-attachment-size').length, 5); assert.equal(tray.children[1].querySelector('.att-name').title, fixtures[1].name); });
   check('untrusted name and error are inert text', () => { assert.equal(tray.children[3].querySelector('img,b'), null); assert.ok(tray.children[3].textContent.includes('<b>提取失败</b>')); });
   check('loading exposes busy state and truncation stays explicit', () => { assert.equal(tray.children[2].getAttribute('aria-busy'), 'true'); assert.ok(tray.children[1].textContent.includes('已截断')); });
-  w.S.attachments = fixtures.filter(a => !a.loading);
+  w.S.attachments = fixtures.filter(a => !a.loading && !a.error);
   for (const inputTypes of [['text'], ['text', 'image'], null]) {
     w.S.state.model = inputTypes ? { input: inputTypes } : {};
     w.renderAttachments(); w.updateSendState();
@@ -65,7 +66,7 @@ async function unit() {
   w.S.attachments = fixtures;
   const beforeMessage = w.buildMessage('正文'), beforeImages = JSON.stringify(w.attachmentImages());
   w.renderAttachments();
-  check('presentation preserves message and image wire format', () => { assert.equal(w.buildMessage('正文'), beforeMessage); assert.equal(JSON.stringify(w.attachmentImages()), beforeImages); assert.ok(beforeMessage.includes('<pi-file name="' + fixtures[1].name + '" meta="3 字 · 已截断">\n原文\n…（内容过长，已截断）\n</pi-file>')); assert.equal(beforeImages, '[{"type":"image","data":"YQ==","mimeType":"image/png"}]'); });
+  check('presentation preserves message and image wire format', () => { assert.equal(w.buildMessage('正文'), beforeMessage); assert.equal(JSON.stringify(w.attachmentImages()), beforeImages); assert.ok(beforeMessage.includes('<pi-file name="' + fixtures[1].name + '" meta="3 字 · 已截断">\n原文\n…（内容过长，已截断）\n</pi-file>')); assert.equal(beforeImages, JSON.stringify([{ type: 'image', data: TINY_PNG_BASE64, mimeType: 'image/png' }])); });
   tray.querySelectorAll('.att-x')[1].focus(); w.renderAttachments();
   check('async redraw retains focused removal button', () => assert.equal(d.activeElement.dataset.attachmentId, 'txt'));
   d.activeElement.click();

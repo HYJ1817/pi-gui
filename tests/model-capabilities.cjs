@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const { bundle } = require('./esm-bundle.cjs');
+const { TINY_PNG_BASE64, tinyPng } = require('./fixtures/attachment-files.cjs');
 let pass = 0, fail = 0;
 async function check(name, fn) { try { await fn(); pass++; console.log('  ok  ' + name); } catch (e) { fail++; console.error(' FAIL ' + name + ': ' + e.message); } }
 async function main() {
@@ -146,7 +147,7 @@ async function runUiChecks() {
   });
   await check('unknown image model really accepts image selection', async () => {
     state({ provider: 'b', id: 'unknown' });
-    await w.handleFiles([new w.File(['image'], 'allowed.png', { type: 'image/png' })]);
+    await w.handleFiles([new w.File([tinyPng()], 'allowed.png', { type: 'image/png' })]);
     assert.ok(w.S.attachments.some(a => a.name === 'allowed.png' && a.kind === 'image'));
   });
   await check('repeated model ID on another Provider never inherits images or tools', () => {
@@ -155,7 +156,7 @@ async function runUiChecks() {
     assert.equal(w.S.state.model.capability.capabilities.toolCalling, null); assert.equal(w.S.localUsage.providerId, 'b');
   });
   await check('switch to image=false blocks existing image submission without losing draft', async () => {
-    state({ provider: 'a', id: 'text', input: ['text'] }); w.S.attachments = [{ id: 'img', kind: 'image', name: 'a.png', dataUrl: 'data:image/png;base64,YQ==' }];
+    state({ provider: 'a', id: 'text', input: ['text'] }); w.S.attachments = [{ id: 'img', kind: 'image', name: 'a.png', dataUrl: 'data:image/png;base64,' + TINY_PNG_BASE64 }];
     w.document.getElementById('input').value = 'draft'; const count = calls.length; await w.submit();
     assert.equal(calls.length, count); assert.equal(w.S.attachments.length, 1); assert.equal(w.document.getElementById('input').value, 'draft');
   });
