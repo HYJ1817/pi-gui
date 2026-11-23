@@ -2,27 +2,40 @@
  * Pi's existing ImageContent formats; all other files keep their saved path. */
 const IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp']);
 const MIME_BY_EXT = Object.freeze({
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg',
+  gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp',
   svg: 'image/svg+xml', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif', tif: 'image/tiff', tiff: 'image/tiff',
   mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', avi: 'video/x-msvideo',
-  mkv: 'video/x-matroska', ogv: 'video/ogg',
+  mkv: 'video/x-matroska', ogv: 'video/ogg', wmv: 'video/x-ms-wmv', flv: 'video/x-flv',
+  '3gp': 'video/3gpp', '3g2': 'video/3gpp2', mpg: 'video/mpeg', mpeg: 'video/mpeg', m2ts: 'video/mp2t',
+  mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', m4b: 'audio/mp4', aac: 'audio/aac',
+  flac: 'audio/flac', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/opus', weba: 'audio/webm',
+  wma: 'audio/x-ms-wma', aif: 'audio/aiff', aiff: 'audio/aiff',
   pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  odt: 'application/vnd.oasis.opendocument.text', rtf: 'application/rtf',
   ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  odp: 'application/vnd.oasis.opendocument.presentation',
   xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  md: 'text/markdown', markdown: 'text/markdown', zip: 'application/zip',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  md: 'text/markdown', markdown: 'text/markdown', csv: 'text/csv', tsv: 'text/tab-separated-values',
+  txt: 'text/plain', log: 'text/plain', json: 'application/json', jsonl: 'application/x-ndjson',
+  xml: 'application/xml', yml: 'text/yaml', yaml: 'text/yaml', html: 'text/html', htm: 'text/html', css: 'text/css',
+  zip: 'application/zip', rar: 'application/vnd.rar', '7z': 'application/x-7z-compressed',
+  tar: 'application/x-tar', gz: 'application/gzip', tgz: 'application/gzip', bz2: 'application/x-bzip2', xz: 'application/x-xz',
 });
 const GENERIC_MIMES = new Set(['', 'application/octet-stream', 'binary/octet-stream', 'application/unknown']);
 const TYPE_BY_EXT = Object.freeze({
   pdf: 'pdf', doc: 'word', docx: 'word', odt: 'word', rtf: 'word',
   ppt: 'slides', pptx: 'slides', odp: 'slides', xls: 'sheet', xlsx: 'sheet', ods: 'sheet', csv: 'sheet', tsv: 'sheet',
   md: 'markdown', markdown: 'markdown', zip: 'archive', rar: 'archive', '7z': 'archive', tar: 'archive', gz: 'archive',
+  tgz: 'archive', bz2: 'archive', xz: 'archive',
 });
 export const ATTACHMENT_ICONS = Object.freeze({
-  image: 'image', video: 'video', pdf: 'file', word: 'fileText', slides: 'panel',
+  image: 'image', video: 'video', audio: 'audio', pdf: 'file', word: 'fileText', slides: 'panel',
   sheet: 'grid', markdown: 'book', archive: 'archive', text: 'fileText', file: 'file',
 });
 export const ATTACHMENT_LABELS = Object.freeze({
-  image: '图片', video: '视频', pdf: 'PDF', word: '文档', slides: '演示文稿', sheet: '表格',
+  image: '图片', video: '视频', audio: '音频', pdf: 'PDF', word: '文档', slides: '演示文稿', sheet: '表格',
   markdown: 'Markdown', archive: '压缩文件', text: '文本', file: '文件',
 });
 function extension(name) { return (String(name || '').match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase(); }
@@ -81,11 +94,15 @@ export function sniffImageMime(dataUrl) {
 export function attachmentFileType(name, mimeType) {
   const mime = attachmentMimeType(name, mimeType);
   if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
   if (mime.startsWith('image/')) return 'image';
   if (mime === 'application/pdf') return 'pdf';
   if (/wordprocessingml|msword|opendocument\.text|rtf/.test(mime)) return 'word';
   if (/presentationml|powerpoint|opendocument\.presentation/.test(mime)) return 'slides';
   if (/spreadsheetml|ms-excel|opendocument\.spreadsheet/.test(mime)) return 'sheet';
+  // JSON and XML are parsed as text by the server, not by extension alone at display time.
+  if (mime === 'application/json' || mime.endsWith('+json') || mime === 'application/x-ndjson'
+    || mime === 'application/xml' || mime.endsWith('+xml')) return 'text';
   return TYPE_BY_EXT[extension(name)] || (mime.startsWith('text/') ? 'text' : 'file');
 }
 export function attachmentSendBlocked(attachment) {

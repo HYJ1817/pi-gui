@@ -4,6 +4,8 @@ const glyphs = Object.freeze({
   archive: '<path d="M3.5 5h17v4h-17z"/><path d="M5.5 9v9.5A1.5 1.5 0 0 0 7 20h10a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M12 11.5v4.5"/><path d="M9.8 14l2.2 2.2L14.2 14"/>',
   arrowDown: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   arrowUp: '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
+  /* Attachment media: repository-authored geometry, same local outline family. */
+  audio: '<path d="M9 18V5l10-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/>',
   box: '<path d="M21 8l-9-5-9 5 9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
   branch: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7"/><path d="M8.5 6h4a3 3 0 0 1 3 3v.5"/>',

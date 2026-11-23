@@ -42,15 +42,9 @@
   min-width: 0;
   min-height: var(--ds-control-size);
   padding: 0;
-  border: 0;
-  border-radius: var(--radius-xs);
-  background: transparent;
   color: inherit;
-  font-family: inherit;
-  cursor: pointer;
   text-align: left;
 }
-.att-info:hover .att-name { text-decoration: underline; text-underline-offset: 2px; }
 .att-name {
   display: block;
   min-width: 0;
@@ -79,6 +73,7 @@
 .att[data-file-type="word"] .att-ic { color: var(--ds-purple); }
 .att[data-file-type="slides"] .att-ic { color: var(--ds-warning); }
 .att[data-file-type="sheet"] .att-ic { color: var(--ds-success); }
+.att[data-file-type="audio"] .att-ic { color: var(--ds-info); }
 .att[data-file-type="archive"] .att-ic { color: var(--ds-text-secondary); }
 .att-meta {
   display: flex;
@@ -182,7 +177,7 @@
   border-radius: var(--radius-xs);
 }
 .att-media .att-x:hover { color: var(--ds-error); }
-#chatComposer .att :is(.att-preview, .att-info, .att-x):focus-visible {
+#chatComposer .att :is(.att-preview, .att-x):focus-visible {
   outline: 2px solid var(--ds-focus);
   outline-offset: -2px;
 }

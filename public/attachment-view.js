@@ -4,7 +4,6 @@ import { createIcon } from './ui/icons.js';
 import { fmtSize } from './util.js';
 import { attachmentFileType, ATTACHMENT_ICONS, ATTACHMENT_LABELS } from './attachment-types.js';
 import { localPreviewSource, openAttachmentPreview } from './attachment-preview.js';
-import { currentAnchor, closePop, toggleHelpPop } from './ui/popover.js';
 
 function statusText(a, blocked) {
   if (a.loading) return '上传并解析中…';
@@ -19,14 +18,13 @@ function sizeText(a) {
 }
 
 function fileInfo(a, type, media) {
-  const body = document.createElement(media ? 'div' : 'button');
+  // Ordinary files are a static row. Hover already exposes type · name · size,
+  // so clicking must not open a second surface with the same text.
+  const body = document.createElement('div');
   body.className = 'att-body' + (media ? ' att-media-info' : ' att-info');
   const description = [ATTACHMENT_LABELS[type], a.name, sizeText(a)].filter(Boolean).join(' · ');
   if (!media) {
-    body.type = 'button';
-    body.setAttribute('aria-label', description);
     body.title = description;
-    body.onclick = () => toggleHelpPop(body, description);
     const mark = document.createElement('span'); mark.className = 'att-ic';
     mark.appendChild(createIcon(ATTACHMENT_ICONS[type])); body.appendChild(mark);
   }
@@ -76,7 +74,6 @@ export function renderAttachmentTray(box, attachments, { imageBlocked, remove, e
   const oldButtons = [...box.querySelectorAll('.' + focusRole)];
   const focusIndex = oldButtons.indexOf(active);
   const scrollTop = box.scrollTop;
-  if (box.contains(currentAnchor())) closePop();
   box.classList.add('ui3-attachment-tray');
   box.replaceChildren();
   box.hidden = !attachments.length;
@@ -106,7 +103,7 @@ export function renderAttachmentTray(box, attachments, { imageBlocked, remove, e
     meta.textContent = status; meta.title = status; meta.hidden = !status;
     if (status) {
       meta.setAttribute('role', a.error ? 'alert' : 'status');
-      (media ? item.querySelector('.att-preview') : body).setAttribute('aria-describedby', meta.id);
+      (media ? item.querySelector('.att-preview') : item).setAttribute('aria-describedby', meta.id);
     }
     if (a.loading) {
       const spin = document.createElement('span'); spin.className = 'att-spin'; spin.setAttribute('aria-hidden', 'true');
@@ -121,9 +118,9 @@ export function renderAttachmentTray(box, attachments, { imageBlocked, remove, e
   }
   box.scrollTop = scrollTop;
   if (focused !== undefined) {
-    // A disabled media control cannot take focus; never let it swallow the
-    // fallback and leave focus outside the tray.
-    const usable = node => !node.disabled;
+    // A disabled media control or a static file row cannot take focus; never
+    // let either swallow the fallback and leave focus outside the tray.
+    const usable = node => !node.disabled && node.tabIndex >= 0;
     const sameRole = [...box.querySelectorAll('.' + focusRole)].filter(usable);
     // Removing the last item of one role must not drop focus out of the tray:
     // fall back to whatever attachment control remains before leaving it.
