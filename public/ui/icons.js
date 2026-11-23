@@ -4,6 +4,8 @@ const glyphs = Object.freeze({
   archive: '<path d="M3.5 5h17v4h-17z"/><path d="M5.5 9v9.5A1.5 1.5 0 0 0 7 20h10a1.5 1.5 0 0 0 1.5-1.5V9"/><path d="M12 11.5v4.5"/><path d="M9.8 14l2.2 2.2L14.2 14"/>',
   arrowDown: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   arrowUp: '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
+  /* Attachment media: repository-authored geometry, same local outline family. */
+  audio: '<path d="M9 18V5l10-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/>',
   box: '<path d="M21 8l-9-5-9 5 9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
   branch: '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7"/><path d="M8.5 6h4a3 3 0 0 1 3 3v.5"/>',
@@ -30,6 +32,8 @@ const glyphs = Object.freeze({
   grid: '<rect x="4" y="4" width="6" height="6" rx="1.4"/><rect x="14" y="4" width="6" height="6" rx="1.4"/><rect x="4" y="14" width="6" height="6" rx="1.4"/><rect x="14" y="14" width="6" height="6" rx="1.4"/>',
   help: '<circle cx="12" cy="12" r="8"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4M12 17v.4"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
+  /* Attachment media: repository-authored geometry, same local outline family. */
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l2 2M14 9l2 2"/>',
   keyboard: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h.01M11 9h.01M15 9h.01M7 13h.01M11 13h.01M15 13h.01M7 16h10"/>',
   layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
@@ -46,6 +50,7 @@ const glyphs = Object.freeze({
   pending: '<circle cx="12" cy="12" r="6.5" stroke-dasharray="2.4 2.8"/>',
   pin: '<path d="M9 4h6M10 4v5l-3.5 4.5h11L14 9V4M12 13.5V20"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  play: '<path d="m9 5 11 7-11 7z" fill="currentColor" stroke="none"/>',
   /* Lucide power (ISC, lucide.dev/icons/power), embedded locally. */
   power: '<path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/>',
   progress: '<circle cx="12" cy="12" r="6.5"/><circle class="plan-pulse-dot" cx="12" cy="12" r="2.1"/>',
@@ -76,6 +81,7 @@ const glyphs = Object.freeze({
   tool: '<path d="M14.7 6.3a4 4 0 0 1 5 5l-8.4 8.4a2 2 0 0 1-2.8-2.8z"/><path d="M5 5l4 4"/>',
   trash: '<path d="M4 7h16"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l.9 12.1a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4L17.5 7"/><path d="M10.5 11v6M13.5 11v6"/>',
   update: '<circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4M12 16V8"/>',
+  video: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   warning: '<path d="M12 4l9 16H3z"/><path d="M12 9v5M12 17h.01"/>',
 });
 

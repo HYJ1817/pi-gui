@@ -1557,50 +1557,7 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .tip-refresh-btn:hover{background:var(--hover);color:var(--t1)}
 .tip-warn{color:var(--warn)}
 
-/* ============ 附件托盘 ============ */
-
-.attach-tray{
-  display:flex;flex-wrap:wrap;gap:6px;padding:2px 2px 9px;
-  max-height:min(132px,22vh);overflow-y:auto;
-}
-.attach-tray[hidden]{display:none}
-
-.att{
-  display:flex;align-items:center;gap:7px;padding:5px 6px 5px 5px;
-  background:var(--ui-code-surface);border:1px solid var(--line);border-radius:9px;
-  max-width:min(250px,100%);min-width:0;position:relative;
-}
-.att.loading{opacity:.62}
-.att.err{border-color:var(--ui-danger-border);background:var(--ui-danger-surface)}
-.att-thumb{
-  width:32px;height:32px;flex:0 0 auto;border-radius:6px;overflow:hidden;background:var(--ui-code-surface);
-  display:flex;align-items:center;justify-content:center;
-}
-.att-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.att-ic{
-  width:32px;height:32px;flex:0 0 auto;border-radius:6px;background:var(--ui-user-surface);
-  display:flex;align-items:center;justify-content:center;color:var(--t2);
-}
-.att-ic svg{width:15px;height:15px}
-.att-body{min-width:0;flex:1}
-.att-name{
-  display:block;font-size:12px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.att-meta{
-  display:block;font-size:10.5px;color:var(--t3);margin-top:1px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.att.err .att-meta{color:var(--err)}
-.att-x{
-  width:26px;height:26px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-  background:transparent;border:0;border-radius:5px;color:var(--t3);cursor:pointer;
-}
-.att-x:hover{background:var(--ui-danger-surface);color:var(--err)}
-.att-x svg{width:10px;height:10px}
-.att-spin{
-  width:12px;height:12px;border-radius:50%;border:1.6px solid var(--line);
-  border-top-color:var(--t1);animation:spin .7s linear infinite;
-}
+/* 附件托盘的布局、预览与状态统一由 attachments.css 持有。 */
 
 .composer-box.drop{border-color:var(--focus-ring);background:var(--ui-user-surface)}
 

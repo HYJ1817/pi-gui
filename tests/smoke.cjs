@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const { bundle } = require('./esm-bundle.cjs');
+const { TINY_PNG_BASE64, tinyPng } = require('./fixtures/attachment-files.cjs');
 
 const PUB = path.join(__dirname, '..', 'public');
 const html = fs.readFileSync(path.join(PUB, 'index.html'), 'utf8');
@@ -3191,7 +3192,7 @@ staticCheck();
   // --- 附件 ---
   const mkFile = (name, content, type) => new window.File([content], name, { type });
 
-  await window.handleFiles([mkFile('shot.png', 'PNGDATA', 'image/png')]);
+  await window.handleFiles([mkFile('shot.png', tinyPng(), 'image/png')]);
   await new Promise((r) => setTimeout(r, 20));
   check('图片附件渲染缩略图', () => window.document.querySelectorAll('#attachTray .att-thumb img').length === 1);
   check('附件托盘已显示', () => $('attachTray').hidden === false);
@@ -3200,7 +3201,7 @@ staticCheck();
   await window.handleFiles([mkFile('发酵罐设计.pdf', 'PDFDATA', 'application/pdf')]);
   await new Promise((r) => setTimeout(r, 20));
   check('PDF 附件渲染为文件卡片', () => window.document.querySelectorAll('#attachTray .att').length === 2);
-  check('PDF 元信息含页数', () => [...window.document.querySelectorAll('#attachTray .att-meta')].some((x) => x.textContent.includes('1 页')));
+  check('PDF 页数保留在真实提取数据，正常文件不显示重复状态', () => window.S.attachments.find(a => a.name === '发酵罐设计.pdf')?.pages === 1 && [...window.document.querySelectorAll('#attachTray .att-meta')].every(x => x.hidden));
 
   await window.handleFiles([mkFile('notes.docx', 'DOCXDATA', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')]);
   await new Promise((r) => setTimeout(r, 20));
@@ -3208,7 +3209,7 @@ staticCheck();
 
   await window.handleFiles([mkFile('archive.zzz', 'BINDATA', 'application/octet-stream')]);
   await new Promise((r) => setTimeout(r, 20));
-  check('未知二进制标记为不可解析', () => [...window.document.querySelectorAll('#attachTray .att-meta')].some((x) => x.textContent.includes('pi 读不了')));
+  check('未提取的二进制保留有效引用，不伪造读取能力或错误', () => window.S.attachments.find(a => a.name === 'archive.zzz')?.path && !!window.document.querySelector('#attachTray [data-state="reference"]') && !$('attachTray').textContent.includes('pi 读不了'));
 
   // 组装消息（在移除之前做，才能覆盖到无法解析的那条）
   const built = window.buildMessage('请看一下这几个文件');
@@ -3219,7 +3220,7 @@ staticCheck();
   check('无法解析的附件附上路径', () => built.includes('本机路径：C:\\pi-GUI\\.uploads\\'));
 
   const imgs = window.attachmentImages();
-  check('图片转成 pi 的 ImageContent', () => imgs.length === 1 && imgs[0].type === 'image' && imgs[0].mimeType === 'image/png' && imgs[0].data === Buffer.from('PNGDATA').toString('base64'));
+  check('图片转成 pi 的 ImageContent', () => imgs.length === 1 && imgs[0].type === 'image' && imgs[0].mimeType === 'image/png' && imgs[0].data === TINY_PNG_BASE64);
 
   // 移除一个
   window.document.querySelectorAll('#attachTray .att-x')[3].click();
@@ -3279,6 +3280,16 @@ staticCheck();
   check('重建后不暴露裸 pi-file 标签', () => window.document.querySelector('.msg.user .msg-body').textContent.includes('<pi-file') === false);
   check('重建后卡片标题正确', () => window.document.querySelector('.msg-file-head').textContent.includes('重建文档.docx'));
   check('重建后正文仍然收起', () => window.document.querySelector('.msg-file').classList.contains('open') === false);
+
+  /* 旧版本不转义 <pi-file> 属性，文件名里可能字面含 &amp;。新解码器只处理
+   * 带 esc="1" 标记的新格式，避免把旧消息里的真实文件名改写掉。 */
+  const legacyCard = window.userBody({ role: 'user', content: '<pi-file name="A &amp; B.txt" meta="文件引用">\nold\n</pi-file>' });
+  check('旧消息的字面 &amp; 文件名保持原样', () => legacyCard.querySelector('.msg-file-head').textContent.includes('A &amp; B.txt'));
+  window.S.attachments = [{ id: 'escaped-name', name: 'A &amp; B.txt', kind: 'binary', path: 'C:\\temp\\amp.txt', size: 3 }];
+  const escapedMessage = window.buildMessage('');
+  const escapedCard = window.userBody({ role: 'user', content: escapedMessage });
+  check('新消息转义后仍显示真实文件名', () => escapedMessage.includes(' esc="1"') && escapedCard.querySelector('.msg-file-head').textContent.includes('A &amp; B.txt'));
+  window.S.attachments = [];
 
   // 回归：历史重建时图片附件要还原成缩略图
   es.emit({

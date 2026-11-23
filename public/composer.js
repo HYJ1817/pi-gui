@@ -9,6 +9,7 @@ import { el, S } from './state.js';
 import { modelCapability } from './model-capabilities.js';
 import { thinkingAvailability } from './thinking-availability.js';
 import { applyChipState } from './ui3-model-picker.js';
+import { attachmentSendBlocked } from './attachment-types.js';
 
 let modelControlsHook = null;
 
@@ -139,7 +140,7 @@ export function updateSendState() {
   /* `S.stopping`：停止期间**不许发**。这一条是 Stop 语义的一部分 ——
    * 界面上「正在停止」时还能点发送的话，新消息会变成旧 run 的 steer。 */
   if (!S.hasProject || S.switching || S.bridgeState !== 'ready' || S.submitting || S.modelSwitchPending || S.fallbackActive || S.stopping
-    || S.attachments.some(a => a.loading)
+    || S.attachments.some(a => a.loading || attachmentSendBlocked(a))
     || (imageInputBlocked() && S.attachments.some(a => a.kind === 'image'))) {
     el.btnSend.disabled = true;
     reflect();

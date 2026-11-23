@@ -5,6 +5,11 @@ import { icon, iconFor } from '../util.js';
 import { FILE_BLOCK_RE } from '../attachments.js';
 
 let disclosureId = 0;
+const decodeFileAttribute = value => value.replace(/&(quot|amp|lt|gt|#39);/g, (_, entity) => ({ quot: '"', amp: '&', lt: '<', gt: '>', '#39': "'" })[entity]);
+/* New messages mark escaped attributes with `esc="1"` on the opening tag.
+ * Older builds wrote literal names, which may themselves contain `&amp;`;
+ * decoding those would rewrite filenames that were never escaped. */
+const ESCAPED_FILE_BLOCK_RE = /^<pi-file name="[^"]*" meta="[^"]*" esc="1">/;
 
 function fileBlockCard(name, meta, content) {
   const d = document.createElement('div');
@@ -89,7 +94,8 @@ export function userBody(msg) {
 
   while ((m = FILE_BLOCK_RE.exec(raw))) {
     pushText(raw.slice(last, m.index));
-    body.appendChild(fileBlockCard(m[1], m[2], m[3]));
+    const escaped = ESCAPED_FILE_BLOCK_RE.test(m[0]);
+    body.appendChild(fileBlockCard(escaped ? decodeFileAttribute(m[1]) : m[1], escaped ? decodeFileAttribute(m[2]) : m[2], m[3]));
     last = m.index + m[0].length;
   }
   pushText(raw.slice(last));

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), zlib = require('node:zlib');
 const { JSDOM } = require('jsdom');
 const { bundle } = require('./esm-bundle.cjs');
+const { TINY_PNG_BASE64 } = require('./fixtures/attachment-files.cjs');
 const tick = async () => { for (let i = 0; i < 12; i++) await new Promise(r => setImmediate(r)); };
 const pause = ms => new Promise(r => setTimeout(r, ms));
 function docx(xml) {
@@ -79,7 +80,7 @@ function docx(xml) {
       try {
         assert.equal(w.S.attachments.length, 1); assert.equal(send.disabled, true);
       } finally {
-        reader.result = 'data:image/png;base64,YQ=='; reader.onload(); await tick();
+        reader.result = 'data:image/png;base64,' + TINY_PNG_BASE64; reader.onload(); await tick();
         finish({ ok: true, kind: 'image', id: 'image-ready' }); await upload; w.FileReader = OriginalReader;
       }
     });

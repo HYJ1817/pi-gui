@@ -20,6 +20,7 @@ import { applyState, applyStats, onModels, onThinkingLevels, renderUsageState } 
 import { invalidateSessionStats, requestSessionStats, takeSessionStatsRequest } from './session-stats.js';
 import { autoGrow, updateSendState, renderModelControls, imageInputBlocked } from './composer.js';
 import { attachmentImages, buildMessage, renderAttachments } from './attachments.js';
+import { attachmentSendBlocked } from './attachment-types.js';
 import { clearChanges } from './changes.js';
 import { showChat } from './ui/workspace-surface.js';
 import { clearDraft, draftSync } from './draft.js';
@@ -371,7 +372,8 @@ export async function submit() {
   const text = el.input.value.trim();
   const atts = S.attachments.slice();
   if (!text && !atts.length) return;
-  if (atts.some(a => a.loading)) return toast('附件正在解析，请稍后发送。', 'info');
+  if (atts.some(a => a.loading)) return toast('附件正在上传或解析，请稍后发送。', 'info');
+  if (atts.some(attachmentSendBlocked)) return toast('有附件未能上传，请移除后重新添加。', 'error');
   if (S.modelSwitchPending) return toast('正在确认当前模型，请稍后发送。', 'info');
   if (imageInputBlocked() && atts.some(a => a.kind === 'image')) {
     toast('当前模型不支持图片，请移除图片或切换模型。', 'info');
