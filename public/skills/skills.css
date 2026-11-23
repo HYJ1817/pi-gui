@@ -84,7 +84,15 @@
 .skills-notice-close svg { width: 13px; height: 13px; }
 
 /* ---------- 分组 ---------- */
-.skills-content { display: grid; gap: var(--ui-space-5); min-width: 0; }
+.skills-content {
+  display: grid;
+  gap: var(--ui-space-5);
+  min-width: 0;
+  /* 滚到底时最后一个分组不能贴住窗口。Chromium 对「固定高度的 flex 子项里
+   * 溢出内容」不把外层滚动容器的 padding-bottom 算进可滚动高度；留白必须
+   * 由内容自身承担，否则空状态瓦片的圆角与底部会被窗口边缘裁掉。 */
+  padding-bottom: var(--ui-space-6);
+}
 .skills-content.is-loading { opacity: .6; pointer-events: none; }
 .skills-group { display: grid; gap: 8px; min-width: 0; }
 .skills-group-head {
