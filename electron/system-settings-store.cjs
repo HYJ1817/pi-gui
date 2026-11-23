@@ -9,7 +9,6 @@ const { randomUUID } = require('node:crypto');
 const DEFAULTS = Object.freeze({ keepAwake: false, preventDisplaySleep: false, closeBehavior: 'quit' });
 const KEYS = Object.keys(DEFAULTS);
 const identity = stat => `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
-const samePath = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 
 function validSetting(key, value) {
   return KEYS.includes(key) && (key === 'closeBehavior' ? ['quit', 'tray'].includes(value) : typeof value === 'boolean');
@@ -44,8 +43,14 @@ async function createSystemPreferenceFile({ directory, io = fs, fileName, defaul
       if (parent === current) break;
       current = parent;
     }
-    if (!samePath(await io.realpath(root), root)) throw Error('unsafe_settings_path');
+    /* Do not compare the realpath string: Windows 8.3 short names
+     * (C:\Users\RUNNER~1\...) and subst drives resolve to the same directory
+     * with a different spelling. A symlink/junction is already rejected by the
+     * per-component lstat above; compare the resolved directory's identity
+     * instead, so aliases pass but a realpath pointing elsewhere still fails. */
+    const real = await io.realpath(root);
     const stat = await io.lstat(root);
+    if (identity(await io.stat(real)) !== identity(stat)) throw Error('unsafe_settings_path');
     rootIdentity ??= identity(stat);
     if (rootIdentity !== identity(stat)) throw Error('settings_directory_changed');
   }

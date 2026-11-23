@@ -117,6 +117,23 @@ test('preferences: hardlinks, junctions, ancestor links and replaced roots are r
   assert.equal((await store.save(DEFAULTS)).ok, false);
   assert.equal(await fs.readFile(file, 'utf8'), 'protected');
 });
+test('preferences: aliases of the same directory are accepted, foreign realpaths are not', async t => {
+  const directory = await world(t), other = await world(t);
+  const alias = directory + '-alias';
+  await fs.symlink(directory, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  t.after(() => fs.unlink(alias).catch(() => {}));
+  /* Simulate an 8.3 short name / subst drive: realpath has a different spelling
+   * but resolves to the same directory. The guard must accept it. */
+  const aliased = await createSystemSettingsStore({ directory, io: { ...fs,
+    realpath: async p => p === directory ? alias : fs.realpath(p) } });
+  assert.equal(aliased.snapshot().status, 'default');
+  assert.equal((await aliased.save(DEFAULTS)).ok, true);
+  /* A realpath that points at another directory is still rejected. */
+  const foreign = await createSystemSettingsStore({ directory, io: { ...fs,
+    realpath: async p => p === directory ? other : fs.realpath(p) } });
+  assert.equal(foreign.snapshot().status, 'unavailable');
+  assert.equal((await foreign.save(DEFAULTS)).ok, false);
+});
 test('power: independent IDs, repeated enable, priority and dispose', () => {
   const native = nativePower(), power = createSystemPower({ powerSaveBlocker: native });
   assert.deepEqual(power.snapshot(), { keepAwake: false, preventDisplaySleep: false });
