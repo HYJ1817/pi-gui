@@ -214,7 +214,8 @@ Memory browser、Browser manager、第二套 MCP runtime、**任意包安装 / n
 | `public/capability-model.js` | 纯投影：四值状态、适用性收口、结论行、setup 视图模型 |
 | `public/ui/capability-setup.js` | 唯一一套 setup 布局 + 唯一的一键安装 + 唯一的「安装后重启 Pi」实现 |
 | `public/extensions/` | 扩展页：「已安装」通用 Registry + 包清单（已安装能力的 setup 在包详情内），「插件市场」负责未安装包的安装 / 更新 |
-| `public/skills/` | 技能设置页；项目切换复用 `public/ui/project-picker.js` |
+| `public/ui/picker.js` | 共享单选 listbox：主题化弹出层、键盘、focus-visible 与异步选择回退；项目选择器与表单里的目标 / exposure 都复用它 |
+| `public/skills/` | 技能设置页；项目切换复用 `public/ui/project-picker.js`，新建 / 导入 / 市场安装的写入目标复用 `skills/target-picker.js` |
 | `public/mcp-settings.js` | MCP 管理页；不再渲染能力报告 |
 | `public/*-capabilities.js` | 各 feature 的事实与 descriptor（Registry 证据 → 三值；`installId` 指向服务端 allowlist） |
 | `server/capability-install.js` | 受控安装：固定 allowlist、固定 argv、闸门、维护暂停 / 恢复、脱敏错误 |

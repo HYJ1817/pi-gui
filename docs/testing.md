@@ -1320,13 +1320,14 @@ Work Surface 自身保持 `overflow:hidden`（`scrollTop` 为 0，与 Planner / 
 未信任行、重启提示走页内、PUT 只走 ID 路径；原状态筛选的 2 条改成 2 条徽标断言，总数不变）、
 `tests/ui-ia.cjs`（32 条）与 `tests/agent-capability-pages.cjs`（55 条）。
 
-真实渲染三层（都不进默认 CI）：`tests/skills-visual.cjs` 截 40 张（1320×820 / 700×600，
+真实渲染三层（都不进默认 CI）：`tests/skills-visual.cjs` 截 44 张（1320×820 / 700×600，
 深浅色，列表 / 空 / 错误 / 成功 / 新建 / 编辑 / 导入 / 市场 / 预览 / 扫描）；
 `npm run test:shortcuts:electron` 104 条，其中技能页实测分组顺序、组头路径宽度、第一行三件
 中线差 < 2px、开关距右缘 10–18px、状态点在图标右下、700px 无横向溢出，并补拍项目选择器打开态；
 `tests/capability-pages-visual.cjs` 57 张（四组尺寸主题 + 菜单 / 焦点 / 选中态，19 条计算样式），
-`tests/capability-pages-electron.cjs` 56 张 / 48 条测量（1320×820、700×600、深浅色、
-125% / 150% 字体缩放与项目菜单打开态，DPR 1.5）。
+`tests/capability-pages-electron.cjs` 68 张 / 48 条测量（1320×820、700×600、深浅色、
+125% / 150% 字体缩放、项目菜单与四处表单选择器菜单打开态、旧缓存状态行，DPR 1.5；
+`MCP_MARKET_STALE=1` 时多 4 张状态行截图并断言无横幅底色 / 左缘条）。
 `npm run shots`（`tests/cdp-shot.cjs`）的未信任技能步骤断言行内「未加载（项目未信任）」。
 
 未运行（如实记录）：完整 `npm test`（以 PR CI 为准）、`npm run test:skills-live`（真 pi）、

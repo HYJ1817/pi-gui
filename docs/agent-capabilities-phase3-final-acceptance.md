@@ -1,6 +1,6 @@
 # Skills、Extensions、MCP 第三阶段验收
 
-**当前结论：第三阶段历史验收见下文；2026-11-23 的产品 UI 整改已完成定向验证与真实 Electron 渲染，完整 PR CI 待验证。未合并、未发布。** 技能与扩展是真实产品页面改版；MCP 是只读版式参照。定向验证与全量证明分开记录。
+**当前结论：第三阶段历史验收见下文；2026-11-23 的产品 UI 整改、表单选择器统一与验收反馈修正已完成定向验证与真实 Electron 渲染，完整 PR CI 待验证。未合并、未发布。** 技能与扩展是真实产品页面改版；MCP 是只读版式参照。定向验证与全量证明分开记录。
 
 - 分支：`feat/agent-capabilities-phase3-final`，独立工作树。基线：`5ed42f3e43881dc7b353452dac3abb506a2c0c52`（已含 [#103](https://github.com/HYJ1817/pi-gui/pull/103)、[#104](https://github.com/HYJ1817/pi-gui/pull/104)、[#105](https://github.com/HYJ1817/pi-gui/pull/105)）。[main push CI 45004352564](https://github.com/HYJ1817/pi-gui/actions/runs/45004352564)，attempt 1 成功，仅证明基线。
 - 本次续作从 `15d3eff2` 起。`8afeb76a` 已撤销 `bb5b4b38` 的 MCP 外观改动，`15d3eff2` 将对应测试恢复到原界面。相较外观改动之前的 `05b5cdd1`，`public/mcp*` 仅多了 `f08bff84` 的一行状态失效与注释；`public/mcp.css` 与 `public/mcp-market.js` 均与 `origin/main` 一致。不能因此称**整个 MCP 模块**与 main 相同：分支原有的两处运行状态修复见下表。
@@ -242,4 +242,66 @@ before HEAD `324786c1`；本轮行为提交与报告提交分开记录，报告�
 - 共享项目选择器的真实视觉只在 Windows Electron / Chromium 上核对；未覆盖其它平台的系统字体与 DPI。
 - 回滚：本轮是独立的前端 / 测试 / 文档提交，可整体 revert；无数据迁移、无 MCP 配置写入格式变化、无依赖变更。后端 `/api/mcp` 与能力安装接口未删除，回滚后旧报告数据仍可取。
 - 待用户决定：是否接受本轮整改、是否允许后续合并；合并与发布分别授权，本轮不自动合并或发版。
+
+## 表单下拉统一为共享 listbox（2026-11-23 追加）
+
+**结论：开发完成；定向 jsdom、真实 Electron 渲染、打包检查已通过；完整 PR CI 待验证。未合并、未发布。**
+行为提交 `123a162c`（共享选择器与四处替换）、`6db80c8f`（测试与取证）；
+本报告提交以 `git log -1 --format=%H -- docs/agent-capabilities-phase3-final-acceptance.md` 定位。
+
+### 范围与适配判断
+
+| 控件 | 原实现 | 适配判断 | 处理 |
+| --- | --- | --- | --- |
+| MCP 服务器表单 · exposure | 原生 `select`，空白项 + codemode / deferred / direct / hidden | 适合：单值闭集，选择只改 `draft.exposure` | 改共享 listbox；空白项仍按「继承全局（不覆盖）」/「不显式设置（Pi 默认 codemode）」区分，值仍是 `''` / `EXPOSURES`，校验与保存请求不变 |
+| 技能新建 · 保存位置 | 原生 `select`，writable targets +「没有可写的位置」 | 适合：单值闭集 | 改 `skills/target-picker.js`；默认目标仍是 `targets[0]`，切换后仍触发 `renderTargetNotice` 与 `scheduleCheck(0)` |
+| 技能导入 · 保存位置 | 同上 | 适合 | 同上；提交请求的 `target` 仍是所选 target key |
+| 技能市场预览 · 安装到 | 同上 | 适合 | 同上；`targetKey` 仍只随选择更新，安装请求体不变 |
+
+未替换、也**没有改业务语义**的原生 `select`：MCP 的保存范围 / 命令来源 / 导入保存范围、技能的三处冲突策略、外部工具导入的目标与冲突策略。它们不在本次指定的四个控件内；写入范围类控件还依赖单个 `option` 的 `disabled`（项目未信任时不可选），而共享 listbox 当前没有选项级禁用，因此保留原生实现。
+
+### 实现
+
+- `public/ui/picker.js`：从项目选择器抽出的通用单选 listbox。复用 `ui/anchored-menu.js` 的 body 门户、翻转 / 视口夹取、Escape / Tab 关闭与焦点归还；键盘支持方向键、Home / End、Enter / Space；`aria-haspopup="listbox"`、每个选项 `role="option"` / `aria-selected`；触发器和选项只用 `:focus-visible` 画 `--ds-focus`，鼠标选择不留系统白框。
+- `public/ui/project-picker.js`：改为薄包装，保留 `.project-picker*` 类名、`fallbackLabel: '当前项目'` 与原有 API；技能 / MCP 项目切换行为不变。
+- `public/skills/target-picker.js`：新建 / 导入 / 市场安装共用「写到哪里」；选项文案仍为「项目 / 全局 · 目录」，value 仍是 target key，无目标时保留「没有可写的位置」占位。
+- 生命周期：picker 的菜单挂在 `body`，表单重绘或对话框关闭时显式 `destroy()`，避免锚点被摘掉后残留门户节点；picker 字段用 `div` 包装，避免 `label` 点击与按钮点击叠成两次开合。
+- `ui/anchored-menu.js` 的 Tab 分支补 `stopPropagation()`，菜单开着时由菜单先处理 Tab，不再和模态框焦点陷阱在同一键上重复处理。
+
+### 验收反馈修正（2026-11-23 追加，待提交）
+
+用户在本地 Electron 产物验收时指出：MCP 市场的「Registry 刷新失败」仍画成一条黄色横幅，并把代理线路 / 错误码等诊断细节直接铺在界面上。对照
+[设计规范的内容克制要求](ui/design-system.md) 与本轮「清理不必要左缘黄线、重复边框和冗余说明」的约束，确认这是本轮遗留问题，修正如下：
+
+- `public/mcp-market.js` 的旧缓存状态改为一行 `role="status"`：`正在后台刷新…` 用时钟图标，`Registry 刷新失败…` / `正在显示上次成功加载的缓存` 用警告图标。不再使用 `.mcp-banner`，没有底色、左缘条或整圈边框；刷新失败原因（`proxy-blocked`、代理线路、原始错误文案）只留在接口响应与日志，不再进入界面。后台轮询、失败后停止轮询、本地请求失败与上游刷新失败分开措辞的行为不变。
+- `public/ui/picker.js` 的触发器 `aria-label` 改为「字段名，当前：选中值」，并随 `paintTrigger()` 更新；原生 `select` 会连同字段与选中项一起播报，静态标签会丢掉值。项目选择器与四处表单选择器共用这一修正。
+- `public/mcp.css` 把 MCP exposure 触发器的高度、底色与字号对齐同表单的 `.ds-input`（32px、`--ds-field-inset-bg`、`--text-sm`），菜单选项同字号；此前触发器是 34px 白底、菜单 13px，和相邻字段不一致。
+- `tests/visual-harness.cjs` 新增 `MCP_MARKET_STALE=1` 夹具：返回旧目录 + `refreshError`，用于真实渲染取证；`tests/mcp-visual.cjs` 与 `tests/capability-pages-electron.cjs` 在该模式下断言状态行无横幅底色 / 左缘条、不泄露夹具诊断文案。
+
+### 验证
+
+| 命令 / 场景 | 结果 |
+| --- | --- |
+| `node tests/mcp-management-ui.cjs` | **41/41**：exposure 选项集合与回填、点击 / 方向键 / Home / End / Enter、Escape / Tab 归还焦点且不关表单、重绘与取消无残留菜单、选择不写配置；保存请求的 `exposure` 不变；旧缓存状态行不带横幅类、不出现原始 `refreshError` / 本地请求细节，刷新完成或切换来源后消失 |
+| `node tests/skills-ui.cjs` | **44/44**：新建 / 导入 / 市场安装三处目标选择器的提交 `target` 与所选一致，不再有原生 `select`；键盘移动与关闭后无残留；可访问名称带当前目标位置 |
+| `node tests/agent-capability-pages.cjs` | **55/55**：项目选择器回归未受通用引擎抽取影响；项目选择器可访问名称带当前值 |
+| `node tests/capability-pages-electron.cjs --tag=stale-fix`（`MCP_MARKET_STALE=1`） | **68** 张、**48** 条测量、0 renderer error；8 组 pickerProofs 覆盖 4 个控件 × 2 组窗口（1320×820 深 / 700×600 浅），真实方向键移动后 Enter 选择，菜单父节点为 `body`、矩形不越出视口；MCP exposure 触发器实测 **32px / 与同表单 `.ds-input` 同底色**；4 张旧缓存状态图断言无底色、无左缘条、单行高度且不含夹具诊断文案 |
+| `MCP_MARKET_STALE=1 node tests/mcp-visual.cjs` | **6** 张（含 `03c-market-stale.png`）；Chromium 实测状态行背景透明、`border-left: 0`、不含夹具错误文案 |
+| `node tests/skills-visual.cjs` | **44** 张、0 页面异常（选择器定位跟到 `data-field="target"`） |
+| `npm run test:skills` / `npm run test:mcp` | 两组全部通过；末套件分别 **44/44**、**203/203** |
+| `node tests/smoke.cjs` | **1337/1337** |
+| `npm run test:primitives` | 通过；font picker **49/49**（含 picker 菜单为固定层的断言） |
+| `node tests/modules.cjs` / `file-size-report.cjs` / `ui-ia.cjs` | **121/121** / **11/11** / **32/32** |
+| `npm run build:app -- --rebuild` / `npm run test:app` | 构建成功；`dist-app/.../resources/app/public` 与源码逐字节比较 **0 差异**；**27/27** |
+| 完整 PR CI | 待验证 |
+
+本轮没有改 `server/`、没有新增依赖、没有改变 MCP 配置写入格式或技能安装目标。按测试政策不重复跑完整本地 `npm test`，以 PR CI 作 canonical 证明；`test:exe` 未单独重跑（纯前端与测试改动）。
+
+真实渲染证据（Electron 44，DPR 1.5，仓库代表图）：[MCP exposure 深 / 宽](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-exposure-menu-1320x820-dark.png) · [MCP exposure 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-exposure-menu-700x600-light.png) · [技能新建目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-editor-target-menu-1320x820-dark.png) · [技能新建目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-editor-target-menu-700x600-light.png) · [技能导入目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-import-target-menu-1320x820-dark.png) · [技能导入目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-import-target-menu-700x600-light.png) · [市场安装目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-market-target-menu-1320x820-dark.png) · [市场安装目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-market-target-menu-700x600-light.png) · [旧缓存失败状态 深](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-market-stale-1320x820-dark.png) · [旧缓存失败状态 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-market-stale-700x600-light.png)。逐项数值见 [manifest-electron.json](ui/evidence/agent-capabilities-phase3/ui-pickers/manifest-electron.json)。
+
+### 边界与回滚
+
+- 真实视觉只在 Windows Electron / Chromium 上核对，未覆盖其它平台的系统字体与 DPI。
+- Electron 取证窗口用 `--no-sandbox` 在离线夹具上渲染，不作为正常原生沙箱或安装 / 升级证明。
+- 回滚：分别 revert `123a162c`、`6db80c8f` 即可回到原生 `select` 与旧项目选择器实现；本轮验收反馈修正（市场状态行、可访问名称、exposure 对齐）尚未提交，提交后可按同一回滚边界 revert。无数据迁移、无依赖变化。文档与证据是独立提交。
 
