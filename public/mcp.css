@@ -109,6 +109,25 @@
 .mcp-banner-copy { min-width: 0; flex: 1; }
 .mcp-banner-actions { display: flex; gap: 8px; flex: 0 0 auto; }
 
+/* 旧目录刷新状态：一行事实，不占一条横幅。语义色只落在图标上，
+ * 页面级错误才用上面的横幅；原始原因留在接口与诊断里。 */
+.mcp-market-refresh-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 14px;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+.mcp-market-refresh-note .mcp-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ds-text-muted);
+}
+.mcp-market-refresh-note.is-warn .mcp-icon { color: var(--ui-warning); }
+.mcp-market-refresh-note-copy { min-width: 0; }
+
 /* ---------- 工具栏 ---------- */
 
 .mcp-toolbar {
@@ -133,9 +152,16 @@
 .mcp-input { width: 100%; }
 /* 弹层表单里的原生选择器沿用字段族外观；工具栏的项目切换走共享 .project-picker。 */
 .mcp-select { appearance: none; padding-right: 28px; cursor: pointer; }
-/* exposure 改用共享 listbox：占满字段宽度，字号与同表单的 ds-input 一致。 */
+/* exposure 改用共享 listbox：占满字段宽度，高度 / 底色 / 字号都跟同表单的
+ * ds-input 对齐，菜单选项沿用同一个字号，避免弹出层比字段突然变大。 */
 .mcp-field .mcp-picker { display: flex; width: 100%; }
-.mcp-field .mcp-picker .ds-picker-trigger { font-size: var(--text-sm); }
+.mcp-field .mcp-picker .ds-picker-trigger {
+  height: var(--ui-control-height);
+  min-height: var(--ui-control-height);
+  background: var(--ds-field-inset-bg);
+  font-size: var(--text-sm);
+}
+.mcp-picker-menu .ds-picker-option { font-size: var(--text-sm); }
 
 /* ---------- 分组 ---------- */
 

@@ -101,7 +101,12 @@ export function createPicker({
     const hit = currentOption();
     /* Same precedence as the project picker this engine was extracted from:
      * an unknown current value still shows the caller's fallback wording. */
-    labelEl.textContent = hit ? hit.label : (fallbackLabel || current || '未选择');
+    const shown = hit ? hit.label : (fallbackLabel || current || '未选择');
+    labelEl.textContent = shown;
+    /* A native select announces the selected option together with its field
+     * label; a static aria-label would drop the value. Keep both in the
+     * accessible name as the visible label changes. */
+    trigger.setAttribute('aria-label', `${label}，当前：${shown}`);
     trigger.title = hit ? (hit.title || hit.label) : '';
     trigger.disabled = triggerDisabled();
     trigger.setAttribute('aria-busy', String(busy));

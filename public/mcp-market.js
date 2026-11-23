@@ -889,30 +889,27 @@ function createMarketPage(card, {
   }
 
   /* 完整目录刷新失败时，服务端会继续返回上一次成功缓存。这里把
-   * “看到的是旧数据”明确告诉用户，而不是假装刚刷新成功。 */
+   * “看到的是旧数据”明确告诉用户，而不是假装刚刷新成功。
+   *
+   * 这是背景状态，不是需要打断用户的页面级错误：用一行带图标的文字，
+   * 不画整条横幅。失败原因（代理线路、错误码等）属于诊断细节，界面只说
+   * 用户需要知道的事实；原始错误仍保留在接口响应与日志里。 */
   function renderStaleNotice() {
     if (state.source !== 'registry' || !state.stale) return null;
     /* 单独标记，后台刷新完成时只替换这一块，不重建整页。 */
-    const wrap = node('div', 'mcp-banners mcp-stale-banners');
     const refreshing = state.stale.refreshing === true && !state.stale.refreshError;
-    const banner = node('div', `mcp-banner ${refreshing ? 'is-info' : 'is-warn'}`);
-    banner.appendChild(icon(refreshing ? 'clock' : 'warning', 'mcp-icon'));
-    const copy = node('div', 'mcp-banner-copy');
-    if (refreshing) {
-      copy.appendChild(node('strong', '', '正在后台刷新官方 Registry 目录，当前显示的是上次加载的缓存。'));
-    } else {
-      /* renderer 到本地服务的一次请求失败（network:true）不等于 Registry
-       * 刷新失败，不能把本地故障说成上游故障。 */
-      const local = state.stale.refreshError?.network === true;
-      copy.appendChild(node('strong', '', local
+    /* renderer 到本地服务的一次请求失败（network:true）不等于 Registry
+     * 刷新失败，不能把本地故障说成上游故障。 */
+    const local = !refreshing && state.stale.refreshError?.network === true;
+    const line = node('div', `mcp-market-refresh-note mcp-stale-banners ${refreshing ? 'is-info' : 'is-warn'}`);
+    line.setAttribute('role', 'status');
+    line.appendChild(icon(refreshing ? 'clock' : 'warning', 'mcp-icon'));
+    line.appendChild(node('span', 'mcp-market-refresh-note-copy', refreshing
+      ? '正在后台刷新官方 Registry 目录，当前显示上次加载的缓存。'
+      : local
         ? '暂时无法确认后台刷新状态，正在显示上次成功加载的缓存。'
         : 'Registry 刷新失败，正在显示上次成功加载的缓存。'));
-      const detail = marketErrorText(state.stale.refreshError);
-      if (detail) copy.appendChild(node('span', '', ` ${detail}`));
-    }
-    banner.appendChild(copy);
-    wrap.appendChild(banner);
-    return wrap;
+    return line;
   }
 
   function loadingNoteText() {
@@ -1084,7 +1081,7 @@ function createMarketPage(card, {
     restoreFocus(focus);
   }
 
-  /** 只替换旧缓存横幅；后台刷新完成时不必重建整页。 */
+  /** 只替换旧缓存状态行；后台刷新完成时不必重建整页。 */
   function refreshStaleNotice() {
     const current = card.querySelector('.mcp-stale-banners');
     const next = renderStaleNotice();
