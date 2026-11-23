@@ -117,14 +117,29 @@ async function run() {
       ST.el.input.disabled=false;ST.el.input.value='';ST.el.composerBox.classList.remove('is-locked');C.renderModelControls();
       window.mediaFixture=async()=>{
         const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;const ctx=canvas.getContext('2d');
-        ctx.fillStyle='#182126';ctx.fillRect(0,0,320,180);ctx.fillStyle='#78b49b';ctx.fillRect(18,18,100,6);
-        ctx.font='13px monospace';for(let i=0;i<6;i++){ctx.fillStyle=i%2?'#9eabb1':'#dadfe2';ctx.fillText('const frame_'+i+' = '+(i+1)+';',20,50+i*19);}
+        const scene=frame=>{ctx.fillStyle='#182126';ctx.fillRect(0,0,320,180);ctx.fillStyle='#78b49b';ctx.fillRect(18,18,100,6);
+          ctx.font='13px monospace';for(let i=0;i<6;i++){ctx.fillStyle=i%2?'#9eabb1':'#dadfe2';ctx.fillText('const frame_'+i+' = '+(i+1)+';',20,50+i*19);}
+          ctx.fillStyle=frame%2?'#78b49b':'#9eabb1';ctx.fillRect(280,140,20,20);};
+        scene(0);
         const image=new File([await new Promise(r=>canvas.toBlob(r,'image/png'))],'界面预览.png',{type:'image/png'});
-        const stream=canvas.captureStream(12),chunks=[];const recorder=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp8'});
-        const stopped=new Promise(r=>{recorder.ondataavailable=e=>chunks.push(e.data);recorder.onstop=r;});recorder.start();
-        for(let frame=0;frame<8;frame++){ctx.fillStyle=frame%2?'#78b49b':'#9eabb1';ctx.fillRect(280,140,20,20);await new Promise(r=>setTimeout(r,90));}
-        recorder.stop();await stopped;stream.getTracks().forEach(track=>track.stop());
-        return {image,video:new File(chunks,'操作演示.webm',{type:'video/webm'})};
+        const stream=canvas.captureStream(12);
+        const record=async(mime,name,frames)=>{const chunks=[];const recorder=new MediaRecorder(stream,{mimeType:mime});
+          const stopped=new Promise(r=>{recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};recorder.onstop=r;});recorder.start();
+          for(let frame=0;frame<frames;frame++){scene(frame);await new Promise(r=>setTimeout(r,100));}
+          recorder.stop();await stopped;return new File(chunks,name,{type:mime.split(';')[0]});};
+        const video=await record('video/webm;codecs=vp8','操作演示.webm',8);
+        const mp4Supported=MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E');
+        const videoMp4=mp4Supported?await record('video/mp4;codecs=avc1.42E01E','操作演示.mp4',10):null;
+        let videoMp4Unsupported=null;window.mp4SampleEntryReplaced=false;
+        if(videoMp4){const bytes=new Uint8Array(await videoMp4.arrayBuffer());let start=-1;
+          /* Probe on this Chromium: an unknown sample-entry fourcc (zzzz) fails
+           * with MEDIA_ERR_SRC_NOT_SUPPORTED, while hvc1/av01 still decode via
+           * the avcC config. Keep the mutation at the real stsd sample entry. */
+          for(let i=0;i<bytes.length-8;i++){if(bytes[i]===0x73&&bytes[i+1]===0x74&&bytes[i+2]===0x73&&bytes[i+3]===0x64){start=i;break;}}
+          if(start>=0)for(let i=start+4;i<bytes.length-4;i++){if(bytes[i]===0x61&&bytes[i+1]===0x76&&bytes[i+2]===0x63&&bytes[i+3]===0x31){bytes.set([0x7a,0x7a,0x7a,0x7a],i);window.mp4SampleEntryReplaced=true;break;}}
+          videoMp4Unsupported=new File([bytes],'不支持的编码.mp4',{type:'video/mp4'});}
+        stream.getTracks().forEach(track=>track.stop());
+        return {image,video,videoMp4,videoMp4Unsupported,mp4Supported};
       };
       window.fixtureMedia=await mediaFixture();
     })()`);

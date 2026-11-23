@@ -8,7 +8,7 @@ const os = require('node:os');
 const http = require('node:http');
 const { JSDOM } = require('jsdom');
 const { bundle } = require('./esm-bundle.cjs');
-const { documentFiles, tinyPng, tinyBmp, TINY_PNG_BASE64 } = require('./fixtures/attachment-files.cjs');
+const { documentFiles, audioFiles, archiveFiles, tinyPng, tinyBmp, TINY_PNG_BASE64 } = require('./fixtures/attachment-files.cjs');
 let passed = 0, failed = 0;
 async function check(name, run) {
   try { await run(); passed++; console.log('PASS ' + name); }
@@ -54,14 +54,71 @@ async function main() {
       assert.equal([...tray.children].map(item => item.dataset.fileType).join(','), 'pdf,word,slides,sheet,markdown,archive');
       assert.equal(new Set([...tray.querySelectorAll('.att-ic svg')].map(item => item.innerHTML)).size, 6);
     });
-    await check('long original filenames survive server storage sanitization and are keyboard-readable', async () => {
+    await check('mainstream formats classify correctly from declared MIME or extension', () => {
+      const cases = [
+        ['report.pdf', 'application/pdf', 'pdf'], ['report.doc', '', 'word'], ['report.docx', '', 'word'],
+        ['deck.ppt', '', 'slides'], ['deck.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'slides'],
+        ['book.xls', '', 'sheet'], ['book.xlsx', '', 'sheet'], ['table.csv', '', 'sheet'], ['table.tsv', '', 'sheet'],
+        ['notes.md', '', 'markdown'], ['archive.zip', '', 'archive'], ['archive.rar', '', 'archive'],
+        ['archive.7z', '', 'archive'], ['archive.tar', '', 'archive'], ['archive.tar.gz', '', 'archive'],
+        ['photo.png', '', 'image'], ['photo.jpeg', '', 'image'], ['photo.webp', '', 'image'],
+        ['photo.avif', '', 'image'], ['vector.svg', 'image/svg+xml', 'image'],
+        ['clip.mp4', '', 'video'], ['clip.mov', '', 'video'], ['clip.mkv', '', 'video'], ['clip.wmv', '', 'video'],
+        ['song.mp3', '', 'audio'], ['song.wav', 'audio/wav', 'audio'], ['song.m4a', '', 'audio'],
+        ['song.aac', '', 'audio'], ['song.flac', '', 'audio'], ['song.ogg', '', 'audio'], ['song.opus', '', 'audio'],
+        ['readme.txt', '', 'text'], ['data.json', 'application/json', 'text'], ['unknown.bin', '', 'file'],
+      ];
+      for (const [name, mime, expected] of cases) assert.equal(w.attachmentFileType(name, mime), expected, name);
+      assert.equal(w.ATTACHMENT_LABELS.audio, '音频'); assert.equal(w.ATTACHMENT_ICONS.audio, 'audio');
+    });
+    await check('audio formats keep an accurate icon/label and send as file references', () => {
+      const files = audioFiles();
+      w.S.attachments = files.map((item, index) => ({ id: 'audio-' + index, name: item.name, size: item.body.length, mimeType: item.type, kind: 'binary', path: 'C:/temp/' + item.name }));
+      w.renderAttachments();
+      assert.equal(tray.querySelectorAll('[data-file-type="audio"]').length, files.length);
+      assert.equal(tray.querySelectorAll('.att-file').length, files.length);
+      assert.ok(tray.querySelector('.att-ic [data-icon="audio"]'));
+      const first = tray.querySelector('.att-info');
+      assert.equal(first.tagName, 'DIV'); assert.ok(first.title.includes(files[0].name));
+      const message = w.buildMessage('音频任务');
+      for (const item of files) assert.ok(message.includes(item.name), item.name);
+      assert.ok(message.includes('C:/temp/'));
+      assert.ok(message.includes('文件内容未内联到消息中'));
+      assert.ok(!/已解析|解析完成|已提取|已就绪|音频内容已/.test(message));
+      assert.equal(w.attachmentImages().length, 0);
+    });
+    await check('file info hover carries the summary and click does not duplicate it in a popover', () => {
+      w.S.attachments = [{ id: 'plain', name: 'report.pdf', size: 13, mimeType: 'application/pdf', kind: 'binary', path: 'C:/temp/report.pdf' }];
+      w.renderAttachments();
+      const info = tray.querySelector('.att-info');
+      assert.equal(info.tagName, 'DIV'); assert.equal(info.getAttribute('role'), null); assert.equal(info.tabIndex, -1);
+      assert.ok(info.title.includes('PDF')); assert.ok(info.title.includes('report.pdf')); assert.ok(info.title.includes('13 B'));
+      w.closePop(); const pop = d.getElementById('composerPopover');
+      info.click();
+      assert.equal(pop.hidden, true); assert.equal(pop.innerHTML, '');
+    });
+    await check('binary-only formats are never described as parsed just because of their extension', () => {
+      w.S.attachments = [
+        { id: 'slides', name: 'review.pptx', size: 13, kind: 'binary', path: 'C:/temp/review.pptx' },
+        { id: 'sheet', name: 'budget.xlsx', size: 13, kind: 'binary', path: 'C:/temp/budget.xlsx' },
+        { id: 'zip', name: 'bundle.zip', size: 13, kind: 'binary', path: 'C:/temp/bundle.zip' },
+        { id: 'audio', name: 'voice.opus', size: 13, kind: 'binary', path: 'C:/temp/voice.opus' },
+      ];
+      w.renderAttachments();
+      const text = tray.textContent + '\n' + w.buildMessage('任务');
+      assert.ok(!/已解析|解析完成|已提取|已就绪|内容已读取/.test(text));
+      const message = w.buildMessage('任务');
+      for (const name of ['review.pptx', 'budget.xlsx', 'bundle.zip', 'voice.opus']) assert.ok(message.includes(name));
+      assert.ok(message.includes('文件内容未内联到消息中'));
+    });
+    await check('long original filenames survive server storage sanitization and keep full hover text', async () => {
       const name = '中文与English'.repeat(30) + '.pdf';
       w.S.attachments = [];
       w.fetch = async () => ({ json: async () => ({ ok: true, id: 'safe', name: name.slice(0, 120), kind: 'binary', path: 'C:/temp/safe.pdf', size: 13 }) });
       await w.handleFiles([file(name, 'application/pdf')]);
       const label = tray.querySelector('.att-name');
       assert.equal(label.textContent, name); assert.equal(label.title, name);
-      assert.ok(tray.querySelector('.att-info').getAttribute('aria-label').includes(name));
+      assert.ok(tray.querySelector('.att-info').title.includes(name));
     });
     await check('uploads register the entire selected batch before any asynchronous work', async () => {
       w.S.attachments = [];
@@ -237,7 +294,7 @@ async function main() {
       assert.equal(signal.aborted, true); await upload;
       assert.equal(w.S.attachments.length, 0); assert.equal(tray.hidden, true);
     });
-    await check('removing the last image leaves focus on a remaining file item', () => {
+    await check('removing the last image leaves focus on a remaining file control', () => {
       w.S.attachments = [
         { id: 'focus-image', name: 'pic.png', size: 68, mimeType: 'image/png', kind: 'image', dataUrl: 'data:image/png;base64,' + TINY_PNG_BASE64 },
         { id: 'focus-file', name: 'notes.md', size: 3, kind: 'text', text: 'abc', chars: 3 },
@@ -245,17 +302,17 @@ async function main() {
       w.renderAttachments();
       tray.querySelector('.att-preview').focus();
       w.removeAttachment('focus-image');
-      assert.ok(tray.contains(d.activeElement)); assert.ok(d.activeElement.matches('.att-info'));
+      assert.ok(tray.contains(d.activeElement)); assert.ok(d.activeElement.matches('.att-x'));
     });
-    await check('removing the last file leaves focus on a remaining media item', () => {
+    await check('removing the last file keeps focus on a remaining media control', () => {
       w.S.attachments = [
         { id: 'focus-image-2', name: 'pic.png', size: 68, mimeType: 'image/png', kind: 'image', dataUrl: 'data:image/png;base64,' + TINY_PNG_BASE64 },
         { id: 'focus-file-2', name: 'notes.md', size: 3, kind: 'text', text: 'abc', chars: 3 },
       ];
       w.renderAttachments();
-      tray.querySelector('.att-info').focus();
+      tray.querySelectorAll('.att-x')[1].focus();
       w.removeAttachment('focus-file-2');
-      assert.ok(tray.contains(d.activeElement)); assert.ok(d.activeElement.matches('.att-preview'));
+      assert.ok(tray.contains(d.activeElement)); assert.ok(d.activeElement.matches('.att-x'));
     });
     await check('a disabled media item cannot swallow focus when the last file is removed', () => {
       w.S.attachments = [
@@ -264,7 +321,7 @@ async function main() {
       ];
       w.renderAttachments();
       assert.equal(tray.querySelector('.att-preview').disabled, true);
-      tray.querySelector('.att-info').focus();
+      tray.querySelectorAll('.att-x')[1].focus();
       w.removeAttachment('focus-file-3');
       assert.ok(tray.contains(d.activeElement)); assert.ok(d.activeElement.matches('.att-x'));
     });
@@ -296,6 +353,21 @@ async function main() {
       assert.deepEqual(fs.readFileSync(result.path), fixture.body); assert.ok(result.path.startsWith(world + path.sep));
       if (/\.(pdf|docx|md)$/.test(fixture.name)) { assert.equal(result.kind, 'text'); assert.ok(result.text.length > 0); }
       else { assert.equal(result.kind, 'binary'); assert.equal(result.error, undefined); }
+    });
+    for (const fixture of [...audioFiles(), ...archiveFiles()]) await check('real upload preserves non-inlined format reference: ' + fixture.name, async () => {
+      const response = await fetch(`http://127.0.0.1:${server.address().port}/api/upload?name=${encodeURIComponent(fixture.name)}`, { method: 'POST', body: fixture.body });
+      const result = await response.json(); assert.equal(result.ok, true); assert.equal(result.size, fixture.body.length);
+      assert.deepEqual(fs.readFileSync(result.path), fixture.body); assert.ok(result.path.startsWith(world + path.sep));
+      assert.equal(result.kind, /\.(csv|tsv)$/.test(fixture.name) ? 'text' : 'binary', fixture.name);
+      if (result.kind === 'text') assert.ok(result.text.length > 0);
+      else assert.equal(result.error, undefined);
+    });
+    await check('invalid OOXML bytes stay a reported binary reference, never a parsed document', async () => {
+      const body = Buffer.from('this is not a zip or a docx');
+      const response = await fetch(`http://127.0.0.1:${server.address().port}/api/upload?name=${encodeURIComponent('损坏.docx')}`, { method: 'POST', body });
+      const result = await response.json();
+      assert.equal(result.ok, true); assert.equal(result.kind, 'binary'); assert.ok(result.error);
+      assert.deepEqual(fs.readFileSync(result.path), body);
     });
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); fs.rmSync(world, { recursive: true, force: true }); }
   console.log(`Attachments: ${passed}/${passed + failed}; failed=${failed}; skipped=0`); process.exitCode = failed ? 1 : 0;

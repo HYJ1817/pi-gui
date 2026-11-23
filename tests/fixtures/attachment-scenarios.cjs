@@ -35,7 +35,7 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
   await waitFor(`!!ST.S.attachments.find(a=>a.name===fixtureMedia.video.name).thumbnailUrl`);
   const thumbnailDetail = await read(`(async()=>{const image=new Image();image.src=ST.S.attachments.find(a=>a.name===fixtureMedia.video.name).thumbnailUrl;await image.decode();const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const ctx=c.getContext('2d');ctx.drawImage(image,0,0);const data=ctx.getImageData(0,0,c.width,c.height).data;let min=255,max=0;for(let i=0;i<data.length;i+=4){const v=Math.max(data[i],data[i+1],data[i+2]);min=Math.min(min,v);max=Math.max(max,v)}return {min,max,width:c.width,height:c.height}})()`);
   facts.push({ thumbnailDetail });
-  check('first video thumbnail contains the actual recorded scene, not an empty decoded frame',thumbnailDetail.max-thumbnailDetail.min>80,thumbnailDetail);
+  check('first WebM video thumbnail contains the actual recorded scene, not an empty decoded frame',thumbnailDetail.max-thumbnailDetail.min>80,thumbnailDetail);
   for (const theme of ['dark', 'light']) {
     await read(`TH.setThemePreference('${theme}');ST.el.input.blur();ST.el.btnAttach.blur();void 0`);
     await waitFor(`document.documentElement.dataset.theme==='${theme}'`);
@@ -62,13 +62,51 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
   await read(`(()=>{const data=new DataTransfer();data.items.add(fixtureMedia.video);ST.el.composerBox.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data}));})()`);
   await settle(1);
   await waitFor(`!!ST.S.attachments[0].thumbnailUrl`);
-  check('drop generates an actual video thumbnail while retaining raw-file reference', await read(`ST.S.attachments[0].kind!=='image'&&!!ST.S.attachments[0].path&&ST.el.attachTray.querySelector('.att-thumb img').naturalWidth>0&&A.attachmentImages().length===0`));
+  check('drop generates an actual WebM video thumbnail while retaining raw-file reference', await read(`ST.S.attachments[0].kind!=='image'&&!!ST.S.attachments[0].path&&ST.el.attachTray.querySelector('.att-thumb img').naturalWidth>0&&A.attachmentImages().length===0`));
   await shot('single-video');
   await click('.att-preview');
   await waitFor(`!document.querySelector('#modal').hidden&&document.querySelector('.attachment-preview-dialog video').readyState>=2`);
-  check('trusted click opens local video playback with real duration', await read(`(()=>{const v=document.querySelector('.attachment-preview-dialog video');return v.controls&&v.videoWidth===320&&v.duration>0})()`));
+  check('trusted click opens local WebM video playback with real duration', await read(`(()=>{const v=document.querySelector('.attachment-preview-dialog video');return v.controls&&v.videoWidth===320&&v.duration>0})()`));
   await shot('video-preview'); await key('ESC');
   check('Escape closes video preview and returns keyboard focus', await read(`document.querySelector('#modal').hidden&&document.activeElement.matches('.att-preview')`));
+
+  await reset();
+  check('Chromium records a real H.264 MP4 for this offline fixture', await read(`fixtureMedia.mp4Supported===true&&!!fixtureMedia.videoMp4&&fixtureMedia.videoMp4.size>0`));
+  await read(`A.handleFiles([fixtureMedia.videoMp4])`); await settle(1);
+  await waitFor(`!!ST.S.attachments[0].thumbnailUrl`);
+  const mp4Thumbnail = await read(`(async()=>{const image=new Image();image.src=ST.S.attachments[0].thumbnailUrl;await image.decode();const c=document.createElement('canvas');c.width=image.width;c.height=image.height;const ctx=c.getContext('2d');ctx.drawImage(image,0,0);const data=ctx.getImageData(0,0,c.width,c.height).data;let min=255,max=0;for(let i=0;i<data.length;i+=4){const v=Math.max(data[i],data[i+1],data[i+2]);min=Math.min(min,v);max=Math.max(max,v)}return {min,max,width:c.width,height:c.height}})()`);
+  const mp4Facts = await read(`({name:ST.S.attachments[0].name,size:ST.S.attachments[0].size,path:ST.S.attachments[0].path,kind:ST.S.attachments[0].kind})`);
+  const mp4Bytes = fs.readFileSync(mp4Facts.path);
+  facts.push({ mp4: { ...mp4Facts, head: mp4Bytes.subarray(4, 8).toString('ascii'), bytes: mp4Bytes.length, sampleEntryReplaced: await read('window.mp4SampleEntryReplaced') }, mp4Thumbnail });
+  check('real MP4 upload preserves ftyp bytes and generates a real-frame thumbnail', mp4Facts.name === '操作演示.mp4' && mp4Facts.kind !== 'image'
+    && mp4Bytes.length === mp4Facts.size && mp4Bytes.subarray(4, 8).toString('ascii') === 'ftyp'
+    && mp4Thumbnail.max - mp4Thumbnail.min > 80, { mp4Facts, mp4Thumbnail, bytes: mp4Bytes.length, head: mp4Bytes.subarray(4, 8).toString('ascii') });
+  await shot('single-mp4');
+  await click('.att-preview');
+  await waitFor(`!document.querySelector('#modal').hidden&&document.querySelector('.attachment-preview-dialog video').readyState>=2`);
+  check('trusted click decodes the real MP4 with its actual dimensions and duration', await read(`(()=>{const v=document.querySelector('.attachment-preview-dialog video');return v.controls&&v.videoWidth===320&&v.duration>0})()`));
+  await shot('mp4-preview'); await key('ESC');
+  await click('#btnSend'); await waitFor('ST.S.attachments.length===0');
+  check('real MP4 sends only its original file reference', commands.at(-1).message.includes('操作演示.mp4') && commands.at(-1).message.includes('本机路径：') && !commands.at(-1).images);
+
+  await read(`A.handleFiles([fixtureMedia.videoMp4])`); await settle(1);
+  await click('.att-x');
+  check('removing the MP4 immediately clears the tray and returns focus to Attach', await read(`ST.S.attachments.length===0&&ST.el.attachTray.hidden&&document.activeElement.id==='btnAttach'`));
+
+  await reset();
+  check('unsupported-codec MP4 fixture actually changed the sample entry', await read(`window.mp4SampleEntryReplaced===true`));
+  await read(`A.handleFiles([fixtureMedia.videoMp4Unsupported])`); await settle(1);
+  await waitFor(`ST.S.attachments[0].previewLoading===false`);
+  const unsupported = await read(`({thumbnail:!!ST.S.attachments[0].thumbnailUrl,placeholder:!!ST.el.attachTray.querySelector('[data-file-type="video"] .att-media-placeholder:not([hidden])'),image:!!ST.el.attachTray.querySelector('.att-thumb img'),path:!!ST.S.attachments[0].path,sendable:!ST.el.btnSend.disabled})`);
+  facts.push({ unsupported });
+  check('MP4 with an unsupported codec falls back to the video placeholder but stays a sendable reference', !unsupported.thumbnail && unsupported.placeholder && !unsupported.image && unsupported.path && unsupported.sendable, unsupported);
+  await shot('mp4-codec-fallback');
+  await click('[data-file-type="video"] .att-preview');
+  await waitFor(`!!document.querySelector('.attachment-preview-error:not([hidden])')`);
+  check('unsupported MP4 preview reports local decoding failure only', await read(`document.querySelector('.attachment-preview-error').textContent.includes('无法预览')`));
+  await shot('mp4-preview-failure'); await key('ESC');
+  await click('#btnSend'); await waitFor('ST.S.attachments.length===0');
+  check('unsupported MP4 still sends its preserved file reference without image content', commands.at(-1).message.includes('不支持的编码.mp4') && commands.at(-1).message.includes('本机路径：') && !commands.at(-1).images);
 
   await reset();
   await read(`(()=>{const data=new DataTransfer();data.items.add(fixtureMedia.image);document.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));})()`);
@@ -95,8 +133,10 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
     win.webContents.sendInputEvent({ type: 'mouseMove', ...point }); await paint();
     check(theme + ': hovered file reveals its own remove action', await read(`getComputedStyle(ST.el.attachTray.querySelector('.att-file .att-x')).opacity==='1'`));
     await shot(theme + '-file-hover');
-    await read(`ST.el.attachTray.querySelector('.att-file .att-info').focus()`); await key('Tab');
-    check(theme + ': keyboard reveals focus-visible remove control', await read(`document.activeElement.matches('.att-x')&&document.activeElement.matches(':focus-visible')&&getComputedStyle(document.activeElement).opacity==='1'`));
+    await click('.att-file .att-info');
+    check(theme + ': file hover summary does not open a duplicate popover', await read(`document.querySelector('#composerPopover').hidden===true`));
+    await read(`ST.el.attachTray.querySelectorAll('.att-preview')[1].focus()`); await key('Tab'); await key('Tab');
+    check(theme + ': keyboard reveals focus-visible remove control', await read(`document.activeElement.matches('.att-file .att-x')&&document.activeElement.matches(':focus-visible')&&getComputedStyle(document.activeElement).opacity==='1'`));
     await shot(theme + '-keyboard-focus');
     await key('Space');
     check(theme + ': keyboard removal updates state immediately and keeps focus in tray', await read(`ST.S.attachments.length===7&&ST.el.attachTray.contains(document.activeElement)&&!ST.el.btnSend.disabled`));

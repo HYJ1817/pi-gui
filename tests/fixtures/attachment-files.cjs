@@ -84,4 +84,47 @@ function tinyBmp() {
   return bytes;
 }
 
-module.exports = { documentFiles, minimalPdf, zipParts, TINY_PNG_BASE64, tinyPng, tinyBmp };
+/* Format-shaped, deterministic audio bytes. Uploads keep them as opaque file
+ * references; no transcoding or model audio input is claimed. */
+function audioFiles() {
+  const id3 = Buffer.concat([Buffer.from('ID3\x04\x00\x00\x00\x00\x00\x00', 'latin1'), Buffer.alloc(64)]);
+  const wav = Buffer.alloc(44);
+  wav.write('RIFF', 0, 'ascii'); wav.writeUInt32LE(36, 4); wav.write('WAVEfmt ', 8, 'ascii');
+  wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(8000, 28); wav.writeUInt16LE(1, 32);
+  wav.writeUInt16LE(8, 34); wav.write('data', 36, 'ascii');
+  const m4a = Buffer.alloc(64);
+  m4a.writeUInt32BE(32, 0); m4a.write('ftypM4A ', 4, 'ascii');
+  m4a.write('M4A mp42isom', 16, 'ascii');
+  const aac = Buffer.concat([Buffer.from([0xff, 0xf1, 0x50, 0x80, 0x01, 0x7f, 0xfc]), Buffer.alloc(64)]);
+  const flac = Buffer.concat([Buffer.from('fLaC', 'ascii'), Buffer.alloc(64)]);
+  const ogg = Buffer.concat([Buffer.from('OggS', 'ascii'), Buffer.alloc(64)]);
+  const opus = Buffer.concat([Buffer.from('OggS', 'ascii'), Buffer.from('OpusHead', 'ascii'), Buffer.alloc(56)]);
+  return [
+    { name: '示例音频.mp3', type: 'audio/mpeg', body: id3 },
+    { name: '录音.wav', type: 'audio/wav', body: wav },
+    { name: '播客.m4a', type: 'audio/mp4', body: m4a },
+    { name: '铃声.aac', type: 'audio/aac', body: aac },
+    { name: '无损.flac', type: 'audio/flac', body: flac },
+    { name: '语音.ogg', type: 'audio/ogg', body: ogg },
+    { name: '语音.opus', type: 'audio/opus', body: opus },
+  ];
+}
+
+function archiveFiles() {
+  const rar = Buffer.concat([Buffer.from('Rar!\x1a\x07\x00', 'latin1'), Buffer.alloc(32)]);
+  const seven = Buffer.concat([Buffer.from('7z\xbc\xaf\x27\x1c', 'latin1'), Buffer.alloc(32)]);
+  const tar = Buffer.alloc(512);
+  tar.write('notes.txt', 0, 'ascii'); tar.write('ustar', 257, 'ascii');
+  const gz = Buffer.concat([Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00]), Buffer.alloc(32)]);
+  return [
+    { name: '备份.rar', type: 'application/vnd.rar', body: rar },
+    { name: '归档.7z', type: 'application/x-7z-compressed', body: seven },
+    { name: '归档.tar', type: 'application/x-tar', body: tar },
+    { name: '日志.tar.gz', type: 'application/gzip', body: gz },
+    { name: '表格.csv', type: 'text/csv', body: Buffer.from('名称,数量\n附件,2\n') },
+    { name: '表格.tsv', type: 'text/tab-separated-values', body: Buffer.from('名称\t数量\n附件\t2\n') },
+  ];
+}
+
+module.exports = { documentFiles, audioFiles, archiveFiles, minimalPdf, zipParts, TINY_PNG_BASE64, tinyPng, tinyBmp };
