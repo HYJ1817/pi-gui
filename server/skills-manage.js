@@ -114,18 +114,37 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
     return { allowed: false, reason: DECIDED_UNTRUSTED_REASON };
   }
 
-  /** 项目的 .pi / .agents 与其下的 skills 不能是链接，也不能解析到项目之外。 */
-  function projectRootProblem(cwd, dir) {
+  /**
+   * 项目里要写入的目录不能是链接，也不能解析到项目之外。
+   * 技能目标要查两级（.pi / .agents 与其下的 skills）；设置文件只有 .pi 一级。
+   */
+  function projectRootProblem(cwd, dir, { parts = [path.dirname(dir), dir], what = '技能目录' } = {}) {
     const cwdStat = statOrNull(cwd);
     if (!cwdStat || !cwdStat.isDirectory()) return '项目目录不存在';
-    for (const part of [path.dirname(dir), dir]) {
+    for (const part of parts) {
       const stat = lstatOrNull(part);
       if (!stat) continue;
       const shown = path.relative(cwd, part).split(path.sep).join('/');
       if (stat.isSymbolicLink()) return `项目里的 ${shown} 是一个链接，无法保证它指向哪里，已拒绝写入`;
       if (!stat.isDirectory()) return `项目里的 ${shown} 不是目录`;
     }
-    return sameRealLayout(cwd, dir) ? '' : '项目的技能目录指向了项目之外，已拒绝写入';
+    return sameRealLayout(cwd, dir) ? '' : `项目的${what}指向了项目之外，已拒绝写入`;
+  }
+
+  /**
+   * 项目的 pi 设置文件能不能写（技能启停写的就是它）。
+   * 闸与项目级写入目标是同一组 —— 父目录不是链接、没有落到项目之外、项目被信任 ——
+   * 但只看这次真正要写的位置：旁边的 skills 目录长什么样与这次写入无关。
+   * 文件本身是不是普通文件由调用方检查（全局设置文件也要过那一条）。
+   */
+  function projectSettingsGate(context) {
+    const p = core.paths(context.cwd);
+    if (!p.cwd || !p.projectSettings) return fail(403, 'project-missing', '没有打开项目');
+    const dir = path.dirname(p.projectSettings);
+    const problem = projectRootProblem(p.cwd, dir, { parts: [dir], what: '配置目录' });
+    if (problem) return fail(403, statOrNull(p.cwd) ? 'unsafe-root' : 'project-missing', problem);
+    const verdict = trustVerdict(p);
+    return verdict.allowed ? { ok: true } : fail(403, 'project-untrusted', verdict.reason);
   }
 
   /** 用户级目录可以是用户自己做的链接（pi 也会跟随）；只要求「存在的话是个目录」。 */
@@ -758,6 +777,7 @@ export function createSkillsManager({ core, dataDir = null, now = () => new Date
   return {
     describe,
     listTargets,
+    projectSettingsGate,
     inspectBundle,
     readSource,
     check,

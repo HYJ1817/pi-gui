@@ -1,17 +1,26 @@
 'use strict';
 const ids = [
-  ['pi-project-notes', '项目知识与跨会话笔记', 'memory', 'context', 'notes'],
-  ['pi-workflow-checks', '在修改完成后运行配置的质量检查', 'agents', 'workflow', 'review'],
+  ['pi-project-notes', '把项目笔记按主题整理，在新会话里搜索之前写下的决定、问题和待办。长记录仍可在详情里查看原文。', 'memory', 'context', 'notes'],
+  ['pi-workflow-checks', '在修改完成后运行项目配置的质量检查，并汇总测试结果。Review each step before continuing with the next task.', 'agents', 'workflow', 'review'],
   ['pi-git-overview', '从当前项目查看分支、未提交的文件与最近提交', 'devtools', 'git', 'workspace'],
   ['pi-terminal-tabs', '为项目命令建立可复用的终端工作流', 'devtools', 'terminal', 'workspace'],
   ['pi-search-index', '搜索项目文档、命令和参考链接', 'memory', 'index', 'search'],
   ['pi-change-timeline', '按会话查看本地工作区的修改历史', 'devtools', 'history', 'timeline'],
   ['pi-workspace-digest', '汇总工作区近况与待办，便于接续任务', 'agents', 'workflow', 'notes'],
+  // Include every supported category to exercise chip wrapping at desktop width.
+  ['pi-daily-tasks', 'Organize tasks into a daily checklist.', 'productivity', 'tasks'],
+  ['pi-desktop-notes', '随手记录桌面待办，自动按日期分组。', 'desktop', 'notes'],
+  ['pi-doc-search', '给已保存的文档建立索引。', 'web', 'search'],
+  ['pi-model-list', '在会话中对照本地模型配置。', 'models', 'models'],
+  ['pi-project-links', '集合项目常用的外部链接。', 'integrations', 'links'],
+  ['pi-text-format', '对选中文本应用格式模板。', 'other', 'format'],
 ];
-const categories = [['devtools', '开发工具'], ['agents', '智能体与工作流'], ['memory', '记忆与知识库']];
+const categories = [['devtools', '开发工具'], ['agents', '智能体与工作流'], ['productivity', '效率工具'], ['web', '网页与搜索'],
+  ['desktop', '桌面与系统'], ['memory', '记忆与知识库'], ['models', '模型与供应商'], ['integrations', '第三方接入'], ['other', '其他']];
 const items = ids.map(([name, description, category, ...tags], index) => ({
   id: 'npm:' + name, name, description, category, tags, maintainer: 'fixture-team-' + (index % 3 + 1),
-  version: '1.' + index + '.0', updatedAt: '2026-11-' + String(20 - index) + 'T08:00:00.000Z',
+  version: '1.' + index + '.0', updatedAt: '2026-11-' + String(20 - index).padStart(2, '0') + 'T08:00:00.000Z',
+  downloadsMonthly: index % 4 === 0 ? null : index * 137,
   links: { npm: 'https://www.npmjs.com/package/' + name, repository: 'https://github.com/example/' + name },
   installed: { state: 'none', version: null }, install: { allowed: true },
 }));
@@ -57,6 +66,8 @@ module.exports = async function extensionMarketFixture(req, url) {
     const matched = items.filter((item) => (item.name + item.description).toLowerCase().includes(q));
     const scoped = matched.filter((item) => category === 'all' || item.category === category);
     if (sort === 'name') scoped.sort((a, b) => a.name.localeCompare(b.name));
+    if (sort === 'downloads') scoped.sort((a, b) => (b.downloadsMonthly ?? -1) - (a.downloadsMonthly ?? -1));
+    if (sort === 'updated') scoped.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     return {
       ok: true, consent: { remote: true }, snapshot: { state: 'fresh', covered: items.length }, items: scoped,
       catalogTotal: items.length, total: scoped.length, query: { sort }, nextOffset: null,
@@ -64,7 +75,7 @@ module.exports = async function extensionMarketFixture(req, url) {
         id, label, count: matched.filter((item) => id === 'all' || item.category === id).length,
       })),
       sorts: [
-        { id: 'recommended', label: '推荐', available: true }, { id: 'downloads', label: '下载量', available: false },
+        { id: 'recommended', label: '推荐', available: true }, { id: 'downloads', label: '下载量', available: true },
         { id: 'updated', label: '最新', available: true }, { id: 'name', label: '名称', available: true },
       ],
       operations: { available: true, running: false },

@@ -31,6 +31,20 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   });
   const w = dom.window;
   const d = w.document;
+  /* document 级监听账本：MCP 页的 Pi 就绪监听必须在关闭时摘掉。 */
+  const docListeners = new Map();
+  const addDocListener = d.addEventListener.bind(d);
+  const removeDocListener = d.removeEventListener.bind(d);
+  d.addEventListener = (type, fn, options) => {
+    if (!docListeners.has(type)) docListeners.set(type, new Set());
+    docListeners.get(type).add(fn);
+    return addDocListener(type, fn, options);
+  };
+  d.removeEventListener = (type, fn, options) => {
+    docListeners.get(type)?.delete(fn);
+    return removeDocListener(type, fn, options);
+  };
+  const listenerCount = (type) => docListeners.get(type)?.size || 0;
   const $ = (id) => d.getElementById(id);
   w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   w.ResizeObserver = class { observe() {} disconnect() {} };
@@ -56,7 +70,9 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     },
   };
   const calls = [];
+  let projectItems = [{ name: 'Workspace', path: 'C:\\workspace' }];
   let serversFail = false;
+  let serversGate = null;
   let forceArgsProtected = false;
   let forceUrlProtected = false;
   let testResponse = null;
@@ -172,8 +188,11 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     const pathOnly = target.split('?')[0];
 
     if (target === '/api/status') return ok({ ok: true, cwd: 'C:\\workspace', hasProject: true });
-    if (target === '/api/projects') return ok({ ok: true, active: 'C:\\workspace', items: [{ name: 'Workspace', path: 'C:\\workspace' }] });
-    if (target === '/api/mcp/servers' && method === 'GET') return ok(serversFail ? { ok: false, error: '读取 MCP 摘要失败（fixture）' } : summary);
+    if (target === '/api/projects') return ok({ ok: true, active: 'C:\\workspace', items: projectItems });
+    if (target === '/api/mcp/servers' && method === 'GET') {
+      if (serversGate) await serversGate;
+      return ok(serversFail ? { ok: false, error: '读取 MCP 摘要失败（fixture）' } : summary);
+    }
     if (target === '/api/mcp/servers' && method === 'POST') return ok({ ok: true, action: body?.action, name: body?.name });
     if (pathOnly === '/api/mcp/config' && method === 'POST') {
       const action = body?.action;
@@ -317,6 +336,23 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.ok(btn, `确认框里找不到 ${text}`);
     btn.click();
   };
+  const fieldTrigger = (root, field) => {
+    const node = root.querySelector(`[data-field="${field}"]`);
+    assert.ok(node, `找不到字段 ${field}`);
+    return node;
+  };
+  const openFieldPicker = async (trigger) => {
+    /* jsdom 没有布局：锚点矩形必须非零，portaled 菜单才不会立即收起。 */
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    trigger.click();
+    await tick(20);
+    const menu = d.querySelector('.pi-anchored-menu.ds-picker-menu');
+    assert.ok(menu, '字段选择器没有打开主题化 listbox');
+    return menu;
+  };
+  const pickerOptionValues = (menu) => [...menu.querySelectorAll('[role="option"]')].map((node) => node.dataset.value);
 
   $('navMcp').click();
   await tick(160);
@@ -326,6 +362,20 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal($('workViewTitle').textContent, 'MCP 服务器');
     assert.ok(page());
     assert.equal(d.querySelector('.ext-tab[aria-selected="true"], .extensions-tab[aria-selected="true"]'), null);
+  });
+
+  await check('重开 / 关闭 MCP 页不会累积 Pi 就绪监听', async () => {
+    const ready = 'pi-gui:capability-bridge-ready';
+    const openCount = listenerCount(ready);
+    $('navMcp').click();
+    await tick(80);
+    assert.equal(listenerCount(ready), openCount, 'reopening replaces the old page listener');
+    $('settingsReturn').click();
+    await tick(80);
+    assert.equal(listenerCount(ready), openCount - 1, 'closing the page removes its listener');
+    $('navMcp').click();
+    await tick(80);
+    assert.equal(listenerCount(ready), openCount, 'reopening restores exactly one');
   });
 
   await check('全局 / 项目分组、路径、状态与操作都来自真实摘要', () => {
@@ -343,10 +393,23 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
   });
 
   await check('筛选计数、项目筛选与搜索保持一致', async () => {
-    const counts = [...d.querySelectorAll('.mcp-filter-count')].map((n) => n.textContent);
+    /* 范围筛选与技能页共用 createSegmentedControl：条数在 .ds-segment-count。 */
+    const scope = d.querySelector('.mcp-toolbar .ds-segmented');
+    assert.ok(scope, '范围筛选是共享分段控件');
+    assert.equal(scope.getAttribute('role'), 'radiogroup');
+    const projectPicker = d.querySelector('.mcp-toolbar .project-picker');
+    assert.ok(projectPicker, '项目切换使用共享 project picker，而不是原生 select');
+    assert.equal(d.querySelector('.mcp-toolbar select'), null);
+    const projectTrigger = projectPicker.querySelector('.project-picker-trigger');
+    assert.equal(projectTrigger.getAttribute('aria-label'), '切换当前项目，当前：Workspace');
+    assert.equal(projectTrigger.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(projectTrigger.textContent.trim(), 'Workspace');
+    const counts = [...scope.querySelectorAll('.ds-segment-count')].map((n) => n.textContent);
     assert.deepEqual(counts, ['3', '2', '1']);
+    assert.equal(scope.querySelector('[data-value="all"]').getAttribute('aria-checked'), 'true');
     d.querySelector('[data-focus-key="filter:user"]').click();
     await tick(20);
+    assert.equal(d.querySelector('.mcp-toolbar .ds-segmented [data-value="user"]').getAttribute('aria-checked'), 'true');
     assert.equal(cards().length, 2);
     d.querySelector('[data-focus-key="filter:project"]').click();
     await tick(20);
@@ -367,6 +430,297 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     d.querySelector('#mcpServerSearch').dispatchEvent(new w.Event('input', { bubbles: true }));
     await tick(20);
     assert.equal(cards().length, 3);
+  });
+
+  await check('项目选择器：主题 listbox、键盘与选中状态', async () => {
+    projectItems = [
+      { name: 'Workspace', path: 'C:\\workspace' },
+      { name: 'Second', path: 'C:\\second' },
+    ];
+    try {
+      $('navMcp').click();
+      await tick();
+      const trigger = () => d.querySelector('.mcp-toolbar .project-picker-trigger');
+      const options = () => [...d.querySelectorAll('.ds-picker-menu [role="option"]')];
+      const key = (name) => d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', {
+        key: name, bubbles: true, cancelable: true,
+      }));
+      assert.ok(trigger(), 'the toolbar has the shared project picker');
+      /* jsdom has no layout: the anchored layer needs a real anchor rect. */
+      trigger().getBoundingClientRect = () => ({
+        x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+      });
+      trigger().click();
+      await tick();
+      const menu = d.querySelector('.pi-anchored-menu.ds-picker-menu');
+      assert.ok(menu, 'the options are a themed listbox, not a native select popup');
+      assert.equal(menu.parentElement, d.body, 'the menu is portaled above the settings card');
+      assert.equal(menu.getAttribute('role'), 'listbox');
+      assert.equal(trigger().getAttribute('aria-expanded'), 'true');
+      assert.deepEqual(options().map((node) => node.textContent.trim()), ['Workspace', 'Second']);
+      assert.equal(d.activeElement?.textContent.trim(), 'Workspace', 'opening starts on the current project');
+      key('ArrowDown');
+      assert.equal(d.activeElement?.textContent.trim(), 'Second');
+      key('Home');
+      assert.equal(d.activeElement?.textContent.trim(), 'Workspace');
+      key('End');
+      assert.equal(d.activeElement?.textContent.trim(), 'Second');
+      key('Escape');
+      await tick();
+      assert.equal(d.querySelector('.pi-anchored-menu'), null);
+      assert.equal(d.activeElement, trigger(), 'Escape returns focus to the trigger');
+      trigger().click();
+      await tick();
+      key('Tab');
+      await tick();
+      assert.equal(d.querySelector('.pi-anchored-menu'), null);
+      assert.equal(d.activeElement, trigger(), 'Tab closes without leaking focus');
+
+      const switches = calls.filter((call) => call.target === '/api/projects/activate').length;
+      trigger().click();
+      await tick();
+      options().find((node) => node.textContent.trim() === 'Second').click();
+      await tick(40);
+      const activation = calls.filter((call) => call.target === '/api/projects/activate');
+      assert.equal(activation.length, switches + 1, '选择项目仍走既有的 activateProject');
+      assert.equal(activation.at(-1).body?.path, 'C:\\second');
+    } finally {
+      projectItems = [{ name: 'Workspace', path: 'C:\\workspace' }];
+      $('navMcp').click();
+      await tick(80);
+    }
+  });
+
+  await check('项目选择器：没有项目列表时显示当前项目且不可打开', async () => {
+    projectItems = [];
+    try {
+      $('navMcp').click();
+      await tick();
+      const trigger = d.querySelector('.mcp-toolbar .project-picker-trigger');
+      assert.ok(trigger);
+      assert.equal(trigger.disabled, true, 'a missing project list cannot pretend to switch');
+      assert.match(trigger.textContent.trim(), /workspace|Workspace|未选择项目/);
+      trigger.click();
+      await tick();
+      assert.equal(d.querySelector('.pi-anchored-menu'), null);
+    } finally {
+      projectItems = [{ name: 'Workspace', path: 'C:\\workspace' }];
+      $('navMcp').click();
+      await tick(80);
+    }
+  });
+
+  await check('项目选择器：页面重绘会关闭旧菜单并归还焦点', async () => {
+    projectItems = [
+      { name: 'Workspace', path: 'C:\\workspace' },
+      { name: 'Second', path: 'C:\\second' },
+    ];
+    try {
+      $('navMcp').click();
+      await tick();
+      const open = () => {
+        const trigger = d.querySelector('.mcp-toolbar .project-picker-trigger');
+        trigger.getBoundingClientRect = () => ({
+          x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+        });
+        trigger.click();
+        return trigger;
+      };
+      const first = open();
+      await tick();
+      assert.ok(d.querySelector('.pi-anchored-menu.ds-picker-menu'));
+      /* A background Pi restart re-renders the page while focus is inside the
+       * portaled menu: the old menu must go and focus returns to the new trigger. */
+      d.dispatchEvent(new w.CustomEvent('pi-gui:capability-bridge-ready'));
+      await tick(40);
+      assert.equal(d.querySelector('.pi-anchored-menu'), null, 'the old portaled menu does not outlive its trigger');
+      const next = d.querySelector('.mcp-toolbar .project-picker-trigger');
+      assert.notEqual(next, first, 'the toolbar was rebuilt');
+      assert.equal(d.activeElement, next, 'focus returns to the project trigger instead of body');
+
+      /* If the user is typing in the search box, that focus must win over the
+       * rebuild (the menu closes, search keeps the caret). */
+      open();
+      await tick();
+      const input = d.querySelector('#mcpServerSearch');
+      input.focus();
+      input.value = 'mem';
+      input.dispatchEvent(new w.Event('input', { bubbles: true }));
+      await tick();
+      assert.equal(d.querySelector('.pi-anchored-menu'), null);
+      assert.equal(d.activeElement, d.querySelector('#mcpServerSearch'), 'search focus is preserved');
+    } finally {
+      projectItems = [{ name: 'Workspace', path: 'C:\\workspace' }];
+      $('navMcp').click();
+      await tick(80);
+    }
+  });
+
+  await check('范围筛选：radiogroup 键盘语义、焦点与读屏状态', async () => {
+    const group = () => d.querySelector('.mcp-toolbar .ds-segmented');
+    const item = (value) => group().querySelector(`.ds-segment-item[data-value="${value}"]`);
+    const active = () => [...group().querySelectorAll('.ds-segment-item')]
+      .filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.dataset.value);
+    const tabStops = () => [...group().querySelectorAll('.ds-segment-item')]
+      .filter((b) => b.tabIndex === 0).map((b) => b.dataset.value);
+    const key = (value, keyName, init = {}) => item(value)
+      .dispatchEvent(new w.KeyboardEvent('keydown', { key: keyName, bubbles: true, cancelable: true, ...init }));
+    const counts = () => [...group().querySelectorAll('.ds-segment-count')].map((n) => n.textContent);
+
+    /* 读屏与 Tab：组有名字、三项都是 radio、只有选中项在 Tab 顺序里。 */
+    assert.equal(group().getAttribute('role'), 'radiogroup');
+    assert.equal(group().getAttribute('aria-label'), '按范围筛选');
+    assert.deepEqual([...group().querySelectorAll('.ds-segment-item')].map((b) => b.getAttribute('role')), ['radio', 'radio', 'radio']);
+    assert.deepEqual([...group().querySelectorAll('.ds-segment-item')].map((b) => b.textContent.trim()), ['全部3', '全局2', '项目1']);
+    assert.deepEqual(active(), ['all']);
+    assert.deepEqual(tabStops(), ['all'], '整组只有一个 Tab 停靠点');
+
+    /* 方向键：选中下一项、列表跟着变、重绘后焦点回到同一筛选项。 */
+    item('all').focus();
+    key('all', 'ArrowRight');
+    await tick(20);
+    assert.deepEqual(active(), ['user']);
+    assert.deepEqual(cards().map((c) => c.dataset.name), ['memory', 'remote']);
+    assert.deepEqual(tabStops(), ['user']);
+    assert.equal(d.activeElement?.dataset.focusKey, 'filter:user', '重绘后焦点回到新选中项');
+    assert.deepEqual(counts(), ['3', '2', '1'], '切换筛选不改变计数');
+
+    key('user', 'End');
+    await tick(20);
+    assert.deepEqual(active(), ['project']);
+    assert.deepEqual(cards().map((c) => c.dataset.name), ['proj']);
+    assert.equal(d.activeElement?.dataset.focusKey, 'filter:project');
+
+    key('project', 'ArrowRight'); // 末项回绕
+    await tick(20);
+    assert.deepEqual(active(), ['all'], 'wrap right selects all');
+    assert.equal(cards().length, 3, 'wrap right shows all rows: '
+      + cards().map((c) => c.dataset.name).join(',')
+      + ' filter=' + (d.querySelector('.mcp-toolbar .ds-segmented .is-active')?.dataset.value || 'none'));
+    key('all', 'ArrowLeft'); // 首项回绕
+    await tick(20);
+    assert.deepEqual(active(), ['project']);
+    key('project', 'Home');
+    await tick(20);
+    assert.deepEqual(active(), ['all']);
+    assert.equal(cards().length, 3);
+
+    /* 鼠标点击同样保留焦点（jsdom 的 click 不自动聚焦，先 focus 模拟真实按钮）。 */
+    item('user').focus();
+    item('user').click();
+    await tick(20);
+    assert.deepEqual(active(), ['user']);
+    assert.equal(d.activeElement?.dataset.focusKey, 'filter:user');
+
+    /* 搜索与筛选组合：计数是全量，行只显示匹配项；工具栏重绘后要重新取输入框。 */
+    const inputField = () => d.querySelector('#mcpServerSearch');
+    let search = inputField();
+    search.value = 'remote';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(20);
+    assert.deepEqual(cards().map((c) => c.dataset.name), ['remote']);
+    assert.deepEqual(counts(), ['3', '2', '1'], '搜索不改变全量计数');
+    search = inputField();
+    search.value = '';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await tick(20);
+    assert.equal(cards().length, 2, '清空搜索后仍停留在「全局」筛选');
+    assert.deepEqual(tabStops(), ['user']);
+    key('user', 'Home');
+    await tick(20);
+    assert.deepEqual(active(), ['all']);
+    assert.equal(cards().length, 3);
+    assert.deepEqual(tabStops(), ['all']);
+
+    /* 修饰键不劫持，留给浏览器 / 系统。 */
+    key('all', 'ArrowRight', { ctrlKey: true });
+    await tick(20);
+    assert.deepEqual(active(), ['all']);
+  });
+
+  await check('Pi 重启后重新读取 MCP 状态且不主动连接 server', async () => {
+    const previousRuntime = summary.runtime;
+    const statusReads = postBodies('/api/mcp/status').length;
+    const reads = calls.filter((c) => c.target === '/api/mcp/servers' && c.method === 'GET').length;
+    try {
+      summary.runtime = null;
+      d.dispatchEvent(new w.CustomEvent('pi-gui:capability-bridge-ready'));
+      await tick();
+      assert.equal(calls.filter((c) => c.target === '/api/mcp/servers' && c.method === 'GET').length, reads + 1);
+      assert.doesNotMatch(d.querySelector('[data-name="memory"] .mcp-status-pill').textContent, /已连接/);
+      assert.equal(postBodies('/api/mcp/status').length, statusReads);
+    } finally {
+      summary.runtime = previousRuntime;
+      $('navMcp').click();
+      await tick();
+    }
+  });
+
+  await check('运行时刷新失败只在页顶说一次，行内标未验证', async () => {
+    const previous = summary.runtime;
+    try {
+      summary.runtime = { ok: false, error: 'fixture runtime down' };
+      $('navMcp').click();
+      await tick();
+      const banners = [...page().querySelectorAll('.mcp-banner.is-warn')].map((node) => node.textContent);
+      assert.equal(banners.filter((text) => text.includes('运行时状态刷新失败')).length, 1, 'the reason appears once');
+      const pills = [...page().querySelectorAll('.mcp-status-pill')].map((node) => node.textContent.trim());
+      assert.ok(pills.length && pills.every((text) => text === '未验证'), pills.join(','));
+      for (const row of page().querySelectorAll('.mcp-server')) {
+        assert.doesNotMatch(row.textContent, /刷新失败/, 'the per-row status does not repeat the page-level failure');
+      }
+    } finally {
+      summary.runtime = previous;
+      $('navMcp').click();
+      await tick();
+    }
+  });
+
+  await check('原生 MCP 被扩展接管：只在页头说一次，不复制到每行，也不再请求能力报告', async () => {
+    const previous = summary.native;
+    try {
+      summary.native = { state: 'replaced', reason: '扩展注册了 /mcp' };
+      $('navMcp').click();
+      await tick();
+      assert.equal(page().querySelector('.mcp-report'), null, '页尾能力报告已移除');
+      assert.equal(calls.filter((call) => call.target === '/api/mcp').length, 0, '不再请求 /api/mcp');
+      const statusLines = page().querySelectorAll('.mcp-page-status');
+      assert.equal(statusLines.length, 1, '只保留一条运行状态');
+      assert.match(statusLines[0].textContent, /内置 MCP 由扩展接管/);
+      const banners = [...page().querySelectorAll('.mcp-banner')].map((node) => node.textContent);
+      assert.ok(!banners.some((text) => text.includes('内置 MCP')), '不再用黄色横幅重复同一条状态');
+      for (const row of page().querySelectorAll('.mcp-server')) {
+        assert.doesNotMatch(row.textContent, /内置 MCP 被扩展接管/);
+        assert.doesNotMatch(row.querySelector('.mcp-status-pill')?.textContent || '', /接管/);
+      }
+      assert.equal(d.querySelector('[data-name="memory"] .mcp-status-pill').textContent.trim(), '已连接');
+      assert.equal(d.querySelector('[data-name="proj"] .mcp-status-pill').textContent.trim(), '未加载');
+      const memoryMeta = d.querySelector('[data-name="memory"] .mcp-server-meta').textContent;
+      assert.match(memoryMeta, /3 个工具/);
+      assert.doesNotMatch(memoryMeta, /已连接/, 'the status label is not repeated in the meta line');
+    } finally {
+      summary.native = previous;
+      $('navMcp').click();
+      await tick();
+    }
+  });
+
+  await check('Pi 就绪后读取成功会清除上一次的 MCP 页面错误', async () => {
+    try {
+      serversFail = true;
+      $('navMcp').click();
+      await tick();
+      assert.ok(page().querySelector('.mcp-empty.is-error'));
+      serversFail = false;
+      d.dispatchEvent(new w.CustomEvent('pi-gui:capability-bridge-ready'));
+      await tick();
+      assert.equal(page().querySelector('.mcp-empty.is-error'), null);
+      assert.equal(cards().length, summary.servers.length);
+    } finally {
+      serversFail = false;
+      $('navMcp').click();
+      await tick();
+    }
   });
 
   await check('新增表单拒绝空名称与明文凭据，不产生写请求', async () => {
@@ -421,12 +775,21 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     };
     set('name', 'demo');
     set('description', 'Demo server');
-    const exposure = form.querySelector('[data-field="exposure"]');
-    assert.ok(exposure, '新增表单必须有 exposure 选择');
-    assert.deepEqual([...exposure.options].map((o) => o.value), ['', 'codemode', 'deferred', 'direct', 'hidden']);
-    assert.equal(exposure.value, 'codemode', '新条目默认 codemode');
-    exposure.value = 'hidden';
-    exposure.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const exposure = fieldTrigger(form, 'exposure');
+    assert.equal(exposure.tagName, 'BUTTON', 'exposure 是主题化 listbox 触发器，不再是原生 select');
+    assert.equal(form.querySelector('select[data-field="exposure"]'), null);
+    assert.equal(exposure.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(exposure.dataset.value, 'codemode', '新条目默认 codemode');
+    assert.equal(exposure.getAttribute('aria-label'), '工具暴露方式（exposure），当前：codemode（默认：按需代码模式）',
+      '可访问名称同时说明字段与当前值');
+    const menu = await openFieldPicker(exposure);
+    assert.deepEqual(pickerOptionValues(menu), ['', 'codemode', 'deferred', 'direct', 'hidden']);
+    assert.equal(menu.querySelector('[role="option"][aria-selected="true"]').dataset.value, 'codemode');
+    menu.querySelector('[role="option"][data-value="hidden"]').click();
+    await tick(20);
+    assert.equal(exposure.dataset.value, 'hidden');
+    assert.match(exposure.textContent, /hidden/, '触发器显示选中的 exposure');
+    assert.match(exposure.getAttribute('aria-label'), /^工具暴露方式（exposure），当前：hidden/, '选值后可访问名称跟随当前值');
     form.querySelector('[data-field="add-arg"]').click();
     await tick(15);
     d.querySelector('.mcp-form-modal [data-field="args-0"]').value = '-y';
@@ -454,6 +817,72 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(body.__expectedCwd, 'C:\\workspace');
     assert.equal(d.querySelector('.mcp-form-modal'), null);
     assert.ok(page().textContent.includes('配置已保存到'));
+  });
+
+  await check('exposure 选择器：键盘移动、Enter 选择与 Escape/Tab 归还焦点', async () => {
+    const before = postBodies('/api/mcp/config').length;
+    const add = [...page().querySelectorAll('button')].find((b) => b.textContent.trim() === '新增');
+    add.click();
+    await tick(20);
+    const form = d.querySelector('.mcp-form-modal');
+    const trigger = fieldTrigger(form, 'exposure');
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    const key = (name) => d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', {
+      key: name, bubbles: true, cancelable: true,
+    }));
+    const menu = () => d.querySelector('.pi-anchored-menu.ds-picker-menu');
+    trigger.focus();
+    key('ArrowDown');
+    await tick(20);
+    assert.ok(menu(), '键盘方向键打开 listbox');
+    assert.equal(d.activeElement?.dataset.value, 'codemode', '打开后焦点落在当前值');
+    key('ArrowDown');
+    assert.equal(d.activeElement?.dataset.value, 'deferred');
+    key('End');
+    assert.equal(d.activeElement?.dataset.value, 'hidden');
+    key('Home');
+    assert.equal(d.activeElement?.dataset.value, '');
+    key('Escape');
+    await tick(20);
+    assert.equal(menu(), null, 'Escape 收起菜单');
+    assert.equal(d.activeElement, trigger, 'Escape 把焦点还给触发器');
+    assert.ok(d.querySelector('.mcp-form-modal'), 'Escape 只收菜单，不关闭整个表单');
+    assert.equal(d.querySelector('.mcp-form-modal').querySelector('[data-field="exposure"]'), trigger);
+
+    key('ArrowDown');
+    await tick(20);
+    assert.ok(menu());
+    key('Tab');
+    await tick(20);
+    assert.equal(menu(), null, 'Tab 收起菜单');
+    assert.equal(d.activeElement, trigger, 'Tab 把焦点还给触发器');
+
+    key('ArrowDown');
+    await tick(20);
+    key('ArrowDown');
+    key('Enter');
+    await tick(20);
+    assert.equal(menu(), null, 'Enter 选择后收起菜单');
+    assert.equal(trigger.dataset.value, 'deferred', '键盘选择更新 draft 对应的值');
+    assert.match(trigger.textContent, /deferred/);
+    assert.equal(postBodies('/api/mcp/config').length, before, '选择 exposure 本身不写配置');
+
+    /* 菜单开着时表单重绘：旧 picker 的 portal 节点必须跟着销毁，不能残留。 */
+    trigger.focus();
+    key('ArrowDown');
+    await tick(20);
+    assert.ok(menu(), '再次打开菜单');
+    clickText(d.querySelector('.mcp-form-modal'), 'button', 'HTTP 端点');
+    await tick(30);
+    assert.equal(menu(), null, '表单重绘会销毁旧 picker 的菜单');
+    assert.ok(d.querySelector('.mcp-form-modal'), '重绘不关闭表单');
+    const refreshed = d.querySelector('.mcp-form-modal [data-field="exposure"]');
+    assert.equal(refreshed.dataset.value, 'deferred', '重绘保留 draft 里的 exposure');
+    clickText(d.querySelector('.mcp-form-modal'), 'button', '取消');
+    await tick(30);
+    assert.equal(d.querySelector('.pi-anchored-menu'), null, '关闭表单后没有残留菜单');
   });
 
   await check('新增弹窗：头部/正文/底部三段，正文独立滚动，窄窗口不溢出', async () => {
@@ -492,7 +921,14 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(form.querySelector('[data-field="env-key-1"]').value, 'API_TOKEN');
     assert.equal(form.querySelector('[data-field="env-value-1"]').value, '');
     assert.ok(form.querySelector('[data-field="env-value-1"]').placeholder.includes('已设置'));
-    assert.equal(form.querySelector('[data-field="exposure"]').value, 'deferred', '编辑时必须回填原 exposure');
+    const exposureTrigger = fieldTrigger(form, 'exposure');
+    assert.equal(exposureTrigger.dataset.value, 'deferred', '编辑时必须回填原 exposure');
+    assert.match(exposureTrigger.textContent, /deferred/);
+    const exposureMenu = await openFieldPicker(exposureTrigger);
+    assert.equal(exposureMenu.querySelector('[role="option"][aria-selected="true"]').dataset.value, 'deferred');
+    exposureTrigger.click();
+    await tick(20);
+    assert.equal(d.querySelector('.pi-anchored-menu'), null, '再次点击触发器收起菜单');
     const desc = form.querySelector('[data-field="description"]');
     desc.value = '更新后的记忆';
     desc.dispatchEvent(new w.Event('input', { bubbles: true }));
@@ -755,39 +1191,41 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
     assert.ok(calls.some((c) => c.target.includes('source=registry') && c.target.includes('page=3')));
 
-    /* 过期目录后台刷新时是信息横幅，不冒充失败。 */
+    /* 过期目录后台刷新时是一行信息状态，不冒充失败。 */
     marketStale.on = true;
     marketStale.refreshing = true;
     pageBtn(2).click();
     await tick(120);
-    const refreshingBanner = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    const refreshingNote = [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .find((b) => b.textContent.includes('正在后台刷新'));
-    assert.ok(refreshingBanner, '后台刷新必须说明当前显示的是旧缓存');
+    assert.ok(refreshingNote, '后台刷新必须说明当前显示的是旧缓存');
     assert.equal(
-      [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+      [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
         .some((b) => b.textContent.includes('刷新失败')),
       false,
-      '后台刷新不是失败，不能用失败横幅',
+      '后台刷新不是失败，不能用失败状态',
     );
     marketStale.refreshing = false;
 
-    /* 刷新失败时显示旧缓存横幅；恢复成功后横幅消失。 */
+    /* 刷新失败时显示一行旧缓存状态；恢复成功后状态消失。 */
     pageBtn(1).click();
     await tick(120);
     pageBtn(2).click();
     await tick(120);
-    const staleBanner = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+    const staleNote = [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
       .find((b) => b.textContent.includes('上次成功加载的缓存'));
-    assert.ok(staleBanner, '刷新失败必须明确提示正在显示旧缓存');
-    assert.ok(staleBanner.textContent.includes('Registry 暂时不可达'));
+    assert.ok(staleNote, '刷新失败必须明确提示正在显示旧缓存');
+    assert.equal(staleNote.querySelector('.mcp-banner, .mcp-banner-copy'), null, '旧缓存状态不能画成横幅');
+    assert.equal(staleNote.textContent.includes('Registry 暂时不可达'), false, '界面不暴露原始刷新错误');
+    assert.equal(staleNote.textContent.includes('fixture'), false, '界面不带诊断细节');
     marketStale.on = false;
     pageBtn(1).click();
     await tick(120);
     assert.equal(
-      [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+      [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
         .some((b) => b.textContent.includes('上次成功加载的缓存')),
       false,
-      '刷新成功后旧缓存横幅必须消失',
+      '刷新成功后旧缓存状态必须消失',
     );
 
     d.querySelector('[data-focus-key="source:builtin"]').click();
@@ -813,7 +1251,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     pageBtn(2).click();
     await tick(120);
     assert.ok(pagination().textContent.includes('第 2 / 9 页'));
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')), '后台刷新期间必须显示提示');
 
     /* 用户焦点停在搜索框；后台轮询更新不能把它抢走。 */
@@ -827,7 +1265,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(registryGets().length - before, 1, '刷新中每轮只发一次列表请求');
     assert.equal(d.activeElement?.id, 'mcpMarketSearch', '刷新中的轮询不能打断搜索框焦点');
     assert.equal(d.querySelector('.mcp-market-results'), resultsHost, '刷新中的轮询不能重建结果区');
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')), '刷新中提示应保留');
 
     /* 后台刷新完成：新目录只有 100 条（5 页），页面应自动换成新总数。 */
@@ -837,7 +1275,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
     assert.equal(registryGets().length - before, 2, '完成检测每轮只发一次列表请求');
     assert.equal(
-      [...d.querySelectorAll('.mcp-market-page .mcp-banner')].some((b) => b.textContent.includes('后台刷新')),
+      [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note')].some((b) => b.textContent.includes('后台刷新')),
       false,
       '刷新完成后旧缓存提示必须消失',
     );
@@ -863,7 +1301,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     marketStale.refreshing = true;
     pageBtn(2).click();
     await tick(120);
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')));
 
     /* 轮询还没到点时切到第 3 页：旧定时器必须作废，只对当前页轮询。 */
@@ -876,10 +1314,10 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     await tick(2300);
     const after = registryGets().length;
     assert.equal(after - before, 1, '翻页后每轮也只请求一次');
-    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
       .find((b) => b.textContent.includes('上次成功加载的缓存'));
     assert.ok(warn, '刷新失败必须明确提示');
-    assert.ok(warn.textContent.includes('Registry 暂时不可达'));
+    assert.equal(warn.textContent.includes('Registry 暂时不可达'), false, '界面不暴露原始刷新错误');
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 24, '失败不能清空已有列表');
     assert.ok(pagination().textContent.includes('第 3 / 9 页'), '轮询不能把用户翻回旧页');
     assert.equal(pagination().querySelector('[aria-current="page"]').textContent, '3');
@@ -910,10 +1348,10 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     await tick(2300);
 
     assert.equal(registryGets().length - before, 1, '本地失败也只发一次轮询');
-    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
       .find((b) => b.textContent.includes('暂时无法确认后台刷新状态'));
     assert.ok(warn, '本地请求失败不能误报成 Registry 刷新失败');
-    assert.ok(warn.textContent.includes('本地连接失败'));
+    assert.equal(warn.textContent.includes('本地连接失败'), false, '界面不带本地请求的诊断细节');
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 24, '失败不能清空已有列表');
     await tick(2300);
     assert.equal(registryGets().length - before, 1, '本地失败后必须停止轮询');
@@ -961,7 +1399,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     marketStale.refreshing = true;
     d.querySelector('[data-focus-key="source:registry"]').click();
     await tick(120);
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')));
 
     const beforeSwitch = registryGets().length;
@@ -972,7 +1410,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
     d.querySelector('[data-focus-key="source:registry"]').click();
     await tick(120);
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')));
     const beforeDispose = registryGets().length;
     d.querySelector('[data-focus-key="market-back"]').click();
@@ -1246,29 +1684,6 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(installScope.querySelector('option[value="project"]').disabled, true);
     assert.ok(install.textContent.includes('当前项目未信任'));
     assert.ok(install.textContent.includes('已回退到全局'));
-  });
-
-  await check('页尾能力报告：摘要读取失败时说「读不到原生 MCP 摘要」，不沿用上一次的原生结论', async () => {
-    w.closeModal();
-    summary.trust = { trusted: true, requiresTrust: false };
-    $('navMcp').click();
-    await tick(160);
-    const report = page().querySelector('details.mcp-report');
-    report.open = true;
-    await tick(80);
-    const native = () => page().querySelector('details.mcp-report .mcp-report-native')?.textContent || '';
-    assert.match(native(), /原生 MCP 生效中/);
-    serversFail = true;
-    d.querySelector('[data-focus-key="refresh"]').click();
-    await tick(160);
-    assert.ok(page().querySelector('.mcp-empty.is-error'), '管理页显示读取失败');
-    assert.equal(page().querySelector('details.mcp-report'), report, '报告仍挂在页尾，展开状态保留');
-    assert.match(native(), /读不到原生 MCP 摘要/);
-    assert.doesNotMatch(native(), /生效中/, '读取失败不能沿用上一次的「生效中」');
-    serversFail = false;
-    clickText(page(), 'button', '重试');
-    await tick(160);
-    assert.match(native(), /原生 MCP 生效中/, '重试读到后恢复');
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

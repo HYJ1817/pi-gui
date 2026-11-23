@@ -109,7 +109,10 @@ export function createAnchoredMenu({
       return;
     }
     if (event.key === 'Tab') {
+      /* The menu owns Tab until it closes. Stop here so a modal focus trap
+       * behind it does not also wrap focus in the same keystroke. */
       event.preventDefault();
+      event.stopPropagation();
       close({ restoreFocus: true, reason: 'tab' });
     }
   }

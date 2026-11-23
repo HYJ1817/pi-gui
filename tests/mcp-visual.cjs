@@ -8,6 +8,7 @@
  *       MCP_MARKET_PAGINATION=1 node tests/mcp-visual.cjs   # 额外截 Registry 分页
  *       MCP_MARKET_PAGINATION=1 MCP_MARKET_PROGRESS=1 node tests/mcp-visual.cjs
  *                                                           # 额外截首次加载进度
+ *       MCP_VISUAL_MATRIX=1 node tests/mcp-visual.cjs    # 1320×820 / 700×600，深浅主题
  * 产物：.shots/mcp/{01-management,02-add-modal,03-market}.png
  *       MCP_MARKET_PAGINATION=1 时另有 05-market-page{1,2,9}.png 与 05d-market-narrow.png
  *       MCP_MARKET_PROGRESS=1 时另有 06-market-loading.png / 06b-market-loaded.png
@@ -181,6 +182,33 @@ async function main() {
       await click('[data-focus-key="source:builtin"]');
       await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
     }
+    if (process.env.MCP_MARKET_STALE === '1') {
+      await click('[data-focus-key="source:registry"]');
+      await waitFor(`!!document.querySelector('.mcp-market-page .mcp-market-refresh-note.is-warn')`, '旧缓存状态行');
+      const stale = await evalJs(`(() => {
+        const node = document.querySelector('.mcp-market-refresh-note');
+        const style = getComputedStyle(node);
+        return {
+          text: node.textContent,
+          banner: node.classList.contains('mcp-banner'),
+          background: style.backgroundColor,
+          borderLeft: style.borderLeftWidth,
+          height: Math.round(node.getBoundingClientRect().height),
+        };
+      })()`);
+      if (!stale.text.includes('正在显示上次成功加载的缓存')) {
+        throw new Error('旧缓存状态行缺少说明：' + JSON.stringify(stale));
+      }
+      if (stale.text.includes('fixture') || stale.text.includes('诊断细节')) {
+        throw new Error('界面暴露了诊断细节：' + stale.text);
+      }
+      if (stale.banner || stale.background !== 'rgba(0, 0, 0, 0)' || stale.borderLeft !== '0px') {
+        throw new Error('旧缓存状态仍被画成横幅：' + JSON.stringify(stale));
+      }
+      await shot('03c-market-stale');
+      await click('[data-focus-key="source:builtin"]');
+      await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
+    }
     if (process.env.MCP_MARKET_PROGRESS === '1') {
       await click('[data-focus-key="source:registry"]');
       await waitFor(
@@ -321,6 +349,72 @@ async function main() {
     await waitFor(`!!document.querySelector('.mcp-install-modal [data-market-preview]')`, '安装确认弹层');
     await evalJs(`(() => { const b = document.querySelector('#modalCard .mcp-modal-body'); if (b) b.scrollTop = 0; return true; })()`);
     await shot('04-install-preview');
+
+    if (process.env.MCP_VISUAL_MATRIX === '1') {
+      const metrics = [];
+      await click('#modalCard .mcp-modal-head .mcp-icon-btn');
+      for (const [width, height] of [[1320, 820], [700, 600]]) {
+        for (const theme of ['dark', 'light']) {
+          const prefix = `${width}-${theme}`;
+          await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+          await evalJs(`document.documentElement.dataset.theme = '${theme}'`);
+          await click('#navMcp');
+          await waitFor(`!!document.querySelector('.mcp-server')`, '服务器列表');
+          const layout = await evalJs(`(() => {
+            const page = document.querySelector('.mcp-page-inner');
+            const title = page.querySelector('.settings-page-title');
+            const button = page.querySelector('.mcp-page-actions .btn');
+            return {
+              viewport: [innerWidth, innerHeight, devicePixelRatio],
+              theme: document.documentElement.dataset.theme,
+              overflow: page.scrollWidth - page.clientWidth,
+              title: getComputedStyle(title).fontSize,
+              titleWeight: getComputedStyle(title).fontWeight,
+              button: button.getBoundingClientRect().height,
+            };
+          })()`);
+          /* MCP 页面保持 main 上的样子：标题沿用设置页的 .settings-page-title（30px / 700）。 */
+          if (layout.overflow > 1 || layout.title !== '30px' || layout.titleWeight !== '700' || layout.button !== 32) {
+            throw new Error('MCP 布局不符合基线：' + JSON.stringify(layout));
+          }
+          metrics.push(layout);
+          await shot(prefix + '-management');
+          await setValue('#mcpServerSearch', 'phase3-no-matches');
+          await waitFor(`!document.querySelector('.mcp-server')`, '空搜索结果');
+          await shot(prefix + '-empty-search');
+          await setValue('#mcpServerSearch', '');
+          await evalJs(`document.querySelector('.mcp-page-actions button.primary').focus()`);
+          await click('.mcp-page-actions button.primary');
+          await waitFor(`!document.getElementById('modal').hidden`, '新增表单');
+          await shot(prefix + '-add');
+          await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+          await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+          await waitFor(`document.getElementById('modal').hidden`, 'Escape 关闭表单');
+          await waitFor(`document.activeElement?.dataset.focusKey === 'add'`, '新增表单回焦');
+          await click('[data-focus-key="market"]');
+          await waitFor(`!!document.querySelector('.mcp-market-card:not(.is-skeleton)')`, 'MCP 市场');
+          await shot(prefix + '-market');
+          if (width === 700) {
+            await evalJs(`(() => {
+              const fetchFixture = window.fetch;
+              window.fetch = (input, ...rest) => {
+                if (!String(input).endsWith('/api/mcp/servers')) return fetchFixture(input, ...rest);
+                window.fetch = fetchFixture;
+                return Promise.resolve(new Response(JSON.stringify({ ok: false, error: '本地连接暂不可用' }), {
+                  status: 503, headers: { 'Content-Type': 'application/json' },
+                }));
+              };
+            })()`);
+            await click('#navMcp');
+            await waitFor(`!!document.querySelector('.mcp-empty.is-error')`, '读取失败');
+            await shot(prefix + '-read-error');
+            await click('.mcp-empty.is-error .btn');
+            await waitFor(`!!document.querySelector('.mcp-server')`, '重试恢复');
+          }
+        }
+      }
+      fs.writeFileSync(path.join(OUT, 'matrix.json'), JSON.stringify(metrics, null, 2) + '\n');
+    }
 
     if (pageErrors.length) throw new Error('页面运行期异常：' + pageErrors.join(' | '));
     console.log('PASS MCP 视觉取证完成');

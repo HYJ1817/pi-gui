@@ -248,34 +248,6 @@ function check(name, fn) { fn(); count++; console.log('  ok  ' + name); }
   buttonByText(document.getElementById('confirmCard'), '取消').click();
   await dangerPromise;
 
-  /* ---------- Extensions 页能力块：unsupported 必须说清、且没有假按钮 ---------- */
-  const box = document.createElement('section');
-  document.body.appendChild(box);
-  approval.renderApprovalSetup(box, {
-    piVersion: '0.87.0',
-    checks: {
-      toolCallHook: { supported: true, evidence: 'types.d.ts:889 「block?: boolean」' },
-      uiPromptDialog: { supported: true, evidence: 'rpc.md:1190 「block until the client sends back…」' },
-      coreApproval: { supported: false, evidence: 'usage.md:150 「does not include … permission popups」' },
-      customUiOverRpc: { supported: false, evidence: 'rpc-mode.js:152 「Custom UI not supported in RPC mode」' },
-    },
-  });
-  check('capability block reports supported and unsupported', () => {
-    const text = box.textContent;
-    assert.ok(text.includes('tool_call hook）') && text.includes('：是'));
-    assert.ok(text.includes('Pi 核心自带审批弹窗 / 全局权限闸门：否'));
-    assert.ok(text.includes('ctx.ui.custom() 可用：否'));
-    assert.ok(text.includes('pi 0.87.0'));
-  });
-  check('capability block states the real boundary', () => assert.ok(box.textContent.includes('不是 OS sandbox')));
-  check('capability block offers no Allow button', () => assert.deepEqual([...box.querySelectorAll('button')].map((b) => b.textContent), []));
-  approval.renderApprovalSetup(box, null);
-  check('unknown capability is not dressed up as protection', () => {
-    assert.ok(box.textContent.includes('未知'));
-    assert.ok(box.textContent.includes('不宣称任何已具备的拦截能力'));
-    assert.deepEqual([...box.querySelectorAll('button')].map((b) => b.textContent), []);
-  });
-
   /* ---------- 后端能力探测（fixture 世界） ----------
    * 包目录**只从 launch identity 取**（P20.5）：给的 `piBin` 是一个真实入口文件，
    * 探测从它向上找到属于它的包。旧版靠 `env.APPDATA` 那种「常见全局安装位置」

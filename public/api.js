@@ -652,10 +652,7 @@ export const fetchSkillMarketFile = (previewId, path) =>
   getJSON('/api/skills/market/preview/' + encodeURIComponent(previewId) + '/file?' + new URLSearchParams({ path }));
 export const installSkillMarketEntry = (project, body) => sendJSON(skillsUrl('/api/skills/market/install', project), { body });
 
-/** MCP 能力报告。能力由**检测本机装着的那个 pi 包**决定（历史基线 0.87.0 没有原生 MCP，
- *  当前基线 0.99.2 自带 builtin:mcp），所以这里返回的是「带出处的结论 + 怎么配置 +
- *  替代路径」。Server 明细与动作走下面的 P20.6 接口。 */
-export const fetchMcp = () => getJSON('/api/mcp');
+/** MCP 原生能力摘要由服务端诊断保留；MCP 管理页不再渲染能力报告。 */
 /* P20.6 原生 MCP：Server 明细（GET，轻量摘要 + 上次运行时状态）与
  * 显式状态刷新（POST，会启动用户的 stdio servers，只在用户手势时调用）。 */
 export const fetchMcpServers = () => getJSON('/api/mcp/servers');
@@ -682,8 +679,7 @@ export const mcpMarketAction = (payload) =>
 export const fetchMcpImport = () => getJSON('/api/mcp/import');
 export const mcpImportApply = (payload) =>
   sendJSON('/api/mcp/import', { body: { ...payload, __expectedCwd: S.cwd } });
-/* P19：approval 能力报告（后端只读本机 pi 包，renderer 拿不到路径）。 */
-export const fetchApprovalCapability = () => getJSON('/api/approvals/capability');
+/* P19 的只读协议探测仍由服务端与文档保留；扩展页不再读取它。 */
 export const fetchExtensions = () => getJSON('/api/extensions');
 
 /** 已知第三方 Capability 的一键安装（`POST /api/capabilities/install`）。

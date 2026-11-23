@@ -740,7 +740,7 @@ export function createSkills({
         off,
         loadedEntry,
         shadowedByPi,
-        loaded: piSide.skills ? Boolean(hitByPath || hitByName) : null,
+        loaded: piSide.skills ? Boolean(loadedEntry) : null,
         settingsFile: info.scope === 'project' ? p.projectSettings : p.globalSettings,
         // 项目级 + 项目没被信任 → pi 根本不会扫这个目录
         blockedByTrust: info.scope === 'project' && trust.requiresTrust && !trust.trusted,
@@ -809,7 +809,7 @@ export function createSkills({
          * 「相对 baseDir 的 posix 路径」—— 实测裸文件名（-name）不命中。 */
         disablePattern: '-' + info.rel,
         settingsPath: settingsFile,
-        toggleable: info.scope === 'user' || info.scope === 'project',
+        toggleable: info.scope === 'user' || (info.scope === 'project' && !blockedByTrust),
         blockedByTrust,
         disabledBy: off.pattern,
         disableModelInvocation: info.disableModelInvocation,
@@ -822,9 +822,9 @@ export function createSkills({
 
     // pi 报了但我们没枚举到的（例如来自 package 的 skill）—— 补进来，别丢信息
     if (piSide.skills) {
-      const seen = new Set(skills.map((s) => s.name));
+      const matched = new Set(facts.map((fact) => fact.loadedEntry));
       for (const [name, cmd] of piSide.skills) {
-        if (seen.has(name)) continue;
+        if (matched.has(cmd)) continue;
         const si = cmd.sourceInfo || {};
         // 刚被删掉（或挪走）的技能：pi 还加载着启动时读到的那一份，直到重启
         const gone = Boolean(si.path) && !fs.existsSync(String(si.path));
@@ -995,6 +995,11 @@ export function createSkills({
     const idx = await buildIndex(context);
     const rec = idx.index.get(id);
     if (!rec) return json(res, 404, { ok: false, error: '找不到这个 skill，刷新一下列表' });
+    if (rec.scope === 'project') {
+      // 启停写的是 <项目>/.pi/settings.json —— 闸看这个文件所在的目录，不看技能目录
+      const gate = routes.manager.projectSettingsGate(context);
+      if (!gate.ok) return json(res, gate.status, { ok: false, code: gate.code, error: gate.error });
+    }
     if (!rec.toggleable || !rec.settingsPath || !rec.disablePattern) {
       return json(res, 400, {
         ok: false,
@@ -1005,6 +1010,10 @@ export function createSkills({
     }
     const enabled = payload.enabled === true;
 
+    const stat = fs.lstatSync(rec.settingsPath, { throwIfNoEntry: false });
+    if (stat && !stat.isFile()) {
+      return json(res, 403, { ok: false, code: 'unsafe-settings', error: '技能设置必须是普通文件，已拒绝写入' });
+    }
     const read = readSettings(rec.settingsPath);
     if (read.error) return json(res, 409, { ok: false, error: `${read.error}。为安全起见没有做任何改动。` });
     const data = read.data || {};
@@ -1049,9 +1058,6 @@ export function createSkills({
     // stillDisabledBy 只在「想打开」时才有值：我们删掉了自己那条，但别的模式还在关着它
     if (stillDisabledBy) {
       warnings.push(`注意：${stillDisabledBy} 这条模式也命中它，所以只删掉 Pi GUI 写的那条不会生效，它仍然是停用状态`);
-    }
-    if (rec.blockedByTrust) {
-      warnings.push('当前项目未被信任，pi 在非交互模式下不会加载项目级 skill —— 这条设置会在项目被信任后才生效');
     }
     if (!changed) warnings.push('设置本来就是这个样子，没有改动文件');
 

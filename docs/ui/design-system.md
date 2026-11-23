@@ -99,7 +99,7 @@
 | --- | --- |
 | Button / IconButton | 文本按钮复用上节 `.btn` 语义系统：默认 `.btn`（Secondary）、`.primary`、`.ghost`、`.danger`、`.danger.ghost`，只有确有必要时才用 `.outline`；图标按钮复用 `.icon-btn`。同组高度一致（默认 32px，紧凑 28px），提交、取消、危险操作区分角色，危险意图在可见文案中明确。 |
 | Input / SearchInput / Textarea | 复用 `.ds-input`、已有表单字段与原生 `input`/`textarea`。字段有可访问标签，placeholder 仅提示；错误与字段关联。搜索组合用同一个外壳承载放大镜、输入及清除按钮，输入和图标基线对齐。多行字段可增高或内部滚动，保留 Composer 自有的输入与发送契约。 |
-| Select / Checkbox / Radio / Switch | 短选项复用 `.ds-select` 和原生 `select`。多选/单选优先原生 checkbox/radio 和可点标签，使用主题语义色。即时开关复用 `createSettingsToggle`（38×22 轨道，16px 滑块）；互斥设置可复用 `createSegmentedControl`（26px 项，公共容器）。切换需同步 checked、aria 状态和可见标记。 |
+| Select / Checkbox / Radio / Switch | 短选项复用 `.ds-select` 和原生 `select`。多选/单选优先原生 checkbox/radio 和可点标签，使用主题语义色。即时开关复用 `createSettingsToggle`（38×22 轨道，16px 滑块）；互斥设置可复用 `createSegmentedControl`（26px 项，公共容器）。分段控件按 radiogroup 键盘模型工作：整组一个 Tab 停靠点（落在当前选中项），方向键 / Home / End 在可用项之间移动并选中，禁用项被跳过；调用方用 `setValue` / `setOptionDisabled` / `setOptionHidden` 后停靠点自动回退到可用项。切换需同步 checked、aria 状态和可见标记。 |
 | Dropdown / Menu / MenuItem | 动作菜单复用 `openActionMenu`，复杂选择保留现有 picker/listbox，内容浮层复用 Popover。动作菜单项沿用 32px 最小高度和 8px 间隔，前导图标与末尾快捷键/选中标记对齐。支持方向键、Enter/Space、Escape、回焦；相应角色决定 Tab 行为，分隔线只用于真实分组。 |
 | Card / Panel / List | 设置复用 `createSettingsCard`、`createSettingsRow`，工作面板复用现有 surface 所有者。列表复用同行密度与动作位置，主项、状态和次要动作有独立语义；静态卡片没有 hover/pressed 假反馈。行操作悬停出现时须随键盘焦点显示。 |
 | Tabs / Badge | Tabs 使用既有 tablist 模式，选中态用可见标记和 `aria-selected`，关联 tabpanel 并支持方向键。设置切换值用 Radio/Segmented。Badge 复用 `createBadge`（20px、11px、6px 圆角），用可读文本表达状态。 |

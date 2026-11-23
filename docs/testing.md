@@ -1204,9 +1204,9 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
 | 层 | 命令 | 条数 | 量什么 |
 |---|---|---|---|
 | 纯投影 | `npm run test:capability`（进 `npm test`） | 74 | 四值状态、`null` 不冒充 `false`、built-in 与 Native MCP、unknown Extension、运行观察重置、`restartRequired`、无自动安装、Registry 无特化 |
-| DOM（jsdom） | `npm run test:ui` 的「Agent 能力」段 | — | 扩展 / 技能 / MCP 配置三个入口、「已知能力设置」仍可从扩展页「已安装」到达、旧能力状态页不再渲染、Registry 仍可诊断、设置导航不再出现「能力状态」 |
-| 拆分边界（jsdom） | `npm run test:agent-capabilities`（进 `npm test`） | 46 | 见下方「三入口拆分」 |
-| 真实 Electron | `npm run test:shortcuts:electron` | 100 | 设置导航七组（「Agent 能力」只有技能，扩展在主导航）、快捷键八条、旧命令面板 ID 安全忽略、扩展两个页签 / 技能 / MCP 配置在 1320×820 / 700×600 暗亮布局、主导航「扩展」选中态的计算样式（暗亮两套）、两个页面的实测排版（见下方「版式」） |
+| DOM（jsdom） | `npm run test:ui` 的「Agent 能力」段 | — | 扩展 / 技能 / MCP 配置三个入口、已安装能力的 setup 在自己包详情内、未安装包仍可从插件市场安装、旧能力状态页与独立「已知能力」说明区不再渲染、Registry 仍可诊断、设置导航不再出现「能力状态」 |
+| 拆分边界（jsdom） | `npm run test:agent-capabilities`（进 `npm test`） | 55 | 见下方「三入口拆分」 |
+| 真实 Electron | `npm run test:shortcuts:electron` | 104 | 设置导航七组（「Agent 能力」只有技能，扩展在主导航）、快捷键八条、旧命令面板 ID 安全忽略、扩展两个页签 / 技能 / MCP 配置在 1320×820 / 700×600 暗亮布局、共享项目选择器的打开 / 键盘 / Escape 回焦、主导航「扩展」选中态的计算样式（暗亮两套）、两个页面的实测排版（见下方「版式」） |
 
 关键判定（写错任何一条，界面就开始撒谎）：
 
@@ -1228,7 +1228,7 @@ Timeline 语义行 → logout 清理。不要用真实远端 server，不要做�
   各调一次 `beginWorkspaceSwitch()`，断言列表与计数清空并显示「项目已切换」，刷新后才重读。
 - **无自动安装**：四个 `*Setup()` 都声明 `automaticInstall === false`；
   投影层与视图层都不出现 `child_process` / `execFile` / `spawn(` / `node:fs`；
-  「已知能力设置」里没有任意包名输入，主安装按钮只服务服务端 allowlist 的四项。
+  能力 setup 里没有任意包名输入；插件市场的安装只接受目录里已有的条目，包名由服务端受控清单决定。
 - **Registry 无特化**：直接读 `server/extension-registry.js` 与
   `lib/extension-paths.js` 的源码，断言里面**不出现**任何 feature 包名
   （`pi-web-access` / `pi-subagents` / `pi-memory` / `pi-browser-harness`）、
@@ -1285,9 +1285,9 @@ Work Surface 自身保持 `overflow:hidden`（`scrollTop` 为 0，与 Planner / 
 只隐藏指定项、两者都不触发 `onChange`。
 
 `tests/cdp-shot.cjs`（`npm run shots`，手动、不进 `npm test`）的 115 / 118 / 132 / 155 四步跟到新结构：
-状态徽标改由分组承载（改写后的断言不会落成空集上的 `every`）、MCP 截图改到「MCP 配置」页并展开页尾
-「MCP 能力报告」、扩展详情点卡片里的「详情」。原 118 里「启停只能走 /mcp」一条已被 P20.7 的受控启停取代，
-改为断言开关写的是 pi 自己的 `mcp.json`。
+状态徽标改由分组承载（改写后的断言不会落成空集上的 `every`）、MCP 截图改到「MCP 配置」页并断言
+页尾能力报告已移除、项目切换是共享 listbox picker、扩展详情点卡片里的「详情」。原 118 里
+「启停只能走 /mcp」一条已被 P20.7 的受控启停取代，改为断言开关写的是 pi 自己的 `mcp.json`。
 132（技能页灰阶）现在是设置详情页，设置页的契约是画布 `.work-surface.settings-detail` 自身 `overflow-y:auto`，
 所以这一步把通用的「内部滚动容器承担滚动」换成「设置详情画布承担滚动」（同时断言画布里就是技能页），
 其余视口判据不变；扩展页的 142 / 145 / 155 照旧过通用判据（滚动在 `.extensions-scroll` 里）。
@@ -1316,14 +1316,19 @@ Work Surface 自身保持 `overflow:hidden`（`scrollTop` 为 0，与 Planner / 
 | `tests/skills-market.cjs` | 113 | 目录解析、缓存与刷新、预览令牌、完整性、安装不联网、主机白名单 |
 | `tests/skills-ui.cjs` | 16 | jsdom：列表 / 编辑器 / 导入 / 扫描 / 市场的迟到结果与网络手势 |
 
-页面级回归另在 `tests/smoke.cjs`（1346 条；技能页新增启用 / 加载徽标分离、坏技能行内报错、
+页面级回归另在 `tests/smoke.cjs`（1337 条；技能页新增启用 / 加载徽标分离、坏技能行内报错、
 未信任行、重启提示走页内、PUT 只走 ID 路径；原状态筛选的 2 条改成 2 条徽标断言，总数不变）、
-`tests/ui-ia.cjs`（32 条）与 `tests/agent-capability-pages.cjs`（46 条）。
+`tests/ui-ia.cjs`（32 条）与 `tests/agent-capability-pages.cjs`（55 条）。
 
-真实渲染三层（都不进默认 CI）：`tests/skills-visual.cjs` 截 40 张（1320×820 / 700×600，
-深浅色，列表 / 空 / 错误 / 成功 / 新建 / 编辑 / 导入 / 市场 / 预览 / 扫描）；
-`npm run test:shortcuts:electron` 100 条，其中技能页实测分组顺序、组头路径宽度、第一行三件
-中线差 < 2px、开关距右缘 10–18px、状态点在图标右下、700px 无横向溢出；
+真实渲染三层（都不进默认 CI）：`tests/skills-visual.cjs` 截 46 张（1320×820 / 700×600，
+深浅色，列表 / 空 / 错误 / 成功 / 新建 / 编辑 / 导入 / 市场 / 预览 / 扫描；700×600 另截
+滚到底并断言最后分组离窗口底部 ≥ 24px）；
+`npm run test:shortcuts:electron` 104 条，其中技能页实测分组顺序、组头路径宽度、第一行三件
+中线差 < 2px、开关距右缘 10–18px、状态点在图标右下、700px 无横向溢出，并补拍项目选择器打开态；
+`tests/capability-pages-visual.cjs` 57 张（四组尺寸主题 + 菜单 / 焦点 / 选中态，19 条计算样式），
+`tests/capability-pages-electron.cjs` 70 张 / 48 条测量（1320×820、700×600、深浅色、
+125% / 150% 字体缩放、项目菜单与四处表单选择器菜单打开态、旧缓存状态行、技能列表
+滚到底，DPR 1.5；`MCP_MARKET_STALE=1` 时多 4 张状态行截图并断言无横幅底色 / 左缘条）。
 `npm run shots`（`tests/cdp-shot.cjs`）的未信任技能步骤断言行内「未加载（项目未信任）」。
 
 未运行（如实记录）：完整 `npm test`（以 PR CI 为准）、`npm run test:skills-live`（真 pi）、
@@ -1455,7 +1460,7 @@ disabled**、到终态**停止轮询**、以及「更新失败经轮询到达界
 | `npm run test:capability` | `tests/capability.cjs` | **74** | 适用性收口（NA 不画 / 未声明不画 / **`null` 仍显示「未知（无法确认）」** / 诊断无错误不画）、一键安装的按钮形态与确认文案、四值投影与既有回归 |
 | `npm run test:capability-install` | `tests/capability-install.cjs` | **38** | 受控安装的全部边界（见下） |
 | `npm run test:sidebar-menu` | `tests/sidebar-menu.cjs` | **37** | 动作菜单的 DOM 行为 + 两个调用点的静态边界 |
-| `npm run test:ui` | `tests/smoke.cjs` | **1326** | 真实点击链路（jsdom 里的整个应用），含**项目菜单作用域**、**安装真实性**与**已知能力设置可达性**三组回归 |
+| `npm run test:ui` | `tests/smoke.cjs` | **1337** | 真实点击链路（jsdom 里的整个应用），含**项目菜单作用域**、**安装真实性**与**能力 setup 归属**三组回归 |
 | `npm run shots:harness` | `tests/cdp-shot.cjs` | 场景 +8 | 真 Chrome 的排版与运行状态 |
 
 ### T1 Specs

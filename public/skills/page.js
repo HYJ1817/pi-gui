@@ -3,11 +3,8 @@
  * 事实来源只有 `/api/skills`（server/skills.js：扫描 + pi get_commands 交叉核对）。
  * 本页不缓存第二份清单：每次 load 整体替换 `state.data`，筛选只是对它的投影。
  *
- * 版式对照 PI-Desktop 的 AgentSkillsPage：
- *   标题（图标 + 技能 + 数量）
- *   第一行：全部 / 全局 / 项目分段 + 搜索 + 项目选择
- *   第二行：扫描 / 新建 / 市场
- *   分组：名称 + 发现目录 + 数量 + 导入文件 / 导入目录 → 行瓦片（图标 + 名称 + 必要徽标 + 一行描述 + 开关）
+ * 页面以 MCP 管理页为版式参照；分组、发现目录、导入及行尾开关对照 PI-Desktop AgentSkillsPage。
+ * 页头放刷新、市场和新建；下方工具栏只负责范围、搜索、项目和外部扫描。
  * 技术细节（路径、停用规则、加载状态、SKILL.md 全文）只收在展开详情里。
  *
  * 启停写的是 pi 自己的 settings.json；创建 / 编辑 / 删除 / 导入都落在服务端枚举过的写入目标里。
@@ -24,6 +21,7 @@ import {
 import { createIcon } from '../ui/icons.js';
 import { confirmModal, confirmSurfaceMeta, dismissConfirm } from '../ui/modal.js';
 import { createBadge, createSegmentedControl, createSettingsToggle } from '../ui/primitives.js';
+import { createProjectPicker } from '../ui/project-picker.js';
 import { resourceEl as el, resourceNote as note } from '../ui/resource-dom.js';
 import { renderSkillDetail } from './detail.js';
 import { openSkillEditor } from './editor.js';
@@ -33,7 +31,7 @@ import { renderSkillsMarket } from './market.js';
 import {
   SKILL_SCOPE_LABEL, SKILL_SCOPE_ORDER, filterSkills, groupSkillsByScope, isSkillOn,
   marketInstalledNames, skillContextProject, skillGroupRoots, skillProjectOptions, skillScopeCounts,
-  skillScopeRoots, skillScopeTitle, skillStateMeta, skillToggleCopy, skillWritableTargets,
+  skillDisplayStatus, skillScopeRoots, skillScopeTitle, skillToggleCopy, skillWritableTargets,
 } from './model.js';
 
 /** 全部视图里即使为空也要出现的分组（空分组显示空状态，说明「这里没有」而不是「没读到」）。 */
@@ -160,13 +158,13 @@ function createSkillsPage(card) {
 
   /* ---------- 骨架：只建一次，筛选与刷新不重建输入框（焦点和输入法状态不丢） ---------- */
   const head = el('header', 'skills-head');
-  const headGlyph = el('span', 'skills-head-glyph');
-  headGlyph.append(createIcon('book', { size: 18 }));
-  const headText = el('div', 'skills-head-text');
-  headText.append(el('h2', 'skills-title', '技能'));
-  const headCount = el('span', 'skills-head-count');
-  const refresh = iconButton('refresh', '刷新技能列表', () => { void load(state.project ?? undefined); });
-  head.append(headGlyph, headText, headCount, refresh);
+  const refresh = actionButton('刷新', 'refresh', 'ghost', () => { void load(state.project ?? undefined); });
+  refresh.setAttribute('aria-label', '刷新技能列表');
+  const marketButton = actionButton('市场', 'market', 'ghost', openMarket);
+  const createButton = actionButton('新建', 'plus', 'primary', openCreate);
+  const actionsBar = el('div', 'skills-actions-bar');
+  actionsBar.append(refresh, marketButton, createButton);
+  head.append(el('h2', 'skills-title settings-page-title', '技能'), actionsBar);
 
   const toolbar = el('div', 'skills-toolbar');
   const scopeControl = createSegmentedControl({
@@ -189,25 +187,27 @@ function createSkillsPage(card) {
   searchInput.setAttribute('aria-label', '搜索技能');
   searchInput.oninput = () => { state.query = searchInput.value; renderBody(); };
   search.append(searchInput);
-  const projectField = el('label', 'skills-project');
+  const projectField = el('div', 'skills-project');
   projectField.append(el('span', 'skills-project-label', '项目'));
-  const projectSelect = el('select', 'ds-select skills-project-select');
-  projectSelect.setAttribute('aria-label', '查看哪个项目的技能');
-  projectSelect.onchange = () => { void switchProject(projectSelect.value); };
-  projectField.append(projectSelect);
-  toolbar.append(scopeControl.element, search, projectField);
-
-  const actionsBar = el('div', 'skills-actions-bar');
-  const scanButton = actionButton('扫描', 'scan', 'ghost', openScan);
-  const createButton = actionButton('新建', 'plus', 'primary', openCreate);
-  const marketButton = actionButton('市场', 'market', 'ghost', openMarket);
-  actionsBar.append(scanButton, createButton, marketButton);
+  const projectPicker = createProjectPicker({
+    value: '',
+    options: [],
+    label: '查看哪个项目的技能',
+    fallbackLabel: '当前项目',
+    disabled: true,
+    onSelect: (value) => { void switchProject(value); return true; },
+  });
+  projectField.append(projectPicker.element);
+  const scanButton = actionButton('从其他工具扫描', 'scan', 'ghost skills-scan', openScan);
+  toolbar.append(scopeControl.element, search, projectField, scanButton);
 
   const noticeHost = el('div', 'skills-notice-host');
   noticeHost.setAttribute('aria-live', 'polite');
   const notes = el('div', 'skills-notes');
   const content = el('div', 'skills-content');
-  card.append(head, toolbar, actionsBar, noticeHost, notes, content);
+  const inner = el('div', 'skills-inner ds-readable-badges');
+  inner.append(head, noticeHost, notes, toolbar, content);
+  card.append(inner);
 
   /* ---------- 操作结果：内联提示（成功不弹 Toast） ---------- */
   function setNotice(notice) {
@@ -305,23 +305,15 @@ function createSkillsPage(card) {
       state.scope = '';
       scopeControl.setValue('');
     }
-    headCount.textContent = state.data ? `${counts.all} 个技能` : '';
   }
 
   function syncProjects() {
     const options = state.data ? skillProjectOptions(state.data) : [];
     const value = state.project ?? (state.data ? skillContextProject(state.data) : 'none');
     // 读取失败时 data 为空、state.project 还留着上次的项目：补一条同值选项，
-    // 否则 select 的值在选项里找不到，会显示成空白。
+    // 否则控件找不到当前值，会显示成空白。
     if (!options.some((option) => option.value === value)) options.push({ value, label: '当前项目' });
-    projectSelect.replaceChildren();
-    for (const option of options) {
-      const item = el('option', '', option.label);
-      item.value = option.value;
-      projectSelect.append(item);
-    }
-    projectSelect.value = value;
-    projectSelect.disabled = state.loading || state.stale;
+    projectPicker.setOptions(options, { value, disabled: state.loading || state.stale });
   }
 
   /** 没有清单 / 工作区已切换时，动作按钮不能假装还能用：它们都依赖当前清单里的写入目标。 */
@@ -332,6 +324,8 @@ function createSkillsPage(card) {
 
   function renderNotes() {
     notes.replaceChildren();
+    /* 列表已过期时，旧项目的信任状态 / 诊断也不再代表任何东西。 */
+    if (state.stale) return;
     const data = state.data;
     if (!data) {
       for (const d of state.diagnostics) notes.append(note(d.message, 'warn'));
@@ -396,14 +390,20 @@ function createSkillsPage(card) {
     const labels = roots.length ? roots.map((root) => root.label) : skillGroupRoots(items);
     const path = el('span', 'skills-group-path', labels.join(' · '));
     path.title = roots.length ? roots.map((root) => root.dir).join('\n') : labels.join('\n');
-    groupHead.append(title, path, el('span', 'skills-group-count', String(items.length)));
+    const glyph = el('span', 'skills-group-glyph');
+    glyph.append(createIcon(scope === 'user' ? 'globe' : scope === 'project' ? 'folder' : 'book', { size: 16 }));
+    const heading = el('div', 'skills-group-heading');
+    const titleLine = el('div', 'skills-group-title-line');
+    titleLine.append(title, el('span', 'skills-group-count', String(items.length)));
+    heading.append(titleLine, path);
+    groupHead.append(glyph, heading);
     if (scope === 'user' || scope === 'project') {
       const target = importTargetFor(scope);
       const importActions = el('div', 'skills-group-actions');
       for (const [label, icon] of [['导入文件', 'fileText'], ['导入目录', 'folder']]) {
         const button = actionButton(label, icon, 'ghost tiny', () => openImport(target ? target.key : ''));
         button.disabled = !target;
-        // 窄窗只留图标（.skills-group-actions .btn span 被隐藏），按钮必须另有可读名字。
+        // 两组都有导入入口，读屏时也要能区分目标目录。
         button.setAttribute('aria-label', target ? `${label}到 ${target.label}` : label);
         button.title = target ? `${label} · ${target.label}` : '这个作用域没有可写的目录';
         importActions.append(button);
@@ -425,7 +425,7 @@ function createSkillsPage(card) {
   }
 
   function renderRow(skill) {
-    const meta = skillStateMeta(skill.state);
+    const display = skillDisplayStatus(skill);
     const open = skill.id === state.openId;
     const item = el('div', 'skill-row' + (open ? ' is-open' : ''));
     item.setAttribute('role', 'listitem');
@@ -438,16 +438,12 @@ function createSkillsPage(card) {
     main.setAttribute('aria-controls', detailId);
     const glyph = el('span', 'skill-glyph');
     glyph.append(createIcon('book', { size: 16 }));
-    const dot = el('span', 'ext-dot ' + meta.dot);
+    const dot = el('span', 'ext-dot ' + display.dot);
     dot.setAttribute('aria-hidden', 'true');
     glyph.append(dot);
     const text = el('span', 'skill-row-text');
-    const titleLine = el('span', 'skill-row-title');
-    const status = skill.state === 'enabled' && skill.loaded === true ? '已加载' : meta.label;
-    titleLine.append(el('span', 'skill-name', skill.name), createBadge({ text: status, tone: meta.tone }));
-    const desc = el('span', 'skill-row-desc', skill.description || '（没有描述）');
-    if (skill.description) desc.title = skill.description;
-    text.append(titleLine, desc);
+    text.append(el('span', 'skill-name', skill.name));
+    if (skill.description) text.append(el('span', 'skill-row-desc', skill.description));
     main.append(glyph, text);
     main.onclick = () => {
       state.openId = open ? '' : skill.id;
@@ -456,7 +452,15 @@ function createSkillsPage(card) {
         ?.querySelector('.skill-row-main')?.focus();
     };
     const actions = el('div', 'skill-row-actions');
-    if (skill.toggleable) actions.append(renderToggle(skill));
+    const badge = createBadge({ text: display.label, tone: display.tone });
+    badge.id = `skillStatus-${skill.id}`;
+    main.setAttribute('aria-describedby', badge.id);
+    actions.append(badge);
+    if (skill.toggleable) {
+      const toggle = renderToggle(skill);
+      toggle.setAttribute('aria-describedby', badge.id);
+      actions.append(toggle);
+    }
     line.append(main, actions);
     item.append(line);
     if (open) item.append(openDetailFor(skill, detailId));
@@ -577,7 +581,6 @@ function createSkillsPage(card) {
     head.remove();
     card.setAttribute('aria-label', '技能市场');
     toolbar.hidden = true;
-    actionsBar.hidden = true;
     notes.hidden = true;
     noticeHost.hidden = true;
     content.replaceChildren();
@@ -599,10 +602,9 @@ function createSkillsPage(card) {
     state.view = 'list';
     market?.dispose();
     market = null;
-    card.prepend(head);
+    inner.prepend(head);
     card.setAttribute('aria-label', '技能');
     toolbar.hidden = false;
-    actionsBar.hidden = false;
     notes.hidden = false;
     noticeHost.hidden = false;
     if (state.needsReload) {
@@ -616,8 +618,13 @@ function createSkillsPage(card) {
   /* ---------- 项目上下文 ---------- */
   async function switchProject(value) {
     if (value === state.project) return;
+    /* 用户是从这个控件选的：真实浏览器在 loading 禁用按钮时会丢焦点；
+     * 读完后只在焦点确实落到 body（没人接手）时还回触发器。 */
+    const restorePickerFocus = document.activeElement === projectPicker.trigger
+      || projectPicker.element.contains(document.activeElement);
     invalidateProjectOperations();
     state.project = value;
+    projectPicker.setValue(value);
     if (state.view === 'market') closeMarket();
     state.openId = '';
     openDetail = null;
@@ -631,31 +638,45 @@ function createSkillsPage(card) {
     state.loading = true;
     renderBody();
     await load(value);
+    if (restorePickerFocus && !disposed && !state.stale
+      && (document.activeElement === document.body || document.activeElement === null)) {
+      projectPicker.focus();
+    }
   }
 
   /* ---------- 读取 ---------- */
   function markStale() {
     if (disposed) return;
     state.stale = true;
+    state.loading = false;
+    content.classList.remove('is-loading');
+    /* 旧项目 / 旧工作区的读取错误必须跟着一起过期。即使刚才的读取失败了
+     * （state.data 为空），也不能把上一次的错误当成当前项目的结论继续显示。 */
+    state.error = '';
+    state.diagnostics = [];
     invalidateProjectOperations();
     if (state.view === 'market') closeMarket();
     syncProjects();
+    renderNotes();
     renderBody();
   }
 
   async function load(project) {
     const token = ++loadToken;
     const generation = S.workspaceGeneration;
+    /* 背景重读（Pi 就绪、刷新）可能正好发生在项目菜单打开时：菜单会因
+     * loading 禁用而收起，读完后把焦点还给触发器，而不是丢到 body。 */
+    const restorePickerFocus = projectPicker.isOpen();
     state.loading = true;
     refresh.disabled = true;
-    projectSelect.disabled = true;
+    projectPicker.setDisabled(true);
     content.classList.add('is-loading');
     if (!state.data) renderBody();
     const result = await fetchSkills(project === null ? undefined : project);
     if (disposed || token !== loadToken) return;
     state.loading = false;
     refresh.disabled = false;
-    projectSelect.disabled = false;
+    projectPicker.setDisabled(false);
     content.classList.remove('is-loading');
     if (!ownsWorkspace(generation)) { markStale(); return; }
     state.stale = false;
@@ -680,10 +701,19 @@ function createSkillsPage(card) {
     renderNotes();
     renderBody();
     writeSkillBadge(result); // 页面刚读到的数字顺手同步给菜单徽标，省一次请求
+    if (restorePickerFocus && !state.stale) projectPicker.focus();
   }
 
-  const onGeneration = () => { if (!disposed && state.data) markStale(); };
+  /* 工作区换代（切项目 / 重启 pi）后旧清单一律作废，无论上次读取成功与否。
+   * 只在上次成功时标记过期，会让一次失败之后切换项目的页面继续停在旧错误上。 */
+  const onGeneration = () => { if (!disposed) markStale(); };
+  const refreshAfterRestart = () => {
+    if (!disposed && !state.stale && ownsWorkspace(state.loadedGeneration)) {
+      void load(state.project ?? undefined);
+    }
+  };
   document.addEventListener('pi-gui:workspace-generation', onGeneration);
+  document.addEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
   syncScopeCounts();
   syncProjects();
   void load(undefined);
@@ -698,7 +728,9 @@ function createSkillsPage(card) {
       openDetail = null;
       market?.dispose();
       market = null;
+      projectPicker.destroy();
       document.removeEventListener('pi-gui:workspace-generation', onGeneration);
+      document.removeEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
     },
   };
 }

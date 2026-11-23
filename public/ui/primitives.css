@@ -385,6 +385,31 @@
   cursor: not-allowed;
 }
 
+/* Opt-in rounded chrome. The tab/segment/search keep their existing semantics and focus states. */
+.ds-segmented.is-rounded,
+.ds-segmented.is-rounded > .ds-segment-item { border-radius: var(--radius-full); }
+
+/* Independent filter pills can wrap onto separate lines without a single filled track. */
+.ds-filter-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ds-filter-chips > .ds-segment-item {
+  height: auto;
+  min-height: 26px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border-radius: var(--radius-full);
+  background: var(--ds-tile);
+}
+.ds-filter-chips > .ds-segment-item.is-active {
+  background: var(--ds-bg-active);
+  box-shadow: none;
+}
+
 /* 可选条数：与标签同一行的弱化数字，不另起徽标。 */
 .ds-segment-count {
   color: var(--ds-text-muted);
@@ -471,22 +496,30 @@
 
 .ds-badge-success {
   background: color-mix(in srgb, var(--ds-success) 14%, transparent);
-  color: var(--ds-success);
+  color: var(--ds-badge-success-ink, var(--ds-success));
 }
 
 .ds-badge-warning {
   background: color-mix(in srgb, var(--ds-warning) 14%, transparent);
-  color: var(--ds-warning);
+  color: var(--ds-badge-warning-ink, var(--ds-warning));
 }
 
 .ds-badge-error {
   background: color-mix(in srgb, var(--ds-error) 14%, transparent);
-  color: var(--ds-error);
+  color: var(--ds-badge-error-ink, var(--ds-error));
 }
 
 .ds-badge-purple {
   background: color-mix(in srgb, var(--ds-purple) 14%, transparent);
-  color: var(--ds-purple);
+  color: var(--ds-badge-purple-ink, var(--ds-purple));
+}
+
+/* Opt-in for small status text on tinted surfaces. Other consumers keep their original ink. */
+.ds-readable-badges {
+  --ds-badge-success-ink: color-mix(in srgb, var(--ds-success) 55%, var(--ds-text-primary));
+  --ds-badge-warning-ink: color-mix(in srgb, var(--ds-warning) 55%, var(--ds-text-primary));
+  --ds-badge-error-ink: color-mix(in srgb, var(--ds-error) 55%, var(--ds-text-primary));
+  --ds-badge-purple-ink: color-mix(in srgb, var(--ds-purple) 55%, var(--ds-text-primary));
 }
 
 /* ==========================================================================
@@ -655,6 +688,137 @@
   cursor: not-allowed;
 }
 
+/* Project picker: a themed listbox on the shared anchored layer.
+ * Native <select> popups are OS-rendered; this field keeps the same surface
+ * and size but draws its options with pi-GUI tokens and focus rules. */
+.ds-picker {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ds-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--ds-border-input);
+  border-radius: var(--ds-radius-8);
+  background: var(--ds-surface-input);
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.ds-picker-trigger:hover:not(:disabled) {
+  border-color: var(--ds-border-subtle);
+}
+
+/* Pointer clicks must not leave a browser-default ring; keyboard focus keeps
+ * the shared semantic indicator. */
+.ds-picker-trigger:focus {
+  outline: none;
+}
+
+.ds-picker-trigger:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 1px;
+}
+
+.ds-picker-trigger:disabled {
+  opacity: var(--ds-button-disabled-opacity);
+  cursor: not-allowed;
+}
+
+.ds-picker-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-picker-chevron {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--ds-text-muted);
+}
+
+.ds-picker-menu {
+  max-width: min(340px, calc(100vw - 16px));
+  max-height: min(320px, calc(100vh - 16px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--ds-bg-elevated-opaque);
+  box-shadow: var(--ds-shadow-dialog);
+  color: var(--ds-text-primary);
+  box-sizing: border-box;
+}
+
+.ds-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ds-text-primary);
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.ds-picker-option:hover {
+  background: var(--ds-bg-hover);
+}
+
+.ds-picker-option.is-selected {
+  background: var(--ds-bg-active);
+}
+
+.ds-picker-option:focus {
+  outline: none;
+}
+
+.ds-picker-option:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+
+.ds-picker-option-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-picker-check {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--ds-accent);
+}
+
 .ds-input {
   height: var(--ui-control-height);
   min-width: 0;
@@ -687,6 +851,8 @@
   background: var(--ds-field-inset-bg);
   color: var(--ds-text-muted);
 }
+
+.ds-search-control.is-rounded { border-radius: var(--radius-full); }
 
 .ds-search-control > input {
   flex: 1;

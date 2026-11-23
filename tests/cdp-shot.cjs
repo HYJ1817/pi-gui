@@ -1004,20 +1004,15 @@ async function main() {
   await evalJs(`[...document.querySelectorAll('#workSurface .skill-row')].find(x=>x.textContent.includes('proj-only'))?.querySelector('.skill-row-main')?.click()`);
   await sleep(220);
   await shotOf('#workSurface', '117-workspace-skill-untrusted', 'P14-D：未信任 Skill 状态', ['未加载（项目未信任）'], [['状态有文字', `[...document.querySelectorAll('#workSurface .skill-row')].find(x=>x.textContent.includes('proj-only'))?.textContent.includes('未加载（项目未信任）')`]]);
-  /* MCP 不再是扩展页的标签：它是「设置 › 扩展与 MCP › MCP 配置」。服务器管理在页面主体，
-   * 原 MCP 标签里的证据（版本出处 / built-in / 原生状态 / RPC 事实）并入页尾的「MCP 能力报告」折叠区。 */
+  /* MCP 不再是扩展页的标签：它是「设置 › 扩展与 MCP › MCP 配置」。服务器管理在页面主体；
+   * 原生能力证据留在诊断与服务端接口，管理页不再挂页尾能力报告。 */
   await evalJs(`document.querySelector('#navGlobalMore').click(); document.querySelector('#navMcp').click()`);
-  for (let i=0; i<40 && !await evalJs(`document.querySelector('#workSurface .mcp-server') && document.querySelector('#workSurface .mcp-report-summary')`); i++) await sleep(50);
-  await evalJs(`(() => { const r=document.querySelector('#workSurface .mcp-report'); if (r && !r.open) r.querySelector('.mcp-report-summary').click(); })()`);
-  for (let i=0; i<40 && !(await evalJs(`(document.querySelector('#workSurface .mcp-report-body')?.textContent||'').includes('builtin:mcp')`)); i++) await sleep(50);
-  await shotOf('#workSurface', '118-workspace-mcp', 'P14-D / P20.6：MCP 配置（Server 管理面 + 能力报告：版本真值 / built-in / 原生状态）', ['这个 pi 带 MCP 能力', 'builtin:mcp', '0.99.1'], [
+  for (let i=0; i<40 && !await evalJs(`document.querySelector('#workSurface .mcp-server')`); i++) await sleep(50);
+  await shotOf('#workSurface', '118-workspace-mcp', 'P14-D / P20.7：MCP 配置（Server 管理面 + 项目切换）', ['filesystem', 'github', '项目服务器'], [
     ['Server 明细走原生摘要', `['filesystem','github','linear','sentry'].every(n=>!!document.querySelector('#workSurface .mcp-server[data-name="'+n+'"]'))`],
-    ['原生状态横幅有证据', `document.querySelector('#workSurface .mcp-report-native')?.textContent.includes('原生 MCP 生效中')`],
-    ['built-in 不被当成普通 Extension', `document.querySelector('#workSurface .mcp-report')?.textContent.includes('不由 Extension Registry 的目录扫描发现')`],
-    ['不伪造工具注册表', `document.querySelector('#workSurface .mcp-report')?.textContent.includes('没有一条返回已注册工具清单')`],
-    ['版本带出处', `document.querySelector('#workSurface .mcp-report')?.textContent.includes('来源 package.json')`],
-    ['不再写死「没有原生 MCP」', `!document.querySelector('#workSurface')?.textContent.includes('没有原生 MCP 支持')`],
-    /* 拆分前的 MCP 标签只能说「启停没有官方自动化接口，走 /mcp」；MCP 配置页（P20.7）已经有受控的启停，写的是 pi 自己的 mcp.json。 */
+    ['页尾能力报告已移除', `!document.querySelector('#workSurface .mcp-report') && !document.querySelector('#workSurface .mcp-report-summary')`],
+    ['项目切换是共享 listbox picker', `!!document.querySelector('#workSurface .mcp-toolbar .project-picker-trigger') && !document.querySelector('#workSurface .mcp-toolbar select')`],
+    /* MCP 配置页（P20.7）有受控启停，写的是 pi 自己的 mcp.json。 */
     ['启停开关写 pi 自己的 mcp.json', `(() => { const s=[...document.querySelectorAll('#workSurface .mcp-server .ds-switch[role="switch"]')]; return s.length===4 && s.every(b=>b.title.includes('mcp.json')); })()`],
     ['目录高亮落在「MCP 配置」', `document.querySelector('#navMcp').getAttribute('aria-current')==='page'`],
   ]);

@@ -41,12 +41,14 @@ export function extensionBytesLabel(bytes) {
   return `${Number((bytes / (1024 * 1024)).toFixed(1))} MB`;
 }
 
-/** 市场卡片标题下的一行：发布者 · 版本 · 更新日期。 */
+/** 市场卡片标题下的一行；npm 月下载数不是安装数，未知时不补零。 */
 export function extensionMarketMeta(item) {
   const date = extensionDateLabel(item?.updatedAt);
+  const downloads = extensionCountLabel(item?.downloadsMonthly);
   return [
     item?.maintainer || '发布者未知',
     item?.version ? `v${item.version}` : '版本未知',
+    downloads ? `月下载 ${downloads}` : '',
     date ? `更新于 ${date}` : '',
   ].filter(Boolean).join(' · ');
 }

@@ -1,0 +1,1035 @@
+{
+  "task": "agent capability pages surface unification",
+  "generatedAt": "2026-11-22T17:21:54.541Z",
+  "source": ".shots/capability-pages/",
+  "browser": "headless Chromium (capability-pages-visual.cjs) + Electron (capability-pages-electron.cjs)",
+  "before": {
+    "computed": [
+      {
+        "label": "ref-settings-row",
+        "selector": ".settings-detail-card .settings-row",
+        "border-top-width": "0px",
+        "border-top-color": "rgb(238, 238, 238)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border-radius": "14px"
+      },
+      {
+        "label": "ref-settings-card-title",
+        "selector": ".settings-detail-card .ds-settings-card-title",
+        "font-size": "13.5px",
+        "font-weight": "600",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "ref-page-title",
+        "selector": ".settings-detail-card > h3",
+        "font-size": "30px",
+        "font-weight": "700",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "skills-row-default",
+        "selector": ".skill-row",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "rgb(40, 40, 40)",
+        "border-radius": "12px"
+      },
+      {
+        "label": "skills-group-icon-default",
+        "selector": ".skills-group-glyph",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "rgb(33, 33, 33)"
+      },
+      {
+        "label": "skills-search-default",
+        "selector": ".skills-search",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.05)",
+        "height": "34px"
+      },
+      {
+        "label": "skills-project-select-default",
+        "selector": ".skills-project-select",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "rgb(33, 33, 33)",
+        "height": "34px"
+      },
+      {
+        "label": "skills-title",
+        "selector": ".skills-title",
+        "font-size": "30px",
+        "font-weight": "700"
+      },
+      {
+        "label": "skills-group-title",
+        "selector": ".skills-group-title",
+        "font-size": "16px",
+        "font-weight": "600",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "mcp-row-default",
+        "selector": ".mcp-server",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "rgb(40, 40, 40)",
+        "border-radius": "12px"
+      },
+      {
+        "label": "mcp-group-icon-default",
+        "selector": ".mcp-group-icon",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "rgb(33, 33, 33)"
+      },
+      {
+        "label": "mcp-search-default",
+        "selector": ".mcp-search",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.05)",
+        "height": "34px"
+      },
+      {
+        "label": "mcp-project-select-default",
+        "selector": ".mcp-project-select",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.05)",
+        "height": "32px"
+      },
+      {
+        "label": "mcp-group-title",
+        "selector": ".mcp-group-title h4",
+        "font-size": "13.5px",
+        "font-weight": "600",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "extensions-row-default",
+        "selector": ".extensions-card",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "rgb(40, 40, 40)",
+        "border-radius": "12px"
+      },
+      {
+        "label": "extensions-group-icon-default",
+        "selector": ".extensions-group-icon",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.06)"
+      },
+      {
+        "label": "extensions-group-title",
+        "selector": ".extensions-group-title",
+        "font-size": "16px",
+        "font-weight": "600",
+        "color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)"
+      },
+      {
+        "label": "extensions-market-card",
+        "selector": ".extensions-market-card",
+        "border-top-width": "0px",
+        "border-top-color": "rgb(238, 238, 238)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border-radius": "16px"
+      },
+      {
+        "label": "extensions-market-refresh",
+        "selector": ".extensions-refresh",
+        "background-color": "rgb(255, 255, 255)",
+        "color": "rgb(24, 24, 24)",
+        "border-top-width": "1px"
+      }
+    ],
+    "pageErrors": []
+  },
+  "after": {
+    "computed": [
+      {
+        "label": "ref-settings-row",
+        "selector": ".settings-detail-card .settings-row",
+        "border-top-width": "0px",
+        "border-top-color": "rgb(238, 238, 238)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border-radius": "14px"
+      },
+      {
+        "label": "ref-settings-card-title",
+        "selector": ".settings-detail-card .ds-settings-card-title",
+        "font-size": "13.5px",
+        "font-weight": "600",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "ref-page-title",
+        "selector": ".settings-detail-card > h3",
+        "font-size": "30px",
+        "font-weight": "700",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "skills-row-default",
+        "selector": ".skill-row",
+        "border-top-width": "0px",
+        "border-top-color": "rgb(238, 238, 238)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border-radius": "14px"
+      },
+      {
+        "label": "skills-group-icon-default",
+        "selector": ".skills-group-glyph",
+        "border-top-width": "0px",
+        "border-top-color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)"
+      },
+      {
+        "label": "skills-search-default",
+        "selector": ".skills-search",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.05)",
+        "height": "34px"
+      },
+      {
+        "label": "skills-project-select-default",
+        "selector": ".skills-project-select",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "rgb(33, 33, 33)",
+        "height": "34px"
+      },
+      {
+        "label": "skills-title",
+        "selector": ".skills-title",
+        "font-size": "30px",
+        "font-weight": "700"
+      },
+      {
+        "label": "skills-group-title",
+        "selector": ".skills-group-title",
+        "font-size": "16px",
+        "font-weight": "600",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "mcp-row-default",
+        "selector": ".mcp-server",
+        "border-top-width": "0px",
+        "border-top-color": "rgb(238, 238, 238)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border-radius": "14px"
+      },
+      {
+        "label": "mcp-group-icon-default",
+        "selector": ".mcp-group-icon",
+        "border-top-width": "0px",
+        "border-top-color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)"
+      },
+      {
+        "label": "mcp-search-default",
+        "selector": ".mcp-search",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.05)",
+        "height": "34px"
+      },
+      {
+        "label": "mcp-project-select-default",
+        "selector": ".mcp-project-select",
+        "border-top-width": "1px",
+        "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+        "background-color": "rgb(33, 33, 33)",
+        "height": "34px"
+      },
+      {
+        "label": "mcp-group-title",
+        "selector": ".mcp-group-title h4",
+        "font-size": "16px",
+        "font-weight": "600",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "extensions-row-default",
+        "selector": ".extensions-card",
+        "border-top-width": "0px",
+        "border-top-color": "rgb(238, 238, 238)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border-radius": "14px"
+      },
+      {
+        "label": "extensions-group-icon-default",
+        "selector": ".extensions-group-icon",
+        "border-top-width": "0px",
+        "border-top-color": "rgb(238, 238, 238)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)"
+      },
+      {
+        "label": "extensions-group-title",
+        "selector": ".extensions-group-title",
+        "font-size": "16px",
+        "font-weight": "600",
+        "color": "rgb(255, 255, 255)"
+      },
+      {
+        "label": "extensions-market-card",
+        "selector": ".extensions-market-card",
+        "border-top-width": "0px",
+        "border-top-color": "rgb(238, 238, 238)",
+        "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+        "border-radius": "16px"
+      },
+      {
+        "label": "extensions-market-refresh",
+        "selector": ".extensions-refresh",
+        "background-color": "rgba(0, 0, 0, 0)",
+        "color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+        "border-top-width": "1px"
+      }
+    ],
+    "pageErrors": []
+  },
+  "electron": {
+    "scale": 1.5,
+    "electron": "44.4.3",
+    "metrics": [
+      {
+        "label": "skills-list-1320x820-dark",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1045,
+        "surfaceClientWidth": 1045,
+        "innerScrollWidth": 957,
+        "innerClientWidth": 957,
+        "theme": "dark"
+      },
+      {
+        "label": "skills-market-1320x820-dark",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1035,
+        "surfaceClientWidth": 1035,
+        "innerScrollWidth": 947,
+        "innerClientWidth": 947,
+        "theme": "dark"
+      },
+      {
+        "label": "extensions-installed-1320x820-dark",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1045,
+        "surfaceClientWidth": 1045,
+        "innerScrollWidth": 1035,
+        "innerClientWidth": 1035,
+        "theme": "dark"
+      },
+      {
+        "label": "extensions-market-1320x820-dark",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1045,
+        "surfaceClientWidth": 1045,
+        "innerScrollWidth": 1035,
+        "innerClientWidth": 1035,
+        "theme": "dark"
+      },
+      {
+        "label": "mcp-list-1320x820-dark",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1035,
+        "surfaceClientWidth": 1035,
+        "innerScrollWidth": 947,
+        "innerClientWidth": 947,
+        "theme": "dark"
+      },
+      {
+        "label": "mcp-market-1320x820-dark",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1035,
+        "surfaceClientWidth": 1035,
+        "innerScrollWidth": 947,
+        "innerClientWidth": 947,
+        "theme": "dark"
+      },
+      {
+        "label": "skills-list-1320x820-light",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1045,
+        "surfaceClientWidth": 1045,
+        "innerScrollWidth": 957,
+        "innerClientWidth": 957,
+        "theme": "light"
+      },
+      {
+        "label": "skills-market-1320x820-light",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1035,
+        "surfaceClientWidth": 1035,
+        "innerScrollWidth": 947,
+        "innerClientWidth": 947,
+        "theme": "light"
+      },
+      {
+        "label": "extensions-installed-1320x820-light",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1045,
+        "surfaceClientWidth": 1045,
+        "innerScrollWidth": 1035,
+        "innerClientWidth": 1035,
+        "theme": "light"
+      },
+      {
+        "label": "extensions-market-1320x820-light",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1045,
+        "surfaceClientWidth": 1045,
+        "innerScrollWidth": 1035,
+        "innerClientWidth": 1035,
+        "theme": "light"
+      },
+      {
+        "label": "mcp-list-1320x820-light",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1035,
+        "surfaceClientWidth": 1035,
+        "innerScrollWidth": 947,
+        "innerClientWidth": 947,
+        "theme": "light"
+      },
+      {
+        "label": "mcp-market-1320x820-light",
+        "dpr": 1.5,
+        "innerWidth": 1320,
+        "innerHeight": 820,
+        "documentScrollWidth": 1320,
+        "surfaceScrollWidth": 1035,
+        "surfaceClientWidth": 1035,
+        "innerScrollWidth": 947,
+        "innerClientWidth": 947,
+        "theme": "light"
+      },
+      {
+        "label": "skills-list-700x600-dark",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 415,
+        "surfaceClientWidth": 415,
+        "innerScrollWidth": 327,
+        "innerClientWidth": 327,
+        "theme": "dark"
+      },
+      {
+        "label": "skills-market-700x600-dark",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 415,
+        "surfaceClientWidth": 415,
+        "innerScrollWidth": 327,
+        "innerClientWidth": 327,
+        "theme": "dark"
+      },
+      {
+        "label": "extensions-installed-700x600-dark",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 460,
+        "surfaceClientWidth": 460,
+        "innerScrollWidth": 450,
+        "innerClientWidth": 450,
+        "theme": "dark"
+      },
+      {
+        "label": "extensions-market-700x600-dark",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 460,
+        "surfaceClientWidth": 460,
+        "innerScrollWidth": 450,
+        "innerClientWidth": 450,
+        "theme": "dark"
+      },
+      {
+        "label": "mcp-list-700x600-dark",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 415,
+        "surfaceClientWidth": 415,
+        "innerScrollWidth": 327,
+        "innerClientWidth": 327,
+        "theme": "dark"
+      },
+      {
+        "label": "mcp-market-700x600-dark",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 415,
+        "surfaceClientWidth": 415,
+        "innerScrollWidth": 327,
+        "innerClientWidth": 327,
+        "theme": "dark"
+      },
+      {
+        "label": "skills-list-700x600-light",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 415,
+        "surfaceClientWidth": 415,
+        "innerScrollWidth": 327,
+        "innerClientWidth": 327,
+        "theme": "light"
+      },
+      {
+        "label": "skills-market-700x600-light",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 415,
+        "surfaceClientWidth": 415,
+        "innerScrollWidth": 327,
+        "innerClientWidth": 327,
+        "theme": "light"
+      },
+      {
+        "label": "extensions-installed-700x600-light",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 460,
+        "surfaceClientWidth": 460,
+        "innerScrollWidth": 450,
+        "innerClientWidth": 450,
+        "theme": "light"
+      },
+      {
+        "label": "extensions-market-700x600-light",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 460,
+        "surfaceClientWidth": 460,
+        "innerScrollWidth": 450,
+        "innerClientWidth": 450,
+        "theme": "light"
+      },
+      {
+        "label": "mcp-list-700x600-light",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 415,
+        "surfaceClientWidth": 415,
+        "innerScrollWidth": 327,
+        "innerClientWidth": 327,
+        "theme": "light"
+      },
+      {
+        "label": "mcp-market-700x600-light",
+        "dpr": 1.5,
+        "innerWidth": 700,
+        "innerHeight": 600,
+        "documentScrollWidth": 700,
+        "surfaceScrollWidth": 415,
+        "surfaceClientWidth": 415,
+        "innerScrollWidth": 327,
+        "innerClientWidth": 327,
+        "theme": "light"
+      }
+    ],
+    "errors": []
+  },
+  "referencePagesByteIdentical": [
+    {
+      "name": "ref-general-1320x820-dark.png",
+      "identical": true
+    },
+    {
+      "name": "ref-shortcuts-1320x820-dark.png",
+      "identical": true
+    },
+    {
+      "name": "ref-info-1320x820-dark.png",
+      "identical": true
+    }
+  ],
+  "copied": [
+    {
+      "group": "before",
+      "name": "ref-general-1320x820-dark.png",
+      "bytes": 57911,
+      "sha256": "6cafeaa28d441a33"
+    },
+    {
+      "group": "before",
+      "name": "ref-shortcuts-1320x820-dark.png",
+      "bytes": 67119,
+      "sha256": "fdad9d77cbbaa87d"
+    },
+    {
+      "group": "before",
+      "name": "ref-info-1320x820-dark.png",
+      "bytes": 64855,
+      "sha256": "e7ce3e6632e38900"
+    },
+    {
+      "group": "before",
+      "name": "skills-list-1320x820-dark.png",
+      "bytes": 69500,
+      "sha256": "3163d92df365eee2"
+    },
+    {
+      "group": "before",
+      "name": "skills-market-1320x820-dark.png",
+      "bytes": 108996,
+      "sha256": "626b5045cd720783"
+    },
+    {
+      "group": "before",
+      "name": "extensions-installed-1320x820-dark.png",
+      "bytes": 67697,
+      "sha256": "6c274157270b45c7"
+    },
+    {
+      "group": "before",
+      "name": "extensions-market-1320x820-dark.png",
+      "bytes": 118224,
+      "sha256": "a429d2f8ac523e1b"
+    },
+    {
+      "group": "before",
+      "name": "mcp-list-1320x820-dark.png",
+      "bytes": 98831,
+      "sha256": "d54485a6f8687129"
+    },
+    {
+      "group": "before",
+      "name": "mcp-market-1320x820-dark.png",
+      "bytes": 107150,
+      "sha256": "7e4c5127e9b73e77"
+    },
+    {
+      "group": "before",
+      "name": "skills-list-1320x820-light.png",
+      "bytes": 70522,
+      "sha256": "d06dd215782f7a3a"
+    },
+    {
+      "group": "before",
+      "name": "extensions-installed-1320x820-light.png",
+      "bytes": 68326,
+      "sha256": "97dbe3eb25a843a3"
+    },
+    {
+      "group": "before",
+      "name": "mcp-list-1320x820-light.png",
+      "bytes": 99489,
+      "sha256": "8ffa9771c3b3c85e"
+    },
+    {
+      "group": "before",
+      "name": "skills-list-700x600-dark.png",
+      "bytes": 48995,
+      "sha256": "69cdaec18705cd90"
+    },
+    {
+      "group": "before",
+      "name": "extensions-installed-700x600-dark.png",
+      "bytes": 45565,
+      "sha256": "007995eb209076ba"
+    },
+    {
+      "group": "before",
+      "name": "mcp-list-700x600-dark.png",
+      "bytes": 50232,
+      "sha256": "045e3966fa2c54a2"
+    },
+    {
+      "group": "before",
+      "name": "state-skills-restart-pending-1320x820-dark.png",
+      "bytes": 69498,
+      "sha256": "7cfee8390776433d"
+    },
+    {
+      "group": "after",
+      "name": "ref-general-1320x820-dark.png",
+      "bytes": 57911,
+      "sha256": "6cafeaa28d441a33"
+    },
+    {
+      "group": "after",
+      "name": "ref-shortcuts-1320x820-dark.png",
+      "bytes": 67119,
+      "sha256": "fdad9d77cbbaa87d"
+    },
+    {
+      "group": "after",
+      "name": "ref-info-1320x820-dark.png",
+      "bytes": 64855,
+      "sha256": "e7ce3e6632e38900"
+    },
+    {
+      "group": "after",
+      "name": "skills-list-1320x820-dark.png",
+      "bytes": 68102,
+      "sha256": "183e2ae9733f1a58"
+    },
+    {
+      "group": "after",
+      "name": "skills-market-1320x820-dark.png",
+      "bytes": 107233,
+      "sha256": "95c6b6114b648b31"
+    },
+    {
+      "group": "after",
+      "name": "extensions-installed-1320x820-dark.png",
+      "bytes": 65628,
+      "sha256": "a2a1d87589521b94"
+    },
+    {
+      "group": "after",
+      "name": "extensions-market-1320x820-dark.png",
+      "bytes": 117918,
+      "sha256": "c175b9501a511e60"
+    },
+    {
+      "group": "after",
+      "name": "mcp-list-1320x820-dark.png",
+      "bytes": 97207,
+      "sha256": "0eaa7a5c1d270aad"
+    },
+    {
+      "group": "after",
+      "name": "mcp-market-1320x820-dark.png",
+      "bytes": 106226,
+      "sha256": "5eb62722b2b700da"
+    },
+    {
+      "group": "after",
+      "name": "skills-list-1320x820-light.png",
+      "bytes": 68957,
+      "sha256": "d14d9dd9e44fc9f5"
+    },
+    {
+      "group": "after",
+      "name": "skills-market-1320x820-light.png",
+      "bytes": 110522,
+      "sha256": "1533fad16e31a9eb"
+    },
+    {
+      "group": "after",
+      "name": "extensions-installed-1320x820-light.png",
+      "bytes": 67058,
+      "sha256": "1c3b52ea406cf75b"
+    },
+    {
+      "group": "after",
+      "name": "extensions-market-1320x820-light.png",
+      "bytes": 115688,
+      "sha256": "26d38be2fe17d678"
+    },
+    {
+      "group": "after",
+      "name": "mcp-list-1320x820-light.png",
+      "bytes": 97438,
+      "sha256": "831c36db6e8e8bde"
+    },
+    {
+      "group": "after",
+      "name": "mcp-market-1320x820-light.png",
+      "bytes": 104951,
+      "sha256": "5ea3e0c53012f1a5"
+    },
+    {
+      "group": "after",
+      "name": "skills-list-700x600-dark.png",
+      "bytes": 48027,
+      "sha256": "63c3e21c8377b09f"
+    },
+    {
+      "group": "after",
+      "name": "extensions-installed-700x600-dark.png",
+      "bytes": 45298,
+      "sha256": "924cbbdc637f27c6"
+    },
+    {
+      "group": "after",
+      "name": "mcp-list-700x600-dark.png",
+      "bytes": 49664,
+      "sha256": "903fb934ad5c43d0"
+    },
+    {
+      "group": "after",
+      "name": "skills-list-700x600-light.png",
+      "bytes": 48792,
+      "sha256": "53ed95ef55eb7de4"
+    },
+    {
+      "group": "after",
+      "name": "extensions-installed-700x600-light.png",
+      "bytes": 46104,
+      "sha256": "fe3192b75156d361"
+    },
+    {
+      "group": "after",
+      "name": "mcp-list-700x600-light.png",
+      "bytes": 49581,
+      "sha256": "307874c6cdcff155"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-row-hover-1320x820-dark.png",
+      "bytes": 68286,
+      "sha256": "bbdac95b3da3eb8d"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-row-focus-1320x820-dark.png",
+      "bytes": 69280,
+      "sha256": "04409f73e82c7974"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-search-focus-1320x820-dark.png",
+      "bytes": 69246,
+      "sha256": "68ca8782f7a6558c"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-loading-1320x820-dark.png",
+      "bytes": 39677,
+      "sha256": "4e92e3682f6e4037"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-error-1320x820-dark.png",
+      "bytes": 41425,
+      "sha256": "4c86538d49f74f90"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-selected-1320x820-dark.png",
+      "bytes": 59010,
+      "sha256": "ac5b872d69007a81"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-button-pressed-1320x820-dark.png",
+      "bytes": 68179,
+      "sha256": "0f6f31595bc5835a"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-search-pointer-focus-1320x820-dark.png",
+      "bytes": 69246,
+      "sha256": "68ca8782f7a6558c"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-success-1320x820-dark.png",
+      "bytes": 75145,
+      "sha256": "3dc2398c6dbbf547"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-restart-pending-1320x820-dark.png",
+      "bytes": 68948,
+      "sha256": "a34592e57bf82612"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-restart-pending-700x600-dark.png",
+      "bytes": 47649,
+      "sha256": "72d7647225a7c997"
+    },
+    {
+      "group": "after",
+      "name": "state-mcp-row-hover-1320x820-dark.png",
+      "bytes": 97370,
+      "sha256": "f7fa692d6cb74789"
+    },
+    {
+      "group": "after",
+      "name": "state-mcp-disabled-1320x820-dark.png",
+      "bytes": 104335,
+      "sha256": "d498f39e46704383"
+    },
+    {
+      "group": "after",
+      "name": "state-mcp-disabled-1320x820-light.png",
+      "bytes": 104558,
+      "sha256": "0e73147e420a8d21"
+    },
+    {
+      "group": "after",
+      "name": "state-extensions-row-hover-1320x820-dark.png",
+      "bytes": 65716,
+      "sha256": "94a719738db3c93d"
+    },
+    {
+      "group": "after",
+      "name": "state-extensions-market-selected-1320x820-dark.png",
+      "bytes": 66376,
+      "sha256": "32139608e1b04413"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-row-hover-1320x820-light.png",
+      "bytes": 69006,
+      "sha256": "e9362dfe5bf4bde8"
+    },
+    {
+      "group": "after",
+      "name": "state-skills-search-focus-1320x820-light.png",
+      "bytes": 70281,
+      "sha256": "25834c41ad5c515f"
+    },
+    {
+      "group": "electron",
+      "name": "skills-list-1320x820-dark.png",
+      "bytes": 112254,
+      "sha256": "5fa1b851a5763612"
+    },
+    {
+      "group": "electron",
+      "name": "extensions-installed-1320x820-dark.png",
+      "bytes": 115456,
+      "sha256": "1ad297c9ef84b67e"
+    },
+    {
+      "group": "electron",
+      "name": "mcp-list-1320x820-dark.png",
+      "bytes": 159265,
+      "sha256": "8257d398eec80efa"
+    },
+    {
+      "group": "electron",
+      "name": "skills-list-1320x820-light.png",
+      "bytes": 113668,
+      "sha256": "87e1eb9527295002"
+    },
+    {
+      "group": "electron",
+      "name": "extensions-installed-1320x820-light.png",
+      "bytes": 119436,
+      "sha256": "86e750d9327e54b9"
+    },
+    {
+      "group": "electron",
+      "name": "mcp-list-1320x820-light.png",
+      "bytes": 162327,
+      "sha256": "038cfc34c5779fbf"
+    },
+    {
+      "group": "electron",
+      "name": "skills-market-1320x820-dark.png",
+      "bytes": 175012,
+      "sha256": "ead62de6b95ea3e5"
+    },
+    {
+      "group": "electron",
+      "name": "extensions-market-1320x820-dark.png",
+      "bytes": 190763,
+      "sha256": "338524c9021702ac"
+    },
+    {
+      "group": "electron",
+      "name": "mcp-market-1320x820-dark.png",
+      "bytes": 168393,
+      "sha256": "cf71e59445670739"
+    },
+    {
+      "group": "electron",
+      "name": "skills-list-700x600-dark.png",
+      "bytes": 77811,
+      "sha256": "91a35230eba7aaa0"
+    },
+    {
+      "group": "electron",
+      "name": "extensions-installed-700x600-dark.png",
+      "bytes": 76183,
+      "sha256": "206ab475f3a526f5"
+    },
+    {
+      "group": "electron",
+      "name": "mcp-list-700x600-dark.png",
+      "bytes": 78905,
+      "sha256": "0d7f73e90424898a"
+    },
+    {
+      "group": "before",
+      "name": "mcp-market-700x600-dark.png",
+      "bytes": 50761,
+      "sha256": "934b63d746969416"
+    },
+    {
+      "group": "after",
+      "name": "mcp-market-700x600-dark.png",
+      "bytes": 50629,
+      "sha256": "d3c028f0ac7edde3"
+    },
+    {
+      "group": "after",
+      "name": "mcp-market-700x600-light.png",
+      "bytes": 50025,
+      "sha256": "c2d9cd391c4ef96d"
+    },
+    {
+      "group": "electron",
+      "name": "mcp-market-700x600-dark.png",
+      "bytes": 79938,
+      "sha256": "b04549b5f89420bf"
+    }
+  ]
+}

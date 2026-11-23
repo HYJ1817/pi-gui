@@ -335,8 +335,10 @@ server 名严格校验），入口从 launch identity 派生（与 bridge 同一
   - 缓存过期时**先返回旧目录**，后台刷新（`stale:true` + `refreshing:true`）；
     前端在 `refreshing:true` 时每 2s 重新请求当前列表（保留搜索词、分类、页码与
     每页数量）；刷新中只探测状态，不重绘结果区；刷新成功后自动换成新总数并移除
-    旧缓存提示；刷新失败则停止轮询、保留旧列表并显示失败横幅（本地接口失败与
-    Registry 刷新失败分开提示），等服务端 30 秒退避，不会清空已有结果；
+    旧缓存提示；刷新失败则停止轮询、保留旧列表，并用一行状态说明「正在显示上次
+    成功加载的缓存」（本地接口失败与 Registry 刷新失败分开措辞）。状态行不画
+    整条横幅，也不展示代理线路 / 错误码等诊断细节；等服务端 30 秒退避，不会
+    清空已有结果；
   - 刷新失败继续返回旧目录并给出 `refreshError`，30 秒退避；
   - 没有旧目录时**边加载边显示**：列表请求带 `partial=1` 拿当前快照，先渲染已
     获取的条目（「已加载 N 条」），前端每 2s 轮询一次；完整目录到手后换成真实
@@ -495,7 +497,7 @@ npm run test:mcp
 # tests/mcp-market.cjs     72 条（内置目录 / Registry 完整目录与游标分页 / cursor 特殊字符、4096 上限与空白 cursor 语义 / 去重与 latest / 搜索分类本地筛选 / 内存与磁盘缓存 / 过期后台刷新与退避 / 启动预取 / 边加载边显示（partial 快照与失败重试）/ 加载进度 / 页码与每页大小边界 / 页数 / 条数 / 总时限守卫 / Registry schema 适配 / 第三方源 / 安装 / SSRF / DNS 固定 / 直连与代理线路 / unknown 失败关闭 / 环境变量代理冲突 / fake-IP / NO_PROXY / 重定向 / 非法状态码 / 覆盖安装凭据）
 # tests/mcp-market-network.cjs 19 条（代理线路分类 / 地址分类 / 主进程代理桥 / 后端 IPC 客户端 / 凭据脱敏）
 # tests/mcp-import.cjs     14 条（只读扫描 / 脱敏 / 冲突结构差异 / 导入）
-# tests/mcp-management-ui.cjs 32 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场分页与筛选重置 / 页码窗口边界（1/2/7/8/9/20 页）/ 完整目录加载进度 / 后台刷新横幅 / 刷新完成自动更新 / 刷新失败保留旧列表 / 本地请求失败不误报 Registry / 缩页后焦点回退 / 翻页与切源竞态 / 销毁清理轮询 / 搜索竞态 / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态 / 摘要读取失败时的页尾能力报告）
+# tests/mcp-management-ui.cjs 41 条（管理页 / 表单 / exposure / 详情 / keepUrl / 市场分页与筛选重置 / 页码窗口边界（1/2/7/8/9/20 页）/ 完整目录加载进度 / 后台刷新状态行 / 刷新完成自动更新 / 刷新失败保留旧列表 / 本地请求失败不误报 Registry / 缩页后焦点回退 / 翻页与切源竞态 / 销毁清理轮询 / 搜索竞态 / 市场 scope / 已配置状态 / 连续安装 revision / 命令预览 / Escape 焦点 / 导入 / 项目信任 / 连接未知态 / 摘要读取失败时的页尾能力报告）
 # tests/mcp-native.cjs     202 条（Pi 契约 / 运行时投影 / 状态机 / 缓存）
 ```
 
@@ -513,9 +515,11 @@ scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsuppo
 收敛、代理凭据脱敏、重定向拒绝、
 关键 UI 交互（exposure 回填、安装 scope 继承、实际命令预览）与项目未信任降级。
 
-`test:ui`（smoke）另有 MCP 配置页与页尾「MCP 能力报告」的界面行为（原生状态横幅、server 行与
-运行时状态、启停 / 删除 / 新增 wiring、trust 提示与信任未知 fail closed、无凭据字段、报告展开前不读取）；
-报告的换项目提示与迟到结果丢弃见 `test:agent-capabilities`。拆分前「Skills 与扩展」里的 MCP 标签
+`test:ui`（smoke）另有 MCP 配置页的界面行为（原生状态不重复、server 行与
+运行时状态、启停 / 删除 / 新增 wiring、trust 提示与信任未知 fail closed、无凭据字段）；
+页尾能力报告已移除，管理页不再请求 `/api/mcp`。共享项目选择器的打开 / 键盘 / 选中 /
+禁用 / 项目列表变化见 `test:agent-capabilities` 与 `tests/mcp-management-ui.cjs`。
+拆分前「Skills 与扩展」里的 MCP 标签
 （server 列表 / 刷新 / 移除 / 添加）与配置页重复，已移除（见 [agent-capabilities.md](agent-capabilities.md)）。
 
 **live MCP 测试不进自动化 CI**（不能在测试里依赖真实网络 / 用户 pi 配置）。

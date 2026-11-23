@@ -1718,21 +1718,6 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 .ext-body{flex:1;min-height:0;display:flex}
 .ext-panel{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 
-/* P36：能力状态页移除后，已知能力的安装 / 运行观察仍留在 Extensions 页。
- * 外层与每一项都默认折叠，避免把 Registry 列表挤下去；展开后内部滚动。 */
-.ext-known{
-  flex:0 0 auto;max-height:42%;overflow:auto;margin-bottom:10px;padding:7px 9px;
-  border:1px solid var(--line);border-radius:9px;background:var(--card);
-}
-.ext-known>summary{cursor:pointer;font-size:12.5px;color:var(--t1)}
-.ext-known>summary:focus-visible,.ext-known-item>summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
-.ext-known-body{padding-top:6px}
-.ext-known-item{border-top:1px solid var(--line-soft);margin-top:6px;padding-top:6px}
-.ext-known-item>summary{cursor:pointer;font-size:12px;color:var(--t2)}
-.ext-known-item-body{padding-top:6px}
-/* 折叠标题已经是这一项的标题，setup 内部不再重复一遍同名 h4。 */
-.ext-known-item .cap-setup>h4:first-child{display:none}
-
 /* ---- Skills ---- */
 .ext-skills{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .ext-bar{display:flex;gap:6px;align-items:center;margin-bottom:9px;flex:0 0 auto}

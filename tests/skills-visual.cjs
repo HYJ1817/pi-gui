@@ -19,6 +19,7 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { contrastSample } = require('./fixtures/system-settings-states.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = process.env.SKILLS_SHOTS_DIR || path.join(ROOT, '.shots', 'skills-phase2a');
@@ -261,6 +262,14 @@ async function main() {
     await expect(`[...document.querySelectorAll('.skills-page h2')].map((h) => h.textContent).join() === '技能市场'
       && !document.querySelector('.skills-page .skills-head')`, '市场只应有一个页面标题');
     await scrollTop();
+    const layout = await evalJs(`(() => {
+      const grid = document.querySelector('.skills-market-grid');
+      const inner = document.querySelector('.skills-inner');
+      return { viewport: [innerWidth, innerHeight], columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+        overflow: inner.scrollWidth - inner.clientWidth, theme: document.documentElement.dataset.theme };
+    })()`);
+    assert(layout.columns === (layout.viewport[0] === 700 ? 1 : 2) && layout.overflow <= 1, '技能市场列数或内容溢出：' + JSON.stringify(layout));
+    metrics.push({ market: layout });
     await sleep(250);
   }
 
@@ -278,11 +287,11 @@ async function main() {
       `(document.querySelector('.skills-editor-dialog textarea[aria-label="描述"]')?.value || '').includes('审查源代码')`,
       '编辑表单回填',
     );
-    await expect(`!document.querySelector('.skills-editor-dialog select[aria-label="保存位置"]')`, '编辑弹窗不应提供保存位置');
+    await expect(`!document.querySelector('.skills-editor-dialog [data-field="target"]')`, '编辑弹窗不应提供保存位置');
   }
 
   async function openExternal() {
-    await clickText('.skills-page .skills-actions-bar button', '扫描');
+    await click('.skills-toolbar .skills-scan');
     await waitFor(`document.querySelectorAll('.skills-external-dialog .skills-external-list .skills-external-row').length >= 4`, '扫描候选');
     await expect(`[...document.querySelectorAll('.skills-external-group-title')].every((node) =>
       getComputedStyle(node).fontSize === '16px' && getComputedStyle(node).lineHeight === '20px')`, '扫描分组标题使用公共字号与行高');
@@ -290,6 +299,8 @@ async function main() {
 
   async function measureList(theme) {
     const result = await evalJs(`(() => {
+      const inner = document.querySelector('.skills-inner');
+      const title = inner.querySelector('h2');
       const measure = (selector) => {
         const nodes = [...document.querySelectorAll(selector)];
         return nodes.map((node) => {
@@ -300,19 +311,37 @@ async function main() {
       };
       return {
         viewport: [innerWidth, innerHeight, devicePixelRatio],
-        pageHeading: measure('.skills-page h2'),
+        pageHeading: measure('.skills-page h2'), titleWeight: getComputedStyle(title).fontWeight,
+        overflow: inner.scrollWidth - inner.clientWidth,
         groupHeadings: measure('.skills-group-title'),
         rows: measure('.skill-row-line'),
-        buttons: measure('.skills-actions-bar .btn'),
-        badges: [...document.querySelectorAll('.skill-row-title')].map((row) =>
+        buttons: measure('.skills-head .skills-actions-bar .btn'),
+        badges: [...document.querySelectorAll('.skill-row-actions')].map((row) =>
           [...row.querySelectorAll('.ds-badge')].map((badge) => badge.textContent)),
       };
     })()`);
+    assert(result.pageHeading.length === 1 && result.pageHeading[0].font === '30px' && result.titleWeight === '700', '标题应与原版 MCP 设置页一致');
+    assert(result.overflow <= 1, '技能列表内容区出现横向溢出：' + result.overflow);
     assert(result.groupHeadings.length === 2 && result.groupHeadings.every(({ font, leading }) => font === '16px' && leading === '20px'),
       '列表分组标题使用公共字号与行高');
     assert(result.badges.length === 3 && result.badges.every((items) => items.length === 1), '每行只有一个必要状态');
     assert(result.buttons.length === 3 && result.buttons.every(({ height }) => height === 32), '同行动作使用同高的标准按钮');
-    metrics.push({ theme, ...result });
+    const labels = ['.skills-group-path', '.skill-name', '.skill-row-desc', '.skill-row .ds-badge-success', '.skill-row .ds-badge-neutral'];
+    const contrasts = await evalJs(`${JSON.stringify(labels)}.map(selector => (${contrastSample.toString()})(selector))`);
+    for (const sample of contrasts) assert(sample.ratio >= 4.5, `${theme} ${sample.selector} 文字对比度 ${sample.ratio.toFixed(2)}:1`);
+    metrics.push({ theme, ...result, contrasts });
+  }
+
+  // CDP 读取真实 Chromium 暴露的可访问描述，不只检查 DOM 里是否有 ARIA 属性。
+  async function verifyRowStatus() {
+    const row = '.skill-row[data-skill-id="a1c0de0000000001"]';
+    const doc = (await send('DOM.getDocument')).result.root.nodeId;
+    for (const [selector, role] of [['.skill-row-main', 'button'], ['.skill-toggle', 'switch']]) {
+      const { nodeId } = (await send('DOM.querySelector', { nodeId: doc, selector: row + ' ' + selector })).result;
+      const tree = (await send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })).result;
+      const action = tree.nodes.find(node => !node.ignored && node.role?.value === role);
+      assert(action?.description?.value === '已加载', `${role} 缺少独立于启停配置的加载状态`);
+    }
   }
 
   async function captureDesktop(theme) {
@@ -329,6 +358,7 @@ async function main() {
       '分组头缺少发现目录',
     );
     await measureList(theme);
+    await verifyRowStatus();
     await shot(`1320-${theme}-01-list`);
 
     await click('.skills-page .skill-row[data-skill-id="a1c0de0000000001"] .skill-row-main');
@@ -338,7 +368,7 @@ async function main() {
     await waitFor(`!document.querySelector('.skills-page .skill-detail')`, '详情收起');
 
     await openEditor();
-    await expect(`!!document.querySelector('.skills-editor-dialog select[aria-label="保存位置"]')`, '新建弹窗缺少保存位置');
+    await expect(`!!document.querySelector('.skills-editor-dialog [data-field="target"]')`, '新建弹窗缺少保存位置');
     await shot(`1320-${theme}-03-editor`);
     await closeModal('取消');
 
@@ -427,6 +457,26 @@ async function main() {
     await measureList(theme);
     await shot(`700-${theme}-01-list`);
 
+    /* 滚到底：最后一个分组必须整个露出，并与窗口底部留出呼吸空间。
+     * 曾经在内容溢出时只差最后一段滚不出来 / 空状态瓦片贴住窗口边缘。 */
+    await scrollBottom();
+    await sleep(250);
+    const listBottom = await evalJs(`(() => {
+      const surface = document.getElementById('workSurface');
+      const groups = [...document.querySelectorAll('.skills-page .skills-content > .skills-group')];
+      const last = groups[groups.length - 1];
+      return {
+        top: Math.round(surface.scrollTop),
+        max: Math.round(surface.scrollHeight - surface.clientHeight),
+        gap: Math.round(surface.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom),
+      };
+    })()`);
+    assert(listBottom.max > 0, '700 宽度下技能列表应可滚动（夹具前提）: ' + JSON.stringify(listBottom));
+    assert(Math.abs(listBottom.top - listBottom.max) <= 1, '技能列表没有滚到底: ' + JSON.stringify(listBottom));
+    assert(listBottom.gap >= 24, '技能列表滚到底后最后一个分组贴住窗口: ' + JSON.stringify(listBottom));
+    await shot(`700-${theme}-01b-list-bottom`);
+    await scrollTop();
+
     await openEditor();
     await shot(`700-${theme}-02-editor`);
     /* 600px 高的窗口放不下整张表单；滚到底证明「保存到」仍然可达。 */
@@ -437,7 +487,7 @@ async function main() {
     })()`);
     await waitFor(
       `(() => {
-        const select = document.querySelector('.skills-editor-dialog select[aria-label="保存位置"]');
+        const select = document.querySelector('.skills-editor-dialog [data-field="target"]');
         if (!select) return false;
         const rect = select.getBoundingClientRect();
         return rect.top >= 0 && rect.bottom <= innerHeight;

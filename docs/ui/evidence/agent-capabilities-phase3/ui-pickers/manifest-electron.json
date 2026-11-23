@@ -1,0 +1,1312 @@
+{
+  "tag": "skills-scroll-final",
+  "scale": 1.5,
+  "origin": "http://127.0.0.1:4922",
+  "generatedAt": "2026-11-23T06:01:44.669Z",
+  "shots": [
+    {
+      "name": "skills-list-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-list-project-menu-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-list-font-125-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-list-font-150-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-market-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "extensions-installed-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "extensions-installed-font-125-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "extensions-installed-font-150-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "extensions-market-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-list-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-list-project-menu-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-list-font-125-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-list-font-150-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-market-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-market-stale-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-list-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-list-project-menu-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-list-font-125-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-list-font-150-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-market-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "extensions-installed-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "extensions-installed-font-125-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "extensions-installed-font-150-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "extensions-market-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-list-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-list-project-menu-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-list-font-125-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-list-font-150-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-market-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-market-stale-1320x820-light",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-list-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-project-menu-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-bottom-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-font-125-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-font-150-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-market-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "extensions-installed-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "extensions-installed-font-125-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "extensions-installed-font-150-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "extensions-market-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-list-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-list-project-menu-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-list-font-125-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-list-font-150-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-market-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-market-stale-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-project-menu-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-bottom-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-font-125-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-font-150-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-market-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "extensions-installed-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "extensions-installed-font-125-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "extensions-installed-font-150-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "extensions-market-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-list-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-list-project-menu-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-list-font-125-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-list-font-150-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-market-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-market-stale-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "mcp-exposure-menu-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-editor-target-menu-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-import-target-menu-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "skills-market-target-menu-1320x820-dark",
+      "size": {
+        "width": 1980,
+        "height": 1230
+      }
+    },
+    {
+      "name": "mcp-exposure-menu-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-editor-target-menu-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-import-target-menu-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-market-target-menu-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "label": "skills-list-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 957,
+      "innerClientWidth": 957,
+      "theme": "dark"
+    },
+    {
+      "label": "skills-list-font-125-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 957,
+      "innerClientWidth": 957,
+      "theme": "dark"
+    },
+    {
+      "label": "skills-list-font-150-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 957,
+      "innerClientWidth": 957,
+      "theme": "dark"
+    },
+    {
+      "label": "skills-market-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1035,
+      "surfaceClientWidth": 1035,
+      "innerScrollWidth": 947,
+      "innerClientWidth": 947,
+      "theme": "dark"
+    },
+    {
+      "label": "extensions-installed-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 1045,
+      "innerClientWidth": 1045,
+      "theme": "dark"
+    },
+    {
+      "label": "extensions-installed-font-125-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 1035,
+      "innerClientWidth": 1035,
+      "theme": "dark"
+    },
+    {
+      "label": "extensions-installed-font-150-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 1035,
+      "innerClientWidth": 1035,
+      "theme": "dark"
+    },
+    {
+      "label": "extensions-market-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 1035,
+      "innerClientWidth": 1035,
+      "theme": "dark"
+    },
+    {
+      "label": "mcp-list-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 957,
+      "innerClientWidth": 957,
+      "theme": "dark"
+    },
+    {
+      "label": "mcp-list-font-125-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1035,
+      "surfaceClientWidth": 1035,
+      "innerScrollWidth": 947,
+      "innerClientWidth": 947,
+      "theme": "dark"
+    },
+    {
+      "label": "mcp-list-font-150-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1035,
+      "surfaceClientWidth": 1035,
+      "innerScrollWidth": 947,
+      "innerClientWidth": 947,
+      "theme": "dark"
+    },
+    {
+      "label": "mcp-market-1320x820-dark",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1035,
+      "surfaceClientWidth": 1035,
+      "innerScrollWidth": 947,
+      "innerClientWidth": 947,
+      "theme": "dark"
+    },
+    {
+      "label": "skills-list-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 957,
+      "innerClientWidth": 957,
+      "theme": "light"
+    },
+    {
+      "label": "skills-list-font-125-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 957,
+      "innerClientWidth": 957,
+      "theme": "light"
+    },
+    {
+      "label": "skills-list-font-150-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 957,
+      "innerClientWidth": 957,
+      "theme": "light"
+    },
+    {
+      "label": "skills-market-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1035,
+      "surfaceClientWidth": 1035,
+      "innerScrollWidth": 947,
+      "innerClientWidth": 947,
+      "theme": "light"
+    },
+    {
+      "label": "extensions-installed-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 1045,
+      "innerClientWidth": 1045,
+      "theme": "light"
+    },
+    {
+      "label": "extensions-installed-font-125-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 1035,
+      "innerClientWidth": 1035,
+      "theme": "light"
+    },
+    {
+      "label": "extensions-installed-font-150-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 1035,
+      "innerClientWidth": 1035,
+      "theme": "light"
+    },
+    {
+      "label": "extensions-market-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 1035,
+      "innerClientWidth": 1035,
+      "theme": "light"
+    },
+    {
+      "label": "mcp-list-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1045,
+      "surfaceClientWidth": 1045,
+      "innerScrollWidth": 957,
+      "innerClientWidth": 957,
+      "theme": "light"
+    },
+    {
+      "label": "mcp-list-font-125-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1035,
+      "surfaceClientWidth": 1035,
+      "innerScrollWidth": 947,
+      "innerClientWidth": 947,
+      "theme": "light"
+    },
+    {
+      "label": "mcp-list-font-150-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1035,
+      "surfaceClientWidth": 1035,
+      "innerScrollWidth": 947,
+      "innerClientWidth": 947,
+      "theme": "light"
+    },
+    {
+      "label": "mcp-market-1320x820-light",
+      "dpr": 1.5,
+      "innerWidth": 1320,
+      "innerHeight": 820,
+      "documentScrollWidth": 1320,
+      "surfaceScrollWidth": 1035,
+      "surfaceClientWidth": 1035,
+      "innerScrollWidth": 947,
+      "innerClientWidth": 947,
+      "theme": "light"
+    },
+    {
+      "label": "skills-list-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "dark"
+    },
+    {
+      "label": "skills-list-font-125-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "dark"
+    },
+    {
+      "label": "skills-list-font-150-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "dark"
+    },
+    {
+      "label": "skills-market-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "dark"
+    },
+    {
+      "label": "extensions-installed-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 460,
+      "surfaceClientWidth": 460,
+      "innerScrollWidth": 450,
+      "innerClientWidth": 450,
+      "theme": "dark"
+    },
+    {
+      "label": "extensions-installed-font-125-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 460,
+      "surfaceClientWidth": 460,
+      "innerScrollWidth": 450,
+      "innerClientWidth": 450,
+      "theme": "dark"
+    },
+    {
+      "label": "extensions-installed-font-150-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 460,
+      "surfaceClientWidth": 460,
+      "innerScrollWidth": 450,
+      "innerClientWidth": 450,
+      "theme": "dark"
+    },
+    {
+      "label": "extensions-market-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 460,
+      "surfaceClientWidth": 460,
+      "innerScrollWidth": 450,
+      "innerClientWidth": 450,
+      "theme": "dark"
+    },
+    {
+      "label": "mcp-list-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "dark"
+    },
+    {
+      "label": "mcp-list-font-125-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "dark"
+    },
+    {
+      "label": "mcp-list-font-150-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "dark"
+    },
+    {
+      "label": "mcp-market-700x600-dark",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "dark"
+    },
+    {
+      "label": "skills-list-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "light"
+    },
+    {
+      "label": "skills-list-font-125-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "light"
+    },
+    {
+      "label": "skills-list-font-150-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "light"
+    },
+    {
+      "label": "skills-market-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "light"
+    },
+    {
+      "label": "extensions-installed-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 460,
+      "surfaceClientWidth": 460,
+      "innerScrollWidth": 450,
+      "innerClientWidth": 450,
+      "theme": "light"
+    },
+    {
+      "label": "extensions-installed-font-125-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 460,
+      "surfaceClientWidth": 460,
+      "innerScrollWidth": 450,
+      "innerClientWidth": 450,
+      "theme": "light"
+    },
+    {
+      "label": "extensions-installed-font-150-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 460,
+      "surfaceClientWidth": 460,
+      "innerScrollWidth": 450,
+      "innerClientWidth": 450,
+      "theme": "light"
+    },
+    {
+      "label": "extensions-market-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 460,
+      "surfaceClientWidth": 460,
+      "innerScrollWidth": 450,
+      "innerClientWidth": 450,
+      "theme": "light"
+    },
+    {
+      "label": "mcp-list-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "light"
+    },
+    {
+      "label": "mcp-list-font-125-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "light"
+    },
+    {
+      "label": "mcp-list-font-150-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "light"
+    },
+    {
+      "label": "mcp-market-700x600-light",
+      "dpr": 1.5,
+      "innerWidth": 700,
+      "innerHeight": 600,
+      "documentScrollWidth": 700,
+      "surfaceScrollWidth": 415,
+      "surfaceClientWidth": 415,
+      "innerScrollWidth": 327,
+      "innerClientWidth": 327,
+      "theme": "light"
+    }
+  ],
+  "pickerProofs": [
+    {
+      "control": "mcp-exposure",
+      "theme": "dark",
+      "size": [
+        1320,
+        820
+      ],
+      "before": "codemode",
+      "after": "deferred",
+      "label": "deferred（延迟暴露工具）",
+      "box": {
+        "parent": true,
+        "left": 361,
+        "top": 502,
+        "right": 701,
+        "bottom": 675,
+        "viewport": [
+          1320,
+          820
+        ],
+        "focused": "deferred",
+        "theme": "dark"
+      },
+      "trigger": {
+        "height": 32,
+        "background": "oklab(0.999994 0.0000455678 0.0000200868 / 0.05)",
+        "fontSize": "12px"
+      }
+    },
+    {
+      "control": "skills-editor-target",
+      "theme": "dark",
+      "size": [
+        1320,
+        820
+      ],
+      "before": "user-pi",
+      "after": "user-agents",
+      "label": "全局 · ~/.agents/skills",
+      "box": {
+        "parent": true,
+        "left": 349,
+        "top": 680,
+        "right": 689,
+        "bottom": 757,
+        "viewport": [
+          1320,
+          820
+        ],
+        "focused": "user-agents",
+        "theme": "dark"
+      },
+      "trigger": {
+        "height": 34,
+        "background": "rgb(33, 33, 33)",
+        "fontSize": "13px"
+      }
+    },
+    {
+      "control": "skills-import-target",
+      "theme": "dark",
+      "size": [
+        1320,
+        820
+      ],
+      "before": "user-pi",
+      "after": "user-agents",
+      "label": "全局 · ~/.agents/skills",
+      "box": {
+        "parent": true,
+        "left": 359,
+        "top": 419,
+        "right": 699,
+        "bottom": 496,
+        "viewport": [
+          1320,
+          820
+        ],
+        "focused": "user-agents",
+        "theme": "dark"
+      },
+      "trigger": {
+        "height": 34,
+        "background": "rgb(33, 33, 33)",
+        "fontSize": "13px"
+      }
+    },
+    {
+      "control": "skills-market-target",
+      "theme": "dark",
+      "size": [
+        1320,
+        820
+      ],
+      "before": "user-pi",
+      "after": "user-agents",
+      "label": "全局 · ~/.agents/skills",
+      "box": {
+        "parent": true,
+        "left": 786,
+        "top": 486,
+        "right": 1108,
+        "bottom": 563,
+        "viewport": [
+          1320,
+          820
+        ],
+        "focused": "user-agents",
+        "theme": "dark"
+      },
+      "trigger": {
+        "height": 30,
+        "background": "rgb(33, 33, 33)",
+        "fontSize": "12px"
+      }
+    },
+    {
+      "control": "mcp-exposure",
+      "theme": "light",
+      "size": [
+        700,
+        600
+      ],
+      "before": "codemode",
+      "after": "deferred",
+      "label": "deferred（延迟暴露工具）",
+      "box": {
+        "parent": true,
+        "left": 45,
+        "top": 333,
+        "right": 385,
+        "bottom": 506,
+        "viewport": [
+          700,
+          600
+        ],
+        "focused": "deferred",
+        "theme": "light"
+      },
+      "trigger": {
+        "height": 32,
+        "background": "rgb(243, 243, 243)",
+        "fontSize": "12px"
+      }
+    },
+    {
+      "control": "skills-editor-target",
+      "theme": "light",
+      "size": [
+        700,
+        600
+      ],
+      "before": "user-pi",
+      "after": "user-agents",
+      "label": "全局 · ~/.agents/skills",
+      "box": {
+        "parent": true,
+        "left": 43,
+        "top": 499,
+        "right": 383,
+        "bottom": 576,
+        "viewport": [
+          700,
+          600
+        ],
+        "focused": "user-agents",
+        "theme": "light"
+      },
+      "trigger": {
+        "height": 34,
+        "background": "rgb(255, 255, 255)",
+        "fontSize": "13px"
+      }
+    },
+    {
+      "control": "skills-import-target",
+      "theme": "light",
+      "size": [
+        700,
+        600
+      ],
+      "before": "user-pi",
+      "after": "user-agents",
+      "label": "全局 · ~/.agents/skills",
+      "box": {
+        "parent": true,
+        "left": 45,
+        "top": 325,
+        "right": 385,
+        "bottom": 402,
+        "viewport": [
+          700,
+          600
+        ],
+        "focused": "user-agents",
+        "theme": "light"
+      },
+      "trigger": {
+        "height": 34,
+        "background": "rgb(255, 255, 255)",
+        "fontSize": "13px"
+      }
+    },
+    {
+      "control": "skills-market-target",
+      "theme": "light",
+      "size": [
+        700,
+        600
+      ],
+      "before": "user-pi",
+      "after": "user-agents",
+      "label": "全局 · ~/.agents/skills",
+      "box": {
+        "parent": true,
+        "left": 46,
+        "top": 327,
+        "right": 386,
+        "bottom": 404,
+        "viewport": [
+          700,
+          600
+        ],
+        "focused": "user-agents",
+        "theme": "light"
+      },
+      "trigger": {
+        "height": 30,
+        "background": "rgb(255, 255, 255)",
+        "fontSize": "12px"
+      }
+    }
+  ],
+  "errors": [],
+  "electron": "44.4.3"
+}

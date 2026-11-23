@@ -1,52 +1,25 @@
-/* 设置 › Agent 能力 › 技能（public/skills/）。
- *
- * 版式对照 PI-Desktop 的 AgentSkillsPage / SkillMarketPanel：
- *   标题（图标 + 技能 + 数量）
- *   第一行：作用域分段 + 搜索 + 项目选择
- *   第二行：扫描 / 新建 / 市场
- *   分组标题（名称 + 发现目录 + 数量 + 导入文件 / 导入目录）→ 行瓦片 → 空状态
- *   市场：返回 → 标题 / 目录源 / 搜索 → 分类 → 两列卡片 → 分页
- * 尺寸、颜色、圆角全部取 pi-GUI Token；控件是公共原语（.ds-segmented / .ds-search-control /
- * .ds-select / .ds-switch / .ds-badge / .btn / .ext-dot / .ext-rows / .cfg-note），这里只管排布。
- * 页面标题用自己的 .skills-title，不复用 .settings-page-title（后者被全局 30px/700 !important 覆盖）。 */
-
-.skills-page { width: 100%; max-width: 1160px; margin: 0 auto; }
-
-/* ---------- 标题 ---------- */
-.skills-head {
+/* 设置 › 技能。标题直接复用设置页原语；MCP 只作视觉参照，两页不依赖彼此的 CSS。
+ * 容器宽度是设置侧栏以外的实际可用宽度。弹窗在独立宿主，仍按视口布局。 */
+.skills-inner {
+  container: skills / inline-size;
+  width: 100%;
+  max-width: 1160px;
+  margin-inline: auto;
+}
+.skills-head, .skills-market-head-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2) var(--ui-space-5);
+}
+.skills-head { margin-bottom: var(--ui-space-5); }
+.skills-actions-bar, .skills-market-head-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 18px;
-  min-height: 36px;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
 }
-.skills-head-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
-  background: var(--ds-bg-chip);
-  color: var(--ds-text-secondary);
-}
-.skills-head-text { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.skills-title {
-  margin: 0;
-  font-size: var(--text-xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--leading-tight);
-  letter-spacing: -0.01em;
-  color: var(--ds-text-primary);
-}
-.skills-head-count {
-  font-size: var(--text-sm);
-  color: var(--ds-text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.skills-head .skills-icon-btn { margin-left: auto; }
 
 /* ---------- 工具栏 ---------- */
 .skills-toolbar {
@@ -54,10 +27,10 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: var(--ui-space-5);
 }
-.skills-scope { flex: 0 0 auto; }
-.skills-search { flex: 1 1 260px; max-width: 520px; min-width: 180px; }
+.skills-scope { flex: 0 1 auto; max-width: 100%; flex-wrap: wrap; }
+.skills-search { flex: 0 1 240px; min-width: min(160px, 100%); }
 .skills-search-icon { flex: 0 0 auto; }
 .skills-project {
   display: flex;
@@ -73,20 +46,7 @@
   color: var(--ds-text-muted);
   white-space: nowrap;
 }
-.skills-project-select {
-  min-width: 0;
-  max-width: 260px;
-  height: 32px;
-  font-size: var(--text-sm);
-}
-.skills-actions-bar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-}
+.skills-project .project-picker { flex: 1 1 auto; min-width: 0; max-width: 220px; }
 
 .skills-notes { display: grid; gap: 8px; margin-bottom: 14px; }
 .skills-notes:empty { display: none; }
@@ -100,7 +60,7 @@
   align-items: flex-start;
   gap: 9px;
   padding: 9px 10px;
-  border: 1px solid var(--ds-border-subtle);
+  border: 0;
   border-left: 2px solid var(--ds-success);
   border-radius: var(--radius-md);
   background: var(--ds-success-surface);
@@ -124,17 +84,39 @@
 .skills-notice-close svg { width: 13px; height: 13px; }
 
 /* ---------- 分组 ---------- */
-.skills-content { display: grid; gap: 22px; min-width: 0; }
+.skills-content {
+  display: grid;
+  gap: var(--ui-space-5);
+  min-width: 0;
+  /* 滚到底时最后一个分组不能贴住窗口。Chromium 对「固定高度的 flex 子项里
+   * 溢出内容」不把外层滚动容器的 padding-bottom 算进可滚动高度；留白必须
+   * 由内容自身承担，否则空状态瓦片的圆角与底部会被窗口边缘裁掉。 */
+  padding-bottom: var(--ui-space-6);
+}
 .skills-content.is-loading { opacity: .6; pointer-events: none; }
 .skills-group { display: grid; gap: 8px; min-width: 0; }
 .skills-group-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ui-space-2) var(--ui-space-3);
+  flex-wrap: wrap;
   min-width: 0;
-  min-height: 24px;
-  padding: 0 2px;
 }
+.skills-group-heading { flex: 1 1 120px; min-width: 0; }
+.skills-group-title-line { display: flex; align-items: center; gap: var(--ui-space-2); }
+.skills-group-glyph, .skill-glyph, .skills-market-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--ds-tile-deep);
+  color: var(--ds-text-secondary);
+}
+.skills-group-glyph { width: 34px; height: 34px; }
 /* .skills-page 同时也是 .modal-card，共享样式里的 `.modal-card h3`（14/500 +
  * 6px 下边距）会盖掉分组标题；用两级选择器把语义标题的规格拿回来。 */
 .skills-page .skills-group-title,
@@ -148,11 +130,9 @@
   white-space: nowrap;
 }
 .skills-group-path {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: block;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--ds-text-muted);
@@ -171,59 +151,46 @@
   font-variant-numeric: tabular-nums;
   box-sizing: border-box;
 }
-.skills-group-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.skills-group-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ui-space-2); }
 
-/* ---------- 行瓦片 ---------- */
+/* ---------- 整宽列表；状态和开关与展开详情的按钮为兄弟节点 ----------
+ * 行是设计系统的内流瓦片（与设置行/.settings-row 同一表面）：只用底色和留白分组，
+ * 不画整圈边框；悬停与展开都在同一层底色上升一级。 */
 .skills-rows { display: grid; gap: 6px; }
-.skill-row {
+.skill-row, .skills-market-card {
   min-width: 0;
+  border: 0;
   border-radius: var(--radius-md-plus);
   background: var(--ds-tile);
   transition: background var(--motion-duration-fast) var(--motion-ease-out);
 }
-.skill-row:hover,
+.skill-row:hover, .skill-row:focus-within, .skills-market-card:focus-within { background: var(--ds-tile-hover); }
 .skill-row.is-open { background: var(--ds-tile-hover); }
-.skill-row-line { display: flex; align-items: center; gap: 8px; padding-right: 14px; }
+.skill-row-line { display: flex; align-items: center; gap: var(--ui-space-3); padding: 14px 16px; }
 .skill-row-main {
   display: flex;
   align-items: center;
   gap: 12px;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 10px 0 10px 14px;
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-md-plus);
+  border-radius: var(--radius-xs);
   background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.skill-row-main:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; }
-.skill-glyph {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 30px;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-md);
-  color: var(--ds-text-muted);
-}
-.skill-row:hover .skill-glyph,
-.skill-row.is-open .skill-glyph { color: var(--ds-text-secondary); }
-/* 状态点贴在图标右下角，描边取行底色，看起来像「挂」在图标上。 */
+.skill-glyph { position: relative; }
+/* 装饰点与文字徽标由同一份运行状态派生。 */
 .skill-glyph > .ext-dot {
   position: absolute;
   right: 1px;
   bottom: 2px;
-  box-shadow: 0 0 0 2px var(--ds-tile);
+  box-shadow: 0 0 0 2px var(--ds-tile-deep);
 }
-.skill-row:hover .skill-glyph > .ext-dot,
-.skill-row.is-open .skill-glyph > .ext-dot { box-shadow: 0 0 0 2px var(--ds-tile-hover); }
-.skill-row-text { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 0; }
-.skill-row-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.skill-row-text { display: grid; gap: var(--ui-space-1); flex: 1 1 auto; min-width: 0; }
 .skill-name {
   min-width: 0;
   font-size: var(--text-md);
@@ -233,35 +200,29 @@
   overflow-wrap: anywhere;
 }
 .skill-row-desc {
-  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
   color: var(--ds-text-secondary);
 }
-.skill-row-actions { display: flex; align-items: center; justify-content: flex-end; flex: 0 0 38px; }
+.skill-row.is-open .skill-row-desc { display: block; }
+.skill-row-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--ui-space-2); }
 .skill-toggle { flex: 0 0 auto; }
 
 /* 展开的详情：行瓦片里的一块浮起面板，左缘与名称对齐。 */
 .skill-detail {
-  margin: 0 14px 14px 56px;
-  padding: 12px;
-  border-radius: var(--radius-md);
+  margin: 0 14px 14px 62px;
+  padding: var(--ui-space-3);
+  border-radius: var(--radius-sm);
   background: var(--ds-raised);
   box-shadow: var(--ds-raised-shadow);
 }
 .skill-detail .ext-row { font-size: var(--text-xs); }
 .skill-detail .ext-code { max-height: 320px; }
-.skill-detail-desc {
-  margin: 0 0 10px;
-  font-size: var(--text-sm);
-  line-height: var(--leading-normal);
-  color: var(--ds-text-secondary);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .skill-detail-columns {
   display: grid;
   grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
@@ -299,7 +260,8 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  padding: 34px 20px;
+  padding: var(--ui-space-6) var(--ui-space-4);
+  border: 0;
   border-radius: var(--radius-md-plus);
   background: var(--ds-tile);
   color: var(--ds-text-secondary);
@@ -307,7 +269,7 @@
   line-height: var(--leading-normal);
   text-align: center;
 }
-.skills-empty-group { min-height: 168px; }
+.skills-empty-group { min-height: 116px; }
 .skills-empty-icon {
   display: inline-flex;
   align-items: center;
@@ -411,6 +373,9 @@
 .skills-field-hint { flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--ds-text-muted); overflow-wrap: anywhere; }
 .skills-field .ds-input:not(textarea),
 .skills-field .skills-select { width: 100%; }
+/* 保存位置 / 安装位置改用共享 listbox；宽度跟着字段走。 */
+.skills-field .skills-picker { display: flex; width: 100%; }
+.skills-field .skills-picker-trigger { width: 100%; }
 .skills-field .skills-counter { flex: 0 0 auto; font-size: var(--text-xs); color: var(--ds-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .skills-textarea {
   width: 100%;
@@ -476,7 +441,7 @@
   display: grid;
   gap: 8px;
   padding: 10px;
-  border: 1px solid var(--ds-border-subtle);
+  border: 0;
   border-left: 2px solid var(--ds-warning);
   border-radius: var(--radius-md);
   background: var(--ds-warning-surface);
@@ -556,27 +521,12 @@
 /* ---------- 市场 ---------- */
 .skills-market-host { min-width: 0; }
 .skills-market { display: grid; gap: 12px; min-width: 0; }
-.skills-market-head-top { display: flex; align-items: center; gap: 8px; }
-.skills-market-back { padding-left: 4px; color: var(--ds-text-secondary); }
-/* 标题与右侧动作分两栏：动作栏不换行，否则搜索框会掉到第二行、把标题挤到下方。 */
-.skills-market-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 16px;
-  min-width: 0;
-}
-.skills-market-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-  min-width: 0;
-}
-.skills-market-search { flex: 0 1 260px; width: 260px; min-width: 180px; max-width: 260px; }
-.skills-market-search-icon { flex: 0 0 auto; }
-.skills-market-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.skills-market-back { justify-self: start; }
+.skills-market-search { flex: 0 1 300px; min-width: 0; }
+.skills-market-search-icon { flex: none; }
+.skills-market-toolbar { display: flex; align-items: center; gap: var(--ui-space-3); flex-wrap: wrap; }
+.skills-market-filter-slot:empty { display: none; }
+.skills-market-filters { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 .skills-market-count { margin-left: auto; font-size: var(--text-xs); color: var(--ds-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .skills-market-notices { display: grid; gap: 8px; }
 .skills-market-notices:empty { display: none; }
@@ -585,7 +535,7 @@
   align-items: center;
   gap: 9px;
   padding: 8px 10px;
-  border: 1px solid var(--ds-border-subtle);
+  border: 0;
   border-left: 2px solid var(--ds-info);
   border-radius: var(--radius-md);
   background: var(--ds-info-surface);
@@ -604,28 +554,13 @@
 }
 .skills-market-grid > .skills-empty { grid-column: 1 / -1; }
 .skills-market-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  min-width: 0;
-  padding: 12px;
-  border-radius: var(--radius-md-plus);
-  background: var(--ds-tile);
-  transition: background var(--motion-duration-fast) var(--motion-ease-out);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-4);
 }
-.skills-market-card:hover { background: var(--ds-tile-hover); }
-.skills-market-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-md);
-  background: var(--ds-bg-chip);
-  color: var(--ds-text-secondary);
-}
-.skills-market-card-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
+.skills-market-card-main { min-width: 0; display: grid; gap: var(--ui-space-1); }
 .skills-market-card-title-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .skills-page .skills-market-card-title {
   margin: 0;
@@ -636,24 +571,21 @@
   color: var(--ds-text-primary);
   overflow-wrap: anywhere;
 }
-.skills-market-card-title-row .ds-badge { height: 18px; padding: 0 6px; }
-.skills-market-card-tags { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 0; }
 .skills-market-tag,
 .skills-market-repo {
   display: inline-flex;
   align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: var(--radius-2xs);
+  justify-self: start;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
   background: var(--ds-bg-chip);
   color: var(--ds-text-secondary);
   font-size: var(--text-xs);
-  white-space: nowrap;
+  line-height: var(--leading-normal);
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
-.skills-market-repo { font-family: var(--font-mono); color: var(--ds-text-muted); }
+.skills-market-repo { display: block; font-family: var(--font-mono); }
 .skills-market-card-desc {
   margin: 1px 0 0;
   font-size: var(--text-sm);
@@ -768,7 +700,8 @@
   background: var(--ds-bg-inset);
 }
 .skills-preview-install .skills-field { gap: 3px; }
-.skills-preview-install .skills-select { height: 30px; font-size: var(--text-sm); }
+.skills-preview-install .skills-select,
+.skills-preview-install .skills-picker-trigger { height: 30px; min-height: 30px; font-size: var(--text-sm); }
 .skills-preview-install .skills-input { height: 30px; font-size: var(--text-sm); }
 .skills-preview-install > button { justify-self: stretch; }
 .skills-preview-install .cfg-note { margin: 0; }
@@ -779,35 +712,29 @@
 
 /* ---------- 响应式 ---------- */
 @media (max-width: 860px) {
-  /* 设置画布在窗口 860 时只剩约 580px，标题与右侧动作放不下同一行。 */
-  .skills-market-head { grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .skills-market-head-actions { justify-content: flex-start; }
-  .skills-market-card-desc { -webkit-line-clamp: 3; }
   .skills-preview-body { grid-template-columns: minmax(0, 1fr); overflow: auto; }
   .skills-preview-pre { max-height: 300px; min-height: 180px; }
   .skills-preview-side { overflow: visible; }
 }
 
-@media (max-width: 720px) {
-  .skills-toolbar { align-items: stretch; }
-  .skills-scope { flex: 1 1 auto; min-width: 0; overflow-x: auto; }
-  .skills-search { flex-basis: 100%; max-width: none; order: 3; }
-  .skills-project { flex-basis: 100%; max-width: none; margin-left: 0; order: 4; }
-  .skills-project-select { flex: 1 1 auto; max-width: none; }
-  .skills-actions-bar { justify-content: flex-start; }
-  .skills-group-path { display: none; }
-  .skills-group-count { margin-left: auto; }
-  .skills-group-actions button > span { display: none; }
-  .skills-group-actions button { padding: 0 7px; }
-  .skills-detail { margin-left: 14px; }
-  .skills-detail-columns { grid-template-columns: minmax(0, 1fr); }
-  .skills-market-grid { grid-template-columns: minmax(0, 1fr); }
-  .skills-market-head { align-items: flex-start; }
-  .skills-market-head-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
-  .skills-market-search { flex: 1 1 100%; width: auto; max-width: none; }
-  .skills-market-count { margin-left: 0; }
-  .skills-market-card-desc { -webkit-line-clamp: 3; }
+@container skills (max-width: 660px) {
+  .skills-market-grid, .skill-detail-columns { grid-template-columns: minmax(0, 1fr); }
+  .skill-detail { margin-inline: 14px; }
+}
+@container skills (max-width: 550px) {
+  .skills-head, .skills-market-head-top { flex-direction: column; }
+  .skills-toolbar { gap: var(--ui-space-2); }
+  .skills-search { flex: 1 1 100%; }
+  .skills-project { flex: 1 1 150px; margin-left: 0; }
+  .skills-project .project-picker { width: 100%; max-width: none; }
+  .skills-market-search { flex: 1 1 150px; }
+  .skill-row-line { flex-wrap: wrap; }
+  .skill-row-main { flex-basis: 155px; }
+  .skill-row-actions { margin-inline-start: auto; }
+  .skills-notice { flex-wrap: wrap; }
   .skills-page-jump-wrap { flex-basis: 100%; justify-content: center; margin-left: 0; }
+}
+@media (max-width: 720px) {
   .skills-dialog-head { padding: 14px 14px 10px; }
   .skills-dialog-body { padding: 12px 14px; gap: 10px; }
   .skills-dialog-foot { padding: 10px 14px; flex-wrap: wrap; }

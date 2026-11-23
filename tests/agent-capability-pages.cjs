@@ -19,6 +19,7 @@ const { bundle } = require('./esm-bundle.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const PUB = path.join(ROOT, 'public');
 const GEN = 'pi-gui:workspace-generation';
+const BRIDGE_READY = 'pi-gui:capability-bridge-ready';
 let passed = 0;
 let failed = 0;
 async function check(name, run) {
@@ -42,11 +43,10 @@ const EXT_DIR = path.join(PUB, 'extensions');
 const SKILL_FILES = ['model.js', 'detail.js', 'editor.js', 'import.js', 'external.js', 'market.js', 'page.js']
   .map((name) => path.join(SKILLS_DIR, name));
 const EXT_FILES = ['model.js', 'installed.js', 'market.js', 'page.js', 'market-model.js', 'operations.js', 'package-detail.js', 'parts.js'].map((name) => path.join(EXT_DIR, name));
-const REPORT = path.join(PUB, 'mcp-report.js');
 const MCP_PAGE = path.join(PUB, 'mcp-settings.js');
 const RESOURCE_DOM = path.join(PUB, 'ui', 'resource-dom.js');
 const API = path.join(PUB, 'api.js');
-const NEW_MODULES = [...SKILL_FILES, ...EXT_FILES, REPORT, RESOURCE_DOM];
+const NEW_MODULES = [...SKILL_FILES, ...EXT_FILES, RESOURCE_DOM];
 
 const IMPORT_RE = /^[ \t]*import\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]/gm;
 function importsOf(file) {
@@ -106,7 +106,10 @@ const SKILLS = {
   trust: { trusted: true, requiresTrust: true, reason: 'trusted', trustFile: AGENT + '\\trust.json' },
   piReachable: true,
   context: { project: 'c000000000000099', live: true },
-  projects: [{ id: 'c000000000000099', name: 'Fixture project', path: PROJECT, active: true }],
+  projects: [
+    { id: 'c000000000000099', name: 'Fixture project', path: PROJECT, active: true },
+    { id: 'c000000000000098', name: 'pi-gui', path: 'C:\\pi-GUI', active: false },
+  ],
   targets: [
     { key: 'user-pi', scope: 'user', mode: 'pi', dir: AGENT + '\\skills', label: '~/.pi/agent/skills', exists: true, writable: true, blockedCode: '', blockedReason: '', notice: '' },
     { key: 'project-pi', scope: 'project', mode: 'pi', dir: PROJECT + '\\.pi\\skills', label: '<项目>/.pi/skills', exists: true, writable: true, blockedCode: '', blockedReason: '', notice: '' },
@@ -148,37 +151,6 @@ const registry = (extensions) => ({
   ok: true, piReachable: true, actions: { install: false, toggle: false, remove: false, refresh: true, restart: true },
   diagnostics: [], capabilityRegistry: { commands: [], tools: [], toolRegistryAvailable: false }, extensions,
 });
-const APPROVAL = {
-  ok: true, piVersion: '0.99.2',
-  checks: {
-    toolCallHook: { supported: true, evidence: 'dist/core/extensions/types.d.ts: block?: boolean' },
-    uiPromptDialog: { supported: true, evidence: 'docs/rpc.md: block until the client sends back an extension_ui_response' },
-    coreApproval: { supported: false, evidence: 'docs/usage.md: no permission popups' },
-    customUiOverRpc: { supported: false, evidence: 'dist/modes/rpc/rpc-mode.js: Custom UI not supported in RPC mode' },
-  },
-};
-const MCP_REPORT = {
-  ok: true, supported: true,
-  reason: '这个 pi 包自带 built-in 扩展 `mcp`（配置走 pi 自己的 mcp.json，命令行是 pi mcp add / remove）',
-  evidence: 'dist/extensions/index.js: { name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }',
-  piVersion: '0.99.2', version: { value: '0.99.2', source: 'package.json', status: 'known', updatedAt: '2026-10-01T03:00:00.000Z' },
-  piPackageFound: true, servers: [],
-  builtins: {
-    known: true, source: 'dist/extensions/index.js',
-    entries: [{ id: 'mcp', replaceable: true, hidden: false, evidence: '{ name: "mcp", factory: mcpExtension, replaceable: true, builtin: true }' }],
-    evidence: 'export const builtInExtensions = [ … ]', note: 'built-in 扩展编译在 pi 包里。',
-  },
-  extensionApi: { available: true, registerMcpServer: true, getMcpServers: true, getAllTools: true, evidence: 'registerMcpServer(name: string, config: McpServerConfig): void;' },
-  rpc: { commandCount: 33, commands: ['abort', 'prompt', 'get_state'], toolListCommand: false, note: 'Pi RPC 没有已注册工具清单命令。' },
-  mcpConfig: { user: { exists: false }, project: { exists: true } },
-  extensionRoute: {
-    note: 'pi 官方建议把 MCP 这类能力做成 extension 或 package。',
-    userDir: AGENT + '\\extensions', projectDir: PROJECT + '\\.pi\\extensions',
-    user: { exists: false, entries: [], count: 0, error: '' },
-    project: { exists: true, entries: [{ name: 'my-ext', kind: 'file', size: 1200, mtime: 1 }], count: 1, error: '' },
-    fromSettings: [], packages: [],
-  },
-};
 
 /* ---------- 隔离的页面世界：每个入口一份 index.html + 自己的模块图 ---------- */
 const pageErrors = [];
@@ -301,13 +273,12 @@ function createWorld(label, entry) {
     for (const file of EXT_FILES) {
       for (const { target } of importsOf(file)) assert.ok(!inside(target, SKILLS_DIR) && !isMcpUi(target), `${rel(file)} imports ${rel(target)}`);
     }
-    for (const file of [REPORT, MCP_PAGE]) {
+    for (const file of [MCP_PAGE]) {
       for (const { target } of importsOf(file)) assert.ok(!inside(target, SKILLS_DIR) && !inside(target, EXT_DIR), `${rel(file)} imports ${rel(target)}`);
     }
     const importers = (target) => listJs(PUB).filter((file) => importsOf(file).some((item) => item.target === target)).map(rel).sort();
     assert.deepEqual(importers(path.join(SKILLS_DIR, 'page.js')), ['public/app.js']);
     assert.deepEqual(importers(path.join(EXT_DIR, 'page.js')), ['public/app.js']);
-    assert.deepEqual(importers(REPORT), ['public/mcp-settings.js']);
     assert.deepEqual(importsOf(RESOURCE_DOM), [], 'the shared DOM helper imports nothing');
     assert.deepEqual(exportsOf(RESOURCE_DOM).sort(), ['resourceEl', 'resourceNote', 'resourceRow']);
   });
@@ -320,12 +291,10 @@ function createWorld(label, entry) {
       [path.join(SKILLS_DIR, 'import.js'), ['commitSkillImport', 'stageSkillImport']],
       [path.join(SKILLS_DIR, 'external.js'), ['importExternalSkills', 'scanExternalSkills']],
       [path.join(SKILLS_DIR, 'market.js'), ['fetchSkillMarket', 'fetchSkillMarketFile', 'installSkillMarketEntry', 'previewSkillMarketEntry', 'refreshSkillMarket', 'skillMarketSources']],
-      [path.join(EXT_DIR, 'installed.js'), ['fetchApprovalCapability', 'fetchExtensionPackages', 'fetchExtensions']],
+      [path.join(EXT_DIR, 'installed.js'), ['fetchExtensionPackages', 'fetchExtensions']],
       [path.join(EXT_DIR, 'market.js'), ['extensionMarketAction', 'fetchExtensionMarket']],
       [path.join(EXT_DIR, 'operations.js'), ['extensionPackageAction']],
       [path.join(EXT_DIR, 'package-detail.js'), ['fetchExtensionMarketItem', 'fetchExtensionPackages']],
-
-      [REPORT, ['fetchMcp']],
     ]);
     for (const file of NEW_MODULES) {
       const code = stripComments(fs.readFileSync(file, 'utf8'));
@@ -407,7 +376,8 @@ function createWorld(label, entry) {
     assert.equal(SM.isSkillOn({ state: 'enabled' }), true);
     assert.equal(SM.isSkillOn({ state: 'unknown', loaded: true, disabledBy: '' }), true);
     assert.equal(SM.isSkillOn({ state: 'disabled', loaded: true, disabledBy: '-skills/x/SKILL.md' }), false);
-    assert.equal(SM.isSkillOn({ state: 'unknown', loaded: null }), false);
+    assert.equal(SM.isSkillOn({ state: 'unknown', loaded: null, disabledBy: '' }), true);
+    assert.equal(SM.isSkillOn({ state: 'shadowed', loaded: false, disabledBy: '' }), true);
   });
 
   await check('skill filters, counts and groups keep every entry and the server order', () => {
@@ -567,6 +537,63 @@ function createWorld(label, entry) {
     page.close();
   });
 
+  await skillsCheck('Skills: a failed read is cleared by a project switch; 刷新 reads the new project', async () => {
+    A.answer('GET /api/skills', { ok: false, error: '读取技能失败（fixture）', diagnostics: [{ level: 'warn', message: '旧项目的诊断' }] });
+    const page = mountSkills();
+    await tick();
+    assert.match(page.card.textContent, /读取技能失败（fixture）/);
+    assert.match(page.card.textContent, /旧项目的诊断/);
+    assert.equal(page.card.querySelectorAll('.skill-row').length, 0);
+
+    A.w.beginWorkspaceSwitch('C:\\fixture\\other');
+    await tick();
+    const body = page.card.querySelector('.skills-content');
+    assert.match(body.textContent, /项目已切换，刷新后查看当前项目的技能/);
+    assert.doesNotMatch(page.card.textContent, /读取技能失败（fixture）/, 'the old failure is not this project\'s state');
+    assert.doesNotMatch(page.card.textContent, /旧项目的诊断/, 'old diagnostics become stale with the project');
+    assert.equal(page.card.querySelector('.skills-notes').childElementCount, 0);
+
+    A.answer('GET /api/skills', SKILLS);
+    const refresh = [...body.querySelectorAll('button')].find((button) => button.textContent === '刷新');
+    assert.ok(refresh, 'the switched prompt still offers 刷新');
+    refresh.click();
+    await tick();
+    assert.equal(page.card.querySelectorAll('.skill-row').length, SKILLS.skills.length);
+    assert.doesNotMatch(page.card.textContent, /读取技能失败/);
+    page.close();
+  });
+
+  await skillsCheck('Skills: a disabled skill that pi still loads says both things, never just 已停用', async () => {
+    const pending = {
+      ...SKILLS,
+      skills: SKILLS.skills.map((item) => (item.name === 'pdf-tools'
+        ? { ...item, state: 'disabled', loaded: true, disableModelInvocation: false }
+        : item)),
+    };
+    A.answer('GET /api/skills', pending);
+    const page = mountSkills();
+    await tick();
+    const row = rowOf(page.card, 'pdf-tools');
+    const badge = row.querySelector('.skill-row-actions .ds-badge');
+    assert.equal(badge.textContent, '已停用 · 重启前仍加载', 'config state and runtime state are both visible');
+    assert.match(badge.className, /ds-badge-warning/);
+    assert.match(row.querySelector('.ext-dot').className, /\bwarn\b/, 'the row dot warns about the pending restart');
+    assert.equal(row.querySelector('.skill-toggle').getAttribute('aria-checked'), 'false', 'the switch still reflects settings.json');
+    row.querySelector('.skill-row-main').click();
+    await tick();
+    assert.match(page.card.querySelector('.skill-detail').textContent, /配置已停用，但 pi 仍加载着它/);
+    assert.match(page.card.querySelector('.skill-detail').textContent, /pi 是否加载\s*是/);
+    page.close();
+
+    A.answer('GET /api/skills', SKILLS);
+    const off = mountSkills();
+    await tick();
+    const offBadge = rowOf(off.card, 'pdf-tools').querySelector('.skill-row-actions .ds-badge');
+    assert.equal(offBadge.textContent, '已停用', 'a disabled skill pi no longer loads stays a plain neutral badge');
+    assert.match(offBadge.className, /ds-badge-neutral/);
+    off.close();
+  });
+
   await skillsCheck('Skills: filtering keeps the search box and listeners, and never re-reads the open SKILL.md', async () => {
     A.answer('GET /api/skills', SKILLS);
     A.answer('GET /api/skills/*', SKILL_DETAIL);
@@ -624,6 +651,23 @@ function createWorld(label, entry) {
     await tick();
     assert.match(details[0].textContent, /Fixture body of code-review/);
     assert.doesNotMatch(details[0].textContent, /读取中…/);
+    page.close();
+  });
+
+  await skillsCheck('Skills: a new Pi run refreshes load evidence and supersedes the previous read', async () => {
+    A.w.S.switching = false;
+    A.hold('GET /api/skills');
+    const page = mountSkills();
+    await tick();
+    A.w.document.dispatchEvent(new A.w.CustomEvent(BRIDGE_READY));
+    await tick();
+    assert.equal(A.pendingCount('GET /api/skills'), 2);
+    A.release('GET /api/skills', SKILLS);
+    await tick();
+    assert.equal(page.card.querySelectorAll('.skill-row').length, 0);
+    A.release('GET /api/skills', SKILLS);
+    await tick();
+    assert.ok(rowOf(page.card, 'code-review'));
     page.close();
   });
 
@@ -705,14 +749,16 @@ function createWorld(label, entry) {
     await tick();
     assert.equal(page.card.querySelectorAll('h1, h2').length, 1, 'one page title');
     assert.equal(page.card.querySelector('.skills-title').textContent, '技能');
-    assert.equal(page.card.querySelector('.settings-page-title'), null, 'the page uses its own title, not the 30px settings title');
-    assert.equal(page.card.querySelector('.skills-head-count').textContent, '3 个技能');
+    assert.equal(page.card.querySelector('.skills-head .settings-page-title'), page.card.querySelector('h2'), 'use the same plain heading as MCP');
+    assert.ok(!page.card.querySelector('.skills-head svg:not(button svg)'), 'no decorative tile before the page title');
     assert.equal(page.card.querySelectorAll('.ext-tabs, .ext-tab').length, 0, 'the old mixed tab strip is gone');
     assert.deepEqual([...page.card.querySelector('.skills-toolbar').children].map((node) => node.classList[0]),
-      ['ds-segmented', 'skills-search', 'skills-project']);
-    assert.deepEqual([...page.card.querySelectorAll('.skills-actions-bar .btn span')].map((node) => node.textContent),
-      ['扫描', '新建', '市场']);
-    assert.equal(page.card.querySelector('.skills-project-select').value, 'c000000000000099');
+      ['ds-segmented', 'skills-search', 'skills-project', 'btn']);
+    assert.equal(page.card.querySelector('.skills-toolbar .skills-scan').textContent, '从其他工具扫描');
+    assert.deepEqual([...page.card.querySelectorAll('.skills-head .skills-actions-bar .btn span')].map((node) => node.textContent),
+      ['刷新', '市场', '新建']);
+    assert.equal(page.card.querySelector('.skills-project .project-picker-trigger')?.textContent.trim(), 'Fixture project（当前）');
+    assert.equal(page.card.querySelector('.skills-project .project-picker-trigger')?.getAttribute('aria-label'), '查看哪个项目的技能，当前：Fixture project（当前）');
     const seg = (value) => page.card.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
     const segText = (value) => [seg(value).querySelector('.ds-segment-label').textContent, seg(value).querySelector('.ds-segment-count').textContent];
     assert.deepEqual(['', 'user', 'project'].map(segText), [['全部', '3'], ['全局', '2'], ['项目', '1']]);
@@ -741,7 +787,118 @@ function createWorld(label, entry) {
     assert.equal(main.getAttribute('aria-expanded'), 'false');
     assert.equal(main.getAttribute('aria-controls'), 'skillDetail-a000000000000001');
     assert.equal(main.contains(review.querySelector('.skill-toggle')), false, 'the switch is not nested inside the row button');
+    for (const row of page.card.querySelectorAll('.skill-row')) {
+      const badge = row.querySelector('.skill-row-actions .ds-badge');
+      for (const focusTarget of row.querySelectorAll('.skill-row-main, .skill-toggle')) {
+        const ref = focusTarget.getAttribute('aria-describedby');
+        assert.equal(A.d.getElementById(ref), badge, 'keyboard focus exposes the runtime status of this row, independently of the switch state');
+      }
+    }
     page.close();
+  });
+
+  await skillsCheck('Skills: the project picker is a themed listbox with pointer and full keyboard support', async () => {
+    A.answer('GET /api/skills', ({ url }) => {
+      const project = new URL(url, 'http://localhost').searchParams.get('project');
+      return { ...clone(SKILLS), context: { ...SKILLS.context, project: project || 'c000000000000099' } };
+    });
+    const page = mountSkills();
+    await tick();
+    const trigger = page.card.querySelector('.skills-project .project-picker-trigger');
+    assert.ok(trigger, 'the project switcher is the shared picker, not a native select');
+    assert.equal(page.card.querySelector('.skills-project select'), null);
+    assert.equal(trigger.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    /* jsdom has no layout: give the anchor a plausible rect so the anchored
+     * layer does not treat it as scrolled out of the viewport. */
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    const key = (keyName) => A.d.activeElement.dispatchEvent(new A.w.KeyboardEvent('keydown', {
+      key: keyName, bubbles: true, cancelable: true,
+    }));
+
+    trigger.click();
+    await tick();
+    const menu = A.d.querySelector('.pi-anchored-menu.ds-picker-menu');
+    assert.ok(menu, 'the options render in the shared anchored layer');
+    assert.equal(menu.parentElement, A.d.body, 'the menu is portaled out of the scrolling settings card');
+    assert.equal(menu.getAttribute('role'), 'listbox');
+    assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+    const labels = [...menu.querySelectorAll('[role="option"]')].map((node) => node.textContent.trim());
+    assert.deepEqual(labels, ['Fixture project（当前）', 'pi-gui', '不指定项目（只看全局）']);
+    assert.equal(A.d.activeElement.getAttribute('aria-selected'), 'true', 'opening starts on the current project');
+    key('ArrowDown');
+    assert.equal(A.d.activeElement.textContent.trim(), 'pi-gui');
+    key('End');
+    assert.equal(A.d.activeElement.textContent.trim(), '不指定项目（只看全局）');
+    key('Home');
+    assert.equal(A.d.activeElement.textContent.trim(), 'Fixture project（当前）');
+    key('Escape');
+    await tick();
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null);
+    assert.equal(A.d.activeElement, trigger, 'Escape closes and returns focus to the trigger');
+
+    const reads = A.count('GET', '/api/skills');
+    trigger.click();
+    await tick();
+    [...A.d.querySelectorAll('.ds-picker-option')].find((node) => node.textContent.trim() === 'pi-gui').click();
+    await tick();
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null, 'choosing closes the menu');
+    assert.equal(A.count('GET', '/api/skills'), reads + 1, 'choosing re-reads the selected project');
+    assert.equal(A.calls.at(-1).url, '/api/skills?project=c000000000000098');
+    assert.equal(trigger.textContent.trim(), 'pi-gui');
+    assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+
+    trigger.click();
+    await tick();
+    key('Tab');
+    await tick();
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null);
+    assert.equal(A.d.activeElement, trigger, 'Tab also closes the menu without leaking focus');
+  });
+
+  await skillsCheck('Skills: switching projects disables the picker until the new list arrives', async () => {
+    A.answer('GET /api/skills', SKILLS);
+    A.hold('GET /api/skills?project=c000000000000098');
+    const page = mountSkills();
+    await tick();
+    const trigger = page.card.querySelector('.skills-project .project-picker-trigger');
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    trigger.click();
+    await tick();
+    [...A.d.querySelectorAll('.ds-picker-option')].find((node) => node.textContent.trim() === 'pi-gui').click();
+    await tick();
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null, 'the menu closes as soon as a project is chosen');
+    assert.equal(trigger.disabled, true, 'the picker is disabled while the new list is in flight');
+    assert.equal(trigger.textContent.trim(), 'pi-gui', 'the chosen project is visible during the switch');
+    A.release('GET /api/skills?project=c000000000000098', {
+      ...clone(SKILLS),
+      context: { ...SKILLS.context, project: 'c000000000000098', live: false },
+      skills: [SKILLS.skills[0]],
+    });
+    await tick();
+    assert.equal(trigger.disabled, false);
+    assert.equal(A.d.activeElement, trigger, 'focus stays on the picker after the switch');
+  });
+
+  await skillsCheck('Skills: a background reload closes the project menu and returns focus to the picker', async () => {
+    A.answer('GET /api/skills', SKILLS);
+    const page = mountSkills();
+    await tick();
+    const trigger = page.card.querySelector('.skills-project .project-picker-trigger');
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    trigger.click();
+    await tick();
+    assert.ok(A.d.querySelector('.pi-anchored-menu.ds-picker-menu'));
+    A.d.dispatchEvent(new A.w.CustomEvent('pi-gui:capability-bridge-ready'));
+    await tick(40);
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null, 'the menu does not survive the reload');
+    assert.equal(A.d.activeElement, trigger, 'focus returns to the picker after the background read');
   });
 
   await skillsCheck('Skills: an empty group says what is missing; a filter with no match shows one empty state, not one per group', async () => {
@@ -796,7 +953,7 @@ function createWorld(label, entry) {
     seg('temporary').click();
     assert.deepEqual([...page.card.querySelectorAll('.skills-group')].map((node) => node.dataset.scope), ['temporary']);
     A.answer('GET /api/skills', SKILLS);
-    page.card.querySelector('.skills-head .skills-icon-btn[aria-label="刷新技能列表"]').click();
+    page.card.querySelector('.skills-head button[aria-label="刷新技能列表"]').click();
     await tick();
     assert.equal(seg('temporary').hidden, true);
     assert.equal(seg('').getAttribute('aria-checked'), 'true', 'a hidden tab cannot stay selected');
@@ -846,7 +1003,6 @@ function createWorld(label, entry) {
   });
   const marketRoute = 'GET /api/extensions/market?*';
   B.w.S.hasProject = true;
-  B.answer('GET /api/approvals/capability', APPROVAL);
   B.answer('GET /api/extensions/packages', { ok: true, packages: [], installRoot: 'C:/fixture/pi/npm/node_modules' });
   B.answer(marketRoute, marketResponse());
   B.answer('GET /api/extensions/market/item?*', { ok: true, item: marketItem, detailState: 'no-consent' });
@@ -905,23 +1061,163 @@ function createWorld(label, entry) {
     B.w.showChat();
   });
 
-  await extCheck('Extensions: live extension notices render above the tabs and follow tab switches', async () => {
-    B.w.S.switching = false; // 切换中的提示会被丢弃；这里验证的是正常运行时的提示
+  await extCheck('Extensions market: a Pi restart re-reads the open market and the installed list from the same manifest', async () => {
+    B.answer('GET /api/extensions', registry([EXT_OK]));
+    B.answer(marketRoute, marketResponse());
+    B.w.openExtensions();
+    await tick();
+    B.$('extensionsTabMarket').click();
+    await tick();
+    assert.ok(B.$('extensionsTabPanel').querySelector('.extensions-market-card-action'), 'fixture starts as installable');
+
+    const search = B.d.querySelector('[aria-label="搜索插件市场"]');
+    search.value = 'pi-fixture';
+    search.dispatchEvent(new B.w.Event('input', { bubbles: true }));
+    await tick(260); // 180ms debounce
+    const reads = B.count('GET', '/api/extensions/market?*');
+    const registryReads = B.count('GET', '/api/extensions');
+    search.focus();
+
+    /* pi 重启后包清单变了：市场与已安装页签都必须按新清单重读。 */
+    B.answer(marketRoute, marketResponse([{ ...marketItem, installed: { state: 'installed', version: '1.2.3' } }]));
+    B.answer('GET /api/extensions', registry([EXT_OK, EXT_BROKEN]));
+    B.d.dispatchEvent(new B.w.Event('pi-gui:capability-bridge-ready'));
+    await tick(60);
+    assert.equal(B.count('GET', '/api/extensions/market?*'), reads + 1, 'the open market re-reads its directory');
+    assert.equal(B.count('GET', '/api/extensions'), registryReads + 1, 'the mounted installed tab re-reads the Registry');
+    assert.equal(B.d.querySelector('[aria-label="搜索插件市场"]').value, 'pi-fixture', 'the query survives the restart');
+    assert.equal(B.d.activeElement, search, 'a background restart does not steal search focus');
+    assert.match(B.d.querySelector('.extensions-market-card-foot').textContent, /已安装/, 'the card settles on the new manifest');
+    B.$('extensionsTabInstalled').click();
+    await tick();
+    assert.equal(extItems().length, 2, 'the installed tab shows the same new manifest');
+    B.w.showChat();
+  });
+
+  await extCheck('Extensions market: 刷新 is the Ghost weak action; the card 安装 keeps the Primary role', async () => {
+    B.answer('GET /api/extensions', registry([EXT_OK]));
+    B.answer(marketRoute, marketResponse());
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const refresh = B.d.querySelector('.extensions-refresh');
+    assert.ok(refresh, 'the market header owns the refresh action');
+    assert.match(refresh.className, /\bbtn\b/);
+    assert.match(refresh.className, /\bghost\b/, '刷新 is listed under Ghost in the design system');
+    assert.doesNotMatch(refresh.className, /\bprimary\b/, 'the header must not compete with the card install action');
+    assert.match(B.d.querySelector('.extensions-market-card-action').className, /\bprimary\b/, '安装 is the primary action of this surface');
+    B.w.showChat();
+  });
+
+  await extCheck('Extensions: long run notices start collapsed, retain severity and full inert text, and clear on a new run', async () => {
+    B.w.S.switching = false;
     B.answer('GET /api/extensions', registry([EXT_OK]));
     B.w.openExtensions();
     await tick();
-    const notices = () => B.d.querySelector('#workSurface .extension-notices');
-    assert.equal(notices().hidden, true, 'no notices yet: the section stays hidden');
-    B.w.handleExtensionNotification({ message: 'memory_search requires qmd. Install qmd', notifyType: 'warning' });
-    assert.equal(notices().hidden, false);
-    assert.ok(notices().textContent.includes('memory_search requires qmd'), 'the notice reaches the open page');
+    const notices = B.d.querySelector('#workSurface .extension-notices');
+    assert.equal(notices.hidden, true);
+    const warn = { message: 'Optional integration unavailable.\n\nSetup notes:\n<em>fixture only</em>\n' + 'A'.repeat(300), notifyType: 'warning' };
+    B.w.handleExtensionNotification(warn);
+    assert.equal(notices.hidden, false);
+    assert.equal(notices.tagName, 'DETAILS');
+    assert.equal(notices.open, false, 'new messages do not expand diagnostics');
+    const summary = notices.querySelector('summary');
+    assert.match(summary.textContent, /1 条警告/);
+    assert.doesNotMatch(summary.textContent, /Setup notes/);
+    assert.ok(notices.textContent.includes(warn.message));
+    assert.equal(notices.querySelector('em'), null, 'notification markup remains plain text');
+    summary.click();
     B.$('extensionsTabMarket').click();
     await tick();
-    assert.ok(notices().textContent.includes('memory_search requires qmd'), 'notices sit above the tabs, not inside one panel');
-    assert.equal(B.$('extensionsTabPanel').contains(notices()), false);
-    B.w.handleExtensionNotification({ message: 'memory_search requires qmd. Install qmd', notifyType: 'warning' });
-    assert.ok(notices().textContent.includes('重复 2 次'), 'a repeated notice updates the same row');
+    assert.equal(B.$('extensionsTabPanel').contains(notices), false);
+    assert.equal(notices.open, true, 'list and market share this run’s disclosure');
+    summary.focus();
+    B.w.handleExtensionNotification(warn);
+    B.w.handleExtensionNotification({ message: 'Fixture connection failed', notifyType: 'error' });
+    assert.equal(B.d.activeElement, summary, 'live updates keep the disclosure focus');
+    assert.equal(notices.open, true);
+    assert.match(summary.textContent, /1 条错误/);
+    assert.match(summary.textContent, /1 条警告/);
+    assert.equal(notices.querySelectorAll('.extension-notice').length, 2);
+    assert.ok(notices.textContent.includes('重复 2 次'), 'repeated notifications are still identifiable');
+    const nextRun = () => {
+      B.w.S.bridgeRun = (B.w.S.bridgeRun || 0) + 1;
+      B.d.dispatchEvent(new B.w.Event('pi-gui:capability-bridge-ready'));
+    };
+    nextRun();
+    assert.equal(notices.hidden, true);
+    assert.equal(notices.open, false);
+    assert.equal(B.d.activeElement, B.$('extensionsTabMarket'), 'clearing the focused summary returns to the selected tab');
+    assert.doesNotMatch(notices.textContent, /Setup notes|Fixture connection failed/);
+    B.w.handleExtensionNotification({ message: 'Fixture ready', notifyType: 'info' });
+    assert.equal(notices.open, false);
+    assert.match(summary.textContent, /1 条提示/);
+    const search = B.d.querySelector('[aria-label="搜索插件市场"]');
+    search.focus();
+    nextRun();
+    assert.equal(notices.hidden, true);
+    assert.equal(B.d.activeElement, search, 'a background restart does not steal search focus');
+    B.$('extensionsTabInstalled').click();
+    B.w.handleExtensionNotification(warn);
+    summary.click();
+    const body = notices.querySelector('.extensions-notice-body');
+    body.focus();
+    assert.equal(B.d.activeElement, body);
+    B.w.beginWorkspaceSwitch('C:\\fixture\\another');
+    assert.equal(notices.hidden, true, 'workspace change also clears the old notices');
+    assert.equal(notices.open, false);
+    assert.equal(B.d.activeElement, B.$('extensionsTabInstalled'), 'clearing the focused body returns to the selected tab');
     B.w.showChat();
+  });
+
+  await extCheck('Extensions market: cards present only known npm facts; body and footer are separate focus targets', async () => {
+    const unknown = { ...marketItem, id: 'npm:another-fixture', name: 'another-fixture', downloadsMonthly: null,
+      flagged: true, install: { allowed: false, reason: 'fixture: blocked' } };
+    B.answer(marketRoute, marketResponse([{ ...marketItem, downloadsMonthly: 0 }, unknown]));
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const first = B.d.querySelector('.extensions-market-card');
+    const view = first.querySelector('.extensions-card-hit');
+    const action = first.querySelector('.extensions-market-card-action');
+    const body = first.querySelector('.extensions-market-card-body');
+    assert.equal(body.querySelector('h4').textContent, 'pi-fixture');
+    assert.match(body.querySelector('.extensions-card-meta').textContent, /月下载 0/);
+    assert.ok(body.contains(view) && !body.contains(action), 'separate the detail hit area from the footer action');
+    assert.equal(view.contains(body.querySelector('.extensions-card-desc')), false, 'named buttons must not mask the visible description');
+    assert.equal(view.contains(action), false);
+    assert.ok(first.querySelector('.extensions-market-card-foot').contains(action));
+    assert.equal(action.getAttribute('aria-label'), '安装 pi-fixture');
+    const blocked = B.d.querySelector('[data-market-id="npm:another-fixture"]');
+    assert.doesNotMatch(blocked.querySelector('.extensions-card-meta').textContent, /月下载/);
+    assert.match(blocked.textContent, /npm 安全警告/);
+    assert.equal(blocked.querySelector('.extensions-market-card-action'), null);
+    const writeCount = () => B.calls.filter(call => call.method === 'POST').length;
+    const before = writeCount();
+    action.focus(); action.click();
+    await tick();
+    assert.ok(!B.$('modal').hidden && B.$('confirmLayer').hidden, 'the footer opens details, never installs directly');
+    B.d.querySelector('.extensions-detail-head button').click();
+    await tick();
+    assert.equal(B.d.activeElement, B.d.querySelector('.extensions-market-card-action'));
+    assert.equal(writeCount(), before);
+  });
+
+  await extCheck('Extensions market: a selected category toggles back to All without changing sort or losing focus', async () => {
+    B.answer(marketRoute, marketResponse());
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const facet = () => B.d.querySelector('.extensions-categories [data-filter="devtools"]');
+    const query = () => new URL(B.calls.filter(c => c.url.startsWith('/api/extensions/market?')).at(-1).url, 'http://localhost').searchParams;
+    assert.equal(B.d.querySelector('.extensions-categories [data-filter="all"]').textContent, '全部');
+    facet().focus(); facet().click();
+    await tick();
+    assert.equal(query().get('category'), 'devtools');
+    assert.equal(facet().getAttribute('aria-pressed'), 'true');
+    facet().click();
+    await tick();
+    assert.equal(query().get('category'), 'all');
+    assert.equal(query().get('sort'), 'recommended');
+    assert.equal(facet().getAttribute('aria-pressed'), 'false');
+    assert.equal(B.d.activeElement, facet());
   });
 
   await extCheck('Extensions: new searches outrank late responses and reset pagination', async () => {
@@ -1019,6 +1315,28 @@ function createWorld(label, entry) {
     assert.equal(B.$('confirmLayer').hidden, true);
     assert.equal(B.$('modal').hidden, true);
     assert.equal(B.count('POST', '/api/extensions/packages'), before);
+  });
+
+  await extCheck('Extensions: leaving a market context dismisses network consent and sends no action', async () => {
+    for (const leave of [
+      () => B.w.showChat(),
+      () => B.w.beginWorkspaceSwitch('C:\\fixture\\other'),
+      () => B.$('extensionsTabInstalled').click(),
+    ]) {
+      B.w.S.switching = false;
+      B.answer(marketRoute, marketResponse());
+      const before = B.count('POST', '/api/extensions/market');
+      B.w.openExtensions({ tab: 'market' });
+      await tick();
+      const enable = [...B.d.querySelectorAll('.extensions-notes button')].find((button) => button.textContent === '启用在线目录');
+      assert.ok(enable);
+      enable.click();
+      assert.equal(B.$('confirmLayer').hidden, false);
+      leave();
+      await tick();
+      assert.equal(B.$('confirmLayer').hidden, true);
+      assert.equal(B.count('POST', '/api/extensions/market'), before);
+    }
   });
 
   await extCheck('Extensions: legacy entry parameters land on 已安装; 插件市场 can be opened directly', async () => {
@@ -1134,12 +1452,12 @@ function createWorld(label, entry) {
     assert.equal(ok.querySelector('.ext-name').textContent, 'Sample Extension');
     assert.equal(ok.querySelector('.extensions-card-meta').textContent, 'v1.0.0 · 本地 · 全局');
     assert.equal(ok.querySelector('.extensions-card-desc').textContent, 'Fixture extension');
-    assert.deepEqual([...ok.querySelectorAll('.extensions-cap')].map((chip) => [chip.textContent, chip.title]), [['hello', 'command: hello']]);
+    assert.ok(!ok.textContent.includes('hello'), 'command inventories belong in the expandable details, not every list row');
     assert.equal(ok.querySelectorAll('.ds-badge').length, 0, 'enabled: true and restartRequired: null add no tag');
     const broken = surface.querySelector('.extensions-card[data-extension-id="ext-2"]');
     assert.ok(broken.classList.contains('is-error'));
     assert.equal(broken.querySelector('.extensions-card-meta').textContent, '版本未知 · 本地 · 项目');
-    assert.equal(broken.querySelector('.extensions-card-desc').textContent, '（没有简介）');
+    assert.equal(broken.querySelector('.extensions-card-desc'), null, 'no placeholder competes with the actionable load error');
     assert.equal(broken.querySelector('.extensions-card-error').textContent, '加载失败：Pi 报告扩展加载错误');
 
     const toggle = ok.querySelector('.extensions-card-toggle');
@@ -1205,7 +1523,7 @@ function createWorld(label, entry) {
     B.w.showChat();
   });
 
-  await extCheck('Extensions: an empty Registry and a failed read are tiles with a real next step; 已知能力 stays available', async () => {
+  await extCheck('Extensions: an empty Registry and a failed read are tiles with a real next step; no separate 已知能力 section', async () => {
     B.answer('GET /api/extensions', registry([{ ...EXT_OK, id: 'ext-3', state: { ...EXT_OK.state, loaded: null } }]));
     B.w.openExtensions();
     await tick();
@@ -1227,9 +1545,8 @@ function createWorld(label, entry) {
     assert.equal(B.d.querySelector('.extensions-tab-count').textContent, '', 'a failed read leaves the count unknown, not 0');
     const retry = [...list().querySelectorAll('button')].find((button) => button.textContent === '重试');
     assert.ok(retry, 'the failure tile offers the real retry path');
-    assert.deepEqual([...B.d.querySelectorAll('#extensionsTabPanel .ext-known-item > summary')].map((node) => node.textContent),
-      ['Web Access', 'Subagents', 'Pi Memory', 'Browser Use', 'Approval / Permission'], 'known capabilities stay reachable after a failure');
-    assert.equal(B.d.querySelector('#extensionsKnownTitle').textContent, '已知能力');
+    assert.equal(B.d.querySelector('#extensionsTabPanel .ext-known'), null, 'the old known-capability section is gone');
+    assert.equal(B.d.querySelector('#extensionsKnownTitle'), null);
     B.answer('GET /api/extensions', registry([EXT_OK]));
     const reads = B.count('GET', '/api/extensions');
     retry.click();
@@ -1239,109 +1556,64 @@ function createWorld(label, entry) {
     B.w.showChat();
   });
 
-  console.log('agent capability pages: MCP report lifecycle');
-  const C = createWorld('mcp-report', REPORT);
-  const REPORT_GEN_BASE = C.listenerCount(GEN);
-  const openReports = [];
-  const mountReport = () => {
-    const report = C.w.createMcpReport();
-    C.d.body.append(report.element);
-    openReports.push(report);
-    return report;
-  };
-  const reportCheck = (name, run) => check(name, async () => {
-    try { await run(); } finally {
-      for (const report of openReports.splice(0)) { report.dispose(); report.element.remove(); }
-      C.reset();
-      await tick();
+  await extCheck('Extensions: an installed capability keeps its setup inside its own package detail', async () => {
+    const webPackage = {
+      id: 'npm:pi-web-access', name: 'pi-web-access', version: '0.7.0', kind: 'npm',
+      source: 'npm:pi-web-access', location: 'C:/fixture/pi/npm/node_modules/pi-web-access',
+      scope: 'user', installed: true, enabled: true, capabilityId: 'web',
+      extensionIds: ['ext-1'], updateAvailable: false,
+      actions: { update: { allowed: false, reason: '' }, remove: { allowed: true, reason: '' } },
+      manual: {}, resources: { declared: true, extensions: 1 }, problem: null,
+    };
+    B.answer('GET /api/extensions', registry([EXT_OK]));
+    B.answer('GET /api/extensions/packages', { ok: true, packages: [webPackage], installRoot: 'C:/fixture/pi/npm/node_modules' });
+    B.w.openExtensions();
+    await tick();
+    assert.equal(B.d.querySelector('#extensionsTabPanel .ext-known'), null, 'no standalone setup section');
+    const card = B.d.querySelector('#extensionsTabPanel .ext-extension-item');
+    assert.ok(card, 'the package has its own card');
+    assert.match(card.textContent, /Web Access/);
+    card.querySelector('.extensions-card-toggle').click();
+    await tick();
+    const setup = card.querySelector('.extensions-embedded-setup .cap-setup.is-embedded');
+    assert.ok(setup, 'the capability setup stays reachable inside the installed package detail');
+    assert.match(setup.textContent, /运行观察/);
+    assert.doesNotMatch(setup.textContent, /安装命令/, 'embedded setup does not repeat the package install flow');
+    B.w.showChat();
+  });
+
+  await extCheck('Extensions market: the four known capabilities remain installable from the catalog', async () => {
+    const known = [
+      ['npm:pi-web-access', 'pi-web-access'],
+      ['npm:pi-subagents', 'pi-subagents'],
+      ['npm:pi-memory', 'pi-memory'],
+      ['npm:pi-browser-harness', 'pi-browser-harness'],
+    ].map(([id, name]) => ({
+      id, name, version: '1.0.0', maintainer: 'fixture', description: `${name} fixture`,
+      category: 'devtools', tags: [], installed: { state: 'none' }, install: { allowed: true },
+    }));
+    B.answer('GET /api/extensions', registry([]));
+    B.answer('GET /api/extensions/packages', { ok: true, packages: [], installRoot: 'C:/fixture/pi/npm/node_modules' });
+    B.answer(marketRoute, marketResponse(known));
+    B.w.openExtensions({ tab: 'market' });
+    await tick();
+    const cards = [...B.d.querySelectorAll('#extensionsTabPanel .extensions-market-card')];
+    assert.deepEqual(cards.map((card) => card.querySelector('.ext-name').textContent).sort(),
+      ['pi-browser-harness', 'pi-memory', 'pi-subagents', 'pi-web-access']);
+    for (const card of cards) {
+      const action = card.querySelector('.extensions-market-card-action');
+      assert.equal(action?.textContent, '安装', `${card.querySelector('.ext-name').textContent} keeps an install entry`);
+      assert.match(action.className, /\bprimary\b/);
     }
-  });
-  const reportBody = (report) => report.element.querySelector('.mcp-report-body');
-
-  await reportCheck('MCP report: no request until expanded, and reopening does not re-read', async () => {
-    C.hold('GET /api/mcp');
-    const report = mountReport();
-    await tick();
-    assert.equal(C.count('GET', '/api/mcp'), 0, 'collapsed report sends nothing');
-    report.element.open = true;
-    await tick();
-    assert.equal(C.count('GET', '/api/mcp'), 1);
-    C.release('GET /api/mcp', MCP_REPORT);
-    await tick();
-    assert.match(reportBody(report).textContent, /这个 pi 带 MCP 能力/);
-    report.element.open = false;
-    await tick();
-    report.element.open = true;
-    await tick();
-    assert.equal(C.count('GET', '/api/mcp'), 1, 'reopening keeps the loaded report');
-    report.dispose();
-    report.element.remove();
+    B.w.showChat();
   });
 
-  await reportCheck('MCP report: a project switch shows the switched prompt during and after a read; 刷新 reads again', async () => {
-    C.hold('GET /api/mcp');
-    const report = mountReport();
-    report.element.open = true;
-    await tick();
-    C.w.beginWorkspaceSwitch('C:\\fixture\\other');
-    C.release('GET /api/mcp', MCP_REPORT);
-    await tick();
-    assert.match(reportBody(report).textContent, /项目已切换，刷新后查看当前项目的 MCP 能力报告/);
-    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/);
-    C.answer('GET /api/mcp', MCP_REPORT);
-    [...reportBody(report).querySelectorAll('button')].find((button) => button.textContent === '刷新').click();
-    await tick();
-    assert.match(reportBody(report).textContent, /这个 pi 带 MCP 能力/);
-    C.w.beginWorkspaceSwitch('C:\\fixture\\third');
-    assert.match(reportBody(report).textContent, /项目已切换/);
-    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/, 'loaded evidence of the old project is replaced');
-    report.dispose();
-    report.element.remove();
-  });
 
-  await reportCheck('MCP report: dispose drops a late report and removes its listener', async () => {
-    C.hold('GET /api/mcp');
-    const report = mountReport();
-    assert.equal(C.listenerCount(GEN), REPORT_GEN_BASE + 1);
-    report.element.open = true;
-    await tick();
-    report.dispose();
-    assert.equal(C.listenerCount(GEN), REPORT_GEN_BASE);
-    C.release('GET /api/mcp', MCP_REPORT);
-    await tick();
-    assert.doesNotMatch(reportBody(report).textContent, /带 MCP 能力/);
-    report.element.remove();
-  });
-
-  await reportCheck('MCP report: native state follows the MCP page without another request', async () => {
-    C.answer('GET /api/mcp', MCP_REPORT);
-    const report = mountReport();
-    const reads = C.count('GET', '/api/mcp');
-    report.setNative({ state: 'active', reason: 'fixture native reason' });
-    report.element.open = true;
-    await tick();
-    const native = () => report.element.querySelector('.mcp-report-native').textContent;
-    assert.match(native(), /原生 MCP 生效中/);
-    assert.match(native(), /fixture native reason/);
-    report.setNative({ state: 'a-future-state' });
-    assert.match(native(), /原生状态未知/, 'an unknown native state is not guessed');
-    report.setNative({ state: 'active' });
-    report.setNative(undefined);
-    assert.match(native(), /原生状态未知/, 'a summary without a native object stays unknown');
-    report.setNative({ state: 'active' });
-    report.setNative(null);
-    assert.match(native(), /读不到原生 MCP 摘要/, 'a failed summary read says so');
-    assert.equal(report.element.querySelector('.mcp-report-native h4'), null, 'no verdict headline is kept from the previous read');
-    assert.equal(C.count('GET', '/api/mcp'), reads + 1, 'native updates reuse the MCP page data');
-    report.dispose();
-    report.element.remove();
-  });
-
-  await check('no uncaught errors or console errors in the three page worlds', () => {
+  await check('no uncaught errors or console errors in the two page worlds', () => {
     assert.deepEqual(pageErrors, []);
   });
 
-  for (const world of [A, B, C]) world.w.close();
+  for (const world of [A, B]) world.w.close();
   console.log(`\n${passed}/${passed + failed} passed`);
   process.exit(failed ? 1 : 0);
 })().catch((error) => {

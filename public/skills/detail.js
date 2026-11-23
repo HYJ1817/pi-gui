@@ -73,11 +73,12 @@ function fileChips(files) {
  */
 export function renderSkillDetail(host, skill, { isLive, project, onEdit, onDelete } = {}) {
   host.replaceChildren();
+  /* 停用只写了 settings；运行中的 pi 在重启前仍会加载它。配置状态与运行时状态分开说。 */
+  if (skill.state === 'disabled' && skill.loaded === true) {
+    host.append(note('配置已停用，但 pi 仍加载着它：重启 pi 之后才会停止加载。', 'warn'));
+  }
   if (skill.stateNote) host.append(note(skill.stateNote, skill.state === 'enabled' ? 'dim' : 'warn'));
   for (const error of skill.errors || []) host.append(note(error.message, error.level === 'error' ? 'warn' : 'dim'));
-  if (skill.description && skill.description.length > 120) {
-    host.append(el('p', 'skill-detail-desc', skill.description));
-  }
 
   const columns = el('div', 'skill-detail-columns');
   const facts = el('div', 'skill-detail-facts');

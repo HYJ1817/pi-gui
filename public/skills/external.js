@@ -52,7 +52,7 @@ export function openSkillExternal({ project = 'none', data = null, onImported = 
 
   openModal((card, close) => {
     closeModal = close;
-    card.classList.add('skills-dialog', 'skills-external-dialog');
+    card.classList.add('skills-dialog', 'skills-external-dialog', 'ds-readable-badges');
     card.setAttribute('aria-label', '从其他工具扫描技能');
 
     const head = el('header', 'skills-dialog-head');

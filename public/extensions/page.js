@@ -1,7 +1,6 @@
 /* 扩展（应用主导航）—— Pi 原生 Extension 的独立工作区页面。
  *
- * 版式对照 PI-Desktop 扩展页（PluginsPage）：页头（图标块 + 标题 + 当前页签的动作）→
- * 页签行（已安装 / 插件市场 + 当前页签的工具栏）→ 扩展提示 → 页签面板。
+ * 版式对照 PI-Desktop 扩展页（PluginsPage）：页头 → 页签与工具栏 → 可折叠的运行提示 → 页签面板。
  * 页面自己画「扩展」标题，工作区标题栏里的同名标题在本页隐藏（extensions.css），不出现两个标题。
  *
  * 页签面板懒建、建好后复用；每个面板返回自己的 dispose，以及可选的 toolbar / actions 节点，
@@ -10,7 +9,7 @@
  * 本模块不 import 技能页或 MCP 页的任何 UI。 */
 
 import { openWorkSurface } from '../ui/workspace-surface.js';
-import { renderExtensionNotices } from '../extension-notices.js';
+import { extensionNotices, renderExtensionNotices } from '../extension-notices.js';
 import { createIcon } from '../ui/icons.js';
 import { resourceEl as el } from '../ui/resource-dom.js';
 import { renderInstalledExtensions } from './installed.js';
@@ -41,14 +40,15 @@ export function openExtensions(options = {}) {
       }
     });
 
-    const inner = el('div', 'extensions-inner');
+    const inner = el('div', 'extensions-inner ds-readable-badges');
     const head = el('header', 'extensions-head');
-    const heading = el('div', 'extensions-heading');
-    const headingIcon = el('span', 'extensions-heading-icon');
-    headingIcon.append(createIcon('box', { size: 14 }));
-    heading.append(headingIcon, el('h2', 'extensions-title', '扩展'));
+    const heading = el('h2', 'extensions-title', '扩展');
+    const titleGlyph = el('span', 'extensions-market-title-glyph');
+    titleGlyph.append(createIcon('box', { size: 14 }));
+    const titleBlock = el('div', 'extensions-title-block');
+    titleBlock.append(titleGlyph, heading);
     const actionsSlot = el('div', 'extensions-head-actions');
-    head.append(heading, actionsSlot);
+    head.append(titleBlock, actionsSlot);
 
     const toolbarRow = el('div', 'extensions-toolbar-row');
     const tablist = el('div', 'ds-segmented extensions-tabs');
@@ -57,7 +57,16 @@ export function openExtensions(options = {}) {
     const toolbarSlot = el('div', 'extensions-toolbar-slot');
     toolbarRow.append(tablist, toolbarSlot);
 
-    const notices = el('section', 'extension-notices');
+    const notices = el('details', 'extension-notices');
+    const noticeSummary = el('summary', 'extensions-notice-summary');
+    const noticeCounts = el('span', 'extensions-notice-counts');
+    noticeSummary.append(createIcon('info', { size: 15 }), el('span', '', '运行提示'), noticeCounts,
+      createIcon('chevronDown', { size: 14, className: 'extensions-notice-chevron' }));
+    const noticeBody = el('div', 'extensions-notice-body');
+    noticeBody.tabIndex = 0; // 展开后可用方向键 / PageDown 滚动长诊断，无须鼠标。
+    noticeBody.setAttribute('role', 'region');
+    noticeBody.setAttribute('aria-label', '运行提示原文');
+    notices.append(noticeSummary, noticeBody);
     const panel = el('div', 'extensions-panel');
     panel.id = 'extensionsTabPanel';
     panel.setAttribute('role', 'tabpanel');
@@ -80,7 +89,11 @@ export function openExtensions(options = {}) {
     };
 
     function select(id, { focus = false } = {}) {
+      if (active !== id) panels.get(active)?.deactivate?.();
       active = id;
+      inner.dataset.tab = id;
+      titleGlyph.hidden = id !== 'market';
+      tablist.classList.toggle('is-rounded', id === 'market');
       for (const tab of TABS) {
         const button = buttons.get(tab.id);
         const on = tab.id === active;
@@ -141,15 +154,29 @@ export function openExtensions(options = {}) {
         operations.invalidate();
         for (const entry of panels.values()) entry.invalidate?.();
       }
-      renderExtensionNotices(notices);
+      const items = extensionNotices(); // 当前运行的去重快照；折叠状态只属于这一个页面。
+      // 隐藏后 Chromium 会释放焦点；仅当焦点在即将消失的提示区时交还当前页签。
+      if (!items.length && notices.contains(document.activeElement)) buttons.get(active).focus();
+      notices.hidden = !items.length;
+      if (!items.length) notices.open = false;
+      const byKind = { error: 0, warning: 0, info: 0 };
+      for (const item of items) byKind[item.kind]++;
+      noticeSummary.dataset.kind = byKind.error ? 'error' : byKind.warning ? 'warning' : 'info';
+      noticeCounts.textContent = [[byKind.error, '错误'], [byKind.warning, '警告'], [byKind.info, '提示']]
+        .filter(([count]) => count > 0).map(([count, label]) => `${count} 条${label}`).join(' · ');
+      renderExtensionNotices(noticeBody);
     };
     for (const type of NOTICE_EVENTS) document.addEventListener(type, refreshNotices);
     disposers.push(() => { for (const type of NOTICE_EVENTS) document.removeEventListener(type, refreshNotices); });
     const refreshAfterRestart = () => {
-      if (instance.isCurrent()) void panels.get('installed')?.reload();
+      if (!instance.isCurrent()) return;
+      refreshNotices();
+      /* pi 重启后包清单与运行时状态都可能变了：已挂载的页签（含正开着的插件市场）
+       * 都要按同一份清单重读，而不是只刷新「已安装」。 */
+      for (const entry of panels.values()) void entry.reload?.();
     };
-    document.addEventListener('pi-gui:extension-bridge-ready', refreshAfterRestart);
-    disposers.push(() => document.removeEventListener('pi-gui:extension-bridge-ready', refreshAfterRestart));
+    document.addEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart);
+    disposers.push(() => document.removeEventListener('pi-gui:capability-bridge-ready', refreshAfterRestart));
 
     inner.append(head, toolbarRow, notices, panel);
     /* Work Surface 本身不滚动（.work-surface 的 overflow:hidden 契约），整页内容由这一层内部滚动容器承担。 */

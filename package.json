@@ -106,6 +106,7 @@
     "test:probes-live": "node tests/pi-probes-live.cjs",
     "test:skills-live": "node tests/skills-live.cjs",
     "test:reliability-live": "node tests/reliability-live.cjs",
+    "test:capabilities-live": "node tests/agent-capabilities-live.cjs",
     "test:security": "node tests/server-security.cjs",
     "test:diagnostics": "node tests/diagnostics.cjs",
     "test:update": "node tests/update-check.cjs",

@@ -1,6 +1,6 @@
 /* 扩展清单：包配置和磁盘事实来自清单，加载证据来自只读 Registry。 */
 import { S, ownsWorkspace } from '../state.js';
-import { fetchExtensions, fetchExtensionPackages, fetchApprovalCapability } from '../api.js';
+import { fetchExtensions, fetchExtensionPackages } from '../api.js';
 import { openActionMenu } from '../ui/action-menu.js';
 import { restartPi } from '../providers.js';
 import { SURFACE_COPY } from '../status-copy.js';
@@ -11,7 +11,6 @@ import { renderWebSetup } from '../web-access.js';
 import { renderSubagentSetup } from '../subagents.js';
 import { renderMemorySetup } from '../memory.js';
 import { renderBrowserSetup } from '../browser.js';
-import { renderApprovalSetup } from '../approval.js';
 import {
   buildExtensionUnits, extensionUnitChips, extensionUnitDescription, extensionUnitErrorText,
   extensionUnitFactRows, extensionUnitMeta, extensionUnitName, extensionUnitTags, filterExtensionUnits, groupExtensionUnits,
@@ -44,20 +43,9 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
 
   const notes = el('div', 'extensions-notes');
   const list = el('div', 'extensions-list');
-  const known = el('section', 'ext-known');
-  const knownHead = extensionGroupHead('已知能力', KNOWN.size + 1, 'extensionsKnownTitle');
-  known.setAttribute('aria-labelledby', 'extensionsKnownTitle');
-  const knownBody = el('div', 'ext-known-body');
-  known.append(knownHead, knownBody);
-  const setupBoxes = new Map();
-  for (const [id, [name]] of [...KNOWN, ['approval', ['Approval / Permission']]]) {
-    const details = el('details', 'ext-known-item');
-    const box = el('div', 'ext-known-item-body');
-    details.append(el('summary', 'ext-known-item-summary', name), box);
-    knownBody.append(details);
-    setupBoxes.set(id, box);
-  }
-  holder.append(notes, list, known);
+  /* 已安装的已知能力在自己的包卡片详情里给 setup（运行观察、限制、出处）；
+   * 未安装的包在插件市场里安装。这里不再额外挂一个「已知能力」说明区。 */
+  holder.append(notes, list);
 
   let registry = null;
   let inventory = null;
@@ -70,21 +58,6 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
   const expanded = new Set();
   const detailIds = new Map();
   const live = () => !disposed && isLive();
-
-  function renderKnown() {
-    const managed = new Map(units.filter((unit) => unit.pkg?.capabilityId)
-      .map((unit) => [unit.pkg.capabilityId, unit]));
-    for (const [id, [, renderSetup]] of KNOWN) {
-      const box = setupBoxes.get(id);
-      box.parentElement.hidden = managed.has(id);
-      if (managed.has(id)) continue;
-      const generation = S.workspaceGeneration;
-      renderSetup(box, registry, { onRegistry: () => {
-        if (live() && ownsWorkspace(generation)) operations?.rediscover();
-      } });
-    }
-    knownHead.querySelector('.extensions-group-count').textContent = String(KNOWN.size + 1 - managed.size);
-  }
 
   function renderDetails(node, unit) {
     const rows = el('div', 'ext-rows');
@@ -134,24 +107,20 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
     const heading = el('div', 'extensions-card-heading');
     const title = el('h4', 'ext-name', name);
     title.title = name;
-    heading.append(title, el('div', 'extensions-card-meta', extensionUnitMeta(unit)));
+    const titleLine = el('div', 'extensions-installed-title');
+    titleLine.append(title);
+    for (const tag of extensionUnitTags(unit)) titleLine.append(createBadge(tag));
+    heading.append(titleLine, el('div', 'extensions-card-meta', extensionUnitMeta(unit)));
     head.append(extensionGlyph(name, { error: !!error }), heading);
     const description = extensionUnitDescription(unit);
-    const desc = el('p', 'extensions-card-desc', description || '（没有简介）');
-    if (description) desc.title = description;
-    card.append(head, desc);
-
-    const tags = el('div', 'extensions-card-tags');
-    for (const tag of extensionUnitTags(unit)) tags.append(createBadge(tag));
-    const chips = extensionUnitChips(unit);
-    for (const chip of chips.slice(0, 3)) {
-      const node = el('span', 'extensions-cap' + (chip.mono ? '' : ' is-more'), chip.text);
-      node.title = chip.title;
-      tags.append(node);
+    if (description) {
+      const desc = el('p', 'extensions-card-desc', description);
+      desc.title = description;
+      heading.append(desc);
     }
-    if (chips.length > 3) tags.append(el('span', 'extensions-cap is-more', `另有 ${chips.length - 3} 项`));
-    if (tags.childElementCount) card.append(tags);
-    if (error) card.append(el('p', 'extensions-card-error', error));
+    card.append(head);
+
+    if (error) heading.append(el('p', 'extensions-card-error', error));
 
     if (!detailIds.has(unit.id)) detailIds.set(unit.id, `extensionDetail-${++detailSeq}`);
     const details = el('div', 'extensions-card-details');
@@ -186,7 +155,6 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
     if (!live()) return;
     notes.replaceChildren();
     refresh.disabled = loading;
-    known.hidden = stale;
     if (stale) {
       resultCount.textContent = '';
       list.replaceChildren(extensionStateTile(STALE_TEXT, { icon: 'refresh', actions: [{ label: '刷新', onClick: load }] }));
@@ -251,9 +219,6 @@ export function renderInstalledExtensions(holder, { isLive, onCount = () => {}, 
     units = buildExtensionUnits(registry, inventory);
     onCount(registry || inventory ? units.length : null);
     render();
-    renderKnown();
-    const report = await fetchApprovalCapability();
-    if (live() && token === request && ownsWorkspace(generation)) renderApprovalSetup(setupBoxes.get('approval'), report);
   }
 
   function invalidate() {

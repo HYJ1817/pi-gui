@@ -275,8 +275,9 @@ Pi GUI 会用官方 `pi install` 装**四个已明确维护的第三方 Capabili
 ## P22 Capability 投影层边界
 
 Capability 投影层是**只读投影**：它把已有的证据重新排版，**不新增任何事实、不新增任何动作**。
-独立的能力状态页已在 P36 移除，投影仍服务 `ui/capability-setup.js` 与
-扩展页「已安装」顶部的「已知能力设置」折叠区。
+独立的能力状态页已在 P36 移除；本轮又移除了扩展页「已安装」顶部的「已知能力设置」折叠区，
+`ui/capability-setup.js` 只服务已安装包的详情。Approval 的协议证据改由本文的审批边界承载，
+不再在扩展页渲染技术报告。
 
 - **不联网、不安装、不执行**：`capability-model.js` /
   `ui/capability-setup.js` 里没有 `child_process` / `execFile` / `spawn(` / `node:fs`；
@@ -687,7 +688,7 @@ Electron 与渲染进程之间**只有一个桥**（`electron/preload.cjs`），
 
 **做法**：`public/tool-view.js` **一次 `innerHTML` 都不用**（除自己写死的
 SVG 图标常量），所有文本走 `textContent`。于是「记得转义」这件事不需要被记住。
-`extensions/`、`skills/`、`mcp-report.js` / `planner.js` 同样如此（Planner 的 Agent stdout 一律当
+`extensions/`、`skills/`、`mcp-settings.js` / `planner.js` 同样如此（Planner 的 Agent stdout 一律当
 不可信文本渲染）。
 
 ### 扩展目录只读元信息

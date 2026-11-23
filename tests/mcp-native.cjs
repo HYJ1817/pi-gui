@@ -262,6 +262,47 @@ function mkNative(over = {}) {
     await mod.summary();
     assert.equal(probes, 2, 'reset 后 command probe 必须重跑');
   });
+  await checkAsync('MCP runtime cache expires across Pi runs and A→B→A; late CLI data cannot replace it', async () => {
+    const box = { cwd: PROJ, epoch: 1, run: 1, bridgeState: 'ready' };
+    const waiters = [];
+    let probes = 0;
+    const { mod } = withCreate({
+      runtime: { getCurrentCwd: () => box.cwd, getWorkspaceGeneration: () => box.epoch },
+      resolvePackageDir: () => mkPkg('run-pkg'),
+      piBuiltins: () => ({ builtins: [{ id: 'mcp' }] }),
+      rpc: {
+        getState: () => ({ bridgeRun: box.run, bridgeState: box.bridgeState }),
+        request: async () => { probes++; return { commands: [] }; },
+      },
+      runCli: () => new Promise((resolve) => waiters.push(resolve)),
+    });
+    const finish = (name) => ({
+      ok: true, exitCode: 0, stdout: JSON.stringify({ servers: [{ name, scope: 'global', state: 'connected' }] }),
+    });
+    const old = mod.refresh();
+    box.bridgeState = 'restarting';
+    assert.equal(mod.peekStatus(), null);
+    box.run++;
+    box.bridgeState = 'ready';
+    const current = mod.refresh();
+    assert.equal(waiters.length, 2);
+    waiters[1](finish('current'));
+    assert.equal((await current).servers[0].name, 'current');
+    waiters[0](finish('previous'));
+    assert.equal((await old).ok, false);
+    assert.equal(mod.peekStatus()?.servers[0].name, 'current');
+    await mod.summary();
+    assert.equal(probes, 1);
+    box.cwd = PROJ_B;
+    box.epoch++;
+    assert.equal(mod.peekStatus(), null);
+    box.cwd = PROJ;
+    box.epoch++;
+    assert.equal(mod.peekStatus(), null);
+    assert.equal(mod.peekSummary(), null);
+    await mod.summary();
+    assert.equal(probes, 2);
+  });
   await checkAsync('A12. 没有 launch identity 注入时，缓存仍按 cwd 隔离（不塌成全局）', async () => {
     const A = mkRuntimeBox(PROJ);
     const { mod } = withCreate({

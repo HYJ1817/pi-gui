@@ -1,0 +1,315 @@
+# Skills、Extensions、MCP 第三阶段验收
+
+**当前结论：第三阶段历史验收见下文；2026-11-23 的产品 UI 整改、表单选择器统一与验收反馈修正已完成定向验证与真实 Electron 渲染，完整 PR CI 待验证。未合并、未发布。** 技能与扩展是真实产品页面改版；MCP 是只读版式参照。定向验证与全量证明分开记录。
+
+- 分支：`feat/agent-capabilities-phase3-final`，独立工作树。基线：`5ed42f3e43881dc7b353452dac3abb506a2c0c52`（已含 [#103](https://github.com/HYJ1817/pi-gui/pull/103)、[#104](https://github.com/HYJ1817/pi-gui/pull/104)、[#105](https://github.com/HYJ1817/pi-gui/pull/105)）。[main push CI 45004352564](https://github.com/HYJ1817/pi-gui/actions/runs/45004352564)，attempt 1 成功，仅证明基线。
+- 本次续作从 `15d3eff2` 起。`8afeb76a` 已撤销 `bb5b4b38` 的 MCP 外观改动，`15d3eff2` 将对应测试恢复到原界面。相较外观改动之前的 `05b5cdd1`，`public/mcp*` 仅多了 `f08bff84` 的一行状态失效与注释；`public/mcp.css` 与 `public/mcp-market.js` 均与 `origin/main` 一致。不能因此称**整个 MCP 模块**与 main 相同：分支原有的两处运行状态修复见下表。
+- 独立回滚边界：技能 `44aca1cc`、扩展 `5eb65555`、两页选用的徽标对比度 `ff85c316`、UI 回归及跨页验收 `298d703b`。
+- 验收材料提交的完整 SHA 可用 `git log -1 --format=%H -- docs/agent-capabilities-phase3-final-acceptance.md` 定位。完整运行日志及全部截图留在本地 `.shots/`，只把代表图和测量带进仓库。没有引入依赖、修改 Pi 本体或改变日常安装。
+
+## 功能、发现与处置
+
+| 模块 | 问题或验收边界 | 结果 |
+| --- | --- | --- |
+| Skills 加载 | RPC 报告的是同名项目技能，磁盘上的全局条目也曾被标为已加载；配置启用不等于实际加载。 | 依 RPC 路径匹配已加载项，保留尚在运行但已离开磁盘的条目。开关读配置，徽标读实际状态；未知不折算为停用。见 `df983dba`、`05b5cdd1`。 |
+| Skills 写入 | 旧项目启停路径没有走已有管理入口的信任检查。 | 复用写入目标和信任检查，异常设置文件拒绝写入；定向测试用临时目录。创建/编辑、BOM/换行/frontmatter、文件/整包导入、外部扫描、同名冲突、只读、删除及撤销均有离线回归。 |
+| Extensions | 关闭或切走市场时，在线目录确认可能留在页面。安装、启用、运行观察不可混为一个状态。 | 旧确认随所属页面释放；取消不发写请求。更新、重复安装、卸载、离线目录、网络错误、恢复及维护锁分层验证。原生启停继续交由 `pi config`，不造 GUI 开关。 |
+| MCP 运行状态（先前修复，不是本轮改版） | 同目录重启及 A→B→A 后，旧连接观测不应继续显示；展开的能力报告不应沿用旧 Pi 的数据。 | `df983dba` 绑定运行身份，`05b5cdd1` 在 Pi 就绪后重读已有状态。只读刷新不等于自动测试连接。`f08bff84` 补齐报告先返回时旧原生摘要的失效。相对 main，两个前端脚本共新增 19 行就绪处理（含注释），另有 `server/mcp-native.js` 缓存修复；未改市场、代理、配置或页面布局。 |
+| 技能页和市场 | 原页头很小、操作单独占一行，列表与设置里的 MCP 不是同一种版式。市场首次读取失败有两处重试，未读取到目录也能点「加载目录」。 | 纯文字标题和页头动作、独立工具栏、作用域及路径、行尾状态和开关；缺少描述不填占位文字。市场保留一次只读恢复入口，加载与确认仍是显式手势；刷新保留分类节点和选中态。 |
+| 扩展页和市场 | 安装清单按小卡片铺开，单条分组留下横向空白。市场一度套用 MCP 双列，但这与用户提供的 PI-Desktop v0.23.0 插件市场不同。 | 已安装仍是整宽管理行。市场按对应版本的源码改为自适应卡片、可换行的独立分类和同排贴底操作；保留原有 npm 数据、网络同意与安装确认。 |
+
+## 真实 Pi 与跨模块矩阵
+
+Windows，Pi 1.6.0。`tests/skills-live.cjs`、`tests/agent-capabilities-live.cjs` 是 opt-in：HOME、agent、项目 A/B、npm 配置与缓存隔离；只安装回环 Registry 提供的无依赖、无生命周期脚本自制包。通过 RPC 的命令/工具发现核对加载事实，而不是据安装退出码推断。
+
+| 场景 | 证据与限制 |
+| --- | --- |
+| A · 创建技能 → 安装扩展 → 返回技能 | 生产 API 创建项目技能，实际安装后 Pi 自动重启；RPC 按路径找到技能，也找到扩展注册的命令。前端返回/重读另有页面测试。 |
+| B · 全局与项目共存 | A→B→A 两边项目技能与扩展各自可见，全局资源不变；MCP 配置字节一致。 |
+| C · 重启恢复 | 安装、更新后重新加载；同目录重启清除旧 MCP 连接，显式重连成功。页面就绪通知与迟到响应另有离线检查。 |
+| D · 切换/关闭中有请求在途 | 编辑、导入、扫描、市场的晚到成功/失败均检查项目与页面身份；扩展目录和 MCP 报告同样覆盖迟到结果。 |
+| E · Skills 失败隔离 | 同一 Electron 窗口中给技能导入框一个内存里的 `notes.txt`，确认错误且不能提交；取消后打开已安装扩展详情，再进入 MCP 管理，旧错误不残留。包操作前后配置字节一致另由真实 Pi 测得。 |
+| F · RPC/网络/配置故障 | 离线 RPC 不可达、配置异常和超时；本地 npm 503 后重试成功。**未覆盖**三个页面在同一场真实 Pi 启动失败中的端到端恢复。 |
+| G · 模态焦点 | Electron 扩展详情 → 确认 → Escape 回焦；Chromium 技能编辑/导入/市场返回、MCP 新增及错误重试。关闭页面/切换项目后旧确认不写。 |
+| H · 同一 Pi 使用三项能力 | 同一隔离配置发现技能、注册命令，并从本地 stdio MCP 取得 `fixture_ping`。**未调用远端模型**，不声称验证了模型回合。 |
+
+## 视觉依据：分别看原图和对应源码
+
+技能和已安装扩展的早期对照锁定到 [`7b8c3169`](https://github.com/vastsa/PI-Desktop/tree/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba)；**仓库归档图片不等于这一提交重新运行的截图**。本次插件市场以用户提供的 **v0.23.0** 实际页面为准，已核对该 tag 指向 [`95df2e0f`](https://github.com/vastsa/PI-Desktop/tree/95df2e0f9d124ba281fc99e6700ca6649766c77e)，不使用其它版本的归档图代替。市场行为提交 `8979698f`，夹具与验证提交 `7a78093b`；生产侧未增加网络请求或依赖，也未更换主导航入口。
+
+| 对照对象 | 阅读的原图、源码 | 借鉴与有意不同 |
+| --- | --- | --- |
+| 技能管理 | [上游技能列表原图](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/.github/pr-assets/skill-market/06-skill-list.png)、本地 [REF-008](ui/pi-desktop-reference/01-screenshot-inventory.md)；[AgentSkillsPage](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/apps/desktop/src/components/settings/AgentSkillsPage.tsx#L661-L695) | 保留作用域、项目选择、发现路径、分组导入、名称/描述与行尾开关。按 pi-GUI 原版 MCP 的主次顺序把「市场 / 新建」收入页头，扫描与项目选择相邻；不造上游产品的内置技能。 |
+| 技能市场 | [市场原图](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/.github/pr-assets/skill-market/01-skill-browse.png)、本地 REF-009；[SkillMarketPanel](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/apps/desktop/src/components/settings/SkillMarketPanel.tsx#L767-L841) | 按原图核对返回、来源、搜索、分类、两列图标卡片与预览。只保留一个市场标题；标签不伪造「已验证」。已装条目仍可查看，安装须先预览。 |
+| 已安装扩展 | [上游已安装原图](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/docs/public/screenshots/app/zh/plugins-live.webp)；[PluginsPage](https://github.com/vastsa/PI-Desktop/blob/7b8c316906ed49871f5ef0db1b3ae9bd52fe82ba/apps/desktop/src/pages/PluginsPage.tsx#L49-L181) | 对照分页签、搜索、整宽分组行、异常文字、尾部操作。标题跟 pi-GUI MCP；不复制上游宿主的作用域菜单或自动更新。 |
+| 插件市场 | 用户的 v0.23.0 深色截图（不发布其个人侧栏）；同版本 [PluginsPage 页头](https://github.com/vastsa/PI-Desktop/blob/95df2e0f9d124ba281fc99e6700ca6649766c77e/apps/desktop/src/pages/PluginsPage.tsx#L49-L75)、[MarketplacePanel](https://github.com/vastsa/PI-Desktop/blob/95df2e0f9d124ba281fc99e6700ca6649766c77e/apps/desktop/src/features/plugins/MarketplacePanel.tsx#L51-L109)、[网格、正文与底栏 CSS](https://github.com/vastsa/PI-Desktop/blob/95df2e0f9d124ba281fc99e6700ca6649766c77e/apps/desktop/src/styles/plugins.css#L1101-L1242) | 每列最小 272px、间距 12px、正文最多四行；圆形分类可再次点选取消，卡片和底栏按钮是独立焦点目标。复用 pi-GUI 的扩展图标和控件；npm 月下载数不等于安装数，关键词不等于权限，评分/评论无数据则不显示。 |
+
+原版 MCP 标题的实际值为 30px/700，大于设计系统一般页面的 20px/600。技能及已安装扩展沿用大标题；插件市场按 v0.23.0 的独立页签设计采用 16px 标题、24px 图标块和页头右侧刷新；不为统一而倒改 MCP，也不新增全局覆盖。控件沿用 `.btn`、Segmented、Select、Badge 和 Switch。实测浅色下旧成功徽标仅 2.86:1，故共享 Badge 提供可选文字色混合，**仅由技能、扩展及相应技能弹层选用**，其他调用点及 MCP 原色不变。合成真实前景与祖先底色后，「已加载」浅色为 6.02:1、深色为 7.43:1；技能 5 种和扩展 5 种常见标签在四组分别断言至少 4.5:1，详见下方测量，不外推到所有状态。
+
+### 本次真实渲染（离线夹具、DPR 1）
+
+| 尺寸 / 主题 | 技能列表 · 市场 | 已安装扩展 · 市场 | MCP 管理 · 市场（参照） |
+| --- | --- | --- | --- |
+| 1320×820 深 | [列表](ui/evidence/agent-capabilities-phase3/skills/1320-dark-list.png) · [市场](ui/evidence/agent-capabilities-phase3/skills/1320-dark-05-market.png) | [已安装](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-installed.png) · [市场](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-market.png) | [管理](ui/evidence/agent-capabilities-phase3/mcp/1320-dark-management.png) · [市场](ui/evidence/agent-capabilities-phase3/mcp/1320-dark-market.png) |
+| 1320×820 浅 | [列表](ui/evidence/agent-capabilities-phase3/skills/1320-light-list.png) · [市场](ui/evidence/agent-capabilities-phase3/skills/1320-light-05-market.png) | [已安装](ui/evidence/agent-capabilities-phase3/extensions/1320-light-installed.png) · [市场](ui/evidence/agent-capabilities-phase3/extensions/1320-light-market.png) | [管理](ui/evidence/agent-capabilities-phase3/mcp/1320-light-management.png) · [市场](ui/evidence/agent-capabilities-phase3/mcp/1320-light-market.png) |
+| 700×600 深 | [列表](ui/evidence/agent-capabilities-phase3/skills/700-dark-list.png) · [市场](ui/evidence/agent-capabilities-phase3/skills/700-dark-04-market.png) | [已安装](ui/evidence/agent-capabilities-phase3/extensions/700-dark-installed.png) · [市场](ui/evidence/agent-capabilities-phase3/extensions/700-dark-market.png) | [管理](ui/evidence/agent-capabilities-phase3/mcp/700-dark-management.png) · [市场](ui/evidence/agent-capabilities-phase3/mcp/700-dark-market.png) |
+| 700×600 浅 | [列表](ui/evidence/agent-capabilities-phase3/skills/700-light-list.png) · [市场](ui/evidence/agent-capabilities-phase3/skills/700-light-04-market.png) | [已安装](ui/evidence/agent-capabilities-phase3/extensions/700-light-installed.png) · [市场](ui/evidence/agent-capabilities-phase3/extensions/700-light-market.png) | [管理](ui/evidence/agent-capabilities-phase3/mcp/700-light-management.png) · [市场](ui/evidence/agent-capabilities-phase3/mcp/700-light-market.png) |
+
+- Skills：Chrome 真实 Renderer，44 张、0 页面异常；[测量](ui/evidence/agent-capabilities-phase3/skills/render.json)。各组技能标题 30px/700，分组 16px，页头按钮 32px，列表和市场内容区横向溢出 0px。[编辑](ui/evidence/agent-capabilities-phase3/skills/700-dark-02c-editor-edit.png) · [导入](ui/evidence/agent-capabilities-phase3/skills/700-light-03-import.png) · [扫描](ui/evidence/agent-capabilities-phase3/skills/700-dark-04b-external.png) · [预览](ui/evidence/agent-capabilities-phase3/skills/1320-dark-07-preview.png) · [成功](ui/evidence/agent-capabilities-phase3/skills/1320-dark-11-notice.png) · [空组](ui/evidence/agent-capabilities-phase3/skills/700-dark-05-empty.png) · [错误](ui/evidence/agent-capabilities-phase3/skills/700-light-06-error.png)。
+- Extensions：Electron 离线真实窗口，23 张，含[参考缩放下的市场实拍](ui/evidence/agent-capabilities-phase3/extensions/reference-scale-dark-market.png)（CSS 1204×804、DPR 1.5、PNG 1806×1206）；[测量](ui/evidence/agent-capabilities-phase3/extensions/render.json)。补测使用扩展通知真实入口注入两条合成长诊断，不含用户截图里的实际路径或消息。四组默认只占 **34px**；首条扩展从桌面 y=254.5px / 窄窗 y=284.5px 开始。Enter 展开原文、Tab 进入正文、PageDown 只滚正文，收起后不丢全文；没有提示时不占位。[桌面展开](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-run-notices.png) · [窄窗展开](ui/evidence/agent-capabilities-phase3/extensions/700-light-run-notices.png)。常规浏览截图在新运行、无提示时拍摄；数据是 13 个隔离夹具包，不将参考截图中的计数写入产品。市场在 1320/1010/700px 分别为三/二/一列，卡片圆角 16px、操作按钮 32px；桌面首排卡片宽 321px、高 221px，高度随文字变化。四组横向溢出 0px，六类市场文字的最低实测对比度深色 5.39:1、浅色 6.15:1。[筛选](ui/evidence/agent-capabilities-phase3/extensions/700-light-filtered.png) · [空结果](ui/evidence/agent-capabilities-phase3/extensions/700-light-empty.png) · [详情](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-detail.png) · [确认](ui/evidence/agent-capabilities-phase3/extensions/1320-dark-confirm.png) · [安装中](ui/evidence/agent-capabilities-phase3/extensions/700-light-installing.png) · [安装失败](ui/evidence/agent-capabilities-phase3/extensions/700-light-install-failed.png)。
+- MCP：`MCP_VISUAL_MATRIX=1 MCP_MARKET_PAGINATION=1 MCP_MARKET_PROGRESS=1 node tests/mcp-visual.cjs`。原版管理页四组标题 **30px/700**、按钮 32px、管理页溢出 0px；[测量](ui/evidence/agent-capabilities-phase3/mcp/render.json) · [新增](ui/evidence/agent-capabilities-phase3/mcp/700-dark-add.png) · [分页](ui/evidence/agent-capabilities-phase3/mcp/05d-market-narrow.png) · [安装预览](ui/evidence/agent-capabilities-phase3/mcp/04-install-preview.png) · [加载](ui/evidence/agent-capabilities-phase3/mcp/06-market-loading.png) · [不匹配](ui/evidence/agent-capabilities-phase3/mcp/700-light-empty-search.png) · [读取失败](ui/evidence/agent-capabilities-phase3/mcp/700-light-read-error.png)。管理页的测量不证明 MCP 市场在所有数据下无溢出。
+
+## 测试、构建与审查
+
+| 层次 / 命令 | 通过 | 失败 | 跳过 / 说明 |
+| --- | ---: | ---: | --- |
+| `npm run test:skills`，8 套件 | 1130 | 0 | 5 个环境 skip 不计入分母：2 个 POSIX 权限位、3 个无文件符号链接权限；UI 43/43 |
+| `npm run test:extensions`，3 套件 | 310 | 0 | 0 |
+| `npm run test:mcp`，7 套件 | 411 | 0 | 0（44+24+72+19+14+35+203） |
+| `node tests/agent-capability-pages.cjs` | 51 | 0 | 三页结构、状态和生命周期；新增市场元信息、底栏回焦和分类回退 |
+| `npm run test:primitives`，4 套件 | 116 | 0 | 具名检查；包括真实 Electron 样式 |
+| `node tests/server-security.cjs` / `capability-install.cjs` / `high-risk-regressions.cjs` | 44 / 83 / 28 | 0 | 隔离夹具 |
+| `node tests/extension-market-electron.cjs` / `node tests/shortcut-electron.cjs` | 70 / 103 | 0 | 23 / 35 张图，测试窗口不作为正常原生沙箱证明 |
+| `PI_BIN=… node tests/skills-live.cjs` | 32 | 0 | 真实 Pi 1.6.0，仅临时数据 |
+| `PI_BIN=… node tests/agent-capabilities-live.cjs` | 27 | 0 | 源码 HTTP 后端；另指定 `PI_GUI_LIVE_BACKEND` 实测打包后的 `server.cjs` |
+| `npm run build:app -- --rebuild` | — | 0 | 本机 Electron 44.4.3 ZIP 离线重建；Windows x64 整包 335.3 MB |
+| `npm run test:app` / `npm run test:exe` | 27 / 50 | 0 | Electron 打包后端与 SEA 单文件分别验证；非安装/升级验证 |
+
+产物位于本分支工作树 `dist-app/Pi GUI-win32-x64/`，不覆盖日常安装。把两模块全部文件、`app.js`、共享原语 CSS 和 MCP 参照资源同打包目录比对，**23/23 逐字节相同**；打包 `server.cjs` 与构建结果 SHA-256 都是 `f73859da6231c03ef39f094a3a372faf22eb792b567d11eb20ee33b087efb7d2`。
+
+首轮回归校正：扩展清单旧用例仍要求「没有简介」占位，48/49；改为断言无空段落但加载错误仍可见，49/49。旧桌面几何用例要求同组条目左右并列，按新需求等价替换为「整宽上下排列、展开详情不遮挡下行」，保留原 100 项，再加同一窗口从失败导入进入扩展和 MCP 的 3 项（103/103）。设计系统守卫拦下一处在技能页直接选择共享分段类的 CSS；改为仅给此实例安排换行，不放宽规则，四套件 116 项通过。
+
+### 独立复审与处置
+
+独立静态审查覆盖 `5ed42f3e..15d3eff2` 的状态与授权边界；另一次独立 UI 审查看了相对 `15d3eff2` 的页面、四组截图和上游依据。没有报告已证实的 Blocker。逐项对比 PR 实际代码，而非直接采纳审查摘要：
+
+| 发现 | 处置与证明 |
+| --- | --- |
+| MCP 报告与服务器摘要乱序（Important） | **已修复 `f08bff84`。** 测试扣住 `/api/mcp/servers`，让 `/api/mcp` 先返回：修前显示旧的「生效中」导致 34 通过 / 1 失败；修后先显示「原生状态未知」，随后显示新一轮「被扩展接管」，无额外 POST，35/35。未改布局。 |
+| 技能详情按钮/开关无法读到行尾加载状态 | **已修复 `3fa3d0f1`。** 两个焦点目标的 `aria-describedby` 指向本行已有徽标；配置开关的 `aria-checked` 不变。回归从 48/49 到 49/49。另在真实 Chromium 可访问性树读取了 button、switch 的 `description`，深浅主题均为「已加载」，未使用真实读屏软件。四组共 44 张，15 张归档图逐字节未变，测量未变。 |
+| 市场分类刷新时重建节点丢焦点 | **已核实，对本 PR 版本不成立。** 服务端返回固定的 `MARKET_CATEGORIES`，本版本 `syncControls` 仅在首次成功读取时创建分类。新增断言在刷新未完成时把键盘焦点放到「文档」；刷新后仍是同一焦点节点、同一选项和对应结果，43/43。未改市场业务代码。 |
+
+新增回归提交 `24fbc2b9`；独立审查不等同于合并批准。
+
+运行提示增量（产品 `2b04c3c1`、测试 `5523c8cb`）：旧页面的长消息用例先红（页面回归 48/49，期望折叠控件、实际是平铺 section）；改后 49/49，另外通知路由/生命周期 10/10、扩展三套件 310/310、共享原语 116 项通过。Electron 首轮键盘驱动只发送键码，没有模拟原生 Enter 的字符事件，未能展开；与仓库已有原生 `summary` 测试对齐输入方式，不更改产品键盘语义，该轮四组 45/45。
+
+**运行提示增量复审（Important，已修复）。** 对 `74955f2e..618c6c95` 的独立静态审查指出：提示区持有焦点时若因 Pi 重启而隐藏，焦点不再落在可见控件上。作者在真实 Electron 中复现；页面回归修前 48/49。`221b92b3` 只在提示区持有焦点时将其交还当前页签；`82b350c6` 覆盖摘要、正文、搜索三条路径以及切换项目。修后页面回归 49/49、真实 Electron 48/48（22 张图）、通知行为 10/10；没有改版式或全局通知路由。桌面重新构建后资源比对 23/23，打包后端 27/27、SEA 50/50。
+
+**完整证明待验证。** 首次本地 `npm test` 停在 `tests/high-risk-regressions.cjs` 的普通文件名 `report%20final.txt`：断言 `result.ok` 为 `false`（27/28）。上传模块、路由和该用例均不在分支 diff 内；单独复跑为 28/28。失败日志未给出具体请求错误，不能推定根因，也不能把重跑单套件当作全量通过。本地第二次 `npm test` 启动于复审增量之前，在 `tests/provider-config-store.cjs` 的 3 项 Windows 原生凭据文件保护断言失败，不记作通过。`66bd1b95` 的[完整 PR CI 45037241940](https://github.com/HYJ1817/pi-gui/actions/runs/45037241940) 已成功，包含运行提示和回焦修复，但不替代本次 v0.23.0 市场增量的证明。后者已通过定向和桌面渲染，最终提交的完整 CI 另记。v0.23.0 首轮高分屏截图验收识别到 `capturePage()` 返回逻辑尺寸 1204×804，改用 Chromium 物理像素截图并校验 PNG 尺寸；未放宽断言。
+
+边界：没有真实远端模型、OAuth、外部 Registry 安装、第三方 MCP 或安装程序升级测试；未在同版本上实际操作 PI-Desktop（使用了上游原图与当前源码）；未逐项覆盖任意字体放大、所有瞬时交互或所有可见颜色的 WCAG 对比度。Windows 文件符号链接的跳过项仍待有权限的环境复验。文件系统对象的外部并发替换保留[安全规范](security.md#技能写入与市场2a)所述边界。
+
+回滚：页面、UI 测试和材料可按提交分别反向回退；全分支撤销时在相同基线重新构建 `npm run build:app -- --rebuild`。不单独反转 MCP 的 `8afeb76a`（否则会把已撤销的外观重新引入）。代码回退不会修改用户已用 Pi 完成的包操作或技能文件。未经用户明确许可，不合并、不打 tag、不发布。
+
+## 2026-11-23 表面统一与四项验收
+
+用户在 Windows 桌面版实拍技能、扩展、MCP 三页后指出：分组、列表行和工具栏大量使用整圈 1px 边框和更亮的独立卡片表面，与设置里的「常规 / 快捷键 / 信息」不是同一种视觉语言。本轮以那三个页面为内部参照，在同一套共享 Token 与原语上整改；不引入第二套样式体系，不覆盖共享控件内部规则，也不改三个页面的后端业务实现。
+
+| 项 | 处置 |
+| --- | --- |
+| 表面与边框 | 行 / 卡片改用 `--ds-tile` + `--radius-md-plus`，去掉整圈边框；Hover / 键盘焦点 / 展开改在同一层底色上升一级。展开详情用 `--ds-raised` + 阴影，代码块保留 `--ds-bg-inset`。列内行距统一 6px。 |
+| 分组头 | 图标片去掉边框（`--ds-tile-deep`），分组标题统一 `--text-lg` / 600 / 主文字，条数统一为 18px 胶囊，路径统一 `--text-xs` + 次级文字。 |
+| 工具栏 | 技能、扩展、MCP 的搜索 / 选择 / 分段 / 开关继续复用公共原语。MCP 的私有筛选实现改为共享 `createSegmentedControl`，项目选择器改为 `.ds-select`；共享分段控件补齐 radiogroup 键盘语义（一个 Tab 停靠点、方向键 / Home / End、禁用项跳过），MCP 表单里的原生字段仍走原有 `.mcp-input` / `.mcp-select`。 |
+| 语义提示与空态 | 保留语义底色与 2px 左缘标记，去掉整圈边框；空态从虚线框改为瓦片。可操作控件（搜索、选择、开关）仍保留设计系统规定的低对比度边框，没有用 `border: none` 抹平，也没有降低文字对比度。 |
+| 按钮语义 | 「刷新插件市场」由 Primary 改为 Ghost（设计系统把刷新列在 Ghost 下），卡片安装 / 更新仍是 Primary；MCP 读取失败的「重试」由 Primary 改为默认 Secondary。 |
+| 技能加载状态 | 停用只写 settings，pi 重启前仍会加载。行徽标改为「已停用 · 重启前仍加载」（warning），详情写明「重启 pi 之后才会停止加载」；pi 已不再加载时仍是中性的「已停用」。 |
+| 旧错误残留 | 工作区换代时无条件作废旧清单与旧错误 / 诊断，即使上一次读取失败（`state.data === null`）也不再让上一个项目的错误留在页面上；「刷新」按新项目重新读取。 |
+| 扩展市场同步 | Pi 重启事件下，已挂载的每个页签都按新包清单重读；正开着的插件市场会更新已安装状态，保留搜索词与键盘焦点。新增回归覆盖重启与包清单变化。 |
+| MCP 市场窄窗溢出 | 700×600 的真实 Electron 渲染发现 MCP 市场卡片不收缩：网格项按 min-content 撑到 424px，超出 337px 的内容区（**既有缺陷**，不是本轮表面修改引入；修前截图可见右侧被裁）。 | `.mcp-market-card` 补 `min-width: 0`，卡片随网格收缩；修后表面滚动宽度 = 容器宽度（425 = 425），四组窗口无横向溢出。卡内信任来源仍按既有约定省略号截断，`title` 保留全文。 |
+
+### 复验
+
+真实渲染（离线夹具；Chromium DPR 1 与 Electron 44.4.3 DPR 1.5）：
+
+| 覆盖 | 结果 |
+| --- | --- |
+| 1320×820 / 700×600 × 深 / 浅，9 个页面 | 修改前 36 张、修改后 36 张；页面异常 0 |
+| 状态：Default / Hover / 键盘 Focus-visible / 指针 Focus / Pressed / Disabled / Loading / Empty / Error / Success / Selected | 修改后 19 张，含停用待重启（1320 与 700）、MCP 未信任禁用、市场选中分类与成功提示 |
+| 参照页 | 常规 / 快捷键 / 信息 × 深 / 浅共 6 张，修改前后 SHA-256 **逐字节相同（6/6）**，参照页面未被改动 |
+| 实际桌面窗口 | Electron 44.4.3，`force-device-scale-factor=1.5`；6 个页面 × 2 尺寸 × 2 主题 = 24 张；实测 `devicePixelRatio=1.5`，PNG 为物理像素（如 1320×820 → 1980×1230）；文档与 Work Surface 横向溢出 0，页面异常 0 |
+
+**表面度量（computed style，1320×820 深色，真实 Chromium）**
+
+| 元素 | 修改前 | 修改后 | 参照 |
+| --- | --- | --- | --- |
+| 技能行 `.skill-row` | 1px `--ds-border-default`，`rgb(40,40,40)`，12px | 0，`--ds-tile`（3.5%），14px | `.settings-row`：0，3.5%，14px |
+| MCP 行 `.mcp-server` | 同上 | 同上 | 同上 |
+| 扩展行 `.extensions-card` | 同上 | 同上 | 同上 |
+| 分组图标（三页） | 1px 边框，`rgb(33,33,33)` / 6% | 0，`--ds-tile-deep`（8%） | — |
+| MCP 分组标题 | 13.5px / 600 | 16px / 600 / 主文字 | 技能与扩展 16px |
+| 扩展分组标题颜色 | 70% 次级文字 | 主文字 | 技能与 MCP 主文字 |
+| MCP 项目选择器 | 32px，字段族 | 34px `.ds-select` | 设计系统通用 Select 34px |
+| 插件市场「刷新」 | 白底 Primary（`rgb(255,255,255)` / `rgb(24,24,24)`） | 透明 Ghost（70% 次级文字） | 设计系统把刷新列在 Ghost |
+| 技能 / MCP 搜索框 | 1px `--ds-border-input`，34px | 不变 | 公共搜索原语（控件边界保留） |
+
+Pressed 状态用 CDP 按住「新建」实测：`transform` 从 `none` 到 `matrix(0.980042, …)`，底色从 `rgb(255,255,255)` 到 `oklab(0.9051 …)`，松开后复原；鼠标点击不额外加焦点环。键盘 Focus-visible、指针 Focus、Disabled、Loading、Empty、Error、Success、Selected 均有截图。
+
+**测试**
+
+| 命令 | 结果 |
+| --- | --- |
+| `node tests/agent-capability-pages.cjs` | **55/55**（原 51；新增失败读取过期、停用待重启、市场重启同步、按钮语义 4 项） |
+| `node tests/mcp-management-ui.cjs` | **36/36**（新增范围筛选 radiogroup 键盘、焦点与读屏状态 1 项） |
+| `node tests/skills-ui.cjs` | **43/43** |
+| `npm run test:skills` | **1130 passed / 0 failed**（5 条环境 skip 未计入：2 个 POSIX 权限位、3 个无文件符号链接权限） |
+| `npm run test:extensions` | **310**（52 + 119 + 139） |
+| `npm run test:mcp` | **412**（44 + 24 + 72 + 19 + 14 + 36 + 203） |
+| `node tests/smoke.cjs` | **1346/1346** |
+| `node tests/ui-ia.cjs` | **32/32** |
+| `node tests/app-update-ui.cjs` / `node tests/system-settings.cjs` | **22/22** / **21/21**（共享分段控件的其它调用面） |
+| `npm run test:primitives` | primitives 全过（含新增 radiogroup 键盘用例）；design-system 阶段 A **6** + 阶段 B **34 PASS**；settings acceptance **19**；font picker **49/49** |
+| 完整 PR CI | `b4e19e68`（表面、四项修复与证据）8/8 通过；本次键盘增量的最终提交在报告更新后推送，CI 结果出来前记「待验证」。 |
+
+### 共享分段控件：键盘、焦点与兼容性复验（2026-11-23 追加）
+
+MCP 范围筛选保留共享实现；审计发现公共 `createSegmentedControl` 只有鼠标点击，没有 roving tabindex、方向键或 Home/End。按「公共组件的问题在其所有者处解决」补在 `public/ui/primitives.js`，并同步写进设计规范。真实 Chromium 实测（离线夹具，`filter-verify.json`）：
+
+| 项 | 实测 |
+| --- | --- |
+| 计数与切换 | 全部 4 / 全局 3 / 项目 1；点选或方向键切换后行数 4 → 3 → 1，切回 4；搜索时计数仍是全量 |
+| Tab | 整组一个停靠点，落在当前选中项（`tabIndex=0`，其余 `-1`）；Tab 离开后进入搜索框，不再逐个停留 |
+| 方向键 / Home / End | ArrowRight 依次 全部 → 全局 → 项目 → 回绕；ArrowLeft 反向回绕；Home/End 到首/末项；均同步 `aria-checked` 与列表 |
+| 焦点 | 键盘或鼠标切换后，重绘完成时焦点仍在同一筛选（`data-focus-key="filter:user"`）；`setValue` 不抢焦点 |
+| 读屏 | AX 树：`radiogroup` 名称「按范围筛选」；三个 `radio` 名称「全部 4 / 全局 3 / 项目 1」；任一时刻只有一个 `checked=true` |
+| 主题与窄窗 | 深 / 浅色、1320×820 与 700×600 均可操作；700 浅色方向键切换正常，分段控件横向溢出 0 |
+| 150% 字体 | 分段组 240×32、单项 77×26、文字行高 25px（未裁切）；700 窄窗工具栏 `scrollWidth = clientWidth = 337` |
+| 其它调用面 | 技能作用域 / 市场分类 / 编辑器页签、外观字号、应用更新偏好、系统关闭行为共用该控件；对应套件 1130 / 43 / 22 / 21 / 1346 / 32 全部通过 |
+| MCP 配置与服务器管理 | `npm run test:mcp` 七套件 412 项全过（配置读写、启停、测试连接、详情、导入、市场、原生契约） |
+
+证据：[键盘焦点](ui/evidence/agent-capabilities-surface/after/filter-tab-focus-1320x820-dark.png) · [方向键选中全局](ui/evidence/agent-capabilities-surface/after/filter-arrow-user-1320x820-dark.png) · [700 浅色](ui/evidence/agent-capabilities-surface/after/filter-keyboard-700x600-light.png) · [150% 字体](ui/evidence/agent-capabilities-surface/after/filter-font150-700x600-dark.png) · [逐项数据](ui/evidence/agent-capabilities-surface/filter-verify.json)。
+
+截图：[修改前](ui/evidence/agent-capabilities-surface/before/) · [修改后](ui/evidence/agent-capabilities-surface/after/) · [Electron DPR 1.5](ui/evidence/agent-capabilities-surface/electron/)；逐项度量与哈希见 [render.json](ui/evidence/agent-capabilities-surface/render.json)。完整 55 张修改后截图（36 页面 + 19 状态）与 manifest 留在本地 `.shots/capability-pages/`，仓库只保留 71 张代表图（含 MCP 市场 700×600 的修改前后）。
+
+构建与产物：`npm run build:app -- --rebuild` 成功（Electron 44.4.3，Windows x64，整包 335.3 MB，版本 0.34.0）；`dist-app/Pi GUI-win32-x64/resources/app/public` 与源码 `public/` **243/243 逐字节相同**（缺失 0、多余 0、内容不同 0）。没有改 `server/`，未重跑打包后端专项。Electron 取证窗口用 `--no-sandbox` 在离线夹具上渲染，**不作为正常原生沙箱或安装/升级证明**。本轮定向验证通过；完整 PR CI 结果出来前记「待验证」。本地未跑完整 `npm test`（按测试政策以 PR CI 作为 canonical 证明）；`test:exe` 也未单独运行。
+
+## 产品 UI 整改：项目选择器、MCP 状态与已知能力归属（2026-11-23 追加）
+
+**结论：开发完成；定向测试、真实 Chromium / Electron 渲染与打包检查已通过；完整 PR CI 待验证。未合并、未发布。**
+before HEAD `324786c1`；本轮行为提交与报告提交分开记录，报告自身以
+`git log -1 --format=%H -- docs/agent-capabilities-phase3-final-acceptance.md` 定位。
+
+### 范围
+
+| 改动 | 实现 |
+| --- | --- |
+| 统一项目选择器 | 新增 `public/ui/project-picker.js`：复用 `ui/anchored-menu.js` 的 portal / 翻转 / 视口夹取，触发器沿用设置字段表面；方向键 / Home / End / Enter / Escape / Tab、`aria-haspopup="listbox"` / `aria-selected`；鼠标不显示浏览器焦点环，键盘保留 `--ds-focus`。技能页与 MCP 页都换成同一个控件，原异步切换、失效守卫与「不指定项目」保留。 |
+| MCP 能力报告 | 删除 `public/mcp-report.js` 与 `mcp.css` 的页尾报告样式；管理页不再请求 `/api/mcp`，也不再创建报告生命周期。服务端 `/api/mcp`、`mcp-capabilities.js` 与诊断页的 Native MCP / 兼容矩阵保留。 |
+| MCP 重复警告 | 原生状态是整页事实，不再写进每个 server 的 `effective.reason` 展示：`replaced` 只在页头留一行 `mcp-page-status`；`disabled` / `unsupported` 保留一条真实警告；每行状态只来自配置 / 运行事实，状态标签只出现在右侧 pill，meta 只补工具数 / 错误等细节。 |
+| 已知能力 | 移除扩展页独立的「已知能力」折叠区、Approval 技术报告与 `.ext-known*` 样式。已安装能力在自己的包详情内展示 setup；未安装包仍在插件市场的受控目录里安装 / 更新；审批流程本身未改。 |
+
+### 功能迁移清单
+
+| 原有操作 | 新入口 / 状态 |
+| --- | --- |
+| 技能页切换查看项目、选「不指定项目（只看全局）」 | 技能工具栏「项目」共享 listbox；选项仍来自 `/api/skills` 的 `projects`，切换仍重新读取，读取中禁用，项目失效仍回到当前项目 |
+| MCP 页切换项目 | MCP 工具栏「项目」共享 listbox；仍调用 `activateProject`，切换中禁用；无项目列表时显示当前项目且不可打开 |
+| 添加 / 编辑 / 删除 / 测试 / 启停 / 市场 / 导入 / 扫描 MCP server | 不变，仍在 MCP 管理页 |
+| 查看 MCP 版本、built-in、RPC、ExtensionAPI、扩展目录 | 诊断页 Native MCP / 兼容矩阵与服务端 `/api/mcp`；管理页不再常驻 |
+| Web Access / Subagents / Pi Memory / Browser Use 的安装 | 未安装：扩展 › 插件市场，受控目录 + 确认框；安装 / 更新 / 卸载仍走服务端包清单与官方 CLI |
+| 上述四项的运行观察、限制、出处 | 已安装包卡片 › 详情内的嵌入 setup |
+| Approval / Permission 的协议证据 | `docs/security.md` 的审批边界与开发文档；产品入口仍是 `extension_ui_request` 审批流（允许 / 拒绝 / 超时 / 工作区隔离未改） |
+| 内置 MCP 被扩展接管 | MCP 页头一条静态运行说明；不再逐行黄色警告 |
+
+删除的纯说明 UI：MCP 页尾能力报告、扩展页「已知能力」分组、Approval 技术报告、每个 server 行重复的原生状态与 meta 重复标签。保留的诊断能力：`/api/mcp`、`/api/approvals/capability` 服务端探测、诊断页 Native MCP / 兼容矩阵 / Extension 版本、`server/capability-install.js` 与包操作锁、`ui/capability-setup.js` 的嵌入渲染。
+
+### 验证
+
+| 命令 / 场景 | 结果 |
+| --- | --- |
+| `node tests/agent-capability-pages.cjs` | **55/55**：共享 picker 打开 / 方向键 / Home / End / Escape / Tab、选中请求、读取中禁用、项目列表重绘与焦点归还；扩展页无已知能力区、已安装包详情仍有 setup、市场仍有四个已知包安装入口；MCP 页不再请求 `/api/mcp` |
+| `node tests/mcp-management-ui.cjs` | **40/40**：项目选择器多项目 / 无项目 / 重绘 / 焦点归还、原生 `replaced` 只出现一次、运行时刷新失败只在页顶说一次、行内状态不重复、报告移除、启停 / 删除 / 新增 / 市场无回退、关闭页移除 Pi 就绪监听 |
+| `node tests/skills-ui.cjs` / `node tests/smoke.cjs` | **43/43** / **1337/1337** |
+| `node tests/approvals.cjs` | **80/80**（删除 5 条已移除的 setup UI 断言；审批流程断言未减） |
+| `npm run test:skills` / `test:extensions` / `test:mcp` | 全部通过；最后套件分别 43/43、139/139、203/203 |
+| `node tests/capability.cjs` / `capability-install.cjs` | **74/74** / **83/83** |
+| `web-access` / `subagents` / `memory` / `browser` | **66/66** / **141/141** / **235/235** / **215/215** |
+| `extension-packages` / `extension-market` | **119/119** / **139/139** |
+| `npm run test:primitives` | primitives / design-system（阶段 A **6** + 阶段 B 通过）/ settings acceptance **19** / font picker **49/49** |
+| `node tests/modules.cjs` / `file-size-report.cjs` / `ui-ia.cjs` | **121/121** / **11/11** / **32/32** |
+| `node tests/shortcut-electron.cjs` | **104/104**，35 张真实 Electron 截图 |
+| `node tests/capability-pages-visual.cjs --tag=ui-final` | **57** 张截图、**19** 条 computed style、0 页面异常 |
+| `node tests/capability-pages-electron.cjs --tag=ui-final` | **56** 张、**48** 条测量、0 renderer error（1320×820 / 700×600、深 / 浅、125% / 150% 字体、项目菜单打开态） |
+| `npm run build:app -- --rebuild` | 335.3 MB；`dist-app/.../resources/app/public` 与源码逐字节比较 **0 差异** |
+| `npm run build:exe` | 101.6 MB；`build/icon.ico` 由随后的 `build:app` 重新生成 |
+| `npm run test:app` / `CHECK_PORT=17897 npm run test:exe`（工作区 TEMP + fixtures） | **27/27** / **50/50** |
+
+真实渲染证据（仓库代表图）：[技能项目菜单 1320 深](ui/evidence/agent-capabilities-phase3/ui-final/state-skills-project-menu-1320x820-dark.png) · [MCP 项目菜单 1320 深](ui/evidence/agent-capabilities-phase3/ui-final/state-mcp-project-menu-1320x820-dark.png) · [技能菜单 700 浅](ui/evidence/agent-capabilities-phase3/ui-final/skills-list-project-menu-700x600-light.png) · [MCP 菜单 700 浅](ui/evidence/agent-capabilities-phase3/ui-final/mcp-list-project-menu-700x600-light.png) · [技能 125% 字体](ui/evidence/agent-capabilities-phase3/ui-final/skills-list-font-125-1320x820-light.png) · [技能 150% 字体 / 700](ui/evidence/agent-capabilities-phase3/ui-final/skills-list-font-150-700x600-light.png) · [MCP 125% 字体](ui/evidence/agent-capabilities-phase3/ui-final/mcp-list-font-125-1320x820-dark.png) · [MCP 150% 字体 / 700](ui/evidence/agent-capabilities-phase3/ui-final/mcp-list-font-150-700x600-dark.png) · [MCP 管理页无报告](ui/evidence/agent-capabilities-phase3/ui-final/mcp-list-1320x820-dark.png) · [扩展已安装无已知能力区](ui/evidence/agent-capabilities-phase3/ui-final/extensions-installed-1320x820-light.png)。完整截图与 manifest 在 `.shots/capability-pages/ui-final{,-electron}/`。
+
+### 边界、风险与回滚
+
+- 未运行完整本地 `npm test`；按测试政策以最终 PR CI 作为 canonical 证明，CI 结果出来前记「待验证」。
+- Electron 取证窗口用 `--no-sandbox` 在离线夹具上渲染，不作为正常原生沙箱或安装 / 升级证明；真实 Pi、OAuth、第三方包安装未在本轮重复。
+- 共享项目选择器的真实视觉只在 Windows Electron / Chromium 上核对；未覆盖其它平台的系统字体与 DPI。
+- 回滚：本轮是独立的前端 / 测试 / 文档提交，可整体 revert；无数据迁移、无 MCP 配置写入格式变化、无依赖变更。后端 `/api/mcp` 与能力安装接口未删除，回滚后旧报告数据仍可取。
+- 待用户决定：是否接受本轮整改、是否允许后续合并；合并与发布分别授权，本轮不自动合并或发版。
+
+## 表单下拉统一为共享 listbox（2026-11-23 追加）
+
+**结论：开发完成；定向 jsdom、真实 Electron 渲染、打包检查已通过；完整 PR CI 待验证。未合并、未发布。**
+行为提交 `123a162c`（共享选择器与四处替换）、`6db80c8f`（测试与取证）；
+本报告提交以 `git log -1 --format=%H -- docs/agent-capabilities-phase3-final-acceptance.md` 定位。
+
+### 范围与适配判断
+
+| 控件 | 原实现 | 适配判断 | 处理 |
+| --- | --- | --- | --- |
+| MCP 服务器表单 · exposure | 原生 `select`，空白项 + codemode / deferred / direct / hidden | 适合：单值闭集，选择只改 `draft.exposure` | 改共享 listbox；空白项仍按「继承全局（不覆盖）」/「不显式设置（Pi 默认 codemode）」区分，值仍是 `''` / `EXPOSURES`，校验与保存请求不变 |
+| 技能新建 · 保存位置 | 原生 `select`，writable targets +「没有可写的位置」 | 适合：单值闭集 | 改 `skills/target-picker.js`；默认目标仍是 `targets[0]`，切换后仍触发 `renderTargetNotice` 与 `scheduleCheck(0)` |
+| 技能导入 · 保存位置 | 同上 | 适合 | 同上；提交请求的 `target` 仍是所选 target key |
+| 技能市场预览 · 安装到 | 同上 | 适合 | 同上；`targetKey` 仍只随选择更新，安装请求体不变 |
+
+未替换、也**没有改业务语义**的原生 `select`：MCP 的保存范围 / 命令来源 / 导入保存范围、技能的三处冲突策略、外部工具导入的目标与冲突策略。它们不在本次指定的四个控件内；写入范围类控件还依赖单个 `option` 的 `disabled`（项目未信任时不可选），而共享 listbox 当前没有选项级禁用，因此保留原生实现。
+
+### 实现
+
+- `public/ui/picker.js`：从项目选择器抽出的通用单选 listbox。复用 `ui/anchored-menu.js` 的 body 门户、翻转 / 视口夹取、Escape / Tab 关闭与焦点归还；键盘支持方向键、Home / End、Enter / Space；`aria-haspopup="listbox"`、每个选项 `role="option"` / `aria-selected`；触发器和选项只用 `:focus-visible` 画 `--ds-focus`，鼠标选择不留系统白框。
+- `public/ui/project-picker.js`：改为薄包装，保留 `.project-picker*` 类名、`fallbackLabel: '当前项目'` 与原有 API；技能 / MCP 项目切换行为不变。
+- `public/skills/target-picker.js`：新建 / 导入 / 市场安装共用「写到哪里」；选项文案仍为「项目 / 全局 · 目录」，value 仍是 target key，无目标时保留「没有可写的位置」占位。
+- 生命周期：picker 的菜单挂在 `body`，表单重绘或对话框关闭时显式 `destroy()`，避免锚点被摘掉后残留门户节点；picker 字段用 `div` 包装，避免 `label` 点击与按钮点击叠成两次开合。
+- `ui/anchored-menu.js` 的 Tab 分支补 `stopPropagation()`，菜单开着时由菜单先处理 Tab，不再和模态框焦点陷阱在同一键上重复处理。
+
+### 验收反馈修正（2026-11-23 追加）
+
+用户在本地 Electron 产物验收时指出：MCP 市场的「Registry 刷新失败」仍画成一条黄色横幅，并把代理线路 / 错误码等诊断细节直接铺在界面上。对照
+[设计规范的内容克制要求](ui/design-system.md) 与本轮「清理不必要左缘黄线、重复边框和冗余说明」的约束，确认这是本轮遗留问题，修正如下：
+
+- `public/mcp-market.js` 的旧缓存状态改为一行 `role="status"`：`正在后台刷新…` 用时钟图标，`Registry 刷新失败…` / `正在显示上次成功加载的缓存` 用警告图标。不再使用 `.mcp-banner`，没有底色、左缘条或整圈边框；刷新失败原因（`proxy-blocked`、代理线路、原始错误文案）只留在接口响应与日志，不再进入界面。后台轮询、失败后停止轮询、本地请求失败与上游刷新失败分开措辞的行为不变。
+- `public/ui/picker.js` 的触发器 `aria-label` 改为「字段名，当前：选中值」，并随 `paintTrigger()` 更新；原生 `select` 会连同字段与选中项一起播报，静态标签会丢掉值。项目选择器与四处表单选择器共用这一修正。
+- `public/mcp.css` 把 MCP exposure 触发器的高度、底色与字号对齐同表单的 `.ds-input`（32px、`--ds-field-inset-bg`、`--text-sm`），菜单选项同字号；此前触发器是 34px 白底、菜单 13px，和相邻字段不一致。
+- `tests/visual-harness.cjs` 新增 `MCP_MARKET_STALE=1` 夹具：返回旧目录 + `refreshError`，用于真实渲染取证；`tests/mcp-visual.cjs` 与 `tests/capability-pages-electron.cjs` 在该模式下断言状态行无横幅底色 / 左缘条、不泄露夹具诊断文案。
+
+### 技能页底部滚动（2026-11-23 追加）
+
+用户在本地 Electron 产物里发现技能页滚到底后最后一个分组贴住窗口下边缘，空状态瓦片像是被截断。复现与测量确认：内容溢出时，Chromium 没有把「固定高度 flex 子项之后的滚动容器 padding-bottom」算进可滚动高度，页面虽然到达 `scrollTop` 最大值，最后一张卡片仍然紧贴视口底部，没有留白。
+
+修正：`public/skills/skills.css` 给 `.skills-content` 自身加 `padding-bottom: var(--ui-space-6)`，让留白成为内容高度的一部分，而不是依赖外层滚动容器的 padding。页面结构、分组顺序和业务数据不变。
+
+回归：`tests/skills-visual.cjs` 在 700×600 滚到底后断言「已到最大 scrollTop」且最后分组与窗口底部间距 ≥ 24px，并新增 `01b-list-bottom` 截图；`tests/capability-pages-electron.cjs` 在真实 Electron 的 700×600 深 / 浅两套窗口重复同一断言。修正前该间距为 0（贴边），修正后实测约 32px。
+
+### 验证
+
+| 命令 / 场景 | 结果 |
+| --- | --- |
+| `node tests/mcp-management-ui.cjs` | **41/41**：exposure 选项集合与回填、点击 / 方向键 / Home / End / Enter、Escape / Tab 归还焦点且不关表单、重绘与取消无残留菜单、选择不写配置；保存请求的 `exposure` 不变；旧缓存状态行不带横幅类、不出现原始 `refreshError` / 本地请求细节，刷新完成或切换来源后消失 |
+| `node tests/skills-ui.cjs` | **44/44**：新建 / 导入 / 市场安装三处目标选择器的提交 `target` 与所选一致，不再有原生 `select`；键盘移动与关闭后无残留；可访问名称带当前目标位置 |
+| `node tests/agent-capability-pages.cjs` | **55/55**：项目选择器回归未受通用引擎抽取影响；项目选择器可访问名称带当前值 |
+| `node tests/capability-pages-electron.cjs --tag=skills-scroll-final`（`MCP_MARKET_STALE=1`） | **70** 张、**48** 条测量、0 renderer error；8 组 pickerProofs 覆盖 4 个控件 × 2 组窗口（1320×820 深 / 700×600 浅），真实方向键移动后 Enter 选择，菜单父节点为 `body`、矩形不越出视口；MCP exposure 触发器实测 **32px / 与同表单 `.ds-input` 同底色**；4 张旧缓存状态图断言无底色、无左缘条、单行高度且不含夹具诊断文案；700×600 深 / 浅技能列表滚到底后最后分组与窗口底部间距 ≥ 24px |
+| `MCP_MARKET_STALE=1 node tests/mcp-visual.cjs` | **6** 张（含 `03c-market-stale.png`）；Chromium 实测状态行背景透明、`border-left: 0`、不含夹具错误文案 |
+| `node tests/skills-visual.cjs` | **46** 张、0 页面异常（选择器定位跟到 `data-field="target"`；700×600 滚到底后间距 ≥ 24px，新增 `01b-list-bottom`） |
+| `npm run test:skills` / `npm run test:mcp` | 两组全部通过；末套件分别 **44/44**、**203/203** |
+| `node tests/smoke.cjs` | **1337/1337** |
+| `npm run test:primitives` | 通过；font picker **49/49**（含 picker 菜单为固定层的断言） |
+| `node tests/modules.cjs` / `file-size-report.cjs` / `ui-ia.cjs` | **121/121** / **11/11** / **32/32** |
+| `npm run build:app -- --rebuild` / `npm run test:app` | 构建成功；`dist-app/.../resources/app/public` 与源码逐字节比较 **0 差异**；**27/27** |
+| 完整 PR CI | 待验证 |
+
+本轮没有改 `server/`、没有新增依赖、没有改变 MCP 配置写入格式或技能安装目标。按测试政策不重复跑完整本地 `npm test`，以 PR CI 作 canonical 证明；`test:exe` 未单独重跑（纯前端与测试改动）。
+
+真实渲染证据（Electron 44，DPR 1.5，仓库代表图）：[MCP exposure 深 / 宽](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-exposure-menu-1320x820-dark.png) · [MCP exposure 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-exposure-menu-700x600-light.png) · [技能新建目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-editor-target-menu-1320x820-dark.png) · [技能新建目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-editor-target-menu-700x600-light.png) · [技能导入目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-import-target-menu-1320x820-dark.png) · [技能导入目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-import-target-menu-700x600-light.png) · [市场安装目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-market-target-menu-1320x820-dark.png) · [市场安装目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-market-target-menu-700x600-light.png) · [旧缓存失败状态 深](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-market-stale-1320x820-dark.png) · [旧缓存失败状态 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-market-stale-700x600-light.png) · [技能页滚到底 深](ui/evidence/agent-capabilities-phase3/skills-scroll/skills-list-bottom-700x600-dark.png) · [技能页滚到底 浅](ui/evidence/agent-capabilities-phase3/skills-scroll/skills-list-bottom-700x600-light.png)。逐项数值见 [manifest-electron.json](ui/evidence/agent-capabilities-phase3/ui-pickers/manifest-electron.json)。
+
+### 边界与回滚
+
+- 真实视觉只在 Windows Electron / Chromium 上核对，未覆盖其它平台的系统字体与 DPI。
+- Electron 取证窗口用 `--no-sandbox` 在离线夹具上渲染，不作为正常原生沙箱或安装 / 升级证明。
+- 回滚：分别 revert `123a162c`、`6db80c8f` 即可回到原生 `select` 与旧项目选择器实现；本轮验收反馈修正（市场状态行、可访问名称、exposure 对齐）尚未提交，提交后可按同一回滚边界 revert。无数据迁移、无依赖变化。文档与证据是独立提交。
+
