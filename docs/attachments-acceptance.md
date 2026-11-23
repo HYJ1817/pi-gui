@@ -43,7 +43,7 @@ T3 仓库许可证为 MIT、Copyright © 2026 T3 Tools Inc.；本次借鉴机制
 
 | 项目 | 实现与证据 |
 | --- | --- |
-| 音频格式 | `MIME_BY_EXT` 增加 MP3／WAV／M4A／M4B／AAC／FLAC／OGG／OGA／OPUS／WEBA／WMA／AIFF；`attachmentFileType` 在 image 之前识别 `audio/*`，使用仓库自绘音频 glyph 与「音频」标签（`--ds-info`）。仍按原文件引用上传和发送，未增加转写、播放或模型音频输入。 |
+| 音频格式 | `MIME_BY_EXT` 增加 MP3／WAV／M4A／M4B／AAC／FLAC／OGG／OGA／OPUS／WEBA／WMA／AIFF；`attachmentFileType` 在 image 之前识别 `audio/*`，使用仓库自绘音频 glyph 与「音频」标签（`--ds-info`）。jsdom 覆盖 7 种音频 fixture；Electron 真实上传 `示例音频.mp3` 后实测行为 `type=audio`、`icon=audio`、静态 `DIV`、`title="音频 · 示例音频.mp3 · 74 B"`、无媒体预览，发送正文只有原文件引用。仍按原文件引用上传和发送，未增加转写、播放或模型音频输入。 |
 | 主流文件分类 | 补齐 DOC／PPT／XLS 旧格式、ODF、RTF、CSV／TSV、TXT／LOG／JSON／JSONL／XML／YAML／HTML／CSS、RAR／7Z／TAR／GZ／TGZ／BZ2／XZ 及更多图片／视频扩展名。分类只决定呈现图标、标签与媒体行；是否已解析仍由服务端 `kind`／`text`／`error` 决定，PPTX／XLSX／压缩包／音视频不会因扩展名被描述为已读取。 |
 | 文件信息行 | 普通文件信息行改为静态 `DIV`，类型 · 名称 · 大小放在 `title`；点击不再打开内容重复的 Popover。媒体缩略图仍是唯一预览入口；静态行不进入 Tab 顺序。发送守卫、状态行 `aria-describedby` 与移除回焦保持。 |
 | 真实 MP4 | Electron 用 Chromium `MediaRecorder` 真实录制 H.264 MP4（`video/mp4;codecs=avc1.42E01E`），上传后核对原字节与 `ftyp`，缩略图 160×90、像素差 min 7／max 200，预览 `videoWidth=320` 且时长约 1 秒；移除后回焦 Attach，发送正文只含原文件路径，不产生图片内容。 |
@@ -91,7 +91,7 @@ Windows 11 x64，Node 24.22.1，Electron 44.4.3 / Chromium 152.0.7977.130。所�
 | 原地 `node tests/smoke.cjs` | **1332/1339**；7 条失败均为工作区另一路未完成的 `tool-view.js`／`classic-execution-view.js` 时间线 SVG／HTML 注入，与本 diff 无关，不计入通过结论 |
 | 隔离副本 `node tests/ui2-classic.cjs` | **55/55**；原地 **52/55**，3 条失败同样是另一路时间线折叠状态／焦点改动 |
 | `node tests/ci-test-plan.cjs` | 319 个 canonical leaves 精确覆盖 5 组，无重复／漏项 |
-| `npm run test:attachments:electron` | **77/77**，32 张真实截图；证据 `%TEMP%/pi-attachments-i2r5iY/evidence/results.json`。新增真实 MP4 缩略图／预览／移除／发送与未知 fourcc 降级检查，原有 WebM／文档／布局／对比度断言全部保留 |
+| `npm run test:attachments:electron` | **80/80**，33 张真实截图；证据 `%TEMP%/pi-attachments-MddyQu/evidence/results.json`。新增真实 MP4 缩略图／预览／移除／发送、未知 fourcc 降级和音频行渲染／真实字节／发送检查，原有 WebM／文档／布局／对比度断言全部保留 |
 | 本轮 `npm run build:app -- --rebuild` 与 App/SEA 打包 | **未运行**。工作区仍混有另一路未完成的 `public/tool-view.js`、`classic-execution-view.js`、`runtime-conversation.css` 等改动，现在重建会把那一路带进产物；最终源码仍需跑源码版。上一轮 38/38 的打包证据早于本轮，不能代表最终状态 |
 | 第一轮独立复审 | **不通过**；1 阻断 + 3 应处理 + 2 建议，已逐项修复，见上表 |
 | 第二轮独立复核 | **0 阻断 + 4 项非阻断建议**，已全部处置；修复后附件／创作器／模型／回归套件复跑通过 |
@@ -102,11 +102,11 @@ Windows 11 x64，Node 24.22.1，Electron 44.4.3 / Chromium 152.0.7977.130。所�
 
 改造前截图：`%TEMP%/pi-attachments-YC2jaw/evidence/before-dark.png` 与 `before-light.png`。
 
-当前源码截图与测量（本轮 77 项检查）：`%TEMP%/pi-attachments-i2r5iY/evidence/results.json`，32 张全界面截图，另有直接 `capturePage(rect)` 的 Composer 区域截图（未合成像素）；代表：
+当前源码截图与测量（本轮 80 项检查）：`%TEMP%/pi-attachments-MddyQu/evidence/results.json`，33 张全界面截图，另有直接 `capturePage(rect)` 的 Composer 区域截图（未合成像素）；代表：
 
 - `reference-three-dark.png`、`reference-three-light.png` 与 `reference-composer-dark.png`、`reference-composer-light.png`：对齐用户截图的「视频＋PDF＋Word」场景，不出现托盘滚动。
 
-- `single-video.png`、`single-pdf.png`、`single-mp4.png`、`video-preview.png`、`mp4-preview.png`、`mp4-codec-fallback.png`、`mp4-preview-failure.png`、`image-preview.png`。
+- `single-video.png`、`single-pdf.png`、`single-mp4.png`、`single-audio.png`、`video-preview.png`、`mp4-preview.png`、`mp4-codec-fallback.png`、`mp4-preview-failure.png`、`image-preview.png`。
 - `dark-1320-mixed.png`、`light-1320-mixed.png`、`dark-700-mixed.png`、`light-700-mixed.png`。
 - `dark-file-hover.png`、`light-file-hover.png`、`dark-keyboard-focus.png`、`light-keyboard-focus.png`。
 - `*-many-zoom-0.8/1/1.25/1.5.png`、`font-scale-150.png`：24 个中文／英文长名称，局部滚动。
@@ -124,7 +124,7 @@ Windows 11 x64，Node 24.22.1，Electron 44.4.3 / Chromium 152.0.7977.130。所�
 - 默认仓库内 Electron 可执行文件首次 GUI 启动 exit 3；复制为唯一 TEMP 私有运行时后正常沙箱通过，未禁用沙箱。两者 electron.exe SHA256 均为 `bf0fe749904ca9f713ccfb2427c519fa39d0bbd0337ba411ba08785802e8d548`。
 - Electron 脚本先因等待自己扣住的 upload Promise 超时，修正只等待真实阶段；再修正 executeJavaScript 不可克隆函数返回值与 RGBA luminance 夹具计算。没有删检查或把失败改成 skip；首个成功完整矩阵为 62/62（`pi-attachments-Fr4ddx`）；补充参考截图三附件检查与真实缩略图像素检查后为 65/65，没有修改产品行为。第一轮复审修复后复跑为 66/66（`pi-attachments-XtX5pQ`），新增的是状态行几何检查，旧检查未删。
 - 第二轮修复后首次 Electron 运行 65/66：首帧缩略图在负载下抓到全黑画面（`min=0,max=0`），其余 65 项通过。按代码路径定位为 `seeked` 与合成帧呈现的竞态，未放宽断言；产品改为等待 `requestVideoFrameCallback`、250ms 兜底后再绘制。随后运行 66/66（`pi-attachments-2a6n8V`、`pi-attachments-g8uBIx`），补齐禁用媒体焦点边缘后最终源码再次 66/66（`pi-attachments-3GJt39`）。
-- 本轮真实 MP4 首次降级用例失败：把 `stsd` 样本项从 `avc1` 改成 `hvc1` 后，Chromium 仍通过 `avcC` 解码并生成缩略图（15/17，细节为 `thumbnail:true, placeholder:false`）。按用户要求没有把失败改成跳过；另写 TEMP Electron 探针逐项加载变体，确认 `zzzz`／`encv` 返回 `MEDIA_ERR_SRC_NOT_SUPPORTED`，而 `hvc1`／`av01` 仍可解码，随后把 fixture 改为未知 fourcc `zzzz`，完整运行 **77/77**。
+- 本轮真实 MP4 首次降级用例失败：把 `stsd` 样本项从 `avc1` 改成 `hvc1` 后，Chromium 仍通过 `avcC` 解码并生成缩略图（15/17，细节为 `thumbnail:true, placeholder:false`）。按用户要求没有把失败改成跳过；另写 TEMP Electron 探针逐项加载变体，确认 `zzzz`／`encv` 返回 `MEDIA_ERR_SRC_NOT_SUPPORTED`，而 `hvc1`／`av01` 仍可解码，随后把 fixture 改为未知 fourcc `zzzz`，完整运行 **80/80**；音频行真实渲染检查在同一轮通过。
 - 默认仓库内 Electron 可执行文件在当前会话再次以无输出方式退出；改用上一轮已校验的 TEMP 私有运行时（SHA256 相同）后正常完成，未禁用沙箱。
 - SEA 在系统 TEMP 的六种上传均被环境拒绝：`EPERM ... mkdir .../sea/.uploads`。App 同处正常。按既有测试政策，仅该专项设置独立仓库内 TEMP/TMP/TMPDIR 后 App/SEA 均 38/38，未修改产品路径守卫。成功证据位于 `.probe/attachment-package-temp-aGLNJZ/pi-attachments-packaged-brDP1i/results.json`；首次失败保留于系统 TEMP 的 `pi-attachments-packaged-NQQ5Ht`。
 - 离线构建使用已有 Electron 缓存，ZIP SHA256 `790a355b684d5c7cc8dc3cdd8c4cca7c4b2d054685427c7554a956879a82e70b`；包内 electron.exe 与已实测运行时摘要一致。既有 SEA 注入工具输出签名警告，构建 exit 0；这些开发产物不是已签名正式发布。
@@ -136,7 +136,7 @@ Windows 11 x64，Node 24.22.1，Electron 44.4.3 / Chromium 152.0.7977.130。所�
 - 图片格式判定只嗅探文件头，不做完整解码；BMP 额外校验文件／DIB 头结构，但伪造了合法头部的非图片仍可能在模型侧解码失败。BMP 仅接受常见 Windows DIB 头（40/52/56/64/108/124 字节）；OS/2 12 字节头等少见变体会保留为普通文件引用，不会作为 `ImageContent`。误标扩展名的真实图片会按实际字节的格式发送，消息里的文件名保持原样。
 - `pagehide`、移除、工作区／会话切换会中止在途上传并释放本地视频缩略图与预览；从 bfcache 恢复时用草稿里的原始 File 重建。服务端若已写完文件，仍由既有缓存清理负责。真正卸载页面后草稿不从磁盘恢复，这是原有边界。
 - 本次未验证真实模型、所有媒体编解码器、macOS/Linux、安装器／正式升级；正常沙箱证明仅限所记录私有运行时和这台机器。MP4 只覆盖本机 Chromium 可录制的 H.264 组合；HEVC／AV1／MOV 等真实文件、以及“未知 fourcc”之外的真实损坏形态未验证。
-- 音频只验证分类、图标、标签、真实字节上传与文件引用发送；没有音频播放器、转写、波形或模型音频输入。SVG／HEIC／AVIF／TIFF 显示为图片类型但只有本地预览，仍按文件引用发送。
+- 音频验证了分类、图标、标签、真实 Electron 行渲染、真实字节上传与文件引用发送；没有音频播放器、转写、波形或模型音频输入，也没有逐一渲染全部 13 个音频扩展名。SVG／HEIC／AVIF／TIFF 显示为图片类型但只有本地预览，仍按文件引用发送。
 - **本轮未重建 App/SEA。** 当前 `dist-app` 与 `build` 产物仍是本轮修复前的附件源码；工作区另有与本次无关、尚在变化的 `public/tool-view.js`、`public/classic-execution-view.js`、`public/runtime-conversation.css` 与未跟踪 `public/conversation-work-log.js`，现在重建会把那一路未完成改动一起带进产物，因此未执行。修复后的效果需跑源码版，或等那一路稳定后再重建；上一轮 38/38 的打包摘要不再代表最终源码。
 - 回滚：本次无数据 schema 迁移；提交后回退 `21a0f621`、`165a8ec6` 与本文档提交再重建即可。不执行整仓 reset/clean，不删除用户原有未跟踪文件。
 - 开发完成：实现与本地定向验证已完成，代码与测试已提交。
