@@ -1,0 +1,384 @@
+{
+  "tag": "ui-final",
+  "origin": "http://127.0.0.1:1725",
+  "generatedAt": "2026-11-23T03:45:17.663Z",
+  "viewport": {
+    "width": 1320,
+    "height": 820,
+    "deviceScaleFactor": 1
+  },
+  "shots": [
+    {
+      "name": "ref-general-1320x820-dark",
+      "bytes": 57911
+    },
+    {
+      "name": "ref-shortcuts-1320x820-dark",
+      "bytes": 67119
+    },
+    {
+      "name": "ref-info-1320x820-dark",
+      "bytes": 64855
+    },
+    {
+      "name": "skills-list-1320x820-dark",
+      "bytes": 68077
+    },
+    {
+      "name": "skills-market-1320x820-dark",
+      "bytes": 107233
+    },
+    {
+      "name": "extensions-installed-1320x820-dark",
+      "bytes": 63890
+    },
+    {
+      "name": "extensions-market-1320x820-dark",
+      "bytes": 117918
+    },
+    {
+      "name": "mcp-list-1320x820-dark",
+      "bytes": 92461
+    },
+    {
+      "name": "mcp-market-1320x820-dark",
+      "bytes": 106226
+    },
+    {
+      "name": "ref-general-700x600-dark",
+      "bytes": 42327
+    },
+    {
+      "name": "ref-shortcuts-700x600-dark",
+      "bytes": 42892
+    },
+    {
+      "name": "ref-info-700x600-dark",
+      "bytes": 38526
+    },
+    {
+      "name": "skills-list-700x600-dark",
+      "bytes": 47876
+    },
+    {
+      "name": "skills-market-700x600-dark",
+      "bytes": 50414
+    },
+    {
+      "name": "extensions-installed-700x600-dark",
+      "bytes": 45298
+    },
+    {
+      "name": "extensions-market-700x600-dark",
+      "bytes": 50790
+    },
+    {
+      "name": "mcp-list-700x600-dark",
+      "bytes": 46393
+    },
+    {
+      "name": "mcp-market-700x600-dark",
+      "bytes": 50629
+    },
+    {
+      "name": "ref-general-1320x820-light",
+      "bytes": 59859
+    },
+    {
+      "name": "ref-shortcuts-1320x820-light",
+      "bytes": 69760
+    },
+    {
+      "name": "ref-info-1320x820-light",
+      "bytes": 64461
+    },
+    {
+      "name": "skills-list-1320x820-light",
+      "bytes": 68931
+    },
+    {
+      "name": "skills-market-1320x820-light",
+      "bytes": 110522
+    },
+    {
+      "name": "extensions-installed-1320x820-light",
+      "bytes": 65172
+    },
+    {
+      "name": "extensions-market-1320x820-light",
+      "bytes": 115688
+    },
+    {
+      "name": "mcp-list-1320x820-light",
+      "bytes": 92723
+    },
+    {
+      "name": "mcp-market-1320x820-light",
+      "bytes": 104951
+    },
+    {
+      "name": "ref-general-700x600-light",
+      "bytes": 44140
+    },
+    {
+      "name": "ref-shortcuts-700x600-light",
+      "bytes": 44298
+    },
+    {
+      "name": "ref-info-700x600-light",
+      "bytes": 37944
+    },
+    {
+      "name": "skills-list-700x600-light",
+      "bytes": 48638
+    },
+    {
+      "name": "skills-market-700x600-light",
+      "bytes": 51209
+    },
+    {
+      "name": "extensions-installed-700x600-light",
+      "bytes": 46104
+    },
+    {
+      "name": "extensions-market-700x600-light",
+      "bytes": 51307
+    },
+    {
+      "name": "mcp-list-700x600-light",
+      "bytes": 46844
+    },
+    {
+      "name": "mcp-market-700x600-light",
+      "bytes": 50020
+    },
+    {
+      "name": "state-skills-row-hover-1320x820-dark",
+      "bytes": 68264
+    },
+    {
+      "name": "state-skills-project-menu-1320x820-dark",
+      "bytes": 76632
+    },
+    {
+      "name": "state-skills-search-focus-1320x820-dark",
+      "bytes": 69238
+    },
+    {
+      "name": "state-skills-row-focus-1320x820-dark",
+      "bytes": 69257
+    },
+    {
+      "name": "state-skills-loading-1320x820-dark",
+      "bytes": 39531
+    },
+    {
+      "name": "state-skills-empty-1320x820-dark",
+      "bytes": 55357
+    },
+    {
+      "name": "state-skills-error-1320x820-dark",
+      "bytes": 41436
+    },
+    {
+      "name": "state-skills-selected-1320x820-dark",
+      "bytes": 58986
+    },
+    {
+      "name": "state-skills-button-pressed-1320x820-dark",
+      "bytes": 68153
+    },
+    {
+      "name": "state-skills-search-pointer-focus-1320x820-dark",
+      "bytes": 69238
+    },
+    {
+      "name": "state-skills-success-1320x820-dark",
+      "bytes": 75197
+    },
+    {
+      "name": "state-skills-restart-pending-1320x820-dark",
+      "bytes": 68922
+    },
+    {
+      "name": "state-skills-restart-pending-700x600-dark",
+      "bytes": 47500
+    },
+    {
+      "name": "state-mcp-row-hover-1320x820-dark",
+      "bytes": 92555
+    },
+    {
+      "name": "state-mcp-project-menu-1320x820-dark",
+      "bytes": 99032
+    },
+    {
+      "name": "state-mcp-disabled-1320x820-dark",
+      "bytes": 99394
+    },
+    {
+      "name": "state-extensions-row-hover-1320x820-dark",
+      "bytes": 63975
+    },
+    {
+      "name": "state-extensions-market-selected-1320x820-dark",
+      "bytes": 66376
+    },
+    {
+      "name": "state-skills-row-hover-1320x820-light",
+      "bytes": 68980
+    },
+    {
+      "name": "state-skills-search-focus-1320x820-light",
+      "bytes": 70266
+    },
+    {
+      "name": "state-mcp-disabled-1320x820-light",
+      "bytes": 100051
+    }
+  ],
+  "computed": [
+    {
+      "label": "ref-settings-row",
+      "selector": ".settings-detail-card .settings-row",
+      "border-top-width": "0px",
+      "border-top-color": "rgb(238, 238, 238)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+      "border-radius": "14px"
+    },
+    {
+      "label": "ref-settings-card-title",
+      "selector": ".settings-detail-card .ds-settings-card-title",
+      "font-size": "13.5px",
+      "font-weight": "600",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "label": "ref-page-title",
+      "selector": ".settings-detail-card > h3",
+      "font-size": "30px",
+      "font-weight": "700",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "label": "skills-row-default",
+      "selector": ".skill-row",
+      "border-top-width": "0px",
+      "border-top-color": "rgb(238, 238, 238)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+      "border-radius": "14px"
+    },
+    {
+      "label": "skills-group-icon-default",
+      "selector": ".skills-group-glyph",
+      "border-top-width": "0px",
+      "border-top-color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)"
+    },
+    {
+      "label": "skills-search-default",
+      "selector": ".skills-search",
+      "border-top-width": "1px",
+      "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.05)",
+      "height": "34px"
+    },
+    {
+      "label": "skills-project-picker-default",
+      "selector": ".skills-project .project-picker-trigger",
+      "border-top-width": "1px",
+      "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+      "background-color": "rgb(33, 33, 33)",
+      "height": "34px"
+    },
+    {
+      "label": "skills-title",
+      "selector": ".skills-title",
+      "font-size": "30px",
+      "font-weight": "700"
+    },
+    {
+      "label": "skills-group-title",
+      "selector": ".skills-group-title",
+      "font-size": "16px",
+      "font-weight": "600",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "label": "mcp-row-default",
+      "selector": ".mcp-server",
+      "border-top-width": "0px",
+      "border-top-color": "rgb(238, 238, 238)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+      "border-radius": "14px"
+    },
+    {
+      "label": "mcp-group-icon-default",
+      "selector": ".mcp-group-icon",
+      "border-top-width": "0px",
+      "border-top-color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)"
+    },
+    {
+      "label": "mcp-search-default",
+      "selector": ".mcp-search",
+      "border-top-width": "1px",
+      "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.05)",
+      "height": "34px"
+    },
+    {
+      "label": "mcp-project-picker-default",
+      "selector": ".mcp-project-picker .project-picker-trigger",
+      "border-top-width": "1px",
+      "border-top-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)",
+      "background-color": "rgb(33, 33, 33)",
+      "height": "34px"
+    },
+    {
+      "label": "mcp-group-title",
+      "selector": ".mcp-group-title h4",
+      "font-size": "16px",
+      "font-weight": "600",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "label": "extensions-row-default",
+      "selector": ".extensions-card",
+      "border-top-width": "0px",
+      "border-top-color": "rgb(238, 238, 238)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+      "border-radius": "14px"
+    },
+    {
+      "label": "extensions-group-icon-default",
+      "selector": ".extensions-group-icon",
+      "border-top-width": "0px",
+      "border-top-color": "rgb(238, 238, 238)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.08)"
+    },
+    {
+      "label": "extensions-group-title",
+      "selector": ".extensions-group-title",
+      "font-size": "16px",
+      "font-weight": "600",
+      "color": "rgb(255, 255, 255)"
+    },
+    {
+      "label": "extensions-market-card",
+      "selector": ".extensions-market-card",
+      "border-top-width": "0px",
+      "border-top-color": "rgb(238, 238, 238)",
+      "background-color": "oklab(0.999994 0.0000455678 0.0000200868 / 0.035)",
+      "border-radius": "16px"
+    },
+    {
+      "label": "extensions-market-refresh",
+      "selector": ".extensions-refresh",
+      "background-color": "rgba(0, 0, 0, 0)",
+      "color": "oklab(0.999994 0.0000455677 0.0000200868 / 0.7)",
+      "border-top-width": "1px"
+    }
+  ],
+  "pageErrors": []
+}

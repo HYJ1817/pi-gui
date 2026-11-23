@@ -513,9 +513,11 @@ scope/状态机、list 合并与脱敏、动作 argv 与校验、stale、unsuppo
 收敛、代理凭据脱敏、重定向拒绝、
 关键 UI 交互（exposure 回填、安装 scope 继承、实际命令预览）与项目未信任降级。
 
-`test:ui`（smoke）另有 MCP 配置页与页尾「MCP 能力报告」的界面行为（原生状态横幅、server 行与
-运行时状态、启停 / 删除 / 新增 wiring、trust 提示与信任未知 fail closed、无凭据字段、报告展开前不读取）；
-报告的换项目提示与迟到结果丢弃见 `test:agent-capabilities`。拆分前「Skills 与扩展」里的 MCP 标签
+`test:ui`（smoke）另有 MCP 配置页的界面行为（原生状态不重复、server 行与
+运行时状态、启停 / 删除 / 新增 wiring、trust 提示与信任未知 fail closed、无凭据字段）；
+页尾能力报告已移除，管理页不再请求 `/api/mcp`。共享项目选择器的打开 / 键盘 / 选中 /
+禁用 / 项目列表变化见 `test:agent-capabilities` 与 `tests/mcp-management-ui.cjs`。
+拆分前「Skills 与扩展」里的 MCP 标签
 （server 列表 / 刷新 / 移除 / 添加）与配置页重复，已移除（见 [agent-capabilities.md](agent-capabilities.md)）。
 
 **live MCP 测试不进自动化 CI**（不能在测试里依赖真实网络 / 用户 pi 配置）。

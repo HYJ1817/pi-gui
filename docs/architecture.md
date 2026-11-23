@@ -112,10 +112,10 @@ P20.5 built-in 与 P20.6 原生状态）折成一张统一状态表。
 `public/ui/capability-setup.js` 是唯一一套 setup 布局，也是全仓库唯一的
 「安装后重启 Pi」实现（`confirmModal` → `ownsWorkspace(generation)` → `restartBackend()`）。
 P36 移除了独立的 `capability-view.js`；之后 `extensions.js` 的 Extensions / Skills / MCP
-三个标签又拆成三个独立入口（`public/extensions/`、`public/skills/`、MCP 配置页页尾的
-`mcp-report.js`，见 [agent-capabilities.md](agent-capabilities.md)），能力投影继续服务
-扩展页「已安装」顶部的「已知能力设置」折叠区（四个 feature + Approval 的 setup 渲染）。
-`server/extension-registry.js` **一个字节都没为 P22 改**：它继续 generic。
+三个标签又拆成三个独立入口（`public/extensions/`、`public/skills/`、`public/mcp-settings.js`，
+见 [agent-capabilities.md](agent-capabilities.md)）。能力投影继续服务扩展页：已安装的已知能力
+在自己的包详情里渲染 setup，未安装时由插件市场负责安装；Approval 的协议证据在安全文档中，
+不再单独渲染报告。`server/extension-registry.js` **一个字节都没为 P22 改**：它继续 generic。
 详见 [Capability UX](capability-ux.md)。
 
 ## P16 Web adapter
@@ -355,7 +355,7 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
 
 `tool-view.js` 一次 `innerHTML` 都不用（除自己写死的 SVG 图标常量），
 所有文本走 `textContent` —— 「记得转义」这件事不需要被记住。
-`extensions/`、`skills/`、`mcp-report.js` / `planner.js` 同样如此。理由见 [security.md](security.md)。
+`extensions/`、`skills/`、`mcp-settings.js` / `planner.js` 同样如此。理由见 [security.md](security.md)。
 
 ## 七、模块地图
 
@@ -516,8 +516,8 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
   设置缓存、手动「AI 生成标题」与任意会话重命名入口；经典会话行与
   `runtime-nav.js` 的并行会话行共用该入口与同一个后端服务，
   不重建列表、不改排序
-- `extensions/` 扩展页（「已安装」通用 Registry +「插件市场」占位）/ `skills/` 技能页
-  （列表、行内详情、新建 / 编辑、导入、扫描、市场）/ `mcp-report.js` MCP 配置页页尾的能力报告 /
+- `extensions/` 扩展页（「已安装」通用 Registry + 包清单，已安装能力在包详情内；「插件市场」安装 / 更新）/ `skills/` 技能页
+  （列表、行内详情、新建 / 编辑、导入、扫描、市场）/ `mcp-settings.js` MCP 管理页 /
   `ui/resource-dom.js` 三者共用的造节点工具
   （入口与归属见 [agent-capabilities.md](agent-capabilities.md)）/
   `planner.js` 任务面板 / `project-config.js` 项目设置
@@ -759,7 +759,8 @@ Memory / Subagent adapter 与 Planner 均不改。见 [browser.md](browser.md)�
 - **不 import pi 的任何模块、不 spawn、不 require** —— 只有几个限长的 `readFileSync`。
 
 两者的结论都汇进 `server/mcp.js` 的 `/api/mcp` 报告（`version` / `builtins` /
-`extensionApi` / `rpc` / `mcpConfig` / `mcpCli`），前端在 MCP 配置页页尾的「MCP 能力报告」（`public/mcp-report.js`）渲染。
+`extensionApi` / `rpc` / `mcpConfig` / `mcpCli`）。这份报告继续由诊断与开发排查消费；
+MCP 管理页不再渲染页尾能力报告。
 `server/pi-compat.js` 的报告多一个 `versionSource`（版本值的出处），
 让 Diagnostics 能区分「文档里的基线」与「你机器上跑的那个」。
 

@@ -10,11 +10,14 @@ Pi 原生 MCP 协议都**没有改**，变的只是前端承载。
 | 入口 | 位置 | 前端模块 | 唯一事实来源 |
 |---|---|---|---|
 | 技能 | 设置 › **Agent 能力** › 技能（`#navSkills`，菜单徽标 `#skillCount`） | `public/skills/`：`model.js` 纯投影、`page.js` 页面、`detail.js` 行内详情、`editor.js` 新建 / 编辑、`import.js` 导入、`external.js` 扫描、`market.js` 市场、`skills.css` | 扫描 / 启停：`/api/skills`、`/api/skills/<id>`（`server/skills.js`）；管理：`/api/skills/*`（`server/skills-routes.js` → `skills-manage.js` / `skills-import.js` / `skills-external.js` / `skills-market.js`） |
-| 扩展 | 应用主导航 **扩展**（`#navExtensions`，Work Surface `extensions`，标题「扩展」） | `public/extensions/`：`model.js`、`installed.js`「已安装」、`market.js`「插件市场」、`page.js` 页签壳、`extensions.css` | `/api/extensions`（`server/extension-registry.js`，只读）、`/api/approvals/capability` |
-| MCP | 设置 › 扩展与 MCP › **MCP 配置**（`#navMcp`） | `public/mcp-settings.js` 管理页 + 页尾折叠区 `public/mcp-report.js`「MCP 能力报告」 | 管理：`/api/mcp/config`、`/api/mcp/servers`；报告：`/api/mcp` |
+| 扩展 | 应用主导航 **扩展**（`#navExtensions`，Work Surface `extensions`，标题「扩展」） | `public/extensions/`：`model.js`、`installed.js`「已安装」、`market.js`「插件市场」、`page.js` 页签壳、`extensions.css` | `/api/extensions`（`server/extension-registry.js`，只读）、`/api/extensions/packages`、`/api/extensions/market` |
+| MCP | 设置 › 扩展与 MCP › **MCP 配置**（`#navMcp`） | `public/mcp-settings.js` 管理页 | 管理：`/api/mcp/config`、`/api/mcp/servers`；原生能力证据只在服务端诊断 / `/api/mcp`，管理页不渲染报告 |
 
 - **技能页**：页头是「技能」及刷新 / 市场 / 新建；其下的工具栏是作用域分段（全部 / 全局 / 项目 /
-  临时，带计数，没有临时技能时隐藏「临时」）、搜索、项目选择和从其他工具扫描。窄窗按内容宽度换行。
+  临时，带计数，没有临时技能时隐藏「临时」）、搜索、项目选择和从其他工具扫描。项目切换复用
+  `public/ui/project-picker.js` 的主题 listbox（`anchored-menu` 浮层、方向键 / Home / End /
+  Enter / Escape / Tab、`aria-haspopup="listbox"` 与 `aria-selected`），不交给系统原生 select
+  弹窗；多项目、无项目、读取中禁用及项目列表变化都在同一控件里处理。窄窗按内容宽度换行。
   列表按作用域分组（全局级 / 项目级 / 临时（--skill）/ 其他），组头显示图标、标题、条数与发现目录
   （`/api/skills` 的 `roots`：磁盘上存在的根，一个都不存在时给 pi 的默认位置）；全局级与项目级组头
   另带「导入文件 / 导入目录」。整宽行显示图标及状态点、名称、有值的描述，行尾放状态徽标与可用开关。作用域只在分组显示。每行一个状态徽标，已确认加载时显示「已加载」，其余
@@ -41,17 +44,15 @@ Pi 原生 MCP 协议都**没有改**，变的只是前端承载。
     加载状态未知（`loaded: null` 单独成组，不并进「未加载」）。每行显示名称、版本 · 来源 · 作用域、一行非空简介，
     标题旁保留更新、停用或需要重启等状态；加载错误仍直接可见。命令和工具名字不占列表行，仍可搜索。
     「详情」在卡片内展开：事实行（`null` 显示「未知」）、错误阶段、已确认能力全集、工具清单限制；
-    展开时简介不再截断，详情里不重复简介与错误。详情第一次展开才建，重绘后保持展开。
-  - 列表之后是「已知能力」（Web Access / Subagents / Pi Memory / Browser Use 的受控安装与运行观察、
-    Approval 协议探测），每项一块可展开的瓦片。
-  - 空 Registry、读取失败（带「重试」）、项目已切换（带「刷新」）都是状态瓦片；读取失败时「已知能力」照样可用。
+    已安装的已知能力（Web Access / Subagents / Pi Memory / Browser Use）在自己的包详情里展示
+    运行观察、限制与出处；未安装时去「插件市场」安装。列表之后不再有独立的「已知能力」说明区。
+  - 空 Registry、读取失败（带「重试」）、项目已切换（带「刷新」）都是状态瓦片。
   - 「插件市场」对照 PI-Desktop v0.23.0：紧凑图标标题和右侧刷新，页签与搜索同排，独立分类胶囊可以换行，排序另成一组。再次点已选分类返回「全部」。网格按内容宽度以 272px 最小列宽自动排布（1320px 窗口三列、1010px 两列、700px 一列）。每张卡的正文进入详情，安装/更新栏贴底；在线同意和写操作确认仍走原流程。npm 月下载量不是安装数，包的关键词不是权限声明。
   - 旧入口参数 `{ tab: 'extensions' }` 与已移除的 `skills` / `mcp` 都落到「已安装」。
-- **MCP 能力报告**：旧 MCP 标签里管理页没有的证据（是否带原生 MCP、版本与出处、built-in 清单、
-  RPC / ExtensionAPI 事实、扩展目录与 settings 声明、本次运行的调用观察）。第一次展开才读 `/api/mcp`；
-  原生状态取自管理页已经读到的 `/api/mcp/servers`（`setNative`），不再发第二次请求；
-  那一次没读到时写「读不到原生 MCP 摘要」，不沿用上一次的结论。
-  旧标签里的 server 列表 / 刷新 / 移除 / 添加与管理页重复，已由管理页承接，没有搬第二份。
+- **MCP 管理页**：只画服务器、配置、连接状态和实际操作（新增 / 编辑 / 删除 / 测试 / 启停 / 市场）。
+  原生 MCP 被扩展接管是运行方式，只在页头留一行静态说明；`disabled` / `unsupported` 这类“配置不会加载”
+  的真实问题仍有一条警告。“MCP 能力报告”（版本出处、built-in、RPC、ExtensionAPI、扩展目录）不再挂在页面
+  页尾；同等证据保留在 `运行状态与诊断` 与服务端 `/api/mcp`，供诊断和开发排查使用。
 
 ## 第三阶段的版式与参照
 
@@ -98,16 +99,15 @@ Pi 原生 MCP 协议都**没有改**，变的只是前端承载。
 |---|---|---|
 | 技能页的「新建 / 导入 / 扫描 / 市场」 | 2A 已实现，入口、分组与密度对齐 | 能力范围按 pi-GUI 的边界收窄：扫描只读 Claude Code / Codex 的已确认目录；市场只读公开 GitHub 目录源，联网只在「加载 / 刷新」与「预览」两个手势上发生，安装不执行远端脚本；导入先出计划再落盘 |
 | 技能编辑器直接写文件 | 表单 + 源文件双模式，服务端再校验一遍，保存带 `baseHash` | 前端表单无法保证磁盘上的字节；同名覆盖、路径逃逸与链接必须由服务端拒绝 |
-| 扩展卡片的「安装 / 卸载」 | 卡片底部是「详情」 | 本阶段不实现安装器（属于 2B）；「已知能力」里既有的一键安装照常可用 |
+| 扩展卡片的「安装 / 卸载」 | 卡片底部是「详情」与包操作；未安装的包在插件市场安装 | 2B 已实现受控包清单与安装 / 更新 / 卸载；已知能力的 setup 只在自己的包详情里出现，不再另开说明区 |
 | 插件市场的分类、排序与卡片 | 一块空状态 | 同上；市场还意味着新的网络行为，须先征得同意 |
 | 技能页标题前的图标块 | 只有文字标题 | pi-GUI 的设置详情页统一用文字标题；扩展是主导航页，标题带图标块 |
 | 自绘页签 | `.ds-segmented` | 复用 pi-GUI 的分段控件，不另画一套 |
 
 技能分组「全局级」在前与 PI-Desktop 相同，但这只是展示顺序：同名时谁生效仍由 `server/skills.js`
 按 pi 的规则判定（项目级优先），结果体现在行上的「被同名覆盖」状态，不靠分组先后表达。
-`styles.css` 里拆分前的 `.ext-known*` 规则保留（其中 `.ext-known-item .cap-setup>h4:first-child`
-仍负责去掉重复标题），扩展页在 `extensions.css` 里按 `.extensions-page` 作用域覆盖外观；
-清理旧规则属于无关重构，本阶段不做。
+拆分前的 `.ext-known*` 规则已随「已知能力」说明区一起移除；已知能力的 setup 仍复用
+`ui/capability-setup.js`，只是宿主变成对应已安装包的详情。
 
 ## 不变的约束
 
@@ -123,7 +123,7 @@ Pi 原生 MCP 协议都**没有改**，变的只是前端承载。
 - 三个入口**互不 import UI**。共享层只有既有的 `api.js` / `state.js` / `ui/*`，
   以及 `ui/resource-dom.js`（只造节点：无状态、无业务文案、不 import 页面）。
 - 页面状态只活在页面实例里：没有模块级可变状态，不写 `S`，每次读取整体替换。
-- document 级监听：技能页 1 个、扩展页 3 个通知事件 + 「已安装」1 个、能力报告 1 个；关闭后净增为 0。
+- document 级监听：技能页 1 个、扩展页 3 个通知事件 + 「已安装」1 个工作区事件、MCP 页 1 个 Pi 就绪事件；关闭后净增为 0。
 
 ## 并行开发的文件归属
 

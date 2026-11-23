@@ -1,6 +1,6 @@
 # Skills、Extensions、MCP 第三阶段验收
 
-**当前结论：有条件通过，尚未达到正式收尾条件。** 技能与扩展是真实产品页面改版；MCP 是只读版式参照。定向验证与全量证明分开记录。未合并、未发布。
+**当前结论：第三阶段历史验收见下文；2026-11-23 的产品 UI 整改已完成定向验证与真实 Electron 渲染，完整 PR CI 待验证。未合并、未发布。** 技能与扩展是真实产品页面改版；MCP 是只读版式参照。定向验证与全量证明分开记录。
 
 - 分支：`feat/agent-capabilities-phase3-final`，独立工作树。基线：`5ed42f3e43881dc7b353452dac3abb506a2c0c52`（已含 [#103](https://github.com/HYJ1817/pi-gui/pull/103)、[#104](https://github.com/HYJ1817/pi-gui/pull/104)、[#105](https://github.com/HYJ1817/pi-gui/pull/105)）。[main push CI 45004352564](https://github.com/HYJ1817/pi-gui/actions/runs/45004352564)，attempt 1 成功，仅证明基线。
 - 本次续作从 `15d3eff2` 起。`8afeb76a` 已撤销 `bb5b4b38` 的 MCP 外观改动，`15d3eff2` 将对应测试恢复到原界面。相较外观改动之前的 `05b5cdd1`，`public/mcp*` 仅多了 `f08bff84` 的一行状态失效与注释；`public/mcp.css` 与 `public/mcp-market.js` 均与 `origin/main` 一致。不能因此称**整个 MCP 模块**与 main 相同：分支原有的两处运行状态修复见下表。
@@ -181,4 +181,65 @@ MCP 范围筛选保留共享实现；审计发现公共 `createSegmentedControl`
 截图：[修改前](ui/evidence/agent-capabilities-surface/before/) · [修改后](ui/evidence/agent-capabilities-surface/after/) · [Electron DPR 1.5](ui/evidence/agent-capabilities-surface/electron/)；逐项度量与哈希见 [render.json](ui/evidence/agent-capabilities-surface/render.json)。完整 55 张修改后截图（36 页面 + 19 状态）与 manifest 留在本地 `.shots/capability-pages/`，仓库只保留 71 张代表图（含 MCP 市场 700×600 的修改前后）。
 
 构建与产物：`npm run build:app -- --rebuild` 成功（Electron 44.4.3，Windows x64，整包 335.3 MB，版本 0.34.0）；`dist-app/Pi GUI-win32-x64/resources/app/public` 与源码 `public/` **243/243 逐字节相同**（缺失 0、多余 0、内容不同 0）。没有改 `server/`，未重跑打包后端专项。Electron 取证窗口用 `--no-sandbox` 在离线夹具上渲染，**不作为正常原生沙箱或安装/升级证明**。本轮定向验证通过；完整 PR CI 结果出来前记「待验证」。本地未跑完整 `npm test`（按测试政策以 PR CI 作为 canonical 证明）；`test:exe` 也未单独运行。
+
+## 产品 UI 整改：项目选择器、MCP 状态与已知能力归属（2026-11-23 追加）
+
+**结论：开发完成；定向测试、真实 Chromium / Electron 渲染与打包检查已通过；完整 PR CI 待验证。未合并、未发布。**
+before HEAD `324786c1`；本轮行为提交与报告提交分开记录，报告自身以
+`git log -1 --format=%H -- docs/agent-capabilities-phase3-final-acceptance.md` 定位。
+
+### 范围
+
+| 改动 | 实现 |
+| --- | --- |
+| 统一项目选择器 | 新增 `public/ui/project-picker.js`：复用 `ui/anchored-menu.js` 的 portal / 翻转 / 视口夹取，触发器沿用设置字段表面；方向键 / Home / End / Enter / Escape / Tab、`aria-haspopup="listbox"` / `aria-selected`；鼠标不显示浏览器焦点环，键盘保留 `--ds-focus`。技能页与 MCP 页都换成同一个控件，原异步切换、失效守卫与「不指定项目」保留。 |
+| MCP 能力报告 | 删除 `public/mcp-report.js` 与 `mcp.css` 的页尾报告样式；管理页不再请求 `/api/mcp`，也不再创建报告生命周期。服务端 `/api/mcp`、`mcp-capabilities.js` 与诊断页的 Native MCP / 兼容矩阵保留。 |
+| MCP 重复警告 | 原生状态是整页事实，不再写进每个 server 的 `effective.reason` 展示：`replaced` 只在页头留一行 `mcp-page-status`；`disabled` / `unsupported` 保留一条真实警告；每行状态只来自配置 / 运行事实，状态标签只出现在右侧 pill，meta 只补工具数 / 错误等细节。 |
+| 已知能力 | 移除扩展页独立的「已知能力」折叠区、Approval 技术报告与 `.ext-known*` 样式。已安装能力在自己的包详情内展示 setup；未安装包仍在插件市场的受控目录里安装 / 更新；审批流程本身未改。 |
+
+### 功能迁移清单
+
+| 原有操作 | 新入口 / 状态 |
+| --- | --- |
+| 技能页切换查看项目、选「不指定项目（只看全局）」 | 技能工具栏「项目」共享 listbox；选项仍来自 `/api/skills` 的 `projects`，切换仍重新读取，读取中禁用，项目失效仍回到当前项目 |
+| MCP 页切换项目 | MCP 工具栏「项目」共享 listbox；仍调用 `activateProject`，切换中禁用；无项目列表时显示当前项目且不可打开 |
+| 添加 / 编辑 / 删除 / 测试 / 启停 / 市场 / 导入 / 扫描 MCP server | 不变，仍在 MCP 管理页 |
+| 查看 MCP 版本、built-in、RPC、ExtensionAPI、扩展目录 | 诊断页 Native MCP / 兼容矩阵与服务端 `/api/mcp`；管理页不再常驻 |
+| Web Access / Subagents / Pi Memory / Browser Use 的安装 | 未安装：扩展 › 插件市场，受控目录 + 确认框；安装 / 更新 / 卸载仍走服务端包清单与官方 CLI |
+| 上述四项的运行观察、限制、出处 | 已安装包卡片 › 详情内的嵌入 setup |
+| Approval / Permission 的协议证据 | `docs/security.md` 的审批边界与开发文档；产品入口仍是 `extension_ui_request` 审批流（允许 / 拒绝 / 超时 / 工作区隔离未改） |
+| 内置 MCP 被扩展接管 | MCP 页头一条静态运行说明；不再逐行黄色警告 |
+
+删除的纯说明 UI：MCP 页尾能力报告、扩展页「已知能力」分组、Approval 技术报告、每个 server 行重复的原生状态与 meta 重复标签。保留的诊断能力：`/api/mcp`、`/api/approvals/capability` 服务端探测、诊断页 Native MCP / 兼容矩阵 / Extension 版本、`server/capability-install.js` 与包操作锁、`ui/capability-setup.js` 的嵌入渲染。
+
+### 验证
+
+| 命令 / 场景 | 结果 |
+| --- | --- |
+| `node tests/agent-capability-pages.cjs` | **55/55**：共享 picker 打开 / 方向键 / Home / End / Escape / Tab、选中请求、读取中禁用、项目列表重绘与焦点归还；扩展页无已知能力区、已安装包详情仍有 setup、市场仍有四个已知包安装入口；MCP 页不再请求 `/api/mcp` |
+| `node tests/mcp-management-ui.cjs` | **40/40**：项目选择器多项目 / 无项目 / 重绘 / 焦点归还、原生 `replaced` 只出现一次、运行时刷新失败只在页顶说一次、行内状态不重复、报告移除、启停 / 删除 / 新增 / 市场无回退、关闭页移除 Pi 就绪监听 |
+| `node tests/skills-ui.cjs` / `node tests/smoke.cjs` | **43/43** / **1337/1337** |
+| `node tests/approvals.cjs` | **80/80**（删除 5 条已移除的 setup UI 断言；审批流程断言未减） |
+| `npm run test:skills` / `test:extensions` / `test:mcp` | 全部通过；最后套件分别 43/43、139/139、203/203 |
+| `node tests/capability.cjs` / `capability-install.cjs` | **74/74** / **83/83** |
+| `web-access` / `subagents` / `memory` / `browser` | **66/66** / **141/141** / **235/235** / **215/215** |
+| `extension-packages` / `extension-market` | **119/119** / **139/139** |
+| `npm run test:primitives` | primitives / design-system（阶段 A **6** + 阶段 B 通过）/ settings acceptance **19** / font picker **49/49** |
+| `node tests/modules.cjs` / `file-size-report.cjs` / `ui-ia.cjs` | **121/121** / **11/11** / **32/32** |
+| `node tests/shortcut-electron.cjs` | **104/104**，35 张真实 Electron 截图 |
+| `node tests/capability-pages-visual.cjs --tag=ui-final` | **57** 张截图、**19** 条 computed style、0 页面异常 |
+| `node tests/capability-pages-electron.cjs --tag=ui-final` | **56** 张、**48** 条测量、0 renderer error（1320×820 / 700×600、深 / 浅、125% / 150% 字体、项目菜单打开态） |
+| `npm run build:app -- --rebuild` | 335.3 MB；`dist-app/.../resources/app/public` 与源码逐字节比较 **0 差异** |
+| `npm run build:exe` | 101.6 MB；`build/icon.ico` 由随后的 `build:app` 重新生成 |
+| `npm run test:app` / `CHECK_PORT=17897 npm run test:exe`（工作区 TEMP + fixtures） | **27/27** / **50/50** |
+
+真实渲染证据（仓库代表图）：[技能项目菜单 1320 深](ui/evidence/agent-capabilities-phase3/ui-final/state-skills-project-menu-1320x820-dark.png) · [MCP 项目菜单 1320 深](ui/evidence/agent-capabilities-phase3/ui-final/state-mcp-project-menu-1320x820-dark.png) · [技能菜单 700 浅](ui/evidence/agent-capabilities-phase3/ui-final/skills-list-project-menu-700x600-light.png) · [MCP 菜单 700 浅](ui/evidence/agent-capabilities-phase3/ui-final/mcp-list-project-menu-700x600-light.png) · [技能 125% 字体](ui/evidence/agent-capabilities-phase3/ui-final/skills-list-font-125-1320x820-light.png) · [技能 150% 字体 / 700](ui/evidence/agent-capabilities-phase3/ui-final/skills-list-font-150-700x600-light.png) · [MCP 125% 字体](ui/evidence/agent-capabilities-phase3/ui-final/mcp-list-font-125-1320x820-dark.png) · [MCP 150% 字体 / 700](ui/evidence/agent-capabilities-phase3/ui-final/mcp-list-font-150-700x600-dark.png) · [MCP 管理页无报告](ui/evidence/agent-capabilities-phase3/ui-final/mcp-list-1320x820-dark.png) · [扩展已安装无已知能力区](ui/evidence/agent-capabilities-phase3/ui-final/extensions-installed-1320x820-light.png)。完整截图与 manifest 在 `.shots/capability-pages/ui-final{,-electron}/`。
+
+### 边界、风险与回滚
+
+- 未运行完整本地 `npm test`；按测试政策以最终 PR CI 作为 canonical 证明，CI 结果出来前记「待验证」。
+- Electron 取证窗口用 `--no-sandbox` 在离线夹具上渲染，不作为正常原生沙箱或安装 / 升级证明；真实 Pi、OAuth、第三方包安装未在本轮重复。
+- 共享项目选择器的真实视觉只在 Windows Electron / Chromium 上核对；未覆盖其它平台的系统字体与 DPI。
+- 回滚：本轮是独立的前端 / 测试 / 文档提交，可整体 revert；无数据迁移、无 MCP 配置写入格式变化、无依赖变更。后端 `/api/mcp` 与能力安装接口未删除，回滚后旧报告数据仍可取。
+- 待用户决定：是否接受本轮整改、是否允许后续合并；合并与发布分别授权，本轮不自动合并或发版。
 
