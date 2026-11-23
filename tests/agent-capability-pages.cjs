@@ -758,7 +758,7 @@ function createWorld(label, entry) {
     assert.deepEqual([...page.card.querySelectorAll('.skills-head .skills-actions-bar .btn span')].map((node) => node.textContent),
       ['刷新', '市场', '新建']);
     assert.equal(page.card.querySelector('.skills-project .project-picker-trigger')?.textContent.trim(), 'Fixture project（当前）');
-    assert.equal(page.card.querySelector('.skills-project .project-picker-trigger')?.getAttribute('aria-label'), '查看哪个项目的技能');
+    assert.equal(page.card.querySelector('.skills-project .project-picker-trigger')?.getAttribute('aria-label'), '查看哪个项目的技能，当前：Fixture project（当前）');
     const seg = (value) => page.card.querySelector(`.skills-scope .ds-segment-item[data-value="${value}"]`);
     const segText = (value) => [seg(value).querySelector('.ds-segment-label').textContent, seg(value).querySelector('.ds-segment-count').textContent];
     assert.deepEqual(['', 'user', 'project'].map(segText), [['全部', '3'], ['全局', '2'], ['项目', '1']]);

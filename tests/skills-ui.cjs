@@ -288,6 +288,8 @@ const targetPicker = (card, field = 'target') => card.querySelector(`[data-field
 async function chooseTarget(card, value, field = 'target') {
   const trigger = targetPicker(card, field);
   assert.ok(trigger, '目标位置使用共享 listbox');
+  assert.ok(trigger.getAttribute('aria-label').includes(trigger.textContent.trim()),
+    '可访问名称带当前目标位置');
   trigger.getBoundingClientRect = () => ({
     x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
   });
@@ -300,6 +302,8 @@ async function chooseTarget(card, value, field = 'target') {
   option.click();
   await tick(20);
   assert.equal(trigger.dataset.value, value);
+  assert.ok(trigger.getAttribute('aria-label').includes(trigger.textContent.trim()),
+    '换目标后可访问名称跟随当前值');
 }
 
 (function modelChecks() {

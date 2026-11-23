@@ -23,6 +23,7 @@ const uxMode = process.env.UX_STATE_HARNESS === '1';
 /* 视觉取证专用：让 Registry 源返回一条“系统代理线路”的固定结果，
  * 用来截取代理状态说明；不影响默认离线夹具。 */
 const marketProxyMode = process.env.MCP_MARKET_PROXY === '1';
+const marketStaleMode = process.env.MCP_MARKET_STALE === '1';
 /* 视觉取证专用：用 209 条固定条目模拟完整 Registry 目录，按真实后端的
  * page / pageSize 语义切片，用于截取分页导航的排版。 */
 const marketPaginationMode = process.env.MCP_MARKET_PAGINATION === '1';
@@ -1632,6 +1633,30 @@ const server = http.createServer(async (req, res) => {
         categories: ['全部', '开发工具'], sources: fixture.sources(),
         items: [{ ...base.items[0], id: 'registry:io.example/proxy', source: 'registry', sourceLabel: '官方 Registry', trust: 'unverified' }],
         network: { route: 'proxied', source: 'system-proxy', addressVerified: false, dns: 'proxy', fakeIp: true },
+      });
+    }
+    if (marketStaleMode && params.source === 'registry') {
+      const base = await fixture.list({ source: 'builtin', limit: 1 });
+      const all = Array.from({ length: 48 }, (_, i) => {
+        const id = `registry:io.example/stale-${String(i).padStart(2, '0')}`;
+        return {
+          ...base.items[0], id, source: 'registry', sourceLabel: '官方 Registry',
+          catalogId: id, name: `Cached Registry ${i}`, installName: `cached-${i}`,
+          identifier: `io.example/stale-${i}`, version: '1.0.0', category: '开发工具',
+          trust: 'registry', trustEvidence: 'MCP 官方 Registry 收录；收录不代表安全性审核',
+          description: `Last successfully loaded registry server ${i}`,
+        };
+      });
+      const pageSize = Math.max(1, Number(params.pageSize || 24));
+      const page = Math.max(1, Number(params.page || 1));
+      return json(res, 200, {
+        ok: true, source: 'registry', total: all.length, page, pageSize,
+        totalPages: Math.ceil(all.length / pageSize), hasMore: false, nextCursor: null,
+        categories: ['全部', '开发工具'], sources: fixture.sources(),
+        items: all.slice((page - 1) * pageSize, page * pageSize),
+        stale: true,
+        refreshError: { code: 'network', error: '无法连接市场源（fixture 诊断细节，不应出现在界面）' },
+        network: { route: 'direct', source: 'direct', addressVerified: true, dns: 'system', fakeIp: false },
       });
     }
     if (marketPaginationMode && params.source === 'registry') {

@@ -401,7 +401,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.ok(projectPicker, '项目切换使用共享 project picker，而不是原生 select');
     assert.equal(d.querySelector('.mcp-toolbar select'), null);
     const projectTrigger = projectPicker.querySelector('.project-picker-trigger');
-    assert.equal(projectTrigger.getAttribute('aria-label'), '切换当前项目');
+    assert.equal(projectTrigger.getAttribute('aria-label'), '切换当前项目，当前：Workspace');
     assert.equal(projectTrigger.getAttribute('aria-haspopup'), 'listbox');
     assert.equal(projectTrigger.textContent.trim(), 'Workspace');
     const counts = [...scope.querySelectorAll('.ds-segment-count')].map((n) => n.textContent);
@@ -780,6 +780,8 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(form.querySelector('select[data-field="exposure"]'), null);
     assert.equal(exposure.getAttribute('aria-haspopup'), 'listbox');
     assert.equal(exposure.dataset.value, 'codemode', '新条目默认 codemode');
+    assert.equal(exposure.getAttribute('aria-label'), '工具暴露方式（exposure），当前：codemode（默认：按需代码模式）',
+      '可访问名称同时说明字段与当前值');
     const menu = await openFieldPicker(exposure);
     assert.deepEqual(pickerOptionValues(menu), ['', 'codemode', 'deferred', 'direct', 'hidden']);
     assert.equal(menu.querySelector('[role="option"][aria-selected="true"]').dataset.value, 'codemode');
@@ -787,6 +789,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     await tick(20);
     assert.equal(exposure.dataset.value, 'hidden');
     assert.match(exposure.textContent, /hidden/, '触发器显示选中的 exposure');
+    assert.match(exposure.getAttribute('aria-label'), /^工具暴露方式（exposure），当前：hidden/, '选值后可访问名称跟随当前值');
     form.querySelector('[data-field="add-arg"]').click();
     await tick(15);
     d.querySelector('.mcp-form-modal [data-field="args-0"]').value = '-y';
@@ -1188,39 +1191,41 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 24);
     assert.ok(calls.some((c) => c.target.includes('source=registry') && c.target.includes('page=3')));
 
-    /* 过期目录后台刷新时是信息横幅，不冒充失败。 */
+    /* 过期目录后台刷新时是一行信息状态，不冒充失败。 */
     marketStale.on = true;
     marketStale.refreshing = true;
     pageBtn(2).click();
     await tick(120);
-    const refreshingBanner = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    const refreshingNote = [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .find((b) => b.textContent.includes('正在后台刷新'));
-    assert.ok(refreshingBanner, '后台刷新必须说明当前显示的是旧缓存');
+    assert.ok(refreshingNote, '后台刷新必须说明当前显示的是旧缓存');
     assert.equal(
-      [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+      [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
         .some((b) => b.textContent.includes('刷新失败')),
       false,
-      '后台刷新不是失败，不能用失败横幅',
+      '后台刷新不是失败，不能用失败状态',
     );
     marketStale.refreshing = false;
 
-    /* 刷新失败时显示旧缓存横幅；恢复成功后横幅消失。 */
+    /* 刷新失败时显示一行旧缓存状态；恢复成功后状态消失。 */
     pageBtn(1).click();
     await tick(120);
     pageBtn(2).click();
     await tick(120);
-    const staleBanner = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+    const staleNote = [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
       .find((b) => b.textContent.includes('上次成功加载的缓存'));
-    assert.ok(staleBanner, '刷新失败必须明确提示正在显示旧缓存');
-    assert.ok(staleBanner.textContent.includes('Registry 暂时不可达'));
+    assert.ok(staleNote, '刷新失败必须明确提示正在显示旧缓存');
+    assert.equal(staleNote.querySelector('.mcp-banner, .mcp-banner-copy'), null, '旧缓存状态不能画成横幅');
+    assert.equal(staleNote.textContent.includes('Registry 暂时不可达'), false, '界面不暴露原始刷新错误');
+    assert.equal(staleNote.textContent.includes('fixture'), false, '界面不带诊断细节');
     marketStale.on = false;
     pageBtn(1).click();
     await tick(120);
     assert.equal(
-      [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+      [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
         .some((b) => b.textContent.includes('上次成功加载的缓存')),
       false,
-      '刷新成功后旧缓存横幅必须消失',
+      '刷新成功后旧缓存状态必须消失',
     );
 
     d.querySelector('[data-focus-key="source:builtin"]').click();
@@ -1246,7 +1251,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     pageBtn(2).click();
     await tick(120);
     assert.ok(pagination().textContent.includes('第 2 / 9 页'));
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')), '后台刷新期间必须显示提示');
 
     /* 用户焦点停在搜索框；后台轮询更新不能把它抢走。 */
@@ -1260,7 +1265,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(registryGets().length - before, 1, '刷新中每轮只发一次列表请求');
     assert.equal(d.activeElement?.id, 'mcpMarketSearch', '刷新中的轮询不能打断搜索框焦点');
     assert.equal(d.querySelector('.mcp-market-results'), resultsHost, '刷新中的轮询不能重建结果区');
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')), '刷新中提示应保留');
 
     /* 后台刷新完成：新目录只有 100 条（5 页），页面应自动换成新总数。 */
@@ -1270,7 +1275,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
     assert.equal(registryGets().length - before, 2, '完成检测每轮只发一次列表请求');
     assert.equal(
-      [...d.querySelectorAll('.mcp-market-page .mcp-banner')].some((b) => b.textContent.includes('后台刷新')),
+      [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note')].some((b) => b.textContent.includes('后台刷新')),
       false,
       '刷新完成后旧缓存提示必须消失',
     );
@@ -1296,7 +1301,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     marketStale.refreshing = true;
     pageBtn(2).click();
     await tick(120);
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')));
 
     /* 轮询还没到点时切到第 3 页：旧定时器必须作废，只对当前页轮询。 */
@@ -1309,10 +1314,10 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     await tick(2300);
     const after = registryGets().length;
     assert.equal(after - before, 1, '翻页后每轮也只请求一次');
-    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
       .find((b) => b.textContent.includes('上次成功加载的缓存'));
     assert.ok(warn, '刷新失败必须明确提示');
-    assert.ok(warn.textContent.includes('Registry 暂时不可达'));
+    assert.equal(warn.textContent.includes('Registry 暂时不可达'), false, '界面不暴露原始刷新错误');
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 24, '失败不能清空已有列表');
     assert.ok(pagination().textContent.includes('第 3 / 9 页'), '轮询不能把用户翻回旧页');
     assert.equal(pagination().querySelector('[aria-current="page"]').textContent, '3');
@@ -1343,10 +1348,10 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     await tick(2300);
 
     assert.equal(registryGets().length - before, 1, '本地失败也只发一次轮询');
-    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-banner.is-warn')]
+    const warn = [...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-warn')]
       .find((b) => b.textContent.includes('暂时无法确认后台刷新状态'));
     assert.ok(warn, '本地请求失败不能误报成 Registry 刷新失败');
-    assert.ok(warn.textContent.includes('本地连接失败'));
+    assert.equal(warn.textContent.includes('本地连接失败'), false, '界面不带本地请求的诊断细节');
     assert.equal(d.querySelectorAll('.mcp-market-card').length, 24, '失败不能清空已有列表');
     await tick(2300);
     assert.equal(registryGets().length - before, 1, '本地失败后必须停止轮询');
@@ -1394,7 +1399,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     marketStale.refreshing = true;
     d.querySelector('[data-focus-key="source:registry"]').click();
     await tick(120);
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')));
 
     const beforeSwitch = registryGets().length;
@@ -1405,7 +1410,7 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
 
     d.querySelector('[data-focus-key="source:registry"]').click();
     await tick(120);
-    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-banner.is-info')]
+    assert.ok([...d.querySelectorAll('.mcp-market-page .mcp-market-refresh-note.is-info')]
       .some((b) => b.textContent.includes('正在后台刷新')));
     const beforeDispose = registryGets().length;
     d.querySelector('[data-focus-key="market-back"]').click();

@@ -212,7 +212,26 @@ if (!process.versions.electron) {
         const after = await js(`document.querySelector(${JSON.stringify(selector)}).dataset.value`);
         const label = await js(`document.querySelector(${JSON.stringify(selector)}).textContent.trim()`);
         assert.notEqual(after, before, control + ': keyboard selection must change the value');
-        pickerProofs.push({ control, theme, size: [width, height], before, after, label, box });
+        const trigger = await js(`(() => {
+          const node = document.querySelector(${JSON.stringify(selector)});
+          const style = getComputedStyle(node);
+          return {
+            height: Math.round(node.getBoundingClientRect().height),
+            background: style.backgroundColor,
+            fontSize: style.fontSize,
+          };
+        })()`);
+        if (control === 'mcp-exposure') {
+          const input = await js(`(() => {
+            const node = document.querySelector('.mcp-form-modal .mcp-input.ds-input');
+            const style = getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
+            return { height: Math.round(rect.height), background: style.backgroundColor };
+          })()`);
+          assert.equal(trigger.height, input.height, 'mcp exposure: trigger height must match sibling ds-input');
+          assert.equal(trigger.background, input.background, 'mcp exposure: trigger surface must match sibling ds-input');
+        }
+        pickerProofs.push({ control, theme, size: [width, height], before, after, label, box, trigger });
       }
       async function captureFormPickers(theme, width, height) {
         await fresh(theme);
@@ -288,6 +307,30 @@ if (!process.versions.electron) {
               await shot(`${page.name}-project-menu-${dims.width}x${dims.height}-${theme}`, dims.width, dims.height);
               await key('Escape', 'Escape', 27);
               await wait(`!document.querySelector('.pi-anchored-menu')`, page.name + ' project menu closed');
+            }
+            /* 旧缓存刷新失败：真实 Electron 里也必须是一行状态，不是横幅。 */
+            if (page.name === 'mcp-market' && process.env.MCP_MARKET_STALE === '1') {
+              await click('[data-focus-key="source:registry"]');
+              await wait(`!!document.querySelector('.mcp-market-page .mcp-market-refresh-note.is-warn')`, 'mcp stale status');
+              const stale = await js(`(() => {
+                const node = document.querySelector('.mcp-market-refresh-note');
+                const style = getComputedStyle(node);
+                return {
+                  text: node.textContent,
+                  banner: node.classList.contains('mcp-banner'),
+                  background: style.backgroundColor,
+                  borderLeft: style.borderLeftWidth,
+                  height: Math.round(node.getBoundingClientRect().height),
+                };
+              })()`);
+              assert.equal(stale.banner, false, 'stale status must not be a banner');
+              assert.equal(stale.background, 'rgba(0, 0, 0, 0)', 'stale status must not paint a surface');
+              assert.equal(stale.borderLeft, '0px', 'stale status must not draw a left bar');
+              assert.ok(stale.height <= 24, 'stale status must stay one line: ' + stale.height);
+              assert.equal(stale.text.includes('fixture'), false, 'stale status must not expose diagnostics');
+              await shot(`mcp-market-stale-${dims.width}x${dims.height}-${theme}`, dims.width, dims.height);
+              await click('[data-focus-key="source:builtin"]');
+              await wait(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, 'back to builtin');
             }
             /* Font scaling is the app's --font-scale, not window zoom. */
             if (page.fontScale && !limit) {

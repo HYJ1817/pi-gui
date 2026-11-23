@@ -182,6 +182,33 @@ async function main() {
       await click('[data-focus-key="source:builtin"]');
       await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
     }
+    if (process.env.MCP_MARKET_STALE === '1') {
+      await click('[data-focus-key="source:registry"]');
+      await waitFor(`!!document.querySelector('.mcp-market-page .mcp-market-refresh-note.is-warn')`, '旧缓存状态行');
+      const stale = await evalJs(`(() => {
+        const node = document.querySelector('.mcp-market-refresh-note');
+        const style = getComputedStyle(node);
+        return {
+          text: node.textContent,
+          banner: node.classList.contains('mcp-banner'),
+          background: style.backgroundColor,
+          borderLeft: style.borderLeftWidth,
+          height: Math.round(node.getBoundingClientRect().height),
+        };
+      })()`);
+      if (!stale.text.includes('正在显示上次成功加载的缓存')) {
+        throw new Error('旧缓存状态行缺少说明：' + JSON.stringify(stale));
+      }
+      if (stale.text.includes('fixture') || stale.text.includes('诊断细节')) {
+        throw new Error('界面暴露了诊断细节：' + stale.text);
+      }
+      if (stale.banner || stale.background !== 'rgba(0, 0, 0, 0)' || stale.borderLeft !== '0px') {
+        throw new Error('旧缓存状态仍被画成横幅：' + JSON.stringify(stale));
+      }
+      await shot('03c-market-stale');
+      await click('[data-focus-key="source:builtin"]');
+      await waitFor(`document.querySelectorAll('.mcp-market-card:not(.is-skeleton)').length >= 9`, '切回内置精选');
+    }
     if (process.env.MCP_MARKET_PROGRESS === '1') {
       await click('[data-focus-key="source:registry"]');
       await waitFor(
