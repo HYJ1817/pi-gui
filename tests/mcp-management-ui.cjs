@@ -336,6 +336,23 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.ok(btn, `确认框里找不到 ${text}`);
     btn.click();
   };
+  const fieldTrigger = (root, field) => {
+    const node = root.querySelector(`[data-field="${field}"]`);
+    assert.ok(node, `找不到字段 ${field}`);
+    return node;
+  };
+  const openFieldPicker = async (trigger) => {
+    /* jsdom 没有布局：锚点矩形必须非零，portaled 菜单才不会立即收起。 */
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    trigger.click();
+    await tick(20);
+    const menu = d.querySelector('.pi-anchored-menu.ds-picker-menu');
+    assert.ok(menu, '字段选择器没有打开主题化 listbox');
+    return menu;
+  };
+  const pickerOptionValues = (menu) => [...menu.querySelectorAll('[role="option"]')].map((node) => node.dataset.value);
 
   $('navMcp').click();
   await tick(160);
@@ -758,12 +775,18 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     };
     set('name', 'demo');
     set('description', 'Demo server');
-    const exposure = form.querySelector('[data-field="exposure"]');
-    assert.ok(exposure, '新增表单必须有 exposure 选择');
-    assert.deepEqual([...exposure.options].map((o) => o.value), ['', 'codemode', 'deferred', 'direct', 'hidden']);
-    assert.equal(exposure.value, 'codemode', '新条目默认 codemode');
-    exposure.value = 'hidden';
-    exposure.dispatchEvent(new w.Event('change', { bubbles: true }));
+    const exposure = fieldTrigger(form, 'exposure');
+    assert.equal(exposure.tagName, 'BUTTON', 'exposure 是主题化 listbox 触发器，不再是原生 select');
+    assert.equal(form.querySelector('select[data-field="exposure"]'), null);
+    assert.equal(exposure.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(exposure.dataset.value, 'codemode', '新条目默认 codemode');
+    const menu = await openFieldPicker(exposure);
+    assert.deepEqual(pickerOptionValues(menu), ['', 'codemode', 'deferred', 'direct', 'hidden']);
+    assert.equal(menu.querySelector('[role="option"][aria-selected="true"]').dataset.value, 'codemode');
+    menu.querySelector('[role="option"][data-value="hidden"]').click();
+    await tick(20);
+    assert.equal(exposure.dataset.value, 'hidden');
+    assert.match(exposure.textContent, /hidden/, '触发器显示选中的 exposure');
     form.querySelector('[data-field="add-arg"]').click();
     await tick(15);
     d.querySelector('.mcp-form-modal [data-field="args-0"]').value = '-y';
@@ -791,6 +814,72 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(body.__expectedCwd, 'C:\\workspace');
     assert.equal(d.querySelector('.mcp-form-modal'), null);
     assert.ok(page().textContent.includes('配置已保存到'));
+  });
+
+  await check('exposure 选择器：键盘移动、Enter 选择与 Escape/Tab 归还焦点', async () => {
+    const before = postBodies('/api/mcp/config').length;
+    const add = [...page().querySelectorAll('button')].find((b) => b.textContent.trim() === '新增');
+    add.click();
+    await tick(20);
+    const form = d.querySelector('.mcp-form-modal');
+    const trigger = fieldTrigger(form, 'exposure');
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    const key = (name) => d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', {
+      key: name, bubbles: true, cancelable: true,
+    }));
+    const menu = () => d.querySelector('.pi-anchored-menu.ds-picker-menu');
+    trigger.focus();
+    key('ArrowDown');
+    await tick(20);
+    assert.ok(menu(), '键盘方向键打开 listbox');
+    assert.equal(d.activeElement?.dataset.value, 'codemode', '打开后焦点落在当前值');
+    key('ArrowDown');
+    assert.equal(d.activeElement?.dataset.value, 'deferred');
+    key('End');
+    assert.equal(d.activeElement?.dataset.value, 'hidden');
+    key('Home');
+    assert.equal(d.activeElement?.dataset.value, '');
+    key('Escape');
+    await tick(20);
+    assert.equal(menu(), null, 'Escape 收起菜单');
+    assert.equal(d.activeElement, trigger, 'Escape 把焦点还给触发器');
+    assert.ok(d.querySelector('.mcp-form-modal'), 'Escape 只收菜单，不关闭整个表单');
+    assert.equal(d.querySelector('.mcp-form-modal').querySelector('[data-field="exposure"]'), trigger);
+
+    key('ArrowDown');
+    await tick(20);
+    assert.ok(menu());
+    key('Tab');
+    await tick(20);
+    assert.equal(menu(), null, 'Tab 收起菜单');
+    assert.equal(d.activeElement, trigger, 'Tab 把焦点还给触发器');
+
+    key('ArrowDown');
+    await tick(20);
+    key('ArrowDown');
+    key('Enter');
+    await tick(20);
+    assert.equal(menu(), null, 'Enter 选择后收起菜单');
+    assert.equal(trigger.dataset.value, 'deferred', '键盘选择更新 draft 对应的值');
+    assert.match(trigger.textContent, /deferred/);
+    assert.equal(postBodies('/api/mcp/config').length, before, '选择 exposure 本身不写配置');
+
+    /* 菜单开着时表单重绘：旧 picker 的 portal 节点必须跟着销毁，不能残留。 */
+    trigger.focus();
+    key('ArrowDown');
+    await tick(20);
+    assert.ok(menu(), '再次打开菜单');
+    clickText(d.querySelector('.mcp-form-modal'), 'button', 'HTTP 端点');
+    await tick(30);
+    assert.equal(menu(), null, '表单重绘会销毁旧 picker 的菜单');
+    assert.ok(d.querySelector('.mcp-form-modal'), '重绘不关闭表单');
+    const refreshed = d.querySelector('.mcp-form-modal [data-field="exposure"]');
+    assert.equal(refreshed.dataset.value, 'deferred', '重绘保留 draft 里的 exposure');
+    clickText(d.querySelector('.mcp-form-modal'), 'button', '取消');
+    await tick(30);
+    assert.equal(d.querySelector('.pi-anchored-menu'), null, '关闭表单后没有残留菜单');
   });
 
   await check('新增弹窗：头部/正文/底部三段，正文独立滚动，窄窗口不溢出', async () => {
@@ -829,7 +918,14 @@ const tick = (ms = 60) => new Promise((r) => setTimeout(r, ms));
     assert.equal(form.querySelector('[data-field="env-key-1"]').value, 'API_TOKEN');
     assert.equal(form.querySelector('[data-field="env-value-1"]').value, '');
     assert.ok(form.querySelector('[data-field="env-value-1"]').placeholder.includes('已设置'));
-    assert.equal(form.querySelector('[data-field="exposure"]').value, 'deferred', '编辑时必须回填原 exposure');
+    const exposureTrigger = fieldTrigger(form, 'exposure');
+    assert.equal(exposureTrigger.dataset.value, 'deferred', '编辑时必须回填原 exposure');
+    assert.match(exposureTrigger.textContent, /deferred/);
+    const exposureMenu = await openFieldPicker(exposureTrigger);
+    assert.equal(exposureMenu.querySelector('[role="option"][aria-selected="true"]').dataset.value, 'deferred');
+    exposureTrigger.click();
+    await tick(20);
+    assert.equal(d.querySelector('.pi-anchored-menu'), null, '再次点击触发器收起菜单');
     const desc = form.querySelector('[data-field="description"]');
     desc.value = '更新后的记忆';
     desc.dispatchEvent(new w.Event('input', { bubbles: true }));

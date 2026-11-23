@@ -284,6 +284,23 @@ const modalButton = (label) => [...modal().querySelectorAll('button')].find((but
 const cardButton = (card, label) => [...card.querySelectorAll('.btn')].find((button) => button.textContent === label);
 const fieldValue = (card, aria) => card.querySelector(`[aria-label="${aria}"]`);
 const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbles: true }));
+const targetPicker = (card, field = 'target') => card.querySelector(`[data-field="${field}"]`);
+async function chooseTarget(card, value, field = 'target') {
+  const trigger = targetPicker(card, field);
+  assert.ok(trigger, '目标位置使用共享 listbox');
+  trigger.getBoundingClientRect = () => ({
+    x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+  });
+  trigger.click();
+  await tick(20);
+  const menu = A.d.querySelector('.pi-anchored-menu.ds-picker-menu');
+  assert.ok(menu, '目标位置弹出主题化 listbox');
+  const option = menu.querySelector(`[role="option"][data-value="${value}"]`);
+  assert.ok(option, '缺少目标选项 ' + value);
+  option.click();
+  await tick(20);
+  assert.equal(trigger.dataset.value, value);
+}
 
 (function modelChecks() {
   const M = vm.runInNewContext(bundle(path.join(SKILLS_DIR, 'model.js')).code, { window: {} });
@@ -347,18 +364,25 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     description.value = 'Demo description';
     const body = fieldValue(modal(), '正文');
     body.value = 'Body\nwith LF';
+    const target = targetPicker(modal());
+    assert.ok(target, '创建弹窗使用共享目标选择器');
+    assert.equal(modal().querySelector('select[aria-label="保存位置"]'), null, '保存位置不再是原生 select');
+    assert.equal(target.getAttribute('aria-haspopup'), 'listbox');
+    assert.equal(target.closest('.skills-field').tagName, 'DIV', 'picker 不能放在 label 里');
+    await chooseTarget(modal(), 'project-pi');
+    assert.match(target.textContent, /项目 · <项目>\/\.pi\/skills/);
     modalButton('创建').click();
     await tick(80);
     const check = A.lastCall('POST', '/api/skills/check');
     assert.ok(check, 'a create is checked before it is written');
     assert.deepEqual(check.body, {
-      kind: 'create', name: 'demo-skill', description: 'Demo description', body: 'Body\nwith LF', target: 'user-pi',
+      kind: 'create', name: 'demo-skill', description: 'Demo description', body: 'Body\nwith LF', target: 'project-pi',
     });
     const create = A.lastCall('POST', '/api/skills/create');
     assert.ok(create);
     assert.equal(create.url, '/api/skills/create?project=' + PROJECT_ID);
     assert.deepEqual(create.body, {
-      name: 'demo-skill', description: 'Demo description', body: 'Body\nwith LF', target: 'user-pi',
+      name: 'demo-skill', description: 'Demo description', body: 'Body\nwith LF', target: 'project-pi',
     });
     assert.equal(A.$('modal').hidden, true, 'the editor closes only after a successful create');
     const notice = page.card.querySelector('.skills-notice');
@@ -370,6 +394,67 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     await tick();
     assert.ok(A.lastCall('POST', '/api/skills/undo/' + UNDO));
     assert.match(page.card.querySelector('.skills-notice').textContent, /已撤销：demo-skill/);
+    page.close();
+    A.reset();
+    await tick();
+  });
+
+  await check('editor target picker: keyboard moves, Escape/Tab return focus, Enter selects', async () => {
+    A.answer('GET /api/skills', SKILLS);
+    A.answer('POST /api/skills/check', CHECK_OK);
+    const page = mount();
+    await tick();
+    cardButton(page.card, '新建').click();
+    await tick();
+    const trigger = targetPicker(modal());
+    assert.ok(trigger, '新建弹窗使用共享目标选择器');
+    trigger.getBoundingClientRect = () => ({
+      x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 340, width: 240, height: 34, toJSON() {},
+    });
+    const key = (name) => A.d.activeElement.dispatchEvent(new A.w.KeyboardEvent('keydown', {
+      key: name, bubbles: true, cancelable: true,
+    }));
+    const menu = () => A.d.querySelector('.pi-anchored-menu.ds-picker-menu');
+    trigger.focus();
+    key('ArrowDown');
+    await tick(20);
+    assert.ok(menu(), '方向键打开 listbox');
+    assert.equal(A.d.activeElement?.dataset.value, 'user-pi', '焦点落在当前目标');
+    key('ArrowDown');
+    assert.equal(A.d.activeElement?.dataset.value, 'project-pi');
+    key('Home');
+    assert.equal(A.d.activeElement?.dataset.value, 'user-pi');
+    key('Escape');
+    await tick(20);
+    assert.equal(menu(), null, 'Escape 收起菜单');
+    assert.equal(A.d.activeElement, trigger, 'Escape 归还焦点');
+    assert.ok(modal().classList.contains('skills-editor-dialog'), 'Escape 不关闭编辑弹窗');
+
+    key('ArrowDown');
+    await tick(20);
+    key('Tab');
+    await tick(20);
+    assert.equal(menu(), null, 'Tab 收起菜单');
+    assert.equal(A.d.activeElement, trigger, 'Tab 归还焦点');
+
+    key('ArrowDown');
+    await tick(20);
+    key('ArrowDown');
+    key('Enter');
+    await tick(20);
+    assert.equal(menu(), null, 'Enter 选择后收起菜单');
+    assert.equal(trigger.dataset.value, 'project-pi');
+    assert.equal(A.count('POST', '/api/skills/create'), 0, '键盘选择本身不提交表单');
+
+    /* 菜单开着时关闭弹窗：portal 菜单不能留在 body 上。 */
+    trigger.focus();
+    key('ArrowDown');
+    await tick(20);
+    assert.ok(menu(), '再次打开菜单');
+    modalButton('取消').click();
+    await tick();
+    assert.equal(menu(), null, '关闭弹窗销毁 picker 菜单');
+    assert.equal(A.d.querySelector('.pi-anchored-menu'), null);
     page.close();
     A.reset();
     await tick();
@@ -477,11 +562,14 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     assert.match(modal().textContent, /技能目录|单个文件/);
     assert.match(modal().textContent, /imported-skill/);
     assert.equal(fieldValue(modal(), '导入后的名称').value, 'imported-skill');
+    assert.ok(targetPicker(modal()), '导入计划使用共享目标选择器');
+    assert.equal(modal().querySelector('select[aria-label="保存位置"]'), null, '保存位置不再是原生 select');
+    await chooseTarget(modal(), 'project-pi');
     modalButton('导入').click();
     await tick(60);
     const commit = A.lastCall('POST', '/api/skills/import/commit');
     assert.equal(commit.url, '/api/skills/import/commit?project=' + PROJECT_ID);
-    assert.deepEqual(commit.body, { stageId: 'b'.repeat(24), target: 'user-pi', name: 'imported-skill', onConflict: 'fail' });
+    assert.deepEqual(commit.body, { stageId: 'b'.repeat(24), target: 'project-pi', name: 'imported-skill', onConflict: 'fail' });
     assert.equal(A.$('modal').hidden, true);
     assert.match(page.card.querySelector('.skills-notice').textContent, /已导入 imported-skill/);
     page.close();
@@ -680,13 +768,17 @@ const change = (control) => control.dispatchEvent(new A.w.Event('input', { bubbl
     assert.equal(A.lastCall('GET', '/api/skills/market/preview/' + PREVIEW_ID + '/file').url,
       '/api/skills/market/preview/' + PREVIEW_ID + '/file?path=notes.md');
     assert.match(modal().querySelector('.skills-preview-pre').textContent, /Note body/);
+    const installTarget = targetPicker(modal(), 'install-target');
+    assert.ok(installTarget, '安装预览使用共享目标选择器');
+    assert.equal(modal().querySelector('select[aria-label="安装到"]'), null, '安装位置不再是原生 select');
+    await chooseTarget(modal(), 'project-pi', 'install-target');
     const install = [...modal().querySelectorAll('.skills-preview-install button')].find((button) => button.textContent === '安装');
     install.click();
     await tick(60);
     const call = A.lastCall('POST', '/api/skills/market/install');
     assert.equal(call.url, '/api/skills/market/install?project=' + PROJECT_ID);
     assert.deepEqual(call.body, {
-      previewId: PREVIEW_ID, target: 'user-pi', name: 'entry-1', onConflict: 'fail', allowPartial: false,
+      previewId: PREVIEW_ID, target: 'project-pi', name: 'entry-1', onConflict: 'fail', allowPartial: false,
     });
     assert.equal(A.$('modal').hidden, true);
     assert.match(page.card.querySelector('.skills-market-banner.is-success').textContent, /已安装 entry-1/);

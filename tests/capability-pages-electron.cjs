@@ -164,6 +164,94 @@ if (!process.versions.electron) {
         await sleep(450);
       }
 
+      /* ---------- 表单里的共享 listbox（exposure / 三处写入目标） ---------- */
+      const pickerProofs = [];
+      const importFixture = path.join(process.env.CAPABILITY_ELECTRON_PROFILE, 'picker-import.md');
+      fs.writeFileSync(importFixture, '---\nname: claude-notes\ndescription: 导入位置选择器取证\n---\n# 会议笔记\n');
+      const scrollInto = async (selector) => {
+        await js(`(() => {
+          const node = document.querySelector(${JSON.stringify(selector)});
+          if (node) node.scrollIntoView({ block: 'center' });
+          return Boolean(node);
+        })()`);
+        await sleep(250);
+      };
+      const setFileInput = async (selector, filePath) => {
+        const documentResult = await window.webContents.debugger.sendCommand('DOM.getDocument', { depth: -1, pierce: true });
+        const found = await window.webContents.debugger.sendCommand('DOM.querySelector', {
+          nodeId: documentResult.root.nodeId, selector,
+        });
+        assert.ok(found.nodeId, '找不到文件输入：' + selector);
+        await window.webContents.debugger.sendCommand('DOM.setFileInputFiles', { files: [filePath], nodeId: found.nodeId });
+      };
+      async function provePicker(control, selector, theme, width, height, move) {
+        await scrollInto(selector);
+        const before = await js(`document.querySelector(${JSON.stringify(selector)}).dataset.value`);
+        await click(selector);
+        await wait(`!!document.querySelector('.pi-anchored-menu.ds-picker-menu [role="option"]')`, control + ' menu');
+        await key(move, move, move === 'End' ? 35 : 40);
+        const box = await js(`(() => {
+          const menu = document.querySelector('.pi-anchored-menu.ds-picker-menu');
+          const rect = menu.getBoundingClientRect();
+          return {
+            parent: menu.parentElement === document.body,
+            left: Math.round(rect.left), top: Math.round(rect.top),
+            right: Math.round(rect.right), bottom: Math.round(rect.bottom),
+            viewport: [innerWidth, innerHeight],
+            focused: document.activeElement?.dataset?.value ?? null,
+            theme: document.documentElement.dataset.theme,
+          };
+        })()`);
+        assert.equal(box.parent, true, control + ': menu must be portaled to body');
+        assert.ok(box.left >= 0 && box.top >= 0
+          && box.right <= box.viewport[0] + 1 && box.bottom <= box.viewport[1] + 1,
+          control + ': menu is clipped by the viewport ' + JSON.stringify(box));
+        await shot(`${control}-menu-${width}x${height}-${theme}`, width, height);
+        await key('Enter', 'Enter', 13);
+        await wait(`!document.querySelector('.pi-anchored-menu')`, control + ' menu closed');
+        const after = await js(`document.querySelector(${JSON.stringify(selector)}).dataset.value`);
+        const label = await js(`document.querySelector(${JSON.stringify(selector)}).textContent.trim()`);
+        assert.notEqual(after, before, control + ': keyboard selection must change the value');
+        pickerProofs.push({ control, theme, size: [width, height], before, after, label, box });
+      }
+      async function captureFormPickers(theme, width, height) {
+        await fresh(theme);
+        window.setContentSize(width, height);
+        await wait(`innerWidth === ${width} && innerHeight === ${height}`, 'content size');
+        await openMcp();
+        await click('[data-focus-key="add"]');
+        await wait(`!!document.querySelector('.mcp-form-modal [data-field="exposure"]')`, 'mcp exposure picker');
+        await provePicker('mcp-exposure', '.mcp-form-modal [data-field="exposure"]', theme, width, height, 'ArrowDown');
+        await clickText('.mcp-form-modal .mcp-modal-foot-actions button', '取消');
+        await wait(`!document.querySelector('.mcp-form-modal')`, 'mcp form closed');
+
+        await openSkills();
+        await clickText('.skills-actions-bar button', '新建');
+        await wait(`!!document.querySelector('.skills-editor-dialog [data-field="target"]')`, 'editor target picker');
+        await provePicker('skills-editor-target', '.skills-editor-dialog [data-field="target"]', theme, width, height, 'End');
+        await clickText('.skills-editor-dialog .skills-dialog-foot button', '取消');
+        await wait(`!document.querySelector('.skills-editor-dialog')`, 'editor closed');
+
+        await openSkills();
+        await clickText('.skills-page .skills-group[data-scope="user"] .skills-group-actions button', '导入文件');
+        await wait(`!!document.querySelector('.skills-import-dialog')`, 'import dialog');
+        await setFileInput('.skills-import-dialog .skills-file-input', importFixture);
+        await wait(`!!document.querySelector('.skills-import-dialog .skills-import-plan:not([hidden])')`, 'import plan');
+        await wait(`!!document.querySelector('.skills-import-dialog [data-field="target"]')`, 'import target picker');
+        await provePicker('skills-import-target', '.skills-import-dialog [data-field="target"]', theme, width, height, 'End');
+        await clickText('.skills-import-dialog .skills-dialog-foot button', '取消');
+        await wait(`!document.querySelector('.skills-import-dialog')`, 'import closed');
+
+        await openSkills();
+        await clickText('.skills-actions-bar button', '市场');
+        await wait(`document.querySelectorAll('.skills-market-card').length > 0`, 'market cards');
+        await clickText('.skills-market-card button', '安装');
+        await wait(`!!document.querySelector('.skills-preview-dialog [data-field="install-target"]')`, 'install target picker');
+        await provePicker('skills-market-target', '.skills-preview-dialog [data-field="install-target"]', theme, width, height, 'End');
+        await clickText('.skills-preview-dialog .skills-dialog-foot button', '关闭');
+        await wait(`!document.querySelector('.skills-preview-dialog')`, 'preview closed');
+      }
+
       const pages = [
         { name: 'skills-list', open: openSkills, menu: '.skills-project .project-picker-trigger', fontScale: true },
         { name: 'skills-market', open: async () => { await openSkills(); await clickText('.skills-actions-bar button', '市场'); await wait(`!!document.querySelector('.skills-market')`, 'skills market'); await sleep(450); } },
@@ -215,8 +303,18 @@ if (!process.versions.electron) {
         }
       }
 
+      if (!limit) {
+        for (const combo of [
+          { theme: 'dark', width: 1320, height: 820 },
+          { theme: 'light', width: 700, height: 600 },
+        ]) {
+          console.log('form pickers', combo.width, combo.theme);
+          await captureFormPickers(combo.theme, combo.width, combo.height);
+        }
+      }
+
       fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({
-        tag, scale, origin, generatedAt: new Date().toISOString(), shots, metrics, errors,
+        tag, scale, origin, generatedAt: new Date().toISOString(), shots, metrics, pickerProofs, errors,
         electron: process.versions.electron,
       }, null, 2));
       console.log(`electron visual: ${shots.length} shots, ${metrics.length} measurements, ${errors.length} renderer errors`);

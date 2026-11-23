@@ -287,7 +287,7 @@ async function main() {
       `(document.querySelector('.skills-editor-dialog textarea[aria-label="描述"]')?.value || '').includes('审查源代码')`,
       '编辑表单回填',
     );
-    await expect(`!document.querySelector('.skills-editor-dialog select[aria-label="保存位置"]')`, '编辑弹窗不应提供保存位置');
+    await expect(`!document.querySelector('.skills-editor-dialog [data-field="target"]')`, '编辑弹窗不应提供保存位置');
   }
 
   async function openExternal() {
@@ -368,7 +368,7 @@ async function main() {
     await waitFor(`!document.querySelector('.skills-page .skill-detail')`, '详情收起');
 
     await openEditor();
-    await expect(`!!document.querySelector('.skills-editor-dialog select[aria-label="保存位置"]')`, '新建弹窗缺少保存位置');
+    await expect(`!!document.querySelector('.skills-editor-dialog [data-field="target"]')`, '新建弹窗缺少保存位置');
     await shot(`1320-${theme}-03-editor`);
     await closeModal('取消');
 
@@ -467,7 +467,7 @@ async function main() {
     })()`);
     await waitFor(
       `(() => {
-        const select = document.querySelector('.skills-editor-dialog select[aria-label="保存位置"]');
+        const select = document.querySelector('.skills-editor-dialog [data-field="target"]');
         if (!select) return false;
         const rect = select.getBoundingClientRect();
         return rect.top >= 0 && rect.bottom <= innerHeight;
