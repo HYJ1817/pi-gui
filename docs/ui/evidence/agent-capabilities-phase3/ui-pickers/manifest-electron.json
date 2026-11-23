@@ -1,8 +1,8 @@
 {
-  "tag": "stale-fix",
+  "tag": "skills-scroll-final",
   "scale": 1.5,
-  "origin": "http://127.0.0.1:3252",
-  "generatedAt": "2026-11-23T05:42:42.740Z",
+  "origin": "http://127.0.0.1:4922",
+  "generatedAt": "2026-11-23T06:01:44.669Z",
   "shots": [
     {
       "name": "skills-list-1320x820-dark",
@@ -229,6 +229,13 @@
       }
     },
     {
+      "name": "skills-list-bottom-700x600-dark",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
       "name": "skills-list-font-125-700x600-dark",
       "size": {
         "width": 1050,
@@ -328,6 +335,13 @@
     },
     {
       "name": "skills-list-project-menu-700x600-light",
+      "size": {
+        "width": 1050,
+        "height": 900
+      }
+    },
+    {
+      "name": "skills-list-bottom-700x600-light",
       "size": {
         "width": 1050,
         "height": 900

@@ -268,7 +268,7 @@ before HEAD `324786c1`；本轮行为提交与报告提交分开记录，报告�
 - 生命周期：picker 的菜单挂在 `body`，表单重绘或对话框关闭时显式 `destroy()`，避免锚点被摘掉后残留门户节点；picker 字段用 `div` 包装，避免 `label` 点击与按钮点击叠成两次开合。
 - `ui/anchored-menu.js` 的 Tab 分支补 `stopPropagation()`，菜单开着时由菜单先处理 Tab，不再和模态框焦点陷阱在同一键上重复处理。
 
-### 验收反馈修正（2026-11-23 追加，待提交）
+### 验收反馈修正（2026-11-23 追加）
 
 用户在本地 Electron 产物验收时指出：MCP 市场的「Registry 刷新失败」仍画成一条黄色横幅，并把代理线路 / 错误码等诊断细节直接铺在界面上。对照
 [设计规范的内容克制要求](ui/design-system.md) 与本轮「清理不必要左缘黄线、重复边框和冗余说明」的约束，确认这是本轮遗留问题，修正如下：
@@ -278,6 +278,14 @@ before HEAD `324786c1`；本轮行为提交与报告提交分开记录，报告�
 - `public/mcp.css` 把 MCP exposure 触发器的高度、底色与字号对齐同表单的 `.ds-input`（32px、`--ds-field-inset-bg`、`--text-sm`），菜单选项同字号；此前触发器是 34px 白底、菜单 13px，和相邻字段不一致。
 - `tests/visual-harness.cjs` 新增 `MCP_MARKET_STALE=1` 夹具：返回旧目录 + `refreshError`，用于真实渲染取证；`tests/mcp-visual.cjs` 与 `tests/capability-pages-electron.cjs` 在该模式下断言状态行无横幅底色 / 左缘条、不泄露夹具诊断文案。
 
+### 技能页底部滚动（2026-11-23 追加）
+
+用户在本地 Electron 产物里发现技能页滚到底后最后一个分组贴住窗口下边缘，空状态瓦片像是被截断。复现与测量确认：内容溢出时，Chromium 没有把「固定高度 flex 子项之后的滚动容器 padding-bottom」算进可滚动高度，页面虽然到达 `scrollTop` 最大值，最后一张卡片仍然紧贴视口底部，没有留白。
+
+修正：`public/skills/skills.css` 给 `.skills-content` 自身加 `padding-bottom: var(--ui-space-6)`，让留白成为内容高度的一部分，而不是依赖外层滚动容器的 padding。页面结构、分组顺序和业务数据不变。
+
+回归：`tests/skills-visual.cjs` 在 700×600 滚到底后断言「已到最大 scrollTop」且最后分组与窗口底部间距 ≥ 24px，并新增 `01b-list-bottom` 截图；`tests/capability-pages-electron.cjs` 在真实 Electron 的 700×600 深 / 浅两套窗口重复同一断言。修正前该间距为 0（贴边），修正后实测约 32px。
+
 ### 验证
 
 | 命令 / 场景 | 结果 |
@@ -285,9 +293,9 @@ before HEAD `324786c1`；本轮行为提交与报告提交分开记录，报告�
 | `node tests/mcp-management-ui.cjs` | **41/41**：exposure 选项集合与回填、点击 / 方向键 / Home / End / Enter、Escape / Tab 归还焦点且不关表单、重绘与取消无残留菜单、选择不写配置；保存请求的 `exposure` 不变；旧缓存状态行不带横幅类、不出现原始 `refreshError` / 本地请求细节，刷新完成或切换来源后消失 |
 | `node tests/skills-ui.cjs` | **44/44**：新建 / 导入 / 市场安装三处目标选择器的提交 `target` 与所选一致，不再有原生 `select`；键盘移动与关闭后无残留；可访问名称带当前目标位置 |
 | `node tests/agent-capability-pages.cjs` | **55/55**：项目选择器回归未受通用引擎抽取影响；项目选择器可访问名称带当前值 |
-| `node tests/capability-pages-electron.cjs --tag=stale-fix`（`MCP_MARKET_STALE=1`） | **68** 张、**48** 条测量、0 renderer error；8 组 pickerProofs 覆盖 4 个控件 × 2 组窗口（1320×820 深 / 700×600 浅），真实方向键移动后 Enter 选择，菜单父节点为 `body`、矩形不越出视口；MCP exposure 触发器实测 **32px / 与同表单 `.ds-input` 同底色**；4 张旧缓存状态图断言无底色、无左缘条、单行高度且不含夹具诊断文案 |
+| `node tests/capability-pages-electron.cjs --tag=skills-scroll-final`（`MCP_MARKET_STALE=1`） | **70** 张、**48** 条测量、0 renderer error；8 组 pickerProofs 覆盖 4 个控件 × 2 组窗口（1320×820 深 / 700×600 浅），真实方向键移动后 Enter 选择，菜单父节点为 `body`、矩形不越出视口；MCP exposure 触发器实测 **32px / 与同表单 `.ds-input` 同底色**；4 张旧缓存状态图断言无底色、无左缘条、单行高度且不含夹具诊断文案；700×600 深 / 浅技能列表滚到底后最后分组与窗口底部间距 ≥ 24px |
 | `MCP_MARKET_STALE=1 node tests/mcp-visual.cjs` | **6** 张（含 `03c-market-stale.png`）；Chromium 实测状态行背景透明、`border-left: 0`、不含夹具错误文案 |
-| `node tests/skills-visual.cjs` | **44** 张、0 页面异常（选择器定位跟到 `data-field="target"`） |
+| `node tests/skills-visual.cjs` | **46** 张、0 页面异常（选择器定位跟到 `data-field="target"`；700×600 滚到底后间距 ≥ 24px，新增 `01b-list-bottom`） |
 | `npm run test:skills` / `npm run test:mcp` | 两组全部通过；末套件分别 **44/44**、**203/203** |
 | `node tests/smoke.cjs` | **1337/1337** |
 | `npm run test:primitives` | 通过；font picker **49/49**（含 picker 菜单为固定层的断言） |
@@ -297,7 +305,7 @@ before HEAD `324786c1`；本轮行为提交与报告提交分开记录，报告�
 
 本轮没有改 `server/`、没有新增依赖、没有改变 MCP 配置写入格式或技能安装目标。按测试政策不重复跑完整本地 `npm test`，以 PR CI 作 canonical 证明；`test:exe` 未单独重跑（纯前端与测试改动）。
 
-真实渲染证据（Electron 44，DPR 1.5，仓库代表图）：[MCP exposure 深 / 宽](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-exposure-menu-1320x820-dark.png) · [MCP exposure 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-exposure-menu-700x600-light.png) · [技能新建目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-editor-target-menu-1320x820-dark.png) · [技能新建目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-editor-target-menu-700x600-light.png) · [技能导入目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-import-target-menu-1320x820-dark.png) · [技能导入目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-import-target-menu-700x600-light.png) · [市场安装目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-market-target-menu-1320x820-dark.png) · [市场安装目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-market-target-menu-700x600-light.png) · [旧缓存失败状态 深](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-market-stale-1320x820-dark.png) · [旧缓存失败状态 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-market-stale-700x600-light.png)。逐项数值见 [manifest-electron.json](ui/evidence/agent-capabilities-phase3/ui-pickers/manifest-electron.json)。
+真实渲染证据（Electron 44，DPR 1.5，仓库代表图）：[MCP exposure 深 / 宽](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-exposure-menu-1320x820-dark.png) · [MCP exposure 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-exposure-menu-700x600-light.png) · [技能新建目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-editor-target-menu-1320x820-dark.png) · [技能新建目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-editor-target-menu-700x600-light.png) · [技能导入目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-import-target-menu-1320x820-dark.png) · [技能导入目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-import-target-menu-700x600-light.png) · [市场安装目标 深](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-market-target-menu-1320x820-dark.png) · [市场安装目标 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/skills-market-target-menu-700x600-light.png) · [旧缓存失败状态 深](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-market-stale-1320x820-dark.png) · [旧缓存失败状态 浅 / 窄](ui/evidence/agent-capabilities-phase3/ui-pickers/mcp-market-stale-700x600-light.png) · [技能页滚到底 深](ui/evidence/agent-capabilities-phase3/skills-scroll/skills-list-bottom-700x600-dark.png) · [技能页滚到底 浅](ui/evidence/agent-capabilities-phase3/skills-scroll/skills-list-bottom-700x600-light.png)。逐项数值见 [manifest-electron.json](ui/evidence/agent-capabilities-phase3/ui-pickers/manifest-electron.json)。
 
 ### 边界与回滚
 
