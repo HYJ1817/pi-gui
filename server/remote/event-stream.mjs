@@ -209,8 +209,13 @@ export class EventStream {
   watermark(deviceId) {
     const t = this._tl(deviceId);
     const generation = Math.max(1, t.generation);
-    const sequence = Math.max(1, t.headSequence);
-    return { cursor: makeCursor(deviceId, generation, sequence), generation, sequence };
+    // The cursor binds the ACTUAL backlog head (0 on an empty stream) so a
+    // client resuming from the snapshot watermark passes 'valid' and misses
+    // nothing. The result `sequence` is the NEXT expected frame number
+    // (schema minimum 1): on an empty backlog that is 1, matching the first
+    // frame the resumed subscription will receive.
+    const sequence = t.headSequence + 1;
+    return { cursor: makeCursor(deviceId, generation, t.headSequence), generation, sequence };
   }
 
   /**
