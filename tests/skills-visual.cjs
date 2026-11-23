@@ -457,6 +457,26 @@ async function main() {
     await measureList(theme);
     await shot(`700-${theme}-01-list`);
 
+    /* 滚到底：最后一个分组必须整个露出，并与窗口底部留出呼吸空间。
+     * 曾经在内容溢出时只差最后一段滚不出来 / 空状态瓦片贴住窗口边缘。 */
+    await scrollBottom();
+    await sleep(250);
+    const listBottom = await evalJs(`(() => {
+      const surface = document.getElementById('workSurface');
+      const groups = [...document.querySelectorAll('.skills-page .skills-content > .skills-group')];
+      const last = groups[groups.length - 1];
+      return {
+        top: Math.round(surface.scrollTop),
+        max: Math.round(surface.scrollHeight - surface.clientHeight),
+        gap: Math.round(surface.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom),
+      };
+    })()`);
+    assert(listBottom.max > 0, '700 宽度下技能列表应可滚动（夹具前提）: ' + JSON.stringify(listBottom));
+    assert(Math.abs(listBottom.top - listBottom.max) <= 1, '技能列表没有滚到底: ' + JSON.stringify(listBottom));
+    assert(listBottom.gap >= 24, '技能列表滚到底后最后一个分组贴住窗口: ' + JSON.stringify(listBottom));
+    await shot(`700-${theme}-01b-list-bottom`);
+    await scrollTop();
+
     await openEditor();
     await shot(`700-${theme}-02-editor`);
     /* 600px 高的窗口放不下整张表单；滚到底证明「保存到」仍然可达。 */

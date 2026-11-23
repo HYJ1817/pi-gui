@@ -308,6 +308,25 @@ if (!process.versions.electron) {
               await key('Escape', 'Escape', 27);
               await wait(`!document.querySelector('.pi-anchored-menu')`, page.name + ' project menu closed');
             }
+            /* 技能列表：滚到底后最后一个分组不能贴住窗口边缘。 */
+            if (page.name === 'skills-list' && dims.width === 700) {
+              const bottom = await js(`(() => {
+                const surface = document.getElementById('workSurface');
+                surface.scrollTop = surface.scrollHeight;
+                const groups = [...document.querySelectorAll('.skills-page .skills-content > .skills-group')];
+                const last = groups[groups.length - 1];
+                return {
+                  top: Math.round(surface.scrollTop),
+                  max: Math.round(surface.scrollHeight - surface.clientHeight),
+                  gap: Math.round(surface.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom),
+                };
+              })()`);
+              assert.ok(bottom.max > 0, 'skills list should overflow at 700x600: ' + JSON.stringify(bottom));
+              assert.ok(Math.abs(bottom.top - bottom.max) <= 1, 'skills list did not reach the bottom: ' + JSON.stringify(bottom));
+              assert.ok(bottom.gap >= 24, 'skills list last group sits on the window edge: ' + JSON.stringify(bottom));
+              await shot(`skills-list-bottom-${dims.width}x${dims.height}-${theme}`, dims.width, dims.height);
+              await js(`document.getElementById('workSurface').scrollTop = 0`);
+            }
             /* 旧缓存刷新失败：真实 Electron 里也必须是一行状态，不是横幅。 */
             if (page.name === 'mcp-market' && process.env.MCP_MARKET_STALE === '1') {
               await click('[data-focus-key="source:registry"]');
