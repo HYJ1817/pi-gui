@@ -2,11 +2,12 @@
 
 ## 范围与身份
 
-- 基线：`6b38415c59a4818177fa706bb3e6086af0e802be`（v0.35.1 最新 main），本地分支 `feat/compact-attachments`，验证对象是该 HEAD 加本次未提交 diff。
+- 基线：`6b38415c59a4818177fa706bb3e6086af0e802be`（v0.35.1 最新 main），本地分支 `feat/compact-attachments`。
+- 本轮验收对象：`21a0f621`（音频分类、主流格式映射与静态文件信息行）与 `165a8ec6`（音频／主流格式／真实 MP4 测试）；本文档随后单独提交。此前附件提交为 `91f0740c`、`38e249ac`、`e022482a`。
 - 基线完整 CI：[45136803834](https://github.com/HYJ1817/pi-gui/actions/runs/45136803834)，push，attempt 2，五个 canonical 组、Electron build、CI gate 均成功。只证明基线。
-- 本次完整 canonical：用户于本任务预先选择后续 PR CI；当前 **待验证**，尚未授权提交／推送／创建 PR，不用定向结果替代完整证明。
-- 范围：Classic Composer 附件 intake、紧凑呈现、本地媒体预览、发送守卫与共用 `<pi-file>` 名称显示。不改变服务端落盘／解析器、Pi schema、模型／发送入口或 Runtime 独立 Composer 的功能范围。
-- 未增加依赖、网络访问、文件执行／任意文件读取接口或 Office 预览。正常图片／PDF／DOCX／文本功能保留；PPT／Excel／ZIP／视频等以有效原文件引用附加，不声称模型已读取其内容。
+- 本次完整 canonical：用户于本任务预先选择后续 PR CI；本地只跑受影响套件，完整链 **待验证**，不用定向结果替代完整证明。分支含本文档提交后推送，未创建 PR。
+- 范围：Classic Composer 附件 intake、紧凑呈现、音频／视频／图片与普通文件分类、本地媒体预览、发送守卫与共用 `<pi-file>` 名称显示。不改变服务端落盘／解析器、Pi schema、模型／发送入口或 Runtime 独立 Composer 的功能范围。
+- 未增加依赖、网络访问、文件执行／任意文件读取接口、音频转写或 Office 预览。正常图片／PDF／DOCX／文本功能保留；PPT／Excel／ZIP／视频／音频等以有效原文件引用附加，不声称模型已读取其内容。
 - 风险：中（UI、异步附件生命周期和发送状态），上传路径／权限边界仍由原模块持有；额外验证本地 URL、恶意文件名和失败发送边界。
 
 ## 官方 T3 源码对照
@@ -36,7 +37,17 @@ T3 仓库许可证为 MIT、Copyright © 2026 T3 Tools Inc.；本次借鉴机制
 - `ui/user-message-body.js`：名称／meta 的转义往返；新格式带 `esc="1"` 标记，旧消息无标记时按字面显示，避免把历史文件名里的 `&amp;` 误改写。继续使用 `textContent`，保持 Classic／Runtime 共用消息展示。
 - 新单元入口加入 `package.json` canonical；真实 Electron 与打包专项保持单独 opt-in，不改变 CI workflow。
 
-文件类型图标沿用 `--ds-error`、`--ds-purple`、`--ds-warning`、`--ds-success` 与中性墨色，仅用于类型识别，不冒充错误状态；实际错误另有文字和 ARIA。预览缩略图／播放控件是媒体的局部表面，不为普通文件添加内层边框或卡片。
+文件类型图标沿用 `--ds-error`、`--ds-purple`、`--ds-warning`、`--ds-success`、`--ds-info` 与中性墨色，仅用于类型识别，不冒充错误状态；实际错误另有文字和 ARIA。预览缩略图／播放控件是媒体的局部表面，不为普通文件添加内层边框或卡片。
+
+## 本轮收尾（音频、格式分类与文件信息行）
+
+| 项目 | 实现与证据 |
+| --- | --- |
+| 音频格式 | `MIME_BY_EXT` 增加 MP3／WAV／M4A／M4B／AAC／FLAC／OGG／OGA／OPUS／WEBA／WMA／AIFF；`attachmentFileType` 在 image 之前识别 `audio/*`，使用仓库自绘音频 glyph 与「音频」标签（`--ds-info`）。仍按原文件引用上传和发送，未增加转写、播放或模型音频输入。 |
+| 主流文件分类 | 补齐 DOC／PPT／XLS 旧格式、ODF、RTF、CSV／TSV、TXT／LOG／JSON／JSONL／XML／YAML／HTML／CSS、RAR／7Z／TAR／GZ／TGZ／BZ2／XZ 及更多图片／视频扩展名。分类只决定呈现图标、标签与媒体行；是否已解析仍由服务端 `kind`／`text`／`error` 决定，PPTX／XLSX／压缩包／音视频不会因扩展名被描述为已读取。 |
+| 文件信息行 | 普通文件信息行改为静态 `DIV`，类型 · 名称 · 大小放在 `title`；点击不再打开内容重复的 Popover。媒体缩略图仍是唯一预览入口；静态行不进入 Tab 顺序。发送守卫、状态行 `aria-describedby` 与移除回焦保持。 |
+| 真实 MP4 | Electron 用 Chromium `MediaRecorder` 真实录制 H.264 MP4（`video/mp4;codecs=avc1.42E01E`），上传后核对原字节与 `ftyp`，缩略图 160×90、像素差 min 7／max 200，预览 `videoWidth=320` 且时长约 1 秒；移除后回焦 Attach，发送正文只含原文件路径，不产生图片内容。 |
+| 不支持编码降级 | 对同一真实 MP4 只把 `stsd` 内样本项 fourcc 改为未知值 `zzzz`。本机 Chromium 探针显示 `zzzz`／`encv` 触发 `MEDIA_ERR_SRC_NOT_SUPPORTED`，而 `hvc1`／`av01` 仍可经 `avcC` 解码，因此选用未知 fourcc。托盘回退视频图标、无 `<img>`、不生成缩略图，文件仍保留路径并可发送；点击预览显示本地「无法预览」错误。该 fixture 是真实 MP4 的受控损坏，不是真实 HEVC 文件。 |
 
 ## 第一轮独立复审与修复
 
@@ -68,33 +79,34 @@ Windows 11 x64，Node 24.22.1，Electron 44.4.3 / Chromium 152.0.7977.130。所�
 
 | 检查 | 实测结果 |
 | --- | --- |
-| `npm run test:attachments` | **35/35**；新增 `BMW` 文本反例、结构合法 BMP 正例、pagehide／移除中止实际 `options.signal`、双向跨 role 焦点回退、禁用媒体不吞焦点；含生产 HTTP 上传 PDF/DOCX/PPTX/XLSX/MD/ZIP 的真实字节与路径核对 |
+| `npm run test:attachments` | **53/53**（本轮新增 18 条，原 35 条全部保留）；新增主流格式分类表、音频图标／标签／静态行／发送引用、bogus `.pptx`／`.xlsx`／`.zip`／`.opus` 不得声称已解析、音频与压缩包真实 HTTP 上传字节核对、非法 OOXML 保留二进制引用；原有 BMP／pagehide／AbortController／焦点回退断言未删 |
 | `node tests/ui3-composer.cjs` | **34/34**；断言数量不变 |
 | `node tests/review-regressions.cjs` | **32/32** |
 | `node tests/model-capabilities.cjs` | **36/36** |
 | `node tests/model-fallback.cjs` | **74/74** |
-| `node tests/smoke.cjs`（干净基线＋仅本次 diff 的隔离副本） | **1339/1339**（第二轮修复后复跑）；新增真实 PNG 正例与「旧消息字面 `&amp;` 不改写」回归，总数未减 |
-| 原地 `node tests/smoke.cjs` | **1335/1339**；4 条失败均来自工作区另一路未完成的 `public/tool-view.js`／`public/classic-execution-view.js` 时间线图标注入，与本 diff 无关；未被计入本次通过结论 |
+| `node tests/high-risk-regressions.cjs` | **28/28**，离线 fixture |
+| `node tests/ui3-integration.cjs` | **23/23** |
+| `node tests/modules.cjs` | **121/121** |
+| `node tests/smoke.cjs`（隔离副本：基线 HEAD＋本轮附件文件） | **1339/1339**；附件断言与旧消息 `esc` 回归全部保留 |
+| 原地 `node tests/smoke.cjs` | **1332/1339**；7 条失败均为工作区另一路未完成的 `tool-view.js`／`classic-execution-view.js` 时间线 SVG／HTML 注入，与本 diff 无关，不计入通过结论 |
+| 隔离副本 `node tests/ui2-classic.cjs` | **55/55**；原地 **52/55**，3 条失败同样是另一路时间线折叠状态／焦点改动 |
 | `node tests/ci-test-plan.cjs` | 319 个 canonical leaves 精确覆盖 5 组，无重复／漏项 |
-| `npm run test:attachments:electron`（第二轮修复后） | **66/66**，28 张全界面截图与 2 张原生区域截取；最终源码证据 `%TEMP%/pi-attachments-3GJt39/evidence/results.json`；此前同类运行 **66/66**（`pi-attachments-g8uBIx`） |
-| 上一轮 `npm run build:app -- --rebuild` 与 App/SEA 打包验证 | 对应**修复前**源码：38/38、249 文件摘要一致。本轮修复后尚未重建，见「限制」 |
+| `npm run test:attachments:electron` | **77/77**，32 张真实截图；证据 `%TEMP%/pi-attachments-i2r5iY/evidence/results.json`。新增真实 MP4 缩略图／预览／移除／发送与未知 fourcc 降级检查，原有 WebM／文档／布局／对比度断言全部保留 |
+| 本轮 `npm run build:app -- --rebuild` 与 App/SEA 打包 | **未运行**。工作区仍混有另一路未完成的 `public/tool-view.js`、`classic-execution-view.js`、`runtime-conversation.css` 等改动，现在重建会把那一路带进产物；最终源码仍需跑源码版。上一轮 38/38 的打包证据早于本轮，不能代表最终状态 |
 | 第一轮独立复审 | **不通过**；1 阻断 + 3 应处理 + 2 建议，已逐项修复，见上表 |
 | 第二轮独立复核 | **0 阻断 + 4 项非阻断建议**，已全部处置；修复后附件／创作器／模型／回归套件复跑通过 |
-| 第三轮窄范围独立复核 | **未完成**：外部通道返回 429（OpenCode Go 月度额度用尽），无审查结论，不计作通过；作者自查另修复「禁用媒体吞焦点」边缘并补测 |
-| 本次完整 canonical / PR CI | **待验证**，用户选择后续 PR CI，未运行本地完整链 |
-
-| 修复后复跑的受影响套件 | high-risk-regressions **28/28**、ui3-integration **23/23**、modules **121/121**；隔离副本 ui2-classic **55/55**（原地 **52/55**，3 条失败同样来自另一路未完成的时间线改动） |
-| 修复前已跑并通过（未逐项复跑） | ui-visual-finish 10/10、theme 47/47、design-system-buttons phase B 34 项、runtime-conversation 110/110、session-ux-phase1 81/81、message-edit-ui 42/42、logging-ui 11/11、stop-barrier 17/17；完整证明交由 PR CI |
+| 第三轮窄范围独立复核 | **未完成**：OpenCode Go 月度额度 429，无审查结论。本轮再尝试独立复审，Devin 周额度 429 失败，仍无结论；不计作通过 |
+| 本次完整 canonical / PR CI | **待验证**，用户选择后续 PR CI；本轮未创建 PR，本地未运行完整链 |
 
 ### 真实渲染矩阵
 
 改造前截图：`%TEMP%/pi-attachments-YC2jaw/evidence/before-dark.png` 与 `before-light.png`。
 
-当前源码截图与测量（第二轮修复后复跑）：`%TEMP%/pi-attachments-3GJt39/evidence/results.json`，66 项检查、28 张全界面截图，另有 2 张直接 `capturePage(rect)` 的 Composer 区域截图（未合成像素）；代表：
+当前源码截图与测量（本轮 77 项检查）：`%TEMP%/pi-attachments-i2r5iY/evidence/results.json`，32 张全界面截图，另有直接 `capturePage(rect)` 的 Composer 区域截图（未合成像素）；代表：
 
 - `reference-three-dark.png`、`reference-three-light.png` 与 `reference-composer-dark.png`、`reference-composer-light.png`：对齐用户截图的「视频＋PDF＋Word」场景，不出现托盘滚动。
 
-- `single-video.png`、`single-pdf.png`、`video-preview.png`、`image-preview.png`。
+- `single-video.png`、`single-pdf.png`、`single-mp4.png`、`video-preview.png`、`mp4-preview.png`、`mp4-codec-fallback.png`、`mp4-preview-failure.png`、`image-preview.png`。
 - `dark-1320-mixed.png`、`light-1320-mixed.png`、`dark-700-mixed.png`、`light-700-mixed.png`。
 - `dark-file-hover.png`、`light-file-hover.png`、`dark-keyboard-focus.png`、`light-keyboard-focus.png`。
 - `*-many-zoom-0.8/1/1.25/1.5.png`、`font-scale-150.png`：24 个中文／英文长名称，局部滚动。
@@ -104,14 +116,15 @@ Windows 11 x64，Node 24.22.1，Electron 44.4.3 / Chromium 152.0.7977.130。所�
 
 实际颜色经 canvas 解析并在真实 Composer 背景上合成：深色文字最小 8.48:1、图标最小 5.66:1；浅色文字最小 7.27:1、图标最小 3.36:1。达到普通文字 4.5:1／非文本 3:1，未用截图猜测对比度。
 
-文件选择经 CDP 注入真实临时文件后触发产品 change；拖拽和粘贴为真实浏览器中的 DataTransfer／ClipboardEvent fixture，不冒称 OS 级拖入或真实系统剪贴板。预览、关闭、移除和发送使用受信鼠标／键盘。视频是本地 canvas + MediaRecorder 生成的真实 VP8 WebM；未验证所有 MP4／MOV 编解码器。
+文件选择经 CDP 注入真实临时文件后触发产品 change；拖拽和粘贴为真实浏览器中的 DataTransfer／ClipboardEvent fixture，不冒称 OS 级拖入或真实系统剪贴板。预览、关闭、移除和发送使用受信鼠标／键盘。视频包含本地 canvas + MediaRecorder 生成的真实 VP8 WebM，以及本机 Chromium 真实录制的 H.264 MP4；不支持编码用例由真实 MP4 的样本项 fourcc 受控改为未知值，不冒充真实 HEVC／MOV 文件。未验证所有 MP4／MOV 编解码器组合。
 
 ### 首次失败与环境说明
 
-- 修复前新增回归运行 7/21，14 项失败；后续增加 3 项负向边界，当时最终 24/24。第一轮复审后补 4 项，第二轮复审后补 7 项（`BMW` 反例、结构合法 BMP 正例、pagehide 中止、移除中止、双向跨 role 焦点、禁用媒体不吞焦点），现为 35/35。既有 Composer 和 smoke 的断言总数没有减少。
+- 修复前新增回归运行 7/21，14 项失败；后续增加 3 项负向边界，当时最终 24/24。第一轮复审后补 4 项，第二轮复审后补 7 项（`BMW` 反例、结构合法 BMP 正例、pagehide 中止、移除中止、双向跨 role 焦点、禁用媒体不吞焦点），当时 35/35。本轮再补 18 条格式／上传／静态行用例，现为 53/53；既有 Composer 和 smoke 的断言总数没有减少。
 - 默认仓库内 Electron 可执行文件首次 GUI 启动 exit 3；复制为唯一 TEMP 私有运行时后正常沙箱通过，未禁用沙箱。两者 electron.exe SHA256 均为 `bf0fe749904ca9f713ccfb2427c519fa39d0bbd0337ba411ba08785802e8d548`。
 - Electron 脚本先因等待自己扣住的 upload Promise 超时，修正只等待真实阶段；再修正 executeJavaScript 不可克隆函数返回值与 RGBA luminance 夹具计算。没有删检查或把失败改成 skip；首个成功完整矩阵为 62/62（`pi-attachments-Fr4ddx`）；补充参考截图三附件检查与真实缩略图像素检查后为 65/65，没有修改产品行为。第一轮复审修复后复跑为 66/66（`pi-attachments-XtX5pQ`），新增的是状态行几何检查，旧检查未删。
 - 第二轮修复后首次 Electron 运行 65/66：首帧缩略图在负载下抓到全黑画面（`min=0,max=0`），其余 65 项通过。按代码路径定位为 `seeked` 与合成帧呈现的竞态，未放宽断言；产品改为等待 `requestVideoFrameCallback`、250ms 兜底后再绘制。随后运行 66/66（`pi-attachments-2a6n8V`、`pi-attachments-g8uBIx`），补齐禁用媒体焦点边缘后最终源码再次 66/66（`pi-attachments-3GJt39`）。
+- 本轮真实 MP4 首次降级用例失败：把 `stsd` 样本项从 `avc1` 改成 `hvc1` 后，Chromium 仍通过 `avcC` 解码并生成缩略图（15/17，细节为 `thumbnail:true, placeholder:false`）。按用户要求没有把失败改成跳过；另写 TEMP Electron 探针逐项加载变体，确认 `zzzz`／`encv` 返回 `MEDIA_ERR_SRC_NOT_SUPPORTED`，而 `hvc1`／`av01` 仍可解码，随后把 fixture 改为未知 fourcc `zzzz`，完整运行 **77/77**。
 - 默认仓库内 Electron 可执行文件在当前会话再次以无输出方式退出；改用上一轮已校验的 TEMP 私有运行时（SHA256 相同）后正常完成，未禁用沙箱。
 - SEA 在系统 TEMP 的六种上传均被环境拒绝：`EPERM ... mkdir .../sea/.uploads`。App 同处正常。按既有测试政策，仅该专项设置独立仓库内 TEMP/TMP/TMPDIR 后 App/SEA 均 38/38，未修改产品路径守卫。成功证据位于 `.probe/attachment-package-temp-aGLNJZ/pi-attachments-packaged-brDP1i/results.json`；首次失败保留于系统 TEMP 的 `pi-attachments-packaged-NQQ5Ht`。
 - 离线构建使用已有 Electron 缓存，ZIP SHA256 `790a355b684d5c7cc8dc3cdd8c4cca7c4b2d054685427c7554a956879a82e70b`；包内 electron.exe 与已实测运行时摘要一致。既有 SEA 注入工具输出签名警告，构建 exit 0；这些开发产物不是已签名正式发布。
@@ -122,9 +135,10 @@ Windows 11 x64，Node 24.22.1，Electron 44.4.3 / Chromium 152.0.7977.130。所�
 - 原上传 32 MiB 限制不变；大视频会准确报告超限。已落盘的文件继续由既有缓存清理负责；从草稿移除不删除服务器文件，不破坏已经发送的引用。
 - 图片格式判定只嗅探文件头，不做完整解码；BMP 额外校验文件／DIB 头结构，但伪造了合法头部的非图片仍可能在模型侧解码失败。BMP 仅接受常见 Windows DIB 头（40/52/56/64/108/124 字节）；OS/2 12 字节头等少见变体会保留为普通文件引用，不会作为 `ImageContent`。误标扩展名的真实图片会按实际字节的格式发送，消息里的文件名保持原样。
 - `pagehide`、移除、工作区／会话切换会中止在途上传并释放本地视频缩略图与预览；从 bfcache 恢复时用草稿里的原始 File 重建。服务端若已写完文件，仍由既有缓存清理负责。真正卸载页面后草稿不从磁盘恢复，这是原有边界。
-- 本次未验证真实模型、所有媒体编解码器、macOS/Linux、安装器／正式升级；正常沙箱证明仅限所记录私有运行时和这台机器。
-- **修复后尚未重建 App/SEA。** 当前 `dist-app` 与 `build` 产物仍是修复前的附件源码；工作区另有与本次无关、尚在变化的 `public/tool-view.js`、`public/classic-execution-view.js` 与未跟踪 `public/conversation-work-log.js`，现在重建会把那一路未完成改动一起带进产物，因此未执行。修复后的效果需跑源码版，或等那一路稳定后再重建；上一轮 38/38 的打包摘要不再代表最终源码。
-- 回滚：本次无数据 schema 迁移；提交后回退该业务 diff 再重建即可。当前未提交状态可仅恢复本报告列出的已跟踪改动并删除本次新增模块／测试，保留用户原有未跟踪文件，不执行整仓 reset/clean。
-- 开发完成：实现与本地验证已完成。
-- 代码验收：第一轮**不通过**（1 阻断 + 3 应处理 + 2 建议，已修复）；第二轮**0 阻断 + 4 项非阻断建议**（已全部修复并复跑）；第三轮窄范围独立复核**未完成**（外部通道 429），作者自查补一处焦点边缘并复跑。因此 `requestVideoFrameCallback` 首帧等待与「禁用媒体不吞焦点」两项属于作者自查＋真实 Electron/jsdom 回归，**未经独立复审**。结论出来前不写「代码验收通过」。另有用户选择的完整 PR CI 待验证。
-- 合并许可：未取得。发布许可：未取得。未提交、未推送、未合并、未打 tag、未发布。
+- 本次未验证真实模型、所有媒体编解码器、macOS/Linux、安装器／正式升级；正常沙箱证明仅限所记录私有运行时和这台机器。MP4 只覆盖本机 Chromium 可录制的 H.264 组合；HEVC／AV1／MOV 等真实文件、以及“未知 fourcc”之外的真实损坏形态未验证。
+- 音频只验证分类、图标、标签、真实字节上传与文件引用发送；没有音频播放器、转写、波形或模型音频输入。SVG／HEIC／AVIF／TIFF 显示为图片类型但只有本地预览，仍按文件引用发送。
+- **本轮未重建 App/SEA。** 当前 `dist-app` 与 `build` 产物仍是本轮修复前的附件源码；工作区另有与本次无关、尚在变化的 `public/tool-view.js`、`public/classic-execution-view.js`、`public/runtime-conversation.css` 与未跟踪 `public/conversation-work-log.js`，现在重建会把那一路未完成改动一起带进产物，因此未执行。修复后的效果需跑源码版，或等那一路稳定后再重建；上一轮 38/38 的打包摘要不再代表最终源码。
+- 回滚：本次无数据 schema 迁移；提交后回退 `21a0f621`、`165a8ec6` 与本文档提交再重建即可。不执行整仓 reset/clean，不删除用户原有未跟踪文件。
+- 开发完成：实现与本地定向验证已完成，代码与测试已提交。
+- 代码验收：第一轮**不通过**（1 阻断 + 3 应处理 + 2 建议，已修复）；第二轮**0 阻断 + 4 项非阻断建议**（已全部修复并复跑）；第三轮窄范围独立复核**未完成**（OpenCode Go 429），本轮独立复审再次因 Devin 周额度 429 未取得结论。因此本轮新增代码只有作者自查＋ jsdom／真实 Electron 回归，**未经独立复审**；`requestVideoFrameCallback` 首帧等待与「禁用媒体不吞焦点」仍是作者自查项。结论出来前不写「代码验收通过」。另有用户选择的完整 PR CI 待验证。
+- 合并许可：未取得。发布许可：未取得。本轮只按用户指示提交并推送分支，未创建 PR、未合并、未打 tag、未发布。
