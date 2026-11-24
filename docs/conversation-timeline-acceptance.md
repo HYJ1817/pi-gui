@@ -72,6 +72,7 @@
   - 样式：`public/agent-execution.css`、`public/styles.css`
   - 测试：`tests/turn-fold.cjs`、`tests/conversation-work-fold.cjs`、`tests/conversation-flow.cjs`、`tests/agent-execution-ui.cjs`、`tests/session-ux-p5-view.cjs`、`tests/session-ux-p5-ui.cjs`、`tests/session-ux-p5-runtime.cjs`、`tests/session-ux-p5-shots.cjs`、`tests/exe-check.cjs`
   - 文档：`docs/conversation-ui.md`、`docs/conversation-timeline-audit.md`、本文件
+- 后续补丁（2026-11-24，展开用量明细修复）：`public/styles.css`、`tests/agent-execution-ui.cjs`、`tests/session-ux-p5-shots.cjs` 三个文件，65 insertions / 3 deletions；新增 2 条 CSS 契约与 1 个真实 Chrome 展开断言。
 - 折叠机制：
   - 每个已结束回合最多一条主折叠；标题由真实回合 start / end 计算墙钟，并行工具取最晚结束，**不相加**。正常结束「执行了 3 分 27 秒」；运行中「执行中 · 已运行 5 秒」；等待 / 停止 / 失败 / 中断 / 未完成各用对应真实状态；补充输入后的段落「继续执行了 1.5 秒」。
   - 主折叠覆盖整轮（含补充输入之间的工作），补充段从该条真实用户消息的时间开始，结束于**该段最后一项真实工作**；只有最后一段采用 settled 的回合结束时间，前段不能借用后段时钟。已验证时间线用 P5 `timing` 与已授权的 `_tlEntry`，Classic 用用户 / assistant 消息时间戳与 ToolEntry，Runtime 回退用真实 block 观察时间。
@@ -81,7 +82,7 @@
   - Classic / Runtime / 原生回退共用 `public/ui/turn-fold.js` 的文案与 `public/ui/work-presentation.js` 的摘要；没有新增虚拟列表、React、服务端字段或 Pi schema 改动。
 - 本轮修复：
   1. **动作名被截断**：工具行标题改为 `flex: 0 0 auto; max-inline-size: 45%`，参数 / facts `flex: 1 1 0; min-inline-size: 0`，状态图标与行尾箭头固定 16px；正常宽度下「执行」等短名完整可见，长命令 / 路径吸收截断，窄窗与字体放大同样成立。
-  2. **用量默认占位留白**：`.ui2-msg-meta` 改为绝对定位的 1px 裁切层，`opacity: 0`、`pointer-events: none`，不再占布局；hover / 键盘 focus 在消息底部 12px 间隙内浮出（`inset-block-end: -11px`），带背景与阴影；操作条同步收进间隙（`-12px`）。真实 token / reasoning / cost / 字段仍可达，「用量」入口不再重复轮次耗时。
+  2. **用量默认占位留白**：`.ui2-msg-meta` 改为绝对定位的 1px 裁切层，`opacity: 0`、`pointer-events: none`，不再占布局；hover / 键盘 focus 在消息底部 12px 间隙内浮出（`inset-block-end: -11px`），带背景与阴影；操作条同步收进间隙（`-12px`）。真实 token / reasoning / cost / 字段仍可达，「用量」入口不再重复轮次耗时。后续补丁：摘要固定单行，长内容省略而不是向上换行；展开「明细」时 footer 切回正常流，向下推开后续内容并为操作条预留 18px，避免此前绝对定位向上生长、盖住思考与最终回答。
   3. **折叠异常状态不可感知**：失败 / 中断 / 取消 / 未完成改用 `circleAlert` / `stop` / `warning` 图标与标题后缀「· N 项失败」等，`data-attention` 驱动默认展开；不画成功标签，也不把单个工具失败升级为整轮失败。
   4. **摘要夸大**：只有同一动作的每次调用都带可靠目标标识（P5 `summary.fileName`、原生 `ToolEntry.path`）时才说「读取 N 个文件」；否则退回「N 次工具」。Thinking、命令、搜索分类保持独立，未扩大任何读取权限。
   5. **Thinking / 过程正文**：最终回答保持可见，中间思考与过程文本作为工作条目进入折叠；Classic 在回合结束后才把最终回答消息内的 Thinking 节点借出到记录中，并保留 marker，释放时原位还原，编辑 / 重发目标不变。运行中内容保持可读，正常完成后通过耗时折叠收起。
@@ -89,11 +90,11 @@
 
 | 证据层 | 命令 / 场景与代码状态 | 环境、退出码与实际结果 | 证据位置 |
 | --- | --- | --- | --- |
-| 作者定向测试 | 最终工作区代码上的受影响套件 | `turn-fold` 6/6；`conversation-work-fold` 6/6；`conversation-flow` 19/19（原 18 + 新补充段用例）；`agent-execution-ui` 226/226；`ui2-classic` 55/55；`ui2-visual`（真实 Chrome）57/57；`session-ux-phase1` 81/81、`phase2` 98/98、`phase3` 128/128；`smoke` 1339/1339；P5-A 25 组 / 61 条模型断言 / 7 组后端，P5 view 7/7、UI 17/17、runtime 1/1，persistence 9/9、recovery 8/8、classic-history 1/1、runtime-recovery 3/3；`runtime-conversation` 110/110；`runtime-store` 34/34；`runtime-ui` 16/16；`runtime-history-search` 37/37；`history-tool-summary` 38/38 用例、168/168 断言；`session-search` 72/72（5i 因本机无符号链接权限跳过，不计入）；`message-edit-ui` 42/42。断言总数没有减少。 | 各套件直接运行；jsdom 结果不作为布局证明 |
-| 真实 Chrome 折叠矩阵 | `node tests/session-ux-p5-shots.cjs`：Classic / Runtime 实时完成后的折叠、已验证完成 / 运行 / 失败 / 停止 / 中断 / 补充段、60 项长记录、原生长命令、用量隐藏 / hover、暗 / 亮、1320 / 700 宽；键盘 Enter、滚动位置、文本选区与截图 | `P7 fold matrix` 完成；`P5-B Chromium: 20 layouts verified`，exit 0。完成态标题 `执行了 3 分 27 秒`，运行态 `执行中 · 已运行 5 秒`，停止态 `你在 8 秒后停止`，补充段三段标题按真实边界；折叠头展开 / 收起前后触发行偏移保持；选中文本在折叠切换后仍保留；用量 chip 与操作条底边均未越过下一条消息顶边，消息高度在有 / 无用量的两种情况下一致；长记录显示 60 项分页且名称未被截成「执...」。 | `C:\pi-GUI\.shots\session-ux-p5b\`：`classic-completed-fold-collapsed.png`、`classic-completed-fold-expanded.png`、`runtime-completed-fold-collapsed.png`、`runtime-completed-fold-expanded.png`、`fold-completed/running/failed/stopped/interrupted/continued-*.png`、`fold-long-*.png`、`fold-native-long-*.png`、`usage-hidden-dark.png`、`usage-hover-dark.png`、`measurements.json` |
+| 作者定向测试 | 最终工作区代码上的受影响套件 | `turn-fold` 6/6；`conversation-work-fold` 6/6；`conversation-flow` 19/19（原 18 + 新补充段用例）；`agent-execution-ui` 228/228；`ui2-classic` 55/55；`ui2-visual`（真实 Chrome）57/57；`session-ux-phase1` 81/81、`phase2` 98/98、`phase3` 128/128；`smoke` 1339/1339；P5-A 25 组 / 61 条模型断言 / 7 组后端，P5 view 7/7、UI 17/17、runtime 1/1，persistence 9/9、recovery 8/8、classic-history 1/1、runtime-recovery 3/3；`runtime-conversation` 110/110；`runtime-store` 34/34；`runtime-ui` 16/16；`runtime-history-search` 37/37；`history-tool-summary` 38/38 用例、168/168 断言；`session-search` 72/72（5i 因本机无符号链接权限跳过，不计入）；`message-edit-ui` 42/42。断言总数没有减少。 | 各套件直接运行；jsdom 结果不作为布局证明 |
+| 真实 Chrome 折叠矩阵 | `node tests/session-ux-p5-shots.cjs`：Classic / Runtime 实时完成后的折叠、已验证完成 / 运行 / 失败 / 停止 / 中断 / 补充段、60 项长记录、原生长命令、用量隐藏 / hover、暗 / 亮、1320 / 700 宽；键盘 Enter、滚动位置、文本选区与截图 | `P7 fold matrix` 完成；`P5-B Chromium: 20 layouts verified`，exit 0。完成态标题 `执行了 3 分 27 秒`，运行态 `执行中 · 已运行 5 秒`，停止态 `你在 8 秒后停止`，补充段三段标题按真实边界；折叠头展开 / 收起前后触发行偏移保持；选中文本在折叠切换后仍保留；用量 chip 与操作条底边均未越过下一条消息顶边，消息高度在有 / 无用量的两种情况下一致；展开用量「明细」后 footer 位于回答下方、下一条消息被正常推开，操作条不压住字段；长记录显示 60 项分页且名称未被截成「执...」。 | `C:\pi-GUI\.shots\session-ux-p5b\`：`classic-completed-fold-collapsed.png`、`classic-completed-fold-expanded.png`、`runtime-completed-fold-collapsed.png`、`runtime-completed-fold-expanded.png`、`fold-completed/running/failed/stopped/interrupted/continued-*.png`、`fold-long-*.png`、`fold-native-long-*.png`、`usage-hidden-dark.png`、`usage-hover-dark.png`、`usage-details-open-dark.png`、`measurements.json` |
 | 前 / 后对照 | 前一轮真实 Chrome 矩阵（工作记录已有、尚无轮次耗时折叠）与本轮矩阵并排检查 | 前：记录头只有「工作记录」与摘要，完成回合没有低优先级耗时行；后：同一位置是带箭头的「执行了 … / 继续执行了 …」折叠头，展开仍是 24px 工作行，无新卡片 / 背景 / 重复标题。用量前一轮占布局的 meta 空白，本轮默认零布局。 | 前：`%LOCALAPPDATA%\Temp\pi-gui-conversation-20261123-b582c14d\t3-matrix\`、`.shots\ui2-visual\`；后：`.shots\session-ux-p5b\` |
 | Electron 实际渲染 | `node tests/agent-execution-visual.cjs`，真实 Electron 44.4.3 | 28/28，exit 0；运行中工具组默认展开、故障工作记录默认展开、Runtime 状态与滚动、深 / 浅 / 700px 均通过。交互录屏已生成。 | `.shots\agent-execution\`、`agent-execution-interaction.mp4` |
-| 打包产物 | `npm run build:exe`；`PI_GUI_ELECTRON_ZIP_DIR=<本机 v44.4.3 缓存> npm run build:app -- --rebuild`，离线 | 均 exit 0。`build/Pi GUI.exe` 106,641,408 bytes，SHA-256 `8a8d383086463a2bf6be3df2db06311433be93233dd53d7ec1c2bb7e39360334`；`dist-app\Pi GUI-win32-x64\Pi GUI.exe` 246,324,736 bytes，SHA-256 `71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f`；整包 335.5 MB。 | `build/Pi GUI.exe`；`dist-app\Pi GUI-win32-x64\`；`build/asset-manifest.json` |
+| 打包产物 | `npm run build:exe`；`PI_GUI_ELECTRON_ZIP_DIR=<本机 v44.4.3 缓存> npm run build:app -- --rebuild`，离线 | 均 exit 0。`build/Pi GUI.exe` 106,642,432 bytes，SHA-256 `fc47ee19c92467bd12dd78c3ecf18b1adb56106f4ac5287cac699db281f151a7`；`dist-app\Pi GUI-win32-x64\Pi GUI.exe` 246,324,736 bytes，SHA-256 `71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f`；整包 335.5 MB。 | `build/Pi GUI.exe`；`dist-app\Pi GUI-win32-x64\`；`build/asset-manifest.json` |
 | 产物内容一致性 | dist-app 的 `resources/app/public` 与源 `public/` 全量逐字节比较；SEA 内嵌资源通过实际启动 exe 后 HTTP 读取 | dist-app 253 个 public 文件 **0 差异 / 0 缺失**；`exe-check` **55/55**，其中 `index.html`、`styles.css`、`app.js`、`agent-execution.css`、`messages.js`、`runtime-conversation.js`、`execution-timeline-view.js`、`conversation-work-log.js`、`ui/turn-fold.js`、`ui/work-presentation.js` 均与磁盘逐字节一致；exe 正常启动、假 pi 子进程与 PTY、PDF、配置读写全部通过。 | 同上；`node tests/exe-check.cjs` 输出 |
 | Git 交付 | 本轮源码 / 测试 / 文档提交 | 按回滚边界拆分提交并推送 `origin/feat/compact-attachments`；未合并、未打 tag、未发布。提交哈希见推送后的 `git log --oneline`。 | `git status -sb`；`git log --oneline -5` |
 | 完整 canonical / PR CI | 未在本机重跑 | **待验证**：上一轮完整 `npm test` 因无关凭据套件失败，用户明确不重跑；本轮按用户口径让 PR CI 完成 canonical。CI 结果出来前不宣称完整通过。 | PR 流程 |
@@ -103,7 +104,7 @@
 - 断言适配说明（均为目标行为变化，不是隐藏失败，断言总数没有减少）：
   - 已验证回合的旧「工作记录」标题改为耗时折叠标题；运行中断言改为「执行中」且不出现伪造的「已运行 / 用时」，失败 / 完成断言接受「执行了 / 工作记录」。
   - 补充输入从 progress 区域移到 activity-flow，保持可见；原导航 / 焦点断言保留，新增每段独立计时断言。
-  - `agent-execution-ui` 新增 5 条 CSS 契约：工具名不收缩、用量默认零布局且 hover 可达、已验证用量仍正常显示、折叠头图标 / 标题 / 摘要弹性、工作行动作名与参数宽度分配。
+  - `agent-execution-ui` 新增 7 条 CSS 契约：工具名不收缩、用量默认零布局且 hover 可达、已验证用量仍正常显示、展开用量明细回到正常流、展开时为操作条留出间距、折叠头图标 / 标题 / 摘要弹性、工作行动作名与参数宽度分配。
   - `exe-check` 新增 7 个内嵌资源逐字节比较，原有 3 个保留。
 - 限制与残余风险：
   - 完整 canonical 与 PR CI **待验证**；本文件只把定向套件、Electron 视觉套件、真实 Chrome 矩阵与打包检查当作已完成的证据层。
