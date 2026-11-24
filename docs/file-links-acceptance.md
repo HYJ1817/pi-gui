@@ -81,7 +81,7 @@
 | 回归 | `node tests/smoke.cjs` | exit 0；**1339/1339**，无断言减少 | 终端输出 |
 | 回归 | `node tests/files-terminal.cjs`、`files-terminal-ui.cjs`、`terminal-job-object.cjs`、`runtime-conversation.cjs`、`theme.cjs`、`modules.cjs`、`ui-ia.cjs`、`system-settings-ui.cjs`、`electron-guard`（test:guard）、`server-security`（test:security） | exit 0；113、95、10、110/110、47/47、121/121、32/32、20/20、128/128、44/44 | 终端输出 |
 | 独立审查 | Codex `gpt-6.2-sol`（reasoning high）对同一最终 diff 的安全复审 | **完成**：首轮报 5 个阻断项 + 3 个确认项 + 1 个历史遗留放大；本轮全部修复（approval 绑定目标身份、持久化失败回滚、敏感祖先双向拒绝、撤销经 SSE/事件清理缓存与标签页、editors-save 不接收 customPath 等）；复审确认修复有效，无新增阻断项 | 审查摘要见下「独立审查历史」 |
-| 独立审查 | Claude Opus 5.5（effort high）功能复审、两次 Claude Agent 原生审查 | **未产出**：原生 Agent 两次 429（周配额耗尽）；Opus 委托已发起但截至本报告未返回；Codex 功能审查中途同因中断，留下的两条线索（持久撤销复活、裸文件名升级后不跟随刷新）已修复并补测试。如实披露，不声称通过 | 本文件 |
+| 独立审查 | Claude Opus 5.5（effort high）功能复审、Codex 功能复审、两次 Claude Agent 原生审查 | **未产出**：原生 Agent 两次 429（DeepSeek 周配额耗尽）；Codex 功能审查 429（周额度，2026-11-27 后才可再试）；Opus 5.5 委托 429（OpenCode Go 月额度，2026-12-02 后才可再试）。Codex 功能审查中断前留下的两条线索（持久撤销复活、裸文件名升级后不跟随刷新）已修复并补测试。**不宣称独立功能审查通过** | 本文件 |
 | 真实桌面验收 | `node tests/file-links-desktop.cjs`；打包产物 `dist-app/Pi GUI-win32-x64/Pi GUI.exe`（最终代码构建后运行） | exit 0；**27/27**：行内/纯文本/外部引用渲染、悬停真实字节数、内部查看器 L18、同名选择器、未授权外部零请求、原生授权对话框、授权后查看器打开、目录授权（本次运行+长期）、外部图片受控端点、设置页探测到真实 VS Code、撤销后 403、工作区 B 不串 A、长期授权重启恢复、Ctrl+Click 真实启动 `Code.exe --goto …\app.ts:18` 且窗口标题确认 | [file-links-evidence/](file-links-evidence/)（17 张截图 + results.json；07/09 为裁剪后的对话框区域，17 为 VS Code 窗口截图） |
 | 打包产物一致性 | `npm run build:exe` + `npm run build:app -- --rebuild` | `build/Pi GUI.exe` 106,856,448 B，SHA-256 `67edce713187b809228363ebbe9847e7d04ce9667b4ab67fd9bfa79dfe851156`；`dist-app/Pi GUI-win32-x64/Pi GUI.exe` 246,324,736 B，SHA-256 `71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f`；`public/editor-settings.js`、`file-links-ui.js`、`app.js`、`file-actions.js`、`markdown.js`、`file-link-model.js` 与 `build/electron-app/`、`dist-app/.../resources/app/` 逐字节一致；`server.cjs` 含 `mainOwnedPersistence`/`desktop_required` | 本文件；构建日志 |
 | 本地完整 canonical | 按用户既定选择交给当前 PR 的完整 CI | **待验证**；本报告不把定向测试当作完整证明 | 待 PR run |
@@ -105,8 +105,10 @@
 3. 功能审查：Codex 功能审查跑到中途额度耗尽，留下两条线索 ——「持久撤销写盘失败
    会复活」与「裸文件名升级后不跟随工作区刷新」；两者已修复（上述回滚 +
    `data-file-origin-*` 来源保留 + epoch 失效退回候选）并有定向测试。
-4. Claude 原生 Agent 两次发起均返回 429（weekly quota exhausted）；Claude
-   Opus 5.5 委托已在队列中，若 PR CI 之前返回且仍有问题，会按新增 diff 继续收敛。
+4. 三次独立功能审查尝试均因额度失败：Claude 原生 Agent 两次 429（DeepSeek 周配额）、
+   Codex `gpt-6.2-sol` 中途 429（周额度，2026-11-27 重置）、Claude Opus 5.5 委托
+   429（OpenCode Go 月额度，2026-12-02 重置）。没有把它们写成「已通过」；若 CI
+   之后有人工或独立审查要求，按当前 head `b84f15e5` 起新一轮。
 
 ## 限制与残余风险
 
@@ -119,8 +121,9 @@
   取决于系统关联；已拒绝可执行/脚本/快捷方式/安装包扩展名。
 - 编辑器打开在主进程拿到后端授权后按路径启动外部程序，「授权→spawn」之间理论上
   存在文件替换窗口；影响限于把别的路径交给用户自己选择的编辑器，不放大权限。
-- 独立功能审查（Opus）截至本报告未返回；不把它计入「已通过」。完整 `npm test`
-  交由 PR CI；二者完成前代码验收仍标**待验证**。
+- 独立功能审查三次尝试均因配额失败（Claude Agent ×2、Codex、Opus 5.5 委托），
+  不把它计入「已通过」；唯一完成的安全审查是 Codex `gpt-6.2-sol`。完整
+  `npm test` 交由 PR CI；二者完成前代码验收仍标**待验证**。
 - 更多已知限制见 [file-links.md 第八节](file-links.md#八验证与已知限制)。
 
 ## 回滚
@@ -134,7 +137,7 @@
 ## 待用户决定
 
 - 是否接受本轮「本地文件读取 + 外部程序启动 + 持久授权」的残余风险；
-- Opus 功能审查若在 CI 前返回，是否按其新增 diff 继续收敛；
+- 独立功能审查因配额三次失败后，是接受现状、等额度恢复后补审、还是换人工审查；
 - 是否授权合并与发布（当前均未授权；本交付只含提交、推送与 PR #111 更新）。
 
 ## 结论
