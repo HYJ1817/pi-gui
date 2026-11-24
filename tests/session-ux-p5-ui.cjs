@@ -103,8 +103,16 @@ async function main() {
       assert.strictEqual(original.closest('[data-execution-turn]'), live);
       assert.equal(live.querySelectorAll('strong').length, 1);
       assert.ok(live.querySelector('.message-regenerate'));
-      assert.equal(live.querySelectorAll('[data-execution-part="usage"]').length, 1);
-      assert.ok([...live.querySelectorAll('.execution-usage-model')].some(node => node.textContent === 'fixture-model-b'));
+      const usageButton = live.querySelector('.message-usage');
+      assert.ok(usageButton, 'verified turn usage lives on the answer action bar');
+      assert.equal(live.querySelectorAll('[data-execution-part="usage"]').length, 0, 'no separate execution usage block');
+      assert.equal(document.querySelector('#stream .ui2-msg-meta'), null, 'no old Token footer');
+      usageButton.click();
+      const pop = document.querySelector('#messageUsagePopover');
+      assert.equal(pop.hidden, false);
+      assert.equal(pop.querySelectorAll('.usage-pop-response').length, 3, 'all three real responses stay reachable');
+      assert.ok([...pop.querySelectorAll('.usage-pop-model')].some(node => node.textContent === 'fixture-model-b'));
+      document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     check('preserves native nested reading anchors', () => {
       const scroller = S.thread.parentElement;

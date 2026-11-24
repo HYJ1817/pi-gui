@@ -68,6 +68,18 @@ if (!process.versions.electron) {
     await sleep(140);
     return true;
   };
+  const hover = async (selector) => {
+    const point = await read(`(() => {
+      const e = document.querySelector(${JSON.stringify(selector)});
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    })()`);
+    if (!point) return false;
+    win.webContents.sendInputEvent({ type: 'mouseMove', ...point });
+    await sleep(160);
+    return true;
+  };
   const setTheme = async (theme) => {
     await read(`document.documentElement.dataset.theme = ${JSON.stringify(theme)}`);
     await sleep(200);
@@ -150,7 +162,7 @@ if (!process.versions.electron) {
     win.setContentSize(1320, 820);
     await sleep(240);
 
-    /* 2. 单条消息 Token 元信息：默认摘要 + 完整明细。 */
+    /* 2. 单条消息用量：默认收进助手操作栏，点击统计图标打开轻量 Popover。 */
     await read(`(async () => {
       __M.clearThread();
       __M.rebuildFromMessages([
@@ -162,15 +174,21 @@ if (!process.versions.electron) {
     })()`);
     await sleep(220);
     await setTheme('dark');
-    await bringIntoView('.ui2-msg-meta');
-    await shot('04-token-default-dark');
-    if (await read(`!!document.querySelector('.ui2-msg-meta-details > summary')`)) {
-      await click('.ui2-msg-meta-details > summary');
-      await shot('05-token-expanded-dark');
-    }
+    await bringIntoView('.msg.assistant');
+    await hover('.msg.assistant');
+    await shot('04-token-action-bar-dark');
+    await hover('.message-usage');
+    await click('.message-usage');
+    await shot('05-token-popover-dark');
+    await read(`(async () => (await import('/ui/usage-popover.js')).closeUsagePopover())()`);
     await setTheme('light');
-    await bringIntoView('.ui2-msg-meta');
-    await shot('06-token-default-light');
+    await bringIntoView('.msg.assistant');
+    await hover('.msg.assistant');
+    await shot('06-token-action-bar-light');
+    await hover('.message-usage');
+    await click('.message-usage');
+    await shot('06b-token-popover-light');
+    await read(`(async () => (await import('/ui/usage-popover.js')).closeUsagePopover())()`);
 
     /* 3. 轮次终态：工具失败只计数，不把整轮判失败。 */
     await read(`(async () => {

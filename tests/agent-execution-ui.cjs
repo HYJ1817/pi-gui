@@ -988,14 +988,15 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   const baseCss = fs.readFileSync(path.join(PUB, 'styles.css'), 'utf8');
   ok('工具动作名不收缩，长参数吸收截断', /\.tl-label\{[^}]*flex:0 0 auto[^}]*max-inline-size:45%[^}]*text-overflow:ellipsis/s.test(baseCss)
     && /\.tl-arg\{[^}]*flex:1 1 0[^}]*min-width:0[^}]*text-overflow:ellipsis/s.test(baseCss));
-  ok('逐条 usage 默认不占布局，悬停/聚焦才浮出', /\.ui2-msg-meta\s*\{[^}]*position:\s*absolute[^}]*inline-size:\s*1px[^}]*block-size:\s*1px[^}]*clip-path:\s*inset\(50%\)[^}]*pointer-events:\s*none/s.test(baseCss)
-    && /:is\(:hover,\s*:focus-within\)\s*>\s*\.ui2-msg-meta\s*\{[^}]*inline-size:\s*auto[^}]*opacity:\s*\.94/s.test(baseCss));
-  ok('已验证回合的「用量」仍按正常流完整显示',
-    /\.execution-usage\s+\.ui2-msg-meta\s*\{[^}]*position:\s*static[^}]*clip-path:\s*none[^}]*opacity:\s*1/s.test(baseCss));
-  ok('展开用量明细回到正常流，不向上盖住回答',
-    /\.ui2-msg-meta:has\(\.ui2-msg-meta-details\[open\]\)\s*\{[^}]*position:\s*static[^}]*margin-top:\s*var\(--ui-space-1\)[^}]*opacity:\s*1/s.test(baseCss));
-  ok('展开用量时为操作条留出间距，不压住字段',
-    /:has\(> \.ui2-msg-meta \.ui2-msg-meta-details\[open\]\)\s*\{[^}]*padding-block-end:\s*18px/s.test(baseCss));
+  ok('助手操作栏在正常流内，悬停/聚焦才显现，且不用负偏移',
+    /:is\(#stream,#runtimeView\) \.message-actions\{[^}]*display:flex[^}]*min-height:24px[^}]*margin-top:6px[^}]*opacity:0/s.test(baseCss)
+    && /:is\(:hover,:focus-within\)[\s\S]{0,200}\.message-actions,[\s\S]{0,120}opacity:1;pointer-events:auto/s.test(baseCss)
+    && !/\.message-actions\{[^}]*(?:margin-top|top):\s*-/s.test(baseCss));
+  ok('用量弹层固定定位、内部滚动，打开不改变消息高度',
+    /\.ui-usage-pop\s*\{[^}]*position:\s*fixed[^}]*max-block-size:[^}]*overflow:\s*auto/s.test(baseCss));
+  ok('用量字段等宽数字并保留逐响应分区',
+    /\.usage-pop-grid\s*\{[^}]*grid-template-columns:[^}]*font-variant-numeric:\s*tabular-nums/s.test(baseCss)
+    && /\.usage-pop-response\s*\{[^}]*border-block-start/s.test(baseCss));
   ok('折叠头图标/箭头固定，标题与摘要按主次分配', /\.conversation-work-icon,[\s\S]*?flex:\s*0 0 24px/.test(css)
     && /\.conversation-work-chevron,[\s\S]*?flex:\s*0 0 16px/.test(css)
     && /\.conversation-work-title,\s*\.execution-activity-group > \.execution-head > \.execution-head-title \{\s*flex:\s*1 1 auto/.test(css));

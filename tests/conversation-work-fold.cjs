@@ -115,6 +115,86 @@ test('wraps multiple untimed tools under the plain work-log label', async t => {
   assert.equal(log.querySelector('.conversation-work-head').getAttribute('aria-expanded'), 'false');
 });
 
+test('counts every abnormal tool instead of deduplicating status types and opens cancelled work', async t => {
+  const s = await surface(t);
+  s.parent.append(user(s.document, { start: 1000, end: 5000, status: 'completed' }),
+    group(s, 'many', ['error', 'error', 'interrupted', 'cancelled', 'incomplete', 'success']));
+  const flow = s.createConversationFlow();
+  flow.render(s.parent);
+  const log = s.parent.querySelector('[data-conversation-work]');
+  const title = log.querySelector('.conversation-work-title').textContent;
+  assert.match(title, /2 项失败/);
+  assert.match(title, /1 项中断/);
+  assert.match(title, /1 项取消/);
+  assert.match(title, /1 项未完成/);
+  assert.equal(log.dataset.attention, 'true');
+  assert.equal(log.querySelector('.conversation-work-head').getAttribute('aria-expanded'), 'true');
+  assert.match(log.querySelector('.conversation-work-state').textContent, /失败 2.*已中断 1.*已取消 1.*未完成 1/);
+});
+
+test('cancelled work opens by default and keeps a stop icon', async t => {
+  const s = await surface(t);
+  s.parent.append(user(s.document, { start: 1000, end: 5000, status: 'completed' }),
+    group(s, 'cancelled', ['cancelled', 'success']));
+  const flow = s.createConversationFlow();
+  flow.render(s.parent);
+  const log = s.parent.querySelector('[data-conversation-work]');
+  assert.equal(log.dataset.status, 'cancelled');
+  assert.equal(log.querySelector('.conversation-work-icon').dataset.icon, 'stop');
+  assert.equal(log.querySelector('.conversation-work-head').getAttribute('aria-expanded'), 'true');
+});
+
+test('resolves ownership from ordered detached nodes and re-confirms it on update', async t => {
+  const s = await surface(t);
+  const input = user(s.document, { start: 1000, end: 5000, status: 'completed' });
+  const tools = group(s, 'detached', ['success', 'success']);
+  const flow = s.createConversationFlow();
+  /* Runtime builds this batch before mounting. Ownership must come from the
+   * ordered nodes, not from previousElementSibling (which is null here). */
+  flow.render(s.parent, [input, tools]);
+  const log = s.parent.querySelector('[data-conversation-work]');
+  assert.equal(log.querySelector('.conversation-work-title').textContent, '执行了 4 秒');
+  assert.equal(tools.parentElement, log.querySelector('.conversation-work-list'));
+
+  /* A later authoritative timing update re-reads the same owner from the
+   * caller's order and refreshes the label without recreating the log. */
+  input.dataset.turnEndedAt = '12500';
+  flow.render(s.parent, [input, tools]);
+  assert.strictEqual(s.parent.querySelector('[data-conversation-work]'), log);
+  assert.equal(log.querySelector('.conversation-work-title').textContent, '执行了 12 秒');
+});
+
+test('never borrows timing across a following execution boundary or another session', async t => {
+  const s = await surface(t);
+  const a = user(s.document, { start: 1000, end: 2000, status: 'completed' });
+  const aTools = group(s, 'a', ['success', 'success']);
+  const other = user(s.document, { start: 9000, end: 12000, status: 'completed' });
+  const bTools = group(s, 'b', ['success', 'success']);
+  const flow = s.createConversationFlow();
+  flow.render(s.parent, [a, aTools]);
+  assert.equal(s.parent.querySelector('.conversation-work-title').textContent, '执行了 1 秒');
+
+  /* Two independent flows stand in for switching conversations: the second
+   * flow has its own ordered nodes and must never reuse A's clock. */
+  const otherParent = s.document.createElement('div');
+  otherParent.className = 'thread';
+  const foreignFlow = s.createConversationFlow();
+  foreignFlow.render(otherParent, [other, bTools]);
+  const title = otherParent.querySelector('.conversation-work-title').textContent;
+  assert.match(title, /执行了 3 秒/);
+  assert.doesNotMatch(title, /1 秒/);
+
+  /* A hard execution boundary without a user node owns no turn timing. */
+  const boundaryParent = s.document.createElement('div');
+  const boundary = s.document.createElement('div');
+  boundary.className = 'execution-turn';
+  const boundaryTools = group(s, 'boundary', ['success', 'success']);
+  boundaryParent.append(a, boundary);
+  foreignFlow.render(boundaryParent, [a, boundary, boundaryTools]);
+  const boundaryLog = boundaryParent.querySelector('[data-conversation-work]');
+  assert.equal(boundaryLog.querySelector('.conversation-work-title').textContent, '工作记录');
+});
+
 test('gives each supplemental input its own timed fold while keeping the user row visible', async t => {
   const s = await surface(t);
   const first = user(s.document, { start: 1000, end: 7000, status: 'completed' });

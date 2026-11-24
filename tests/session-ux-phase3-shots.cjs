@@ -274,8 +274,8 @@ async function main() {
         toolArg: style('#stream .tl-arg', ['fontSize', 'color']),
         toolState: style('#stream .tl-group .ui2-tool-state', ['fontSize', 'color', 'flexWrap']),
         plan: style('#stream .plan-card', ['margin', 'padding', 'fontSize']),
-        meta: style('#stream .msg.assistant .ui2-msg-meta', ['fontSize', 'color', 'marginTop']),
-        metaSummary: style('#stream .msg.assistant .ui2-msg-meta-summary', ['fontSize', 'color']),
+        usageButton: style('#stream .msg.assistant .message-actions .message-usage', ['width', 'height', 'color']),
+        usageIcon: style('#stream .message-usage svg', ['width', 'height']),
         overflow: { document: document.documentElement.scrollWidth - innerWidth, stream: stream.scrollWidth - stream.clientWidth },
       };
     })()`));
@@ -391,8 +391,8 @@ async function main() {
         toolArg: style('#runtimeView .tl-arg', ['fontSize', 'color']),
         planWrap: style('#runtimeView .ui2-runtime-plan', ['margin', 'padding']),
         plan: style('#runtimeView .plan-card', ['margin', 'padding', 'fontSize']),
-        meta: style('#runtimeView .ui2-runtime-usage .ui2-msg-meta', ['fontSize', 'color', 'marginTop']),
-        metaSummary: style('#runtimeView .ui2-runtime-usage .ui2-msg-meta-summary', ['fontSize', 'color']),
+        usageButton: style('#runtimeView .message-usage', ['width', 'height', 'color']),
+        usageIcon: style('#runtimeView .message-usage svg', ['width', 'height']),
         overflow: { document: document.documentElement.scrollWidth - innerWidth, runtimeView: view.scrollWidth - view.clientWidth, output: output.scrollWidth - output.clientWidth },
         composer: composer ? { top: composer.getBoundingClientRect().top, bottom: composer.getBoundingClientRect().bottom, overlapsOutput: output.getBoundingClientRect().bottom > composer.getBoundingClientRect().top + 1 } : null,
       };
@@ -512,9 +512,9 @@ async function main() {
         return out;
       };
       return {
-        metaSummary: style('#runtimeView .rtc-timeline-message[data-role="assistant"] .ui2-msg-meta-summary', ['fontSize', 'color']),
-        metaNote: style('#runtimeView .rtc-timeline-message[data-role="assistant"] .ui2-msg-meta-details', ['fontSize', 'color']),
-        thinkingMeta: style('#runtimeView .ui2-runtime-thinking-wrap > .ui2-msg-meta', ['marginTop']),
+        usageButton: style('#runtimeView .message-usage', ['width', 'height', 'color']),
+        usageIcon: style('#runtimeView .message-usage svg', ['width', 'height']),
+        oldUsageEntries: document.querySelectorAll('#runtimeView .ui2-msg-meta, #runtimeView .ui2-runtime-usage').length,
         toolState: style('#runtimeView .tl-group .ui2-tool-state', ['fontSize', 'color', 'flexWrap']),
         planHead: style('#runtimeView .plan-card .plan-head', ['fontSize', 'color']),
         planNowExpandedDisplay: (() => { const node = document.querySelector('#runtimeView .plan-now'); return node ? getComputedStyle(node).display : null; })(),
@@ -712,20 +712,22 @@ async function main() {
     await shot('13-planonly-history-expanded-dark-1320');
     recordMetrics('planonly-history-1320', await evalJs(`(() => {
       const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
-      const metas = plan ? [...plan.querySelectorAll('.ui2-msg-meta')] : [];
-      const output = document.querySelector('#runtimeView .rtc-output');
+      const view = document.querySelector('#runtimeView');
+      const buttons = [...view.querySelectorAll('.message-usage')];
+      const output = view.querySelector('.rtc-output');
       return {
-        planCards: document.querySelectorAll('#runtimeView .ui2-runtime-plan').length,
-        metaCount: metas.length,
-        summaries: metas.map(meta => meta.querySelector('.ui2-msg-meta-summary')?.textContent || ''),
-        planHeadCount: document.querySelectorAll('#runtimeView .plan-card .plan-head').length,
-        assistantRows: document.querySelectorAll('#runtimeView .rtc-timeline-message[data-role="assistant"]').length,
+        planCards: view.querySelectorAll('.ui2-runtime-plan').length,
+        usageButtons: buttons.length,
+        usageLabels: buttons.map(button => button.getAttribute('aria-label')),
+        oldUsageEntries: view.querySelectorAll('.ui2-msg-meta, .ui2-runtime-usage').length,
+        planHeadCount: view.querySelectorAll('.plan-card .plan-head').length,
+        assistantRows: view.querySelectorAll('.rtc-timeline-message[data-role="assistant"]').length,
         expanded: plan?.querySelector('.plan-head')?.getAttribute('aria-expanded'),
-        metasOutsideList: metas.every(meta => !meta.closest('.plan-list')),
+        usageOutsidePlanList: buttons.every(button => !button.closest('.plan-list')),
         hostWidth: plan?.getBoundingClientRect().width || 0,
-        metaWidths: metas.map(meta => meta.getBoundingClientRect().width),
+        usageButtonWidths: buttons.map(button => button.getBoundingClientRect().width),
         overflow: { document: document.documentElement.scrollWidth - innerWidth,
-          runtimeView: document.querySelector('#runtimeView').scrollWidth - document.querySelector('#runtimeView').clientWidth,
+          runtimeView: view.scrollWidth - view.clientWidth,
           output: output.scrollWidth - output.clientWidth },
       };
     })()`));
@@ -740,14 +742,17 @@ async function main() {
     await shot('13b-planonly-history-collapsed-dark-1320');
     recordMetrics('planonly-history-collapsed', await evalJs(`(() => {
       const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
-      const metas = plan ? [...plan.querySelectorAll('.ui2-msg-meta')] : [];
+      const view = document.querySelector('#runtimeView');
+      const buttons = [...view.querySelectorAll('.message-usage')];
       const head = plan?.querySelector('.plan-head');
       const list = plan?.querySelector('.plan-list');
       return {
         expanded: head?.getAttribute('aria-expanded'),
         listHidden: list?.hidden === true,
-        metaCount: metas.length,
-        metasVisible: metas.every(meta => meta.isConnected && meta.getBoundingClientRect().height > 0),
+        usageButtons: buttons.length,
+        usageButtonsVisible: buttons.every(button => button.isConnected
+          && button.getBoundingClientRect().height > 0 && !button.closest('[hidden]')),
+        oldUsageEntries: view.querySelectorAll('.ui2-msg-meta, .ui2-runtime-usage').length,
       };
     })()`));
 
@@ -755,23 +760,25 @@ async function main() {
       const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
       const head = plan?.querySelector('.plan-head');
       if (head && head.getAttribute('aria-expanded') === 'false') head.click();
-      const toggle = plan?.querySelector('.ui2-msg-meta-toggle');
-      if (toggle) toggle.click();
+      document.querySelector('#runtimeView .message-usage')?.click();
       const output = document.querySelector('#runtimeView .rtc-output');
       output.scrollTop = output.scrollHeight;
       return true;
     })()`);
     await sleep(220);
-    await shot('13c-planonly-history-usage-details-dark-1320');
+    await shot('13c-planonly-history-usage-popover-dark-1320');
     recordMetrics('planonly-history-details', await evalJs(`(() => {
       const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
-      const details = plan?.querySelector('.ui2-msg-meta-details');
+      const pop = document.querySelector('#messageUsagePopover');
       return {
-        usageDetailsOpen: details?.open === true,
-        usageItemCount: details?.querySelectorAll('.ui2-msg-meta-item').length || 0,
-        metaCount: plan?.querySelectorAll('.ui2-msg-meta').length || 0,
+        usagePopoverOpen: !!pop && !pop.hidden,
+        usagePopoverFixed: pop ? getComputedStyle(pop).position === 'fixed' : false,
+        usageFieldCount: pop ? pop.querySelectorAll('.usage-pop-value').length : 0,
+        usageInPlanList: !!plan?.querySelector('.plan-list .message-usage'),
+        oldUsageEntries: document.querySelectorAll('#runtimeView .ui2-msg-meta, #runtimeView .ui2-runtime-usage').length,
       };
     })()`));
+    await evalJs(`(async () => (await import('/ui/usage-popover.js')).closeUsagePopover())()`);
 
     await setTheme('light');
     await setViewport(700, 600);
@@ -786,19 +793,20 @@ async function main() {
     await shot('13d-planonly-history-narrow-light-700');
     recordMetrics('planonly-history-700', await evalJs(`(() => {
       const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
-      const metas = plan ? [...plan.querySelectorAll('.ui2-msg-meta')] : [];
-      const output = document.querySelector('#runtimeView .rtc-output');
-      const composer = document.querySelector('#runtimeView .rtc-composer');
+      const view = document.querySelector('#runtimeView');
+      const buttons = [...view.querySelectorAll('.message-usage')];
+      const output = view.querySelector('.rtc-output');
+      const composer = view.querySelector('.rtc-composer');
       return {
         viewport: [innerWidth, innerHeight],
-        planCards: document.querySelectorAll('#runtimeView .ui2-runtime-plan').length,
-        metaCount: metas.length,
-        summaries: metas.map(meta => meta.querySelector('.ui2-msg-meta-summary')?.textContent || ''),
+        planCards: view.querySelectorAll('.ui2-runtime-plan').length,
+        usageButtons: buttons.length,
+        oldUsageEntries: view.querySelectorAll('.ui2-msg-meta, .ui2-runtime-usage').length,
         expanded: plan?.querySelector('.plan-head')?.getAttribute('aria-expanded'),
-        metaWidths: metas.map(meta => meta.getBoundingClientRect().width),
+        usageButtonWidths: buttons.map(button => button.getBoundingClientRect().width),
         hostWidth: plan?.getBoundingClientRect().width || 0,
         overflow: { document: document.documentElement.scrollWidth - innerWidth,
-          runtimeView: document.querySelector('#runtimeView').scrollWidth - document.querySelector('#runtimeView').clientWidth,
+          runtimeView: view.scrollWidth - view.clientWidth,
           output: output.scrollWidth - output.clientWidth },
         composer: composer ? { bottom: composer.getBoundingClientRect().bottom,
           insideViewport: composer.getBoundingClientRect().bottom <= innerHeight + 1,
@@ -816,14 +824,17 @@ async function main() {
     await shot('13e-planonly-history-narrow-collapsed-light-700');
     recordMetrics('planonly-history-700-collapsed', await evalJs(`(() => {
       const plan = document.querySelector('#runtimeView .ui2-runtime-plan');
-      const metas = plan ? [...plan.querySelectorAll('.ui2-msg-meta')] : [];
+      const view = document.querySelector('#runtimeView');
+      const buttons = [...view.querySelectorAll('.message-usage')];
       return {
         expanded: plan?.querySelector('.plan-head')?.getAttribute('aria-expanded'),
         listHidden: plan?.querySelector('.plan-list')?.hidden === true,
-        metaCount: metas.length,
-        metasVisible: metas.every(meta => meta.isConnected && meta.getBoundingClientRect().height > 0),
+        usageButtons: buttons.length,
+        usageButtonsVisible: buttons.every(button => button.isConnected
+          && button.getBoundingClientRect().height > 0 && !button.closest('[hidden]')),
+        oldUsageEntries: view.querySelectorAll('.ui2-msg-meta, .ui2-runtime-usage').length,
         overflow: { document: document.documentElement.scrollWidth - innerWidth,
-          runtimeView: document.querySelector('#runtimeView').scrollWidth - document.querySelector('#runtimeView').clientWidth },
+          runtimeView: view.scrollWidth - view.clientWidth },
       };
     })()`));
 

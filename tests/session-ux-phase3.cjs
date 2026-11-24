@@ -75,39 +75,33 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     workspaceId: 'ws-' + id, workspaceEpoch: 'epoch', conversationId: id, runtimeId: 'rt-' + id,
     runtimeGeneration: gen, sessionId: 's-' + id });
   const usage = { input: 11, output: 7, cacheRead: 3, cacheWrite: 2, cacheWrite1h: 1, reasoning: 4, totalTokens: 21 };
-  const metaText = root => [...root.querySelectorAll('.ui2-msg-meta-item')].map(node => node.textContent);
 
-  console.log('P3-B：Token 摘要与明细统一');
+  console.log('P3-B：用量字段白名单、摘要与整轮汇总');
   {
-    const meta = MM.renderMessageMeta({ role: 'assistant', usage });
-    ok('摘要只显示总量与推理（含在输出中）', meta?.querySelector('.ui2-msg-meta-summary')?.textContent
-      === 'Token 21 · 推理 4（含在输出中）');
-    equal(meta.querySelector('.ui2-msg-meta-details')?.open, false, '明细默认收起');
-    deep(metaText(meta), [
-      '输入 11 Token', '输出 7 Token', '缓存读取 3 Token', '缓存写入 2 Token',
-      '缓存写入（1小时） 1 Token', '推理 4 Token（含在输出中）', '总计 21 Token',
-    ], '七个白名单字段使用统一名称');
-    equal(meta.querySelector('[data-kind="reasoning"]')?.textContent, '推理 4 Token（含在输出中）',
-      'reasoning 明确标注已包含在输出中，不新增“思考 Token”');
+    const normalized = MM.normalizeUsage({ ...usage, extra: 'SECRET', cost: { total: 0.0123, input: 99 } });
+    deep(Object.keys(normalized).sort(), [...MM.USAGE_FIELDS.map(([key]) => key), 'costTotal'].sort(),
+      '只保留七个 Pi 字段与已算好的成本');
+    equal(normalized.costTotal, 0.0123, '成本只认 Pi 的 usage.cost.total');
+    ok('成本不补货币符号', !JSON.stringify(normalized).includes('$') && !JSON.stringify(normalized).includes('¥'));
+    equal(MM.formatUsageNumber(1234), '1,234', '数字格式统一');
+    equal(MM.usageSummary(usage), 'Token 21 · 推理 4（含在输出中）', '摘要只放总量与推理');
+    equal(MM.usageSummary({ input: 0, output: 1234 }), '输出 1,234 Token', '缺 total 时退回 output');
+    equal(MM.usageSummary({ input: 0, output: 0, reasoning: 0, totalTokens: 0 }),
+      'Token 0 · 推理 0（含在输出中）', '真实 0 不被省略');
 
-    const fallback = MM.renderMessageMeta({ role: 'assistant', usage: { input: 0, output: 1234 } });
-    equal(fallback.querySelector('.ui2-msg-meta-summary')?.textContent, '输出 1,234 Token', '缺 total 时退回 output');
-    equal(fallback.querySelector('[data-kind="totalTokens"]'), null, '不把 input/output 相加伪造总计');
-    equal(fallback.querySelector('[data-kind="input"]')?.textContent, '输入 0 Token', '真实 0 保留');
-
-    const invalid = MM.renderMessageMeta({ role: 'assistant', usage: {
+    const invalid = MM.normalizeUsage({
       input: -1, output: 1.5, cacheRead: '3', cacheWrite: null, cacheWrite1h: NaN,
       reasoning: Infinity, totalTokens: null,
-    } });
-    equal(invalid, null, '负数/小数/字符串/非有限值都不进入元信息');
+    });
+    equal(invalid, null, '负数/小数/字符串/非有限值都不进入白名单');
+    equal(MM.normalizeUsage([]), null, '数组载荷不生成用量');
+    equal(MM.normalizeUsage({}), null, '没有任何有效字段时整块不生成');
 
-    const cost = MM.renderMessageMeta({ role: 'assistant', usage: { output: 2, cost: { total: 0.0123 } } });
-    equal(cost.querySelector('[data-kind="cost"]')?.textContent, '预估成本 0.0123', '成本只显示 Pi 已算好的数');
-    ok('成本不补货币符号', !cost.textContent.includes('$') && !cost.textContent.includes('¥'));
-
-    const stream = MM.renderUsageMeta({ output: 5, source: 'message_update' }, { source: 'message_update' });
-    ok('流式中的摘要带“仍在累计”，但不是终值', stream.textContent.includes('仍在累计'));
-    equal(MM.renderUsageMeta({}, {}), null, '没有任何有效字段时整块不生成');
+    deep(MM.mergeUsages([usage, { output: 1 }]), { output: 8 },
+      '整轮汇总只累加每条响应都有的字段，缺失字段不补 0');
+    equal(MM.mergeUsages([]), null, '空记录没有汇总');
+    equal(MM.mergeUsages([{ input: 0, output: 0, reasoning: 0, totalTokens: 0 }]).totalTokens, 0,
+      '单条真实 0 保留');
   }
 
   console.log('P3-D：历史 usage 白名单投影');
@@ -328,28 +322,59 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     d.body.append(host);
     const view = RTC.createRuntimeConversation({ host });
     view.show('R');
-    observeRuntimeFrame({ type: 'runtime_event', owner: owner('R'), eventSequence: 1,
-      event: { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', usage, content: [text('live a')] } } });
+    const usageButtonIn = root => root?.querySelector('.message-usage') || null;
+    const openUsage = button => {
+      if (!button) return null;
+      button.click();
+      return d.querySelector('#messageUsagePopover');
+    };
+    const closeUsage = () => d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    /* 第一个网格是整轮汇总；逐响应网格排在它后面。 */
+    const popValue = (pop, kind) => pop?.querySelector('.usage-pop-grid')
+      ?.querySelector(`[data-kind="${kind}"]`)?.textContent || '';
+    let sequence = 0;
+    const frame = event => observeRuntimeFrame({ type: 'runtime_event', owner: owner('R'),
+      eventSequence: ++sequence, event });
+    frame({ type: 'agent_start' });
+    frame({ type: 'message_start', message: { role: 'user', content: [text('live q')] } });
+    frame({ type: 'message_end', message: { role: 'assistant', stopReason: 'stop', usage, content: [text('live a')] } });
     await tick();
-    const liveMeta = host.querySelector('.ui2-runtime-usage .ui2-msg-meta');
-    ok('实时 usage 有摘要与明细', Boolean(liveMeta?.querySelector('.ui2-msg-meta-summary'))
-      && liveMeta.querySelectorAll('.ui2-msg-meta-item').length === 7);
-    equal(liveMeta.querySelector('.ui2-msg-meta-summary')?.textContent,
-      '本轮 · Token 21 · 推理 4（含在输出中）', '实时摘要与 Classic 字段/格式一致');
-    deep(metaText(liveMeta), metaText(MM.renderMessageMeta({ role: 'assistant', usage })),
-      '实时与 Classic 明细条目逐字一致');
+    const liveButton = usageButtonIn(host.querySelector('.rtc-output .rtc-timeline-message[data-role="assistant"]'));
+    ok('实时 usage 成为助手操作栏里唯一的统计入口', Boolean(liveButton)
+      && host.querySelectorAll('.rtc-output .message-usage').length === 1);
+    equal(liveButton?.getAttribute('aria-label'), '查看用量', '入口名称描述动作而不是堆数字');
+    equal(liveButton?.title, '', '不再叠加原生 title tooltip');
+    const livePop = openUsage(liveButton);
+    equal(livePop?.hidden, false, '点击浮出轻量用量弹层');
+    equal(livePop?.querySelector('.usage-pop-head > span')?.textContent, '本轮用量');
+    equal(popValue(livePop, 'input'), '11 Token');
+    equal(popValue(livePop, 'output'), '7 Token');
+    equal(popValue(livePop, 'reasoning'), '4 Token');
+    equal(popValue(livePop, 'totalTokens'), '21 Token');
+    ok('推理仍标注为含在输出中', livePop?.textContent.includes('推理（含在输出中）'));
+    ok('实时摘要带整轮 Token 总量', livePop?.textContent.includes('Token 21'));
+    closeUsage();
 
     view.show('HIST');
     await tick();
     [...host.querySelectorAll('button')].find(button => button.textContent === '打开历史').click();
     await tick();
-    const historyMeta = host.querySelector('.rtc-output .rtc-timeline-message[data-role="assistant"] .ui2-msg-meta');
-    ok('历史 assistant 消息显示真实 usage', Boolean(historyMeta));
-    equal(historyMeta?.querySelector('.ui2-msg-meta-summary')?.textContent,
-      'Token 21 · 推理 4（含在输出中）', '历史摘要与 Classic 一致');
-    const thinkingMeta = host.querySelector('.rtc-output .ui2-runtime-thinking-wrap > .ui2-msg-meta');
-    equal(thinkingMeta?.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 3',
-      '只思考的消息也显示真实 usage，且不伪造空正文');
+    const historyButton = usageButtonIn(host.querySelector('.rtc-output .rtc-timeline-message[data-role="assistant"]'));
+    ok('历史 assistant 消息显示真实 usage', Boolean(historyButton));
+    equal(host.querySelectorAll('.rtc-output .message-usage').length, 1,
+      '同一回合的 Thinking 与正文用量合成一个入口');
+    const historyPop = openUsage(historyButton);
+    equal(historyPop?.querySelector('.usage-pop-head > span')?.textContent, '本轮用量');
+    equal(popValue(historyPop, 'input'), '12 Token', '整轮汇总只累加每条响应都有的字段');
+    equal(popValue(historyPop, 'output'), '9 Token');
+    equal(popValue(historyPop, 'totalTokens'), '24 Token');
+    equal(popValue(historyPop, 'reasoning'), '', '缺失字段不伪造，推理仅在第 2 条响应里出现');
+    const historySections = historyPop?.querySelectorAll('.usage-pop-response') || [];
+    equal(historySections.length, 2, '逐响应明细保留两条真实记录');
+    equal(historySections[0]?.querySelector('[data-kind="totalTokens"]')?.textContent, '3 Token');
+    equal(historySections[1]?.querySelector('[data-kind="totalTokens"]')?.textContent, '21 Token');
+    equal(historySections[1]?.querySelector('[data-kind="reasoning"]')?.textContent, '4 Token');
+    closeUsage();
     ok('历史提示说明用量可用', host.querySelector('.rtc-state').textContent.includes('正文与用量'));
 
     historyPayload = { ok: true, conversationId: 'R', sessionId: 's-R',
@@ -363,6 +388,14 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     ok('只有 Thinking 用量时提示仍与实际字段相符', host.querySelector('.rtc-state').textContent.includes('正文与用量'));
     equal(host.querySelectorAll('.rtc-output .rtc-timeline-message[data-role="assistant"]').length, 0,
       'Thinking-only 历史不伪造空的助手正文');
+    const thinkingBar = host.querySelector('.rtc-output .conversation-work-log > .message-actions-usage-only');
+    ok('Thinking-only 历史把真实 usage 挂在思考记录上且只挂一次', Boolean(thinkingBar)
+      && host.querySelectorAll('.rtc-output .message-usage').length === 1);
+    ok('思考折叠时用量入口仍在折叠列表之外', thinkingBar?.closest('.conversation-work-list') === null);
+    const thinkingPop = openUsage(usageButtonIn(thinkingBar));
+    equal(popValue(thinkingPop, 'totalTokens'), '3 Token');
+    equal(popValue(thinkingPop, 'reasoning'), '', 'Thinking 记录没有的字段不补 0');
+    closeUsage();
 
     historyPayload = { ok: true, conversationId: 'R', sessionId: 's-R',
       messages: [{ role: 'user', text: 'history q' }], truncated: false,
@@ -376,20 +409,24 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     [...host.querySelectorAll('button')].find(button => button.textContent === '打开历史').click();
     await tick();
     const planHost = host.querySelector('.rtc-output .ui2-runtime-plan');
-    const planMeta = planHost?.querySelector('.ui2-msg-meta');
-    ok('plan-only 历史显示真实 usage', Boolean(planMeta?.querySelector('.ui2-msg-meta-summary')));
-    equal(planMeta?.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 21 · 推理 4（含在输出中）',
-      '计划卡 usage 摘要与 Classic 一致');
-    equal(host.querySelectorAll('.rtc-output .ui2-runtime-plan > .ui2-msg-meta').length, 1,
+    const planBar = planHost?.querySelector(':scope > .message-actions-usage-only');
+    const planButton = usageButtonIn(planBar);
+    ok('plan-only 历史显示真实 usage', Boolean(planButton));
+    const planPop = openUsage(planButton);
+    equal(popValue(planPop, 'totalTokens'), '21 Token');
+    equal(popValue(planPop, 'reasoning'), '4 Token');
+    equal(popValue(planPop, 'cost'), '0.0123', 'Pi 已算好的成本仍可达');
+    closeUsage();
+    equal(host.querySelectorAll('.rtc-output .message-usage').length, 1,
       'plan-only 历史的 usage 只显示一次');
     equal(host.querySelectorAll('.rtc-output .rtc-timeline-message[data-role="assistant"]').length, 0,
       'plan-only 历史不伪造空的助手正文');
-    ok('计划用量位于折叠列表之外', Boolean(planMeta) && planMeta.closest('.plan-list') === null);
+    ok('计划用量位于折叠列表之外', Boolean(planBar) && planBar.closest('.plan-list') === null);
     const planHead = planHost.querySelector('.plan-head');
     const planList = planHost.querySelector('.plan-list');
     planHead.click();
     equal(planHead.getAttribute('aria-expanded'), 'false', '计划卡仍可折叠');
-    ok('折叠计划列表不影响用量显示', planList.hidden && planMeta.isConnected);
+    ok('折叠计划列表不影响用量显示', planList.hidden && planBar.isConnected);
     planHead.click();
     equal(planHead.getAttribute('aria-expanded'), 'true', '计划卡可再次展开');
 
@@ -422,10 +459,17 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     await tick();
     const steerPlanHosts = host.querySelectorAll('.rtc-output .ui2-runtime-plan');
     equal(steerPlanHosts.length, 1, '同一 turnId 的两条 plan-only 消息仍只有一张计划卡');
-    const steerMetas = steerPlanHosts[0].querySelectorAll('.ui2-msg-meta');
-    equal(steerMetas.length, 2, '两条真实 usage 各显示一次');
-    deep([...steerMetas].map(meta => meta.querySelector('.ui2-msg-meta-summary')?.textContent),
-      ['Token 12', 'Token 23'], '两条 usage 数值不同且没有被覆盖');
+    const steerButton = usageButtonIn(steerPlanHosts[0]);
+    ok('两条真实 usage 合成一个整轮入口', Boolean(steerButton)
+      && host.querySelectorAll('.rtc-output .message-usage').length === 1);
+    const steerPop = openUsage(steerButton);
+    const steerSections = steerPop?.querySelectorAll('.usage-pop-response') || [];
+    equal(steerSections.length, 2, '逐响应明细保留两条真实 usage');
+    equal(steerSections[0]?.querySelector('[data-kind="totalTokens"]')?.textContent, '12 Token');
+    equal(steerSections[1]?.querySelector('[data-kind="totalTokens"]')?.textContent, '23 Token',
+      '两条 usage 数值不同且没有被覆盖');
+    equal(popValue(steerPop, 'totalTokens'), '35 Token', '整轮汇总等于两条真实记录之和');
+    closeUsage();
     equal(host.querySelectorAll('.rtc-output .rtc-timeline-message[data-role="assistant"]').length, 0,
       '同一 turnId 的 plan-only 历史仍不伪造正文');
     ok('多条用量时历史提示说明用量可用', host.querySelector('.rtc-state').textContent.includes('正文与用量'));
@@ -433,8 +477,8 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     const steerList = steerPlanHosts[0].querySelector('.plan-list');
     steerHead.click();
     equal(steerHead.getAttribute('aria-expanded'), 'false', '多用量计划卡仍可折叠');
-    ok('折叠计划列表后两条用量仍显示',
-      steerList.hidden && [...steerMetas].every(meta => meta.isConnected));
+    ok('折叠计划列表后两条用量仍可达',
+      steerList.hidden && Boolean(steerButton?.isConnected));
     view.dispose(); host.remove();
   }
 

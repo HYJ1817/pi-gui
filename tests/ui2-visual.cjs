@@ -402,7 +402,7 @@ async function suite(send) {
         '<div class="rtc-output">RUNTIME_PROBE</div>' +
       '</div>',
       '<button class="ui2-tool-summary" aria-expanded="false"><svg class="ui2-chev" viewBox="0 0 24 24"></svg>SUMMARY_PROBE</button>',
-      '<div class="ui2-msg-meta">META_PROBE</div>',
+      '<div class="ui-usage-pop">POP_PROBE</div>',
       '<div class="ui2-runtime-status" data-state="running">STATUS_PROBE</div>',
       '<div class="ui2-runtime-meta">RT_META_PROBE</div>',
     ].join('');
@@ -416,11 +416,9 @@ async function suite(send) {
   await evalJs(`document.querySelector('#u2c-probes .ui2-tool-summary').setAttribute('aria-expanded','true')`);
   await expect('预留 · .ui2-chev 展开态旋转（与 .think-head 同构）',
     `getComputedStyle(document.querySelector('#u2c-probes .ui2-chev')).transform !== 'none'`);
-  await expect('预留 · .ui2-msg-meta 11px、共享次级文字色',
-    `(() => { const s = getComputedStyle(document.querySelector('#u2c-probes .ui2-msg-meta'));
-      const token = document.createElement('span'); token.style.color = 'var(--ds-text-secondary)'; document.body.append(token);
-      const expected = getComputedStyle(token).color; token.remove();
-      return s.fontSize === '11px' && s.color === expected; })()`);
+  await expect('用量弹层固定定位且收在视口内（打开不改变消息排版）',
+    `(() => { const s = getComputedStyle(document.querySelector('#u2c-probes .ui-usage-pop'));
+      return s.position === 'fixed' && parseFloat(s.width) <= innerWidth - 16 + 1 && s.overflow === 'auto'; })()`);
   await expect('预留 · .ui2-runtime-status[data-state=running] = running 语义色',
     `(() => { return getComputedStyle(document.querySelector('#u2c-probes .ui2-runtime-status')).color === 'rgb(34, 211, 238)'; })()`);
   await expect('预留 · .ui2-runtime-meta 弱化小字',
@@ -455,17 +453,17 @@ async function suite(send) {
         '<div class="think" data-state="error"><button type="button" class="think-head">',
           '<span>思考过程 · 12 字</span><span class="ui2-think-status"> · 发生错误</span>',
         '</button><div class="think-body">思考内容</div></div>',
-        '<footer class="ui2-msg-meta" aria-label="本条助手消息用量">',
-          '<span class="ui2-msg-meta-item" data-kind="input">输入 1,234 Token</span>',
-          ' · <span class="ui2-msg-meta-item" data-kind="output">输出 56 Token</span>',
-        '</footer>',
-      '</div></div>',
+      '</div>',
+        '<div class="message-actions">',
+          '<button type="button" class="message-action-btn message-copy" aria-label="复制消息">复制</button>',
+          '<button type="button" class="message-action-btn message-usage" aria-label="查看用量">用量</button>',
+        '</div>',
+      '</div>',
       '<div class="runtime-conversation">',
         '<details class="ui2-runtime-thinking" id="u2c-think" open>',
           '<summary class="ui2-runtime-thinking-head">思考过程 · 12 字</summary>',
           '<pre class="ui2-runtime-thinking-body" id="u2c-think-body">' + 'X'.repeat(400) + '</pre>',
         '</details>',
-        '<p class="ui2-runtime-usage">本轮 · 输入 12 · 输出 3</p>',
         '<div class="rtc-state ui2-runtime-tools">',
           '<span class="ui2-runtime-tool" data-state="running">read · 运行中</span>',
           '<span class="ui2-runtime-tool" data-state="done">bash · 完成</span>',
@@ -474,7 +472,7 @@ async function suite(send) {
         '</div>',
       '</div>',
     ].join('');
-    document.body.appendChild(probe);
+    (document.querySelector('#stream') || document.body).appendChild(probe);
     return 'ok';
   })()`);
 
@@ -503,9 +501,13 @@ async function suite(send) {
   await expect('A · .ui2-tool-state 组状态弱化小字（11px / t3）',
     `(() => { const s = getComputedStyle(document.getElementById('u2c-st'));
       return s.fontSize === '11px' && s.color === 'rgb(176, 176, 176)'; })()`);
-  await expect('A · .ui2-msg-meta-item 等宽数字对齐（tabular-nums）',
-    `(() => { const s = getComputedStyle(document.querySelector('#u2c-ab .ui2-msg-meta-item'));
-      return s.fontVariantNumeric.includes('tabular'); })()`);
+  await expect('A · 操作栏与各动作共用 24px 尺寸，统计入口不另起一行',
+    `(() => { const bar = document.querySelector('#u2c-ab .message-actions');
+      const buttons = [...bar.querySelectorAll('.message-action-btn')];
+      return buttons.length === 2 && buttons.every(button => {
+        const s = getComputedStyle(button);
+        return s.width === '24px' && s.height === '24px';
+      }) && getComputedStyle(bar).display === 'flex'; })()`);
   await expect('A · .think[data-state=error] 状态文字用 err 色',
     `getComputedStyle(document.querySelector('#u2c-ab .ui2-think-status')).color === 'rgb(248, 113, 113)'`);
 
@@ -516,9 +518,12 @@ async function suite(send) {
   await expect('B · 长思考文本不产生容器横向滚动',
     `(() => { const b = document.getElementById('u2c-think-body');
       return b.scrollWidth <= b.clientWidth + 1; })()`);
-  await expect('B · .ui2-runtime-usage 弱化小字（11.5px / t3）',
-    `(() => { const s = getComputedStyle(document.querySelector('#u2c-ab .ui2-runtime-usage'));
-      return s.fontSize === '11.5px' && s.color === 'rgb(176, 176, 176)'; })()`);
+  await expect('B · 用量字段网格两列对齐且等宽数字',
+    `(() => { const grid = document.createElement('div'); grid.className = 'usage-pop-grid';
+      grid.innerHTML = '<span class="usage-pop-term">输入</span><b class="usage-pop-value">1,234 Token</b>';
+      document.getElementById('u2c-ab').append(grid);
+      const s = getComputedStyle(grid);
+      return s.display === 'grid' && s.fontVariantNumeric.includes('tabular'); })()`);
   await expect('B · .ui2-runtime-tools 每项一行（flex 纵排）',
     `getComputedStyle(document.querySelector('#u2c-ab .ui2-runtime-tools')).flexDirection === 'column'`);
   await expect('B · .ui2-runtime-tool[data-state=running] = run 色',

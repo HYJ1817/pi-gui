@@ -55,21 +55,21 @@ test('preserves native section nodes and keeps streaming thinking outside a disc
   const thinking = document.createElement('details');
   const answer = document.createElement('article');
   const outcome = document.createElement('footer');
-  const meta = document.createElement('footer');
   progress.textContent = 'original progress';
   answer.textContent = 'original final answer';
   let copied = false;
   answer.addEventListener('click', () => { copied = true; });
   update({ turn, input, plan, progress: [progress], thinking: [thinking], answer: [answer],
-    outcomes: [outcome], usage: [meta], items: [], group: null });
+    outcomes: [outcome], items: [], group: null });
   assert.deepEqual([...node.querySelectorAll('article')], [input, progress, answer]);
   // 参考 T3：助手的过程文字是时间线的一行，不再被折进工作记录里。
   // 流式 thinking 仍保持 native <details>，不被套进第二层 disclosure。
   assert.ok(!progress.parentElement.hidden);
   assert.ok(!thinking.parentElement.closest('[hidden]'));
   assert.ok(!answer.parentElement.closest('[hidden]'));
-  assert.equal(node.querySelectorAll('footer').length, 2);
-  assert.ok(meta.parentElement.hidden);
+  assert.equal(node.querySelectorAll('footer').length, 1, 'the verified turn only contributes its outcome footer');
+  assert.ok(node.contains(outcome));
+  assert.equal(node.querySelector('.execution-usage'), null, 'execution view owns no usage entry');
   answer.click();
   assert.ok(copied);
 });
@@ -232,7 +232,7 @@ test('reuses Plan rows, reveals a later parallel item and respects an explicit d
   assert.equal(list.firstElementChild, first);
 });
 
-test('uses authorized file facts and preserves known zero token values', async t => {
+test('uses authorized file facts without exposing restricted detail', async t => {
   const { document, node, update } = await surface(t);
   global.document = document;
   t.after(() => { delete global.document; });
@@ -241,13 +241,12 @@ test('uses authorized file facts and preserves known zero token values', async t
     title: '修改文件', summary: { fileName: 'contract.js', requestedRange: { start: 10 }, diffStat: { added: 6, removed: 3 } },
     detailRef: { state: 'restricted' },
   });
-  const usage = [{ responseId: 'response', model: { id: 'model-A' }, recorded: { output: 0, totalTokens: 0 } }];
-  update({ turn: { ...turn, usage }, group, items: [edit], input });
+  update({ turn: { ...turn, status: 'completed' }, group, items: [edit], input });
   const workHead = node.querySelector('.execution-activity-group > button');
   if (workHead.getAttribute('aria-expanded') === 'false') workHead.click();
   const row = node.querySelector('.execution-activity-item button');
   assert.match(row.textContent, /contract\.js.*请求 10.*\+6 −3/);
   row.click();
   assert.match(row.parentElement.textContent, /当前视图无权读取详情/);
-  assert.match(node.querySelector('.execution-usage').textContent, /model-A.*Token 0/);
+  assert.equal(node.querySelector('.execution-usage'), null);
 });

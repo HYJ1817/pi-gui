@@ -166,8 +166,18 @@ test('history view groups authorized blocks, reveals precise search hits, and fe
   assert.match(bTurn.querySelector('.execution-activity-item').textContent, /note\.js|读取文件/);
   assert.match(bTurn.querySelector('.execution-activity-item').textContent, /无权读取详情/);
   assert.doesNotMatch(bTurn.innerHTML, /RAW_ARGS_SENTINEL|RAW_RESULT_SENTINEL/);
-  assert.equal(bTurn.querySelectorAll('.execution-usage-entry').length, 2);
-  assert.equal(bTurn.querySelectorAll('.ui2-msg-meta').length, 2, 'history ledger retains both recorded rows without duplicates');
+  const bUsage = bTurn.querySelector('.message-usage');
+  assert.ok(bUsage, 'history turn exposes usage through the answer action bar');
+  assert.equal(bTurn.querySelectorAll('.message-usage').length, 1, 'one entry per turn');
+  assert.equal(bTurn.querySelector('.execution-usage'), null, 'no separate usage block remains');
+  bUsage.click();
+  const bUsagePop = d.querySelector('#messageUsagePopover');
+  assert.equal(bUsagePop.hidden, false);
+  assert.equal(bUsagePop.querySelectorAll('.usage-pop-response').length, 2,
+    'both recorded rows stay reachable without duplicates');
+  assert.match(bUsagePop.textContent, /first-model/);
+  assert.match(bUsagePop.textContent, /final-model/);
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   requests.get('A').resolve(packet(a));
   assert.equal(await readingA, false);
   assert.equal(output.querySelector('.execution-turn'), bTurn, 'late A history cannot write into B');
@@ -182,11 +192,14 @@ test('history view groups authorized blocks, reveals precise search hits, and fe
   assert.equal(output.dataset.historyMatchState, 'found');
   assert.equal(output.scrollTop, 530);
   assert.equal(aTurn.querySelectorAll('.turn-outcome').length, 1, 'supplemental input did not make a second outcome');
-  const usageControl = turn => turn.querySelector('[data-execution-part="usage"] button.execution-head');
-  usageControl(aTurn).click();
+  const aUsage = aTurn.querySelector('.message-usage');
+  assert.ok(aUsage, 'A turn exposes usage through the answer action bar');
+  aUsage.click();
+  assert.equal(d.querySelector('#messageUsagePopover').hidden, false);
   output.scrollTop = 610;
   view.show(b.conversationId);
-  assert.equal(usageControl(bTurn).getAttribute('aria-expanded'), 'false');
+  assert.equal(d.querySelector('#messageUsagePopover').hidden, true,
+    'switching conversations closes the usage detail of the previous one');
   view.show(a.conversationId);
   assert.equal(output.scrollTop, 610, 'returning to the same read-only history preserves the resulting reading position');
   const reopeningA = view.openHistory(locator(a), { messageId: 'A-answer' });
@@ -194,7 +207,14 @@ test('history view groups authorized blocks, reveals precise search hits, and fe
   assert.equal(await reopeningA, true);
   const rebuiltA = output.querySelector('.execution-turn');
   assert.notEqual(rebuiltA, aTurn);
-  assert.equal(usageControl(rebuiltA).getAttribute('aria-expanded'), 'true', 'explicit choice survives rebuilding the same native cut');
+  const rebuiltUsage = rebuiltA?.querySelector('.message-usage');
+  assert.ok(rebuiltUsage, 'rebuilding the same native cut keeps its usage action');
+  rebuiltUsage.click();
+  const rebuiltPop = d.querySelector('#messageUsagePopover');
+  assert.equal(rebuiltPop.querySelector('.usage-pop-grid [data-kind="totalTokens"]')?.textContent, '4 Token',
+    'rebuilt verified history still carries the recorded usage row');
+  assert.match(rebuiltPop.textContent, /history-model/);
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
   const readingC = view.openHistory(locator(c), { messageId: 'C-progress' });
   requests.get('C').resolve(packet(c, { malformed: true }));

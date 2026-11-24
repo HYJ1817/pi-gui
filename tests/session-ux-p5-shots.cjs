@@ -445,47 +445,186 @@ async function seedNativeFoldCase() {
     overflow: thread.scrollWidth - thread.clientWidth };
 }
 
+/* 用量入口是助手操作栏里的一枚统计图标：默认不抢阅读注意力，但**保留
+ * 24px 的常驻槽位**，所以 hover / 聚焦 / 打开 Popover 都不会让消息或下一条
+ * 跳动。这里用真实 messageActions 构树，不走已删除的旧元信息页脚。 */
 async function seedUsageCase() {
-  const { renderUsageMeta } = await import('/message-meta.js');
-  const thread = document.querySelector('#stream .thread');
+  const { messageActions } = await import('/ui/message-actions.js');
+  const stream = document.querySelector('#stream');
+  stream.scrollTop = 0;
+  const thread = stream.querySelector('.thread');
   thread.replaceChildren();
+  const now = Date.now();
+  const userText = '请说明这个补丁的用量。';
+  const user = document.createElement('article');
+  user.className = 'msg user';
+  user.id = 'usage-user';
+  user.setAttribute('aria-label', '你');
+  const userBody = document.createElement('div');
+  userBody.className = 'msg-body';
+  userBody.textContent = userText;
+  const userBar = messageActions(userText, { onEdit: () => {} });
+  user.append(userBody, userBar);
   const message = document.createElement('article');
   message.className = 'msg assistant';
   message.id = 'usage-msg';
+  message.setAttribute('aria-label', '助手');
+  message.dataset.turnStartAt = String(now - 3200);
+  message.dataset.turnEndedAt = String(now);
+  message.dataset.turnStatus = 'completed';
   const body = document.createElement('div');
   body.className = 'msg-body';
-  body.textContent = '这条助手消息保留真实用量，但默认不占布局高度。';
-  const meta = renderUsageMeta({ input: 1540, output: 220, reasoning: 120, totalTokens: 1880 },
-    { label: '助手响应的用量' });
-  const actions = document.createElement('div');
-  actions.className = 'message-actions';
-  const copy = document.createElement('button');
-  copy.className = 'message-copy';
-  copy.type = 'button';
-  copy.textContent = '复制';
-  actions.append(copy);
-  message.append(body, meta, actions);
+  body.innerHTML = '<p>用量来自 Pi 的真实上报，默认收进操作栏中的统计图标。</p>'
+    + '<pre class="code"><code>const usage = await readUsage();</code></pre>'
+    + '<table><thead><tr><th>字段</th><th>值</th></tr></thead><tbody>'
+    + '<tr><td>输出</td><td>220</td></tr></tbody></table>';
+  const bar = messageActions(body.textContent, {
+    onRegenerate: () => {},
+    usage: [{ usage: { input: 1540, output: 220, reasoning: 120, totalTokens: 1880,
+      cacheRead: 64, cacheWrite: 32, costTotal: 0.0123 }, model: 'fixture-model', responseId: 'resp-1' }],
+    usageOptions: { label: '本轮用量', status: 'completed',
+      timing: { startedAt: now - 3200, endedAt: now, durationMs: null, evidence: 'observed' } },
+  });
+  message.append(body, bar);
   const next = document.createElement('article');
   next.className = 'msg assistant';
   next.id = 'usage-next';
+  next.setAttribute('aria-label', '助手');
   next.textContent = '下一条消息';
-  thread.append(message, next);
+  thread.append(user, message, next);
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  const heightWithExtras = message.offsetHeight;
-  const nextTopWithExtras = next.getBoundingClientRect().top;
-  meta.remove();
-  const heightWithoutMeta = message.offsetHeight;
-  const nextTopWithoutMeta = next.getBoundingClientRect().top;
-  message.append(meta);
-  actions.remove();
-  const heightWithoutActions = message.offsetHeight;
-  message.append(actions);
-  const hidden = meta.getBoundingClientRect();
-  return { hiddenWidth: hidden.width, hiddenHeight: hidden.height,
-    heightWithExtras, heightWithoutMeta, heightWithoutActions,
-    nextTopWithExtras, nextTopWithoutMeta,
-    gap: next.getBoundingClientRect().top - message.getBoundingClientRect().bottom,
-    summary: meta.querySelector('.ui2-msg-meta-summary')?.textContent || '' };
+  /* 字体与入场动画在首帧后仍可能改变 1–2px；等排版稳定再交给几何断言。 */
+  await new Promise(resolve => setTimeout(resolve, 260));
+  const box = element => {
+    const r = element.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+  };
+  const buttons = [...bar.querySelectorAll('button')];
+  const icon = bar.querySelector('.message-usage svg');
+  return {
+    barOpacity: Number(getComputedStyle(bar).opacity),
+    userBarOpacity: Number(getComputedStyle(userBar).opacity),
+    buttonCount: buttons.length,
+    buttonBoxes: buttons.map(box),
+    iconBox: icon ? box(icon) : null,
+    nativeTitles: buttons.filter(button => button.hasAttribute('title')).length,
+    labels: buttons.map(button => button.getAttribute('aria-label')),
+    bodyBottom: box(body).bottom,
+    barTop: box(bar).top,
+    barBottom: box(bar).bottom,
+    nextTop: box(next).top,
+    messageHeight: message.offsetHeight,
+    userBarRight: box(userBar).right,
+    userBodyRight: box(userBody).right,
+    scrollTop: stream.scrollTop,
+    usageLabel: bar.querySelector('.message-usage')?.getAttribute('aria-label') || '',
+    overflow: stream.scrollWidth - stream.clientWidth,
+  };
+}
+
+/* 「你好啊」的最短会话：用户气泡靠右、回答靠左，两条操作栏都要在
+ * 各自正文下方留出稳定槽位，用量图标只在真实 usage 存在时出现。 */
+async function seedGreetingCase() {
+  const { messageActions } = await import('/ui/message-actions.js');
+  const stream = document.querySelector('#stream');
+  stream.scrollTop = 0;
+  const thread = stream.querySelector('.thread');
+  thread.replaceChildren();
+  const user = document.createElement('article');
+  user.className = 'msg user';
+  user.id = 'greet-user';
+  user.setAttribute('aria-label', '你');
+  const userBody = document.createElement('div');
+  userBody.className = 'msg-body';
+  userBody.textContent = '你好啊';
+  const userBar = messageActions('你好啊', { onEdit: () => {} });
+  user.append(userBody, userBar);
+  const answer = document.createElement('article');
+  answer.className = 'msg assistant';
+  answer.id = 'greet-answer';
+  answer.setAttribute('aria-label', '助手');
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = '你好！有什么我可以帮你的吗？';
+  const bar = messageActions(body.textContent, {
+    onRegenerate: () => {},
+    usage: [{ usage: { input: 12, output: 9, totalTokens: 21 } }],
+    usageOptions: { label: '本条助手消息用量' },
+  });
+  answer.append(body, bar);
+  thread.append(user, answer);
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await new Promise(resolve => setTimeout(resolve, 260));
+  const box = element => {
+    const r = element.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+  };
+  const composer = document.querySelector('#chatComposer');
+  return {
+    userBody: box(userBody), userBar: box(userBar), answerBody: box(body), answerBar: box(bar),
+    thread: box(thread),
+    userBarOpacity: Number(getComputedStyle(userBar).opacity),
+    answerBarOpacity: Number(getComputedStyle(bar).opacity),
+    userButtons: [...userBar.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
+    answerButtons: [...bar.querySelectorAll('button')].map(button => button.getAttribute('aria-label')),
+    composerTop: composer && composer.getClientRects().length ? composer.getBoundingClientRect().top : null,
+    oldEntries: document.querySelectorAll('.ui2-msg-meta, .ui2-runtime-usage, .execution-usage').length,
+    overflow: stream.scrollWidth - stream.clientWidth,
+    messageHeight: answer.offsetHeight,
+    scrollTop: stream.scrollTop,
+  };
+}
+
+/* 两轮对话：每轮只有一枚真实用量入口，轮与轮之间不重复、不额外留白。 */
+async function seedMultiTurnCase() {
+  const { messageActions } = await import('/ui/message-actions.js');
+  const stream = document.querySelector('#stream');
+  stream.scrollTop = 0;
+  const thread = stream.querySelector('.thread');
+  thread.replaceChildren();
+  const turn = (index, usage, answerText) => {
+    const user = document.createElement('article');
+    user.className = 'msg user';
+    user.id = 'multi-user-' + index;
+    user.setAttribute('aria-label', '你');
+    const userBody = document.createElement('div');
+    userBody.className = 'msg-body';
+    userBody.textContent = index === 1 ? '第一个问题' : '第二个问题';
+    user.append(userBody, messageActions(userBody.textContent, { onEdit: () => {} }));
+    const answer = document.createElement('article');
+    answer.className = 'msg assistant';
+    answer.id = 'multi-answer-' + index;
+    answer.setAttribute('aria-label', '助手');
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    body.textContent = answerText;
+    answer.append(body, messageActions(answerText, {
+      onRegenerate: () => {},
+      usage: [{ usage }],
+      usageOptions: { label: '本轮用量' },
+    }));
+    return [user, answer];
+  };
+  thread.append(...turn(1, { input: 10, output: 5, totalTokens: 15 }, '第一个回答。'),
+    ...turn(2, { input: 20, output: 7, totalTokens: 27 }, '第二个回答，稍微长一点，但仍是单行。'));
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await new Promise(resolve => setTimeout(resolve, 260));
+  const answers = [...thread.querySelectorAll('.msg.assistant')];
+  const bars = answers.map(answer => answer.querySelector('.message-actions'));
+  const bodies = answers.map(answer => answer.querySelector('.msg-body'));
+  const box = element => {
+    const r = element.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, height: r.height };
+  };
+  return {
+    usageButtons: thread.querySelectorAll('.message-usage').length,
+    bars: bars.map(box), bodies: bodies.map(box),
+    messageHeights: answers.map(answer => answer.offsetHeight),
+    nextTops: [bars[0].getBoundingClientRect().bottom, thread.querySelector('#multi-user-2').getBoundingClientRect().top],
+    oldEntries: thread.querySelectorAll('.ui2-msg-meta, .ui2-runtime-usage, .execution-usage').length,
+    overflow: stream.scrollWidth - stream.clientWidth,
+    scrollTop: stream.scrollTop,
+  };
 }
 
 async function main() {
@@ -546,6 +685,15 @@ async function main() {
         + 'const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()');
       await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
       await wait(140);
+    };
+    const click = async selector => {
+      const point = await evaluate('(() => { const e = document.querySelector(' + JSON.stringify(selector) + ');'
+        + 'if (!e) throw Error("missing " + ' + JSON.stringify(selector) + ');'
+        + 'const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()');
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
+      await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+      await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+      await wait(160);
     };
     const moveAway = async () => {
       await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 8 });
@@ -747,60 +895,320 @@ async function main() {
 
     await send('Emulation.setDeviceMetricsOverride', { width: 1320, height: 820, deviceScaleFactor: 1, mobile: false });
     await evaluate('document.documentElement.dataset.theme = "dark"; document.documentElement.style.setProperty("--font-scale", 1)');
-    const usage = await evaluate('(' + seedUsageCase.toString() + ')()');
-    assert.ok(usage.hiddenWidth <= 16 && usage.hiddenHeight <= 16, 'hidden usage still occupies layout: ' + JSON.stringify(usage));
-    assert.equal(usage.heightWithExtras, usage.heightWithoutMeta, 'usage changes the message height');
-    assert.equal(usage.heightWithExtras, usage.heightWithoutActions, 'message actions changed the message height');
-    assert.equal(usage.nextTopWithExtras, usage.nextTopWithoutMeta, 'hidden usage moved the next message');
-    assert.ok(usage.gap >= 10, 'message gap changed: ' + JSON.stringify(usage));
-    assert.match(usage.summary, /Token 1,880.*推理 120/);
-    await shot('usage-hidden-dark');
-    await hover('#usage-msg');
-    const shown = await evaluate('(() => { const m = document.querySelector("#usage-msg .ui2-msg-meta");'
-      + 'const r = m.getBoundingClientRect(); const next = document.querySelector("#usage-next").getBoundingClientRect();'
-      + 'const actions = document.querySelector("#usage-msg .message-actions").getBoundingClientRect();'
-      + 'return { opacity: Number(getComputedStyle(m).opacity), width: r.width, height: r.height, bottom: r.bottom,'
-      + 'nextTop: next.top, actionsBottom: actions.bottom,'
-      + 'summary: m.querySelector(".ui2-msg-meta-summary")?.textContent || "" }; })()');
-    assert.ok(shown.opacity > 0.5 && shown.width > 20 && shown.height > 8, 'usage did not reveal on hover: ' + JSON.stringify(shown));
-    assert.match(shown.summary, /Token 1,880.*推理 120/);
-    assert.ok(shown.bottom <= shown.nextTop + 0.5, 'usage chip crossed into the next row: ' + JSON.stringify(shown));
-    assert.ok(shown.actionsBottom <= shown.nextTop + 0.5, 'message actions crossed into the next row: ' + JSON.stringify(shown));
-    await shot('usage-hover-dark');
-    /* Opening the real fields must not grow upward over the answer: the footer
-     * returns to normal flow and pushes the next row instead of covering it. */
-    const opened = await evaluate(`new Promise(resolve => {
-      document.querySelector('#usage-msg .ui2-msg-meta-details > summary').click();
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        const m = document.querySelector('#usage-msg .ui2-msg-meta');
-        const body = document.querySelector('#usage-msg .msg-body');
-        const next = document.querySelector('#usage-next');
-        const actions = document.querySelector('#usage-msg .message-actions');
-        const r = m.getBoundingClientRect(), b = body.getBoundingClientRect();
-        const a = actions.getBoundingClientRect();
-        resolve({ position: getComputedStyle(m).position, opacity: Number(getComputedStyle(m).opacity),
-          metaTop: r.top, metaBottom: r.bottom, bodyBottom: b.bottom,
-          nextTop: next.getBoundingClientRect().top,
-          actionsTop: a.top, actionsBottom: a.bottom });
-      }));
-    })`);
-    assert.equal(opened.position, 'static', 'opened usage stayed absolutely positioned: ' + JSON.stringify(opened));
-    assert.ok(opened.opacity > 0.9, 'opened usage is not readable: ' + JSON.stringify(opened));
-    assert.ok(opened.metaTop >= opened.bodyBottom - 0.5, 'opened usage covers the answer: ' + JSON.stringify(opened));
-    assert.ok(opened.metaBottom <= opened.nextTop + 0.5, 'opened usage crossed into the next row: ' + JSON.stringify(opened));
-    assert.ok(opened.actionsTop >= opened.metaBottom - 0.5, 'actions cover the opened usage fields: ' + JSON.stringify(opened));
-    assert.ok(opened.actionsBottom <= opened.nextTop + 0.5, 'actions crossed into the next row after opening usage: ' + JSON.stringify(opened));
-    await shot('usage-details-open-dark');
-    await evaluate('document.querySelector("#usage-msg .ui2-msg-meta-details > summary").click()');
-    await evaluate('document.querySelector("#usage-msg .ui2-msg-meta-details > summary").focus()');
     await moveAway();
-    const focused = await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .ui2-msg-meta")).opacity)');
-    assert.ok(focused > 0.5, 'usage did not reveal on keyboard focus: ' + focused);
+    const usage = await evaluate('(' + seedUsageCase.toString() + ')()');
+    /* 默认隐藏但保留槽位：不透明度为 0，几何位置与 hover 后完全一致。 */
+    assert.equal(usage.barOpacity, 0, 'assistant actions are not quiet at rest: ' + JSON.stringify(usage));
+    assert.equal(usage.userBarOpacity, 0, 'user actions are not quiet at rest: ' + JSON.stringify(usage));
+    assert.equal(usage.buttonCount, 3, 'assistant bar should be regenerate / copy / usage: ' + JSON.stringify(usage));
+    assert.deepEqual(usage.labels, ['重新生成', '复制消息', '查看用量']);
+    assert.ok(usage.buttonBoxes.every(box => Math.abs(box.width - 24) <= 0.5
+      && Math.abs(box.height - 24) <= 0.5), 'action hit areas are not 24px: ' + JSON.stringify(usage.buttonBoxes));
+    assert.ok(usage.iconBox && Math.abs(usage.iconBox.width - 16) <= 0.5
+      && Math.abs(usage.iconBox.height - 16) <= 0.5, 'usage icon is not 16px: ' + JSON.stringify(usage.iconBox));
+    const gaps = usage.buttonBoxes.slice(1).map((box, index) => box.left - usage.buttonBoxes[index].right);
+    assert.ok(gaps.every(gap => gap >= 1 && gap <= 6), 'action spacing is inconsistent: ' + JSON.stringify(gaps));
+    assert.equal(usage.nativeTitles, 0, 'native title tooltip was left on an action');
+    assert.ok(usage.barBottom - usage.barTop >= 23.5, 'action bar lost its 24px slot: ' + JSON.stringify(usage));
+    assert.ok(usage.bodyBottom <= usage.barTop + 0.5, 'action bar covers the answer: ' + JSON.stringify(usage));
+    assert.ok(usage.barBottom <= usage.nextTop + 0.5, 'action bar crosses into the next message: ' + JSON.stringify(usage));
+    assert.ok(Math.abs(usage.userBarRight - usage.userBodyRight) <= 1,
+      'user actions do not align to the bubble trailing edge: ' + JSON.stringify(usage));
+    assert.ok(usage.overflow <= 1, 'usage fixture overflowed horizontally: ' + JSON.stringify(usage));
+    await shot('usage-bar-idle-dark');
+
+    await hover('#usage-msg');
+    const shown = await evaluate(`(() => {
+      const msg = document.querySelector('#usage-msg');
+      const bar = msg.querySelector('.message-actions');
+      const body = msg.querySelector('.msg-body');
+      const next = document.querySelector('#usage-next');
+      const stream = document.querySelector('#stream');
+      const r = bar.getBoundingClientRect(), b = body.getBoundingClientRect();
+      return { opacity: Number(getComputedStyle(bar).opacity),
+        pointerEvents: getComputedStyle(bar).pointerEvents,
+        bodyBottom: b.bottom, barTop: r.top, barBottom: r.bottom,
+        nextTop: next.getBoundingClientRect().top,
+        messageHeight: msg.offsetHeight, scrollTop: stream.scrollTop };
+    })()`);
+    assert.ok(shown.opacity > 0.95, 'actions did not reveal on hover: ' + JSON.stringify(shown));
+    assert.equal(shown.pointerEvents, 'auto');
+    for (const key of ['bodyBottom', 'barTop', 'barBottom', 'nextTop', 'messageHeight', 'scrollTop']) {
+      assert.equal(shown[key], usage[key], 'hover changed layout at ' + key + ': ' + JSON.stringify(shown));
+    }
+    /* 指针从正文移到操作栏不能把按钮藏掉。 */
+    await hover('#usage-msg .message-usage');
+    const tip = await evaluate(`(() => {
+      const bar = document.querySelector('#usage-msg .message-actions');
+      const t = document.querySelector('.ui-tooltip');
+      if (!t || t.hidden) return { opacity: Number(getComputedStyle(bar).opacity) };
+      const r = t.getBoundingClientRect();
+      return { opacity: Number(getComputedStyle(bar).opacity), text: t.textContent,
+        role: t.getAttribute('role'), position: getComputedStyle(t).position,
+        left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    })()`);
+    assert.ok(tip.opacity > 0.95, 'body-to-bar hover hid the actions: ' + JSON.stringify(tip));
+    assert.equal(tip.text, '查看用量');
+    assert.equal(tip.role, 'tooltip');
+    assert.equal(tip.position, 'fixed');
+    assert.ok(tip.left >= 7.5 && tip.top >= 7.5 && tip.right <= 1320 - 7.5 && tip.bottom <= 820 - 7.5,
+      'tooltip left the viewport: ' + JSON.stringify(tip));
+    assert.ok(tip.top >= usage.bodyBottom - 0.5, 'tooltip covers the answer: ' + JSON.stringify(tip));
+    await shot('usage-bar-hover-dark');
+
+    /* 键盘聚焦同样要显示操作栏，且焦点离开后恢复安静。 */
+    await moveAway();
+    assert.ok(await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .message-actions")).opacity)') < 0.2,
+      'actions stayed visible after moving away');
+    await evaluate('document.querySelector("#usage-msg .message-usage").focus()');
+    await moveAway();
+    const focusedOpacity = await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .message-actions")).opacity)');
+    assert.ok(focusedOpacity > 0.95, 'actions did not reveal on keyboard focus: ' + focusedOpacity);
     await evaluate('document.activeElement.blur()');
-    await hover('#usage-next');
-    const hiddenAgain = await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .ui2-msg-meta")).opacity)');
-    assert.ok(hiddenAgain < 0.2, 'usage stayed visible over the next message: ' + hiddenAgain);
-    results.push({ name: 'usage-overlay', ...usage, shown, opened, focusedOpacity: focused, hiddenAgain });
+    await moveAway();
+    assert.ok(await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .message-actions")).opacity)') < 0.2,
+      'actions stayed visible after blur');
+
+    /* 真实点击打开浮层：固定定位，不改变消息高度、下一条位置或滚动。 */
+    await click('#usage-msg .message-usage');
+    const pop = await evaluate(`(() => {
+      const el = document.querySelector('#messageUsagePopover');
+      const msg = document.querySelector('#usage-msg');
+      const bar = msg.querySelector('.message-actions');
+      const body = msg.querySelector('.msg-body');
+      const next = document.querySelector('#usage-next');
+      const stream = document.querySelector('#stream');
+      const composer = document.querySelector('#chatComposer');
+      const r = el.getBoundingClientRect();
+      const c = composer && composer.getClientRects().length ? composer.getBoundingClientRect() : null;
+      return { hidden: el.hidden, position: getComputedStyle(el).position, role: el.getAttribute('role'),
+        left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height,
+        viewportWidth: innerWidth, viewportHeight: innerHeight, composerTop: c ? c.top : null,
+        text: el.textContent, values: [...el.querySelectorAll('.usage-pop-value')].map(n => n.textContent),
+        sections: el.querySelectorAll('.usage-pop-response').length,
+        expanded: bar.querySelector('.message-usage').getAttribute('aria-expanded'),
+        tooltipHidden: !document.querySelector('.ui-tooltip') || document.querySelector('.ui-tooltip').hidden,
+        bodyBottom: body.getBoundingClientRect().bottom, barTop: bar.getBoundingClientRect().top,
+        barBottom: bar.getBoundingClientRect().bottom, nextTop: next.getBoundingClientRect().top,
+        messageHeight: msg.offsetHeight, scrollTop: stream.scrollTop };
+    })()`);
+    assert.equal(pop.hidden, false, 'usage popover did not open');
+    assert.equal(pop.position, 'fixed', 'usage popover is not fixed: ' + JSON.stringify(pop));
+    assert.equal(pop.role, 'dialog');
+    assert.equal(pop.expanded, 'true');
+    assert.equal(pop.tooltipHidden, true, 'tooltip remained above the popover');
+    assert.ok(pop.left >= 7.5 && pop.top >= 7.5
+      && pop.right <= pop.viewportWidth - 7.5 && pop.bottom <= pop.viewportHeight - 7.5,
+    'popover left the viewport: ' + JSON.stringify(pop));
+    if (pop.composerTop !== null) {
+      assert.ok(pop.bottom <= pop.composerTop - 7.5, 'popover overlaps the composer: ' + JSON.stringify(pop));
+    }
+    assert.ok(pop.width <= 340.5 && pop.height <= 420.5, 'popover exceeded its compact bounds: ' + JSON.stringify(pop));
+    for (const [key, expected] of [['bodyBottom', usage.bodyBottom], ['barTop', usage.barTop],
+      ['barBottom', usage.barBottom], ['nextTop', usage.nextTop],
+      ['messageHeight', usage.messageHeight], ['scrollTop', usage.scrollTop]]) {
+      assert.equal(pop[key], expected, 'opening the popover changed layout at ' + key + ': ' + JSON.stringify(pop));
+    }
+    assert.match(pop.text, /本轮用量/);
+    assert.match(pop.text, /Token 1,880/);
+    assert.match(pop.text, /耗时 3\.2 秒/);
+    assert.match(pop.text, /模型 fixture-model/);
+    assert.match(pop.text, /推理（含在输出中）/);
+    assert.match(pop.text, /预估成本/);
+    assert.deepEqual(pop.values, ['1,540 Token', '220 Token', '64 Token', '32 Token',
+      '120 Token', '1,880 Token', '0.0123']);
+    assert.equal(pop.sections, 0, 'one response should not be split into sections');
+    assert.doesNotMatch(pop.text, /流式中/);
+    await shot('usage-popover-dark');
+
+    await key('Escape', 'Escape', 27);
+    const escaped = await evaluate(`(() => { const el = document.querySelector('#messageUsagePopover');
+      const btn = document.querySelector('#usage-msg .message-usage');
+      const msg = document.querySelector('#usage-msg');
+      return { hidden: el.hidden, expanded: btn.getAttribute('aria-expanded'),
+        messageHeight: msg.offsetHeight, scrollTop: document.querySelector('#stream').scrollTop }; })()`);
+    assert.equal(escaped.hidden, true, 'Escape did not close the usage popover');
+    assert.equal(escaped.expanded, 'false');
+    assert.equal(escaped.messageHeight, usage.messageHeight, 'Escape changed message height');
+    assert.equal(escaped.scrollTop, usage.scrollTop, 'Escape changed scroll position');
+
+    await click('#usage-msg .message-usage');
+    assert.equal(await evaluate('document.querySelector("#messageUsagePopover").hidden'), false);
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: 8, y: 8, button: 'left', clickCount: 1 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 8, y: 8, button: 'left', clickCount: 1 });
+    await wait(140);
+    assert.equal(await evaluate('document.querySelector("#messageUsagePopover").hidden'), true,
+      'outside click did not close the usage popover');
+    results.push({ name: 'usage-action-bar', ...usage, shown, tip, focusedOpacity, pop, escaped });
+
+    /* 窄屏 + 浅色 + 字体缩放：浮层仍要夹在可视区内并让开输入框。 */
+    await send('Emulation.setDeviceMetricsOverride', { width: 700, height: 640, deviceScaleFactor: 1, mobile: false });
+    await evaluate('document.documentElement.dataset.theme = "light"; document.documentElement.style.setProperty("--font-scale", 1.25)');
+    await moveAway();
+    const narrow = await evaluate('(' + seedUsageCase.toString() + ')()');
+    assert.ok(narrow.overflow <= 1, 'narrow usage fixture overflowed: ' + JSON.stringify(narrow));
+    await hover('#usage-msg');
+    await click('#usage-msg .message-usage');
+    const narrowPop = await evaluate(`(() => {
+      const el = document.querySelector('#messageUsagePopover');
+      const msg = document.querySelector('#usage-msg');
+      const body = msg.querySelector('.msg-body');
+      const bar = msg.querySelector('.message-actions');
+      const next = document.querySelector('#usage-next');
+      const composer = document.querySelector('#chatComposer');
+      const r = el.getBoundingClientRect(), b = body.getBoundingClientRect();
+      const a = bar.getBoundingClientRect(), n = next.getBoundingClientRect();
+      const c = composer && composer.getClientRects().length ? composer.getBoundingClientRect() : null;
+      return { hidden: el.hidden, left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+        width: r.width, height: r.height, viewportWidth: innerWidth, viewportHeight: innerHeight,
+        composerTop: c ? c.top : null, bodyBottom: b.bottom, barTop: a.top,
+        barBottom: a.bottom, nextTop: n.top, messageHeight: msg.offsetHeight,
+        scrollTop: document.querySelector('#stream').scrollTop,
+        scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
+    })()`);
+    assert.equal(narrowPop.hidden, false);
+    assert.ok(narrowPop.left >= 7.5 && narrowPop.top >= 7.5
+      && narrowPop.right <= narrowPop.viewportWidth - 7.5 && narrowPop.bottom <= narrowPop.viewportHeight - 7.5,
+    'narrow popover left the viewport: ' + JSON.stringify(narrowPop));
+    if (narrowPop.composerTop !== null) {
+      assert.ok(narrowPop.bottom <= narrowPop.composerTop - 7.5,
+        'narrow popover overlaps the composer: ' + JSON.stringify(narrowPop));
+    }
+    assert.ok(narrowPop.scrollWidth <= narrowPop.clientWidth + 1, 'popover content overflows horizontally');
+    assert.ok(narrowPop.bodyBottom <= narrowPop.barTop + 0.5 && narrowPop.barBottom <= narrowPop.nextTop + 0.5,
+      'narrow action bar overlaps a neighbour: ' + JSON.stringify(narrowPop));
+    await shot('usage-popover-light-narrow');
+    results.push({ name: 'usage-popover-narrow', ...narrowPop });
+
+    /* 「你好啊」最短会话：真实气泡/操作栏几何 + 用量入口。 */
+    await send('Emulation.setDeviceMetricsOverride', { width: 1320, height: 820, deviceScaleFactor: 1, mobile: false });
+    await evaluate('document.documentElement.dataset.theme = "dark"; document.documentElement.style.setProperty("--font-scale", 1)');
+    await moveAway();
+    const greet = await evaluate('(' + seedGreetingCase.toString() + ')()');
+    assert.equal(greet.oldEntries, 0, '旧用量入口仍出现在「你好啊」会话里');
+    assert.ok(greet.overflow <= 1, 'greeting overflowed: ' + JSON.stringify(greet));
+    assert.deepEqual(greet.userButtons, ['编辑并重新发送', '复制消息']);
+    assert.deepEqual(greet.answerButtons, ['重新生成', '复制消息', '查看用量']);
+    assert.equal(greet.userBarOpacity, 0, 'greeting user bar is not quiet at rest');
+    assert.equal(greet.answerBarOpacity, 0, 'greeting answer bar is not quiet at rest');
+    assert.ok(Math.abs(greet.userBody.right - greet.userBar.right) <= 1,
+      'greeting user actions are not on the bubble trailing edge: ' + JSON.stringify(greet));
+    assert.ok(greet.userBody.right > greet.thread.left + greet.thread.width * 0.6,
+      'greeting user bubble is not on the right: ' + JSON.stringify(greet));
+    assert.ok(greet.answerBody.left < greet.thread.left + greet.thread.width * 0.5,
+      'greeting answer is not on the reading edge: ' + JSON.stringify(greet));
+    assert.ok(greet.userBar.bottom <= greet.answerBody.top + 0.5,
+      'greeting user bar overlaps the answer: ' + JSON.stringify(greet));
+    assert.ok(greet.answerBody.bottom <= greet.answerBar.top + 0.5,
+      'greeting answer bar covers the answer: ' + JSON.stringify(greet));
+    if (greet.composerTop !== null) {
+      assert.ok(greet.answerBar.bottom <= greet.composerTop + 0.5,
+        'greeting answer bar reaches the composer: ' + JSON.stringify(greet));
+    }
+    await shot('greeting-idle-dark');
+    await hover('#greet-answer');
+    const greetShown = await evaluate(`(() => {
+      const answer = document.querySelector('#greet-answer');
+      const body = answer.querySelector('.msg-body');
+      const bar = answer.querySelector('.message-actions');
+      const stream = document.querySelector('#stream');
+      const r = bar.getBoundingClientRect(), b = body.getBoundingClientRect();
+      return { opacity: Number(getComputedStyle(bar).opacity), pointerEvents: getComputedStyle(bar).pointerEvents,
+        bodyBottom: b.bottom, barTop: r.top, barBottom: r.bottom,
+        messageHeight: answer.offsetHeight, scrollTop: stream.scrollTop };
+    })()`);
+    assert.ok(greetShown.opacity > 0.95 && greetShown.pointerEvents === 'auto',
+      'greeting hover did not reveal the answer actions: ' + JSON.stringify(greetShown));
+    assert.equal(greetShown.bodyBottom, greet.answerBody.bottom, 'greeting hover moved the answer');
+    assert.equal(greetShown.barTop, greet.answerBar.top, 'greeting hover moved the action bar');
+    assert.equal(greetShown.barBottom, greet.answerBar.bottom, 'greeting hover resized the action bar');
+    assert.equal(greetShown.messageHeight, greet.messageHeight, 'greeting hover changed message height');
+    assert.equal(greetShown.scrollTop, greet.scrollTop, 'greeting hover changed scroll');
+    await hover('#greet-answer .message-usage');
+    const greetTip = await evaluate(`(() => {
+      const t = document.querySelector('.ui-tooltip');
+      const r = t.getBoundingClientRect();
+      return { hidden: t.hidden, text: t.textContent, left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    })()`);
+    assert.equal(greetTip.hidden, false, 'greeting tooltip did not appear');
+    assert.equal(greetTip.text, '查看用量');
+    assert.ok(greetTip.top >= greet.answerBody.bottom - 0.5,
+      'greeting tooltip covers the answer: ' + JSON.stringify(greetTip));
+    await shot('greeting-hover-dark');
+    await click('#greet-answer .message-usage');
+    const greetPop = await evaluate(`(() => {
+      const el = document.querySelector('#messageUsagePopover');
+      const stream = document.querySelector('#stream');
+      const r = el.getBoundingClientRect();
+      const composer = document.querySelector('#chatComposer');
+      return { hidden: el.hidden, text: el.textContent, left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+        viewportWidth: innerWidth, viewportHeight: innerHeight,
+        composerTop: composer && composer.getClientRects().length ? composer.getBoundingClientRect().top : null,
+        scrollTop: stream.scrollTop };
+    })()`);
+    assert.equal(greetPop.hidden, false, 'greeting usage entry did not open its popover');
+    assert.match(greetPop.text, /Token 21/);
+    assert.match(greetPop.text, /输入\s*12 Token/);
+    assert.match(greetPop.text, /输出\s*9 Token/);
+    assert.ok(greetPop.left >= 7.5 && greetPop.top >= 7.5
+      && greetPop.right <= greetPop.viewportWidth - 7.5 && greetPop.bottom <= greetPop.viewportHeight - 7.5,
+    'greeting popover left the viewport: ' + JSON.stringify(greetPop));
+    if (greetPop.composerTop !== null) {
+      assert.ok(greetPop.bottom <= greetPop.composerTop - 7.5,
+        'greeting popover overlaps the composer: ' + JSON.stringify(greetPop));
+    }
+    assert.equal(greetPop.scrollTop, greet.scrollTop, 'greeting popover changed scroll');
+    await shot('greeting-usage-popover-dark');
+    await key('Escape', 'Escape', 27);
+    await hover('#greet-user');
+    assert.ok(await evaluate('Number(getComputedStyle(document.querySelector("#greet-user .message-actions")).opacity)') > 0.95,
+      'greeting user actions did not reveal on hover');
+    await shot('greeting-user-hover-dark');
+    results.push({ name: 'greeting-short-exchange', ...greet, shown: greetShown, tip: greetTip, popover: greetPop });
+
+    /* 两轮对话：每轮一枚入口，打开第一轮不影响第二轮几何。 */
+    await moveAway();
+    const multi = await evaluate('(' + seedMultiTurnCase.toString() + ')()');
+    assert.equal(multi.usageButtons, 2, 'multi-turn usage entries are duplicated or missing');
+    assert.equal(multi.oldEntries, 0, 'multi-turn conversation kept an old usage entry');
+    assert.ok(multi.overflow <= 1, 'multi-turn conversation overflowed: ' + JSON.stringify(multi));
+    assert.ok(multi.bodies.every((body, index) => body.bottom <= multi.bars[index].top + 0.5),
+      'multi-turn bar covers its answer: ' + JSON.stringify(multi));
+    assert.ok(multi.bars[0].bottom <= multi.nextTops[1] + 0.5,
+      'first-turn bar crosses into the second turn: ' + JSON.stringify(multi));
+    const multiComposerTop = await evaluate(`(() => { const c = document.querySelector('#chatComposer');
+      return c && c.getClientRects().length ? c.getBoundingClientRect().top : null; })()`);
+    if (multiComposerTop !== null) {
+      assert.ok(multi.bars[1].bottom <= multiComposerTop + 0.5,
+        'second-turn bar reaches the composer: ' + JSON.stringify(multi));
+    }
+    await hover('#multi-answer-1');
+    await hover('#multi-answer-1 .message-usage');
+    await click('#multi-answer-1 .message-usage');
+    const firstPop = await evaluate(`(() => { const el = document.querySelector('#messageUsagePopover');
+      const stream = document.querySelector('#stream');
+      const answers = [...document.querySelectorAll('#stream .msg.assistant')];
+      return { hidden: el.hidden, text: el.textContent,
+        heights: answers.map(answer => answer.offsetHeight), scrollTop: stream.scrollTop }; })()`);
+    assert.equal(firstPop.hidden, false);
+    assert.match(firstPop.text, /Token 15/);
+    assert.doesNotMatch(firstPop.text, /Token 27/);
+    assert.deepEqual(firstPop.heights, multi.messageHeights, 'opening turn-one usage moved a message');
+    assert.equal(firstPop.scrollTop, multi.scrollTop, 'opening turn-one usage moved the scroll');
+    await shot('multi-turn-usage-popover-dark');
+    await key('Escape', 'Escape', 27);
+    await hover('#multi-answer-2');
+    await hover('#multi-answer-2 .message-usage');
+    await click('#multi-answer-2 .message-usage');
+    const secondPop = await evaluate(`(() => { const el = document.querySelector('#messageUsagePopover');
+      return { hidden: el.hidden, text: el.textContent }; })()`);
+    assert.equal(secondPop.hidden, false);
+    assert.match(secondPop.text, /Token 27/);
+    assert.doesNotMatch(secondPop.text, /Token 15/);
+    assert.equal(await evaluate('document.querySelectorAll("#stream .message-usage").length'), 2,
+      'opening usage created a duplicate entry');
+    await key('Escape', 'Escape', 27);
+    results.push({ name: 'multi-turn-usage', ...multi, first: firstPop, second: secondPop });
 
     fs.writeFileSync(path.join(out, 'measurements.json'), JSON.stringify(results, null, 2) + '\n');
     console.log('P5-B Chromium: ' + results.length + ' layouts verified; ' + out);

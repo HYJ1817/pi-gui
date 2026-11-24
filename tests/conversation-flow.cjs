@@ -314,7 +314,14 @@ test('Classic production renderer folds consecutive native tool messages, not th
   const answer = [...thread.querySelectorAll('.msg.assistant')].at(-1);
   assert.equal(answer.parentElement, thread);
   assert.equal(answer.getAttribute('aria-label'), '助手');
-  assert.equal(answer.querySelector('[data-kind="output"]').textContent, '输出 0 Token');
+  const usageButton = answer.querySelector('.message-usage');
+  assert.ok(usageButton, 'real zero usage keeps the stats action');
+  usageButton.click();
+  const pop = w.document.querySelector('#messageUsagePopover');
+  assert.equal(pop.hidden, false);
+  assert.match(pop.textContent, /输出.*0 Token/);
+  assert.match(pop.textContent, /推理（含在输出中）.*0 Token/);
+  assert.equal(answer.querySelector('.ui2-msg-meta'), null, 'no old token footer');
   const log = thread.querySelector('.conversation-work-log'); log.querySelector('button').click();
   const think = thread.querySelector('.think'); think.querySelector('.think-head').click();
   w.refreshClassicConversationFlow();
@@ -445,7 +452,7 @@ test('Classic live steers close each work fold at its own observed end', async t
   assert.ok(steers.every(node => node.parentElement && !node.closest('[hidden]')), 'supplemental inputs stay visible');
 });
 
-async function runtimeSurface(t) {
+async function runtimeSurface(t, { extraItems = [], fetchHistory = null } = {}) {
   // Use the real document and an isolated renderer module graph. state.js caches
   // modal references at import time; reusing another test's document is not valid.
   const dom = new JSDOM(fs.readFileSync(path.join(PUB, 'index.html'), 'utf8'), {
@@ -455,20 +462,25 @@ async function runtimeSurface(t) {
   t.after(() => { view?.dispose(); dom.window.close(); });
   const w = dom.window, d = w.document;
   w.TextEncoder = TextEncoder;
-  w.fetch = async () => ({ json: async () => ({ ok: true, items: [], files: [], isRepo: false }) });
+  w.fetch = async () => ({ json: async () => fetchHistory || ({ ok: true, items: [], files: [], isRepo: false }) });
   w.eval(bundle(path.join(PUB, 'runtime-conversation.js')).code);
   const { projectRuntimeEvent } = await import('../server/session-runtime.js');
   const owner = { backendInstance: 'fixture', projectId: 'project', repoId: 'repo', workspaceId: 'workspace', workspaceEpoch: 1,
     conversationId: 'focus', runtimeId: 'fixture-runtime', runtimeGeneration: 1, sessionId: 'fixture-session' };
   w.runtimeStore.seed({ backendInstance: 'fixture', items: [{ conversationId: owner.conversationId, owner,
-    workspace: { projectId: 'project', workspaceId: 'workspace', workspaceEpoch: 1 }, lifecycle: 'ready', activity: 'idle' }] });
+    workspace: { projectId: 'project', workspaceId: 'workspace', workspaceEpoch: 1 }, lifecycle: 'ready', activity: 'idle' },
+  ...extraItems] });
   const host = d.createElement('div'); d.body.append(host);
   view = w.createRuntimeConversation({ host });
   view.show(owner.conversationId);
   let sequence = 0;
-  const emit = event => w.observeRuntimeFrame({ type: 'runtime_event', owner, eventSequence: ++sequence, event: projectRuntimeEvent(event) });
+  const emit = (event, targetOwner = owner) => w.observeRuntimeFrame({ type: 'runtime_event', owner: targetOwner,
+    eventSequence: ++sequence, event: projectRuntimeEvent(event) });
   return { w, d, view, host, owner, emit, output: host.querySelector('.rtc-output') };
 }
+
+const usage = { input: 11, output: 7, cacheRead: 3, cacheWrite: 2, cacheWrite1h: 1, reasoning: 4, totalTokens: 21 };
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 test('Runtime production tool rows and visible work controls keep focus across actual accepted status frames', async t => {
   const { d, host, emit } = await runtimeSurface(t);
@@ -515,6 +527,138 @@ test('Runtime text selection survives streamed Markdown growth and unchanged ter
   emit({ type: 'message_end', message: { role: 'assistant', content: [text('prefix selected suffix **bold**')], stopReason: 'stop' } });
   assert.equal(selection.toString(), 'selected');
   assert.equal(body.firstElementChild, stableBody, 'state-only completion does not rebuild unchanged Markdown');
+});
+
+test('Runtime first mount resolves the fold owner from ordered detached nodes and refreshes it on settle', async t => {
+  const { emit, output } = await runtimeSurface(t);
+  emit({ type: 'agent_start' });
+  const input = { role: 'user', content: [text('timing fixture')] };
+  emit({ type: 'message_start', message: input }); emit({ type: 'message_end', message: input });
+  const answer = { role: 'assistant', content: [text('first answer')], stopReason: 'stop' };
+  emit({ type: 'message_start', message: answer });
+  emit({ type: 'tool_execution_start', toolCallId: 'a', toolName: 'read', args: { path: 'a' } });
+  emit({ type: 'tool_execution_start', toolCallId: 'b', toolName: 'read', args: { path: 'b' } });
+  emit({ type: 'message_end', message: answer });
+  emit({ type: 'tool_execution_end', toolCallId: 'a', isError: false });
+  emit({ type: 'tool_execution_end', toolCallId: 'b', isError: false });
+  await wait(8);
+  const log = output.querySelector('.conversation-work-log');
+  assert.ok(log, 'two tools fold under the owning user turn');
+  const head = log.querySelector('.conversation-work-head');
+  assert.match(log.querySelector('.conversation-work-title').textContent, /执行中|已运行/,
+    'first mount must not lose ownership just because nodes were built detached');
+  emit({ type: 'agent_settled' });
+  assert.strictEqual(output.querySelector('.conversation-work-log'), log, 'settle updates the same fold');
+  assert.match(log.querySelector('.conversation-work-title').textContent, /执行了/);
+  assert.equal(log.querySelector('.conversation-work-head'), head);
+});
+
+test('Runtime session switches never borrow timing from the conversation left behind', async t => {
+  const otherOwner = { backendInstance: 'fixture', projectId: 'project', repoId: 'repo', workspaceId: 'workspace-b',
+    workspaceEpoch: 1, conversationId: 'other', runtimeId: 'fixture-runtime-b', runtimeGeneration: 1, sessionId: 'fixture-session-b' };
+  const { view, emit, output } = await runtimeSurface(t, { extraItems: [{
+    conversationId: otherOwner.conversationId, owner: otherOwner,
+    workspace: { projectId: 'project', workspaceId: 'workspace-b', workspaceEpoch: 1 },
+    lifecycle: 'ready', activity: 'idle',
+  }] });
+  emit({ type: 'agent_start' });
+  const input = { role: 'user', content: [text('A question')] };
+  emit({ type: 'message_start', message: input }); emit({ type: 'message_end', message: input });
+  emit({ type: 'message_start', message: { role: 'assistant', content: [text('A answer')], stopReason: 'stop' } });
+  emit({ type: 'tool_execution_start', toolCallId: 'a1', toolName: 'read', args: { path: 'a' } });
+  emit({ type: 'tool_execution_start', toolCallId: 'a2', toolName: 'read', args: { path: 'b' } });
+  emit({ type: 'message_end', message: { role: 'assistant', content: [text('A answer')], stopReason: 'stop' } });
+  emit({ type: 'tool_execution_end', toolCallId: 'a1', isError: false });
+  emit({ type: 'tool_execution_end', toolCallId: 'a2', isError: false });
+  await wait(8);
+  emit({ type: 'agent_settled' });
+  assert.match(output.querySelector('.conversation-work-title').textContent, /执行了/);
+
+  view.show('other');
+  emit({ type: 'message_start', message: { role: 'assistant', content: [text('orphan answer')], stopReason: 'stop' } }, otherOwner);
+  emit({ type: 'tool_execution_start', toolCallId: 'b1', toolName: 'read', args: { path: 'a' } }, otherOwner);
+  emit({ type: 'tool_execution_start', toolCallId: 'b2', toolName: 'read', args: { path: 'b' } }, otherOwner);
+  emit({ type: 'message_end', message: { role: 'assistant', content: [text('orphan answer')], stopReason: 'stop' } }, otherOwner);
+  emit({ type: 'tool_execution_end', toolCallId: 'b1', isError: false }, otherOwner);
+  emit({ type: 'tool_execution_end', toolCallId: 'b2', isError: false }, otherOwner);
+  const otherOutput = output;
+  const otherLog = otherOutput.querySelector('.conversation-work-log');
+  assert.ok(otherLog);
+  assert.equal(otherLog.querySelector('.conversation-work-title').textContent, '工作记录',
+    'a conversation without its own user turn must not inherit the previous clock');
+
+  view.show('focus');
+  assert.match(output.querySelector('.conversation-work-title').textContent, /执行了/);
+});
+
+test('Runtime read-only native history restores duration from its own trusted timestamps', async t => {
+  const historyOwner = { backendInstance: 'fixture', projectId: 'project', repoId: 'repo', workspaceId: 'workspace-h',
+    workspaceEpoch: 1, conversationId: 'history-only', runtimeId: '', runtimeGeneration: 1, sessionId: 'history-session' };
+  const history = {
+    ok: true, conversationId: 'history-only', sessionId: 'history-session', truncated: false,
+    messages: [{ role: 'user', text: 'old question' }, { role: 'assistant', text: 'old answer' }],
+    execution: { truncated: false, planBoundary: null, timeline: [
+      { id: 'h-user', kind: 'user', text: 'old question', userIndex: 0, at: 1000 },
+      { id: 'h-tools', kind: 'tools', at: 3000, tools: [
+        { id: 'h-t1', name: 'read', state: 'success', waiting: false, durationMs: 200 },
+        { id: 'h-t2', name: 'read', state: 'success', waiting: false, durationMs: 200 },
+      ] },
+      { id: 'h-answer', kind: 'assistant', text: 'old answer', state: 'complete', at: 5000 },
+    ] },
+  };
+  const { view, d, output } = await runtimeSurface(t, { fetchHistory: history, extraItems: [{
+    conversationId: historyOwner.conversationId, owner: null, nativeSessionId: 'history-session',
+    workspace: { projectId: 'project', workspaceId: 'workspace-h', workspaceEpoch: 1 },
+    lifecycle: 'dormant', activity: 'idle',
+  }] });
+  view.show(historyOwner.conversationId);
+  [...d.querySelectorAll('button')].find(button => button.textContent === '打开历史').click();
+  await wait(30);
+  const log = output.querySelector('.conversation-work-log');
+  assert.ok(log, 'history still uses its native work fold');
+  assert.equal(log.querySelector('.conversation-work-title').textContent, '执行了 4 秒',
+    'history timing comes from the user message and its own last observed work');
+  const input = output.querySelector('[data-role="user"]');
+  assert.equal(input.dataset.turnStartAt, '1000');
+  assert.equal(input.dataset.turnEndedAt, '5000');
+  const answer = output.querySelector('.rtc-timeline-message[data-role="assistant"]');
+  assert.ok(answer.querySelector('.message-copy'), 'history terminal answer has a shared action bar');
+  assert.equal(answer.querySelector('.message-usage'), null, 'missing usage creates no entry');
+});
+
+test('Runtime usage lives in the assistant action bar and the popover closes without a layout entry', async t => {
+  const { w, d, emit, output } = await runtimeSurface(t);
+  emit({ type: 'agent_start' });
+  const input = { role: 'user', content: [text('usage fixture')] };
+  emit({ type: 'message_start', message: input }); emit({ type: 'message_end', message: input });
+  const answer = { role: 'assistant', content: [text('usage answer')], stopReason: 'stop', usage };
+  emit({ type: 'message_start', message: answer }); emit({ type: 'message_end', message: answer });
+  emit({ type: 'agent_settled' });
+  await wait(8);
+  const row = output.querySelector('.rtc-timeline-message[data-role="assistant"]');
+  const bar = row.querySelector('.message-actions');
+  assert.ok(bar, 'terminal answer owns the assistant action bar');
+  assert.ok(row.querySelector('.message-copy'));
+  assert.ok(row.querySelector('.message-regenerate'));
+  const usageButton = row.querySelector('.message-usage');
+  assert.ok(usageButton, 'real usage creates exactly one stats action');
+  assert.equal(usageButton.getAttribute('aria-label'), '查看用量');
+  assert.equal(usageButton.title, '', 'no native title tooltip layer');
+  assert.equal(output.querySelector('.ui2-msg-meta, .ui2-runtime-usage, .execution-usage'), null,
+    'the old footer/strip equivalents are gone');
+  usageButton.focus();
+  usageButton.click();
+  const pop = d.querySelector('#messageUsagePopover');
+  assert.equal(pop.hidden, false);
+  assert.equal(usageButton.getAttribute('aria-expanded'), 'true');
+  assert.match(pop.textContent, /输入.*11 Token/s);
+  assert.match(pop.textContent, /输出.*7 Token/s);
+  assert.match(pop.textContent, /推理（含在输出中）.*4 Token/s);
+  assert.match(pop.textContent, /总计.*21 Token/s);
+  assert.doesNotMatch(pop.textContent, /Token 23,140/);
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(pop.hidden, true);
+  assert.equal(usageButton.getAttribute('aria-expanded'), 'false');
 });
 
 test('Runtime message actions retain focus and copy the current authoritative streamed text', async t => {

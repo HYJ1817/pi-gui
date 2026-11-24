@@ -16,6 +16,7 @@ async function unit() {
   w.fetch = async () => ({ ok: true, json: async () => ({ ok: true, files: [], isRepo: false }) });
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.eval(bundle(path.join(PUB, 'tools.js')).code);
+  const { normalizeUsage } = await import('../public/message-meta.js');
   let passed = 0, failed = 0;
   const check = (name, run) => { try { run(); passed++; console.log('PASS ' + name); } catch (error) { failed++; console.error('FAIL ' + name + ': ' + error.message); } };
   const equal = assert.equal;
@@ -23,41 +24,79 @@ async function unit() {
   const reset = () => { w.resetTimeline(); w.clearThread(); };
   const one = selector => d.querySelector('#stream ' + selector);
   const all = selector => [...d.querySelectorAll('#stream ' + selector)];
-  const data = [assistant('first', { input: 11, output: 3, reasoning: 0, totalTokens: 14 }), assistant('second', { input: 29, output: 7, reasoning: 2 }), assistant('unknown'), assistant('zero', { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, reasoning: 0, totalTokens: 0 })];
+  const question = value => ({ role: 'user', content: [text(value)] });
+  const usagePopup = () => d.querySelector('#messageUsagePopover');
+  const openUsage = root => { root?.querySelector('.message-usage')?.click(); return usagePopup(); };
+  const closeUsage = () => d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const gridValue = (pop, kind) => pop?.querySelector('.usage-pop-grid')
+    ?.querySelector(`[data-kind="${kind}"]`)?.textContent || '';
+  const usageValue = (root, kind) => { const pop = openUsage(root); const value = gridValue(pop, kind); closeUsage(); return value; };
+  const usageState = () => all('.msg.assistant').map(node => {
+    const button = node.querySelector('.message-usage');
+    return button ? JSON.stringify(button._usageRecords) : null;
+  });
+  const data = [
+    question('q1'), assistant('first', { input: 11, output: 3, reasoning: 0, totalTokens: 14 }),
+    question('q2'), assistant('second', { input: 29, output: 7, reasoning: 2 }),
+    question('q3'), assistant('unknown'),
+    question('q4'), assistant('zero', { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, reasoning: 0, totalTokens: 0 }),
+  ];
   try {
     w.S.localUsage.lastTurn = { inputTokens: 999999, outputTokens: 888888 };
     w.rebuildFromMessages(data);
-    check('message-specific metadata exists for three known usages', () => equal(all('.ui2-msg-meta').length, 3));
-    check('two assistant messages keep different input usage', () => {
-      equal(all('.msg.assistant')[0].querySelector('[data-kind="input"]')?.textContent, '输入 11 Token');
-      equal(all('.msg.assistant')[1].querySelector('[data-kind="input"]')?.textContent, '输入 29 Token');
+    check('message-specific usage exists for three known turns', () => equal(all('.message-usage').length, 3));
+    check('each turn keeps its own input usage', () => {
+      equal(usageValue(all('.msg.assistant')[0], 'input'), '11 Token');
+      equal(usageValue(all('.msg.assistant')[1], 'input'), '29 Token');
     });
-    check('missing usage stays absent despite global lastTurn', () => equal(all('.msg.assistant')[2].querySelector('.ui2-msg-meta'), null));
-    check('zero reasoning is distinct from unknown', () => equal(all('.msg.assistant')[0].querySelector('[data-kind="reasoning"]')?.textContent, '推理 0 Token（含在输出中）'));
-    check('all seven actual zero fields remain visible', () => equal(all('.msg.assistant')[3].querySelectorAll('.ui2-msg-meta-item').length, 7));
-    check('global or inferred time never enters metadata', () => assert.ok(!all('.ui2-msg-meta').some(n => /999999|888888|耗时|秒|ms/.test(n.textContent))));
-    const historyMeta = all('.ui2-msg-meta').map(n => n.textContent);
+    check('missing usage stays absent despite global lastTurn', () => equal(all('.msg.assistant')[2].querySelector('.message-usage'), null));
+    check('zero reasoning is distinct from unknown', () => {
+      const pop = openUsage(all('.msg.assistant')[0]);
+      equal(gridValue(pop, 'reasoning'), '0 Token');
+      assert.ok(pop.textContent.includes('推理（含在输出中）'));
+      closeUsage();
+    });
+    check('all seven actual zero fields remain visible', () => {
+      const pop = openUsage(all('.msg.assistant')[3]);
+      equal(pop.querySelectorAll('.usage-pop-grid [data-kind]').length, 7);
+      closeUsage();
+    });
+    check('global or inferred time never enters usage', () => {
+      const pop = openUsage(all('.msg.assistant')[0]);
+      assert.ok(!/999999|888888|耗时|秒|ms/.test(pop.textContent));
+      closeUsage();
+    });
+    const historyUsage = usageState();
     reset();
-    for (const message of data) { w.onMessageStart({ message: { role: 'assistant' } }); w.onMessageUpdate({ usage: { input: 999 }, assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'draft' } }); w.onMessageEnd({ message }); }
-    check('live final authoritative usage equals historical usage', () => assert.deepEqual(all('.ui2-msg-meta').map(n => n.textContent), historyMeta));
+    for (const message of data) {
+      if (message.role === 'user') { w.beginTurn(); w.onMessageStart({ message }); continue; }
+      w.onMessageStart({ message: { role: 'assistant' } });
+      w.onMessageUpdate({ usage: { input: 999 }, assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'draft' } });
+      w.onMessageEnd({ message });
+      w.onSettled();
+    }
+    check('live final authoritative usage equals historical usage', () => assert.deepEqual(usageState(), historyUsage));
     check('live authoritative body replaces streamed draft', () => equal(all('.msg.assistant')[0].querySelector('.msg-body').textContent, 'first'));
-    w.rebuildFromMessages([assistant('bad', { input: '12', output: NaN, totalTokens: Infinity, reasoning: -1, cacheRead: null }), assistant('partial', { input: 4, output: 2 })]);
-    check('malformed usage cannot create numeric metadata', () => equal(all('.msg.assistant')[0].querySelector('.ui2-msg-meta'), null));
-    check('total is not invented by adding input/output', () => equal(all('.msg.assistant')[1].querySelector('[data-kind="totalTokens"]'), null));
-    check('user and malformed array usage have no assistant metadata', () => {
-      equal(w.renderMessageMeta({ role: 'user', usage: { input: 1 } }), null);
-      equal(w.renderMessageMeta({ role: 'assistant', usage: [] }), null);
+    w.rebuildFromMessages([question('bad'), assistant('bad', { input: '12', output: NaN, totalTokens: Infinity, reasoning: -1, cacheRead: null }), question('partial'), assistant('partial', { input: 4, output: 2 })]);
+    check('malformed usage cannot create numeric metadata', () => equal(all('.msg.assistant')[0].querySelector('.message-usage'), null));
+    check('total is not invented by adding input/output', () => equal(usageValue(all('.msg.assistant')[1], 'totalTokens'), ''));
+    check('empty and malformed usage payloads create no entry', () => {
+      equal(normalizeUsage({}), null);
+      equal(normalizeUsage([]), null);
     });
-    w.rebuildFromMessages([{ role: 'assistant', content: [call('only-tool')], usage: { input: 100, output: 0 } }, result('only-tool'), { role: 'assistant', content: [{ type: 'thinking', thinking: 'provided thinking' }], usage: { output: 1 } }]);
+    w.rebuildFromMessages([question('tool-only'), { role: 'assistant', content: [call('only-tool')], usage: { input: 100, output: 0 } }, result('only-tool'),
+      question('thinking-only'), { role: 'assistant', content: [{ type: 'thinking', thinking: 'provided thinking' }], usage: { output: 1 } }]);
     check('tool-only usage does not resurrect empty assistant shell', () => equal(all('.msg.assistant').length, 1));
     check('tool-only tool entry is retained', () => equal(all('.tl-item').length, 1));
-    reset(); w.onMessageStart({ message: { role: 'assistant' } });
+    reset(); w.beginTurn(); w.onMessageStart({ message: { role: 'user', content: [text('pending')] } });
+    w.onMessageStart({ message: { role: 'assistant' } });
     w.onMessageUpdate({ usage: { input: 999 }, assistantMessageEvent: { type: 'text_delta', delta: 'pending', contentIndex: 0 } });
-    check('pending update usage is not promoted to authoritative metadata', () => equal(all('.ui2-msg-meta').length, 0));
+    check('pending update usage is not promoted to authoritative usage', () => equal(all('.message-usage').length, 0));
     w.onMessageEnd({ message: { role: 'assistant', content: [call('live-only')], usage: { input: 9 } } });
     check('live tool-only final removes shell even with usage and streamed draft', () => equal(all('.msg.assistant').length, 0));
-    w.rebuildFromMessages([{ role: 'assistant', content: [call('only-tool')], usage: { input: 100, output: 0 } }, result('only-tool'), { role: 'assistant', content: [{ type: 'thinking', thinking: 'provided thinking' }], usage: { output: 1 } }]);
-    check('thinking-only message keeps actual metadata', () => equal(one('.msg.assistant .ui2-msg-meta [data-kind="output"]')?.textContent, '输出 1 Token'));
+    w.rebuildFromMessages([question('tool-only'), { role: 'assistant', content: [call('only-tool')], usage: { input: 100, output: 0 } }, result('only-tool'),
+      question('thinking-only'), { role: 'assistant', content: [{ type: 'thinking', thinking: 'provided thinking' }], usage: { output: 1 } }]);
+    check('thinking-only message keeps actual usage', () => equal(usageValue(one('.msg.assistant'), 'output'), '1 Token'));
     check('single tool has no duplicate batch title', () => { equal(one('.tl-group-head').hidden, true); equal(one('.tl-group-head').textContent, ''); equal(one('.tl-list').hidden, false); });
     reset();
     w.onMessageStart({ message: { role: 'assistant' } });
@@ -121,20 +160,22 @@ async function unit() {
     check('error without final content retains thinking and marks its true state', () => { equal(one('.think'), partialThink); equal(partialThink.dataset.state, 'error'); equal(partialThink.querySelector('.think-body').hidden, false); assert.ok(one('.msg-err')); });
     check('error before the next animation frame preserves pending thinking text', () => equal(partialThink.querySelector('.think-body').textContent, 'partial thought'));
     reset(); w.S.stopOwnedTurn = true;
+    w.beginTurn(); w.onMessageStart({ message: { role: 'user', content: [text('stop me')] } });
     w.onMessageStart({ message: { role: 'assistant' } });
     w.onMessageEnd({ message: { role: 'assistant', content: [], stopReason: 'aborted', usage: { input: 0 } } });
-    check('owned cancellation remains neutral with real usage', () => { assert.match(one('.msg-note').textContent, /已由用户取消/); equal(one('.msg-err'), null); equal(one('.ui2-msg-meta [data-kind="input"]').textContent, '输入 0 Token'); });
+    w.onSettled();
+    check('owned cancellation remains neutral with real usage', () => { assert.match(one('.msg-note').textContent, /已由用户取消/); equal(one('.msg-err'), null); equal(usageValue(one('.msg.assistant'), 'input'), '0 Token'); });
     reset(); w.S.stopOwnedTurn = false;
-    w.rebuildFromMessages([{ role: 'assistant', content: [], stopReason: 'aborted', errorMessage: 'provider cancelled' }]);
+    w.rebuildFromMessages([question('cancelled'), { role: 'assistant', content: [], stopReason: 'aborted', errorMessage: 'provider cancelled' }]);
     check('unowned cancellation with error stays visible as error', () => assert.ok(one('.msg-err')));
-    w.rebuildFromMessages([{ role: 'assistant', content: [], stopReason: 'error', errorMessage: '<img src=x onerror="evil()">', usage: { input: 0 } }]);
-    check('error message preserves real zero metadata and safe text', () => { assert.ok(one('.msg-err')); equal(one('.ui2-msg-meta [data-kind="input"]')?.textContent, '输入 0 Token'); equal(one('.msg-err img'), null); });
+    w.rebuildFromMessages([question('safe error'), { role: 'assistant', content: [], stopReason: 'error', errorMessage: '<img src=x onerror="evil()">', usage: { input: 0 } }]);
+    check('error message preserves real zero usage and safe text', () => { assert.ok(one('.msg-err')); equal(usageValue(one('.msg.assistant'), 'input'), '0 Token'); equal(one('.msg-err img'), null); });
     w.dropTrailingError();
     check('retry removes error-only shell even with sibling metadata', () => equal(all('.msg.assistant').length, 0));
     const evil = '<img src=x onerror="evil()"><script>evil()</script>';
-    w.rebuildFromMessages([assistant(evil, { input: evil }), { role: 'assistant', content: [{ type: 'thinking', thinking: evil }, call('evil-tool', evil), call('safe')] }, result('evil-tool', true, evil)]);
+    w.rebuildFromMessages([question('evil'), assistant(evil, { input: evil }), { role: 'assistant', content: [{ type: 'thinking', thinking: evil }, call('evil-tool', evil), call('safe')] }, result('evil-tool', true, evil)]);
     check('untrusted message/thinking/tool text never becomes active HTML', () => { equal(one('script'), null); equal(one('img[onerror]'), null); equal(one('[onerror]'), null); assert.ok(one('.think-body').textContent.includes('<img')); });
-    check('untrusted usage cannot leak into metadata', () => equal(one('.msg.assistant .ui2-msg-meta'), null));
+    check('untrusted usage cannot create a usage entry', () => equal(all('.msg.assistant .message-usage').length, 0));
     const copied = [];
     Object.defineProperty(w.navigator, 'clipboard', { configurable: true, value: { writeText: async value => copied.push(value) } });
     const userText = '原始 **Markdown**\n<img src=x onerror=alert(1)>';
@@ -215,7 +256,8 @@ async function electron() {
       check(await read(`document.querySelector('#connText').textContent==='已连接'&&!!document.querySelector('#stream .msg')`), theme + ' initial RPC fixture history ready');
       await read(`(async()=>{const m=await import('/messages.js');m.rebuildFromMessages(${JSON.stringify(fixture)});return true})()`);
       check(await read(`document.documentElement.dataset.theme===${JSON.stringify(theme)}`), theme + ' actual theme');
-      check(await read(`document.querySelectorAll('.ui2-msg-meta').length===3`), theme + ' per-message metadata in real renderer');
+      check(await read(`document.querySelectorAll('#stream .message-usage').length===1`), theme + ' one turn usage entry in real renderer');
+      check(await read(`(async()=>{const pop=document.querySelector('#messageUsagePopover');document.querySelector('#stream .message-usage')?.click();const ok=!pop.hidden&&!!pop.querySelector('.usage-pop-grid')&&pop.textContent.includes('输入');(await import('/ui/usage-popover.js')).closeUsagePopover();return ok})()`), theme + ' usage popover reads real fields');
       check(await read(`document.querySelector('.ui2-tool-summary').tagName==='BUTTON'`), theme + ' native summary button');
       for (const width of [700, 900, 1200, 1536]) {
         win.setContentSize(width, 900); await sleep(150);
@@ -233,7 +275,7 @@ async function electron() {
         check(await read(`document.querySelector('.tl-list').contains(document.activeElement)`), theme + '/' + width + ' Tab enters expanded list');
         await read(`document.querySelector('.think-head').focus()`); await key('Enter', 'Enter', 13);
         check(await read(`document.querySelector('.think-head').getAttribute('aria-expanded')==='true'`), theme + '/' + width + ' actual Thinking Enter');
-        const f = await read(`({width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,dpr:devicePixelRatio,metadata:document.querySelectorAll('.ui2-msg-meta').length,groups:document.querySelectorAll('.tl-group').length})`);
+        const f = await read(`({width:innerWidth,height:innerHeight,scrollWidth:document.documentElement.scrollWidth,dpr:devicePixelRatio,usageButtons:document.querySelectorAll('#stream .message-usage').length,groups:document.querySelectorAll('.tl-group').length})`);
         check(f.width === width && f.scrollWidth <= f.width + 1, theme + '/' + width + ' correct CSS viewport and no page overflow');
         facts.push({ theme, ...f }); file = `${theme}-${width}-expanded.png`;
         fs.writeFileSync(path.join(out, file), (await win.webContents.capturePage()).toPNG()); shots.push(file);
