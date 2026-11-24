@@ -29,8 +29,6 @@
   overflow:hidden;clip-path:inset(50%);white-space:nowrap;pointer-events:none;
 }
 .rtc-history-message[data-role="user"]>.rtc-history-role{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-/* 历史时间线的用量与 Classic 共用 .ui2-msg-meta；消息之间只差真实间距。 */
-.runtime-conversation .rtc-output .rtc-timeline-message>.ui2-msg-meta{margin-top:6px}
 .runtime-conversation>.ui2-runtime-thinking{flex-shrink:0;max-height:24vh;overflow:auto}
 .runtime-conversation>.ui2-runtime-thinking-wrap{flex-shrink:0;min-width:0}
 .runtime-conversation>.ui2-runtime-thinking-wrap>.ui2-runtime-thinking{max-height:24vh;overflow:auto}

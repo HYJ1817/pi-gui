@@ -93,18 +93,26 @@ const STATUS = { running: '运行中', waiting: '等待', error: '失败', incom
   interrupted: '已中断', cancelled: '已取消', unknown: '状态未知' };
 let logId = 0;
 
-/** The nearest real user input owns this batch. A Plan or another execution
- * boundary in between is a hard stop: never borrow a previous turn's clock. */
-function timingOwner(first) {
-  for (let node = first?.previousElementSibling; node; node = node.previousElementSibling) {
-    if (node.matches?.('.msg.user, .rtc-timeline-message[data-role="user"], [data-role="user"]')) return node;
-    if (node.matches?.('.plan, .execution-turn, [data-execution-turn], .turn-outcome')) return null;
+const USER_NODE = '.msg.user, .rtc-timeline-message[data-role="user"], [data-role="user"]';
+const OWNER_BOUNDARY = '.plan, .execution-turn, [data-execution-turn], .turn-outcome';
+
+/** The nearest real user input in the caller's ordered node list owns this
+ * batch. Reading the ordered list instead of DOM siblings is required because
+ * Runtime mounts a first render before its nodes are connected. A Plan or
+ * another execution boundary in between is a hard stop: never borrow a
+ * previous turn's clock. */
+function timingOwner(nodes, end) {
+  for (let index = end - 1; index >= 0; index--) {
+    const node = nodes[index];
+    if (node?.nodeType !== 1) continue;
+    if (node.matches?.(USER_NODE)) return node;
+    if (node.matches?.(OWNER_BOUNDARY)) return null;
   }
   return null;
 }
 
 function readTiming(node) {
-  if (!node?.isConnected) return null;
+  if (!node?.dataset) return null;
   const start = Number(node.dataset.turnStartAt);
   const end = Number(node.dataset.turnEndedAt);
   const status = node.dataset.turnStatus || '';
@@ -151,7 +159,6 @@ function createLog(document, first, preferences) {
   const key = safeChoiceKey(first);
   if (key) node.dataset.anchorId = 'work-' + key;
   node.dataset.collapsible = '';
-  const owner = timingOwner(first);
   let choice = key ? preferences?.get(key) : undefined;
   let adopted = new Set();
 
@@ -169,7 +176,7 @@ function createLog(document, first, preferences) {
 
   return {
     node,
-    update(nodes) {
+    update(nodes, owner) {
       const groups = new Set(nodes.flatMap(nativeGroups));
       for (const group of adopted) if (!groups.has(group) && list.contains(group)) setGroupEmbedded(group, false);
       for (const group of groups) {
@@ -182,21 +189,24 @@ function createLog(document, first, preferences) {
       const summaryText = workSummary(descriptors) || nodes.length + ' 项工作记录';
       if (summary.textContent !== summaryText) summary.textContent = summaryText;
       const tools = [...groups].flatMap(groupEntries);
+      const statuses = tools.map(tool => tool.dataset.status === 'running' && tool.dataset.waiting === 'true'
+        ? 'waiting' : tool.dataset.status || 'unknown');
       const counts = new Map();
-      for (const tool of tools) {
-        const status = tool.dataset.status === 'running' && tool.dataset.waiting === 'true'
-          ? 'waiting' : tool.dataset.status || 'unknown';
-        if (status !== 'success') counts.set(status, (counts.get(status) || 0) + 1);
-      }
+      for (const status of statuses) if (status !== 'success') counts.set(status, (counts.get(status) || 0) + 1);
       count.textContent = tools.length ? tools.length + ' 次工具' : nodes.length + ' 条记录';
       state.textContent = [...counts].map(([status, total]) => (STATUS[status] || STATUS.unknown) + ' ' + total).join(' · ');
       const active = counts.has('running') || counts.has('waiting');
-      const needsAttention = counts.has('error') || counts.has('interrupted') || counts.has('incomplete');
+      /* Every abnormal tool state opens by default, including cancellation.
+       * The P5 timeline uses the same set (failed/interrupted/cancelled/
+       * incomplete); running and waiting already open as active work. */
+      const needsAttention = counts.has('error') || counts.has('interrupted')
+        || counts.has('cancelled') || counts.has('incomplete');
       // This is an activity summary, never a task/run outcome.
       node.dataset.status = active ? counts.has('waiting') ? 'waiting' : 'running'
-        : counts.has('error') ? 'failed' : counts.size ? 'incomplete' : 'recorded';
+        : counts.has('error') ? 'failed' : counts.has('cancelled') ? 'cancelled'
+          : counts.size ? 'incomplete' : 'recorded';
       const timing = readTiming(owner);
-      const note = activityNote([...counts.keys()]);
+      const note = activityNote(statuses);
       const visibleNote = timing && isAbnormalTurnStatus(timing.status) ? '' : note;
       const label = turnFoldLabel({
         status: timing?.status || '', timing, now: Date.now(), continued: timing?.continued === true,
@@ -205,7 +215,8 @@ function createLog(document, first, preferences) {
       node.dataset.turnStatus = timing?.status || '';
       node.dataset.attention = note ? 'true' : 'false';
       const iconName = timing?.status === 'failed' || node.dataset.status === 'failed' ? 'circleAlert'
-        : ['interrupted', 'cancelled', 'stopped'].includes(timing?.status) ? 'stop'
+        : ['interrupted', 'cancelled', 'stopped'].includes(timing?.status) || node.dataset.status === 'cancelled'
+          ? 'stop'
           : timing?.status === 'incomplete' || node.dataset.status === 'incomplete' ? 'warning'
             : workSummaryIcon(descriptors);
       if (icon.dataset.icon !== iconName) {
@@ -259,6 +270,7 @@ export function createConversationFlow({ document = globalThis.document, prefere
         const nextLogs = new Map();
         const result = [];
         let batch = [];
+        let batchStart = -1;
         const flush = () => {
           if (!batch.length) return;
           /* A settled turn with timing always gets one fold entry, including a
@@ -266,7 +278,7 @@ export function createConversationFlow({ document = globalThis.document, prefere
            * keeps its own native disclosure instead of gaining a second
            * generic "工作记录" heading. */
           const first = batch[0];
-          const owner = timingOwner(first);
+          const owner = timingOwner(nodes, batchStart);
           const hasTurnEvidence = Boolean(owner?.dataset.turnStatus || owner?.dataset.turnStartAt
             || owner?.dataset.turnEndedAt);
           const single = batch.length === 1;
@@ -278,15 +290,18 @@ export function createConversationFlow({ document = globalThis.document, prefere
           } else {
             const log = logs.get(first) || createLog(document, first, preferences);
             if (!log.node.parentNode) parent.append(log.node);
-            log.update(batch);
+            log.update(batch, owner);
             result.push(log.node);
             nextLogs.set(first, log);
           }
           batch = [];
+          batchStart = -1;
         };
-        for (const node of nodes) {
-          if (workKind(node)) batch.push(node);
-          else { flush(); result.push(node); }
+        for (const [index, node] of nodes.entries()) {
+          if (workKind(node)) {
+            if (!batch.length) batchStart = index;
+            batch.push(node);
+          } else { flush(); result.push(node); }
         }
         flush();
         // Release before aligning the host, so no detached wrapper can retain

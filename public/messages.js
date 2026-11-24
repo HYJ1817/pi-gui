@@ -37,8 +37,9 @@ import { addToGroup, createGroup, groupCount, renderEntry, setEntryExpanded, set
 import { collectPlanTurns, isPlanTool } from './plan-model.js';
 import { renderPlan, setPlanStalled } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
-import { renderMessageMeta } from './message-meta.js';
+import { normalizeUsage } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
+import { closeUsagePopover } from './ui/usage-popover.js';
 import { preserveTextSelection } from './ui/text-selection.js';
 import { thinkingPreview } from './ui/work-presentation.js';
 import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance, rememberPendingMessageEdit, clearPendingMessageEdit, readPendingMessageEdit, isEditInProgress } from './ui/message-edit.js';
@@ -241,6 +242,7 @@ export function clearThread() {
   resetClassicExecutionView();
   ++threadGeneration;
   lastHydratedFence = ++historyFence;
+  closeUsagePopover();
   try { closeMessageEditor({ restore: false }); } catch { /* editor may already be detached */ }
   if (streamScrollRaf !== null) cancelAnimationFrame(streamScrollRaf);
   streamScrollRaf = null;
@@ -360,6 +362,15 @@ export function scrollBottom(force) {
 /* ---------- 轮次证据（只认真实事件） ---------- */
 
 /** 真正的 session 级 run 开始。由 app.js 在 agent_start 且上一轮已 settled 时调用。 */
+/** One assistant message's real usage, with the model as recorded by Pi. */
+function classicUsageRecord(msg) {
+  const usage = normalizeUsage(msg?.usage);
+  if (!usage) return null;
+  const model = [msg?.provider, msg?.model].filter(value => typeof value === 'string' && value)
+    .filter((value, index, list) => list.indexOf(value) === index).join(' / ');
+  return { usage, ...(model ? { model } : {}) };
+}
+
 export function beginTurn() {
   ++historyFence;
   liveTurn = {
@@ -367,6 +378,7 @@ export function beginTurn() {
     seq: 0,
     toolIds: new Set(),
     toolSeqs: new Map(),
+    usageRecords: [],
     lastAssistant: null,
     /* 本轮由哪条用户消息触发：重新生成要回到这条消息重跑，而不是 steer
      * 中途追加的那条。agent_start 早于用户的 message_start，所以这里留空，
@@ -504,8 +516,14 @@ function finalizeTurn() {
       status: turnStatusOf(outcome.state),
     });
   }
-  /* 轮次结束后才挂“重新生成”：运行中的回复不应允许把当前 turn 替换掉。 */
-  attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
+  /* 轮次结束后才挂“重新生成”：运行中的回复不应允许把当前 turn 替换掉。
+   * 整轮真实 usage 作为动作条上的一个统计入口，不另设页脚。 */
+  attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex, turn.usageRecords, {
+    label: '本轮用量',
+    timing: outcome && Number.isFinite(outcome.durationMs)
+      ? { startedAt: turn.startedAt, endedAt, durationMs: null, evidence: 'observed' } : null,
+    status: outcome ? turnStatusOf(outcome.state) : '',
+  });
   if (!outcome) {
     settleClassicExecutionView(null);
     scrollBottom();
@@ -792,12 +810,17 @@ function clearPendingClassicEdit() {
 
 /* 给一轮里最后一条可见的助手消息挂“重新生成”。按钮属于既有 message-actions
  * 体系（与复制/编辑同尺寸、同 hover/focus 规则），不新建按钮样式。 */
-function attachClassicRegenerate(article, userIndex) {
+function attachClassicRegenerate(article, userIndex, usage = null, usageOptions = {}) {
   if (!article || !Number.isInteger(userIndex)) return null;
-  if (article.querySelector('.message-regenerate')) return null;
+  const existing = article.querySelector(':scope > .message-actions');
+  if (existing) {
+    if (usage !== null && existing.updateUsage) existing.updateUsage(usage, usageOptions);
+    return existing;
+  }
   const text = article.querySelector('.msg-body')?.textContent || '';
   const bar = messageActions(text, {
     onRegenerate: event => regenerateClassicTurn(event?.currentTarget, userIndex),
+    ...(usage !== null && { usage, usageOptions }),
   });
   article.append(bar);
   return bar;
@@ -1231,6 +1254,8 @@ export function onMessageEnd(evt) {
     /* 轮次失败只认 assistant 的终态证据；工具 isError 不改变轮次状态。
      * 与 rebuildAssistant 的判定保持一致：用户主动停止优先按中性处理。 */
     if (liveTurn && !liveTurn.finalized) {
+      const record = classicUsageRecord(msg);
+      if (record) liveTurn.usageRecords.push(record);
       const ownedAbort = msg.stopReason === 'aborted' && S.stopOwnedTurn === true;
       liveTurn.lastAssistant = {
         failed: !ownedAbort && (msg.stopReason === 'error' || Boolean(msg.errorMessage)),
@@ -1250,8 +1275,6 @@ export function onMessageEnd(evt) {
        * 下一轮 message_start 会再建一个新的外壳。 */
       if (!keep) S.current.wrap.remove();
       else {
-        const meta = renderMessageMeta(msg);
-        if (meta) S.current.wrap.appendChild(meta);
         classifyAssistantWork(S.current.wrap, msg);
         /* 一轮里最后一条**有正文**的助手消息承载“重新生成”；后续只有工具
          * 调用的空消息被收掉时，仍指回这条。 */
@@ -1631,6 +1654,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       userIndex: Number.isInteger(userIndex) ? userIndex : null,
       lastAssistantNode: null,
       hasEvidence: false,
+      usageRecords: [],
       nodes: { input, additional: [], responses: [], tools: new Map(), plan: null, outcomes: [] },
       ...(record && { record }),
     };
@@ -1639,9 +1663,6 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     if (!historyTurn) return;
     const turn = historyTurn;
     historyTurn = null;
-    /* 重新生成入口按轮挂在该轮最后一条可见助手消息上；历史重建也要有，
-     * 否则刷新/重开之后功能就消失了。 */
-    attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
     const recovered = turn.record;
     if (!turn.hasEvidence && !recovered) return;
     let outcome = turn.hasEvidence && deriveTurnOutcome({
@@ -1653,15 +1674,21 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       const [state, label] = HISTORY_OUTCOME[recovered.status];
       outcome = { ...outcome, state, label, durationMs: null };
     }
+    const timing = recovered?.timing;
+    const startedAt = Number.isFinite(timing?.startedAt) ? timing.startedAt : turn.startedAt;
+    const endedAt = Number.isFinite(timing?.endedAt) ? timing.endedAt : turn.endedAt;
+    const status = recovered?.status || (outcome ? turnStatusOf(outcome.state) : '');
     if (turn.nodes?.input) {
-      const timing = recovered?.timing;
-      const startedAt = Number.isFinite(timing?.startedAt) ? timing.startedAt : turn.startedAt;
-      const endedAt = Number.isFinite(timing?.endedAt) ? timing.endedAt : turn.endedAt;
-      tagClassicTurn(turn.nodes.input, turn.nodes.additional, {
-        startedAt, endedAt,
-        status: recovered?.status || (outcome ? turnStatusOf(outcome.state) : ''),
-      });
+      tagClassicTurn(turn.nodes.input, turn.nodes.additional, { startedAt, endedAt, status });
     }
+    /* 重新生成与用量入口按轮挂在该轮最后一条可见助手消息上；历史重建也要有，
+     * 否则刷新/重开之后功能与真实用量入口就消失了。 */
+    attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex, turn.usageRecords, {
+      label: '本轮用量',
+      timing: Number.isFinite(startedAt) && Number.isFinite(endedAt)
+        ? { startedAt, endedAt, durationMs: null, evidence: 'observed' } : null,
+      status,
+    });
     if (outcome) {
       const outcomeNode = renderTurnOutcome(outcome);
       outcomeNode.dataset.anchorId = 'outcome-' + (++outcomeSeq);
@@ -1718,6 +1745,8 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     if (item.kind === 'assistant') {
       const msg = item.message;
       if (historyTurn) {
+        const usageRecord = classicUsageRecord(msg);
+        if (usageRecord) historyTurn.usageRecords.push(usageRecord);
         const failed = msg.stopReason === 'error' || Boolean(msg.errorMessage);
         const interrupted = msg.stopReason === 'aborted' && !failed;
         historyTurn.lastAssistant = {
@@ -1747,8 +1776,6 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       }
       wrap.appendChild(body);
       classifyAssistantWork(wrap, msg);
-      const meta = renderMessageMeta(msg);
-      if (meta) wrap.appendChild(meta);
       frag.appendChild(wrap);
       return;
     }

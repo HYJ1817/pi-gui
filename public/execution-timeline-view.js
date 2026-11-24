@@ -1,6 +1,5 @@
 /* Shared, live execution-turn layout. Hosts supply their authorized native message
  * and tool nodes. The layout never requests data or revises the P5-A event model. */
-import { renderUsageMeta } from './message-meta.js';
 import { preserveScrollAround } from './reading-position.js';
 import { groupEntries, isEntryExpanded, setEntryExpanded } from './tool-view.js';
 import { formatTurnDuration } from './turn-outcome.js';
@@ -531,12 +530,9 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   const thinking = section('thinking');
   const answer = section('answer');
   const outcomes = section('outcome');
-  const usage = makeDisclosure(make, 'usage', '用量', 'execution-usage');
-  usage.setOpen(preferences?.get('usage') === true);
-  node.append(task, planSlot, activityFlow, thinking, answer, outcomes, usage.node);
+  node.append(task, planSlot, activityFlow, thinking, answer, outcomes);
 
   const rows = new Map();
-  const ledger = new Map();
   const openRows = new Set();
   let timer = null;
 
@@ -761,11 +757,6 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   let currentItems = EMPTY_NODES;
   let currentDetails = EMPTY_DETAILS;
 
-  usage.head.addEventListener('click', () => preserveScrollAround(usage.head, () => {
-    usage.setOpen(usage.body.hidden);
-    preferences?.set('usage', !usage.body.hidden);
-  }));
-
   function tick() {
     if (!node.isConnected) {
       stopClock();
@@ -784,7 +775,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   function update({
     turn, group, items = EMPTY_NODES, input, plan, progress: process = EMPTY_NODES, steers = EMPTY_NODES,
     thinking: activeThinking = EMPTY_NODES, answer: final = EMPTY_NODES, outcomes: terminal = EMPTY_NODES,
-    details = EMPTY_DETAILS, usage: existingUsage = EMPTY_NODES, workOrder = null,
+    details = EMPTY_DETAILS, workOrder = null,
   }) {
     node.dataset.executionTurn = turn.id;
     node.dataset.status = turn.status;
@@ -877,30 +868,6 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
     render(thinking, activeThinking);
     render(answer, final);
     render(outcomes, terminal);
-
-    const wanted = new Set();
-    const usageNodes = [...existingUsage];
-    for (const response of turn.usage ?? []) {
-      const id = response.responseId;
-      if (!id || wanted.has(id)) continue;
-      wanted.add(id);
-      const model = [response.model?.provider, response.model?.id].filter(Boolean).join(' / ');
-      const signature = JSON.stringify([response.recorded, model]);
-      let row = ledger.get(id);
-      if (row?.signature !== signature) {
-        const meta = renderUsageMeta(response.recorded, { label: '助手响应的用量' });
-        if (!meta) continue;
-        const entry = make('div', 'execution-usage-entry');
-        if (model) entry.append(make('div', 'execution-usage-model', model));
-        entry.append(meta);
-        row = { signature, entry };
-        ledger.set(id, row);
-      }
-      usageNodes.push(row.entry);
-    }
-    for (const id of ledger.keys()) if (!wanted.has(id)) ledger.delete(id);
-    order(usage.body, usageNodes);
-    usage.node.hidden = usageNodes.length === 0;
 
     if (isActiveTurnStatus(turn.status) && Number.isFinite(turn.timing?.startedAt)) {
       if (timer === null && document.defaultView) timer = document.defaultView.setInterval(tick, 1000);

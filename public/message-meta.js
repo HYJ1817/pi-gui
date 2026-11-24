@@ -2,10 +2,10 @@
  * Pi Usage.reasoning is a subset of output, not an additional token total.
  * Missing/invalid numbers stay absent; an actual numeric zero is meaningful.
  *
- * 默认只显示一行摘要（总量/输出 + 推理），完整拆分放进原生 <details>；
- * 这样默认信息密度更低，但所有真实字段仍然可达、可复制，缺失与 0 的语义不变。
- * Classic、Runtime 实时与 Runtime 历史共用这里的字段名、数字格式和语义，
- * 避免同一份 usage 在三处出现三种标签。 */
+ * 这里只做字段白名单、聚合与摘要；展示入口是助手操作栏中的一枚统计图标，
+ * 完整拆分放进轻量 Popover。缺失与 0 的语义不变：缺失字段不补 0，
+ * 真实 0 仍然保留；整轮汇总只累加每条响应都有的字段。
+ * Classic、Runtime 实时、Runtime 历史与 P5 共用这里字段名和数字格式。 */
 
 const FIELDS = [
   ['input', '输入'], ['output', '输出'], ['cacheRead', '缓存读取'],
@@ -16,7 +16,7 @@ const FIELDS = [
 export const USAGE_FIELDS = FIELDS;
 
 const valid = (usage, key) => Number.isSafeInteger(usage?.[key]) && usage[key] >= 0;
-const grouped = value => value.toLocaleString('en-US');
+export const formatUsageNumber = value => value.toLocaleString('en-US');
 
 /** 成本只接受 Pi 已算好的非负有限数；不在这里乘单价、不补货币符号。 */
 export function validCost(usage) {
@@ -24,88 +24,38 @@ export function validCost(usage) {
   return Number.isFinite(total) && total >= 0 ? total : null;
 }
 
+/** Project one Pi usage into the shared whitelist. Missing and invalid values
+ * stay absent; a real zero is kept. `costTotal` accepts either the already
+ * projected form or Pi's native `cost.total`. */
+export function normalizeUsage(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const usage = {};
+  for (const [key] of FIELDS) if (valid(raw, key)) usage[key] = raw[key];
+  const cost = validCost(raw) ?? (Number.isFinite(raw.cost?.total) && raw.cost.total >= 0 ? raw.cost.total : null);
+  if (cost !== null) usage.costTotal = cost;
+  return Object.keys(usage).length ? usage : null;
+}
+
+/** Whole-turn totals are emitted only for fields every response reported.
+ * Mixing present and missing values would make a partial sum look complete. */
+export function mergeUsages(usages) {
+  const list = Array.isArray(usages) ? usages.map(normalizeUsage).filter(Boolean) : [];
+  if (!list.length) return null;
+  if (list.length === 1) return { ...list[0] };
+  const merged = {};
+  for (const [key] of [...FIELDS, ['costTotal', '成本']]) {
+    if (!list.every(usage => Object.hasOwn(usage, key))) continue;
+    merged[key] = list.reduce((total, usage) => total + usage[key], 0);
+  }
+  return Object.keys(merged).length ? merged : null;
+}
+
 /** 默认一行的用量摘要。缺失 totalTokens 时退回 output；推理永远标注含在输出中。 */
 export function usageSummary(usage) {
   if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return '';
   const parts = [];
-  if (valid(usage, 'totalTokens')) parts.push(`Token ${grouped(usage.totalTokens)}`);
-  else if (valid(usage, 'output')) parts.push(`输出 ${grouped(usage.output)} Token`);
-  if (valid(usage, 'reasoning')) parts.push(`推理 ${grouped(usage.reasoning)}（含在输出中）`);
+  if (valid(usage, 'totalTokens')) parts.push(`Token ${formatUsageNumber(usage.totalTokens)}`);
+  else if (valid(usage, 'output')) parts.push(`输出 ${formatUsageNumber(usage.output)} Token`);
+  if (valid(usage, 'reasoning')) parts.push(`推理 ${formatUsageNumber(usage.reasoning)}（含在输出中）`);
   return parts.join(' · ');
-}
-
-/**
- * 渲染一条 usage 的“摘要 + 明细”。usage 形状与 Pi 一致：
- * input / output / cacheRead / cacheWrite / cacheWrite1h / reasoning / totalTokens，
- * 可选 costTotal（Pi `usage.cost.total` 的原值）。非白名单字段一律忽略。
- *
- * @param {object} usage
- * @param {{ source?: string, label?: string, prefix?: string, className?: string }} options
- * @returns {HTMLElement|null} 没有任何有效字段时返回 null（不是空壳）
- */
-export function renderUsageMeta(usage, {
-  source = '',
-  label = '本条助手消息用量',
-  prefix = '',
-  className = 'ui2-msg-meta',
-} = {}) {
-  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return null;
-  const fields = FIELDS.filter(([key]) => valid(usage, key));
-  const cost = validCost(usage);
-  if (!fields.length && cost === null) return null;
-
-  const footer = document.createElement('footer');
-  footer.className = className;
-  footer.setAttribute('aria-label', label);
-
-  const summaryText = usageSummary(usage);
-  if (summaryText) {
-    const summary = document.createElement('span');
-    summary.className = 'ui2-msg-meta-summary';
-    summary.textContent = prefix + summaryText;
-    footer.appendChild(summary);
-  }
-
-  const details = document.createElement('details');
-  details.className = 'ui2-msg-meta-details';
-  const toggle = document.createElement('summary');
-  toggle.className = 'ui2-msg-meta-toggle';
-  toggle.textContent = summaryText ? '明细' : 'Token 明细';
-  details.appendChild(toggle);
-
-  for (const [key, fieldLabel] of fields) {
-    const item = document.createElement('span');
-    item.className = 'ui2-msg-meta-item';
-    item.dataset.kind = key;
-    item.textContent = `${fieldLabel} ${grouped(usage[key])} Token${key === 'reasoning' ? '（含在输出中）' : ''}`;
-    if (details.childNodes.length > 1) details.appendChild(document.createTextNode(' · '));
-    details.appendChild(item);
-  }
-  if (cost !== null) {
-    const item = document.createElement('span');
-    item.className = 'ui2-msg-meta-item';
-    item.dataset.kind = 'cost';
-    item.textContent = `预估成本 ${cost.toFixed(4)}`;
-    if (details.childNodes.length > 1) details.appendChild(document.createTextNode(' · '));
-    details.appendChild(item);
-  }
-
-  if (source === 'message_update') {
-    const note = document.createElement('span');
-    note.className = 'ui2-msg-meta-note';
-    note.textContent = '（流式中，Pi 仍在累计）';
-    footer.appendChild(note);
-  }
-
-  footer.appendChild(details);
-  return footer;
-}
-
-/** Classic 的一条 assistant 消息：usage 直接来自 message.usage。 */
-export function renderMessageMeta(message) {
-  if (message?.role !== 'assistant' || !message.usage || typeof message.usage !== 'object' || Array.isArray(message.usage)) return null;
-  const usage = { ...message.usage };
-  const cost = message.usage.cost?.total;
-  if (Number.isFinite(cost) && cost >= 0) usage.costTotal = cost;
-  return renderUsageMeta(usage, { label: '本条助手消息用量' });
 }

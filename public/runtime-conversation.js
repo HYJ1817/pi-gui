@@ -47,8 +47,8 @@ import { runtimeSessionAction, fetchRuntimeHistory, runtimeEditPreflight, runtim
 import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval, refreshRuntimeViews } from './runtime-state.js';
 import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeDisplay, shouldFollow } from './runtime-display.js';
-import { renderUsageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
+import { closeUsagePopover } from './ui/usage-popover.js';
 import { preserveTextSelection } from './ui/text-selection.js';
 import { userBody } from './ui/user-message-body.js';
 import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance, rememberPendingMessageEdit, clearPendingMessageEdit, readPendingMessageEdit, resumePendingMessageEdit, isEditInProgress } from './ui/message-edit.js';
@@ -236,7 +236,6 @@ const EMPTY_TIMELINE_VIEW = () => ({
   entryOpen: new Map(),
   execution: new Map(),
   executionSource: null,
-  provisionalUsage: null,
   recordRef: null,
   flow: null,
   workOpen: new Map(),
@@ -273,7 +272,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
    * 会话的视图态），这样每个实例独立 dispose，测试之间也不共享残留记录。 */
   const projection = display || createRuntimeDisplay();
   const ownsProjection = !display;
-  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null, renderedHistory = null, renderedLocatorKey = null, renderedUsageKey = '';
+  let id = null, alive = true, active = false, focusEpoch = 0, approvalKey = '', renderedId = null, renderedHistory = null, renderedLocatorKey = null;
 
   function viewOf(conversationId) {
     let view = views.get(conversationId);
@@ -406,7 +405,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   /* 本轮用量：只显示 Pi 报过的数字（见 runtime-display.js）。刻意**不加** aria-live ——
    * 它每帧都在变，做成 live region 会不停打断读屏。
    * 外面这层只负责占位/显隐，摘要与明细由 message-meta.js 与 Classic 共用。 */
-  const usage = el('div', 'ui2-runtime-usage'); usage.hidden = true; root.append(usage);
 
   const approvals = el('div', 'rtc-approvals'); root.append(approvals);
   let composing = false;
@@ -761,44 +759,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     };
   }
 
-  /* 一条 assistant 消息的真实 usage 可能挂在正文、Thinking 或工具组上；
-   * 每个 block 只渲染一次，更新时按白名单投影的签名原位替换。 */
-  function syncUsageMeta(host, block) {
-    const usage = usageProjection(block?.usage);
-    const key = usage ? JSON.stringify(usage) : '';
-    if (!key) {
-      if (host._usageMeta) { host._usageMeta.remove(); host._usageMeta = null; host._usageKey = ''; }
-      return;
-    }
-    if (host._usageMeta && host._usageKey === key) return;
-    const fresh = renderUsageMeta(usage, { label: '本条助手消息用量' });
-    if (!fresh) {
-      if (host._usageMeta) { host._usageMeta.remove(); host._usageMeta = null; host._usageKey = ''; }
-      return;
-    }
-    if (host._usageMeta) host._usageMeta.replaceWith(fresh);
-    else host.append(fresh);
-    host._usageMeta = fresh;
-    host._usageKey = key;
-  }
-
-  /* Plan 卡会被同一 turnId 的多条 assistant 消息复用；每条消息的真实 usage
-   * 都追加在卡外，按记录顺序各显示一次。旧响应只有单条 `usage` 时按一条处理。 */
-  function syncPlanUsages(host, block) {
-    const raw = Array.isArray(block?.usages) ? block.usages : (block?.usage ? [block.usage] : []);
-    const usages = raw.map(usageProjection).filter(Boolean);
-    const key = JSON.stringify(usages);
-    if (host._planUsageKey === key) return;
-    host._planUsageKey = key;
-    if (Array.isArray(host._planUsageMetas)) {
-      for (const node of host._planUsageMetas) node.remove();
-    }
-    host._planUsageMetas = usages
-      .map(usage => renderUsageMeta(usage, { label: '本条助手消息用量' }))
-      .filter(Boolean);
-    for (const meta of host._planUsageMetas) host.append(meta);
-  }
-
   function runtimeOwnerOf(record) {
     return record?.owner && typeof record.owner === 'object' ? { ...record.owner } : null;
   }
@@ -1101,13 +1061,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       let actionBar = null;
       let renderedText = block.text;
       let regenerateIndex = null;
-      /* 历史 usage 与 Classic 同一条摘要/明细；同一消息的多段正文不会重复
-       * 出现同一份用量（投影只把 usage 挂到该消息的一个 block 上）。 */
-      const syncMeta = (next, recovered) => syncUsageMeta(row, recovered ? null : next);
-      syncMeta(block);
-      /* 正文不混入重复角色文本；流式替换保留选区，状态/用量更新不重建正文。
-       * 操作按钮保持身份，但重新生成的用户目标仍由当前真实轮次边界决定。 */
-      return { node: row, update(next, regenerateUserIndex, recovered) {
+      /* 正文不混入重复角色文本；流式替换保留选区，状态更新不重建正文。
+       * 操作按钮保持身份，但重新生成的用户目标仍由当前真实轮次边界决定。
+       * 历史只读视图也用同一条动作条（复制/用量），但不提供重新生成。 */
+      return { node: row, update(next, regenerateUserIndex) {
         if (renderedText !== next.text) {
           preserveTextSelection(body, () => {
             body.replaceChildren();
@@ -1117,9 +1074,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         }
         row.dataset.state = next.state || '';
         regenerateIndex = regenerateUserIndex;
-        if (!history && Number.isInteger(regenerateIndex)) {
+        if (Number.isInteger(regenerateIndex)) {
           if (!actionBar) {
-            actionBar = messageActions(next.text, { onRegenerate: event =>
+            actionBar = messageActions(next.text, history ? {} : { onRegenerate: event =>
               regenerateRuntimeTurn(event.currentTarget, regenerateIndex, record, options.notify) });
             row.append(actionBar);
           } else actionBar.updateText(next.text);
@@ -1127,7 +1084,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           actionBar.remove();
           actionBar = null;
         }
-        syncMeta(next, recovered);
       } };
     }
 
@@ -1159,7 +1115,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           view.timeline.thinkingOpen.set(openKey(block.id), details.open);
         });
       });
-      if (wrap) syncUsageMeta(wrap, block);
       return {
         node: wrap || details,
         update(next, _, recovered) {
@@ -1174,7 +1129,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           if (body.textContent !== text) preserveTextSelection(body, () => { body.textContent = text; });
           preview.textContent = String(text ?? '').trim() ? thinkingPreview(text) : '思考中…';
           stateText.textContent = (truncated ? '（已截断）' : '') + (stateLabel ? ' · ' + stateLabel : '');
-          if (wrap) syncUsageMeta(wrap, recovered ? null : next);
         },
       };
     }
@@ -1218,7 +1172,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           }
           orderConversationNodes(group._tlGroup.list, ordered);
           if (view.timeline.groupOpen.has(openKey(next.id))) setGroupExpanded(group, view.timeline.groupOpen.get(openKey(next.id)));
-          syncUsageMeta(wrapper, recovered ? null : next);
         },
       };
     }
@@ -1247,9 +1200,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           /* 旧回合的计划不再呼吸；当前回合按真实运行态决定。 */
           const currentPlan = record?.planBlock?.id === next.id;
           setPlanStalled(card, history || recovered || !currentPlan || !activeRun);
-          /* plan-only 消息的真实 usage 挂在计划 block 上；放在卡片外层，
-           * 折叠计划列表不会把用量一起藏掉。 */
-          syncPlanUsages(host, recovered ? null : next);
         },
       };
     }
@@ -1386,10 +1336,163 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         const observed = segment.blocks.slice(start + 1, stop)
           .reduce((end, block) => block.kind !== 'user' && Number.isFinite(block.at)
             ? Math.max(end, block.at) : end, -Infinity);
-        const steerEnd = !activeStatus && Number.isFinite(steer.at) && observed > steer.at ? observed : null;
+        /* Only the final supplemental segment of the final turn may use the
+         * real settle point; an earlier steer ends at its own last observed
+         * work. The top fold keeps the whole turn's time, as T3 does. */
+        const finalSteer = last && steerIndex === segment.steers.length - 1;
+        const steerObserved = Math.max(observed, finalSteer ? settledAt ?? -Infinity : -Infinity);
+        const steerEnd = !activeStatus && Number.isFinite(steer.at) && steerObserved > steer.at
+          ? steerObserved : null;
         annotate(steer, Number.isFinite(steer.at) ? steer.at : null, steerEnd, status, true);
       }
     }
+  }
+
+  /* ---------- 用量动作 ----------
+   * 用量只作为助手动作条上的一个统计入口。原生 block 的 usage 先按真实
+   * turn 边界聚合；P5 已验证回合随后用 turn.usage 覆盖为整轮记录，并保留
+   * 逐响应明细。没有真实数字时不创建按钮。 */
+  function usageTimingOf(owner) {
+    const startedAt = Number(owner?.dataset?.turnStartAt);
+    const endedAt = Number(owner?.dataset?.turnEndedAt);
+    const status = owner?.dataset?.turnStatus || '';
+    if (!Number.isFinite(startedAt) && !Number.isFinite(endedAt) && !status) return null;
+    return {
+      startedAt: Number.isFinite(startedAt) ? startedAt : null,
+      endedAt: Number.isFinite(endedAt) ? endedAt : null,
+      durationMs: null,
+      evidence: Number.isFinite(startedAt) || Number.isFinite(endedAt) ? 'observed' : 'unknown',
+    };
+  }
+
+  function usageRecordsFromBlocks(blocks) {
+    const records = [];
+    for (const block of blocks) {
+      const raw = Array.isArray(block?.usages) ? block.usages : (block?.usage ? [block.usage] : []);
+      for (const usage of raw) {
+        const recorded = usageProjection(usage);
+        if (recorded) records.push({ usage: recorded });
+      }
+    }
+    return records;
+  }
+
+  /** Place usage on the turn's terminal assistant; if the turn has no text,
+   * the last visible record still carries the entry so real data stays
+   * reachable, exactly once per turn. */
+  function applyTurnUsage(anchorNode, records, options) {
+    if (!anchorNode) return;
+    let bar = anchorNode.querySelector?.(':scope > .message-actions') || null;
+    if (!bar) {
+      bar = anchorNode._usageBar;
+      if (!bar || !anchorNode.contains(bar)) {
+        if (!records.length) return;
+        bar = messageActions('', { usage: records, usageOptions: options });
+        bar._usageOnly = true;
+        bar.classList.add('message-actions-usage-only');
+        anchorNode.append(bar);
+        anchorNode._usageBar = bar;
+        return;
+      }
+    }
+    if (!bar.updateUsage) return;
+    bar.updateUsage(records, options);
+    if (bar._usageOnly && !records.length) {
+      bar.remove();
+      anchorNode._usageBar = null;
+    }
+  }
+
+  function syncNativeUsageActions(blocks, view, supplemental) {
+    let owner = null;
+    let turnBlocks = [];
+    const turns = [];
+    for (const block of blocks) {
+      if (!block || typeof block.id !== 'string') continue;
+      if (block.kind === 'user' && !supplemental.has(block)) {
+        if (owner) turns.push({ owner, blocks: turnBlocks });
+        owner = block;
+        turnBlocks = [];
+      }
+      if (owner) turnBlocks.push(block);
+    }
+    if (owner) turns.push({ owner, blocks: turnBlocks });
+    for (const turn of turns) {
+      const records = usageRecordsFromBlocks(turn.blocks);
+      if (!records.length) continue;
+      let anchor = null;
+      for (let index = turn.blocks.length - 1; index >= 0; index--) {
+        const block = turn.blocks[index];
+        if (block.kind !== 'assistant') continue;
+        const node = view.timeline.nodes.get(block.id)?.node;
+        if (node) { anchor = node; break; }
+      }
+      if (!anchor) {
+        for (let index = turn.blocks.length - 1; index >= 0; index--) {
+          const block = turn.blocks[index];
+          if (block.kind === 'user') continue;
+          const node = view.timeline.nodes.get(block.id)?.node;
+          if (node) { anchor = node; break; }
+        }
+      }
+      if (!anchor) continue;
+      const ownerNode = view.timeline.nodes.get(turn.owner.id)?.node || null;
+      applyTurnUsage(anchor, records, {
+        label: '本轮用量',
+        timing: usageTimingOf(ownerNode),
+        status: ownerNode?.dataset?.turnStatus || '',
+      });
+    }
+  }
+
+  /* 实时原生回退的 block 本身不携带 usage；这里的值来自同一 store 广播帧的
+   * 只读投影。只在没有任何已记录 usage 的当前回合上补充，绝不覆盖多响应记录。 */
+  function syncProvisionalUsageAction(blocks, view, supplemental, record) {
+    if (!record?.owner) return;
+    const currentUsage = projection.usageOf(record.owner.conversationId);
+    const recorded = usageProjection(currentUsage);
+    if (!recorded) return;
+    let owner = null;
+    let terminal = null;
+    let hasRecorded = false;
+    for (const block of blocks) {
+      if (!block || typeof block.id !== 'string') continue;
+      if (block.kind === 'user' && !supplemental.has(block)) {
+        owner = block;
+        terminal = null;
+        hasRecorded = false;
+        continue;
+      }
+      /* 没有用户消息的残段（重连/截断历史）也可以把用量挂在自己的助手
+       * 回复上；此时不猜任何轮次时间或状态。 */
+      if (block.kind === 'assistant') terminal = block;
+      if (block.usage || (Array.isArray(block.usages) && block.usages.length)) hasRecorded = true;
+    }
+    if (!terminal || hasRecorded) return;
+    const node = view.timeline.nodes.get(terminal.id)?.node;
+    if (!node) return;
+    const ownerNode = owner ? view.timeline.nodes.get(owner.id)?.node || null : null;
+    applyTurnUsage(node, [{ usage: recorded }], {
+      label: owner ? '本轮用量' : '本条助手消息用量',
+      timing: usageTimingOf(ownerNode),
+      status: ownerNode?.dataset?.turnStatus || '',
+      partial: currentUsage.source === 'message_update',
+    });
+  }
+
+  function verifiedUsageRecords(turn) {
+    const records = [];
+    for (const row of Array.isArray(turn?.usage) ? turn.usage : []) {
+      const recorded = usageProjection(row?.recorded);
+      if (!recorded) continue;
+      const model = [row?.model?.provider, row?.model?.id].filter(Boolean).join(' / ');
+      records.push({ usage: recorded, responseId: row?.responseId || '', ...(model ? { model } : {}) });
+    }
+    return records;
+  }
+
+  function verifiedUsageOptions(turn) {
+    return { label: '本轮用量', timing: turn?.timing || null, status: turn?.status || '' };
   }
 
   function clearExecutionViews(timeline) {
@@ -1398,7 +1501,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     for (const execution of timeline.execution.values()) execution.release();
     timeline.execution.clear();
     timeline.executionSource = null;
-    timeline.provisionalUsage = null;
   }
 
   function executionSource(timeline, record) {
@@ -1500,6 +1602,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     }
     execution.update({ turn, group: turn.group, items: turn.items, input: rows[0].info.node,
       plan, progress, steers, answer, workOrder, outcomes: execution.outcome ? [execution.outcome] : [] });
+    /* Verified whole-turn usage replaces the per-block fallback on the closing
+     * assistant answer; per-response rows stay inside the popover. */
+    applyTurnUsage(answer.at(-1), verifiedUsageRecords(turn), verifiedUsageOptions(turn));
     return { key, node: execution.node };
   }
 
@@ -1507,7 +1612,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const { snapshot, groups, items: itemsByTurn } = history ? {} : executionSource(timeline, record);
     const used = new Set();
     const nodes = [];
-    let usageInTimeline = false;
     for (let index = 0; index < rows.length;) {
       const row = rows[index];
       const restored = recovered?.byStart.get(row.block.id);
@@ -1580,22 +1684,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         execution = createExecutionTurnView({ document, preferences });
         timeline.execution.set(turn.id, execution);
       }
-      const usage = [];
-      if (end === rows.length) {
-        const currentUsage = projection.usageOf(record.owner.conversationId);
-        if (currentUsage?.source === 'message_update') {
-          const key = JSON.stringify([record.settled, currentUsage]);
-          if (timeline.provisionalUsage?.key !== key) {
-            timeline.provisionalUsage = { key, node: renderUsageMeta(currentUsage, {
-              source: record.settled ? '' : currentUsage.source,
-              label: '最后可用的流式用量',
-              prefix: record.settled ? '部分记录 · ' : '',
-            }) };
-          }
-          if (timeline.provisionalUsage.node) usage.push(timeline.provisionalUsage.node);
-        } else timeline.provisionalUsage = null;
-        usageInTimeline = usage.length > 0 || turn.usage.length > 0;
-      }
       const positions = new Map(members.map((member, part) => [member.info.node,
         { sequence: store.executionWitness(record, member.block).sequence, part }]));
       const workOrder = [
@@ -1606,14 +1694,26 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         ...items.map(item => ({ activityId: item.id, ...item.position })),
       ].sort((a, b) => a.sequence - b.sequence || a.part - b.part);
       execution.update({ turn, group, items, input: row.info.node, plan, progress,
-        steers: steers.map(steer => steer.node), thinking, answer, outcomes, usage, workOrder });
+        steers: steers.map(steer => steer.node), thinking, answer, outcomes, workOrder });
+      let records = verifiedUsageRecords(turn);
+      let partial = false;
+      /* 当前回复仍在流式时，把它真实上报的累计用量追加为一条部分记录，
+       * 并明确标注仍在累计；它替代不了已验证记录，也不补缺失字段。 */
+      if (end === rows.length) {
+        const currentUsage = projection.usageOf(record.owner.conversationId);
+        if (currentUsage?.source === 'message_update') {
+          const recorded = usageProjection(currentUsage);
+          if (recorded) { records = [...records, { usage: recorded }]; partial = true; }
+        }
+      }
+      applyTurnUsage(answer.at(-1), records, { ...verifiedUsageOptions(turn), partial });
       nodes.push(execution.node);
       used.add(turn.id);
     }
     for (const [key, execution] of timeline.execution) {
       if (!used.has(key)) { execution.release(); timeline.execution.delete(key); }
     }
-    return { nodes, usageInTimeline };
+    return { nodes };
   }
 
   function supplementalInputs(blocks, record, snapshot) {
@@ -1771,17 +1871,26 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     for (const key of view.timeline.workOpen.keys()) if (key.startsWith(prefix) && !blockIds.has(key.slice(prefix.length))) view.timeline.workOpen.delete(key);
     const turnKeys = new Set(blocks.filter(block => block && block.kind === 'user').map(block => block.id));
     for (const key of view.timeline.settledTurns) if (!turnKeys.has(key)) view.timeline.settledTurns.delete(key);
-    /* 顺序由数据决定；这里只是把 DOM 对齐到数据，不猜测事件先后。 */
-    if (rows) annotateNativeTurnTiming(blocks, view, supplemental, outcomeByKey, history, record);
-    const { nodes, usageInTimeline } = rows
+    /* 顺序由数据决定；这里只是把 DOM 对齐到数据，不猜测事件先后。
+     * 只读历史没有 P5 恢复包时也使用原生消息自带的真实时间戳标注，
+     * 否则带历史正文的旧会话永远看不到时长。归属仍只认本段用户消息。 */
+    annotateNativeTurnTiming(blocks, view, supplemental, outcomeByKey, history, record);
+    syncNativeUsageActions(blocks, view, supplemental);
+    syncProvisionalUsageAction(blocks, view, supplemental, record);
+    const { nodes } = rows
       ? composeExecutionRows(rows, view.timeline, record, recovered, history)
-      : { nodes: [...wanted], usageInTimeline: false };
+      : { nodes: [...wanted] };
     if (!view.timeline.flow) view.timeline.flow = createConversationFlow({ document, preferences: {
       get: key => view.timeline.workOpen.get(prefix + key),
       set: (key, value) => view.timeline.workOpen.set(prefix + key, value),
     } });
     view.timeline.flow.render(output, nodes);
-    return usageInTimeline;
+    /* 只有工作记录的回合没有助手正文可挂动作条；把统计入口放到折叠头
+     * 所属的工作记录外层，避免入口随折叠列表一起藏掉。 */
+    for (const bar of output.querySelectorAll('.message-actions-usage-only')) {
+      const log = bar.closest('[data-conversation-work]');
+      if (log && bar.parentElement !== log) log.append(bar);
+    }
   }
 
   /** 只读历史里的搜索落点。
@@ -1836,8 +1945,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
      * 滚动策略要用它区分「用户主动切过来」与「同一条会话内的流式更新」。 */
     const entered = renderedId !== id;
     /* 切换会话/视图时，旧的就地编辑器不能留在 detached DOM 里继续持有
-     * “正在编辑”状态；恢复原节点，但不抢新视图的焦点。 */
-    if (entered) { try { closeMessageEditor({ restore: true, focus: false }); } catch { /* editor may be detached */ } }
+     * “正在编辑”状态；恢复原节点，但不抢新视图的焦点。用量弹层锚在旧
+     * 会话的动作条上，也必须随视图一起关闭，不能浮在另一条会话上。 */
+    if (entered) {
+      closeUsagePopover();
+      try { closeMessageEditor({ restore: true, focus: false }); } catch { /* editor may be detached */ }
+    }
     // Capture intent before text/thinking/tool changes can increase scrollHeight.
     const wasNearBottom = !entered && !view.history && shouldFollow(output);
     const prevScrollHeight = output.scrollHeight || 0;
@@ -1862,7 +1975,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       setState(lifecycle + notice, showsWorkingDots(r?.item, r, view), entered);
     }
 
-    let executionUsageInTimeline = false;
     if (view.history) {
       const executionBlocks = Array.isArray(view.history.execution?.timeline) ? view.history.execution.timeline : [];
       if (executionBlocks.length) {
@@ -1949,7 +2061,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       const blocks = Array.isArray(r?.timeline) ? r.timeline : [];
       if (blocks.length) {
         delete output.dataset.renderedText;
-        executionUsageInTimeline = renderTimeline(blocks, view, r, false);
+        renderTimeline(blocks, view, r, false);
       } else {
         clearExecutionViews(view.timeline);
         view.timeline.mode = null;
@@ -1968,23 +2080,6 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         }
       }
     }
-
-    const usageStats = view.history ? null : projection.usageOf(id);
-    const usageKey = usageStats ? JSON.stringify(usageStats) : '';
-    if (usageKey !== renderedUsageKey) {
-      renderedUsageKey = usageKey;
-      usage.replaceChildren();
-      if (usageStats) {
-        const meta = renderUsageMeta(usageStats, {
-          source: usageStats.source,
-          label: '本轮助手消息用量',
-          prefix: '本轮 · ',
-          className: 'ui2-msg-meta ui2-runtime-usage-meta',
-        });
-        if (meta) usage.append(meta);
-      }
-    }
-    usage.hidden = !usageKey || executionUsageInTimeline;
 
     const curLoc = r ? extractStableLocator(r?.item, r?.owner) : null;
     const curLocKey = runtimeDraftKey(curLoc);

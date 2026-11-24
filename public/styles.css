@@ -417,10 +417,24 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 }
 .msg.user .msg-body>div+div{margin-top:8px}
 .msg.user .msg-body p{margin:0}
-/* Shared read-only actions; keyboard focus reveals the same bar as hover. */
-:is(#stream,#runtimeView) .message-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-height:26px;padding-top:2px;opacity:0;color:var(--ds-text-muted)}
-:is(#stream .msg.user,#runtimeView .rtc-history-message):is(:hover,:focus-within) .message-actions,
-:is(#stream,#runtimeView) .message-actions:has(.message-copy-feedback:not(:empty)){opacity:1}
+/* Shared read-only actions. The bar is in normal flow below the message, so
+ * showing it never overlaps the body or the next row, and a stable 24px slot
+ * means hover/focus cannot reflow the conversation. User bars align to the
+ * bubble's trailing edge; assistant bars stay on the reading edge. */
+:is(#stream,#runtimeView) .message-actions{
+  display:flex;align-items:center;justify-content:flex-start;gap:2px;
+  min-height:24px;margin-top:6px;padding:0;opacity:0;
+  color:var(--ds-text-muted);pointer-events:none;transition:opacity .12s;
+}
+:is(#stream .msg.user,#runtimeView .rtc-timeline-message[data-role="user"],#runtimeView .rtc-history-message[data-role="user"]) .message-actions{justify-content:flex-end}
+:is(#stream .msg,#runtimeView .rtc-timeline-message,#runtimeView .rtc-history-message,
+  #stream .ui2-runtime-thinking-wrap,#stream .ui2-runtime-plan,#stream .ui2-runtime-tools,
+  #stream .conversation-work-log,#stream .execution-turn,
+  #runtimeView .ui2-runtime-thinking-wrap,#runtimeView .ui2-runtime-plan,#runtimeView .ui2-runtime-tools,
+  #runtimeView .ui2-runtime-thinking,#runtimeView .conversation-work-log,#runtimeView .execution-turn):is(:hover,:focus-within) > .message-actions,
+:is(#stream,#runtimeView) .message-actions:has(.message-copy-feedback:not(:empty)){opacity:1;pointer-events:auto}
+/* 工作记录外层的统计入口跟随时间线阅读边，而不是缩进到折叠列表里。 */
+:is(#stream,#runtimeView) .conversation-work-log > .message-actions{margin-top:2px}
 :is(#stream,#runtimeView) .message-copy{display:grid;place-items:center;flex:none;width:24px;height:24px;padding:4px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--ds-text-muted);cursor:pointer}
 :is(#stream,#runtimeView) .message-copy:hover{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
 :is(#stream,#runtimeView) .message-copy:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
@@ -663,7 +677,6 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
  * 对应 A 侧 tool-view.js / messages.js / message-meta.js 实际生成的节点：
  *  - button.tl-group-head.ui2-tool-summary  原生 button（aria-expanded/-controls/-describedby）
  *  - span.ui2-tool-state                    组级状态计数（role=status，单项组隐藏）
- *  - footer.ui2-msg-meta > span.ui2-msg-meta-item[data-kind]
  *  - .think[data-state] 里的 span.ui2-think-status
  * 规则刻意不依赖 .tl-*：A 的 DOM 挂在哪一层都能用。
  * A 的摘要按钮里**没有** chevron 元素，折叠图标由这里用 ::before 画、
@@ -688,18 +701,6 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 .tl-group-meta[hidden]{display:none}
 .tl-group-meta .ui2-tool-state{padding:0;flex:1 1 auto;min-width:0}
 .tl-group-time{flex:0 0 auto;font-family:var(--mono);font-size:var(--text-xs);line-height:var(--leading-normal);color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap}
-.ui2-msg-meta{display:flex;align-items:center;gap:var(--ui-space-2);flex-wrap:wrap;margin-top:var(--ui-space-1);font-size:var(--text-xs);color:var(--ds-text-secondary);min-width:0}
-.ui2-msg-meta-summary{white-space:nowrap;font-variant-numeric:tabular-nums}
-.ui2-msg-meta-note{white-space:nowrap;color:var(--t3);font-size:11px}
-.ui2-msg-meta-details{display:inline-block;min-width:0}
-.ui2-msg-meta-details[open]{flex-basis:100%;width:100%}
-.ui2-msg-meta-details>summary{display:inline-block;cursor:pointer;color:var(--ds-text-secondary);font-size:var(--text-xs);line-height:var(--leading-normal);border-radius:var(--radius-xs)}
-.ui2-msg-meta-details>summary::marker,.ui2-msg-meta-details>summary::-webkit-details-marker{display:none}
-.ui2-msg-meta-details>summary::before{content:"";display:inline-block;width:5px;height:5px;margin-right:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);vertical-align:middle}
-.ui2-msg-meta-details[open]>summary::before{transform:rotate(45deg)}
-.ui2-msg-meta-details>summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
-.ui2-msg-meta-details .ui2-msg-meta-item{display:inline-block;margin-right:10px}
-.ui2-msg-meta-item{white-space:nowrap;font-variant-numeric:tabular-nums}
 /* C 预留、A 未使用：A 的图标是内联 svg，摘要按钮也不含 chevron 元素。
  * 作为兼容扩展保留，不代表 A 已经采用（见 UI-2C-acceptance.md 第 3 节）。 */
 .ui2-chev{width:12px;height:12px;flex:0 0 auto;fill:none;stroke:currentColor;
@@ -4411,7 +4412,6 @@ body.rp-resizing{cursor:col-resize;user-select:none}
  * 对应 B 侧 runtime-conversation.js 实际生成的节点：
  *  - <details class="ui2-runtime-thinking">（hidden 时整块消失）
  *      <summary class="ui2-runtime-thinking-head"> <pre class="ui2-runtime-thinking-body">
- *  - <p class="ui2-runtime-usage">（每轮用量，[hidden] 由全局规则覆盖）
  *  - <div class="rtc-state ui2-runtime-tools"> 内每项 <span class="ui2-runtime-tool" data-state>
  * 工具项之间是**纯空白文本节点**，所以这里用 flex 把它们收成每项一行，
  * 空白节点按规范不生成 flex item，自动消失。 */
@@ -4432,8 +4432,6 @@ body.rp-resizing{cursor:col-resize;user-select:none}
   margin:2px 0 6px 30px;padding:2px 0 2px 2px;max-height:360px;overflow:auto;overscroll-behavior:contain;border:0;border-radius:0;background:transparent;
   color:var(--ds-text-secondary);font-family:inherit;font-size:var(--text-sm);line-height:var(--leading-body);
 }
-.ui2-runtime-usage{margin:0;font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere}
-.ui2-runtime-usage .ui2-msg-meta{margin-top:0}
 .ui2-runtime-tools{display:flex;flex-direction:column;gap:1px;min-width:0}
 .ui2-runtime-tool{font-size:12px;line-height:1.5;color:var(--t2);overflow-wrap:anywhere}
 /* B 真实使用的工具状态只有 running / done / error 三种，只给这三种着色 */
@@ -4454,7 +4452,7 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .rtc-history-empty{color:var(--t3);font-style:italic}
 
 /* ---------- UI-2C 预留：未使用的兼容扩展 ----------
- * B 的 DOM 实际用的是 .ui2-runtime-usage / -tools / -tool，**没有**使用下面两个类。
+ * B 的 DOM 实际用的是 .ui2-runtime-tools / -tool，**没有**使用下面两个类。
  * 保留为兼容扩展（未知 data-state 回落 t2），不代表 B 已经适配。 */
 .ui2-runtime-meta{font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere;min-width:0}
 .ui2-runtime-status{font-size:12px;color:var(--t2);line-height:1.5;overflow-wrap:anywhere;min-width:0}
@@ -4527,118 +4525,77 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .candidate-file summary { cursor: pointer; overflow-wrap: anywhere; font-size: 12px; }
 .candidate-diff { max-width: 100%; overflow: auto; max-height: 440px; }
 
-/* T3 对照：消息操作条只在 hover / 键盘焦点时浮出，不再为每条消息预留 28px
- * 空白。绝对定位同时保留原按钮、焦点与复制反馈，不改变任何消息事务。 */
-:is(#stream, #runtimeView) :is(.msg, .rtc-timeline-message, .ui2-runtime-thinking-wrap):has(> .ui2-msg-meta) {
-  position: relative;
+/* 设计系统 Tooltip：简短、固定定位、不参与消息排版。 */
+.ui-tooltip {
+  position:fixed;
+  z-index:80;
+  max-inline-size:min(240px,calc(100vw - 16px));
+  padding:4px 8px;
+  border:1px solid var(--ds-border-default);
+  border-radius:var(--radius-sm);
+  background:var(--ds-bg-elevated-opaque);
+  color:var(--ds-text-secondary);
+  box-shadow:var(--ui-shadow-popover);
+  font-size:var(--text-xs);
+  line-height:var(--leading-compact);
+  pointer-events:none;
+  white-space:nowrap;
 }
+.ui-tooltip[hidden]{display:none}
 
-/* 时间线里的逐条 usage 属于低优先级背景信息：默认只留在可访问树里，不占
- * 任何布局高度；悬停消息或键盘进入时以浮层出现，因此已完成消息下方不再留下
- * 一条 opacity:0 的空白。已验证回合的「用量」展开后仍按正常流完整显示。 */
-:is(.thread, .rtc-output) .ui2-msg-meta {
-  position: absolute;
-  inset-inline-start: 0;
-  /* The chip lives inside the assistant message's 12px bottom gap. Its bottom
-   * edge never crosses into the next message/tool row; a larger font scale can
-   * only grow it upward over its own message. */
-  inset-block-end: -11px;
-  z-index: 2;
-  margin: 0;
-  max-inline-size: calc(100% - 96px);
-  padding: 0 4px;
-  border-radius: 4px;
-  background: var(--ds-bg-elevated-opaque);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .10);
-  inline-size: 1px;
-  block-size: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  line-height: 1;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .12s;
+/* 用量浮层：只承载真实 Pi 字段；固定定位，开关不改变消息高度或滚动位置。 */
+.ui-usage-pop {
+  position:fixed;
+  z-index:79;
+  inline-size:min(340px,calc(100vw - 16px));
+  max-block-size:min(420px,calc(100vh - 16px));
+  overflow:auto;
+  overscroll-behavior:contain;
+  padding:10px 12px;
+  border:1px solid var(--ds-border-default);
+  border-radius:var(--radius-md);
+  background:var(--ds-bg-elevated-opaque);
+  color:var(--ds-text-primary);
+  box-shadow:var(--ui-shadow-popover);
+  font-size:var(--text-xs);
+  line-height:var(--leading-compact);
 }
-:is(.thread, .rtc-output) .ui2-msg-meta-summary {
-  min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.ui-usage-pop[hidden]{display:none}
+.usage-pop-head {
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  margin-block-end:6px;
+  color:var(--ds-text-secondary);
 }
-:is(.thread, .rtc-output) .ui2-msg-meta-details { flex: 0 0 auto; }
-:is(.thread, .rtc-output) :is(.msg, .rtc-timeline-message, .ui2-runtime-thinking-wrap):is(:hover, :focus-within) > .ui2-msg-meta {
-  inline-size: auto;
-  block-size: auto;
-  overflow: visible;
-  clip-path: none;
-  /* The chip must stay one line inside the message's bottom gap. If it wrapped
-   * or grew upward it would cover the answer it describes. */
-  white-space: nowrap;
-  flex-wrap: nowrap;
-  opacity: .94;
-  pointer-events: auto;
+.usage-pop-total { color:var(--ds-text-primary); font-size:var(--text-sm); font-weight:500; font-variant-numeric:tabular-nums; }
+.usage-pop-meta { margin-block:2px 6px; color:var(--ds-text-muted); font-variant-numeric:tabular-nums; }
+.usage-pop-grid {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:3px 16px;
+  font-variant-numeric:tabular-nums;
 }
-/* Opening the real fields is an explicit disclosure, not hover chrome. Put the
- * footer back into normal flow so it expands downward and pushes the next row
- * instead of growing upward over the message's own thinking / final answer. */
-:is(.thread, .rtc-output) .ui2-msg-meta:has(.ui2-msg-meta-details[open]) {
-  position: static;
-  inset: auto;
-  z-index: auto;
-  inline-size: auto;
-  block-size: auto;
-  max-inline-size: none;
-  overflow: visible;
-  clip-path: none;
-  flex-wrap: wrap;
-  white-space: normal;
-  margin-top: var(--ui-space-1);
-  padding: 0;
-  background: none;
-  box-shadow: none;
-  opacity: 1;
-  pointer-events: auto;
+.usage-pop-term { color:var(--ds-text-secondary); min-inline-size:0; }
+.usage-pop-value { color:var(--ds-text-primary); font-weight:400; text-align:end; }
+.usage-pop-note { margin-block-start:6px; color:var(--ds-text-muted); }
+.usage-pop-response {
+  margin-block-start:8px;
+  padding-block-start:8px;
+  border-block-start:1px solid var(--ds-border-subtle);
 }
-/* The absolute action bar sits in the message's bottom gap. While the usage
- * disclosure is in flow, reserve that gap so the actions cannot sit on top of
- * the last real field. Only the explicitly opened state pays this height. */
-:is(.thread, .rtc-output) :is(.msg, .rtc-timeline-message):has(> .ui2-msg-meta .ui2-msg-meta-details[open]) {
-  padding-block-end: 18px;
+.usage-pop-section-title {
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  margin-block-end:4px;
+  color:var(--ds-text-secondary);
 }
-:is(.thread, .rtc-output) .execution-usage .ui2-msg-meta {
-  position: static;
-  inset: auto;
-  inline-size: auto;
-  block-size: auto;
-  overflow: visible;
-  clip-path: none;
-  white-space: normal;
-  margin: 0;
-  padding: 0;
-  background: none;
-  box-shadow: none;
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* T3 对照：消息操作条只在 hover / 键盘焦点时浮出，不再为每条消息预留 28px
- * 空白。绝对定位同时保留原按钮、焦点与复制反馈，不改变任何消息事务。 */
-:is(#stream, #runtimeView) :is(.msg, .rtc-timeline-message):has(> .message-actions) { position: relative; }
-:is(#stream, #runtimeView) .message-actions {
-  position: absolute;
-  inset-inline-end: 2px;
-  /* Keep the bar's bottom edge inside the message gap so it does not cover the
-   * next message or tool row. It may overlap the hovered message's own bottom
-   * padding while visible. */
-  inset-block-end: -12px;
-  z-index: 3;
-  min-height: 24px;
-  padding: 0;
-  margin: 0;
-  pointer-events: none;
-}
-:is(#stream, #runtimeView) :is(.msg, .rtc-timeline-message):is(:hover, :focus-within) > .message-actions,
-:is(#stream, #runtimeView) .message-actions:has(.message-copy-feedback:not(:empty)) { pointer-events: auto; }
+.usage-pop-model { min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ds-text-muted); }
+.usage-pop-model-line { overflow-wrap:anywhere; }
+@media (prefers-reduced-motion:reduce){ .ui-tooltip,.ui-usage-pop{scroll-behavior:auto} }
 
 /* 中间进展与最终回答使用同一阅读字号（T3 text-sm）；层级靠次级颜色而非缩小字号，
  * 否则工作记录里的说明文字会比工具行还小，破坏同一时间线的密度。 */

@@ -56,7 +56,6 @@ function eventKey(event, sessionId = event.executionClassic?.sessionId ?? null) 
 
 function release(round) {
   for (const outcome of round.outcomes) outcome.hidden = false;
-  for (const response of round.responses) response.usageLabel?.remove();
   for (const [node, marker] of round.markers) {
     if (node.parentNode) marker.replaceWith(node);
     else marker.remove();
@@ -329,9 +328,6 @@ function renderRound(round, turn, group, items, scope = null) {
   if (!round.historical && (Boolean(turn.plan) !== Boolean(plan) || (!plan && round.plan?.isConnected))) return false;
   const progress = [];
   const answer = [];
-  const usage = [];
-  const nativeUsageIds = new Set();
-  const recordedUsage = new Map(turn.usage.map(row => [row.responseId, row]));
   const kindsByResponse = new Map();
   for (const part of turn.parts ?? []) {
     if (!kindsByResponse.has(part.message.id)) kindsByResponse.set(part.message.id, new Set());
@@ -346,21 +342,6 @@ function renderRound(round, turn, group, items, scope = null) {
     if (round.historical ? !node.parentNode : !node.isConnected) continue;
     const responseId = response.responseId ?? turn.id + ':response:' + sequence;
     const kinds = kindsByResponse.get(responseId);
-    const meta = response.meta || node.querySelector(':scope > .ui2-msg-meta');
-    if (meta) {
-      response.meta = meta;
-      usage.push(meta);
-      nativeUsageIds.add(responseId);
-      const model = recordedUsage.get(responseId)?.model;
-      if (model) {
-        if (!response.usageLabel) {
-          response.usageLabel = meta.ownerDocument.createElement('span');
-          response.usageLabel.className = 'execution-usage-model';
-        }
-        response.usageLabel.textContent = [model.provider, model.id].filter(Boolean).join(' / ');
-        if (response.usageLabel.parentNode !== meta) meta.prepend(response.usageLabel);
-      }
-    }
     // A streaming block may still be empty at its first frame. Leave that
     // original host visible until the model can classify its public parts.
     if (round.historical ? responseId === turn.finalResponseId : kinds?.has('answer') || kinds?.has('partial-answer')
@@ -410,7 +391,7 @@ function renderRound(round, turn, group, items, scope = null) {
     round.view = createExecutionTurnView({ document: round.input.ownerDocument, preferences });
     round.input.before(round.view.node);
   }
-  for (const node of [round.input, plan, ...progress, ...answer, ...usage, ...round.outcomes, ...steers.map(entry => entry.node)]) {
+  for (const node of [round.input, plan, ...progress, ...answer, ...round.outcomes, ...steers.map(entry => entry.node)]) {
     rememberPosition(round, node);
   }
   for (const tool of round.tools.values()) {
@@ -421,10 +402,9 @@ function renderRound(round, turn, group, items, scope = null) {
   }
   for (const outcome of round.outcomes) outcome.hidden = waitingForFallback;
   round.view.update({
-    turn: { ...turn, status: waitingForFallback ? 'waiting' : turn.status,
-      usage: turn.usage.filter(row => !nativeUsageIds.has(row.responseId)) },
+    turn: { ...turn, status: waitingForFallback ? 'waiting' : turn.status },
     group, items, input: round.input, plan, progress, steers: steers.map(entry => entry.node),
-    answer, outcomes: round.outcomes, details, usage,
+    answer, outcomes: round.outcomes, details,
     workOrder: [
       ...ordered.filter(entry => !steerByNode.has(entry.node))
         .map(entry => ({ node: entry.node, sequence: entry.sequence, part: -1 })),
