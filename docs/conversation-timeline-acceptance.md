@@ -118,7 +118,7 @@
 
 ## 2026-11-24 最终验收整改：操作栏与用量 Popover
 
-- 身份：分支 `feat/compact-attachments`，基线 `803a8d56`；固定 T3 Code 提交 [`1e088be4b5dc15ca3dd66fa01c6f2e035511a827`](https://github.com/pingdotgg/t3code/tree/1e088be4b5dc15ca3dd66fa01c6f2e035511a827)。本轮源码提交 `15079aee`、测试提交 `9ac22884`，文档提交随推送更新；**未合并、未打 tag、未发布**。
+- 身份：分支 `feat/compact-attachments`，基线 `803a8d56`；固定 T3 Code 提交 [`1e088be4b5dc15ca3dd66fa01c6f2e035511a827`](https://github.com/pingdotgg/t3code/tree/1e088be4b5dc15ca3dd66fa01c6f2e035511a827)。本轮源码提交 `15079aee`、测试提交 `9ac22884`、文档提交 `e69ced8b`；PR [#110](https://github.com/HYJ1817/pi-gui/pull/110) 的 8 项 CI 在 `e69ced8` 全部通过，本文件仅回填该结果。**未合并、未打 tag、未发布**。
 - 修改范围：34 个已跟踪文件（`public/` 11、测试 21、文档 2），1704 insertions / 812 deletions；另新增 `public/ui/usage-action.js`、`public/ui/usage-popover.js`、`public/ui/tooltip.js`。没有新增依赖、React、服务端字段、网络请求或 Pi 协议 / 权限 / 会话格式改动。`thinking-dots.css/js` 与 composer / 侧栏 / 设置保持未改。
 - T3 源码对照（固定提交，全部为只读源码，不执行 T3 仓库）：
   - `MessagesTimeline.logic.ts:1229–1313`：整轮耗时取 run 的 start / completed（或首条工作到终态消息），steer 之后的每个折叠段从该条 steer 开始、结束于**该段自己的最后一项工作**；顶部折叠保留整轮时间（角标注释 1262–1298）。迟到的 background subagent 活动从段结束时间中排除（1240–1253）。
@@ -142,7 +142,7 @@
 | 打包 exe | `npm run build:exe`；`node tests/exe-check.cjs`（workspace TEMP，`CHECK_PORT=15797`；用内置最小 PDF fixture） | `exe-check` **57/57**, exit 0；exe 启动、假 pi 子进程 / PTY、PDF、配置读写、无 build/ 污染均通过。 | `build/Pi GUI.exe`；`build/asset-manifest.json` |
 | 打包内容 | `cmp` 逐字节比较 `dist-app/Pi GUI-win32-x64/resources/app/public/` 与 `public/` | `styles.css`、`ui/usage-popover.js`、`message-meta.js`、`classic-execution-view.js` 等 **MATCH**；`asset-manifest.json` 已包含 `ui/usage-action.js`、`ui/usage-popover.js`、`ui/tooltip.js`。 | 同上 |
 | 产物 | `build/Pi GUI.exe` / `dist-app` | `build/Pi GUI.exe` **106,656,768 bytes**，SHA-256 `5716af0df65a24a67034ca696b4884cd672458cf45d3dcecdffee14e5c984e91`；`dist-app/Pi GUI-win32-x64/Pi GUI.exe` **246,324,736 bytes**，SHA-256 `71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f`。 | 同上 |
-| 完整 canonical | 本机 `npm test` | **未运行（用户明确要求）**：上轮完整 `npm test` 因无关凭据套件失败，用户要求不重复环境失败；本轮按约定交给 PR CI。 | 待 PR |
+| 完整 canonical / PR CI | PR [#110](https://github.com/HYJ1817/pi-gui/pull/110) 的 CI，head `e69ced8` | **8/8 全部通过**（2026-11-24 11:45–12:05Z，run [45387084542](https://github.com/HYJ1817/pi-gui/actions/runs/45387084542)）：`Validate complete test plan`、`Tests (core / ui / security / native / faults)`、`Electron build check`、`CI gate` 均为 SUCCESS。本机完整 `npm test` 仍按用户要求未重跑；此后只能修改本验收文档回填结果，不改变代码 / 测试状态。 | PR #110 checks |
 | 独立审查 | — | **未运行**：本轮未启动独立审查 agent；作者自审发现并修复了操作栏 hover 的 `pointer-events` 选择器缺陷、Tooltip 覆盖正文、P5 旧 meta 兼容分支。自审不能替代独立复审。 | 会话记录 |
 | 真实模型 / Electron 窗口 | — | **未验证**：未调用真实模型、未打开打包 Electron 窗口人工体验；Electron 视觉脚本已更新选择器，但本轮未运行。真实 Chrome 证据来自离线 fixture + 生产 `index.html` / 模块。 | 不适用 |
 
@@ -152,9 +152,9 @@
   - `conversation-flow` **19 → 23**；`phase1` **81 → 82**；`message-edit-ui` 保持 **42/42**；`ui2-classic` **55/55**；`ui2-visual` **57/57**。
 - 截图的可见结论：`greeting-hover-dark.png` 里用户气泡靠右、助手回答靠左，操作栏在回答下方且 Tooltip「查看用量」位于栏下、不覆盖回答；`greeting-usage-popover-dark.png` 打开后字段完整、不改变气泡位置；`usage-popover-light-narrow.png` 在 700px + 1.25 字体缩放下夹在视口内并让开输入框；`multi-turn-usage-popover-dark.png` 只展开当前轮次的用量，另一轮不出现重复入口。
 - 未验证 / 残余风险：
-  - PR CI 出来前不宣称完整 canonical 通过；本机 `npm test` 未重跑。
+  - 完整 canonical 已由 PR CI 在 `e69ced8` 验证为 8/8 通过；本机完整 `npm test` 未重跑，后续文档回填不改变代码状态。
   - 未运行独立代码审查；操作栏与 Popover 属常规 UI 风险，未触及凭据、执行权限、文件写入或安装更新。
   - 真实模型会话、真实项目写操作、打包 Electron 窗口人工体验未执行；fixture 的时长 / 状态不代表真实模型性能。
   - 历史恢复与补充段计时的真实渲染证据仍来自 P5 夹具和 jsdom 行为契约；未在真实长会话上重放。
 - 回滚：回退上述 34 个已跟踪文件并删除 `public/ui/usage-action.js`、`public/ui/usage-popover.js`、`public/ui/tooltip.js`；随后重建 `build/` 与 `dist-app/`。不涉及用户会话、凭据、Pi 安装或全局 npm。
-- 结论：操作栏、用量 Popover、计时归属、异常计数与补充段计时 **已实现并通过定向 + 真实 Chrome 验收**；打包产物 **已重建且 exe-check 57/57**；完整 canonical **待 PR CI**；独立审查 **未运行**；合并 / 发布 **未授权且未执行**。
+- 结论：操作栏、用量 Popover、计时归属、异常计数与补充段计时 **已实现并通过定向 + 真实 Chrome 验收**；打包产物 **已重建且 exe-check 57/57**；完整 canonical **已由 PR CI 在 `e69ced8` 验证 8/8 通过**；独立审查 **未运行**；合并 / 发布 **未授权且未执行**。
