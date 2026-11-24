@@ -439,6 +439,47 @@ export const fetchFileDocument = (filePath, workspace, generation) => getJSON(
   gitScopeHeaders()
 );
 
+/* 消息内文件引用使用**消息自己的会话身份**，而不是当前全局焦点。
+ * 经典会话没有 id，此时不带请求头，由后端使用经典聊天的工作区。 */
+const fileLinkHeaders = (conversationId) => (typeof conversationId === 'string' && conversationId
+  ? { 'X-Pi-Gui-Conversation': conversationId }
+  : undefined);
+
+export const fetchFileMetadata = (filePath, conversationId = gitConversationId) => getJSON(
+  '/api/files/metadata?' + new URLSearchParams({ path: filePath }),
+  fileLinkHeaders(conversationId)
+);
+
+export const findWorkspaceFile = (name, conversationId = gitConversationId) => getJSON(
+  '/api/files/find?' + new URLSearchParams({ name }),
+  fileLinkHeaders(conversationId)
+);
+
+/** 图片预览走 fetch 而不是 <img src>：会话身份必须随请求头发出去。 */
+export async function fetchFileAsset(filePath, conversationId = gitConversationId) {
+  try {
+    const res = await fetch('/api/files/asset?' + new URLSearchParams({ path: filePath }), {
+      headers: fileLinkHeaders(conversationId),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      return { ok: false, code: body?.code || 'asset_unavailable', error: body?.error || '无法读取图片。' };
+    }
+    const type = res.headers.get('content-type') || '';
+    if (!type.startsWith('image/')) return { ok: false, code: 'unsupported_type', error: '这个格式不支持内联预览。' };
+    return { ok: true, blob: await res.blob(), type };
+  } catch (error) {
+    return { ok: false, code: 'network', error: error.message };
+  }
+}
+
+/** 用系统默认程序打开 / 在文件管理器中显示前，先让后端认可这个相对路径。
+ *  返回的绝对路径只用于 Electron 主进程与“复制完整路径”。 */
+export const authorizeFileOpen = (filePath, conversationId = gitConversationId) => sendJSON(
+  '/api/files/open-target',
+  { body: { path: filePath }, headers: fileLinkHeaders(conversationId) }
+);
+
 export const fetchTerminalStatus = () => getJSON('/api/terminal/status', gitScopeHeaders());
 
 /* A terminal session is authorized against the workspace that started it.

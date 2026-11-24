@@ -1,5 +1,6 @@
 import { hydrateIcons } from './ui/icons.js';
 import { initSettingsSurface } from './ui/settings-surface.js';
+import { initFileLinks } from './file-links-ui.js';
 /* Pi GUI — 前端入口。
  *
  * 这个文件只做三件事：
@@ -1383,6 +1384,7 @@ $('navPlanner').onclick = () => openPlanner();
 const globalMenu = $('globalMoreMenu');
 const globalMore = $('navGlobalMore');
 hydrateIcons(document);
+initFileLinks();
 
 const settingsSurface = initSettingsSurface({
   captureRuntimeReturn: () => {

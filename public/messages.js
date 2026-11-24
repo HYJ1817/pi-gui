@@ -1146,6 +1146,12 @@ export function onMessageStart(evt) {
 const pendingPaint = new Map();
 let rafId = null;
 
+/* Classic 会话只有当前项目一个工作区，没有并行会话 id；文件引用按 S.cwd
+ * 解析。S.cwd 不在时（还没拿到状态）不识别，避免把历史正文缓存成“无链接”。 */
+function classicFileLinks() {
+  return typeof S.cwd === 'string' && S.cwd ? { cwd: S.cwd, conversationId: '' } : null;
+}
+
 function schedulePaint(block) {
   pendingPaint.set(block, true);
   if (rafId) return;
@@ -1159,7 +1165,7 @@ function schedulePaint(block) {
 function paint(b) {
   if (!b.node) return;
   if (b.kind === 'text') {
-    preserveTextSelection(b.node, () => { b.node.innerHTML = md(b.text); });
+    preserveTextSelection(b.node, () => { b.node.innerHTML = md(b.text, { fileLinks: classicFileLinks() }); });
   } else if (b.bodyEl) {
     preserveTextSelection(b.bodyEl, () => { b.bodyEl.textContent = b.text; });
     if (b.headEl) b.headEl.textContent = b.text.trim() ? thinkingPreview(b.text) : '思考中…';
@@ -1584,7 +1590,7 @@ export function rebuildAssistant(bodyEl, msg) {
       const node = old?.kind === 'text' ? old.node : document.createElement('div');
       node.className = 'assistant-text';
       // b.text 是已收到的流式数据，不代表待执行的 rAF 已把它画进 DOM。
-      node.innerHTML = md(text);
+      node.innerHTML = md(text, { fileLinks: classicFileLinks() });
       nodes.push(node);
     } else if (part.type === 'thinking') {
       const old = liveBlocks?.get(idx);

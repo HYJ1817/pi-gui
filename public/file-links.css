@@ -1,0 +1,301 @@
+/* 会话内文件引用 + Files 面板标签/行定位。
+ *
+ * 链接本身只是“图标 + 文件名”的行内锚点：没有底色、没有边框、没有独立
+ * 容器，字号与行高完全继承正文。悬停提示挂在 body 上（fixed），因此不会被
+ * 消息容器或右侧面板裁掉，也不参与布局。 */
+
+/* ---------- 文件类型图标 ---------- */
+
+.file-kind-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: 15px;
+  block-size: 15px;
+  color: var(--file-kind-unknown);
+}
+.file-kind-icon > svg { inline-size: 100%; block-size: 100%; display: block; }
+.file-kind-icon[data-file-kind="code"] { color: var(--file-kind-code); }
+.file-kind-icon[data-file-kind="style"] { color: var(--file-kind-style); }
+.file-kind-icon[data-file-kind="markup"] { color: var(--file-kind-markup); }
+.file-kind-icon[data-file-kind="data"] { color: var(--file-kind-data); }
+.file-kind-icon[data-file-kind="text"] { color: var(--file-kind-text); }
+.file-kind-icon[data-file-kind="config"] { color: var(--file-kind-config); }
+.file-kind-icon[data-file-kind="image"] { color: var(--file-kind-image); }
+.file-kind-icon[data-file-kind="pdf"] { color: var(--file-kind-pdf); }
+.file-kind-icon[data-file-kind="word"] { color: var(--file-kind-word); }
+.file-kind-icon[data-file-kind="sheet"] { color: var(--file-kind-sheet); }
+.file-kind-icon[data-file-kind="slides"] { color: var(--file-kind-slides); }
+.file-kind-icon[data-file-kind="archive"] { color: var(--file-kind-archive); }
+.file-kind-icon[data-file-kind="font"] { color: var(--file-kind-font); }
+.file-kind-icon[data-file-kind="audio"] { color: var(--file-kind-audio); }
+.file-kind-icon[data-file-kind="video"] { color: var(--file-kind-video); }
+.file-kind-icon[data-file-kind="unknown"] { color: var(--file-kind-unknown); }
+
+/* ---------- 消息内文件链接 ---------- */
+
+.msg-body a.md-file-link,
+.msg-body a.md-file-link:hover {
+  /* 压过 .msg-body a 的下划线/边框与颜色，保持行内文本观感。 */
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--ui-link);
+  font: inherit;
+  line-height: inherit;
+  text-decoration: none;
+  vertical-align: -0.14em;
+  cursor: pointer;
+}
+.msg-body a.md-file-link:hover { color: var(--ui-link); }
+.msg-body a.md-file-link:hover .md-file-name {
+  text-decoration-color: currentColor;
+}
+.msg-body a.md-file-link:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.msg-body a.md-file-link .file-kind-icon {
+  align-self: center;
+  transform: translateY(0.06em);
+}
+.md-file-name {
+  min-inline-size: 0;
+  max-inline-size: 26em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, currentColor 38%, transparent);
+}
+.md-file-link.is-missing { color: var(--ds-text-muted); }
+.md-file-link.is-missing .md-file-name { text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* 悬停提示：路径可能很长，允许换行；任何主题都走同一组 token。 */
+.ui-tooltip.file-link-tip {
+  max-inline-size: min(460px, calc(100vw - 16px));
+  padding: 5px 9px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-family: var(--ui-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ds-text-secondary);
+}
+.ui-tooltip.file-link-tip .tip-position { color: var(--ds-text-faint); }
+
+/* 消息内不接受“卡片/胶囊”外观；表格里只允许省略号收窄。 */
+.msg-body .md-table .md-file-link { max-inline-size: 22em; }
+
+/* ---------- Files 面板：标签条 ---------- */
+
+.files-surface .files-tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  padding: 2px 8px 0;
+  border-top: 1px solid var(--ds-border-subtle);
+}
+.files-surface .files-tabs[hidden] { display: none; }
+.files-surface .files-tablist {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-inline-size: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.files-surface .files-tablist::-webkit-scrollbar { display: none; }
+.files-surface .files-tab {
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 0;
+  max-inline-size: 210px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  color: var(--ds-text-muted);
+}
+.files-surface .files-tab:hover { background: var(--ds-bg-hover); color: var(--ds-text-secondary); }
+.files-surface .files-tab[aria-selected="true"] {
+  background: var(--ds-bg-active);
+  color: var(--ds-text-primary);
+}
+.files-surface .files-tab-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  padding: 5px 3px 5px 8px;
+  border: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.files-surface .files-tab-select:focus-visible,
+.files-surface .files-tab-close:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+.files-surface .files-tab-label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-surface .files-tab-position {
+  flex: none;
+  color: var(--ds-text-faint);
+  font-family: var(--ui-font-mono);
+  font-size: 10px;
+}
+.files-surface .files-entry .file-kind-icon {
+  inline-size: 13px;
+  block-size: 13px;
+}
+.files-surface .files-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: 20px;
+  block-size: 20px;
+  margin-inline-end: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ds-text-faint);
+  cursor: pointer;
+}
+.files-surface .files-tab-close:hover { background: var(--ds-bg-active); color: var(--ds-text-primary); }
+.files-surface .files-tab-close svg { inline-size: 11px; block-size: 11px; }
+
+/* ---------- Files 面板：源码 / 行定位 ---------- */
+
+.files-surface .files-preview {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 0;
+}
+.files-surface .files-preview-head { flex: none; }
+.files-surface .files-preview-code {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  min-inline-size: 0;
+  border-top: 1px solid var(--ds-border-subtle);
+}
+.files-surface .files-preview-gutter {
+  /* DOM 里正文在前（选择器/读屏先拿内容），视觉上栏号在左。 */
+  order: -1;
+  flex: none;
+  margin: 0;
+  padding: 10px 9px 10px 0;
+  border-right: 1px solid var(--ds-border-subtle);
+  color: var(--ds-text-faint);
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: right;
+  white-space: pre;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.files-surface .files-preview-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.files-surface .files-preview-scroll .files-preview-body {
+  display: block;
+  inline-size: max-content;
+  min-inline-size: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: var(--ds-text-secondary);
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+  tab-size: 4;
+}
+.files-surface .files-preview-body .tok-com { color: var(--code-tok-com); font-style: italic; }
+.files-surface .files-preview-body .tok-str { color: var(--code-tok-str); }
+.files-surface .files-preview-body .tok-num { color: var(--code-tok-num); }
+.files-surface .files-preview-body .tok-kw { color: var(--code-tok-kw); }
+.files-surface .files-preview-body .tok-fn { color: var(--code-tok-fn); }
+.files-surface .files-preview-body .tok-type { color: var(--code-tok-type); }
+.files-surface .files-preview-body .tok-lit { color: var(--code-tok-lit); }
+.files-surface .files-preview-body .tok-tag { color: var(--code-tok-tag); }
+.files-surface .files-preview-body .tok-attr { color: var(--code-tok-attr); }
+.files-surface .files-preview-body .tok-meta { color: var(--code-tok-meta); }
+.files-surface .files-line-highlight {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 0;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--ds-text-primary) 7%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in oklab, var(--ds-text-primary) 34%, transparent);
+  pointer-events: none;
+}
+.files-surface .files-line-highlight[hidden] { display: none; }
+.files-surface .files-preview-image {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  justify-content: center;
+  min-block-size: 0;
+  padding: 14px 0;
+  overflow: auto;
+}
+.files-surface .files-preview-image img {
+  max-inline-size: 100%;
+  block-size: auto;
+  border-radius: var(--radius-sm);
+  background: var(--ds-bg-inset);
+}
+.files-surface .files-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+.files-surface .files-preview-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 26px 2px;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* 窄面板里标签条与预览头都只保留必要信息。 */
+@container (max-width: 360px) {
+  .files-surface .files-tab { max-inline-size: 150px; }
+  .files-surface .files-preview-gutter { display: none; }
+}

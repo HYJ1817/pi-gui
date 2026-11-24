@@ -13,13 +13,29 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { isInside, normalizeForCompare, realPathOrNull, resolveProjectPath } from '../lib/safe-path.js';
-import { json } from './http-utils.js';
+import { json, readBody } from './http-utils.js';
 
 export const FILE_LIMITS = Object.freeze({
   maxEntries: 512,
   maxPreviewBytes: 256 * 1024,
+  maxAssetBytes: 8 * 1024 * 1024,
   maxPathChars: 1024,
+  maxFindEntries: 4000,
+  maxFindDepth: 8,
 });
+
+const IMAGE_TYPES = Object.freeze({
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon',
+  '.avif': 'image/avif',
+  '.svg': 'image/svg+xml',
+});
+const FIND_SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', 'coverage', 'target', 'vendor', '.cache']);
 
 const fail = (code, message) => Object.assign(new Error(message || code), { code });
 const hash = (value) => createHash('sha256').update(String(value)).digest('hex').slice(0, 32);
@@ -245,11 +261,183 @@ export function createFiles({
     }
   }
 
-  async function handle(req, res, url) {
-    if (req.method !== 'GET') return json(res, 405, { ok: false, code: 'method_not_allowed', error: 'Method not allowed' });
+  /* 消息内文件引用只需要“这条相对路径现在是什么”，不读内容。
+   * 与 document 共用同一套工作区令牌之外的守卫：相对路径、符号链接、
+   * realpath 边界；这里不要求 workspace token，因为消息渲染时并没有
+   * 文件树的 token，授权仍由 conversation 身份 + realpath 边界完成。 */
+  function guardWorkspaceFile(workspace, requested) {
+    if (!requested || requested.length > limits.maxPathChars || requested.includes('\0')) {
+      return { code: 'invalid_request' };
+    }
+    const guard = resolveProjectPath(workspace.root, requested);
+    if (!guard.ok) return { code: 'unsafe_path' };
+    const stat = statNoFollow(guard.abs);
+    if (!stat || stat.isSymbolicLink() || !stat.isFile()) return { code: 'file_missing' };
+    const real = realPathOrNull(guard.abs);
+    if (!real || !isInside(workspace.root, real)) return { code: 'unsafe_path' };
+    return { abs: real, stat, path: toSlashes(path.relative(workspace.root, real)) };
+  }
+
+  const guardError = (res, code) => {
+    const status = code === 'invalid_request' ? 400 : code === 'unsafe_path' ? 403 : code === 'file_missing' ? 404 : 503;
+    const message = code === 'invalid_request' ? '文件路径不合法。' : code === 'unsafe_path' ? '文件不在当前项目内。' : code === 'file_missing' ? '文件不存在。' : '无法读取文件。';
+    return json(res, status, { ok: false, code, error: message });
+  };
+
+  async function metadata(req, res, url) {
+    const requested = String(url.searchParams.get('path') || '');
+    const scope = await scopeForRequest(req);
+    const workspace = workspaceFor(scope);
+    if (!workspace) return json(res, 409, { ok: false, code: 'workspace_unavailable', error: '当前工作区不可用。' });
+    const guarded = guardWorkspaceFile(workspace, requested);
+    if (guarded.code) return guardError(res, guarded.code);
+    const ext = path.extname(guarded.abs).toLowerCase();
+    return json(res, 200, {
+      ok: true,
+      file: {
+        path: guarded.path,
+        absolutePath: guarded.abs,
+        name: path.basename(guarded.abs),
+        bytes: guarded.stat.size,
+        image: Boolean(IMAGE_TYPES[ext]),
+      },
+    });
+  }
+
+  /* 图片是唯一在右栏内联渲染的二进制。只放行图片扩展名，读前先看大小，
+   * 读的时候依旧 O_NOFOLLOW + fstat 身份复核，并带上禁止脚本执行的 CSP。 */
+  async function asset(req, res, url) {
+    const requested = String(url.searchParams.get('path') || '');
+    const scope = await scopeForRequest(req);
+    const workspace = workspaceFor(scope);
+    if (!workspace) return json(res, 409, { ok: false, code: 'workspace_unavailable', error: '当前工作区不可用。' });
+    const guarded = guardWorkspaceFile(workspace, requested);
+    if (guarded.code) return guardError(res, guarded.code);
+    const ext = path.extname(guarded.abs).toLowerCase();
+    const type = IMAGE_TYPES[ext];
+    if (!type) return json(res, 415, { ok: false, code: 'unsupported_type', error: '这个格式不支持内联预览。' });
+    if (guarded.stat.size > limits.maxAssetBytes) {
+      return json(res, 413, { ok: false, code: 'oversized', error: '图片超过预览大小上限。' });
+    }
+
+    let fd = null;
     try {
+      fd = fs.openSync(guarded.abs, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+      const opened = fs.fstatSync(fd);
+      if (!opened.isFile()) throw fail('file_missing', '文件不存在。');
+      if (opened.dev !== guarded.stat.dev || opened.ino !== guarded.stat.ino) throw fail('unsafe_path', '文件对象已变化。');
+      if (opened.size > limits.maxAssetBytes) throw fail('oversized', '图片超过预览大小上限。');
+      const reopened = statNoFollow(guarded.abs);
+      if (!reopened || reopened.isSymbolicLink() || !reopened.isFile()) throw fail('unsafe_path', '文件路径已变化。');
+      const currentReal = realPathOrNull(guarded.abs);
+      if (!currentReal || !isInside(workspace.root, currentReal)) throw fail('unsafe_path', '文件不在当前项目内。');
+
+      const buffer = Buffer.allocUnsafe(opened.size);
+      let offset = 0;
+      while (offset < buffer.length) {
+        const bytes = fs.readSync(fd, buffer, offset, buffer.length - offset, offset);
+        if (!bytes) break;
+        offset += bytes;
+      }
+      res.writeHead(200, {
+        'Content-Type': type,
+        'Content-Length': String(offset),
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        'Content-Disposition': 'inline',
+      });
+      res.end(buffer.subarray(0, offset));
+      return;
+    } catch (error) {
+      const code = error.code || 'file_unavailable';
+      const status = code === 'oversized' ? 413 : code === 'unsafe_path' ? 403 : code === 'file_missing' ? 404 : 503;
+      return json(res, status, { ok: false, code, error: code === 'oversized' ? '图片超过预览大小上限。' : code === 'file_missing' ? '文件不存在。' : '无法读取图片。' });
+    } finally {
+      if (fd !== null) {
+        try { fs.closeSync(fd); } catch { /* result already decided */ }
+      }
+    }
+  }
+
+  /* 纯文件名只有在“唯一存在”时才升级为链接。遍历有深度与条目预算，
+   * 跳过依赖/构建目录 —— 同名文件在 node_modules 里出现不算歧义。 */
+  async function find(req, res, url) {
+    const name = String(url.searchParams.get('name') || '');
+    if (!safeName(name) || name === '.' || name === '..') {
+      return json(res, 400, { ok: false, code: 'invalid_request', error: '文件名不合法。' });
+    }
+    const scope = await scopeForRequest(req);
+    const workspace = workspaceFor(scope);
+    if (!workspace) return json(res, 200, { ok: true, name, matches: [], truncated: false });
+
+    const queue = [{ abs: workspace.root, rel: '', depth: 0 }];
+    const matches = [];
+    let visited = 0;
+    let truncated = false;
+    const wanted = normalizeForCompare(name);
+    for (let head = 0; head < queue.length && matches.length < 2; head++) {
+      const current = queue[head];
+      let dirents;
+      try {
+        dirents = await fs.promises.readdir(current.abs, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      dirents.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+      for (const entry of dirents) {
+        if (visited >= limits.maxFindEntries) { truncated = true; break; }
+        visited++;
+        if (entry.isSymbolicLink()) continue;
+        const rel = current.rel ? current.rel + '/' + entry.name : entry.name;
+        if (entry.isFile()) {
+          if (normalizeForCompare(entry.name) === wanted) matches.push(rel);
+          if (matches.length >= 2) break;
+          continue;
+        }
+        if (entry.name.startsWith('.')) continue;
+        if (!entry.isDirectory()) continue;
+        if (current.depth >= limits.maxFindDepth || FIND_SKIP_DIRS.has(entry.name)) continue;
+        queue.push({ abs: path.join(current.abs, entry.name), rel, depth: current.depth + 1 });
+      }
+      if (truncated) break;
+    }
+    return json(res, 200, { ok: true, name, matches, truncated });
+  }
+
+  /* 授权“用系统默认程序打开 / 在文件管理器中显示”的目标。
+   * 返回后端认可的绝对路径；真正的 shell 调用在 Electron 主进程。 */
+  async function openTarget(req, res) {
+    let payload;
+    try {
+      payload = JSON.parse((await readBody(req, 8 * 1024)) || '{}');
+    } catch {
+      return json(res, 400, { ok: false, code: 'invalid_request', error: '请求体不是合法 JSON。' });
+    }
+    const requested = String(payload?.path ?? '');
+    const scope = await scopeForRequest(req);
+    const workspace = workspaceFor(scope);
+    if (!workspace) return json(res, 409, { ok: false, code: 'workspace_unavailable', error: '当前工作区不可用。' });
+    const guarded = guardWorkspaceFile(workspace, requested);
+    if (guarded.code) return guardError(res, guarded.code);
+    return json(res, 200, {
+      ok: true,
+      file: { path: guarded.path, absolutePath: guarded.abs, bytes: guarded.stat.size },
+    });
+  }
+
+  async function handle(req, res, url) {
+    try {
+      if (url.pathname === '/api/files/open-target') {
+        if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'method_not_allowed', error: 'Method not allowed' });
+        return await openTarget(req, res);
+      }
+      if (req.method !== 'GET') return json(res, 405, { ok: false, code: 'method_not_allowed', error: 'Method not allowed' });
       if (url.pathname === '/api/files') return await list(req, res, url);
       if (url.pathname === '/api/files/document') return await document(req, res, url);
+      if (url.pathname === '/api/files/metadata') return await metadata(req, res, url);
+      if (url.pathname === '/api/files/asset') return await asset(req, res, url);
+      if (url.pathname === '/api/files/find') return await find(req, res, url);
       return json(res, 404, { ok: false, code: 'not_found', error: '未知的文件接口。' });
     } catch (error) {
       return workspaceError(res, error);

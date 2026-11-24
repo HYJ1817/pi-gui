@@ -91,6 +91,36 @@
   --ds-accent-soft: var(--gray-300);
   --ds-focus: var(--ds-accent);
 
+  /* File-type ink: 只用于文件类型图标，不承担正文语义。 */
+  --file-kind-code: #7fb3ff;
+  --file-kind-style: #d9a3ff;
+  --file-kind-markup: #ffab7a;
+  --file-kind-data: #ffd479;
+  --file-kind-text: #b8bcc4;
+  --file-kind-config: #9aa4b2;
+  --file-kind-image: #7fd6a8;
+  --file-kind-pdf: #ff7b7b;
+  --file-kind-word: #82aaff;
+  --file-kind-sheet: #6fd69a;
+  --file-kind-slides: #ffa46e;
+  --file-kind-archive: #d6b36a;
+  --file-kind-font: #c7a7ff;
+  --file-kind-audio: #6fd6d2;
+  --file-kind-video: #c49bff;
+  --file-kind-unknown: #9aa3ad;
+
+  /* Source ink: Files 预览的轻量语法高亮，只服务代码观感。 */
+  --code-tok-com: #7d8590;
+  --code-tok-str: #9ece6a;
+  --code-tok-num: #f2b880;
+  --code-tok-kw: #c792ea;
+  --code-tok-fn: #82aaff;
+  --code-tok-type: #ffcb6b;
+  --code-tok-lit: #89ddff;
+  --code-tok-tag: #f07178;
+  --code-tok-attr: #ffcb6b;
+  --code-tok-meta: #9aa3ad;
+
   --ds-settings-field-bg: #212121;
   --ds-settings-nav-active: color-mix(in oklab, var(--gray-0) 10%, transparent);
   --ds-field-inset-bg: color-mix(in oklab, var(--ds-text-primary) 5%, transparent);
@@ -369,6 +399,34 @@
   --ds-accent-hover: #303030;
   --ds-accent-soft: #5d5d5d;
   --ds-focus: var(--ds-accent);
+
+  --file-kind-code: #2563eb;
+  --file-kind-style: #8b3fd9;
+  --file-kind-markup: #c2410c;
+  --file-kind-data: #8a6100;
+  --file-kind-text: #52575f;
+  --file-kind-config: #5b6779;
+  --file-kind-image: #047857;
+  --file-kind-pdf: #d32626;
+  --file-kind-word: #1d4ed8;
+  --file-kind-sheet: #15803d;
+  --file-kind-slides: #c2410c;
+  --file-kind-archive: #8a5a12;
+  --file-kind-font: #7c3aed;
+  --file-kind-audio: #0f766e;
+  --file-kind-video: #7c3aed;
+  --file-kind-unknown: #5b6779;
+
+  --code-tok-com: #7a8494;
+  --code-tok-str: #2f7d32;
+  --code-tok-num: #b45309;
+  --code-tok-kw: #7c3aed;
+  --code-tok-fn: #1d4ed8;
+  --code-tok-type: #a16207;
+  --code-tok-lit: #0e7490;
+  --code-tok-tag: #b91c1c;
+  --code-tok-attr: #a16207;
+  --code-tok-meta: #6b7280;
 
   --ds-settings-field-bg: #ffffff;
   --ds-settings-nav-active: color-mix(in oklab, #1a1c1f 12%, #ffffff);

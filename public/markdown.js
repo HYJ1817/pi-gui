@@ -25,6 +25,8 @@ import { iconMarkup } from './ui/icons.js';
 
 import { esc } from './util.js';
 import { parseVizData } from './viz-schema.js';
+import { fileLinkFromHref, fileLinkFromInlineCode, scanPlainTextPaths, positionLabel } from './file-link-model.js';
+import { fileIconHtml } from './ui/file-icons.js';
 
 /* ---------- 链接安全 ---------- */
 
@@ -44,24 +46,138 @@ function safeUrl(raw) {
 
 /* ---------- 行内 ---------- */
 
-function inline(text) {
+const CODE_SLOT = '\u0001';
+const HTML_SLOT = '\u0002';
+
+function fileSlots(ctx) {
+  return ctx?.fileLinks && typeof ctx.fileLinks.cwd === 'string' && ctx.fileLinks.cwd
+    ? ctx.fileLinks
+    : null;
+}
+
+function fileAttrs(meta, links) {
+  const attrs = [
+    `data-file-link="1"`,
+    `data-file-path="${esc(meta.path)}"`,
+    `data-file-cwd="${esc(meta.cwd)}"`,
+    `data-file-conversation="${esc(links.conversationId || '')}"`,
+  ];
+  if (meta.line) attrs.push(`data-file-line="${meta.line}"`);
+  if (meta.column) attrs.push(`data-file-column="${meta.column}"`);
+  if (meta.endLine) attrs.push(`data-file-end-line="${meta.endLine}"`);
+  if (meta.endColumn) attrs.push(`data-file-end-column="${meta.endColumn}"`);
+  return attrs.join(' ');
+}
+
+function fileChip(meta, links) {
+  const label = meta.name + (meta.position || '');
+  return `<a href="#" class="md-file-link" ${fileAttrs(meta, links)} aria-label="${esc(meta.path + (meta.position || ''))}">` +
+    fileIconHtml(meta.path) +
+    `<span class="md-file-name">${esc(label)}</span>` +
+    `</a>`;
+}
+
+/* 单个文件名先保持代码外观，等后端确认“唯一存在”后再原地升级为链接；
+ * 否则 README.md 这类泛称会被错误地变成文件入口。 */
+function fileCandidate(code, meta, links) {
+  return `<code class="md-file-candidate" data-file-candidate="${esc(code)}"` +
+    ` data-file-cwd="${esc(meta.cwd)}" data-file-conversation="${esc(links.conversationId || '')}"` +
+    (meta.line ? ` data-file-line="${meta.line}"` : '') +
+    (meta.column ? ` data-file-column="${meta.column}"` : '') +
+    (meta.endLine ? ` data-file-end-line="${meta.endLine}"` : '') +
+    (meta.endColumn ? ` data-file-end-column="${meta.endColumn}"` : '') +
+    `>${esc(code)}</code>`;
+}
+
+/* 链接文字已经能表示这个文件时，只显示 chip；否则保留作者写的文字，
+ * 后面再跟 chip —— 和 T3 的 MarkdownFileLink 行为一致。 */
+function labelNamesFile(label, meta) {
+  const text = String(label || '').trim().replace(/^`|`$/g, '');
+  if (!text) return true;
+  return text === meta.name
+    || text === meta.path
+    || text === meta.name + (meta.position || '')
+    || text === meta.path + (meta.position || '')
+    || text.replace(/:[0-9].*$/, '') === meta.name;
+}
+
+function inline(text, ctx = {}) {
+  const links = fileSlots(ctx);
+
   // 行内代码先摘出来占位，免得里面的 * / _ / [] 被后面的规则误伤
   const codes = [];
-  let s = esc(text).replace(/`([^`\n]+)`/g, (_m, c) => {
-    codes.push(c);
-    return `\u0001${codes.length - 1}\u0001`;
+  const codeMetas = [];
+  let s = String(text).replace(/`([^`\n]+)`/g, (_m, c) => {
+    let html;
+    const meta = links ? fileLinkFromInlineCode(c, links.cwd) : null;
+    if (!meta) html = `<code>${esc(c)}</code>`;
+    else if (meta.candidate) html = fileCandidate(c, meta, links);
+    else html = fileChip(meta, links);
+    codes.push(html);
+    codeMetas.push(meta);
+    return `${CODE_SLOT}${codes.length - 1}${CODE_SLOT}`;
   });
 
-  const link = (label, url) => {
-    const u = safeUrl(url);
-    // 危险 scheme 不丢弃、也不静默变成空链接 —— 退化成纯文本，用户看得见原文
-    if (!u) return `${label}（${url}）`;
-    return `<a href="${u}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  const htmls = [];
+  const slot = (html) => {
+    htmls.push(html);
+    return `${HTML_SLOT}${htmls.length - 1}${HTML_SLOT}`;
   };
 
-  // 图片同样不加载，降级成链接（见文件头的安全模型）
-  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, alt, url) => link(alt || url, url));
-  s = s.replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, label, url) => link(label, url));
+  const link = (rawLabel, url, original) => {
+    const meta = links ? fileLinkFromHref(url, links.cwd) : null;
+    if (meta) {
+      const chip = fileChip(meta, links);
+      /* 标签本身是行内代码时，先摘出来的占位里可能已经渲染成同一个文件
+       * 的 chip。此时只保留标签，避免“chip 后面再跟一个 chip”。 */
+      const slots = [...String(rawLabel || '').matchAll(new RegExp(CODE_SLOT + '(\\d+)' + CODE_SLOT, 'g'))];
+      const slotNamesFile = slots.some((m) => {
+        const codeMeta = codeMetas[+m[1]];
+        return codeMeta && !codeMeta.candidate && codeMeta.path === meta.path
+          && codeMeta.line === meta.line && codeMeta.endLine === meta.endLine;
+      });
+      const bareLabel = String(rawLabel || '').replace(new RegExp(CODE_SLOT + '\\d+' + CODE_SLOT, 'g'), '').trim();
+      if (!bareLabel) return slotNamesFile ? esc(rawLabel) : chip;
+      if (slotNamesFile) return esc(rawLabel);
+      return labelNamesFile(rawLabel, meta) ? chip : `${esc(rawLabel)} ${chip}`;
+    }
+    const u = safeUrl(url);
+    const label = esc(rawLabel || url);
+    // 危险 scheme 不丢弃、也不静默变成空链接 —— 退化成纯文本，用户看得见原文
+    if (!u) return `${label}（${esc(url)}）`;
+    // 普通 Markdown 链接目标不能含空白；带空格的路径必须写成 <...>。
+    // 这里返回的是原文而不是自己生成的标签，必须转义后再放进 slot，
+    // 否则 `[<img onerror=...>](a b)` 会绕过“转义优先”的安全模型。
+    if (/\s/.test(url) && !/^https?:/i.test(url)) return esc(original);
+    return `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  };
+
+  // 图片同样不加载，降级成链接（见文件头的安全模型）。
+  // `<...>` 目标允许路径里有空格（如 `C:/Program Files/...`）。
+  s = s.replace(/!\[([^\]]*)\]\((?:<([^>\n]+)>|([^)\n]+))\)/g, (m, alt, angled, plain) => {
+    const url = angled || plain;
+    return slot(link(alt || url, url, m));
+  });
+  s = s.replace(/\[([^\]]*)\]\((?:<([^>\n]+)>|([^)\n]+))\)/g, (m, label, angled, plain) => slot(link(label, angled || plain, m)));
+
+  // 纯文本里只认绝对路径（或带行号的相对路径）；反引号/链接已经处理过。
+  if (links) {
+    const found = scanPlainTextPaths(s, links.cwd);
+    if (found.length) {
+      let out = '';
+      let last = 0;
+      for (const hit of found) {
+        if (hit.text.includes(HTML_SLOT) || hit.text.includes(CODE_SLOT)) continue;
+        out += s.slice(last, hit.start) + slot(fileChip(hit.meta, links));
+        last = hit.end;
+      }
+      out += s.slice(last);
+      s = out;
+    }
+  }
+
+  // 到这里剩余的原文才整体转义；模型写出的尖括号从语法上就不成立。
+  s = esc(s);
 
   s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
@@ -69,7 +185,8 @@ function inline(text) {
   s = s.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
   s = s.replace(/(^|[^_\w])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
 
-  return s.replace(/\u0001(\d+)\u0001/g, (_m, i) => `<code>${codes[+i]}</code>`);
+  s = s.replace(new RegExp(HTML_SLOT + '(\\d+)' + HTML_SLOT, 'g'), (_m, i) => htmls[+i] ?? '');
+  return s.replace(new RegExp(CODE_SLOT + '(\\d+)' + CODE_SLOT, 'g'), (_m, i) => codes[+i] ?? '');
 }
 
 /* ---------- 代码块 ---------- */
@@ -143,7 +260,7 @@ function asTask(text) {
  * 子列表必须塞进**上一个 li 里面**（`<li>甲<ul>…</ul></li>`），
  * 而不是接在它后面 —— 后者是非法 HTML，浏览器会自行修补，
  * 结果就是「缩进看起来生效了，但结构是错的」。 */
-function listHtml(items) {
+function listHtml(items, ctx) {
   let pos = 0;
 
   const level = (indent) => {
@@ -165,8 +282,8 @@ function listHtml(items) {
 
       pos++;
       const inner = it.task
-        ? `<span class="md-task${it.checked ? ' on' : ''}"></span>${inline(it.text)}`
-        : inline(it.text);
+        ? `<span class="md-task${it.checked ? ' on' : ''}"></span>${inline(it.text, ctx)}`
+        : inline(it.text, ctx);
       html += `<li>${inner}</li>`;
     }
 
@@ -204,14 +321,14 @@ const cellAlign = (c) => {
   return '';
 };
 
-function table(head, aligns, rows) {
-  const th = head.map((c, i) => `<th${aligns[i] ? ` style="text-align:${aligns[i]}"` : ''}>${inline(c)}</th>`);
+function table(head, aligns, rows, ctx) {
+  const th = head.map((c, i) => `<th${aligns[i] ? ` style="text-align:${aligns[i]}"` : ''}>${inline(c, ctx)}</th>`);
   const body = rows
     .map(
       (r) =>
         '<tr>' +
         head
-          .map((_c, i) => `<td${aligns[i] ? ` style="text-align:${aligns[i]}"` : ''}>${inline(r[i] ?? '')}</td>`)
+          .map((_c, i) => `<td${aligns[i] ? ` style="text-align:${aligns[i]}"` : ''}>${inline(r[i] ?? '', ctx)}</td>`)
           .join('') +
         '</tr>'
     )
@@ -249,7 +366,7 @@ function renderBlocks(lines, ctx) {
 
   const flush = () => {
     if (!para.length) return;
-    out.push('<p>' + para.map(inline).join('<br>') + '</p>');
+    out.push('<p>' + para.map((line) => inline(line, ctx)).join('<br>') + '</p>');
     para = [];
   };
 
@@ -299,7 +416,7 @@ function renderBlocks(lines, ctx) {
       // 统一渲染成 h4：对话正文里六级标题的视觉差异没有意义，字号也不该乱跳
       // Specs 预览按需加入页内锚点；聊天 Markdown 的既有输出保持不变。
       const id = ctx.headingIds ? ` id="${esc(headingSlug(h[2], ctx))}"` : '';
-      out.push(`<h4${id}>` + inline(h[2]) + '</h4>');
+      out.push(`<h4${id}>` + inline(h[2], ctx) + '</h4>');
       i++;
       continue;
     }
@@ -329,7 +446,7 @@ function renderBlocks(lines, ctx) {
           rows.push(splitRow(lines[i]));
           i++;
         }
-        out.push(table(head, aligns, rows));
+        out.push(table(head, aligns, rows, ctx));
         continue;
       }
     }
@@ -350,7 +467,7 @@ function renderBlocks(lines, ctx) {
         });
         i++;
       }
-      out.push(listHtml(items));
+      out.push(listHtml(items, ctx));
       continue;
     }
 
@@ -363,8 +480,10 @@ function renderBlocks(lines, ctx) {
 }
 
 /** 渲染一段 Markdown 成 HTML。
- *  返回值里所有标签都由本文件生成，模型原文只以转义后的形式出现。 */
-export function md(src, { headingIds = false } = {}) {
-  const ctx = { headingIds: headingIds === true, headingSlugs: new Map() };
+ *  返回值里所有标签都由本文件生成，模型原文只以转义后的形式出现。
+ *  `fileLinks` 只在“这条消息知道自己属于哪个工作区”时传入；不传就完全不
+ *  识别文件，避免 Specs、更新说明等共享渲染器误把普通文本当成文件。 */
+export function md(src, { headingIds = false, fileLinks = null } = {}) {
+  const ctx = { headingIds: headingIds === true, headingSlugs: new Map(), fileLinks };
   return renderBlocks(String(src ?? '').split(/\r?\n/), ctx);
 }

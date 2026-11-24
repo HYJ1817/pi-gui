@@ -152,6 +152,12 @@ try {
      */
     openPath: (relPath, conversationId = null) => ipcRenderer.invoke('pi-gui:open-path', String(relPath ?? ''), conversationId),
 
+    /* 消息内文件链接：与 openPath 同一套“后端认可后才执行”的模式，
+     * 但目标由 /api/files/open-target 按消息所属的**项目目录**解析，
+     * 因此仓库在子目录、或并行会话各自 worktree 时也不会开错文件。 */
+    openWorkspaceFile: (relPath, conversationId = null) => ipcRenderer.invoke('pi-gui:open-workspace-file', String(relPath ?? ''), conversationId),
+    revealWorkspaceFile: (relPath, conversationId = null) => ipcRenderer.invoke('pi-gui:reveal-workspace-file', String(relPath ?? ''), conversationId),
+
     /* ---------- 供应商凭据受限输入面（P2/P5） ----------
      *
      * 这里只有「打开 / 取消 / 查状态 / 关闭草稿」四个具名入口和状态订阅——
