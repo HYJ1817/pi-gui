@@ -141,6 +141,30 @@ const write = (root, rel, content) => {
       assert.equal(inspected.existing, null);
     });
 
+    /* POSIX 回归锁（安全复审 C3）：把文件原地改写后再用 utimes 把 mtime 拨回，
+     * dev/ino/size/mtime 全等，但 ctime（inode change time，不可回拨）已变 ——
+     * 文件身份必须仍判不同。Windows 上 ctime≈birthtime，同样覆盖。 */
+    await check('an in-place rewrite with mtime rolled back is still caught by ctime', async () => {
+      const victim = path.join(fileArea, 'ctime-rollback.txt');
+      fs.writeFileSync(victim, 'original content A\n');
+      const created = createApproved(grants, { rawPath: victim, scopeKind: 'file', scope: conversationA });
+      const statBefore = fs.lstatSync(victim);
+      /* 原地改写（保持 size 一致最严苛：连 size 都不变时只剩 ctime 能抓到）。
+       * 用秒级浮点 utimes 保留亚毫秒精度，真正只留下 ctime 差异。 */
+      fs.writeFileSync(victim, 'replaced content B\n');
+      fs.utimesSync(victim, statBefore.atimeMs / 1000, statBefore.mtimeMs / 1000);
+      const statAfter = fs.lstatSync(victim);
+      assert.equal(statAfter.size, statBefore.size, 'fixture should keep size identical');
+      /* NTFS 时间戳粒度 ~0.5µs，回写后 mtime 不会位级相等但仍在回拨窗口内；
+       * 关键是 ctime 已前进 —— 而 ctime 用户不可回拨，必须仍判 file_changed。 */
+      assert.ok(Math.abs(statAfter.mtimeMs - statBefore.mtimeMs) < 2,
+        `mtime should be rolled back close to original: ${statAfter.mtimeMs} vs ${statBefore.mtimeMs}`);
+      assert.throws(
+        () => grants.authorizeRead({ grantId: created.grant.id, rawPath: victim, scope: conversationA }),
+        (error) => error.code === 'file_changed',
+      );
+    });
+
     await check('an approval is single-use and rejects a file replaced while the dialog was open', async () => {
       const victim = path.join(fileArea, 'approval.txt');
       fs.writeFileSync(victim, 'before\n');

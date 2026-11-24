@@ -363,6 +363,28 @@ async function serve({ files }) {
       assert.equal(disguisedEdit.status, 200);
     });
 
+    /* 复审剔除项的回归锁：.svg 顶层浏览器文档会执行内嵌脚本、.eps 是可执行
+     * PostScript、.xsl/.xsd 走 XSLT、.doc/.xls/.ppt 可带 VBA、.p12/.pfx 是证书
+     * 导入 —— 全部不得经系统默认程序打开。 */
+    for (const [fixture, file, code] of [
+      ['svg-script.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', 'unsafe_type'],
+      ['vector.eps', '%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n', 'unsafe_type'],
+      ['sheet.xsl', '<?xml version="1.0"?><xsl:stylesheet/>', 'unsafe_type'],
+      ['schema.xsd', '<?xml version="1.0"?><xs:schema/>', 'unsafe_type'],
+      ['legacy.doc', 'doc bytes', 'unsafe_type'],
+      ['cert.p12', 'p12', 'unsafe_type'],
+      ['cert.pfx', 'pfx', 'unsafe_type'],
+    ]) {
+      write(rootA, fixture, file);
+      const open = await app.request('/api/files/open-target', {
+        method: 'POST', headers: scoped('a'),
+        body: { path: fixture, workspace: { id: tokenA.id }, generation: tokenA.generation, action: 'open' },
+      });
+      assert.equal(open.status, 415, fixture);
+      assert.equal(open.body.code, code, fixture);
+    }
+    await check('system open refuses svg/xsl/xsd/eps/legacy-office/cert surfaces removed after security review', () => {});
+
     await check('open-target refuses traversal/missing files and never launches executables or scripts through the generic open action', () => {
       assert.equal(openTraversal.status, 403);
       assert.equal(openMissing.status, 404);
