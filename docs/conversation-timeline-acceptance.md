@@ -115,3 +115,46 @@
   - `session-search` 的符号链接用例在无权限机器上跳过，不计入分子分母。
 - 回滚：回退本轮 21 个已跟踪文件并删除 `public/ui/turn-fold.js`、`tests/turn-fold.cjs`、`tests/conversation-work-fold.cjs`；随后重建 `build/` 与 `dist-app/`。不涉及用户会话、凭据、Pi 安装或全局 npm。
 - 结论：源码、定向测试、真实渲染矩阵、Electron 视觉与打包产物 **已完成**；完整 CI **待 PR 验证**；独立审查 **未运行**；合并 / 发布 **未授权且未执行**。
+
+## 2026-11-24 最终验收整改：操作栏与用量 Popover
+
+- 身份：分支 `feat/compact-attachments`，基线 `803a8d56`；固定 T3 Code 提交 [`1e088be4b5dc15ca3dd66fa01c6f2e035511a827`](https://github.com/pingdotgg/t3code/tree/1e088be4b5dc15ca3dd66fa01c6f2e035511a827)。本轮源码提交 `15079aee`、测试提交 `9ac22884`，文档提交随推送更新；**未合并、未打 tag、未发布**。
+- 修改范围：34 个已跟踪文件（`public/` 11、测试 21、文档 2），1704 insertions / 812 deletions；另新增 `public/ui/usage-action.js`、`public/ui/usage-popover.js`、`public/ui/tooltip.js`。没有新增依赖、React、服务端字段、网络请求或 Pi 协议 / 权限 / 会话格式改动。`thinking-dots.css/js` 与 composer / 侧栏 / 设置保持未改。
+- T3 源码对照（固定提交，全部为只读源码，不执行 T3 仓库）：
+  - `MessagesTimeline.logic.ts:1229–1313`：整轮耗时取 run 的 start / completed（或首条工作到终态消息），steer 之后的每个折叠段从该条 steer 开始、结束于**该段自己的最后一项工作**；顶部折叠保留整轮时间（角标注释 1262–1298）。迟到的 background subagent 活动从段结束时间中排除（1240–1253）。
+  - `TimelineAssistantRows.tsx:222–280`：助手操作行 `flex items-center gap-2`、`opacity-0` 默认，`group-hover/assistant` 与 `focus-within` 显示；工具按钮与时间戳同排。`TimelineUserMessageRow.tsx:356–381`：用户操作行右对齐（`justify-end`）、`opacity-0` + hover / focus-within 显示，和气泡尾部对齐。
+  - `tooltip.tsx:122–141`：T3 Tooltip 默认 `side="top"`、`sideOffset=4`。本产品消息操作栏紧贴最后一行正文，若向上弹出会盖住刚读完的正文，因此只在消息操作栏改用 `placement: "bottom"`（视口不够时自动翻回上方）；其余 Tooltip 语义与 T3 相同，且不使用原生 `title`。
+  - 任务描述里的设想与本仓库现状的偏离：①T3 / 旧实现把用量放在轮次终态或逐条消息页脚；本仓库已有 `messageActions`、`message-meta` 聚合和操作栏事务，因此复用操作栏，只删掉旧页脚，没有另造统计组件。②任务描述只要求「最终回答附近预留空间」；实际所有可操作消息都保留 24px 槽位，否则 hover 显示会造成布局跳动，也覆盖不到用户编辑 / 复制和工具记录入口。③旧 `classic-execution-view.js` 还保留了一段读取 `.ui2-msg-meta` 的兼容逻辑；本轮直接删除，否则 P5 会继续把已不存在的节点当用量来源。
+- 修复内容：
+  1. **计时归属**：原生回退按调用方给的**有序 block 数组**切 turn 与 supplement 段，不再读 DOM previous sibling；每次 render 重新计算并覆盖 `data-turn-*`，不跨会话 / 轮次 / 相邻段借用时间。历史恢复使用已持久化的可信时间戳；没有证据时不写 start / end，不伪造 0 秒或约数。只有最后一段可以使用真实 settled 时间；早段用该段最后一项观测工作收尾；迟到 background subagent 不延长已结算段。
+  2. **异常计数与默认展开**：失败 / 中断 / 取消 / 未完成按真实条目逐项计数，不按类型去重；多个同类失败显示实际数量。运行中 / 等待 / 失败 / 中断 / 取消 / 未完成默认展开，正常完成默认折叠；用户显式选择仍优先。
+  3. **补充输入计时**：Classic / Runtime / P5 / 原生回退共用同一段边界语义；顶部折叠保留整轮时间，补充段从真实用户输入开始，到该段最后一项工作结束；最后一段才使用真实 settled end。Classic 实时多补充输入由 assistant `message_end` / ToolEntry 的真实观察时间收尾；无工具段只用自己的 assistant 时间，不借用后段。
+  4. **消息操作栏视觉**：操作栏回到正文下方正常流，固定 24px 槽位；用户消息右对齐到气泡尾部，助手消息沿阅读边左对齐。按钮 24×24、图标 16×16、间距 2px、统一 muted 色 / hover / focus-visible；默认 `opacity: 0; pointer-events: none`，消息 hover / `focus-within` 时显示并启用指针。修复了旧 CSS 选择器把 hover 写成后代 hover、导致「看得见但点不到」的问题；`message-edit.css` 里会绕过 `pointer-events` 的第二套 reveal 已删除。正文 → 操作栏的指针移动保持按钮可见。
+  5. **用量入口重构**：删除 `renderUsageMeta` / `renderMessageMeta` 与 `.ui2-msg-meta*`、`.ui2-runtime-usage*` 全部样式；助手操作栏只保留一枚统计图标（`aria-label="查看用量"`、设计系统 Tooltip）。点击打开固定定位的 `#messageUsagePopover`：整轮汇总 + 逐响应分段、模型、真实耗时、成本、流式中提示；关闭方式为再次点击、外部指针、Escape、focus 移出、resize / scroll。打开时关闭 Tooltip，避免两层重叠；Popover 避开视口边缘与 `#chatComposer`。缺失字段不补 0，真实 0 保留；`reasoning` 明确标注为 output 子集；没有真实 usage 时不创建按钮。每个 turn 只有一处入口；P5 已验证回合显示整轮用量并保留逐响应明细，原生回退沿用原 block 用量。
+  6. **死代码清理**：`classic-execution-view.js` 移除对已删除 `.ui2-msg-meta` 的读取、模型标签注入和 usage 过滤；`docs/conversation-ui.md` 同步为操作栏 + Popover 的现行行为。
+- 证据层（全部为 2026-11-24 当前工作区代码）：
+
+| 证据层 | 命令 / 场景 | 实际结果 | 位置 |
+| --- | --- | --- | --- |
+| 定向套件 | `conversation-flow`、`message-edit-ui`、phase1/2/3/4a/4b/4d/4e、P5 view/UI/runtime/persistence/recovery、`ui2-classic`、`ui2-runtime-display`、`ui2-visual`、`agent-execution-ui`、`turn-fold`、`conversation-work-fold`、`thinking-dots` | `conversation-flow` **23/23**；`message-edit-ui` **42/42**；phase1 **82/82**、phase2 **98/98**、phase3 **154/154**、phase4a **110/110**、phase4b **108/108**、phase4d **14/14**、phase4e **60/60**；P5 view **7/7**、UI **17/17**、runtime **1/1**、persistence **9/9**、recovery **3/3**、classic-history **1/1**；`ui2-classic` **55/55**、`ui2-runtime-display` **83/83**；`agent-execution-ui` **227/227**；`turn-fold` **6/6**；`conversation-work-fold` **10/10**；`thinking-dots` **90/90**。jsdom 结果只作行为契约，不作布局证明。 | 各套件直接运行 |
+| 真实 Chrome 操作栏 / 用量 | `node tests/session-ux-p5-shots.cjs`（Classic / Runtime、折叠矩阵、用量、问候、多轮） | **P5-B Chromium: 23 layouts verified，exit 0**。断言包括：操作栏默认 opacity 0 但保留 24px 槽位；hover / focus 显示且几何完全不变；body → bar 指针移动不隐藏；按钮 24×24 / 图标 16×16 / 间距 2px；无原生 title；用户栏与气泡右缘对齐；Popover 固定定位、不越视口 / 输入框、开关不改变消息高度 / 下一条位置 / 滚动；Escape / 外部点击关闭；工具提示在栏下方且不覆盖正文；窄屏 + 浅色 + `--font-scale:1.25` 边界；每轮只有一枚入口；「你好啊」单轮问候与两轮对话各自命中真实用量。 | `.shots/session-ux-p5b/`：`usage-bar-idle-dark.png`、`usage-bar-hover-dark.png`、`usage-popover-dark.png`、`usage-popover-light-narrow.png`、`greeting-idle-dark.png`、`greeting-hover-dark.png`、`greeting-usage-popover-dark.png`、`greeting-user-hover-dark.png`、`multi-turn-usage-popover-dark.png`、`measurements.json` |
+| 真实 Chrome 基础视觉 | `node tests/ui2-visual.cjs` | **57/57 通过**；24px 操作按钮 / 固定 Popover / 用量网格与各断点、主题、reduced-motion 均通过；截图见 `.shots/ui2-visual/c5-final.png` 等。 | `.shots/ui2-visual/report.json` |
+| 打包 exe | `npm run build:exe`；`node tests/exe-check.cjs`（workspace TEMP，`CHECK_PORT=15797`；用内置最小 PDF fixture） | `exe-check` **57/57**, exit 0；exe 启动、假 pi 子进程 / PTY、PDF、配置读写、无 build/ 污染均通过。 | `build/Pi GUI.exe`；`build/asset-manifest.json` |
+| 打包内容 | `cmp` 逐字节比较 `dist-app/Pi GUI-win32-x64/resources/app/public/` 与 `public/` | `styles.css`、`ui/usage-popover.js`、`message-meta.js`、`classic-execution-view.js` 等 **MATCH**；`asset-manifest.json` 已包含 `ui/usage-action.js`、`ui/usage-popover.js`、`ui/tooltip.js`。 | 同上 |
+| 产物 | `build/Pi GUI.exe` / `dist-app` | `build/Pi GUI.exe` **106,656,768 bytes**，SHA-256 `5716af0df65a24a67034ca696b4884cd672458cf45d3dcecdffee14e5c984e91`；`dist-app/Pi GUI-win32-x64/Pi GUI.exe` **246,324,736 bytes**，SHA-256 `71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f`。 | 同上 |
+| 完整 canonical | 本机 `npm test` | **未运行（用户明确要求）**：上轮完整 `npm test` 因无关凭据套件失败，用户要求不重复环境失败；本轮按约定交给 PR CI。 | 待 PR |
+| 独立审查 | — | **未运行**：本轮未启动独立审查 agent；作者自审发现并修复了操作栏 hover 的 `pointer-events` 选择器缺陷、Tooltip 覆盖正文、P5 旧 meta 兼容分支。自审不能替代独立复审。 | 会话记录 |
+| 真实模型 / Electron 窗口 | — | **未验证**：未调用真实模型、未打开打包 Electron 窗口人工体验；Electron 视觉脚本已更新选择器，但本轮未运行。真实 Chrome 证据来自离线 fixture + 生产 `index.html` / 模块。 | 不适用 |
+
+- 断言数量变化（必须解释，不能只看「全绿」）：
+  - `agent-execution-ui` **228 → 227**：删除 4 条已失效的旧用量 CSS 契约，新增 3 条现行契约（操作栏正常流 + opacity / 固定可滚动 Popover / 网格与逐响应分段），净少 1 条。没有删行为断言。
+  - `phase3` **128 → 154**：新增操作栏入口、Popover 字段 / 成本 / 多段、原生回退按钮位置、缺失 / 0 语义等真实 DOM 断言。
+  - `conversation-flow` **19 → 23**；`phase1` **81 → 82**；`message-edit-ui` 保持 **42/42**；`ui2-classic` **55/55**；`ui2-visual` **57/57**。
+- 截图的可见结论：`greeting-hover-dark.png` 里用户气泡靠右、助手回答靠左，操作栏在回答下方且 Tooltip「查看用量」位于栏下、不覆盖回答；`greeting-usage-popover-dark.png` 打开后字段完整、不改变气泡位置；`usage-popover-light-narrow.png` 在 700px + 1.25 字体缩放下夹在视口内并让开输入框；`multi-turn-usage-popover-dark.png` 只展开当前轮次的用量，另一轮不出现重复入口。
+- 未验证 / 残余风险：
+  - PR CI 出来前不宣称完整 canonical 通过；本机 `npm test` 未重跑。
+  - 未运行独立代码审查；操作栏与 Popover 属常规 UI 风险，未触及凭据、执行权限、文件写入或安装更新。
+  - 真实模型会话、真实项目写操作、打包 Electron 窗口人工体验未执行；fixture 的时长 / 状态不代表真实模型性能。
+  - 历史恢复与补充段计时的真实渲染证据仍来自 P5 夹具和 jsdom 行为契约；未在真实长会话上重放。
+- 回滚：回退上述 34 个已跟踪文件并删除 `public/ui/usage-action.js`、`public/ui/usage-popover.js`、`public/ui/tooltip.js`；随后重建 `build/` 与 `dist-app/`。不涉及用户会话、凭据、Pi 安装或全局 npm。
+- 结论：操作栏、用量 Popover、计时归属、异常计数与补充段计时 **已实现并通过定向 + 真实 Chrome 验收**；打包产物 **已重建且 exe-check 57/57**；完整 canonical **待 PR CI**；独立审查 **未运行**；合并 / 发布 **未授权且未执行**。
