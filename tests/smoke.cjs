@@ -1847,29 +1847,37 @@ staticCheck();
   /* 只查 .tl-body：状态图标是我们自己写死的 SVG，挂在 .tl-dot 里，
    * 与工具内容无关，不该算进「危险元素」。 */
   check('工具参数里的 HTML 不产生活元素', () => {
-    const n = liveCount(tlPart('t6', '.tl-body'));
+    /* 详情按钮在 .tl-body 内，它的 chevron 是本地图标常量。 */
+    const n = liveCount(withoutVerifiedIcons(tlPart('t6', '.tl-body'), [['.tl-toggle > svg', 'chevronRight']]));
     return n === 0 || `解析出 ${n} 个危险元素`;
   });
   check('工具输出里的 <script> 只是文本', () => {
     const it = tlItem('t6');
-    const ok = it.textContent.includes('<script>alert(1)</script>') && liveCount(it.querySelector('.tl-body')) === 0;
+    const ok = it.textContent.includes('<script>alert(1)</script>')
+      && liveCount(withoutVerifiedIcons(it.querySelector('.tl-body'), [['.tl-toggle > svg', 'chevronRight']])) === 0;
     return ok || it.textContent.slice(0, 160);
   });
   check('时间线正文里没有任何非白名单活标签', () => {
-    const bad = tlItems().map((x) => x.querySelector('.tl-body').innerHTML).filter((h) => !noLiveTagIn(h));
-    if (!bad.length) return true;
-    const m = /<\s*(script|img|iframe|svg|object|embed|style|link|meta|form|input|base)\b/i.exec(bad[0]);
-    const at = m ? m.index : 0;
-    return `命中 ${m ? m[0] : '?'} :: ${bad[0].slice(Math.max(0, at - 70), at + 70)}`;
+    /* 查解析树而不是正则扫 innerHTML：参数原文会出现在 title 属性里，
+     * 属性值中的 `<` 是合法字面量，绝不会被解析成元素（见本段开头的说明）。
+     * 只排除已核对的本地 chevron 常量，其余活标签仍全部拦截。 */
+    const hits = tlItems().flatMap((x) => [...withoutVerifiedIcons(
+      x.querySelector('.tl-body'), [['.tl-toggle > svg', 'chevronRight']]).querySelectorAll(LIVE_SEL)]);
+    return hits.length === 0 || `命中 <${hits[0].tagName.toLowerCase()}> ×${hits.length}`;
   });
 
   /* --- 分组的真实边界：一条 assistant 消息 = 一组 --- */
   const firstGroup = window.document.querySelector('.tl-group');
   check('同一批工具落在同一个组里', () => firstGroup.querySelectorAll('.tl-item').length === 6 || firstGroup.querySelectorAll('.tl-item').length);
-  check('一组超过一项时显示「操作 N 项」', () => {
+  check('一组超过一项时显示真实调用次数', () => {
     const n = firstGroup.querySelectorAll('.tl-item').length;
     const head = firstGroup.querySelector('.tl-group-head');
-    return (n >= 2 && head.hidden === false && head.textContent === `工具调用 · ${n} 次`) || `${head.hidden} ${head.textContent}`;
+    /* 被工作记录接管时原生组头隐藏，由可见的外层记录头承担披露与计数；
+     * 两种情况都必须显示同一份真实次数，不能编造。 */
+    const outer = firstGroup.closest('[data-conversation-work]')?.querySelector('.conversation-work-head');
+    const counted = head.textContent === `工具调用 · ${n} 次`;
+    const shown = head.hidden === false || Boolean(outer && outer.textContent.includes(`${n} 次工具`));
+    return (n >= 2 && counted && shown) || `${head.hidden} ${head.textContent} / ${outer?.textContent}`;
   });
 
   es.emit({ type: 'message_start', message: { role: 'assistant', content: [] } });
@@ -1952,7 +1960,10 @@ staticCheck();
     return (txt.includes('跑一下测试') && txt.includes('先看看') && txt.includes('全过了')) || txt.slice(0, 120);
   });
   check('文本 → 工具 → 文本 的交错顺序被保留', () => {
-    const kids = [...window.document.querySelector('.thread').children]
+    /* 工作记录只包装连续展示节点；按原生子节点展开后顺序必须与数据一致。 */
+    const flatten = node => [...node.children].flatMap(child => child.hasAttribute('data-conversation-work')
+      ? flatten(child.querySelector(':scope > .conversation-work-list')) : [child]);
+    const kids = flatten(window.document.querySelector('.thread'))
       .filter((n) => n.classList.contains('msg') || n.classList.contains('tl-group'))
       .map((n) => (n.classList.contains('tl-group') ? 'tools' : n.classList.contains('user') ? 'user' : 'assistant'));
     return kids.join(',') === 'user,assistant,tools,assistant' || kids.join(',');
@@ -2096,7 +2107,10 @@ staticCheck();
     return lines.some((t) => /^已写入 \d+ 字节$/.test(t)) || lines.slice(0, 8).join(' | ');
   });
   check('真实会话重建：全篇不产生活元素', () => {
-    const n = [...window.document.querySelectorAll('.tl-item .tl-body')].reduce((a, b) => a + liveCount(b), 0);
+    /* 详情按钮现在位于 .tl-body 内，它的 chevron 是 iconMarkup 的本地常量；
+     * 只排除这一枚已核对的图标，工具内容仍按原解析树检查。 */
+    const n = [...window.document.querySelectorAll('.tl-item .tl-body')]
+      .reduce((a, b) => a + liveCount(withoutVerifiedIcons(b, [['.tl-toggle > svg', 'chevronRight']])), 0);
     return n === 0 || `解析出 ${n} 个危险元素`;
   });
   check('真实会话重建：没有留下空白「Pi」', () => {
@@ -2104,7 +2118,10 @@ staticCheck();
     return empty.length === 0 || `${empty.length} 条助手正文是空的`;
   });
   check('真实会话重建：用户 / 正文 / 工具交替出现', () => {
-    const kinds = [...window.document.querySelector('.thread').children]
+    /* 工作记录是展示包装，不代表原生消息顺序；按原生子节点展开后再看交替。 */
+    const flatten = node => [...node.children].flatMap(child => child.hasAttribute('data-conversation-work')
+      ? flatten(child.querySelector(':scope > .conversation-work-list')) : [child]);
+    const kinds = flatten(window.document.querySelector('.thread'))
       .filter((n) => n.classList.contains('msg') || n.classList.contains('tl-group'))
       .map((n) => (n.classList.contains('tl-group') ? 'T' : n.classList.contains('user') ? 'U' : 'A'));
     return (kinds.includes('T') && kinds.includes('A') && kinds.includes('U')) || kinds.join('');

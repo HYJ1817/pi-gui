@@ -13,8 +13,8 @@
 .rtc-markdown p{margin:0 0 13px;white-space:pre-wrap}
 .rtc-markdown>:first-child{margin-top:0}
 .rtc-markdown>:last-child{margin-bottom:0}
-.runtime-conversation .rtc-history-message{display:block;margin-bottom:24px;min-width:0}
-.rtc-history-role{font-size:11px;color:var(--t3);margin-bottom:6px}
+.runtime-conversation .rtc-history-message{display:block;margin-bottom:var(--ui-space-3);min-width:0}
+.rtc-history-role{display:none} /* Accessible identity is on the message row. */
 .rtc-history-user-text{white-space:pre-wrap;overflow-wrap:anywhere;max-width:min(82%,600px);padding:10px 15px;border-radius:var(--radius-lg-plus);border-bottom-right-radius:var(--radius-xs);background:var(--ds-tile-deep);line-height:var(--leading-chat)}
 .runtime-conversation .rtc-history-message[data-role="user"]{display:flex;flex-direction:column;align-items:flex-end;width:100%;padding:0;border:0;background:transparent}
 /* 实时/历史时间线的用户消息只保留一个右对齐气泡：外层行不再是第二个盒子。
@@ -29,8 +29,6 @@
   overflow:hidden;clip-path:inset(50%);white-space:nowrap;pointer-events:none;
 }
 .rtc-history-message[data-role="user"]>.rtc-history-role{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-/* 历史时间线的用量与 Classic 共用 .ui2-msg-meta；消息之间只差真实间距。 */
-.runtime-conversation .rtc-output .rtc-timeline-message>.ui2-msg-meta{margin-top:6px}
 .runtime-conversation>.ui2-runtime-thinking{flex-shrink:0;max-height:24vh;overflow:auto}
 .runtime-conversation>.ui2-runtime-thinking-wrap{flex-shrink:0;min-width:0}
 .runtime-conversation>.ui2-runtime-thinking-wrap>.ui2-runtime-thinking{max-height:24vh;overflow:auto}

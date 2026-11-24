@@ -113,8 +113,9 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     T.onToolStart({ toolCallId: 'g1', toolName: 'read', args: { path: 'a.txt' } });
     T.onToolStart({ toolCallId: 'g2', toolName: 'read', args: { path: 'b.txt' } });
     const group = d.querySelector('#stream .tl-group');
-    const head = group.querySelector('.tl-group-head');
-    const list = group.querySelector('.tl-list');
+    const work = group.closest('[data-conversation-work]');
+    const head = work.querySelector('.conversation-work-head');
+    const list = work.querySelector('.conversation-work-list');
     equal(list.hidden, false, '运行中的多工具组默认展开');
     equal(head.getAttribute('aria-expanded'), 'true', '运行中展开的 aria 状态一致');
 
@@ -122,7 +123,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     equal(list.hidden, true, '用户显式折叠生效');
     T.onToolStart({ toolCallId: 'g3', toolName: 'read', args: { path: 'c.txt' } });
     equal(list.hidden, true, '新工具到达不覆盖用户显式折叠');
-    equal(head.textContent, '工具调用 · 3 次', '组头仍按真实次数更新');
+    ok('工作记录仍按真实次数更新', /工作记录.*3 次工具/.test(head.textContent));
 
     head.click();
     equal(list.hidden, false, '用户显式展开生效');
@@ -136,7 +137,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     T.onToolStart({ toolCallId: 'a2', toolName: 'read', args: {} });
     T.onToolEnd({ toolCallId: 'a1', isError: false, result: { content: [text('ok')] } });
     T.onToolEnd({ toolCallId: 'a2', isError: false, result: { content: [text('ok')] } });
-    equal(d.querySelector('#stream .tl-list').hidden, true, '未手动操作的多项组在结束后默认折叠');
+    equal(d.querySelector('#stream .conversation-work-list').hidden, true, '未手动操作且全部成功的工作记录在结束后默认折叠');
 
     M.clearThread();
     T.onToolStart({ toolCallId: 'w1', toolName: 'write', args: { path: 'x' } });
@@ -174,27 +175,37 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     ok('运行中的组耗时按当前时间推进', /0\.[5-7]s/.test(runningGroup.querySelector('.tl-group-time')?.textContent || ''));
   }
 
-  console.log('单条消息 Token 摘要');
+  console.log('单条消息 Token 用量入口');
   {
-    M.rebuildFromMessages([{ role: 'assistant', content: [text('x')], stopReason: 'stop',
-      usage: { input: 11, output: 3, reasoning: 0, totalTokens: 14 } }]);
-    const meta = d.querySelector('#stream .ui2-msg-meta');
-    ok('Token 摘要存在', Boolean(meta));
-    equal(meta.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 14 · 推理 0（含在输出中）', '摘要只放总量与推理');
-    equal(meta.querySelector('details')?.open, false, '完整拆分默认收起');
-    equal(meta.querySelectorAll('.ui2-msg-meta-item').length, 4, '完整字段仍在 DOM 中');
-    equal(meta.querySelector('[data-kind="input"]')?.textContent, '输入 11 Token', '输入字段保持不变');
-    equal(meta.querySelector('[data-kind="reasoning"]')?.textContent, '推理 0 Token（含在输出中）', '推理 0 仍是真实值');
+    const closeUsage = () => d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    M.rebuildFromMessages([{ role: 'user', content: [text('q')] },
+      { role: 'assistant', content: [text('x')], stopReason: 'stop',
+        usage: { input: 11, output: 3, reasoning: 0, totalTokens: 14 } }]);
+    const button = d.querySelector('#stream .message-usage');
+    ok('Token 用量入口存在且位于助手操作栏', Boolean(button) && Boolean(button.closest('.message-actions')));
+    equal(d.querySelector('#stream .ui2-msg-meta'), null, '不再有旧 Token 页脚');
+    button.click();
+    const pop = d.querySelector('#messageUsagePopover');
+    equal(pop.hidden, false, '点击打开用量弹层');
+    equal(pop.querySelector('.usage-pop-total')?.textContent, 'Token 14', '摘要只放总量');
+    equal(pop.querySelector('.usage-pop-grid [data-kind="input"]')?.textContent, '11 Token', '输入字段保持不变');
+    equal(pop.querySelector('.usage-pop-grid [data-kind="reasoning"]')?.textContent, '0 Token', '推理 0 仍是真实值');
+    ok('推理标注含在输出中', pop.textContent.includes('推理（含在输出中）'));
+    equal(pop.querySelectorAll('.usage-pop-grid [data-kind]').length, 4, '完整字段都在弹层里');
+    closeUsage();
 
-    M.rebuildFromMessages([{ role: 'assistant', content: [text('zero')], stopReason: 'stop',
-      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, reasoning: 0, totalTokens: 0 } }]);
-    const zero = d.querySelector('#stream .ui2-msg-meta');
-    equal(zero.querySelectorAll('.ui2-msg-meta-item').length, 7, '七个真实 0 字段全部保留');
-    equal(zero.querySelector('.ui2-msg-meta-summary')?.textContent, 'Token 0 · 推理 0（含在输出中）', '0 不被省略');
-    equal(zero.querySelector('details')?.querySelectorAll('.ui2-msg-meta-item').length, 7, '完整拆分仍可达');
+    M.rebuildFromMessages([{ role: 'user', content: [text('q')] },
+      { role: 'assistant', content: [text('zero')], stopReason: 'stop',
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0, reasoning: 0, totalTokens: 0 } }]);
+    d.querySelector('#stream .message-usage')?.click();
+    const zero = d.querySelector('#messageUsagePopover');
+    equal(zero.querySelectorAll('.usage-pop-grid [data-kind]').length, 7, '七个真实 0 字段全部保留');
+    equal(zero.querySelector('.usage-pop-total')?.textContent, 'Token 0', '0 不被省略');
+    closeUsage();
 
-    M.rebuildFromMessages([{ role: 'assistant', content: [text('none')], stopReason: 'stop' }]);
-    equal(d.querySelector('#stream .ui2-msg-meta'), null, '没有 usage 就不生成元信息');
+    M.rebuildFromMessages([{ role: 'user', content: [text('q')] },
+      { role: 'assistant', content: [text('none')], stopReason: 'stop' }]);
+    equal(d.querySelector('#stream .message-usage'), null, '没有 usage 就不生成入口');
   }
 
   console.log('自动重试摘要');

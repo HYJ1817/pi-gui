@@ -37,15 +37,18 @@ import { addToGroup, createGroup, groupCount, renderEntry, setEntryExpanded, set
 import { collectPlanTurns, isPlanTool } from './plan-model.js';
 import { renderPlan, setPlanStalled } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
-import { renderMessageMeta } from './message-meta.js';
+import { normalizeUsage } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
+import { closeUsagePopover } from './ui/usage-popover.js';
+import { preserveTextSelection } from './ui/text-selection.js';
+import { thinkingPreview } from './ui/work-presentation.js';
 import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance, rememberPendingMessageEdit, clearPendingMessageEdit, readPendingMessageEdit, isEditInProgress } from './ui/message-edit.js';
 import { confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { messageEditPreflight, messageEditResend, messageEditStatus, messageEditRecover } from './api.js';
 import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
 import { classicNativeThreadChildren, indexClassicHistoryTurns, mountClassicHistoryTurn, releaseClassicExecutionTail, resetClassicExecutionView,
-  resumeClassicExecutionFallback, settleClassicExecutionView, trackClassicExecutionMessage } from './classic-execution-view.js';
+  renderClassicConversationFlow, resumeClassicExecutionFallback, settleClassicExecutionView, trackClassicExecutionMessage } from './classic-execution-view.js';
 import {
   saveSessionBookmark,
   restoreSessionBookmark,
@@ -76,6 +79,39 @@ let historyFence = 0;
 let lastHydratedFence = 0;
 let streamScrollBound = false;
 let streamScrollRaf = null;
+let followFrame = null;
+let followTop = 0;
+let followReleased = false;
+
+function cancelQueuedFollow() {
+  if (followFrame !== null) cancelAnimationFrame(followFrame);
+  followFrame = null;
+}
+
+function wheelStaysInside(event) {
+  if (!event.deltaY) return true;
+  const view = el.stream?.ownerDocument.defaultView;
+  for (let node = event.target?.nodeType === 1 ? event.target : event.target?.parentElement;
+    node && node !== el.stream; node = node.parentElement) {
+    if (node.scrollHeight <= node.clientHeight + 1) continue;
+    const style = view.getComputedStyle(node);
+    if (!['auto', 'scroll', 'overlay'].includes(style.overflowY)) continue;
+    const remaining = event.deltaY < 0 ? node.scrollTop : node.scrollHeight - node.clientHeight - node.scrollTop;
+    if (remaining > 1 || ['contain', 'none'].includes(style.overscrollBehaviorY)) return true;
+  }
+  return false;
+}
+
+function releaseFollow(event) {
+  // Inspecting a bounded command/output pane is not navigation of the transcript.
+  if (event.type === 'wheel' && wheelStaysInside(event)) return;
+  if (event.type === 'keydown') {
+    if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+    if (!['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) return;
+  }
+  cancelQueuedFollow();
+  if (event.type !== 'wheel' || event.deltaY < 0) followReleased = true;
+}
 
 /* P4-D：长历史（800 条消息起）分块构建并挂载。
  *
@@ -142,6 +178,9 @@ export function saveClassicReadingPosition(sessionId) {
 }
 
 function onStreamScroll() {
+  const stream = el.stream;
+  if (followFrame !== null && Math.abs(stream.scrollTop - followTop) > 1) cancelQueuedFollow();
+  if (stream.scrollHeight - stream.scrollTop - stream.clientHeight <= 8) followReleased = false;
   if (streamScrollRaf) return;
   const sessionId = threadSessionId;
   streamScrollRaf = requestAnimationFrame(() => {
@@ -154,6 +193,9 @@ export function bindStreamReadingPosition() {
   if (streamScrollBound || !el.stream) return;
   streamScrollBound = true;
   el.stream.addEventListener('scroll', onStreamScroll, { passive: true });
+  el.stream.addEventListener('wheel', releaseFollow, { passive: true });
+  el.stream.addEventListener('touchmove', releaseFollow, { passive: true });
+  el.stream.addEventListener('keydown', releaseFollow);
 }
 
 /* 当前 session 级 run 的证据。只在 app.js 收到真实 agent_start（上一轮已 settled）
@@ -194,10 +236,13 @@ export function syncWelcome() {
 }
 
 export function clearThread() {
+  cancelQueuedFollow();
+  followReleased = false;
   resetThroughput();
   resetClassicExecutionView();
   ++threadGeneration;
   lastHydratedFence = ++historyFence;
+  closeUsagePopover();
   try { closeMessageEditor({ restore: false }); } catch { /* editor may already be detached */ }
   if (streamScrollRaf !== null) cancelAnimationFrame(streamScrollRaf);
   streamScrollRaf = null;
@@ -247,6 +292,27 @@ function expansionChoice(sessionId, key, expanded) {
   if (toolExpansion.size > 100) toolExpansion.delete(toolExpansion.keys().next().value);
 }
 
+/** Display-only native work, using this renderer's existing session choices. */
+export function refreshClassicConversationFlow() {
+  if (mountingClassicHistory()) return;
+  const sessionId = threadSessionId;
+  renderClassicConversationFlow({
+    get: key => expansionChoice(sessionId, 'work:' + key),
+    set: (key, value) => expansionChoice(sessionId, 'work:' + key, value),
+  });
+}
+
+function classifyAssistantWork(wrap, msg) {
+  // A declared tool call is a real native message boundary, not run evidence.
+  // Errors/interruption and final text remain visible outside the work fold.
+  const parts = Array.isArray(msg?.content) ? msg.content : [];
+  const work = msg?.stopReason !== 'error' && msg?.stopReason !== 'aborted' && !msg?.errorMessage
+    && (parts.some(part => part?.type === 'toolCall')
+      || parts.some(part => part?.type === 'thinking') && !parts.some(part => part?.type === 'text' && part.text));
+  if (work) wrap.dataset.conversationWorkKind = 'progress';
+  else delete wrap.dataset.conversationWorkKind;
+}
+
 export function clearClassicSessionView(sessionId) {
   clearSessionBookmark(sessionId);
   toolExpansion.delete(sessionId);
@@ -266,6 +332,7 @@ export function createClassicToolGroup(firstCallId) {
 export function addClassicToolEntry(group, entry, sessionId = threadSessionId) {
   const key = 'entry-' + group.dataset.anchorId + ':' + encodeURIComponent(entry.id);
   const node = renderEntry(entry, expanded => expansionChoice(sessionId, key, expanded));
+  node.dataset.anchorId = key;
   if (expansionChoice(sessionId, key) === true) setEntryExpanded(node, true);
   addToGroup(group, node);
   const groupChoice = expansionChoice(sessionId, group.dataset.anchorId);
@@ -274,19 +341,36 @@ export function addClassicToolEntry(group, entry, sessionId = threadSessionId) {
 }
 
 export function scrollBottom(force) {
-  const s = el.stream;
-  const nearBottom = s.scrollHeight - s.scrollTop - s.clientHeight < 160;
-  if (force || nearBottom) {
-    const generation = threadGeneration;
-    requestAnimationFrame(() => {
-      if (generation === threadGeneration) s.scrollTop = s.scrollHeight;
-    });
-  }
+  const stream = el.stream;
+  if (!stream) return;
+  bindStreamReadingPosition();
+  const nearBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 160;
+  if (!force && (followReleased || !nearBottom)) return;
+  if (force) followReleased = false;
+  followTop = stream.scrollTop;
+  if (followFrame !== null) return; // One follow per paint, not one per delta.
+  const generation = threadGeneration;
+  followFrame = requestAnimationFrame(() => {
+    followFrame = null;
+    // Search, scrollbar navigation and later user input all supersede this request.
+    if (generation !== threadGeneration || el.stream !== stream || followReleased
+        || Math.abs(stream.scrollTop - followTop) > 1) return;
+    stream.scrollTop = stream.scrollHeight;
+  });
 }
 
 /* ---------- 轮次证据（只认真实事件） ---------- */
 
 /** 真正的 session 级 run 开始。由 app.js 在 agent_start 且上一轮已 settled 时调用。 */
+/** One assistant message's real usage, with the model as recorded by Pi. */
+function classicUsageRecord(msg) {
+  const usage = normalizeUsage(msg?.usage);
+  if (!usage) return null;
+  const model = [msg?.provider, msg?.model].filter(value => typeof value === 'string' && value)
+    .filter((value, index, list) => list.indexOf(value) === index).join(' / ');
+  return { usage, ...(model ? { model } : {}) };
+}
+
 export function beginTurn() {
   ++historyFence;
   liveTurn = {
@@ -294,6 +378,7 @@ export function beginTurn() {
     seq: 0,
     toolIds: new Set(),
     toolSeqs: new Map(),
+    usageRecords: [],
     lastAssistant: null,
     /* 本轮由哪条用户消息触发：重新生成要回到这条消息重跑，而不是 steer
      * 中途追加的那条。agent_start 早于用户的 message_start，所以这里留空，
@@ -340,12 +425,72 @@ function interruptedToolTerminal(tools, lastAssistant, toolSeqs = null) {
   return !Number.isFinite(lastTool.endedAt) || lastTool.endedAt > lastAt;
 }
 
+/** Native fallback labels read these attributes; they never become run evidence. */
+function writeTurnTiming(node, { startedAt, endedAt, status, continued }) {
+  if (!node?.dataset) return;
+  if (Number.isFinite(startedAt) && startedAt >= 0) node.dataset.turnStartAt = String(Math.round(startedAt));
+  else delete node.dataset.turnStartAt;
+  if (Number.isFinite(endedAt) && endedAt >= 0) node.dataset.turnEndedAt = String(Math.round(endedAt));
+  else delete node.dataset.turnEndedAt;
+  if (status) node.dataset.turnStatus = status;
+  else delete node.dataset.turnStatus;
+  if (continued) node.dataset.turnContinued = '';
+  else delete node.dataset.turnContinued;
+}
+
+function turnStatusOf(state) {
+  return state === 'unsettled' ? 'incomplete' : state || '';
+}
+
+/** Latest real end observed between two supplemental user inputs. Tool rows
+ * carry their own authorized timestamps; assistant wrappers carry the native
+ * message timestamp captured at message_end. Nothing else is treated as time
+ * evidence, so a segment with no observed work simply keeps no duration. */
+function observedTurnEnd(from, stop) {
+  let end = null;
+  const consider = value => {
+    if (Number.isFinite(value) && (end === null || value > end)) end = value;
+  };
+  const considerEntry = entry => {
+    if (!entry || !Number.isFinite(entry.startedAt)) return;
+    consider(Number.isFinite(entry.endedAt) ? entry.endedAt
+      : Number.isFinite(entry.durationMs) ? entry.startedAt + entry.durationMs : null);
+  };
+  for (let node = from?.nextElementSibling; node && node !== stop; node = node.nextElementSibling) {
+    consider(Number(node.dataset?.turnObservedAt));
+    considerEntry(node._tlEntry);
+    for (const row of node.querySelectorAll?.('.tl-item') || []) considerEntry(row._tlEntry);
+    /* A work log may have adopted this segment's intermediate assistant text
+     * before settle; its native timestamp is still inside the recorded node. */
+    for (const mark of node.querySelectorAll?.('[data-turn-observed-at]') || []) {
+      consider(Number(mark.dataset.turnObservedAt));
+    }
+  }
+  return end;
+}
+
+function tagClassicTurn(input, additional, { startedAt, endedAt, status }) {
+  writeTurnTiming(input, { startedAt, endedAt, status, continued: false });
+  const entries = (additional || []).filter(entry => entry?.node);
+  for (const [index, entry] of entries.entries()) {
+    const observed = Number(entry.at) || Number(entry.node.dataset.turnTime)
+      || Number(entry.node.dataset.turnObservedAt) || null;
+    /* T3 ends each post-steer fold at that segment's own last work. Only the
+     * final steer keeps the settled turn end; an earlier segment without
+     * observed work must not borrow a later segment's clock. */
+    const last = index === entries.length - 1;
+    const segmentEnd = last ? endedAt : observedTurnEnd(entry.node, entries[index + 1]?.node);
+    writeTurnTiming(entry.node, { startedAt: observed, endedAt: segmentEnd, status, continued: true });
+  }
+}
+
 /** agent_settled 后的轮次终态。没有真实证据（assistant / 工具）就不画。 */
 function finalizeTurn() {
   finishClassicHistoryBeforeLive();
   const turn = liveTurn;
   if (!turn || turn.finalized) return;
   turn.finalized = true;
+  const endedAt = Date.now();
   const tools = [...turn.toolIds]
     .map(id => S.tools.get(id)?.entry)
     .filter(Boolean);
@@ -354,11 +499,31 @@ function finalizeTurn() {
     lastAssistant: turn.lastAssistant,
     interruptedToolTerminal: interruptedToolTerminal(tools, turn.lastAssistant, turn.toolSeqs),
     startedAt: turn.startedAt,
-    endedAt: Date.now(),
+    endedAt,
   });
   const t = ensureThread();
-  /* 轮次结束后才挂“重新生成”：运行中的回复不应允许把当前 turn 替换掉。 */
-  attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
+  if (outcome) {
+    const input = Number.isInteger(turn.userIndex)
+      ? t.querySelector('.msg.user[data-user-index="' + turn.userIndex + '"]') : null;
+    const additional = input
+      ? [...t.querySelectorAll('.msg.user[data-turn-continued]')]
+        .filter(node => input.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
+        .map(node => ({ node, at: Number(node.dataset.turnTime) || Number(node.dataset.turnObservedAt) || null }))
+      : [];
+    tagClassicTurn(input, additional, {
+      startedAt: Number.isFinite(outcome.durationMs) ? turn.startedAt : null,
+      endedAt: Number.isFinite(outcome.durationMs) ? endedAt : null,
+      status: turnStatusOf(outcome.state),
+    });
+  }
+  /* 轮次结束后才挂“重新生成”：运行中的回复不应允许把当前 turn 替换掉。
+   * 整轮真实 usage 作为动作条上的一个统计入口，不另设页脚。 */
+  attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex, turn.usageRecords, {
+    label: '本轮用量',
+    timing: outcome && Number.isFinite(outcome.durationMs)
+      ? { startedAt: turn.startedAt, endedAt, durationMs: null, evidence: 'observed' } : null,
+    status: outcome ? turnStatusOf(outcome.state) : '',
+  });
   if (!outcome) {
     settleClassicExecutionView(null);
     scrollBottom();
@@ -464,6 +629,7 @@ export function interruptActive() {
    * 是不对的：界面会一直显示「运行中」，而且 hasRunning() 恒为真会让
    * 「Pi 正在处理…」再也不出现。 */
   settleRunning();
+  refreshClassicConversationFlow();
 }
 
 /* ---------- 用户消息 ---------- */
@@ -481,16 +647,29 @@ function thinkingBlock(text = '') {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'think-head';
-  button.innerHTML = iconMarkup('chevronRight') + '<span></span>';
+  /* Same flat row as tool calls: kind glyph, one-line preview, trailing
+   * chevron. The canonical label and real state stay in the DOM for assistive
+   * technology without repeating "思考过程 · N 字 · 已完成" in the row. */
+  const icon = document.createElement('span');
+  icon.className = 'think-icon';
+  icon.innerHTML = iconMarkup('brain'); // local constant only
+  const label = document.createElement('span');
+  label.className = 'think-label';
+  label.textContent = '思考过程';
+  const preview = document.createElement('span');
+  preview.className = 'think-preview';
+  const status = document.createElement('span');
+  status.className = 'ui2-think-status';
+  const chevron = document.createElement('span');
+  chevron.className = 'think-chevron';
+  chevron.innerHTML = iconMarkup('chevronRight'); // local constant only
+  button.append(icon, label, preview, status, chevron);
   const body = document.createElement('div');
   body.className = 'think-body';
   body.id = 'thinking-detail-' + ++disclosureId;
   button.id = 'thinking-summary-' + disclosureId;
   body.setAttribute('role', 'region');
   body.setAttribute('aria-labelledby', button.id);
-  const status = document.createElement('span');
-  status.className = 'ui2-think-status';
-  button.appendChild(status);
   button.setAttribute('aria-controls', body.id);
   setDisclosure(button, body, false);
   button.addEventListener('click', () => {
@@ -510,8 +689,9 @@ function setThinkingState(wrap, state) {
 
 function updateThinking(wrap, text) {
   const body = wrap.querySelector('.think-body');
-  if (body.textContent !== text) body.textContent = text;
-  wrap.querySelector('.think-head span').textContent = `思考过程 · ${text.length} 字`;
+  if (body.textContent !== text) preserveTextSelection(body, () => { body.textContent = text; });
+  const preview = wrap.querySelector('.think-preview');
+  if (preview) preview.textContent = String(text ?? '').trim() ? thinkingPreview(text) : '思考中…';
 }
 
 function syncMessageChildren(body, nodes) {
@@ -551,6 +731,12 @@ function updateClassicUserArticle(article, text, images, userIndex) {
   if (oldActions) oldActions.replaceWith(actions);
   else article.appendChild(actions);
   article.dataset.userIndex = String(userIndex);
+  /* The edited input will run again; stale timing would label the new work as
+   * an already-settled turn until the next agent_settled. */
+  delete article.dataset.turnStartAt;
+  delete article.dataset.turnEndedAt;
+  delete article.dataset.turnStatus;
+  delete article.dataset.turnContinued;
 }
 
 function trimClassicTail(pending) {
@@ -624,12 +810,17 @@ function clearPendingClassicEdit() {
 
 /* 给一轮里最后一条可见的助手消息挂“重新生成”。按钮属于既有 message-actions
  * 体系（与复制/编辑同尺寸、同 hover/focus 规则），不新建按钮样式。 */
-function attachClassicRegenerate(article, userIndex) {
+function attachClassicRegenerate(article, userIndex, usage = null, usageOptions = {}) {
   if (!article || !Number.isInteger(userIndex)) return null;
-  if (article.querySelector('.message-regenerate')) return null;
+  const existing = article.querySelector(':scope > .message-actions');
+  if (existing) {
+    if (usage !== null && existing.updateUsage) existing.updateUsage(usage, usageOptions);
+    return existing;
+  }
   const text = article.querySelector('.msg-body')?.textContent || '';
   const bar = messageActions(text, {
     onRegenerate: event => regenerateClassicTurn(event?.currentTarget, userIndex),
+    ...(usage !== null && { usage, usageOptions }),
   });
   article.append(bar);
   return bar;
@@ -859,12 +1050,17 @@ function renderUser(msg, { userIndex = null } = {}) {
 
   const index = Number.isInteger(userIndex) ? userIndex : userIndexSeq;
   userIndexSeq = Math.max(userIndexSeq, index + 1);
+  const continuing = liveTurn && !liveTurn.finalized && Number.isInteger(liveTurn.userIndex)
+    && liveTurn.userIndex !== index;
   noteTurnUserIndex(index);
 
   const wrap = document.createElement('article');
   wrap.className = 'msg user';
   wrap.dataset.anchorId = 'user-' + (++userSeq);
   wrap.dataset.userIndex = String(index);
+  wrap.dataset.turnObservedAt = String(Date.now());
+  if (Number.isFinite(msg?.timestamp)) wrap.dataset.turnTime = String(msg.timestamp);
+  if (continuing) wrap.dataset.turnContinued = '';
 
   const role = document.createElement('div');
   role.className = 'msg-role';
@@ -888,6 +1084,7 @@ function createAssistant() {
   const t = ensureThread();
   const wrap = document.createElement('article');
   wrap.className = 'msg assistant';
+  wrap.setAttribute('aria-label', '助手');
   wrap.dataset.anchorId = 'assistant-' + (++assistantSeq);
 
   const role = document.createElement('div');
@@ -962,10 +1159,10 @@ function schedulePaint(block) {
 function paint(b) {
   if (!b.node) return;
   if (b.kind === 'text') {
-    b.node.innerHTML = md(b.text);
+    preserveTextSelection(b.node, () => { b.node.innerHTML = md(b.text); });
   } else if (b.bodyEl) {
-    b.bodyEl.textContent = b.text;
-    if (b.headEl) b.headEl.textContent = `思考过程 · ${b.text.length} 字`;
+    preserveTextSelection(b.bodyEl, () => { b.bodyEl.textContent = b.text; });
+    if (b.headEl) b.headEl.textContent = b.text.trim() ? thinkingPreview(b.text) : '思考中…';
   }
 }
 
@@ -986,7 +1183,7 @@ function ensureBlock(idx, kind) {
     S.current.body.appendChild(wrap);
     b.node = wrap;
     b.bodyEl = wrap.querySelector('.think-body');
-    b.headEl = wrap.querySelector('.think-head span');
+    b.headEl = wrap.querySelector('.think-preview');
   }
 
   S.blocks.set(idx, b);
@@ -1044,6 +1241,12 @@ export function onMessageEnd(evt) {
   const msg = evt.message;
   if (msg?.role === 'assistant') {
     ++historyFence;
+    /* Wall-clock end of this assistant message. It stays presentation-only,
+     * but lets an earlier supplemental segment close at its own last work
+     * instead of the end of the whole turn. */
+    if (S.current?.wrap) {
+      S.current.wrap.dataset.turnObservedAt = String(Number.isFinite(msg.timestamp) ? msg.timestamp : Date.now());
+    }
     // 与历史按同一条 assistant 声明的首个普通工具定位，实际工具启动顺序可以不同。
     toolGroupCallId = Array.isArray(msg.content)
       ? msg.content.find(part => part?.type === 'toolCall' && !isPlanTool(part.name))?.id
@@ -1051,6 +1254,8 @@ export function onMessageEnd(evt) {
     /* 轮次失败只认 assistant 的终态证据；工具 isError 不改变轮次状态。
      * 与 rebuildAssistant 的判定保持一致：用户主动停止优先按中性处理。 */
     if (liveTurn && !liveTurn.finalized) {
+      const record = classicUsageRecord(msg);
+      if (record) liveTurn.usageRecords.push(record);
       const ownedAbort = msg.stopReason === 'aborted' && S.stopOwnedTurn === true;
       liveTurn.lastAssistant = {
         failed: !ownedAbort && (msg.stopReason === 'error' || Boolean(msg.errorMessage)),
@@ -1064,14 +1269,13 @@ export function onMessageEnd(evt) {
       // 最终消息是权威值；丢弃尚未执行的流式绘制，避免下一帧把旧草稿写回复用节点。
       pendingPaint.clear();
       // message_end.message 是权威，用它校正渲染结果
-      const keep = rebuildAssistant(S.current.body, msg);
+      const keep = preserveTextSelection(S.current.body, () => rebuildAssistant(S.current.body, msg));
       /* 只有工具调用、没有正文时整条外壳收掉。
        * 工具卡片由 tools.js 直接挂在 thread 上，不在这个 body 里，所以不受影响；
        * 下一轮 message_start 会再建一个新的外壳。 */
       if (!keep) S.current.wrap.remove();
       else {
-        const meta = renderMessageMeta(msg);
-        if (meta) S.current.wrap.appendChild(meta);
+        classifyAssistantWork(S.current.wrap, msg);
         /* 一轮里最后一条**有正文**的助手消息承载“重新生成”；后续只有工具
          * 调用的空消息被收掉时，仍指回这条。 */
         if (liveTurn && !liveTurn.finalized) liveTurn.lastAssistantNode = S.current.wrap;
@@ -1081,6 +1285,7 @@ export function onMessageEnd(evt) {
   S.current = null;
   S.blocks.clear();
   moveWorkingToEnd();
+  refreshClassicConversationFlow();
   scrollBottom();
 }
 
@@ -1449,16 +1654,15 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       userIndex: Number.isInteger(userIndex) ? userIndex : null,
       lastAssistantNode: null,
       hasEvidence: false,
-      ...(record && { record, nodes: { input, additional: [], responses: [], tools: new Map(), plan: null, outcomes: [] } }),
+      usageRecords: [],
+      nodes: { input, additional: [], responses: [], tools: new Map(), plan: null, outcomes: [] },
+      ...(record && { record }),
     };
   };
   const flushHistoryTurn = () => {
     if (!historyTurn) return;
     const turn = historyTurn;
     historyTurn = null;
-    /* 重新生成入口按轮挂在该轮最后一条可见助手消息上；历史重建也要有，
-     * 否则刷新/重开之后功能就消失了。 */
-    attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
     const recovered = turn.record;
     if (!turn.hasEvidence && !recovered) return;
     let outcome = turn.hasEvidence && deriveTurnOutcome({
@@ -1470,6 +1674,21 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       const [state, label] = HISTORY_OUTCOME[recovered.status];
       outcome = { ...outcome, state, label, durationMs: null };
     }
+    const timing = recovered?.timing;
+    const startedAt = Number.isFinite(timing?.startedAt) ? timing.startedAt : turn.startedAt;
+    const endedAt = Number.isFinite(timing?.endedAt) ? timing.endedAt : turn.endedAt;
+    const status = recovered?.status || (outcome ? turnStatusOf(outcome.state) : '');
+    if (turn.nodes?.input) {
+      tagClassicTurn(turn.nodes.input, turn.nodes.additional, { startedAt, endedAt, status });
+    }
+    /* 重新生成与用量入口按轮挂在该轮最后一条可见助手消息上；历史重建也要有，
+     * 否则刷新/重开之后功能与真实用量入口就消失了。 */
+    attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex, turn.usageRecords, {
+      label: '本轮用量',
+      timing: Number.isFinite(startedAt) && Number.isFinite(endedAt)
+        ? { startedAt, endedAt, durationMs: null, evidence: 'observed' } : null,
+      status,
+    });
     if (outcome) {
       const outcomeNode = renderTurnOutcome(outcome);
       outcomeNode.dataset.anchorId = 'outcome-' + (++outcomeSeq);
@@ -1507,6 +1726,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       wrap.className = 'msg user';
       wrap.dataset.anchorId = 'user-' + (++userSeq);
       wrap.dataset.userIndex = String(index);
+      if (Number.isFinite(item.message?.timestamp)) wrap.dataset.turnTime = String(item.message.timestamp);
       wrap.innerHTML = '<div class="msg-role">你</div>';
       userTextByArticle.set(wrap, textOf(item.message));
       wrap.appendChild(userBody(item.message));
@@ -1514,14 +1734,19 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
         onEdit: () => openClassicEditor(wrap, item.message, index),
       }));
       frag.appendChild(wrap);
-      if (supplemental) historyTurn.nodes.additional.push({ node: wrap, sequence: item.sourceIndex });
-      else startHistoryTurn(item.message, index, owner, wrap);
+      if (supplemental) {
+        wrap.dataset.turnContinued = '';
+        historyTurn.nodes.additional.push({ node: wrap, sequence: item.sourceIndex,
+          at: Number.isFinite(item.message?.timestamp) ? item.message.timestamp : null });
+      } else startHistoryTurn(item.message, index, owner, wrap);
       return;
     }
 
     if (item.kind === 'assistant') {
       const msg = item.message;
       if (historyTurn) {
+        const usageRecord = classicUsageRecord(msg);
+        if (usageRecord) historyTurn.usageRecords.push(usageRecord);
         const failed = msg.stopReason === 'error' || Boolean(msg.errorMessage);
         const interrupted = msg.stopReason === 'aborted' && !failed;
         historyTurn.lastAssistant = {
@@ -1534,7 +1759,9 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       }
       const wrap = document.createElement('article');
       wrap.className = 'msg assistant';
+      wrap.setAttribute('aria-label', '助手');
       wrap.dataset.anchorId = 'assistant-' + (++assistantSeq);
+      if (Number.isFinite(msg.timestamp)) wrap.dataset.turnObservedAt = String(msg.timestamp);
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
       const body = document.createElement('div');
       body.className = 'msg-body';
@@ -1548,8 +1775,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
         historyTurn.nodes?.responses.push({ node: wrap, sequence: item.sourceIndex, responseId });
       }
       wrap.appendChild(body);
-      const meta = renderMessageMeta(msg);
-      if (meta) wrap.appendChild(meta);
+      classifyAssistantWork(wrap, msg);
       frag.appendChild(wrap);
       return;
     }
@@ -1609,6 +1835,11 @@ function finishHistoryRender(t, sessionId, generation, { userScrolled = false } 
   if (generation !== threadGeneration || S.thread !== t) return;
   /* 分块期间线程对辅助技术是 busy；完整 DOM、导航与位置都就绪后再解除。 */
   t.removeAttribute('aria-busy');
+  const sessionChoice = {
+    get: key => expansionChoice(sessionId, 'work:' + key),
+    set: (key, value) => expansionChoice(sessionId, 'work:' + key, value),
+  };
+  renderClassicConversationFlow(sessionChoice);
 
   /* 历史重建完之后**重新扫一遍 DOM** 建导航（§10）—— 刷新页面、重开 App、
    * 恢复旧会话、fork、retry 之后走的都是这条路。不自己维护消息副本，

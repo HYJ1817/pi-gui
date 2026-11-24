@@ -104,9 +104,19 @@ test('Runtime groups only its current owned live evidence and preserves the orig
   emit(start(final));
   emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: '**最后' },
     usage: { input: 0, output: 1 } });
-  const usage = turn.querySelector('[data-execution-part="usage"]');
-  assert.match(usage.textContent, /流式中/);
-  assert.equal(view.element.querySelector('.ui2-runtime-usage').hidden, true, 'owned provisional usage appears inside the same ledger only');
+  const provisionalButton = turn.querySelector('.message-usage');
+  assert.ok(provisionalButton, 'owned provisional usage lives on the answer action bar');
+  assert.equal(turn.querySelector('[data-execution-part="usage"]'), null, 'no separate execution usage part');
+  assert.equal(view.element.querySelector('.ui2-runtime-usage'), null, 'no old bottom usage strip');
+  provisionalButton.click();
+  const provisionalPop = d.querySelector('#messageUsagePopover');
+  assert.match(provisionalPop.textContent, /流式中/);
+  const provisionalGrid = provisionalPop.querySelector('.usage-pop-grid');
+  assert.equal(provisionalGrid.querySelector('[data-kind="totalTokens"]'), null,
+    'streaming value is the current real projection, not an invented total');
+  assert.equal(provisionalGrid.querySelector('[data-kind="output"]')?.textContent, '7 Token',
+    'verified responses and the current streaming usage are both real and not double counted');
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   emit(end(final));
   emit({ type: 'agent_settled', aborted: false });
 
@@ -114,9 +124,11 @@ test('Runtime groups only its current owned live evidence and preserves the orig
   assert.equal(output.querySelectorAll('[data-role="user"]').length, 2);
   assert.equal(output.querySelectorAll('.execution-turn').length, 1);
   assert.match(turn.querySelector('[data-execution-part="plan"]').textContent, /审阅代码/);
-  assert.match(turn.querySelector('[data-execution-part="progress"]').textContent, /运行期间追加的要求/);
+  assert.doesNotMatch(turn.querySelector('[data-execution-part="progress"]').textContent, /运行期间追加的要求/);
+  assert.match(turn.querySelector('[data-execution-part="activity-flow"]').textContent, /运行期间追加的要求/);
   assert.equal(turn.querySelectorAll('.turn-outcome').length, 1);
-  turn.querySelector('.execution-activity-group button').click();
+  const workHead = turn.querySelector('.execution-activity-group button');
+  if (workHead.getAttribute('aria-expanded') === 'false') workHead.click();
   const activities = [...turn.querySelectorAll('.execution-activity-item')];
   assert.deepEqual(activities.map(row => row.dataset.status), ['completed', 'failed']);
   activities[0].querySelector('button').click();
@@ -125,8 +137,17 @@ test('Runtime groups only its current owned live evidence and preserves the orig
   const strong = [...turn.querySelectorAll('strong')].find(node => node.textContent === '最后结果');
   assert.ok(strong, 'the existing final Markdown renderer is retained');
   assert.ok([...turn.querySelectorAll('details')].every(node => !node.contains(strong)), 'the answer stays visible outside disclosures');
-  assert.doesNotMatch(usage.textContent, /流式中/);
-  assert.match(usage.textContent, /model-b/);
+  const settledButton = turn.querySelector('.message-usage');
+  assert.ok(settledButton, 'settled turn keeps one usage action');
+  settledButton.click();
+  const settledPop = d.querySelector('#messageUsagePopover');
+  assert.doesNotMatch(settledPop.textContent, /流式中/);
+  assert.match(settledPop.textContent, /model-b/);
+  assert.equal(settledPop.querySelectorAll('.usage-pop-response').length, 3,
+    'each verified response keeps its own detail');
+  assert.equal(settledPop.querySelector('.usage-pop-grid [data-kind="totalTokens"]')?.textContent, '9 Token',
+    'whole-turn total comes from verified recorded rows');
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(turn.querySelectorAll('.message-regenerate').length, 1);
   turn.querySelector('.message-regenerate').click();
   await new Promise(resolve => setImmediate(resolve));

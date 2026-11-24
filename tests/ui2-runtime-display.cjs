@@ -73,7 +73,16 @@ const { JSDOM } = require('jsdom');
   const output = () => host.querySelector('.rtc-output');
   const stateLine = () => host.querySelector('.rtc-state').textContent;
   const thinkingBlock = () => host.querySelector('.ui2-runtime-thinking');
-  const usageLine = () => host.querySelector('.ui2-runtime-usage');
+  const usageButton = () => host.querySelector('.rtc-output .message-usage');
+  const closeUsage = () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const usageSnapshot = () => {
+    const button = usageButton();
+    if (!button) return '';
+    button.click();
+    const text = document.querySelector('#messageUsagePopover')?.textContent || '';
+    closeUsage();
+    return text;
+  };
   const toolRows = () => [...host.querySelectorAll('.ui2-runtime-tool')];
   /* 正文现在只是执行时间线里的一种 block；整只 output 的 textContent 还包含
    * 思考标题、工具名与状态。断言「是谁的正文」时只取助手正文节点，避免把
@@ -139,14 +148,24 @@ const { JSDOM } = require('jsdom');
   frame('A', 6, { type: 'message_update', usage: { input: 10, output: 2, cost: { total: 0.001 } },
     assistantMessageEvent: { type: 'text_delta', delta: '!' } });
   await tick();
-  ok('流式 usage 显示，并标注仍在累计', usageLine().hidden === false && usageLine().textContent.includes('输入 10') && usageLine().textContent.includes('仍在累计'));
-  ok('usage 文案不含货币符号与凭据', !usageLine().textContent.includes('$') && !/apiKey|token=/i.test(usageLine().textContent));
+  ok('流式 usage 显示，并标注仍在累计', Boolean(usageButton())
+    && /输入\s*10 Token/.test(usageSnapshot()) && usageSnapshot().includes('流式中'));
+  ok('usage 文案不含货币符号与凭据', (() => {
+    const text = usageSnapshot();
+    return !text.includes('$') && !/apiKey|token=/i.test(text);
+  })());
   frame('A', 7, { type: 'message_end', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'thinking', thinking: '权威思考' }, { type: 'text', text: '权威正文' }],
     usage: { input: 100, output: 20, totalTokens: 120, cost: { total: 0.0025 } } } });
   await tick();
   ok('message_end 的 thinking 是权威值（覆盖流式累积）', thinkingBlock().querySelector('.ui2-runtime-thinking-body').textContent === '权威思考');
-  ok('message_end 的 usage 是终值（不再标「仍在累计」）', usageLine().textContent.includes('输入 100') && usageLine().textContent.includes('总计 120') && !usageLine().textContent.includes('仍在累计'));
-  ok('usage 缺的字段不出现（没有缓存/推理这一轮）', !usageLine().textContent.includes('缓存') && !usageLine().textContent.includes('推理'));
+  ok('message_end 的 usage 是终值（不再标「仍在累计」）', (() => {
+    const text = usageSnapshot();
+    return /输入\s*100 Token/.test(text) && /总计\s*120 Token/.test(text) && !text.includes('流式中');
+  })());
+  ok('usage 缺的字段不出现（没有缓存/推理这一轮）', (() => {
+    const text = usageSnapshot();
+    return !text.includes('缓存') && !text.includes('推理');
+  })());
 
   /* ================= 6. 有界输出与截断 ================= */
 
@@ -189,16 +208,16 @@ const { JSDOM } = require('jsdom');
   ok('关闭后正文与工具与 store 保持一致（store 保留，视图也保留）',
     assistantText() === lastAssistant.text && toolRows().length === closedRecord.tools.length);
   ok('关闭后 thinking 与 usage 同样保留（与 store 的保留语义一致）',
-    thinkingBlock().hidden === false && usageLine().hidden === false);
+    thinkingBlock().hidden === false && Boolean(usageButton()) && /输入\s*100 Token/.test(usageSnapshot()));
   ok('关闭后审批被清掉（store 关掉时清 approvals）', host.querySelectorAll('.rtc-approval').length === 0);
 
   observeRuntimeFrame({ type: 'runtime_state', owner: owner('A', 'two'), item: { ...item('A'), owner: owner('A', 'two'), revision: 99, activity: 'idle' } });
   await tick();
-  ok('换代后不再显示上一个 runtime 的 thinking 与 usage（那是另一条运行）', thinkingBlock() === null && usageLine().hidden === true);
+  ok('换代后不再显示上一个 runtime 的 thinking 与 usage（那是另一条运行）', thinkingBlock() === null && !usageButton());
   delta('A', 1, '-新代次正文', 'two'); thinkDelta('A', 2, '-新代次思考', 'two');
   await tick();
   ok('恢复后显示新 runtime 自己的正文与思考', assistantText().includes('-新代次正文') && thinkingBlock().querySelector('.ui2-runtime-thinking-body').textContent === '-新代次思考');
-  ok('恢复后不残留上一个 runtime 的 usage', usageLine().hidden === true);
+  ok('恢复后不残留上一个 runtime 的 usage', !usageButton());
   delta('A', 3, '-旧代次迟到', 'one'); thinkDelta('A', 4, '-旧代次思考', 'one');
   await tick();
   ok('旧代次的迟到正文与思考都不进新 runtime 的视图',
@@ -212,7 +231,7 @@ const { JSDOM } = require('jsdom');
   btn('打开历史').click(); await tick(12);
   ok('历史显示正文', output().textContent.includes('历史问题') && output().textContent.includes('历史回答'));
   ok('历史里没有 thinking（接口不提供，就不显示）', thinkingBlock() === null);
-  ok('历史里没有 usage（接口不提供，就不显示）', usageLine().hidden === true);
+  ok('历史里没有 usage（接口不提供，就不显示）', !usageButton());
   ok('历史里没有工具块（接口不提供，就不显示）', toolRows().length === 0);
   ok('历史状态行说明「只含正文」，用户知道为什么没有', stateLine().includes('只含正文'));
   ok('历史视图禁止发送', btn('发送').disabled && host.querySelector('textarea').disabled);
@@ -320,12 +339,13 @@ const { JSDOM } = require('jsdom');
   delta('G', 1, 'G-正文'); thinkDelta('G', 2, 'G-思考');
   frame('G', 3, { type: 'message_update', usage: { output: 7 }, assistantMessageEvent: { type: 'text_delta', delta: '' } });
   await tick();
-  ok('快照之前：G 有自己的 thinking 与 usage', thinkingBlock().hidden === false && usageLine().hidden === false);
+  ok('快照之前：G 有自己的 thinking 与 usage', thinkingBlock().hidden === false
+    && Boolean(usageButton()) && /输出\s*7 Token/.test(usageSnapshot()));
   /* seedRuntimeSnapshot **不带帧**（runtime-state.js:25 的 broadcast() 无参）。这条路径
    * 在真机上就是「刷新会话列表」——owner 可能已经换代，投影必须自己核对。 */
   seedRuntimeSnapshot({ backendInstance: 'backend', items: [{ ...item('G'), owner: owner('G', 'snapshot-two'), revision: 500 }] });
   await tick();
-  ok('快照换代（不带帧）后不残留上一个 runtime 的 thinking 与 usage', thinkingBlock() === null && usageLine().hidden === true);
+  ok('快照换代（不带帧）后不残留上一个 runtime 的 thinking 与 usage', thinkingBlock() === null && !usageButton());
   thinkDelta('G', 1, 'G-新代次思考', 'snapshot-two');
   await tick();
   ok('快照换代后新 runtime 的 thinking 正常进入', thinkingBlock().querySelector('.ui2-runtime-thinking-body').textContent === 'G-新代次思考');

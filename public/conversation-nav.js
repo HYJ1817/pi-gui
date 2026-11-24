@@ -379,9 +379,8 @@ function scrollToEntry(entry) {
   if (!entry || !entry.element.isConnected) return;
   const stream = el.stream;
   if (!stream) return;
-  const process = entry.element.closest('[data-execution-part="progress"]');
-  const collapsed = process?.querySelector(':scope > button[aria-expanded="false"]');
-  collapsed?.click();
+  const work = entry.element.closest('.execution-activity-group, [data-conversation-work], .execution-progress');
+  work?.querySelector(':scope > button[aria-expanded="false"]')?.click();
   const max = Math.max(0, stream.scrollHeight - stream.clientHeight);
   const rect = entry.element.getBoundingClientRect();
   const contentTop = Math.max(0, rect.top - riseInShift(entry.element)

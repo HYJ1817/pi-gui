@@ -74,6 +74,45 @@ function nativePacket(project, o) {
   return { ...history, locator: locator(o), owner: o, branchEpoch: 1, cursor: 0 };
 }
 
+function twoToolPacket(project, o, { reversed = false } = {}) {
+  const id = o.conversationId;
+  const leafId = id + '-answer';
+  const textPart = text => ({ type: 'text', text });
+  const rows = [
+    [id + '-user', { role: 'user', content: [textPart(id + ' task')] }],
+    [id + '-progress', { role: 'assistant', stopReason: 'toolUse', content: [textPart(id + ' progress'),
+      { type: 'toolCall', id: 'call-a', name: 'read', arguments: { path: 'src/a.js' } },
+      { type: 'toolCall', id: 'call-b', name: 'grep', arguments: { pattern: 'needle' } }],
+    usage: { input: 0, output: 2 }, model: 'first-model' }],
+    [id + '-tool-a', { role: 'toolResult', content: [textPart('a result')],
+      toolCallId: 'call-a', toolName: 'read', isError: false }],
+    [id + '-tool-b', { role: 'toolResult', content: [textPart('b result')],
+      toolCallId: 'call-b', toolName: 'grep', isError: false }],
+    [leafId, { role: 'assistant', stopReason: 'stop', content: [textPart('**' + id + ' answer**')],
+      usage: { input: 0, output: 4 }, model: 'final-model' }],
+  ];
+  const entries = rows.map(([entryId, message], index) => ({ type: 'message', id: entryId, message,
+    parentId: index ? rows[index - 1][0] : null }));
+  const checkpoint = {
+    inputId: entries[0].id, beforeLeafId: null, leafId, status: 'completed', finalResponseId: leafId,
+    timing: { startedAt: 10, endedAt: 40 },
+    entries: entries.map(entry => ({ id: entry.id, role: entry.message.role })),
+    tools: [
+      { callId: 'call-a', responseId: id + '-progress', resultId: id + '-tool-a',
+        startedAt: 12, endedAt: 13, durationMs: 1, status: 'completed' },
+      { callId: 'call-b', responseId: id + '-progress', resultId: id + '-tool-b',
+        startedAt: 14, endedAt: 16, durationMs: 2, status: 'completed' },
+    ],
+  };
+  const history = project(entries, [checkpoint], { sessionId: o.sessionId, leafId });
+  assert.ok(history, 'two-tool fixture uses the production native history projection');
+  if (reversed) {
+    const turn = history.execution.p5.turns[0];
+    turn.items = turn.items.map(item => ({ ...item, toolName: item.toolName === 'read' ? 'grep' : 'read' }));
+  }
+  return { ...history, locator: locator(o), owner: o, branchEpoch: 1, cursor: 0 };
+}
+
 test('history view groups authorized blocks, reveals precise search hits, and fences switching requests', async t => {
   const dom = new JSDOM(fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8'), {
     url: 'http://fixture.invalid/', pretendToBeVisual: true,
@@ -127,8 +166,18 @@ test('history view groups authorized blocks, reveals precise search hits, and fe
   assert.match(bTurn.querySelector('.execution-activity-item').textContent, /note\.js|读取文件/);
   assert.match(bTurn.querySelector('.execution-activity-item').textContent, /无权读取详情/);
   assert.doesNotMatch(bTurn.innerHTML, /RAW_ARGS_SENTINEL|RAW_RESULT_SENTINEL/);
-  assert.equal(bTurn.querySelectorAll('.execution-usage-entry').length, 2);
-  assert.equal(bTurn.querySelectorAll('.ui2-msg-meta').length, 2, 'history ledger retains both recorded rows without duplicates');
+  const bUsage = bTurn.querySelector('.message-usage');
+  assert.ok(bUsage, 'history turn exposes usage through the answer action bar');
+  assert.equal(bTurn.querySelectorAll('.message-usage').length, 1, 'one entry per turn');
+  assert.equal(bTurn.querySelector('.execution-usage'), null, 'no separate usage block remains');
+  bUsage.click();
+  const bUsagePop = d.querySelector('#messageUsagePopover');
+  assert.equal(bUsagePop.hidden, false);
+  assert.equal(bUsagePop.querySelectorAll('.usage-pop-response').length, 2,
+    'both recorded rows stay reachable without duplicates');
+  assert.match(bUsagePop.textContent, /first-model/);
+  assert.match(bUsagePop.textContent, /final-model/);
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   requests.get('A').resolve(packet(a));
   assert.equal(await readingA, false);
   assert.equal(output.querySelector('.execution-turn'), bTurn, 'late A history cannot write into B');
@@ -143,11 +192,14 @@ test('history view groups authorized blocks, reveals precise search hits, and fe
   assert.equal(output.dataset.historyMatchState, 'found');
   assert.equal(output.scrollTop, 530);
   assert.equal(aTurn.querySelectorAll('.turn-outcome').length, 1, 'supplemental input did not make a second outcome');
-  const usageControl = turn => turn.querySelector('[data-execution-part="usage"] button.execution-head');
-  usageControl(aTurn).click();
+  const aUsage = aTurn.querySelector('.message-usage');
+  assert.ok(aUsage, 'A turn exposes usage through the answer action bar');
+  aUsage.click();
+  assert.equal(d.querySelector('#messageUsagePopover').hidden, false);
   output.scrollTop = 610;
   view.show(b.conversationId);
-  assert.equal(usageControl(bTurn).getAttribute('aria-expanded'), 'false');
+  assert.equal(d.querySelector('#messageUsagePopover').hidden, true,
+    'switching conversations closes the usage detail of the previous one');
   view.show(a.conversationId);
   assert.equal(output.scrollTop, 610, 'returning to the same read-only history preserves the resulting reading position');
   const reopeningA = view.openHistory(locator(a), { messageId: 'A-answer' });
@@ -155,7 +207,14 @@ test('history view groups authorized blocks, reveals precise search hits, and fe
   assert.equal(await reopeningA, true);
   const rebuiltA = output.querySelector('.execution-turn');
   assert.notEqual(rebuiltA, aTurn);
-  assert.equal(usageControl(rebuiltA).getAttribute('aria-expanded'), 'true', 'explicit choice survives rebuilding the same native cut');
+  const rebuiltUsage = rebuiltA?.querySelector('.message-usage');
+  assert.ok(rebuiltUsage, 'rebuilding the same native cut keeps its usage action');
+  rebuiltUsage.click();
+  const rebuiltPop = d.querySelector('#messageUsagePopover');
+  assert.equal(rebuiltPop.querySelector('.usage-pop-grid [data-kind="totalTokens"]')?.textContent, '4 Token',
+    'rebuilt verified history still carries the recorded usage row');
+  assert.match(rebuiltPop.textContent, /history-model/);
+  d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
   const readingC = view.openHistory(locator(c), { messageId: 'C-progress' });
   requests.get('C').resolve(packet(c, { malformed: true }));
@@ -204,6 +263,61 @@ test('history view groups authorized blocks, reveals precise search hits, and fe
   assert.equal(output.querySelector('.execution-turn'), recovered);
   assert.match(output.textContent, /R answer/);
   assert.match(output.textContent, /new live task/);
+});
+
+test('restored tool order is adopted only when it matches the native tool sequence', async t => {
+  const dom = new JSDOM(fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8'), {
+    url: 'http://fixture.invalid/', pretendToBeVisual: true,
+  });
+  const w = dom.window, d = w.document;
+  for (const key of ['window', 'document', 'localStorage', 'HTMLElement', 'Event', 'CustomEvent',
+    'Node', 'MutationObserver']) global[key] = key === 'window' ? w : w[key];
+  global.requestAnimationFrame = w.requestAnimationFrame.bind(w);
+  global.cancelAnimationFrame = w.cancelAnimationFrame.bind(w);
+  const { createRuntimeConversation } = await import('../public/runtime-conversation.js');
+  const { seedRuntimeSnapshot } = await import('../public/runtime-state.js');
+  const { projectExecutionHistory } = await import('../server/execution-timeline-history.js');
+  const wrong = owner('D'), right = owner('E');
+  seedRuntimeSnapshot({ backendInstance: wrong.backendInstance, items: [dormant(wrong), dormant(right)] });
+  const requests = new Map();
+  global.fetch = async (url, options) => {
+    const body = options?.body ? JSON.parse(options.body) : null;
+    if (body?.action?.startsWith('edit-')) return { ok: true, json: async () => ({ ok: true }) };
+    const target = new URL(url, 'http://fixture.invalid').searchParams.get('conversationId');
+    if (!target) return { ok: true, json: async () => ({ ok: true }) };
+    const response = defer();
+    requests.set(target, response);
+    return { ok: true, json: () => response.promise };
+  };
+  const host = d.createElement('div');
+  d.body.append(host);
+  const view = createRuntimeConversation({ host });
+  t.after(() => { view.dispose(); w.close(); });
+  const output = view.element.querySelector('.rtc-output');
+  Object.defineProperties(output, { scrollHeight: { value: 2400 }, clientHeight: { value: 400 } });
+  output.getBoundingClientRect = () => ({ top: 0, height: 400 });
+  w.HTMLElement.prototype.getBoundingClientRect = function () {
+    return { top: this.closest('[hidden]') ? 0 : 720 - output.scrollTop, height: 20 };
+  };
+
+  const readingWrong = view.openHistory(locator(wrong));
+  requests.get('D').resolve(twoToolPacket(projectExecutionHistory, wrong, { reversed: true }));
+  assert.equal(await readingWrong, true);
+  assert.equal(output.querySelector('.execution-turn'), null,
+    'restored items whose tool order disagrees with the native blocks are not adopted');
+  assert.match(output.textContent, /D task/, 'authorized history still renders through the legacy reader');
+
+  const readingRight = view.openHistory(locator(right));
+  requests.get('E').resolve(twoToolPacket(projectExecutionHistory, right));
+  assert.equal(await readingRight, true);
+  const turn = output.querySelector('.execution-turn');
+  assert.ok(turn, 'matching restored tool order is adopted');
+  turn.querySelector('.execution-activity-group button').click();
+  const activities = [...turn.querySelectorAll('.execution-activity-item')];
+  assert.equal(activities.length, 2);
+  assert.match(activities[0].textContent, /读取文件/);
+  assert.match(activities[1].textContent, /搜索内容/);
+  assert.match(turn.textContent, /E answer/);
 });
 
 test('reconnect settles only the captured idle generation, cursor and branch', async () => {

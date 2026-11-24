@@ -188,7 +188,9 @@ export function timelineFromMessages(messages, { messageMeta = null, onBlock = n
    * 卡，同时不会把两个真实任务合并。两种记录可以同时存在。 */
   let legacyTurnPlan = null;
   const planByTurnId = new Map();
+  let messageAt = null;
   const add = block => {
+    if (messageAt !== null && !Number.isFinite(block.at)) block.at = messageAt;
     block.id = 'h' + (++id);
     blocks.push(block);
     onBlock?.(block.id, index);
@@ -197,6 +199,7 @@ export function timelineFromMessages(messages, { messageMeta = null, onBlock = n
 
   for (; index < list.length; index++) {
     const message = list[index];
+    messageAt = Number.isFinite(message?.timestamp) ? message.timestamp : null;
     if (!message || typeof message !== 'object') continue;
     const meta = messageMeta?.[index] || {};
 

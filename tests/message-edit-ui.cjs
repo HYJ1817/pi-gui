@@ -69,27 +69,50 @@ const path = require('node:path');
     assert.equal(bar.querySelector('.message-regenerate'), null);
   });
 
-  await pass('edit action uses the existing icon set, tooltip and accessible name', () => {
+  await pass('edit action uses the existing icon set, one tooltip layer and accessible name', async () => {
     let clicked = 0;
     const bar = messageActions('hello', { onEdit: () => { clicked++; } });
+    document.body.append(bar);
     const button = bar.querySelector('.message-edit');
     assert.ok(button, 'edit button');
-    assert.equal(button.title, '编辑并重新发送');
+    assert.equal(button.title, '', 'no native title tooltip layer');
     assert.equal(button.getAttribute('aria-label'), '编辑并重新发送');
     assert.equal(button.type, 'button');
     assert.ok(button.querySelector('svg'), 'uses the existing icon markup');
+    /* 设计系统 tooltip：悬停/聚焦浮出，Escape 关闭，且不改消息布局。 */
+    button.dispatchEvent(new dom.window.Event('pointerenter', { bubbles: true }));
+    let tip = document.querySelector('.ui-tooltip');
+    assert.equal(tip?.hidden, false);
+    assert.equal(tip.textContent, '编辑并重新发送');
+    button.dispatchEvent(new dom.window.Event('pointerleave', { bubbles: true }));
+    await tick(120);
+    assert.equal(tip.hidden, true);
+    button.focus();
+    assert.equal(tip.hidden, false);
+    button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(tip.hidden, true);
     button.click();
     assert.equal(clicked, 1);
+    bar.remove();
   });
 
-  await pass('regenerate action is rendered with its own tooltip', () => {
+  await pass('regenerate action is rendered with its own tooltip', async () => {
     const bar = messageActions('', { onRegenerate: () => {} });
+    document.body.append(bar);
     const button = bar.querySelector('.message-regenerate');
     assert.ok(button);
-    assert.equal(button.title, '重新生成');
+    assert.equal(button.title, '');
     assert.equal(button.getAttribute('aria-label'), '重新生成');
+    button.focus();
+    const tip = document.querySelector('.ui-tooltip');
+    assert.equal(tip.hidden, false);
+    assert.equal(tip.textContent, '重新生成');
+    button.blur();
+    await tick(120);
+    assert.equal(tip.hidden, true);
     assert.equal(bar.hidden, false, 'image-only messages still get the action bar');
     assert.equal(bar.querySelector('.message-copy'), null);
+    bar.remove();
   });
 
   await pass('disabled actions stay visible but cannot fire', () => {
@@ -761,15 +784,19 @@ const path = require('node:path');
   });
 
   /* ---------------- 样式契约 ---------------- */
-  await pass('editor CSS reuses design tokens and the existing action-bar reveal', () => {
+  await pass('editor CSS reuses design tokens and the action bar keeps one shared reveal', () => {
     const css = fs.readFileSync(path.join(__dirname, '../public/message-edit.css'), 'utf8');
+    const styles = fs.readFileSync(path.join(__dirname, '../public/styles.css'), 'utf8');
     assert.match(css, /\.message-edit\s*\{/);
     assert.match(css, /var\(--ds-bg-secondary\)/);
     assert.match(css, /var\(--ds-focus\)/);
     assert.match(css, /\.message-edit-input:focus/);
     assert.match(css, /\.message-edit-warning\[hidden\]/);
-    assert.match(css, /#runtimeView \.rtc-timeline-message/);
-    assert.match(css, /:focus-within/);
+    /* 动作条显隐与 pointer-events 只由 styles.css 提供；这里再放一份 reveal
+     * 会让按钮“看得见但点不到”。 */
+    assert.match(styles, /#stream \.msg[^}]*:is\(:hover,:focus-within\) > \.message-actions/);
+    assert.match(styles, /opacity:1;pointer-events:auto/);
+    assert.equal(css.includes('.message-actions'), false, 'reveal must live in styles.css only');
     assert.equal(/--ds-[a-z-]+\s*:/.test(css), false, 'no new theme tokens are defined here');
     assert.equal(/#[0-9a-fA-F]{3,8}\b/.test(css), false, 'no hard-coded colors');
   });

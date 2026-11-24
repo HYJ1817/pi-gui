@@ -84,12 +84,14 @@ async function main() {
     check('places the existing Plan between input and activity, using one card', () => {
       assert.strictEqual(live.querySelector('[data-execution-part="plan"] .plan-card'), originalPlan);
       assert.equal(live.querySelectorAll('.plan-card').length, 1);
-      assert.equal(live.querySelectorAll('.execution-activity-item').length, 0);
+      // 运行中的单条工具就是一行紧凑工作记录（T3 的 work-live 行）。
+      assert.equal(live.querySelectorAll('.execution-activity-item').length, 1);
       assert.equal(oldGroup.isConnected, false);
       assert.equal(tool.isConnected, false);
     });
     check('uses the original authorized Classic tool detail', () => {
-      live.querySelector('.execution-activity-group > .execution-head').click();
+      const groupHead = live.querySelector('.execution-activity-group > .execution-head');
+      if (groupHead.getAttribute('aria-expanded') === 'false') groupHead.click();
       live.querySelector('.execution-activity-item > .execution-head').click();
       assert.ok(live.contains(tool));
     });
@@ -101,8 +103,16 @@ async function main() {
       assert.strictEqual(original.closest('[data-execution-turn]'), live);
       assert.equal(live.querySelectorAll('strong').length, 1);
       assert.ok(live.querySelector('.message-regenerate'));
-      assert.equal(live.querySelectorAll('[data-execution-part="usage"]').length, 1);
-      assert.ok([...live.querySelectorAll('.execution-usage-model')].some(node => node.textContent === 'fixture-model-b'));
+      const usageButton = live.querySelector('.message-usage');
+      assert.ok(usageButton, 'verified turn usage lives on the answer action bar');
+      assert.equal(live.querySelectorAll('[data-execution-part="usage"]').length, 0, 'no separate execution usage block');
+      assert.equal(document.querySelector('#stream .ui2-msg-meta'), null, 'no old Token footer');
+      usageButton.click();
+      const pop = document.querySelector('#messageUsagePopover');
+      assert.equal(pop.hidden, false);
+      assert.equal(pop.querySelectorAll('.usage-pop-response').length, 3, 'all three real responses stay reachable');
+      assert.ok([...pop.querySelectorAll('.usage-pop-model')].some(node => node.textContent === 'fixture-model-b'));
+      document.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     check('preserves native nested reading anchors', () => {
       const scroller = S.thread.parentElement;
@@ -149,11 +159,13 @@ async function main() {
     });
     send('message_start', { message: { role: 'user', content: [text('Additional steer')] } }, 2);
     await frame();
-    check('navigation reveals a supplemental input inside collapsed progress', () => {
+    check('supplemental input stays visible between folds and navigation still lands', () => {
       const inputs = S.thread.querySelectorAll('.msg.user');
       const steer = inputs[1];
-      assert.ok(steer.closest('[data-execution-part="progress"]'));
-      assert.ok(steer.closest('[hidden]'));
+      // 用户补充输入按真实执行边界留在两段工作折叠之间，不进入任何折叠列表。
+      assert.ok(steer.closest('[data-execution-part="activity-flow"]'));
+      assert.equal(steer.closest('[data-execution-part="progress"]'), null);
+      assert.equal(steer.closest('[hidden]'), null);
       assert.equal(scrollToUserTurn(1), true);
       assert.equal(steer.closest('[hidden]'), null);
     });

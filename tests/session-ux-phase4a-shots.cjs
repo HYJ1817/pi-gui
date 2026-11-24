@@ -373,7 +373,7 @@ async function main() {
         guiPlanRows: document.querySelectorAll('#stream .tl-item[data-id^="p4a-plan"]').length,
         normalGroupChildren: normalGroup ? normalGroup.querySelectorAll('.tl-item').length : 0,
         thinkingBlocks: document.querySelectorAll('#stream .think').length,
-        usageMetas: document.querySelectorAll('#stream .msg.assistant .ui2-msg-meta').length,
+        usageButtons: document.querySelectorAll('#stream .msg.assistant .message-usage').length,
         toolGroups: document.querySelectorAll('#stream .tl-group').length,
         subagentCards: document.querySelectorAll('#stream .tl-subagent').length,
         subagentRows: document.querySelectorAll('#stream .tl-subagent-row').length,
@@ -391,7 +391,7 @@ async function main() {
     check('plan-not-tool-row', fixture.planToolRows === 0, fixture);
     check('normal-group-2', fixture.normalGroupChildren === 2, fixture);
     check('thinking-present', fixture.thinkingBlocks === 1, fixture);
-    check('usage-present', fixture.usageMetas >= 1, fixture);
+    check('usage-present', fixture.usageButtons >= 1, fixture);
     check('raw-args-absent', Object.values(fixture.hiddenRawMarkers).every((value) => value === false), fixture.hiddenRawMarkers);
     if (LABEL === 'before') {
       check('before-no-card', fixture.subagentCards === 0 && fixture.subagentRows === 0, fixture);

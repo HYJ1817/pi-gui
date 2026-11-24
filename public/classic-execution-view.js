@@ -1,6 +1,8 @@
 /* DOM ownership for Classic turns. Live attribution comes from accepted
  * frames; restored turns use the same server-verified native message range. */
-import { S } from './state.js';
+import { S, el } from './state.js';
+import { createConversationFlow, nativeConversationChildren } from './conversation-work-log.js';
+import { captureReadingPosition, restoreReadingPosition } from './reading-position.js';
 import { classicExecutionFallbackEcho, getClassicExecutionTimeline } from './execution-timeline-state.js';
 import { createExecutionTurnView, executionTurnForInput } from './execution-timeline-view.js';
 import { executionLivePreferenceKey, executionViewPreferences } from './execution-view-preferences.js';
@@ -18,6 +20,26 @@ let active = null;
 const rounds = new Set();
 const dirty = new Set();
 const accepted = new WeakSet();
+let nativeFlow = null;
+let nativeHost = null;
+let nativePreferences = null;
+
+/** Native fallback has the same presentation without gaining P5 evidence. */
+export function renderClassicConversationFlow(preferences) {
+  if (!S.thread) return;
+  if (preferences) nativePreferences = preferences;
+  if (nativeHost !== S.thread) {
+    nativeFlow?.restore();
+    nativeHost = S.thread;
+    nativeFlow = createConversationFlow({ document: S.thread.ownerDocument, preferences: {
+      get: key => nativePreferences?.get(key), set: (key, value) => nativePreferences?.set(key, value),
+    } });
+  }
+  const bookmark = el.stream?.clientHeight > 0
+    ? captureReadingPosition(el.stream, S.thread, { pinnedThreshold: 24 }) : null;
+  nativeFlow.render(S.thread);
+  if (bookmark) restoreReadingPosition(el.stream, S.thread, bookmark);
+}
 
 function makeKey(instance, run, workspace, generation, branch, session) {
   return JSON.stringify([instance, run, workspace, generation, branch, session]);
@@ -34,12 +56,12 @@ function eventKey(event, sessionId = event.executionClassic?.sessionId ?? null) 
 
 function release(round) {
   for (const outcome of round.outcomes) outcome.hidden = false;
-  for (const response of round.responses) response.usageLabel?.remove();
   for (const [node, marker] of round.markers) {
     if (node.parentNode) marker.replaceWith(node);
     else marker.remove();
   }
   round.markers.clear();
+  round.thoughts?.clear();
   for (const [group, marker] of round.groups) marker.replaceWith(group);
   round.groups.clear();
   round.view?.release();
@@ -47,6 +69,8 @@ function release(round) {
 }
 
 export function resetClassicExecutionView({ restore = false } = {}) {
+  nativeFlow?.restore();
+  nativeFlow = nativeHost = nativePreferences = null;
   if (pendingFrame != null) cancelAnimationFrame(pendingFrame);
   pendingFrame = null;
   if (restore) for (const round of rounds) release(round);
@@ -69,11 +93,12 @@ export function classicNativeThreadChildren(thread) {
       if (marker.parentNode === thread) adopted.set(marker, group);
     }
   }
-  return [...thread.childNodes].map(node => adopted.get(node) || node)
+  return nativeConversationChildren(thread).map(node => adopted.get(node) || node)
     .filter(node => node.nodeType === 1 && !node.hasAttribute('data-execution-turn'));
 }
 
 export function releaseClassicExecutionTail(article, oldTail) {
+  nativeFlow?.restore();
   for (const round of rounds) {
     if (round.input !== article && !oldTail.has(round.input) && !round.additional.some(item => item.node === article)) continue;
     release(round);
@@ -154,7 +179,8 @@ export function indexClassicHistoryTurns(p5, messages, items, sessionId) {
 }
 
 export function mountClassicHistoryTurn(turn, nodes) {
-  const round = { ...nodes, historical: true, settled: true, markers: new Map(), groups: new Map(), view: null };
+  const round = { ...nodes, historical: true, settled: true, markers: new Map(), groups: new Map(),
+    thoughts: new Map(), view: null };
   try {
     if (renderRound(round, turn, turn.group, turn.items)) {
       rounds.add(round);
@@ -194,9 +220,11 @@ export function trackClassicExecutionMessage(node, event) {
   if (role === 'user') {
     if (!active || active.settled) {
       active = { input: node, sequence: event._seq, additional: [], responses: [], tools: new Map(),
-        plan: null, outcomes: [], settled: false, view: null, markers: new Map(), groups: new Map() };
+        plan: null, outcomes: [], settled: false, view: null, markers: new Map(), groups: new Map(),
+        thoughts: new Map() };
       rounds.add(active);
-    } else active.additional.push({ node, sequence: event._seq });
+    } else active.additional.push({ node, sequence: event._seq,
+      at: Number.isFinite(event.message?.timestamp) ? event.message.timestamp : Date.now() });
   } else if (role === 'assistant' && active) {
     active.responses.push({ node, sequence: event._seq });
   }
@@ -284,6 +312,7 @@ function flush() {
       release(round);
     }
   }
+  renderClassicConversationFlow();
 }
 
 function renderRound(round, turn, group, items, scope = null) {
@@ -299,9 +328,6 @@ function renderRound(round, turn, group, items, scope = null) {
   if (!round.historical && (Boolean(turn.plan) !== Boolean(plan) || (!plan && round.plan?.isConnected))) return false;
   const progress = [];
   const answer = [];
-  const usage = [];
-  const nativeUsageIds = new Set();
-  const recordedUsage = new Map(turn.usage.map(row => [row.responseId, row]));
   const kindsByResponse = new Map();
   for (const part of turn.parts ?? []) {
     if (!kindsByResponse.has(part.message.id)) kindsByResponse.set(part.message.id, new Set());
@@ -310,26 +336,12 @@ function renderRound(round, turn, group, items, scope = null) {
   const tail = round.responses.at(-1);
   const waitingForFallback = round.fallbackPending && S.fallbackActive === true;
   const ordered = [...round.additional];
+  const steerByNode = new Map(round.additional.map(entry => [entry.node, entry]));
   for (const response of round.responses) {
     const { node, sequence } = response;
     if (round.historical ? !node.parentNode : !node.isConnected) continue;
     const responseId = response.responseId ?? turn.id + ':response:' + sequence;
     const kinds = kindsByResponse.get(responseId);
-    const meta = response.meta || node.querySelector(':scope > .ui2-msg-meta');
-    if (meta) {
-      response.meta = meta;
-      usage.push(meta);
-      nativeUsageIds.add(responseId);
-      const model = recordedUsage.get(responseId)?.model;
-      if (model) {
-        if (!response.usageLabel) {
-          response.usageLabel = meta.ownerDocument.createElement('span');
-          response.usageLabel.className = 'execution-usage-model';
-        }
-        response.usageLabel.textContent = [model.provider, model.id].filter(Boolean).join(' / ');
-        if (response.usageLabel.parentNode !== meta) meta.prepend(response.usageLabel);
-      }
-    }
     // A streaming block may still be empty at its first frame. Leave that
     // original host visible until the model can classify its public parts.
     if (round.historical ? responseId === turn.finalResponseId : kinds?.has('answer') || kinds?.has('partial-answer')
@@ -339,8 +351,37 @@ function renderRound(round, turn, group, items, scope = null) {
     } else ordered.push(response);
   }
   ordered.sort((a, b) => a.sequence - b.sequence);
-  for (const response of ordered) progress.push(response.node);
+  for (const response of ordered) if (!steerByNode.has(response.node)) progress.push(response.node);
+  const steers = ordered.filter(entry => steerByNode.has(entry.node));
 
+  /* T3 keeps the final answer visible and folds its reasoning into the work
+   * log. Pi may emit thinking and final text in one assistant message, so the
+   * reasoning nodes are detached from that message only after the turn has
+   * settled and the message is the final answer. Markers restore them on
+   * release, keeping the native message recoverable for edit/resend. */
+  const thoughts = [];
+  if (round.settled || round.historical) {
+    if (!round.thoughts) round.thoughts = new Map();
+    for (const response of round.responses) {
+      if (!answer.includes(response.node) || response.node.querySelector('.msg-err')) continue;
+      let nodes = round.thoughts.get(response.node);
+      if (!nodes || nodes.some(node => !node.isConnected)) {
+        nodes = [...response.node.querySelectorAll('.think')];
+        for (const node of nodes) rememberPosition(round, node);
+        round.thoughts.set(response.node, nodes);
+      }
+      for (const [index, node] of nodes.entries()) {
+        if (!node.isConnected) continue;
+        if (response.node.contains(node)) response.node.before(node);
+        progress.push(node);
+        thoughts.push({ node, sequence: response.sequence, part: -1 - index });
+      }
+    }
+  }
+
+  // Native display wrappers cannot become P5's original-order marker owner.
+  // Restore them before the first verified adoption; fallback remains recoverable.
+  if (!round.view && round.input.isConnected) nativeFlow?.restore();
   if (!round.view) {
     const preferenceId = round.historical ? turn.id + ':' + turn.entryIds.at(-1)
       : executionLivePreferenceKey(scope, round.sequence);
@@ -350,7 +391,7 @@ function renderRound(round, turn, group, items, scope = null) {
     round.view = createExecutionTurnView({ document: round.input.ownerDocument, preferences });
     round.input.before(round.view.node);
   }
-  for (const node of [round.input, plan, ...progress, ...answer, ...usage, ...round.outcomes]) {
+  for (const node of [round.input, plan, ...progress, ...answer, ...round.outcomes, ...steers.map(entry => entry.node)]) {
     rememberPosition(round, node);
   }
   for (const tool of round.tools.values()) {
@@ -361,9 +402,18 @@ function renderRound(round, turn, group, items, scope = null) {
   }
   for (const outcome of round.outcomes) outcome.hidden = waitingForFallback;
   round.view.update({
-    turn: { ...turn, status: waitingForFallback ? 'waiting' : turn.status,
-      usage: turn.usage.filter(row => !nativeUsageIds.has(row.responseId)) },
-    group, items, input: round.input, plan, progress, answer, outcomes: round.outcomes, details, usage,
+    turn: { ...turn, status: waitingForFallback ? 'waiting' : turn.status },
+    group, items, input: round.input, plan, progress, steers: steers.map(entry => entry.node),
+    answer, outcomes: round.outcomes, details,
+    workOrder: [
+      ...ordered.filter(entry => !steerByNode.has(entry.node))
+        .map(entry => ({ node: entry.node, sequence: entry.sequence, part: -1 })),
+      ...thoughts,
+      ...items.map(item => ({ activityId: item.id, ...item.position })),
+      ...steers.map(entry => ({ node: entry.node, sequence: entry.sequence, part: -1, steer: true,
+        startedAt: steerByNode.get(entry.node).at,
+        steerKey: entry.node.dataset.anchorId || entry.node.dataset.blockId || String(entry.sequence) })),
+    ].sort((first, second) => first.sequence - second.sequence || first.part - second.part),
   });
   const firstGroup = round.tools.values().next().value?.group;
   if (firstGroup?.dataset.anchorId) {

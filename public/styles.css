@@ -34,7 +34,9 @@
   --conversation-max-width:var(--ds-composer-width);
   --composer-max-width:var(--ds-composer-width);
   --turn-gap:var(--ui-space-6);
-  --tool-row-height:30px;
+  /* T3-style flat work row: 24px line box (WCAG 2.5.8 minimum target),
+   * 16px glyph in a 24px slot, 13px muted label. */
+  --tool-row-height:24px;
 }
 
 html,body{height:100%}
@@ -415,17 +417,33 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 }
 .msg.user .msg-body>div+div{margin-top:8px}
 .msg.user .msg-body p{margin:0}
-/* Shared read-only actions; keyboard focus reveals the same bar as hover. */
-:is(#stream,#runtimeView) .message-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;min-height:26px;padding-top:2px;opacity:0;color:var(--ds-text-muted)}
-:is(#stream .msg.user,#runtimeView .rtc-history-message):is(:hover,:focus-within) .message-actions,
-:is(#stream,#runtimeView) .message-actions:has(.message-copy-feedback:not(:empty)){opacity:1}
+/* Shared read-only actions. The bar is in normal flow below the message, so
+ * showing it never overlaps the body or the next row, and a stable 24px slot
+ * means hover/focus cannot reflow the conversation. User bars align to the
+ * bubble's trailing edge; assistant bars stay on the reading edge. */
+:is(#stream,#runtimeView) .message-actions{
+  display:flex;align-items:center;justify-content:flex-start;gap:2px;
+  min-height:24px;margin-top:6px;padding:0;opacity:0;
+  color:var(--ds-text-muted);pointer-events:none;transition:opacity .12s;
+}
+:is(#stream .msg.user,#runtimeView .rtc-timeline-message[data-role="user"],#runtimeView .rtc-history-message[data-role="user"]) .message-actions{justify-content:flex-end}
+:is(#stream .msg,#runtimeView .rtc-timeline-message,#runtimeView .rtc-history-message,
+  #stream .ui2-runtime-thinking-wrap,#stream .ui2-runtime-plan,#stream .ui2-runtime-tools,
+  #stream .conversation-work-log,#stream .execution-turn,
+  #runtimeView .ui2-runtime-thinking-wrap,#runtimeView .ui2-runtime-plan,#runtimeView .ui2-runtime-tools,
+  #runtimeView .ui2-runtime-thinking,#runtimeView .conversation-work-log,#runtimeView .execution-turn):is(:hover,:focus-within) > .message-actions,
+:is(#stream,#runtimeView) .message-actions:has(.message-copy-feedback:not(:empty)){opacity:1;pointer-events:auto}
+/* 工作记录外层的统计入口跟随时间线阅读边，而不是缩进到折叠列表里。 */
+:is(#stream,#runtimeView) .conversation-work-log > .message-actions{margin-top:2px}
 :is(#stream,#runtimeView) .message-copy{display:grid;place-items:center;flex:none;width:24px;height:24px;padding:4px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--ds-text-muted);cursor:pointer}
 :is(#stream,#runtimeView) .message-copy:hover{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
 :is(#stream,#runtimeView) .message-copy:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
 :is(#stream,#runtimeView) .message-copy svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round}
 :is(#stream,#runtimeView) .message-copy-feedback{font-size:var(--text-xs)}
 @media(hover:none){:is(#stream,#runtimeView) .message-actions{opacity:1}}
-.msg.assistant{margin-bottom:18px}
+.msg.assistant{margin-bottom:var(--ui-space-3)}
+.msg.assistant>.msg-role{display:none} /* Identity is the article's accessible label. */
+.msg.assistant[data-conversation-work-kind] .msg-body{font-size:var(--text-sm-plus);line-height:var(--leading-body);color:var(--ds-text-secondary)}
 .msg.assistant .msg-body{color:var(--ds-text-primary);overflow-wrap:anywhere;min-width:0;font-size:var(--text-base);line-height:var(--leading-prose)}
 .msg.assistant .assistant-text+.assistant-text{margin-top:12px}
 .msg.assistant .assistant-text p{margin:0 0 13px}
@@ -499,13 +517,21 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
   border:solid var(--ui-on-primary);border-width:0 1.6px 1.6px 0;transform:rotate(45deg);
 }
 
-.think{margin:var(--ui-space-2) 0 var(--ui-space-3);color:var(--t3);font-size:12px;line-height:1.65;min-width:0}
-.think-head{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--t3);font:inherit;cursor:pointer;padding:2px 4px 2px 0;text-align:left}
-.think-head:hover{color:var(--t2)}
-.think-head:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:3px}
-.think-head svg{width:11px;height:11px;transition:transform .16s;fill:none;stroke:currentColor;}
-.think-head[aria-expanded=true] svg{transform:rotate(90deg)}
-.think-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0 5px;padding:2px 0 2px 12px;border-left:1px solid var(--line);color:var(--t2)}
+/* Reasoning is a flat work row, not a second card: brain glyph, one-line
+ * preview, trailing chevron. The canonical label and real state stay in the
+ * DOM for assistive technology. */
+.think{margin:0;color:var(--ds-text-secondary);font-size:var(--text-md);line-height:1.6;min-width:0}
+.think-head{display:flex;align-items:center;gap:6px;width:100%;min-height:var(--tool-row-height);border:0;background:transparent;color:var(--ds-text-secondary);font:inherit;font-size:var(--text-md);line-height:1.6;cursor:pointer;padding:0 2px;text-align:left;border-radius:4px}
+.think-head:hover{color:var(--ds-text-primary)}
+.think-head:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px;border-radius:4px}
+.think-icon{flex:0 0 24px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--ds-text-secondary)}
+.think-icon svg{width:16px;height:16px;transition:none}
+.think-label,.ui2-think-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.think-preview{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ds-text-secondary)}
+.think-chevron{flex:0 0 16px;width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--ds-text-secondary);opacity:.7}
+.think-chevron svg{width:12px;height:12px;transition:transform .16s;fill:none;stroke:currentColor}
+.think-head[aria-expanded=true] .think-chevron svg{transform:rotate(90deg)}
+.think-body{white-space:pre-wrap;overflow-wrap:anywhere;margin:2px 0 6px 30px;padding:2px 0 2px 2px;max-height:360px;overflow:auto;overscroll-behavior:contain;background:transparent;border-radius:0;color:var(--ds-text-secondary);font-size:var(--text-sm)}
 /* UI-2C：思考状态补充文字（A 侧 .think-head 的第二个 span）。
  * A 真实设置的 data-state 为 streaming / returned / complete / error / interrupted；
  * 只有错误与中断做强调，其余保持 .think 的弱化色 —— 不给不存在的状态着色。 */
@@ -515,68 +541,77 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 /* ============ Tool Timeline ============
  *
  * 定位是「嵌在对话流里的执行记录」，不是独立日志控制台：紧凑、无大卡片、
- * 无满屏边框。一条 = 图标 + 标题 + 关键参数 + 耗时（+ 结果行），
+ * 无满屏边框。一条 = 图标 + 标题 + 关键参数 + 状态 + 耗时，
  * 完整输出收在折叠区里。
  *
  * 状态靠 data-status 区分，不靠颜色本身 —— 图标形状（对勾 / 叉 / 虚线圈）
  * 在灰度下也能分辨。
  *
- * UI-2C：同一组连续调用收进一个 hairline 圆角容器（Claude 的分组观感），
- * 行与行之间 1px 分隔、不再用左侧竖线包住整列 —— 竖线在长输出展开时
- * 会把注意力拉到「缩进」而不是「这一组做了什么」。行内 hover 从圆角
- * 小药丸改成填满行宽，与容器圆角一致。 */
-.tl-group{display:flex;flex-direction:column;gap:0;margin:var(--ui-space-2) 0 var(--ui-space-4);min-width:0;
-  border:1px solid var(--line-soft);border-radius:var(--ui-radius-card);
-  padding:2px 3px 3px;background:transparent}
-.tl-group-head{font-size:var(--text-sm);line-height:var(--leading-normal);color:var(--t3);letter-spacing:.2px;padding:6px 9px 4px}
+ * Native batches keep their real message boundary. The shared work log owns
+ * presentation grouping, so neither the batch nor each row needs another card. */
+.tl-group{display:flex;flex-direction:column;gap:0;margin:0;min-width:0;
+  border:0;border-radius:0;padding:0;background:transparent}
+.tl-group.is-work-embedded{margin:0}
+.tl-group-head{font-size:var(--text-md);line-height:1.6;color:var(--ds-text-secondary);padding:0 2px}
 .tl-list{display:flex;flex-direction:column;gap:0;min-width:0}
-.tl-list>.tl-item+.tl-item{border-top:1px solid var(--line-soft)}
+.tl-list>.tl-item+.tl-item{border:0}
 
-.tl-item{display:flex;gap:8px;min-height:var(--tool-row-height);padding:4px 7px;border-radius:0;min-width:0;transition:background var(--ui-duration-snap) var(--ui-ease-out)}
-.tl-item:hover{background:var(--hover)}
-.tl-item.open{background:var(--ui-selected)}
+/* One flat line per tool: 16px kind glyph in a 24px slot, muted label +
+ * target, hover/focus-only duration, trailing chevron. */
+.tl-item{display:flex;align-items:flex-start;gap:6px;min-height:var(--tool-row-height);padding:0 2px;border-radius:4px;min-width:0}
+.tl-item:hover,.tl-item.open{background:transparent}
 
-.tl-dot{flex:0 0 14px;width:14px;height:14px;margin-top:2px;display:flex;align-items:center;justify-content:center;color:var(--t3)}
-.tl-dot svg{width:13px;height:13px;}
-.tl-item[data-status=running] .tl-dot{color:var(--run)}
-.tl-item[data-status=success] .tl-dot{color:var(--ok)}
+.tl-dot{flex:0 0 24px;width:24px;height:24px;margin-top:0;display:flex;align-items:center;justify-content:center;color:var(--ds-text-secondary)}
+.tl-dot svg{width:16px;height:16px;stroke-width:1.7}
+/* Outcome is carried by the glyph tint, the hidden status line and the row's
+ * data-status — not by a repeating green check/"已完成". */
+.tl-item[data-status=running] .tl-dot{color:var(--ds-text-secondary)}
+.tl-item[data-status=success] .tl-dot{color:var(--ds-text-secondary)}
 .tl-item[data-status=error] .tl-dot{color:var(--err)}
 .tl-item[data-status=incomplete] .tl-dot{color:var(--warn)}
-.tl-item[data-status=interrupted] .tl-dot,.tl-item[data-status=cancelled] .tl-dot,.tl-item[data-status=unknown] .tl-dot{color:var(--t2)}
+.tl-item[data-status=interrupted] .tl-dot,.tl-item[data-status=cancelled] .tl-dot,.tl-item[data-status=unknown] .tl-dot{color:var(--ds-text-secondary)}
 /* 运行中只做一个缓慢的明暗呼吸 —— 转圈之类会持续抢注意力 */
 .tl-item[data-status=running] .tl-dot svg{animation:tl-breathe 1.2s ease-in-out infinite}
 @keyframes tl-breathe{0%,100%{opacity:.3}50%{opacity:1}}
 
 .tl-body{flex:1;min-width:0}
-.tl-head{display:flex;align-items:baseline;gap:8px;min-width:0}
+.tl-head{display:flex;align-items:center;gap:6px;min-height:var(--tool-row-height);min-width:0;font-size:var(--text-md);line-height:1.6}
 .tl-item.has-more .tl-head{cursor:pointer}
-.tl-label{font-size:var(--text-sm);line-height:var(--leading-normal);color:var(--t1);flex:0 0 auto}
-.tl-status{font-size:var(--text-xs);line-height:var(--leading-normal);color:var(--t3);white-space:nowrap;flex:0 0 auto}
+/* Short action names never shrink: the argument/command takes the truncation
+ * budget. A genuinely long label is still capped and ellipsized at 45%. */
+.tl-label{font-size:inherit;line-height:inherit;color:var(--ds-text-secondary);flex:0 0 auto;max-inline-size:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .tl-item[data-status=error] .tl-status{color:var(--err)}
 .tl-item[data-status=incomplete] .tl-status{color:var(--warn)}
-.tl-arg{font-family:var(--mono);font-size:11.5px;color:var(--t3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tl-stat{flex:0 0 auto;font-family:var(--mono);font-size:11px;display:flex;gap:5px}
+.tl-arg{font-family:inherit;font-size:inherit;line-height:inherit;color:var(--ds-text-secondary);flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.92}
+.tl-stat{flex:0 0 auto;font-family:var(--font-mono);font-size:var(--text-xs);display:flex;gap:5px;opacity:0;transition:opacity .12s}
 .tl-stat .add{color:var(--ui-diff-add)}
 .tl-stat .del{color:var(--ui-diff-delete)}
-.tl-time{flex:0 0 auto;font-family:var(--mono);font-size:11px;color:var(--t3);min-width:40px;text-align:right}
+.tl-time{flex:0 0 auto;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--ds-text-secondary);text-align:right;opacity:0;transition:opacity .12s}
+.tl-item:hover :is(.tl-time,.tl-stat),.tl-item:focus-within :is(.tl-time,.tl-stat){opacity:.8}
+.tl-time:empty,.tl-stat:empty{display:none}
 
-.tl-result{font-family:var(--mono);font-size:11.5px;color:var(--t2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-result{font-family:var(--font-mono);font-size:var(--text-sm);color:var(--ds-text-secondary);margin:2px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .tl-item[data-status=error] .tl-result{color:var(--err)}
 .tl-item[data-status=incomplete] .tl-result{color:var(--warn)}
 
-.tl-acts{margin-left:auto;flex:0 0 auto}
-.tl-toggle{background:none;border:0;min-height:26px;padding:2px 5px;color:var(--t3);font-size:11px;cursor:pointer;font-family:var(--font);border-radius:5px}
-.tl-toggle:hover{color:var(--t1)}
-.tl-toggle:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.tl-acts{margin-left:auto;flex:0 0 auto;align-self:center}
+.tl-toggle{display:grid;place-items:center;background:none;border:0;width:20px;min-height:20px;padding:2px;color:var(--ds-text-secondary);cursor:pointer;border-radius:4px;opacity:.7}
+.tl-toggle svg{width:12px;height:12px;fill:none;stroke:currentColor;transition:transform .16s}
+.tl-toggle[aria-expanded="true"] svg{transform:rotate(90deg)}
+.tl-toggle-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.tl-toggle:hover{color:var(--ds-text-primary);background:var(--ds-bg-hover);opacity:1}
+.tl-toggle:focus-visible{outline:2px solid var(--ds-focus);outline-offset:0;opacity:1}
+.tl-detail-note{margin:4px 0;color:var(--ds-text-secondary);font-size:var(--text-sm)}
 
-.tl-more{margin-top:6px}
+.tl-more{margin:0 0 4px}
 .tl-sec{font-size:10.5px;color:var(--t3);letter-spacing:.4px;margin:7px 0 3px}
 /* 输出与详细参数：等宽、保留换行（pre）、横向滚动、限高内部滚动。
  * 几千行的 shell 输出绝不能把聊天记录撑满 —— 所以 max-height 是硬要求。 */
 .tl-out,.tl-args{
-  margin:0;font-family:var(--mono);font-size:11.5px;line-height:1.5;
-  color:var(--t2);background:var(--ui-code-surface);border:1px solid var(--line-soft);border-radius:7px;
-  padding:7px 9px;white-space:pre;overflow:auto;max-height:260px;
+  margin:0;font-family:var(--font-mono);font-size:var(--text-sm);line-height:var(--leading-body);
+  color:var(--ds-text-secondary);background:transparent;border:0;border-radius:0;
+  padding:2px 0;white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;overscroll-behavior:contain;max-height:260px;
 }
 .tl-args{color:var(--t2);max-height:180px}
 
@@ -642,7 +677,6 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
  * 对应 A 侧 tool-view.js / messages.js / message-meta.js 实际生成的节点：
  *  - button.tl-group-head.ui2-tool-summary  原生 button（aria-expanded/-controls/-describedby）
  *  - span.ui2-tool-state                    组级状态计数（role=status，单项组隐藏）
- *  - footer.ui2-msg-meta > span.ui2-msg-meta-item[data-kind]
  *  - .think[data-state] 里的 span.ui2-think-status
  * 规则刻意不依赖 .tl-*：A 的 DOM 挂在哪一层都能用。
  * A 的摘要按钮里**没有** chevron 元素，折叠图标由这里用 ::before 画、
@@ -667,18 +701,6 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 .tl-group-meta[hidden]{display:none}
 .tl-group-meta .ui2-tool-state{padding:0;flex:1 1 auto;min-width:0}
 .tl-group-time{flex:0 0 auto;font-family:var(--mono);font-size:var(--text-xs);line-height:var(--leading-normal);color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap}
-.ui2-msg-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:var(--t3);min-width:0}
-.ui2-msg-meta-summary{white-space:nowrap;font-variant-numeric:tabular-nums}
-.ui2-msg-meta-note{white-space:nowrap;color:var(--t3);font-size:11px}
-.ui2-msg-meta-details{display:inline-block;min-width:0}
-.ui2-msg-meta-details[open]{flex-basis:100%;width:100%}
-.ui2-msg-meta-details>summary{display:inline-block;cursor:pointer;color:var(--t3);font-size:11px;line-height:1.5;border-radius:3px}
-.ui2-msg-meta-details>summary::marker,.ui2-msg-meta-details>summary::-webkit-details-marker{display:none}
-.ui2-msg-meta-details>summary::before{content:"";display:inline-block;width:5px;height:5px;margin-right:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);vertical-align:middle}
-.ui2-msg-meta-details[open]>summary::before{transform:rotate(45deg)}
-.ui2-msg-meta-details>summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
-.ui2-msg-meta-details .ui2-msg-meta-item{display:inline-block;margin-right:10px}
-.ui2-msg-meta-item{white-space:nowrap;font-variant-numeric:tabular-nums}
 /* C 预留、A 未使用：A 的图标是内联 svg，摘要按钮也不含 chevron 元素。
  * 作为兼容扩展保留，不代表 A 已经采用（见 UI-2C-acceptance.md 第 3 节）。 */
 .ui2-chev{width:12px;height:12px;flex:0 0 auto;fill:none;stroke:currentColor;
@@ -4390,23 +4412,26 @@ body.rp-resizing{cursor:col-resize;user-select:none}
  * 对应 B 侧 runtime-conversation.js 实际生成的节点：
  *  - <details class="ui2-runtime-thinking">（hidden 时整块消失）
  *      <summary class="ui2-runtime-thinking-head"> <pre class="ui2-runtime-thinking-body">
- *  - <p class="ui2-runtime-usage">（每轮用量，[hidden] 由全局规则覆盖）
  *  - <div class="rtc-state ui2-runtime-tools"> 内每项 <span class="ui2-runtime-tool" data-state>
  * 工具项之间是**纯空白文本节点**，所以这里用 flex 把它们收成每项一行，
  * 空白节点按规范不生成 flex item，自动消失。 */
-.ui2-runtime-thinking{margin:2px 0 6px;color:var(--t3);font-size:12px;line-height:1.65;min-width:0}
-.ui2-runtime-thinking-head{cursor:pointer;color:var(--t3);padding:2px 0;font-size:12px}
-.ui2-runtime-thinking-head:hover{color:var(--t2)}
-.ui2-runtime-thinking-head:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:3px}
+.ui2-runtime-thinking{margin:0;color:var(--ds-text-secondary);font-size:var(--text-md);line-height:1.6;min-width:0}
+.ui2-runtime-thinking-head{display:flex;align-items:center;gap:6px;width:100%;cursor:pointer;color:var(--ds-text-secondary);min-height:var(--tool-row-height);padding:0 2px;font-size:var(--text-md);line-height:1.6;box-sizing:border-box;list-style:none;border-radius:4px}
+.ui2-runtime-thinking-head::-webkit-details-marker{display:none}
+.ui2-runtime-thinking-head:hover{color:var(--ds-text-primary)}
+.ui2-runtime-thinking-head:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px;border-radius:4px}
+.ui2-runtime-thinking-preview{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ds-text-secondary)}
+.ui2-runtime-thinking-state{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.ui2-runtime-thinking[open] .think-chevron svg{transform:rotate(90deg)}
+.ui2-runtime-thinking[data-state=error] .think-icon{color:var(--err)}
+.ui2-runtime-thinking[data-state=interrupted] .think-icon{color:var(--warn)}
 /* 必须 pre-wrap + overflow-wrap:anywhere：B 用的是 <pre>，默认 white-space:pre
  * 会让长思考文本把中央列撑出横向滚动条。 */
 .ui2-runtime-thinking-body{
   white-space:pre-wrap;overflow-wrap:anywhere;
-  margin:6px 0 0 5px;padding:2px 0 2px 12px;border-left:1px solid var(--line);
-  color:var(--t2);font-family:inherit;font-size:12px;line-height:1.65;
+  margin:2px 0 6px 30px;padding:2px 0 2px 2px;max-height:360px;overflow:auto;overscroll-behavior:contain;border:0;border-radius:0;background:transparent;
+  color:var(--ds-text-secondary);font-family:inherit;font-size:var(--text-sm);line-height:var(--leading-body);
 }
-.ui2-runtime-usage{margin:0;font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere}
-.ui2-runtime-usage .ui2-msg-meta{margin-top:0}
 .ui2-runtime-tools{display:flex;flex-direction:column;gap:1px;min-width:0}
 .ui2-runtime-tool{font-size:12px;line-height:1.5;color:var(--t2);overflow-wrap:anywhere}
 /* B 真实使用的工具状态只有 running / done / error 三种，只给这三种着色 */
@@ -4427,7 +4452,7 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .rtc-history-empty{color:var(--t3);font-style:italic}
 
 /* ---------- UI-2C 预留：未使用的兼容扩展 ----------
- * B 的 DOM 实际用的是 .ui2-runtime-usage / -tools / -tool，**没有**使用下面两个类。
+ * B 的 DOM 实际用的是 .ui2-runtime-tools / -tool，**没有**使用下面两个类。
  * 保留为兼容扩展（未知 data-state 回落 t2），不代表 B 已经适配。 */
 .ui2-runtime-meta{font-size:11.5px;color:var(--t3);line-height:1.55;overflow-wrap:anywhere;min-width:0}
 .ui2-runtime-status{font-size:12px;color:var(--t2);line-height:1.5;overflow-wrap:anywhere;min-width:0}
@@ -4499,3 +4524,83 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .candidate-file { border-top: 1px solid var(--border); padding: 8px 0; min-width: 0; }
 .candidate-file summary { cursor: pointer; overflow-wrap: anywhere; font-size: 12px; }
 .candidate-diff { max-width: 100%; overflow: auto; max-height: 440px; }
+
+/* 设计系统 Tooltip：简短、固定定位、不参与消息排版。 */
+.ui-tooltip {
+  position:fixed;
+  z-index:80;
+  max-inline-size:min(240px,calc(100vw - 16px));
+  padding:4px 8px;
+  border:1px solid var(--ds-border-default);
+  border-radius:var(--radius-sm);
+  background:var(--ds-bg-elevated-opaque);
+  color:var(--ds-text-secondary);
+  box-shadow:var(--ui-shadow-popover);
+  font-size:var(--text-xs);
+  line-height:var(--leading-compact);
+  pointer-events:none;
+  white-space:nowrap;
+}
+.ui-tooltip[hidden]{display:none}
+
+/* 用量浮层：只承载真实 Pi 字段；固定定位，开关不改变消息高度或滚动位置。 */
+.ui-usage-pop {
+  position:fixed;
+  z-index:79;
+  inline-size:min(340px,calc(100vw - 16px));
+  max-block-size:min(420px,calc(100vh - 16px));
+  overflow:auto;
+  overscroll-behavior:contain;
+  padding:10px 12px;
+  border:1px solid var(--ds-border-default);
+  border-radius:var(--radius-md);
+  background:var(--ds-bg-elevated-opaque);
+  color:var(--ds-text-primary);
+  box-shadow:var(--ui-shadow-popover);
+  font-size:var(--text-xs);
+  line-height:var(--leading-compact);
+}
+.ui-usage-pop[hidden]{display:none}
+.usage-pop-head {
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  margin-block-end:6px;
+  color:var(--ds-text-secondary);
+}
+.usage-pop-total { color:var(--ds-text-primary); font-size:var(--text-sm); font-weight:500; font-variant-numeric:tabular-nums; }
+.usage-pop-meta { margin-block:2px 6px; color:var(--ds-text-muted); font-variant-numeric:tabular-nums; }
+.usage-pop-grid {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:3px 16px;
+  font-variant-numeric:tabular-nums;
+}
+.usage-pop-term { color:var(--ds-text-secondary); min-inline-size:0; }
+.usage-pop-value { color:var(--ds-text-primary); font-weight:400; text-align:end; }
+.usage-pop-note { margin-block-start:6px; color:var(--ds-text-muted); }
+.usage-pop-response {
+  margin-block-start:8px;
+  padding-block-start:8px;
+  border-block-start:1px solid var(--ds-border-subtle);
+}
+.usage-pop-section-title {
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  margin-block-end:4px;
+  color:var(--ds-text-secondary);
+}
+.usage-pop-model { min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ds-text-muted); }
+.usage-pop-model-line { overflow-wrap:anywhere; }
+@media (prefers-reduced-motion:reduce){ .ui-tooltip,.ui-usage-pop{scroll-behavior:auto} }
+
+/* 中间进展与最终回答使用同一阅读字号（T3 text-sm）；层级靠次级颜色而非缩小字号，
+ * 否则工作记录里的说明文字会比工具行还小，破坏同一时间线的密度。 */
+.msg.assistant[data-conversation-work-kind] .msg-body {
+  font-size: var(--text-base);
+  line-height: var(--leading-prose);
+  color: var(--ds-text-secondary);
+}

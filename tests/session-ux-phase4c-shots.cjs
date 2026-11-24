@@ -346,7 +346,7 @@ async function main() {
             groups: document.querySelectorAll('#stream .tl-group').length,
             subagentCards: document.querySelectorAll('#stream .tl-subagent').length,
             thinking: document.querySelectorAll('#stream .think').length,
-            usage: document.querySelectorAll('#stream .ui2-msg-meta').length,
+            usage: document.querySelectorAll('#stream .message-usage').length,
           };
         },
         expandClassic() {
@@ -382,7 +382,7 @@ async function main() {
           const planItem = plan?.querySelector('.plan-item');
           const subagentLine = document.querySelector('#stream .tl-subagent-line');
           const subagentList = document.querySelector('#stream .tl-subagents');
-          const usage = document.querySelector('#stream .ui2-msg-meta');
+          const usage = document.querySelector('#stream .message-usage');
           const composer = document.getElementById('chatComposer');
           const threadSpacing = spacer(thread);
           const netWidth = thread ? Math.round((thread.clientWidth - threadSpacing.paddingLeft - threadSpacing.paddingRight) * 100) / 100 : null;
@@ -509,7 +509,7 @@ async function main() {
             planCards: document.querySelectorAll('#runtimeView .plan-card').length,
             groups: document.querySelectorAll('#runtimeView .tl-group').length,
             thinking: document.querySelectorAll('#runtimeView .ui2-runtime-thinking').length,
-            usage: document.querySelectorAll('#runtimeView .ui2-runtime-usage .ui2-msg-meta').length,
+            usage: document.querySelectorAll('#runtimeView .message-usage').length,
           };
         },
         measureRuntime() {
@@ -524,7 +524,7 @@ async function main() {
           const status = group?.querySelector('.tl-status');
           const message = document.querySelector('#runtimeView .rtc-timeline-message');
           const userText = document.querySelector('#runtimeView .rtc-history-user-text');
-          const usage = document.querySelector('#runtimeView .ui2-runtime-usage .ui2-msg-meta');
+          const usage = document.querySelector('#runtimeView .message-usage');
           const composer = document.querySelector('#runtimeView .rtc-composer');
           const outputSpacing = spacer(output);
           const netWidth = output ? Math.round((output.clientWidth - outputSpacing.paddingLeft - outputSpacing.paddingRight) * 100) / 100 : null;

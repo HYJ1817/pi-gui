@@ -331,6 +331,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     '新回合的新计划是第二张卡，不是覆盖旧卡');
 
   const { createRuntimeConversation } = await import(url('runtime-conversation.js'));
+  const { nativeConversationChildren } = await import(url('conversation-work-log.js'));
   const host = d.createElement('div'); host.id = 'agent-plan-runtime'; d.body.appendChild(host);
   const view = createRuntimeConversation({ host });
   view.show('A'); await tick();
@@ -417,31 +418,36 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   startTool('t1', 'bash'); startTool('t2', 'read');
   toolsView.show('T'); await tick();
   const toolGroup = () => toolsHost.querySelector('.ui2-runtime-tools .tl-group');
+  const toolWork = () => toolGroup().closest('[data-conversation-work]');
+  const toolHead = () => toolWork().querySelector('.conversation-work-head');
+  const toolList = () => toolWork().querySelector('.conversation-work-list');
   const toolRows = () => [...toolsHost.querySelectorAll('.ui2-runtime-tool')];
   deep(toolRows().slice(0, 2).map(node => node.dataset.toolName), ['bash', 'read'], '组内工具保持真实调用顺序');
   equal(toolGroup().querySelector('.tl-group-head').textContent, '工具调用 · 2 次', '工具组标题显示真实次数');
   equal(toolGroup().querySelector('.ui2-tool-state').textContent, '运行中 2', '运行中的组摘要来自真实状态');
-  equal(toolGroup().querySelector('.tl-list').hidden, false, '运行中的多项工具组默认展开');
-  equal(toolGroup().querySelector('.tl-group-head').getAttribute('aria-expanded'), 'true', '运行中展开时 aria-expanded=true');
+  equal(toolList().hidden, false, '运行中的工作记录默认展开');
+  equal(toolHead().getAttribute('aria-expanded'), 'true', '运行中展开时 aria-expanded=true');
   equal(toolGroup().querySelectorAll('.ui2-runtime-tool[data-tool-name="gui_plan"]').length, 0, 'gui_plan 不进入工具行');
   endTool('t2', 'read', false, 1200); endTool('t1', 'bash', true, 300);
   await tick();
   equal(toolGroup().querySelector('.ui2-tool-state').textContent, '失败 1 · 成功 1', '组摘要区分失败与成功，不靠工具调用数猜进度');
-  equal(toolGroup().querySelector('.tl-list').hidden, true, '全部结束后未手动操作的多项组默认折叠');
+  equal(toolList().hidden, false, '有失败的工作记录不自动隐藏错误');
 
-  toolGroup().querySelector('.tl-group-head').click();
+  toolHead().click();
   await tick();
-  equal(toolGroup().querySelector('.tl-list').hidden, false, '点击组标题展开真实工具明细');
-  equal(toolGroup().querySelector('.tl-group-head').getAttribute('aria-expanded'), 'true', '展开后 aria-expanded=true');
+  equal(toolList().hidden, true, '用户仍可显式收起工作记录');
+  toolHead().click();
+  await tick();
+  equal(toolHead().getAttribute('aria-expanded'), 'true', '重新展开后 aria-expanded=true');
   startTool('t3', 'write');
   await tick();
   equal(toolGroup().querySelector('.tl-group-head').textContent, '工具调用 · 3 次', '新工具到达后组标题按真实次数更新');
-  equal(toolGroup().querySelector('.tl-list').hidden, false, '新工具到达不打断用户已展开的组');
+  equal(toolList().hidden, false, '新工具到达不打断用户已展开的工作记录');
   equal(toolRows().at(-1).querySelector('.tl-more').hidden, true, '单条工具详情默认折叠（不伪造参数）');
   /* 正文在工具之后到达时另起一段，不能并回更早的位置而改变真实顺序。 */
   frame('T', ++toolSeq, { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '阶段结论' } });
   await tick();
-  const outputNodes = [...toolsHost.querySelectorAll('.rtc-output > *')];
+  const outputNodes = nativeConversationChildren(toolsHost.querySelector('.rtc-output')).filter(node => node.nodeType === 1);
   const kindOf = node => node.dataset?.role || (node.classList.contains('ui2-runtime-thinking') ? 'thinking'
     : node.classList.contains('ui2-runtime-tools') ? 'tools' : node.className);
   deep(outputNodes.map(kindOf), ['user', 'thinking', 'tools', 'assistant'],
@@ -472,7 +478,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   const uGroup = toolsHost.querySelector('.ui2-runtime-tools .tl-group');
   equal(uGroup.querySelector('.tl-list').hidden, false, '切到另一会话时该会话自己的运行中组按默认规则展开');
   toolsView.show('T'); await tick();
-  equal(toolGroup().querySelector('.tl-list').hidden, false, '切回原会话恢复用户自己的展开状态');
+  equal(toolList().hidden, false, '切回原会话恢复用户自己的工作记录展开状态');
   toolsView.dispose();
 
   console.log('Runtime message_end 权威顺序');
@@ -484,7 +490,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     endSeqs.set(id, seq);
     return frame(id, seq, event);
   };
-  const endKinds = () => [...endHost.querySelectorAll('.rtc-output > *')].map(node => node.dataset?.role
+  const endKinds = () => nativeConversationChildren(endHost.querySelector('.rtc-output')).filter(node => node.nodeType === 1).map(node => node.dataset?.role
     || (node.classList.contains('ui2-runtime-thinking') ? 'thinking'
       : node.classList.contains('ui2-runtime-tools') ? 'tools'
         : node.classList.contains('ui2-runtime-plan') ? 'plan' : node.className));
@@ -885,7 +891,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   historyView.show('H'); await tick();
   [...historyHost.querySelectorAll('button')].find(button => button.textContent === '打开历史')?.click();
   await tick(20);
-  const historyKinds = [...historyHost.querySelectorAll('.rtc-output > *')].map(node => node.dataset?.role
+  const historyKinds = nativeConversationChildren(historyHost.querySelector('.rtc-output')).filter(node => node.nodeType === 1).map(node => node.dataset?.role
     || (node.classList.contains('ui2-runtime-thinking') ? 'thinking'
       : node.classList.contains('ui2-runtime-tools') ? 'tools'
         : node.classList.contains('ui2-runtime-plan') ? 'plan' : node.className));
@@ -979,6 +985,24 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     .every(status => new RegExp(`\\.plan-item\\[data-status="${status}"\\]`).test(css)));
   ok('reduced-motion 下关掉呼吸与过渡', /prefers-reduced-motion:\s*reduce[\s\S]*?\.plan-pulse-dot\s*\{\s*animation:\s*none/.test(css)
     && /prefers-reduced-motion:\s*reduce[\s\S]*?\.scroll-bottom[^{]*\{\s*transition:\s*none/.test(css));
+  const baseCss = fs.readFileSync(path.join(PUB, 'styles.css'), 'utf8');
+  ok('工具动作名不收缩，长参数吸收截断', /\.tl-label\{[^}]*flex:0 0 auto[^}]*max-inline-size:45%[^}]*text-overflow:ellipsis/s.test(baseCss)
+    && /\.tl-arg\{[^}]*flex:1 1 0[^}]*min-width:0[^}]*text-overflow:ellipsis/s.test(baseCss));
+  ok('助手操作栏在正常流内，悬停/聚焦才显现，且不用负偏移',
+    /:is\(#stream,#runtimeView\) \.message-actions\{[^}]*display:flex[^}]*min-height:24px[^}]*margin-top:6px[^}]*opacity:0/s.test(baseCss)
+    && /:is\(:hover,:focus-within\)[\s\S]{0,200}\.message-actions,[\s\S]{0,120}opacity:1;pointer-events:auto/s.test(baseCss)
+    && !/\.message-actions\{[^}]*(?:margin-top|top):\s*-/s.test(baseCss));
+  ok('用量弹层固定定位、内部滚动，打开不改变消息高度',
+    /\.ui-usage-pop\s*\{[^}]*position:\s*fixed[^}]*max-block-size:[^}]*overflow:\s*auto/s.test(baseCss));
+  ok('用量字段等宽数字并保留逐响应分区',
+    /\.usage-pop-grid\s*\{[^}]*grid-template-columns:[^}]*font-variant-numeric:\s*tabular-nums/s.test(baseCss)
+    && /\.usage-pop-response\s*\{[^}]*border-block-start/s.test(baseCss));
+  ok('折叠头图标/箭头固定，标题与摘要按主次分配', /\.conversation-work-icon,[\s\S]*?flex:\s*0 0 24px/.test(css)
+    && /\.conversation-work-chevron,[\s\S]*?flex:\s*0 0 16px/.test(css)
+    && /\.conversation-work-title,\s*\.execution-activity-group > \.execution-head > \.execution-head-title \{\s*flex:\s*1 1 auto/.test(css));
+  ok('工作行动作名不让位给参数，参数吸收剩余宽度',
+    /\.execution-activity-item > \.execution-head > \.execution-head-title \{[^}]*flex:\s*0 0 auto[^}]*max-inline-size:\s*45%/s.test(css)
+    && /\.execution-activity-item > \.execution-head > \.execution-activity-facts \{[^}]*flex:\s*1 1 0[^}]*min-inline-size:\s*0/s.test(css));
   const html = fs.readFileSync(path.join(PUB, 'index.html'), 'utf8');
   ok('新样式在 thinking-dots 之后加载', html.indexOf('href="/agent-execution.css"') > html.indexOf('href="/thinking-dots.css"'));
 

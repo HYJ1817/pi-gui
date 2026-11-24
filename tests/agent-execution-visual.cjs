@@ -558,15 +558,17 @@ if (!process.versions.electron) {
     await read(`document.documentElement.dataset.theme = 'dark'`);
     await sleep(200);
     await shot('05-classic-dark');
-    await check('深色主题下任务列表文字与状态仍可读', async () => {
+    await check('深色主题下任务列表文字与状态仍可读，且不再套独立卡片', async () => {
       const f = await read(`(() => {
         const card = document.querySelector('.plan-card');
         const row = card.querySelector('.plan-item[data-status="in_progress"]');
         return { color: getComputedStyle(row).color, bg: getComputedStyle(card).backgroundColor,
+          pageBg: getComputedStyle(document.body).backgroundColor,
           pulse: getComputedStyle(row.querySelector('.plan-pulse-dot')).animationName };
       })()`);
       must(f.color && f.color !== 'rgba(0, 0, 0, 0)', '深色下任务文字不可见');
-      must(f.bg && f.bg !== 'rgba(0, 0, 0, 0)', '深色下任务卡没有背景');
+      must(f.bg === 'rgba(0, 0, 0, 0)', '任务列表又套回了独立卡片背景');
+      must(f.pageBg && f.pageBg !== 'rgba(0, 0, 0, 0)', '任务列表所在阅读面没有背景');
       return f;
     });
 
@@ -635,36 +637,41 @@ if (!process.versions.electron) {
       must(f.thinking === false && f.thinkingText.includes('A 会话'), 'Runtime 思考内容缺失');
       must(f.tools.join(',') === 'read,bash', 'Runtime 工具顺序/身份不是真实 read,bash');
       must(f.labels.join(',') === '读取文件,执行命令', 'Runtime 工具没有使用可读语义名');
-      must(f.order.join(',') === 'thinking,plan,tools,assistant', 'Runtime 时间线没有按真实事件顺序排列');
+      must(f.order.join(',') === 'thinking,plan,conversation-work-log,assistant', 'Runtime 时间线没有按真实事件顺序排列：' + f.order.join(','));
       return f;
     });
 
-    await check('Runtime 工具组默认折叠，标题显示真实次数与失败摘要', async () => {
+    await check('Runtime 故障工作记录默认展开，仍保留真实次数与失败摘要', async () => {
       const f = await read(`(() => {
+        const work = document.querySelector('.conversation-work-log');
         const group = document.querySelector('.ui2-runtime-tools .tl-group');
-        return { head: group.querySelector('.tl-group-head').textContent,
-          state: group.querySelector('.ui2-tool-state').textContent,
-          hidden: group.querySelector('.tl-list').hidden,
-          expanded: group.querySelector('.tl-group-head').getAttribute('aria-expanded') };
+        return { summary: work.querySelector('.conversation-work-summary').textContent,
+          state: work.querySelector('.conversation-work-state').textContent,
+          expanded: work.querySelector('.conversation-work-head').getAttribute('aria-expanded'),
+          hidden: work.querySelector('.conversation-work-list').hidden,
+          head: group.querySelector('.tl-group-head').textContent,
+          groupState: group.querySelector('.ui2-tool-state').textContent };
       })()`);
+      must(f.summary.includes('读取') && f.summary.includes('命令'), 'Runtime 工作摘要没有真实动作');
+      must(f.state.includes('失败 1'), 'Runtime 工作摘要没有真实失败数');
+      must(f.expanded === 'true' && f.hidden === false, '含失败的 Runtime 工作记录没有默认展开');
       must(f.head === '工具调用 · 2 次', 'Runtime 工具组标题不是「工具调用 · 2 次」');
-      must(f.state.includes('失败 1') && f.state.includes('成功 1'), 'Runtime 组摘要没有真实失败/成功数');
-      must(f.hidden === true && f.expanded === 'false', 'Runtime 工具组没有默认折叠');
+      must(f.groupState.includes('失败 1') && f.groupState.includes('成功 1'), 'Runtime 组摘要没有真实失败/成功数');
       return f;
     });
 
-    await bringRuntimeIntoView('.ui2-runtime-tools .tl-group-head');
-    await click('.ui2-runtime-tools .tl-group-head');
+    await bringRuntimeIntoView('.conversation-work-head');
     await read(`__frame('A', { type: 'tool_execution_start', toolCallId: 'a-grep', toolName: 'grep' })`);
     await sleep(200);
-    await check('Runtime 展开后，新工具到达不打断展开', async () => {
+    await check('Runtime 工作记录展开后，新工具到达不打断展开', async () => {
       const f = await read(`(() => {
+        const work = document.querySelector('.conversation-work-log');
         const group = document.querySelector('.ui2-runtime-tools .tl-group');
-        return { hidden: group.querySelector('.tl-list').hidden,
+        return { hidden: work.querySelector('.conversation-work-list').hidden,
           head: group.querySelector('.tl-group-head').textContent,
           rows: group.querySelectorAll('.tl-item').length };
       })()`);
-      must(f.hidden === false, '新工具到达把用户展开的组收回了');
+      must(f.hidden === false, '新工具到达把用户正在看的工作记录收回了');
       must(f.head === '工具调用 · 3 次' && f.rows === 3, '新工具没有按真实次数进入组');
       return f;
     });
@@ -840,21 +847,27 @@ if (!process.versions.electron) {
       must(f.text.includes('已完成') && f.text.includes('1 次工具失败'), '终态没有显示真实工具失败数');
       return f;
     });
-    await bringIntoView('.ui2-msg-meta');
-    await shot('14-phase1-classic-token-summary-dark');
-    await check('阶段 1：Token 默认简洁摘要，完整字段可展开', async () => {
+    await bringIntoView('.msg.assistant');
+    await hover('.msg.assistant');
+    await shot('14-phase1-classic-usage-action-dark');
+    await click('.message-usage');
+    await shot('15-phase1-classic-usage-popover-dark');
+    await check('阶段 1：用量收进操作栏，Popover 展示真实字段', async () => {
       const f = await read(`(() => {
-        const meta = document.querySelector('.ui2-msg-meta');
-        const details = meta?.querySelector('details');
-        return { summary: meta?.querySelector('.ui2-msg-meta-summary')?.textContent || '',
-          open: details?.open, items: details?.querySelectorAll('.ui2-msg-meta-item').length || 0 };
+        const pop = document.querySelector('#messageUsagePopover');
+        const values = pop ? [...pop.querySelectorAll('.usage-pop-grid .usage-pop-value')].map(n => n.textContent) : [];
+        return { hidden: pop?.hidden !== false, text: pop?.textContent || '', values,
+          sections: pop?.querySelectorAll('.usage-pop-response').length || 0,
+          oldEntry: document.querySelectorAll('.ui2-msg-meta, .ui2-runtime-usage').length };
       })()`);
-      must(f.summary.includes('Token 1,540') && f.summary.includes('思考 120'), '摘要不是真实总量/思考：' + f.summary);
-      must(f.open === false && f.items === 5, '完整字段不是默认收起且仍可达');
+      must(f.hidden === false, '用量 Popover 没有打开');
+      must(f.text.includes('Token 1,540') && f.values.includes('120 Token'), '用量没显示真实总量/推理：' + f.text);
+      must(f.values.includes('1,200 Token') && f.values.includes('800 Token'), '缺输入或缓存读取');
+      must(f.oldEntry === 0, '旧的 Token 页脚/明细入口仍然存在');
       return f;
     });
-    await click('.ui2-msg-meta-details > summary');
-    await shot('15-phase1-classic-token-details-dark');
+    await click('.message-usage');
+    await moveAway();
     await click('.tl-group-head');
     await bringIntoView('.tl-group');
     await shot('16-phase1-classic-tools-expanded-dark');
@@ -872,19 +885,27 @@ if (!process.versions.electron) {
     });
     await read(`document.documentElement.dataset.theme = 'light'`);
     await sleep(220);
-    await bringIntoView('.ui2-msg-meta');
-    await shot('17-phase1-classic-token-summary-light');
+    await bringIntoView('.msg.assistant');
+    await hover('.msg.assistant');
+    await shot('17-phase1-classic-usage-action-light');
+    await hover('.message-usage');
+    await click('.message-usage');
+    await shot('17b-phase1-classic-usage-popover-light');
+    await click('.message-usage');
+    await moveAway();
     await bringIntoView('.turn-outcome');
     await shot('18-phase1-classic-turn-outcome-light');
     win.setContentSize(700, 600);
     await sleep(260);
     await read(`document.documentElement.dataset.theme = 'dark'`);
     await sleep(180);
-    await bringIntoView('.ui2-msg-meta');
+    await bringIntoView('.msg.assistant');
+    await hover('.msg.assistant');
     await shot('19-phase1-classic-narrow-700-dark');
     await read(`document.documentElement.dataset.theme = 'light'`);
     await sleep(180);
-    await bringIntoView('.ui2-msg-meta');
+    await hover('.message-usage');
+    await click('.message-usage');
     await shot('20-phase1-classic-narrow-700-light');
 
     /* 重试摘要：错误块撤掉后仍能看到失败原因。 */

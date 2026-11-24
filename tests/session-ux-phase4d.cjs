@@ -446,22 +446,37 @@ async function pageChecks() {
     await painted();
     const closed = { expanded: thinkHead.getAttribute('aria-expanded'), hidden: thinkBody.hidden };
 
-    const group = [...stream.querySelectorAll('.tl-group')].find(node => node.querySelector('.tl-group-head:not([hidden])'));
-    const head = group.querySelector('.tl-group-head');
-    const list = group.querySelector('.tl-list');
+    // 工作记录接管组合展示；原生批次头已隐藏，不能拿隐藏按钮当用户入口。
+    // 选成功且无显式选择的记录，继续验证默认收起及真实工具详情两层契约。
+    const group = [...stream.querySelectorAll('.conversation-work-log[data-status="recorded"]')]
+      .find(node => node.querySelector('.tl-item:not(.tl-subagent)'));
+    const head = group.querySelector('.conversation-work-head');
+    const list = group.querySelector('.conversation-work-list');
     const groupBefore = head.getAttribute('aria-expanded');
     head.click();
     await painted();
-    const groupClosed = { expanded: head.getAttribute('aria-expanded'), hidden: list.hidden };
+    const groupOpen = { expanded: head.getAttribute('aria-expanded'), hidden: list.hidden };
+    const tool = group.querySelector('.tl-item:not(.tl-subagent)');
+    const toggle = tool.querySelector('.tl-toggle');
+    const detail = tool.querySelector('.tl-more');
+    toggle.click();
+    await painted();
+    const detailOpen = { expanded: toggle.getAttribute('aria-expanded'), hidden: detail.hidden,
+      resultRetained: detail.textContent.includes('result') };
+    toggle.click();
+    await painted();
+    const detailClosed = { expanded: toggle.getAttribute('aria-expanded'), hidden: detail.hidden };
     head.click();
     await painted();
-    const groupOpen = { expanded: head.getAttribute('aria-expanded'), hidden: list.hidden };
+    const groupClosed = { expanded: head.getAttribute('aria-expanded'), hidden: list.hidden };
     return {
       ok: before === 'false' && open.expanded === 'true' && open.hidden === false &&
         closed.expanded === 'false' && closed.hidden === true &&
-        groupBefore === 'false' && groupClosed.expanded === 'true' && groupClosed.hidden === false &&
-        groupOpen.expanded === 'false' && groupOpen.hidden === true,
-      before, open, closed, groupBefore, groupClosed, groupOpen,
+        groupBefore === 'false' && groupOpen.expanded === 'true' && groupOpen.hidden === false &&
+        groupClosed.expanded === 'false' && groupClosed.hidden === true &&
+        detailOpen.expanded === 'true' && detailOpen.hidden === false && detailOpen.resultRetained &&
+        detailClosed.expanded === 'false' && detailClosed.hidden === true,
+      before, open, closed, groupBefore, groupOpen, groupClosed, detailOpen, detailClosed,
     };
   });
 

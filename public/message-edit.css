@@ -77,10 +77,8 @@
   gap: 8px;
 }
 
-/* 消息动作条：编辑 / 重新生成与复制共用 24px 图标按钮。 */
-:is(#stream .msg.assistant, #runtimeView .rtc-history-message, #runtimeView .rtc-timeline-message):is(:hover,:focus-within) .message-actions {
-  opacity: 1;
-}
+/* 消息动作按钮：编辑 / 重新生成与复制共用 24px 图标按钮；动作条的显隐由
+ * styles.css 统一负责，避免出现“看得见但点不到”的第二套 reveal 规则。 */
 :is(#stream,#runtimeView) .message-action-btn {
   display: grid;
   place-items: center;
