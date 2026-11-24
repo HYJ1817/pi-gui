@@ -48,12 +48,29 @@
 | 2 | **授权→外部启动之间的 TOCTOU**：后端授权后到 `spawn`/`shell.openPath` 前文件被替换/授权被撤销仍会拉起 | `electron/editor-settings.cjs` 新增 `launchAuthorized`：外部授权再经 `confirmStillAuthorized` 二次确认 + `recheckLaunchTarget`（lstat 普通文件/非符号链接 + dev/ino/size/mtime/ctime 对 identity + realpath 对 absolutePath）三道过才启动；响应带文件 `identity`。OS 层最后窗口如实披露，不宣称消除。 |
 | 3 | **「系统默认程序打开」是黑名单扩展名**：可执行/脚本/快捷方式靠枚举拒，漏伪装/无扩展名/内容伪装 | 新增 `server/open-policy.js` 白名单优先：放行文档/图片/媒体/压缩包；无扩展名 `unknown_type`、白名单外 `unsafe_type`、白名单内但文件头可执行（MZ/PE、ELF、Mach-O、`#!`、Java class、.lnk，4KiB 有界）`executable_header:*`，全 415；不依赖已装软件。编辑器/查看器动作不受影响。`server/files.js` 两处 `action==='open'` 都走 `evaluateSystemOpen`。 |
 
-测试新增「修复前失败、修复后通过」用例：external-grants +6（成员增删保留/
-删除重建逐出/顶替/junction/恢复丢身份/读中替换/重授权不复用旧对象）、
-file-links-backend +2（伪装+双扩展+无扩展名 415、替换目录 403+evict 事件）、
-editor-settings +2（授权后替换拒启动、授权后撤销拒启动）、external-files
-fixture 带 dirIdentity。回归：file-links 全链、smoke/electron-guard/
-server-security/modules/files-terminal/files-terminal-ui 无红。
+### 独立安全复审处置（SWE-2，thinking high）
+
+| 级别 | 发现 | 处置 |
+| --- | --- | --- |
+| 阻断 | `.svg` 在白名单：顶层浏览器文档执行内嵌 `<script>`/`onload`，是「打开→执行」的干净通道 | 从白名单移除 `.svg`（`unsafe_type`）；内部预览走受控 `externalAsset`+CSP 不受影响 |
+| 确认 | `.xsl`/`.xsd`：`xml-stylesheet`+XSLT 是文档级执行面（`document()` 读本地文件、旧 MSXML `msxsl:script` 跑 JScript） | 移除 `.xsl`/`.xsd`；`.xml` 保留（本身是数据），stylesheet 面记为残余 |
+| 确认 | `.eps`：PostScript 是可执行语言，Ghostscript 系查看器会跑 | 移除 `.eps` |
+| 确认 | `sameFileIdentity` 丢了 `ctimeMs`：POSIX 上「改写+`utimes` 回拨 mtime」能骗过文件身份，是回归 | `ctimeMs` 加回 `sameFileIdentity`（POSIX 抓 inode change；Windows ctime≈birthtime 多比无害） |
+| 确认（取舍提示） | `.doc`/`.xls`/`.ppt`（97-2003）可带 VBA；`.p12`/`.pfx` 是证书导入向导 | 全部移除；`.docx/.xlsx/.pptx` 保留（宏容器 `.docm` 等本就不在名单） |
+| 次要 | 注释写「目录记 …/ctime」与实现不符；open-policy 注释与导出矛盾 | 注释已修正 |
+
+复审确认有效：authorizeRead 目录身份前置核对、逐出无再入、create 目录复用分支、
+restore 缺身份丢弃（后端独立重算不信存储值）、confirmStillAuthorized 非 external
+直放由 recheckLaunchTarget 兜住、spawn 无注入面、onEvict→SSE 与显式撤销同构。
+新增复审回归锁用例：external-grants +1（mtime 回拨仍被 ctime 抓）、
+file-links-backend +1（svg/xsl/xsd/eps/legacy-office/cert 系统打开全 415）。
+
+测试新增「修复前失败、修复后通过」用例：external-grants +7（成员增删保留/
+删除重建逐出/顶替/junction/恢复丢身份/读中替换/重授权不复用旧对象/mtime 回拨
+ctime 抓住）、file-links-backend +3（伪装+双扩展+无扩展名 415、替换目录 403+evict
+事件、复审剔除扩展名全拒）、editor-settings +2（授权后替换拒启动、授权后撤销
+拒启动）、external-files fixture 带 dirIdentity。回归：file-links 全链、
+smoke/electron-guard/server-security/modules/files-terminal/files-terminal-ui 无红。
 
 ## 工作区外访问架构与安全边界
 
@@ -105,14 +122,14 @@ server-security/modules/files-terminal/files-terminal-ui 无红。
 
 | 证据层 | 命令/场景与代码状态 | 退出码与实际结果 | 日志/截图 |
 | --- | --- | --- | --- |
-| 定向功能套件 | `npm run test:file-links`；最终安全整改 head | exit 0；model 66/66、backend 23、external-grants 25、external-files 20、editor-settings 22、editor-settings-ui 8、file-links-ui 50、runtime 8、source-highlight 12 — **合计 234** | 终端输出 |
+| 定向功能套件 | `npm run test:file-links`；最终安全整改 + 复审修复 head | exit 0；model 66/66、backend 24、external-grants 26、external-files 20、editor-settings 22、editor-settings-ui 8、file-links-ui 50、runtime 8、source-highlight 12 — **合计 236** | 终端输出 |
 | 回归 | `node tests/smoke.cjs` | exit 0；**1339/1339**，无断言减少 | 终端输出 |
 | 回归 | `node tests/files-terminal.cjs`、`files-terminal-ui.cjs`、`electron-guard`、`server-security`、`modules.cjs` | exit 0；113、95、128/128、44/44、121/121 | 终端输出 |
 | 独立审查（上一轮） | Codex `gpt-6.2-sol`（reasoning high）安全复审 | **完成**：首轮 5 阻断 + 3 确认 + 1 历史遗留，全部修复并复确认 | 见下「独立审查历史」 |
-| 独立审查（本轮） | SWE-2（thinking high）对最终安全整改 diff 的安全复审 | **进行中**：跨 provider 委托，针对 `91f175a4`+`66734f3a` 与新增 `lib/file-identity.js`/`server/open-policy.js`；结果回填 | 本文件 |
+| 独立审查（本轮） | SWE-2（thinking high，跨 provider `pi` 委托，`worktree` 隔离）对最终安全整改 diff 的安全复审 | **完成**：1 阻断（`.svg`）+ 2 强烈建议（`.xsl`/`.xsd`、`.eps`）+ 1 POSIX 回归（`ctimeMs` 丢失）+ 取舍提示（`.doc/.xls/.ppt`、`.p12/.pfx`），全部修复并加回归锁；确认架构与实现有效，无新增阻断 | 本文件 |
 | 独立审查 | Claude Opus 5.5（effort high）功能复审、Codex 功能复审、两次 Claude Agent 原生审查 | **未产出**：原生 Agent 两次 429（DeepSeek 周配额耗尽）；Codex 功能审查 429（周额度，2026-11-27 后才可再试）；Opus 5.5 委托 429（OpenCode Go 月额度，2026-12-02 后才可再试）。**不宣称独立功能审查通过** | 本文件 |
 | 真实桌面验收 | `node tests/file-links-desktop.cjs`；打包产物 `dist-app/Pi GUI-win32-x64/Pi GUI.exe`（最终代码构建后运行） | exit 0；**27/27**：行内/纯文本/外部引用渲染、悬停真实字节数、内部查看器 L18、同名选择器、未授权外部零请求、原生授权对话框、授权后查看器打开、目录授权（本次运行+长期，记录含 `dirIdentity`）、外部图片受控端点、设置页探测到真实 VS Code、撤销后 403、工作区 B 不串 A、长期授权重启恢复（对象身份一致）、Ctrl+Click 真实启动 `Code.exe --goto …\app.ts:18` 且窗口标题确认 | [file-links-evidence/](file-links-evidence/)（17 张截图 + results.json；07/09 为裁剪后的对话框区域，17 为 VS Code 窗口截图） |
-| 打包产物一致性 | `npm run build:exe` + `npm run build:app -- --rebuild`（最终整改后重建） | `build/Pi GUI.exe` 106,864,128 B，SHA-256 `6a79fc1f6d8a78bfd5405bebce1236eec2db1aef1b7ef3b869d5be54feff47b6`；`dist-app/Pi GUI-win32-x64/Pi GUI.exe` 246,324,736 B，SHA-256 `71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f`；`resources/app/` 内 `editor-settings.cjs`/`external-files.cjs` 与源逐字节一致，`server.cjs` 打包内含 `dirIdentity`/`executable_header`/`sameStatIdentity`/`onEvict`/`evaluateSystemOpen` | 本文件；构建日志 |
+| 打包产物一致性 | `npm run build:exe` + `npm run build:app -- --rebuild`（复审修复后重建） | `build/Pi GUI.exe` 106,864,128 B，SHA-256 `d6f1e0298570fcd5163cbc856c7f9802d959f67db572288cf7e1ba58d494dd98`；`dist-app/Pi GUI-win32-x64/Pi GUI.exe` 246,324,736 B，SHA-256 `71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f`；`resources/app/` 内 `editor-settings.cjs`/`external-files.cjs` 与源逐字节一致，`server.cjs` 打包内含 `dirIdentity`/`executable_header`/`sameStatIdentity`/`onEvict`/`evaluateSystemOpen`，`.svg` 已移出系统打开白名单 | 本文件；构建日志 |
 | 本地完整 canonical | 按用户既定选择交给当前 PR 的完整 CI | **待验证**；本报告不把定向测试当作完整证明 | 待 PR run |
 | PR CI | 推送后的 PR；精确 head SHA 待回填 | **待验证** | 待回填 run URL |
 | 模型调用/安装升级 | 不适用：不调用模型、不安装升级 | — | — |
@@ -140,9 +157,14 @@ server-security/modules/files-terminal/files-terminal-ui 无红。
    之后有人工或独立审查要求，按当前 head `b84f15e5` 起新一轮。
 5. **最终安全整改的独立复审**：SWE-2（thinking high，跨 provider `pi` 委托，
    `isolation: worktree`）对 `91f175a4`+`66734f3a` 的最终安全整改 diff 做安全
-   复审，重点攻击面见任务书（authorizeRead 身份核对提前、ino 复用、缺身份记录
-   丢弃、白名单+4KiB 嗅探绕过、recheck TOCTOU、伪造身份记录绕过 restore 等）。
-   结果待回填；未返回前本报告不宣称本轮独立安全审查通过。
+   复审。报 **1 个阻断项**（`.svg` 顶层浏览器执行内嵌脚本）、**2 个强烈建议**
+   （`.xsl`/`.xsd` XSLT 面、`.eps` PostScript 执行）、**1 个 POSIX 回归**
+   （`sameFileIdentity` 丢 `ctimeMs`，改写+回拨 mtime 可绕过）与取舍提示
+   （`.doc/.xls/.ppt` VBA、`.p12/.pfx` 证书导入）。全部修复并加回归锁
+   （`external-grants` mtime-rollback、`file-links-backend` 复审剔除扩展名）。
+   复审同时确认：authorizeRead 目录身份前置核对、逐出无再入、create 复用分支、
+   restore 独立重算身份不信存储值、recheckLaunchTarget 兜住非 external 替换、
+   spawn 无注入面、onEvict→SSE 与撤销同构 —— 实现方向确认有效，无新增阻断。
 
 ## 限制与残余风险
 
@@ -151,12 +173,13 @@ server-security/modules/files-terminal/files-terminal-ui 无红。
   参数表按 T3 `externalLauncher.ts`/`contracts/editor.ts` 移植）。
 - 真实 VS Code 验收要求运行前没有已打开的 VS Code 实例（单实例交接会让命令行
   不可验证）；脚本明确检查此前置条件。
-- **系统打开残余边界**：白名单收窄到只读查看类型 + 4KiB 可执行头嗅探，但 —
-  (a) `.svg` 仍在白名单，含脚本时取决于系统关联的查看器是否执行（已知残余）；
-  (b) 白名单内的 `.pdf`/`.docx` 等可含内嵌脚本/宏，默认程序打开时是否执行取决于
-  OS 关联的应用，不是本层能完全约束的；(c) 文件头嗅探只看前 4 KiB 的已知可执行
-  magic，polyglot 或不带 magic 的可执行内容理论上可绕过 —— 已把「会不会执行」
-  收敛到「扩展名白名单 + 已知可执行头」两层，**不宣称完全消除**。
+- **系统打开残余边界**：白名单收窄到只读查看类型 + 4KiB 可执行头嗅探，复审后
+  剔除 `.svg`/`.xsl`/`.xsd`/`.eps`/`.doc`/`.xls`/`.ppt`/`.p12`/`.pfx`。残余：
+  (a) `.xml` 保留（本身是数据），`xml-stylesheet` 处理指令依赖默认关联属已知残余；
+  (b) 白名单内 `.pdf`/`.docx` 等可含内嵌脚本/宏，默认程序是否执行取决于 OS 关联，
+  不在本层控制；(c) 文件头嗅探只看前 4 KiB 已知可执行 magic，polyglot/无 magic
+  内容理论上可绕过 —— 已收敛到「扩展名白名单 + 已知可执行头」两层，**不宣称
+  完全消除**。
 - **OS 层启动 TOCTOU 残余**：`launchAuthorized`/`recheckLaunchTarget` 把授权→
   spawn 窗口收窄到「最后一次 `lstat` 到 OS 真正拉起」之间；文件 mtime/ctime 在
   Windows 上不可由用户回拨但 dev/ino 可能被复用，三道复核是 stat 能给的最强近似，
