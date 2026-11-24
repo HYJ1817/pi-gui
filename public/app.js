@@ -1,5 +1,6 @@
 import { hydrateIcons } from './ui/icons.js';
 import { initSettingsSurface } from './ui/settings-surface.js';
+import { initFileLinks } from './file-links-ui.js';
 /* Pi GUI — 前端入口。
  *
  * 这个文件只做三件事：
@@ -541,6 +542,12 @@ function attachGenerationRecovery(evt) {
 }
 
 function handleEvent(evt) {
+  /* 授权撤销可能来自另一个 HTTP 调用（例如设置页/另一个客户端），不一定经过
+   * preload 的本地事件。SSE 是后端通知所有窗口关闭外部标签、清缓存的通道。 */
+  if (evt.type === 'external_grants') {
+    document.dispatchEvent(new CustomEvent('pi-gui:external-grants', { detail: evt.detail || {} }));
+    return;
+  }
   if (['runtime_event', 'runtime_state', 'runtime_closed'].includes(evt.type)) { observeRuntimeEvent(evt); return; }
   /* 标题服务是**应用级**的：事件可能属于另一个项目、或侧栏里并非当前会话的
    * 那一行。它必须在「没有项目」与 bridgeRun 的过滤之前到达，否则后台会话
@@ -1383,6 +1390,7 @@ $('navPlanner').onclick = () => openPlanner();
 const globalMenu = $('globalMoreMenu');
 const globalMore = $('navGlobalMore');
 hydrateIcons(document);
+initFileLinks();
 
 const settingsSurface = initSettingsSurface({
   captureRuntimeReturn: () => {

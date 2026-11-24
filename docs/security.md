@@ -610,11 +610,14 @@ renderer 与 Electron main 分别校验 http/https、credentials、控制字符�
 - 项目的绝对路径（除了用户自己选的那个，那是必要信息）
 
 Electron 与渲染进程之间**只有一个桥**（`electron/preload.cjs`），
-只暴露三个转发动作：`openPath` 打开项目内文件、`openExternal` 打开 Release / 下载链接、
-`openWebUrl` 打开 Web Activity 的 HTTP(S) 来源。不暴露整个 `ipcRenderer`。
-判定在后端（`lib/git.js` 的路径校验）或主进程
-（`electron/net-probe.cjs` 的 `isSafeReleaseUrl` / `isSafeWebUrl`）。
-`tests/electron-guard.cjs` 钉住了这个形状。
+只暴露具名的转发动作：`openPath` 打开项目内文件、`openExternal` 打开 Release / 下载链接、
+`openWebUrl` 打开 Web Activity 的 HTTP(S) 来源，以及文件链接的打开/定位/复制、
+外部编辑器、工作区外授权、设置、升级、环境安装等固定接口。**不暴露整个
+`ipcRenderer`**，也不接受任意 IPC 频道名或任意负载形状。
+判定在后端（`lib/git.js` 的路径校验、`server/files.js` 的工作区/文件身份）或主进程
+（`electron/net-probe.cjs` 的 `isSafeReleaseUrl` / `isSafeWebUrl`，
+`electron/external-files.cjs` 的可信来源与原生确认）。`tests/electron-guard.cjs`
+钉住了桥的形状；文件链接动作另有后端身份与授权测试。
 
 ### 外链白名单
 
@@ -770,6 +773,61 @@ Extension 是**第三方本地代码**，在 Pi 进程权限下运行，可能�
 路径仍经 `lib/safe-path.js` 校验。目录项跳过符号链接 / junction，预览用
 `O_NOFOLLOW` 打开并复核 inode，拒绝二进制与超过 256 KiB 的文件，不回绝对路径。
 没有删除、重命名、上传或保存接口；写操作需要单独设计与授权。
+
+### 会话内文件引用与工作区外授权
+
+**威胁**：Markdown 里的路径由模型输出，不能等于读取权限；工作区外路径尤其不能
+因为“页面说想打开”或“模型写了一个绝对路径”就自动读取。路径还可能经 `..`、
+符号链接 / junction、UNC / 设备路径、Windows 保留名、ADS、授权后替换文件、
+撤销竞态等方式越界。
+
+**做法**：
+
+- **身份由后端签发。** 工作区内文件用 `fileId`（workspace.id + realpath +
+  dev/ino/size/mtime 的 SHA-256）；消息里的裸文件名查询显式带 conversationId，
+  后端按该会话的 workspace 解析，**没有“默认当前会话”的兜底**。历史消息不会
+  借用当前聚焦项目，两个工作区里的同名文件不会互串。
+- **工作区外只在可信交互后授权。** 渲染进程只能请求打开一个绝对路径；主进程先用
+  后端 `inspect` 规范化，再由 Electron 原生 dialog 让用户选择
+  “仅此文件 / 此文件夹（本次运行）/ 记住此文件夹 / 取消”。主进程经父子进程私有
+  IPC 创建 grant，**HTTP 侧没有创建入口**；模型输出、Markdown、页面脚本和工具
+  调用都不能自动授权。没有原生通道的网页版明确不可用。
+- **授权绑定会话与范围。** Runtime 会话按 conversationId、Classic 会话按项目根
+  绑定；file grant 只覆盖一个文件并核对创建时的 dev/ino/size/mtime，directory
+  grant 只覆盖规范化目录内的真实文件。**只有目录授权可持久化**，且复用主进程既有的
+  系统设置持久化设施 `createSystemPreferenceFile`
+  （`external-file-grants.json`，schema 校验、原子写入、16 KiB、64 条上限）。
+  后端只持运行期账本；启动时主进程经私有 IPC 投喂保存的记录，后端逐条重新
+  `realpath`、核对不是符号链接/junction、重跑敏感目录检查，坏记录只丢弃不回写为
+  可用授权。渲染进程和 HTTP 都不能读这个文件或创建持久记录。
+- **路径与范围收口。** 拒绝相对路径、UNC / 设备命名空间、协议相对地址、控制字符、
+  Windows 保留名与 ADS；`realpath` 后再 `lstat`，符号链接 / junction 一律拒绝。
+  系统目录、凭据目录、浏览器 profile、磁盘根与用户主目录根不允许授权。图片仍走
+  白名单 + 8MB 上限，文档预览仍受 256 KiB 与二进制判断限制。
+- **只读、不执行。** 外部接口没有写入、删除、重命名、修改或执行能力。通用
+  “用系统默认程序打开”对可执行文件、脚本、快捷方式、安装包等扩展名直接拒绝；
+  外部编辑器只把文件当字节读取，文件管理器定位与复制完整路径不受影响。
+  工作区外的 asset/document 使用独立 grant token，**不能伪造工作区相对路径绕过
+  工作区守卫**。
+- **撤销即时失效。** 撤销推进账本 epoch，关闭已有外部标签页并清 metadata/asset
+  缓存、中止在途请求；读取前后都核对 epoch，旧 grant 再访问返回 403。应用重启后
+  只恢复仍有效的长期目录授权。
+- 读取路径使用 `O_NOFOLLOW`、`fstat` 身份复核、再次 `realpath`，文件被替换时要求
+  重新授权。验收和单元测试覆盖 junction 逃逸、跨会话复用、撤销后的在途请求、
+  UNC/ADS/保留名与敏感目录。
+
+### 外部编辑器启动
+
+**威胁**：自定义编辑器若经 shell 字符串拼接，路径里的空格、引号、`&`、中文或模型
+输出就可能变成命令注入。
+
+**做法**：编辑器目录与探测都在主进程（`electron/editor-settings.cjs`），偏好写入
+既有的用户级原子 JSON；启动前一律先经后端授权（内部 workspace token 或外部
+grant），再用 `spawn(executable, argsArray, { shell: false })` 启动。参数按编辑器
+能力生成：VS Code 系 `--goto <abs>:line[:col]`、Notepad++ `-n/-c`、Zed 直传、
+自定义编辑器只传文件路径。模型输出不参与可执行文件和参数。`windowsHide` 有意
+保持 `false`：Windows 会用 `SW_HIDE` 隐藏子进程的第一个顶层窗口，编辑器会因此
+“启动成功但看不见”。
 
 ### 技能写入与市场（2A）
 

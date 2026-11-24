@@ -1,0 +1,348 @@
+{
+  "startedAt": "2026-11-24T16:23:24.613Z",
+  "checks": [
+    {
+      "name": "the real packaged app renders internal, plain-text and external references",
+      "ok": true,
+      "detail": {
+        "links": [
+          {
+            "path": "src/app.ts",
+            "line": "18",
+            "ambiguous": false,
+            "text": "app.ts:18"
+          },
+          {
+            "path": "src/app.ts",
+            "line": "18",
+            "ambiguous": false,
+            "text": "app.ts:18-24"
+          },
+          {
+            "path": "src/styles.css",
+            "ambiguous": false,
+            "text": "styles.css"
+          },
+          {
+            "path": "src/main.ts",
+            "line": "12",
+            "ambiguous": false,
+            "text": "main.ts:12"
+          },
+          {
+            "path": "notes.txt",
+            "ambiguous": false,
+            "text": "notes.txt"
+          },
+          {
+            "ambiguous": true,
+            "text": "index.js"
+          },
+          {
+            "path": "C:/Users/21022/AppData/Local/Temp/pi-file-links-world-hNQ6RZ/外部 资料/验收 报告.md",
+            "external": "1",
+            "line": "3",
+            "ambiguous": false,
+            "text": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料\\验收 报告.md:3"
+          },
+          {
+            "path": "C:/Users/21022/AppData/Local/Temp/pi-file-links-world-hNQ6RZ/外部 资料/外部 图.png",
+            "external": "1",
+            "ambiguous": false,
+            "text": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料\\外部 图.png"
+          }
+        ],
+        "candidates": 0,
+        "npm": false,
+        "version": false,
+        "url": false
+      }
+    },
+    {
+      "name": "npm packages, versions and URLs are not turned into file links",
+      "ok": true,
+      "detail": {
+        "npm": false,
+        "version": false,
+        "url": false
+      }
+    },
+    {
+      "name": "hover shows the canonical path, real byte size and line",
+      "ok": true,
+      "detail": {
+        "tooltip": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\project-a\\src\\app.ts · 806 B · L18"
+      }
+    },
+    {
+      "name": "clicking opens the right-side Files viewer at line 18",
+      "ok": true,
+      "detail": {
+        "line": "18",
+        "active": "app.ts",
+        "text": "import { readFile } from 'node:fs/promises';\n\nexport interface DocumentView {\n  path: string;\n  content: string;\n}\n\n// A"
+      }
+    },
+    {
+      "name": "an ambiguous bare filename opens a picker with distinguishing paths",
+      "ok": true,
+      "detail": {
+        "labels": [
+          "public/index.js",
+          "src/index.js",
+          "tests/index.js"
+        ]
+      }
+    },
+    {
+      "name": "the chosen same-name file opens in the existing viewer",
+      "ok": true,
+      "detail": {
+        "active": "index.js",
+        "text": "export const where = 'tests 版本';\n"
+      }
+    },
+    {
+      "name": "an unauthorized external path only shows scope in the tooltip and reads nothing",
+      "ok": true,
+      "detail": {
+        "externalTip": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料\\验收 报告.md · 工作区外 · 点击后授权 · L3",
+        "beforeExternal": 0,
+        "afterExternal": 0
+      }
+    },
+    {
+      "name": "the external authorization uses a native Electron confirmation",
+      "ok": true,
+      "detail": {
+        "status": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "after confirmation the external file opens in the existing right-side viewer",
+      "ok": true,
+      "detail": {
+        "active": "验收 报告.md",
+        "path": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料\\验收 报告.md",
+        "text": "# 外部报告\n\n这是工作区之外的第三行。\n\n结束。\n"
+      }
+    },
+    {
+      "name": "the external context menu exposes folder authorization",
+      "ok": true,
+      "detail": [
+        "在文件面板中打开",
+        "用外部编辑器打开",
+        "用系统默认程序打开",
+        "在文件管理器中显示",
+        "授权所在文件夹…",
+        "复制完整路径"
+      ]
+    },
+    {
+      "name": "a directory can be granted with a persistent choice",
+      "ok": true,
+      "detail": {
+        "status": 0,
+        "stderr": ""
+      }
+    },
+    {
+      "name": "the grant ledger keeps a session file grant and a persistent directory grant",
+      "ok": true,
+      "detail": [
+        {
+          "id": "4da2a75d3e48f4bac0176e7e58715a6a",
+          "kind": "file",
+          "scope": "session",
+          "target": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料\\验收 报告.md",
+          "createdAt": "2026-11-24T16:23:37.611Z"
+        },
+        {
+          "id": "450f44198a91555cb973613fc85c9946",
+          "kind": "directory",
+          "scope": "persistent",
+          "target": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料",
+          "createdAt": "2026-11-24T16:23:40.278Z"
+        }
+      ]
+    },
+    {
+      "name": "the authorized directory lets an external image open through the controlled asset endpoint",
+      "ok": true,
+      "detail": {
+        "width": 96,
+        "height": 64,
+        "active": "外部 图.png"
+      }
+    },
+    {
+      "name": "Settings → General auto-detects the installed Visual Studio Code via App Paths",
+      "ok": true,
+      "detail": {
+        "label": "系统默认程序",
+        "title": "",
+        "vscode": {
+          "id": "vscode",
+          "label": "Visual Studio Code",
+          "available": true,
+          "path": "C:\\下载\\Microsoft VS Code\\Code.exe",
+          "launch": "goto"
+        }
+      }
+    },
+    {
+      "name": "the settings page lists the actual canonical paths and scope",
+      "ok": true,
+      "detail": [
+        {
+          "path": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料\\验收 报告.md",
+          "meta": "文件 · 本次运行"
+        },
+        {
+          "path": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料",
+          "meta": "文件夹 · 长期"
+        }
+      ]
+    },
+    {
+      "name": "the editor menu offers the detected editors and re-detection",
+      "ok": true,
+      "detail": [
+        "系统默认程序 · 当前",
+        "Visual Studio Code",
+        "选择自定义编辑器…",
+        "重新检测"
+      ]
+    },
+    {
+      "name": "selecting the editor saves it",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "revoking closes the external tab and the backend rejects the old grant",
+      "ok": true,
+      "detail": {
+        "afterRevoke": {
+          "tabs": []
+        },
+        "denied": {
+          "status": 403,
+          "body": {
+            "ok": false,
+            "code": "grant_invalid",
+            "error": "授权不存在、已撤销或不属于当前会话。"
+          }
+        }
+      }
+    },
+    {
+      "name": "a second workspace opens its own same-named file, not workspace A",
+      "ok": true,
+      "detail": {
+        "text": "// B 工作区：同名文件，内容不同。\nexport const project = 'project-b';\n\nexport function workspa",
+        "cwd": "C:/Users/21022/AppData/Local/Temp/pi-file-links-world-hNQ6RZ/project-b"
+      }
+    },
+    {
+      "name": "the editor preference survives restart and workspace B does not inherit A grants",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "a persistent directory grant is restored after restart",
+      "ok": true,
+      "detail": [
+        {
+          "id": "450f44198a91555cb973613fc85c9946",
+          "kind": "directory",
+          "scope": "persistent",
+          "target": "C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\外部 资料",
+          "createdAt": "2026-11-24T16:23:40.278Z"
+        }
+      ]
+    },
+    {
+      "name": "the restored directory grant reopens the external image without a new dialog",
+      "ok": true,
+      "detail": null
+    },
+    {
+      "name": "no VS Code instance is running before the real launch check",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Ctrl+Click launches the configured VS Code with the real absolute path and line 18",
+      "ok": true,
+      "detail": {
+        "beforeCode": 0,
+        "pid": 3312,
+        "command": "\"C:\\����\\Microsoft VS Code\\Code.exe\" --goto C:\\Users\\21022\\AppData\\Local\\Temp\\pi-file-links-world-hNQ6RZ\\project-a\\src\\app.ts:18"
+      }
+    },
+    {
+      "name": "VS Code reports the opened file in its window title",
+      "ok": true,
+      "detail": "app.ts - Visual Studio Code"
+    },
+    {
+      "name": "a real screen capture shows VS Code with the opened file",
+      "ok": true,
+      "detail": {
+        "helper": "screenshot: C:\\pi-GUI\\.shots\\file-links-desktop\\17-vscode-editor.png (1244 x 841)",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "after revoking the directory grant the external asset endpoint rejects the old grant",
+      "ok": true,
+      "detail": 403
+    }
+  ],
+  "shots": [
+    ".shots\\file-links-desktop\\01-dark-conversation.png",
+    ".shots\\file-links-desktop\\02-hover.png",
+    ".shots\\file-links-desktop\\03-internal-viewer.png",
+    ".shots\\file-links-desktop\\04-same-name-picker.png",
+    ".shots\\file-links-desktop\\05-picked-file.png",
+    ".shots\\file-links-desktop\\06-external-hover.png",
+    ".shots\\file-links-desktop\\08-external-authorized.png",
+    ".shots\\file-links-desktop\\10-external-image.png",
+    ".shots\\file-links-desktop\\11-editor-and-access-settings.png",
+    ".shots\\file-links-desktop\\12-light-settings.png",
+    ".shots\\file-links-desktop\\13-workspace-b.png",
+    ".shots\\file-links-desktop\\14-workspace-b-settings.png",
+    ".shots\\file-links-desktop\\15-restored-grant.png",
+    ".shots\\file-links-desktop\\16-after-external-editor.png",
+    ".shots\\file-links-desktop\\17-vscode-editor.png"
+  ],
+  "runs": [
+    {
+      "label": "A",
+      "pid": 34336,
+      "port": 17891,
+      "cdp": 19231,
+      "startedAt": "2026-11-24T16:23:24.722Z"
+    },
+    {
+      "label": "B",
+      "pid": 36016,
+      "port": 17892,
+      "cdp": 19232,
+      "startedAt": "2026-11-24T16:23:47.200Z"
+    },
+    {
+      "label": "A-restored",
+      "pid": 37768,
+      "port": 17893,
+      "cdp": 19233,
+      "startedAt": "2026-11-24T16:23:56.392Z"
+    }
+  ],
+  "finishedAt": "2026-11-24T16:24:11.217Z",
+  "checksTotal": 27,
+  "failures": []
+}

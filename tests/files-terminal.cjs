@@ -228,7 +228,7 @@ const noSweep = (limits) => ({ ...limits, scopeSweepMs: 0 });
       assert.equal(viaLink.status, 403);
       assert.equal(viaLink.body.code, 'unsafe_path');
       assert.equal(missingToken.status, 400);
-      assert.equal(missingToken.body.code, 'invalid_request');
+      assert.equal(missingToken.body.code, 'binding_required');
     });
 
     const noProject = await app.request(listUrl(''), { headers: scoped('none') });

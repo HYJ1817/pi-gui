@@ -83,6 +83,8 @@ const { PARTITION: BROWSER_PARTITION } = require('./browser-policy.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 const { installEnvironmentSetup } = require('./environment-setup.cjs');
+const { installExternalFiles } = require('./external-files.cjs');
+const { installEditorSettings } = require('./editor-settings.cjs');
 const { installAppUpdate } = require('./app-update-desktop.cjs');
 /* P2：供应商凭据受限输入窗（CredentialSheet）。协议必须在 app ready 前注册。 */
 const { createProviderCredentialDesktop, registerCredentialScheme, PARTITION: CREDENTIAL_SHEET_PARTITION } = require('./provider-credentials.cjs');
@@ -420,6 +422,10 @@ function installOpenPathHandler() {
     return { ok: true, abs: body.abs };
   });
 }
+
+/* 消息内文件链接的“用系统默认程序打开 / 在文件管理器中显示 / 外部编辑器”
+ * 由 editor-settings.cjs 统一注册：授权判定仍在后端 /api/files/open-target，
+ * 主进程只转发并执行。这样四个入口共享同一份工作区身份与文件身份校验。 */
 
 /** 处理渲染进程发来的「用系统浏览器打开这个链接」（版本检查的 Release / 下载）。
  *
@@ -1096,6 +1102,10 @@ if (!app.requestSingleInstanceLock()) {
     // 必须在 createWindow 之前注册，否则页面首帧就调用的话会拿到
     // "No handler registered"。
     installOpenPathHandler();
+    const externalFiles = await installExternalFiles({
+      ipcMain, dialog, getWindow: () => win, getServer: () => server, origin: ORIGIN,
+      directory: app.getPath('userData'),
+    });
     installOpenExternalHandler();
     installEnvironmentSetup({ ipcMain, dialog, getWindow: () => win, getServer: () => server, origin: ORIGIN });
     const desktopResources = {};
@@ -1188,6 +1198,35 @@ if (!app.requestSingleInstanceLock()) {
       dialog.showErrorBox('Pi GUI 启动失败', String(err.message || err));
       app.exit(1);
       return;
+    }
+    try {
+      /* 长期目录授权保存在系统设置设施里；启动后先交给后端逐条重验，
+       * 再创建窗口。恢复失败只影响“上次记住的目录”，不阻断应用启动。 */
+      const restored = await externalFiles.restore();
+      if (restored?.storeError) {
+        mlog('electron', 'electron.external_grants_restore_warning', { code: restored.storeError });
+      }
+    } catch (error) {
+      mlog('electron', 'electron.external_grants_restore_failed', {
+        code: 'EXTERNAL_GRANTS_RESTORE_FAILED',
+        error: String(error?.message || error).slice(0, 200),
+      });
+    }
+    try {
+      // 设置文件在主进程里校验；打开动作仍要经后端授权。
+      await installEditorSettings({
+        ipcMain, dialog, shell,
+        getWindow: () => win,
+        origin: ORIGIN,
+        authToken: AUTH_TOKEN,
+        tokenHeader: TOKEN_HEADER,
+        directory: app.getPath('userData'),
+      });
+    } catch (error) {
+      mlog('electron', 'electron.editor_settings_unavailable', {
+        code: 'EDITOR_SETTINGS_UNAVAILABLE',
+        error: error?.message || String(error),
+      });
     }
     try {
       systemSettings = await createSystemSettings({ ipcMain, origin: ORIGIN, getWindow: () => win,

@@ -324,7 +324,7 @@ export function createRouter({
     /* Files is read-only and uses the same focused-conversation workspace
      * resolution as Specs / Changes. It has its own top-level path so the
      * projects prefix and the GET/405 fallback cannot swallow it. */
-    if (url.pathname === '/api/files' || url.pathname === '/api/files/document') {
+    if (url.pathname === '/api/files' || url.pathname.startsWith('/api/files/')) {
       return files ? files.handle(req, res, url) : json(res, 503, { ok: false, code: 'files_unavailable' });
     }
     /* Terminal is a POST-capable top-level path. The module itself enforces

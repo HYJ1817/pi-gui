@@ -101,11 +101,18 @@ function createVizCardNode(code) {
   return temp.firstElementChild;
 }
 
-function appendRuntimeContent(container, text, { isBlock = false } = {}) {
+function fileLinksForRecord(record) {
+  const cwd = record?.item?.workspace?.cwd;
+  if (typeof cwd !== 'string' || !cwd) return null;
+  const conversationId = record?.item?.conversationId;
+  return { cwd, conversationId: typeof conversationId === 'string' ? conversationId : '' };
+}
+
+function appendRuntimeContent(container, text, { isBlock = false, fileLinks = null } = {}) {
   const appendMarkdown = value => {
     if (!value) return;
     const body = el('div', 'rtc-markdown msg-body');
-    body.innerHTML = md(value); // Existing escape-first renderer; never raw model HTML.
+    body.innerHTML = md(value, { fileLinks }); // Existing escape-first renderer; never raw model HTML.
     container.append(body);
   };
   VIZ_BLOCK_RE.lastIndex = 0;
@@ -1054,7 +1061,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         };
       }
       const body = el('div', 'rtc-assistant-text');
-      appendRuntimeContent(body, block.text);
+      appendRuntimeContent(body, block.text, { fileLinks: fileLinksForRecord(record) });
       row.append(body);
       if (block.messageId) row.dataset.historyMessageId = block.messageId;
       row.dataset.state = block.state || '';
@@ -1068,7 +1075,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         if (renderedText !== next.text) {
           preserveTextSelection(body, () => {
             body.replaceChildren();
-            appendRuntimeContent(body, next.text);
+            appendRuntimeContent(body, next.text, { fileLinks: fileLinksForRecord(record) });
           });
           renderedText = next.text;
         }
@@ -2037,7 +2044,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
               userIndex++;
             }
             if (message.role === 'assistant') {
-              appendRuntimeContent(row, message.text);
+              appendRuntimeContent(row, message.text, { fileLinks: fileLinksForRecord(r) });
             } else {
               row.append(el('div', 'rtc-history-user-text', message.text));
               if (message.role === 'user') row.append(messageActions(message.text));
@@ -2075,7 +2082,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
             output.textContent = '等待任务';
           } else {
             output.replaceChildren();
-            appendRuntimeContent(output, curText, { isBlock: true });
+            appendRuntimeContent(output, curText, { isBlock: true, fileLinks: fileLinksForRecord(r) });
           }
         }
       }

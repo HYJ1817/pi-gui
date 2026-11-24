@@ -20,6 +20,18 @@ const PUB = path.resolve(process.env.VISUAL_PUBLIC_ROOT || path.join(__dirname, 
 const UPLOAD_DIR = process.env.VISUAL_UPLOAD_DIR || path.join(__dirname, '..', '.uploads');
 const PORT = Number(process.env.HARNESS_PORT || 7789);
 const uxMode = process.env.UX_STATE_HARNESS === '1';
+/* 文件引用截图专用：真实 createFiles + os.tmpdir() 里两个工作区。 */
+const fileLinksMode = process.env.FILE_LINKS_HARNESS === '1';
+const fileLinkWorld = fileLinksMode ? require('./file-links-fixture.cjs').createFileLinksWorld() : null;
+const fileLinkFiles = fileLinksMode ? import('../server/files.js').then(({ createFiles }) => createFiles({
+  scopeForRequest: async (req) => {
+    const id = req.headers?.['x-pi-gui-conversation'];
+    const scope = (root, name) => ({ root, scopeId: name, generation: '1' });
+    if (id === 'fixture-b') return scope(fileLinkWorld.rootB, 'fixture-b');
+    if (!id || id === 'fixture-a') return scope(fileLinkWorld.rootA, 'fixture-a');
+    return null;
+  },
+})) : null;
 /* 视觉取证专用：让 Registry 源返回一条“系统代理线路”的固定结果，
  * 用来截取代理状态说明；不影响默认离线夹具。 */
 const marketProxyMode = process.env.MCP_MARKET_PROXY === '1';
@@ -1227,9 +1239,17 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (fileLinksMode && p === '/api/__file-links/info') {
+    return json(res, 200, { ok: true, rootA: fileLinkWorld.rootA, rootB: fileLinkWorld.rootB });
+  }
+  if (fileLinksMode && (p === '/api/files' || p.startsWith('/api/files/'))) {
+    return (await fileLinkFiles).handle(req, res, url);
+  }
+
   if (p === '/api/status') {
     if (recoveryMode) return json(res, 200, { ok: true, ...recoverySnapshot() });
     if (hotfixNoProject) return json(res, 200, { ok: true, piRunning: false, cwd: null, hasProject: false });
+    if (fileLinksMode) return json(res, 200, { ok: true, piRunning: true, pid: 0, args: ['--mode', 'rpc'], cwd: fileLinkWorld.rootA });
     return json(res, 200, { ok: true, piRunning: true, pid: 0, args: ['--mode', 'rpc'], cwd: process.cwd() });
   }
 
@@ -2390,3 +2410,8 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`视觉夹具已启动: http://127.0.0.1:${server.address().port}/`);
 });
+if (fileLinkWorld) {
+  process.on('exit', () => {
+    try { fs.rmSync(fileLinkWorld.world, { recursive: true, force: true }); } catch { /* 临时目录已不存在 */ }
+  });
+}

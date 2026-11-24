@@ -18,6 +18,10 @@
  *      放行规则在 electron/browser-policy.cjs，由主进程执行
  *   5. 读取系统已安装字体族（fonts.list）—— 固定通道、零参数，
  *      枚举、超时与缓存全部由主进程持有
+ *   6. 文件链接的打开/定位/复制、外部编辑器与工作区外授权
+ *      （openWorkspaceFile / editors.* / externalFiles.*）—— 只转发固定字段；
+ *      文件是否可读、绝对路径是什么由后端判定，主进程只执行授权结果
+ *   7. 设置、升级、环境安装等具名动作 —— 各自有独立的白名单与主进程状态
  *
  * ---------- 这个文件里没有任何校验，这是故意的 ----------
  *
@@ -55,6 +59,26 @@ try {
     themeLatest = snapshot;
     for (const listener of themeListeners) listener(snapshot);
   });
+
+  /* 只放固定字段过去：页面可以传对象，但不能借它夹带任意 IPC 负载。 */
+  function fileRequest(request) {
+    const source = request && typeof request === 'object' ? request : {};
+    return {
+      path: typeof source.path === 'string' ? source.path : '',
+      cwd: typeof source.cwd === 'string' ? source.cwd : '',
+      conversationId: typeof source.conversationId === 'string' ? source.conversationId : null,
+      fileId: typeof source.fileId === 'string' ? source.fileId : '',
+      workspace: source.workspace && typeof source.workspace === 'object'
+        ? { id: typeof source.workspace.id === 'string' ? source.workspace.id : '' }
+        : null,
+      generation: source.generation === undefined || source.generation === null ? '' : String(source.generation),
+      line: Number.isSafeInteger(source.line) && source.line > 0 ? source.line : 0,
+      column: Number.isSafeInteger(source.column) && source.column > 0 ? source.column : 0,
+      action: typeof source.action === 'string' ? source.action : '',
+      external: source.external === true,
+      grantId: typeof source.grantId === 'string' ? source.grantId : '',
+    };
+  }
 
   contextBridge.exposeInMainWorld('piGuiDesktop', {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
@@ -151,6 +175,46 @@ try {
      * @returns {Promise<{ok:boolean, abs?:string, error?:string}>}
      */
     openPath: (relPath, conversationId = null) => ipcRenderer.invoke('pi-gui:open-path', String(relPath ?? ''), conversationId),
+
+    /* 消息内文件链接：与 openPath 同一套“后端认可后才执行”的模式，
+     * 但目标由 /api/files/open-target 按消息所属的**项目目录**解析，
+     * 因此仓库在子目录、或并行会话各自 worktree 时也不会开错文件。
+     * 这里只摊平固定字段；工作区令牌 / 文件身份 / 行号都由主进程复核。 */
+    openWorkspaceFile: request => ipcRenderer.invoke('pi-gui:open-workspace-file', fileRequest(request)),
+    revealWorkspaceFile: request => ipcRenderer.invoke('pi-gui:reveal-workspace-file', fileRequest(request)),
+    authorizeWorkspaceFile: request => ipcRenderer.invoke('pi-gui:authorize-workspace-file', fileRequest(request)),
+
+    /* 工作区外文件授权：只有主进程能弹原生确认框并创建授权令牌。
+     * 页面只能“请求”，不能把模型输出或 Markdown 变成授权。 */
+    externalFiles: {
+      authorize: request => ipcRenderer.invoke('pi-gui:external-file-authorize', {
+        path: typeof request?.path === 'string' ? request.path : '',
+        conversationId: typeof request?.conversationId === 'string' ? request.conversationId : null,
+        kind: request?.kind === 'directory' ? 'directory' : 'file',
+      }),
+      list: request => ipcRenderer.invoke('pi-gui:external-file-list', {
+        conversationId: typeof request?.conversationId === 'string' ? request.conversationId : null,
+      }),
+      revoke: request => ipcRenderer.invoke('pi-gui:external-file-revoke', {
+        conversationId: typeof request?.conversationId === 'string' ? request.conversationId : null,
+        grantId: typeof request?.grantId === 'string' ? request.grantId : '',
+      }),
+      chooseDirectory: request => ipcRenderer.invoke('pi-gui:external-file-choose-directory', {
+        conversationId: typeof request?.conversationId === 'string' ? request.conversationId : null,
+      }),
+    },
+
+    /* 外部编辑器：设置读取 / 保存 / 选择可执行文件 / 打开。
+     * 打开动作先经后端授权，再由主进程用参数数组启动；页面碰不到 shell。 */
+    editors: {
+      list: () => ipcRenderer.invoke('pi-gui:editors-list'),
+      save: request => ipcRenderer.invoke('pi-gui:editors-save', {
+        editor: typeof request?.editor === 'string' ? request.editor : '',
+        customPath: typeof request?.customPath === 'string' ? request.customPath : '',
+      }),
+      chooseCustom: () => ipcRenderer.invoke('pi-gui:editors-choose-custom'),
+      open: request => ipcRenderer.invoke('pi-gui:editors-open', fileRequest(request)),
+    },
 
     /* ---------- 供应商凭据受限输入面（P2/P5） ----------
      *
