@@ -992,6 +992,10 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     && /:is\(:hover,\s*:focus-within\)\s*>\s*\.ui2-msg-meta\s*\{[^}]*inline-size:\s*auto[^}]*opacity:\s*\.94/s.test(baseCss));
   ok('已验证回合的「用量」仍按正常流完整显示',
     /\.execution-usage\s+\.ui2-msg-meta\s*\{[^}]*position:\s*static[^}]*clip-path:\s*none[^}]*opacity:\s*1/s.test(baseCss));
+  ok('展开用量明细回到正常流，不向上盖住回答',
+    /\.ui2-msg-meta:has\(\.ui2-msg-meta-details\[open\]\)\s*\{[^}]*position:\s*static[^}]*margin-top:\s*var\(--ui-space-1\)[^}]*opacity:\s*1/s.test(baseCss));
+  ok('展开用量时为操作条留出间距，不压住字段',
+    /:has\(> \.ui2-msg-meta \.ui2-msg-meta-details\[open\]\)\s*\{[^}]*padding-block-end:\s*18px/s.test(baseCss));
   ok('折叠头图标/箭头固定，标题与摘要按主次分配', /\.conversation-work-icon,[\s\S]*?flex:\s*0 0 24px/.test(css)
     && /\.conversation-work-chevron,[\s\S]*?flex:\s*0 0 16px/.test(css)
     && /\.conversation-work-title,\s*\.execution-activity-group > \.execution-head > \.execution-head-title \{\s*flex:\s*1 1 auto/.test(css));

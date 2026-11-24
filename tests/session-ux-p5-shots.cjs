@@ -767,6 +767,31 @@ async function main() {
     assert.ok(shown.bottom <= shown.nextTop + 0.5, 'usage chip crossed into the next row: ' + JSON.stringify(shown));
     assert.ok(shown.actionsBottom <= shown.nextTop + 0.5, 'message actions crossed into the next row: ' + JSON.stringify(shown));
     await shot('usage-hover-dark');
+    /* Opening the real fields must not grow upward over the answer: the footer
+     * returns to normal flow and pushes the next row instead of covering it. */
+    const opened = await evaluate(`new Promise(resolve => {
+      document.querySelector('#usage-msg .ui2-msg-meta-details > summary').click();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const m = document.querySelector('#usage-msg .ui2-msg-meta');
+        const body = document.querySelector('#usage-msg .msg-body');
+        const next = document.querySelector('#usage-next');
+        const actions = document.querySelector('#usage-msg .message-actions');
+        const r = m.getBoundingClientRect(), b = body.getBoundingClientRect();
+        const a = actions.getBoundingClientRect();
+        resolve({ position: getComputedStyle(m).position, opacity: Number(getComputedStyle(m).opacity),
+          metaTop: r.top, metaBottom: r.bottom, bodyBottom: b.bottom,
+          nextTop: next.getBoundingClientRect().top,
+          actionsTop: a.top, actionsBottom: a.bottom });
+      }));
+    })`);
+    assert.equal(opened.position, 'static', 'opened usage stayed absolutely positioned: ' + JSON.stringify(opened));
+    assert.ok(opened.opacity > 0.9, 'opened usage is not readable: ' + JSON.stringify(opened));
+    assert.ok(opened.metaTop >= opened.bodyBottom - 0.5, 'opened usage covers the answer: ' + JSON.stringify(opened));
+    assert.ok(opened.metaBottom <= opened.nextTop + 0.5, 'opened usage crossed into the next row: ' + JSON.stringify(opened));
+    assert.ok(opened.actionsTop >= opened.metaBottom - 0.5, 'actions cover the opened usage fields: ' + JSON.stringify(opened));
+    assert.ok(opened.actionsBottom <= opened.nextTop + 0.5, 'actions crossed into the next row after opening usage: ' + JSON.stringify(opened));
+    await shot('usage-details-open-dark');
+    await evaluate('document.querySelector("#usage-msg .ui2-msg-meta-details > summary").click()');
     await evaluate('document.querySelector("#usage-msg .ui2-msg-meta-details > summary").focus()');
     await moveAway();
     const focused = await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .ui2-msg-meta")).opacity)');
@@ -775,7 +800,7 @@ async function main() {
     await hover('#usage-next');
     const hiddenAgain = await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .ui2-msg-meta")).opacity)');
     assert.ok(hiddenAgain < 0.2, 'usage stayed visible over the next message: ' + hiddenAgain);
-    results.push({ name: 'usage-overlay', ...usage, shown, focusedOpacity: focused, hiddenAgain });
+    results.push({ name: 'usage-overlay', ...usage, shown, opened, focusedOpacity: focused, hiddenAgain });
 
     fs.writeFileSync(path.join(out, 'measurements.json'), JSON.stringify(results, null, 2) + '\n');
     console.log('P5-B Chromium: ' + results.length + ' layouts verified; ' + out);
