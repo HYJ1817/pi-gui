@@ -2,10 +2,11 @@
  * and tool nodes. The layout never requests data or revises the P5-A event model. */
 import { renderUsageMeta } from './message-meta.js';
 import { preserveScrollAround } from './reading-position.js';
-import { isEntryExpanded, setEntryExpanded } from './tool-view.js';
+import { groupEntries, isEntryExpanded, setEntryExpanded } from './tool-view.js';
 import { formatTurnDuration } from './turn-outcome.js';
 import { orderConversationNodes as order } from './conversation-work-log.js';
 import { iconMarkup } from './ui/icons.js';
+import { activityNote, isAbnormalTurnStatus, isActiveTurnStatus, turnFoldLabel } from './ui/turn-fold.js';
 import { workIconName, workSummary, workSummaryIcon } from './ui/work-presentation.js';
 
 const ACTIVITY_PAGE = 40;
@@ -42,13 +43,37 @@ function write(node, value) {
   if (node.textContent !== value) node.textContent = value;
 }
 
-function duration(timing, status, now) {
+function rowDuration(timing, status, now) {
   if (!timing || timing.evidence === 'unknown') return '';
   const milliseconds = timing.durationMs ?? (Number.isFinite(timing.startedAt)
     ? (timing.endedAt ?? (ACTIVE.has(status) ? now : NaN)) - timing.startedAt
     : NaN);
   const formatted = formatTurnDuration(milliseconds);
   return formatted && timing.evidence === 'estimated' ? '约 ' + formatted : formatted;
+}
+
+/* T3 ends each post-steer segment at its own last entry, not at the end of the
+ * whole turn. Activity items carry their own timing; adopted native tool rows
+ * carry the already-authorized `_tlEntry` timestamps. Missing evidence returns
+ * null so the caller can leave the duration off instead of borrowing a later
+ * segment's clock. */
+function latestEnd(entries, items) {
+  let end = null;
+  const consider = value => {
+    if (Number.isFinite(value) && (end === null || value > end)) end = value;
+  };
+  const considerEntry = entry => {
+    if (!entry || !Number.isFinite(entry.startedAt)) return;
+    consider(Number.isFinite(entry.endedAt) ? entry.endedAt
+      : Number.isFinite(entry.durationMs) ? entry.startedAt + entry.durationMs : null);
+  };
+  for (const item of items) considerEntry(item.timing);
+  for (const entry of entries) {
+    if (entry.activityId || !entry.node) continue;
+    considerEntry(entry.node._tlEntry);
+    for (const child of groupEntries(entry.node)) considerEntry(child._tlEntry);
+  }
+  return end;
 }
 
 function rangeText(range) {
@@ -309,7 +334,8 @@ function nativeWorkDescriptors(node, result) {
     if (!rows.length) result.push({ kind: 'tool' });
     for (const row of rows) {
       const entry = row._tlEntry;
-      result.push({ name: entry?.name, title: entry?.label, kind: entry?.kind });
+      result.push({ name: entry?.name, title: entry?.label, kind: entry?.kind,
+        targetId: typeof entry?.path === 'string' ? entry.path : undefined });
     }
     return;
   }
@@ -334,6 +360,9 @@ function workDescriptors(work, items) {
       kind: item.kind === 'tool' ? undefined : item.kind,
       name: item.toolName,
       title: item.title,
+      // P5 already authorizes this display field; it is only used to count a
+      // distinct file when every call of that kind carries one.
+      targetId: typeof item.summary?.fileName === 'string' ? item.summary.fileName : undefined,
     });
   }
   return result;
@@ -341,6 +370,20 @@ function workDescriptors(work, items) {
 
 function hasFailureStatus(value) {
   return ['error', 'failed', 'incomplete', 'interrupted', 'cancelled'].includes(value);
+}
+
+function nativeStatuses(work) {
+  return work.flatMap(entry => entry.node?.matches?.('.tl-group')
+    ? [...entry.node.querySelectorAll('.tl-item')].map(row => row.dataset.status)
+    : entry.node?.dataset?.status ? [entry.node.dataset.status] : []);
+}
+
+function segmentActivityStatus(items, work, fallback = null) {
+  const states = [...items.map(item => item.status), ...nativeStatuses(work)];
+  if (states.some(status => ACTIVE.has(status))) return 'running';
+  if (states.some(status => status === 'failed' || status === 'error')) return 'failed';
+  if (states.some(status => hasFailureStatus(status))) return 'incomplete';
+  return fallback || (items.length || work.length ? 'completed' : 'unknown');
 }
 
 function makeActivityRow(make, item, expanded, onToggle) {
@@ -428,7 +471,7 @@ function makeActivityRow(make, item, expanded, onToggle) {
   row.setOpen(expanded);
 
   function tick(now) {
-    write(time, duration(latest.timing, latest.status, now));
+    write(time, rowDuration(latest.timing, latest.status, now));
   }
 
   return {
@@ -484,54 +527,244 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   const preview = taskPreview(taskContent, taskToggle, preferences);
   const planSlot = section('plan');
   const planControl = supportPlan(make, preferences);
-  const activity = makeDisclosure(make, 'activity', '工作记录', 'execution-activity-group');
-  const groupIcon = make('span', 'execution-work-icon');
-  groupIcon.setAttribute('aria-hidden', 'true');
-  const groupSummary = make('span', 'execution-activity-summary');
-  const groupStatus = make('span', 'execution-activity-status');
-  const groupMeta = make('span', 'execution-activity-count');
-  const groupTime = make('span', 'execution-time');
-  activity.head.prepend(groupIcon);
-  activity.title.after(groupSummary);
-  activity.head.append(groupStatus, groupMeta, groupTime);
-  const rowList = make('div', 'execution-activity-list execution-work-list');
-  rowList.dataset.executionPart = 'progress';
-  const pager = make('div', 'execution-activity-pager');
-  const prevPage = make('button', 'btn tiny ghost execution-activity-earlier');
-  prevPage.type = 'button';
-  const pageRange = make('span', 'execution-activity-range');
-  const nextPage = make('button', 'btn tiny ghost execution-activity-more');
-  nextPage.type = 'button';
-  pager.append(prevPage, pageRange, nextPage);
-  activity.body.append(pager, rowList);
-
+  const activityFlow = section('activity-flow');
   const thinking = section('thinking');
   const answer = section('answer');
   const outcomes = section('outcome');
-  const usage = makeDisclosure(make, 'usage', '用量与耗时', 'execution-usage');
-  // The former activity/progress controls now disclose one ordered work log.
-  // Existing activity choice wins; a lone old progress choice still reopens it.
-  let activityChoice = preferences?.get('activity');
-  if (typeof activityChoice !== 'boolean') activityChoice = preferences?.get('progress');
-  let activityChosen = typeof activityChoice === 'boolean';
-  activity.setOpen(activityChoice === true);
-  rowList.hidden = activity.body.hidden;
+  const usage = makeDisclosure(make, 'usage', '用量', 'execution-usage');
   usage.setOpen(preferences?.get('usage') === true);
-  node.append(task, planSlot, activity.node, thinking, answer, outcomes, usage.node);
+  node.append(task, planSlot, activityFlow, thinking, answer, outcomes, usage.node);
 
   const rows = new Map();
   const ledger = new Map();
-  let currentGroup = null;
-  let currentItems = [];
-  let sourceItems = EMPTY_NODES;
-  let currentDetails = EMPTY_DETAILS;
-  let pageStart = 0;
-  let pageEnd = 0;
-  let pageAnchor = null;
-  let pageLength = ACTIVITY_PAGE;
   const openRows = new Set();
   let timer = null;
-  let currentWork = EMPTY_NODES;
+
+  function stopClock() {
+    if (timer !== null) document.defaultView.clearInterval(timer);
+    timer = null;
+  }
+
+  function makeSegment(key, part, anchorId) {
+    const disclosure = makeDisclosure(make, part, '', 'execution-activity-group');
+    const icon = make('span', 'execution-work-icon');
+    icon.setAttribute('aria-hidden', 'true');
+    const summary = make('span', 'execution-activity-summary');
+    const status = make('span', 'execution-activity-status');
+    const meta = make('span', 'execution-activity-count');
+    const time = make('span', 'execution-time');
+    disclosure.head.prepend(icon);
+    disclosure.title.after(summary);
+    disclosure.head.append(status, meta, time);
+    disclosure.head.append(disclosure.head.querySelector('.execution-chevron'));
+    const list = make('div', 'execution-activity-list execution-work-list');
+    list.dataset.executionPart = part === 'activity' ? 'progress' : 'progress-continued';
+    const pager = make('div', 'execution-activity-pager');
+    const prevPage = make('button', 'btn tiny ghost execution-activity-earlier');
+    prevPage.type = 'button';
+    const pageRange = make('span', 'execution-activity-range');
+    const nextPage = make('button', 'btn tiny ghost execution-activity-more');
+    nextPage.type = 'button';
+    pager.append(prevPage, pageRange, nextPage);
+    disclosure.body.append(pager, list);
+    if (anchorId) disclosure.node.dataset.anchorId = anchorId;
+
+    const preferenceKey = part === 'activity' ? 'activity' : 'activity:' + key;
+    let choice = preferences?.get(preferenceKey);
+    if (part === 'activity' && typeof choice !== 'boolean') choice = preferences?.get('progress');
+    let chosen = typeof choice === 'boolean';
+    disclosure.setOpen(choice === true);
+    list.hidden = disclosure.body.hidden;
+
+    let items = EMPTY_NODES;
+    let work = EMPTY_NODES;
+    let pageStart = 0;
+    let pageEnd = 0;
+    let pageAnchor = null;
+    let pageLength = ACTIVITY_PAGE;
+    let timing = null;
+    let turnStatus = '';
+    let continued = false;
+    let note = '';
+    let summaryTextValue = '';
+    let statusValue = '';
+    let countText = '';
+    let labelText = '';
+
+    function setOpenRow(id, open) {
+      preferences?.set('activity-item:' + id, open);
+      openRows.delete(id);
+      if (!open) return;
+      openRows.add(id);
+      if (openRows.size > MAX_OPEN_ACTIVITIES) openRows.delete(openRows.values().next().value);
+    }
+
+    function alignWork() {
+      order(list, work.map(entry => entry.node || rows.get(entry.activityId)?.node).filter(Boolean));
+      list.hidden = disclosure.body.hidden;
+    }
+
+    function removeRows() {
+      for (const row of rows.values()) row.restore();
+      rows.clear();
+      // Native progress stays searchable while folded; only tool detail rows
+      // are lazy/windowed. Never discard an adopted message to close a panel.
+      order(list, work.filter(entry => entry.node).map(entry => entry.node));
+    }
+
+    function renderRows() {
+      if (disclosure.body.hidden) return;
+      const total = items.length;
+      const anchoredIndex = pageAnchor === null ? -1 : items.findIndex(item => item.id === pageAnchor);
+      const firstPage = ACTIVE.has(statusValue) ? Math.max(0, total - ACTIVITY_PAGE) : 0;
+      pageStart = anchoredIndex >= 0 ? anchoredIndex : pageAnchor === null ? firstPage : Math.min(pageStart, Math.max(0, total - 1));
+      pageEnd = Math.min(total, pageStart + pageLength);
+      const subset = items.slice(pageStart, pageEnd);
+      pageAnchor = subset[0]?.id ?? null;
+      const visible = new Set(subset.map(item => item.id));
+      for (const [id, row] of rows) {
+        if (visible.has(id)) continue;
+        if (row.node.contains(document.activeElement)) disclosure.head.focus({ preventScroll: true });
+        row.restore();
+        row.node.remove();
+        rows.delete(id);
+      }
+      const instant = now();
+      for (const item of subset) {
+        if (!rows.has(item.id)) rows.set(item.id, makeActivityRow(make, item,
+          openRows.has(item.id) || preferences?.get('activity-item:' + item.id) === true,
+          open => setOpenRow(item.id, open)));
+        const row = rows.get(item.id);
+        row.update(item, currentDetails.get(item.id), instant);
+      }
+      alignWork();
+      prevPage.hidden = pageStart === 0;
+      nextPage.hidden = pageEnd === total;
+      pager.hidden = prevPage.hidden && nextPage.hidden;
+      write(prevPage, '显示更早记录（' + (Math.max(0, pageStart - ACTIVITY_PAGE) + 1) + '–' + pageStart + '）');
+      write(pageRange, (pageStart + 1) + '–' + pageEnd + ' / ' + total);
+      write(nextPage, '显示较新记录（' + (pageEnd + 1) + '–' + Math.min(total, pageEnd + ACTIVITY_PAGE) + '）');
+    }
+
+    function movePage(earlier) {
+      const control = earlier ? prevPage : nextPage;
+      if (control.hidden) return;
+      preserveScrollAround(pager, () => {
+        const start = earlier ? Math.max(0, pageStart - ACTIVITY_PAGE) : pageEnd;
+        pageLength = earlier ? pageStart - start : ACTIVITY_PAGE;
+        pageAnchor = items[start]?.id ?? null;
+        renderRows();
+        if (control.hidden) {
+          const otherControl = earlier ? nextPage : prevPage;
+          (otherControl.hidden ? disclosure.head : otherControl).focus({ preventScroll: true });
+        }
+      });
+    }
+
+    disclosure.head.addEventListener('click', () => preserveScrollAround(disclosure.head, () => {
+      const opening = disclosure.body.hidden;
+      chosen = true;
+      choice = opening;
+      disclosure.setOpen(opening);
+      preferences?.set(preferenceKey, opening);
+      if (opening) renderRows();
+      else removeRows();
+      alignWork();
+    }));
+    prevPage.addEventListener('click', () => movePage(true));
+    nextPage.addEventListener('click', () => movePage(false));
+
+    function paintLabel(instant) {
+      labelText = turnFoldLabel({ status: turnStatus, timing, now: instant, continued });
+      const visible = labelText + (note ? ' · ' + note : '');
+      write(disclosure.title, visible || '工作记录');
+      const accessible = [visible, summaryTextValue, countText].filter(Boolean).join(' · ');
+      if (disclosure.head.title !== accessible) disclosure.head.title = accessible;
+      write(status, '');
+      write(time, '');
+    }
+
+    return {
+      key, node: disclosure.node, head: disclosure.head, body: disclosure.body,
+      list,
+      setOpen: disclosure.setOpen,
+      update({ items: nextItems, work: nextWork, group, turnStatus: nextTurnStatus, timing: nextTiming,
+        continued: isContinued, note: nextNote, now: instant }) {
+        items = nextItems;
+        work = nextWork;
+        turnStatus = nextTurnStatus || '';
+        timing = nextTiming || null;
+        continued = isContinued === true;
+        statusValue = segmentActivityStatus(items, work, group?.status || null);
+        note = nextNote || '';
+        disclosure.node.dataset.status = statusValue;
+        disclosure.node.dataset.turnStatus = turnStatus;
+        disclosure.node.dataset.attention = note || hasFailureStatus(statusValue) ? 'true' : 'false';
+        disclosure.node.dataset.continued = continued ? 'true' : 'false';
+        disclosure.node.dataset.single = items.length + work.length <= 1 ? 'true' : 'false';
+        const descriptors = workDescriptors(work, items);
+        summaryTextValue = workSummary(descriptors) || (work.length ? work.length + ' 项工作记录' : '');
+        write(summary, summaryTextValue);
+        const activeCount = items.filter(item => ACTIVE.has(item.status)).length;
+        const failed = items.filter(item => item.status === 'failed').length;
+        countText = [items.length ? items.length + ' 项' : work.length ? work.length + ' 条记录' : '',
+          activeCount > 1 ? activeCount + ' 项同时执行' : '', failed ? failed + ' 项失败' : '']
+          .filter(Boolean).join(' · ');
+        write(meta, countText);
+        const summaryIcon = workSummaryIcon(descriptors);
+        const iconName = turnStatus === 'failed' || statusValue === 'failed' ? 'circleAlert'
+          : ['interrupted', 'cancelled', 'stopped'].includes(turnStatus) ? 'stop'
+            : turnStatus === 'incomplete' || statusValue === 'incomplete' ? 'warning'
+              : summaryIcon;
+        if (icon.dataset.icon !== iconName) {
+          icon.dataset.icon = iconName;
+          icon.innerHTML = iconMarkup(iconName); // local constant only
+        }
+        paintLabel(instant);
+        const active = items.some(item => ACTIVE.has(item.status))
+          || nativeStatuses(work).some(status => status === 'running' || status === 'waiting')
+          || isActiveTurnStatus(turnStatus);
+        const attention = items.some(item => hasFailureStatus(item.status))
+          || nativeStatuses(work).some(hasFailureStatus);
+        const wantsOpen = chosen ? choice === true : active || attention;
+        if (wantsOpen !== !disclosure.body.hidden) disclosure.setOpen(wantsOpen);
+        disclosure.node.hidden = items.length === 0 && work.length === 0;
+        if (disclosure.body.hidden || !items.length) removeRows();
+        if (!disclosure.body.hidden) renderRows();
+        alignWork();
+        return { active, hidden: disclosure.node.hidden };
+      },
+      paint(instant) {
+        paintLabel(instant);
+        if (disclosure.body.hidden) return;
+        for (const row of rows.values()) if (row.active()) row.tick(instant);
+      },
+      contains(target) {
+        return disclosure.body.contains(target);
+      },
+      reveal() {
+        if (!disclosure.body.hidden) return false;
+        disclosure.setOpen(true);
+        renderRows();
+        alignWork();
+        return true;
+      },
+      cleanup() {
+        for (const row of rows.values()) row.restore();
+        rows.clear();
+      },
+    };
+  }
+
+  const main = makeSegment('main', 'activity', null);
+  const segments = new Map([['main', main]]);
+  let currentItems = EMPTY_NODES;
+  let currentDetails = EMPTY_DETAILS;
+
+  usage.head.addEventListener('click', () => preserveScrollAround(usage.head, () => {
+    usage.setOpen(usage.body.hidden);
+    preferences?.set('usage', !usage.body.hidden);
+  }));
 
   function tick() {
     if (!node.isConnected) {
@@ -539,107 +772,19 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
       return;
     }
     const instant = now();
-    write(groupTime, duration(currentGroup?.timing, currentGroup?.status, instant));
-    if (activity.body.hidden) return;
-    for (const row of rows.values()) if (row.active()) row.tick(instant);
-  }
-
-  function stopClock() {
-    if (timer !== null) document.defaultView.clearInterval(timer);
-    timer = null;
-  }
-
-  function removeRows() {
-    for (const row of rows.values()) row.restore();
-    rows.clear();
-    // Native progress stays searchable while folded; only tool detail rows
-    // are lazy/windowed. Never discard an adopted message to close a panel.
-    order(rowList, currentWork.filter(entry => entry.node).map(entry => entry.node));
-  }
-
-  function alignWork() {
-    order(rowList, currentWork.map(entry => entry.node || rows.get(entry.activityId)?.node).filter(Boolean));
-    rowList.hidden = activity.body.hidden;
-  }
-
-  function setOpenRow(id, open) {
-    preferences?.set('activity-item:' + id, open);
-    openRows.delete(id);
-    if (!open) return;
-    openRows.add(id);
-    if (openRows.size > MAX_OPEN_ACTIVITIES) openRows.delete(openRows.values().next().value);
-  }
-
-  function renderRows() {
-    if (activity.body.hidden) return;
-    const total = currentItems.length;
-    const anchoredIndex = pageAnchor === null ? -1 : currentItems.findIndex(item => item.id === pageAnchor);
-    const firstPage = ACTIVE.has(currentGroup?.status) ? Math.max(0, total - ACTIVITY_PAGE) : 0;
-    pageStart = anchoredIndex >= 0 ? anchoredIndex : pageAnchor === null ? firstPage : Math.min(pageStart, Math.max(0, total - 1));
-    pageEnd = Math.min(total, pageStart + pageLength);
-    const subset = currentItems.slice(pageStart, pageEnd);
-    pageAnchor = subset[0]?.id ?? null;
-    const visible = new Set(subset.map(item => item.id));
-    for (const [id, row] of rows) {
-      if (visible.has(id)) continue;
-      if (row.node.contains(document.activeElement)) activity.head.focus({ preventScroll: true });
-      row.restore();
-      row.node.remove();
-      rows.delete(id);
+    let active = false;
+    for (const segment of segments.values()) {
+      segment.paint(instant);
+      active ||= segment.node.dataset.status === 'running' || segment.node.dataset.status === 'waiting'
+        || segment.node.dataset.turnStatus === 'running' || segment.node.dataset.turnStatus === 'waiting';
     }
-    const instant = now();
-    for (const item of subset) {
-      if (!rows.has(item.id)) rows.set(item.id, makeActivityRow(make, item,
-        openRows.has(item.id) || preferences?.get('activity-item:' + item.id) === true,
-        open => setOpenRow(item.id, open)));
-      const row = rows.get(item.id);
-      row.update(item, currentDetails.get(item.id), instant);
-    }
-    alignWork();
-    prevPage.hidden = pageStart === 0;
-    nextPage.hidden = pageEnd === total;
-    pager.hidden = prevPage.hidden && nextPage.hidden;
-    write(prevPage, '显示更早记录（' + (Math.max(0, pageStart - ACTIVITY_PAGE) + 1) + '–' + pageStart + '）');
-    write(pageRange, (pageStart + 1) + '–' + pageEnd + ' / ' + total);
-    write(nextPage, '显示较新记录（' + (pageEnd + 1) + '–' + Math.min(total, pageEnd + ACTIVITY_PAGE) + '）');
+    if (!active) stopClock();
   }
-
-  function movePage(earlier) {
-    const control = earlier ? prevPage : nextPage;
-    if (control.hidden) return;
-    preserveScrollAround(pager, () => {
-      const start = earlier ? Math.max(0, pageStart - ACTIVITY_PAGE) : pageEnd;
-      pageLength = earlier ? pageStart - start : ACTIVITY_PAGE;
-      pageAnchor = currentItems[start]?.id ?? null;
-      renderRows();
-      if (control.hidden) {
-        const otherControl = earlier ? nextPage : prevPage;
-        (otherControl.hidden ? activity.head : otherControl).focus({ preventScroll: true });
-      }
-    });
-  }
-
-  activity.head.addEventListener('click', () => preserveScrollAround(activity.head, () => {
-    const opening = activity.body.hidden;
-    activityChosen = true;
-    activityChoice = opening;
-    activity.setOpen(opening);
-    preferences?.set('activity', opening);
-    if (opening) renderRows();
-    else removeRows();
-    alignWork();
-  }));
-  prevPage.addEventListener('click', () => movePage(true));
-  nextPage.addEventListener('click', () => movePage(false));
-  usage.head.addEventListener('click', () => preserveScrollAround(usage.head, () => {
-    usage.setOpen(usage.body.hidden);
-    preferences?.set('usage', !usage.body.hidden);
-  }));
 
   function update({
-    turn, group, items = EMPTY_NODES, input, plan, progress: process = EMPTY_NODES, thinking: activeThinking = EMPTY_NODES,
-    answer: final = EMPTY_NODES, outcomes: terminal = EMPTY_NODES, details = EMPTY_DETAILS, usage: existingUsage = EMPTY_NODES,
-    workOrder = null,
+    turn, group, items = EMPTY_NODES, input, plan, progress: process = EMPTY_NODES, steers = EMPTY_NODES,
+    thinking: activeThinking = EMPTY_NODES, answer: final = EMPTY_NODES, outcomes: terminal = EMPTY_NODES,
+    details = EMPTY_DETAILS, usage: existingUsage = EMPTY_NODES, workOrder = null,
   }) {
     node.dataset.executionTurn = turn.id;
     node.dataset.status = turn.status;
@@ -648,66 +793,86 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
     render(planSlot, plan ? [plan] : []);
     planControl.update(plan, turn);
 
-    const nextGroup = group?.turnId === turn.id ? group : null;
-    if (currentGroup !== nextGroup || sourceItems !== items || currentDetails !== details) {
-      currentGroup = nextGroup;
-      sourceItems = items;
-      currentItems = currentGroup ? items.filter(item => item.turnId === turn.id && item.parentId === group.id)
-        .sort((first, second) => first.position.sequence - second.position.sequence || first.position.part - second.position.part) : [];
-      currentDetails = details;
-      if (!currentItems.length) {
-        pageAnchor = null;
-        pageLength = ACTIVITY_PAGE;
-        openRows.clear();
-      }
-    }
-    // Hosts supply actual ordered display entries. Membership is checked here
-    // so a malformed presentation hint cannot hide/duplicate a native node.
-    const native = new Set(process);
+    currentItems = group?.turnId === turn.id
+      ? items.filter(item => item.turnId === turn.id && item.parentId === group.id)
+        .sort((first, second) => first.position.sequence - second.position.sequence || first.position.part - second.position.part)
+      : EMPTY_NODES;
+    currentDetails = details;
+    const native = new Set([...process, ...steers]);
     const ids = new Set(currentItems.map(item => item.id));
     const seenNodes = new Set(), seenIds = new Set();
     const validOrder = Array.isArray(workOrder) && workOrder.every(entry => {
+      if (entry.steer) {
+        if (entry.node && native.has(entry.node) && !seenNodes.has(entry.node)) { seenNodes.add(entry.node); return true; }
+        return false;
+      }
       if (entry.node && native.has(entry.node) && !seenNodes.has(entry.node)) { seenNodes.add(entry.node); return true; }
       if (ids.has(entry.activityId) && !seenIds.has(entry.activityId)) { seenIds.add(entry.activityId); return true; }
       return false;
     }) && seenNodes.size === native.size && seenIds.size === ids.size;
-    currentWork = validOrder ? workOrder : [...process.map(node => ({ node })), ...currentItems.map(item => ({ activityId: item.id }))];
-    const activeCount = currentItems.filter(item => ACTIVE.has(item.status)).length;
-    const failed = currentItems.filter(item => item.status === 'failed').length;
-    activity.node.dataset.status = currentGroup?.status || 'unknown';
-    activity.node.dataset.anchorId = 'work-' + turn.id;
-    write(activity.title, '工作记录');
-    write(groupStatus, currentGroup ? label(currentGroup.status) : '');
-    groupStatus.hidden = !currentGroup;
-    write(groupMeta, [currentItems.length ? currentItems.length + ' 项' : process.length + ' 条记录',
-      activeCount > 1 ? activeCount + ' 项同时执行' : '', failed ? failed + ' 项失败' : ''].filter(Boolean).join(' · '));
-    write(groupTime, duration(currentGroup?.timing, currentGroup?.status, now()));
-    const descriptors = workDescriptors(currentWork, currentItems);
-    write(groupSummary, workSummary(descriptors) || (currentWork.length ? currentWork.length + ' 项工作记录' : ''));
-    const summaryIcon = workSummaryIcon(descriptors);
-    if (groupIcon.dataset.icon !== summaryIcon) {
-      groupIcon.dataset.icon = summaryIcon;
-      groupIcon.innerHTML = iconMarkup(summaryIcon); // local constant only
+    const orderedWork = validOrder ? workOrder
+      : [...process.map(node => ({ node })), ...steers.map(node => ({ node, steer: true })),
+        ...currentItems.map(item => ({ activityId: item.id }))];
+
+    // Split the actual ordered work entries at user steer nodes. A steer is a
+    // real user message, so it stays visible between two work folds; only the
+    // work around it is collapsed.
+    const parts = [{ key: 'main', steers: [], entries: [], startedAt: null, index: 0 }];
+    for (const entry of orderedWork) {
+      const tail = parts[parts.length - 1];
+      if (entry.steer && entry.node) {
+        if (!tail.entries.length && tail.steers.length) {
+          tail.steers.push(entry.node);
+          if (Number.isFinite(entry.startedAt)) tail.startedAt = entry.startedAt;
+        } else {
+          parts.push({ key: entry.steerKey || entry.node.dataset?.anchorId || entry.node.dataset?.blockId
+            || 'steer:' + parts.length, steers: [entry.node], entries: [],
+          startedAt: Number.isFinite(entry.startedAt) ? entry.startedAt : null, index: parts.length });
+        }
+      } else tail.entries.push(entry);
     }
-    const single = descriptors.length <= 1;
-    activity.node.dataset.single = single ? 'true' : 'false';
-    const nativeStatuses = process.flatMap(entry => entry.matches?.('.tl-group')
-      ? [...entry.querySelectorAll('.tl-item')].map(row => row.dataset.status)
-      : entry.dataset?.status ? [entry.dataset.status] : []);
-    const active = currentItems.some(item => ACTIVE.has(item.status))
-      || nativeStatuses.some(status => status === 'running' || status === 'waiting')
-      || ACTIVE.has(currentGroup?.status);
-    const attention = currentItems.some(item => hasFailureStatus(item.status))
-      || nativeStatuses.some(hasFailureStatus);
-    const wantsOpen = single ? true : activityChosen ? activityChoice === true : active || attention;
-    if (wantsOpen !== !activity.body.hidden) activity.setOpen(wantsOpen);
-    activity.node.hidden = currentItems.length === 0 && process.length === 0;
-    if (activity.body.hidden || !currentItems.length) removeRows();
-    if (!activity.body.hidden) renderRows();
-    alignWork();
-    if (ACTIVE.has(currentGroup?.status) && Number.isFinite(currentGroup?.timing?.startedAt)) {
-      if (timer === null && document.defaultView) timer = document.defaultView.setInterval(tick, 1000);
-    } else stopClock();
+
+    const flow = [];
+    const used = new Set();
+    for (const [index, part] of parts.entries()) {
+      const segment = index === 0 ? main : (segments.get(part.key)
+        || makeSegment(part.key, 'activity-continued', null));
+      if (index > 0) segments.set(part.key, segment);
+      used.add(part.key);
+      const partItems = part.entries.filter(entry => entry.activityId)
+        .map(entry => currentItems.find(item => item.id === entry.activityId)).filter(Boolean);
+      const normalizedWork = part.entries.filter(entry => entry.node
+        || partItems.some(item => item.id === entry.activityId));
+      const notes = activityNote([...partItems.map(item => item.status), ...nativeStatuses(normalizedWork)]);
+      const segmentNote = isAbnormalTurnStatus(turn.status) ? '' : notes;
+      const partEnd = latestEnd(part.entries, partItems);
+      const lastPart = index === parts.length - 1;
+      const segmentEnd = lastPart && Number.isFinite(turn.timing?.endedAt)
+        ? turn.timing.endedAt : partEnd;
+      const timing = index === 0 ? turn.timing
+        : part.startedAt !== null ? {
+          startedAt: part.startedAt,
+          endedAt: segmentEnd,
+          evidence: Number.isFinite(segmentEnd)
+            ? turn.timing?.evidence === 'estimated' ? 'estimated' : 'observed' : 'unknown',
+        } : null;
+      const result = segment.update({
+        items: partItems, work: normalizedWork, group: index === 0 ? group : null,
+        turnStatus: turn.status, timing, continued: index > 0, note: segmentNote, now: now(),
+      });
+      if (index > 0) {
+        for (const steer of part.steers) flow.push(steer);
+      }
+      if (!result.hidden) flow.push(segment.node);
+    }
+    for (const [key, segment] of [...segments]) {
+      if (used.has(key)) continue;
+      segment.cleanup();
+      segment.node.remove();
+      segments.delete(key);
+    }
+    order(activityFlow, flow);
+    activityFlow.hidden = flow.length === 0;
 
     render(thinking, activeThinking);
     render(answer, final);
@@ -734,31 +899,26 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
       usageNodes.push(row.entry);
     }
     for (const id of ledger.keys()) if (!wanted.has(id)) ledger.delete(id);
-    const elapsed = duration(turn.timing, turn.status, now());
-    if (elapsed && !ACTIVE.has(turn.status)) {
-      let clock = usage.body.querySelector('.execution-usage-duration');
-      if (!clock) clock = make('div', 'execution-usage-duration');
-      write(clock, '任务耗时 ' + elapsed);
-      usageNodes.push(clock);
-    }
     order(usage.body, usageNodes);
     usage.node.hidden = usageNodes.length === 0;
+
+    if (isActiveTurnStatus(turn.status) && Number.isFinite(turn.timing?.startedAt)) {
+      if (timer === null && document.defaultView) timer = document.defaultView.setInterval(tick, 1000);
+    } else stopClock();
   }
 
   return {
     node, update,
     reveal(messageNode) {
-      if (rowList.contains(messageNode) && activity.body.hidden) {
-        activity.setOpen(true);
-        renderRows();
-        alignWork();
+      for (const segment of segments.values()) {
+        if (segment.contains(messageNode) && segment.reveal()) return;
       }
     },
     release() {
       stopClock();
       preview.stop();
       planControl.clear();
-      for (const row of rows.values()) row.restore();
+      for (const segment of segments.values()) segment.cleanup();
       node.remove();
     },
   };

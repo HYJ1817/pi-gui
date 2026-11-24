@@ -1325,6 +1325,73 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     }).filter(Boolean);
   }
 
+  /* Native fallback timing stays on the display nodes only. It is derived from
+   * real message/tool observation times already held by the record, never from
+   * the next user message or a made-up settle point. Missing evidence simply
+   * leaves the duration off the fold label. */
+  function annotateNativeTurnTiming(blocks, view, supplemental, outcomeByKey, history, record) {
+    const segments = [];
+    let current = null;
+    for (const block of blocks) {
+      if (!block || typeof block.id !== 'string') continue;
+      if (block.kind === 'user' && !supplemental.has(block)) {
+        current = { initial: block, startAt: Number.isFinite(block.at) ? block.at : null,
+          answerEnd: null, toolEnd: null, contentEnd: null, steers: [], blocks: [block] };
+        segments.push(current);
+        continue;
+      }
+      if (!current) continue;
+      current.blocks.push(block);
+      if (block.kind === 'user') current.steers.push(block);
+      if (!Number.isFinite(block.at)) continue;
+      current.contentEnd = Math.max(current.contentEnd ?? 0, block.at);
+      if (block.kind === 'assistant') current.answerEnd = Math.max(current.answerEnd ?? 0, block.at);
+      if (block.kind === 'tools') current.toolEnd = Math.max(current.toolEnd ?? 0, block.at);
+    }
+    const annotate = (block, startAt, endAt, status, continued) => {
+      const node = view.timeline.nodes.get(block.id)?.node;
+      if (!node) return;
+      if (Number.isFinite(startAt)) node.dataset.turnStartAt = String(Math.round(startAt));
+      else delete node.dataset.turnStartAt;
+      if (Number.isFinite(endAt)) node.dataset.turnEndedAt = String(Math.round(endAt));
+      else delete node.dataset.turnEndedAt;
+      if (status) node.dataset.turnStatus = status;
+      else delete node.dataset.turnStatus;
+      if (continued) node.dataset.turnContinued = '';
+      else delete node.dataset.turnContinued;
+    };
+    for (const [index, segment] of segments.entries()) {
+      const entry = outcomeByKey.get(segment.initial.id) || null;
+      const complete = history || entry?.complete === true;
+      const outcomeState = entry?.outcome?.state || '';
+      const status = complete
+        ? outcomeState === 'unsettled' ? 'incomplete' : outcomeState || 'unknown'
+        : outcomeState && outcomeState !== 'completed' ? outcomeState : 'running';
+      const last = index === segments.length - 1;
+      const settledAt = last && !history && Number.isFinite(record?.settledAt) ? record.settledAt : null;
+      const observedEnd = Math.max(segment.answerEnd ?? 0, segment.toolEnd ?? 0,
+        segment.contentEnd ?? 0, settledAt ?? 0);
+      const endAt = !['running', 'queued', 'waiting', 'stopping'].includes(status)
+        && Number.isFinite(segment.startAt) && observedEnd > segment.startAt ? observedEnd : null;
+      annotate(segment.initial, segment.startAt, endAt, status, false);
+      /* Each supplemental input owns the work up to the next supplemental
+       * input, not the rest of the turn. T3 slices later folds at the steer
+       * boundary; reusing the whole segment's end would overstate every early
+       * steer. Missing observed work leaves the duration off. */
+      const activeStatus = ['running', 'queued', 'waiting', 'stopping'].includes(status);
+      for (const [steerIndex, steer] of segment.steers.entries()) {
+        const start = segment.blocks.indexOf(steer);
+        const next = segment.steers[steerIndex + 1];
+        const stop = next ? segment.blocks.indexOf(next) : segment.blocks.length;
+        const observed = segment.blocks.slice(start + 1, stop)
+          .reduce((end, block) => block.kind !== 'user' && Number.isFinite(block.at)
+            ? Math.max(end, block.at) : end, -Infinity);
+        const steerEnd = !activeStatus && Number.isFinite(steer.at) && observed > steer.at ? observed : null;
+        annotate(steer, Number.isFinite(steer.at) ? steer.at : null, steerEnd, status, true);
+      }
+    }
+  }
+
   function clearExecutionViews(timeline) {
     timeline.flow?.restore();
     timeline.flow = null;
@@ -1416,7 +1483,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       execution.outcome = renderTurnOutcome(deriveTurnOutcome({ tools, lastAssistant }));
       timeline.execution.set(key, execution);
     }
-    const progress = [], answer = [], workOrder = [];
+    const progress = [], steers = [], answer = [], workOrder = [];
     const activities = [...turn.items].sort((a, b) => a.position.sequence - b.position.sequence || a.position.part - b.position.part);
     let activityIndex = 0;
     let plan = null;
@@ -1425,10 +1492,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       else if (block.kind === 'assistant' && block.messageId === turn.finalResponseId) answer.push(info.node);
       else if (block.kind === 'tools') {
         for (const tool of block.tools) workOrder.push({ activityId: activities[activityIndex++]?.id });
+      } else if (block.kind === 'user') {
+        steers.push(info.node);
+        workOrder.push({ node: info.node, steer: true, startedAt: block.at,
+          steerKey: block.id });
       } else { progress.push(info.node); workOrder.push({ node: info.node }); }
     }
     execution.update({ turn, group: turn.group, items: turn.items, input: rows[0].info.node,
-      plan, progress, answer, workOrder, outcomes: execution.outcome ? [execution.outcome] : [] });
+      plan, progress, steers, answer, workOrder, outcomes: execution.outcome ? [execution.outcome] : [] });
     return { key, node: execution.node };
   }
 
@@ -1479,7 +1550,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       const answerResponses = new Set(turn.parts.filter(part => part.kind === 'answer' || part.kind === 'partial-answer')
         .map(part => part.message.id));
       const inputsByStart = new Map(turn.additionalInputs.map(input => [input.id, input]));
-      const progress = [], thinking = [], answer = [], outcomes = [];
+      const progress = [], steers = [], thinking = [], answer = [], outcomes = [];
       const fallbackRunning = turn.attempts.some(attempt => attempt.kind === 'fallback' && attempt.status === 'running');
       let plan = null;
       for (const member of members) {
@@ -1488,7 +1559,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         const { sequence, responseSequence } = store.executionWitness(record, block);
         if (block.kind === 'user') {
           info.updateInput?.(snapshot, member === row ? turn.input : inputsByStart.get(turn.id + ':input:' + sequence));
-          if (member !== row) progress.push(info.node);
+          if (member !== row) steers.push({ node: info.node, sequence, part: 0, at: block.at });
         } else if (block.kind === 'plan') {
           if (!info.node.hidden) plan = info.node;
         } else if (block.kind === 'thinking' && block.state === 'streaming') {
@@ -1529,9 +1600,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         { sequence: store.executionWitness(record, member.block).sequence, part }]));
       const workOrder = [
         ...progress.map(node => ({ node, ...positions.get(node) })),
+        ...steers.map(steer => ({ node: steer.node, ...positions.get(steer.node), steer: true,
+          startedAt: steer.at, steerKey: steer.node.dataset.anchorId || steer.node.dataset.blockId
+            || String(steer.sequence) })),
         ...items.map(item => ({ activityId: item.id, ...item.position })),
       ].sort((a, b) => a.sequence - b.sequence || a.part - b.part);
-      execution.update({ turn, group, items, input: row.info.node, plan, progress, thinking, answer, outcomes, usage, workOrder });
+      execution.update({ turn, group, items, input: row.info.node, plan, progress,
+        steers: steers.map(steer => steer.node), thinking, answer, outcomes, usage, workOrder });
       nodes.push(execution.node);
       used.add(turn.id);
     }
@@ -1588,6 +1663,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const turnOutcomes = timelineTurnOutcomes(blocks, record, supplemental);
     const outcomeByLastBlock = new Map();
     for (const turn of turnOutcomes) outcomeByLastBlock.set(turn.lastBlockId, turn);
+    const outcomeByKey = new Map(turnOutcomes.map(turn => [turn.key, turn]));
     /* 每一轮只在最后一条 assistant 正文上放“重新生成”：它代表该轮回复的
      * 可见终点，点它重跑的是这一轮的用户消息。 */
     const regenerateByBlock = new Map();
@@ -1696,6 +1772,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const turnKeys = new Set(blocks.filter(block => block && block.kind === 'user').map(block => block.id));
     for (const key of view.timeline.settledTurns) if (!turnKeys.has(key)) view.timeline.settledTurns.delete(key);
     /* 顺序由数据决定；这里只是把 DOM 对齐到数据，不猜测事件先后。 */
+    if (rows) annotateNativeTurnTiming(blocks, view, supplemental, outcomeByKey, history, record);
     const { nodes, usageInTimeline } = rows
       ? composeExecutionRows(rows, view.timeline, record, recovered, history)
       : { nodes: [...wanted], usageInTimeline: false };

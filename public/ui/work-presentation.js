@@ -18,11 +18,11 @@ const ACTION_ORDER = ['command', 'read', 'search', 'edit', 'write', 'web', 'comp
 
 const ACTION = {
   command: { icon: 'terminal', label: count => `运行 ${count} 条命令` },
-  read: { icon: 'eye', label: count => `读取 ${count} 个文件` },
+  read: { icon: 'eye', label: count => `读取 ${count} 次`, identity: 'file', distinct: count => `读取 ${count} 个文件` },
   search: { icon: 'search', label: count => `搜索 ${count} 次` },
-  edit: { icon: 'edit', label: count => `编辑 ${count} 个文件` },
-  write: { icon: 'edit', label: count => `写入 ${count} 个文件` },
-  web: { icon: 'globe', label: count => `浏览 ${count} 个页面` },
+  edit: { icon: 'edit', label: count => `编辑 ${count} 次`, identity: 'file', distinct: count => `编辑 ${count} 个文件` },
+  write: { icon: 'edit', label: count => `写入 ${count} 次`, identity: 'file', distinct: count => `写入 ${count} 个文件` },
+  web: { icon: 'globe', label: count => `浏览 ${count} 次`, identity: 'web', distinct: count => `浏览 ${count} 个页面` },
   compaction: { icon: 'layers', label: count => `压缩上下文 ${count} 次` },
   subagent: { icon: 'conversation', label: count => `运行 ${count} 个子代理` },
   other: { icon: 'tool', label: count => `执行 ${count} 项工具` },
@@ -47,6 +47,7 @@ export function workActionKind(value) {
   const kind = kindOf(value);
   const name = nameOf(value);
   const title = typeof value?.title === 'string' ? value.title : '';
+  if (kind === 'thinking' || kind === 'reasoning') return 'thinking';
   if (kind === 'compaction' || kind === 'context-compaction') return 'compaction';
   if (kind === 'subagent') return 'subagent';
   if (kind === 'read') return 'read';
@@ -97,10 +98,14 @@ export function thinkingPreview(text, maximum = 180) {
   return plain.length > maximum ? plain.slice(0, maximum - 1).trimEnd() + '…' : plain;
 }
 
-/** Compact group summary, e.g. "读取 1 个文件 · 搜索 1 次 · 运行 2 条命令".
- * Counts only descriptors the caller already owns; no hidden rows are inferred. */
+/** Compact group summary, e.g. "读取 2 次 · 搜索 1 次 · 运行 2 条命令".
+ * A distinct file/page count is used only when every call of that kind carries
+ * an explicit, reliable target identity. Otherwise the label counts calls, so
+ * repeated reads of one file are never reported as multiple files. */
 export function workSummary(descriptors = []) {
   const counts = new Map();
+  const targets = new Map();
+  const incompleteIdentity = new Set();
   let reasoning = 0;
   let total = 0;
   for (const descriptor of descriptors) {
@@ -110,10 +115,20 @@ export function workSummary(descriptors = []) {
     if (!kind) continue;
     if (kind === 'thinking') { reasoning += 1; continue; }
     counts.set(kind, (counts.get(kind) || 0) + 1);
+    if (!ACTION[kind]?.identity) continue;
+    const target = typeof descriptor.targetId === 'string' ? descriptor.targetId : '';
+    if (!target) { incompleteIdentity.add(kind); continue; }
+    if (!targets.has(kind)) targets.set(kind, new Set());
+    targets.get(kind).add(target);
   }
   const parts = ACTION_ORDER
     .filter(kind => counts.has(kind))
-    .map(kind => ACTION[kind].label(counts.get(kind)));
+    .map(kind => {
+      const action = ACTION[kind];
+      const distinct = targets.get(kind);
+      return distinct && !incompleteIdentity.has(kind)
+        ? action.distinct(distinct.size) : action.label(counts.get(kind));
+    });
   if (parts.length) return parts.join(' · ');
   if (reasoning) return `思考 ${reasoning} 次`;
   return total ? `${total} 项工作记录` : '';

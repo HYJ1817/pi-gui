@@ -481,7 +481,7 @@
 
 @media (max-width: 700px) {
   .execution-activity-group > .execution-head { flex-wrap: wrap; }
-  .execution-activity-group > .execution-head > .execution-head-title { flex: 1 1 30%; }
+  .execution-activity-group > .execution-head > .execution-head-title { flex: 1 1 auto; }
 }
 
 /* ---------- T3 Code 对照：扁平工作行 ----------
@@ -532,19 +532,18 @@
 .conversation-work-icon svg,
 .execution-work-icon svg,
 .execution-activity-icon svg { inline-size: 16px; block-size: 16px; }
-.conversation-work-summary,
-.execution-activity-summary {
+.conversation-work-title,
+.execution-activity-group > .execution-head > .execution-head-title {
   flex: 1 1 auto;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ds-text-secondary);
 }
-.conversation-work-title,
+.conversation-work-summary,
+.execution-activity-summary,
 .conversation-work-count,
 .conversation-work-state,
-.execution-activity-group > .execution-head > .execution-head-title,
 .execution-activity-group > .execution-head > .execution-activity-status,
 .execution-activity-group > .execution-head > .execution-activity-count,
 .execution-activity-group > .execution-head > .execution-time {
@@ -558,11 +557,37 @@
 .conversation-work-count,
 .conversation-work-state { margin: 0; }
 .conversation-work-log[data-status="failed"] .conversation-work-state { color: var(--ds-error); }
-.execution-activity-group > .execution-head > .execution-chevron { display: none; }
+.conversation-work-log[data-turn-status="failed"] .conversation-work-icon,
+.conversation-work-log[data-attention="true"][data-status="failed"] .conversation-work-icon {
+  color: var(--ds-error);
+}
+.conversation-work-log[data-turn-status="incomplete"] .conversation-work-icon {
+  color: var(--warn);
+}
+.conversation-work-chevron,
+.execution-activity-group > .execution-head > .execution-chevron {
+  display: flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  inline-size: 16px;
+  block-size: 16px;
+  margin: 0;
+  border: 0;
+  color: var(--ds-text-secondary);
+  opacity: .7;
+  transition: transform .12s;
+}
+.conversation-work-chevron svg,
+.execution-activity-group > .execution-head > .execution-chevron svg {
+  inline-size: 14px;
+  block-size: 14px;
+}
+.conversation-work-head[aria-expanded="true"] > .conversation-work-chevron svg { transform: rotate(90deg); }
+.execution-activity-group > .execution-head[aria-expanded="true"] > .execution-chevron { transform: rotate(135deg); }
 .execution-activity-group > .execution-head > .execution-activity-status { margin: 0; }
 .execution-activity-group > .execution-head > .execution-activity-status::before,
 .execution-activity-item > .execution-head > .execution-activity-status::before { display: none; }
-.execution-activity-group[data-single="true"] > .execution-head { display: none; }
 .execution-activity-group > .execution-body { padding: 0; }
 :is(.conversation-work-list, .execution-work-list) { min-inline-size: 0; }
 :is(.conversation-work-list, .execution-work-list) > .msg.assistant {
@@ -606,8 +631,8 @@
   border-radius: 4px;
 }
 .execution-activity-item > .execution-head > .execution-head-title {
-  flex: 0 1 auto;
-  max-inline-size: none;
+  flex: 0 0 auto;
+  max-inline-size: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -615,7 +640,7 @@
   font-weight: 400;
 }
 .execution-activity-item > .execution-head > .execution-activity-facts {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -683,8 +708,8 @@
 .execution-tool-native .tl-more { background: transparent; }
 @media (max-width: 700px) {
   .conversation-work-summary,
-  .execution-activity-summary { white-space: normal; overflow-wrap: anywhere; }
-  .execution-activity-item > .execution-head > .execution-head-title { max-inline-size: 55%; }
+  .execution-activity-summary { white-space: nowrap; overflow-wrap: normal; }
+  .execution-activity-item > .execution-head > .execution-head-title { max-inline-size: 45%; }
 }
 
 /* ---------- T3 对照：终态与用量的低优先级呈现 ----------
@@ -747,7 +772,6 @@
 .execution-usage-entry { margin-block: 2px; }
 .execution-usage-model { font-size: var(--text-xs); opacity: .75; }
 .execution-usage .ui2-msg-meta { margin: 0; font-size: var(--text-xs); }
-.execution-usage-duration { margin-block: 2px; font-variant-numeric: tabular-nums; opacity: .8; }
 
 /* T3 的工作行使用 14px（text-sm），与正文形成同一阅读字号；辅助信息才降到 11–12px。 */
 .think,

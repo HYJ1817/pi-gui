@@ -413,12 +413,72 @@ function interruptedToolTerminal(tools, lastAssistant, toolSeqs = null) {
   return !Number.isFinite(lastTool.endedAt) || lastTool.endedAt > lastAt;
 }
 
+/** Native fallback labels read these attributes; they never become run evidence. */
+function writeTurnTiming(node, { startedAt, endedAt, status, continued }) {
+  if (!node?.dataset) return;
+  if (Number.isFinite(startedAt) && startedAt >= 0) node.dataset.turnStartAt = String(Math.round(startedAt));
+  else delete node.dataset.turnStartAt;
+  if (Number.isFinite(endedAt) && endedAt >= 0) node.dataset.turnEndedAt = String(Math.round(endedAt));
+  else delete node.dataset.turnEndedAt;
+  if (status) node.dataset.turnStatus = status;
+  else delete node.dataset.turnStatus;
+  if (continued) node.dataset.turnContinued = '';
+  else delete node.dataset.turnContinued;
+}
+
+function turnStatusOf(state) {
+  return state === 'unsettled' ? 'incomplete' : state || '';
+}
+
+/** Latest real end observed between two supplemental user inputs. Tool rows
+ * carry their own authorized timestamps; assistant wrappers carry the native
+ * message timestamp captured at message_end. Nothing else is treated as time
+ * evidence, so a segment with no observed work simply keeps no duration. */
+function observedTurnEnd(from, stop) {
+  let end = null;
+  const consider = value => {
+    if (Number.isFinite(value) && (end === null || value > end)) end = value;
+  };
+  const considerEntry = entry => {
+    if (!entry || !Number.isFinite(entry.startedAt)) return;
+    consider(Number.isFinite(entry.endedAt) ? entry.endedAt
+      : Number.isFinite(entry.durationMs) ? entry.startedAt + entry.durationMs : null);
+  };
+  for (let node = from?.nextElementSibling; node && node !== stop; node = node.nextElementSibling) {
+    consider(Number(node.dataset?.turnObservedAt));
+    considerEntry(node._tlEntry);
+    for (const row of node.querySelectorAll?.('.tl-item') || []) considerEntry(row._tlEntry);
+    /* A work log may have adopted this segment's intermediate assistant text
+     * before settle; its native timestamp is still inside the recorded node. */
+    for (const mark of node.querySelectorAll?.('[data-turn-observed-at]') || []) {
+      consider(Number(mark.dataset.turnObservedAt));
+    }
+  }
+  return end;
+}
+
+function tagClassicTurn(input, additional, { startedAt, endedAt, status }) {
+  writeTurnTiming(input, { startedAt, endedAt, status, continued: false });
+  const entries = (additional || []).filter(entry => entry?.node);
+  for (const [index, entry] of entries.entries()) {
+    const observed = Number(entry.at) || Number(entry.node.dataset.turnTime)
+      || Number(entry.node.dataset.turnObservedAt) || null;
+    /* T3 ends each post-steer fold at that segment's own last work. Only the
+     * final steer keeps the settled turn end; an earlier segment without
+     * observed work must not borrow a later segment's clock. */
+    const last = index === entries.length - 1;
+    const segmentEnd = last ? endedAt : observedTurnEnd(entry.node, entries[index + 1]?.node);
+    writeTurnTiming(entry.node, { startedAt: observed, endedAt: segmentEnd, status, continued: true });
+  }
+}
+
 /** agent_settled 后的轮次终态。没有真实证据（assistant / 工具）就不画。 */
 function finalizeTurn() {
   finishClassicHistoryBeforeLive();
   const turn = liveTurn;
   if (!turn || turn.finalized) return;
   turn.finalized = true;
+  const endedAt = Date.now();
   const tools = [...turn.toolIds]
     .map(id => S.tools.get(id)?.entry)
     .filter(Boolean);
@@ -427,9 +487,23 @@ function finalizeTurn() {
     lastAssistant: turn.lastAssistant,
     interruptedToolTerminal: interruptedToolTerminal(tools, turn.lastAssistant, turn.toolSeqs),
     startedAt: turn.startedAt,
-    endedAt: Date.now(),
+    endedAt,
   });
   const t = ensureThread();
+  if (outcome) {
+    const input = Number.isInteger(turn.userIndex)
+      ? t.querySelector('.msg.user[data-user-index="' + turn.userIndex + '"]') : null;
+    const additional = input
+      ? [...t.querySelectorAll('.msg.user[data-turn-continued]')]
+        .filter(node => input.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)
+        .map(node => ({ node, at: Number(node.dataset.turnTime) || Number(node.dataset.turnObservedAt) || null }))
+      : [];
+    tagClassicTurn(input, additional, {
+      startedAt: Number.isFinite(outcome.durationMs) ? turn.startedAt : null,
+      endedAt: Number.isFinite(outcome.durationMs) ? endedAt : null,
+      status: turnStatusOf(outcome.state),
+    });
+  }
   /* 轮次结束后才挂“重新生成”：运行中的回复不应允许把当前 turn 替换掉。 */
   attachClassicRegenerate(turn.lastAssistantNode, turn.userIndex);
   if (!outcome) {
@@ -639,6 +713,12 @@ function updateClassicUserArticle(article, text, images, userIndex) {
   if (oldActions) oldActions.replaceWith(actions);
   else article.appendChild(actions);
   article.dataset.userIndex = String(userIndex);
+  /* The edited input will run again; stale timing would label the new work as
+   * an already-settled turn until the next agent_settled. */
+  delete article.dataset.turnStartAt;
+  delete article.dataset.turnEndedAt;
+  delete article.dataset.turnStatus;
+  delete article.dataset.turnContinued;
 }
 
 function trimClassicTail(pending) {
@@ -947,12 +1027,17 @@ function renderUser(msg, { userIndex = null } = {}) {
 
   const index = Number.isInteger(userIndex) ? userIndex : userIndexSeq;
   userIndexSeq = Math.max(userIndexSeq, index + 1);
+  const continuing = liveTurn && !liveTurn.finalized && Number.isInteger(liveTurn.userIndex)
+    && liveTurn.userIndex !== index;
   noteTurnUserIndex(index);
 
   const wrap = document.createElement('article');
   wrap.className = 'msg user';
   wrap.dataset.anchorId = 'user-' + (++userSeq);
   wrap.dataset.userIndex = String(index);
+  wrap.dataset.turnObservedAt = String(Date.now());
+  if (Number.isFinite(msg?.timestamp)) wrap.dataset.turnTime = String(msg.timestamp);
+  if (continuing) wrap.dataset.turnContinued = '';
 
   const role = document.createElement('div');
   role.className = 'msg-role';
@@ -1133,6 +1218,12 @@ export function onMessageEnd(evt) {
   const msg = evt.message;
   if (msg?.role === 'assistant') {
     ++historyFence;
+    /* Wall-clock end of this assistant message. It stays presentation-only,
+     * but lets an earlier supplemental segment close at its own last work
+     * instead of the end of the whole turn. */
+    if (S.current?.wrap) {
+      S.current.wrap.dataset.turnObservedAt = String(Number.isFinite(msg.timestamp) ? msg.timestamp : Date.now());
+    }
     // 与历史按同一条 assistant 声明的首个普通工具定位，实际工具启动顺序可以不同。
     toolGroupCallId = Array.isArray(msg.content)
       ? msg.content.find(part => part?.type === 'toolCall' && !isPlanTool(part.name))?.id
@@ -1540,7 +1631,8 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       userIndex: Number.isInteger(userIndex) ? userIndex : null,
       lastAssistantNode: null,
       hasEvidence: false,
-      ...(record && { record, nodes: { input, additional: [], responses: [], tools: new Map(), plan: null, outcomes: [] } }),
+      nodes: { input, additional: [], responses: [], tools: new Map(), plan: null, outcomes: [] },
+      ...(record && { record }),
     };
   };
   const flushHistoryTurn = () => {
@@ -1560,6 +1652,15 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
     if (recovered) {
       const [state, label] = HISTORY_OUTCOME[recovered.status];
       outcome = { ...outcome, state, label, durationMs: null };
+    }
+    if (turn.nodes?.input) {
+      const timing = recovered?.timing;
+      const startedAt = Number.isFinite(timing?.startedAt) ? timing.startedAt : turn.startedAt;
+      const endedAt = Number.isFinite(timing?.endedAt) ? timing.endedAt : turn.endedAt;
+      tagClassicTurn(turn.nodes.input, turn.nodes.additional, {
+        startedAt, endedAt,
+        status: recovered?.status || (outcome ? turnStatusOf(outcome.state) : ''),
+      });
     }
     if (outcome) {
       const outcomeNode = renderTurnOutcome(outcome);
@@ -1598,6 +1699,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       wrap.className = 'msg user';
       wrap.dataset.anchorId = 'user-' + (++userSeq);
       wrap.dataset.userIndex = String(index);
+      if (Number.isFinite(item.message?.timestamp)) wrap.dataset.turnTime = String(item.message.timestamp);
       wrap.innerHTML = '<div class="msg-role">你</div>';
       userTextByArticle.set(wrap, textOf(item.message));
       wrap.appendChild(userBody(item.message));
@@ -1605,8 +1707,11 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
         onEdit: () => openClassicEditor(wrap, item.message, index),
       }));
       frag.appendChild(wrap);
-      if (supplemental) historyTurn.nodes.additional.push({ node: wrap, sequence: item.sourceIndex });
-      else startHistoryTurn(item.message, index, owner, wrap);
+      if (supplemental) {
+        wrap.dataset.turnContinued = '';
+        historyTurn.nodes.additional.push({ node: wrap, sequence: item.sourceIndex,
+          at: Number.isFinite(item.message?.timestamp) ? item.message.timestamp : null });
+      } else startHistoryTurn(item.message, index, owner, wrap);
       return;
     }
 
@@ -1627,6 +1732,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       wrap.className = 'msg assistant';
       wrap.setAttribute('aria-label', '助手');
       wrap.dataset.anchorId = 'assistant-' + (++assistantSeq);
+      if (Number.isFinite(msg.timestamp)) wrap.dataset.turnObservedAt = String(msg.timestamp);
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
       const body = document.createElement('div');
       body.className = 'msg-body';

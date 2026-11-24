@@ -80,6 +80,9 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
        * 若发生在 settled 之后，才是真正的新用户任务；运行中追加消息不会发
        * 新的 agent_start。不要用「看到一条 user 消息」当新回合判据。 */
       settled: true,
+      /* Display-only observation time. It is never used as P5 run evidence;
+       * the native fallback uses it to label a settled turn's wall clock. */
+      settledAt: null,
       assistant: null, planBlock: null, thinkingBlock: null,
     };
   }
@@ -139,6 +142,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
 
   function appendBlock(r, block, keep = true) {
     witness(r, block, block.kind === 'user' && !r.executionLive.input);
+    if (!Number.isFinite(block.at)) block.at = Date.now();
     block.id = 'b' + (++r.timelineSeq);
     r.timeline.push(block);
     r.timelineChars += blockChars(block);
@@ -150,6 +154,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     const before = blockChars(block);
     const bounded = boundText(text, max);
     block.text = bounded.text;
+    block.at = Date.now();
     block.truncated = block.truncated || bounded.truncated;
     r.timelineChars += blockChars(block) - before;
     trimTimeline(r, block);
@@ -552,6 +557,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       r.item = frame.item; r.owner = null; r.approvals = [];
       stopRunningTools(r);
       r.settled = true;
+      r.settledAt = Date.now();
       return { ok: true };
     }
     if (frame.type !== 'runtime_event' || frame.owner?.backendInstance !== backend) {
@@ -663,6 +669,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       r.tools.push({ id: e.toolCallId, name: e.toolName, state: 'running' });
       if (r.tools.length > 100) r.tools.shift();
       const group = assistantToolGroup(r);
+      group.at = Date.now();
       if (group.tools.length >= MAX_TOOLS_PER_GROUP) group.truncated = true;
       else {
         const activity = { id: e.toolCallId, name: e.toolName, state: 'running', waiting: false, durationMs: null };
@@ -681,6 +688,9 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         tool.waiting = false;
         if (Number.isFinite(e.durationMs) && e.durationMs >= 0) tool.durationMs = Math.min(e.durationMs, 24 * 60 * 60 * 1000);
       }
+      const group = r.timeline.find(block => block.kind === 'tools'
+        && block.tools?.some(item => item.id === e.toolCallId));
+      if (group) group.at = Date.now();
     }
     if (e.type === 'tool_wait_state') {
       const flat = r.tools.find(t => t.id === e.toolCallId);
@@ -699,7 +709,7 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       r.approvals = [];
       stopRunningTools(r);
       if (r.assistant?.thinking?.state === 'streaming') r.assistant.thinking.state = 'interrupted';
-      if (e.type === 'agent_settled') { r.settled = true; r.pendingEdit = null; }
+      if (e.type === 'agent_settled') { r.settled = true; r.settledAt = Date.now(); r.pendingEdit = null; }
     }
     if (e.type === 'agent_settled') {
       r.executionLive.input = null;

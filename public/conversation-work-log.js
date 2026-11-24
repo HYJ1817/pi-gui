@@ -8,6 +8,7 @@ import { setGroupEmbedded, groupEntries } from './tool-view.js';
 import { preserveScrollAround } from './reading-position.js';
 import { preserveTextSelection } from './ui/text-selection.js';
 import { iconMarkup } from './ui/icons.js';
+import { activityNote, isAbnormalTurnStatus, turnFoldLabel } from './ui/turn-fold.js';
 import { workSummary, workSummaryIcon } from './ui/work-presentation.js';
 
 const CONTROLS = 'button:not(:disabled), a[href], summary, [tabindex="0"]';
@@ -76,7 +77,8 @@ function workDescriptors(nodes) {
       if (!entries.length) result.push({ kind: 'tool' });
       for (const entry of entries) {
         const value = entry._tlEntry;
-        result.push({ name: value?.name, title: value?.label, kind: value?.kind });
+        result.push({ name: value?.name, title: value?.label, kind: value?.kind,
+          targetId: typeof value?.path === 'string' ? value.path : undefined });
       }
     } else if (node.dataset?.conversationWorkKind === 'thinking') {
       result.push({ kind: 'thinking' });
@@ -90,6 +92,32 @@ function workDescriptors(nodes) {
 const STATUS = { running: '运行中', waiting: '等待', error: '失败', incomplete: '未完成',
   interrupted: '已中断', cancelled: '已取消', unknown: '状态未知' };
 let logId = 0;
+
+/** The nearest real user input owns this batch. A Plan or another execution
+ * boundary in between is a hard stop: never borrow a previous turn's clock. */
+function timingOwner(first) {
+  for (let node = first?.previousElementSibling; node; node = node.previousElementSibling) {
+    if (node.matches?.('.msg.user, .rtc-timeline-message[data-role="user"], [data-role="user"]')) return node;
+    if (node.matches?.('.plan, .execution-turn, [data-execution-turn], .turn-outcome')) return null;
+  }
+  return null;
+}
+
+function readTiming(node) {
+  if (!node?.isConnected) return null;
+  const start = Number(node.dataset.turnStartAt);
+  const end = Number(node.dataset.turnEndedAt);
+  const status = node.dataset.turnStatus || '';
+  if (!Number.isFinite(start) && !Number.isFinite(end) && !status) return null;
+  return {
+    startedAt: Number.isFinite(start) ? start : null,
+    endedAt: Number.isFinite(end) ? end : null,
+    durationMs: null,
+    evidence: Number.isFinite(start) ? 'observed' : 'unknown',
+    status,
+    continued: node.hasAttribute('data-turn-continued'),
+  };
+}
 
 function createLog(document, first, preferences) {
   const node = document.createElement('section');
@@ -110,7 +138,11 @@ function createLog(document, first, preferences) {
   count.className = 'conversation-work-count';
   const state = document.createElement('span');
   state.className = 'conversation-work-state';
-  head.append(icon, title, summary, count, state);
+  const chevron = document.createElement('span');
+  chevron.className = 'conversation-work-chevron';
+  chevron.setAttribute('aria-hidden', 'true');
+  chevron.innerHTML = iconMarkup('chevronRight'); // local constant only
+  head.append(icon, title, summary, count, state, chevron);
   const list = document.createElement('div');
   list.className = 'conversation-work-list';
   list.id = 'conversation-work-' + ++logId;
@@ -119,6 +151,7 @@ function createLog(document, first, preferences) {
   const key = safeChoiceKey(first);
   if (key) node.dataset.anchorId = 'work-' + key;
   node.dataset.collapsible = '';
+  const owner = timingOwner(first);
   let choice = key ? preferences?.get(key) : undefined;
   let adopted = new Set();
 
@@ -148,11 +181,6 @@ function createLog(document, first, preferences) {
       const descriptors = workDescriptors(nodes);
       const summaryText = workSummary(descriptors) || nodes.length + ' 项工作记录';
       if (summary.textContent !== summaryText) summary.textContent = summaryText;
-      const iconName = workSummaryIcon(descriptors);
-      if (icon.dataset.icon !== iconName) {
-        icon.dataset.icon = iconName;
-        icon.innerHTML = iconMarkup(iconName); // local constant only
-      }
       const tools = [...groups].flatMap(groupEntries);
       const counts = new Map();
       for (const tool of tools) {
@@ -167,6 +195,25 @@ function createLog(document, first, preferences) {
       // This is an activity summary, never a task/run outcome.
       node.dataset.status = active ? counts.has('waiting') ? 'waiting' : 'running'
         : counts.has('error') ? 'failed' : counts.size ? 'incomplete' : 'recorded';
+      const timing = readTiming(owner);
+      const note = activityNote([...counts.keys()]);
+      const visibleNote = timing && isAbnormalTurnStatus(timing.status) ? '' : note;
+      const label = turnFoldLabel({
+        status: timing?.status || '', timing, now: Date.now(), continued: timing?.continued === true,
+      });
+      title.textContent = (label || '工作记录') + (visibleNote ? ' · ' + visibleNote : '');
+      node.dataset.turnStatus = timing?.status || '';
+      node.dataset.attention = note ? 'true' : 'false';
+      const iconName = timing?.status === 'failed' || node.dataset.status === 'failed' ? 'circleAlert'
+        : ['interrupted', 'cancelled', 'stopped'].includes(timing?.status) ? 'stop'
+          : timing?.status === 'incomplete' || node.dataset.status === 'incomplete' ? 'warning'
+            : workSummaryIcon(descriptors);
+      if (icon.dataset.icon !== iconName) {
+        icon.dataset.icon = iconName;
+        icon.innerHTML = iconMarkup(iconName); // local constant only
+      }
+      const accessible = [title.textContent, summaryText, state.textContent].filter(Boolean).join(' · ');
+      if (head.title !== accessible) head.title = accessible;
       const viewingDetails = !!list.querySelector('.tl-item.open, .think-head[aria-expanded="true"], details[open]');
       const selection = document.defaultView.getSelection?.();
       const selecting = selection && !selection.isCollapsed && (list.contains(selection.anchorNode) || list.contains(selection.focusNode));
@@ -214,12 +261,21 @@ export function createConversationFlow({ document = globalThis.document, prefere
         let batch = [];
         const flush = () => {
           if (!batch.length) return;
-          // A lone thought or single native tool already has its own disclosure.
+          /* A settled turn with timing always gets one fold entry, including a
+           * lone row. Without trustworthy timing, a lone thought/single tool
+           * keeps its own native disclosure instead of gaining a second
+           * generic "工作记录" heading. */
+          const first = batch[0];
+          const owner = timingOwner(first);
+          const hasTurnEvidence = Boolean(owner?.dataset.turnStatus || owner?.dataset.turnStartAt
+            || owner?.dataset.turnEndedAt);
           const single = batch.length === 1;
-          const tools = batch.flatMap(nativeGroups).reduce((total, group) => total + (group._tlGroup?.count || 0), 0);
-          if (single && (workKind(batch[0]) !== 'tools' || tools < 2)) result.push(batch[0]);
-          else {
-            const first = batch[0];
+          const tools = single
+            ? (nativeGroups(batch[0]).reduce((total, group) => total + (group._tlGroup?.count || 0), 0))
+            : 0;
+          if (single && !hasTurnEvidence && (workKind(batch[0]) !== 'tools' || tools < 2)) {
+            result.push(batch[0]);
+          } else {
             const log = logs.get(first) || createLog(document, first, preferences);
             if (!log.node.parentNode) parent.append(log.node);
             log.update(batch);

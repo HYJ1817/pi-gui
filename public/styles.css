@@ -563,11 +563,13 @@ svg:where([data-icon]:not([width])){width:16px;height:16px}
 .tl-body{flex:1;min-width:0}
 .tl-head{display:flex;align-items:center;gap:6px;min-height:var(--tool-row-height);min-width:0;font-size:var(--text-md);line-height:1.6}
 .tl-item.has-more .tl-head{cursor:pointer}
-.tl-label{font-size:inherit;line-height:inherit;color:var(--ds-text-secondary);flex:0 1 auto;max-width:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Short action names never shrink: the argument/command takes the truncation
+ * budget. A genuinely long label is still capped and ellipsized at 45%. */
+.tl-label{font-size:inherit;line-height:inherit;color:var(--ds-text-secondary);flex:0 0 auto;max-inline-size:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tl-status{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .tl-item[data-status=error] .tl-status{color:var(--err)}
 .tl-item[data-status=incomplete] .tl-status{color:var(--warn)}
-.tl-arg{font-family:inherit;font-size:inherit;line-height:inherit;color:var(--ds-text-secondary);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.92}
+.tl-arg{font-family:inherit;font-size:inherit;line-height:inherit;color:var(--ds-text-secondary);flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.92}
 .tl-stat{flex:0 0 auto;font-family:var(--font-mono);font-size:var(--text-xs);display:flex;gap:5px;opacity:0;transition:opacity .12s}
 .tl-stat .add{color:var(--ui-diff-add)}
 .tl-stat .del{color:var(--ui-diff-delete)}
@@ -4525,29 +4527,66 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 .candidate-file summary { cursor: pointer; overflow-wrap: anywhere; font-size: 12px; }
 .candidate-diff { max-width: 100%; overflow: auto; max-height: 440px; }
 
-/* 原生回退里的逐条 usage 默认收起为背景信息，悬停或键盘焦点时再出现。
- * 已验证回合的「用量与耗时」仍保留独立入口，token 不会丢失。 */
-:is(.conversation-work-list, .execution-work-list) > :is(.msg.assistant, .rtc-timeline-message) .ui2-msg-meta {
-  margin-block: 0 2px;
-  opacity: 0;
-  transition: opacity .12s;
-}
-:is(.conversation-work-list, .execution-work-list) > :is(.msg.assistant, .rtc-timeline-message):is(:hover, :focus-within) .ui2-msg-meta {
-  opacity: .75;
+/* T3 对照：消息操作条只在 hover / 键盘焦点时浮出，不再为每条消息预留 28px
+ * 空白。绝对定位同时保留原按钮、焦点与复制反馈，不改变任何消息事务。 */
+:is(#stream, #runtimeView) :is(.msg, .rtc-timeline-message, .ui2-runtime-thinking-wrap):has(> .ui2-msg-meta) {
+  position: relative;
 }
 
-/* 时间线里的逐条 usage 属于低优先级背景信息：默认不占视觉层，悬停消息或
- * 键盘进入时出现；已验证回合的「用量与耗时」展开后仍完整显示。 */
+/* 时间线里的逐条 usage 属于低优先级背景信息：默认只留在可访问树里，不占
+ * 任何布局高度；悬停消息或键盘进入时以浮层出现，因此已完成消息下方不再留下
+ * 一条 opacity:0 的空白。已验证回合的「用量」展开后仍按正常流完整显示。 */
 :is(.thread, .rtc-output) .ui2-msg-meta {
-  margin-block: 0 2px;
+  position: absolute;
+  inset-inline-start: 0;
+  /* The chip lives inside the assistant message's 12px bottom gap. Its bottom
+   * edge never crosses into the next message/tool row; a larger font scale can
+   * only grow it upward over its own message. */
+  inset-block-end: -11px;
+  z-index: 2;
+  margin: 0;
+  max-inline-size: calc(100% - 96px);
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--ds-bg-elevated-opaque);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .10);
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  line-height: 1;
   opacity: 0;
+  pointer-events: none;
   transition: opacity .12s;
 }
-:is(.thread, .rtc-output) .ui2-msg-meta:hover,
-:is(.thread, .rtc-output) :is(.msg, .rtc-timeline-message, .ui2-runtime-thinking-wrap, .ui2-runtime-tools):is(:hover, :focus-within) .ui2-msg-meta {
-  opacity: .75;
+:is(.thread, .rtc-output) :is(.msg, .rtc-timeline-message, .ui2-runtime-thinking-wrap):is(:hover, :focus-within) > .ui2-msg-meta {
+  inline-size: auto;
+  block-size: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  opacity: .94;
+  pointer-events: auto;
 }
-:is(.thread, .rtc-output) .execution-usage .ui2-msg-meta { opacity: 1; }
+:is(.thread, .rtc-output) .ui2-msg-meta:has(.ui2-msg-meta-details[open]) {
+  max-inline-size: calc(100% - 8px);
+}
+:is(.thread, .rtc-output) .execution-usage .ui2-msg-meta {
+  position: static;
+  inset: auto;
+  inline-size: auto;
+  block-size: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  margin: 0;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  opacity: 1;
+  pointer-events: auto;
+}
 
 /* T3 对照：消息操作条只在 hover / 键盘焦点时浮出，不再为每条消息预留 28px
  * 空白。绝对定位同时保留原按钮、焦点与复制反馈，不改变任何消息事务。 */
@@ -4555,7 +4594,10 @@ body.rp-resizing{cursor:col-resize;user-select:none}
 :is(#stream, #runtimeView) .message-actions {
   position: absolute;
   inset-inline-end: 2px;
-  inset-block-end: -24px;
+  /* Keep the bar's bottom edge inside the message gap so it does not cover the
+   * next message or tool row. It may overlap the hovered message's own bottom
+   * padding while visible. */
+  inset-block-end: -12px;
   z-index: 3;
   min-height: 24px;
   padding: 0;

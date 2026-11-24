@@ -62,6 +62,7 @@ function release(round) {
     else marker.remove();
   }
   round.markers.clear();
+  round.thoughts?.clear();
   for (const [group, marker] of round.groups) marker.replaceWith(group);
   round.groups.clear();
   round.view?.release();
@@ -179,7 +180,8 @@ export function indexClassicHistoryTurns(p5, messages, items, sessionId) {
 }
 
 export function mountClassicHistoryTurn(turn, nodes) {
-  const round = { ...nodes, historical: true, settled: true, markers: new Map(), groups: new Map(), view: null };
+  const round = { ...nodes, historical: true, settled: true, markers: new Map(), groups: new Map(),
+    thoughts: new Map(), view: null };
   try {
     if (renderRound(round, turn, turn.group, turn.items)) {
       rounds.add(round);
@@ -219,9 +221,11 @@ export function trackClassicExecutionMessage(node, event) {
   if (role === 'user') {
     if (!active || active.settled) {
       active = { input: node, sequence: event._seq, additional: [], responses: [], tools: new Map(),
-        plan: null, outcomes: [], settled: false, view: null, markers: new Map(), groups: new Map() };
+        plan: null, outcomes: [], settled: false, view: null, markers: new Map(), groups: new Map(),
+        thoughts: new Map() };
       rounds.add(active);
-    } else active.additional.push({ node, sequence: event._seq });
+    } else active.additional.push({ node, sequence: event._seq,
+      at: Number.isFinite(event.message?.timestamp) ? event.message.timestamp : Date.now() });
   } else if (role === 'assistant' && active) {
     active.responses.push({ node, sequence: event._seq });
   }
@@ -336,6 +340,7 @@ function renderRound(round, turn, group, items, scope = null) {
   const tail = round.responses.at(-1);
   const waitingForFallback = round.fallbackPending && S.fallbackActive === true;
   const ordered = [...round.additional];
+  const steerByNode = new Map(round.additional.map(entry => [entry.node, entry]));
   for (const response of round.responses) {
     const { node, sequence } = response;
     if (round.historical ? !node.parentNode : !node.isConnected) continue;
@@ -365,7 +370,33 @@ function renderRound(round, turn, group, items, scope = null) {
     } else ordered.push(response);
   }
   ordered.sort((a, b) => a.sequence - b.sequence);
-  for (const response of ordered) progress.push(response.node);
+  for (const response of ordered) if (!steerByNode.has(response.node)) progress.push(response.node);
+  const steers = ordered.filter(entry => steerByNode.has(entry.node));
+
+  /* T3 keeps the final answer visible and folds its reasoning into the work
+   * log. Pi may emit thinking and final text in one assistant message, so the
+   * reasoning nodes are detached from that message only after the turn has
+   * settled and the message is the final answer. Markers restore them on
+   * release, keeping the native message recoverable for edit/resend. */
+  const thoughts = [];
+  if (round.settled || round.historical) {
+    if (!round.thoughts) round.thoughts = new Map();
+    for (const response of round.responses) {
+      if (!answer.includes(response.node) || response.node.querySelector('.msg-err')) continue;
+      let nodes = round.thoughts.get(response.node);
+      if (!nodes || nodes.some(node => !node.isConnected)) {
+        nodes = [...response.node.querySelectorAll('.think')];
+        for (const node of nodes) rememberPosition(round, node);
+        round.thoughts.set(response.node, nodes);
+      }
+      for (const [index, node] of nodes.entries()) {
+        if (!node.isConnected) continue;
+        if (response.node.contains(node)) response.node.before(node);
+        progress.push(node);
+        thoughts.push({ node, sequence: response.sequence, part: -1 - index });
+      }
+    }
+  }
 
   // Native display wrappers cannot become P5's original-order marker owner.
   // Restore them before the first verified adoption; fallback remains recoverable.
@@ -379,7 +410,7 @@ function renderRound(round, turn, group, items, scope = null) {
     round.view = createExecutionTurnView({ document: round.input.ownerDocument, preferences });
     round.input.before(round.view.node);
   }
-  for (const node of [round.input, plan, ...progress, ...answer, ...usage, ...round.outcomes]) {
+  for (const node of [round.input, plan, ...progress, ...answer, ...usage, ...round.outcomes, ...steers.map(entry => entry.node)]) {
     rememberPosition(round, node);
   }
   for (const tool of round.tools.values()) {
@@ -392,10 +423,16 @@ function renderRound(round, turn, group, items, scope = null) {
   round.view.update({
     turn: { ...turn, status: waitingForFallback ? 'waiting' : turn.status,
       usage: turn.usage.filter(row => !nativeUsageIds.has(row.responseId)) },
-    group, items, input: round.input, plan, progress, answer, outcomes: round.outcomes, details, usage,
+    group, items, input: round.input, plan, progress, steers: steers.map(entry => entry.node),
+    answer, outcomes: round.outcomes, details, usage,
     workOrder: [
-      ...ordered.map(entry => ({ node: entry.node, sequence: entry.sequence, part: -1 })),
+      ...ordered.filter(entry => !steerByNode.has(entry.node))
+        .map(entry => ({ node: entry.node, sequence: entry.sequence, part: -1 })),
+      ...thoughts,
       ...items.map(item => ({ activityId: item.id, ...item.position })),
+      ...steers.map(entry => ({ node: entry.node, sequence: entry.sequence, part: -1, steer: true,
+        startedAt: steerByNode.get(entry.node).at,
+        steerKey: entry.node.dataset.anchorId || entry.node.dataset.blockId || String(entry.sequence) })),
     ].sort((first, second) => first.sequence - second.sequence || first.part - second.part),
   });
   const firstGroup = round.tools.values().next().value?.group;
