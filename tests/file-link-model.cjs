@@ -23,9 +23,10 @@ function check(name, fn) {
 async function main() {
   const model = await import(pathToFileURL(path.join(__dirname, '..', 'public', 'file-link-model.js')).href);
   const {
-    splitPosition, positionLabel, rangeLabel, resolveFilePath,
+    splitPosition, positionLabel, rangeLabel, resolveFilePath, resolveFileReference,
     fileLinkFromHref, fileLinkFromInlineCode, fileLinkFromPlainText,
-    scanPlainTextPaths, uniqueNameCandidate, toSlashes,
+    scanPlainTextPaths, uniqueNameCandidate, toSlashes, isPathWithin,
+    fileLinkDisplayLabel, fileLinkAriaLabel,
   } = model;
 
   const WIN = 'C:\\pi-GUI';
@@ -307,6 +308,102 @@ async function main() {
   });
 
   /* ---------- 同名文件按各自工作区解析 ---------- */
+
+  /* ---------- 纯文本相对路径（显式开启） ---------- */
+
+  check('纯文本相对路径：只有显式 relative 才识别，且一律是待验证候选', () => {
+    assert.equal(scanPlainTextPaths('见 public/styles.css 与 src/main.ts:128', WIN).length, 0);
+    const found = scanPlainTextPaths('见 public/styles.css 与 src/main.ts:128', WIN, { relative: true });
+    assert.equal(found.length, 2);
+    assert.equal(found[0].meta.path, 'public/styles.css');
+    assert.equal(found[0].meta.verification, 'metadata');
+    assert.equal(found[0].meta.candidate, true);
+    assert.equal(found[1].meta.path, 'src/main.ts');
+    assert.equal(found[1].meta.line, 128);
+  });
+  check('纯文本相对路径：行号、行列与范围都保留', () => {
+    const line = scanPlainTextPaths('src/main.ts:128', WIN, { relative: true });
+    assert.equal(line[0].meta.line, 128);
+    const column = scanPlainTextPaths('src/main.ts:128:10', WIN, { relative: true });
+    assert.equal(column[0].meta.column, 10);
+    const range = scanPlainTextPaths('src/main.ts:128-145', WIN, { relative: true });
+    assert.equal(range[0].meta.endLine, 145);
+    assert.equal(range[0].meta.position, ':128-145');
+    const hash = scanPlainTextPaths('src/main.ts#L128C10', WIN, { relative: true });
+    assert.equal(hash[0].meta.line, 128);
+    assert.equal(hash[0].meta.column, 10);
+  });
+  check('纯文本相对路径：消息里常见的测试文件带行号也能识别', () => {
+    const found = scanPlainTextPaths('tests/session-ux-p5-shots.cjs:45 已更新', WIN, { relative: true });
+    assert.equal(found.length, 1);
+    assert.equal(found[0].meta.path, 'tests/session-ux-p5-shots.cjs');
+    assert.equal(found[0].meta.line, 45);
+  });
+  check('纯文本：包名、模块说明符、网址与技术术语不会被猜成文件', () => {
+    const text = 'npm install react @scope/pkg lodash/fp node:fs foo/bar Node.js/Express '
+      + 'https://example.com/a.ts www.example.com/x.ts version 1.2.3 commit deadbeef';
+    const found = scanPlainTextPaths(text, WIN, { relative: true });
+    assert.equal(found.length, 0, JSON.stringify(found.map((item) => item.text)));
+  });
+  check('纯文本：file URI 与工作区外绝对路径都能识别，但外部不做读取', () => {
+    const uri = scanPlainTextPaths('file:///C:/pi-GUI/src/main.ts#L12', WIN);
+    assert.equal(uri.length, 1);
+    assert.equal(uri[0].meta.path, 'src/main.ts');
+    assert.equal(uri[0].meta.line, 12);
+    const external = scanPlainTextPaths('报告在 D:/reports/说明.md:3', WIN, { allowExternal: true });
+    assert.equal(external.length, 1);
+    assert.equal(external[0].meta.external, true);
+    assert.equal(external[0].meta.line, 3);
+    assert.equal(scanPlainTextPaths('报告在 D:/reports/说明.md', WIN).length, 0);
+  });
+
+  /* ---------- 工作区外绝对路径（显式允许） ---------- */
+
+  check('外部绝对路径：默认拒绝，显式 allowExternal 才返回外部标记', () => {
+    assert.equal(resolveFileReference('D:/资料/报告.md', WIN).ok, false);
+    const external = resolveFileReference('D:/资料/报告.md', WIN, { allowExternal: true });
+    assert.equal(external.ok, true);
+    assert.equal(external.external, true);
+    assert.equal(external.path, 'D:/资料/报告.md');
+    assert.equal(external.absolutePath, 'D:/资料/报告.md');
+  });
+  check('外部绝对路径：行号、空格与中文由链接/行内代码路径保留', () => {
+    const href = fileLinkFromHref('D:/资料/报告 v1.md:12:3', WIN, { allowExternal: true });
+    assert.equal(href.external, true);
+    assert.equal(href.line, 12);
+    assert.equal(href.column, 3);
+    assert.equal(href.displayPath, 'D:/资料/报告 v1.md');
+    const code = fileLinkFromInlineCode('D:\\资料\\报告 v1.md', WIN, { allowExternal: true });
+    assert.equal(code.external, true);
+    assert.equal(code.path, 'D:/资料/报告 v1.md');
+  });
+  check('外部绝对路径：工作区内的路径仍然按内部链接处理', () => {
+    const inside = fileLinkFromHref('C:/pi-GUI/src/main.ts', WIN, { allowExternal: true });
+    assert.equal(inside.external, false);
+    assert.equal(inside.path, 'src/main.ts');
+  });
+  check('外部绝对路径：跨平台形态、UNC、设备路径与协议仍然拒绝', () => {
+    assert.equal(fileLinkFromHref('/etc/passwd', WIN, { allowExternal: true }), null);
+    assert.equal(fileLinkFromHref('C:/pi-GUI/src/main.ts', POSIX, { allowExternal: true }), null);
+    assert.equal(fileLinkFromHref('\\\\server\\share\\x.md', WIN, { allowExternal: true }), null);
+    assert.equal(fileLinkFromHref('\\\\?\\C:\\x.md', WIN, { allowExternal: true }), null);
+    assert.equal(fileLinkFromHref('https://example.com/x.md', WIN, { allowExternal: true }), null);
+    assert.equal(fileLinkFromInlineCode('D:/资料/报告\u0000.md', WIN, { allowExternal: true }), null);
+  });
+  check('显示标签：外部文件保留模型给的原始路径，内部文件用文件名', () => {
+    const external = fileLinkFromHref('D:/资料/报告 v1.md:12', WIN, { allowExternal: true });
+    assert.equal(fileLinkDisplayLabel(external), 'D:/资料/报告 v1.md:12');
+    const inside = fileLinkFromHref('C:/pi-GUI/src/main.ts:7', WIN, { allowExternal: true });
+    assert.equal(fileLinkDisplayLabel(inside), 'main.ts:7');
+    assert.equal(fileLinkAriaLabel(external), 'D:/资料/报告 v1.md，L12');
+    assert.match(fileLinkAriaLabel(inside), /^src\/main\.ts，L7$/);
+  });
+  check('isPathWithin：跨平台不互相包含', () => {
+    assert.equal(isPathWithin('C:/pi-GUI', 'C:/pi-GUI/src/a.ts'), true);
+    assert.equal(isPathWithin('C:/pi-GUI', 'C:/pi-GUI-other/a.ts'), false);
+    assert.equal(isPathWithin('/home/u/p', '/home/u/p/a.ts'), true);
+    assert.equal(isPathWithin('C:/pi-GUI', '/pi-GUI/src/a.ts'), false);
+  });
 
   check('同名文件：不同工作区解析到各自根', () => {
     const a = fileLinkFromHref('src/index.ts', 'C:/work/a');

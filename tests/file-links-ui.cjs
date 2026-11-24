@@ -67,7 +67,7 @@ const contentFor = (filePath) => {
   const { mountFilesPanel } = await import('../public/files-panel.js');
   const { setGitConversationScope } = await import('../public/api.js');
   const { S } = await import('../public/state.js');
-  const { initFileLinks, enhanceFileCandidates, resetFileLinkCaches } = await import('../public/file-links-ui.js');
+  const { initFileLinks, enhanceFileCandidates, resetFileLinkCaches, fileLinkCacheStats } = await import('../public/file-links-ui.js');
   S.cwd = WIN;
 
   /* ---------- 渲染 ---------- */
@@ -189,6 +189,7 @@ const contentFor = (filePath) => {
     if (value.startsWith('/api/files/find')) {
       const name = new URL(value, 'http://x').searchParams.get('name');
       if (name === 'README.md') return json({ ok: true, name, matches: ['README.md'], truncated: false });
+      if (name === 'only-b.txt') return json({ ok: true, name, matches: ['only-b.txt'], truncated: false });
       if (name === 'dup.txt') return json({ ok: true, name, matches: ['src/dup.txt', 'docs/dup.txt'], truncated: false });
       if (/^unique-\d+\.md$/.test(name)) return json({ ok: true, name, matches: [name], truncated: false });
       return json({ ok: true, name, matches: [], truncated: false });
@@ -242,11 +243,13 @@ const contentFor = (filePath) => {
   ambiguousWrap.innerHTML = md('`dup.txt`', { fileLinks: links });
   document.getElementById('host').append(ambiguousWrap);
   await enhanceFileCandidates(ambiguousWrap);
-  ok('an ambiguous filename stays as code and is not clickable', () => {
-    assert.equal(ambiguousWrap.querySelectorAll('a.md-file-link').length, 0);
-    const candidate = ambiguousWrap.querySelector('code.md-file-candidate');
-    assert.ok(candidate);
-    assert.equal(candidate.dataset.fileChecked, '1');
+  ok('an ambiguous filename becomes a picker entry instead of opening the first match', () => {
+    assert.equal(ambiguousWrap.querySelectorAll('code.md-file-candidate').length, 0);
+    const ambiguous = ambiguousWrap.querySelector('a.md-file-link.is-ambiguous');
+    assert.ok(ambiguous);
+    assert.equal(ambiguous.dataset.fileAmbiguous, '1');
+    assert.equal(ambiguous.dataset.fileCandidate, 'dup.txt');
+    assert.equal(ambiguous.querySelector('.md-file-name').textContent, 'dup.txt');
   });
 
   /* 长对话里候选很多时按批处理，避免一次打出几十个请求；自动扫描要在
@@ -315,16 +318,27 @@ const contentFor = (filePath) => {
   const view = fakeView();
   const panelHost = document.createElement('section');
   host.append(panelHost);
+  const externalDocs = [];
+  const externalMetas = [];
+  let panelMetadataAbsolute = null;
   mountFilesPanel(panelHost, view, {
     transport: {
       list,
       document: documentTransport,
       metadata: async (filePath, conversationId) => {
         metadata.push({ filePath, conversationId });
-        return { ok: true, file: { path: filePath, absolutePath: `${WIN}/${filePath}`, name: filePath.split('/').pop(), bytes: 1234, image: filePath.endsWith('.png') } };
+        return { ok: true, file: { path: filePath, absolutePath: panelMetadataAbsolute || `${WIN}/${filePath}`, name: filePath.split('/').pop(), bytes: 1234, image: filePath.endsWith('.png') } };
       },
       asset: async (filePath) => {
         return { ok: true, blob: new dom.window.Blob(['not-a-real-png'], { type: 'image/png' }), type: 'image/png' };
+      },
+      externalMetadata: async (filePath, grantId, conversationId) => {
+        externalMetas.push({ filePath, grantId, conversationId });
+        return { ok: true, external: true, file: { path: filePath, absolutePath: filePath, name: filePath.split('/').pop(), bytes: 10 } };
+      },
+      externalDocument: async (filePath, grantId, conversationId) => {
+        externalDocs.push({ filePath, grantId, conversationId });
+        return { ok: true, external: true, file: { path: filePath, bytes: 10, binary: false, content: '# external report\n', grantId } };
       },
     },
   });
@@ -471,24 +485,49 @@ const contentFor = (filePath) => {
     assert.ok(menu);
     assert.equal(menu.getAttribute('role'), 'menu');
     const labels = [...menu.querySelectorAll('.action-menu-label')].map((n) => n.textContent);
-    for (const label of ['在文件面板中打开', '用系统默认程序打开', '在文件管理器中显示', '复制相对路径', '复制完整路径']) {
+    for (const label of ['在文件面板中打开', '用外部编辑器打开', '用系统默认程序打开', '在文件管理器中显示', '复制相对路径', '复制完整路径']) {
       assert.ok(labels.includes(label), label);
     }
   });
   document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
   const desktopCalls = [];
+  const externalAuthorizeCalls = [];
+  const externalRevokeCalls = [];
   window.piGuiDesktop = {
-    openWorkspaceFile: async (filePath, conversationId) => {
-      desktopCalls.push({ filePath, conversationId });
-      return { ok: true, abs: `${WIN}/${filePath}` };
+    editors: {
+      open: async (request) => {
+        desktopCalls.push(request);
+        return { ok: true, used: 'vscode' };
+      },
+    },
+    openWorkspaceFile: async (request) => {
+      desktopCalls.push(request);
+      return { ok: true, abs: `${WIN}/${request.path}` };
+    },
+    externalFiles: {
+      authorize: async (request) => {
+        externalAuthorizeCalls.push(request);
+        // 每次授权给出不同 id，便于断言“撤销后没有复用旧授权”。
+        const id = String.fromCharCode(96 + externalAuthorizeCalls.length).repeat(32);
+        return {
+          ok: true,
+          grant: { id, kind: 'file', scope: 'session', target: request.path },
+        };
+      },
+      list: async () => ({ ok: true, grants: [] }),
+      revoke: async (request) => {
+        externalRevokeCalls.push(request);
+        return { ok: true, id: request.grantId };
+      },
     },
   };
   chip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
   await until(() => desktopCalls.length === 1);
-  ok('Ctrl/Cmd+click opens through the authorized desktop bridge, not the web browser', () => {
-    assert.equal(desktopCalls[0].filePath, 'README.md');
+  ok('Ctrl/Cmd+click opens through the configured external editor, not the system default', () => {
+    assert.equal(desktopCalls[0].path, 'README.md');
     assert.equal(desktopCalls[0].conversationId, null);
+    assert.equal(desktopCalls[0].cwd, WIN);
     assert.equal(panelHost.querySelectorAll('.files-tab').length >= 1, true);
   });
 
@@ -505,7 +544,342 @@ const contentFor = (filePath) => {
     assert.equal(panelHost.querySelectorAll('.files-tab').length, beforeTabs);
     assert.match(document.getElementById('toasts').textContent, /其它会话/);
   });
+  foreign.querySelector('a.md-file-link')
+    .dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  await until(() => document.querySelector('.action-menu'));
+  ok('every menu action is disabled for a reference from another session', () => {
+    const items = [...document.querySelectorAll('.action-menu .action-menu-item')]
+      .filter((item) => item.getAttribute('role') !== 'separator');
+    assert.ok(items.length >= 6);
+    assert.equal(items.every((item) => item.getAttribute('aria-disabled') === 'true'), true);
+  });
+  document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const callsBeforeForeignEditor = desktopCalls.length;
+  foreign.querySelector('a.md-file-link')
+    .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
+  await tick(50);
+  ok('Ctrl/Cmd+click also refuses a reference from another session', () => {
+    assert.equal(desktopCalls.length, callsBeforeForeignEditor);
+    assert.match(document.getElementById('toasts').textContent, /其它会话/);
+  });
   setGitConversationScope(null);
+
+  /* ---------- 纯文本相对路径候选 ---------- */
+
+  resetFileLinkCaches();
+  const plainWrap = document.createElement('div');
+  plainWrap.innerHTML = md('见 public/styles.css 和 src/main.ts:5，以及 npm install react。', { fileLinks: links });
+  document.getElementById('host').append(plainWrap);
+  const plainSpans = plainWrap.querySelectorAll('span.md-file-plain-candidate');
+  await enhanceFileCandidates(plainWrap);
+  ok('plain-text relative paths keep their look until metadata confirms they exist', () => {
+    assert.equal(plainSpans.length, 2);
+    const chips = [...plainWrap.querySelectorAll('a.md-file-link')];
+    assert.equal(chips.length, 2);
+    assert.ok(chips.some((n) => n.dataset.filePath === 'public/styles.css'));
+    assert.ok(chips.some((n) => n.dataset.filePath === 'src/main.ts' && n.dataset.fileLine === '5'));
+    assert.ok(plainWrap.textContent.includes('npm install react'));
+    assert.equal(plainWrap.querySelector('a[data-file-path="react"]'), null);
+  });
+
+  /* 候选查询必须带**消息自己的会话身份**，不是当前焦点。
+   * 这里焦点在另一个会话，候选仍要按原会话查；点击再被拒绝。 */
+  const candidateConvFetch = [];
+  const previousFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    if (String(url).startsWith('/api/files/find')) candidateConvFetch.push({ url: String(url), headers: options.headers || {} });
+    return previousFetch(url, options);
+  };
+  setGitConversationScope('77777777-6666-5555-4444-333333333333');
+  resetFileLinkCaches();
+  const crossConv = document.createElement('div');
+  crossConv.innerHTML = md('`only-b.txt`', { fileLinks: { cwd: WIN, conversationId: '99999999-8888-7777-6666-555555555555' } });
+  messages.append(crossConv);
+  await enhanceFileCandidates(crossConv);
+  ok('a candidate is queried against the message conversation, never the focused one', () => {
+    assert.equal(candidateConvFetch.length, 1);
+    assert.equal(candidateConvFetch[0].headers['X-Pi-Gui-Conversation'], '99999999-8888-7777-6666-555555555555');
+    const query = new URL(candidateConvFetch[0].url, 'http://x').searchParams;
+    assert.equal(query.get('root'), WIN);
+    assert.equal(query.get('name'), 'only-b.txt');
+  });
+  const crossChip = crossConv.querySelector('a.md-file-link');
+  crossChip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  await tick(30);
+  ok('clicking that candidate still refuses to resolve it against the focused workspace', () => {
+    assert.match(document.getElementById('toasts').textContent, /其它会话/);
+  });
+  setGitConversationScope(null);
+  global.fetch = previousFetch;
+
+  /* ---------- 同名文件选择器 ---------- */
+
+  resetFileLinkCaches();
+  const pickerWrap = document.createElement('div');
+  pickerWrap.innerHTML = md('`dup.txt`', { fileLinks: links });
+  messages.append(pickerWrap);
+  await enhanceFileCandidates(pickerWrap);
+  const ambiguous = pickerWrap.querySelector('a.md-file-link.is-ambiguous');
+  const tabsBeforePicker = panelHost.querySelectorAll('.files-tab').length;
+  ambiguous.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  await until(() => document.querySelector('.action-menu'));
+  ok('an ambiguous bare filename opens a compact picker with distinguishing paths', () => {
+    const menu = document.querySelector('.action-menu');
+    const labels = [...menu.querySelectorAll('.action-menu-label')].map((n) => n.textContent);
+    assert.deepEqual(labels, ['src/dup.txt', 'docs/dup.txt']);
+    assert.equal(menu.querySelectorAll('.file-kind-icon').length, 2);
+    assert.equal(panelHost.querySelectorAll('.files-tab').length, tabsBeforePicker);
+  });
+  const pickerItems = [...document.querySelectorAll('.action-menu .action-menu-item')];
+  pickerItems[0].click();
+  await until(() => panelHost.querySelector('.files-preview-path')?.textContent === 'src/dup.txt');
+  ok('choosing one match replaces only that link and opens it in the existing viewer', () => {
+    assert.equal(pickerWrap.querySelector('a.md-file-link.is-ambiguous'), null);
+    const chosen = pickerWrap.querySelector('a.md-file-link');
+    assert.equal(chosen.dataset.filePath, 'src/dup.txt');
+    assert.equal(chosen.dataset.fileAmbiguous, undefined);
+    assert.equal(panelHost.querySelectorAll('.files-tab').length, tabsBeforePicker + 1);
+  });
+
+  /* ---------- 文件增删/刷新：已升级的唯一匹配要重新判定 ---------- */
+
+  let refreshSplits = false;
+  const refreshWrap = document.createElement('div');
+  refreshWrap.innerHTML = md('`unique-77.md`', { fileLinks: links });
+  document.getElementById('host').append(refreshWrap);
+  await enhanceFileCandidates(refreshWrap);
+  ok('a unique filename starts as a normal link before the refresh', () => {
+    const chip = refreshWrap.querySelector('a.md-file-link');
+    assert.ok(chip);
+    assert.equal(chip.dataset.filePath, 'unique-77.md');
+    assert.equal(chip.dataset.fileOriginCandidate, 'unique-77.md');
+  });
+
+  const refreshBaseFetch = global.fetch;
+  let refreshFindCalls = 0;
+  global.fetch = async (url, options = {}) => {
+    if (String(url).startsWith('/api/files/find')
+      && new URL(url, 'http://x').searchParams.get('name') === 'unique-77.md') {
+      refreshFindCalls++;
+      const matches = refreshSplits ? ['src/unique-77.md', 'docs/unique-77.md'] : ['unique-77.md'];
+      return {
+        status: 200,
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ ok: true, name: 'unique-77.md', matches, truncated: false }),
+      };
+    }
+    return refreshBaseFetch(url, options);
+  };
+
+  refreshSplits = true;
+  document.dispatchEvent(new dom.window.CustomEvent('pi-gui:files-refresh'));
+  await until(() => refreshWrap.querySelector('a.md-file-link.is-ambiguous'), 'refresh recheck');
+  ok('a files refresh re-checks an upgraded filename instead of keeping the old match', () => {
+    assert.ok(refreshFindCalls >= 1);
+    const chip = refreshWrap.querySelector('a.md-file-link.is-ambiguous');
+    assert.equal(chip.dataset.fileCandidate, 'unique-77.md');
+    assert.equal(chip.dataset.fileOriginCandidate, 'unique-77.md');
+    assert.equal(refreshWrap.querySelectorAll('a.md-file-link').length, 1);
+  });
+
+  refreshSplits = false;
+  document.dispatchEvent(new dom.window.CustomEvent('pi-gui:files-refresh'));
+  await until(() => refreshWrap.querySelector('a.md-file-link:not(.is-ambiguous)'), 'refresh unique again');
+  ok('the refreshed picker entry can become a normal link again', () => {
+    const chip = refreshWrap.querySelector('a.md-file-link:not(.is-ambiguous)');
+    assert.equal(chip.dataset.filePath, 'unique-77.md');
+    assert.equal(chip.dataset.fileOriginCandidate, 'unique-77.md');
+  });
+  global.fetch = refreshBaseFetch;
+  refreshWrap.remove();
+
+  /* ---------- 异步结果与工作区代次 ---------- */
+
+  resetFileLinkCaches();
+  let releaseSlow = null;
+  let slowCalls = 0;
+  const slowReply = {
+    status: 200,
+    ok: true,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ ok: true, file: { path: 'src/slow.md', absolutePath: `${WIN}/src/slow.md`, name: 'slow.md', bytes: 4 } }),
+  };
+  const slowFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    if (String(url).startsWith('/api/files/metadata')
+      && new URL(url, 'http://x').searchParams.get('path') === 'src/slow.md') {
+      slowCalls++;
+      if (slowCalls > 1) return slowReply;
+      return new Promise((resolve) => { releaseSlow = () => resolve(slowReply); });
+    }
+    return slowFetch(url, options);
+  };
+  const slowWrap = document.createElement('div');
+  slowWrap.innerHTML = md('正在看 src/slow.md', { fileLinks: links });
+  document.getElementById('host').append(slowWrap);
+  const slowEnhance = enhanceFileCandidates(slowWrap);
+  await until(() => Boolean(releaseSlow), 'slow metadata request');
+  resetFileLinkCaches();
+  releaseSlow();
+  await slowEnhance;
+  ok('a stale response does not replace the candidate after a workspace switch', () => {
+    assert.equal(slowWrap.querySelector('a.md-file-link'), null);
+    assert.ok(slowWrap.querySelector('span.md-file-plain-candidate'));
+    assert.equal(fileLinkCacheStats().metadataInFlight, 0);
+  });
+  slowWrap.remove();
+  const staleWrap = document.createElement('div');
+  staleWrap.innerHTML = md('再开 src/slow.md', { fileLinks: links });
+  document.getElementById('host').append(staleWrap);
+  await enhanceFileCandidates(staleWrap);
+  ok('the stale response was not cached; a later lookup asks the backend again', () => {
+    assert.equal(slowCalls, 2);
+    assert.equal(staleWrap.querySelectorAll('a.md-file-link').length, 1);
+  });
+  global.fetch = slowFetch;
+
+  let dedupeCount = 0;
+  const dedupeFetch = global.fetch;
+  global.fetch = async (url, options = {}) => {
+    if (String(url).startsWith('/api/files/metadata')
+      && new URL(url, 'http://x').searchParams.get('path') === 'src/same.md') {
+      dedupeCount++;
+      await tick(30);
+    }
+    return dedupeFetch(url, options);
+  };
+  resetFileLinkCaches();
+  const dedupeA = document.createElement('div');
+  const dedupeB = document.createElement('div');
+  dedupeA.innerHTML = md('src/same.md', { fileLinks: links });
+  dedupeB.innerHTML = md('src/same.md', { fileLinks: links });
+  document.getElementById('host').append(dedupeA, dedupeB);
+  await Promise.all([enhanceFileCandidates(dedupeA), enhanceFileCandidates(dedupeB)]);
+  ok('identical concurrent candidate queries share one request and both links upgrade', () => {
+    assert.equal(dedupeCount, 1);
+    assert.equal(dedupeA.querySelectorAll('a.md-file-link').length, 1);
+    assert.equal(dedupeB.querySelectorAll('a.md-file-link').length, 1);
+    assert.equal(fileLinkCacheStats().metadata, 1);
+  });
+  resetFileLinkCaches();
+  global.fetch = dedupeFetch;
+
+  /* ---------- 历史引用在工作区被替换后失效 ---------- */
+
+  resetFileLinkCaches();
+  const replacedWrap = document.createElement('div');
+  replacedWrap.innerHTML = md('[replaced](src/replaced.ts)', { fileLinks: links });
+  messages.append(replacedWrap);
+  panelMetadataAbsolute = 'C:/fixture/other-project/src/replaced.ts';
+  const tabsBeforeReplaced = panelHost.querySelectorAll('.files-tab').length;
+  replacedWrap.querySelector('a.md-file-link')
+    .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  await until(() => /工作区已经变化/.test(document.getElementById('toasts').textContent));
+  ok('a historical reference is refused when the backend resolves it outside the message workspace', () => {
+    assert.equal(panelHost.querySelectorAll('.files-tab').length, tabsBeforeReplaced);
+    assert.match(document.getElementById('toasts').textContent, /工作区已经变化/);
+  });
+  panelMetadataAbsolute = null;
+
+  /* ---------- 工作区外文件：授权前不读、授权后进同一个查看器 ---------- */
+
+  resetFileLinkCaches();
+  const externalWrap = document.createElement('div');
+  externalWrap.innerHTML = md('[报告](<D:/外部 报告/报告 v1.md>)', { fileLinks: links });
+  messages.append(externalWrap);
+  const externalChip = externalWrap.querySelector('a.md-file-link');
+  const fetchCallsBeforeExternal = fetchCalls.length;
+  ok('an external absolute path is rendered as an inline reference with the original path', () => {
+    assert.ok(externalChip);
+    assert.equal(externalChip.classList.contains('is-external'), true);
+    assert.equal(externalChip.dataset.fileExternal, '1');
+    assert.equal(externalChip.dataset.filePath, 'D:/外部 报告/报告 v1.md');
+    assert.equal(externalChip.dataset.fileDisplay, 'D:/外部 报告/报告 v1.md');
+    assert.equal(externalChip.querySelector('.md-file-name').textContent, 'D:/外部 报告/报告 v1.md');
+    assert.ok(externalChip.querySelector('.file-kind-icon'));
+    assert.equal(fetchCalls.length, fetchCallsBeforeExternal);
+  });
+  externalChip.dispatchEvent(new dom.window.Event('pointerover', { bubbles: true }));
+  await tick(320);
+  ok('hovering an unauthorized external file shows scope but performs no metadata read', () => {
+    const tip = document.querySelector('.ui-tooltip.file-link-tip');
+    assert.ok(tip);
+    assert.ok(tip.textContent.includes('工作区外 · 点击后授权'), tip.textContent);
+    assert.ok(tip.textContent.includes('D:/外部 报告/报告 v1.md'));
+    assert.equal(fetchCalls.length, fetchCallsBeforeExternal);
+    externalChip.dispatchEvent(new dom.window.Event('pointerout', { bubbles: true }));
+  });
+  const tabsBeforeExternal = panelHost.querySelectorAll('.files-tab').length;
+  externalChip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  await until(() => panelHost.querySelector('.files-preview-body')?.textContent.includes('# external report'));
+  ok('after native authorization the external file opens in the existing right-side viewer', () => {
+    assert.equal(externalAuthorizeCalls.length, 1);
+    assert.equal(externalAuthorizeCalls[0].path, 'D:/外部 报告/报告 v1.md');
+    assert.equal(externalAuthorizeCalls[0].kind, 'file');
+    assert.equal(externalMetas.length, 1);
+    assert.equal(externalMetas[0].grantId, 'a'.repeat(32));
+    assert.equal(externalDocs.length, 1);
+    assert.equal(externalDocs[0].filePath, 'D:/外部 报告/报告 v1.md');
+    assert.equal(panelHost.querySelectorAll('.files-tab').length, tabsBeforeExternal + 1);
+    assert.equal(panelHost.querySelector('.files-preview-path').textContent, 'D:/外部 报告/报告 v1.md');
+  });
+  document.dispatchEvent(new dom.window.CustomEvent('pi-gui:external-grants', { detail: { revoked: 'a'.repeat(32) } }));
+  await until(() => panelHost.querySelectorAll('.files-tab').length === tabsBeforeExternal);
+  ok('revoking the grant closes the external tab instead of leaving stale content reachable', () => {
+    assert.equal([...panelHost.querySelectorAll('.files-tab-label')]
+      .some((n) => n.textContent.includes('报告 v1.md')), false);
+    assert.equal(externalChip.hasAttribute('data-file-grant'), false);
+  });
+
+  /* 撤销时仍有在途元数据请求：迟到的成功响应不能把 grant 写回缓存，
+   * 否则下一次点击会拿已撤销的 grant 去开后端。 */
+  const lateWrap = document.createElement('div');
+  lateWrap.innerHTML = md('[延迟](<D:/延迟 报告/报告 v2.md>)', { fileLinks: links });
+  messages.append(lateWrap);
+  const lateChip = lateWrap.querySelector('a.md-file-link');
+  lateChip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  await until(() => panelHost.querySelector('.files-preview-path')?.textContent === 'D:/延迟 报告/报告 v2.md');
+  const lateGrantId = String.fromCharCode(96 + externalAuthorizeCalls.length).repeat(32);
+
+  const lateBaseFetch = global.fetch;
+  let releaseLateMeta = null;
+  let lateMetaCalls = 0;
+  global.fetch = async (url, options = {}) => {
+    if (String(url).startsWith('/api/files/external/metadata')
+      && new URL(url, 'http://x').searchParams.get('path') === 'D:/延迟 报告/报告 v2.md') {
+      lateMetaCalls++;
+      await new Promise((resolve) => { releaseLateMeta = resolve; });
+      return {
+        status: 200,
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          ok: true,
+          external: true,
+          file: { path: 'D:/延迟 报告/报告 v2.md', absolutePath: 'D:/延迟 报告/报告 v2.md', name: '报告 v2.md', bytes: 8, grantId: lateGrantId },
+        }),
+      };
+    }
+    return lateBaseFetch(url, options);
+  };
+  lateChip.dispatchEvent(new dom.window.Event('pointerover', { bubbles: true }));
+  await until(() => Boolean(releaseLateMeta), 'late external metadata');
+  document.dispatchEvent(new dom.window.CustomEvent('pi-gui:external-grants', { detail: { revoked: lateGrantId } }));
+  await tick(30);
+  releaseLateMeta();
+  await tick(80);
+  const authorizeBeforeLateClick = externalAuthorizeCalls.length;
+  lateChip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  await until(() => externalAuthorizeCalls.length === authorizeBeforeLateClick + 1
+    && lateChip.dataset.fileGrant !== lateGrantId, 'reauthorization after late response');
+  ok('a late metadata response cannot restore a revoked grant in the cache', () => {
+    assert.equal(lateMetaCalls, 1);
+    assert.equal(externalAuthorizeCalls.length, authorizeBeforeLateClick + 1);
+    assert.ok(lateChip.dataset.fileGrant);
+    assert.notEqual(lateChip.dataset.fileGrant, lateGrantId);
+  });
+  global.fetch = lateBaseFetch;
 
   /* 流式：未闭合的行内代码不会半个路径就成链接 */
   const streaming = document.createElement('div');
