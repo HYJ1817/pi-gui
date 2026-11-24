@@ -4560,17 +4560,50 @@ body.rp-resizing{cursor:col-resize;user-select:none}
   pointer-events: none;
   transition: opacity .12s;
 }
+:is(.thread, .rtc-output) .ui2-msg-meta-summary {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:is(.thread, .rtc-output) .ui2-msg-meta-details { flex: 0 0 auto; }
 :is(.thread, .rtc-output) :is(.msg, .rtc-timeline-message, .ui2-runtime-thinking-wrap):is(:hover, :focus-within) > .ui2-msg-meta {
   inline-size: auto;
   block-size: auto;
   overflow: visible;
   clip-path: none;
-  white-space: normal;
+  /* The chip must stay one line inside the message's bottom gap. If it wrapped
+   * or grew upward it would cover the answer it describes. */
+  white-space: nowrap;
+  flex-wrap: nowrap;
   opacity: .94;
   pointer-events: auto;
 }
+/* Opening the real fields is an explicit disclosure, not hover chrome. Put the
+ * footer back into normal flow so it expands downward and pushes the next row
+ * instead of growing upward over the message's own thinking / final answer. */
 :is(.thread, .rtc-output) .ui2-msg-meta:has(.ui2-msg-meta-details[open]) {
-  max-inline-size: calc(100% - 8px);
+  position: static;
+  inset: auto;
+  z-index: auto;
+  inline-size: auto;
+  block-size: auto;
+  max-inline-size: none;
+  overflow: visible;
+  clip-path: none;
+  flex-wrap: wrap;
+  white-space: normal;
+  margin-top: var(--ui-space-1);
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+/* The absolute action bar sits in the message's bottom gap. While the usage
+ * disclosure is in flow, reserve that gap so the actions cannot sit on top of
+ * the last real field. Only the explicitly opened state pays this height. */
+:is(.thread, .rtc-output) :is(.msg, .rtc-timeline-message):has(> .ui2-msg-meta .ui2-msg-meta-details[open]) {
+  padding-block-end: 18px;
 }
 :is(.thread, .rtc-output) .execution-usage .ui2-msg-meta {
   position: static;
