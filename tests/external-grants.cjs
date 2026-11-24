@@ -367,12 +367,18 @@ const write = (root, rel, content) => {
     await check('restore accepts only well-formed, still-safe persistent directory grants', async () => {
       const ledger = createExternalGrants({ env: fakeEnv, platform: 'linux' });
       const key = ledger.conversationKeyOf(conversationA);
+      const stat = fs.lstatSync(path.join(outside, 'nested'));
       const good = {
         id: 'a'.repeat(32),
         conversationKey: key,
         kind: 'directory',
         scope: 'persistent',
         target: path.join(outside, 'nested'),
+        dirIdentity: {
+          dev: String(stat.dev),
+          ino: String(stat.ino),
+          birthtimeMs: stat.birthtimeMs,
+        },
         createdAt: new Date(0).toISOString(),
       };
       fs.mkdirSync(path.join(world, 'fakehome/.ssh/keys'), { recursive: true });
@@ -392,6 +398,132 @@ const write = (root, rel, content) => {
       assert.equal(result.restored, 1);
       assert.deepEqual(ledger.persistentGrants().map((grant) => grant.id), ['a'.repeat(32)]);
       assert.throws(() => ledger.restore({}), (error) => error.code === 'invalid_request');
+    });
+
+    /* 目录对象身份：以下每条在旧实现（只比对路径字符串）里都会通过，
+     * 在新实现（dev+ino+birthtime）里必须让授权失效或被拒绝恢复。 */
+    await check('member churn keeps a directory grant alive while delete+recreate kills it', async () => {
+      const dir = path.join(world, 'churn-dir');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'a.txt'), 'a\n');
+      const evicted = [];
+      const ledger = createExternalGrants({ env: fakeEnv, platform: 'linux', onEvict: (grant) => evicted.push(grant.id) });
+      const created = createApproved(ledger, { rawPath: dir, scopeKind: 'directory', scope: conversationA });
+      const file = path.join(dir, 'note.md');
+      fs.writeFileSync(file, '# n\n');
+      /* 普通增删成员只动目录的 size/mtime/ctime，不动对象身份：授权必须仍然有效。 */
+      fs.writeFileSync(path.join(dir, 'b.txt'), 'b\n');
+      fs.unlinkSync(path.join(dir, 'b.txt'));
+      assert.doesNotThrow(() => ledger.authorizeRead({ grantId: created.grant.id, rawPath: file, scope: conversationA }));
+      /* 删除后原地重建：路径字符串相同，但 dev/ino/birthtime 已是另一个对象。 */
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir);
+      fs.writeFileSync(file, '# n\n');
+      assert.throws(
+        () => ledger.authorizeRead({ grantId: created.grant.id, rawPath: file, scope: conversationA }),
+        (error) => error.code === 'grant_changed' || error.code === 'file_missing',
+      );
+      assert.equal(ledger.list(conversationA).grants.some((grant) => grant.id === created.grant.id), false);
+      assert.ok(evicted.includes(created.grant.id), 'eviction must notify listeners so tabs/caches close');
+    });
+
+    await check('a renamed-away imposter directory does not inherit the grant', async () => {
+      const dir = path.join(world, 'imposter-dir');
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'keep.md'), 'k\n');
+      const ledger = createExternalGrants({ env: fakeEnv, platform: 'linux' });
+      const created = createApproved(ledger, { rawPath: dir, scopeKind: 'directory', scope: conversationA });
+      fs.renameSync(dir, dir + '-old');
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'keep.md'), 'k\n');
+      assert.throws(
+        () => ledger.authorizeRead({ grantId: created.grant.id, rawPath: path.join(dir, 'keep.md'), scope: conversationA }),
+        (error) => error.code === 'grant_changed',
+      );
+      assert.equal(ledger.list(conversationA).grants.length, 0);
+      fs.rmSync(dir + '-old', { recursive: true, force: true });
+    });
+
+    await check('a directory swapped for a junction at the same path loses the grant', async () => {
+      const real = path.join(world, 'junction-real');
+      fs.mkdirSync(real);
+      fs.writeFileSync(path.join(real, 'inside.md'), 'i\n');
+      const swap = path.join(world, 'junction-swap');
+      fs.mkdirSync(swap);
+      const ledger = createExternalGrants({ env: fakeEnv, platform: 'linux' });
+      const created = createApproved(ledger, { rawPath: swap, scopeKind: 'directory', scope: conversationA });
+      fs.rmdirSync(swap);
+      fs.symlinkSync(real, swap, 'junction');
+      assert.throws(
+        () => ledger.authorizeRead({ grantId: created.grant.id, rawPath: path.join(swap, 'inside.md'), scope: conversationA }),
+        (error) => error.code === 'grant_changed' || error.code === 'unsafe_path',
+      );
+      fs.rmSync(swap, { force: true });
+    });
+
+    await check('restore drops records whose directory was replaced or never carried an identity', async () => {
+      const dir = path.join(world, 'restore-dir');
+      fs.mkdirSync(dir);
+      const first = createExternalGrants({ env: fakeEnv, platform: 'linux' });
+      const created = createApproved(first, { rawPath: dir, scopeKind: 'directory', persistent: true, scope: conversationA });
+      const saved = created.persistent.find((grant) => grant.id === created.grant.id);
+      assert.ok(saved.dirIdentity, 'persistent record must carry dirIdentity');
+      /* 同一目录对象：恢复成功。 */
+      const ok = createExternalGrants({ env: fakeEnv, platform: 'linux' });
+      assert.equal(ok.restore([saved]).restored, 1);
+      /* 目录被删除重建：同一路径不同对象，记录必须被丢弃。 */
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir);
+      const replaced = createExternalGrants({ env: fakeEnv, platform: 'linux' });
+      const result = replaced.restore([saved]);
+      assert.equal(result.restored, 0);
+      assert.equal(result.persistent.length, 0);
+      /* 旧版记录没有 dirIdentity：不能证明同一对象，同样丢弃，走重新授权。 */
+      const legacy = { ...saved };
+      delete legacy.dirIdentity;
+      const legacyLedger = createExternalGrants({ env: fakeEnv, platform: 'linux' });
+      assert.equal(legacyLedger.restore([legacy]).restored, 0);
+      /* 身份被篡改的记录也丢弃。 */
+      const tampered = { ...saved, dirIdentity: { ...saved.dirIdentity, ino: '1' } };
+      const tamperedLedger = createExternalGrants({ env: fakeEnv, platform: 'linux' });
+      assert.equal(tamperedLedger.restore([tampered]).restored, 0);
+    });
+
+    await check('a mid-read directory swap fails the still-valid check like a revoke', async () => {
+      const dir = path.join(world, 'midread-dir');
+      fs.mkdirSync(dir);
+      const file = path.join(dir, 'data.txt');
+      fs.writeFileSync(file, 'd\n');
+      const evicted = [];
+      const ledger = createExternalGrants({ env: fakeEnv, platform: 'linux', onEvict: (grant) => evicted.push(grant.id) });
+      const created = createApproved(ledger, { rawPath: dir, scopeKind: 'directory', scope: conversationA });
+      const state = ledger.authorizeRead({ grantId: created.grant.id, rawPath: file, scope: conversationA });
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir);
+      fs.writeFileSync(file, 'd\n');
+      assert.throws(() => ledger.assertStillValid(state), (error) => error.code === 'grant_changed');
+      assert.ok(evicted.includes(created.grant.id));
+    });
+
+    await check('a second authorization for a replaced directory does not resurrect the old grant', async () => {
+      const dir = path.join(world, 'reauth-dir');
+      fs.mkdirSync(dir);
+      const evicted = [];
+      const ledger = createExternalGrants({ env: fakeEnv, platform: 'linux', onEvict: (grant) => evicted.push(grant.id) });
+      const first = createApproved(ledger, { rawPath: dir, scopeKind: 'directory', scope: conversationA });
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'new.md'), 'n\n');
+      /* 用户在旧路径重新授权：旧对象必须逐出并通知，新授权绑定新对象。 */
+      const second = createApproved(ledger, { rawPath: dir, scopeKind: 'directory', scope: conversationA });
+      assert.notEqual(second.grant.id, first.grant.id);
+      assert.ok(evicted.includes(first.grant.id));
+      const listed = ledger.list(conversationA).grants;
+      assert.equal(listed.length, 1);
+      assert.equal(listed[0].id, second.grant.id);
+      assert.doesNotThrow(() => ledger.authorizeRead({
+        grantId: second.grant.id, rawPath: path.join(dir, 'new.md'), scope: conversationA,
+      }));
     });
 
     await check('classic sessions bind grants to the project root, not to every classic session', async () => {

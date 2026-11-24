@@ -32,6 +32,8 @@ const inspectReply = (kind, target) => ({
   existing: null,
   approval: APPROVAL,
 });
+/* 持久化记录的形状与后端 persistentGrants() 一致：目录授权带
+ * dirIdentity（dev+ino+birthtimeMs），恢复时靠它验证同一目录对象。 */
 const grantRecord = (id, target) => ({
   id,
   conversationKey: `conversation:${CONVERSATION}`,
@@ -39,6 +41,7 @@ const grantRecord = (id, target) => ({
   scope: 'persistent',
   target,
   createdAt: '2026-01-01T00:00:00.000Z',
+  dirIdentity: { dev: '1234567890', ino: '9876543210', birthtimeMs: 1735689600000 },
 });
 
 async function harness({ directory } = {}) {

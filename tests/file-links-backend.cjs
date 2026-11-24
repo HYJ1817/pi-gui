@@ -87,6 +87,12 @@ async function serve({ files }) {
   write(rootA, 'photo.svg', '<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>');
   write(rootA, 'big.png', Buffer.concat([PNG, Buffer.alloc(128, 1)]));
   write(rootA, 'run.cmd', '@echo off\n');
+  /* 系统打开策略的对抗 fixture：白名单扩展名但 PE 头、伪装扩展名、
+   * 无扩展名可执行文件、双扩展名 —— 都必须被拒绝。 */
+  write(rootA, 'disguised.md', Buffer.concat([Buffer.from('MZ'), Buffer.alloc(64, 0)]));
+  write(rootA, 'invoice.pdf.exe', Buffer.concat([Buffer.from('MZ'), Buffer.alloc(64, 0)]));
+  write(rootA, 'noext-binary', Buffer.concat([Buffer.from('MZ'), Buffer.alloc(64, 0)]));
+  write(rootA, 'plain-md.md', '# safe\n');
   write(rootB, 'README.md', '# B\n');
   write(rootB, 'src/app.js', "console.log('b');\n");
   write(rootB, 'only-b.txt', 'only b\n');
@@ -106,7 +112,9 @@ async function serve({ files }) {
     'runtime-a': { root: rootA, scopeId: 'runtime-a', generation: '1', conversationId: CONV_A },
     'runtime-b': { root: rootB, scopeId: 'runtime-b', generation: '1', conversationId: CONV_B },
   };
-  const grants = createExternalGrants();
+  const grants = createExternalGrants({
+    onEvict: (grant) => published.push({ type: 'external_grants', detail: { revoked: grant.id } }),
+  });
   const createApproved = ({ rawPath, scopeKind = 'file', persistent = false, scope }) => {
     const inspected = grants.inspect({ rawPath, scopeKind, scope });
     assert.ok(inspected.approval);
@@ -328,6 +336,33 @@ async function serve({ files }) {
     const editScript = await app.request('/api/files/open-target', {
       method: 'POST', headers: scoped('a'), body: { path: 'src/app.js', workspace: { id: tokenA.id }, generation: tokenA.generation, action: 'editor' },
     });
+    const disguisedOpen = await app.request('/api/files/open-target', {
+      method: 'POST', headers: scoped('a'), body: { path: 'disguised.md', workspace: { id: tokenA.id }, generation: tokenA.generation, action: 'open' },
+    });
+    const doubleExtOpen = await app.request('/api/files/open-target', {
+      method: 'POST', headers: scoped('a'), body: { path: 'invoice.pdf.exe', workspace: { id: tokenA.id }, generation: tokenA.generation, action: 'open' },
+    });
+    const noExtOpen = await app.request('/api/files/open-target', {
+      method: 'POST', headers: scoped('a'), body: { path: 'noext-binary', workspace: { id: tokenA.id }, generation: tokenA.generation, action: 'open' },
+    });
+    const plainOpen = await app.request('/api/files/open-target', {
+      method: 'POST', headers: scoped('a'), body: { path: 'plain-md.md', workspace: { id: tokenA.id }, generation: tokenA.generation, action: 'open' },
+    });
+    const disguisedEdit = await app.request('/api/files/open-target', {
+      method: 'POST', headers: scoped('a'), body: { path: 'disguised.md', workspace: { id: tokenA.id }, generation: tokenA.generation, action: 'editor' },
+    });
+    await check('system open is whitelist-first: safe extensions pass, disguised/extensionless executables are refused', () => {
+      assert.equal(disguisedOpen.status, 415);
+      assert.match(disguisedOpen.body.code, /executable_header|unsafe_type/);
+      assert.equal(doubleExtOpen.status, 415);
+      assert.equal(doubleExtOpen.body.code, 'unsafe_type');
+      assert.equal(noExtOpen.status, 415);
+      assert.equal(noExtOpen.body.code, 'unknown_type');
+      assert.equal(plainOpen.status, 200);
+      /* 同一个伪装文件经“编辑器”动作不受影响：编辑器读的是字节，不执行。 */
+      assert.equal(disguisedEdit.status, 200);
+    });
+
     await check('open-target refuses traversal/missing files and never launches executables or scripts through the generic open action', () => {
       assert.equal(openTraversal.status, 403);
       assert.equal(openMissing.status, 404);
@@ -477,6 +512,31 @@ async function serve({ files }) {
       assert.equal(afterRevoke.body.code, 'grant_invalid');
       assert.equal(published.some((event) => event.type === 'external_grants'
         && event.detail?.revoked === fileGrant.id), true);
+    });
+
+    /* 授权目录被替换时，账本自动逐出授权并经 onEvict 发布同一个
+     * external_grants 事件 —— 渲染进程收到后与显式撤销一样关闭外部标签。 */
+    const swapDir = path.join(world, 'swap-dir');
+    fs.mkdirSync(swapDir, { recursive: true });
+    write(swapDir, 'inside.md', 'i\n');
+    const swapMetaUrl = (filePath, grantId) => '/api/files/external/metadata?' + new URLSearchParams({ path: filePath, grant: grantId });
+    const swapGrant = createApproved({
+      rawPath: swapDir, scopeKind: 'directory', scope: { root: rootA, conversationId: CONV_A },
+    }).grant;
+    const swapMeta = await app.request(swapMetaUrl(path.join(swapDir, 'inside.md'), swapGrant.id), { headers: scoped('runtime-a') });
+    const swapGrantId = swapGrant.id;
+    fs.rmSync(swapDir, { recursive: true, force: true });
+    fs.mkdirSync(swapDir);
+    write(swapDir, 'inside.md', 'i\n');
+    const afterSwap = await app.request(swapMetaUrl(path.join(swapDir, 'inside.md'), swapGrantId), { headers: scoped('runtime-a') });
+    const listedAfterSwap = await app.request('/api/files/grants', { headers: scoped('runtime-a') });
+    await check('a replaced grant directory auto-evicts and publishes the revoked event like an explicit revoke', () => {
+      assert.equal(swapMeta.status, 200);
+      assert.equal(afterSwap.status, 403);
+      assert.equal(afterSwap.body.code, 'grant_changed');
+      assert.equal(published.some((event) => event.type === 'external_grants'
+        && event.detail?.revoked === swapGrantId), true);
+      assert.equal(listedAfterSwap.body.grants.some((grant) => grant.id === swapGrantId), false);
     });
 
     const before = fs.readFileSync(path.join(rootA, 'src/app.js'), 'utf8');

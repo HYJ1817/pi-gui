@@ -42,7 +42,9 @@ function trustedWindow(origin) {
 
 async function startServer() {
   const records = [];
-  const state = { deny: false, absolutePath: 'C:\\项目 目录\\src\\app.js' };
+  /* 与真实后端同形：返回的文件身份来自真实磁盘，让主进程的启动前复核
+   * 能通过；测试用绝对路径 fixture 真实存在时才返回 identity。 */
+  const state = { deny: false, absolutePath: 'C:\\项目 目录\\src\\app.js', externalPath: 'D:\\外部 报告\\a.md' };
   const server = http.createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
@@ -51,11 +53,48 @@ async function startServer() {
     if (req.url.startsWith('/api/files/metadata')) return json({ ok: true, file: { fileId: 'meta-file-id' } });
     if (req.url.startsWith('/api/files/open-target')) {
       if (state.deny) return json({ ok: false, code: 'stale_workspace', error: '工作区已经变化。' });
-      return json({ ok: true, file: { absolutePath: state.absolutePath, fileId: 'f'.repeat(32) } });
+      let stat;
+      try { stat = require('node:fs').lstatSync(state.absolutePath); } catch { stat = null; }
+      return json({
+        ok: true,
+        file: {
+          absolutePath: state.absolutePath,
+          fileId: 'f'.repeat(32),
+          /* identity 可被测试覆盖成“授权时的旧快照”，模拟授权后文件被替换。 */
+          ...(stat && stat.isFile() ? {
+            identity: state.identity || {
+              dev: String(stat.dev), ino: String(stat.ino),
+              size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs,
+            },
+          } : {}),
+        },
+      });
     }
     if (req.url.startsWith('/api/files/external/open-target')) {
-      if (state.deny) return json({ ok: false, code: 'grant_invalid', error: '授权已经撤销。' });
-      return json({ ok: true, external: true, file: { absolutePath: state.externalPath || 'D:\\外部 报告\\a.md' } });
+      state.externalCalls = (state.externalCalls || 0) + 1;
+      /* denyExternalAfterNCalls 让测试模拟“授权响应之后才撤销”：前 N 次
+       * 外部确认放行，之后的调用拒绝。 */
+      if (state.deny || (Number.isInteger(state.denyExternalAfterNCalls)
+        && state.externalCalls > state.denyExternalAfterNCalls)) {
+        return json({ ok: false, code: 'grant_invalid', error: '授权已经撤销。' });
+      }
+      let stat;
+      try { stat = require('node:fs').lstatSync(state.externalPath); } catch { stat = null; }
+      return json({
+        ok: true,
+        external: true,
+        file: {
+          absolutePath: state.externalPath,
+          grantId: 'a'.repeat(32),
+          fileKey: 'k'.repeat(22),
+          ...(stat && stat.isFile() ? {
+            identity: state.identity || {
+              dev: String(stat.dev), ino: String(stat.ino),
+              size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs,
+            },
+          } : {}),
+        },
+      });
     }
     json({ ok: false, code: 'not_expected' });
   });
@@ -82,6 +121,14 @@ async function startServer() {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, 'fixture executable');
   }
+  /* 授权返回的 absolutePath / externalPath 指向真实存在的 fixture；
+   * 主进程的启动前复核会 lstat 它并对齐 identity。 */
+  const workspaceFile = path.join(world, 'project/src/app.js');
+  const externalFile = path.join(world, 'outside/报告.md');
+  fs.mkdirSync(path.dirname(workspaceFile), { recursive: true });
+  fs.mkdirSync(path.dirname(externalFile), { recursive: true });
+  fs.writeFileSync(workspaceFile, 'console.log("fixture");\n');
+  fs.writeFileSync(externalFile, '# fixture\n');
   fs.mkdirSync(dataDir, { recursive: true });
   const env = {
     LOCALAPPDATA: localAppData,
@@ -92,6 +139,8 @@ async function startServer() {
   };
   const { detect, editorArgs, installEditorSettings, parseAppPaths } = require('../electron/editor-settings.cjs');
   const server = await startServer();
+  server.absolutePath = workspaceFile;
+  server.externalPath = externalFile;
   const origin = server.origin;
   const openWindow = trustedWindow(origin);
 
@@ -261,7 +310,7 @@ async function startServer() {
 
     await check('a configured editor opens the authorized absolute path with --goto line:column', async () => {
       await first.ipcMain.invoke('pi-gui:editors-save', { editor: 'vscode', customPath: '' }, openWindow.event);
-      server.absolutePath = 'C:\\项目 目录\\src\\app.js';
+      server.absolutePath = workspaceFile;
       const result = await first.ipcMain.invoke('pi-gui:editors-open', {
         path: 'src/app.js',
         cwd: 'C:\\项目 目录',
@@ -273,7 +322,7 @@ async function startServer() {
       assert.equal(result.editor, 'vscode');
       assert.equal(first.spawnCalls.length, 1);
       assert.equal(first.spawnCalls[0].command, vscodeExe);
-      assert.deepEqual(first.spawnCalls[0].args, ['--goto', 'C:\\项目 目录\\src\\app.js:128:10']);
+      assert.deepEqual(first.spawnCalls[0].args, ['--goto', `${workspaceFile}:128:10`]);
       const posted = server.records.filter((record) => record.url === '/api/files/open-target').at(-1);
       assert.equal(posted.method, 'POST');
       assert.equal(posted.headers[TOKEN_HEADER], TOKEN);
@@ -286,7 +335,10 @@ async function startServer() {
 
     await check('paths with spaces, Chinese, ampersands and quotes stay one argument', async () => {
       await first.ipcMain.invoke('pi-gui:editors-save', { editor: 'vscode', customPath: '' }, openWindow.event);
-      const hostile = 'C:\\tmp\\报告 & calc.exe "quoted" `tick`.md';
+      /* Windows 文件名不允许 `"`，用单引号保留同等的 shell 敌意形状。 */
+      const hostile = path.join(world, 'tmp', "报告 & calc.exe 'quoted' `tick`.md");
+      fs.mkdirSync(path.dirname(hostile), { recursive: true });
+      fs.writeFileSync(hostile, 'x\n');
       server.absolutePath = hostile;
       first.spawnCalls.length = 0;
       const result = await first.ipcMain.invoke('pi-gui:editors-open', {
@@ -304,7 +356,7 @@ async function startServer() {
     await check('Notepad++ receives -n/-c flags, not a --goto string', async () => {
       await first.ipcMain.invoke('pi-gui:editors-save', { editor: 'notepadpp', customPath: '' }, openWindow.event);
       first.spawnCalls.length = 0;
-      server.absolutePath = 'C:\\项目 目录\\src\\app.js';
+      server.absolutePath = workspaceFile;
       await first.ipcMain.invoke('pi-gui:editors-open', {
         path: 'src/app.js',
         cwd: 'C:\\项目 目录',
@@ -313,7 +365,7 @@ async function startServer() {
         column: 3,
       }, openWindow.event);
       assert.equal(first.spawnCalls[0].command, notepadExe);
-      assert.deepEqual(first.spawnCalls[0].args, ['-n7', '-c3', 'C:\\项目 目录\\src\\app.js']);
+      assert.deepEqual(first.spawnCalls[0].args, ['-n7', '-c3', workspaceFile]);
     });
 
     await check('a custom editor receives the file path only and no guessed position flags', async () => {
@@ -327,7 +379,7 @@ async function startServer() {
         column: 3,
       }, openWindow.event);
       assert.equal(first.spawnCalls[0].command, customExe);
-      assert.deepEqual(first.spawnCalls[0].args, ['C:\\项目 目录\\src\\app.js']);
+      assert.deepEqual(first.spawnCalls[0].args, [workspaceFile]);
     });
 
     await check('the system default editor still requires backend authorization before shell.openPath', async () => {
@@ -344,34 +396,34 @@ async function startServer() {
       assert.equal(first.shellCalls.length, 0);
 
       server.deny = false;
-      server.absolutePath = 'C:\\项目 目录\\src\\app.js';
+      server.absolutePath = workspaceFile;
       const opened = await first.ipcMain.invoke('pi-gui:editors-open', {
         path: 'src/app.js',
         cwd: 'C:\\项目 目录',
         fileId: 'file-id-1',
       }, openWindow.event);
       assert.equal(opened.ok, true);
-      assert.deepEqual(first.shellCalls, [{ kind: 'openPath', target: 'C:\\项目 目录\\src\\app.js' }]);
+      assert.deepEqual(first.shellCalls, [{ kind: 'openPath', target: workspaceFile }]);
     });
 
     await check('an external file open carries the grant token and never a workspace path', async () => {
       await first.ipcMain.invoke('pi-gui:editors-save', { editor: 'vscode', customPath: '' }, openWindow.event);
       first.spawnCalls.length = 0;
-      server.externalPath = 'D:\\外部 报告\\a.md';
+      server.externalPath = externalFile;
       const result = await first.ipcMain.invoke('pi-gui:editors-open', {
-        path: 'D:\\外部 报告\\a.md',
+        path: externalFile,
         external: true,
         grantId: 'a'.repeat(32),
         conversationId: CONVERSATION,
         line: 4,
       }, openWindow.event);
       assert.equal(result.ok, true);
-      assert.deepEqual(first.spawnCalls[0].args, ['--goto', 'D:\\外部 报告\\a.md:4']);
+      assert.deepEqual(first.spawnCalls[0].args, ['--goto', `${externalFile}:4`]);
       const posted = server.records.filter((record) => record.url === '/api/files/external/open-target').at(-1);
       assert.equal(posted.headers['x-pi-gui-conversation'], CONVERSATION);
       assert.deepEqual(JSON.parse(posted.body), {
         grant: 'a'.repeat(32),
-        path: 'D:\\外部 报告\\a.md',
+        path: externalFile,
         action: 'editor',
       });
     });
@@ -380,7 +432,7 @@ async function startServer() {
       server.deny = true;
       first.spawnCalls.length = 0;
       const result = await first.ipcMain.invoke('pi-gui:editors-open', {
-        path: 'D:\\外部 报告\\a.md',
+        path: externalFile,
         external: true,
         grantId: 'a'.repeat(32),
         conversationId: CONVERSATION,
@@ -421,7 +473,7 @@ async function startServer() {
         assert.equal(result.code, 'invalid_request');
       }
       assert.equal(first.spawnCalls.length, 0);
-      server.absolutePath = 'C:\\项目 目录\\src\\app.js';
+      server.absolutePath = workspaceFile;
       const clamped = await first.ipcMain.invoke('pi-gui:editors-open', {
         path: 'src/app.js',
         cwd: 'C:\\项目 目录',
@@ -431,7 +483,44 @@ async function startServer() {
       }, openWindow.event);
       assert.equal(clamped.ok, true);
       assert.equal(first.spawnCalls.length, 1);
-      assert.deepEqual(first.spawnCalls[0].args, ['C:\\项目 目录\\src\\app.js']);
+      assert.deepEqual(first.spawnCalls[0].args, [workspaceFile]);
+    });
+
+    /* 启动前复核：授权响应之后、spawn/openPath 之前文件被替换或授权被撤销，
+     * 都必须拒绝 —— 不能靠“后端已授权”一路放行到 shell。 */
+    await check('a file replaced between authorization and launch is refused with no spawn', async () => {
+      await first.ipcMain.invoke('pi-gui:editors-save', { editor: 'vscode', customPath: '' }, openWindow.event);
+      first.spawnCalls.length = 0;
+      server.absolutePath = workspaceFile;
+      /* 伪造“授权时的旧身份”：授权通过，但主进程复核发现磁盘上已是另一个对象。 */
+      server.identity = { dev: '1', ino: '1', size: 1, mtimeMs: 1, ctimeMs: 1 };
+      const result = await first.ipcMain.invoke('pi-gui:editors-open', {
+        path: 'src/app.js', cwd: 'C:\\项目 目录', fileId: 'file-id-1', line: 1,
+      }, openWindow.event);
+      assert.equal(result.ok, false);
+      assert.equal(result.code, 'launch_target_changed');
+      assert.equal(first.spawnCalls.length, 0);
+      server.identity = null;
+    });
+
+    await check('a grant revoked between authorization and launch is refused with no spawn', async () => {
+      await first.ipcMain.invoke('pi-gui:editors-save', { editor: 'vscode', customPath: '' }, openWindow.event);
+      first.spawnCalls.length = 0;
+      server.externalPath = externalFile;
+      /* 授权响应之后、spawn 之前后端撤销了授权：主进程启动前会再确认一次，
+       * 第二次返回 grant_invalid，必须拒绝且不拉起编辑器。 */
+      server.externalCalls = 0;
+      server.denyExternalAfterNCalls = 1;
+      const result = await first.ipcMain.invoke('pi-gui:editors-open', {
+        path: externalFile, external: true,
+        grantId: 'a'.repeat(32), conversationId: CONVERSATION,
+      }, openWindow.event);
+      assert.equal(result.ok, false);
+      assert.equal(result.code, 'grant_invalid');
+      assert.equal(first.spawnCalls.length, 0);
+      const externals = server.records.filter((record) => record.url === '/api/files/external/open-target');
+      assert.ok(externals.length >= 2, 'launch must re-confirm the external grant before spawn');
+      server.denyExternalAfterNCalls = undefined;
     });
 
     await check('an uninstalled editor falls back to the system program instead of failing silently', async () => {
@@ -440,7 +529,7 @@ async function startServer() {
       try {
         first.spawnCalls.length = 0;
         first.shellCalls.length = 0;
-        server.absolutePath = 'C:\\项目 目录\\src\\app.js';
+        server.absolutePath = workspaceFile;
         const result = await first.ipcMain.invoke('pi-gui:editors-open', {
           path: 'src/app.js',
           cwd: 'C:\\项目 目录',
@@ -450,7 +539,7 @@ async function startServer() {
         assert.equal(result.editor, 'system');
         assert.equal(result.fallback, true);
         assert.equal(first.spawnCalls.length, 0);
-        assert.deepEqual(first.shellCalls, [{ kind: 'openPath', target: 'C:\\项目 目录\\src\\app.js' }]);
+        assert.deepEqual(first.shellCalls, [{ kind: 'openPath', target: workspaceFile }]);
       } finally {
         fs.renameSync(vscodeExe + '.gone', vscodeExe);
       }
