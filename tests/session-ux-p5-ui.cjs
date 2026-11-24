@@ -151,11 +151,12 @@ async function main() {
     });
     send('message_start', { message: { role: 'user', content: [text('Additional steer')] } }, 2);
     await frame();
-    check('supplemental input stays visible in progress and navigation still lands', () => {
+    check('supplemental input stays visible between folds and navigation still lands', () => {
       const inputs = S.thread.querySelectorAll('.msg.user');
       const steer = inputs[1];
-      assert.ok(steer.closest('[data-execution-part="progress"]'));
-      // 用户补充输入不能被折进工作记录；T3 的时间线同样始终显示用户行。
+      // 用户补充输入按真实执行边界留在两段工作折叠之间，不进入任何折叠列表。
+      assert.ok(steer.closest('[data-execution-part="activity-flow"]'));
+      assert.equal(steer.closest('[data-execution-part="progress"]'), null);
       assert.equal(steer.closest('[hidden]'), null);
       assert.equal(scrollToUserTurn(1), true);
       assert.equal(steer.closest('[hidden]'), null);

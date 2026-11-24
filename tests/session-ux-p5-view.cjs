@@ -85,7 +85,10 @@ test('orders by recorded start position and retains detail nodes as tool status 
   const rest = Array.from({ length: 3 }, (_, i) => activity('later-' + i, i + 3));
   update({ turn, group, items: [...rest, second, first], details, input });
   const showActivities = node.querySelector('.execution-activity-group > button');
-  assert.match(showActivities.textContent, /工作记录.*进行中.*5 项.*3(.0)?s/);
+  assert.match(showActivities.textContent, /执行中/);
+  assert.match(showActivities.textContent, /5 项/);
+  // 这一轮没有轮次时间证据，工具组自身的 3s 不能冒充整轮耗时。
+  assert.doesNotMatch(showActivities.textContent, /已运行|用时/);
   // 运行中的工作记录默认展开（T3 的活动组语义）；用户显式折叠后才保持折叠。
   assert.equal(showActivities.getAttribute('aria-expanded'), 'true');
   const rows = node.querySelectorAll('.execution-activity-item');
@@ -102,9 +105,56 @@ test('orders by recorded start position and retains detail nodes as tool status 
   assert.equal(node.querySelector('.execution-activity-item'), rows[0]);
   assert.equal(showFirst.getAttribute('aria-expanded'), 'true');
   assert.ok(rows[0].contains(native));
-  assert.match(showActivities.textContent, /工作记录.*1 项失败/);
+  assert.match(showActivities.textContent, /执行了|工作记录/);
+  assert.match(showActivities.textContent, /1 项失败/);
   rows[1].querySelector('button').click();
   assert.match(rows[1].textContent, /失败.*详情暂不可用/);
+});
+
+test('labels the turn fold from wall-clock timing and keeps each steer segment on its own boundary', async t => {
+  const { document, node, update } = await surface(t);
+  const input = document.createElement('div');
+  const completedGroup = { ...group, status: 'completed', activeItemId: null };
+  const timed = (id, sequence, startedAt, endedAt) => ({
+    ...activity(id, sequence), timing: { startedAt, endedAt, evidence: 'observed' },
+  });
+  const first = timed('item-1', 1, 1000, 1800);
+  const between = timed('item-2', 3, 2500, 3500);
+  const last = timed('item-3', 5, 6500, 8500);
+  const steerA = document.createElement('article');
+  const steerB = document.createElement('article');
+  steerA.textContent = '补充要求 A';
+  steerB.textContent = '补充要求 B';
+  update({
+    turn: { ...turn, status: 'completed',
+      timing: { startedAt: 1000, endedAt: 9000, evidence: 'observed' } },
+    group: completedGroup, input, items: [first, between, last],
+    steers: [steerA, steerB],
+    workOrder: [
+      { activityId: first.id, ...first.position },
+      { node: steerA, steer: true, startedAt: 2000, steerKey: 'a' },
+      { activityId: between.id, ...between.position },
+      { node: steerB, steer: true, startedAt: 6000, steerKey: 'b' },
+      { activityId: last.id, ...last.position },
+    ],
+  });
+  const titles = [...node.querySelectorAll('.execution-activity-group .execution-head-title')]
+    .map(entry => entry.textContent);
+  // 主折叠覆盖整轮 8s；第一段补充执行只到下一个 steer 前，不借用整轮终点。
+  assert.deepEqual(titles, ['执行了 8 秒', '继续执行了 1.5 秒', '继续执行了 3 秒']);
+  const flow = node.querySelector('[data-execution-part="activity-flow"]');
+  const order = [...flow.children];
+  assert.ok(order.includes(steerA) && order.includes(steerB));
+  assert.ok(order.indexOf(steerA) < order.indexOf(steerB));
+  // 补充输入是真实用户行，留在两段折叠之间且默认可见。
+  assert.equal(steerA.closest('[data-execution-part="progress"]'), null);
+  assert.equal(steerB.closest('[data-execution-part="progress"]'), null);
+  assert.equal(steerA.closest('[hidden]'), null);
+  assert.equal(steerB.closest('[hidden]'), null);
+  // 正常完成后过程默认折叠，时长与状态仍可从折叠头读到。
+  const heads = [...node.querySelectorAll('.execution-activity-group > button')];
+  assert.ok(heads.every(head => head.getAttribute('aria-expanded') === 'false'));
+  assert.match(heads[0].title, /执行了 8 秒/);
 });
 
 test('opens a stable 40-row window and releases native details when the window is hidden', async t => {

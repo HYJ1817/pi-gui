@@ -184,7 +184,11 @@ async function main() {
     check('私有 RPC 确认单文件 EXE bridge ready', () => readyState.bridgeState === 'ready' || readyState.bridgeState);
 
     /* 内嵌资源必须和磁盘上的原文逐字节一致 */
-    for (const f of ['index.html', 'styles.css', 'app.js']) {
+    for (const f of [
+      'index.html', 'styles.css', 'app.js', 'agent-execution.css',
+      'messages.js', 'runtime-conversation.js', 'execution-timeline-view.js',
+      'conversation-work-log.js', 'ui/turn-fold.js', 'ui/work-presentation.js',
+    ]) {
       const served = Buffer.from(await (await fetch(`${BASE}/${f}`)).arrayBuffer());
       const disk = fs.readFileSync(path.join(ROOT, 'public', f));
       check(`内嵌 ${f} 与磁盘一致`, () => served.equals(disk) || `${served.length} vs ${disk.length}`);

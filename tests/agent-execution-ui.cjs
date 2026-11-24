@@ -985,6 +985,19 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     .every(status => new RegExp(`\\.plan-item\\[data-status="${status}"\\]`).test(css)));
   ok('reduced-motion 下关掉呼吸与过渡', /prefers-reduced-motion:\s*reduce[\s\S]*?\.plan-pulse-dot\s*\{\s*animation:\s*none/.test(css)
     && /prefers-reduced-motion:\s*reduce[\s\S]*?\.scroll-bottom[^{]*\{\s*transition:\s*none/.test(css));
+  const baseCss = fs.readFileSync(path.join(PUB, 'styles.css'), 'utf8');
+  ok('工具动作名不收缩，长参数吸收截断', /\.tl-label\{[^}]*flex:0 0 auto[^}]*max-inline-size:45%[^}]*text-overflow:ellipsis/s.test(baseCss)
+    && /\.tl-arg\{[^}]*flex:1 1 0[^}]*min-width:0[^}]*text-overflow:ellipsis/s.test(baseCss));
+  ok('逐条 usage 默认不占布局，悬停/聚焦才浮出', /\.ui2-msg-meta\s*\{[^}]*position:\s*absolute[^}]*inline-size:\s*1px[^}]*block-size:\s*1px[^}]*clip-path:\s*inset\(50%\)[^}]*pointer-events:\s*none/s.test(baseCss)
+    && /:is\(:hover,\s*:focus-within\)\s*>\s*\.ui2-msg-meta\s*\{[^}]*inline-size:\s*auto[^}]*opacity:\s*\.94/s.test(baseCss));
+  ok('已验证回合的「用量」仍按正常流完整显示',
+    /\.execution-usage\s+\.ui2-msg-meta\s*\{[^}]*position:\s*static[^}]*clip-path:\s*none[^}]*opacity:\s*1/s.test(baseCss));
+  ok('折叠头图标/箭头固定，标题与摘要按主次分配', /\.conversation-work-icon,[\s\S]*?flex:\s*0 0 24px/.test(css)
+    && /\.conversation-work-chevron,[\s\S]*?flex:\s*0 0 16px/.test(css)
+    && /\.conversation-work-title,\s*\.execution-activity-group > \.execution-head > \.execution-head-title \{\s*flex:\s*1 1 auto/.test(css));
+  ok('工作行动作名不让位给参数，参数吸收剩余宽度',
+    /\.execution-activity-item > \.execution-head > \.execution-head-title \{[^}]*flex:\s*0 0 auto[^}]*max-inline-size:\s*45%/s.test(css)
+    && /\.execution-activity-item > \.execution-head > \.execution-activity-facts \{[^}]*flex:\s*1 1 0[^}]*min-inline-size:\s*0/s.test(css));
   const html = fs.readFileSync(path.join(PUB, 'index.html'), 'utf8');
   ok('新样式在 thinking-dots 之后加载', html.indexOf('href="/agent-execution.css"') > html.indexOf('href="/thinking-dots.css"'));
 

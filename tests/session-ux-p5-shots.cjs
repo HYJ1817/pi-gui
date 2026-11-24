@@ -277,6 +277,217 @@ function measure(root, scroller) {
   };
 }
 
+/* Real Chromium matrix for the turn-duration fold. Uses the production view and
+ * work-log modules in the actual page, with real CSS and scrolling. */
+async function seedFoldCase(kind) {
+  const { createExecutionTurnView } = await import('/execution-timeline-view.js');
+  const thread = document.querySelector('#stream .thread');
+  thread.replaceChildren();
+  const now = Date.now();
+  const [status, elapsed] = {
+    completed: ['completed', 207000], running: ['running', 5000], failed: ['failed', 12000],
+    stopped: ['cancelled', 8000], interrupted: ['interrupted', 8000],
+    continued: ['completed', 9000], long: ['completed', 45000],
+  }[kind];
+  const startedAt = now - elapsed;
+  const endedAt = status === 'running' ? null : now;
+  const turnId = 'fold-' + kind;
+  const turn = { id: turnId, status, sessionId: 'fold-session', source: 'classic-rpc',
+    evidence: 'verified', completeness: 'complete', position: { domain: 'live', sequence: 1 },
+    input: { id: turnId + ':input:1', content: { source: 'live-buffer', state: 'available' } },
+    timing: { startedAt, endedAt, evidence: 'observed' } };
+  const group = { id: turnId + ':group', turnId, status,
+    activeItemId: status === 'running' ? 'fold-2' : null,
+    timing: { startedAt, endedAt, evidence: 'observed' } };
+  const item = (id, itemStatus, title, summary, sequence, timing) => ({ id, turnId,
+    parentId: group.id, position: { sequence, part: 0 }, status: itemStatus, kind: 'tool',
+    title, summary, detailRef: { state: 'restricted' }, ...(timing ? { timing } : {}) });
+  let items = [
+    item('fold-1', 'completed', '读取 state.js', { fileName: 'state.js' }, 1),
+    item('fold-2', status === 'running' ? 'running' : status === 'failed' ? 'failed'
+      : kind === 'stopped' || kind === 'interrupted' ? 'interrupted' : 'completed',
+      '运行命令', { command: 'npm test -- conversation' }, 2),
+  ];
+  if (kind === 'long') items = Array.from({ length: 60 }, (_, index) => item('fold-' + index,
+    'completed', '执行', { command: 'npm run verify:' + 'x'.repeat(90) }, index + 1));
+  if (kind === 'continued') {
+    items = [
+      item('fold-1', 'completed', '读取 state.js', { fileName: 'state.js' }, 1,
+        { startedAt: now - 9000, endedAt: now - 8200, evidence: 'observed' }),
+      item('fold-2', 'completed', '运行命令', { command: 'npm test -- first' }, 3,
+        { startedAt: now - 7500, endedAt: now - 6500, evidence: 'observed' }),
+      item('fold-3', 'completed', '运行命令', { command: 'npm test -- second' }, 5,
+        { startedAt: now - 3500, endedAt: now - 1500, evidence: 'observed' }),
+    ];
+  }
+  const input = document.createElement('article');
+  input.className = 'msg user';
+  input.textContent = '请检查执行顺序、工具结果和最终回答。';
+  const answer = document.createElement('article');
+  answer.className = 'msg assistant';
+  const answerBody = document.createElement('div');
+  answerBody.className = 'msg-body';
+  answerBody.textContent = '最终回答仍然保持可见，并保有自己的阅读文本。';
+  answer.append(answerBody);
+  const view = createExecutionTurnView({ document, now: () => now });
+  thread.append(view.node);
+  if (kind === 'long') {
+    const spacer = document.createElement('div');
+    spacer.style.height = '1200px';
+    spacer.style.flexShrink = '0';
+    thread.append(spacer);
+  }
+  const payload = { turn, group, items, input, answer: [answer] };
+  if (kind === 'continued') {
+    const steer = label => {
+      const node = document.createElement('article');
+      node.className = 'msg user';
+      node.textContent = label;
+      return node;
+    };
+    const first = steer('补充要求 A');
+    const second = steer('补充要求 B');
+    payload.steers = [first, second];
+    payload.workOrder = [
+      { activityId: 'fold-1', sequence: 1, part: 0 },
+      { node: first, steer: true, startedAt: now - 8000, steerKey: 'a' },
+      { activityId: 'fold-2', sequence: 3, part: 0 },
+      { node: second, steer: true, startedAt: now - 4000, steerKey: 'b' },
+      { activityId: 'fold-3', sequence: 5, part: 0 },
+    ];
+  }
+  view.update(payload);
+  const raf = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await raf();
+  const head = view.node.querySelector('.execution-activity-group > .execution-head');
+  const count = view.node.querySelector('.execution-activity-count');
+  const wasOpen = head.getAttribute('aria-expanded') === 'true';
+  const selection = getSelection();
+  selection.removeAllRanges();
+  const range = document.createRange();
+  range.selectNodeContents(view.node.querySelector('[data-execution-part="answer"] .msg-body') || answerBody);
+  selection.addRange(range);
+  const selectedBefore = selection.toString();
+  const beforeTop = head.getBoundingClientRect().top;
+  head.click();
+  await raf();
+  const openDelta = Math.abs(head.getBoundingClientRect().top - beforeTop);
+  const selectionPreserved = Boolean(selectedBefore) && selection.toString() === selectedBefore;
+  selection.removeAllRanges();
+  head.click();
+  await raf();
+  let visibleRows = 0;
+  let rangeText = '';
+  let labelClipped = null;
+  if (kind === 'long') {
+    head.click();
+    await raf();
+    labelClipped = (() => {
+      const label = view.node.querySelector('.execution-activity-item .execution-head-title');
+      return label ? label.scrollWidth > label.clientWidth + 1 : null;
+    })();
+    const more = view.node.querySelector('.execution-activity-more');
+    if (more && !more.hidden) {
+      more.click();
+      await raf();
+    }
+    visibleRows = view.node.querySelectorAll('.execution-activity-item').length;
+    rangeText = view.node.querySelector('.execution-activity-range')?.textContent || '';
+  }
+  const steers = [...view.node.querySelectorAll('[data-execution-part="activity-flow"] > .msg.user')];
+  return { kind, title: head.querySelector('.execution-head-title').textContent,
+    titles: [...view.node.querySelectorAll('.execution-activity-group')].map(node =>
+      node.querySelector(':scope > .execution-head > .execution-head-title')?.textContent || ''),
+    expanded: wasOpen, rows: view.node.querySelectorAll('.execution-activity-item').length,
+    countText: count ? count.textContent : '', openDelta, selectionPreserved,
+    steers: steers.length,
+    steerVisible: steers.length > 0 && steers.every(node => node.getBoundingClientRect().height > 0),
+    overflow: Math.max(thread.scrollWidth - thread.clientWidth, view.node.scrollWidth - view.node.clientWidth),
+    visibleRows, rangeText, labelClipped };
+}
+
+async function seedNativeFoldCase() {
+  const [{ createConversationFlow }, tool] = await Promise.all([
+    import('/conversation-work-log.js'), import('/tool-view.js'),
+  ]);
+  const thread = document.querySelector('#stream .thread');
+  thread.replaceChildren();
+  const now = Date.now();
+  const user = document.createElement('article');
+  user.className = 'msg user';
+  user.textContent = '请运行一条带长参数的命令。';
+  user.dataset.turnStartAt = String(now - 2000);
+  user.dataset.turnEndedAt = String(now);
+  user.dataset.turnStatus = 'completed';
+  const group = tool.createGroup();
+  const command = 'npm run verify:conversation-timeline -- --case=long-command --include-trace --worker=1 --filter='
+    + 'fixture'.repeat(24);
+  tool.addToGroup(group, tool.renderEntry({ id: 'native-long', name: 'bash', label: '执行', known: true,
+    status: 'success', args: { command }, summary: command, command, path: '', output: 'ok',
+    resultLine: 'ok', durationMs: 800, startedAt: now - 1800, endedAt: now - 1000 }));
+  thread.append(user, group);
+  const flow = createConversationFlow();
+  flow.render(thread);
+  const head = thread.querySelector('.conversation-work-head');
+  if (head.getAttribute('aria-expanded') === 'false') head.click();
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const label = thread.querySelector('.tl-label');
+  const arg = thread.querySelector('.tl-arg');
+  const toggle = thread.querySelector('.tl-toggle');
+  const dot = thread.querySelector('.tl-dot');
+  const row = thread.querySelector('.tl-head');
+  return { title: thread.querySelector('.conversation-work-title').textContent,
+    workLabel: label.textContent, labelWidth: label.getBoundingClientRect().width,
+    labelClient: label.clientWidth, labelScroll: label.scrollWidth,
+    labelClipped: label.scrollWidth > label.clientWidth + 1,
+    argWidth: arg.getBoundingClientRect().width, toggleWidth: toggle.getBoundingClientRect().width,
+    dotWidth: dot.getBoundingClientRect().width, rowHeight: row.getBoundingClientRect().height,
+    overflow: thread.scrollWidth - thread.clientWidth };
+}
+
+async function seedUsageCase() {
+  const { renderUsageMeta } = await import('/message-meta.js');
+  const thread = document.querySelector('#stream .thread');
+  thread.replaceChildren();
+  const message = document.createElement('article');
+  message.className = 'msg assistant';
+  message.id = 'usage-msg';
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = '这条助手消息保留真实用量，但默认不占布局高度。';
+  const meta = renderUsageMeta({ input: 1540, output: 220, reasoning: 120, totalTokens: 1880 },
+    { label: '助手响应的用量' });
+  const actions = document.createElement('div');
+  actions.className = 'message-actions';
+  const copy = document.createElement('button');
+  copy.className = 'message-copy';
+  copy.type = 'button';
+  copy.textContent = '复制';
+  actions.append(copy);
+  message.append(body, meta, actions);
+  const next = document.createElement('article');
+  next.className = 'msg assistant';
+  next.id = 'usage-next';
+  next.textContent = '下一条消息';
+  thread.append(message, next);
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const heightWithExtras = message.offsetHeight;
+  const nextTopWithExtras = next.getBoundingClientRect().top;
+  meta.remove();
+  const heightWithoutMeta = message.offsetHeight;
+  const nextTopWithoutMeta = next.getBoundingClientRect().top;
+  message.append(meta);
+  actions.remove();
+  const heightWithoutActions = message.offsetHeight;
+  message.append(actions);
+  const hidden = meta.getBoundingClientRect();
+  return { hiddenWidth: hidden.width, hiddenHeight: hidden.height,
+    heightWithExtras, heightWithoutMeta, heightWithoutActions,
+    nextTopWithExtras, nextTopWithoutMeta,
+    gap: next.getBoundingClientRect().top - message.getBoundingClientRect().bottom,
+    summary: meta.querySelector('.ui2-msg-meta-summary')?.textContent || '' };
+}
+
 async function main() {
   assert.ok(chromePath, 'set CHROME_PATH to a locally installed Chromium');
   fs.mkdirSync(out, { recursive: true });
@@ -328,6 +539,17 @@ async function main() {
       await send('Input.dispatchKeyEvent', { type: 'keyDown', ...fields, text, unmodifiedText: text });
       await send('Input.dispatchKeyEvent', { type: 'keyUp', ...fields });
       await wait(80);
+    };
+    const hover = async selector => {
+      const point = await evaluate('(() => { const e = document.querySelector(' + JSON.stringify(selector) + ');'
+        + 'if (!e) throw Error("missing " + ' + JSON.stringify(selector) + ');'
+        + 'const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()');
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
+      await wait(140);
+    };
+    const moveAway = async () => {
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 8 });
+      await wait(140);
     };
     await send('Page.enable');
     await send('Page.navigate', { url });
@@ -390,7 +612,10 @@ async function main() {
       assert.equal(await evaluate(link + '.hasAttribute("inert")'), false);
       await key(' ', 'Space', 32);
       assert.equal(await evaluate(preview + '.getAttribute("aria-expanded")'), 'false');
-      await evaluate(select + '.querySelector(".execution-activity-group > button").focus()');
+      // 运行中的工作默认展开（T3 work-live 语义）；先回到关闭态，再用键盘打开，
+      // 验证 Enter 的可达性而不是依赖某个默认值。
+      await evaluate('(() => { const b = ' + select + '.querySelector(".execution-activity-group > button");'
+        + 'if (b.getAttribute("aria-expanded") === "true") b.click(); b.focus(); })()');
       await key('Enter', 'Enter', 13);
       const keyboard = await evaluate('(() => { const b = ' + select + '.querySelector(".execution-activity-group > button");'
         + 'return { open: b.getAttribute("aria-expanded"), focused: b === document.activeElement, outline: getComputedStyle(b).outlineStyle }; })()');
@@ -423,7 +648,135 @@ async function main() {
       assert.match(detail, mode === 'classic' ? /const state = readState/ : /当前视图无权读取详情/);
       await evaluate(scroll + '.scrollTop = ' + scroll + '.scrollHeight');
       await shot(mode + '-detail-and-answer');
+      const fold = await evaluate('(() => { const t = ' + select + ';'
+        + 'const group = t.querySelector(".execution-activity-group");'
+        + 'const head = group.querySelector(":scope > button");'
+        + 'if (head.getAttribute("aria-expanded") === "true") head.click();'
+        + 'const titles = [...t.querySelectorAll(".execution-activity-group")].map(g => g.querySelector(":scope > .execution-head > .execution-head-title")?.textContent || "");'
+        + 'return { title: titles[0] || "", titles, logs: t.querySelectorAll(".conversation-work-log").length,'
+        + 'expanded: head.getAttribute("aria-expanded"), count: group.querySelector(".execution-activity-count")?.textContent || "" }; })()');
+      assert.match(fold.title, /^执行了 \d+(?:\.\d+)? 秒(?: · 1 项失败)?$/, mode + ' fold title: ' + fold.title);
+      assert.equal(fold.titles.length, 1, mode + ' produced duplicate fold headings');
+      assert.equal(fold.expanded, 'false', mode + ' completed fold should default closed');
+      assert.equal(fold.logs, 0, mode + ' rendered a second native work-log heading');
+      assert.match(fold.count, /3 项/);
+      await evaluate(select + '.querySelector(".execution-activity-group").scrollIntoView({ block: "center", behavior: "instant" })');
+      await wait(140);
+      await shot(mode + '-completed-fold-collapsed');
+      await evaluate(select + '.querySelector(".execution-activity-group > button").click()');
+      await wait(140);
+      await shot(mode + '-completed-fold-expanded');
     }
+
+    /* ---------- P7：耗时折叠矩阵 ---------- */
+    console.log('P7 fold matrix');
+    await evaluate('(async () => { const surface = await import("/ui/workspace-surface.js");'
+      + 'surface.showChat(); document.querySelector("#stream").scrollTop = 0; })()');
+    const expectations = {
+      completed: { title: '执行了 3 分 27 秒', expanded: false, rows: 0 },
+      running: { title: '执行中 · 已运行 5 秒', expanded: true, rows: 2 },
+      failed: { title: '执行失败 · 用时 12 秒', expanded: true, rows: 2 },
+      stopped: { title: '你在 8 秒后停止', expanded: true, rows: 2 },
+      interrupted: { title: '已中断 · 用时 8 秒', expanded: true, rows: 2 },
+      continued: { titles: ['执行了 9 秒', '继续执行了 1.5 秒', '继续执行了 4 秒'], steers: 2 },
+      long: { title: '执行了 45 秒', countText: '60 项', visibleRows: 20,
+        rangeText: '41–60 / 60', labelClipped: false, expanded: false },
+    };
+    const variants = {
+      completed: [['dark', 1320, 820, 1], ['light', 700, 640, 1]],
+      running: [['dark', 1320, 820, 1]], failed: [['dark', 1320, 820, 1]],
+      stopped: [['dark', 1320, 820, 1]], interrupted: [['dark', 1320, 820, 1]],
+      continued: [['dark', 1320, 820, 1]], long: [['dark', 1320, 820, 1], ['light', 700, 640, 1.25]],
+    };
+    for (const [kind, expected] of Object.entries(expectations)) {
+      for (const [theme, width, height, scale] of variants[kind]) {
+        await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+        await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+        await evaluate('document.documentElement.dataset.theme = ' + JSON.stringify(theme)
+          + '; document.documentElement.style.setProperty("--font-scale", ' + scale
+          + '); document.querySelector("#stream").scrollTop = 0');
+        const f = await evaluate('(' + seedFoldCase.toString() + ')(' + JSON.stringify(kind) + ')');
+        assert.ok(f.overflow <= 1, kind + ' horizontal overflow: ' + JSON.stringify(f));
+        assert.ok(f.openDelta <= 2, kind + ' fold toggle moved the header: ' + JSON.stringify(f));
+        assert.equal(f.selectionPreserved, true, kind + ' lost a text selection while folding');
+        if (expected.titles) assert.deepEqual(f.titles, expected.titles);
+        else {
+          assert.equal(f.title, expected.title);
+          assert.equal(f.titles.length, 1, kind + ' produced duplicate fold headings');
+          assert.equal(f.expanded, expected.expanded);
+        }
+        if (kind === 'running') assert.equal(f.rows, expected.rows);
+        if (kind === 'failed' || kind === 'stopped' || kind === 'interrupted') {
+          assert.equal(f.rows, expected.rows);
+          if (kind === 'failed') assert.match(f.countText, /1 项失败/);
+        }
+        if (kind === 'continued') {
+          assert.equal(f.steers, 2);
+          assert.equal(f.steerVisible, true);
+        }
+        if (kind === 'long') {
+          assert.equal(f.countText, expected.countText);
+          assert.equal(f.visibleRows, expected.visibleRows);
+          assert.equal(f.rangeText, expected.rangeText);
+          assert.equal(f.labelClipped, expected.labelClipped);
+        }
+        const name = ['fold', kind, theme, width].join('-');
+        results.push({ name, scale, ...f });
+        await shot(name);
+      }
+    }
+
+    for (const [theme, width, height, scale] of [['dark', 1320, 820, 1], ['light', 700, 640, 1.5]]) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+      await evaluate('document.documentElement.dataset.theme = ' + JSON.stringify(theme)
+        + '; document.documentElement.style.setProperty("--font-scale", ' + scale
+        + '); document.querySelector("#stream").scrollTop = 0');
+      const f = await evaluate('(' + seedNativeFoldCase.toString() + ')()');
+      assert.equal(f.title, '执行了 2 秒', 'native fold title: ' + f.title);
+      assert.equal(f.workLabel, '执行', 'native action name changed: ' + f.workLabel);
+      assert.equal(f.labelClipped, false, 'action name was squeezed: ' + JSON.stringify(f));
+      assert.ok(f.labelWidth >= 24, 'action name collapsed to nothing: ' + JSON.stringify(f));
+      assert.ok(f.toggleWidth >= 16 && f.dotWidth >= 16, 'status/chevron squeezed: ' + JSON.stringify(f));
+      assert.ok(f.rowHeight >= 24, 'work row below T3 24px baseline: ' + JSON.stringify(f));
+      assert.ok(f.overflow <= 1, 'native long command overflow: ' + JSON.stringify(f));
+      const name = ['fold-native-long', theme, width].join('-');
+      results.push({ name, scale, ...f });
+      await shot(name);
+    }
+
+    await send('Emulation.setDeviceMetricsOverride', { width: 1320, height: 820, deviceScaleFactor: 1, mobile: false });
+    await evaluate('document.documentElement.dataset.theme = "dark"; document.documentElement.style.setProperty("--font-scale", 1)');
+    const usage = await evaluate('(' + seedUsageCase.toString() + ')()');
+    assert.ok(usage.hiddenWidth <= 16 && usage.hiddenHeight <= 16, 'hidden usage still occupies layout: ' + JSON.stringify(usage));
+    assert.equal(usage.heightWithExtras, usage.heightWithoutMeta, 'usage changes the message height');
+    assert.equal(usage.heightWithExtras, usage.heightWithoutActions, 'message actions changed the message height');
+    assert.equal(usage.nextTopWithExtras, usage.nextTopWithoutMeta, 'hidden usage moved the next message');
+    assert.ok(usage.gap >= 10, 'message gap changed: ' + JSON.stringify(usage));
+    assert.match(usage.summary, /Token 1,880.*推理 120/);
+    await shot('usage-hidden-dark');
+    await hover('#usage-msg');
+    const shown = await evaluate('(() => { const m = document.querySelector("#usage-msg .ui2-msg-meta");'
+      + 'const r = m.getBoundingClientRect(); const next = document.querySelector("#usage-next").getBoundingClientRect();'
+      + 'const actions = document.querySelector("#usage-msg .message-actions").getBoundingClientRect();'
+      + 'return { opacity: Number(getComputedStyle(m).opacity), width: r.width, height: r.height, bottom: r.bottom,'
+      + 'nextTop: next.top, actionsBottom: actions.bottom,'
+      + 'summary: m.querySelector(".ui2-msg-meta-summary")?.textContent || "" }; })()');
+    assert.ok(shown.opacity > 0.5 && shown.width > 20 && shown.height > 8, 'usage did not reveal on hover: ' + JSON.stringify(shown));
+    assert.match(shown.summary, /Token 1,880.*推理 120/);
+    assert.ok(shown.bottom <= shown.nextTop + 0.5, 'usage chip crossed into the next row: ' + JSON.stringify(shown));
+    assert.ok(shown.actionsBottom <= shown.nextTop + 0.5, 'message actions crossed into the next row: ' + JSON.stringify(shown));
+    await shot('usage-hover-dark');
+    await evaluate('document.querySelector("#usage-msg .ui2-msg-meta-details > summary").focus()');
+    await moveAway();
+    const focused = await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .ui2-msg-meta")).opacity)');
+    assert.ok(focused > 0.5, 'usage did not reveal on keyboard focus: ' + focused);
+    await evaluate('document.activeElement.blur()');
+    await hover('#usage-next');
+    const hiddenAgain = await evaluate('Number(getComputedStyle(document.querySelector("#usage-msg .ui2-msg-meta")).opacity)');
+    assert.ok(hiddenAgain < 0.2, 'usage stayed visible over the next message: ' + hiddenAgain);
+    results.push({ name: 'usage-overlay', ...usage, shown, focusedOpacity: focused, hiddenAgain });
+
     fs.writeFileSync(path.join(out, 'measurements.json'), JSON.stringify(results, null, 2) + '\n');
     console.log('P5-B Chromium: ' + results.length + ' layouts verified; ' + out);
   } finally {

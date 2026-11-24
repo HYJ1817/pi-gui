@@ -114,7 +114,8 @@ test('Runtime groups only its current owned live evidence and preserves the orig
   assert.equal(output.querySelectorAll('[data-role="user"]').length, 2);
   assert.equal(output.querySelectorAll('.execution-turn').length, 1);
   assert.match(turn.querySelector('[data-execution-part="plan"]').textContent, /审阅代码/);
-  assert.match(turn.querySelector('[data-execution-part="progress"]').textContent, /运行期间追加的要求/);
+  assert.doesNotMatch(turn.querySelector('[data-execution-part="progress"]').textContent, /运行期间追加的要求/);
+  assert.match(turn.querySelector('[data-execution-part="activity-flow"]').textContent, /运行期间追加的要求/);
   assert.equal(turn.querySelectorAll('.turn-outcome').length, 1);
   const workHead = turn.querySelector('.execution-activity-group button');
   if (workHead.getAttribute('aria-expanded') === 'false') workHead.click();

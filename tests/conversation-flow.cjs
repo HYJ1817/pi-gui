@@ -384,6 +384,67 @@ test('Classic production streaming retains selected Markdown text across append 
   await painted(); assert.equal(selection.toString(), 'selected');
 });
 
+test('Classic live steers close each work fold at its own observed end', async t => {
+  const dom = new JSDOM(fs.readFileSync(path.join(PUB, 'index.html'), 'utf8'), {
+    url: 'http://fixture.invalid/', runScripts: 'outside-only', pretendToBeVisual: true,
+  });
+  t.after(() => dom.window.close());
+  const w = dom.window;
+  w.fetch = async () => ({ ok: true, json: async () => ({ ok: true }) });
+  const tasks = new Map(); let sequence = 0;
+  w.requestAnimationFrame = fn => { tasks.set(++sequence, fn); return sequence; };
+  w.cancelAnimationFrame = id => tasks.delete(id);
+  const flush = () => { const pending = [...tasks.values()]; tasks.clear(); pending.forEach(fn => fn()); };
+  let clock = 1000;
+  w.Date.now = () => clock;
+  w.eval(bundle(path.join(PUB, 'tools.js')).code);
+  const say = value => w.onMessageStart({ message: { role: 'user', content: [text(value)], timestamp: clock } });
+  const tool = id => {
+    w.onToolStart({ toolCallId: id, toolName: 'read', args: { path: id + '.js' } });
+    clock += 1000;
+    w.onToolEnd({ toolCallId: id, result: { content: [text('ok')] }, isError: false });
+  };
+
+  w.beginTurn();
+  say('任务');
+  clock = 2000;
+  w.onMessageStart({ message: { role: 'assistant', content: [] } });
+  w.onMessageEnd({ message: { role: 'assistant', content: [text('中间')], timestamp: clock, stopReason: 'toolUse' } });
+  clock = 3000; tool('a');
+  clock = 5000; say('补充一');
+  /* No tool in this segment: its end can only come from the assistant's native
+   * message timestamp, even after the work log adopts that node. */
+  clock = 6000;
+  w.onMessageStart({ message: { role: 'assistant', content: [] } });
+  w.onMessageEnd({ message: { role: 'assistant', content: [{ type: 'thinking', thinking: '检查中' }], timestamp: 7000, stopReason: 'toolUse' } });
+  clock = 8000; say('补充二');
+  clock = 9000; tool('c');
+  clock = 11000;
+  w.onMessageStart({ message: { role: 'assistant', content: [] } });
+  w.onMessageEnd({ message: { role: 'assistant', content: [text('最终回答')], timestamp: clock, stopReason: 'stop' } });
+  clock = 12000;
+  w.onSettled();
+  flush(); flush();
+  w.refreshClassicConversationFlow();
+  flush();
+
+  const rows = [...w.document.querySelectorAll('.msg.user')].map(node => ({
+    continued: node.hasAttribute('data-turn-continued'),
+    start: node.dataset.turnStartAt, end: node.dataset.turnEndedAt, status: node.dataset.turnStatus,
+  }));
+  assert.deepEqual(rows, [
+    { continued: false, start: '1000', end: '12000', status: 'completed' },
+    /* The earlier steer stops at its own last tool; only the final steer keeps
+     * the settled turn end. */
+    { continued: true, start: '5000', end: '7000', status: 'completed' },
+    { continued: true, start: '8000', end: '12000', status: 'completed' },
+  ]);
+  assert.deepEqual([...w.document.querySelectorAll('.conversation-work-title')].map(node => node.textContent),
+    ['执行了 11 秒', '继续执行了 2 秒', '继续执行了 4 秒']);
+  const steers = [...w.document.querySelectorAll('.msg.user[data-turn-continued]')];
+  assert.ok(steers.every(node => node.parentElement && !node.closest('[hidden]')), 'supplemental inputs stay visible');
+});
+
 async function runtimeSurface(t) {
   // Use the real document and an isolated renderer module graph. state.js caches
   // modal references at import time; reusing another test's document is not valid.
