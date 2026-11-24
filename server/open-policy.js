@@ -14,19 +14,30 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /* 明确“只读查看”的扩展名。保守取舍：没列出来的一律按不可打开处理，
- * 让规则可读、可审。仍允许看源码/配置/数据文件。 */
+ * 让规则可读、可审。仍允许看源码/配置/数据文件。
+ *
+ * 三条额外的剔除（独立安全复审确认）：
+ *   - `.svg` 不在白名单：默认浏览器把顶层 SVG 当文档渲染，内嵌 <script>/onload
+ *     会执行 —— 这是“打开”变“执行”的直接通道；内部预览走受控 asset + CSP
+ *     sandbox，不受影响。
+ *   - `.xsl`/`.xsd` 剔除：`xml-stylesheet` + XSLT 是文档级执行面（document()
+ *     读本地文件、旧 MSXML 的 msxsl:script 跑 JScript）。`.xml` 保留 —— 它本身是
+ *     数据，xml-stylesheet 面依赖默认关联，记为残余。
+ *   - `.eps` 剔除：PostScript 是可执行语言，Ghostscript 系查看器会跑它。
+ *   - `.doc`/`.xls`/`.ppt`（97-2003 二进制）可携带 VBA 宏，依赖用户不再点
+ *     “启用内容”；`.p12`/`.pfx` 默认关联是证书导入向导 —— 都剔除。 */
 const SAFE_OPEN_EXTENSIONS = new Set([
   /* 文本 / 文档 */
   '.txt', '.md', '.markdown', '.mdown', '.mkd', '.rst', '.adoc', '.org', '.log',
-  '.csv', '.tsv', '.json', '.jsonl', '.ndjson', '.xml', '.xsd', '.xsl',
-  '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.properties', '.env',
+  '.csv', '.tsv', '.json', '.jsonl', '.ndjson', '.xml',
+  '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.properties',
   '.diff', '.patch', '.puml', '.plantuml', '.mermaid', '.sql', '.graphql', '.gql',
-  /* 办公 / 报告 */
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp',
+  /* 办公 / 报告（.doc/.xls/.ppt 含 VBA 宏面已剔除；宏容器 .docm/.xlsm/.pptm 本就不在） */
+  '.pdf', '.docx', '.xlsx', '.pptx', '.odt', '.ods', '.odp',
   '.rtf', '.pages', '.numbers', '.key', '.epub',
-  /* 图片 */
-  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.avif', '.svg',
-  '.tif', '.tiff', '.heic', '.heif', '.psd', '.ai', '.eps',
+  /* 图片（.svg/.eps 因脚本/PostScript 执行面已剔除） */
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.avif',
+  '.tif', '.tiff', '.heic', '.heif', '.psd', '.ai',
   /* 音视频 */
   '.mp3', '.wav', '.flac', '.aac', '.ogg', '.opus', '.m4a', '.wma',
   '.mp4', '.mkv', '.webm', '.mov', '.avi', '.wmv', '.flv', '.m4v', '.3gp',
@@ -38,7 +49,7 @@ const SAFE_OPEN_EXTENSIONS = new Set([
   /* 字体与排版 */
   '.ttf', '.otf', '.woff', '.woff2',
   /* 配置/元数据（打开后是查看器/编辑器，不是执行） */
-  '.lock', '.snapshot', '.pem', '.crt', '.cer', '.der', '.p12', '.pfx',
+  '.lock', '.snapshot', '.pem', '.crt', '.cer', '.der',
 ]);
 
 /* 路径形状判断：
@@ -109,7 +120,8 @@ export function evaluateSystemOpen(abs, { basename } = {}) {
   return { ok: true, ext, reason: '' };
 }
 
-/** 测试可读：白名单不导出供拼接；只读检查器单独看头部。 */
+/** 测试可读：白名单/可执行头清单只读导出（供断言与文档核对），
+ *  运行期不据此拼接新规则。 */
 export function unsafeHeaderReason(abs) {
   const header = readHeader(abs);
   const label = looksExecutableHeader(header);

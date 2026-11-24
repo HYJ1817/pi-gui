@@ -6,9 +6,10 @@
  *   - 授权绑定会话身份（runtime conversationId；经典会话绑定项目根），
  *     另一个会话不能复用。
  *   - 授权绑定**文件系统对象身份**，不只是路径：
- *     单文件记 dev/ino/birthtime/ctime/size/mtime；目录记 dev/ino/birthtime/ctime。
+ *     单文件记 dev/ino/birthtime/size/mtime/ctime；目录记 dev/ino/birthtime。
  *     文件被替换、目录被删除重建或变成符号链接/junction 时旧授权失效；
- *     目录的 mtime/成员变化不进身份，普通增删子文件不会让授权误失效。
+ *     目录的 size/mtime/ctime 随成员增删变化，不进身份，普通增删子文件
+ *     不会让授权误失效。
  *   - 目录授权只允许目录内的真实路径；符号链接 / junction 解析到目录外一律拒绝。
  *   - 敏感系统目录、用户凭据目录、UNC / 设备路径、Windows 保留名不参与授权。
  *   - 仅目录授权可持久化。持久化由 Electron 主进程走既有的系统设置持久化设施
@@ -79,8 +80,8 @@ function directoryIdentity(stat) {
 }
 
 /* 目录授权绑的是“当时那个目录对象”，不是路径字符串。目录被删除后原地
- * 重建、重命名后被顶替、变成符号链接/junction 时 dev/ino/birthtime/ctime
- * 会变化；member 增删只影响目录的 size/mtime，不在身份里，避免误失效。
+ * 重建、重命名后被顶替、变成符号链接/junction 时 dev/ino/birthtime
+ * 会变化；member 增删只影响目录的 size/mtime/ctime，不在身份里，避免误失效。
  * 旧记录（schema v1、无身份字段）当作未知对象处理：只标记失效并引导重新
  * 授权，不静默沿用路径继续放行。 */
 function directoryIdentityCurrent(target) {
