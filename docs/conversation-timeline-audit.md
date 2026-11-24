@@ -92,3 +92,28 @@
 - 运行中 / 等待 / 失败 / 中断的工作组默认展开，仅成功且已结束的组默认折叠；这与 T3 活动组展开的语义一致，也是对本文「保留最后正文」原则的实现细化。
 - 终态行只对停止 / 失败 / 未完成保留，完成轮次不额外占行；逐条 token 摘要退为 hover / focus 背景，已验证回合保留一个折叠用量入口。
 - 最终数值、截图、测试与产物证据见 [conversation-timeline-acceptance.md](conversation-timeline-acceptance.md)，不以本文的初稿目标值代替实测。
+
+## 六、耗时折叠实施后校准（2026-11-24）
+
+T3 参考提交不变：`1e088be4b5dc15ca3dd66fa01c6f2e035511a827`。本轮直接读取以下源码，并用 pi-GUI 现有数据契约独立实现，不复制 React 组件：
+
+- `MessagesTimeline.logic.ts:506`：`computeElapsedMs(startIso, endIso)`，墙钟差值而不是工具耗时求和。
+- `MessagesTimeline.logic.ts:1180–1313`：按 run 分组构造 `foldsByAnchorEntryId`；只有已结束、非运行、无失败/中断豁免的回合才折叠。
+- `MessagesTimeline.logic.ts:1238–1271`：最新中断轮显示 `You stopped after {duration}`；其余轮优先用 `latestRun.startedAt/completedAt`，否则用 `startBoundary → 终态消息/最后条目`；无时长显示裸 `Worked`。
+- `MessagesTimeline.logic.ts:1243–1253`：终态之后才 spawn 的子代理条目不计入轮次结束时间。
+- `MessagesTimeline.logic.ts:1193–1221`：只隐藏工作条目；保留终态 assistant、最新 compaction、持久资源卡、实时子代理、保留回复和问题回答。
+- `MessagesTimeline.logic.ts:1276–1310`：每个 steer 段单独折叠，`continued` 段从 `steer.createdAt` 起，结束于该段最后一条 entry end，而不是整轮结束；标签 `Continued for {duration}` / 裸 `Continued`。
+- `MessagesTimeline.logic.ts:1691–1731,1963,2103`：折叠集合应用到投影、逐行渲染与分组边界；折叠行不等于隐藏内容。
+- `formatDuration` 来自 `packages/shared/src/orchestrationTimingCopy.ts`（`MessagesTimeline.logic.ts:75` 导入）；本地化文案由 pi-GUI 的 `public/ui/turn-fold.js` 负责，未复制 T3 资源。
+- 密度仍按 `WorkLog.tsx:24–185`、`TimelineRowParts.tsx:14–42`、`TimelineWorkGroupRows.tsx:188–347,631–679`。
+
+pi-GUI 的实现映射：
+
+- `public/ui/turn-fold.js`：纯函数标签；完成 / 运行 / 等待 / 停止 / 失败 / 中断 / 未完成 / 补充段；`不到 1 秒`、`约` 等紧凑连接；无证据返回空，不生成 0 秒。
+- `public/execution-timeline-view.js`：已验证时间线按真实 order 切段；`latestEnd()` 只从 P5 item timing 或已授权原生 `_tlEntry` 取结束；只有最后一段采用回合 `endedAt`，前段绝不借用整轮结束。
+- `public/conversation-work-log.js`：原生回退共用同一标签；空白/摘要/次数留 DOM 与可访问名；失败 / 中断图标与 `data-attention` 表达异常。
+- `public/messages.js`：Classic 只把真实用户、assistant `message_end` 时间戳和 ToolEntry 时间写成展示属性；补充段在 `tagClassicTurn` 中按到下一个 steer 前的最后观察值收尾。观察范围包括已被工作记录接管节点内部的 assistant 时间标记，因此没有工具的思考 / 过程段也能用自己的结束时间，不借用整轮时钟。
+- `public/runtime-conversation.js`：Runtime 原生回退按 block 真实观察时间切段；每个 steer 只拥有到下一个 steer 前的工作。
+- `public/classic-execution-view.js`：补充输入作为独立节点保留在记录之外；终态后把最终回答里的 Thinking 节点借出并在释放时原位还原，不改变原生消息或编辑目标。
+
+校准结论：整轮折叠时长、补充段边界、无证据降级与 T3 的语义一致；本地化文案、数据来源和异常图标按 pi-GUI 契约实现，不把 T3 的英文文案或 React 状态机搬进产品。

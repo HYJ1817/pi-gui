@@ -1,5 +1,9 @@
 # Conversation 展示重构验收材料
 
+> 本文件保留上一轮（工作记录与紧凑展示）的验收记录。2026-11-24 收尾轮在基线
+> `37c58e27` 上完成耗时折叠与细节修复，源码对照、实际测试、截图与剩余风险见
+> 文末「2026-11-24 收尾轮」；那一节不改变上一轮已核验的历史结论。
+
 - 目标：在不引入 React、不照搬 T3 Code 后端的前提下，把连续思考 / 工具 / 中间进展呈现为 T3 Code WorkLog 式的紧凑工作行，并让 User、Plan、最终回答和轮次终态保持独立层级；Classic 回退与 Runtime 已验证路径共用同一套展示。已交付源码、定向测试、真实 Chrome 矩阵、离线打包产物。未交付：完整 canonical 通过、独立代码审查结论、真实模型会话、Agent 启动打包窗口的实际交互。
 - 身份：分支 `feat/compact-attachments`；起点 HEAD `a315b46e48f4ce6d3dad720f72731fd9241596ed`；展示代码提交 `5a0e87e1`，测试与注册提交 `461eb770`，两者已推送至 `origin/feat/compact-attachments`。本验收材料随文档提交推送；未合并、未打 tag、未创建 PR、未发布。
 - T3 Code 对照基线：固定提交 [`1e088be4b5dc15ca3dd66fa01c6f2e035511a827`](https://github.com/pingdotgg/t3code/tree/1e088be4b5dc15ca3dd66fa01c6f2e035511a827)，审计结论见 [conversation-timeline-audit.md](conversation-timeline-audit.md)。本轮按该提交的 `WorkLog`、`TimelineWorkEntryRow`、`MessagesTimeline.logic.ts` 结构独立实现，不复制 React / 后端代码；新增图标来自 Lucide（ISC）并在 `public/ui/icons.js` 就地注明来源。
@@ -57,3 +61,56 @@
   - 打包已核对内容一致性，但未验证签名、安装器或自动更新链。
 - 回滚：回退 29 个已跟踪文件并删除新增的 `public/conversation-work-log.js`、`public/ui/work-presentation.js`、`public/ui/text-selection.js`、`tests/conversation-flow.cjs`、`docs/conversation-timeline-audit.md`、本文件；删除或重建 `build/`、`dist-app/` 可恢复旧产物。回滚不涉及用户会话、凭据或 Pi 安装。
 - 结论：实现与定向验证 **完成**；完整 canonical **未通过（无关凭据套件）**；独立审查 **未运行**；Git 提交与推送 **已按用户指令执行**；合并 / 发布 **未授权且未执行**。
+
+## 2026-11-24 收尾轮：T3 耗时折叠与细节修复
+
+- 身份：分支 `feat/compact-attachments`，基线 `37c58e27`（上一轮展示代码 `5a0e87e1`、测试注册 `461eb770` 已在此基线上）。本轮交付源码、测试、真实 Chrome / Electron 验收、打包产物与文档；**未合并、未打 tag、未发布**。提交与推送按用户指令执行，推送后由 PR 流程补完整 CI。
+- T3 Code 对照基线：固定提交 [`1e088be4b5dc15ca3dd66fa01c6f2e035511a827`](https://github.com/pingdotgg/t3code/tree/1e088be4b5dc15ca3dd66fa01c6f2e035511a827)。本轮直接读取 `MessagesTimeline.logic.ts:506,1180–1313,1238–1271,1243–1253,1193–1221,1276–1310,1691–1731,1963,2103`、`WorkLog.tsx:24–185`、`TimelineRowParts.tsx:14–42`、`TimelineWorkGroupRows.tsx:188–347,631–679`、`TimelineAssistantRows.tsx:222–280`；对照结论已写入 [conversation-timeline-audit.md](conversation-timeline-audit.md#六耗时折叠实施后校准2026-11-24)。未执行 T3 仓库、未安装其依赖、未复制 React 组件或后端 schema。
+- 修改范围：21 个已跟踪文件（10 个 `public/`、7 个测试、`package.json`、3 个文档）；另新增 `public/ui/turn-fold.js`、`tests/turn-fold.cjs`、`tests/conversation-work-fold.cjs`，共 24 个文件。`git diff --stat` 为 1378 insertions / 279 deletions（不含新增文件）。`package.json` 只把两个新套件加入唯一 `test` 链，没有第二份测试清单。
+  - 展示：`public/ui/turn-fold.js`（新，纯标签 / 计时）、`public/execution-timeline-view.js`（已验证分段折叠）、`public/conversation-work-log.js`（原生折叠头）、`public/ui/work-presentation.js`（摘要分类）、`public/classic-execution-view.js`（补充输入与最终回答中的 Thinking）
+  - 计时与回退：`public/messages.js`、`public/runtime-conversation.js`、`public/runtime-store.js`、`public/runtime-timeline.js`
+  - 样式：`public/agent-execution.css`、`public/styles.css`
+  - 测试：`tests/turn-fold.cjs`、`tests/conversation-work-fold.cjs`、`tests/conversation-flow.cjs`、`tests/agent-execution-ui.cjs`、`tests/session-ux-p5-view.cjs`、`tests/session-ux-p5-ui.cjs`、`tests/session-ux-p5-runtime.cjs`、`tests/session-ux-p5-shots.cjs`、`tests/exe-check.cjs`
+  - 文档：`docs/conversation-ui.md`、`docs/conversation-timeline-audit.md`、本文件
+- 折叠机制：
+  - 每个已结束回合最多一条主折叠；标题由真实回合 start / end 计算墙钟，并行工具取最晚结束，**不相加**。正常结束「执行了 3 分 27 秒」；运行中「执行中 · 已运行 5 秒」；等待 / 停止 / 失败 / 中断 / 未完成各用对应真实状态；补充输入后的段落「继续执行了 1.5 秒」。
+  - 主折叠覆盖整轮（含补充输入之间的工作），补充段从该条真实用户消息的时间开始，结束于**该段最后一项真实工作**；只有最后一段采用 settled 的回合结束时间，前段不能借用后段时钟。已验证时间线用 P5 `timing` 与已授权的 `_tlEntry`，Classic 用用户 / assistant 消息时间戳与 ToolEntry，Runtime 回退用真实 block 观察时间。
+  - 无可信时间证据时退化为「工作记录」/「继续执行」，不显示 0 秒或约数；settled 后标签不再走动，重开会话从历史时间恢复；后台子代理在回合结束后的活动不延长已结算耗时。
+  - 折叠只覆盖该段工作条目；最终回答、User、Plan、审批、等待输入和错误终态保留在折叠之外。P5 的 compaction 是 `kind=compaction` 的 activity 工作行，按真实顺序随所属段折叠（展开后可读），没有照搬 T3 的 compaction 分隔行；后台子代理完成若以独立用户 / 系统消息到达则按真实边界保持可见，其迟到活动不延长已结算耗时。T3 的其它保留项按 pi-GUI 现有数据契约映射；不伪造新的 run / attempt / owner。
+  - 运行中 / 等待 / 失败 / 中断默认展开；正常完成默认折叠。用户显式选择按会话记忆；切换、展开、状态更新前后用稳定锚点保持阅读位置。
+  - Classic / Runtime / 原生回退共用 `public/ui/turn-fold.js` 的文案与 `public/ui/work-presentation.js` 的摘要；没有新增虚拟列表、React、服务端字段或 Pi schema 改动。
+- 本轮修复：
+  1. **动作名被截断**：工具行标题改为 `flex: 0 0 auto; max-inline-size: 45%`，参数 / facts `flex: 1 1 0; min-inline-size: 0`，状态图标与行尾箭头固定 16px；正常宽度下「执行」等短名完整可见，长命令 / 路径吸收截断，窄窗与字体放大同样成立。
+  2. **用量默认占位留白**：`.ui2-msg-meta` 改为绝对定位的 1px 裁切层，`opacity: 0`、`pointer-events: none`，不再占布局；hover / 键盘 focus 在消息底部 12px 间隙内浮出（`inset-block-end: -11px`），带背景与阴影；操作条同步收进间隙（`-12px`）。真实 token / reasoning / cost / 字段仍可达，「用量」入口不再重复轮次耗时。
+  3. **折叠异常状态不可感知**：失败 / 中断 / 取消 / 未完成改用 `circleAlert` / `stop` / `warning` 图标与标题后缀「· N 项失败」等，`data-attention` 驱动默认展开；不画成功标签，也不把单个工具失败升级为整轮失败。
+  4. **摘要夸大**：只有同一动作的每次调用都带可靠目标标识（P5 `summary.fileName`、原生 `ToolEntry.path`）时才说「读取 N 个文件」；否则退回「N 次工具」。Thinking、命令、搜索分类保持独立，未扩大任何读取权限。
+  5. **Thinking / 过程正文**：最终回答保持可见，中间思考与过程文本作为工作条目进入折叠；Classic 在回合结束后才把最终回答消息内的 Thinking 节点借出到记录中，并保留 marker，释放时原位还原，编辑 / 重发目标不变。运行中内容保持可读，正常完成后通过耗时折叠收起。
+- 本轮补充修正：Classic 实时多补充输入的原生回退此前会让每个补充段都使用整轮结束时间，早段被高估。现按真实 DOM 观察（assistant `message_end` 时间戳、ToolEntry 起止）在下一个补充输入处收尾；若该段只有思考 / 过程正文、且节点已被工作记录接管，仍会从记录内部读取 assistant 的原生时间戳，不借用后段时钟。新增 `conversation-flow` 用例覆盖两段补充输入（其中一段没有工具、只靠 assistant 时间戳收尾），标签为「执行了 11 秒 / 继续执行了 2 秒 / 继续执行了 4 秒」。
+
+| 证据层 | 命令 / 场景与代码状态 | 环境、退出码与实际结果 | 证据位置 |
+| --- | --- | --- | --- |
+| 作者定向测试 | 最终工作区代码上的受影响套件 | `turn-fold` 6/6；`conversation-work-fold` 6/6；`conversation-flow` 19/19（原 18 + 新补充段用例）；`agent-execution-ui` 226/226；`ui2-classic` 55/55；`ui2-visual`（真实 Chrome）57/57；`session-ux-phase1` 81/81、`phase2` 98/98、`phase3` 128/128；`smoke` 1339/1339；P5-A 25 组 / 61 条模型断言 / 7 组后端，P5 view 7/7、UI 17/17、runtime 1/1，persistence 9/9、recovery 8/8、classic-history 1/1、runtime-recovery 3/3；`runtime-conversation` 110/110；`runtime-store` 34/34；`runtime-ui` 16/16；`runtime-history-search` 37/37；`history-tool-summary` 38/38 用例、168/168 断言；`session-search` 72/72（5i 因本机无符号链接权限跳过，不计入）；`message-edit-ui` 42/42。断言总数没有减少。 | 各套件直接运行；jsdom 结果不作为布局证明 |
+| 真实 Chrome 折叠矩阵 | `node tests/session-ux-p5-shots.cjs`：Classic / Runtime 实时完成后的折叠、已验证完成 / 运行 / 失败 / 停止 / 中断 / 补充段、60 项长记录、原生长命令、用量隐藏 / hover、暗 / 亮、1320 / 700 宽；键盘 Enter、滚动位置、文本选区与截图 | `P7 fold matrix` 完成；`P5-B Chromium: 20 layouts verified`，exit 0。完成态标题 `执行了 3 分 27 秒`，运行态 `执行中 · 已运行 5 秒`，停止态 `你在 8 秒后停止`，补充段三段标题按真实边界；折叠头展开 / 收起前后触发行偏移保持；选中文本在折叠切换后仍保留；用量 chip 与操作条底边均未越过下一条消息顶边，消息高度在有 / 无用量的两种情况下一致；长记录显示 60 项分页且名称未被截成「执...」。 | `C:\pi-GUI\.shots\session-ux-p5b\`：`classic-completed-fold-collapsed.png`、`classic-completed-fold-expanded.png`、`runtime-completed-fold-collapsed.png`、`runtime-completed-fold-expanded.png`、`fold-completed/running/failed/stopped/interrupted/continued-*.png`、`fold-long-*.png`、`fold-native-long-*.png`、`usage-hidden-dark.png`、`usage-hover-dark.png`、`measurements.json` |
+| 前 / 后对照 | 前一轮真实 Chrome 矩阵（工作记录已有、尚无轮次耗时折叠）与本轮矩阵并排检查 | 前：记录头只有「工作记录」与摘要，完成回合没有低优先级耗时行；后：同一位置是带箭头的「执行了 … / 继续执行了 …」折叠头，展开仍是 24px 工作行，无新卡片 / 背景 / 重复标题。用量前一轮占布局的 meta 空白，本轮默认零布局。 | 前：`%LOCALAPPDATA%\Temp\pi-gui-conversation-20261123-b582c14d\t3-matrix\`、`.shots\ui2-visual\`；后：`.shots\session-ux-p5b\` |
+| Electron 实际渲染 | `node tests/agent-execution-visual.cjs`，真实 Electron 44.4.3 | 28/28，exit 0；运行中工具组默认展开、故障工作记录默认展开、Runtime 状态与滚动、深 / 浅 / 700px 均通过。交互录屏已生成。 | `.shots\agent-execution\`、`agent-execution-interaction.mp4` |
+| 打包产物 | `npm run build:exe`；`PI_GUI_ELECTRON_ZIP_DIR=<本机 v44.4.3 缓存> npm run build:app -- --rebuild`，离线 | 均 exit 0。`build/Pi GUI.exe` 106,641,408 bytes，SHA-256 `8a8d383086463a2bf6be3df2db06311433be93233dd53d7ec1c2bb7e39360334`；`dist-app\Pi GUI-win32-x64\Pi GUI.exe` 246,324,736 bytes，SHA-256 `71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f`；整包 335.5 MB。 | `build/Pi GUI.exe`；`dist-app\Pi GUI-win32-x64\`；`build/asset-manifest.json` |
+| 产物内容一致性 | dist-app 的 `resources/app/public` 与源 `public/` 全量逐字节比较；SEA 内嵌资源通过实际启动 exe 后 HTTP 读取 | dist-app 253 个 public 文件 **0 差异 / 0 缺失**；`exe-check` **55/55**，其中 `index.html`、`styles.css`、`app.js`、`agent-execution.css`、`messages.js`、`runtime-conversation.js`、`execution-timeline-view.js`、`conversation-work-log.js`、`ui/turn-fold.js`、`ui/work-presentation.js` 均与磁盘逐字节一致；exe 正常启动、假 pi 子进程与 PTY、PDF、配置读写全部通过。 | 同上；`node tests/exe-check.cjs` 输出 |
+| Git 交付 | 本轮源码 / 测试 / 文档提交 | 按回滚边界拆分提交并推送 `origin/feat/compact-attachments`；未合并、未打 tag、未发布。提交哈希见推送后的 `git log --oneline`。 | `git status -sb`；`git log --oneline -5` |
+| 完整 canonical / PR CI | 未在本机重跑 | **待验证**：上一轮完整 `npm test` 因无关凭据套件失败，用户明确不重跑；本轮按用户口径让 PR CI 完成 canonical。CI 结果出来前不宣称完整通过。 | PR 流程 |
+| 独立审查 | 未运行 | **未运行（环境配额）**：上一轮两次独立审查均返回 HTTP 429；本轮未切换供应方或模型。作者自审修复了 Classic 补充段计时问题，但不能替代独立复审。 | 会话记录 |
+| 真实模型 / 打包窗口 | 未运行 | **未验证**：未调用模型、未打开打包后的 Electron 窗口做人工体验；SEA exe 只做启动与 HTTP 内容验证，Electron 视觉套件运行的是开发态渲染器。 | 不适用 |
+
+- 断言适配说明（均为目标行为变化，不是隐藏失败，断言总数没有减少）：
+  - 已验证回合的旧「工作记录」标题改为耗时折叠标题；运行中断言改为「执行中」且不出现伪造的「已运行 / 用时」，失败 / 完成断言接受「执行了 / 工作记录」。
+  - 补充输入从 progress 区域移到 activity-flow，保持可见；原导航 / 焦点断言保留，新增每段独立计时断言。
+  - `agent-execution-ui` 新增 5 条 CSS 契约：工具名不收缩、用量默认零布局且 hover 可达、已验证用量仍正常显示、折叠头图标 / 标题 / 摘要弹性、工作行动作名与参数宽度分配。
+  - `exe-check` 新增 7 个内嵌资源逐字节比较，原有 3 个保留。
+- 限制与残余风险：
+  - 完整 canonical 与 PR CI **待验证**；本文件只把定向套件、Electron 视觉套件、真实 Chrome 矩阵与打包检查当作已完成的证据层。
+  - 独立代码审查 **未运行**；按项目规则不能宣称审查通过。
+  - 真实模型会话、真实项目写操作、打包 Electron 窗口的人工体验未执行；fixture 的耗时和状态不代表真实模型性能。
+  - 折叠状态按会话偏好保存，不写入 Pi 会话文件；老会话缺少时间证据时只显示「工作记录」/「继续执行」，这是有意的降级。
+  - 离线 Electron 打包使用本机 zip 并跳过校验和（`PI_GUI_ELECTRON_ZIP_DIR` 的设计），只使用本机既有、此前已由 npm 安装校验过的 44.4.3 缓存。
+  - `session-search` 的符号链接用例在无权限机器上跳过，不计入分子分母。
+- 回滚：回退本轮 21 个已跟踪文件并删除 `public/ui/turn-fold.js`、`tests/turn-fold.cjs`、`tests/conversation-work-fold.cjs`；随后重建 `build/` 与 `dist-app/`。不涉及用户会话、凭据、Pi 安装或全局 npm。
+- 结论：源码、定向测试、真实渲染矩阵、Electron 视觉与打包产物 **已完成**；完整 CI **待 PR 验证**；独立审查 **未运行**；合并 / 发布 **未授权且未执行**。
