@@ -31,14 +31,11 @@ export function messageActions(text, {
 } = {}) {
   const bar = document.createElement('div');
   bar.className = 'message-actions';
-  const hasText = typeof text === 'string' && text.length > 0;
-  if (!hasText && typeof onEdit !== 'function' && typeof onRegenerate !== 'function') {
-    bar.hidden = true;
-    return bar;
-  }
   const feedback = document.createElement('span');
   feedback.className = 'message-copy-feedback';
   feedback.setAttribute('role', 'status');
+  let currentText = '';
+  let copy = null;
 
   if (typeof onEdit === 'function') {
     bar.append(actionButton('edit', '编辑并重新发送', 'message-edit', onEdit, editDisabled));
@@ -46,23 +43,32 @@ export function messageActions(text, {
   if (typeof onRegenerate === 'function') {
     bar.append(actionButton('refresh', '重新生成', 'message-regenerate', onRegenerate, regenerateDisabled));
   }
-  if (hasText) {
-    const button = document.createElement('button');
-    button.type = 'button'; button.className = 'message-action-btn message-copy';
-    button.title = '复制消息'; button.setAttribute('aria-label', '复制消息');
-    button.innerHTML = iconMarkup('copy');
-    button.onclick = async () => {
-      button.disabled = true;
-      try {
-        await bar.ownerDocument.defaultView.navigator.clipboard.writeText(text);
-        feedback.textContent = '已复制';
-      } catch {
-        feedback.textContent = '复制失败，请手动选择';
-      } finally { button.disabled = false; }
-    };
-    bar.append(feedback, button);
-  } else {
-    bar.append(feedback);
-  }
+  bar.append(feedback);
+  // Streaming callers update content without replacing focused actions. The
+  // caller still owns edit/regenerate authorization and callback lifetime.
+  bar.updateText = value => {
+    const next = typeof value === 'string' ? value : '';
+    if (next !== currentText) feedback.textContent = '';
+    currentText = next;
+    if (next && !copy) {
+      copy = actionButton('copy', '复制消息', 'message-copy', async () => {
+        const button = copy;
+        button.disabled = true;
+        try {
+          await bar.ownerDocument.defaultView.navigator.clipboard.writeText(currentText);
+          feedback.textContent = '已复制';
+        } catch {
+          feedback.textContent = '复制失败，请手动选择';
+        } finally { button.disabled = false; }
+      });
+      bar.append(copy);
+    } else if (!next && copy) {
+      if (copy === bar.ownerDocument.activeElement) bar.querySelector('button:not(.message-copy):not(:disabled)')?.focus({ preventScroll: true });
+      copy.remove();
+      copy = null;
+    }
+    bar.hidden = !next && typeof onEdit !== 'function' && typeof onRegenerate !== 'function';
+  };
+  bar.updateText(text);
   return bar;
 }

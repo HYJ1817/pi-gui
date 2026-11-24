@@ -29,7 +29,7 @@
  * 用户消息进来同样关组。 */
 
 import { S } from './state.js';
-import { addClassicToolEntry, createClassicToolGroup, ensureThread, finishClassicHistoryBeforeLive, moveWorkingToEnd, noteTurnTool, scrollBottom, syncToolWorking } from './messages.js';
+import { addClassicToolEntry, createClassicToolGroup, ensureThread, finishClassicHistoryBeforeLive, moveWorkingToEnd, noteTurnTool, refreshClassicConversationFlow, scrollBottom, syncToolWorking } from './messages.js';
 import { recordToolChange } from './changes.js';
 import { scheduleGitRefresh, setGitStatusHook } from './git.js';
 import {
@@ -147,6 +147,7 @@ export function onToolStart(evt) {
   startTicker();
   syncToolWorking();
   moveWorkingToEnd();
+  refreshClassicConversationFlow();
   scrollBottom();
 }
 
@@ -162,6 +163,7 @@ export function onToolWait(evt) {
   if (!rec || rec.entry.status!=='running') return;
   rec.entry.waiting=evt.waiting===true;
   updateEntry(rec.node,rec.entry);
+  refreshClassicConversationFlow();
 }
 
 export function onToolEnd(evt) {
@@ -188,6 +190,7 @@ export function onToolEnd(evt) {
   if (!hasRunning()) stopTicker();
   syncToolWorking();
   moveWorkingToEnd();
+  refreshClassicConversationFlow();
   scrollBottom();
 }
 

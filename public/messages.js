@@ -39,13 +39,15 @@ import { renderPlan, setPlanStalled } from './plan-view.js';
 import { clearPlanLive, markLivePlanStalled, resetPlanLiveForUserTurn, settlePlanTaskBoundary } from './plan-live.js';
 import { renderMessageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
+import { preserveTextSelection } from './ui/text-selection.js';
+import { thinkingPreview } from './ui/work-presentation.js';
 import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance, rememberPendingMessageEdit, clearPendingMessageEdit, readPendingMessageEdit, isEditInProgress } from './ui/message-edit.js';
 import { confirmModal } from './ui/modal.js';
 import { toast } from './ui/toast.js';
 import { messageEditPreflight, messageEditResend, messageEditStatus, messageEditRecover } from './api.js';
 import { deriveTurnOutcome, renderTurnOutcome } from './turn-outcome.js';
 import { classicNativeThreadChildren, indexClassicHistoryTurns, mountClassicHistoryTurn, releaseClassicExecutionTail, resetClassicExecutionView,
-  resumeClassicExecutionFallback, settleClassicExecutionView, trackClassicExecutionMessage } from './classic-execution-view.js';
+  renderClassicConversationFlow, resumeClassicExecutionFallback, settleClassicExecutionView, trackClassicExecutionMessage } from './classic-execution-view.js';
 import {
   saveSessionBookmark,
   restoreSessionBookmark,
@@ -76,6 +78,39 @@ let historyFence = 0;
 let lastHydratedFence = 0;
 let streamScrollBound = false;
 let streamScrollRaf = null;
+let followFrame = null;
+let followTop = 0;
+let followReleased = false;
+
+function cancelQueuedFollow() {
+  if (followFrame !== null) cancelAnimationFrame(followFrame);
+  followFrame = null;
+}
+
+function wheelStaysInside(event) {
+  if (!event.deltaY) return true;
+  const view = el.stream?.ownerDocument.defaultView;
+  for (let node = event.target?.nodeType === 1 ? event.target : event.target?.parentElement;
+    node && node !== el.stream; node = node.parentElement) {
+    if (node.scrollHeight <= node.clientHeight + 1) continue;
+    const style = view.getComputedStyle(node);
+    if (!['auto', 'scroll', 'overlay'].includes(style.overflowY)) continue;
+    const remaining = event.deltaY < 0 ? node.scrollTop : node.scrollHeight - node.clientHeight - node.scrollTop;
+    if (remaining > 1 || ['contain', 'none'].includes(style.overscrollBehaviorY)) return true;
+  }
+  return false;
+}
+
+function releaseFollow(event) {
+  // Inspecting a bounded command/output pane is not navigation of the transcript.
+  if (event.type === 'wheel' && wheelStaysInside(event)) return;
+  if (event.type === 'keydown') {
+    if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+    if (!['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) return;
+  }
+  cancelQueuedFollow();
+  if (event.type !== 'wheel' || event.deltaY < 0) followReleased = true;
+}
 
 /* P4-D：长历史（800 条消息起）分块构建并挂载。
  *
@@ -142,6 +177,9 @@ export function saveClassicReadingPosition(sessionId) {
 }
 
 function onStreamScroll() {
+  const stream = el.stream;
+  if (followFrame !== null && Math.abs(stream.scrollTop - followTop) > 1) cancelQueuedFollow();
+  if (stream.scrollHeight - stream.scrollTop - stream.clientHeight <= 8) followReleased = false;
   if (streamScrollRaf) return;
   const sessionId = threadSessionId;
   streamScrollRaf = requestAnimationFrame(() => {
@@ -154,6 +192,9 @@ export function bindStreamReadingPosition() {
   if (streamScrollBound || !el.stream) return;
   streamScrollBound = true;
   el.stream.addEventListener('scroll', onStreamScroll, { passive: true });
+  el.stream.addEventListener('wheel', releaseFollow, { passive: true });
+  el.stream.addEventListener('touchmove', releaseFollow, { passive: true });
+  el.stream.addEventListener('keydown', releaseFollow);
 }
 
 /* 当前 session 级 run 的证据。只在 app.js 收到真实 agent_start（上一轮已 settled）
@@ -194,6 +235,8 @@ export function syncWelcome() {
 }
 
 export function clearThread() {
+  cancelQueuedFollow();
+  followReleased = false;
   resetThroughput();
   resetClassicExecutionView();
   ++threadGeneration;
@@ -247,6 +290,27 @@ function expansionChoice(sessionId, key, expanded) {
   if (toolExpansion.size > 100) toolExpansion.delete(toolExpansion.keys().next().value);
 }
 
+/** Display-only native work, using this renderer's existing session choices. */
+export function refreshClassicConversationFlow() {
+  if (mountingClassicHistory()) return;
+  const sessionId = threadSessionId;
+  renderClassicConversationFlow({
+    get: key => expansionChoice(sessionId, 'work:' + key),
+    set: (key, value) => expansionChoice(sessionId, 'work:' + key, value),
+  });
+}
+
+function classifyAssistantWork(wrap, msg) {
+  // A declared tool call is a real native message boundary, not run evidence.
+  // Errors/interruption and final text remain visible outside the work fold.
+  const parts = Array.isArray(msg?.content) ? msg.content : [];
+  const work = msg?.stopReason !== 'error' && msg?.stopReason !== 'aborted' && !msg?.errorMessage
+    && (parts.some(part => part?.type === 'toolCall')
+      || parts.some(part => part?.type === 'thinking') && !parts.some(part => part?.type === 'text' && part.text));
+  if (work) wrap.dataset.conversationWorkKind = 'progress';
+  else delete wrap.dataset.conversationWorkKind;
+}
+
 export function clearClassicSessionView(sessionId) {
   clearSessionBookmark(sessionId);
   toolExpansion.delete(sessionId);
@@ -266,6 +330,7 @@ export function createClassicToolGroup(firstCallId) {
 export function addClassicToolEntry(group, entry, sessionId = threadSessionId) {
   const key = 'entry-' + group.dataset.anchorId + ':' + encodeURIComponent(entry.id);
   const node = renderEntry(entry, expanded => expansionChoice(sessionId, key, expanded));
+  node.dataset.anchorId = key;
   if (expansionChoice(sessionId, key) === true) setEntryExpanded(node, true);
   addToGroup(group, node);
   const groupChoice = expansionChoice(sessionId, group.dataset.anchorId);
@@ -274,14 +339,22 @@ export function addClassicToolEntry(group, entry, sessionId = threadSessionId) {
 }
 
 export function scrollBottom(force) {
-  const s = el.stream;
-  const nearBottom = s.scrollHeight - s.scrollTop - s.clientHeight < 160;
-  if (force || nearBottom) {
-    const generation = threadGeneration;
-    requestAnimationFrame(() => {
-      if (generation === threadGeneration) s.scrollTop = s.scrollHeight;
-    });
-  }
+  const stream = el.stream;
+  if (!stream) return;
+  bindStreamReadingPosition();
+  const nearBottom = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 160;
+  if (!force && (followReleased || !nearBottom)) return;
+  if (force) followReleased = false;
+  followTop = stream.scrollTop;
+  if (followFrame !== null) return; // One follow per paint, not one per delta.
+  const generation = threadGeneration;
+  followFrame = requestAnimationFrame(() => {
+    followFrame = null;
+    // Search, scrollbar navigation and later user input all supersede this request.
+    if (generation !== threadGeneration || el.stream !== stream || followReleased
+        || Math.abs(stream.scrollTop - followTop) > 1) return;
+    stream.scrollTop = stream.scrollHeight;
+  });
 }
 
 /* ---------- 轮次证据（只认真实事件） ---------- */
@@ -464,6 +537,7 @@ export function interruptActive() {
    * 是不对的：界面会一直显示「运行中」，而且 hasRunning() 恒为真会让
    * 「Pi 正在处理…」再也不出现。 */
   settleRunning();
+  refreshClassicConversationFlow();
 }
 
 /* ---------- 用户消息 ---------- */
@@ -481,16 +555,29 @@ function thinkingBlock(text = '') {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'think-head';
-  button.innerHTML = iconMarkup('chevronRight') + '<span></span>';
+  /* Same flat row as tool calls: kind glyph, one-line preview, trailing
+   * chevron. The canonical label and real state stay in the DOM for assistive
+   * technology without repeating "思考过程 · N 字 · 已完成" in the row. */
+  const icon = document.createElement('span');
+  icon.className = 'think-icon';
+  icon.innerHTML = iconMarkup('brain'); // local constant only
+  const label = document.createElement('span');
+  label.className = 'think-label';
+  label.textContent = '思考过程';
+  const preview = document.createElement('span');
+  preview.className = 'think-preview';
+  const status = document.createElement('span');
+  status.className = 'ui2-think-status';
+  const chevron = document.createElement('span');
+  chevron.className = 'think-chevron';
+  chevron.innerHTML = iconMarkup('chevronRight'); // local constant only
+  button.append(icon, label, preview, status, chevron);
   const body = document.createElement('div');
   body.className = 'think-body';
   body.id = 'thinking-detail-' + ++disclosureId;
   button.id = 'thinking-summary-' + disclosureId;
   body.setAttribute('role', 'region');
   body.setAttribute('aria-labelledby', button.id);
-  const status = document.createElement('span');
-  status.className = 'ui2-think-status';
-  button.appendChild(status);
   button.setAttribute('aria-controls', body.id);
   setDisclosure(button, body, false);
   button.addEventListener('click', () => {
@@ -510,8 +597,9 @@ function setThinkingState(wrap, state) {
 
 function updateThinking(wrap, text) {
   const body = wrap.querySelector('.think-body');
-  if (body.textContent !== text) body.textContent = text;
-  wrap.querySelector('.think-head span').textContent = `思考过程 · ${text.length} 字`;
+  if (body.textContent !== text) preserveTextSelection(body, () => { body.textContent = text; });
+  const preview = wrap.querySelector('.think-preview');
+  if (preview) preview.textContent = String(text ?? '').trim() ? thinkingPreview(text) : '思考中…';
 }
 
 function syncMessageChildren(body, nodes) {
@@ -888,6 +976,7 @@ function createAssistant() {
   const t = ensureThread();
   const wrap = document.createElement('article');
   wrap.className = 'msg assistant';
+  wrap.setAttribute('aria-label', '助手');
   wrap.dataset.anchorId = 'assistant-' + (++assistantSeq);
 
   const role = document.createElement('div');
@@ -962,10 +1051,10 @@ function schedulePaint(block) {
 function paint(b) {
   if (!b.node) return;
   if (b.kind === 'text') {
-    b.node.innerHTML = md(b.text);
+    preserveTextSelection(b.node, () => { b.node.innerHTML = md(b.text); });
   } else if (b.bodyEl) {
-    b.bodyEl.textContent = b.text;
-    if (b.headEl) b.headEl.textContent = `思考过程 · ${b.text.length} 字`;
+    preserveTextSelection(b.bodyEl, () => { b.bodyEl.textContent = b.text; });
+    if (b.headEl) b.headEl.textContent = b.text.trim() ? thinkingPreview(b.text) : '思考中…';
   }
 }
 
@@ -986,7 +1075,7 @@ function ensureBlock(idx, kind) {
     S.current.body.appendChild(wrap);
     b.node = wrap;
     b.bodyEl = wrap.querySelector('.think-body');
-    b.headEl = wrap.querySelector('.think-head span');
+    b.headEl = wrap.querySelector('.think-preview');
   }
 
   S.blocks.set(idx, b);
@@ -1064,7 +1153,7 @@ export function onMessageEnd(evt) {
       // 最终消息是权威值；丢弃尚未执行的流式绘制，避免下一帧把旧草稿写回复用节点。
       pendingPaint.clear();
       // message_end.message 是权威，用它校正渲染结果
-      const keep = rebuildAssistant(S.current.body, msg);
+      const keep = preserveTextSelection(S.current.body, () => rebuildAssistant(S.current.body, msg));
       /* 只有工具调用、没有正文时整条外壳收掉。
        * 工具卡片由 tools.js 直接挂在 thread 上，不在这个 body 里，所以不受影响；
        * 下一轮 message_start 会再建一个新的外壳。 */
@@ -1072,6 +1161,7 @@ export function onMessageEnd(evt) {
       else {
         const meta = renderMessageMeta(msg);
         if (meta) S.current.wrap.appendChild(meta);
+        classifyAssistantWork(S.current.wrap, msg);
         /* 一轮里最后一条**有正文**的助手消息承载“重新生成”；后续只有工具
          * 调用的空消息被收掉时，仍指回这条。 */
         if (liveTurn && !liveTurn.finalized) liveTurn.lastAssistantNode = S.current.wrap;
@@ -1081,6 +1171,7 @@ export function onMessageEnd(evt) {
   S.current = null;
   S.blocks.clear();
   moveWorkingToEnd();
+  refreshClassicConversationFlow();
   scrollBottom();
 }
 
@@ -1534,6 +1625,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       }
       const wrap = document.createElement('article');
       wrap.className = 'msg assistant';
+      wrap.setAttribute('aria-label', '助手');
       wrap.dataset.anchorId = 'assistant-' + (++assistantSeq);
       wrap.innerHTML = '<div class="msg-role">Pi</div>';
       const body = document.createElement('div');
@@ -1548,6 +1640,7 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
         historyTurn.nodes?.responses.push({ node: wrap, sequence: item.sourceIndex, responseId });
       }
       wrap.appendChild(body);
+      classifyAssistantWork(wrap, msg);
       const meta = renderMessageMeta(msg);
       if (meta) wrap.appendChild(meta);
       frag.appendChild(wrap);
@@ -1609,6 +1702,11 @@ function finishHistoryRender(t, sessionId, generation, { userScrolled = false } 
   if (generation !== threadGeneration || S.thread !== t) return;
   /* 分块期间线程对辅助技术是 busy；完整 DOM、导航与位置都就绪后再解除。 */
   t.removeAttribute('aria-busy');
+  const sessionChoice = {
+    get: key => expansionChoice(sessionId, 'work:' + key),
+    set: (key, value) => expansionChoice(sessionId, 'work:' + key, value),
+  };
+  renderClassicConversationFlow(sessionChoice);
 
   /* 历史重建完之后**重新扫一遍 DOM** 建导航（§10）—— 刷新页面、重开 App、
    * 恢复旧会话、fork、retry 之后走的都是这条路。不自己维护消息副本，

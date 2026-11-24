@@ -4,6 +4,9 @@ import { renderUsageMeta } from './message-meta.js';
 import { preserveScrollAround } from './reading-position.js';
 import { isEntryExpanded, setEntryExpanded } from './tool-view.js';
 import { formatTurnDuration } from './turn-outcome.js';
+import { orderConversationNodes as order } from './conversation-work-log.js';
+import { iconMarkup } from './ui/icons.js';
+import { workIconName, workSummary, workSummaryIcon } from './ui/work-presentation.js';
 
 const ACTIVITY_PAGE = 40;
 const MAX_OPEN_ACTIVITIES = 200;
@@ -37,24 +40,6 @@ function label(status) {
 
 function write(node, value) {
   if (node.textContent !== value) node.textContent = value;
-}
-
-function order(parent, nodes) {
-  const focused = parent.ownerDocument.activeElement;
-  let cursor = parent.firstChild;
-  for (const node of nodes) {
-    if (node === cursor) cursor = cursor.nextSibling;
-    else if (parent.moveBefore && parent.isConnected && node.isConnected) parent.moveBefore(node, cursor);
-    else parent.insertBefore(node, cursor);
-  }
-  while (cursor) {
-    const next = cursor.nextSibling;
-    cursor.remove();
-    cursor = next;
-  }
-  if (focused && focused !== parent.ownerDocument.activeElement && parent.contains(focused)) {
-    focused.focus({ preventScroll: true });
-  }
 }
 
 function duration(timing, status, now) {
@@ -315,8 +300,53 @@ function supportPlan(make, preferences) {
   return { update, clear };
 }
 
+/** Display descriptors for the summary row. Native nodes are already-owned
+ * message/tool DOM; activity descriptors are the P5 read projection. */
+function nativeWorkDescriptors(node, result) {
+  if (!node?.matches) return;
+  if (node.matches('.tl-group, .ui2-runtime-tools')) {
+    const rows = [...node.querySelectorAll('.tl-item')];
+    if (!rows.length) result.push({ kind: 'tool' });
+    for (const row of rows) {
+      const entry = row._tlEntry;
+      result.push({ name: entry?.name, title: entry?.label, kind: entry?.kind });
+    }
+    return;
+  }
+  if (node.matches('.ui2-runtime-thinking, .think')) {
+    result.push({ kind: 'thinking' });
+    return;
+  }
+  result.push({ kind: 'progress' });
+}
+
+function workDescriptors(work, items) {
+  const byId = new Map(items.map(item => [item.id, item]));
+  const result = [];
+  for (const entry of work) {
+    if (entry.node) {
+      nativeWorkDescriptors(entry.node, result);
+      continue;
+    }
+    const item = byId.get(entry.activityId);
+    if (!item) continue;
+    result.push({
+      kind: item.kind === 'tool' ? undefined : item.kind,
+      name: item.toolName,
+      title: item.title,
+    });
+  }
+  return result;
+}
+
+function hasFailureStatus(value) {
+  return ['error', 'failed', 'incomplete', 'interrupted', 'cancelled'].includes(value);
+}
+
 function makeActivityRow(make, item, expanded, onToggle) {
   const row = makeDisclosure(make, '', '', 'execution-activity-item');
+  const icon = make('span', 'execution-activity-icon');
+  icon.setAttribute('aria-hidden', 'true');
   const facts = make('span', 'execution-activity-facts');
   const status = make('span', 'execution-activity-status');
   const time = make('span', 'execution-time');
@@ -325,7 +355,12 @@ function makeActivityRow(make, item, expanded, onToggle) {
   const detailFacts = make('p', 'execution-detail-note execution-detail-facts');
   const error = make('p', 'execution-detail-note execution-error');
   const childList = make('ul', 'execution-detail-children');
-  row.head.append(facts, status, time);
+  /* Same flat row as a native tool call: glyph, label, chevron at the far
+   * right. Status and elapsed time remain in the DOM (and on hover) rather
+   * than repeating a green "已完成 0.8s" suffix on every line. */
+  row.head.prepend(icon);
+  const marker = row.head.querySelector('.execution-chevron');
+  row.head.append(facts, status, time, marker);
   row.body.append(error, detailFacts, childList, nativeSlot, notice);
 
   let adopted = null;
@@ -403,7 +438,17 @@ function makeActivityRow(make, item, expanded, onToggle) {
       latest = value;
       native = detail || null;
       row.node.dataset.status = value.status;
+      row.node.dataset.anchorId = 'activity-' + value.id;
       write(row.title, value.kind === 'compaction' ? '压缩上下文' : value.title);
+      const iconName = workIconName({
+        kind: value.kind === 'tool' ? undefined : value.kind,
+        name: value.toolName,
+        title: value.title,
+      });
+      if (icon.dataset.icon !== iconName) {
+        icon.dataset.icon = iconName;
+        icon.innerHTML = iconMarkup(iconName); // local constant only
+      }
       write(facts, summaryText(value.summary, row.title.textContent));
       if (facts.title !== facts.textContent) facts.title = facts.textContent;
       write(status, label(value.status));
@@ -439,12 +484,18 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   const preview = taskPreview(taskContent, taskToggle, preferences);
   const planSlot = section('plan');
   const planControl = supportPlan(make, preferences);
-  const activity = makeDisclosure(make, 'activity', '执行活动', 'execution-activity-group');
+  const activity = makeDisclosure(make, 'activity', '工作记录', 'execution-activity-group');
+  const groupIcon = make('span', 'execution-work-icon');
+  groupIcon.setAttribute('aria-hidden', 'true');
+  const groupSummary = make('span', 'execution-activity-summary');
   const groupStatus = make('span', 'execution-activity-status');
   const groupMeta = make('span', 'execution-activity-count');
   const groupTime = make('span', 'execution-time');
+  activity.head.prepend(groupIcon);
+  activity.title.after(groupSummary);
   activity.head.append(groupStatus, groupMeta, groupTime);
-  const rowList = make('div', 'execution-activity-list');
+  const rowList = make('div', 'execution-activity-list execution-work-list');
+  rowList.dataset.executionPart = 'progress';
   const pager = make('div', 'execution-activity-pager');
   const prevPage = make('button', 'btn tiny ghost execution-activity-earlier');
   prevPage.type = 'button';
@@ -454,16 +505,19 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   pager.append(prevPage, pageRange, nextPage);
   activity.body.append(pager, rowList);
 
-  const progress = makeDisclosure(make, 'progress', '执行过程', 'execution-progress');
   const thinking = section('thinking');
   const answer = section('answer');
   const outcomes = section('outcome');
   const usage = makeDisclosure(make, 'usage', '用量与耗时', 'execution-usage');
-  const preferredProgress = preferences?.get('progress');
-  activity.setOpen(preferences?.get('activity') === true);
-  progress.setOpen(preferredProgress ?? !activity.body.hidden);
+  // The former activity/progress controls now disclose one ordered work log.
+  // Existing activity choice wins; a lone old progress choice still reopens it.
+  let activityChoice = preferences?.get('activity');
+  if (typeof activityChoice !== 'boolean') activityChoice = preferences?.get('progress');
+  let activityChosen = typeof activityChoice === 'boolean';
+  activity.setOpen(activityChoice === true);
+  rowList.hidden = activity.body.hidden;
   usage.setOpen(preferences?.get('usage') === true);
-  node.append(task, planSlot, activity.node, progress.node, thinking, answer, outcomes, usage.node);
+  node.append(task, planSlot, activity.node, thinking, answer, outcomes, usage.node);
 
   const rows = new Map();
   const ledger = new Map();
@@ -477,7 +531,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   let pageLength = ACTIVITY_PAGE;
   const openRows = new Set();
   let timer = null;
-  let explicitProgress = typeof preferredProgress === 'boolean';
+  let currentWork = EMPTY_NODES;
 
   function tick() {
     if (!node.isConnected) {
@@ -498,7 +552,14 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   function removeRows() {
     for (const row of rows.values()) row.restore();
     rows.clear();
-    rowList.replaceChildren();
+    // Native progress stays searchable while folded; only tool detail rows
+    // are lazy/windowed. Never discard an adopted message to close a panel.
+    order(rowList, currentWork.filter(entry => entry.node).map(entry => entry.node));
+  }
+
+  function alignWork() {
+    order(rowList, currentWork.map(entry => entry.node || rows.get(entry.activityId)?.node).filter(Boolean));
+    rowList.hidden = activity.body.hidden;
   }
 
   function setOpenRow(id, open) {
@@ -527,15 +588,14 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
       rows.delete(id);
     }
     const instant = now();
-    const ordered = subset.map(item => {
+    for (const item of subset) {
       if (!rows.has(item.id)) rows.set(item.id, makeActivityRow(make, item,
         openRows.has(item.id) || preferences?.get('activity-item:' + item.id) === true,
         open => setOpenRow(item.id, open)));
       const row = rows.get(item.id);
       row.update(item, currentDetails.get(item.id), instant);
-      return row.node;
-    });
-    order(rowList, ordered);
+    }
+    alignWork();
     prevPage.hidden = pageStart === 0;
     nextPage.hidden = pageEnd === total;
     pager.hidden = prevPage.hidden && nextPage.hidden;
@@ -561,19 +621,16 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
 
   activity.head.addEventListener('click', () => preserveScrollAround(activity.head, () => {
     const opening = activity.body.hidden;
+    activityChosen = true;
+    activityChoice = opening;
     activity.setOpen(opening);
     preferences?.set('activity', opening);
-    if (!explicitProgress) progress.setOpen(opening);
     if (opening) renderRows();
     else removeRows();
+    alignWork();
   }));
   prevPage.addEventListener('click', () => movePage(true));
   nextPage.addEventListener('click', () => movePage(false));
-  progress.head.addEventListener('click', () => preserveScrollAround(progress.head, () => {
-    explicitProgress = true;
-    progress.setOpen(progress.body.hidden);
-    preferences?.set('progress', !progress.body.hidden);
-  }));
   usage.head.addEventListener('click', () => preserveScrollAround(usage.head, () => {
     usage.setOpen(usage.body.hidden);
     preferences?.set('usage', !usage.body.hidden);
@@ -582,6 +639,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   function update({
     turn, group, items = EMPTY_NODES, input, plan, progress: process = EMPTY_NODES, thinking: activeThinking = EMPTY_NODES,
     answer: final = EMPTY_NODES, outcomes: terminal = EMPTY_NODES, details = EMPTY_DETAILS, usage: existingUsage = EMPTY_NODES,
+    workOrder = null,
   }) {
     node.dataset.executionTurn = turn.id;
     node.dataset.status = turn.status;
@@ -597,31 +655,60 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
       currentItems = currentGroup ? items.filter(item => item.turnId === turn.id && item.parentId === group.id)
         .sort((first, second) => first.position.sequence - second.position.sequence || first.position.part - second.position.part) : [];
       currentDetails = details;
-      if (currentItems.length) {
-        const activeItem = currentItems.find(item => item.id === currentGroup.activeItemId);
-        const activeCount = currentItems.filter(item => ACTIVE.has(item.status)).length;
-        const failed = currentItems.filter(item => item.status === 'failed').length;
-        activity.node.dataset.status = currentGroup.status;
-        write(activity.title, activeItem?.kind === 'compaction' ? '压缩上下文' : activeItem?.title || '执行活动');
-        write(groupStatus, label(currentGroup.status));
-        write(groupMeta, [currentItems.length + ' 项', activeCount > 1 ? activeCount + ' 项同时执行' : '',
-          failed ? failed + ' 项失败' : ''].filter(Boolean).join(' · '));
-        write(groupTime, duration(currentGroup.timing, currentGroup.status, now()));
-        renderRows();
-      } else {
-        removeRows();
+      if (!currentItems.length) {
         pageAnchor = null;
         pageLength = ACTIVITY_PAGE;
         openRows.clear();
       }
     }
-    activity.node.hidden = currentItems.length === 0;
+    // Hosts supply actual ordered display entries. Membership is checked here
+    // so a malformed presentation hint cannot hide/duplicate a native node.
+    const native = new Set(process);
+    const ids = new Set(currentItems.map(item => item.id));
+    const seenNodes = new Set(), seenIds = new Set();
+    const validOrder = Array.isArray(workOrder) && workOrder.every(entry => {
+      if (entry.node && native.has(entry.node) && !seenNodes.has(entry.node)) { seenNodes.add(entry.node); return true; }
+      if (ids.has(entry.activityId) && !seenIds.has(entry.activityId)) { seenIds.add(entry.activityId); return true; }
+      return false;
+    }) && seenNodes.size === native.size && seenIds.size === ids.size;
+    currentWork = validOrder ? workOrder : [...process.map(node => ({ node })), ...currentItems.map(item => ({ activityId: item.id }))];
+    const activeCount = currentItems.filter(item => ACTIVE.has(item.status)).length;
+    const failed = currentItems.filter(item => item.status === 'failed').length;
+    activity.node.dataset.status = currentGroup?.status || 'unknown';
+    activity.node.dataset.anchorId = 'work-' + turn.id;
+    write(activity.title, '工作记录');
+    write(groupStatus, currentGroup ? label(currentGroup.status) : '');
+    groupStatus.hidden = !currentGroup;
+    write(groupMeta, [currentItems.length ? currentItems.length + ' 项' : process.length + ' 条记录',
+      activeCount > 1 ? activeCount + ' 项同时执行' : '', failed ? failed + ' 项失败' : ''].filter(Boolean).join(' · '));
+    write(groupTime, duration(currentGroup?.timing, currentGroup?.status, now()));
+    const descriptors = workDescriptors(currentWork, currentItems);
+    write(groupSummary, workSummary(descriptors) || (currentWork.length ? currentWork.length + ' 项工作记录' : ''));
+    const summaryIcon = workSummaryIcon(descriptors);
+    if (groupIcon.dataset.icon !== summaryIcon) {
+      groupIcon.dataset.icon = summaryIcon;
+      groupIcon.innerHTML = iconMarkup(summaryIcon); // local constant only
+    }
+    const single = descriptors.length <= 1;
+    activity.node.dataset.single = single ? 'true' : 'false';
+    const nativeStatuses = process.flatMap(entry => entry.matches?.('.tl-group')
+      ? [...entry.querySelectorAll('.tl-item')].map(row => row.dataset.status)
+      : entry.dataset?.status ? [entry.dataset.status] : []);
+    const active = currentItems.some(item => ACTIVE.has(item.status))
+      || nativeStatuses.some(status => status === 'running' || status === 'waiting')
+      || ACTIVE.has(currentGroup?.status);
+    const attention = currentItems.some(item => hasFailureStatus(item.status))
+      || nativeStatuses.some(hasFailureStatus);
+    const wantsOpen = single ? true : activityChosen ? activityChoice === true : active || attention;
+    if (wantsOpen !== !activity.body.hidden) activity.setOpen(wantsOpen);
+    activity.node.hidden = currentItems.length === 0 && process.length === 0;
+    if (activity.body.hidden || !currentItems.length) removeRows();
+    if (!activity.body.hidden) renderRows();
+    alignWork();
     if (ACTIVE.has(currentGroup?.status) && Number.isFinite(currentGroup?.timing?.startedAt)) {
       if (timer === null && document.defaultView) timer = document.defaultView.setInterval(tick, 1000);
     } else stopClock();
 
-    order(progress.body, process);
-    progress.node.hidden = process.length === 0;
     render(thinking, activeThinking);
     render(answer, final);
     render(outcomes, terminal);
@@ -661,7 +748,11 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   return {
     node, update,
     reveal(messageNode) {
-      if (progress.body.hidden && progress.body.contains(messageNode)) progress.setOpen(true);
+      if (rowList.contains(messageNode) && activity.body.hidden) {
+        activity.setOpen(true);
+        renderRows();
+        alignWork();
+      }
     },
     release() {
       stopClock();

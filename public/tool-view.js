@@ -1,4 +1,5 @@
 import { iconMarkup } from './ui/icons.js';
+import { workIconName } from './ui/work-presentation.js';
 /* Tool Timeline 的视图层。
  *
  * 只做一件事：把一条 ToolEntry 画成 DOM，以及在它变化时**就地更新**。
@@ -23,6 +24,7 @@ import { iconMarkup } from './ui/icons.js';
 
 import { formatDuration, previewOf, statOf } from './tool-model.js';
 import { preserveScrollAround } from './reading-position.js';
+import { preserveTextSelection } from './ui/text-selection.js';
 import { webActivity, webSourceLink } from './web-activity.js';
 import { subagentActivity } from './subagent-activity.js';
 import { memoryActivity } from './memory-activity.js';
@@ -31,21 +33,6 @@ import { guiBrowserActivity } from './gui-browser-activity.js';
 import { processActivity } from './process-activity.js';
 import { mcpActivity } from './mcp-activity.js';
 import { noteUnknownTool } from './schema-drift.js';
-
-/* 状态图标。
- *
- * 用 SVG 而不是 ✓ / ✕ / ● 这些字符：时间线是多行左对齐的，字符的宽度和基线
- * 在不同字体下不一致，一歪就整列错位。 */
-const STATUS_ICON = {
-  running: iconMarkup('running'),
-  success: iconMarkup('check'),
-  error: iconMarkup('close'),
-  /* 未完成：虚线圆圈 —— 既不是对勾也不是叉，一眼能看出「这一轮没跑完」 */
-  incomplete: iconMarkup('pending'),
-  interrupted: iconMarkup('pause'),
-  cancelled: iconMarkup('close'),
-  unknown: iconMarkup('help'),
-};
 
 const STATUS_TEXT = {
   running: '运行中',
@@ -108,11 +95,12 @@ export function renderEntry(entry, onExpanded) {
   const stat = sub(head, 'tl-stat', 'span');
   const time = sub(head, 'tl-time', 'span');
 
-  const result = sub(body, 'tl-result');
   const acts = sub(head, 'tl-acts');
   const toggle = document.createElement('button');
   toggle.type = 'button';
   toggle.className = 'tl-toggle';
+  toggle.innerHTML = iconMarkup('chevronRight'); // Local icon only.
+  const toggleCaption = sub(toggle, 'tl-toggle-label', 'span');
   acts.appendChild(toggle);
 
   const more = sub(body, 'tl-more');
@@ -120,6 +108,9 @@ export function renderEntry(entry, onExpanded) {
   more.hidden = true;
   toggle.setAttribute('aria-controls', more.id);
   toggle.setAttribute('aria-expanded', 'false');
+  const detailNote = sub(more, 'tl-detail-note', 'p');
+  detailNote.hidden = true;
+  const result = sub(more, 'tl-result');
   const outHead = sub(more, 'tl-sec', 'div');
   outHead.textContent = '输出';
   const out = sub(more, 'tl-out', 'pre');
@@ -127,7 +118,7 @@ export function renderEntry(entry, onExpanded) {
   argHead.textContent = '详细信息';
   const args = sub(more, 'tl-args', 'pre');
 
-  node._tl = { dot, label, statusText, arg, stat, time, result, toggle, more, out, outHead, args, argHead, hasOutput: false, hasMore: false, output: '', subMeta: null, subList: null, subKey: '', subagents: null, toggleLabel: '' };
+  node._tl = { dot, label, statusText, arg, stat, time, result, toggle, toggleCaption, more, detailNote, out, outHead, args, argHead, hasOutput: false, hasMore: false, output: '', subMeta: null, subList: null, subKey: '', subagents: null, toggleLabel: '' };
 
   /* 整行可点 = 展开 / 收起（和原来的工具卡片一致，用户已经习惯了）。
    * 折叠是纯前端状态，不进 entry —— 刷新后没必要记住某一条展开过。 */
@@ -166,10 +157,14 @@ function syncToggle(p) {
   if (!p.hasMore) {
     p.more.hidden = true;
     p.toggle.setAttribute('aria-expanded', 'false');
-    setText(p.toggle, '');
+    setText(p.toggleCaption, '');
+    p.toggle.removeAttribute('aria-label');
     return;
   }
-  setText(p.toggle, p.hasOutput ? (p.more.hidden ? '展开输出' : '收起') : p.more.hidden ? (p.toggleLabel || '详细信息') : '收起');
+  const label = p.hasOutput ? (p.more.hidden ? '展开输出' : '收起') : p.more.hidden ? (p.toggleLabel || '详细信息') : '收起';
+  setText(p.toggleCaption, label);
+  p.toggle.setAttribute('aria-label', label);
+  p.toggle.title = label;
 }
 
 /** 折叠状态下把关键结果补进 title，鼠标悬停就能看到，不用点开。 */
@@ -260,6 +255,7 @@ function syncSubagents(p, subagents) {
 
 /** 更新一条已经渲染出来的 entry。只改真正变了的字段。 */
 export function updateEntry(node, entry) {
+  if (entry.detailState === 'restricted') entry = { ...entry, args: null, details: null, output: '', resultLine: '' };
   const web = webActivity(entry);
   /* 语义适配器按工具名匹配，互不依赖包名：命中一个就接管，raw args/details
    * 一律不进 DOM（见下面的 argsText 分支）。 */
@@ -280,18 +276,28 @@ export function updateEntry(node, entry) {
   const previousWaiting = node.dataset.waiting;
   node.dataset.status = status;
   node.dataset.waiting = entry.waiting === true ? 'true' : 'false';
-  node.className = 'tl-item' + (node.classList.contains('open') ? ' open' : '') + (subagents ? ' tl-subagent' : '');
+  node.classList.toggle('tl-subagent', Boolean(subagents));
 
-  const iconHtml = STATUS_ICON[status] || STATUS_ICON.unknown;
-  if (p.dot.dataset.s !== status) {
+  /* The glyph names the action (read/search/command/edit/…); the row's
+   * data-status color and the screen-reader status line carry the outcome.
+   * Keeping one stable glyph per tool avoids swapping in a check mark that
+   * hides what the row actually did. Incomplete is the one exception: the
+   * dashed circle is the long-standing, non-color cue that the call never
+   * received a result, so it must not be lost behind the action glyph. */
+  const iconName = status === 'incomplete'
+    ? 'pending'
+    : workIconName({ kind: semantic?.kind, name: entry.name, title: entry.label });
+  if (p.dot.dataset.s !== status || p.dot.dataset.i !== iconName) {
     p.dot.dataset.s = status;
-    p.dot.innerHTML = iconHtml; // 自写常量，不含任何外部文本
+    p.dot.dataset.i = iconName;
+    p.dot.innerHTML = iconMarkup(iconName); // 自写常量，不含任何外部文本
     p.dot.title = STATUS_TEXT[status] || status;
   }
 
   setText(p.label, entry.label + (entry.known ? '' : ' ' + entry.name));
   setText(p.statusText, status==='running'&&entry.waiting ? '等待写入' : STATUS_TEXT[status] || STATUS_TEXT.unknown);
   setText(p.arg, entry.summary);
+  p.arg.title = String(entry.summary || '');
 
   /* +N −M：Git 的数字优先，退回工具自己给的（见 tool-model.statOf） */
   const st = statOf(entry);
@@ -317,6 +323,7 @@ export function updateEntry(node, entry) {
 
   setText(p.time, formatDuration(entry.durationMs));
   setText(p.result, entry.resultLine || '');
+  p.result.hidden = !entry.resultLine;
   p.toggleLabel = subagents ? '子代理' : '';
   syncSubagents(p, subagents);
 
@@ -329,9 +336,9 @@ export function updateEntry(node, entry) {
   const wasNearBottom = outVisible
     && p.out.scrollHeight - p.out.scrollTop - p.out.clientHeight < 40;
 
-  if (p.out.dataset.len !== String(output.length) || (semantic && p.out.textContent !== output)) {
+  if (p.output !== output) {
     p.out.dataset.len = String(output.length);
-    p.out.textContent = output;
+    preserveTextSelection(p.out, () => { p.out.textContent = output; });
   }
   if (status === 'running' && outVisible && wasNearBottom) p.out.scrollTop = p.out.scrollHeight;
 
@@ -345,7 +352,7 @@ export function updateEntry(node, entry) {
   const argsText = semantic ? '' : argsTextOf(entry);
   if (p.argsText !== argsText) {
     p.argsText = argsText;
-    p.args.textContent = argsText;
+    preserveTextSelection(p.args, () => { p.args.textContent = argsText; });
   }
 
   /* 折叠区里的分节标题按需显隐 —— 没有输出时留一个空的「输出」标题很怪 */
@@ -379,9 +386,12 @@ export function updateEntry(node, entry) {
     p.sources.replaceChildren();
   }
 
+  const restricted = entry.detailState === 'restricted';
+  p.detailNote.hidden = !restricted;
+  setText(p.detailNote, restricted ? '当前视图无权读取原始参数与输出' : '');
   p.hasOutput = hasOutput;
   p.output = output;
-  p.hasMore = hasOutput || Boolean(argsText) || sources.length > 0 || Boolean(subagents);
+  p.hasMore = hasOutput || Boolean(argsText) || Boolean(entry.resultLine) || sources.length > 0 || Boolean(subagents) || restricted;
   node.classList.toggle('has-more', p.hasMore);
   syncToggle(p);
   syncTitle(node, p);
@@ -478,15 +488,24 @@ function syncGroup(group) {
   const g = group?._tlGroup;
   if (!g) return;
   const multiple = g.count >= 2;
-  const children = [...g.list.children];
+  const children = groupEntries(group);
   const hasRunning = children.some(node => node.dataset.status === 'running' && node.dataset.waiting !== 'true');
   const hasWaiting = children.some(node => node.dataset.status === 'running' && node.dataset.waiting === 'true');
   const hasOpenChild = children.some(node => node.classList.contains('open'));
   const focusInside = g.list.contains(document.activeElement) || selectionInside(g.list);
   const explicit = g.userToggled || hasOpenChild;
+  group.classList.toggle('is-work-embedded', g.embedded === true);
 
-  if (multiple) {
-    if (!g.userToggled && hasOpenChild && g.list.hidden) {
+  if (g.embedded) {
+    // Visibility belongs to the outer work log. Remember the native disclosure
+    // choice separately so releasing adoption never turns an explicit close open.
+    g.list.hidden = false;
+    g.head.setAttribute('aria-expanded', 'true');
+    group.classList.remove('is-collapsed');
+  } else if (multiple) {
+    if (g.userToggled) {
+      setGroupOpen(g, group, g.expandedChoice === true);
+    } else if (hasOpenChild && g.list.hidden) {
       /* 用户展开的行不能被自动折叠隐藏；但组头被用户显式收起时，收起优先。 */
       setGroupOpen(g, group, true);
     } else if (!explicit) {
@@ -496,8 +515,8 @@ function syncGroup(group) {
     setGroupOpen(g, group, true);
   }
 
-  g.head.hidden = !multiple;
-  g.meta.hidden = !multiple;
+  g.head.hidden = !multiple || g.embedded === true;
+  g.meta.hidden = !multiple || g.embedded === true;
   g.state.hidden = !multiple;
   g.time.hidden = !multiple;
   setText(g.head, multiple ? `工具调用 · ${g.count} 次` : '');
@@ -515,7 +534,7 @@ function syncGroup(group) {
   const elapsed = multiple ? groupElapsed(children) : null;
   const timeText = elapsed != null && elapsed >= 100 ? formatDuration(elapsed) : '';
   setText(g.time, timeText);
-  g.time.hidden = !multiple || !timeText;
+  g.time.hidden = !multiple || g.embedded === true || !timeText;
 }
 
 /* 一组 = 一条 assistant 消息里的全部 toolCall。
@@ -557,12 +576,15 @@ export function createGroup(onExpanded) {
   head.setAttribute('aria-expanded', 'true');
   g.appendChild(list);
 
-  g._tlGroup = { head, meta, state, time, list, count: 0 };
+  // Native display membership survives temporary authorized P5 detail adoption.
+  // A moved row is still part of this real assistant batch, not a removed tool.
+  g._tlGroup = { head, meta, state, time, list, entries: new Set(), count: 0 };
   head.addEventListener('click', () => {
     g._tlGroup.userToggled = true;
     preserveScrollAround(head, () => {
       const open = list.hidden;
-      if (!open && list.contains(document.activeElement)) head.focus();
+      g._tlGroup.expandedChoice = open;
+      if (!open && list.contains(document.activeElement)) head.focus({ preventScroll: true });
       list.hidden = !open;
       head.setAttribute('aria-expanded', String(open));
       g.classList.toggle('is-collapsed', !open);
@@ -576,7 +598,8 @@ export function createGroup(onExpanded) {
 export function addToGroup(group, node) {
   const g = group._tlGroup;
   g.list.appendChild(node);
-  g.count += 1;
+  g.entries.add(node);
+  g.count = g.entries.size;
   syncGroup(group);
   return g.count;
 }
@@ -585,15 +608,38 @@ export function groupCount(group) {
   return group?._tlGroup?.count ?? 0;
 }
 
+/** Native display rows, including rows temporarily adopted as P5 details. */
+export function groupEntries(group) {
+  return [...group?._tlGroup?.entries || []];
+}
+
+/** Presentation adoption only; never merge tool IDs or execution batches. */
+export function setGroupEmbedded(group, embedded) {
+  if (!group?._tlGroup) return false;
+  group._tlGroup.embedded = embedded === true;
+  syncGroup(group);
+  return true;
+}
+
+export function removeFromGroup(group, node) {
+  const g = group?._tlGroup;
+  if (!g || !g.entries.delete(node)) return false;
+  node.remove();
+  g.count = g.entries.size;
+  syncGroup(group);
+  return true;
+}
+
 /* 展开状态由使用者按会话保存时，需要能从外部恢复。这两个函数只操作
  * 视图自身已有的 hidden/aria 状态，不改变分组规则（例如多项默认折叠）。 */
 export function setGroupExpanded(group, expanded) {
   const g = group?._tlGroup;
   if (!g) return false;
   g.userToggled = true;
-  g.list.hidden = !expanded;
-  g.head.setAttribute('aria-expanded', String(expanded));
-  group.classList.toggle('is-collapsed', !expanded);
+  g.expandedChoice = expanded === true;
+  g.list.hidden = g.embedded ? false : !expanded;
+  g.head.setAttribute('aria-expanded', String(g.embedded || expanded === true));
+  group.classList.toggle('is-collapsed', !g.embedded && !expanded);
   return true;
 }
 

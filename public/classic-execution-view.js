@@ -1,6 +1,8 @@
 /* DOM ownership for Classic turns. Live attribution comes from accepted
  * frames; restored turns use the same server-verified native message range. */
-import { S } from './state.js';
+import { S, el } from './state.js';
+import { createConversationFlow, nativeConversationChildren } from './conversation-work-log.js';
+import { captureReadingPosition, restoreReadingPosition } from './reading-position.js';
 import { classicExecutionFallbackEcho, getClassicExecutionTimeline } from './execution-timeline-state.js';
 import { createExecutionTurnView, executionTurnForInput } from './execution-timeline-view.js';
 import { executionLivePreferenceKey, executionViewPreferences } from './execution-view-preferences.js';
@@ -18,6 +20,26 @@ let active = null;
 const rounds = new Set();
 const dirty = new Set();
 const accepted = new WeakSet();
+let nativeFlow = null;
+let nativeHost = null;
+let nativePreferences = null;
+
+/** Native fallback has the same presentation without gaining P5 evidence. */
+export function renderClassicConversationFlow(preferences) {
+  if (!S.thread) return;
+  if (preferences) nativePreferences = preferences;
+  if (nativeHost !== S.thread) {
+    nativeFlow?.restore();
+    nativeHost = S.thread;
+    nativeFlow = createConversationFlow({ document: S.thread.ownerDocument, preferences: {
+      get: key => nativePreferences?.get(key), set: (key, value) => nativePreferences?.set(key, value),
+    } });
+  }
+  const bookmark = el.stream?.clientHeight > 0
+    ? captureReadingPosition(el.stream, S.thread, { pinnedThreshold: 24 }) : null;
+  nativeFlow.render(S.thread);
+  if (bookmark) restoreReadingPosition(el.stream, S.thread, bookmark);
+}
 
 function makeKey(instance, run, workspace, generation, branch, session) {
   return JSON.stringify([instance, run, workspace, generation, branch, session]);
@@ -47,6 +69,8 @@ function release(round) {
 }
 
 export function resetClassicExecutionView({ restore = false } = {}) {
+  nativeFlow?.restore();
+  nativeFlow = nativeHost = nativePreferences = null;
   if (pendingFrame != null) cancelAnimationFrame(pendingFrame);
   pendingFrame = null;
   if (restore) for (const round of rounds) release(round);
@@ -69,11 +93,12 @@ export function classicNativeThreadChildren(thread) {
       if (marker.parentNode === thread) adopted.set(marker, group);
     }
   }
-  return [...thread.childNodes].map(node => adopted.get(node) || node)
+  return nativeConversationChildren(thread).map(node => adopted.get(node) || node)
     .filter(node => node.nodeType === 1 && !node.hasAttribute('data-execution-turn'));
 }
 
 export function releaseClassicExecutionTail(article, oldTail) {
+  nativeFlow?.restore();
   for (const round of rounds) {
     if (round.input !== article && !oldTail.has(round.input) && !round.additional.some(item => item.node === article)) continue;
     release(round);
@@ -284,6 +309,7 @@ function flush() {
       release(round);
     }
   }
+  renderClassicConversationFlow();
 }
 
 function renderRound(round, turn, group, items, scope = null) {
@@ -341,6 +367,9 @@ function renderRound(round, turn, group, items, scope = null) {
   ordered.sort((a, b) => a.sequence - b.sequence);
   for (const response of ordered) progress.push(response.node);
 
+  // Native display wrappers cannot become P5's original-order marker owner.
+  // Restore them before the first verified adoption; fallback remains recoverable.
+  if (!round.view && round.input.isConnected) nativeFlow?.restore();
   if (!round.view) {
     const preferenceId = round.historical ? turn.id + ':' + turn.entryIds.at(-1)
       : executionLivePreferenceKey(scope, round.sequence);
@@ -364,6 +393,10 @@ function renderRound(round, turn, group, items, scope = null) {
     turn: { ...turn, status: waitingForFallback ? 'waiting' : turn.status,
       usage: turn.usage.filter(row => !nativeUsageIds.has(row.responseId)) },
     group, items, input: round.input, plan, progress, answer, outcomes: round.outcomes, details, usage,
+    workOrder: [
+      ...ordered.map(entry => ({ node: entry.node, sequence: entry.sequence, part: -1 })),
+      ...items.map(item => ({ activityId: item.id, ...item.position })),
+    ].sort((first, second) => first.sequence - second.sequence || first.part - second.part),
   });
   const firstGroup = round.tools.values().next().value?.group;
   if (firstGroup?.dataset.anchorId) {

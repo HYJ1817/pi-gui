@@ -49,6 +49,7 @@ import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeR
 import { createRuntimeDisplay, shouldFollow } from './runtime-display.js';
 import { renderUsageMeta } from './message-meta.js';
 import { messageActions } from './ui/message-actions.js';
+import { preserveTextSelection } from './ui/text-selection.js';
 import { userBody } from './ui/user-message-body.js';
 import { openMessageEditor, closeMessageEditor, messageEditErrorText, messageEditRequestId, messageEditorBusy, resolveEditAcceptance, rememberPendingMessageEdit, clearPendingMessageEdit, readPendingMessageEdit, resumePendingMessageEdit, isEditInProgress } from './ui/message-edit.js';
 import { openModal, confirmModal } from './ui/modal.js';
@@ -57,6 +58,7 @@ import { md, renderVizCardHtml } from './markdown.js';
 import { createRuntimePicker } from './runtime-picker.js';
 import { bindComposerPointerFocus } from './composer.js';
 import { thinkingAvailability } from './thinking-availability.js';
+import { thinkingPreview } from './ui/work-presentation.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { normalizePlan } from './plan-model.js';
 import { usageProjection } from './runtime-timeline.js';
@@ -67,16 +69,17 @@ import {
   addToGroup,
   renderEntry,
   setGroupExpanded,
-  isGroupExpanded,
   setEntryExpanded,
-  isEntryExpanded,
+  updateEntry,
+  removeFromGroup,
 } from './tool-view.js';
 import { getRuntimeExecutionTimeline, resolveRuntimeExecutionMessage } from './execution-timeline-state.js';
 import { createExecutionTurnView, executionTurnForInput } from './execution-timeline-view.js';
 import { executionLivePreferenceKey, executionViewPreferences } from './execution-view-preferences.js';
 import { deriveTurnOutcome, renderTurnOutcome, updateTurnOutcome } from './turn-outcome.js';
 import { createScrollButton } from './scroll-button.js';
-import { findScrollContainer } from './reading-position.js';
+import { captureReadingPosition, restoreReadingPosition, preserveScrollAround } from './reading-position.js';
+import { createConversationFlow, orderConversationNodes } from './conversation-work-log.js';
 import {
   extractStableLocator,
   sameStableLocator,
@@ -235,6 +238,8 @@ const EMPTY_TIMELINE_VIEW = () => ({
   executionSource: null,
   provisionalUsage: null,
   recordRef: null,
+  flow: null,
+  workOpen: new Map(),
 });
 
 /**
@@ -261,7 +266,7 @@ export function scrollRowIntoView(output, row, block = 'center') {
 }
 
 export function createRuntimeConversation({ host, onNotice = () => {}, onTitle = () => {}, openBrowser = null, openProcesses = null, openSessionChanges = null, models = null, display = null }) {
-  const scrollTops = new Map();       // conversationId -> scrollTop
+  const scrollTops = new Map();       // conversationId -> display bookmark (ID + offset)
   const views = new Map();            // conversationId -> 该会话自己的纯 UI 态
   const modelOwners = new Map();
   /* thinking / usage 的只读投影。**本视图自己建一份**（和 scrollTops/views 一样是按
@@ -382,7 +387,21 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   output.setAttribute('aria-relevant', 'additions');
   output.setAttribute('aria-atomic', 'false');
   root.append(output);
-  output.addEventListener('scroll', () => { if (id && !current().history) scrollTops.set(id, output.scrollTop); }, { passive: true });
+  const captureOutput = () => captureReadingPosition(output, output,
+    output.clientHeight > 0 ? {} : { isPinned: false });
+  const restoreOutput = bookmark => {
+    if (!bookmark) return false;
+    // A hidden surface has no geometry yet. Keep its raw offset as a fallback
+    // instead of declaring it pinned or clamping its bookmark to a false zero.
+    if (!output.clientHeight && Number.isFinite(bookmark.scrollTop)) {
+      output.scrollTop = bookmark.scrollTop;
+      return true;
+    }
+    return restoreReadingPosition(output, output, bookmark);
+  };
+  output.addEventListener('scroll', () => {
+    if (id && active && renderedId === id && !current().history) scrollTops.set(id, captureOutput());
+  }, { passive: true });
 
   /* 本轮用量：只显示 Pi 报过的数字（见 runtime-display.js）。刻意**不加** aria-live ——
    * 它每帧都在变，做成 live region 会不停打断读屏。
@@ -668,10 +687,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     if (!id) return;
     const view = current();
     if (!view.history) {
-      scrollTops.set(id, output.scrollTop);
+      scrollTops.set(id, captureOutput());
       return;
     }
-    view.historyPosition = { history: view.history, top: output.scrollTop,
+    view.historyPosition = { history: view.history, bookmark: captureOutput(), top: output.scrollTop,
       match: output.dataset.historyMatch, state: output.dataset.historyMatchState };
   }
   function matchesLocator(item, locator) {
@@ -732,6 +751,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       details: null,
       output: '',
       resultLine: '',
+      detailState: 'restricted',
       status: TOOL_STATUS[tool?.state] || 'unknown',
       waiting: tool?.waiting === true,
       durationMs: Number.isFinite(tool?.durationMs) ? tool.durationMs : null,
@@ -1026,7 +1046,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         const editAction = history || !Number.isInteger(block.userIndex)
           ? null
           : () => openRuntimeUserEdit(row, block, record, options.notify);
-        let actionBar = messageActions(block.text, editAction ? { onEdit: editAction } : {});
+        const actionBar = messageActions(block.text, editAction ? { onEdit: editAction } : {});
         row.append(actionBar);
         if (block.messageId) row.dataset.historyMessageId = block.messageId;
         if (Number.isInteger(block.userIndex)) row.dataset.historyUserIndex = String(block.userIndex);
@@ -1035,9 +1055,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         const updateActions = value => {
           if (actionText === value) return;
           actionText = value;
-          const fresh = messageActions(value, editAction ? { onEdit: editAction } : {});
-          actionBar.replaceWith(fresh);
-          actionBar = fresh;
+          actionBar.updateText(value);
         };
         return {
           node: row,
@@ -1081,22 +1099,30 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       if (block.messageId) row.dataset.historyMessageId = block.messageId;
       row.dataset.state = block.state || '';
       let actionBar = null;
+      let renderedText = block.text;
+      let regenerateIndex = null;
       /* 历史 usage 与 Classic 同一条摘要/明细；同一消息的多段正文不会重复
        * 出现同一份用量（投影只把 usage 挂到该消息的一个 block 上）。 */
       const syncMeta = (next, recovered) => syncUsageMeta(row, recovered ? null : next);
       syncMeta(block);
-      /* 正文文本本身就是 output.textContent 的主体：角色标签用 CSS 伪元素，
-       * 不额外插入文本节点，避免把「助手」混进正文复制/断言。 */
+      /* 正文不混入重复角色文本；流式替换保留选区，状态/用量更新不重建正文。
+       * 操作按钮保持身份，但重新生成的用户目标仍由当前真实轮次边界决定。 */
       return { node: row, update(next, regenerateUserIndex, recovered) {
-        body.replaceChildren();
-        appendRuntimeContent(body, next.text);
+        if (renderedText !== next.text) {
+          preserveTextSelection(body, () => {
+            body.replaceChildren();
+            appendRuntimeContent(body, next.text);
+          });
+          renderedText = next.text;
+        }
         row.dataset.state = next.state || '';
-        if (!history && Number.isInteger(regenerateUserIndex)) {
-          const fresh = messageActions(next.text, { onRegenerate: event =>
-            regenerateRuntimeTurn(event.currentTarget, regenerateUserIndex, record, options.notify) });
-          if (actionBar) actionBar.replaceWith(fresh);
-          else row.append(fresh);
-          actionBar = fresh;
+        regenerateIndex = regenerateUserIndex;
+        if (!history && Number.isInteger(regenerateIndex)) {
+          if (!actionBar) {
+            actionBar = messageActions(next.text, { onRegenerate: event =>
+              regenerateRuntimeTurn(event.currentTarget, regenerateIndex, record, options.notify) });
+            row.append(actionBar);
+          } else actionBar.updateText(next.text);
         } else if (actionBar) {
           actionBar.remove();
           actionBar = null;
@@ -1111,31 +1137,26 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       const wrap = block.usage ? el('div', 'ui2-runtime-thinking-wrap') : null;
       const details = el('details', 'ui2-runtime-thinking');
       const head = el('summary', 'ui2-runtime-thinking-head');
+      /* Flat reasoning row: brain glyph, one-line preview, hidden canonical
+       * label/state, trailing disclosure chevron. */
+      const icon = el('span', 'think-icon');
+      icon.innerHTML = iconMarkup('brain'); // local constant only
+      const label = el('span', 'think-label', '思考过程');
+      const preview = el('span', 'ui2-runtime-thinking-preview');
+      const stateText = el('span', 'ui2-runtime-thinking-state');
+      const chevron = el('span', 'think-chevron');
+      chevron.innerHTML = iconMarkup('chevronRight'); // local constant only
+      head.append(icon, label, preview, stateText, chevron);
       const body = el('pre', 'ui2-runtime-thinking-body');
       details.append(head, body);
       wrap?.append(details);
       details.open = view.timeline.thinkingOpen.get(openKey(block.id)) === true;
       details.addEventListener('toggle', () => { view.timeline.thinkingOpen.set(openKey(block.id), details.open); });
-      head.addEventListener('click', () => {
-        const scroller = findScrollContainer(head);
-        if (!scroller || typeof scroller.scrollTop !== 'number') return;
-        const initialScrollTop = scroller.scrollTop;
-        const initialOffset = head.getBoundingClientRect ? head.getBoundingClientRect().top - scroller.getBoundingClientRect().top : 0;
-        const wasPinned = (scroller.scrollHeight || 0) - initialScrollTop - (scroller.clientHeight || 0) <= 24;
-        requestAnimationFrame(() => {
-          if (scroller.scrollTop !== initialScrollTop) return;
-          const maxScroll = Math.max(0, (scroller.scrollHeight || 0) - (scroller.clientHeight || 0));
-          if (wasPinned) {
-            scroller.scrollTop = maxScroll;
-            return;
-          }
-          if (head.getBoundingClientRect && scroller.getBoundingClientRect) {
-            const newOffset = head.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-            const delta = newOffset - initialOffset;
-            if (Math.abs(delta) > 0.5) {
-              scroller.scrollTop = Math.max(0, Math.min(maxScroll, initialScrollTop + delta));
-            }
-          }
+      head.addEventListener('click', event => {
+        event.preventDefault();
+        preserveScrollAround(head, () => {
+          details.open = !details.open;
+          view.timeline.thinkingOpen.set(openKey(block.id), details.open);
         });
       });
       if (wrap) syncUsageMeta(wrap, block);
@@ -1150,8 +1171,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           const truncated = viewed ? viewed.truncated : next.truncated === true;
           const stateLabel = THINKING_LABEL[state] || '';
           details.dataset.state = state || '';
-          body.textContent = text;
-          head.textContent = `思考过程 · ${text.length} 字${truncated ? '（已截断）' : ''}${stateLabel ? ' · ' + stateLabel : ''}`;
+          if (body.textContent !== text) preserveTextSelection(body, () => { body.textContent = text; });
+          preview.textContent = String(text ?? '').trim() ? thinkingPreview(text) : '思考中…';
+          stateText.textContent = (truncated ? '（已截断）' : '') + (stateLabel ? ' · ' + stateLabel : '');
           if (wrap) syncUsageMeta(wrap, recovered ? null : next);
         },
       };
@@ -1159,42 +1181,43 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
 
     if (block.kind === 'tools') {
       const wrapper = el('div', 'ui2-runtime-tools');
-      let group = null;
-      let signature = '';
+      const group = createGroup(expanded => view.timeline.groupOpen.set(openKey(block.id), expanded));
+      group.dataset.blockId = block.id;
+      wrapper.append(group);
+      const entries = new Map();
       return {
         node: wrapper,
         update(next, _, recovered) {
-          const nextSignature = JSON.stringify(next.tools);
-          if (nextSignature !== signature) {
-            signature = nextSignature;
-            wrapper.replaceChildren();
-            wrapper._usageMeta = null;
-            wrapper._usageKey = '';
-            group = createGroup();
-            group.dataset.blockId = next.id;
-            wrapper.append(group);
-            for (const tool of next.tools) {
-              const entry = toolEntryOf(tool);
-              const node = renderEntry(entry);
-              node.classList.add('ui2-runtime-tool');
-              node.dataset.state = LEGACY_STATE[tool.state] || String(tool.state || 'unknown');
-              node.dataset.toolName = entry.name;
-              /* tool-view 的头/按钮自己处理折叠；这里在捕获阶段记录点击后的状态。 */
-              node.addEventListener('click', () => setTimeout(() => {
-                view.timeline.entryOpen.set(openKey(tool.id), isEntryExpanded(node));
-              }, 0), true);
-              if (view.timeline.entryOpen.get(openKey(tool.id)) === true) setEntryExpanded(node, true);
-              addToGroup(group, node);
+          const wanted = new Set(next.tools.map(tool => String(tool.id)));
+          for (const [key, node] of entries) {
+            if (wanted.has(key)) continue;
+            if (node.contains(document.activeElement)) {
+              /* 被工作记录接管时原生组头是隐藏的；优先把焦点交给可见的记录头。 */
+              const workHead = node.closest('[data-conversation-work]')?.querySelector('.conversation-work-head');
+              (workHead?.isConnected && !workHead.closest('[hidden]') ? workHead : group._tlGroup.head)
+                .focus({ preventScroll: true });
             }
-            group.addEventListener('click', event => {
-              if (!event.target?.closest?.('.tl-group-head')) return;
-              view.timeline.groupOpen.set(openKey(next.id), isGroupExpanded(group));
-            });
-            /* 只有用户真的点过组头才恢复展开；否则交给 tool-view 的默认规则：
-             * 多项自动折叠、单项不摆组头。不能把「单项时列表可见」误判成
-             * 用户展开过，否则第二个工具一到就永远展开。 */
-            if (view.timeline.groupOpen.has(openKey(next.id))) setGroupExpanded(group, view.timeline.groupOpen.get(openKey(next.id)));
+            removeFromGroup(group, node);
+            entries.delete(key);
           }
+          const ordered = [];
+          for (const tool of next.tools) {
+            const entry = toolEntryOf(tool);
+            let node = entries.get(entry.id);
+            if (!node) {
+              node = renderEntry(entry, expanded => view.timeline.entryOpen.set(openKey(entry.id), expanded));
+              node.classList.add('ui2-runtime-tool');
+              node.dataset.anchorId = 'tool-' + block.id + ':' + entry.id;
+              entries.set(entry.id, node);
+              if (view.timeline.entryOpen.get(openKey(entry.id)) === true) setEntryExpanded(node, true);
+              addToGroup(group, node);
+            } else updateEntry(node, entry);
+            node.dataset.state = LEGACY_STATE[tool.state] || String(tool.state || 'unknown');
+            node.dataset.toolName = entry.name;
+            ordered.push(node);
+          }
+          orderConversationNodes(group._tlGroup.list, ordered);
+          if (view.timeline.groupOpen.has(openKey(next.id))) setGroupExpanded(group, view.timeline.groupOpen.get(openKey(next.id)));
           syncUsageMeta(wrapper, recovered ? null : next);
         },
       };
@@ -1303,6 +1326,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
   }
 
   function clearExecutionViews(timeline) {
+    timeline.flow?.restore();
+    timeline.flow = null;
     for (const execution of timeline.execution.values()) execution.release();
     timeline.execution.clear();
     timeline.executionSource = null;
@@ -1364,8 +1389,9 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
             || turn.items.some(item => item?.turnId !== turn.id || item.parentId !== turn.group.id
               || !Number.isSafeInteger(item.position?.sequence) || !Number.isSafeInteger(item.position?.part)))) continue;
       const nativeNames = owned.filter(block => block.kind === 'tools')
-        .flatMap(block => block.tools?.map(tool => tool.name) ?? []).sort();
-      const toolNames = turn.items.filter(item => item.callId).map(item => item.toolName).sort();
+        .flatMap(block => block.tools?.map(tool => tool.name) ?? []);
+      const toolNames = [...turn.items].sort((a, b) => a.position.sequence - b.position.sequence || a.position.part - b.position.part)
+        .filter(item => item.callId).map(item => item.toolName);
       if (nativeNames.length !== toolNames.length || nativeNames.some((name, index) => name !== toolNames[index])) continue;
       ids.add(turn.id);
       turn.blockIds.forEach(id => members.add(id));
@@ -1390,15 +1416,19 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       execution.outcome = renderTurnOutcome(deriveTurnOutcome({ tools, lastAssistant }));
       timeline.execution.set(key, execution);
     }
-    const progress = [], answer = [];
+    const progress = [], answer = [], workOrder = [];
+    const activities = [...turn.items].sort((a, b) => a.position.sequence - b.position.sequence || a.position.part - b.position.part);
+    let activityIndex = 0;
     let plan = null;
     for (const { block, info } of rows.slice(1)) {
       if (block.kind === 'plan') plan = info.node;
       else if (block.kind === 'assistant' && block.messageId === turn.finalResponseId) answer.push(info.node);
-      else if (block.kind !== 'tools') progress.push(info.node);
+      else if (block.kind === 'tools') {
+        for (const tool of block.tools) workOrder.push({ activityId: activities[activityIndex++]?.id });
+      } else { progress.push(info.node); workOrder.push({ node: info.node }); }
     }
     execution.update({ turn, group: turn.group, items: turn.items, input: rows[0].info.node,
-      plan, progress, answer, outcomes: execution.outcome ? [execution.outcome] : [] });
+      plan, progress, answer, workOrder, outcomes: execution.outcome ? [execution.outcome] : [] });
     return { key, node: execution.node };
   }
 
@@ -1495,7 +1525,13 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         } else timeline.provisionalUsage = null;
         usageInTimeline = usage.length > 0 || turn.usage.length > 0;
       }
-      execution.update({ turn, group, items, input: row.info.node, plan, progress, thinking, answer, outcomes, usage });
+      const positions = new Map(members.map((member, part) => [member.info.node,
+        { sequence: store.executionWitness(record, member.block).sequence, part }]));
+      const workOrder = [
+        ...progress.map(node => ({ node, ...positions.get(node) })),
+        ...items.map(item => ({ activityId: item.id, ...item.position })),
+      ].sort((a, b) => a.sequence - b.sequence || a.part - b.part);
+      execution.update({ turn, group, items, input: row.info.node, plan, progress, thinking, answer, outcomes, usage, workOrder });
       nodes.push(execution.node);
       used.add(turn.id);
     }
@@ -1574,6 +1610,15 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     };
     const rows = history && !recovered ? null : [];
     const wanted = new Set();
+    // Presentation may fold earlier text only when the next actual display
+    // boundary is a tool block. It does not invent a run/attempt association.
+    const workText = new Set();
+    let pendingText = [];
+    for (const block of blocks) {
+      if (block.kind === 'assistant' && block.state !== 'streaming' && !['error', 'interrupted'].includes(block.state)) pendingText.push(block.id);
+      else if (block.kind === 'tools') { pendingText.forEach(key => workText.add(key)); pendingText = []; }
+      else if (block.kind !== 'thinking') pendingText = [];
+    }
     for (const block of blocks) {
       if (!block || typeof block.id !== 'string') continue;
       let info = view.timeline.nodes.get(block.id);
@@ -1590,6 +1635,11 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         info.signature = '';
         view.timeline.nodes.set(block.id, info);
       }
+      info.node.dataset.blockId = block.id;
+      const work = block.kind === 'thinking' && !['streaming', 'error', 'interrupted'].includes(block.state)
+        || block.kind === 'assistant' && workText.has(block.id);
+      if (work) info.node.dataset.conversationWorkKind = block.kind;
+      else delete info.node.dataset.conversationWorkKind;
       const regenerateUserIndex = regenerateByBlock.get(block.id);
       const recoveredBlock = recovered?.members.has(block.id) === true;
       const signature = JSON.stringify(block) + (recoveredBlock ? '|recovered' : '')
@@ -1642,23 +1692,18 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     for (const key of view.timeline.thinkingOpen.keys()) if (key.startsWith(prefix) && !blockIds.has(key.slice(prefix.length))) view.timeline.thinkingOpen.delete(key);
     for (const key of view.timeline.groupOpen.keys()) if (key.startsWith(prefix) && !blockIds.has(key.slice(prefix.length))) view.timeline.groupOpen.delete(key);
     for (const key of view.timeline.entryOpen.keys()) if (key.startsWith(prefix) && !toolIds.has(key.slice(prefix.length))) view.timeline.entryOpen.delete(key);
+    for (const key of view.timeline.workOpen.keys()) if (key.startsWith(prefix) && !blockIds.has(key.slice(prefix.length))) view.timeline.workOpen.delete(key);
     const turnKeys = new Set(blocks.filter(block => block && block.kind === 'user').map(block => block.id));
     for (const key of view.timeline.settledTurns) if (!turnKeys.has(key)) view.timeline.settledTurns.delete(key);
     /* 顺序由数据决定；这里只是把 DOM 对齐到数据，不猜测事件先后。 */
     const { nodes, usageInTimeline } = rows
       ? composeExecutionRows(rows, view.timeline, record, recovered, history)
       : { nodes: [...wanted], usageInTimeline: false };
-    const topLevel = new Set(nodes);
-    let cursor = output.firstChild;
-    for (const node of nodes) {
-      if (node === cursor) cursor = cursor.nextSibling;
-      else output.insertBefore(node, cursor);
-    }
-    while (cursor) {
-      const next = cursor.nextSibling;
-      if (!topLevel.has(cursor)) cursor.remove();
-      cursor = next;
-    }
+    if (!view.timeline.flow) view.timeline.flow = createConversationFlow({ document, preferences: {
+      get: key => view.timeline.workOpen.get(prefix + key),
+      set: (key, value) => view.timeline.workOpen.set(prefix + key, value),
+    } });
+    view.timeline.flow.render(output, nodes);
     return usageInTimeline;
   }
 
@@ -1693,6 +1738,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       for (const execution of view.timeline.execution.values()) {
         if (execution.node.contains(row)) { execution.reveal(row); break; }
       }
+      view.timeline.flow?.reveal(row);
       scrollRowIntoView(output, row, 'center');
       view.locateNotice = '';
       state = 'found';
@@ -1718,6 +1764,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     // Capture intent before text/thinking/tool changes can increase scrollHeight.
     const wasNearBottom = !entered && !view.history && shouldFollow(output);
     const prevScrollHeight = output.scrollHeight || 0;
+    const reading = !entered && !wasNearBottom && output.clientHeight > 0
+      ? captureReadingPosition(output, output, { isPinned: false }) : null;
     root.hidden = !id;
     if (!id) return;
     title.textContent = r?.item?.title || r?.item?.sessionName || models?.get(id)?.sessionName || r?.item?.workspace?.branch || '并行会话';
@@ -1791,6 +1839,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
             const message = messages[i];
             const row = el('div', 'rtc-history-message');
             row.dataset.role = message.role;
+            row.setAttribute('aria-label', message.role === 'user' ? '你' : '助手');
             row.append(el('div', 'rtc-history-role', message.role === 'user' ? '我' : '助手'));
             if (message.messageId) row.dataset.historyMessageId = message.messageId;
             if (message.role === 'user') {
@@ -1935,9 +1984,10 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
      * jsdom 不派发 scroll 事件、也不做布局，靠事件判定的写法在测试里会假绿。
      */
     if (view.history) {
+      if (!entered && reading) restoreReadingPosition(output, output, reading);
       const position = view.historyPosition;
       if (entered && position?.history === view.history) {
-        output.scrollTop = position.top;
+        if (!restoreOutput(position.bookmark)) output.scrollTop = position.top;
         if (position.match) {
           output.dataset.historyMatch = position.match;
           output.dataset.historyMatchState = position.state;
@@ -1945,10 +1995,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       }
       updateHistoryLocate(view, active);
     } else if (entered) {
-      const top = scrollTops.get(id);
-      output.scrollTop = top === undefined ? output.scrollHeight : top;
+      const bookmark = scrollTops.get(id);
+      if (!restoreOutput(bookmark)) output.scrollTop = output.scrollHeight;
     } else if (wasNearBottom && (output.scrollHeight || 0) > prevScrollHeight) {
       output.scrollTop = output.scrollHeight;
+    } else if (reading && !view.history?.match) {
+      restoreReadingPosition(output, output, reading);
     }
     /* 回到底部按钮：滚的是 output 自己；运行态复用四点动画。切会话后
      * 可见性/位置都由当前会话的 scrollTop 重新算。 */

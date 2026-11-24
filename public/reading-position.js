@@ -14,13 +14,23 @@
 const MAX_BOOKMARKS = 100;
 const bookmarks = new Map();
 
+const ANCHORS = '[data-anchor-id], [data-block-id], [data-history-message-id]';
+const readingId = node => node.dataset.anchorId || node.dataset.blockId || node.dataset.historyMessageId || node.dataset.navId || node.id;
+
 function* readingAnchors(content) {
   for (const child of content?.children || []) {
-    if (child.hasAttribute('data-execution-turn')) {
-      yield* child.querySelectorAll('[data-anchor-id]');
-    } else {
-      yield child;
-    }
+    if (child.hasAttribute('data-execution-turn') || child.hasAttribute('data-conversation-work')) {
+      const descendants = [...child.querySelectorAll(ANCHORS)];
+      if (!descendants.some(node => !node.closest('[hidden]'))) yield child;
+      for (const node of descendants) {
+        // An open work log is a container, not the row being read. A closed
+        // log's stable header is a valid fallback when its native rows are hidden.
+        if (node.matches('.execution-activity-group, [data-conversation-work], .tl-group')
+            && node.querySelector('.execution-body:not([hidden]), .conversation-work-list:not([hidden]), .tl-list:not([hidden])')
+            && node.querySelector(ANCHORS)) continue;
+        yield node;
+      }
+    } else yield child;
   }
 }
 
@@ -81,7 +91,7 @@ export function captureReadingPosition(scroller, content, options = {}) {
       if (r.height === 0 && r.width === 0) continue;
 
       // 寻找底部处于视口顶部以下（即在视口内可见或跨越视口上边界）的第一个子元素
-      const id = child.dataset?.anchorId || child.dataset?.navId || child.id;
+      const id = readingId(child);
       if (id && r.bottom > scrollerRect.top + 2) {
         const layoutOffset = readingTop(child, r) - scrollerRect.top;
         if (layoutOffset + r.height <= 2) continue;
@@ -127,7 +137,7 @@ export function restoreReadingPosition(scroller, content, bookmark) {
   let anchor = null;
   if (bookmark.anchorId && content) {
     for (const child of readingAnchors(content)) {
-      if ((child.dataset.anchorId || child.dataset.navId || child.id) === bookmark.anchorId
+      if (readingId(child) === bookmark.anchorId
           && !child.closest('[hidden]')) {
         anchor = child;
         break;
