@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { isInside, normalizeForCompare, realPathOrNull, resolveProjectPath } from '../lib/safe-path.js';
+import { evaluateSystemOpen } from './open-policy.js';
 import { json, readBody } from './http-utils.js';
 
 export const FILE_LIMITS = Object.freeze({
@@ -47,19 +48,6 @@ const IMAGE_TYPES = Object.freeze({
   '.svg': 'image/svg+xml',
 });
 const FIND_SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', 'coverage', 'target', 'vendor', '.cache']);
-/* 通用预览入口永远不会执行文件；但“用系统默认程序打开”会。可执行脚本、
- * 快捷方式与安装包不通过这条通用入口直接启动。外部编辑器仍然可以打开它们
- * （编辑器只是读取字节），文件管理器定位与复制路径也不受影响。 */
-const DANGEROUS_OPEN_EXTENSIONS = new Set([
-  '.exe', '.com', '.bat', '.cmd', '.msi', '.msp', '.scr', '.pif', '.cpl', '.msc',
-  '.hta', '.hjs', '.jse', '.vbs', '.vbe', '.wsf', '.wsh', '.ps1', '.psm1', '.psd1',
-  '.reg', '.lnk', '.url', '.scf', '.jar', '.class', '.application', '.appref-ms',
-  /* 脚本源码本身不会“被预览执行”，但“用系统默认程序打开”可能落到 node/python/
-   * shell 的解释器关联上。通用打开入口不赌用户机器上的文件关联；源码仍可用
-   * 内置查看器或外部编辑器打开。 */
-  '.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.py', '.pyw',
-  '.sh', '.bash', '.zsh', '.fish', '.ksh', '.rb', '.pl', '.pm', '.php', '.lua',
-]);
 const FIND_CACHE_TTL_MS = 15_000;
 const FIND_CACHE_LIMIT = 200;
 
@@ -560,7 +548,9 @@ export function createFiles({
   }
 
   function openTargetError(res, code, extra = {}) {
-    if (code === 'unsafe_type') {
+    /* unsafe_type / unknown_type / executable_header:<label> 都是
+     * “系统默认程序可能执行它”的拒绝 —— 同一个 415，用户语义一致。 */
+    if (code === 'unsafe_type' || code === 'unknown_type' || (typeof code === 'string' && code.startsWith('executable_header'))) {
       return json(res, 415, { ok: false, code, error: '这个文件类型不会通过通用打开入口直接执行。', ...extra });
     }
     return guardError(res, code);
@@ -619,9 +609,9 @@ export function createFiles({
     }
     if (guarded.code) return openTargetError(res, guarded.code);
 
-    const ext = path.extname(guarded.abs).toLowerCase();
-    if (action === 'open' && DANGEROUS_OPEN_EXTENSIONS.has(ext)) {
-      return openTargetError(res, 'unsafe_type');
+    if (action === 'open') {
+      const verdict = evaluateSystemOpen(guarded.abs);
+      if (!verdict.ok) return openTargetError(res, verdict.reason || 'unsafe_type');
     }
     return json(res, 200, {
       ok: true,
@@ -631,6 +621,13 @@ export function createFiles({
         name: path.basename(guarded.abs),
         bytes: guarded.stat.size,
         fileId: guarded.fileId,
+        identity: {
+          dev: String(guarded.stat.dev),
+          ino: String(guarded.stat.ino),
+          size: guarded.stat.size,
+          mtimeMs: guarded.stat.mtimeMs,
+          ctimeMs: guarded.stat.ctimeMs,
+        },
       },
     });
   }
@@ -776,9 +773,11 @@ export function createFiles({
         scope,
       });
       const action = ['open', 'reveal', 'copy', 'editor'].includes(payload?.action) ? payload.action : 'open';
-      const ext = path.extname(state.real).toLowerCase();
-      if (action === 'open' && DANGEROUS_OPEN_EXTENSIONS.has(ext)) {
-        return json(res, 415, { ok: false, code: 'unsafe_type', error: '这个文件类型不会通过通用打开入口直接执行。' });
+      if (action === 'open') {
+        const verdict = evaluateSystemOpen(state.real);
+        if (!verdict.ok) {
+          return json(res, 415, { ok: false, code: verdict.reason || 'unsafe_type', error: '这个文件类型不会通过通用打开入口直接执行。' });
+        }
       }
       return json(res, 200, {
         ok: true,
@@ -789,6 +788,14 @@ export function createFiles({
           name: path.basename(state.real),
           bytes: state.stat.size,
           grantId: state.grant.id,
+          fileKey: state.targetKey,
+          identity: {
+            dev: String(state.stat.dev),
+            ino: String(state.stat.ino),
+            size: state.stat.size,
+            mtimeMs: state.stat.mtimeMs,
+            ctimeMs: state.stat.ctimeMs,
+          },
         },
       });
     } catch (error) {

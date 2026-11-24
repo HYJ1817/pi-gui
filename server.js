@@ -840,6 +840,11 @@ const externalGrants = desktopEnvironment
       env: process.env,
       /* Pi 的 agent 目录（auth.json 等）与应用数据目录不能作为工作区外文件授权。 */
       protectedRoots: [path.dirname(MODELS_JSON), DATA_DIR],
+      /* 授权目录被替换/授权对象消失时账本会自动逐出授权；与显式撤销一样，
+       * 要让渲染进程关掉对应的外部标签、清掉缓存 —— 用同一个事件通道。 */
+      onEvict: (grant) => {
+        try { sse.publish({ type: 'external_grants', detail: { revoked: grant.id } }); } catch { /* 推送只尽力而为 */ }
+      },
     })
   : null;
 const files = createFiles({

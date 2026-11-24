@@ -22,6 +22,17 @@ const MAX_PATH_CHARS = 1024;
 const CONTROL = /[\u0000-\u001f\u007f]/;
 const CONVERSATION_KEY = /^(?:conversation:[0-9a-f-]{36}|classic:.+)$/i;
 
+/* 目录对象身份（dev+ino+birthtimeMs）必须随持久化记录一起保存，否则
+ * 后端恢复时无法证明“还是同一个目录对象”，只能把整条授权丢弃。
+ * 旧版本写出的记录可能没有它：校验放行，由后端决定丢弃并触发重新授权，
+ * 这里不能为了兼容性擅自补造一个身份。 */
+function validDirIdentity(identity) {
+  return Boolean(identity) && typeof identity === 'object' && !Array.isArray(identity)
+    && typeof identity.dev === 'string' && identity.dev.length <= 64
+    && typeof identity.ino === 'string' && identity.ino.length <= 64
+    && Number.isFinite(identity.birthtimeMs) && identity.birthtimeMs >= 0;
+}
+
 function validGrant(grant) {
   return Boolean(grant) && typeof grant === 'object' && !Array.isArray(grant)
     && typeof grant.id === 'string' && /^[a-f0-9]{32}$/.test(grant.id)
@@ -31,7 +42,8 @@ function validGrant(grant) {
     && grant.kind === 'directory' && grant.scope === 'persistent'
     && typeof grant.target === 'string' && /^(?:[a-z]:[\\/]|\/)/i.test(grant.target)
     && grant.target.length <= MAX_PATH_CHARS && !CONTROL.test(grant.target)
-    && typeof grant.createdAt === 'string' && grant.createdAt.length <= 40;
+    && typeof grant.createdAt === 'string' && grant.createdAt.length <= 40
+    && (grant.dirIdentity === undefined || validDirIdentity(grant.dirIdentity));
 }
 
 function validGrantStore(value) {
@@ -49,6 +61,15 @@ function normalizedGrant(grant) {
     scope: 'persistent',
     target: grant.target,
     createdAt: grant.createdAt,
+    ...(validDirIdentity(grant.dirIdentity)
+      ? {
+        dirIdentity: {
+          dev: grant.dirIdentity.dev,
+          ino: grant.dirIdentity.ino,
+          birthtimeMs: grant.dirIdentity.birthtimeMs,
+        },
+      }
+      : {}),
   };
 }
 

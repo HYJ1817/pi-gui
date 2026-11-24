@@ -20,13 +20,9 @@ const EDITOR_IDS = Object.freeze(['system', 'vscode', 'cursor', 'windsurf', 'zed
 const EDITOR_SET = new Set(EDITOR_IDS);
 const DEFAULTS = Object.freeze({ editor: 'system', customPath: '' });
 const MAX_POSITION = 10_000_000;
-const DANGEROUS_OPEN_EXTENSIONS = new Set([
-  '.exe', '.com', '.bat', '.cmd', '.msi', '.msp', '.scr', '.pif', '.cpl', '.msc',
-  '.hta', '.hjs', '.jse', '.vbs', '.vbe', '.wsf', '.wsh', '.ps1', '.psm1', '.psd1',
-  '.reg', '.lnk', '.url', '.scf', '.jar', '.class', '.application', '.appref-ms',
-  '.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.py', '.pyw',
-  '.sh', '.bash', '.zsh', '.fish', '.ksh', '.rb', '.pl', '.pm', '.php', '.lua',
-]);
+/* “系统默认程序打开”可能执行文件：这里只做最小的额外兜底（真正的白名单
+ * 在后端 open-policy.js；主进程不根据扩展名单独再判，避免两边不一致）。
+ * 主进程只在启动前复核文件对象身份与授权状态。 */
 
 function validPreferences(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -464,20 +460,16 @@ async function installEditorSettings({
     const chosen = editors.find(editor => editor.id === preference.editor) || editors[0];
     const external = source.external === true;
 
-    // 系统默认程序：仍然要经后端授权（外部文件还要校验授权令牌）。
+    // 系统默认程序：仍然要经后端授权（外部文件还要校验授权令牌）+ 启动前复核。
     if (!chosen || chosen.id === 'system' || !chosen.available) {
-      const authorized = external
-        ? await authorizeExternal({ ...source, conversationId }, 'open')
-        : await authorizeInternal({ ...source, conversationId }, 'open');
-      if (!authorized?.ok || typeof authorized.file?.absolutePath !== 'string') {
-        return {
-          ok: false,
-          code: authorized?.code || 'unauthorized',
-          error: authorized?.error || '文件没有通过授权校验。',
-        };
-      }
-      const result = await openWithSystem(authorized.file.absolutePath);
-      return { ...result, fallback: chosen?.id !== 'system', editor: 'system' };
+      const result = await launchAuthorized(
+        { ...source, conversationId },
+        'open',
+        openWithSystem,
+      );
+      return result.ok === false
+        ? result
+        : { ...result, fallback: chosen?.id !== 'system', editor: 'system' };
     }
 
     const authorized = external
@@ -491,6 +483,10 @@ async function installEditorSettings({
       };
     }
     const abs = authorized.file.absolutePath;
+    const stillOk = await confirmStillAuthorized({ ...source, conversationId }, 'editor');
+    if (!stillOk.ok) return stillOk;
+    const target = recheckLaunchTarget(abs, authorized.file);
+    if (!target.ok) return target;
     if (chosen.id === 'custom') {
       const result = await spawnFile(chosen.path, [abs], env, platform);
       return result.ok ? { ...result, abs, used: 'custom', editor: 'custom' } : result;
@@ -505,6 +501,67 @@ async function installEditorSettings({
   });
 
   // 主进程自己的“用系统默认程序打开 / 文件管理器定位”也要先授权。
+  /* 后端授权与真正启动外部程序之间还有一道窗口：文件被替换、移动，或授权
+   * 在响应之后被撤销/目录被替换。主进程在 spawn/openPath 前做最终复核：
+   *   1. realpath 仍是后端认可的那个真实路径；
+   *   2. 仍是普通文件、不是符号链接；
+   *   3. dev/ino/size/mtime/ctime 与授权响应里的身份一致；
+   *   4. 后端 authState（workspace epoch / grant epoch）仍与响应一致 ——
+   *      对外部授权再问一次后端，发现授权已失效就拒绝。
+   * 不能凭主进程自己的 path 判断：必须重新读文件对象并与授权响应比对。 */
+  function recheckLaunchTarget(abs, authorized) {
+    const expected = authorized?.identity;
+    let stat;
+    try {
+      stat = fs.lstatSync(abs);
+    } catch {
+      return { ok: false, code: 'launch_target_changed', error: '文件在授权后已经变化。' };
+    }
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      return { ok: false, code: 'launch_target_changed', error: '文件在授权后已经变化。' };
+    }
+    if (expected && typeof expected === 'object') {
+      const same = String(stat.dev) === String(expected.dev)
+        && String(stat.ino) === String(expected.ino)
+        && stat.size === expected.size
+        && stat.mtimeMs === expected.mtimeMs
+        && stat.ctimeMs === expected.ctimeMs;
+      if (!same) {
+        return { ok: false, code: 'launch_target_changed', error: '文件在授权后已经被替换。' };
+      }
+    }
+    const real = (() => {
+      try { return fs.realpathSync.native(abs); } catch { return null; }
+    })();
+    const authorizedAbs = typeof authorized?.absolutePath === 'string' ? authorized.absolutePath : abs;
+    if (!real || real.toLowerCase() !== path.resolve(authorizedAbs).toLowerCase()) {
+      return { ok: false, code: 'launch_target_changed', error: '文件在授权后已经变化。' };
+    }
+    return { ok: true };
+  }
+
+  /* 外部授权可能在我们拿到响应之后被撤销或目录被替换；
+   * 启动前经后端再确认一次授权与文件状态，把窗口缩到最小。 */
+  async function confirmStillAuthorized(request, action) {
+    if (request.external !== true) return { ok: true };
+    const conversationId = typeof request.conversationId === 'string' && /^[\da-f-]{36}$/.test(request.conversationId)
+      ? request.conversationId
+      : null;
+    const confirmed = await postJson('/api/files/external/open-target', {
+      grant: request.grantId,
+      path: request.path,
+      action,
+    }, conversationId);
+    if (!confirmed?.ok || typeof confirmed.file?.absolutePath !== 'string') {
+      return {
+        ok: false,
+        code: confirmed?.code || 'grant_invalid',
+        error: confirmed?.error || '授权已经失效。',
+      };
+    }
+    return { ok: true };
+  }
+
   async function authorizeShellRequest(request, action) {
     if (!request || typeof request.path !== 'string' || !request.path.trim()) {
       return { ok: false, code: 'invalid_request', error: '缺少文件路径。' };
@@ -525,23 +582,32 @@ async function installEditorSettings({
     return { ok: true, abs: authorized.file.absolutePath, file: authorized.file };
   }
 
+  async function launchAuthorized(request, action, run) {
+    const authorized = await authorizeShellRequest(request, action);
+    if (!authorized.ok) return authorized;
+    const stillOk = await confirmStillAuthorized(request, action);
+    if (!stillOk.ok) return stillOk;
+    const target = recheckLaunchTarget(authorized.abs, authorized.file);
+    if (!target.ok) return target;
+    return run(authorized.abs);
+  }
+
   ipcMain.handle('pi-gui:open-workspace-file', async (event, request) => {
     if (!trusted(event)) return { ok: false, code: 'untrusted-sender' };
-    const authorized = await authorizeShellRequest(request, 'open');
-    if (!authorized.ok) return authorized;
-    return openWithSystem(authorized.abs);
+    return launchAuthorized(request, 'open', openWithSystem);
   });
 
   ipcMain.handle('pi-gui:reveal-workspace-file', async (event, request) => {
     if (!trusted(event)) return { ok: false, code: 'untrusted-sender' };
-    const authorized = await authorizeShellRequest(request, 'reveal');
-    if (!authorized.ok) return authorized;
-    shell.showItemInFolder(authorized.abs);
-    return { ok: true, abs: authorized.abs };
+    return launchAuthorized(request, 'reveal', async (abs) => {
+      shell.showItemInFolder(abs);
+      return { ok: true, abs };
+    });
   });
 
   ipcMain.handle('pi-gui:authorize-workspace-file', async (event, request) => {
     if (!trusted(event)) return { ok: false, code: 'untrusted-sender' };
+    /* 复制/定位不执行文件，不需要启动前复核；后端已经返回权威结果。 */
     return authorizeShellRequest(request, request?.action === 'copy' ? 'copy' : 'reveal');
   });
 
@@ -555,7 +621,6 @@ async function installEditorSettings({
 module.exports = {
   installEditorSettings,
   EDITOR_IDS,
-  DANGEROUS_OPEN_EXTENSIONS,
   editorArgs,
   detect,
   parseAppPaths,
