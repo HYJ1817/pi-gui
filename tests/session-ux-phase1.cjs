@@ -113,8 +113,9 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     T.onToolStart({ toolCallId: 'g1', toolName: 'read', args: { path: 'a.txt' } });
     T.onToolStart({ toolCallId: 'g2', toolName: 'read', args: { path: 'b.txt' } });
     const group = d.querySelector('#stream .tl-group');
-    const head = group.querySelector('.tl-group-head');
-    const list = group.querySelector('.tl-list');
+    const work = group.closest('[data-conversation-work]');
+    const head = work.querySelector('.conversation-work-head');
+    const list = work.querySelector('.conversation-work-list');
     equal(list.hidden, false, '运行中的多工具组默认展开');
     equal(head.getAttribute('aria-expanded'), 'true', '运行中展开的 aria 状态一致');
 
@@ -122,7 +123,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     equal(list.hidden, true, '用户显式折叠生效');
     T.onToolStart({ toolCallId: 'g3', toolName: 'read', args: { path: 'c.txt' } });
     equal(list.hidden, true, '新工具到达不覆盖用户显式折叠');
-    equal(head.textContent, '工具调用 · 3 次', '组头仍按真实次数更新');
+    ok('工作记录仍按真实次数更新', /工作记录.*3 次工具/.test(head.textContent));
 
     head.click();
     equal(list.hidden, false, '用户显式展开生效');
@@ -136,7 +137,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     T.onToolStart({ toolCallId: 'a2', toolName: 'read', args: {} });
     T.onToolEnd({ toolCallId: 'a1', isError: false, result: { content: [text('ok')] } });
     T.onToolEnd({ toolCallId: 'a2', isError: false, result: { content: [text('ok')] } });
-    equal(d.querySelector('#stream .tl-list').hidden, true, '未手动操作的多项组在结束后默认折叠');
+    equal(d.querySelector('#stream .conversation-work-list').hidden, true, '未手动操作且全部成功的工作记录在结束后默认折叠');
 
     M.clearThread();
     T.onToolStart({ toolCallId: 'w1', toolName: 'write', args: { path: 'x' } });

@@ -363,16 +363,17 @@ async function suite(send) {
   await evalJs(`fetch('/api/__conversation?what=tool-failed').then(r => r.ok)`);
   await sleep(240);
   await shot('c2-tool-group', '.tl-group');
-  await expect('C2 · 连续调用收进一个 hairline 卡片（8px 圆角）',
+  await expect('C2 · 原生工具批次不再叠加独立卡片边框与底色',
     `(() => { const g = document.querySelector('.tl-group'); const s = getComputedStyle(g);
-      return s.borderTopLeftRadius === '8px' && s.borderTopWidth === '1px'; })()`);
-  await expect('C2 · 行间用 1px 分隔线（替代左竖线列）',
+      return s.borderTopLeftRadius === '0px' && s.borderTopWidth === '0px' && s.backgroundColor === 'rgba(0, 0, 0, 0)'; })()`);
+  await expect('C2 · 连续工具保持独立行，不加重复分隔线',
     `(() => { const it = document.querySelectorAll('.tl-group .tl-list > .tl-item');
-      return it.length >= 2 && getComputedStyle(it[1]).borderTopWidth === '1px'; })()`);
-  await expect('C2 · 行最小高度保持 30px 紧凑体量',
+      return it.length >= 2 && getComputedStyle(it[1]).borderTopWidth === '0px'; })()`);
+  await expect('C2 · 行最小高度保持 24px 紧凑体量',
     `(() => { const it = document.querySelector('.tl-group .tl-item');
-      return getComputedStyle(it).minHeight === '30px'; })()`);
-  await evalJs(`document.querySelector('.tl-group .tl-group-head')?.click()`);
+      return getComputedStyle(it).minHeight === '24px'; })()`);
+  await evalJs(`(() => { const head = document.querySelector('.conversation-work-head') || document.querySelector('.tl-group .tl-group-head');
+    if (head?.getAttribute('aria-expanded') === 'false') head.click(); })()`);
   const expanded = await evalJs(`(() => { const h = document.querySelector('.tl-group .tl-item.has-more .tl-head');
     if (!h) return 'no-item'; h.click(); return 'ok'; })()`);
   if (expanded === 'ok') {
@@ -415,9 +416,11 @@ async function suite(send) {
   await evalJs(`document.querySelector('#u2c-probes .ui2-tool-summary').setAttribute('aria-expanded','true')`);
   await expect('预留 · .ui2-chev 展开态旋转（与 .think-head 同构）',
     `getComputedStyle(document.querySelector('#u2c-probes .ui2-chev')).transform !== 'none'`);
-  await expect('预留 · .ui2-msg-meta 11.5px 弱化条',
+  await expect('预留 · .ui2-msg-meta 11px、共享次级文字色',
     `(() => { const s = getComputedStyle(document.querySelector('#u2c-probes .ui2-msg-meta'));
-      return s.fontSize === '11.5px' && s.color === 'rgb(176, 176, 176)'; })()`);
+      const token = document.createElement('span'); token.style.color = 'var(--ds-text-secondary)'; document.body.append(token);
+      const expected = getComputedStyle(token).color; token.remove();
+      return s.fontSize === '11px' && s.color === expected; })()`);
   await expect('预留 · .ui2-runtime-status[data-state=running] = running 语义色',
     `(() => { return getComputedStyle(document.querySelector('#u2c-probes .ui2-runtime-status')).color === 'rgb(34, 211, 238)'; })()`);
   await expect('预留 · .ui2-runtime-meta 弱化小字',

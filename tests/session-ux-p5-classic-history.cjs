@@ -73,7 +73,11 @@ test('Classic mounts only owned history, keeps native tools, ordinals, answer an
   assert.equal(S.thread.querySelector('pre.tl-out'), null);
   assert.equal(scrollToUserTurn(2), true);
   assert.equal(turn.querySelector('[data-user-index="2"]').closest('[hidden]'), null);
-  turn.querySelector('.execution-activity-group > button').click();
+  const workControl = turn.querySelector('.execution-activity-group > button');
+  // Navigation already reveals this shared work list when its supplemental input
+  // is the target. Do not immediately close it as the former separate cards did.
+  if (workControl.getAttribute('aria-expanded') === 'false') workControl.click();
+  assert.equal(workControl.getAttribute('aria-expanded'), 'true');
   turn.querySelector('.execution-activity-item > button').click();
   assert.equal(turn.querySelector('pre.tl-out').textContent, 'Real native output fixture');
   const legacyNodes = classicNativeThreadChildren(S.thread);

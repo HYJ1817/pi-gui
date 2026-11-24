@@ -116,7 +116,8 @@ test('Runtime groups only its current owned live evidence and preserves the orig
   assert.match(turn.querySelector('[data-execution-part="plan"]').textContent, /审阅代码/);
   assert.match(turn.querySelector('[data-execution-part="progress"]').textContent, /运行期间追加的要求/);
   assert.equal(turn.querySelectorAll('.turn-outcome').length, 1);
-  turn.querySelector('.execution-activity-group button').click();
+  const workHead = turn.querySelector('.execution-activity-group button');
+  if (workHead.getAttribute('aria-expanded') === 'false') workHead.click();
   const activities = [...turn.querySelectorAll('.execution-activity-item')];
   assert.deepEqual(activities.map(row => row.dataset.status), ['completed', 'failed']);
   activities[0].querySelector('button').click();

@@ -63,7 +63,9 @@ test('preserves native section nodes and keeps streaming thinking outside a disc
   update({ turn, input, plan, progress: [progress], thinking: [thinking], answer: [answer],
     outcomes: [outcome], usage: [meta], items: [], group: null });
   assert.deepEqual([...node.querySelectorAll('article')], [input, progress, answer]);
-  assert.ok(progress.parentElement.hidden);
+  // 参考 T3：助手的过程文字是时间线的一行，不再被折进工作记录里。
+  // 流式 thinking 仍保持 native <details>，不被套进第二层 disclosure。
+  assert.ok(!progress.parentElement.hidden);
   assert.ok(!thinking.parentElement.closest('[hidden]'));
   assert.ok(!answer.parentElement.closest('[hidden]'));
   assert.equal(node.querySelectorAll('footer').length, 2);
@@ -83,9 +85,9 @@ test('orders by recorded start position and retains detail nodes as tool status 
   const rest = Array.from({ length: 3 }, (_, i) => activity('later-' + i, i + 3));
   update({ turn, group, items: [...rest, second, first], details, input });
   const showActivities = node.querySelector('.execution-activity-group > button');
-  assert.match(showActivities.textContent, /运行命令.*5 项.*3(.0)?s/);
-  assert.equal(showActivities.getAttribute('aria-expanded'), 'false');
-  showActivities.click();
+  assert.match(showActivities.textContent, /工作记录.*进行中.*5 项.*3(.0)?s/);
+  // 运行中的工作记录默认展开（T3 的活动组语义）；用户显式折叠后才保持折叠。
+  assert.equal(showActivities.getAttribute('aria-expanded'), 'true');
   const rows = node.querySelectorAll('.execution-activity-item');
   assert.equal(rows.length, 5);
   assert.match(rows[0].textContent, /state\.js.*1–8/);
@@ -100,7 +102,7 @@ test('orders by recorded start position and retains detail nodes as tool status 
   assert.equal(node.querySelector('.execution-activity-item'), rows[0]);
   assert.equal(showFirst.getAttribute('aria-expanded'), 'true');
   assert.ok(rows[0].contains(native));
-  assert.match(showActivities.textContent, /执行活动.*1 项失败/);
+  assert.match(showActivities.textContent, /工作记录.*1 项失败/);
   rows[1].querySelector('button').click();
   assert.match(rows[1].textContent, /失败.*详情暂不可用/);
 });
@@ -117,7 +119,8 @@ test('opens a stable 40-row window and releases native details when the window i
   update({ turn, group, items, input, details });
   const trigger = node.querySelector('.execution-activity-group > button');
   const rows = () => [...node.querySelectorAll('.execution-activity-item')];
-  trigger.click();
+  // 运行中的组默认已经展开；仅在折叠时补一次用户点击。
+  if (trigger.getAttribute('aria-expanded') === 'false') trigger.click();
   assert.equal(rows().length, 40);
   assert.match(rows()[0].textContent, /item-1961/);
   rows()[0].querySelector('button').click();
@@ -190,7 +193,8 @@ test('uses authorized file facts and preserves known zero token values', async t
   });
   const usage = [{ responseId: 'response', model: { id: 'model-A' }, recorded: { output: 0, totalTokens: 0 } }];
   update({ turn: { ...turn, usage }, group, items: [edit], input });
-  node.querySelector('.execution-activity-group > button').click();
+  const workHead = node.querySelector('.execution-activity-group > button');
+  if (workHead.getAttribute('aria-expanded') === 'false') workHead.click();
   const row = node.querySelector('.execution-activity-item button');
   assert.match(row.textContent, /contract\.js.*请求 10.*\+6 −3/);
   row.click();

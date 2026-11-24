@@ -84,12 +84,14 @@ async function main() {
     check('places the existing Plan between input and activity, using one card', () => {
       assert.strictEqual(live.querySelector('[data-execution-part="plan"] .plan-card'), originalPlan);
       assert.equal(live.querySelectorAll('.plan-card').length, 1);
-      assert.equal(live.querySelectorAll('.execution-activity-item').length, 0);
+      // 运行中的单条工具就是一行紧凑工作记录（T3 的 work-live 行）。
+      assert.equal(live.querySelectorAll('.execution-activity-item').length, 1);
       assert.equal(oldGroup.isConnected, false);
       assert.equal(tool.isConnected, false);
     });
     check('uses the original authorized Classic tool detail', () => {
-      live.querySelector('.execution-activity-group > .execution-head').click();
+      const groupHead = live.querySelector('.execution-activity-group > .execution-head');
+      if (groupHead.getAttribute('aria-expanded') === 'false') groupHead.click();
       live.querySelector('.execution-activity-item > .execution-head').click();
       assert.ok(live.contains(tool));
     });
@@ -149,11 +151,12 @@ async function main() {
     });
     send('message_start', { message: { role: 'user', content: [text('Additional steer')] } }, 2);
     await frame();
-    check('navigation reveals a supplemental input inside collapsed progress', () => {
+    check('supplemental input stays visible in progress and navigation still lands', () => {
       const inputs = S.thread.querySelectorAll('.msg.user');
       const steer = inputs[1];
       assert.ok(steer.closest('[data-execution-part="progress"]'));
-      assert.ok(steer.closest('[hidden]'));
+      // 用户补充输入不能被折进工作记录；T3 的时间线同样始终显示用户行。
+      assert.equal(steer.closest('[hidden]'), null);
       assert.equal(scrollToUserTurn(1), true);
       assert.equal(steer.closest('[hidden]'), null);
     });

@@ -58,6 +58,7 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
   global.fetch = w.fetch;
 
   const RP = await import(url('reading-position.js'));
+  const { nativeConversationChildren } = await import(url('conversation-work-log.js'));
   const M = await import(url('messages.js'));
   const T = await import(url('tools.js'));
   const V = await import(url('tool-view.js'));
@@ -181,9 +182,21 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
     const nativeRect = w.HTMLElement.prototype.getBoundingClientRect;
     let rowHeight = 100;
     w.HTMLElement.prototype.getBoundingClientRect = function() {
-      if (this.parentNode === S.thread && S.thread) {
-        const index = [...S.thread.children].indexOf(this);
-        return rect(index * rowHeight - stream.scrollTop, rowHeight);
+      if (S.thread?.contains(this)) {
+        // jsdom 不做布局。按真实原生行序列分配几何，并为工作记录内的
+        // 工具行保留独立位置；不能只给包装后的 thread 直接子节点赋值。
+        const rows = nativeConversationChildren(S.thread).filter(node => node.nodeType === 1);
+        const row = this.matches('[data-conversation-work]')
+          ? nativeConversationChildren(this.querySelector('.conversation-work-list'))[0]
+          : this.closest('.tl-group, .msg, .plan-card');
+        const index = rows.indexOf(row);
+        if (index >= 0) {
+          const tool = this.closest('.tl-item');
+          const tools = row.matches('.tl-group') ? [...row.querySelectorAll('.tl-list > .tl-item')] : [];
+          const toolIndex = tools.indexOf(tool);
+          const height = toolIndex >= 0 ? rowHeight / tools.length : rowHeight;
+          return rect(index * rowHeight + (toolIndex >= 0 ? toolIndex * height : 0) - stream.scrollTop, height);
+        }
       }
       return nativeRect.call(this);
     };
@@ -247,16 +260,19 @@ const deep = (a, b, label) => ok(label, () => assert.deepEqual(a, b));
       await deliverHistory(id, history(id), messagesFirst);
       ok(id + ' 渲染目标会话历史', S.thread.textContent.includes(id + ' question'));
     };
-    const groupOpen = () => S.thread.querySelector('.tl-group-head').getAttribute('aria-expanded');
+    const groupOpen = () => S.thread.querySelector('.conversation-work-head').getAttribute('aria-expanded');
     const detailOpen = () => S.thread.querySelector('.tl-toggle').getAttribute('aria-expanded');
     rpc.boot();
     await deliverHistory('A', history('A'), false);
     equal(S.thread.firstElementChild.dataset.anchorId, 'user-1', '历史锚点分配用户序号');
-    S.thread.querySelector('.tl-group-head').click();
+    S.thread.querySelector('.conversation-work-head').click();
     S.thread.querySelector('.tl-toggle').click();
     equal(groupOpen(), 'true', 'A 展开工具组');
     equal(detailOpen(), 'true', 'A 展开工具详情');
     stream.scrollTop = 215;
+    const reading = RP.captureReadingPosition(stream, S.thread);
+    equal(reading.anchorId, S.thread.querySelector('.tl-item').dataset.anchorId, '展开工作记录捕获实际嵌套工具行锚点');
+    equal(reading.offset, -15, '工具行保留相对视口偏移，不退回包装容器');
     await switchTo('B', true);
     equal(groupOpen(), 'false', 'B 的工具组不继承 A 的选择');
     equal(detailOpen(), 'false', '相同 toolCallId 的 B 详情不继承 A 的选择');
