@@ -83,6 +83,8 @@ const { PARTITION: BROWSER_PARTITION } = require('./browser-policy.cjs');
 const { createRuntimeBrowserHost } = require('./browser-runtime-host.cjs');
 const { createMainLogging, defaultMainLogDir } = require('./logging.cjs');
 const { installEnvironmentSetup } = require('./environment-setup.cjs');
+const { installExternalFiles } = require('./external-files.cjs');
+const { installEditorSettings } = require('./editor-settings.cjs');
 const { installAppUpdate } = require('./app-update-desktop.cjs');
 /* P2：供应商凭据受限输入窗（CredentialSheet）。协议必须在 app ready 前注册。 */
 const { createProviderCredentialDesktop, registerCredentialScheme, PARTITION: CREDENTIAL_SHEET_PARTITION } = require('./provider-credentials.cjs');
@@ -421,59 +423,9 @@ function installOpenPathHandler() {
   });
 }
 
-/** 消息内文件链接的“用系统默认程序打开 / 在文件管理器中显示”。
- *
- * 与 openPath 同一条原则：主进程不自己判断路径。这里问的是
- * /api/files/open-target —— 它按**消息所属会话的项目目录**解析相对路径，
- * 因此仓库在子目录、或并行会话各有 worktree 时不会落到别的同名文件上。
- * 页面仍然只提交相对路径和会话 id，拿不到 shell 能力。 */
-function installWorkspaceFileHandlers() {
-  const authorize = async (relPath, conversationId) => {
-    if (conversationId !== null && (typeof conversationId !== 'string' || !/^[\da-f-]{36}$/.test(conversationId))) {
-      return { ok: false, error: '会话身份不可用' };
-    }
-    if (typeof relPath !== 'string' || !relPath.trim()) return { ok: false, error: '缺少文件路径' };
-    let body = null;
-    let status = 0;
-    try {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 5000);
-      try {
-        const res = await fetch(`${ORIGIN}/api/files/open-target`, {
-          method: 'POST',
-          signal: ctl.signal,
-          headers: { 'Content-Type': 'application/json', [TOKEN_HEADER]: AUTH_TOKEN, ...(conversationId ? { 'X-Pi-Gui-Conversation': conversationId } : {}) },
-          body: JSON.stringify({ path: relPath }),
-        });
-        status = res.status;
-        body = await res.json().catch(() => null);
-      } finally {
-        clearTimeout(timer);
-      }
-    } catch (err) {
-      return { ok: false, error: '无法连接后端：' + err.message };
-    }
-    if (!body || body.ok !== true || typeof body.file?.absolutePath !== 'string') {
-      return { ok: false, error: (body && body.error) || `后端未认可这个路径（HTTP ${status}）` };
-    }
-    return { ok: true, abs: body.file.absolutePath };
-  };
-
-  ipcMain.handle('pi-gui:open-workspace-file', async (_e, relPath, conversationId = null) => {
-    const authorized = await authorize(relPath, conversationId);
-    if (!authorized.ok) return authorized;
-    const err = await shell.openPath(authorized.abs);
-    if (err) return { ok: false, error: err };
-    return { ok: true, abs: authorized.abs };
-  });
-
-  ipcMain.handle('pi-gui:reveal-workspace-file', async (_e, relPath, conversationId = null) => {
-    const authorized = await authorize(relPath, conversationId);
-    if (!authorized.ok) return authorized;
-    shell.showItemInFolder(authorized.abs);
-    return { ok: true, abs: authorized.abs };
-  });
-}
+/* 消息内文件链接的“用系统默认程序打开 / 在文件管理器中显示 / 外部编辑器”
+ * 由 editor-settings.cjs 统一注册：授权判定仍在后端 /api/files/open-target，
+ * 主进程只转发并执行。这样四个入口共享同一份工作区身份与文件身份校验。 */
 
 /** 处理渲染进程发来的「用系统浏览器打开这个链接」（版本检查的 Release / 下载）。
  *
@@ -1150,7 +1102,10 @@ if (!app.requestSingleInstanceLock()) {
     // 必须在 createWindow 之前注册，否则页面首帧就调用的话会拿到
     // "No handler registered"。
     installOpenPathHandler();
-    installWorkspaceFileHandlers();
+    const externalFiles = await installExternalFiles({
+      ipcMain, dialog, getWindow: () => win, getServer: () => server, origin: ORIGIN,
+      directory: app.getPath('userData'),
+    });
     installOpenExternalHandler();
     installEnvironmentSetup({ ipcMain, dialog, getWindow: () => win, getServer: () => server, origin: ORIGIN });
     const desktopResources = {};
@@ -1243,6 +1198,35 @@ if (!app.requestSingleInstanceLock()) {
       dialog.showErrorBox('Pi GUI 启动失败', String(err.message || err));
       app.exit(1);
       return;
+    }
+    try {
+      /* 长期目录授权保存在系统设置设施里；启动后先交给后端逐条重验，
+       * 再创建窗口。恢复失败只影响“上次记住的目录”，不阻断应用启动。 */
+      const restored = await externalFiles.restore();
+      if (restored?.storeError) {
+        mlog('electron', 'electron.external_grants_restore_warning', { code: restored.storeError });
+      }
+    } catch (error) {
+      mlog('electron', 'electron.external_grants_restore_failed', {
+        code: 'EXTERNAL_GRANTS_RESTORE_FAILED',
+        error: String(error?.message || error).slice(0, 200),
+      });
+    }
+    try {
+      // 设置文件在主进程里校验；打开动作仍要经后端授权。
+      await installEditorSettings({
+        ipcMain, dialog, shell,
+        getWindow: () => win,
+        origin: ORIGIN,
+        authToken: AUTH_TOKEN,
+        tokenHeader: TOKEN_HEADER,
+        directory: app.getPath('userData'),
+      });
+    } catch (error) {
+      mlog('electron', 'electron.editor_settings_unavailable', {
+        code: 'EDITOR_SETTINGS_UNAVAILABLE',
+        error: error?.message || String(error),
+      });
     }
     try {
       systemSettings = await createSystemSettings({ ipcMain, origin: ORIGIN, getWindow: () => win,

@@ -54,14 +54,18 @@ export async function downloadSessionHtml() {
 }
 
 /** GET 一个 JSON 接口。网络层失败返回 {ok:false, network:true}。 */
-export async function getJSON(url, headers) {
+export async function getJSON(url, headers, { signal } = {}) {
   try {
-    const r = await fetch(url, headers ? { headers } : undefined);
+    const init = {};
+    if (headers) init.headers = headers;
+    if (signal) init.signal = signal;
+    const r = await fetch(url, init);
     if (r.status >= 500) reportRequestFailure(url, r.status);
     return await r.json();
   } catch (err) {
-    reportRequestFailure(url, 0);
-    return { ok: false, error: err.message, network: true };
+    const aborted = err?.name === 'AbortError';
+    if (!aborted) reportRequestFailure(url, 0);
+    return { ok: false, error: err.message, network: true, ...(aborted ? { aborted: true } : {}) };
   }
 }
 
@@ -86,8 +90,9 @@ export async function sendJSON(url, { method = 'POST', body, contentType, header
     return await r.json();
   } catch (err) {
     // Intentional cancellation (pagehide, removal, switch) is not a network fault.
-    if (err?.name !== 'AbortError') reportRequestFailure(url, 0);
-    return { ok: false, error: err.message, network: true };
+    const aborted = err?.name === 'AbortError';
+    if (!aborted) reportRequestFailure(url, 0);
+    return { ok: false, error: err.message, network: true, ...(aborted ? { aborted: true } : {}) };
   }
 }
 
@@ -430,36 +435,63 @@ export const fetchFiles = (dir = '', { workspace, generation, hidden = false } =
   }),
   gitScopeHeaders()
 );
-export const fetchFileDocument = (filePath, workspace, generation) => getJSON(
+
+/* `workspace` 是文件树的不透明令牌；消息引用没有令牌，改用消息自己的
+ * 工作区根 + 后端签发的 fileId。两者后端都会复核，页面只能让它失败。 */
+export const fetchFileDocument = (
+  filePath,
+  workspace,
+  generation,
+  /* 不提供“当前焦点会话”的默认值：调用方必须显式给出这条文件所属的
+   * conversationId（经典会话传 null）。否则切到别的会话后，一个迟到的
+   * 文档请求会落到错误的工作区。 */
+  { root = '', fileId = '', conversationId = null, signal } = {},
+) => getJSON(
   '/api/files/document?' + new URLSearchParams({
     path: filePath,
     workspace: workspace?.id || '',
     generation: String(generation ?? ''),
+    ...(root ? { root } : {}),
+    ...(fileId ? { fileId } : {}),
   }),
-  gitScopeHeaders()
+  fileLinkHeaders(conversationId),
+  { signal },
 );
 
 /* 消息内文件引用使用**消息自己的会话身份**，而不是当前全局焦点。
- * 经典会话没有 id，此时不带请求头，由后端使用经典聊天的工作区。 */
+ * 经典会话没有 id，此时不带请求头，由后端使用经典聊天的工作区。
+ * 第二个参数必须由调用方显式给出（包括经典会话的 null），避免回落到焦点会话。 */
 const fileLinkHeaders = (conversationId) => (typeof conversationId === 'string' && conversationId
   ? { 'X-Pi-Gui-Conversation': conversationId }
   : undefined);
 
-export const fetchFileMetadata = (filePath, conversationId = gitConversationId) => getJSON(
-  '/api/files/metadata?' + new URLSearchParams({ path: filePath }),
-  fileLinkHeaders(conversationId)
+export const fetchFileMetadata = (
+  filePath,
+  conversationId,
+  { root = '', fileId = '', workspace, generation, signal } = {},
+) => getJSON(
+  '/api/files/metadata?' + new URLSearchParams({
+    path: filePath,
+    ...(root ? { root } : {}),
+    ...(fileId ? { fileId } : {}),
+    ...(workspace?.id ? { workspace: workspace.id } : {}),
+    ...(generation !== undefined && generation !== null ? { generation: String(generation) } : {}),
+  }),
+  fileLinkHeaders(conversationId),
+  { signal },
 );
 
-export const findWorkspaceFile = (name, conversationId = gitConversationId) => getJSON(
-  '/api/files/find?' + new URLSearchParams({ name }),
-  fileLinkHeaders(conversationId)
+export const findWorkspaceFile = (name, conversationId, { root = '', signal } = {}) => getJSON(
+  '/api/files/find?' + new URLSearchParams({ name, ...(root ? { root } : {}) }),
+  fileLinkHeaders(conversationId),
+  { signal },
 );
 
-/** 图片预览走 fetch 而不是 <img src>：会话身份必须随请求头发出去。 */
-export async function fetchFileAsset(filePath, conversationId = gitConversationId) {
+async function fetchAsset(pathname, conversationId, signal) {
   try {
-    const res = await fetch('/api/files/asset?' + new URLSearchParams({ path: filePath }), {
+    const res = await fetch(pathname, {
       headers: fileLinkHeaders(conversationId),
+      ...(signal ? { signal } : {}),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
@@ -469,16 +501,88 @@ export async function fetchFileAsset(filePath, conversationId = gitConversationI
     if (!type.startsWith('image/')) return { ok: false, code: 'unsupported_type', error: '这个格式不支持内联预览。' };
     return { ok: true, blob: await res.blob(), type };
   } catch (error) {
-    return { ok: false, code: 'network', error: error.message };
+    const aborted = error?.name === 'AbortError';
+    return { ok: false, code: aborted ? 'aborted' : 'network', error: error.message, ...(aborted ? { aborted: true } : {}) };
   }
 }
 
-/** 用系统默认程序打开 / 在文件管理器中显示前，先让后端认可这个相对路径。
- *  返回的绝对路径只用于 Electron 主进程与“复制完整路径”。 */
-export const authorizeFileOpen = (filePath, conversationId = gitConversationId) => sendJSON(
-  '/api/files/open-target',
-  { body: { path: filePath }, headers: fileLinkHeaders(conversationId) }
+/** 图片预览走 fetch 而不是 <img src>：会话身份必须随请求头发出去。 */
+export function fetchFileAsset(
+  filePath,
+  conversationId,
+  { root = '', fileId = '', workspace, generation, signal } = {},
+) {
+  const query = new URLSearchParams({
+    path: filePath,
+    ...(root ? { root } : {}),
+    ...(fileId ? { fileId } : {}),
+    ...(workspace?.id ? { workspace: workspace.id } : {}),
+    ...(generation !== undefined && generation !== null ? { generation: String(generation) } : {}),
+  });
+  return fetchAsset('/api/files/asset?' + query, conversationId, signal);
+}
+
+/* ---------- 工作区外文件（只能在已有授权下读取） ---------- */
+
+const externalHeaders = (conversationId) => fileLinkHeaders(conversationId);
+
+export const fetchExternalFileMetadata = (filePath, grantId, conversationId, { signal } = {}) => getJSON(
+  '/api/files/external/metadata?' + new URLSearchParams({ path: filePath, grant: grantId }),
+  externalHeaders(conversationId),
+  { signal },
 );
+
+export function fetchExternalFileDocument(filePath, grantId, conversationId, { signal } = {}) {
+  return getJSON(
+    '/api/files/external/document?' + new URLSearchParams({ path: filePath, grant: grantId }),
+    externalHeaders(conversationId),
+    { signal },
+  );
+}
+
+export function fetchExternalFileAsset(filePath, grantId, conversationId, { signal } = {}) {
+  return fetchAsset(
+    '/api/files/external/asset?' + new URLSearchParams({ path: filePath, grant: grantId }),
+    conversationId,
+    signal,
+  );
+}
+
+export const fetchExternalGrants = (conversationId) => getJSON(
+  '/api/files/grants',
+  externalHeaders(conversationId),
+);
+
+export const revokeExternalGrant = (grantId, conversationId) => sendJSON(
+  '/api/files/grants/revoke',
+  { body: { id: grantId }, headers: externalHeaders(conversationId) },
+);
+
+/** 用系统默认程序打开 / 在文件管理器中显示前，先让后端认可这个相对路径。
+ *  返回的绝对路径只用于 Electron 主进程与“复制完整路径”。
+ *  文件引用必须带 `root` + `fileId`；文件树用 `workspace` + `generation`。 */
+export function authorizeFileOpen(request, conversationId) {
+  const source = typeof request === 'string' ? { path: request } : (request || {});
+  const id = source.conversationId !== undefined ? source.conversationId : conversationId;
+  return sendJSON('/api/files/open-target', {
+    body: {
+      path: source.path,
+      root: source.root || source.cwd || '',
+      fileId: source.fileId || '',
+      workspace: source.workspace || null,
+      generation: source.generation,
+      action: source.action || 'open',
+    },
+    headers: fileLinkHeaders(id),
+  });
+}
+
+export function authorizeExternalFileOpen({ path, grantId, conversationId, action = 'open' } = {}) {
+  return sendJSON('/api/files/external/open-target', {
+    body: { path, grant: grantId, action },
+    headers: fileLinkHeaders(conversationId),
+  });
+}
 
 export const fetchTerminalStatus = () => getJSON('/api/terminal/status', gitScopeHeaders());
 

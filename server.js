@@ -50,6 +50,7 @@ import { samePath } from './lib/git-worktree.js';
 import { createProjectConfig } from './server/project-config.js';
 import { createSpecs } from './server/specs.js';
 import { createFiles } from './server/files.js';
+import { createExternalGrants } from './server/external-grants.js';
 import { createTerminal } from './server/terminal.js';
 import { createProviders } from './server/providers.js';
 import { createProviderManagement } from './server/provider-management.js';
@@ -814,6 +815,7 @@ const workspaceScopeForConversation = async (conversationId) => {
       root: runtime.getCurrentCwd(),
       scopeId: 'classic-chat',
       generation: String(runtime.getWorkspaceGeneration()),
+      conversationId: null,
       /* Classic chat has no durable conversation identity. Terminals bind to
        * the folder itself so switching projects away and back reconnects to
        * the same PTYs instead of killing them on every generation bump. */
@@ -828,11 +830,24 @@ const workspaceScopeForConversation = async (conversationId) => {
     root: workspace.cwd,
     scopeId: workspace.workspaceId,
     generation: workspace.workspaceEpoch,
+    conversationId,
   }));
 };
 const workspaceScopeForRequest = (req) => workspaceScopeForConversation(req.headers?.['x-pi-gui-conversation']);
 const specs = createSpecs({ scopeForRequest: workspaceScopeForRequest });
-const files = createFiles({ scopeForRequest: workspaceScopeForRequest });
+const externalGrants = desktopEnvironment
+  ? createExternalGrants({
+      env: process.env,
+      /* Pi 的 agent 目录（auth.json 等）与应用数据目录不能作为工作区外文件授权。 */
+      protectedRoots: [path.dirname(MODELS_JSON), DATA_DIR],
+    })
+  : null;
+const files = createFiles({
+  scopeForRequest: workspaceScopeForRequest,
+  grants: externalGrants,
+  mainOwnedPersistence: Boolean(desktopEnvironment),
+  publish: event => sse.publish(event),
+});
 /* The desktop build has a token (auth.isDevMode is false), so the terminal is
  * enabled there. A plain `npm start` browser session needs an explicit opt-in;
  * this keeps a new shell capability from appearing just because the dev page
@@ -1909,6 +1924,43 @@ if (process.send) process.on('message', async message => {
     }
   } catch {result={ok:false,code:'cleanup_pending'};}
   process.send?.({type:'app-update',id:message.id,...result});
+});
+
+// 工作区外文件的授权通道。和 environment-install 一样只属于直接拉起本后端的
+// Electron 父进程：HTTP 渲染进程没有 create/revoke-any 入口。主进程在原生
+// 对话框里取得用户确认后才发 `create`；路径的规范化与敏感目录判断仍在后端。
+if (desktopEnvironment && externalGrants && process.send) process.on('message', async message => {
+  if (message?.type !== 'files-grant' || !Number.isSafeInteger(message.id)) return;
+  let result = { ok: false, code: 'invalid_request' };
+  try {
+    if (message.action === 'restore') {
+      /* 长期授权的持久化属于 Electron 主进程的既有系统设置设施。后端重启后
+       * 只接收主进程保存的记录，并逐条重新校验；HTTP 侧没有这个入口。 */
+      result = externalGrants.restore(message.grants);
+    } else {
+      const conversationId = message.conversationId === null || message.conversationId === undefined
+        ? undefined
+        : (typeof message.conversationId === 'string' ? message.conversationId : undefined);
+      const scope = await workspaceScopeForConversation(conversationId);
+      if (message.action === 'inspect') {
+        result = externalGrants.inspect({ rawPath: message.path, scopeKind: message.scopeKind, scope });
+      } else if (message.action === 'create') {
+        result = externalGrants.create({
+          approval: message.approval,
+          scopeKind: message.scopeKind,
+          persistent: message.persistent === true,
+          scope,
+        });
+      } else if (message.action === 'list') {
+        result = externalGrants.list(scope);
+      } else if (message.action === 'revoke') {
+        result = externalGrants.revoke({ id: message.grantId, scope });
+      }
+    }
+  } catch (error) {
+    result = { ok: false, code: error?.code || 'external_grant_failed', error: error?.message || '外部文件授权失败。' };
+  }
+  if (process.connected) process.send({ type: 'files-grant-result', id: message.id, result }, () => {});
 });
 
 /* P2：供应商凭据私有通道。只有 Electron main（直属父进程）能走到这里；

@@ -9,6 +9,7 @@ import { themePreference, setThemePreference, onThemeChange } from './theme.js';
 import { createSettingsCard, createSettingsRow, createSegmentedControl, createSettingsToggle } from './ui/primitives.js';
 import { createThemePicker } from './ui/theme-picker.js';
 import { createFontPicker } from './ui/font-picker.js';
+import { createEditorAndAccessCard } from './editor-settings.js';
 import {
   loadSessionTitleSettings,
   onSessionTitleSettings,
@@ -43,6 +44,7 @@ export function openAppearance({
   let unsubscribeTitle = null;
   let themePicker = null;
   let fontPicker = null;
+  let editorAccess = null;
   let disposed = false;
   present((card, close) => {
     card.classList.add('appearance-card');
@@ -257,6 +259,11 @@ export function openAppearance({
       if (!disposed) syncTitleSettings(snapshot);
     });
 
+    // Editor + external access ---------------------------------------------
+    /* 编辑器检测与授权创建都在主进程；这里只放两行紧凑设置，不新开窗口、
+     * 不把授权列表做成独立页面。 */
+    editorAccess = createEditorAndAccessCard({ setStatus });
+
     // Page assembly ---------------------------------------------------------
     const cardBlock = createSettingsCard({
       title: '外观',
@@ -280,7 +287,7 @@ export function openAppearance({
     done.onclick = close;
     actions.append(done);
 
-    card.append(heading, cardBlock, titleCard, status, actions);
+    card.append(heading, cardBlock, titleCard, editorAccess.card, status, actions);
     themePicker.focus();
   }, () => {
     disposed = true;
@@ -288,6 +295,7 @@ export function openAppearance({
     unsubscribeTitle?.();
     themePicker?.destroy();
     fontPicker?.destroy();
+    editorAccess?.dispose();
   });
 }
 

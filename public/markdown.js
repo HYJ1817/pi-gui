@@ -25,7 +25,7 @@ import { iconMarkup } from './ui/icons.js';
 
 import { esc } from './util.js';
 import { parseVizData } from './viz-schema.js';
-import { fileLinkFromHref, fileLinkFromInlineCode, scanPlainTextPaths, positionLabel } from './file-link-model.js';
+import { fileLinkFromHref, fileLinkFromInlineCode, scanPlainTextPaths, fileLinkDisplayLabel, fileLinkAriaLabel } from './file-link-model.js';
 import { fileIconHtml } from './ui/file-icons.js';
 
 /* ---------- 链接安全 ---------- */
@@ -50,9 +50,7 @@ const CODE_SLOT = '\u0001';
 const HTML_SLOT = '\u0002';
 
 function fileSlots(ctx) {
-  return ctx?.fileLinks && typeof ctx.fileLinks.cwd === 'string' && ctx.fileLinks.cwd
-    ? ctx.fileLinks
-    : null;
+  return ctx?.fileLinks && typeof ctx.fileLinks === 'object' ? ctx.fileLinks : null;
 }
 
 function fileAttrs(meta, links) {
@@ -62,6 +60,10 @@ function fileAttrs(meta, links) {
     `data-file-cwd="${esc(meta.cwd)}"`,
     `data-file-conversation="${esc(links.conversationId || '')}"`,
   ];
+  if (meta.external) {
+    attrs.push(`data-file-external="1"`);
+    attrs.push(`data-file-display="${esc(meta.displayPath || meta.path)}"`);
+  }
   if (meta.line) attrs.push(`data-file-line="${meta.line}"`);
   if (meta.column) attrs.push(`data-file-column="${meta.column}"`);
   if (meta.endLine) attrs.push(`data-file-end-line="${meta.endLine}"`);
@@ -70,8 +72,8 @@ function fileAttrs(meta, links) {
 }
 
 function fileChip(meta, links) {
-  const label = meta.name + (meta.position || '');
-  return `<a href="#" class="md-file-link" ${fileAttrs(meta, links)} aria-label="${esc(meta.path + (meta.position || ''))}">` +
+  const label = fileLinkDisplayLabel(meta);
+  return `<a href="#" class="md-file-link${meta.external ? ' is-external' : ''}" ${fileAttrs(meta, links)} aria-label="${esc(fileLinkAriaLabel(meta))}">` +
     fileIconHtml(meta.path) +
     `<span class="md-file-name">${esc(label)}</span>` +
     `</a>`;
@@ -82,11 +84,30 @@ function fileChip(meta, links) {
 function fileCandidate(code, meta, links) {
   return `<code class="md-file-candidate" data-file-candidate="${esc(code)}"` +
     ` data-file-cwd="${esc(meta.cwd)}" data-file-conversation="${esc(links.conversationId || '')}"` +
+    ` data-file-verify="${esc(meta.verification || 'find')}"` +
     (meta.line ? ` data-file-line="${meta.line}"` : '') +
     (meta.column ? ` data-file-column="${meta.column}"` : '') +
     (meta.endLine ? ` data-file-end-line="${meta.endLine}"` : '') +
     (meta.endColumn ? ` data-file-end-column="${meta.endColumn}"` : '') +
     `>${esc(code)}</code>`;
+}
+
+/* 纯文本相对路径在验证前保持原来的文字外观：不加代码底色、不加图标。
+ * 后端确认存在后才由 file-links-ui 原地替换成 chip；不存在就什么都不做。 */
+function fileTextCandidate(raw, meta, links) {
+  const attrs = [
+    `class="md-file-plain-candidate"`,
+    `data-file-candidate="${esc(raw)}"`,
+    `data-file-cwd="${esc(meta.cwd)}"`,
+    `data-file-conversation="${esc(links.conversationId || '')}"`,
+    `data-file-verify="${esc(meta.verification || 'metadata')}"`,
+    `data-file-plain="1"`,
+  ];
+  if (meta.line) attrs.push(`data-file-line="${meta.line}"`);
+  if (meta.column) attrs.push(`data-file-column="${meta.column}"`);
+  if (meta.endLine) attrs.push(`data-file-end-line="${meta.endLine}"`);
+  if (meta.endColumn) attrs.push(`data-file-end-column="${meta.endColumn}"`);
+  return `<span ${attrs.join(' ')}>${esc(raw)}</span>`;
 }
 
 /* 链接文字已经能表示这个文件时，只显示 chip；否则保留作者写的文字，
@@ -109,7 +130,7 @@ function inline(text, ctx = {}) {
   const codeMetas = [];
   let s = String(text).replace(/`([^`\n]+)`/g, (_m, c) => {
     let html;
-    const meta = links ? fileLinkFromInlineCode(c, links.cwd) : null;
+    const meta = links ? fileLinkFromInlineCode(c, links.cwd, { allowExternal: true }) : null;
     if (!meta) html = `<code>${esc(c)}</code>`;
     else if (meta.candidate) html = fileCandidate(c, meta, links);
     else html = fileChip(meta, links);
@@ -125,7 +146,7 @@ function inline(text, ctx = {}) {
   };
 
   const link = (rawLabel, url, original) => {
-    const meta = links ? fileLinkFromHref(url, links.cwd) : null;
+    const meta = links ? fileLinkFromHref(url, links.cwd, { allowExternal: true }) : null;
     if (meta) {
       const chip = fileChip(meta, links);
       /* 标签本身是行内代码时，先摘出来的占位里可能已经渲染成同一个文件
@@ -160,15 +181,19 @@ function inline(text, ctx = {}) {
   });
   s = s.replace(/\[([^\]]*)\]\((?:<([^>\n]+)>|([^)\n]+))\)/g, (m, label, angled, plain) => slot(link(label, angled || plain, m)));
 
-  // 纯文本里只认绝对路径（或带行号的相对路径）；反引号/链接已经处理过。
+  // 纯文本：绝对路径直接识别；相对路径先作为“无样式候选”，由后端确认存在
+  // 后才升级。反引号/链接已经处理过，不会重复扫描。
   if (links) {
-    const found = scanPlainTextPaths(s, links.cwd);
+    const found = scanPlainTextPaths(s, links.cwd, { allowExternal: true, relative: true });
     if (found.length) {
       let out = '';
       let last = 0;
       for (const hit of found) {
         if (hit.text.includes(HTML_SLOT) || hit.text.includes(CODE_SLOT)) continue;
-        out += s.slice(last, hit.start) + slot(fileChip(hit.meta, links));
+        const html = hit.meta.candidate && hit.meta.verification === 'metadata'
+          ? fileTextCandidate(hit.text, hit.meta, links)
+          : fileChip(hit.meta, links);
+        out += s.slice(last, hit.start) + slot(html);
         last = hit.end;
       }
       out += s.slice(last);

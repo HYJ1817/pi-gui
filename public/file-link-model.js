@@ -10,8 +10,11 @@
  *   - 不把 HTTP(S)、mailto、npm 包名、模块标识符、版本号、提交哈希、
  *     省略号路径、主机名当成文件；
  *   - 相对路径按“这条消息所属会话的 cwd”解析，绝不使用全局当前项目；
- *   - 解析结果必须落在 cwd 内，`..` 越界直接拒绝；
- *   - 纯文件名（无分隔符）只作为候选，等后端确认唯一存在后才变成链接。
+ *   - 相对路径与裸文件名只先标记为候选，等后端确认存在（唯一）后才变成
+ *     可点击链接；
+ *   - 工作区绝对路径落在 cwd 内时仍按相对路径处理；落在 cwd 外则作为
+ *     “工作区外文件”返回，但**不做任何读取**，授权由用户点击后的原生
+ *     对话框完成（见 file-links-ui.js / electron/external-files.cjs）。
  *
  * 真正的权限判断仍在后端：这里只是“看起来可以”，不是授权。 */
 
@@ -19,6 +22,9 @@ const WINDOWS_DRIVE = /^[A-Za-z]:[\\/]/;
 const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 const CONTROL = /[\u0000-\u001f\u007f]/;
 const ELIDED = /(?:\.\.\.|…)/;
+const WINDOWS_BAD_CHARS = /[<>"|?*]/;
+const MAX_PATH_CHARS = 1024;
+const MAX_POSITION = 10_000_000;
 
 const KNOWN_EXTENSIONLESS = new Set([
   'makefile', 'dockerfile', 'readme', 'license', 'licence', 'changelog',
@@ -37,8 +43,6 @@ const HOST_LIKE_TLDS = new Set([
   'com', 'org', 'net', 'io', 'dev', 'ai', 'cn', 'app', 'so', 'gg', 'me',
   'co', 'edu', 'gov', 'xyz', 'tech', 'site', 'online', 'top', 'info',
 ]);
-
-const MAX_POSITION = 10_000_000;
 
 export function toSlashes(value) {
   return String(value ?? '').replace(/\\/g, '/');
@@ -61,7 +65,7 @@ export function baseName(value) {
 
 function extensionOf(name) {
   const bare = String(name ?? '');
-  if (!bare || bare.startsWith('.') && bare.indexOf('.', 1) < 0) return '';
+  if (!bare || (bare.startsWith('.') && bare.indexOf('.', 1) < 0)) return '';
   const i = bare.lastIndexOf('.');
   return i > 0 ? bare.slice(i).toLowerCase() : '';
 }
@@ -144,13 +148,13 @@ export function rangeLabel({ line, endLine } = {}) {
 
 function validFilePathShape(value, { allowBare = false } = {}) {
   const p = String(value ?? '');
-  if (!p || p.length > 1024) return false;
+  if (!p || p.length > MAX_PATH_CHARS) return false;
   if (CONTROL.test(p)) return false;
   if (ELIDED.test(p)) return false;
   if (/^[\\/]{2}/.test(p)) return false; // UNC / 协议相对地址
-  if (/[<>"|?*]/.test(p)) return false;
+  if (WINDOWS_BAD_CHARS.test(p)) return false;
   if (/\/\/+/.test(p.replace(WINDOWS_DRIVE, 'C:/'))) return false;
-  if (/[\\/]$/.test(p)) return false;
+  if (/[\\/]$/.test(p)) return false; // 目录
   if (!allowBare && !hasSeparator(p) && !isAbsolutePath(p)) return false;
 
   const name = baseName(p);
@@ -203,47 +207,80 @@ function samePathPrefix(cwd, abs, windows) {
   return { inside: true, rel: abs.slice(prefix.length) };
 }
 
-/**
- * 把引用路径解析到消息 cwd 下。
- * @returns {{ok:true, path:string, absolutePath:string, cwd:string, windows:boolean} |
- *           {ok:false, reason:string}}
- */
-export function resolveFilePath(rawPath, cwd) {
-  const root = normalizeCwd(cwd);
-  if (!root) return { ok: false, reason: 'no_workspace' };
-  const raw = String(rawPath ?? '').trim();
-  if (!raw) return { ok: false, reason: 'empty' };
-
-  const windows = isWindowsPath(root);
-  let abs;
-  if (isAbsolutePath(raw)) {
-    abs = normalizeSegmentsAbsolute(raw);
-  } else {
-    if (raw.startsWith('~')) return { ok: false, reason: 'home' };
-    if (!validFilePathShape(raw, { allowBare: true })) return { ok: false, reason: 'shape' };
-    abs = normalizeSegmentsAbsolute(root + '/' + raw);
-  }
-  if (!abs) return { ok: false, reason: 'escape' };
-
-  const inside = samePathPrefix(root, abs, windows);
-  if (!inside.inside) return { ok: false, reason: 'outside' };
-  if (!inside.rel) return { ok: false, reason: 'directory' };
-  if (!validFilePathShape(inside.rel, { allowBare: true })) return { ok: false, reason: 'shape' };
-
-  return { ok: true, path: inside.rel, absolutePath: abs, cwd: root, windows };
+function sameFlavor(a, b) {
+  return isWindowsPath(a) === isWindowsPath(b);
 }
 
-function makeMeta(raw, cwd, source, { candidate = false } = {}) {
+function internalResolution(root, abs, windows) {
+  const inside = samePathPrefix(root, abs, windows);
+  if (!inside.inside) return null;
+  if (!inside.rel) return { code: 'directory' };
+  if (!validFilePathShape(inside.rel, { allowBare: true })) return { code: 'shape' };
+  return { path: inside.rel, absolutePath: abs, cwd: root, windows, external: false };
+}
+
+/**
+ * 把引用路径解析到消息 cwd 下；默认只接受工作区内路径（既有调用与测试
+ * 的安全默认）。需要展示工作区外绝对路径时显式传 `allowExternal: true`。
+ *
+ * @returns {{ok:true, path:string, absolutePath:string, cwd:string,
+ *            windows:boolean, external:boolean} | {ok:false, reason:string}}
+ */
+export function resolveFileReference(rawPath, cwd, { allowExternal = false } = {}) {
+  const raw = String(rawPath ?? '').trim();
+  if (!raw) return { ok: false, reason: 'empty' };
+  const root = normalizeCwd(cwd);
+
+  if (isAbsolutePath(raw)) {
+    const abs = normalizeSegmentsAbsolute(raw);
+    if (!abs) return { ok: false, reason: 'escape' };
+    if (root && !sameFlavor(root, abs)) return { ok: false, reason: 'shape' };
+    if (root) {
+      const internal = internalResolution(root, abs, isWindowsPath(root));
+      if (internal?.code) return { ok: false, reason: internal.code };
+      if (internal) return { ok: true, ...internal };
+    }
+    if (!allowExternal) return { ok: false, reason: 'outside' };
+    if (!validFilePathShape(abs, { allowBare: true })) return { ok: false, reason: 'shape' };
+    return {
+      ok: true,
+      path: toSlashes(abs),
+      absolutePath: abs,
+      cwd: root || '',
+      windows: isWindowsPath(abs),
+      external: true,
+    };
+  }
+
+  if (!root) return { ok: false, reason: 'no_workspace' };
+  if (raw.startsWith('~')) return { ok: false, reason: 'home' };
+  if (!validFilePathShape(raw, { allowBare: true })) return { ok: false, reason: 'shape' };
+  const abs = normalizeSegmentsAbsolute(root + '/' + raw);
+  if (!abs) return { ok: false, reason: 'escape' };
+  const internal = internalResolution(root, abs, isWindowsPath(root));
+  if (internal?.code) return { ok: false, reason: internal.code };
+  if (!internal) return { ok: false, reason: 'outside' };
+  return { ok: true, ...internal };
+}
+
+/** 工作区内部的严格解析（既有 API，行为不变）。 */
+export function resolveFilePath(rawPath, cwd) {
+  return resolveFileReference(rawPath, cwd, { allowExternal: false });
+}
+
+function makeMeta(raw, cwd, source, { candidate = false, allowExternal = false, verification = '' } = {}) {
   const trimmed = String(raw ?? '').trim();
   if (!trimmed) return null;
   const { path: pathPart, line, column, endLine, endColumn } = splitPosition(trimmed);
-  const resolved = resolveFilePath(pathPart, cwd);
+  const resolved = resolveFileReference(pathPart, cwd, { allowExternal });
   if (!resolved.ok) return null;
   return {
     path: resolved.path,
     absolutePath: resolved.absolutePath,
     cwd: resolved.cwd,
     name: baseName(resolved.path),
+    displayPath: pathPart,
+    external: resolved.external === true,
     line,
     column,
     endLine,
@@ -251,6 +288,7 @@ function makeMeta(raw, cwd, source, { candidate = false } = {}) {
     position: positionLabel({ line, column, endLine, endColumn }),
     source,
     candidate: candidate === true,
+    verification,
   };
 }
 
@@ -263,8 +301,9 @@ function decodePercent(value) {
 }
 
 /* Markdown 链接地址。显式链接视为作者意图，单文件名也可以直接成为链接；
- * 但地址形状仍必须是文件，且最终必须落在工作区内。 */
-export function fileLinkFromHref(href, cwd) {
+ * 但地址形状仍必须是文件，且最终必须落在工作区内（或明确允许的工作区外
+ * 绝对路径，后者不做读取，等用户授权）。 */
+export function fileLinkFromHref(href, cwd, { allowExternal = false } = {}) {
   let raw = String(href ?? '').trim();
   if (!raw) return null;
   if (raw.startsWith('<') && raw.endsWith('>')) raw = raw.slice(1, -1).trim();
@@ -306,42 +345,67 @@ export function fileLinkFromHref(href, cwd) {
   if (!text) return null;
   const { path: pathPart } = splitPosition(text);
   if (!validFilePathShape(pathPart, { allowBare: true })) return null;
-  return makeMeta(text, cwd, 'markdown');
+  return makeMeta(text, cwd, 'markdown', { allowExternal });
 }
 
 /* 行内代码。要求“明确像文件路径”；单文件名只生成候选，等后端确认唯一。 */
-export function fileLinkFromInlineCode(code, cwd) {
-  let text = String(code ?? '').trim();
-  if (!text || text.length > 1024) return null;
+export function fileLinkFromInlineCode(code, cwd, { allowExternal = false } = {}) {
+  const text = String(code ?? '').trim();
+  if (!text || text.length > MAX_PATH_CHARS) return null;
   if (/[\n\r]/.test(text)) return null;
   if (text.startsWith('`') || text.endsWith('`')) return null;
   if (/^https?:/i.test(text) || /^(?:mailto|data|javascript|vbscript|blob|chrome|about):/i.test(text)) return null;
   if (text.includes(' ') && !isAbsolutePath(text) && !hasSeparator(text)) return null;
   if (isAbsolutePath(text) && /^\s|\s$/.test(text)) return null;
   if (text.startsWith('@')) return null;
-  const { path: pathPart } = splitPosition(text);
+  const { path: pathPart, line } = splitPosition(text);
   if (!validFilePathShape(pathPart, { allowBare: true })) return null;
   const separated = hasSeparator(pathPart) || isAbsolutePath(pathPart);
-  const positioned = splitPosition(text).line !== null;
+  const positioned = line !== null;
   const source = 'code';
   if (!separated && !positioned) {
     // 单个 `README.md`：可能是泛指的“README.md 这个文件”，必须查存在且唯一。
-    return makeMeta(text, cwd, source, { candidate: true });
+    return makeMeta(text, cwd, source, { candidate: true, allowExternal, verification: 'find' });
   }
-  // 有分隔符但仍可能不存在；候选标记保持 false，渲染成链接，点击后给出简洁错误。
-  return makeMeta(text, cwd, source);
+  if (!separated && positioned) {
+    // `main.ts:12` 有了明确位置，但仍是裸文件名，需要查同名文件。
+    return makeMeta(text, cwd, source, { candidate: true, allowExternal, verification: 'find' });
+  }
+  // 有分隔符但仍可能不存在；点击后由后端给出简洁错误。
+  return makeMeta(text, cwd, source, { allowExternal });
 }
 
-/* 纯文本里只认绝对路径（或带行号的相对路径）。没有反引号/链接语义时，
- * 普通相对路径与 npm 包名/模块标识符无法可靠区分，宁可不转。 */
-export function fileLinkFromPlainText(text, cwd) {
+/* 纯文本里的 `example.com/x.ts` 更像网址而不是仓库路径；只有首段确实
+ * 是带常见 TLD 的主机名形状时才排除，`src.v2/main.ts` 不受影响。 */
+function looksLikeBareUrlPath(value) {
+  const head = toSlashes(value).split('/')[0] || '';
+  if (!hasSeparator(value) || !/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(head)) return false;
+  const tld = head.slice(head.lastIndexOf('.') + 1).toLowerCase();
+  return HOST_LIKE_TLDS.has(tld);
+}
+
+/* 纯文本。没有反引号/链接语义时：
+ *   - 绝对路径可以直接识别；
+ *   - 相对路径必须含分隔符（或带明确行号），且只作为候选，等后端确认存在；
+ *   - 默认不扫描相对路径（调用方显式传 relative: true），避免纯函数被误用。 */
+export function fileLinkFromPlainText(text, cwd, { allowExternal = false, relative = false } = {}) {
   const raw = String(text ?? '').trim();
   if (!raw) return null;
-  const positioned = splitPosition(raw).line !== null;
-  if (!isAbsolutePath(raw) && !positioned) return null;
   if (/\s/.test(raw)) return null;
-  if (!validFilePathShape(raw.replace(/:(\d+)(?::\d+)?(?:-\d+(?::\d+)?)?$/, ''), { allowBare: false })) return null;
-  return makeMeta(raw, cwd, 'text');
+  if (raw.startsWith('@')) return null;
+  const { path: pathPart, line } = splitPosition(raw);
+  const positioned = line !== null;
+  const absolute = isAbsolutePath(pathPart);
+  if (!absolute && !relative && !positioned) return null;
+  if (!absolute && !hasSeparator(pathPart) && !positioned) return null;
+  if (!absolute && looksLikeBareUrlPath(pathPart)) return null;
+  if (!validFilePathShape(pathPart, { allowBare: positioned })) return null;
+  const candidate = !absolute;
+  return makeMeta(raw, cwd, 'text', {
+    candidate,
+    allowExternal,
+    verification: candidate ? 'metadata' : '',
+  });
 }
 
 function trimPlainPath(value) {
@@ -365,25 +429,60 @@ function trimPlainPath(value) {
   return text;
 }
 
+const PATH_STOP = '\\s<>"\'`|?*，。；：！？、（）【】「」『』';
+const ABSOLUTE_PATH_RE = new RegExp(
+  `(?:[A-Za-z]:[\\\\/]|/(?!/))[^${PATH_STOP}]+`,
+  'g',
+);
+const FILE_URI_RE = new RegExp(
+  `file:///[^${PATH_STOP}]+`,
+  'gi',
+);
+const RELATIVE_PATH_RE = new RegExp(
+  `(?:\\.{1,2}[\\\\/])?(?:[\\p{L}\\p{N}_.@-]+[\\\\/])+[\\p{L}\\p{N}_.@-]+` +
+  `(?::\\d+(?::\\d+)?(?:-\\d+(?::\\d+)?)?|#L\\d+(?:C\\d+)?(?:-L?\\d+(?:C\\d+)?)?)?`,
+  'gu',
+);
+const MAX_SCAN_MATCHES = 48;
+
 /** 扫描一段纯文本里的可识别文件引用，返回位置与元数据。
- *  调用方负责把匹配区间替换成自己的占位符；这里不改动原文。 */
-export function scanPlainTextPaths(text, cwd) {
+ *  调用方负责把匹配区间替换成自己的占位符；这里不改动原文。
+ *  相对路径默认不扫描；只有显式 `relative: true` 才产生候选。 */
+export function scanPlainTextPaths(text, cwd, { allowExternal = false, relative = false } = {}) {
   const src = String(text ?? '');
   if (!src || !normalizeCwd(cwd)) return [];
+  const found = [];
+  const seen = new Set();
+
+  const consider = (start, rawMatch) => {
+    if (found.length >= MAX_SCAN_MATCHES) return;
+    const prev = start > 0 ? src[start - 1] : '';
+    // URL、模块说明符和已有占位符内部的字符不参与。
+    if (prev && (/[\w@:/\\+\-.]/.test(prev) || prev === '&' || prev === '\u0001' || prev === '\u0002')) return;
+    const raw = trimPlainPath(rawMatch);
+    if (!raw || raw.length < 3) return;
+    const key = start + ':' + raw;
+    if (seen.has(key)) return;
+    const meta = /^file:/i.test(raw)
+      ? fileLinkFromHref(raw, cwd, { allowExternal })
+      : fileLinkFromPlainText(raw, cwd, { allowExternal, relative });
+    if (!meta) return;
+    seen.add(key);
+    found.push({ start, end: start + raw.length, text: raw, meta });
+  };
+
+  for (const match of src.matchAll(FILE_URI_RE)) consider(match.index, match[0]);
+  for (const match of src.matchAll(ABSOLUTE_PATH_RE)) consider(match.index, match[0]);
+  if (relative) for (const match of src.matchAll(RELATIVE_PATH_RE)) consider(match.index, match[0]);
+
+  // 绝对匹配可能覆盖相对匹配；保留起点更早、终点更远的那个。
+  found.sort((a, b) => a.start - b.start || b.end - a.end);
   const out = [];
-  const re = /(?:[A-Za-z]:[\\/]|\/(?!\/))[^\s<>"'`|?*，。；：！？、（）【】「」『』]+/g;
-  let match;
-  while ((match = re.exec(src))) {
-    const prev = match.index > 0 ? src[match.index - 1] : '';
-    if (prev && (/[\w@:/\\+\-.]/.test(prev) || prev === '&')) continue;
-    const raw = trimPlainPath(match[0]);
-    if (!raw || raw.length < 3) continue;
-    const meta = fileLinkFromPlainText(raw, cwd);
-    if (!meta) continue;
-    // 位置后缀可能被 trim 掉尾随标点，重新按最终文本定位。
-    const end = match.index + raw.length;
-    out.push({ start: match.index, end, text: raw, meta });
-    re.lastIndex = Math.max(re.lastIndex, end);
+  let lastEnd = -1;
+  for (const hit of found) {
+    if (hit.start < lastEnd) continue;
+    out.push(hit);
+    lastEnd = hit.end;
   }
   return out;
 }
@@ -394,18 +493,26 @@ export function isPathWithin(root, target) {
   const base = normalizeSegmentsAbsolute(String(root ?? ''));
   const abs = normalizeSegmentsAbsolute(String(target ?? ''));
   if (!base || !abs) return false;
+  if (!sameFlavor(base, abs)) return false;
   const windows = isWindowsPath(base);
   const rel = samePathPrefix(base, abs, windows);
   return rel.inside && Boolean(rel.rel);
 }
 
-/** 文件名候选（无分隔符）是否值得查后端：只用于行内代码。 */
+/** 文件名候选（无分隔符）是否值得查后端。 */
 export function uniqueNameCandidate(meta) {
   return Boolean(meta?.candidate && meta.name && !hasSeparator(meta.path));
 }
 
+/** 显示用标签：工作区内显示文件名 + 位置；工作区外显示模型给的原始路径。 */
+export function fileLinkDisplayLabel(meta) {
+  if (!meta) return '';
+  const base = meta.external ? (meta.displayPath || meta.path) : meta.name;
+  return base + (meta.position || '');
+}
+
 export function fileLinkAriaLabel(meta) {
-  const p = meta?.path || '';
+  const p = meta?.external ? (meta.displayPath || meta.path) : (meta?.path || '');
   const range = rangeLabel(meta);
   return range ? `${p}，${range}` : p;
 }

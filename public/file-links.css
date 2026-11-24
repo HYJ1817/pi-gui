@@ -80,6 +80,64 @@
 }
 .md-file-link.is-missing { color: var(--ds-text-muted); }
 .md-file-link.is-missing .md-file-name { text-decoration: underline dotted; text-underline-offset: 3px; }
+.md-file-link.is-ambiguous .md-file-name { text-decoration-style: dotted; }
+.md-file-link.is-external .file-kind-icon { color: var(--ds-text-secondary); }
+.md-file-plain-candidate { color: inherit; }
+
+/* ---------- 设置：编辑器与工作区外访问 ---------- */
+
+.editor-access-card .settings-row { align-items: center; }
+.editor-access-card .editor-settings-trigger {
+  max-inline-size: 15em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.external-grant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 6px;
+}
+.external-grant-list[hidden] { display: none; }
+.external-grant-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 2px 0 6px;
+}
+.external-grant-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  padding: 5px 4px;
+  border-top: 1px solid var(--ds-border-subtle);
+}
+.external-grant-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-inline-size: 0;
+  flex: 1 1 auto;
+}
+.external-grant-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ds-text-secondary);
+  font-family: var(--ui-font-mono);
+  font-size: 11px;
+}
+.external-grant-meta {
+  color: var(--ds-text-faint);
+  font-size: 10.5px;
+}
+.external-grant-empty {
+  margin: 2px 4px 6px;
+  color: var(--ds-text-faint);
+  font-size: 11.5px;
+}
+
 
 /* 悬停提示：路径可能很长，允许换行；任何主题都走同一组 token。 */
 .ui-tooltip.file-link-tip {

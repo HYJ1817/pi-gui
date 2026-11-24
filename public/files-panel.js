@@ -8,7 +8,16 @@ import { createIcon } from './ui/icons.js';
  * The viewer is still one surface, but it now owns tabs, tree selection and
  * line targeting so a file reference in a message can open the real file in
  * the workspace that message belongs to. */
-import { fetchFiles, fetchFileDocument, fetchFileMetadata, fetchFileAsset, gitConversationScope } from './api.js';
+import {
+  fetchExternalFileAsset,
+  fetchExternalFileDocument,
+  fetchExternalFileMetadata,
+  fetchFiles,
+  fetchFileDocument,
+  fetchFileMetadata,
+  fetchFileAsset,
+  gitConversationScope,
+} from './api.js';
 import { createPaneHeader } from './right-pane.js';
 import { openSecondarySurface } from './ui/secondary-surface.js';
 import { createFileIcon, fileKind } from './ui/file-icons.js';
@@ -39,6 +48,7 @@ const relEqual = (a, b) => {
   return looksWindows(S.cwd || '') ? a.toLowerCase() === b.toLowerCase() : false;
 };
 const tabKeyOf = (filePath) => (looksWindows(S.cwd || '') ? String(filePath).toLowerCase() : String(filePath));
+const tabKeyFor = (request) => `${request.external ? 'external:' : ''}${tabKeyOf(request.path)}`;
 
 /* 文件链接点开时，当前挂着的 Files 面板会在下一次点击中复用；
  * 没有面板则由这里新开一个。注册表只保存“当前还活着”的实例。 */
@@ -72,6 +82,9 @@ export function mountFilesPanel(host, view, options = {}) {
     document: fetchFileDocument,
     metadata: fetchFileMetadata,
     asset: fetchFileAsset,
+    externalDocument: fetchExternalFileDocument,
+    externalMetadata: fetchExternalFileMetadata,
+    externalAsset: fetchExternalFileAsset,
   };
   let alive = true;
   let workspace = null;
@@ -482,12 +495,27 @@ export function mountFilesPanel(host, view, options = {}) {
     return head;
   }
 
+  function fileActionRequest(tab) {
+    return {
+      path: tab.path,
+      cwd: tab.cwd || '',
+      conversationId: tab.conversationId || null,
+      fileId: tab.fileId || '',
+      workspace: tab.external ? null : workspace,
+      generation: tab.external ? undefined : workspace?.generation,
+      line: tab.line,
+      column: tab.column,
+      external: tab.external === true,
+      grantId: tab.grantId || '',
+    };
+  }
+
   function unsupportedNote(text, tab) {
     const note = node('p', 'files-preview-note', text);
     const actions = node('div', 'files-preview-actions');
     const open = node('button', 'btn tiny', '用系统默认程序打开');
     open.type = 'button';
-    open.onclick = () => void openInSystemProgram({ path: tab.path, conversationId: tab.conversationId });
+    open.onclick = () => void openInSystemProgram(fileActionRequest(tab));
     actions.append(open);
     return [note, actions];
   }
@@ -566,7 +594,7 @@ export function mountFilesPanel(host, view, options = {}) {
   }
 
   async function loadDocument(tab, { force = false } = {}) {
-    if (!workspace) return;
+    if (!workspace && !tab.external) return;
     if (tab.doc && !force) return;
     const request = ++tab.request;
     const scopeEpoch = epoch;
@@ -574,7 +602,13 @@ export function mountFilesPanel(host, view, options = {}) {
       tab.state = 'loading';
       if (activeKey === tab.key) renderTabContent(tab);
     }
-    const result = await transport.document(tab.path, workspace, workspace.generation);
+    const result = tab.external
+      ? await transport.externalDocument(tab.path, tab.grantId, tab.conversationId)
+      : await transport.document(tab.path, workspace, workspace.generation, {
+        conversationId: tab.conversationId || gitConversationScope() || null,
+        root: tab.cwd || '',
+        fileId: tab.fileId || '',
+      });
     if (!alive || scopeEpoch !== epoch || request !== tab.request || tabs.get(tab.key) !== tab) return;
     if (!result?.ok) {
       tab.state = 'error';
@@ -582,12 +616,14 @@ export function mountFilesPanel(host, view, options = {}) {
         ? '文件超过预览大小上限。'
         : result?.code === 'file_missing'
           ? '文件不存在或已被移动。'
-          : result?.error || '读取文件失败。';
+          : result?.code === 'grant_invalid' || result?.code === 'grant_changed' || result?.code === 'grant_scope'
+            ? '访问授权已经失效，请重新打开文件并授权。'
+            : result?.error || '读取文件失败。';
       tab.doc = null;
       if (activeKey === tab.key) renderTabContent(tab);
       return;
     }
-    if (workspace && result.workspace?.id !== workspace.id) {
+    if (!tab.external && workspace && result.workspace?.id !== workspace.id) {
       tab.state = 'error';
       tab.error = '工作区已经切换，请重新打开文件。';
       tab.doc = null;
@@ -601,7 +637,8 @@ export function mountFilesPanel(host, view, options = {}) {
   }
 
   async function loadImage(tab) {
-    if (!transport.asset) {
+    const asset = tab.external ? transport.externalAsset : transport.asset;
+    if (!asset) {
       tab.state = 'unsupported';
       tab.error = '暂不支持内联预览。';
       if (activeKey === tab.key) renderTabContent(tab);
@@ -613,11 +650,22 @@ export function mountFilesPanel(host, view, options = {}) {
       tab.state = 'loading';
       if (activeKey === tab.key) renderTabContent(tab);
     }
-    const result = await transport.asset(tab.path, tab.conversationId);
+    const result = tab.external
+      ? await transport.externalAsset(tab.path, tab.grantId, tab.conversationId)
+      : await transport.asset(tab.path, tab.conversationId, {
+        workspace,
+        generation: workspace?.generation,
+        root: tab.cwd || '',
+        fileId: tab.fileId || '',
+      });
     if (!alive || scopeEpoch !== epoch || request !== tab.request || tabs.get(tab.key) !== tab) return;
     if (!result?.ok) {
       tab.state = 'unsupported';
-      tab.error = result?.code === 'oversized' ? '图片超过预览大小上限。' : '无法内联预览这个文件。';
+      tab.error = result?.code === 'oversized'
+        ? '图片超过预览大小上限。'
+        : result?.code === 'grant_invalid' || result?.code === 'grant_changed' || result?.code === 'grant_scope'
+          ? '访问授权已经失效，请重新打开文件并授权。'
+          : '无法内联预览这个文件。';
       if (activeKey === tab.key) renderTabContent(tab);
       return;
     }
@@ -641,11 +689,15 @@ export function mountFilesPanel(host, view, options = {}) {
   }
 
   function openTab(request) {
-    if (!workspace) {
+    if (!workspace && !request.external) {
       toast('当前项目不可用，无法打开文件。', 'warn');
       return;
     }
-    const key = tabKeyOf(request.path);
+    if (request.external && (!request.grantId || !request.path)) {
+      toast('缺少外部文件授权，请重新打开。', 'warn');
+      return;
+    }
+    const key = tabKeyFor(request);
     let tab = tabs.get(key);
     if (!tab) {
       tabSeq++;
@@ -653,7 +705,7 @@ export function mountFilesPanel(host, view, options = {}) {
         key,
         id: `filesTab-${tabSeq}`,
         path: request.path,
-        name: request.name || request.path.split('/').pop(),
+        name: request.name || request.path.split(/[\\/]/).pop(),
         kind: fileKind(request.path),
         doc: null,
         state: 'loading',
@@ -665,6 +717,10 @@ export function mountFilesPanel(host, view, options = {}) {
         endColumn: null,
         bytes: Number.isFinite(request.bytes) ? request.bytes : null,
         conversationId: request.conversationId || null,
+        cwd: request.cwd || '',
+        fileId: request.fileId || '',
+        external: request.external === true,
+        grantId: request.grantId || '',
         imageUrl: null,
         scroll: { top: 0, left: 0 },
       };
@@ -679,6 +735,10 @@ export function mountFilesPanel(host, view, options = {}) {
     tab.endLine = request.endLine || null;
     tab.endColumn = request.endColumn || null;
     tab.conversationId = request.conversationId || tab.conversationId || null;
+    tab.cwd = request.cwd || tab.cwd || '';
+    tab.fileId = request.fileId || tab.fileId || '';
+    tab.external = request.external === true || tab.external;
+    tab.grantId = request.grantId || tab.grantId || '';
     if (Number.isFinite(request.bytes)) tab.bytes = request.bytes;
 
     saveScroll();
@@ -697,11 +757,11 @@ export function mountFilesPanel(host, view, options = {}) {
       : BINARY_KINDS.has(tab.kind)
         ? Promise.resolve(showUnsupported(tab, '这个格式暂不内联预览。'))
         : loadDocument(tab, { force: true });
-    void ensurePathVisible(tab.path);
+    if (!tab.external) void ensurePathVisible(tab.path);
     void load.then(() => {
       if (!isCurrent() || activeKey !== key) return;
       renderTree();
-      scrollTreeTo(tab.path);
+      if (!tab.external) scrollTreeTo(tab.path);
     });
   }
 
@@ -716,7 +776,8 @@ export function mountFilesPanel(host, view, options = {}) {
   }
 
   /* 会话内链接 → Files 面板。这里再做一次身份校验：即使 DOM 里有旧链接，
-   * 也不能用当前焦点的工作区去解析它。 */
+   * 也不能用当前焦点的工作区去解析它。外部文件走独立的授权令牌与后端
+   * /api/files/external/*，不会伪造一个工作区相对路径混进文件树通道。 */
   async function openFromReference(request) {
     if (!request?.path) return;
     const scopeEpoch = epoch;
@@ -726,6 +787,35 @@ export function mountFilesPanel(host, view, options = {}) {
       toast('这个文件引用属于其它会话，请先切换到那个会话。', 'warn');
       return;
     }
+
+    if (request.external) {
+      if (!request.grantId) {
+        toast('缺少访问授权，请重新点击文件引用。', 'warn');
+        return;
+      }
+      let next = { ...request, external: true, cwd: '', conversationId: wanted };
+      if (typeof transport.externalMetadata === 'function') {
+        const meta = await transport.externalMetadata(next.path, next.grantId, wanted);
+        if (!alive || scopeEpoch !== epoch) return;
+        if (wanted !== (gitConversationScope() || null)) {
+          toast('这个文件引用属于其它会话，请先切换到那个会话。', 'warn');
+          return;
+        }
+        if (!meta?.ok) {
+          toast(meta?.error || '无法读取这个文件的信息。', 'warn');
+          return;
+        }
+        next = {
+          ...next,
+          path: meta.file?.absolutePath || next.path,
+          name: meta.file?.name || next.name,
+          bytes: meta.file?.bytes,
+        };
+      }
+      openTab(next);
+      return;
+    }
+
     if (rootPromise) await rootPromise;
     if (!alive || scopeEpoch !== epoch) return;
     if (!workspace) {
@@ -733,7 +823,7 @@ export function mountFilesPanel(host, view, options = {}) {
       return;
     }
     if (typeof transport.metadata === 'function' && request.cwd) {
-      const meta = await transport.metadata(request.path, wanted);
+      const meta = await transport.metadata(request.path, wanted, { root: request.cwd });
       // 读取期间可能又换了工作区/会话；旧请求不能落在新面板上。
       if (!alive || scopeEpoch !== epoch) return;
       if (wanted !== (gitConversationScope() || null)) {
@@ -748,10 +838,27 @@ export function mountFilesPanel(host, view, options = {}) {
         toast('这个文件所在的工作区已经变化，请重新打开会话。', 'warn');
         return;
       }
-      request.bytes = meta.file?.bytes;
-      request.name = meta.file?.name || request.name;
+      request = {
+        ...request,
+        bytes: meta.file?.bytes,
+        name: meta.file?.name || request.name,
+        fileId: meta.file?.fileId || '',
+      };
     }
     openTab({ ...request, conversationId: wanted });
+  }
+
+  function closeRevokedExternalTabs(event) {
+    const revoked = event?.detail?.revoked;
+    if (typeof revoked !== 'string' || !revoked) return;
+    let closed = false;
+    for (const tab of [...tabs.values()]) {
+      if (tab.external && tab.grantId === revoked) {
+        closeTab(tab.key);
+        closed = true;
+      }
+    }
+    if (closed) toast('访问授权已撤销，文件已关闭。', 'warn');
   }
 
   function resetForWorkspace() {
@@ -767,11 +874,15 @@ export function mountFilesPanel(host, view, options = {}) {
 
   document.addEventListener('pi-gui:workspace-generation', resetForWorkspace);
   document.addEventListener('pi-gui:git-scope', resetForWorkspace);
+  document.addEventListener('pi-gui:external-grants', closeRevokedExternalTabs);
 
   refresh = node('button', 'btn tiny ghost rp-btn', '刷新');
   refresh.type = 'button';
   refresh.title = '重新读取项目文件';
   refresh.onclick = () => {
+    // 文件可能已经被会话或外部程序增删改名；消息里的元数据/唯一性结论
+    // 也必须跟着失效，否则长会话会一直拿着旧结果。
+    document.dispatchEvent(new window.CustomEvent('pi-gui:files-refresh'));
     dirs = new Map();
     selectedPath = null;
     closeAllTabs();
@@ -834,6 +945,7 @@ export function mountFilesPanel(host, view, options = {}) {
     alive = false;
     document.removeEventListener('pi-gui:workspace-generation', resetForWorkspace);
     document.removeEventListener('pi-gui:git-scope', resetForWorkspace);
+    document.removeEventListener('pi-gui:external-grants', closeRevokedExternalTabs);
     closeAllTabs();
     if (activePanel?.isCurrent === isCurrent) activePanel = null;
   });
