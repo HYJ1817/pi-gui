@@ -1,10 +1,11 @@
 'use strict';
 module.exports = async function (t, group) {
   const { check, read, sleep, until, shot, click, key, type, value, open, clipboard, win, notes } = t;
+  const option = label => require('./file-preview-desktop-actions.cjs')(t, label);
   await group('tree-text-reference', async () => {
     await read("import('/files-panel.js').then(m=>{m.openFilesPanel();return true})");
-    await until(() => read("!!document.querySelector('.files-maximize')"), 'files-panel');
-    await click('.files-maximize');
+    await until(() => read("!!document.querySelector('#workPanelMaximize')"), 'files-panel');
+    await click('#workPanelMaximize');
     await until(() => read("document.querySelectorAll('.files-entry').length>10"), 'real-tree');
     check('production tree contains real backend files', await read("!!document.querySelector('.files-entry[data-file-path=\"long-lines.js\"]')"));
     if (await read("document.querySelector('.files-sidebar').hidden")) await click('.files-tree-toggle');
@@ -21,14 +22,14 @@ module.exports = async function (t, group) {
     // for this request's inclusive range, not the previous search-hit DOM.
     await until(() => read("document.querySelector('.files-tab-position')?.textContent.includes('3000')&&!!document.querySelector('.files-line-highlight[data-line-from=\"3000\"]')&&!document.querySelector('.fp-loading')"), 'range-reference');
     check('same workspace path reuses existing tab and adds range', await read("document.querySelectorAll('.files-tab').length===1&&!!document.querySelector('.files-line-highlight[data-line-from=\"3000\"]')"));
-    await click('[aria-label="复制引用区间"]');
+    await option('复制引用区间');
     await sleep(200);
     const copied = await clipboard.readText();
     check('real clipboard copies exact inclusive line-column reference', copied === 'rangeMarker', { length: copied.length, sha256: require('node:crypto').createHash('sha256').update(copied).digest('hex'), expectedLength: 11 });
     await value('.fp-line-input', '5000');
     await until(() => read("!!document.querySelector('.fp-text-line[data-line=\"5000\"]')"), 'long-line');
     check('long unwrapped line stays in local horizontal scroller', await read("document.querySelector('.fp-text-scroll').scrollWidth>document.querySelector('.fp-text-scroll').clientWidth&&document.querySelectorAll('.fp-text-line').length<=180"));
-    await click('[aria-label="自动换行"]');
+    await option('自动换行');
     check('wrap on long lines preserves bounded DOM', await read("document.querySelector('.fp-text').classList.contains('is-wrapped')&&document.querySelectorAll('.fp-text-line').length<=180"));
     await shot('text-long-line-wrapped');
     await open('utf16.txt', '.fp-text-source');
@@ -37,8 +38,10 @@ module.exports = async function (t, group) {
     await open('gb18030.txt', '.fp-text-source');
     await until(() => read("document.querySelector('.fp-text-rows')?.textContent.includes('中文 GB18030')"), 'gb18030');
     check('GB18030 fallback decodes Chinese', true);
-    await value('.fp-encoding', 'gb18030');
-    check('explicit encoding selector remains usable', await read("document.querySelector('.fp-encoding').value==='gb18030'&&document.querySelector('.fp-text-rows').textContent.includes('中文')"));
+    await option('GB18030');
+    await click('.fp-reading-menu');
+    check('explicit encoding option remains usable and reports selection', await read("document.querySelector('.fp-text-rows').textContent.includes('中文')&&[...document.querySelectorAll('#actionMenu [role=menuitem]')].some(e=>e.textContent.trim()==='GB18030 ✓')"));
+    await key('Escape');
   });
   await group('file-link-attachment', async () => {
     // Synthetic authored message, rendered by the real production md and handled
@@ -90,7 +93,9 @@ module.exports = async function (t, group) {
   await group('changes', async () => {
     await read("import('/git.js').then(async m=>{await m.refreshGitNow();m.openChangesPanel();return true})");
     await until(() => read("!!document.querySelector('.chg-file')||!!document.querySelector('.chg-row')||document.querySelector('#rightPane')?.textContent.includes('changed.txt')"), 'changes-list');
-    const clicked = await read("(()=>{const e=[...document.querySelectorAll('.chg-main,.chg-file-main,.chg-row-main,button')].find(e=>e.textContent.includes('changed.txt'));if(!e)return false;e.click();return true})()");
+    const clicked = await read("(()=>{const e=[...document.querySelectorAll('.chg-main')].find(e=>e.querySelector('.chg-path')?.textContent==='changed.txt');if(!e)return false;e.dataset.desktopDiffTarget='true';return true})()");
+    t.assert.ok(clicked, 'the actual changed-file row exists');
+    await click('.chg-main[data-desktop-diff-target="true"]');
     await until(() => read("!!document.querySelector('.d-row')"), 'real-diff');
     check('Changes remains a true diff view, not generic preview', clicked && await read("!!document.querySelector('.d-row')&&!document.querySelector('.fp-text')"));
     await shot('changes-preserved-diff');

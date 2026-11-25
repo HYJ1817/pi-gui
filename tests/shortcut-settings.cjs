@@ -624,19 +624,14 @@ function plainEvent(init = {}) {
       f.w.configureShortcutStorage(memoryStore());
       const host = f.d.createElement('div');
       f.d.body.append(host);
-      const source = f.d.createElement('button');
-      source.id = 'navChanges';
-      source.setAttribute('aria-label', '变更');
-      const icon = f.d.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      source.append(icon);
-      f.d.body.append(source);
-      const dispose = f.w.mountWorkPanelLauncher(host, [{ source, label: '变更', shortcutId: 'work-changes' }]);
+      const dispose = f.w.mountWorkPanelLauncher(host, [{ id: 'changes', label: '文件变更', icon: 'changes', shortcutId: 'work-changes', open() {} }]);
       const hint = () => host.querySelector('.work-panel-launcher-shortcut');
       assert.equal(hint().textContent, f.w.formatCombo('primary+shift+g'));
       f.w.commitShortcutBinding('work-changes', 'ctrl+alt+g');
       assert.equal(hint().textContent, f.w.formatCombo('ctrl+alt+g'));
       f.w.commitShortcutBinding('work-changes', null);
-      assert.equal(hint().textContent, '未绑定');
+      assert.equal(hint().hidden, true);
+      assert.equal(hint().textContent, '');
       dispose();
     } finally {
       f.close();

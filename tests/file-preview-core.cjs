@@ -22,6 +22,13 @@ const until = async fn => { for (let i = 0; i < 150; i++) { if (fn()) return; aw
 const defer = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const utf8 = value => new Uint8Array(Buffer.from(value));
 const clicked = (toolbar, label) => { const button = [...toolbar.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === label); assert.ok(button, label); button.click(); return button; };
+const readingAction = (toolbar, label) => {
+  clicked(toolbar, '阅读选项');
+  const menu = document.querySelector('[role="menu"][aria-label="阅读选项"]');
+  assert.ok(menu, 'reading actions use the shared visible menu');
+  const item = [...menu.querySelectorAll('[role="menuitem"]')].find(item => item.textContent.trim().replace(/ ✓$/, '') === label);
+  assert.ok(item && !item.disabled, label); item.click(); return item;
+};
 const fixtures = [];
 function context(source, name, { state = {}, request = {}, relative } = {}) {
   const host = document.createElement('div'), toolbar = document.createElement('div'); document.body.append(toolbar, host);
@@ -152,11 +159,13 @@ test('source displays exact escaped rows, real numbers and syntax-spanning inclu
   assert.deepEqual([...f.ctx.host.querySelectorAll('.fp-text-gutter')].map(n => n.textContent), ['1', '2', '3']);
   assert.equal(f.ctx.host.querySelectorAll('img,script').length, 0); assert.ok(f.ctx.host.querySelector('.tok-kw'));
   assert.equal(document.getSelection().toString(), 'const value');
+  assert.equal(f.ctx.toolbar.querySelector('select,[aria-label="复制全文"],[aria-label="复制引用区间"],[aria-label="自动换行"],[aria-label="行号"]'), null);
+  assert.ok(f.ctx.toolbar.querySelector('button.icon-btn[aria-label="阅读选项"]'));
   const selectedNode = document.getSelection().anchorNode;
   f.ctx.host.querySelector('.fp-text-scroll').dispatchEvent(new dom.window.Event('scroll'));
   assert.equal(document.getSelection().toString(), 'const value'); assert.equal(document.getSelection().anchorNode, selectedNode);
-  clicked(f.ctx.toolbar, '复制引用区间'); await tick(); assert.equal(clipboard, 'const value');
-  clicked(f.ctx.toolbar, '复制全文'); await tick(); assert.equal(clipboard, source); engine.dispose(); f.dispose();
+  readingAction(f.ctx.toolbar, '复制引用区间'); await tick(); assert.equal(clipboard, 'const value');
+  readingAction(f.ctx.toolbar, '复制全文'); await tick(); assert.equal(clipboard, source); engine.dispose(); f.dispose();
 });
 test('source virtualizes large wrapped and unwrapped files, restores reading and searches without regex', async () => {
   const [, , , text] = await imports; const source = Array.from({ length: 20000 }, (_, i) => `line ${i + 1} [literal] 中文`).join('\n');
@@ -165,15 +174,15 @@ test('source virtualizes large wrapped and unwrapped files, restores reading and
   assert.ok(f.ctx.host.querySelectorAll('.fp-text-line').length <= 180);
   const search = f.ctx.toolbar.querySelector('input[type=search]'); search.value = '[literal]'; search.dispatchEvent(new dom.window.Event('input'));
   assert.match(f.ctx.toolbar.querySelector('.fp-text-count').textContent, /1\/10000\+/);
-  clicked(f.ctx.toolbar, '自动换行'); assert.ok(f.ctx.host.querySelector('.is-wrapped'));
+  readingAction(f.ctx.toolbar, '自动换行'); assert.ok(f.ctx.host.querySelector('.is-wrapped'));
   assert.ok(f.ctx.host.querySelectorAll('.fp-text-line').length <= 180);
-  clicked(f.ctx.toolbar, '行号'); assert.equal(engine.getState().lineNumbers, false); engine.dispose(); f.dispose();
+  readingAction(f.ctx.toolbar, '隐藏行号'); assert.equal(engine.getState().lineNumbers, false); engine.dispose(); f.dispose();
 });
 test('text encoding selector actually decodes GB18030 source', async () => {
   const [, , , text] = await imports; const f = context('', 'encoded.txt');
   f.ctx.access.bytes = async () => new Uint8Array([0xd6, 0xd0, 0xce, 0xc4]); const engine = await text.mount(f.ctx);
   assert.equal(f.ctx.host.querySelector('.fp-text-source').textContent, '中文');
-  const select = f.ctx.toolbar.querySelector('select'); select.value = 'gb18030'; select.dispatchEvent(new dom.window.Event('change'));
+  readingAction(f.ctx.toolbar, 'GB18030');
   assert.equal(engine.getState().encoding, 'gb18030'); assert.equal(f.errors.length, 0); engine.dispose(); f.dispose();
 });
 for (const endian of ['le', 'be']) test(`text auto and explicit UTF-16${endian.toUpperCase()} decode real byte fixtures`, async () => {
@@ -184,8 +193,34 @@ for (const endian of ['le', 'be']) test(`text auto and explicit UTF-16${endian.t
   const engine = await text.mount(f.ctx);
   const rendered = () => [...f.ctx.host.querySelectorAll('.fp-text-source')].map(n => n.textContent).join('\n');
   assert.equal(rendered(), '中文 A\n第二行');
-  const select = f.ctx.toolbar.querySelector('select'); select.value = `utf-16${endian}`; select.dispatchEvent(new dom.window.Event('change'));
+  readingAction(f.ctx.toolbar, `UTF-16 ${endian.toUpperCase()}`);
   assert.equal(rendered(), '中文 A\n第二行'); assert.equal(engine.getState().encoding, `utf-16${endian}`); assert.deepEqual(f.errors, []);
+  engine.dispose(); f.dispose();
+});
+test('disposed reading menus cannot execute retained actions or close another surface menu', async () => {
+  const [, , , text, , , , , menus] = await imports;
+  const f = context('private former document', 'former.txt'); await text.mount(f.ctx);
+  clicked(f.ctx.toolbar, '阅读选项');
+  const staleCopy = [...document.querySelectorAll('[role="menuitem"]')].find(item => item.textContent === '复制全文');
+  assert.ok(staleCopy);
+  const anchor = document.createElement('button'); document.body.append(anchor);
+  menus.openActionMenu(anchor, [{ label: 'Other surface', onClick() {} }]);
+  f.dispose(); assert.equal(menus.actionMenuOpen(), true);
+  clipboard = 'current document'; staleCopy.click(); await tick();
+  assert.equal(clipboard, 'current document', 'a disposed document no longer owns a clipboard action');
+  assert.equal(menus.actionMenuOpen(), true, 'a stale item must not dismiss another surface menu');
+  menus.closeActionMenu(); anchor.remove();
+});
+test('restored HTML static mode has the correct accessible action and returns to source', async () => {
+  const [, , , , , html] = await imports;
+  const f = context('<p>restored document</p>', 'restored.html', { state: { rendered: true, scrollTop: 41 } });
+  const engine = await html.mount(f.ctx);
+  assert.ok(f.ctx.host.querySelector('iframe'));
+  const toggle = clicked(f.ctx.toolbar, '查看源码');
+  assert.equal(toggle.textContent, '切换到静态预览');
+  assert.equal(f.ctx.host.querySelector('iframe'), null);
+  assert.equal(engine.getState().rendered, false);
+  assert.equal(engine.getState().scrollTop, 41);
   engine.dispose(); f.dispose();
 });
 test('binary classification remains explicit for legacy transport and actual binary text bytes', async () => {
@@ -244,6 +279,30 @@ test('HTML renders only sanitized content in an opaque CSP frame, with cached au
   assert.deepEqual(f.reads.map(r => r.href), ['local.css', 'local.png']);
   clicked(f.ctx.toolbar, '查看源码'); clicked(f.ctx.toolbar, '切换到静态预览'); await until(() => f.ctx.host.querySelector('iframe'));
   assert.equal(f.reads.length, 2); engine.dispose(); assert.equal(f.ctx.host.querySelector('iframe'), null); f.dispose();
+});
+test('HTML static preview cannot cache an empty document while source reading is pending', async () => {
+  const [, , , , , html] = await imports, waiting = defer();
+  const f = context('<p>delayed HTML body</p>', 'delayed.html');
+  f.ctx.access.text = () => waiting.promise;
+  const mounting = html.mount(f.ctx);
+  const toggle = [...f.ctx.toolbar.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '切换到静态预览');
+  assert.equal(toggle.disabled, true);
+  toggle.click(); await tick(); assert.equal(f.ctx.host.querySelector('iframe'), null);
+  waiting.resolve('<p>delayed HTML body</p>'); const engine = await mounting;
+  assert.equal(toggle.disabled, false);
+  toggle.click(); await until(() => f.ctx.host.querySelector('iframe'));
+  assert.match(f.ctx.host.querySelector('iframe').srcdoc, /delayed HTML body/);
+  engine.dispose(); f.dispose();
+});
+test('HTML disposed during a pending source read never enables stale preview controls', async () => {
+  const [, , , , , html] = await imports, waiting = defer();
+  const f = context('<p>retired HTML</p>', 'retired.html');
+  f.ctx.access.text = () => waiting.promise;
+  const mounting = html.mount(f.ctx);
+  const toggle = [...f.ctx.toolbar.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '切换到静态预览');
+  f.dispose(); waiting.resolve('<p>retired HTML</p>'); await mounting;
+  assert.equal(toggle.disabled, true); toggle.click(); await tick();
+  assert.equal(f.ctx.host.querySelector('iframe'), null);
 });
 test('HTML toggle races cannot append a late frame to source mode', async () => {
   const [, , , , , html] = await imports; const waiting = defer();

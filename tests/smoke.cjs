@@ -1258,6 +1258,21 @@ window.fetch = async (url, opts) => {
 window.onerror = (m) => errors.push('onerror: ' + m);
 
 const $ = (id) => window.document.getElementById(id);
+const activeTool = id => Boolean(window.document.querySelector(`.work-surface-tab[data-surface="${id}"] .work-surface-tab-select[aria-selected="true"]`));
+function openTool(id) {
+  const root = $('rightPane');
+  const existing = window.document.querySelector(`.work-surface-tab[data-surface="${id}"] .work-surface-tab-select`);
+  if (existing) {
+    if (root.hidden) $('btnWorkPanel').click();
+    existing.click();
+    return;
+  }
+  if (root.hidden) $('btnWorkPanel').click();
+  else $('workPanelNew').click();
+  const row = window.document.querySelector(`#rightPane .work-panel-launcher-row[data-tool="${id}"]`);
+  if (!row) throw new Error(`Missing registered launcher tool: ${id}`);
+  row.click();
+}
 
 function run() {
   window.eval(code);
@@ -1280,12 +1295,17 @@ function check(name, fn) {
  * 扫的是全部模块的源码：`el` 定义在 state.js、引用散落在各模块，
  * 只看 app.js 会漏掉绝大多数。 */
 function staticCheck() {
-  const elBlock = sources.match(/const el = \{([\s\S]*?)\n\};/);
+  const stateSource = fs.readFileSync(path.join(PUB, 'state.js'), 'utf8');
+  const elBlock = stateSource.match(/const el = \{([\s\S]*?)\n\};/);
   check('找得到 el 定义', () => (elBlock ? true : 'state.js 里没有 const el = {…}'));
   if (!elBlock) return;
 
   const keys = new Set([...elBlock[1].matchAll(/^\s*([a-zA-Z0-9_]+)\s*:/gm)].map((m) => m[1]));
-  const used = new Set([...sources.matchAll(/\bel\.([a-zA-Z0-9_]+)/g)].map((m) => m[1]));
+  // Only the state-owned binding is in this contract; local variables named el
+  // (for example Surface tab elements) are not references to state.el.
+  const stateConsumers = bundled.files.map(file => fs.readFileSync(file, 'utf8'))
+    .filter(source => /import\s*\{[^}]*\bel\b[^}]*\}\s*from\s*['"][^'"]*state\.js['"]/.test(source));
+  const used = new Set([stateSource, ...stateConsumers].flatMap(source => [...source.matchAll(/\bel\.([a-zA-Z0-9_]+)/g)].map(m => m[1])));
   const missing = [...used].filter((k) => !keys.has(k));
   check('el 对象覆盖全部引用', () => (missing.length ? '缺失: ' + missing.join(', ') : true));
 
@@ -1320,7 +1340,7 @@ staticCheck();
     const offenders = rules.filter(([, selector, body]) => interactive.test(selector.replace(/\/\*[\s\S]*?\*\//g, '')) && amber.test(body));
     return offenders.length ? offenders.map(([, selector]) => selector.trim()).join(' | ') : true;
   });
-  check('P14-A 三列外壳与全局导航存在', () => Boolean($('globalRail') && $('projectSidebar') && $('workspace') && $('navHome') && $('navPlanner') && $('navChanges') && $('navExtensions') && $('navGlobalMore')));
+  check('P14-A 三列外壳与一级导航存在，工作工具由面板标签承载', () => Boolean($('globalRail') && $('projectSidebar') && $('workspace') && $('navHome') && $('navPlanner') && !$('navChanges') && $('navExtensions') && $('navGlobalMore') && $('workPanelTabs') && $('workPanelNew') && $('workPanelMaximize')));
   check('P14-A 侧栏有独立折叠按钮', () => Boolean($('btnSidebarCollapse')));
   check('侧栏按钮初始语义为展开', () => !$('projectSidebar').hidden && $('btnSidebarCollapse').getAttribute('aria-expanded') === 'true' && $('btnSidebarExpand').getAttribute('aria-expanded') === 'true');
   const railGroup = $('groupHead').closest('.rail-group');
@@ -1540,7 +1560,10 @@ staticCheck();
     },
   });
   // 可见条目 = a / b / c（model_change 与 thinking_level_change 被过滤掉）
-  check('分支计数 = 3（只算对话条目）', () => $('branchCount').textContent === '3');
+  check('分支计数 = 3（只算对话条目）', () => {
+    const count = nodes => nodes.reduce((total, node) => total + 1 + count(node.children || []), 0);
+    return count(window.S.treeData) === 3 && !$('branchCount');
+  });
 
   /* 条目文本映射：每种类型的字段位置都不一样，逐类钉住。
    * 这一组是回归守卫 —— 没有它，改回「只读顶层」也不会有人发现。 */
@@ -2177,7 +2200,14 @@ staticCheck();
   const confirmText = () => ($('confirmCard') ? $('confirmCard').textContent : '');
   const confirmBtn = (label) => [...window.document.querySelectorAll('#confirmCard .btn')].find((b) => b.textContent === label);
 
-  check('全局栏有「文件变更」入口', () => window.document.querySelector('#workPanelNav #navChanges') !== null);
+  $('btnWorkPanel').click();
+  check('Launcher 仅显示 registry 工具的单列入口而非旧卡片导航', () => {
+    const rows = [...window.document.querySelectorAll('#rightPane .work-panel-launcher-row')];
+    const ids = rows.map(row => row.dataset.tool);
+    return ids.includes('changes') && ids.includes('terminal') && ids.includes('files') && ids.includes('specs') && !ids.includes('browser') && ids.includes('tree') && ids.includes('collab') && ids.includes('process') &&
+      !window.document.querySelector('#rightPane .work-panel-launcher-grid, #rightPane .work-panel-launcher-card, #rightPane .work-panel-launcher-more') &&
+      !window.document.querySelector('#navChanges, #btnTerminal, #btnFiles, #btnBrowser, #btnSpecs, #btnTree, #btnCollab');
+  });
 
   gitStub.status = {
     ok: true,
@@ -2191,9 +2221,9 @@ staticCheck();
     ],
   };
   await window.loadGitStatus();
-  check('徽标显示变更数', () => ($('changesCount').textContent === '5' && $('changesCount').hidden === false) || $('changesCount').textContent);
+  check('权威 Git 总数保留 5 条且不依赖已移除入口徽标', () => window.S.changes.files.length === 5 && !$('changesCount'));
 
-  $('navChanges').click();
+  window.document.querySelector('#rightPane .work-panel-launcher-row[data-tool="changes"]').click();
   await new Promise((r) => setTimeout(r, 20));
   check('变更工作区打开且没有 Modal 遮罩', () => $('workspace').dataset.workspaceView === 'chat' && !$('rightPane').hidden && $('modal').hidden);
   check('列表渲染 5 行', () => chgRows().length === 5);
@@ -2415,7 +2445,7 @@ staticCheck();
     const paths = chgRows().map((x) => x.querySelector('.chg-path').textContent).sort().join(',');
     return paths === 'big.log,src/app.js' || paths;
   });
-  check('侧栏徽标仍是 Git 总数，不受过滤影响', () => $('changesCount').textContent === '5' || $('changesCount').textContent);
+  check('全部过滤器仍是 Git 总数，不受会话过滤影响', () => $('chgFilterAll').querySelector('.chg-tab-n').textContent === '5' && window.S.changes.files.length === 5);
 
   $('chgFilterAll').click();
   check('切回「全部」恢复 5 行', () => chgRows().length === 5);
@@ -2715,7 +2745,7 @@ staticCheck();
   await window.loadGitStatus();
   window.renderChangesBody();
   check('工作区干净时有明确空状态', () => chgText().includes('工作区是干净的'));
-  check('干净时徽标隐藏', () => $('changesCount').hidden === true);
+  check('干净时总数为零且不残留计数徽标', () => window.S.changes.files.length === 0 && !$('changesCount') && !window.document.querySelector('#rightPane .chg-tab-n'));
   check('干净时没有过滤行（没有东西可过滤）', () => $('chgFilterAll') === null);
 
   gitStub.status = { ok: true, isRepo: false, files: [] };
@@ -2839,42 +2869,42 @@ staticCheck();
   window.clearChanges();
 
   // --- 弹层：分支 ---
-  $('btnTree').click();
-  check('分支弹层打开', () => $('modal').hidden === false);
-  check('分支树渲染 3 个节点', () => window.document.querySelectorAll('#modalCard .tree-node').length === 3);
+  openTool('tree');
+  check('分支 Surface 打开而不创建弹层', () => !$('rightPane').hidden && activeTool('tree') && $('modal').hidden);
+  check('分支树渲染 3 个节点', () => window.document.querySelectorAll('#rightPane .tree-node').length === 3);
   check('分支节点文本不是 [object Object]', () => {
-    const t = [...window.document.querySelectorAll('#modalCard .tree-text')].map((x) => x.textContent).join(' | ');
+    const t = [...window.document.querySelectorAll('#rightPane .tree-text')].map((x) => x.textContent).join(' | ');
     return !t.includes('[object') || t;
   });
   check('分支节点只列对话条目', () => {
-    const t = [...window.document.querySelectorAll('#modalCard .tree-text')].map((x) => x.textContent);
+    const t = [...window.document.querySelectorAll('#rightPane .tree-text')].map((x) => x.textContent);
     const want = ['你：帮我看看 server.js', 'Pi：文件没问题。', 'Pi：换个模型再答一次'];
     return t.every((s, i) => s.startsWith(want[i])) || t.join(' | ');
   });
   check('操作类条目不出现在分支树里', () => {
-    const t = [...window.document.querySelectorAll('#modalCard .tree-text')].map((x) => x.textContent).join(' | ');
+    const t = [...window.document.querySelectorAll('#rightPane .tree-text')].map((x) => x.textContent).join(' | ');
     return !/模型 →|思考档位 →|model_change|thinking_level_change/.test(t) || t;
   });
   check('分叉点标出支线数', () => {
-    const f = window.document.querySelector('#modalCard .tree-fork');
+    const f = window.document.querySelector('#rightPane .tree-fork');
     return (f && f.textContent === '2 条支线') || (f ? f.textContent : '没有分叉标记');
   });
   check('分支树左对齐（不按深度递进缩进）', () => {
-    const nodes = [...window.document.querySelectorAll('#modalCard .tree-node')];
+    const nodes = [...window.document.querySelectorAll('#rightPane .tree-node')];
     const bad = nodes.filter((n) => n.style.paddingLeft);
     return bad.length === 0 || `有 ${bad.length} 个节点带 paddingLeft`;
   });
   check('节点上的 label 作为徽标渲染', () => {
-    const lb = window.document.querySelector('#modalCard .tree-label');
+    const lb = window.document.querySelector('#rightPane .tree-label');
     return (lb && lb.textContent === '关键结论') || '缺少 label 徽标';
   });
-  check('分支弹层是「按钮固定 + 树体滚动」布局', () =>
-    $('modalCard').classList.contains('tree-modal') || '缺少 tree-modal');
+  check('分支 Surface 是「共享标题按钮 + 树体滚动」结构', () =>
+    Boolean(window.document.querySelector('#rightPane .tree-surface > .rp-head') && window.document.querySelector('#rightPane .tree-surface > .tree.rp-scroll')));
   check('节点悬停给出完整文本与可点击说明', () => {
-    const first = window.document.querySelector('#modalCard .tree-node');
+    const first = window.document.querySelector('#rightPane .tree-node');
     return first.title.includes('点击从此节点分叉') || first.title;
   });
-  $('modal').click();
+  window.document.querySelector('.work-surface-tab[data-surface="tree"] .work-surface-tab-close').click();
 
   // --- 弹层：供应商 ---
   const providerPage = () => window.document.querySelector('#workSurface .settings-detail-card');
@@ -8125,8 +8155,8 @@ staticCheck();
   $('navExtensions').click();
   check('Rail 扩展入口打开扩展工作区', () => $('workspace').dataset.workspaceView === 'extensions' && $('modal').hidden && $('navExtensions').getAttribute('aria-current') === 'page');
   $('navHome').click();
-  $('navChanges').click();
-  check('Rail 文件变更入口打开文件工作区', () => $('workspace').dataset.workspaceView === 'chat' && $('modal').hidden && $('navChanges').getAttribute('aria-pressed') === 'true');
+  openTool('changes');
+  check('工作面板 registry 的 Changes 工具在右栏打开且不替换一级工作区', () => $('workspace').dataset.workspaceView === 'chat' && $('modal').hidden && activeTool('changes'));
   $('navHome').click();
 
   /* P14-B：独立夹具走现有历史与流式入口，核对真实节点与可操作性。
@@ -8405,11 +8435,11 @@ staticCheck();
     await new Promise((resolve) => setTimeout(resolve, 35));
     check('P14-D 非 Chat 时流式正文继续进入原 Conversation', () => $('stream').textContent.includes('离开 Chat 后继续生成') && window.S.streaming);
     $('workSurface').querySelector('.planner-goal')?.focus();
-    $('navChanges').click();
-    check('P30 Changes 不替换当前 Planner 焦点', () => $('workSurface').contains(window.document.activeElement));
-    check('P30 Changes 在右栏且 Planner 保持原实例', () => $('workspace').dataset.workspaceView === 'planner' && $('rightPane').querySelector('.chg-body') && host.querySelector('.planner-pane') && $('navChanges').getAttribute('aria-pressed') === 'true');
+    openTool('changes');
+    check('P30 Changes 标签选择获得本地焦点而不丢失 Planner 实例', () => window.document.activeElement.matches('.work-surface-tab-select[aria-selected="true"]') && Boolean(host.querySelector('.planner-goal')));
+    check('P30 Changes 在右栏且 Planner 保持原实例', () => $('workspace').dataset.workspaceView === 'planner' && $('rightPane').querySelector('.chg-body') && host.querySelector('.planner-pane') && activeTool('changes'));
     $('navExtensions').click();
-    check('P14-D Extensions 替换 Changes 并清掉 Git 容器', () => $('workspace').dataset.workspaceView === 'extensions' && !host.querySelector('.chg-body') && window.panels.changes === null);
+    check('P14-D Extensions 导航隐藏工作面板但保留 Changes 标签与业务实例', () => $('workspace').dataset.workspaceView === 'extensions' && $('rightPane').hidden && $('rightPane').querySelector('.work-surface-tab[data-surface="changes"]') && window.panels.changes !== null);
     check('P14-E Extensions Tab 语义与可见面板一致', () => [...host.querySelectorAll('[role="tab"]')].every((tab) => tab.getAttribute('aria-selected') === String(tab.classList.contains('is-active')) && tab.getAttribute('aria-controls') === 'extensionsTabPanel') && Boolean(host.querySelector('#extensionsTabPanel[role="tabpanel"]')));
     /* 拆分前「Skills 与扩展」挂在设置目录下，进入扩展工作区时设置目录保持展开；
      * 现在「扩展」是应用主导航目的地：设置目录收起、「返回应用」隐藏，侧栏只有它一处高亮。 */

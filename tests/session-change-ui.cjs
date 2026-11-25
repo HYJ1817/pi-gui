@@ -4,8 +4,12 @@ const {JSDOM}=require('jsdom');
   let checks=0;const ok=(name,value)=>{assert.ok(value,name);checks++;console.log('  ok  '+name);};
   const dom=new JSDOM(fs.readFileSync(require('node:path').join(__dirname,'../public/index.html'),'utf8'),{url:'http://localhost/'});
   global.document=dom.window.document;global.window=dom.window;global.localStorage=dom.window.localStorage;global.CustomEvent=dom.window.CustomEvent;
+  global.MutationObserver=dom.window.MutationObserver;global.requestAnimationFrame=fn=>setTimeout(fn,0);global.cancelAnimationFrame=clearTimeout;global.sessionStorage=dom.window.sessionStorage;
   const {configureSecondaryPane}=await import('../public/ui/secondary-surface.js');
-  let kind;const listeners=[];configureSecondaryPane({root:document.querySelector('#rightPane'),open(v){kind=v;for(const f of listeners)f(v);},close(){kind=null;for(const f of listeners)f(null);},onSurfaceChange:f=>listeners.push(f)});
+  const {initRightPane}=await import('../public/right-pane.js');
+  const pane=initRightPane();
+  let kind;const innerOpen=pane.open.bind(pane);pane.open=v=>{kind=v;innerOpen(v);};
+  configureSecondaryPane(pane);
   let api={};try{api=await import('../public/session-changes-panel.js');}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}
   ok('read-only session panel exists',typeof api.openSessionChangesPanel==='function');
   let context={conversationId:'A',owner:{runtimeGeneration:'a',workspaceId:'w',workspaceEpoch:'e'}},queryPending,previewPending,exportPending,failCode,empty=false,historyEmpty=false,previewResult,queryExtra={};

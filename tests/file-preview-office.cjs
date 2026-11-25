@@ -191,22 +191,28 @@ async function unitTests() {
   finally { global.setTimeout = nativeTimeout; }
   check('deadline terminates the real stalled worker', () => assert.ok(hungTerminated));
   delete global.Worker;
-  // The real PPTX ES-source bundle, not text extraction or a mock result.
-  // jsdom only proves parsing/DOM, never claims to prove visual layout.
+  // Execute our actual data-only frame with the real worker projection. jsdom
+  // proves DOM/resource behavior only; desktop tests prove rendered layout.
   const slidesDom = new JSDOM('<!doctype html><div id="slides"></div>', { runScripts: 'outside-only', pretendToBeVisual: true });
-  Object.assign(slidesDom.window, { setImmediate, clearImmediate });
-  slidesDom.window.URL.createObjectURL = () => 'blob:offline-fixture'; slidesDom.window.URL.revokeObjectURL = () => {};
-  slidesDom.window.eval(fs.readFileSync(path.join(ROOT, 'public/vendor/file-preview/pptx-preview.js'), 'utf8'));
-  const presentation = slidesDom.window.PptxPreview.init(slidesDom.window.document.querySelector('#slides'), { width: 960, height: 540, mode: 'slide' });
-  await presentation.load(slidesDom.window.Uint8Array.from(pptx).buffer);
-  check('real PPTX reader loads both legal slides', () => assert.equal(presentation.slideCount, 2));
-  presentation.renderSingleSlide(0);
-  check('real PPTX renderer emits shape SVGs, not a text dump', () => assert.equal(slidesDom.window.document.querySelectorAll('svg').length, 2));
-  check('real PPTX renderer emits embedded raster image', () => assert.match(slidesDom.window.document.querySelector('img').src, /^data:image\/png;base64,/));
-  check('real PPTX source layout has genuine slide dimensions', () => assert.equal(slidesDom.window.document.querySelector('.pptx-preview-slide-wrapper').style.width, '960px'));
-  presentation.renderSingleSlide(1);
-  check('real PPTX navigation replaces content with second slide', () => assert.ok(slidesDom.window.document.body.textContent.includes('Slide 2') && !slidesDom.window.document.body.textContent.includes('Slide 1')));
-  presentation.destroy(); slidesDom.window.close();
+  const frameWindow = slidesDom.window, messages = [], revoked = [];
+  const script = frameWindow.document.createElement('script'); script.dataset.key = 'offline-key';
+  Object.defineProperty(frameWindow.document, 'currentScript', { value: script });
+  frameWindow.postMessage = data => messages.push(data);
+  frameWindow.URL.createObjectURL = () => 'blob:offline-fixture';
+  frameWindow.URL.revokeObjectURL = value => revoked.push(value);
+  frameWindow.eval(fs.readFileSync(path.join(ROOT, 'public/file-preview/office-slides-frame.js'), 'utf8'));
+  const deck = { ...workerPptx.deck, images: Object.fromEntries(Object.entries(workerPptx.deck.images).map(([name, image]) => [name, { ...image, bytes: frameWindow.Uint8Array.from(image.bytes) }])) };
+  const frameMessage = (type, extra = {}) => frameWindow.dispatchEvent(new frameWindow.MessageEvent('message', { source: frameWindow, data: { officeSlides: 'offline-key', type, ...extra } }));
+  frameMessage('load', { deck, slides: 2 });
+  check('real PPTX reader loads both legal slides', () => assert.equal(messages.find(value => value.type === 'loaded').count, 2));
+  check('real PPTX renderer emits shape SVGs, not a text dump', () => assert.equal(frameWindow.document.querySelectorAll('svg rect').length, 2));
+  check('real PPTX renderer emits embedded raster image', () => assert.match(frameWindow.document.querySelector('img').src, /^blob:/));
+  check('real PPTX source layout has genuine slide dimensions', () => assert.equal(frameWindow.document.querySelector('.pptx-slide').style.width, '960px'));
+  frameMessage('page', { page: 1 });
+  check('real PPTX navigation replaces content with second slide', () => assert.ok(frameWindow.document.body.textContent.includes('Slide 2') && !frameWindow.document.body.textContent.includes('Slide 1')));
+  frameMessage('dispose');
+  check('real PPTX disposal empties slide DOM and revokes image URLs', () => { assert.equal(frameWindow.document.querySelector('#slides').childElementCount, 0); assert.deepEqual(revoked, ['blob:offline-fixture']); });
+  slidesDom.window.close();
   const doc = await parseOffice('docx', docx);
   const docDom = new JSDOM(doc.html).window.document;
   check('real Mammoth preserves heading', () => assert.equal(docDom.querySelector('h1').textContent, '中文 Office Preview'));
@@ -448,7 +454,7 @@ async function electronTests() {
       check(`real CSV Worker render ${width} ${theme}`, !csv.error && await read('document.querySelector(".office-grid-viewport").textContent.includes("中文,名字")'));
       await shot(`csv-${width}-${theme}`);
       const ppt = await read('showFixture("presentation.pptx")');
-      check(`real PPTX sandbox render ${width} ${theme}`, !ppt.error && await childRead('document.querySelectorAll(".pptx-preview-slide-wrapper").length===1 && document.body.textContent.includes("Slide 1")'));
+      check(`real PPTX sandbox render ${width} ${theme}`, !ppt.error && await childRead('document.querySelectorAll(".pptx-slide").length===1 && document.body.textContent.includes("Slide 1")'));
       check(`PPTX shape and image layout ${width} ${theme}`, await childRead('document.querySelectorAll("svg").length>0 && document.querySelectorAll("img").length>0'));
       check(`PPTX opaque origin ${width} ${theme}`, await read('document.querySelector("iframe").contentDocument===null'));
       check(`toolbar fits ${width} ${theme}`, await read('document.querySelector("#toolbar").scrollWidth<=innerWidth'));
@@ -465,7 +471,7 @@ async function electronTests() {
     check('PPTX markup fixture rendered without parent execution', !attackResult.error && await read('window.hacked===undefined'));
     check('PPTX text cannot create active elements', await childRead('!document.querySelector("#slides script,#slides iframe,#slides [onerror],#slides [onload]")'));
     check('PPTX raw image text cannot create remote src', await childRead('[...document.querySelectorAll("#slides img")].every(image=>image.src.startsWith("blob:")||image.src.startsWith("data:image/"))'));
-    check('PPTX sanitizes raw markup before native DOM insertion', await childRead(`(()=>{const span=document.createElement('span');span.innerHTML='<img src="https://invalid.example/leak" onerror="parent.hacked=1"><svg onload="alert(1)"></svg><b>safe</b>';document.querySelector('#slides').append(span);return span.querySelectorAll('img,svg,[onerror],[onload]').length===0&&span.querySelector('b').textContent==='safe'})()`));
+    check('PPTX projects markup as inert text without an HTML insertion sink', await childRead(`[...document.querySelectorAll('.pptx-text')].some(element=>element.textContent.includes('<img src="https://invalid.example/leak" onerror="parent.hacked=1">')) && document.querySelectorAll('#slides img').length===1 && document.querySelectorAll('#slides svg').length===2`) && !/innerHTML|outerHTML|insertAdjacentHTML|DOMParser/.test(fs.readFileSync(path.join(ROOT, 'public/file-preview/office-slides-frame.js'), 'utf8')));
     await read('cleanup()');
     check('dispose removes sandbox and toolbar', await read('!document.querySelector("iframe") && !document.querySelector("#toolbar").children.length'));
     const stats = await read('workerStats');
@@ -477,7 +483,9 @@ async function electronTests() {
   app.exit(0);
 }
 
-if (require.main === module) {
+// Electron's default-app loader does not reliably set require.main to this
+// CommonJS file. Only the explicitly fixture-scoped child may use this entry.
+if (require.main === module || (process.versions.electron && process.env.OFFICE_TEST_WORLD && path.resolve(process.argv[1] || '') === __filename)) {
   if (process.versions.electron) electronTests().catch(error => { console.error(error); require('electron').app.exit(1); });
   else if (process.argv.includes('--electron')) {
     const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-office-electron-'));

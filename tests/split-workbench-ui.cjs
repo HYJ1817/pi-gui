@@ -49,18 +49,18 @@ function indexPayload(workspaceId, generation, label) {
 
   const { S } = await import('../public/state.js');
   const { initRightPane } = await import('../public/right-pane.js');
-  const { configureSecondaryPane } = await import('../public/ui/secondary-surface.js');
+  const { configureSecondaryPane, openSecondarySurface, closeSecondarySurface, secondaryTabs } = await import('../public/ui/secondary-surface.js');
   const { openSplitWorkbench, normalizeSplitRatio, clampSplitRatio, splitRatioAt, SPLIT_WORKBENCH_LIMITS } =
     await import('../public/ui/split-workbench.js');
   const { openSpecsPanel } = await import('../public/specs-panel.js');
-  const { setGitConversationScope } = await import('../public/api.js');
+  const { setGitConversationScope, gitConversationScope } = await import('../public/api.js');
   const { openChangesPanel, refreshGitNow, resetChanges } = await import('../public/git.js');
 
   S.workspaceGeneration = 1;
   S.switching = false;
   S.bridgeState = 'ready';
   const pane = initRightPane();
-  configureSecondaryPane(pane);
+  configureSecondaryPane(pane, { getScope: () => JSON.stringify([S.workspaceGeneration, gitConversationScope()]) });
   const listenerCounts = new Map();
   const listenerKey = (target, type) => (target === document ? 'document:' : 'window:') + type;
   const addDocument = document.addEventListener.bind(document);
@@ -150,6 +150,7 @@ function indexPayload(workspaceId, generation, label) {
     open(event.detail?.source === 'changes' ? 'changes' : 'specs');
   });
   const listenerBaseline = new Map(listenerCounts);
+  const observerBaseline = activeObservers;
   const rectFor = (height, top = 0) => ({ top, left: 0, width: 420, height, right: 420, bottom: top + height });
   const setHeight = (host, height) => {
     Object.defineProperty(host, 'getBoundingClientRect', { configurable: true, value: () => rectFor(height) });
@@ -306,10 +307,11 @@ function indexPayload(workspaceId, generation, label) {
     ok('workspace generation changes immediately remove both old panes from view', () =>
       !document.querySelector('[data-spec-path]') &&
       !document.querySelector('.chg-row') &&
-      document.querySelector('.workbench-split'));
+      !document.querySelector('.workbench-split') && pane.surface() === 'work-tools');
 
-    heldStatus = () => {};
-    await until(() => document.querySelector('[data-spec-path="SPEC.md"]'));
+    setGitConversationScope('A');
+    open('specs');
+    await until(() => document.querySelector('[data-spec-path="SPEC.md"]') && document.querySelector('.chg-main'));
     documentReply = () => {};
     document.querySelector('[data-spec-path="SPEC.md"]').click();
     diffReply = () => {};
@@ -319,13 +321,14 @@ function indexPayload(workspaceId, generation, label) {
     const releaseOldDiff = diffReply;
     documentReply = null;
     diffReply = null;
-    setGitConversationScope('A');
+    heldStatus = () => {};
     const pending = refreshGitNow();
     await tick();
     scope = 'B';
     setGitConversationScope('B');
+    open('specs');
     await refreshGitNow();
-    heldStatus(null);
+    heldStatus(statusPayload('A'));
     await pending;
     await tick(20);
     ok('a late old-scope Changes response cannot overwrite the new workbench scope', () =>
@@ -338,16 +341,17 @@ function indexPayload(workspaceId, generation, label) {
       !pane.root.textContent.includes('OLD PRIVATE A') && document.querySelector('.specs-markdown').textContent.includes('B'));
 
     document.getElementById('input').value = 'split workbench draft';
-    open('specs');
-    pane.open('browser');
-    ok('switching to Browser disposes the workbench without touching the chat draft', () =>
-      pane.surface() === 'browser' &&
-      !document.querySelector('.workbench-split') &&
+    const retainedWorkbench = open('specs');
+    openSecondarySurface('browser', host => { host.textContent = 'Browser presentation boundary fixture'; });
+    ok('selecting another tool retains the inactive workbench without touching the chat draft', () =>
+      pane.surface() === 'browser' && retainedWorkbench.isConnected && retainedWorkbench.hidden &&
       document.getElementById('input').value === 'split workbench draft');
 
+    closeSecondarySurface('workbench-split');
     openChangesPanel();
-    document.querySelector('#btnChangesSplit').focus();
-    const shortHost = open('changes', 280);
+    const shortHost = open('changes', 720);
+    document.querySelector('#btnSpecsSplit').focus();
+    setHeight(shortHost, 280);
     await tick();
     ok('entering fallback moves focus out of the now-hidden pane', () =>
       shortHost.classList.contains('is-fallback') &&
@@ -367,9 +371,12 @@ function indexPayload(workspaceId, generation, label) {
       open(i % 2 ? 'changes' : 'specs');
       pane.close();
     }
-    ok('repeated open/close releases split observers and leaves the right pane empty', () =>
+    ok('repeated hide/reopen retains one workbench without duplicating observers', () =>
       activeObservers === observersBefore &&
-      document.querySelectorAll('#rightPane .rp-surface').length === 0);
+      document.querySelectorAll('#rightPane .workbench-split').length === 1);
+    for (const tab of secondaryTabs()) closeSecondarySurface(tab.id);
+    ok('explicit tab closes release split observers and leave the right pane empty', () =>
+      activeObservers === observerBaseline && document.querySelectorAll('#rightPane .rp-surface').length === 0);
     ok('repeated open/close leaves no split scope, resize or drag listeners behind', () =>
       ['document:pi-gui:git-scope', 'document:pi-gui:workspace-generation', 'window:resize',
         'document:mousemove', 'document:mouseup'].every(key =>

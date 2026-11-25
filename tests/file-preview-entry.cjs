@@ -30,35 +30,82 @@ const imagePart = (data = TINY_PNG_BASE64, name = 'same.png', mimeType = 'image/
 
 (async () => {
   const { S, el } = await import('../public/state.js');
-  const { setGitConversationScope } = await import('../public/api.js');
+  const { setGitConversationScope, gitConversationScope } = await import('../public/api.js');
   const { runtimeStore, seedRuntimeSnapshot } = await import('../public/runtime-state.js');
-  const { mountFilesPanel } = await import('../public/files-panel.js');
+  const { openFilesPanel } = await import('../public/files-panel.js');
+  const { initRightPane } = await import('../public/right-pane.js');
+  const surfaces = await import('../public/ui/secondary-surface.js');
   const { renderAttachments, removeAttachment } = await import('../public/attachments.js');
   const { userBody } = await import('../public/ui/user-message-body.js');
   const preview = await import('../public/attachment-preview.js');
   Object.assign(S, { cwd: 'C:/fixture/project', workspaceGeneration: 1, attachments: [], state: { sessionId: 'entry-session', model: { input: ['text', 'image'] } } });
   const tray = el.attachTray;
-  const panelHost = document.createElement('section'); document.body.append(panelHost);
-  let alive = true; const hooks = [];
-  const view = { isCurrent: () => alive, onDispose(fn) { hooks.push(fn); }, dispose() { if (!alive) return; alive = false; hooks.reverse().forEach(fn => fn()); } };
+  const pane = initRightPane();
+  const ownerFields = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
+  surfaces.configureSecondaryPane(pane, {
+    getScope: () => {
+      const id = gitConversationScope(), record = id ? runtimeStore.get(id) : null;
+      return JSON.stringify([id || 'classic', record?.owner?.workspaceId || S.cwd,
+        record?.item?.nativeSessionId || (!id ? S.legacyOwner?.sessionId || S.state?.sessionId : null)]);
+    },
+    getIdentity: () => {
+      const id = gitConversationScope(), owner = id ? runtimeStore.get(id)?.owner : S.legacyOwner;
+      return JSON.stringify([S.workspaceGeneration, id || 'classic', ...ownerFields.map(key => owner?.[key] ?? null)]);
+    },
+  });
+  let panelHost;
   const forbiddenRead = async () => { transportReads++; throw new Error('An attachment must never read a local path'); };
-  mountFilesPanel(panelHost, view, {
+  let panelOptions = {
     transport: {
       list: async () => ({ ok: true, workspace: { id: 'fixture', generation: '1' }, entries: [] }),
       metadata: forbiddenRead, document: forbiddenRead, asset: forbiddenRead, content: forbiddenRead,
       externalMetadata: forbiddenRead, externalDocument: forbiddenRead, externalContent: forbiddenRead,
     },
-    previewMount(host, request) {
-      const entry = { request, disposed: false }; opens.push(entry); views.push(entry);
+    previewMount(host, request, options) {
+      const entry = { request, state: { ...options.state }, disposed: false }; opens.push(entry); views.push(entry);
       host.textContent = request.name;
-      return { ready: Promise.resolve(), getState: () => ({}), dispose() { entry.disposed = true; host.replaceChildren(); } };
+      return { ready: Promise.resolve(), getState: () => entry.state, dispose() { entry.disposed = true; host.replaceChildren(); } };
     },
-  });
+  };
+  // Inject only the file owner through its public opener. Every attachment click
+  // still goes through the real manager, including activation of a hidden tab.
+  const openFixturePanel = () => { const view = openFilesPanel(panelOptions); panelHost = view.host; return view; };
+  const unregister = surfaces.registerSecondaryTool({ id: 'files', label: '文件', icon: 'folder', open: openFixturePanel });
+  openFixturePanel();
   await tick();
-  const show = attachments => { S.attachments = attachments; renderAttachments(); };
-  const historical = parts => { const body = userBody({ role: 'user', content: parts }); document.body.append(body); return body; };
+  const show = attachments => { openFixturePanel(); S.attachments = attachments; renderAttachments(); };
+  const historical = parts => { openFixturePanel(); const body = userBody({ role: 'user', content: parts }); document.body.append(body); return body; };
   const fileAttachment = (id, file, extra = {}) => ({ id, file, name: file.name, size: file.size, kind: 'binary', path: 'C:/must-not-read/' + file.name, ...extra });
   try {
+    await check('attachment references reactivate Files through the manager and preserve its internal tab and reading state', () => {
+      const file = new File(['resume original'], 'resume.txt');
+      show([fileAttachment('resume', file)]); tray.querySelector('.att-info').click();
+      const host = panelHost, tree = host.querySelector('.files-tree'), tab = host.querySelector('.files-tab');
+      const previous = opens.at(-1); previous.state = { scrollTop: 245, wrap: true };
+      surfaces.openSecondarySurface('specs', content => { content.textContent = 'Other tool'; });
+      assert.equal(surfaces.secondaryTabs().find(tab => tab.active).view, 'specs');
+      assert.equal(previous.disposed, true); assert.equal(host.hidden, true);
+      assert.equal(host.querySelector('.files-tab'), tab);
+      surfaces.activateSecondarySurface('files');
+      assert.equal(host.querySelector('.files-tab'), tab);
+      tray.querySelector('.att-info').click();
+      assert.equal(surfaces.secondaryTabs().find(tab => tab.active).view, 'files');
+      assert.equal(surfaces.secondarySurfaceInstance('files').host, host);
+      assert.equal(host.querySelector('.files-tree'), tree);
+      assert.equal(host.querySelectorAll('.files-tab').length, 1);
+      assert.equal(host.querySelector('.files-tab').dataset.fileTab, tab.dataset.fileTab);
+      assert.deepEqual(opens.at(-1).state, { scrollTop: 245, wrap: true });
+      assert.equal(opens.at(-1).request.file, file);
+      assert.equal(views.filter(view => !view.disposed).length, 1);
+      surfaces.closeSecondarySurface('specs');
+    });
+    await check('attachment reference reopens the common pane before resuming Files', () => {
+      const previous = opens.at(-1); pane.close();
+      assert.equal(previous.disposed, true); assert.equal(pane.isOpen(), false);
+      tray.querySelector('.att-info').click();
+      assert.equal(pane.isOpen(), true); assert.equal(surfaces.secondarySurfaceInstance('files').isVisible(), true);
+      assert.equal(views.filter(view => !view.disposed).length, 1);
+    });
     await check('historical MIME is an exact allowlist, not a PNG default or executable data URL', () => {
       const before = decodeCalls;
       for (const mime of ['', undefined, 'image/svg+xml', 'text/html', 'image/PNG', 'image/png;foo=bar', 'image/png\n', '__proto__']) {
@@ -156,7 +203,7 @@ const imagePart = (data = TINY_PNG_BASE64, name = 'same.png', mimeType = 'image/
         document.dispatchEvent(new CustomEvent(event));
         S.attachments = [attachment]; // Isolate the owner guard from membership.
         const before = opens.length; button.click(); assert.equal(opens.length, before);
-        renderAttachments(); tray.querySelector('.att-info').click();
+        show(S.attachments); tray.querySelector('.att-info').click();
         assert.equal(opens.at(-1).request.file, file);
       });
     }
@@ -216,7 +263,7 @@ const imagePart = (data = TINY_PNG_BASE64, name = 'same.png', mimeType = 'image/
         conversationId: runtimeId, runtimeId: 'entry-process', runtimeGeneration: '1', sessionId },
     }] });
     await check('returning to the same Runtime owner reuses retained history despite a different Classic session', async () => {
-      seedRuntime('native-entry-one', 1); setGitConversationScope(runtimeId);
+      seedRuntime('native-entry-one', 1); setGitConversationScope(runtimeId); openFixturePanel();
       assert.equal(runtimeStore.get(runtimeId).owner.sessionId, 'native-entry-one');
       const wrapper = document.createElement('section'); wrapper.dataset.conversationId = runtimeId;
       const body = userBody({ content: [imagePart()] }); wrapper.append(body); document.body.append(wrapper);
@@ -224,7 +271,7 @@ const imagePart = (data = TINY_PNG_BASE64, name = 'same.png', mimeType = 'image/
       setGitConversationScope(null); const before = opens.length; chip.click(); assert.equal(opens.length, before);
       const classic = S.state.sessionId;
       try {
-        S.state.sessionId = 'unrelated-classic-session'; setGitConversationScope(runtimeId); chip.click();
+        S.state.sessionId = 'unrelated-classic-session'; setGitConversationScope(runtimeId); openFixturePanel(); chip.click();
         assert.equal(opens.at(-1).request.attachmentId, first.attachmentId);
         assert.equal(opens.at(-1).request.file, first.file);
         assert.equal(opens.at(-1).request.conversationId, runtimeId);
@@ -294,7 +341,7 @@ const imagePart = (data = TINY_PNG_BASE64, name = 'same.png', mimeType = 'image/
     });
     await check('disposing Files releases every entry controller, without changing upload ownership', () => {
       const file = new File(['keep draft'], 'keep.txt'), attachment = fileAttachment('keep', file);
-      show([attachment]); tray.querySelector('.att-info').click(); view.dispose();
+      show([attachment]); tray.querySelector('.att-info').click(); surfaces.closeSecondarySurface('files');
       assert.ok(views.every(item => item.disposed));
       assert.equal(S.attachments[0], attachment); assert.equal(S.attachments[0].file, file);
     });
@@ -303,18 +350,17 @@ const imagePart = (data = TINY_PNG_BASE64, name = 'same.png', mimeType = 'image/
       ['no workspace', { ok: true, noProject: true, workspace: null, entries: [] }],
     ]) {
       await check('an owned File preview survives a late ' + name + ' independently of the workspace tree', async () => {
-        const host = document.createElement('section'); document.body.append(host);
-        let resolveRoot, current = true, disposed = false, received;
-        const callbacks = [];
-        const localView = { isCurrent: () => current, onDispose(fn) { callbacks.push(fn); },
-          dispose() { if (!current) return; current = false; callbacks.reverse().forEach(fn => fn()); } };
-        mountFilesPanel(host, localView, {
+        surfaces.closeSecondarySurface('files');
+        const previousOptions = panelOptions;
+        let resolveRoot, disposed = false, received;
+        panelOptions = {
           transport: { list: () => new Promise(resolve => { resolveRoot = resolve; }), metadata: forbiddenRead, document: forbiddenRead, content: forbiddenRead },
           previewMount(content, request) {
             received = request; content.textContent = request.name;
             return { ready: Promise.resolve(), getState: () => ({}), dispose() { disposed = true; content.replaceChildren(); } };
           },
-        });
+        };
+        const localView = openFixturePanel(), host = localView.host;
         try {
           const file = new File([tinyPng()], 'local-only.png', { type: 'image/png' });
           show([fileAttachment('tree-independent', file, { kind: 'image', mimeType: 'image/png' })]);
@@ -327,12 +373,12 @@ const imagePart = (data = TINY_PNG_BASE64, name = 'same.png', mimeType = 'image/
           document.dispatchEvent(new CustomEvent('pi-gui:attachment-revoked', { detail: { attachmentId: 'tree-independent' } }));
           assert.equal(disposed, true, 'owner revocation still disposes the independent File reader');
           assert.equal(host.querySelectorAll('.files-tab[data-file-tab="local-only.png"]').length, 0);
-        } finally { localView.dispose(); host.remove(); }
+        } finally { localView.dispose(); panelOptions = previousOptions; }
         assert.equal(disposed, true);
       });
     }
   } finally {
-    show([]); view.dispose(); dom.window.close();
+    S.attachments = []; renderAttachments(); surfaces.configureSecondaryPane(null); unregister(); pane.close(); dom.window.close();
     URL.createObjectURL = originalCreate; URL.revokeObjectURL = originalRevoke;
     global.atob = originalAtob; global.fetch = originalFetch;
   }

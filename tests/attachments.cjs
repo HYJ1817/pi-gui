@@ -202,11 +202,15 @@ async function main() {
         assert.equal(d.getElementById('modal').hidden, true);
         assert.equal(opened.source, 'attachment'); assert.equal(opened.file, original);
         assert.equal(opened.path, undefined);
-        const close = d.getElementById('rightPaneClose'); close.focus();
+        const filesHost = d.querySelector('.files-surface');
+        const close = d.getElementById('workPanelClose'); close.focus();
         close.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
         assert.equal(pane.isOpen(), false); assert.equal(disposed, true);
+        assert.equal(filesHost.isConnected, true, 'hiding releases the preview, not the Files tab');
         assert.equal(d.activeElement, d.getElementById('btnWorkPanel') || button);
-        assert.equal(requests, 0); assert.deepEqual(w.S.attachments, draft); assert.equal(input.value, text);
+        d.querySelector('.work-surface-tab[data-surface="files"] .work-surface-tab-close').click();
+        assert.equal(filesHost.isConnected, false, 'explicit tab close retires the Files owner');
+        assert.equal(requests, 0); assert.deepEqual(w.S.attachments, draft); assert.equal(w.S.attachments[0].file, original); assert.equal(input.value, text);
       } finally { pane.close(); w.fetch = fetch; }
     });
     await check('untrusted file names and parse messages stay inert', () => {

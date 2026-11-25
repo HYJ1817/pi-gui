@@ -52,8 +52,8 @@ module.exports = async function (t, group) {
   await group('selection-states', async () => {
     try {
       await read("import('/files-panel.js').then(m=>{m.openFilesPanel();return true})");
-      await until(() => read("!!document.querySelector('.files-maximize')"), 'selection-panel');
-      if (!await read("document.querySelector('.files-surface').classList.contains('files-maximized')")) await click('.files-maximize');
+      await until(() => read("!!document.querySelector('#workPanelMaximize')"), 'selection-panel');
+      if (!await read("(document.querySelector('#rightPane').dataset.maximized==='true')")) await click('#workPanelMaximize');
       await until(() => read(`!!document.querySelector(${JSON.stringify(tree)})`), 'selection-tree');
       await open('long-lines.js', '.fp-text-source');
       await open('guide.md', '.fp-markdown-body');
@@ -62,14 +62,22 @@ module.exports = async function (t, group) {
         win.setContentSize(width, width === 700 ? 600 : 820);
         await read(`import('/theme.js').then(m=>m.setThemePreference(${JSON.stringify(mode)}))`);
         await sleep(180);
+        if (await read("document.querySelector('.files-sidebar').hidden")) await click('.files-tree-toggle');
         await click(tree);
         await until(() => read("!!document.querySelector('.fp-markdown-body')"), 'selection-markdown');
+        // A narrow-tree selection deliberately closes the overlay. Reopen through
+        // its real trigger before measuring the visible selected row.
+        if (await read("document.querySelector('.files-sidebar').hidden")) await click('.files-tree-toggle');
         const pointerTree = await inspect(tree);
         check('pointer tree selection has no decorative frame ' + id, noFrame(pointerTree) && !pointerTree.focusVisible && pointerTree.selected === 'true', pointerTree);
+        if (await read("document.querySelector('.files-narrow.files-tree-open')!==null")) await key('Escape');
         await click(tab);
         const pointerTab = await inspect(tab), selectedTab = await inspect(tabShell);
         check('pointer tab selection has no decorative frame ' + id, noFrame(pointerTab) && noFrame(selectedTab) && !pointerTab.focusVisible && pointerTab.selected === 'true', { pointerTab, selectedTab });
         check('selected labels retain readable text ' + id, pointerTree.textContrast >= 4.5 && pointerTab.textContrast >= 4.5, { tree: pointerTree.textContrast, tab: pointerTab.textContrast });
+        // A same-tab activation remounts the async reader. Wait for document
+        // content, not the empty article shell, before clicking that content.
+        await until(() => read("!!document.querySelector('.fp-markdown-body h1')"), 'selection-content-heading');
         // Clicking content must not be required to hide a selection decoration.
         await click('.fp-markdown-body h1');
         const idleTree = await inspect(tree), idleTab = await inspect(tabShell);
@@ -86,11 +94,14 @@ module.exports = async function (t, group) {
         await key('Right');
         await until(() => read("!!document.querySelector('.fp-markdown-body')"), 'selection-keyboard-markdown');
         await shot('selection-keyboard-' + id);
-        await click(tree); await key('Down');
+        if (await read("document.querySelector('.files-sidebar').hidden")) await click('.files-tree-toggle');
+        else await click(tree);
+        await key('Down');
         const keyboardTree = await inspect('.files-entry:focus');
         check('keyboard tree retains one visible focus indicator ' + id, keyboardRing(keyboardTree), keyboardTree);
         await key('Up');
         check('tree keyboard focus returns without changing selection ' + id, await read(`document.activeElement.matches(${JSON.stringify(tree)})&&document.activeElement.getAttribute('aria-selected')==='true'`));
+        if (await read("document.querySelector('.files-narrow.files-tree-open')!==null")) await key('Escape');
         await open('archive.zip', '.fp-archive');
         // Opening an existing tab now restores expansion. Do not blindly toggle
         // a folder that the preceding theme/viewport iteration already opened.
@@ -125,8 +136,8 @@ module.exports = async function (t, group) {
         await click('.files-tabs-menu'); await key('End'); await key('Return');
       }
       await until(() => read("document.querySelectorAll('.files-tab').length===0"), 'selection-close-tabs');
-      if (await read("document.querySelector('.files-surface')?.classList.contains('files-maximized')")) await click('.files-maximize');
-      await until(() => read("!!document.querySelector('.files-surface')&&!document.querySelector('.files-surface').classList.contains('files-maximized')&&document.documentElement.dataset.theme==='dark'"), 'selection-restored-baseline');
+      if (await read("document.querySelector('#rightPane')?.dataset.maximized==='true'")) await click('#workPanelMaximize');
+      await until(() => read("!!document.querySelector('.files-surface')&&!(document.querySelector('#rightPane').dataset.maximized==='true')&&document.documentElement.dataset.theme==='dark'"), 'selection-restored-baseline');
       restored = true;
     }
   });

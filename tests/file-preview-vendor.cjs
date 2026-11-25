@@ -47,13 +47,12 @@ try {
  const {default: Excel} = await load('exceljs.js');
  const {default: mammoth} = await load('mammoth.js');
  const {default: Papa} = await load('papaparse.js');
- vm.runInContext(fs.readFileSync(path.join(workerData.base,'pptx-preview.js'),'utf8'),context);
  const book = new Excel.Workbook(); await book.xlsx.load(vm.runInContext('Uint8Array.from(fixtureXlsx).buffer',context));
  const result = await mammoth.convertToHtml({arrayBuffer: vm.runInContext('Uint8Array.from(fixtureDocx).buffer',context)});
  const csv = Papa.parse('name,value\\n中文,0');
  let csvDisabled = false; try { void book.csv; } catch { csvDisabled = true; }
  parentPort.postMessage({sheets:book.worksheets.map(sheet=>sheet.name), cell:book.worksheets[0].getCell('B2').value,
-  docx: result.value, csv:csv.data, csvDisabled, pptxInit:vm.runInContext('typeof PptxPreview.init',context),
+  docx: result.value, csv:csv.data, csvDisabled, pptxGlobalAbsent:vm.runInContext('typeof PptxPreview === "undefined"',context),
   nodeGlobalsAbsent: vm.runInContext('typeof Buffer === "undefined" && typeof process === "undefined"',context)});
 } catch(error) { parentPort.postMessage({error: String(error)}); }
 `);
@@ -103,7 +102,7 @@ async function main() {
   const check = async (label, fn) => { await fn(); passed++; console.log('PASS ' + label); };
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-preview-vendor-test-'));
   const moduleRoot = fs.realpathSync(path.join(ROOT, 'node_modules'));
-  const { materializePreviewVendor, checkedPath } = await import(pathToFileURL(path.join(ROOT, 'scripts/sync-preview-vendor.mjs')));
+  const { materializePreviewVendor, checkedPath, extractPakoZlibNotice } = await import(pathToFileURL(path.join(ROOT, 'scripts/sync-preview-vendor.mjs')));
   try {
     fs.mkdirSync(path.join(fixture, 'scripts'));
     for (const file of ['preview-browser-globals.mjs', 'sync-preview-vendor.mjs']) {
@@ -123,18 +122,31 @@ async function main() {
       assert.deepEqual(stdout.trim().split(/\r?\n/), ['public/vendor/file-preview/pptx-preview.js', 'public/vendor/file-preview/versions.json']);
     });
     const output = path.join(fixture, 'public/vendor/file-preview');
+    // Old node_modules may still contain the excluded package. Generation must
+    // not inspect it, even when it is installed and inaccessible to JS readers.
+    fs.writeFileSync(path.join(fixture, 'deny-restricted-package.mjs'), `import fs from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
+for (const name of ['readFileSync','readdirSync','existsSync','statSync','lstatSync','realpathSync']) {
+ const original=fs[name];
+ const checked=(file,...args)=>{ if (/(?:^|[\\\\/])pptx-preview(?:[\\\\/]|$)/.test(String(file))) throw new Error('restricted package filesystem access'); return original(file,...args); };
+ if (original.native) checked.native=(file,...args)=>{ if (/(?:^|[\\\\/])pptx-preview(?:[\\\\/]|$)/.test(String(file))) throw new Error('restricted package filesystem access'); return original.native(file,...args); };
+ fs[name]=checked;
+}
+syncBuiltinESMExports();
+`);
     let cliSummary;
     await check('installation command creates the complete vendor tree from a clean TEMP checkout', () => {
       assert.equal(fs.existsSync(output), false);
-      const cli = require('node:child_process').spawnSync(process.execPath, ['scripts/sync-preview-vendor.mjs'], {
+      const cli = require('node:child_process').spawnSync(process.execPath, ['--import', './deny-restricted-package.mjs', 'scripts/sync-preview-vendor.mjs'], {
         cwd: fixture, env: { ...process.env, PI_GUI_OFFLINE: '1', PI_OFFLINE: '1' }, encoding: 'utf8', windowsHide: true, timeout: 60000,
       });
       assert.ifError(cli.error);
       assert.equal(cli.status, 0, cli.stderr);
-      assert.match(cli.stderr, /Preview license review remains REQUIRED/);
+      assert.match(cli.stderr, /Preview license review remains REQUIRED; generation is not redistribution approval: pdfjs-dist Liberation fonts/);
+      assert.doesNotMatch(cli.stdout + cli.stderr, /redistribution approved|release approved/i);
       cliSummary = JSON.parse(cli.stdout.trim().replace(/^preview vendor: /, ''));
-      assert.deepEqual(cliSummary.legalReviewRequired, ['pptx-preview@1.0.7']);
-      assert.ok(fs.statSync(path.join(output, 'pptx-preview.js')).size > 0);
+      assert.deepEqual(cliSummary.legalReviewRequired, ['pdfjs-dist Liberation fonts: source-distribution obligations remain unverified (GPLv2 with font exceptions)']);
+      assert.equal(fs.existsSync(path.join(output, 'pptx-preview.js')), false);
       assert.ok(fs.statSync(path.join(output, 'pdf.worker.mjs')).size > 0);
     });
     const first = await materializePreviewVendor({ root: fixture });
@@ -180,24 +192,23 @@ async function main() {
         assert.equal(readJson(path.join(ROOT, 'node_modules', name, 'package.json')).version, version);
       }
     });
-    await check('scoped overrides are used in the actual ExcelJS/PPTX bundle inputs', () => {
-      assert.deepEqual(manifest.versions.resolvedOverrides, { exceljs: { uuid: '11.1.1' }, 'pptx-preview': { uuid: '11.1.1', echarts: '6.1.0' } });
-      for (const asset of ['exceljs.js', 'pptx-preview.js']) {
-        assert.ok(manifest.bundles[asset].packages.includes('uuid@11.1.1'));
-        assert.deepEqual(manifest.bundles[asset].packages.filter(id => id.startsWith('uuid@')), ['uuid@11.1.1']);
-      }
-      assert.ok(manifest.bundles['pptx-preview.js'].packages.includes('echarts@6.1.0'));
-      assert.deepEqual(manifest.bundles['pptx-preview.js'].packages.filter(id => id.startsWith('echarts@')), ['echarts@6.1.0']);
+    await check('scoped overrides remain effective for ExcelJS without retaining removed PPTX owners', () => {
+      assert.deepEqual(manifest.versions.resolvedOverrides, { exceljs: { uuid: '11.1.1' } });
+      assert.deepEqual(manifest.versions.overrides, { exceljs: { uuid: '11.1.1' } });
+      assert.ok(manifest.bundles['exceljs.js'].packages.includes('uuid@11.1.1'));
+      assert.deepEqual(manifest.bundles['exceljs.js'].packages.filter(id => id.startsWith('uuid@')), ['uuid@11.1.1']);
+      assert.equal(manifest.bundles['pptx-preview.js'], undefined);
+      assert.ok(!Object.keys(manifest.versions.packages).some(id => /^(?:pptx-preview|echarts|zrender|tslib|lodash)@/.test(id)));
     });
-    await check('source graph rejects opaque ExcelJS, JSZip and ECharts prebundles', () => {
-      for (const asset of ['mammoth.js', 'exceljs.js', 'pptx-preview.js']) {
+    await check('source graph rejects opaque ExcelJS, JSZip and removed PPTX/ECharts prebundles', () => {
+      for (const asset of ['mammoth.js', 'exceljs.js']) {
         const sources = manifest.bundles[asset].inputs;
         assert.ok(sources.some(file => file.includes('jszip/lib/index.js')));
         assert.ok(!sources.some(file => /\/(?:exceljs|jszip|echarts)\/dist\//.test(file)));
       }
       assert.ok(manifest.bundles['exceljs.js'].inputs.includes('node_modules/exceljs/lib/doc/workbook.js'));
-      assert.ok(manifest.bundles['pptx-preview.js'].inputs.includes('node_modules/echarts/index.js'));
-      assert.ok(manifest.bundles['pptx-preview.js'].inputs.includes('node_modules/pptx-preview/dist/pptx-preview.es.js'));
+      assert.ok(!Object.keys(manifest.inputs).some(file => /\/(?:pptx-preview|echarts|zrender|tslib|lodash)\//.test(file)));
+      assert.doesNotMatch(manifestBytes.toString(), /pptx-preview|echarts|zrender/);
     });
     await check('every recorded source is within its declared root and has its real digest', () => {
       for (const [name, info] of Object.entries(manifest.inputs)) {
@@ -209,15 +220,29 @@ async function main() {
         if (name.startsWith('node_modules/')) assert.ok(manifest.versions.packages[info.package]);
       }
     });
-    await check('LICENSE and NOTICE coexist without dropping font/wasm subcomponent licenses', () => {
-      const echarts = manifest.versions.packages['echarts@6.1.0'];
-      assert.ok(echarts.legalFiles.some(file => file.endsWith('/LICENSE')));
-      assert.ok(echarts.legalFiles.some(file => file.endsWith('/NOTICE')));
+    await check('MIT and embedded Zlib notices coexist without dropping font/wasm subcomponent licenses', () => {
+      const pako = manifest.versions.packages['pako@1.0.11'];
+      assert.ok(pako.legalFiles.some(file => file.endsWith('/LICENSE')));
+      assert.ok(pako.legalFiles.some(file => file.endsWith('/ZLIB-NOTICE.txt')));
       const pdf = manifest.versions.packages['pdfjs-dist@' + manifest.versions.direct['pdfjs-dist']];
       for (const suffix of ['/cmaps/LICENSE', '/standard_fonts/LICENSE_FOXIT', '/standard_fonts/LICENSE_LIBERATION', '/wasm/LICENSE_OPENJPEG', '/wasm/LICENSE_QCMS']) {
         assert.ok(pdf.legalFiles.some(file => file.endsWith(suffix)), suffix);
       }
       for (const pkg of Object.values(manifest.versions.packages)) for (const file of pkg.legalFiles) assert.ok(manifest.files[file]);
+    });
+    await check('PPTX exclusion does not falsely clear the separate PDF font source-distribution review', () => {
+      const pdf = manifest.versions.packages['pdfjs-dist@' + manifest.versions.direct['pdfjs-dist']];
+      const review = pdf.fontLicenseReview;
+      assert.equal(review.sourceDistributionVerified, false);
+      assert.equal(review.files.length, 4);
+      assert.deepEqual(review.files, Object.keys(manifest.copied).filter(file => /^pdf\/standard_fonts\/LiberationSans-[^/]+\.ttf$/.test(file)).sort(compare));
+      assert.ok(pdf.legalFiles.includes(review.licenseFile));
+      const license = fs.readFileSync(path.join(output, review.licenseFile), 'utf8');
+      assert.match(license, /GNU General Public License v\.2/);
+      assert.match(license, /physical product/);
+      for (const file of review.files) assert.ok(manifest.files[file] && manifest.inputs[manifest.copied[file]]);
+      assert.deepEqual(manifest.legalReviewRequired, cliSummary.legalReviewRequired);
+      assert.doesNotMatch(manifest.legalReviewRequired.join('\n'), /pptx-preview/);
     });
     await check('KaTeX font copyright/RFN and complete OFL are separate from its MIT code license', () => {
       const pkg = manifest.versions.packages['katex@' + manifest.versions.direct.katex];
@@ -253,18 +278,80 @@ async function main() {
         assert.equal(readJson(path.join(output, file)).version, manifest.versions.packages[id].version);
       }
     });
-    await check('PPTX ISC conflict is explicit and archived upstream bytes are authentic, not a template', () => {
-      const pkg = manifest.versions.packages['pptx-preview@1.0.7'];
-      assert.equal(pkg.license, 'ISC');
-      assert.match(pkg.licenseStatus, /^unresolved:/);
-      assert.deepEqual(manifest.legalReviewRequired, ['pptx-preview@1.0.7']);
-      const bytes = fs.readFileSync(path.join(output, 'licenses/pptx-preview%401.0.7/UPSTREAM-LICENSE.txt'));
+    await check('excluded PPTX retains authentic npm/upstream restriction evidence only in a non-shipped fixture', () => {
+      const evidence = readJson(path.join(ROOT, 'tests/fixtures/preview-legal/pptx-preview-1.0.7.json'));
+      assert.equal(evidence.package.name, 'pptx-preview');
+      assert.equal(evidence.package.version, '1.0.7');
+      assert.equal(evidence.package.licenseMetadata, 'ISC');
+      assert.equal(evidence.npmArchive.integrity, 'sha512-YByocJuyxAR4YB4Q3+VAxdLfEvA5LojG1gAJsx2Mw0QU5FJPps/2fkJOupJ6oBbA+KdWRpuAk6G6T34rKCHVxw==');
+      assert.equal(evidence.npmArchive.sha256, '93e7e270f93305a5238894760862a0e4471529cea5ee1dec8991cfa415c3b1b0');
+      assert.equal(evidence.npmArchive.fileCount, 47);
+      assert.deepEqual(evidence.npmArchive.standaloneLegalFiles, []);
+      const excerpt = Buffer.from(evidence.npmReadme.excerpt);
+      assert.equal(excerpt.length, evidence.npmReadme.excerptBytes);
+      assert.equal(sha256(excerpt), evidence.npmReadme.excerptSha256);
+      assert.equal(evidence.npmReadme.excerptSha256, 'efe4ae5410d35977b5b6856b8f06ea97d719481a0e9e2d203442983a578f972e');
+      assert.match(excerpt.toString(), /自用商用均可/);
+      assert.match(excerpt.toString(), /源码仅供个人学习使用，不得发布到互联网平台中/);
+      const bytes = Buffer.from(evidence.upstreamLicense.base64, 'base64');
       assert.equal(bytes.length, 200);
       assert.match(bytes.toString('utf8'), /源码仅供个人学习使用/);
       assert.doesNotMatch(bytes.toString('utf8'), /Permission to use|Copyright \(c\)/);
-      assert.equal(sha256(bytes), pkg.upstreamNotice.sha256);
-      assert.equal(pkg.upstreamNotice.gitBlob, 'f2d9e1ed347b274e9b8e0b552058fb8b0a9889fb');
-      assert.match(pkg.upstreamNotice.url, /b9bb0460a426ffe155487ee124ad9d57fd9c4c51\/LICENSE$/);
+      assert.equal(crypto.createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'), evidence.upstreamLicense.gitBlob);
+      assert.equal(evidence.upstreamLicense.gitBlob, 'f2d9e1ed347b274e9b8e0b552058fb8b0a9889fb');
+      assert.match(evidence.upstreamLicense.url, /b9bb0460a426ffe155487ee124ad9d57fd9c4c51\/LICENSE$/);
+      assert.doesNotMatch(manifest.legalReviewRequired.join('\n'), /pptx-preview/);
+      assert.ok(!Object.keys(before).some(file => /pptx-preview|preview-legal/.test(file)));
+    });
+    await check('pako archives every bundled lib/zlib copyright and full Zlib terms alongside its MIT license', () => {
+      const pkg = manifest.versions.packages['pako@1.0.11'];
+      assert.equal(pkg.license, '(MIT AND Zlib)');
+      assert.equal(pkg.zlibNotice.license, 'Zlib');
+      const bytes = fs.readFileSync(path.join(output, pkg.zlibNotice.file));
+      const expected = fs.readFileSync(path.join(ROOT, 'tests/fixtures/preview-legal/pako-1.0.11-zlib-notice.txt'));
+      assert.deepEqual(bytes, expected);
+      assert.equal(bytes.length, 960);
+      assert.equal(sha256(bytes), '170d7d544d380b38d5f76ab5eda29475b44ef537f4564163d6d9bece85c51c13');
+      assert.equal(sha256(bytes), pkg.zlibNotice.sha256);
+      assert.match(bytes.toString(), /1995-2013 Jean-loup Gailly and Mark Adler/);
+      assert.match(bytes.toString(), /2014-2017 Vitaly Puzrin and Andrey Tupitsin/);
+      for (const clause of ['1. The origin', '2. Altered source versions', '3. This notice']) assert.ok(bytes.includes(clause));
+      const sources = Object.keys(manifest.inputs).filter(name => /^node_modules\/pako\/lib\/zlib\/[^/]+\.js$/.test(name));
+      assert.equal(sources.length, 11);
+      assert.deepEqual(pkg.zlibNotice.sources, sources);
+      for (const source of sources) {
+        const original = fs.readFileSync(path.join(ROOT, source));
+        assert.ok(original.includes(bytes), source);
+        assert.equal(sha256(original), manifest.inputs[source].sha256);
+      }
+      const changes = fs.readFileSync(path.join(output, pkg.zlibNotice.transformations), 'utf8');
+      assert.match(changes, /mechanically bundled and minified by esbuild/);
+      assert.match(changes, /altered versions, not the original upstream source distribution/);
+      const mit = fs.readFileSync(path.join(output, 'licenses/pako%401.0.11/LICENSE'));
+      assert.deepEqual(mit, fs.readFileSync(path.join(moduleRoot, 'pako/LICENSE')));
+      assert.match(mit.toString(), /Vitaly Puzrin and Andrei Tuputcyn/);
+      for (const asset of ['mammoth.js', 'exceljs.js']) assert.ok(manifest.bundles[asset].packages.includes('pako@1.0.11'));
+      assert.deepEqual(readJson(path.join(output, 'licenses/pako%401.0.11/provenance.json')).zlibNotice, pkg.zlibNotice);
+    });
+    await check('missing, truncated or altered pako Zlib notices fail closed rather than falling back to MIT', () => {
+      const bytes = fs.readFileSync(path.join(ROOT, 'tests/fixtures/preview-legal/pako-1.0.11-zlib-notice.txt'));
+      assert.deepEqual(extractPakoZlibNotice(Buffer.concat([Buffer.from("'use strict';\n\n"), bytes, Buffer.from('\nvar code = 1;\n')])), bytes);
+      for (const source of [Buffer.from(''), fs.readFileSync(path.join(moduleRoot, 'pako/LICENSE')), bytes.subarray(0, -10), Buffer.from(bytes.toString().replace('Jean-loup Gailly', 'Unknown author'))]) {
+        assert.throws(() => extractPakoZlibNotice(source), /pako Zlib notice integrity mismatch/);
+      }
+    });
+    await check('source notice loss aborts materialization before replacing the published tree', async () => {
+      const original = fs.readFileSync, source = path.join(moduleRoot, 'pako/lib/zlib/inflate.js');
+      fs.readFileSync = function(file, ...args) {
+        const bytes = original(file, ...args);
+        if (typeof file !== 'string' || path.resolve(file) !== source) return bytes;
+        const text = bytes.toString().replace(/^\/\/ \(C\) 1995-2013[\s\S]*?^\/\/ 3\. This notice[^\n]*\n/m, '');
+        return Buffer.isBuffer(bytes) ? Buffer.from(text) : text;
+      };
+      try {
+        await assert.rejects(materializePreviewVendor({ root: fixture }), /pako Zlib notice integrity mismatch/);
+        assert.deepEqual(inventory(output), before);
+      } finally { fs.readFileSync = original; }
     });
     await check('saxes npm omission is repaired with complete pinned upstream copyright/ISC text', () => {
       const pkg = manifest.versions.packages['saxes@5.0.1'];
@@ -300,7 +387,7 @@ async function main() {
       assert.match(result.docx, /中文 Office Preview/);
       assert.deepEqual(result.csv[1], ['中文', '0']);
       assert.equal(result.csvDisabled, true);
-      assert.equal(result.pptxInit, 'function');
+      assert.equal(result.pptxGlobalAbsent, true);
     });
     await check('failed lockfile verification preserves the previously published tree', async () => {
       const file = path.join(fixture, 'package-lock.json');
@@ -311,6 +398,70 @@ async function main() {
       await assert.rejects(materializePreviewVendor({ root: fixture }), /lockfile mismatch/);
       assert.deepEqual(inventory(output), before);
       fs.writeFileSync(file, bytes);
+    });
+    await check('removed PPTX-only lock subgraph stays excluded while all retained dependency edges resolve offline', () => {
+      const pkg = readJson(path.join(ROOT, 'package.json'));
+      const lock = readJson(path.join(ROOT, 'package-lock.json'));
+      const excluded = ['pptx-preview', 'echarts', 'zrender', 'lodash', 'tslib'];
+      for (const name of excluded) {
+        assert.equal(pkg.dependencies[name], undefined);
+        assert.ok(!Object.keys(lock.packages).some(key => key.endsWith('/node_modules/' + name) || key === 'node_modules/' + name));
+        assert.ok(!Object.values(lock.packages).some(item => item.dependencies?.[name] || item.devDependencies?.[name] || item.optionalDependencies?.[name]));
+      }
+      assert.deepEqual(lock.packages[''].dependencies, pkg.dependencies);
+      assert.equal(lock.packages['node_modules/pako'].version, '1.0.11');
+      assert.equal(lock.packages['node_modules/jszip'].version, '3.10.2');
+      assert.equal(lock.packages['node_modules/uuid'].version, '11.1.1');
+      const visited = new Set();
+      function visit(key) {
+        if (visited.has(key)) return;
+        visited.add(key);
+        const item = lock.packages[key];
+        for (const name of Object.keys({ ...item.dependencies, ...item.devDependencies, ...item.optionalDependencies })) {
+          let cursor = key, resolved;
+          while (true) {
+            const candidate = (cursor ? cursor + '/' : '') + 'node_modules/' + name;
+            if (lock.packages[candidate]) { resolved = candidate; break; }
+            if (!cursor) break;
+            const at = cursor.lastIndexOf('/node_modules/');
+            cursor = at < 0 ? '' : cursor.slice(0, at);
+          }
+          if (!resolved && item.optionalDependencies?.[name]) continue;
+          assert.ok(resolved, `${key || 'root'} -> ${name}`);
+          visit(resolved);
+        }
+      }
+      visit('');
+      assert.equal(visited.size, Object.keys(lock.packages).length, 'no unrelated or PPTX-only lock entries become orphaned');
+    });
+    await check('reintroduced PPTX declarations or nested lock entries fail before touching installed code or publication', async () => {
+      for (const [name, mutate] of [
+        ['package.json', pkg => { pkg.dependencies['pptx-preview'] = '1.0.7'; }],
+        ['package-lock.json', lock => { lock.packages[''].dependencies['pptx-preview'] = '1.0.7'; }],
+        ['package-lock.json', lock => { lock.packages['node_modules/pptx-preview'] = { version: '1.0.7', license: 'ISC' }; }],
+        ['package-lock.json', lock => { lock.packages['node_modules/other/node_modules/pptx-preview'] = { version: '1.0.7', license: 'ISC' }; }],
+      ]) {
+        const file = path.join(fixture, name), bytes = fs.readFileSync(file), metadata = JSON.parse(bytes);
+        mutate(metadata); fs.writeFileSync(file, JSON.stringify(metadata));
+        try {
+          await assert.rejects(materializePreviewVendor({ root: fixture }), /restricted pptx-preview dependency must remain excluded/);
+          assert.deepEqual(inventory(output), before);
+        } finally { fs.writeFileSync(file, bytes); }
+      }
+    });
+    await check('staged materialization removes stale PPTX bundle and legal artifacts only after successful validation', async () => {
+      for (const name of ['pptx-preview.js', 'licenses/pptx-preview%401.0.7/UPSTREAM-LICENSE.txt', 'licenses/echarts%406.1.0/NOTICE']) {
+        const file = checkedPath(output, name); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'obsolete fixture artifact');
+      }
+      const stale = inventory(output), file = path.join(fixture, 'package-lock.json'), bytes = fs.readFileSync(file), lock = JSON.parse(bytes);
+      lock.packages['node_modules/fflate'].version = '0.0.0'; fs.writeFileSync(file, JSON.stringify(lock));
+      try {
+        await assert.rejects(materializePreviewVendor({ root: fixture }), /lockfile mismatch/);
+        assert.deepEqual(inventory(output), stale);
+      } finally { fs.writeFileSync(file, bytes); }
+      assert.deepEqual(await materializePreviewVendor({ root: fixture }), first);
+      assert.deepEqual(inventory(output), before);
+      assert.ok(!Object.keys(inventory(output)).some(name => /pptx-preview|echarts/.test(name)));
     });
     await check('unapplied overrides are fatal before publication', async () => {
       const file = path.join(fixture, 'package.json');

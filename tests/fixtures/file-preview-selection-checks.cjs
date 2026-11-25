@@ -24,7 +24,7 @@ function probe({ failWorksheet = false, failRestore = false, weight = '600', sel
         state.theme = theme;
       }
       if (code.includes('document.documentElement.dataset.theme')) return state.theme === 'dark' && !state.maximized;
-      if (code.includes("classList.contains('files-maximized')")) return state.maximized;
+      if (code.includes(".dataset.maximized==='true'")) return state.maximized;
       if (code.includes("document.querySelectorAll('.files-tab').length")) return code.includes('>0') ? state.tabs.size > 0 : state.tabs.size === 0;
       return true;
     },
@@ -32,7 +32,7 @@ function probe({ failWorksheet = false, failRestore = false, weight = '600', sel
     async shot() {},
     async sleep() {},
     async click(selector) {
-      if (selector === '.files-maximize') state.maximized = !state.maximized;
+      if (selector === '#workPanelMaximize') state.maximized = !state.maximized;
       if (selector === '.files-tabs-menu') state.menu = true;
     },
     async key(key) {

@@ -25,7 +25,7 @@ const until = async (fn, label = 'UI state') => {
   throw new Error(label + ' timeout');
 };
 
-const dom = new JSDOM('<!doctype html><html><body><div id="host"></div><div id="messages"></div><div id="toasts"></div><div id="modal" hidden></div><div id="confirmLayer" hidden></div></body></html>', {
+const dom = new JSDOM('<!doctype html><html><body><div class="app"><div id="host"></div><button id="btnWorkPanel">工作区</button><div id="rightPaneResizer"></div><aside id="rightPane" hidden><div id="workPanelTabs" role="tablist"></div><button id="workPanelNew">新标签页</button><button id="workPanelClose">隐藏</button><div class="rp-body"></div></aside></div><div id="messages"></div><div id="toasts"></div><div id="modal" hidden></div><div id="confirmLayer" hidden></div></body></html>', {
   url: 'http://127.0.0.1/',
   pretendToBeVisual: true,
 });
@@ -38,20 +38,6 @@ global.MutationObserver = dom.window.MutationObserver;
 global.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 global.cancelAnimationFrame = clearTimeout;
 global.getComputedStyle = dom.window.getComputedStyle;
-
-function fakeView() {
-  let current = true;
-  const hooks = [];
-  return {
-    isCurrent: () => current,
-    onDispose(fn) { if (current) hooks.push(fn); },
-    dispose() {
-      if (!current) return;
-      current = false;
-      for (const fn of hooks.reverse()) fn();
-    },
-  };
-}
 
 const WIN = 'C:/fixture/project';
 const WORKSPACE = { id: 'w1', generation: '1' };
@@ -66,7 +52,10 @@ const contentFor = (filePath) => {
 
 (async () => {
   const { md } = await import('../public/markdown.js');
-  const { mountFilesPanel } = await import('../public/files-panel.js');
+  const { openFilesPanel } = await import('../public/files-panel.js');
+  const { initRightPane } = await import('../public/right-pane.js');
+  const { configureSecondaryPane, closeSecondarySurface } = await import('../public/ui/secondary-surface.js');
+  configureSecondaryPane(initRightPane());
   const { setGitConversationScope } = await import('../public/api.js');
   const { S } = await import('../public/state.js');
   const { initFileLinks, enhanceFileCandidates, resetFileLinkCaches, fileLinkCacheStats } = await import('../public/file-links-ui.js');
@@ -317,13 +306,10 @@ const contentFor = (filePath) => {
       file: { path: filePath, bytes: contentFor(filePath).length, binary, content: binary ? '' : contentFor(filePath) },
     };
   };
-  const view = fakeView();
-  const panelHost = document.createElement('section');
-  host.append(panelHost);
   const externalDocs = [];
   const externalMetas = [];
   let panelMetadataAbsolute = null;
-  mountFilesPanel(panelHost, view, {
+  const view = openFilesPanel({
     transport: {
       list,
       document: documentTransport,
@@ -344,6 +330,7 @@ const contentFor = (filePath) => {
       },
     },
   });
+  const panelHost = view.host;
   await until(() => panelHost.querySelectorAll('.files-entry').length >= 3);
 
   // jsdom 没有 createObjectURL；图片预览只需要可预测的 URL。
@@ -801,13 +788,14 @@ const contentFor = (filePath) => {
   messages.append(externalWrap);
   const externalChip = externalWrap.querySelector('a.md-file-link');
   const fetchCallsBeforeExternal = fetchCalls.length;
-  ok('an external absolute path is rendered as an inline reference with the original path', () => {
+  ok('external references show filename and icon while retaining original path identity and accessible name', () => {
     assert.ok(externalChip);
     assert.equal(externalChip.classList.contains('is-external'), true);
     assert.equal(externalChip.dataset.fileExternal, '1');
     assert.equal(externalChip.dataset.filePath, 'D:/外部 报告/报告 v1.md');
     assert.equal(externalChip.dataset.fileDisplay, 'D:/外部 报告/报告 v1.md');
-    assert.equal(externalChip.querySelector('.md-file-name').textContent, 'D:/外部 报告/报告 v1.md');
+    assert.equal(externalChip.querySelector('.md-file-name').textContent, '报告 v1.md');
+    assert.equal(externalChip.getAttribute('aria-label'), 'D:/外部 报告/报告 v1.md');
     assert.ok(externalChip.querySelector('.file-kind-icon'));
     assert.equal(fetchCalls.length, fetchCallsBeforeExternal);
   });
@@ -902,7 +890,7 @@ const contentFor = (filePath) => {
   });
 
   /* 收尾 */
-  view.dispose();
+  closeSecondarySurface('files');
   dom.window.URL.createObjectURL = realCreate;
   dom.window.URL.revokeObjectURL = realRevoke;
   delete global.URL.createObjectURL;

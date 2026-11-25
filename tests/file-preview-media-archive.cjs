@@ -13,6 +13,7 @@ const { crc32 } = require('../lib/zip.cjs');
 const { tinyBmp } = require('./fixtures/attachment-files.cjs');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-media-archive-'));
 const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://fixture.invalid/' });
+global.window = dom.window;
 global.document = dom.window.document;
 global.DOMParser = dom.window.DOMParser;
 const load = name => import(pathToFileURL(path.join(__dirname, '../public/file-preview', name)).href);
@@ -293,12 +294,14 @@ test('SVG rejects scripts/foreignObject/external references/DTD/animation, never
 test('image fit/original/zoom and disposal remove own listeners/source, stale reads add nothing', async () => {
   const [, { mount }] = await modules;
   const scope = context(png, 'image.png'); const instance = await mount(scope.ctx);
-  const buttons = [...scope.ctx.toolbar.querySelectorAll('button')];
-  buttons.find(item => item.textContent === '原始尺寸').click();
+  const control = label => scope.ctx.toolbar.querySelector(`button[aria-label="${label}"]`);
+  control('阅读选项').click();
+  const original = [...document.querySelectorAll('[role="menuitem"]')].find(item => item.textContent.trim() === '原始尺寸');
+  assert.ok(original); original.click();
   assert.equal(instance.getState().mode, 'original');
-  buttons.find(item => item.textContent === '放大').click();
+  control('放大').click();
   assert.equal(instance.getState().zoom, 1.25);
-  buttons.find(item => item.textContent === '适合窗口').click();
+  control('适合窗口').click();
   assert.equal(instance.getState().mode, 'fit');
   const image = scope.ctx.host.querySelector('img'); instance.dispose();
   assert.equal(image.hasAttribute('src'), false);

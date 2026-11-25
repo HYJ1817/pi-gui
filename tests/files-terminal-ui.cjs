@@ -1919,11 +1919,15 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
     mountFilesPanel(host, view, { transport: { list, document } });
     await until(() => host.querySelectorAll('.files-entry').length >= 2);
     ok('files starts with a bounded root listing and a read-only empty preview', () => {
-      assert.equal(host.querySelector('.rp-head-title').textContent, '文件');
+      assert.equal(host.querySelector('.rp-head-title,.rp-head-sub'), null);
+      assert.equal(host.querySelectorAll('.files-preview-head').length, 1);
       const names = [...host.querySelectorAll('.files-entry-name')].map((n) => n.textContent);
       assert.ok(names.includes('src') && names.includes('README.md'));
       assert.ok(!names.includes('.env'));
-      assert.ok(host.querySelector('.files-preview').textContent.includes('只读'));
+      assert.equal(host.querySelector('.files-preview').getAttribute('aria-label'), '文件预览（只读）');
+      assert.equal(host.querySelector('.files-preview').getAttribute('role'), 'group');
+      assert.equal(host.querySelector('.files-empty-title').textContent, '选择文件预览');
+      assert.equal(host.querySelector('.files-empty-text'), null);
       assert.equal(lists[0].dir, '');
       assert.equal(lists[0].options.hidden, false);
     });
@@ -2095,13 +2099,16 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
   {
     const { registerShortcut, assertNoConflicts } = await import('../public/shortcuts.js');
     const appSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
-    const block = appSource.slice(appSource.indexOf('const workPanelToolEntries = ['), appSource.indexOf('];', appSource.indexOf('const workPanelToolEntries = [')) + 2);
-    const order = ['navChanges', 'btnTerminal', 'btnFiles', 'btnBrowser', 'btnSpecs', 'btnTree', 'btnCollab'];
-    ok('the launcher entries keep the required four-cell order (变更/终端/文件/更多)', () => {
-      const positions = order.map((id) => block.indexOf(id));
-      assert.ok(positions.every((position) => position >= 0));
+    const start = appSource.indexOf('for (const tool of [');
+    const end = ']) registerSecondaryTool(tool);';
+    const block = appSource.slice(start, appSource.indexOf(end, start) + end.length);
+    const order = ['changes', 'terminal', 'files', 'specs', 'browser', 'tree', 'collab', 'process'];
+    ok('the launcher registers real tool owners in a stable order, not hidden source buttons', () => {
+      const positions = order.map(id => block.indexOf(`{ id: '${id}'`));
+      assert.ok(positions.every(position => position >= 0));
       assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
-      assert.ok(block.indexOf('more: true') > block.indexOf('btnFiles'));
+      assert.ok(block.includes('registerSecondaryTool(tool)'));
+      assert.doesNotMatch(block, /sourceId|more:\s*true/);
     });
     assert.doesNotThrow(() => {
       registerShortcut({ id: 'fixture-terminal', combo: 'primary+`', label: '终端', run() {} });

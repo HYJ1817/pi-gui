@@ -122,19 +122,28 @@ async function main() {
     clipboard, win, read, check, sleep, until, shot, click, key, type, value, open };
   await require('./file-preview-desktop-scenarios.cjs')(tools, group);
   await require('./file-preview-desktop-formats.cjs')(tools, group);
+  // Layout proof runs while the Files surface is still mounted. The Surface
+  // scenarios below deliberately close every top-level tab, and reopening Files
+  // with a queued file request currently races the pre-existing Files internal
+  // tab restore (R0, tracked separately, not widened here). Do not conflate
+  // that known restore race with common-maximize layout acceptance.
   await group('packaged-layout', async () => {
     await open('guide.md', '.fp-markdown-body');
-    if (!await read("document.querySelector('.files-surface').classList.contains('files-maximized')")) await click('.files-maximize');
+    if (!await read("document.querySelector('#rightPane').dataset.maximized==='true'")) await click('#workPanelMaximize');
     for (const width of [1320, 700]) for (const theme of ['dark', 'light']) {
       win.setContentSize(width, width === 700 ? 600 : 820);
       check('packaged theme ' + theme + ' ' + width, await read(`import('/theme.js').then(m=>m.setThemePreference(${JSON.stringify(theme)}))`));
       await sleep(200);
-      const measured = await read("(()=>{const s=document.querySelector('.files-surface').getBoundingClientRect();return{width:innerWidth,height:innerHeight,dpr:devicePixelRatio,theme:document.documentElement.dataset.theme,overflow:document.documentElement.scrollWidth-innerWidth,surfaceWidth:s.width,bodyText:!!document.querySelector('.fp-markdown-body .katex')}})()");
+      const measured = await read(`(${require('./file-preview-desktop-geometry.cjs').toString()})()`);
       geometry.push(measured);
-      check('packaged bounded layout ' + width + '-' + theme, Math.abs(measured.width - measured.surfaceWidth) <= 2 && measured.overflow <= 1 && measured.bodyText);
+      check('packaged bounded common-maximize layout ' + width + '-' + theme,
+        Math.abs(measured.pane.width - measured.expectedWidth) <= 2 && Math.abs(measured.surface.width - measured.body.width) <= 2 &&
+        Math.abs(measured.surface.x - measured.body.x) <= 2 && Math.abs(measured.pane.right - measured.app.right) <= 2 &&
+        measured.docOverflow <= 1 && measured.bodyText && measured.chatPresent && measured.chatInert, measured);
       await shot('packaged-' + width + '-' + theme);
     }
   });
+  await require('./surface-final-scenarios.cjs')(tools, group);
   check('packaged renderer did not crash', diagnostics.rendererGone === 0);
 }
 main().catch(error => { check('packaged boot and integration', false, { type: error.name, stage: error.testLabel || 'boot' }); }).finally(async () => {

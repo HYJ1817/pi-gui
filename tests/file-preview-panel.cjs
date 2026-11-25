@@ -3,7 +3,7 @@
  * No network, real Pi, user project writes, or assertions about jsdom layout. */
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
-const dom = new JSDOM('<!doctype html><body><div id="rightPane" style="width:392px"></div><div id="toasts"></div></body>', { url: 'http://127.0.0.1/', pretendToBeVisual: true });
+const dom = new JSDOM('<!doctype html><body><div class="app"><main id="workspace"></main><aside id="rightPane" style="width:392px" hidden><div id="rightPaneResizer"></div><div id="workPanelTabs"></div><button id="workPanelMaximize"></button><div class="rp-body"></div></aside></div><div id="toasts"></div></body>', { url: 'http://127.0.0.1/', pretendToBeVisual: true });
 for (const key of ['window', 'document', 'localStorage', 'sessionStorage', 'CustomEvent', 'MutationObserver']) global[key] = key === 'window' ? dom.window : dom.window[key];
 global.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 global.cancelAnimationFrame = clearTimeout;
@@ -16,11 +16,11 @@ const deferred = () => { let resolve; const promise = new Promise((r) => { resol
 const event = (target, type, props) => target.dispatchEvent(new dom.window.KeyboardEvent(type, { bubbles: true, cancelable: true, ...props }));
 let fixtureSequence = 0;
 let mountFilesPanel;
-let stateModule;
+let stateModule, pane, surfaces;
 const made = [];
 function fixture({ width = 1000, session, owner, transport = {}, previewMount } = {}) {
   const index = ++fixtureSequence;
-  const root = document.getElementById('rightPane');
+  const root = document.querySelector('#rightPane .rp-body');
   const host = document.createElement('section'); root.append(host);
   const size = { width };
   host.getBoundingClientRect = () => ({ width: size.width, height: 700, left: 0, top: 0, right: size.width, bottom: 700 });
@@ -71,12 +71,17 @@ function menuItem(label) { return [...document.querySelectorAll('[role="menuitem
 (async () => {
   ({ mountFilesPanel } = await import('../public/files-panel.js'));
   stateModule = await import('../public/files-state.js');
+  surfaces = await import('../public/ui/secondary-surface.js');
+  Object.defineProperty(document.querySelector('.app'), 'clientWidth', { value: 1000 });
+  pane = (await import('../public/right-pane.js')).initRightPane();
+  surfaces.configureSecondaryPane(pane);
   try {
     {
       const f = fixture(); await until(() => f.row('src'));
       check('root listing is lazy and the header has no persistent subtitle', () => {
         assert.deepEqual(f.calls.list.map((call) => call.path), ['']);
-        assert.equal(f.host.querySelector('.rp-head-sub').hidden, true);
+        assert.equal(f.host.querySelector('.rp-head-title,.rp-head-sub'), null);
+        assert.equal(f.host.querySelectorAll('.files-preview-head').length, 1);
         assert.equal(f.host.querySelectorAll('[role="treeitem"][tabindex="0"]').length, 1);
       });
       f.row('src').focus(); event(f.row('src'), 'keydown', { key: 'ArrowRight' }); await until(() => f.row('src/app.js'));
@@ -120,7 +125,7 @@ function menuItem(label) { return [...document.querySelectorAll('[role="menuitem
         assert.equal(f.row('src/nested').getAttribute('aria-expanded'), 'true');
         assert.equal(f.row('src/nested/deep.ts').getAttribute('aria-current'), 'page');
       });
-      const divider = f.host.querySelector('.files-tree-resizer'); event(divider, 'keydown', { key: 'ArrowRight' });
+      const divider = f.host.querySelector('.files-tree-resizer'); event(divider, 'keydown', { key: 'ArrowLeft' });
       check('tree resizer has an independent accessible value', () => assert.equal(divider.getAttribute('aria-valuenow'), '236'));
       const toggle = f.host.querySelector('.files-tree-toggle'); toggle.click();
       check('wide tree can be hidden without disposing the current preview', () => {
@@ -143,19 +148,27 @@ function menuItem(label) { return [...document.querySelectorAll('[role="menuitem
         assert.equal(document.activeElement, toggle);
         assert.equal(f.host.querySelector('.files-main').inert, false);
       });
-      const max = f.host.querySelector('.files-maximize'); max.click();
-      check('maximize is Files-local and does not change remembered pane width', () => {
-        assert.equal(document.getElementById('rightPane').classList.contains('files-pane-maximized'), true);
-        assert.equal(document.getElementById('rightPane').style.width, '392px');
-        assert.equal(max.getAttribute('aria-label'), '还原文件面板');
+      pane.open('files');
+      const max = document.getElementById('workPanelMaximize'); max.click();
+      check('the common pane owns maximize and retains its remembered width', () => {
+        assert.equal(pane.isMaximized(), true);
+        assert.equal(pane.width(), 392);
+        assert.equal(max.getAttribute('aria-label'), '还原工作面板');
+        assert.equal(f.host.querySelector('.files-maximize'), null);
+        assert.equal(document.getElementById('rightPane').style.width, '1000px');
       });
       max.click();
-      check('restore removes the Files override', () => assert.equal(document.getElementById('rightPane').classList.contains('files-pane-maximized'), false));
-      max.click(); f.dispose();
-      check('disposing a maximized surface restores pane geometry and releases preview', () => {
-        assert.equal(document.getElementById('rightPane').classList.contains('files-pane-maximized'), false);
-        assert.equal(f.calls.preview.filter((entry) => !entry.disposed).length, 0);
+      check('the common restore control restores normal geometry', () => {
+        assert.equal(pane.isMaximized(), false);
+        assert.equal(document.getElementById('rightPane').style.width, '392px');
       });
+      max.click(); f.dispose();
+      check('disposing Files releases its preview without changing common maximize ownership', () => {
+        assert.equal(pane.isMaximized(), true);
+        assert.equal(f.calls.preview.filter((entry) => !entry.disposed).length, 0);
+        assert.equal(document.getElementById('rightPane').classList.contains('files-pane-maximized'), false);
+      });
+      pane.close();
     }
     {
       const f = fixture(); await f.open('src/app.js'); await f.open('docs/app.js'); await f.open('root.txt');
@@ -333,10 +346,13 @@ function menuItem(label) { return [...document.querySelectorAll('[role="menuitem
     {
       let disposed = 0;
       const f = fixture({ previewMount() { return { ready: Promise.resolve(), getState: () => ({}), dispose() { disposed++; throw new Error('fixture cleanup failure'); } }; } });
-      await f.open('root.txt'); f.host.querySelector('.files-maximize').click();
+      await f.open('root.txt'); f.size.width = 390; window.dispatchEvent(new dom.window.Event('resize'));
+      f.host.querySelector('.files-tree-toggle').click(); const main = f.host.querySelector('.files-main');
       check('a failing plugin cleanup cannot prevent Files geometry or listeners from releasing', () => {
+        assert.equal(main.inert, true);
         assert.doesNotThrow(() => f.dispose());
         assert.equal(disposed, 1);
+        assert.equal(main.inert, false);
         assert.equal(document.getElementById('rightPane').classList.contains('files-pane-maximized'), false);
       });
     }
@@ -488,6 +504,7 @@ function menuItem(label) { return [...document.querySelectorAll('[role="menuitem
     console.log(`file-preview-panel: ${checks} checks passed`);
   } finally {
     for (const f of made) f.dispose();
+    surfaces.configureSecondaryPane(null);
     dom.window.close();
   }
 })().catch((error) => { console.error(error.stack || error); process.exitCode = 1; });

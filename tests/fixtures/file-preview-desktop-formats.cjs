@@ -10,11 +10,13 @@ module.exports = async function (t, group) {
     check('Markdown source toggle uses unified real text plugin', await read("document.querySelector('.fp-text-rows').textContent.includes('![本地彩色图]')"));
     await click('.fp-source-toggle'); await until(() => read("!!document.querySelector('.fp-markdown-body')"), 'markdown-rerender');
     await type('.fp-search', 'English');
+    await until(() => read("document.querySelectorAll('mark.fp-md-hit').length===1"), 'markdown-search-completed');
     check('Markdown document search highlights real rendered text', await read("document.querySelectorAll('mark.fp-md-hit').length===1"));
   });
   await group('html', async () => {
     await open('sample.html', '.fp-html-source');
     check('HTML defaults to inert visible source', await read("!document.querySelector('.fp-html-source').hidden&&!document.querySelector('.fp-html-frame')"));
+    await until(() => read("document.querySelector('[aria-label=\"切换到静态预览\"]')?.disabled===false&&document.querySelector('.fp-html-source').textContent.length>0"), 'html-source-loaded');
     await click('[aria-label="切换到静态预览"]');
     await until(() => read("!!document.querySelector('.fp-html-frame')"), 'html-frame');
     const child = () => win.webContents.mainFrame.frames.find(frame => frame.url === 'about:srcdoc');
@@ -74,7 +76,7 @@ module.exports = async function (t, group) {
     await open('workbook.xlsx', '.office-grid-viewport');
     await until(() => read("document.querySelectorAll('.office-sheet-tabs [role=tab]').length===3"), 'xlsx-parser', 22000);
     check('ExcelJS worker preserves display values, merge and cached formula', await read("document.querySelector('.office-grid-rows').textContent.includes('1,234.50')&&document.querySelector('.office-grid-rows').textContent.includes('2469')&&!!document.querySelector('.office-grid-cell[aria-colspan=\"2\"]')"));
-    await click('[aria-label="显示公式"]');
+    await require('./file-preview-desktop-actions.cjs')(t, '显示公式');
     check('XLSX formula toggle displays formula without recalculating', await read("document.querySelector('.office-grid-rows').textContent.includes('B2*2')"));
     await read("[...document.querySelectorAll('.office-sheet-tabs button')].find(e=>e.textContent==='Virtual Rows').click()");
     await until(() => read("document.querySelector('.office-grid-viewport').getAttribute('aria-rowcount')==='2000'"), 'xlsx-virtual');
@@ -87,7 +89,9 @@ module.exports = async function (t, group) {
     await until(() => read("document.querySelector('.office-page-input')&&!document.querySelector('.office-page-input').disabled"), 'pptx-real-parser', 25000);
     check('real PPTX parser loads two slides in opaque allow-scripts frame', await read("document.querySelector('.office-page-count').textContent.includes('2')&&document.querySelector('.office-slides-frame').sandbox.value==='allow-scripts'"));
     const frame = win.webContents.mainFrame.frames.find(frame => frame.url === 'about:srcdoc');
-    check('PPTX paints actual parsed slide text and shape layout', await frame.executeJavaScript("!!document.querySelector('.pptx-preview-slide-wrapper')&&document.body.textContent.includes('第 1 页')"));
+    const slidePainted = () => frame.executeJavaScript("!!document.querySelector('.pptx-slide')&&document.body.textContent.includes('第 1 页')&&document.querySelectorAll('svg rect').length===2&&document.querySelector('img')?.complete&&document.querySelector('img')?.naturalWidth===1");
+    await until(slidePainted, 'pptx-first-slide-image-decoded');
+    check('PPTX paints actual parsed slide text and shape layout', await slidePainted());
     await click('[aria-label="下一页"]');
     await until(() => read("document.querySelector('.office-page-input').value==='2'"), 'pptx-page2');
     check('PPTX page navigation reaches second parsed slide', true);
@@ -96,7 +100,7 @@ module.exports = async function (t, group) {
     await until(() => read("document.querySelector('.office-page-input')?.value==='2'&&!document.querySelector('.office-page-input').disabled"), 'pptx-tab-restore', 25000);
     check('real PPTX restores second slide and string-valued zoom across tabs', await read("document.querySelector('.office-zoom').value==='75'"));
     const restoredFrame = win.webContents.mainFrame.frames.find(frame => frame.url === 'about:srcdoc');
-    check('restored PPTX still paints actual second-slide content', await restoredFrame.executeJavaScript("document.body.textContent.includes('第 2 页')&&!!document.querySelector('.pptx-preview-slide-wrapper')"));
+    check('restored PPTX still paints actual second-slide content', await restoredFrame.executeJavaScript("document.body.textContent.includes('第 2 页')&&!!document.querySelector('.pptx-slide')"));
   });
   await group('image-audio-archive', async () => {
     await open('local.png', '.fp-image-viewport');

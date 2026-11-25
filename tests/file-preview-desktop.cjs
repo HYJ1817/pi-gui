@@ -54,7 +54,10 @@ async function main() {
   child.stdout.on('data', data => process.stdout.write(data));
   // Chromium may log URLs/paths; retain only structural counts in the report.
   let stderrChunks = 0; child.stderr.on('data', () => { stderrChunks++; });
-  const deadline = Date.now() + 240000;
+  // The complete four-viewport/theme selection matrix precedes the format and
+  // layout scenarios. Allow that whole sequence to finish on a busy Windows
+  // host; individual readiness waits still retain their 10/22-second bounds.
+  const deadline = Date.now() + 480000;
   while (!fs.existsSync(path.join(world, 'ready-for-cleanup')) && child.exitCode === null && !spawnError && Date.now() < deadline) await sleep(100);
   if (spawnError) throw new Error('environment-blocked: Electron ' + spawnError);
   if (child.exitCode === null && fs.existsSync(path.join(world, 'ready-for-cleanup'))) {

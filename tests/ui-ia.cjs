@@ -11,6 +11,13 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   const pub = path.resolve(__dirname, '../public');
   const dom = new JSDOM(fs.readFileSync(path.join(pub, 'index.html'), 'utf8'), { url: 'http://localhost:7788', runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window, d = w.document, $ = id => d.getElementById(id);
+  const activateTool = id => {
+    const existing = d.querySelector(`.work-surface-tab[data-surface="${id}"] .work-surface-tab-select`);
+    if (existing) { if ($('rightPane').hidden) $('btnWorkPanel').click(); existing.click(); return; }
+    if ($('rightPane').hidden) $('btnWorkPanel').click(); else $('workPanelNew').click();
+    const row = d.querySelector(`.work-panel-launcher-row[data-tool="${id}"]`);
+    assert.ok(row, `missing Launcher tool ${id}`); row.click();
+  };
   w.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   w.ResizeObserver = class { observe() {} disconnect() {} };
   w.HTMLElement.prototype.scrollIntoView = () => {};
@@ -37,11 +44,11 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     onState: () => () => {}, onNotice: () => () => {} } };
   w.eval(bundle(path.join(pub, 'app.js')).code); await tick();
   w.S.hasProject = true; w.S.bridgeState = 'ready'; w.S.restoring = false; w.applyProjectState();
-  await check('Changes is contextual, absent from global navigation', () => {
-    assert.equal(d.querySelector('#globalRail #navChanges'), null);
-    assert.ok(d.querySelector('#workPanelNav #navChanges'));
-    assert.equal(d.querySelector('.head-right #navChanges'), null);
+  await check('work tools are absent from legacy navigation and exposed through the shared panel trigger', () => {
+    assert.equal(d.querySelector('#navChanges, #btnTerminal, #btnFiles, #btnBrowser, #btnSpecs, #btnTree, #btnCollab'), null);
     assert.ok(d.querySelector('.head-right #btnWorkPanel'));
+    assert.ok($('workPanelTabs')?.matches('[role="tablist"]'));
+    assert.ok($('workPanelNew') && $('workPanelMaximize'));
   });
   await check('Settings has all seven logical groups, none empty, and bound actions', () => {
     $('navGlobalMore').click();
@@ -163,19 +170,26 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal($('navHome').getAttribute('aria-current'), 'page');
     $('input').value = '';
   });
-  await check('Work panel launcher contains only live registered tools and preserves chat', () => {
+  await check('Work panel Launcher shows real registry tools and preserves chat', () => {
     $('btnWorkPanel').click();
     assert.equal($('rightPane').hidden, false);
-    assert.ok($('workPanelNav').contains($('btnBrowser')));
+    assert.deepEqual([...d.querySelectorAll('.work-panel-launcher-row')].map(row => row.dataset.tool), ['changes', 'terminal', 'files', 'specs', 'browser', 'tree', 'collab', 'process']);
+    assert.equal(d.querySelectorAll('.work-panel-launcher-grid, .work-panel-launcher-card, .work-panel-launcher-more').length, 0);
     assert.equal($('workspace').dataset.workspaceView, 'chat');
-    $('btnWorkPanel').click(); assert.equal($('rightPane').hidden, true);
+    $('workPanelClose').click(); assert.equal($('rightPane').hidden, true);
+    assert.ok(d.querySelector('.work-surface-tab[data-surface="work-tools"]'), 'hiding preserves the live Launcher tab');
   });
-  await check('Settings keeps the work panel entrance visible and close restores it', () => {
+  await check('Settings keeps the work panel entrance visible and hide preserves its selected tool tab', () => {
     $('navGlobalMore').click();
     assert.equal($('btnWorkPanel').hidden, false);
     $('btnWorkPanel').click(); assert.equal($('rightPane').hidden, false);
+    $('workPanelNew').click();
+    d.querySelector('.work-panel-launcher-row[data-tool="changes"]').click();
+    const changesTab = d.querySelector('.work-surface-tab[data-surface="changes"] .work-surface-tab-select');
+    assert.ok(changesTab);
     $('workPanelClose').focus(); $('workPanelClose').click();
     assert.equal(d.activeElement, $('btnWorkPanel'));
+    assert.ok(d.querySelector('.work-surface-tab[data-surface="changes"]'), 'hiding is not tab close');
     $('settingsReturn').click();
   });
   await check('Settings leaf is a central page with selected directory and no modal', async () => {
@@ -377,7 +391,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
   });
   await check('Changes preserves mounted conversation, scroll and draft', async () => {
     $('input').value = 'draft'; $('stream').scrollTop = 71;
-    $('navChanges').click(); await tick();
+    activateTool('changes'); await tick();
     assert.equal($('workspace').dataset.workspaceView, 'chat');
     assert.equal($('chatView').hidden, false); assert.equal($('chatComposer').hidden, false);
     assert.equal($('rightPane').hidden, false); assert.equal($('rightPane').dataset.surface, 'changes');
@@ -386,23 +400,35 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     d.querySelector('#rightPane .chg-main').click(); await tick();
     assert.equal(d.querySelector('#rightPane .chg-diff').hidden, false);
   });
-  await check('Changes close releases content and restores contextual focus', () => {
-    $('rightPaneClose').click();
-    assert.equal($('rightPane').hidden, true); assert.equal(d.querySelector('#rightPane .chg-row'), null);
-    assert.equal($('navChanges').getAttribute('aria-pressed'), 'false'); assert.equal(d.activeElement, $('btnWorkPanel'));
+  await check('closing the Changes tab releases its owner and focuses a surviving tab', () => {
+    const close = d.querySelector('.work-surface-tab[data-surface="changes"] .work-surface-tab-close');
+    close.focus(); close.click();
+    assert.equal($('rightPane').hidden, false); assert.equal(d.querySelector('#rightPane .chg-row'), null);
+    assert.equal(d.querySelector('.work-surface-tab[data-surface="changes"]'), null);
+    assert.equal(d.activeElement, d.querySelector('.work-surface-tab-select[aria-selected="true"]'));
   });
-  await check('Browser → Changes disposes native view; no duplicate surfaces', async () => {
-    $('btnBrowser').click(); await tick(); assert.ok(d.querySelector('#browserViewport'));
-    $('navChanges').click(); await tick();
-    assert.equal(d.querySelector('#browserViewport'), null); assert.ok(nativeCloses > 0);
-    assert.equal($('btnBrowser').getAttribute('aria-pressed'), 'false');
-    assert.equal(d.querySelectorAll('#rightPane .rp-surface').length, 1);
+  await check('Browser and Changes remain live as independent tabs; explicit Browser close releases native view', async () => {
+    activateTool('browser'); await tick(); assert.ok(d.querySelector('#browserViewport'));
+    const closesBefore = nativeCloses;
+    activateTool('changes'); await tick();
+    const browserTab = d.querySelector('.work-surface-tab[data-surface="browser"]');
+    assert.ok(browserTab); assert.ok(d.querySelector('#browserViewport'), 'switching tabs must retain Browser DOM');
+    assert.equal(d.querySelector('#browserViewport').closest('[role="tabpanel"]').hidden, true);
+    assert.equal(nativeCloses, closesBefore, 'background tab switch is not explicit close');
+    browserTab.querySelector('.work-surface-tab-select').click();
+    assert.equal(d.querySelector('#browserViewport').closest('[role="tabpanel"]').hidden, false);
+    browserTab.querySelector('.work-surface-tab-close').click(); await tick();
+    assert.equal(d.querySelector('#browserViewport'), null); assert.ok(nativeCloses > closesBefore);
+    assert.ok(d.querySelector('.work-surface-tab[data-surface="changes"] .work-surface-tab-select[aria-selected="true"]'));
   });
-  await check('Changes → Browser invalidates old Changes owner', async () => {
-    $('btnBrowser').click(); await tick();
-    assert.equal(d.querySelector('#rightPane .chg-row'), null); assert.ok(d.querySelector('#browserViewport'));
-    await w.refreshGitNow(); assert.equal(d.querySelector('#rightPane .chg-row'), null);
-    assert.equal($('navChanges').getAttribute('aria-pressed'), 'false');
+  await check('Changes remains mounted and refreshes while Browser is selected', async () => {
+    activateTool('browser'); await tick();
+    const changesTab = d.querySelector('.work-surface-tab[data-surface="changes"] .work-surface-tab-select');
+    const changesHost = d.getElementById(changesTab?.getAttribute('aria-controls'));
+    assert.ok(changesHost?.hidden); assert.equal(changesHost.querySelectorAll('.chg-row').length, 1);
+    await w.refreshGitNow();
+    assert.equal(changesHost.querySelectorAll('.chg-row').length, 1);
+    assert.ok(d.querySelector('#browserViewport'));
   });
   await check('Every project row has its own New action', async () => {
     await w.loadProjects();

@@ -128,23 +128,26 @@ async function main() {
   await require('./file-preview-desktop-formats.cjs')(tools, group);
   await group('layout', async () => {
     await open('long-lines.js', '.fp-text-rows');
-    if (!await read("document.querySelector('.files-surface').classList.contains('files-maximized')")) await click('.files-maximize');
+    if (!await read("document.querySelector('#rightPane').dataset.maximized==='true'")) await click('#workPanelMaximize');
     for (const width of [1320, 700]) for (const mode of ['dark', 'light']) {
       win.setContentSize(width, width === 700 ? 600 : 820);
       check('production theme API ' + mode + ' at ' + width, await read(`import('/theme.js').then(m=>m.setThemePreference(${JSON.stringify(mode)}))`));
       await sleep(260);
-      const measured = await read("(()=>{const r=document.querySelector('.files-surface').getBoundingClientRect(),p=document.querySelector('.files-preview').getBoundingClientRect();return {width:innerWidth,height:innerHeight,dpr:devicePixelRatio,theme:document.documentElement.dataset.theme,docOverflow:document.documentElement.scrollWidth-innerWidth,surface:{x:r.x,y:r.y,width:r.width,height:r.height},preview:{x:p.x,y:p.y,width:p.width,height:p.height},font:parseFloat(getComputedStyle(document.querySelector('.fp-text-scroll')).fontSize)}})()");
+      const measured = await read(`(${require('./file-preview-desktop-geometry.cjs').toString()})()`);
       geometry.push(measured);
       check('bounded visible preview ' + width + '-' + mode, measured.docOverflow <= 1 && measured.preview.width > 200 && measured.preview.x >= 0 && measured.preview.x + measured.preview.width <= measured.width + 1, measured);
-      check('maximized files fills viewport width ' + width + '-' + mode, Math.abs(measured.surface.width - measured.width) <= 2, { surfaceWidth: measured.surface.width, viewportWidth: measured.width });
+      check('common maximize fills available workspace and preserves sidebar ' + width + '-' + mode,
+        Math.abs(measured.pane.width - measured.expectedWidth) <= 2 && Math.abs(measured.surface.width - measured.body.width) <= 2 &&
+        Math.abs(measured.surface.x - measured.body.x) <= 2 && Math.abs(measured.pane.right - measured.app.right) <= 2 &&
+        measured.chatPresent && measured.chatInert, measured);
       await shot('text-' + width + '-' + mode);
     }
     check('many tabs overflow in narrow viewport with menu reachable', await read("document.querySelector('.files-tablist').scrollWidth>document.querySelector('.files-tablist').clientWidth&&document.querySelector('.files-tabs-menu').getBoundingClientRect().right<=innerWidth"));
     await click('.files-tabs-menu'); await key('Down'); await key('Return');
     check('trusted tab menu closes others and restores active tab focus', await read("document.querySelectorAll('.files-tab').length===1&&document.activeElement.matches('.files-tab-select')"));
-    // Maximized 700px is wider than Files' 620px inline-tree breakpoint.
-    // Restore the actual narrow pane before qualifying its overlay behavior.
-    await click('.files-maximize');
+    // The common maximized width excludes the existing project sidebar.
+    // Restore the normal pane before qualifying its independent tree overlay.
+    await click('#workPanelMaximize');
     await until(() => read("document.querySelector('.files-surface').classList.contains('files-narrow')"), 'restored-narrow-pane');
     check('restored narrow pane starts with tree off-canvas', await read("document.querySelector('.files-surface').getBoundingClientRect().width<620&&document.querySelector('.files-sidebar').hidden&&!document.querySelector('.files-main').inert"));
     await click('.files-tree-toggle'); await until(() => read("!document.querySelector('.files-sidebar').hidden"), 'narrow-tree');
@@ -154,17 +157,17 @@ async function main() {
     await key('Tab');
     check('trusted keyboard advances focus', await read("document.activeElement!==document.body&&document.activeElement!==document.querySelector('.files-tree-toggle')"));
     win.setContentSize(1320, 820); await sleep(200);
-    await click('.files-maximize');
-    await until(() => read("document.querySelector('.files-surface').classList.contains('files-maximized')"), 'remaximize-wide-pane');
+    await click('#workPanelMaximize');
+    await until(() => read("document.querySelector('#rightPane').dataset.maximized==='true'"), 'remaximize-wide-pane');
     const scaleBefore = await read("parseFloat(getComputedStyle(document.querySelector('.fp-text-scroll')).fontSize)");
     await read("document.documentElement.style.setProperty('--font-scale','1.25')"); await sleep(180);
     const scaleAfter = await read("parseFloat(getComputedStyle(document.querySelector('.fp-text-scroll')).fontSize)");
     check('preview follows 125 percent font scale', scaleAfter > scaleBefore);
     await shot('text-font125'); await read("document.documentElement.style.removeProperty('--font-scale')");
     const before = await read("document.querySelector('.files-surface').getBoundingClientRect().width");
-    await click('.files-maximize'); await sleep(180);
+    await click('#workPanelMaximize'); await sleep(180);
     const restored = await read("document.querySelector('.files-surface').getBoundingClientRect().width");
-    check('maximize restore returns original outer pane geometry', restored < before && !await read("document.querySelector('#rightPane').classList.contains('files-pane-maximized')"), { maximizedWidth: before, restoredWidth: restored });
+    check('maximize restore returns original outer pane geometry', restored < before && !await read("document.querySelector('#rightPane').dataset.maximized==='true'"), { maximizedWidth: before, restoredWidth: restored });
     await shot('restored-outer-pane');
     const divider = await read("(()=>{const r=document.querySelector('#rightPane>.rp-resizer').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()");
     win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,x:divider.x,y:divider.y});
