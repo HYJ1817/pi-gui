@@ -62,7 +62,7 @@ async function boot(overrides = {}) {
     conversations: () => conversations,
     sessionRecords: p => [{ sessionId: 'sess_fixture_001', displayName: 'fixture session', updatedAt: '2026-01-01T00:00:00Z', conversationIds: ['conv_fixture_001'] }],
     openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
-    sendMessage: async () => ({ accepted: true }),
+    sendMessage: overrides.sendMessage ?? (async () => ({ accepted: true })),
     stop: async () => ({ stopped: true }),
     pendingDialogs: () => conversations.flatMap(c => c.pendingApprovals),
     consumeApproval: overrides.consumeApproval ?? (() => true),
@@ -602,6 +602,74 @@ async function main() {
       const env3 = JSON.parse(buf3.split('\n').find(l => l.startsWith('data:')).slice(5));
       assert.equal(env3.event, 'message.append');
       assert.equal(env3.streamGeneration, gen, 'generation must survive revision advancement');
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('runtime generation roll invalidates cursors (round-3 finding 1)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      const deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = deviceId;
+      // capture a cursor from a live frame first
+      const subscribe = (query) => new Promise(resolve => {
+        const path = '/remote/v1/events' + (query ? `?cursor=${encodeURIComponent(query)}` : '');
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', query: query ? { cursor: query } : {}, accept: 'text/event-stream' });
+        const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path, headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          let buf = '';
+          res.on('data', c => {
+            buf += c.toString('utf8');
+            if (buf.includes('event:')) { req.destroy(); resolve(buf); }
+          });
+          res.on('end', () => resolve(buf));
+        });
+        req.on('error', () => resolve(buf));
+        req.end();
+      });
+      const p1 = subscribe();
+      await new Promise(r => setTimeout(r, 150));
+      ctx.remote.stream.publish('conv_fixture_001', 1, 'message.append', { messageId: 'msg_gen_01', role: 'assistant', text: 'pre-roll' }, [deviceId]);
+      const buf1 = await p1;
+      const env1 = JSON.parse(buf1.split('\n').find(l => l.startsWith('data:')).slice(5));
+      // Roll the runtime generation: same conversation/workspace, new logical authority.
+      ctx.conversations[0].runtimeGeneration = 'gen-rolled-' + Date.now();
+      // Resuming with the pre-roll cursor must reset, not replay across the roll.
+      const buf2 = await subscribe(env1.cursor);
+      assert.ok(buf2.includes('event: reset'), `generation roll must invalidate cursor: ${buf2.slice(0, 200)}`);
+      const env2 = JSON.parse(buf2.split('\n').find(l => l.startsWith('data:')).slice(5));
+      assert.equal(env2.event, 'reset');
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('owner roll namespaces idempotency: retry after roll dispatches fresh (round-3 finding 2)', async () => {
+    let sends = 0;
+    const ctx = await boot({ sendMessage: async () => { sends++; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const call = async (revision) => {
+        const body = envelope('chat.send', { clientMessageId, text: 'hi' }, revision);
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      let r = await call(1);
+      assert.equal(r.status, 200, r.body);
+      assert.equal(sends, 1, 'first send dispatched once');
+      // Exact retry pre-roll: same owner epoch — must NOT dispatch again.
+      r = await call(1);
+      assert.equal(r.status, 200, r.body);
+      assert.equal(sends, 1, 'pre-roll retry returns recorded outcome without dispatch');
+      // Roll the owner (generation change) — the same client id is a FRESH key.
+      ctx.conversations[0].runtimeGeneration = 'gen-rolled-' + Date.now();
+      ctx.conversations[0].revision += 1;
+      r = await call(2);
+      assert.equal(r.status, 200, r.body);
+      assert.equal(sends, 2, 'post-roll same client id must dispatch fresh (new idempotency namespace)');
     } finally { await ctx.cleanup(); }
   });
 

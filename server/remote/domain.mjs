@@ -50,6 +50,10 @@ export function buildDomain({ runtime, runtimeRegistry, projects, ordinarySessio
         lifecycle: i.lifecycle === 'live' ? 'running' : ['idle', 'running', 'stopping', 'error'].includes(i.lifecycle) ? i.lifecycle : 'unknown',
         revision: Number.isSafeInteger(i.revision) ? i.revision : 0,
         workspace: { cwd: ws.cwd ?? null, workspaceId: ws.workspaceId ?? null, workspaceEpoch: ws.workspaceEpoch ?? null, backendInstance: ws.backendInstance ?? null },
+        // The runtime generation is part of the owner identity per contract
+        // typedResource/admissionAtomicity: a bridge generation roll is a new
+        // logical authority even when project/workspace/conversation survive.
+        runtimeGeneration: i.owner?.runtimeGeneration ?? null,
         owner: i.owner ?? null,
         pendingApprovals: pending,
         messages: [],

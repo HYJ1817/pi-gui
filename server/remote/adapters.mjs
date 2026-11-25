@@ -64,6 +64,7 @@ export class RegistryClock {
       this.revision = Number.isSafeInteger(s.revision) ? s.revision : 0;
       this.fingerprint = typeof s.fingerprint === 'string' ? s.fingerprint : null;
     } catch { this.revision = 0; this.fingerprint = null; }
+    this.epochCounter = 0;
     // Owner epochs persist too: a restart must never let the epoch for a
     // re-appearing identity regress to 1 — signed-request replay protection
     // is only as strong as the lowest epoch the verifier ever accepts again.
@@ -73,11 +74,15 @@ export class RegistryClock {
       for (const [k, v] of Object.entries(s.epochs ?? {})) {
         if (typeof k === 'string' && Number.isSafeInteger(v) && v >= 1) this.epochs.set(k, v);
       }
-    } catch { /* no persisted epochs — fresh install */ }
+      this.epochCounter = Math.max(
+        Number.isSafeInteger(s.epochCounter) ? s.epochCounter : 0,
+        ...[...this.epochs.values()], 0,
+      );
+    } catch { /* no persisted epochs — fresh install; counter stays at the pre-set 0 or the max of any epochs loaded above */ }
   }
   _persist() {
     const tmp = this.path + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ revision: this.revision, fingerprint: this.fingerprint, epochs: Object.fromEntries(this.epochs) }), 'utf8');
+    fs.writeFileSync(tmp, JSON.stringify({ revision: this.revision, fingerprint: this.fingerprint, epochs: Object.fromEntries(this.epochs), epochCounter: this.epochCounter ?? 0 }), 'utf8');
     fs.renameSync(tmp, this.path);
   }
   /** Registry revision: bumps whenever the conversation/project set changes. */
@@ -86,15 +91,22 @@ export class RegistryClock {
     if (fp !== this.fingerprint) { this.revision += 1; this.fingerprint = fp; this._persist(); }
     return this.revision;
   }
-  /** Per-owner epoch: never regresses for the same identity, even across
-   * restarts. The identity string itself carries the workspace epoch, so an
-   * authority transition is a NEW identity starting at 1 — no bump needed. */
+  /** Per-owner epoch: monotonically allocated, never reused. Contract
+   * idempotency namespace + ownerEpoch roll semantics: EVERY new owner
+   * identity (including generation rolls) receives a fresh, distinct epoch,
+   * so a mutation outcome recorded under a rolled owner is unreachable by
+   * construction — never merely keyed differently. The counter persists;
+   * losing the newest assignments on crash is safe (re-roll is higher, and
+   * continuity loss surfaces as a reset, never as cross-owner replay). */
   epochFor(identity) {
     let e = this.epochs.get(identity);
     if (!e) {
-      e = 1; this.epochs.set(identity, e);
+      e = (this.epochCounter ?? 0) + 1;
+      this.epochCounter = e;
+      this.epochs.set(identity, e);
       // Owner churn is bounded: cap the persisted map, evicting the oldest
-      // registrations first (they are also the least likely to reappear).
+      // registrations first. Eviction cannot collide: the counter never
+      // regresses, so a re-appearing identity gets a NEW higher epoch.
       while (this.epochs.size > 4096) this.epochs.delete(this.epochs.keys().next().value);
       this._persist();
     }
@@ -182,8 +194,8 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
       const proj = projectOfConversation(conv);
       if (!proj || projectIdFor(proj.path) !== projectId) return null;
       const ws = conv.workspace ?? {};
-      const identity = `runtime:${ws.backendInstance ?? ''}:${ws.workspaceId ?? ''}:${ws.workspaceEpoch ?? 0}:${conv.conversationId}`;
-      return { current: true, namespace: 'runtime', identity, epoch: ws.workspaceEpoch ?? clock.epochFor(identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId, conversationId: conv.conversationId };
+      const identity = `runtime:${ws.backendInstance ?? ''}:${ws.workspaceId ?? ''}:${ws.workspaceEpoch ?? 0}:${conv.conversationId}:${conv.runtimeGeneration ?? 'dormant'}`;
+      return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId, conversationId: conv.conversationId };
     }
     const params = pathParameters ?? {};
     if (params.projectId !== undefined && params.conversationId === undefined && params.requestId === undefined) {
@@ -198,8 +210,8 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
       const proj = projectOfConversation(conv);
       if (!proj) return null;
       const ws = conv.workspace ?? {};
-      const identity = `runtime:${ws.backendInstance ?? ''}:${ws.workspaceId ?? ''}:${ws.workspaceEpoch ?? 0}:${conv.conversationId}`;
-      const base = { current: true, namespace: 'runtime', identity, epoch: ws.workspaceEpoch ?? clock.epochFor(identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId: projectIdFor(proj.path), conversationId: conv.conversationId };
+      const identity = `runtime:${ws.backendInstance ?? ''}:${ws.workspaceId ?? ''}:${ws.workspaceEpoch ?? 0}:${conv.conversationId}:${conv.runtimeGeneration ?? 'dormant'}`;
+      const base = { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId: projectIdFor(proj.path), conversationId: conv.conversationId };
       if (params.requestId !== undefined) {
         const dialog = (conv.pendingApprovals ?? []).find(d => d.requestId === params.requestId && d.pending === true);
         if (!dialog) return null;
