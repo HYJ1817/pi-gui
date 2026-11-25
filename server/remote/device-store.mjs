@@ -44,7 +44,14 @@ export class DeviceStore {
         for (const d of data.devices) {
           if (!isRecord(d) || typeof d.deviceId !== 'string') { corrupt = true; continue; }
           // Replay state must be intact; corruption bumps the epoch (fail closed).
-          if (!isRecord(d.nonces) || !Number.isSafeInteger(d.timestampFloor)) {
+          // Round-7 R7-REPLAY-05: validating only the CONTAINER let malformed
+          // entries survive — a consumed request was re-admitted after restart.
+          // Every entry must itself be well-formed: the nonce key is the
+          // base64url encoding of 32 random bytes (43 chars, no padding) and
+          // its value a safe-integer millisecond timestamp.
+          const NONCE_RE = /^[A-Za-z0-9_-]{43}$/;
+          const entriesIntact = isRecord(d.nonces) && Object.entries(d.nonces).every(([n, ts]) => NONCE_RE.test(n) && Number.isSafeInteger(ts) && ts >= 0);
+          if (!isRecord(d.nonces) || !entriesIntact || !Number.isSafeInteger(d.timestampFloor) || d.timestampFloor < 0) {
             // signedRequest.replay.stateLoss: lost/corrupt replay state bumps the
             // epoch AND requires re-pair before ANY new request is admitted —
             // no silent accumulation. The device becomes inactive until a fresh
@@ -135,6 +142,11 @@ export class DeviceStore {
       registeredAt: nowIso(),
       nonces: {},
       timestampFloor: 0,
+      // Round-7 R7-GEN-03: re-registering the same deviceId must carry the
+      // durable stream-generation floor forward — resetting it let the server
+      // re-issue generations the pinned client already consumed, breaking
+      // forward recovery after an ordinary re-pair.
+      ...(Number.isSafeInteger(existing?.streamGenerationFloor) ? { streamGenerationFloor: existing.streamGenerationFloor } : {}),
     };
     this.devices.set(deviceId, rec);
     this.keyIndex.set(devicePublicKey, deviceId);
@@ -228,11 +240,21 @@ export class DeviceStore {
     return Number.isSafeInteger(d?.streamGenerationFloor) ? d.streamGenerationFloor : 0;
   }
   persistStreamGenerationFloor(deviceId, floor) {
+    // Round-7 R7-GEN-04: the floor is meaningless unless it is durable BEFORE
+    // the generation it bounds can be issued. Throws propagate to the caller
+    // (event-stream) which must refuse to mint the generation rather than
+    // sign frames it cannot guarantee monotonicity for.
     const d = this.devices.get(deviceId);
     if (!d || !Number.isSafeInteger(floor)) return;
     if (!(floor > (d.streamGenerationFloor ?? 0))) return;
+    const previous = d.streamGenerationFloor;
     d.streamGenerationFloor = floor;
-    this._persist();
+    try {
+      this._persist();
+    } catch (e) {
+      d.streamGenerationFloor = previous;
+      throw e;
+    }
   }
 }
 

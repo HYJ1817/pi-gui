@@ -60,13 +60,19 @@ export class EventStream {
     return t;
   }
   _persistFloor(id, gen) {
-    try { this.deviceStore.persistStreamGenerationFloor?.(id, gen); } catch { /* a floor persistence failure degrades to process-local monotonicity — the restart then re-resets cursors rather than silently regressing */ }
+    // Round-7 R7-GEN-04: floor persistence is part of the generation's
+    // durability, not an optional optimization. A generation whose floor
+    // cannot be persisted must never be issued — otherwise a restart
+    // re-issues numbers the pinned client already consumed. Fail closed:
+    // the error propagates to the caller, which refuses the generation.
+    this.deviceStore.persistStreamGenerationFloor?.(id, gen);
   }
   _allocGeneration(id) {
     const t = this._tl(id);
-    t.genCtr += 1;
-    this._persistFloor(id, t.genCtr);
-    return t.genCtr;
+    const next = t.genCtr + 1;
+    this._persistFloor(id, next);   // throws before mutation when durability fails
+    t.genCtr = next;
+    return next;
   }
   _tag(id, generation, sequence) {
     const t = this._tl(id);
@@ -115,7 +121,17 @@ export class EventStream {
   }
   resetDevice(id, reason) {
     const t = this._tl(id);
-    t.generation = this._allocGeneration(id); t.authority = this._authority(id);
+    try {
+      t.generation = this._allocGeneration(id);
+    } catch (e) {
+      // Round-7 R7-GEN-04: when the new generation cannot be made durable the
+      // device must lose its streams entirely — continuing at the old
+      // generation would deliver frames under authority (grants/scopes) that
+      // has already changed. Fail closed, then surface the error.
+      this.dropDevice(id);
+      throw e;
+    }
+    t.authority = this._authority(id);
     for (const s of [...(this.subscribers.get(id) ?? [])]) this._resetOne(s, reason);
   }
   _reconcile(id) {

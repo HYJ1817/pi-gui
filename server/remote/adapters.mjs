@@ -333,6 +333,30 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     return true;
   }
 
+  /**
+   * Round-7 R7-AUTH-01: admission + commit checks happen BEFORE a mutation
+   * queues inside serializedMutation. A revocation, grant removal, re-pair or
+   * owner roll that lands while the request waits must fail closed at the
+   * moment the queued work actually begins — otherwise the queued request
+   * executes its effect with authority that no longer exists.
+   * Returns true only when the live device record still matches admission
+   * (active, same replay epoch), the grant for the operation's project still
+   * holds, and the re-resolved owner is IDENTICAL in identity and epoch.
+   */
+  function authorityStillValid(device, owner, pathParameters) {
+    if (deviceStore) {
+      const live = deviceStore.active(device.deviceId);
+      if (!live) return false;
+      if (live.replayEpoch !== device.replayEpoch) return false;   // re-pair / replay-state loss
+    }
+    const fresh = resolveOwner({ pathParameters });
+    if (!fresh || fresh.identity !== owner.identity || fresh.epoch !== owner.epoch) return false;
+    if (!deviceStore) return true;
+    const live = deviceStore.get(device.deviceId);
+    if (!live?.grants) return false;
+    return live.grants[fresh.projectId] === true;
+  }
+
   /* ---------- operations ---------- */
 
   async function projectsList({ device }) {
@@ -370,29 +394,29 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     const clientId = body.payload.clientConversationId;
     const payloadHash = sha256hex(canonicalJson(body.payload) ?? '');
     return serializedMutation(mutationKey(device.deviceId, projectId, owner.epoch, clientId), async () => {
+      // Round-7 R7-AUTH-01: revalidate authority NOW — admission passed before
+      // this request queued; the world may have changed while it waited.
+      if (!authorityStillValid(device, owner, pathParameters)) return deny('operation_rejected');
       const prior = idem.resolve(device.deviceId, projectId, owner.epoch, clientId, payloadHash);
       if (prior?.conflict) return deny('payload_invalid');
       if (prior?.unknown) return deny('operation_rejected');   // committed-unknown: exactly-once forbids re-execution
       if (prior) return okResult(prior);                        // recorded retry OR joined in-flight outcome
       if (!idem.hasCapacity()) return deny('operation_rejected');
       if (!idem.reserve(device.deviceId, projectId, owner.epoch, clientId, payloadHash)) return deny('operation_rejected');
+      // Round-7 R7-IDEMP-02: NO outcome path below may release the
+      // reservation. Releasing requires proof the effect never executed, and
+      // neither an exception (even one carrying a business-denial code — it
+      // can be thrown AFTER the effect) nor a malformed result establishes
+      // that. Every non-success hardens into committed-unknown; the client
+      // retries with a fresh client id.
       try {
         const out = await domain.openConversation(proj.path, { clientConversationId: clientId });
-        if (!OPAQUE_ID.test(out?.conversationId ?? '')) { idem.release(device.deviceId, projectId, owner.epoch, clientId); return deny('unavailable'); }
+        if (!OPAQUE_ID.test(out?.conversationId ?? '')) return deny('unavailable');
         const ownerRevision = clock.registryRevision(domain.conversations());
         const result = { conversationId: out.conversationId, ownerRevision };
         if (!idem.record(device.deviceId, projectId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
         return okResult(result);
-      } catch (e) {
-        const code = e?.code;
-        if (code === 'workspace_in_use' || code === 'stale_workspace') {
-          // Business denial: the mutation verifiably never executed — release
-          // the reservation so the client id is retriable.
-          idem.release(device.deviceId, projectId, owner.epoch, clientId);
-          return deny('stale_owner');
-        }
-        // Unknown execution state: leave the reservation to harden into
-        // committed-unknown — a retry must never re-execute (fail closed).
+      } catch {
         return deny('unavailable');
       }
     });
@@ -444,21 +468,20 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     // are rejected, never silently truncated.
     if (Buffer.byteLength(JSON.stringify(String(body.payload.text ?? '')), 'utf8') > L.maxTranscriptSerializedBytes) return deny('payload_invalid');
     return serializedMutation(mutationKey(device.deviceId, conv.conversationId, owner.epoch, clientId), async () => {
+      if (!authorityStillValid(device, owner, pathParameters)) return deny('operation_rejected');
       const prior = idem.resolve(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash);
       if (prior?.conflict) return deny('payload_invalid');
       if (prior?.unknown) return deny('operation_rejected');
       if (prior) return okResult(prior);
       if (!idem.hasCapacity()) return deny('operation_rejected');
       if (!idem.reserve(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash)) return deny('operation_rejected');
+      // Round-7 R7-IDEMP-02: no release on any failure path — see runtimeCreate.
       try {
         const out = await domain.sendMessage({ owner, text: body.payload.text, clientMessageId: clientId });
         const result = { clientMessageId: clientId, accepted: out?.accepted === true, ownerRevision: conv.revision ?? 0 };
         if (!idem.record(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
         return okResult(result);
-      } catch (e) {
-        const code = e?.code;
-        if (code === 'stale_owner' || code === 'owner_stale') { idem.release(device.deviceId, conv.conversationId, owner.epoch, clientId); return deny('stale_owner'); }
-        if (code === 'busy' || code === 'in_progress') { idem.release(device.deviceId, conv.conversationId, owner.epoch, clientId); return deny('operation_rejected'); }
+      } catch {
         return deny('unavailable');
       }
     });

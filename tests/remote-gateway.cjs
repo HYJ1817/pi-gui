@@ -1166,6 +1166,162 @@ async function main() {
     } finally { await ctx.cleanup(); }
   });
 
+  await t('round-7: queued mutation must not execute after revocation (R7-AUTH-01)', async () => {
+    // First request parks inside the domain effect; a second same-key request
+    // queues behind it in the serializer. The device is revoked while both
+    // wait. The parked effect completes for the first caller (it was admitted
+    // under valid authority), but the QUEUED request must never execute its
+    // own effect — admission-time checks are stale by the time it runs.
+    let sends = 0, release;
+    const gate = new Promise(r => { release = r; });
+    const ctx = await boot({ sendMessage: async () => { sends++; await gate; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const body = envelope('chat.send', { clientMessageId, text: 'queued-after-revoke' }, 1);
+      const fire = () => {
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      const p1 = fire();
+      await new Promise(r => setTimeout(r, 30));   // first inside the barrier
+      const p2 = fire();                            // second queues in the serializer
+      await new Promise(r => setTimeout(r, 30));
+      ctx.remote.deviceStore.revoke(device.deviceId);
+      release();
+      const [r1, r2] = await Promise.all([p1, p2]);
+      assert.equal(sends, 1, `exactly one execution — the queued request must not run, got ${sends}`);
+      assert.equal(r1.status, 200, r1.body);
+      assert.notEqual(r2.status, 200, `queued post-revocation request must be refused: ${r2.body}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-7: exception after effect execution never releases the reservation (R7-IDEMP-02)', async () => {
+    // The domain effect EXECUTES and then throws a coded error that resembles
+    // a business denial. Releasing the reservation here would let a retry
+    // re-execute — the exact double-effect round-6 set out to kill. The
+    // reservation must harden; the retry is refused without execution.
+    let sends = 0, first = true;
+    const ctx = await boot({
+      sendMessage: async () => {
+        sends++;
+        if (first) { first = false; const e = new Error('busy'); e.code = 'busy'; throw e; }
+        return { accepted: true };
+      },
+    });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const body = envelope('chat.send', { clientMessageId, text: 'post-effect-throw' }, 1);
+      const fire = () => {
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      const r1 = await fire();
+      assert.equal(sends, 1);
+      assert.notEqual(r1.status, 200, r1.body);
+      const r2 = await fire();   // retry same client id — must NOT execute again
+      assert.equal(sends, 1, `post-effect coded exception must not free the reservation, got ${sends} sends`);
+      assert.notEqual(r2.status, 200, `retry after unknown execution state must be refused: ${r2.body}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-7: same-device re-registration preserves the generation floor (R7-GEN-03)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Drive a generation allocation so the floor advances past 1.
+      ctx.remote.deviceStore.setGrants(device.deviceId, ['p-fixture']);
+      const before = ctx.remote.deviceStore.streamGenerationFloor(device.deviceId);
+      assert.ok(before >= 2, `floor must have advanced, got ${before}`);
+      // Re-register the SAME deviceId (re-pair); the floor must carry forward.
+      ctx.remote.deviceStore.register({
+        deviceId: device.deviceId, devicePublicKey: device.publicKeyB64 ?? crypto.randomBytes(32).toString('base64url'),
+        grantedScopes: ['projects.read', 'conversations.write'], serviceFingerprint: ctx.fingerprint,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(), deviceName: 're-pair',
+      });
+      const after = ctx.remote.deviceStore.streamGenerationFloor(device.deviceId);
+      assert.ok(after >= before, `re-registration must preserve the floor (${before} -> ${after})`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-7: floor persistence failure refuses generation allocation (R7-GEN-04)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const genBefore = ctx.remote.deviceStore.streamGenerationFloor(device.deviceId);
+      // Sabotage durability: a directory at the .tmp path makes writeFileSync
+      // fail deterministically on every platform.
+      const tmpPath = path.join(ctx.dataDir, 'remote-devices.json.tmp');
+      fs.mkdirSync(tmpPath);
+      try {
+        assert.throws(
+          () => ctx.remote.deviceStore.persistStreamGenerationFloor(device.deviceId, genBefore + 50),
+          undefined,
+          'persistence failure must propagate',
+        );
+        assert.equal(
+          ctx.remote.deviceStore.streamGenerationFloor(device.deviceId), genBefore,
+          'failed persistence must leave the floor unchanged',
+        );
+      } finally { fs.rmdirSync(tmpPath); }
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-7: malformed nonce entries force re-pair after restart (R7-REPLAY-05)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Persist a well-formed container with a malformed ENTRY: key is not a
+      // 32-byte nonce encoding (and its timestamp is junk).
+      const file = path.join(ctx.dataDir, 'remote-devices.json');
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      data.devices[0].nonces = { 'not-a-real-nonce': 'junk-timestamp' };
+      fs.writeFileSync(file, JSON.stringify(data), 'utf8');
+      await ctx.remote.close();
+      const { startRemote } = await import(MODULES.index);
+      const conversations = ctx.conversations;
+      const domain = {
+        projects: () => [{ path: 'C:/fixture/proj', name: 'fixture' }],
+        conversations: () => conversations,
+        sessionRecords: () => [],
+        openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
+        sendMessage: async () => ({ accepted: true }),
+        stop: async () => ({ stopped: true }),
+        pendingDialogs: () => [],
+        consumeApproval: () => true,
+      };
+      const remote2 = startRemote({ dataDir: ctx.dataDir, domain, host: '127.0.0.1', port: 0 });
+      const addr2 = await remote2.listen();
+      try {
+        const rec = remote2.deviceStore.get(device.deviceId);
+        assert.ok(rec.requiresRepair === true && rec.active === false,
+          `malformed entries must demand re-pair, got active=${rec.active} repair=${rec.requiresRepair}`);
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/projects', epoch: rec.replayEpoch });
+        const res = await new Promise(resolve => {
+          const req = https.request({ host: '127.0.0.1', port: addr2.port, method: 'GET', path: '/remote/v1/projects', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, r => {
+            r.resume();
+            r.on('end', () => resolve(r.statusCode));
+          });
+          req.on('error', () => resolve(0));
+          req.end();
+        });
+        assert.equal(res, 401, `corrupt-entry device must not be admitted: ${res}`);
+      } finally { await remote2.close(); }
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
   await t('production pairing completes: pending -> approve -> same-request retry', async () => {
     // No injected confirmLocally: the loopback admin approves a server-verified
     // pending transcript and the device retries the SAME signed request.
