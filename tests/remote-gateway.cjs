@@ -486,6 +486,14 @@ async function main() {
       const sres = await streamPromise;
       assert.equal(sres.status, 200);          // opened fine
       // (ended) — the end event fired on revoke
+      // Contract deviceLifecycle.revocation: exactly one reset frame with
+      // reason authorization_changed is delivered BEFORE the close.
+      const resetFrame = sres.body.split('\n\n').find(e => e.startsWith('event: reset'));
+      assert.ok(resetFrame, `revocation must deliver a reset frame before close; got: ${sres.body.slice(0, 200)}`);
+      const resetEnv = JSON.parse(resetFrame.split('\n').find(l => l.startsWith('data:')).slice(5));
+      assert.equal(resetEnv.payload.reason, 'authorization_changed');
+      assert.equal(resetEnv.event, 'reset');
+      assert.equal(resetEnv.conversationId, 'stream-reset');
     } finally { await ctx.cleanup(); }
   });
 
@@ -583,6 +591,17 @@ async function main() {
       const env2 = JSON.parse(buf2.split('\n').find(l => l.startsWith('data:')).slice(5));
       assert.equal(env2.event, 'message.append');
       assert.equal(env2.streamGeneration, gen, 'resume did not continue the same generation');
+      // R1 regression pin: the owner revision advancing AFTER a frame was
+      // journaled must never abort replay — authorization transitions already
+      // invalidate cursors categorically, so exact-revision rechecks only
+      // killed the contract replay fast-path.
+      ctx.conversations[0].revision += 5;
+      ctx.remote.stream.publish('conv_fixture_001', 7, 'message.append', { messageId: 'msg_00000003', role: 'assistant', text: 'c' }, [deviceId]);
+      const buf3 = await subscribe(env2.cursor);
+      assert.ok(!buf3.includes('event: reset'), `post-revision-advance resume must not reset: ${buf3.slice(0, 200)}`);
+      const env3 = JSON.parse(buf3.split('\n').find(l => l.startsWith('data:')).slice(5));
+      assert.equal(env3.event, 'message.append');
+      assert.equal(env3.streamGeneration, gen, 'generation must survive revision advancement');
     } finally { await ctx.cleanup(); }
   });
 

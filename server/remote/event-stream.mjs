@@ -83,7 +83,13 @@ export class EventStream {
     s.expiry.unref?.();
   }
   dropDevice(id) {
-    for (const s of [...(this.subscribers.get(id) ?? [])]) this._close(s);
+    // Contract deviceLifecycle.revocation / cursorDelivery.resetScope: every
+    // subscription receives exactly one reset (authorization_changed) before
+    // the stream closes. The reset never touches the shared sequence journal.
+    for (const s of [...(this.subscribers.get(id) ?? [])]) {
+      this._resetOne(s, 'authorization_changed', { bypass: true });
+      this._close(s);
+    }
     this.subscribers.delete(id); this.timelines.delete(id);
   }
   /** Called synchronously by authoritative device-record transactions. */
@@ -103,7 +109,7 @@ export class EventStream {
     if (t.authority !== current) this.resetDevice(id, 'owner_changed');
     return true;
   }
-  _resetOne(s, reason) {
+  _resetOne(s, reason, { bypass = false } = {}) {
     if (s.closed || s.resetting) { this._close(s); return false; }
     s.resetting = true;
     try {
@@ -112,13 +118,32 @@ export class EventStream {
       // A reset establishes the current head. The next ordinary frame is
       // head+1 for EVERY subscriber; no invisible shared sequence is consumed.
       const frame = this._materialize(s, { sequence: t.headSequence, fields: { conversationId: 'stream-reset', ownerRevision: 0, event: 'reset', payload: { reason } } });
-      if (!frame || !this._write(s, frame.env, frame.raw)) return false;
+      if (!frame) return false;
+      // The revocation/grant-loss notification is the one frame that must be
+      // delivered precisely BECAUSE authorization died — _mayDeliver would
+      // always refuse it for an inactive device.
+      if (!bypass ? !this._write(s, frame.env, frame.raw) : !this._writeRaw(s, frame.env, frame.raw)) return false;
       return true;
     } finally { s.resetting = false; }
+  }
+  _writeRaw(s, env, raw) {
+    if (s.closed) return false;
+    return this._writeBytes(s, env, raw);
+  }
+  _writeBytes(s, env, raw) {
+    try {
+      if ((s.res.writableLength ?? 0) + Buffer.byteLength(raw) > L.maxEventBacklogBytesPerDevice || s.res.write(raw) === false) return false;
+      return true;
+    } catch { return false; }
   }
   handleSubscribe(req, res, device, query) {
     if (!this._reconcile(device.deviceId)) return { status: 401, body: { code: 'unauthorized', retryable: false } };
     if (this._subs(device.deviceId).size >= L.maxConcurrentStreamsPerDevice || this.streams.size >= L.maxConcurrentStreamsTotal) return { status: 429, body: { code: 'server_busy', retryable: true } };
+    // cursorTransitionTable.malformed is enforced upstream at admission
+    // (cursorPattern/length -> cursor_invalid -> unauthorized). Everything that
+    // survives that gate but fails the strict g<n>_s<n>_<tag> shape or HMAC is
+    // well-formed-but-foreign/stale per the table: exactly one reset below —
+    // never a cross-device leak, never an open stream without notification.
     const t = this._tl(device.deviceId), cursor = query.cursor, bound = cursor ? this._parse(device.deviceId, cursor) : null;
     const s = { deviceId: device.deviceId, res, keepalive: null, expiry: null, closed: false, generation: 0, resetting: false };
     res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' });
@@ -175,14 +200,17 @@ export class EventStream {
       if (env.event === 'reset') this._close(s); else this._resetOne(s, 'authorization_changed');
       return false;
     }
-    try {
-      if ((s.res.writableLength ?? 0) + Buffer.byteLength(raw) > L.maxEventBacklogBytesPerDevice || s.res.write(raw) === false) { this._close(s); return false; }
-      return true;
-    } catch { this._close(s); return false; }
+    if (!this._writeBytes(s, env, raw)) { this._close(s); return false; }
+    return true;
   }
   _deliverTemplate(s, tpl) {
     const frame = this._materialize(s, tpl);
-    if (!frame) { this._close(s); return false; }
+    // An immaterializable journal entry (oversized or unsignable) can never
+    // be delivered, and every later frame is blocked behind it: a bare close
+    // would leave the client resubscribing into the same dead journal forever
+    // without ever learning why. Contract frameBudget: emit exactly one reset
+    // (sequence_gap) BEFORE the close so the client re-collects instead.
+    if (!frame) { this._resetOne(s, 'sequence_gap'); this._close(s); return false; }
     return this._write(s, frame.env, frame.raw);
   }
   _prune(t) {

@@ -236,7 +236,7 @@ export class RemoteGateway {
      * all new requests"). Re-read the live record right before dispatch; a
      * revoked or inactive device never reaches the adapter. */
     const live = this.deviceStore.active(device.deviceId);
-    if (!live) return this._wire(res, admission.requestId, 'device_inactive');
+    if (!live) return this._wire(res, admission.requestId, wireErrorCode('device_inactive'));
 
     const dispatch = this.adapters.dispatch[admission.operation];
     if (!dispatch) return this._wire(res, admission.requestId, 'operation_rejected');

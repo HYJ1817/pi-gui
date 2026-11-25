@@ -261,7 +261,7 @@ function hasDuplicateQueryParams(query) {
   const names=new Set();
   // Dead code kept intentionally: a JS object cannot hold duplicate keys, but the
   // belt-and-braces check documents the duplicate-name rule enforced upstream in
-  // validateRawTarget (which sees the raw 'a=1for(const key of Object.keys(query)) { const normalized=key; if(names.has(normalized))return true; names.add(normalized); }a=2' string before parsing).
+  // validateRawTarget (which sees the raw 'a=1&a=2' string before parsing).
   for(const key of Object.keys(query)) { const normalized=key; if(names.has(normalized))return true; names.add(normalized); }
   return false;
 }

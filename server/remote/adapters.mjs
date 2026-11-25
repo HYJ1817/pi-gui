@@ -64,11 +64,20 @@ export class RegistryClock {
       this.revision = Number.isSafeInteger(s.revision) ? s.revision : 0;
       this.fingerprint = typeof s.fingerprint === 'string' ? s.fingerprint : null;
     } catch { this.revision = 0; this.fingerprint = null; }
-    this.epochs = new Map();      // ownerIdentity -> epoch counter
+    // Owner epochs persist too: a restart must never let the epoch for a
+    // re-appearing identity regress to 1 — signed-request replay protection
+    // is only as strong as the lowest epoch the verifier ever accepts again.
+    this.epochs = new Map();
+    try {
+      const s = JSON.parse(fs.readFileSync(this.path, 'utf8'));
+      for (const [k, v] of Object.entries(s.epochs ?? {})) {
+        if (typeof k === 'string' && Number.isSafeInteger(v) && v >= 1) this.epochs.set(k, v);
+      }
+    } catch { /* no persisted epochs — fresh install */ }
   }
   _persist() {
     const tmp = this.path + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ revision: this.revision, fingerprint: this.fingerprint }), 'utf8');
+    fs.writeFileSync(tmp, JSON.stringify({ revision: this.revision, fingerprint: this.fingerprint, epochs: Object.fromEntries(this.epochs) }), 'utf8');
     fs.renameSync(tmp, this.path);
   }
   /** Registry revision: bumps whenever the conversation/project set changes. */
@@ -77,10 +86,18 @@ export class RegistryClock {
     if (fp !== this.fingerprint) { this.revision += 1; this.fingerprint = fp; this._persist(); }
     return this.revision;
   }
-  /** Per-owner epoch: bumps when the owner identity string changes. */
+  /** Per-owner epoch: never regresses for the same identity, even across
+   * restarts. The identity string itself carries the workspace epoch, so an
+   * authority transition is a NEW identity starting at 1 — no bump needed. */
   epochFor(identity) {
     let e = this.epochs.get(identity);
-    if (!e) { e = 1; this.epochs.set(identity, e); }
+    if (!e) {
+      e = 1; this.epochs.set(identity, e);
+      // Owner churn is bounded: cap the persisted map, evicting the oldest
+      // registrations first (they are also the least likely to reappear).
+      while (this.epochs.size > 4096) this.epochs.delete(this.epochs.keys().next().value);
+      this._persist();
+    }
     return e;
   }
 }
@@ -193,8 +210,14 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     return null;
   }
 
-  /** authorizeResource for the event stream: grant+owner must still hold. */
-  function authorizeResource({ deviceId, conversationId, ownerRevision }) {
+  /** authorizeResource for the event stream: grant+owner must still hold.
+   * Revision equality is NOT re-checked here: mutations legitimately advance
+   * the revision after a frame was journaled, and every authorization-bearing
+   * transition (grant/owner/device/epoch) already invalidates the whole cursor
+   * space categorically, so a stale-owner frame can never be delivered as
+   * continuous. Requiring exact revisions killed the contract replay fast-path
+   * on any reconnect after two mutations. */
+  function authorizeResource({ deviceId, conversationId }) {
     if (!OPAQUE_ID.test(conversationId ?? '')) return false;
     const conv = conversationIndex().get(conversationId);
     if (!conv) return false;
@@ -202,7 +225,6 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     if (!proj) return false;
     const device = deviceStore?.get(deviceId);
     if (device && device.grants && device.grants[projectIdFor(proj.path)] !== true) return false;
-    if (ownerRevision !== undefined && conv.revision !== undefined && conv.revision !== ownerRevision) return false;
     return true;
   }
 
