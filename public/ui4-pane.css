@@ -75,9 +75,13 @@
   color:var(--ui-text-primary);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;
 }
-.secondary-surface .chg-head{position:relative;height:auto;min-height:var(--rp-head-h);flex-wrap:wrap;overflow:visible;padding-block:8px}
-.secondary-surface .chg-head h3{flex:1 0 100%;max-width:100%;padding-right:32px}
-.secondary-surface .chg-head>.secondary-close{position:absolute;right:var(--rp-pad);top:8px}
+/* Unified single-row band: in the tab-strip architecture there is no per-head
+ * close button to clear, so the title shares the row with the actions like
+ * every other surface. Actions compress (ellipsis/hidden counts) instead of
+ * wrapping onto a second row. */
+.secondary-surface .chg-head{position:relative;flex-wrap:nowrap;overflow:hidden;padding-block:0}
+.secondary-surface .chg-head h3{flex:0 1 auto;min-width:0}
+.secondary-surface .chg-head>.secondary-close{display:none}
 .secondary-surface .chg-head>.grow{display:none}
 .secondary-surface .chg-head > .btn,
 .secondary-surface .chg-head > .icon-btn,
@@ -507,7 +511,6 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 .work-panel-nav .icon-btn svg,.work-surface-tab-icon svg{width:16px;height:16px;flex:none}
 .work-surface-tab{display:flex;align-items:center;flex:none;position:relative;min-width:0;max-width:180px;height:var(--ds-control-size);border-radius:var(--radius-xs);color:var(--ds-text-secondary);-webkit-app-region:no-drag}
 .work-surface-tab:has([aria-selected="true"]){background:var(--ds-bg-active);color:var(--ds-text-primary)}
-.work-surface-tab:has([aria-selected="true"])::after{content:"";position:absolute;bottom:1px;left:var(--ui-space-2);right:var(--ui-space-2);height:2px;background:var(--ds-text-primary);pointer-events:none}
 .work-surface-tab-select{display:flex;align-items:center;gap:var(--ui-space-1);flex:1;min-width:0;height:100%;padding:0 var(--ui-space-2);border:0;border-radius:var(--radius-xs);background:transparent;color:inherit;font:inherit;font-size:var(--text-sm-plus);text-align:left;cursor:pointer}
 .work-surface-tab-select:hover{background:var(--ds-bg-hover)}
 .work-surface-tab-icon{display:inline-flex;flex:none}
@@ -522,18 +525,19 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
  * secondary icon strip, descriptions or “more tools” navigation exists. */
 .secondary-surface.work-tools-surface{padding:0;overflow:hidden}
 .right-pane .work-panel-empty{display:flex;flex:1;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:var(--ui-space-5);background:transparent;color:var(--ds-text-primary)}
-.work-panel-launcher-content{width:100%;max-width:304px;margin:auto}
-.right-pane .work-panel-empty h2{margin:0 0 var(--ui-space-4);padding:0 var(--ui-space-2);font-size:var(--text-lg);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);color:var(--ds-text-primary)}
-.work-panel-launcher-list{display:flex;flex-direction:column;gap:var(--ui-space-1)}
-.work-panel-launcher-row{display:flex;align-items:center;gap:var(--ui-space-2);width:100%;min-width:0;min-height:36px;padding:var(--ui-space-2);border:0;border-radius:var(--radius-xs);background:transparent;color:var(--ds-text-secondary);font:inherit;font-size:var(--text-md);line-height:var(--leading-compact);text-align:left;cursor:pointer}
+.work-panel-launcher-content{width:100%;max-width:320px;margin:auto;padding-block:var(--ui-space-5)}
+.right-pane .work-panel-empty h2{margin:0 0 var(--ui-space-3);padding:0 var(--ui-space-2);font-size:var(--text-md);font-weight:var(--font-weight-medium);line-height:var(--leading-tight);text-align:center;color:var(--ds-text-primary)}
+.work-panel-launcher-list{display:flex;flex-direction:column;gap:2px}
+.work-panel-launcher-row{display:flex;align-items:center;gap:10px;width:100%;min-width:0;min-height:32px;padding:var(--ui-space-1) 10px;border:0;border-radius:var(--radius-xs);background:transparent;color:var(--ds-text-secondary);font:inherit;font-size:var(--text-md);line-height:var(--leading-compact);text-align:left;cursor:pointer}
 .work-panel-launcher-row:hover{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
 .work-panel-launcher-row:active{background:var(--ds-bg-active)}
 .work-panel-launcher-row:disabled{opacity:var(--ds-button-disabled-opacity);cursor:not-allowed}
 .work-panel-launcher-row:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px}
-.work-panel-launcher-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:none;color:inherit}
+.work-panel-launcher-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex:none;color:inherit}
 .work-panel-launcher-icon svg{width:16px;height:16px}
 .work-panel-launcher-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.work-panel-launcher-shortcut{flex:none;padding:2px var(--ui-space-1);border:0;border-radius:var(--radius-xs);background:transparent;font-family:var(--font-mono);font-size:var(--text-xs);font-weight:var(--font-weight-normal);line-height:var(--leading-normal);color:var(--ds-text-secondary);white-space:nowrap}
+/* Lightweight keycap: a faint filled chip like T3's Kbd, never a bordered card. */
+.work-panel-launcher-shortcut{flex:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:20px;height:20px;padding:0 var(--ui-space-1);border:0;border-radius:var(--radius-xs);background:color-mix(in srgb,var(--ds-text-primary) 7%,transparent);font-family:var(--font-sans);font-size:var(--text-xs);font-weight:var(--font-weight-medium);line-height:1;color:var(--ds-text-secondary);white-space:nowrap}
 .work-panel-launcher-shortcut[hidden]{display:none}
 
 /* ================= 终端面板 ================= */
@@ -686,7 +690,9 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 .files-surface .files-preview-path[hidden]{display:none}
 .files-surface .files-tree-toggle{flex:none;margin-inline-start:auto}
 .files-surface .files-preview-path:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
-.files-surface .files-format-tools{display:flex;align-items:center;flex:0 1 auto;min-width:0;flex-wrap:nowrap;gap:var(--ui-space-1);padding:2px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;overscroll-behavior:contain}
+/* Overflowing actions collapse into the reading/file menus instead of growing
+ * a horizontal scrollbar lane inside the viewer head. */
+.files-surface .files-format-tools{display:flex;align-items:center;flex:0 1 auto;min-width:0;flex-wrap:wrap;row-gap:2px;gap:var(--ui-space-1);padding:2px;overflow:hidden;overscroll-behavior:contain}
 .files-surface .files-format-tools>:not([hidden]){flex-shrink:0}
 .files-surface .files-format-tools:empty{display:none}
 .files-surface .files-preview-content{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;min-width:0;overflow:hidden}
