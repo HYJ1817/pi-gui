@@ -63,10 +63,20 @@ export function openFilesPanel(options = {}) {
 function currentIdentity() {
   const conversationId = Api.gitConversationScope() || null;
   const record = conversationId ? runtimeStore.get(conversationId) : null;
+  const owner = S.legacyOwner;
+  // app accepts the current bridge's owner before publishing its context event;
+  // the get_state projection is written afterwards, without a second event.
+  // Trust that owner only while its runtime still owns the current workspace.
+  // Client workspaceGeneration is a local fence, not the backend workspaceEpoch.
+  const classicOwner = !conversationId && S.hasProject && !S.switching
+    && owner?.conversationId === 'classic-chat' && owner.workspaceId && owner.runtimeId
+    && owner.runtimeId === S.bridgeInstance && S.bridgeRun != null
+    && String(owner.runtimeGeneration) === String(S.bridgeRun) ? owner : null;
   return {
     cwd: record?.item?.workspace?.cwd || S.cwd || '',
     conversationId,
-    sessionId: record?.item?.nativeSessionId || record?.owner?.sessionId || (!conversationId ? S.state?.sessionId : '') || '',
+    sessionId: record?.item?.nativeSessionId || record?.owner?.sessionId
+      || (!conversationId ? classicOwner?.sessionId || S.state?.sessionId : '') || '',
   };
 }
 
@@ -259,7 +269,7 @@ export function mountFilesPanel(host, view, options = {}) {
     updatePath(tab);
     if (!isVisible()) { tab.needsValidation = true; persistSoon(); return; }
     if (!resume) {
-      tree.select(tab.request.external || localSource(tab.request) ? null : tab.request.path);
+      tree.select(tab.request.external || localSource(tab.request) ? null : tab.request.path, { user: !restoring });
       if (!tab.request.external && !localSource(tab.request)) void tree.reveal(tab.request.path);
       geometry.hideOverlay();
     }
@@ -302,7 +312,7 @@ export function mountFilesPanel(host, view, options = {}) {
       activeKey = null;
       const next = tabs[Math.min(index, tabs.length - 1)];
       if (next) void activate(next.key, { focus });
-      else { tree.select(null); renderTabs(); empty(); if (focus) geometry.treeButton.focus(); }
+      else { tree.select(null, { user: true }); renderTabs(); empty(); if (focus) geometry.treeButton.focus(); }
     } else renderTabs({ focus });
     persistSoon();
   }
@@ -446,7 +456,7 @@ export function mountFilesPanel(host, view, options = {}) {
     if (!alive) return;
     persistNow();
     scopeEpoch++; openSequence++; cancelMetadata(); disposePreview();
-    tabs = []; activeKey = null; tabsUI.dispose();
+    tabs = []; activeKey = null; tabsUI.dispose(); closedKeys.clear();
     if (event?.type === 'pi-gui:session-switch' && !Api.gitConversationScope()) {
       sessionBeforeSwitch = getIdentity().sessionId;
       sessionOverride = event.detail?.sessionKey || `pending:${++pendingSessionSequence}`;
@@ -459,15 +469,12 @@ export function mountFilesPanel(host, view, options = {}) {
     if (sessionOverride && getIdentity().sessionId && getIdentity().sessionId !== sessionBeforeSwitch) sessionOverride = null;
     const next = effectiveIdentity();
     if (sameScope(identity, next)) return;
-    /* A genuine workspace/conversation change is a full reset: file access is
-     * bound to that scope, so every open tab and in-flight open must go. But the
-     * session id is only a *history* namespace — the backend never binds file
-     * access to it. Session identity always settles asynchronously after the
-     * bridge is ready (it is empty at mount, then the real id arrives), so a
-     * session-only transition while cwd+conversation stay stable must not destroy
-     * open tabs or an in-flight open the user already started. Adopt the settled
-     * session in place and merge that session's history around what survives. */
-    if (sameWorkspace(identity, next)) { settleSession(next); return; }
+    /* Only an unknown/pending session becoming known is a settle. Two distinct
+     * known sessions are a real boundary even when cwd+conversation are unchanged:
+     * pending opens and close records must not migrate to the other session. The
+     * Surface manager independently fences full runtime/workspace owner changes. */
+    if (sameWorkspace(identity, next) && (!identity.sessionId || String(identity.sessionId).startsWith('pending:'))
+      && next.sessionId && !String(next.sessionId).startsWith('pending:')) { settleSession(next); return; }
     reset();
   }
   /* The tree merge is per-field, never an overwrite. The live tree is the user's
@@ -480,9 +487,11 @@ export function mountFilesPanel(host, view, options = {}) {
    * snapshot at all the user's tree survives verbatim instead of being replaced by
    * the default, and a boolean the user toggled (e.g. hidden-items off) is not
    * resurrected to the snapshot's stale `true` merely because `false` is also the
-   * install-time default. Expanded folders union rather than pick a winner: both
-   * the user's and the snapshot's expansions are cheap to keep and neither is a
-   * destructive rollback. `touched` is transient merge metadata, never persisted. */
+   * install-time default. Once the user has expanded or collapsed anything, the
+   * live expansion set is authoritative — union would resurrect a directory the
+   * user deliberately collapsed; before any such gesture, union keeps both the
+   * reveal-expanded ancestors and the settled session's saved folders. `touched`
+   * is transient merge metadata, never persisted. */
   function mergeTreeState(live, snap) {
     if (!snap || typeof snap !== 'object') {
       if (!live || typeof live !== 'object') return undefined;
@@ -491,12 +500,14 @@ export function mountFilesPanel(host, view, options = {}) {
     }
     if (!live || typeof live !== 'object') return snap;
     const touched = new Set(Array.isArray(live.touched) ? live.touched : []);
-    const expanded = [...new Set([...(Array.isArray(live.expanded) ? live.expanded : []), ...(Array.isArray(snap.expanded) ? snap.expanded : [])])].slice(0, 96);
+    const liveExpanded = Array.isArray(live.expanded) ? live.expanded : [];
+    const snapExpanded = Array.isArray(snap.expanded) ? snap.expanded : [];
+    const expanded = touched.has('expanded') ? liveExpanded : [...new Set([...liveExpanded, ...snapExpanded])];
     return {
-      selected: live.selected || snap.selected || null,
+      selected: touched.has('selected') ? live.selected || null : snap.selected || null,
       hidden: touched.has('hidden') ? live.hidden === true : snap.hidden === true,
-      expanded,
-      scrollTop: touched.has('scrollTop') && Number(live.scrollTop) ? Number(live.scrollTop) : (Number(snap.scrollTop) || Number(live.scrollTop) || 0),
+      expanded: (Array.isArray(expanded) ? expanded : []).slice(0, 96),
+      scrollTop: touched.has('scrollTop') ? Number(live.scrollTop) || 0 : Number(snap.scrollTop) || 0,
     };
   }
   function settleSession(next) {

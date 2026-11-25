@@ -35,6 +35,20 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
   let searchMessage = '';
   let refreshingExpanded = [];
   let rootAbort = null;
+  /* Scroll intent is remembered apart from the DOM value. Replacing the tree
+   * content with the loading placeholder shrinks the scroller and the browser
+   * clamps scrollTop to 0 *before* any data arrives; reading the DOM back would
+   * therefore treat a refresh as "the user is at the top". Scroll events are
+   * ignored only while that restore is in progress (the placeholder can shrink
+   * under the cursor). After it completes, every event is a real position —
+   * including one the user caused just before a re-render, whose asynchronous
+   * event may arrive after the re-render wrote the same value back. Suppressing
+   * those by value equality would silently drop the user's gesture. */
+  let scrollIntent = Number(state.scrollTop) || 0;
+  let restoring = false;
+  /* Directories the user collapsed during the current deferred history restore.
+   * The restore loop must not re-expand an ancestor it is still walking through. */
+  let userCollapsed = new Set();
   /* Fields the user explicitly changed since this tree was installed. A boolean
    * preference like `hidden` cannot merge by value alone — `false` is both the
    * untouched default and a deliberate user choice — so the merge that adopts a
@@ -73,6 +87,22 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
     if (error) message.dataset.tone = 'error'; else delete message.dataset.tone;
   }
   function visibleRows() { return [...tree.querySelectorAll('.files-entry')]; }
+  function writeScroll(value) { tree.scrollTop = value; }
+  /* Expanded directories that are actually reachable from the root. A child
+   * left expanded under a folder the user collapsed is not visible state and
+   * must not be replayed by a refresh; otherwise the union of `expanded` would
+   * silently reopen the collapsed ancestor. */
+  function expandedState() {
+    const union = new Set([...refreshingExpanded, ...[...dirs].filter(([, dir]) => dir.expanded).map(([path]) => path)]);
+    for (const path of [...union]) {
+      const parts = path.split('/');
+      for (let i = 1; i < parts.length; i++) {
+        const dir = dirs.get(parts.slice(0, i).join('/'));
+        if (dir && !dir.expanded) { union.delete(path); break; }
+      }
+    }
+    return [...union].slice(0, 96);
+  }
   function focusPath(path) {
     focused = path;
     for (const row of visibleRows()) row.tabIndex = equal(row.dataset.filePath, path) ? 0 : -1;
@@ -109,7 +139,7 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
     const rows = visibleRows();
     let stop = rows.find((row) => equal(row.dataset.filePath, focused)) || rows.find((row) => equal(row.dataset.filePath, selected)) || rows[0];
     if (stop) { focused = stop.dataset.filePath; stop.tabIndex = 0; if (hadFocus) stop.focus(); }
-    tree.scrollTop = oldScroll;
+    writeScroll(oldScroll);
   }
   function entryRow(entry, depth, result = false) {
     const row = node('button', 'files-entry');
@@ -197,11 +227,19 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
     if (!dir) { setMessage('已达文件树缓存上限，请刷新。'); return; }
     touched.add('expanded');
     dir.expanded = !dir.expanded;
+    if (dir.expanded) userCollapsed.delete(entry.path);
+    else {
+      // A collapse is the user's final word for this restore pass: the deferred
+      // expansion loop must not walk through this directory again, and the
+      // pending expansion list must stop reporting it as expanded.
+      userCollapsed.add(entry.path);
+      refreshingExpanded = refreshingExpanded.filter((path) => path !== entry.path && !path.startsWith(entry.path + '/'));
+    }
     focused = entry.path;
     render(); onChange();
     if (dir.expanded && !dir.loaded) await loadDirectory(entry, dir);
   }
-  async function expandPath(path, { targetIsDirectory = false, run = epoch } = {}) {
+  async function expandPath(path, { targetIsDirectory = false, run = epoch, skipCollapsed = false } = {}) {
     let entries = roots;
     const parts = path.replace(/\\/g, '/').split('/');
     const count = Math.min(parts.length - (targetIsDirectory ? 0 : 1), 32);
@@ -212,6 +250,7 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
       if (!entry) return;
       const dir = directoryState(entry.path);
       if (!dir) return;
+      if (skipCollapsed && userCollapsed.has(entry.path)) return;
       dir.expanded = true;
       if (!dir.loaded && !await loadDirectory(entry, dir)) return;
       if (!current(run)) return;
@@ -268,53 +307,70 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
     else if (event.key === 'Enter') { event.preventDefault(); void runSearch(); }
   };
   function loadRoot() {
-    const expanded = [...new Set([...refreshingExpanded, ...[...dirs].filter(([, dir]) => dir.expanded).map(([path]) => path), ...(Array.isArray(state.expanded) ? state.expanded : [])])].slice(0, 96);
-    refreshingExpanded = expanded;
-    const restoredScroll = Number(state.scrollTop) || 0;
+    const pendingExpansion = [...new Set([...expandedState(), ...(Array.isArray(state.expanded) ? state.expanded : [])])].slice(0, 96);
+    refreshingExpanded = pendingExpansion;
     state = {};
     const oldScroll = tree.scrollTop;
+    /* A refresh starts while the real tree is on screen: keep exactly what the
+     * user is looking at. When a second refresh interrupts loading, the DOM is
+     * the placeholder and `scrollIntent` already holds the last real position. */
+    if (status !== 'loading') scrollIntent = oldScroll;
+    userCollapsed = new Set();
     const run = ++epoch;
     const request = ++rootSequence;
     cancelSearch(); rootAbort?.abort();
     for (const controller of pending) controller.abort(); pending.clear();
     rootAbort = new AbortController();
-    dirs = new Map(); status = 'loading'; searchRows = null; setMessage(''); render();
+    dirs = new Map(); status = 'loading'; searchRows = null; setMessage(''); restoring = true; render();
     rootPromise = (async () => {
-      let result;
-      try { result = await transport.list('', { hidden, conversationId: getIdentity().conversationId, signal: rootAbort.signal }); }
-      catch { result = { ok: false }; }
-      if (!current(run) || request !== rootSequence) return null;
-      const previous = workspace;
-      workspace = result?.ok ? result.workspace || null : null;
-      roots = result?.ok ? normalize(result.entries, 4000) : [];
-      status = result?.noProject === true ? 'no-project' : !result?.ok ? 'error' : roots.length ? 'success' : 'empty';
-      if (status === 'error') setMessage('无法读取项目文件，请刷新后重试。', true);
-      else if (result?.truncated) setMessage('目录内容过多，只显示了前一部分。');
-      render();
-      onRoot({ status, workspace, previous });
-      if (!current(run)) return null;
-      for (const path of expanded.sort((a, b) => a.split('/').length - b.split('/').length)) {
-        await expandPath(path, { targetIsDirectory: true, run });
+      try {
+        let result;
+        try { result = await transport.list('', { hidden, conversationId: getIdentity().conversationId, signal: rootAbort.signal }); }
+        catch { result = { ok: false }; }
+        if (!current(run) || request !== rootSequence) return null;
+        const previous = workspace;
+        workspace = result?.ok ? result.workspace || null : null;
+        roots = result?.ok ? normalize(result.entries, 4000) : [];
+        status = result?.noProject === true ? 'no-project' : !result?.ok ? 'error' : roots.length ? 'success' : 'empty';
+        if (status === 'error') setMessage('无法读取项目文件，请刷新后重试。', true);
+        else if (result?.truncated) setMessage('目录内容过多，只显示了前一部分。');
+        render();
+        onRoot({ status, workspace, previous });
         if (!current(run)) return null;
+        for (const path of pendingExpansion.sort((a, b) => a.split('/').length - b.split('/').length)) {
+          await expandPath(path, { targetIsDirectory: true, run, skipCollapsed: true });
+          if (!current(run)) return null;
+        }
+        if (status !== 'error') refreshingExpanded = [];
+        render(); writeScroll(scrollIntent);
+        if (search.value.trim()) void runSearch();
+        return workspace;
+      } finally {
+        // Only the run that still owns the tree may end its restore window; a
+        // superseded run must not re-enable scroll capture for its successor.
+        if (run === epoch) restoring = false;
       }
-      if (status !== 'error') refreshingExpanded = [];
-      render(); tree.scrollTop = oldScroll || restoredScroll;
-      if (search.value.trim()) void runSearch();
-      return workspace;
     })();
     return rootPromise;
   }
   refresh.onclick = () => { document.dispatchEvent(new window.CustomEvent('pi-gui:files-refresh')); void loadRoot(); };
   hiddenToggle.onclick = () => { touched.add('hidden'); hidden = !hidden; hiddenToggle.setAttribute('aria-pressed', String(hidden)); onChange(); void loadRoot(); };
-  // Scrolling and clicking are user gestures on navigation ephemera; marking them
-  // touched keeps a settle from rolling the user's position back to a stale snapshot.
-  tree.addEventListener('scroll', () => { if (tree.scrollTop) touched.add('scrollTop'); }, { passive: true });
+  // Scrolling is a user gesture on navigation ephemera; marking it touched keeps
+  // a settle from rolling the user's position back to a stale snapshot. Only the
+  // refresh restore window is exempt — there the DOM position is our own
+  // placeholder clamp, not a gesture.
+  tree.addEventListener('scroll', () => {
+    if (restoring) return;
+    scrollIntent = tree.scrollTop;
+    touched.add('scrollTop');
+    onChange();
+  }, { passive: true });
   return {
     tree, search, refresh, hiddenToggle, loadRoot, reveal,
     get workspace() { return workspace; },
     get ready() { return rootPromise; },
-    select(path) { selected = path; render(); },
-    getState: () => ({ selected, hidden, expanded: [...new Set([...refreshingExpanded, ...[...dirs].filter(([, dir]) => dir.expanded).map(([path]) => path)])].slice(0, 96), scrollTop: tree.scrollTop, touched: [...touched] }),
+    select(path, { user = false } = {}) { if (user) touched.add('selected'); selected = path; render(); },
+    getState: () => ({ selected, hidden, expanded: expandedState(), scrollTop: scrollIntent, touched: [...touched] }),
     dispose() { alive = false; epoch++; rootAbort?.abort(); cancelSearch(); for (const controller of pending) controller.abort(); pending.clear(); dirs.clear(); roots = []; },
   };
 }

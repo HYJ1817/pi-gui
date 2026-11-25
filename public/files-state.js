@@ -14,9 +14,9 @@ export const scopeKey = ({ cwd = '', conversationId = '', sessionId = '' } = {})
 export const sameScope = (a, b) => scopeKey(a) === scopeKey(b);
 /* The backend binds file access to the workspace root + conversation (the
  * fileId hash never includes the session id); the session id only namespaces
- * per-session tab *history*. So the access-relevant identity is cwd+conversation.
- * A session id that settles or rotates while those two are stable is a history
- * refinement, not a workspace change — it must not tear down open tabs. */
+ * per-session tab *history*. The access-relevant root is cwd+conversation, but
+ * only an unknown-to-known session is a history refinement. Switching between
+ * known sessions still retires pending opens and session-local close records. */
 export const workspaceKey = ({ cwd = '', conversationId = '' } = {}) => JSON.stringify([pathKey(cwd), conversationId || '']);
 export const sameWorkspace = (a, b) => workspaceKey(a) === workspaceKey(b);
 
