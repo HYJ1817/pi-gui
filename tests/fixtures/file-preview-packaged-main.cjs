@@ -122,11 +122,15 @@ async function main() {
     clipboard, win, read, check, sleep, until, shot, click, key, type, value, open };
   await require('./file-preview-desktop-scenarios.cjs')(tools, group);
   await require('./file-preview-desktop-formats.cjs')(tools, group);
-  // Layout proof runs while the Files surface is still mounted. The Surface
-  // scenarios below deliberately close every top-level tab, and reopening Files
-  // with a queued file request currently races the pre-existing Files internal
-  // tab restore (R0, tracked separately, not widened here). Do not conflate
-  // that known restore race with common-maximize layout acceptance.
+  /* Natural scenario order restored: the Surface scenarios deliberately close
+   * every top-level tab, then the layout proof reopens Files with a queued file
+   * request — exactly the close-all/reopen interleaving that raced the deferred
+   * history restore before the F2 fix. Restoration now merges into user state
+   * (never overwrites open tabs) and stale snapshots are discarded by the
+   * scope/epoch guards, so this ordering is itself a production-environment
+   * regression proof of R0: if a late restore could still clobber the queued
+   * open, the geometry assertions below fail. */
+  await require('./surface-final-scenarios.cjs')(tools, group);
   await group('packaged-layout', async () => {
     await open('guide.md', '.fp-markdown-body');
     if (!await read("document.querySelector('#rightPane').dataset.maximized==='true'")) await click('#workPanelMaximize');
@@ -143,7 +147,6 @@ async function main() {
       await shot('packaged-' + width + '-' + theme);
     }
   });
-  await require('./surface-final-scenarios.cjs')(tools, group);
   check('packaged renderer did not crash', diagnostics.rendererGone === 0);
 }
 main().catch(error => { check('packaged boot and integration', false, { type: error.name, stage: error.testLabel || 'boot' }); }).finally(async () => {
