@@ -142,10 +142,11 @@ syncBuiltinESMExports();
       });
       assert.ifError(cli.error);
       assert.equal(cli.status, 0, cli.stderr);
-      assert.match(cli.stderr, /Preview license review remains REQUIRED; generation is not redistribution approval: pdfjs-dist Liberation fonts/);
+      assert.doesNotMatch(cli.stderr, /license review remains REQUIRED/);
+      assert.match(cli.stderr, /Preview font license verification recorded/);
       assert.doesNotMatch(cli.stdout + cli.stderr, /redistribution approved|release approved/i);
       cliSummary = JSON.parse(cli.stdout.trim().replace(/^preview vendor: /, ''));
-      assert.deepEqual(cliSummary.legalReviewRequired, ['pdfjs-dist Liberation fonts: source-distribution obligations remain unverified (GPLv2 with font exceptions)']);
+      assert.deepEqual(cliSummary.legalReviewRequired, []);
       assert.equal(fs.existsSync(path.join(output, 'pptx-preview.js')), false);
       assert.ok(fs.statSync(path.join(output, 'pdf.worker.mjs')).size > 0);
     });
@@ -230,10 +231,21 @@ syncBuiltinESMExports();
       }
       for (const pkg of Object.values(manifest.versions.packages)) for (const file of pkg.legalFiles) assert.ok(manifest.files[file]);
     });
-    await check('PPTX exclusion does not falsely clear the separate PDF font source-distribution review', () => {
+    await check('PDF font verification is pinned into the manifest with its compliance evidence', () => {
       const pdf = manifest.versions.packages['pdfjs-dist@' + manifest.versions.direct['pdfjs-dist']];
       const review = pdf.fontLicenseReview;
-      assert.equal(review.sourceDistributionVerified, false);
+      /* The verification concluded in docs/pdf-font-license-verification.md:
+       * Liberation Sans 1.07.4 under GPLv2 with the Liberation font exceptions;
+       * the TTF bytes are both object code and corresponding source for this
+       * version, they ship unmodified (digest-locked here), and mere aggregation
+       * plus the carried LICENSE_LIBERATION satisfy the terms. The manifest
+       * records the verified outcome as evidence — it must never silently flip
+       * back to unverified, and any byte change of the fonts re-blocks via the
+       * digest locks. */
+      assert.equal(review.sourceDistributionVerified, true);
+      assert.equal(review.license, 'GPLv2 with Liberation font exceptions');
+      assert.equal(review.fontVersion, '1.07.4');
+      assert.equal(review.verification, 'docs/pdf-font-license-verification.md');
       assert.equal(review.files.length, 4);
       assert.deepEqual(review.files, Object.keys(manifest.copied).filter(file => /^pdf\/standard_fonts\/LiberationSans-[^/]+\.ttf$/.test(file)).sort(compare));
       assert.ok(pdf.legalFiles.includes(review.licenseFile));
@@ -242,7 +254,22 @@ syncBuiltinESMExports();
       assert.match(license, /physical product/);
       for (const file of review.files) assert.ok(manifest.files[file] && manifest.inputs[manifest.copied[file]]);
       assert.deepEqual(manifest.legalReviewRequired, cliSummary.legalReviewRequired);
-      assert.doesNotMatch(manifest.legalReviewRequired.join('\n'), /pptx-preview/);
+      assert.deepEqual(manifest.legalReviewRequired, []);
+    });
+    await check('the pinned font bytes still match the verified Liberation Sans 1.07.4 upstream identity', () => {
+      /* Verification-anchor digests from docs/pdf-font-license-verification.md:
+       * if any of these flips, the verification document no longer covers the
+       * shipped font and the release block must be reinstated manually. */
+      const anchors = {
+        'pdf/standard_fonts/LiberationSans-Regular.ttf': 'f8ace1f892b2bd9dc1792ba7f097fa75',
+        'pdf/standard_fonts/LiberationSans-Bold.ttf': '361c61b82d575c5c35fd9157fda8b019',
+        'pdf/standard_fonts/LiberationSans-Italic.ttf': '832b4406dbef23628800d3aaad210485',
+        'pdf/standard_fonts/LiberationSans-BoldItalic.ttf': 'a224075ac17495ad0a3af3bc0a419ac0',
+      };
+      for (const [file, prefix] of Object.entries(anchors)) {
+        assert.ok(manifest.files[file], file + ' shipped');
+        assert.ok(manifest.files[file].sha256.startsWith(prefix), file + ' matches verified 1.07.4 digest');
+      }
     });
     await check('KaTeX font copyright/RFN and complete OFL are separate from its MIT code license', () => {
       const pkg = manifest.versions.packages['katex@' + manifest.versions.direct.katex];
