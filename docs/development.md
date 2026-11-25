@@ -15,6 +15,14 @@ npm run app        # 桌面窗口（Electron 会自己拉起一份后端，不�
 
 改前端时用 `npm start` 更快（改完刷新页面即可）；`npm run app` 每次都要重启进程。
 
+统一文件预览的 `public/vendor/file-preview/` 是可再生资源，不提交第三方构建代码。
+正常 `npm ci` 完成后，`postinstall` 会用已安装、锁定的 npm 包离线生成，不自行下载、
+不运行上游构建脚本、不读取用户文档。源码开发需要完整开发依赖（含 esbuild）；使用
+`--ignore-scripts` 准备依赖或手动清理该目录后，先执行 `npm run sync:preview` 再启动/测试。
+`build:exe`（及 `build:app -- --rebuild`）仍在收集资源前显式生成，不依赖安装钩子已运行。
+`npm run sync:preview` 和本地构建的成功不代表第三方再分发获准；PPTX 当前许可边界见
+[第二阶段验收材料](unified-file-viewer-acceptance.md#独立审查许可与残余风险)。
+
 ## 二、三种形态，三条资源解析路径
 
 **这是最容易踩的坑**：改了 `public/` 之后，只有源码树那条路是「实时」的。
