@@ -108,7 +108,19 @@ function text(shape, inherited, ctx) {
         const rawStart = attr(autoNum, 'startAt');
         if (rawStart !== '') {
           const parsed = Number(rawStart);
-          if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 32767) { start = parsed; explicitStart = true; }
+          /* ECMA-376 types startAt as a positive decimal (minimum 1): a written
+           * but out-of-range value is invalid markup. Office software treats the
+           * restart *intent* as present and clamps the value into the valid range
+           * rather than silently dropping the attribute — so startAt="0" renders
+           * as a restart at 1, not a continuation. Clamping here keeps the
+           * projection honest: the value the renderer uses is the value the
+           * projection carries, and explicitStart stays true because the document
+           * did write a startAt. A non-numeric startAt carries no usable intent
+           * and degrades to a continuation, exactly the malformed-markup rule
+           * the comment above describes. */
+          if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 32767) {
+            start = Math.max(1, parsed); explicitStart = true;
+          }
         }
         marker = { kind: 'number', format, start, explicitStart };
       } else if (child(pPr, A, 'buFont')) marker = { kind: 'bullet', char: '•' };
