@@ -212,6 +212,27 @@ async function unitTests() {
     parts['xl/workbook.xml'] = Buffer.from(`<workbook><definedNames><definedName name="Explosive">Sheet!${reference}</definedName></definedNames></workbook>`);
     check('named range allocation bounded: ' + reference, () => assert.throws(() => inspectOffice(zipParts(parts), 'xlsx'), error => error.code === 'sheet-limit'));
   }
+  /* Entity-lexical boundary: numeric entities inside attribute values are
+   * inert data to the real XML parser — substitution never re-enters the
+   * lexical layer. A scanner decoding them before the lexical scan would see
+   * tag boundaries and attributes that do not exist. These constructs pin the
+   * correct layering: raw-text scan, per-value decode. */
+  acceptDocx('entity-encoded fake tag boundary inside attribute value stays inert', parts => {
+    // Real parser reading: ONE internal image relationship whose Evil attribute
+    // carries inert text. A scanner fooled by decoded `</Relationship><…>` sees
+    // a forged External mode and either rejects the legal document or admits a
+    // fabricated relationship. Correct behavior: accept as internal image rel.
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png" Evil="&#60;&#47;Relationship&#62;&#60;Relationship Type=&#34;${NS_OFFICE}/image&#34; Target=&#34;https://invalid.example/x.png&#34; TargetMode=&#34;External&#34;&#47;&#62;"/></Relationships>`;
+  });
+  acceptDocx('entity-encoded quote cannot forge attribute boundaries', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Note="&#34; Target=&#34;https://invalid.example/x.png&#34; TargetMode=&#34;External&#34; x=&#34;" Target="media/image1.png"/></Relationships>`;
+  });
+  acceptDocx('entity-encoded colon inside hyperlink target still decodes per-value', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="${NS_OFFICE}/hyperlink" Target="https&#58;//example.com/reference" TargetMode="External"/></Relationships>`;
+  });
+  rejectDocx('entity-encoded javascript scheme rejected after per-value decode', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="${NS_OFFICE}/hyperlink" Target="javascript&#58;alert(1)" TargetMode="External"/></Relationships>`;
+  }, 'external-link');
   // Real worker_threads with only the browser worker messaging API shimmed;
   // notably there is NO DOMParser/window/document in this execution context.
   const bootstrap = path.join(world, 'office-worker-bootstrap.mjs');

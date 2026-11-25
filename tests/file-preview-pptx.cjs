@@ -146,6 +146,19 @@ test('slide size scan is quote-aware: a decoy gt cannot truncate cy away', async
   assert.equal(deck.width, 960); assert.equal(deck.height, 540);
 });
 
+test('comment or PI decoy sldSz cannot shadow the real element', async () => {
+  for (const [label, prefix] of [
+    ['comment decoy', '<!-- <p:sldSz cx="100" cy="100"/> -->'],
+    ['comment decoy with wrong-but-valid size', '<!-- <p:sldSz cx="9144000" cy="9144000"/> -->'],
+  ]) {
+    const parts = pptxParts();
+    parts['ppt/presentation.xml'] = parts['ppt/presentation.xml'].replace(/<p:sldSz[^>]*\/>/, prefix + '<p:sldSz cx="9144000" cy="5143500"/>');
+    const deck = await parse(parts);
+    assert.equal(deck.width, 960, label + ' must not corrupt the real size');
+    assert.equal(deck.height, 540);
+  }
+});
+
 test('malformed slide size still rejected regardless of attribute order', async () => {
   for (const bad of ['<p:sldSz cy="5143500"/>', '<p:sldSz cx="9144000"/>', '<p:sldSz cx="100" cy="5143500"/>', '<p:sldSz cy="100" cx="9144000"/>']) {
     const parts = pptxParts();
@@ -366,6 +379,59 @@ test('east-asian typeface participates without a latin face', async () => {
  * arabicPlain/alphaLcPeriod/romanLcPeriod types. The projection must carry
  * their structure without rejection, silent drops or fabricated markers. */
 const realDeck = name => new Uint8Array(require('node:fs').readFileSync(path.join(__dirname, 'fixtures/office-real', name)));
+
+test('malformed startAt degrades the marker instead of killing the deck', async () => {
+  for (const bad of ['32768', 'abc', '-5', '2.5']) {
+    const parts = pptxParts();
+    const list = '<p:sp><p:nvSpPr><p:cNvPr id="40" name="BadStart"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="3000000"/><a:ext cx="7315200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>' +
+      '<a:p><a:pPr marL="342900" indent="-342900"><a:buAutoNum type="arabicPeriod" startAt="' + bad + '"/></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"/><a:t>畸形起点</a:t></a:r></a:p>' +
+      '</p:txBody></p:sp>';
+    inject(parts, slidePath, list);
+    const deck = await parse(parts);
+    const shape = deck.slides[0].shapes.find(item => item.text?.paragraphs.some(pp => pp.runs.some(r => r.text.includes('畸形起点'))));
+    assert.ok(shape, 'deck with malformed startAt ' + bad + ' still projects');
+    assert.equal(shape.text.paragraphs[0].marker.start, 1);
+    assert.equal(shape.text.paragraphs[0].marker.explicitStart, false);
+  }
+});
+
+test('alpha numbering beyond z uses spreadsheet bijective base-26', async () => {
+  const { JSDOM } = require('jsdom');
+  const fs = require('node:fs');
+  const parts = pptxParts();
+  const items = Array.from({ length: 28 }, (_, i) =>
+    '<a:p><a:pPr marL="342900" indent="-342900" lvl="0"><a:buAutoNum type="alphaLcPeriod"' + (i === 0 ? ' startAt="24"' : '') + '/></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"/><a:t>项' + (i + 1) + '</a:t></a:r></a:p>').join('');
+  const list = '<p:sp><p:nvSpPr><p:cNvPr id="41" name="LongAlpha"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="1000000"/><a:ext cx="7315200" cy="4000000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>' + items + '</p:txBody></p:sp>';
+  inject(parts, slidePath, list);
+  const deck = await parse(parts);
+  const slidesDom = new JSDOM('<!doctype html><div id="slides"></div>', { runScripts: 'outside-only', pretendToBeVisual: true });
+  const frameWindow = slidesDom.window;
+  const script = frameWindow.document.createElement('script'); script.dataset.key = 'alpha-key';
+  Object.defineProperty(frameWindow.document, 'currentScript', { value: script });
+  frameWindow.postMessage = () => {};
+  frameWindow.URL.createObjectURL = () => 'blob:x';
+  frameWindow.URL.revokeObjectURL = () => {};
+  frameWindow.eval(fs.readFileSync(path.join(ROOT, 'public/file-preview/office-slides-frame.js'), 'utf8'));
+  const frameDeck = { ...deck, images: Object.fromEntries(Object.entries(deck.images).map(([name, image]) => [name, { ...image, bytes: frameWindow.Uint8Array.from(image.bytes) }])) };
+  frameWindow.dispatchEvent(new frameWindow.MessageEvent('message', { source: frameWindow, data: { officeSlides: 'alpha-key', type: 'load', deck: frameDeck, slides: 2 } }));
+  const markers = [...frameWindow.document.querySelectorAll('.pptx-marker')].map(el => el.textContent.trim());
+  assert.equal(markers[0], 'x.');
+  assert.equal(markers[2], 'z.');
+  assert.equal(markers[3], 'aa.', 'item after z renders aa not a-repeat');
+  assert.equal(markers[4], 'ab.', 'second item after z renders ab not bb');
+  slidesDom.window.close();
+});
+
+test('font names with commas are rejected by the whitelist rather than splitting the chain', async () => {
+  const parts = pptxParts();
+  const item = '<p:sp><p:nvSpPr><p:cNvPr id="42" name="CommaFont"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="5000000"/><a:ext cx="7315200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>' +
+    '<a:p><a:r><a:rPr lang="zh-CN" sz="2000"><a:latin typeface="FakeFont,system-ui"/></a:rPr><a:t>逗号字体</a:t></a:r></a:p>' +
+    '</p:txBody></p:sp>';
+  inject(parts, slidePath, item);
+  const deck = await parse(parts);
+  const shape = deck.slides[0].shapes.find(item => item.text?.paragraphs.some(pp => pp.runs.some(r => r.text.includes('逗号字体'))));
+  assert.equal(shape.text.paragraphs[0].runs[0].family, undefined, 'comma-containing font name dropped whole, not split');
+});
 
 test('real LibreOffice mixed bullet deck passes preflight with complete structure', async () => {
   const bytes = realDeck('libreoffice-bullets-mixed.pptx');
