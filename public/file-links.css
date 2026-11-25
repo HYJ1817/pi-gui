@@ -165,6 +165,7 @@
   padding: var(--ui-space-1) var(--ui-space-2);
   gap: var(--ui-space-1);
   border-bottom: 1px solid var(--ds-border-default);
+  background: var(--ds-bg-secondary);
 }
 .files-surface .files-tabs[hidden] { display: none; }
 .files-surface .files-tablist {
@@ -184,8 +185,8 @@
   min-inline-size: 0;
   max-inline-size: 210px;
   flex: none;
-  border-radius: var(--radius-sm);
-  color: var(--ds-text-muted);
+  border-radius: var(--radius-xs);
+  color: var(--ds-text-secondary);
 }
 .files-surface .files-tab:hover { background: var(--ds-bg-hover); color: var(--ds-text-secondary); }
 /* Selection uses the existing navigation surface, never a focus-like frame. */
@@ -202,7 +203,7 @@
   max-inline-size: 100%;
   padding: 5px 3px 5px 8px;
   border: 0;
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  border-radius: var(--radius-xs) 0 0 var(--radius-xs);
   background: none;
   color: inherit;
   font: inherit;

@@ -311,7 +311,6 @@ export async function loadGitStatus() {
     c.projectRoot = '';
     c.truncated = false;
     c.error = '无法连接后端，变更信息暂不可用。';
-    renderChangesBadge();
     emitGitStatus();
     return c;
   }
@@ -324,7 +323,6 @@ export async function loadGitStatus() {
   c.projectRoot = typeof j.projectRoot === 'string' ? j.projectRoot : '';
   c.error = j.ok === false ? String(j.error || '读取 Git 状态失败') : '';
 
-  renderChangesBadge();
   emitGitStatus();
   return c;
 }
@@ -336,18 +334,7 @@ export function resetChanges() {
   refreshTimer = null;
   Object.assign(S.changes, blankChanges());
   view.sessionOnly = false;
-  renderChangesBadge();
   renderChangesBody();
-}
-
-/** 侧栏徽标。0 条时隐藏而不是显示 0 —— 常态是「干净」，不该常驻一个数字。
- *  **注意这里数的是 Git 的总数**，与「仅本次会话」过滤无关：
- *  徽标回答的是「磁盘上有多少没提交的东西」，那是权威数字，不该被视角改变。 */
-export function renderChangesBadge() {
-  if (!el.changesCount) return;
-  const n = S.changes.files.length;
-  el.changesCount.textContent = n ? String(n) : '';
-  el.changesCount.hidden = n === 0;
 }
 
 /* ---------- 会话账本 → 项目相对路径 ---------- */

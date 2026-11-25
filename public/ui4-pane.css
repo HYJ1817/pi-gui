@@ -418,6 +418,7 @@
 .workbench-splitter[hidden]{display:none}
 .workbench-pane-specs{border-bottom:0}
 .workbench-pane-changes{border-top:0}
+.workbench-pane > .secondary-surface{flex:1 1 0;min-height:0;width:100%}
 .workbench-pane-browser > .rp-surface-browser{flex:1 1 0;min-height:0;width:100%}
 .workbench-pane-browser .rp-toolbar{gap:3px;padding-inline:8px}
 .workbench-pane-browser .ui4-browser-title{display:none}
@@ -496,78 +497,44 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
   .workbench-tab{padding-inline:7px}
 }
 
-/* Persistent tool navigation is outside rp-body, so switching surfaces cannot
-   orphan the entrance or duplicate business mounts. */
-/* Keep the drag rectangle outside native caption controls. The persistent
-   strip reuses existing actions; it is not a second tab/session owner. */
-.work-panel-nav{display:flex;align-items:center;gap:var(--ds-work-panel-control-gap);height:var(--ds-toolbar-height);flex:0 0 var(--ds-toolbar-height);min-width:0;margin-right:var(--rp-caption-inset);padding:0 12px;border:0;background:var(--ds-bg-primary)}
-.work-panel-tool-strip{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;scrollbar-width:none;-webkit-app-region:no-drag}
-.work-panel-tool-strip::-webkit-scrollbar{display:none}
-.work-panel-nav .icon-btn{flex:0 0 auto;width:28px;min-width:28px;height:28px;gap:6px;padding:0;border:0;border-radius:var(--radius-sm);font:inherit;font-size:var(--text-sm-plus);position:relative;color:var(--ds-text-muted);-webkit-app-region:no-drag}
-.work-panel-nav .icon-btn:hover,.work-panel-nav .icon-btn.is-active{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
-.work-panel-nav .work-tool-label{display:none;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.work-panel-nav .icon-btn.is-active{width:auto;min-width:92px;max-width:180px;padding:0 10px}
-.work-panel-nav .icon-btn.is-active .work-tool-label{display:block}
-.work-panel-nav .icon-btn:has(.head-count:not(:empty)){width:auto;padding-inline:6px}
-.work-panel-nav .head-count{position:static;font-size:var(--text-xs)}
-.work-panel-nav #workPanelClose{font-size:20px}
-.work-panel-nav .icon-btn svg{width:16px;height:16px;flex:none}
-.work-panel-nav .icon-btn:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px}
-/* 起始页：工具启动器。内容靠上，固定两列；页面用画布底色，卡片比页面
- * 略亮一档、边框只做低对比分隔。尺寸按参考图校准：24px 内容边距、60px 卡片、
- * 12px 圆角；列间距在常规宽度为 24px，栏窄时收成 12px 以保住两列和快捷键。 */
-.right-pane .work-panel-empty{
-  --launcher-card-bg:#202020;
-  --launcher-card-hover:#262626;
-  --launcher-card-border:color-mix(in oklab,var(--ds-text-primary) 6%,transparent);
-  display:flex;flex-direction:column;flex:1;min-height:0;gap:18px;
-  padding:20px 24px 24px;
-  color:var(--ds-text-muted);overflow-y:auto;overscroll-behavior:contain;
-  background:var(--ds-bg-primary);container-type:inline-size;
-}
-:root[data-theme="light"] .right-pane .work-panel-empty{
-  --launcher-card-bg:var(--ds-surface-card);
-  --launcher-card-hover:var(--ds-bg-tertiary);
-  --launcher-card-border:var(--ds-border-subtle);
-}
-.right-pane .work-panel-empty h2{flex:none;margin:0;padding:0;font-size:var(--text-md);font-weight:var(--font-weight-semibold);line-height:1.35;color:var(--ds-text-secondary)}
-.work-panel-launcher-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px;row-gap:7px;align-content:start}
-.work-panel-launcher-row,.work-panel-launcher-more{
-  display:flex;align-items:center;gap:0;min-width:0;height:60px;padding:0 17px;
-  border:1px solid var(--launcher-card-border);border-radius:12px;
-  background:var(--launcher-card-bg);color:var(--ds-text-primary);
-  font:inherit;font-size:18px;font-weight:400;line-height:1.2;text-align:left;
-  cursor:pointer;transition:background-color .12s ease,border-color .12s ease;
-}
-.work-panel-launcher-row:hover,.work-panel-launcher-more:hover{background:var(--launcher-card-hover);border-color:var(--ds-border-default)}
-.work-panel-launcher-row:disabled{opacity:.45;cursor:default;background:var(--launcher-card-bg)}
-.work-panel-launcher-row:focus-visible,.work-panel-launcher-more:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px}
-.work-panel-launcher-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:none;margin-right:10px;color:var(--ds-text-muted)}
-.work-panel-launcher-icon svg{width:20px;height:20px}
+/* Real Surface tabs, followed immediately by + in the same scroll lane.
+ * The outer titleband still ends before native caption controls. */
+.work-panel-nav{display:flex;align-items:center;gap:var(--ds-work-panel-control-gap);height:var(--ds-toolbar-height);flex:0 0 var(--ds-toolbar-height);min-width:0;margin-right:var(--rp-caption-inset);padding:0 var(--ui-space-2);border:0;background:var(--ds-bg-primary)}
+.work-panel-tab-scroll{display:flex;align-items:center;gap:var(--ui-space-1);flex:1 1 auto;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-inline:contain;scrollbar-width:thin;-webkit-app-region:no-drag}
+.work-panel-tabs{display:flex;align-items:center;gap:var(--ui-space-1);flex:0 0 auto;min-width:0}
+.work-panel-nav .icon-btn{flex:0 0 auto;width:var(--ds-control-size);min-width:var(--ds-control-size);height:var(--ds-control-size);padding:0;border:0;border-radius:var(--radius-xs);color:var(--ds-text-secondary);-webkit-app-region:no-drag}
+.work-panel-nav .icon-btn:hover{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
+.work-panel-nav .icon-btn svg,.work-surface-tab-icon svg{width:16px;height:16px;flex:none}
+.work-surface-tab{display:flex;align-items:center;flex:none;position:relative;min-width:0;max-width:180px;height:var(--ds-control-size);border-radius:var(--radius-xs);color:var(--ds-text-secondary);-webkit-app-region:no-drag}
+.work-surface-tab:has([aria-selected="true"]){background:var(--ds-bg-active);color:var(--ds-text-primary)}
+.work-surface-tab:has([aria-selected="true"])::after{content:"";position:absolute;bottom:1px;left:var(--ui-space-2);right:var(--ui-space-2);height:2px;background:var(--ds-text-primary);pointer-events:none}
+.work-surface-tab-select{display:flex;align-items:center;gap:var(--ui-space-1);flex:1;min-width:0;height:100%;padding:0 var(--ui-space-2);border:0;border-radius:var(--radius-xs);background:transparent;color:inherit;font:inherit;font-size:var(--text-sm-plus);text-align:left;cursor:pointer}
+.work-surface-tab-select:hover{background:var(--ds-bg-hover)}
+.work-surface-tab-icon{display:inline-flex;flex:none}
+.work-surface-tab-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work-panel-nav .work-surface-tab-close{width:24px;min-width:24px;height:24px;margin-right:2px}
+.work-panel-nav .work-surface-tab-close svg{width:12px;height:12px}
+.work-panel-nav .icon-btn:focus-visible,.work-surface-tab-select:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px}
+.rp-surface[hidden]{display:none}
+.right-pane[data-maximized="true"]{max-width:none}
+.right-pane[data-maximized="true"] .rp-resizer{display:none}
+/* Launcher is transparent, centered, and a single compact list. No tool cards,
+ * secondary icon strip, descriptions or “more tools” navigation exists. */
+.secondary-surface.work-tools-surface{padding:0;overflow:hidden}
+.right-pane .work-panel-empty{display:flex;flex:1;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:var(--ui-space-5);background:transparent;color:var(--ds-text-primary)}
+.work-panel-launcher-content{width:100%;max-width:304px;margin:auto}
+.right-pane .work-panel-empty h2{margin:0 0 var(--ui-space-4);padding:0 var(--ui-space-2);font-size:var(--text-lg);font-weight:var(--font-weight-semibold);line-height:var(--leading-tight);color:var(--ds-text-primary)}
+.work-panel-launcher-list{display:flex;flex-direction:column;gap:var(--ui-space-1)}
+.work-panel-launcher-row{display:flex;align-items:center;gap:var(--ui-space-2);width:100%;min-width:0;min-height:36px;padding:var(--ui-space-2);border:0;border-radius:var(--radius-xs);background:transparent;color:var(--ds-text-secondary);font:inherit;font-size:var(--text-md);line-height:var(--leading-compact);text-align:left;cursor:pointer}
+.work-panel-launcher-row:hover{background:var(--ds-bg-hover);color:var(--ds-text-primary)}
+.work-panel-launcher-row:active{background:var(--ds-bg-active)}
+.work-panel-launcher-row:disabled{opacity:var(--ds-button-disabled-opacity);cursor:not-allowed}
+.work-panel-launcher-row:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px}
+.work-panel-launcher-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:none;color:inherit}
+.work-panel-launcher-icon svg{width:16px;height:16px}
 .work-panel-launcher-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.work-panel-launcher-shortcut{
-  flex:0 0 auto;margin-left:6px;padding:4px 6px;border-radius:6px;
-  background:color-mix(in oklab,var(--ds-text-primary) 7%,transparent);
-  font-family:var(--ui-font-mono);font-size:10.5px;font-weight:400;line-height:1;
-  color:var(--ds-text-muted);white-space:nowrap;
-}
-.work-panel-launcher-chevron{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex:none;margin-left:6px;color:var(--ds-text-muted);transition:transform .16s ease}
-.work-panel-launcher-chevron svg{width:16px;height:16px}
-.work-panel-launcher-more[aria-expanded="true"] .work-panel-launcher-chevron{transform:rotate(180deg)}
-.work-panel-launcher-extra{margin-top:0}
-/* 默认栏宽 392px 放不下 24px 列间距 + 18px 名称 + 完整快捷键胶囊；
- * 341–459px 收窄列间距与卡片内距，仍保持两列、60px 高与 18px 名称。 */
-@container (max-width:459px){
-  .work-panel-launcher-grid{column-gap:12px}
-  .work-panel-launcher-row,.work-panel-launcher-more{padding:0 11px}
-  .work-panel-launcher-icon{margin-right:8px}
-  .work-panel-launcher-shortcut{margin-left:4px;padding:3px 5px;font-size:9px}
-  .work-panel-launcher-chevron{margin-left:5px}
-}
-/* 更窄的栏（最小 320px）里快捷键提示先让位，入口名称与两列结构保留。 */
-@container (max-width:340px){
-  .work-panel-launcher-shortcut{display:none}
-}
+.work-panel-launcher-shortcut{flex:none;padding:2px var(--ui-space-1);border:0;border-radius:var(--radius-xs);background:transparent;font-family:var(--font-mono);font-size:var(--text-xs);font-weight:var(--font-weight-normal);line-height:var(--leading-normal);color:var(--ds-text-secondary);white-space:nowrap}
+.work-panel-launcher-shortcut[hidden]{display:none}
 
 /* ================= 终端面板 ================= */
 .secondary-surface.terminal-surface{padding:0;overflow:hidden;background:var(--ds-bg-inset)}
@@ -685,9 +652,7 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 
 /* ================= 文件面板（仅 Files 自己的布局） ================= */
 .secondary-surface.files-surface{overflow:hidden}
-.right-pane.files-pane-maximized{position:absolute;inset:0;width:100%!important;max-width:none!important;z-index:21}
-.right-pane.files-pane-maximized>.rp-resizer{display:none}
-.files-surface .files-layout{position:relative;display:flex;flex:1 1 auto;min-height:0;min-width:0;border-top:1px solid var(--ds-border-default);overflow:hidden}
+.files-surface .files-layout{position:relative;display:flex;flex:1 1 auto;min-height:0;min-width:0;overflow:hidden}
 .files-surface .files-sidebar{display:flex;flex-direction:column;flex:0 0 var(--files-tree-width,220px);width:var(--files-tree-width,220px);min-height:0;min-width:0;background:var(--ds-bg-secondary)}
 .files-surface .files-sidebar[hidden],.files-surface .files-tree-resizer[hidden],.files-surface .files-tree-backdrop[hidden]{display:none}
 .files-surface .files-main{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden}
@@ -701,7 +666,7 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 .files-surface .files-tree-resizer:focus-visible{outline:2px solid var(--ds-focus);outline-offset:-2px}
 .files-surface.files-resizing{cursor:col-resize;user-select:none}
 .files-surface .files-tree-backdrop{display:none}
-.files-surface.files-narrow .files-sidebar{position:absolute;inset:0 auto 0 0;z-index:3;width:min(var(--files-tree-width,220px),calc(100% - 48px));box-shadow:var(--ds-shadow-popover)}
+.files-surface.files-narrow .files-sidebar{position:absolute;inset:0 0 0 auto;z-index:3;width:min(var(--files-tree-width,220px),calc(100% - 48px));box-shadow:var(--ds-shadow-popover);border-inline-start:1px solid var(--ds-border-default)}
 .files-surface.files-narrow .files-tree-backdrop:not([hidden]){display:block;position:absolute;inset:0;z-index:2;border:0;border-radius:0;background:var(--ds-scrim);cursor:default}
 .files-surface .files-message{flex:none;margin:0 var(--ui-space-2) var(--ui-space-2);color:var(--ds-text-secondary);font-size:var(--text-sm);line-height:var(--leading-normal);overflow-wrap:anywhere}
 .files-surface .files-message[hidden]{display:none}
@@ -716,11 +681,13 @@ body.workbench-resizing{cursor:row-resize;user-select:none}
 .files-surface .files-tree-status[role="alert"]{color:var(--ds-error)}
 .files-surface .files-tree-indent{padding-inline-start:var(--ui-space-4)}
 .files-surface .files-preview{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;overflow:hidden}
-.files-surface .files-preview-head{display:flex;align-items:center;flex:none;gap:var(--ui-space-2);padding:var(--ui-space-2) var(--ui-space-3);border-bottom:1px solid var(--ds-border-default)}
-.files-surface .files-preview-path{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ds-text-secondary);font-family:var(--font-mono);font-size:var(--text-sm)}
+.files-surface .files-preview-head{display:flex;align-items:center;flex:none;min-width:0;min-height:36px;gap:var(--ui-space-1);padding:var(--ui-space-1) var(--ui-space-2);border-bottom:1px solid var(--ds-border-default)}
+.files-surface .files-preview-path{flex:1 1 10em;min-width:4em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ds-text-secondary);font-family:var(--font-mono);font-size:var(--text-sm)}
+.files-surface .files-preview-path[hidden]{display:none}
+.files-surface .files-tree-toggle{flex:none;margin-inline-start:auto}
 .files-surface .files-preview-path:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
-.files-surface .files-preview-size{flex:none;color:var(--ds-text-muted);font-size:var(--text-xs)}
-.files-surface .files-format-tools{display:flex;align-items:center;flex:none;flex-wrap:wrap;gap:var(--ui-space-2);padding:var(--ui-space-2) var(--ui-space-3);border-bottom:1px solid var(--ds-border-default)}
+.files-surface .files-format-tools{display:flex;align-items:center;flex:0 1 auto;min-width:0;flex-wrap:nowrap;gap:var(--ui-space-1);padding:2px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;overscroll-behavior:contain}
+.files-surface .files-format-tools>:not([hidden]){flex-shrink:0}
 .files-surface .files-format-tools:empty{display:none}
 .files-surface .files-preview-content{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;min-width:0;overflow:hidden}
 .files-surface .files-preview-note{margin:var(--ui-space-3);color:var(--ds-text-secondary);font-size:var(--text-sm);line-height:var(--leading-body)}

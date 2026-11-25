@@ -9,21 +9,20 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build, version as esbuildVersion } from 'esbuild';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DIRECT = ['fflate', 'dompurify', 'katex', 'mammoth', 'exceljs', 'papaparse', 'pdfjs-dist', 'pptx-preview', '@xmldom/xmldom'];
+const DIRECT = ['fflate', 'dompurify', 'katex', 'mammoth', 'exceljs', 'papaparse', 'pdfjs-dist', '@xmldom/xmldom'];
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const slash = value => value.split(path.sep).join('/');
 const digest = data => crypto.createHash('sha256').update(data).digest('hex');
 const json = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 
-// Retrieved read-only from the author's own repository, not an invented ISC
-// template. npm 1.0.7 includes no license text and labels itself ISC, whereas
-// this upstream LICENSE imposes source restrictions. This is evidence, NOT a
-// resolution of the conflict or permission to redistribute a modified bundle.
-const PPTX_LICENSE = {
-  url: 'https://raw.githubusercontent.com/501351981/pptx-preview/b9bb0460a426ffe155487ee124ad9d57fd9c4c51/LICENSE',
-  gitBlob: 'f2d9e1ed347b274e9b8e0b552058fb8b0a9889fb',
-  base64: '5pys6aG555uu5Y+R5biD55qEbnBt5YyF5Y+v5YWN6LS55L2/55So77yM6Ieq55So5ZWG55So5Z2H5Y+vCuacrOmhueebrueahOa6kOeggeS7heS+m+S4quS6uuWtpuS5oOS9v+eUqO+8jOS4jeW+l+WPkeW4g+WIsOS6kuiBlOe9keW5s+WPsOS4re+8jOS4jeW+l+ebtOaOpeS/ruaUuea6kOeggeW5tui9rOS4uuiHquaciemhueebrui/m+ihjOW8gOa6kAo=',
-};
+// pako's top-level MIT LICENSE does not cover its Zlib-licensed port. Retain
+// the complete original lib/zlib comment block, not a rewritten license template.
+// The pinned digest covers both Gailly/Adler and Puzrin/Tupitsin attribution.
+export function extractPakoZlibNotice(source) {
+  const notice = source.toString('utf8').match(/^\/\/ \(C\) 1995-2013 Jean-loup Gailly and Mark Adler\r?\n[\s\S]*?^\/\/ 3\. This notice may not be removed or altered from any source distribution\.\r?\n/m)?.[0];
+  if (!notice || digest(notice) !== '170d7d544d380b38d5f76ab5eda29475b44ef537f4564163d6d9bece85c51c13') throw new Error('pako Zlib notice integrity mismatch');
+  return Buffer.from(notice);
+}
 
 // saxes 5.0.1 also omits LICENSE from npm. The complete official v5.0.1
 // license (including the inherited sax notice and historical MIT notice) is
@@ -182,6 +181,13 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
   const out = checkedPath(root, 'public/vendor/file-preview');
   const pkg = json(path.join(root, 'package.json'));
   const lock = json(path.join(root, 'package-lock.json'));
+  // The removed package carries source restrictions despite its ISC metadata.
+  // Refuse reintroduction before touching any of its installed files or dist.
+  if ([pkg, lock.packages?.['']].some(metadata => ['dependencies', 'devDependencies', 'optionalDependencies'].some(field => metadata?.[field]?.['pptx-preview'])) ||
+      Object.keys(lock.packages || {}).some(name => /(?:^|\/)node_modules\/pptx-preview$/.test(name))) throw new Error('restricted pptx-preview dependency must remain excluded');
+  // Ignore obsolete overrides for removed owners; only active preview packages
+  // can contribute dependency overrides or provenance to the shipped manifest.
+  const overrides = Object.fromEntries(DIRECT.filter(name => pkg.overrides?.[name]).map(name => [name, pkg.overrides[name]]));
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-preview-vendor-'));
   const packages = new Map(), inputs = {}, bundles = {}, copied = {};
   const write = (name, data) => {
@@ -321,9 +327,9 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
       direct[name] = packages.get(id).version;
     }
     const resolvedOverrides = {};
-    for (const owner of ['exceljs', 'pptx-preview']) {
+    for (const [owner, dependencies] of Object.entries(overrides)) {
       resolvedOverrides[owner] = {};
-      for (const [name, required] of Object.entries(pkg.overrides?.[owner] || {})) {
+      for (const [name, required] of Object.entries(dependencies)) {
         const directory = packageRoot(name, packageRoot(owner));
         const actual = json(path.join(directory, 'package.json')).version;
         if (actual !== required) throw new Error(`preview override mismatch: ${owner} -> ${name}`);
@@ -339,9 +345,6 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
     await bundle('exceljs', 'import Workbook from "exceljs/lib/doc/workbook.js"; export default { Workbook };', {
       plugins: [sourceDependencies, readerOnly], inject: [path.join(root, 'scripts/preview-browser-globals.mjs')],
     });
-    // npm ships this first-party ESM module with EXTERNAL dependency imports;
-    // unlike the opaque IIFE, bundling it resolves our locked/overridden graph.
-    await bundle('pptx-preview', 'export { init } from "pptx-preview/dist/pptx-preview.es.js";', { format: 'iife', globalName: 'PptxPreview' });
     copy('katex/dist/katex.mjs', 'katex.js');
     copy('katex/dist/katex.min.css', 'katex.css');
     copyDir('katex/dist/fonts', 'fonts');
@@ -355,7 +358,12 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
         records: fontNotices(fs.readFileSync(modulePath(copied[name].slice('node_modules/'.length)))) };
     }
     if (digest(Buffer.from(OFL_TEXT)) !== OFL_SOURCE.archivedSha256) throw new Error('official OFL license byte integrity mismatch');
-    const legalReviewRequired = [];
+    // Removing PPTX does not clear unrelated, unresolved redistribution checks.
+    // These unchanged PDF fonts carry their own terms, not the package's Apache
+    // license; keep the source-delivery review visible without dropping assets.
+    const liberationFonts = Object.keys(copied).filter(name => /^pdf\/standard_fonts\/LiberationSans-[^/]+\.ttf$/.test(name)).sort(compare);
+    const legalReviewRequired = liberationFonts.length
+      ? ['pdfjs-dist Liberation fonts: source-distribution obligations remain unverified (GPLv2 with font exceptions)'] : [];
     const legalName = /^(?:licen[sc]e|copying|notice|copyright|ofl|authors)(?:$|[._-])/i;
     function legalFiles(directory, prefix = '') {
       const found = [];
@@ -391,7 +399,25 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
         item.legalFiles.push(license, notices);
         item.fontLicense = { license: 'OFL-1.1', ...OFL_SOURCE, notices, fontCount: Object.keys(fontCopyrights).length };
       }
-      const upstream = id === 'pptx-preview@1.0.7' ? PPTX_LICENSE : id === 'saxes@5.0.1' ? SAXES_LICENSE : null;
+      if (item.name === 'pdfjs-dist' && liberationFonts.length) {
+        item.fontLicenseReview = { files: liberationFonts,
+          licenseFile: `${folder}/standard_fonts/LICENSE_LIBERATION`, sourceDistributionVerified: false };
+      }
+      if (item.name === 'pako') {
+        const sources = Object.keys(inputs).filter(name => inputs[name].package === id && /\/lib\/zlib\/[^/]+\.js$/.test(name)).sort(compare);
+        if (!sources.length) throw new Error('missing pako Zlib source notices');
+        const notice = `${folder}/ZLIB-NOTICE.txt`, changes = `${folder}/TRANSFORMATIONS.txt`;
+        for (const source of sources) {
+          const bytes = fs.readFileSync(modulePath(source.slice('node_modules/'.length)));
+          if (digest(bytes) !== inputs[source].sha256) throw new Error('pako source changed during notice extraction');
+          write(notice, extractPakoZlibNotice(bytes));
+        }
+        const transformation = `The pako JavaScript port is mechanically bundled and minified by esbuild ${esbuildVersion} for browser preview. Generated bundles are altered versions, not the original upstream source distribution. Original lib/zlib copyright and license comment bytes are retained unchanged in ZLIB-NOTICE.txt; the package's separate MIT LICENSE also remains applicable.\n`;
+        write(changes, transformation);
+        item.legalFiles.push(notice, changes);
+        item.zlibNotice = { license: 'Zlib', file: notice, sha256: digest(fs.readFileSync(checkedPath(stage, notice))), sources, transformations: changes };
+      }
+      const upstream = id === 'saxes@5.0.1' ? SAXES_LICENSE : null;
       if (upstream) {
         const destination = `${folder}/UPSTREAM-LICENSE.txt`;
         const text = Buffer.from(upstream.base64, 'base64');
@@ -400,12 +426,6 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
         write(destination, text);
         item.legalFiles.push(destination);
         item.upstreamNotice = { url: upstream.url, gitBlob: blob, bytes: text.length, sha256: digest(text) };
-      }
-      if (id === 'pptx-preview@1.0.7') {
-        copy('pptx-preview/README.md', `${folder}/npm-README.md`);
-        item.legalFiles.push(`${folder}/npm-README.md`);
-        item.licenseStatus = 'unresolved: npm ISC metadata conflicts with upstream source restrictions; no verified ISC copyright grant';
-        legalReviewRequired.push(id);
       }
       if (!item.legalFiles.length) throw new Error(`missing preview license text: ${id}`);
       item.instances.sort((a, b) => compare(a.path, b.path));
@@ -429,7 +449,7 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
     const manifest = { schemaVersion: 2, generator: { esbuild: esbuildVersion,
       materializerSha256: digest(fs.readFileSync(fileURLToPath(import.meta.url))),
       packageLockSha256: digest(fs.readFileSync(path.join(root, 'package-lock.json'))) },
-      versions: { direct, overrides: pkg.overrides || {}, resolvedOverrides,
+      versions: { direct, overrides, resolvedOverrides,
         packages: Object.fromEntries([...packages].sort(([a], [b]) => compare(a, b)).map(([id, { roots, ...item }]) => [id, item])) },
       legalReviewRequired, bundles: ordered(bundles), copied: ordered(copied), inputs: ordered(inputs), files };
     const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');

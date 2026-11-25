@@ -4,9 +4,9 @@ import { createIcon } from './icons.js';
  * This module owns layout only. Specs and Changes keep their existing state,
  * request guards, Markdown renderer and Git authority in their own modules.
  */
-import { openSecondarySurface } from './secondary-surface.js';
-import { mountSpecsPanel, openSpecsPanel } from '../specs-panel.js';
-import { mountChangesPanel, openChangesPanel } from '../git.js';
+import { openSecondarySurface, ensureSecondaryTool, borrowSecondarySurface, closeSecondarySurface } from './secondary-surface.js';
+import { openSpecsPanel } from '../specs-panel.js';
+import { openChangesPanel } from '../git.js';
 
 const STORAGE_KEY = 'pi-gui.workbench.split.v1';
 const DEFAULT_RATIO = 0.56;
@@ -156,12 +156,24 @@ export function mountSplitWorkbench(host, view, {
 
   const exitAction = button('btn ghost rp-btn workbench-exit', '退出', '退出分屏，恢复单面板', () => exitSplit());
   exitAction.dataset.workbenchExit = 'true';
-  if (browserOptions) browserOptions.mount(specsPane, exitSplit);
-  else mountSpecsPanel(specsPane, view, {
-    ...specsOptions,
-    extraActions: [...(specsOptions.extraActions || []), exitAction],
-  });
-  mountChangesPanel(changesPane, view, changesOptions);
+  if (browserOptions) browserOptions.mount(specsPane, exitSplit, view);
+  else {
+    ensureSecondaryTool('specs', () => openSpecsPanel(specsOptions));
+    borrowSecondarySurface('specs', specsPane, view);
+    // Layout actions belong to the layout, not the single Specs business owner.
+    specsPane.querySelector('.rp-head-actions')?.append(exitAction);
+    view.onDispose(() => exitAction.remove());
+  }
+  ensureSecondaryTool('changes', () => openChangesPanel(changesOptions));
+  borrowSecondarySurface('changes', changesPane, view);
+
+  function placeSurfaces() {
+    if (!view.isCurrent()) return;
+    if (browserOptions) browserOptions.mount(specsPane, exitSplit, view);
+    else borrowSecondarySurface('specs', specsPane, view);
+    borrowSecondarySurface('changes', changesPane, view);
+  }
+  view.onVisibility?.(visible => { if (visible) { placeSurfaces(); applyLayout(); } });
 
   function selectFallback(next) {
     activeFallback = next === 'changes' ? 'changes' : topKind;
@@ -171,6 +183,7 @@ export function mountSplitWorkbench(host, view, {
   function exitSplit() {
     if (browserOptions) { browserOptions.exit(); return; }
     const target = fallback ? activeFallback : returnSurface;
+    closeSecondarySurface(view.view);
     if (target === 'changes') openChangesPanel(changesOptions);
     else openSpecsPanel(specsOptions);
   }

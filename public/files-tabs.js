@@ -127,5 +127,5 @@ export function createFilesTabs({ getTabs, getActive, activate, close, reorder }
     previousActive = key;
     if (focus || focusKey) focusTab(focus ? key : focusKey);
   }
-  return { element, render, focus: focusTab, dispose() { menu?.close(); dragging = null; } };
+  return { element, render, focus: focusTab, closeMenu() { menu?.close(); menu = null; }, dispose() { menu?.close(); menu = null; dragging = null; } };
 }

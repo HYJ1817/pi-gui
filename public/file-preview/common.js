@@ -1,6 +1,15 @@
 /* Small shared controls, not a parallel component system. Document values only
  * enter textContent; trusted icons come from the repository's icon owner. */
 import { createIcon } from '../ui/icons.js';
+import { openActionMenu } from '../ui/action-menu.js';
+
+// These fixed action names share the app's existing outline icons. Unknown
+// labels remain text buttons; document text can never pick arbitrary markup.
+const controlIcons = Object.freeze({
+  '上一个匹配项': 'arrowUp', '下一个匹配项': 'arrowDown', '上一处': 'arrowUp', '下一处': 'arrowDown',
+  '上一页': 'chevronLeft', '下一页': 'chevronRight', '缩小': 'minus', '放大': 'plus',
+  '适合宽度': 'scan', '适合窗口': 'scan', '原始尺寸': 'image',
+});
 
 export function node(tag, className = '', text) {
   const element = document.createElement(tag);
@@ -17,6 +26,43 @@ export function button(label, handler, { icon, title } = {}) {
   if (icon) element.append(createIcon(icon));
   element.addEventListener('click', handler);
   return element;
+}
+
+export function navigationButton(label, handler) {
+  return button(label, handler, { icon: Object.hasOwn(controlIcons, label) ? controlIcons[label] : undefined });
+}
+
+export function compactNavigation(element) {
+  const label = element.getAttribute('aria-label');
+  if (!Object.hasOwn(controlIcons, label)) return;
+  element.classList.remove('btn', 'ghost', 'tiny');
+  element.classList.add('icon-btn');
+  element.replaceChildren(createIcon(controlIcons[label]));
+}
+
+export function toolbarMenu(ctx, items, { label = '阅读选项', icon = 'more' } = {}) {
+  let menu = null;
+  const trigger = button(label, () => {
+    if (ctx.resources.signal.aborted || !ctx.resources.isCurrent()) return;
+    menu = openActionMenu(trigger, typeof items === 'function' ? items() : items);
+    if (!menu) return;
+    const popup = trigger.ownerDocument.getElementById(trigger.getAttribute('aria-controls'));
+    // The shared menu closes before calling an action. Reject stale detached
+    // clicks in capture phase, before they can dismiss another surface's menu
+    // or execute an action that belonged to a now-disposed document.
+    popup?.addEventListener('click', event => {
+      if (popup.isConnected && !ctx.resources.signal.aborted && ctx.resources.isCurrent()) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+    }, true);
+  }, { icon });
+  trigger.classList.add('fp-reading-menu');
+  trigger.setAttribute('aria-haspopup', 'menu');
+  trigger.setAttribute('aria-expanded', 'false');
+  ctx.resources.own(() => {
+    if (trigger.getAttribute('aria-expanded') === 'true') menu?.close();
+    trigger.remove();
+  });
+  return trigger;
 }
 
 export function searchControl(toolbar, onSearch) {

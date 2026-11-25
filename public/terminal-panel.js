@@ -136,6 +136,7 @@ export function mountTerminalPanel(host, view, options = {}) {
   const order = [];
 
   const isCurrent = () => alive && (!view || view.isCurrent());
+  const isVisible = () => isCurrent() && (!view?.isVisible || view.isVisible());
   const activeMeta = () => (activeId ? tabs.get(activeId) || null : null);
   const activeController = () => activeMeta()?.controller || null;
 
@@ -428,13 +429,13 @@ export function mountTerminalPanel(host, view, options = {}) {
     activeId = id;
     hideEmpty();
     for (const other of tabs.values()) {
-      other.controller.show(other.id === id);
+      other.controller.show(other.id === id && isVisible(), { focus });
       updateTab(other.id);
     }
     tabsUi.activate(id);
     rememberActive();
     updateHeader();
-    if (focus) meta.controller.focus();
+    if (focus && isVisible()) meta.controller.focus();
   }
 
   function removeTab(id) {
@@ -500,7 +501,7 @@ export function mountTerminalPanel(host, view, options = {}) {
         updateHeader();
         return;
       }
-      if (activeId === session.id) controller.show(true);
+      if (activeId === session.id && isVisible()) controller.show(true);
       else controller.show(false);
       updateTab(session.id);
       updateHeader();
@@ -907,7 +908,8 @@ export function mountTerminalPanel(host, view, options = {}) {
       if (result?.code === 'invalid_action') {
         multi = false;
         tabsUi.newButton.hidden = true;
-        await startLegacy({ atBoot: true });
+        if (autoCreate) await startLegacy({ atBoot: true });
+        else showEmptyIfIdle();
         return;
       }
       handleListFailure(result, { autoCreate });
@@ -1044,10 +1046,11 @@ export function mountTerminalPanel(host, view, options = {}) {
       maxPerWorkspace = Number.isSafeInteger(result.maxSessionsPerWorkspace) ? result.maxSessionsPerWorkspace : Infinity;
       if (!multi) {
         tabsUi.newButton.hidden = true;
-        await startLegacy({ atBoot: true });
+        if (!view.restored) await startLegacy({ atBoot: true });
+        else showEmptyIfIdle();
         return;
       }
-      await loadWorkspace(token, { autoCreate: true });
+      await loadWorkspace(token, { autoCreate: !view.restored });
     } finally {
       if (alive && token === bootToken) {
         booting = false;
@@ -1057,10 +1060,10 @@ export function mountTerminalPanel(host, view, options = {}) {
   }
 
   function scheduleFit() {
-    if (!isCurrent() || fitFrame) return;
+    if (!isVisible() || fitFrame) return;
     fitFrame = requestAnimationFrame(() => {
       fitFrame = 0;
-      if (!isCurrent()) return;
+      if (!isVisible()) return;
       activeController()?.fit();
     });
   }
@@ -1098,7 +1101,12 @@ export function mountTerminalPanel(host, view, options = {}) {
   document.addEventListener('pi-gui:workspace-generation', onWorkspaceEvent);
   document.addEventListener('pi-gui:git-scope', onGitScope);
 
+  const offVisibility = view.onVisibility?.(() => {
+    for (const meta of tabs.values()) meta.controller.show(meta.id === activeId && isVisible());
+    if (isVisible()) scheduleFit();
+  });
   view.onDispose(() => {
+    offVisibility?.();
     alive = false;
     bootToken++;
     createToken++;

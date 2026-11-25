@@ -44,10 +44,20 @@ function defaultContext() {
 }
 const wire=context=>({conversationId:context.conversationId,...(context.owner?{owner:context.owner}:{})});
 
-export function openSessionChangesPanel({context=defaultContext,transport,objectTransport}={}) {
+const panelControllers=new WeakMap();
+export function openSessionChangesPanel(options={}) {
+  const instance=openSecondarySurface('session-changes',(host,view)=>{
+    panelControllers.set(view,mountSessionChangesPanel(host,view,options));
+  },{label:'本会话变更'});
+  return panelControllers.get(instance) || null;
+}
+
+/* Subscriptions and object actions belong only to a real mount. Reopening an
+ * existing singleton must not allocate another controller or listener set. */
+function mountSessionChangesPanel(host,instance,{context=defaultContext,transport,objectTransport}={}) {
   const api=transport || {query:fetchSessionEvidence,preview:previewSessionRevert,history:previewSessionRevertRecovery,export:downloadSessionRevertBackup};
   let alive=true,serial=0,viewGeneration=0,signature=fingerprint(context()),tab='changes',summary=null;
-  let head,body,notice,instance;
+  let head,body,notice;
   const objectAPI=objectTransport || objectRevertTransport;
   const objectContext=()=>({...context(),...(summary?.target?.workspaceFingerprint?{workspaceFingerprint:summary.target.workspaceFingerprint}:{})});
   const objectUI=createObjectRevertUI({context:objectContext,isCurrent:()=>alive&&Boolean(instance?.isCurrent()),transport:objectAPI});
@@ -188,6 +198,7 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
     }
   }
   async function load(cursor) {
+    if(!alive)return;
     clear();const token=serial,key=signature=fingerprint(context()),identity=wire(context());
     body.setAttribute('aria-busy','true');
     const loading=node('div','rp-loading');loading.append(node('span','rp-loading-dot'),node('span','','正在读取…'));body.append(loading);
@@ -228,25 +239,21 @@ export function openSessionChangesPanel({context=defaultContext,transport,object
     for(const name of ['pi-gui:git-scope','pi-gui:session-evidence-context'])document.removeEventListener(name,contextChanged);
     for(const name of ['pi-gui:workspace-generation','pi-gui:session-switch'])document.removeEventListener(name,closeForSwitch);
     document.removeEventListener('pi-gui:session-evidence-changed',classicEvidenceChanged);};
-  instance=openSecondarySurface('session-changes',(host,view)=>{
-    /* 面板外壳与「开发进程」共用 createPaneHeader：标题 + 一行说明 + 工具按钮，
-     * 关闭按钮由 ui/secondary-surface.js 追加在本标题带最右端。 */
-    const refresh=button('刷新',()=>void load());refresh.classList.add('ghost','rp-btn');
-    const header=createPaneHeader({title:'本会话变更',subtitle:'只读证据 · 撤销预览',actions:[refresh]});
-    head=header.el;host.append(head);
-    /* 页签独占第二行：两个中文标签加按钮在 320px 的右栏里放不进标题带。 */
-    const bar=node('div','rp-bar');
-    const tabs=node('nav','rp-tabs');tabs.setAttribute('aria-label','会话修改材料');
-    for(const [label,value] of [['会话变更','changes'],['历史恢复材料','history']]){
-      const b=button(label,()=>{tab=value;for(const sibling of tabs.querySelectorAll('[aria-pressed]'))sibling.setAttribute('aria-pressed',String(sibling===b));void load();});
-      b.classList.add('rp-tab');
-      b.setAttribute('aria-pressed',String(tab===value));tabs.append(b);
-    }
-    bar.append(tabs);host.append(bar);
-    notice=node('p','session-change-note','当前支持查看本会话修改与撤销预览。自动恢复仍需完成安全验证。');
-    notice.classList.add('rp-notice');notice.dataset.tone='info';host.append(notice);
-    body=node('div','session-change-body rp-scroll');body.setAttribute('aria-live','polite');host.append(body);view.onDispose(dispose);
-  },{label:'本会话变更',headerSelector:'.rp-head',triggerId:context().conversationId==='classic-chat'?'btnMore':'runtimeSessionMore'});
-  head.querySelector('#rightPaneClose')?.focus();
+  /* 面板外壳与「开发进程」共用 createPaneHeader；关闭由外层工具标签持有。 */
+  const refresh=button('刷新',()=>void load());refresh.classList.add('ghost','rp-btn');
+  const header=createPaneHeader({title:'本会话变更',subtitle:'只读证据 · 撤销预览',actions:[refresh]});
+  head=header.el;host.append(head);
+  /* 页签独占第二行：两个中文标签加按钮在 320px 的右栏里放不进标题带。 */
+  const bar=node('div','rp-bar');
+  const tabs=node('nav','rp-tabs');tabs.setAttribute('aria-label','会话修改材料');
+  for(const [label,value] of [['会话变更','changes'],['历史恢复材料','history']]){
+    const b=button(label,()=>{tab=value;for(const sibling of tabs.querySelectorAll('[aria-pressed]'))sibling.setAttribute('aria-pressed',String(sibling===b));void load();});
+    b.classList.add('rp-tab');
+    b.setAttribute('aria-pressed',String(tab===value));tabs.append(b);
+  }
+  bar.append(tabs);host.append(bar);
+  notice=node('p','session-change-note','当前支持查看本会话修改与撤销预览。自动恢复仍需完成安全验证。');
+  notice.classList.add('rp-notice');notice.dataset.tone='info';host.append(notice);
+  body=node('div','session-change-body rp-scroll');body.setAttribute('aria-live','polite');host.append(body);instance.onDispose(dispose);
   void load();return {contextChanged,dispose};
 }

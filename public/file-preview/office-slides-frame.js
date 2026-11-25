@@ -1,124 +1,106 @@
-/* Classic, trusted bootstrap inside an opaque-origin sandbox only. No document
- * markup or filename is interpolated into this program or the iframe srcdoc. */
+/* Self-authored DrawingML view inside opaque allow-scripts iframe. Input is the
+ * bounded data projection from our Office worker, never raw document markup. */
 (() => {
   'use strict';
   const stage = document.getElementById('slides');
-  const script = document.currentScript;
-  const key = script.dataset.key;
-  const nativeHtml = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
-  const purifier = window.DOMPurify;
-  const urls = new Set();
-  let preview = null, page = 0, scale = 'fit', started = false, cleaning = false, disposed = false;
+  const key = document.currentScript.dataset.key;
+  const urls = new Map();
+  let deck = null, page = 0, scale = 'fit', started = false, disposed = false, slide = null, wrapper = null;
   const send = (type, extra = {}) => parent.postMessage({ officeSlides: key, type, ...extra }, '*');
-  const safeImage = value => typeof value === 'string' && (urls.has(value) || /^data:image\/(?:png|jpeg|gif);base64,[a-z\d+/]+=*$/i.test(value));
-
-  // pptx-preview's text renderer assigns innerHTML from a:t. Sanitize BEFORE
-  // that assignment, not after appending untrusted nodes. Recursion is limited
-  // to DOMPurify's own inert parser while the guard is set. CSP still forbids
-  // all non-nonced scripts and remote subresources, even on a sanitizer miss.
-  Object.defineProperty(Element.prototype, 'innerHTML', {
-    configurable: true, get: nativeHtml.get,
-    set(value) {
-      if (cleaning) return nativeHtml.set.call(this, value);
-      cleaning = true;
-      let clean;
-      try {
-        clean = purifier.sanitize(String(value), { ALLOWED_TAGS: ['span', 'b', 'strong', 'i', 'em', 'u', 's', 'br', 'sup', 'sub'], ALLOWED_ATTR: [], ALLOW_DATA_ATTR: false, ALLOW_ARIA_ATTR: false });
-      } finally { cleaning = false; }
-      nativeHtml.set.call(this, clean);
-    },
-  });
-  const createUrl = URL.createObjectURL.bind(URL), revokeUrl = URL.revokeObjectURL.bind(URL);
-  URL.createObjectURL = blob => { const url = createUrl(blob); urls.add(url); return url; };
-  URL.revokeObjectURL = url => { urls.delete(url); revokeUrl(url); };
-  const imageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
-  Object.defineProperty(HTMLImageElement.prototype, 'src', { configurable: true, get: imageSrc.get, set(value) { imageSrc.set.call(this, safeImage(value) ? value : ''); } });
-
-  // Patched ECharts is SVG-only in pptx-preview. Bound any incidental canvas
-  // surface (font measurement etc.) rather than accepting document dimensions.
-  const canvases = new Map();
-  for (const dimension of ['width', 'height']) {
-    const descriptor = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, dimension);
-    Object.defineProperty(HTMLCanvasElement.prototype, dimension, {
-      configurable: true, get: descriptor.get,
-      set(value) {
-        const number = Number(value);
-        if (!Number.isFinite(number) || number < 0 || number > 4096) throw new Error('Canvas budget');
-        const next = { width: this.width, height: this.height, [dimension]: Math.floor(number) };
-        canvases.set(this, next.width * next.height);
-        if (canvases.size > 128 || [...canvases.values()].reduce((sum, pixels) => sum + pixels, 0) > 16 * 1024 * 1024) throw new Error('Canvas budget');
-        descriptor.set.call(this, number);
-      },
-    });
+  const node = (tag, className) => { const value = document.createElement(tag); if (className) value.className = className; return value; };
+  function svg(item) {
+    const namespace = 'http://www.w3.org/2000/svg';
+    const root = document.createElementNS(namespace, 'svg');
+    root.setAttribute('width', String(Math.max(1, item.width))); root.setAttribute('height', String(Math.max(1, item.height)));
+    root.style.overflow = 'visible'; root.style.position = 'absolute';
+    root.setAttribute('aria-hidden', 'true');
+    const type = { rect: 'rect', roundRect: 'rect', ellipse: 'ellipse', triangle: 'polygon', rtTriangle: 'polygon', diamond: 'polygon', line: 'line' }[item.geometry];
+    if (!type) return root;
+    const shape = document.createElementNS(namespace, type), w = item.width, h = item.height;
+    const set = attributes => { for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, String(value)); };
+    if (type === 'rect') { set({ x: 0, y: 0, width: w, height: h }); if (item.geometry === 'roundRect') set({ rx: Math.min(w, h) * .16 }); }
+    else if (type === 'ellipse') set({ cx: w/2, cy: h/2, rx: w/2, ry: h/2 });
+    else if (type === 'line') set({ x1: 0, y1: 0, x2: w, y2: h });
+    else set({ points: item.geometry === 'diamond' ? `${w/2},0 ${w},${h/2} ${w/2},${h} 0,${h/2}` : item.geometry === 'rtTriangle' ? `0,0 ${w},${h} 0,${h}` : `${w/2},0 ${w},${h} 0,${h}` });
+    set({ fill: item.fill || 'none', stroke: item.stroke || 'none', 'stroke-width': item.strokeWidth || 0 });
+    root.append(shape); return root;
   }
-  // No network API is needed: every byte comes from a worker-validated buffer.
-  window.fetch = () => Promise.reject(new Error('Network disabled'));
-  window.XMLHttpRequest = class { constructor() { throw new Error('Network disabled'); } };
-  document.addEventListener('click', event => { if (event.target.closest('a,form,button,input')) event.preventDefault(); }, true);
-  document.addEventListener('submit', event => event.preventDefault(), true);
-  purifier.addHook('uponSanitizeAttribute', (_node, data) => {
-    if (/^on/i.test(data.attrName)) data.keepAttr = false;
-    if (['href', 'xlink:href'].includes(data.attrName) && !/^#[a-z\d_.:-]+$/i.test(data.attrValue)) data.keepAttr = false;
-    if (data.attrName === 'src' && !safeImage(data.attrValue)) data.keepAttr = false;
-    if (data.attrName === 'style' && /(?:@import|expression\s*\(|javascript\s*:)/i.test(data.attrValue)) data.keepAttr = false;
-    if (['style', 'fill', 'stroke', 'filter', 'mask', 'clip-path'].includes(data.attrName)) {
-      for (const match of data.attrValue.matchAll(/url\(\s*["']?([^\s"')]+)["']?\s*\)/gi)) {
-        if (!/^#[a-z\d_.:-]+$/i.test(match[1]) && !safeImage(match[1])) data.keepAttr = false;
+  function text(item) {
+    const box = node('div', 'pptx-text');
+    Object.assign(box.style, { position: 'absolute', inset: '0', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', justifyContent: item.anchor,
+      padding: `${item.margins.top}px ${item.margins.right}px ${item.margins.bottom}px ${item.margins.left}px`, whiteSpace: item.wrap ? 'pre-wrap' : 'pre', overflowWrap: 'anywhere', lineHeight: '1.2' });
+    for (const paragraph of item.paragraphs) {
+      const p = node('p'); Object.assign(p.style, { margin: '0', textAlign: paragraph.alignment, minHeight: '.9em' });
+      for (const run of paragraph.runs) {
+        const span = node('span'); span.textContent = run.text;
+        Object.assign(span.style, { fontSize: run.size + 'px', color: run.color, fontWeight: run.bold ? '700' : '400', fontStyle: run.italic ? 'italic' : 'normal', textDecoration: run.underline ? 'underline' : 'none' });
+        if (run.family) span.style.fontFamily = run.family;
+        p.append(span);
       }
+      box.append(p);
     }
-  });
-  function cleanStage() {
-    cleaning = true;
-    try {
-      purifier.sanitize(stage, {
-        IN_PLACE: true, USE_PROFILES: { html: true, svg: true, svgFilters: true }, ALLOW_DATA_ATTR: false,
-        FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'link', 'meta', 'base', 'foreignObject', 'audio', 'video', 'source', 'track', 'animate', 'animateMotion', 'set', 'a'],
-        FORBID_ATTR: ['srcset', 'action', 'formaction', 'target'],
-      });
-    } finally { cleaning = false; }
+    return box;
   }
-  function layout() {
-    if (!preview || disposed) return;
-    const width = Number(preview.pptx.width), height = Number(preview.pptx.height);
-    if (!width || !height || width > 2880 || height > 2880) throw new Error('Slide size');
-    const factor = scale === 'fit' ? Math.max(.1, Math.min(2, (innerWidth - 32) / width, (innerHeight - 32) / height)) : Number(scale) / 100;
-    const wrapper = preview.wrapper;
-    wrapper.style.width = `${width * factor}px`; wrapper.style.height = `${height * factor}px`;
-    wrapper.style.background = 'transparent'; wrapper.style.overflow = 'visible';
-    // Constructing the renderer once at 960 CSS px
-    // keeps all Office coordinates intact. Scale its complete source surface.
-    const slide = stage.querySelector('.pptx-preview-slide-wrapper');
-    if (slide) { slide.style.top = '0'; slide.style.transformOrigin = '0 0'; slide.style.transform = `scale(${width * factor / 960})`; }
+  function imageUrl(name) {
+    if (!urls.has(name)) {
+      const image = deck.images[name];
+      if (!image || !['image/png', 'image/jpeg', 'image/gif'].includes(image.mime) || !(image.bytes instanceof Uint8Array) || image.bytes.byteLength > 16 * 1024 * 1024) throw Error('Image budget');
+      urls.set(name, URL.createObjectURL(new Blob([image.bytes], { type: image.mime })));
+    }
+    return urls.get(name);
   }
   function render() {
-    if (!preview || disposed) return;
-    preview.renderSingleSlide(page);
-    cleanStage(); layout();
-    send('page', { page, count: preview.slideCount });
+    if (!deck || disposed) return;
+    const data = deck.slides[page];
+    wrapper = node('div', 'pptx-page-viewport');
+    slide = node('div', 'pptx-slide'); slide.setAttribute('role', 'img'); slide.setAttribute('aria-label', `幻灯片 ${page + 1}`);
+    Object.assign(slide.style, { position: 'relative', width: deck.width + 'px', height: deck.height + 'px', backgroundColor: data.background, overflow: 'hidden', transformOrigin: '0 0' });
+    for (const item of data.shapes) {
+      const element = node('div', 'pptx-object');
+      Object.assign(element.style, { position: 'absolute', left: '0', top: '0', width: item.width + 'px', height: item.height + 'px', transformOrigin: '0 0', transform: `matrix(${item.matrix.join(',')})` });
+      if (item.description) element.setAttribute('aria-label', item.description);
+      if (item.kind === 'image') {
+        const image = node('img', 'pptx-image'), c = item.crop;
+        image.alt = item.description || ''; image.src = imageUrl(item.image);
+        element.style.overflow = 'hidden';
+        Object.assign(image.style, { position: 'absolute', maxWidth: 'none', width: `${100/(1-c.l-c.r)}%`, height: `${100/(1-c.t-c.b)}%`, left: `${-100*c.l/(1-c.l-c.r)}%`, top: `${-100*c.t/(1-c.t-c.b)}%` });
+        element.append(image);
+      } else {
+        element.append(svg(item)); if (item.text) element.append(text(item.text));
+      }
+      slide.append(element);
+    }
+    wrapper.append(slide); stage.replaceChildren(wrapper); layout();
+    send('page', { page, count: deck.slides.length });
+  }
+  function layout() {
+    if (!deck || disposed || !wrapper) return;
+    const factor = scale === 'fit' ? Math.max(.1, Math.min(2, (innerWidth - 32) / deck.width, (innerHeight - 32) / deck.height)) : Number(scale) / 100;
+    wrapper.style.width = `${deck.width * factor}px`; wrapper.style.height = `${deck.height * factor}px`;
+    slide.style.transform = `scale(${factor})`;
   }
   function dispose() {
     if (disposed) return;
-    disposed = true; preview?.destroy(); preview = null;
-    for (const url of urls) revokeUrl(url);
-    urls.clear(); canvases.clear(); stage.replaceChildren();
+    disposed = true;
+    for (const url of urls.values()) URL.revokeObjectURL(url);
+    urls.clear(); deck = null; stage.replaceChildren(); slide = wrapper = null;
   }
-  window.addEventListener('message', async event => {
+  window.addEventListener('message', event => {
     if (event.source !== parent || event.data?.officeSlides !== key || disposed) return;
     const message = event.data;
     try {
       if (typeof message.background === 'string' && /^[#\w\s(),.%+-]{1,100}$/.test(message.background) && CSS.supports('color', message.background)) document.body.style.backgroundColor = message.background;
-      if (message.type === 'load' && !started && message.buffer instanceof ArrayBuffer) {
+      if (message.type === 'load' && !started && message.deck) {
         started = true;
-        preview = window.PptxPreview.init(stage, { width: 960, height: 960 / Math.max(.25, Math.min(4, Number(message.aspect) || 16 / 9)), mode: 'slide' });
-        await preview.load(message.buffer);
-        if (disposed) return;
-        if (preview.slideCount !== message.slides || preview.slideCount > 80) throw new Error('Slide count');
-        page = Math.max(0, Math.min(preview.slideCount - 1, Math.trunc(Number(message.page)) || 0));
+        const model = message.deck;
+        if (model.width !== 960 || !Number.isFinite(model.height) || model.height < 240 || model.height > 3840 || !Array.isArray(model.slides) || model.slides.length !== message.slides || model.slides.length > 80) throw Error('Slide budget');
+        deck = model;
+        page = Math.max(0, Math.min(deck.slides.length - 1, Math.trunc(Number(message.page)) || 0));
         scale = ['fit', '50', '75', '100', '125', '150', '200'].includes(message.scale) ? message.scale : 'fit';
-        render(); send('loaded', { page, count: preview.slideCount });
-      } else if (message.type === 'page' && preview) {
-        page = Math.max(0, Math.min(preview.slideCount - 1, Math.trunc(Number(message.page)) || 0)); render();
-      } else if (message.type === 'scale' && preview) {
+        render(); send('loaded', { page, count: deck.slides.length, unsupported: deck.unsupported });
+      } else if (message.type === 'page' && deck) {
+        page = Math.max(0, Math.min(deck.slides.length - 1, Math.trunc(Number(message.page)) || 0)); render();
+      } else if (message.type === 'scale' && deck) {
         scale = ['fit', '50', '75', '100', '125', '150', '200'].includes(message.scale) ? message.scale : 'fit'; layout();
       } else if (message.type === 'dispose') dispose();
     } catch { dispose(); send('error'); }

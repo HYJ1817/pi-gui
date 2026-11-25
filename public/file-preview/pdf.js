@@ -1,4 +1,4 @@
-import { node, button, searchControl, loadStyle } from './common.js';
+import { node, navigationButton, searchControl, loadStyle } from './common.js';
 
 export const PDF_LIMITS = Object.freeze({
   bytes: 32 * 1024 * 1024, pages: 1200, pagePixels: 20 * 1024 * 1024,
@@ -49,11 +49,11 @@ export async function mount(ctx) {
   const outline = node('select', 'ds-select fp-pdf-outline');
   outline.hidden = true; outline.setAttribute('aria-label', 'PDF 目录');
   let destinations = [];
-  const previous = button('上一个匹配项', () => move(-1));
-  const next = button('下一个匹配项', () => move(1));
-  const less = button('缩小', () => setZoom(zoom / 1.2));
-  const more = button('放大', () => setZoom(zoom * 1.2));
-  const fit = button('适合宽度', () => { fitWidth = true; setZoom(fitScale(), true); });
+  const previous = navigationButton('上一个匹配项', () => move(-1));
+  const next = navigationButton('下一个匹配项', () => move(1));
+  const less = navigationButton('缩小', () => setZoom(zoom / 1.2));
+  const more = navigationButton('放大', () => setZoom(zoom * 1.2));
+  const fit = navigationButton('适合宽度', () => { fitWidth = true; setZoom(fitScale(), true); });
   const navigation = node('div', 'fp-pdf-navigation');
   navigation.append(pageInput, total, less, more, fit, zoomLabel, outline);
   const searchTools = node('div', 'fp-pdf-search-tools');
@@ -437,7 +437,7 @@ export async function mount(ctx) {
     // pages use the same serialized queue; no canvas can have concurrent tasks.
     wanted = [records[currentPage - 1]];
     await pump(); assertCurrent();
-    status.textContent = `PDF · ${pdf.numPages} 页`;
+    status.textContent = ''; status.hidden = true;
     await loadOutline(); resize?.observe(scroll); schedule();
   } catch (error) { if (current()) fail(error); }
   return { dispose, getState };

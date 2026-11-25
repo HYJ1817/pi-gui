@@ -137,6 +137,8 @@
   border-radius: var(--radius-xs);
 }
 .fp-archive-folder-name:hover { background: var(--ds-bg-hover); }
+.fp-archive-selection[hidden] { display: none; }
+.fp-archive-status:empty { display: none; }
 .fp-archive-selection {
   display: flex;
   flex-wrap: wrap;

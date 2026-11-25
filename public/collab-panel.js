@@ -21,8 +21,8 @@ function context() {
     signature:JSON.stringify([S.workspaceGeneration,S.cwd,conversationId?null:S.bridgeRun,view,conversationId,headers])};
 }
 
-export function openCollabPanel() {
-  return openSecondarySurface('collab',mountCollabPanel,{label:'协同文档',headerSelector:'.collab-head',triggerId:'btnCollab'});
+export function openCollabPanel({replace=false}={}) {
+  return openSecondarySurface('collab',mountCollabPanel,{label:'协同文档',replace,headerSelector:'.collab-head',triggerId:'btnCollab'});
 }
 
 /* Only this adapter holds the current server snapshot. Canvas emits intents;
@@ -210,7 +210,10 @@ export function mountCollabPanel(host,view) {
     create.hidden=true;reload.hidden=false;
     status.textContent='会话或工作区已变化，旧编辑器已失效。请重新打开。';
   }
-  create.onclick=()=>void request('create');reload.onclick=()=>{if(alive)openCollabPanel();};
+  create.onclick=()=>void request('create');
+  // Recovery is a fresh content intent, unlike an ordinary singleton activation.
+  // Dispose first so the old editor, polling, downloads and confirmation retire.
+  reload.onclick=()=>{if(alive&&view.isCurrent())openCollabPanel({replace:true});};
   const events=['pi-gui:workspace-generation','pi-gui:session-switch','pi-gui:git-scope','pi-gui:workspace-view','pi-gui:session-evidence-context'];
   for(const event of events)document.addEventListener(event,invalidate);
   const offRuntime=onRuntimeChange(invalidate);

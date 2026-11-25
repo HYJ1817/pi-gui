@@ -1,6 +1,6 @@
 import { md } from '../markdown.js';
 import DOMPurify from '../vendor/file-preview/purify.js';
-import { node, button, searchControl, loadStyle } from './common.js';
+import { node, navigationButton, toolbarMenu, searchControl, loadStyle } from './common.js';
 import { inspectImage } from './image.js';
 
 function textNodes(root) {
@@ -55,18 +55,24 @@ function prepare(source) {
 
 export async function mount(ctx) {
   loadStyle('katex.css');
-  let disposed = false, complete = false, query = '', hits = [], hitIndex = -1, source = '', prepared = null;
+  let disposed = false, complete = false, query = String(ctx.state?.search || '').slice(0, 256), hits = [], hitIndex = -1, source = '', prepared = null;
   const current = () => !disposed && !ctx.resources.signal.aborted && ctx.resources.isCurrent();
   const wrapper = node('div', 'fp-markdown'), toc = node('nav', 'fp-markdown-toc');
   toc.setAttribute('aria-label', '文档目录');
   const body = node('article', 'fp-markdown-body'), count = node('span', 'fp-markdown-count'); count.setAttribute('role', 'status');
-  const previous = button('上一个匹配项', () => move(-1)), next = button('下一个匹配项', () => move(1));
-  const copy = button('复制文档文本', async () => {
+  const previous = navigationButton('上一个匹配项', () => move(-1)), next = navigationButton('下一个匹配项', () => move(1));
+  const options = toolbarMenu(ctx, [{ label: '复制文档文本', async onClick() {
     try { await navigator.clipboard.writeText(body.innerText || body.textContent || ''); if (current()) count.textContent = '已复制'; }
     catch { if (current()) count.textContent = '无法访问剪贴板'; }
+  } }]);
+  const input = searchControl(ctx.toolbar, value => { query = value.slice(0, 256); if (complete) search(); });
+  input.value = query;
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); move(event.shiftKey ? -1 : 1); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); input.value = ''; query = ''; search(); }
   });
-  searchControl(ctx.toolbar, value => { query = value.slice(0, 256); if (complete) search(); });
-  ctx.toolbar.append(previous, next, copy, count); wrapper.append(toc, body); ctx.host.append(wrapper);
+  previous.disabled = next.disabled = true;
+  ctx.toolbar.append(previous, next, count, options); wrapper.append(toc, body); ctx.host.append(wrapper);
   async function populate() {
     let katex = null;
     if (prepared.slots.some(slot => slot.kind === 'math')) {
@@ -111,6 +117,7 @@ export async function mount(ctx) {
   function search() {
     if (!current()) return;
     hits = markQuery(body, query); hitIndex = hits.length ? 0 : -1;
+    previous.disabled = next.disabled = !hits.length;
     count.textContent = query ? `${hits.length}${hits.length >= 5000 ? '+' : ''} 处` : '';
     if (hits.length) { hits[0].classList.add('is-current'); hits[0].scrollIntoView({ block: 'center' }); }
   }
@@ -134,7 +141,7 @@ export async function mount(ctx) {
   body.addEventListener('click', onClick);
   const dispose = () => { if (disposed) return; disposed = true; body.removeEventListener('click', onClick); source = ''; prepared = null; hits = []; };
   ctx.resources.own(dispose);
-  const getState = () => ({ scrollTop: body.scrollTop });
+  const getState = () => ({ scrollTop: body.scrollTop, search: query });
   try {
     source = await ctx.access.text(4 * 1024 * 1024);
     if (!current()) return { dispose, getState };

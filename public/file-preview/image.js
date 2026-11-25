@@ -1,4 +1,4 @@
-import { node, button, formatBytes } from './common.js';
+import { node, navigationButton, toolbarMenu, formatBytes } from './common.js';
 
 export const IMAGE_LIMITS = Object.freeze({
   maxBytes: 32 * 1024 * 1024,
@@ -380,7 +380,7 @@ export async function mount(ctx) {
     image.alt = ctx.meta.name || ctx.request.name || '图片';
     image.draggable = false;
     image.decoding = 'async';
-    const status = node('span', 'fp-image-info', `${info.width} × ${info.height} · ${formatBytes(info.bytes)}${info.frames > 1 ? ` · ${info.frames} 帧` : ''}`);
+    const details = `${info.width} × ${info.height} · ${formatBytes(info.bytes)}${info.frames > 1 ? ` · ${info.frames} 帧` : ''}`;
     const scale = node('span', 'fp-image-scale');
     function update() {
       if (!current()) return;
@@ -389,14 +389,19 @@ export async function mount(ctx) {
       image.style.height = mode === 'fit' ? '' : `${Math.round(info.height * zoom)}px`;
       scale.textContent = mode === 'fit' ? '适合窗口' : `${Math.round(zoom * 100)}%`;
       fit.setAttribute('aria-pressed', String(mode === 'fit'));
-      original.setAttribute('aria-pressed', String(mode === 'original' && zoom === 1));
+      minus.disabled = mode === 'original' && zoom <= .1;
+      plus.disabled = mode === 'original' && zoom >= 8;
     }
-    const fit = button('适合窗口', () => { mode = 'fit'; update(); });
-    const original = button('原始尺寸', () => { mode = 'original'; zoom = 1; update(); });
+    const fit = navigationButton('适合窗口', () => { mode = 'fit'; update(); });
     const changeZoom = delta => { mode = 'original'; zoom = Math.max(0.1, Math.min(8, zoom * delta)); update(); };
-    const minus = button('缩小', () => changeZoom(1 / 1.25));
-    const plus = button('放大', () => changeZoom(1.25));
-    ctx.toolbar.append(fit, original, minus, plus, scale, status);
+    const minus = navigationButton('缩小', () => changeZoom(1 / 1.25));
+    const plus = navigationButton('放大', () => changeZoom(1.25));
+    const options = toolbarMenu(ctx, [
+      { label: '原始尺寸', onClick: () => { mode = 'original'; zoom = 1; update(); } },
+      { label: '图片信息', disabled: true, disabledReason: details },
+    ]);
+    scale.title = details;
+    ctx.toolbar.append(minus, scale, plus, fit, options);
     listen(image, 'load', () => {
       if (!current()) return;
       if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth > IMAGE_LIMITS.maxSide

@@ -1,5 +1,5 @@
 import DOMPurify from '../vendor/file-preview/purify.js';
-import { node, button, searchControl, loadStyle, decodeText } from './common.js';
+import { node, button, navigationButton, searchControl, loadStyle, decodeText } from './common.js';
 import { highlightSource } from '../ui/source-highlight.js';
 import { inspectImage } from './image.js';
 import { safeDocumentCss } from './html-style.js';
@@ -43,17 +43,19 @@ function imagesWithoutSources(source, ctx, descriptors) {
 
 export async function mount(ctx) {
   loadStyle('preview.css');
-  let disposed = false, source = '', rendered = ctx.state?.rendered === true, frame = null, query = '', hits = [], hitIndex = -1;
+  let disposed = false, loaded = false, source = '', rendered = ctx.state?.rendered === true, frame = null, query = '', hits = [], hitIndex = -1;
   const current = () => !disposed && !ctx.resources.signal.aborted && ctx.resources.isCurrent();
   const wrapper = node('section', 'fp-html'), sourceView = node('pre', 'fp-html-source');
   sourceView.tabIndex = 0; sourceView.setAttribute('aria-label', 'HTML 源码');
   const sourceCode = node('code'); sourceView.append(sourceCode);
   const body = node('div', 'fp-html-body');
   const toggle = button('切换到静态预览', switchMode), count = node('span', 'fp-html-match-count'); count.setAttribute('role', 'status');
-  const previous = button('上一个匹配项', () => move(-1)), next = button('下一个匹配项', () => move(1));
+  toggle.disabled = true;
+  const previous = navigationButton('上一个匹配项', () => move(-1)), next = navigationButton('下一个匹配项', () => move(1));
   searchControl(ctx.toolbar, value => { query = value.slice(0, 256); updateSearch(); });
   ctx.toolbar.append(toggle, previous, next, count);
-  const warning = node('p', 'fp-html-note', '静态隔离预览：脚本、表单、外链和网络资源均已禁用；仅加载已授权的相对图片和安全样式。');
+  const warning = node('p', 'fp-html-note', '静态隔离预览 · 脚本、表单与网络资源已禁用');
+  warning.title = '仅加载已授权的相对图片和安全样式；外链不可导航。';
   wrapper.append(warning, sourceView, body); ctx.host.append(wrapper);
 
   let documentPromise = null, modeEpoch = 0;
@@ -125,13 +127,14 @@ export async function mount(ctx) {
     } catch { if (current() && rendered && epoch === modeEpoch) { body.replaceChildren(node('p', 'fp-fallback', '无法安全渲染此 HTML，可返回源码查看。')); } }
   }
   function switchMode() {
-    if (!current()) return;
+    if (!current() || !loaded) return;
     rendered = !rendered; modeEpoch++; toggle.textContent = rendered ? '查看源码' : '切换到静态预览';
     toggle.setAttribute('aria-label', toggle.textContent); sourceView.hidden = rendered; body.hidden = !rendered;
     if (rendered) void createFrame(); else { frame?.removeAttribute('srcdoc'); frame?.remove(); frame = null; }
   }
   function updateSearch() {
     hits = markSource(sourceCode, query); hitIndex = hits.length ? 0 : -1;
+    previous.disabled = next.disabled = !hits.length;
     count.textContent = query ? `${hits.length}${hits.length >= 5000 ? '+' : ''} 处` : '';
     if (hits.length) { hits[0].classList.add('is-current'); hits[0].scrollIntoView({ block: 'center' }); }
   }
@@ -148,7 +151,9 @@ export async function mount(ctx) {
     source = await ctx.access.text(4 * 1024 * 1024);
     if (!current()) return { dispose, getState: () => ({ rendered, scrollTop: sourceView.scrollTop }) };
     sourceCode.innerHTML = highlightSource(source, ctx.meta.name || ctx.request.name || '').html;
+    loaded = true; toggle.disabled = false;
     sourceView.hidden = rendered; body.hidden = !rendered; toggle.textContent = rendered ? '查看源码' : '切换到静态预览';
+    toggle.setAttribute('aria-label', toggle.textContent);
     updateSearch(); sourceView.scrollTop = Math.max(0, Number(ctx.state?.scrollTop) || 0); if (rendered) await createFrame();
   } catch { if (current()) ctx.error('无法读取 HTML 文件。'); }
   return { dispose, getState: () => ({ rendered, scrollTop: sourceView.scrollTop }) };

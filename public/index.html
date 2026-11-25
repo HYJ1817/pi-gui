@@ -242,33 +242,15 @@
        （见 electron/browser-view.cjs），所以这个占位块的内容是空的。 -->
   <aside class="right-pane" id="rightPane" aria-label="右侧工作区" hidden>
     <div class="rp-resizer" id="rightPaneResizer" role="separator" aria-orientation="vertical" aria-label="调整右栏宽度" tabindex="0"></div>
-    <!-- The same 46px title band now contains the existing tools. CSS ends its
-         drag box before native caption controls; the tool strip can scroll. -->
-    <nav id="workPanelNav" class="rp-titlebar work-panel-nav" aria-label="工作面板工具">
-      <div class="work-panel-tool-strip">
-      <button type="button" class="icon-btn" id="btnTree" title="分支树" aria-label="分支树">
-        <svg data-icon="branch" aria-hidden="true" focusable="false"></svg><span class="work-tool-label">分支树</span>
-        <span id="branchCount" class="head-count"></span>
-      </button>
-        <button type="button" class="icon-btn" id="navChanges" aria-label="文件变更" title="文件变更" aria-pressed="false"><svg data-icon="changes" aria-hidden="true" focusable="false"></svg><span class="work-tool-label">文件变更</span><span class="head-count" id="changesCount" hidden></span></button>
-        <button type="button" class="icon-btn" id="btnTerminal" title="终端" aria-label="终端" aria-pressed="false">
-          <svg data-icon="terminal" aria-hidden="true" focusable="false"></svg><span class="work-tool-label">终端</span>
-        </button>
-        <button type="button" class="icon-btn" id="btnFiles" title="文件" aria-label="文件" aria-pressed="false">
-          <svg data-icon="folder" aria-hidden="true" focusable="false"></svg><span class="work-tool-label">文件</span>
-        </button>
-        <button type="button" class="icon-btn" id="btnSpecs" title="项目 Specs" aria-label="项目 Specs" aria-pressed="false">
-          <svg data-icon="fileText" aria-hidden="true" focusable="false"></svg><span class="work-tool-label">Specs</span>
-        </button>
-        <button type="button" class="icon-btn" id="btnCollab" title="协同文档" aria-label="协同文档" aria-pressed="false">
-          <svg data-icon="diagram" aria-hidden="true" focusable="false"></svg><span class="work-tool-label">协同文档</span>
-        </button>
-        <button type="button" class="icon-btn" id="btnBrowser" title="内置浏览器" aria-label="内置浏览器" aria-pressed="false">
-          <svg data-icon="globe" aria-hidden="true" focusable="false"></svg><span class="work-tool-label">浏览器</span>
-        </button>
+    <!-- Only real open Surfaces appear here. The Launcher uses the tool registry,
+         not a second permanent toolbar or hidden source-button navigation. -->
+    <nav id="workPanelNav" class="rp-titlebar work-panel-nav" aria-label="工作面板">
+      <div class="work-panel-tab-scroll">
+        <div id="workPanelTabs" class="work-panel-tabs" role="tablist" aria-label="已打开的工具"></div>
+        <button type="button" class="icon-btn" id="workPanelNew" aria-label="新建工具标签页" title="新建工具标签页"><svg data-icon="plus" aria-hidden="true" focusable="false"></svg></button>
       </div>
-      <button type="button" class="icon-btn" id="workPanelHome" aria-label="选择工作面板工具" title="选择工作面板工具" hidden><svg data-icon="plus" aria-hidden="true" focusable="false"></svg></button>
-      <button type="button" class="icon-btn" id="workPanelClose" aria-label="关闭工作面板" title="关闭工作面板"><svg data-icon="close" aria-hidden="true" focusable="false"></svg></button>
+      <button type="button" class="icon-btn" id="workPanelMaximize" aria-label="最大化工作面板" title="最大化工作面板"><svg data-icon="external" aria-hidden="true" focusable="false"></svg></button>
+      <button type="button" class="icon-btn" id="workPanelClose" aria-label="隐藏工作面板" title="隐藏工作面板"><svg data-icon="panel" aria-hidden="true" focusable="false"></svg></button>
     </nav>
     <div class="rp-body"></div>
   </aside>

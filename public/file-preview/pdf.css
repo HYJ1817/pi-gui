@@ -9,14 +9,15 @@
 }
 .fp-pdf-tools, .fp-pdf-navigation, .fp-pdf-search-tools {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: var(--ui-space-2);
+  gap: var(--ui-space-1);
   min-width: 0;
 }
-.fp-pdf-tools { flex: 1; }
-.fp-pdf-search-tools { margin-inline-start: auto; }
-.fp-pdf-page-input { width: 5.5em; min-width: 0; }
+.fp-pdf-tools { flex: none; }
+.fp-pdf-tools > *, .fp-pdf-navigation > *, .fp-pdf-search-tools > * { flex-shrink: 0; }
+.fp-pdf-search-tools { margin-inline-start: var(--ui-space-2); }
+.fp-pdf-page-input { box-sizing: border-box; height: var(--ds-control-size); width: 4.5em; min-width: 0; }
 .fp-pdf-search-tools .fp-search { width: 11em; min-width: 5em; max-width: 100%; }
 .fp-pdf-outline { max-width: 12em; }
 .fp-pdf-outline[hidden] { display: none; }

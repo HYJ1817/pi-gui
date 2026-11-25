@@ -504,15 +504,17 @@ export function uniqueNameCandidate(meta) {
   return Boolean(meta?.candidate && meta.name && !hasSeparator(meta.path));
 }
 
-/** 显示用标签：工作区内显示文件名 + 位置；工作区外显示模型给的原始路径。 */
+/** 展示不决定权限或身份：内外统一文件名，原路径留给 tooltip 和无障碍名称。 */
 export function fileLinkDisplayLabel(meta) {
   if (!meta) return '';
-  const base = meta.external ? (meta.displayPath || meta.path) : meta.name;
-  return base + (meta.position || '');
+  const name = meta.name || baseName(meta.path || meta.displayPath || '');
+  return name + (meta.position || positionLabel(meta));
 }
 
 export function fileLinkAriaLabel(meta) {
   const p = meta?.external ? (meta.displayPath || meta.path) : (meta?.path || '');
-  const range = rangeLabel(meta);
-  return range ? `${p}，${range}` : p;
+  if (!meta?.line) return p;
+  const start = `L${meta.line}${meta.column ? `C${meta.column}` : ''}`;
+  const end = meta.endLine ? `–L${meta.endLine}${meta.endColumn ? `C${meta.endColumn}` : ''}` : '';
+  return `${p}，${start}${end}`;
 }

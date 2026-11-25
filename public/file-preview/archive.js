@@ -1,4 +1,4 @@
-import { node, button, searchControl, formatBytes } from './common.js';
+import { node, button, toolbarMenu, searchControl, formatBytes } from './common.js';
 import { inspectZip, ZIP_LIMITS } from './zip-policy.js';
 
 import { archivePreviewLimit } from './archive-policy.js';
@@ -55,12 +55,12 @@ export async function mount(ctx) {
     const wrapper = node('section', 'fp-archive');
     wrapper.setAttribute('aria-label', '压缩包目录');
     const total = zip.entries.reduce((sum, entry) => sum + entry.size, 0);
-    const summary = node('div', 'fp-archive-summary', `${zip.entries.length} 个条目 · 声明大小 ${formatBytes(total)} · 文件大小 ${formatBytes(bytes.length)}`);
+    const summary = `${zip.entries.length} 个条目 · 声明大小 ${formatBytes(total)} · 文件大小 ${formatBytes(bytes.length)}`;
     const listing = node('div', 'fp-archive-listing');
     const selection = node('div', 'fp-archive-selection');
     const status = node('p', 'fp-archive-status');
     status.setAttribute('role', 'status');
-    const name = node('span', 'fp-archive-selected-name', '选择文件查看元数据');
+    const name = node('span', 'fp-archive-selected-name');
     const sizes = node('span', 'fp-archive-selected-size');
     const open = button('预览文件', async () => {
       if (!current() || !selected || !zip) return;
@@ -85,11 +85,13 @@ export async function mount(ctx) {
     });
     open.disabled = true;
     selection.append(name, sizes, open);
-    wrapper.append(summary, listing, selection, status);
+    selection.hidden = true;
+    wrapper.append(listing, selection, status);
     ctx.host.append(wrapper);
     function select(entry) {
       if (!current()) return;
       selected = entry.name;
+      selection.hidden = false;
       name.textContent = entry.name;
       name.title = entry.name;
       sizes.textContent = `声明大小 ${formatBytes(entry.size)} · 压缩后 ${formatBytes(entry.compressedSize)}`;
@@ -155,6 +157,7 @@ export async function mount(ctx) {
     });
     input.setAttribute('aria-label', '查找压缩包中的文件');
     input.maxLength = 256;
+    ctx.toolbar.append(toolbarMenu(ctx, [{ label: '压缩包信息', disabled: true, disabledReason: summary }], { label: '压缩包信息', icon: 'info' }));
     search = typeof ctx.state?.search === 'string' ? ctx.state.search.slice(0, 256) : '';
     input.value = search;
     render();

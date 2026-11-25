@@ -15,13 +15,15 @@
     "test:file-preview": "npm run test:file-preview:core && npm run test:file-preview:backend && npm run test:file-preview:panel && npm run test:file-preview:office && npm run test:file-preview:media-archive && npm run test:file-preview:pdf && npm run test:file-preview:entry && npm run test:file-preview:vendor",
     "test:file-preview:core": "node tests/file-preview-core.cjs && node tests/esm-bundle-check.cjs",
     "test:file-preview:backend": "node tests/file-preview-backend.cjs",
+    "test:file-preview:large-media-backend": "node tests/large-media-backend.cjs",
     "test:file-preview:panel": "node tests/file-preview-panel.cjs",
-    "test:file-preview:office": "node tests/file-preview-office.cjs",
+    "test:file-preview:office": "node tests/file-preview-office.cjs && node --test tests/file-preview-pptx.cjs",
     "test:file-preview:media-archive": "node tests/file-preview-media-archive.cjs",
     "test:file-preview:pdf": "node tests/file-preview-pdf.cjs",
     "test:file-preview:entry": "node tests/file-preview-entry.cjs",
     "test:file-preview:vendor": "node tests/file-preview-vendor.cjs",
     "test:file-preview:desktop": "node tests/file-preview-desktop.cjs",
+    "test:file-preview:large-media": "node tests/large-media-desktop.cjs",
     "test:file-preview:packaged": "node tests/file-preview-packaged.cjs",
     "test:file-preview:runtime-probe": "node tests/file-preview-runtime-probe.cjs",
     "test:attachments:electron": "node tests/attachments-electron.cjs",
@@ -197,7 +199,8 @@
     "test:ui3:visual": "node tests/ui3-cdp.cjs",
     "test:ui4": "node tests/ui4-approval.cjs && node tests/ui4-feedback.cjs && node tests/ui4-integration.cjs",
     "test:specs": "node tests/specs.cjs && node tests/specs-ui.cjs && node tests/panel-restore-ui.cjs",
-    "test:work-surfaces": "node tests/files-terminal.cjs && node tests/files-terminal-ui.cjs && node tests/terminal-job-object.cjs",
+    "test:work-surfaces": "node tests/files-terminal.cjs && node tests/files-terminal-ui.cjs && node tests/terminal-job-object.cjs && npm run test:surfaces",
+    "test:surfaces": "node tests/surface-tabs.cjs && node tests/surface-lifecycle.cjs && node tests/files-surface-lifecycle.cjs",
     "test:file-links": "node tests/file-link-model.cjs && node tests/file-links-backend.cjs && node tests/external-grants.cjs && node tests/external-files.cjs && node tests/editor-settings.cjs && node tests/editor-settings-ui.cjs && node tests/file-links-ui.cjs && node tests/file-links-runtime.cjs && node tests/source-highlight.cjs",
     "test:diff-comments": "node tests/diff-comments.cjs && node tests/diff-comments-ui.cjs && node tests/diff-comments-split.cjs && node tests/diff-comment-ranges.cjs && node tests/diff-comment-ranges-ui.cjs && npm run test:review-tasks",
     "test:review-tasks": "node tests/review-task.cjs && node tests/review-task-ui.cjs",
@@ -246,16 +249,11 @@
     "mammoth": "1.13.0",
     "node-pty": "1.1.0",
     "papaparse": "5.7.1",
-    "pdfjs-dist": "^6.3.289",
-    "pptx-preview": "1.0.7"
+    "pdfjs-dist": "^6.3.289"
   },
   "overrides": {
     "exceljs": {
       "uuid": "11.1.1"
-    },
-    "pptx-preview": {
-      "uuid": "11.1.1",
-      "echarts": "6.1.0"
     }
   }
 }

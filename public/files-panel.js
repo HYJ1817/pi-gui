@@ -1,7 +1,6 @@
 /* Files owns navigation and a single live preview controller. Format selection,
  * decoding, bytes, object URLs and plugin resources belong to file-preview. */
 import * as Api from './api.js';
-import { createPaneHeader } from './right-pane.js';
 import { openSecondarySurface } from './ui/secondary-surface.js';
 import { mountFilePreview } from './file-preview/index.js';
 import { createFilesLayout } from './files-layout.js';
@@ -46,14 +45,19 @@ const attachmentKeys = new WeakMap();
 
 export function openFileReference(request) {
   if (!request?.path && !(request?.source === 'attachment' && request.file) && !(request?.source === 'archive' && request.bytes)) return null;
-  if (activePanel?.isCurrent()) { void activePanel.open(request); return activePanel; }
   return openFilesPanel({ openRequest: request, triggerId: request.triggerId || 'btnFiles' });
 }
 
 export function openFilesPanel(options = {}) {
-  return openSecondarySurface('files', (host, view) => mountFilesPanel(host, view, options), {
-    label: '项目文件', headerSelector: '.rp-head', triggerId: options.triggerId || 'btnFiles',
-  });
+  let mounted = false;
+  const surface = openSecondarySurface('files', (host, view) => {
+    mounted = true;
+    return mountFilesPanel(host, view, options);
+  }, { label: '文件', headerSelector: '.files-preview-head', triggerId: options.triggerId || 'btnFiles' });
+  // Reusing a live top-level tab skips mount, not the caller's new open intent.
+  // Always activate through the manager before touching a possibly hidden host.
+  if (!mounted && options.openRequest && activePanel?.isCurrent()) void activePanel.open(options.openRequest);
+  return surface;
 }
 
 function currentIdentity() {
@@ -94,7 +98,9 @@ export function mountFilesPanel(host, view, options = {}) {
   let restored = readFilesState(identity, options.storage);
   let restoring = false;
   const metadataRequests = new Set();
+  let visible = view.isVisible?.() !== false;
   const isCurrent = () => alive && view.isCurrent();
+  const isVisible = () => isCurrent() && visible && view.isVisible?.() !== false;
   const scopeCurrent = (run) => isCurrent() && scopeEpoch === run && sameScope(identity, effectiveIdentity());
   function effectiveIdentity() {
     const result = { ...getIdentity() };
@@ -111,6 +117,7 @@ export function mountFilesPanel(host, view, options = {}) {
       try { controller.dispose(); } catch { /* Isolate a failed plugin cleanup from the surface's remaining resources. */ }
       finally { controller = null; controllerTab = null; }
     }
+    toolbar.replaceChildren();
   }
   function snapshot() {
     return { tabs, active: activeKey, tree: tree?.getState(), layout: geometry.getState() };
@@ -128,25 +135,38 @@ export function mountFilesPanel(host, view, options = {}) {
     persistTimer = setTimeout(() => { if (isCurrent()) persistNow(); }, 160);
   }
   const geometry = createFilesLayout(host, { state: restored?.layout, onChange: persistSoon });
-  const header = createPaneHeader({ title: '文件', actions: [geometry.treeButton, geometry.maximizeButton] });
-  host.append(header.el, geometry.element);
+  host.append(geometry.element);
+  const head = node('div', 'files-preview-head');
+  const path = node('span', 'files-preview-path');
+  path.tabIndex = 0;
+  const toolbar = node('div', 'files-format-tools');
+  head.append(path, toolbar, geometry.treeButton);
   const preview = node('section', 'files-preview');
   preview.id = 'filesPreviewPanel';
-  preview.setAttribute('aria-label', '文件预览');
+  preview.setAttribute('aria-label', '文件预览（只读）');
   const tabsUI = createFilesTabs({
     getTabs: () => tabs, getActive: () => activeKey,
     activate: (key) => { openSequence++; cancelMetadata(); void activate(key); },
     close: closeTabs, reorder,
   });
-  geometry.main.append(tabsUI.element, preview);
+  geometry.main.append(tabsUI.element, head, preview);
 
+  function updatePath(tab = activeTab()) {
+    const label = tab?.request.path || tab?.request.name || '';
+    path.textContent = label;
+    path.hidden = !label;
+    path.setAttribute('aria-label', label);
+    const bytes = tab?.request.source === 'archive' ? tab.request.size : tab?.request.bytes ?? tab?.request.size;
+    path.title = [label, formatBytes(bytes)].filter(Boolean).join('\n');
+  }
   function renderTabs(settings) {
     tabsUI.render(settings);
     preview.setAttribute('role', tabs.length ? 'tabpanel' : 'group');
     if (activeTab()) preview.setAttribute('aria-labelledby', activeTab().id);
     else preview.removeAttribute('aria-labelledby');
   }
-  function empty(title = '选择文件预览', detail = '只读') {
+  function empty(title = '选择文件预览', detail = '') {
+    toolbar.replaceChildren(); updatePath(null);
     preview.replaceChildren();
     const section = node('section', 'files-empty');
     section.append(node('h4', 'files-empty-title', title));
@@ -170,6 +190,7 @@ export function mountFilesPanel(host, view, options = {}) {
         if (typeof transport.externalMetadata !== 'function') return { ok: !restore, request };
         const result = await transport.externalMetadata(request.path, request.grantId, request.conversationId, { signal: abort.signal });
         if (request.fileId && result?.file?.fileId && request.fileId !== result.file.fileId) return { ok: false, code: 'file_changed' };
+        if (restore && (!request.fileId || result?.file?.fileId !== request.fileId)) return { ok: false, code: 'file_changed' };
         return { ...result, request: { ...request, path: result?.file?.absolutePath || request.path, fileId: result?.file?.fileId || request.fileId || '', name: result?.file?.name || request.name, bytes: result?.file?.bytes } };
       }
       if (typeof transport.metadata !== 'function') return { ok: !restore, request };
@@ -186,21 +207,13 @@ export function mountFilesPanel(host, view, options = {}) {
     finally { metadataRequests.delete(abort); }
   }
   function mountPreview(tab) {
-    if (!isCurrent() || activeTab() !== tab) return;
-    disposePreview();
+    if (!isVisible() || activeTab() !== tab) return;
+    disposePreview(); updatePath(tab);
     const sequence = previewSequence;
     const run = scopeEpoch;
-    const head = node('div', 'files-preview-head');
-    const path = node('span', 'files-preview-path', tab.request.path || tab.request.name);
-    path.title = tab.request.path || tab.request.name;
-    path.tabIndex = 0;
-    path.setAttribute('aria-label', tab.request.path || tab.request.name);
-    const size = node('span', 'files-preview-size', formatBytes(Number.isFinite(tab.request.bytes) ? tab.request.bytes : tab.request.size));
-    head.append(path, size);
-    const toolbar = node('div', 'files-format-tools');
     const content = node('div', 'files-preview-content');
-    preview.replaceChildren(head, toolbar, content);
-    const current = () => scopeCurrent(run) && previewSequence === sequence && activeTab() === tab;
+    preview.replaceChildren(content);
+    const current = () => isVisible() && scopeCurrent(run) && previewSequence === sequence && activeTab() === tab;
     try {
       const mounted = previewMount(content, {
         ...tab.request,
@@ -214,7 +227,7 @@ export function mountFilesPanel(host, view, options = {}) {
           if (Number.isFinite(file.bytes)) {
             if (tab.request.source === 'archive') tab.request.size = file.bytes;
             else tab.request.bytes = file.bytes;
-            size.textContent = formatBytes(file.bytes);
+            updatePath(tab);
           }
           persistSoon();
         },
@@ -229,23 +242,32 @@ export function mountFilesPanel(host, view, options = {}) {
       });
     } catch { if (current()) failure(tab, '无法预览此文件，请重新打开。'); }
   }
-  async function activate(key, { validate = true, focus = false } = {}) {
+  async function activate(key, { validate = true, focus = false, resume = false } = {}) {
     const tab = tabs.find((item) => item.key === key);
     if (!tab) return;
     disposePreview();
     activeKey = key;
-    renderTabs({ focus });
-    tree.select(tab.request.external || localSource(tab.request) ? null : tab.request.path);
-    if (!tab.request.external && !localSource(tab.request)) void tree.reveal(tab.request.path);
-    geometry.hideOverlay();
+    if (!resume) renderTabs({ focus });
+    updatePath(tab);
+    if (!isVisible()) { tab.needsValidation = true; persistSoon(); return; }
+    if (!resume) {
+      tree.select(tab.request.external || localSource(tab.request) ? null : tab.request.path);
+      if (!tab.request.external && !localSource(tab.request)) void tree.reveal(tab.request.path);
+      geometry.hideOverlay();
+    }
     const run = scopeEpoch;
     const sequence = previewSequence;
+    const intent = openSequence;
     if (tab.needsValidation && validate) {
       preview.replaceChildren(node('p', 'files-tree-status', '正在核对文件…'));
-      const result = await metadata(tab.request, { restore: true });
-      if (!scopeCurrent(run) || previewSequence !== sequence || activeTab() !== tab) return;
+      // In-memory archive members inherit their parent's authority and object
+      // identity; retaining the bytes is not permission to restore a changed ZIP.
+      const target = tab.request.source === 'archive' ? tab.request.parent : tab.request;
+      const result = target?.source === 'attachment' ? { ok: true } : await metadata(target, { restore: true });
+      if (!isVisible() || !scopeCurrent(run) || previewSequence !== sequence || openSequence !== intent || activeTab() !== tab) return;
       if (!result?.ok) { failure(tab, '文件不存在、已变化或暂不可用，请从文件树重新打开。'); return; }
-      tab.request = result.request; tab.needsValidation = false;
+      if (result.request && tab.request.source !== 'archive') tab.request = result.request;
+      tab.needsValidation = false;
     }
     mountPreview(tab); persistSoon();
   }
@@ -281,13 +303,16 @@ export function mountFilesPanel(host, view, options = {}) {
       tabs.push(tab);
     } else {
       if (controllerTab === tab) disposePreview();
-      if (tab.request.fileId !== request.fileId || request.line) tab.state = {};
+      // Local File/member metadata has an empty token; incoming references omit
+      // it. Those are the same identity, not a replacement that resets reading.
+      if ((tab.request.fileId || '') !== (request.fileId || '') || request.line) tab.state = {};
       tab.request = request; tab.needsValidation = false;
     }
     void activate(key, { validate: false });
   }
   async function openFromReference(source) {
-    if (!source || (!source.path && !(source.source === 'attachment' && source.file) && !(source.source === 'archive' && source.bytes))) return;
+    if (!isCurrent() || !source || (!source.path && !(source.source === 'attachment' && source.file) && !(source.source === 'archive' && source.bytes))) return;
+    if (!sameScope(identity, effectiveIdentity())) reset();
     const run = scopeEpoch;
     const sequence = ++openSequence;
     cancelMetadata();
@@ -372,7 +397,9 @@ export function mountFilesPanel(host, view, options = {}) {
     void tree.loadRoot();
   }
   function reset(event) {
-    if (!isCurrent()) return;
+    // Identity invalidation can reach the manager before this event listener.
+    // Hidden/invalid is never a reason to retain the previous owner's bytes.
+    if (!alive) return;
     persistNow();
     scopeEpoch++; openSequence++; cancelMetadata(); disposePreview();
     tabs = []; activeKey = null; tabsUI.dispose();
@@ -425,6 +452,22 @@ export function mountFilesPanel(host, view, options = {}) {
   window.addEventListener('pagehide', onPageHide);
   renderTabs(); empty(); installTree(restored?.tree);
   activePanel = { isCurrent, open: openFromReference };
+  const unsubscribeVisibility = view.onVisibility?.((shown) => {
+    const next = typeof shown === 'boolean' ? shown : view.isVisible?.() !== false;
+    if (!alive || next === visible) return;
+    visible = next;
+    openSequence++; cancelMetadata();
+    if (!next) {
+      disposePreview();
+      for (const tab of tabs) tab.needsValidation = true;
+      tabsUI.closeMenu(); geometry.hideOverlay(); preview.replaceChildren();
+      persistNow();
+    } else {
+      const run = scopeEpoch;
+      onContext(); geometry.measure();
+      if (run === scopeEpoch && activeTab()) void activate(activeKey, { resume: true });
+    }
+  });
   if (options.openRequest) void openFromReference(options.openRequest);
   view.onDispose(() => {
     persistNow(); alive = false; scopeEpoch++; openSequence++;
@@ -437,7 +480,7 @@ export function mountFilesPanel(host, view, options = {}) {
     window.removeEventListener('pagehide', onPageHide);
     host.removeEventListener('keydown', onPanelKey);
     preview.removeEventListener('scroll', persistSoon, true);
-    unsubscribeRuntime();
+    unsubscribeRuntime(); unsubscribeVisibility?.();
     tabs = []; activeKey = null; restored = null;
     // Right pane can keep a hidden host mounted. Drop event closures and local
     // archive/File references as well as the plugin's content when it closes.

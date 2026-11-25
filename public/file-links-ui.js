@@ -16,6 +16,7 @@ import { fetchExternalFileMetadata, fetchFileMetadata, findWorkspaceFile, gitCon
 import {
   baseName,
   fileLinkDisplayLabel,
+  fileLinkAriaLabel,
   fileLinkFromInlineCode,
   fileLinkFromPlainText,
   isPathWithin,
@@ -327,7 +328,7 @@ function chipElement(meta, { ambiguous = false, origin = null } = {}) {
   if (meta.endLine) link.dataset.fileEndLine = String(meta.endLine);
   if (meta.endColumn) link.dataset.fileEndColumn = String(meta.endColumn);
   if (meta.grantId) link.dataset.fileGrant = meta.grantId;
-  link.setAttribute('aria-label', ambiguous ? `${meta.name}，多个同名文件` : fileLinkDisplayLabel(meta));
+  link.setAttribute('aria-label', ambiguous ? `${meta.name}，多个同名文件` : fileLinkAriaLabel(meta));
   link.append(
     createFileIcon(document, meta.external ? meta.path : (ambiguous ? meta.name : meta.path)),
     Object.assign(document.createElement('span'), {

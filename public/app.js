@@ -21,7 +21,6 @@ import { $, el, S, invalidateStop } from './state.js';
 import { fmt } from './util.js';
 import { renderModelPicker, rememberRecentModel } from './ui3-model-picker.js';
 import { createInlineCommandMenu } from './ui/inline-command-menu.js';
-import { mountWorkPanelLauncher } from './ui/work-panel-launcher.js';
 import { observeFallbackEvent, cancelFallback } from './fallback.js';
 import { recoveryForFailure } from './error-recovery.js';
 import { sendCommand, runtimeSessionAction, setRequestFailureReporter, switchSession, fetchRuntimeSessions, messageEditStatus, messageEditRecover } from './api.js';
@@ -139,7 +138,7 @@ import { openFilesPanel } from './files-panel.js';
 import { openSplitWorkbench } from './ui/split-workbench.js';
 import { openSessionChangesPanel } from './session-changes-panel.js';
 import { attachBrowserPane, isBrowserAvailable } from './browser-pane.js';
-import { configureSecondaryPane, readRestoredSurface } from './ui/secondary-surface.js';
+import { configureSecondaryPane, registerSecondaryTool, openSecondaryTool, showSecondaryPane, restoreSecondaryTabs, secondaryTabs } from './ui/secondary-surface.js';
 import { openProcessPanel as openClassicProcessPanel } from './process-panel.js';
 import { openAboutSettings } from './about.js';
 import { openSystemSettings } from './system-settings.js';
@@ -289,141 +288,58 @@ createScrollButton({ host: el.composerBox, scroller: el.stream, running: () => S
  * 由 session-plans.js 自己决定（没有关联时整块 hidden，不占位）。 */
 mountSessionPlans($('sessionPlans'));
 
-/* 右栏工作区（P26）。
- * 外壳是通用的（right-pane.js），这一版只往里装「内置浏览器」一面。
- * 网页版（浏览器里跑 npm start）没有 preload 桥 —— 那时 browserPane 为 null，
- * 入口按钮直接不显示，而不是画一个点了没反应的按钮。 */
+/* The shell owns geometry; the Surface registry owns real open tool tabs.
+ * Identity comes from the existing Api scope, Runtime owner and Classic owner,
+ * never from a button, title or a second conversation registry. */
 const rightPane = initRightPane();
+const secondaryOwnerFields = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
+configureSecondaryPane(rightPane, {
+  // Navigation descriptors survive a return to this session/workspace. The
+  // transient full owner remains a separate live-result guard, never a grant.
+  getScope: () => {
+    const id = gitConversationScope(), record = id ? runtimeStore.get(id) : null;
+    return JSON.stringify([id || 'classic', record?.item?.workspace?.workspaceId || record?.owner?.workspaceId || S.cwd,
+      record?.item?.nativeSessionId || record?.owner?.sessionId || (!id ? S.legacyOwner?.sessionId || S.state?.sessionId : null)]);
+  },
+  getIdentity: () => {
+    const id = gitConversationScope(), record = id ? runtimeStore.get(id) : null;
+    const owner = id ? record?.owner : S.legacyOwner;
+    return JSON.stringify([S.workspaceGeneration, id || 'classic',
+      ...secondaryOwnerFields.map(key => owner?.[key] ?? null)]);
+  },
+});
 const runtimeSecondary = rightPane ? createRuntimeSecondary({ pane: rightPane }) : null;
 const openProcessPanel = () => conversationScopeActive() ? runtimeSecondary?.openProcesses() : openClassicProcessPanel();
 configureRuntimeSessions({ pane: rightPane, focusView: focusRuntimeConversation, openBrowser: () => runtimeSecondary?.openBrowser() });
-configureSecondaryPane(rightPane);
 const browserPane = rightPane && isBrowserAvailable() ? attachBrowserPane(rightPane, { openWorkbench: openSplitWorkbench }) : null;
+for (const tool of [
+  { id: 'changes', label: '文件变更', icon: 'changes', key: 'g', shortcutId: 'work-changes', open: openChangesPanel },
+  { id: 'terminal', label: '终端', icon: 'terminal', key: 't', shortcutId: 'work-terminal', open: openTerminalPanel },
+  { id: 'files', label: '文件', icon: 'folder', key: 'f', shortcutId: 'work-files', open: openFilesPanel },
+  { id: 'specs', label: 'Specs', icon: 'fileText', key: 's', open: openSpecsPanel },
+  { id: 'browser', views: ['runtime-browser'], label: '浏览器', icon: 'globe', key: 'b',
+    available: () => Boolean(conversationScopeActive() ? window.piGuiDesktop?.runtimeBrowser : browserPane),
+    open: () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane?.open() },
+  { id: 'tree', label: '分支树', icon: 'branch', key: 'r', open: openBranchPanel },
+  { id: 'collab', label: '协同文档', icon: 'diagram', key: 'c', open: openCollabPanel },
+  { id: 'process', label: '开发进程', icon: 'terminal', key: 'p', open: openProcessPanel },
+]) registerSecondaryTool(tool);
 const workPanelToggle = $('btnWorkPanel');
-let disposeWorkPanelLauncher = null;
-/* 起始页的主卡片只放常用工具；其余真实入口收进「更多工具」。
- * 入口仍然是顶部那排按钮本身 —— launcher 只负责摆放和委托点击。 */
-const workPanelToolEntries = [
-  { source: $('navChanges'), label: '变更', shortcutId: 'work-changes' },
-  { source: $('btnTerminal'), label: '终端', shortcutId: 'work-terminal' },
-  { source: $('btnFiles'), label: '文件', shortcutId: 'work-files' },
-  { source: $('btnBrowser'), label: '浏览器', more: true },
-  { source: $('btnSpecs'), label: 'Specs', more: true },
-  { source: $('btnTree'), label: '分支树', more: true },
-  { source: $('btnCollab'), label: '协同文档', more: true },
-];
-rightPane.onSurfaceChange(() => { disposeWorkPanelLauncher?.(); disposeWorkPanelLauncher = null; });
-function openWorkPanelTools() {
-  if (rightPane.surface() === 'work-tools') return;
-  rightPane.open('work-tools');
-  disposeWorkPanelLauncher = mountWorkPanelLauncher(rightPane.root.querySelector('.rp-body'), workPanelToolEntries);
-}
 workPanelToggle.onclick = () => {
-  if (rightPane.isOpen()) { rightPane.close(); workPanelToggle.focus(); return; }
-  openWorkPanelTools();
+  if (rightPane.isOpen()) { rightPane.close(); workPanelToggle.focus(); }
+  else showSecondaryPane();
 };
-$('workPanelHome').onclick = openWorkPanelTools;
-$('workPanelClose').onclick = () => { rightPane.close(); workPanelToggle.focus(); };
 document.addEventListener('pi-gui:right-pane', event => {
   workPanelToggle.setAttribute('aria-expanded', String(event.detail?.open === true));
   workPanelToggle.classList.toggle('is-active', event.detail?.open === true);
-  $('workPanelClose').hidden = event.detail?.surface !== 'work-tools';
-  $('workPanelHome').hidden = event.detail?.surface === 'work-tools';
-  // Tool owners update their active classes in this same event dispatch.
-  // Wait for those projections before revealing the selected label's full width.
-  queueMicrotask(() => {
-    if (!rightPane.isOpen()) return;
-    const active = [...$('workPanelNav').querySelectorAll('.work-panel-tool-strip .is-active')].at(-1);
-    active?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  });
 });
 initGuiBrowserState();
 initVizIntegration();
-
-const btnSpecs = $('btnSpecs');
-const btnCollab = $('btnCollab');
-if (btnCollab) {
-  btnCollab.hidden = !rightPane;
-  btnCollab.addEventListener('click', () => {
-    if (!rightPane) return;
-    if (rightPane.isOpen() && rightPane.surface() === 'collab') rightPane.close();
-    else openCollabPanel();
-  });
-  document.addEventListener('pi-gui:right-pane', event => {
-    const open = event.detail?.open === true && event.detail?.surface === 'collab';
-    btnCollab.setAttribute('aria-pressed', String(open));
-    btnCollab.classList.toggle('is-active', open);
-  });
-}
-if (btnSpecs) {
-  if (!rightPane) {
-    btnSpecs.hidden = true;
-  } else {
-    btnSpecs.addEventListener('click', () => {
-      if (rightPane.isOpen() && rightPane.surface() === 'specs') rightPane.close();
-      else openSpecsPanel({ triggerId: 'btnSpecs' });
-    });
-    document.addEventListener('pi-gui:right-pane', (event) => {
-      const open = event.detail?.open === true && ['specs', 'workbench-split'].includes(event.detail?.surface);
-      btnSpecs.setAttribute('aria-pressed', String(open));
-      btnSpecs.classList.toggle('is-active', open);
-    });
-  }
-}
 
 document.addEventListener('pi-gui:open-split-workbench', (event) => {
   if (!rightPane) return;
   openSplitWorkbench({ returnSurface: event.detail?.source === 'changes' ? 'changes' : 'specs' });
 });
-
-const btnTerminal = $('btnTerminal');
-const btnFiles = $('btnFiles');
-if (btnTerminal) {
-  if (!rightPane) {
-    btnTerminal.hidden = true;
-  } else {
-    btnTerminal.addEventListener('click', () => {
-      if (rightPane.isOpen() && rightPane.surface() === 'terminal') rightPane.close();
-      else openTerminalPanel({ triggerId: 'btnTerminal' });
-    });
-    document.addEventListener('pi-gui:right-pane', (event) => {
-      const open = event.detail?.open === true && event.detail?.surface === 'terminal';
-      btnTerminal.setAttribute('aria-pressed', String(open));
-      btnTerminal.classList.toggle('is-active', open);
-    });
-  }
-}
-if (btnFiles) {
-  if (!rightPane) {
-    btnFiles.hidden = true;
-  } else {
-    btnFiles.addEventListener('click', () => {
-      if (rightPane.isOpen() && rightPane.surface() === 'files') rightPane.close();
-      else openFilesPanel({ triggerId: 'btnFiles' });
-    });
-    document.addEventListener('pi-gui:right-pane', (event) => {
-      const open = event.detail?.open === true && event.detail?.surface === 'files';
-      btnFiles.setAttribute('aria-pressed', String(open));
-      btnFiles.classList.toggle('is-active', open);
-    });
-  }
-}
-
-const btnBrowser = $('btnBrowser');
-if (btnBrowser) {
-  if (!browserPane) {
-    btnBrowser.hidden = true; // 网页版：没有内置浏览器这回事
-  } else {
-    btnBrowser.addEventListener('click', () => conversationScopeActive() ? runtimeSecondary?.openBrowser() : browserPane.toggle());
-    /* 右栏可能从内部（工具栏的 ×）关掉，只有它自己知道 —— 所以入口按钮的
-     * 状态跟着事件走，不去猜。 */
-    document.addEventListener('pi-gui:right-pane', (e) => {
-      const open = e.detail?.open === true && ['browser', 'runtime-browser', 'browser-changes-split'].includes(e.detail?.surface);
-      btnBrowser.setAttribute('aria-pressed', open ? 'true' : 'false');
-      btnBrowser.classList.toggle('is-active', open);
-    });
-  }
-}
 
 /* ---------- SSE ---------- */
 
@@ -1347,7 +1263,6 @@ document.addEventListener('paste', (e) => {
 });
 
 // 顶栏
-$('btnTree').onclick = openBranchPanel;
 $('btnMore').onclick = openMoreMenu;
 
 // 侧栏导航
@@ -1363,12 +1278,6 @@ function goChat() {
 }
 
 $('navHome').onclick = goChat;
-$('navChanges').onclick = () => openChangesPanel();
-document.addEventListener('pi-gui:right-pane', (event) => {
-  const open = event.detail?.open === true && ['changes', 'workbench-split', 'browser-changes-split'].includes(event.detail?.surface);
-  $('navChanges').setAttribute('aria-pressed', String(open));
-  $('navChanges').classList.toggle('is-active', open);
-});
 /* MCP 是完整的设置页（管理 + 市场）。原生能力证据留在服务端诊断，
  * 管理页只负责服务器、配置与运行状态。 */
 function openMcpPage() {
@@ -1542,8 +1451,8 @@ registerShortcut({ id: 'view-changes', combo: 'alt+3', label: '切到文件变�
 registerShortcut({ id: 'view-extensions', combo: 'alt+4', label: '切到扩展', group: '视图', when: canRun, run: openView('extensions') });
 /* 起始页「变更」卡片显示的就是这一条 —— 提示从注册表读，不另写一份组合键。 */
 registerShortcut({ id: 'work-changes', combo: 'primary+shift+g', label: '打开文件变更面板', group: '工作面板', when: canRun, run: () => openChangesPanel() });
-registerShortcut({ id: 'work-terminal', combo: 'primary+`', label: '打开终端面板', group: '工作面板', when: canRun, run: () => openTerminalPanel({ triggerId: 'btnTerminal' }) });
-registerShortcut({ id: 'work-files', combo: 'primary+p', label: '打开项目文件面板', group: '工作面板', when: canRun, run: () => openFilesPanel({ triggerId: 'btnFiles' }) });
+registerShortcut({ id: 'work-terminal', combo: 'primary+`', label: '打开终端面板', group: '工作面板', when: canRun, run: () => openSecondaryTool('terminal') });
+registerShortcut({ id: 'work-files', combo: 'primary+p', label: '打开项目文件面板', group: '工作面板', when: canRun, run: () => openSecondaryTool('files') });
 /* 冲突检查放在装配末尾：注册完立刻验，重复键位在启动时就炸出来，
  * 而不是等用户按下那个键才发现有两个功能抢。
  * 随后从 `pi-gui.keybindings.v1` 恢复用户覆盖值 —— 必须在注册之后，
@@ -1658,12 +1567,9 @@ loadStatus().then(() => {
 
 function restoreOrdinaryPanel() {
   if (!S.hasProject) return;
-  const surface = readRestoredSurface();
-  if (surface === 'changes') {
-    openChangesPanel();
-  } else if (surface === 'specs') {
-    openSpecsPanel();
-  }
+  restoreSecondaryTabs();
+  // A descriptor is not permission to navigate a Browser or start a PTY.
+  if (['changes', 'specs', 'files'].includes(secondaryTabs().find(tab => tab.active)?.view)) showSecondaryPane();
 }
 
 /* 版本检查：启动后**延迟**跑一次，不阻塞启动、不在启动瞬间请求

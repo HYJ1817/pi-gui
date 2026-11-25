@@ -5,10 +5,8 @@ export function createFilesLayout(host, { state = {}, onChange = () => {} } = {}
   let treeVisible = state.treeVisible !== false;
   let narrow = false;
   let overlay = false;
-  let maximized = false;
   let endDrag = null;
   let alive = true;
-  const root = host.closest('#rightPane');
   const layout = document.createElement('div');
   layout.className = 'files-layout';
   const sidebar = document.createElement('aside');
@@ -30,12 +28,10 @@ export function createFilesLayout(host, { state = {}, onChange = () => {} } = {}
   divider.setAttribute('aria-valuemax', '480');
   const main = document.createElement('div');
   main.className = 'files-main';
-  layout.append(backdrop, sidebar, divider, main);
-  const treeButton = iconButton('切换文件树', 'folder');
+  layout.append(backdrop, main, divider, sidebar);
+  const treeButton = iconButton('切换文件树', 'panel');
   treeButton.classList.add('files-tree-toggle');
   treeButton.setAttribute('aria-controls', sidebar.id);
-  const maximizeButton = iconButton('最大化文件面板', 'scan');
-  maximizeButton.classList.add('files-maximize');
 
   function apply() {
     const shown = narrow ? overlay : treeVisible;
@@ -87,7 +83,7 @@ export function createFilesLayout(host, { state = {}, onChange = () => {} } = {}
   divider.onkeydown = (event) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    setWidth(event.key === 'Home' ? 140 : event.key === 'End' ? 480 : treeWidth + (event.key === 'ArrowRight' ? 16 : -16));
+    setWidth(event.key === 'Home' ? 140 : event.key === 'End' ? 480 : treeWidth + (event.key === 'ArrowLeft' ? 16 : -16));
     onChange();
   };
   divider.onmousedown = (event) => {
@@ -97,7 +93,7 @@ export function createFilesLayout(host, { state = {}, onChange = () => {} } = {}
     const startX = event.clientX;
     const width = treeWidth;
     host.classList.add('files-resizing');
-    const move = (e) => setWidth(width + e.clientX - startX);
+    const move = (e) => setWidth(width + startX - e.clientX);
     const stop = () => {
       document.removeEventListener('mousemove', move);
       document.removeEventListener('mouseup', stop);
@@ -111,29 +107,18 @@ export function createFilesLayout(host, { state = {}, onChange = () => {} } = {}
     document.addEventListener('mouseup', stop);
     window.addEventListener('blur', stop);
   };
-  maximizeButton.onclick = () => {
-    maximized = !maximized;
-    host.classList.toggle('files-maximized', maximized);
-    root?.classList.toggle('files-pane-maximized', maximized);
-    maximizeButton.setAttribute('aria-pressed', String(maximized));
-    maximizeButton.setAttribute('aria-label', maximized ? '还原文件面板' : '最大化文件面板');
-    maximizeButton.title = maximized ? '还原文件面板' : '最大化文件面板';
-    maximizeButton.replaceChildren(createIcon(maximized ? 'panel' : 'scan'));
-    measure();
-  };
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
   observer?.observe(host);
   window.addEventListener('resize', measure);
   measure();
   return {
-    element: layout, sidebar, main, treeButton, maximizeButton, hideOverlay,
+    element: layout, sidebar, main, treeButton, hideOverlay, measure,
     getState: () => ({ treeWidth, treeVisible }),
     dispose() {
       alive = false;
       endDrag?.(); observer?.disconnect();
       window.removeEventListener('resize', measure);
-      root?.classList.remove('files-pane-maximized');
-      host.classList.remove('files-maximized', 'files-narrow', 'files-tree-open', 'files-resizing');
+      host.classList.remove('files-narrow', 'files-tree-open', 'files-resizing');
       main.inert = false;
     },
   };

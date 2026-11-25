@@ -27,7 +27,10 @@ export async function parseOffice(kind, bytes, encoding = 'auto') {
     }
   };
   const summary = inspectOffice(bytes, kind, { validateXml });
-  if (kind === 'pptx') return { kind, ...summary };
+  if (kind === 'pptx') {
+    const { projectPptx } = await import('./pptx-model.js');
+    return { kind, ...summary, deck: projectPptx(bytes, DOMParser, summary.slides) };
+  }
   if (kind === 'xlsx') {
     const { default: ExcelJS } = await import('../vendor/file-preview/exceljs.js');
     const workbook = new ExcelJS.Workbook();

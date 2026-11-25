@@ -1,4 +1,4 @@
-import { node } from './common.js';
+import { node, compactNavigation, toolbarMenu } from './common.js';
 import { OFFICE_LIMITS, officeError } from './office-policy.js';
 import { parseInWorker } from './office-worker-client.js';
 
@@ -19,16 +19,47 @@ const MESSAGES = Object.freeze({
   'parser-unavailable': '本地 Office 预览组件不可用。',
 });
 
+/* Adapt existing renderer-owned controls, not document bytes or parser state.
+ * The detached originals still own their behavior; the shared menu only invokes
+ * those actions. Their references and any open menu die with this renderer. */
+export function compactOfficeUI(ctx, kind) {
+  if (kind === 'pptx') return () => {}; // Slide chrome is owned with the isolated slide renderer.
+  const actions = ctx.toolbar.querySelector('.office-actions');
+  if (!actions) return () => {};
+  for (const control of actions.querySelectorAll('button')) compactNavigation(control);
+  const low = [...actions.querySelectorAll('button')].filter(control => ['复制正文', '复制选区', '显示公式'].includes(control.getAttribute('aria-label')));
+  const encoding = actions.querySelector('.office-encoding');
+  const note = ctx.host.querySelector('.office-note');
+  const explanation = note?.textContent;
+  note?.remove();
+  for (const control of low) control.remove();
+  encoding?.closest('.office-encoding-label')?.remove();
+  const owned = [];
+  const menu = toolbarMenu({ ...ctx, resources: { ...ctx.resources, own: fn => owned.push(fn) } }, () => [
+    ...low.map(control => ({
+      label: `${control.getAttribute('aria-label')}${control.getAttribute('aria-pressed') === 'true' ? ' ✓' : ''}`,
+      disabled: control.disabled, onClick: () => control.click(),
+    })),
+    ...(encoding ? [{ separator: true }, ...[...encoding.options].map(option => ({
+      label: `${option.textContent}${encoding.value === option.value ? ' ✓' : ''}`,
+      onClick: () => { encoding.value = option.value; encoding.dispatchEvent(new encoding.ownerDocument.defaultView.Event('change', { bubbles: true })); },
+    }))] : []),
+    ...(explanation ? [{ separator: true }, { label: '文档信息', disabled: true, disabledReason: explanation }] : []),
+  ]);
+  actions.append(menu);
+  return () => { for (const dispose of owned.splice(0)) dispose(); };
+}
+
 export async function mount(ctx) {
   const name = String(ctx.meta?.name || ctx.request?.name || ctx.meta?.path || '');
   const kind = /\.([^.\/\\]+)$/.exec(name)?.[1]?.toLowerCase();
   if (!['docx', 'xlsx', 'csv', 'tsv', 'pptx'].includes(kind)) throw officeError('format');
-  let disposed = false, renderer = null, epoch = 0, controller = null;
+  let disposed = false, renderer = null, epoch = 0, controller = null, disposeUI = null;
   let encoding = ctx.state.encoding || 'auto';
   const current = () => !disposed && !ctx.resources.signal.aborted && ctx.resources.isCurrent();
   const dispose = () => {
     if (disposed) return;
-    disposed = true; epoch++; controller?.abort(); renderer?.dispose?.(); renderer = null;
+    disposed = true; epoch++; controller?.abort(); disposeUI?.(); disposeUI = null; renderer?.dispose?.(); renderer = null;
     ctx.resources.signal.removeEventListener('abort', dispose);
   };
   ctx.resources.own(dispose);
@@ -39,7 +70,7 @@ export async function mount(ctx) {
     controller?.abort(); controller = new AbortController();
     const localController = controller;
     const previousState = renderer?.getState?.() || ctx.state;
-    renderer?.dispose?.(); renderer = null;
+    disposeUI?.(); disposeUI = null; renderer?.dispose?.(); renderer = null;
     encoding = nextEncoding;
     const loading = node('div', 'office-note', '正在解析文档…');
     loading.setAttribute('role', 'status'); ctx.host.replaceChildren(loading);
@@ -61,6 +92,7 @@ export async function mount(ctx) {
         if (current() && requestEpoch === epoch) renderer = mountGrid(renderCtx, result, ['csv', 'tsv'].includes(kind) ? { onEncoding: load } : {});
       }
       if (!current() || requestEpoch !== epoch) { renderer?.dispose?.(); renderer = null; }
+      else if (renderer) disposeUI = compactOfficeUI(ctx, kind);
     } catch (error) {
       if (current() && requestEpoch === epoch && error?.code !== 'cancelled') {
         ctx.error(MESSAGES[error?.code] || '无法预览此文档。文件可能已损坏、包含不支持的内容或超过安全限制。');

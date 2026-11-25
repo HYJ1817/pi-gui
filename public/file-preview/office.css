@@ -3,9 +3,10 @@
 .office-view,
 .office-grid-view,
 .office-slides-view { display: flex; flex-direction: column; min-height: 0; height: 100%; min-width: 0; font-family: var(--font-sans); }
-.office-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-space-2); min-width: 0; }
-.office-actions .office-page-input { width: 5.5em; }
-.office-actions .office-zoom { width: 7em; }
+.office-actions { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--ui-space-1); min-width: 0; }
+.office-actions > :not([hidden]) { flex-shrink: 0; }
+.office-actions .office-page-input { box-sizing: border-box; height: var(--ds-control-size); width: 4.5em; }
+.office-actions .office-zoom { box-sizing: border-box; height: var(--ds-control-size); width: 7em; }
 .office-match-count,
 .office-page-count { color: var(--ds-text-secondary); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 .office-encoding-label { display: inline-flex; gap: var(--ui-space-2); align-items: center; color: var(--ds-text-secondary); font-size: var(--text-sm); }

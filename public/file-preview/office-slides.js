@@ -1,4 +1,4 @@
-import { node, button } from './common.js';
+import { node, navigationButton } from './common.js';
 import { OFFICE_LIMITS, officeError } from './office-policy.js';
 
 function html(value) { return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
@@ -6,9 +6,9 @@ function html(value) { return String(value).replace(/[&<>"']/g, char => ({ '&': 
 export function slidesDocument({ key, nonce, base }) {
   const url = file => html(new URL(file, base).href);
   // No same-origin, popups, forms, downloads, top-navigation or clipboard
-  // permission. Nonces authorize only the three bundled, trusted scripts.
+  // permission. A nonce authorizes only our local data-only view program.
   const csp = `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${html(csp)}"><meta name="referrer" content="no-referrer"><style>html,body{margin:0;width:100%;height:100%;overflow:auto;font-family:system-ui,sans-serif}body{display:flex}#slides{position:relative;flex:none;margin:auto;padding:16px}.pptx-preview-wrapper{background:transparent!important}.pptx-preview-slide-wrapper{box-shadow:0 1px 8px #0002}*:focus-visible{outline:2px solid Highlight}</style></head><body><div id="slides" aria-label="幻灯片内容"></div><script nonce="${nonce}" src="${url('../vendor/file-preview/purify.min.js')}"></script><script nonce="${nonce}" src="${url('../vendor/file-preview/pptx-preview.js')}"></script><script nonce="${nonce}" data-key="${html(key)}" src="${url('./office-slides-frame.js')}"></script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${html(csp)}"><meta name="referrer" content="no-referrer"><style>html,body{margin:0;width:100%;height:100%;overflow:auto;font-family:system-ui,sans-serif}body{display:flex}#slides{position:relative;flex:none;margin:auto;padding:16px}.pptx-slide{box-shadow:0 1px 8px #0002}*:focus-visible{outline:2px solid Highlight}</style></head><body><div id="slides" aria-label="幻灯片内容"></div><script nonce="${nonce}" data-key="${html(key)}" src="${url('./office-slides-frame.js')}"></script></body></html>`;
 }
 
 export async function mountSlides(ctx, bytes, summary) {
@@ -16,7 +16,8 @@ export async function mountSlides(ctx, bytes, summary) {
   const random = new Uint8Array(24); crypto.getRandomValues(random);
   const nonce = [...random].map(value => value.toString(16).padStart(2, '0')).join('');
   const wrapper = node('div', 'office-slides-view');
-  const note = node('p', 'office-note', '只读幻灯片；高级图表、动画、嵌入音视频与复杂字体可能不受支持。');
+  const note = node('p', 'office-note', '此文稿包含暂不支持的图表、几何或布局，相关内容未完整显示。');
+  note.hidden = !summary.deck?.unsupported;
   const frame = node('iframe', 'office-slides-frame');
   frame.title = '隔离的 PowerPoint 幻灯片'; frame.setAttribute('sandbox', 'allow-scripts');
   frame.setAttribute('referrerpolicy', 'no-referrer');
@@ -29,8 +30,8 @@ export async function mountSlides(ctx, bytes, summary) {
   const background = () => getComputedStyle(ctx.host).getPropertyValue('--ds-bg-secondary').trim();
   const themeObserver = new MutationObserver(() => send('theme', { background: background() }));
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
-  const previous = button('上一页', () => go(page - 1));
-  const next = button('下一页', () => go(page + 1));
+  const previous = navigationButton('上一页', () => go(page - 1));
+  const next = navigationButton('下一页', () => go(page + 1));
   const input = node('input', 'ds-input office-page-input'); input.type = 'number'; input.min = '1'; input.max = String(summary.slides); input.value = String(page + 1); input.setAttribute('aria-label', '幻灯片页码');
   const count = node('span', 'office-page-count', `/ ${summary.slides}`); count.setAttribute('aria-live', 'polite');
   const zoom = node('select', 'ds-select office-zoom'); zoom.setAttribute('aria-label', '幻灯片缩放');
@@ -65,8 +66,8 @@ export async function mountSlides(ctx, bytes, summary) {
     if (event.source !== frame.contentWindow || event.origin !== 'null' || event.data?.officeSlides !== key) return;
     const message = event.data;
     if (message.type === 'ready' && !sent) {
-      sent = true; const buffer = bytes.slice().buffer;
-      frame.contentWindow.postMessage({ officeSlides: key, type: 'load', buffer, slides: summary.slides, aspect: summary.aspect, page, scale, background: background() }, '*', [buffer]);
+      sent = true;
+      frame.contentWindow.postMessage({ officeSlides: key, type: 'load', deck: summary.deck, slides: summary.slides, page, scale, background: background() }, '*');
     } else if (message.type === 'loaded' && message.count === summary.slides) {
       loaded = true; clearTimeout(timer); controls(); finish();
     } else if (message.type === 'page' && Number.isInteger(message.page) && message.page >= 0 && message.page < summary.slides && message.count === summary.slides) {

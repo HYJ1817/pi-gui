@@ -1,4 +1,4 @@
-import { node, button, searchControl, decodeText } from './common.js';
+import { node, navigationButton, toolbarMenu, searchControl, decodeText } from './common.js';
 import { highlightSource } from '../ui/source-highlight.js';
 
 const MAX_LINES = 100000;
@@ -6,7 +6,7 @@ const WINDOW_LINES = 180;
 const MAX_MATCHES = 10000;
 
 export async function mount(ctx) {
-  let disposed = false, sourceText = '', lines = [], query = '', matches = [], matchIndex = -1;
+  let disposed = false, sourceText = '', lines = [], query = String(ctx.state?.search || '').slice(0, 256), matches = [], matchIndex = -1;
   let wrap = ctx.state?.wrap === true, lineNumbers = ctx.state?.lineNumbers !== false;
   let encoding = ctx.state?.encoding || 'auto', bytes;
   const referenceLine = Math.max(0, Math.trunc(Number(ctx.request.line) || 0));
@@ -22,20 +22,12 @@ export async function mount(ctx) {
   const top = node('div', 'fp-text-spacer'), rows = node('div', 'fp-text-rows'), bottom = node('div', 'fp-text-spacer');
   code.append(top, rows, bottom); scroller.append(code); view.append(scroller); ctx.host.append(view);
   const count = node('span', 'fp-text-count'); count.setAttribute('role', 'status');
-  const numbers = button('行号', () => { lineNumbers = !lineNumbers; measure(); render(); });
-  const wrapping = button('自动换行', () => { wrap = !wrap; measure(); render(); });
-  const previous = button('上一个匹配项', () => move(-1));
-  const next = button('下一个匹配项', () => move(1));
+  const previous = navigationButton('上一个匹配项', () => move(-1));
+  const next = navigationButton('下一个匹配项', () => move(1));
   const location = node('input', 'ds-input fp-line-input'); location.type = 'number'; location.min = '1'; location.step = '1'; location.placeholder = '行'; location.setAttribute('aria-label', '跳到行');
   location.addEventListener('change', () => goTo(Number(location.value)));
-  const encodingSelect = node('select', 'ds-select fp-encoding'); encodingSelect.setAttribute('aria-label', '文本编码');
-  for (const [value, label] of [['auto', '自动编码'], ['utf-8', 'UTF-8'], ['gb18030', 'GB18030'], ['utf-16le', 'UTF-16 LE'], ['utf-16be', 'UTF-16 BE']]) {
-    const option = node('option', '', label); option.value = value; encodingSelect.append(option);
-  }
-  encodingSelect.value = encoding;
-  encodingSelect.addEventListener('change', () => { encoding = encodingSelect.value; decode(); });
-  const copy = button('复制全文', () => copyText(sourceText));
-  const copyRange = button('复制引用区间', () => {
+  const encodings = [['auto', '自动编码'], ['utf-8', 'UTF-8'], ['gb18030', 'GB18030'], ['utf-16le', 'UTF-16 LE'], ['utf-16be', 'UTF-16 BE']];
+  function copyRange() {
     const first = Math.max(0, referenceLine - 1), last = Math.min(lines.length - 1, referenceEnd - 1);
     const parts = lines.slice(first, last + 1);
     if (!parts.length) return;
@@ -44,17 +36,29 @@ export async function mount(ctx) {
     if (parts.length === 1) parts[0] = parts[0].slice(startColumn, endColumn > 0 ? endColumn : undefined);
     else { if (endColumn > 0) parts[parts.length - 1] = parts.at(-1).slice(0, endColumn); parts[0] = parts[0].slice(startColumn); }
     void copyText(parts.join('\n'));
+  }
+  const options = toolbarMenu(ctx, () => [
+    { label: wrap ? '关闭自动换行' : '自动换行', onClick: () => { wrap = !wrap; measure(); render(); } },
+    { label: lineNumbers ? '隐藏行号' : '显示行号', onClick: () => { lineNumbers = !lineNumbers; measure(); render(); } },
+    { separator: true },
+    { label: '复制全文', onClick: () => void copyText(sourceText) },
+    ...(referenceLine ? [{ label: '复制引用区间', onClick: copyRange }] : []),
+    { separator: true },
+    ...encodings.map(([value, label]) => ({ label: `${label}${encoding === value ? ' ✓' : ''}`, onClick: () => { encoding = value; decode(); } })),
+  ]);
+  const search = searchControl(ctx.toolbar, value => { query = value; find(); });
+  search.value = query;
+  search.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); move(event.shiftKey ? -1 : 1); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); search.value = ''; query = ''; find(); }
   });
-  copyRange.hidden = !target;
-  searchControl(ctx.toolbar, value => { query = value; find(); });
-  ctx.toolbar.append(previous, next, location, wrapping, numbers, encodingSelect, copy, copyRange, count);
+  ctx.toolbar.append(previous, next, location, count, options);
   async function copyText(text) {
     try { await navigator.clipboard.writeText(text); if (live()) count.textContent = '已复制'; }
     catch { if (live()) count.textContent = '无法访问剪贴板'; }
   }
   function measure() {
     view.classList.toggle('is-wrapped', wrap); view.classList.toggle('no-line-numbers', !lineNumbers);
-    numbers.setAttribute('aria-pressed', String(lineNumbers)); wrapping.setAttribute('aria-pressed', String(wrap));
     const style = scroller.ownerDocument.defaultView.getComputedStyle(scroller);
     rowHeight = Math.max(16, parseFloat(style.lineHeight) || 20);
     charWidth = Math.max(6, (parseFloat(style.fontSize) || 13) * .62);
@@ -128,6 +132,7 @@ export async function mount(ctx) {
       const lower = lines[i].toLocaleLowerCase(); let at = 0;
       while ((at = lower.indexOf(needle, at)) >= 0 && matches.length < MAX_MATCHES) { matches.push({ line: i, column: at }); at += Math.max(1, needle.length); }
     }
+    previous.disabled = next.disabled = matches.length === 0;
     count.textContent = needle ? `${matches.length}${matches.length === MAX_MATCHES ? '+' : ''} 处` : `${lines.length} 行`;
     if (matches.length) { matchIndex = 0; showMatch(); } else render();
   }
@@ -146,7 +151,7 @@ export async function mount(ctx) {
   observer?.observe(scroller);
   const dispose = () => { if (disposed) return; disposed = true; observer?.disconnect(); scroller.removeEventListener('scroll', onScroll); bytes = null; sourceText = ''; lines = []; widths = []; };
   ctx.resources.own(dispose);
-  const getState = () => ({ scrollTop: scroller.scrollTop, scrollLeft: scroller.scrollLeft, wrap, lineNumbers, encoding, line: target });
+  const getState = () => ({ scrollTop: scroller.scrollTop, scrollLeft: scroller.scrollLeft, wrap, lineNumbers, encoding, line: target, search: query });
   try {
     bytes = await ctx.access.bytes(4 * 1024 * 1024);
     if (!live()) return { dispose, getState };

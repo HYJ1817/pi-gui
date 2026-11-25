@@ -64,6 +64,7 @@ export function createTerminalSession({
   let mounted = false;
   let visible = false;
   let wantVisible = false;
+  let wantFocus = false;
   let busy = true;
   let detached = false;
   let cursor = 0;
@@ -331,16 +332,18 @@ export function createTerminalSession({
       view.fit?.();
       const size = view.getSize?.();
       if (size) scheduleResize(size.cols, size.rows);
-      view.focus?.();
+      if (wantFocus) view.focus?.();
+      wantFocus = false;
       schedulePoll(0);
       syncStdin();
     }
     return Boolean(alive && view);
   }
 
-  function show(next) {
+  function show(next, { focus = false } = {}) {
     const value = Boolean(next) && alive;
     wantVisible = value;
+    wantFocus = value && focus;
     if (!mounted) return;
     if (value === visible) return;
     visible = value;
@@ -352,7 +355,8 @@ export function createTerminalSession({
         view?.fit?.();
         const size = view?.getSize?.();
         if (size) scheduleResize(size.cols, size.rows);
-        view?.focus?.();
+        if (wantFocus) view?.focus?.();
+        wantFocus = false;
         schedulePoll(0);
       });
     } else {

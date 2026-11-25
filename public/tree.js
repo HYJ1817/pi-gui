@@ -7,9 +7,11 @@
  * 注意这里**不 import rpc.js**：分叉动作由调用方以 onFork 回调传进来。
  * 否则会形成 rpc → tree（applyTree）与 tree → rpc（forkFrom）的循环依赖。 */
 
-import { el, panels, S } from './state.js';
+import { panels, S } from './state.js';
 import { sendCommand } from './api.js';
-import { closeModal, openModal } from './ui/modal.js';
+import { closeModal } from './ui/modal.js';
+import { openSecondarySurface } from './ui/secondary-surface.js';
+import { createPaneHeader } from './right-pane.js';
 import { toast } from './ui/toast.js';
 
 const CLIP = 56;
@@ -107,15 +109,6 @@ export function entryText(entry, max = CLIP) {
   }
 }
 
-function countNodes(list) {
-  let n = 0;
-  for (const x of list) {
-    n += 1;
-    if (x.children?.length) n += countNodes(x.children);
-  }
-  return n;
-}
-
 /* 哪些条目算「对话」。
  *
  * pi 的树里混着大量**操作类**条目：model_change / thinking_level_change /
@@ -150,11 +143,6 @@ export function applyTree(data) {
   const raw = Array.isArray(data) ? data : data?.tree || [];
   const nodes = toVisibleForest(raw);
   S.treeData = nodes;
-
-  /* 计数跟着列表走 —— 徽标回答的是「这里有几次对话可以回溯」，
-   * 不是「会话文件里有多少条记录」。 */
-  const total = countNodes(nodes);
-  el.branchCount.textContent = total ? String(total) : '';
 
   if (panels.tree) renderTree(nodes, panels.tree);
 }
@@ -228,53 +216,23 @@ export function renderTree(nodes, box) {
 }
 
 export function openBranchPanel() {
-  openModal((card, close) => {
-    /* tree-modal：标题 / 说明 / 按钮固定，只有树体滚动。
-     * 原来整张卡片滚，节点一多底部按钮就被滚出可视区 —— 想关掉得先滚到底。 */
-    card.classList.add('wide', 'tree-modal');
-
-    const h = document.createElement('h3');
-    h.textContent = '分支';
-    card.appendChild(h);
-
-    const desc = document.createElement('div');
-    desc.className = 'modal-desc';
-    desc.textContent = '当前会话里可回溯的对话。点击任意一条即可从该处分叉，开启一条新的支线。切换模型、调整思考档位这类操作不会列在这里。';
-    card.appendChild(desc);
-
-    const box = document.createElement('div');
-    box.className = 'tree';
-    card.appendChild(box);
-
-    panels.tree = box;
-    if (S.treeData.length) renderTree(S.treeData, box);
-    else box.innerHTML = '<div class="hint-empty">加载中…</div>';
-
-    const actions = document.createElement('div');
-    actions.className = 'modal-actions';
-
+  return openSecondarySurface('tree', (host, view) => {
+    host.classList.add('tree-surface');
     const refresh = document.createElement('button');
-    refresh.className = 'btn';
-    refresh.textContent = '刷新';
+    refresh.type = 'button'; refresh.className = 'btn tiny ghost'; refresh.textContent = '刷新';
     refresh.onclick = () => sendCommand({ type: 'get_tree' });
-
     const clone = document.createElement('button');
-    clone.className = 'btn';
-    clone.textContent = '复制当前分支';
+    clone.type = 'button'; clone.className = 'btn tiny ghost'; clone.textContent = '复制当前分支';
     clone.onclick = () => {
-      sendCommand({ type: 'clone' });
-      close();
-      toast('已复制当前分支', 'info');
+      if (!view.isCurrent()) return;
+      sendCommand({ type: 'clone' }); view.close(); toast('已复制当前分支', 'info');
     };
-
-    const done = document.createElement('button');
-    done.className = 'btn';
-    done.textContent = '关闭';
-    done.onclick = close;
-
-    actions.append(refresh, clone, done);
-    card.appendChild(actions);
-  });
-
-  sendCommand({ type: 'get_tree' });
+    const header = createPaneHeader({ title: '分支树', actions: [refresh, clone] });
+    const box = document.createElement('div'); box.className = 'tree rp-scroll';
+    host.append(header.el, box);
+    panels.tree = box;
+    renderTree(S.treeData, box);
+    view.onDispose(() => { if (panels.tree === box) panels.tree = null; });
+    sendCommand({ type: 'get_tree' });
+  }, { label: '分支树' });
 }

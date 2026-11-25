@@ -1,168 +1,86 @@
 import { createIcon } from './icons.js';
-/* Presentation only: the existing tool buttons retain capability and action ownership.
- *
- * 起始页只决定「怎么摆」：入口仍然来自右栏顶部那排真实按钮，
- * 点击时 focus + click 原按钮 —— 本模块不复制任何打开面板的业务逻辑。
- * 可用性（hidden / disabled）继续观察原按钮；本模块只做投影。
- *
- * 入口可以是元素，也可以是描述：
- *   mountWorkPanelLauncher(host, [
- *     { source: navChanges, label: '变更', shortcutId: 'work-changes' },
- *     { source: btnTree, label: '分支树', more: true },
- *   ])
- * `label` 省略时退回按钮的 aria-label / title；`shortcutId` 从 shortcuts.js
- * 的唯一注册表读取**当前生效**的组合键，提示不会和真实按键漂移。
- * 设置页改了键位后订阅回调会就地更新，不需要重挂载。 */
-import { shortcutFor, subscribeShortcuts } from '../shortcuts.js';
+import { shortcutFor, subscribeShortcuts, isTextEntry } from '../shortcuts.js';
 
-let moreSerial = 0;
-
-function span(className, text) {
-  const node = document.createElement('span');
-  if (className) node.className = className;
-  if (text != null) node.textContent = text;
-  return node;
-}
-
-function normalise(tool) {
-  if (!tool) return null;
-  if (tool.nodeType === 1) return { source: tool, label: '', shortcutId: '', more: false };
-  const source = tool.source;
-  if (!source || source.nodeType !== 1) return null;
-  return {
-    source,
-    label: typeof tool.label === 'string' ? tool.label : '',
-    shortcutId: typeof tool.shortcutId === 'string' ? tool.shortcutId : '',
-    more: tool.more === true,
-  };
-}
-
+/* A local keyboard/presentation projection of the actual Surface registry.
+ * Capability and action ownership stay with each registered tool. There are
+ * deliberately no hidden DOM source buttons and no global letter shortcuts. */
 export function mountWorkPanelLauncher(host, tools, options = {}) {
-  const entries = (Array.isArray(tools) ? tools : []).map(normalise).filter(Boolean);
-  const primary = entries.filter((entry) => !entry.more);
-  const extra = entries.filter((entry) => entry.more);
-
   const root = document.createElement('section');
   root.className = 'work-panel-empty';
-  const title = document.createElement('h2');
-  title.textContent = options.title || '工具';
+  const content = document.createElement('div');
+  content.className = 'work-panel-launcher-content';
+  const title = document.createElement('h2'); title.textContent = '打开工具';
+  const list = document.createElement('div'); list.className = 'work-panel-launcher-list';
+  list.setAttribute('role', 'group'); list.setAttribute('aria-label', '打开工作面板工具');
+  content.append(title, list); root.append(content); host.append(root);
+  let disposed = false;
+  let bindings = [];
+  const entries = () => (typeof tools === 'function' ? tools() : Array.isArray(tools) ? tools : [])
+    .filter(tool => tool && typeof tool.id === 'string' && (typeof tool.available !== 'function' || tool.available()));
+  const enabled = () => bindings.filter(({ row }) => !row.hidden && !row.disabled);
 
-  const grid = document.createElement('div');
-  grid.className = 'work-panel-launcher-grid';
-  grid.setAttribute('role', 'group');
-  grid.setAttribute('aria-label', '工作面板工具');
-
-  const extraGrid = document.createElement('div');
-  extraGrid.className = 'work-panel-launcher-grid work-panel-launcher-extra';
-  extraGrid.id = `workPanelLauncherMore${++moreSerial}`;
-  extraGrid.hidden = true;
-  extraGrid.setAttribute('role', 'group');
-  extraGrid.setAttribute('aria-label', '更多工作面板工具');
-
-  const bindings = [];
-  const addCard = (entry, parent) => {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'work-panel-launcher-row';
-    row.dataset.tool = entry.source.id;
-
-    const icon = span('work-panel-launcher-icon');
-    icon.setAttribute('aria-hidden', 'true');
-    const sourceIcon = entry.source.querySelector('svg');
-    if (sourceIcon) icon.append(sourceIcon.cloneNode(true));
-
-    const label = span('work-panel-launcher-label');
-    const shortcut = document.createElement('kbd');
-    shortcut.className = 'work-panel-launcher-shortcut';
-    const syncShortcut = () => {
-      const registered = entry.shortcutId ? shortcutFor(entry.shortcutId) : null;
-      shortcut.hidden = !registered;
-      if (registered) shortcut.textContent = registered.display;
-    };
-    syncShortcut();
-
-    const sync = () => {
-      row.hidden = entry.source.hidden;
-      row.disabled = entry.source.disabled;
-      if (!entry.label) label.textContent = entry.source.getAttribute('aria-label') || entry.source.title || '';
-      row.title = entry.source.getAttribute('aria-label') || entry.source.title || label.textContent;
-    };
-
-    label.textContent = entry.label;
-    row.append(icon, label, shortcut);
-    row.onclick = () => {
-      if (entry.source.hidden || entry.source.disabled) return;
-      entry.source.focus();
-      entry.source.click();
-    };
-    parent.append(row);
-    const binding = { entry, row, sync, syncShortcut };
-    bindings.push(binding);
-    sync();
+  function select(binding, focus = false) {
+    for (const item of bindings) item.row.tabIndex = item === binding ? 0 : -1;
+    if (focus) binding?.row.focus();
+  }
+  function syncShortcuts() {
+    for (const { tool, shortcut } of bindings) {
+      const registered = tool.shortcutId ? shortcutFor(tool.shortcutId) : null;
+      shortcut.hidden = !registered?.effectiveCombo || registered.available === false;
+      shortcut.textContent = shortcut.hidden ? '' : registered.display;
+    }
+  }
+  function render() {
+    if (disposed) return;
+    const focusedId = bindings.find(item => item.row === document.activeElement)?.tool.id;
+    bindings = entries().map(tool => {
+      const row = document.createElement('button'); row.type = 'button'; row.className = 'work-panel-launcher-row'; row.dataset.tool = tool.id;
+      row.disabled = typeof tool.disabled === 'function' ? Boolean(tool.disabled()) : tool.disabled === true;
+      const icon = document.createElement('span'); icon.className = 'work-panel-launcher-icon'; icon.setAttribute('aria-hidden', 'true'); icon.append(createIcon(tool.icon || 'panel'));
+      const label = document.createElement('span'); label.className = 'work-panel-launcher-label'; label.textContent = tool.label || tool.id;
+      const shortcut = document.createElement('kbd'); shortcut.className = 'work-panel-launcher-shortcut';
+      row.append(icon, label, shortcut);
+      row.onclick = () => { if (!disposed && !row.disabled) (options.open || tool.open)?.(tool.id); };
+      return { tool, row, shortcut };
+    });
+    list.replaceChildren(...bindings.map(item => item.row));
+    syncShortcuts();
+    const active = enabled().find(item => item.tool.id === focusedId) || enabled()[0];
+    select(active, Boolean(focusedId));
+  }
+  const onKey = event => {
+    if (disposed || event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || isTextEntry(event.target)
+      || event.target?.closest?.('[contenteditable="true"]') || !root.contains(document.activeElement)) return;
+    const rows = enabled();
+    const index = rows.findIndex(item => item.row === document.activeElement);
+    let next;
+    if (event.key === 'Escape') {
+      if (!options.onEscape) return;
+      event.preventDefault(); event.stopPropagation(); options.onEscape(); return;
+    }
+    if (!rows.length) return;
+    if (event.key === 'ArrowDown') next = rows[(index + 1) % rows.length];
+    else if (event.key === 'ArrowUp') next = rows[(index - 1 + rows.length) % rows.length];
+    else if (event.key === 'Home') next = rows[0];
+    else if (event.key === 'End') next = rows.at(-1);
+    else if (event.key === 'Enter' || event.key === ' ') {
+      if (index < 0) return;
+      event.preventDefault(); rows[index].row.click(); return;
+    } else if (/^[a-z]$/i.test(event.key)) {
+      // Type-ahead only while the Launcher itself has focus. It cannot steal
+      // letters from Composer, browser addresses, file search or xterm.
+      const letter = event.key.toLowerCase();
+      next = [...rows.slice(index + 1), ...rows.slice(0, index + 1)].find(item => (item.tool.key || item.tool.label || '').toLowerCase().startsWith(letter));
+    } else return;
+    if (next) { event.preventDefault(); select(next, true); }
   };
-
-  for (const entry of primary) addCard(entry, grid);
-  for (const entry of extra) addCard(entry, extraGrid);
-
-  let moreButton = null;
-  if (extra.length) {
-    moreButton = document.createElement('button');
-    moreButton.type = 'button';
-    moreButton.className = 'work-panel-launcher-more';
-    moreButton.setAttribute('aria-expanded', 'false');
-    moreButton.setAttribute('aria-controls', extraGrid.id);
-    const icon = span('work-panel-launcher-icon');
-    icon.setAttribute('aria-hidden', 'true');
-    icon.append(createIcon('grid'));
-    const chevron = span('work-panel-launcher-chevron');
-    chevron.setAttribute('aria-hidden', 'true');
-    chevron.append(createIcon('chevronDown'));
-    moreButton.append(icon, span('work-panel-launcher-label', '更多工具…'), chevron);
-    moreButton.onclick = () => {
-      const open = moreButton.getAttribute('aria-expanded') !== 'true';
-      moreButton.setAttribute('aria-expanded', String(open));
-      extraGrid.hidden = !open;
-    };
-    grid.append(moreButton);
-  }
-
-  const extraBindings = bindings.filter((binding) => binding.entry.more);
-  function syncMore() {
-    if (!moreButton) return;
-    const available = extraBindings.some((binding) => !binding.row.hidden);
-    moreButton.hidden = !available;
-    if (!available && moreButton.getAttribute('aria-expanded') === 'true') {
-      moreButton.setAttribute('aria-expanded', 'false');
-      extraGrid.hidden = true;
-    }
-  }
-
-  const observer = new MutationObserver(() => {
-    for (const binding of bindings) binding.sync();
-    syncMore();
-  });
-  for (const { entry } of bindings) {
-    observer.observe(entry.source, { attributes: true, attributeFilter: ['hidden', 'disabled', 'aria-label'] });
-  }
-  const unsubscribeShortcuts = subscribeShortcuts(() => {
-    for (const binding of bindings) binding.syncShortcut();
-  });
-  syncMore();
-
-  root.append(title, grid);
-  if (extra.length) root.append(extraGrid);
-  host.append(root);
-
+  root.addEventListener('keydown', onKey);
+  const offShortcuts = subscribeShortcuts(syncShortcuts);
+  const offTools = options.subscribe?.(render);
+  render();
   return () => {
-    observer.disconnect();
-    unsubscribeShortcuts();
-    for (const { row } of bindings) {
-      row.disabled = true;
-      row.onclick = null;
-    }
-    if (moreButton) {
-      moreButton.disabled = true;
-      moreButton.onclick = null;
-    }
+    if (disposed) return;
+    disposed = true; offShortcuts(); offTools?.(); root.removeEventListener('keydown', onKey);
+    for (const { row } of bindings) { row.onclick = null; row.disabled = true; }
   };
 }
