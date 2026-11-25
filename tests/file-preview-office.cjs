@@ -115,6 +115,20 @@ async function unitTests() {
   rejectDocx('URI relationship rejected without TargetMode', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId3', 'image', 'https://invalid.example/x.png']]); }, 'external-link');
   rejectDocx('entity-encoded external target rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId3', 'image', 'https&#58;//invalid.example/x.png']]); }, 'external-link');
   rejectDocx('entity-encoded external mode rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId3', 'image', 'relative.png', 'Ext&#101;rnal']]); }, 'active-content');
+  /* F5: external relationships are classified by OOXML Type. A plain network
+   * hyperlink is text, never a fetched resource, so it must not reject the
+   * whole document; every execution/remote-access type still fails closed. */
+  const acceptDocx = (label, mutate) => {
+    const parts = docxParts(); mutate(parts);
+    check(label, () => assert.ok(inspectOffice(zipParts(parts), 'docx')));
+  };
+  acceptDocx('plain https hyperlink relationship accepted', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'hyperlink', 'https://example.com/reference', 'External']]); });
+  acceptDocx('plain http hyperlink relationship accepted', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'hyperlink', 'http://example.com', 'External']]); });
+  rejectDocx('external image relationship rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'image', 'https://invalid.example/x.png', 'External']]); }, 'active-content');
+  rejectDocx('external attachedTemplate relationship rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'attachedTemplate', 'https://invalid.example/t.dotx', 'External']]); }, 'active-content');
+  rejectDocx('javascript-scheme hyperlink rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'hyperlink', 'javascript:alert(1)', 'External']]); }, 'external-link');
+  rejectDocx('file-scheme hyperlink rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'hyperlink', 'file:///C:/Windows/win.ini', 'External']]); }, 'external-link');
+  rejectDocx('unknown external relationship type rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'customXml', 'https://invalid.example/x', 'External']]); }, 'active-content');
   rejectDocx('macro payload rejected', parts => { parts['word/vbaProject.bin'] = Buffer.from('fixture'); }, 'active-content');
   rejectDocx('embedded package rejected', parts => { parts['word/embeddings/object.dat'] = Buffer.from('fixture'); }, 'active-content');
   rejectDocx('raw SVG media rejected before DOM', parts => { parts['word/media/active.svg'] = '<svg onload="alert(1)"/>'; }, 'image-limit');

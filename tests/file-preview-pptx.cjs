@@ -117,3 +117,79 @@ for (const [label, mutate] of [
   ['relationship traversal', p => { p['ppt/slides/_rels/slide1.xml.rels'] = p['ppt/slides/_rels/slide1.xml.rels'].replace('../media/image1.png', '../../../../outside.png'); }],
   ['external raster relationship', p => { p['ppt/slides/_rels/slide1.xml.rels'] = p['ppt/slides/_rels/slide1.xml.rels'].replace('../media/image1.png', 'https://invalid.example/leak'); }],
 ]) test(label + ' is rejected before frame rendering', async () => { const parts = pptxParts(); mutate(parts); await assert.rejects(parse(parts)); });
+
+/* F4: slide dimensions must be read independent of XML attribute order, quote
+ * style, whitespace and namespace prefix — order is not significant in XML. */
+for (const [label, sldSz] of [
+  ['canonical cx-then-cy', '<p:sldSz cx="9144000" cy="5143500"/>'],
+  ['reversed cy-then-cx', '<p:sldSz cy="5143500" cx="9144000"/>'],
+  ['single-quoted reversed', "<p:sldSz cy='5143500' cx='9144000'/>"],
+  ['extra whitespace and other attrs', '<p:sldSz  type="screen16x9"   cy="5143500"   cx="9144000"  />'],
+]) test('slide size parsed independent of attribute order: ' + label, async () => {
+  const parts = pptxParts();
+  parts['ppt/presentation.xml'] = parts['ppt/presentation.xml'].replace(/<p:sldSz[^>]*\/>/, sldSz);
+  const deck = await parse(parts);
+  assert.equal(deck.width, 960); assert.equal(deck.height, 540);
+});
+
+test('malformed slide size still rejected regardless of attribute order', async () => {
+  for (const bad of ['<p:sldSz cy="5143500"/>', '<p:sldSz cx="9144000"/>', '<p:sldSz cx="100" cy="5143500"/>', '<p:sldSz cy="100" cx="9144000"/>']) {
+    const parts = pptxParts();
+    parts['ppt/presentation.xml'] = parts['ppt/presentation.xml'].replace(/<p:sldSz[^>]*\/>/, bad);
+    await assert.rejects(parse(parts));
+  }
+});
+
+/* F5: a plain network hyperlink in slide relationships is inert text, never a
+ * fetched resource, so it must not reject the whole deck. */
+test('plain hyperlink relationship in slide rels does not reject the deck', async () => {
+  const parts = pptxParts();
+  parts['ppt/slides/_rels/slide1.xml.rels'] = parts['ppt/slides/_rels/slide1.xml.rels'].replace('</Relationships>',
+    '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/reference" TargetMode="External"/></Relationships>');
+  const deck = await parse(parts);
+  assert.equal(deck.slides.length, 2);
+  // No remote fetch occurs: the hyperlink is never resolved as a package part.
+  assert.equal(deck.images['ppt/media/image1.png'] !== undefined, true);
+});
+
+test('non-hyperlink external relationship in slide rels is still rejected', async () => {
+  const parts = pptxParts();
+  parts['ppt/slides/_rels/slide1.xml.rels'] = parts['ppt/slides/_rels/slide1.xml.rels'].replace('</Relationships>',
+    '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://invalid.example/leak.png" TargetMode="External"/></Relationships>');
+  await assert.rejects(parse(parts));
+});
+
+/* F6: everyday list/paragraph structure is projected, not dropped. The model
+ * carries bullet/auto-number markers, indent levels, hanging indents, spacing
+ * and East-Asian font fallback so ordinary decks do not lose their lists. */
+test('bullet and auto-number markers are projected with indent level', async () => {
+  const parts = pptxParts();
+  const list = '<p:sp><p:nvSpPr><p:cNvPr id="30" name="List"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="3000000"/><a:ext cx="7315200" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>' +
+    '<a:p><a:pPr marL="342900" indent="-342900" lvl="0"><a:buChar char="•"/></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"/><a:t>项目一</a:t></a:r></a:p>' +
+    '<a:p><a:pPr marL="685800" indent="-342900" lvl="1"><a:buChar char="◦"/></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"/><a:t>子项目</a:t></a:r></a:p>' +
+    '<a:p><a:pPr marL="342900" indent="-342900" lvl="0"><a:buAutoNum type="arabicPeriod" startAt="1"/></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"/><a:t>编号项</a:t></a:r></a:p>' +
+    '</p:txBody></p:sp>';
+  inject(parts, slidePath, list);
+  const deck = await parse(parts);
+  const shape = deck.slides[0].shapes.find(item => item.text?.paragraphs.some(pp => pp.marker));
+  assert.ok(shape, 'list shape projected');
+  const [bullet, sub, numbered] = shape.text.paragraphs;
+  assert.deepEqual(bullet.marker, { kind: 'bullet', char: '•' });
+  assert.equal(bullet.level, 0); assert.equal(sub.level, 1);
+  assert.equal(numbered.marker.kind, 'number'); assert.equal(numbered.marker.start, 1);
+  assert.ok(bullet.marL > 0, 'marL projected'); assert.ok(bullet.indent < 0, 'hanging indent projected');
+});
+
+test('paragraph spacing and East-Asian font fallback are projected', async () => {
+  const parts = pptxParts();
+  const spaced = '<p:sp><p:nvSpPr><p:cNvPr id="31" name="Spaced"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="5000000"/><a:ext cx="7315200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>' +
+    '<a:p><a:pPr><a:spcBef><a:spcPts val="1200"/></a:spcBef><a:spcAft><a:spcPts val="600"/></a:spcAft></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"><a:ea typeface="微软雅黑"/></a:rPr><a:t>中文</a:t></a:r></a:p>' +
+    '</p:txBody></p:sp>';
+  inject(parts, slidePath, spaced);
+  const deck = await parse(parts);
+  const shape = deck.slides[0].shapes.find(item => item.text?.paragraphs.some(pp => pp.spacing?.before > 0));
+  assert.ok(shape, 'spaced paragraph projected');
+  assert.ok(shape.text.paragraphs[0].spacing.before > 0);
+  assert.ok(shape.text.paragraphs[0].spacing.after > 0);
+  assert.equal(shape.text.paragraphs[0].runs[0].eastFamily, '微软雅黑');
+});
