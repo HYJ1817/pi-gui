@@ -98,21 +98,39 @@ async function run() {
     screenshots.push(name + '.png');
   }
   /* 右栏的几何事实：一次读全，避免断言的取数方式各不相同。 */
+  /* Unified-architecture geometry: the persistent #workPanelNav strip is the
+   * single top band every surface shares (tabs + maximize + hide). Per-surface
+   * actions live in each surface's own in-body head (.chg-head / .rp-head /
+   * #browserToolbar), measured separately. The legacy per-surface close button
+   * (#rightPaneClose/#browserClose) does not exist; hiding is the strip's
+   * persistent #workPanelClose, closing is the tab's own ×. */
   const paneFacts = () => read(`(()=>{
     const pane=document.getElementById('rightPane'), r=pane.getBoundingClientRect();
     const body=pane.querySelector('.rp-body');
-    const head=pane.querySelector('.work-panel-nav');
-    const close=pane.querySelector('#rightPaneClose, #browserClose');
+    const nav=pane.querySelector('.work-panel-nav');
+    const hide=pane.querySelector('#workPanelClose');
+    const surfaceName=pane.dataset.surface||'';
+    const surfaces=[...pane.querySelectorAll('.rp-body > .rp-surface')];
+    const visibleSurface=surfaces.find(s=>!s.hidden)||null;
+    /* The active surface's own head: prefer a head inside the visible host,
+     * but exclude heads belonging to a nested surface of a different owner. */
+    const innerHead=(()=>{
+      if(!visibleSurface)return null;
+      const heads=[...visibleSurface.querySelectorAll('.rp-head, .chg-head, .rp-toolbar')];
+      return heads.find(h=>h.closest('.rp-surface')===visibleSurface)||heads[0]||null;
+    })();
     const cs=getComputedStyle(document.documentElement);
     return {
       hidden:pane.hidden, surface:pane.dataset.surface||null, mode:pane.dataset.mode||null,
       left:r.left, right:r.right, width:r.width, scrollWidth:pane.scrollWidth, clientWidth:pane.clientWidth,
       cssWidth:Number.parseFloat(cs.getPropertyValue('--rp-width'))||0,
-      headHeight:head?head.getBoundingClientRect().height:0,
-      headTop:head?head.getBoundingClientRect().top:0,
-      headClass:head?head.className:null,
-      closeRight:close?close.getBoundingClientRect().right:0,
-      closeLabel:close?close.getAttribute('aria-label'):null,
+      headHeight:nav?nav.getBoundingClientRect().height:0,
+      headTop:nav?nav.getBoundingClientRect().top:0,
+      headClass:nav?nav.className:null,
+      innerHeadHeight:innerHead?innerHead.getBoundingClientRect().height:0,
+      innerHeadClass:innerHead?innerHead.className:null,
+      closeRight:hide?hide.getBoundingClientRect().right:0,
+      closeLabel:hide?hide.getAttribute('aria-label'):null,
       bodyCount:body?body.children.length:0,
       pageOverflow:document.documentElement.scrollWidth>innerWidth+1
     };
@@ -124,14 +142,14 @@ async function run() {
     return { exists: true, attached: Boolean(view), bounds: view ? view.getBounds() : null };
   };
   const closePane = async () => {
-    await read(`(()=>{const b=document.getElementById('rightPaneClose')||document.getElementById('browserClose');if(b)b.click();})()`);
+    await read(`(()=>{const b=document.getElementById('workPanelClose');if(b)b.click();})()`);
     await sleep(120);
   };
   /* Escape 是「右栏自己接住的键」：只有焦在面板里（root 的 keydown）才算数。
    * 焦还在顶栏入口按钮上时浏览器不会把它送到面板里 —— 这是既有行为，
    * 下面先用一条断言把它如实记下来，再从面板内部验证 Escape 能关。 */
   async function escapeFromInside() {
-    await read(`(()=>{const c=document.getElementById('rightPaneClose')||document.getElementById('browserClose');if(c)c.focus();})()`);
+    await read(`(()=>{const c=document.getElementById('workPanelClose');if(c)c.focus();})()`);
     await key('Escape', 'Escape', 27);
     await until(async () => (await paneFacts()).hidden);
   }
@@ -178,7 +196,10 @@ async function run() {
     win.show(); win.focus(); win.webContents.focus();
     win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Page.bringToFront');
-    await until(() => read('!!document.getElementById("btnMore") && !!document.getElementById("btnBrowser")'));
+    /* The unified work-panel architecture removed the legacy #btnBrowser top-bar
+     * entry: Browser opens through the Launcher (or its tab once open). btnMore
+     * is still the real readiness signal for the chrome being interactive. */
+    await until(() => read('!!document.getElementById("btnMore") && !!document.getElementById("btnWorkPanel")'));
     check(await read('document.hasFocus()'), 'Chromium 页面拿到焦点（后续受信键盘才有意义）');
 
     /* ---------- 0. 样式表：集成方要加的那一行，本测试自己按同一路径挂上去 ---------- */
@@ -195,28 +216,62 @@ async function run() {
     check(facts0.hidden && facts0.width === 0, '启动时右栏是关着的', facts0);
     check(facts0.cssWidth === limits.default, '--rp-width 缺省值为参考重构后的 392px', facts0);
 
+    /* Changes has the same identity problem as Browser: once its tab exists
+     * the Launcher row is gone. Reusing the tab is what a user does. */
+    const openChanges = async () => {
+      if (await read(`!!document.querySelector('.work-surface-tab[data-surface="changes"]')`)) {
+        await read(`document.querySelector('.work-surface-tab[data-surface="changes"] .work-surface-tab-select').click()`);
+      } else {
+        await read(`import('/git.js').then(m=>{m.openChangesPanel();return true})`);
+      }
+    };
+    const browserPath = `(()=>{
+        if (document.querySelector('.work-panel-launcher-row[data-tool="browser"]')) return 'launcher';
+        if (document.querySelector('.work-surface-tab[data-surface="browser"]')) return 'tab';
+        return 'none';
+      })()`;
+    const openBrowser = async () => {
+      // A live Browser tab is reactivated directly. Otherwise the designed
+      // path is: reveal the pane if hidden, open the Launcher (the empty state
+      // when no tabs exist, or a '+' Launcher tab when other tools do), then
+      // pick the Browser row. The Launcher row only ever exists inside a
+      // Launcher surface — never alongside live tool tabs.
+      if (await read(`!!document.querySelector('.work-surface-tab[data-surface="browser"]')`)) {
+        if (await read(`document.getElementById('rightPane').hidden`)) await click('#btnWorkPanel');
+        await read(`document.querySelector('.work-surface-tab[data-surface="browser"] .work-surface-tab-select').click()`);
+        return;
+      }
+      if (await read(`document.getElementById('rightPane').hidden`)) await click('#btnWorkPanel');
+      if (await read(`!!document.querySelector('.work-surface-tab')`)) {
+        await click('#workPanelNew');
+      }
+      await until(async () => (await read(browserPath)) === 'launcher');
+      await click('.work-panel-launcher-row[data-tool="browser"]');
+    };
+
     await click('#btnWorkPanel');
-    await click('.work-panel-launcher-row[data-tool="navChanges"]');
+    await click('.work-panel-launcher-row[data-tool="changes"]');
     await until(async () => (await paneFacts()).surface === 'changes');
     facts0 = await paneFacts();
     check(!facts0.hidden && facts0.surface === 'changes' && facts0.mode === 'dock', '「文件变更」在 dock 模式打开', facts0);
     check(facts0.width === limits.default && facts0.cssWidth === limits.default, '打开宽度 = 持久化宽度 = --rp-width', facts0);
-    check(Math.abs(facts0.headHeight - 46) <= 1, 'Changes 顶部条与 46px 带高一致', facts0);
-    check(facts0.closeLabel === '关闭文件变更', 'Changes 的关闭按钮带可读标签', facts0);
-    check(facts0.closeRight >= facts0.right - 16, '关闭按钮落在标题带最右端', facts0);
+    check(Math.abs(facts0.headHeight - 46) <= 1, '工作面板标签带与 46px 带高一致', facts0);
+    check(Math.abs(facts0.innerHeadHeight - 46) <= 1, 'Changes 面板内头部与 46px 带高一致', facts0);
+    check(facts0.closeLabel === '隐藏工作面板', '标题带右端的持久隐藏按钮带可读标签', facts0);
+    check(facts0.closeRight >= facts0.right - 16, '隐藏按钮落在标题带最右端', facts0);
 
-    /* 顶部条的统一：先把 46px 记下来，后面每个面都要对得上。 */
-    const headerHeight = facts0.headHeight;
+    /* 面板内头部的统一：先把 46px 记下来，后面每个面的内头部都要对得上。 */
+    const headerHeight = facts0.innerHeadHeight;
 
     await read(`document.querySelector('#btnWorkPanel').focus()`);
     await key('Escape', 'Escape', 27);
     check(!(await paneFacts()).hidden, '焦点还在顶栏入口时 Escape 不关闭右栏（既有行为，如实记录）');
     await escapeFromInside();
     check(await read(`document.activeElement && document.activeElement.id==='btnWorkPanel'`), 'Escape 关闭后焦点回到可见工作面板入口');
-    check(await read(`!document.querySelector('#rightPane .rp-surface')`), '关闭后不留下任何 surface 内容');
+    check(await read(`(()=>{const pane=document.getElementById('rightPane');const s=pane.querySelector('.rp-surface');return pane.hidden&&!!s&&s.isConnected})()`), '隐藏后 surface 实例保留在 DOM 中（保留式架构：隐藏不是销毁，重开不必重建）');
 
     /* ---------- 2. 宽度：鼠标拖动 / 键盘 / 双击复位 / aria ---------- */
-    await read(`document.querySelector('#navChanges').click()`);
+    await openChanges();
     await until(async () => (await paneFacts()).surface === 'changes');
     const resizerAria = await read(`(()=>{const r=document.getElementById('rightPaneResizer');return {min:r.getAttribute('aria-valuemin'),max:r.getAttribute('aria-valuemax'),now:r.getAttribute('aria-valuenow'),text:r.getAttribute('aria-valuetext'),controls:r.getAttribute('aria-controls')}})()`);
     facts.push({ resizerAria });
@@ -256,14 +311,18 @@ async function run() {
     check((await paneFacts()).width === limits.default, '双击分隔条复位到默认宽 392');
 
     /* ---------- 3. Browser：显示、原生 view 归属、切换、关闭 ---------- */
+    /* Browser opens through the Launcher while no tabs exist, and through the
+     * Launcher inside the empty state after every tab closes — but once real
+     * tabs exist its opener row is gone. The tab strip then owns activation.
+     * This helper takes whichever real path is present. */
     const beforeBrowser = await paneFacts();
-    await click('#btnBrowser');
+    await openBrowser();
     await until(async () => (await paneFacts()).surface === 'browser');
     await until(() => read('!!document.getElementById("browserToolbar")'));
     const browserPane = await paneFacts();
     facts.push({ browserPane });
     check(!browserPane.hidden && browserPane.surface === 'browser', 'Browser 面在右栏打开', browserPane);
-    check(Math.abs(browserPane.headHeight - headerHeight) <= 1, 'Browser 工具栏与其它面同一条 46px 标题带', { browser: browserPane.headHeight, changes: headerHeight });
+    check(Math.abs(browserPane.innerHeadHeight - headerHeight) <= 1, 'Browser 工具栏与其它面的面板内头部同一条 46px 带', { browser: browserPane.innerHeadHeight, changes: headerHeight });
     check(browserPane.width === beforeBrowser.width, '换面不改宽度（用户调过的宽度沿用）', { before: beforeBrowser.width, after: browserPane.width });
     check(await read(`(()=>{const a=document.getElementById('browserAddress');const r=a.getBoundingClientRect();return r.width>120&&r.height>=24})()`), '地址栏在默认宽下可读（宽度 > 120px）');
     check(await read(`(()=>{const back=document.getElementById('browserBack'),forward=document.getElementById('browserForward');return back.disabled&&forward.disabled})()`), '未导航时后退/前进如实禁用（不猜状态）');
@@ -323,16 +382,19 @@ async function run() {
     await sleep(140);
 
     /* Browser → Changes：原生 view 必须撤离,而不是留在那儿盖住新面板。 */
-    await click('#navChanges');
+    await openChanges();
     await until(async () => (await paneFacts()).surface === 'changes');
     await sleep(260);
-    check(!(await read(`!!document.getElementById('browserToolbar')`)), '切到 Changes 后浏览器工具栏被卸载');
+    check(await read(`(()=>{const bar=document.getElementById('browserToolbar');if(!bar)return false;const host=bar.closest('.rp-surface');return !host||host.hidden||!bar.checkVisibility()})()`), '切到 Changes 后浏览器工具栏不再可见（保留式架构：DOM 保留隐藏，不是卸载）');
     check(browser.getWebContents() === null || !nativeView().attached, '切到 Changes 后原生 view 已撤离', nativeView());
 
-    /* 再切回 Browser：新 view 重新挂上，宽度仍然沿用。 */
-    await click('#btnBrowser');
+    /* 再切回 Browser：保留式架构下实例与导航状态都还在 —— 地址栏保留之前
+     * 的 URL、原生 view 随可见性重新挂上，而不是回到空态。空态只属于从未
+     * 导航过的全新 Browser（上文「未导航时」已验）。 */
+    await openBrowser();
     await until(async () => (await paneFacts()).surface === 'browser');
-    check(!nativeView().attached&&await read(`!document.querySelector('.browser-empty').hidden`), '关闭后重开 Browser 恢复应用空态');
+    check(await read(`(()=>{const a=document.getElementById('browserAddress');return a&&a.value.startsWith('http://127.0.0.1')})()`), '切回 Browser 保留之前的导航状态（保留式架构：URL 不丢）');
+    check(await read(`(()=>{const empty=document.querySelector('.rp-surface:not([hidden]) .browser-empty, .browser-empty');return empty?empty.hidden||getComputedStyle(empty).display==='none':true})()`), '已导航的 Browser 不显示空态引导');
     await browser.navigate(fixtureOrigin + '/');
     await until(() => nativeView().attached);
     check(Math.abs((await paneFacts()).width - narrower) <= 1, '切回 Browser 仍沿用用户拖过的宽度', { expected: narrower, got: (await paneFacts()).width });
@@ -393,9 +455,9 @@ async function run() {
 
     const sessionPane = await paneFacts();
     facts.push({ sessionPane });
-    check(Math.abs(sessionPane.headHeight - headerHeight) <= 1, '「本会话变更」标题带与其它面同一高度', { session: sessionPane.headHeight, other: headerHeight });
+    check(Math.abs(sessionPane.innerHeadHeight - headerHeight) <= 1, '「本会话变更」面板内头部与其它面同一高度', { session: sessionPane.innerHeadHeight, other: headerHeight });
     check(await read(`(()=>{const h=document.querySelector('#rightPane .rp-head');return Boolean(h)&&h.querySelector('.rp-head-title').textContent==='本会话变更'&&h.querySelector('.rp-head-sub').textContent.includes('只读证据')})()`), '标题带由 createPaneHeader 统一画出（标题 + 一行说明）');
-    check(await read(`(()=>{const h=document.querySelector('#rightPane .rp-head'),c=document.getElementById('rightPaneClose');return c.parentElement===h&&c.getBoundingClientRect().right>=h.getBoundingClientRect().right-16})()`), '关闭按钮就在标题带最右端（与其它面同一位置）');
+    check(await read(`(()=>{const nav=document.querySelector('#workPanelNav'),c=document.getElementById('workPanelClose');return c.parentElement===nav&&c.getBoundingClientRect().right>=nav.getBoundingClientRect().right-16})()`), '隐藏按钮就在统一标题带最右端（各面共用同一位置）');
     check(await read(`document.querySelectorAll('#rightPane .session-change-row').length===12`), '文件条目数量来自后端 fileCount 对应的真实列表');
     check(await read(`(()=>{const c=document.querySelector('#rightPane .session-change-summary-count');return c&&c.textContent.includes('12 个已捕获文件')&&c.textContent.includes('24 项操作')})()`), '概览显示后端给出的真实计数');
     check(await read(`[...document.querySelectorAll('#rightPane .rp-chip')].some(c=>c.textContent.includes('归因缺口存在'))&&[...document.querySelectorAll('#rightPane .rp-chip')].some(c=>c.textContent.includes('证据不完整'))`), '状态标记反映「证据不完整 / 存在归因缺口」');
@@ -424,29 +486,29 @@ async function run() {
     check(await read(`document.querySelector('#rightPane').textContent.includes('重新预览') && !document.querySelector('#rightPane .diff')`), '证据变化后旧预览失效并提示重新预览');
 
     /* 加载中：明确的进行中状态，而不是空白。 */
-    await read(`window.__ui4.mode='pending';document.querySelector('#rightPane .rp-head button').click()`);
+    await read(`window.__ui4.mode='pending';document.querySelector('#rightPane .rp-body .rp-head .rp-head-actions button').click()`);
     await until(() => read(`!!document.querySelector('#rightPane .rp-loading')`));
     check(await read(`document.getElementById('rightPane').textContent.includes('正在读取') && document.querySelector('#rightPane .session-change-body').getAttribute('aria-busy')==='true'`), '加载中有明确文案与 aria-busy');
 
     /* 空态：不得被读成「文件没改过」。 */
-    await read(`window.__ui4.mode='empty';document.querySelector('#rightPane .rp-head button').click()`);
+    await read(`window.__ui4.mode='empty';document.querySelector('#rightPane .rp-body .rp-head .rp-head-actions button').click()`);
     await until(() => read(`!!document.querySelector('#rightPane .rp-empty')`));
     check(await read(`(()=>{const e=document.querySelector('#rightPane .rp-empty');return e&&e.textContent.includes('不代表文件没有被修改')})()`), '空态明确区分「没有证据」与「没有改动」');
     check(await read(`document.querySelectorAll('#rightPane .session-change-row').length===0`), '空态下不残留上一批文件行');
 
     /* 错误态：面生的后端码不能原样泄进界面。 */
-    await read(`window.__ui4.mode='error';document.querySelector('#rightPane .rp-head button').click()`);
+    await read(`window.__ui4.mode='error';document.querySelector('#rightPane .rp-body .rp-head .rp-head-actions button').click()`);
     await until(() => read(`!!document.querySelector('#rightPane [data-tone="error"]')`));
     check(await read(`(()=>{const n=document.querySelector('#rightPane [data-tone="error"]');return n.getAttribute('role')==='status'&&n.textContent.includes('证据已更新')})()`), '错误态有 role=status 且用法定的可读文案');
     await shot('session-changes-error-1200-dark');
 
-    await read(`window.__ui4.mode='full';document.querySelector('#rightPane .rp-head button').click()`);
+    await read(`window.__ui4.mode='full';document.querySelector('#rightPane .rp-body .rp-head .rp-head-actions button').click()`);
     await until(() => read(`document.querySelectorAll('#rightPane .session-change-row').length===12`));
 
     /* 会话切换：内容与状态不串会话。 */
     await read(`document.dispatchEvent(new CustomEvent('pi-gui:session-switch'))`);
     await sleep(160);
-    check(await read(`(()=>{const t=document.getElementById('rightPane').textContent;return t.includes('会话或工作区正在切换')&&!t.includes('module-9')})()`), '切换会话时旧文件行被清掉，只留切换提示');
+    check(await read(`(()=>{const t=document.getElementById('rightPane').textContent;return !t.includes('module-9')})()`), '切换会话时旧文件行被立即清掉（硬边界退休或切换提示，均不得残留旧行）');
 
     await escapeFromInside();
     check(await read(`document.activeElement && document.activeElement.id==='btnWorkPanel'`), '从「更多」菜单打开的面关闭后焦点回到可见工作面板入口');
@@ -460,7 +522,7 @@ async function run() {
     await sleep(200);
 
     const processPane = await paneFacts();
-    check(Math.abs(processPane.headHeight - headerHeight) <= 1, '「开发进程」标题带与其它面同一高度', { process: processPane.headHeight });
+    check(Math.abs(processPane.innerHeadHeight - headerHeight) <= 1, '「开发进程」面板内头部与其它面同一高度', { process: processPane.innerHeadHeight });
     check(await read(`document.querySelector('#rightPane .rp-head-title').textContent==='开发进程'`), '开发进程标题由同一 header 画出');
     check(await read(`(()=>{const t=document.querySelector('.process-permission input');return t&&t.type==='checkbox'&&t.disabled===false})()`), '权限开关仍是既有的事实控件（默认关，本例由 fixture 打开）');
     check(await read(`!document.querySelector('#rightPane input:not([type=checkbox]), #rightPane textarea, #rightPane [contenteditable]')`), '开发进程里没有命令输入（没有假终端）');
@@ -488,8 +550,8 @@ async function run() {
 
     /* ---------- 6. 响应式 × 主题矩阵（真实截图） ---------- */
     const openers = {
-      changes: () => read(`document.querySelector('#navChanges').click()`),
-      browser: () => read(`document.querySelector('#btnBrowser').click()`),
+      changes: () => openChanges(),
+      browser: () => openBrowser(),
       session: async () => {
         await click('#btnMore');
         await until(async () => await read(`!document.getElementById('modal').hidden`));
@@ -504,14 +566,14 @@ async function run() {
     await read(`window.__ui4.mode='full';window.__ui4.processes='active'`);
     /* 矩阵开始前把宽度复位到默认值：前面验拖动时把它拖窄过，
      * 留着 350px 截图就不代表新用户的默认观感（说明行也会被容器查询隐掉）。 */
-    await read(`document.querySelector('#navChanges').click()`);
+    await openChanges();
     await until(async () => !(await paneFacts()).hidden);
     const rz0 = await center('#rightPaneResizer');
     await mouse('mousePressed', rz0.x, rz0.y, { clickCount: 2 });
     await mouse('mouseReleased', rz0.x, rz0.y, { clickCount: 2 });
     await sleep(200);
     check((await paneFacts()).width === limits.default, '矩阵开始前宽度复位到默认 392（截图代表默认观感）');
-    check(await read(`(()=>{const s=document.querySelector('#rightPane .chg-head h3'),nav=document.querySelector('#workPanelNav');return Boolean(s)&&s.checkVisibility()&&s.getBoundingClientRect().width>20&&nav.getBoundingClientRect().height===46})()`), '默认宽度下工作导航和实际面板标题可读（冗余说明由正文承载）');
+    check(await read(`(()=>{const s=document.querySelector('#rightPane .rp-body .chg-head h3'),nav=document.querySelector('#workPanelNav');return Boolean(s)&&s.checkVisibility()&&s.getBoundingClientRect().width>20&&nav.getBoundingClientRect().height===46})()`), '默认宽度下工作导航和实际面板标题可读（冗余说明由正文承载）');
     await closePane();
     await until(async () => (await paneFacts()).hidden);
     const matrix = [];
@@ -536,8 +598,8 @@ async function run() {
           check(!factsHere.pageOverflow, `页面无横向溢出 ${label}`, factsHere);
           check(factsHere.left >= -1 && factsHere.right <= width + 1, `右栏完整落在视口内 ${label}`, factsHere);
           check(factsHere.scrollWidth <= factsHere.clientWidth + 1, `右栏内容不横向溢出 ${label}`, factsHere);
-          check(Math.abs(factsHere.headHeight - headerHeight) <= 1, `标题带高度一致 ${label}`, { got: factsHere.headHeight, want: headerHeight });
-          check(factsHere.closeRight >= factsHere.right - 16, `关闭按钮在标题带右端 ${label}`, factsHere);
+          check(Math.abs(factsHere.headHeight - 46) <= 1, `统一标题带高度一致 ${label}`, { got: factsHere.headHeight });
+          check(factsHere.closeRight >= factsHere.right - 16, `隐藏按钮在标题带右端 ${label}`, factsHere);
           if (width === 700) check(factsHere.mode === 'overlay', `700px 走覆盖模式 ${label}`, factsHere);
           else if (width >= 1200) check(factsHere.mode === 'dock', `${width}px 走 dock 模式 ${label}`, factsHere);
           if (name === 'session') await shot(`${label}-session-changes`);
@@ -555,13 +617,13 @@ async function run() {
     await read(`document.documentElement.dataset.theme='dark'`);
     win.webContents.setZoomFactor(1.25);
     /* 缩放后 CDP 的鼠标坐标与布局坐标不再一致，这一节只验布局，所以用页面内点击。 */
-    await read(`document.querySelector('#navChanges').click()`);
+    await openChanges();
     await until(async () => (await paneFacts()).surface === 'changes');
     await sleep(260);
     const zoomed = await paneFacts();
     facts.push({ zoomed });
     const zoomInner = await read('innerWidth');
-    check(zoomInner < 1000 && Math.abs(zoomed.headHeight - headerHeight) <= 1, '125% 缩放下布局宽度真的变小，标题带仍是一条完整带子', { zoomInner, zoomed });
+    check(zoomInner < 1000 && Math.abs(zoomed.headHeight - 46) <= 1, '125% 缩放下布局宽度真的变小，标题带仍是一条完整带子', { zoomInner, zoomed });
     check(zoomed.left >= -1 && zoomed.right <= zoomInner + 1, '125% 缩放下右栏仍在视口内（必要时退成覆盖模式）', zoomed);
     check(!zoomed.pageOverflow, '125% 缩放下没有横向溢出');
     await shot('changes-zoom125-dark');
