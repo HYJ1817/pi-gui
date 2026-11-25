@@ -114,7 +114,9 @@ export function initRightPane() {
   if (!root || !resizer || !app) return null;
 
   let width = readStoredWidth();
-  let surface = null; // 当前装的是哪一面（'browser' | null）
+  let surface = null;
+  let maximized = false;
+  let workspaceWasInert = null;
   let rafId = 0;
   let occluded = false;
   /* 打开前焦点在哪。关闭时还给**当时那个入口** —— 比按 surface 名硬编码一个
@@ -128,7 +130,9 @@ export function initRightPane() {
   const surfaceListeners = new Set();
 
   function viewportEl() {
-    return root.querySelector('.rp-viewport');
+    // Inactive surfaces stay mounted. A hidden first viewport must never supply
+    // bounds (or occlusion) for the native Browser in the selected tab.
+    return [...root.querySelectorAll('.rp-viewport')].find(node => !node.closest('[hidden]')) || null;
   }
 
   /** 量出 viewport 矩形并通知订阅者。**不做校验** —— 校验在主进程。 */
@@ -163,13 +167,28 @@ export function initRightPane() {
     const sideW = sidebar && !sidebar.hidden ? sidebar.getBoundingClientRect().width : 0;
     const available = app.clientWidth - railW - sideW - (root.hidden ? 0 : root.getBoundingClientRect().width) - resizer.offsetWidth;
     const floor = byId('workspace')?.dataset.workspaceView === 'runtime' ? RUNTIME_FLOOR : CHAT_FLOOR;
-    const mode = !root.hidden && available < floor ? 'overlay' : 'dock';
+    const mode = !root.hidden && (maximized || available < floor) ? 'overlay' : 'dock';
     if (root.dataset.mode !== mode) root.dataset.mode = mode;
   }
 
   function applyWidth() {
+    const workspace = byId('workspace');
+    const cover = maximized && !root.hidden;
+    if (workspace && cover && workspaceWasInert === null) {
+      if (workspace.contains(document.activeElement)) byId('workPanelMaximize')?.focus();
+      workspaceWasInert = workspace.inert;
+      workspace.inert = true;
+    } else if (workspace && !cover && workspaceWasInert !== null) {
+      workspace.inert = workspaceWasInert;
+      workspaceWasInert = null;
+    }
     let renderedWidth = width;
-    if (byId('workspace')?.dataset.workspaceView === 'runtime') {
+    if (maximized) {
+      const railW = byId('globalRail')?.getBoundingClientRect().width || 0;
+      const sidebar = byId('projectSidebar');
+      const sideW = sidebar && !sidebar.hidden ? sidebar.getBoundingClientRect().width : 0;
+      renderedWidth = Math.max(MIN_WIDTH, app.clientWidth - railW - sideW);
+    } else if (byId('workspace')?.dataset.workspaceView === 'runtime') {
       const railW = byId('globalRail')?.getBoundingClientRect().width || 0;
       const sidebar = byId('projectSidebar');
       const sideW = sidebar && !sidebar.hidden ? sidebar.getBoundingClientRect().width : 0;
@@ -211,6 +230,7 @@ export function initRightPane() {
 
   let endWidthDrag = null;
   function onDragStart(e) {
+    if (maximized) return;
     endWidthDrag?.();
     e.preventDefault();
     const startX = e.clientX;
@@ -338,14 +358,12 @@ export function initRightPane() {
     const focused = document.activeElement;
     if (focused && focused !== document.body && !root.contains(focused)) lastTrigger = focused;
     const next = nextSurface || surface || 'browser';
-    if (surface !== next) {
-      for (const fn of surfaceListeners) fn(next);
-      root.querySelector('.rp-body').replaceChildren();
-    }
+    const changed = surface !== next;
     surface = next;
     root.dataset.surface = surface;
     root.hidden = false;
     app.classList.add('rp-open');
+    if (changed) for (const fn of surfaceListeners) fn(next);
     applyWidth();
     measure();
     announce();
@@ -365,13 +383,15 @@ export function initRightPane() {
     endWidthDrag?.();
     const focusInside = root.contains(document.activeElement);
     const previous = surface;
-    for (const fn of surfaceListeners) fn(null);
-    root.querySelector('.rp-body').replaceChildren();
-    surface = null;
-    delete root.dataset.surface;
+    // Hiding is not closing a Surface. Its tab, DOM and native/PTY owner remain
+    // alive; secondary-surface projects this visibility change to its owners.
     root.hidden = true;
+    maximized = false;
+    root.dataset.maximized = 'false';
+    resizer.hidden = false;
     app.classList.remove('rp-open');
-    applyMode();
+    applyWidth();
+    syncOcclusion();
     announce();
     if (focusInside) restoreFocus(previous);
   }
@@ -380,7 +400,7 @@ export function initRightPane() {
    *  而从面板内部的 × 关闭时只有这里知道。 */
   function announce() {
     document.dispatchEvent(
-      new CustomEvent('pi-gui:right-pane', { detail: { open: !root.hidden, surface } })
+      new CustomEvent('pi-gui:right-pane', { detail: { open: !root.hidden, surface, maximized } })
     );
   }
 
@@ -399,6 +419,15 @@ export function initRightPane() {
     isOpen: () => !root.hidden,
     surface: () => surface,
     width: () => width,
+    isMaximized: () => maximized,
+    setMaximized(next) {
+      endWidthDrag?.();
+      maximized = Boolean(next);
+      root.dataset.maximized = String(maximized);
+      resizer.hidden = maximized;
+      applyWidth();
+      announce();
+    },
     isOccluded: () => occluded,
     /** 订阅 viewport 矩形。返回取消订阅函数。 */
     onViewport: (fn) => {

@@ -390,13 +390,42 @@ async function main() {
     assert.equal(fileLinkFromHref('https://example.com/x.md', WIN, { allowExternal: true }), null);
     assert.equal(fileLinkFromInlineCode('D:/资料/报告\u0000.md', WIN, { allowExternal: true }), null);
   });
-  check('显示标签：外部文件保留模型给的原始路径，内部文件用文件名', () => {
+  check('显示标签：工作区内外统一文件名，完整路径保留在无障碍信息', () => {
     const external = fileLinkFromHref('D:/资料/报告 v1.md:12', WIN, { allowExternal: true });
-    assert.equal(fileLinkDisplayLabel(external), 'D:/资料/报告 v1.md:12');
+    assert.equal(fileLinkDisplayLabel(external), '报告 v1.md:12');
     const inside = fileLinkFromHref('C:/pi-GUI/src/main.ts:7', WIN, { allowExternal: true });
     assert.equal(fileLinkDisplayLabel(inside), 'main.ts:7');
     assert.equal(fileLinkAriaLabel(external), 'D:/资料/报告 v1.md，L12');
     assert.match(fileLinkAriaLabel(inside), /^src\/main\.ts，L7$/);
+  });
+  for (const [input, cwd, label] of [
+    ['D:\\中文 目录\\报告.md:12:3-18:7', WIN, '报告.md:12:3-18:7'],
+    ['/srv/another project/中文 报告.md#L12C3-L18C7', POSIX, '中文 报告.md:12:3-18:7'],
+    ['D:/' + 'long folder/'.repeat(50) + 'report.pdf:3', WIN, 'report.pdf:3'],
+    ['docs/another folder/报告.md:12:3-18:7', WIN, '报告.md:12:3-18:7'],
+  ]) {
+    check('精简标签保持路径身份和完整行列范围：' + label, () => {
+      const meta = fileLinkFromInlineCode(input, cwd, { allowExternal: true });
+      assert.ok(meta);
+      const before = structuredClone(meta);
+      assert.equal(fileLinkDisplayLabel(meta), label);
+      const aria = fileLinkAriaLabel(meta);
+      assert.ok(aria.includes(meta.displayPath || meta.path));
+      if (meta.column) { assert.ok(aria.includes('C3')); assert.ok(aria.includes('C7')); }
+      assert.deepEqual(meta, before);
+    });
+  }
+  check('历史元数据没有name时从原路径获得文件名，不更改路径', () => {
+    const meta = { external: true, path: 'D:/old folder/历史.txt', position: ':7' };
+    assert.equal(fileLinkDisplayLabel(meta), '历史.txt:7');
+    assert.equal(meta.path, 'D:/old folder/历史.txt');
+  });
+  check('同名引用展示相同文件名，但完整无障碍路径互不相同', () => {
+    const a = fileLinkFromHref('D:/first/报告.md:1', WIN, { allowExternal: true });
+    const b = fileLinkFromHref('D:/second/报告.md:1', WIN, { allowExternal: true });
+    assert.equal(fileLinkDisplayLabel(a), fileLinkDisplayLabel(b));
+    assert.notEqual(fileLinkAriaLabel(a), fileLinkAriaLabel(b));
+    assert.notEqual(a.absolutePath, b.absolutePath);
   });
   check('isPathWithin：跨平台不互相包含', () => {
     assert.equal(isPathWithin('C:/pi-GUI', 'C:/pi-GUI/src/a.ts'), true);

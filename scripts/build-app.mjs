@@ -24,6 +24,7 @@ import * as esbuild from 'esbuild';
 // 删目录 / 算体积 / 拷文件这套东西安装程序脚本也要用，统一放 scripts/util.mjs
 import { sizeOf, mb, copyInto, removePaths, clearDir, COPYRIGHT } from './util.mjs';
 import { stageNodePty } from './node-pty-package.mjs';
+import { fontDistributionNotice } from './preview-font-source.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputAt = process.argv.indexOf('--output-root');
@@ -169,7 +170,8 @@ fs.writeFileSync(
     '',
     `pdfjs-dist ${pdfjsVersion}   Apache License 2.0`,
     'https://github.com/mozilla/pdf.js',
-    '用途：从 PDF 里抽取文本（PDF 附件功能）。',
+    '用途：PDF 文本提取与预览。上述 Apache-2.0 不覆盖随附字体；字体独立许可、版权与源码获取信息如下。',
+    fontDistributionNotice(path.join(STAGE, 'public/vendor/file-preview')),
     '',
     `node-pty ${stagedPty.version}   MIT License`,
     'https://github.com/microsoft/node-pty',

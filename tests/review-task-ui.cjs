@@ -5,7 +5,7 @@ const tick=()=>new Promise(r=>setTimeout(r,10));
 async function until(fn){for(let i=0;i<200;i++){if(fn())return;await tick();}throw Error('task UI timeout');}
 (async()=>{
   const dom=new JSDOM(fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8'),{url:'http://127.0.0.1/'});
-  Object.assign(global,{window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,CustomEvent:dom.window.CustomEvent,Event:dom.window.Event,MutationObserver:dom.window.MutationObserver,requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout});
+  Object.assign(global,{window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,sessionStorage:dom.window.sessionStorage,CustomEvent:dom.window.CustomEvent,Event:dom.window.Event,MutationObserver:dom.window.MutationObserver,requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout});
   const listeners=new Map(),add=document.addEventListener.bind(document),remove=document.removeEventListener.bind(document);
   document.addEventListener=(name,fn,opts)=>{if(name.startsWith('pi-gui:review'))listeners.set(name,(listeners.get(name)||0)+1);return add(name,fn,opts);};
   document.removeEventListener=(name,fn,opts)=>{if(name.startsWith('pi-gui:review'))listeners.set(name,(listeners.get(name)||0)-1);return remove(name,fn,opts);};
@@ -96,9 +96,14 @@ async function until(fn){for(let i=0;i<200;i++){if(fn())return;await tick();}thr
   const restored=m.addComment({path:'a.js',anchor,text:'reload selection'}).comment;
   open();generate();S.cwd='C:\\another-worktree';document.dispatchEvent(new CustomEvent('pi-gui:workspace-generation'));
   check('workspace event immediately closes preview',()=>document.querySelector('#modal').hidden);
+  /* Hard boundaries retire the whole surface; reopen before reusing controls. */
+  git.openChangesPanel();
   S.cwd='C:\\task-fixture';await persistence.loadReviewComments({force:true});m.addComment({path:'a.js',anchor,text:'session selection'});
   open();generate();document.dispatchEvent(new CustomEvent('pi-gui:session-switch'));
   check('session switch immediately closes preview',()=>document.querySelector('#modal').hidden);
+  /* A hard boundary retires the whole Changes surface in the new retained
+   * architecture; reopen it before the review button exists again. */
+  git.openChangesPanel();
   await git.refreshGitNow();await persistence.loadReviewComments({force:true});m.addComment({path:'a.js',anchor,text:'loop selection'});
   const before=new Map(listeners);for(let i=0;i<6;i++){open();generate();closeModal();}
   check('repeated open and close release every review listener',()=>[...listeners].every(([name,count])=>count===(before.get(name)||0)));

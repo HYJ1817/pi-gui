@@ -3,12 +3,13 @@ const {JSDOM}=require('jsdom');
 (async()=>{
   let checks=0;const ok=(name,value)=>{assert.ok(value,name);checks++;console.log('PASS '+name);};
   const dom=new JSDOM(fs.readFileSync(path.join(__dirname,'../public/index.html'),'utf8'),{url:'http://localhost/'});
-  global.document=dom.window.document;global.window=dom.window;global.localStorage=dom.window.localStorage;
+  global.document=dom.window.document;global.window=dom.window;global.localStorage=dom.window.localStorage;global.MutationObserver=dom.window.MutationObserver;global.CustomEvent=dom.window.CustomEvent;global.requestAnimationFrame=fn=>setTimeout(fn,0);global.cancelAnimationFrame=clearTimeout;
   const {configureSecondaryPane}=await import('../public/ui/secondary-surface.js');
-  const {setGitConversationScope,restoreGitPath}=await import('../public/api.js');
+  const {setGitConversationScope,gitConversationScope,restoreGitPath}=await import('../public/api.js');
+  const {initRightPane}=await import('../public/right-pane.js');
   const {openChangesPanel,refreshGitNow}=await import('../public/git.js');
   const {S}=await import('../public/state.js');S.hasProject=true;
-  let surface;const listeners=[];const pane={root:document.querySelector('#rightPane'),open(next){surface=next;for(const f of listeners)f(next);},close(){surface=null;for(const f of listeners)f(null);},onSurfaceChange:f=>listeners.push(f)};configureSecondaryPane(pane);
+  const pane=initRightPane();configureSecondaryPane(pane,{getScope:()=>JSON.stringify([S.workspaceGeneration,gitConversationScope()])});
   const requests=[];let pendingStatus;
   global.fetch=async(url,opts={})=>({json:async()=>{
     requests.push({url,opts});const scope=opts.headers?.['X-Pi-Gui-Conversation'];
@@ -25,7 +26,7 @@ const {JSDOM}=require('jsdom');
   ok('restore shows actual confirmation',!document.querySelector('#confirmLayer').hidden);
   setGitConversationScope('B');document.querySelector('#confirmCard .danger').click();await tick();
   ok('A confirmation after switch cannot restore B',!requests.some(r=>String(r.url).endsWith('/restore')));
-  setGitConversationScope('A');await refreshGitNow();
+  setGitConversationScope('A');await refreshGitNow();openChangesPanel();await tick();
   [...document.querySelectorAll('.chg-head button')].find(b=>b.textContent==='全部撤销').click();await tick();
   ok('restore-all plan targets captured A',requests.filter(r=>String(r.url).endsWith('restore-all')).at(-1).opts.headers['X-Pi-Gui-Conversation']==='A');
   setGitConversationScope('B');document.querySelector('#confirmCard .danger').click();await tick();

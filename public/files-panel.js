@@ -1,31 +1,15 @@
-import { createIcon } from './ui/icons.js';
-/* Read-only project file tree + file viewer in the existing right pane.
- *
- * The tree is lazy: opening a directory asks the backend for that directory
- * only. File names and contents are rendered with textContent; the backend
- * rejects absolute paths, `..`, symlinks and oversized/binary previews.
- *
- * The viewer is still one surface, but it now owns tabs, tree selection and
- * line targeting so a file reference in a message can open the real file in
- * the workspace that message belongs to. */
-import {
-  fetchExternalFileAsset,
-  fetchExternalFileDocument,
-  fetchExternalFileMetadata,
-  fetchFiles,
-  fetchFileDocument,
-  fetchFileMetadata,
-  fetchFileAsset,
-  gitConversationScope,
-} from './api.js';
-import { createPaneHeader } from './right-pane.js';
+/* Files owns navigation and a single live preview controller. Format selection,
+ * decoding, bytes, object URLs and plugin resources belong to file-preview. */
+import * as Api from './api.js';
 import { openSecondarySurface } from './ui/secondary-surface.js';
-import { createFileIcon, fileKind } from './ui/file-icons.js';
-import { highlightSource } from './ui/source-highlight.js';
-import { openInSystemProgram } from './file-actions.js';
-import { isPathWithin, positionLabel, rangeLabel } from './file-link-model.js';
+import { mountFilePreview } from './file-preview/index.js';
+import { createFilesLayout } from './files-layout.js';
+import { createFilesTabs } from './files-tabs.js';
+import { createFilesTree } from './files-tree.js';
+import { FILES_TAB_LIMIT, pathKey, requestKey, readingState, readFilesState, writeFilesState, sameScope, sameWorkspace } from './files-state.js';
+import { isPathWithin } from './file-link-model.js';
+import { runtimeStore, onRuntimeChange } from './runtime-state.js';
 import { S } from './state.js';
-import { looksWindows } from './util.js';
 import { toast } from './ui/toast.js';
 
 const node = (tag, className, text) => {
@@ -34,919 +18,589 @@ const node = (tag, className, text) => {
   if (text !== undefined) element.textContent = text;
   return element;
 };
-const formatBytes = (bytes) => {
-  const value = Number(bytes);
-  if (!Number.isFinite(value) || value < 0) return '';
-  if (value < 1024) return value + ' B';
-  if (value < 1024 * 1024) return (value / 1024).toFixed(value < 10 * 1024 ? 1 : 0) + ' KB';
-  return (value / 1024 / 1024).toFixed(1) + ' MB';
-};
-const BINARY_KINDS = new Set(['pdf', 'word', 'sheet', 'slides', 'archive', 'font', 'audio', 'video']);
-const relEqual = (a, b) => {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return looksWindows(S.cwd || '') ? a.toLowerCase() === b.toLowerCase() : false;
-};
-const tabKeyOf = (filePath) => (looksWindows(S.cwd || '') ? String(filePath).toLowerCase() : String(filePath));
-const tabKeyFor = (request) => `${request.external ? 'external:' : ''}${tabKeyOf(request.path)}`;
-
-/* 文件链接点开时，当前挂着的 Files 面板会在下一次点击中复用；
- * 没有面板则由这里新开一个。注册表只保存“当前还活着”的实例。 */
-let activePanel = null;
-
-/** 从会话内的文件链接打开一个文件。`request` 已由 file-links-ui 解析成
- *  workspace 相对路径，并带上所属会话的 id 与 cwd。 */
-export function openFileReference(request) {
-  if (!request?.path) return null;
-  if (activePanel?.isCurrent()) {
-    activePanel.open(request);
-    return activePanel;
+const formatBytes = (bytes) => Number.isFinite(bytes) ? bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB` : '';
+const localSource = (request) => request?.source === 'attachment' || request?.source === 'archive';
+function boundedRequest(source) {
+  const result = { external: source.external === true };
+  for (const [key, limit] of Object.entries({ path: 4096, name: 512, cwd: 4096, conversationId: 256, fileId: 256, grantId: 256 })) {
+    if (typeof source[key] === 'string' && source[key].length <= limit) result[key] = source[key];
   }
-  const surface = openFilesPanel({ openRequest: request });
-  return surface;
+  for (const key of ['line', 'column', 'endLine', 'endColumn']) {
+    if (Number.isSafeInteger(source[key]) && source[key] > 0 && source[key] <= 1e9) result[key] = source[key];
+  }
+  if (Number.isFinite(source.bytes) && source.bytes >= 0) result.bytes = source.bytes;
+  result.conversationId ||= null;
+  return result;
+}
+function parentDescription(request = {}) {
+  if (!request || typeof request !== 'object') return {};
+  const parent = boundedRequest(request);
+  if (request.source === 'attachment') { parent.source = 'attachment'; parent.attachmentId = String(request.attachmentId || '').slice(0, 256); }
+  return parent;
+}
+let activePanel = null;
+let tabSequence = 0;
+let pendingSessionSequence = 0;
+const attachmentKeys = new WeakMap();
+
+export function openFileReference(request) {
+  if (!request?.path && !(request?.source === 'attachment' && request.file) && !(request?.source === 'archive' && request.bytes)) return null;
+  return openFilesPanel({ openRequest: request, triggerId: request.triggerId || 'btnFiles' });
 }
 
 export function openFilesPanel(options = {}) {
-  const triggerId = options.triggerId || 'btnFiles';
-  return openSecondarySurface(
-    'files',
-    (host, view) => mountFilesPanel(host, view, options),
-    { label: '项目文件', headerSelector: '.rp-head', triggerId }
-  );
+  let mounted = false;
+  const surface = openSecondarySurface('files', (host, view) => {
+    mounted = true;
+    return mountFilesPanel(host, view, options);
+  }, { label: '文件', headerSelector: '.files-preview-head', triggerId: options.triggerId || 'btnFiles' });
+  // Reusing a live top-level tab skips mount, not the caller's new open intent.
+  // Always activate through the manager before touching a possibly hidden host.
+  if (!mounted && options.openRequest && activePanel?.isCurrent()) void activePanel.open(options.openRequest);
+  return surface;
+}
+
+function currentIdentity() {
+  const conversationId = Api.gitConversationScope() || null;
+  const record = conversationId ? runtimeStore.get(conversationId) : null;
+  const owner = S.legacyOwner;
+  // app accepts the current bridge's owner before publishing its context event;
+  // the get_state projection is written afterwards, without a second event.
+  // Trust that owner only while its runtime still owns the current workspace.
+  // Client workspaceGeneration is a local fence, not the backend workspaceEpoch.
+  const classicOwner = !conversationId && S.hasProject && !S.switching
+    && owner?.conversationId === 'classic-chat' && owner.workspaceId && owner.runtimeId
+    && owner.runtimeId === S.bridgeInstance && S.bridgeRun != null
+    && String(owner.runtimeGeneration) === String(S.bridgeRun) ? owner : null;
+  return {
+    cwd: record?.item?.workspace?.cwd || S.cwd || '',
+    conversationId,
+    sessionId: record?.item?.nativeSessionId || record?.owner?.sessionId
+      || (!conversationId ? classicOwner?.sessionId || S.state?.sessionId : '') || '',
+  };
 }
 
 export function mountFilesPanel(host, view, options = {}) {
   host.classList.add('files-surface');
+  // Keep injected legacy document/asset transports intact: registry/access owns
+  // their compatibility adapter, not a second renderer in the Files panel.
   const transport = options.transport || {
-    list: fetchFiles,
-    document: fetchFileDocument,
-    metadata: fetchFileMetadata,
-    asset: fetchFileAsset,
-    externalDocument: fetchExternalFileDocument,
-    externalMetadata: fetchExternalFileMetadata,
-    externalAsset: fetchExternalFileAsset,
+    list: Api.fetchFiles, metadata: Api.fetchFileMetadata, document: Api.fetchFileDocument, asset: Api.fetchFileAsset,
+    externalMetadata: Api.fetchExternalFileMetadata, externalDocument: Api.fetchExternalFileDocument, externalAsset: Api.fetchExternalFileAsset,
+    content: Api.fetchFilePreviewContent, externalContent: Api.fetchExternalFilePreviewContent, mediaUrl: Api.filePreviewMediaUrl,
+    search: (...args) => Api.searchWorkspaceFiles?.(...args),
   };
+  const previewMount = options.previewMount || mountFilePreview;
+  const getIdentity = options.getIdentity || currentIdentity;
+  let identity = { ...getIdentity() };
+  let sessionOverride = null;
+  let sessionBeforeSwitch = null;
   let alive = true;
-  let workspace = null;
-  let rootEntries = [];
-  let dirs = new Map();
-  let selectedPath = null;
-  let showHidden = false;
-  let rootStatus = 'loading';
-  let epoch = 0;
-  let rootRequest = 0;
-  let rootPromise = null;
-  let header;
-  let refresh;
-  let hiddenToggle;
-  let message;
-  let tree;
-  let preview;
-  let tabsBar = null;
-  let tabList = null;
-  let tabs = new Map();
-  let tabOrder = [];
+  let scopeEpoch = 0;
+  let openSequence = 0;
+  let previewSequence = 0;
+  let controller = null;
+  let controllerTab = null;
+  let tabs = [];
   let activeKey = null;
-  let tabSeq = 0;
-  let initialRequest = options.openRequest || null;
-
+  let tree = null;
+  let persistTimer = null;
+  let restored = readFilesState(identity, options.storage);
+  let restoring = false;
+  /* Tombstones of keys the user closed while a history restore is still
+   * deferred. Dedup against currently-open tabs is not enough: a tab the user
+   * opened and then closed before the tree resolved is no longer in `existing`,
+   * so the late snapshot would resurrect it — an overwrite of an explicit user
+   * decision, exactly what restoration must never do. Keys die with the panel
+   * (or the scope reset): a later mount restores history normally again, and
+   * explicitly reopening a file always wins because openTab runs its own path. */
+  const closedKeys = new Set();
+  const metadataRequests = new Set();
+  let visible = view.isVisible?.() !== false;
   const isCurrent = () => alive && view.isCurrent();
-
-  function setMessage(text, tone = '') {
-    if (!message) return;
-    message.hidden = !text;
-    message.setAttribute('role', tone === 'error' ? 'alert' : 'status');
-    message.textContent = text || '';
-    if (tone) message.dataset.tone = tone;
-    else delete message.dataset.tone;
+  const isVisible = () => isCurrent() && visible && view.isVisible?.() !== false;
+  const scopeCurrent = (run) => isCurrent() && scopeEpoch === run && sameScope(identity, effectiveIdentity());
+  function effectiveIdentity() {
+    const result = { ...getIdentity() };
+    if (!result.conversationId && sessionOverride) result.sessionId = sessionOverride;
+    return result;
   }
-
-  function renderEmptyPreview(title, text) {
-    preview.replaceChildren();
-    const empty = node('section', 'files-empty');
-    empty.append(
-      createIcon('fileText', { className: 'files-empty-icon' }),
-      node('h4', 'files-empty-title', title),
-      node('p', 'files-empty-text', text)
-    );
-    preview.append(empty);
-  }
-
-  function entryRow(entry, depth) {
-    const row = node('button', 'files-entry');
-    row.type = 'button';
-    row.dataset.filePath = entry.path;
-    row.style.paddingLeft = `${8 + depth * 14}px`;
-    row.title = entry.path;
-    row.setAttribute('role', 'treeitem');
-    row.setAttribute('aria-level', String(depth + 1));
-    if (entry.type === 'dir') {
-      const state = dirs.get(entry.path);
-      row.classList.add('files-entry-dir');
-      row.setAttribute('aria-expanded', String(Boolean(state?.expanded)));
-      row.append(
-        createIcon(state?.expanded ? 'chevronDown' : 'chevronRight', { className: 'files-entry-chev' }),
-        node('span', 'files-entry-name', entry.name)
-      );
-      row.onclick = () => void toggleDirectory(entry);
-    } else {
-      row.classList.add('files-entry-file');
-      row.setAttribute('aria-current', relEqual(entry.path, selectedPath) ? 'page' : 'false');
-      row.append(
-        createFileIcon(document, entry.path, 'files-entry-mark file-kind-icon'),
-        node('span', 'files-entry-name', entry.name),
-        node('span', 'files-entry-size', formatBytes(entry.bytes))
-      );
-      row.onclick = () => void openTreeFile(entry);
-    }
-    return row;
-  }
-
-  function renderTree() {
-    tree.replaceChildren();
-    tree.setAttribute('aria-busy', String(rootStatus === 'loading'));
-    if (rootStatus === 'loading') {
-      tree.append(node('div', 'files-tree-status', '正在读取项目文件…'));
-      return;
-    }
-    if (rootStatus === 'no-project' || rootStatus === 'empty') {
-      tree.append(node('div', 'files-tree-status', rootStatus === 'empty' ? '这个目录没有可显示的文件。' : '还没有打开项目。'));
-      return;
-    }
-    if (rootStatus === 'error') return;
-    const visit = (entries, depth) => {
-      for (const entry of entries) {
-        tree.append(entryRow(entry, depth));
-        if (entry.type !== 'dir') continue;
-        const state = dirs.get(entry.path);
-        if (!state?.expanded) continue;
-        if (state.loading) tree.append(node('div', 'files-tree-status files-tree-indent', '读取中…'));
-        else if (state.error) {
-          const error = node('div', 'files-tree-status files-tree-indent', state.error);
-          error.setAttribute('role', 'alert');
-          tree.append(error);
-        }
-        else visit(state.entries || [], depth + 1);
+  const activeTab = () => tabs.find((tab) => tab.key === activeKey) || null;
+  function disposePreview({ save = true } = {}) {
+    previewSequence++;
+    if (controller) {
+      if (save && controllerTab) {
+        try { controllerTab.state = readingState(controller.getState?.()); } catch { /* A failed plugin must not prevent disposal. */ }
       }
-    };
-    visit(rootEntries, 0);
-  }
-
-  function scrollTreeTo(filePath) {
-    if (!filePath || !tree) return;
-    const row = [...tree.querySelectorAll('.files-entry[data-file-path]')]
-      .find((entry) => relEqual(entry.dataset.filePath, filePath));
-    if (row && typeof row.scrollIntoView === 'function') {
-      try { row.scrollIntoView({ block: 'nearest' }); } catch { /* layout is optional */ }
+      try { controller.dispose(); } catch { /* Isolate a failed plugin cleanup from the surface's remaining resources. */ }
+      finally { controller = null; controllerTab = null; }
     }
+    toolbar.replaceChildren();
   }
-
-  function loadRoot() {
-    const run = async () => {
-      const request = ++rootRequest;
-      const scopeEpoch = epoch;
-      rootStatus = 'loading';
-      setMessage('');
-      renderTree();
-      const result = await transport.list('', { hidden: showHidden });
-      if (!isCurrent() || scopeEpoch !== epoch || request !== rootRequest) return rootStatus;
-      if (result?.noProject === true) {
-        rootStatus = 'no-project';
-        workspace = null;
-        rootEntries = [];
-        dirs = new Map();
-        selectedPath = null;
-        closeAllTabs();
-        renderTree();
-        renderEmptyPreview('还没有打开项目', '在左侧选择一个项目后，这里会显示项目文件。');
-        return rootStatus;
-      }
-      if (!result?.ok) {
-        rootStatus = 'error';
-        setMessage(result?.error || '无法读取项目文件。', 'error');
-        rootEntries = [];
-        selectedPath = null;
-        closeAllTabs();
-        renderEmptyPreview('暂时无法预览', '请刷新文件列表后重新选择文件。');
-        renderTree();
-        return rootStatus;
-      }
-      if (workspace && result.workspace?.id !== workspace.id) {
-        dirs = new Map();
-        selectedPath = null;
-        closeAllTabs();
-        renderEmptyPreview('工作区已切换', '已刷新到新的项目文件。');
-      }
-      workspace = result.workspace || null;
-      rootEntries = Array.isArray(result.entries) ? result.entries : [];
-      rootStatus = rootEntries.length ? 'success' : 'empty';
-      setMessage(result.truncated ? '目录内容过多，只显示了前一部分。' : '', result.truncated ? 'warn' : '');
-      renderTree();
-      if (!selectedPath) renderEmptyPreview('选择文件预览', '文件内容只读，不会在这里修改。');
-      return rootStatus;
-    };
-    rootPromise = run();
-    return rootPromise;
+  function snapshot() {
+    return { tabs, active: activeKey, tree: tree?.getState(), layout: geometry.getState() };
   }
-
-  async function loadDirectory(entry, state) {
-    state.loading = true;
-    const request = (state.request || 0) + 1;
-    state.request = request;
-    const scopeEpoch = epoch;
-    renderTree();
-    const result = await transport.list(entry.path, {
-      workspace,
-      generation: workspace?.generation,
-      hidden: showHidden,
-    });
-    if (!isCurrent() || scopeEpoch !== epoch || dirs.get(entry.path) !== state || state.request !== request) return false;
-    state.loading = false;
-    if (!result?.ok) {
-      state.error = result?.error || '无法读取目录。';
-      state.loaded = false;
-      renderTree();
-      return false;
+  function persistNow() {
+    clearTimeout(persistTimer); persistTimer = null;
+    if (controller && controllerTab) {
+      try { controllerTab.state = readingState(controller.getState?.()); } catch { /* optional reading position */ }
     }
-    if (workspace && result.workspace?.id !== workspace.id) {
-      state.error = '工作区已经变化，请刷新文件树。';
-      renderTree();
-      return false;
-    }
-    state.error = '';
-    state.entries = Array.isArray(result.entries) ? result.entries : [];
-    state.loaded = true;
-    state.expanded = true;
-    if (result.truncated) setMessage('目录内容过多，只显示了前一部分。', 'warn');
-    renderTree();
-    return true;
+    writeFilesState(identity, snapshot(), options.storage);
   }
-
-  async function toggleDirectory(entry) {
-    const state = dirs.get(entry.path) || { entries: [], loaded: false, loading: false, expanded: false };
-    dirs.set(entry.path, state);
-    if (state.expanded) {
-      state.expanded = false;
-      renderTree();
-      return;
-    }
-    state.expanded = true;
-    if (state.loaded) {
-      renderTree();
-      return;
-    }
-    if (!state.loading) await loadDirectory(entry, state);
+  function persistSoon() {
+    if (!isCurrent() || restoring) return;
+    clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => { if (isCurrent()) persistNow(); }, 160);
   }
+  const geometry = createFilesLayout(host, { state: restored?.layout, onChange: persistSoon });
+  host.append(geometry.element);
+  const head = node('div', 'files-preview-head');
+  const path = node('span', 'files-preview-path');
+  path.tabIndex = 0;
+  const toolbar = node('div', 'files-format-tools');
+  head.append(path, toolbar, geometry.treeButton);
+  const preview = node('section', 'files-preview');
+  preview.id = 'filesPreviewPanel';
+  preview.setAttribute('aria-label', '文件预览（只读）');
+  const tabsUI = createFilesTabs({
+    getTabs: () => tabs, getActive: () => activeKey,
+    activate: (key) => { openSequence++; cancelMetadata(); void activate(key); },
+    close: closeTabs, reorder,
+  });
+  geometry.main.append(tabsUI.element, head, preview);
 
-  /* 展开到目标文件的父目录。只做有界懒加载；遇到被截断/不存在的目录就停，
-   * 文件本身仍然可以在预览区打开。 */
-  async function ensurePathVisible(filePath) {
-    if (!filePath || !workspace) return;
-    const segments = String(filePath).split('/');
-    const needsHidden = segments.some((segment) => segment.startsWith('.'));
-    if (needsHidden && !showHidden) {
-      showHidden = true;
-      if (hiddenToggle) hiddenToggle.setAttribute('aria-pressed', 'true');
-      dirs = new Map();
-      await loadRoot();
-      if (!workspace) return;
-    }
-    let entries = rootEntries;
-    for (let i = 0; i < segments.length - 1; i++) {
-      const prefix = segments.slice(0, i + 1).join('/');
-      let dir = entries.find((entry) => entry.type === 'dir' && relEqual(entry.path, prefix));
-      if (!dir) {
-        // 目录可能因为隐藏项/截断没出现；重读一次根目录再找。
-        await loadRoot();
-        entries = rootEntries;
-        dir = entries.find((entry) => entry.type === 'dir' && relEqual(entry.path, prefix));
-        if (!dir) return;
-      }
-      const state = dirs.get(dir.path) || { entries: [], loaded: false, loading: false, expanded: false };
-      dirs.set(dir.path, state);
-      state.expanded = true;
-      if (!state.loaded) {
-        const loaded = await loadDirectory(dir, state);
-        if (!loaded) return;
-      } else {
-        renderTree();
-      }
-      entries = state.entries || [];
-    }
-    selectedPath = activeTab()?.path || selectedPath;
-    renderTree();
-    scrollTreeTo(selectedPath);
+  function updatePath(tab = activeTab()) {
+    const label = tab?.request.path || tab?.request.name || '';
+    path.textContent = label;
+    path.hidden = !label;
+    path.setAttribute('aria-label', label);
+    const bytes = tab?.request.source === 'archive' ? tab.request.size : tab?.request.bytes ?? tab?.request.size;
+    path.title = [label, formatBytes(bytes)].filter(Boolean).join('\n');
   }
-
-  function activeTab() {
-    return activeKey ? tabs.get(activeKey) || null : null;
-  }
-
-  function revokeImage(tab) {
-    if (!tab?.imageUrl) return;
-    try { URL.revokeObjectURL(tab.imageUrl); } catch { /* not all environments */ }
-    tab.imageUrl = null;
-  }
-
-  function closeAllTabs() {
-    for (const tab of tabs.values()) revokeImage(tab);
-    tabs = new Map();
-    tabOrder = [];
-    activeKey = null;
-    if (tabsBar) {
-      tabsBar.hidden = true;
-      tabList?.replaceChildren();
-    }
-  }
-
-  function closeTab(key) {
-    const tab = tabs.get(key);
-    if (!tab) return;
-    revokeImage(tab);
-    const index = tabOrder.indexOf(key);
-    tabs.delete(key);
-    tabOrder = tabOrder.filter((item) => item !== key);
-    if (activeKey === key) {
-      const next = tabOrder[index] || tabOrder[index - 1] || null;
-      activeKey = next;
-      if (next) {
-        selectedPath = tabs.get(next).path;
-        renderTabs();
-        showActiveTab();
-      } else {
-        selectedPath = null;
-        renderTabs();
-        renderEmptyPreview('选择文件预览', '文件内容只读，不会在这里修改。');
-        renderTree();
-      }
-      return;
-    }
-    renderTabs();
-  }
-
-  function renderTabs() {
-    if (!tabsBar || !tabList) return;
-    tabsBar.hidden = tabOrder.length === 0;
-    tabList.replaceChildren();
-    for (const key of tabOrder) {
-      const tab = tabs.get(key);
-      if (!tab) continue;
-      const item = node('div', 'files-tab');
-      item.dataset.fileTab = tab.path;
-      const select = node('button', 'files-tab-select');
-      select.type = 'button';
-      select.id = tab.id;
-      select.setAttribute('role', 'tab');
-      select.setAttribute('aria-selected', String(key === activeKey));
-      select.setAttribute('aria-controls', 'filesPreviewPanel');
-      select.setAttribute('title', tab.path + (tab.line ? positionLabel(tab) : ''));
-      select.tabIndex = key === activeKey ? 0 : -1;
-      select.append(
-        createFileIcon(document, tab.path, 'file-kind-icon'),
-        node('span', 'files-tab-label', tab.name)
-      );
-      if (tab.line) select.append(node('span', 'files-tab-position', positionLabel(tab)));
-      select.onclick = () => activateTab(key);
-      select.onkeydown = (event) => {
-        const index = tabOrder.indexOf(key);
-        let next = null;
-        if (event.key === 'ArrowRight') next = tabOrder[(index + 1) % tabOrder.length];
-        else if (event.key === 'ArrowLeft') next = tabOrder[(index - 1 + tabOrder.length) % tabOrder.length];
-        else if (event.key === 'Home') next = tabOrder[0];
-        else if (event.key === 'End') next = tabOrder[tabOrder.length - 1];
-        if (!next) return;
-        event.preventDefault();
-        activateTab(next);
-        const buttons = tabList.querySelectorAll('.files-tab-select');
-        buttons[tabOrder.indexOf(next)]?.focus();
-      };
-      const close = node('button', 'files-tab-close');
-      close.type = 'button';
-      close.setAttribute('aria-label', `关闭 ${tab.name}`);
-      close.append(createIcon('close'));
-      close.onclick = (event) => { event.stopPropagation(); closeTab(key); };
-      item.append(select, close);
-      tabList.append(item);
-    }
-    preview.setAttribute('role', tabOrder.length ? 'tabpanel' : 'group');
-    const active = activeTab();
-    if (active) preview.setAttribute('aria-labelledby', active.id);
+  function renderTabs(settings) {
+    tabsUI.render(settings);
+    preview.setAttribute('role', tabs.length ? 'tabpanel' : 'group');
+    if (activeTab()) preview.setAttribute('aria-labelledby', activeTab().id);
     else preview.removeAttribute('aria-labelledby');
   }
-
-  function saveScroll() {
-    const tab = activeTab();
-    if (!tab) return;
-    const scroll = preview.querySelector('.files-preview-scroll');
-    if (scroll) tab.scroll = { top: scroll.scrollTop, left: scroll.scrollLeft };
+  function empty(title = '选择文件预览', detail = '') {
+    toolbar.replaceChildren(); updatePath(null);
+    preview.replaceChildren();
+    const section = node('section', 'files-empty');
+    section.append(node('h4', 'files-empty-title', title));
+    if (detail) section.append(node('p', 'files-empty-text', detail));
+    preview.append(section);
   }
-
-  function activateTab(key) {
-    if (!tabs.has(key)) return;
-    saveScroll();
+  function failure(tab, text) {
+    if (activeTab() !== tab) return;
+    disposePreview({ save: false });
+    preview.replaceChildren(node('p', 'files-preview-note', text));
+    preview.firstChild.setAttribute('role', 'alert');
+  }
+  function cancelMetadata() {
+    for (const request of metadataRequests) request.abort();
+    metadataRequests.clear();
+  }
+  async function metadata(request, { restore = false } = {}) {
+    const abort = new AbortController(); metadataRequests.add(abort);
+    try {
+      if (request.external) {
+        if (typeof transport.externalMetadata !== 'function') return { ok: !restore, request };
+        const result = await transport.externalMetadata(request.path, request.grantId, request.conversationId, { signal: abort.signal });
+        if (request.fileId && result?.file?.fileId && request.fileId !== result.file.fileId) return { ok: false, code: 'file_changed' };
+        if (restore && (!request.fileId || result?.file?.fileId !== request.fileId)) return { ok: false, code: 'file_changed' };
+        return { ...result, request: { ...request, path: result?.file?.absolutePath || request.path, fileId: result?.file?.fileId || request.fileId || '', name: result?.file?.name || request.name, bytes: result?.file?.bytes } };
+      }
+      if (typeof transport.metadata !== 'function') return { ok: !restore, request };
+      const result = await transport.metadata(request.path, request.conversationId, {
+        root: request.cwd || '', workspace: tree?.workspace, generation: tree?.workspace?.generation,
+        ...(restore ? { fileId: request.fileId } : {}), signal: abort.signal,
+      });
+      if (!result?.ok) return result;
+      if (request.cwd && result.file?.absolutePath && !isPathWithin(request.cwd, result.file.absolutePath)) return { ok: false, code: 'stale_workspace' };
+      if (request.fileId && result.file?.fileId && request.fileId !== result.file.fileId) return { ok: false, code: 'file_changed' };
+      if (restore && (!request.fileId || result.file?.fileId !== request.fileId)) return { ok: false, code: 'file_changed' };
+      return { ok: true, request: { ...request, fileId: result.file?.fileId || request.fileId || '', bytes: result.file?.bytes, name: result.file?.name || request.name } };
+    } catch { return { ok: false, code: abort.signal.aborted ? 'aborted' : 'unavailable' }; }
+    finally { metadataRequests.delete(abort); }
+  }
+  function mountPreview(tab) {
+    if (!isVisible() || activeTab() !== tab) return;
+    disposePreview(); updatePath(tab);
+    const sequence = previewSequence;
+    const run = scopeEpoch;
+    const content = node('div', 'files-preview-content');
+    preview.replaceChildren(content);
+    const current = () => isVisible() && scopeCurrent(run) && previewSequence === sequence && activeTab() === tab;
+    try {
+      const mounted = previewMount(content, {
+        ...tab.request,
+        workspace: tab.request.external || localSource(tab.request) ? null : tree.workspace,
+        generation: tab.request.external || localSource(tab.request) ? undefined : tree.workspace?.generation,
+      }, {
+        toolbar, state: tab.state || {}, transport,
+        onMetadata(file) {
+          if (!current() || !file) return;
+          if (typeof file.fileId === 'string' && !tab.request.fileId) tab.request.fileId = file.fileId;
+          if (Number.isFinite(file.bytes)) {
+            if (tab.request.source === 'archive') tab.request.size = file.bytes;
+            else tab.request.bytes = file.bytes;
+            updatePath(tab);
+          }
+          persistSoon();
+        },
+        onOpen(request) {
+          if (current()) void openFromReference(request?.source === 'archive' ? { ...request, parent: parentDescription(tab.request) } : request);
+        },
+      });
+      if (!mounted || typeof mounted.dispose !== 'function') throw new Error('Preview controller unavailable');
+      controller = mounted; controllerTab = tab;
+      Promise.resolve(mounted.ready).then(() => { if (current()) persistSoon(); }, () => {
+        if (current()) failure(tab, '无法预览此文件，请重新打开。');
+      });
+    } catch { if (current()) failure(tab, '无法预览此文件，请重新打开。'); }
+  }
+  async function activate(key, { validate = true, focus = false, resume = false } = {}) {
+    const tab = tabs.find((item) => item.key === key);
+    if (!tab) return;
+    disposePreview();
     activeKey = key;
-    const tab = tabs.get(key);
-    selectedPath = tab.path;
-    renderTabs();
-    renderTree();
-    void ensurePathVisible(tab.path);
-    showActiveTab();
-  }
-
-  function showActiveTab() {
-    const tab = activeTab();
-    if (!tab) return;
-    renderTabContent(tab);
-  }
-
-  function applyLineTarget(tab, { scroll = true } = {}) {
-    const body = preview.querySelector('.files-preview-body');
-    const highlight = preview.querySelector('.files-line-highlight');
-    if (!body || !highlight || !tab?.doc) return;
-    const content = typeof tab.doc.content === 'string' ? tab.doc.content : '';
-    const lineCount = Math.max(1, content.split('\n').length);
-    tab.lineCount = lineCount;
-    if (!tab.line) {
-      highlight.hidden = true;
-      return;
+    if (!resume) renderTabs({ focus });
+    updatePath(tab);
+    if (!isVisible()) { tab.needsValidation = true; persistSoon(); return; }
+    if (!resume) {
+      tree.select(tab.request.external || localSource(tab.request) ? null : tab.request.path, { user: !restoring });
+      if (!tab.request.external && !localSource(tab.request)) void tree.reveal(tab.request.path);
+      geometry.hideOverlay();
     }
-    const from = Math.min(Math.max(1, tab.line), lineCount);
-    const to = Math.min(Math.max(from, tab.endLine || from), lineCount);
-    const style = getComputedStyle(body);
-    const lineHeight = parseFloat(style.lineHeight) || (parseFloat(style.fontSize) || 12) * 1.55;
-    const paddingTop = parseFloat(style.paddingTop) || 10;
-    highlight.style.top = `${paddingTop + (from - 1) * lineHeight}px`;
-    highlight.style.height = `${(to - from + 1) * lineHeight}px`;
-    highlight.hidden = false;
-    highlight.dataset.lineFrom = String(from);
-    highlight.dataset.lineTo = String(to);
-    if (scroll) {
-      const scroller = preview.querySelector('.files-preview-scroll');
-      if (scroller) scroller.scrollTop = Math.max(0, paddingTop + (from - 1) * lineHeight - scroller.clientHeight / 3);
+    const run = scopeEpoch;
+    const sequence = previewSequence;
+    const intent = openSequence;
+    if (tab.needsValidation && validate) {
+      preview.replaceChildren(node('p', 'files-tree-status', '正在核对文件…'));
+      // In-memory archive members inherit their parent's authority and object
+      // identity; retaining the bytes is not permission to restore a changed ZIP.
+      const target = tab.request.source === 'archive' ? tab.request.parent : tab.request;
+      const result = target?.source === 'attachment' ? { ok: true } : await metadata(target, { restore: true });
+      if (!isVisible() || !scopeCurrent(run) || previewSequence !== sequence || openSequence !== intent || activeTab() !== tab) return;
+      if (!result?.ok) { failure(tab, '文件不存在、已变化或暂不可用，请从文件树重新打开。'); return; }
+      if (result.request && tab.request.source !== 'archive') tab.request = result.request;
+      tab.needsValidation = false;
     }
+    mountPreview(tab); persistSoon();
   }
-
-  function previewHead(tab) {
-    const head = node('div', 'files-preview-head');
-    head.append(
-      node('span', 'files-preview-path', tab.doc?.path || tab.path),
-      node('span', 'files-preview-size', formatBytes(tab.doc?.bytes ?? tab.bytes))
-    );
-    return head;
+  function closeTabs(keys, { focus = false } = {}) {
+    if (!keys.length) return;
+    openSequence++; cancelMetadata();
+    const removed = new Set(keys);
+    /* Every close is a user decision no later restore may undo — and a restore
+     * can arrive *after* this close in two ways, not one: the deferred tree
+     * resolution, but also a session settle that reads a fresh snapshot under a
+     * namespace that was empty (and therefore unrestorable) at mount time. In
+     * the empty-session case `restored` is null here, so guarding on it leaves
+     * no tombstone and the settle resurrects a file the user already closed.
+     * Tombstoning is unconditional: it only filters the restore merge, never an
+     * explicit open (which runs its own path), so recording every close cannot
+     * block a file the user later reopens on purpose. Keys still die with the
+     * panel, so a fresh mount restores history normally again. */
+    for (const key of removed) closedKeys.add(key);
+    const index = tabs.findIndex((tab) => tab.key === activeKey);
+    const removesActive = removed.has(activeKey);
+    if (removesActive) disposePreview();
+    tabs = tabs.filter((tab) => !removed.has(tab.key));
+    if (removesActive) {
+      activeKey = null;
+      const next = tabs[Math.min(index, tabs.length - 1)];
+      if (next) void activate(next.key, { focus });
+      else { tree.select(null, { user: true }); renderTabs(); empty(); if (focus) geometry.treeButton.focus(); }
+    } else renderTabs({ focus });
+    persistSoon();
   }
-
-  function fileActionRequest(tab) {
+  function reorder(key, target) {
+    const from = tabs.findIndex((tab) => tab.key === key);
+    const to = tabs.findIndex((tab) => tab.key === target);
+    if (from < 0 || to < 0 || from === to) return;
+    const [tab] = tabs.splice(from, 1); tabs.splice(to, 0, tab);
+    renderTabs(); persistSoon();
+  }
+  function openTab(request) {
+    const key = requestKey(request);
+    let tab = tabs.find((item) => item.key === key);
+    if (!tab) {
+      if (tabs.length >= FILES_TAB_LIMIT) { toast('最多打开 24 个文件，请先关闭一些标签。', 'warn'); return; }
+      tab = { key, id: `filesTab-${++tabSequence}`, request, state: {} };
+      tabs.push(tab);
+    } else {
+      if (controllerTab === tab) disposePreview();
+      // Local File/member metadata has an empty token; incoming references omit
+      // it. Those are the same identity, not a replacement that resets reading.
+      if ((tab.request.fileId || '') !== (request.fileId || '') || request.line) tab.state = {};
+      tab.request = request; tab.needsValidation = false;
+    }
+    void activate(key, { validate: false });
+  }
+  async function openFromReference(source) {
+    if (!isCurrent() || !source || (!source.path && !(source.source === 'attachment' && source.file) && !(source.source === 'archive' && source.bytes))) return;
+    if (!sameScope(identity, effectiveIdentity())) reset();
+    const run = scopeEpoch;
+    const sequence = ++openSequence;
+    cancelMetadata();
+    let request = { ...source };
+    if (request.source === 'archive') {
+      const parent = parentDescription(request.parent);
+      if (!request.parent || request.parent.source === 'archive' || (parent.conversationId || null) !== identity.conversationId
+        || (parent.cwd && pathKey(parent.cwd) !== pathKey(identity.cwd))) return;
+      if (Object.prototype.toString.call(request.bytes) !== '[object Uint8Array]' || request.bytes.byteLength > 8 * 1024 * 1024) {
+        toast('压缩包内文件超过 8 MB 预览上限。', 'warn'); return;
+      }
+      const name = String(request.name || '文件').slice(0, 512);
+      const archiveEntry = String(request.archiveEntry || name).slice(0, 4096);
+      const local = { source: 'archive', name, archiveEntry, parent, size: request.bytes.byteLength };
+      const key = requestKey(local);
+      const total = tabs.reduce((sum, tab) => sum + (tab.request.source === 'archive' && tab.key !== key ? tab.request.bytes.byteLength : 0), 0);
+      if (total + request.bytes.byteLength > 32 * 1024 * 1024) { toast('压缩包预览已达 32 MB 上限，请先关闭一些标签。', 'warn'); return; }
+      // Own an exact-size copy: a small view must not retain an enormous ZIP buffer.
+      openTab({ ...local, bytes: Uint8Array.from(request.bytes) }); return;
+    }
+    if (request.source === 'attachment') {
+      if (!request.file || typeof request.file !== 'object') return;
+      if (!attachmentKeys.has(request.file)) attachmentKeys.set(request.file, `local-${++tabSequence}`);
+      request = { source: 'attachment', file: request.file, name: String(request.name || request.file.name || '附件').slice(0, 512), attachmentId: request.attachmentId || attachmentKeys.get(request.file), size: request.file.size, cwd: identity.cwd, conversationId: identity.conversationId };
+      openTab(request); return;
+    }
+    request = boundedRequest(request);
+    if (typeof request.path !== 'string' || !request.path) return;
+    const wanted = request.conversationId || null;
+    if (wanted !== identity.conversationId || (request.cwd && identity.cwd && pathKey(request.cwd) !== pathKey(identity.cwd))) {
+      toast('这个文件引用属于其它会话，请先切换到那个会话。', 'warn'); return;
+    }
+    if (request.external && !request.grantId) { toast('缺少访问授权，请重新打开。', 'warn'); return; }
+    /* Opening a file must not queue behind the workspace tree. The tree is a
+     * navigation aid; blocking the user's open on its (possibly slow) root
+     * listing is exactly the window in which a late history restore used to
+     * overwrite newer user actions. The open therefore proceeds independently:
+     * the path is confined to the workspace root and the file's object identity
+     * is re-verified by metadata() itself (fileId on restore, root+path binding
+     * otherwise). The opaque workspace token is only available once the tree
+     * has resolved; without it the backend still binds root path + fileId, and
+     * the token check joins at preview time — so a workspace that changed its
+     * backing under the same path fails at preview, never reads wrong bytes. */
+    request = { ...request, cwd: request.external ? '' : request.cwd || identity.cwd, conversationId: wanted, name: String(request.name || request.path.split(/[\\/]/).pop()).slice(0, 512) };
+    const result = await metadata(request);
+    if (!scopeCurrent(run) || sequence !== openSequence) return;
+    if (!result?.ok) { toast('文件不存在、已变化或当前无法读取。', 'warn'); return; }
+    openTab(result.request);
+  }
+  /* Restoration is a merge, never an overwrite. By the time the deferred file
+   * tree resolves, the user may already have opened, closed or reordered tabs;
+   * a late snapshot must not resurrect closed tabs, drop user-opened ones, or
+   * clobber the order and selection the user just chose. Restored history is
+   * deduplicated by stable request key against what is already open. */
+  function restoreTabs(value) {
+    if (!value?.tabs?.length) return;
+    if (!sameScope(identity, effectiveIdentity())) return;
+    const existing = new Set(tabs.map((tab) => tab.key));
+    const seen = new Set();
+    const incoming = value.tabs.filter((request) => {
+      const key = requestKey(request);
+      if (seen.has(key) || existing.has(key) || closedKeys.has(key) || (request.conversationId || null) !== identity.conversationId
+        || (request.cwd && pathKey(request.cwd) !== pathKey(identity.cwd))) return false;
+      seen.add(key); return true;
+    }).map((request) => ({ key: requestKey(request), id: `filesTab-${++tabSequence}`, request: boundedRequest(request), state: readingState(request.state), needsValidation: true }));
+    if (!incoming.length) return;
+    // Attachments and in-memory archive members are never persisted, so any
+    // user tab already open wins; restored history only fills in the gaps.
+    tabs = tabs.concat(incoming);
+    // The user's current selection outranks the snapshot. Only a panel with no
+    // active tab yet (the pure restore path) adopts the snapshot's active tab.
+    const current = activeTab();
+    const key = current ? current.key
+      : tabs.some((tab) => tab.key === value.active) ? value.active
+      : (existing.size ? null : tabs[0].key);
+    restoring = true;
+    const finish = () => { restoring = false; };
+    if (key) void activate(key).finally(finish);
+    else { renderTabs(); finish(); }
+    persistSoon();
+  }
+  function installTree(treeState) {
+    tree?.dispose(); geometry.sidebar.replaceChildren();
+    tree = createFilesTree(geometry.sidebar, {
+      transport, getIdentity: () => identity, isCurrent, state: treeState,
+      onChange: persistSoon,
+      onOpen: (entry) => void openFromReference({ ...entry, cwd: identity.cwd, conversationId: identity.conversationId }),
+      onRoot({ status, workspace, previous }) {
+        if (!isCurrent()) return;
+        if (status === 'error' || status === 'no-project') {
+          // The project tree does not authorize original File bytes or an
+          // independently granted external file. A late listing failure must
+          // not tear down either reader; their own owner/revoke paths remain.
+          const selected = activeTab()?.request;
+          if (selected && (localSource(selected) || selected.external)) return;
+          openSequence++; cancelMetadata(); disposePreview();
+          empty(status === 'no-project' ? '还没有打开项目' : '暂时无法预览', status === 'no-project' ? '在左侧选择一个项目。' : '请刷新文件列表后重新选择文件。');
+        } else if (previous && previous.id !== workspace?.id) {
+          openSequence++; cancelMetadata(); disposePreview(); tabs = []; activeKey = null; renderTabs(); empty('工作区已切换', '');
+        } else if (restored) {
+          const value = restored; restored = null; restoreTabs(value);
+        } else if (activeTab() && !controller) {
+          activeTab().needsValidation = true; void activate(activeKey);
+        }
+      },
+    });
+    void tree.loadRoot();
+  }
+  function reset(event) {
+    // Identity invalidation can reach the manager before this event listener.
+    // Hidden/invalid is never a reason to retain the previous owner's bytes.
+    if (!alive) return;
+    persistNow();
+    scopeEpoch++; openSequence++; cancelMetadata(); disposePreview();
+    tabs = []; activeKey = null; tabsUI.dispose(); closedKeys.clear();
+    if (event?.type === 'pi-gui:session-switch' && !Api.gitConversationScope()) {
+      sessionBeforeSwitch = getIdentity().sessionId;
+      sessionOverride = event.detail?.sessionKey || `pending:${++pendingSessionSequence}`;
+    }
+    identity = effectiveIdentity();
+    restored = event?.type === 'pi-gui:workspace-generation' ? null : readFilesState(identity, options.storage);
+    renderTabs(); empty(); installTree(restored?.tree);
+  }
+  function onContext() {
+    if (sessionOverride && getIdentity().sessionId && getIdentity().sessionId !== sessionBeforeSwitch) sessionOverride = null;
+    const next = effectiveIdentity();
+    if (sameScope(identity, next)) return;
+    /* Only an unknown/pending session becoming known is a settle. Two distinct
+     * known sessions are a real boundary even when cwd+conversation are unchanged:
+     * pending opens and close records must not migrate to the other session. The
+     * Surface manager independently fences full runtime/workspace owner changes. */
+    if (sameWorkspace(identity, next) && (!identity.sessionId || String(identity.sessionId).startsWith('pending:'))
+      && next.sessionId && !String(next.sessionId).startsWith('pending:')) { settleSession(next); return; }
+    reset();
+  }
+  /* The tree merge is per-field, never an overwrite. The live tree is the user's
+   * most recent intent inside the *same* workspace+conversation scope (file access
+   * never binds to the session id). Fields the user actually touched — reported by
+   * the tree in `touched` — always win over the settled session's snapshot, because
+   * rolling them back would undo a deliberate gesture. Untouched fields fall back to
+   * the snapshot so the session's real preference is still adopted. This matters in
+   * the two extremes the round-2 review exposed: when the target session has *no*
+   * snapshot at all the user's tree survives verbatim instead of being replaced by
+   * the default, and a boolean the user toggled (e.g. hidden-items off) is not
+   * resurrected to the snapshot's stale `true` merely because `false` is also the
+   * install-time default. Once the user has expanded or collapsed anything, the
+   * live expansion set is authoritative — union would resurrect a directory the
+   * user deliberately collapsed; before any such gesture, union keeps both the
+   * reveal-expanded ancestors and the settled session's saved folders. `touched`
+   * is transient merge metadata, never persisted. */
+  function mergeTreeState(live, snap) {
+    if (!snap || typeof snap !== 'object') {
+      if (!live || typeof live !== 'object') return undefined;
+      const { touched, ...rest } = live;
+      return rest;
+    }
+    if (!live || typeof live !== 'object') return snap;
+    const touched = new Set(Array.isArray(live.touched) ? live.touched : []);
+    const liveExpanded = Array.isArray(live.expanded) ? live.expanded : [];
+    const snapExpanded = Array.isArray(snap.expanded) ? snap.expanded : [];
+    const expanded = touched.has('expanded') ? liveExpanded : [...new Set([...liveExpanded, ...snapExpanded])];
     return {
-      path: tab.path,
-      cwd: tab.cwd || '',
-      conversationId: tab.conversationId || null,
-      fileId: tab.fileId || '',
-      workspace: tab.external ? null : workspace,
-      generation: tab.external ? undefined : workspace?.generation,
-      line: tab.line,
-      column: tab.column,
-      external: tab.external === true,
-      grantId: tab.grantId || '',
+      selected: touched.has('selected') ? live.selected || null : snap.selected || null,
+      hidden: touched.has('hidden') ? live.hidden === true : snap.hidden === true,
+      expanded: (Array.isArray(expanded) ? expanded : []).slice(0, 96),
+      scrollTop: touched.has('scrollTop') ? Number(live.scrollTop) || 0 : Number(snap.scrollTop) || 0,
     };
   }
-
-  function unsupportedNote(text, tab) {
-    const note = node('p', 'files-preview-note', text);
-    const actions = node('div', 'files-preview-actions');
-    const open = node('button', 'btn tiny', '用系统默认程序打开');
-    open.type = 'button';
-    open.onclick = () => void openInSystemProgram(fileActionRequest(tab));
-    actions.append(open);
-    return [note, actions];
-  }
-
-  function renderCode(tab) {
-    const wrap = node('div', 'files-preview-code');
-    const scroll = node('div', 'files-preview-scroll');
-
-    const highlight = node('div', 'files-line-highlight');
-    highlight.hidden = true;
-    highlight.setAttribute('aria-hidden', 'true');
-    scroll.append(highlight);
-
-    const body = node('pre', 'files-preview-body');
-    body.innerHTML = highlightSource(tab.doc.content, tab.doc.path || tab.path).html;
-    body.tabIndex = 0;
-    body.setAttribute('aria-label', tab.doc.path || tab.path);
-    scroll.append(body);
-
-    const gutter = node('pre', 'files-preview-gutter');
-    gutter.setAttribute('aria-hidden', 'true');
-    gutter.textContent = Array.from({ length: Math.max(1, tab.doc.content.split('\n').length) }, (_v, i) => i + 1).join('\n');
-    scroll.onscroll = () => { gutter.scrollTop = scroll.scrollTop; };
-
-    // DOM 顺序保持正文在栏号之前：既有选择器与读屏都先拿到内容。
-    wrap.append(scroll, gutter);
-    preview.append(wrap);
-    const saved = tab.scroll;
-    if (saved) { scroll.scrollTop = saved.top; scroll.scrollLeft = saved.left; }
-    if (tab.line) applyLineTarget(tab);
-  }
-
-  function renderTabContent(tab) {
-    preview.replaceChildren();
-    const head = previewHead(tab);
-    preview.append(head);
-    if (tab.state === 'loading' && !tab.doc) {
-      preview.append(node('div', 'files-tree-status', '正在读取文件…'));
-      return;
-    }
-    if (tab.state === 'error') {
-      const [note] = unsupportedNote(tab.error || '无法读取文件。', tab);
-      preview.append(note);
-      return;
-    }
-    if (tab.state === 'unsupported') {
-      for (const part of unsupportedNote(tab.error || '这个格式暂不内联预览。', tab)) preview.append(part);
-      return;
-    }
-    if (tab.kind === 'image') {
-      const box = node('div', 'files-preview-image');
-      if (tab.imageUrl) {
-        const img = document.createElement('img');
-        img.src = tab.imageUrl;
-        img.alt = tab.name;
-        box.append(img);
-      } else {
-        box.append(node('span', 'files-preview-note', tab.error || '正在读取图片…'));
-      }
-      preview.append(box);
-      return;
-    }
-    if (!tab.doc) {
-      preview.append(node('div', 'files-tree-status', '正在读取文件…'));
-      return;
-    }
-    if (tab.doc.binary) {
-      for (const part of unsupportedNote('这是二进制文件，暂不提供预览。', tab)) preview.append(part);
-      return;
-    }
-    if (!tab.doc.content) {
-      preview.append(node('p', 'files-preview-note', '空文件。'));
-      return;
-    }
-    renderCode(tab);
-  }
-
-  async function loadDocument(tab, { force = false } = {}) {
-    if (!workspace && !tab.external) return;
-    if (tab.doc && !force) return;
-    const request = ++tab.request;
-    const scopeEpoch = epoch;
-    if (!tab.doc) {
-      tab.state = 'loading';
-      if (activeKey === tab.key) renderTabContent(tab);
-    }
-    const result = tab.external
-      ? await transport.externalDocument(tab.path, tab.grantId, tab.conversationId)
-      : await transport.document(tab.path, workspace, workspace.generation, {
-        conversationId: tab.conversationId || gitConversationScope() || null,
-        root: tab.cwd || '',
-        fileId: tab.fileId || '',
-      });
-    if (!alive || scopeEpoch !== epoch || request !== tab.request || tabs.get(tab.key) !== tab) return;
-    if (!result?.ok) {
-      tab.state = 'error';
-      tab.error = result?.code === 'oversized'
-        ? '文件超过预览大小上限。'
-        : result?.code === 'file_missing'
-          ? '文件不存在或已被移动。'
-          : result?.code === 'grant_invalid' || result?.code === 'grant_changed' || result?.code === 'grant_scope'
-            ? '访问授权已经失效，请重新打开文件并授权。'
-            : result?.error || '读取文件失败。';
-      tab.doc = null;
-      if (activeKey === tab.key) renderTabContent(tab);
-      return;
-    }
-    if (!tab.external && workspace && result.workspace?.id !== workspace.id) {
-      tab.state = 'error';
-      tab.error = '工作区已经切换，请重新打开文件。';
-      tab.doc = null;
-      if (activeKey === tab.key) renderTabContent(tab);
-      return;
-    }
-    tab.doc = result.file || {};
-    tab.state = 'ready';
-    if (Number.isFinite(tab.doc.bytes)) tab.bytes = tab.doc.bytes;
-    if (activeKey === tab.key) renderTabContent(tab);
-  }
-
-  async function loadImage(tab) {
-    const asset = tab.external ? transport.externalAsset : transport.asset;
-    if (!asset) {
-      tab.state = 'unsupported';
-      tab.error = '暂不支持内联预览。';
-      if (activeKey === tab.key) renderTabContent(tab);
-      return;
-    }
-    const request = ++tab.request;
-    const scopeEpoch = epoch;
-    if (!tab.imageUrl) {
-      tab.state = 'loading';
-      if (activeKey === tab.key) renderTabContent(tab);
-    }
-    const result = tab.external
-      ? await transport.externalAsset(tab.path, tab.grantId, tab.conversationId)
-      : await transport.asset(tab.path, tab.conversationId, {
-        workspace,
-        generation: workspace?.generation,
-        root: tab.cwd || '',
-        fileId: tab.fileId || '',
-      });
-    if (!alive || scopeEpoch !== epoch || request !== tab.request || tabs.get(tab.key) !== tab) return;
-    if (!result?.ok) {
-      tab.state = 'unsupported';
-      tab.error = result?.code === 'oversized'
-        ? '图片超过预览大小上限。'
-        : result?.code === 'grant_invalid' || result?.code === 'grant_changed' || result?.code === 'grant_scope'
-          ? '访问授权已经失效，请重新打开文件并授权。'
-          : '无法内联预览这个文件。';
-      if (activeKey === tab.key) renderTabContent(tab);
-      return;
-    }
-    if (typeof URL?.createObjectURL !== 'function') {
-      tab.state = 'unsupported';
-      tab.error = '当前环境不支持图片预览。';
-      if (activeKey === tab.key) renderTabContent(tab);
-      return;
-    }
-    revokeImage(tab);
-    tab.imageUrl = URL.createObjectURL(result.blob);
-    tab.state = 'ready';
-    if (activeKey === tab.key) renderTabContent(tab);
-  }
-
-  function showUnsupported(tab, text) {
-    tab.state = 'unsupported';
-    tab.error = text;
-    tab.doc = null;
-    if (activeKey === tab.key) renderTabContent(tab);
-  }
-
-  function openTab(request) {
-    if (!workspace && !request.external) {
-      toast('当前项目不可用，无法打开文件。', 'warn');
-      return;
-    }
-    if (request.external && (!request.grantId || !request.path)) {
-      toast('缺少外部文件授权，请重新打开。', 'warn');
-      return;
-    }
-    const key = tabKeyFor(request);
-    let tab = tabs.get(key);
-    if (!tab) {
-      tabSeq++;
-      tab = {
-        key,
-        id: `filesTab-${tabSeq}`,
-        path: request.path,
-        name: request.name || request.path.split(/[\\/]/).pop(),
-        kind: fileKind(request.path),
-        doc: null,
-        state: 'loading',
-        error: '',
-        request: 0,
-        line: null,
-        column: null,
-        endLine: null,
-        endColumn: null,
-        bytes: Number.isFinite(request.bytes) ? request.bytes : null,
-        conversationId: request.conversationId || null,
-        cwd: request.cwd || '',
-        fileId: request.fileId || '',
-        external: request.external === true,
-        grantId: request.grantId || '',
-        imageUrl: null,
-        scroll: { top: 0, left: 0 },
-      };
-      tabs.set(key, tab);
-      tabOrder.push(key);
-    }
-    tab.path = request.path;
-    tab.name = request.name || tab.name;
-    tab.kind = fileKind(tab.path);
-    tab.line = request.line || null;
-    tab.column = request.column || null;
-    tab.endLine = request.endLine || null;
-    tab.endColumn = request.endColumn || null;
-    tab.conversationId = request.conversationId || tab.conversationId || null;
-    tab.cwd = request.cwd || tab.cwd || '';
-    tab.fileId = request.fileId || tab.fileId || '';
-    tab.external = request.external === true || tab.external;
-    tab.grantId = request.grantId || tab.grantId || '';
-    if (Number.isFinite(request.bytes)) tab.bytes = request.bytes;
-
-    saveScroll();
-    activeKey = key;
-    selectedPath = tab.path;
-    // 先移除旧错误，重新读取时不要显示上一次的失败。
-    tab.error = '';
-    renderTabs();
-    renderTree();
-    if (tab.doc && tab.kind !== 'image') renderTabContent(tab);
-    else if (tab.kind === 'image' && tab.imageUrl) renderTabContent(tab);
-    else showActiveTab();
-
-    const load = tab.kind === 'image'
-      ? loadImage(tab)
-      : BINARY_KINDS.has(tab.kind)
-        ? Promise.resolve(showUnsupported(tab, '这个格式暂不内联预览。'))
-        : loadDocument(tab, { force: true });
-    if (!tab.external) void ensurePathVisible(tab.path);
-    void load.then(() => {
-      if (!isCurrent() || activeKey !== key) return;
-      renderTree();
-      if (!tab.external) scrollTreeTo(tab.path);
-    });
-  }
-
-  async function openTreeFile(entry) {
-    openTab({
-      path: entry.path,
-      name: entry.name,
-      bytes: entry.bytes,
-      cwd: '',
-      conversationId: gitConversationScope() || null,
-    });
-  }
-
-  /* 会话内链接 → Files 面板。这里再做一次身份校验：即使 DOM 里有旧链接，
-   * 也不能用当前焦点的工作区去解析它。外部文件走独立的授权令牌与后端
-   * /api/files/external/*，不会伪造一个工作区相对路径混进文件树通道。 */
-  async function openFromReference(request) {
-    if (!request?.path) return;
-    const scopeEpoch = epoch;
-    const wanted = request.conversationId || null;
-    const current = gitConversationScope() || null;
-    if (wanted !== current) {
-      toast('这个文件引用属于其它会话，请先切换到那个会话。', 'warn');
-      return;
-    }
-
-    if (request.external) {
-      if (!request.grantId) {
-        toast('缺少访问授权，请重新点击文件引用。', 'warn');
-        return;
-      }
-      let next = { ...request, external: true, cwd: '', conversationId: wanted };
-      if (typeof transport.externalMetadata === 'function') {
-        const meta = await transport.externalMetadata(next.path, next.grantId, wanted);
-        if (!alive || scopeEpoch !== epoch) return;
-        if (wanted !== (gitConversationScope() || null)) {
-          toast('这个文件引用属于其它会话，请先切换到那个会话。', 'warn');
-          return;
-        }
-        if (!meta?.ok) {
-          toast(meta?.error || '无法读取这个文件的信息。', 'warn');
-          return;
-        }
-        next = {
-          ...next,
-          path: meta.file?.absolutePath || next.path,
-          name: meta.file?.name || next.name,
-          bytes: meta.file?.bytes,
-        };
-      }
-      openTab(next);
-      return;
-    }
-
-    if (rootPromise) await rootPromise;
-    if (!alive || scopeEpoch !== epoch) return;
-    if (!workspace) {
-      toast('当前项目不可用，无法打开文件。', 'warn');
-      return;
-    }
-    if (typeof transport.metadata === 'function' && request.cwd) {
-      const meta = await transport.metadata(request.path, wanted, { root: request.cwd });
-      // 读取期间可能又换了工作区/会话；旧请求不能落在新面板上。
-      if (!alive || scopeEpoch !== epoch) return;
-      if (wanted !== (gitConversationScope() || null)) {
-        toast('这个文件引用属于其它会话，请先切换到那个会话。', 'warn');
-        return;
-      }
-      if (!meta?.ok) {
-        toast(meta?.code === 'file_missing' ? '文件不存在或已被移动。' : '无法读取文件信息。', 'warn');
-        return;
-      }
-      if (!isPathWithin(request.cwd, meta.file?.absolutePath || '')) {
-        toast('这个文件所在的工作区已经变化，请重新打开会话。', 'warn');
-        return;
-      }
-      request = {
-        ...request,
-        bytes: meta.file?.bytes,
-        name: meta.file?.name || request.name,
-        fileId: meta.file?.fileId || '',
-      };
-    }
-    openTab({ ...request, conversationId: wanted });
-  }
-
-  function closeRevokedExternalTabs(event) {
-    const revoked = event?.detail?.revoked;
-    if (typeof revoked !== 'string' || !revoked) return;
-    let closed = false;
-    for (const tab of [...tabs.values()]) {
-      if (tab.external && tab.grantId === revoked) {
-        closeTab(tab.key);
-        closed = true;
-      }
-    }
-    if (closed) toast('访问授权已撤销，文件已关闭。', 'warn');
-  }
-
-  function resetForWorkspace() {
-    epoch++;
-    workspace = null;
-    rootEntries = [];
-    dirs = new Map();
-    selectedPath = null;
-    closeAllTabs();
-    renderEmptyPreview('工作区已切换', '正在读取新的项目文件。');
-    void loadRoot();
-  }
-
-  document.addEventListener('pi-gui:workspace-generation', resetForWorkspace);
-  document.addEventListener('pi-gui:git-scope', resetForWorkspace);
-  document.addEventListener('pi-gui:external-grants', closeRevokedExternalTabs);
-
-  refresh = node('button', 'btn tiny ghost rp-btn', '刷新');
-  refresh.type = 'button';
-  refresh.title = '重新读取项目文件';
-  refresh.onclick = () => {
-    // 文件可能已经被会话或外部程序增删改名；消息里的元数据/唯一性结论
-    // 也必须跟着失效，否则长会话会一直拿着旧结果。
-    document.dispatchEvent(new window.CustomEvent('pi-gui:files-refresh'));
-    dirs = new Map();
-    selectedPath = null;
-    closeAllTabs();
-    renderEmptyPreview('选择文件预览', '文件内容只读，不会在这里修改。');
-    void loadRoot();
-  };
-  hiddenToggle = node('button', 'btn tiny ghost rp-btn', '隐藏项');
-  hiddenToggle.type = 'button';
-  hiddenToggle.setAttribute('aria-pressed', 'false');
-  hiddenToggle.title = '显示或隐藏以点开头的文件';
-  hiddenToggle.onclick = () => {
-    showHidden = !showHidden;
-    hiddenToggle.setAttribute('aria-pressed', String(showHidden));
-    dirs = new Map();
-    void loadRoot();
-  };
-
-  header = createPaneHeader({
-    title: '文件',
-    subtitle: '只读 · 当前项目',
-    actions: [hiddenToggle, refresh],
-  });
-  host.append(header['el']);
-  message = node('p', 'files-message');
-  message.setAttribute('role', 'status');
-  message.hidden = true;
-  host.append(message);
-
-  tabsBar = node('div', 'files-tabs');
-  tabsBar.hidden = true;
-  tabList = node('div', 'files-tablist');
-  tabList.setAttribute('role', 'tablist');
-  tabList.setAttribute('aria-label', '打开的文件');
-  tabsBar.append(tabList);
-  host.append(tabsBar);
-
-  const layout = node('div', 'files-layout');
-  tree = node('div', 'files-tree rp-scroll');
-  tree.setAttribute('role', 'tree');
-  tree.setAttribute('aria-label', '项目文件');
-  preview = node('section', 'files-preview rp-scroll');
-  preview.id = 'filesPreviewPanel';
-  preview.setAttribute('aria-label', '文件预览');
-  layout.append(tree, preview);
-  host.append(layout);
-
-  renderEmptyPreview('选择文件预览', '文件内容只读，不会在这里修改。');
-  activePanel = {
-    isCurrent,
-    open: openFromReference,
-  };
-  loadRoot().then(() => {
+  function settleSession(next) {
     if (!alive) return;
-    const request = initialRequest;
-    initialRequest = null;
-    if (request) void openFromReference(request);
+    identity = { ...next };
+    /* History is namespaced by session, and the snapshot carries more than tabs:
+     * it also holds the file-tree state (expanded folders, the hidden-items
+     * toggle, selection, scroll). Adopting the settled session re-reads that
+     * snapshot, but the rebuild must merge it around the tree the user already
+     * has — captured live before the old tree is disposed — rather than overwrite
+     * it. What settle must NOT do is reset()'s destructive half: no scopeEpoch or
+     * openSequence bump, no cancelMetadata, no disposePreview, no clearing tabs
+     * or activeKey — so open tabs, their mounted previews and any in-flight open
+     * all survive. The tree rebuild only replaces the navigation sidebar; it does
+     * not touch the tab strip or the preview pane. Restoration itself stays on the
+     * normal deferred path: `restored` is left set and the tree's onRoot merge
+     * applies it around the surviving user tabs, deduplicated by request key. */
+    const liveTree = tree?.getState?.();
+    restored = readFilesState(identity, options.storage);
+    installTree(mergeTreeState(liveTree, restored?.tree));
+    persistSoon();
+  }
+  function revoked(event) {
+    const id = event?.detail?.revoked;
+    if (typeof id !== 'string' || !id) return;
+    openSequence++; cancelMetadata();
+    closeTabs(tabs.filter((tab) => (tab.request.external && tab.request.grantId === id)
+      || (tab.request.source === 'archive' && tab.request.parent?.external && tab.request.parent.grantId === id)).map((tab) => tab.key));
+  }
+  function attachmentRevoked(event) {
+    const id = event?.detail?.attachmentId;
+    if (!id) return;
+    closeTabs(tabs.filter(tab => (tab.request.source === 'attachment' && tab.request.attachmentId === id)
+      || (tab.request.source === 'archive' && tab.request.parent?.source === 'attachment' && tab.request.parent.attachmentId === id)).map(tab => tab.key));
+  }
+  document.addEventListener('pi-gui:attachment-revoked', attachmentRevoked);
+  const resetEvents = ['pi-gui:workspace-generation', 'pi-gui:git-scope', 'pi-gui:session-switch'];
+  for (const name of resetEvents) document.addEventListener(name, reset);
+  document.addEventListener('pi-gui:session-evidence-context', onContext);
+  document.addEventListener('pi-gui:external-grants', revoked);
+  const unsubscribeRuntime = onRuntimeChange(onContext);
+  preview.addEventListener('scroll', persistSoon, true);
+  function onPanelKey(event) {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || !tabs.length) return;
+    if (event.key.toLowerCase() === 'w') {
+      event.preventDefault(); event.stopPropagation(); closeTabs([activeKey], { focus: true });
+    } else if (['PageUp', 'PageDown', 'Tab'].includes(event.key)) {
+      event.preventDefault(); event.stopPropagation();
+      openSequence++; cancelMetadata();
+      const step = event.key === 'PageUp' || (event.key === 'Tab' && event.shiftKey) ? -1 : 1;
+      const index = tabs.findIndex((tab) => tab.key === activeKey);
+      void activate(tabs[(index + step + tabs.length) % tabs.length].key, { focus: true });
+    }
+  }
+  host.addEventListener('keydown', onPanelKey);
+  const onPageHide = () => persistNow();
+  window.addEventListener('pagehide', onPageHide);
+  renderTabs(); empty(); installTree(restored?.tree);
+  activePanel = { isCurrent, open: openFromReference };
+  const unsubscribeVisibility = view.onVisibility?.((shown) => {
+    const next = typeof shown === 'boolean' ? shown : view.isVisible?.() !== false;
+    if (!alive || next === visible) return;
+    visible = next;
+    openSequence++; cancelMetadata();
+    if (!next) {
+      disposePreview();
+      for (const tab of tabs) tab.needsValidation = true;
+      tabsUI.closeMenu(); geometry.hideOverlay(); preview.replaceChildren();
+      persistNow();
+    } else {
+      const run = scopeEpoch;
+      onContext(); geometry.measure();
+      if (run === scopeEpoch && activeTab()) void activate(activeKey, { resume: true });
+    }
   });
-
+  if (options.openRequest) void openFromReference(options.openRequest);
   view.onDispose(() => {
-    alive = false;
-    document.removeEventListener('pi-gui:workspace-generation', resetForWorkspace);
-    document.removeEventListener('pi-gui:git-scope', resetForWorkspace);
-    document.removeEventListener('pi-gui:external-grants', closeRevokedExternalTabs);
-    closeAllTabs();
+    persistNow(); alive = false; scopeEpoch++; openSequence++;
+    cancelMetadata(); disposePreview(); clearTimeout(persistTimer);
+    tree.dispose(); tabsUI.dispose(); geometry.dispose();
+    for (const name of resetEvents) document.removeEventListener(name, reset);
+    document.removeEventListener('pi-gui:session-evidence-context', onContext);
+    document.removeEventListener('pi-gui:external-grants', revoked);
+    document.removeEventListener('pi-gui:attachment-revoked', attachmentRevoked);
+    window.removeEventListener('pagehide', onPageHide);
+    host.removeEventListener('keydown', onPanelKey);
+    preview.removeEventListener('scroll', persistSoon, true);
+    unsubscribeRuntime(); unsubscribeVisibility?.();
+    tabs = []; activeKey = null; restored = null;
+    // Right pane can keep a hidden host mounted. Drop event closures and local
+    // archive/File references as well as the plugin's content when it closes.
+    tabsUI.render(); preview.replaceChildren(); geometry.sidebar.replaceChildren();
     if (activePanel?.isCurrent === isCurrent) activePanel = null;
   });
+  return { open: openFromReference, getState: () => ({ identity: { ...identity }, tabs: tabs.map((tab) => ({ key: tab.key, path: tab.request.path, state: { ...tab.state } })), active: activeKey }), isCurrent };
 }

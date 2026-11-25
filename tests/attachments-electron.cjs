@@ -157,6 +157,12 @@ async function run() {
     check('no renderer crash or fixture server errors', errors.length === 0, errors);
   } catch (error) {
     check('attachment scenario completed', false, error.stack);
+    if (win && !win.isDestroyed()) {
+      try {
+        facts.push({ failure: await read(`(()=>{const pane=document.querySelector('#rightPane');return{paneHidden:pane?.hidden,paneClass:pane?.className,previewKinds:[...pane.querySelectorAll('[class]')].map(e=>e.className).filter(v=>typeof v==='string'&&/^(?:fp-|files-)/.test(v)).slice(0,80),notes:[...pane.querySelectorAll('[role=status],.fp-fallback,.fp-media-status')].map(e=>e.textContent.slice(0,180)),media:[...pane.querySelectorAll('video,audio')].map(e=>({tag:e.tagName,readyState:e.readyState,networkState:e.networkState,error:e.error?.code||0,hasSource:e.hasAttribute('src')}))}})()`) });
+        await shot('failure');
+      } catch { /* retain the original failure even if screenshot capture fails */ }
+    }
   } finally {
     clearTimeout(deadline);
     const failed = checks.filter(item => !item.pass).length;

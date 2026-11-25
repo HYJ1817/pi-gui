@@ -1,0 +1,29 @@
+{
+  "purpose": "Historical legal evidence for an excluded dependency, not a redistribution grant. This fixture must never be shipped in preview vendor output.",
+  "package": {
+    "name": "pptx-preview",
+    "version": "1.0.7",
+    "licenseMetadata": "ISC",
+    "packageJsonSha256": "9cb5a648f76c08386869ab62eb71a809287fb2fb1d83594d5d130be098a33cba"
+  },
+  "npmArchive": {
+    "url": "https://registry.npmjs.org/pptx-preview/-/pptx-preview-1.0.7.tgz",
+    "integrity": "sha512-YByocJuyxAR4YB4Q3+VAxdLfEvA5LojG1gAJsx2Mw0QU5FJPps/2fkJOupJ6oBbA+KdWRpuAk6G6T34rKCHVxw==",
+    "sha256": "93e7e270f93305a5238894760862a0e4471529cea5ee1dec8991cfa415c3b1b0",
+    "fileCount": 47,
+    "standaloneLegalFiles": []
+  },
+  "npmReadme": {
+    "path": "package/README.md",
+    "sha256": "1bef7f8195efa391cbc7516c87a32d155f9e35748e18744fcbf5c75c49b2ba27",
+    "excerptByteOffset": 724,
+    "excerptBytes": 221,
+    "excerptSha256": "efe4ae5410d35977b5b6856b8f06ea97d719481a0e9e2d203442983a578f972e",
+    "excerpt": "# 关于授权\n\n- 本项目发布的npm包可免费使用，自用商用均可\n- 本项目的源码仅供个人学习使用，不得发布到互联网平台中，不得直接修改源码并转为自有项目进行开源\n\n"
+  },
+  "upstreamLicense": {
+    "url": "https://raw.githubusercontent.com/501351981/pptx-preview/b9bb0460a426ffe155487ee124ad9d57fd9c4c51/LICENSE",
+    "gitBlob": "f2d9e1ed347b274e9b8e0b552058fb8b0a9889fb",
+    "base64": "5pys6aG555uu5Y+R5biD55qEbnBt5YyF5Y+v5YWN6LS55L2/55So77yM6Ieq55So5ZWG55So5Z2H5Y+vCuacrOmhueebrueahOa6kOeggeS7heS+m+S4quS6uuWtpuS5oOS9v+eUqO+8jOS4jeW+l+WPkeW4g+WIsOS6kuiBlOe9keW5s+WPsOS4re+8jOS4jeW+l+ebtOaOpeS/ruaUuea6kOeggeW5tui9rOS4uuiHquaciemhueebrui/m+ihjOW8gOa6kAo="
+  }
+}

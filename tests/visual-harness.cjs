@@ -32,6 +32,13 @@ const fileLinkFiles = fileLinksMode ? import('../server/files.js').then(({ creat
     return null;
   },
 })) : null;
+/* ui4-pane matrix evidence: the harness cwd IS a writable temp world, so the
+ * real createFiles implementation can serve it directly. This gives the Files
+ * surface a truthful tree/metadata/content path without a second fixture. */
+const ui4FilesMode = process.env.UI4_FILES_HARNESS === '1';
+const ui4Files = ui4FilesMode ? import('../server/files.js').then(({ createFiles }) => createFiles({
+  scopeForRequest: async () => ({ root: process.cwd(), scopeId: 'ui4-pane', generation: '1' }),
+})) : null;
 /* 视觉取证专用：让 Registry 源返回一条“系统代理线路”的固定结果，
  * 用来截取代理状态说明；不影响默认离线夹具。 */
 const marketProxyMode = process.env.MCP_MARKET_PROXY === '1';
@@ -306,6 +313,8 @@ const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.wasm': 'application/wasm',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
@@ -1244,6 +1253,9 @@ const server = http.createServer(async (req, res) => {
   }
   if (fileLinksMode && (p === '/api/files' || p.startsWith('/api/files/'))) {
     return (await fileLinkFiles).handle(req, res, url);
+  }
+  if (ui4FilesMode && (p === '/api/files' || p.startsWith('/api/files/'))) {
+    return (await ui4Files).handle(req, res, url);
   }
 
   if (p === '/api/status') {

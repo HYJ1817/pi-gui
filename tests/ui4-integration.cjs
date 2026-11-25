@@ -42,80 +42,91 @@ const click = (d, text, id = 'confirmCard') => {
 };
 
 (async () => {
-  await check('work panel launcher delegates real tools, follows availability and disposes', async () => {
+  await check('work panel launcher delegates registered tool ids, follows registry changes and disposes', async () => {
     const f = fixture('work-panel', 'ui/work-panel-launcher.js');
     try {
       const { w, d } = f;
-      const source = d.getElementById('navChanges'), browser = d.getElementById('btnBrowser');
-      source.setAttribute('aria-label', '<Files & review>'); browser.hidden = true;
-      let runs = 0; source.onclick = () => { runs++; };
+      let available = true, disabled = false, runs = 0, refresh, unsubscribed = false;
+      let registry = [
+        { id: 'changes', label: '<Files & review>', icon: 'changes', available: () => available, disabled: () => disabled },
+        { id: 'browser', label: '浏览器', icon: 'globe' },
+      ];
       const host = d.querySelector('#rightPane .rp-body');
-      const dispose = w.mountWorkPanelLauncher(host, [source, browser]);
-      const rows = host.querySelectorAll('.work-panel-launcher-row');
-      assert.equal(rows.length, 2); assert.equal(rows[1].hidden, true);
-      assert.ok(rows[0].textContent.includes('<Files & review>')); assert.equal(rows[0].querySelector('files'), null);
-      rows[0].click(); assert.equal(runs, 1); assert.equal(d.activeElement, source);
-      source.disabled = true; browser.hidden = false; await tick();
-      assert.equal(rows[0].disabled, true); assert.equal(rows[1].hidden, false);
-      rows[0].click(); assert.equal(runs, 1);
-      dispose(); source.disabled = false; await tick(); rows[0].click();
-      assert.equal(runs, 1); assert.equal(rows[0].disabled, true);
+      const dispose = w.mountWorkPanelLauncher(host, () => registry, {
+        open: id => { if (id === 'changes') runs++; },
+        subscribe: render => { refresh = render; return () => { unsubscribed = true; }; },
+      });
+      let row = host.querySelector('.work-panel-launcher-row[data-tool="changes"]');
+      assert.ok(row); assert.equal(host.querySelectorAll('#navChanges, #btnBrowser').length, 0);
+      assert.ok(row.textContent.includes('<Files & review>')); assert.equal(row.querySelector('files'), null);
+      row.click(); assert.equal(runs, 1);
+      row.focus(); disabled = true; refresh();
+      row = host.querySelector('[data-tool="changes"]');
+      assert.equal(row.disabled, true); row.click(); assert.equal(runs, 1);
+      available = false; refresh();
+      assert.equal(host.querySelector('[data-tool="changes"]'), null);
+      assert.equal(d.activeElement.dataset.tool, 'browser');
+      available = true; disabled = false; refresh();
+      row = host.querySelector('[data-tool="changes"]'); row.click(); assert.equal(runs, 2);
+      registry = [...registry, { id: 'files', label: '文件', icon: 'folder' }]; refresh();
+      assert.ok(host.querySelector('[data-tool="files"]'));
+      row = host.querySelector('[data-tool="changes"]');
+      dispose();
+      row.click(); assert.equal(runs, 2); assert.equal(row.disabled, true); assert.equal(unsubscribed, true);
     } finally { f.close(); }
   });
-  await check('work panel launcher renders the four default cells, live shortcut hints and a controlled more grid', async () => {
+  await check('work panel launcher lists real tool ids in one column with live registered shortcut hints', async () => {
     const f = fixture('work-panel', 'ui/work-panel-launcher.js');
     try {
       const { w, d } = f;
-      const changes = d.getElementById('navChanges'), terminal = d.getElementById('btnTerminal'), files = d.getElementById('btnFiles');
-      const browser = d.getElementById('btnBrowser'), specs = d.getElementById('btnSpecs'), tree = d.getElementById('btnTree'), collab = d.getElementById('btnCollab');
-      w.registerShortcut({ id: 'fixture-changes', combo: 'primary+shift+g', label: '变更', run() {} });
-      w.registerShortcut({ id: 'fixture-terminal', combo: 'primary+`', label: '终端', run() {} });
-      w.registerShortcut({ id: 'fixture-files', combo: 'primary+p', label: '文件', run() {} });
+      for (const [id, combo, label] of [
+        ['work-changes', 'primary+shift+g', '变更'],
+        ['work-terminal', 'primary+`', '终端'],
+        ['work-files', 'primary+p', '文件'],
+      ]) w.registerShortcut({ id, combo, label, run() {} });
+      const tools = [
+        { id: 'changes', label: '文件变更', icon: 'changes', shortcutId: 'work-changes' },
+        { id: 'terminal', label: '终端', icon: 'terminal', shortcutId: 'work-terminal' },
+        { id: 'files', label: '文件', icon: 'folder', shortcutId: 'work-files' },
+        { id: 'specs', label: 'Specs', icon: 'fileText' },
+        { id: 'browser', label: '浏览器', icon: 'globe' },
+        { id: 'tree', label: '分支树', icon: 'branch' },
+        { id: 'collab', label: '协同文档', icon: 'diagram' },
+        { id: 'process', label: '开发进程', icon: 'terminal' },
+      ].map(tool => ({ ...tool, key: tool.id[0], open: id => opened.push(id) }));
+      const opened = []; let escapes = 0;
       const host = d.querySelector('#rightPane .rp-body');
-      const dispose = w.mountWorkPanelLauncher(host, [
-        { source: changes, label: '变更', shortcutId: 'fixture-changes' },
-        { source: terminal, label: '终端', shortcutId: 'fixture-terminal' },
-        { source: files, label: '文件', shortcutId: 'fixture-files' },
-        { source: browser, label: '浏览器', more: true },
-        { source: specs, label: 'Specs', more: true },
-        { source: tree, label: '分支树', more: true },
-        { source: collab, label: '协同文档', more: true },
-      ]);
-      assert.equal(host.querySelector('.work-panel-empty h2').textContent, '工具');
-      const primary = host.querySelector('.work-panel-launcher-grid:not(.work-panel-launcher-extra)');
-      assert.equal(primary.querySelectorAll('.work-panel-launcher-row').length, 3);
-      const more = host.querySelector('.work-panel-launcher-more');
-      assert.equal(primary.children.length, 4);
-      assert.equal(primary.children[3], more);
-      assert.deepEqual(
-        [...primary.querySelectorAll('.work-panel-launcher-row .work-panel-launcher-label')].map((n) => n.textContent),
-        ['变更', '终端', '文件']
-      );
-      const hints = [...primary.querySelectorAll('.work-panel-launcher-row .work-panel-launcher-shortcut')].map((n) => n.textContent);
-      assert.deepEqual(hints, [
-        w.formatCombo('primary+shift+g'),
-        w.formatCombo('primary+`'),
-        w.formatCombo('primary+p'),
-      ]);
-      const extra = host.querySelector('.work-panel-launcher-extra');
-      assert.ok(more && extra);
-      assert.ok(more.querySelector('.work-panel-launcher-label').textContent.includes('更多工具'));
-      assert.equal(extra.hidden, true);
-      assert.equal(more.getAttribute('aria-expanded'), 'false');
-      more.click();
-      assert.equal(extra.hidden, false);
-      assert.equal(more.getAttribute('aria-expanded'), 'true');
-      assert.deepEqual(
-        [...extra.querySelectorAll('.work-panel-launcher-label')].map((n) => n.textContent),
-        ['浏览器', 'Specs', '分支树', '协同文档']
-      );
-      more.click();
-      assert.equal(extra.hidden, true);
-      assert.equal(more.getAttribute('aria-expanded'), 'false');
+      const dispose = w.mountWorkPanelLauncher(host, tools, { onEscape: () => { escapes++; } });
+      assert.equal(host.querySelector('.work-panel-empty h2').textContent, '打开工具');
+      assert.deepEqual([...host.querySelectorAll('.work-panel-launcher-row')].map(row => row.dataset.tool), tools.map(tool => tool.id));
+      assert.deepEqual([...host.querySelectorAll('.work-panel-launcher-row .work-panel-launcher-label')].map(node => node.textContent), tools.map(tool => tool.label));
+      assert.equal(host.querySelectorAll('.work-panel-launcher-grid, .work-panel-launcher-card, .work-panel-launcher-more').length, 0);
+      const hints = [...host.querySelectorAll('.work-panel-launcher-row .work-panel-launcher-shortcut')].slice(0, 3).map(node => node.textContent);
+      assert.deepEqual(hints, ['primary+shift+g', 'primary+`', 'primary+p'].map(combo => w.formatCombo(combo)));
+      assert.ok([...host.querySelectorAll('.work-panel-launcher-row .work-panel-launcher-shortcut')].slice(3).every(node => node.hidden));
       assert.equal(host.querySelector('[class*="recommend"]'), null);
-      assert.ok(!host.textContent.includes('推荐'));
+      const rows = [...host.querySelectorAll('.work-panel-launcher-row')];
+      const key = (target, value, extra = {}) => {
+        const event = new w.KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true, ...extra });
+        target.dispatchEvent(event); return event;
+      };
+      assert.equal(rows[0].tabIndex, 0); assert.ok(rows.slice(1).every(row => row.tabIndex === -1));
+      rows[0].focus();
+      assert.equal(key(rows[0], 'ArrowDown').defaultPrevented, true);
+      assert.equal(d.activeElement, rows[1]);
+      key(rows[1], 'End'); assert.equal(d.activeElement, rows.at(-1));
+      key(rows.at(-1), 'Home'); assert.equal(d.activeElement, rows[0]);
+      key(rows[0], 'f'); assert.equal(d.activeElement.dataset.tool, 'files');
+      key(d.activeElement, 'Enter'); assert.deepEqual(opened, ['files']);
+      key(d.activeElement, ' '); assert.deepEqual(opened, ['files', 'files']);
+      assert.equal(key(d.activeElement, 'b', { ctrlKey: true }).defaultPrevented, false);
+      assert.equal(d.activeElement.dataset.tool, 'files');
+      key(d.activeElement, 'Escape'); assert.equal(escapes, 1);
+      d.getElementById('input').focus();
+      assert.equal(key(rows[0], 't').defaultPrevented, false);
+      assert.equal(d.activeElement, d.getElementById('input'));
       dispose();
-      assert.equal(more.disabled, true);
+      key(rows[0], 'Enter'); assert.deepEqual(opened, ['files', 'files']);
     } finally { f.close(); }
   });
   for (const decision of ['允许一次', '拒绝']) for (const lifecycle of ['expired', 'stop', 'workspace', 'session', 'bridge', 'timeout']) {
@@ -310,8 +321,8 @@ const click = (d, text, id = 'confirmCard') => {
   function sessionFixture(context, held = false) {
     const f = fixture('A', 'session-changes-panel.js');
     let release;
-    const callbacks = [], root = f.d.getElementById('rightPane');
-    f.w.configureSecondaryPane({ root, open(view) { root.hidden = false; callbacks.forEach(fn => fn(view)); }, close() { callbacks.forEach(fn => fn(null)); }, onSurfaceChange(fn) { callbacks.push(fn); } });
+    const callbacks = [], root = f.d.getElementById('rightPane'); let surface = null;
+    f.w.configureSecondaryPane({ root, open(view) { surface = view; root.hidden = false; callbacks.forEach(fn => fn(view)); }, close() { root.hidden = true; callbacks.forEach(fn => fn(null)); }, isOpen() { return !root.hidden; }, surface() { return surface; }, onSurfaceChange(fn) { callbacks.push(fn); } });
     const summary = { ok: true, target: { conversationId: context.conversationId }, capture: { enabled: false }, fileCount: 0, operationCount: 0, files: [] };
     const transport = { query: () => held ? new Promise(resolve => { release = () => resolve(summary); }) : Promise.resolve(summary) };
     const panel = f.w.openSessionChangesPanel({ context: () => context, transport });
@@ -358,9 +369,11 @@ const click = (d, text, id = 'confirmCard') => {
     await check('cancelled loading clears busy immediately and ignores late result: ' + event, async () => {
       const f = sessionFixture({ conversationId: 'classic-chat', owner: null }, true);
       try {
-        assert.equal(f.d.querySelector('.session-change-body').getAttribute('aria-busy'), 'true');
+        const body = f.d.querySelector('.session-change-body');
+        assert.equal(body.getAttribute('aria-busy'), 'true');
         f.d.dispatchEvent(new f.w.CustomEvent(event, { detail: {} }));
-        assert.notEqual(f.d.querySelector('.session-change-body').getAttribute('aria-busy'), 'true');
+        if (event === 'pi-gui:session-switch') assert.equal(body.isConnected, false);
+        else assert.notEqual(body.getAttribute('aria-busy'), 'true');
         f.release(); await tick(); await tick();
         assert.ok(!f.d.querySelector('.session-change-summary'));
       } finally { f.panel.dispose(); f.close(); }
@@ -371,10 +384,11 @@ const click = (d, text, id = 'confirmCard') => {
     let poll, delay, cleared = false;
     f.w.setInterval = (fn, ms) => { poll = fn; delay = ms; return 1; };
     f.w.clearInterval = () => { cleared = true; };
-    f.w.configureSecondaryPane({ root: f.d.getElementById('rightPane'), open(view) { listeners.forEach(fn => fn(view)); }, close() { listeners.forEach(fn => fn(null)); }, onSurfaceChange(fn) { listeners.push(fn); } });
+    const root = f.d.getElementById('rightPane'); let surface = null;
+    f.w.configureSecondaryPane({ root, open(view) { surface = view; root.hidden = false; listeners.forEach(fn => fn(view)); }, close() { root.hidden = true; listeners.forEach(fn => fn(null)); }, isOpen() { return !root.hidden; }, surface() { return surface; }, onSurfaceChange(fn) { listeners.push(fn); } });
     f.w.openProcessPanel({ transport });
     return { ...f, poll: () => poll(), delay: () => delay, cleared: () => cleared,
-      dispose: () => f.w.openSecondarySurface('changes', host => { host.textContent = 'replacement'; }) };
+      dispose: () => { f.w.closeSecondarySurface('process'); f.w.openSecondarySurface('changes', host => { host.textContent = 'replacement'; }); } };
   }
   const processRecord = revision => ({ id: 'fixture-process', revision, command: 'node', argCount: 1, state: 'ready', uptimeMs: 100, cleanupConfirmed: true });
   await check('process polling stays serial across manual refresh and pending logs', async () => {

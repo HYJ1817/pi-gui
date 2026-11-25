@@ -75,7 +75,12 @@ const check = (name, fn) => { fn(); count++; console.log('  ok  ' + name); };
     onAgentOpen: (fn) => { openListener = fn; }, agentStatus: async () => truth,
     setAgentControl: async (enabled) => { calls.push(enabled); truth = { ...truth, enabled }; agentListener(truth); } };
   window.piGuiDesktop = { browser: bridge };
-  const pane = { root: document.getElementById('rightPane'), open() {}, close() {}, isOpen: () => true, onViewport: () => () => {}, onOccluded: () => () => {} };
+  const root = document.getElementById('rightPane');
+  root.insertAdjacentHTML('afterbegin', '<div id="workPanelTabs" role="tablist"></div><button id="workPanelNew">新标签页</button>');
+  let selected = null;
+  const pane = { root, open(view) { selected = view; root.hidden = false; }, close() { root.hidden = true; }, isOpen: () => !root.hidden, surface: () => selected, onViewport: () => () => {}, onOccluded: () => () => {} };
+  const { configureSecondaryPane } = await import('../public/ui/secondary-surface.js');
+  configureSecondaryPane(pane);
   const { attachBrowserPane } = await import('../public/browser-pane.js');
   const attached = attachBrowserPane(pane);
   document.getElementById('keepFocus').focus();

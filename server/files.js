@@ -23,8 +23,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { isInside, normalizeForCompare, realPathOrNull, resolveProjectPath } from '../lib/safe-path.js';
-import { evaluateSystemOpen } from './open-policy.js';
+import { evaluateSystemOpen, EXECUTABLE_MAGIC } from './open-policy.js';
 import { json, readBody } from './http-utils.js';
+import { directoryIdentityOf, fileIdentityOf, sameStatIdentity } from '../lib/file-identity.js';
+import { PREVIEW_LIMITS, previewPolicy, assertPreviewHeader, previewRange } from '../lib/file-preview-policy.js';
+import { assertPreviewRelative, assertPreviewPath, openPreviewReader, sendPreviewContent } from '../lib/file-preview-reader.js';
+import { searchPreviewFiles } from '../lib/file-preview-search.js';
 
 export const FILE_LIMITS = Object.freeze({
   maxEntries: 512,
@@ -67,9 +71,22 @@ function statNoFollow(target) {
  *  compute it without already having asked this backend about that file. */
 function fileIdFor(workspace, absolutePath, stat) {
   return createHash('sha256')
-    .update(`${workspace.id}\0${normalizeForCompare(absolutePath)}\0${stat.dev}\0${stat.ino}\0${stat.size}\0${Math.trunc(stat.mtimeMs)}`)
+    .update(`${workspace.id}\0${workspace.conversationId ?? ''}\0${normalizeForCompare(absolutePath)}\0${JSON.stringify(fileIdentityOf(stat))}`)
     .digest('base64url')
     .slice(0, 32);
+}
+
+/* Object tokens only bind a preview to bytes already authorized by the owner;
+ * they cannot grant access, and there is no second permission/token ledger. */
+function externalFileIdFor(state, scope) {
+  const id = hash([state.grant.id, state.conversationKey, normalizeForCompare(scope.root),
+    scope.scopeId ?? '', scope.generation ?? ''].join('\0'));
+  return fileIdFor({ id }, state.real, state.stat);
+}
+
+function previewMetadata(abs) {
+  const policy = previewPolicy(abs);
+  return { type: policy.type, mime: policy.mime, maxBytes: policy.maxBytes, range: policy.media };
 }
 
 function workspaceFor(scope) {
@@ -92,6 +109,7 @@ function workspaceFor(scope) {
     : null;
   return {
     root,
+    rootIdentity: directoryIdentityOf(stat),
     id: hash(normalizeForCompare(root) + '\0' + scopeId + '\0' + generation),
     generation,
     conversationId,
@@ -100,6 +118,21 @@ function workspaceFor(scope) {
 }
 
 const publicWorkspace = (workspace) => workspace ? { id: workspace.id, generation: workspace.generation } : null;
+
+/* Native <video>/<audio> cannot attach the conversation header. Translate only
+ * the owner identifier, then invoke precisely the existing scope resolver. */
+function requestForFileScope(req, url = new URL(req.url || '/', 'http://files.local')) {
+  const values = url.searchParams.getAll('conversation');
+  const header = req.headers?.['x-pi-gui-conversation'];
+  if (values.length > 1 || (header !== undefined && typeof header !== 'string')) throw fail('invalid_request', '会话身份不合法。');
+  if (!values.length) return req;
+  const conversation = values[0];
+  if (!conversation || conversation.length > 128 || /[\u0000- \u007f]/.test(conversation)
+    || (header !== undefined && header !== conversation)) throw fail('invalid_request', '会话身份冲突或不合法。');
+  const scoped = Object.create(req);
+  Object.defineProperty(scoped, 'headers', { value: { ...req.headers, 'x-pi-gui-conversation': conversation } });
+  return scoped;
+}
 
 function validateWorkspaceIdentity(workspace, expectedId, expectedGeneration, required = false) {
   const id = String(expectedId ?? '');
@@ -202,6 +235,7 @@ export function createFiles({
 } = {}) {
   if (typeof scopeForRequest !== 'function') throw new TypeError('scopeForRequest must be a function');
   const findCache = new Map();
+  const resolveScope = (req) => scopeForRequest(requestForFileScope(req));
 
   function workspaceError(res, error) {
     const code = error?.code || 'files_unavailable';
@@ -221,7 +255,7 @@ export function createFiles({
   }
 
   async function list(req, res, url) {
-    const scope = await scopeForRequest(req);
+    const scope = await resolveScope(req);
     const workspace = workspaceFor(scope);
     if (!workspace) {
       return json(res, 200, { ok: true, noProject: true, workspace: null, dir: '', entries: [], truncated: false });
@@ -304,7 +338,7 @@ export function createFiles({
     if (!requested || requested.length > limits.maxPathChars) {
       return json(res, 400, { ok: false, code: 'invalid_request', error: '缺少文件路径。' });
     }
-    const scope = await scopeForRequest(req);
+    const scope = await resolveScope(req);
     const workspace = workspaceFor(scope);
     if (!workspace) return json(res, 409, { ok: false, code: 'workspace_unavailable', error: '当前工作区不可用。' });
     const hasToken = validateWorkspaceToken(workspace, url);
@@ -398,7 +432,7 @@ export function createFiles({
 
   async function metadata(req, res, url) {
     const requested = String(url.searchParams.get('path') || '');
-    const scope = await scopeForRequest(req);
+    const scope = await resolveScope(req);
     const workspace = workspaceFor(scope);
     if (!workspace) return json(res, 409, { ok: false, code: 'workspace_unavailable', error: '当前工作区不可用。' });
     const expectedRoot = expectedRootOf(url.searchParams.get('root'));
@@ -422,6 +456,7 @@ export function createFiles({
         bytes: guarded.stat.size,
         image: Boolean(IMAGE_TYPES[ext]),
         fileId: guarded.fileId,
+        ...previewMetadata(guarded.abs),
       },
     });
   }
@@ -430,7 +465,7 @@ export function createFiles({
    * 读的时候依旧 O_NOFOLLOW + fstat 身份复核，并带上禁止脚本执行的 CSP。 */
   async function asset(req, res, url) {
     const requested = String(url.searchParams.get('path') || '');
-    const scope = await scopeForRequest(req);
+    const scope = await resolveScope(req);
     const workspace = workspaceFor(scope);
     if (!workspace) return json(res, 409, { ok: false, code: 'workspace_unavailable', error: '当前工作区不可用。' });
     const hasToken = validateWorkspaceToken(workspace, url);
@@ -488,7 +523,7 @@ export function createFiles({
     if (!safeName(name) || name === '.' || name === '..') {
       return json(res, 400, { ok: false, code: 'invalid_request', error: '文件名不合法。' });
     }
-    const scope = await scopeForRequest(req);
+    const scope = await resolveScope(req);
     const workspace = workspaceFor(scope);
     if (!workspace) return json(res, 200, { ok: true, name, matches: [], truncated: false });
     const expectedRoot = expectedRootOf(url.searchParams.get('root'));
@@ -547,6 +582,141 @@ export function createFiles({
     return json(res, 200, { ok: true, name, ...value });
   }
 
+  /* ---------- Unified preview: same owner, stricter byte/object binding ---------- */
+
+  async function assertWorkspaceCurrent(req, expected) {
+    const current = workspaceFor(await resolveScope(req));
+    if (!current || current.id !== expected.id || current.conversationId !== expected.conversationId
+      || !sameStatIdentity(current.rootIdentity, expected.rootIdentity)) throw fail('workspace_changed');
+  }
+
+  const PREVIEW_ERRORS = Object.freeze({
+    invalid_request: [400, '请求参数不合法。'], binding_required: [400, '缺少工作区身份。'],
+    file_identity_required: [428, '缺少文件身份，请先读取文件信息。'],
+    workspace_unavailable: [409, '当前工作区不可用。'], unknown_conversation: [409, '这个会话不可用。'],
+    workspace_changed: [409, '工作区已经变化，请重新打开。'], stale_workspace: [409, '工作区已经变化，请重新打开。'],
+    file_changed: [409, '文件已经变化，请重新读取文件信息。'], file_missing: [404, '文件不存在。'],
+    unsafe_path: [403, '文件路径不安全。'], invalid_path: [403, '文件路径不安全。'],
+    grant_required: [400, '需要先授权访问这个文件。'], grant_invalid: [403, '授权已失效或不属于当前会话。'],
+    grant_scope: [403, '授权不覆盖这个文件。'], grant_changed: [403, '授权状态已经变化。'],
+    oversized: [413, '文件或响应超过此格式的预览上限。'],
+    unsafe_type: [415, '不提供可执行文件的伪装预览。'], unsupported_type: [415, '不支持这个预览格式。'],
+    type_mismatch: [415, '文件头与预览格式不符。'], range_not_satisfiable: [416, '无法提供这个字节范围。'],
+  });
+
+  function previewError(res, error, size) {
+    if (res.destroyed) return;
+    if (res.headersSent) { res.destroy(); return; }
+    const code = PREVIEW_ERRORS[error?.code] ? error.code
+      : error?.code === 'ENOENT' ? 'file_missing' : 'file_unavailable';
+    const [status, message] = PREVIEW_ERRORS[code] || [503, '无法读取文件。'];
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (status === 416 && Number.isSafeInteger(size)) res.setHeader('Content-Range', `bytes */${size}`);
+    return json(res, status, { ok: false, code, error: message });
+  }
+
+  function previewWorkspaceBinding(workspace, url) {
+    if (!workspace) throw fail('workspace_unavailable');
+    const hasToken = validateWorkspaceToken(workspace, url);
+    const rawRoot = url.searchParams.get('root');
+    const expectedRoot = expectedRootOf(rawRoot);
+    if (rawRoot && !expectedRoot) throw fail('workspace_changed');
+    if (!hasToken && !expectedRoot) throw fail('binding_required');
+    assertExpectedRoot(workspace, expectedRoot);
+    return expectedRoot;
+  }
+
+  async function content(req, res, url, external = false) {
+    if (external && !grants) return externalUnavailable(res);
+    let reader;
+    let size;
+    try {
+      for (const key of ['path', 'fileId', 'root', 'workspace', 'generation', 'grant']) {
+        if (url.searchParams.getAll(key).length > 1) throw fail('invalid_request');
+      }
+      const requested = String(url.searchParams.get('path') || '');
+      if (!requested || requested.length > limits.maxPathChars) throw fail('invalid_request');
+      const expectedFileId = String(url.searchParams.get('fileId') || '');
+      const workspace = workspaceFor(await resolveScope(req));
+      if (!workspace) throw fail('workspace_unavailable');
+      let abs, stat, assertPath, assertAccess;
+      if (external) {
+        const scope = { root: workspace.root, scopeId: workspace.scope.scopeId,
+          generation: workspace.generation, conversationId: workspace.conversationId };
+        const state = grants.authorizeRead({ grantId: String(url.searchParams.get('grant') || ''), rawPath: requested, scope });
+        if (!expectedFileId) throw fail('file_identity_required');
+        if (externalFileIdFor(state, scope) !== expectedFileId) throw fail('file_changed');
+        abs = state.real; stat = state.stat;
+        const root = state.grant.kind === 'directory' ? state.grant.target : path.dirname(abs);
+        assertPath = () => { assertPreviewPath(root, requested); assertPreviewPath(root, abs); };
+        assertAccess = async () => {
+          grants.assertStillValid(state);
+          await assertWorkspaceCurrent(req, workspace);
+          grants.assertStillValid(state);
+          const current = grants.authorizeRead({ grantId: state.grant.id, rawPath: requested, scope });
+          if (externalFileIdFor(current, scope) !== expectedFileId) throw fail('file_changed');
+        };
+      } else {
+        const expectedRoot = previewWorkspaceBinding(workspace, url);
+        assertPreviewRelative(requested);
+        const guarded = guardWorkspaceFile(workspace, requested, { expectedRoot, expectedFileId, requireFileId: true });
+        if (guarded.code) throw fail(guarded.code);
+        abs = guarded.abs; stat = guarded.stat;
+        assertPath = () => { assertPreviewPath(workspace.root, path.resolve(workspace.root, requested)); assertPreviewPath(workspace.root, abs); };
+        assertAccess = () => assertWorkspaceCurrent(req, workspace);
+      }
+      size = stat.size;
+      const policy = previewPolicy(abs);
+      if (policy.type === 'unsupported') throw fail('unsupported_type');
+      if (!Number.isSafeInteger(size) || size < 0 || size > policy.maxBytes) throw fail('oversized');
+      reader = await openPreviewReader({ abs, stat, assertPath, assertAccess });
+      const header = await reader.read(0, Math.min(size, PREVIEW_LIMITS.headerBytes));
+      assertPreviewHeader(header, policy, EXECUTABLE_MAGIC);
+      const range = previewRange(req.headers?.range, size);
+      // Large media must use bounded Range windows; other formats can be read
+      // in full, but only within their own total-file policy, even with Range.
+      if (!range && policy.media && size > PREVIEW_LIMITS.maxRangeBytes) throw fail('oversized');
+      await reader.verify();
+      const headers = {
+        'Content-Type': policy.type === 'html' || policy.ext === '.svg' ? 'application/octet-stream' : policy.mime,
+        'Content-Length': String(range ? range.length : size),
+        'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff', 'Content-Disposition': 'attachment',
+        'Content-Security-Policy': "default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none'; sandbox",
+        'Cross-Origin-Resource-Policy': 'same-origin',
+        ...(range ? { 'Content-Range': `bytes ${range.start}-${range.end}/${size}` } : {}),
+      };
+      await sendPreviewContent(req, res, reader, { start: range?.start ?? 0,
+        length: range ? range.length : size, headers, status: range ? 206 : 200 });
+    } catch (error) {
+      return previewError(res, error, size);
+    } finally {
+      if (reader) await reader.close().catch(() => {}); // always release this request's descriptor
+    }
+  }
+
+  async function search(req, res, url) {
+    try {
+      if (url.searchParams.getAll('q').length !== 1 || url.searchParams.getAll('hidden').length > 1) throw fail('invalid_request');
+      const query = String(url.searchParams.get('q') || '').trim();
+      if (!query || query.length > 200 || /[\u0000-\u001f\u007f]/.test(query)) throw fail('invalid_request');
+      const workspace = workspaceFor(await resolveScope(req));
+      previewWorkspaceBinding(workspace, url);
+      const result = await searchPreviewFiles({ root: workspace.root, query,
+        hidden: url.searchParams.get('hidden') === '1',
+        maxEntries: Math.min(limits.maxFindEntries, 4000), maxDepth: Math.min(limits.maxFindDepth, 8), maxResults: 100,
+        assertAccess: async () => {
+          if (req.aborted || res.destroyed) throw fail('request_aborted');
+          await assertWorkspaceCurrent(req, workspace);
+        },
+      });
+      return json(res, 200, { ok: true, q: query, workspace: publicWorkspace(workspace), ...result });
+    } catch (error) {
+      return previewError(res, error);
+    }
+  }
+
   function openTargetError(res, code, extra = {}) {
     /* unsafe_type / unknown_type / executable_header:<label> 都是
      * “系统默认程序可能执行它”的拒绝 —— 同一个 415，用户语义一致。 */
@@ -572,7 +742,7 @@ export function createFiles({
     }
     const requested = String(payload?.path ?? '');
     const action = ['open', 'reveal', 'copy', 'editor'].includes(payload?.action) ? payload.action : 'open';
-    const scope = await scopeForRequest(req);
+    const scope = await resolveScope(req);
     const workspace = workspaceFor(scope);
     if (!workspace) return json(res, 409, { ok: false, code: 'workspace_unavailable', error: '当前工作区不可用。' });
 
@@ -639,7 +809,7 @@ export function createFiles({
   });
 
   async function externalScope(req) {
-    const scope = await scopeForRequest(req);
+    const scope = await resolveScope(req);
     const workspace = workspaceFor(scope);
     if (!workspace) throw fail('workspace_unavailable', '当前工作区不可用。');
     return {
@@ -686,7 +856,7 @@ export function createFiles({
   async function externalMetadata(req, res, url) {
     if (!grants) return externalUnavailable(res);
     try {
-      const { state } = await authorizeExternal(req, url);
+      const { state, scope } = await authorizeExternal(req, url);
       const ext = path.extname(state.real).toLowerCase();
       return json(res, 200, {
         ok: true,
@@ -698,6 +868,8 @@ export function createFiles({
           bytes: state.stat.size,
           image: Boolean(IMAGE_TYPES[ext]),
           grantId: state.grant.id,
+          fileId: externalFileIdFor(state, scope),
+          ...previewMetadata(state.real),
         },
       });
     } catch (error) {
@@ -846,6 +1018,7 @@ export function createFiles({
 
   async function handle(req, res, url) {
     try {
+      requestForFileScope(req, url); // reject conflicting owners before any action
       if (url.pathname === '/api/files/open-target') {
         if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'method_not_allowed', error: 'Method not allowed' });
         return await openTarget(req, res);
@@ -861,6 +1034,9 @@ export function createFiles({
       if (req.method !== 'GET') return json(res, 405, { ok: false, code: 'method_not_allowed', error: 'Method not allowed' });
       if (url.pathname === '/api/files') return await list(req, res, url);
       if (url.pathname === '/api/files/document') return await document(req, res, url);
+      if (url.pathname === '/api/files/content') return await content(req, res, url);
+      if (url.pathname === '/api/files/external/content') return await content(req, res, url, true);
+      if (url.pathname === '/api/files/search') return await search(req, res, url);
       if (url.pathname === '/api/files/metadata') return await metadata(req, res, url);
       if (url.pathname === '/api/files/asset') return await asset(req, res, url);
       if (url.pathname === '/api/files/find') return await find(req, res, url);

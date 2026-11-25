@@ -1,0 +1,112 @@
+.fp-pdf {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  color: var(--ds-text-primary);
+  background: var(--ds-bg-secondary);
+}
+.fp-pdf-tools, .fp-pdf-navigation, .fp-pdf-search-tools {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--ui-space-1);
+  min-width: 0;
+}
+.fp-pdf-tools { flex: none; }
+.fp-pdf-tools > *, .fp-pdf-navigation > *, .fp-pdf-search-tools > * { flex-shrink: 0; }
+.fp-pdf-search-tools { margin-inline-start: var(--ui-space-2); }
+.fp-pdf-page-input { box-sizing: border-box; height: var(--ds-control-size); width: 4.5em; min-width: 0; }
+.fp-pdf-search-tools .fp-search { width: 11em; min-width: 5em; max-width: 100%; }
+.fp-pdf-outline { max-width: 12em; }
+.fp-pdf-outline[hidden] { display: none; }
+.fp-pdf-total, .fp-pdf-zoom, .fp-pdf-match-count, .fp-pdf-status {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-text-secondary);
+}
+.fp-pdf-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  padding: var(--ui-space-3);
+}
+.fp-pdf-scroll:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: -2px; }
+.fp-pdf-pages {
+  position: relative;
+  width: max-content;
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ui-space-3);
+}
+.fp-pdf-page {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  /* Intrinsic PDF paper is intentionally light, independent of app theme. */
+  color-scheme: only light;
+  background: Canvas;
+  contain: layout paint;
+}
+.fp-pdf-page[aria-busy="true"]::after {
+  content: '正在渲染…';
+  position: absolute;
+  inset-block-start: var(--ui-space-2);
+  inset-inline-start: var(--ui-space-2);
+  color: CanvasText;
+  background: Canvas;
+  font: var(--text-sm) var(--font-sans);
+}
+.fp-pdf-canvas { display: block; width: 100%; height: 100%; }
+.fp-pdf-status { padding: var(--ui-space-1) var(--ui-space-3); }
+/* PDF.js 6.3.289 TextLayer geometry, scoped to this plugin. These mechanical
+   rules mirror pdfjs-dist/web/pdf_viewer.css (Apache-2.0), not a second UI kit. */
+.fp-pdf-text-layer {
+  position: absolute;
+  inset: 0;
+  text-align: initial;
+  overflow: clip;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.fp-pdf-text-layer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+  user-select: text;
+}
+.fp-pdf-text-layer > :not(.markedContent), .fp-pdf-text-layer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.fp-pdf-text-layer .markedContent { display: contents; }
+.fp-pdf-text-layer[data-main-rotation="90"] { transform: rotate(90deg) translateY(-100%); }
+.fp-pdf-text-layer[data-main-rotation="180"] { transform: rotate(180deg) translate(-100%, -100%); }
+.fp-pdf-text-layer[data-main-rotation="270"] { transform: rotate(270deg) translateX(-100%); }
+.fp-pdf-text-layer .has-search-hit { background: color-mix(in srgb, var(--ds-warning) 35%, transparent); }
+.fp-pdf-text-layer ::selection { color: transparent; background: color-mix(in srgb, var(--ds-accent) 35%, transparent); }
+@media (max-width: 760px) {
+  .fp-pdf-search-tools { margin-inline-start: 0; }
+  .fp-pdf-outline { max-width: 9em; }
+}

@@ -18,6 +18,7 @@ import { iconMarkup } from './ui/icons.js';
 
 import { toast } from './ui/toast.js';
 import { acceptGuiBrowserState } from './gui-browser-capabilities.js';
+import { openSecondarySurface, closeSecondarySurface, activateSecondarySurface, borrowSecondarySurface } from './ui/secondary-surface.js';
 
 const byId = (id) => document.getElementById(id);
 
@@ -115,7 +116,7 @@ function buildToolbar(host) {
  * @param {() => void} o.onRequestClose   点工具栏的 × 时调用（由外层决定怎么关）
  */
 export function createBrowserSurface({ pane, onRequestClose, bridge = window.piGuiDesktop.browser,
-  surfaceName = 'browser', onAgentState = acceptGuiBrowserState, onRequestSplit = null }) {
+  surfaceName = 'browser', onAgentState = acceptGuiBrowserState, onRequestSplit = null, target = null, instance = null }) {
   const host = document.createElement('div');
   host.className = 'rp-surface rp-surface-browser';
   const ui = buildToolbar(host);
@@ -137,7 +138,7 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
     // Compose with the existing pane occlusion instead of covering a native view.
     const blank = !state.url || state.url === 'about:blank';
     ui.empty.hidden = !blank;
-    const occluded = paneOccluded || blank;
+    const occluded = paneOccluded || blank || (instance && !instance.isVisible()) || Boolean(host.closest('[hidden]'));
     if (!disposed && nativeOccluded !== occluded) {
       nativeOccluded = occluded;
       bridge.setOccluded(occluded);
@@ -175,7 +176,7 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
   function mount() {
     if (disposed) {
       disposed = false;
-      pane.root.querySelector('.rp-body').appendChild(host);
+      (target || pane.root.querySelector('.rp-body')).appendChild(host);
 
       ui.back.addEventListener('click', () => bridge.back());
       ui.forward.addEventListener('click', () => bridge.forward());
@@ -234,9 +235,12 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
         if (!disposed && next && initialRevision === agentRevision) { agentState = next; onAgentState(next); render(); }
       }).catch(() => {});
       // 量出来的矩形交给主进程，由它 clamp 后再摆 WebContentsView
-      unsubs.push(pane.onViewport((rect) => bridge.setBounds(rect)));
+      unsubs.push(pane.onViewport((rect) => {
+        if ((!instance || instance.isVisible()) && !host.closest('[hidden]')) bridge.setBounds(rect);
+      }));
       // 有弹层盖上来时把原生 view 摘下去，否则它会压在弹层上面
       unsubs.push(pane.onOccluded((occluded) => { paneOccluded = occluded; render(); }));
+      if (instance?.onVisibility) unsubs.push(instance.onVisibility(() => render()));
 
       render();
     }
@@ -245,6 +249,7 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
   function unmount() {
     if (disposed) return;
     disposed = true;
+    bridge.setOccluded(true);
     for (const fn of unsubs.splice(0)) {
       try {
         fn();
@@ -275,7 +280,7 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
     host,
     isLive: () => !disposed,
     async open() {
-      pane.open(surfaceName);
+      if (!instance) pane.open(surfaceName);
       mount();
       let r;
       try { r = await bridge.open(); } catch { r = { ok: false, error: 'Browser 暂不可用' }; }
@@ -285,12 +290,12 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
         render();
       }
       // 打开后把焦点给地址栏 —— 用户接下来多半就是要输地址
-      ui.address.focus();
+      if (!instance || instance.isVisible()) ui.address.focus();
     },
     // Agent has already created/navigated the native view. Mounting the chrome
     // must neither call open() again nor move focus away from that page.
     openFromAgent() {
-      pane.open(surfaceName);
+      if (!instance) pane.open(surfaceName);
       mount();
     },
     moveTo(target, split = false) {
@@ -318,62 +323,52 @@ export function createBrowserSurface({ pane, onRequestClose, bridge = window.piG
 
 let paneRef = null;
 let surfaceRef = null;
-let moving = false;
 let workbenchOpener = null;
 
-function showClassicBrowser(split = false) {
+function showClassicBrowser(split = false, fromAgent = false) {
   if (!isBrowserAvailable() || (split && !workbenchOpener)) return false;
-  if (!surfaceRef) surfaceRef = createBrowserSurface({ pane: paneRef, onRequestClose: closeBrowserPane,
-    onRequestSplit: workbenchOpener ? () => showClassicBrowser(paneRef.surface() !== 'browser-changes-split') : null });
-  const surface = surfaceRef;
-  const wasLive = surface.isLive();
-  moving = true;
-  try {
-    if (split) {
-      if (!wasLive) surface.open();
-      workbenchOpener({ returnSurface: 'browser', browserOptions: {
-        mount: target => surface.moveTo(target, true),
-        exit: () => showClassicBrowser(false),
-        refresh: () => paneRef.refresh?.(),
-      } });
-    } else if (wasLive) {
-      paneRef.open('browser');
-      surface.moveTo(paneRef.root.querySelector('.rp-body'));
-    } else surface.open();
-  } finally { moving = false; }
+  openSecondarySurface('browser', (host, instance) => {
+    host.classList.add('browser-surface');
+    const surface = createBrowserSurface({ pane: paneRef, target: host, instance,
+      onRequestClose: closeBrowserPane,
+      onRequestSplit: workbenchOpener ? () => showClassicBrowser(paneRef.surface() !== 'browser-changes-split') : null });
+    surfaceRef = surface;
+    instance.onDispose(() => {
+      surface.close();
+      if (surfaceRef === surface) surfaceRef = null;
+      // A scope change detaches the old chrome. It must not close a different
+      // runtime Browser through the Classic bridge; explicit tab close does.
+      if (instance.disposeReason !== 'scope') window.piGuiDesktop?.browser?.close();
+    });
+    if (fromAgent) surface.openFromAgent();
+    else void surface.open();
+  }, { label: '浏览器' });
+  if (split && surfaceRef) {
+    const surface = surfaceRef;
+    workbenchOpener({ returnSurface: 'browser', browserOptions: {
+      mount: (target, _exit, owner) => {
+        if (!borrowSecondarySurface('browser', target, owner)) surface.moveTo(target, true);
+        surface.ui.split.innerHTML = iconMarkup('exitSplit');
+      },
+      exit: () => { closeSecondarySurface('browser-changes-split'); showClassicBrowser(false); },
+      refresh: () => paneRef.refresh?.(),
+    } });
+  }
   return true;
 }
 
-/** 关右栏 = 关浏览器：主进程那边同时销毁 WebContentsView。
- *  反复开 → 关 → 开 必须走同一条路，否则 webContents 会一代代留下来。 */
-function closeBrowserPane() {
-  if (paneRef?.onSurfaceChange) { paneRef.close(); return; }
-  if (surfaceRef) {
-    surfaceRef.close();
-    surfaceRef = null;
-  }
-  window.piGuiDesktop?.browser?.close();
-  if (paneRef) paneRef.close();
-}
+// Closing the Browser tab is explicit; hiding the pane never gets here.
+function closeBrowserPane() { closeSecondarySurface('browser'); }
 
 /** @param {object} pane  right-pane.js 的 initRightPane() 返回的面板对象 */
 export function attachBrowserPane(pane, { openWorkbench = null } = {}) {
   paneRef = pane;
   workbenchOpener = openWorkbench;
-  pane.onSurfaceChange?.((next) => {
-    if (moving || next === 'browser' || !surfaceRef) return;
-    surfaceRef.close();
-    surfaceRef = null;
-    window.piGuiDesktop?.browser?.close();
-  });
   window.piGuiDesktop?.browser?.onAgentOpen?.(() => {
+    // Do not steal focus or reveal a hidden Browser just because its own Agent
+    // updated an already-live native instance.
     if (surfaceRef?.isLive()) return;
-    if (!surfaceRef) surfaceRef = createBrowserSurface({ pane: paneRef, onRequestClose: closeBrowserPane,
-      onRequestSplit: workbenchOpener ? () => showClassicBrowser(paneRef.surface() !== 'browser-changes-split') : null });
-    surfaceRef.openFromAgent();
-  });
-  document.addEventListener('pi-gui:workspace-generation', () => {
-    if (surfaceRef) closeBrowserPane();
+    showClassicBrowser(false, true);
   });
   return {
     open() {
@@ -385,13 +380,14 @@ export function attachBrowserPane(pane, { openWorkbench = null } = {}) {
     close: closeBrowserPane,
     /** 入口按钮的行为：没开就开，开着就聚焦地址栏（不重复建 view）。 */
     toggle() {
-      if (paneRef?.isOpen() && surfaceRef) {
+      if (surfaceRef?.isLive()) {
+        activateSecondarySurface('browser');
         surfaceRef.focusAddress();
         return true;
       }
       return this.open();
     },
-    isOpen: () => Boolean(paneRef?.isOpen()),
+    isOpen: () => Boolean(surfaceRef?.isLive()),
     surface: () => surfaceRef,
   };
 }

@@ -35,8 +35,6 @@ export const el = {
   uQuota: $('uQuota'),
   projects: $('projects'),
   groupHead: $('groupHead'),
-  branchCount: $('branchCount'),
-  changesCount: $('changesCount'),
   providerCount: $('providerCount'),
   modal: $('modal'),
   modalCard: $('modalCard'),

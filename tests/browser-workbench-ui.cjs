@@ -73,11 +73,16 @@ const tick = async () => { for (let i = 0; i < 6; i++) await new Promise(r => se
   for (let i = 0; i < 20; i++) { browser.openSplit(); await tick(); surface.ui.split.click(); await tick(); }
   check('twenty layout transitions keep one instance/subscription', () => { assert.equal(browser.surface(), surface); assert.equal(listeners.size, 1); assert.equal(document.querySelectorAll('#browserViewport').length, 1); });
   browser.openSplit(); await tick();
+  S.workspaceGeneration++;
   document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-generation'));
   await tick();
-  check('classic project change closes old browser and workbench', () => { assert.equal(pane.surface(), null); assert.ok(events.includes('close')); assert.equal(listeners.size, 0); });
-  browser.openSplit(); await tick(); pane.close();
-  check('closing workbench releases browser instance and listeners', () => { assert.equal(browser.surface(), null); assert.equal(listeners.size, 0); });
+  check('classic project change retires old chrome and split without closing native authority', () => { assert.equal(pane.surface(), 'work-tools'); assert.equal(browser.surface(), null); assert.equal(surface.host.isConnected, false); assert.equal(document.querySelector('.workbench-split'), null); assert.ok(!events.includes('close')); assert.equal(occluded(), true); assert.equal(listeners.size, 0); });
+  browser.openSplit(); await tick();
+  const retained = browser.surface(); pane.close();
+  check('hiding workbench retains Browser; explicit tab close releases its instance and listeners', () => {
+    assert.equal(pane.isOpen(), false); assert.equal(browser.surface(), retained); assert.equal(listeners.size, 1); assert.equal(occluded(), true);
+    browser.close(); assert.equal(browser.surface(), null); assert.equal(listeners.size, 0); assert.ok(events.includes('close'));
+  });
   dom.window.close();
   console.log(`Browser workbench UI: ${count}/${count}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

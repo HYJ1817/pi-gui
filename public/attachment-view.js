@@ -3,7 +3,7 @@
 import { createIcon } from './ui/icons.js';
 import { fmtSize } from './util.js';
 import { attachmentFileType, ATTACHMENT_ICONS, ATTACHMENT_LABELS } from './attachment-types.js';
-import { localPreviewSource, openAttachmentPreview } from './attachment-preview.js';
+import { localPreviewSource, openAttachmentPreview, openAttachmentFile, attachmentPreviewOwner } from './attachment-preview.js';
 
 function statusText(a, blocked) {
   if (a.loading) return '上传并解析中…';
@@ -18,10 +18,19 @@ function sizeText(a) {
 }
 
 function fileInfo(a, type, media) {
-  // Ordinary files are a static row. Hover already exposes type · name · size,
-  // so clicking must not open a second surface with the same text.
-  const body = document.createElement('div');
-  body.className = 'att-body' + (media ? ' att-media-info' : ' att-info');
+  // Keep the compact tray geometry. Files with an original File can now open
+  // the unified reader; references without local bytes remain static metadata.
+  const previewable = !media && a.file && !a.loading && !a.uploadFailed;
+  const body = document.createElement(previewable ? 'button' : 'div');
+  if (previewable) {
+    const owner = attachmentPreviewOwner();
+    body.type = 'button';
+    body.setAttribute('aria-label', `预览附件：${a.name}`);
+    body.setAttribute('aria-controls', 'rightPane');
+    body.onclick = () => openAttachmentFile(a, body.id, owner);
+    body.id = `attachment-file-${String(a.id).replace(/[^a-z\d_-]/gi, '_')}`;
+  }
+  body.className = 'att-body' + (media ? ' att-media-info' : ' att-info') + (previewable ? ' att-open-file' : '');
   const description = [ATTACHMENT_LABELS[type], a.name, sizeText(a)].filter(Boolean).join(' · ');
   if (!media) {
     body.title = description;
@@ -36,13 +45,15 @@ function fileInfo(a, type, media) {
   return body;
 }
 
-function mediaButton(a, type, box) {
+function mediaButton(a, type) {
+  const owner = attachmentPreviewOwner();
   const button = document.createElement('button'); button.type = 'button'; button.className = 'att-thumb att-preview';
   button.dataset.attachmentId = String(a.id);
   const label = [a.name, sizeText(a)].filter(Boolean).join(' · ');
   button.title = label;
   button.setAttribute('aria-label', `预览${ATTACHMENT_LABELS[type]}：${label}`);
-  button.setAttribute('aria-haspopup', 'dialog');
+  button.setAttribute('aria-controls', 'rightPane');
+  button.id = `attachment-preview-${String(a.id).replace(/[^a-z\d_-]/gi, '_')}`;
   const source = localPreviewSource(a);
   // Only local owner-created URLs or the existing native ImageContent are used.
   const thumbnail = type === 'video' ? source && a.thumbnailUrl : source;
@@ -59,11 +70,8 @@ function mediaButton(a, type, box) {
     play.appendChild(createIcon('play')); button.appendChild(play);
   }
   // A missing decoder/thumbnail does not disable a file that uploaded correctly.
-  button.disabled = !source;
-  button.onclick = () => openAttachmentPreview(a, type, () => {
-    const target = [...box.querySelectorAll('.att-preview')].find(node => node.dataset.attachmentId === String(a.id));
-    target?.focus({ preventScroll: true });
-  });
+  button.disabled = !a.file && !source;
+  button.onclick = () => openAttachmentPreview(a, type, button.id, owner);
   return button;
 }
 
@@ -94,7 +102,7 @@ export function renderAttachmentTray(box, attachments, { imageBlocked, remove, e
     item.dataset.fileType = type;
     item.dataset.state = a.loading ? 'loading' : a.error ? 'error' : blocked ? 'blocked' : a.truncated ? 'truncated' : a.kind === 'binary' ? 'reference' : 'ready';
     item.setAttribute('role', 'listitem'); item.setAttribute('aria-busy', String(Boolean(a.loading)));
-    if (media) item.appendChild(mediaButton(a, type, box));
+    if (media) item.appendChild(mediaButton(a, type));
     const body = fileInfo(a, type, media);
     if (!media) body.dataset.attachmentId = String(a.id);
     item.appendChild(body);

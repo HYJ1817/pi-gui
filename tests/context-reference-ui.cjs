@@ -30,6 +30,7 @@ async function main() {
     window: dom.window,
     document: dom.window.document,
     localStorage: dom.window.localStorage,
+    sessionStorage: dom.window.sessionStorage,
     MutationObserver: dom.window.MutationObserver,
     CustomEvent: dom.window.CustomEvent,
     requestAnimationFrame: (fn) => setTimeout(fn, 0),
@@ -38,7 +39,7 @@ async function main() {
 
   const { S } = await import('../public/state.js');
   const { initRightPane } = await import('../public/right-pane.js');
-  const { configureSecondaryPane, readPaneState } = await import('../public/ui/secondary-surface.js');
+  const { configureSecondaryPane, readPaneState, secondarySurfaceInstance, secondaryTabs, closeSecondarySurface } = await import('../public/ui/secondary-surface.js');
   const { setGitConversationScope } = await import('../public/api.js');
   const { openChangesPanel } = await import('../public/git.js');
   const { openSpecsPanel } = await import('../public/specs-panel.js');
@@ -122,16 +123,25 @@ async function main() {
     scroller.dispatchEvent(new window.Event('scroll', { bubbles: false }));
     ok('diff row is expanded before the panel switch', () => !row.querySelector('.chg-diff').hidden);
 
+    const changesInstance = secondarySurfaceInstance('changes');
+    const changesHost = changesInstance?.host;
     openSpecsPanel();
     await tick(20);
-    ok('switching surfaces clears the Changes DOM', () => !pane.root.querySelector('.chg-row'));
+    // 隐藏不等于关闭：切到 Specs 后 Changes 的 host 必须不可见，但业务 DOM
+    // 与展开状态由原 owner 保留；不能用“清空 DOM”冒充切换，也不能让旧面板
+    // 继续可见或保持 current 展示。
+    ok('switching surfaces hides but retains the Changes DOM', () =>
+      Boolean(changesHost) && changesHost.hidden === true &&
+      changesInstance.isVisible() === false &&
+      pane.root.querySelector('.chg-row') === row &&
+      !row.querySelector('.chg-diff').hidden);
     await until(() => pane.root.querySelector('.specs-surface'));
 
     openChangesPanel();
     await until(() => pane.root.querySelector('.chg-row .chg-diff:not([hidden])'));
     const reopenedRow = pane.root.querySelector('#rightPane .chg-row');
     ok('reopening Changes restores the expanded diff for the same scope', () =>
-      Boolean(reopenedRow) && !reopenedRow.querySelector('.chg-diff').hidden);
+      Boolean(reopenedRow) && reopenedRow === row && !reopenedRow.querySelector('.chg-diff').hidden);
     await until(() => pane.root.querySelector('.chg-list')?.scrollTop === 40, 'list scroll restore');
     ok('list restoration targets .chg-list rather than the non-scrolling body', () =>
       pane.root.querySelector('.chg-body').scrollTop === 0 && pane.root.querySelector('.chg-list').scrollTop === 40);
@@ -149,7 +159,7 @@ async function main() {
       return Boolean(freshRow) && freshRow.querySelector('.chg-diff').hidden;
     });
 
-    /* ---------- Task B2: Specs reopen keeps expanded dirs + selection ---------- */
+    /* ---------- Task B2: Specs keeps expanded dirs + selection ---------- */
 
     openSpecsPanel();
     await until(() => pane.root.querySelector('.specs-doc-item'));
@@ -158,10 +168,11 @@ async function main() {
     ok('specs document opens after the surface swap', () => Boolean(docItem));
     await tick(10);
     const specsSnapshot = readPaneState('specs');
-    ok('specs state only snapshots after real content exists', () =>
+    ok('live Specs does not need a dispose snapshot to render content', () =>
       specsSnapshot === null || (specsSnapshot && specsSnapshot.workspaceId === 'z1-workspace'));
 
-    /* Force a snapshot with collapsed state by disposing via surface switch. */
+    const specsInstance = secondarySurfaceInstance('specs');
+    const specsHost = specsInstance?.host;
     const treeList = pane.root.querySelector('.specs-tree-list');
     const dirRow = pane.root.querySelector('.specs-tree-dir');
     if (dirRow) {
@@ -171,13 +182,37 @@ async function main() {
     const markdown = pane.root.querySelector('.specs-markdown');
     if (markdown) markdown.scrollTop = 30;
     if (treeList) treeList.scrollTop = 12;
+
     openChangesPanel();
     await tick(20);
+    ok('switching away hides but retains the live Specs owner', () =>
+      Boolean(specsHost) && specsHost.hidden === true && specsInstance.isVisible() === false &&
+      pane.root.querySelector('.specs-doc-item') === docItem &&
+      docItem.getAttribute('aria-current') === 'page' &&
+      pane.root.querySelector('.specs-tree-list') === treeList);
+
+    openSpecsPanel();
+    await tick(20);
+    ok('switching back keeps the same Specs DOM without rebuilding', () =>
+      pane.root.querySelector('.specs-doc-item') === docItem &&
+      specsInstance.isVisible() === true &&
+      pane.root.querySelector('.specs-tree-list') === treeList);
+
+    /* A hard boundary (explicit close) still snapshots; ordinary switching must
+     * not dispose the owner just to retain selection. */
+    const specsTab = secondaryTabs().find(tab => tab.view === 'specs');
+    closeSecondarySurface(specsTab.id);
+    await tick(20);
+    const closedSnapshot = readPaneState('specs');
+    ok('explicit close snapshots the selected Specs document', () =>
+      Boolean(closedSnapshot) && closedSnapshot.workspaceId === 'z1-workspace' &&
+      closedSnapshot.selectedPath === 'SPEC.md');
+
     openSpecsPanel();
     await until(() => pane.root.querySelector('.specs-doc-item'), 'specs reopen');
     await tick(30);
     const restoredState = readPaneState('specs');
-    ok('specs reopen keeps the selected document and snapshot identity', () =>
+    ok('specs reopen restores the selected document from its snapshot', () =>
       Boolean(restoredState) && restoredState.workspaceId === 'z1-workspace' &&
       restoredState.selectedPath === 'SPEC.md');
   } finally {

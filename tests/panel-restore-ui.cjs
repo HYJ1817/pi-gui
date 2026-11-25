@@ -38,7 +38,9 @@ const { JSDOM } = require('jsdom');
   };
 
   const pane = initRightPane();
-  configureSecondaryPane(pane);
+  const { S } = await import('../public/state.js');
+  let sessionId = 'A';
+  configureSecondaryPane(pane, { getScope: () => JSON.stringify([S.workspaceGeneration, sessionId]) });
 
   // 1. Ordinary panel tracking in sessionStorage
   openSecondarySurface('changes', (host) => {
@@ -62,7 +64,7 @@ const { JSDOM } = require('jsdom');
   ok('changes state has diff view state', storedChangesState?.diffViewState?.[0]?.[0] === 'file-a.js');
 
   // 2. Browser surface is NEVER recorded or restored (Safety Rule)
-  pane.open('browser');
+  openSecondarySurface('browser', host => { host.textContent = 'Browser descriptor fixture; no native open'; });
   ok('browser surface is NOT recorded in restored surface', readRestoredSurface() === null);
 
   // Directly attempting writeRestoredSurface('browser') is safely blocked
@@ -104,6 +106,7 @@ const { JSDOM } = require('jsdom');
   ok('pre-switch changes state exists', readPaneState('changes') !== null);
 
   // Dispatch session switch event (production event, no manual clearPaneState call)
+  sessionId = 'B';
   document.dispatchEvent(new dom.window.CustomEvent('pi-gui:session-switch'));
   ok('session switch automatically clears changes pane state', readPaneState('changes') === null);
 
@@ -111,9 +114,11 @@ const { JSDOM } = require('jsdom');
   writeRestoredSurface('changes');
   writePaneState('specs', { treeScroll: 100 });
   // Dispatch workspace generation event (production event, no manual clearPaneState call)
+  S.workspaceGeneration++;
   document.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
   ok('workspace generation automatically clears restored surface', readRestoredSurface() === null);
   ok('workspace generation automatically clears specs pane state', readPaneState('specs') === null);
 
   console.log(`Panel restore UI: ${checks}/${checks} passed`);
+  dom.window.close();
 })();

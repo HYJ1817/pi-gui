@@ -23,7 +23,7 @@ function makeDom() {
       <aside id="projectSidebar"></aside>
       <main id="workspace" data-workspace-view="chat"></main>
       <div id="rightPaneResizer"></div>
-      <aside id="rightPane" class="right-pane" hidden><div class="rp-titlebar"></div><div class="rp-body"></div></aside>
+      <aside id="rightPane" class="right-pane" hidden><div class="rp-titlebar"><div id="workPanelTabs" role="tablist"></div><button id="workPanelNew">新标签页</button></div><div class="rp-body"></div></aside>
       <div class="head-right"><button id="btnSpecs" aria-pressed="false"></button><button id="btnMore"></button></div>
       <div id="modal" hidden></div><div id="confirmLayer" hidden></div>
       <div id="globalMoreMenu" hidden></div><div id="toasts"></div>
@@ -56,7 +56,8 @@ function indexPayload(workspaceId, generation, docs) {
   const dom = makeDom();
   const { S } = await import('../public/state.js');
   const { initRightPane } = await import('../public/right-pane.js');
-  const { configureSecondaryPane } = await import('../public/ui/secondary-surface.js');
+  const { configureSecondaryPane, closeSecondarySurface, openSecondarySurface } = await import('../public/ui/secondary-surface.js');
+  const { gitConversationScope, setGitConversationScope } = await import('../public/api.js');
   const { openSpecsPanel } = await import('../public/specs-panel.js');
   const { md } = await import('../public/markdown.js');
   const { buildSpecTree, resolveSpecLink } = await import('../public/specs-tree.js');
@@ -65,7 +66,7 @@ function indexPayload(workspaceId, generation, docs) {
   S.switching = false;
   S.bridgeState = 'ready';
   const pane = initRightPane();
-  configureSecondaryPane(pane);
+  configureSecondaryPane(pane, { getScope: () => JSON.stringify([S.workspaceGeneration, gitConversationScope()]) });
 
   try {
     ok('Markdown heading IDs are opt-in and preserve existing chat rendering', () =>
@@ -123,17 +124,19 @@ function indexPayload(workspaceId, generation, docs) {
       },
       document: async (id, workspace, generation) => {
         documentCalls++;
+        const index = currentIndex;
+        const doc = index.documents.find(entry => entry.id === id);
+        const content = doc && contentByPath.get(doc.path);
+        assert.equal(workspace.id, index.workspace.id);
+        assert.equal(generation, index.workspace.generation);
         if (holdDocument) {
           const held = holdDocument;
           holdDocument = null;
           await held;
         }
         if (failDocument) return { ok: false, code: 'oversized', error: '文档过大' };
-        const doc = currentIndex.documents.find((entry) => entry.id === id);
         if (!doc) return { ok: false, code: 'document_missing', error: '文档不存在' };
-        assert.equal(workspace.id, currentIndex.workspace.id);
-        assert.equal(generation, currentIndex.workspace.generation);
-        return { ok: true, document: { ...doc, content: contentByPath.get(doc.path) } };
+        return { ok: true, document: { ...doc, content } };
       },
     };
 
@@ -220,20 +223,23 @@ function indexPayload(workspaceId, generation, docs) {
     document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-generation'));
     ok('workspace change immediately removes the previous workspace content', () =>
       document.querySelector('.specs-doc-path') === null &&
-      document.querySelector('.specs-empty') !== null);
+      document.querySelector('.specs-surface') === null && pane.surface() === 'work-tools');
     currentIndex = indexPayload('w2', 'g2', [{ path: 'SPEC.md', content: '# Worktree B\n' }]);
     contentByPath.set('SPEC.md', '# Worktree B\n');
     S.switching = false;
+    openSpecsPanel({ transport });
     await until(() => document.querySelector('.specs-markdown')?.textContent.includes('Worktree B'));
-    ok('Specs auto-reloads for the new workspace generation', () =>
+    ok('explicit Specs activation loads the new workspace generation', () =>
       document.querySelector('[data-spec-path="SPEC.md"]') !== null);
 
-    document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
+    const beforeScope = indexCalls;
+    setGitConversationScope('B');
     ok('focused conversation scope changes clear the previous tree immediately', () =>
       !document.querySelector('[data-spec-path="SPEC.md"]') &&
       document.querySelector('.specs-doc-path') === null);
-    await until(() => indexCalls >= 5);
-    ok('focused conversation scope changes reload Specs from the backend', () => indexCalls >= 5);
+    openSpecsPanel({ transport });
+    await until(() => indexCalls > beforeScope && document.querySelector('.specs-markdown'));
+    ok('focused conversation activation reloads Specs from the backend', () => indexCalls > beforeScope);
 
     const lateCalls = documentCalls;
     let releaseDocument;
@@ -245,6 +251,7 @@ function indexPayload(workspaceId, generation, docs) {
     currentIndex = indexPayload('w3', 'g3', [{ path: 'SPEC.md', content: '# Worktree C\n' }]);
     contentByPath.set('SPEC.md', '# Worktree C\n');
     S.switching = false;
+    openSpecsPanel({ transport });
     await until(() => document.querySelector('.specs-markdown')?.textContent.includes('Worktree C'));
     releaseDocument();
     await tick(20);
@@ -253,7 +260,8 @@ function indexPayload(workspaceId, generation, docs) {
       !document.querySelector('.specs-markdown').textContent.includes('Worktree B'));
 
     const callsBeforeDispose = indexCalls;
-    pane.open('changes');
+    closeSecondarySurface('specs');
+    openSecondarySurface('changes', host => { host.textContent = 'replacement owner'; });
     document.dispatchEvent(new window.CustomEvent('pi-gui:git-scope'));
     await tick(20);
     ok('leaving Specs disposes its listeners and in-flight work', () =>

@@ -21,7 +21,6 @@ function sync(view) {
    * 用户在并行会话里同样需要点侧栏切走。 */
   $('title').hidden = work;
   $('workViewTitle').hidden = !work;
-  $('btnTree').hidden = work;
   $('btnMore').hidden = work;
   projectWorkSurface(view);
   document.dispatchEvent(new window.CustomEvent('pi-gui:workspace-view', { detail: { view } }));

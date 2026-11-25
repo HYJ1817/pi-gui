@@ -7,11 +7,13 @@
  *
  * 转换规则写得很死，因为这套规则由我们自己约束（见下面的「允许的写法」）：
  *   允许：import { a, b as c } from './x.js';
+ *        import * as Api from './api.js';
+ *        import.meta.url —— 转为当前源模块的 file URL，仅用于测试链接
  *        export function / async function / const / let / var / class
  *        export { a, b };
  *        import('./x.js') —— 静态字面量的动态导入原样保留，但**不纳入链接**；
  *        它只允许出现在 jsdom 不会执行的懒加载分支里（例如终端打开时才加载 xterm）。
- *   不允许（遇到就抛错，绝不静默跳过）：default 导入/导出、命名空间导入、
+ *   不允许（遇到就抛错，绝不静默跳过）：default 导入/导出、
  *        裸导入、非静态 specifier 的动态 import、re-export。
  * 这样一旦有人写出链接器认不出的写法，测试会立刻以明确信息失败，
  * 而不是产出一个「少了一个模块」的残缺脚本。
@@ -24,16 +26,17 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 /* 多行 import 也要支持 —— app.js 里就有把 12 个名字折成多行的写法。 */
 const IMPORT_RE = /^[ \t]*import\s*\{([\s\S]*?)\}\s*from\s*['"]([^'"]+)['"]\s*;?[ \t]*$/gm;
+const NAMESPACE_IMPORT_RE = /^[ \t]*import\s*\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s*['"]([^'"]+)['"]\s*;?[ \t]*$/gm;
 const EXPORT_DECL_RE = /^[ \t]*export\s+(async\s+function|function|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm;
 const EXPORT_LIST_RE = /^[ \t]*export\s*\{([^}]*)\}\s*;?[ \t]*$/gm;
 
 /* 认不出来的写法 —— 宁可报错也不要生成残缺脚本 */
 const FORBIDDEN = [
   [/^[ \t]*import\s+[A-Za-z_$][\w$]*\s*(,|from)/m, '默认导入（import X from ...）'],
-  [/^[ \t]*import\s*\*\s*as\s/m, '命名空间导入（import * as X）'],
   [/^[ \t]*import\s+['"]/m, '裸导入（import "./x.js"）'],
   [/^[ \t]*export\s+default/m, '默认导出（export default）'],
   [/^[ \t]*export\s+\*\s*from/m, 're-export（export * from ...）'],
@@ -66,19 +69,28 @@ function parseModule(file) {
     return '';
   });
 
-  const exports = new Set();
+  body = body.replace(NAMESPACE_IMPORT_RE, (_match, namespace, spec) => {
+    imports.push({ spec, namespace });
+    return '';
+  });
+  // A static metadata URL keeps each source module's actual relative resolution.
+  // Other import.meta features remain syntax errors rather than silent stubs.
+  body = body.replace(/\bimport\.meta\.url\b/g, JSON.stringify(pathToFileURL(file).href));
+
+  const exports = new Map();
   body = body.replace(EXPORT_DECL_RE, (_m, kind, name) => {
-    exports.add(name);
+    exports.set(name, name);
     return `${kind} ${name}`;
   });
   body = body.replace(EXPORT_LIST_RE, (_m, names) => {
     for (const n of names.split(',').map((s) => s.trim()).filter(Boolean)) {
-      exports.add(n.split(/\s+as\s+/).pop().trim());
+      const [local, alias] = n.split(/\s+as\s+/).map(value => value.trim());
+      exports.set(alias || local, local);
     }
     return '';
   });
 
-  return { imports, exports: [...exports], body };
+  return { imports, exports: [...exports].map(([exported, local]) => exported === local ? local : `${exported}: ${local}`), body };
 }
 
 /**
@@ -112,6 +124,7 @@ function bundle(entry) {
         const dep = path.resolve(path.dirname(mod.file), imp.spec);
         const idx = seen.get(dep);
         if (idx === undefined) throw new Error(`${mod.file} 引了未纳入链接的 ${imp.spec}`);
+        if (imp.namespace) return `var ${imp.namespace} = __mods[${idx}];`;
         const list = imp.bindings.map((b) => (b.imported === b.local ? b.imported : `${b.imported}: ${b.local}`)).join(', ');
         return `var { ${list} } = __mods[${idx}];`;
       })

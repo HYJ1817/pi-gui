@@ -548,6 +548,77 @@ export function fetchExternalFileAsset(filePath, grantId, conversationId, { sign
   );
 }
 
+/* Unified preview content is binary and bounded by backend policy. The client
+ * consumes chunks sequentially; the authorization identity is repeated for each
+ * chunk so each read observes the current workspace/grant ledger. */
+async function fetchPreviewBytes(url, conversationId, signal, range) {
+  try {
+    const response = await fetch(url, { headers: { ...fileLinkHeaders(conversationId), ...(range ? { Range: range } : {}) }, ...(signal ? { signal } : {}) });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      return { ok: false, code: body?.code || 'content_unavailable', error: body?.error || '无法读取文件。' };
+    }
+    const declared = Number(response.headers.get('content-length'));
+    const limit = 8 * 1024 * 1024;
+    if (Number.isFinite(declared) && declared > limit) { await response.body?.cancel?.(); return { ok: false, code: 'oversized' }; }
+    let bytes;
+    if (response.body?.getReader) {
+      const reader = response.body.getReader(), chunks = []; let total = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read(); if (done) break;
+          total += value.byteLength;
+          if (total > limit) { await reader.cancel(); return { ok: false, code: 'oversized' }; }
+          chunks.push(value);
+        }
+      } finally { reader.releaseLock?.(); }
+      bytes = new Uint8Array(total); let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    } else {
+      bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength > limit) return { ok: false, code: 'oversized' };
+    }
+    const contentRange = response.headers.get('content-range') || '';
+    const matched = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(contentRange);
+    if (range && (!matched || response.status !== 206)) return { ok: false, code: 'file_changed' };
+    return { ok: true, bytes, type: response.headers.get('content-type') || '',
+      ...(matched ? { rangeStart: Number(matched[1]), rangeEnd: Number(matched[2]), rangeTotal: Number(matched[3]) } : {}) };
+  } catch (error) {
+    return { ok: false, code: error?.name === 'AbortError' ? 'aborted' : 'network', aborted: error?.name === 'AbortError' };
+  }
+}
+function previewIdentityParams(filePath, conversationId, options = {}) {
+  return new URLSearchParams({
+    path: filePath,
+    fileId: options.fileId || '',
+    ...(options.root ? { root: options.root } : {}),
+    ...(options.workspace?.id ? { workspace: options.workspace.id } : {}),
+    ...(options.generation !== undefined && options.generation !== null ? { generation: String(options.generation) } : {}),
+    ...(typeof conversationId === 'string' && conversationId ? { conversation: conversationId } : {}),
+  });
+}
+export async function fetchFilePreviewContent(filePath, conversationId, { root = '', fileId = '', workspace, generation, range, signal } = {}) {
+  const query = previewIdentityParams(filePath, conversationId, { root, fileId, workspace, generation });
+  return fetchPreviewBytes('/api/files/content?' + query, conversationId, signal, range);
+}
+export async function fetchExternalFilePreviewContent(filePath, grantId, fileId, conversationId, { range, signal } = {}) {
+  const query = new URLSearchParams({ path: filePath, grant: grantId, fileId,
+    ...(typeof conversationId === 'string' && conversationId ? { conversation: conversationId } : {}) });
+  return fetchPreviewBytes('/api/files/external/content?' + query, conversationId, signal, range);
+}
+export function filePreviewMediaUrl(request) {
+  const external = request?.external === true;
+  const query = external
+    ? new URLSearchParams({ path: request.path || '', grant: request.grantId || '', fileId: request.fileId || '' })
+    : previewIdentityParams(request?.path || '', request?.conversationId, { ...request, root: request?.cwd || '' });
+  if (request?.conversationId) query.set('conversation', request.conversationId);
+  return `/api/files/${external ? 'external/' : ''}content?${query}`;
+}
+export const searchWorkspaceFiles = (q, conversationId, { workspace, generation, hidden = false, signal } = {}) => getJSON(
+  '/api/files/search?' + new URLSearchParams({ q: String(q || '').slice(0, 200), workspace: workspace?.id || '', generation: String(generation ?? ''), hidden: hidden ? '1' : '0' }),
+  fileLinkHeaders(conversationId), { signal },
+);
+
 export const fetchExternalGrants = (conversationId) => getJSON(
   '/api/files/grants',
   externalHeaders(conversationId),

@@ -60,6 +60,13 @@ import { loadReviewComments, saveReviewComment, removeReviewComment, reviewPersi
 import { fillReviewComposer } from './review-fill.js';
 import { mountReviewTaskPreview } from './review-task-preview.js';
 import { selectReviewRange, rangeRows, reconcileReviewRange } from './review-comment-range.js';
+import { runtimeStore } from './runtime-state.js';
+
+/* Owner dimensions that make two workspaces or two runtime incarnations
+ * different even when the conversation id and cwd stayed the same. Mirrors
+ * the shell's secondary-surface identity so a late file-open action dies with
+ * the exact owner that rendered its row. */
+const secondaryOwnerKeys = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 
 /* 自动刷新的防抖窗口。
  *
@@ -84,6 +91,15 @@ document.addEventListener('pi-gui:git-scope', () => {
   changesListRestore = null;
   renderChangesBody();
 });
+/* A hard scope boundary does not destroy the retained Changes surface, but the
+ * rows inside it belong to the scope that is being left. Clearing the content
+ * area detaches every stale editor, gutter and row synchronously — including
+ * ones a concurrent re-render had already detached from the live tree, which a
+ * querySelector sweep of the live container can no longer reach. The next
+ * activation repaints the correct scope's diff. */
+function dropScopeContent() {
+  if (panels.changes) panels.changes.replaceChildren();
+}
 document.addEventListener('pi-gui:workspace-generation', () => {
   dropReviewDraftSurface();
   /* 项目 / Worktree 切换：旧作用域的展开状态与滚动位置一并丢弃。 */
@@ -91,6 +107,7 @@ document.addEventListener('pi-gui:workspace-generation', () => {
   diffViewStateEpoch++;
   lastChangesListScroll = 0;
   changesListRestore = null;
+  dropScopeContent();
   clearPaneState('changes');
 });
 document.addEventListener('pi-gui:session-switch', () => {
@@ -102,6 +119,7 @@ document.addEventListener('pi-gui:session-switch', () => {
   lastChangesListScroll = 0;
   changesListRestore = null;
   suspendReviewSurface();
+  dropScopeContent();
   clearPaneState('changes');
 });
 
@@ -218,13 +236,18 @@ function suspendReviewSurface() {
     /* An open editor belongs to the session that is being left. Close it
      * synchronously: the old textarea and its 保存 button must not survive
      * into the window where S.state.sessionId has not caught up yet. */
+    /* Resolve every affected row BEFORE detaching any editor: closest() only
+     * works while the editor is still inside its row, and the row may itself
+     * already be detached from the live panel by a concurrent re-render. */
+    const affected = new Set();
     for (const editor of box.querySelectorAll('.d-review-editor')) {
       const row = editor.closest('.d-row');
+      if (row) affected.add(row);
       editor.remove();
-      if (row) {
-        row.classList.remove('reviewing');
-        row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
-      }
+    }
+    for (const row of affected) {
+      row.classList.remove('reviewing');
+      row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
     }
     for (const node of box.querySelectorAll('.chg-review-n')) node.remove();
     /* The rows still belong to the previous session until the next refresh
@@ -311,7 +334,6 @@ export async function loadGitStatus() {
     c.projectRoot = '';
     c.truncated = false;
     c.error = '无法连接后端，变更信息暂不可用。';
-    renderChangesBadge();
     emitGitStatus();
     return c;
   }
@@ -324,7 +346,6 @@ export async function loadGitStatus() {
   c.projectRoot = typeof j.projectRoot === 'string' ? j.projectRoot : '';
   c.error = j.ok === false ? String(j.error || '读取 Git 状态失败') : '';
 
-  renderChangesBadge();
   emitGitStatus();
   return c;
 }
@@ -336,18 +357,7 @@ export function resetChanges() {
   refreshTimer = null;
   Object.assign(S.changes, blankChanges());
   view.sessionOnly = false;
-  renderChangesBadge();
   renderChangesBody();
-}
-
-/** 侧栏徽标。0 条时隐藏而不是显示 0 —— 常态是「干净」，不该常驻一个数字。
- *  **注意这里数的是 Git 的总数**，与「仅本次会话」过滤无关：
- *  徽标回答的是「磁盘上有多少没提交的东西」，那是权威数字，不该被视角改变。 */
-export function renderChangesBadge() {
-  if (!el.changesCount) return;
-  const n = S.changes.files.length;
-  el.changesCount.textContent = n ? String(n) : '';
-  el.changesCount.hidden = n === 0;
 }
 
 /* ---------- 会话账本 → 项目相对路径 ---------- */
@@ -456,6 +466,30 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
     captureChangesListScroll();
     rememberChangesPaneState();
     changesListRestore = null;
+    /* Capture the body before releasing it. Retirement detaches this surface
+     * from the document, but any editor a concurrent re-render had already
+     * moved outside the live container would otherwise survive on a detached
+     * row — leaking a writable textarea and an expanded gutter for a session
+     * that is already gone. Clearing here detaches every row synchronously. */
+    const body = panels.changes;
+    if (body) {
+      for (const editor of body.querySelectorAll('.d-review-editor')) {
+        const row = editor.closest('.d-row');
+        editor.remove();
+        if (row) {
+          row.classList.remove('reviewing');
+          row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
+        }
+      }
+      /* Retired rows must never accept a new comment: a gutter that survives
+       * on a detached reference would otherwise open an editor whose anchor is
+       * written into the incoming session's bucket. */
+      for (const gutter of body.querySelectorAll('.d-gutter')) {
+        gutter.disabled = true;
+        gutter.title = '正在切换会话；刷新后再添加评论';
+      }
+      body.replaceChildren();
+    }
     panels.changes = null;
     restoreAllBtn = null;
     reviewButton = null;
@@ -857,6 +891,38 @@ function changeRow(f, inSession, reopenSerial = 0, listRestore = null) {
 
   const acts = document.createElement('span');
   acts.className = 'chg-acts';
+  if (!f.isDir) {
+    /* The file belongs to the workspace that rendered this row, not whichever
+     * workspace happens to be current when the dynamic import resolves. Capture
+     * the full identity now — conversation scope, workspace generation, the
+     * runtime/classic owner fields and the file's own workspace cwd (resolved
+     * exactly like the Files panel resolves it, so a runtime worktree is bound
+     * to its own cwd rather than to the Classic S.cwd). A same-named file in
+     * a replaced workspace, a retired runtime owner or a switched session must
+     * never be opened by a late click. */
+    const fileIdentity = () => {
+      const conversationId = gitConversationScope();
+      const record = conversationId ? runtimeStore.get(conversationId) : null;
+      const owner = conversationId ? record?.owner : S.legacyOwner;
+      return {
+        conversationId,
+        generation: S.workspaceGeneration,
+        cwd: record?.item?.workspace?.cwd || S.cwd || '',
+        ownerKey: JSON.stringify(secondaryOwnerKeys.map((key) => owner?.[key] ?? null)),
+      };
+    };
+    const captured = fileIdentity();
+    const preview = tinyBtn('查看文件', async () => {
+      const { openFileReference } = await import('./files-panel.js');
+      const now = fileIdentity();
+      if (now.conversationId !== captured.conversationId) return;
+      if (!ownsWorkspace(captured.generation) || now.generation !== captured.generation) return;
+      if (now.ownerKey !== captured.ownerKey) return;
+      if ((now.cwd || '') !== (captured.cwd || '')) return;
+      openFileReference({ path: f.path, name: f.path.split(/[\\/]/).pop(), conversationId: captured.conversationId, cwd: captured.cwd });
+    });
+    preview.classList.add('chg-view-file'); acts.append(preview);
+  }
   if (canOpenFile()) acts.append(tinyBtn('打开', () => openFile(f)));
   acts.append(tinyBtn(f.untracked ? '删除' : '撤销', () => restoreFile(f), 'danger'));
 

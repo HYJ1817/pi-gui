@@ -252,6 +252,19 @@ async function waitReady(ms = 20000, base = BASE) {
       const response = await get(asset);
       check(asset + ' 可独立加载且 MIME 正确', () => response.status === 200 && response.type.includes(mime) && !response.body.trimStart().startsWith('<'));
     }
+    // Preview assets need the production static route, not just the visual
+    // harness. Streaming WASM compilation requires application/wasm.
+    for (const [asset, mime] of [
+      ['/vendor/file-preview/pdf/wasm/jbig2.wasm', 'application/wasm'],
+      ['/vendor/file-preview/fonts/KaTeX_Main-Regular.woff2', 'font/woff2'],
+      ['/vendor/file-preview/fonts/KaTeX_Main-Regular.woff', 'font/woff'],
+      ['/vendor/file-preview/fonts/KaTeX_Main-Regular.ttf', 'font/ttf'],
+    ]) {
+      const response = await fetch(BASE + asset);
+      const bytes = Buffer.from(await response.arrayBuffer());
+      check(asset + ' 以正确 MIME 提供原始字节', () => response.status === 200
+        && response.headers.get('content-type') === mime && bytes.equals(fs.readFileSync(path.join(ROOT, 'public', asset.slice(1)))));
+    }
     const js = await get('/app.js');
     check('app.js 200', () => js.status === 200 || '状态 ' + js.status);
     check('app.js 不是 HTML 兜底', () => !js.body.includes('<title>') || '返回了 HTML');

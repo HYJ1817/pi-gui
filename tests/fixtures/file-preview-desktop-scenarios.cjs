@@ -1,0 +1,103 @@
+'use strict';
+module.exports = async function (t, group) {
+  const { check, read, sleep, until, shot, click, key, type, value, open, clipboard, win, notes } = t;
+  const option = label => require('./file-preview-desktop-actions.cjs')(t, label);
+  await group('tree-text-reference', async () => {
+    await read("import('/files-panel.js').then(m=>{m.openFilesPanel();return true})");
+    await until(() => read("!!document.querySelector('#workPanelMaximize')"), 'files-panel');
+    await click('#workPanelMaximize');
+    await until(() => read("document.querySelectorAll('.files-entry').length>10"), 'real-tree');
+    check('production tree contains real backend files', await read("!!document.querySelector('.files-entry[data-file-path=\"long-lines.js\"]')"));
+    if (await read("document.querySelector('.files-sidebar').hidden")) await click('.files-tree-toggle');
+    await click('.files-entry[data-file-path="long-lines.js"]');
+    await until(() => read("!!document.querySelector('.fp-text-line')"), 'text-from-tree');
+    check('tree opens unified text plugin with bounded virtualization', await read("document.querySelectorAll('.fp-text-line').length<=180&&document.querySelector('.fp-text-count').textContent==='6000 行'"));
+    await type('.fp-search', 'TARGET_ALPHA');
+    await until(() => read("document.querySelector('.fp-text-count').textContent==='1/1'"), 'text-search');
+    check('full-file literal search reaches virtualized line 3000', await read("!!document.querySelector('.fp-text-line[data-line=\"3000\"].is-target.has-match')"));
+    const searchSelection = await read("({length:getSelection().toString().length,target:!!document.querySelector('.fp-text-line[data-line=\"3000\"].is-target'),selected:getSelection().toString()==='TARGET_ALPHA'})");
+    check('search query substring selection survives virtual scroll rendering', searchSelection.selected, searchSelection);
+    await open('long-lines.js', '.fp-text-line[data-line="3000"]', { line: 3000, column: 7, endLine: 3000, endColumn: 17 });
+    // The tab label updates before the asynchronous byte read and render. Wait
+    // for this request's inclusive range, not the previous search-hit DOM.
+    await until(() => read("document.querySelector('.files-tab-position')?.textContent.includes('3000')&&!!document.querySelector('.files-line-highlight[data-line-from=\"3000\"]')&&!document.querySelector('.fp-loading')"), 'range-reference');
+    check('same workspace path reuses existing tab and adds range', await read("document.querySelectorAll('.files-tab').length===1&&!!document.querySelector('.files-line-highlight[data-line-from=\"3000\"]')"));
+    await option('复制引用区间');
+    await sleep(200);
+    const copied = await clipboard.readText();
+    check('real clipboard copies exact inclusive line-column reference', copied === 'rangeMarker', { length: copied.length, sha256: require('node:crypto').createHash('sha256').update(copied).digest('hex'), expectedLength: 11 });
+    await value('.fp-line-input', '5000');
+    await until(() => read("!!document.querySelector('.fp-text-line[data-line=\"5000\"]')"), 'long-line');
+    check('long unwrapped line stays in local horizontal scroller', await read("document.querySelector('.fp-text-scroll').scrollWidth>document.querySelector('.fp-text-scroll').clientWidth&&document.querySelectorAll('.fp-text-line').length<=180"));
+    await option('自动换行');
+    check('wrap on long lines preserves bounded DOM', await read("document.querySelector('.fp-text').classList.contains('is-wrapped')&&document.querySelectorAll('.fp-text-line').length<=180"));
+    await shot('text-long-line-wrapped');
+    await open('utf16.txt', '.fp-text-source');
+    await until(() => read("document.querySelector('.fp-text-rows')?.textContent.includes('中文 UTF16')"), 'utf16');
+    check('UTF16 BOM decoding is real production decoder', true);
+    await open('gb18030.txt', '.fp-text-source');
+    await until(() => read("document.querySelector('.fp-text-rows')?.textContent.includes('中文 GB18030')"), 'gb18030');
+    check('GB18030 fallback decodes Chinese', true);
+    await option('GB18030');
+    await click('.fp-reading-menu');
+    check('explicit encoding option remains usable and reports selection', await read("document.querySelector('.fp-text-rows').textContent.includes('中文')&&[...document.querySelectorAll('#actionMenu [role=menuitem]')].some(e=>e.textContent.trim()==='GB18030 ✓')"));
+    await key('Escape');
+  });
+  await group('file-link-attachment', async () => {
+    // Synthetic authored message, rendered by the real production md and handled
+    // by the already installed production event delegation, not a fake opener.
+    await read("Promise.all([import('/markdown.js'),import('/state.js')]).then(([m,{S}])=>{const box=document.createElement('div');box.id='desktopFixtureMessage';box.innerHTML=m.md('[Source range](long-lines.js#L3000)',{fileLinks:{cwd:S.cwd,conversationId:null}});document.querySelector('#stream').append(box);return true})");
+    await read("document.querySelector('#desktopFixtureMessage [data-file-link]').click()");
+    await until(() => read("document.querySelector('.files-preview-path')?.textContent==='long-lines.js'&&!!document.querySelector('.files-line-highlight[data-line=\"3000\"]')"), 'message-file-link');
+    check('production Markdown message file reference reaches unified viewer', true);
+    await read("Promise.all([import('/attachment-preview.js'),import('/state.js')]).then(([m,{S}])=>{const file=new File(['附件 File bytes only\\n'], 'attachment-only.txt',{type:'text/plain'});const attachment={id:'desktop-attachment',file,name:file.name,size:file.size};S.attachments.push(attachment);m.openAttachmentFile(attachment);return true})");
+    await until(() => read("document.querySelector('.files-preview-path')?.textContent==='attachment-only.txt'&&document.querySelector('.fp-text-rows')?.textContent.includes('附件 File bytes only')"), 'attachment-file');
+    check('production attachment File entry opens only supplied bytes', await read("!document.querySelector('.fp-file-menu')"));
+    await read("Promise.all([import('/attachments.js'),import('/state.js')]).then(([m,{S}])=>{S.attachments=[];m.renderAttachments();return true})");
+    await until(() => read("![...document.querySelectorAll('.files-tab-label')].some(e=>e.textContent==='attachment-only.txt')"), 'sent-attachment-revoked');
+    check('production send/reset reconciliation removes ordinary attachment preview', await read("!document.querySelector('.files-preview-path')?.textContent.includes('attachment-only.txt')&&!document.querySelector('#attachTray .att')"));
+  });
+  await group('tabs-tree', async () => {
+    await open('duplicate-a/same.txt', '.fp-text-source');
+    await until(() => read("document.querySelector('.fp-text-rows')?.textContent.includes('same filename A')"), 'same-a');
+    await open('duplicate-b/same.txt', '.fp-text-source');
+    await until(() => read("document.querySelector('.fp-text-rows')?.textContent.includes('same filename B')"), 'same-b');
+    const labels = await read("[...document.querySelectorAll('.files-tab-label')].map(e=>e.textContent).filter(s=>s.includes('same.txt'))");
+    check('same-name tabs carry distinct path disambiguators', labels.length === 2 && labels[0] !== labels[1], { distinct: new Set(labels).size });
+    await read("document.querySelector('.files-tab[aria-selected=true] .files-tab-select').focus()");
+    const before = await read("[...document.querySelectorAll('.files-tab')].map(e=>e.dataset.fileTab)");
+    await key('Left', ['alt', 'shift']);
+    const after = await read("[...document.querySelectorAll('.files-tab')].map(e=>e.dataset.fileTab)");
+    check('trusted Alt Shift Arrow reorders tabs without changing count', before.length === after.length && before.join('|') !== after.join('|'));
+    const count = after.length; await key('Delete');
+    check('trusted Delete closes focused file tab', await read(`document.querySelectorAll('.files-tab').length===${count - 1}`));
+    await open('long-lines.js', '.fp-text-source'); await value('.fp-line-input', '4200');
+    const position = await read("document.querySelector('.fp-text-scroll').scrollTop");
+    await open('duplicate-a/same.txt', '.fp-text-source'); await open('long-lines.js', '.fp-text-source');
+    await until(() => read("document.querySelector('.fp-text-scroll').scrollTop>1000"), 'reading-position');
+    check('tab activation restores saved text reading position', Math.abs(await read("document.querySelector('.fp-text-scroll').scrollTop") - position) <= 25);
+    if (await read("document.querySelector('.files-sidebar').hidden")) await click('.files-tree-toggle');
+    await click('.files-entry[data-file-path="nested"]');
+    await until(() => read("!!document.querySelector('.files-entry[data-file-path=\"nested/deeper\"]')"), 'expand-tree');
+    check('tree expands directory via real backend list', true);
+    await type('.files-search-input', '搜索中文');
+    await until(() => read("!!document.querySelector('.files-entry[data-file-path=\"nested/deeper/搜索中文-target.txt\"]')"), 'tree-search');
+    check('bounded backend search finds nested Chinese filename', true);
+    await type('.files-search-input', ''); await sleep(250);
+    check('hidden files absent by default', await read("!document.querySelector('.files-entry[data-file-path=\".hidden-preview.txt\"]')"));
+    await click('.files-hidden-toggle');
+    await until(() => read("!!document.querySelector('.files-entry[data-file-path=\".hidden-preview.txt\"]')"), 'hidden-tree');
+    check('explicit hidden toggle shows hidden fixture', true);
+    notes.push({ kind: 'tabs', count: await read("document.querySelectorAll('.files-tab').length"), overflow: await read("document.querySelector('.files-tablist').scrollWidth>document.querySelector('.files-tablist').clientWidth") });
+  });
+  await group('changes', async () => {
+    await read("import('/git.js').then(async m=>{await m.refreshGitNow();m.openChangesPanel();return true})");
+    await until(() => read("!!document.querySelector('.chg-file')||!!document.querySelector('.chg-row')||document.querySelector('#rightPane')?.textContent.includes('changed.txt')"), 'changes-list');
+    const clicked = await read("(()=>{const e=[...document.querySelectorAll('.chg-main')].find(e=>e.querySelector('.chg-path')?.textContent==='changed.txt');if(!e)return false;e.dataset.desktopDiffTarget='true';return true})()");
+    t.assert.ok(clicked, 'the actual changed-file row exists');
+    await click('.chg-main[data-desktop-diff-target="true"]');
+    await until(() => read("!!document.querySelector('.d-row')"), 'real-diff');
+    check('Changes remains a true diff view, not generic preview', clicked && await read("!!document.querySelector('.d-row')&&!document.querySelector('.fp-text')"));
+    await shot('changes-preserved-diff');
+  });
+};

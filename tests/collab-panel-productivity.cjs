@@ -218,6 +218,27 @@ const check = async (name, fn) => { await fn(); checks++; console.log('ok ' + na
     assert.equal(button(panel.host, '自动整理').disabled, true);
   });
   panel.close();
+
+  /* ---------- 阶段 D：导出文件名清洗（I2-01 回归） ---------- */
+  // 标题含路径分隔符（含 Windows 反斜杠）与保留字符：真实 <a download> 的
+  // 文件名必须逐字符替换为连字符。替换串或转义丢失会得到「undefined」，
+  // 而 SVG/PNG 两条导出路径共用这一处计算。
+  doc = bindSession(createFlowchartDocument({ documentId: 'doc-filename', title: 'my doc/v1: sub\\final draft' }), scope.sessionId);
+  calls = []; service = createCollabService({ store: storeStub });
+  panel = mount(); await tick();
+  await check('导出文件名把路径分隔符与保留字符替换为连字符', async () => {
+    const expected = `my doc-v1- sub-final draft-r${doc.revision}.svg`;
+    const anchors = [];
+    const originalClick = window.HTMLAnchorElement.prototype.click;
+    window.HTMLAnchorElement.prototype.click = function click() { anchors.push(this.download); };
+    try {
+      button(panel.host, '导出 SVG').click(); await tick();
+    } finally { window.HTMLAnchorElement.prototype.click = originalClick; }
+    assert.deepEqual(anchors, [expected], '真实 <a download> 文件名必须已清洗');
+    assert.ok(panel.host.textContent.includes(`已开始下载 ${expected}`), '状态提示显示同一个已清洗文件名');
+    assert.doesNotMatch(panel.host.textContent, /undefined/);
+  });
+  panel.close();
   dom.window.close();
   console.log(`Collab panel productivity: ${checks}/${checks}; assertions=${assertions}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

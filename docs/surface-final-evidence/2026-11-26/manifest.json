@@ -1,0 +1,115 @@
+{
+ "date": "2026-11-26",
+ "qualification": "packaged-production-main-normal-sandbox",
+ "sourceRun": "pi-preview-packaged-oZyex5",
+ "passed": 132,
+ "failed": 0,
+ "skipped": 0,
+ "desktopRows": 123,
+ "publicFiles": 660,
+ "publicBytes": 19067121,
+ "publicTreeSha256": "f0efbf678d8a9573683c379dcab28984210db802cc179046f2868ffdc1a3dcb3",
+ "sea": {
+  "bytes": 121608704,
+  "sha256": "68737337527d508e2e80bd9b4ccb2b0cf6988e5cf57d0555eff0f4d4efb3b3b8"
+ },
+ "app": {
+  "bytes": 246324736,
+  "sha256": "71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f"
+ },
+ "backend": {
+  "bytes": 3873898,
+  "sha256": "35a0a4618080194001463d2c3fc4ba6e4d9e418ab1137f36e38bef35ac6905e5"
+ },
+ "evidencePath": "%TEMP%/pi-preview-packaged-oZyex5/evidence",
+ "files": [
+  {
+   "name": "01-launcher-dark.png",
+   "source": "surface-launcher-1320-dark.png",
+   "requirement": "深色空面板 Launcher",
+   "detail": "1320x820 dark; centered title, compact tools, filled keycaps, 0 .work-surface-tab",
+   "bytes": 49697,
+   "sha256": "b543f491d3067ed8bc67b8d399e426c073910dd200306b087352cdba3ee50c4c"
+  },
+  {
+   "name": "02-launcher-light.png",
+   "source": "surface-launcher-1320-light.png",
+   "requirement": "浅色空面板 Launcher",
+   "detail": "1320x820 light; same assertions",
+   "bytes": 52137,
+   "sha256": "3931fc8474baae7c06571f1c48e8e09d2bf22ce09abd0117bf194d543abab9b9"
+  },
+  {
+   "name": "03-top-no-old-tools.png",
+   "source": "surface-launcher-keyboard-files-focus.png",
+   "requirement": "顶部无旧固定工具图标/空标签",
+   "detail": "Launcher with real keyboard focus; pane header carries no legacy tool buttons",
+   "bytes": 81153,
+   "sha256": "a1c884e619ad3e38930fc60674f49ef09d3dcd4fb7a80e91c888192518bec05b"
+  },
+  {
+   "name": "04-multi-surface-tabs.png",
+   "source": "surface-multiple-live-tabs.png",
+   "requirement": "多 Surface 标签栏",
+   "detail": "Files + Specs + Terminal + Browser live tabs",
+   "bytes": 147654,
+   "sha256": "b85234db070ea023bf470fabbad4b7079cc6ce840d6d3ed13ef731931d3d74ee"
+  },
+  {
+   "name": "05-last-close-launcher.png",
+   "source": "surface-last-close-launcher.png",
+   "requirement": "关闭最后一个 Surface 后的 Launcher",
+   "detail": "pane open, 0 .work-surface-tab, tabless Launcher",
+   "bytes": 78368,
+   "sha256": "bec6a4e3eb4afec4fcde45d9e3981c8f6a2606b5160b5c3f5fe9cac2039a3299"
+  },
+  {
+   "name": "06-viewer-1320-dark.png",
+   "source": "packaged-1320-dark.png",
+   "requirement": "正常宽度文件查看器 + 右侧文件树",
+   "detail": "1320 width; common maximize geometry, compact toolbar",
+   "bytes": 152051,
+   "sha256": "e02a1ba27a8b59db3d656216c81bdd89a779c18a471ef6222255ab9c4c800999"
+  },
+  {
+   "name": "07-viewer-700-dark.png",
+   "source": "packaged-700-dark.png",
+   "requirement": "700px 窄窗文件查看器/工具栏",
+   "detail": "700 width; toolbar overflow <=1 and no horizontal scrollbar",
+   "bytes": 77802,
+   "sha256": "08cf5591a462934e158d1c40337299c65a1d6c98ab4c2887518b18f700269906"
+  },
+  {
+   "name": "08-pptx-real-bullets.png",
+   "source": "office-pptx-real-bullets.png",
+   "requirement": "真实 LibreOffice PPTX 项目符号",
+   "detail": "libreoffice-bullets-mixed.pptx; painted markers",
+   "bytes": 173552,
+   "sha256": "263fee9eaf24e5806d567d1455f26aa1bb64d3d6d17dc9247365a40bcccb44a3"
+  },
+  {
+   "name": "09-pptx-real-multilevel.png",
+   "source": "office-pptx-real-multilevel.png",
+   "requirement": "真实 LibreOffice PPTX 多级自动编号",
+   "detail": "libreoffice-autonum-multilevel.pptx; markers 1./a./i./2./3./•/◦/▪",
+   "bytes": 158937,
+   "sha256": "33b134c6fdc36e3cdfde481771a22080e719e16ccba4d160b527b5ac458ddc49"
+  },
+  {
+   "name": "10-pptx-real-slide.png",
+   "source": "office-pptx-page2.png",
+   "requirement": "真实幻灯片预览",
+   "detail": "OOXML -> SVG/DOM slide 2",
+   "bytes": 128965,
+   "sha256": "c8105aa4a3a74932fa357c36be1ca7c98d0eb513318aaacc7965c4ac39d3c8ae"
+  },
+  {
+   "name": "11-pdf-unembedded-font.png",
+   "source": "pdf-unembedded-font.png",
+   "requirement": "未嵌入字体 PDF 正常渲染",
+   "detail": "PDF uses /BaseFont /Helvetica with no FontFile; rendered in packaged app",
+   "bytes": 125870,
+   "sha256": "45a202a1275be38348b15868ff8cf10380f99d2a1e40f8def42164f57d2f919e"
+  }
+ ]
+}
