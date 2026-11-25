@@ -12,6 +12,13 @@ const short = (value, max = 4096) => typeof value === 'string' && value.length <
 export const pathKey = (path, cwd = '') => /^[a-z]:[\\/]/i.test(cwd || path) ? String(path).replace(/\\/g, '/').toLowerCase() : String(path);
 export const scopeKey = ({ cwd = '', conversationId = '', sessionId = '' } = {}) => JSON.stringify([pathKey(cwd), conversationId || '', sessionId || '']);
 export const sameScope = (a, b) => scopeKey(a) === scopeKey(b);
+/* The backend binds file access to the workspace root + conversation (the
+ * fileId hash never includes the session id); the session id only namespaces
+ * per-session tab *history*. So the access-relevant identity is cwd+conversation.
+ * A session id that settles or rotates while those two are stable is a history
+ * refinement, not a workspace change — it must not tear down open tabs. */
+export const workspaceKey = ({ cwd = '', conversationId = '' } = {}) => JSON.stringify([pathKey(cwd), conversationId || '']);
+export const sameWorkspace = (a, b) => workspaceKey(a) === workspaceKey(b);
 
 function archivePath(value) {
   if (typeof value !== 'string' || !value.length || value.length > 1024 || /^[\/]|[\\:\x00-\x1f\x7f-\x9f]/.test(value)) return false;

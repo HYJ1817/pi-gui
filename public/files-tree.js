@@ -35,6 +35,13 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
   let searchMessage = '';
   let refreshingExpanded = [];
   let rootAbort = null;
+  /* Fields the user explicitly changed since this tree was installed. A boolean
+   * preference like `hidden` cannot merge by value alone — `false` is both the
+   * untouched default and a deliberate user choice — so the merge that adopts a
+   * settled session snapshot needs to know which fields carry real user intent
+   * and which are still the install-time default. Only genuine user gestures mark
+   * a field touched; restoring a snapshot or programmatic reveal/expand does not. */
+  const touched = new Set();
   const pending = new Set();
   const equal = (a, b) => pathKey(a || '', getIdentity().cwd) === pathKey(b || '', getIdentity().cwd);
   const current = (run = epoch) => alive && isCurrent() && run === epoch;
@@ -188,6 +195,7 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
   async function toggleDirectory(entry) {
     const dir = directoryState(entry.path);
     if (!dir) { setMessage('已达文件树缓存上限，请刷新。'); return; }
+    touched.add('expanded');
     dir.expanded = !dir.expanded;
     focused = entry.path;
     render(); onChange();
@@ -297,13 +305,16 @@ export function createFilesTree(sidebar, { transport, getIdentity, isCurrent, st
     return rootPromise;
   }
   refresh.onclick = () => { document.dispatchEvent(new window.CustomEvent('pi-gui:files-refresh')); void loadRoot(); };
-  hiddenToggle.onclick = () => { hidden = !hidden; hiddenToggle.setAttribute('aria-pressed', String(hidden)); onChange(); void loadRoot(); };
+  hiddenToggle.onclick = () => { touched.add('hidden'); hidden = !hidden; hiddenToggle.setAttribute('aria-pressed', String(hidden)); onChange(); void loadRoot(); };
+  // Scrolling and clicking are user gestures on navigation ephemera; marking them
+  // touched keeps a settle from rolling the user's position back to a stale snapshot.
+  tree.addEventListener('scroll', () => { if (tree.scrollTop) touched.add('scrollTop'); }, { passive: true });
   return {
     tree, search, refresh, hiddenToggle, loadRoot, reveal,
     get workspace() { return workspace; },
     get ready() { return rootPromise; },
     select(path) { selected = path; render(); },
-    getState: () => ({ selected, hidden, expanded: [...new Set([...refreshingExpanded, ...[...dirs].filter(([, dir]) => dir.expanded).map(([path]) => path)])].slice(0, 96), scrollTop: tree.scrollTop }),
+    getState: () => ({ selected, hidden, expanded: [...new Set([...refreshingExpanded, ...[...dirs].filter(([, dir]) => dir.expanded).map(([path]) => path)])].slice(0, 96), scrollTop: tree.scrollTop, touched: [...touched] }),
     dispose() { alive = false; epoch++; rootAbort?.abort(); cancelSearch(); for (const controller of pending) controller.abort(); pending.clear(); dirs.clear(); roots = []; },
   };
 }

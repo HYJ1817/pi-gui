@@ -6,7 +6,7 @@ import { mountFilePreview } from './file-preview/index.js';
 import { createFilesLayout } from './files-layout.js';
 import { createFilesTabs } from './files-tabs.js';
 import { createFilesTree } from './files-tree.js';
-import { FILES_TAB_LIMIT, pathKey, requestKey, readingState, readFilesState, writeFilesState, sameScope } from './files-state.js';
+import { FILES_TAB_LIMIT, pathKey, requestKey, readingState, readFilesState, writeFilesState, sameScope, sameWorkspace } from './files-state.js';
 import { isPathWithin } from './file-link-model.js';
 import { runtimeStore, onRuntimeChange } from './runtime-state.js';
 import { S } from './state.js';
@@ -97,6 +97,14 @@ export function mountFilesPanel(host, view, options = {}) {
   let persistTimer = null;
   let restored = readFilesState(identity, options.storage);
   let restoring = false;
+  /* Tombstones of keys the user closed while a history restore is still
+   * deferred. Dedup against currently-open tabs is not enough: a tab the user
+   * opened and then closed before the tree resolved is no longer in `existing`,
+   * so the late snapshot would resurrect it — an overwrite of an explicit user
+   * decision, exactly what restoration must never do. Keys die with the panel
+   * (or the scope reset): a later mount restores history normally again, and
+   * explicitly reopening a file always wins because openTab runs its own path. */
+  const closedKeys = new Set();
   const metadataRequests = new Set();
   let visible = view.isVisible?.() !== false;
   const isCurrent = () => alive && view.isCurrent();
@@ -275,6 +283,17 @@ export function mountFilesPanel(host, view, options = {}) {
     if (!keys.length) return;
     openSequence++; cancelMetadata();
     const removed = new Set(keys);
+    /* Every close is a user decision no later restore may undo — and a restore
+     * can arrive *after* this close in two ways, not one: the deferred tree
+     * resolution, but also a session settle that reads a fresh snapshot under a
+     * namespace that was empty (and therefore unrestorable) at mount time. In
+     * the empty-session case `restored` is null here, so guarding on it leaves
+     * no tombstone and the settle resurrects a file the user already closed.
+     * Tombstoning is unconditional: it only filters the restore merge, never an
+     * explicit open (which runs its own path), so recording every close cannot
+     * block a file the user later reopens on purpose. Keys still die with the
+     * panel, so a fresh mount restores history normally again. */
+    for (const key of removed) closedKeys.add(key);
     const index = tabs.findIndex((tab) => tab.key === activeKey);
     const removesActive = removed.has(activeKey);
     if (removesActive) disposePreview();
@@ -349,8 +368,13 @@ export function mountFilesPanel(host, view, options = {}) {
     /* Opening a file must not queue behind the workspace tree. The tree is a
      * navigation aid; blocking the user's open on its (possibly slow) root
      * listing is exactly the window in which a late history restore used to
-     * overwrite newer user actions. Identity, generation and object tokens are
-     * all verified by metadata() itself, so the open proceeds independently. */
+     * overwrite newer user actions. The open therefore proceeds independently:
+     * the path is confined to the workspace root and the file's object identity
+     * is re-verified by metadata() itself (fileId on restore, root+path binding
+     * otherwise). The opaque workspace token is only available once the tree
+     * has resolved; without it the backend still binds root path + fileId, and
+     * the token check joins at preview time — so a workspace that changed its
+     * backing under the same path fails at preview, never reads wrong bytes. */
     request = { ...request, cwd: request.external ? '' : request.cwd || identity.cwd, conversationId: wanted, name: String(request.name || request.path.split(/[\\/]/).pop()).slice(0, 512) };
     const result = await metadata(request);
     if (!scopeCurrent(run) || sequence !== openSequence) return;
@@ -369,7 +393,7 @@ export function mountFilesPanel(host, view, options = {}) {
     const seen = new Set();
     const incoming = value.tabs.filter((request) => {
       const key = requestKey(request);
-      if (seen.has(key) || existing.has(key) || (request.conversationId || null) !== identity.conversationId
+      if (seen.has(key) || existing.has(key) || closedKeys.has(key) || (request.conversationId || null) !== identity.conversationId
         || (request.cwd && pathKey(request.cwd) !== pathKey(identity.cwd))) return false;
       seen.add(key); return true;
     }).map((request) => ({ key: requestKey(request), id: `filesTab-${++tabSequence}`, request: boundedRequest(request), state: readingState(request.state), needsValidation: true }));
@@ -433,7 +457,67 @@ export function mountFilesPanel(host, view, options = {}) {
   }
   function onContext() {
     if (sessionOverride && getIdentity().sessionId && getIdentity().sessionId !== sessionBeforeSwitch) sessionOverride = null;
-    if (!sameScope(identity, effectiveIdentity())) reset();
+    const next = effectiveIdentity();
+    if (sameScope(identity, next)) return;
+    /* A genuine workspace/conversation change is a full reset: file access is
+     * bound to that scope, so every open tab and in-flight open must go. But the
+     * session id is only a *history* namespace — the backend never binds file
+     * access to it. Session identity always settles asynchronously after the
+     * bridge is ready (it is empty at mount, then the real id arrives), so a
+     * session-only transition while cwd+conversation stay stable must not destroy
+     * open tabs or an in-flight open the user already started. Adopt the settled
+     * session in place and merge that session's history around what survives. */
+    if (sameWorkspace(identity, next)) { settleSession(next); return; }
+    reset();
+  }
+  /* The tree merge is per-field, never an overwrite. The live tree is the user's
+   * most recent intent inside the *same* workspace+conversation scope (file access
+   * never binds to the session id). Fields the user actually touched — reported by
+   * the tree in `touched` — always win over the settled session's snapshot, because
+   * rolling them back would undo a deliberate gesture. Untouched fields fall back to
+   * the snapshot so the session's real preference is still adopted. This matters in
+   * the two extremes the round-2 review exposed: when the target session has *no*
+   * snapshot at all the user's tree survives verbatim instead of being replaced by
+   * the default, and a boolean the user toggled (e.g. hidden-items off) is not
+   * resurrected to the snapshot's stale `true` merely because `false` is also the
+   * install-time default. Expanded folders union rather than pick a winner: both
+   * the user's and the snapshot's expansions are cheap to keep and neither is a
+   * destructive rollback. `touched` is transient merge metadata, never persisted. */
+  function mergeTreeState(live, snap) {
+    if (!snap || typeof snap !== 'object') {
+      if (!live || typeof live !== 'object') return undefined;
+      const { touched, ...rest } = live;
+      return rest;
+    }
+    if (!live || typeof live !== 'object') return snap;
+    const touched = new Set(Array.isArray(live.touched) ? live.touched : []);
+    const expanded = [...new Set([...(Array.isArray(live.expanded) ? live.expanded : []), ...(Array.isArray(snap.expanded) ? snap.expanded : [])])].slice(0, 96);
+    return {
+      selected: live.selected || snap.selected || null,
+      hidden: touched.has('hidden') ? live.hidden === true : snap.hidden === true,
+      expanded,
+      scrollTop: touched.has('scrollTop') && Number(live.scrollTop) ? Number(live.scrollTop) : (Number(snap.scrollTop) || Number(live.scrollTop) || 0),
+    };
+  }
+  function settleSession(next) {
+    if (!alive) return;
+    identity = { ...next };
+    /* History is namespaced by session, and the snapshot carries more than tabs:
+     * it also holds the file-tree state (expanded folders, the hidden-items
+     * toggle, selection, scroll). Adopting the settled session re-reads that
+     * snapshot, but the rebuild must merge it around the tree the user already
+     * has — captured live before the old tree is disposed — rather than overwrite
+     * it. What settle must NOT do is reset()'s destructive half: no scopeEpoch or
+     * openSequence bump, no cancelMetadata, no disposePreview, no clearing tabs
+     * or activeKey — so open tabs, their mounted previews and any in-flight open
+     * all survive. The tree rebuild only replaces the navigation sidebar; it does
+     * not touch the tab strip or the preview pane. Restoration itself stays on the
+     * normal deferred path: `restored` is left set and the tree's onRoot merge
+     * applies it around the surviving user tabs, deduplicated by request key. */
+    const liveTree = tree?.getState?.();
+    restored = readFilesState(identity, options.storage);
+    installTree(mergeTreeState(liveTree, restored?.tree));
+    persistSoon();
   }
   function revoked(event) {
     const id = event?.detail?.revoked;
