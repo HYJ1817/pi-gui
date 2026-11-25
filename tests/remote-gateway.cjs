@@ -47,6 +47,7 @@ async function boot(overrides = {}) {
   const { REMOTE_V1 } = await import(MODULES.protocol);
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'remote-gw-'));
   // Synthetic domain fixture: one project, one live runtime conversation.
+  const projects = [{ path: 'C:/fixture/proj', name: 'fixture' }];
   const conversations = [{
     conversationId: 'conv_fixture_001',
     sessionId: 'sess_fixture_001',
@@ -58,7 +59,7 @@ async function boot(overrides = {}) {
     messages: [{ messageId: 'msg_fixture_01', role: 'assistant', text: 'hello' }],
   }];
   const domain = {
-    projects: () => [{ path: 'C:/fixture/proj', name: 'fixture' }],
+    projects: () => projects,
     conversations: () => conversations,
     sessionRecords: p => [{ sessionId: 'sess_fixture_001', displayName: 'fixture session', updatedAt: '2026-01-01T00:00:00Z', conversationIds: ['conv_fixture_001'] }],
     openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
@@ -110,7 +111,7 @@ async function boot(overrides = {}) {
     assert.equal(sha256(res.cert.raw), fingerprint, 'pinned fingerprint mismatch');
     return res;
   };
-  return { remote, addr, fingerprint, request, pinnedRequest, dataDir, REMOTE_V1, conversations,
+  return { remote, addr, fingerprint, request, pinnedRequest, dataDir, REMOTE_V1, conversations, projects,
     getPeerCert: () => lastPeerCert,
     cleanup: async () => { await remote.close(); fs.rmSync(dataDir, { recursive: true, force: true }); } };
 }
@@ -1320,6 +1321,179 @@ async function main() {
         assert.equal(res, 401, `corrupt-entry device must not be admitted: ${res}`);
       } finally { await remote2.close(); }
     } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('round-8: floor-persistence failure closes every stream even when resets cannot sign (R8-GEN-01)', async () => {
+    // A REAL live subscriber: sabotage durability, then drop the device while
+    // every reset's generation allocation is guaranteed to fail. The close
+    // guarantee must not depend on signing the reset — the stream must end
+    // even though no reset frame could ever be written.
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Open a live SSE subscription and keep it open.
+      const streamState = { status: 0, ended: false };
+      const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+      const sse = await new Promise((resolve, reject) => {
+        const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          streamState.status = res.statusCode;
+          res.on('end', () => { streamState.ended = true; });
+          res.on('close', () => { streamState.ended = true; });
+          res.resume();   // paused-mode responses never emit end/close — must consume
+          resolve(res);
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      assert.equal(streamState.status, 200, 'subscription established');
+      assert.equal(streamState.ended, false, 'stream is live');
+      const tmpPath = path.join(ctx.dataDir, 'remote-devices.json.tmp');
+      fs.mkdirSync(tmpPath);   // durability sabotage: every allocation now fails
+      try {
+        try { ctx.remote.stream.dropDevice(device.deviceId); } catch { /* surfacing the durability error is acceptable — closing is the invariant */ }
+        // The stream must end promptly even though its reset could not sign.
+        const deadline = Date.now() + 3000;
+        while (!streamState.ended && Date.now() < deadline) await new Promise(r => setTimeout(r, 25));
+        assert.equal(streamState.ended, true, 'live stream must close even when its reset cannot be signed');
+        assert.equal(ctx.remote.stream.subscribers.get(device.deviceId)?.size ?? 0, 0, 'no subscriber may survive a drop');
+        assert.ok(!ctx.remote.stream.timelines.has(device.deviceId), 'timeline must be torn down');
+      } finally {
+        fs.rmdirSync(tmpPath);
+        try { sse.destroy(); } catch {}
+      }
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-8: non-canonical nonce aliases force re-pair after restart (R8-REPLAY-02)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Build a canonical nonce and its trailing-bit alias (same 32 bytes,
+      // non-canonical encoding: last char's unused low bit flipped).
+      const canonical = crypto.randomBytes(32).toString('base64url');
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+      const last = canonical[canonical.length - 1];
+      const alias = canonical.slice(0, -1) + chars[chars.indexOf(last) + 1];
+      assert.notEqual(alias, canonical);
+      assert.ok(Buffer.from(alias, 'base64url').equals(Buffer.from(canonical, 'base64url')), 'alias decodes to the same bytes');
+      const file = path.join(ctx.dataDir, 'remote-devices.json');
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      data.devices[0].nonces = { [alias]: Date.now() };
+      fs.writeFileSync(file, JSON.stringify(data), 'utf8');
+      await ctx.remote.close();
+      const { startRemote } = await import(MODULES.index);
+      const conversations = ctx.conversations;
+      const domain = {
+        projects: () => [{ path: 'C:/fixture/proj', name: 'fixture' }],
+        conversations: () => conversations,
+        sessionRecords: () => [],
+        openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
+        sendMessage: async () => ({ accepted: true }),
+        stop: async () => ({ stopped: true }),
+        pendingDialogs: () => [],
+        consumeApproval: () => true,
+      };
+      const remote2 = startRemote({ dataDir: ctx.dataDir, domain, host: '127.0.0.1', port: 0 });
+      try {
+        const rec = remote2.deviceStore.get(device.deviceId);
+        assert.ok(rec.requiresRepair === true && rec.active === false,
+          `aliased nonce entries must demand re-pair, got active=${rec.active} repair=${rec.requiresRepair}`);
+      } finally { await remote2.close(); }
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('round-8: outcome persistence failure never leaves a replayable success (R8-IDEMP-03)', async () => {
+    // The domain effect executes while persistence is sabotaged mid-flight.
+    // Memory must describe disk: the same-process retry is refused even after
+    // the obstruction is removed — no forged success may become replayable.
+    let effects = 0;
+    let ctx2;
+    const ctx = await boot({
+      sendMessage: async () => {
+        effects++;
+        fs.mkdirSync(path.join(ctx.dataDir, 'remote-idempotency.json.tmp'));
+        return { accepted: true };
+      },
+    });
+    ctx2 = ctx;
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const body = envelope('chat.send', { clientMessageId, text: 'record-persist-fail' }, 1);
+      const fire = () => {
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      const r1 = await fire();
+      assert.equal(effects, 1);
+      assert.notEqual(r1.status, 200, `undurable outcome must not be reported as success: ${r1.body}`);
+      fs.rmdirSync(path.join(ctx.dataDir, 'remote-idempotency.json.tmp'));
+      const r2 = await fire();   // same-id retry after obstruction removed
+      assert.equal(effects, 1, `retry must never re-execute, got ${effects}`);
+      assert.notEqual(r2.status, 200, `undurable success must not be replayable: status ${r2.status}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-8: initial timeline floor must persist before the generation is usable (R8-GEN-04)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const tmpPath = path.join(ctx.dataDir, 'remote-devices.json.tmp');
+      fs.mkdirSync(tmpPath);
+      try {
+        // Force initial timeline creation while durability is impossible.
+        assert.throws(() => ctx.remote.stream.watermark(device.deviceId), undefined, 'undurable initial generation must throw');
+        assert.throws(() => ctx.remote.stream.watermark(device.deviceId), undefined, 'a failed initialization must not be cached — every attempt retries honestly');
+      } finally { fs.rmdirSync(tmpPath); }
+      const wm = ctx.remote.stream.watermark(device.deviceId);
+      const floor = ctx.remote.deviceStore.streamGenerationFloor(device.deviceId);
+      assert.ok(wm.generation <= floor, `published generation ${wm.generation} must be backed by durable floor ${floor}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-8: queued mutation must not execute after project substitution (R8-AUTH-05)', async () => {
+    // Admission binds project A. While the first effect is parked, the
+    // conversation moves to project B (workspace cwd changes) and grants move
+    // with it. Identity+epoch still match — only the project comparison
+    // catches the substitution.
+    let sends = 0, release;
+    const gate = new Promise(r => { release = r; });
+    const ctx = await boot({ sendMessage: async () => { sends++; await gate; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const projB = 'C:/fixture/projB';
+      const pidB = 'p-' + crypto.createHash('sha256').update(projB).digest('base64url').slice(0, 22);
+      const clientMessageId = crypto.randomUUID();
+      const body = envelope('chat.send', { clientMessageId, text: 'project-substitution' }, 1);
+      const fire = () => {
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      const p1 = fire();
+      await new Promise(r => setTimeout(r, 30));
+      const p2 = fire();   // queues in the serializer
+      await new Promise(r => setTimeout(r, 30));
+      // Move the conversation to project B and shift the grants — the domain
+      // project list must contain B for the move to resolve at all.
+      ctx.projects.push({ path: projB, name: 'fixture-b' });
+      ctx.conversations[0].workspace.cwd = projB;
+      ctx.remote.deviceStore.setGrants(device.deviceId, [pidB]);
+      release();
+      const [r1, r2] = await Promise.all([p1, p2]);
+      assert.equal(sends, 1, `exactly one execution — the queued request must not run under the substituted project, got ${sends}`);
+      assert.notEqual(r2.status, 200, `queued post-substitution request must be refused: ${r2.body}`);
+    } finally { await ctx.cleanup(); }
   });
 
   await t('production pairing completes: pending -> approve -> same-request retry', async () => {

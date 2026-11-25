@@ -53,9 +53,15 @@ export class EventStream {
       // so a routine restart that re-issued low generations permanently broke
       // forward recovery. The durable floor lives in the device record.
       const floor = typeof this.deviceStore.streamGenerationFloor === 'function' ? this.deviceStore.streamGenerationFloor(id) : 0;
-      t = { generation: Math.max(1, floor + 1), genCtr: Math.max(1, floor + 1), headSequence: 1, frames: [], bytes: 0, salt: crypto.randomBytes(16), authority: this._authority(id) };
+      // Round-8 R8-GEN-04: the initial generation is published the moment the
+      // timeline enters the map — persist its floor FIRST or a failed write
+      // leaves a cached timeline whose watermark claims durability the disk
+      // does not have (generation=1 responses while floor=0). On failure no
+      // timeline is cached and the next attempt retries honestly.
+      const initial = Math.max(1, floor + 1);
+      this._persistFloor(id, initial);
+      t = { generation: initial, genCtr: initial, headSequence: 1, frames: [], bytes: 0, salt: crypto.randomBytes(16), authority: this._authority(id) };
       this.timelines.set(id, t);
-      this._persistFloor(id, t.genCtr);
     }
     return t;
   }
@@ -108,8 +114,13 @@ export class EventStream {
     // Contract deviceLifecycle.revocation / cursorDelivery.resetScope: every
     // subscription receives exactly one reset (authorization_changed) before
     // the stream closes. The reset never touches the shared sequence journal.
+    // Round-8 R8-GEN-01: the close guarantee must NOT depend on the reset's
+    // generation allocation succeeding — a floor-persistence failure inside
+    // _resetOne used to throw before _close ran, leaving live streams that
+    // kept delivering frames under dead authority. Close every subscriber
+    // even when its reset cannot be signed.
     for (const s of [...(this.subscribers.get(id) ?? [])]) {
-      this._resetOne(s, 'authorization_changed', { bypass: true });
+      try { this._resetOne(s, 'authorization_changed', { bypass: true }); } catch { /* reset undeliverable — close anyway */ }
       this._close(s);
     }
     this.subscribers.delete(id); this.timelines.delete(id);

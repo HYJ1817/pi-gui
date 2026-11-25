@@ -197,16 +197,36 @@ export class IdempotencyStore {
    * overlapping admissions into the final slot cannot both pass). */
   reserve(deviceId, resourceId, ownerEpoch, clientId, payloadSha256) {
     if (this.records.size >= 4096) return false;     // fail closed
-    this.records.set(this._key(deviceId, resourceId, ownerEpoch, clientId), { payloadSha256, pending: true, at: Date.now() });
-    this._persist();
+    const key = this._key(deviceId, resourceId, ownerEpoch, clientId);
+    const prior = this.records.get(key);
+    this.records.set(key, { payloadSha256, pending: true, at: Date.now() });
+    try {
+      this._persist();
+    } catch (e) {
+      // Round-8 R8-IDEMP-03: memory must never diverge from the durable view.
+      // Roll back so the store keeps describing what is actually on disk.
+      if (prior) this.records.set(key, prior); else this.records.delete(key);
+      throw e;
+    }
     return true;
   }
   /** Complete a reservation with its outcome — the post-dispatch half of the
    * same critical section. */
   record(deviceId, resourceId, ownerEpoch, clientId, payloadSha256, outcome) {
-    if (this.records.size >= 4096 && !this.records.has(this._key(deviceId, resourceId, ownerEpoch, clientId))) return false;
-    this.records.set(this._key(deviceId, resourceId, ownerEpoch, clientId), { payloadSha256, outcome, at: Date.now() });
-    this._persist();
+    const key = this._key(deviceId, resourceId, ownerEpoch, clientId);
+    if (this.records.size >= 4096 && !this.records.has(key)) return false;
+    const prior = this.records.get(key);
+    this.records.set(key, { payloadSha256, outcome, at: Date.now() });
+    try {
+      this._persist();
+    } catch (e) {
+      // Round-8 R8-IDEMP-03: a success outcome that never reached disk must
+      // never be replayable. Restore the pending reservation — the mutation
+      // stays committed-unknown and retries are refused rather than served a
+      // forged success.
+      if (prior) this.records.set(key, prior); else this.records.delete(key);
+      throw e;
+    }
     return true;
   }
   /** A reservation for a mutation that verifiably never executed (domain
@@ -348,9 +368,21 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
       const live = deviceStore.active(device.deviceId);
       if (!live) return false;
       if (live.replayEpoch !== device.replayEpoch) return false;   // re-pair / replay-state loss
+      // Round-8 R8-AUTH-05: scopes are part of admission authority. They are
+      // immutable within a record (rotations produce a new record object),
+      // but compare anyway — the cost is negligible and the invariant is
+      // then independent of how the store evolves.
+      if (JSON.stringify([...(live.grantedScopes ?? [])].sort()) !== JSON.stringify([...(device.grantedScopes ?? [])].sort())) return false;
     }
     const fresh = resolveOwner({ pathParameters });
     if (!fresh || fresh.identity !== owner.identity || fresh.epoch !== owner.epoch) return false;
+    // Round-8 R8-AUTH-05: the runtime owner identity intentionally omits the
+    // project path (workspace identity is the authority), so a conversation
+    // that MOVED projects while keeping its workspace ids still resolved to
+    // the same identity+epoch. Admission bound a specific project — compare
+    // it, or a grant removal on the admitted project goes unnoticed when the
+    // conversation reappears under a granted one.
+    if (fresh.projectId !== owner.projectId) return false;
     if (!deviceStore) return true;
     const live = deviceStore.get(device.deviceId);
     if (!live?.grants) return false;

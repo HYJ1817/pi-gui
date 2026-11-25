@@ -49,8 +49,14 @@ export class DeviceStore {
           // Every entry must itself be well-formed: the nonce key is the
           // base64url encoding of 32 random bytes (43 chars, no padding) and
           // its value a safe-integer millisecond timestamp.
-          const NONCE_RE = /^[A-Za-z0-9_-]{43}$/;
-          const entriesIntact = isRecord(d.nonces) && Object.entries(d.nonces).every(([n, ts]) => NONCE_RE.test(n) && Number.isSafeInteger(ts) && ts >= 0);
+          // Round-8 R8-REPLAY-02: alphabet+length is not enough — base64url
+          // has non-canonical trailing-bit aliases for the same 32 bytes. A
+          // consumed nonce rewritten as its alias survived the round-7 regex
+          // check, so the original canonical nonce no longer matched any
+          // entry and a consumed request was re-admitted after restart. The
+          // canonical decoder (decode/re-encode equality) is the only valid
+          // shape test — the same one the signature path enforces.
+          const entriesIntact = isRecord(d.nonces) && Object.entries(d.nonces).every(([n, ts]) => decodeB64url(n, 32) !== null && Number.isSafeInteger(ts) && ts >= 0);
           if (!isRecord(d.nonces) || !entriesIntact || !Number.isSafeInteger(d.timestampFloor) || d.timestampFloor < 0) {
             // signedRequest.replay.stateLoss: lost/corrupt replay state bumps the
             // epoch AND requires re-pair before ANY new request is admitted —
