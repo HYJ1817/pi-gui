@@ -1,10 +1,10 @@
 # 统一文件查看器：实施契约
 
-基线 `032b96659faee5d2a1252fbb744b2da4c5f3ef3d`。本文件协调本阶段模块边界，不另立授权系统。第一阶段 `file-links.md` 的授权、对象身份、撤销与外部打开策略保持权威。只读，不保存/删除/重命名文件。
+初始阶段基线 `032b96659faee5d2a1252fbb744b2da4c5f3ef3d`；2026-11-25 最终整改比较基线为 `78ca4dcb9dd3e4293e9dcb0f7507a0a6d51d7d5d`。本文件协调模块边界，不另立授权系统。第一阶段 `file-links.md` 的授权、对象身份、撤销与外部打开策略保持权威。只读，不保存/删除/重命名文件。当前 Surface 合同见 [work-surfaces.md](work-surfaces.md#当前右栏工作区2026-11-25-最终整改)，证据与未验证边界见 [最终整改验收](surface-final-acceptance.md)。
 
 ## 状态与入口
 
-`public/files-panel.js` 持有 surface、工作区令牌、会话级 tabs、顺序、树、布局与活动文件；`public/file-preview/index.js` 持有单个当前预览的加载和释放。标签只保存有界请求描述及阅读状态，不长期缓存文档字节或原始内容。工作区/会话切换、关闭、撤销均释放当前预览。恢复必须重新元数据/对象身份校验；不在 localStorage 保存 grant id/附件字节，外部授权标签不跨重启恢复。
+`public/ui/secondary-surface.js` 持有外层工具 tabs、有序描述符与可见性投影；`right-pane.js` 持有公共几何、最大化与聊天 inert/focus，Files 不维护私有全屏状态。`public/files-panel.js` 持有文件层的工作区令牌、会话级 tabs、顺序、右侧树、布局与活动文件；`public/file-preview/index.js` 持有单个当前预览的加载和释放。两层不复制 active-file owner。标签只保存有界请求描述及阅读状态，不长期缓存文档字节或原始内容。切换到其它工具或隐藏右栏时保存阅读状态并释放重预览；返回时重新校验并恢复，不自动播放媒体。工作区/会话切换、关闭、撤销均释放当前预览。恢复必须重新元数据/对象身份校验；不在 localStorage 保存 grant id/附件字节，外部授权标签不跨重启恢复。
 
 入口统一调用 `openFileReference(request)`，请求沿用 `{path,name,cwd,conversationId,fileId,workspace,generation,external,grantId,line,column,endLine,endColumn,bytes}`。附件额外允许 `{source:'attachment',file:File,name,size,attachmentId}`，只读取该 File；禁止将附件绝对 path 当成授权工作区文件。附件业务/视觉不重构。
 
@@ -22,7 +22,7 @@ ctx：
 - `resources.signal`；`resources.isCurrent()`；`resources.own(disposer)`；`resources.url(blob)` 创建且托管 ObjectURL。资源不跨预览实例共享。
 - `open(request)` 文档相对文件链接委托统一入口；`error(message)` 简短统一降级。
 
-公共 UI 辅助为 `public/file-preview/common.js`：`node(tag,className,text)`、`button(label,handler,{icon,title}={})`、`searchControl(toolbar,onSearch)`（返回 input）、`formatBytes`。插件可直接使用公共 `.icon-btn` / `.btn.ghost.tiny` / `.ds-input`，只使用现有 Token。格式相关样式在 `public/file-preview/preview.css`；主面板样式在既有文件面板 CSS 所有者。插件负责人可增加自己的按需样式文件，但不得写共同 preview.css。
+公共 UI 辅助为 `public/file-preview/common.js`：`node(tag,className,text)`、`button(label,handler,{icon,title}={})`、`searchControl(toolbar,onSearch)`（返回 input）、`formatBytes`、`toolbarMenu(ctx,items,options)`。编码、复制、公式等低频阅读动作复用公共 action-menu，过期/已关闭菜单不能执行旧实例动作；不得保留隐藏旧控件作为第二入口。插件可直接使用公共 `.icon-btn` / `.btn.ghost.tiny` / `.ds-input`，只使用现有 Token。格式相关样式在 `public/file-preview/preview.css`；主面板样式在既有文件面板 CSS 所有者。插件负责人可增加自己的按需样式文件，但不得写共同 preview.css。
 
 插件路径与责任：
 - `text.js`、`markdown.js`、`html.js`、`pdf.js`：主代理。
@@ -30,6 +30,8 @@ ctx：
 - `image.js`、`media.js`、`archive.js`、`zip-policy.js`：媒体/压缩包代理。zip-policy 导出 `inspectZip(bytes,options={})`，返回 `{entries,read(name,maxBytes)}`；entries 包括 `{name,size,compressedSize,directory}`，拒绝路径穿越/设备名/符号链接/加密/异常头/超条目/比例/总解压预算；read 使用有界流解压并校验实际大小。
 
 重模块只在打开对应类型后动态 import。Office/PDF 解析不得在 Electron main 执行。Worker 必须有超时与 terminate；所有库从本地 vendor 加载，无 CDN，无运行时在线服务。
+
+PPTX 已移除 `pptx-preview@1.0.7` 及其独占依赖/预打包代码，改由本仓库 `pptx-model.js` / `pptx-shapes.js` 进行有界 OOXML→模型→SVG/DOM 投影，实际绘制文本、基础形状、嵌入图片和页尺寸；分页、缩放/适配与阅读状态沿用预览接口。渲染位于 opaque `allow-scripts` iframe，无 same-origin/app bridge；不运行文档脚本、宏、外部关系资源。动画、SmartArt、高级图表、母版/主题全保真和嵌入媒体不在此基础投影能力内，不能宣称等同 PowerPoint。依赖与实际产物许可结论由独立审查和 vendor 来源清单证明，不以移除 warning 代替。
 
 ## 后端增量（只扩展现有 files owner）
 

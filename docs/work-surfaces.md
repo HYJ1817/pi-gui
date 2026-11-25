@@ -3,7 +3,22 @@
 本文负责 UI 工作区的承载、生命周期与布局约束。开发/审查规则见
 [AGENTS.md](../AGENTS.md) 和 [REVIEW.md](../REVIEW.md)，其他任务入口见 [文档导航](README.md)。
 
-## 当前右栏工作区（T2-A / T2-B）
+## 当前右栏工作区（2026-11-25 最终整改）
+
+当前 owner 是 `public/ui/secondary-surface.js` 的工具注册表与有序 Surface 描述符，`right-pane.js` 只持有公共几何、可见性、最大化与焦点隔离。旧常驻工具按钮、隐藏 source-button、卡片网格与“更多工具”导航已删除；不再通过观察旧按钮重建第二套入口。
+
+- 会话顶栏“工作面板”只切换整栏可见性。无标签时呈现居中单列 Launcher；图标来自本仓库公共图标，快捷键提示读取唯一 shortcut 注册表。字母只在 Launcher 焦点内做 type-ahead，Enter/Space 执行，不抢 Composer、文件搜索或 Terminal 的输入。
+- 顶部只列实际打开的工具 Surface，`+` 新建独立空 Launcher，选择尚未打开的工具将该空标签转换；单例工具已存在时激活原实例，不创建第二个业务 owner。支持切换、关闭、中键关闭、左右键/Home/End、Delete、Alt+Shift+方向键与拖动重排；右键/Shift+F10 菜单支持关闭当前/其它/右侧/全部。上限16标签、8个导航scope；只保存有界描述符，不保存内容、grant、Blob/native/PTY id。
+- **两层标签有意保留**：外层是工具，Files 内层仍是文件标签，工作簿内层仍是 sheets。Files 内部24 tabs、6 scope、192KiB持久化合同不变，不将文件再复制到外层 store。
+- **隐藏不等于关闭**：切换/隐藏保留各业务 owner，投影 `onVisibility(false)`；Files 保存有界阅读状态并 dispose 重预览，返回后重新校验权限与对象身份；Browser detach native view，返回先更新 bounds 再 attach 同一实例；Terminal 保留 controller/PTY并降频，不重建进程、不自动夺焦。显式关闭 Surface 才执行其 dispose；Terminal 外层关闭仍只释放前端，结束后端PTY须走内层 stop/close。
+- 导航scope与瞬时owner identity分开。backend/epoch/runtime身份变化令旧实例和异步结果失效；恢复描述符不等于恢复授权。Browser/Terminal描述符不得隐式导航或创建PTY，空后端必须等用户显式动作。
+- Changes/Specs/Browser split 只借用既有 singleton host，不重复 mount；首次进入也经完整业务open动作准备头部和权限。退出/关闭split归还仍活着的子工具。
+- 公共最大化覆盖聊天**可用工作区**，不覆盖既有项目侧栏，不是OS全屏。聊天DOM保留但变为inert，移出被覆盖区域焦点；还原/隐藏恢复原inert与正常宽度，不把临时最大宽度写入偏好。Files无私有fullscreen owner。
+- Files树在预览右侧，左侧分隔条向左拖/ArrowLeft增宽；窄于620px用overlay与Escape焦点返回。只读语义保留在ARIA和具体状态，不重复常驻说明。格式低频复制、编码、公式等进入公共阅读菜单；不存在为旧测试保留的隐藏controls。
+
+参考T3 Code精确SHA `c925b9ab198099f67de862ed01701bd1d8809f2b`，仅借鉴交互机制，不复制其品牌、React/Zustand store、host-path权限、可写文件能力或所有资源关闭策略。T3的`+`实际是类型菜单、文件位于同层Surface；Pi按本任务明确要求改为独立空Launcher，并保留既有Files双层结构。研究调用链与差异见[最终整改参考](surface-final-reference.md)，当前测试与产物资格见[最终整改验收](surface-final-acceptance.md)。
+
+## 历史右栏工作区（T2-A / T2-B，以下至P14-D历史记录均非当前导航合同）
 
 PI-Desktop 阶段 E 将原空白 `rp-titlebar` 与 `#workPanelNav` 合为同一条 46px 工具带；保留 `rp-titlebar` 类作为原生标题栏验收的定位接口。工具带按实际原生 caption 区域结束拖拽矩形，28px 控件及选中标签可横向滚动；选中状态仍来自各工具 owner，更新后仅滚动到当前项。右栏默认 392px、最小 320px、宽度记忆、dock/overlay 与分屏比例都由原模块持有。
 

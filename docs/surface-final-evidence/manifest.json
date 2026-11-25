@@ -1,0 +1,86 @@
+{
+  "date": "2026-11-25",
+  "beforeHead": "78ca4dcb9dd3e4293e9dcb0f7507a0a6d51d7d5d",
+  "files": [
+    {
+      "source": "surface-launcher-1320-dark.png",
+      "name": "launcher-1320-dark.png",
+      "qualification": "packaged-production-main-normal-sandbox",
+      "bytes": 75758,
+      "sha256": "1304f70acf5198b78107689fd1cbb13ea90bf1b01f54e5009149e7e47dd5cda1",
+      "sourceRun": "pi-preview-packaged-F9IKLx"
+    },
+    {
+      "source": "surface-launcher-1320-light.png",
+      "name": "launcher-1320-light.png",
+      "qualification": "packaged-production-main-normal-sandbox",
+      "bytes": 78038,
+      "sha256": "0992f6e7dcc51336304e0675eed1501613bfc33d9601c412d0256299786debfa",
+      "sourceRun": "pi-preview-packaged-F9IKLx"
+    },
+    {
+      "source": "surface-launcher-700-dark.png",
+      "name": "launcher-700-dark.png",
+      "qualification": "packaged-production-main-normal-sandbox",
+      "bytes": 45314,
+      "sha256": "b4dbe4e99825adf10575b73693ca4c4f5498fdbac412bb60707cfd9e6a6ad888",
+      "sourceRun": "pi-preview-packaged-F9IKLx"
+    },
+    {
+      "source": "surface-launcher-700-light.png",
+      "name": "launcher-700-light.png",
+      "qualification": "packaged-production-main-normal-sandbox",
+      "bytes": 47447,
+      "sha256": "e1f53791e66a652cc3b20b27bc2029405a374b967174f8c79dd884e4fe4de062",
+      "sourceRun": "pi-preview-packaged-F9IKLx"
+    },
+    {
+      "source": "surface-files-right-tree-maximized.png",
+      "name": "files-right-tree-maximized.png",
+      "qualification": "packaged-production-main-normal-sandbox",
+      "bytes": 193505,
+      "sha256": "7502a23a4679ce57b1c6d1ce5da81a3da0fc1e079759bf5868b9b02a1a5242c4",
+      "sourceRun": "pi-preview-packaged-F9IKLx"
+    },
+    {
+      "source": "office-pptx-page2.png",
+      "name": "pptx-page2.png",
+      "qualification": "packaged-production-main-normal-sandbox",
+      "bytes": 124011,
+      "sha256": "2967375c914fe3af4663ee1d2030f454ed6141e4acfc7ed3eed75965e38e2b9f",
+      "sourceRun": "pi-preview-packaged-F9IKLx"
+    },
+    {
+      "source": "surface-browser-native-restored.png",
+      "name": "browser-native-restored.png",
+      "qualification": "native-child-webcontents-capture",
+      "bytes": 13996,
+      "sha256": "ae3badac86cda0fc3327cc2fddbafe78828186f9dc209e93d3d40705254e923b",
+      "sourceRun": "pi-preview-packaged-F9IKLx"
+    },
+    {
+      "source": "text-700-dark.png",
+      "name": "files-700-dark.png",
+      "qualification": "source-production-renderer-normal-sandbox",
+      "bytes": 84917,
+      "sha256": "f7490c4c67c63fa1a58b4a97a08d993f51ca55cab5d99e4170b34aab8c72e74c",
+      "sourceRun": "pi-preview-desktop-ZYGwsX"
+    },
+    {
+      "source": "seek-0.88.png",
+      "name": "large-media-seek.png",
+      "qualification": "built-production-renderer-normal-sandbox-test-owned-main",
+      "bytes": 1886132,
+      "sha256": "2497dcdb6b76f06788d2063c12d2162851c5da664ad5e7246c5753049526b42c",
+      "sourceRun": "pi-large-media-shAP8t"
+    },
+    {
+      "source": "surface-restored-files-keyboard-focus.png",
+      "name": "restored-files-keyboard-focus.png",
+      "qualification": "packaged-production-main-normal-sandbox",
+      "bytes": 63023,
+      "sha256": "c555deff8c61d657d8b192576f9b26181a6b9cc269daa8be360c76fa36f57df0",
+      "sourceRun": "pi-preview-packaged-F9IKLx"
+    }
+  ]
+}
