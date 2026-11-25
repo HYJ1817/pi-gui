@@ -48,6 +48,71 @@ export function columnNumber(label) {
   return value;
 }
 
+/* The one external relationship type ordinary Office documents legitimately
+ * carry. Compared as the exact, case-sensitive OPC URI — a namespace whose
+ * tail merely resembles "hyperlink" is not this type. */
+export const OOXML_HYPERLINK_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
+
+/* Walk one XML tag forward from `<`, honoring quoted attribute values, and
+ * return the position of its closing `>`. Shared by every scanner here:
+ * regexes like `[^>]*` lie about tags whose attribute values legally contain
+ * `>`. Throws closed on an unterminated tag. */
+function tagEnd(xml, open) {
+  let quote = null;
+  for (let cursor = open + 1; cursor < xml.length; cursor++) {
+    const ch = xml[cursor];
+    if (quote) { if (ch === quote) quote = null; }
+    else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '>') return cursor;
+  }
+  throw officeError('format');
+}
+
+/* Read attributes from a tag body with XML lexical rules. Namespace-prefixed
+ * attributes are never reported as their unprefixed local name (x:Type is not
+ * Type). Input is already entity-decoded by the caller, so values are exactly
+ * what the real XML parser will see. */
+function tagAttributes(body) {
+  const attributes = {};
+  const attrPattern = /([A-Za-z][\w.-]*(?::[A-Za-z][\w.-]*)?)\s*=\s*("([^"]*)"|'([^']*)')/g;
+  for (const attr of body.matchAll(attrPattern)) {
+    if (attr[1].includes(':')) continue;
+    if (!(attr[1] in attributes)) attributes[attr[1]] = attr[3] ?? attr[4] ?? '';
+  }
+  return attributes;
+}
+
+/* Quote-aware scanner for `<…Relationship …>` elements in a .rels part. A
+ * hand-rolled regex (`[^>]*`) truncates at a `>` inside a quoted attribute
+ * value and misreads namespace-prefixed attributes; this scanner walks the
+ * tag character by character, honoring quote state, then reads attributes
+ * with XML lexical rules (prefixes may contain `-` and `.`). Malformed tags
+ * fail closed. */
+export function scanRelationshipElements(xml) {
+  const results = [];
+  let index = 0;
+  while (index < xml.length) {
+    const open = xml.indexOf('<', index);
+    if (open < 0) break;
+    if (xml.startsWith('<!--', open)) { const close = xml.indexOf('-->', open); index = close < 0 ? xml.length : close + 3; continue; }
+    if (xml.startsWith('<![CDATA[', open)) { const close = xml.indexOf(']]>', open); index = close < 0 ? xml.length : close + 3; continue; }
+    if (xml[open + 1] === '?') { const close = xml.indexOf('?>', open); index = close < 0 ? xml.length : close + 2; continue; }
+    const nameMatch = /^<((?:[A-Za-z][\w.-]*:)?Relationship)(?=[\s/>])/.exec(xml.slice(open, open + 128));
+    // Walk every tag to its real end so a `>` inside an unrelated attribute
+    // value cannot hide a later Relationship element in the skipped region.
+    const end = tagEnd(xml, open);
+    if (!nameMatch) { index = end + 1; continue; }
+    const attributes = tagAttributes(xml.slice(open + nameMatch[0].length, end));
+    index = end + 1;
+    results.push({
+      type: attributes.Type || '',
+      target: attributes.Target || '',
+      mode: attributes.TargetMode || 'Internal',
+    });
+  }
+  return results;
+}
+
 function dimensionGuard(xml) {
   let mergeCells = 0, mergeArea = 0;
   for (const match of xml.matchAll(/<(?:\w+:)?col\b[^>]*>/g)) {
@@ -151,23 +216,24 @@ export function inspectOffice(bytes, kind, { validateXml } = {}) {
        * reference or a web address); only those, and only over a network-safe
        * scheme, may survive — and they are never fetched during preview. Every
        * other external target (remote image, template, workbook, data
-       * connection, OLE object, or an unknown type) still refuses the package. */
+       * connection, OLE object, or an unknown type) still refuses the package.
+       *
+       * The scan is quote-aware and namespace-aware rather than regex-shaped:
+       * attribute values may legally contain `>`, prefixes may legally contain
+       * `-`/`.`, and `x:Type` is not `Type`. The type comparison is the exact
+       * OOXML hyperlink relationship URI — the scheme of the URI itself is
+       * fixed, but the relationship type string is case-sensitive in OPC. */
       if (name.endsWith('.rels')) {
-        for (const rel of xml.matchAll(/<(?:\w+:)?Relationship\b[^>]*>/gi)) {
-          const tag = rel[0];
-          const type = (tag.match(/\bType\s*=\s*["']([^"']*)["']/i) || [])[1] || '';
-          const target = (tag.match(/\bTarget\s*=\s*["']([^"']*)["']/i) || [])[1] || '';
-          const mode = (tag.match(/\bTargetMode\s*=\s*["']([^"']*)["']/i) || [])[1] || 'Internal';
-          const suffix = type.split('/').pop().toLowerCase();
-          if (mode !== 'Internal') {
-            if (mode !== 'External') throw officeError('external-link');
-            if (suffix !== 'hyperlink') throw officeError('active-content');
-            if (!/^https?:\/\//i.test(target)) throw officeError('external-link');
+        for (const rel of scanRelationshipElements(xml)) {
+          if (rel.mode !== 'Internal') {
+            if (rel.mode !== 'External') throw officeError('external-link');
+            if (rel.type !== OOXML_HYPERLINK_TYPE) throw officeError('active-content');
+            if (!/^https?:\/\//i.test(rel.target)) throw officeError('external-link');
             continue;
           }
           // Internal targets cannot be a URI, protocol-relative URL or a
           // Windows path. Relative ../ targets are valid package relationships.
-          if (/[:\\]|^\s*\/|&#/i.test(target)) throw officeError('external-link');
+          if (/[:\\]|^\s*\/|&#/i.test(rel.target)) throw officeError('external-link');
         }
       } else if (/TargetMode\s*=\s*["']\s*External\s*["']/i.test(xml)) {
         // A TargetMode outside a .rels part is not a package relationship and
@@ -199,12 +265,14 @@ export function inspectOffice(bytes, kind, { validateXml } = {}) {
         // enormous canvas. Attribute order in XML is not significant, so the
         // scan reads cx/cy independently of their positions, quote style and
         // whitespace, and tolerates any namespace prefix on the element.
-        const element = xml.match(/<(?:[A-Za-z][\w.-]*:)?sldSz\b[^>]*>?/);
-        if (!element) throw officeError('slide-size');
-        const cxAttr = element[0].match(/\bcx\s*=\s*["'](\d+)["']/);
-        const cyAttr = element[0].match(/\bcy\s*=\s*["'](\d+)["']/);
-        if (!cxAttr || !cyAttr) throw officeError('slide-size');
-        const cx = Number(cxAttr[1]), cy = Number(cyAttr[1]);
+        let element = null;
+        for (const found of xml.matchAll(/<(?:[A-Za-z][\w.-]*:)?sldSz(?=[\s/>])/g)) {
+          const end = tagEnd(xml, found.index);
+          element = tagAttributes(xml.slice(found.index + found[0].length, end));
+          break;
+        }
+        if (!element || !/^\d+$/.test(element.cx || '') || !/^\d+$/.test(element.cy || '')) throw officeError('slide-size');
+        const cx = Number(element.cx), cy = Number(element.cy);
         aspect = cx / cy;
         if (cx < 914400 || cy < 914400 || cx > 36576000 || cy > 36576000 || cx / cy > 4 || cy / cx > 4) throw officeError('slide-size');
       }

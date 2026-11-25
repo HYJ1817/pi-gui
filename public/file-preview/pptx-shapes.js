@@ -95,12 +95,15 @@ function text(shape, inherited, ctx) {
     if (!child(pPr, A, 'buNone')) {
       const bulletChar = attr(child(pPr, A, 'buChar'), 'char');
       const autoNum = child(pPr, A, 'buAutoNum');
-      if (bulletChar) marker = { kind: 'bullet', char: bulletChar.slice(0, 4) };
+      if (bulletChar) marker = { kind: 'bullet', char: [...bulletChar].slice(0, 4).join('') };
       else if (autoNum) {
         const format = attr(autoNum, 'type') || 'arabicPeriod';
         const start = Math.max(0, Math.min(32767, number(attr(autoNum, 'startAt'), 1, 32767)));
-        marker = { kind: 'number', format, start };
-      } else if (child(pPr, A, 'buFont') || marL > 0) marker = { kind: 'bullet', char: '•' };
+        /* Whether startAt was written matters: an explicit startAt — even 1 —
+         * is exactly how PowerPoint encodes "restart numbering here", while a
+         * paragraph without one continues the level's counter. */
+        marker = { kind: 'number', format, start, explicitStart: attr(autoNum, 'startAt') !== '' };
+      } else if (child(pPr, A, 'buFont')) marker = { kind: 'bullet', char: '•' };
     }
     const spacing = {
       before: Math.max(0, number(attr(child(child(pPr, A, 'spcBef'), A, 'spcPts'), 'val'), 0, 400000) / 100 * (12700 * ctx.scale)),
@@ -116,7 +119,10 @@ function text(shape, inherited, ctx) {
       if (ctx.budget.text > OFFICE_LIMITS.textChars) throw officeError('size');
       const runFont = font(child(item, A, 'rPr'), ctx, paragraphFont);
       const east = eaTypeface(child(item, A, 'rPr')) || eaTypeface(child(pPr, A, 'defRPr'));
-      if (!runFont.family && /^[\p{L}\p{N} ,_.-]{1,80}$/u.test(east)) runFont.eastFamily = east;
+      /* The East-Asian face participates whenever the document named one,
+       * whether or not a Latin face exists — Latin handles the ASCII runs,
+       * the EA face is the script-correct fallback for CJK text. */
+      if (/^[\p{L}\p{N} ,_.-]{1,80}$/u.test(east)) runFont.eastFamily = east;
       runs.push({ text: value, ...runFont });
     }
     return { alignment, runs, level, marL, indent, marker, spacing };

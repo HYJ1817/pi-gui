@@ -2,7 +2,7 @@
  * ECMA-376 / DrawingML: package relationships, ordered sldIdLst, xfrm, sp/pic.
  * Only data leaves the killable Office worker; no document markup is rendered. */
 import { inspectZip } from './zip-policy.js';
-import { OFFICE_LIMITS, officeError, xmlText } from './office-policy.js';
+import { OFFICE_LIMITS, OOXML_HYPERLINK_TYPE, officeError, xmlText } from './office-policy.js';
 import { projectSlideShapes } from './pptx-shapes.js';
 
 const P = 'http://schemas.openxmlformats.org/presentationml/2006/main';
@@ -55,7 +55,7 @@ export function projectPptx(bytes, DOMParser, expectedSlides) {
          * It is never resolved into the package or fetched, so it simply is
          * not registered as an internal part. Anything else the preflight let
          * through by mistake still fails closed here. */
-        if (type.split('/').pop().toLowerCase() !== 'hyperlink' || !/^https?:\/\//i.test(target)) throw officeError('external-link');
+        if (type !== OOXML_HYPERLINK_TYPE || !/^https?:\/\//i.test(target)) throw officeError('external-link');
         continue;
       }
       const resolved = targetPath(part, target);

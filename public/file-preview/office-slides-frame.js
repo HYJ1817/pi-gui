@@ -28,18 +28,22 @@
   /* Auto-number formats seen in ordinary decks. Exotic numbering schemes fall
    * back to a simple arabic counter rather than dropping the list structure. */
   function numeral(value, format) {
+    // OOXML numbering formats are camel-cased: alphaLcPeriod / alphaUcPeriod,
+    // romanLcPeriod / romanUcPeriod. The case signal lives in the Uc/Lc infix,
+    // not in the first letter (every format starts lowercase).
+    const upperCase = format.includes('Uc');
     if (format.startsWith('alpha')) {
       const letter = String.fromCharCode(97 + ((value - 1) % 26));
       const text = value > 26 ? letter + letter : letter;
-      const upper = format[0] === 'a' ? text : text.toUpperCase();
-      return format.endsWith('ParenR') ? upper + ')' : upper + '.';
+      const cased = upperCase ? text.toUpperCase() : text;
+      return format.endsWith('ParenR') ? cased + ')' : cased + '.';
     }
     if (format.startsWith('roman')) {
       const table = [[1000,'m'],[900,'cm'],[500,'d'],[400,'cd'],[100,'c'],[90,'xc'],[50,'l'],[40,'xl'],[10,'x'],[9,'ix'],[5,'v'],[4,'iv'],[1,'i']];
       let rest = value, out = '';
       for (const [n, sym] of table) while (rest >= n) { out += sym; rest -= n; }
-      const text = format[0] === 'r' ? out : out.toUpperCase();
-      return format.endsWith('ParenR') ? text + ')' : text + '.';
+      const cased = upperCase ? out.toUpperCase() : out;
+      return format.endsWith('ParenR') ? cased + ')' : cased + '.';
     }
     return format.endsWith('ParenR') ? value + ')' : value + '.';
   }
@@ -65,7 +69,13 @@
         let label;
         if (paragraph.marker.kind === 'number') {
           const level = paragraph.level || 0;
-          const next = (counters.get(level) ?? (paragraph.marker.start || 1) - 1) + 1;
+          /* An explicit startAt restarts the level's counter — it is exactly
+           * how PowerPoint encodes "restart numbering here" (the only encoding
+           * that exists). A paragraph without one continues the counter; the
+           * projection carries explicitStart so the two cases stay distinct. */
+          const startAt = paragraph.marker.start || 1;
+          const next = !counters.has(level) || paragraph.marker.explicitStart ? startAt
+            : counters.get(level) + 1;
           counters.set(level, next);
           for (const deeper of [...counters.keys()]) if (deeper > level) counters.delete(deeper);
           label = numeral(next, paragraph.marker.format || 'arabicPeriod');
@@ -80,10 +90,12 @@
         Object.assign(span.style, { fontSize: run.size + 'px', color: run.color, fontWeight: run.bold ? '700' : '400', fontStyle: run.italic ? 'italic' : 'normal', textDecoration: run.underline ? 'underline' : 'none' });
         // Latin face first, the East-Asian face as the CJK fallback, then a
         // generic CJK system fallback so Chinese text never renders as boxes.
-        const faces = [run.family, run.eastFamily, run.family ? null : 'system-ui'].filter(Boolean);
-        if (/[㐀-鿿]/.test(run.text) && !run.eastFamily && !run.family) faces.unshift('Microsoft YaHei', 'PingFang SC', 'SimSun');
-        if (faces.length) span.style.fontFamily = faces.map(face => /^[\p{L}\p{N} ,_.-]+$/u.test(face) && /\s/.test(face) ? `"${face}"` : face).join(', ');
-        else if (run.family) span.style.fontFamily = run.family;
+        // The whitelist admits only real font-name characters (no quotes,
+        // commas or semicolons), so joining is injection-safe; names containing
+        // whitespace are quoted per CSS font-family rules.
+        const faces = [run.family, run.eastFamily, run.family || run.eastFamily ? null : 'system-ui'].filter(Boolean);
+        if (/[㐀-鿿]/.test(run.text) && !run.eastFamily) faces.push('Microsoft YaHei', 'PingFang SC', 'SimSun');
+        if (faces.length) span.style.fontFamily = faces.map(face => /\s/.test(face) ? `"${face}"` : face).join(', ');
         p.append(span);
       }
       box.append(p);

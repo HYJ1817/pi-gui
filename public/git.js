@@ -60,6 +60,13 @@ import { loadReviewComments, saveReviewComment, removeReviewComment, reviewPersi
 import { fillReviewComposer } from './review-fill.js';
 import { mountReviewTaskPreview } from './review-task-preview.js';
 import { selectReviewRange, rangeRows, reconcileReviewRange } from './review-comment-range.js';
+import { runtimeStore } from './runtime-state.js';
+
+/* Owner dimensions that make two workspaces or two runtime incarnations
+ * different even when the conversation id and cwd stayed the same. Mirrors
+ * the shell's secondary-surface identity so a late file-open action dies with
+ * the exact owner that rendered its row. */
+const secondaryOwnerKeys = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 
 /* 自动刷新的防抖窗口。
  *
@@ -887,18 +894,32 @@ function changeRow(f, inSession, reopenSerial = 0, listRestore = null) {
   if (!f.isDir) {
     /* The file belongs to the workspace that rendered this row, not whichever
      * workspace happens to be current when the dynamic import resolves. Capture
-     * the full identity now: a same-named file in a replaced workspace, a
-     * switched worktree or a retired runtime owner must never be opened by a
-     * late click. The re-check after the await binds every dimension. */
-    const conversationId = gitConversationScope();
-    const generation = S.workspaceGeneration;
-    const cwd = S.cwd;
+     * the full identity now — conversation scope, workspace generation, the
+     * runtime/classic owner fields and the file's own workspace cwd (resolved
+     * exactly like the Files panel resolves it, so a runtime worktree is bound
+     * to its own cwd rather than to the Classic S.cwd). A same-named file in
+     * a replaced workspace, a retired runtime owner or a switched session must
+     * never be opened by a late click. */
+    const fileIdentity = () => {
+      const conversationId = gitConversationScope();
+      const record = conversationId ? runtimeStore.get(conversationId) : null;
+      const owner = conversationId ? record?.owner : S.legacyOwner;
+      return {
+        conversationId,
+        generation: S.workspaceGeneration,
+        cwd: record?.item?.workspace?.cwd || S.cwd || '',
+        ownerKey: JSON.stringify(secondaryOwnerKeys.map((key) => owner?.[key] ?? null)),
+      };
+    };
+    const captured = fileIdentity();
     const preview = tinyBtn('查看文件', async () => {
       const { openFileReference } = await import('./files-panel.js');
-      if (gitConversationScope() !== conversationId) return;
-      if (!ownsWorkspace(generation)) return;
-      if ((S.cwd || '') !== (cwd || '')) return;
-      openFileReference({ path: f.path, name: f.path.split(/[\\/]/).pop(), conversationId, cwd });
+      const now = fileIdentity();
+      if (now.conversationId !== captured.conversationId) return;
+      if (!ownsWorkspace(captured.generation) || now.generation !== captured.generation) return;
+      if (now.ownerKey !== captured.ownerKey) return;
+      if ((now.cwd || '') !== (captured.cwd || '')) return;
+      openFileReference({ path: f.path, name: f.path.split(/[\\/]/).pop(), conversationId: captured.conversationId, cwd: captured.cwd });
     });
     preview.classList.add('chg-view-file'); acts.append(preview);
   }
