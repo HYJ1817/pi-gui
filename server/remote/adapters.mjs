@@ -112,6 +112,15 @@ export class RegistryClock {
     }
     return e;
   }
+  /** Monotonicity floor: the counter must never restart below an epoch that a
+   * surviving idempotency record still references, or a rolled owner could
+   * collide with the prior owner's namespace and replay its outcome. Evicted
+   * records need no protection — their outcomes are unreachable anyway. */
+  floorEpochs(minimum) {
+    if (Number.isSafeInteger(minimum) && minimum > (this.epochCounter ?? 0)) {
+      this.epochCounter = minimum;
+    }
+  }
 }
 
 /** Idempotency records keyed (deviceId, resourceId, ownerEpoch) -> outcome. */
@@ -132,6 +141,16 @@ export class IdempotencyStore {
   _key(deviceId, resourceId, ownerEpoch, clientId) {
     return `${deviceId}|${resourceId}|${ownerEpoch}|${clientId}`;
   }
+  /** Highest owner epoch referenced by any live record. Keys are
+   * deviceId|resourceId|epoch|clientId; the epoch is the third field. */
+  maxLiveEpoch() {
+    let max = 0;
+    for (const key of this.records.keys()) {
+      const epoch = Number(key.split('|')[2]);
+      if (Number.isSafeInteger(epoch) && epoch > max) max = epoch;
+    }
+    return max;
+  }
   /**
    * resolve() -> the recorded outcome or null. record() -> persists.
    * Capacity overflow refuses NEW mutations (never evicts a live record).
@@ -150,6 +169,10 @@ export class IdempotencyStore {
 }
 
 export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataDir), idem = new IdempotencyStore(dataDir), deviceStore = null, streamWatermark = null }) {
+  // If registry state is lost while idempotency records survive, fresh epochs
+  // must still allocate above every live record — otherwise a rolled owner
+  // could inherit a prior owner's outcomes (round-4 R4-CORRECTNESS-1).
+  clock.floorEpochs(idem.maxLiveEpoch());
   const nowMs = () => Date.now();
 
   const projectIndex = () => {

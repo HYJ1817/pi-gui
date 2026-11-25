@@ -673,6 +673,54 @@ async function main() {
     } finally { await ctx.cleanup(); }
   });
 
+  await t('lost registry state cannot replay outcomes across an owner roll (round-4 R4-CORRECTNESS-1)', async () => {
+    let sends = 0;
+    const ctx = await boot({ sendMessage: async () => { sends++; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const call = async (revision) => {
+        const body = envelope('chat.send', { clientMessageId, text: 'hi' }, revision);
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      let r = await call(1);
+      assert.equal(r.status, 200, r.body);
+      assert.equal(sends, 1, 'first send dispatched once');
+      // Simulate the review attack: stop the gateway, roll the generation, and
+      // delete ONLY remote-registry.json — idempotency records survive.
+      const dataDir = ctx.dataDir;
+      const convs = ctx.conversations;
+      const sendMessage = async () => { sends++; return { accepted: true }; };
+      await ctx.remote.close();
+      convs[0].runtimeGeneration = 'gen-post-loss-' + Date.now();
+      fs.rmSync(path.join(dataDir, 'remote-registry.json'), { force: true });
+      assert.ok(fs.existsSync(path.join(dataDir, 'remote-idempotency.json')), 'idempotency records must survive');
+      // Restart in place: reuse the booted harness pieces against the same dataDir.
+      const { startRemote } = await import(MODULES.index);
+      const domain = {
+        projects: () => [{ path: 'C:/fixture/proj', name: 'fixture' }],
+        conversations: () => convs,
+        sessionRecords: () => [],
+        openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
+        sendMessage, stop: async () => ({}), pendingDialogs: () => [], consumeApproval: () => true,
+      };
+      const remote2 = startRemote({ dataDir, domain, host: '127.0.0.1', port: 0 });
+      ctx.remote = remote2;
+      const addr2 = await remote2.listen();
+      Object.assign(ctx.addr, addr2);
+      // Reboot harness bookkeeping uses the same device credentials. The new
+      // owner epoch MUST allocate above the surviving record's epoch — the same
+      // client id then dispatches fresh instead of replaying generation-1's outcome.
+      r = await call(convs[0].revision);
+      assert.equal(r.status, 200, r.body);
+      assert.equal(sends, 2, 'post-loss owner roll must dispatch fresh — epoch floor covers surviving records');
+    } finally { await ctx.cleanup(); }
+  });
+
   await t('production pairing completes: pending -> approve -> same-request retry', async () => {
     // No injected confirmLocally: the loopback admin approves a server-verified
     // pending transcript and the device retries the SAME signed request.
