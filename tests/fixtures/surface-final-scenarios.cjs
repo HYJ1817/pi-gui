@@ -27,6 +27,8 @@ module.exports = async function (t, group) {
       await read(`import('/theme.js').then(m=>m.setThemePreference(${JSON.stringify(theme)}))`); await sleep(180);
       const measure = await read("(()=>{const e=document.querySelector('.work-panel-launcher-list'),r=e.getBoundingClientRect(),p=e.closest('.rp-body').getBoundingClientRect(),rows=[...e.querySelectorAll('button')].map(x=>{const b=x.getBoundingClientRect(),s=getComputedStyle(x);return{x:b.x,width:b.width,height:b.height,border:s.borderWidth,bg:s.backgroundColor,icon:!!x.querySelector('svg'),label:!!x.querySelector('.work-panel-launcher-label')}});return{centerOffset:Math.abs((r.left+r.right-p.left-p.right)/2),within:r.top>=p.top&&r.bottom<=p.bottom&&r.left>=p.left&&r.right<=p.right,overflow:document.documentElement.scrollWidth-innerWidth,rows}})()");
       check(`centered compact single-column real Launcher ${width}-${theme}`, measure.within && measure.centerOffset < 3 && measure.overflow <= 1 && measure.rows.length >= 5 && measure.rows.every(row => row.icon && row.label && row.height <= 44 && Math.abs(row.x - measure.rows[0].x) < 1), measure);
+      const finish = await read("(()=>{const root=document.querySelector('.work-panel-launcher-content'),title=root.querySelector('h2'),keys=[...root.querySelectorAll('kbd:not([hidden])')];return{titleAlign:getComputedStyle(title).textAlign,keycaps:keys.length,filled:keys.every(e=>{const c=getComputedStyle(e).backgroundColor;return c!=='transparent'&&c!=='rgba(0, 0, 0, 0)'}),tabs:document.querySelectorAll('.work-surface-tab').length,extraCopy:!!root.querySelector('p')}})()");
+      check(`finished tabless Launcher title keycaps and minimal copy ${width}-${theme}`, finish.titleAlign === 'center' && finish.keycaps > 0 && finish.filled && finish.tabs === 0 && !finish.extraCopy, finish);
       await shot(`surface-launcher-${width}-${theme}`);
     }
     win.setContentSize(1320, 820);
@@ -223,6 +225,10 @@ module.exports = async function (t, group) {
     await click('.work-surface-tab:last-child .work-surface-tab-select'); await key('F10', ['shift']); await key('Down'); await key('Return');
     check('close-others keeps only its target Surface', await manager('m.secondaryTabs().length===1'));
     await shot('surface-close-others');
+    await click('.work-surface-tab-close');
+    await until(() => manager('m.secondaryTabs().length===0'), 'close-last-surface');
+    check('closing the final Surface shows Launcher with no empty tab', await read("document.querySelector('#rightPane').hidden===false&&!!document.querySelector('.work-panel-launcher-list')&&!document.querySelector('.work-surface-tab')"));
+    await shot('surface-last-close-launcher');
   });
   await group('surface-lazy-restore-focus', async () => {
     await manager('m.secondaryTabs().forEach(tab=>m.closeSecondarySurface(tab.id))');

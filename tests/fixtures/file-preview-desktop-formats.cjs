@@ -39,6 +39,10 @@ module.exports = async function (t, group) {
     await open('pages.pdf', '.fp-pdf');
     await until(() => read("document.querySelector('.fp-pdf-total')?.textContent.includes('8')&&!!document.querySelector('.fp-pdf canvas')&&document.querySelector('.fp-pdf canvas').width>0"), 'pdf-render', 25000);
     check('PDF.js real worker parses eight pages and paints actual canvas', await read("document.querySelectorAll('.fp-pdf-page').length===8&&document.querySelector('.fp-pdf canvas').width>0"));
+    const pdfBytes = t.fs.readFileSync(t.path.join(t.repo, 'pages.pdf'));
+    check('PDF fixture uses unembedded Helvetica rather than an embedded font', pdfBytes.includes(Buffer.from('/BaseFont /Helvetica')) && !/\/FontFile[23]?\b/.test(pdfBytes.toString('latin1')));
+    notes.push({ kind: 'unembedded-pdf-font', fixture: 'pages.pdf', sha256: require('node:crypto').createHash('sha256').update(pdfBytes).digest('hex'), systemFonts: false, standardFontData: 'packaged pdf/standard_fonts (byte-verified)' });
+    await shot('pdf-unembedded-font');
     // The fixture has an outline. Wait for its async toolbar insertion before
     // measuring the search field's click position (canvas paint is earlier).
     await until(() => read("!document.querySelector('.fp-pdf-outline')?.hidden&&document.querySelector('.fp-pdf-outline').options.length>1&&!document.querySelector('.fp-pdf-search-tools .fp-search').disabled"), 'pdf-outline-toolbar');
@@ -101,6 +105,21 @@ module.exports = async function (t, group) {
     check('real PPTX restores second slide and string-valued zoom across tabs', await read("document.querySelector('.office-zoom').value==='75'"));
     const restoredFrame = win.webContents.mainFrame.frames.find(frame => frame.url === 'about:srcdoc');
     check('restored PPTX still paints actual second-slide content', await restoredFrame.executeJavaScript("document.body.textContent.includes('第 2 页')&&!!document.querySelector('.pptx-slide')"));
+  });
+  await group('real-office-lists', async () => {
+    for (const [name, shotName, expected] of [
+      ['libreoffice-bullets-mixed.pptx', 'office-pptx-real-bullets', "document.body.textContent.includes('第一层项目符号')&&document.querySelectorAll('.pptx-marker').length>=5"],
+      ['libreoffice-autonum-multilevel.pptx', 'office-pptx-real-multilevel', "(()=>{const m=[...document.querySelectorAll('.pptx-marker')].map(e=>e.textContent.trim());return ['1.','2.','3.','a.','i.','•','◦','▪'].every(v=>m.includes(v))})()"],
+    ]) {
+      await open(name, '.office-slides-frame');
+      await until(() => read("!!document.querySelector('.office-page-input')&&!document.querySelector('.office-page-input').disabled"), 'real-list-toolbar');
+      const frame = win.webContents.mainFrame.frames.find(frame => frame.url === 'about:srcdoc');
+      await until(() => frame.executeJavaScript(expected), 'real-list-painted');
+      check('packaged renderer paints actual LibreOffice list geometry: ' + name, await frame.executeJavaScript(expected));
+      const bytes = t.fs.readFileSync(t.path.join(t.repo, name));
+      notes.push({ kind: 'real-office-fixture', file: name, sha256: require('node:crypto').createHash('sha256').update(bytes).digest('hex'), content: await frame.executeJavaScript("({slide:!!document.querySelector('.pptx-slide'),markers:[...document.querySelectorAll('.pptx-marker')].map(e=>e.textContent.trim()),viewport:{width:innerWidth,height:innerHeight}})") });
+      await shot(shotName);
+    }
   });
   await group('image-audio-archive', async () => {
     await open('local.png', '.fp-image-viewport');

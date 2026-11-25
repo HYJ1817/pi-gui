@@ -102,10 +102,13 @@ async function main() {
   const check = async (label, fn) => { await fn(); passed++; console.log('PASS ' + label); };
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-preview-vendor-test-'));
   const moduleRoot = fs.realpathSync(path.join(ROOT, 'node_modules'));
-  const { materializePreviewVendor, checkedPath, extractPakoZlibNotice } = await import(pathToFileURL(path.join(ROOT, 'scripts/sync-preview-vendor.mjs')));
+  const { materializePreviewVendor: materialize, checkedPath, extractPakoZlibNotice } = await import(pathToFileURL(path.join(ROOT, 'scripts/sync-preview-vendor.mjs')));
+  const fonts = await import(pathToFileURL(path.join(ROOT, 'scripts/preview-font-source.mjs')));
+  const emptyCache = path.join(fixture, 'font-source-cache');
+  const materializePreviewVendor = options => materialize({ fontSourceCache: emptyCache, ...options });
   try {
     fs.mkdirSync(path.join(fixture, 'scripts'));
-    for (const file of ['preview-browser-globals.mjs', 'sync-preview-vendor.mjs']) {
+    for (const file of ['preview-browser-globals.mjs', 'sync-preview-vendor.mjs', 'preview-font-source.mjs']) {
       fs.copyFileSync(path.join(ROOT, 'scripts', file), path.join(fixture, 'scripts', file));
     }
     fs.copyFileSync(path.join(ROOT, 'package.json'), path.join(fixture, 'package.json'));
@@ -138,15 +141,16 @@ syncBuiltinESMExports();
     await check('installation command creates the complete vendor tree from a clean TEMP checkout', () => {
       assert.equal(fs.existsSync(output), false);
       const cli = require('node:child_process').spawnSync(process.execPath, ['--import', './deny-restricted-package.mjs', 'scripts/sync-preview-vendor.mjs'], {
-        cwd: fixture, env: { ...process.env, PI_GUI_OFFLINE: '1', PI_OFFLINE: '1' }, encoding: 'utf8', windowsHide: true, timeout: 60000,
+        cwd: fixture, env: { ...process.env, PI_GUI_OFFLINE: '1', PI_OFFLINE: '1', PI_GUI_THIRD_PARTY_CACHE: emptyCache }, encoding: 'utf8', windowsHide: true, timeout: 60000,
       });
       assert.ifError(cli.error);
       assert.equal(cli.status, 0, cli.stderr);
-      assert.doesNotMatch(cli.stderr, /license review remains REQUIRED/);
-      assert.match(cli.stderr, /Preview font license verification recorded/);
+      assert.match(cli.stderr, /license review remains REQUIRED/);
+      assert.match(cli.stderr, /source correspondence is unresolved/);
       assert.doesNotMatch(cli.stdout + cli.stderr, /redistribution approved|release approved/i);
       cliSummary = JSON.parse(cli.stdout.trim().replace(/^preview vendor: /, ''));
-      assert.deepEqual(cliSummary.legalReviewRequired, []);
+      assert.equal(cliSummary.legalReviewRequired.length, 2);
+      assert.match(cliSummary.legalReviewRequired[1], /archives missing/);
       assert.equal(fs.existsSync(path.join(output, 'pptx-preview.js')), false);
       assert.ok(fs.statSync(path.join(output, 'pdf.worker.mjs')).size > 0);
     });
@@ -234,15 +238,16 @@ syncBuiltinESMExports();
     await check('PDF font verification is pinned into the manifest with its compliance evidence', () => {
       const pdf = manifest.versions.packages['pdfjs-dist@' + manifest.versions.direct['pdfjs-dist']];
       const review = pdf.fontLicenseReview;
-      /* The verification concluded in docs/pdf-font-license-verification.md:
-       * Liberation Sans 1.07.4 under GPLv2 with the Liberation font exceptions;
-       * the TTF bytes are both object code and corresponding source for this
-       * version, they ship unmodified (digest-locked here), and mere aggregation
-       * plus the carried LICENSE_LIBERATION satisfy the terms. The manifest
-       * records the verified outcome as evidence — it must never silently flip
-       * back to unverified, and any byte change of the fonts re-blocks via the
-       * digest locks. */
-      assert.equal(review.sourceDistributionVerified, true);
+      // Authentic 1.07.4 source contains SFD/build scripts. Current PDF.js TTFs
+      // differ from the preserved TTF release, so neither metadata nor archive
+      // availability is proof that corresponding-source obligations are met.
+      assert.equal(review.sourceDistributionVerified, false);
+      assert.equal(review.correspondence, 'unresolved');
+      assert.equal(review.archives.source.included, false);
+      assert.equal(review.archives.binary.included, false);
+      assert.ok(pdf.legalFiles.includes(review.noticeFile));
+      assert.ok(pdf.legalFiles.includes(review.identityFile));
+      assert.match(fs.readFileSync(path.join(output, review.noticeFile), 'utf8'), /NOT INCLUDED — release blocked/);
       assert.equal(review.license, 'GPLv2 with Liberation font exceptions');
       assert.equal(review.fontVersion, '1.07.4');
       assert.equal(review.verification, 'docs/pdf-font-license-verification.md');
@@ -254,22 +259,144 @@ syncBuiltinESMExports();
       assert.match(license, /physical product/);
       for (const file of review.files) assert.ok(manifest.files[file] && manifest.inputs[manifest.copied[file]]);
       assert.deepEqual(manifest.legalReviewRequired, cliSummary.legalReviewRequired);
-      assert.deepEqual(manifest.legalReviewRequired, []);
+      assert.match(manifest.legalReviewRequired[0], /source correspondence is unresolved/);
     });
-    await check('the pinned font bytes still match the verified Liberation Sans 1.07.4 upstream identity', () => {
-      /* Verification-anchor digests from docs/pdf-font-license-verification.md:
-       * if any of these flips, the verification document no longer covers the
-       * shipped font and the release block must be reinstated manually. */
-      const anchors = {
-        'pdf/standard_fonts/LiberationSans-Regular.ttf': 'f8ace1f892b2bd9dc1792ba7f097fa75',
-        'pdf/standard_fonts/LiberationSans-Bold.ttf': '361c61b82d575c5c35fd9157fda8b019',
-        'pdf/standard_fonts/LiberationSans-Italic.ttf': '832b4406dbef23628800d3aaad210485',
-        'pdf/standard_fonts/LiberationSans-BoldItalic.ttf': 'a224075ac17495ad0a3af3bc0a419ac0',
-      };
-      for (const [file, prefix] of Object.entries(anchors)) {
-        assert.ok(manifest.files[file], file + ' shipped');
-        assert.ok(manifest.files[file].sha256.startsWith(prefix), file + ' matches verified 1.07.4 digest');
+    await check('real App notice-writing block retains complete font terms, copyright and source retrieval status', () => {
+      const script = fs.readFileSync(path.join(ROOT, 'scripts/build-app.mjs'), 'utf8');
+      const start = script.indexOf("fs.copyFileSync(path.join(ROOT, 'LICENSE'), path.join(STAGE, 'LICENSE'));");
+      const end = script.indexOf('console.log(`  应用目录', start);
+      assert.ok(start >= 0 && end > start, 'identify the real notice-writing block; never execute a full App build');
+      const stage = path.join(fixture, 'app-notice-fixture'); fs.mkdirSync(stage);
+      const license = path.join(moduleRoot, 'pdfjs-dist/LICENSE');
+      vm.runInNewContext(script.slice(start, end), { fs, path, ROOT, STAGE: stage,
+        pdfjsVersion: fonts.FONT_REVIEW.pdfjsVersion, stagedPty: { version: 'fixture' }, xtermVersion: 'fixture', fitVersion: 'fixture',
+        pdfjsLicense: license, ptyLicense: license, xtermLicensePath: license, fitLicensePath: license,
+        fontDistributionNotice: () => fonts.fontDistributionNotice(output) });
+      const notice = fs.readFileSync(path.join(stage, 'THIRD-PARTY-NOTICES.txt'), 'utf8');
+      assert.match(notice, /Apache-2.0 不覆盖随附字体/);
+      assert.match(notice, /SOURCE-INFO\.txt；原文中的 .* 均相对该目录，不是本通知所在的 App 根目录/, 'root notice states where its relative references resolve');
+      assert.match(notice, /Copyright \(c\) 2007 Red Hat/);
+      assert.match(notice, /NOT INCLUDED — release blocked/);
+      for (const spec of Object.values(fonts.FONT_REVIEW.archives)) { assert.ok(notice.includes(spec.url)); assert.ok(notice.includes(spec.sha256)); }
+      assert.ok(notice.includes(fs.readFileSync(path.join(output, 'pdf/standard_fonts/LICENSE_LIBERATION'), 'utf8')));
+      assert.throws(() => fonts.fontDistributionNotice(stage), /ENOENT/);
+    });
+    await check('all four PDF.js font identities use complete SHA256, not version strings or hash prefixes', () => {
+      for (const [name, pin] of Object.entries(fonts.FONT_REVIEW.fonts)) {
+        const file = 'pdf/standard_fonts/' + name;
+        assert.equal(manifest.files[file].sha256, pin.sha256);
+        assert.equal(manifest.files[file].bytes, pin.bytes);
+        assert.notEqual(pin.sha256, pin.upstreamSha256, 'do not claim binary-release identity');
       }
+    });
+    await check('PDF version/integrity, font inventory, license and every font byte fail closed automatically', () => {
+      const files = Object.fromEntries([...Object.keys(fonts.FONT_REVIEW.assets), ...Object.keys(fonts.FONT_REVIEW.fonts).map(name => 'pdf/standard_fonts/' + name)].map(name => [name, fs.readFileSync(path.join(output, name))]));
+      const identity = { version: fonts.FONT_REVIEW.pdfjsVersion, integrity: fonts.FONT_REVIEW.npmIntegrity, files };
+      fonts.verifyPdfFontIdentity(identity);
+      for (const key of ['version', 'integrity']) assert.throws(() => fonts.verifyPdfFontIdentity({ ...identity, [key]: 'changed' }), /re-verification required/);
+      for (const name of Object.keys(files)) {
+        assert.throws(() => fonts.verifyPdfFontIdentity({ ...identity, files: { ...files, [name]: Buffer.concat([files[name], Buffer.from('changed')]) } }), /re-verification required/);
+      }
+      const missing = { ...files }; delete missing['pdf/standard_fonts/LiberationSans-Regular.ttf'];
+      for (const changed of [missing, { ...files, 'pdf/standard_fonts/Other.ttf': Buffer.from('new') }]) assert.throws(() => fonts.verifyPdfFontIdentity({ ...identity, files: changed }), /inventory changed/);
+    });
+    await check('production materializer refuses changed PDF font bytes before replacing existing vendor output', async () => {
+      const original = fs.readFileSync, source = path.join(moduleRoot, 'pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf');
+      fs.readFileSync = function(file, ...args) {
+        const bytes = original(file, ...args);
+        if (typeof file !== 'string' || path.resolve(file) !== source) return bytes;
+        const changed = Buffer.from(bytes); changed[changed.length - 1] ^= 1; return changed;
+      };
+      try {
+        await assert.rejects(materializePreviewVendor({ root: fixture }), /font bytes changed/);
+        assert.deepEqual(inventory(output), before);
+      } finally { fs.readFileSync = original; }
+    });
+    await check('missing cache stays offline and corrupt cache cannot produce compliance metadata or replace good output', async () => {
+      const originalFetch = global.fetch;
+      global.fetch = () => { throw new Error('network forbidden'); };
+      try {
+        await assert.rejects(fonts.prepareFontArchives({ cacheDir: emptyCache }), /missing font source cache/);
+        const spec = fonts.FONT_REVIEW.archives.source, cacheFile = fonts.archiveCachePath(emptyCache, spec);
+        fs.mkdirSync(path.dirname(cacheFile), { recursive: true }); fs.writeFileSync(cacheFile, 'corrupt');
+        assert.throws(() => fonts.fontSourceMaterials({ cacheDir: emptyCache }), /not a pinned regular file/);
+        await assert.rejects(materializePreviewVendor({ root: fixture }), /not a pinned regular file/);
+        assert.deepEqual(inventory(output), before);
+        fs.unlinkSync(cacheFile);
+      } finally { global.fetch = originalFetch; }
+    });
+    await check('failed explicit archive import/download never writes an unverified cache entry', async () => {
+      const corrupt = path.join(fixture, 'corrupt.tar.gz'); fs.writeFileSync(corrupt, 'bad');
+      await assert.rejects(fonts.prepareFontArchives({ cacheDir: emptyCache, source: corrupt }), /integrity mismatch/);
+      const originalFetch = global.fetch;
+      global.fetch = async () => ({ ok: true, body: (async function* () { yield Buffer.from('bad'); })() });
+      try { await assert.rejects(fonts.prepareFontArchives({ cacheDir: emptyCache, download: true }), /integrity mismatch/); }
+      finally { global.fetch = originalFetch; }
+      assert.equal(fs.existsSync(fonts.archiveCachePath(emptyCache, fonts.FONT_REVIEW.archives.source)), false);
+    });
+    await check('font source cache junctions are rejected without touching their target', () => {
+      const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-font-cache-outside-'));
+      const link = path.join(fixture, 'linked-cache'); fs.symlinkSync(outside, link, 'junction');
+      try {
+        assert.throws(() => fonts.fontSourceMaterials({ cacheDir: link }), /contains a link/);
+        assert.deepEqual(fs.readdirSync(outside), []);
+      } finally { fs.unlinkSync(link); fs.rmSync(outside, { recursive: true, force: true }); }
+    });
+    await check('font tar reader rejects links, traversal, duplicates and bad/truncated records without extraction', () => {
+      const { gzipSync } = require('node:zlib');
+      const tar = (name, type = '0', body = Buffer.from('fixture')) => {
+        const header = Buffer.alloc(512);
+        header.write(name); header.write(body.length.toString(8).padStart(11, '0') + '\0', 124);
+        header.write('        ', 148); header.write(type, 156);
+        let sum = 0; for (const byte of header) sum += byte;
+        header.write(sum.toString(8).padStart(6, '0') + '\0 ', 148);
+        return Buffer.concat([header, body, Buffer.alloc((512 - body.length % 512) % 512)]);
+      };
+      const entry = tar('source/README');
+      const valid = gzipSync(Buffer.concat([entry, Buffer.alloc(1024)]));
+      assert.equal(fonts.readFontTar(valid).get('source/README').toString(), 'fixture');
+      for (const bytes of [tar('../escape'), tar('C:/escape'), tar('source/link', '2'), Buffer.concat([entry, entry]), Buffer.from('bad')]) {
+        assert.throws(() => fonts.readFontTar(gzipSync(Buffer.concat([bytes, Buffer.alloc(1024)]))));
+      }
+      assert.throws(() => fonts.readFontTar(gzipSync(entry.subarray(0, 513))), /truncated/);
+      const badChecksum = Buffer.from(entry); badChecksum[10] ^= 1;
+      assert.throws(() => fonts.readFontTar(gzipSync(Buffer.concat([badChecksum, Buffer.alloc(1024)]))), /checksum/);
+    });
+    await check('Release precheck and publish CLI refuse unresolved fonts even with bypass flags, without network/build', () => {
+      assert.throws(fonts.assertFontReviewComplete, /source correspondence is unresolved/);
+      for (const [script, args] of [['release-check.mjs', ['--skip-tests', '--skip-build']], ['publish-release.mjs', ['--tag=v0.0.0', '--dry-run']]]) {
+        const child = require('node:child_process').spawnSync(process.execPath, [path.join(ROOT, 'scripts', script), ...args], {
+          cwd: fixture, env: { ...process.env, GITHUB_TOKEN: '', GH_TOKEN: '', PI_GUI_OFFLINE: '1' }, encoding: 'utf8', windowsHide: true, timeout: 15000,
+        });
+        assert.ifError(child.error); assert.equal(child.status, 1);
+        assert.match(child.stdout + child.stderr, /source correspondence is unresolved/);
+        assert.doesNotMatch(child.stdout, /READY TO RELEASE\s*$|npm run build:|创建 draft|已发布：/m);
+      }
+    });
+    if (process.env.PI_GUI_FONT_SOURCE_TEST_CACHE) await check('real pinned archives are copied into TEMP vendor legal distribution but do not resolve correspondence', async () => {
+      const cacheDir = process.env.PI_GUI_FONT_SOURCE_TEST_CACHE;
+      const archived = await materializePreviewVendor({ root: fixture, fontSourceCache: cacheDir });
+      const withSource = readJson(path.join(output, 'versions.json'));
+      const review = withSource.versions.packages['pdfjs-dist@' + fonts.FONT_REVIEW.pdfjsVersion].fontLicenseReview;
+      assert.equal(review.sourceDistributionVerified, false);
+      assert.equal(archived.legalReviewRequired.length, 1);
+      for (const spec of Object.values(review.archives)) {
+        assert.equal(spec.included, true);
+        assert.equal(sha256(fs.readFileSync(path.join(output, spec.file))), spec.sha256);
+        assert.deepEqual(fs.readFileSync(path.join(output, spec.file)), fs.readFileSync(fonts.archiveCachePath(cacheDir, spec)));
+      }
+      for (const name of ['Makefile', 'README', 'License.txt', 'COPYING', 'AUTHORS', 'scripts/fontexport.pe', 'scripts/sfd2ttf.pe', 'scripts/ttf2sfd.pe']) {
+        const members = fonts.readFontTar(fs.readFileSync(path.join(output, review.archives.source.file)));
+        assert.ok(members.has(review.archives.source.prefix + name));
+      }
+      assert.throws(() => fonts.verifyFontDistribution(output), /source correspondence is unresolved/);
+      // A stale/forged success boolean cannot bypass the immutable review gate.
+      withSource.legalReviewRequired = []; review.sourceDistributionVerified = true;
+      fs.writeFileSync(path.join(output, 'versions.json'), JSON.stringify(withSource));
+      assert.throws(() => fonts.verifyFontDistribution(output), /source correspondence is unresolved/);
+      await materializePreviewVendor({ root: fixture });
+      assert.deepEqual(inventory(output), before);
+      console.log('Real font archive distribution: ' + JSON.stringify({ files: archived.files, bytes: archived.bytes, manifest: archived.manifestSha256, tree: archived.treeSha256 }));
     });
     await check('KaTeX font copyright/RFN and complete OFL are separate from its MIT code license', () => {
       const pkg = manifest.versions.packages['katex@' + manifest.versions.direct.katex];

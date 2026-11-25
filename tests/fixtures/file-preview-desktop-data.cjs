@@ -35,6 +35,9 @@ module.exports = async function ({ SOURCE, world, repo }) {
   write('bad-image.png', 'MZnot an image'); write('unknown.blob', Buffer.from([0, 1, 2, 0, 3]));
   const office = require('../file-preview-office.cjs');
   write('document.docx', office.zipParts(office.docxParts())); write('presentation.pptx', office.zipParts(office.pptxParts())); write('workbook.xlsx', await office.xlsxBytes());
+  for (const name of ['libreoffice-bullets-mixed.pptx', 'libreoffice-autonum-multilevel.pptx']) {
+    write(name, fs.readFileSync(path.join(SOURCE, 'tests/fixtures/office-real', name)));
+  }
   write('quoted.csv', '名称,备注,数值\r\n"中文,名字","第一行\n第二行 ""quoted""",0\r\nFormula,=1+2,FALSE\r\n');
   write('archive.zip', office.zipParts({ 'a/same.txt': 'archive-A', 'b/same.txt': 'archive-B', '中文/readme.md': '# Archive document' }));
   write('tabular.zip', office.zipParts({ '数据/table.csv': '名称,数值\r\n"中文,名字",42\r\n', '数据/table.tsv': '名称\t数值\r\n中文TSV\t84\r\n', 'nested.zip': office.zipParts({ 'not-open.txt': 'nested member' }) }));

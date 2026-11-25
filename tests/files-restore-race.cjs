@@ -21,12 +21,20 @@ let sequence = 0;
 /* A fixture whose root listing is held back until `releaseRoot` fires. History
  * for the scope is pre-seeded so restoration only completes once the tree
  * resolves — the exact window in which the user can act first. */
-async function fixture({ history = [], activeHistory = null, transport = {}, previewMount } = {}) {
+async function fixture({ history = [], activeHistory = null, tree = {}, transport = {}, previewMount, sessionId, useCurrentIdentity = false } = {}) {
   const [{ mountFilesPanel }, state] = await imports;
   const id = ++sequence;
   const host = document.createElement('section'); document.getElementById('rightPane').append(host);
   host.getBoundingClientRect = () => ({ width: 1000, height: 700 });
-  let identity = { cwd: `C:/fixture/race-${id}`, sessionId: `race-${id}`, conversationId: null };
+  let identity = { cwd: `C:/fixture/race-${id}`, sessionId: sessionId ?? `race-${id}`, conversationId: null };
+  const { S } = await import('../public/state.js');
+  if (useCurrentIdentity) Object.assign(S, {
+    cwd: identity.cwd, hasProject: true, switching: false, bridgeInstance: `bridge-${id}`, bridgeRun: id,
+    state: { sessionId: identity.sessionId },
+    legacyOwner: { backendInstance: `backend-${id}`, projectId: `workspace-${id}`, repoId: null,
+      workspaceId: `workspace-${id}`, workspaceEpoch: String(id), conversationId: 'classic-chat',
+      runtimeId: `bridge-${id}`, runtimeGeneration: String(id), sessionId: `owner-session-${id}` },
+  });
   let alive = true, visible = true, valid = true;
   const disposers = [], visibility = new Set();
   const view = {
@@ -43,10 +51,10 @@ async function fixture({ history = [], activeHistory = null, transport = {}, pre
   // Seed persisted history for exactly this scope before the panel mounts.
   state.writeFilesState(identity, {
     tabs: history.map(path => ({ path, name: path, cwd: identity.cwd, conversationId: null, fileId: `id:${path}`, state: {} })),
-    active: activeHistory, tree: {}, layout: {},
+    active: activeHistory, tree, layout: {},
   }, localStorage);
   const panel = mountFilesPanel(host, view, {
-    getIdentity: () => identity, storage: localStorage,
+    ...(!useCurrentIdentity ? { getIdentity: () => identity } : {}), storage: localStorage,
     transport: {
       list(path) { calls.list.push(path); return path === '' ? rootGate.promise : Promise.resolve({ ok: true, workspace, entries: [] }); },
       async metadata(path, conversation, options) { calls.metadata.push({ path, conversation, options }); return { ok: true, file: { name: path, fileId: `id:${path}`, bytes: 32, absolutePath: `${identity.cwd}/${path}` } }; },
@@ -60,7 +68,7 @@ async function fixture({ history = [], activeHistory = null, transport = {}, pre
     }),
   });
   const f = {
-    host, panel, view, calls, workspace,
+    host, panel, view, calls, workspace, classicState: S,
     identity: () => ({ ...identity }),
     open: (path = 'a.txt', extra = {}) => panel.open({ path, cwd: identity.cwd, conversationId: identity.conversationId, ...extra }),
     releaseRoot(entries = [{ path: 'a.txt', name: 'a.txt', type: 'file' }]) { rootGate.resolve({ ok: true, workspace, entries }); },
@@ -286,8 +294,8 @@ test('restored history follows the user-opened tab in order rather than replacin
  * identity settles asynchronously after the bridge is ready, so a session-only
  * transition while cwd+conversation stay stable must adopt the new namespace in
  * place — not tear down tabs or an in-flight open the user already started. */
-test('a session-only identity settle never destroys an open the user already started', async () => {
-  const f = await fixture({ history: [] });
+test('an empty-to-known session identity settle never destroys an open the user already started', async () => {
+  const f = await fixture({ history: [], sessionId: '' });
   await f.open('guide.md');
   await until(() => f.tabKeys().includes('workspace:guide.md'));
   // Session identity settles/rotates inside the SAME workspace + conversation:
@@ -301,8 +309,8 @@ test('a session-only identity settle never destroys an open the user already sta
   f.dispose();
 });
 
-test('an in-flight open survives a session-only settle that lands mid-open', async () => {
-  const f = await fixture({ history: [] });
+test('an in-flight open survives an empty-to-known session settle that lands mid-open', async () => {
+  const f = await fixture({ history: [], sessionId: '' });
   // Open but do not yet release the tree, so the open is in-flight when settle lands.
   const opening = f.open('guide.md');
   f.change({ sessionId: 'race-settled' }, 'pi-gui:session-evidence-context');
@@ -444,5 +452,248 @@ test('a cwd-only change in the same session invalidates a pending open', async (
   f.releaseRoot();
   await tick(); await tick();
   assert.ok(!f.tabKeys().includes('workspace:guide.md'), 'pending open discarded on cwd change');
+  f.dispose();
+});
+
+test('Classic owner established before the state projection is the Files history identity', async () => {
+  const f = await fixture({ sessionId: '', useCurrentIdentity: true });
+  assert.equal(f.panel.getState().identity.sessionId, f.classicState.legacyOwner.sessionId);
+  assert.equal(f.classicState.state.sessionId, '', 'state projection has not arrived');
+  f.dispose();
+});
+
+test('a file opened after the owner notification survives the later state write without another event', async () => {
+  const gate = deferred();
+  const f = await fixture({ sessionId: '', useCurrentIdentity: true, transport: { metadata: () => gate.promise } });
+  // app.handleEvent publishes the accepted owner notification BEFORE handleState.
+  document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-context'));
+  const opening = f.open('guide.md');
+  f.classicState.state = { sessionId: f.classicState.legacyOwner.sessionId };
+  gate.resolve({ ok: true, file: { fileId: 'guide-id', absolutePath: `${f.identity().cwd}/guide.md` } });
+  await opening;
+  assert.ok(f.tabKeys().includes('workspace:guide.md'), 'late projection does not invalidate the legitimate open');
+  f.dispose();
+});
+
+test('an attachment opened in the notification/projection window retains a live preview', async () => {
+  const f = await fixture({ sessionId: '', useCurrentIdentity: true });
+  document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-context'));
+  await f.panel.open({ source: 'attachment', attachmentId: 'owner-window', file: new File(['x'], 'note.txt') });
+  f.classicState.state = { sessionId: f.classicState.legacyOwner.sessionId };
+  await tick();
+  const preview = f.calls.preview.at(-1);
+  assert.equal(f.panel.getState().active, 'attachment:owner-window');
+  preview.options.onMetadata({ bytes: 9 });
+  assert.match(f.host.querySelector('.files-preview-path').title, /9 B/, 'preview callbacks remain current');
+  f.dispose();
+});
+
+test('an owner from another runtime generation is not trusted over the state projection', async () => {
+  const f = await fixture({ sessionId: 'projected', useCurrentIdentity: true });
+  f.classicState.legacyOwner = { ...f.classicState.legacyOwner, runtimeGeneration: 'obsolete' };
+  document.dispatchEvent(new CustomEvent('pi-gui:session-evidence-context'));
+  assert.equal(f.panel.getState().identity.sessionId, 'projected');
+  f.dispose();
+});
+
+test('a pending open never lands in a replacement workspace with the same file name', async () => {
+  const gate = deferred();
+  const f = await fixture({ transport: { metadata: () => gate.promise } });
+  const opening = f.open('same.txt');
+  // A workspace replacement is a hard boundary even when the new root happens
+  // to contain a file with the identical relative name.
+  f.change({ cwd: 'C:/fixture/replacement-workspace' }, 'pi-gui:workspace-generation');
+  gate.resolve({ ok: true, file: { fileId: 'old-id', absolutePath: `${f.identity().cwd}/same.txt` } });
+  await opening;
+  assert.deepEqual(f.tabKeys(), [], 'the stale open is not adopted by the replacement workspace');
+  f.dispose();
+});
+
+test('a real known-session transition invalidates the old pending open', async () => {
+  const gate = deferred();
+  const f = await fixture({ transport: { metadata: () => gate.promise } });
+  const opening = f.open('same.txt');
+  f.change({ sessionId: 'different-real-session' }, 'pi-gui:session-evidence-context');
+  gate.resolve({ ok: true, file: { fileId: 'old-id', absolutePath: `${f.identity().cwd}/same.txt` } });
+  await opening;
+  assert.deepEqual(f.tabKeys(), [], 'a nonempty session rotation is not an identity settle');
+  f.dispose();
+});
+
+test('a real session transition clears old close records before restoring same-name history', async () => {
+  const f = await fixture();
+  await f.open('same.txt');
+  f.host.querySelector('.files-tab-close').click();
+  const [, state] = await imports;
+  const next = { ...f.identity(), sessionId: 'independent-history' };
+  state.writeFilesState(next, { tabs: [{ path: 'same.txt', cwd: next.cwd, fileId: 'id:same.txt' }], tree: {} }, localStorage);
+  f.change({ sessionId: next.sessionId }, 'pi-gui:session-evidence-context');
+  f.releaseRoot();
+  await until(() => f.tabKeys().includes('workspace:same.txt'));
+  assert.equal(f.panel.getState().identity.sessionId, next.sessionId);
+  f.dispose();
+});
+
+test('a user scroll back to zero beats a historical nonzero scroll position', async () => {
+  const f = await settleFixture({ tree: { scrollTop: 280 } });
+  f.releaseRoot([{ path: 'a.txt', name: 'a.txt', type: 'file' }]);
+  await tick(); await tick();
+  const tree = f.host.querySelector('.files-tree');
+  tree.scrollTop = 120; tree.dispatchEvent(new window.Event('scroll'));
+  tree.scrollTop = 0; tree.dispatchEvent(new window.Event('scroll'));
+  f.settle();
+  await tick(); await tick();
+  assert.equal(f.host.querySelector('.files-tree').scrollTop, 0);
+  f.dispose();
+});
+
+test('clearing the final file selection beats a historical selected path', async () => {
+  const f = await settleFixture({ tree: { selected: 'a.txt' } });
+  f.releaseRoot([{ path: 'a.txt', name: 'a.txt', type: 'file' }]);
+  await f.open('a.txt');
+  f.closeActive();
+  f.settle();
+  await tick(); await tick();
+  assert.equal(f.host.querySelector('[data-file-path="a.txt"]').getAttribute('aria-selected'), 'false');
+  f.dispose();
+});
+
+test('a folder deliberately collapsed by the user is not re-expanded by history union', async () => {
+  const f = await settleFixture({ tree: { expanded: ['folder'] } });
+  f.releaseRoot([{ path: 'folder', name: 'folder', type: 'dir' }]);
+  await tick(); await tick();
+  f.host.querySelector('[data-file-path="folder"]').click();
+  await tick();
+  f.host.querySelector('[data-file-path="folder"]').click();
+  assert.equal(f.host.querySelector('[data-file-path="folder"]').getAttribute('aria-expanded'), 'false');
+  f.settle();
+  await tick(); await tick();
+  assert.equal(f.host.querySelector('[data-file-path="folder"]').getAttribute('aria-expanded'), 'false');
+  f.dispose();
+});
+
+/* jsdom has no layout: replacing the tree content never clamps scrollTop as a
+ * real scroller does. Model that clamp explicitly so the refresh path is tested
+ * against the behavior the browser actually exhibits: swapping in the loading
+ * placeholder collapses the scroll position to 0 before any data returns. */
+function clampScrollToLayout(tree) {
+  let value = tree.scrollTop;
+  const replace = tree.replaceChildren.bind(tree);
+  Object.defineProperty(tree, 'scrollTop', {
+    configurable: true,
+    get: () => value,
+    set: (next) => { value = tree.querySelectorAll('.files-entry').length ? Math.max(0, Number(next) || 0) : 0; },
+  });
+  tree.replaceChildren = (...nodes) => { replace(...nodes); value = 0; };
+  return tree;
+}
+
+test('a refresh keeps the scroll position the user was at, not the loading placeholder clamp', async () => {
+  const f = await fixture({ tree: { scrollTop: 280 } });
+  f.releaseRoot([{ path: 'a.txt', name: 'a.txt', type: 'file' }, { path: 'b.txt', name: 'b.txt', type: 'file' }]);
+  await tick(); await tick();
+  const tree = clampScrollToLayout(f.host.querySelector('.files-tree'));
+  assert.equal(tree.scrollTop, 280, 'the persisted position is still restored on first load');
+  tree.scrollTop = 300; tree.dispatchEvent(new window.Event('scroll'));
+  f.host.querySelector('.files-refresh').click();
+  await tick(); await tick(); await tick();
+  assert.equal(tree.scrollTop, 300, 'refresh restores the position the user was reading');
+  f.host.querySelector('.files-hidden-toggle').click();
+  await tick(); await tick(); await tick();
+  assert.equal(tree.scrollTop, 300, 'the hidden-items reload keeps the user scroll too');
+  tree.scrollTop = 0; tree.dispatchEvent(new window.Event('scroll'));
+  f.host.querySelector('.files-refresh').click();
+  await tick(); await tick(); await tick();
+  assert.equal(tree.scrollTop, 0, 'a deliberate return to the top is still honored');
+  f.dispose();
+});
+
+test('a user scroll whose event is still queued survives a re-render and the settle', async () => {
+  const f = await settleFixture({ tree: { scrollTop: 280 } });
+  f.releaseRoot([{ path: 'a.txt', name: 'a.txt', type: 'file' }]);
+  await tick(); await tick();
+  const tree = f.host.querySelector('.files-tree');
+  // The user scrolls, but the browser has not delivered the async scroll event
+  // yet when a tab activation re-renders the tree.
+  tree.scrollTop = 120;
+  await f.open('a.txt');
+  await tick();
+  tree.dispatchEvent(new window.Event('scroll'));
+  f.settle();
+  await tick(); await tick();
+  assert.equal(f.host.querySelector('.files-tree').scrollTop, 120, 'the queued user gesture beats history 280');
+});
+
+test('a queued user scroll back to zero also survives a re-render and the settle', async () => {
+  const f = await settleFixture({ tree: { scrollTop: 280 } });
+  f.releaseRoot([{ path: 'a.txt', name: 'a.txt', type: 'file' }, { path: 'b.txt', name: 'b.txt', type: 'file' }]);
+  await tick(); await tick();
+  const tree = f.host.querySelector('.files-tree');
+  await f.open('a.txt');
+  tree.scrollTop = 120;
+  tree.dispatchEvent(new window.Event('scroll'));
+  // Now the deliberate return to the top, again with its event still queued.
+  tree.scrollTop = 0;
+  await f.open('b.txt');
+  await tick();
+  tree.dispatchEvent(new window.Event('scroll'));
+  f.settle();
+  await tick(); await tick();
+  assert.equal(f.host.querySelector('.files-tree').scrollTop, 0, 'queued zero is not replaced by history 280');
+});
+
+test('a refresh keeps a collapsed ancestor collapsed even when a child stayed expanded', async () => {
+  const workspace = { id: 'refresh-collapse-workspace', generation: '1' };
+  const transport = {
+    list(path) {
+      const entries = path === '' ? [{ path: 'folder', name: 'folder', type: 'dir' }]
+        : path === 'folder' ? [{ path: 'folder/sub', name: 'sub', type: 'dir' }] : [];
+      return Promise.resolve({ ok: true, workspace, entries });
+    },
+  };
+  const f = await fixture({ transport });
+  await tick(); await tick();
+  f.host.querySelector('[data-file-path="folder"]').click();
+  await tick(); await tick();
+  f.host.querySelector('[data-file-path="folder/sub"]').click();
+  await tick(); await tick();
+  assert.equal(f.host.querySelector('[data-file-path="folder/sub"]')?.getAttribute('aria-expanded'), 'true', 'child expanded');
+  f.host.querySelector('[data-file-path="folder"]').click();
+  assert.equal(f.host.querySelector('[data-file-path="folder"]').getAttribute('aria-expanded'), 'false', 'ancestor collapsed');
+  f.host.querySelector('.files-refresh').click();
+  await tick(); await tick(); await tick();
+  assert.equal(f.host.querySelector('[data-file-path="folder"]').getAttribute('aria-expanded'), 'false', 'refresh must not resurrect the hidden child expansion');
+  await new Promise(resolve => setTimeout(resolve, 220));
+  const [, state] = await imports;
+  assert.deepEqual(state.readFilesState(f.identity(), localStorage).tree.expanded, [], 'persisted expanded union excludes unreachable children');
+  f.dispose();
+});
+
+test('a user collapse during deferred history expansion is not undone by the restore loop', async () => {
+  const rootGate = deferred(), folderGate = deferred();
+  let f;
+  const transport = {
+    list(path) {
+      if (path === '') return rootGate.promise;
+      if (path === 'folder') return folderGate.promise;
+      return Promise.resolve({ ok: true, workspace: f.workspace, entries: [] });
+    },
+  };
+  f = await fixture({ tree: { expanded: ['folder', 'folder/sub'] }, transport });
+  rootGate.resolve({ ok: true, workspace: f.workspace, entries: [{ path: 'folder', name: 'folder', type: 'dir' }] });
+  await tick(); await tick();
+  const row = () => f.host.querySelector('[data-file-path="folder"]');
+  assert.equal(row().getAttribute('aria-expanded'), 'true', 'history expansion has started');
+  // The ancestor listing is still deferred when the user collapses the folder.
+  row().click();
+  assert.equal(row().getAttribute('aria-expanded'), 'false', 'the collapse takes effect immediately');
+  folderGate.resolve({ ok: true, workspace: f.workspace, entries: [{ path: 'folder/sub', name: 'sub', type: 'dir' }] });
+  await tick(); await tick(); await tick();
+  assert.equal(row().getAttribute('aria-expanded'), 'false', 'the deferred restore loop must not reopen a collapsed ancestor');
+  // persistSoon debounces 160ms; the collapsed tree must be what a settle would
+  // adopt, without the pending expansion list resurrecting the folder.
+  await new Promise(resolve => setTimeout(resolve, 220));
+  const [, state] = await imports;
+  assert.deepEqual(state.readFilesState(f.identity(), localStorage).tree.expanded, [], 'the collapsed directory is no longer reported as expanded');
   f.dispose();
 });

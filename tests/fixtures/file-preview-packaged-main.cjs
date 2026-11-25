@@ -173,6 +173,9 @@ async function main() {
         Math.abs(measured.pane.width - measured.expectedWidth) <= 2 && Math.abs(measured.surface.width - measured.body.width) <= 2 &&
         Math.abs(measured.surface.x - measured.body.x) <= 2 && Math.abs(measured.pane.right - measured.app.right) <= 2 &&
         measured.docOverflow <= 1 && measured.bodyText && measured.chatPresent && measured.chatInert, measured);
+      check('packaged compact toolbar and no tab underline ' + width + '-' + theme,
+        measured.toolbarOverflow <= 1 && !['auto', 'scroll'].includes(measured.toolbarOverflowX)
+          && measured.activeTabBorderBottom === '0px' && ['none', 'normal'].includes(measured.activeTabAfter), measured);
       await shot('packaged-' + width + '-' + theme);
     }
   });
