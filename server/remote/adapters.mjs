@@ -447,7 +447,11 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
         // that can never address a real conversation — accepting it as a create
         // result minted an unusable success the retry would happily replay.
         // A malformed result is unknown execution state, not a release.
-        if (!OPAQUE_ID.test(out?.conversationId ?? '') || out.conversationId === 'stream-reset') return deny('unavailable');
+        // Round-10 R10-CREATE-01: the result must be a PRIMITIVE string —
+        // a boxed String('stream-reset') coerces through RegExp.test but fails
+        // strict equality, so it was recorded raw (500s) yet normalized to the
+        // reserved literal by JSON on restart, minting a replayable success.
+        if (typeof out?.conversationId !== 'string' || !OPAQUE_ID.test(out.conversationId) || out.conversationId === 'stream-reset') return deny('unavailable');
         const ownerRevision = clock.registryRevision(domain.conversations());
         const result = { conversationId: out.conversationId, ownerRevision };
         if (!idem.record(device.deviceId, projectId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');

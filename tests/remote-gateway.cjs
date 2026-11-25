@@ -1619,6 +1619,158 @@ async function main() {
     } finally { await ctx.cleanup(); }
   });
 
+  await t('round-10: reset-materialization failure closes the stream instead of silent continuation (R10-GEN-01)', async () => {
+    // A reset frame that cannot materialize (oversized reason exceeds the
+    // frame budget) makes _resetOne return FALSE without throwing. The stream
+    // must close — continuing open delivered the next ordinary frame in a
+    // stale generation with no reset at all.
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const state = { status: 0, ended: false };
+      await new Promise((resolve, reject) => {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+        const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          state.status = res.statusCode;
+          state.res = res;
+          res.on('end', () => { state.ended = true; });
+          res.on('close', () => { state.ended = true; });
+          res.resume();
+          resolve();
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      assert.equal(state.status, 200);
+      // Oversized reason: the reset frame exceeds maxEventFrameBytes so
+      // materialization returns null -> _resetOne false (no throw).
+      try { ctx.remote.stream.resetDevice(device.deviceId, 'x'.repeat(70000)); } catch { /* surfacing acceptable */ }
+      const deadline = Date.now() + 3000;
+      while (!state.ended && Date.now() < deadline) await new Promise(r => setTimeout(r, 25));
+      assert.equal(state.ended, true, 'a stream whose reset cannot materialize must close, never silently continue');
+      try { state.res.destroy(); } catch {}
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-10: fresh-subscription initial-timeline failure answers correlated 503, never zero-id 500 (R10-SUBSCRIBE-01)', async () => {
+    // Fresh device (no timeline yet): floor persistence sabotaged. The
+    // exception must be absorbed inside handleSubscribe into a correlated
+    // 503 — a 500 with the zero requestId violates the contract, which
+    // reserves the zero sentinel for pre-auth unauthorized errors.
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // No watermark call — this device's timeline has never been initialized.
+      const store = ctx.remote.deviceStore;
+      const orig = store.persistStreamGenerationFloor.bind(store);
+      store.persistStreamGenerationFloor = () => { const e = new Error('injected EIO'); e.code = 'EIO'; throw e; };
+      try {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+        const outcome = await new Promise(resolve => {
+          const chunks = [];
+          let settled = false;
+          const done = o => { if (!settled) { settled = true; resolve(o); } };
+          const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+            res.on('data', c => chunks.push(c));
+            res.on('end', () => done({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+            res.on('close', () => done({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8'), closed: true }));
+            res.resume();
+          });
+          req.on('error', () => done({ status: 0, body: 'socket-error' }));
+          req.setTimeout(4000, () => { req.destroy(); done({ status: -1, body: 'timeout-no-response' }); });
+          req.end();
+        });
+        assert.notEqual(outcome.status, -1, `a response or termination is required: ${JSON.stringify(outcome)}`);
+        assert.notEqual(outcome.status, 200, `no half-open 200: ${outcome.status}`);
+        const zero = '00000000-0000-0000-0000-000000000000';
+        assert.ok(!outcome.body.includes(zero), `the zero requestId is reserved for pre-auth errors, never post-auth: ${outcome.body.slice(0, 200)}`);
+        if (outcome.body.includes('requestId')) {
+          const parsed = JSON.parse(outcome.body);
+          assert.notEqual(parsed.requestId, zero, 'post-auth errors must be correlated');
+          assert.equal(parsed.error?.code, 'unavailable', `expected correlated unavailable, got ${outcome.body.slice(0, 200)}`);
+        }
+        assert.equal(ctx.remote.stream.subscribers.get(device.deviceId)?.size ?? 0, 0, 'no subscriber may survive');
+      } finally { store.persistStreamGenerationFloor = orig; }
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-10: boxed reserved-id create result is refused and can never replay as success (R10-CREATE-01)', async () => {
+    // Domain returns a BOXED String('stream-reset'). RegExp coercion passed
+    // the shape test while strict equality missed the reserved-id check —
+    // the boxed object was recorded raw (500s) but JSON normalization on
+    // restart turned it into the primitive literal, replaying as 200.
+    // The mutable wrapper starts in normal mode so boot-invariants hold.
+    let mode = 'normal';
+    const ctx = await boot({
+      openConversation: async () => mode === 'boxed' ? { conversationId: new String('stream-reset') } : { conversationId: 'conv_fixture_001' },
+    });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      mode = 'boxed';
+      const pid = 'p-' + crypto.createHash('sha256').update('C:/fixture/proj').digest('base64url').slice(0, 22);
+      const clientConversationId = crypto.randomUUID();
+      const body = envelope('runtime.create', { clientConversationId }, 1);
+      const firePinned = () => {
+        const x = signed(device, ctx, { method: 'POST', path: `/remote/v1/projects/${pid}/conversations`, body });
+        return ctx.pinnedRequest('POST', `/remote/v1/projects/${pid}/conversations`, { rawBody: x.rawBody, headers: x.headers });
+      };
+      // Port-aware raw variant for the restarted server (same credentials,
+      // same dataDir — cert pinning still verified against ctx.fingerprint).
+      const fireRaw = (port) => new Promise((resolve, reject) => {
+        const x = signed(device, ctx, { method: 'POST', path: `/remote/v1/projects/${pid}/conversations`, body });
+        const req = https.request({
+          host: '127.0.0.1', port, method: 'POST', path: `/remote/v1/projects/${pid}/conversations`,
+          headers: { 'content-length': Buffer.byteLength(x.rawBody), ...x.headers },
+          rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }),
+        }, res => {
+          const chunks = [];
+          res.on('data', c => chunks.push(c));
+          res.on('end', () => {
+            const cert = res.socket?.getPeerCertificate?.();
+            if (cert?.raw) assert.equal(crypto.createHash('sha256').update(cert.raw).digest('hex'), ctx.fingerprint, 'pinned fingerprint mismatch after restart');
+            resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') });
+          });
+        });
+        req.on('error', reject);
+        req.write(x.rawBody);
+        req.end();
+      });
+      const r1 = await firePinned();
+      assert.notEqual(r1.status, 200, `boxed reserved id must not be accepted: ${r1.body}`);
+      const r2 = await firePinned();
+      assert.notEqual(r2.status, 200, `same-process retry must not replay: ${r2.body}`);
+      // Restart: even after JSON normalization, no success may exist to replay.
+      await ctx.remote.close();
+      const { startRemote } = await import(MODULES.index);
+      const conversations = ctx.conversations;
+      const domain = {
+        projects: () => [{ path: 'C:/fixture/proj', name: 'fixture' }],
+        conversations: () => conversations,
+        sessionRecords: () => [],
+        openConversation: async () => ({ conversationId: new String('stream-reset') }),
+        sendMessage: async () => ({ accepted: true }),
+        stop: async () => ({ stopped: true }),
+        pendingDialogs: () => [],
+        consumeApproval: () => true,
+      };
+      const remote2 = startRemote({ dataDir: ctx.dataDir, domain, host: '127.0.0.1', port: 0 });
+      const addr2 = await remote2.listen();
+      try {
+        const r3 = await fireRaw(addr2.port);
+        assert.notEqual(r3.status, 200, `post-restart retry must not replay a normalized boxed success: ${r3.body}`);
+      } finally { await remote2.close(); }
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
   await t('production pairing completes: pending -> approve -> same-request retry', async () => {
     // No injected confirmLocally: the loopback admin approves a server-verified
     // pending transcript and the device retries the SAME signed request.

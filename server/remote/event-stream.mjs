@@ -145,7 +145,11 @@ export class EventStream {
     t.authority = this._authority(id);
     for (const s of [...(this.subscribers.get(id) ?? [])]) {
       try {
-        this._resetOne(s, reason);
+        // Round-10 R10-GEN-01: a FALSE return is a reset failure just as much
+        // as a throw — materialization or write failure after the generation
+        // was advanced must close the stream. Leaving it open delivered the
+        // next ordinary frame in a stale generation with no reset at all.
+        if (!this._resetOne(s, reason)) this._close(s);
       } catch {
         // Round-9 R9-GEN-01: a subscriber whose reset cannot be signed (the
         // per-subscriber generation allocation failed) must CLOSE, never keep
@@ -191,7 +195,17 @@ export class EventStream {
     } catch { return false; }
   }
   handleSubscribe(req, res, device, query) {
-    if (!this._reconcile(device.deviceId)) return { status: 401, body: { code: 'unauthorized', retryable: false } };
+    // Round-10 R10-SUBSCRIBE-01: _reconcile can THROW when the initial
+    // timeline floor cannot persist. At this point the request is already
+    // authenticated — letting the exception escape produced a 500 framed
+    // with the zero requestId, which the contract reserves for pre-auth
+    // unauthorized errors only. Nothing has reached the wire or registry
+    // yet, so an honest correlated 503 is the correct answer.
+    try {
+      if (!this._reconcile(device.deviceId)) return { status: 401, body: { code: 'unauthorized', retryable: false } };
+    } catch {
+      return { status: 503, body: { code: 'unavailable', retryable: true } };
+    }
     if (this._subs(device.deviceId).size >= L.maxConcurrentStreamsPerDevice || this.streams.size >= L.maxConcurrentStreamsTotal) return { status: 429, body: { code: 'server_busy', retryable: true } };
     // cursorTransitionTable.malformed is enforced upstream at admission
     // (cursorPattern/length -> cursor_invalid -> unauthorized). Everything that
