@@ -65,24 +65,31 @@ export class RegistryClock {
       this.fingerprint = typeof s.fingerprint === 'string' ? s.fingerprint : null;
     } catch { this.revision = 0; this.fingerprint = null; }
     this.epochCounter = 0;
-    // Owner epochs persist too: a restart must never let the epoch for a
-    // re-appearing identity regress to 1 — signed-request replay protection
-    // is only as strong as the lowest epoch the verifier ever accepts again.
-    this.epochs = new Map();
+    // Round-6 continuity model: an epoch belongs to (resource, owner identity)
+    // for as long as that identity CONTINUOUSLY owns the resource. Retries of
+    // a continuous owner must hit the recorded outcome, but ANY ownership
+    // transition — including returning to an identity seen before (ABA:
+    // dormant -> generation -> dormant) — must mint a fresh epoch, or the
+    // resurrected owner reaches the stale outcome of its earlier incarnation
+    // (R6-CORRECTNESS-2 / contract I06+I17).
+    this.ownerEpochs = new Map();   // resourceId -> { identity, epoch }
     try {
       const s = JSON.parse(fs.readFileSync(this.path, 'utf8'));
-      for (const [k, v] of Object.entries(s.epochs ?? {})) {
-        if (typeof k === 'string' && Number.isSafeInteger(v) && v >= 1) this.epochs.set(k, v);
+      const legacyMax = [];
+      for (const v of Object.values(s.epochs ?? {})) if (Number.isSafeInteger(v)) legacyMax.push(v);
+      for (const [k, v] of Object.entries(s.ownerEpochs ?? {})) {
+        if (typeof k === 'string' && isRecord(v) && typeof v.identity === 'string' && Number.isSafeInteger(v.epoch) && v.epoch >= 1) this.ownerEpochs.set(k, v);
       }
       this.epochCounter = Math.max(
         Number.isSafeInteger(s.epochCounter) ? s.epochCounter : 0,
-        ...[...this.epochs.values()], 0,
+        ...legacyMax,   // one-time monotonic floor over the superseded table
+        ...[...this.ownerEpochs.values()].map(v => v.epoch), 0,
       );
-    } catch { /* no persisted epochs — fresh install; counter stays at the pre-set 0 or the max of any epochs loaded above */ }
+    } catch { /* fresh install */ }
   }
   _persist() {
     const tmp = this.path + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ revision: this.revision, fingerprint: this.fingerprint, epochs: Object.fromEntries(this.epochs), epochCounter: this.epochCounter ?? 0 }), 'utf8');
+    fs.writeFileSync(tmp, JSON.stringify({ revision: this.revision, fingerprint: this.fingerprint, ownerEpochs: Object.fromEntries(this.ownerEpochs), epochCounter: this.epochCounter ?? 0 }), 'utf8');
     fs.renameSync(tmp, this.path);
   }
   /** Registry revision: bumps whenever the conversation/project set changes. */
@@ -91,26 +98,21 @@ export class RegistryClock {
     if (fp !== this.fingerprint) { this.revision += 1; this.fingerprint = fp; this._persist(); }
     return this.revision;
   }
-  /** Per-owner epoch: monotonically allocated, never reused. Contract
-   * idempotency namespace + ownerEpoch roll semantics: EVERY new owner
-   * identity (including generation rolls) receives a fresh, distinct epoch,
-   * so a mutation outcome recorded under a rolled owner is unreachable by
-   * construction — never merely keyed differently. The counter persists;
-   * losing the newest assignments on crash is safe (re-roll is higher, and
-   * continuity loss surfaces as a reset, never as cross-owner replay). */
-  epochFor(identity) {
-    let e = this.epochs.get(identity);
-    if (!e) {
-      e = (this.epochCounter ?? 0) + 1;
-      this.epochCounter = e;
-      this.epochs.set(identity, e);
-      // Owner churn is bounded: cap the persisted map, evicting the oldest
-      // registrations first. Eviction cannot collide: the counter never
-      // regresses, so a re-appearing identity gets a NEW higher epoch.
-      while (this.epochs.size > 4096) this.epochs.delete(this.epochs.keys().next().value);
-      this._persist();
-    }
-    return e;
+  /** Continuity-aware epoch resolution: SAME resource + SAME identity ->
+   * stable epoch (retries hit their recorded outcome); ANY identity change
+   * for the resource — including returning to a previously seen identity —
+   * allocates a fresh monotonic epoch. Allocation persists so a restart
+   * cannot regress below any epoch ever handed out. */
+  epochFor(resourceId, identity) {
+    const key = String(resourceId);
+    const cur = this.ownerEpochs.get(key);
+    if (cur && cur.identity === identity) return cur.epoch;
+    const epoch = (this.epochCounter ?? 0) + 1;
+    this.epochCounter = epoch;
+    this.ownerEpochs.set(key, { identity, epoch });
+    // Resource count is product-bounded (projects+conversations); no cap needed.
+    this._persist();
+    return epoch;
   }
   /** Monotonicity floor: the counter must never restart below an epoch that a
    * surviving idempotency record still references, or a rolled owner could
@@ -132,6 +134,19 @@ export class IdempotencyStore {
       const data = JSON.parse(fs.readFileSync(this.path, 'utf8'));
       if (isRecord(data)) for (const [k, v] of Object.entries(data)) this.records.set(k, v);
     } catch {}
+    // Crash-recovery rule (round-6 R6-CORRECTNESS-1 / contract I08): a record
+    // left in 'pending' state means the process died somewhere inside the
+    // dispatch -> outcome-record critical section, so whether the effect ever
+    // executed is UNKNOWN. Exactly-once forbids re-execution; the only sound
+    // resolution is a permanent terminal outcome for that client id.
+    let upgraded = false;
+    for (const [k, v] of this.records) {
+      if (isRecord(v) && v.pending === true) {
+        this.records.set(k, { payloadSha256: v.payloadSha256, unknown: true, at: v.at ?? Date.now() });
+        upgraded = true;
+      }
+    }
+    if (upgraded) this._persist();
   }
   _persist() {
     const tmp = this.path + '.tmp';
@@ -165,11 +180,37 @@ export class IdempotencyStore {
   resolve(deviceId, resourceId, ownerEpoch, clientId, payloadSha256) {
     const rec = this.records.get(this._key(deviceId, resourceId, ownerEpoch, clientId));
     if (!rec) return null;
-    return rec.payloadSha256 === payloadSha256 ? rec.outcome : { conflict: true };
+    if (rec.payloadSha256 !== payloadSha256) return { conflict: true };
+    if (rec.unknown === true) return { unknown: true };
+    return rec.outcome;
   }
-  record(deviceId, resourceId, ownerEpoch, clientId, payloadSha256, outcome) {
+  /** Reserve the key BEFORE dispatch with a durable pending record. This is
+   * the atomicity anchor of contract mutationRecord: the persistence of the
+   * reservation precedes any side effect, so a crash inside the critical
+   * section leaves evidence that resolves to committed-unknown rather than
+   * re-executing. Capacity is consumed by the reservation itself (I14:
+   * overlapping admissions into the final slot cannot both pass). */
+  reserve(deviceId, resourceId, ownerEpoch, clientId, payloadSha256) {
     if (this.records.size >= 4096) return false;     // fail closed
+    this.records.set(this._key(deviceId, resourceId, ownerEpoch, clientId), { payloadSha256, pending: true, at: Date.now() });
+    this._persist();
+    return true;
+  }
+  /** Complete a reservation with its outcome — the post-dispatch half of the
+   * same critical section. */
+  record(deviceId, resourceId, ownerEpoch, clientId, payloadSha256, outcome) {
+    if (this.records.size >= 4096 && !this.records.has(this._key(deviceId, resourceId, ownerEpoch, clientId))) return false;
     this.records.set(this._key(deviceId, resourceId, ownerEpoch, clientId), { payloadSha256, outcome, at: Date.now() });
+    this._persist();
+    return true;
+  }
+  /** A reservation for a mutation that verifiably never executed (domain
+   * business denial) is released so the client id may be retried. */
+  release(deviceId, resourceId, ownerEpoch, clientId) {
+    const key = this._key(deviceId, resourceId, ownerEpoch, clientId);
+    const rec = this.records.get(key);
+    if (!rec || rec.pending !== true) return false;
+    this.records.delete(key);
     this._persist();
     return true;
   }
@@ -181,6 +222,23 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
   // could inherit a prior owner's outcomes (round-4 R4-CORRECTNESS-1).
   clock.floorEpochs(idem.maxLiveEpoch());
   const nowMs = () => Date.now();
+
+  /* Per-key mutation serializer (round-6 R6-CORRECTNESS-1 / contract I10):
+   * operations sharing an idempotency key chain onto one promise, so the
+   * resolve-check -> reserve -> dispatch -> record critical section cannot
+   * interleave. A retry of an in-flight mutation JOINS it (the reservation is
+   * visible in the store by the time the second caller enters the chain), and
+   * a conflicting payload is rejected before any second dispatch. Memory is
+   * bounded: chain tails are dropped once quiescent. */
+  const mutationChains = new Map();
+  function serializedMutation(key, fn) {
+    const prev = mutationChains.get(key) ?? Promise.resolve();
+    const next = prev.catch(() => {}).then(fn);
+    mutationChains.set(key, next);
+    next.finally(() => { if (mutationChains.get(key) === next) mutationChains.delete(key); }).catch(() => {});
+    return next;
+  }
+  const mutationKey = (deviceId, resourceId, epoch, clientId) => `${deviceId}|${resourceId}|${epoch}|${clientId}`;
 
   const projectIndex = () => {
     const map = new Map();
@@ -217,7 +275,7 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
         const proj = projects.get(projectId);
         if (!proj) return null;
         const identity = `project:${projectId}`;
-        return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(identity), revision: clock.registryRevision(domain.conversations()), projectId, conversationId: undefined };
+        return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(projectId, identity), revision: clock.registryRevision(domain.conversations()), projectId, conversationId: undefined };
       }
       const conv = convs.get(resourceId);
       if (!conv) return null;
@@ -225,14 +283,14 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
       if (!proj || projectIdFor(proj.path) !== projectId) return null;
       const ws = conv.workspace ?? {};
       const identity = `runtime:${ws.backendInstance ?? ''}:${ws.workspaceId ?? ''}:${ws.workspaceEpoch ?? 0}:${conv.conversationId}:${conv.runtimeGeneration ?? 'dormant'}`;
-      return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId, conversationId: conv.conversationId };
+      return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(conv.conversationId, identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId, conversationId: conv.conversationId };
     }
     const params = pathParameters ?? {};
     if (params.projectId !== undefined && params.conversationId === undefined && params.requestId === undefined) {
       const proj = projects.get(params.projectId);
       if (!proj) return null;
       const identity = `project:${params.projectId}`;
-      return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(identity), revision: clock.registryRevision(domain.conversations()), projectId: params.projectId };
+      return { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(params.projectId, identity), revision: clock.registryRevision(domain.conversations()), projectId: params.projectId };
     }
     if (params.conversationId !== undefined) {
       const conv = convs.get(params.conversationId);
@@ -241,7 +299,7 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
       if (!proj) return null;
       const ws = conv.workspace ?? {};
       const identity = `runtime:${ws.backendInstance ?? ''}:${ws.workspaceId ?? ''}:${ws.workspaceEpoch ?? 0}:${conv.conversationId}:${conv.runtimeGeneration ?? 'dormant'}`;
-      const base = { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId: projectIdFor(proj.path), conversationId: conv.conversationId };
+      const base = { current: true, namespace: 'runtime', identity, epoch: clock.epochFor(conv.conversationId, identity), revision: conv.revision ?? clock.registryRevision(domain.conversations()), projectId: projectIdFor(proj.path), conversationId: conv.conversationId };
       if (params.requestId !== undefined) {
         const dialog = (conv.pendingApprovals ?? []).find(d => d.requestId === params.requestId && d.pending === true);
         if (!dialog) return null;
@@ -306,31 +364,59 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     if (!proj || device.grants?.[projectId] !== true) return deny('unknown_resource');
     const clientId = body.payload.clientConversationId;
     const payloadHash = sha256hex(canonicalJson(body.payload) ?? '');
-    const prior = idem.resolve(device.deviceId, projectId, owner.epoch, clientId, payloadHash);
-    if (prior?.conflict) return deny('payload_invalid');
-    if (prior) return okResult(prior);
-    if (!idem.hasCapacity()) return deny('operation_rejected');
-    try {
-      const out = await domain.openConversation(proj.path, { clientConversationId: clientId });
-      if (!OPAQUE_ID.test(out?.conversationId ?? '')) return deny('unavailable');
-      const ownerRevision = clock.registryRevision(domain.conversations());
-      const result = { conversationId: out.conversationId, ownerRevision };
-      if (!idem.record(device.deviceId, projectId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
-      return okResult(result);
-    } catch (e) {
-      const code = e?.code;
-      if (code === 'workspace_in_use' || code === 'stale_workspace') return deny('stale_owner');
-      return deny('unavailable');
-    }
+    return serializedMutation(mutationKey(device.deviceId, projectId, owner.epoch, clientId), async () => {
+      const prior = idem.resolve(device.deviceId, projectId, owner.epoch, clientId, payloadHash);
+      if (prior?.conflict) return deny('payload_invalid');
+      if (prior?.unknown) return deny('operation_rejected');   // committed-unknown: exactly-once forbids re-execution
+      if (prior) return okResult(prior);                        // recorded retry OR joined in-flight outcome
+      if (!idem.hasCapacity()) return deny('operation_rejected');
+      if (!idem.reserve(device.deviceId, projectId, owner.epoch, clientId, payloadHash)) return deny('operation_rejected');
+      try {
+        const out = await domain.openConversation(proj.path, { clientConversationId: clientId });
+        if (!OPAQUE_ID.test(out?.conversationId ?? '')) { idem.release(device.deviceId, projectId, owner.epoch, clientId); return deny('unavailable'); }
+        const ownerRevision = clock.registryRevision(domain.conversations());
+        const result = { conversationId: out.conversationId, ownerRevision };
+        if (!idem.record(device.deviceId, projectId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
+        return okResult(result);
+      } catch (e) {
+        const code = e?.code;
+        if (code === 'workspace_in_use' || code === 'stale_workspace') {
+          // Business denial: the mutation verifiably never executed — release
+          // the reservation so the client id is retriable.
+          idem.release(device.deviceId, projectId, owner.epoch, clientId);
+          return deny('stale_owner');
+        }
+        // Unknown execution state: leave the reservation to harden into
+        // committed-unknown — a retry must never re-execute (fail closed).
+        return deny('unavailable');
+      }
+    });
   }
 
   async function runtimeSnapshot({ device, pathParameters, owner }) {
     const conv = conversationIndex().get(pathParameters.conversationId);
     if (!conv) return deny('unknown_resource');
-    const messages = (conv.messages ?? [])
-      .filter(m => OPAQUE_ID.test(m.messageId ?? '') && ['user', 'assistant'].includes(m.role))
-      .map(m => ({ messageId: m.messageId, role: m.role, text: String(m.text ?? '') }))
-      .slice(-500);
+    // Contract snapshotWindow (round-6 R6-CORRECTNESS-4): the newest messages
+    // within BOTH the count limit AND a serialized-byte budget. Older history
+    // that fits neither is omitted from the head; the watermark still always
+    // permits forward recovery, and any omission sets snapshotTruncated=true.
+    // Messages individually exceeding transcriptBounds can never fit a frame
+    // and are excluded from the window (counting as truncation when dropped).
+    const budget = REMOTE_V1.limits.maxSerializedResponseBytes - 65536;
+    const all = (conv.messages ?? [])
+      .filter(m => OPAQUE_ID.test(m.messageId ?? '') && ['user', 'assistant'].includes(m.role));
+    const messages = [];
+    let bytes = 0, omitted = 0;
+    for (let i = all.length - 1; i >= 0; i--) {
+      const m = all[i];
+      const entry = { messageId: m.messageId, role: m.role, text: String(m.text ?? '') };
+      const size = Buffer.byteLength(JSON.stringify(entry), 'utf8');
+      if (messages.length >= 500 || bytes + size > budget || Buffer.byteLength(JSON.stringify(entry.text), 'utf8') > L.maxTranscriptSerializedBytes) { omitted = i + 1; break; }
+      messages.unshift(entry);
+      bytes += size;
+    }
+    if (omitted === 0 && messages.length < all.length) omitted = all.length - messages.length;
+    const truncated = omitted > 0 || conv.truncated === true;
     const wm = typeof streamWatermark === 'function' ? streamWatermark(device.deviceId) : null;
     return okResult({
       ownerRevision: conv.revision ?? 0,
@@ -339,7 +425,7 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
       cursor: wm?.cursor ?? 'g1_s0_0000000000000000000000',
       streamGeneration: wm?.generation ?? 1,
       sequence: wm?.sequence ?? 1,
-      ...(conv.truncated === true ? { snapshotTruncated: true } : {}),
+      ...(truncated ? { snapshotTruncated: true } : {}),
     });
   }
 
@@ -348,21 +434,29 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     if (!conv) return deny('unknown_resource');
     const clientId = body.payload.clientMessageId;
     const payloadHash = sha256hex(canonicalJson(body.payload) ?? '');
-    const prior = idem.resolve(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash);
-    if (prior?.conflict) return deny('payload_invalid');
-    if (prior) return okResult(prior);
-    if (!idem.hasCapacity()) return deny('operation_rejected');
-    try {
-      const out = await domain.sendMessage({ owner, text: body.payload.text, clientMessageId: clientId });
-      const result = { clientMessageId: clientId, accepted: out?.accepted === true, ownerRevision: conv.revision ?? 0 };
-      if (!idem.record(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
-      return okResult(result);
-    } catch (e) {
-      const code = e?.code;
-      if (code === 'stale_owner' || code === 'owner_stale') return deny('stale_owner');
-      if (code === 'busy' || code === 'in_progress') return deny('operation_rejected');
-      return deny('unavailable');
-    }
+    // Contract transcriptBounds: text is bounded by maxTranscriptSerializedBytes
+    // measured on the JSON-serialized UTF-8 representation; oversized submissions
+    // are rejected, never silently truncated.
+    if (Buffer.byteLength(JSON.stringify(String(body.payload.text ?? '')), 'utf8') > L.maxTranscriptSerializedBytes) return deny('payload_invalid');
+    return serializedMutation(mutationKey(device.deviceId, conv.conversationId, owner.epoch, clientId), async () => {
+      const prior = idem.resolve(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash);
+      if (prior?.conflict) return deny('payload_invalid');
+      if (prior?.unknown) return deny('operation_rejected');
+      if (prior) return okResult(prior);
+      if (!idem.hasCapacity()) return deny('operation_rejected');
+      if (!idem.reserve(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash)) return deny('operation_rejected');
+      try {
+        const out = await domain.sendMessage({ owner, text: body.payload.text, clientMessageId: clientId });
+        const result = { clientMessageId: clientId, accepted: out?.accepted === true, ownerRevision: conv.revision ?? 0 };
+        if (!idem.record(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
+        return okResult(result);
+      } catch (e) {
+        const code = e?.code;
+        if (code === 'stale_owner' || code === 'owner_stale') { idem.release(device.deviceId, conv.conversationId, owner.epoch, clientId); return deny('stale_owner'); }
+        if (code === 'busy' || code === 'in_progress') { idem.release(device.deviceId, conv.conversationId, owner.epoch, clientId); return deny('operation_rejected'); }
+        return deny('unavailable');
+      }
+    });
   }
 
   async function chatStop({ device, pathParameters, owner }) {

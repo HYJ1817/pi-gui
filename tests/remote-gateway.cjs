@@ -794,6 +794,378 @@ async function main() {
     } finally { await ctx.cleanup(); }
   });
 
+  await t('round-6: concurrent same-key mutations join instead of double-dispatching (R6-CORRECTNESS-1/I10)', async () => {
+    // Barrier-controlled dispatch: both requests are in flight before the
+    // domain effect completes. Exactly one dispatch; both callers get the
+    // same outcome; a later retry resolves to the record.
+    let sends = 0, release;
+    const gate = new Promise(r => { release = r; });
+    const ctx = await boot({ sendMessage: async () => { sends++; await gate; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const body = envelope('chat.send', { clientMessageId, text: 'join-me' }, 1);
+      const fire = () => {
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      const p1 = fire();
+      await new Promise(r => setTimeout(r, 30));   // first is inside the barrier
+      const p2 = fire();
+      release();
+      const [r1, r2] = await Promise.all([p1, p2]);
+      assert.equal(sends, 1, `same client id must dispatch once, got ${sends}`);
+      assert.equal(r1.status, 200, r1.body);
+      assert.equal(r2.status, 200, r2.body);
+      assert.equal(JSON.parse(r1.body).result?.clientMessageId, clientMessageId);
+      assert.equal(JSON.parse(r2.body).result?.clientMessageId, clientMessageId);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-6: concurrent conflicting payload rejected before any second dispatch (I11)', async () => {
+    let sends = 0, release;
+    const gate = new Promise(r => { release = r; });
+    const ctx = await boot({ sendMessage: async () => { sends++; await gate; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const fire = text => {
+        const body = envelope('chat.send', { clientMessageId, text }, 1);
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      const p1 = fire('first-payload');
+      await new Promise(r => setTimeout(r, 30));
+      const p2 = fire('conflicting-payload');
+      release();
+      const [r1, r2] = await Promise.all([p1, p2]);
+      assert.equal(sends, 1, `conflict must never reach dispatch, got ${sends}`);
+      const bodies = [JSON.parse(r1.body), JSON.parse(r2.body)];
+      const conflict = bodies.find(b => b.error?.code === 'payload_invalid');
+      assert.ok(conflict, `one response must be payload_invalid: ${r1.body} / ${r2.body}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-6: overlapping admissions into the final capacity slot (I14)', async () => {
+    let sends = 0, release;
+    const gate = new Promise(r => { release = r; });
+    const ctx = await boot({ sendMessage: async () => { sends++; await gate; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const idem = ctx.remote.adapters.idem;
+      // One slot left: the reservation itself must consume it, so the second
+      // concurrent mutation is refused BEFORE dispatching.
+      for (let i = 0; i < 4095; i++) idem.records.set(idem._key(device.deviceId, 'filler-' + i, 1, 'fill-' + i), { payloadSha256: 'h', outcome: { accepted: true }, at: Date.now() });
+      const fire = () => {
+        const body = envelope('chat.send', { clientMessageId: crypto.randomUUID(), text: 'x' }, 1);
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      const p1 = fire();
+      await new Promise(r => setTimeout(r, 30));
+      const p2 = fire();
+      release();
+      const [r1, r2] = await Promise.all([p1, p2]);
+      assert.equal(sends, 1, `exactly one mutation may execute for the final slot, got ${sends}`);
+      const bodies = [JSON.parse(r1.body), JSON.parse(r2.body)];
+      assert.ok(bodies.some(b => b.error?.code === 'operation_rejected'), `loser must be refused: ${r1.body} / ${r2.body}`);
+      assert.ok(bodies.some(b => b.result?.clientMessageId), 'winner must succeed');
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-6: persistence failure after dispatch never re-executes (committed-unknown, I08)', async () => {
+    let sends = 0;
+    const ctx = await boot({ sendMessage: async () => { sends++; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const idem = ctx.remote.adapters.idem;
+      // Inject the persistence failure ONLY at outcome-record time: reserve()
+      // already persisted durably before dispatch (the atomicity anchor).
+      const realRecord = idem.record.bind(idem);
+      idem.record = () => false;
+      const body = envelope('chat.send', { clientMessageId, text: 'doomed' }, 1);
+      const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+      const r1 = await ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      assert.equal(JSON.parse(r1.body).error?.code, 'operation_rejected', r1.body);
+      assert.equal(sends, 1, 'the effect executed exactly once before the failure');
+      idem.record = realRecord;
+      // Simulate restart recovery: the durable pending record hardens into
+      // committed-unknown. A fresh store instance over the same dataDir must
+      // perform the upgrade on load.
+      const { IdempotencyStore } = await import('../server/remote/adapters.mjs');
+      const reloaded = new IdempotencyStore(ctx.dataDir);
+      const ownerEpoch = 1;
+      const key = `${device.deviceId}|conv_fixture_001|${ownerEpoch}|${clientMessageId}`;
+      assert.ok(reloaded.records.get(key)?.unknown === true, 'pending must harden to committed-unknown on recovery');
+      // Mirror the upgrade into the live store (it is the same process the
+      // retry hits) and verify a retry never re-executes.
+      const live = idem.records.get(key);
+      if (live) { delete live.pending; live.unknown = true; }
+      const x2 = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+      const r2 = await ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x2.rawBody, headers: x2.headers });
+      assert.equal(JSON.parse(r2.body).error?.code, 'operation_rejected', `committed-unknown must refuse, got ${r2.body}`);
+      assert.equal(sends, 1, `retry must never re-execute, dispatched ${sends}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-6: dormant ABA return mints a fresh epoch and dispatches fresh (R6-CORRECTNESS-2/I06)', async () => {
+    let sends = 0;
+    const ctx = await boot({ sendMessage: async () => { sends++; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const clientMessageId = crypto.randomUUID();
+      const conv = ctx.conversations[0];
+      const fire = rev => {
+        const body = envelope('chat.send', { clientMessageId, text: 'aba' }, rev);
+        const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+        return ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      };
+      // dormant (no runtimeGeneration) -> live generation -> dormant again.
+      delete conv.runtimeGeneration;
+      conv.revision = 1;
+      const r1 = await fire(1);
+      assert.equal(r1.status, 200, r1.body);
+      const epoch1 = ctx.remote.adapters.clock.ownerEpochs.get('conv_fixture_001')?.epoch;
+      conv.runtimeGeneration = 7;
+      conv.revision = 2;
+      const r2 = await fire(2);
+      assert.equal(r2.status, 200, r2.body);
+      const epoch2 = ctx.remote.adapters.clock.ownerEpochs.get('conv_fixture_001')?.epoch;
+      delete conv.runtimeGeneration;
+      conv.revision = 3;
+      const r3 = await fire(3);
+      assert.equal(r3.status, 200, r3.body);
+      const epoch3 = ctx.remote.adapters.clock.ownerEpochs.get('conv_fixture_001')?.epoch;
+      assert.ok(epoch1 < epoch2 && epoch2 < epoch3, `epochs must be strictly monotonic through ABA: ${epoch1}/${epoch2}/${epoch3}`);
+      assert.equal(sends, 3, `every incarnation dispatches exactly once, got ${sends}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-6: subscription generations survive a routine restart (R6-CORRECTNESS-3/S17)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const openStream = (port) => new Promise(resolve => {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+        const req = https.request({ host: '127.0.0.1', port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          res.socket.destroy();
+          resolve(res.statusCode);
+        });
+        req.on('error', () => resolve(0));
+        req.end();
+      });
+      assert.equal(await openStream(ctx.addr.port), 200);
+      const floor1 = ctx.remote.deviceStore.get(device.deviceId).streamGenerationFloor;
+      assert.ok(floor1 >= 2, `subscription allocates durable generations, floor ${floor1}`);
+      // Routine restart: same dataDir, same credentials, new process objects.
+      await ctx.remote.close();
+      const { startRemote } = await import(MODULES.index);
+      const conversations = ctx.conversations;
+      const domain = {
+        projects: () => [{ path: 'C:/fixture/proj', name: 'fixture' }],
+        conversations: () => conversations,
+        sessionRecords: () => [],
+        openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
+        sendMessage: async () => ({ accepted: true }),
+        stop: async () => ({ stopped: true }),
+        pendingDialogs: () => [],
+        consumeApproval: () => true,
+      };
+      const remote2 = startRemote({ dataDir: ctx.dataDir, domain, host: '127.0.0.1', port: 0 });
+      const addr2 = await remote2.listen();
+      try {
+        assert.equal(await openStream(addr2.port), 200);
+        const floor2 = remote2.deviceStore.get(device.deviceId).streamGenerationFloor;
+        assert.ok(floor2 > floor1, `generation floor must strictly advance across restart: ${floor1} -> ${floor2}`);
+      } finally { await remote2.close(); }
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('round-6: service rotation invalidates bindings minted under the old pin (R6-SECURITY-1/D04)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Sanity: the binding works under the original service.
+      const okReq = signed(device, ctx, { method: 'GET', path: '/remote/v1/projects' });
+      const sanity = await ctx.pinnedRequest('GET', '/remote/v1/projects', { rawBody: okReq.rawBody, headers: okReq.headers });
+      assert.equal(sanity.status, 200, sanity.body);
+      // Rotate: stop the service and delete the persisted cert/key so the
+      // restart mints a NEW service identity (device records keep the old pin).
+      await ctx.remote.close();
+      for (const f of fs.readdirSync(ctx.dataDir)) if (/cert|key|tls|service/i.test(f)) fs.rmSync(path.join(ctx.dataDir, f), { force: true });
+      const { startRemote } = await import(MODULES.index);
+      const conversations = ctx.conversations;
+      const domain = {
+        projects: () => [{ path: 'C:/fixture/proj', name: 'fixture' }],
+        conversations: () => conversations,
+        sessionRecords: () => [],
+        openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
+        sendMessage: async () => ({ accepted: true }),
+        stop: async () => ({ stopped: true }),
+        pendingDialogs: () => [],
+        consumeApproval: () => true,
+      };
+      const remote2 = startRemote({ dataDir: ctx.dataDir, domain, host: '127.0.0.1', port: 0 });
+      const addr2 = await remote2.listen();
+      try {
+        assert.notEqual(remote2.serviceFingerprint, ctx.fingerprint, 'rotation must change the service identity for this test to mean anything');
+        ctx.serviceId = 'svc-' + remote2.serviceFingerprint.slice(0, 16);
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/projects' });
+        const res = await new Promise(resolve => {
+          const req = https.request({ host: '127.0.0.1', port: addr2.port, method: 'GET', path: '/remote/v1/projects', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, r => {
+            const chunks = [];
+            r.on('data', c => chunks.push(c));
+            r.on('end', () => resolve({ status: r.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+          });
+          req.on('error', () => resolve({ status: 0, body: '' }));
+          req.end();
+        });
+        assert.equal(res.status, 401, `old-pin binding must be rejected after rotation, got ${res.status}: ${res.body}`);
+      } finally { await remote2.close(); }
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('round-6: replay-state loss requires re-pair, not just a new epoch (R6-SECURITY-2/X01)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Corrupt the persisted replay state, then restart: the loader must
+      // knock the device inactive pending re-pair.
+      const file = path.join(ctx.dataDir, 'remote-devices.json');
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      delete data.devices[0].nonces;
+      delete data.devices[0].timestampFloor;
+      fs.writeFileSync(file, JSON.stringify(data), 'utf8');
+      await ctx.remote.close();
+      const { startRemote } = await import(MODULES.index);
+      const conversations = ctx.conversations;
+      const domain = {
+        projects: () => [{ path: 'C:/fixture/proj', name: 'fixture' }],
+        conversations: () => conversations,
+        sessionRecords: () => [],
+        openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
+        sendMessage: async () => ({ accepted: true }),
+        stop: async () => ({ stopped: true }),
+        pendingDialogs: () => [],
+        consumeApproval: () => true,
+      };
+      const remote2 = startRemote({ dataDir: ctx.dataDir, domain, host: '127.0.0.1', port: 0 });
+      const addr2 = await remote2.listen();
+      try {
+        const rec = remote2.deviceStore.get(device.deviceId);
+        assert.ok(rec.requiresRepair === true && rec.active === false, 'state loss must demand re-pair');
+        for (const epoch of [rec.replayEpoch - 1, rec.replayEpoch]) {
+          const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/projects', epoch });
+          const res = await new Promise(resolve => {
+            const req = https.request({ host: '127.0.0.1', port: addr2.port, method: 'GET', path: '/remote/v1/projects', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, r => {
+              r.resume();
+              r.on('end', () => resolve(r.statusCode));
+            });
+            req.on('error', () => resolve(0));
+            req.end();
+          });
+          assert.equal(res, 401, `no admission at any epoch before re-pair (epoch ${epoch})`);
+        }
+      } finally { await remote2.close(); }
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('round-6: snapshot obeys the byte window and truncates honestly (R6-CORRECTNESS-4/S43/S44/S45)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const conv = ctx.conversations[0];
+      // 300 valid 5000-char messages blew the serialized response into a 500
+      // before the byte window existed.
+      conv.messages = [];
+      for (let i = 0; i < 300; i++) conv.messages.push({ messageId: 'm' + String(i).padStart(20, '0'), role: i % 2 ? 'user' : 'assistant', text: 'x'.repeat(5000) });
+      const snap = async () => {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/conversations/conv_fixture_001/snapshot' });
+        const r = await ctx.pinnedRequest('GET', '/remote/v1/conversations/conv_fixture_001/snapshot', { rawBody: x.rawBody, headers: x.headers });
+        return r;
+      };
+      const r1 = await snap();
+      assert.equal(r1.status, 200, `large snapshot must succeed, got ${r1.status}: ${r1.body.slice(0, 200)}`);
+      const body = JSON.parse(r1.body).result ?? {};
+      assert.ok(Array.isArray(body.messages) && body.messages.length > 0 && body.messages.length <= 500, 'bounded window returned');
+      assert.equal(body.snapshotTruncated, true, 'omitted history must be admitted honestly');
+      assert.ok(body.cursor && body.streamGeneration >= 1 && body.sequence >= 1, 'forward-recovery watermark present');
+      // Count-window truncation is likewise admitted.
+      conv.messages = [];
+      for (let i = 0; i < 601; i++) conv.messages.push({ messageId: 's' + String(i).padStart(20, '0'), role: 'user', text: 'hi' });
+      const r2 = await snap();
+      const body2 = JSON.parse(r2.body).result ?? {};
+      assert.equal(body2.messages.length, 500, 'count window applies');
+      assert.equal(body2.snapshotTruncated, true, '601 messages must set snapshotTruncated');
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-6: reserved stream-reset id never enters the journal (R6-NIT-3/S07)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const es = ctx.remote.stream;
+      es.watermark(device.deviceId);   // establish the timeline
+      const before = es.timelines.get(device.deviceId)?.headSequence ?? 0;
+      es.publish('stream-reset', 1, 'message.append', { messageId: 'x_attack_01', role: 'user', text: 'forged' });
+      const after = es.timelines.get(device.deviceId)?.headSequence ?? 0;
+      assert.equal(after, before, 'reserved id must never be journaled');
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-6: oversized events are rejected before any sign operation (R6-NIT-1/S35)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const es = ctx.remote.stream;
+      es.watermark(device.deviceId);
+      // Count crypto.sign across a normal publish, then across an oversized
+      // one: the oversized frame must add ZERO sign operations. (No subscribers,
+      // so even the sequence_gap reset materializes nothing.)
+      const realSign = crypto.sign;
+      let calls = 0;
+      crypto.sign = function (...a) { calls++; return realSign.apply(this, a); };
+      try {
+        es.publish('conv_fixture_001', 1, 'message.append', { messageId: 'ok_msg_0001', role: 'user', text: 'small' });
+        const normalCalls = calls;
+        assert.ok(normalCalls >= 1, 'normal publish signs its frame');
+        calls = 0;
+        es.publish('conv_fixture_001', 1, 'message.append', { messageId: 'big_msg_0001', role: 'user', text: 'y'.repeat(82000) });
+        assert.equal(calls, 0, `oversized frame must never be signed, saw ${calls} sign calls`);
+      } finally { crypto.sign = realSign; }
+    } finally { await ctx.cleanup(); }
+  });
+
   await t('production pairing completes: pending -> approve -> same-request retry', async () => {
     // No injected confirmLocally: the loopback admin approves a server-verified
     // pending transcript and the device retries the SAME signed request.

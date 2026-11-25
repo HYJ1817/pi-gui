@@ -45,8 +45,13 @@ export class DeviceStore {
           if (!isRecord(d) || typeof d.deviceId !== 'string') { corrupt = true; continue; }
           // Replay state must be intact; corruption bumps the epoch (fail closed).
           if (!isRecord(d.nonces) || !Number.isSafeInteger(d.timestampFloor)) {
+            // signedRequest.replay.stateLoss: lost/corrupt replay state bumps the
+            // epoch AND requires re-pair before ANY new request is admitted —
+            // no silent accumulation. The device becomes inactive until a fresh
+            // pair exchange re-registers it.
             d.nonces = {}; d.timestampFloor = 0;
             if (Number.isSafeInteger(d.replayEpoch)) d.replayEpoch += 1;
+            d.active = false; d.requiresRepair = true;
             corrupt = true;
           }
           this.devices.set(d.deviceId, d);
@@ -202,9 +207,32 @@ export class DeviceStore {
     if (!d) return false;
     d.replayEpoch = (Number.isSafeInteger(d.replayEpoch) ? d.replayEpoch : 0) + 1;
     d.nonces = {}; d.timestampFloor = 0;
+    // Contract replay.stateLoss: the device must re-pair before any new
+    // request is admitted. Epoch bump alone still let the SAME key sign under
+    // the new epoch without re-pairing (round-6 R6-SECURITY-2) — fail closed.
+    d.active = false; d.requiresRepair = true;
     this._persist();
     this.onAuthorizationChanged?.(deviceId, 'epoch_changed');
     return true;
+  }
+
+  /**
+   * Stream-generation durability floor (round-6 R6-CORRECTNESS-3): server-issued
+   * subscription generations are monotonic for the authenticated device ACROSS
+   * restarts, or the pinned client (which rejects lower generations) can never
+   * recover after a routine reboot. The floor persists inside the device
+   * record — the same atomic file as the rest of the authentication state.
+   */
+  streamGenerationFloor(deviceId) {
+    const d = this.devices.get(deviceId);
+    return Number.isSafeInteger(d?.streamGenerationFloor) ? d.streamGenerationFloor : 0;
+  }
+  persistStreamGenerationFloor(deviceId, floor) {
+    const d = this.devices.get(deviceId);
+    if (!d || !Number.isSafeInteger(floor)) return;
+    if (!(floor > (d.streamGenerationFloor ?? 0))) return;
+    d.streamGenerationFloor = floor;
+    this._persist();
   }
 }
 

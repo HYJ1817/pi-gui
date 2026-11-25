@@ -346,6 +346,12 @@ export function verifyRemoteSignature({request,device,serviceId,serviceFingerpri
   const expiryMs=Date.parse(device.expiresAt);
   if(expiryMs<=nowMs)return {ok:false,code:'device_inactive',wire:'unauthorized'};
   if(Number(headers['x-pi-remote-epoch'])!==device.replayEpoch)return {ok:false,code:'signature_invalid',wire:'unauthorized'};
+  // Contract deviceLifecycle.rotation (round-6 R6-SECURITY-1): a device binding
+  // is minted under the service pin present at pairing. Rotating the TLS
+  // certificate (and with it the derived canonical service id) must invalidate
+  // every binding minted under the old pin — otherwise the previously paired
+  // device key keeps signing for the NEW service identity without re-pairing.
+  if(typeof device.serviceId==='string'&&device.serviceId!==canonicalId)return {ok:false,code:'service_identity_invalid',wire:'unauthorized'};
   if(!Number.isSafeInteger(nowMs))return {ok:false,code:'signature_expired',wire:'unauthorized'};
   const timestamp=Number(headers['x-pi-remote-timestamp']);
   if(!Number.isSafeInteger(timestamp)||Math.abs(nowMs-timestamp)>REMOTE_V1.signedRequest.maximumClockSkewSeconds*1000)return {ok:false,code:'signature_expired',wire:'unauthorized'};
@@ -643,6 +649,10 @@ export function buildEventFrameMessage(event,deviceId,serviceId) {
 export function validateEventEnvelope(event) {
   if(!validateSchema(event,REMOTE_V1.eventStream.eventEnvelope)||hasForbiddenKey(event))return false;
   if(event.event==='reset'&&event.conversationId!=='stream-reset')return false;
+  // The reserved reset identity must never appear on ordinary frames either —
+  // the server-side emission path could otherwise deliver an ordinary event
+  // for a synthetic conversation literally named stream-reset (round-6 R6-NIT-3).
+  if(event.event!=='reset'&&event.conversationId==='stream-reset')return false;
   const payloadSchema=REMOTE_V1.eventStream.eventPayloadSchemas[event.event];
   if(!payloadSchema||!validateSchema(event.payload,payloadSchema)||hasForbiddenKey(event.payload)||hasForbiddenValue(event.payload,0,['payload']))return false;
   if(requiredEventScope(event.event)===null)return false;

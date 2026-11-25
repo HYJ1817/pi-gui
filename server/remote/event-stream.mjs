@@ -47,10 +47,26 @@ export class EventStream {
   _tl(id) {
     let t = this.timelines.get(id);
     if (!t) {
-      t = { generation: 1, genCtr: 1, headSequence: 1, frames: [], bytes: 0, salt: crypto.randomBytes(16), authority: this._authority(id) };
+      // Generation monotonicity is a contract property of the AUTHENTICATED
+      // DEVICE, not the process (round-6 R6-CORRECTNESS-3 / S17): the pinned
+      // client rejects frames at-or-below a generation it already accepted,
+      // so a routine restart that re-issued low generations permanently broke
+      // forward recovery. The durable floor lives in the device record.
+      const floor = typeof this.deviceStore.streamGenerationFloor === 'function' ? this.deviceStore.streamGenerationFloor(id) : 0;
+      t = { generation: Math.max(1, floor + 1), genCtr: Math.max(1, floor + 1), headSequence: 1, frames: [], bytes: 0, salt: crypto.randomBytes(16), authority: this._authority(id) };
       this.timelines.set(id, t);
+      this._persistFloor(id, t.genCtr);
     }
     return t;
+  }
+  _persistFloor(id, gen) {
+    try { this.deviceStore.persistStreamGenerationFloor?.(id, gen); } catch { /* a floor persistence failure degrades to process-local monotonicity — the restart then re-resets cursors rather than silently regressing */ }
+  }
+  _allocGeneration(id) {
+    const t = this._tl(id);
+    t.genCtr += 1;
+    this._persistFloor(id, t.genCtr);
+    return t.genCtr;
   }
   _tag(id, generation, sequence) {
     const t = this._tl(id);
@@ -99,7 +115,7 @@ export class EventStream {
   }
   resetDevice(id, reason) {
     const t = this._tl(id);
-    t.generation = ++t.genCtr; t.authority = this._authority(id);
+    t.generation = this._allocGeneration(id); t.authority = this._authority(id);
     for (const s of [...(this.subscribers.get(id) ?? [])]) this._resetOne(s, reason);
   }
   _reconcile(id) {
@@ -114,7 +130,7 @@ export class EventStream {
     s.resetting = true;
     try {
       const t = this._tl(s.deviceId);
-      s.generation = ++t.genCtr;
+      s.generation = this._allocGeneration(s.deviceId);
       // A reset establishes the current head. The next ordinary frame is
       // head+1 for EVERY subscriber; no invisible shared sequence is consumed.
       const frame = this._materialize(s, { sequence: t.headSequence, fields: { conversationId: 'stream-reset', ownerRevision: 0, event: 'reset', payload: { reason } } });
@@ -156,7 +172,7 @@ export class EventStream {
     res.on('close', () => this._close(s));
     res.socket?.on('close', () => this._close(s));
     res.on('error', () => this._close(s));
-    if (!cursor) s.generation = ++t.genCtr;
+    if (!cursor) s.generation = this._allocGeneration(device.deviceId);
     else {
       this._prune(t);
       const firstNeeded = bound ? bound.sequence + 1 : -1;
@@ -187,6 +203,17 @@ export class EventStream {
     const env = { protocolVersion: 1, sequence: tpl.sequence, conversationId: tpl.fields.conversationId, ownerRevision: tpl.fields.ownerRevision,
       event: tpl.fields.event, payload: tpl.fields.payload, streamGeneration: s.generation,
       cursor: this._cursor(s.deviceId, s.generation, tpl.sequence), frameSignature: '' };
+    // Pre-sign budget gate (round-6 R6-NIT-1 / S35): an oversized event must be
+    // NEVER signed, queued or delivered. The base64url Ed25519 signature is a
+    // fixed 86 characters, so measuring the frame with a same-length placeholder
+    // is byte-exact — the gate runs before any crypto.sign call.
+    env.frameSignature = 'A'.repeat(86);
+    const probeRaw = `event: ${env.event}
+data: ${JSON.stringify(env)}
+
+`;
+    if (Buffer.byteLength(probeRaw, 'utf8') > FRAME_MAX) return null;
+    env.frameSignature = '';
     const message = buildEventFrameMessage(env, s.deviceId, this.serviceId);
     if (!message) return null;
     try { env.frameSignature = crypto.sign(null, Buffer.from(message, 'utf8'), this.serviceKey.privateKey).toString('base64url'); } catch { return null; }
@@ -226,6 +253,10 @@ export class EventStream {
   }
   publish(conversationId, ownerRevision, event, payload, deviceIds = null) {
     if (!requiredEventScope(event) || event === 'reset') return;
+    // stream-reset is the reserved reset identity: ordinary frames carrying it
+    // are structurally invalid contract-wide (round-6 R6-NIT-3 / S07). Refuse
+    // at the source so nothing is ever journaled for it.
+    if (conversationId === 'stream-reset') return;
     for (const id of deviceIds ?? [...this.timelines.keys()]) {
       if (!this._reconcile(id)) continue;
       const fields = { conversationId, ownerRevision, event, payload };
