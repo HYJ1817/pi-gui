@@ -6,6 +6,8 @@
  * 不读用户项目、不发真实网络请求。 */
 const assert = require('node:assert/strict');
 const { JSDOM } = require('jsdom');
+const { tinyPng } = require('./fixtures/attachment-files.cjs');
+const textSource = root => [...root.querySelectorAll('.fp-text-source')].map(row => row.textContent).join('\n');
 
 let checks = 0;
 const ok = (name, value) => {
@@ -330,7 +332,7 @@ const contentFor = (filePath) => {
         return { ok: true, file: { path: filePath, absolutePath: panelMetadataAbsolute || `${WIN}/${filePath}`, name: filePath.split('/').pop(), bytes: 1234, image: filePath.endsWith('.png') } };
       },
       asset: async (filePath) => {
-        return { ok: true, blob: new dom.window.Blob(['not-a-real-png'], { type: 'image/png' }), type: 'image/png' };
+        return { ok: true, blob: new Blob([tinyPng()], { type: 'image/png' }), type: 'image/png' };
       },
       externalMetadata: async (filePath, grantId, conversationId) => {
         externalMetas.push({ filePath, grantId, conversationId });
@@ -370,7 +372,7 @@ const contentFor = (filePath) => {
   }
 
   await clickChip('src/app.js', 12);
-  await until(() => panelHost.querySelectorAll('.files-tab').length === 1 && panelHost.querySelector('.files-preview-body'));
+  await until(() => panelHost.querySelectorAll('.files-tab').length === 1 && panelHost.querySelector('.fp-text-source'));
   ok('clicking a file link opens the existing Files surface, expands the tree and selects the row', () => {
     const tab = panelHost.querySelector('.files-tab');
     assert.ok(tab);
@@ -387,14 +389,13 @@ const contentFor = (filePath) => {
   });
 
   ok('the preview keeps exact text and highlights the requested line', () => {
-    const body = panelHost.querySelector('.files-preview-body');
-    assert.equal(body.textContent, contentFor('src/app.js'));
+    assert.equal(textSource(panelHost), contentFor('src/app.js'));
     const highlight = panelHost.querySelector('.files-line-highlight');
     assert.equal(highlight.hidden, false);
     assert.equal(highlight.dataset.lineFrom, '12');
     assert.equal(highlight.dataset.lineTo, '12');
-    const gutter = panelHost.querySelector('.files-preview-gutter');
-    assert.ok(gutter.textContent.startsWith('1\n2\n3'));
+    const gutter = [...panelHost.querySelectorAll('.fp-text-gutter')].map(row => row.textContent).join('\n');
+    assert.ok(gutter.startsWith('1\n2\n3'));
     assert.ok(parseFloat(panelHost.querySelector('.files-preview-scroll').scrollTop) > 0);
   });
 
@@ -406,20 +407,25 @@ const contentFor = (filePath) => {
   });
 
   await clickChip('README.md');
-  await until(() => panelHost.querySelectorAll('.files-tab').length === 2 && panelHost.querySelector('.files-preview-path')?.textContent === 'README.md');
+  await until(() => panelHost.querySelectorAll('.files-tab').length === 2 && panelHost.querySelector('.fp-markdown-body h1')?.textContent === 'README');
   ok('a second file adds a tab and syncs tree selection', () => {
     const selected = [...panelHost.querySelectorAll('.files-tab-select')].find((n) => n.getAttribute('aria-selected') === 'true');
     assert.equal(selected.querySelector('.files-tab-label').textContent, 'README.md');
     const row = [...panelHost.querySelectorAll('.files-entry')].find((n) => n.dataset.filePath === 'README.md');
     assert.equal(row.getAttribute('aria-current'), 'page');
-    assert.equal(panelHost.querySelector('.files-preview-body').textContent, '# README\n');
-    assert.equal(panelHost.querySelector('.files-preview-body .tok-kw')?.textContent, '# README');
+    assert.equal(panelHost.querySelector('.fp-markdown-body h1').textContent, 'README');
+  });
+  panelHost.querySelector('.fp-source-toggle').click();
+  await until(() => panelHost.querySelector('.fp-text-source'));
+  ok('Markdown source view preserves exact bytes, trailing newline and syntax highlighting', () => {
+    assert.equal(textSource(panelHost), '# README\n');
+    assert.equal(panelHost.querySelector('.fp-text-source .tok-kw')?.textContent, '# README');
   });
 
   const firstTab = () => [...panelHost.querySelectorAll('.files-tab-select')]
     .find((n) => n.querySelector('.files-tab-label')?.textContent === 'app.js');
   firstTab().dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-  await until(() => panelHost.querySelector('.files-preview-path')?.textContent === 'src/app.js');
+  await until(() => panelHost.querySelector('.files-preview-path')?.textContent === 'src/app.js' && panelHost.querySelector('.files-line-highlight'));
   ok('switching tabs restores that tab content and line target', () => {
     assert.equal(panelHost.querySelector('.files-line-highlight').dataset.lineFrom, '20');
     assert.equal(firstTab().getAttribute('aria-selected'), 'true');
@@ -444,32 +450,36 @@ const contentFor = (filePath) => {
 
   /* 图片 */
   await clickChip('assets/logo.png');
-  await until(() => panelHost.querySelector('.files-preview-image img'));
+  await until(() => panelHost.querySelector('.fp-image-content'));
   ok('an image opens inline through the controlled asset transport', () => {
-    const img = panelHost.querySelector('.files-preview-image img');
+    const img = panelHost.querySelector('.fp-image-content');
     assert.equal(img.getAttribute('src'), 'blob:fixture-image');
     assert.equal(img.alt, 'logo.png');
     assert.ok(panelHost.querySelectorAll('.files-tab').length >= 3);
   });
 
   /* 不支持格式 / 二进制 */
-  await clickChip('docs/manual.pdf');
-  await until(() => panelHost.querySelector('.files-preview-actions'));
-  ok('PDF/Office-like formats offer a system-default-program entry instead of a fake preview', () => {
-    assert.match(panelHost.querySelector('.files-preview').textContent, /暂不内联预览/);
-    const action = [...panelHost.querySelectorAll('.files-preview-actions button')].find((n) => n.textContent.includes('系统默认程序'));
+  // PDF/OOXML now have real plugins; unsupported legacy Office still needs the
+  // original safe fallback and system-program action, never a fake document.
+  await clickChip('docs/manual.doc');
+  await until(() => panelHost.querySelector('.fp-fallback'));
+  ok('unsupported legacy Office offers a system-default-program entry instead of a fake preview', () => {
+    assert.match(panelHost.querySelector('.fp-fallback').textContent, /不支持.*内联预览/);
+    const action = panelHost.querySelector('.files-preview-open');
     assert.ok(action);
+    assert.equal(action.textContent, '用系统默认程序打开');
+    assert.equal(panelHost.querySelector('.fp-text-source,.fp-pdf'), null);
   });
 
   await clickChip('binary.bin');
-  await until(() => panelHost.querySelector('.files-preview')?.textContent.includes('二进制'));
+  await until(() => panelHost.querySelector('.files-preview-path')?.textContent === 'binary.bin' && panelHost.querySelector('.fp-fallback')?.textContent.includes('二进制'));
   ok('binary files keep the existing concise note', () => {
     assert.ok(panelHost.querySelector('.files-preview').textContent.includes('二进制'));
   });
 
   /* 行号越界 */
   await clickChip('src/app.js', 999);
-  await until(() => panelHost.querySelector('.files-preview-path')?.textContent === 'src/app.js');
+  await until(() => panelHost.querySelector('.files-preview-path')?.textContent === 'src/app.js' && panelHost.querySelector('.files-line-highlight'));
   ok('an out-of-range line degrades to the last real line without breaking the view', () => {
     const highlight = panelHost.querySelector('.files-line-highlight');
     assert.equal(highlight.hidden, false);
@@ -775,10 +785,11 @@ const contentFor = (filePath) => {
   const tabsBeforeReplaced = panelHost.querySelectorAll('.files-tab').length;
   replacedWrap.querySelector('a.md-file-link')
     .dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
-  await until(() => /工作区已经变化/.test(document.getElementById('toasts').textContent));
+  await until(() => /文件不存在、已变化或当前无法读取/.test(document.getElementById('toasts').textContent));
   ok('a historical reference is refused when the backend resolves it outside the message workspace', () => {
     assert.equal(panelHost.querySelectorAll('.files-tab').length, tabsBeforeReplaced);
-    assert.match(document.getElementById('toasts').textContent, /工作区已经变化/);
+    assert.match(document.getElementById('toasts').textContent, /文件不存在、已变化或当前无法读取/);
+    assert.equal(docs.some(entry => entry.filePath === 'src/replaced.ts'), false);
   });
   panelMetadataAbsolute = null;
 
@@ -812,13 +823,13 @@ const contentFor = (filePath) => {
   });
   const tabsBeforeExternal = panelHost.querySelectorAll('.files-tab').length;
   externalChip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
-  await until(() => panelHost.querySelector('.files-preview-body')?.textContent.includes('# external report'));
+  await until(() => panelHost.querySelector('.fp-markdown-body h1')?.textContent === 'external report');
   ok('after native authorization the external file opens in the existing right-side viewer', () => {
     assert.equal(externalAuthorizeCalls.length, 1);
     assert.equal(externalAuthorizeCalls[0].path, 'D:/外部 报告/报告 v1.md');
     assert.equal(externalAuthorizeCalls[0].kind, 'file');
-    assert.equal(externalMetas.length, 1);
-    assert.equal(externalMetas[0].grantId, 'a'.repeat(32));
+    assert.equal(externalMetas.length, 2); // Panel validation plus preview's independent metadata gate.
+    assert.ok(externalMetas.every(entry => entry.grantId === 'a'.repeat(32) && entry.conversationId === null));
     assert.equal(externalDocs.length, 1);
     assert.equal(externalDocs[0].filePath, 'D:/外部 报告/报告 v1.md');
     assert.equal(panelHost.querySelectorAll('.files-tab').length, tabsBeforeExternal + 1);

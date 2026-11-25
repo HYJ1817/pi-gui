@@ -45,6 +45,9 @@
   color: inherit;
   text-align: left;
 }
+.att-open-file { border: 0; background: transparent; font: inherit; cursor: pointer; }
+.att-open-file:hover .att-name { text-decoration: underline; text-underline-offset: 2px; }
+.att-open-file:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 2px; border-radius: var(--radius-xs); }
 .att-name {
   display: block;
   min-width: 0;

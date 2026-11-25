@@ -438,10 +438,11 @@ function renderBlocks(lines, ctx) {
     const h = /^(#{1,6})\s+(.+)$/.exec(t);
     if (h) {
       flush();
-      // 统一渲染成 h4：对话正文里六级标题的视觉差异没有意义，字号也不该乱跳
-      // Specs 预览按需加入页内锚点；聊天 Markdown 的既有输出保持不变。
+      // Chat keeps its compact h4 convention. The standalone document reader
+      // explicitly requests the authored semantic hierarchy, without restyling chat.
+      const level = ctx.documentHeadings ? h[1].length : 4;
       const id = ctx.headingIds ? ` id="${esc(headingSlug(h[2], ctx))}"` : '';
-      out.push(`<h4${id}>` + inline(h[2], ctx) + '</h4>');
+      out.push(`<h${level}${id}>` + inline(h[2], ctx) + `</h${level}>`);
       i++;
       continue;
     }
@@ -508,7 +509,7 @@ function renderBlocks(lines, ctx) {
  *  返回值里所有标签都由本文件生成，模型原文只以转义后的形式出现。
  *  `fileLinks` 只在“这条消息知道自己属于哪个工作区”时传入；不传就完全不
  *  识别文件，避免 Specs、更新说明等共享渲染器误把普通文本当成文件。 */
-export function md(src, { headingIds = false, fileLinks = null } = {}) {
-  const ctx = { headingIds: headingIds === true, headingSlugs: new Map(), fileLinks };
+export function md(src, { headingIds = false, documentHeadings = false, fileLinks = null } = {}) {
+  const ctx = { headingIds: headingIds === true, documentHeadings: documentHeadings === true, headingSlugs: new Map(), fileLinks };
   return renderBlocks(String(src ?? '').split(/\r?\n/), ctx);
 }

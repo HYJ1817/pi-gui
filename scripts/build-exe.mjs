@@ -44,6 +44,11 @@ function walk(dir) {
 }
 
 function main() {
+  // Resolve browser sources/overrides and legal notices before collecting public
+  // assets (also used by build:app --rebuild). Failure must abort, not package a
+  // stale vendor tree or destroy an existing build before validation finishes.
+  execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'sync-preview-vendor.mjs')], { stdio: 'inherit', cwd: ROOT });
+
   // 不能用裸 fs.rmSync：受限环境注入了删除保护，build/ 里几百个文件会被拦下，
   // 报 "state lock timeout" 而构建直接失败。clearDir 有三级兜底。
   clearDir(BUILD, 'build/');

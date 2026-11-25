@@ -9,8 +9,16 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
   const inputs = path.join(world, 'inputs'); fs.mkdirSync(inputs);
   for (const file of files) fs.writeFileSync(path.join(inputs, file.name), file.body);
   await read(`window.fixtureDocs=${JSON.stringify(files.map(file => ({ name: file.name, type: file.type, data: file.body.toString('base64') })))}.map(f=>new File([Uint8Array.from(atob(f.data),c=>c.charCodeAt(0))],f.name,{type:f.type}));`);
-  const reset = () => read(`ST.S.attachments=[];A.renderAttachments();ST.el.input.value='';C.autoGrow();C.updateSendState();void 0`);
+  const reset = () => read(`document.getElementById('rightPaneClose')?.click();ST.S.attachments=[];A.renderAttachments();ST.el.input.value='';C.autoGrow();C.updateSendState();void 0`);
   async function settle(count) { await waitFor(`ST.S.attachments.length===${count}&&!ST.S.attachments.some(a=>a.loading)`); await paint(); }
+  async function closePreview() {
+    const sent = commands.length;
+    // Focus the real common pane before trusted Escape. Its documented close
+    // target is the work-panel launcher, not the former attachment modal.
+    await read(`window.fixturePreviewPlayer=document.querySelector('#rightPane .fp-media-player');document.getElementById('rightPaneClose').focus();void 0`);
+    await key('ESC');
+    return commands.length === sent && await read(`document.getElementById('rightPane').hidden&&document.getElementById('modal').hidden&&document.activeElement.id==='btnWorkPanel'&&(!fixturePreviewPlayer||(!fixturePreviewPlayer.isConnected&&!fixturePreviewPlayer.hasAttribute('src')&&fixturePreviewPlayer.paused))`);
+  }
   async function geometry(name) {
     const result = await read(`(()=>{
       const q=s=>document.querySelector(s),r=e=>{const b=e.getBoundingClientRect();return {x:b.x,y:b.y,w:b.width,h:b.height,right:b.right,bottom:b.bottom}};
@@ -65,10 +73,10 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
   check('drop generates an actual WebM video thumbnail while retaining raw-file reference', await read(`ST.S.attachments[0].kind!=='image'&&!!ST.S.attachments[0].path&&ST.el.attachTray.querySelector('.att-thumb img').naturalWidth>0&&A.attachmentImages().length===0`));
   await shot('single-video');
   await click('.att-preview');
-  await waitFor(`!document.querySelector('#modal').hidden&&document.querySelector('.attachment-preview-dialog video').readyState>=2`);
-  check('trusted click opens local WebM video playback with real duration', await read(`(()=>{const v=document.querySelector('.attachment-preview-dialog video');return v.controls&&v.videoWidth===320&&v.duration>0})()`));
-  await shot('video-preview'); await key('ESC');
-  check('Escape closes video preview and returns keyboard focus', await read(`document.querySelector('#modal').hidden&&document.activeElement.matches('.att-preview')`));
+  await waitFor(`!document.getElementById('rightPane').hidden&&document.querySelector('#rightPane video.fp-media-player')?.readyState>=2`);
+  check('trusted click opens local WebM in unified Files with real duration and no autoplay', await read(`(()=>{const v=document.querySelector('#rightPane video.fp-media-player');return document.getElementById('rightPane').dataset.surface==='files'&&document.getElementById('modal').hidden&&v.controls&&v.videoWidth===320&&v.duration>0&&!v.autoplay&&v.paused&&v.src.startsWith('blob:')})()`));
+  await shot('video-preview');
+  check('Escape closes video preview, releases its decoder and restores work-panel focus without sending', await closePreview());
 
   await reset();
   check('Chromium records a real H.264 MP4 for this offline fixture', await read(`fixtureMedia.mp4Supported===true&&!!fixtureMedia.videoMp4&&fixtureMedia.videoMp4.size>0`));
@@ -83,9 +91,10 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
     && mp4Thumbnail.max - mp4Thumbnail.min > 80, { mp4Facts, mp4Thumbnail, bytes: mp4Bytes.length, head: mp4Bytes.subarray(4, 8).toString('ascii') });
   await shot('single-mp4');
   await click('.att-preview');
-  await waitFor(`!document.querySelector('#modal').hidden&&document.querySelector('.attachment-preview-dialog video').readyState>=2`);
-  check('trusted click decodes the real MP4 with its actual dimensions and duration', await read(`(()=>{const v=document.querySelector('.attachment-preview-dialog video');return v.controls&&v.videoWidth===320&&v.duration>0})()`));
-  await shot('mp4-preview'); await key('ESC');
+  await waitFor(`!document.getElementById('rightPane').hidden&&document.querySelector('#rightPane video.fp-media-player')?.readyState>=2`);
+  check('trusted click decodes the real MP4 in unified Files with its actual dimensions and duration', await read(`(()=>{const v=document.querySelector('#rightPane video.fp-media-player');return document.getElementById('modal').hidden&&v.controls&&v.videoWidth===320&&v.duration>0&&!v.autoplay&&v.paused&&v.src.startsWith('blob:')})()`));
+  await shot('mp4-preview');
+  check('closing the MP4 releases its decoder and preserves the unsent attachment', await closePreview() && await read(`ST.S.attachments.length===1&&ST.S.attachments[0].file===fixtureMedia.videoMp4`));
   await click('#btnSend'); await waitFor('ST.S.attachments.length===0');
   check('real MP4 sends only its original file reference', commands.at(-1).message.includes('操作演示.mp4') && commands.at(-1).message.includes('本机路径：') && !commands.at(-1).images);
 
@@ -102,9 +111,10 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
   check('MP4 with an unsupported codec falls back to the video placeholder but stays a sendable reference', !unsupported.thumbnail && unsupported.placeholder && !unsupported.image && unsupported.path && unsupported.sendable, unsupported);
   await shot('mp4-codec-fallback');
   await click('[data-file-type="video"] .att-preview');
-  await waitFor(`!!document.querySelector('.attachment-preview-error:not([hidden])')`);
-  check('unsupported MP4 preview reports local decoding failure only', await read(`document.querySelector('.attachment-preview-error').textContent.includes('无法预览')`));
-  await shot('mp4-preview-failure'); await key('ESC');
+  await waitFor(`!!document.querySelector('#rightPane .fp-media-status[data-state="error"]')`);
+  check('unsupported MP4 preview reports local decoding failure only', await read(`document.querySelector('#rightPane .fp-media-status[data-state="error"]').textContent.includes('当前环境无法播放此媒体')&&ST.S.attachments[0].file===fixtureMedia.videoMp4Unsupported&&!ST.el.btnSend.disabled`));
+  await shot('mp4-preview-failure');
+  check('unsupported MP4 failure closes and releases the native player without sending', await closePreview());
   await click('#btnSend'); await waitFor('ST.S.attachments.length===0');
   check('unsupported MP4 still sends its preserved file reference without image content', commands.at(-1).message.includes('不支持的编码.mp4') && commands.at(-1).message.includes('本机路径：') && !commands.at(-1).images);
 
@@ -114,17 +124,26 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
   await settle(1);
   const audioRow = await read(`(()=>{const row=ST.el.attachTray.querySelector('.att-file');return {type:row.dataset.fileType,icon:row.querySelector('.att-ic [data-icon]')?.dataset.icon,infoTag:row.querySelector('.att-info').tagName,title:row.querySelector('.att-info').title,hasPreview:!!row.querySelector('.att-preview')}})()`);
   facts.push({ audio: audioRow });
-  check('audio row uses the audio icon/label and has no media preview', audioRow.type === 'audio' && audioRow.icon === 'audio' && audioRow.infoTag === 'DIV' && audioRow.title.includes('音频') && audioRow.title.includes(audio.name) && !audioRow.hasPreview, audioRow);
+  check('audio row keeps its compact icon/label and opens unified preview without a media thumbnail', audioRow.type === 'audio' && audioRow.icon === 'audio' && audioRow.infoTag === 'BUTTON' && audioRow.title.includes('音频') && audioRow.title.includes(audio.name) && !audioRow.hasPreview, audioRow);
   check('audio upload preserves exact source bytes as a file reference', fs.readFileSync(await read('ST.S.attachments[0].path')).equals(audio.body));
   await shot('single-audio');
+  // audioFiles intentionally supplies ID3 plus padding, not MPEG audio frames.
+  // Assert decoding failure honestly; extension/MIME alone never proves playback.
+  await click('[data-file-type="audio"] .att-info');
+  await waitFor(`!!document.querySelector('#rightPane .fp-media-status[data-state="error"]')`);
+  check('the ID3-only MP3 fixture reports real decoding failure, never invented playback success', await read(`document.querySelector('#rightPane .fp-media-status[data-state="error"]').textContent.includes('当前环境无法播放此媒体')&&!!ST.S.attachments[0].path&&!ST.el.btnSend.disabled&&A.attachmentImages().length===0`));
+  await shot('audio-invalid-fixture');
+  check('failed audio preview releases its player and restores work-panel focus without sending', await closePreview());
   await click('#btnSend'); await waitFor('ST.S.attachments.length===0');
   check('audio sends as a file reference without image content', commands.at(-1).message.includes(audio.name) && commands.at(-1).message.includes('本机路径：') && !commands.at(-1).images);
 
   await reset();
   await read(`(()=>{const data=new DataTransfer();data.items.add(fixtureMedia.image);document.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));})()`);
   await settle(1); await click('.att-preview');
-  check('paste image can be previewed and keeps original ImageContent', await read(`!!document.querySelector('.attachment-preview-dialog img')&&A.attachmentImages().length===1`));
-  await shot('image-preview'); await key('ESC');
+  await waitFor(`document.querySelector('#rightPane .fp-image-content')?.naturalWidth>0`);
+  check('paste image decodes in unified Files and keeps its exact original ImageContent', await read(`document.getElementById('modal').hidden&&document.querySelector('#rightPane .fp-image-content').naturalWidth===320&&ST.S.attachments[0].file===fixtureMedia.image&&A.attachmentImages().length===1`));
+  await shot('image-preview');
+  check('Escape closes the pasted image preview and restores work-panel focus without sending', await closePreview());
 
   await reset();
   await read(`A.handleFiles([fixtureMedia.video,...fixtureDocs,fixtureMedia.image])`); await settle(8);
@@ -146,8 +165,12 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
     check(theme + ': hovered file reveals its own remove action', await read(`getComputedStyle(ST.el.attachTray.querySelector('.att-file .att-x')).opacity==='1'`));
     await shot(theme + '-file-hover');
     await click('.att-file .att-info');
-    check(theme + ': file hover summary does not open a duplicate popover', await read(`document.querySelector('#composerPopover').hidden===true`));
+    await waitFor(`!!document.querySelector('#rightPane .fp-pdf-page:not([aria-busy]) .fp-pdf-canvas')&&document.querySelector('#rightPane .fp-pdf-text-layer')?.textContent.includes('Attachment fixture')`);
+    check(theme + ': file click opens the real PDF in shared Files without duplicating the hover summary popover', await read(`document.querySelector('#composerPopover').hidden===true&&!document.getElementById('rightPane').hidden&&document.getElementById('rightPane').dataset.surface==='files'&&document.getElementById('modal').hidden`));
+    check(theme + ': closing a document preview preserves focus and does not send', await closePreview());
     await read(`ST.el.attachTray.querySelectorAll('.att-preview')[1].focus()`); await key('Tab'); await key('Tab');
+    check(theme + ': keyboard reaches the new file-preview entry in media-first DOM order', await read(`document.activeElement.matches('.att-file .att-info')&&document.activeElement.matches(':focus-visible')&&document.activeElement.getAttribute('aria-controls')==='rightPane'`));
+    await key('Tab');
     check(theme + ': keyboard reveals focus-visible remove control', await read(`document.activeElement.matches('.att-file .att-x')&&document.activeElement.matches(':focus-visible')&&getComputedStyle(document.activeElement).opacity==='1'`));
     await shot(theme + '-keyboard-focus');
     await key('Space');
@@ -197,9 +220,10 @@ module.exports = async function ({ read, waitFor, paint, shot, click, key, check
     && statusLayout.meta.left <= statusLayout.info.left + 1, statusLayout);
   await shot('parse-error-and-video-fallback');
   await click('[data-file-type="video"] .att-preview');
-  await waitFor(`!!document.querySelector('.attachment-preview-error:not([hidden])')`);
-  check('unsupported preview reports only local decoding failure', await read(`document.querySelector('.attachment-preview-error').textContent.includes('无法预览')`));
-  await shot('video-preview-failure'); await key('ESC');
+  await waitFor(`!!document.querySelector('#rightPane .fp-media-status[data-state="error"]')`);
+  check('unsupported preview reports only local decoding failure', await read(`document.querySelector('#rightPane .fp-media-status[data-state="error"]').textContent.includes('当前环境无法播放此媒体')&&ST.S.attachments.every(a=>a.path)&&!ST.el.btnSend.disabled`));
+  await shot('video-preview-failure');
+  check('the invalid video releases its player and preserves the failed-extraction draft on close', await closePreview() && await read(`ST.S.attachments.length===2&&!!ST.S.attachments[0].error`));
   await click('#btnSend'); await waitFor('ST.S.attachments.length===0');
   check('failed extraction and video still send accurate preserved references, not fake image content', commands.at(-1).message.includes('preview-failure.mp4') && commands.at(-1).message.includes('本机路径：') && !commands.at(-1).images);
 

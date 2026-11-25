@@ -179,12 +179,35 @@ async function main() {
       assert.equal(w.attachmentImages()[0].mimeType, 'image/png');
       assert.ok(tray.querySelector('.att-preview'));
     });
-    await check('preview modal handles Escape and returns focus without sending', () => {
-      const button = tray.querySelector('.att-preview'); button.focus(); button.click();
-      assert.equal(d.getElementById('modal').hidden, false);
-      assert.ok(d.querySelector('.attachment-preview-dialog img'));
-      d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-      assert.equal(d.getElementById('modal').hidden, true); assert.equal(d.activeElement, button);
+    await check('shared Files preview handles Escape, releases its controller and restores work-panel focus without sending', async () => {
+      const button = tray.querySelector('.att-preview'), original = w.S.attachments[0].file;
+      const draft = [...w.S.attachments], text = input.value;
+      let opened, disposed = false, requests = 0;
+      const fetch = w.fetch;
+      w.fetch = async () => { requests++; throw new Error('An attachment preview cannot read paths or send a prompt'); };
+      button.focus();
+      const pane = w.initRightPane(); w.configureSecondaryPane(pane);
+      // Use the real common surface and Files ownership with a controller spy:
+      // plugin decoding is covered by its dedicated suites, not jsdom eval.
+      w.openFilesPanel({
+        transport: { list: async () => ({ ok: true, workspace: { id: 'fixture', generation: '1' }, entries: [] }) },
+        previewMount(host, request) {
+          opened = request; host.textContent = request.name;
+          return { ready: Promise.resolve(), getState: () => ({}), dispose() { disposed = true; host.replaceChildren(); } };
+        },
+      });
+      try {
+        button.click(); await tick();
+        assert.equal(pane.isOpen(), true); assert.equal(pane.surface(), 'files');
+        assert.equal(d.getElementById('modal').hidden, true);
+        assert.equal(opened.source, 'attachment'); assert.equal(opened.file, original);
+        assert.equal(opened.path, undefined);
+        const close = d.getElementById('rightPaneClose'); close.focus();
+        close.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        assert.equal(pane.isOpen(), false); assert.equal(disposed, true);
+        assert.equal(d.activeElement, d.getElementById('btnWorkPanel') || button);
+        assert.equal(requests, 0); assert.deepEqual(w.S.attachments, draft); assert.equal(input.value, text);
+      } finally { pane.close(); w.fetch = fetch; }
     });
     await check('untrusted file names and parse messages stay inert', () => {
       w.S.attachments = [{ id: 'inert', name: '<img src=x onerror=alert(1)>.pdf', size: 4, kind: 'binary', path: 'C:/temp/safe.pdf', error: '<b>解析失败</b>' }];
@@ -333,11 +356,19 @@ async function main() {
       assert.ok(w.buildMessage('').includes('C:/temp/vector.svg')); assert.ok(!w.buildMessage('').includes('已作为图像内容提供'));
     });
     await check('local preview refuses unowned remote URLs or raw local paths', () => {
-      for (const previewUrl of ['https://example.invalid/leak.png', 'file:///private/video.mp4', 'javascript:alert(1)']) {
-        w.S.attachments = [{ id: 'unowned', name: 'private.mp4', kind: 'binary', previewUrl, path: 'C:/temp/private.mp4' }];
-        w.renderAttachments(); tray.querySelector('.att-preview')?.click();
-        assert.equal(d.querySelector('.attachment-preview-dialog video'), null);
-      }
+      const fetch = w.fetch, urls = created.length; let requests = 0;
+      w.fetch = async () => { requests++; throw new Error('Unowned URLs must not be read'); };
+      try {
+        for (const previewUrl of ['https://example.invalid/leak.png', 'file:///private/video.mp4', 'javascript:alert(1)']) {
+          w.S.attachments = [{ id: 'unowned', name: 'private.mp4', kind: 'binary', previewUrl, path: 'C:/temp/private.mp4' }];
+          w.renderAttachments(); const button = tray.querySelector('.att-preview');
+          assert.equal(button.disabled, true); button.click();
+          assert.equal(d.getElementById('rightPane').hidden, true);
+          assert.equal(d.querySelector('.fp-media-player'), null);
+          assert.equal(d.getElementById('modal').hidden, true);
+        }
+        assert.equal(requests, 0); assert.equal(created.length, urls);
+      } finally { w.fetch = fetch; }
     });
   } finally { dom.window.close(); }
 

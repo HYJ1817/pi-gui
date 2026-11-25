@@ -857,6 +857,15 @@ function changeRow(f, inSession, reopenSerial = 0, listRestore = null) {
 
   const acts = document.createElement('span');
   acts.className = 'chg-acts';
+  if (!f.isDir) {
+    const conversationId = gitConversationScope();
+    const preview = tinyBtn('查看文件', async () => {
+      const { openFileReference } = await import('./files-panel.js');
+      if (gitConversationScope() !== conversationId) return;
+      openFileReference({ path: f.path, name: f.path.split(/[\\/]/).pop(), conversationId });
+    });
+    preview.classList.add('chg-view-file'); acts.append(preview);
+  }
   if (canOpenFile()) acts.append(tinyBtn('打开', () => openFile(f)));
   acts.append(tinyBtn(f.untracked ? '删除' : '撤销', () => restoreFile(f), 'danger'));
 

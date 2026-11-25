@@ -7,6 +7,13 @@ projects.json
 build/
 dist-app/
 
+# 从已安装、锁定的 npm 包离线生成，不公开提交第三方构建代码。
+# npm ci 的 postinstall 与 build:exe 均生成；许可未决状态不会因此消失。
+/public/vendor/file-preview/
+
+# 上游调研媒体仅作本机参考，公开再分发权未确认；提交来源与摘要，不提交图片。
+/docs/unified-file-viewer-evidence/reference/
+
 # 安装程序 / 便携版。上百 MB，不要进仓库 ——
 # 要分发就走 GitHub Release 的附件，别用 git 传二进制。
 dist-installer/

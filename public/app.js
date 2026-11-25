@@ -187,12 +187,13 @@ configureFeedbackContext(() => {
 onRuntimeChange(refreshFeedbackContext);
 const conversationScopeActive = () => Boolean(gitConversationScope());
 const focusRuntimeConversation = conversationId => {
+  /* Bind scope before synchronous draw: historical attachment handlers capture
+   * this exact owner, not the previously focused conversation. The backend
+   * still resolves the workspace root from the registry, never this UI. */
+  setGitConversationScope(conversationId);
   runtimeConversation.show(conversationId);
   showRuntimeConversation();
   runtimeSecondary.focus(conversationId);
-  /* P32.4-C：Changes 跟随 focused 会话。只设 conversationId ——
-   * 工作区根由后端从 registry 记录解析，前端不传路径。 */
-  setGitConversationScope(conversationId);
   void refreshGitNow();
 };
 setRuntimeFocusHandler(conversationId => {

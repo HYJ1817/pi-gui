@@ -1632,6 +1632,9 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   background:var(--ui-user-surface);border:1px solid var(--control-border);border-radius:7px;padding:4px 7px;
 }
 .msg-att-chip img{width:18px;height:18px;object-fit:cover;border-radius:4px;display:block}
+.msg-att-chip[role="button"]{cursor:pointer}
+.msg-att-chip[role="button"]:hover{border-color:var(--ds-border-strong);background:var(--ds-bg-hover)}
+.msg-att-chip[role="button"]:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
 
 /* 上游错误块 —— 之前这里是一片空白，用户完全看不出发生了什么 */
 .msg-err{

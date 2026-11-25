@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
+const textSource = root => [...root.querySelectorAll('.fp-text-source')].map(row => row.textContent).join('\n');
 
 let checks = 0;
 const ok = (name, value) => {
@@ -1941,13 +1942,13 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
 
     const fileRow = [...host.querySelectorAll('.files-entry')].find((row) => row.dataset.filePath === 'src/app.js');
     fileRow.click();
-    await until(() => host.querySelector('.files-preview-body')?.textContent.includes('hello'));
+    await until(() => textSource(host) === 'hello\n');
     ok('a text preview uses the workspace identity and renders as text', () => {
       assert.equal(docs.length, 1);
       assert.equal(docs[0].filePath, 'src/app.js');
       assert.equal(docs[0].ws.id, 'w1');
       assert.equal(docs[0].generation, '1');
-      assert.equal(host.querySelector('.files-preview-body').textContent, 'hello\n');
+      assert.equal(textSource(host), 'hello\n');
     });
 
     binary = true;
@@ -1958,7 +1959,7 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
     });
     binary = false;
 
-    const hidden = [...host.querySelectorAll('.rp-head-actions button')].find((button) => button.textContent === '隐藏项');
+    const hidden = host.querySelector('.files-hidden-toggle');
     hidden.click();
     await until(() => lists.some((entry) => entry.dir === '' && entry.options.hidden === true));
     ok('the hidden-file toggle is an explicit opt-in', () => {
@@ -1991,53 +1992,59 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
     const previews = [];
     const document = () => new Promise(resolve => previews.push(resolve));
     mountFilesPanel(host, view, { transport: { list, document } });
-    const tree = host.querySelector('.files-tree');
-    const refresh = [...host.querySelectorAll('.rp-head-actions button')].find((button) => button.textContent === '刷新');
+    // Scope changes replace the tree owner and its controls. Always inspect the
+    // live DOM; assertions against a detached previous tree would be false green.
+    const tree = () => host.querySelector('.files-tree');
+    const refresh = () => host.querySelector('.files-refresh');
     const finishRoot = async (result) => {
       pending.shift()(result);
       await tick();
     };
 
     ok('files announces the initial root load', () => {
-      assert.match(tree.textContent, /正在读取项目文件/);
+      assert.match(tree().textContent, /正在读取项目文件/);
     });
     await finishRoot({ ok: false, error: '无法读取项目文件。' });
     ok('initial root read failure is neither no-project nor empty, and refresh stays available', () => {
-      assert.doesNotMatch(tree.textContent, /还没有打开项目|这个目录没有可显示的文件/);
+      assert.doesNotMatch(tree().textContent, /还没有打开项目|这个目录没有可显示的文件/);
       assert.match(host.textContent, /无法读取项目文件/);
-      assert.equal(refresh.disabled, false);
+      assert.equal(refresh().disabled, false);
     });
-    refresh.click();
+    refresh().click();
     await finishRoot({ ok: true, workspace, entries: [] });
     ok('successful empty root displays the empty-directory message', () => {
-      assert.match(tree.textContent, /这个目录没有可显示的文件/);
+      assert.match(tree().textContent, /这个目录没有可显示的文件/);
       assert.equal(host.querySelector('.files-message').hidden, true);
     });
-    refresh.click();
+    refresh().click();
     await finishRoot({ ok: true, workspace, entries: [file] });
     ok('refresh can recover the file tree after an error', () => {
-      assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
+      assert.equal(tree().querySelector('.files-entry').dataset.filePath, file.path);
     });
 
     const preview = host.querySelector('.files-preview');
-    tree.querySelector('.files-entry').click();
+    tree().querySelector('.files-entry').click();
+    await until(() => previews.length === 1, 'first preview request');
     previews.shift()({ ok: true, workspace, file: { path: file.path, content: 'old preview' } });
-    await until(() => preview.querySelector('pre')?.textContent === 'old preview');
-    refresh.click();
+    await until(() => preview.querySelector('.fp-markdown-body')?.textContent.trim() === 'old preview');
+    refresh().click();
     await finishRoot({ ok: false, error: '刷新失败' });
     ok('same-workspace root refresh failure clears old preview and explains how to recover', () => {
       assert.doesNotMatch(preview.textContent, /old preview|选择文件预览/);
       assert.match(preview.textContent, /刷新文件列表/);
     });
-    refresh.click();
+    refresh().click();
     await finishRoot({ ok: true, workspace, entries: [file] });
-    ok('successful refresh clears the unavailable preview message', () => {
-      assert.match(preview.textContent, /选择文件预览/);
-      assert.doesNotMatch(preview.textContent, /刷新文件列表/);
+    ok('successful refresh clears the tree error but cannot restore a tab without object-identity evidence', () => {
+      assert.match(preview.textContent, /文件不存在、已变化或暂不可用/);
+      assert.doesNotMatch(preview.textContent, /刷新文件列表|old preview/);
+      assert.equal(tree().querySelector('.files-entry').dataset.filePath, file.path);
+      assert.equal(refresh().disabled, false);
     });
-    tree.querySelector('.files-entry').click();
+    tree().querySelector('.files-entry').click();
+    await until(() => previews.length === 1, 'deferred Classic preview request');
     const finishClassicPreview = previews.shift();
-    refresh.click();
+    refresh().click();
     const finishOld = pending.shift();
     host.ownerDocument.dispatchEvent(new dom.window.CustomEvent('pi-gui:workspace-generation'));
     await finishRoot({ ok: true, workspace, entries: [file] });
@@ -2045,11 +2052,11 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
     finishOld({ ok: false, error: '旧工作区读取失败' });
     await tick();
     ok('a late root failure cannot replace the new workspace tree', () => {
-      assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
+      assert.equal(tree().querySelector('.files-entry').dataset.filePath, file.path);
       assert.doesNotMatch(host.textContent, /旧工作区读取失败/);
       assert.doesNotMatch(preview.textContent, /late Classic preview/);
     });
-    refresh.click();
+    refresh().click();
     const finishClassic = pending.shift();
     const { setGitConversationScope } = await import('../public/api.js');
     setGitConversationScope('fixture-runtime');
@@ -2060,10 +2067,11 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
     finishClassic({ ok: false, error: 'Classic 读取失败' });
     await tick();
     ok('a late Classic failure cannot replace Runtime files', () => {
-      assert.equal(tree.querySelector('.files-entry').dataset.filePath, file.path);
+      assert.equal(tree().querySelector('.files-entry').dataset.filePath, file.path);
       assert.doesNotMatch(host.textContent, /Classic 读取失败/);
     });
-    tree.querySelector('.files-entry').click();
+    tree().querySelector('.files-entry').click();
+    await until(() => previews.length === 1, 'deferred Runtime preview request');
     const finishRuntimePreview = previews.shift();
     setGitConversationScope(null);
     await finishRoot({ ok: true, workspace, entries: [file] });
@@ -2073,10 +2081,10 @@ function multiBackend({ workspace = { id: 'w1', generation: '1' }, maxPerWorkspa
       assert.match(preview.textContent, /选择文件预览/);
       assert.doesNotMatch(preview.textContent, /late Runtime preview/);
     });
-    refresh.click();
+    refresh().click();
     await finishRoot({ ok: true, noProject: true, workspace: null, entries: [] });
     ok('only explicit noProject displays the closed-project message', () => {
-      assert.match(tree.textContent, /还没有打开项目/);
+      assert.match(tree().textContent, /还没有打开项目/);
       assert.equal(host.querySelector('.files-message').hidden, true);
     });
     view.dispose();

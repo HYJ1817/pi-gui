@@ -162,14 +162,16 @@
   display: flex;
   align-items: center;
   min-inline-size: 0;
-  padding: 2px 8px 0;
-  border-top: 1px solid var(--ds-border-subtle);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  gap: var(--ui-space-1);
+  border-bottom: 1px solid var(--ds-border-default);
 }
 .files-surface .files-tabs[hidden] { display: none; }
 .files-surface .files-tablist {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--ui-space-1);
+  flex: 1 1 auto;
   min-inline-size: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -186,9 +188,11 @@
   color: var(--ds-text-muted);
 }
 .files-surface .files-tab:hover { background: var(--ds-bg-hover); color: var(--ds-text-secondary); }
+/* Selection uses the existing navigation surface, never a focus-like frame. */
 .files-surface .files-tab[aria-selected="true"] {
   background: var(--ds-bg-active);
   color: var(--ds-text-primary);
+  font-weight: var(--font-weight-semibold);
 }
 .files-surface .files-tab-select {
   display: inline-flex;
@@ -202,8 +206,9 @@
   background: none;
   color: inherit;
   font: inherit;
-  font-size: 11.5px;
-  line-height: 1.4;
+  font-size: var(--text-sm-plus);
+  line-height: var(--leading-normal);
+  min-block-size: var(--ds-control-size);
   cursor: pointer;
 }
 .files-surface .files-tab-select:focus-visible,
@@ -219,141 +224,20 @@
 }
 .files-surface .files-tab-position {
   flex: none;
-  color: var(--ds-text-faint);
-  font-family: var(--ui-font-mono);
-  font-size: 10px;
+  color: var(--ds-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 .files-surface .files-entry .file-kind-icon {
   inline-size: 13px;
   block-size: 13px;
 }
-.files-surface .files-tab-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  inline-size: 20px;
-  block-size: 20px;
-  margin-inline-end: 3px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--ds-text-faint);
-  cursor: pointer;
-}
-.files-surface .files-tab-close:hover { background: var(--ds-bg-active); color: var(--ds-text-primary); }
-.files-surface .files-tab-close svg { inline-size: 11px; block-size: 11px; }
+.files-surface .files-tab-close { flex: none; }
 
-/* ---------- Files 面板：源码 / 行定位 ---------- */
-
-.files-surface .files-preview {
-  display: flex;
-  flex-direction: column;
-  min-block-size: 0;
-}
-.files-surface .files-preview-head { flex: none; }
-.files-surface .files-preview-code {
-  position: relative;
-  display: flex;
-  flex: 1 1 auto;
-  min-block-size: 0;
-  min-inline-size: 0;
-  border-top: 1px solid var(--ds-border-subtle);
-}
-.files-surface .files-preview-gutter {
-  /* DOM 里正文在前（选择器/读屏先拿内容），视觉上栏号在左。 */
-  order: -1;
-  flex: none;
-  margin: 0;
-  padding: 10px 9px 10px 0;
-  border-right: 1px solid var(--ds-border-subtle);
-  color: var(--ds-text-faint);
-  font-family: var(--ui-font-mono);
-  font-size: 12px;
-  line-height: 1.55;
-  text-align: right;
-  white-space: pre;
-  overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.files-surface .files-preview-scroll {
-  position: relative;
-  flex: 1 1 auto;
-  min-inline-size: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-.files-surface .files-preview-scroll .files-preview-body {
-  display: block;
-  inline-size: max-content;
-  min-inline-size: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 10px 12px;
-  border: 0;
-  background: none;
-  color: var(--ds-text-secondary);
-  font-family: var(--ui-font-mono);
-  font-size: 12px;
-  line-height: 1.55;
-  white-space: pre;
-  tab-size: 4;
-}
-.files-surface .files-preview-body .tok-com { color: var(--code-tok-com); font-style: italic; }
-.files-surface .files-preview-body .tok-str { color: var(--code-tok-str); }
-.files-surface .files-preview-body .tok-num { color: var(--code-tok-num); }
-.files-surface .files-preview-body .tok-kw { color: var(--code-tok-kw); }
-.files-surface .files-preview-body .tok-fn { color: var(--code-tok-fn); }
-.files-surface .files-preview-body .tok-type { color: var(--code-tok-type); }
-.files-surface .files-preview-body .tok-lit { color: var(--code-tok-lit); }
-.files-surface .files-preview-body .tok-tag { color: var(--code-tok-tag); }
-.files-surface .files-preview-body .tok-attr { color: var(--code-tok-attr); }
-.files-surface .files-preview-body .tok-meta { color: var(--code-tok-meta); }
-.files-surface .files-line-highlight {
-  position: absolute;
-  inset-inline: 0;
-  z-index: 0;
-  border-radius: 3px;
-  background: color-mix(in oklab, var(--ds-text-primary) 7%, transparent);
-  box-shadow: inset 2px 0 0 color-mix(in oklab, var(--ds-text-primary) 34%, transparent);
-  pointer-events: none;
-}
-.files-surface .files-line-highlight[hidden] { display: none; }
-.files-surface .files-preview-image {
-  display: flex;
-  flex: 1 1 auto;
-  align-items: flex-start;
-  justify-content: center;
-  min-block-size: 0;
-  padding: 14px 0;
-  overflow: auto;
-}
-.files-surface .files-preview-image img {
-  max-inline-size: 100%;
-  block-size: auto;
-  border-radius: var(--radius-sm);
-  background: var(--ds-bg-inset);
-}
-.files-surface .files-preview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 10px 0 0;
-}
-.files-surface .files-preview-empty {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 26px 2px;
-  color: var(--ds-text-faint);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-/* 窄面板里标签条与预览头都只保留必要信息。 */
+/* Format-specific styles live with file-preview, never in the panel shell. */
+.files-surface .files-tabs-menu { flex: none; }
+.files-surface .files-tab.is-dragging { opacity: .5; }
+.files-surface .files-tab.is-drop-target { box-shadow: inset 2px 0 var(--ds-focus); }
 @container (max-width: 360px) {
-  .files-surface .files-tab { max-inline-size: 150px; }
-  .files-surface .files-preview-gutter { display: none; }
+  .files-surface .files-tab { max-inline-size: 170px; }
 }

@@ -2224,14 +2224,14 @@ staticCheck();
     const m = chgRows()[4].querySelector('.chg-meta').textContent;
     return m === '未跟踪 · 目录' || m;
   });
-  check('网页行只提供可执行的撤销按钮', () => {
+  check('网页行保留撤销并独立提供只读查看文件，而不伪造系统打开', () => {
     const r = chgRows()[0];
     const b = [...r.querySelectorAll('.chg-acts .btn')].map((x) => x.textContent);
-    return b.join(',') === '撤销' || b.join(',');
+    return b.join(',') === '查看文件,撤销' || b.join(',');
   });
-  check('未跟踪文件的按钮写「删除」而非「撤销」', () => {
+  check('未跟踪文件独立查看仍保留「删除」而非「撤销」', () => {
     const b = [...chgRows()[2].querySelectorAll('.chg-acts .btn')].map((x) => x.textContent);
-    return b.join(',') === '删除' || b.join(',');
+    return b.join(',') === '查看文件,删除' || b.join(',');
   });
 
   /* --- diff 就地展开 --- */

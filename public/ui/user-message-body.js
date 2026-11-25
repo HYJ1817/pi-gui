@@ -3,8 +3,12 @@ import { createIcon } from './icons.js';
 import { md } from '../markdown.js';
 import { icon, iconFor } from '../util.js';
 import { FILE_BLOCK_RE } from '../attachments.js';
+import { openFileReference } from '../files-panel.js';
+import { gitConversationScope } from '../api.js';
+import { imagePreviewData, imagePreviewFile, attachmentPreviewOwner, attachmentPreviewIsCurrent } from '../attachment-preview.js';
 
 let disclosureId = 0;
+let imageSequence = 0;
 const decodeFileAttribute = value => value.replace(/&(quot|amp|lt|gt|#39);/g, (_, entity) => ({ quot: '"', amp: '&', lt: '<', gt: '>', '#39': "'" })[entity]);
 /* New messages mark escaped attributes with `esc="1"` on the opening tag.
  * Older builds wrote literal names, which may themselves contain `&amp;`;
@@ -57,13 +61,40 @@ function fileBlockCard(name, meta, content) {
 function attChips(imgs) {
   const row = document.createElement('div');
   row.className = 'msg-att-chips';
+  const owner = attachmentPreviewOwner();
   for (const c of imgs) {
+    const data = imagePreviewData(c.data, c.mimeType);
+    const attachmentId = `message-image-${++imageSequence}`;
     const chip = document.createElement('div');
     chip.className = 'msg-att-chip';
-    chip.title = '图片附件';
+    chip.id = attachmentId;
+    chip.title = data ? '图片附件' : '图片附件无法预览';
     const img = document.createElement('img');
-    img.src = `data:${c.mimeType || 'image/png'};base64,${c.data}`;
-    img.alt = '图片附件';
+    img.alt = chip.title;
+    if (data) {
+      img.src = data.url;
+      chip.setAttribute('role', 'button'); chip.tabIndex = 0;
+      chip.setAttribute('aria-label', `查看图片附件 ${c.name || ''}`.trim());
+      chip.setAttribute('aria-controls', 'rightPane');
+      let fileRef = null;
+      const name = String(c.name || '图片').slice(0, 480);
+      const open = () => {
+        const conversation = chip.closest('[data-conversation-id]');
+        // Runtime may retain a message node when returning to its exact owner;
+        // unlike a removed draft it can reopen there, never in another session.
+        if (!chip.isConnected || !attachmentPreviewIsCurrent(owner, { sameLifetime: false })
+          || (conversation && conversation.dataset.conversationId !== (gitConversationScope() || ''))) return;
+        // Two images named alike have independent identities. Do not keep a
+        // second strong decoded-byte cache after the viewer's tab is closed.
+        const file = fileRef?.deref() || imagePreviewFile(data, name);
+        if (file) {
+          fileRef = new WeakRef(file);
+          openFileReference({ source: 'attachment', file, name: file.name, bytes: file.size, size: file.size, attachmentId, triggerId: chip.id });
+        }
+      };
+      chip.addEventListener('click', open);
+      chip.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
+    }
     chip.appendChild(img);
     row.appendChild(chip);
   }
