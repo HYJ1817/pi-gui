@@ -375,8 +375,11 @@ function indexPayload(workspaceId, generation, label) {
       activeObservers === observersBefore &&
       document.querySelectorAll('#rightPane .workbench-split').length === 1);
     for (const tab of secondaryTabs()) closeSecondarySurface(tab.id);
-    ok('explicit tab closes release split observers and leave the right pane empty', () =>
-      activeObservers === observerBaseline && document.querySelectorAll('#rightPane .rp-surface').length === 0);
+    ok('explicit tab closes release split observers and leave only the tabless Launcher', () =>
+      activeObservers === observerBaseline
+      && document.querySelectorAll('#rightPane .workbench-split').length === 0
+      && document.querySelectorAll('#rightPane .rp-surface:not(.work-tools-surface)').length === 0
+      && document.querySelectorAll('#rightPane .rp-body > .work-tools-surface').length === 1);
     ok('repeated open/close leaves no split scope, resize or drag listeners behind', () =>
       ['document:pi-gui:git-scope', 'document:pi-gui:workspace-generation', 'window:resize',
         'document:mousemove', 'document:mouseup'].every(key =>
