@@ -129,6 +129,70 @@ async function unitTests() {
   rejectDocx('javascript-scheme hyperlink rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'hyperlink', 'javascript:alert(1)', 'External']]); }, 'external-link');
   rejectDocx('file-scheme hyperlink rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'hyperlink', 'file:///C:/Windows/win.ini', 'External']]); }, 'external-link');
   rejectDocx('unknown external relationship type rejected', parts => { parts['word/_rels/document.xml.rels'] = rels([['rId1', 'styles', 'styles.xml'], ['rId2', 'numbering', 'numbering.xml'], ['rId3', 'image', 'media/image1.png'], ['rId9', 'customXml', 'https://invalid.example/x', 'External']]); }, 'active-content');
+  /* Scanner bypass variants: a hand-rolled `[^>]*` regex truncates at a `>`
+   * inside a quoted attribute value and misreads namespace-prefixed attributes.
+   * Every one of these is well-formed XML whose true semantics must reach the
+   * security decision unchanged. */
+  rejectDocx('attribute-value gt cannot hide external image type', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="${NS_OFFICE}/image" Target="https://invalid.example/a.png" TargetMode="External" Ext="a&gt;b"/></Relationships>`;
+  }, 'active-content');
+  rejectDocx('attribute-value gt cannot hide the TargetMode', parts => {
+    // Type/Target/TargetMode all follow the first quoted `>`. A scanner that
+    // truncates there would see no Type at all and (without fail-closed
+    // scanning) silently pass the external relationship through.
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Ext="a&gt;b" Type="${NS_OFFICE}/image" Target="https://invalid.example/x.png" TargetMode="External" Note="tail"/></Relationships>`;
+  }, 'active-content');
+  acceptDocx('attribute-value gt before hyperlink type does not corrupt scanning', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Ext="a&gt;b" Type="${NS_OFFICE}/hyperlink" Target="https://example.com/" TargetMode="External"/></Relationships>`;
+  });
+  acceptDocx('single-quoted hyperlink attributes accepted', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id='rId9' Type='${NS_OFFICE}/hyperlink' Target='https://example.com/' TargetMode='External'/></Relationships>`;
+  });
+  rejectDocx('single-quoted external image type rejected', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id='rId9' Type='${NS_OFFICE}/image' Target='https://invalid.example/x.png' TargetMode='External'/></Relationships>`;
+  }, 'active-content');
+  rejectDocx('namespaced prefix with dash/dot is still a relationship', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><ns-x.y:Relationship xmlns:ns-x.y="urn:fake" Id="rId9" Type="${NS_OFFICE}/image" Target="https://invalid.example/x.png" TargetMode="External"/></Relationships>`;
+  }, 'active-content');
+  acceptDocx('namespaced prefix with dash/dot on benign hyperlink accepted', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><ns-x.y:Relationship xmlns:ns-x.y="urn:fake" Id="rId9" Type="${NS_OFFICE}/hyperlink" Target="https://example.com/" TargetMode="External"/></Relationships>`;
+  });
+  rejectDocx('prefixed x:Type does not shadow the real Type attribute', parts => {
+    // A scanner that strips prefixes would read x:Type as Type and see the
+    // benign hyperlink type first; the real parser sees both, and the genuine
+    // Type says image. Ordering puts x:Type ahead to catch prefix stripping.
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship xmlns:x="urn:fake" x:Type="${NS_OFFICE}/hyperlink" Id="rId9" Type="${NS_OFFICE}/image" Target="https://invalid.example/x.png" TargetMode="External"/></Relationships>`;
+  }, 'active-content');
+  rejectDocx('hyperlink type URI is case-sensitive: capitalized variant rejected', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/Hyperlink" Target="https://example.com/" TargetMode="External"/></Relationships>`;
+  }, 'active-content');
+  rejectDocx('resemblant namespace tail is not the hyperlink type', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="http://invalid.example/hyperlink" Target="https://example.com/" TargetMode="External"/></Relationships>`;
+  }, 'active-content');
+  rejectDocx('hyperlink type missing trailing path segment rejected', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink2" Target="https://example.com/" TargetMode="External"/></Relationships>`;
+  }, 'active-content');
+  rejectDocx('unknown TargetMode value rejected', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="${NS_OFFICE}/hyperlink" Target="https://example.com/" TargetMode="Externalish"/></Relationships>`;
+  }, 'external-link');
+  rejectDocx('relationship hidden after quoted gt in unrelated element still scanned', parts => {
+    // A tag-end walk that truncates at the first `>` inside the unrelated
+    // element's quoted attribute would mis-index and could skip the real
+    // Relationship element following it.
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Unrelated Note="a&gt;b&lt;c"/><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="${NS_OFFICE}/image" Target="https://invalid.example/x.png" TargetMode="External"/></Relationships>`;
+  }, 'active-content');
+  rejectDocx('unterminated relationship tag fails closed', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId9" Type="${NS_OFFICE}/image" Target="https://invalid.example/x.png" TargetMode="External"`;
+  });
+  acceptDocx('non-self-closing relationship element scanned once and accepted', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="${NS_OFFICE}/hyperlink" Target="https://example.com/" TargetMode="External"></Relationship></Relationships>`;
+  });
+  rejectDocx('hyperlink target with leading whitespace before scheme rejected', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="${NS_OFFICE}/hyperlink" Target=" javascript:alert(1)" TargetMode="External"/></Relationships>`;
+  }, 'external-link');
+  rejectDocx('protocol-relative hyperlink target rejected', parts => {
+    parts['word/_rels/document.xml.rels'] = XML + `<Relationships xmlns="${NS_REL}"><Relationship Id="rId1" Type="${NS_OFFICE}/styles" Target="styles.xml"/><Relationship Id="rId2" Type="${NS_OFFICE}/numbering" Target="numbering.xml"/><Relationship Id="rId3" Type="${NS_OFFICE}/image" Target="media/image1.png"/><Relationship Id="rId9" Type="${NS_OFFICE}/hyperlink" Target="//invalid.example/x" TargetMode="External"/></Relationships>`;
+  }, 'external-link');
   rejectDocx('macro payload rejected', parts => { parts['word/vbaProject.bin'] = Buffer.from('fixture'); }, 'active-content');
   rejectDocx('embedded package rejected', parts => { parts['word/embeddings/object.dat'] = Buffer.from('fixture'); }, 'active-content');
   rejectDocx('raw SVG media rejected before DOM', parts => { parts['word/media/active.svg'] = '<svg onload="alert(1)"/>'; }, 'image-limit');
