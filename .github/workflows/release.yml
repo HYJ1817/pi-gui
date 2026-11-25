@@ -84,6 +84,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      # Explicit, checksum-pinned maintenance download; normal postinstall,
+      # tests and local builds stay offline. Complete archives accompany the
+      # binaries inside vendor/legal, not as a fourth Release asset.
+      - name: Prepare pinned Liberation source distribution cache
+        run: node scripts/preview-font-source.mjs --download
+
       - name: Install dependencies
         run: npm ci
 

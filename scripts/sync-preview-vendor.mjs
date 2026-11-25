@@ -7,6 +7,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build, version as esbuildVersion } from 'esbuild';
+import { FONT_REVIEW, fontSourceMaterials, verifyPdfFontIdentity } from './preview-font-source.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIRECT = ['fflate', 'dompurify', 'katex', 'mammoth', 'exceljs', 'papaparse', 'pdfjs-dist', '@xmldom/xmldom'];
@@ -172,7 +173,7 @@ export function checkedPath(root, relative) {
   return target;
 }
 
-export async function materializePreviewVendor({ root = ROOT } = {}) {
+export async function materializePreviewVendor({ root = ROOT, fontSourceCache } = {}) {
   root = fs.realpathSync(root);
   const modules = path.join(root, 'node_modules');
   // node_modules itself may be a workspace-managed junction. Its canonical
@@ -358,18 +359,16 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
         records: fontNotices(fs.readFileSync(modulePath(copied[name].slice('node_modules/'.length)))) };
     }
     if (digest(Buffer.from(OFL_TEXT)) !== OFL_SOURCE.archivedSha256) throw new Error('official OFL license byte integrity mismatch');
-    // Removing PPTX does not clear unrelated, unresolved redistribution checks.
-    // These unchanged PDF fonts carry their own terms, not the package's Apache
-    // license. The source-distribution obligations were verified byte-exactly in
-    // docs/pdf-font-license-verification.md: Liberation Sans 1.07.4 (GPLv2 with
-    // the Liberation font exceptions), whose corresponding source IS the TTF
-    // itself — distributed unmodified, so mere aggregation plus the shipped
-    // LICENSE_LIBERATION satisfy the license. The review outcome is pinned into
-    // the manifest as evidence rather than emitted as an open warning; any byte
-    // change of these files must re-run that verification (the font digests are
-    // locked in versions.json and by the vendor test suite).
+    // Metadata/version strings alone cannot establish corresponding source.
+    // Fail closed on any PDF.js/font drift before replacing the published tree.
     const liberationFonts = Object.keys(copied).filter(name => /^pdf\/standard_fonts\/LiberationSans-[^/]+\.ttf$/.test(name)).sort(compare);
-    const legalReviewRequired = [];
+    const pdfPackage = packages.get(`pdfjs-dist@${direct['pdfjs-dist']}`);
+    const identityNames = [...Object.keys(FONT_REVIEW.assets), ...Object.keys(copied).filter(name => /^pdf\/standard_fonts\/.*\.ttf$/i.test(name))];
+    verifyPdfFontIdentity({ version: direct['pdfjs-dist'], integrity: pdfPackage.instances[0].integrity,
+      files: Object.fromEntries(identityNames.map(name => [name, fs.readFileSync(checkedPath(stage, name))])) });
+    const fontSource = fontSourceMaterials({ cacheDir: fontSourceCache });
+    const legalReviewRequired = [FONT_REVIEW.blocker];
+    if (Object.values(fontSource.review.archives).some(archive => !archive.included)) legalReviewRequired.push('Liberation source archives missing from distribution; prepare the pinned third-party cache explicitly.');
     const legalName = /^(?:licen[sc]e|copying|notice|copyright|ofl|authors)(?:$|[._-])/i;
     function legalFiles(directory, prefix = '') {
       const found = [];
@@ -406,10 +405,12 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
         item.fontLicense = { license: 'OFL-1.1', ...OFL_SOURCE, notices, fontCount: Object.keys(fontCopyrights).length };
       }
       if (item.name === 'pdfjs-dist' && liberationFonts.length) {
-        item.fontLicenseReview = { files: liberationFonts,
-          licenseFile: `${folder}/standard_fonts/LICENSE_LIBERATION`, sourceDistributionVerified: true,
-          verification: 'docs/pdf-font-license-verification.md',
-          license: 'GPLv2 with Liberation font exceptions', fontVersion: '1.07.4' };
+        for (const [file, bytes] of Object.entries(fontSource.files)) {
+          write(file, bytes);
+          item.legalFiles.push(file);
+        }
+        item.fontLicenseReview = { ...fontSource.review, files: liberationFonts,
+          licenseFile: `${folder}/standard_fonts/LICENSE_LIBERATION` };
       }
       if (item.name === 'pako') {
         const sources = Object.keys(inputs).filter(name => inputs[name].package === id && /\/lib\/zlib\/[^/]+\.js$/.test(name)).sort(compare);
@@ -456,6 +457,7 @@ export async function materializePreviewVendor({ root = ROOT } = {}) {
     const ordered = object => Object.fromEntries(Object.entries(object).sort(([a], [b]) => compare(a, b)));
     const manifest = { schemaVersion: 2, generator: { esbuild: esbuildVersion,
       materializerSha256: digest(fs.readFileSync(fileURLToPath(import.meta.url))),
+      fontReviewSha256: digest(fs.readFileSync(new URL('./preview-font-source.mjs', import.meta.url))),
       packageLockSha256: digest(fs.readFileSync(path.join(root, 'package-lock.json'))) },
       versions: { direct, overrides, resolvedOverrides,
         packages: Object.fromEntries([...packages].sort(([a], [b]) => compare(a, b)).map(([id, { roots, ...item }]) => [id, item])) },
@@ -487,5 +489,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const summary = await materializePreviewVendor();
   console.log(`preview vendor: ${JSON.stringify(summary)}`);
   if (summary.legalReviewRequired.length) console.warn('Preview license review remains REQUIRED; generation is not redistribution approval: ' + summary.legalReviewRequired.join(', '));
-  else if (summary.packages) console.warn('Preview font license verification recorded (docs/pdf-font-license-verification.md): Liberation Sans 1.07.4 GPLv2+font-exception, unmodified bytes, compliance obligations apply');
 }

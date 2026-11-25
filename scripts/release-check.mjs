@@ -40,6 +40,7 @@ import { collectReleaseArtifacts, RELEASE_DIR } from './collect-release-artifact
 import { checkReleaseDir } from './check-release-artifacts.mjs';
 import { verifyChecksums } from './make-checksums.mjs';
 import { createGitHubApi, verifyCheckoutCiProof } from './verify-ci-proof.mjs';
+import { assertFontReviewComplete, verifyFontDistribution } from './preview-font-source.mjs';
 
 const argv = process.argv.slice(2);
 let skipTests = argv.includes('--skip-tests');
@@ -91,6 +92,11 @@ console.log(
     (withInstaller ? '（含安装程序真装验证）' : '')
 );
 console.log('  ══════════════════════════════════════════════════');
+
+// Never let --skip-tests/--skip-build or an old generated boolean bypass L1.
+// Stop before CI/network/build/installation while correspondence is unresolved.
+try { assertFontReviewComplete(); }
+catch (error) { fail('字体对应源码未核实，发布阻断', [error.message]); }
 
 /* ---------- 1. 版本一致性 ---------- */
 {
@@ -170,6 +176,11 @@ if (skipBuild) {
 } else {
   runStep('构建 Electron 应用', 'npm run build:app -- --rebuild');
 }
+
+// Required even with --skip-build: the App must carry the original source
+// archives and legal material, not merely a source-cache path on the builder.
+try { verifyFontDistribution(path.join(APP_DIR, 'resources/app/public/vendor/file-preview')); }
+catch (error) { fail('随包字体源码材料未通过', [error.message]); }
 
 /* ---------- 4. 打包产物验证（打包链路真的能跑） ----------
  *

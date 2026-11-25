@@ -35,6 +35,7 @@ import { expectedAssetNames } from './check-release-artifacts.mjs';
 import { compareReleaseAssets, readLocalAssets, fetchRemoteAssets, makeGhRunner } from './verify-uploaded-release.mjs';
 import { readReleaseSummary, RELEASE_SUMMARY_REL } from './release-summary.mjs';
 import { createGitHubApi, verifyCheckoutCiProof } from './verify-ci-proof.mjs';
+import { assertFontReviewComplete } from './preview-font-source.mjs';
 
 /** 追加到 Release 页面末尾的固定说明。
  *
@@ -306,6 +307,9 @@ async function main() {
   console.log('');
   let r;
   try {
+    // The write-permission job has no dependency/cache checkout. Its immutable
+    // source-review gate must still reject unresolved L1 before touching GitHub.
+    assertFontReviewComplete();
     const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8', windowsHide: true }).trim().toLowerCase();
     const api = createGitHubApi({ token: process.env.GITHUB_TOKEN });
     const verifyProof = async (stage) => {
