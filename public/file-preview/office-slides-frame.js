@@ -62,8 +62,14 @@
         marginTop: (paragraph.spacing?.before || 0) + 'px',
         marginBottom: (paragraph.spacing?.after || 0) + 'px',
       });
-      // A hanging indent pulls the first line (the marker) back towards the margin.
-      if (paragraph.indent) p.style.textIndent = paragraph.indent + 'px';
+      /* Hanging-indent geometry (OOXML): the paragraph body sits at marL; the
+       * first line — the marker — starts at marL+indent. A negative text-indent
+       * would pull the whole first line back, including the text that must stay
+       * at marL (visible in real decks as text jammed against the marker). The
+       * correct rendering keeps padding at marL and lets the marker occupy the
+       * hang width itself (see below). Positive indents stay a plain
+       * first-line indent; markerless paragraphs keep the hanging negative. */
+      if (paragraph.indent > 0) p.style.textIndent = paragraph.indent + 'px';
       if (paragraph.marker) {
         const marker = node('span'); marker.className = 'pptx-marker';
         let label;
@@ -80,11 +86,20 @@
           for (const deeper of [...counters.keys()]) if (deeper > level) counters.delete(deeper);
           label = numeral(next, paragraph.marker.format || 'arabicPeriod');
         } else label = paragraph.marker.char || '•';
-        marker.textContent = label + ' ';
         const base = paragraph.runs[0] || {};
         Object.assign(marker.style, { fontSize: (base.size || 18) + 'px', color: base.color || 'inherit', fontWeight: base.bold ? '700' : '400' });
+        /* The marker occupies the hang width itself: an inline-block shifted
+         * left by exactly the hang width (capped at marL so it never leaves the
+         * paragraph box), so first-line text still begins at the marL edge and
+         * wrap lines align with it — the visual structure real office software
+         * produces. Without a hanging indent the marker stays plain inline. */
+        const hang = paragraph.indent < 0 ? Math.min(-paragraph.indent, paragraph.marL || 0) : 0;
+        if (hang > 0) {
+          marker.textContent = label;
+          Object.assign(marker.style, { display: 'inline-block', width: hang + 'px', marginLeft: -hang + 'px', verticalAlign: 'top' });
+        } else marker.textContent = label + ' ';
         p.append(marker);
-      }
+      } else if (paragraph.indent < 0) p.style.textIndent = paragraph.indent + 'px';
       for (const run of paragraph.runs) {
         const span = node('span'); span.textContent = run.text;
         Object.assign(span.style, { fontSize: run.size + 'px', color: run.color, fontWeight: run.bold ? '700' : '400', fontStyle: run.italic ? 'italic' : 'normal', textDecoration: run.underline ? 'underline' : 'none' });

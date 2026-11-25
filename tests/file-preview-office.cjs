@@ -465,6 +465,11 @@ async function electronTests() {
   const attack = pptxParts();
   attack['ppt/slides/slide1.xml'] = attack['ppt/slides/slide1.xml'].replace('中文文本与真实布局', escape('<img src="https://invalid.example/leak" onerror="parent.hacked=1">'));
   fixtures['markup.pptx'] = zipParts(attack);
+  /* F6 real-software decks: written by LibreOffice Impress, kept as repo
+   * fixtures. Desktop screenshots prove real rendering, not just model data. */
+  for (const real of ['libreoffice-bullets-mixed.pptx', 'libreoffice-autonum-multilevel.pptx']) {
+    fixtures[real] = fs.readFileSync(path.join(__dirname, 'fixtures/office-real', real));
+  }
   for (const [name, bytes] of Object.entries(fixtures)) fs.writeFileSync(path.join(world, name), bytes);
   const html = `<!doctype html><html data-theme="light"><head><meta charset="utf-8"><link rel="stylesheet" href="/tokens.css"><link rel="stylesheet" href="/ui/primitives.css"><link rel="stylesheet" href="/file-preview/office.css"><style>*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:var(--font-sans);background:var(--ds-bg-primary);color:var(--ds-text-primary)}body{display:flex;flex-direction:column}#toolbar{padding:12px;border-bottom:1px solid var(--ds-border-default)}#host{flex:1;min-height:0}</style></head><body><div id="toolbar"></div><main id="host"></main><script type="module">
     import {mount} from '/file-preview/office.js';
@@ -545,6 +550,32 @@ async function electronTests() {
     check('oversized zoom remains scrollable from the left edge', await childRead('document.querySelector("#slides").getBoundingClientRect().left>=0'));
     await read('document.querySelector("input.office-page-input").value="1.5";document.querySelector("input.office-page-input").dispatchEvent(new Event("change"))'); await paint();
     check('fractional page input is clamped to an integer without renderer failure', await read('currentView.getState().page===0 && !lastError') && await childRead('document.body.textContent.includes("Slide 1")'));
+    /* F6 real-software rendering proof: the LibreOffice-written decks render
+     * in the real Electron sandbox at both widths and themes — bullet glyphs,
+     * auto-numbered continuation, nested indentation and CJK text as actual
+     * pixels, with screenshots as externally reviewable evidence. */
+    for (const [real, expect] of [
+      ['libreoffice-bullets-mixed.pptx', { text: '第一层项目符号', slide2: '甲' }],
+      ['libreoffice-autonum-multilevel.pptx', { text: '自动编号与多级列表', markers: ['1.', '2.', '3.', '•', '◦', '▪'] }],
+    ]) {
+      for (const [width, height] of [[1320, 820], [700, 600]]) for (const theme of ['light', 'dark']) {
+        win.setContentSize(width, height); await read(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+        const result = await read(`showFixture(${JSON.stringify(real)})`);
+        const shortName = real.replace('libreoffice-', '').replace('.pptx', '');
+        check(`real-software deck ${shortName} renders in sandbox ${width} ${theme}`, !result.error && await childRead(`document.body.textContent.includes(${JSON.stringify(expect.text)})`));
+        await shot(`real-${shortName}-${width}-${theme}`);
+      }
+      if (expect.markers) {
+        const rendered = await childRead('[...document.querySelectorAll(".pptx-marker")].map(el=>el.textContent.trim())');
+        for (const marker of expect.markers) check(`real-software deck renders marker ${marker}`, rendered.includes(marker));
+        const arabic = rendered.filter(text => /^\d+\.$/.test(text));
+        check('real-software auto-numbering continues 1. 2. 3. in rendered output', JSON.stringify(arabic) === JSON.stringify(['1.', '2.', '3.']));
+      }
+      if (expect.slide2) {
+        await read('document.querySelector("button[aria-label=下一页]")?.click()'); await paint();
+        check('real-software mixed deck second slide keeps its numbering items as text', await childRead(`document.body.textContent.includes(${JSON.stringify(expect.slide2)})`));
+      }
+    }
     const attackResult = await read('showFixture("markup.pptx")');
     check('PPTX markup fixture rendered without parent execution', !attackResult.error && await read('window.hacked===undefined'));
     check('PPTX text cannot create active elements', await childRead('!document.querySelector("#slides script,#slides iframe,#slides [onerror],#slides [onload]")'));
