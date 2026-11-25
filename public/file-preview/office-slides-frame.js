@@ -33,8 +33,12 @@
     // not in the first letter (every format starts lowercase).
     const upperCase = format.includes('Uc');
     if (format.startsWith('alpha')) {
-      const letter = String.fromCharCode(97 + ((value - 1) % 26));
-      const text = value > 26 ? letter + letter : letter;
+      // Spreadsheet-style bijective base-26: 1→a … 26→z, 27→aa, 28→ab.
+      // ECMA-376 does not define beyond-z behavior; this is the convention
+      // office software users actually expect, and it never emits control
+      // characters for out-of-range values (0 or negative clamps to a).
+      let rest = Math.max(1, Math.trunc(value)), text = '';
+      while (rest > 0) { const digit = (rest - 1) % 26; text = String.fromCharCode(97 + digit) + text; rest = Math.floor((rest - 1) / 26); }
       const cased = upperCase ? text.toUpperCase() : text;
       return format.endsWith('ParenR') ? cased + ')' : cased + '.';
     }

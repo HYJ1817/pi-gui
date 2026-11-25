@@ -67,7 +67,7 @@ function font(properties, ctx, inherited = {}) {
   if (attr(properties, 'u')) result.underline = !['none', '0', 'false'].includes(attr(properties, 'u'));
   const fill = paint(properties, ctx); if (fill) result.color = fill;
   const typeface = attr(child(properties, A, 'latin'), 'typeface');
-  if (/^[\p{L}\p{N} ,_.-]{1,80}$/u.test(typeface)) result.family = typeface;
+  if (/^[\p{L}\p{N} _.+-]{1,80}$/u.test(typeface)) result.family = typeface;
   return result;
 }
 function text(shape, inherited, ctx) {
@@ -98,11 +98,19 @@ function text(shape, inherited, ctx) {
       if (bulletChar) marker = { kind: 'bullet', char: [...bulletChar].slice(0, 4).join('') };
       else if (autoNum) {
         const format = attr(autoNum, 'type') || 'arabicPeriod';
-        const start = Math.max(0, Math.min(32767, number(attr(autoNum, 'startAt'), 1, 32767)));
         /* Whether startAt was written matters: an explicit startAt — even 1 —
          * is exactly how PowerPoint encodes "restart numbering here", while a
-         * paragraph without one continues the level's counter. */
-        marker = { kind: 'number', format, start, explicitStart: attr(autoNum, 'startAt') !== '' };
+         * paragraph without one continues the level's counter. A malformed
+         * startAt must not kill the whole document: the numbering degrades to
+         * a continuation at 1, which is how office software treats corrupt
+         * list markup — degrading the marker, not the deck. */
+        let start = 1, explicitStart = false;
+        const rawStart = attr(autoNum, 'startAt');
+        if (rawStart !== '') {
+          const parsed = Number(rawStart);
+          if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 32767) { start = parsed; explicitStart = true; }
+        }
+        marker = { kind: 'number', format, start, explicitStart };
       } else if (child(pPr, A, 'buFont')) marker = { kind: 'bullet', char: '•' };
     }
     const spacing = {
@@ -122,7 +130,7 @@ function text(shape, inherited, ctx) {
       /* The East-Asian face participates whenever the document named one,
        * whether or not a Latin face exists — Latin handles the ASCII runs,
        * the EA face is the script-correct fallback for CJK text. */
-      if (/^[\p{L}\p{N} ,_.-]{1,80}$/u.test(east)) runFont.eastFamily = east;
+      if (/^[\p{L}\p{N} _.+-]{1,80}$/u.test(east)) runFont.eastFamily = east;
       runs.push({ text: value, ...runFont });
     }
     return { alignment, runs, level, marL, indent, marker, spacing };

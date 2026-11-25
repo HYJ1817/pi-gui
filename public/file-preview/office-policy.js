@@ -53,10 +53,27 @@ export function columnNumber(label) {
  * tail merely resembles "hyperlink" is not this type. */
 export const OOXML_HYPERLINK_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
 
+/* Decode numeric character references inside a single attribute VALUE — the
+ * only place XML entity substitution applies. This must never run on whole
+ * document text: decoding `<`/`"`/`>` ahead of scanning would inject lexical
+ * structure that the real XML parser never sees (entity replacement happens
+ * inside values and its output never re-enters the lexical layer), letting a
+ * document author forge tag boundaries or shadow attributes. Malformed points
+ * fail closed exactly like the whole-document guard did. */
+function decodeValueEntities(value) {
+  return value.replace(/&#(x[\da-f]+|\d+);/gi, (_all, digits) => {
+    const point = digits[0].toLowerCase() === 'x' ? parseInt(digits.slice(1), 16) : Number(digits);
+    if (!point || point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) throw officeError('entity');
+    return String.fromCodePoint(point);
+  });
+}
+
 /* Walk one XML tag forward from `<`, honoring quoted attribute values, and
  * return the position of its closing `>`. Shared by every scanner here:
  * regexes like `[^>]*` lie about tags whose attribute values legally contain
- * `>`. Throws closed on an unterminated tag. */
+ * `>`. Throws closed on an unterminated tag. Operates on RAW source text —
+ * a `>` inside a quoted value is inert data either way, but the raw text is
+ * what the real parser's lexical layer sees. */
 function tagEnd(xml, open) {
   let quote = null;
   for (let cursor = open + 1; cursor < xml.length; cursor++) {
@@ -68,28 +85,41 @@ function tagEnd(xml, open) {
   throw officeError('format');
 }
 
-/* Read attributes from a tag body with XML lexical rules. Namespace-prefixed
- * attributes are never reported as their unprefixed local name (x:Type is not
- * Type). Input is already entity-decoded by the caller, so values are exactly
- * what the real XML parser will see. */
+/* Read attributes from a tag body with XML lexical rules, on RAW source text.
+ * Namespace-prefixed attributes are never reported as their unprefixed local
+ * name (x:Type is not Type). Values are entity-decoded individually — that
+ * is exactly what the real XML parser reports — without letting decoded
+ * characters reach the lexical layer. First occurrence wins; duplicate
+ * attributes are a well-formedness error the validating parser rejects, so
+ * the scan only needs a deterministic reading. */
 function tagAttributes(body) {
   const attributes = {};
   const attrPattern = /([A-Za-z][\w.-]*(?::[A-Za-z][\w.-]*)?)\s*=\s*("([^"]*)"|'([^']*)')/g;
   for (const attr of body.matchAll(attrPattern)) {
     if (attr[1].includes(':')) continue;
-    if (!(attr[1] in attributes)) attributes[attr[1]] = attr[3] ?? attr[4] ?? '';
+    if (!(attr[1] in attributes)) attributes[attr[1]] = decodeValueEntities(attr[3] ?? attr[4] ?? '');
   }
   return attributes;
 }
 
-/* Quote-aware scanner for `<…Relationship …>` elements in a .rels part. A
- * hand-rolled regex (`[^>]*`) truncates at a `>` inside a quoted attribute
- * value and misreads namespace-prefixed attributes; this scanner walks the
- * tag character by character, honoring quote state, then reads attributes
- * with XML lexical rules (prefixes may contain `-` and `.`). Malformed tags
- * fail closed. */
-export function scanRelationshipElements(xml) {
+/* Quote-aware scanner for `<…Relationship …>` elements in a .rels part,
+ * operating on RAW XML source text. A hand-rolled regex (`[^>]*`) truncates
+ * at a `>` inside a quoted attribute value and misreads namespace-prefixed
+ * attributes; this scanner walks the tag character by character, honoring
+ * quote state, then reads attributes with XML lexical rules (prefixes may
+ * contain `-` and `.`). Malformed tags fail closed. Attribute values are
+ * entity-decoded per-value by tagAttributes, so the returned records carry
+ * exactly the strings the real parser reports — while no decoded character
+ * ever reaches the lexical scan. */
+/* Quote-, comment-, CDATA- and PI-aware scanner for elements of one local
+ * name in RAW XML source text. Comments, CDATA sections and processing
+ * instructions are skipped as regions, so a decoy element inside them never
+ * counts; every other tag is walked to its real end, so a `>` inside an
+ * unrelated attribute value cannot hide a later element. Malformed tags fail
+ * closed. Returns the raw attribute maps (entity-decoded per value). */
+export function scanElements(xml, localName) {
   const results = [];
+  const elementPattern = new RegExp('^<((?:[A-Za-z][\\w.-]*:)?' + localName + ')(?=[\\s/>])');
   let index = 0;
   while (index < xml.length) {
     const open = xml.indexOf('<', index);
@@ -97,20 +127,24 @@ export function scanRelationshipElements(xml) {
     if (xml.startsWith('<!--', open)) { const close = xml.indexOf('-->', open); index = close < 0 ? xml.length : close + 3; continue; }
     if (xml.startsWith('<![CDATA[', open)) { const close = xml.indexOf(']]>', open); index = close < 0 ? xml.length : close + 3; continue; }
     if (xml[open + 1] === '?') { const close = xml.indexOf('?>', open); index = close < 0 ? xml.length : close + 2; continue; }
-    const nameMatch = /^<((?:[A-Za-z][\w.-]*:)?Relationship)(?=[\s/>])/.exec(xml.slice(open, open + 128));
+    if (xml[open + 1] === '!') { const end = tagEnd(xml, open); index = end + 1; continue; }
+    const nameMatch = elementPattern.exec(xml.slice(open, open + 128));
     // Walk every tag to its real end so a `>` inside an unrelated attribute
-    // value cannot hide a later Relationship element in the skipped region.
+    // value cannot hide a later element in the skipped region.
     const end = tagEnd(xml, open);
     if (!nameMatch) { index = end + 1; continue; }
-    const attributes = tagAttributes(xml.slice(open + nameMatch[0].length, end));
+    results.push({ attributes: tagAttributes(xml.slice(open + nameMatch[0].length, end)), index: open });
     index = end + 1;
-    results.push({
-      type: attributes.Type || '',
-      target: attributes.Target || '',
-      mode: attributes.TargetMode || 'Internal',
-    });
   }
   return results;
+}
+
+export function scanRelationshipElements(xml) {
+  return scanElements(xml, 'Relationship').map(({ attributes }) => ({
+    type: attributes.Type || '',
+    target: attributes.Target || '',
+    mode: attributes.TargetMode || 'Internal',
+  }));
 }
 
 function dimensionGuard(xml) {
@@ -224,7 +258,11 @@ export function inspectOffice(bytes, kind, { validateXml } = {}) {
        * OOXML hyperlink relationship URI — the scheme of the URI itself is
        * fixed, but the relationship type string is case-sensitive in OPC. */
       if (name.endsWith('.rels')) {
-        for (const rel of scanRelationshipElements(xml)) {
+        // Scan the RAW text, not the entity-decoded copy: decoded quote or
+        // angle-bracket characters inside attribute values would forge lexical
+        // structure the real parser never sees. The scanner decodes entities
+        // per value, so comparisons below already see the parser's strings.
+        for (const rel of scanRelationshipElements(rawXml)) {
           if (rel.mode !== 'Internal') {
             if (rel.mode !== 'External') throw officeError('external-link');
             if (rel.type !== OOXML_HYPERLINK_TYPE) throw officeError('active-content');
@@ -233,7 +271,7 @@ export function inspectOffice(bytes, kind, { validateXml } = {}) {
           }
           // Internal targets cannot be a URI, protocol-relative URL or a
           // Windows path. Relative ../ targets are valid package relationships.
-          if (/[:\\]|^\s*\/|&#/i.test(rel.target)) throw officeError('external-link');
+          if (/[:\\]|^\s*\//i.test(rel.target)) throw officeError('external-link');
         }
       } else if (/TargetMode\s*=\s*["']\s*External\s*["']/i.test(xml)) {
         // A TargetMode outside a .rels part is not a package relationship and
@@ -264,11 +302,13 @@ export function inspectOffice(bytes, kind, { validateXml } = {}) {
         // Refuse abnormal slide surfaces before a renderer can allocate an
         // enormous canvas. Attribute order in XML is not significant, so the
         // scan reads cx/cy independently of their positions, quote style and
-        // whitespace, and tolerates any namespace prefix on the element.
+        // whitespace, and tolerates any namespace prefix on the element. The
+        // scan is comment/PI-aware and runs on raw text for the same reason as
+        // the .rels scan: a decoy element inside a comment is not an element,
+        // and entity-decoded text must never reach the lexical layer.
         let element = null;
-        for (const found of xml.matchAll(/<(?:[A-Za-z][\w.-]*:)?sldSz(?=[\s/>])/g)) {
-          const end = tagEnd(xml, found.index);
-          element = tagAttributes(xml.slice(found.index + found[0].length, end));
+        for (const found of scanElements(rawXml, 'sldSz')) {
+          element = found.attributes;
           break;
         }
         if (!element || !/^\d+$/.test(element.cx || '') || !/^\d+$/.test(element.cy || '')) throw officeError('slide-size');
