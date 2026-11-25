@@ -84,6 +84,15 @@ document.addEventListener('pi-gui:git-scope', () => {
   changesListRestore = null;
   renderChangesBody();
 });
+/* A hard scope boundary does not destroy the retained Changes surface, but the
+ * rows inside it belong to the scope that is being left. Clearing the content
+ * area detaches every stale editor, gutter and row synchronously — including
+ * ones a concurrent re-render had already detached from the live tree, which a
+ * querySelector sweep of the live container can no longer reach. The next
+ * activation repaints the correct scope's diff. */
+function dropScopeContent() {
+  if (panels.changes) panels.changes.replaceChildren();
+}
 document.addEventListener('pi-gui:workspace-generation', () => {
   dropReviewDraftSurface();
   /* 项目 / Worktree 切换：旧作用域的展开状态与滚动位置一并丢弃。 */
@@ -91,6 +100,7 @@ document.addEventListener('pi-gui:workspace-generation', () => {
   diffViewStateEpoch++;
   lastChangesListScroll = 0;
   changesListRestore = null;
+  dropScopeContent();
   clearPaneState('changes');
 });
 document.addEventListener('pi-gui:session-switch', () => {
@@ -102,6 +112,7 @@ document.addEventListener('pi-gui:session-switch', () => {
   lastChangesListScroll = 0;
   changesListRestore = null;
   suspendReviewSurface();
+  dropScopeContent();
   clearPaneState('changes');
 });
 
@@ -218,13 +229,18 @@ function suspendReviewSurface() {
     /* An open editor belongs to the session that is being left. Close it
      * synchronously: the old textarea and its 保存 button must not survive
      * into the window where S.state.sessionId has not caught up yet. */
+    /* Resolve every affected row BEFORE detaching any editor: closest() only
+     * works while the editor is still inside its row, and the row may itself
+     * already be detached from the live panel by a concurrent re-render. */
+    const affected = new Set();
     for (const editor of box.querySelectorAll('.d-review-editor')) {
       const row = editor.closest('.d-row');
+      if (row) affected.add(row);
       editor.remove();
-      if (row) {
-        row.classList.remove('reviewing');
-        row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
-      }
+    }
+    for (const row of affected) {
+      row.classList.remove('reviewing');
+      row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
     }
     for (const node of box.querySelectorAll('.chg-review-n')) node.remove();
     /* The rows still belong to the previous session until the next refresh
@@ -443,6 +459,30 @@ export function mountChangesPanel(card, instance, { extraActions = [] } = {}) {
     captureChangesListScroll();
     rememberChangesPaneState();
     changesListRestore = null;
+    /* Capture the body before releasing it. Retirement detaches this surface
+     * from the document, but any editor a concurrent re-render had already
+     * moved outside the live container would otherwise survive on a detached
+     * row — leaking a writable textarea and an expanded gutter for a session
+     * that is already gone. Clearing here detaches every row synchronously. */
+    const body = panels.changes;
+    if (body) {
+      for (const editor of body.querySelectorAll('.d-review-editor')) {
+        const row = editor.closest('.d-row');
+        editor.remove();
+        if (row) {
+          row.classList.remove('reviewing');
+          row.querySelector('.d-gutter')?.setAttribute('aria-expanded', 'false');
+        }
+      }
+      /* Retired rows must never accept a new comment: a gutter that survives
+       * on a detached reference would otherwise open an editor whose anchor is
+       * written into the incoming session's bucket. */
+      for (const gutter of body.querySelectorAll('.d-gutter')) {
+        gutter.disabled = true;
+        gutter.title = '正在切换会话；刷新后再添加评论';
+      }
+      body.replaceChildren();
+    }
     panels.changes = null;
     restoreAllBtn = null;
     reviewButton = null;

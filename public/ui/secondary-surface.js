@@ -27,6 +27,10 @@ let unsubPane = null;
 let explicitRestore = null;
 let restoring = false;
 let backgroundMount = false;
+/* Tabless empty state: when no tool tab is open the pane body hosts a Launcher
+ * directly, as in T3's RightPanelEmptyState. It is not a tab record — nothing
+ * persists it, closing it is impossible, and the strip stays empty. */
+let emptyState = null;
 /* Layout dependencies outlive the current presentation: a child may move back
  * to its standalone tab or into another split while layouts still borrow it.
  * Every borrow is recorded persistently on the child (borrowOwners) and only
@@ -115,6 +119,49 @@ export function readRestoredSurface() {
 export function writeRestoredSurface(view) { explicitRestore = RESTORABLE.has(view) ? view : null; }
 export function clearRestoredSurface() { explicitRestore = null; }
 
+function retireEmptyState() {
+  if (!emptyState) return;
+  for (const fn of [...emptyState.disposers].reverse()) {
+    try { fn(); } catch { /* A failing Launcher cleanup must not strand the rest. */ }
+  }
+  emptyState.disposers.clear(); emptyState.visibility.clear();
+  emptyState.host?.remove();
+  emptyState = null;
+}
+function mountEmptyState() {
+  if (!emptyState) return;
+  emptyState.host.classList.add('work-tools-surface');
+  const dispose = mountWorkPanelLauncher(emptyState.host, secondaryTools, {
+    open: openSecondaryTool,
+    subscribe(fn) { toolListeners.add(fn); return () => toolListeners.delete(fn); },
+    onEscape: () => pane.close(),
+  });
+  emptyState.disposers.add(dispose);
+}
+/* Present the tabless empty-state Launcher in the pane body. No tab record is
+ * created: the strip stays empty, nothing persists, and the state cannot be
+ * closed into itself. */
+function presentEmptyState({ focus = false } = {}) {
+  if (!pane) return null;
+  retireEmptyState();
+  emptyState = { disposers: new Set(), visibility: new Set(), host: null };
+  emptyState.host = document.createElement('section');
+  emptyState.host.className = 'rp-surface secondary-surface work-tools-surface';
+  emptyState.host.setAttribute('aria-label', '打开工具');
+  pane.root.querySelector('.rp-body').append(emptyState.host);
+  mountEmptyState();
+  selected = null;
+  pane.open('work-tools');
+  syncVisibility();
+  if (focus) focusEmptyState();
+  return emptyState;
+}
+function focusEmptyState() {
+  queueMicrotask(() => {
+    if (emptyState && pane?.isOpen()) emptyState.host.querySelector('button:not([hidden]):not(:disabled)')?.focus();
+  });
+}
+
 function retire(tab, reason = 'close') {
   const instance = tab.instance;
   if (instance && !instance.disposed) {
@@ -136,6 +183,7 @@ function ensureScope(event, force = false) {
   // Retire before changing scope: onDispose state snapshots still belong to
   // their captured old scope, never to the newly focused conversation.
   for (const tab of [...tabs]) retire(tab, 'scope');
+  retireEmptyState();
   tabs = []; selected = null; scope = next; identity = nextIdentity; explicitRestore = null;
   renderTabs();
 }
@@ -148,10 +196,8 @@ export function syncSecondaryScope(event) {
     // Reconstruct descriptors lazily, never replay an old payload or implicitly
     // open a Browser / start a PTY during an identity transition.
     restoreSecondaryTabs({ reveal: false });
-    if (pane.isOpen()) {
-      if (!tabs.length) newSecondaryLauncher({ focus: false });
-      else activateRecord(selected || tabs[0], { lazy: true });
-    }
+    if (pane.isOpen() && tabs.length) activateRecord(selected || tabs[0], { lazy: true });
+    else if (pane.isOpen() && !tabs.length && !emptyState) presentEmptyState({ focus: false });
   }
 }
 
@@ -164,6 +210,8 @@ function updateVisibility(tab) {
   }
 }
 function syncVisibility() {
+  const emptyShown = Boolean(emptyState) && !tabs.length && Boolean(pane?.isOpen());
+  if (emptyState) emptyState.host.hidden = !emptyShown;
   for (const tab of tabs) {
     tab.host.hidden = presentation(tab) !== selected;
     tab.select.setAttribute('aria-selected', String(tab === selected));
@@ -171,6 +219,11 @@ function syncVisibility() {
   }
   // All DOM visibility is committed before notifying any owner.
   for (const tab of tabs) updateVisibility(tab);
+  if (emptyState) {
+    for (const fn of [...emptyState.visibility]) {
+      try { fn(emptyShown); } catch { /* Isolate visibility subscribers. */ }
+    }
+  }
   pane?.refresh?.();
 }
 function renderTabs() {
@@ -248,8 +301,13 @@ export function closeSecondarySurface(id = selected?.id) {
   tabs.splice(index, 1);
   if (wasSelected) selected = tabs[Math.min(index, tabs.length - 1)] || null;
   retire(tab);
-  if (!tabs.length) pane.close();
-  else if (wasSelected) activateRecord(selected, { lazy: !selected.instance });
+  if (!tabs.length) {
+    /* Closing the last tool is not hiding the panel. The pane falls back to a
+     * tabless empty-state Launcher (the T3 empty state): no phantom tab is
+     * created, so closing it cannot recurse, and only the explicit hide
+     * control collapses the whole region. */
+    presentEmptyState({ focus: hadFocus && pane.isOpen() });
+  } else if (wasSelected) activateRecord(selected, { lazy: !selected.instance });
   else syncVisibility();
   if (hadFocus && selected && pane.isOpen()) focusRecord(selected);
   renderTabs(); rememberTabs(); return true;
@@ -376,6 +434,9 @@ function attachInstance(tab, mount) {
     dispose: () => { if (!instance.disposed) closeSecondarySurface(tab.id); },
   };
   tab.instance = instance;
+  /* Any real tool mount retires the empty-state Launcher. Background mounts
+   * replace it silently; foreground mounts hand the visible pane over. */
+  retireEmptyState();
   if (!backgroundMount) {
     selected = tab;
     syncVisibility(); pane.open(tab.view); syncVisibility();
@@ -485,7 +546,12 @@ function mountLauncher(tab, focus) {
 export function showSecondaryPane() {
   ensureScope();
   if (!tabs.length) restoreSecondaryTabs({ reveal: false });
-  if (!tabs.length) return newSecondaryLauncher();
+  if (!tabs.length) {
+    // Reopening a hidden empty panel restores the tabless empty-state Launcher;
+    // reopening one whose tools were closed likewise has no tab to reactivate.
+    if (emptyState) { pane.open('work-tools'); syncVisibility(); return emptyState; }
+    return presentEmptyState();
+  }
   return activateRecord(selected || tabs[0]);
 }
 export function restoreSecondaryTabs({ reveal = false } = {}) {

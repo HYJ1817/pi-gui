@@ -346,28 +346,48 @@ export function mountFilesPanel(host, view, options = {}) {
       toast('这个文件引用属于其它会话，请先切换到那个会话。', 'warn'); return;
     }
     if (request.external && !request.grantId) { toast('缺少访问授权，请重新打开。', 'warn'); return; }
-    if (tree.ready) await tree.ready;
-    if (!scopeCurrent(run) || sequence !== openSequence) return;
-    if (!request.external && !tree.workspace) { toast('当前项目不可用，无法打开文件。', 'warn'); return; }
+    /* Opening a file must not queue behind the workspace tree. The tree is a
+     * navigation aid; blocking the user's open on its (possibly slow) root
+     * listing is exactly the window in which a late history restore used to
+     * overwrite newer user actions. Identity, generation and object tokens are
+     * all verified by metadata() itself, so the open proceeds independently. */
     request = { ...request, cwd: request.external ? '' : request.cwd || identity.cwd, conversationId: wanted, name: String(request.name || request.path.split(/[\\/]/).pop()).slice(0, 512) };
     const result = await metadata(request);
     if (!scopeCurrent(run) || sequence !== openSequence) return;
     if (!result?.ok) { toast('文件不存在、已变化或当前无法读取。', 'warn'); return; }
     openTab(result.request);
   }
+  /* Restoration is a merge, never an overwrite. By the time the deferred file
+   * tree resolves, the user may already have opened, closed or reordered tabs;
+   * a late snapshot must not resurrect closed tabs, drop user-opened ones, or
+   * clobber the order and selection the user just chose. Restored history is
+   * deduplicated by stable request key against what is already open. */
   function restoreTabs(value) {
     if (!value?.tabs?.length) return;
+    if (!sameScope(identity, effectiveIdentity())) return;
+    const existing = new Set(tabs.map((tab) => tab.key));
     const seen = new Set();
-    tabs = value.tabs.filter((request) => {
+    const incoming = value.tabs.filter((request) => {
       const key = requestKey(request);
-      if (seen.has(key) || (request.conversationId || null) !== identity.conversationId
+      if (seen.has(key) || existing.has(key) || (request.conversationId || null) !== identity.conversationId
         || (request.cwd && pathKey(request.cwd) !== pathKey(identity.cwd))) return false;
       seen.add(key); return true;
     }).map((request) => ({ key: requestKey(request), id: `filesTab-${++tabSequence}`, request: boundedRequest(request), state: readingState(request.state), needsValidation: true }));
-    if (!tabs.length) return;
-    const key = tabs.some((tab) => tab.key === value.active) ? value.active : tabs[0].key;
+    if (!incoming.length) return;
+    // Attachments and in-memory archive members are never persisted, so any
+    // user tab already open wins; restored history only fills in the gaps.
+    tabs = tabs.concat(incoming);
+    // The user's current selection outranks the snapshot. Only a panel with no
+    // active tab yet (the pure restore path) adopts the snapshot's active tab.
+    const current = activeTab();
+    const key = current ? current.key
+      : tabs.some((tab) => tab.key === value.active) ? value.active
+      : (existing.size ? null : tabs[0].key);
     restoring = true;
-    void activate(key).finally(() => { restoring = false; });
+    const finish = () => { restoring = false; };
+    if (key) void activate(key).finally(finish);
+    else { renderTabs(); finish(); }
+    persistSoon();
   }
   function installTree(treeState) {
     tree?.dispose(); geometry.sidebar.replaceChildren();
