@@ -170,7 +170,7 @@ test('Ed25519 request signature, device+service binding, skew and atomic replay 
   const valid=signedRequest(unsigned,pair,nonce,timestamp);
   let consumed=0;
   const consumeNonce=(device,seenNonce,at)=>{assert.equal(device,'device_abc12345');assert.equal(seenNonce,nonce);assert.equal(at,Number(timestamp));consumed++;return consumed===1;};
-  const device={deviceId:'device_abc12345',devicePublicKey:pair.publicKeyRaw,grantedScopes:['chat.send'],active:true,replayEpoch:1,expiresAt:new Date(Number(timestamp)+3600000).toISOString()};
+  const device={deviceId:'device_abc12345',devicePublicKey:pair.publicKeyRaw,grantedScopes:['chat.send'],serviceId:SERVICE_ID,active:true,replayEpoch:1,expiresAt:new Date(Number(timestamp)+3600000).toISOString()};
   const verification={request:valid,device,serviceId:SERVICE_ID,serviceFingerprint:SERVICE_FP,nowMs:Number(timestamp),consumeNonce};
   const first=verifyRemoteSignature(verification);
   assert.equal(first.ok,true); assert.equal(first.operation,'chat.send'); assert.equal(first.scope,'chat.send'); assert.equal(first.deviceId,'device_abc12345'); assert.equal(consumed,1);
@@ -366,7 +366,7 @@ test('responses use operation-specific closed projections and never carry raw er
 
 test('device grants and owner recheck gate admission (IDOR / stale owner / substitution)',()=>{
   const pair=testKeyPair();
-  const device={deviceId:'device_abc12345',devicePublicKey:pair.publicKeyRaw,grantedScopes:['sessions.read','chat.send'],active:true,replayEpoch:1,expiresAt:new Date(Date.now()+3600000).toISOString(),grants:{'project_12345678':true}};
+  const device={deviceId:'device_abc12345',devicePublicKey:pair.publicKeyRaw,grantedScopes:['sessions.read','chat.send'],serviceId:SERVICE_ID,active:true,replayEpoch:1,expiresAt:new Date(Date.now()+3600000).toISOString(),grants:{'project_12345678':true}};
   const ts=Date.now().toString();
   const ownedConvo='conversation_12345678';
   const send=(path,ownerRev=3)=>signedRequest(request('chat.send',path,{clientMessageId:id,text:'x'},{ownerRevision:ownerRev}),pair,Buffer.alloc(32,10).toString('base64url'),ts);
@@ -407,7 +407,7 @@ test('approval payload enforces the per-method decision/value matrix',()=>{
 test('approval settlement resolves and consumes a live Pi dialog exactly once',()=>{
   const pair=testKeyPair();
   const reqId='req_pending_01';
-  const device={deviceId:'device_abc12345',devicePublicKey:pair.publicKeyRaw,grantedScopes:['approvals.respond'],active:true,replayEpoch:1,expiresAt:new Date(Date.now()+3600000).toISOString(),grants:{'project_12345678':true}};
+  const device={deviceId:'device_abc12345',devicePublicKey:pair.publicKeyRaw,grantedScopes:['approvals.respond'],serviceId:SERVICE_ID,active:true,replayEpoch:1,expiresAt:new Date(Date.now()+3600000).toISOString(),grants:{'project_12345678':true}};
   const ts=Date.now().toString();
   const respond=(method='confirm',decision='allow',value)=>signedRequest(request('approvals.respond',`/remote/v1/conversations/conversation_12345678/approvals/${reqId}/respond`,{method,decision,...(value===undefined?{}:{value})},{ownerRevision:5}),pair,Buffer.alloc(32,14).toString('base64url'),ts);
   const owner={current:true,revision:5,epoch:9,namespace:'runtime',identity:'rt-1',projectId:'project_12345678',conversationId:'conversation_12345678',dialogId:reqId};
@@ -471,7 +471,7 @@ test('raw transport adapter rejects duplicate names, bad encoding, BOM and reser
 });
 
 test('admission token recheck binds owner, device epoch and project at commit',()=>{
-  const device={deviceId:'device_abc12345',devicePublicKey:'k',active:true,replayEpoch:1,expiresAt:new Date(Date.now()+3600000).toISOString(),grantedScopes:['chat.send'],grants:{project_12345678:true}};
+  const device={deviceId:'device_abc12345',devicePublicKey:'k',serviceId:SERVICE_ID,active:true,replayEpoch:1,expiresAt:new Date(Date.now()+3600000).toISOString(),grantedScopes:['chat.send'],grants:{project_12345678:true}};
   const owner={current:true,revision:3,epoch:9,projectId:'project_12345678',namespace:'runtime',identity:'rt-1',conversationId:'conversation_12345678'};
   const token={deviceId:'device_abc12345',replayEpoch:1,scope:'chat.send',ownerEpoch:9,ownerRevision:3,projectId:'project_12345678',resourceId:'conversation_12345678',requestId:id,issuedAtMs:Date.now()};
   assert.equal(commitAdmission({admissionToken:token,device,resolveOwner:()=>owner}).ok,true);

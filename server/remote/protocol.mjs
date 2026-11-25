@@ -351,7 +351,7 @@ export function verifyRemoteSignature({request,device,serviceId,serviceFingerpri
   // certificate (and with it the derived canonical service id) must invalidate
   // every binding minted under the old pin — otherwise the previously paired
   // device key keeps signing for the NEW service identity without re-pairing.
-  if(typeof device.serviceId==='string'&&device.serviceId!==canonicalId)return {ok:false,code:'service_identity_invalid',wire:'unauthorized'};
+  if(device.serviceId!==canonicalId)return {ok:false,code:'service_identity_invalid',wire:'unauthorized'};
   if(!Number.isSafeInteger(nowMs))return {ok:false,code:'signature_expired',wire:'unauthorized'};
   const timestamp=Number(headers['x-pi-remote-timestamp']);
   if(!Number.isSafeInteger(timestamp)||Math.abs(nowMs-timestamp)>REMOTE_V1.signedRequest.maximumClockSkewSeconds*1000)return {ok:false,code:'signature_expired',wire:'unauthorized'};

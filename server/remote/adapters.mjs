@@ -181,7 +181,12 @@ export class IdempotencyStore {
     const rec = this.records.get(this._key(deviceId, resourceId, ownerEpoch, clientId));
     if (!rec) return null;
     if (rec.payloadSha256 !== payloadSha256) return { conflict: true };
-    if (rec.unknown === true) return { unknown: true };
+    // A pending record inside the live process means a previous mutation hit
+    // an unknown execution state and deliberately kept its reservation (the
+    // in-flight join path can never observe this: the serializer only admits
+    // the retry after the first critical section fully completes). It is
+    // committed-unknown either way — never re-execute (round-7 re-review).
+    if (rec.pending === true || rec.unknown === true) return { unknown: true };
     return rec.outcome;
   }
   /** Reserve the key BEFORE dispatch with a durable pending record. This is
