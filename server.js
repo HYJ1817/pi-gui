@@ -1677,6 +1677,11 @@ const messageEditRoutes = createMessageEditRoutes({
     classicExecutionCapture.reset();
   },
 });
+/* remote/v1 本机管理面只挂载在既有认证回环 router 上。
+ * 必须先初始化依赖再创建 router；listener 成功启动前保持 null。 */
+let remoteInstance = null;
+const remoteAdmin = createRemoteAdmin({ getRemote: () => remoteInstance, log: m => console.log(`  → remote: ${m}`) });
+
 const route = createRouter({
   systemStorage: createSystemStorage({ dataDir: DATA_DIR, piAgentDir: path.dirname(MODELS_JSON), env: process.env,
     executionMode: process.env.PI_GUI_DESKTOP === '1' ? 'electron' : runningInSea ? 'portable-sea' : 'source-web' }),
@@ -1819,11 +1824,6 @@ const updateMaintenance = createAppUpdateMaintenance({
   pause: () => rpc.pauseForMaintenance('app-update', { graceful: true }),
   resume: () => rpc.resumeFromMaintenance(),
 });
-/* remote/v1 本机管理面（contract localAdminControl）：只接在已认证的
- * 127.0.0.1 /api/remote/* 上，远程设备到不了。
- * `remoteInstance` 在监听器成功启动后才赋值；管理面据此回答 enabled:false。 */
-let remoteInstance = null;
-const remoteAdmin = createRemoteAdmin({ getRemote: () => remoteInstance, log: m => console.log(`  → remote: ${m}`) });
 const server = http.createServer((req,res) => {
   if (updateMaintenance.locked() && req.method !== 'GET' && req.method !== 'HEAD') {
     const denied = auth.denyRequest(req);
