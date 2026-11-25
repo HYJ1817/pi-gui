@@ -718,6 +718,7 @@ async function main() {
       r = await call(convs[0].revision);
       assert.equal(r.status, 200, r.body);
       assert.equal(sends, 2, 'post-loss owner roll must dispatch fresh — epoch floor covers surviving records');
+      await remote2.close();
     } finally { await ctx.cleanup(); }
   });
 
