@@ -1,143 +1,189 @@
 # Surface 与统一文件预览：最终整改验收
 
-日期：2026-11-25。此报告记录本轮实际证据，不继承历史验收的通过结论。
+日期：**2026-11-26**。本文以当前代码状态为准；2026-11-25 的报告内容保留在 Git 历史中，
+其中字体许可「已核验定案、阻断解除」的结论**已撤回**。历史状态与当前状态在下文分开记录，
+不把旧基线的 CI、旧运行或旧截图继承为当前证明。
 
-## 身份、范围与当前门槛
+## 一、当前身份、范围与结论
 
 - 分支：`feat/unified-file-viewer`；既有 PR [#112](https://github.com/HYJ1817/pi-gui/pull/112)，不新建 PR。
-- before HEAD：`78ca4dcb9dd3e4293e9dcb0f7507a0a6d51d7d5d`。基线完整 CI run `45551821141` 成功仅证明该 SHA。
-- 证据代码状态：上述 HEAD 之上的本轮待提交工作区；提交后核对产品、测试与构建文件树，不把提交前运行冒称新 SHA 的 CI。交付提交按 `git log -1 --format=%H -- docs/surface-final-acceptance.md` 解析，最终交付消息另记完整 SHA。
-- 风险：**高**。涉及跨会话恢复、资源生命周期、受控文件读取、复杂文档解析及依赖/构建来源。
-- 当前门槛：源码桌面、重建产物桌面、真实大视频与后端故障专项、受影响 canonical 与独立复审均已有最终通过记录；**完整 canonical 依用户选择交由当前 PR CI，CI 未完成前标为待验证，整体代码验收尚未通过**。
-- 用户仅授权提交、推送当前分支并更新 #112；未授权合并、tag 或发布。
+- 本轮基线：`cba8398260a7272eca14a3a57d027dc3634f3ca1`（远端分支当时的 HEAD）。
+  证据代码状态 = 该 SHA **加上本文所在的未提交整改**；最终提交 SHA 见交付消息，本文不自引用。
+- 风险：**高**。涉及跨会话恢复、Surface 生命周期、文件访问绑定、第三方字体许可与发布门槛。
+- 当前结论：
+  - 定向功能/回归、受影响 canonical 检查与**重建后的正式产物桌面验收通过**；
+  - **完整 canonical 交由最终提交的 PR CI，尚未完成 → 代码验收整体仍为待验证**；
+  - **L1 字体许可阻断保留**（对应源码未闭合）；不合并、不打 tag、不发布。
+- 用户仅授权提交、推送当前分支并更新 #112；合并与发布须另行明确授权。
 
-## 实际改动与所有者
+## 二、外部验收 F1–F9（与内部 F1–F6 编号不同）
 
-| 范围 | 本轮行为与边界 |
+| 编号 | 外部验收要求 | 当前证据（本代码状态） | 状态 |
+| --- | --- | --- | --- |
+| F1 | 完整 CI 回归与旧 Surface 合同迁移 | `npm run test:ci` 346 leaves / 5 groups，coverage exact；`npm test` 唯一入口未改写。完整运行交由最终提交的 PR CI | **待验证**（CI 未完成） |
+| F2 | 文件 tab 恢复竞态（R0） | restore-race 37/37；正式产物自然 close-all/reopen 顺序 `openError:null`、`activeFileTab:guide.md` | 通过（本地 + 生产产物） |
+| F3 | 关闭最后一个 Surface 的行为 | surface-tabs 174/174（47 类）；打包 `surface-last-close-launcher` 断言面板仍开、0 个 `.work-surface-tab` | 通过 |
+| F4 | PPTX XML 属性顺序 | office 119/119 + PPTX 50 tests；真实 SVG/DOM 投影断言 | 通过（本地定向） |
+| F5 | Office 超链接兼容 | office 119/119 覆盖；代码未在本轮改动 | 通过（本地定向） |
+| F6 | 自建 PPTX 日常兼容（项目符号/自动编号/多级/真实软件文件） | 真实 LibreOffice 保存的 `libreoffice-bullets-mixed.pptx`、`libreoffice-autonum-multilevel.pptx` 实际渲染并断言标记；第二页真实幻灯片。PowerPoint / WPS 桌面应用未实测 | 通过（有限范围） |
+| F7 | Changes 文件条目身份绑定 | changes-file-identity 9/9；workspace/epoch/session/worktree 替换均不读旧文件 | 通过 |
+| F8 | T3 Code 风格 UI 收尾 | 最新正式产物 11 张真实截图；居中偏差、紧凑工具栏、无底边线、无溢出均有断言 | 通过（视觉） |
+| F9 | 第三方依赖许可（PDF 字体） | 对应源码机制与 fail-closed 门槛成立；**PDF.js 四字体与历史 TTF 的准确对应关系未闭合** | **发布阻断** |
+
+## 三、当前定向测试（实际数字）
+
+环境：Windows 11；Node v24.22.1；Electron 44.4.3 / Chromium 152.0.7977.130。
+桌面使用正常 sandbox/contextIsolation、无 renderer Node globals、无 `--no-sandbox`；
+TEMP fixture、fake Pi、离线网络门控；没有真实模型调用或用户项目写操作。
+
+| 命令/套件 | 实测结果 |
 | --- | --- |
-| `public/ui/secondary-surface.js`、Launcher、app/runtime 入口 | 外层有序工具 tabs、独立空 Launcher、单例复用、切换/关闭/批量关闭/重排、有界描述符恢复；删除永久工具按钮、隐藏 source-button、旧卡片和“更多工具” |
-| `public/right-pane.js`、split、Browser、Terminal、tree 的必要适配 | 公共几何/最大化；聊天保留且 inert；隐藏与显式关闭分开；稳定导航 scope 与瞬时 owner identity 分开；split 借同一业务 host |
-| `public/files-*.js`、预览公共菜单和格式叶子 | Files 内层仍唯一持有文件 tabs/活动文件/阅读状态；树在右侧、左缘分隔条、窄窗 overlay；低频动作进现有 action-menu；隐藏时保存并 dispose 重预览，返回重新验证 |
-| `public/file-link-model.js`、`file-links-ui.js` / CSS | 外部引用可见文本仅文件名加行列范围，完整路径留 tooltip/必要无障碍名称；不提前读取未授权元数据 |
-| `pptx-model.js`、`pptx-shapes.js`、Office 投影 | 自有有界 OOXML 模型绘制实际文本、形状、图片、基础页布局；保留分页/缩放/适配/恢复，不用纯文本提取替代幻灯片 |
-| package/lock、`sync-preview-vendor.mjs` | 移除 `pptx-preview@1.0.7` 及其独占子图和 opaque 预打包文件；实际源码依赖、完整通知、大小和摘要可追溯；无新增依赖 |
-| 专用单元/集成、legacy 入口 fixture、desktop/large-media | 新增生命周期与故障回归；迁移真实菜单/几何/导航合同，不为测试保留隐藏旧控件，不复制 canonical 测试清单 |
+| `node --test tests/files-restore-race.cjs` | **37/37**（新增 3 条滚动/折叠回归 + 1 条同名文件工作区替换回归） |
+| `node --test tests/files-surface-lifecycle.cjs` | **13/13** |
+| `node --test tests/surface-tabs.cjs` | **174/174 assertions，47 类，0 skipped** |
+| `node --test tests/surface-lifecycle.cjs` | **257/257 assertions，56 类，0 skipped** |
+| `node tests/changes-file-identity.cjs` | **9/9** |
+| `node tests/context-reference-ui.cjs` | **13/13** |
+| `node --test tests/file-preview-backend.cjs` | **31 checks / 270 assertions**（连续三次通过，7.1–7.4 s；更早一次曾出现一次未复现失败，见第五节） |
+| `node tests/file-preview-vendor.cjs` | 默认空缓存 **39/39**（357 files / 10,038,557 bytes）；独立复审用真实缓存 **40/40** |
+| `node tests/release-artifacts.cjs` | **77/77** |
+| `node tests/ci-workflow.cjs` | **5/5 + 15/15** |
+| `npm run test:ci` | exit 0；**346 leaves / 5 groups**，coverage exact；gate fail-closed matrix 15/15 |
+| `npm run test:file-preview` | 见下方分项；核心/后端/面板/Office/PPTX/媒体/PDF/入口/vendor 全部通过 |
+| `node tests/file-preview-packaged.cjs --output-root <worktree>` | **132/132**（9 外层 + 123 桌面）；33 张截图；11 个进程身份残留 0；资格 `packaged-production-main-normal-sandbox` |
 
-当前合同见 [work-surfaces.md](work-surfaces.md) 和 [统一预览契约](unified-file-viewer-contract.md)。T3 Code 精确 SHA、调用链、MIT/品牌边界与必须保留的本地差异见 [参考研究](surface-final-reference.md)。[旧验收](unified-file-viewer-acceptance.md) 固定保留原阶段失败与许可未决，不能覆盖成本轮通过记录。
+`npm run test:file-preview` 分项：core 62 tests + ESM 7、backend 31 checks / 270 assertions、
+panel 70 checks、office 119/119、PPTX 50 tests、media-archive 44 tests、PDF 15/15、
+entry 35/35、vendor 39/39。跳过的断言不计入分子分母；本文只引用套件自己打印的分母。
 
-未重构思考动画、工作记录、轮次耗时、用量 Popover、消息操作栏、AI 标题、左侧会话业务、模型/供应商设置、MCP/Skills/扩展系统；跨模块仅作统一 Surface 所必需的接口适配。
+未运行：完整 `npm test`（按用户选择由 PR CI 完成）；未修改 manifest 的普通双击启动；
+原生外部文件授权对话框；真实 Pi/供应商/模型；其它 OS、全部 codec、长时间内存稳定性；
+安装/升级/签名。未执行不等于通过。
 
-## 本地定向证据（最终状态）
+## 四、最新桌面产物与证据
 
-环境：Windows 11；源码 Node v24.22.1；Electron 44.4.3 / Chromium 152.0.7977.130。桌面使用正常 sandbox/contextIsolation、无 renderer Node globals、无 `--no-sandbox`，TEMP 项目、fake Pi、离线网络门控；没有真实模型调用或用户项目写操作。Chromium、视口/DPR 与实际几何保存在各运行 JSON。日志根：系统 TEMP `final-suites/`；下列数字均为最后一次完整运行，不是中途部分成功。
-
-| 命令/套件 | 最终实测结果 | 证据位置（系统 TEMP） |
-| --- | --- | --- |
-| `npm run test:file-preview` | exit 0；core 62 tests + ESM 7，backend 31 checks / 270 assertions（14,845 ms），panel 70 checks，office 91/91，PPTX 20/20，media-archive 44/44，PDF 15/15，entry 35/35，vendor 30/30 | `final-suites/file-preview.log` |
-| `node tests/surface-tabs.cjs` | **174/174 assertions，47 类，0 skipped**（含新增 close-others 借用子工具契约） | `final-suites/work-surfaces.log` |
-| `node tests/surface-lifecycle.cjs` | **257/257 assertions，56 类，0 skipped** | 同目录 |
-| `node --test tests/files-surface-lifecycle.cjs` | 13/13 | 同目录 |
-| `npm run test:work-surfaces` | exit 0；files-terminal 113 checks、files-terminal-ui 95、terminal-job-object 10，加 Surface 三套 | 同目录 |
-| 相邻 canonical 批次 | ui4 44/44 + 27/27 + 57/57；Specs 18/18 + 25/25 + 14/14；browser-workbench 17/17 + viewport-safety 36；file-links 链 243 checks（模型 72、backend 24、grant 26、external 20、editor 22+8、UI 51、runtime 8、highlight 12）；session-change-ui 27/27；shortcut-settings 29/29；runtime-secondary 26/26；runtime-git-ui 6/6；process-ui 19/19；gui-browser-ui 24/24；attachments 53/53；ui-ia 32/32；split-workbench-ui 31/31；smoke **1339/1339** | `final-suites/{ui4,specs,browser-workbench,file-links,session-change-ui,shortcut-settings,runtime-secondary,runtime-git-ui,process-ui,gui-browser-ui,attachments,ui-ia,split-workbench-ui,smoke}.log` |
-| `node tests/file-preview-desktop.cjs` | **156/156**（155 项 renderer 断言 + 1 项退出清理），35,661 ms，正常沙箱，残留 0；Electron 可执行文件 SHA-256 `bf0fe749…`，`override=false` | `pi-preview-desktop-ZYGwsX/evidence/results.json` |
-| `node tests/file-preview-packaged.cjs --output-root <build-root>` | **120/120**（9 外层 + 111 桌面）；public 652 files / 14,756,099 bytes；48 个桌面模块字节一致；观测 11 个进程身份，残留 0；资格 `packaged-production-main-normal-sandbox`；`open-guide.md` 在自然 close-all/reopen 顺序下成功（`openError:null、activeFileTab:guide.md`），Launcher Escape 通过。本轮为 R0 树合并修复后的最终重建运行 | `pi-preview-packaged-79Haa0/evidence/{summary,desktop}.json` |
-| `node tests/large-media-desktop.cjs --fixture <TEMP>/media --app-root <built-app>` | **24/24**，33,138 ms；真实原生播放/seek/撤权/关闭 | `pi-large-media-shAP8t/evidence/report.json` |
-| `node tests/large-media-backend.cjs --fixture <TEMP>/media` | **57/57**；撤权后 65,536 B / 75 ms 内停止，scope 退休 65,536 B / 66 ms 内中断 | `pi-large-media-fault-0avrCJ` |
-| `npm run test:ci` | exit 0；344 leaves / 5 groups，coverage exact；readiness 5/5、gate 15/15、results 10/10、summary 30/30、history 21 assertions、doc-scope 28/28、release-proof 16/16、NSIS fixture 12/12 | 较早任务输出；它验证 CI 机制，不执行全部 344 leaves |
-
-新 Surface 与 Files lifecycle 已经沿 `test:work-surfaces → test:surfaces` 进入 `npm test` 唯一 canonical 链；PPTX 沿 `test:file-preview:office` 进入。大媒体是 Windows Electron/TEMP 离线生成专项，backend alias 必须显式传 `--fixture`，不把需参数的脚本无参加入 canonical。
-
-## 真正运行了什么
-
-### 文件查看器与 Surface
-
-源码 156 项覆盖宽窄窗 × 深浅主题、树选中/焦点/AA、真实菜单、编码、引用区间复制、真实 Changes diff，以及 Markdown/KaTeX/授权图片、opaque HTML、PDF Worker/canvas/搜索/缩放/位置恢复、DOCX、XLSX、CSV、PPTX、图片、WAV、MP4、ZIP 和故障降级。
-
-正式产物专项使用 TEMP 复制包，在 **TEMP manifest 中选择观察 bootstrap**，再加载字节不变的 production main/preload/backend/public（原始 manifest SHA-256 `f300f9…`，`bootstrapManifestOverride=true`）。不是“未修改 manifest 的普通双击启动”证明；未注入替代 renderer、未用 CDP 或 sandbox 绕过。验证 SEA 认证/隔离与全部 652 个 served public 文件字节、48 个桌面模块，随后通过真实输入驱动预览和 Surface：
-
-- 四组居中单列 Launcher、键盘 type-ahead 仅聚焦、Enter 执行、Escape 隐藏；旧入口缺失。
-- `+` 建独立空标签、选择转换、Files 单例复用与内层文件 tabs 保留。
-- 真 PTY/xterm 切 Surface 不重建；Browser 原生实例、URL 与输入值在 Files/Changes 切换后保留。子 `WebContentsView` 不因页面加载而持有窗口焦点，驱动脚本先聚焦真实视图、可信点击输入框、等待 `activeElement` 后才键入；产品断言仍同时检查未销毁、同一 id、同一 URL、同一表单值。
-- Browser 返回时原生子视图重新 attach 且 bounds 非零，关闭后 native webContents 销毁。
-- 隐藏/重开 Files 恢复预览；公共最大化保留聊天 DOM 且 inert，restore 宽度误差小于 2px；四组公共几何误差均不超过 2px。
-- 外层工具 tabs 真实键盘重排及反向恢复、roving focus、Delete、关闭其它/右侧/全部。
-- renderer 真实 reload 后 Files 以懒描述符恢复，可信 Home 首次挂载并把焦点交给选中且可见的 Files 工具 tab。
-- production quit coordinator 清理按 PID **和创建身份**观测的后端/fake Pi/PTY 家族，11 个身份全部退出，残留 0。
-
-打包场景的组顺序为自然顺序：Surface 场景先关闭全部顶层 tab，`packaged-layout` 随后带着排队文件请求重开 Files —— 这正是 F2 修复前会触发 R0 恢复竞态的 close-all/reopen 交错。本轮用注入运行时副本的 open-chain spy（不碰产品字节）把 R0 的真实根因定案为 **session 身份 settle 触发的过度 reset**：sessionId 在 bridge ready 后总是异步settle（`app.js` 注释明确"bridge ready 可能先于会话身份到达"），从空 sessionId settle 到真实 UUID 时 `onContext` 误判为 scope 变化而调用 `reset()`，把用户已经开始的 open 一并销毁；而 backend `fileIdFor` 的 hash 只覆盖 workspace.id+conversationId+路径+文件身份，**不含 sessionId** —— sessionId 只是 per-session 历史命名空间，不是访问绑定。修复为 `settleSession`：cwd+conversationId 稳定时仅就地采纳 settle 的 session 并合并该会话历史，不做 reset；真正的 workspace/conversation 变化仍全量 reset。最终打包运行实测 `layout-after-open` 的 `openError:null`、`activeFileTab:guide.md` —— 用户的排队打开在 settle 中存活并成为活动 tab，四组几何断言通过。没有场景被删除。F2 的恢复竞态由 `tests/files-restore-race.cjs` 19/19 锁定（含 tombstone 复活回归，及本轮新增的八条 session-settle 回归：session-only settle 不销毁已开 tab、in-flight open 在 settle 中存活、真正 workspace 变化仍销毁、settle 应用目标 session 树状态、空 session tombstone 不被 settle 复活、settle 合并去重、in-flight 在 tree 未决时存活、cwd-only 变化使 pending open 失效；revert 修复后目标测试变红、安全对照仍绿，证明非假绿）。
-
-BrowserWindow 截图不包含子 WebContentsView 像素，因此 Browser 原生内容单独通过真实 `webContents.capturePage()` 保存为 `surface-browser-native-restored.png`，与外壳截图分开；未合成伪造应用截图。跨会话/epoch 退休与恢复的专项证据目前来自定向生命周期集成，不把它写成桌面跨会话人工点击证明。
-
-### 大于 100 MB 的真实视频
-
-离线 fixture 为 **180,850,509 bytes** 的 VP8 WebM，960×540、12fps、360 帧、30 秒：180,817,713 bytes 实际新编码 frame payload + 32,796 bytes 容器。生成器由 canvas 噪声和帧号经 WebCodecs 编码并写合法 duration/SeekHead/Cues，不靠空洞/零填充凑大小。frame payload SHA-256：`1ee774c68eb6299cbffe0bd5ca554428fc72185cffd9e97714c26a822b330a08`。
-
-- 连续播放跨 62 个记录在案的 Range 请求、至少三个完整 8MiB 206 响应；每个成功响应不超过 8MiB，无整文件 200。
-- 原生 controls timeline 在 0.73、0.23、0.88 比例真实拖动；`seeking.isTrusted`、currentTime 与 decodedFrames 推进共同证明，不以设置 currentTime 代替拖动。
-- 调试器只临时读取 UA shadow timeline 的 box，detach 后才发送原生输入；不是完整流程未 attach debugger。
-- hide/close/文件 tab 关闭/撤权分别 8/9、6/58、12/64、7/10 ms 释放 decoder 与 descriptor；观察窗 1.2 秒内不再请求/读取；返回不 autoplay，旧授权拒绝 403。
-- renderer whole-file fetch 0、媒体 ObjectURL 0；backend opened==closed==63，readCalls=5,820，actualBytes=377,396,711，单次 read 不超过 64KiB，wholeFileReads=0。
-- 撤权由 **真实 SSE** 驱动：native `EventSource` 观察到 `sequence=10, replay=false`；同一事件下 capture-before-owner 记录同步 document 事件拆除；不以 403 回退冒充 SSE 成功。
-- 后端 fault 专项在首个 64KiB write 后故意 backpressure，不 emit drain；撤权和 generation 退休后结束读取、销毁响应。
-- 无 renderer crash、无远程请求；final 前与 final 时 opened/closed/active 均为 63/63/0。
-
-媒体运行使用 **test-owned BrowserWindow**，但加载经字节比较的 built production renderer/preload/backend；**不冒充 production-main 媒体证明**。授权采用仅限生成 TEMP 文件的 test-private grant IPC，未覆盖系统原生文件授权对话框。原生浏览器和生产 main 的证明来自上一项，不能混合层级。
-
-## 离线双构建与产物身份
-
-先以 `node scripts/build-app.mjs --rebuild --output-root <fresh TEMP root>` 在 `%TEMP%/pi-surface-final-build-70Ie6I` 构建并验证，随后在删除死 DOM 引用及 tree/git 遗留徽标路径、冻结产品源码后执行 **`node scripts/build-app.mjs --rebuild`**，更新目标 worktree 的默认 `build/` 与 `dist-app/`（均内部先重建 SEA）。本轮最终收口（I2-01 恢复、Browser 驱动与打包场景顺序）之后再次完整重建默认双产物并重跑 desktop/packaged/媒体，下表是**这次最终重建**的实际身份，不沿用清理前字节摘要。使用已存在的 Electron 44.4.3 ZIP，先对本地安装 checksum 核验 SHA-256 `790a355b684d5c7cc8dc3cdd8c4cca7c4b2d054685427c7554a956879a82e70b`，再以 `PI_GUI_ELECTRON_ZIP_DIR` 离线构建；没有下载运行时。
+离线双构建：`npm run build:app -- --rebuild`，使用已存在的 Electron 44.4.3 ZIP
+（`PI_GUI_ELECTRON_ZIP_DIR`），未下载运行时。构建后实际启动的是默认产物的 TEMP 字节相同副本，
+只替换 TEMP 副本的 manifest 观测入口，production main/preload/backend/public 字节不变。
+SEA 注入仍有既有 `The signature seems corrupted!` warning，未隐藏；不据此宣称代码签名。
 
 | 对象 | 实测大小/摘要 |
 | --- | --- |
-| preview vendor | 355 files / 10,029,375 bytes / 32 source packages |
-| vendor manifest SHA-256 | `d7767a9f567b508c32c9e83cb000c8314d82f2c0ea0a72cfd8ce3411ba018ab5` |
-| vendor tree SHA-256 | `c6f71e017374a6605fff9bafd560b5659e44859979060da4860e6edb246a6545` |
-| public 资产清单摘要（652 文件，逐文件 `路径\|大小\|内容SHA-256` 行串联后再取 SHA-256） | `41523a1cb9e5145c422cfaf93665eef5e8a70bbbdc2ba3c68dfaf5c58cc62f03`；合计 14,756,099 bytes（R0 树合并修复使 files-panel/files-tree 增大，字节总数较此前 14,723,319 上升） |
-| SEA | 117,296,128 bytes；`6586143cf0e9861bc267eb5d68d75437a4ff86ac8c693d6576f511f940a028d2`（R0 树合并修复后最终重建） |
-| Electron executable | 246,324,736 bytes；`71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f` |
-| Electron backend bundle | SHA-256 `35a0a4618080194001463d2c3fc4ba6e4d9e418ab1137f36e38bef35ac6905e5` |
-| Electron runtime（源码桌面实际启动） | SHA-256 `bf0fe749904ca9f713ccfb2427c519fa39d0bbd0337ba411ba08785802e8d548`，`override=false` |
+| `build/Pi GUI.exe` | 121,608,704 bytes；`68737337527d508e2e80bd9b4ccb2b0cf6988e5cf57d0555eff0f4d4efb3b3b8` |
+| `dist-app/Pi GUI-win32-x64/Pi GUI.exe` | 246,324,736 bytes；`71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f` |
+| App 内 backend bundle | 3,873,898 bytes；`35a0a4618080194001463d2c3fc4ba6e4d9e418ab1137f36e38bef35ac6905e5` |
+| `public/`（源 = staging = 打包 App，逐文件 660 项全部一致） | 660 files / 19,067,121 bytes；清单摘要 `f0efbf678d8a9573683c379dcab28984210db802cc179046f2868ffdc1a3dcb3` |
+| preview vendor（`versions.json`） | 362 files / 14,040,820 bytes；manifest `2805fddb0888bf14e48cdd873e8b1aa78e0648f06fd9b2cf86842b94723a89ba` |
 | node-pty / conpty.node | 1.1.0；`fe61108b40fcf0c1172d6e193f482e6ef2e0d9b1a447468b6a1eb7c67ca80271` |
 
-默认可运行产物位于目标 worktree 的 `dist-app/Pi GUI-win32-x64/Pi GUI.exe`，SEA 位于该 worktree 的 `build/`；不是另一分支根目录 `C:/pi-GUI` 的产物。重建后实际启动的是此默认产物的 TEMP 字节相同副本。SEA 注入仍出现既有 `The signature seems corrupted!` warning，未隐藏；不据此宣称代码签名或发布资格。许可清单 `legalReviewRequired=[]` 只是生成器结果，**不代替独立许可核验**；本轮 F9 已对 pdfjs-dist Liberation 字体完成实际核验（证据链见下），生成器相应记录 `sourceDistributionVerified=true` 而非未核验警告。
+产物验收运行 `pi-preview-packaged-oZyex5`：132/132、123 条桌面交互断言、33 张原始
+`webContents.capturePage()` 截图、32,995 ms；SEA 服务的 660 个 public 文件逐字节与源一致；
+48 个桌面模块字节一致；11 个观察到的进程身份退出后残留 0。
 
-## 失败、修复与数量变化
+代表性截图与来源记录已归档到
+[`docs/surface-final-evidence/2026-11-26/`](surface-final-evidence/2026-11-26/README.md)：
+深/浅 Launcher、顶部无旧工具空标签、多 Surface 标签栏、关闭最后一个 Surface、1320/700
+查看器、真实 PPTX 项目符号/多级编号/第二页、未嵌入字体 PDF。每张图的源运行、字节与
+SHA-256 见该目录 `manifest.json`。上一级目录 2026-11-25 的图片是历史证据，不冒充当前运行。
 
-较早轮次保留的失败（均已处置或明确降级）：
+关键 UI 断言（打包产物）：Launcher 标题居中、键帽有背景、0 个 `.work-surface-tab`、
+无多余说明文案；活动 tab 底边 `0px` 且无 `::after`；工具栏 `toolbarOverflow ≤ 1` 且
+overflow-x 不为 auto/scroll；1320/700 × 深/浅四组公共几何误差 ≤2px，聊天 DOM inert。
 
-1. 早期源码 desktop 因旧常驻按钮、窄窗隐藏树与旧私有最大化几何 fixture 中断（104 通过 / 8 失败）。改走真实阅读菜单、树 toggle/Escape 和公共 pane/body 几何后完整执行。
-2. Changes 的宽泛 button 选择器命中外层 tab；改定位实际 `.chg-main > .chg-path` 文件行并真实点击，仍要求 `.d-row` 真 diff。
-3. 正式产物先后在隐藏旧 Launcher 行、动作返回 Surface 对象的 Electron 序列化，以及不存在的 `.rp-url` 地址栏选择器失败。分别改为活动 Launcher host、仅返回 serializable true、实际 `#browserAddress`，生产代码不为这些 fixture 修改。
-4. Files 实测暴露的真实修复为原始 File 的空 fileId 形式归一、过期阅读菜单动作守卫，以及 HTML 恢复后的动作名与 aria-label 同步；非空对象身份变化和权限重验未放宽。
-5. Surface 实测修复首次 Specs split 业务头部准备、公共 max 的 inert/focus、stable scope 与 instant owner identity 分离、Terminal 恢复不创建 PTY/抢焦点，以及旧菜单/批量关闭不 mount dormant 资源。
-6. 静态契约定位到 state 中读取已删除 branchCount/changesCount 的遗留引用：最终删除这两个查询，以及 tree/git 中无消费者的旧徽标逻辑，不加白名单/null 占位，不影响树状态或 Changes 权威总数/过滤计数。
-7. 并发编辑中曾编译到 countNodes 函数与调用不同步的瞬态 bundle；该次启动 ReferenceError 保留为失败记录，之后在冻结源树上重建并重跑。
+## 五、本轮代码改动与失败修复
 
-本轮最终收口新增：
+本轮相对 `cba83982` 的未提交改动集中在：
 
-8. **I2-01（第二轮独立审查发现的唯一 Important，本轮新引入）**：`public/collab-panel.js:94` 导出文件名清洗正则丢失 `'-'` 替换串与 `\\` 转义。单行恢复为 HEAD 逐字节内容，并在 `tests/collab-panel-productivity.cjs` 增加拦截真实 `<a download>` 文件名的阶段 D 断言。换入坏正则时套件 exit 1（实际 `my docundefinedv1undefined sub\final draft-r2.svg`），恢复后 15/15 checks、76 assertions。第三轮增量复核确认 0/0/0。
-9. **close-others 借用子工具契约**：第二轮指出实现自洽但该组合只有文字契约。`tests/surface-tabs.cjs` 新增显式断言（子工具保持 current、host 归还 `.rp-body`、layout 正常关闭、实例身份不变），套件最终 174/174。
-10. **打包 Browser 键入失败**：首跑（`pi-preview-packaged-aiL7w5`）子 `WebContentsView` 未持有焦点，`insertText` 未落入输入框。修正驱动为先 `focus()`、可信点击、等待 `activeElement` 与值落地；产品断言未删减。最终 119/119。
-11. **打包 `open-guide.md` 在 close-all 后失败（R0 根因本轮定案并修复）**：早期定位为预先存在的 R0 恢复竞态后，本轮用 open-chain spy 把精确根因定为 session 身份 settle 触发的过度 `reset()`（详见上段）。修复 `settleSession` 后，自然顺序下 `open-guide.md` 成功、`activeFileTab:guide.md`；不再有"调整场景顺序规避竞态"的处置，场景保持自然 close-all/reopen 顺序作为生产环境回归证明。另修复同组一个场景驱动层缺陷：Launcher Escape 的 specs 行可信点击是异步派发的，原驱动在点击效果落地前探测 tab 条会偶发读到 0 tab（非产品缺陷），改为等待 specs tab 实际挂载再探测。
-12. **打包退出超时**：失败的 Browser 导航留下 `state.loading=true`，production quit coordinator 依设计拒绝退出。导航成功后最终运行由 production coordinator 清理 11 个身份、残留 0；这是失败现场诊断，不是绕过。
+| 范围 | 行为与边界 |
+| --- | --- |
+| `public/files-tree.js` | 滚动意图与 DOM 分离；只在刷新恢复窗口忽略占位符 clamp，窗口结束后每个滚动事件都是用户意图；折叠父目录后只报告可达的 `expanded`，刷新不复活隐藏子展开 |
+| `public/files-panel.js` / `files-state.js` | 已确认且仍属当前工作区/运行代的 Classic owner 优先提供 sessionId；known→known 才是真实会话边界；树状态逐字段合并，用户手势优先 |
+| `scripts/preview-font-source.mjs`（新）等 | 锁定 PDF.js/字体身份；原始归档内容寻址缓存；vendor/App 法务材料；`release-check`/`publish-release` 在任何构建或 GitHub 操作前 fail closed |
+| 测试与文档 | restore-race 新增滚动/折叠/工作区替换回归；vendor 新增许可 fail-closed 与 notice 定位断言；验收与复审文档更新 |
 
-计数变化：源码桌面 **156/156 = 155 项 renderer + 1 项清理**（`results.json` 的 `passed` 为 155）；打包 **120/120 = 9 外层 + 111 桌面**（open-guide 修复后 packaged-layout 不再提前中断，后续几何/最大化断言得以执行，故桌面断言总数较此前 110 增加）；Surface tabs **174/174 / 47 类**；Surface lifecycle 最终 **257/257 / 56 类**（fixture 动态循环展开）；files-restore-race 由 11 升至 **22/22**（新增八条 session-settle 回归 + 二轮复审后三条树合并回归：无快照保留手势 / dirty-off 胜过快照 / 未碰仍采纳快照）；大媒体由 20 升至 **24**（新增撤权/关闭/边界断言）；backend 故障 **57/57**。没有通过删除断言换取绿色；总数只增不减。跳过的断言不计入分子分母，本报告只引用各套件自己打印的分母。
+失败与处置：
 
-## 独立审查、限制与交付状态
+1. **复审 Important（本轮新引入，已修）**：上一版 `expectedScroll` 用“值相等”吞掉滚动事件。
+   用户滚动后事件尚未派发时发生重绘，重绘把同值写回，随后到达的用户事件被误吞；主动回 0
+   同样受影响。修复为只在刷新恢复窗口忽略滚动；新增两条回归锁。换回旧逻辑时分别实测
+   `280 !== 120`、`120 !== 0`，恢复修复后 37/37。
+2. **复审 Pre-existing 1（已修）**：父目录折叠后子目录仍在 `expanded` 并集，刷新会把父目录
+   重新展开。`files-tree.js` 只报告从根可达的展开目录；新增折叠→刷新回归锁。
+3. **复审 Pre-existing 2（保留并披露）**：owner 在 Files 挂载**之后**才建立时，外层 Surface
+   的正常 context 通知仍会先退役旧实例。修复覆盖的是“owner 已建立、state 投影未到”的窗口；
+   外层 scope 迁移属于禁止重写的 Surface 架构，未做，不宣称全链路已解。
+4. **字体许可复审 Nit（已修）**：根 `THIRD-PARTY-NOTICES.txt` 复制的 SOURCE-INFO 相对引用
+   指向不存在的位置；现在在文本前明确写出实际 vendor 路径，并由 vendor 测试锁定。
+5. **font license 旧结论撤回**：2026-11-25 曾称“1.07.4 无独立源工程、TTF 即完整源码、
+   阻断解除”。实际上游有源码与独立 TTF 归档，PDF.js 四字体与历史 TTF 字节/glyph 数不同，
+   对应关系 **unresolved**。详见 [pdf-font-license-verification.md](pdf-font-license-verification.md)。
+6. **打包 Browser 焦点偶发**：较早一次运行（116 通过 / 1 失败，stage `browser-input-focused`）
+   子 `WebContentsView` 未持有焦点，属已知驱动层偶发；同一产物重跑 132/132。该失败保留记录，
+   不计为产品通过。
+7. **backend 一次未复现失败**：更早一次运行在第 375 行“mid-read replacement”得到 200 而非 409；
+   随后连续三次 31 checks / 270 assertions 通过，代码未改。原因未定位，如实保留，不写成已修。
+8. **数量变化**：restore-race 22 → 33 → 36 → **37**（新增会话窗口、滚动、折叠、工作区替换）；
+   vendor 31 → **39**（默认，含真实缓存时 40）；打包 119/120 → **132**（完整桌面交互与几何）；
+   surface-tabs 163 → **174**；surface-lifecycle **257**。没有删除断言换取绿色。
 
-五个首轮独立上下文分别检查：Surface 架构/生命周期与原功能、文件/恢复安全、PPTX 许可与实际 vendor、媒体与证据资格、真实 UI PNG 与规范。全部报告已返回并逐项处置，账本见 [surface-final-reviews.md](surface-final-reviews.md)。第二轮由另一独立上下文复核六项修复，结论 Blocker 0 / Important 1（I2-01，已修复）/ Pre-existing 0；I2-01 修复与新增契约断言经第三轮增量复核 0/0/0；HTML 读取竞态与桌面就绪判据复核 0/0/0。媒体 SSE 证据与许可标记/旧 PPTX 产物的最终增量复审为 Blocker 0 / Important 0 / Nit 1（英文边界文案风格，不阻断）：E1 证据资格通过，P1 通过并保留 exe 内部未逐字节枚举的边界。L1 字体许可本轮已实际核验定案、阻断解除（见下）。本轮新增：office scanner 第三轮复审唯一 Important（startAt=0 投影/渲染不一致）已修复并经星驰定向复核 0/0/1（1 条非阻断 Nit 已收窄）；F9 许可核验定案；Surface 打包场景失败定位为场景驱动层陈旧期望而非产品缺陷，已修正。
+## 六、PR #112 CI 未触发：实际原因与当前状态
 
-未验证：当前 PR 完整 canonical（待 CI）；未改 manifest 的普通启动；原生外部授权对话框与晚期撤权响应；真实 Pi/供应商/模型；其它 OS/全部 codec；长时间内存稳定性；OS 窗口拖动缩放与多显示器 DPI；安装/原位置升级/签名/发布。PPTX 仅基础只读投影，不保证动画、SmartArt、高级图表、母版/主题及复杂字体全保真；PowerPoint 对 startAt=0、悬挂缩进 cap 分支（-indent > marL）的桌面应用实测未验证，源码证据不冒充应用实测。R0 恢复竞态本轮已根因修复并经二轮独立复审闭环：session 身份 settle 不再销毁 open，且二轮发现的「`installTree` 无条件重建树覆盖用户树操作」Important 已修复为逐字段合并（`files-tree` dirty 追踪 + `mergeTreeState`，用户碰过的字段以 live 为准、未碰的回落快照、无快照保留 live、expanded 取并集），最终打包运行 `openError:null、activeFileTab:guide.md`。残余边界：(a) settle 之外更复杂的跨会话/workspace 交错未逐一穷举；(b) 复审指出的 P2 既有时序 —— `session-evidence-context` 通知先于 `S.state.sessionId` 写入到达的排序下，in-flight open 仍可能被 scopeCurrent 丢弃；因 surface scope 本身含 sessionId、补发通知会触发 surface 级 reset（副作用大于收益），该窄边界未修、如实保留；复审者另提出更窄方向（Files 在已确认当前 Classic owner 可用时采用其 sessionId），作为建议记录、不计入本轮已修；(c) 目标历史存在待合入标签时当前预览会经 `restoreTabs → activate` 重挂载 —— 复审分类为 Pre-existing（基线既有重激活路径，非本轮新增），故验收口径为「活动标签未变」而非「预览实例未变」；P1 的 SEA 内部字节未全量枚举，只覆盖实际服务集合。
+**原因已定位**：`cba83982` 的推送时间（2026-11-25T16:03:07Z）落在 GitHub 官方事故
+[qn8mfv6q5hlx](https://www.githubstatus.com/incidents/qn8mfv6q5hlx) 窗口内
+（15:55:19Z–16:52:16Z，涉及 Git Operations/Webhooks/API/Pull Requests/Actions）。
+分支 ref 与 `git ls-remote` 已是新 SHA，但 PR 的 `head.sha`、GraphQL `headRefOid`、
+`refs/pull/112/head` 仍停在 `8f565f72`；该 SHA 的 Actions run 数为 0，check-runs 与
+commit statuses 为空。已排除 fork/跨仓、关闭重建、base 变更、路径过滤、skip-ci、权限/审批、
+workflow 语法与分支保护；actions 已启用，CI workflow active，同 blob 曾被成功解析。
 
-**L1 字体许可核验定案（本轮 F9）**：实际解析四个 Liberation Sans TTF 的 name 表得版本串 `Version 1.07.4`（不凭字体名推断）；上游 mozilla/pdf.js#21746/#21750 核实为未修改 1.07.4 发布件；1.07.x 适用 GPLv2+Liberation 字体例外（2.x 起才是 OFL-1.1）；随附 LICENSE_LIBERATION 与上游逐字一致。1.07.4 无独立字体源工程，TTF 本身即对应源码，逐字节分发未修改件同时满足 object-code 分发与源码提供，mere aggregation 不让主程序落入 GPL，渲染产物依字体例外 (a) 不被 GPL 覆盖。三项落实义务（不改字节、双份许可文本、不声称 Apache 覆盖）均已满足，**发布的字体许可阻断解除**。完整证据链与义务清单见 [pdf-font-license-verification.md](pdf-font-license-verification.md)；该文档是核验证据而非法律意见，分发形态变化须重核。
+这不是本地推错，也不是“已有最新 run 未关联”：最新 SHA 根本没有 run。旧 SHA 的成功
+（`45551821141`）或失败（`45607097340`）run 都不冒充当前验证。最终提交正常推送后，
+须重新核对 PR head、commit 数与新 run 的 `event=pull_request`/`head_sha`/PR 关联；
+run 出现不等于通过，以最终 CI gate 为准。完成前本文保持 **待验证**。
 
-回滚按业务/测试基建/文档的提交边界 revert 本轮提交，再从锁定依赖离线重建；不 reset 用户其它工作，不清理根目录未跟踪文件，不删除真实会话或文件。既有只读文件授权账本和 Pi schema 未更改，不需要数据迁移。
+## 七、独立审查（2026-11-26）
+
+三个独立上下文，模型 `xingchiapi/gpt-6.1-sol`（星驰），effort max；账本见
+[surface-final-reviews.md](surface-final-reviews.md#2026-11-26-最终复审当前)。
+
+- **字体许可整改复审**：通过；Blocker 0 / Important 0 / Nit 1（notice 相对定位，已修）。
+  独立复算归档/字体/SFD/glyph；故障注入伪造成功字段、清空警告、跳过参数均仍被拒绝，
+  前置门槛网络 0 / 子进程 0 / 文件写入 0。L1 阻断保留是正确保护。
+- **会话身份与文件树复审**：首轮不通过；Blocker 0 / Important 1（滚动回显，已修）/
+  Pre-existing 3（折叠刷新已修、reveal 标记保留、外层 Surface 退役时序披露）。
+  指定六套实测通过；修复后 restore-race 37/37，红→绿见第五节。
+- **CI 调查**：定位为 GitHub 服务事故导致 PR head 同步未完成；未修改仓库、未触发 workflow。
+
+## 八、限制与发布阻断
+
+- **L1 发布阻断（必须保留）**：PDF.js 四字体与 1.07.4 历史源码/TTF 的准确对应关系未闭合；
+  差异在 `glyf/post/GSUB/hmtx/cmap` 等表，不只是时间戳。分发机制已随包携带完整已知上游归档
+  与许可，但 `correspondence:'unresolved'`、`sourceDistributionVerified:false`；
+  `release-check` 与 `publish-release` fail closed。缓存可用、测试通过或附带许可文本都不是
+  合规批准；不得把布尔值改成 true 解禁。详见
+  [pdf-font-license-verification.md](pdf-font-license-verification.md)。
+- **完整 canonical**：最终提交的 PR CI 未完成前为待验证；本地只跑定向与受影响套件。
+- **Surface 时序**：owner 晚于 Files 挂载建立时的外层实例退役未修，保留严格隔离并披露；
+  `reveal()` 的滚动仍计为导航意图（基线行为）。
+- **范围外未验证**：PowerPoint/WPS 桌面应用、其它 OS、全部 codec、长时间内存稳定性、
+  安装/原位置升级/签名、未改 manifest 的普通启动、原生授权对话框与晚期撤权响应。
+- **SEA 边界**：打包验收覆盖 SEA 实际服务的 660 个 public 文件与 48 个桌面模块，逐字节一致；
+  未对 exe 内部全部字节做静态枚举。
+- 本文与字体文档是工程证据，不是法律意见。
+
+## 九、回滚
+
+按业务代码 / 测试基建 / 许可与构建 / 文档的提交边界分别 revert 本轮提交，再从锁定依赖
+离线重建。不 reset 用户其它工作，不清理根目录未跟踪文件，不删除真实会话或文件。
+既有只读文件授权账本与 Pi schema 未更改，不需要数据迁移。
+
+## 十、阶段状态
 
 | 阶段 | 当前状态 |
 | --- | --- |
-| 开发完成 | 已完成；已知发现均处置，受影响套件与真实运行通过 |
-| 代码验收通过 | **待验证**：当前 PR 完整 canonical CI 未完成；其余本地证据已通过 |
-| 提交 / 推送 | 已授权；本文档所在提交完成后执行，最终 SHA 见交付消息 |
+| 开发完成 | 已完成；已知发现均处置或如实披露 |
+| 代码验收通过 | **待验证**：本地定向与正式产物通过；最终提交 PR CI 未完成 |
+| 提交 / 推送 | 已授权；本文提交后执行，最终 SHA 见交付消息 |
 | 合并许可 | 未授权，不合并 |
 | 发布许可 | 未授权，不打 tag、不发布 |
-| L1 字体许可 | 已核验定案，阻断解除（证据链见 pdf-font-license-verification.md）；分发形态变化须重核 |
+| L1 字体许可 | **发布阻断保留**；对应源码未闭合 |

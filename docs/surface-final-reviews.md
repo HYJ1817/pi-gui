@@ -1,6 +1,15 @@
 # Surface 最终整改：独立发现与处置账本
 
-日期：2026-11-25。基线 `78ca4dcb9dd3e4293e9dcb0f7507a0a6d51d7d5d`；审查对象是其上的本轮工作区，不将基线成功 CI 继承为新代码证明。总体验收、源码/产物身份及最终数字见 [最终验收](surface-final-acceptance.md)。
+> **本文是账本，不是当前结论。** 2026-11-25 的各轮结论按当时证据保留在下方；
+> 其中 **L1 字体许可「已核验定案、阻断解除」已被 2026-11-26 的重核撤回**，
+> 当前仍为发布阻断。当前代码状态的复审见文末
+> [2026-11-26 最终复审](#2026-11-26-最终复审当前)，验收状态与外部 F1–F9 表见
+> [最终验收](surface-final-acceptance.md)。
+
+日期：2026-11-25（历史轮次）→ 2026-11-26（当前）。历史轮次基线
+`78ca4dcb9dd3e4293e9dcb0f7507a0a6d51d7d5d`；当前轮次基线
+`cba8398260a7272eca14a3a57d027dc3634f3ca1`；均不将旧基线的成功 CI 继承为新代码证明。
+总体验收、源码/产物身份及最终数字见 [最终验收](surface-final-acceptance.md)。
 
 ## 首轮独立结论与最终处置
 
@@ -15,8 +24,8 @@
 | F5 | Launcher 键盘转换删除原持焦行，或复用工具后把该行隐藏；焦点落 BODY 或留在隐藏 Launcher | Important | 已修复：转换/复用只服务当前用户操作并把焦点交给可见的继任 tab；程序化打开与后台 ensure 不抢焦点，第二轮正向探针确认 |
 | F6 | 首次键盘激活懒恢复 tab，`tool.open()` 后提前返回，选中项已变但焦点仍在旧的未选中 tab | Important | 已修复：懒恢复首次挂载后焦点落到选中且可见的 tab；真实 renderer reload + 可信 Home 的截图另有桌面证据 |
 | E1 | 大媒体 fixture 将 private grant revoke IPC 的 `ok` 标为 SSE 证明，但该调用没有发布 SSE；独立探针观察到事件回调 0，后续 403 也可能让停止读取断言通过 | Important（验证资格） | 已修复：fixture 走真实 SSE 通道，最终运行 trusted sequence=10、replay=false，停止读取断言绑定在同一撤权事件之后；24/24 通过 |
-| P1 | 首轮许可审查时 staging/dist/SEA 的旧 bundle 字节仍实际存在；不是只根据文件时间推断 | Pre-existing，分发阻断 | 最终双重建后复核：public/package 中无 `pptx-preview`，唯一相关依赖为 `pdfjs-dist`；打包 public 与 652 个实际服务文件逐字节一致。残留边界：未对 SEA 内部全部字节做枚举，只覆盖实际服务集合 |
-| L1 | PDF 随附的四个 LiberationSans 字体有独立 GPLv2+字体例外原文，来源/源码交付义务尚无充分核验材料；不能由包顶层 Apache 或 PPTX 移除推导分发许可 | 许可待核验，不作侵权定罪 | **已核验定案，阻断解除**（本轮 F9）：实际解析 TTF name 表得 `Version 1.07.4`（非凭字体名推断）；上游 mozilla/pdf.js#21746/#21750 核实为未修改 1.07.4 发布件；1.07.x 适用 GPLv2+字体例外（2.x 起才是 OFL）；随附 LICENSE_LIBERATION 与上游逐字一致。1.07.4 无独立字体源工程，TTF 本身即对应源码，逐字节分发未修改件同时满足 object-code 与源码提供。三项落实义务（不改字节、双份许可文本、不声称 Apache 覆盖）满足。证据链见 [pdf-font-license-verification.md](pdf-font-license-verification.md) |
+| P1 | 首轮许可审查时 staging/dist/SEA 的旧 bundle 字节仍实际存在；不是只根据文件时间推断 | Pre-existing，分发阻断 | 当轮双重建后复核：public/package 中无 `pptx-preview`，唯一相关依赖为 `pdfjs-dist`；打包 public 与 652 个实际服务文件逐字节一致。**当前（2026-11-26）已重建为 660 个文件**，源/staging/App/SEA 服务集一致。残留边界：未对 SEA 内部全部字节做枚举，只覆盖实际服务集合 |
+| L1 | PDF 随附的四个 LiberationSans 字体有独立 GPLv2+字体例外原文，来源/源码交付义务尚无充分核验材料；不能由包顶层 Apache 或 PPTX 移除推导分发许可 | 许可待核验，不作侵权定罪 | **历史结论（2026-11-25）：曾记为“已核验定案、阻断解除”，该结论已撤回。** 当时称“1.07.4 无独立字体源工程，TTF 即完整源码”不成立；上游存在源码归档与独立 TTF 归档，且 PDF.js 字体与历史 TTF 字节/glyph 数不同，对应关系未闭合。**当前：L1 发布阻断保留**，见 [pdf-font-license-verification.md](pdf-font-license-verification.md) 与文末 2026-11-26 复审 |
 | R0 | 初始文件树迟到时，历史恢复覆盖刚打开的附件 tab；安全审查在当前与精确基线两个版本都复现 | Pre-existing | **本轮已根因修复**：open-chain spy 定案真实根因为 session 身份 settle 触发的过度 `reset()`（sessionId 在 bridge ready 后异步settle，`onContext` 误判 scope 变化销毁 in-flight open；backend fileId 不含 sessionId，它只是历史命名空间）。修复 `settleSession` 只就地采纳 settle 的 session 并合并历史，真正 workspace/conversation 变化仍全量 reset。打包自然顺序实测 `activeFileTab:guide.md`；files-restore-race 14/14（含三条新 session-settle 回归，revert 后两条变红证非假绿）。独立复审结论见下节 |
 
 首轮合并后为 **6 项功能问题 + 1 项证据问题**，不把历史问题或未知法律结论计成新增产品缺陷。
@@ -66,7 +75,7 @@ SWE-2.1 独立增量复审仅检查 E1 与 L1/P1，不重开整套审查。结�
 
 - **E1 证据资格：通过。** 撤权链为渲染进程 `api.revokeExternalGrant` → 生产 `/api/files/grants/revoke` → 服务端 `grants.revoke` + `publish({type:'external_grants'})` → SSE `_seq` 广播；第二个原生 `EventSource` 观察到 `trusted=true, sequence=10, replay=false`。capture 阶段监听先于 Files 自有监听执行，并用 `queueMicrotask` 取 after 快照（微任务先于任何 defer 清理，能识破伪同步）；实测 before `tabPresent/connected/sourcePresent/readyState=4` → after `false/false/false/0`，`mediaErrors=0`、新请求/响应 0，排除 403 回退。revocation fixture 中没有把 IPC `ok` 当 SSE 证据的断言。
 - **暂停空闲断言：通过。** `paused/readyState=4/buffered[[0,30]]` 覆盖当前时间，backend `active=0`（opened 63 = closed 63），readCalls/actualBytes/requests 三键在观察窗不变；setup seek 到 duration−2 只是准备，明确注释非原生输入证据，0.73/0.23/0.88 三条可信拖动证据独立存在（decodedFrames 增量 15/15/14）。
-- **L1：仍待核验，保持发布阻断（该轮时点结论）。** `legalReviewRequired` 逐字保留 `pdfjs-dist Liberation fonts: source-distribution obligations remain unverified (GPLv2 with font exceptions)`，vendor 30/30 测试锁定该警告、四字体清单、`sourceDistributionVerified=false` 与 `copied` 状态；生成器明示“生成不等于再分发批准”。但字体 GPLv2 源码分发义务本身仍未核验，任何桌面/打包/单元绿灯都不构成许可通过。**【本轮后续已结】** 该阻断在之后的 F9 核验中定案解除，证据链与最终结论见首节 L1 行与 [pdf-font-license-verification.md](pdf-font-license-verification.md)。
+- **L1：仍待核验，保持发布阻断（该轮时点结论）。** `legalReviewRequired` 逐字保留 `pdfjs-dist Liberation fonts: source-distribution obligations remain unverified (GPLv2 with font exceptions)`，vendor 30/30 测试锁定该警告、四字体清单、`sourceDistributionVerified=false` 与 `copied` 状态；生成器明示“生成不等于再分发批准”。但字体 GPLv2 源码分发义务本身仍未核验，任何桌面/打包/单元绿灯都不构成许可通过。**【历史更正】** 2026-11-25 后续曾把该阻断记为“F9 核验定案解除”，2026-11-26 重核发现其前提错误并撤回；**当前仍保持发布阻断**，见文末当前复审。
 - **P1：证据资格通过（含残余边界）。** `package.json`/`package-lock.json` 中 `pptx-preview` 出现 0 次；source、`build/electron-app/public`、`dist-app` 三棵树各 652 文件逐字节一致，三树均无旧 `pptx-preview.js` 与旧许可目录；SEA 对 652 个文件逐一 HTTP 抓取并比对 sha256；`build/Pi GUI.exe` 与 `dist-app` exe 的 sha256 与 summary 工件逐字节相同。**残余边界**：未对 117 MB exe 内部做逐字节静态枚举，只能证明“被服务的字节全部正确”，不能证明 exe 内不存在不被服务的旧死字节。
 - **Nit（不阻断）**：`large-media-main.cjs:256` 的 `boundary`/`revocationBoundary` 为英文、与报告其余中文注释风格不一；不影响证据效力，本轮不改。
 
@@ -143,6 +152,71 @@ restore:choose  chosen=long-lines.js                  ← reset 重新触发恢�
 
 本轮 F1–F3 与 F8 的两份独立复审**实际运行在 devin/swe-2-1**，而非用户指定的星驰 gpt-6.1-sol —— 系委托时模型选择错误，发现后已取消并以正确模型重发。为不影响证据有效性，该两份报告的结论仍按实际运行模型如实标注；后续的第三轮 office 复审、startAt 定向复核与 Surface 场景诊断均已在正确的星驰 gpt-6.1-sol 上完成。模型偏差不否定已验证的发现本身，但读者应知晓审查者身份与最初指令不一致。
 
+## 2026-11-26 最终复审（当前）
+
+三个独立上下文针对当前未提交工作区运行；模型均为 `xingchiapi/gpt-6.1-sol`（星驰），effort max。
+
+### 字体许可整改复审（通过，Nit 1 已修）
+
+结论：**Blocker 0 / Important 0 / Nit 1**；L1 阻断保留是正确保护，不是整改缺陷。
+
+- 独立复算两个归档、四个字体、16 个 SFD、License.txt 与 glyph 数，结果与
+  [pdf-font-license-verification.md](pdf-font-license-verification.md) 一致。
+- 故障注入：伪造 `sourceDistributionVerified=true`/`correspondence=verified`、清空
+  `legalReviewRequired`、设置成功环境变量、`--skip-tests --skip-build` 均仍被拒绝；前置
+  门槛注入计数为网络 0 / 子进程 0 / 文件写入 0。
+- vendor（有缓存 363 文件 / 14,336,763 bytes；默认 357 / 10,038,557）与原 App 材料逐字节一致；
+  根 notices 40,962 bytes 含完整许可、SOURCE-INFO 与“Apache-2.0 不覆盖字体”。
+- **Nit（已修）**：根 notices 复制的 SOURCE-INFO 中“next to this notice”仍相对 vendor 目录，
+  在 App 根会指向不存在的位置。修复为由 `fontDistributionNotice()` 在文本前明确写出实际
+  vendor 路径；`tests/file-preview-vendor.cjs` 新增断言锁定。修复后 39/39。
+
+### 会话身份与文件树修复复审（首轮不通过，Important 已修）
+
+基线 `cba83982` + 未提交 diff；结论 **Blocker 0 / Important 1（本轮新引入）/ Nit 0，
+另有 Pre-existing 3**。指定六套实测全部通过，但额外时序注入发现：
+
+**Important（已修复）**：上一版用 `expectedScroll` 值相等吞掉“程序性回显”。用户滚动后
+`scroll` 事件尚未派发时发生一次重绘，重绘把同一值写回，随后到达的用户事件被误吞；
+`scrollIntent` 保持旧值，settle 时历史值覆盖用户位置。主动滚回 0 同样受影响
+（实测期望 0、实际 120）。
+
+处置：删除 `expectedScroll`，改为**只在刷新恢复窗口内忽略滚动事件**（loading 占位符会
+收缩滚动区）；窗口结束后每个事件都是真实位置，即使它由重绘前的手势异步到达。新增两条
+回归锁（非零与回 0）。灵敏度：换回旧回显逻辑后两条分别实测 `280 !== 120`、`120 !== 0`，
+恢复修复后 37/37。
+
+**Pre-existing 1（已修）**：父目录折叠后，子目录仍在 `expanded` 并集里；刷新清空折叠记录后
+会把父目录重新展开。`files-tree.js` 现在只报告“从根可达”的展开目录，刷新后折叠父目录
+保持折叠；新增回归锁（折叠 folder/sub、刷新、持久化 expanded 为空）。
+
+**Pre-existing 2（保留并披露）**：真实外层 Surface 在 owner 于 Files 挂载**之后**才建立时，
+正常的 `session-evidence-context` 通知会先退役旧 Files 实例（`disposed=true`，tabs=0）。
+本轮修复覆盖的是“owner 已建立、`S.state.sessionId` 投影未到”的窗口（Files 采用当前
+Classic owner 的 sessionId），不覆盖挂载后 owner 才建立的外层 scope 变化。后者需要
+Surface scope 迁移，属于禁止重写的架构范围；保留安全行为并如实披露，不宣称全链路已解。
+
+**Pre-existing 3（保留）**：`reveal()` 的 `scrollIntoView` 会把程序性定位记为滚动手势；
+这是基线既有行为，且 reveal 由用户打开文件触发，本轮不改。当前注释已收窄，不再声称
+程序性 reveal 不标记 touched。
+
+### PR #112 CI 未触发调查（原因已定位）
+
+实际原因：推送 `cba83982` 的时间（2026-11-25T16:03:07Z）落在 GitHub 官方事故
+[qn8mfv6q5hlx](https://www.githubstatus.com/incidents/qn8mfv6q5hlx) 窗口内
+（15:55:19Z–16:52:16Z，涉及 Git Operations / Webhooks / API / Pull Requests / Actions）。
+分支 ref 与 `git ls-remote` 已是新 SHA，但 PR 的 `head.sha`、GraphQL `headRefOid`、
+`refs/pull/112/head` 仍停在 `8f565f72`；最新 SHA 的 Actions run 数为 0，check-runs 与
+commit statuses 为空。排除 fork、跨仓、关闭重建、base 变更、路径过滤、skip-ci、权限/审批
+与 workflow 配置。结论：服务端 PR head 同步未完成，不是本地推错或 workflow 配置错误。
+最终提交正常推送后需重新核对 PR head 与新 run；旧 SHA 的成功/失败 run 均不冒充当前验证。
+
 ## 当前结论
 
-F1–F6、E1 已由独立上下文复现确认修复；第二轮唯一新引入的 I2-01 已修复并通过第三轮增量复核（0/0/0）；HTML 竞态、媒体 SSE 证据与旧 PPTX 产物边界均经独立增量复审通过（分别 0/0/0 与 0/0/1 非阻断 Nit）。本轮新增：office scanner 第三轮复审的唯一 Important（startAt=0 投影/渲染不一致）已修复并定向复核通过（0/0/1）；F9 字体许可已核验定案解除 L1 阻断；Surface 打包场景失败定位为场景驱动层陈旧期望，非产品缺陷，已修正。定向与相邻 canonical、源码桌面、真实大媒体均有最终通过记录。**仍在的边界**：R0 为预先存在的恢复竞态（本轮打包已含其生产环境回归证明），单独跟踪；PowerPoint 对 startAt=0、悬挂缩进 cap 分支的桌面应用实测未验证；P1 的 SEA 内部字节未全量枚举，只能证明实际服务集合；完整 canonical 依用户选择交由当前 PR CI，未完成前是待验证。用户仅授权提交、推送并更新既有 PR #112，未授权合并、tag 或发版。
+历史轮次的 F1–F6、E1 修复与 I2-01/startAt 处置按当时证据保留。2026-11-26 当前状态：
+字体许可整改与 fail-closed 门槛经独立复审通过（Nit 已修），**L1 发布阻断仍保留**；
+会话身份窄窗口修复与文件树滚动/折叠修复经复审发现 1 个新 Important，已修复并以
+37/37 与红→绿证明；外层 Surface 在 owner 晚于挂载时的退役时序保留为已披露边界；
+CI 未触发原因定位为 GitHub 服务事故，非配置。定向套件与打包产物验收通过，完整 canonical
+交由最终提交的 PR CI，完成前为**待验证**。用户仅授权提交、推送并更新既有 PR #112，
+未授权合并、tag 或发版。
