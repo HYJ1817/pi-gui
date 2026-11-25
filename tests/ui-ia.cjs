@@ -170,14 +170,19 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     assert.equal($('navHome').getAttribute('aria-current'), 'page');
     $('input').value = '';
   });
-  await check('Work panel Launcher shows real registry tools and preserves chat', () => {
+  await check('Work panel Launcher shows real registry tools, preserves chat and hides without a phantom tab', () => {
     $('btnWorkPanel').click();
     assert.equal($('rightPane').hidden, false);
     assert.deepEqual([...d.querySelectorAll('.work-panel-launcher-row')].map(row => row.dataset.tool), ['changes', 'terminal', 'files', 'specs', 'browser', 'tree', 'collab', 'process']);
     assert.equal(d.querySelectorAll('.work-panel-launcher-grid, .work-panel-launcher-card, .work-panel-launcher-more').length, 0);
     assert.equal($('workspace').dataset.workspaceView, 'chat');
+    assert.equal(d.querySelectorAll('.work-surface-tab').length, 0, 'the empty Launcher is hosted in the pane body, not a tab');
+    assert.ok(d.querySelector('#rightPane .work-tools-surface .work-panel-launcher-list'), 'tabless Launcher mounted in the pane body');
     $('workPanelClose').click(); assert.equal($('rightPane').hidden, true);
-    assert.ok(d.querySelector('.work-surface-tab[data-surface="work-tools"]'), 'hiding preserves the live Launcher tab');
+    assert.equal(d.querySelectorAll('.work-surface-tab').length, 0, 'hiding leaves no phantom Launcher tab');
+    $('btnWorkPanel').click(); assert.equal($('rightPane').hidden, false);
+    assert.ok(d.querySelector('#rightPane .work-tools-surface .work-panel-launcher-list'), 'reopening restores the live tabless Launcher');
+    $('workPanelClose').click(); assert.equal($('rightPane').hidden, true);
   });
   await check('Settings keeps the work panel entrance visible and hide preserves its selected tool tab', () => {
     $('navGlobalMore').click();
@@ -400,12 +405,16 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     d.querySelector('#rightPane .chg-main').click(); await tick();
     assert.equal(d.querySelector('#rightPane .chg-diff').hidden, false);
   });
-  await check('closing the Changes tab releases its owner and focuses a surviving tab', () => {
+  await check('closing the last Changes tab keeps the pane on the tabless Launcher and moves focus into it', async () => {
     const close = d.querySelector('.work-surface-tab[data-surface="changes"] .work-surface-tab-close');
     close.focus(); close.click();
     assert.equal($('rightPane').hidden, false); assert.equal(d.querySelector('#rightPane .chg-row'), null);
     assert.equal(d.querySelector('.work-surface-tab[data-surface="changes"]'), null);
-    assert.equal(d.activeElement, d.querySelector('.work-surface-tab-select[aria-selected="true"]'));
+    assert.equal(d.querySelectorAll('.work-surface-tab').length, 0, 'the last tool close creates no phantom tab');
+    const launcher = d.querySelector('#rightPane .work-tools-surface .work-panel-launcher-list');
+    assert.ok(launcher, 'pane stays open on the tabless empty-state Launcher');
+    await tick();
+    assert.equal(d.activeElement, launcher.querySelector('button:not([hidden]):not(:disabled)'), 'focus lands on the surviving Launcher');
   });
   await check('Browser and Changes remain live as independent tabs; explicit Browser close releases native view', async () => {
     activateTool('browser'); await tick(); assert.ok(d.querySelector('#browserViewport'));
