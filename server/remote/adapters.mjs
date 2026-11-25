@@ -451,9 +451,16 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
         // a boxed String('stream-reset') coerces through RegExp.test but fails
         // strict equality, so it was recorded raw (500s) yet normalized to the
         // reserved literal by JSON on restart, minting a replayable success.
-        if (typeof out?.conversationId !== 'string' || !OPAQUE_ID.test(out.conversationId) || out.conversationId === 'stream-reset') return deny('unavailable');
+        // Round-11 R11-CREATE-01: capture the identifier EXACTLY ONCE. The
+        // domain object is untrusted — an accessor can answer the validation
+        // reads with a valid value and the recording read with a poisoned
+        // one (primitive, boxed, or toJSON-shaped reserved ids all observed).
+        // Every check and the recorded outcome must use the same captured
+        // primitive: what is validated is what is persisted, byte for byte.
+        const convId = out?.conversationId;
+        if (typeof convId !== 'string' || !OPAQUE_ID.test(convId) || convId === 'stream-reset') return deny('unavailable');
         const ownerRevision = clock.registryRevision(domain.conversations());
-        const result = { conversationId: out.conversationId, ownerRevision };
+        const result = { conversationId: convId, ownerRevision };
         if (!idem.record(device.deviceId, projectId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');
         return okResult(result);
       } catch {

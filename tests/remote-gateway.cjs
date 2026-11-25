@@ -1688,13 +1688,17 @@ async function main() {
         });
         assert.notEqual(outcome.status, -1, `a response or termination is required: ${JSON.stringify(outcome)}`);
         assert.notEqual(outcome.status, 200, `no half-open 200: ${outcome.status}`);
+        // Strict envelope requirements (round-11 nit R11-PIN-01): the answer
+        // must be a 503 carrying a well-formed error envelope with the exact
+        // requestId echoed and retryable=true — never a bare destroy, never
+        // the zero sentinel, never a shapeless body.
+        assert.equal(outcome.status, 503, `expected correlated 503, got ${outcome.status}: ${outcome.body.slice(0, 200)}`);
+        const parsed = JSON.parse(outcome.body);
         const zero = '00000000-0000-0000-0000-000000000000';
-        assert.ok(!outcome.body.includes(zero), `the zero requestId is reserved for pre-auth errors, never post-auth: ${outcome.body.slice(0, 200)}`);
-        if (outcome.body.includes('requestId')) {
-          const parsed = JSON.parse(outcome.body);
-          assert.notEqual(parsed.requestId, zero, 'post-auth errors must be correlated');
-          assert.equal(parsed.error?.code, 'unavailable', `expected correlated unavailable, got ${outcome.body.slice(0, 200)}`);
-        }
+        assert.notEqual(parsed.requestId, zero, 'post-auth errors must never carry the zero sentinel');
+        assert.equal(parsed.requestId, x.headers['x-pi-remote-request-id'], `requestId must be echoed exactly: ${parsed.requestId} vs ${x.headers['x-pi-remote-request-id']}`);
+        assert.equal(parsed.error?.code, 'unavailable', `expected unavailable, got ${JSON.stringify(parsed.error)}`);
+        assert.equal(parsed.error?.retryable, true, 'initial-timeline failure must be retryable');
         assert.equal(ctx.remote.stream.subscribers.get(device.deviceId)?.size ?? 0, 0, 'no subscriber may survive');
       } finally { store.persistStreamGenerationFloor = orig; }
     } finally { await ctx.cleanup(); }
@@ -1769,6 +1773,71 @@ async function main() {
         assert.notEqual(r3.status, 200, `post-restart retry must not replay a normalized boxed success: ${r3.body}`);
       } finally { await remote2.close(); }
     } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('round-11: accessor-poisoned create result never escapes validation into the journal (R11-CREATE-01)', async () => {
+    // The getter answers the FIRST read with a valid id and every later read
+    // with primitive 'stream-reset'. A correct implementation reads exactly
+    // once, so validation and recording share one captured primitive: either
+    // the valid id is journaled (legitimate) or the poison is validated and
+    // refused. What must NEVER happen: validate the valid id yet journal the
+    // poison. The disk record is the witness.
+    let mode = 'normal';
+    let readCount = 0;
+    const validId = 'conv_valid_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    const ctx = await boot({
+      openConversation: async () => {
+        if (mode === 'normal') return { conversationId: 'conv_fixture_001' };
+        readCount = 0;
+        const obj = {};
+        Object.defineProperty(obj, 'conversationId', {
+          enumerable: true,
+          get() {
+            // The pre-fix implementation read three times for validation and
+            // a fourth time to build the recorded result — the defect lives
+            // in reads diverging AFTER validation. Reads 1-3 answer valid;
+            // the recording read (4+) is poisoned. A correct implementation
+            // reads exactly once, so only read 1 ever happens.
+            readCount++;
+            return readCount <= 3 ? validId : 'stream-reset';
+          },
+        });
+        return obj;
+      },
+    });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      mode = 'poisoned';
+      const pid = 'p-' + crypto.createHash('sha256').update('C:/fixture/proj').digest('base64url').slice(0, 22);
+      const clientConversationId = crypto.randomUUID();
+      const body = envelope('runtime.create', { clientConversationId }, 1);
+      const fire = () => {
+        const x = signed(device, ctx, { method: 'POST', path: `/remote/v1/projects/${pid}/conversations`, body });
+        return ctx.pinnedRequest('POST', `/remote/v1/projects/${pid}/conversations`, { rawBody: x.rawBody, headers: x.headers });
+      };
+      const r1 = await fire();
+      // Either legitimate acceptance of the FIRST-read valid id, or honest
+      // refusal — both are spec-compliant. The forbidden outcome is replaying
+      // 'stream-reset' as a success. Check the durable journal:
+      const idemPath = path.join(ctx.dataDir, 'remote-idempotency.json');
+      const journal = JSON.parse(fs.readFileSync(idemPath, 'utf8'));
+      const serialized = JSON.stringify(journal);
+      if (r1.status === 200) {
+        const parsed = JSON.parse(r1.body);
+        assert.equal(parsed.result?.conversationId, validId, `acceptance must carry the first-read id, not a later poisoned read: ${r1.body}`);
+      }
+      assert.ok(!serialized.includes('stream-reset'), `the reserved id must never be journaled by any read ordering: ${serialized.slice(0, 300)}`);
+      const r2 = await fire();
+      if (r1.status === 200) {
+        assert.equal(r2.status, 200, 'a legitimate success must replay honestly');
+        assert.equal(JSON.parse(r2.body).result?.conversationId, validId, 'replay must carry the same valid id');
+      } else {
+        assert.notEqual(r2.status, 200, `a refusal must never become a replayed success: ${r2.body}`);
+      }
+    } finally { await ctx.cleanup(); }
   });
 
   await t('production pairing completes: pending -> approve -> same-request retry', async () => {
