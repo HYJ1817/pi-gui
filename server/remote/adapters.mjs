@@ -141,6 +141,13 @@ export class IdempotencyStore {
   _key(deviceId, resourceId, ownerEpoch, clientId) {
     return `${deviceId}|${resourceId}|${ownerEpoch}|${clientId}`;
   }
+  /** Capacity must be consulted BEFORE dispatch: a mutation whose outcome can
+   * never be recorded must never execute — otherwise retries repeat the
+   * unrecorded effect (round-5 finding 1). Records never evict, so the gate
+   * is stable across the dispatch/record pair within this process. */
+  hasCapacity() {
+    return this.records.size < 4096;
+  }
   /** Highest owner epoch referenced by any live record. Keys are
    * deviceId|resourceId|epoch|clientId; the epoch is the third field. */
   maxLiveEpoch() {
@@ -302,6 +309,7 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     const prior = idem.resolve(device.deviceId, projectId, owner.epoch, clientId, payloadHash);
     if (prior?.conflict) return deny('payload_invalid');
     if (prior) return okResult(prior);
+    if (!idem.hasCapacity()) return deny('operation_rejected');
     try {
       const out = await domain.openConversation(proj.path, { clientConversationId: clientId });
       if (!OPAQUE_ID.test(out?.conversationId ?? '')) return deny('unavailable');
@@ -343,6 +351,7 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     const prior = idem.resolve(device.deviceId, conv.conversationId, owner.epoch, clientId, payloadHash);
     if (prior?.conflict) return deny('payload_invalid');
     if (prior) return okResult(prior);
+    if (!idem.hasCapacity()) return deny('operation_rejected');
     try {
       const out = await domain.sendMessage({ owner, text: body.payload.text, clientMessageId: clientId });
       const result = { clientMessageId: clientId, accepted: out?.accepted === true, ownerRevision: conv.revision ?? 0 };

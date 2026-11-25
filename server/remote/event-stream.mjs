@@ -148,7 +148,14 @@ export class EventStream {
     const s = { deviceId: device.deviceId, res, keepalive: null, expiry: null, closed: false, generation: 0, resetting: false };
     res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' });
     this._subs(device.deviceId).add(s); this.streams.add(s);
+    // Slot release must track the RESPONSE/socket lifecycle, not only the
+    // request: a disconnected client can leave the request 'close' without the
+    // response tearing down promptly, retaining the slot and blocking
+    // reconnects (round-5 finding 2). All paths funnel into idempotent _close.
     req.on('close', () => this._close(s));
+    res.on('close', () => this._close(s));
+    res.socket?.on('close', () => this._close(s));
+    res.on('error', () => this._close(s));
     if (!cursor) s.generation = ++t.genCtr;
     else {
       this._prune(t);

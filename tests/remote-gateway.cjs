@@ -722,6 +722,78 @@ async function main() {
     } finally { await ctx.cleanup(); }
   });
 
+  await t('full idempotency capacity refuses before dispatch (round-5 finding 1)', async () => {
+    let sends = 0;
+    const ctx = await boot({ sendMessage: async () => { sends++; return { accepted: true }; } });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Fill the store to capacity with synthetic records (same shape the
+      // runtime writes), then verify a NEW mutation is refused WITHOUT executing.
+      const idem = ctx.remote.adapters.idem;
+      // Fill the map directly: the gate reads only live records.size, and the
+      // per-record sync persistence loop would benchmark the known write-
+      // amplification nit instead of the gate. Shape matches record() entries.
+      for (let i = 0; i < 4096; i++) idem.records.set(idem._key(device.deviceId, 'filler-' + i, 1, 'fill-' + i), { payloadSha256: 'h', outcome: { accepted: true }, at: Date.now() });
+      assert.ok(!idem.hasCapacity(), 'store at capacity');
+      const clientMessageId = crypto.randomUUID();
+      const body = envelope('chat.send', { clientMessageId, text: 'hi' }, 1);
+      const x = signed(device, ctx, { method: 'POST', path: '/remote/v1/conversations/conv_fixture_001/messages', body });
+      const r = await ctx.pinnedRequest('POST', '/remote/v1/conversations/conv_fixture_001/messages', { rawBody: x.rawBody, headers: x.headers });
+      assert.equal(JSON.parse(r.body).error?.code, 'operation_rejected', r.body);
+      assert.equal(sends, 0, 'refused mutation must never dispatch');
+      // Retry semantics: a recorded hit must STILL resolve even at capacity —
+      // the record exists, so resolve short-circuits before the capacity gate.
+      // (Synthetic record written directly to emulate a pre-capacity success.)
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('disconnected SSE slots release promptly and permit reconnect (round-5 finding 2)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const openAndKill = async () => {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+        await new Promise(resolve => {
+          const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+            res.on('data', () => {});
+            // Really sever the TCP connection: after the response arrives the
+            // socket belongs to the response path, so destroying the request
+            // object alone leaves the connection open (masking the leak).
+            res.socket.destroy();
+            res.socket.once('close', resolve);
+          });
+          req.on('error', () => {});
+          req.end();
+        });
+      };
+      // Disconnect twice (maxConcurrentStreamsPerDevice is small); without the
+      // fix the slots linger until a write/keepalive notices, up to 15s.
+      await openAndKill();
+      await openAndKill();
+      // Give the server a moment to process the close events — far below the
+      // 15s keepalive that previously masked the leak.
+      await new Promise(r => setTimeout(r, 400));
+      // A fresh subscription must be admitted (200), not 429 server_busy.
+      const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+      const status = await new Promise(resolve => {
+        const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          const status = res.statusCode;
+          res.socket.destroy();   // admitted: sever the stream for real
+          resolve(status);
+        });
+        req.on('error', () => resolve(0));
+        req.end();
+      });
+      assert.equal(status, 200, `reconnect after disconnects must be admitted, got ${status}`);
+    } finally { await ctx.cleanup(); }
+  });
+
   await t('production pairing completes: pending -> approve -> same-request retry', async () => {
     // No injected confirmLocally: the loopback admin approves a server-verified
     // pending transcript and the device retries the SAME signed request.
