@@ -200,7 +200,7 @@
     "test:ui4": "node tests/ui4-approval.cjs && node tests/ui4-feedback.cjs && node tests/ui4-integration.cjs",
     "test:specs": "node tests/specs.cjs && node tests/specs-ui.cjs && node tests/panel-restore-ui.cjs",
     "test:work-surfaces": "node tests/files-terminal.cjs && node tests/files-terminal-ui.cjs && node tests/terminal-job-object.cjs && npm run test:surfaces",
-    "test:surfaces": "node tests/surface-tabs.cjs && node tests/surface-lifecycle.cjs && node tests/files-surface-lifecycle.cjs",
+    "test:surfaces": "node tests/surface-tabs.cjs && node tests/surface-lifecycle.cjs && node tests/files-surface-lifecycle.cjs && node tests/files-restore-race.cjs",
     "test:file-links": "node tests/file-link-model.cjs && node tests/file-links-backend.cjs && node tests/external-grants.cjs && node tests/external-files.cjs && node tests/editor-settings.cjs && node tests/editor-settings-ui.cjs && node tests/file-links-ui.cjs && node tests/file-links-runtime.cjs && node tests/source-highlight.cjs",
     "test:diff-comments": "node tests/diff-comments.cjs && node tests/diff-comments-ui.cjs && node tests/diff-comments-split.cjs && node tests/diff-comment-ranges.cjs && node tests/diff-comment-ranges-ui.cjs && npm run test:review-tasks",
     "test:review-tasks": "node tests/review-task.cjs && node tests/review-task-ui.cjs",

@@ -71,17 +71,25 @@ let dom, surfaces;
     assert.equal(document.querySelectorAll('#workPanelTabs > *').length, 0);
   });
   surfaces.showSecondaryPane(); await tick();
-  check('empty pane launches a centered single tool list with official local icons', () => {
-    assert.equal(selected().view, 'work-tools');
+  /* The empty pane is a tabless Launcher hosted directly in the pane body,
+   * not a 'work-tools' tab: the strip stays empty and nothing persists. */
+  check('empty pane is a tabless centered Launcher with official local icons', () => {
+    assert.equal(all().length, 0);
+    assert.equal(document.querySelectorAll('#workPanelTabs > *').length, 0);
     assert.equal(document.querySelectorAll('.work-panel-launcher-row').length, defs.length);
     assert.equal(document.querySelectorAll('.work-panel-launcher-row svg[data-icon]').length, defs.length);
     assert.equal(document.querySelector('.work-panel-launcher-more, .work-panel-tool-card'), null);
-    assert.equal(document.activeElement.dataset.tool, 'changes');
+    assert.equal(pane.isOpen(), true);
   });
-  const firstLauncher = all()[0].id;
+  document.getElementById('workPanelNew').click(); await tick();
+  const firstLauncher = selected().id;
+  check('+ creates the first independent blank Launcher tab', () => {
+    assert.equal(all().length, 1); assert.equal(selected().view, 'work-tools');
+    assert.equal(document.querySelectorAll('.work-tools-surface:not([hidden])').length, 1);
+  });
   document.getElementById('workPanelNew').click(); await tick();
   const secondLauncher = selected().id;
-  check('+ creates an independent blank tab instead of replacing the first Launcher', () => {
+  check('+ again creates an independent blank tab instead of replacing the first Launcher', () => {
     assert.equal(all().length, 2); assert.notEqual(firstLauncher, secondLauncher);
     assert.equal(document.querySelectorAll('.work-tools-surface').length, 2);
   });
@@ -182,11 +190,29 @@ let dom, surfaces;
     assert.equal(surfaces.secondarySurfaceInstance('files'), liveFiles);
   });
   menu('files', '关闭标签页');
-  check('close-current menu closes the last tool and hides the shell', () => { assert.equal(all().length, 0); assert.equal(pane.isOpen(), false); });
+  check('closing the last tool keeps the pane open on a tabless empty-state Launcher', () => {
+    assert.equal(all().length, 0); assert.equal(pane.isOpen(), true);
+    assert.equal(document.querySelectorAll('#workPanelTabs > *').length, 0);
+    assert.ok(document.querySelector('.rp-body > .work-tools-surface .work-panel-launcher-list'));
+    assert.equal(pane.surface(), 'work-tools');
+  });
   open('changes'); open('files'); menu('changes', '关闭全部标签页');
-  check('close-all releases all tabs, not just the visible one', () => { assert.equal(all().length, 0); assert.equal(pane.isOpen(), false); });
+  check('close-all releases every tab and the pane stays open on the empty-state Launcher', () => {
+    assert.equal(all().length, 0); assert.equal(pane.isOpen(), true);
+    assert.ok(document.querySelector('.rp-body > .work-tools-surface .work-panel-launcher-list'));
+  });
+  /* Closing the empty state itself is impossible — it is not a tab, so there
+   * is nothing to close and no close loop can form. */
+  check('the empty state is not a closeable tab and creates no persisted descriptor', () => {
+    const emptySurface = document.querySelector('.rp-body > .work-tools-surface');
+    assert.ok(emptySurface);
+    assert.equal(emptySurface.querySelector('.surface-resume, .work-surface-tab-close'), null);
+  });
   open('specs'); tabFor('specs').parentElement.onauxclick({ button: 1, preventDefault() {} });
-  check('middle click closes its own tab', () => assert.equal(all().length, 0));
+  check('middle click closes the last tool back into the empty-state Launcher', () => {
+    assert.equal(all().length, 0);
+    assert.ok(document.querySelector('.rp-body > .work-tools-surface .work-panel-launcher-list'));
+  });
   surfaces.newSecondaryLauncher(); await tick();
   let launcher = document.querySelector('.work-panel-launcher-list');
   const rows = () => [...launcher.querySelectorAll('button')];

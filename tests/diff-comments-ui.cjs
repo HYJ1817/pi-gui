@@ -30,6 +30,7 @@ async function main() {
     window: dom.window,
     document: dom.window.document,
     localStorage: dom.window.localStorage,
+    sessionStorage: dom.window.sessionStorage,
     MutationObserver: dom.window.MutationObserver,
     CustomEvent: dom.window.CustomEvent,
     requestAnimationFrame: (fn) => setTimeout(fn, 0),
@@ -38,7 +39,7 @@ async function main() {
 
   const { S } = await import('../public/state.js');
   const { initRightPane } = await import('../public/right-pane.js');
-  const { configureSecondaryPane } = await import('../public/ui/secondary-surface.js');
+  const { configureSecondaryPane, closeSecondarySurface } = await import('../public/ui/secondary-surface.js');
   const { setGitConversationScope } = await import('../public/api.js');
   const { openChangesPanel, refreshGitNow, resetChanges } = await import('../public/git.js');
   const { currentReviewScope, commentsForScope } = await import('../public/diff-comments.js');
@@ -421,10 +422,12 @@ async function main() {
 
     S.state = { sessionId: 'classic-b' };
     document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
-    ok('a classic session switch removes the previous review counts immediately', () =>
-      !document.querySelector('#btnChangesReview').textContent.includes('1') &&
-      document.querySelector('#btnChangesReview').disabled === true &&
+    ok('a classic session switch retires the previous Changes surface and review counts', () =>
+      !document.querySelector('.changes') &&
       !document.querySelector('.chg-review-n'));
+    /* A hard boundary retires the whole surface in the new architecture; the
+     * owner must be reopened before its controls exist again. */
+    openChangesPanel();
     await refreshGitNow();
     await until(() => rowOf('classic.txt'));
     await openRow('classic.txt');
@@ -438,11 +441,15 @@ async function main() {
       commentsForScope().length === 0 && requests.filter(r => r.url.endsWith('/api/review-comments') && r.body).length === beforeStaleClick);
     S.state = { sessionId: 'classic-a' };
     document.dispatchEvent(new window.CustomEvent('pi-gui:session-switch'));
+    openChangesPanel();
     await refreshGitNow();
     await until(() => rowOf('classic.txt'));
 
-    /* Panel close/reopen keeps comments, discards unsaved editor text. */
+    /* Explicitly closing the surface keeps saved comments but discards the
+     * unsaved editor draft. (Hiding the pane is not closing: only an explicit
+     * close retires the owner.) */
     setGitConversationScope('A');
+    openChangesPanel();
     await refreshGitNow();
     await until(() => rowOf('A.txt'));
     const closeRow = await openRow('A.txt');
@@ -450,7 +457,7 @@ async function main() {
     await tick();
     editor(closeRow).querySelector('textarea').value = '关闭面板前的草稿';
     editor(closeRow).querySelector('textarea').dispatchEvent(new window.Event('input', { bubbles: true }));
-    pane.close();
+    closeSecondarySurface('changes');
     await tick();
     openChangesPanel();
     await refreshGitNow();
@@ -478,7 +485,7 @@ async function main() {
     editor(pendingCloseRow).querySelector('textarea').value = '关闭时仍在保存的评论';
     let releaseClosed;
     reviewBackend.hold = () => new Promise(resolve => { releaseClosed = resolve; });
-    save(pendingCloseRow).click(); await tick(); pane.close();
+    save(pendingCloseRow).click(); await tick(); closeSecondarySurface('changes');
     reviewBackend.hold = null; releaseClosed(); await tick();
     ok('closing a panel while saving never resurrects its editor after the acknowledgement', () =>
       !document.querySelector('.d-review-editor') && commentsForScope().length === 1);
