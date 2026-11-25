@@ -885,11 +885,20 @@ function changeRow(f, inSession, reopenSerial = 0, listRestore = null) {
   const acts = document.createElement('span');
   acts.className = 'chg-acts';
   if (!f.isDir) {
+    /* The file belongs to the workspace that rendered this row, not whichever
+     * workspace happens to be current when the dynamic import resolves. Capture
+     * the full identity now: a same-named file in a replaced workspace, a
+     * switched worktree or a retired runtime owner must never be opened by a
+     * late click. The re-check after the await binds every dimension. */
     const conversationId = gitConversationScope();
+    const generation = S.workspaceGeneration;
+    const cwd = S.cwd;
     const preview = tinyBtn('查看文件', async () => {
       const { openFileReference } = await import('./files-panel.js');
       if (gitConversationScope() !== conversationId) return;
-      openFileReference({ path: f.path, name: f.path.split(/[\\/]/).pop(), conversationId });
+      if (!ownsWorkspace(generation)) return;
+      if ((S.cwd || '') !== (cwd || '')) return;
+      openFileReference({ path: f.path, name: f.path.split(/[\\/]/).pop(), conversationId, cwd });
     });
     preview.classList.add('chg-view-file'); acts.append(preview);
   }

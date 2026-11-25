@@ -78,10 +78,34 @@ function text(shape, inherited, ctx) {
   const bodyAttr = name => bodyProperties.map(value => attr(value, name)).find(Boolean) || '';
   const baseFont = { size: 18 * 12700 * ctx.scale, color: ctx.colors[ctx.colorMap.tx1] || '#000000' };
   const defaultFont = [...inheritedBodies].reverse().reduce((value, inheritedBody) => font(first(inheritedBody, A, 'defRPr'), ctx, value), baseFont);
+  /* East-Asian typeface is a separate attribute in DrawingML; without it a
+   * Chinese run falls back to the Latin face even though the document named a
+   * proper CJK font. Latin is still the primary face for Latin text. */
+  const eaTypeface = properties => attr(child(properties, A, 'ea'), 'typeface');
   const paragraphs = children(body, A, 'p').map(paragraph => {
     const pPr = child(paragraph, A, 'pPr');
     const paragraphFont = font(child(pPr, A, 'defRPr'), ctx, defaultFont);
     const alignment = { ctr: 'center', r: 'right', just: 'justify', l: 'left' }[attr(pPr, 'algn')] || 'left';
+    /* Common list/paragraph structure: bullet or auto-number, indentation level
+     * and the hanging indent geometry. These are ordinary in everyday decks. */
+    const level = Math.max(0, Math.min(8, number(attr(pPr, 'lvl'), 0, 8)));
+    const marL = Math.max(0, number(attr(pPr, 'marL'), 0, 36576000) * ctx.scale);
+    const indent = number(attr(pPr, 'indent'), 0, 36576000) * ctx.scale;
+    let marker = null;
+    if (!child(pPr, A, 'buNone')) {
+      const bulletChar = attr(child(pPr, A, 'buChar'), 'char');
+      const autoNum = child(pPr, A, 'buAutoNum');
+      if (bulletChar) marker = { kind: 'bullet', char: bulletChar.slice(0, 4) };
+      else if (autoNum) {
+        const format = attr(autoNum, 'type') || 'arabicPeriod';
+        const start = Math.max(0, Math.min(32767, number(attr(autoNum, 'startAt'), 1, 32767)));
+        marker = { kind: 'number', format, start };
+      } else if (child(pPr, A, 'buFont') || marL > 0) marker = { kind: 'bullet', char: '•' };
+    }
+    const spacing = {
+      before: Math.max(0, number(attr(child(child(pPr, A, 'spcBef'), A, 'spcPts'), 'val'), 0, 400000) / 100 * (12700 * ctx.scale)),
+      after: Math.max(0, number(attr(child(child(pPr, A, 'spcAft'), A, 'spcPts'), 'val'), 0, 400000) / 100 * (12700 * ctx.scale)),
+    };
     const runs = [];
     for (const item of Array.from(paragraph.childNodes || [])) {
       if (item.nodeType !== 1 || item.namespaceURI !== A) continue;
@@ -90,9 +114,12 @@ function text(shape, inherited, ctx) {
       const value = child(item, A, 't')?.textContent || '';
       ctx.budget.text += value.length;
       if (ctx.budget.text > OFFICE_LIMITS.textChars) throw officeError('size');
-      runs.push({ text: value, ...font(child(item, A, 'rPr'), ctx, paragraphFont) });
+      const runFont = font(child(item, A, 'rPr'), ctx, paragraphFont);
+      const east = eaTypeface(child(item, A, 'rPr')) || eaTypeface(child(pPr, A, 'defRPr'));
+      if (!runFont.family && /^[\p{L}\p{N} ,_.-]{1,80}$/u.test(east)) runFont.eastFamily = east;
+      runs.push({ text: value, ...runFont });
     }
-    return { alignment, runs };
+    return { alignment, runs, level, marL, indent, marker, spacing };
   });
   const margins = {};
   for (const [side, name] of [['left','lIns'],['top','tIns'],['right','rIns'],['bottom','bIns']]) margins[side] = Math.max(0, number(bodyAttr(name), side === 'left' || side === 'right' ? 91440 : 45720) * ctx.scale);

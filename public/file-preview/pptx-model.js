@@ -47,7 +47,17 @@ export function projectPptx(bytes, DOMParser, expectedSlides) {
     const result = new Map();
     if (names.has(relPath)) for (const item of children(xml(relPath), REL, 'Relationship')) {
       const id = attr(item, 'Id'), target = attr(item, 'Target'), type = attr(item, 'Type');
-      if (!id || result.has(id) || (attr(item, 'TargetMode') && attr(item, 'TargetMode') !== 'Internal')) throw officeError('external-link');
+      const mode = attr(item, 'TargetMode') || 'Internal';
+      if (!id || result.has(id)) throw officeError('external-link');
+      if (mode !== 'Internal') {
+        /* The preflight already classified external relationships: only a
+         * network-safe hyperlink survived, and it is text, not a resource.
+         * It is never resolved into the package or fetched, so it simply is
+         * not registered as an internal part. Anything else the preflight let
+         * through by mistake still fails closed here. */
+        if (type.split('/').pop().toLowerCase() !== 'hyperlink' || !/^https?:\/\//i.test(target)) throw officeError('external-link');
+        continue;
+      }
       const resolved = targetPath(part, target);
       if (!names.has(resolved)) throw officeError('format');
       result.set(id, { target: resolved, type });

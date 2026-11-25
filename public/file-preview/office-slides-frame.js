@@ -25,16 +25,65 @@
     set({ fill: item.fill || 'none', stroke: item.stroke || 'none', 'stroke-width': item.strokeWidth || 0 });
     root.append(shape); return root;
   }
+  /* Auto-number formats seen in ordinary decks. Exotic numbering schemes fall
+   * back to a simple arabic counter rather than dropping the list structure. */
+  function numeral(value, format) {
+    if (format.startsWith('alpha')) {
+      const letter = String.fromCharCode(97 + ((value - 1) % 26));
+      const text = value > 26 ? letter + letter : letter;
+      const upper = format[0] === 'a' ? text : text.toUpperCase();
+      return format.endsWith('ParenR') ? upper + ')' : upper + '.';
+    }
+    if (format.startsWith('roman')) {
+      const table = [[1000,'m'],[900,'cm'],[500,'d'],[400,'cd'],[100,'c'],[90,'xc'],[50,'l'],[40,'xl'],[10,'x'],[9,'ix'],[5,'v'],[4,'iv'],[1,'i']];
+      let rest = value, out = '';
+      for (const [n, sym] of table) while (rest >= n) { out += sym; rest -= n; }
+      const text = format[0] === 'r' ? out : out.toUpperCase();
+      return format.endsWith('ParenR') ? text + ')' : text + '.';
+    }
+    return format.endsWith('ParenR') ? value + ')' : value + '.';
+  }
   function text(item) {
     const box = node('div', 'pptx-text');
     Object.assign(box.style, { position: 'absolute', inset: '0', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', justifyContent: item.anchor,
       padding: `${item.margins.top}px ${item.margins.right}px ${item.margins.bottom}px ${item.margins.left}px`, whiteSpace: item.wrap ? 'pre-wrap' : 'pre', overflowWrap: 'anywhere', lineHeight: '1.2' });
+    // Auto-number counters run per indent level across the shape's paragraphs.
+    const counters = new Map();
     for (const paragraph of item.paragraphs) {
-      const p = node('p'); Object.assign(p.style, { margin: '0', textAlign: paragraph.alignment, minHeight: '.9em' });
+      const p = node('p');
+      const padLeft = (paragraph.marL || 0) + (paragraph.level || 0) * 0;
+      Object.assign(p.style, {
+        margin: '0', textAlign: paragraph.alignment, minHeight: '.9em',
+        paddingLeft: padLeft + 'px',
+        marginTop: (paragraph.spacing?.before || 0) + 'px',
+        marginBottom: (paragraph.spacing?.after || 0) + 'px',
+      });
+      // A hanging indent pulls the first line (the marker) back towards the margin.
+      if (paragraph.indent) p.style.textIndent = paragraph.indent + 'px';
+      if (paragraph.marker) {
+        const marker = node('span'); marker.className = 'pptx-marker';
+        let label;
+        if (paragraph.marker.kind === 'number') {
+          const level = paragraph.level || 0;
+          const next = (counters.get(level) ?? (paragraph.marker.start || 1) - 1) + 1;
+          counters.set(level, next);
+          for (const deeper of [...counters.keys()]) if (deeper > level) counters.delete(deeper);
+          label = numeral(next, paragraph.marker.format || 'arabicPeriod');
+        } else label = paragraph.marker.char || '•';
+        marker.textContent = label + ' ';
+        const base = paragraph.runs[0] || {};
+        Object.assign(marker.style, { fontSize: (base.size || 18) + 'px', color: base.color || 'inherit', fontWeight: base.bold ? '700' : '400' });
+        p.append(marker);
+      }
       for (const run of paragraph.runs) {
         const span = node('span'); span.textContent = run.text;
         Object.assign(span.style, { fontSize: run.size + 'px', color: run.color, fontWeight: run.bold ? '700' : '400', fontStyle: run.italic ? 'italic' : 'normal', textDecoration: run.underline ? 'underline' : 'none' });
-        if (run.family) span.style.fontFamily = run.family;
+        // Latin face first, the East-Asian face as the CJK fallback, then a
+        // generic CJK system fallback so Chinese text never renders as boxes.
+        const faces = [run.family, run.eastFamily, run.family ? null : 'system-ui'].filter(Boolean);
+        if (/[㐀-鿿]/.test(run.text) && !run.eastFamily && !run.family) faces.unshift('Microsoft YaHei', 'PingFang SC', 'SimSun');
+        if (faces.length) span.style.fontFamily = faces.map(face => /^[\p{L}\p{N} ,_.-]+$/u.test(face) && /\s/.test(face) ? `"${face}"` : face).join(', ');
+        else if (run.family) span.style.fontFamily = run.family;
         p.append(span);
       }
       box.append(p);

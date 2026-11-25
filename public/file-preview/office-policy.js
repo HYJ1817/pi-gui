@@ -143,18 +143,36 @@ export function inspectOffice(bytes, kind, { validateXml } = {}) {
       });
       nodes += (xml.match(/</g) || []).length;
       if (nodes > OFFICE_LIMITS.xmlNodes) throw officeError('xml-limit');
-      if (/TargetMode\s*=\s*["']\s*External\s*["']|(?:macroEnabled|vbaProject|oleObject|activeX|attachedTemplate)/i.test(xml)) {
+      if (/(?:macroEnabled|vbaProject|oleObject|activeX|attachedTemplate)/i.test(xml)) {
         throw officeError('active-content');
       }
-      // Internal .rels targets cannot be a URI, protocol-relative URL or a
-      // Windows path. Relative ../ targets are valid package relationships.
+      /* External relationships are classified by their OOXML Type, not rejected
+       * wholesale. Ordinary documents routinely carry harmless hyperlinks (a
+       * reference or a web address); only those, and only over a network-safe
+       * scheme, may survive — and they are never fetched during preview. Every
+       * other external target (remote image, template, workbook, data
+       * connection, OLE object, or an unknown type) still refuses the package. */
       if (name.endsWith('.rels')) {
-        for (const mode of xml.matchAll(/\bTargetMode\s*=\s*["']([^"']*)["']/gi)) {
-          if (mode[1] !== 'Internal') throw officeError('external-link');
+        for (const rel of xml.matchAll(/<(?:\w+:)?Relationship\b[^>]*>/gi)) {
+          const tag = rel[0];
+          const type = (tag.match(/\bType\s*=\s*["']([^"']*)["']/i) || [])[1] || '';
+          const target = (tag.match(/\bTarget\s*=\s*["']([^"']*)["']/i) || [])[1] || '';
+          const mode = (tag.match(/\bTargetMode\s*=\s*["']([^"']*)["']/i) || [])[1] || 'Internal';
+          const suffix = type.split('/').pop().toLowerCase();
+          if (mode !== 'Internal') {
+            if (mode !== 'External') throw officeError('external-link');
+            if (suffix !== 'hyperlink') throw officeError('active-content');
+            if (!/^https?:\/\//i.test(target)) throw officeError('external-link');
+            continue;
+          }
+          // Internal targets cannot be a URI, protocol-relative URL or a
+          // Windows path. Relative ../ targets are valid package relationships.
+          if (/[:\\]|^\s*\/|&#/i.test(target)) throw officeError('external-link');
         }
-        for (const target of xml.matchAll(/\bTarget\s*=\s*["']([^"']*)["']/gi)) {
-          if (/[:\\]|^\s*\/|&#/i.test(target[1])) throw officeError('external-link');
-        }
+      } else if (/TargetMode\s*=\s*["']\s*External\s*["']/i.test(xml)) {
+        // A TargetMode outside a .rels part is not a package relationship and
+        // has no legitimate reading in the supported formats.
+        throw officeError('active-content');
       }
       if (name === 'xl/workbook.xml') {
         let namedArea = 0;
@@ -177,11 +195,16 @@ export function inspectOffice(bytes, kind, { validateXml } = {}) {
       }
       if (/^ppt\/slides\/slide\d+\.xml$/.test(name)) slides++;
       if (name === 'ppt/presentation.xml') {
-        // pptx-preview creates a canvas at the source EMU aspect ratio. Refuse
-        // abnormal slides before the library can create an enormous surface.
-        const dimensions = xml.match(/<(?:\w+:)?sldSz\b[^>]*\bcx=["'](\d+)["'][^>]*\bcy=["'](\d+)["']/);
-        if (!dimensions) throw officeError('slide-size');
-        const [cx, cy] = [Number(dimensions[1]), Number(dimensions[2])];
+        // Refuse abnormal slide surfaces before a renderer can allocate an
+        // enormous canvas. Attribute order in XML is not significant, so the
+        // scan reads cx/cy independently of their positions, quote style and
+        // whitespace, and tolerates any namespace prefix on the element.
+        const element = xml.match(/<(?:[A-Za-z][\w.-]*:)?sldSz\b[^>]*>?/);
+        if (!element) throw officeError('slide-size');
+        const cxAttr = element[0].match(/\bcx\s*=\s*["'](\d+)["']/);
+        const cyAttr = element[0].match(/\bcy\s*=\s*["'](\d+)["']/);
+        if (!cxAttr || !cyAttr) throw officeError('slide-size');
+        const cx = Number(cxAttr[1]), cy = Number(cyAttr[1]);
         aspect = cx / cy;
         if (cx < 914400 || cy < 914400 || cx > 36576000 || cy > 36576000 || cx / cy > 4 || cy / cx > 4) throw officeError('slide-size');
       }
