@@ -356,3 +356,100 @@ test('east-asian typeface participates without a latin face', async () => {
   const run = shape.text.paragraphs[0].runs[0];
   assert.equal(run.eastFamily, '微软雅黑');
 });
+
+/* F6 real-software compatibility: these two decks were written by LibreOffice
+ * Impress (headless conversion of the sibling .fodp sources, kept in the same
+ * directory for provenance and regeneration). They are what real office
+ * software actually emits for bullets, auto-numbering and multi-level lists —
+ * notably, LibreOffice exports bullet glyphs as buChar with font-specific
+ * characters, and real auto-numbering as buAutoNum with
+ * arabicPlain/alphaLcPeriod/romanLcPeriod types. The projection must carry
+ * their structure without rejection, silent drops or fabricated markers. */
+const realDeck = name => new Uint8Array(require('node:fs').readFileSync(path.join(__dirname, 'fixtures/office-real', name)));
+
+test('real LibreOffice mixed bullet deck passes preflight with complete structure', async () => {
+  const bytes = realDeck('libreoffice-bullets-mixed.pptx');
+  const { inspectOffice } = await import(pathToFileURL(path.join(ROOT, 'public/file-preview/office-policy.js')));
+  const inspection = inspectOffice(bytes, 'pptx');
+  assert.equal(inspection.slides, 2);
+  const deck = await (await load).parseOffice('pptx', bytes).then(result => result.deck);
+  assert.equal(deck.slides.length, 2);
+  assert.equal(deck.unsupported, 0);
+  const slide1 = deck.slides[0];
+  const paragraphs = slide1.shapes.flatMap(shape => shape.text?.paragraphs || []).filter(p => p.runs.some(r => r.text.trim()));
+  // CJK text survives the full pipeline without replacement characters.
+  assert.ok(paragraphs.some(p => p.runs.map(r => r.text).join('').includes('真实软件兼容性验证')));
+  assert.ok(paragraphs.some(p => p.runs.map(r => r.text).join('').includes('第一层项目符号')));
+  assert.ok(paragraphs.some(p => p.runs.map(r => r.text).join('').includes('中文混排')));
+  // Two nesting levels of bullets are projected with their indent geometry.
+  const bulleted = paragraphs.filter(p => p.marker?.kind === 'bullet');
+  assert.ok(bulleted.length >= 5, 'LibreOffice bullet items carry bullet markers');
+  assert.ok(bulleted.some(p => p.level === 0) && bulleted.some(p => p.level === 1), 'nested levels preserved');
+  for (const p of bulleted) {
+    assert.ok(p.marL > 0, 'bullet paragraphs carry real marL');
+    assert.ok(p.indent < 0, 'bullet paragraphs carry hanging indent');
+  }
+  // Plain paragraphs never grow a bullet from mere indentation (I4 regression).
+  const plain = paragraphs.find(p => p.runs.map(r => r.text).join('').includes('普通段落'));
+  assert.equal(plain.marker, null);
+  // Slide 2 numbering items remain readable text; the projection must not
+  // fabricate numbering the source does not carry.
+  const slide2 = deck.slides[1];
+  const items2 = slide2.shapes.flatMap(shape => shape.text?.paragraphs || []).filter(p => p.runs.some(r => r.text.trim()));
+  assert.ok(items2.some(p => p.runs.map(r => r.text).join('').trim() === '甲'));
+  assert.ok(items2.some(p => p.runs.map(r => r.text).join('').trim() === '乙'));
+  assert.ok(items2.some(p => p.runs.map(r => r.text).join('').trim() === '丙'));
+});
+
+test('real LibreOffice auto-numbering deck projects true buAutoNum across three levels', async () => {
+  const bytes = realDeck('libreoffice-autonum-multilevel.pptx');
+  const { inspectOffice } = await import(pathToFileURL(path.join(ROOT, 'public/file-preview/office-policy.js')));
+  assert.equal(inspectOffice(bytes, 'pptx').slides, 1);
+  const deck = await (await load).parseOffice('pptx', bytes).then(result => result.deck);
+  assert.equal(deck.unsupported, 0);
+  const paragraphs = deck.slides[0].shapes.flatMap(shape => shape.text?.paragraphs || []).filter(p => p.runs.some(r => r.text.trim()));
+  const numbered = paragraphs.filter(p => p.marker?.kind === 'number');
+  // Real office software wrote arabicPlain at level 0, alphaLcPeriod at
+  // level 1 and romanLcPeriod at level 2 — exactly the everyday formats.
+  const formats = numbered.map(p => [p.level, p.marker.format]);
+  assert.ok(formats.some(([level, format]) => level === 0 && format === 'arabicPlain'), JSON.stringify(formats));
+  assert.ok(formats.some(([level, format]) => level === 1 && format === 'alphaLcPeriod'), JSON.stringify(formats));
+  assert.ok(formats.some(([level, format]) => level === 2 && format === 'romanLcPeriod'), JSON.stringify(formats));
+  // LibreOffice omits startAt when it means continuation — the projection
+  // must read them as non-explicit so the counter continues 1,2,3.
+  assert.ok(numbered.every(p => !p.marker.explicitStart));
+  const arabicItems = numbered.filter(p => p.marker.format === 'arabicPlain');
+  assert.ok(arabicItems.length >= 3, 'three top-level numbered items');
+  // Multi-level bullets survive with their distinct glyphs.
+  const bulletChars = new Set(paragraphs.filter(p => p.marker?.kind === 'bullet').map(p => p.marker.char));
+  assert.ok(bulletChars.has('•') && bulletChars.has('◦') && bulletChars.has('▪'), JSON.stringify([...bulletChars]));
+  // The spaced paragraph projects without a fabricated marker.
+  const spaced = paragraphs.find(p => p.runs.map(r => r.text).join('').includes('间距段落'));
+  assert.ok(spaced); assert.equal(spaced.marker, null);
+});
+
+test('real LibreOffice decks render numbered continuation correctly in the frame', async () => {
+  const { JSDOM } = require('jsdom');
+  const fs = require('node:fs');
+  const bytes = realDeck('libreoffice-autonum-multilevel.pptx');
+  const deck = await (await load).parseOffice('pptx', bytes).then(result => result.deck);
+  const slidesDom = new JSDOM('<!doctype html><div id="slides"></div>', { runScripts: 'outside-only', pretendToBeVisual: true });
+  const frameWindow = slidesDom.window;
+  const script = frameWindow.document.createElement('script'); script.dataset.key = 'real-deck';
+  Object.defineProperty(frameWindow.document, 'currentScript', { value: script });
+  frameWindow.postMessage = () => {};
+  frameWindow.URL.createObjectURL = () => 'blob:fixture';
+  frameWindow.URL.revokeObjectURL = () => {};
+  frameWindow.eval(fs.readFileSync(path.join(ROOT, 'public/file-preview/office-slides-frame.js'), 'utf8'));
+  const frameDeck = { ...deck, images: Object.fromEntries(Object.entries(deck.images).map(([name, image]) => [name, { ...image, bytes: frameWindow.Uint8Array.from(image.bytes) }])) };
+  frameWindow.dispatchEvent(new frameWindow.MessageEvent('message', { source: frameWindow, data: { officeSlides: 'real-deck', type: 'load', deck: frameDeck, slides: 1 } }));
+  const markers = [...frameWindow.document.querySelectorAll('.pptx-marker')].map(el => el.textContent.trim());
+  // arabicPlain at level 0 continues 1,2,3 across the list; alpha/roman
+  // children render lowercase per their Lc infix.
+  const arabic = markers.filter(text => /^\d+\.$/.test(text));
+  assert.deepEqual(arabic, ['1.', '2.', '3.'], JSON.stringify(markers));
+  assert.ok(markers.some(text => /^a\.$/.test(text)), 'alpha child renders a.');
+  assert.ok(markers.some(text => /^i\.$/.test(text)), 'roman grandchild renders i.');
+  assert.ok(markers.includes('•') && markers.includes('◦') && markers.includes('▪'), JSON.stringify(markers));
+  slidesDom.window.close();
+});
