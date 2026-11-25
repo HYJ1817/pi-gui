@@ -132,7 +132,36 @@ async function main() {
    * open, the geometry assertions below fail. */
   await require('./surface-final-scenarios.cjs')(tools, group);
   await group('packaged-layout', async () => {
-    await open('guide.md', '.fp-markdown-body');
+    /* This reopen-after-close-all ordering is the production regression proof
+     * of the R0 restore race: the restored Files surface must accept the queued
+     * open and merge the deferred history around it, never overwrite it. The
+     * state snapshot is failure evidence, not an assertion shortcut. */
+    notes.push({ kind: 'layout-reopen-state', paneHidden: await read("document.querySelector('#rightPane')?.hidden"),
+      surfaceTabs: await read("import('/ui/secondary-surface.js').then(m=>m.secondaryTabs())"),
+      fileTabCount: await read("document.querySelectorAll('.files-tab').length") });
+    /* Structured open trace: the helper only returns true, so a timeout cannot
+     * distinguish "open never delivered" from "metadata failed" from "sequence
+     * invalidated". Arm a metadata/logger capture before opening so the failure
+     * evidence shows exactly where the open chain stopped. */
+    await read(`(()=>{
+      window.__guideTrace={fetches:[],toasts:[]};
+      const origFetch=window.fetch;
+      window.fetch=function(url,opts){const u=String(url&&url.url||url);if(u.includes('/api/files'))window.__guideTrace.fetches.push(u.slice(0,140));return origFetch.apply(this,arguments)};
+      const origToast=window.toast||null;
+      return true;
+    })()`);
+    let openError = null;
+    try { await open('guide.md', '.fp-markdown-body'); }
+    catch (error) { openError = { type: error.name, stage: error.testLabel || 'interaction' }; }
+    notes.push({ kind: 'layout-after-open',
+      openError,
+      filesPath: await read("document.querySelector('.files-preview-path')?.textContent||null"),
+      fileTabLabels: await read("[...document.querySelectorAll('.files-tab')].map(t=>t.textContent.trim().replace(/\\s+/g,' ').slice(0,24))"),
+      guideTrace: await read("window.__guideTrace||null"),
+      openChain: await read("window.__openChain||null"),
+      activeSurface: await read("import('/ui/secondary-surface.js').then(m=>m.secondaryTabs().find(t=>t.active)?.view||null)"),
+      activeFileTab: await read("document.querySelector('.files-tab[aria-selected=\"true\"], .files-tab.active')?.textContent?.trim()||null") });
+    if (openError) throw Object.assign(Error('open-guide.md'), { testLabel: 'open-guide.md' });
     if (!await read("document.querySelector('#rightPane').dataset.maximized==='true'")) await click('#workPanelMaximize');
     for (const width of [1320, 700]) for (const theme of ['dark', 'light']) {
       win.setContentSize(width, width === 700 ? 600 : 820);

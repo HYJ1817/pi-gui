@@ -170,7 +170,7 @@ async function run() {
 
     harness = spawn(process.execPath, [path.join(ROOT, 'tests/visual-harness.cjs')], {
       cwd: world,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HARNESS_PORT: '0', VISUAL_PUBLIC_ROOT: process.env.UI4_ASSETS_ROOT || path.join(ROOT, 'public'), VISUAL_UPLOAD_DIR: path.join(world, 'uploads') },
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', HARNESS_PORT: '0', UI4_FILES_HARNESS: '1', VISUAL_PUBLIC_ROOT: process.env.UI4_ASSETS_ROOT || path.join(ROOT, 'public'), VISUAL_UPLOAD_DIR: path.join(world, 'uploads') },
       stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     });
     harness.stderr.on('data', chunk => errors.push('harness: ' + String(chunk)));
@@ -180,6 +180,7 @@ async function run() {
       harness.stdout.on('data', chunk => { buffer += chunk; const found = buffer.match(/http:\/\/127\.0\.0\.1:\d+/); if (found) { clearTimeout(timer); resolve(found[0]); } });
       harness.on('error', reject);
     });
+    harness.stdout.on('data', chunk => { const s = String(chunk); if (s.includes('UI4-SCOPE-DEBUG')) console.log(s.trim()); });
 
     win = new BrowserWindow({
       width: 1440, height: 900, useContentSize: true, show: true,
@@ -442,6 +443,12 @@ async function run() {
           if(u.includes('?'))return ok({ok:true,lines:[{cursor:1,text:'dev server ready on 5199'},{cursor:2,text:('compiled successfully in 120 ms '.repeat(40))}],cursor:2,truncated:false});
           return ok(window.__ui4.processStatus());
         }
+        /* The Files surface is deliberately NOT stubbed here: it must exercise
+         * the real backend tree/metadata/content path (the harness cwd is a
+         * writable temp world served by the real createFiles). An earlier stub
+         * returned a hardcoded absolutePath outside the workspace, which made
+         * the frontend's isPathWithin check fail with stale_workspace — a fake
+         * defect the real product never has. Real evidence requires real bytes. */
         return original(url,opts);
       };
     })()`);
@@ -549,6 +556,11 @@ async function run() {
     check(await read(`document.activeElement && document.activeElement.id==='btnWorkPanel'`), '开发进程关闭后焦点回到可见工作面板入口');
 
     /* ---------- 6. 响应式 × 主题矩阵（真实截图） ---------- */
+    /* Files opener 的真实文件：harness cwd 就是 world（可写临时目录）。
+     * 长文件名刻意压窄窗工具栏；后端 /api/files 走 createFiles 真实现。 */
+    fs.mkdirSync(path.join(world, 'docs', 'deeply', 'nested', 'directories', 'for', 'toolbar-width-stress'), { recursive: true });
+    fs.writeFileSync(path.join(world, 'docs', 'deeply', 'nested', 'directories', 'for', 'toolbar-width-stress', 'readme-with-a-rather-long-file-name.md'),
+      '# UI4 Files Pane\n\n矩阵证据用真实渲染路径。'.repeat(4));
     const openers = {
       changes: () => openChanges(),
       browser: () => openBrowser(),
@@ -561,6 +573,50 @@ async function run() {
         await click('#btnMore');
         await until(async () => await read(`!document.getElementById('modal').hidden`));
         await read(`[...document.querySelectorAll('.modal-item')].find(b=>b.textContent==='开发进程').click()`);
+      },
+      files: async () => {
+        /* The Files opener exercises the real end-user path: singleton surface,
+         * REAL backend file tree (the harness cwd is a writable temp world —
+         * the markdown file is materialized there before the matrix begins),
+         * a real tree click on the nested file, and the format toolbar truly
+         * renders. This is the evidence F8's narrow-window claim lacked. */
+        await read(`import('/ui/secondary-surface.js').then(m=>(m.openSecondaryTool('files'),true))`);
+        await until(() => read(`!!document.querySelector('.files-surface:not([hidden])')`), 15000);
+        // Expand the nested directories one real row at a time: rows are
+        // .files-entry buttons keyed by exact data-file-path — the real tree
+        // interaction, no selector guessing.
+        await until(() => read(`!!document.querySelector('.files-surface:not([hidden]) .files-entry')`), 15000);
+        const treeDiag = { rows: await read(`[...document.querySelectorAll('.files-entry')].map(r=>r.dataset.filePath).slice(0,20)`),
+          status: await read(`document.querySelector('.files-surface:not([hidden]) .files-tree-status')?.textContent||document.querySelector('.files-surface:not([hidden]) [class*=empty]')?.textContent||null`),
+          cwd: await read(`import('/state.js').then(({S})=>S.cwd||null)`),
+          apiProbe: await read(`fetch('/api/files?dir=&workspace=&generation=').then(r=>r.json()).then(j=>({ok:j.ok,entries:(j.entries||[]).length,noProject:j.noProject||false,first:(j.entries||[]).slice(0,8).map(e=>e.path)})).catch(e=>'err:'+e.message)`) };
+        console.log('FILES-TREE-DIAG ' + JSON.stringify(treeDiag));
+        facts.push({ filesTreeDiag: treeDiag });
+        /* The tree materializes single-child directory chains flattened into
+         * the leaf row (the diag above shows full paths at root level), so the
+         * leaf row is directly clickable. If a directory hierarchy does render,
+         * expand it level by level first. */
+        for (const dir of ['docs', 'docs/deeply', 'docs/deeply/nested', 'docs/deeply/nested/directories', 'docs/deeply/nested/directories/for', 'docs/deeply/nested/directories/for/toolbar-width-stress']) {
+          const state = await read(`(()=>{
+            const row=document.querySelector('.files-entry[data-file-path=${JSON.stringify(dir)}]');
+            if(!row)return 'absent';
+            if(row.getAttribute('aria-expanded')==='true')return 'already';
+            row.click();return 'clicked';
+          })()`);
+          if (state !== 'absent') await sleep(320);
+        }
+        const leaf = 'docs/deeply/nested/directories/for/toolbar-width-stress/readme-with-a-rather-long-file-name.md';
+        const clickedLeaf = await read(`(()=>{
+          const row=document.querySelector('.files-entry[data-file-path=${JSON.stringify(leaf)}]');
+          if(!row)return false;row.click();return true;
+        })()`);
+        check(clickedLeaf, '文件树里真实点击嵌套 md 叶子');
+        /* The click flows through onOpen → openFromReference → metadata() →
+         * openTab against the REAL backend (the harness cwd is the workspace).
+         * The toolbar + format toolbar only render once the preview mounts. */
+        await until(() => read(`!!document.querySelector('.files-surface:not([hidden]) .fp-markdown-body')`), 15000);
+        facts.push({ filesPreviewPath: await read(`document.querySelector('.files-preview-path')?.textContent||null`),
+          filesTabs: await read(`[...document.querySelectorAll('.files-tab')].length`) });
       },
     };
     await read(`window.__ui4.mode='full';window.__ui4.processes='active'`);
@@ -611,6 +667,31 @@ async function run() {
       }
     }
     facts.push({ matrixCount: matrix.length });
+
+    /* ---------- 6b. 最大化形态（F8 四形态的最后一块视觉证据） ----------
+     * 矩阵覆盖暗/亮 × 四种宽度；最大化是独立形态：公共最大化保留聊天 DOM
+     * 但 inert，右栏铺满到窗口右缘。两主题各留一张真实截图。 */
+    for (const theme of ['dark', 'light']) {
+      win.setContentSize(1200, 900);
+      await read(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+      await openChanges();
+      await until(async () => !(await paneFacts()).hidden);
+      await sleep(280);
+      await read(`document.querySelector('#workPanelMaximize').click()`);
+      await sleep(280);
+      const maximized = await paneFacts();
+      facts.push({ ['maximized-' + theme]: maximized });
+      check(await read(`document.querySelector('#rightPane').dataset.maximized==='true'`), `最大化形态生效 ${theme}`, maximized);
+      check(Math.abs(maximized.right - (await read('innerWidth'))) <= 2, `最大化右栏铺到窗口右缘 ${theme}`, maximized);
+      check(await read(`!!document.querySelector('#input') && document.querySelector('#input').closest('[inert]')!==null`), `最大化下聊天保留但 inert ${theme}`);
+      check(!maximized.pageOverflow, `最大化无横向溢出 ${theme}`);
+      await shot(`maximized-${theme}-changes`);
+      await read(`document.querySelector('#workPanelMaximize').click()`);
+      await sleep(240);
+      check(await read(`document.querySelector('#rightPane').dataset.maximized==='false'`), `还原后最大化态退出 ${theme}`);
+      await closePane();
+      await until(async () => (await paneFacts()).hidden);
+    }
 
     /* ---------- 7. 缩放、reduced-motion、键盘可达 ---------- */
     win.setContentSize(1200, 900);

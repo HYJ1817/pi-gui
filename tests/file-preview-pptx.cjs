@@ -395,6 +395,47 @@ test('malformed startAt degrades the marker instead of killing the deck', async 
   }
 });
 
+/* startAt="0" is schema-invalid (ECMA-376 types startAt as a positive decimal,
+ * minimum 1) but it is *written* — office software treats the restart intent as
+ * present and clamps the value into range rather than silently dropping it.
+ * The regression this locks: the projection carried start=0/explicitStart=true
+ * while the renderer collapsed the zero with `start || 1`, so the projected
+ * value and the value the renderer actually used disagreed — the projection was
+ * dishonest about what would render. The clamp keeps projection and render in
+ * agreement: the value the renderer uses is the value the projection carries. */
+test('startAt=0 clamps to a restart at 1 and keeps projection and render in agreement', async () => {
+  const { JSDOM } = require('jsdom');
+  const fs = require('node:fs');
+  const parts = pptxParts();
+  const list = '<p:sp><p:nvSpPr><p:cNvPr id="45" name="ZeroStart"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="3000000"/><a:ext cx="7315200" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>' +
+    '<a:p><a:pPr marL="342900" indent="-342900" lvl="0"><a:buAutoNum type="arabicPeriod" startAt="4"/></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"/><a:t>起点四</a:t></a:r></a:p>' +
+    '<a:p><a:pPr marL="342900" indent="-342900" lvl="0"><a:buAutoNum type="arabicPeriod" startAt="0"/></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"/><a:t>起点零</a:t></a:r></a:p>' +
+    '<a:p><a:pPr marL="342900" indent="-342900" lvl="0"><a:buAutoNum type="arabicPeriod"/></a:pPr><a:r><a:rPr lang="zh-CN" sz="2000"/><a:t>继续项</a:t></a:r></a:p>' +
+    '</p:txBody></p:sp>';
+  inject(parts, slidePath, list);
+  const deck = await parse(parts);
+  const numbered = deck.slides[0].shapes.flatMap(item => (item.text?.paragraphs || []).filter(pp => pp.marker?.kind === 'number'));
+  assert.equal(numbered.length, 3, 'all three list paragraphs project');
+  // Projection carries the clamped value — never a zero the renderer rewrites.
+  assert.equal(numbered[1].marker.start, 1, 'startAt=0 clamps to 1 at projection');
+  assert.equal(numbered[1].marker.explicitStart, true, 'a written startAt keeps its restart intent');
+  const slidesDom = new JSDOM('<!doctype html><div id="slides"></div>', { runScripts: 'outside-only', pretendToBeVisual: true });
+  const frameWindow = slidesDom.window;
+  const script = frameWindow.document.createElement('script'); script.dataset.key = 'zero-key';
+  Object.defineProperty(frameWindow.document, 'currentScript', { value: script });
+  frameWindow.postMessage = () => {};
+  frameWindow.URL.createObjectURL = () => 'blob:fixture';
+  frameWindow.URL.revokeObjectURL = () => {};
+  frameWindow.eval(fs.readFileSync(path.join(ROOT, 'public/file-preview/office-slides-frame.js'), 'utf8'));
+  const frameDeck = { ...deck, images: Object.fromEntries(Object.entries(deck.images).map(([name, image]) => [name, { ...image, bytes: frameWindow.Uint8Array.from(image.bytes) }])) };
+  frameWindow.dispatchEvent(new frameWindow.MessageEvent('message', { source: frameWindow, data: { officeSlides: 'zero-key', type: 'load', deck: frameDeck, slides: 2 } }));
+  const markers = [...frameWindow.document.querySelectorAll('.pptx-marker')].map(el => el.textContent.trim());
+  assert.equal(markers[0], '4.', 'explicit startAt=4 starts at four');
+  assert.equal(markers[1], '1.', 'startAt=0 restarts at one (clamped), never zero');
+  assert.equal(markers[2], '2.', 'the following continuation continues from the restart, not a reset');
+  slidesDom.window.close();
+});
+
 test('alpha numbering beyond z uses spreadsheet bijective base-26', async () => {
   const { JSDOM } = require('jsdom');
   const fs = require('node:fs');

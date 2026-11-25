@@ -108,6 +108,20 @@ async function main() {
   }
   check('packaged production desktop modules are byte-identical', true, { files: Object.keys(modules).length });
   artifacts.app = { bytes: fs.statSync(executable).size, sha256: digest(executable), backendSha256: digest(path.join(appRoot, 'server.cjs')), modules };
+  /* Diagnostic open-chain spy: patch ONLY the runtime copy's files-panel.js
+   * (never source, never the byte-verified staging). The final assertion below
+   * re-verifies source public bytes are unchanged, so this instrumentation is
+   * confined to the disposable world/application copy. It records the exact
+   * guard that stops a file open, per the R0 diagnosis that the open path's
+   * runtime trace must be captured rather than guessed. Opt-in via env so the
+   * canonical packaged run stays byte-clean. */
+  if (process.env.PREVIEW_OPENCHAIN_SPY === '1') {
+    const target = path.join(appRoot, 'public/files-panel.js');
+    fs.copyFileSync(path.join(SOURCE, 'public/files-panel.js'), target);
+    const spy = spawnSync('python', [path.join(SOURCE, 'tests/fixtures/inject-openchain-spy.py'), target], { encoding: 'utf8' });
+    assert.equal(spy.status, 0, 'open-chain spy injection: ' + (spy.stderr || spy.stdout));
+    artifacts.openChainSpy = true;
+  }
   process.env.PREVIEW_NODE_EXECUTABLE = process.execPath;
   const fixture = await require('./fixtures/file-preview-desktop-data.cjs')({ SOURCE, world, repo: path.join(world, 'repo') });
   // Avoid production catalog prefetch even before the network guards reject it.
@@ -139,7 +153,13 @@ async function main() {
   assert.equal(report.failed, 0, 'packaged UI assertions');
   check('actual packaged main completes all viewer interactions', report.passed > 50, { passed: report.passed, failed: report.failed, skipped: report.skipped });
   for (const [file, sha256] of Object.entries(modules)) assert.equal(digest(path.join(appRoot, file)), sha256, 'desktop modules unchanged after interaction');
-  for (const file of files(path.join(SOURCE, 'public'))) assert.equal(digest(path.join(appRoot, 'public', file)), digest(path.join(SOURCE, 'public', file)), 'public bytes unchanged after interaction');
+  // With the open-chain spy active the runtime files-panel.js is intentionally
+  // instrumented; skip only that one file's post-interaction byte comparison.
+  const spyActive = process.env.PREVIEW_OPENCHAIN_SPY === '1';
+  for (const file of files(path.join(SOURCE, 'public'))) {
+    if (spyActive && file === 'files-panel.js') continue;
+    assert.equal(digest(path.join(appRoot, 'public', file)), digest(path.join(SOURCE, 'public', file)), 'public bytes unchanged after interaction');
+  }
   check('production modules and public files remain unchanged', true);
   fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify({ passed: rows.length + report.passed, failed: 0, skipped: 0, rows, artifacts,
     qualification: report.qualification, processCleanup: { observed: observed.length, residual: residual.length }, desktopReport: 'desktop.json' }, null, 2) + '\n');
