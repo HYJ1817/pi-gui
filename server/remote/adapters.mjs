@@ -357,8 +357,23 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
     return { ok: true, operation: result.operation, result: { accepted: true, ownerRevision: pendingDialog?.revision ?? 0 }, requestId: result.requestId };
   }
 
+  // Internal-only owner epoch projection. Message/status revision changes do
+  // not reset cursors; resource ownership identity/epoch changes do. Nothing
+  // here is exposed as a remote endpoint or diagnostic payload.
+  const authorizationState = deviceId => {
+    const device = deviceStore?.active(deviceId);
+    if (!device) return null;
+    const owners = [];
+    for (const conv of conversationIndex().values()) {
+      const owner = resolveOwner({ pathParameters: { conversationId: conv.conversationId } });
+      if (owner && device.grants?.[owner.projectId] === true) owners.push([conv.conversationId, owner.namespace, owner.identity, owner.epoch, owner.projectId]);
+    }
+    owners.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+    return sha256hex(canonicalJson(owners));
+  };
+
   return {
-    resolveOwner, authorizeResource, clock, idem,
+    resolveOwner, authorizeResource, authorizationState, clock, idem,
     dispatch: {
       'projects.list': projectsList,
       'sessions.list': sessionsList,

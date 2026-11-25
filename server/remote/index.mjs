@@ -94,7 +94,12 @@ export function startRemote({
   stream = new EventStream({
     serviceKey, serviceFingerprint, deviceStore,
     authorizeResource: adapters.authorizeResource,
+    authorizationState: adapters.authorizationState,
   });
+  // The device record is the single authority for every authorization
+  // transition; stream invalidation is wired here exactly once so admin
+  // operations cannot forget or double-apply it.
+  deviceStore.onAuthorizationChanged = (deviceId, reason) => stream.authorizationChanged(deviceId, reason);
   const pairManager = new PairManager({
     dataDir, serviceKey, serviceFingerprint, deviceStore, confirmLocally, grantsFor,
     log: m => log(`remote: ${m}`),
@@ -124,16 +129,12 @@ export function startRemote({
     approvePendingConfirmation: id => pairManager.approvePendingConfirmation(id),
     declinePendingConfirmation: id => pairManager.declinePendingConfirmation(id),
     listDevices: () => deviceStore.list(),
-    revokeDevice: id => { const done = deviceStore.revoke(id); if (done) stream.dropDevice(id); return done; },
+    revokeDevice: id => deviceStore.revoke(id),
     // Removing a grant revokes access immediately: reset the device's
     // streams (authorization_changed) so no live/replayed frame for the
     // revoked resource can still be delivered (contract resetScope +
     // mustRevalidateAuthorizationBeforeReplay).
-    setGrants: (id, projectIds) => {
-      const done = deviceStore.setGrants(id, projectIds);
-      if (done) stream.resetDevice(id, 'authorization_changed');
-      return done;
-    },
+    setGrants: (id, projectIds) => deviceStore.setGrants(id, projectIds),
   };
 
   return {

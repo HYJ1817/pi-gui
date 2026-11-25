@@ -33,6 +33,7 @@ export class DeviceStore {
     this.log = log;
     this.devices = new Map();      // deviceId -> record
     this.keyIndex = new Map();     // devicePublicKey -> deviceId
+    this.onAuthorizationChanged = null; // composition-root-only synchronous invalidation
     this._load();
   }
   _load() {
@@ -133,6 +134,8 @@ export class DeviceStore {
     this.devices.set(deviceId, rec);
     this.keyIndex.set(devicePublicKey, deviceId);
     this._persist();
+    if (boundTo !== null && boundTo !== deviceId) this.onAuthorizationChanged?.(boundTo, 'revoked');
+    this.onAuthorizationChanged?.(deviceId, 'registered');
     return { replayEpoch, deviceId };
   }
 
@@ -147,6 +150,7 @@ export class DeviceStore {
     d.revoked = true; d.active = false;
     if (typeof d.devicePublicKey === 'string' && this.keyIndex.get(d.devicePublicKey) === deviceId) this.keyIndex.delete(d.devicePublicKey);
     this._persist();
+    this.onAuthorizationChanged?.(deviceId, 'revoked');
     return true;
   }
   list() {
@@ -162,6 +166,7 @@ export class DeviceStore {
     d.grants = {};
     for (const pid of projectIds ?? []) if (typeof pid === 'string' && pid) d.grants[pid] = true;
     this._persist();
+    this.onAuthorizationChanged?.(deviceId, 'grants_changed');
     return true;
   }
 
@@ -198,6 +203,7 @@ export class DeviceStore {
     d.replayEpoch = (Number.isSafeInteger(d.replayEpoch) ? d.replayEpoch : 0) + 1;
     d.nonces = {}; d.timestampFloor = 0;
     this._persist();
+    this.onAuthorizationChanged?.(deviceId, 'epoch_changed');
     return true;
   }
 }
