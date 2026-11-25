@@ -443,7 +443,11 @@ export function buildAdapters({ domain, dataDir, clock = new RegistryClock(dataD
       // retries with a fresh client id.
       try {
         const out = await domain.openConversation(proj.path, { clientConversationId: clientId });
-        if (!OPAQUE_ID.test(out?.conversationId ?? '')) return deny('unavailable');
+        // Round-9 R9-CREATE-01: 'stream-reset' is a reserved journal identifier
+        // that can never address a real conversation — accepting it as a create
+        // result minted an unusable success the retry would happily replay.
+        // A malformed result is unknown execution state, not a release.
+        if (!OPAQUE_ID.test(out?.conversationId ?? '') || out.conversationId === 'stream-reset') return deny('unavailable');
         const ownerRevision = clock.registryRevision(domain.conversations());
         const result = { conversationId: out.conversationId, ownerRevision };
         if (!idem.record(device.deviceId, projectId, owner.epoch, clientId, payloadHash, result)) return deny('operation_rejected');

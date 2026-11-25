@@ -143,7 +143,18 @@ export class EventStream {
       throw e;
     }
     t.authority = this._authority(id);
-    for (const s of [...(this.subscribers.get(id) ?? [])]) this._resetOne(s, reason);
+    for (const s of [...(this.subscribers.get(id) ?? [])]) {
+      try {
+        this._resetOne(s, reason);
+      } catch {
+        // Round-9 R9-GEN-01: a subscriber whose reset cannot be signed (the
+        // per-subscriber generation allocation failed) must CLOSE, never keep
+        // delivering ordinary frames in its pre-reset generation — that would
+        // silently continue the stream under authority that has already
+        // changed. One failing subscriber must not abort the reset of the rest.
+        this._close(s);
+      }
+    }
   }
   _reconcile(id) {
     if (!this.deviceStore.active(id)) { this.dropDevice(id); return false; }
@@ -189,6 +200,18 @@ export class EventStream {
     // never a cross-device leak, never an open stream without notification.
     const t = this._tl(device.deviceId), cursor = query.cursor, bound = cursor ? this._parse(device.deviceId, cursor) : null;
     const s = { deviceId: device.deviceId, res, keepalive: null, expiry: null, closed: false, generation: 0, resetting: false };
+    // Round-9 R9-GEN-02: the initial generation is allocated BEFORE anything
+    // reaches the wire or the subscriber registry. A floor-write failure here
+    // used to leak a generation-0 subscriber behind an already-sent 200 with
+    // no cleanup path — the client hung on a half-open response forever. Now
+    // the listener can answer with an honest error because no bytes exist yet.
+    if (!cursor) {
+      try {
+        s.generation = this._allocGeneration(device.deviceId);
+      } catch {
+        return { status: 503, body: { code: 'unavailable', retryable: true } };
+      }
+    }
     res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' });
     this._subs(device.deviceId).add(s); this.streams.add(s);
     // Slot release must track the RESPONSE/socket lifecycle, not only the
@@ -199,8 +222,7 @@ export class EventStream {
     res.on('close', () => this._close(s));
     res.socket?.on('close', () => this._close(s));
     res.on('error', () => this._close(s));
-    if (!cursor) s.generation = this._allocGeneration(device.deviceId);
-    else {
+    if (cursor) {
       this._prune(t);
       const firstNeeded = bound ? bound.sequence + 1 : -1;
       const retained = bound && (bound.sequence === t.headSequence || (t.frames.length > 0 && t.frames[0].sequence <= firstNeeded));
@@ -208,7 +230,19 @@ export class EventStream {
       if (valid) {
         s.generation = bound.generation;
         for (const f of [...t.frames]) if (f.sequence > bound.sequence && !this._deliverTemplate(s, f)) break;
-      } else this._resetOne(s, 'cursor_expired');
+      } else {
+        try {
+          this._resetOne(s, 'cursor_expired');
+        } catch {
+          // The reset's allocation failed after headers were already sent —
+          // an error response is impossible. Close the subscriber and
+          // terminate the connection so the client reconnects honestly.
+          this._close(s);
+          try { res.socket?.destroy?.(); } catch {}
+          try { res.destroy?.(); } catch {}
+          return null;
+        }
+      }
     }
     if (!s.closed) {
       s.keepalive = setInterval(() => {

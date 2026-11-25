@@ -62,7 +62,7 @@ async function boot(overrides = {}) {
     projects: () => projects,
     conversations: () => conversations,
     sessionRecords: p => [{ sessionId: 'sess_fixture_001', displayName: 'fixture session', updatedAt: '2026-01-01T00:00:00Z', conversationIds: ['conv_fixture_001'] }],
-    openConversation: async () => ({ conversationId: 'conv_fixture_001' }),
+    openConversation: overrides.openConversation ?? (async () => ({ conversationId: 'conv_fixture_001' })),
     sendMessage: overrides.sendMessage ?? (async () => ({ accepted: true })),
     stop: async () => ({ stopped: true }),
     pendingDialogs: () => conversations.flatMap(c => c.pendingApprovals),
@@ -1493,6 +1493,129 @@ async function main() {
       const [r1, r2] = await Promise.all([p1, p2]);
       assert.equal(sends, 1, `exactly one execution — the queued request must not run under the substituted project, got ${sends}`);
       assert.notEqual(r2.status, 200, `queued post-substitution request must be refused: ${r2.body}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-9: per-subscriber reset failure closes that stream instead of silent stale delivery (R9-GEN-01)', async () => {
+    // Controlled failure injection: the SHARED reset allocation succeeds but
+    // the SECOND per-subscriber reset allocation fails. Every stream must
+    // either receive a valid reset in the new generation or END — silent
+    // continuation in the pre-reset generation is the defect.
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const openStream = () => new Promise((resolve, reject) => {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+        const state = { status: 0, ended: false, bytes: 0 };
+        const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          state.status = res.statusCode;
+          res.on('data', c => { state.bytes += c.length; });
+          res.on('end', () => { state.ended = true; });
+          res.on('close', () => { state.ended = true; });
+          res.resume();
+          resolve({ res, state });
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      const s1 = await openStream();
+      const s2 = await openStream();
+      assert.equal(s1.state.status, 200);
+      assert.equal(s2.state.status, 200);
+      // Count-controlled sabotage: subscriptions already consumed some floor
+      // writes. Fail exactly after ONE further successful write — the shared
+      // reset allocation — so subscriber reset allocations fail.
+      const store = ctx.remote.deviceStore;
+      const orig = store.persistStreamGenerationFloor.bind(store);
+      let calls = 0;
+      store.persistStreamGenerationFloor = (id, floor) => {
+        calls++;
+        if (calls > 1) { const e = new Error('injected EIO'); e.code = 'EIO'; throw e; }
+        return orig(id, floor);
+      };
+      try {
+        try { ctx.remote.stream.resetDevice(device.deviceId, 'owner_changed'); } catch { /* surfacing is acceptable */ }
+        const deadline = Date.now() + 3000;
+        while ((!s1.state.ended || !s2.state.ended) && Date.now() < deadline) await new Promise(r => setTimeout(r, 25));
+        // Invariant: no stream may remain open but un-reset. A stream that got
+        // its valid reset stays open (legitimate); a stream whose reset failed
+        // must have ended. At least one stream must show the defect-controlled
+        // outcome: with calls>1 failing, later subscribers cannot reset.
+        const open = [s1, s2].filter(s => !s.state.ended);
+        const ended = [s1, s2].filter(s => s.state.ended);
+        assert.ok(ended.length >= 1, `at least one stream must close when its reset cannot be signed (ended=${ended.length}, open=${open.length})`);
+        // Any stream still open must have received reset bytes in the new generation.
+        for (const s of open) assert.ok(s.state.bytes > 0, 'an open survivor must carry its signed reset bytes');
+      } finally {
+        store.persistStreamGenerationFloor = orig;
+        try { s1.res.destroy(); } catch {}
+        try { s2.res.destroy(); } catch {}
+      }
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('round-9: fresh-subscription allocation failure answers an error and retains nothing (R9-GEN-02)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Timeline exists; sabotage makes the subscription-generation write fail.
+      ctx.remote.stream.watermark(device.deviceId);
+      const store = ctx.remote.deviceStore;
+      const orig = store.persistStreamGenerationFloor.bind(store);
+      store.persistStreamGenerationFloor = () => { const e = new Error('injected EIO'); e.code = 'EIO'; throw e; };
+      try {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+        const outcome = await new Promise(resolve => {
+          const chunks = [];
+          let settled = false;
+          const done = o => { if (!settled) { settled = true; resolve(o); } };
+          const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+            res.on('data', c => chunks.push(c));
+            res.on('end', () => done({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+            res.on('close', () => done({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8'), closed: true }));
+            res.resume();
+          });
+          req.on('error', () => done({ status: 0, body: 'socket-error' }));
+          req.setTimeout(4000, () => { req.destroy(); done({ status: -1, body: 'timeout-no-response' }); });
+          req.end();
+        });
+        assert.notEqual(outcome.status, -1, `a response or termination is required, never a hang: ${JSON.stringify(outcome)}`);
+        assert.notEqual(outcome.status, 200, `no half-open 200 may be constructed: ${outcome.status}`);
+        // Immediate check — no grace period: the subscriber registry must be clean.
+        assert.equal(ctx.remote.stream.subscribers.get(device.deviceId)?.size ?? 0, 0, 'no subscriber may survive a failed allocation');
+      } finally { store.persistStreamGenerationFloor = orig; }
+    } finally { await ctx.cleanup(); }
+  });
+
+
+  await t('round-9: reserved stream-reset is never accepted as a create result (R9-CREATE-01)', async () => {
+    // Domain fault injection: openConversation returns the reserved journal
+    // identifier. The create must be refused as unknown execution state; the
+    // same-id retry must never replay a fabricated success.
+    const ctx = await boot({ openConversation: async () => ({ conversationId: 'stream-reset' }) });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const pid = 'p-' + crypto.createHash('sha256').update('C:/fixture/proj').digest('base64url').slice(0, 22);
+      const clientConversationId = crypto.randomUUID();
+      const body = envelope('runtime.create', { clientConversationId }, 1);
+      const fire = () => {
+        const x = signed(device, ctx, { method: 'POST', path: `/remote/v1/projects/${pid}/conversations`, body });
+        return ctx.pinnedRequest('POST', `/remote/v1/projects/${pid}/conversations`, { rawBody: x.rawBody, headers: x.headers });
+      };
+      const r1 = await fire();
+      assert.notEqual(r1.status, 200, `reserved identifier must not be accepted: ${r1.body}`);
+      const r2 = await fire();
+      assert.notEqual(r2.status, 200, `retry must not replay a fabricated success: ${r2.body}`);
+      assert.ok(!r2.body.includes('stream-reset') || JSON.parse(r2.body).error, `no success-shaped replay: ${r2.body}`);
     } finally { await ctx.cleanup(); }
   });
 
