@@ -87,11 +87,13 @@ export class RemoteGateway {
     this.rate = new Map();                    // deviceId -> [ms]
     this.server = https.createServer(tlsOptions, (req, res) => {
       this._handle(req, res).catch(e => {
-        // FS-004: NEVER interpolate raw exception text — a domain exception
-        // can carry credential material from whatever it touched, and this
-        // logger is production-wired to console. Log the failure category
-        // only; the wire answer stays a fixed shape.
-        this.log(`remote request failed: handler exception (${e?.name ?? 'Error'})`);
+        // FS-004 / FS-R2-001: NEVER interpolate ANY exception field — message
+        // AND name are both ordinary mutable properties carrying whatever the
+        // throwing code put there (credential material included), and this
+        // logger is production-wired to console. The log line is a fixed
+        // string naming only the failure category; the wire answer stays a
+        // fixed shape.
+        this.log('remote request failed: handler exception');
         try { this._wire(res, ZERO_UUID, 'internal_error'); } catch {}
       });
     });
@@ -273,8 +275,10 @@ export class RemoteGateway {
         });
       }
     } catch (e) {
-      // FS-004: category + operation only, never raw exception text.
-      this.log(`remote op ${admission.operation} failed: handler exception (${e?.name ?? 'Error'})`);
+      // FS-004 / FS-R2-001: fixed category + the contract operation id (an
+      // allowlisted enum token, not exception content). No exception field —
+      // name included — is ever interpolated.
+      this.log(`remote op ${admission.operation} failed: handler exception`);
       return this._wire(res, admission.requestId, 'internal_error');
     }
     if (!out.ok) return this._wire(res, admission.requestId, out.wire ?? wireErrorCode(out.code));

@@ -2145,7 +2145,13 @@ async function main() {
     const lines = [];
     const ctx = await boot({
       log: m => lines.push(String(m)),
-      projects: () => { throw new Error('synthetic-secret sk-live-ABC123'); },
+      projects: () => {
+        // FS-R2-001: name is as mutable as message — poison BOTH. A safe
+        // message with a credential-shaped name must not leak either field.
+        const e = new Error('synthetic-secret sk-live-ABC123');
+        e.name = 'sk-synthetic-pin4-name-credential-shaped';
+        throw e;
+      },
     });
     try {
       const { device } = await pair(ctx).then(p => p);
@@ -2159,6 +2165,7 @@ async function main() {
       const joined = lines.join(String.fromCharCode(10));
       assert.ok(!joined.includes('sk-live-ABC123'), `raw exception text must never reach the log: ${joined.slice(0, 300)}`);
       assert.ok(!joined.includes('synthetic-secret'), `credential-shaped exception text must never reach the log: ${joined.slice(0, 300)}`);
+      assert.ok(!joined.includes('sk-synthetic-pin4'), `mutable exception NAME must never reach the log either (FS-R2-001): ${joined.slice(0, 300)}`);
     } finally { await ctx.cleanup(); }
   });
 
