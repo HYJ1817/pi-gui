@@ -1408,28 +1408,6 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   border:1px solid var(--line-soft);border-radius:9px;background:var(--ui-popover-surface);padding:4px;
 }
 
-/* 诊断弹层：与 .changes / .ext / .tree-modal 同一套思路 —— 标题、说明、按钮固定，
- * 只有中间的内容区滚动。用默认的 .modal-card（整卡滚）时，几行内容加上 JSON 预览
- * 就把底部的「复制 / 导出 / 刷新 / 关闭」推出了可视区，想关掉得先滚到底。 */
-.modal-card:has(> .diag-body){
-  display:flex;flex-direction:column;overflow:hidden;
-  /* P23：诊断面板的内容从「几行状态」长成了六个小节（版本真值 / 能力 probe /
-   * 兼容矩阵 / Native MCP / Extension 版本 / JSON）。440px 的默认宽度会把底部
-   * 五个按钮挤成「复制诊断\n摘要」这种两行字 —— 加宽，并让按钮**整块**换行。 */
-  max-width:min(720px,94vw);height:min(760px,86vh);
-}
-.modal-card:has(> .diag-body) h3,
-.modal-card:has(> .diag-body) .modal-desc,
-.modal-card:has(> .diag-body) .modal-actions{flex:0 0 auto}
-.modal-card:has(> .diag-body) .modal-actions{margin-top:12px;flex-wrap:wrap}
-.modal-card:has(> .diag-body) .modal-actions .btn{height:auto;min-height:var(--ds-button-height);white-space:nowrap}
-.modal-card:has(> .diag-body) > .diag-body{flex:1 1 auto;min-height:0;overflow:auto}
-
-/* 选 :has(> .diag-body) 而不是给卡片加一个类，是因为 openModal() 只清 innerHTML、
- * 不清 class —— 加在卡片上的类会在弹层之间残留（诊断之后打开别的弹层会继承这里的
- * overflow:hidden 而被裁掉内容）。挂在内容容器上没有这个问题：内容一清，选择器
- * 自然不再匹配。 */
-
 /* 统计表 */
 .stat-rows{display:flex;flex-direction:column;gap:1px;margin-bottom:14px}.stat-rows>div{
   display:flex;align-items:baseline;justify-content:space-between;gap:14px;
@@ -1437,11 +1415,8 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 }
 .stat-rows>div:nth-child(odd){background:var(--ui-user-surface)}
 .stat-rows b{font-weight:400;font-family:var(--mono);font-size:11.5px;color:var(--t1);text-align:right;word-break:break-all}
-/* 诊断面板里的值有「标签」语义：正常 / 不支持 / 未验证 要一眼分得开。
- * 不支持用警示色，未验证用弱化色（未验证 ≠ 有问题）。 */
-.stat-rows b.warn{color:var(--err)}
-.stat-rows b.dim{color:var(--t3)}
-/* 兼容性区下面的说明（缺少的能力、协议异常）。等宽字体给操作名用。 */
+
+/* 更新组件与技术诊断共用的注释文字。 */
 .diag-note{
   font-size:11.5px;color:var(--t2);line-height:1.65;white-space:pre-wrap;
   margin:2px 0 10px;padding-left:2px;
@@ -1449,11 +1424,9 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
 
 /* ============ 版本与更新（P5） ============
  *
- * 挂在诊断面板最前面。三条布局要求（都是实测踩出来的）：
+ * 由信息页挂载。三条布局要求（都是实测踩出来的）：
  *   1. 说明文字用 --t2 而不是 --t3 —— 深色底上 11.5px 的 --t3 读不清；
- *   2. Release Notes 必须**自己可滚动**，否则一篇长说明会把下面的
- *      「健康检查 / Agent / JSON」和底部按钮一起顶出可视区
- *      （诊断面板的滚动区是 .diag-body，见上面的 :has(> .diag-body)）；
+ *   2. Release Notes 自己限高滚动，避免长发布说明淹没其它设置；
  *   3. 按钮区 flex-wrap，窄窗口下换行而不是横向溢出。 */
 .update-sec{margin:2px 0 16px}
 .update-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
@@ -2727,9 +2700,10 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   align-items: center;
   gap: 10px;
   width: calc(100% - 12px);
-  height: 34px;
+  min-height: 34px;
+  height: auto;
   margin: 1px 6px;
-  padding: 0 10px;
+  padding: 7px 10px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -2743,6 +2717,16 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   transition: background var(--motion-duration-fast) var(--motion-ease-out),
               color var(--motion-duration-fast) var(--motion-ease-out);
 }
+.settings-menu button > span:first-of-type {
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: var(--leading-body);
+}
+.settings-menu button > .rail-badge,
+.settings-menu button > .rp-count,
+.settings-menu button > .rp-dot { flex: 0 0 auto; }
 .settings-menu button:hover {
   background: var(--ds-hover-overlay);
   color: var(--ds-text-primary);
@@ -2907,9 +2891,10 @@ button:focus-visible,[role="button"]:focus-visible,textarea:focus-visible,input:
   font-size: var(--text-sm-plus);
   font-weight: var(--font-weight-medium);
   color: var(--ds-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: var(--leading-body);
 }
 .settings-overview-item-arrow {
   width: 14px;

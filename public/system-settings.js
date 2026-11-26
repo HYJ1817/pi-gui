@@ -1,4 +1,4 @@
-import { fetchSystemStorage } from './api.js';
+import { fetchSystemStorage, fetchDiagnostics } from './api.js';
 import { confirmModal } from './ui/modal.js';
 import { createSettingsCard, createSettingsRow, createSettingsToggle, createSegmentedControl } from './ui/primitives.js';
 import { createSystemNetworkCard } from './system-settings-network.js';
@@ -271,7 +271,43 @@ function desktopCards({ desktop, call, current }) {
   return { power, close, feedback, adopt };
 }
 
-export function openSystemSettings({ present, fetchStorage = fetchSystemStorage } = {}) {
+// 只读已有脱敏快照；不触发环境探测、安装、更新，也不把存储路径拼进诊断。
+function runtimeCard({ current, readDiagnostics }) {
+  const rows = node('div');
+  const feedback = status('system-runtime-feedback');
+  let busy = false;
+  const refresh = button('刷新', 'btn ghost', load);
+  refresh.setAttribute('aria-label', '刷新系统运行环境');
+  const card = createSettingsCard({ title: '运行环境', action: refresh, children: [rows, feedback] });
+  const tri = (value, yes = '正常', no = '不可用') => value === true ? yes : value === false ? no : '未知';
+  const labels = { 'data-readable': '应用数据可读', 'data-writable': '应用数据可写',
+    'project-readable': '项目可读', 'project-writable': '项目可写', 'pi-running': 'Pi 运行' };
+  async function load() {
+    if (busy) return;
+    busy = true; refresh.disabled = true;
+    message(feedback, '正在读取运行环境…');
+    const result = await readDiagnostics().catch(() => ({ ok: false }));
+    if (!current()) return;
+    busy = false; refresh.disabled = false;
+    const d = result?.ok !== false && result?.diagnostics;
+    if (!d) { message(feedback, '无法读取运行环境，请重试。', 'error'); return; }
+    rows.replaceChildren();
+    const add = (label, value) => rows.append(createSettingsRow({ label, detail: String(value) }));
+    add('操作系统', [d.system?.os || d.system?.platform, d.system?.release].filter(Boolean).join(' ') || '未知');
+    add('架构', d.system?.arch || '未知');
+    add('宿主 Node.js', d.system?.node || '未知');
+    add('Pi 运行状态', tri(d.bridge?.piRunning, '运行中', '未运行'));
+    add('Pi Bridge 运行标识', Number.isFinite(d.bridge?.bridgeRun) ? d.bridge.bridgeRun : '未知');
+    add('当前项目', tri(d.project?.selected, '已选择', '未选择'));
+    for (const check of d.checks || []) {
+      if (check.id !== 'pi-running') add(labels[check.id] || check.id, tri(check.ok));
+    }
+    message(feedback, '读取当前快照，不执行依赖检测。Node.js、Pi、Git 的安装检查请到环境与依赖。');
+  }
+  return { card, load };
+}
+
+export function openSystemSettings({ present, fetchStorage = fetchSystemStorage, readDiagnostics = fetchDiagnostics } = {}) {
   let active = true;
   const current = () => active;
   const desktop = window.piGuiDesktop;
@@ -283,11 +319,13 @@ export function openSystemSettings({ present, fetchStorage = fetchSystemStorage 
   return present(card => {
     // Match the shared detail layout, without the old bare h3/30px override.
     const head = node('header', '', 'system-heading');
-    head.append(node('h2', '系统'), node('p', '网络、存储、电源，以及本机的窗口行为。'));
+    head.append(node('h2', '系统'), node('p', '运行环境、网络、存储、电源与窗口行为。'));
+    const runtime = runtimeCard({ current, readDiagnostics });
     const storage = storageCard({ desktop, call, current, fetchStorage });
     const settings = desktopCards({ desktop, call, current });
     const network = createSystemNetworkCard({ desktop, call, current });
-    card.append(head, network.card, storage.card, settings.power, settings.close, settings.feedback);
+    card.append(head, runtime.card, network.card, storage.card, settings.power, settings.close, settings.feedback);
+    void runtime.load();
     void storage.loadPaths();
     void call('state').then(result => {
       if (!current()) return;

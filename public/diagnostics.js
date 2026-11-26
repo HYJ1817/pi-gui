@@ -1,4 +1,4 @@
-/* 诊断面板（P2 建立，P23 扩充）。
+/* 诊断摘要与按需故障排查详情（复用于日志与诊断）。
  *
  * ---------- 这一页的立场 ----------
  *
@@ -10,11 +10,7 @@
  * 关键 Extension 版本；另外多一个「复制诊断摘要」—— 一段给人读的纯文本，
  * 只由白名单字段拼出来，不含会话正文 / 配置内容 / 环境变量 / 凭据 / 绝对路径。
  */
-import { fetchDiagnostics } from './api.js';
-import { renderUpdateSection } from './update.js';
-import { renderPiUpdateSection } from './pi-update.js';
-import { statusLabel } from './environment-setup-model.js';
-import { openModal } from './ui/modal.js';
+import { fetchDiagnostics, fetchLogsStatus } from './api.js';
 import { toast } from './ui/toast.js';
 import { driftSnapshot } from './schema-drift.js';
 
@@ -26,7 +22,7 @@ function node(tag, cls = '', text = '') {
 }
 
 function row(label, value, cls) {
-  const r = node('div');
+  const r = node('div', 'diagnostic-row');
   const a = node('span', '', label);
   const b = node('b', '', value == null || value === '' ? '—' : value);
   if (cls) b.className = cls;
@@ -35,7 +31,7 @@ function row(label, value, cls) {
 }
 
 function head(text) {
-  return node('div', 'ext-sec-head', text);
+  return node('h4', 'diagnostic-heading', text);
 }
 
 function note(text) {
@@ -103,7 +99,7 @@ const tri = (v) => (v === true ? '支持' : v === false ? '不支持' : '未知'
  * @param d      `/api/diagnostics` 里的 `diagnostics` 对象（可空）
  * @param drift  `driftSnapshot()` 的结果（前端观察，可选）
  */
-export function buildDiagnosticSummary(d, drift = []) {
+export function buildDiagnosticSummary(d, drift = [], logging = null) {
   if (!d || typeof d !== 'object') return '无法读取诊断信息。';
   const lines = [];
   const push = (label, value) => {
@@ -217,6 +213,13 @@ export function buildDiagnosticSummary(d, drift = []) {
     for (const item of driftList) lines.push(`  - ${item.source}.${item.field} · ${item.kind} · ${item.type}`);
   }
 
+  if (logging) {
+    push('本地日志', `${logging.enabled ? '开启' : '关闭'} · ${logging.mode === 'verbose' ? '详细' : '标准'} · ${logging.fileCount ?? '未知'} 个文件 · ${logging.usageBytes ?? '未知'} B`);
+    push('上次运行', logging.session?.previousUnclean ? '异常退出' : '正常或首次运行');
+    for (const entry of (logging.recentErrors || []).slice(0, 8)) {
+      if (entry?.timestamp && entry?.event) push('最近错误', [entry.timestamp, entry.level, entry.source, entry.event, entry.code].filter(Boolean).join(' · '));
+    }
+  }
   push('隐私', '不含会话正文 / 工具输出 / 配置内容 / 环境变量 / 凭据 / 绝对路径');
   return lines.join('\n');
 }
@@ -236,16 +239,7 @@ export function buildLogReference(entry) {
   return lines.join('\n');
 }
 
-async function copyText(text, message = '已复制') {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast(message, 'info');
-  } catch {
-    toast('复制失败，请手工选中', 'warn');
-  }
-}
-
-function downloadJSON(text) {
+export function downloadDiagnosticJSON(text) {
   try {
     const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -263,46 +257,10 @@ function downloadJSON(text) {
   }
 }
 
-/** P23：版本与核对状态 —— 诊断面板里最先要看的一行。 */
-/* ---------- 运行环境（首次设置 / 修复入口） ----------
- *
- * 这里只展示后端 `diagnosticsSummary()` 给出的**脱敏结构**：组件状态、
- * 版本、来源与最近一次安装的结果码。具体路径不进来，也不会把子进程输出
- * 贴给用户。入口按钮派发一个应用内事件，由环境向导自己接住 —— 诊断模块
- * 不 import 向导，避免两块 UI 互相依赖。 */
-const ENV_COMPONENT_NAME = { node: 'Node.js', pi: 'Pi Coding Agent', git: 'Git' };
-
-function renderEnvironmentSection(body, d) {
-  const env = d.environment;
-  if (!env) return;
-  body.appendChild(head('运行环境'));
-  if (!env.components) {
-    body.appendChild(note(env.note || '环境检测尚未运行。'));
-  } else {
-    const rows = node('div', 'stat-rows');
-    for (const [id, component] of Object.entries(env.components)) {
-      const value = [statusLabel(component.status), component.version].filter(Boolean).join(' · ');
-      const cls = component.status === 'ready' ? '' : component.kind === 'required' ? 'warn' : 'dim';
-      rows.appendChild(row(ENV_COMPONENT_NAME[id] || id, value || '未知', cls));
-    }
-    body.appendChild(rows);
-    const last = env.lastJob;
-    if (last) {
-      const progress = `${last.completedSteps || 0}/${last.totalSteps || 0}`;
-      body.appendChild(note(`最近一次安装：${statusLabel(last.state)} · 完成 ${progress}${last.errorCode ? ' · ' + last.errorCode : ''}`));
-    }
-  }
-  const actions = node('div', 'diag-env-actions');
-  const open = node('button', 'btn', '打开环境检查');
-  open.type = 'button';
-  open.onclick = () => document.dispatchEvent(new CustomEvent('pi-gui:open-environment'));
-  actions.appendChild(open);
-  body.appendChild(actions);
-}
-
+/** 版本来源与核对不是依赖安装检查，保留在按需故障排查详情中。 */
 function renderVersionVerification(body, d) {
   const pi = d.pi || {};
-  const rows = node('div', 'stat-rows');
+  const rows = node('div', 'diagnostic-rows');
   rows.appendChild(row('pi', pi.version || (pi.available === false ? '不可用' : '未知（不影响兼容判定）')));
   rows.appendChild(row('版本来源', pi.versionSource || '未知（未接入规范探测）'));
   const v = pi.verification;
@@ -332,7 +290,7 @@ function renderProbes(body, d, drift) {
       + (pr.at ? `（求值于 ${pr.at}）` : '')
       + (pr.packageKnown === false ? ' · 读不到本机 pi 包，源码类 probe 全部未知' : '')
     ));
-    const rows = node('div', 'stat-rows');
+    const rows = node('div', 'diagnostic-rows');
     for (const item of pr.items) {
       const text = `${tri(item.state)}${item.evidence ? ' · ' + item.evidence : ''}`;
       rows.appendChild(row(item.label || item.id, text, item.state === false ? 'warn' : item.state === null ? 'dim' : ''));
@@ -362,14 +320,14 @@ function renderMatrix(body, d) {
     body.appendChild(note('没有接入兼容矩阵。'));
     return;
   }
-  const rows = node('div', 'stat-rows');
+  const rows = node('div', 'diagnostic-rows');
   rows.appendChild(row('当前验证基线', m.currentBaseline || '未登记'));
   for (const b of m.piBaselines || []) {
     rows.appendChild(row(`Pi ${b.version}`, `${b.scope === 'current' ? '当前基线' : '历史基线'} · 核对于 ${b.verifiedAt}`));
   }
   body.appendChild(rows);
   if ((m.extensionBaselines || []).length) {
-    const ext = node('div', 'stat-rows');
+    const ext = node('div', 'diagnostic-rows');
     for (const b of m.extensionBaselines) ext.appendChild(row(b.name, `${b.version} · 核对于 ${b.verifiedAt}`));
     body.appendChild(note('已登记的 Extension release（Pi GUI 依赖它们的契约，升级时照这些版本 diff）：'));
     body.appendChild(ext);
@@ -387,7 +345,7 @@ function renderNativeAndExtensions(body, d) {
   if (!native) {
     body.appendChild(note('尚未取到原生摘要（打开过一次 MCP 页 / 切过项目之后才会有）。没有摘要 ≠ 没有 server。'));
   } else {
-    const rows = node('div', 'stat-rows');
+    const rows = node('div', 'diagnostic-rows');
     rows.appendChild(row('原生状态', NATIVE_TEXT[native.state] || native.state || '未知', native.state === 'active' ? '' : 'dim'));
     rows.appendChild(row('server 条目', native.serverCount === null || native.serverCount === undefined ? '未知' : native.serverCount));
     rows.appendChild(row('项目信任', native.trust === null || native.trust === undefined ? '未知' : native.trust ? '已信任' : '未信任'));
@@ -402,7 +360,7 @@ function renderNativeAndExtensions(body, d) {
   } else if (!(ext.items || []).length) {
     body.appendChild(note(`发现 ${ext.discovered ?? 0} 个 Extension，其中没有读到可靠版本号的。`));
   } else {
-    const rows = node('div', 'stat-rows');
+    const rows = node('div', 'diagnostic-rows');
     for (const e of ext.items) {
       rows.appendChild(row(`${e.name || '?'}@${e.version}`, `${e.scope === 'project' ? '项目' : '用户'} · ${e.loaded === true ? '已加载' : e.loaded === false ? '未加载' : '加载未知'}`));
     }
@@ -411,64 +369,9 @@ function renderNativeAndExtensions(body, d) {
   }
 }
 
-function render(card, close, payload) {
-  card.innerHTML = '';
-  const d = payload?.diagnostics;
-  card.appendChild(node('h3', '', '诊断'));
-
-  if (!payload || payload.ok === false || !d) {
-    card.appendChild(node('div', 'modal-desc', payload?.error || '无法读取诊断信息'));
-    const actions = node('div', 'modal-actions');
-    const done = node('button', 'btn', '关闭');
-    done.type = 'button';
-    done.onclick = close;
-    actions.appendChild(done);
-    card.appendChild(actions);
-    return;
-  }
-
-  card.appendChild(
-    node(
-      'div',
-      'modal-desc',
-      '这里只显示适合用于故障排查的信息。绝对路径、会话正文、配置文件内容和环境变量不会包含在结果里，常见 token / API key 会再次脱敏。'
-    )
-  );
-
-  /* 中间这一段（概览 / 健康检查 / Agent / JSON）是滚动区，
-   * 标题、说明与底部按钮固定 —— 见 styles.css 的 :has(> .diag-body)。
-   * 否则内容一多，底部按钮会被推出可视区。 */
-  const body = node('div', 'diag-body');
-
-  /* ---------- 版本与更新（P5） ----------
-   *
-   * 放在最前面：这是用户来诊断面板常找的东西之一，而「检查更新」需要一个
-   * 稳定、可见的落点。**刻意不在侧栏新开一级入口** —— 更新检查是诊断的一部分，
-   * 不是第七个主导航项。
-   *
-   * 版本号由这里传进去（来自诊断快照的 app.version，后端 VERSION 是唯一真相），
-   * 前端不硬编码。状态由 update.js 持有，所以关掉再打开面板状态不会丢。 */
-  renderUpdateSection(body, d.app?.version);
-
-  /* ---------- Pi 运行时更新（Built-in Pi Updater） ----------
-   *
-   * 紧跟在 Pi GUI 自己的版本块后面，两块挨着看才不会混：
-   * 上面那个是「Pi GUI 要不要升级」，这个是「它驱动的 pi 要不要升级」。
-   * 当前版本用诊断快照里的 `pi.version` 兜底（同一个东西，后端是唯一真相）。 */
-  renderPiUpdateSection(body, d.pi?.version);
-  renderEnvironmentSection(body, d);
-
-  const rows = node('div', 'stat-rows');
-  rows.append(
-    row('系统', [d.system?.os, d.system?.release, d.system?.arch].filter(Boolean).join(' ')),
-    row('Node', d.system?.node),
-    row('项目', d.project?.selected ? d.project?.name || '已选择' : '未选择'),
-    row('pi', d.pi?.available === false ? '不可用' : d.pi?.version || (d.pi?.available ? '可用' : '未知')),
-    row('Bridge', d.project?.selected ? (d.bridge?.piRunning ? '运行中' : '未运行') : '未选择项目'),
-    row('MCP', d.mcp?.supported === true ? '检测到相关模块' : d.mcp?.supported === false ? 'pi 无原生支持' : '未知')
-  );
-  body.appendChild(rows);
-
+/** 挂入日志与诊断的按需详情；不创建页面、不挂载更新或安装组件。 */
+export function renderDiagnosticDetails(body, d, drift = driftSnapshot()) {
+  body.classList.add('diagnostic-details');
   /* ---------- P23：版本真值与核对状态 ---------- */
   body.appendChild(head('版本真值'));
   renderVersionVerification(body, d);
@@ -481,7 +384,7 @@ function render(card, close, payload) {
     const c = d.compatibility;
     body.appendChild(head('Pi 兼容性'));
 
-    const cap = node('div', 'stat-rows');
+    const cap = node('div', 'diagnostic-rows');
     cap.appendChild(row('Pi 版本', c.versionKnown ? c.piVersion : '未知（不影响兼容判定）'));
     cap.appendChild(
       row(
@@ -516,18 +419,17 @@ function render(card, close, payload) {
   }
 
   /* ---------- P23：能力 probe / 兼容矩阵 / Native MCP / Extension 版本 ---------- */
-  const drift = driftSnapshot();
   renderProbes(body, d, drift);
   renderMatrix(body, d);
   renderNativeAndExtensions(body, d);
 
   body.appendChild(head('健康检查'));
-  const checks = node('div', 'stat-rows');
+  const checks = node('div', 'diagnostic-rows');
   for (const check of d.checks || []) checks.appendChild(row(check.id, statusText(check.ok)));
   body.appendChild(checks);
 
   body.appendChild(head('Agent'));
-  const agents = node('div', 'stat-rows');
+  const agents = node('div', 'diagnostic-rows');
   if (!(d.agents || []).length) {
     agents.appendChild(row('Agent', '未检测到'));
   } else {
@@ -538,48 +440,16 @@ function render(card, close, payload) {
   }
   body.appendChild(agents);
 
-  body.appendChild(head('脱敏后的诊断 JSON'));
-  const pre = node('pre', 'ext-code', JSON.stringify(d, null, 2));
-  pre.style.maxHeight = '240px';
-  body.appendChild(pre);
-
-  card.appendChild(body);
-
-  const actions = node('div', 'modal-actions');
-  /* P23：「复制诊断摘要」是给人读的一段纯文本（比整份 JSON 更适合贴进 issue）。
-   * 它只由白名单字段拼出来，与面板里显示的是同一份已脱敏快照。 */
-  const copySummary = node('button', 'btn', '复制诊断摘要');
-  copySummary.type = 'button';
-  copySummary.onclick = () => copyText(buildDiagnosticSummary(d, drift), '诊断摘要已复制（不含正文与凭据）');
-  const copy = node('button', 'btn', '复制诊断 JSON');
-  copy.type = 'button';
-  copy.onclick = () => copyText(pre.textContent || '', '诊断信息已复制');
-  const download = node('button', 'btn', '导出 JSON');
-  download.type = 'button';
-  download.onclick = () => downloadJSON(pre.textContent || '');
-  const refresh = node('button', 'btn', '刷新');
-  refresh.type = 'button';
-  refresh.onclick = () => loadInto(card, close);
-  const done = node('button', 'btn', '关闭');
-  done.type = 'button';
-  done.onclick = close;
-  actions.append(copySummary, copy, download, refresh, done);
-  card.appendChild(actions);
 }
 
-async function loadInto(card, close) {
-  card.innerHTML = '';
-  card.appendChild(node('h3', '', '诊断'));
-  card.appendChild(node('div', 'modal-desc', '正在读取运行状态…'));
-  const payload = await fetchDiagnostics();
-  if (!card.isConnected) return;
-  render(card, close, payload);
-}
-
-export function openDiagnostics({ present = openModal } = {}) {
-  present((card, close) => {
-    loadInto(card, close);
-  });
+/** 兼容旧模块调用；只转交唯一日志页面，不保留旧诊断页面实现。 */
+export async function openDiagnostics(options = {}) {
+  if (!options.present) {
+    const intent = new CustomEvent('pi-gui:open-logs', { cancelable: true, detail: { initialTab: 'export' } });
+    if (!document.dispatchEvent(intent)) return;
+  }
+  const { openLogs } = await import('./logs.js');
+  return openLogs({ ...options, initialTab: 'export' });
 }
 
 /**
@@ -590,19 +460,19 @@ export function openDiagnostics({ present = openModal } = {}) {
  * 取不到快照时如实说失败，不静默。
  */
 export async function copyDiagnosticsSummary() {
-  const payload = await fetchDiagnostics();
+  const [payload, logs] = await Promise.all([fetchDiagnostics(), fetchLogsStatus()]);
   const d = payload && payload.ok !== false ? payload.diagnostics : null;
   if (!d) {
-    toast(payload?.error || '无法读取诊断信息', 'error');
+    toast('无法读取诊断信息，请到日志与诊断重试。', 'error');
     return { ok: false };
   }
-  const text = buildDiagnosticSummary(d, driftSnapshot());
+  const text = buildDiagnosticSummary(d, driftSnapshot(), logs?.ok ? logs.status : null);
   try {
     await navigator.clipboard.writeText(text);
     toast('诊断摘要已复制（不含正文与凭据）', 'info');
     return { ok: true, text };
   } catch {
-    toast('复制失败，请到诊断面板手工选中', 'warn');
+    toast('复制失败，请到日志与诊断展开 JSON 手工选中。', 'warn');
     return { ok: false, text };
   }
 }

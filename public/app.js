@@ -107,7 +107,7 @@ import { createSessionNavigation } from './session-navigation.js';
 import { initSidebarSearch, openSessionSearch as openSessionSearchEntry, toggleSessionSearch, closeSessionSearch } from './sidebar-search.js';
 import { initConversationNav } from './conversation-nav.js';
 import { createScrollButton } from './scroll-button.js';
-import { openDiagnostics, copyDiagnosticsSummary } from './diagnostics.js';
+import { copyDiagnosticsSummary } from './diagnostics.js';
 import { openLogs } from './logs.js';
 import { initUpdateAuto } from './update.js';
 import { initPiUpdateAuto } from './pi-update.js';
@@ -629,12 +629,12 @@ let bridgeHintText = '';
  *
  * toast 是一次性的，状态是持续的：pi 起不来时用户随时回来都该看到同一句说明
  * 与同一个下一步。这里只做「把状态翻译成一条 notice」，具体文案在 status-copy.js。
- * 动作一律指向既有入口（重启走 restartPi、诊断走 openDiagnostics），
+ * 动作一律指向既有入口（重启走 restartPi、诊断走日志与诊断的导出标签），
  * **不自动修复任何东西**（不装、不改 PATH、不删配置）。 */
 const NOTICE_HANDLERS = {
   resync: () => loadStatus(),
   restart: () => restartPi(),
-  diagnostics: () => $('navDiagnostics').click(),
+  diagnostics: () => openLogSettings('export'),
 };
 
 function noticeActions(ids) {
@@ -1315,9 +1315,17 @@ const settingsSurface = initSettingsSurface({
   },
 });
 const presentSettingsDetail = (id) => (build, dispose, options) => settingsSurface.presentDetail(id, build, dispose, options);
+function openLogSettings(initialTab = 'overview') {
+  return openLogs({ initialTab, present: presentSettingsDetail('navLogs') });
+}
+// 向导及旧诊断入口声明导航意图；页面归属与生命周期统一由设置工作面持有。
+document.addEventListener('pi-gui:open-logs', event => {
+  event.preventDefault();
+  openLogSettings(event.detail?.initialTab);
+});
+$('navLogs').onclick = () => openLogSettings();
 for (const [id, render] of [
   ['navProviders', openProvidersPanel], ['navProviderAuth', openProviderAuthPanel],
-  ['navDiagnostics', openDiagnostics], ['navLogs', openLogs],
   ['navAppearance', openAppearance],
   ['navShortcutHelp', openShortcutHelp],
   ['navSystem', openSystemSettings],
@@ -1325,12 +1333,10 @@ for (const [id, render] of [
 ]) {
   $(id).onclick = () => render({ present: presentSettingsDetail(id) });
 }
-/* 信息页把两类更新、重启、日志和诊断收在一个入口里；日志与诊断仍导航到
- * 各自既有的设置详情页，不复制它们的实现。 */
+/* 信息页独占更新区块；支持入口只导航到统一的日志与诊断，不复制其状态。 */
 $('navInfo').onclick = () => openAboutSettings({
   present: presentSettingsDetail('navInfo'),
-  openLogs: (initialTab) => openLogs({ initialTab, present: presentSettingsDetail('navLogs') }),
-  openDiagnostics: () => openDiagnostics({ present: presentSettingsDetail('navDiagnostics') }),
+  openLogs: openLogSettings,
 });
 $('navEnvironment').onclick = () => openEnvironmentSettings();
 $('btnTheme').onclick = () => $('navAppearance').click();
@@ -1488,8 +1494,8 @@ defineCommands([
   { id: 'app.settings', title: '项目设置', group: '全局', keywords: 'settings 设置 配置', when: () => S.hasProject, run: () => openProjectSettings() },
   { id: 'app.providers', title: '模型供应商', group: '全局', keywords: 'provider 供应商 模型 key', run: () => $('navProviders').click() },
   { id: 'app.providerAuth', title: '供应商与认证', group: '全局', keywords: 'provider authentication OAuth login 认证', run: () => $('navProviderAuth').click() },
-  { id: 'app.diagnostics', title: '诊断', group: '全局', keywords: 'diagnostics 诊断 版本 兼容', run: () => $('navDiagnostics').click() },
-  { id: 'app.logs', title: '日志与故障报告', group: '全局', keywords: 'logs 日志 故障报告 bug report zip 导出', run: () => $('navLogs').click() },
+  { id: 'app.diagnostics', title: '诊断与故障报告', group: '全局', keywords: 'diagnostics 诊断 兼容 能力 摘要 json report zip 导出', run: () => openLogSettings('export') },
+  { id: 'app.logs', title: '日志与诊断', group: '全局', keywords: 'logs diagnostics 日志 诊断 错误 崩溃 故障报告 bug report', run: () => openLogSettings() },
   { id: 'app.copy-diagnostics', title: '复制诊断摘要', group: '全局', keywords: 'copy diagnostics 复制 摘要 issue', run: () => copyDiagnosticsSummary() },
   { id: 'app.shortcuts', title: '键盘快捷键', group: '全局', keywords: 'keyboard shortcut 快捷键 帮助', shortcutId: 'shortcut-help', run: () => $('navShortcutHelp').click() },
 ]);

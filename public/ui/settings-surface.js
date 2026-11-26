@@ -4,10 +4,9 @@ import { iconMarkup } from './icons.js';
 import { $ } from '../state.js';
 import { openWorkSurface, showChat, workspaceView } from './workspace-surface.js';
 
-/* 旧设置页在迁移后可能还有调用方（命令、向导、测试夹具）按旧 id 点击。
- * 目标不存在时统一落到「信息」而不是静默退回概览 —— 旧入口指向的内容
- * （应用更新 / 重启）现在都在信息页里，回退到那里才是同一个意图。 */
-const DESTINATION_ALIASES = { navAppUpdates: 'navInfo', navRestartPi: 'navInfo' };
+/* 保留历史目的地的归属解析，不保留隐藏导航按钮或第二份页面。
+ * 组合根仍负责选择正确的 builder；alias 本身不创建页面或后台服务。 */
+const DESTINATION_ALIASES = { navAppUpdates: 'navInfo', navRestartPi: 'navInfo', navDiagnostics: 'navLogs' };
 
 function resolveDestination(destination) {
   return DESTINATION_ALIASES[destination] || destination;

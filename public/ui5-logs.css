@@ -1,457 +1,133 @@
-/* UI-5：日志与故障报告。只使用 UI-1 的语义 Token，不引入新的配色体系。 */
-
+/* 日志与诊断仅持有组合布局；控件外观来自 primitives / ext-tabs。 */
 .modal-card.ui5-logs-modal {
-  max-width: min(880px, calc(100vw - 48px));
-  max-height: calc(100vh - 56px);
+  max-width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
-
-.ui5-logs-modal h3,
-.ui5-logs-modal > .modal-desc,
-.ui5-logs-tabs,
-.ui5-logs-modal > .modal-actions {
-  flex: 0 0 auto;
+.settings-detail-card.ui5-logs-modal { display: block; }
+.ui5-logs-heading { margin-bottom: var(--ui-space-5); }
+.ui5-logs-heading h2 {
+  margin: 0;
+  color: var(--ds-text-primary);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
 }
-
-.ui5-logs-modal > .modal-actions {
-  margin-top: 12px;
-  flex-wrap: wrap;
-}
-
-.ui5-logs-tabs {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  border-bottom: 1px solid var(--ui-border);
-  margin: 0 0 var(--ui-space-3);
-}
-
-.ui5-logs-tab {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--ui-text-secondary);
-  font: inherit;
-  font-size: 12.5px;
-  padding: 8px 11px;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-
-.ui5-logs-tab:hover {
-  background: var(--ui-hover);
-  color: var(--ui-text-primary);
-}
-
-.ui5-logs-tab[aria-selected="true"] {
-  color: var(--ui-text-primary);
-  border-bottom-color: var(--ui-brand);
-}
-
-.ui5-logs-tab:focus-visible {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: -2px;
-}
-
-.ui5-logs-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.ui5-logs-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-  flex-wrap: wrap;
-  margin-bottom: var(--ui-space-3);
-}
-
-.ui5-logs-summary {
-  margin-bottom: var(--ui-space-4);
-}
-
-.ui5-logs-settings {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--ui-space-3);
-  padding: var(--ui-space-3);
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
-  background: var(--ui-panel-surface);
-  margin-bottom: var(--ui-space-3);
-}
-
-.ui5-logs-check {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-  font-size: 12.5px;
-  color: var(--ui-text-primary);
-}
-
-.ui5-logs-check input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--ui-brand);
-}
-
-.ui5-logs-field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-space-2);
-  font-size: 12px;
-  color: var(--ui-text-secondary);
-  min-width: 0;
-}
-
-.ui5-logs-field select {
-  min-width: 0;
-  max-width: 210px;
-  height: 28px;
-  border-radius: var(--ui-radius-control);
-  border: 1px solid var(--ui-border-strong);
-  background: var(--ui-input-surface);
-  color: var(--ui-text-primary);
-  font: inherit;
-  font-size: 12px;
-  padding: 0 6px;
-}
-
-.ui5-logs-field-block {
-  display: flex;
-  align-items: stretch;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ui5-logs-field-block textarea {
-  width: 100%;
-  min-height: 64px;
-  resize: vertical;
-  border-radius: var(--ui-radius-control);
-  border: 1px solid var(--ui-border-strong);
-  background: var(--ui-input-surface);
-  color: var(--ui-text-primary);
-  font: inherit;
-  font-size: 12.5px;
-  line-height: 1.55;
-  padding: 8px 10px;
-}
-
-.ui5-logs-field select:focus-visible,
-.ui5-logs-field textarea:focus-visible,
-.ui5-logs-search input:focus-visible {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: 1px;
-}
-
-.ui5-logs-inline-note {
-  color: var(--ui-text-muted);
-  font-size: 11.5px;
-  line-height: 1.5;
-}
-
-.ui5-logs-empty {
-  padding: var(--ui-space-4);
-  border: 1px dashed var(--ui-border);
-  border-radius: var(--ui-radius-card);
-  color: var(--ui-text-muted);
-  font-size: 12px;
-  line-height: 1.6;
-  text-align: center;
-}
-
-.ui5-logs-error {
-  color: var(--ui-danger);
-  border-color: var(--ui-danger-border);
-  background: var(--ui-danger-surface);
-}
-
-.ui5-logs-recent-error {
-  display: grid;
-  grid-template-columns: minmax(140px, auto) 54px minmax(0, 1fr);
-  gap: var(--ui-space-2);
-  align-items: baseline;
-  padding: 7px 9px;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: 11.5px;
-  color: var(--ui-text-secondary);
-}
-
-.ui5-logs-recent-error .ui5-log-level {
-  justify-self: start;
-}
-
-.ui5-logs-files {
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
-  overflow: hidden;
-  margin-bottom: var(--ui-space-4);
-}
-
+.ui5-logs-tabs { flex-wrap: wrap; margin-bottom: var(--ui-space-5); }
+.ui5-logs-body { min-height: 0; overflow: auto; }
+.settings-detail-card .ui5-logs-body { overflow: visible; }
+.ui5-logs-summary { margin: 0; }
+.ui5-logs-summary > div,
+.diagnostic-row,
 .ui5-logs-file {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-space-2);
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--ui-border);
-  font-size: 11.5px;
-  color: var(--ui-text-secondary);
-}
-
-.ui5-logs-file:last-child {
-  border-bottom: 0;
-}
-
-.ui5-logs-file-name {
-  font-family: var(--ui-font-mono);
-  overflow-wrap: anywhere;
-}
-
-.ui5-logs-filters {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-  flex-wrap: wrap;
-  margin-bottom: var(--ui-space-2);
-}
-
-.ui5-logs-filters select,
-.ui5-logs-search input {
-  height: 30px;
-  border-radius: var(--ui-radius-control);
-  border: 1px solid var(--ui-border-strong);
-  background: var(--ui-input-surface);
-  color: var(--ui-text-primary);
-  font: inherit;
-  font-size: 12px;
-  padding: 0 8px;
-}
-
-.ui5-logs-search {
-  flex: 1 1 190px;
-  min-width: 140px;
-}
-
-.ui5-logs-search input {
-  width: 100%;
-}
-
-.ui5-logs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-bottom: var(--ui-space-2);
-}
-
-.ui5-log-entry {
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
-  background: var(--ui-panel-surface);
-  overflow: hidden;
-}
-
-.ui5-log-entry[data-level="ERROR"],
-.ui5-log-entry[data-level="FATAL"] {
-  border-color: var(--ui-danger-border);
-}
-
-.ui5-log-entry-head {
-  display: flex;
   align-items: baseline;
-  gap: var(--ui-space-2);
-  flex-wrap: wrap;
-  padding: 8px 10px;
-  font-size: 11.5px;
-  color: var(--ui-text-secondary);
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+  padding: var(--ui-space-2) 0;
+  border-bottom: 1px solid var(--ds-border-default);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
 }
-
-.ui5-log-time {
-  font-family: var(--ui-font-mono);
-  color: var(--ui-text-muted);
-  white-space: nowrap;
-}
-
-.ui5-log-level {
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-pill);
-  padding: 0 6px;
-  font-size: 10.5px;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-.ui5-log-level[data-level="ERROR"],
-.ui5-log-level[data-level="FATAL"] {
-  color: var(--ui-danger);
-  border-color: var(--ui-danger-border);
-  background: var(--ui-danger-surface);
-}
-
-.ui5-log-level[data-level="WARN"] {
-  color: var(--ui-warning);
-  border-color: var(--ui-warning-border);
-  background: var(--ui-warning-surface);
-}
-
-.ui5-log-source {
-  font-weight: var(--ui-weight-medium);
-  color: var(--ui-text-primary);
-}
-
-.ui5-log-event {
-  font-family: var(--ui-font-mono);
-  color: var(--ui-text-primary);
+.ui5-logs-summary dt { color: var(--ds-text-secondary); }
+.ui5-logs-summary dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.ui5-logs-summary > div:last-child,
+.diagnostic-row:last-child,
+.ui5-logs-file:last-child { border-bottom: 0; }
+.ui5-logs-inline-note,
+.ui5-logs-empty,
+.diagnostic-details .diag-note {
+  margin: var(--ui-space-2) 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
   overflow-wrap: anywhere;
 }
-
-.ui5-log-code {
-  font-family: var(--ui-font-mono);
-  font-size: 10.5px;
-  color: var(--ui-danger);
-  background: var(--ui-danger-surface);
-  border-radius: 4px;
-  padding: 0 4px;
+.ui5-logs-error { color: var(--ds-error); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.ui5-logs-inline-note:empty { display: none; }
+.ui5-logs-empty { padding: var(--ui-space-3) 0; }
+.ui5-logs-filters,
+.ui5-logs-actions,
+.ui5-log-actions,
+.ui5-logs-export-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  flex-wrap: wrap;
 }
-
-.ui5-log-details summary {
+.ui5-logs-filters { margin-bottom: var(--ui-space-3); }
+.ui5-logs-filters > .btn { margin-inline-start: auto; }
+.ui5-logs-search { flex: 1 1 220px; }
+/* 多动作行与分段控件同规：窄窗让控件整块换到下一行，标签不挤成竖排。 */
+.ui5-logs-modal .settings-row:has(> .settings-row-control > .ui5-logs-actions) {
+  flex-wrap: wrap;
+  gap: var(--ui-space-2) var(--ui-space-6);
+}
+/* 基础行复制区 flex-basis 为 0，会先被压到竖排；给这类动作行一个真实最小宽度，
+ * 空间不足时让它整行占满、按钮换行，而不是把中文标题挤成一行一个字。 */
+.ui5-logs-modal .settings-row:has(> .settings-row-control > .ui5-logs-actions) > .settings-row-copy {
+  flex: 1 1 220px;
+}
+.ui5-logs-search > svg { flex: 0 0 auto; }
+.ui5-logs-list { min-width: 0; }
+.ui5-log-entry,
+.ui5-logs-recent-error { border-bottom: 1px solid var(--ds-border-default); }
+.ui5-log-entry-head {
+  padding: var(--ui-space-3) 0;
+  color: var(--ds-text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
   cursor: pointer;
-  padding: 5px 10px;
-  color: var(--ui-text-muted);
-  font-size: 11px;
-  border-top: 1px solid var(--ui-border);
+  overflow-wrap: anywhere;
 }
-
-.ui5-log-details[open] summary {
-  color: var(--ui-text-secondary);
-}
-
-.ui5-log-meta {
-  padding: 0 10px 10px;
-  font-size: 11.5px;
-  color: var(--ui-text-secondary);
-  line-height: 1.55;
-}
-
+.ui5-log-entry-head > * { margin-inline-end: var(--ui-space-2); }
+.ui5-log-time { color: var(--ds-text-secondary); font-variant-numeric: tabular-nums; }
+.ui5-log-level { white-space: nowrap; }
+.ui5-log-level[data-level="ERROR"],
+.ui5-log-level[data-level="FATAL"],
+.ui5-log-entry[data-level="ERROR"] .ui5-log-code,
+.ui5-log-entry[data-level="FATAL"] .ui5-log-code { color: var(--ds-error); }
+.ui5-log-level[data-level="WARN"] { color: var(--ds-warning); }
+.ui5-log-source { color: var(--ds-text-secondary); }
+.ui5-log-event,
+.ui5-log-code,
+.ui5-logs-file code { font-family: var(--font-mono); overflow-wrap: anywhere; }
+.ui5-log-meta { padding: 0 0 var(--ui-space-3); color: var(--ds-text-secondary); font-size: var(--text-sm); line-height: var(--leading-body); }
 .ui5-log-detail-json {
-  margin: 6px 0;
-  padding: 8px;
-  max-height: 220px;
+  margin: var(--ui-space-2) 0;
+  padding: var(--ui-space-3);
+  max-height: 300px;
   overflow: auto;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
-  background: var(--ui-code-surface);
-  color: var(--ui-text-primary);
-  font-family: var(--ui-font-mono);
-  font-size: 11px;
+  background: var(--ds-bg-secondary);
+  color: var(--ds-text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
-.ui5-log-copy {
-  margin-top: 4px;
-}
-
-.ui5-log-actions {
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-  flex-wrap: wrap;
-}
-
-.ui5-log-ref-status {
-  font-size: 11px;
-  color: var(--ui-text-secondary);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.ui5-log-ref {
-  margin-left: auto;
-}
-
-.ui5-logs-recent-error .ui5-log-actions {
-  grid-column: 1 / -1;
-  min-width: 0;
-  margin-top: 0;
-}
-
-.ui5-logs-recent-error .ui5-log-ref {
-  margin-left: 0;
-}
-
-.ui5-logs-export-intro {
-  padding: var(--ui-space-3);
-  border: 1px solid var(--ui-info-border);
-  border-radius: var(--ui-radius-card);
-  background: var(--ui-info-surface);
-  color: var(--ui-text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
-  margin-bottom: var(--ui-space-3);
-}
-
-.ui5-logs-export-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-3);
-  margin-bottom: var(--ui-space-3);
-}
-
-.ui5-logs-preview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-2);
-  margin-bottom: var(--ui-space-3);
-}
-
-.ui5-logs-export-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--ui-space-2);
-  flex-wrap: wrap;
-}
-
+.ui5-log-actions { margin-top: var(--ui-space-2); }
+.ui5-log-ref-status { font-size: var(--text-sm); overflow-wrap: anywhere; }
+.ui5-logs-disclosure { margin: var(--ui-space-3) 0 var(--ui-space-5); }
+.ui5-logs-disclosure > summary { padding: var(--ui-space-2) 0; color: var(--ds-text-primary); font-size: var(--text-md); cursor: pointer; }
+.ui5-logs-disclosure > summary:focus-visible,
+.ui5-log-entry-head:focus-visible { outline: 2px solid var(--ds-focus); outline-offset: 1px; }
+.diagnostic-heading { margin: var(--ui-space-5) 0 var(--ui-space-2); font-size: var(--text-md); font-weight: var(--font-weight-semibold); }
+.diagnostic-row { align-items: flex-start; }
+.diagnostic-row > span { flex: 0 1 40%; color: var(--ds-text-secondary); }
+.diagnostic-row > b { flex: 1 1 60%; font-weight: var(--font-weight-normal); text-align: right; overflow-wrap: anywhere; }
+.diagnostic-row > b.warn { color: var(--ds-warning); }
+.diagnostic-row > b.dim { color: var(--ds-text-secondary); }
+.diagnostic-details .diag-note { white-space: pre-wrap; }
+.ui5-logs-export-form { display: flex; flex-direction: column; gap: var(--ui-space-4); margin: var(--ui-space-4) 0; }
+.ui5-logs-field-block { display: flex; flex-direction: column; gap: var(--ui-space-2); font-size: var(--text-md); }
+.ui5-logs-field-block textarea { width: 100%; height: auto; min-height: 80px; padding: var(--ui-space-2) var(--ui-space-3); resize: vertical; line-height: var(--leading-body); }
+.ui5-logs-manifest { margin: var(--ui-space-2) 0 var(--ui-space-4); padding-left: var(--ui-space-5); color: var(--ds-text-secondary); font: var(--text-sm) / var(--leading-body) var(--font-mono); overflow-wrap: anywhere; }
+.ui5-logs-export-actions { justify-content: flex-end; margin-top: var(--ui-space-4); }
 @media (max-width: 760px) {
-  .modal-card.ui5-logs-modal {
-    max-width: calc(100vw - 20px);
-    max-height: calc(100vh - 20px);
-    padding: 14px;
-  }
-
-  .ui5-logs-settings {
-    grid-template-columns: 1fr;
-  }
-
-  .ui5-logs-field {
-    justify-content: flex-start;
-  }
-
-  .ui5-logs-field select {
-    max-width: none;
-    flex: 1 1 auto;
-  }
-
-  .ui5-logs-filters select {
-    flex: 1 1 120px;
-  }
-
-  .ui5-logs-recent-error {
-    grid-template-columns: 1fr;
-    gap: 2px;
-  }
-
-  /* 只让按钮按内容换行，不把 700px 弹层里的每个动作拉成整行 —
-   * 主操作（导出）不应该因为窄屏变成一整块深色横条。 */
-  .ui5-logs-toolbar .btn,
-  .ui5-logs-export-actions .btn {
-    flex: 0 0 auto;
-  }
+  .ui5-logs-filters > select { flex: 1 1 120px; min-width: 0; order: 1; }
+  .ui5-logs-filters > .btn { order: 2; }
+  .ui5-logs-search { flex-basis: 100%; order: 3; }
+  .ui5-logs-actions { justify-content: flex-end; }
 }

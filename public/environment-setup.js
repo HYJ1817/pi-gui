@@ -570,7 +570,7 @@ function renderVerifying() {
   if (report.requiredReady) state.footer.append(primaryButton('进入 Pi GUI', finish));
   else state.footer.append(primaryButton('重试', () => { state.error = null; setPhase(ENV_PHASES.CHECK); }));
   state.footer.append(secondaryButton('重新验证', verify));
-  state.footer.append(textButton('打开诊断', openDiagnosticsFromWizard));
+  state.footer.append(textButton('打开日志与诊断', openDiagnosticsFromWizard));
 }
 
 function renderError() {
@@ -589,7 +589,7 @@ function renderError() {
     refreshReport({ force: true });
   }));
   state.footer.append(secondaryButton('重新检查', () => { state.error = null; refreshReport({ force: true }); }));
-  state.footer.append(textButton('打开诊断', openDiagnosticsFromWizard));
+  state.footer.append(textButton('打开日志与诊断', openDiagnosticsFromWizard));
   if (!state.fromSettings) state.footer.append(textButton('稍后设置', () => closeModal()));
 }
 

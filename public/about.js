@@ -6,10 +6,8 @@
  *   - 重启：providers.js 的 restartPi()（唯一入口 + 确认框）
  *   - 日志 / 导出：logs.js 的 openLogs()（用 initialTab 落到既有标签）
  *
- * 信息页与诊断页都会挂 update.js / pi-update.js 的区块。两个更新模块各自只有
- * 一个 `mounted` 指针，并且只画在 `isConnected` 的节点上 —— 设置页的 detail
- * 生命周期保证同一时刻只有一个页面在 DOM 里，所以不存在两个页面争用同一个
- * 容器。这里不复制状态、也不额外订阅一份。
+ * 更新区块只在信息页挂载。系统环境由系统页展示，技术诊断由日志与诊断承接；
+ * 这里不复制它们的状态、不额外订阅后台服务。
  */
 import { fetchDiagnostics } from './api.js';
 import { appUpdateSnapshot } from './app-update.js';
@@ -22,17 +20,6 @@ import { createSettingsCard, createSettingsRow } from './ui/primitives.js';
 import { toast } from './ui/toast.js';
 
 const ISSUES_URL = 'https://github.com/HYJ1817/pi-gui/issues';
-const COMPAT_TEXT = {
-  compatible: '兼容正常',
-  partial: '部分兼容',
-  incompatible: '不兼容',
-  unknown: '兼容状态未知',
-};
-const COMPAT_TONE = {
-  compatible: 'is-ok',
-  partial: 'is-warn',
-  incompatible: 'is-err',
-};
 
 function node(tag, cls = '', text = '') {
   const n = document.createElement(tag);
@@ -47,16 +34,6 @@ function button(label, cls = 'btn') {
   b.className = cls;
   b.textContent = label;
   return b;
-}
-
-function statusChip(text, tone = '') {
-  return node('span', 'about-status' + (tone ? ' ' + tone : ''), text);
-}
-
-function separator() {
-  const s = node('span', 'about-hero-sep', '·');
-  s.setAttribute('aria-hidden', 'true');
-  return s;
 }
 
 function actionGroup(actions) {
@@ -107,52 +84,17 @@ function buildHero(card) {
   return { version, meta, error, focus: (options) => hero.focus(options) };
 }
 
-function heroValues(diagnostics) {
-  const app = diagnostics.app || {};
-  const system = diagnostics.system || {};
-  const pi = diagnostics.pi || {};
-  const bridge = diagnostics.bridge || {};
-  const compatibility = diagnostics.compatibility || {};
-  const platform = [system.os || system.platform, system.release, system.arch]
-    .filter(Boolean)
-    .join(' ') || '系统未知';
-  const piVersion = pi.available === false ? '不可用' : (pi.version || '未知');
-  const runtimeKnown = typeof bridge.piRunning === 'boolean';
-  return {
-    appVersion: app.version || '未知',
-    piVersion,
-    platform,
-    compatibility: compatibility.status || 'unknown',
-    runtime: runtimeKnown ? (bridge.piRunning ? 'Pi 运行中' : 'Pi 未运行') : 'Pi 状态未知',
-    runtimeTone: runtimeKnown && bridge.piRunning ? 'is-ok' : '',
-  };
-}
-
 function paintHero(hero, diagnostics) {
-  const values = heroValues(diagnostics);
-  hero.version.textContent = `版本 ${values.appVersion}`;
-  hero.meta.replaceChildren(
-    node('span', '', 'Pi ' + values.piVersion),
-    separator(),
-    node('span', '', values.platform),
-    separator(),
-    statusChip(COMPAT_TEXT[values.compatibility] || `兼容状态：${values.compatibility}`, COMPAT_TONE[values.compatibility] || ''),
-    separator(),
-    statusChip(values.runtime, values.runtimeTone),
-  );
+  hero.version.textContent = `版本 ${diagnostics.app?.version || '未知'}`;
+  const pi = diagnostics.pi || {};
+  hero.meta.textContent = 'Pi ' + (pi.available === false ? '不可用' : pi.version || '未知');
   hero.error.hidden = true;
   hero.error.replaceChildren();
 }
 
 function paintHeroError(hero, message, retry) {
   hero.version.textContent = '版本 未知';
-  hero.meta.replaceChildren(
-    node('span', '', 'Pi 未知'),
-    separator(),
-    node('span', '', '系统未知'),
-    separator(),
-    statusChip('无法确认兼容状态'),
-  );
+  hero.meta.textContent = 'Pi 未知';
   hero.error.replaceChildren(
     node('span', '', message || '无法读取应用信息'),
     (() => {
@@ -201,18 +143,16 @@ function restartRow() {
  * 打开「信息」页。
  *
  * `present` 与其它设置页同形（settingsSurface.presentDetail 或 openModal）。
- * `openLogs(initialTab)` / `openDiagnostics()` 由组合根注入：信息页不自己
- * 决定日志与诊断挂在哪一层，只声明「我要去那个既有页面」。
+ * `openLogs(initialTab)` 由组合根注入：只声明目的地，不自己创建第二层页面。
  */
 export function openAboutSettings({
   present = openModal,
   openLogs = () => { const b = document.getElementById('navLogs'); if (b) b.click(); },
-  openDiagnostics = () => { const b = document.getElementById('navDiagnostics'); if (b) b.click(); },
 } = {}) {
   present((card) => {
     card.classList.add('about-settings-card');
     card.appendChild(node('h3', '', '信息'));
-    card.appendChild(node('p', 'settings-page-desc', '版本、更新与运行状态。'));
+    card.appendChild(node('p', 'settings-page-desc', '版本、更新与应用支持。'));
 
     const hero = buildHero(card);
     let heroSeq = 0;
@@ -223,14 +163,11 @@ export function openAboutSettings({
       hero.version.textContent = '版本 读取中…';
       hero.meta.textContent = '正在读取应用信息…';
       hero.error.hidden = true;
-      const payload = await fetchDiagnostics().catch((err) => ({
-        ok: false,
-        error: err && err.message ? err.message : String(err),
-      }));
+      const payload = await fetchDiagnostics().catch(() => ({ ok: false }));
       if (!card.isConnected || seq !== heroSeq) return;
       const diagnostics = payload && payload.ok !== false ? payload.diagnostics : null;
       if (!diagnostics) {
-        paintHeroError(hero, payload && payload.error ? `无法读取应用信息：${payload.error}` : '无法读取应用信息', loadHero);
+        paintHeroError(hero, '无法读取应用信息，请重试。', loadHero);
       } else {
         paintHero(hero, diagnostics);
       }
@@ -277,23 +214,14 @@ export function openAboutSettings({
       description: '日志只保存在本机；打开 GitHub 不会自动上传日志、会话内容或密钥。',
       children: [
         createSettingsRow({
-          label: '日志',
-          detail: '查看本机结构化日志，或导出只含脱敏摘要的故障报告。',
+          label: '日志与诊断',
+          detail: '查看本机日志、诊断摘要，或导出脱敏故障报告。',
           control: actionGroup([
-            { label: '打开日志', testId: 'open-logs', run: () => openLogs('overview') },
+            { label: '打开日志与诊断', testId: 'open-logs', run: () => openLogs('overview') },
             { label: '导出故障报告', testId: 'export-report', run: () => openLogs('export') },
           ]),
           extraClass: 'about-support-row',
           id: 'aboutLogsRow',
-        }),
-        createSettingsRow({
-          label: '运行状态与诊断',
-          detail: '查看版本、兼容矩阵、能力探测与环境快照。',
-          control: actionGroup([
-            { label: '打开诊断', testId: 'open-diagnostics', run: () => openDiagnostics() },
-          ]),
-          extraClass: 'about-support-row',
-          id: 'aboutDiagnosticsRow',
         }),
         createSettingsRow({
           label: '问题反馈',
