@@ -84,8 +84,15 @@ export function createRemoteAdmin({ getRemote, log = () => {} }) {
       const body = await readBody(req).then(s => { try { return JSON.parse(s || '{}'); } catch { return null; } });
       const id = body?.deviceId;
       if (typeof id !== 'string' || !id) return json(res, 400, { ok: false, code: 'invalid_request' });
-      const done = r.admin.revokeDevice(id);                 // 同时断开实时流
-      return json(res, done ? 200 : 404, { ok: done, ...(done ? {} : { code: 'unknown_device' }) });
+      const result = r.admin.revokeDevice(id);               // 同时断开实时流
+      if (!result) return json(res, 404, { ok: false, code: 'unknown_device' });
+      // FSEC-005: a revocation that no durable channel confirmed is never
+      // acknowledged as success. The device IS denied in memory and its
+      // streams ARE dead — but the operator is told the durability failed
+      // and must retry (the same endpoint is the retry path: revoke of an
+      // already-revoked record re-attempts both durable channels).
+      if (!result.durable) return json(res, 503, { ok: false, code: 'revocation_not_durable', inMemoryDenied: true });
+      return json(res, 200, { ok: true, revoked: true, ...(result.alreadyRevoked ? { alreadyRevoked: true } : {}) });
     }
     if (path === '/api/remote/devices/grants' && req.method === 'POST') {
       const body = await readBody(req).then(s => { try { return JSON.parse(s || '{}'); } catch { return null; } });

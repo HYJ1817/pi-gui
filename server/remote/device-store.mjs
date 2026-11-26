@@ -34,7 +34,41 @@ export class DeviceStore {
     this.devices = new Map();      // deviceId -> record
     this.keyIndex = new Map();     // devicePublicKey -> deviceId
     this.onAuthorizationChanged = null; // composition-root-only synchronous invalidation
+    // FSEC-005: write-ahead revocation tombstones. A revocation whose only
+    // record lives in memory is reverted by a restart; the tombstone is a
+    // second, independent durable channel written BEFORE the main mutation
+    // so at least one of the two carries the revocation across a restart.
+    this.tombstonePath = path.join(dataDir, 'remote-revocations.json');
     this._load();
+  }
+  _readTombstones() {
+    try {
+      const data = JSON.parse(fs.readFileSync(this.tombstonePath, 'utf8'));
+      if (isRecord(data) && Array.isArray(data.revocations)) {
+        return data.revocations.filter(r => isRecord(r) && typeof r.deviceId === 'string'
+          && typeof r.devicePublicKey === 'string' && typeof r.registeredAt === 'string');
+      }
+    } catch (e) {
+      if (e.code !== 'ENOENT') this.log(`revocation tombstone load failed (treating as none): ${e.code}`);
+    }
+    return [];
+  }
+  _writeTombstones(entries) {
+    const tmp = this.tombstonePath + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ revocations: entries }, null, 2), 'utf8');
+    try { fs.chmodSync(tmp, 0o600); } catch { /* Windows */ }
+    fs.renameSync(tmp, this.tombstonePath);
+  }
+  /** Durable intent first: append this revocation to the tombstone WAL. */
+  _appendTombstone(d) {
+    const entries = this._readTombstones();
+    entries.push({
+      deviceId: d.deviceId,
+      devicePublicKey: typeof d.devicePublicKey === 'string' ? d.devicePublicKey : '',
+      registeredAt: typeof d.registeredAt === 'string' ? d.registeredAt : '',
+      revokedAt: nowIso(),
+    });
+    this._writeTombstones(entries);
   }
   _load() {
     let corrupt = false;
@@ -78,13 +112,45 @@ export class DeviceStore {
     } catch (e) {
       if (e.code !== 'ENOENT') { this.log(`device store load failed (starting empty): ${e.code}`); corrupt = true; }
     }
-    if (corrupt) this._persist();
+    // FSEC-005 reconciliation: tombstoned revocations are re-applied over
+    // whatever the main file says — revocation of the SAME registration
+    // instance (deviceId + key + registeredAt all match) is authoritative.
+    // Entries whose registration instance no longer matches (re-paired with
+    // a fresh registeredAt/key) are inert and compacted away below.
+    let reconciled = false;
+    for (const entry of this._readTombstones()) {
+      const d = this.devices.get(entry.deviceId);
+      if (d && !d.revoked && d.devicePublicKey === entry.devicePublicKey && d.registeredAt === entry.registeredAt) {
+        d.revoked = true; d.active = false;
+        if (this.keyIndex.get(d.devicePublicKey) === d.deviceId) this.keyIndex.delete(d.devicePublicKey);
+        reconciled = true;
+      }
+    }
+    if (corrupt || reconciled) this._persist();
   }
   _persist() {
     const tmp = this.path + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ devices: [...this.devices.values()] }, null, 2), 'utf8');
+    const serializable = [...this.devices.values()].map(d => {
+      const copy = { ...d };
+      delete copy.revocationPersistenceFailed;
+      return copy;
+    });
+    fs.writeFileSync(tmp, JSON.stringify({ devices: serializable }, null, 2), 'utf8');
     try { fs.chmodSync(tmp, 0o600); } catch { /* Windows */ }
     fs.renameSync(tmp, this.path);
+    // Main file is now authoritative for everything it contains: compact the
+    // tombstone WAL by dropping entries whose registration instance is already
+    // revoked in durable bytes (or no longer exists). Compaction failure is
+    // harmless — stale entries are inert or idempotently re-applied.
+    try {
+      const remaining = this._readTombstones().filter(entry => {
+        const d = this.devices.get(entry.deviceId);
+        if (!d) return false;
+        if (d.devicePublicKey !== entry.devicePublicKey || d.registeredAt !== entry.registeredAt) return false;
+        return d.revoked !== true;
+      });
+      this._writeTombstones(remaining);
+    } catch { /* compaction is best-effort; durability never depends on it */ }
   }
 
   count() { return this.devices.size; }
@@ -215,31 +281,65 @@ export class DeviceStore {
    * drop the key binding, persist. Live streams are closed by the caller
    * (the gateway subscribes this list).
    */
+  /**
+   * FSEC-005 revocation durability protocol. Revocation proceeds as a
+   * write-ahead transaction:
+   *   1. Tombstone WAL append (durable intent, independent file channel).
+   *   2. In-memory mutation — sticky, never rolled back (FS-001).
+   *   3. Main store persistence (authoritative record; also compacts the WAL).
+   * The revocation is DURABLE if at least one durable channel landed: a
+   * restart either reads the main file (device revoked) or reconciles the
+   * tombstone over it (device revoked again). Only a double write failure
+   * leaves the revocation memory-only — in that case callers are told
+   * durable:false so the failure is never acknowledged as success, and the
+   * same revoke call doubles as the operator retry path (tombstone append
+   * and main persist are both re-attempted for an already-revoked record).
+   * Returns false only for a device that does not exist at all.
+   */
   revoke(deviceId) {
     const d = this.devices.get(deviceId);
-    if (!d || d.revoked) return false;
-    // FS-001: authorization LOSS is never rolled back. If persistence fails
-    // the revocation cannot be durable — but the fail-closed direction is to
-    // keep denying in memory and kill the streams anyway. A restart then
-    // reloads the device active, which is the honest representation of what
-    // the disk confirms; nothing in THIS process may continue authorizing it.
-    d.revoked = true; d.active = false;
-    if (typeof d.devicePublicKey === 'string' && this.keyIndex.get(d.devicePublicKey) === deviceId) this.keyIndex.delete(d.devicePublicKey);
+    if (!d) return false;
+    let tombstoned = false;
+    let persisted = false;
+    try {
+      this._appendTombstone(d);
+      tombstoned = true;
+    } catch (e) {
+      this.log(`device revocation tombstone failed for ${deviceId}: durable intent not recorded`);
+    }
+    const first = d.revoked !== true;
+    if (first) {
+      // FS-001: authorization LOSS is never rolled back. The fail-closed
+      // direction keeps denying in memory and kills the streams regardless
+      // of what durability achieves.
+      d.revoked = true; d.active = false;
+      if (typeof d.devicePublicKey === 'string' && this.keyIndex.get(d.devicePublicKey) === deviceId) this.keyIndex.delete(d.devicePublicKey);
+    }
     try {
       this._persist();
+      persisted = true;
     } catch (e) {
       this.log(`device revocation persistence failed for ${deviceId}: authorization stays revoked in memory`);
     }
-    // Invalidation is unconditional — it must never depend on the durability
-    // of the revocation that caused it.
-    this.onAuthorizationChanged?.(deviceId, 'revoked');
-    return true;
+    if (first) {
+      // Invalidation is unconditional — it must never depend on the durability
+      // of the revocation that caused it.
+      this.onAuthorizationChanged?.(deviceId, 'revoked');
+    }
+    const durable = tombstoned || persisted;
+    // Operator-visible in-memory signal; cleared by a durable retry. It is a
+    // runtime annotation, never written into durable bytes — after a restart
+    // the disk record is the only truth and a falsely persisted flag would
+    // misrepresent it.
+    d.revocationPersistenceFailed = !durable;
+    return { revoked: true, durable, alreadyRevoked: !first };
   }
   list() {
     return [...this.devices.values()].map(d => ({
       deviceId: d.deviceId, deviceName: d.deviceName, grantedScopes: d.grantedScopes,
       grants: Object.keys(d.grants ?? {}), expiresAt: d.expiresAt, registeredAt: d.registeredAt,
       revoked: d.revoked === true,
+      revocationPersistenceFailed: d.revocationPersistenceFailed === true || undefined,
     }));
   }
   setGrants(deviceId, projectIds) {

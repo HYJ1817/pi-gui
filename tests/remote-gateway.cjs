@@ -480,7 +480,11 @@ async function main() {
       });
       await new Promise(r => setTimeout(r, 300));
       // revoke
-      assert.equal(ctx.remote.admin.revokeDevice(deviceId), true);
+      {
+        const rv = ctx.remote.admin.revokeDevice(deviceId);
+        assert.equal(rv && rv.revoked, true, 'revokeDevice returns a revocation result object');
+        assert.equal(rv.durable, true, 'unfaulted revocation is durable via tombstone+main channels');
+      }
       // new request rejected
       const y = s('GET', '/remote/v1/projects');
       const r = await ctx.pinnedRequest('GET', '/remote/v1/projects', { headers: y.headers });
@@ -1917,11 +1921,23 @@ async function main() {
       });
       assert.equal(state.status, 200);
       const tmpPath = path.join(ctx.dataDir, 'remote-devices.json.tmp');
+      const tombTmp = path.join(ctx.dataDir, 'remote-revocations.json.tmp');
       fs.mkdirSync(tmpPath);
+      fs.mkdirSync(tombTmp);
       let revokeResult;
       try {
         revokeResult = ctx.remote.deviceStore.revoke(device.deviceId);
-      } catch { revokeResult = 'threw'; } finally { fs.rmdirSync(tmpPath); }
+      } catch { revokeResult = 'threw'; } finally { fs.rmdirSync(tmpPath); fs.rmdirSync(tombTmp); }
+      assert.notEqual(revokeResult, 'threw', 'revocation never throws — it degrades to memory-only denial');
+      assert.equal(revokeResult.revoked, true);
+      assert.equal(revokeResult.durable, false, 'FSEC-005: double write failure is honestly reported as not durable');
+      const flagged = ctx.remote.deviceStore.get(device.deviceId);
+      assert.equal(flagged.revocationPersistenceFailed, true, 'operator-visible persistence failure flag');
+      // Retry with the fault removed must re-attempt both durable channels.
+      const retry = ctx.remote.deviceStore.revoke(device.deviceId);
+      assert.equal(retry.durable, true, 'retry path re-establishes durability');
+      assert.equal(retry.alreadyRevoked, true);
+      assert.equal(ctx.remote.deviceStore.get(device.deviceId).revocationPersistenceFailed, false);
       const deadline = Date.now() + 3000;
       while (!state.ended && Date.now() < deadline) await new Promise(r => setTimeout(r, 25));
       assert.equal(state.ended, true, 'revocation must close streams even when persistence fails');
@@ -1933,6 +1949,84 @@ async function main() {
       const res2 = await ctx.pinnedRequest('GET', '/remote/v1/projects', { headers: x2.headers });
       assert.equal(res2.status, 401, `revoked-in-memory device must never authorize: ${res2.status}`);
       try { state.res.destroy(); } catch {}
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('fsec-005: revocation survives restart via tombstone WAL; retry path is honest; inert tombstone never kills a re-registered instance', async () => {
+    // Reviewer reproduction: revoke with faulted MAIN persistence, restart —
+    // pre-fix the device came back active; fixed, the tombstone WAL reconciles.
+    const { DeviceStore } = await import(MODULES.deviceStore);
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(pp => pp);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const deviceId = device.deviceId;
+      const dataDir = ctx.dataDir;
+      const rec = ctx.remote.deviceStore.get(deviceId);
+      const instanceKey = rec.devicePublicKey;
+      const instanceRegisteredAt = rec.registeredAt;
+      // Fault ONLY the main channel: tombstone write succeeds, main persist fails.
+      fs.mkdirSync(path.join(dataDir, 'remote-devices.json.tmp'));
+      let result;
+      try {
+        result = ctx.remote.deviceStore.revoke(deviceId);
+      } finally {
+        fs.rmdirSync(path.join(dataDir, 'remote-devices.json.tmp'));
+      }
+      assert.equal(result.revoked, true);
+      assert.equal(result.durable, true, 'tombstone channel alone is sufficient for durability');
+      // The main durable bytes were never updated: on disk the device still
+      // looks active. Pre-fix, a restart re-admitted it.
+      const diskBytes = JSON.parse(fs.readFileSync(path.join(dataDir, 'remote-devices.json'), 'utf8'));
+      const diskRec = diskBytes.devices.find(d => d.deviceId === deviceId);
+      assert.equal(diskRec.revoked !== true, true, 'test premise: main durable bytes still show the device active');
+      // Close the server but PRESERVE the data dir — restart durability is
+      // exactly what this pin verifies.
+      await ctx.remote.close();
+      // Restart: tombstone reconciliation must re-apply the revocation.
+      const store2 = new DeviceStore(dataDir, () => {});
+      const reloaded = store2.get(deviceId);
+      assert.equal(reloaded.revoked, true, 'FSEC-005: tombstoned revocation must survive restart even when main persistence failed');
+      assert.equal(reloaded.active, false);
+      assert.equal(store2.active(deviceId), null, 'device must never authorize after restart');
+      // Reconciliation is instance-scoped: the SAME registration instance.
+      assert.equal(reloaded.devicePublicKey, instanceKey);
+      assert.equal(reloaded.registeredAt, instanceRegisteredAt);
+      // Inert tombstone: a re-registered instance (fresh registeredAt/key)
+      // must NOT be killed by the stale entry.
+      const store3 = new DeviceStore(dataDir, () => {});
+      const live = store3.devices.get(deviceId);
+      live.revoked = false; live.active = true;
+      live.registeredAt = new Date(Date.now() + 1000).toISOString(); // fresh registration instance
+      live.expiresAt = new Date(Date.now() + 3600000).toISOString();
+      live.replayEpoch = live.replayEpoch + 1;
+      store3._persist();
+      const store4 = new DeviceStore(dataDir, () => {});
+      const survived = store4.get(deviceId);
+      assert.equal(survived.revoked, false, 'inert tombstone must never kill a re-registered instance');
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('fsec-005b: double write failure is memory-only, honestly flagged, and durable bytes never gain a false annotation', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(pp => pp);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const deviceId = device.deviceId;
+      fs.mkdirSync(path.join(ctx.dataDir, 'remote-devices.json.tmp'));
+      fs.mkdirSync(path.join(ctx.dataDir, 'remote-revocations.json.tmp'));
+      let result;
+      try {
+        result = ctx.remote.deviceStore.revoke(deviceId);
+      } finally {
+        fs.rmdirSync(path.join(ctx.dataDir, 'remote-devices.json.tmp'));
+        fs.rmdirSync(path.join(ctx.dataDir, 'remote-revocations.json.tmp'));
+      }
+      assert.equal(result.durable, false);
+      assert.equal(result.revoked, true, 'memory denial is unconditional');
+      // Durable bytes must never carry the runtime-only failure annotation.
+      const diskBytes = fs.readFileSync(path.join(ctx.dataDir, 'remote-devices.json'), 'utf8');
+      assert.equal(diskBytes.includes('revocationPersistenceFailed'), false, 'runtime annotation stays out of durable bytes');
     } finally { await ctx.cleanup(); }
   });
 
