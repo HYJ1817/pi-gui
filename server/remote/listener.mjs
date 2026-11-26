@@ -87,7 +87,11 @@ export class RemoteGateway {
     this.rate = new Map();                    // deviceId -> [ms]
     this.server = https.createServer(tlsOptions, (req, res) => {
       this._handle(req, res).catch(e => {
-        this.log(`remote request failed: ${e?.message ?? e}`);
+        // FS-004: NEVER interpolate raw exception text — a domain exception
+        // can carry credential material from whatever it touched, and this
+        // logger is production-wired to console. Log the failure category
+        // only; the wire answer stays a fixed shape.
+        this.log(`remote request failed: handler exception (${e?.name ?? 'Error'})`);
         try { this._wire(res, ZERO_UUID, 'internal_error'); } catch {}
       });
     });
@@ -97,6 +101,20 @@ export class RemoteGateway {
 
   _wire(res, requestId, code, extraHeaders) {
     const body = { protocolVersion: 1, requestId, error: { code, retryable: RETRYABLE.has(code) } };
+    // FS-005: validation BEFORE writing applies to error envelopes too. The
+    // zero sentinel is contract-reserved for closed uncorrelated unauthorized
+    // errors; any other error carrying it (or any malformed shape) falls back
+    // to the one shape the validator always accepts rather than emitting a
+    // response that fails the project's own schema.
+    if (!validateRemoteResponse(body)) {
+      const fallback = { protocolVersion: 1, requestId: ZERO_UUID, error: { code: 'unauthorized', retryable: false } };
+      if (!validateRemoteResponse(fallback)) return;
+      try {
+        res.writeHead(WIRE_STATUS.unauthorized, { 'content-type': 'application/json; charset=utf-8', ...extraHeaders });
+        res.end(JSON.stringify(fallback));
+      } catch {}
+      return;
+    }
     try {
       res.writeHead(WIRE_STATUS[code] ?? 500, { 'content-type': 'application/json; charset=utf-8', ...extraHeaders });
       res.end(JSON.stringify(body));
@@ -255,7 +273,8 @@ export class RemoteGateway {
         });
       }
     } catch (e) {
-      this.log(`remote op ${admission.operation} failed: ${e?.message ?? e}`);
+      // FS-004: category + operation only, never raw exception text.
+      this.log(`remote op ${admission.operation} failed: handler exception (${e?.name ?? 'Error'})`);
       return this._wire(res, admission.requestId, 'internal_error');
     }
     if (!out.ok) return this._wire(res, admission.requestId, out.wire ?? wireErrorCode(out.code));

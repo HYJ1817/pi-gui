@@ -125,11 +125,18 @@ export class DeviceStore {
     const existing = this.devices.get(deviceId);
     if (!existing && this.devices.size >= L.maxDevices) return null;
     const boundTo = this.deviceIdForKey(devicePublicKey);
+    // Contract deviceLifecycle.rotation: re-pairing an already-bound device
+    // key atomically revokes the prior binding in the same transaction —
+    // the old deviceId is revoked (its streams die on the next recheck)
+    // rather than leaving two records or rejecting the re-pair.
+    // FS-001 rollback requires the TRUE pre-transaction state — snapshot
+    // BEFORE mutating anything (the rotation block below flips the fields).
+    var priorState = null;
     if (boundTo !== null && boundTo !== deviceId) {
-      // Contract deviceLifecycle.rotation: re-pairing an already-bound device
-      // key atomically revokes the prior binding in the same transaction —
-      // the old deviceId is revoked (its streams die on the next recheck)
-      // rather than leaving two records or rejecting the re-pair.
+      const priorRec = this.devices.get(boundTo);
+      if (priorRec) priorState = { rec: priorRec, revoked: priorRec.revoked, active: priorRec.active, hadKeyBinding: this.keyIndex.get(priorRec.devicePublicKey) === boundTo };
+    }
+    if (boundTo !== null && boundTo !== deviceId) {
       const prior = this.devices.get(boundTo);
       if (prior) { prior.revoked = true; prior.active = false; this.keyIndex.delete(devicePublicKey); }
     }
@@ -156,7 +163,27 @@ export class DeviceStore {
     };
     this.devices.set(deviceId, rec);
     this.keyIndex.set(devicePublicKey, deviceId);
-    this._persist();
+    try {
+      this._persist();
+    } catch (e) {
+      // FS-001: memory must never carry active credentials the disk does not
+      // confirm — a failed registration that stayed memory-active authenticated
+      // with 200 while the pairing had already failed. Roll back every mutation
+      // this transaction made (record, key index, prior-binding revocation,
+      // replaced predecessor) so memory keeps describing exactly what persists.
+      this.devices.delete(deviceId);
+      this.keyIndex.delete(devicePublicKey);
+      if (isRecord(existing)) {
+        this.devices.set(deviceId, existing);
+        if (typeof existing.devicePublicKey === 'string') this.keyIndex.set(existing.devicePublicKey, deviceId);
+      }
+      if (priorState) {
+        priorState.rec.revoked = priorState.revoked;
+        priorState.rec.active = priorState.active;
+        if (priorState.hadKeyBinding) this.keyIndex.set(priorState.rec.devicePublicKey, boundTo);
+      }
+      throw e;
+    }
     if (boundTo !== null && boundTo !== deviceId) this.onAuthorizationChanged?.(boundTo, 'revoked');
     this.onAuthorizationChanged?.(deviceId, 'registered');
     return { replayEpoch, deviceId };
@@ -170,9 +197,20 @@ export class DeviceStore {
   revoke(deviceId) {
     const d = this.devices.get(deviceId);
     if (!d || d.revoked) return false;
+    // FS-001: authorization LOSS is never rolled back. If persistence fails
+    // the revocation cannot be durable — but the fail-closed direction is to
+    // keep denying in memory and kill the streams anyway. A restart then
+    // reloads the device active, which is the honest representation of what
+    // the disk confirms; nothing in THIS process may continue authorizing it.
     d.revoked = true; d.active = false;
     if (typeof d.devicePublicKey === 'string' && this.keyIndex.get(d.devicePublicKey) === deviceId) this.keyIndex.delete(d.devicePublicKey);
-    this._persist();
+    try {
+      this._persist();
+    } catch (e) {
+      this.log(`device revocation persistence failed for ${deviceId}: authorization stays revoked in memory`);
+    }
+    // Invalidation is unconditional — it must never depend on the durability
+    // of the revocation that caused it.
     this.onAuthorizationChanged?.(deviceId, 'revoked');
     return true;
   }
@@ -186,9 +224,19 @@ export class DeviceStore {
   setGrants(deviceId, projectIds) {
     const d = this.devices.get(deviceId);
     if (!d) return false;
+    // FS-001: grant WIDENING is authorization gain — it must never exist only
+    // in memory. Roll back on persistence failure so memory and disk agree;
+    // removal safety is independently guaranteed by execution-time
+    // revalidation of queued mutations.
+    const previous = d.grants;
     d.grants = {};
     for (const pid of projectIds ?? []) if (typeof pid === 'string' && pid) d.grants[pid] = true;
-    this._persist();
+    try {
+      this._persist();
+    } catch (e) {
+      d.grants = previous;
+      throw e;
+    }
     this.onAuthorizationChanged?.(deviceId, 'grants_changed');
     return true;
   }
@@ -214,8 +262,17 @@ export class DeviceStore {
     }
     if (Object.keys(d.nonces).length >= L.maxNonceEntriesPerDevice) return false; // fail closed
     d.nonces[nonce] = timestamp;
+    const previousFloor = d.timestampFloor;
     if (timestamp > d.timestampFloor) d.timestampFloor = timestamp;
-    this._persist();
+    try {
+      this._persist();
+    } catch (e) {
+      // FS-001: an undurable nonce acceptance is replayable after restart —
+      // the consumed state must never exist only in memory.
+      delete d.nonces[nonce];
+      d.timestampFloor = previousFloor;
+      throw e;
+    }
     return true;
   };
 
@@ -229,7 +286,13 @@ export class DeviceStore {
     // request is admitted. Epoch bump alone still let the SAME key sign under
     // the new epoch without re-pairing (round-6 R6-SECURITY-2) — fail closed.
     d.active = false; d.requiresRepair = true;
-    this._persist();
+    try {
+      this._persist();
+    } catch (e) {
+      // FS-001: deactivation is authorization loss — sticky in memory even
+      // when durability fails, same as revocation.
+      this.log(`replay-epoch bump persistence failed for ${deviceId}: device stays inactive in memory`);
+    }
     this.onAuthorizationChanged?.(deviceId, 'epoch_changed');
     return true;
   }

@@ -95,7 +95,19 @@ export class RegistryClock {
   /** Registry revision: bumps whenever the conversation/project set changes. */
   registryRevision(items) {
     const fp = sha256hex(canonicalJson((items ?? []).map(i => [i.conversationId ?? null, i.sessionId ?? null, i.title ?? null]).sort()) ?? '[]');
-    if (fp !== this.fingerprint) { this.revision += 1; this.fingerprint = fp; this._persist(); }
+    if (fp !== this.fingerprint) {
+      const prevRevision = this.revision, prevFingerprint = this.fingerprint;
+      this.revision += 1; this.fingerprint = fp;
+      try {
+        this._persist();
+      } catch (e) {
+        // Same memory-disk agreement discipline as epochFor: the revision is
+        // served inside mutation outcomes, so an undurable bump must not
+        // become observable.
+        this.revision = prevRevision; this.fingerprint = prevFingerprint;
+        throw e;
+      }
+    }
     return this.revision;
   }
   /** Continuity-aware epoch resolution: SAME resource + SAME identity ->
@@ -108,10 +120,24 @@ export class RegistryClock {
     const cur = this.ownerEpochs.get(key);
     if (cur && cur.identity === identity) return cur.epoch;
     const epoch = (this.epochCounter ?? 0) + 1;
+    const previousCounter = this.epochCounter ?? 0;
+    const hadKey = this.ownerEpochs.has(key);
+    const previousEntry = this.ownerEpochs.get(key);
     this.epochCounter = epoch;
     this.ownerEpochs.set(key, { identity, epoch });
     // Resource count is product-bounded (projects+conversations); no cap needed.
-    this._persist();
+    try {
+      this._persist();
+    } catch (e) {
+      // FS-002: an epoch that never reached disk must NEVER be handed out —
+      // after restart the same key re-allocates a DIFFERENT epoch for the
+      // unchanged owner, and the same client id executes twice under the two
+      // epochs. Roll memory back so every later caller retries the allocation
+      // against what the disk actually confirms.
+      this.epochCounter = previousCounter;
+      if (hadKey) this.ownerEpochs.set(key, previousEntry); else this.ownerEpochs.delete(key);
+      throw e;
+    }
     return epoch;
   }
   /** Monotonicity floor: the counter must never restart below an epoch that a

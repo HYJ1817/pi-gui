@@ -59,7 +59,7 @@ async function boot(overrides = {}) {
     messages: [{ messageId: 'msg_fixture_01', role: 'assistant', text: 'hello' }],
   }];
   const domain = {
-    projects: () => projects,
+    projects: overrides.projects ?? (() => projects),
     conversations: () => conversations,
     sessionRecords: p => [{ sessionId: 'sess_fixture_001', displayName: 'fixture session', updatedAt: '2026-01-01T00:00:00Z', conversationIds: ['conv_fixture_001'] }],
     openConversation: overrides.openConversation ?? (async () => ({ conversationId: 'conv_fixture_001' })),
@@ -73,6 +73,7 @@ async function boot(overrides = {}) {
     host: '127.0.0.1', port: 0,
     confirmLocally: overrides.confirmLocally ?? null,
     grantsFor: overrides.grantsFor ?? (() => ['p-' + crypto.createHash('sha256').update('C:/fixture/proj').digest('base64url').slice(0, 22)]),
+    log: overrides.log ?? (() => {}),
   });
   const addr = await remote.listen();
   const fingerprint = remote.serviceFingerprint;
@@ -1837,6 +1838,326 @@ async function main() {
       } else {
         assert.notEqual(r2.status, 200, `a refusal must never become a replayed success: ${r2.body}`);
       }
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('fs-001: failed registration leaves no memory-active credentials (FS-001 register rollback)', async () => {
+    const ctx = await boot();
+    try {
+      // Sabotage persistence BEFORE the pair exchange completes: the durable
+      // registration write fails. The exchange must fail AND memory must not
+      // retain an active record — pre-fix, the memory-only device then
+      // authenticated with 200.
+      const tmpPath = path.join(ctx.dataDir, 'remote-devices.json.tmp');
+      fs.mkdirSync(tmpPath);
+      let device = null;
+      let pairOutcome = null;
+      try {
+        const session = ctx.remote.admin.issuePairing();
+        device = keypair();
+        const clientNonce = b64(crypto.randomBytes(32));
+        const scopes = ['projects.read', 'sessions.read'];
+        const body = {
+          pairCode: session.code,
+          deviceName: 'fs-test',
+          devicePublicKey: device.publicKeyRaw,
+          clientNonce,
+          serviceFingerprint: ctx.fingerprint,
+          proofSignature: '',
+          pairingSessionId: session.pairingSessionId,
+          requestedScopes: scopes,
+        };
+        const { buildPairProofMessage } = await import(MODULES.protocol);
+        body.proofSignature = crypto.sign(null, Buffer.from(buildPairProofMessage(body), 'utf8'), device.privateKey).toString('base64url');
+        ctx.remote.admin.approvePairing({
+          pairingSessionId: body.pairingSessionId, pairCode: body.pairCode,
+          deviceName: body.deviceName, devicePublicKey: device.devicePublicKey ?? device.publicKeyRaw,
+          clientNonce: body.clientNonce, serviceFingerprint: body.serviceFingerprint,
+          requestedScopes: [...scopes],
+          proofTranscript: canonicalJson(body),
+        });
+        const rawBody = canonicalJson(body);
+        pairOutcome = await ctx.pinnedRequest('POST', '/remote/v1/pair/exchange', { rawBody, headers: { 'content-type': 'application/json; charset=utf-8', 'accept': 'application/json' } }).catch(e => ({ status: 0, body: String(e?.message ?? e) }));
+      } finally { fs.rmdirSync(tmpPath); }
+      assert.notEqual(pairOutcome?.status ?? 0, 200, `pairing must fail when registration cannot persist: ${JSON.stringify(pairOutcome).slice(0, 200)}`);
+      // Any device the exchange might have registered must not be memory-active.
+      const anyActive = ctx.remote.deviceStore.list().some(d => ctx.remote.deviceStore.get(d.deviceId)?.active === true);
+      assert.equal(anyActive, false, `no memory-active record may survive a failed registration: ${JSON.stringify(ctx.remote.deviceStore.list()).slice(0, 200)}`);
+      // The would-be credentials must NOT authenticate under any deviceId.
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = 'dev_fs001_probe_00000001';
+      const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/projects' });
+      const res = await ctx.pinnedRequest('GET', '/remote/v1/projects', { headers: x.headers });
+      assert.equal(res.status, 401, `failed-registration credentials must never authenticate: ${res.status}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('fs-001: failed revocation still closes streams and stays revoked in memory (FS-001 revoke sticky)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const state = { status: 0, ended: false };
+      await new Promise((resolve, reject) => {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', accept: 'text/event-stream' });
+        const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          state.status = res.statusCode;
+          state.res = res;
+          res.on('end', () => { state.ended = true; });
+          res.on('close', () => { state.ended = true; });
+          res.resume();
+          resolve();
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      assert.equal(state.status, 200);
+      const tmpPath = path.join(ctx.dataDir, 'remote-devices.json.tmp');
+      fs.mkdirSync(tmpPath);
+      let revokeResult;
+      try {
+        revokeResult = ctx.remote.deviceStore.revoke(device.deviceId);
+      } catch { revokeResult = 'threw'; } finally { fs.rmdirSync(tmpPath); }
+      const deadline = Date.now() + 3000;
+      while (!state.ended && Date.now() < deadline) await new Promise(r => setTimeout(r, 25));
+      assert.equal(state.ended, true, 'revocation must close streams even when persistence fails');
+      const rec = ctx.remote.deviceStore.get(device.deviceId);
+      assert.equal(rec?.active, false, 'authorization loss is sticky in memory — never re-enabled by a durability failure');
+      assert.equal(rec?.revoked, true);
+      // New requests must fail closed regardless of the durability gap.
+      const x2 = signed(device, ctx, { method: 'GET', path: '/remote/v1/projects' });
+      const res2 = await ctx.pinnedRequest('GET', '/remote/v1/projects', { headers: x2.headers });
+      assert.equal(res2.status, 401, `revoked-in-memory device must never authorize: ${res2.status}`);
+      try { state.res.destroy(); } catch {}
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('fs-001: failed grant widening rolls back to the durable set (FS-001 grants rollback)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const before = { ...(ctx.remote.deviceStore.get(device.deviceId).grants ?? {}) };
+      const tmpPath = path.join(ctx.dataDir, 'remote-devices.json.tmp');
+      fs.mkdirSync(tmpPath);
+      let threw = false;
+      try {
+        ctx.remote.deviceStore.setGrants(device.deviceId, [...Object.keys(before), 'p-widened0000000000000000']);
+      } catch { threw = true; } finally { fs.rmdirSync(tmpPath); }
+      assert.equal(threw, true, 'failed persistence must surface');
+      const after = ctx.remote.deviceStore.get(device.deviceId).grants ?? {};
+      assert.ok(!('p-widened0000000000000000' in after), `widening must not exist in memory when disk refused it: ${JSON.stringify(after)}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('fs-001: failed nonce consumption rolls back — the nonce is not silently burned (FS-001 nonce rollback)', async () => {
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const tmpPath = path.join(ctx.dataDir, 'remote-devices.json.tmp');
+      const nonce = crypto.randomBytes(32).toString('base64url');
+      fs.mkdirSync(tmpPath);
+      let threw = false;
+      try {
+        ctx.remote.deviceStore.consumeNonce(device.deviceId, nonce, Date.now());
+      } catch { threw = true; } finally { fs.rmdirSync(tmpPath); }
+      assert.equal(threw, true);
+      const rec = ctx.remote.deviceStore.get(device.deviceId);
+      assert.ok(!(nonce in (rec.nonces ?? {})), 'undurable consumption must not exist in memory');
+      // After the durability problem clears, the same nonce is consumable (it was never burned).
+      assert.equal(ctx.remote.deviceStore.consumeNonce(device.deviceId, nonce, Date.now()), true, 'a rolled-back nonce remains consumable');
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('fs-002: epoch allocation failure never hands out an undurable epoch; restart cannot double-execute (FS-002)', async () => {
+    // Mirrors the independent reviewer's reproduction (journal-restart.mjs):
+    // chat.send against a conversation that carries its OWN revision — the
+    // registryRevision() repair path is never invoked, so only epochFor's own
+    // persist discipline can protect exactly-once across a restart.
+    const convId = 'conversation_fs002_journal_001';
+    const projectPath = 'C:/fixture/proj';
+    const pid = 'p-' + crypto.createHash('sha256').update(projectPath).digest('base64url').slice(0, 22);
+    let effects = 0;
+    const ctx = await boot({
+      grantsFor: () => [pid],
+      sendMessage: async () => { effects += 1; return { accepted: true }; },
+    });
+    try {
+      const { device } = await pair(ctx, { scopes: ['projects.read', 'sessions.read', 'chat.send'] });
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      // Seed the conversation into the fixture with its own revision.
+      ctx.conversations.push({
+        conversationId: convId, revision: 1, lifecycle: 'idle', runtimeGeneration: 1,
+        workspace: { cwd: projectPath, workspaceId: 'ws-fs002', workspaceEpoch: 1, backendInstance: 'fixture' },
+        messages: [], pendingApprovals: [],
+      });
+      const clientMessageId = crypto.randomUUID();
+      const body = envelope('chat.send', { clientMessageId, text: 'synthetic single effect' }, 1);
+      const target = `/remote/v1/conversations/${convId}/messages`;
+      const send = () => {
+        const x = signed(device, ctx, { method: 'POST', path: target, body });
+        return ctx.pinnedRequest('POST', target, { rawBody: x.rawBody, headers: x.headers });
+      };
+      // Obstruct the registry write, attempt the mutation: it must fail.
+      const obstruction = path.join(ctx.dataDir, 'remote-registry.json.tmp');
+      fs.mkdirSync(obstruction);
+      const failed = await send();
+      fs.rmdirSync(obstruction);
+      assert.notEqual(failed.status, 200, `undurable epoch must never serve success: ${failed.status}`);
+      assert.equal(effects, 0, 'a failed admission must never reach the domain');
+      // Retry with the obstruction cleared: succeeds exactly once.
+      const succeeded = await send();
+      assert.equal(succeeded.status, 200, `durable allocation must succeed: ${succeeded.status} ${succeeded.body.slice(0, 120)}`);
+      assert.equal(effects, 1);
+      const clockFileExists = fs.existsSync(path.join(ctx.dataDir, 'remote-registry.json'));
+      // Restart with unchanged owner identity, replay the same clientMessageId.
+      await ctx.remote.close();
+      const { startRemote } = await import(MODULES.index);
+      const conversations = ctx.conversations;
+      const domain = {
+        projects: () => [{ path: projectPath, name: 'fixture' }],
+        conversations: () => conversations,
+        sessionRecords: () => [],
+        openConversation: async () => ({ conversationId: convId }),
+        sendMessage: async () => { effects += 1; return { accepted: true }; },
+        stop: async () => ({ stopped: true }),
+        pendingDialogs: () => [],
+        consumeApproval: () => true,
+      };
+      const remote2 = startRemote({ dataDir: ctx.dataDir, domain, host: '127.0.0.1', port: 0, grantsFor: () => [pid] });
+      const addr2 = await remote2.listen();
+      try {
+        const x3 = signed(device, ctx, { method: 'POST', path: target, body });
+        const replay = await new Promise((resolve, reject) => {
+          const req = https.request({ host: '127.0.0.1', port: addr2.port, method: 'POST', path: target, headers: { 'content-length': Buffer.byteLength(x3.rawBody), ...x3.headers }, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+            const chunks = [];
+            res.on('data', c => chunks.push(c));
+            res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+          });
+          req.on('error', reject);
+          req.write(x3.rawBody);
+          req.end();
+        });
+        assert.equal(effects, 1, `replaying a recorded mutation across restart must NEVER execute the domain again (effects=${effects}, clockFile=${clockFileExists}, replay=${replay.status})`);
+      } finally { await remote2.close(); }
+    } finally {
+      try { fs.rmdirSync(path.join(ctx.dataDir, 'remote-registry.json.tmp')); } catch {}
+      await ctx.cleanup();
+    }
+  });
+
+  await t('fs-003: mandatory cursor reset materialization failure closes the stream (FS-003)', async () => {
+    // Stale-cursor subscription: the cursor_expired reset is mandatory. When
+    // it cannot be written (write failure), the stream must close rather than
+    // deliver ordinary frames in a generation the client never re-baselined.
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      ctx.remote.stream.watermark(device.deviceId);
+      // Force the reset WRITE to fail (not the allocation): _resetOne then
+      // returns FALSE — the exact branch FS-003 is about. The failure surface
+      // (write failure) is representative of any false-return cause because
+      // the fix keys on the return value, not the cause.
+      const stream = ctx.remote.stream;
+      const origWrite = stream._write.bind(stream);
+      stream._write = () => false;
+      const outcome = await new Promise(resolve => {
+        const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/events', query: { cursor: 'g1_s0_aaaaaaaaaaaaaaaaaaaaaa' }, accept: 'text/event-stream' });
+        const chunks = [];
+        let settled = false;
+        const done = o => { if (!settled) { settled = true; resolve(o); } };
+        const req = https.request({ host: '127.0.0.1', port: ctx.addr.port, method: 'GET', path: '/remote/v1/events?cursor=g1_s0_aaaaaaaaaaaaaaaaaaaaaa', headers: x.headers, rejectUnauthorized: false, agent: new https.Agent({ keepAlive: false, maxCachedSessions: 0 }) }, res => {
+          res.on('data', c => chunks.push(c));
+          res.on('end', () => done({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+          res.on('close', () => done({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8'), closed: true }));
+          res.resume();
+        });
+        req.on('error', () => done({ status: 0, body: 'socket-error' }));
+        req.setTimeout(4000, () => { req.destroy(); done({ status: -1, body: 'timeout-no-response' }); });
+        req.end();
+      });
+      stream._write = origWrite;
+      // Server-side truth: no subscriber may survive the failed mandatory reset.
+      assert.equal(ctx.remote.stream.subscribers.get(device.deviceId)?.size ?? 0, 0, 'subscriber registry must be empty after a failed mandatory reset');
+      // And the client connection must terminate — never hang silently.
+      // 'end' (graceful res.end from _close), 'close' (socket teardown) and
+      // socket errors all count as termination; only a timeout-hang violates.
+      assert.notEqual(outcome.status, -1, `stream must terminate, never hang: ${JSON.stringify(outcome).slice(0, 160)}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('fs-005: pairing error responses pass the response validator (FS-005)', async () => {
+    // An expired/invalid pairing session error must validate under the
+    // project's own schema — pre-fix it carried zero UUID with pairing_expired
+    // and failed validation.
+    const { validateRemoteResponse } = await import(MODULES.protocol);
+    const zero = '00000000-0000-0000-0000-000000000000';
+    for (const code of ['pairing_expired', 'pairing_rejected', 'unauthorized', 'payload_invalid', 'rate_limited', 'unavailable', 'internal_error']) {
+      const err = { protocolVersion: 1, requestId: zero, error: { code, retryable: false } };
+      assert.equal(validateRemoteResponse(err), true, `closed uncorrelated pairing/pre-auth error ${code} must validate`);
+    }
+    // But the sentinel must NEVER authenticate success or arbitrary codes.
+    assert.equal(validateRemoteResponse({ protocolVersion: 1, requestId: zero, error: { code: 'scope_denied', retryable: false } }), false, 'operational codes must never carry the zero sentinel');
+    assert.equal(validateRemoteResponse({ protocolVersion: 1, requestId: zero, result: {} }), false);
+    // And live: an expired pairing exchange yields a validatable response.
+    const ctx = await boot();
+    try {
+      const device = keypair();
+      // Real session, correct transcript and signature — but the desktop side
+      // never approves, so the exchange fails with a pairing-family error.
+      const session = ctx.remote.admin.issuePairing();
+      const body = {
+        pairCode: session.code,
+        deviceName: 'fs5',
+        devicePublicKey: device.publicKeyRaw,
+        clientNonce: b64(crypto.randomBytes(32)),
+        serviceFingerprint: ctx.fingerprint,
+        proofSignature: '',
+        pairingSessionId: session.pairingSessionId,
+        requestedScopes: ['projects.read', 'sessions.read'],
+      };
+      const { buildPairProofMessage } = await import(MODULES.protocol);
+      const proofMsg = buildPairProofMessage(body);
+      assert.ok(typeof proofMsg === 'string', 'proof transcript must construct for a well-formed body');
+      body.proofSignature = crypto.sign(null, Buffer.from(proofMsg, 'utf8'), device.privateKey).toString('base64url');
+      const res = await ctx.pinnedRequest('POST', '/remote/v1/pair/exchange', { rawBody: canonicalJson(body), headers: { 'content-type': 'application/json; charset=utf-8', 'accept': 'application/json' } });
+      const parsed = JSON.parse(res.body);
+      assert.equal(validateRemoteResponse(parsed), true, `live pairing error must validate: ${res.body.slice(0, 200)}`);
+    } finally { await ctx.cleanup(); }
+  });
+
+  await t('fs-004: handler exception logs carry categories, never raw exception text (FS-004)', async () => {
+    // A domain exception carrying credential-shaped text must never reach the
+    // log verbatim — production wires this logger to console. Category-level
+    // logging only; the wire answer stays a fixed shape.
+    const lines = [];
+    const ctx = await boot({
+      log: m => lines.push(String(m)),
+      projects: () => { throw new Error('synthetic-secret sk-live-ABC123'); },
+    });
+    try {
+      const { device } = await pair(ctx).then(p => p);
+      ctx.serviceId = 'svc-' + ctx.fingerprint.slice(0, 16);
+      ctx.buildSignatureMessage = buildSignatureMessage;
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const x = signed(device, ctx, { method: 'GET', path: '/remote/v1/projects' });
+      const res = await ctx.pinnedRequest('GET', '/remote/v1/projects', { headers: x.headers });
+      assert.notEqual(res.status, 200, 'a throwing domain cannot produce success');
+      await new Promise(r => setTimeout(r, 150));
+      const joined = lines.join(String.fromCharCode(10));
+      assert.ok(!joined.includes('sk-live-ABC123'), `raw exception text must never reach the log: ${joined.slice(0, 300)}`);
+      assert.ok(!joined.includes('synthetic-secret'), `credential-shaped exception text must never reach the log: ${joined.slice(0, 300)}`);
     } finally { await ctx.cleanup(); }
   });
 

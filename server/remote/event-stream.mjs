@@ -245,12 +245,20 @@ export class EventStream {
         s.generation = bound.generation;
         for (const f of [...t.frames]) if (f.sequence > bound.sequence && !this._deliverTemplate(s, f)) break;
       } else {
+        // FS-003: the cursor_expired reset is MANDATORY — a false return
+        // (materialization/write failure, not just allocation throws) is the
+        // same failure: the stream must close rather than deliver the next
+        // ordinary frame in a generation the client never re-baselined.
+        let resetOk = false;
         try {
-          this._resetOne(s, 'cursor_expired');
+          resetOk = this._resetOne(s, 'cursor_expired') === true;
         } catch {
-          // The reset's allocation failed after headers were already sent —
-          // an error response is impossible. Close the subscriber and
-          // terminate the connection so the client reconnects honestly.
+          resetOk = false;
+        }
+        if (!resetOk) {
+          // The reset failed after headers were already sent — an error
+          // response is impossible. Close the subscriber and terminate the
+          // connection so the client reconnects honestly.
           this._close(s);
           try { res.socket?.destroy?.(); } catch {}
           try { res.destroy?.(); } catch {}

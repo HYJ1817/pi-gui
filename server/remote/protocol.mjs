@@ -714,12 +714,18 @@ export function validateRemoteResponse(response,operationId=null,requestId=null)
   if(serialized===null||Buffer.byteLength(serialized,'utf8')>(REMOTE_V1.limits?.maxSerializedResponseBytes??1048576))return false;
   if(hasForbiddenKey(response)||hasForbiddenValue(response))return false;
   const isError=own(response,'error')&&!own(response,'result');
-  // The zero sentinel is ONLY a closed uncorrelated unauthorized error with a
-  // fully-validated error object - never a free-form bypass.
+  // The zero sentinel is ONLY a closed uncorrelated error with a
+  // fully-validated error object - never a free-form bypass. Two families can
+  // never carry a real correlation id: pre-authentication failures (whose wire
+  // code collapses to 'unauthorized') and unsigned pairing-exchange errors
+  // (the pairing surface has no request UUID; the codes are exactly the closed
+  // pair-exchange wire vocabulary). FS-005: permitting only 'unauthorized'
+  // meant legitimate expired/rejected pairing answers failed validation.
   if(rid===ZERO_UUID) {
+    const ZERO_ID_CODES=new Set(['unauthorized','payload_invalid','rate_limited','pairing_expired','pairing_rejected','unavailable','internal_error']);
     return isError&&Object.keys(response).sort().join(',')==='error,protocolVersion,requestId'
       &&Object.keys(response.error).sort().join(',')==='code,retryable'
-      &&response.error.code==='unauthorized'&&typeof response.error.retryable==='boolean';
+      &&ZERO_ID_CODES.has(response.error.code)&&typeof response.error.retryable==='boolean';
   }
   if(!UUID.test(rid))return false;
   if(requestId!==null&&rid!==requestId)return false;
