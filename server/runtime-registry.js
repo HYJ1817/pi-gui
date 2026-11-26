@@ -525,7 +525,9 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   async function command(expected, cmd) {
     let live = resolve(expected);
     if (!cmd || !COMMANDS.has(cmd.type) || typeof cmd.id === 'number' || Object.hasOwn(cmd, 'sessionPath') || Object.hasOwn(cmd, '__owner')) throw fail('invalid_command');
+    const admissionGuard = live.adapter.captureCommandGuard?.(cmd);
     if (cmd.type !== 'abort') { await validateWorkspace(live.record.workspace); live = resolve(expected); }
+    admissionGuard?.();
     const blocked = beforeCommand(cmd, live); if (blocked && cmd.type !== 'abort') {
       safeLog('runtime.owner_rejected', { operation: 'command', reason: 'before_command' });
       throw fail(blocked);

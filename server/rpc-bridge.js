@@ -219,8 +219,36 @@ export function createRpcBridge({
   const pending = new Map();
   const updateApprovals = new Set();
   const updateCommands = new Map();
-  const updateKey = cmd => JSON.stringify([typeof cmd.id, cmd.id ?? null, cmd.command || cmd.type]);
+  // Request `command` is payload for bash (and may be an extra caller field).
+  // Only request.type and response.command name the RPC operation.
+  const updateKey = (id, command) => JSON.stringify([typeof id, id ?? null, command]);
   let nextRequestId = 1;
+  function trackCommand(cmd, publicMutation = false, publicId = undefined) {
+    const key = updateKey(cmd.id, cmd.type), previous = updateCommands.get(key);
+    const entry = { command: cmd.type, count: (previous?.count || 0) + 1, publicMutation, publicId };
+    updateCommands.set(key, entry);
+    return { key, entry };
+  }
+  function untrackCommand(ticket) {
+    if (!ticket || updateCommands.get(ticket.key) !== ticket.entry) return;
+    if (ticket.entry.count > 1) ticket.entry.count--;
+    else updateCommands.delete(ticket.key);
+  }
+  function commandResponse(msg) {
+    if (typeof msg.success !== 'boolean') return null;
+    const key = updateKey(msg.id, msg.command), entry = updateCommands.get(key);
+    if (!entry) return null;
+    untrackCommand({ key, entry });
+    if (sessionMutation(entry.command) && msg.success) {
+      providerSessionEpoch++;
+      providerSessionChanged?.();
+    }
+    return entry;
+  }
+  // Node rejects write-after-end before queuing bytes. Other stream/pipe errors
+  // may follow a partial write; they are unknown execution, not proof of no send.
+  const unqueuedWrite = error => error?.code === 'ERR_STREAM_WRITE_AFTER_END';
+  const notSent = () => ({ __error: 'Pi 命令未发送。', __code: 'pi_command_not_sent' });
 
   /** 结束所有挂起请求（超时/退出/重启时用）。reason 只用于内部排查，不外发。 */
   function settleAllPending(value) {
@@ -487,14 +515,7 @@ export function createRpcBridge({
         observeCompat((c) => c.observeUpstream(msg));
         if (msg?.type === 'extension_ui_request' && ['select','confirm','input','editor'].includes(msg.method)) updateApprovals.add(msg.id);
         if (msg?.type === 'agent_settled') updateApprovals.clear();
-        if (msg?.type === 'response') {
-          const key=updateKey(msg),count=updateCommands.get(key)||0;
-          if(count<=1)updateCommands.delete(key);else updateCommands.set(key,count-1);
-          if (sessionMutation(msg.command) && msg.success === true) {
-            providerSessionEpoch++;
-            providerSessionChanged?.();
-          }
-        }
+        const completedCommand = msg?.type === 'response' ? commandResponse(msg) : null;
         if (msg?.type === 'response' && msg.id === readinessId && msg.command === 'get_state' && msg.success === true && !maintenance) {
           readinessId = null;
           safeLog('bridge.ready', { bridgeRun: run, durationMs: Date.now() - startedAt });
@@ -505,6 +526,9 @@ export function createRpcBridge({
          * 和别人的应答都直接落到下面的 publish。 */
         if (msg && msg.type === 'response' && pending.has(msg.id)) {
           const entry = pending.get(msg.id);
+          // A matching id with another command or no authoritative result cannot
+          // settle a mutation. Keep its unknown ownership through the timeout.
+          if (msg.command !== entry.command || sessionMutation(entry.command) && typeof msg.success !== 'boolean') continue;
           pending.delete(msg.id);
           clearTimeout(entry.timer);
           entry.resolve(entry.strictCommand && (msg.success !== true || msg.command !== entry.strictCommand) ? null
@@ -520,6 +544,13 @@ export function createRpcBridge({
          * ⚠️ 必须在下面那条 `continue` **之前** —— 超时后的应答正好走那一条。 */
         if (msg?.type === 'agent_settled') noteStopSettled();
         else if (msg?.type === 'response' && msg.command === 'abort' && msg.success === true) noteStopAbortResponse(msg);
+        // Public mutations use unique private wire ids too, so a duplicate or a
+        // late reply for a reused caller id can never close a newer operation.
+        // Restore only the original public id of this exactly matched response.
+        if (completedCommand?.publicMutation) {
+          publish({ ...msg, id: completedCommand.publicId, bridgeRun: run, cwd });
+          continue;
+        }
         // Timed-out internal replies belong to the same private numeric ID space.
         if (msg?.type === 'response' && Number.isInteger(msg.id) && msg.id > 0 && msg.id < nextRequestId) continue;
         publish({ ...msg, bridgeRun: run, cwd });
@@ -638,13 +669,22 @@ export function createRpcBridge({
     /* 停止屏障：会开新 run 的命令在停止期间**写不进 stdin**（后端保护，
      * 不依赖前端 disabled）。 */
     stopGuard(wireCommand);
-    if (sessionMutation(wireCommand.type)) providerSessionEpoch++;
-    if(wireCommand.type==='extension_ui_response') {
-      pi.stdin.write(JSON.stringify(wireCommand) + '\n');updateApprovals.delete(wireCommand.id);
+    const mutation = sessionMutation(wireCommand.type);
+    const wire = mutation ? { ...wireCommand, id: nextRequestId++ } : wireCommand;
+    const line = JSON.stringify(wire) + '\n'; // Encoding may fail before any send.
+    if (mutation) providerSessionEpoch++;
+    if (wire.type === 'extension_ui_response') {
+      pi.stdin.write(line); updateApprovals.delete(wire.id);
     } else {
-      const key=updateKey(wireCommand);updateCommands.set(key,(updateCommands.get(key)||0)+1);
-      try {pi.stdin.write(JSON.stringify(wireCommand) + '\n');}
-      catch(error){const count=updateCommands.get(key)||0;if(count<=1)updateCommands.delete(key);else updateCommands.set(key,count-1);throw error;}
+      const ticket = trackCommand(wire, mutation, wireCommand.id);
+      try {
+        pi.stdin.write(line, error => {
+          if (unqueuedWrite(error)) untrackCommand(ticket);
+        });
+      } catch (error) {
+        if (!mutation || unqueuedWrite(error)) untrackCommand(ticket);
+        throw error;
+      }
     }
   }
 
@@ -673,6 +713,9 @@ export function createRpcBridge({
         return;
       }
       const id = nextRequestId++;
+      let line;
+      try { line = JSON.stringify({ ...cmd, id }) + '\n'; }
+      catch { resolve(notSent()); return; }
       // Internal request identity is captured before the write, so even a synchronous
       // fake Pi reply cannot be mistaken for a different Stop generation.
       if (typeof onId === 'function') onId(id);
@@ -684,26 +727,27 @@ export function createRpcBridge({
       // timer.unref() 让一个挂起的请求不会拖住进程退出
       if (typeof timer.unref === 'function') timer.unref();
       const changesSession = sessionMutation(cmd.type);
-      pending.set(id, { resolve, timer, strictCommand: strict ? cmd.type : null });
-      try {
-        if (changesSession) {
-          providerSessionEpoch++;
-          // Reuse the command ledger for private mutations too. A timeout is
-          // not evidence that Pi did not switch; retain it until reply/cleanup.
-          const key = updateKey({ ...cmd, id });
-          updateCommands.set(key, (updateCommands.get(key) || 0) + 1);
-        }
-        pi.stdin.write(JSON.stringify({ ...cmd, id }) + '\n', (err) => {
-          if (!err || !pending.has(id)) return;
-          clearTimeout(timer);
-          pending.delete(id);
-          resolve(null);
-        });
-      } catch {
+      pending.set(id, { resolve, timer, command: cmd.type, strictCommand: strict ? cmd.type : null });
+      let ticket = null;
+      if (changesSession) {
+        providerSessionEpoch++;
+        // A timeout or a partial pipe write is not evidence that Pi did not
+        // switch. Retain the existing ledger until authoritative reply/cleanup.
+        ticket = trackCommand({ ...cmd, id });
+      }
+      const writeFailed = error => {
+        const definitelyNotSent = unqueuedWrite(error);
+        // A delayed write callback may arrive after request timeout. It may
+        // release only this exact ticket, never another operation or process.
+        if (definitelyNotSent) untrackCommand(ticket);
+        if (!pending.has(id)) return;
         clearTimeout(timer);
         pending.delete(id);
-        resolve(null);
-      }
+        resolve(definitelyNotSent ? notSent() : null);
+      };
+      try {
+        pi.stdin.write(line, error => { if (error) writeFailed(error); });
+      } catch (error) { writeFailed(error); }
     });
   }
 
@@ -752,6 +796,24 @@ export function createRpcBridge({
     const err = new Error('上一轮正在停止，等 Pi 确认停止后再发送。');
     err.code = 'stop_in_progress';
     throw err;
+  }
+
+  // Capture before asynchronous admission. Looking only at stopRun after await
+  // misses a whole Stop that started and finished while admission was pending.
+  // This reads the existing child/session/Stop authorities; it never replays input.
+  function captureCommandGuard(cmd) {
+    if (!STOP_BLOCKED_COMMANDS.has(cmd?.type)) return null;
+    const child = pi, run = bridgeRun, cwd = runtime.getCurrentCwd(), workspace = runtime.getWorkspaceGeneration?.();
+    const stopped = stopSeq, stopping = Boolean(stopRun), session = providerSessionEpoch;
+    return () => {
+      stopGuard(cmd);
+      if (stopping || stopped !== stopSeq || child !== pi || run !== bridgeRun || cwd !== runtime.getCurrentCwd()
+        || workspace !== runtime.getWorkspaceGeneration?.() || session !== providerSessionEpoch
+        || [...updateCommands.values()].some(entry => sessionMutation(entry.command))
+        || runtime.isShuttingDown() || restartRequested || maintenance) {
+        throw Object.assign(Error('会话状态已变化，输入未重新提交；请确认后再发送。'), { code: 'stale_runtime' });
+      }
+    };
   }
 
   /** 屏障状态（给 /api/status、诊断与测试看；不含任何用户内容）。 */
@@ -1186,9 +1248,9 @@ export function createRpcBridge({
     };
   }
 
-  return { start, send, request, abortAndWait, stopState, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState,
+  return { start, send, request, abortAndWait, stopState, captureCommandGuard, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState,
     providerLaunch: () => pi && pi !== retiringChild && providerLaunch?.bridgeRun === bridgeRun ? providerLaunch.witness : null,
     providerSessionEpoch: () => providerSessionEpoch,
-    providerSessionChanging: () => [...updateCommands.keys()].some(key => sessionMutation(JSON.parse(key)[2])),
+    providerSessionChanging: () => [...updateCommands.values()].some(entry => sessionMutation(entry.command)),
     updateBusy: () => Boolean(pending.size || updateApprovals.size || updateCommands.size) };
 }

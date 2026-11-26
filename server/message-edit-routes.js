@@ -56,6 +56,7 @@ export function createMessageEditRoutes({
   getWorkspaceGeneration,
   getCwd,
   beforePrompt = null,
+  captureCommandGuard = () => null,
   afterPrompt = null,
   beforeNavigation = null,
 } = {}) {
@@ -86,7 +87,11 @@ export function createMessageEditRoutes({
         const { __messageEditNav, ...wire } = cmd || {};
         const nav = __messageEditNav === true;
         if (!nav && wire?.type === 'prompt' && typeof beforePrompt === 'function') {
-          try { await beforePrompt(wire); } catch (error) { return { ok: false, code: error?.code || 'edit_unavailable' }; }
+          try {
+            const admissionGuard = captureCommandGuard(wire);
+            await beforePrompt(wire);
+            admissionGuard?.();
+          } catch (error) { return { ok: false, code: error?.code || 'edit_unavailable' }; }
         }
         if (nav) {
           try { beforeNavigation?.(); } catch { /* observation only */ }

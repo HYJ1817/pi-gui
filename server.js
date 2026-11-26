@@ -520,8 +520,39 @@ let cliInFlight = 0;
 const processManagers = new Set();
 const mutationAdmission = createSessionRevertAdmission();
 const toolScheduler = createSessionToolScheduler({admission:mutationAdmission});
+function primaryToolOwner(epoch = rpc.providerSessionEpoch()) {
+  const owner = primaryOwner();
+  // The last public readback is not native authority after a mutation. Reuse its
+  // existing epoch, rather than letting an A cache reject the real B hello.
+  return {...owner,sessionId:primarySessionWitnessEpoch === epoch ? owner.sessionId : null};
+}
+function primaryToolCurrent(witness, changing = false) {
+  if (!witness || typeof witness.sessionId !== 'string' || !witness.sessionId) return false;
+  const state = rpc.getState(), owner = primaryToolOwner(), initial = witness.owner.sessionId === null;
+  return !runtime.isShuttingDown() && ['starting','ready'].includes(state.state) && state.piRunning && !state.stop?.pending
+    && state.bridgeInstance === witness.bridgeInstance && state.bridgeRun === witness.bridgeRun && state.pid === witness.pid
+    && runtime.getCurrentCwd() === witness.cwd && rpc.providerSessionEpoch() === witness.sessionEpoch && rpc.providerSessionChanging() === changing
+    && (initial || witness.owner.sessionId === witness.sessionId)
+    && (owner.sessionId === witness.sessionId || initial && owner.sessionId === null)
+    && sameClassicOwner(initial ? {...witness.owner,sessionId:owner.sessionId} : witness.owner,owner);
+}
+function primaryToolAdvance(previous, witness) {
+  return Boolean(previous && witness && witness.sessionEpoch > previous.sessionEpoch
+    && previous.cwd === witness.cwd && previous.bridgeInstance === witness.bridgeInstance
+    && previous.bridgeRun === witness.bridgeRun && previous.pid === witness.pid
+    && sameClassicOwner({...previous.owner,sessionId:null},{...witness.owner,sessionId:null}));
+}
 const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch:piLaunch,getCwd:()=>runtime.getCurrentCwd(),
-  getRoot:()=>toolWorkspaceRoot(runtime.getCurrentCwd()),readState:()=>rpc.request({type:'get_state'}),
+  getRoot:()=>toolWorkspaceRoot(runtime.getCurrentCwd()),
+  readState:()=>rpc.request({type:'get_state'},{strict:true,timeoutMs:1000}),
+  capture:sessionId => {
+    const state = rpc.getState(), sessionEpoch = rpc.providerSessionEpoch();
+    return { owner:primaryToolOwner(sessionEpoch), sessionId, cwd:runtime.getCurrentCwd(), sessionEpoch,
+      bridgeInstance:state.bridgeInstance, bridgeRun:state.bridgeRun, pid:state.pid };
+  },
+  isCurrent:primaryToolCurrent,
+  canRevalidate:(previous,witness) => primaryToolAdvance(previous,witness) && primaryToolCurrent(witness),
+  isInitializing:(previous,witness) => primaryToolAdvance(previous,witness) && primaryToolCurrent(witness,true),
   onEvent:publishClassicExecution});
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
@@ -1465,7 +1496,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     getCwd: runtime.getCurrentCwd, getOwner: primaryOwner, isShuttingDown: runtime.isShuttingDown,
     getState: rpc.getState, getSessionEpoch: rpc.providerSessionEpoch, isSessionChanging: rpc.providerSessionChanging,
     assertReady: () => primaryToolGuard.assertReady(),
-    readState: () => rpc.request({type:'get_state'}), ready: (cwd, native) => primaryToolGuard.ready(cwd, native),
+    readState: () => rpc.request({type:'get_state'},{strict:true,timeoutMs:1000}), ready: (cwd, native) => primaryToolGuard.ready(cwd, native),
   }),
   onFocus: async owner => { if (!owner) { await runtimeBrowser.focus(null); return; } const { repoId, ...scope } = owner; await runtimeBrowser.focus(scope); },
   factory: async (context, emit) => {
@@ -1719,6 +1750,7 @@ const messageEditRoutes = createMessageEditRoutes({
   getBridgeRun: () => rpc.getState().bridgeRun,
   getWorkspaceGeneration: () => runtime.getWorkspaceGeneration(),
   getCwd: () => runtime.getCurrentCwd(),
+  captureCommandGuard: rpc.captureCommandGuard,
   /* 重发 prompt 与普通 prompt 走同一组前置闸门：候选任务互斥、变更采集就绪、
    * 工作区写入互斥、模型代际；导航命令不开 run，不走这里。 */
   beforePrompt: async cmd => {

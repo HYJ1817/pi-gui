@@ -11,7 +11,7 @@ export function resourceText(resources = runtimeStore.resources()) {
 }
 export function runtimeLimitNotice(result) {
   if (result?.code === 'runtime_busy') return '此会话已有任务正在执行，草稿已保留；可以切到其它会话继续。';
-  if (result?.code === 'tool_guard_unavailable') return '工具写入协调尚未就绪，请重启应用后再试；输入已保留。';
+  if (result?.code === 'tool_guard_unavailable') return '工具写入协调未能就绪，输入已保留；请等待任务结束后，手动重启受影响会话再试。';
   if (result?.code === 'runtime_limit') return '运行名额已满。可以打开历史，关闭一个运行中的会话后再恢复，或稍后恢复。';
   if (result?.code === 'cleanup_pending') return '清理未完成，运行名额仍被占用。请等待清理完成后再试。';
   return null;

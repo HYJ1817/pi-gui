@@ -39,7 +39,8 @@ export async function assertSharedSessionTools(workspace, others, primary = null
       while (current() && primary.getState().state === 'starting' && Date.now() < deadline)
         await new Promise(resolve => setTimeout(resolve, 20));
       if (!current() || primary.getState().state !== 'ready') fail('tool_guard_unavailable');
-      await primary.assertReady();
+      const guardProof = await primary.assertReady();
+      if (typeof guardProof === 'function') proofs.push(guardProof);
       native = (await primary.readState())?.sessionId;
       if (!current() || typeof native !== 'string' || !native || !primary.ready(cwd, native)) fail('tool_guard_unavailable');
     }

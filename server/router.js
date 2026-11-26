@@ -154,6 +154,7 @@ export function createRouter({
           return json(res, 400, { ok: false, error: '命令不是合法 JSON' });
         }
         try {
+          const admissionGuard = rpc.captureCommandGuard?.(cmd);
           if (worktrees && cmd.type !== 'abort') await worktrees.validateCurrent();
           if (cmd.type === 'export_html') return json(res, 400, { ok: false, error: '请使用安全会话导出入口' });
           if (typeof cmd.id === 'number') return json(res, 400, { ok: false, error: '客户端请求 ID 必须为字符串' });
@@ -169,6 +170,7 @@ export function createRouter({
               : { ok: false, code: stop.code, error: stop.error });
           }
           if (await commandAdmission(cmd)) return json(res, 200, { ok: true });
+          admissionGuard?.();
           await rpc.send(cmd);
           return json(res, 200, { ok: true });
         } catch (err) {
