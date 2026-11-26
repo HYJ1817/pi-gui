@@ -64,9 +64,14 @@ export class DeviceStore {
     try {
       const data = JSON.parse(raw);
       if (isRecord(data) && Array.isArray(data.revocations)) {
-        const entries = data.revocations.filter(r => isRecord(r) && typeof r.deviceId === 'string'
-          && typeof r.devicePublicKey === 'string' && typeof r.registeredAt === 'string');
-        return { state: 'present', entries };
+        // FSEC-005-R5-001: entry-level validation is all-or-nothing. Silently
+        // filtering malformed entries out of an otherwise readable journal
+        // would lose exactly the revocations those entries carried — the
+        // journal would compact away records acknowledged as durable. Any
+        // malformed entry poisons the whole journal into 'unknown' state.
+        const wellFormed = r => isRecord(r) && typeof r.deviceId === 'string'
+          && typeof r.devicePublicKey === 'string' && typeof r.registeredAt === 'string';
+        if (data.revocations.every(wellFormed)) return { state: 'present', entries: data.revocations };
       }
     } catch { /* malformed bytes fall through */ }
     this.log('revocation tombstone malformed: revocation state unknown, failing closed');

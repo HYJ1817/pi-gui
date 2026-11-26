@@ -2007,6 +2007,36 @@ async function main() {
     } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
   });
 
+  await t('fsec-005-r5: malformed entries inside a readable journal poison the whole journal to unknown — never silently dropped', async () => {
+    // FSEC-005-R5-001: a valid-JSON journal containing one malformed entry
+    // plus one well-formed revocation used to silently drop the malformed
+    // entry and stay 'present'. If the well-formed entry's revocation was
+    // later compacted away, nothing prevented treating the truncated set as
+    // complete. All-or-nothing validation: any malformed entry makes the
+    // journal unknown — fail-closed, append-refusing, compaction-disabled.
+    const { DeviceStore } = await import(MODULES.deviceStore);
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(pp => pp);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const deviceId = device.deviceId;
+      const dataDir = ctx.dataDir;
+      const rec = ctx.remote.deviceStore.get(deviceId);
+      // Write a journal mixing one valid revocation with one malformed entry.
+      fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), JSON.stringify({ revocations: [
+        { deviceId, devicePublicKey: rec.devicePublicKey, registeredAt: rec.registeredAt, revokedAt: new Date().toISOString() },
+        { deviceId: 42, note: 'malformed entry: deviceId is not a string' },
+      ] }), 'utf8');
+      const store2 = new DeviceStore(dataDir, () => {});
+      assert.equal(store2.revocationJournalUnknown, true, 'FSEC-005-R5-001: malformed entry must poison the journal to unknown');
+      assert.equal(store2.active(deviceId), null, 'unknown journal never authorizes');
+      // Append over the poisoned journal must refuse, preserving bytes verbatim.
+      const bytesBefore = fs.readFileSync(path.join(dataDir, 'remote-revocations.json'), 'utf8');
+      assert.throws(() => store2._appendTombstone(store2.get(deviceId)), /unknown revocation state/);
+      assert.equal(fs.readFileSync(path.join(dataDir, 'remote-revocations.json'), 'utf8'), bytesBefore, 'journal bytes preserved verbatim');
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
   await t('fsec-005b: double write failure is memory-only, honestly flagged, and durable bytes never gain a false annotation', async () => {
     const ctx = await boot();
     try {
@@ -2044,6 +2074,19 @@ async function main() {
       device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
       const deviceId = device.deviceId;
       const dataDir = ctx.dataDir;
+      // Pin premise (round-5 functional review): the scenario must first
+      // create a TOMBSTONE-ONLY durable revocation — main persist faulted so
+      // the durable bytes still show the device ACTIVE, and the journal is
+      // the only durable record of the revocation. Corrupting the journal
+      // must then never restore the authorization the tombstone carried.
+      fs.mkdirSync(path.join(dataDir, 'remote-devices.json.tmp'));
+      try {
+        ctx.remote.deviceStore.revoke(deviceId);
+      } finally {
+        fs.rmdirSync(path.join(dataDir, 'remote-devices.json.tmp'));
+      }
+      const diskCheck = JSON.parse(fs.readFileSync(path.join(dataDir, 'remote-devices.json'), 'utf8'));
+      assert.equal(diskCheck.devices.find(d => d.deviceId === deviceId).revoked !== true, true, 'test premise: durable bytes still show the device active');
       await ctx.remote.close();
       // Corrupt the revocation journal so it cannot be parsed.
       fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), '{not json', 'utf8');
@@ -2054,10 +2097,12 @@ async function main() {
       assert.equal(reloaded.active, false, 'device deactivated in memory');
       assert.equal(reloaded.requiresRepair, true, 'operator-visible repair is required');
       // The degraded state must NOT have been persisted — durable bytes
-      // keep the correct record so the failure heals when the journal is fixed.
+      // keep their pre-corruption record so the failure heals when the
+      // journal is fixed (here: still active, since the main channel was
+      // faulted — the tombstone is the only revocation record).
       const diskBytes = JSON.parse(fs.readFileSync(path.join(dataDir, 'remote-devices.json'), 'utf8'));
       const diskRec = diskBytes.devices.find(d => d.deviceId === deviceId);
-      assert.equal(diskRec.active, true, 'degradation is memory-only: durable bytes keep the true record');
+      assert.equal(diskRec.active, true, 'degradation is memory-only: durable bytes keep the pre-corruption record');
     } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
   });
 
