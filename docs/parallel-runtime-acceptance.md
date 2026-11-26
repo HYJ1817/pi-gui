@@ -2,6 +2,8 @@
 
 > 状态：PR #113 保持 Draft。窄复核 Important 修复后，最终产物（HEAD `18a6d4a0…`、backend `9e554f4b…`）已完成同构建真实预检 **10/10** 与完整 exercise→recovery **66/66**（exit 0、`fullLiveAcceptance=true`），产物字节校验 **734/734**。旧 backend `917a5fbc…` 的 66/66 只对旧产物有效。最终 PR head 的 canonical CI 尚未产生（用户指示本轮不 push）。下文旧轮真实模型失败原样保留，不与新轮拼接。没有合并或发布许可。
 >
+> **后续增量（2026-11-26）**：用户要求彻底移除会话/并发数量上限（默认 2、第三确认、硬上限 3、记录数上限等）。本文旧轮中出现的 2/3 预算、第三确认和第四拒绝属于历史证据，原样保留，但不再代表当前产品契约；现行契约与增量证据见 [无数量上限增量验收](parallel-runtime-unlimited-acceptance.md)。
+>
 > 2026-11-26 用户明确授权在原分支继续有限整改、真实模型预检/完整验收及最终增量独立复审，不重做全仓研究。完整 canonical 改由最终 PR head 的 CI 提供，不再重复耗时的本地完整链。已提交基线 `8d6b388cf8a76935cdcbf0dadafa51c6d77a2216` 的 [PR CI 45765100890](https://github.com/HYJ1817/pi-gui/actions/runs/45765100890)（pull_request / attempt 1）实际 completed/success、8/8 jobs。下载的 `ci-evidence-summary/ci-summary.json` 核实 `allPassed=true`、`dataComplete=true`、349/349 leaves、0 failed/skipped/unexecuted；实际 checkout/merge SHA `f883a4996ef2eaea6f4a6614313f7297c5e345fc` 的两个 parent 为 main `ac812c6f…` 与 PR head `8d6b388c…`。标准 `ci-results.mjs:planDigest()` 为 `2e03fafdcbfed32331547143542c2d02cac4d9fd6b7675d8e045bd9f0e405f93`，当前 npm 清单复算相同。只证明该基线，不覆盖本轮未提交增量。
 
 ## 1. 身份、范围和勘察结论

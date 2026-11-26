@@ -33,8 +33,10 @@
 私有 bridge、ordinary-session resolver/runtime，并新增 `tests/parallel-runtime-integration.cjs`。
 后者使用 `os.tmpdir()` 的假 Pi 1.6 公共契约与原生形状 JSONL，实际跑生产 Registry、
 session-runtime、guardian/RPC 子进程、bundled guard、私有 HTTP 和共享工具调度。
-覆盖三运行重叠、共享根写工具等待、独立根前进、相同请求/工具/审批 ID、焦点与 owner 分离、
-Stop 隔离、持久化、硬预算、确认清理和重启 dormant/旧 owner 拒绝。
+覆盖十个真实 guardian/RPC 子进程重叠（同项目与不同项目混合）、共享根写工具等待、
+独立根前进、相同请求/工具/审批 ID、六十次焦点切换与同 ID 并行读取、第三个及以后无需确认、
+Stop 隔离、单次启动失败隔离、持久化、确认清理和重启 dormant/旧 owner 拒绝。
+十个是回归的最低负载，不是产品上限；不设会话数量准入配额。
 这是离线真实进程集成，**不是实际 Pi 或模型验收**。
 同一 canonical alias 还运行观察驱动的 `--check-driver` 和 `--check-safety`：前者编译 renderer
 模板，后者使用 TEMP、合成进程身份和两个隔离 Git 仓库验证环境覆盖清除、退出身份、缺阶段/
