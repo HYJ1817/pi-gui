@@ -1,0 +1,182 @@
+{
+  "identity": {
+    "head": "18a6d4a0d4a4566969c4f5bc06bb88189074b36f",
+    "branch": "fix/parallel-session-runtime",
+    "sourceDigests": {
+      "server/pi-probes.js": "0936fe7602dd34d82c31a31ae7d76aeac61324b31301168ed1b34eb11bd813c9",
+      "server/session-tool-bridge.js": "783879d27eac845415ad9dc33d80820057630a8bd33d8d8fa0e65ec55c8adc99",
+      "server/session-runtime.js": "d3fd9079dfc1d8db30c93cf9efb5b6fa4e38c231cf6cb5e88411a528f144ee47",
+      "server/runtime-registry.js": "9da8f3c83f90093b4e076c88cab802c30945f3834f47b02b49ae6b09d9f560df",
+      "extensions/pi-gui-tool-guard/index.js": "34315c384bcadff6756835d84b7dcce9839647eaf12e86b26574377fc6da14ae",
+      "electron/main.cjs": "135a00e0423d9df5d739eb0c576023f1ea8296de802fcf60029cd2b4403fee05",
+      "public/runtime-store.js": "f7da1a6503e580e9b1757d6858266712db356588f79805d39c31152ce26851b2",
+      "public/runtime-conversation.js": "1fa3542e37c73edd872e8dd7d7d0baefe9c0aa29f0951ecc0cb32e05fdb471a3"
+    },
+    "pi": "1.6.0",
+    "provider": "selected-existing-provider (redacted)",
+    "model": "xingchiapi/gpt-6.1-sol",
+    "node": "v24.22.1",
+    "platform": "win32",
+    "qualification": "packaged-production-bytes-observation-bootstrap-normal-sandbox",
+    "optIn": true,
+    "mode": "full-live-exercise",
+    "modelResolution": {
+      "sdkModelFound": true,
+      "fixtureModelMatches": true,
+      "fixtureCredentialMatches": true,
+      "keyTransport": "child-env-only; dollar environment reference; SDK in-memory equality checked",
+      "preservedThinkingMap": true,
+      "preservedPromptCache": true,
+      "turnTimeoutMs": 180000,
+      "modelFallbackEnabled": false
+    },
+    "driverDigests": {
+      "runner": "2bf993b9208ad2bacedfe0832c14f4ab1d4fb15d1b1c2d7d3f9798836d259b1f",
+      "fixture": "0d7b327a7694dc72bae015fdce9f6b29a868f3847ba018397ce3cfdcf08fb9d7"
+    },
+    "gitBefore": [
+      {
+        "head": "7d449c581d43d8bffc32149832166aff2790a992",
+        "statusEntries": [],
+        "index": {
+          "bytes": 209,
+          "sha256": "3142333528c49a624f55bed0fa55a4d2f3b194eedce79695955a9d9f03909a12"
+        },
+        "tracked": [
+          {
+            "file": "seed.txt",
+            "bytes": 23,
+            "sha256": "a7b86066348d9f25060d98e6b0aa0c240dfe8da85c7e909f41f0f421e5e1c7b1"
+          },
+          {
+            "file": "hold.cjs",
+            "bytes": 498,
+            "sha256": "1863991ebe4ae94242844081a340689d3ca51b0b2bed6074f2de5955f5cf3ab1"
+          }
+        ]
+      },
+      {
+        "head": "7d449c581d43d8bffc32149832166aff2790a992",
+        "statusEntries": [],
+        "index": {
+          "bytes": 209,
+          "sha256": "0a0fbbe2b0341875c4166af7c95ced1cd66b81e6922d5d1e064bb533e53f2841"
+        },
+        "tracked": [
+          {
+            "file": "seed.txt",
+            "bytes": 23,
+            "sha256": "a7b86066348d9f25060d98e6b0aa0c240dfe8da85c7e909f41f0f421e5e1c7b1"
+          },
+          {
+            "file": "hold.cjs",
+            "bytes": 498,
+            "sha256": "1863991ebe4ae94242844081a340689d3ca51b0b2bed6074f2de5955f5cf3ab1"
+          }
+        ]
+      }
+    ],
+    "packaged": {
+      "version": "0.35.1",
+      "executable": "71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f",
+      "backend": "9e554f4b5abdceeda114a3f56819d2aef67ec5d5fb685fbd5d1adde91418217f",
+      "main": "135a00e0423d9df5d739eb0c576023f1ea8296de802fcf60029cd2b4403fee05",
+      "manifestBootstrapOverride": true,
+      "mainMatchesSource": true,
+      "publicMatchesSource": true
+    }
+  },
+  "passed": 66,
+  "failed": 0,
+  "phases": [
+    {
+      "phase": "exercise",
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "passed": 35,
+      "failed": 0,
+      "valid": true
+    },
+    {
+      "phase": "recovery",
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "passed": 31,
+      "failed": 0,
+      "valid": true
+    }
+  ],
+  "completed": true,
+  "preflightComplete": false,
+  "fullLiveAcceptance": true,
+  "privacy": {
+    "verified": true,
+    "rawPayloadSaved": false,
+    "credentialsInEnvironmentOnly": true,
+    "sourceUserDataReadOnly": true,
+    "fixturesInOsTmpdir": true
+  },
+  "gitAfter": [
+    {
+      "head": "7d449c581d43d8bffc32149832166aff2790a992",
+      "statusEntries": [
+        "?? A-started.flag",
+        "?? B-started.flag",
+        "?? a-native.txt",
+        "?? b-done.txt",
+        "?? b-native.txt",
+        "?? release-A.flag",
+        "?? release-B.flag",
+        "?? release-C.flag"
+      ],
+      "index": {
+        "bytes": 209,
+        "sha256": "3142333528c49a624f55bed0fa55a4d2f3b194eedce79695955a9d9f03909a12"
+      },
+      "tracked": [
+        {
+          "file": "seed.txt",
+          "bytes": 23,
+          "sha256": "a7b86066348d9f25060d98e6b0aa0c240dfe8da85c7e909f41f0f421e5e1c7b1"
+        },
+        {
+          "file": "hold.cjs",
+          "bytes": 498,
+          "sha256": "1863991ebe4ae94242844081a340689d3ca51b0b2bed6074f2de5955f5cf3ab1"
+        }
+      ]
+    },
+    {
+      "head": "7d449c581d43d8bffc32149832166aff2790a992",
+      "statusEntries": [
+        "?? C-started.flag",
+        "?? c-done.txt",
+        "?? c-native.txt",
+        "?? recovery-native.txt",
+        "?? release-A.flag",
+        "?? release-B.flag",
+        "?? release-C.flag"
+      ],
+      "index": {
+        "bytes": 209,
+        "sha256": "0a0fbbe2b0341875c4166af7c95ced1cd66b81e6922d5d1e064bb533e53f2841"
+      },
+      "tracked": [
+        {
+          "file": "seed.txt",
+          "bytes": 23,
+          "sha256": "a7b86066348d9f25060d98e6b0aa0c240dfe8da85c7e909f41f0f421e5e1c7b1"
+        },
+        {
+          "file": "hold.cjs",
+          "bytes": 498,
+          "sha256": "1863991ebe4ae94242844081a340689d3ca51b0b2bed6074f2de5955f5cf3ab1"
+        }
+      ]
+    }
+  ]
+}

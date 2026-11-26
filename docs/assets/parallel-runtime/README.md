@@ -8,9 +8,10 @@ JSON 仅含白名单结构：owner、原生 session、runtime 代次、SSE 序�
 
 ## 最终构建完整真实验收（2026-11-26，通过）
 
-- 同一打包字节（exe `71b9ed51…`、backend `917a5fbc…`、main `135a00e0…`）先在 `pi-parallel-live-1CfIzx` 完成真实预检 **10/10**（独立资格，`fullLiveAcceptance=false`），再在 `pi-parallel-live-ci41oY` 完成完整 exercise→recovery：**exercise 35/35、recovery 31/31、合计 66/66**、failed 0、两阶段 exit 0、`completed=true`、`fullLiveAcceptance=true`、privacy verified。
-- [最终摘要](final-acceptance-20261126-summary.json) / [运行身份](final-acceptance-20261126-identity.json) / [恢复回合最小证明](final-acceptance-20261126-recovery-proof.json) / [归档 manifest](final-acceptance-20261126-manifest.json)：恢复后真实 write→read 回合输出 11 字节 sha `106da1c5…`、工具 0 错误、`toolPairsComplete=true`、`writeThenRead=true`、settled/idle、耗时 12.639 秒；结果文件 21 字节 sha `c89212fd…` 且精确。
-- JSON 仍只含白名单结构，不含消息、工具参数/结果、凭据或 provider 配置。本轮未改 UI，未归档新截图；TEMP 原图保留本机复核。此前 `pi-parallel-live-hGBJUN` 的 19/21 是驱动证据形状错误（公开 SSE 合法省略白名单外 `toolCallId`），不是产品回合失败，详见 [真实专项记录](../../parallel-runtime-live-evidence.md)。
+- **最终产物**：HEAD `18a6d4a0…`、exe `71b9ed51…`、backend `9e554f4b…`、main `135a00e0…`；`npm run build:app -- --rebuild` exit 0，产物逐字节校验 **734/734**。先在 `pi-parallel-live-aUEbW1` 完成真实预检 **10/10**（独立资格，`fullLiveAcceptance=false`），再在 `pi-parallel-live-vIZXkf` 完成完整 exercise→recovery：**exercise 35/35、recovery 31/31、合计 66/66**、failed 0、两阶段 exit 0、`completed=true`、`fullLiveAcceptance=true`、privacy verified。
+- 新归档：[预检摘要](final-acceptance-20261126-r2-preflight-summary.json) / [完整摘要](final-acceptance-20261126-r2-summary.json) / [运行身份](final-acceptance-20261126-r2-identity.json) / [恢复回合最小证明](final-acceptance-20261126-r2-recovery-proof.json) / [manifest](final-acceptance-20261126-r2-manifest.json)。恢复后真实 write→read 回合输出 11 字节 sha `106da1c5…`、工具 0 错误、`toolPairsComplete=true`、`writeThenRead=true`、settled/idle、耗时 47.079 秒；结果文件 21 字节 sha `c89212fd…` 且精确。
+- 旧的 `final-acceptance-20261126-*`（backend `917a5fbc…`，`ci41oY` 66/66）保留为历史，只对旧产物有效；窄复核 Important（超时 mutation 仍获 `tool_guard_initializing`）修复后已重建并重跑。`pi-parallel-live-hGBJUN` 的 19/21 是驱动证据形状错误（公开 SSE 合法省略白名单外 `toolCallId`），不是产品回合失败，详见 [真实专项记录](../../parallel-runtime-live-evidence.md)。
+- JSON 仍只含白名单结构，不含消息、工具参数/结果、凭据或 provider 配置。本轮未改 UI，未归档新截图；TEMP 原图保留本机复核。
 
 ## 恢复提示：离线实际渲染，不是真模型证明
 

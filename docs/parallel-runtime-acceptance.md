@@ -1,6 +1,6 @@
 # 多会话并行运行机制专项修复 · 验收记录
 
-> 状态：PR #113 保持 Draft。最终生产构建已完成同构建真实预检 **10/10** 与完整 exercise→recovery **66/66**（exit 0、`fullLiveAcceptance=true`）；I1 修复的独立窄复核仍在进行，最终 PR head 的 canonical CI 尚未产生（用户指示本轮不 push）。下文旧轮真实模型失败原样保留，不与新轮拼接。没有合并或发布许可。
+> 状态：PR #113 保持 Draft。窄复核 Important 修复后，最终产物（HEAD `18a6d4a0…`、backend `9e554f4b…`）已完成同构建真实预检 **10/10** 与完整 exercise→recovery **66/66**（exit 0、`fullLiveAcceptance=true`），产物字节校验 **734/734**。旧 backend `917a5fbc…` 的 66/66 只对旧产物有效。最终 PR head 的 canonical CI 尚未产生（用户指示本轮不 push）。下文旧轮真实模型失败原样保留，不与新轮拼接。没有合并或发布许可。
 >
 > 2026-11-26 用户明确授权在原分支继续有限整改、真实模型预检/完整验收及最终增量独立复审，不重做全仓研究。完整 canonical 改由最终 PR head 的 CI 提供，不再重复耗时的本地完整链。已提交基线 `8d6b388cf8a76935cdcbf0dadafa51c6d77a2216` 的 [PR CI 45765100890](https://github.com/HYJ1817/pi-gui/actions/runs/45765100890)（pull_request / attempt 1）实际 completed/success、8/8 jobs。下载的 `ci-evidence-summary/ci-summary.json` 核实 `allPassed=true`、`dataComplete=true`、349/349 leaves、0 failed/skipped/unexecuted；实际 checkout/merge SHA `f883a4996ef2eaea6f4a6614313f7297c5e345fc` 的两个 parent 为 main `ac812c6f…` 与 PR head `8d6b388c…`。标准 `ci-results.mjs:planDigest()` 为 `2e03fafdcbfed32331547143542c2d02cac4d9fd6b7675d8e045bd9f0e405f93`，当前 npm 清单复算相同。只证明该基线，不覆盖本轮未提交增量。
 
@@ -151,8 +151,10 @@ Classic 可先通过 `switchTo`，而私有 `switch_session` 应答不广播，`
 - 权威拒绝 mutation 后原 native 未变、原 RPC 账本已收口，但发送时递增的 epoch 使长期 `b.witness` 过期；原实现连下一次新显式验证也拒绝，形成永久错误阻塞。离线对照基线与当前装配，已证实本轮引入。
 - 新 native 的真实 `session_start` hello 若早于 mutation 权威应答或 Classic owner 缓存回读，原实现将过渡窗口的 `stale_runtime` 固化为扩展终态；后续身份稳定也不能重新验证。该协议时序在 TEMP 故障注入中已复现，真实 Pi 是否出现该具体先后顺序尚未实证，不能声称已证明现场根因。
 - 作者修复已落盘：`session-tool-bridge` 增加由 owner 正面证明的重新严格验证通道，Classic 复用既有 `primarySessionWitnessEpoch` 排除过期缓存，扩展两端闭集识别非授权 `tool_guard_initializing`（不绑定、不 ready、不释放 lease），Runtime 保留原始 proof。作者与主线程分别实跑 bridge **52/52**、session-runtime **9/9**、integration **41/41**、provider-auth **75/75**、Stop **19/19**、scheduler **9/9**，合计 **205/205**、skip 0；新增回归无断言删除（bridge 37→52、integration 40→41）。
-- 独立窄复核尚在进行；仍要求 epoch 单调、未知 mutation 阻断、旧 proof 失效、完整身份重验、Stop 不复活旧输入以及活动 writer 保锁。
-- 最终构建真实验收已通过：同一打包字节上预检 **10/10**，完整 exercise **35/35** + recovery **31/31** = **66/66**、exit 0、`fullLiveAcceptance=true`；恢复后真实 write→read、精确输出、settled/idle、restart 旧 owner 拒绝均通过。I1 因此记为「已修复并经作者/主线程 205/205 与最终真实构建验收，**待独立窄复核**」；窄复验完成前不写成已闭合。
+- 独立窄复核（绑定 `4bdd29f4…`）结论 **Blocker 0 / Important 1 / Nit 0 / Pre-existing 0**：`tool_guard_initializing` 仅凭 `providerSessionChanging()` 判断；`request(switch_session,{timeoutMs:5})` 超时后账本仍改变中，新 native hello 仍获该码，与“unknown/timeout 不得获得”相反。独立实测 `requestResult:null` / `ledgerChanging:true` / `helloCode:"tool_guard_initializing"`。其余恢复分支、lease、Stop、Classic 两种 B 时序均通过；独立重跑 bridge **52/52**、session-runtime **9/9**、integration **41/41**、stop **19/19**（121/121），作者所称其余 84 项未复跑。
+- 修复：RPC 账本对请求超时、部分写失败与同步写异常标记 `uncertain`；新增 `providerSessionPending()`，仅当所有会话 mutation 都未被标记未知时为真；Classic `isInitializing` 同时要求 pending。超时后新 native hello 首次即 `stale_runtime`，正常 in-flight 早到 hello 路径保持。定向复跑 bridge **52/52**、provider-auth **75/75**、session-runtime **9/9**、integration **41/41**、stop **19/19**、message-edit service **49/49**、scheduler **9/9**、registry **43/43**，skip 0。
+- 该修复改变生产字节，此前 66/66 仅对旧 backend `917a5fbc…` 有效。重建后（HEAD `18a6d4a0…`、backend `9e554f4b…`）产物字节校验 **734/734**；同构建真实预检 **10/10**（`aUEbW1`），完整 exercise **35/35** + recovery **31/31** = **66/66**（`vIZXkf`），exit 0、`fullLiveAcceptance=true`、privacy verified；恢复回合真实 write→read、精确输出、settled/idle、restart 旧 owner 拒绝均通过。
+- I1 与窄复核 Important 均已有代码修复、定向回归和最终同构建真实验收；窄修复未再开第二个独立复审代理，此边界如实保留。PR 仍为 Draft，未获合并或发布许可。
 
 ## 3. 修复机制与安全边界
 
@@ -236,5 +238,5 @@ Classic 可先通过 `switchTo`，而私有 `switch_session` 应答不广播，`
 - 渲染环境失败保留：共享 `node_modules/electron/dist` 连 `--version` 都异常退出，原脚本先报 `EXCEPTION_BREAKPOINT` / exit 3。离线 zip 已对照锁定安装包 checksums 的 SHA-256 `790a355b684d5c7cc8dc3cdd8c4cca7c4b2d054685427c7554a956879a82e70b`；新 TEMP 解压后 exe、两个 V8 snapshot 和 ICU 与原路径摘要完全相同，但独立目录 `--version` exit 0。显式 `ELECTRON_OVERRIDE_DIST_PATH` 的副本完成上述正常沙箱渲染，不据此宣称默认路径已修复。核验报告 `os.tmpdir()/pi-parallel-electron-dist-uB45iF/verification-report.json`；未下载、未改全局安装或沙箱设置。
 - 旧真实打包窗口交互与失败截图仍保留，不能据截图存在宣称本轮最终通过。diagnostics 沿既有能力证据展示，不新增设计。
 - 回滚：对本次行为提交执行单独 `git revert <行为提交>`，再 `npm run build:app -- --rebuild`；测试/文档提交按需独立回退。不改真实项目、Pi session 或全局安装，无数据 schema migration 要撤销。
-- 开发实现：§2.6–2.7 增量已提交（生产 `a0103c19`、测试 `0f76c079` / `f9c72944`、文档 `4bdd29f4` / `2fee3b71`），Windows Electron 已重建并逐字节核对 734/734。代码验收：最终同构建真实预检 **10/10**、完整 exercise→recovery **66/66** 已通过；I1 修复的独立窄复核仍在进行，最终 head 的 canonical 仍待验证（本轮不 push）。允许合并：未授权；允许发布：未授权。
+- 开发实现：§2.6–2.7 增量及窄复核修复已提交（生产 `a0103c19` / `ae37a832`、测试 `0f76c079` / `f9c72944` / `18a6d4a0`、文档另按回滚边界提交），Windows Electron 已重建并逐字节核对 734/734。代码验收：最终同构建真实预检 **10/10**、完整 exercise→recovery **66/66** 已通过；窄复核 Important 已修复并由定向回归与最终真实验收覆盖，未再开第二个独立复审代理。最终 head 的 canonical 仍待验证（本轮不 push）。允许合并：未授权；允许发布：未授权。
 - 交付策略：仅在原分支和既有 Draft PR #113 完成有界整改、定向回归、独立增量复审、重建和本轮真实验收后提交/推送；不新建 PR、不合并、不打 tag、不发版。完整 canonical 交给最终 head 的 PR CI，不再重复本地长链。最终提交/PR 与 CI 状态由交付消息记录；失败和未执行项不能按成功交付。

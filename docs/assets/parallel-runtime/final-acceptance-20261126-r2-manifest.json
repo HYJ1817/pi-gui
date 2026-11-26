@@ -1,0 +1,43 @@
+{
+  "world": "pi-parallel-live-vIZXkf",
+  "preflightWorld": "pi-parallel-live-aUEbW1",
+  "date": "2026-11-26",
+  "note": "Final rebuild after the narrow-review Important fix (mutation timeout/unknown must not receive tool_guard_initializing). Supersedes final-acceptance-20261126-* built on backend 917a5fbc.",
+  "sourceEvidence": "os.tmpdir() only; original files and screenshots left in TEMP",
+  "archived": [
+    {
+      "file": "final-acceptance-20261126-r2-preflight-summary.json",
+      "bytes": 5243,
+      "sha256": "dc6fe35137f9e5316e18bd1462410501378169001408a68a3c66f14cd0efb15b"
+    },
+    {
+      "file": "final-acceptance-20261126-r2-summary.json",
+      "bytes": 5803,
+      "sha256": "fec3d9c8f2790b56d84aa9b0aebd25e37d19047f24f21e77aa64f0719f586832"
+    },
+    {
+      "file": "final-acceptance-20261126-r2-identity.json",
+      "bytes": 3352,
+      "sha256": "798e8e5094f537d9670aed29599191f93458eafb8cee6d03c070f566d962fefe"
+    },
+    {
+      "file": "final-acceptance-20261126-r2-recovery-proof.json",
+      "bytes": 2247,
+      "sha256": "97d5cc0b54b45a827703df2a4e34600c338ef7c7aa427d2b8d05ea850d82c590"
+    }
+  ],
+  "sourceDigests": {
+    "runner": "2bf993b9208ad2bacedfe0832c14f4ab1d4fb15d1b1c2d7d3f9798836d259b1f",
+    "fixture": "0d7b327a7694dc72bae015fdce9f6b29a868f3847ba018397ce3cfdcf08fb9d7"
+  },
+  "packaged": {
+    "version": "0.35.1",
+    "executable": "71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f",
+    "backend": "9e554f4b5abdceeda114a3f56819d2aef67ec5d5fb685fbd5d1adde91418217f",
+    "main": "135a00e0423d9df5d739eb0c576023f1ea8296de802fcf60029cd2b4403fee05",
+    "manifestBootstrapOverride": true,
+    "mainMatchesSource": true,
+    "publicMatchesSource": true
+  },
+  "head": "18a6d4a0d4a4566969c4f5bc06bb88189074b36f"
+}
