@@ -1,0 +1,31 @@
+{
+  "head": "ac812c6fa49dfd960867a5688ee6f61cb8ec5f67",
+  "branch": "fix/parallel-session-runtime",
+  "sourceDigests": {
+    "server/pi-probes.js": "0936fe7602dd34d82c31a31ae7d76aeac61324b31301168ed1b34eb11bd813c9",
+    "server/session-tool-bridge.js": "f775ffcf275b38724c44e34d9faf82dd1d73b3ac490340d74016246513003335",
+    "server/session-runtime.js": "ff14c1da247abec1f217ae371b4b3cf5fb79724b40c6cdb870582c8f8daa4c66",
+    "server/runtime-registry.js": "f030cc087200532a96afe3aff6cfcd60a14bf8b7e7704bf00bbaea9f62237474",
+    "extensions/pi-gui-tool-guard/index.js": "aa455b84001e523fea077625f981851be7c2cfe799572d39441b2e2f71163e37",
+    "electron/main.cjs": "135a00e0423d9df5d739eb0c576023f1ea8296de802fcf60029cd2b4403fee05",
+    "public/runtime-store.js": "f7da1a6503e580e9b1757d6858266712db356588f79805d39c31152ce26851b2",
+    "public/runtime-conversation.js": "1fa3542e37c73edd872e8dd7d7d0baefe9c0aa29f0951ecc0cb32e05fdb471a3"
+  },
+  "pi": "1.6.0",
+  "provider": "selected-existing-provider (redacted)",
+  "model": "xingchiapi/gpt-6.1-sol",
+  "node": "v24.22.1",
+  "platform": "win32",
+  "qualification": "packaged-production-bytes-observation-bootstrap-normal-sandbox",
+  "optIn": true,
+  "mode": "model-free-restart-probe",
+  "packaged": {
+    "version": "0.35.1",
+    "executable": "71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f",
+    "backend": "7c7efb19cb648e9a2fbb73d390282094051ddfc784f42ae3143800cc74961aa9",
+    "main": "135a00e0423d9df5d739eb0c576023f1ea8296de802fcf60029cd2b4403fee05",
+    "manifestBootstrapOverride": true,
+    "mainMatchesSource": true,
+    "publicMatchesSource": true
+  }
+}

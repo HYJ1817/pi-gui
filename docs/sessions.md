@@ -429,3 +429,32 @@ P7 给了一个**只用于精确定位**的入口：注入的 `extraSessionRoots
    旧 Owner 的迟到 ACK 绝不清理新会话或用户新输入的草稿；仅当 ACK 属于当前目标会话、完整 Owner 匹配、draftRevision 与正文均等于提交版本时，才同步清除对应持久副本。
 4. **容量与降级**：
    恢复上限为 20000 字符（`DRAFT_MAX_CHARS`）；超过 20000 字符时内存保留完整文本、清除持久副本并给出内联提示，不静默截断。存储配额不足或隐私模式时降级为仅内存保留并内联提示。
+
+## 十七、并行执行与共享项目工具协调
+
+Runtime Registry 已按会话持有独立 `session-runtime`、Pi child / guardian、RPC pending、
+工具守卫与审批。Classic 聊天是另一条运行线；选中会话只决定显示，后台会话不会因切页而停止。
+同一 Runtime 的重复 prompt 仍拒绝；不同 Runtime 的模型回合可以同时推进，不经过全局任务 FIFO。
+默认总运行预算两个，第三个必须显式确认，硬限三个，Classic 等既有外部运行也计入预算。
+
+共享或父子重叠 workspace 的写工具仍由 `session-tool-scheduler.js` 协调，不因允许并行而绕过：
+
+- 启动包的公开契约由同一 [工具协调 probe](pi-compatibility.md#会话工具协调契约2026-11-26-专项) 核验；
+  版本号不决定可用性，source probe 为 true 也不等于 child 已 ready。
+- 每个 child 还须完成私有 token + 原生 sessionId hello，后端用该 child 的 `get_state` 重验；
+  证据缺失时提示工具写入协调未就绪，保留输入并 fail-closed，不把重启提示当作永久解决办法。
+- 已证实来源的 builtin `read/ls/find/grep` 可按既有策略旁路写租约；未知工具与 Shell 保守等待。
+  工具等待可以发生在 B，而 A/C 的模型请求、流式状态和独立项目工具继续推进。
+- Stop/退出仅处置目标 owner 的资源；未确认清理不能提前释放活动写租约。重启恢复 dormant
+  身份和历史，不复用旧进程、审批或迟到事件，也不自动续调模型。
+- 普通项目的显式 restart/resume 重新走普通项目权限，而非 Worktree 身份解析；项目登记、
+  目录 epoch、工具守卫和预算仍需通过。若 Classic 已续接同一个原生 session，独立 Runtime
+  必须拒绝 `session_in_use`，不能让两个 child 同时写同一 Pi JSONL；恢复成功使用新的 owner。
+- 所有异步准入结束后、创建 live/child 前同步复核已证明的 guard、owner 和 Classic 的
+  cwd/session mutation epoch。私有切换应答可能不更新 owner 缓存，不能只靠缓存判断；
+  RPC 原有命令账本中的会话变更在途（含超时但未确认终态）仍阻止新共享准入，直到权威应答或清理。
+
+这是合作式工具调度，不是 OS sandbox、多文件事务或任意 Shell/Git 副作用的完整保护。
+外部编辑、脱离工具生命周期的子进程、跨根访问和 Git 共享元数据仍需按实际边界处理。
+本专项的修改范围、参考源码、真实模型与 Windows Electron 证据、未验证项和回滚见
+[并行专项验收记录](parallel-runtime-acceptance.md)；当前行为说明不替代专项通过证明。

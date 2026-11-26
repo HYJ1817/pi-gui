@@ -1,0 +1,118 @@
+{
+  "kind": "offline-driver-regressions-not-model-evidence",
+  "checks": [
+    {
+      "name": "default off exits before imports",
+      "pass": true
+    },
+    {
+      "name": "all inherited Git overrides cleared including mixed case",
+      "pass": true
+    },
+    {
+      "name": "real TEMP Git cannot redirect config/index or invoke hooks",
+      "pass": true
+    },
+    {
+      "name": "complete explicit phase is accepted",
+      "pass": true
+    },
+    {
+      "name": "fail closed: missing failed count",
+      "pass": true
+    },
+    {
+      "name": "fail closed: missing ended marker",
+      "pass": true
+    },
+    {
+      "name": "fail closed: unfinished phase",
+      "pass": true
+    },
+    {
+      "name": "fail closed: nonzero exit",
+      "pass": true
+    },
+    {
+      "name": "fail closed: signal exit",
+      "pass": true
+    },
+    {
+      "name": "fail closed: missing required check",
+      "pass": true
+    },
+    {
+      "name": "fail closed: failed check",
+      "pass": true
+    },
+    {
+      "name": "fail closed: unconfirmed public close",
+      "pass": true
+    },
+    {
+      "name": "fail closed: unconfirmed process exit",
+      "pass": true
+    },
+    {
+      "name": "missing recovery cannot qualify complete",
+      "pass": true
+    },
+    {
+      "name": "privacy scan failure cannot qualify complete",
+      "pass": true
+    },
+    {
+      "name": "exact live process identity permits bounded fallback",
+      "pass": true
+    },
+    {
+      "name": "signal-exited handle never permits kill",
+      "pass": true
+    },
+    {
+      "name": "reused PID never permits kill",
+      "pass": true
+    },
+    {
+      "name": "changed command line never permits kill",
+      "pass": true
+    },
+    {
+      "name": "missing original witness never permits kill",
+      "pass": true
+    },
+    {
+      "name": "PID-reused root cannot own a process family",
+      "pass": true
+    },
+    {
+      "name": "cleanup_pending is acceptance failure",
+      "pass": true
+    },
+    {
+      "name": "cleanup exception is acceptance failure",
+      "pass": true
+    },
+    {
+      "name": "confirmed close plus no live owner is accepted",
+      "pass": true
+    },
+    {
+      "name": "configured fixture key uses environment reference, never literal",
+      "pass": true
+    },
+    {
+      "name": "actual upstream pure parser rejects bare env name as reference",
+      "pass": true
+    },
+    {
+      "name": "actual upstream pure parser resolves dollar env reference",
+      "pass": true
+    }
+  ],
+  "passed": 27,
+  "failed": 0,
+  "sourceSha256": "cc1d1518de2b8938605cf264b4102ae279399485673c35aa4080a5995ce9596c",
+  "endedAt": "2026-11-26T05:36:55.946Z",
+  "realUserDataTouched": false
+}

@@ -1,0 +1,59 @@
+{
+  "date": "2026-11-26",
+  "qualification": "control-plane-passed-final-model-round-failed-not-full-acceptance",
+  "json": [
+    {
+      "file": "final-control-owner-probe.json",
+      "bytes": 26358,
+      "sha256": "78989774d09d97ea574856a0e00bde4e55c680e701ecab5154717f31b6560717"
+    },
+    {
+      "file": "final-control-owner-probe-summary.json",
+      "bytes": 2716,
+      "sha256": "ab9eddac4593e244ad797f2b7935c31776148ffa392369b55248ebe042798694"
+    },
+    {
+      "file": "final-live-exercise.json",
+      "bytes": 10584,
+      "sha256": "f8b9e935b16562996446f0110981d417590c71f97abef9b1dc168aeebf3942ec"
+    },
+    {
+      "file": "final-live-summary.json",
+      "bytes": 4979,
+      "sha256": "f580dd7cde5c34bc1fb07983141abf184c0a733e72bbea4efcf98358989cfe34"
+    },
+    {
+      "file": "final-driver-safety.json",
+      "bytes": 2712,
+      "sha256": "0d0ffeaf4f596c72423be65f8b0001c0ddd889762eb8d13781567107f8568366"
+    }
+  ],
+  "images": [
+    {
+      "file": "final-control-C-restarted-dark-wide.png",
+      "width": 1980,
+      "height": 1230,
+      "sourceSha256": "f55441c537c0de542847eec93f91ff2977ee9396cd09d490b122eb8529a845cf",
+      "archivedSha256": "f55441c537c0de542847eec93f91ff2977ee9396cd09d490b122eb8529a845cf",
+      "redactions": [],
+      "outsideRedactionChangedChannels": 0
+    },
+    {
+      "file": "final-live-failure-start-A.png",
+      "width": 1980,
+      "height": 1230,
+      "sourceSha256": "c3b227377f357d01457ad9430f957a0ddfbf22f0585da4c3d08aca3f2346c95c",
+      "archivedSha256": "565b1b4245cc871a6013e54ab7bed5b1ceaa00ec4b2a5c801d75df5c2574eb87",
+      "redactions": [
+        {
+          "x": 1450,
+          "y": 1150,
+          "width": 215,
+          "height": 45,
+          "reason": "model/provider picker identity"
+        }
+      ],
+      "outsideRedactionChangedChannels": 0
+    }
+  ]
+}

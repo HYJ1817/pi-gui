@@ -27,6 +27,32 @@
 
 以上不改变 CI 触发、测试清单、gate 或发布脚本，也不授予联网模型调用、推送、合并、tag 或发布权限。
 
+## 多会话并行专项验证
+
+`npm run test:session-concurrency` 仍从 `package.json` 进入 canonical，包含工具 scheduler、
+私有 bridge、ordinary-session resolver/runtime，并新增 `tests/parallel-runtime-integration.cjs`。
+后者使用 `os.tmpdir()` 的假 Pi 1.6 公共契约与原生形状 JSONL，实际跑生产 Registry、
+session-runtime、guardian/RPC 子进程、bundled guard、私有 HTTP 和共享工具调度。
+覆盖三运行重叠、共享根写工具等待、独立根前进、相同请求/工具/审批 ID、焦点与 owner 分离、
+Stop 隔离、持久化、硬预算、确认清理和重启 dormant/旧 owner 拒绝。
+这是离线真实进程集成，**不是实际 Pi 或模型验收**。
+同一 canonical alias 还运行观察驱动的 `--check-driver` 和 `--check-safety`：前者编译 renderer
+模板，后者使用 TEMP、合成进程身份和两个隔离 Git 仓库验证环境覆盖清除、退出身份、缺阶段/
+异常退出/隐私与清理失败的 fail-closed 结论。两模式均不加载 Electron、Pi、用户模型配置或网络；
+可选的实际 Pi 纯解析器读取是显式专项，不进入默认 canonical，不使 CI 依赖真 Pi。
+
+`npm run test:parallel-live`（`node tests/parallel-runtime-live.cjs`）是独立的 Windows Electron / 真 Pi / 真模型专项。
+默认在任何 fixture、import 或 spawn 前退出且不算通过；仅显式 `PI_GUI_PARALLEL_LIVE=1`
+才会调用已配置模型并消耗额度。不得把该环境变量写入 canonical/CI，不自动下载 Pi 或依赖，
+不复制真实 auth，不修改真实项目/session；全部可写目录隔离在 `os.tmpdir()`。
+打包层还需显式 `PI_GUI_PARALLEL_PACKAGED=1`，默认读取已重建的 `dist-app/Pi GUI-win32-x64`，
+复制到 TEMP 后用观察 bootstrap 加载未修改的生产 main/backend/renderer；不关闭正常 sandbox。
+身份摘要必须说明入口观察层与正式零插桩启动的区别。
+
+真实专项结果、时间区间/截图、首次失败、独立审查、未验证矩阵与回滚统一见
+[并行专项验收记录](parallel-runtime-acceptance.md)。不以 fixture、API accepted、截图文件存在
+或 source capability true 代替真实 Pi hook、模型任务重叠和实际窗口交互的证据。
+
 ## 首次环境安装验证
 
 `npm run test:environment` 已纳入 canonical `test` 链，包含六个离线套件：
