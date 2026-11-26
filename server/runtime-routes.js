@@ -1,7 +1,7 @@
 import { json, readRawBody } from './http-utils.js';
 
 const CODES = new Set(['stale_runtime', 'stale_workspace', 'unknown_workspace', 'workspace_in_use', 'workspace_archived', 'workspace_unavailable',
-  'runtime_limit', 'conversation_limit', 'unknown_conversation', 'invalid_request', 'invalid_command', 'invalid_cursor', 'runtime_not_ready',
+  'unknown_conversation', 'invalid_request', 'invalid_command', 'invalid_cursor', 'runtime_not_ready',
   'runtime_start_failed', 'registry_unavailable', 'metadata_write_failed', 'cleanup_pending', 'pi_entry_unproven', 'session_unavailable',
   'stop_in_progress', 'runtime_busy', 'stale_approval', 'maintenance', 'auth_syncing', 'process_limit', 'process_control_disabled', 'cancelled',
   'stale_generation', 'stale_process', 'invalid_permission', 'invalid_args', 'unknown_project', 'session_in_use', 'tool_guard_unavailable',
@@ -36,12 +36,19 @@ export function createRuntimeRoutes({ registry, validateWorkspace = async () => 
       if (req.method !== 'POST') return json(res, 405, { ok: false, code: 'invalid_request' });
       const body = JSON.parse((await readRawBody(req, 96 * 1024 * 1024)).toString('utf8'));
       if (!closed(body, ['action', 'owner', 'args', 'conversationId', 'allowThird', 'command', 'cursor', 'edit', 'requestId'])) fail();
+      // Older renderers sent this quota confirmation flag. Accept at the
+      // transport boundary, then deliberately discard it before backend calls.
       beforeAction(body);
       let result;
       switch (body.action) {
         case 'open-session': if (!openSession) fail(); result = await openSession(body.args); break;
-        case 'start': result = await registry.start(body.args); break;
-        case 'resume': result = await registry.resume(body.conversationId, { allowThird: body.allowThird === true }); break;
+        case 'start': {
+          // New UI never sends this; old renderers nested it under args. Ignore
+          // the legacy admission flag at the transport boundary, never consult it.
+          const { allowThird: _legacy, ...args } = body.args || {};
+          result = await registry.start(args); break;
+        }
+        case 'resume': result = await registry.resume(body.conversationId); break;
         case 'focus': result = await registry.focus(body.owner); break;
         case 'blur': result = await registry.blur(body.owner); break;
         case 'close': await registry.close(body.owner); result = { ok: true }; break;

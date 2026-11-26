@@ -21,7 +21,7 @@ const MESSAGES = {
   unmerged_work: '尚有未合并工作或整合目标不明，保守拒绝移除。', submodule_present: '存在子模块或嵌套仓库，保守拒绝移除。',
   unsafe_path: '受控路径校验失败，未操作任何目录。', metadata_invalid: 'Worktree 登记文件不可用，请保留文件并检查诊断。',
   metadata_write_failed: '登记写入失败；请刷新检查工作区，不会强制删除。', partial_creation: '创建未完成，保留已生成的分支或目录供检查。',
-  workspace_limit: '登记工作区已达上限，请先检查和清理旧记录。', invalid_project: '项目目录边界无法确认。',
+  invalid_project: '项目目录边界无法确认。',
   storage_inside_project: '受控目录位于仓库内；请将 PI_GUI_DATA 设为仓库外目录后重启，再创建工作区。',
 };
 
@@ -38,9 +38,12 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
   const confirmations = new Map();
   try {
     if (fs.existsSync(manifest)) {
-      if (fs.lstatSync(manifest).isSymbolicLink() || fs.statSync(manifest).size > 1024 * 1024) throw Error();
+      // Retained workspace history is not an admission budget. Only the
+      // manifest's identity/shape is security-relevant; its aggregate size and
+      // record count must not reject otherwise valid workspaces.
+      if (fs.lstatSync(manifest).isSymbolicLink()) throw Error();
       const parsed = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-      if (parsed.version !== 1 || !Array.isArray(parsed.entries) || parsed.entries.length > 256) throw Error();
+      if (parsed.version !== 1 || !Array.isArray(parsed.entries)) throw Error();
       entries = parsed.entries;
       const seen = new Set();
       for (const r of entries) {
@@ -141,7 +144,6 @@ export function createWorktrees({ dataDir, getProjects, getContext = () => ({ cw
   }
   async function prepareImpl(args, readOnly = false) {
     if (!closed(args, ['project', 'source', 'branch'])) throw failure('invalid_request');
-    if (entries.length >= 256) throw failure('workspace_limit');
     const repo = await projectInfo(args.project), id = randomUUID();
     if (isInside(repo.root, root) || isInside(repo.common, root)) throw failure('storage_inside_project');
     const branch = args.branch || `pi-gui/p32/${id}`;

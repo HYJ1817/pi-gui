@@ -1,0 +1,806 @@
+{
+  "phase": "owner-probe",
+  "platform": "win32",
+  "startedAt": "2026-11-26T05:35:16.158Z",
+  "checks": [
+    {
+      "name": "production main uses normal sandbox, context isolation and no nodeIntegration",
+      "pass": true
+    },
+    {
+      "name": "production preload is active",
+      "pass": true
+    },
+    {
+      "name": "probe fixture contains dormant native session currently held by classic",
+      "pass": true
+    },
+    {
+      "name": "classic-held native session resume is rejected without spawning",
+      "pass": true,
+      "details": {
+        "sessionId": "01a21640-b6ea-7565-becd-b59fbef77863",
+        "conversationId": "4b905964-b3ab-4c77-9c8e-6e7b64a3d5b5",
+        "ok": false,
+        "code": "session_in_use",
+        "before": 1,
+        "after": 1
+      }
+    },
+    {
+      "name": "classic holds the original real persisted B native session",
+      "pass": true
+    },
+    {
+      "name": "probe selects the original persisted C session not held by classic",
+      "pass": true
+    },
+    {
+      "name": "model-free probe resumes materialized ordinary project native session",
+      "pass": true,
+      "details": {
+        "code": null
+      }
+    },
+    {
+      "name": "probe real Pi is idle before restart",
+      "pass": true
+    },
+    {
+      "name": "restart probe sends no prompt or model generation",
+      "pass": true
+    },
+    {
+      "name": "ordinary project restart accepted in model-free probe",
+      "pass": true,
+      "details": {
+        "ok": true,
+        "code": null
+      }
+    },
+    {
+      "name": "model-free restart preserves native session and rotates runtime owner",
+      "pass": true
+    },
+    {
+      "name": "restarted real Pi get_state confirms the original persisted C session and idle state",
+      "pass": true
+    },
+    {
+      "name": "model-free restart rejects prior owner reads and event replay",
+      "pass": true,
+      "details": {
+        "readCode": "stale_runtime",
+        "eventCode": "stale_runtime"
+      }
+    },
+    {
+      "name": "model-free resumed C history is from the original real persisted model task",
+      "pass": true
+    },
+    {
+      "name": "entire resume and restart probe performs zero model generations",
+      "pass": true
+    },
+    {
+      "name": "parent observed this live process family before cleanup",
+      "pass": true
+    },
+    {
+      "name": "cleanup public runtime closes are confirmed",
+      "pass": true,
+      "details": {
+        "confirmed": true,
+        "codes": []
+      }
+    }
+  ],
+  "shots": [
+    {
+      "file": "model-free-C-restarted-dark-wide.png",
+      "metrics": {
+        "width": 1320,
+        "height": 820,
+        "dpr": 1.5,
+        "theme": "dark",
+        "scrollWidth": 1320
+      },
+      "pixelSize": {
+        "width": 1980,
+        "height": 1230
+      },
+      "masked": [],
+      "redaction": "opaque pixel rectangles only; unchanged DOM/layout and all unmasked capture pixels"
+    }
+  ],
+  "facts": {
+    "lastStatus": {
+      "state": "ready",
+      "hasProject": true,
+      "legacyOwner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "repoId": null,
+        "workspaceId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "aba4c70c-89b0-4303-96fa-8eb11ee45b1f",
+        "runtimeGeneration": "1",
+        "sessionId": "01a21640-b6ea-7565-becd-b59fbef77863"
+      },
+      "error": null
+    },
+    "classicNativeAdmission": {
+      "sessionId": "01a21640-b6ea-7565-becd-b59fbef77863",
+      "conversationId": "4b905964-b3ab-4c77-9c8e-6e7b64a3d5b5",
+      "ok": false,
+      "code": "session_in_use",
+      "before": 1,
+      "after": 1
+    },
+    "probeOwner": {
+      "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+      "projectId": "b6c4c9a5ef728d87bf55fdb5",
+      "repoId": "b6c4c9a5ef728d87bf55fdb5",
+      "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+      "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+      "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+      "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+      "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+      "sessionId": "01a21640-c275-721c-88b2-c05a381398de"
+    },
+    "restartResponse": {
+      "ok": true,
+      "code": null
+    },
+    "afterRestart": {
+      "totalCount": 2,
+      "items": [
+        {
+          "conversationId": "4b905964-b3ab-4c77-9c8e-6e7b64a3d5b5",
+          "owner": null,
+          "lifecycle": "dormant"
+        },
+        {
+          "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+          "owner": {
+            "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+            "projectId": "b6c4c9a5ef728d87bf55fdb5",
+            "repoId": "b6c4c9a5ef728d87bf55fdb5",
+            "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+            "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+            "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+            "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+            "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+            "sessionId": null
+          },
+          "lifecycle": "starting"
+        },
+        {
+          "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+          "owner": null,
+          "lifecycle": "dormant"
+        },
+        {
+          "conversationId": "4e327fb6-89af-4ce8-8635-03a8567acc8a",
+          "owner": null,
+          "lifecycle": "dormant"
+        }
+      ]
+    },
+    "restartedOwner": {
+      "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+      "projectId": "b6c4c9a5ef728d87bf55fdb5",
+      "repoId": "b6c4c9a5ef728d87bf55fdb5",
+      "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+      "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+      "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+      "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+      "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+      "sessionId": "01a21640-c275-721c-88b2-c05a381398de"
+    }
+  },
+  "events": [
+    {
+      "at": 1795671317749,
+      "seq": 1,
+      "eventSequence": null,
+      "kind": "bridge_status",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "repoId": null,
+        "workspaceId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "aba4c70c-89b0-4303-96fa-8eb11ee45b1f",
+        "runtimeGeneration": "1",
+        "sessionId": null
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671318549,
+      "seq": 2,
+      "eventSequence": null,
+      "kind": "bridge_status",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "repoId": null,
+        "workspaceId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "aba4c70c-89b0-4303-96fa-8eb11ee45b1f",
+        "runtimeGeneration": "1",
+        "sessionId": null
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671320425,
+      "seq": 10,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+        "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "starting",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671320447,
+      "seq": 11,
+      "eventSequence": 1,
+      "kind": "runtime_event",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+        "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671320448,
+      "seq": 12,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+        "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "starting",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671321512,
+      "seq": 13,
+      "eventSequence": 2,
+      "kind": "runtime_event",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+        "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671321512,
+      "seq": 14,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+        "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671321539,
+      "seq": 15,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+        "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+        "sessionId": "01a21640-c275-721c-88b2-c05a381398de"
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671321539,
+      "seq": 16,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+        "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+        "sessionId": "01a21640-c275-721c-88b2-c05a381398de"
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671321812,
+      "seq": 17,
+      "eventSequence": null,
+      "kind": "runtime_closed",
+      "type": "runtime_closed",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "786cee45-b3b7-49c0-b06c-699872c5ece6",
+        "runtimeGeneration": "c35e50f9-5fce-427f-8a9a-9fb76f78425d",
+        "sessionId": "01a21640-c275-721c-88b2-c05a381398de"
+      },
+      "bridgeRun": null,
+      "lifecycle": "dormant",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671322195,
+      "seq": 18,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+        "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "starting",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671322214,
+      "seq": 19,
+      "eventSequence": 1,
+      "kind": "runtime_event",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+        "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671322214,
+      "seq": 20,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+        "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "starting",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671323284,
+      "seq": 21,
+      "eventSequence": 2,
+      "kind": "runtime_event",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+        "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671323284,
+      "seq": 22,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+        "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671323315,
+      "seq": 23,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+        "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+        "sessionId": "01a21640-c275-721c-88b2-c05a381398de"
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671323315,
+      "seq": 24,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "9d0edafa-0b20-4083-b525-e9562cf30409",
+        "projectId": "b6c4c9a5ef728d87bf55fdb5",
+        "repoId": "b6c4c9a5ef728d87bf55fdb5",
+        "workspaceId": "project-b6c4c9a5ef728d87bf55fdb5",
+        "workspaceEpoch": "aa54fbe0d17e8f1739f6ab13",
+        "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+        "runtimeId": "1e930f6c-7b2f-4ce5-832b-d8608bd94f0d",
+        "runtimeGeneration": "b2ac0237-f74a-4683-ab8e-f757709430b9",
+        "sessionId": "01a21640-c275-721c-88b2-c05a381398de"
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    }
+  ],
+  "electron": "44.4.3",
+  "stage": "model_free_restart_probe",
+  "cleanup": {
+    "confirmed": true,
+    "codes": []
+  },
+  "endedAt": "2026-11-26T05:35:25.325Z",
+  "failed": 0,
+  "completed": true,
+  "unverified": [
+    "long-duration stress/real OS power loss",
+    "non-Windows platforms",
+    "other provider/model combinations",
+    "full canonical and independent security review (owned by main agent)"
+  ],
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "stdoutBytes": 1202,
+  "stderrBytes": 0,
+  "processCleanup": {
+    "observedAt": "2026-11-26T05:35:25.104Z",
+    "observed": 12,
+    "identities": [
+      {
+        "pid": 37488,
+        "parent": 65492,
+        "birth": "639312681159346520",
+        "exeSha256": "bafaa3aee760c8785c832f3fba8b3cb434b546f1d3a7618afa995b2c46936e54",
+        "commandSha256": "58da4c7a4606c9f4e2f887b3e0f6e52890a3f562431354af3d766cf590f354d4",
+        "marker": true
+      },
+      {
+        "pid": 63396,
+        "parent": 37488,
+        "birth": "639312681162295060",
+        "exeSha256": "bafaa3aee760c8785c832f3fba8b3cb434b546f1d3a7618afa995b2c46936e54",
+        "commandSha256": "b9f0fbb0f06a0646c674aad01b0deb41ff311a8cf7b8ef7fab0619112e42010a",
+        "marker": true
+      },
+      {
+        "pid": 59792,
+        "parent": 37488,
+        "birth": "639312681163038170",
+        "exeSha256": "bafaa3aee760c8785c832f3fba8b3cb434b546f1d3a7618afa995b2c46936e54",
+        "commandSha256": "71e15f253c2f13f49b80095f66928c80bdfa23e5a4cc2c4ca6fba08e930f335e",
+        "marker": true
+      },
+      {
+        "pid": 24548,
+        "parent": 37488,
+        "birth": "639312681169838070",
+        "exeSha256": "bafaa3aee760c8785c832f3fba8b3cb434b546f1d3a7618afa995b2c46936e54",
+        "commandSha256": "00d69f27d212811f5265a27e7372b2bafa18fd93ffd19727727f87df21d47ad4",
+        "marker": true
+      },
+      {
+        "pid": 49040,
+        "parent": 37488,
+        "birth": "639312681173388390",
+        "exeSha256": "bafaa3aee760c8785c832f3fba8b3cb434b546f1d3a7618afa995b2c46936e54",
+        "commandSha256": "34f036b569eab66063a1228754ccf7ce26b0983b60e8181e48aba80728c0a8a1",
+        "marker": true
+      },
+      {
+        "pid": 63932,
+        "parent": 24548,
+        "birth": "639312681174735260",
+        "exeSha256": "aff50af76ffba4b4b7b54b3f259c25ca785085d1e9e339463924d5913d1171d4",
+        "commandSha256": "55c9ef390c972f06009bb844427af3fc2690d165a0bee60a5d4a61088fa039e2",
+        "marker": true
+      },
+      {
+        "pid": 58764,
+        "parent": 63932,
+        "birth": "639312681174895200",
+        "exeSha256": "25193318e83d0508392efa098b6d93e382601c47bc929caf9e99a02278d20e34",
+        "commandSha256": "417222c4a0ecb4d60a457ebe8e26fddf3d5406bffb16a5c59af8eeb241beca51",
+        "marker": false
+      },
+      {
+        "pid": 6128,
+        "parent": 63932,
+        "birth": "639312681175449670",
+        "exeSha256": "cfef83d46ea5e69b511ea30aaf1b6ab8fbf7caa6bcfef169d4993fed7c675c20",
+        "commandSha256": "b4d39fb05f46de9818e5e08c6690f0aa84b27b0527d4a400d14e447429ebde3b",
+        "marker": true
+      },
+      {
+        "pid": 59860,
+        "parent": 24548,
+        "birth": "639312681222244190",
+        "exeSha256": "c515e8e7d219f83538d2b67a22458dcf00e518f53376ac1706c83df3948be2ed",
+        "commandSha256": "cc82f6c5510e5857a8adc8cef712eff47803007d3bb0cf2c056ac14c646207cd",
+        "marker": true
+      },
+      {
+        "pid": 57756,
+        "parent": 59860,
+        "birth": "639312681222398620",
+        "exeSha256": "25193318e83d0508392efa098b6d93e382601c47bc929caf9e99a02278d20e34",
+        "commandSha256": "417222c4a0ecb4d60a457ebe8e26fddf3d5406bffb16a5c59af8eeb241beca51",
+        "marker": false
+      },
+      {
+        "pid": 41204,
+        "parent": 59860,
+        "birth": "639312681227849830",
+        "exeSha256": "bafaa3aee760c8785c832f3fba8b3cb434b546f1d3a7618afa995b2c46936e54",
+        "commandSha256": "e41fe81c571d064569f323b324751ac4ca474d9c7d7e3c69fcd73b4b6f5350d7",
+        "marker": true
+      },
+      {
+        "pid": 64120,
+        "parent": 41204,
+        "birth": "639312681228741570",
+        "exeSha256": "bafaa3aee760c8785c832f3fba8b3cb434b546f1d3a7618afa995b2c46936e54",
+        "commandSha256": "cbce5f9af66c72355b02fcb394d282da9f27e4dd694bd84539f45fb2d0b76e91",
+        "marker": true
+      }
+    ],
+    "residual": 0,
+    "confirmed": true
+  }
+}

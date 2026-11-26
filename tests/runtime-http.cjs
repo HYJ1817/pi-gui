@@ -12,6 +12,9 @@ let checks = 0; const check = async (name, fn) => { await fn(); checks++; consol
     factory: async (_context, emit) => ({ start: () => emit({ type: 'bridge_status', state: 'ready', bridgeRun: 1 }),
       send: cmd => wire.push(cmd), request: async cmd => cmd.type === 'get_state' ? { sessionId: 'native' } : { messages: [] },
       abortAndWait: async () => { wire.push({ type: 'abort' }); return { ok: true }; }, getState: () => ({ state: 'ready' }), dispose: async () => {}, cleanupConfirmed: () => true }) });
+  const starts = [], resumes = [], start = registry.start, resume = registry.resume;
+  registry.start = args => { starts.push(args); return start(args); };
+  registry.resume = (...args) => { resumes.push(args); return resume(...args); };
   const auth = createAuth({ token: 'fixture-auth', port: 7788, appId: 'pi-gui', protocol: 1, version: '0.22.0' });
   const legacy = { backendInstance: 'primary', runtimeId: 'classic', runtimeGeneration: '1' };
   const router = createRouter({ auth, sse: { subscribe() {} }, rpc: { getState: () => ({ state: 'ready' }), send: cmd => wire.push({ legacy: true, ...cmd }) },
@@ -21,9 +24,17 @@ let checks = 0; const check = async (name, fn) => { await fn(); checks++; consol
   try {
     await check('runtime HTTP受现有 token鉴权', async () => { const r = await fetch(base + '/api/runtime-sessions'); assert.equal(r.status, 401); });
     await check('跨 Origin token正确仍拒绝', async () => assert.equal((await post({ action: 'start', args: { id: 'w', epoch: 'e' } }, { Origin: 'https://foreign.invalid' })).status, 403));
-    const started = await post({ action: 'start', args: { id: 'w', epoch: 'e' } }); assert.equal(started.body.ok, true);
+    const started = await post({ action: 'start', allowThird: true, args: { id: 'w', epoch: 'e', allowThird: true } }); assert.equal(started.body.ok, true);
     const snapshot = await (await fetch(base + '/api/runtime-sessions', { headers: { 'X-Pi-Gui-Token': 'fixture-auth' } })).json(); const owner = snapshot.items[0].owner;
     await check('启动/快照 owner齐全，不按activeUI路由', () => { assert.ok(owner.sessionId); assert.equal(owner.workspaceId, 'w'); assert.ok(owner.runtimeId); });
+    await check('旧启动标志在 HTTP 边界丢弃，快照没有伪 quota 字段', () => {
+      assert.deepEqual(starts, [{ id: 'w', epoch: 'e' }]);
+      assert.equal(Object.hasOwn(snapshot, 'limit'), false); assert.equal(Object.hasOwn(snapshot, 'hardLimit'), false);
+    });
+    await check('旧兼容字段不放宽封闭启动 schema', async () => {
+      const result = await post({ action: 'start', args: { id: 'w', epoch: 'e', allowThird: true, sessionPath: cwd } });
+      assert.equal(result.body.code, 'invalid_request'); assert.equal(registry.liveCount(), 1);
+    });
     await check('执行历史只接受当前原生 owner 和封闭请求体', async () => {
       const request = { action: 'execution-history', owner };
       assert.equal((await post(request, { 'X-Pi-Gui-Token': '' })).status, 401);
@@ -46,6 +57,11 @@ let checks = 0; const check = async (name, fn) => { await fn(); checks++; consol
     await entered; await registry.close(owner); resolveHealth(); pendingHealth = null;
     await check('body/read/preflight晚到owner失效，未写stdin', async () => { assert.equal((await late).body.code, 'stale_runtime'); assert.ok(!wire.some(c => c.message === 'late')); });
     await check('关闭保留conversation且不信旧owner', async () => assert.equal((await post({ action: 'command', owner, command: { type: 'abort' } })).body.code, 'stale_runtime'));
+    await check('旧恢复标志仅边界接受，不作为内部 options 传递', async () => {
+      const result = await post({ action: 'resume', conversationId: started.body.conversationId, allowThird: true });
+      assert.equal(result.body.ok, true); assert.deepEqual(resumes.at(-1), [started.body.conversationId]);
+      assert.notEqual(result.body.owner.runtimeId, owner.runtimeId);
+    });
   } finally { await registry.dispose(); server.closeAllConnections(); await new Promise(r => server.close(r)); fs.rmSync(fixture, { recursive: true, force: true }); }
   console.log(`Runtime HTTP: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

@@ -1,0 +1,35 @@
+{
+  "provenance": "read-only digest after model completion and failure cleanup; fixture results unchanged",
+  "files": [
+    {
+      "project": 1,
+      "file": "a-native.txt",
+      "bytes": 14,
+      "sha256": "839c0569a200c70382f7816075f52e9a8049b454fa0adc0d328c627d4f932df7"
+    },
+    {
+      "project": 1,
+      "file": "b-native.txt",
+      "bytes": 14,
+      "sha256": "51fb9cb7bab9d8e9a8774d2693a5b3a45fc16a6176da42a01779b0984ddd0fc0"
+    },
+    {
+      "project": 1,
+      "file": "b-done.txt",
+      "bytes": 6,
+      "sha256": "9cef5614ef25563102cdfe30a9904c6579dcd730bfdd5fd30ae6288696c167b2"
+    },
+    {
+      "project": 2,
+      "file": "c-native.txt",
+      "bytes": 14,
+      "sha256": "700f9bc837d4bf51ed0136352189ce2db1a3b2bb559d024c127dda835583d4a4"
+    },
+    {
+      "project": 2,
+      "file": "c-done.txt",
+      "bytes": 6,
+      "sha256": "edd88083c781b4644e48b9e6544fa5128307fc55096d5ffe6b5b6971e7901530"
+    }
+  ]
+}

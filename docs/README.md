@@ -33,7 +33,7 @@
 | 协同流程图编辑 | [Z4-2 契约](Z4-2-contract.md)、[验收状态](Z4-2-acceptance.md) | [独立审查](Z4-2-reviews.md)、[Agent 来源研究](Z4-2-agent-source-research.md)；Z4-3 接入真实 Agent 建议来源：[来源契约](Z4-3-agent-source-contract.md)、[验收状态](Z4-3-acceptance.md) |
 | 并行输入、思考等级与历史工具摘要 | [Z5 规划](Z5-roadmap.md)、[Z5 审计](Z5-0-product-audit.md) | [Z5-1 验收](Z5-1-acceptance.md)、[Z5-2 验收](Z5-2-acceptance.md)、[Z5-3 验收](Z5-3-acceptance.md)、[Z5-3B 验收](Z5-3B-acceptance.md)、[Z5-Final 验收](Z5-final-acceptance.md) |
 | Planner、Review、Verification | [Planner](planner.md)、[工作流与数据契约](workflows.md)、[人工审阅](reviews.md) | [审批](approvals.md)、[测试政策](testing.md#测试执行政策) |
-| Runtime、Worktree、多会话 | [会话](sessions.md)、[Worktree](worktrees.md)、[架构](architecture.md) | [运行恢复](runtime-recovery.md)、[进程管理](p31-managed-process.md)、[安全](security.md) |
+| Runtime、Worktree、多会话 | [会话](sessions.md)、[Worktree](worktrees.md)、[架构](architecture.md) | [运行恢复](runtime-recovery.md)、[进程管理](p31-managed-process.md)、[安全](security.md)、[并行专项验收与待验证项](parallel-runtime-acceptance.md)、[无数量上限增量验收](parallel-runtime-unlimited-acceptance.md)、[T3 源码参考](parallel-runtime-reference-t3.md)、[PI-Desktop 源码参考](parallel-runtime-reference-pi-desktop.md) |
 | AI 会话标题（自动 / 手动） | [会话：AI 自动标题](sessions.md#ai-自动标题与手动标题的优先级) | [供应商认证](provider-auth.md)、[架构](architecture.md)、[验收记录](ai-session-title-acceptance.md) |
 | 历史消息编辑 / 重新发送 / 重新生成 | [会话界面：历史消息编辑](conversation-ui.md#历史消息编辑与重新生成)、[验收记录](message-edit-resend-acceptance.md) | [会话](sessions.md)、[安全](security.md)、[测试政策](testing.md#测试执行政策) |
 | Browser 与 Electron | [Browser](browser.md)、[Agent Control](agent-browser.md)、[工作区](work-surfaces.md) | [架构](architecture.md)、[安全](security.md)、[构建](development.md) |

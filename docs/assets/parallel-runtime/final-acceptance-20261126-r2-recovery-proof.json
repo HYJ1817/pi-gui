@@ -1,0 +1,84 @@
+{
+  "world": "pi-parallel-live-vIZXkf",
+  "preflightWorld": "pi-parallel-live-aUEbW1",
+  "date": "2026-11-26",
+  "head": "18a6d4a0d4a4566969c4f5bc06bb88189074b36f",
+  "packaged": {
+    "version": "0.35.1",
+    "executable": "71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f",
+    "backend": "9e554f4b5abdceeda114a3f56819d2aef67ec5d5fb685fbd5d1adde91418217f",
+    "main": "135a00e0423d9df5d739eb0c576023f1ea8296de802fcf60029cd2b4403fee05",
+    "manifestBootstrapOverride": true,
+    "mainMatchesSource": true,
+    "publicMatchesSource": true
+  },
+  "preflight": {
+    "passed": 10,
+    "failed": 0,
+    "completed": true,
+    "preflightComplete": true,
+    "fullLiveAcceptance": false
+  },
+  "qualification": {
+    "passed": 66,
+    "failed": 0,
+    "completed": true,
+    "fullLiveAcceptance": true,
+    "preflightComplete": false,
+    "privacy": {
+      "verified": true,
+      "rawPayloadSaved": false,
+      "credentialsInEnvironmentOnly": true,
+      "sourceUserDataReadOnly": true,
+      "fixturesInOsTmpdir": true
+    }
+  },
+  "phases": [
+    {
+      "phase": "exercise",
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "passed": 35,
+      "failed": 0,
+      "valid": true
+    },
+    {
+      "phase": "recovery",
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "passed": 31,
+      "failed": 0,
+      "valid": true
+    }
+  ],
+  "recoveryTurn": {
+    "checkPassed": true,
+    "outputMatches": true,
+    "outputBytes": 11,
+    "outputSha256": "106da1c5595acb2761aaeb2348f2a3e36b01d567e1e512b12956d48a2b4e964c",
+    "toolNames": [
+      "write",
+      "read"
+    ],
+    "completedTools": [
+      "write",
+      "read"
+    ],
+    "toolErrors": 0,
+    "toolPairsComplete": true,
+    "writeThenRead": true,
+    "settled": true,
+    "idle": true,
+    "elapsedMs": 47079,
+    "file": {
+      "bytes": 21,
+      "sha256": "c89212fd1c14e80225ee7a3940198349f00c6bc17cce229f634e9f59e5d0be37",
+      "exact": true
+    }
+  },
+  "note": "Only whitelisted structure: no prompts, messages, tool arguments/results, credentials or provider configuration. Public SSE legitimately omits toolCallId outside its closed wire-id charset; pairing uses tool name, order and exactly-once consumption."
+}

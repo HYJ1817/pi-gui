@@ -189,6 +189,35 @@ const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8',
     const insideData = path.join(repo, 'inside-data'); fs.mkdirSync(insideData);
     const inside = createWorktrees({ ...options, dataDir: insideData });
     await check('managed storage 不能放在仓库内污染 main Git 状态', async () => { await rejected(() => inside.prepare({ project: repo }), 'storage_inside_project'); assert.equal(fs.existsSync(path.join(insideData, 'worktrees')), false); }); inside.dispose();
+    /* Seed real-shaped removed records rather than spawning hundreds of Git
+     * processes. Tombstones must preserve history, not exhaust admission. */
+    const largeData = path.join(fixture, 'large-data'); fs.mkdirSync(largeData);
+    const removed = JSON.parse(fs.readFileSync(path.join(data, 'worktrees.json'), 'utf8')).entries.find(entry => entry.removed);
+    assert.ok(removed);
+    const history = Array.from({ length: 1536 }, () => ({ ...removed, id: require('node:crypto').randomUUID(), epoch: require('node:crypto').randomUUID() }));
+    const largeFile = path.join(largeData, 'worktrees.json'), raw = JSON.stringify({ version: 1, entries: history }, null, 2);
+    assert.ok(Buffer.byteLength(raw) > 1024 * 1024); fs.writeFileSync(largeFile, raw);
+    const largeOptions = { ...options, dataDir: largeData }; let large = createWorktrees(largeOptions);
+    try {
+      await check('超过 256 条且大于 1MiB 的真实形状 tombstone 不阻止新 Worktree 预检', async () => {
+        const listed = await large.list({ project: repo }); assert.equal(listed.ok, true);
+        const planned = await large.prepare({ project: repo, branch: 'pi-gui/after-many-tombstones' });
+        assert.ok(planned.nonce);
+        const created = await large.create({ nonce: planned.nonce }); assert.equal(created.ok, true);
+        const saved = JSON.parse(fs.readFileSync(largeFile, 'utf8'));
+        assert.equal(saved.entries.length, 1537); assert.deepEqual(saved.entries.slice(0, -1), history);
+        assert.ok(fs.existsSync(created.workspace.path));
+        large.dispose(); large = createWorktrees(largeOptions);
+        const restored = await large.withWorkspace(identity(created.workspace), w => w);
+        assert.equal(restored.root, created.workspace.path); assert.equal(restored.branch, created.workspace.branch);
+        console.log('    worktree manifest bytes=' + fs.statSync(largeFile).size + ', records=1537, added real worktrees=1');
+      });
+      await check('大 Worktree manifest 仍核验末尾每条 schema，失败不覆盖 journal', async () => {
+        large.dispose(); const saved = JSON.parse(fs.readFileSync(largeFile, 'utf8')); saved.entries[1500].prefix = '../escape';
+        const invalid = JSON.stringify(saved); fs.writeFileSync(largeFile, invalid); large = createWorktrees(largeOptions);
+        await rejected(() => large.prepare({ project: repo }), 'metadata_invalid'); assert.equal(fs.readFileSync(largeFile, 'utf8'), invalid);
+      });
+    } finally { large.dispose(); }
     console.log(`Worktree lifecycle: ${count}/${count} passed (${process.platform}, real Git fixtures)`);
   } finally { manager.dispose(); fs.rmSync(fixture, { recursive: true, force: true }); }
 })().catch(e => { console.error(e); process.exitCode = 1; });

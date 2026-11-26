@@ -88,7 +88,7 @@ import { createPlanBridge } from './server/plan-bridge.js';
 import { createMessageEditLaunch } from './server/message-edit-launch.js';
 import { createMessageEditService } from './server/message-edit.js';
 import { createMessageEditRoutes } from './server/message-edit-routes.js';
-import { createOrdinarySessions, isProjectWorkspace, rootsOverlap, toolWorkspaceRoot } from './server/ordinary-sessions.js';
+import { createOrdinarySessions, isProjectWorkspace, toolWorkspaceRoot, assertSharedSessionTools } from './server/ordinary-sessions.js';
 import { createSessionRevertAuthority, createSessionRevertMutationAuthority } from './server/session-revert-authority.js';
 import { createSessionRevertAdmission } from './server/session-revert-admission.js';
 import { inspectFileMetadata } from './server/session-revert-metadata.js';
@@ -520,8 +520,39 @@ let cliInFlight = 0;
 const processManagers = new Set();
 const mutationAdmission = createSessionRevertAdmission();
 const toolScheduler = createSessionToolScheduler({admission:mutationAdmission});
+function primaryToolOwner(epoch = rpc.providerSessionEpoch()) {
+  const owner = primaryOwner();
+  // The last public readback is not native authority after a mutation. Reuse its
+  // existing epoch, rather than letting an A cache reject the real B hello.
+  return {...owner,sessionId:primarySessionWitnessEpoch === epoch ? owner.sessionId : null};
+}
+function primaryToolCurrent(witness, changing = false) {
+  if (!witness || typeof witness.sessionId !== 'string' || !witness.sessionId) return false;
+  const state = rpc.getState(), owner = primaryToolOwner(), initial = witness.owner.sessionId === null;
+  return !runtime.isShuttingDown() && ['starting','ready'].includes(state.state) && state.piRunning && !state.stop?.pending
+    && state.bridgeInstance === witness.bridgeInstance && state.bridgeRun === witness.bridgeRun && state.pid === witness.pid
+    && runtime.getCurrentCwd() === witness.cwd && rpc.providerSessionEpoch() === witness.sessionEpoch && rpc.providerSessionChanging() === changing
+    && (initial || witness.owner.sessionId === witness.sessionId)
+    && (owner.sessionId === witness.sessionId || initial && owner.sessionId === null)
+    && sameClassicOwner(initial ? {...witness.owner,sessionId:owner.sessionId} : witness.owner,owner);
+}
+function primaryToolAdvance(previous, witness) {
+  return Boolean(previous && witness && witness.sessionEpoch > previous.sessionEpoch
+    && previous.cwd === witness.cwd && previous.bridgeInstance === witness.bridgeInstance
+    && previous.bridgeRun === witness.bridgeRun && previous.pid === witness.pid
+    && sameClassicOwner({...previous.owner,sessionId:null},{...witness.owner,sessionId:null}));
+}
 const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch:piLaunch,getCwd:()=>runtime.getCurrentCwd(),
-  getRoot:()=>toolWorkspaceRoot(runtime.getCurrentCwd()),readState:()=>rpc.request({type:'get_state'}),
+  getRoot:()=>toolWorkspaceRoot(runtime.getCurrentCwd()),
+  readState:()=>rpc.request({type:'get_state'},{strict:true,timeoutMs:1000}),
+  capture:sessionId => {
+    const state = rpc.getState(), sessionEpoch = rpc.providerSessionEpoch();
+    return { owner:primaryToolOwner(sessionEpoch), sessionId, cwd:runtime.getCurrentCwd(), sessionEpoch,
+      bridgeInstance:state.bridgeInstance, bridgeRun:state.bridgeRun, pid:state.pid };
+  },
+  isCurrent:primaryToolCurrent,
+  canRevalidate:(previous,witness) => primaryToolAdvance(previous,witness) && primaryToolCurrent(witness),
+  isInitializing:(previous,witness) => primaryToolAdvance(previous,witness) && primaryToolCurrent(witness,true) && rpc.providerSessionPending(),
   onEvent:publishClassicExecution});
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
@@ -1450,7 +1481,8 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
     || rpc.maintenanceState() || plannerRef?.projectSwitchBlockReason() || cliInFlight ? 'maintenance' : null,
   beforeCommand: (cmd,live) => ['prompt','steer','follow_up'].includes(cmd.type) && candidateRunsRef?.busy() && !candidateRunsRef.owns(runtimeRegistryRef.getOwner(live.record.conversationId)) ? 'runtime_busy' : null,
-  admission: (args, action) => worktrees.withWorkspace(args, workspace => {
+  admission: (args, action, target) => target && isProjectWorkspace(target.workspace)
+    ? ordinarySessions.withResume(target, action) : worktrees.withWorkspace(args, workspace => {
     const current = runtime.getCurrentCwd(), relative = current ? path.relative(workspace.root, fs.realpathSync(current)) : null;
     if (relative !== null && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) {
       const error = new Error('workspace_in_use'); error.code = 'workspace_in_use'; throw error;
@@ -1458,20 +1490,14 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     return action(workspace);
   }),
   resolveWorkspace: args => worktrees.withWorkspace(args, workspace => workspace),
-  validateWorkspace: workspace => isProjectWorkspace(workspace) ? ordinarySessions.validate(workspace)
+  validateWorkspace: (workspace, sessionId) => isProjectWorkspace(workspace) ? ordinarySessions.validate(workspace, sessionId)
     : worktrees.withWorkspace({ id: workspace.workspaceId, epoch: workspace.workspaceEpoch }, () => {}),
-  sharedAdmission: async (workspace, others) => {
-    for (const other of others) if (rootsOverlap(other.workspace.root,workspace.root)) {
-      if (!isProjectWorkspace(other.workspace)) throw Object.assign(Error('workspace_in_use'),{code:'workspace_in_use'});
-      if (!other.adapter?.toolGuard?.ready(other.workspace.cwd)) throw Object.assign(Error('tool_guard_unavailable'),{code:'tool_guard_unavailable'});
-    }
-    const cwd=runtime.getCurrentCwd();
-    if (cwd && rootsOverlap(await toolWorkspaceRoot(cwd),workspace.root)) {
-      await primaryToolGuard.assertReady();
-      const state=await rpc.request({type:'get_state'});
-      if (!primaryToolGuard.ready(cwd,state?.sessionId)) throw Object.assign(Error('tool_guard_unavailable'),{code:'tool_guard_unavailable'});
-    }
-  },
+  sharedAdmission: (workspace, others) => assertSharedSessionTools(workspace, others, {
+    getCwd: runtime.getCurrentCwd, getOwner: primaryOwner, isShuttingDown: runtime.isShuttingDown,
+    getState: rpc.getState, getSessionEpoch: rpc.providerSessionEpoch, isSessionChanging: rpc.providerSessionChanging,
+    assertReady: () => primaryToolGuard.assertReady(),
+    readState: () => rpc.request({type:'get_state'},{strict:true,timeoutMs:1000}), ready: (cwd, native) => primaryToolGuard.ready(cwd, native),
+  }),
   onFocus: async owner => { if (!owner) { await runtimeBrowser.focus(null); return; } const { repoId, ...scope } = owner; await runtimeBrowser.focus(scope); },
   factory: async (context, emit) => {
     /* 独立会话与主聊天必须用**同一个有效 Pi 入口**。环境安装可能刚把
@@ -1724,6 +1750,7 @@ const messageEditRoutes = createMessageEditRoutes({
   getBridgeRun: () => rpc.getState().bridgeRun,
   getWorkspaceGeneration: () => runtime.getWorkspaceGeneration(),
   getCwd: () => runtime.getCurrentCwd(),
+  captureCommandGuard: rpc.captureCommandGuard,
   /* 重发 prompt 与普通 prompt 走同一组前置闸门：候选任务互斥、变更采集就绪、
    * 工作区写入互斥、模型代际；导航命令不开 run，不走这里。 */
   beforePrompt: async cmd => {

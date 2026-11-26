@@ -63,9 +63,39 @@ P20.5 把「文档里的基线版本」和「你机器上跑的版本」拆开�
 | 块 | 在哪 | 回答什么 |
 |---|---|---|
 | **版本真值** | `server/pi-version.js` | 跑的是哪个 pi（`value` / `source` / `status` / `updatedAt`）**以及这个版本我们核过没有**（`verifiedAgainst` / `verification`） |
-| **probe registry** | `server/pi-probes.js` | 14 条能力 probe 的三值 + 出处 + 降级策略。**优先 probe feature，不写 `if version >= X`** |
+| **probe registry** | `server/pi-probes.js` | 能力 probe 的三值 + 出处 + 降级策略，清单以 `PROBE_DEFS` 为准。**优先 probe feature，不写 `if version >= X`** |
 | **兼容矩阵** | `server/pi-compat-matrix.js` | 小型、明确、可核对的 metadata：已验证的 Pi 版本、关键 Extension release、Native MCP 契约、已知差异 |
 | **升级 playbook** | [upgrade-playbook.md](upgrade-playbook.md) | 拿到新版本之后按什么顺序做，以及「**CI 绿不能认证一个新版本**」 |
+
+### 会话工具协调契约（2026-11-26 专项）
+
+`probeSessionToolGuard()` 与 `session-tool-bridge.js` 的 `prepare()` 共用 source probe
+`session-tool-guard`，替代旧的 1.2.0 / 1.3.0 版本白名单。读取的必须是
+`createPiLaunch().packageDir()` 证明的实际启动包，不能按常见全局目录猜另一份安装。
+
+该 probe 只读 `dist/core/extensions/types.d.ts` 与 `dist/core/session-manager.d.ts`
+（每文件限 512 KiB），核对异步 handler、session_start、可阻断 tool_call、tool_result、
+tool_execution_end、agent_settled、工具来源清单与 native sessionId API。
+契约缺项为 false；不可读、缺文件或超限为 unknown；两者都不开放写入。
+
+**source true 只是允许注入公开扩展，不是 runtime ready。** 仍必须收到该 child 的私有
+loopback/token hello，再由该 child 的真实 `get_state` 证明原生会话身份，才放行受保护发送。
+未完成、失效或未知时保留原 fail-closed 边界与草稿，不静默降级成无工具协调运行。
+Diagnostics 展示契约证据，不把它包装成子进程握手证明。
+
+初始化 hello 为非阻塞 single-flight：Pi 1.6 在绑定扩展后才安装 RPC stdin reader，不能在
+`session_start` 中 await 依赖 `get_state` 的握手。扩展最多三次、总预算八秒；可证明的
+会话切换过渡只回非授权等待，不绑定 native 也不重置预算。backend 初始
+binding 三十秒到期后终态失效，readback 最多三次、每次一秒。并发准入共享等待，不能
+靠重复 prompt 重置预算。`extension_error.extensionPath` 只有在绝对路径/文件 URL 可解析、
+文件真实存在且 canonical 身份不等于 guard 入口时才证明无关；缺失、相对、合成来源与
+无法验证的错误继续 fail-closed，不记录原始错误或扩展 payload。终态故障需用户显式
+重启目标 Runtime，重新完成完整身份与 native hello 验证；不自动重发结果未知的模型任务。
+
+本机 1.6.0 的本次只读核验覆盖上述声明，以及 runner/agent-session 中 hook 的 await、
+阻断异常传播和 settled 顺序；这只认证专项所依赖的边界，**不更新全产品当前验证基线或兼容矩阵**。
+离线 fixture、真实模型与打包 Electron 的证据范围、尚未验证的场景分别见
+[专项验收记录](parallel-runtime-acceptance.md)。
 
 ### 版本真值多了一个维度
 

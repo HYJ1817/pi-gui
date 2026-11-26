@@ -196,7 +196,7 @@ async function main() {
   // Router composition ends before the independent app-update HTTP wrapper.
   const end = source.indexOf('\nconst updateMaintenance = createAppUpdateMaintenance({', start);
   assert.ok(start >= 0 && end > start, 'server.js Router assembly must be found');
-  let syncing = false;
+  let syncing = false, workspaceGate = null, captureGate = null, admissionEntered = false;
   const guarded = [], modelAccepted = [], activityAccepted = [];
   const context = {
     // Construct the actual lazy comment dependencies; this Stop-only fixture
@@ -224,7 +224,7 @@ async function main() {
     withWorkspaceIdentity: (...args) => context.conversationWorkspaces.withWorkspace(...args),
     createSessionRevertRoutes, createSessionRevertAuthority, createSessionRevertMutationAuthority, createSessionRevertStopAndDrain,
     mutationAdmission: createSessionRevertAdmission(), getEvidenceStore: async () => { throw Error('fixture evidence unavailable'); },
-    managedProcesses: { manager: null }, worktrees: null, specs: null,
+    managedProcesses: { manager: null }, worktrees: { async validateCurrent() { if (workspaceGate) { admissionEntered = true; await workspaceGate; } } }, specs: null,
     extensionPackages: null, extensionMarket: null,
     /* Stop-only facade fixture; Files/Terminal have their own route suites. */
     files: null, terminal: null,
@@ -251,7 +251,7 @@ async function main() {
     serveClassicExecutionHistory() { assert.fail('Stop test routed to execution history'); },
     createSessionExport: () => null,
     runtime: { getCurrentCwd: () => cwd },
-    sessionChanges: { assertReady: async () => {}, disable: async () => ({ ok: true }) },
+    sessionChanges: { assertReady: async () => { if (captureGate) { admissionEntered = true; await captureGate; } }, disable: async () => ({ ok: true }) },
     piLaunch: { packageDir: () => null },
   };
   for (const name of ['providers', 'projects', 'projectConfig', 'skills', 'mcp', 'mcpNative', 'mcpManager',
@@ -461,6 +461,24 @@ async function main() {
       assert.equal(raw.stopState(), null, 'Pi 确认后应解除屏障');
       assert.deepEqual(pi.writes.map(command => command.type), ['clear_queue', 'abort']);
       assert.deepEqual([guarded.length, modelAccepted.length, activityAccepted.length], before.map(count => count + 1));
+    });
+
+    for (const phase of ['workspace', 'capture']) await check('8b. 完整 Stop 跨过 Classic ' + phase + ' 等待后，旧输入不复活，新输入只发送一次', async () => {
+      resetLog(); const gate = deferred(); admissionEntered = false;
+      if (phase === 'workspace') workspaceGate = gate.promise; else captureGate = gate.promise;
+      const input = { type: 'prompt', message: 'KEEP_AFTER_STOP_' + phase };
+      let waiting;
+      try {
+        waiting = post(input); await waitFor('异步准入已进入', () => admissionEntered);
+        pi.state.abortMode = 'respond'; const stopped = await post({ type: 'abort' });
+        assert.equal(stopped.status, 200); assert.equal(raw.stopState(), null);
+        workspaceGate = captureGate = null; gate.resolve();
+        const rejected = await waiting; assert.equal(rejected.status, 503); assert.equal(rejected.body.code, 'stale_runtime');
+        assert.equal(pi.writes.filter(cmd => cmd.message === input.message).length, 0);
+        const fresh = await post(input); assert.equal(fresh.status, 200);
+        assert.equal(pi.writes.filter(cmd => cmd.message === input.message).length, 1);
+        assert.equal((await post({ type: 'abort' })).status, 200);
+      } finally { workspaceGate = captureGate = null; gate.resolve(); await waiting; }
     });
 
     /* 放在最后：它真的会把 bridge 打换代，之后的用例不再依赖这颗 child。 */

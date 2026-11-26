@@ -179,8 +179,32 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   const activity = createPiActivity(), generation = createModelGeneration(), approvals = new Map();
   const executionTools = createExecutionToolProjection();
   let rpc, disposed = false, cleanup = false, disposal = null;
+  function captureGuard(sessionId) {
+    const state = rpc.getState();
+    return {owner:{...context.getOwner()},sessionId,cwd:context.cwd,bridgeInstance:state.bridgeInstance,bridgeRun:state.bridgeRun,pid:state.pid,
+      sessionEpoch:rpc.providerSessionEpoch()};
+  }
+  function guardCurrent(witness, changing = false) {
+    if (!witness || disposed || !context.isCurrent() || witness.cwd !== context.cwd) return false;
+    const state = rpc.getState(), owner = context.getOwner();
+    return ['starting','ready'].includes(state.state) && state.piRunning && !state.stop?.pending && rpc.providerSessionChanging() === changing
+      && state.bridgeInstance === witness.bridgeInstance && state.bridgeRun === witness.bridgeRun && state.pid === witness.pid && rpc.providerSessionEpoch() === witness.sessionEpoch
+      && (owner.sessionId === null || owner.sessionId === witness.sessionId)
+      && Object.entries(witness.owner).every(([key,value]) => key === 'sessionId' && value === null
+        ? owner.sessionId === null || owner.sessionId === witness.sessionId : owner[key] === value);
+  }
+  function guardAdvance(previous, witness) {
+    // Runtime owners are authoritative (unlike Classic's readback cache). Do not
+    // erase or rebind a known owner merely because Pi changed native sessions.
+    return Boolean(previous && witness && witness.sessionEpoch > previous.sessionEpoch
+      && previous.sessionId === witness.sessionId && previous.cwd === witness.cwd
+      && previous.bridgeInstance === witness.bridgeInstance && previous.bridgeRun === witness.bridgeRun && previous.pid === witness.pid
+      && Object.entries(previous.owner).every(([key,value]) => key === 'sessionId' && value === null
+        ? witness.owner.sessionId === null || witness.owner.sessionId === witness.sessionId : witness.owner[key] === value));
+  }
   const toolGuard = toolScheduler ? createSessionToolBridge({scheduler:toolScheduler,launch,getCwd:()=>context.cwd,getRoot:()=>context.workspace.root,
-    readState:()=>rpc.request({type:'get_state'}),onEvent:emit,audit:candidateAudit}) : null;
+    readState:()=>rpc.request({type:'get_state'},{timeoutMs:1000,strict:true}),capture:captureGuard,isCurrent:guardCurrent,
+    canRevalidate:(previous,witness) => guardAdvance(previous,witness) && guardCurrent(witness),onEvent:emit,audit:candidateAudit}) : null;
   const planBridge = createPlanBridge();
   const editLaunch = createMessageEditLaunch();
   const messageEdit = createMessageEditService({ publish: event => emit(event) });
@@ -228,12 +252,44 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
         event.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? readModelsConfig() : null)), executionTools.observe(event)));
     },
   });
+  // Admission may follow open() before asynchronous launch preparation even
+  // installs the guard. Wait only for this child's control-plane startup, never
+  // for its model turn; source capability and native hello remain mandatory.
+  async function assertToolGuardReady() {
+    const expected = { ...context.getOwner() }, guardRevision = toolGuard?.revision();
+    const current = () => {
+      const owner = context.getOwner();
+      return !disposed && context.isCurrent() && guardRevision === toolGuard?.revision() && Object.entries(expected).every(([key, value]) =>
+        key === 'sessionId' && value === null || owner[key] === value);
+    };
+    const deadline = Date.now() + 30000;
+    while (current() && Date.now() < deadline && (rpc.getState().state === 'starting'
+      || rpc.getState().state === 'ready' && !context.getOwner().sessionId)) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    if (!current()) throw fail('stale_runtime');
+    if (!toolGuard || rpc.getState().state !== 'ready') throw fail('tool_guard_unavailable');
+    const proof = await toolGuard.assertReady();
+    if (!current() || typeof proof !== 'function' || !proof()) throw fail('stale_runtime');
+    if (!toolGuard.ready(context.cwd, context.getOwner().sessionId)) throw fail('tool_guard_unavailable');
+    const proven = captureGuard(context.getOwner().sessionId);
+    return () => proof() && guardRevision === toolGuard.revision() && guardCurrent(proven) && rpc.getState().state === 'ready'
+      && toolGuard.ready(context.cwd, proven.sessionId);
+  }
   return {
+    assertToolGuardReady,
+    captureCommandGuard: rpc.captureCommandGuard,
     providerLaunch: rpc.providerLaunch,
     providerLaunchCurrent: witness => witness?.binding.identity === launch.identityKey(),
     providerRead: type => rpc.request({ type }, { timeoutMs: 3000, strict: true }),
     providerSession: (state, identity) => runtimeSessionWitness(state, sessions.resolveByUuid, identity),
-    start: () => resumeFile ? rpc.restart({ sessionPath: resumeFile }) : rpc.start(),
+    start: async () => {
+      if (resumeFile) return rpc.restart({ sessionPath: resumeFile });
+      const result = await rpc.start();
+      /* 新建会话的 HTTP start 等待这里；rpc.start() 对 spawn 失败给出结构化
+       * 结果，不能让它继续以「已启动」返回。历史恢复仍走事件推进。 */
+      if (result?.ok === false && result.code === 'runtime_start_failed') throw fail('runtime_start_failed');
+    },
     executionBranch: (scope, branchEpoch, detailTarget, onVerifiedPath) => readExecutionBranch({
       scope, branchEpoch, detailTarget, onVerifiedPath,
       readState: () => rpc.request({ type: 'get_state' }, { timeoutMs: 3000, strict: true }),
@@ -254,13 +310,16 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     },
     async send(cmd) {
       if (disposed || !context.isCurrent()) throw fail('stale_runtime');
+      const admissionGuard = rpc.captureCommandGuard(cmd);
+      let guardProof = null;
       if (context.workspace?.workspaceId?.startsWith('project-') && ['prompt','steer','follow_up'].includes(cmd.type)) {
         if (!toolGuard) throw fail('tool_guard_unavailable');
-        await toolGuard.assertReady();
+        guardProof = await assertToolGuardReady();
       }
       if (changes && cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable') return changes.disable();
       if (['prompt', 'steer', 'follow_up'].includes(cmd.type) && !(cmd.type === 'prompt' && cmd.message?.trim() === '/gui-capture disable')) await changes?.assertReady();
-      if (disposed || !context.isCurrent()) throw fail('stale_runtime');
+      if (disposed || !context.isCurrent() || guardProof && !guardProof()) throw fail('stale_runtime');
+      admissionGuard?.();
       cmd = { ...cmd, id: typeof cmd.id === 'string' ? cmd.id : randomUUID() };
       if (cmd.type === 'extension_ui_response') {
         if (!approvals.has(cmd.id)) throw fail('stale_approval');
@@ -283,14 +342,18 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       if (disposed || !context.isCurrent()) return { ok: false, code: 'stale_runtime', unknown: true };
       const { __messageEditNav, ...wire } = cmd || {};
       const nav = __messageEditNav === true;
+      const admissionGuard = nav ? null : rpc.captureCommandGuard(wire);
+      let guardProof = null;
       /* 导航命令只是移动 leaf，不开 run；真正的重发 prompt 必须走与普通
        * prompt 相同的工具闸门、变更采集闸门与互斥写入闸门，不能借编辑通道
        * 绕过权限/审批或与文件撤销并发。 */
       try {
         if (!nav && wire?.type === 'prompt') {
-          if (context.workspace?.workspaceId?.startsWith('project-') && toolGuard) await toolGuard.assertReady();
+          if (context.workspace?.workspaceId?.startsWith('project-') && toolGuard) guardProof = await assertToolGuardReady();
           if (context.workspace?.workspaceId?.startsWith('project-') && !toolGuard) return { ok: false, code: 'tool_guard_unavailable' };
           await changes?.assertReady?.();
+          if (disposed || !context.isCurrent() || guardProof && !guardProof()) throw fail('stale_runtime');
+          admissionGuard?.();
           generation.guardCommand(wire);
           mutationAdmission?.assertAllowed(context.cwd);
         }

@@ -1,0 +1,444 @@
+{
+  "phase": "owner-probe",
+  "platform": "win32",
+  "startedAt": "2026-11-26T05:12:19.944Z",
+  "checks": [
+    {
+      "name": "production main uses normal sandbox, context isolation and no nodeIntegration",
+      "pass": true
+    },
+    {
+      "name": "production preload is active",
+      "pass": true
+    },
+    {
+      "name": "model-free probe opens ordinary project runtime",
+      "pass": true,
+      "details": {
+        "code": null
+      }
+    },
+    {
+      "name": "probe real Pi is idle before restart",
+      "pass": true
+    },
+    {
+      "name": "restart probe sends no prompt or model generation",
+      "pass": true
+    },
+    {
+      "name": "ordinary project restart accepted in model-free probe",
+      "pass": false,
+      "details": {
+        "ok": false,
+        "code": "unknown_workspace"
+      }
+    },
+    {
+      "name": "runner completed model_free_restart_probe",
+      "pass": false,
+      "details": {
+        "stage": "model_free_restart_probe",
+        "name": "Error",
+        "code": "check_failed"
+      }
+    }
+  ],
+  "shots": [
+    {
+      "file": "failure-model_free_restart_probe.png",
+      "metrics": {
+        "width": 1320,
+        "height": 820,
+        "dpr": 1.5,
+        "theme": "dark",
+        "scrollWidth": 1320
+      },
+      "redaction": "TEMP absolute text only; original pixels otherwise"
+    }
+  ],
+  "facts": {
+    "lastStatus": {
+      "state": "ready",
+      "hasProject": true,
+      "legacyOwner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "repoId": null,
+        "workspaceId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "5b32368b-f3f9-402f-b6e8-eb717107086c",
+        "runtimeGeneration": "1",
+        "sessionId": "01a21640-b6ea-7565-becd-b59fbef77863"
+      },
+      "error": null
+    },
+    "probeOwner": {
+      "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+      "projectId": "86700f48a7c0ab852750a994",
+      "repoId": "86700f48a7c0ab852750a994",
+      "workspaceId": "project-86700f48a7c0ab852750a994",
+      "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+      "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+      "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+      "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+      "sessionId": "01a21644-fa38-76a7-b14e-963b27befff8"
+    },
+    "restartResponse": {
+      "ok": false,
+      "code": "unknown_workspace"
+    },
+    "afterRestart": {
+      "totalCount": 1,
+      "items": [
+        {
+          "conversationId": "4b905964-b3ab-4c77-9c8e-6e7b64a3d5b5",
+          "owner": null,
+          "lifecycle": "dormant"
+        },
+        {
+          "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+          "owner": null,
+          "lifecycle": "dormant"
+        },
+        {
+          "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+          "owner": null,
+          "lifecycle": "dormant"
+        }
+      ]
+    },
+    "failureSnapshot": {
+      "totalCount": 1,
+      "hardLimit": 3,
+      "items": [
+        {
+          "conversationId": "4b905964-b3ab-4c77-9c8e-6e7b64a3d5b5",
+          "owner": null,
+          "lifecycle": "dormant",
+          "activity": "idle",
+          "error": null
+        },
+        {
+          "conversationId": "f61be3f1-0303-45c1-82ed-390ab584e6f2",
+          "owner": null,
+          "lifecycle": "dormant",
+          "activity": "idle",
+          "error": null
+        },
+        {
+          "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+          "owner": null,
+          "lifecycle": "dormant",
+          "activity": "idle",
+          "error": null
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "at": 1795669942545,
+      "seq": 1,
+      "eventSequence": null,
+      "kind": "bridge_status",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "repoId": null,
+        "workspaceId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "5b32368b-f3f9-402f-b6e8-eb717107086c",
+        "runtimeGeneration": "1",
+        "sessionId": null
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669944210,
+      "seq": 2,
+      "eventSequence": null,
+      "kind": "bridge_status",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "repoId": null,
+        "workspaceId": "700e01626ff45c8fdc921c1b034fd115bb4bd9d73945218c15060e1bac482b15",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "5b32368b-f3f9-402f-b6e8-eb717107086c",
+        "runtimeGeneration": "1",
+        "sessionId": null
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669947346,
+      "seq": 10,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "86700f48a7c0ab852750a994",
+        "repoId": "86700f48a7c0ab852750a994",
+        "workspaceId": "project-86700f48a7c0ab852750a994",
+        "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+        "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+        "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+        "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "starting",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669947375,
+      "seq": 11,
+      "eventSequence": 1,
+      "kind": "runtime_event",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "86700f48a7c0ab852750a994",
+        "repoId": "86700f48a7c0ab852750a994",
+        "workspaceId": "project-86700f48a7c0ab852750a994",
+        "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+        "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+        "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+        "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669947375,
+      "seq": 12,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "86700f48a7c0ab852750a994",
+        "repoId": "86700f48a7c0ab852750a994",
+        "workspaceId": "project-86700f48a7c0ab852750a994",
+        "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+        "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+        "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+        "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "starting",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669949139,
+      "seq": 13,
+      "eventSequence": 2,
+      "kind": "runtime_event",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "86700f48a7c0ab852750a994",
+        "repoId": "86700f48a7c0ab852750a994",
+        "workspaceId": "project-86700f48a7c0ab852750a994",
+        "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+        "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+        "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+        "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669949139,
+      "seq": 14,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "86700f48a7c0ab852750a994",
+        "repoId": "86700f48a7c0ab852750a994",
+        "workspaceId": "project-86700f48a7c0ab852750a994",
+        "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+        "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+        "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+        "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+        "sessionId": null
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669949156,
+      "seq": 15,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "86700f48a7c0ab852750a994",
+        "repoId": "86700f48a7c0ab852750a994",
+        "workspaceId": "project-86700f48a7c0ab852750a994",
+        "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+        "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+        "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+        "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+        "sessionId": "01a21644-fa38-76a7-b14e-963b27befff8"
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669949156,
+      "seq": 16,
+      "eventSequence": null,
+      "kind": "runtime_state",
+      "type": "runtime_state",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "86700f48a7c0ab852750a994",
+        "repoId": "86700f48a7c0ab852750a994",
+        "workspaceId": "project-86700f48a7c0ab852750a994",
+        "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+        "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+        "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+        "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+        "sessionId": "01a21644-fa38-76a7-b14e-963b27befff8"
+      },
+      "bridgeRun": null,
+      "lifecycle": "ready",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795669949534,
+      "seq": 17,
+      "eventSequence": null,
+      "kind": "runtime_closed",
+      "type": "runtime_closed",
+      "owner": {
+        "backendInstance": "991d1517-7320-492f-80dc-21cad283eb1d",
+        "projectId": "86700f48a7c0ab852750a994",
+        "repoId": "86700f48a7c0ab852750a994",
+        "workspaceId": "project-86700f48a7c0ab852750a994",
+        "workspaceEpoch": "6ac380c39cfdbb0ddf7da840",
+        "conversationId": "e410e79b-bfae-49c7-8e2d-ca4f4dce4923",
+        "runtimeId": "e886db81-781e-4338-acb2-3b2937a94148",
+        "runtimeGeneration": "0d94d463-b3bc-4037-bfd8-b6e1ebb14e9e",
+        "sessionId": "01a21644-fa38-76a7-b14e-963b27befff8"
+      },
+      "bridgeRun": null,
+      "lifecycle": "dormant",
+      "activity": "idle",
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    }
+  ],
+  "electron": "44.4.3",
+  "stage": "model_free_restart_probe",
+  "failure": {
+    "stage": "model_free_restart_probe",
+    "name": "Error",
+    "code": "check_failed"
+  },
+  "endedAt": "2026-11-26T05:12:29.871Z",
+  "failed": 2,
+  "unverified": [
+    "long-duration stress/real OS power loss",
+    "non-Windows platforms",
+    "other provider/model combinations",
+    "full canonical and independent security review (owned by main agent)",
+    "all stages following model_free_restart_probe"
+  ],
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "stdoutBytes": 451,
+  "stderrBytes": 0
+}

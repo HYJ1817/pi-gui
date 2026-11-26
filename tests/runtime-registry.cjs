@@ -52,9 +52,14 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     const b = await start('B'); await tick(); const bo = registry.snapshot().items.find(e => e.owner.workspaceId === 'B').owner;
     await check('A/B child 与 immutable cwd 独立', () => { assert.equal(spawnCount, 2); assert.notEqual(ao.runtimeId, bo.runtimeId); assert.notEqual(contexts.get(ao.conversationId).cwd, contexts.get(bo.conversationId).cwd); });
     await check('并行 writer 不共用工作区', () => reject(() => start('A'), 'workspace_in_use'));
-    await check('默认 2 个上限', () => reject(() => start('C'), 'runtime_limit'));
-    const c = await start('C', { allowThird: true }); await tick();
-    await check('第三条必须显式允许且硬上限 3', () => { assert.equal(registry.snapshot().liveCount, 3); });
+    const c = await start('C'); await tick();
+    await check('第三个 Runtime 无需额外许可且快照不声明伪上限', () => {
+      const state = registry.snapshot(); assert.equal(state.liveCount, 3);
+      assert.equal(Object.hasOwn(state, 'limit'), false); assert.equal(Object.hasOwn(state, 'hardLimit'), false);
+    });
+    await check('快照展示实际 Runtime 加 Classic 外部计数', () => {
+      external = 40; assert.equal(registry.snapshot().totalCount, 43); external = 0;
+    });
     await check('命令缺 owner 拒绝', () => reject(() => registry.command(null, { type: 'prompt', message: 'x' }), 'stale_runtime'));
     await check('旧 generation 拒绝', () => reject(() => registry.command({ ...ao, runtimeGeneration: 'old' }, { type: 'prompt', message: 'x' }), 'stale_runtime'));
     await registry.command(ao, { type: 'prompt', id: 'same', message: 'only A' });
@@ -101,6 +106,24 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         adapter.abortAndWait = original;
       }
     });
+    await check('工作区验证等待跨过完整 Stop 后旧 Runtime 输入不能复活', async () => {
+      const adapter = adapters[0], originalAbort = adapter.abortAndWait; let stopped = 0, release;
+      adapter.captureCommandGuard = cmd => {
+        if (!['prompt', 'steer', 'follow_up'].includes(cmd.type)) return null;
+        const expected = stopped; return () => { if (expected !== stopped) throw Object.assign(Error('stale_runtime'), { code: 'stale_runtime' }); };
+      };
+      adapter.abortAndWait = async cmd => { stopped++; return originalAbort(cmd); };
+      hold = new Promise(resolve => { release = resolve; });
+      const input = { type: 'prompt', message: 'KEEP_REGISTRY_DRAFT' }, copy = JSON.stringify(input);
+      const waiting = registry.command(ao, input);
+      try {
+        await tick(); await registry.command(ao, { type: 'abort' }); hold = null; release();
+        await reject(() => waiting, 'stale_runtime'); assert.equal(JSON.stringify(input), copy);
+        assert.equal(adapter.commands.filter(cmd => cmd.message === input.message).length, 0);
+        await registry.command(ao, input); assert.equal(adapter.commands.filter(cmd => cmd.message === input.message).length, 1);
+        await registry.command(ao, { type: 'abort' });
+      } finally { hold = null; release(); adapter.abortAndWait = originalAbort; delete adapter.captureCommandGuard; }
+    });
     await check('不能用 switch_session 改写固定 conversation', () => reject(() => registry.command(ao, { type: 'switch_session', sessionPath: '/tmp/unknown' }), 'invalid_command'));
     await check('Focus 只选视图，不 spawn/stop', async () => { await registry.focus(bo); await registry.focus(ao); assert.equal(spawnCount, 3); assert.equal(adapters[1].commands.length, 1); });
     await check('换焦点时旧会话也被广播（前端按 item.focused 画，否则会两行同时高亮）', async () => {
@@ -129,7 +152,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     await check('异步 preflight 后再次校验，迟到命令不执行', () => reject(() => stale, 'stale_runtime'));
     const before = events.length; adapters[0].emit({ type: 'stop_state', pending: false });
     await check('close 后 late callback 不发布', () => assert.equal(events.length, before));
-    const restarted = await registry.resume(a.conversationId, { allowThird: true }); await tick();
+    const restarted = await registry.resume(a.conversationId); await tick();
     await check('恢复 conversation 生新 generation，旧 scope拒绝', async () => { assert.notEqual(restarted.owner.runtimeGeneration, ao.runtimeGeneration); await reject(() => registry.command(ao, { type: 'abort' }), 'stale_runtime'); });
 
     /* ---------- 编辑事务互斥：只锁目标 Runtime ---------- */
@@ -314,7 +337,11 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     blocked = true;
     await check('维护禁止新 child', () => reject(() => registry.resume(b.conversationId), 'maintenance'));
     blocked = false; external = 3;
-    await check('预算包含外部主 child/CLI', () => reject(() => registry.resume(b.conversationId, { allowThird: true }), 'runtime_limit'));
+    await check('外部主 child/CLI 数量不阻止恢复', async () => {
+      await registry.resume(b.conversationId); await tick();
+      assert.equal(registry.snapshot().liveCount, 1); assert.equal(registry.snapshot().totalCount, 4);
+      await registry.close(registry.getOwner(b.conversationId));
+    });
     external = 0;
     workspaces.set('B', { ...workspaces.get('B'), workspaceEpoch: 'replaced' });
     await check('重发现 external replacement epoch不继承', () => reject(() => registry.resume(b.conversationId), 'stale_workspace'));
@@ -393,6 +420,108 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         admitted = { ...f.workspace };await f.instance.resume(first.conversationId);await tick();assert.equal(f.children.length, 1);
       } finally { await f.instance.dispose(); }
     });
+    /* Many dormant records must not become an admission or aggregate-byte cap.
+     * These adapters are native-shaped mocks; no per-record process is spawned. */
+    {
+      const capacityDir = path.join(dir, 'unbounded-records'), children = [];
+      const w = { ...workspaces.get('A'), branch: Array(24).fill('mock-topic-'.repeat(16)).join('/') };
+      let failFactory = false, failStart = false, sendGate = null;
+      const capacityOptions = { dataDir: capacityDir, externalCount: () => 20,
+        resolveWorkspace: async () => ({ ...w }), validateWorkspace: async () => {}, sharedAdmission: async () => () => true,
+        factory: async (context, emit) => {
+          if (failFactory) throw Object.assign(Error('fixture'), { code: 'fixture_factory_failure' });
+          let disposed = false;
+          const rejectStart = failStart, child = { context, emit, commands: [], disposeCalls: 0,
+            async start() {
+              if (rejectStart) throw Object.assign(Error('fixture'), { code: 'fixture_start_failure' });
+              emit({ type: 'bridge_status', state: 'ready', bridgeRun: 1 });
+            },
+            request: async () => ({ sessionId: context.sessionId || 'native-' + context.owner.conversationId }),
+            getState: () => ({ state: 'ready', stop: null }),
+            async send(command) { child.commands.push(command); if (sendGate) await sendGate; },
+            abortAndWait: async () => ({ ok: true }),
+            async dispose() { child.disposeCalls++; disposed = true; }, cleanupConfirmed: () => disposed };
+          children.push(child); return child;
+        } };
+      let many = createRuntimeRegistry(capacityOptions);
+      const ids = [];
+      try {
+        await check('创建超过 256 条普通与 worktree 会话记录且不逐条起子进程', async () => {
+          for (let i = 0; i < 270; i++) {
+            w.cwd = w.root = path.join(capacityDir, 'workspace-' + i); fs.mkdirSync(w.root);
+            const result = i % 2 === 0 ? await many.start({ id: 'A', epoch: 'epoch-A' })
+              : await many.openProjectSession({ workspace: { ...w, workspaceId: 'project-mock' }, requestId: require('node:crypto').randomUUID() });
+            await tick(); ids.push(result.conversationId); await many.close(many.getOwner(result.conversationId));
+          }
+          assert.equal(many.snapshot().items.length, 270); assert.equal(many.liveCount(), 0);
+          const saved = fs.readFileSync(path.join(capacityDir, 'conversations.json'));
+          assert.ok(saved.length > 1024 * 1024); assert.equal(JSON.parse(saved).items.length, 270);
+          console.log('    capacity manifest bytes=' + saved.length + ', records=270, real children=0');
+        });
+        await check('大 manifest 完整读回为 dormant，不自动启动也不丢记录', async () => {
+          const previous = many.snapshot().backendInstance; await many.dispose(); many = createRuntimeRegistry(capacityOptions);
+          assert.equal(many.snapshot().ok, true); assert.equal(many.liveCount(), 0);
+          assert.deepEqual(many.snapshot().items.map(item => item.conversationId), ids);
+          assert.notEqual(many.snapshot().backendInstance, previous); assert.equal(children.length, 270);
+          for (const id of ids) assert.ok(many.historyTarget(id));
+        });
+        await check('五个 Runtime 在多个既有会话及 Classic 计数下同时恢复', async () => {
+          for (const id of ids.slice(0, 5)) await many.resume(id);
+          await tick(); assert.equal(many.liveCount(), 5); assert.equal(many.snapshot().totalCount, 25);
+          assert.equal(new Set(ids.slice(0, 5).map(id => many.getOwner(id).runtimeId)).size, 5);
+        });
+        await check('五个模型命令都先进入各自 adapter，不经全局执行 FIFO', async () => {
+          const release = Promise.withResolvers(); sendGate = release.promise;
+          const sends = ids.slice(0, 5).map(id => many.command(many.getOwner(id), { type: 'prompt', id: 'same', message: 'overlap' }));
+          try {
+            await tick(); assert.equal(children.slice(-5).filter(child => child.commands.length === 1).length, 5);
+            assert.equal(many.runningCount(), 5);
+          } finally { sendGate = null; release.resolve(); await Promise.all(sends); }
+        });
+        await check('已有多个执行线时重启只换目标 owner，其他回合保持运行', async () => {
+          const peers = ids.slice(1, 5).map(id => many.getOwner(id)), old = many.getOwner(ids[0]);
+          await many.restart(old); await tick(); const current = many.getOwner(ids[0]);
+          assert.notEqual(current.runtimeId, old.runtimeId); assert.equal(current.sessionId, old.sessionId);
+          assert.equal(many.liveCount(), 5); assert.equal(many.runningCount(), 4);
+          assert.deepEqual(ids.slice(1, 5).map(id => many.getOwner(id)), peers);
+          await reject(() => many.command(old, { type: 'abort' }), 'stale_runtime');
+        });
+        await check('单个 factory 或异步 start 失败只清理本次资源，不影响五个已有会话', async () => {
+          const peers = ids.slice(0, 5).map(id => many.getOwner(id)), before = many.snapshot().items.length;
+          failFactory = true;
+          await reject(() => many.start({ id: 'A', epoch: 'epoch-A' }), 'fixture_factory_failure'); failFactory = false;
+          assert.equal(many.liveCount(), 5); assert.equal(many.snapshot().items.length, before);
+          // Use another worktree root to exercise startup, not its exclusive lease.
+          const otherRoot = path.join(dir, 'start-failure-root'); fs.mkdirSync(otherRoot); const originalRoot = w.root; w.root = otherRoot;
+          failStart = true;
+          try { await reject(() => many.start({ id: 'A', epoch: 'epoch-A' }), 'fixture_start_failure'); }
+          finally { failStart = false; w.root = originalRoot; }
+          assert.equal(children.at(-1).disposeCalls, 1); assert.equal(many.inUse(otherRoot), false);
+          assert.equal(many.liveCount(), 5); assert.equal(many.snapshot().items.length, before);
+          assert.deepEqual(ids.slice(0, 5).map(id => many.getOwner(id)), peers);
+          await many.read(peers[1], { type: 'get_state' }); await many.command(peers[1], { type: 'abort' });
+        });
+      } finally { failFactory = false; failStart = false; await many.dispose(); }
+      await check('大记录集仍拒绝坏 schema、重复身份与 manifest 链接，保留原文件', async () => {
+        const file = path.join(capacityDir, 'conversations.json'), original = fs.readFileSync(file);
+        const saved = JSON.parse(original);
+        for (const mutate of [value => { value.items[269].unexpected = true; }, value => { value.items[269].conversationId = value.items[0].conversationId; }]) {
+          const value = structuredClone(saved); mutate(value); const raw = JSON.stringify(value); fs.writeFileSync(file, raw);
+          const invalid = createRuntimeRegistry(capacityOptions);
+          try {
+            assert.equal(invalid.snapshot().ok, false);
+            await reject(() => invalid.start({ id: 'A', epoch: 'epoch-A' }), 'registry_unavailable');
+            assert.equal(fs.readFileSync(file, 'utf8'), raw);
+          } finally { await invalid.dispose(); }
+        }
+        fs.writeFileSync(file, original);
+        const linkedDir = path.join(dir, 'linked-manifest'); fs.mkdirSync(linkedDir);
+        fs.symlinkSync(capacityDir, path.join(linkedDir, 'conversations.json'), process.platform === 'win32' ? 'junction' : 'dir');
+        const linked = createRuntimeRegistry({ ...capacityOptions, dataDir: linkedDir });
+        try { assert.equal(linked.snapshot().ok, false); assert.deepEqual(fs.readFileSync(file), original); }
+        finally { await linked.dispose(); }
+      });
+    }
     const failedTurn = controlled('generation-failure');
     try {
       const initial = await failedTurn.instance.start({ id: 'A', epoch: 'epoch-A' });await tick();
@@ -471,6 +600,29 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         process.off('unhandledRejection', onUnhandled);
         await f?.dispose();
       }
+    }
+    /* 回归：HTTP start 等待自己的 adapter.start()，但不能占住全局生命周期队列；
+     * 无关工作区的启动不得排在慢启动后面。 */
+    {
+      const gates = new Map(), slowDir = path.join(dir, 'slow-start'); fs.mkdirSync(slowDir);
+      const slow = createRuntimeRegistry({ dataDir: slowDir, publish: () => {},
+        resolveWorkspace: async args => { const cwd = path.join(dir, args.id); fs.mkdirSync(cwd, { recursive: true });
+          return { projectId: 'p', repoId: 'r', workspaceId: args.id, workspaceEpoch: 'epoch-' + args.id, cwd, root: cwd, branch: args.id }; },
+        validateWorkspace: async () => {},
+        factory: async (context, emit) => ({ start: async () => { const gate = gates.get(context.workspace.workspaceId); if (gate) await gate;
+            emit({ type: 'bridge_status', state: 'ready', bridgeRun: 1 }); },
+          request: async () => ({ sessionId: 'native-' + context.workspace.workspaceId }), getState: () => ({ state: 'ready', stop: null }), send() {},
+          dispose: async () => {}, cleanupConfirmed: () => true }) });
+      const gate = Promise.withResolvers(); gates.set('slow-A', gate.promise);
+      try {
+        const pending = slow.start({ id: 'slow-A', epoch: 'epoch-slow-A' }); await tick();
+        const fast = await Promise.race([slow.start({ id: 'fast-B', epoch: 'epoch-fast-B' }),
+          new Promise((_, rejectSlow) => setTimeout(() => rejectSlow(Error('start_blocked_by_unrelated_slow_start')), 5000))]);
+        await check('慢启动只占自己的 HTTP 等待，无关 Runtime 仍可完成登记并启动', () => {
+          assert.equal(slow.liveCount(), 2); assert.ok(slow.getOwner(fast.conversationId));
+        });
+        gate.resolve(); await pending;
+      } finally { gate.resolve(); await slow.dispose(); }
     }
   } finally { await registry.dispose(); fs.rmSync(dir, { recursive: true, force: true }); }
   console.log(`Runtime registry: ${checks}/${checks}`);

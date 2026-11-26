@@ -251,5 +251,30 @@ function requestFor({ method = 'POST', url = '/api/message-edit', body = null, o
     assert.equal(restarts, 1);
   });
 
+  await pass('completed Stop during an awaited Classic edit gate rejects the old prompt, not the next explicit input', async () => {
+    const entered = Promise.withResolvers(), release = Promise.withResolvers();
+    let stopGeneration = 0, hold = true; const sent = [];
+    const fixture = createMessageEditRoutes({
+      service: { async resend(io, body) { return io.request({ type: 'prompt', message: body.text }); } },
+      getOwner: () => OWNER, getSessionId: () => 'native-1', getBridgeRun: () => 1,
+      getWorkspaceGeneration: () => 1, getCwd: () => '/fixture/project',
+      captureCommandGuard: () => { const expected = stopGeneration; return () => {
+        if (expected !== stopGeneration) throw Object.assign(Error('stale_runtime'), { code: 'stale_runtime' });
+      }; },
+      beforePrompt: async () => { if (hold) { entered.resolve(); await release.promise; } },
+      request: async cmd => { sent.push(cmd); return { ok: true, data: cmd.type === 'get_state' ? { sessionId: 'native-1' } : { disposition: 'started' } }; },
+    });
+    const hit = async text => {
+      const req = requestFor({ body: { action: 'resend', text, requestId: 'stop-gate-fixture' } }), res = response();
+      await fixture.handle(req, res, new URL('/api/message-edit', 'http://localhost')); return res;
+    };
+    const input = 'KEEP_EDIT_DRAFT', waiting = hit(input); await entered.promise;
+    stopGeneration++; hold = false; release.resolve();
+    const rejected = await waiting; assert.equal(rejected.code, 409); assert.equal(rejected.body.code, 'stale_runtime');
+    assert.equal(sent.filter(cmd => cmd.type === 'prompt').length, 0);
+    const fresh = await hit(input); assert.equal(fresh.code, 200);
+    assert.deepEqual(sent.filter(cmd => cmd.type === 'prompt').map(cmd => cmd.message), [input]);
+  });
+
   console.log(`Message edit HTTP: ${checks}/${checks}`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

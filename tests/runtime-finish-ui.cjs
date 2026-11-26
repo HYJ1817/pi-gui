@@ -135,7 +135,7 @@ const { JSDOM } = require('jsdom');
   resolveHistory({ ok: true, locator: locator('A'), messages: [{ role: 'user', text: 'first' }, { role: 'assistant', text: 'reply' }, { role: 'user', text: 'matched second' }], truncated: false }); await history;
   ok('search opens matching explicit native history', host.querySelector('.rtc-output').textContent.includes('matched second'));
   ok('history match identifies target user turn', host.querySelector('[data-history-user-index="1"]').textContent.includes('matched second'));
-  ok('live readonly history adds no launch request', requests.length === 1 && host.querySelector('.rtc-state').textContent.includes('不增加运行名额'));
+  ok('live readonly history adds no launch request', requests.length === 1 && host.querySelector('.rtc-state').textContent.includes('查看记录不会启动新运行') && !host.querySelector('.rtc-state').textContent.includes('名额'));
   ok('readonly history disables model mutation and prompt', select().disabled && input().disabled);
   ok('live readonly offers return without resume', !button('返回实时会话').hidden && button('恢复会话').disabled);
   button('返回实时会话').click(); ok('return live preserves runtime output', !input().disabled && host.querySelector('.rtc-output').textContent.includes('...'));

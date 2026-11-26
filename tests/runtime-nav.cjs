@@ -172,12 +172,12 @@ const { JSDOM } = require('jsdom');
   const btn = text => [...card().querySelectorAll('button')].find(b => b.textContent === text);
   const branchInput = () => card().querySelector('input');
 
-  function mockApi({ prepare, create, start } = {}) {
+  function mockApi({ prepare, create, start, totalCount = 0, legacyLimits = false } = {}) {
     const calls = [];
     global.fetch = async (url, opts = {}) => ({ json: async () => {
       const u = String(url);
       if (u.startsWith('/api/worktrees') && !opts.body) return { ok: true, projectId: 'project', contextGeneration: 7, items: [] };
-      if (u.startsWith('/api/runtime-sessions') && !opts.body) return { ok: true, backendInstance: 'backend', items };
+      if (u.startsWith('/api/runtime-sessions') && !opts.body) return { ok: true, backendInstance: 'backend', items, liveCount: totalCount, totalCount, ...(legacyLimits ? { limit: 2, hardLimit: 3 } : {}) };
       const body = JSON.parse(opts.body); calls.push({ url: u, body });
       if (u.startsWith('/api/worktrees')) {
         if (body.action === 'prepare') return prepare ? prepare(body) : { ok: true, nonce: 'nonce-1' };
@@ -250,12 +250,29 @@ const { JSDOM } = require('jsdom');
   for (let n = 0; n < 40; n++) await new Promise(r => setImmediate(r));
   ok('create 失败后不 start', calls.map(c => c.body.action).join(',') === 'prepare,create');
 
-  calls = mockApi({ start: () => ({ ok: false, error: 'runtime_limit' }) });
+  calls = mockApi({ totalCount: 100, start: () => ({ ok: false, error: 'fixture spawn failed', code: 'spawn_failed' }) });
   await openCreateDialog();
   btn('创建并启动').click();
   for (let n = 0; n < 80 && !calls.some(c => c.body.action === 'start'); n++) await new Promise(r => setImmediate(r));
-  ok('start 失败时如实提示「工作区已创建」，不谎报成功',
-    document.querySelector('#toasts').textContent.includes('工作区已创建'));
+  ok('start 失败时如实提示真实错误及「工作区已创建」，不谎报成功',
+    document.querySelector('#toasts').textContent.includes('工作区已创建')
+    && document.querySelector('#toasts').textContent.includes('fixture spawn failed')
+    && calls.filter(c => c.body.action === 'start').length === 1);
+
+  for (const count of [2, 3, 4, 100]) {
+    calls = mockApi({ totalCount: count, legacyLimits: true });
+    await nav.loadRuntimeNav({ path: '/fixture' }, { parent: list });
+    ok(`${count} 个运行时新建入口不按数量禁用，旧 limit 不参与计数`, !list.querySelector('.pj-runtime-new').disabled
+      && list.querySelector('.runtime-resource-count').textContent === `${count} 个会话正在运行`);
+    await openCreateDialog();
+    btn('创建并启动').click();
+    for (let n = 0; n < 80 && !calls.some(c => c.body.action === 'start'); n++) await new Promise(r => setImmediate(r));
+    const launches = calls.filter(c => c.body.action === 'start');
+    ok(`${count + 1} 个会话直接创建启动一次，不弹确认、不加准入字段`, launches.length === 1
+      && calls.map(c => c.body.action).join(',') === 'prepare,create,start'
+      && JSON.stringify(launches[0].body.args) === '{"id":"ws-new","epoch":"epoch-new"}'
+      && document.querySelector('#confirmLayer').hidden);
+  }
 
   // 某条快照先发现新会话、归属列表尚在读取时，持续 SSE 不得不断废弃前一个读取。
   const { runtimeStore } = await import('../public/runtime-state.js');

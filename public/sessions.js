@@ -80,8 +80,6 @@ export function setRuntimeHistoryHandler(fn) { runtimeHistoryHandler = typeof fn
 
 /** 进行中的会话一次最多列几条，超出折叠（和 Codex 一样给个「展开显示」）。 */
 const COLLAPSED = 6;
-/** 已归档的默认全部展开，但给个上限，免得几百条把侧栏撑爆。 */
-const MAX_ARCHIVED = 50;
 
 function el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -633,10 +631,9 @@ function paintList() {
       }, 'pj-sess-arch-toggle')
     );
     if (archivedOpen) {
-      for (const s of arch.slice(0, MAX_ARCHIVED)) area.append(makeRow(s));
-      if (arch.length > MAX_ARCHIVED) {
-        area.append(el('div', 'pj-sess-hint', `还有 ${arch.length - MAX_ARCHIVED} 条已归档未显示`));
-      }
+      // Archived sessions are still real history; no fixed display cap may make
+      // older records unreachable.
+      for (const s of arch) area.append(makeRow(s));
     }
   }
 }

@@ -1,0 +1,144 @@
+{
+  "sourceFixture": "pi-parallel-live-BAHvF5",
+  "passed": 29,
+  "failed": 2,
+  "fullAcceptance": false,
+  "images": [
+    {
+      "file": "attempt-3-running-C-dark-wide.png",
+      "width": 1980,
+      "height": 1230,
+      "sourceSha256": "7453e448359b29077aa59b66b1aab13a3a34ee26b677d023bddc8f699749da79",
+      "archivedSha256": "625ba97f9cb91b7916f85f8e2f04db67c7e2415519f516586c680d72714c7857",
+      "redactions": [
+        {
+          "rect": [
+            1250,
+            1126,
+            260,
+            34
+          ],
+          "reason": "model/provider picker identity"
+        }
+      ],
+      "outsideRedactionChangedChannels": 0
+    },
+    {
+      "file": "attempt-3-waiting-B-light-narrow.png",
+      "width": 1052,
+      "height": 903,
+      "sourceSha256": "89d8915c087bc54a096e4c3bea0b4030414805671fbac38f662cd72889b63abc",
+      "archivedSha256": "a2c936f09abaacfae09ec21340fdaf0c266812e21be7c53a48bcb7dd448b6501",
+      "redactions": [
+        {
+          "rect": [
+            520,
+            800,
+            250,
+            34
+          ],
+          "reason": "model/provider picker identity"
+        }
+      ],
+      "outsideRedactionChangedChannels": 0
+    },
+    {
+      "file": "attempt-3-running-B-dark-wide.png",
+      "width": 1980,
+      "height": 1230,
+      "sourceSha256": "7337e6a65bd86e1b55de7c15edae0851831d2d23be08f57a0bff33a933052d5a",
+      "archivedSha256": "bd31a3af38538b084faec8fefb7e0631b3fa664553e377728e76cc9f05f1168a",
+      "redactions": [
+        {
+          "rect": [
+            1250,
+            1126,
+            260,
+            34
+          ],
+          "reason": "model/provider picker identity"
+        }
+      ],
+      "outsideRedactionChangedChannels": 0
+    },
+    {
+      "file": "attempt-3-running-C-dark-narrow.png",
+      "width": 1052,
+      "height": 903,
+      "sourceSha256": "1cc08e327112e3abcec045a9db9a6a424af036acc3b22e6d03b5a83c98a1b9ff",
+      "archivedSha256": "1cc08e327112e3abcec045a9db9a6a424af036acc3b22e6d03b5a83c98a1b9ff",
+      "redactions": [],
+      "outsideRedactionChangedChannels": 0
+    },
+    {
+      "file": "attempt-3-running-C-light-wide.png",
+      "width": 1980,
+      "height": 1230,
+      "sourceSha256": "b61a29e49ec0553052ae94939d12ee60baa184a804b71068557140c4af3841de",
+      "archivedSha256": "f4f67a9b2bac7d1a255faadb7a7212755003e05213598458cf42b88f6ee5d8aa",
+      "redactions": [
+        {
+          "rect": [
+            1250,
+            1126,
+            260,
+            34
+          ],
+          "reason": "model/provider picker identity"
+        }
+      ],
+      "outsideRedactionChangedChannels": 0
+    },
+    {
+      "file": "attempt-3-failure-runtime_restart_owner_safety.png",
+      "width": 1980,
+      "height": 1230,
+      "sourceSha256": "20c608ad075f97e4a0e6c68cf45433254eff92836998a0df29a749d97d3aec87",
+      "archivedSha256": "3d4c8fb2e0ac28f6175bfbc0545e126274e00dd276e6bfcc806c52ba93c23ea4",
+      "redactions": [
+        {
+          "rect": [
+            1250,
+            1126,
+            260,
+            34
+          ],
+          "reason": "model/provider picker identity"
+        }
+      ],
+      "outsideRedactionChangedChannels": 0
+    }
+  ],
+  "json": [
+    {
+      "file": "attempt-3-exercise.json",
+      "bytes": 471796,
+      "sha256": "7681efb5ae2ba1fff1672f7bfc3b4cb435074501ea5ecd5df5895f44643685d3"
+    },
+    {
+      "file": "attempt-3-identity.json",
+      "bytes": 1592,
+      "sha256": "99a29d907f72ad8ef2cd2043115a683534976b1fbbe420041bf7000569c6508e"
+    },
+    {
+      "file": "attempt-3-summary.json",
+      "bytes": 2043,
+      "sha256": "92f584fca38683a543b8533e2b7890be935a4a085d9f46214241ef5896497c32"
+    },
+    {
+      "file": "restart-before-fix-owner-probe.json",
+      "bytes": 13706,
+      "sha256": "f43024b4b75736dbc7cf8d1d63480adc9deeeb97ae21abafc06a283276f20ac0"
+    },
+    {
+      "file": "restart-before-fix-owner-probe-identity.json",
+      "bytes": 1630,
+      "sha256": "cc3d9acdfa60a0b87cffd98729f4519cd196eba434aa5b0d467ca1f2c8e7a46b"
+    },
+    {
+      "file": "restart-before-fix-owner-probe-summary.json",
+      "bytes": 2115,
+      "sha256": "1a9db451afbbf5e299d0fe43664a4f93ff8f33e3d902f1a7c9126e4e10150fc7"
+    }
+  ]
+}

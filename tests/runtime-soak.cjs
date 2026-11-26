@@ -36,7 +36,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const mainHead = git(repo, 'rev-parse', 'HEAD');
 
   const dirs = {}, descriptors = {};
-  for (const name of ['A', 'B', 'C', 'D']) {
+  for (const name of ['A', 'B', 'C', 'D', 'E']) {
     const cwd = path.join(root, name); git(repo, 'worktree', 'add', '-b', 'soak-' + name, cwd, 'HEAD');
     dirs[name] = cwd;
     descriptors[name] = { projectId: 'soak-project', repoId: 'soak-repo', workspaceId: 'ws-' + name, workspaceEpoch: 'epoch-1', cwd, root: cwd, branch: 'soak-' + name };
@@ -133,7 +133,7 @@ require('readline').createInterface({input:process.stdin}).on('line',line=>{
 
   const startedAt = Date.now();
   const overlap = [];
-  const rounds = { coding: 0, focus: 0, stop: 0, crash: 0, limit: 0, process: 0, sse: 0, recycle: 0 };
+  const rounds = { coding: 0, focus: 0, stop: 0, crash: 0, launchRange: 0, process: 0, sse: 0, recycle: 0 };
   let owners = null;
 
   try {
@@ -245,21 +245,26 @@ require('readline').createInterface({input:process.stdin}).on('line',line=>{
       }
 
       if (kind === 5) {
-        // third runtime explicitly allowed, fourth refused by the hard cap
-        const c = await post({ action: 'start', args: { id: 'ws-C', epoch: 'epoch-1', allowThird: true } });
-        check(c.body.ok, 'round ' + round + ': explicit third runtime allowed');
-        await until(async () => (await snapshot()).items.find(i => i.owner?.workspaceId === 'ws-C')?.lifecycle === 'ready', 30000, 'C ready');
-        const cap = await post({ action: 'start', args: { id: 'ws-D', epoch: 'epoch-1', allowThird: true } });
-        check(cap.body.ok === false && cap.body.code === 'runtime_limit', 'round ' + round + ': hard cap 3 enforced');
-        check(await snapshot().then(s => s.totalCount === 3), 'round ' + round + ': total child count capped at 3');
-        const owners3 = (await snapshot()).items;
-        const cOwner = owners3.find(i => i.owner?.workspaceId === 'ws-C').owner;
-        await post({ action: 'command', owner: cOwner, command: { type: 'prompt', message: 'SOAK_' + (round * 10 + 5) + '_300' } });
-        await until(async () => (await snapshot()).items.find(i => i.conversationId === cOwner.conversationId).activity === 'idle', 30000, 'C settle');
-        check(fs.readFileSync(path.join(dirs.C, 'marker-C-' + (round * 10 + 5) + '.txt'), 'utf8').includes('C'), 'round ' + round + ': third runtime did real work in its own worktree');
-        check((await post({ action: 'close', owner: cOwner })).body.ok, 'round ' + round + ': close third runtime');
-        await until(async () => (await snapshot()).liveCount === 2, 20000, 'third runtime released slot');
-        rounds.limit++;
+        // Exercise repeated direct starts, work isolation and scoped cleanup.
+        const extraOwners = [];
+        for (const name of ['C', 'D', 'E']) {
+          const started = await post({ action: 'start', args: { id: 'ws-' + name, epoch: 'epoch-1' } });
+          check(started.body.ok, 'round ' + round + ': runtime ' + name + ' starts directly without admission metadata');
+          await until(async () => (await snapshot()).items.find(i => i.owner?.workspaceId === 'ws-' + name)?.lifecycle === 'ready', 30000, name + ' ready');
+          const current = await snapshot();
+          check(current.totalCount === extraOwners.length + 3, 'round ' + round + ': actual total count includes runtime ' + name);
+          const extraOwner = current.items.find(i => i.owner?.workspaceId === 'ws-' + name).owner;
+          extraOwners.push(extraOwner);
+          const n = round * 10 + name.charCodeAt(0);
+          await post({ action: 'command', owner: extraOwner, command: { type: 'prompt', message: 'SOAK_' + n + '_300' } });
+          await until(async () => (await snapshot()).items.find(i => i.conversationId === extraOwner.conversationId).activity === 'idle', 30000, name + ' settle');
+          check(fs.readFileSync(path.join(dirs[name], 'marker-' + name + '-' + n + '.txt'), 'utf8').includes(name), 'round ' + round + ': runtime ' + name + ' did real work in its own worktree');
+        }
+        for (const [index, extraOwner] of extraOwners.entries()) {
+          check((await post({ action: 'close', owner: extraOwner })).body.ok, 'round ' + round + ': close only extra runtime ' + ['C', 'D', 'E'][index]);
+          await until(async () => (await snapshot()).totalCount === 4 - index, 20000, 'extra runtime count after close');
+        }
+        rounds.launchRange++;
       }
 
       if (kind === 6) {
@@ -329,7 +334,7 @@ require('readline').createInterface({input:process.stdin}).on('line',line=>{
     // A full 30-minute run must exercise every dimension repeatedly; a short
     // validation run only has to touch each one once.
     const need = DURATION >= 1500000 ? 6 : 1;
-    check(rounds.coding >= need && rounds.focus >= 1 && rounds.stop >= 1 && rounds.crash >= 1 && rounds.limit >= 1 && rounds.process >= 1 && rounds.sse >= 1, 'soak covered all required dimensions');
+    check(rounds.coding >= need && rounds.focus >= 1 && rounds.stop >= 1 && rounds.crash >= 1 && rounds.launchRange >= 1 && rounds.process >= 1 && rounds.sse >= 1, 'soak covered all required dimensions');
     const intervals = overlap.sort((x, y) => x.from - y.from);
     const overlapping = intervals.filter(iv => iv.bothRunning).length;
     report.overlapIntervals = intervals;
@@ -356,7 +361,7 @@ require('readline').createInterface({input:process.stdin}).on('line',line=>{
     const after = await snapshot();
     const dormant = after.items.find(i => i.conversationId === bOwner.conversationId);
     check(after.liveCount === 0 && dormant && dormant.lifecycle === 'dormant' && dormant.owner === null, 'restart rediscovered conversations as dormant without spawning');
-    const resumed = await post({ action: 'resume', conversationId: bOwner.conversationId, allowThird: true });
+    const resumed = await post({ action: 'resume', conversationId: bOwner.conversationId });
     check(resumed.body.ok, 'resume after backend restart accepted');
     await until(async () => (await snapshot()).items.find(i => i.conversationId === bOwner.conversationId)?.lifecycle === 'ready', 30000, 'resumed ready');
     const resumedOwner = (await snapshot()).items.find(i => i.conversationId === bOwner.conversationId).owner;

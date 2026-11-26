@@ -570,6 +570,31 @@ function mkSession(dir, { id, cwd, ts, messages = 0, firstUser = null, extra = [
     }
   }
 
+  /* ---- 会话状态记录不能被固定条数裁剪 ---- */
+  {
+    const largeCwd = path.join(TMP, 'large-project'); fs.mkdirSync(largeCwd);
+    const largeDir = path.join(AGENT, 'sessions', I.dirNameFor(largeCwd));
+    const lg1 = mkSession(largeDir, { id: 'lg1', cwd: largeCwd, ts: '2026-09-25T14:00:00.000Z' });
+    const lg2 = mkSession(largeDir, { id: 'lg2', cwd: largeCwd, ts: '2026-09-25T15:00:00.000Z' });
+    const largeData = path.join(TMP, 'large-flags-data'), largeFlags = path.join(largeData, 'session-flags.json');
+    fs.mkdirSync(largeData, { recursive: true });
+    const history = Array.from({ length: 5000 }, (_, i) => 'old-' + i);
+    fs.writeFileSync(largeFlags, JSON.stringify({ version: 1, archived: [...history, 'lg1'], deleted: [] }), 'utf8');
+    const large = createSessions({ runtime: { getCurrentCwd: () => largeCwd }, env: { HOME: TMP, PI_CODING_AGENT_DIR: AGENT }, dataDir: largeData, getProjects: () => [{ path: largeCwd }] });
+    const listed = await large.list();
+    check('7y. 超过旧 5000 条归档状态仍保留，较早记录不会复活', () => {
+      const s = listed.sessions.find((x) => x.sessionId === 'lg1');
+      return (listed.ok && s && s.archived === true) || JSON.stringify({ ok: listed.ok, s });
+    });
+    const id2 = listed.sessions.find((x) => x.sessionId === 'lg2').id;
+    const archived = await large.setArchived(id2, true);
+    const saved = JSON.parse(fs.readFileSync(largeFlags, 'utf8'));
+    check('7z. 写入归档状态不按固定条数裁剪既有历史', () =>
+      (archived.ok && saved.archived.length === 5002 && saved.archived.includes('old-0') && saved.archived.includes('lg1') && saved.archived.includes('lg2'))
+      || JSON.stringify({ ok: archived.ok, length: saved.archived.length }));
+    fs.rmSync(lg1, { force: true }); fs.rmSync(lg2, { force: true });
+  }
+
   /* ================= 8. 当前会话补位（pi 还没落盘） ================= */
   section('8. 当前会话补位');
 

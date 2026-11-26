@@ -1,0 +1,342 @@
+{
+  "phase": "exercise",
+  "platform": "win32",
+  "startedAt": "2026-11-26T05:37:00.194Z",
+  "checks": [
+    {
+      "name": "production main uses normal sandbox, context isolation and no nodeIntegration",
+      "pass": true
+    },
+    {
+      "name": "production preload is active",
+      "pass": true
+    },
+    {
+      "name": "production resource budget starts at classic 1; limit 2 hard cap 3",
+      "pass": true,
+      "details": {
+        "totalCount": 1,
+        "limit": 2,
+        "hardLimit": 3
+      }
+    },
+    {
+      "name": "runner completed start_A_real_tools",
+      "pass": false,
+      "details": {
+        "stage": "start_A_real_tools",
+        "name": "Error",
+        "code": "condition_timeout"
+      }
+    },
+    {
+      "name": "parent observed this live process family before cleanup",
+      "pass": true
+    },
+    {
+      "name": "cleanup public runtime closes are confirmed",
+      "pass": true,
+      "details": {
+        "confirmed": true,
+        "codes": []
+      }
+    }
+  ],
+  "shots": [
+    {
+      "file": "failure-start_A_real_tools.png",
+      "metrics": {
+        "width": 1320,
+        "height": 820,
+        "dpr": 1.5,
+        "theme": "dark",
+        "scrollWidth": 1320
+      },
+      "pixelSize": {
+        "width": 1980,
+        "height": 1230
+      },
+      "masked": [],
+      "redaction": "opaque pixel rectangles only; unchanged DOM/layout and all unmasked capture pixels"
+    }
+  ],
+  "facts": {
+    "lastStatus": {
+      "state": "ready",
+      "hasProject": true,
+      "legacyOwner": {
+        "backendInstance": "fb6660a2-f030-44a5-a76c-2c0e2dd169ad",
+        "projectId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "repoId": null,
+        "workspaceId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "3dcdc5ed-5a94-485e-a608-ea923cb9a9af",
+        "runtimeGeneration": "1",
+        "sessionId": "01a2165b-7434-7579-9482-7b9827f0f547"
+      },
+      "error": null
+    },
+    "A": {
+      "owner": {
+        "backendInstance": "fb6660a2-f030-44a5-a76c-2c0e2dd169ad",
+        "projectId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "repoId": null,
+        "workspaceId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "3dcdc5ed-5a94-485e-a608-ea923cb9a9af",
+        "runtimeGeneration": "1",
+        "sessionId": "01a2165b-7434-7579-9482-7b9827f0f547"
+      },
+      "kind": "classic"
+    },
+    "failureSnapshot": {
+      "totalCount": 1,
+      "hardLimit": 3,
+      "items": []
+    }
+  },
+  "events": [
+    {
+      "at": 1795671421704,
+      "seq": 1,
+      "eventSequence": null,
+      "kind": "bridge_status",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "fb6660a2-f030-44a5-a76c-2c0e2dd169ad",
+        "projectId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "repoId": null,
+        "workspaceId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "3dcdc5ed-5a94-485e-a608-ea923cb9a9af",
+        "runtimeGeneration": "1",
+        "sessionId": null
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671422518,
+      "seq": 2,
+      "eventSequence": null,
+      "kind": "bridge_status",
+      "type": "bridge_status",
+      "owner": {
+        "backendInstance": "fb6660a2-f030-44a5-a76c-2c0e2dd169ad",
+        "projectId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "repoId": null,
+        "workspaceId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "3dcdc5ed-5a94-485e-a608-ea923cb9a9af",
+        "runtimeGeneration": "1",
+        "sessionId": null
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671425229,
+      "seq": 12,
+      "eventSequence": null,
+      "kind": "agent_start",
+      "type": "agent_start",
+      "owner": {
+        "backendInstance": "fb6660a2-f030-44a5-a76c-2c0e2dd169ad",
+        "projectId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "repoId": null,
+        "workspaceId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "3dcdc5ed-5a94-485e-a608-ea923cb9a9af",
+        "runtimeGeneration": "1",
+        "sessionId": "01a2165b-7434-7579-9482-7b9827f0f547"
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671425229,
+      "seq": 15,
+      "eventSequence": null,
+      "kind": "message_end",
+      "type": "message_end",
+      "owner": {
+        "backendInstance": "fb6660a2-f030-44a5-a76c-2c0e2dd169ad",
+        "projectId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "repoId": null,
+        "workspaceId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "3dcdc5ed-5a94-485e-a608-ea923cb9a9af",
+        "runtimeGeneration": "1",
+        "sessionId": "01a2165b-7434-7579-9482-7b9827f0f547"
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    },
+    {
+      "at": 1795671425229,
+      "seq": 17,
+      "eventSequence": null,
+      "kind": "message_end",
+      "type": "message_end",
+      "owner": {
+        "backendInstance": "fb6660a2-f030-44a5-a76c-2c0e2dd169ad",
+        "projectId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "repoId": null,
+        "workspaceId": "d8b33e4a631793641cde017c7ab351badeca91ccf2de4ce8644d3c36c07855d3",
+        "workspaceEpoch": "0",
+        "conversationId": "classic-chat",
+        "runtimeId": "3dcdc5ed-5a94-485e-a608-ea923cb9a9af",
+        "runtimeGeneration": "1",
+        "sessionId": "01a2165b-7434-7579-9482-7b9827f0f547"
+      },
+      "bridgeRun": 1,
+      "lifecycle": null,
+      "activity": null,
+      "toolName": null,
+      "toolCallId": null,
+      "isError": false,
+      "waiting": null,
+      "outcome": null,
+      "stopReason": null,
+      "failureClass": null
+    }
+  ],
+  "electron": "44.4.3",
+  "stage": "start_A_real_tools",
+  "timeout": "A_real_shell_started",
+  "failure": {
+    "stage": "start_A_real_tools",
+    "name": "Error",
+    "code": "condition_timeout"
+  },
+  "cleanup": {
+    "confirmed": true,
+    "codes": []
+  },
+  "endedAt": "2026-11-26T05:39:05.024Z",
+  "failed": 1,
+  "completed": false,
+  "unverified": [
+    "long-duration stress/real OS power loss",
+    "non-Windows platforms",
+    "other provider/model combinations",
+    "full canonical and independent security review (owned by main agent)",
+    "all stages following start_A_real_tools"
+  ],
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "stdoutBytes": 429,
+  "stderrBytes": 0,
+  "processCleanup": {
+    "observedAt": "2026-11-26T05:39:04.916Z",
+    "observed": 8,
+    "identities": [
+      {
+        "pid": 18036,
+        "parent": 62144,
+        "birth": "639312682199619290",
+        "exeSha256": "a5d4ce786a3f37e895f97a115aa072a9cfdf2a076cf42a88021994f266dc653c",
+        "commandSha256": "145314dafe5ba738d12aa8eeb473b7da2c06ed21820ed60422cd8a7d7e51f9bd",
+        "marker": true
+      },
+      {
+        "pid": 60388,
+        "parent": 18036,
+        "birth": "639312682202318500",
+        "exeSha256": "a5d4ce786a3f37e895f97a115aa072a9cfdf2a076cf42a88021994f266dc653c",
+        "commandSha256": "cf569f554115da6024ec3a8c081a1251d06d360f5c1bd3a7f492f3cd18553760",
+        "marker": true
+      },
+      {
+        "pid": 59884,
+        "parent": 18036,
+        "birth": "639312682202991480",
+        "exeSha256": "a5d4ce786a3f37e895f97a115aa072a9cfdf2a076cf42a88021994f266dc653c",
+        "commandSha256": "f9c906c0167f752dbe4fc8fbb01d1e3ef52bad7aa9703361200b24ed1e44fb38",
+        "marker": true
+      },
+      {
+        "pid": 51864,
+        "parent": 18036,
+        "birth": "639312682209363280",
+        "exeSha256": "a5d4ce786a3f37e895f97a115aa072a9cfdf2a076cf42a88021994f266dc653c",
+        "commandSha256": "43dde372da6f942cfe8bae531d471f5300479a37b218f3143db66c0fd501f32a",
+        "marker": true
+      },
+      {
+        "pid": 62740,
+        "parent": 18036,
+        "birth": "639312682213058470",
+        "exeSha256": "a5d4ce786a3f37e895f97a115aa072a9cfdf2a076cf42a88021994f266dc653c",
+        "commandSha256": "51f90a9c6d6c80c4b68c977045d22c362139de91cc16da4c235c4328da25676a",
+        "marker": true
+      },
+      {
+        "pid": 61252,
+        "parent": 51864,
+        "birth": "639312682214332720",
+        "exeSha256": "aff50af76ffba4b4b7b54b3f259c25ca785085d1e9e339463924d5913d1171d4",
+        "commandSha256": "0db8b7f1449291a0427b34b2e6ea2b74317367654e25696fc5a2bf975ea55faf",
+        "marker": true
+      },
+      {
+        "pid": 42700,
+        "parent": 61252,
+        "birth": "639312682214460250",
+        "exeSha256": "25193318e83d0508392efa098b6d93e382601c47bc929caf9e99a02278d20e34",
+        "commandSha256": "417222c4a0ecb4d60a457ebe8e26fddf3d5406bffb16a5c59af8eeb241beca51",
+        "marker": false
+      },
+      {
+        "pid": 61596,
+        "parent": 61252,
+        "birth": "639312682214950510",
+        "exeSha256": "cfef83d46ea5e69b511ea30aaf1b6ab8fbf7caa6bcfef169d4993fed7c675c20",
+        "commandSha256": "fdd9a5bf290031b93027d1a0fc796763e31c60bac11ee73bf2a92eaa6dc3b26e",
+        "marker": true
+      }
+    ],
+    "residual": 0,
+    "confirmed": true
+  }
+}

@@ -41,8 +41,6 @@ const MAX_READ_BYTES = 4 * 1024 * 1024;
  * 也不能把用户没改过的标题误判成过期。 */
 const NATIVE_TAIL_BYTES = 512 * 1024;
 const MAX_TITLE = 80;
-const MAX_SESSIONS = 200;
-const MAX_FLAGS = 5000;
 const FLAGS_FILE = 'session-flags.json';
 const TRASH_DIR = 'trash-sessions';
 
@@ -359,7 +357,9 @@ export function createSessions({
     let namingSeen = false;
     let sawNested = false;
 
-    for (const f of candidateFiles(cwd).slice(0, MAX_SESSIONS * 4)) {
+    /* No fixed scan/window cap: every retained session of this project must
+     * remain listable and resumable. Per-file reads stay size-bounded. */
+    for (const f of candidateFiles(cwd)) {
       attempted++;
       const s = summarize(f);
       if (!s) {
@@ -455,7 +455,7 @@ export function createSessions({
       hasProject: true,
       currentId,
       diagnostics,
-      sessions: sessions.slice(0, MAX_SESSIONS).map((s) => ({
+      sessions: sessions.map((s) => ({
         id: s.id,
         title: s.title,
         titleSource: s.titleSource,
@@ -611,8 +611,11 @@ export function createSessions({
     const body = JSON.stringify(
       {
         version: 1,
-        archived: [...new Set(flags.archived)].slice(-MAX_FLAGS),
-        deleted: flags.deleted.slice(-MAX_FLAGS),
+        /* Archive/delete flags are per-session state, not an admission window.
+         * Trimming them would silently resurrect old sessions once the user has
+         * more records than the trim threshold. */
+        archived: [...new Set(flags.archived)],
+        deleted: flags.deleted,
       },
       null,
       2
