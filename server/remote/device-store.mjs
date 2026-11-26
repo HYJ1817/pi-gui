@@ -130,6 +130,18 @@ export class DeviceStore {
             d.active = false; d.requiresRepair = true;
             corrupt = true;
           }
+          // FSEC-005-R9-001: the revocation flag itself must be a boolean.
+          // Truthy non-boolean shapes ('false', 'true', 1, objects, arrays)
+          // otherwise slip between two different tests — excluded from the
+          // live-key index by truthiness yet still eligible because
+          // revoked !== true — leaving two request-eligible registrations
+          // for one key. Fail closed: malformed flags are forced ineligible
+          // and the repair is persisted.
+          if (d.revoked !== undefined && typeof d.revoked !== 'boolean') {
+            d.revoked = true;
+            d.active = false;
+            corrupt = true;
+          }
           this.devices.set(d.deviceId, d);
           if (typeof d.devicePublicKey === 'string') {
             // FSEC-005-R8-001: only NON-REVOKED records compete for the live

@@ -2182,6 +2182,43 @@ async function main() {
     } finally { await ctx.remote.close().catch(() => {}); fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
   });
 
+  await t('fsec-005-r9: truthy non-boolean revocation flags never bypass single-live-binding — malformed shapes forced ineligible in both file orders', async () => {
+    // FSEC-005-R9-001: truthy non-boolean revoked shapes ('false', 'true',
+    // 1, {}, []) slipped between the truthiness-based index exclusion and
+    // the revoked !== true eligibility test — excluded from duplicate
+    // validation yet still eligible for requests, leaving two live bindings
+    // for one key. Reconstruction must validate the flag as a boolean and
+    // force malformed records ineligible.
+    const { DeviceStore } = await import(MODULES.deviceStore);
+    const mk = (id, key, revokedShape) => ({
+      deviceId: id, deviceName: 't', devicePublicKey: key,
+      serviceFingerprint: 'a'.repeat(64), serviceId: 'svc-aaaaaaaaaaaaaaaa',
+      grantedScopes: ['projects.read', 'sessions.read'], grants: {}, active: true, revoked: revokedShape,
+      replayEpoch: 1, expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      registeredAt: new Date().toISOString(), nonces: {}, timestampFloor: 0,
+    });
+    const key = crypto.randomBytes(32).toString('base64url');
+    const shapes = ['false', 'true', 1, {}, []];
+    for (const shape of shapes) {
+      for (const order of ['malformed-first', 'malformed-second']) {
+        const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'r9-shape-'));
+        try {
+          const malformed = mk('dev_r9malform1', key, shape);
+          const clean = mk('dev_r9clean0001', key, false);
+          const devices = order === 'malformed-first' ? [malformed, clean] : [clean, malformed];
+          fs.writeFileSync(path.join(dataDir, 'remote-devices.json'), JSON.stringify({ devices }));
+          const store = new DeviceStore(dataDir, () => {});
+          const eligible = ['dev_r9malform1', 'dev_r9clean0001'].filter(id => store.active(id) !== null);
+          assert.ok(eligible.length <= 1, `shape ${JSON.stringify(shape)} order ${order}: at most one live binding per key (got ${eligible.length})`);
+          // The malformed record itself must NEVER be eligible.
+          assert.equal(store.active('dev_r9malform1'), null, `shape ${JSON.stringify(shape)}: malformed flag forced ineligible`);
+          // And the clean record survives as the single binding.
+          assert.equal(store.active('dev_r9clean0001') !== null, true, 'clean record remains the single live binding');
+        } finally { fs.rmSync(dataDir, { recursive: true, force: true }); }
+      }
+    }
+  });
+
   await t('fsec-005b: double write failure is memory-only, honestly flagged, and durable bytes never gain a false annotation', async () => {
     const ctx = await boot();
     try {
