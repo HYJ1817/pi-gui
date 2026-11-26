@@ -316,6 +316,28 @@ export class DeviceStore {
       // forward recovery after an ordinary re-pair.
       ...(Number.isSafeInteger(existing?.streamGenerationFloor) ? { streamGenerationFloor: existing.streamGenerationFloor } : {}),
     };
+    // FSEC-005-R7-001 coherent freeze: while the revocation journal is
+    // unreadable, NO authorization may exist in memory — including freshly
+    // registered instances. Without this, a re-pair performed during the
+    // journal outage was active for the rest of the session yet degraded
+    // after the next restart: two different answers to the same unverifiable
+    // revocation state. The uniform freeze makes session and restart agree,
+    // and because the durable record itself stays active=true (it is the
+    // journal restart-time reconciliation that degrades), recovery is
+    // automatic when the journal is restored. Intentional registrations do
+    // not carry a degradation marker — their restart-time degradation is
+    // inherent, not a serialization concern.
+    if (this.revocationJournalUnknown && rec.revoked !== true) {
+      // The marker carries the registration's TRUE durable intent
+      // (active: true) — serialization strips the degradation so durable
+      // bytes describe the actual registration, memory freezes uniformly,
+      // and journal restoration heals the fresh instance exactly like every
+      // pre-existing one. Without the marker this would be the R6B leak all
+      // over again: frozen bytes permanently bricking the device.
+      rec._preDegradation = { active: true };
+      rec.active = false;
+      rec.requiresRepair = true;
+    }
     this.devices.set(deviceId, rec);
     this.keyIndex.set(devicePublicKey, deviceId);
     try {

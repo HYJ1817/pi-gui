@@ -2085,6 +2085,50 @@ async function main() {
     } finally { await ctx.remote.close().catch(() => {}); fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
   });
 
+  await t('fsec-005-r7: re-pair during unknown journal freezes uniformly in memory yet heals with the journal — never a session/restart split', async () => {
+    // FSEC-005-R7-001: before the uniform freeze, a re-pair performed while
+    // the journal was unreadable was active for the rest of the session but
+    // degraded after restart — two different answers to one unverifiable
+    // revocation state. Worse, once serialization was considered, the naive
+    // freeze bricked the fresh instance permanently. Coherent design:
+    // uniform memory freeze (session === restart), durable bytes keep the
+    // registration's true intent via the degradation marker, journal
+    // restoration heals the fresh instance like every other device.
+    const { DeviceStore } = await import(MODULES.deviceStore);
+    const ctx = await boot();
+    try {
+      const paired = await pair(ctx);
+      paired.device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const deviceId = paired.device.deviceId;
+      const dataDir = ctx.dataDir;
+      const key = ctx.remote.deviceStore.get(deviceId).devicePublicKey;
+      await ctx.remote.close();
+      // Journal becomes unreadable.
+      fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), '{corrupt', 'utf8');
+      const store = new DeviceStore(dataDir, () => {});
+      assert.equal(store.revocationJournalUnknown, true);
+      // Re-pair the same key during the outage (rotation semantics).
+      const result = store.register({
+        deviceId, devicePublicKey: key,
+        grantedScopes: ['projects.read', 'sessions.read'], serviceFingerprint: 'a'.repeat(64),
+        expiresAt: new Date(Date.now() + 3600000).toISOString(), deviceName: 't',
+      });
+      assert.ok(result, 're-pair itself is accepted — the freeze is about authorization, not registration');
+      assert.equal(store.active(deviceId), null, 'uniform freeze: fresh instance is NOT authorized in memory');
+      // Durable bytes keep the registration's true intent.
+      const disk = JSON.parse(fs.readFileSync(path.join(dataDir, 'remote-devices.json'), 'utf8'));
+      const diskRec = disk.devices.find(d => d.deviceId === deviceId);
+      assert.equal(diskRec.active, true, 'FSEC-005-R7-001: durable bytes must carry the true registration, not the freeze');
+      // Restart with journal still broken: same answer as the session — frozen.
+      const store2 = new DeviceStore(dataDir, () => {});
+      assert.equal(store2.active(deviceId), null, 'session and restart agree: frozen');
+      // Restore the journal: the fresh instance heals like every other device.
+      fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), JSON.stringify({ revocations: [] }), 'utf8');
+      const store3 = new DeviceStore(dataDir, () => {});
+      assert.equal(store3.active(deviceId) !== null, true, 'FSEC-005-R7-001: journal restoration must heal the fresh instance — never a permanent brick');
+    } finally { await ctx.remote.close().catch(() => {}); fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
   await t('fsec-005b: double write failure is memory-only, honestly flagged, and durable bytes never gain a false annotation', async () => {
     const ctx = await boot();
     try {
