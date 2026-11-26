@@ -179,15 +179,25 @@ async function bridgeCases(createAuthRuntimeSync) {
     check('private session switch dispatch and completion both invalidate the Classic owner epoch', () => assert.equal(bridge.providerSessionEpoch(), priorEpoch + 2));
     holdSwitch = true;
     const switching = bridge.request({ type: 'switch_session', sessionPath: 'fixture-pending-session.jsonl' }, { timeoutMs: 20 });
-    check('already dispatched private session mutation remains visible without refreshing the owner cache', () => assert.equal(bridge.providerSessionChanging(), true));
+    check('already dispatched private session mutation remains visible without refreshing the owner cache', () => {
+      assert.equal(bridge.providerSessionChanging(), true); assert.equal(bridge.providerSessionPending(), true);
+    });
     await Promise.all([switching, new Promise(resolve => setTimeout(resolve, 30))]);
-    check('private mutation timeout cannot prove that native identity stayed unchanged', () => assert.equal(bridge.providerSessionChanging(), true));
+    check('private mutation timeout cannot prove that native identity stayed unchanged', () => {
+      assert.equal(bridge.providerSessionChanging(), true); assert.equal(bridge.providerSessionPending(), false);
+    });
     heldSwitch.child.stdout.emit('data', JSON.stringify({ id: heldSwitch.cmd.id, type: 'response', command: 'switch_session', success: true, data: {} }) + '\n');
-    check('late authoritative private mutation response settles the existing command ledger', () => assert.equal(bridge.providerSessionChanging(), false));
+    check('late authoritative private mutation response settles the existing command ledger', () => {
+      assert.equal(bridge.providerSessionChanging(), false); assert.equal(bridge.providerSessionPending(), false);
+    });
     bridge.send({ id: 'public-switch', type: 'switch_session', sessionPath: 'fixture-public-session.jsonl' });
-    check('public session mutation uses the same pending authority as private requests', () => assert.equal(bridge.providerSessionChanging(), true));
+    check('public session mutation uses the same pending authority as private requests', () => {
+      assert.equal(bridge.providerSessionChanging(), true); assert.equal(bridge.providerSessionPending(), true);
+    });
     heldSwitch.child.stdout.emit('data', JSON.stringify({ id: heldSwitch.cmd.id, type: 'response', command: 'switch_session', success: true, data: {} }) + '\n');
-    check('public authoritative mutation response releases only its matching command', () => assert.equal(bridge.providerSessionChanging(), false));
+    check('public authoritative mutation response releases only its matching command', () => {
+      assert.equal(bridge.providerSessionChanging(), false); assert.equal(bridge.providerSessionPending(), false);
+    });
     check('only the public mutation response is broadcast, never the private or expired request', () => assert.deepEqual(responses.map(event => event.id), ['public-switch']));
     responses.length = 0; // The following auth synchronization has its own no-broadcast interval.
     holdSwitch = false;
@@ -247,7 +257,7 @@ async function mutationLedgerCases() {
       const result = await rpc.request({ type: 'switch_session', sessionPath: 'fixture-session' });
       check('known unqueued mutation write failure releases only its ledger entry', () => {
         assert.equal(result?.__code, 'pi_command_not_sent'); assert.equal(rpc.providerSessionChanging(), false);
-        assert.equal(rpc.updateBusy(), false);
+        assert.equal(rpc.providerSessionPending(), false); assert.equal(rpc.updateBusy(), false);
       });
     }
     const circular = {}; circular.self = circular;
@@ -266,6 +276,7 @@ async function mutationLedgerCases() {
     const unknown = lastMutation();
     check('ambiguous pipe failure preserves unknown mutation rather than declaring not sent', () => {
       assert.equal(partial, null); assert.equal(rpc.providerSessionChanging(), true);
+      assert.equal(rpc.providerSessionPending(), false);
     });
     reply(unknown.child, unknown.cmd, { command: 'get_state' });
     check('wrong-command response cannot clear unknown mutation', () => assert.equal(rpc.providerSessionChanging(), true));

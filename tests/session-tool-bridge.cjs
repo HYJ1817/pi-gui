@@ -321,7 +321,7 @@ let passed=0;async function check(name,run){await run();passed++;console.log('PA
       assert.equal(f.guard.ready(world,'B'),false);
     });
     try{x.start('A');await f.guard.assertReady();await until(()=>x.installed.status().verified);const old=await f.guard.assertReady();
-      f.rpc.send({type:'switch_session'});f.native('B');const before=x.hellos();x.start('B');await x.call('B-after-transition');
+      f.rpc.send({type:'switch_session'});assert.equal(f.rpc.providerSessionPending(),true);f.native('B');const before=x.hellos();x.start('B');await x.call('B-after-transition');
       assert.equal(hints,1);assert.equal(x.hellos()-before,2);assert.equal(x.helloCodes.at(-1),'tool_guard_initializing');
       assert.equal(x.signals.at(-1),x.signals.at(-2));assert.ok(x.timeouts.at(-1)<=x.timeouts.at(-2));
       assert.equal(x.installed.status().failed,false);assert.equal(f.guard.ready(world,'B'),true);assert.equal(f.cache(),'A');assert.equal(old(),false);
@@ -331,18 +331,19 @@ let passed=0;async function check(name,run){await run();passed++;console.log('PA
   }));
   await check('Classic B hello after mutation completion does not depend on delayed public owner readback',()=>classic(async f=>{
     const x=classicExtension(f);try{x.start('A');await f.guard.assertReady();await until(()=>x.installed.status().verified);
-      f.rpc.send({type:'switch_session'});f.native('B');f.mutation(true);assert.equal(f.cache(),'A');const before=x.hellos();x.start('B');await x.call('B-cache-lag');
+      f.rpc.send({type:'switch_session'});f.native('B');f.mutation(true);assert.equal(f.rpc.providerSessionChanging(),false);assert.equal(f.rpc.providerSessionPending(),false);assert.equal(f.cache(),'A');const before=x.hellos();x.start('B');await x.call('B-cache-lag');
       assert.equal(x.hellos()-before,1);assert.equal(x.installed.status().failed,false);assert.equal(f.guard.ready(world,'B'),true);await x.end('B-cache-lag');
     }finally{x.installed.dispose();}
   }));
-  await check('unknown mutation timeout never authorizes B; all three initializing retries exhaust terminally',()=>classic(async f=>{
+  await check('unknown mutation timeout never obtains initializing and fails the new native terminally',()=>classic(async f=>{
     const x=classicExtension(f);try{x.start('A');await f.guard.assertReady();await until(()=>x.installed.status().verified);
-      assert.equal(await f.rpc.request({type:'switch_session'},{timeoutMs:5}),null);assert.equal(f.rpc.providerSessionChanging(),true);
-      f.native('B');const before=x.hellos();x.start('B');await until(()=>x.installed.status().failed);await until(()=>!f.guard.status().verified);
-      assert.equal(x.hellos()-before,3);assert.deepEqual(x.helloCodes.slice(-3),Array(3).fill('tool_guard_initializing'));
+      assert.equal(await f.rpc.request({type:'switch_session'},{timeoutMs:5}),null);
+      assert.equal(f.rpc.providerSessionChanging(),true);assert.equal(f.rpc.providerSessionPending(),false);
+      f.native('B');const before=x.hellos();x.start('B');await until(()=>x.installed.status().failed);
+      assert.equal(x.hellos()-before,1);assert.equal(x.helloCodes.at(-1),'stale_runtime');
       assert.equal(f.guard.ready(world,'B'),false);assert.equal(f.rpc.providerSessionChanging(),true);
-      f.mutation(true);await assert.rejects(()=>x.call('never-revive'));assert.equal(x.hellos()-before,3);
-      await assert.rejects(()=>f.guard.assertReady(),error=>error.code==='tool_guard_unavailable');assert.equal(f.writes.some(cmd=>cmd.type==='prompt'),false);
+      f.mutation(true);await assert.rejects(()=>x.call('never-revive'));assert.equal(x.hellos()-before,1);
+      await assert.rejects(()=>f.guard.assertReady(),error=>error.code==='stale_runtime');assert.equal(f.writes.some(cmd=>cmd.type==='prompt'),false);
     }finally{x.installed.dispose();}
   }));
   await check('a real hello cannot move a known binding without an advanced settled epoch, even with null cache authority',()=>classic(async f=>{
