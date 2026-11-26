@@ -6,7 +6,13 @@ JSON 仅含白名单结构：owner、原生 session、runtime 代次、SSE 序�
 
 历史 PNG 来自真实 `capturePage()`：原图曾做 TEMP 路径文本替换。归档副本另外对底部 model/provider picker 身份标签做明确的矩形隐私遮盖（不透明隐私色块）；不修补或合成其它界面像素。`archive-manifest.json` 记录历史原图与归档 SHA-256、遮盖坐标及像素校验结果。原始截图保留在 TEMP 供本机复核，不写入仓库。
 
-## 最终构建证据：控制面通过，模型尝试未通过
+## 本轮恢复提示：离线实际渲染，不是真模型证明
+
+- [测量与摘要](recovery-notice-render.json)：2026-11-26 在正常 sandbox / contextIsolation 的 Electron 44.4.3 内加载生产 Runtime 组件和完整生产 CSS，使用合成拒绝响应，实际点击发送。六组明暗 / 宽窄 / 中英文 fixture 均保留草稿、提交仅一次，提示无裁切或横向溢出；深浅文字对比度分别为 8.672:1 / 6.673:1。
+- 主线程人工查看并逐字节归档的两张代表截图：[深色窄窗](recovery-notice-dark-narrow.png)、[浅色窄窗英文草稿](recovery-notice-light-narrow-english.png)。PNG 未遮盖、未修改像素；其余四张的摘要保留在测量报告，原图留 TEMP。
+- 此证据只验证本轮一条恢复提示的实际排版和输入保留，不启动真实 Pi / 模型，不证明最终打包构建通过。没有改动 CSS、动画或现有视觉设计。
+
+## 上一轮构建证据：控制面通过，模型尝试未通过
 
 最终 backend SHA-256 为 `9495579ee39ee69c29f9a9b5cebc08491ad9eb8467de0ae3d3a8554d8f6f8aae`，生产与桌面打包副本一致。新一轮没有覆盖上述历史失败：
 

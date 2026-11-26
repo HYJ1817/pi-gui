@@ -443,6 +443,13 @@ Runtime Registry 已按会话持有独立 `session-runtime`、Pi child / guardia
   版本号不决定可用性，source probe 为 true 也不等于 child 已 ready。
 - 每个 child 还须完成私有 token + 原生 sessionId hello，后端用该 child 的 `get_state` 重验；
   证据缺失时提示工具写入协调未就绪，保留输入并 fail-closed，不把重启提示当作永久解决办法。
+- 初始化通信失败在原握手内有限重试：扩展 single-flight 最多三次、总预算八秒且同一 controller
+  内不重置；可证明的会话切换过渡只返回非授权的等待提示，不绑定会话、不解除保护，也不扩大
+  预算。后端初始 binding 三十秒到期后终态失效，不靠新 prompt 或无限循环续命。可证明来自另一份实际存在的绝对路径
+  扩展文件的 `extension_error` 不撤销本 guard；guard 自身、缺来源或无法核验的错误仍 fail-closed。
+- 终态失效不承诺安全进程内恢复。输入保留，等待任务结束后由用户显式重启受影响 Runtime；
+  新 generation 必须重新证明 owner、native sessionId、cwd、source 与当前 child。不会因此重启
+  正常 B/C，也不会自动重发已提交但结果未知的任务；重启或 Stop 不能释放执行结果未知的 writer。
 - 已证实来源的 builtin `read/ls/find/grep` 可按既有策略旁路写租约；未知工具与 Shell 保守等待。
   工具等待可以发生在 B，而 A/C 的模型请求、流式状态和独立项目工具继续推进。
 - Stop/退出仅处置目标 owner 的资源；未确认清理不能提前释放活动写租约。重启恢复 dormant

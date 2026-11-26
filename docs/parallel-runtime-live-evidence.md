@@ -1,7 +1,7 @@
 # 多会话真实 Pi / Windows Electron 验收记录
 
-日期：2026-11-26。**当前状态：最终真实模型专项未通过，已停止追加轮次。最终产物零 prompt 控制面 17/17；唯一完整模型尝试 exercise 5/6，B/C 与 recovery 未执行。**
-本记录只涵盖真实验收 runner；完整 canonical、生产修复及独立安全复审由主线程另行提交。
+日期：2026-11-26。**当前状态：用户已明确授权 PR #113 的最终整改、轻量预检与完整真实验收，新轮结果待验证。下文截至 `8d6b388c` 的旧轮记录原样保留：旧产物零 prompt 控制面 17/17；旧轮最终完整模型尝试 exercise 5/6，B/C 与 recovery 未执行。不能把历史成功与新轮部分结果拼接为通过。**
+本记录只涵盖真实验收 runner；最终 head 的完整 canonical 由 PR CI 提供，生产修复及独立安全复审另见主验收记录。
 
 ## 路径与授权边界
 
@@ -28,12 +28,25 @@ node tests/parallel-runtime-live.cjs
 $env:PI_GUI_PARALLEL_LIVE='1'
 $env:PI_GUI_PARALLEL_PACKAGED='1'
 $env:PI_GUI_PARALLEL_MODEL='xingchiapi/gpt-6.1-sol' # 完整模型 ID；provider 沿既有配置，不硬写 xingchiapi
+$env:PI_GUI_PARALLEL_PHASE='preflight' # 两个轻量真实 turn，独立资格
+node tests/parallel-runtime-live.cjs
+# 同一最终构建的预检通过后，明确进入完整 exercise → recovery
+$env:PI_GUI_PARALLEL_PHASE='full'
 node tests/parallel-runtime-live.cjs
 ```
 
 可选 `PI_GUI_PARALLEL_PROVIDER` / `PI_GUI_PARALLEL_BUILD_ROOT`；不写用户配置。每次调用新建 fixture；应用副本与会话数据保留在 TEMP 供只读复核。模型失败、timeout 和未运行场景不得算作通过。
 
-## 已执行结果
+## 本轮驱动冻结与旧预检追领（不替代最终新构建）
+
+- 2026-11-26 两个驱动文件冻结：runner SHA-256 `b35c122bd683aa32aecf751caf6b28a627b03e96de61673788451bbfdd11424f`（30,219 字节）；fixture `310a1f715f571f0e9da8de87842ea53a5eab00c85c47fc2f12f359892ae0c48d`（77,602 字节）。作者离线语法 **50/50**、安全 **32/32**、默认 off 为 skipped。32 项保留原 31 项，只新增一项恢复证据复合负例；未减少断言。最终独立驱动资格复验进行中。
+- 独立资格复验对上述冻结字节给出新增 **Blocker 0 / Important 0 / Nit 0 / Pre-existing 1**；两文件语法 **2/2**、模板 **50/50**、安全 **32/32**、额外 TEMP 负例 **47/47**（skip 0）。既有 Important：exercise 主进程 exit 0 但进程族清理未确认时仍进入 recovery；最终汇总会拒绝，不是绿色假阳性，但违反阶段不重叠约束。
+- 随后主线程最小修复该既有问题：下一阶段须通过原 `phaseValid(report, phase)`，不能仅凭 exit 0。新增四项实际 loop-tail 回归（清理未知、公开 close 未确认、缺阶段证据、完整阶段）；修复前测试确实 exit 1，修复后模板 **50/50**、安全 **36/36**、语法及 diff check exit 0，默认 off 仍 skipped。新 runner SHA-256 `2bf993b9208ad2bacedfe0832c14f4ab1d4fb15d1b1c2d7d3f9798836d259b1f`（30,312 字节）；fixture `c3c31d92a1c1344254fdb17d82e989abd96b993fb94123ba6fdc3b5136877c19`（78,745 字节）。该增量随后通过独立窄复验：安全 **36/36**（新增 **4/4**、原 **32/32**），执行实际阶段循环的独立验证 **30/30**、两种错误门禁变异负例 **2/2**（均被测试捕获，skip 0），新增 Blocker/Important/Nit 均 0。P1 的“不确认就不推进”已闭合；不等于残留进程已被自动安全清理，也不替代最终真实环境验收。
+- 已追领前代理 TEMP `pi-parallel-live-qqidkV/evidence/summary.json`：**10/10**、exit 0、`completed=true`、`preflightComplete=true`、`fullLiveAcceptance=false`，privacy verified；记录八个创建身份，代理按完整身份只读复核残留 0，未 kill。07:09:32.569Z–07:13:06.371Z，213.802 秒，输出 turn 47.790 秒、工具 turn 161.536 秒。
+- 此预检的实际 backend 仍是旧 `9495579e…`，driver 摘要也早于本次冻结；不能使用 identity 中“源码当时已改”掩盖实际打包字节。它证明该次已有模型输出及 write/read 路径，不证明当前 dirty 修复或最终完整并行通过；`thinkingOff=false` 保留为事实，不能声称当时实际关闭思考。
+- 恢复驱动已增加一次真实 UI write/read、完整 owner/seq 与工具起止配对、文件及输出摘要、settled、当 turn 原生历史、restart 旧 owner 拒绝与无自动重放。代码存在和离线负例不等于真实恢复执行通过；最终生产提交、重建、同构建预检与完整 exercise→recovery 均仍待验证。未新建模型轮或覆盖旧失败。
+
+## 上一轮已执行结果（按当时字节保留）
 
 | 检查 | 实际结果 |
 | --- | --- |
@@ -136,7 +149,7 @@ node tests/fixtures/parallel-runtime-electron.cjs --check-driver
 - HTTP closes 确认，观察到 12 个进程身份，退出后残留 0。控制面 PNG 显示 Runtime 就绪/空闲；取景时 model 控件仍在同步、运行视图为空，不能把这张截图宣称成完整模型可用或已渲染 C 历史。
 - 两文件语法 exit 0，模板 46/46，默认入口 skipped；完整模型轮前再次执行显式 parser 安全负例 27/27。probe 通过后仅增加最终完整轮的 Git/driver 身份采集，没有更改生产行为。
 
-## 最终唯一完整模型尝试：未通过，不再追加
+## 上一轮最终完整模型尝试：未通过，历史保留
 
 - 命令：`PI_GUI_PARALLEL_LIVE=1 PI_GUI_PARALLEL_PACKAGED=1 PI_GUI_PARALLEL_MODEL=xingchiapi/gpt-6.1-sol node tests/parallel-runtime-live.cjs`（Bash 写法；PowerShell 见上文）。provider 沿已有配置，未改用户配置。之前一次错误地把 `xingchiapi` 当 provider 的预备调用在 SDK `model_unavailable` 阶段退出，未启动 Pi/模型；没有因此增加真实模型轮次。
 - 新 TEMP `pi-parallel-live-WfQuPN`，**05:37:00.194Z–05:39:05.024Z，124.830 秒**，exercise exit 1；使用上述 `9495579e…` 最终产物及正常 sandbox。运行 identity 是提交前 `ac812c6f…` + 源文件 digest；生产随后由主线程提交为 `7a277aeb`，产物字节未变，不把提交后的身份冒充运行起点。
