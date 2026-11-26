@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { materializeDir } from '../lib/assets.js';
 import { json, readRawBody } from './http-utils.js';
+import { probeSessionToolGuard } from './pi-probes.js';
 
 const fail = code => { throw Object.assign(Error(code), { code }); };
 const closed = (v, keys) => v && !Array.isArray(v) && typeof v === 'object' && Object.keys(v).every(k => keys.includes(k));
@@ -19,9 +20,7 @@ export function createSessionToolBridge({ scheduler, launch, getCwd, getRoot = g
   async function capable() {
     if (supported !== undefined) return supported;
     try {
-      const dir = launch.packageDir(), pkg = JSON.parse(fs.readFileSync(path.join(dir,'package.json'),'utf8'));
-      const types = fs.readFileSync(path.join(dir,'dist/core/extensions/types.d.ts'),'utf8');
-      return ['1.2.0','1.3.0'].includes(pkg.version) && types.includes('"tool_call"') && types.includes('"tool_execution_end"');
+      return probeSessionToolGuard(launch.packageDir()).state === true;
     } catch { return false; }
   }
   async function current(expected) {

@@ -88,7 +88,7 @@ import { createPlanBridge } from './server/plan-bridge.js';
 import { createMessageEditLaunch } from './server/message-edit-launch.js';
 import { createMessageEditService } from './server/message-edit.js';
 import { createMessageEditRoutes } from './server/message-edit-routes.js';
-import { createOrdinarySessions, isProjectWorkspace, rootsOverlap, toolWorkspaceRoot } from './server/ordinary-sessions.js';
+import { createOrdinarySessions, isProjectWorkspace, toolWorkspaceRoot, assertSharedSessionTools } from './server/ordinary-sessions.js';
 import { createSessionRevertAuthority, createSessionRevertMutationAuthority } from './server/session-revert-authority.js';
 import { createSessionRevertAdmission } from './server/session-revert-admission.js';
 import { inspectFileMetadata } from './server/session-revert-metadata.js';
@@ -1450,7 +1450,8 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
   beforeStart: () => runtime.isShuttingDown() || providerAuth.inFlight() || piUpdate.isRunning() || capabilityInstall.isRunning()
     || rpc.maintenanceState() || plannerRef?.projectSwitchBlockReason() || cliInFlight ? 'maintenance' : null,
   beforeCommand: (cmd,live) => ['prompt','steer','follow_up'].includes(cmd.type) && candidateRunsRef?.busy() && !candidateRunsRef.owns(runtimeRegistryRef.getOwner(live.record.conversationId)) ? 'runtime_busy' : null,
-  admission: (args, action) => worktrees.withWorkspace(args, workspace => {
+  admission: (args, action, target) => target && isProjectWorkspace(target.workspace)
+    ? ordinarySessions.withResume(target, action) : worktrees.withWorkspace(args, workspace => {
     const current = runtime.getCurrentCwd(), relative = current ? path.relative(workspace.root, fs.realpathSync(current)) : null;
     if (relative !== null && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)) {
       const error = new Error('workspace_in_use'); error.code = 'workspace_in_use'; throw error;
@@ -1458,20 +1459,14 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     return action(workspace);
   }),
   resolveWorkspace: args => worktrees.withWorkspace(args, workspace => workspace),
-  validateWorkspace: workspace => isProjectWorkspace(workspace) ? ordinarySessions.validate(workspace)
+  validateWorkspace: (workspace, sessionId) => isProjectWorkspace(workspace) ? ordinarySessions.validate(workspace, sessionId)
     : worktrees.withWorkspace({ id: workspace.workspaceId, epoch: workspace.workspaceEpoch }, () => {}),
-  sharedAdmission: async (workspace, others) => {
-    for (const other of others) if (rootsOverlap(other.workspace.root,workspace.root)) {
-      if (!isProjectWorkspace(other.workspace)) throw Object.assign(Error('workspace_in_use'),{code:'workspace_in_use'});
-      if (!other.adapter?.toolGuard?.ready(other.workspace.cwd)) throw Object.assign(Error('tool_guard_unavailable'),{code:'tool_guard_unavailable'});
-    }
-    const cwd=runtime.getCurrentCwd();
-    if (cwd && rootsOverlap(await toolWorkspaceRoot(cwd),workspace.root)) {
-      await primaryToolGuard.assertReady();
-      const state=await rpc.request({type:'get_state'});
-      if (!primaryToolGuard.ready(cwd,state?.sessionId)) throw Object.assign(Error('tool_guard_unavailable'),{code:'tool_guard_unavailable'});
-    }
-  },
+  sharedAdmission: (workspace, others) => assertSharedSessionTools(workspace, others, {
+    getCwd: runtime.getCurrentCwd, getOwner: primaryOwner, isShuttingDown: runtime.isShuttingDown,
+    getState: rpc.getState, getSessionEpoch: rpc.providerSessionEpoch, isSessionChanging: rpc.providerSessionChanging,
+    assertReady: () => primaryToolGuard.assertReady(),
+    readState: () => rpc.request({type:'get_state'}), ready: (cwd, native) => primaryToolGuard.ready(cwd, native),
+  }),
   onFocus: async owner => { if (!owner) { await runtimeBrowser.focus(null); return; } const { repoId, ...scope } = owner; await runtimeBrowser.focus(scope); },
   factory: async (context, emit) => {
     /* 独立会话与主聊天必须用**同一个有效 Pi 入口**。环境安装可能刚把

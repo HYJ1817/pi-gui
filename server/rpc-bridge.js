@@ -686,7 +686,13 @@ export function createRpcBridge({
       const changesSession = sessionMutation(cmd.type);
       pending.set(id, { resolve, timer, strictCommand: strict ? cmd.type : null });
       try {
-        if (changesSession) providerSessionEpoch++;
+        if (changesSession) {
+          providerSessionEpoch++;
+          // Reuse the command ledger for private mutations too. A timeout is
+          // not evidence that Pi did not switch; retain it until reply/cleanup.
+          const key = updateKey({ ...cmd, id });
+          updateCommands.set(key, (updateCommands.get(key) || 0) + 1);
+        }
         pi.stdin.write(JSON.stringify({ ...cmd, id }) + '\n', (err) => {
           if (!err || !pending.has(id)) return;
           clearTimeout(timer);
@@ -1183,5 +1189,6 @@ export function createRpcBridge({
   return { start, send, request, abortAndWait, stopState, restart, stop, getState, buildArgs, pauseForMaintenance, resumeFromMaintenance, maintenanceState,
     providerLaunch: () => pi && pi !== retiringChild && providerLaunch?.bridgeRun === bridgeRun ? providerLaunch.witness : null,
     providerSessionEpoch: () => providerSessionEpoch,
+    providerSessionChanging: () => [...updateCommands.keys()].some(key => sessionMutation(JSON.parse(key)[2])),
     updateBusy: () => Boolean(pending.size || updateApprovals.size || updateCommands.size) };
 }

@@ -228,7 +228,33 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
         event.type === 'response' && ['get_state', 'get_available_models', 'set_model', 'cycle_model'].includes(event.command) ? readModelsConfig() : null)), executionTools.observe(event)));
     },
   });
+  // Admission may follow open() before asynchronous launch preparation even
+  // installs the guard. Wait only for this child's control-plane startup, never
+  // for its model turn; source capability and native hello remain mandatory.
+  async function assertToolGuardReady() {
+    const expected = { ...context.getOwner() };
+    const current = () => {
+      const owner = context.getOwner();
+      return !disposed && context.isCurrent() && Object.entries(expected).every(([key, value]) =>
+        key === 'sessionId' && value === null || owner[key] === value);
+    };
+    const deadline = Date.now() + 30000;
+    while (current() && Date.now() < deadline && (rpc.getState().state === 'starting'
+      || rpc.getState().state === 'ready' && !context.getOwner().sessionId)) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    if (!current()) throw fail('stale_runtime');
+    if (!toolGuard || rpc.getState().state !== 'ready') throw fail('tool_guard_unavailable');
+    await toolGuard.assertReady();
+    if (!current()) throw fail('stale_runtime');
+    if (!toolGuard.ready(context.cwd, context.getOwner().sessionId)) throw fail('tool_guard_unavailable');
+    const proven = { ...context.getOwner() };
+    return () => !disposed && context.isCurrent() && rpc.getState().state === 'ready'
+      && Object.entries(proven).every(([key, value]) => context.getOwner()[key] === value)
+      && toolGuard.ready(context.cwd, proven.sessionId);
+  }
   return {
+    assertToolGuardReady,
     providerLaunch: rpc.providerLaunch,
     providerLaunchCurrent: witness => witness?.binding.identity === launch.identityKey(),
     providerRead: type => rpc.request({ type }, { timeoutMs: 3000, strict: true }),

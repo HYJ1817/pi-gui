@@ -7,10 +7,66 @@ let passed=0;async function check(name,run){await run();passed++;console.log('PA
  const world=fs.mkdtempSync(path.join(os.tmpdir(),'pi-tool-private-')),scheduler=createSessionToolScheduler();let native='native-A';
  const a=createSessionToolBridge({scheduler,launch:{},getCwd:()=>world,readState:async()=>({sessionId:native}),supported:true});
  const b=createSessionToolBridge({scheduler,launch:{},getCwd:()=>world,readState:async()=>({sessionId:'native-B'}),supported:true});
- const send=async(spec,action,body={},token=spec.env.PI_GUI_TOOL_TOKEN,origin)=>{
-  const response=await fetch(spec.env.PI_GUI_TOOL_URL+'/'+action,{method:'POST',headers:{'content-type':'application/json','x-pi-gui-tool-token':token,...(origin?{origin}:{})},body:JSON.stringify(body)});return {status:response.status,...await response.json()};};
+ // Match the extension's Node HTTP transport: fetch applies browser forbidden-
+ // port rules even to an OS-assigned loopback port (e.g. 6667 on Windows).
+ const send=(spec,action,body={},token=spec.env.PI_GUI_TOOL_TOKEN,origin)=>new Promise((resolve,reject)=>{
+  const request=require('node:http').request(spec.env.PI_GUI_TOOL_URL+'/'+action,{method:'POST',headers:{'content-type':'application/json','x-pi-gui-tool-token':token,...(origin?{origin}:{})}},response=>{
+    let data='';response.on('data',chunk=>{data+=chunk;});response.on('end',()=>{try{resolve({status:response.statusCode,...JSON.parse(data)});}catch(error){reject(error);}});
+  });request.on('error',reject);request.end(JSON.stringify(body));
+ });
  try{
   const sa=await a.prepare(),sb=await b.prepare();
+  // Contract excerpts from Pi 1.6.0's public declarations. No installed Pi,
+  // credentials, global npm directory or external model is used by this suite.
+  const types=`export interface ExtensionAPI {
+    on(event: "session_start", handler: ExtensionHandler<SessionStartEvent>): () => void;
+    on(event: "tool_call", handler: ExtensionHandler<ToolCallEvent, ToolCallEventResult>): () => void;
+    on(event: "tool_result", handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>): () => void;
+    on(event: "tool_execution_end", handler: ExtensionHandler<ToolExecutionEndEvent>): () => void;
+    on(event: "agent_settled", handler: ExtensionHandler<AgentSettledEvent>): () => void;
+    getAllTools(): ToolInfo[];
+  }
+  export interface ToolCallEventResult { block?: boolean; reason?: string; }
+  export type ExtensionHandler<E, R = undefined> = (event: E, ctx: ExtensionContext) => Promise<R | void> | R | void;`;
+  const pkg=path.join(world,'pi-package'),typeFile=path.join(pkg,'dist/core/extensions/types.d.ts'),managerFile=path.join(pkg,'dist/core/session-manager.d.ts');
+  fs.mkdirSync(path.dirname(typeFile),{recursive:true});fs.writeFileSync(typeFile,types);fs.writeFileSync(managerFile,'export declare class SessionManager { getSessionId(): string; }');
+  const {probeSessionToolGuard,createPiProbes}=await import('../server/pi-probes.js');
+  const production=()=>createSessionToolBridge({scheduler,launch:{packageDir:()=>pkg},getCwd:()=>world,readState:async()=>({sessionId:'native-contract'})});
+  await check('Pi 1.6 contract is installed without a version bypass but still requires a real session handshake',async()=>{
+    fs.writeFileSync(path.join(pkg,'package.json'),JSON.stringify({name:'@earendil-works/pi-coding-agent',version:'1.6.0'}));
+    const guard=production();try{const spec=await guard.prepare();assert.ok(spec,'compatible 1.6 package was incorrectly rejected');assert.deepEqual(guard.status(),{installed:true,verified:false});assert.equal(guard.ready(),false);
+      assert.equal((await send(spec,'hello',{sessionId:'foreign'})).ok,false);assert.equal(guard.ready(),false);
+      assert.equal((await send(spec,'hello',{sessionId:'native-contract'})).ok,true);await guard.assertReady();assert.equal(guard.ready(),true);
+    }finally{await guard.dispose();guard.confirmCleanup();}
+  });
+  await check('contract probe is version independent and diagnostics reuse the exact admission verdict',async()=>{
+    fs.writeFileSync(path.join(pkg,'package.json'),JSON.stringify({version:'99.0.0-fork'}));
+    assert.equal(probeSessionToolGuard(pkg).state,true);
+    assert.equal(createPiProbes({resolvePackageDir:()=>pkg}).report().probes.find(p=>p.id==='session-tool-guard').state,true);
+    const guard=production();try{assert.ok(await guard.prepare());assert.equal(guard.ready(),false);}finally{await guard.dispose();guard.confirmCleanup();}
+  });
+  await check('each required hook, blocking result and identity API is mandatory even for formerly allowlisted versions',async()=>{
+    fs.writeFileSync(path.join(pkg,'package.json'),JSON.stringify({version:'1.2.0'}));
+    for(const part of ['session_start','tool_call','tool_result','tool_execution_end','agent_settled','getAllTools','block?','Promise']){
+      fs.writeFileSync(typeFile,types.replaceAll(part,'missing_contract'));assert.equal(probeSessionToolGuard(pkg).state,false,part);
+      const guard=production();try{assert.equal(await guard.prepare(),null,part);await assert.rejects(()=>guard.assertReady(),e=>e.code==='tool_guard_unavailable');}finally{await guard.dispose();guard.confirmCleanup();}
+    }
+    fs.writeFileSync(typeFile,types);fs.writeFileSync(managerFile,'export declare class SessionManager {}');assert.equal(probeSessionToolGuard(pkg).state,false);
+    fs.writeFileSync(managerFile,'export declare class SessionManager { getSessionId(): string; }');
+  });
+  await check('unreadable, oversized and absent capability evidence stays unknown, not ready',async()=>{
+    fs.writeFileSync(typeFile,'x'.repeat(512*1024+1));assert.equal(probeSessionToolGuard(pkg).state,null);
+    fs.rmSync(typeFile);fs.mkdirSync(typeFile);assert.equal(probeSessionToolGuard(pkg).state,null);fs.rmdirSync(typeFile);
+    assert.equal(probeSessionToolGuard(pkg).state,null);assert.equal(probeSessionToolGuard(null).state,null);
+    const guard=production();try{assert.equal(await guard.prepare(),null);assert.equal(guard.ready(),false);}finally{await guard.dispose();guard.confirmCleanup();}
+    fs.writeFileSync(typeFile,types);
+  });
+  await check('readiness awaits native hello and rejects invalidation instead of declaring success',async()=>{
+    const guard=production();try{const spec=await guard.prepare();let complete=false;const pending=guard.assertReady().then(()=>{complete=true;});
+      await new Promise(r=>setTimeout(r,30));assert.equal(complete,false);await send(spec,'hello',{sessionId:'native-contract'});await pending;assert.equal(complete,true);
+      guard.invalidate();assert.equal(guard.ready(),false);await assert.rejects(()=>guard.assertReady(),e=>e.code==='tool_guard_unavailable');
+    }finally{await guard.dispose();guard.confirmCleanup();}
+  });
   await check('private endpoint refuses browser origins, foreign tokens and claimed paths',async()=>{
    assert.equal((await send(sa,'hello',{sessionId:'native-A'},'wrong')).status,403);
    assert.equal((await send(sa,'hello',{sessionId:'native-A'},undefined,'http://localhost')).status,403);

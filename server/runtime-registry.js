@@ -424,15 +424,19 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   }
   async function launchRecord(record, options = {}) {
     guardStore(); const blocked = beforeStart(); if (blocked) throw fail(blocked);
-    if (!options.workspaceChecked) await validateWorkspace(record.workspace); guardStore();
+    if (!options.workspaceChecked) await validateWorkspace(record.workspace, record.sessionId); guardStore();
     if (beforeStart()) throw fail(beforeStart());
     const key = rootKey(fs.realpathSync(record.workspace.root));
     const occupants = leases.get(key);
     if (!projectWorkspace(record.workspace)) { if (occupants?.size) throw fail('workspace_in_use'); }
     else {
       if (occupants && [...occupants].some(l => !projectWorkspace(l.record.workspace))) throw fail('workspace_in_use');
-      await sharedAdmission(record.workspace, [...lives.values()].map(l => ({ workspace:l.record.workspace, adapter:l.adapter })));
+      const sharedCurrent = await sharedAdmission(record.workspace, [...lives.values()].map(l => ({ workspace:l.record.workspace, adapter:l.adapter })));
+      // Startup/hello waits may outlive workspace, native-session or maintenance authority.
+      await validateWorkspace(record.workspace, record.sessionId);
       guardStore();
+      if (beforeStart()) throw fail(beforeStart());
+      if (typeof sharedCurrent !== 'function' || !sharedCurrent()) throw fail('tool_guard_unavailable');
     }
     const total = lives.size + externalCount();
     if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
@@ -516,7 +520,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
         if (admitted && ['projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'cwd', 'root', 'branch'].some(k =>
           ['cwd', 'root'].includes(k) ? rootKey(admitted[k]) !== rootKey(record.workspace[k]) : admitted[k] !== record.workspace[k])) throw fail('stale_workspace');
         return launchRecord(record, { ...options, workspaceChecked: Boolean(admitted) });
-      }); });
+      }, { workspace: { ...record.workspace }, sessionId: record.sessionId }); });
   }
   async function command(expected, cmd) {
     let live = resolve(expected);

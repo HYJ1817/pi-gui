@@ -155,7 +155,7 @@ async function bridgeCases(createAuthRuntimeSync) {
   const { createRuntime } = await load('server/runtime.js');
   const runtime = createRuntime({ initialCwd: 'fixture-A' });
   const children = [], launches = [], listeners = new Set(), responses = [];
-  let launchRevision = 'revision-one';
+  let launchRevision = 'revision-one', holdSwitch = false, heldSwitch = null;
   const bridge = createRpcBridge({ runtime, isWin: false, piBin: 'fixture-pi', env: { PI_NO_CONTINUE: '1' }, publish: event => { if (event.type === 'response') responses.push(event); for (const fn of [...listeners]) fn(event); },
     captureProviderLaunch: ({ cwd }) => ({ cwd, revision: launchRevision }),
     spawnProcess: (_bin, args) => {
@@ -163,7 +163,9 @@ async function bridgeCases(createAuthRuntimeSync) {
       const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
       child.stdout.setEncoding = child.stderr.setEncoding = () => {};
       child.stdin = new EventEmitter(); child.stdin.end = () => {};
-      child.stdin.write = line => { const cmd = JSON.parse(line); queueMicrotask(() => child.stdout.emit('data', JSON.stringify({ id: cmd.id, type: 'response', command: cmd.type, success: cmd.type === 'fixture_unqualified' ? undefined : true, data: cmd.type === 'get_state' ? { sessionFile: 'fixture-current-session.jsonl' } : {} }) + '\n')); };
+      child.stdin.write = line => { const cmd = JSON.parse(line);
+        if (holdSwitch && cmd.type === 'switch_session') { heldSwitch = { child, cmd }; return; }
+        queueMicrotask(() => child.stdout.emit('data', JSON.stringify({ id: cmd.id, type: 'response', command: cmd.type, success: cmd.type === 'fixture_unqualified' ? undefined : true, data: cmd.type === 'get_state' ? { sessionFile: 'fixture-current-session.jsonl' } : {} }) + '\n')); };
       child.kill = () => { queueMicrotask(() => child.emit('exit', 0, null)); return true; };
       children.push(child); queueMicrotask(() => child.emit('spawn')); return child;
     } });
@@ -174,6 +176,20 @@ async function bridgeCases(createAuthRuntimeSync) {
     const priorEpoch = bridge.providerSessionEpoch();
     await bridge.request({ type: 'switch_session', sessionPath: 'fixture-next-session.jsonl' });
     check('private session switch dispatch and completion both invalidate the Classic owner epoch', () => assert.equal(bridge.providerSessionEpoch(), priorEpoch + 2));
+    holdSwitch = true;
+    const switching = bridge.request({ type: 'switch_session', sessionPath: 'fixture-pending-session.jsonl' }, { timeoutMs: 20 });
+    check('already dispatched private session mutation remains visible without refreshing the owner cache', () => assert.equal(bridge.providerSessionChanging(), true));
+    await Promise.all([switching, new Promise(resolve => setTimeout(resolve, 30))]);
+    check('private mutation timeout cannot prove that native identity stayed unchanged', () => assert.equal(bridge.providerSessionChanging(), true));
+    heldSwitch.child.stdout.emit('data', JSON.stringify({ id: heldSwitch.cmd.id, type: 'response', command: 'switch_session', success: true, data: {} }) + '\n');
+    check('late authoritative private mutation response settles the existing command ledger', () => assert.equal(bridge.providerSessionChanging(), false));
+    bridge.send({ id: 'public-switch', type: 'switch_session', sessionPath: 'fixture-public-session.jsonl' });
+    check('public session mutation uses the same pending authority as private requests', () => assert.equal(bridge.providerSessionChanging(), true));
+    heldSwitch.child.stdout.emit('data', JSON.stringify({ id: heldSwitch.cmd.id, type: 'response', command: 'switch_session', success: true, data: {} }) + '\n');
+    check('public authoritative mutation response releases only its matching command', () => assert.equal(bridge.providerSessionChanging(), false));
+    check('only the public mutation response is broadcast, never the private or expired request', () => assert.deepEqual(responses.map(event => event.id), ['public-switch']));
+    responses.length = 0; // The following auth synchronization has its own no-broadcast interval.
+    holdSwitch = false;
     launchRevision = 'revision-two';
     check('launch witness remains bound to the actual spawned run', () => assert.deepEqual(bridge.providerLaunch(), { cwd: 'fixture-A', revision: 'revision-one' }));
     const sync = createAuthRuntimeSync({ rpc: bridge, getCwd: runtime.getCurrentCwd, busyReason: () => null, subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn); }, timeoutMs: 1000 });

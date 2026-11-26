@@ -50,6 +50,25 @@ function readTextSafe(file, maxBytes = MAX_FILE_BYTES) {
   }
 }
 
+/** Tool coordination uses the launched package's public contract, never a version
+ * allowlist. This is source evidence, not proof that a child loaded our guard:
+ * the private native-session handshake remains mandatory before any prompt. */
+export function probeSessionToolGuard(dir) {
+  const types = dir ? readTextSafe(path.join(dir, 'dist/core/extensions/types.d.ts')) : null;
+  const manager = dir ? readTextSafe(path.join(dir, 'dist/core/session-manager.d.ts')) : null;
+  if (types === null || manager === null) return { state: null, evidence: '工具协调契约文件不可读或超限；仍禁止共享写入' };
+  const hooks = ['session_start', 'tool_call', 'tool_result', 'tool_execution_end', 'agent_settled'];
+  const complete = hooks.every(event => new RegExp(`on\\s*\\(\\s*event\\s*:\\s*["']${event}["']\\s*,\\s*handler\\s*:\\s*ExtensionHandler\\s*<`).test(types))
+    && /on\s*\(\s*event\s*:\s*["']tool_call["']\s*,\s*handler\s*:\s*ExtensionHandler\s*<\s*ToolCallEvent\s*,\s*ToolCallEventResult\s*>/.test(types)
+    && /interface\s+ToolCallEventResult\s*\{[^}]*\bblock\?\s*:\s*boolean\b/.test(types)
+    && /type\s+ExtensionHandler\b[^;]*=>\s*Promise\s*</.test(types)
+    && /getAllTools\s*\(\s*\)\s*:\s*ToolInfo\[\]/.test(types)
+    && /getSessionId\s*\(\s*\)\s*:\s*string\b/.test(manager);
+  return { state: complete, evidence: complete
+    ? 'dist/core/extensions/types.d.ts + session-manager.d.ts: 工具阻断、结束、settled、工具来源与会话身份契约齐备；尚需子进程握手'
+    : '已读工具协调契约，但缺少所需 hook 或身份 API；仍禁止共享写入' };
+}
+
 /** 在文本里找第一行命中任一 pattern 的原文（截断）。找不到回 ''。 */
 function findLine(text, patterns) {
   if (!text) return '';
@@ -156,6 +175,14 @@ export const PROBE_DEFS = Object.freeze([
     label: 'tool_call 可阻断',
     what: 'Extension 能在工具执行前返回 `{ block: true }`（批准的真正闸门在这里）',
     fallback: '为 false 时 GUI 只说「拦不住」，不画假的允许 / 拒绝按钮。',
+    file: 'dist/core/extensions/types.d.ts',
+  }),
+  Object.freeze({
+    id: 'session-tool-guard',
+    kind: 'source',
+    label: '会话工具写入协调契约',
+    what: '实际启动包声明可阻断工具的异步 hook、执行结束与 settled，以及工具来源和会话身份 API',
+    fallback: '缺失或未知时共享项目任务保持 fail-closed；契约齐备也必须等真实子进程握手。',
     file: 'dist/core/extensions/types.d.ts',
   }),
   Object.freeze({
@@ -345,6 +372,8 @@ export function createPiProbes({
         ? `${clip(typeBlock)}；${clip(docBlock)}`
         : (src.extTypes || src.extDocs ? '类型与文档里没有同时找到 tool_call 阻断契约' : '读不到本机 pi 包的类型与文档'),
     });
+
+    out.set('session-tool-guard', probeSessionToolGuard(dir));
 
     /* 核心审批：**「有证据说没有」才是 false**。读到了 usage.md 但没有那句话 → unknown，
      * 不能据此断言核心「有」审批。 */
