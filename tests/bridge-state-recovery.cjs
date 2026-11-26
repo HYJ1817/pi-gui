@@ -54,8 +54,9 @@ async function main() {
   check(rpc.getState().bridgeState === 'no-project' && !rpc.getState().hasProject, 'no-project snapshot');
   const broken = createRpcBridge({ runtime: { getCurrentCwd: () => 'fixture', isShuttingDown: () => false }, publish() {}, piBin: 'fixture', isWin: false,
     spawnProcess() { throw Error('SECRET fixture launch path'); } });
-  broken.start();
-  check(broken.getState().bridgeState === 'error' && !JSON.stringify(broken.getState()).includes('SECRET'), 'launch error snapshot uses safe fixed fields');
+  const brokenStart = await broken.start();
+  check(brokenStart.ok === false && brokenStart.code === 'runtime_start_failed' && broken.getState().bridgeState === 'error'
+    && !JSON.stringify(broken.getState()).includes('SECRET'), 'launch failure returns a safe structured startup result');
   function outputFixture(limit) {
     let worker, stopped = 0;
     const observed = [], bridge = createRpcBridge({ runtime: { getCurrentCwd: () => 'fixture', isShuttingDown: () => false },

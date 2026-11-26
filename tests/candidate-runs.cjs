@@ -14,9 +14,9 @@ const waitFor=async(test,label)=>{for(let i=0;i<1200;i++){if(test())return;await
  const scope={key:'a'.repeat(64),projectRoot:root,gitCommon:path.join(root,'.git'),assertCurrent(){if(stale)throw Error('stale');}};let stale=false,sends=0,live=null,controller,closeGate=null,closing=false,closeHook=null;
  const row={id:'comment',path:'file.txt',text:'change fixture',createdAt:1,updatedAt:1,anchor:{path:'file.txt',section:'working',type:'add',oldLine:null,newLine:1,hunkIndex:0,hunkHeader:lineHash('@@ -1 +1 @@'),codeHash:lineHash('dirty'),diffFingerprint:'00000000'}};
  let revision='11111111-1111-4111-8111-111111111111';
- const registry={snapshot:()=>({items:live?[{owner:live.owner,lifecycle:'ready',activity:live.active?'running':'idle',conversationId:live.owner.conversationId}]:[],totalCount:0}),getOwner:()=>live?.owner,
+ const registry={snapshot:()=>({items:live?[{owner:live.owner,lifecycle:'ready',activity:live.active?'running':'idle',conversationId:live.owner.conversationId}]:[],totalCount:17+Number(Boolean(live))}),getOwner:()=>live?.owner,
   getAdapter:()=>({toolGuard:{assertReady:async()=>{}},getState:()=>({state:'ready',stop:{pending:false}})}),
-  async start(args){if(sends===0&&process.env.T4B_FIXTURE_START_DELAY_MS)await new Promise(r=>setTimeout(r,Math.min(10000,Number(process.env.T4B_FIXTURE_START_DELAY_MS)||0)));await manager.withWorkspace(args,w=>{live={root:w.root,active:false,owner:{conversationId:'candidate-conversation',sessionId:'candidate-native',workspaceId:w.workspaceId,workspaceEpoch:w.workspaceEpoch}};});return{owner:live.owner,conversationId:live.owner.conversationId};},
+  async start(args){assert.deepEqual(Object.keys(args).sort(),['epoch','id'],'candidate must not forward a legacy admission flag');if(sends===0&&process.env.T4B_FIXTURE_START_DELAY_MS)await new Promise(r=>setTimeout(r,Math.min(10000,Number(process.env.T4B_FIXTURE_START_DELAY_MS)||0)));await manager.withWorkspace(args,w=>{live={root:w.root,active:false,owner:{conversationId:'candidate-conversation',sessionId:'candidate-native',workspaceId:w.workspaceId,workspaceEpoch:w.workspaceEpoch}};});return{owner:live.owner,conversationId:live.owner.conversationId};},
   read:async()=>({sessionId:'candidate-native',isStreaming:false}),
   async command(owner,cmd){assert.equal(owner,live.owner);if(cmd.type==='abort'){live.active=false;return{ok:true};}sends++;live.active=true;},
   close:async()=>{closing=true;if(closeGate)await closeGate;if(closeHook)closeHook(live);live=null;},busy:()=>false};
@@ -27,6 +27,7 @@ const waitFor=async(test,label)=>{for(let i=0;i<1200;i++){if(test())return;await
   await check('candidate controller exposes a read-only adoption check',()=>assert.equal(typeof controller.checkAdoption,'function'));
   const plan=await controller.prepare(scope,body,{conversationId:'source',sessionId:'native'});
   await check('preflight creates no worktree or Agent',()=>{assert.equal(sends,0);assert(!fs.existsSync(path.join(data,'worktrees')));assert(plan.nonce);});
+  await check('many existing runtimes are observed but never block candidate admission',()=>assert.equal(plan.plan.runtimeCount,17));
   let retired=false;const previousScope={...scope,token:'owner-A',assertCurrent(){if(retired)throw Error('old owner');}};
   const oldOwnerPlan=await controller.prepare(previousScope,body,{conversationId:'source',sessionId:'native'});retired=true;
   const realCreate=manager.createCandidate;manager.createCandidate=async()=>{throw Object.assign(Error('old nonce reached create'),{code:'old_nonce_reached_create'});};

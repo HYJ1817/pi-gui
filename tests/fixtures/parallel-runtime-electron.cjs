@@ -71,6 +71,16 @@ function historyProof(history, sessionId, expectedOutput) {
     toolNames: items.map(item => item.toolName) };
 }
 function historyMatches(proof) { return proof.sessionMatches && proof.assistantMatches && proof.nativeToolsConfirmed; }
+function overlapProof(observed, owners, states) {
+  const independent = ['sessionId', 'runtimeId'].every(key => new Set(owners.map(owner => owner[key])).size === owners.length);
+  const starts = owners.map(owner => observed.find(event => event.type === 'agent_start' && sameOwner(event.owner, owner)));
+  const allStreaming = states.length === owners.length && states.every((state, index) => state?.ok === true
+    && state.data?.sessionId === owners[index].sessionId && state.data.isStreaming === true);
+  const allActive = starts.every((start, index) => start && !observed.some(event => sameOwner(event.owner, owners[index])
+    && event.seq > start.seq && ['agent_end', 'agent_settled'].includes(event.type)));
+  return { count: owners.length, independent, allStreaming, allActive, starts: starts.map(event => event?.at ?? null),
+    eventObserved: starts.every(Boolean), observedAllActiveAt: Date.now() };
+}
 // Offline syntax check for every literal renderer expression, including both
 // API branches. This deliberately accepts only literal call arguments: adding
 // a new dynamic expression requires extending the checker, not silently
@@ -194,6 +204,27 @@ async function runOfflineSafetyChecks() {
     assert.equal(h.qualification([valid('exercise'), report], ['exercise', 'recovery'], true).fullLiveAcceptance, false);
   });
   verify('only continuous complete exercise/recovery qualifies full acceptance', () => assert.equal(h.qualification([valid('exercise'), valid('recovery')], ['exercise', 'recovery'], true).fullLiveAcceptance, true));
+  verify('five-session overlap requires five real owner-scoped active starts and RPC readbacks', () => {
+    const owners = 'ABCDE'.split('').map(label => ({ backendInstance: 'backend', projectId: label, repoId: null,
+      workspaceId: label, workspaceEpoch: 'epoch', conversationId: label, runtimeId: 'runtime-' + label,
+      runtimeGeneration: 'generation-' + label, sessionId: 'native-' + label }));
+    const observed = owners.map((owner, index) => ({ owner, type: 'agent_start', seq: index + 1, at: index + 1 }));
+    const states = owners.map(owner => ({ ok: true, data: { sessionId: owner.sessionId, isStreaming: true } }));
+    const qualifies = proof => proof.count === 5 && proof.independent && proof.allStreaming && proof.allActive && proof.eventObserved;
+    assert.equal(qualifies(overlapProof(observed, owners, states)), true);
+    assert.equal(qualifies(overlapProof(observed.slice(0, 3), owners, states)), false);
+    assert.equal(qualifies(overlapProof(observed.map((event, index) => index === 4 ? { ...event, owner: owners[0] } : event), owners, states)), false);
+    assert.equal(qualifies(overlapProof(observed, owners, states.slice(0, 4))), false);
+    assert.equal(qualifies(overlapProof([...observed, { owner: owners[4], type: 'agent_settled', seq: 6 }], owners, states)), false);
+    assert.equal(qualifies(overlapProof(observed, owners, states.map((state, index) => index === 4 ? { ...state, data: { ...state.data, isStreaming: false } } : state))), false);
+    assert.equal(qualifies(overlapProof(observed, [...owners.slice(0, 4), owners[0]], states)), false);
+  });
+  verify('exercise cannot qualify from the previous three-session evidence set', () => {
+    for (const missing of h.requiredChecks.exercise) {
+      const report = valid('exercise'); report.checks = report.checks.filter(check => check.name !== missing);
+      assert.equal(h.phaseValid(report, 'exercise'), false);
+    }
+  });
   verify('recovery evidence rejects missing resumed turn and prompt-only history', () => {
     const owner = { backendInstance: 'b', projectId: 'p', repoId: null, workspaceId: 'w', workspaceEpoch: '0', conversationId: 'c', runtimeId: 'r', runtimeGeneration: 'g', sessionId: 's' };
     assert.equal(sameOwner(owner, owner), true);
@@ -431,6 +462,7 @@ async function focus(id) {
 async function recordProjection(ids) {
   return read(`(async()=>{const {runtimeStore}=await import('/runtime-state.js');return ${JSON.stringify(ids)}.map(id=>{const r=runtimeStore.get(id);return{id,owner:r?.owner,cursor:r?.cursor,lifecycle:r?.item?.lifecycle,activity:r?.item?.activity,
     hasA:r?.text?.includes('A_')||false,hasB:r?.text?.includes('B_')||false,hasC:r?.text?.includes('C_')||false,
+    hasD:r?.text?.includes('D_')||false,hasE:r?.text?.includes('E_')||false,
     tools:(r?.tools||[]).map(t=>({name:t.toolName||t.name||null,state:t.status||null})),timelineKinds:(r?.timeline||[]).map(b=>b.kind)};});})()`);
 }
 async function shot(name, width = 1320, height = 820, theme = 'dark') {
@@ -547,7 +579,8 @@ async function exercise() {
   const primary = await state(); const ownerA = primary.legacyOwner;
   report.facts.A = { owner: ownerA, kind: 'classic' };
   const initial = await api();
-  requireCheck(initial.totalCount === 1 && initial.hardLimit === 3 && initial.limit === 2, 'production resource budget starts at classic 1; limit 2 hard cap 3', { totalCount: initial.totalCount, limit: initial.limit, hardLimit: initial.hardLimit });
+  requireCheck(initial.totalCount === 1 && !Object.hasOwn(initial, 'limit') && !Object.hasOwn(initial, 'hardLimit'),
+    'production resource snapshot counts classic without a product admission cap', { totalCount: initial.totalCount });
   mark('start_A_real_tools');
   await sendText('#input', task('A'), '#btnSend');
   await untilTask(() => marker(projects[0], 'A'), 'A_real_shell_started', [ownerA]);
@@ -562,37 +595,50 @@ async function exercise() {
   await sendText('#runtimeView textarea', task('B'), '#runtimeView .rtc-send');
   await untilTask(async () => (await events()).some(event => event.owner?.conversationId === ownerB.conversationId && event.type === 'agent_start'), 'B_agent_start', [ownerB], 90000);
   requireCheck(!fs.existsSync(path.join(projects[0], 'b-native.txt')), 'same-project B write remains behind A shell write lease');
-  mark('open_C_other_project_third_confirmation');
-  const otherProject = `.project[data-project-path=${JSON.stringify(projects[1])}] .pj-header-action`;
-  await click(otherProject);
-  await until(() => read(`!document.querySelector('#confirmLayer')?.hidden&&document.querySelector('#confirmCard').textContent.includes('启动第三个会话')`), 'third_confirmation');
-  requireCheck((await api()).totalCount === 2, 'third-session confirmation does not preempt or increase the budget');
-  await read(`[...document.querySelectorAll('#confirmCard button')].find(button=>button.textContent==='继续启动').id='parallelConfirmThird'`);
-  await click('#parallelConfirmThird');
-  let ownerC;
-  await until(async () => { snapshot = await api(); const item = snapshot.items.find(item => item.owner && item.conversationId !== ownerB.conversationId && item.workspace.cwd === projects[1]); ownerC = item?.owner; return Boolean(ownerC?.sessionId) && item.lifecycle === 'ready'; }, 'C_native_identity', 65000);
-  report.facts.C = { owner: ownerC, kind: 'runtime', differentProject: true };
-  requireCheck(snapshot.totalCount === 3 && snapshot.hardLimit === 3 && new Set([ownerA.sessionId, ownerB.sessionId, ownerC.sessionId]).size === 3, 'A/B/C occupy exactly three resources with three native identities');
-  await focus(ownerC.conversationId);
-  await sendText('#runtimeView textarea', task('C'), '#runtimeView .rtc-send');
-  await untilTask(() => marker(projects[1], 'C'), 'C_real_shell_started', [ownerC]);
-  const active = await read(`(async()=> (await import('/state.js')).S.streaming)()`);
-  const bState = await state(ownerB), cState = await state(ownerC);
-  requireCheck(active && bState.data?.isStreaming && cState.data?.isStreaming, 'three real model tasks overlap while A is still running');
-  const aStart = (await events()).find(event => event.owner?.sessionId === ownerA.sessionId && event.type === 'agent_start');
-  const bStart = report.events.find(event => event.owner?.conversationId === ownerB.conversationId && event.type === 'agent_start');
-  const cStart = report.events.find(event => event.owner?.conversationId === ownerC.conversationId && event.type === 'agent_start');
-  report.facts.overlap = { A: aStart?.at, B: bStart?.at, C: cStart?.at, observedAllActiveAt: Date.now(), eventObserved: Boolean(aStart && bStart && cStart) };
-  requireCheck(Boolean(aStart && bStart && cStart), 'SSE records genuine agent_start for A/B/C');
-  const deniedFourth = await api({ action: 'open-session', args: { project: projects[1], requestId: require('node:crypto').randomUUID(), allowThird: true } });
-  requireCheck(deniedFourth.ok === false && deniedFourth.code === 'runtime_limit' && (await api()).totalCount === 3, 'fourth actual runtime admission is rejected without raising hard cap', { code: deniedFourth.code });
+  // Keep the original two-project shared-resource exercise. D shares A/B's
+  // writer root and E shares C's, but each has a real independent Pi/model turn.
+  const runtimeOwners = [ownerB], allOwners = [ownerA, ownerB], labels = ['B', 'C', 'D', 'E'];
+  const projectFor = { B: projects[0], C: projects[1], D: projects[0], E: projects[1] };
+  for (const label of ['C', 'D', 'E']) {
+    mark('open_' + label + '_without_quota_confirmation');
+    await click(`.project[data-project-path=${JSON.stringify(projectFor[label])}] .pj-header-action`);
+    let next;
+    await until(async () => {
+      if (await read(`document.querySelector('#confirmLayer')?.hidden===false`)) throw Error('unexpected_quota_confirmation');
+      snapshot = await api();
+      const item = snapshot.items.find(item => item.owner && !runtimeOwners.some(owner => owner.conversationId === item.conversationId));
+      next = item?.owner; return Boolean(next?.sessionId) && item.lifecycle === 'ready';
+    }, label + '_native_identity', 65000);
+    runtimeOwners.push(next); allOwners.push(next);
+    report.facts[label] = { owner: next, kind: 'runtime', sameProjectAsA: projectFor[label] === projects[0], differentProject: projectFor[label] !== projects[0] };
+    requireCheck(snapshot.totalCount === allOwners.length && new Set(allOwners.map(owner => owner.sessionId)).size === allOwners.length,
+      label + ' starts with an independent native identity and no confirmation or replacement');
+    await focus(next.conversationId);
+    await sendText('#runtimeView textarea', task(label), '#runtimeView .rtc-send');
+    await untilTask(async () => (await events()).some(event => sameOwner(event.owner, next) && event.type === 'agent_start'), label + '_agent_start', [next], 90000);
+    if (label === 'C') await untilTask(() => marker(projects[1], 'C'), 'C_real_shell_started', [next]);
+    else await untilTask(async () => (await events()).some(event => sameOwner(event.owner, next)
+      && event.type === 'tool_wait_state' && event.waiting === true), label + '_real_shared_root_tool_wait', [next]);
+  }
+  const [, ownerC, ownerD, ownerE] = runtimeOwners;
+  requireCheck(snapshot.totalCount === 5 && new Set(allOwners.map(owner => owner.runtimeId)).size === 5,
+    'A/B/C/D/E occupy exactly five counted resources with independent owners');
+  const overlapStates = await Promise.all(allOwners.map(state));
+  report.facts.overlap = overlapProof(await events(), allOwners, overlapStates);
+  requireCheck(report.facts.overlap.count === 5 && report.facts.overlap.independent && report.facts.overlap.allStreaming && report.facts.overlap.allActive,
+    'five real model tasks overlap while A and C tool shells are still running', report.facts.overlap);
+  requireCheck(report.facts.overlap.eventObserved, 'SSE records genuine agent_start for A/B/C/D/E');
+  requireCheck([ownerD, ownerE].every(owner => report.events.some(event => sameOwner(event.owner, owner)
+    && event.type === 'tool_wait_state' && event.waiting === true))
+    && !fs.existsSync(path.join(projects[0], 'd-native.txt')) && !fs.existsSync(path.join(projects[1], 'e-native.txt')),
+    'D/E actual write tools wait behind their own shared-root writers, not a runtime admission cap');
   mark('background_switching');
-  for (let i = 0; i < 3; i++) { await focus(ownerB.conversationId); await focus(ownerC.conversationId); }
-  const afterSwitch = [await state(ownerB), await state(ownerC)];
-  const stillA = await read(`(async()=> (await import('/state.js')).S.streaming)()`);
-  requireCheck(stillA && afterSwitch.every(result => result.data?.isStreaming) && marker(projects[0], 'A'), 'three B/C round trips preserve all real tasks and native owners');
-  report.facts.runningProjection = await recordProjection([ownerB.conversationId, ownerC.conversationId]);
-  requireCheck(report.facts.runningProjection.every((record, i) => record.owner.sessionId === [ownerB, ownerC][i].sessionId && record.cursor > 0), 'public runtime store consumes owner-scoped production SSE eventSequence');
+  for (let i = 0; i < 3; i++) for (const owner of runtimeOwners) await focus(owner.conversationId);
+  const afterSwitch = await Promise.all(allOwners.map(state));
+  requireCheck(afterSwitch.every((result, i) => result.data?.isStreaming && result.data.sessionId === allOwners[i].sessionId) && marker(projects[0], 'A'),
+    'three B/C/D/E navigation rounds preserve all five real tasks and native owners');
+  report.facts.runningProjection = await recordProjection(runtimeOwners.map(owner => owner.conversationId));
+  requireCheck(report.facts.runningProjection.every((record, i) => sameOwner(record.owner, runtimeOwners[i]) && record.cursor > 0), 'public runtime store consumes owner-scoped production SSE eventSequence');
   await shot('running-C-dark-wide');
   await focus(ownerB.conversationId); await shot('waiting-B-light-narrow', 700, 600, 'light');
   mark('stop_only_A');
@@ -605,12 +651,17 @@ async function exercise() {
   const stoppedAt = Date.now();
   await click('#btnStop');
   await until(() => read(`(async()=> !(await import('/state.js')).S.streaming)()`), 'A_abort_settled', 45000);
-  await untilTask(() => marker(projects[0], 'B'), 'B_lease_released_after_A_stop', [ownerB]);
-  const bAfterStop = await state(ownerB), cAfterStop = await state(ownerC);
-  requireCheck(bAfterStop.data?.isStreaming && cAfterStop.data?.isStreaming && bAfterStop.data.sessionId === ownerB.sessionId && cAfterStop.data.sessionId === ownerC.sessionId, 'stopping A leaves B/C streaming and same native identities');
+  // A stop must release the shared-root writer lease so B's already-queued real
+  // write executes. Do not wait for B's bash hold here: B and D share project 0,
+  // so B's long-running `node hold.cjs B` may legitimately queue behind D's own
+  // shell lease until the later release stage. The write file is the proof that
+  // A's lease was released.
+  await untilTask(() => { try { return fs.readFileSync(path.join(projects[0], 'b-native.txt'), 'utf8').trim() === 'B_NATIVE_WRITE'; } catch { return false; } }, 'B_write_released_after_A_stop', [ownerB]);
+  const afterStop = await Promise.all(runtimeOwners.map(state));
+  requireCheck(afterStop.every((result, i) => result.data?.isStreaming && result.data.sessionId === runtimeOwners[i].sessionId), 'stopping A leaves B/C/D/E streaming and same native identities');
   requireCheck(fs.readFileSync(path.join(projects[0], 'b-native.txt'), 'utf8').trim() === 'B_NATIVE_WRITE', 'B actual write proceeds after A lease is released');
   requireCheck(!fs.existsSync(path.join(projects[0], 'a-done.txt')), 'aborted A does not execute its post-delay write');
-  report.facts.stopA = { requestedAt: stoppedAt, BObservedRunningAt: Date.now(), BNativeUnchanged: true, CNativeUnchanged: true };
+  report.facts.stopA = { requestedAt: stoppedAt, othersObservedRunningAt: Date.now(), nativeUnchanged: labels };
   const nativeATools = (await events()).filter(event => event.owner?.sessionId === ownerA.sessionId && event.type === 'tool_execution_start');
   requireCheck(nativeATools.some(event => event.toolName === 'write') && nativeATools.some(event => event.toolName === 'read'), 'A genuinely invoked native write and read tools (not only shell)');
   const waiting = report.events.filter(event => event.owner?.conversationId === ownerB.conversationId && event.type === 'tool_wait_state');
@@ -618,33 +669,48 @@ async function exercise() {
   requireCheck(waiting.some(event => event.waiting === true) && waiting.some(event => event.waiting === false), 'real B tool_wait_state proves intentional same-root write coordination');
   mark('reload_while_B_C_running');
   await focus(ownerB.conversationId); await shot('running-B-dark-wide');
-  const beforeReload = [ownerB, ownerC];
+  const beforeReload = runtimeOwners;
   previousEvents = await events();
   const didLoad = new Promise(resolve => win.webContents.once('did-finish-load', resolve)); win.webContents.reload(); await didLoad;
   await until(() => read(`(async()=>{const {runtimeStore}=await import('/runtime-state.js');return ${JSON.stringify(beforeReload)}.every(owner=>runtimeStore.get(owner.conversationId)?.owner?.runtimeId===owner.runtimeId);})()`), 'reload_runtime_recovery', 45000);
-  requireCheck((await state(ownerB)).data?.isStreaming && (await state(ownerC)).data?.isStreaming, 'real Electron reload recovers B/C owners without abort or auto-respawn');
+  requireCheck((await Promise.all(runtimeOwners.map(state))).every((result, i) => result.data?.isStreaming && result.data.sessionId === runtimeOwners[i].sessionId),
+    'real Electron reload recovers B/C/D/E owners without abort or auto-respawn');
   // Preserve prior structure, then attach a new read-only SSE observation stream.
   await attachObserver();
   await focus(ownerC.conversationId); await shot('running-C-dark-narrow', 700, 600, 'dark');
   await shot('running-C-light-wide', 1320, 820, 'light');
-  mark('complete_B_C_real_files');
-  release(projects[0], 'B'); release(projects[1], 'C');
-  await untilTask(() => fs.existsSync(path.join(projects[0], 'b-done.txt')), 'B_final_native_write', [ownerB]);
-  await untilTask(() => fs.existsSync(path.join(projects[1], 'c-done.txt')), 'C_final_native_write', [ownerC]);
-  await until(async () => { const states = await Promise.all([state(ownerB), state(ownerC)]); return states.every(result => result.ok && result.data?.isStreaming === false); }, 'B_C_finished', 120000);
-  requireCheck(fs.readFileSync(path.join(projects[0], 'b-done.txt'), 'utf8').trim() === 'B_DONE' && fs.readFileSync(path.join(projects[1], 'c-done.txt'), 'utf8').trim() === 'C_DONE', 'B/C completed real native write/read tasks with exact isolated outputs');
-  requireCheck(!fs.existsSync(path.join(projects[0], 'c-done.txt')) && !fs.existsSync(path.join(projects[1], 'a-native.txt')) && !fs.existsSync(path.join(projects[1], 'b-native.txt')), 'file results do not cross project boundaries');
+  mark('complete_B_C_D_E_real_files');
+  // Release all owned gates together: queued D/E can then make progress without
+  // retaining a writer shell forever. This does not bypass production leases.
+  for (const label of labels) release(projectFor[label], label);
+  for (let i = 0; i < labels.length; i++) {
+    const label = labels[i];
+    await untilTask(() => fs.existsSync(path.join(projectFor[label], label.toLowerCase() + '-done.txt')), label + '_final_native_write', [runtimeOwners[i]], 180000);
+  }
+  await until(async () => { const states = await Promise.all(runtimeOwners.map(state)); return states.every(result => result.ok && result.data?.isStreaming === false); }, 'B_C_D_E_finished', 180000);
+  requireCheck(labels.every(label => fs.readFileSync(path.join(projectFor[label], label.toLowerCase() + '-done.txt'), 'utf8') === label + '_DONE'),
+    'B/C/D/E completed real native write/read tasks with exact isolated outputs');
+  requireCheck(['A', ...labels].every(label => !fs.existsSync(path.join(projects[projectFor[label] === projects[1] ? 0 : 1], label.toLowerCase() + '-native.txt'))
+    && !fs.existsSync(path.join(projects[projectFor[label] === projects[1] ? 0 : 1], label.toLowerCase() + '-done.txt'))), 'file results do not cross project boundaries');
   await events();
-  const ownerIds = [ownerB.conversationId, ownerC.conversationId];
-  for (const [label, owner] of [['B', ownerB], ['C', ownerC]]) {
+  const ownerIds = runtimeOwners.map(owner => owner.conversationId);
+  for (const [i, label] of labels.entries()) {
+    const owner = runtimeOwners[i];
     const tools = report.events.filter(event => event.owner?.conversationId === owner.conversationId && event.type === 'tool_execution_start');
     const toolErrors = report.events.filter(event => event.owner?.conversationId === owner.conversationId && event.type === 'tool_execution_end' && event.isError);
     check(tools.some(event => event.toolName === 'write') && tools.some(event => event.toolName === 'read') && tools.some(event => event.toolName === 'bash'), label + ' real native write/read/bash tool invocation');
     check(toolErrors.length === 0, label + ' has no tool error', { errors: toolErrors.length });
+    await until(async () => (await events()).some(event => sameOwner(event.owner, owner) && event.type === 'agent_settled'), label + '_observed_settled');
+    const proof = modelTurnProof(report.events, owner, 0, label + '_OK');
+    requireCheck(proof.outputMatches && proof.settled && proof.toolPairsComplete && proof.writeThenRead && proof.toolErrors === 0,
+      label + ' complete model/tool evidence stays on its exact native owner', proof);
   }
   const projection = await recordProjection(ownerIds); report.facts.completedProjection = projection;
-  requireCheck(!projection[0].hasC && !projection[1].hasB && !projection[0].hasA && !projection[1].hasA, 'public runtime store text never mixes A/B/C completion markers');
-  for (const [label, owner] of [['B', ownerB], ['C', ownerC]]) {
+  requireCheck(projection.every((record, i) => sameOwner(record.owner, runtimeOwners[i])
+    && ['A', ...labels].every(label => label === labels[i] || record['has' + label] === false)),
+    'public runtime store text never mixes A/B/C/D/E completion markers');
+  for (const [i, label] of labels.entries()) {
+    const owner = runtimeOwners[i];
     const history = await api(null, '/api/runtime-sessions?conversationId=' + encodeURIComponent(owner.conversationId));
     const proof = historyProof(history, owner.sessionId, label + '_OK');
     check(historyMatches(proof), label + ' production read-only history binds exact native session and tool result', proof);
@@ -660,12 +726,13 @@ async function exercise() {
   const staleRead = await api({ action: 'read', owner: ownerB, command: { type: 'get_state' } });
   const staleEvents = await api({ action: 'events', owner: ownerB, cursor: 0 });
   requireCheck(staleRead.code === 'stale_runtime' && staleEvents.code === 'stale_runtime', 'old owner cannot read or replay after real runtime restart');
-  requireCheck((await state(ownerC)).data?.sessionId === ownerC.sessionId, 'B restart does not replace C');
+  requireCheck((await Promise.all([ownerC, ownerD, ownerE].map(state))).every((result, index) => result.data?.sessionId === [ownerC, ownerD, ownerE][index].sessionId),
+    'B restart does not replace C/D/E');
   report.facts.B.restartedOwner = newB;
-  fs.writeFileSync(path.join(out, 'recovery-input.json'), JSON.stringify({ owners: { A: ownerA, B: newB, C: ownerC }, conversations: ownerIds }, null, 2));
+  fs.writeFileSync(path.join(out, 'recovery-input.json'), JSON.stringify({ owners: { A: ownerA, B: newB, C: ownerC, D: ownerD, E: ownerE }, conversations: ownerIds }, null, 2));
   await focus(ownerB.conversationId); await shot('completed-B-light-wide', 1320, 820, 'light');
   report.facts.files = projects.map((cwd, index) => ({ project: index + 1,
-    results: ['a-native.txt', 'a-done.txt', 'b-native.txt', 'b-done.txt', 'c-native.txt', 'c-done.txt'].filter(file => fs.existsSync(path.join(cwd, file))).map(file => {
+    results: ['A', ...labels].flatMap(label => [label.toLowerCase() + '-native.txt', label.toLowerCase() + '-done.txt']).filter(file => fs.existsSync(path.join(cwd, file))).map(file => {
       const bytes = fs.readFileSync(path.join(cwd, file)); return { file, bytes: bytes.length, sha256: require('node:crypto').createHash('sha256').update(bytes).digest('hex') };
     }) }));
 }
@@ -719,9 +786,9 @@ async function recovery() {
   const snap = await api();
   report.facts.recoveredSnapshot = { backendInstance: snap.backendInstance, totalCount: snap.totalCount, items: snap.items.map(item => ({ conversationId: item.conversationId, owner: item.owner, lifecycle: item.lifecycle, nativeSessionId: item.nativeSessionId })) };
   requireCheck(snap.backendInstance !== prior.owners.B.backendInstance && snap.totalCount === 1
-    && ['B', 'C'].every(label => snap.items.some(item => item.conversationId === prior.owners[label].conversationId))
-    && snap.items.every(item => item.lifecycle === 'dormant' && !item.owner), 'real app/backend restart restores dormant records without spawning B/C');
-  for (const label of ['B', 'C']) {
+    && ['B', 'C', 'D', 'E'].every(label => snap.items.some(item => item.conversationId === prior.owners[label].conversationId))
+    && snap.items.every(item => item.lifecycle === 'dormant' && !item.owner), 'real app/backend restart restores dormant records without spawning B/C/D/E');
+  for (const label of ['B', 'C', 'D', 'E']) {
     const owner = prior.owners[label];
     const hist = await api(null, '/api/runtime-sessions?conversationId=' + encodeURIComponent(owner.conversationId));
     const proof = historyProof(hist, owner.sessionId, label + '_OK');
@@ -739,8 +806,8 @@ async function recovery() {
   // Identity, not a fixed B label or timestamp, decides which one may resume.
   const classicSession = (await state()).legacyOwner?.sessionId;
   requireCheck(typeof classicSession === 'string' && classicSession.length > 0, 'recovery classic native identity is known before resume');
-  const heldLabel = ['B', 'C'].find(label => prior.owners[label].sessionId === classicSession);
-  const resumeLabel = ['B', 'C'].find(label => prior.owners[label].sessionId !== classicSession);
+  const heldLabel = ['B', 'C', 'D', 'E'].find(label => prior.owners[label].sessionId === classicSession);
+  const resumeLabel = ['B', 'C', 'D', 'E'].find(label => prior.owners[label].sessionId !== classicSession);
   report.facts.resumeSelection = { classicSession, heldLabel: heldLabel || null, resumeLabel };
   if (heldLabel) {
     const duplicate = await api({ action: 'resume', conversationId: prior.owners[heldLabel].conversationId });
@@ -757,19 +824,34 @@ async function recovery() {
   requireCheck(current.owner.sessionId === expected.sessionId && current.owner.conversationId === expected.conversationId
     && current.owner.runtimeId !== expected.runtimeId && current.owner.runtimeGeneration !== expected.runtimeGeneration
     && current.owner.backendInstance === snap.backendInstance && current.owner.backendInstance !== expected.backendInstance
-    && resumedSnapshot.totalCount === 2 && resumedSnapshot.limit === 2 && resumedSnapshot.hardLimit === 3,
+    && resumedSnapshot.totalCount === 2 && !Object.hasOwn(resumedSnapshot, 'limit') && !Object.hasOwn(resumedSnapshot, 'hardLimit'),
   'resume binds persisted native session with new backend/runtime identity');
   const readback = await state(current.owner);
   requireCheck(readback.ok === true && readback.data?.sessionId === expected.sessionId && readback.data.isStreaming === false,
     'resumed real Pi get_state confirms same session and does not call model');
   requireCheck(readback.data.model?.provider === process.env.PI_PROVIDER && readback.data.model?.id === process.env.PI_MODEL,
     'recovery resumed Pi confirms the explicitly selected existing model');
+  const restoredPeers = [];
+  for (const label of ['B', 'C', 'D', 'E'].filter(label => label !== resumeLabel && label !== heldLabel)) {
+    const expectedPeer = prior.owners[label], result = await api({ action: 'resume', conversationId: expectedPeer.conversationId });
+    requireCheck(result.ok === true, label + ' additional persisted native resume is admitted without quota confirmation', { code: result.code || null });
+    let peer;
+    await until(async () => { const snapshot = await api(); const item = snapshot.items.find(item => item.conversationId === expectedPeer.conversationId);
+      peer = item?.owner; return item?.lifecycle === 'ready' && Boolean(peer?.sessionId); }, label + '_recovered_peer_ready', 65000);
+    const actual = await state(peer);
+    requireCheck(peer.sessionId === expectedPeer.sessionId && peer.backendInstance === snap.backendInstance && peer.runtimeId !== expectedPeer.runtimeId
+      && actual.ok && actual.data?.sessionId === expectedPeer.sessionId && actual.data.isStreaming === false,
+    label + ' recovered peer retains its own real native history and idle RPC owner');
+    restoredPeers.push(peer);
+  }
+  requireCheck((await api()).totalCount === restoredPeers.length + 2 && restoredPeers.length >= 2,
+    'recovery restores multiple persisted native children beyond the former three-resource cap without replay');
   const noPromptEvents = await events();
   requireCheck(!noPromptEvents.some(event => event.type === 'agent_start'), 'recovery does not generate a model task',
     { scope: 'startup through explicit resume, before the one authorized recovery prompt', agentStarts: 0 });
   report.facts.resumedOwner = current.owner;
   mark('recovery_real_native_turn');
-  const recoveryProject = projects[resumeLabel === 'B' ? 0 : 1];
+  const recoveryProject = projects[['B', 'D'].includes(resumeLabel) ? 0 : 1];
   requireCheck(!fs.existsSync(path.join(recoveryProject, 'recovery-native.txt')), 'recovery result file does not predate the authorized model turn');
   const recoveryTurn = await runModelTurn(current.owner, 'recovery', 'This is an authorized temporary fixture acceptance task. Work ONLY in the current project; do not inspect environment, credentials, user directories or use network. Use only the native write and read tools. Write recovery-native.txt with exactly RECOVERY_NATIVE_WRITE, then read it to verify the exact contents. Do not use bash or any other tool. Reply with exactly RECOVERY_OK and nothing else.', 'RECOVERY_OK', modelTurnTimeout());
   const recoveryBytes = fs.existsSync(path.join(recoveryProject, 'recovery-native.txt')) ? fs.readFileSync(path.join(recoveryProject, 'recovery-native.txt')) : null;
@@ -819,13 +901,18 @@ async function recovery() {
   'recovery actual post-restart event window preserves current owner projection', report.facts.lateOwnerObservation);
   const starts = allEvents.filter(event => event.type === 'agent_start');
   requireCheck(starts.length === 1 && sameOwner(starts[0].owner, current.owner), 'recovery restart does not automatically generate another model task');
+  requireCheck((await Promise.all(restoredPeers.map(state))).every((result, index) => result.ok && result.data?.sessionId === restoredPeers[index].sessionId
+    && result.data.isStreaming === false), 'recovery restart leaves other restored native owners intact');
   report.facts.finalOwner = finalOwner;
+  const peersClosed = await Promise.all(restoredPeers.map(owner => api({ action: 'close', owner })));
+  requireCheck(peersClosed.every(result => result.ok === true) && (await api()).totalCount === 2 && (await state(finalOwner)).data?.sessionId === finalOwner.sessionId,
+    'parallel recovery closes return all other slots without disturbing the current owner');
   await shot('recovery-native-restarted-dark-wide');
   const closed = await api({ action: 'close', owner: finalOwner }), afterClose = await api();
   requireCheck(closed.ok === true && afterClose.totalCount === 1 && !afterClose.items.some(item => item.owner), 'explicit close returns resumed slot while preserving classic');
 }
 async function main() {
-  const phaseTimeout = phase === 'preflight' ? modelTurnTimeout() * 2 + 90000 : 500000;
+  const phaseTimeout = phase === 'preflight' ? modelTurnTimeout() * 2 + 90000 : 900000;
   const watchdog = setTimeout(() => { report.failure = { stage, name: 'watchdog_timeout' }; report.failed = report.checks.filter(check => !check.pass).length + 1; save(); app.exit(1); }, phaseTimeout);
   let failed = false;
   try {
@@ -848,14 +935,14 @@ async function main() {
     check(false, 'runner completed ' + stage, report.failure);
     try {
       await events();
-      const snap = await api(); report.facts.failureSnapshot = { totalCount: snap.totalCount, hardLimit: snap.hardLimit, items: snap.items?.map(item => ({ conversationId: item.conversationId, owner: item.owner, lifecycle: item.lifecycle, activity: item.activity, error: item.error })) };
+      const snap = await api(); report.facts.failureSnapshot = { totalCount: snap.totalCount, items: snap.items?.map(item => ({ conversationId: item.conversationId, owner: item.owner, lifecycle: item.lifecycle, activity: item.activity, error: item.error })) };
       await shot('failure-' + stage);
     } catch { report.facts.failureSnapshotUnavailable = true; }
   } finally {
     clearTimeout(watchdog);
     // Release owned fixture shells even after failure, then close only the
     // exact production runtimes created in this isolated data directory.
-    if (phase === 'exercise') for (const cwd of projects) for (const label of ['A', 'B', 'C']) release(cwd, label);
+    if (phase === 'exercise') for (const cwd of projects) for (const label of ['A', 'B', 'C', 'D', 'E']) release(cwd, label);
     let familyObserved = false;
     try {
       fs.writeFileSync(path.join(world, phase + '-ready-for-cleanup'), 'ready', { flag: 'wx' });

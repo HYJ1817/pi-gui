@@ -64,20 +64,35 @@ const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=NUL', '
 const requiredChecks = {
   common: ['production main uses normal sandbox, context isolation and no nodeIntegration', 'production preload is active',
     'cleanup public runtime closes are confirmed', 'parent observed this live process family before cleanup'],
-  exercise: ['three real model tasks overlap while A is still running', 'SSE records genuine agent_start for A/B/C',
-    'fourth actual runtime admission is rejected without raising hard cap', 'stopping A leaves B/C streaming and same native identities',
-    'real B tool_wait_state proves intentional same-root write coordination', 'real Electron reload recovers B/C owners without abort or auto-respawn',
-    'B/C completed real native write/read tasks with exact isolated outputs', 'B real native write/read/bash tool invocation',
-    'C real native write/read/bash tool invocation', 'explicit runtime restart accepted',
+  exercise: ['production resource snapshot counts classic without a product admission cap',
+    'C starts with an independent native identity and no confirmation or replacement',
+    'D starts with an independent native identity and no confirmation or replacement',
+    'E starts with an independent native identity and no confirmation or replacement',
+    'A/B/C/D/E occupy exactly five counted resources with independent owners',
+    'five real model tasks overlap while A and C tool shells are still running', 'SSE records genuine agent_start for A/B/C/D/E',
+    'D/E actual write tools wait behind their own shared-root writers, not a runtime admission cap',
+    'stopping A leaves B/C/D/E streaming and same native identities',
+    'real B tool_wait_state proves intentional same-root write coordination', 'real Electron reload recovers B/C/D/E owners without abort or auto-respawn',
+    'B/C/D/E completed real native write/read tasks with exact isolated outputs', 'B real native write/read/bash tool invocation',
+    'C real native write/read/bash tool invocation', 'D real native write/read/bash tool invocation', 'E real native write/read/bash tool invocation',
+    'B complete model/tool evidence stays on its exact native owner', 'C complete model/tool evidence stays on its exact native owner',
+    'D complete model/tool evidence stays on its exact native owner', 'E complete model/tool evidence stays on its exact native owner',
+    'public runtime store text never mixes A/B/C/D/E completion markers', 'explicit runtime restart accepted',
     'restart preserves native session and rotates runtimeId/generation', 'old owner cannot read or replay after real runtime restart',
-    'B production read-only history binds exact native session and tool result', 'C production read-only history binds exact native session and tool result'],
+    'B production read-only history binds exact native session and tool result', 'C production read-only history binds exact native session and tool result',
+    'D production read-only history binds exact native session and tool result', 'E production read-only history binds exact native session and tool result',
+    'B restart does not replace C/D/E'],
   preflight: ['preflight real Pi get_state confirms the explicitly selected existing model',
     'preflight output-only turn has genuine start, exact output, settled and idle',
     'preflight output-only turn invokes no tool', 'preflight native write/read turn has genuine start, exact output, settled and idle',
     'preflight invokes successful native write and read tools', 'preflight file has exact expected bytes and digest'],
-  recovery: ['real app/backend restart restores dormant records without spawning B/C',
+  recovery: ['real app/backend restart restores dormant records without spawning B/C/D/E',
     'B persisted history survives actual Electron/backend restart', 'C persisted history survives actual Electron/backend restart',
+    'D persisted history survives actual Electron/backend restart', 'E persisted history survives actual Electron/backend restart',
     'B prior backend owner is rejected after restart', 'C prior backend owner is rejected after restart',
+    'D prior backend owner is rejected after restart', 'E prior backend owner is rejected after restart',
+    'recovery restores multiple persisted native children beyond the former three-resource cap without replay',
+    'recovery restart leaves other restored native owners intact', 'parallel recovery closes return all other slots without disturbing the current owner',
     'explicit non-classic native resume after backend restart is admitted within budget',
     'resume binds persisted native session with new backend/runtime identity', 'recovery does not generate a model task',
     'recovery before explicit resume has zero agent_start', 'recovery resumed Pi confirms the explicitly selected existing model',
@@ -235,10 +250,10 @@ async function run() {
     // lease must queue B, not be interpreted as model/global runtime serialism.
     fs.writeFileSync(path.join(cwd, 'hold.cjs'), [
       "const fs=require('node:fs'),path=require('node:path');",
-      "const label=process.argv[2];if(!['A','B','C'].includes(label))process.exit(2);",
+      "const label=process.argv[2];if(!['A','B','C','D','E'].includes(label))process.exit(2);",
       "const root=fs.realpathSync(process.cwd());if(!root.includes('pi-parallel-live-'))process.exit(3);",
       "fs.writeFileSync(path.join(root,label+'-started.flag'),'started');",
-      "const end=Date.now()+420000;const timer=setInterval(()=>{if(fs.existsSync(path.join(root,'release-'+label+'.flag'))||Date.now()>end){clearInterval(timer);console.log(label+'_HOLD_RELEASED');}},100);",
+      "const end=Date.now()+900000;const timer=setInterval(()=>{if(fs.existsSync(path.join(root,'release-'+label+'.flag'))||Date.now()>end){clearInterval(timer);console.log(label+'_HOLD_RELEASED');}},100);",
       '',
     ].join('\n'));
     git(cwd, 'add', '.'); git(cwd, 'commit', '-m', 'fixture baseline');
@@ -307,7 +322,7 @@ async function run() {
     if (!childIdentity) throw Error('process_identity_unavailable');
     let observed = [], observedAt = null;
     const readyFile = path.join(world, phase + '-ready-for-cleanup');
-    const deadline = Date.now() + (phase === 'preflight' ? turnTimeout * 2 + 130000 : 540000);
+    const deadline = Date.now() + (phase === 'preflight' ? turnTimeout * 2 + 130000 : 940000);
     while (!phaseExit && !spawnError && Date.now() < deadline) {
       if (!observedAt && fs.existsSync(readyFile)) {
         observed = processFamily(processTable(world), childIdentity); observedAt = new Date().toISOString();

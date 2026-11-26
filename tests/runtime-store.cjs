@@ -227,5 +227,22 @@ const assert = require('node:assert/strict');
   assert.equal(storeC.get('conv-c').draftRevision, 7); // 绝不倒退为 0！
   checks++;
 
+  const counts = createRuntimeStore();
+  counts.seed({ backendInstance: 'counts', items: [], liveCount: 4, totalCount: 5 });
+  assert.deepEqual(counts.resources(), { liveCount: 4, totalCount: 5 }); checks++;
+  counts.seed({ backendInstance: 'counts', items: [], liveCount: 6, totalCount: 7, limit: 2, hardLimit: 3 });
+  assert.deepEqual(counts.resources(), { liveCount: 6, totalCount: 7 }); checks++;
+  counts.seed({ backendInstance: 'counts', items: [], liveCount: 8, totalCount: 9, limit: null, hardLimit: 'legacy' });
+  assert.deepEqual(counts.resources(), { liveCount: 8, totalCount: 9 }); checks++;
+  for (const partial of [{ liveCount: 1 }, { totalCount: 1 }, { liveCount: -1, totalCount: 0 }, { liveCount: 0, totalCount: NaN }]) {
+    counts.seed({ backendInstance: 'counts', items: [], ...partial });
+    assert.deepEqual(counts.resources(), { liveCount: 8, totalCount: 9 }); checks++;
+  }
+  const many = Array.from({ length: 100 }, (_, n) => ({ conversationId: 'count-' + n, owner: { ...owner('count-' + n), backendInstance: 'counts' } }));
+  counts.seed({ backendInstance: 'counts', items: many, liveCount: 100, totalCount: 101 });
+  assert.equal(counts.values().length, 100); assert.deepEqual(counts.resources(), { liveCount: 100, totalCount: 101 }); checks++;
+  counts.seed({ backendInstance: 'replacement', items: [] });
+  assert.equal(counts.resources(), null); checks++;
+
   console.log(`Runtime conversation store: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

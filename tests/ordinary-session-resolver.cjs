@@ -15,7 +15,17 @@ let passed=0;async function check(name,run){await run();passed++;console.log('PA
    for(const args of [{project:a,session:one.native},{project:a,session:two.id},{project:a,session:one.id,sessionPath:one.file},{project:world,session:one.id}])await assert.rejects(()=>ordinary.open(args));assert.equal(calls.length,1);
   });
   await check('a native session already owned by classic cannot be opened by another child',async()=>{primary=one.native;await assert.rejects(()=>ordinary.open({project:a,session:one.id}),e=>e.code==='session_in_use');primary=null;});
-  await check('new ordinary session keeps project cwd and bounded retry identity',async()=>{const requestId=randomUUID();await ordinary.open({project:a,requestId,allowThird:true});assert.equal(calls[1].value.requestId,requestId);assert.equal(calls[1].value.sessionId,null);assert.equal(calls[1].value.workspace.cwd,a);assert.equal(calls[1].options.allowThird,true);});
+  await check('legacy input flag is accepted but not forwarded to ordinary runtime admission',async()=>{const requestId=randomUUID();await ordinary.open({project:a,requestId,allowThird:true});assert.equal(calls[1].value.requestId,requestId);assert.equal(calls[1].value.sessionId,null);assert.equal(calls[1].value.workspace.cwd,a);assert.equal(calls[1].options,undefined);assert.equal(Object.hasOwn(calls[1].value,'allowThird'),false);});
+  await check('every retained history session is listed and opens without a fixed scan/window cap',async()=>{
+   for(let i=0;i<805;i++)fixture(a);
+   const dir=path.join(agent,'sessions',sessions._internals.dirNameFor(a)),file=path.join(dir,fs.readdirSync(dir).filter(f=>f.endsWith('.jsonl')).sort().at(-1));
+   const id=sessions._internals.sessionId(file),list=await sessions.list(a);
+   assert.equal(list.sessions.length,806);assert.equal(list.sessions.some(s=>s.id===id),true);
+   assert.equal(sessions.forSearch.ownedSessions(a).items.some(s=>s.id===id),true);
+   await ordinary.open({project:a,session:id});const opened=calls.at(-1).value;
+   assert.equal(opened.sessionLocator,file);assert.equal(opened.sessionId,JSON.parse(fs.readFileSync(file,'utf8')).id);
+   await assert.rejects(()=>ordinary.open({project:b,session:id}),e=>e.code==='session_unavailable');
+  });
   await check('directory replacement invalidates recorded workspace epoch',async()=>{const w=await ordinary.workspaceFor(b);fs.renameSync(b,b+'-old');fs.mkdirSync(b);await assert.rejects(()=>ordinary.validate(w),e=>e.code==='stale_workspace');});
   await check('removing project registration revokes later workspace operations',async()=>{const w=await ordinary.workspaceFor(a);projects.shift();await assert.rejects(()=>ordinary.validate(w),e=>e.code==='unknown_project');});
   await check('ordinary startup instructions use a private file instead of mutating the shared project',async()=>{

@@ -1,5 +1,5 @@
 'use strict';
-const assert=require('node:assert/strict'),http=require('node:http'),Module=require('node:module'),{EventEmitter}=require('node:events');
+const assert=require('node:assert/strict'),http=require('node:http'),Module=require('node:module'),path=require('node:path'),os=require('node:os'),{pathToFileURL}=require('node:url'),{EventEmitter}=require('node:events');
 const {createRuntimeBrowserHost}=require('../electron/browser-runtime-host.cjs');
 let checks=0;const ok=v=>{assert.ok(v);checks++;};
 function request(url,token,body,header='X-Pi-Runtime-Browser-Token',origin){return new Promise((resolve,reject)=>{
@@ -47,8 +47,12 @@ function browserRequest(connection,path,body,token=connection.token){return new 
     ok(a.connection.token!==b.connection.token&&a.connection.url!==b.connection.url);
     ok(controllers[0].opts.partition!==controllers[1].opts.partition);
     ok(!controllers[0].opts.isVisible()&&!controllers[1].opts.isVisible());
-    ok((await act({action:'allocate',scope:scope('C')})).code==='browser_limit');
-    ok((await act({action:'allocate',scope:{...A,runtimeId:'../escape'}})).code==='browser_limit');
+    const c=await act({action:'allocate',scope:scope('C')});ok(c.ok&&c.connection.token!==a.connection.token&&c.connection.url!==a.connection.url);
+    ok(controllers[2].opts.partition!==controllers[0].opts.partition);
+    // A schema-valid opaque identity is a key, never a path; there is no
+    // two-scope admission cap to turn it into browser_limit.
+    ok((await act({action:'allocate',scope:{...A,runtimeId:'../escape'}})).ok===true);
+    ok((await act({action:'allocate',scope:{...A,runtimeId:''}})).code==='invalid_scope');
     ok((await act({action:'allocate',scope:{...A,extra:'unknown'}})).code==='invalid_scope');
     ok((await act({action:'allocate',scope:{...A}})).connection.token===a.connection.token);
     const enable=handlers.get('pi-gui:runtime-browser-enable'),status=handlers.get('pi-gui:runtime-browser-status'),open=handlers.get('pi-gui:runtime-browser-open');
@@ -81,6 +85,11 @@ function browserRequest(connection,path,body,token=connection.token){return new 
     await act({action:'dispose',scope:A});ok(controllers[0].closed);
     ok((await status(event,{scope:A})).code==='stale_runtime');
     ok((await act({action:'allocate',scope:A})).code==='stale_runtime');
+    // Retained tombstones must not become a lifetime scope/admission budget.
+    let reopened=true;
+    for(let i=0;i<300;i++){const s=scope('retired-'+i);const r=await act({action:'allocate',scope:s});
+      if(!r.ok)reopened=false;await act({action:'dispose',scope:s});}
+    ok(reopened);
     ok((await status(event,{scope:B})).enabled===true);
     await act({action:'focus',scope:null});ok(focused.at(-1)===false&&controllers[1].hidden===true);
     bindLegacyViewport();
@@ -89,6 +98,20 @@ function browserRequest(connection,path,body,token=connection.token){return new 
     await act({action:'dispose',scope:B});bindLegacyViewport();ok(host.isLegacyVisible()&&attached.size===1);
     const b2={...B,runtimeGeneration:'new-generation-B'};await act({action:'allocate',scope:b2});await act({action:'focus',scope:b2});
     ok(!host.isLegacyVisible()&&attached.size===0);
+    // Batch lifecycle control must not hit the listener's connection limit:
+    // >16 real sessions are allocated and closed at once, as closeAll()/restore
+    // would do. The host serializes internally; the gateway wrapper must not
+    // pile sockets up to maxConnections and let Node reset the excess.
+    const {createRuntimeBrowserGateway}=await import(pathToFileURL(path.join(__dirname,'..','server','runtime-browser-launch.js')).href);
+    const gateway=createRuntimeBrowserGateway({env:{PI_GUI_RUNTIME_BROWSER_URL:url,PI_GUI_RUNTIME_BROWSER_TOKEN:token}});
+    const launch={packageDir:()=>path.join(os.tmpdir(),'pi-gui-browser-gateway-no-pi')};
+    const burst=Array.from({length:40},(_,i)=>scope('burst-'+i));
+    const activeBeforeBurst=host.records.size;
+    const allocated=await Promise.all(burst.map(item=>gateway.allocate(launch,item)));
+    ok(allocated.length===40&&allocated.every(adapter=>adapter&&typeof adapter.dispose==='function'));
+    const disposed=await Promise.allSettled(allocated.map(adapter=>adapter.dispose()));
+    ok(disposed.every(result=>result.status==='fulfilled'));
+    ok(host.records.size===activeBeforeBurst&&(await status(event,{scope:b2})).ok===true);
     const stopping=host.stop();ok((await status(event,{scope:b2})).code==='stale_runtime');
     ok(host.stop()===stopping);await stopping;ok(controllers[1].closed);
     ok((await status(event,{scope:b2})).code==='stale_runtime');console.log(`Runtime Browser scope HTTP/IPC isolation: ${checks}/${checks}`);

@@ -110,7 +110,7 @@ const { JSDOM } = require('jsdom');
   ok('dormant 时不显示发送，显示「恢复会话」与「打开历史」', btn('发送').disabled && !btn('恢复会话').disabled && !btn('打开历史').disabled);
   btn('打开历史').click(); await tick();
   ok('打开历史只发只读请求，不 spawn', requests.length === 0 && output().textContent.includes('历史问题') && output().textContent.includes('历史回答'));
-  ok('历史视图明确标注未启动、不占名额', stateLine().includes('未被启动'));
+  ok('历史视图明确标注未启动且不含名额文案', stateLine().includes('未被启动') && !stateLine().includes('名额'));
   ok('历史视图禁止发送', btn('发送').disabled && input().disabled);
   requests.length = 0;
   btn('恢复会话').click(); await tick();

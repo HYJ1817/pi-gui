@@ -23,6 +23,18 @@ let passed=0;async function check(name,run){await run();passed++;console.log('PA
   await check('closing A retains B workspace occupancy and live control',async()=>{await registry.close(ao);assert.equal(registry.inUse(world),true);await registry.command(bo,{type:'abort'});assert.equal(registry.getOwner(b.conversationId).runtimeId,bo.runtimeId);});
   await registry.close(bo);
   await check('sharing requires guard admission, not a deleted lease check',async()=>{shared=false;await assert.rejects(()=>registry.openProjectSession({workspace,sessionId:'native-C'}),e=>e.code==='tool_guard_unavailable');assert.equal(children.length,2);});
+  shared=true;
+  await check('five ordinary sessions at the same cwd run independently without extra confirmation',async()=>{
+   const opened=[];
+   for(const native of ['C','D','E','F','G'])opened.push(await registry.openProjectSession({workspace,sessionId:'native-'+native}));
+   await tick();const owners=opened.map(item=>registry.getOwner(item.conversationId));
+   await Promise.all(owners.map(owner=>registry.command(owner,{type:'prompt',message:'parallel '+owner.sessionId,id:'same'})));
+   assert.equal(registry.liveCount(),5);assert.equal(registry.runningCount(),5);assert.equal(registry.inUse(world),true);
+   assert.equal(new Set(owners.map(owner=>owner.runtimeId)).size,5);
+   const changed=await registry.restart(owners[0]);await tick();assert.notEqual(changed.owner.runtimeId,owners[0].runtimeId);
+   assert.equal(registry.liveCount(),5);assert.equal(registry.runningCount(),4);
+   assert.deepEqual(owners.slice(1).map(owner=>registry.getOwner(owner.conversationId)),owners.slice(1));
+  });
   // Match production's split authority: initial worktree admission must never
   // resolve a project-* identity; only a stored project resume target may use
   // the ordinary resolver, which rechecks registration/epoch/native ownership.
@@ -67,10 +79,9 @@ let passed=0;async function check(name,run){await run();passed++;console.log('PA
     try{await assert.rejects(()=>resuming.resume(opened.conversationId),e=>e.code==='stale_workspace');assert.equal(spawned.length,2);}
     finally{fs.rmdirSync(cwd);fs.renameSync(cwd+'-old',cwd);}
    });
-   await check('project resume retains tool guard, maintenance and hard-budget gates',async()=>{
+   await check('project resume retains tool guard and maintenance gates without a count quota',async()=>{
     guard=false;await assert.rejects(()=>resuming.resume(opened.conversationId),e=>e.code==='tool_guard_unavailable');guard=true;
     maintenance=true;await assert.rejects(()=>resuming.resume(opened.conversationId),e=>e.code==='maintenance');maintenance=false;
-    external=3;await assert.rejects(()=>resuming.resume(opened.conversationId,{allowThird:true}),e=>e.code==='runtime_limit');external=0;
     assert.equal(spawned.length,2);
    });
    await check('Classic native takeover during shared admission is rechecked before child creation',async()=>{
@@ -78,17 +89,24 @@ let passed=0;async function check(name,run){await run();passed++;console.log('PA
     try{await assert.rejects(()=>resuming.resume(opened.conversationId),e=>e.code==='session_in_use');assert.equal(spawned.length,2);}
     finally{takeover=false;primary=null;}
    });
+   await check('Classic external count does not prevent ordinary recovery',async()=>{
+    external=30;
+    try{const result=await resuming.resume(opened.conversationId);await tick();assert.equal(result.ok,true);
+     assert.equal(resuming.snapshot().totalCount,31);assert.equal(spawned.length,3);
+     await resuming.close(resuming.getOwner(opened.conversationId));
+    }finally{external=0;}
+   });
    await resuming.dispose();resuming=createRuntimeRegistry(resumeOptions);
    await check('backend restart keeps project dormant until explicitly resumed with fresh owner',async()=>{
     const snapshot=resuming.snapshot();assert.equal(snapshot.items.length,1);assert.equal(snapshot.items[0].owner,null);assert.equal(snapshot.liveCount,0);
     const restored=await resuming.resume(opened.conversationId);await tick();const current=resuming.getOwner(opened.conversationId);
     assert.equal(restored.ok,true);assert.equal(current.sessionId,previous.sessionId);assert.notEqual(current.backendInstance,previous.backendInstance);
-    assert.equal(spawned.length,3);assert.equal(worktreeCalls,0);
+    assert.equal(spawned.length,4);assert.equal(worktreeCalls,0);
    });
    await check('an unrelated missing registered project cannot block target project restoration',async()=>{
     await resuming.close(resuming.getOwner(opened.conversationId));projects.unshift({path:path.join(world,'offline-project')});
     const restored=await resuming.resume(opened.conversationId);await tick();assert.equal(restored.ok,true);
-    assert.equal(resuming.getOwner(opened.conversationId).sessionId,previous.sessionId);assert.equal(spawned.length,4);
+    assert.equal(resuming.getOwner(opened.conversationId).sessionId,previous.sessionId);assert.equal(spawned.length,5);
    });
   }finally{await resuming.dispose();}
   console.log(`Ordinary session runtime: ${passed}/${passed}`);

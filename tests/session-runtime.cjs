@@ -60,6 +60,17 @@ rl.on('line',line=>{const c=JSON.parse(line);
       assert.ok(messages.some(m => m.content?.some(p => p.text === 'finished-B')));
       assert.ok(!fs.readFileSync(path.join(aDir, 'fixture-session.jsonl'), 'utf8').includes('finished-B'));
     });
+    await check('生产 adapter 在子进程创建失败时把启动失败作为 rejection 返回，而不是假装已启动', async () => {
+      const { createPiSupervisor } = await import('../server/pi-supervisor.js');
+      const failed = await createSessionRuntime({ ...options,
+        supervisorFactory: config => ({ ...createPiSupervisor(config),
+          spawnProcess: () => { throw Object.assign(Error('fixture EAGAIN'), { code: 'EAGAIN' }); } }),
+        context: { cwd: bDir, owner: { conversationId: 'start-failure' }, isCurrent: () => true }, emit: () => {} });
+      try {
+        await assert.rejects(() => failed.start(), error => error.code === 'runtime_start_failed');
+        assert.equal(failed.getState().state, 'error');
+      } finally { await failed.dispose(); }
+    });
     await a.dispose();
     await check('A清理整树后 B继续RPC', async () => { assert.equal(a.cleanupConfirmed(), true); assert.equal((await b.request({ type: 'get_state' })).sessionId, 'B'); });
     await check('扩展错误公开投影只含固定文案，不含来源路径或原始错误',async()=>{

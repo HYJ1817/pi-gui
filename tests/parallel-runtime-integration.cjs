@@ -40,12 +40,16 @@ export type ExtensionHandler<E, R = undefined> = (event: E, ctx: ExtensionContex
   fs.writeFileSync(cli, `const guardUrl=${JSON.stringify(guardUrl)};\n` + String.raw`
 const fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
 const rl=require('node:readline').createInterface({input:process.stdin});
-const native=randomUUID(),cwd=process.cwd(),file=path.join(cwd,native+'.jsonl'),hooks=new Map();
+if(process.argv.includes('--fixture-fail-startup'))process.exit(24);
+const arg=name=>{const index=process.argv.indexOf(name);return index<0?null:process.argv[index+1];};
+const cwd=process.cwd(),resumed=arg('--session'),native=resumed?JSON.parse(fs.readFileSync(resumed,'utf8').split('\n')[0]).id:randomUUID();
+const sessionDir=arg('--session-dir')||cwd;fs.mkdirSync(sessionDir,{recursive:true});
+const file=resumed||path.join(sessionDir,new Date().toISOString().replace(/[:.]/g,'-')+'_'+native+'.jsonl'),hooks=new Map();
 const ctx={cwd,sessionManager:{getSessionId:()=>native}},send=value=>console.log(JSON.stringify(value));
 let streaming=false,current=null,helloAttempts=0,prompts=0,delayedStartup=null,firstState=true,helloBeforeStartup=false;
 const failFirst=process.argv.includes('--fixture-first-hello-fails'),failAll=process.argv.includes('--fixture-hello-always-fails'),delayStartup=process.argv.includes('--fixture-delay-startup-state');
 const append=message=>fs.appendFileSync(file,JSON.stringify({type:'message',id:randomUUID(),message})+'\n');
-fs.writeFileSync(file,JSON.stringify({type:'session',version:3,id:native,cwd})+'\n');
+if(!resumed)fs.writeFileSync(file,JSON.stringify({type:'session',version:3,id:native,cwd,timestamp:new Date().toISOString()})+'\n');
 const ready=import(guardUrl).then(({installToolGuard,toolTransport})=>{
   const connection={url:process.env.PI_GUI_TOOL_URL,token:process.env.PI_GUI_TOOL_TOKEN};
   installToolGuard({on:(type,fn)=>hooks.set(type,fn),getAllTools:()=>[{name:'write',sourceInfo:{source:'builtin',path:'builtin:write',scope:'temporary',origin:'top-level'}}]},
@@ -60,12 +64,12 @@ const ready=import(guardUrl).then(({installToolGuard,toolTransport})=>{
 const response=(c,data={})=>send({type:'response',id:c.id,command:c.type,success:true,data});
 async function settle(run,aborted=false){
   if(current!==run)return;
-  if(run.lease)await hooks.get('tool_execution_end')({toolCallId:'same-tool'},ctx);
+  if(run.lease){await hooks.get('tool_execution_end')({toolCallId:'same-tool'},ctx);send({type:'tool_execution_end',toolCallId:'same-tool',toolName:'write',isError:false});}
   if(current!==run)return;
   streaming=false;current=null;await hooks.get('agent_settled')({},ctx);send({type:'agent_settled',aborted});
 }
 async function run(c){
-  const own=current={lease:false,cancelled:false};streaming=true;
+  const own=current={lease:false,cancelled:false,label:c.message};streaming=true;
   append({role:'user',content:[{type:'text',text:c.message}]});send({type:'agent_start'});
   send({type:'message_update',assistantMessageEvent:{type:'text_delta',contentIndex:0,delta:'output-'+c.message}});
   response(c,{disposition:'started'});
@@ -89,11 +93,11 @@ rl.on('line',async line=>{
     send({type:'extension_error',extensionPath,event:'agent_start',error:'fixture-private-error-never-published'});response(c);return;
   }
   if(c.type==='extension_ui_response'){
-    const run=current;append({role:'assistant',content:[{type:'text',text:'finished-'+path.basename(cwd)}]});
+    const run=current;append({role:'assistant',content:[{type:'text',text:'finished-'+run?.label}]});
     if(run)await settle(run);response(c);return;
   }
   if(c.type==='abort'){if(current){current.cancelled=true;await settle(current,true);}response(c);return;}
-  if(c.type==='fixture_metrics'){response(c,{fixtureHelloAttempts:helloAttempts,fixturePrompts:prompts,fixtureHelloBeforeStartup:helloBeforeStartup});return;}
+  if(c.type==='fixture_metrics'){response(c,{fixturePid:process.pid,fixtureHelloAttempts:helloAttempts,fixturePrompts:prompts,fixtureHelloBeforeStartup:helloBeforeStartup});return;}
   // This fixture has one native session; reject a mutation rather than claiming
   // success while silently keeping the old native/extension session unchanged.
   if(c.type==='new_session'){send({type:'response',id:c.id,command:c.type,success:false,error:'fixture mutation rejected'});return;}
@@ -110,17 +114,30 @@ rl.on('line',async line=>{
   fs.mkdirSync(same); fs.mkdirSync(other);
   const workspace = (cwd, id) => ({ projectId: id, repoId: id, workspaceId: 'project-' + id, workspaceEpoch: 'epoch', cwd, root: cwd, branch: '' });
   const scheduler = createSessionToolScheduler(), frames = [], children = [];
+  let failNextStartup = false, enteredSharedStartup = false, releaseFirstPrepare;
+  const firstPrepare = new Promise(resolve => { releaseFirstPrepare = resolve; });
   const options = {
     dataDir: path.join(world, 'data'), publish: event => frames.push(event), validateWorkspace: async () => {},
-    sharedAdmission: assertSharedSessionTools,
+    sharedAdmission: (target, others) => {
+      if (others.length && children.length === 1) enteredSharedStartup = true;
+      return assertSharedSessionTools(target, others);
+    },
     factory: async (context, emit) => {
+      const extraArgs = failNextStartup ? ['--fixture-fail-startup'] : []; failNextStartup = false;
       const child = await createSessionRuntime({ context, emit, piBin: cli, dataDir: path.join(world, 'data'),
+        sessionDir: path.join(world, 'sessions'), extraArgs,
         toolScheduler: scheduler, env: { ...process.env, PI_CODING_AGENT_DIR: path.join(world, 'agent') } });
+      if (children.length === 0) {
+        // Hold the actual production prepare boundary, not a timeout/sleep or a
+        // fake-ready adapter. B must enter admission before token installation.
+        const prepare = child.toolGuard.prepare.bind(child.toolGuard);
+        child.toolGuard.prepare = async (...args) => { await firstPrepare; return prepare(...args); };
+      }
       children.push(child); return child;
     },
   };
   let registry = createRuntimeRegistry(options);
-  const open = (cwd, id, allowThird = false) => registry.openProjectSession({ workspace: workspace(cwd, id) }, { allowThird });
+  const open = (cwd, id) => registry.openProjectSession({ workspace: workspace(cwd, id) });
   const owner = id => registry.getOwner(id);
   const events = (id, type) => frames.filter(frame => frame.owner?.conversationId === id && frame.event?.type === type);
   try {
@@ -131,47 +148,75 @@ rl.on('line',async line=>{
       assert.equal(children[0].toolGuard.status().installed, false);
       assert.equal(children[0].toolGuard.ready(), false);
       // Deliberately do not await A's RPC ready, prepare or hello here.
-      b = await open(same, 'same');
+      const openingB = open(same, 'same');
+      await until(() => enteredSharedStartup);
+      assert.equal(children.length, 1); assert.equal(children[0].toolGuard.status().installed, false);
+      releaseFirstPrepare(); b = await openingB;
       assert.equal(children[0].toolGuard.ready(), true);
     });
     await until(() => registry.snapshot().items.find(item => item.conversationId === b.conversationId)?.lifecycle === 'ready');
-    const c = await open(other, 'other', true);
+    // Ten is the regression's minimum load, never a product limit. A/B share a
+    // root; C..J each have a different root so real tool execution can overlap.
+    const labels = 'ABCDEFGHIJ'.split(''), roots = [same, same, other];
+    const records = [a, b, await open(other, 'other')];
+    for (const label of labels.slice(3)) {
+      const cwd = path.join(world, 'project-' + label); fs.mkdirSync(cwd); roots.push(cwd);
+      records.push(await open(cwd, 'project-' + label));
+    }
     await until(() => registry.snapshot().items.every(item => item.lifecycle === 'ready'));
     await Promise.all(children.map(child => child.toolGuard.assertReady()));
-    const ids = [a, b, c].map(item => item.conversationId), owners = ids.map(owner);
+    const ids = records.map(item => item.conversationId), owners = ids.map(owner);
     const nativeFiles = await Promise.all(owners.map(value => registry.read(value, { type: 'get_state' }).then(state => state.sessionFile)));
-    await check('A/B/C have independent guardian/RPC/native identities including same-cwd A/B', () => {
-      assert.equal(new Set(owners.map(value => value.sessionId)).size, 3);
-      assert.equal(new Set(owners.map(value => value.runtimeId)).size, 3);
-      assert.equal(new Set(owners.map(value => value.runtimeGeneration)).size, 3);
+    await check('ten actual guardian/RPC children have independent native and runtime identities including same-cwd A/B', async () => {
+      for (const key of ['sessionId', 'runtimeId', 'runtimeGeneration']) assert.equal(new Set(owners.map(value => value[key])).size, labels.length);
+      const metrics = await Promise.all(children.map(child => child.request({ type: 'fixture_metrics' })));
+      assert.equal(new Set(metrics.map(value => value.fixturePid)).size, labels.length);
+      assert.ok(metrics.every(value => Number.isInteger(value.fixturePid) && value.fixturePid !== process.pid));
     });
-    await check('fourth child is refused without bypassing resource limits', async () => {
-      await assert.rejects(() => open(other, 'other', true), error => error.code === 'runtime_limit');
-      assert.equal(children.length, 3);
+    await check('third through tenth children start without confirmation or a replacement owner', () => {
+      assert.equal(registry.snapshot().liveCount, labels.length); assert.equal(children.length, labels.length);
+      assert.deepEqual(ids.map(owner), owners);
     });
     await registry.focus(owners[1]);
     await registry.command(owners[0], { type: 'prompt', id: 'same-request', message: 'A' });
     await until(() => events(ids[0], 'extension_ui_request').length > 0);
-    await registry.command(owners[1], { type: 'prompt', id: 'same-request', message: 'B' });
-    await registry.command(owners[2], { type: 'prompt', id: 'same-request', message: 'C' });
-    await until(() => ids.every(id => events(id, 'agent_start').length > 0) && events(ids[2], 'extension_ui_request').length > 0
+    await Promise.all(owners.slice(1).map((value, index) => registry.command(value, { type: 'prompt', id: 'same-request', message: labels[index + 1] })));
+    await until(() => ids.every(id => events(id, 'agent_start').length > 0) && ids.slice(2).every(id => events(id, 'extension_ui_request').length > 0)
       && events(ids[1], 'tool_wait_state').some(frame => frame.event.waiting));
-    await check('all three runs overlap; B waits only for its shared workspace tool while C executes', async () => {
+    await check('all ten real child turns overlap; shared-root B waits while nine tool holders execute', async () => {
       const states = await Promise.all(owners.map(value => registry.read(value, { type: 'get_state' })));
-      assert.ok(states.every(state => state.isStreaming));
+      assert.ok(states.every((state, index) => state.isStreaming && state.sessionId === owners[index].sessionId));
       assert.ok(fs.existsSync(path.join(same, 'A.txt'))); assert.ok(!fs.existsSync(path.join(same, 'B.txt')));
-      assert.equal(fs.readFileSync(path.join(other, 'C.txt'), 'utf8'), 'C');
+      for (let i = 2; i < labels.length; i++) assert.equal(fs.readFileSync(path.join(roots[i], labels[i] + '.txt'), 'utf8'), labels[i]);
+      assert.equal(ids.filter(id => events(id, 'tool_execution_start').length === 1).length, labels.length - 1);
+      assert.equal(ids.filter(id => events(id, 'agent_settled').length > 0).length, 0);
     });
     await check('selected conversation is not the owner of background text, tools or equal approval IDs', () => {
       for (let i = 0; i < ids.length; i++) {
         const deltas = events(ids[i], 'message_update').map(frame => frame.event.assistantMessageEvent.delta);
-        assert.deepEqual(deltas, ['output-' + ['A', 'B', 'C'][i]]);
+        assert.deepEqual(deltas, ['output-' + labels[i]]);
         const ownFrames = frames.filter(frame => frame.type === 'runtime_event' && frame.owner?.conversationId === ids[i]);
         assert.ok(ownFrames.every(frame => frame.owner.runtimeId === owners[i].runtimeId));
         assert.ok(ownFrames.every((frame, n) => !n || frame.eventSequence > ownFrames[n - 1].eventSequence));
       }
-      assert.equal(events(ids[0], 'extension_ui_request')[0].event.title, 'permission-A');
-      assert.equal(events(ids[2], 'extension_ui_request')[0].event.title, 'permission-C');
+      for (const i of [0, ...labels.slice(2).map((_, index) => index + 2)]) {
+        assert.equal(events(ids[i], 'extension_ui_request')[0].event.title, 'permission-' + labels[i]);
+        assert.equal(events(ids[i], 'tool_execution_start')[0].event.toolCallId, 'same-tool');
+      }
+    });
+    await check('sixty focus changes and same-ID parallel RPC reads do not pause or reassign background children', async () => {
+      for (let round = 0; round < 6; round++) for (const value of owners) await registry.focus(value);
+      const states = await Promise.all(owners.map(value => registry.read(value, { type: 'get_state', id: 'equal-read' })));
+      assert.ok(states.every((state, index) => state.isStreaming && state.sessionId === owners[index].sessionId));
+      assert.deepEqual(ids.map(owner), owners); assert.equal(children.length, labels.length);
+    });
+    await check('actual child startup failure is isolated while ten existing tasks keep their native owners', async () => {
+      failNextStartup = true; const failed = await open(other, 'other');
+      await until(() => registry.snapshot().items.find(item => item.conversationId === failed.conversationId)?.lifecycle === 'error');
+      const states = await Promise.all(owners.map(value => registry.read(value, { type: 'get_state' })));
+      assert.ok(states.every((state, index) => state.isStreaming && state.sessionId === owners[index].sessionId));
+      await registry.close(owner(failed.conversationId));
+      assert.equal(children.at(-1).cleanupConfirmed(), true); assert.equal(registry.liveCount(), labels.length);
     });
     await check('actual unrelated extension_error on A does not revoke its guard or disturb B/C runs', async () => {
       await children[0].request({type:'fixture_error',kind:'unrelated'});assert.equal(children[0].toolGuard.ready(),true);
@@ -188,7 +233,7 @@ rl.on('line',async line=>{
       assert.equal(stopped.ok, true);
       assert.equal((await registry.read(owners[0], { type: 'get_state' })).isStreaming, false);
       assert.equal((await registry.read(owners[1], { type: 'get_state' })).isStreaming, true);
-      assert.equal((await registry.read(owners[2], { type: 'get_state' })).isStreaming, true);
+      assert.ok((await Promise.all(owners.slice(2).map(value => registry.read(value, { type: 'get_state' })))).every(state => state.isStreaming));
       assert.equal(fs.readFileSync(path.join(same, 'B.txt'), 'utf8'), 'B');
     });
     await check('stopped A cannot reuse C approval; B approval completes only B', async () => {
@@ -204,26 +249,100 @@ rl.on('line',async line=>{
       assert.equal((await registry.read(owners[1], { type: 'get_state' })).sessionId, owners[1].sessionId);
       assert.equal(children[0].toolGuard.ready(), false);
       await assert.rejects(() => registry.command(owner(ids[0]), { type: 'prompt', message: 'after-crash' }), error => error.code === 'runtime_not_ready');
+      await registry.close(owner(ids[0])); assert.equal(children[0].cleanupConfirmed(), true);
     });
-    await registry.command(owners[2], { type: 'extension_ui_response', id: 'same-approval', confirmed: true });
-    await until(() => events(ids[2], 'agent_settled').length > 0);
+    await Promise.all(owners.slice(2).map(value => registry.command(value, { type: 'extension_ui_response', id: 'same-approval', confirmed: true })));
+    await until(() => ids.slice(2).every(id => events(id, 'agent_settled').length > 0));
+    await check('equal tool and approval IDs settle only their own native histories across all ten children', () => {
+      for (let i = 1; i < ids.length; i++) {
+        assert.equal(events(ids[i], 'tool_execution_end').length, 1);
+        assert.equal(events(ids[i], 'agent_settled').length, 1);
+        const lines = fs.readFileSync(nativeFiles[i], 'utf8').trim().split('\n').map(line => JSON.parse(line));
+        assert.equal(lines.at(-1).message.content[0].text, 'finished-' + labels[i]);
+      }
+    });
     await check('persistence is native-session scoped, not a shared selected-session buffer', async () => {
       for (let i = 0; i < owners.length; i++) {
         const lines = fs.readFileSync(nativeFiles[i], 'utf8').trim().split('\n').map(line => JSON.parse(line));
         assert.equal(lines[0].id, owners[i].sessionId);
-        assert.equal(lines[1].message.content[0].text, ['A', 'B', 'C'][i]);
+        assert.equal(lines[1].message.content[0].text, labels[i]);
       }
     });
+    await check('three repeated nine-child pressure rounds reuse RPC/tool/approval IDs without losing event or task ownership', async () => {
+      const survivors = owners.slice(1), baselinePrompts = await Promise.all(children.slice(1, labels.length).map(child => child.request({ type: 'fixture_metrics' })));
+      for (let round = 0; round < 3; round++) {
+        const messages = labels.slice(1).map(label => 'STRESS_' + round + '_' + label);
+        await Promise.all(survivors.map((value, index) => registry.command(value, { type: 'prompt', id: 'same-request', message: messages[index] })));
+        await until(() => messages.every((message, index) => fs.existsSync(path.join(roots[index + 1], message + '.txt'))));
+        const active = await Promise.all(survivors.map(value => registry.read(value, { type: 'get_state', id: 'same-read' })));
+        assert.ok(active.every((state, index) => state.isStreaming && state.sessionId === survivors[index].sessionId));
+        await Promise.all(survivors.map(value => registry.command(value, { type: 'extension_ui_response', id: 'same-approval', confirmed: true })));
+        await until(() => survivors.every(value => registry.snapshot().items.find(item => item.conversationId === value.conversationId)?.activity === 'idle'));
+        const metrics = await Promise.all(children.slice(1, labels.length).map(child => child.request({ type: 'fixture_metrics' })));
+        assert.ok(metrics.every((value, index) => value.fixturePrompts === baselinePrompts[index].fixturePrompts + round + 1));
+        for (let index = 0; index < survivors.length; index++) {
+          const history = await registry.read(survivors[index], { type: 'get_messages' });
+          assert.equal(history.messages.at(-1).content[0].text, 'finished-' + messages[index]);
+          const ownFrames = frames.filter(frame => frame.type === 'runtime_event' && frame.owner?.conversationId === survivors[index].conversationId);
+          assert.ok(ownFrames.every((frame, n) => frame.owner.runtimeId === survivors[index].runtimeId && (!n || frame.eventSequence > ownFrames[n - 1].eventSequence)));
+        }
+      }
+    });
+    await check('simultaneously closing three busy children confirms cleanup while the other children keep running', async () => {
+      await Promise.all([1, 2, 3].map(index => registry.command(owners[index], { type: 'prompt', message: 'CLOSE_' + labels[index] })));
+      await until(() => [1, 2, 3].every(index => fs.existsSync(path.join(roots[index], 'CLOSE_' + labels[index] + '.txt'))));
+      await registry.command(owners[4], { type: 'prompt', message: 'SURVIVOR_E' });
+      await until(() => fs.existsSync(path.join(roots[4], 'SURVIVOR_E.txt')));
+      await Promise.all([1, 2, 3].map(index => registry.close(owners[index])));
+      assert.ok([1, 2, 3].every(index => children[index].cleanupConfirmed()));
+      assert.equal((await registry.read(owners[4], { type: 'get_state' })).isStreaming, true);
+      for (const index of [5, 6, 7, 8, 9]) assert.equal((await registry.read(owners[index], { type: 'get_state' })).sessionId, owners[index].sessionId);
+    });
+    const resumedOwners = [];
+    await check('resume and restart a persisted real native child while many other owners already exist', async () => {
+      await registry.resume(ids[1]);
+      await until(() => registry.snapshot().items.find(item => item.conversationId === ids[1])?.lifecycle === 'ready'
+        && registry.getOwner(ids[1])?.sessionId === owners[1].sessionId);
+      const resumed = owner(ids[1]); resumedOwners.push(resumed);
+      assert.equal(resumed.sessionId, owners[1].sessionId); assert.notEqual(resumed.runtimeId, owners[1].runtimeId);
+      const history = await registry.read(resumed, { type: 'get_messages' });
+      assert.equal(history.messages[0].content[0].text, 'B');
+      await registry.restart(resumed);
+      await until(() => registry.snapshot().items.find(item => item.conversationId === ids[1])?.lifecycle === 'ready'
+        && registry.getOwner(ids[1])?.sessionId === resumed.sessionId);
+      const restarted = owner(ids[1]); resumedOwners.push(restarted);
+      assert.equal(restarted.sessionId, resumed.sessionId); assert.notEqual(restarted.runtimeGeneration, resumed.runtimeGeneration);
+      for (const stale of [owners[1], resumed]) await assert.rejects(() => registry.read(stale, { type: 'get_state' }), error => error.code === 'stale_runtime');
+      assert.equal((await registry.read(owners[4], { type: 'get_state' })).isStreaming, true);
+      assert.equal(registry.liveCount(), labels.length - 3);
+    });
+    const createdBeforeRestart = children.length, recordCount = registry.snapshot().items.length;
     await registry.dispose();
-    await check('closing the app confirms all guardian trees cleaned before dropping live owners', () => {
+    await check('closing the app confirms every created guardian tree cleaned before dropping live owners', () => {
       assert.ok(children.every(child => child.cleanupConfirmed())); assert.equal(scheduler.busy(), false);
     });
     registry = createRuntimeRegistry(options);
-    await check('backend restart restores history identities as dormant; old owners cannot replay', async () => {
-      const snapshot = registry.snapshot(); assert.equal(snapshot.liveCount, 0); assert.equal(snapshot.items.length, 3);
+    await check('backend restart restores all ten history identities as dormant; every old owner is rejected without respawn', async () => {
+      const snapshot = registry.snapshot(); assert.equal(snapshot.liveCount, 0); assert.equal(snapshot.items.length, recordCount);
+      assert.ok(ids.every(id => snapshot.items.some(item => item.conversationId === id)));
       assert.ok(snapshot.items.every(item => item.lifecycle === 'dormant' && item.owner === null));
-      for (const previous of owners) await assert.rejects(() => registry.command(previous, { type: 'prompt', message: 'late' }), error => error.code === 'stale_runtime');
-      assert.equal(children.length, 3);
+      for (const previous of [...owners, ...resumedOwners]) await assert.rejects(() => registry.command(previous, { type: 'prompt', message: 'late' }), error => error.code === 'stale_runtime');
+      assert.equal(children.length, createdBeforeRestart);
+    });
+    await check('explicit backend recovery starts five persisted sessions without auto-replaying a task', async () => {
+      const recoveredIndices = [1, 2, 3, 5, 6];
+      for (const index of recoveredIndices) await registry.resume(ids[index]);
+      await until(() => recoveredIndices.every(index => registry.snapshot().items.find(item => item.conversationId === ids[index])?.lifecycle === 'ready'
+        && registry.getOwner(ids[index])?.sessionId === owners[index].sessionId));
+      const recovered = recoveredIndices.map(index => owner(ids[index]));
+      assert.equal(registry.liveCount(), recovered.length);
+      for (let i = 0; i < recovered.length; i++) {
+        const value = recovered[i], previous = owners[recoveredIndices[i]];
+        assert.equal(value.sessionId, previous.sessionId); assert.notEqual(value.backendInstance, previous.backendInstance);
+        assert.equal((await registry.read(value, { type: 'get_state' })).isStreaming, false);
+        assert.equal((await children[createdBeforeRestart + i].request({ type: 'fixture_metrics' })).fixturePrompts, 0);
+      }
+      await registry.dispose(); assert.ok(children.every(child => child.cleanupConfirmed()));
     });
     const readFixture=async child=>({...await child.request({type:'get_state'}),...await child.request({type:'fixture_metrics'})});
     async function controlled(name, run, extraArgs = [], additions = {}) {
@@ -381,7 +500,7 @@ rl.on('line',async line=>{
       const adapters=[],groupFrames=[];
       const local=createRuntimeRegistry({...options,dataDir:path.join(world,label+'-data'),publish:frame=>groupFrames.push(frame),
         factory:async(context,emit)=>{const child=await createSessionRuntime({context,emit,piBin:cli,dataDir:path.join(world,label+'-data'),toolScheduler:scheduler,env:{...process.env,PI_CODING_AGENT_DIR:path.join(world,'agent')}});adapters.push(child);return child;}});
-      try{const records=[await local.openProjectSession({workspace:workspace(root,label)}),await local.openProjectSession({workspace:workspace(root,label)}),await local.openProjectSession({workspace:workspace(independent,label+'-other')},{allowThird:true})];
+      try{const records=[await local.openProjectSession({workspace:workspace(root,label)}),await local.openProjectSession({workspace:workspace(root,label)}),await local.openProjectSession({workspace:workspace(independent,label+'-other')})];
         await until(()=>local.snapshot().items.every(item=>item.lifecycle==='ready'));await Promise.all(adapters.map(child=>child.assertToolGuardReady()));
         const owners=records.map(record=>local.getOwner(record.conversationId));await run({local,adapters,owners,groupFrames,root,independent});
       }finally{await local.dispose();}
@@ -407,6 +526,7 @@ rl.on('line',async line=>{
     }));
     console.log(`Parallel runtime integration: ${passed}/${passed}`);
   } finally {
+    releaseFirstPrepare();
     await registry.dispose(); scheduler.dispose(); fs.rmSync(world, { recursive: true, force: true, maxRetries: 8, retryDelay: 100 });
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

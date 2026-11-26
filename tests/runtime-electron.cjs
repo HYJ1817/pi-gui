@@ -137,7 +137,7 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     const workspaces = [];
     for (const name of ['A', 'B']) { const list = await api(null, '/api/worktrees?project=' + encodeURIComponent(repo)); const plan = await api({ action: 'prepare', project: repo, branch: 'runtime-' + name, source: 'HEAD', contextGeneration: list.contextGeneration }, '/api/worktrees'); assert.ok(plan.ok, JSON.stringify(plan)); const created = await api({ action: 'create', nonce: plan.nonce, contextGeneration: list.contextGeneration }, '/api/worktrees'); assert.ok(created.ok, JSON.stringify(created)); const next = await api(null, '/api/worktrees?project=' + encodeURIComponent(repo)); workspaces.push(next.items.find(w => w.branch === 'runtime-' + name)); }
     let started = await api({ action: 'start', args: { id: workspaces[0].id, epoch: workspaces[0].epoch } }); check(started.ok, 'A scoped child start');
-    started = await api({ action: 'start', args: { id: workspaces[1].id, epoch: workspaces[1].epoch, allowThird: true } }); check(started.ok, 'B explicit third total child');
+    started = await api({ action: 'start', args: { id: workspaces[1].id, epoch: workspaces[1].epoch } }); check(started.ok, 'B third total child starts directly');
     let state; await until(async () => { state = await api(); return state.items.every(r => r.lifecycle === 'ready' && r.owner.sessionId); });
     const owners = workspaces.map(w => state.items.find(r => r.owner.workspaceId === w.id).owner);
     if (process.env.P32_REFINED_RUNTIME === '1') {
@@ -459,55 +459,61 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     const recovered=state.items.find(r=>r.conversationId===owners[0].conversationId).owner;
     check(recovered.backendInstance!==owners[0].backendInstance&&recovered.sessionId===owners[0].sessionId,'disk recovery keeps native session and allocates fresh backend owner');
 
-    /* ---- P32.4-D: totalCount includes the classic child; UI launch paths use
-     * backend snapshots and ask before explicit third admission. ---- */
+    /* ---- P32.4-D: totalCount includes the classic child; every UI launch
+     * is a single request without count-based confirmation or retry. ---- */
     await read(`import('/sessions.js').then(m=>m.refreshSidebarSessions())`);
     await until(() => read(`document.querySelectorAll('#pjRuntimeList [data-conversation-id]').length===2`));
     await clickRow(idA); await until(async () => (await centerBranch()).includes('runtime-A'));
-    const quotaText = () => read(`document.querySelector('#runtimeView .runtime-resource-count')?.textContent || ''`);
-    await until(async () => (await quotaText()) === '正在运行 2 / 2');
+    const runningText = () => read(`document.querySelector('#runtimeView .runtime-resource-count')?.textContent || ''`);
+    await until(async () => (await runningText()) === '2 个会话正在运行');
     state = await api();
-    check(state.totalCount === 2 && state.liveCount === 1 && state.limit === 2 && state.hardLimit === 3, 'P32.4-D classic plus A fills two regular slots with backend limits unchanged');
-    check(await read(`document.querySelector('#pjRuntimeList .runtime-resource-count').textContent==='正在运行 2 / 2'`), 'P32.4-D sidebar resource count comes from totalCount including classic');
-    await shot('d-two-regular-slots', OUT4);
-    await read(`(()=>{const original=window.fetch;window.__resourceOriginalFetch=original;window.__resourceRequests=[];window.__resourceFocusRequests=[];window.fetch=async(...args)=>{let body;try{body=JSON.parse(args[1]?.body||'null')}catch{}const runtime=String(args[0]).includes('/api/runtime-sessions'),launch=runtime&&['start','resume'].includes(body?.action);const entry=launch?{action:body.action,conversationId:body.conversationId||null,workspaceId:body.args?.id||null,allowThird:body.action==='start'?body.args?.allowThird===true:body.allowThird===true}:runtime&&body?.action==='focus'?{action:'focus',conversationId:body.owner?.conversationId,runtimeId:body.owner?.runtimeId,runtimeGeneration:body.owner?.runtimeGeneration}:null;if(entry)(launch?window.__resourceRequests:window.__resourceFocusRequests).push(entry);const response=await original(...args);if(entry){const result=await response.clone().json();entry.ok=result.ok;entry.code=result.code||null;if(body.action==='resume')entry.returnedOwner={conversationId:result.owner?.conversationId,runtimeId:result.owner?.runtimeId,runtimeGeneration:result.owner?.runtimeGeneration};}return response}})()`);
+    check(state.totalCount === 2 && state.liveCount === 1 && !Object.hasOwn(state, 'limit') && !Object.hasOwn(state, 'hardLimit'), 'P32.4-D classic plus A reports actual counts without budget metadata');
+    check(await read(`document.querySelector('#pjRuntimeList .runtime-resource-count').textContent==='2 个会话正在运行'`), 'P32.4-D sidebar running count comes from totalCount including classic');
+    await shot('d-two-running', OUT4);
+    await read(`(()=>{const original=window.fetch;window.__resourceOriginalFetch=original;window.__resourceRequests=[];window.__resourceFocusRequests=[];window.fetch=async(...args)=>{let body;try{body=JSON.parse(args[1]?.body||'null')}catch{}const runtime=String(args[0]).includes('/api/runtime-sessions'),launch=runtime&&['start','resume','open-session'].includes(body?.action);const entry=launch?{action:body.action,conversationId:body.conversationId||null,workspaceId:body.args?.id||null,hasAdmissionField:Object.hasOwn(body,'allowThird')||Object.hasOwn(body.args||{},'allowThird')}:runtime&&body?.action==='focus'?{action:'focus',conversationId:body.owner?.conversationId,runtimeId:body.owner?.runtimeId,runtimeGeneration:body.owner?.runtimeGeneration}:null;if(entry)(launch?window.__resourceRequests:window.__resourceFocusRequests).push(entry);const response=await original(...args);if(entry){const result=await response.clone().json();entry.ok=result.ok;entry.code=result.code||null;entry.error=result.error||null;if(body.action==='resume')entry.returnedOwner={conversationId:result.owner?.conversationId,runtimeId:result.owner?.runtimeId,runtimeGeneration:result.owner?.runtimeGeneration};}return response}})()`);
     await clickRow(idB); await until(async () => (await centerBranch()).includes('runtime-B'));
     await centerButton('打开历史'); await until(() => read(`document.querySelector('#runtimeView .rtc-state').textContent.includes('只读历史')`));
     state = await api();
-    check(state.totalCount === 2 && !state.items.find(r => r.conversationId === idB).owner, 'P32.4-D dormant B history opens at full regular capacity without spawning');
+    check(state.totalCount === 2 && !state.items.find(r => r.conversationId === idB).owner, 'P32.4-D dormant B history opens without spawning regardless of running count');
     check(await read(`window.__resourceRequests.length===0`), 'P32.4-D opening history never sends a launch request');
-    await centerButton('恢复会话'); await until(() => read(`!document.querySelector('#confirmLayer').hidden`));
-    check(await read(`document.querySelector('#confirmCard').textContent.includes('第三个')&&document.querySelector('#confirmCard').textContent.includes('CPU、内存和模型请求')`), 'P32.4-D third Resume explains resource cost before launch');
-    check(await read(`window.__resourceRequests.length===0`) && (await api()).totalCount === 2, 'P32.4-D third confirmation appears before any Pi spawn request');
-    await shot('d-third-confirmation', OUT4);
-    await read(`[...document.querySelectorAll('#confirmCard button')].find(b=>b.textContent==='取消').click()`);
-    await until(() => read(`document.querySelector('#confirmLayer').hidden&&![...document.querySelectorAll('#runtimeView button')].find(b=>b.textContent==='恢复会话').disabled`));
-    state = await api();
-    check(state.totalCount === 2 && state.items.find(r => r.conversationId === idB).lifecycle === 'dormant' && await read(`window.__resourceRequests.length===0`), 'P32.4-D Cancel leaves B dormant and sends no resume');
-    await centerButton('恢复会话'); await until(() => read(`!document.querySelector('#confirmLayer').hidden`));
-    await read(`[...document.querySelectorAll('#confirmCard button')].find(b=>b.textContent==='继续启动').click()`);
+    await centerButton('恢复会话');
     await until(async () => { state = await api(); return state.totalCount === 3 && state.items.find(r => r.conversationId === idB)?.lifecycle === 'ready'; }, 60000);
-    check(await read(`window.__resourceRequests.length===1&&window.__resourceRequests[0].action==='resume'&&window.__resourceRequests[0].conversationId===${JSON.stringify(idB)}&&window.__resourceRequests[0].allowThird===true&&window.__resourceRequests[0].ok===true`), 'P32.4-D confirmed central Resume sends top-level allowThird true exactly once');
-    await until(async () => (await quotaText()) === '3 个会话正在运行');
+    check(await read(`document.querySelector('#confirmLayer').hidden`), 'P32.4-D third Resume never opens a quantity confirmation');
+    check(await read(`window.__resourceRequests.length===1&&window.__resourceRequests[0].action==='resume'&&window.__resourceRequests[0].conversationId===${JSON.stringify(idB)}&&!window.__resourceRequests[0].hasAdmissionField&&window.__resourceRequests[0].ok===true`), 'P32.4-D central Resume sends its captured identity exactly once without admission fields');
+    await until(async () => (await runningText()) === '3 个会话正在运行');
     console.log('D after third safe focus evidence: ' + JSON.stringify({ backendFocusedB: (await api()).focusedConversationId === idB, renderer: await read(`import('/runtime-state.js').then(m=>{const r=m.runtimeStore.get(${JSON.stringify(idB)});return{requests:window.__resourceRequests,focusRequests:window.__resourceFocusRequests,title:document.querySelector('#runtimeView .rtc-title')?.textContent,view:document.querySelector('#workspace').dataset.workspaceView,b:{lifecycle:r?.item.lifecycle,conversationId:r?.owner?.conversationId,runtimeId:r?.owner?.runtimeId,runtimeGeneration:r?.owner?.runtimeGeneration}}})`) }));
     check(state.liveCount === 2 && state.items.find(r => r.conversationId === idA).owner.runtimeId === recovered.runtimeId, 'P32.4-D third child ready preserves existing A runtime');
     await shot('d-third-active', OUT4);
     const thirdOwner = state.items.find(r => r.conversationId === idB).owner;
 
-    await read(`document.querySelector('#pjRuntimeList .pj-runtime-new').click()`);
-    await until(() => read(`!!document.querySelector('#modalCard input')&&!document.querySelector('#modal').hidden`));
-    await read(`(()=>{const i=document.querySelector('#modalCard input');i.value='p32-4-fourth-rejected';i.dispatchEvent(new Event('input'))})()`);
-    await read(`[...document.querySelectorAll('#modalCard button')].find(b=>b.textContent==='创建并启动').click()`);
-    await until(() => read(`window.__resourceRequests.some(r=>r.action==='start'&&r.code==='runtime_limit')`), 60000);
-    check(await read(`window.__resourceRequests.filter(r=>r.action==='start').length===1&&!window.__resourceRequests.find(r=>r.action==='start').allowThird`), 'P32.4-D fourth sidebar create actually reaches backend and receives runtime_limit');
-    await until(() => read(`[...document.querySelectorAll('.toast')].some(t=>t.textContent.includes('运行名额已满')&&t.textContent.includes('打开历史'))`));
-    check(await read(`document.querySelector('#confirmLayer').hidden`), 'P32.4-D fourth request shows backend rejection without another third confirmation');
-    state = await api();
-    check(state.totalCount === 3 && state.items.find(r => r.conversationId === idA).owner.runtimeId === recovered.runtimeId && state.items.find(r => r.conversationId === idB).owner.runtimeId === thirdOwner.runtimeId, 'P32.4-D fourth rejection never replaces or closes existing A/B');
-    await shot('d-fourth-rejected', OUT4);
-
+    const additionalOwners = [];
+    for (const count of [4, 5]) {
+      await read(`document.querySelector('#pjRuntimeList .pj-runtime-new').click()`);
+      await until(() => read(`!!document.querySelector('#modalCard input')&&!document.querySelector('#modal').hidden`));
+      await read(`(()=>{const i=document.querySelector('#modalCard input');i.value=${JSON.stringify('p32-4-running-' + count)};i.dispatchEvent(new Event('input'))})()`);
+      await read(`[...document.querySelectorAll('#modalCard button')].find(b=>b.textContent==='创建并启动').click()`);
+      await until(async () => { state = await api(); return state.totalCount === count && state.items.find(r => r.workspace.branch === 'p32-4-running-' + count)?.lifecycle === 'ready'; }, 60000);
+      const createdOwner = state.items.find(r => r.workspace.branch === 'p32-4-running-' + count).owner;
+      additionalOwners.push(createdOwner);
+      check(await read(`window.__resourceRequests.filter(r=>r.action==='start').length===${count - 3}&&window.__resourceRequests.filter(r=>r.action==='start').every(r=>r.ok&&!r.hasAdmissionField)&&document.querySelector('#confirmLayer').hidden`), `P32.4-D session ${count} sidebar create sends once without a count confirmation or admission fields`);
+      check(state.items.find(r => r.conversationId === idA).owner.runtimeId === recovered.runtimeId && state.items.find(r => r.conversationId === idB).owner.runtimeId === thirdOwner.runtimeId, `P32.4-D session ${count} preserves existing A/B owners`);
+      await until(() => read(`document.querySelector('#pjRuntimeList .runtime-resource-count').textContent===${JSON.stringify(count + ' 个会话正在运行')}`));
+      await shot('d-running-' + count, OUT4);
+    }
+    // A real stale-workspace launch still fails once and displays its own error.
+    await read(`import('/runtime-sessions.js').then(m=>m.openRuntimeSessions({path:${JSON.stringify(repo)}},{id:${JSON.stringify(workspaces[0].id)},epoch:'stale-fixture-epoch',projectId:${JSON.stringify(state.items.find(r => r.conversationId === idA).workspace.projectId)}}))`);
+    await until(() => read(`!![...document.querySelectorAll('#modalCard button')].find(b=>b.textContent==='启动此工作区')`));
+    await read(`[...document.querySelectorAll('#modalCard button')].find(b=>b.textContent==='启动此工作区').click()`);
+    await until(() => read(`window.__resourceRequests.filter(r=>r.action==='start').length===3&&window.__resourceRequests.at(-1).ok===false`));
+    await until(() => read(`(()=>{const r=window.__resourceRequests.at(-1),text=document.querySelector('#modalCard .wt-notice').textContent;return text.length>0&&(text.includes(r.error||'')||text.includes(r.code))})()`));
+    check(await read(`!window.__resourceRequests.at(-1).hasAdmissionField&&document.querySelector('#confirmLayer').hidden`), 'P32.4-D actual workspace error is neither confirmed nor retried');
+    check((await api()).totalCount === 5, 'P32.4-D rejected stale workspace leaves every live session intact');
+    await read(`import('/ui/modal.js').then(m=>m.closeModal())`);
+    for (const owner of additionalOwners) check((await api({ action: 'close', owner })).ok, 'P32.4-D fixture closes only its extra scoped runtime');
+    await until(async () => (await api()).totalCount === 3);
+    await clickRow(idB);
     // Populate real B Browser and Process resources, then close via central UI.
-    // A retained slot must not be freed before their owned cleanup completes.
+    // Authoritative counts must not drop before owned cleanup completes.
     await until(async () => (await api()).focusedConversationId === idB);
     check((await api()).focusedConversationId === idB, 'P32.4-D resumed current central B receives backend focus after ready');
     await centerButton('Browser');
@@ -529,21 +535,20 @@ send({type:'response',id:c.id,command:c.type,success:true,data:c.type==='get_sta
     await read(`import('/runtime-state.js').then(m=>{window.__dClosedCounts=[];window.__dOff=m.onRuntimeChange(()=>{if(m.runtimeStore.get(${JSON.stringify(idB)})?.item.lifecycle==='dormant')window.__dClosedCounts.push(m.runtimeStore.resources().totalCount)})})`);
     await centerButton('关闭会话');
     await until(async () => { state = await api(); return state.totalCount === 2 && state.items.find(r => r.conversationId === idB)?.lifecycle === 'dormant'; }, 30000);
-    check(await read(`window.__dClosedCounts.length>0&&window.__dClosedCounts[0]===3`), 'P32.4-D closed SSE does not optimistically release the authoritative slot count');
-    check(thirdBrowser.isDestroyed() && ![...host.records.values()].some(r => r.scope.runtimeId === thirdOwner.runtimeId), 'P32.4-D close frees third Browser owner before slot readback drops');
+    check(await read(`window.__dClosedCounts.length>0&&window.__dClosedCounts[0]===3`), 'P32.4-D closed SSE does not optimistically reduce the authoritative running count');
+    check(thirdBrowser.isDestroyed() && ![...host.records.values()].some(r => r.scope.runtimeId === thirdOwner.runtimeId), 'P32.4-D close disposes third Browser owner before running-count readback drops');
     await until(async () => { try { await fetch(thirdUrl); return false; } catch { return true; } });
-    check(true, 'P32.4-D close actually stops third owned Node service before released-slot readback');
-    await until(async () => (await quotaText()) === '正在运行 2 / 2');
-    check(state.items.find(r => r.conversationId === idA).owner.runtimeId === recovered.runtimeId, 'P32.4-D closing B recovers its slot and preserves A');
+    check(true, 'P32.4-D close actually stops third owned Node service before running-count readback');
+    await until(async () => (await runningText()) === '2 个会话正在运行');
+    check(state.items.find(r => r.conversationId === idA).owner.runtimeId === recovered.runtimeId, 'P32.4-D closing B updates actual count and preserves A');
     await centerButton('打开历史'); await until(() => read(`document.querySelector('#runtimeView .rtc-state').textContent.includes('只读历史')`));
-    check((await api()).totalCount === 2 && await read(`window.__resourceRequests.length===2`), 'P32.4-D closed B history remains accessible without another launch');
-    await shot('d-close-slot-recovered-history', OUT4);
+    check((await api()).totalCount === 2 && await read(`window.__resourceRequests.length===4`), 'P32.4-D closed B history remains accessible without another launch');
+    await shot('d-close-history', OUT4);
     await read(`window.__dOff();window.fetch=window.__resourceOriginalFetch;delete window.__resourceOriginalFetch;delete window.__dOff`);
 
     /* P32.4-E: native model confirmation, exact history identity and physical
      * keyboard/layout checks share the same real fixture-owned conversations. */
-    await centerButton('恢复会话'); await until(() => read(`!document.querySelector('#confirmLayer').hidden`));
-    await read(`[...document.querySelectorAll('#confirmCard button')].find(b=>b.textContent==='继续启动').click()`);
+    await centerButton('恢复会话');
     await until(async () => { state = await api(); return state.items.find(r => r.conversationId === idB)?.owner?.sessionId && state.focusedConversationId === idB; });
     const eOwnerB = state.items.find(r => r.conversationId === idB).owner;
     const modelSel = '#runtimeView select[aria-label="当前会话模型"]', thinkingSel = '#runtimeView select[aria-label="当前会话推理强度"]';
