@@ -62,6 +62,20 @@ rl.on('line',line=>{const c=JSON.parse(line);
     });
     await a.dispose();
     await check('A清理整树后 B继续RPC', async () => { assert.equal(a.cleanupConfirmed(), true); assert.equal((await b.request({ type: 'get_state' })).sessionId, 'B'); });
+    await check('扩展错误公开投影只含固定文案，不含来源路径或原始错误',async()=>{
+      const {projectRuntimeEvent}=await import('../server/session-runtime.js');
+      assert.deepEqual(projectRuntimeEvent({type:'extension_error',extensionPath:path.join(dir,'private-extension.js'),event:'tool_call',error:'private fixture payload',bridgeRun:4}),
+        {type:'extension_error',error:'扩展执行或加载失败',bridgeRun:4});
+    });
+    await check('未证明工具源契约的项目发送保持输入且不写 Pi prompt，不影响 B',async()=>{
+      const {createSessionToolScheduler}=await import('../server/session-tool-scheduler.js');const scheduler=createSessionToolScheduler(),cwd=path.join(dir,'P');fs.mkdirSync(cwd);
+      const owner={backendInstance:'fixture',projectId:'P',repoId:'P',workspaceId:'project-P',workspaceEpoch:'epoch',conversationId:'P',runtimeId:'P',runtimeGeneration:'one',sessionId:'P'};
+      const p=await createSessionRuntime({...options,toolScheduler:scheduler,context:{cwd,workspace:{workspaceId:'project-P',root:cwd},getOwner:()=>({...owner}),isCurrent:()=>true},emit:()=>{}});
+      try{p.start();await until(()=>p.getState().state==='ready');const input={type:'prompt',id:'not-submitted',message:'KEEP_DRAFT'},copy={...input};
+        await assert.rejects(()=>p.send(input),error=>error.code==='tool_guard_unavailable');assert.deepEqual(input,copy);assert.equal(p.toolGuard.status().installed,false);
+        assert.deepEqual((await p.request({type:'get_messages'})).messages,[]);assert.equal((await b.request({type:'get_state'})).sessionId,'B');
+      }finally{await p.dispose();scheduler.dispose();}
+    });
   } finally { await Promise.allSettled([a.dispose(), b.dispose()]); fs.rmSync(dir, { recursive: true, force: true }); }
   console.log(`Session runtime: ${checks}/${checks}`);
 })().catch(e => { console.error(e); process.exitCode = 1; });

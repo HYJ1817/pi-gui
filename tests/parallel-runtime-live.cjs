@@ -12,7 +12,6 @@ const path = require('node:path');
 const net = require('node:net');
 const { spawn, execFileSync } = require('node:child_process');
 const { createHash } = require('node:crypto');
-const { pathToFileURL } = require('node:url');
 const ROOT = path.resolve(__dirname, '..');
 const digest = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -72,11 +71,24 @@ const requiredChecks = {
     'C real native write/read/bash tool invocation', 'explicit runtime restart accepted',
     'restart preserves native session and rotates runtimeId/generation', 'old owner cannot read or replay after real runtime restart',
     'B production read-only history binds exact native session and tool result', 'C production read-only history binds exact native session and tool result'],
+  preflight: ['preflight real Pi get_state confirms the explicitly selected existing model',
+    'preflight output-only turn has genuine start, exact output, settled and idle',
+    'preflight output-only turn invokes no tool', 'preflight native write/read turn has genuine start, exact output, settled and idle',
+    'preflight invokes successful native write and read tools', 'preflight file has exact expected bytes and digest'],
   recovery: ['real app/backend restart restores dormant records without spawning B/C',
     'B persisted history survives actual Electron/backend restart', 'C persisted history survives actual Electron/backend restart',
     'B prior backend owner is rejected after restart', 'C prior backend owner is rejected after restart',
     'explicit non-classic native resume after backend restart is admitted within budget',
     'resume binds persisted native session with new backend/runtime identity', 'recovery does not generate a model task',
+    'recovery before explicit resume has zero agent_start', 'recovery resumed Pi confirms the explicitly selected existing model',
+    'recovery result file does not predate the authorized model turn',
+    'recovery resumed native write/read turn has genuine start, exact output, settled and idle',
+    'recovery invokes successful native write and read tools', 'recovery file has exact expected bytes and digest',
+    'recovery native history records the new assistant and confirmed tool results before restart',
+    'recovery restarted native session after real model interaction', 'recovery restart preserves resumed native session and rotates runtime owner',
+    'recovery restart retains real post-recovery native history', 'recovery old owner read and event replay are rejected',
+    'recovery production projection keeps only current owner after restart', 'recovery actual post-restart event window preserves current owner projection',
+    'recovery restart does not automatically generate another model task',
     'explicit close returns resumed slot while preserving classic'],
   'owner-probe': ['classic-held native session resume is rejected without spawning', 'classic holds the original real persisted B native session',
     'model-free probe resumes materialized ordinary project native session', 'ordinary project restart accepted in model-free probe',
@@ -92,6 +104,11 @@ function phaseValid(report, phase) {
 }
 function acceptanceComplete(phases, expected, privacyVerified) { return privacyVerified === true && phases.length === expected.length
   && phases.every((report, index) => phaseValid(report, expected[index])); }
+function qualification(phases, expected, privacyVerified) {
+  const completed = acceptanceComplete(phases, expected, privacyVerified);
+  return { completed, preflightComplete: completed && expected.length === 1 && expected[0] === 'preflight',
+    fullLiveAcceptance: completed && expected.length === 2 && expected[0] === 'exercise' && expected[1] === 'recovery' };
+}
 function sameProcess(a, b) { return Boolean(a && b && a.pid === b.pid && a.birth === b.birth
   && a.exeSha256 === b.exeSha256 && a.commandSha256 === b.commandSha256); }
 function canTerminate(handle, original, current) { return handle?.exitCode === null && handle?.signalCode === null
@@ -145,7 +162,12 @@ async function run() {
   });
   const probe = Boolean(process.env.PI_GUI_PARALLEL_PROBE_WORLD);
   const probePhase = process.env.PI_GUI_PARALLEL_PROBE_PHASE || 'owner-probe';
-  if (probe && (process.env.PI_GUI_PARALLEL_PACKAGED !== '1' || probePhase !== 'owner-probe')) throw Error('invalid_probe_fixture');
+  const requestedPhase = process.env.PI_GUI_PARALLEL_PHASE || 'full';
+  const preflight = !probe && requestedPhase === 'preflight';
+  if (!['full', 'preflight'].includes(requestedPhase)) throw Error('invalid_live_phase');
+  const turnTimeout = Number(process.env.PI_GUI_PARALLEL_PREFLIGHT_TURN_TIMEOUT_MS || 180000);
+  if (!Number.isSafeInteger(turnTimeout) || turnTimeout < 30000 || turnTimeout > 300000) throw Error('invalid_preflight_timeout');
+  if (probe && (process.env.PI_GUI_PARALLEL_PACKAGED !== '1' || probePhase !== 'owner-probe' || requestedPhase !== 'full')) throw Error('invalid_probe_fixture');
   if (probe) {
     probeSource = fs.realpathSync(process.env.PI_GUI_PARALLEL_PROBE_WORLD);
     if (!path.basename(probeSource).startsWith('pi-parallel-live-')
@@ -166,7 +188,10 @@ async function run() {
   const launch = createPiLaunch({ getCwd: () => ROOT });
   const entry = launch.cliEntry();
   if (!entry.ok) throw Error('pi_entry_unavailable');
-  const sdk = await import(pathToFileURL(path.join(launch.packageDir(), 'dist/index.js')).href);
+  const { resolveAuthSdk } = await import('../server/provider-auth-sdk.js');
+  const publicSdk = resolveAuthSdk(launch.packageDir());
+  if (!publicSdk) throw Error('pi_public_sdk_unavailable');
+  const sdk = await import(publicSdk.entry);
   const settings = JSON.parse(fs.readFileSync(path.join(sourceAgent, 'settings.json'), 'utf8'));
   const provider = process.env.PI_GUI_PARALLEL_PROVIDER || settings.defaultProvider;
   const modelId = process.env.PI_GUI_PARALLEL_MODEL || settings.defaultModel;
@@ -181,7 +206,7 @@ async function run() {
   if (Object.keys(auth.auth.headers || {}).some(key => !['authorization', 'content-type'].includes(key.toLowerCase()))) throw Error('custom_auth_headers_unsupported');
   const config = models.getRegisteredProviderConfig(provider) || {};
   const sourceModel = (config.models || []).find(item => item.id === modelId) || model;
-  const selected = Object.fromEntries(['id', 'name', 'api', 'reasoning', 'input', 'cost', 'contextWindow', 'maxTokens', 'compat']
+  const selected = Object.fromEntries(['id', 'name', 'api', 'reasoning', 'input', 'cost', 'contextWindow', 'maxTokens', 'compat', 'thinkingLevelMap', 'promptCache']
     .filter(key => sourceModel[key] !== undefined).map(key => [key, sourceModel[key]]));
   const baseUrl = auth.auth.baseUrl || config.baseUrl || model.baseUrl;
   const url = new URL(baseUrl);
@@ -189,6 +214,11 @@ async function run() {
   fs.writeFileSync(path.join(agent, 'models.json'), JSON.stringify({ providers: { [provider]: {
     baseUrl, api: config.api || model.api, apiKey: '$PI_GUI_PARALLEL_KEY', models: [{ ...selected, headers: undefined }],
   } } }), { mode: 0o600 });
+  const fixtureModels = await sdk.ModelRuntime.create({ authPath: path.join(agent, 'auth.json'), modelsPath: path.join(agent, 'models.json'),
+    modelsStore: { async read() { return undefined; }, async write() {}, async delete() {} }, allowModelNetwork: false, refreshOnCreate: false });
+  const fixtureModel = fixtureModels.getModel(provider, modelId);
+  const fixtureAuth = fixtureModel ? await fixtureModels.getAuth(fixtureModel, { env: { PI_GUI_PARALLEL_KEY: auth.auth.apiKey } }) : null;
+  if (!fixtureModel || fixtureModel.provider !== provider || fixtureModel.id !== modelId || fixtureAuth?.auth?.apiKey !== auth.auth.apiKey) throw Error('fixture_model_resolution_mismatch');
   fs.writeFileSync(path.join(agent, 'settings.json'), JSON.stringify({ defaultProvider: provider, defaultModel: modelId,
     defaultThinkingLevel: 'off', packages: [], extensions: [], skills: [], promptTemplates: [], themes: [],
     retry: { enabled: false }, quietStartup: true }));
@@ -221,7 +251,11 @@ async function run() {
     sourceDigests: Object.fromEntries(files.map(file => [file, digest(path.join(ROOT, file))])),
     pi: entry.version, provider: 'selected-existing-provider (redacted)', model: modelId, node: process.version, platform: process.platform,
     qualification: 'production-source-main-backend-normal-sandbox', optIn: true,
-    mode: probe ? 'model-free-restart-probe' : 'full-live-exercise',
+    mode: probe ? 'model-free-restart-probe' : preflight ? 'real-model-preflight' : 'full-live-exercise',
+    modelResolution: { sdkModelFound: true, fixtureModelMatches: true, fixtureCredentialMatches: true,
+      keyTransport: 'child-env-only; dollar environment reference; SDK in-memory equality checked',
+      preservedThinkingMap: sourceModel.thinkingLevelMap !== undefined, preservedPromptCache: sourceModel.promptCache !== undefined,
+      turnTimeoutMs: turnTimeout, modelFallbackEnabled: false },
     driverDigests: { runner: digest(__filename), fixture: digest(path.join(ROOT, 'tests/fixtures/parallel-runtime-electron.cjs')) },
     ...(probe ? {} : { gitBefore: projects.map(gitEvidence) }) };
   let executable = require('electron');
@@ -258,7 +292,7 @@ async function run() {
     PI_GUI_OPEN: '0', PI_OFFLINE: '1', PI_GUI_OFFLINE: '1', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(world, 'no-global-config') };
   for (const key of Object.keys(env)) if (/^(?:ELECTRON_RUN_AS_NODE|NODE_OPTIONS|PI_GUI_TOKEN|PI_GUI_BROWSER_|PI_GUI_RUNTIME_BROWSER_)/.test(key)) delete env[key];
   const phases = [];
-  for (const phase of probe ? [probePhase] : ['exercise', 'recovery']) {
+  for (const phase of probe ? [probePhase] : preflight ? ['preflight'] : ['exercise', 'recovery']) {
     if (phase === 'recovery' && !fs.existsSync(path.join(out, 'recovery-input.json'))) break;
     const port = await freePort();
     child = spawn(executable, [...launchArgs, '--user-data-dir=' + path.join(world, 'profile'), '--disable-background-networking'], {
@@ -273,7 +307,7 @@ async function run() {
     if (!childIdentity) throw Error('process_identity_unavailable');
     let observed = [], observedAt = null;
     const readyFile = path.join(world, phase + '-ready-for-cleanup');
-    const deadline = Date.now() + 540000;
+    const deadline = Date.now() + (phase === 'preflight' ? turnTimeout * 2 + 130000 : 540000);
     while (!phaseExit && !spawnError && Date.now() < deadline) {
       if (!observedAt && fs.existsSync(readyFile)) {
         observed = processFamily(processTable(world), childIdentity); observedAt = new Date().toISOString();
@@ -297,10 +331,11 @@ async function run() {
     fs.writeFileSync(resultFile, JSON.stringify(report, null, 2));
     phases.push(report);
     // The next app must not overlap the preceding backend's process cleanup.
-    if (exit.code !== 0) break;
+    // Exit 0 alone proves neither confirmed family cleanup nor phase completion.
+    if (!phaseValid(report, phase)) break;
     await sleep(500);
   }
-  const expectedPhases = probe ? [probePhase] : ['exercise', 'recovery'];
+  const expectedPhases = probe ? [probePhase] : preflight ? ['preflight'] : ['exercise', 'recovery'];
   const passed = phases.reduce((sum, phase) => sum + (phase.checks || []).filter(check => check.pass === true).length, 0);
   const failed = phases.reduce((sum, phase, index) => sum + Math.max((phase.checks || []).filter(check => check.pass !== true).length,
     phaseValid(phase, expectedPhases[index]) ? 0 : 1), 0) + Math.max(0, expectedPhases.length - phases.length);
@@ -309,10 +344,10 @@ async function run() {
   for (const name of fs.readdirSync(out).filter(name => name.endsWith('.json'))) {
     if (fs.readFileSync(path.join(out, name), 'utf8').includes(auth.auth.apiKey)) privacyVerified = false;
   }
-  const completed = acceptanceComplete(phases, expectedPhases, privacyVerified);
+  const qualified = qualification(phases, expectedPhases, privacyVerified);
   const summary = { identity, passed, failed: failed + (privacyVerified ? 0 : 1), phases: phases.map(phase => ({ phase: phase.phase, exit: phase.exit,
     passed: (phase.checks || []).filter(check => check.pass === true).length, failed: phase.failed, valid: phaseValid(phase, phase.phase) })),
-    completed, fullLiveAcceptance: !probe && completed,
+    ...qualified,
     privacy: { verified: privacyVerified, rawPayloadSaved: false, credentialsInEnvironmentOnly: true, sourceUserDataReadOnly: true, fixturesInOsTmpdir: true },
     ...(probe ? {} : { gitAfter: projects.map(gitEvidence) }) };
   if (probe) {
@@ -327,8 +362,9 @@ async function run() {
   if (!summary.completed) process.exitCode = 1;
 }
 run().catch(error => {
-  const safe = new Set(['windows_required', 'fixture_inside_repository', 'pi_entry_unavailable', 'oauth_requires_fixture_credentials', 'model_unavailable',
-    'fixture_key_unavailable', 'custom_auth_headers_unsupported', 'endpoint_contains_private_fields', 'port_unavailable', 'packaged_build_missing', 'electron_timeout', 'evidence_secret_leak', 'invalid_probe_fixture']);
+  const safe = new Set(['windows_required', 'fixture_inside_repository', 'pi_entry_unavailable', 'pi_public_sdk_unavailable', 'oauth_requires_fixture_credentials', 'model_unavailable',
+    'fixture_key_unavailable', 'custom_auth_headers_unsupported', 'fixture_model_resolution_mismatch', 'endpoint_contains_private_fields',
+    'port_unavailable', 'packaged_build_missing', 'electron_timeout', 'evidence_secret_leak', 'invalid_probe_fixture', 'invalid_live_phase', 'invalid_preflight_timeout']);
   console.error('Parallel live failed: ' + (safe.has(error.message) ? error.message : error.name));
   if (world) console.error('Evidence fixture: ' + world);
   process.exitCode = 1;

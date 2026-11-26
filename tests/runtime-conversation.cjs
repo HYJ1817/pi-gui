@@ -432,6 +432,47 @@ const { JSDOM } = require('jsdom');
   draftView2.show('DRAFT-A');
   ok('清空后再次打开草稿为空', input().value === '');
 
+  // Coordinator rejection is not a model submission ACK. Recovery snapshots
+  // preserve the draft, but never replay it; only another explicit Send may do so.
+  let submitCode = 'tool_guard_unavailable';
+  const submissions = [];
+  global.fetch = async (_url, opts = {}) => ({ json: async () => {
+    if (!opts.body) return { ok: true, backendInstance: 'backend-new', items: [] };
+    const body = JSON.parse(opts.body);
+    if (body.action === 'command' && body.command?.type === 'prompt') {
+      submissions.push(body);
+      return submitCode ? { ok: false, code: submitCode } : { ok: true };
+    }
+    return { ok: true };
+  } });
+  input().value = '协调恢复后由用户决定提交';
+  input().dispatchEvent(new dom.window.Event('input'));
+  btn('发送').click(); await tick();
+  ok('协调器拒绝只提交一次且带原 owner', submissions.length === 1 && submissions[0].owner.runtimeId === 'rt-a2');
+  ok('协调器拒绝保留输入和内存草稿', input().value === '协调恢复后由用户决定提交' && runtimeStore.get('DRAFT-A').draft === input().value);
+  ok('协调器错误只提示重启受影响会话', /手动重启受影响会话/.test(host.querySelector('.rtc-notice').textContent) && !/重启应用/.test(host.querySelector('.rtc-notice').textContent));
+  const recoveredOwner = { ...draftOwnerA, backendInstance: 'backend-new', runtimeId: 'rt-a3', runtimeGeneration: 'g-a3' };
+  runtimeStore.seed({ backendInstance: 'backend-new', items: [
+    { conversationId: 'DRAFT-A', nativeSessionId: 'native-draft-a', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-a', workspaceEpoch: 'epoch-1' }, owner: recoveredOwner, lifecycle: 'ready', activity: 'idle', revision: 3 },
+    { conversationId: 'DRAFT-B', nativeSessionId: 'native-draft-b', workspace: { projectId: 'p-draft', workspaceId: 'ws-draft-b', workspaceEpoch: 'epoch-1' }, owner: { ...draftOwnerB, backendInstance: 'backend-new', runtimeId: 'rt-b2' }, lifecycle: 'ready', activity: 'idle', revision: 3 },
+  ] });
+  draftView2.draw(); await tick();
+  ok('新代次恢复就绪不自动重发且保留草稿', submissions.length === 1 && input().value === '协调恢复后由用户决定提交');
+  draftView2.show('DRAFT-B'); submitCode = null;
+  btn('发送').click(); await tick();
+  ok('A 协调器错误不阻断 B 原有草稿提交', submissions.length === 2 && submissions[1].owner.conversationId === 'DRAFT-B' && submissions[1].command.message === '持久草稿 B');
+  draftView2.show('DRAFT-A');
+  ok('切回 A 保留被拒输入且不重发', submissions.length === 2 && input().value === '协调恢复后由用户决定提交');
+  btn('发送').click(); await tick();
+  ok('用户显式重发只一次并使用恢复后的 owner', submissions.length === 3 && submissions[2].owner.runtimeId === recoveredOwner.runtimeId && input().value === '');
+  submitCode = 'acceptance_unknown';
+  input().value = '已提交结果未知不得重放';
+  input().dispatchEvent(new dom.window.Event('input'));
+  btn('发送').click(); await tick();
+  ok('结果未知同样保留草稿且没有自动重试', submissions.length === 4 && input().value === '已提交结果未知不得重放');
+  draftView2.leave(); draftView2.show('DRAFT-A'); draftView2.draw(); await tick();
+  ok('视图恢复和状态重绘不重放结果未知任务', submissions.length === 4 && input().value === '已提交结果未知不得重放');
+
   // 4. 超限 20000 字符内联提示
   const hugeText = 'H'.repeat(20005);
   input().value = hugeText;

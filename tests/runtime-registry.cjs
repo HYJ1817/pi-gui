@@ -101,6 +101,24 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         adapter.abortAndWait = original;
       }
     });
+    await check('工作区验证等待跨过完整 Stop 后旧 Runtime 输入不能复活', async () => {
+      const adapter = adapters[0], originalAbort = adapter.abortAndWait; let stopped = 0, release;
+      adapter.captureCommandGuard = cmd => {
+        if (!['prompt', 'steer', 'follow_up'].includes(cmd.type)) return null;
+        const expected = stopped; return () => { if (expected !== stopped) throw Object.assign(Error('stale_runtime'), { code: 'stale_runtime' }); };
+      };
+      adapter.abortAndWait = async cmd => { stopped++; return originalAbort(cmd); };
+      hold = new Promise(resolve => { release = resolve; });
+      const input = { type: 'prompt', message: 'KEEP_REGISTRY_DRAFT' }, copy = JSON.stringify(input);
+      const waiting = registry.command(ao, input);
+      try {
+        await tick(); await registry.command(ao, { type: 'abort' }); hold = null; release();
+        await reject(() => waiting, 'stale_runtime'); assert.equal(JSON.stringify(input), copy);
+        assert.equal(adapter.commands.filter(cmd => cmd.message === input.message).length, 0);
+        await registry.command(ao, input); assert.equal(adapter.commands.filter(cmd => cmd.message === input.message).length, 1);
+        await registry.command(ao, { type: 'abort' });
+      } finally { hold = null; release(); adapter.abortAndWait = originalAbort; delete adapter.captureCommandGuard; }
+    });
     await check('不能用 switch_session 改写固定 conversation', () => reject(() => registry.command(ao, { type: 'switch_session', sessionPath: '/tmp/unknown' }), 'invalid_command'));
     await check('Focus 只选视图，不 spawn/stop', async () => { await registry.focus(bo); await registry.focus(ao); assert.equal(spawnCount, 3); assert.equal(adapters[1].commands.length, 1); });
     await check('换焦点时旧会话也被广播（前端按 item.focused 画，否则会两行同时高亮）', async () => {

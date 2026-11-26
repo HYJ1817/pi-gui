@@ -90,6 +90,7 @@ async function main() {
     check('new bridge ready followed by readback completes', () => assert.equal(result.ok, true));
   }
   await bridgeCases(createAuthRuntimeSync);
+  await mutationLedgerCases();
   await singleFlightCases();
   const { createProviderConfigSync } = await load('server/provider-config-sync.js');
   let live = false, active = false;
@@ -206,6 +207,125 @@ async function bridgeCases(createAuthRuntimeSync) {
     const empty = await sync();
     check('no-project needs no chat readback for user-level auth', () => assert.equal(empty.ok, true));
   } finally { runtime.setShuttingDown(true); bridge.stop(); }
+}
+
+async function mutationLedgerCases() {
+  const { createRpcBridge } = await load('server/rpc-bridge.js');
+  const { createRuntime } = await load('server/runtime.js');
+  const runtime = createRuntime({ initialCwd: 'fixture-A' });
+  const children = [], writes = [], responses = [];
+  let failure = null;
+  const reply = (child, cmd, extra = {}) => child.stdout.emit('data', JSON.stringify({
+    type: 'response', id: cmd.id, command: cmd.type, success: true, data: {}, ...extra,
+  }) + '\n');
+  const rpc = createRpcBridge({ runtime, isWin: false, piBin: 'fixture', autoRestart: false,
+    env: { PI_NO_CONTINUE: '1' }, publish: event => { if (event.type === 'response') responses.push(event); },
+    spawnProcess() {
+      const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+      child.stdout.setEncoding = child.stderr.setEncoding = () => {};
+      child.stdin = new EventEmitter(); child.stdin.end = () => {};
+      child.stdin.write = (line, callback) => {
+        const cmd = JSON.parse(line); writes.push({ child, cmd });
+        if (failure) {
+          const current = failure; failure = null;
+          const error = Object.assign(Error('private transport failure'), { code: current.code });
+          if (current.throw) throw error;
+          if (current.delay) setTimeout(() => callback?.(error), current.delay);
+          else queueMicrotask(() => callback?.(error));
+        } else if (cmd.type === 'get_state') queueMicrotask(() => reply(child, cmd));
+        return true;
+      };
+      child.kill = () => { queueMicrotask(() => child.emit('exit', 0, null)); return true; };
+      children.push(child); queueMicrotask(() => child.emit('spawn')); return child;
+    },
+  });
+  const lastMutation = () => writes.findLast(row => row.cmd.type === 'switch_session');
+  try {
+    rpc.start(); await tick();
+    for (const transport of [{ code: 'ERR_STREAM_WRITE_AFTER_END', throw: true }, { code: 'ERR_STREAM_WRITE_AFTER_END' }]) {
+      failure = transport;
+      const result = await rpc.request({ type: 'switch_session', sessionPath: 'fixture-session' });
+      check('known unqueued mutation write failure releases only its ledger entry', () => {
+        assert.equal(result?.__code, 'pi_command_not_sent'); assert.equal(rpc.providerSessionChanging(), false);
+        assert.equal(rpc.updateBusy(), false);
+      });
+    }
+    const circular = {}; circular.self = circular;
+    const beforeWrites = writes.length, beforeEpoch = rpc.providerSessionEpoch();
+    const unencoded = await rpc.request({ type: 'switch_session', sessionPath: circular });
+    check('serialization failure is definitely not sent and creates no mutation authority', () => {
+      assert.equal(unencoded?.__code, 'pi_command_not_sent'); assert.equal(writes.length, beforeWrites);
+      assert.equal(rpc.providerSessionEpoch(), beforeEpoch); assert.equal(rpc.providerSessionChanging(), false);
+    });
+    failure = { code: 'ERR_STREAM_WRITE_AFTER_END', delay: 30 };
+    const lateFailure = rpc.request({ type: 'switch_session', sessionPath: 'fixture-session' }, { timeoutMs: 5 });
+    await Promise.all([lateFailure, new Promise(resolve => setTimeout(resolve, 40))]);
+    check('late proof of an unqueued write clears mutation even after the request timed out', () => assert.equal(rpc.providerSessionChanging(), false));
+    failure = { code: 'EPIPE' };
+    const partial = await rpc.request({ type: 'switch_session', sessionPath: 'fixture-session' });
+    const unknown = lastMutation();
+    check('ambiguous pipe failure preserves unknown mutation rather than declaring not sent', () => {
+      assert.equal(partial, null); assert.equal(rpc.providerSessionChanging(), true);
+    });
+    reply(unknown.child, unknown.cmd, { command: 'get_state' });
+    check('wrong-command response cannot clear unknown mutation', () => assert.equal(rpc.providerSessionChanging(), true));
+    reply(unknown.child, unknown.cmd, { success: undefined });
+    check('unqualified response cannot clear unknown mutation', () => assert.equal(rpc.providerSessionChanging(), true));
+    reply(unknown.child, unknown.cmd, { success: false });
+    check('late matching authoritative failure closes the unknown mutation', () => assert.equal(rpc.providerSessionChanging(), false));
+    rpc.send({ id: 'reused-public-id', type: 'switch_session', sessionPath: 'first' });
+    const first = lastMutation(); reply(first.child, first.cmd);
+    const completedEpoch = rpc.providerSessionEpoch();
+    reply(first.child, first.cmd);
+    check('duplicate authoritative response neither changes epoch nor broadcasts twice', () => {
+      assert.equal(rpc.providerSessionEpoch(), completedEpoch); assert.equal(responses.length, 1);
+      assert.equal(responses[0].id, 'reused-public-id');
+    });
+    rpc.send({ id: 'reused-public-id', type: 'switch_session', sessionPath: 'second' });
+    const second = lastMutation(); reply(first.child, first.cmd);
+    check('late response cannot close a newer public mutation that reused its caller id', () => {
+      assert.notEqual(second.cmd.id, first.cmd.id); assert.equal(rpc.providerSessionChanging(), true);
+    });
+    reply(second.child, second.cmd);
+    check('public mutation still broadcasts exactly its caller id on completion', () => {
+      assert.equal(rpc.providerSessionChanging(), false); assert.deepEqual(responses.map(event => event.id), ['reused-public-id', 'reused-public-id']);
+    });
+    rpc.send({ id: 'bash-command-field', type: 'bash', command: 'synthetic-echo' });
+    const bash = writes.at(-1);
+    check('Bash command text is payload, not the command identity in the ledger', () => {
+      assert.equal(rpc.updateBusy(), true); reply(bash.child, bash.cmd);
+      assert.equal(rpc.updateBusy(), false);
+    });
+    for (const type of ['switch_session', 'new_session', 'fork']) {
+      rpc.send({ id: 'extra-command-' + type, type, command: 'get_state', sessionPath: 'fixture-session' });
+      const mutation = writes.at(-1), sentEpoch = rpc.providerSessionEpoch();
+      reply(mutation.child, mutation.cmd, { command: 'get_state' });
+      check('extra command payload cannot authorize a wrong response to close ' + type, () => {
+        assert.equal(rpc.providerSessionChanging(), true); assert.equal(rpc.updateBusy(), true);
+        assert.equal(rpc.providerSessionEpoch(), sentEpoch);
+        reply(mutation.child, mutation.cmd);
+        assert.equal(rpc.providerSessionChanging(), false); assert.equal(rpc.updateBusy(), false);
+        assert.equal(rpc.providerSessionEpoch(), sentEpoch + 1);
+      });
+    }
+    const pending = rpc.request({ type: 'switch_session', sessionPath: 'next' }, { timeoutMs: 1000 });
+    const interrupted = lastMutation();
+    const epoch = rpc.providerSessionEpoch();
+    reply(interrupted.child, interrupted.cmd, { command: 'get_state' });
+    check('wrong private response cannot resolve a pending mutation', () => {
+      assert.equal(rpc.providerSessionChanging(), true); assert.equal(rpc.providerSessionEpoch(), epoch);
+    });
+    children[0].emit('exit', 1, null); await pending;
+    check('child exit clears pending mutation and update authority', () => {
+      assert.equal(rpc.providerSessionChanging(), false); assert.equal(rpc.updateBusy(), false);
+    });
+    rpc.start(); await tick();
+    const next = rpc.request({ type: 'switch_session', sessionPath: 'next' });
+    const current = lastMutation(); reply(interrupted.child, interrupted.cmd);
+    check('retired child late response cannot close the new process mutation', () => assert.equal(rpc.providerSessionChanging(), true));
+    reply(current.child, current.cmd); await next;
+    check('new process matching response closes only its own mutation', () => assert.equal(rpc.providerSessionChanging(), false));
+  } finally { runtime.setShuttingDown(true); rpc.stop(); }
 }
 
 async function singleFlightCases() {

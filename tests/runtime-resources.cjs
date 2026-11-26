@@ -36,6 +36,8 @@ const { JSDOM } = require('jsdom');
   ok('hard cap does not show third confirmation', confirms === oldConfirms);
   ok('no implicit kill stop close or archive', requests.every(p => ['start', 'resume'].includes(p.action)));
   ok('limit notice gives all alternatives', /打开历史/.test(runtimeLimitNotice(result)) && /关闭/.test(runtimeLimitNotice(result)) && /稍后恢复/.test(runtimeLimitNotice(result)));
+  const guardNotice = runtimeLimitNotice({ code: 'tool_guard_unavailable' });
+  ok('guard recovery notice preserves input and targets only the affected session', /输入已保留/.test(guardNotice) && /手动重启受影响会话/.test(guardNotice) && !/重启应用/.test(guardNotice));
   count = 2; requests = []; await launch({ action: 'resume', conversationId: 'dormant' });
   ok('resume allowThird is top level', requests[0].allowThird === true && requests[0].args === undefined);
   count = 1; race = true; requests = []; const before = confirms; await launch(start);

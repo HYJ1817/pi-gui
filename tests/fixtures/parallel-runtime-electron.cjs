@@ -2,6 +2,57 @@
  * preload and renderer. No fake Pi, API replacement, SSE injection or registry
  * factory is used. Test driver calls only public HTTP/RPC/UI boundaries.
  */
+// Pure checks consume only the same closed projections retained by the observer.
+// Synthetic offline fixtures exercise these checks; they are never model evidence.
+function outputDigest(text) { return require('node:crypto').createHash('sha256').update(text).digest('hex'); }
+function sameOwner(actual, expected) {
+  const identity = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
+  return Boolean(actual && expected && ['backendInstance', 'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId']
+    .every(key => typeof expected[key] === 'string' && expected[key].length > 0)
+    && identity.every(key => Object.hasOwn(expected, key) && actual[key] === expected[key]));
+}
+function modelTurnProof(observed, owner, cursor, expectedOutput) {
+  const own = observed.filter(event => Number.isSafeInteger(event.seq) && event.seq > cursor && sameOwner(event.owner, owner));
+  const start = own.find(event => event.type === 'agent_start'), settled = own.find(event => event.type === 'agent_settled');
+  const turn = own.filter(event => start && event.seq >= start.seq && (!settled || event.seq <= settled.seq));
+  const starts = turn.filter(event => event.type === 'tool_execution_start'), ends = turn.filter(event => event.type === 'tool_execution_end');
+  const pairs = starts.map(event => ({ start: event, ends: ends.filter(end => end.toolCallId === event.toolCallId && end.toolName === event.toolName && end.seq > event.seq) }));
+  const toolPairsComplete = starts.length === ends.length && new Set(starts.map(event => event.toolCallId)).size === starts.length
+    && pairs.every(pair => typeof pair.start.toolCallId === 'string' && pair.start.toolCallId.length > 0 && pair.ends.length === 1);
+  const completed = pairs.filter(pair => pair.ends.length === 1 && pair.ends[0].isError === false);
+  const assistant = turn.findLast(event => event.type === 'message_end' && event.messageRole === 'assistant');
+  const agentEnd = turn.findLast(event => event.type === 'agent_end');
+  const terminalSequenceValid = Boolean(start && assistant && agentEnd && settled && start.seq < assistant.seq && assistant.seq < agentEnd.seq
+    && agentEnd.seq < settled.seq && own.filter(event => event.type === 'agent_start').length === 1
+    && own.filter(event => event.type === 'agent_end').length === 1 && own.filter(event => event.type === 'agent_settled').length === 1
+    && !own.some(event => event.failureClass || event.stopReason === 'error' || event.stopReason === 'aborted' || event.outcome === 'failed')
+    && ends.every(event => event.seq < assistant.seq));
+  return { owner, outputMatches: terminalSequenceValid && assistant.messageHash === outputDigest(expectedOutput)
+      && assistant.messageBytes === Buffer.byteLength(expectedOutput),
+    outputBytes: assistant?.messageBytes ?? null, outputSha256: assistant?.messageHash ?? null,
+    toolNames: starts.map(event => event.toolName), completedTools: completed.map(pair => pair.start.toolName),
+    toolErrors: ends.filter(event => event.isError !== false).length, toolPairsComplete,
+    writeThenRead: toolPairsComplete && completed.some(write => write.start.toolName === 'write'
+      && completed.some(read => read.start.toolName === 'read' && write.ends[0].seq < read.start.seq)),
+    settled: terminalSequenceValid, firstStartSeq: start?.seq ?? null, settledSeq: settled?.seq ?? null,
+    startedAt: start?.at ?? null, settledAt: settled?.at ?? null };
+}
+function historyProof(history, sessionId, expectedOutput) {
+  const messages = Array.isArray(history?.messages) ? history.messages : [];
+  const assistantIndex = messages.findLastIndex(message => message.role === 'assistant');
+  const userIndex = messages.findLastIndex((message, index) => index < assistantIndex && message.role === 'user');
+  const assistantText = messages[assistantIndex]?.text;
+  const items = (history?.toolSummary?.items || []).filter(item => Number.isSafeInteger(item.messagePosition)
+    && item.messagePosition > userIndex && item.messagePosition <= assistantIndex);
+  return { sessionMatches: history?.ok === true && history.sessionId === sessionId,
+    assistantMatches: typeof assistantText === 'string' && assistantText === expectedOutput && assistantIndex === messages.length - 1 && userIndex >= 0,
+    assistantSha256: typeof assistantText === 'string' ? outputDigest(assistantText) : null, messageCount: messages.length,
+    nativeToolsConfirmed: history?.truncated === false && history.toolSummary?.uncertain === false
+      && ['write', 'read'].every(name => items.some(item => item.toolName === name && item.source === 'confirmed' && item.status === 'completed'))
+      && items.every(item => item.source === 'confirmed' && item.status === 'completed'),
+    toolNames: items.map(item => item.toolName) };
+}
+function historyMatches(proof) { return proof.sessionMatches && proof.assistantMatches && proof.nativeToolsConfirmed; }
 // Offline syntax check for every literal renderer expression, including both
 // API branches. This deliberately accepts only literal call arguments: adding
 // a new dynamic expression requires extending the checker, not silently
@@ -14,11 +65,17 @@ function validateRendererScripts() {
   if (literals.length !== expected) throw Error('renderer_check_unsupported_call');
   const sample = { selector: '#runtimeView textarea[data-probe="a\\b"]', sendSelector: '#runtimeView .rtc-send',
     id: 'fixture-conversation', ids: ['fixture-B', 'fixture-C'], projects: ['C:/Temp/pi-parallel-live-fixture/project-one', 'C:/Temp/pi-parallel-live-fixture/project-two'], world: 'C:\\Temp\\pi-parallel-live-quote\'fixture',
-    route: '/api/runtime-sessions', theme: 'dark', providerLabel: 'fixture-provider', beforeReload: [{ conversationId: 'fixture-B', runtimeId: 'fixture-runtime' }] };
+    route: '/api/runtime-sessions', theme: 'dark', providerLabel: 'fixture-provider', beforeReload: [{ conversationId: 'fixture-B', runtimeId: 'fixture-runtime' }],
+    owner: { conversationId: 'classic-chat', sessionId: 'fixture-session', runtimeId: 'fixture-runtime', runtimeGeneration: 'fixture-generation' }, stateId: 'parallel-state-fixture',
+    finalOwner: { conversationId: 'fixture-conversation', runtimeId: 'fixture-runtime', runtimeGeneration: 'fixture-generation' }, sameOwner };
+  let templateIndex = 0;
   for (const body of [null, { action: 'read', owner: { sessionId: 'fixture-session' }, command: { type: 'get_state' } }]) {
     for (const [literal] of literals.map(match => [match[1]])) {
-      const script = new vm.Script(literal).runInNewContext({ ...sample, body }, { timeout: 1000 });
-      new vm.Script(script);
+      try {
+        const script = new vm.Script(literal).runInNewContext({ ...sample, body }, { timeout: 1000 });
+        new vm.Script(script);
+      } catch { throw Error('renderer_template_' + templateIndex); }
+      templateIndex++;
     }
   }
   return { templates: literals.length, variants: literals.length * 2 };
@@ -47,7 +104,7 @@ async function runOfflineSafetyChecks() {
     GIT_INDEX_FILE: path.join(temp, 'outside-index'), GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'core.hooksPath', GIT_CONFIG_VALUE_0: temp,
     git_config_parameters: "'core.hooksPath=hostile'", GIT_CONFIG: path.join(temp, 'outside-config') };
   const helpers = source.split('// SAFETY_HELPERS_BEGIN')[1].split('\n').slice(1).join('\n').split('// SAFETY_HELPERS_END')[0];
-  const h = vm.runInNewContext(helpers + '\n({gitEnv,git,phaseValid,acceptanceComplete,requiredChecks,sameProcess,canTerminate,processFamily})',
+  const h = vm.runInNewContext(helpers + '\n({gitEnv,git,phaseValid,acceptanceComplete,qualification,requiredChecks,sameProcess,canTerminate,processFamily})',
     { process: { env }, path, execFileSync: cp.execFileSync, createHash });
   verify('default off exits before imports', () => {
     const stop = Symbol('exit'); let imports = 0, exit;
@@ -84,8 +141,71 @@ async function runOfflineSafetyChecks() {
     ['failed check', report => { report.checks[0].pass = false; }], ['unconfirmed public close', report => { report.cleanup.confirmed = false; }],
     ['unconfirmed process exit', report => { report.processCleanup.confirmed = false; }],
   ]) verify('fail closed: ' + name, () => { const report = valid('recovery'); mutate(report); assert.equal(h.phaseValid(report, 'recovery'), false); });
+  // Exercise the runner's actual loop tail, not a copied transition predicate.
+  const transition = source.slice(source.indexOf('// The next app must not overlap'), source.indexOf('\n  }\n  const expectedPhases'));
+  assert.ok(transition.includes('break;'), 'runner phase transition must be located');
+  for (const [name, mutate, expected] of [
+    ['unconfirmed process family', report => { report.processCleanup.confirmed = false; }, 'exercise'],
+    ['unconfirmed public close', report => { report.cleanup.confirmed = false; }, 'exercise'],
+    ['missing phase evidence', report => { report.checks.pop(); }, 'exercise'],
+    ['complete confirmed phase', () => {}, 'exercise,recovery'],
+  ]) {
+    const report = valid('exercise'); mutate(report);
+    const entered = await vm.runInNewContext('(async () => { const entered = []; for (const phase of ["exercise", "recovery"]) { entered.push(phase); const exit = report.exit;\n' + transition + '\n} return entered.join(","); })()',
+      { report, phaseValid: h.phaseValid, sleep: async () => {} });
+    verify('phase transition respects ' + name, () => assert.equal(entered, expected));
+  }
   verify('missing recovery cannot qualify complete', () => assert.equal(h.acceptanceComplete([valid('exercise')], ['exercise', 'recovery'], true), false));
   verify('privacy scan failure cannot qualify complete', () => assert.equal(h.acceptanceComplete([valid('exercise'), valid('recovery')], ['exercise', 'recovery'], false), false));
+  verify('complete preflight qualifies only preflight', () => {
+    const result = h.qualification([valid('preflight')], ['preflight'], true);
+    assert.equal(result.completed, true); assert.equal(result.preflightComplete, true); assert.equal(result.fullLiveAcceptance, false);
+  });
+  verify('preflight cannot substitute for full exercise/recovery', () => assert.equal(h.qualification([valid('preflight')], ['exercise', 'recovery'], true).fullLiveAcceptance, false));
+  verify('failed preflight cannot qualify', () => {
+    const report = valid('preflight'); report.failed = 1; assert.equal(h.qualification([report], ['preflight'], true).completed, false);
+  });
+  verify('preflight with missing output or tool evidence cannot qualify', () => {
+    for (const missing of h.requiredChecks.preflight) {
+      const report = valid('preflight'); report.checks = report.checks.filter(check => check.name !== missing);
+      assert.equal(h.phaseValid(report, 'preflight'), false);
+    }
+  });
+  verify('recovery without real resumed model evidence cannot qualify', () => {
+    const report = valid('recovery'); report.checks = report.checks.filter(check => !check.name.includes('genuine start'));
+    assert.equal(h.qualification([valid('exercise'), report], ['exercise', 'recovery'], true).fullLiveAcceptance, false);
+  });
+  verify('only continuous complete exercise/recovery qualifies full acceptance', () => assert.equal(h.qualification([valid('exercise'), valid('recovery')], ['exercise', 'recovery'], true).fullLiveAcceptance, true));
+  verify('recovery evidence rejects missing resumed turn and prompt-only history', () => {
+    const owner = { backendInstance: 'b', projectId: 'p', repoId: null, workspaceId: 'w', workspaceEpoch: '0', conversationId: 'c', runtimeId: 'r', runtimeGeneration: 'g', sessionId: 's' };
+    assert.equal(sameOwner(owner, owner), true);
+    for (const field of Object.keys(owner)) assert.equal(sameOwner({ ...owner, [field]: 'foreign' }, owner), false);
+    const event = (seq, type, extra = {}) => ({ seq, type, owner, ...extra });
+    const message = { messageRole: 'assistant', messageHash: outputDigest('OK'), messageBytes: 2 };
+    const complete = [event(1, 'agent_start'), event(2, 'tool_execution_start', { toolName: 'write', toolCallId: 'w' }),
+      event(3, 'tool_execution_end', { toolName: 'write', toolCallId: 'w', isError: false }),
+      event(4, 'tool_execution_start', { toolName: 'read', toolCallId: 'r' }),
+      event(5, 'tool_execution_end', { toolName: 'read', toolCallId: 'r', isError: false }),
+      event(6, 'message_end', message), event(7, 'agent_end'), event(8, 'agent_settled')];
+    const good = modelTurnProof(complete, owner, 0, 'OK');
+    assert.equal(good.outputMatches && good.toolPairsComplete && good.writeThenRead, true);
+    assert.equal(modelTurnProof(complete, { ...owner, runtimeGeneration: 'old' }, 0, 'OK').outputMatches, false);
+    assert.equal(modelTurnProof(complete, owner, 8, 'OK').outputMatches, false);
+    assert.equal(modelTurnProof(complete.filter(e => e.type !== 'agent_end'), owner, 0, 'OK').outputMatches, false);
+    assert.equal(modelTurnProof(complete.filter(e => e.seq !== 5), owner, 0, 'OK').toolPairsComplete, false);
+    assert.equal(modelTurnProof(complete.map(e => e.seq === 5 ? { ...e, isError: true } : e), owner, 0, 'OK').writeThenRead, false);
+    const history = { ok: true, sessionId: 's', truncated: false, messages: [{ role: 'user', text: 'Reply OK' }, { role: 'assistant', text: 'OK' }],
+      toolSummary: { uncertain: false, items: ['write', 'read'].map(toolName => ({ toolName, source: 'confirmed', status: 'completed', messagePosition: 1 })) } };
+    assert.equal(historyMatches(historyProof(history, 's', 'OK')), true);
+    assert.equal(historyMatches(historyProof({ ...history, sessionId: 'foreign' }, 's', 'OK')), false);
+    assert.equal(historyMatches(historyProof({ ...history, messages: [{ role: 'user', text: 'OK' }] }, 's', 'OK')), false);
+    assert.equal(historyMatches(historyProof({ ...history, toolSummary: { uncertain: false, items: [] } }, 's', 'OK')), false);
+    assert.equal(historyMatches(historyProof({ ...history, toolSummary: { ...history.toolSummary, items: history.toolSummary.items.map(item => ({ ...item, messagePosition: 0 })) } }, 's', 'OK')), false);
+    for (const missing of h.requiredChecks.recovery) {
+      const report = valid('recovery'); report.checks = report.checks.filter(check => check.name !== missing);
+      assert.equal(h.phaseValid(report, 'recovery'), false);
+    }
+  });
   const original = { pid: 42, birth: '0001', exeSha256: 'fixture-exe', commandSha256: 'fixture-cmd', marker: true };
   const live = { pid: 42, exitCode: null, signalCode: null };
   verify('exact live process identity permits bounded fallback', () => assert.equal(h.canTerminate(live, original, original), true));
@@ -119,7 +239,7 @@ const safetyOnly = process.argv.includes('--check-safety');
 if (safetyOnly) runOfflineSafetyChecks().catch(error => { console.error('Parallel driver safety: failed (' + error.name + ')'); process.exitCode = 1; });
 if (process.argv.includes('--check-driver')) {
   try { const checked = validateRendererScripts(); console.log(`Parallel renderer syntax: ${checked.variants}/${checked.variants} (${checked.templates} templates; no Electron/Pi/model)`); }
-  catch { console.error('Parallel renderer syntax: failed'); process.exit(1); }
+  catch (error) { console.error('Parallel renderer syntax: failed (' + error.message + ')'); process.exit(1); }
   process.exit(0);
 }
 if (!safetyOnly) {
@@ -196,31 +316,36 @@ async function attachObserver() {
       return classes.find(value=>safeFallbackFailure({class:value}).reason===message.errorMessage)
         ||classifyGenerationError({message:message.errorMessage,source:'pi-assistant',stopReason:message.stopReason}).class;
     };
-    window.__parallelEvents=[];window.__parallelOnline=false;
+    window.__parallelEvents=[];window.__parallelOnline=false;window.__parallelObserverFailed=false;
+    let pending=Promise.resolve();
     window.__parallelStream=new EventSource('/api/events');
     __parallelStream.onopen=()=>{__parallelOnline=true;};
-    __parallelStream.onmessage=message=>{
+    __parallelStream.onmessage=message=>{const observedAt=Date.now();pending=pending.then(async()=>{
       let frame;try{frame=JSON.parse(message.data);}catch{return;}
       const event=frame.type==='runtime_event'?frame.event:frame;
-      const allowed=['agent_start','agent_end','agent_settled','tool_execution_start','tool_execution_end','tool_wait_state','bridge_status','extension_error','message_end','generation_result'];
+      const allowed=['agent_start','agent_end','agent_settled','tool_execution_start','tool_execution_end','tool_wait_state','bridge_status','extension_error','message_update','message_end','generation_result'];
       const rejectedPrompt=event?.type==='response'&&['prompt','steer','follow_up'].includes(event.command)&&event.success===false;
       if(!allowed.includes(event?.type)&&!['runtime_state','runtime_closed'].includes(frame.type)&&!rejectedPrompt)return;
       const owner=frame.owner||frame.legacyOwner||null;
-      __parallelEvents.push({at:Date.now(),seq:frame._seq,eventSequence:frame.eventSequence||null,
+      __parallelEvents.push({at:observedAt,seq:frame._seq,eventSequence:frame.eventSequence||null,
         kind:frame.type,type:event.type,owner,bridgeRun:frame.bridgeRun||null,
         lifecycle:frame.item?.lifecycle||null,activity:frame.item?.activity||null,
         toolName:event.toolName||null,toolCallId:event.toolCallId||null,isError:event.isError===true,
         waiting:event.type==='tool_wait_state'?event.waiting:null,
         outcome:['success','failed','unknown'].includes(event.generationResult?.outcome)?event.generationResult.outcome:rejectedPrompt?'failed':null,
         stopReason:['error','aborted','stop','length','toolUse'].includes(event.message?.stopReason)?event.message.stopReason:null,
+        messageRole:['assistant','user','toolResult'].includes(event.message?.role)?event.message.role:null,
+        deltaKind:['start','text_start','text_delta','text_end','thinking_start','thinking_delta','thinking_end','toolcall_start','toolcall_delta','toolcall_end','done','error'].includes(event.assistantMessageEvent?.type)?event.assistantMessageEvent.type:null,
+        messageHash:await (async()=>{const value=Array.isArray(event.message?.content)?event.message.content.filter(block=>block?.type==='text'&&typeof block.text==='string').map(block=>block.text).join(''):'';if(!value)return null;const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(bytes)].map(byte=>byte.toString(16).padStart(2,'0')).join('');})(),
+        messageBytes:Array.isArray(event.message?.content)?event.message.content.filter(block=>block?.type==='text'&&typeof block.text==='string').reduce((size,block)=>size+new TextEncoder().encode(block.text).byteLength,0):0,
         failureClass:failureClass(event)});
       if(__parallelEvents.length>20000)__parallelEvents.shift();
-    };
+    }).catch(()=>{__parallelObserverFailed=true;});};
   })()`);
   await until(() => read('__parallelOnline'), 'observer_sse_open');
 }
 async function events() {
-  const list = await read('window.__parallelEvents||[]');
+  const list = await read(`(()=>{if(window.__parallelObserverFailed)throw Error('observer_projection_failed');return window.__parallelEvents||[];})()`);
   const merged = new Map();
   // SSE reconnect replays earlier frames. Keep the FIRST observation time,
   // never overwrite it with the replay receipt after a renderer reload.
@@ -248,7 +373,29 @@ async function untilTask(fn, name, owners, timeout = 120000) {
     return false;
   }, name, timeout);
 }
-async function state(owner) { return owner ? api({ action: 'read', owner, command: { type: 'get_state' } }) : api(null, '/api/status'); }
+async function state(owner) {
+  if (!owner) return api(null, '/api/status');
+  if (owner.conversationId !== 'classic-chat') return api({ action: 'read', owner, command: { type: 'get_state' } });
+  // Classic /api/command acknowledges delivery; its actual RPC reply arrives
+  // over SSE. Match our unique read id AND the exact classic owner, then close
+  // the read-only stream. Never mistake HTTP accepted for real Pi state.
+  const stateId = 'parallel-state-' + require('node:crypto').randomUUID();
+  return read(`(async()=>{const owner=${JSON.stringify(owner)},id=${JSON.stringify(stateId)},sameOwner=${sameOwner.toString()};
+    return new Promise(resolve=>{const stream=new EventSource('/api/events');let ended=false;
+      const finish=value=>{if(ended)return;ended=true;clearTimeout(timer);stream.close();resolve(value);};
+      const timer=setTimeout(()=>finish({ok:false,code:'state_reply_timeout'}),30000);
+      stream.onmessage=message=>{let frame;try{frame=JSON.parse(message.data);}catch{return;}
+        const actual=frame.legacyOwner;if(frame.type!=='response'||frame.command!=='get_state'||frame.id!==id||!sameOwner(actual,owner))return;
+        if(frame.success!==true)return finish({ok:false,code:'state_reply_rejected'});
+        const data=frame.data||{},model=data.model||{};
+        finish({ok:true,data:{sessionId:data.sessionId,isStreaming:data.isStreaming,isCompacting:data.isCompacting,
+          thinkingLevel:data.thinkingLevel,pendingMessageCount:data.pendingMessageCount,
+          model:{id:model.id||model.modelId,provider:model.provider||model.providerId}}});};
+      stream.onopen=async()=>{if(ended)return;const response=await fetch('/api/command',{method:'POST',headers:{'Content-Type':'application/json','X-Pi-Gui-Owner':JSON.stringify(owner)},body:JSON.stringify({type:'get_state',id})});
+        if(!response.ok)finish({ok:false,code:'state_read_rejected'});};
+      stream.onerror=()=>finish({ok:false,code:'state_stream_failed'});
+    });})()`);
+}
 async function focus(id) {
   const selector = `.pj-runtime[data-conversation-id="${id}"] .pj-sess-primary`;
   if (await read(`!!document.querySelector(${JSON.stringify(selector)})`)) await click(selector);
@@ -294,6 +441,80 @@ async function waitReady() {
       return status.state === 'ready' && Boolean(status.legacyOwner?.sessionId);
     } catch { return false; }
   }, 'classic_pi_ready', 65000);
+}
+function modelTurnTimeout() {
+  const timeoutMs = Number(process.env.PI_GUI_PARALLEL_PREFLIGHT_TURN_TIMEOUT_MS || 180000);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 30000 || timeoutMs > 300000) throw Error('invalid_preflight_timeout');
+  return timeoutMs;
+}
+async function runModelTurn(owner, label, prompt, expectedOutput, timeoutMs) {
+  const before = await events();
+  const cursor = before.reduce((max, event) => Math.max(max, Number.isSafeInteger(event.seq) ? event.seq : 0), 0);
+  const submittedAt = Date.now();
+  report.facts.turns ||= [];
+  const attempt = { label, owner, submittedAt, timeoutMs, status: 'submitted-outcome-unknown', promptSha256: outputDigest(prompt), autoResent: false };
+  report.facts.turns.push(attempt); save();
+  if (owner.conversationId && owner.conversationId !== 'classic-chat') {
+    await focus(owner.conversationId);
+    await sendText('#runtimeView textarea', prompt, '#runtimeView .rtc-send');
+  } else await sendText('#input', prompt, '#btnSend');
+  let turn = [];
+  await until(async () => {
+    const observed = await events();
+    turn = observed.filter(event => event.seq > cursor && sameOwner(event.owner, owner));
+    const failed = turn.findLast(event => event.failureClass || event.stopReason === 'error' || event.stopReason === 'aborted' || event.outcome === 'failed');
+    if (failed) {
+      report.facts.turnFailure = { turn: label, failureClass: failed.failureClass || 'unknown', seq: failed.seq, at: failed.at };
+      attempt.status = 'failed'; attempt.failureClass = report.facts.turnFailure.failureClass; save();
+      throw Error('model_request_failed');
+    }
+    const start = turn.findIndex(event => event.type === 'agent_start');
+    if (start < 0) return false;
+    const current = turn.slice(start);
+    const settled = current.findLast(event => event.type === 'agent_settled');
+    if (!settled) return false;
+    turn = current.slice(0, current.indexOf(settled) + 1);
+    return true;
+  }, 'preflight_' + label + '_settled', timeoutMs);
+  await until(async () => { const current = await state(owner); return current.ok === true
+    && current.data?.sessionId === owner.sessionId && current.data.isStreaming === false;
+  }, 'preflight_' + label + '_idle', 30000);
+  const result = { ...modelTurnProof(await events(), owner, cursor, expectedOutput), idle: true,
+    submittedAt, elapsedMs: Date.now() - submittedAt };
+  attempt.status = result.outputMatches && result.toolPairsComplete && !result.toolErrors ? 'settled-exact-output' : 'settled-result-mismatch';
+  Object.assign(attempt, result); save();
+  return result;
+}
+async function preflight() {
+  mark('preflight_classic_ready'); await waitReady();
+  const initial = await state(), owner = initial.legacyOwner;
+  const current = await state(owner), selectedProvider = process.env.PI_PROVIDER, selectedModel = process.env.PI_MODEL;
+  const model = current.data?.model;
+  const modelMatches = model?.provider === selectedProvider && model?.id === selectedModel;
+  report.facts.selectedModel = { matchesExplicitSelection: modelMatches, thinkingOff: current.data?.thinkingLevel === 'off',
+    thinkingLevel: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'].includes(current.data?.thinkingLevel) ? current.data.thinkingLevel : 'unknown' };
+  requireCheck(modelMatches, 'preflight real Pi get_state confirms the explicitly selected existing model');
+  const timeoutMs = modelTurnTimeout();
+  mark('preflight_output_only_turn');
+  const outputTurn = await runModelTurn(owner, 'output', 'Reply with exactly PI_GUI_PREFLIGHT_OUTPUT_OK and nothing else. Do not call any tools.', 'PI_GUI_PREFLIGHT_OUTPUT_OK', timeoutMs);
+  report.facts.outputTurn = outputTurn;
+  requireCheck(outputTurn.outputMatches, 'preflight output-only turn has genuine start, exact output, settled and idle', outputTurn);
+  requireCheck(outputTurn.toolNames.length === 0 && outputTurn.completedTools.length === 0 && outputTurn.toolErrors === 0 && outputTurn.toolPairsComplete,
+    'preflight output-only turn invokes no tool', { toolCount: outputTurn.toolNames.length, toolPairsComplete: outputTurn.toolPairsComplete });
+  mark('preflight_native_write_read_turn');
+  const fileName = 'preflight-native.txt', expectedFile = 'PI_GUI_PREFLIGHT_NATIVE';
+  const toolTurn = await runModelTurn(owner, 'tools', `Use only the native write and read tools in this temporary project. Write ${fileName} with exactly ${expectedFile}, then read it to verify the exact contents. Do not use bash or any other tool. Reply with exactly PI_GUI_PREFLIGHT_TOOLS_OK and nothing else.`, 'PI_GUI_PREFLIGHT_TOOLS_OK', timeoutMs);
+  const file = path.join(projects[0], fileName);
+  const actual = fs.existsSync(file) ? fs.readFileSync(file) : null;
+  const fileMatches = Boolean(actual && actual.equals(Buffer.from(expectedFile)));
+  const fileProof = actual ? { bytes: actual.length, sha256: require('node:crypto').createHash('sha256').update(actual).digest('hex') } : null;
+  report.facts.toolTurn = { ...toolTurn, file: fileProof };
+  requireCheck(toolTurn.outputMatches && toolTurn.settled && toolTurn.idle && toolTurn.toolPairsComplete && toolTurn.writeThenRead,
+    'preflight native write/read turn has genuine start, exact output, settled and idle', toolTurn);
+  requireCheck(toolTurn.toolNames.includes('write') && toolTurn.toolNames.includes('read') && toolTurn.completedTools.includes('write')
+    && toolTurn.completedTools.includes('read') && toolTurn.toolErrors === 0 && toolTurn.toolPairsComplete,
+  'preflight invokes successful native write and read tools', { toolNames: toolTurn.toolNames, completedTools: toolTurn.completedTools, toolErrors: toolTurn.toolErrors, toolPairsComplete: toolTurn.toolPairsComplete });
+  requireCheck(fileMatches, 'preflight file has exact expected bytes and digest', fileProof);
 }
 async function exercise() {
   mark('classic_ready'); await waitReady();
@@ -399,9 +620,9 @@ async function exercise() {
   requireCheck(!projection[0].hasC && !projection[1].hasB && !projection[0].hasA && !projection[1].hasA, 'public runtime store text never mixes A/B/C completion markers');
   for (const [label, owner] of [['B', ownerB], ['C', ownerC]]) {
     const history = await api(null, '/api/runtime-sessions?conversationId=' + encodeURIComponent(owner.conversationId));
-    const text = JSON.stringify(history.messages || []);
-    check(history.ok && history.sessionId === owner.sessionId && text.includes(label + '_DONE'), label + ' production read-only history binds exact native session and tool result');
-    report.facts[label].history = { ok: history.ok, count: history.messages?.length, sessionId: history.sessionId };
+    const proof = historyProof(history, owner.sessionId, label + '_OK');
+    check(historyMatches(proof), label + ' production read-only history binds exact native session and tool result', proof);
+    report.facts[label].history = proof;
   }
   mark('runtime_restart_owner_safety');
   const restarted = await api({ action: 'restart', owner: ownerB });
@@ -471,13 +692,18 @@ async function recovery() {
   const prior = JSON.parse(fs.readFileSync(path.join(out, 'recovery-input.json'), 'utf8'));
   const snap = await api();
   report.facts.recoveredSnapshot = { backendInstance: snap.backendInstance, totalCount: snap.totalCount, items: snap.items.map(item => ({ conversationId: item.conversationId, owner: item.owner, lifecycle: item.lifecycle, nativeSessionId: item.nativeSessionId })) };
-  requireCheck(snap.backendInstance !== prior.owners.B.backendInstance && snap.totalCount === 1 && snap.items.every(item => item.lifecycle === 'dormant' && !item.owner), 'real app/backend restart restores dormant records without spawning B/C');
+  requireCheck(snap.backendInstance !== prior.owners.B.backendInstance && snap.totalCount === 1
+    && ['B', 'C'].every(label => snap.items.some(item => item.conversationId === prior.owners[label].conversationId))
+    && snap.items.every(item => item.lifecycle === 'dormant' && !item.owner), 'real app/backend restart restores dormant records without spawning B/C');
   for (const label of ['B', 'C']) {
     const owner = prior.owners[label];
     const hist = await api(null, '/api/runtime-sessions?conversationId=' + encodeURIComponent(owner.conversationId));
-    check(hist.ok && hist.sessionId === owner.sessionId && JSON.stringify(hist.messages || []).includes(label + '_DONE'), label + ' persisted history survives actual Electron/backend restart');
+    const proof = historyProof(hist, owner.sessionId, label + '_OK');
+    requireCheck(historyMatches(proof), label + ' persisted history survives actual Electron/backend restart', proof);
     const stale = await api({ action: 'read', owner, command: { type: 'get_state' } });
-    check(stale.ok === false && stale.code === 'stale_runtime', label + ' prior backend owner is rejected after restart', { code: stale.code });
+    const staleEvents = await api({ action: 'events', owner, cursor: 0 });
+    requireCheck(stale.ok === false && stale.code === 'stale_runtime' && staleEvents.ok === false && staleEvents.code === 'stale_runtime',
+      label + ' prior backend owner is rejected after restart', { readCode: stale.code || null, eventCode: staleEvents.code || null });
   }
   await focus(prior.owners.B.conversationId);
   await until(() => read(`document.querySelector('#runtimeView .rtc-output')?.textContent.includes('B_DONE')`), 'dormant_B_history_render');
@@ -486,6 +712,7 @@ async function recovery() {
   // Real Pi may continue its newest native session in classic on startup.
   // Identity, not a fixed B label or timestamp, decides which one may resume.
   const classicSession = (await state()).legacyOwner?.sessionId;
+  requireCheck(typeof classicSession === 'string' && classicSession.length > 0, 'recovery classic native identity is known before resume');
   const heldLabel = ['B', 'C'].find(label => prior.owners[label].sessionId === classicSession);
   const resumeLabel = ['B', 'C'].find(label => prior.owners[label].sessionId !== classicSession);
   report.facts.resumeSelection = { classicSession, heldLabel: heldLabel || null, resumeLabel };
@@ -494,22 +721,86 @@ async function recovery() {
     requireCheck(duplicate.ok === false && duplicate.code === 'session_in_use' && (await api()).totalCount === 1,
       'classic-held native session cannot be resumed as a second runtime', { label: heldLabel, code: duplicate.code || null });
   }
+  requireCheck(!(await events()).some(event => event.type === 'agent_start'), 'recovery before explicit resume has zero agent_start');
   const expected = prior.owners[resumeLabel];
   const resumed = await api({ action: 'resume', conversationId: expected.conversationId });
   report.facts.resumeResponse = { label: resumeLabel, ok: resumed.ok === true, code: resumed.code || null };
   requireCheck(resumed.ok, 'explicit non-classic native resume after backend restart is admitted within budget', report.facts.resumeResponse);
-  let current;
-  await until(async () => { const result = await api(); current = result.items.find(item => item.conversationId === expected.conversationId); return current?.owner?.sessionId && current.lifecycle === 'ready'; }, 'resumed_native_identity', 65000);
-  requireCheck(current.owner.sessionId === expected.sessionId && current.owner.runtimeId !== expected.runtimeId && current.owner.backendInstance !== expected.backendInstance, 'resume binds persisted native session with new backend/runtime identity');
+  let current, resumedSnapshot;
+  await until(async () => { resumedSnapshot = await api(); current = resumedSnapshot.items.find(item => item.conversationId === expected.conversationId); return current?.owner?.sessionId && current.lifecycle === 'ready'; }, 'resumed_native_identity', 65000);
+  requireCheck(current.owner.sessionId === expected.sessionId && current.owner.conversationId === expected.conversationId
+    && current.owner.runtimeId !== expected.runtimeId && current.owner.runtimeGeneration !== expected.runtimeGeneration
+    && current.owner.backendInstance === snap.backendInstance && current.owner.backendInstance !== expected.backendInstance
+    && resumedSnapshot.totalCount === 2 && resumedSnapshot.limit === 2 && resumedSnapshot.hardLimit === 3,
+  'resume binds persisted native session with new backend/runtime identity');
   const readback = await state(current.owner);
-  requireCheck(readback.data?.sessionId === expected.sessionId && readback.data?.isStreaming === false, 'resumed real Pi get_state confirms same session and does not call model');
-  requireCheck(!(await events()).some(event => event.type === 'agent_start'), 'recovery does not generate a model task');
+  requireCheck(readback.ok === true && readback.data?.sessionId === expected.sessionId && readback.data.isStreaming === false,
+    'resumed real Pi get_state confirms same session and does not call model');
+  requireCheck(readback.data.model?.provider === process.env.PI_PROVIDER && readback.data.model?.id === process.env.PI_MODEL,
+    'recovery resumed Pi confirms the explicitly selected existing model');
+  const noPromptEvents = await events();
+  requireCheck(!noPromptEvents.some(event => event.type === 'agent_start'), 'recovery does not generate a model task',
+    { scope: 'startup through explicit resume, before the one authorized recovery prompt', agentStarts: 0 });
   report.facts.resumedOwner = current.owner;
-  await api({ action: 'close', owner: current.owner });
-  requireCheck((await api()).totalCount === 1, 'explicit close returns resumed slot while preserving classic');
+  mark('recovery_real_native_turn');
+  const recoveryProject = projects[resumeLabel === 'B' ? 0 : 1];
+  requireCheck(!fs.existsSync(path.join(recoveryProject, 'recovery-native.txt')), 'recovery result file does not predate the authorized model turn');
+  const recoveryTurn = await runModelTurn(current.owner, 'recovery', 'This is an authorized temporary fixture acceptance task. Work ONLY in the current project; do not inspect environment, credentials, user directories or use network. Use only the native write and read tools. Write recovery-native.txt with exactly RECOVERY_NATIVE_WRITE, then read it to verify the exact contents. Do not use bash or any other tool. Reply with exactly RECOVERY_OK and nothing else.', 'RECOVERY_OK', modelTurnTimeout());
+  const recoveryBytes = fs.existsSync(path.join(recoveryProject, 'recovery-native.txt')) ? fs.readFileSync(path.join(recoveryProject, 'recovery-native.txt')) : null;
+  const recoveryProof = recoveryBytes ? { bytes: recoveryBytes.length, sha256: outputDigest(recoveryBytes), exact: recoveryBytes.equals(Buffer.from('RECOVERY_NATIVE_WRITE')) } : null;
+  report.facts.recoveryTurn = { ...recoveryTurn, file: recoveryProof };
+  requireCheck(recoveryTurn.outputMatches && recoveryTurn.settled && recoveryTurn.idle && recoveryTurn.toolPairsComplete && recoveryTurn.writeThenRead,
+    'recovery resumed native write/read turn has genuine start, exact output, settled and idle', recoveryTurn);
+  requireCheck(recoveryTurn.toolNames.includes('write') && recoveryTurn.toolNames.includes('read') && recoveryTurn.completedTools.includes('write')
+    && recoveryTurn.completedTools.includes('read') && recoveryTurn.toolNames.every(name => ['write', 'read'].includes(name))
+    && recoveryTurn.toolErrors === 0 && recoveryTurn.toolPairsComplete,
+  'recovery invokes successful native write and read tools', { toolNames: recoveryTurn.toolNames, completedTools: recoveryTurn.completedTools, toolErrors: recoveryTurn.toolErrors, toolPairsComplete: recoveryTurn.toolPairsComplete });
+  requireCheck(recoveryProof?.exact === true, 'recovery file has exact expected bytes and digest', recoveryProof);
+  const beforeFinalRestart = historyProof(await api(null, '/api/runtime-sessions?conversationId=' + encodeURIComponent(current.owner.conversationId)), expected.sessionId, 'RECOVERY_OK');
+  requireCheck(historyMatches(beforeFinalRestart), 'recovery native history records the new assistant and confirmed tool results before restart', beforeFinalRestart);
+  const beforeRestartEvents = await events();
+  const restartCursor = beforeRestartEvents.reduce((max, event) => Math.max(max, event.seq || 0), 0);
+  const finalRestart = await api({ action: 'restart', owner: current.owner });
+  requireCheck(finalRestart.ok, 'recovery restarted native session after real model interaction', { ok: finalRestart.ok === true, code: finalRestart.code || null });
+  let finalOwner;
+  await until(async () => { const snapshot = await api(); const item = snapshot.items.find(record => record.conversationId === current.owner.conversationId); finalOwner = item?.owner; return item?.lifecycle === 'ready' && Boolean(finalOwner?.sessionId); }, 'recovery_final_restart_ready', 65000);
+  requireCheck(finalOwner.sessionId === expected.sessionId && finalOwner.conversationId === current.owner.conversationId
+    && finalOwner.backendInstance === current.owner.backendInstance && finalOwner.runtimeId !== current.owner.runtimeId
+    && finalOwner.runtimeGeneration !== current.owner.runtimeGeneration,
+  'recovery restart preserves resumed native session and rotates runtime owner');
+  const finalHistory = historyProof(await api(null, '/api/runtime-sessions?conversationId=' + encodeURIComponent(finalOwner.conversationId)), expected.sessionId, 'RECOVERY_OK');
+  requireCheck(historyMatches(finalHistory) && finalHistory.assistantSha256 === beforeFinalRestart.assistantSha256,
+    'recovery restart retains real post-recovery native history', finalHistory);
+  const oldRead = await api({ action: 'read', owner: current.owner, command: { type: 'get_state' } });
+  const oldEvents = await api({ action: 'events', owner: current.owner, cursor: 0 });
+  requireCheck(oldRead.ok === false && oldRead.code === 'stale_runtime' && oldEvents.ok === false && oldEvents.code === 'stale_runtime',
+    'recovery old owner read and event replay are rejected', { readCode: oldRead.code || null, eventCode: oldEvents.code || null });
+  await focus(finalOwner.conversationId);
+  await until(() => read(`(async()=>{const {runtimeStore}=await import('/runtime-state.js');const sameOwner=${sameOwner.toString()};
+    return sameOwner(runtimeStore.get(${JSON.stringify(finalOwner.conversationId)})?.owner,${JSON.stringify(finalOwner)});})()`), 'recovery_current_projection');
+  requireCheck(true, 'recovery production projection keeps only current owner after restart');
+  const lateWindowStart = Date.now();
+  // Observe actual delivery only: do not fabricate an old event or replace SSE.
+  // A zero count is a bounded observation, NOT proof that late events cannot exist.
+  await sleep(1000);
+  const finalState = await state(finalOwner), finalProjection = (await recordProjection([finalOwner.conversationId]))[0];
+  const allEvents = await events(), lateEvents = allEvents.filter(event => event.seq > restartCursor && sameOwner(event.owner, current.owner));
+  report.facts.lateOwnerObservation = { afterSequence: restartCursor, observationStartedAt: lateWindowStart, observationEndedAt: Date.now(),
+    oldOwnerFrames: lateEvents.length, oldOwnerModelEvents: lateEvents.filter(event => ['agent_start','message_update','message_end','tool_execution_start','tool_execution_end'].includes(event.type)).length,
+    syntheticEventsInjected: false, adversarialLateDelivery: 'not exercised by this real-Pi run; offline regression is separate' };
+  requireCheck(finalState.ok === true && finalState.data?.sessionId === expected.sessionId && finalState.data.isStreaming === false
+    && sameOwner(finalProjection?.owner, finalOwner),
+  'recovery actual post-restart event window preserves current owner projection', report.facts.lateOwnerObservation);
+  const starts = allEvents.filter(event => event.type === 'agent_start');
+  requireCheck(starts.length === 1 && sameOwner(starts[0].owner, current.owner), 'recovery restart does not automatically generate another model task');
+  report.facts.finalOwner = finalOwner;
+  await shot('recovery-native-restarted-dark-wide');
+  const closed = await api({ action: 'close', owner: finalOwner }), afterClose = await api();
+  requireCheck(closed.ok === true && afterClose.totalCount === 1 && !afterClose.items.some(item => item.owner), 'explicit close returns resumed slot while preserving classic');
 }
 async function main() {
-  const watchdog = setTimeout(() => { report.failure = { stage, name: 'watchdog_timeout' }; report.failed = report.checks.filter(check => !check.pass).length + 1; save(); app.exit(1); }, 500000);
+  const phaseTimeout = phase === 'preflight' ? modelTurnTimeout() * 2 + 90000 : 500000;
+  const watchdog = setTimeout(() => { report.failure = { stage, name: 'watchdog_timeout' }; report.failed = report.checks.filter(check => !check.pass).length + 1; save(); app.exit(1); }, phaseTimeout);
   let failed = false;
   try {
     await app.whenReady(); report.electron = process.versions.electron;
@@ -522,6 +813,7 @@ async function main() {
     requireCheck(await read('window.piGuiDesktop?.isDesktop===true'), 'production preload is active');
     await attachObserver();
     if (phase === 'exercise') await exercise();
+    else if (phase === 'preflight') await preflight();
     else if (phase === 'owner-probe') await ownerProbe();
     else if (phase === 'recovery') await recovery();
     else throw Error('unknown_phase');
