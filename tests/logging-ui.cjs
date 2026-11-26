@@ -105,8 +105,22 @@ const body = f => f.d.getElementById('ui5-logs-body');
 const action = (f, id) => body(f).querySelector(`[data-log-action="${id}"]`);
 const button = (f, label) => [...body(f).querySelectorAll('button')].find(b => b.textContent === label);
 const input = (f, label) => body(f).querySelector(`[aria-label="${label}"]`);
-const change = (f, control, value) => { control.value = value; control.dispatchEvent(new f.w.Event('change', { bubbles: true })); };
 const type = (f, control, value) => { control.value = value; control.dispatchEvent(new f.w.Event('input', { bubbles: true })); };
+const picker = (f, field) => body(f).querySelector(`[data-field="${field}"]`);
+const pickerValue = (f, field) => picker(f, field)?.dataset.value;
+async function choose(f, field, value) {
+  const trigger = picker(f, field);
+  assert.ok(trigger, 'missing picker ' + field);
+  // jsdom has no layout; a plausible rect keeps the anchored layer from
+  // treating the trigger as scrolled out of the viewport.
+  trigger.getBoundingClientRect = () => ({
+    x: 100, y: 100, top: 100, bottom: 134, left: 100, right: 296, width: 196, height: 34, toJSON() {},
+  });
+  trigger.click();
+  await until(() => f.d.querySelector(`.ds-picker-menu .ds-picker-option[data-value="${value}"]`));
+  f.d.querySelector(`.ds-picker-menu .ds-picker-option[data-value="${value}"]`).click();
+  await wait();
+}
 const refreshEntries = f => input(f, '刷新日志列表').click();
 const confirm = (f, label) => [...f.d.querySelectorAll('#confirmCard button')].find(b => b.textContent === label).click();
 async function isolated(run, initialTab = 'overview') {
@@ -125,7 +139,7 @@ async function isolated(run, initialTab = 'overview') {
       for (const text of ['日志状态', '正常', '最近错误与崩溃', 'app-20261017.jsonl']) assert.ok(body(f).textContent.includes(text), text);
       assert.equal(f.d.querySelector('img'), null);
       assert.equal(input(f, '启用本地日志').getAttribute('role'), 'switch');
-      assert.ok(input(f, '日志级别').classList.contains('ds-select'));
+      assert.equal(picker(f, 'mode').getAttribute('aria-haspopup'), 'listbox');
       assert.equal(f.count('/api/logs/status'), 1); assert.equal(f.count('/api/logs/entries'), 0);
       tab(f, 'overview').click(); assert.equal(f.count('/api/logs/status'), 1);
     });
@@ -167,15 +181,15 @@ async function isolated(run, initialTab = 'overview') {
       f.w.setGitConversationScope(null); f.w.showChat(); assert.ok(!f.calls.some(c => /prompt|steer|follow.up|command|execute/.test(c.url)));
     });
     await check('设置修改走白名单 API，模式与截止时间以返回状态为准', async () => {
-      change(f, input(f, '日志级别'), 'verbose'); await until(() => !input(f, '日志级别').disabled);
+      await choose(f, 'mode', 'verbose'); await until(() => !picker(f, 'mode').disabled);
       assert.deepEqual(f.calls.find(c => c.url === '/api/logs/settings').body, { mode: 'verbose' });
-      assert.equal(input(f, '日志级别').value, 'verbose'); assert.match(body(f).textContent, /详细模式截止/);
+      assert.equal(pickerValue(f, 'mode'), 'verbose'); assert.match(body(f).textContent, /详细模式截止/);
     });
     await check('首次进入日志查看恰一次查询，同标签重选不重复；级别/来源/搜索与分页均发送准确参数', async () => {
       tab(f, 'logs').click(); await until(() => body(f).querySelector('.ui5-log-entry'));
       assert.equal(f.count('/api/logs/entries'), 1); tab(f, 'logs').click(); await wait(); assert.equal(f.count('/api/logs/entries'), 1);
-      change(f, input(f, '按级别筛选'), 'ERROR'); await until(() => body(f).querySelector('.ui5-log-entry'));
-      change(f, input(f, '按来源筛选'), 'pi-bridge'); await until(() => body(f).querySelector('.ui5-log-entry'));
+      await choose(f, 'level', 'ERROR'); await until(() => body(f).querySelector('.ui5-log-entry'));
+      await choose(f, 'source', 'pi-bridge'); await until(() => body(f).querySelector('.ui5-log-entry'));
       type(f, input(f, '搜索日志'), 'request'); await wait(280); await until(() => !body(f).querySelector('.ui5-logs-list').getAttribute('aria-busy') || body(f).querySelector('.ui5-logs-list').getAttribute('aria-busy') === 'false');
       const query = new URL(f.calls.filter(c => c.url.startsWith('/api/logs/entries')).at(-1).url, 'http://fixture.invalid').searchParams;
       assert.equal(query.get('level'), 'ERROR'); assert.equal(query.get('source'), 'pi-bridge'); assert.equal(query.get('q'), 'request');
@@ -183,6 +197,48 @@ async function isolated(run, initialTab = 'overview') {
       button(f, '加载更早日志').click(); await until(() => f.calls.at(-1).url.includes('cursor=next'));
       assert.equal(new URL(f.calls.at(-1).url, 'http://fixture.invalid').searchParams.get('cursor'), 'next');
     });
+    await check('搜索防抖期间旧分页立即禁用并失效，不把旧游标带进新查询', () => isolated(async f => {
+      const calls = () => f.calls.filter(call => call.url.startsWith('/api/logs/entries'));
+      const older = () => button(f, '加载更早日志');
+      assert.ok(older() && !older().disabled, 'the first page exposes earlier logs');
+      const before = calls().length;
+      type(f, input(f, '搜索日志'), 'request');
+      assert.equal(body(f).querySelector('.ui5-logs-list').getAttribute('aria-busy'), 'true');
+      assert.match(body(f).querySelector('.ui5-logs-inline-note').textContent, /正在更新筛选/);
+      assert.ok(older()?.disabled, 'the old pagination is disabled during the debounce window');
+      // Even a forced click (jsdom dispatches to disabled handlers) must not
+      // combine the old cursor with the new query.
+      older().dispatchEvent(new f.w.MouseEvent('click', { bubbles: true, cancelable: true }));
+      await wait(20);
+      assert.equal(calls().length, before, 'no pagination request during debounce');
+      await wait(280);
+      await until(() => body(f).querySelector('.ui5-logs-list').getAttribute('aria-busy') === 'false');
+      const requested = calls().map(call => new URL(call.url, 'http://fixture.invalid').searchParams);
+      assert.equal(requested.at(-1).get('q'), 'request');
+      assert.equal(requested.at(-1).get('cursor'), null);
+      assert.ok(!requested.some(query => query.get('q') === 'request' && query.get('cursor') === 'next'));
+      assert.equal(older().disabled, false, 'the fresh result restores pagination with its new cursor');
+    }, 'logs'));
+
+    await check('旧查询的迟到响应不会覆盖新查询结果', () => isolated(async f => {
+      const calls = () => f.calls.filter(call => call.url.startsWith('/api/logs/entries'));
+      const finishStale = f.deferNext('/api/logs/entries');
+      type(f, input(f, '搜索日志'), 'stale');
+      await wait(280);
+      await until(() => calls().length === 2);
+      type(f, input(f, '搜索日志'), 'fresh');
+      await wait(280);
+      await until(() => calls().length === 3);
+      await until(() => body(f).querySelector('.ui5-logs-list').getAttribute('aria-busy') === 'false');
+      const fresh = body(f).querySelector('.ui5-logs-list').textContent;
+      finishStale({ ok: true, entries: [{ v: 1, timestamp: '2026-10-17T11:59:00.000Z', level: 'ERROR',
+        source: 'pi-bridge', event: 'stale_delayed_response', process: 'main' }], nextCursor: 'stale', truncated: false, scannedFiles: 1 });
+      await wait(80);
+      const after = body(f).querySelector('.ui5-logs-list').textContent;
+      assert.equal(after, fresh);
+      assert.ok(!after.includes('stale_delayed_response'));
+    }, 'logs'));
+
     await check('恶意 HTML 与长中文只作为文本呈现', async () => {
       f.setEntries([{ v: 1, timestamp: '2026-10-17T11:59:00.000Z', level: 'ERROR', source: '<img src=x onerror="window.__xss=1">', event: '<script>alert(1)</script>', process: 'renderer', cursor: 'x', details: { reason: '<b>not-html</b>', note: '很长的中文日志说明'.repeat(30) } }]);
       refreshEntries(f); await until(() => body(f).querySelector('.ui5-logs-list').textContent.includes('<script>'));
@@ -235,21 +291,22 @@ async function isolated(run, initialTab = 'overview') {
   await check('本地日志开关保存期间禁用控件并去重，以权威响应而非乐观值重绘', () => isolated(async f => {
     const finish = f.deferNext('/api/logs/settings'), toggle = input(f, '启用本地日志'); toggle.focus(); toggle.click(); toggle.click();
     assert.equal(f.count('/api/logs/settings'), 1); assert.equal(toggle.disabled, true);
-    assert.ok([...body(f).querySelectorAll('.ui5-logs-settings button, .ui5-logs-settings select')].every(control => control.disabled));
+    assert.ok([...body(f).querySelectorAll('.ui5-logs-settings button, .ui5-logs-settings input')].every(control => control.disabled));
+    assert.equal(picker(f, 'mode').disabled, true);
     assert.deepEqual(f.calls.find(c => c.url === '/api/logs/settings').body, { enabled: false });
     finish({ ok: true, status: { ...f.status(), enabled: true } }); await until(() => !input(f, '启用本地日志').disabled);
     assert.equal(input(f, '启用本地日志').getAttribute('aria-checked'), 'true'); assert.equal(f.d.activeElement, input(f, '启用本地日志'));
     input(f, '启用本地日志').click(); await until(() => !input(f, '启用本地日志').disabled);
-    assert.equal(input(f, '启用本地日志').getAttribute('aria-checked'), 'false'); assert.equal(input(f, '日志级别').disabled, true);
-    change(f, input(f, '保留天数'), '14'); await until(() => !input(f, '保留天数').disabled);
-    change(f, input(f, '空间上限'), '50'); await until(() => !input(f, '空间上限').disabled);
+    assert.equal(input(f, '启用本地日志').getAttribute('aria-checked'), 'false'); assert.equal(picker(f, 'mode').disabled, true);
+    await choose(f, 'retention', '14'); await until(() => !picker(f, 'retention').disabled);
+    await choose(f, 'capacity', '50'); await until(() => !picker(f, 'capacity').disabled);
     assert.deepEqual(f.calls.filter(c => c.url === '/api/logs/settings').map(c => c.body), [{ enabled: false }, { enabled: false }, { retentionDays: 14 }, { maxTotalMB: 50 }]);
   }));
 
   await check('设置失败回读权威状态，持久化可能成功也不声称保存，固定提示不泄露 detail', () => isolated(async f => {
     f.queueNext('/api/logs/settings', f.failure, 503); f.setSettings({ retentionDays: 14 });
-    change(f, input(f, '保留天数'), '3'); await until(() => body(f).textContent.includes('未能确认保存') && !input(f, '保留天数').disabled);
-    assert.equal(f.count('/api/logs/status'), 2); assert.equal(input(f, '保留天数').value, '14');
+    await choose(f, 'retention', '3'); await until(() => body(f).textContent.includes('未能确认保存') && !picker(f, 'retention').disabled);
+    assert.equal(f.count('/api/logs/status'), 2); assert.equal(pickerValue(f, 'retention'), '14');
     assert.doesNotMatch(body(f).textContent, /PRIVATE_ERROR_DETAIL|已保存/);
   }));
 
@@ -281,11 +338,11 @@ async function isolated(run, initialTab = 'overview') {
   }));
 
   await check('设置迟到响应不替换新标签或抢焦点，返回概览使用权威状态', () => isolated(async f => {
-    const finish = f.deferNext('/api/logs/settings'); change(f, input(f, '保留天数'), '3');
+    const finish = f.deferNext('/api/logs/settings'); await choose(f, 'retention', '3');
     tab(f, 'logs').click(); await until(() => body(f).querySelector('.ui5-log-entry')); input(f, '搜索日志').focus();
     const search = input(f, '搜索日志'); finish({ ok: true, status: { ...f.status(), retentionDays: 14 } }); await wait();
     assert.equal(f.d.activeElement, search); assert.equal(tab(f, 'logs').getAttribute('aria-selected'), 'true');
-    tab(f, 'overview').click(); assert.equal(input(f, '保留天数').value, '14');
+    tab(f, 'overview').click(); assert.equal(pickerValue(f, 'retention'), '14');
   }));
 
   await check('清理确认成功只发 confirm:true 一次，回读状态并移除旧条目', () => isolated(async f => {
@@ -333,16 +390,16 @@ async function isolated(run, initialTab = 'overview') {
 
   await check('ZIP 时间范围变动使在途预览失效，重新预览后仅导出确认范围与草稿', () => isolated(async f => {
     const finish = f.deferNext('/api/logs/export/preview'); button(f, '预览摘要').click(); button(f, '预览摘要').click();
-    assert.equal(f.count('/api/logs/export/preview'), 1); change(f, input(f, '故障报告时间范围'), '120');
+    assert.equal(f.count('/api/logs/export/preview'), 1); await choose(f, 'exportRange', '120');
     finish({ ok: true, windowMinutes: 30, entryCount: 999, errorCount: 999, filesIncluded: ['OLD_RANGE_MARKER'] }); await wait();
     assert.equal(button(f, '确认导出 ZIP').disabled, true); assert.doesNotMatch(body(f).textContent, /OLD_RANGE_MARKER|999/);
     type(f, input(f, '问题描述'), 'fixture issue'); type(f, input(f, '复现步骤'), 'fixture repro');
     button(f, '预览摘要').click(); await until(() => !button(f, '确认导出 ZIP').disabled);
     assert.deepEqual(f.calls.filter(c => c.url === '/api/logs/export/preview').at(-1).body, { windowMinutes: 120 });
-    change(f, input(f, '故障报告时间范围'), '1440'); assert.equal(button(f, '确认导出 ZIP').disabled, true);
+    await choose(f, 'exportRange', '1440'); assert.equal(button(f, '确认导出 ZIP').disabled, true);
     button(f, '预览摘要').click(); await until(() => !button(f, '确认导出 ZIP').disabled);
     const exported = f.deferNext('/api/logs/export'); f.setFailExport(false); button(f, '确认导出 ZIP').click(); button(f, '确认导出 ZIP').click();
-    assert.equal(f.count('/api/logs/export'), 1); assert.equal(input(f, '故障报告时间范围').disabled, true);
+    assert.equal(f.count('/api/logs/export'), 1); assert.equal(picker(f, 'exportRange').disabled, true);
     assert.deepEqual(f.calls.find(c => c.url === '/api/logs/export').body, { confirm: true, windowMinutes: 1440, description: 'fixture issue', repro: 'fixture repro' });
     // 让 API 的失败响应恢复按钮，再验证真正成功下载（字节由 fixture 提供）。
     exported(f.failure, 503); await until(() => !button(f, '确认导出 ZIP').disabled);
@@ -351,11 +408,11 @@ async function isolated(run, initialTab = 'overview') {
   }, 'export'));
 
   await check('导出草稿与已读诊断跨标签保留，预览授权不跨挂载复用，迟到预览不能污染新页', () => isolated(async f => {
-    type(f, input(f, '问题描述'), 'persist issue'); type(f, input(f, '复现步骤'), 'persist repro'); change(f, input(f, '故障报告时间范围'), '120');
+    type(f, input(f, '问题描述'), 'persist issue'); type(f, input(f, '复现步骤'), 'persist repro'); await choose(f, 'exportRange', '120');
     const finish = f.deferNext('/api/logs/export/preview'); button(f, '预览摘要').click(); tab(f, 'overview').click();
     finish({ ok: true, entryCount: 999, filesIncluded: ['STALE_PREVIEW_MARKER'] }); await wait();
     tab(f, 'export').click(); assert.equal(input(f, '问题描述').value, 'persist issue'); assert.equal(input(f, '复现步骤').value, 'persist repro');
-    assert.equal(input(f, '故障报告时间范围').value, '120'); assert.equal(f.count('/api/diagnostics'), 1);
+    assert.equal(pickerValue(f, 'exportRange'), '120'); assert.equal(f.count('/api/diagnostics'), 1);
     assert.equal(button(f, '确认导出 ZIP').disabled, true); assert.doesNotMatch(body(f).textContent, /STALE_PREVIEW_MARKER|999/);
     button(f, '预览摘要').click(); await until(() => !button(f, '确认导出 ZIP').disabled);
     tab(f, 'logs').click(); tab(f, 'export').click(); assert.equal(button(f, '确认导出 ZIP').disabled, true);
