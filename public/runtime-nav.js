@@ -12,7 +12,7 @@
  */
 import { fetchRuntimeSessions, fetchWorktrees, runtimeSessionAction, worktreeAction } from './api.js';
 import { runtimeStore as store, onRuntimeChange, seedRuntimeSnapshot } from './runtime-state.js';
-import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
+import { launchRuntimeSession, resourceText, runtimeActionNotice } from './runtime-resources.js';
 import { openRuntimeSessions } from './runtime-sessions.js';
 import { generateAiTitle, isTitleGenerating, renameSessionTitle, titleCapability } from './session-titles.js';
 import { MENU_ICONS, openActionMenu } from './ui/action-menu.js';
@@ -382,7 +382,7 @@ function newConversationRow() {
 
 /** 「新建并行会话」= P32.2 create + P32.3 start 的**编排**，不是第二条创建路径。
  *  两个动作都走已验证的 HTTP 端点，后端返回什么就显示什么（dirty / branch 冲突 /
- *  runtime_limit / workspace_busy 都如实呈现，前端不自己模拟）。 */
+ *  workspace_busy 都如实呈现，前端不自己模拟）。 */
 export async function createParallelConversation(project = null) {
   const projectPath = project?.path || currentProjectPath;
   if (!projectPath) return;
@@ -401,7 +401,7 @@ export async function createParallelConversation(project = null) {
     if (started?.cancelled) toast('未启动会话。工作区已创建，可稍后从「工作区管理」启动。', 'info', { context });
     if (started && started.ok === false && !started.cancelled) {
       /* 工作区已经建好了，只是 runtime 没起来 —— 如实说清楚，不要谎报成功。 */
-      toast(`${runtimeLimitNotice(started) || started.error || '会话未能启动'}（工作区已创建，可在「工作区管理」里重试）`, 'warn', { context });
+      toast(`${runtimeActionNotice(started) || started.error || '会话未能启动'}（工作区已创建，可在「工作区管理」里重试）`, 'warn', { context });
     }
     if (!project || projectPath === currentProjectPath) await loadRuntimeNav({ path: projectPath }, { parent });
     if (started?.ok && started.owner) await focusConversation(started.owner.conversationId);

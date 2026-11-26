@@ -486,8 +486,8 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
     if (snapshot.backendInstance !== backend) { records.clear(); resources = null; backend = snapshot.backendInstance; }
     // Only complete authoritative snapshots update occupancy. SSE items cannot
     // prove that cleanup finished, or account for the classic external child.
-    if (['liveCount', 'totalCount', 'limit', 'hardLimit'].every(k => Number.isInteger(snapshot[k]) && snapshot[k] >= 0)) {
-      resources = { liveCount: snapshot.liveCount, totalCount: snapshot.totalCount, limit: snapshot.limit, hardLimit: snapshot.hardLimit };
+    if (['liveCount', 'totalCount'].every(k => Number.isInteger(snapshot[k]) && snapshot[k] >= 0)) {
+      resources = { liveCount: snapshot.liveCount, totalCount: snapshot.totalCount };
     }
     for (const rawItem of snapshot.items || []) {
       /* 快照 / runtime_state 都可能迟到。标题按持久修订号裁决：旧数据里的

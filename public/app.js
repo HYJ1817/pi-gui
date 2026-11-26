@@ -116,7 +116,7 @@ import { createRuntimeConversation } from './runtime-conversation.js';
 import { createRuntimeSecondary } from './runtime-secondary.js';
 import { setGitConversationScope, gitConversationScope } from './api.js';
 import { setRuntimeFocusHandler, createParallelConversation, focusRuntimeById } from './runtime-nav.js';
-import { refreshRuntimeResources, launchRuntimeSession, runtimeLimitNotice } from './runtime-resources.js';
+import { refreshRuntimeResources, launchRuntimeSession, runtimeActionNotice } from './runtime-resources.js';
 import { createRuntimeModels } from './runtime-models.js';
 import { createRuntimeRecovery } from './runtime-recovery.js';
 import { onRuntimeChange, runtimeStore, setRuntimeStoreRejectObserver, seedRuntimeSnapshot, observeRuntimeFrame, refreshRuntimeViews } from './runtime-state.js';
@@ -235,9 +235,8 @@ const sessionNavigation = createSessionNavigation({
   },
   openRuntime: async (session,project,text,intent) => {
     intent.requestId ||= crypto.randomUUID();
-    const result=await launchRuntimeSession({action:'open-session',args:{project:project.path,...(session?{session:session.id}:{requestId:intent.requestId})}},
-      {isExisting:snapshot=>Boolean(session?.sessionId)&&snapshot?.items?.some(item=>item.owner&&item.nativeSessionId===session.sessionId&&samePath(item.workspace?.cwd,project.path))});
-    if (!result?.ok) return {...result,error:runtimeLimitNotice(result)||result?.error||'会话未能打开，输入已保留。'};
+    const result=await launchRuntimeSession({action:'open-session',args:{project:project.path,...(session?{session:session.id}:{requestId:intent.requestId})}});
+    if (!result?.ok) return {...result,error:runtimeActionNotice(result)||result?.error||'会话未能打开，输入已保留。'};
     const record=runtimeStore.get(result.conversationId);
     const draft=intent.getDraft?.()??text;
     if (record && draft && !record.draft) {record.draft=draft;record.draftRevision++;}

@@ -4,8 +4,19 @@ import { createGuiBrowserLaunch } from './gui-browser-launch.js';
 
 export function createRuntimeBrowserGateway({ env = process.env } = {}) {
   const url = env.PI_GUI_RUNTIME_BROWSER_URL, token = env.PI_GUI_RUNTIME_BROWSER_TOKEN;
+  /* Browser host 在 Electron 主进程里已经按单一 chain 串行处理 allocate/focus/
+   * dispose。这里同样串行发送，避免批量关闭或恢复较多会话时，把私有控制面的
+   * 连接堆到 listener 的 maxConnections 之上——超出的请求会被 Node 直接 reset，
+   * 表现为大面积 cleanup_pending。排队只针对 Browser 生命周期控制，不参与模型
+   * 回合调度，也不限制会话数量。 */
+  let chain = Promise.resolve();
   function action(action, scope) {
     if (!url || !token) return Promise.resolve({ ok: true, unavailable: true });
+    const task = chain.catch(() => {}).then(() => send(action, scope));
+    chain = task.catch(() => {});
+    return task;
+  }
+  function send(action, scope) {
     return new Promise((resolve, reject) => {
       const target = new URL(url);
       if (target.protocol !== 'http:' || target.hostname !== '127.0.0.1') return reject(Error('browser_unavailable'));

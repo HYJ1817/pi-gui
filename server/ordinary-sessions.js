@@ -118,7 +118,7 @@ export function createOrdinarySessions({ getProjects, sessions, getRegistry, cur
       let identity=null,locator=null;
       if(target) {const stat=fs.statSync(target.file);identity={dev:stat.dev,ino:stat.ino,birthtimeMs:stat.birthtimeMs};locator=fs.realpathSync(target.file);}
       return getRegistry().openProjectSession({workspace,sessionId:target?.sessionId||null,sessionLocator:locator,sessionIdentity:identity,
-        sessionName:target?.title||'新会话',...(args.requestId?{requestId:args.requestId}:{})},{allowThird:args.allowThird===true});
+        sessionName:target?.title||'新会话',...(args.requestId?{requestId:args.requestId}:{})});
     },
   };
 }

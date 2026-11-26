@@ -29,7 +29,7 @@ export function createCandidateFlow({root,headers,isCurrent,isFresh,selection,ac
     const info=element('dl','candidate-facts');
     const facts=[['来源',p.source],['当前会话',p.conversationId],['Git HEAD',p.head],['输入快照',p.inputId],['评论 / 文件',`${p.commentCount} 条 / ${p.files.length} 个`],
       ['输入容量',`${p.inputFiles} 个文件 / ${p.inputBytes} 字节`],['Git 状态',`staged ${p.counts.staged} · working ${p.counts.working} · untracked ${p.counts.untracked} · ignored ${p.counts.ignored}`],
-      ['候选位置',p.path],['执行资源',`当前 ${p.runtimeCount||0} 条执行线；本次增加一条，上限 3。`],['本次写入','候选工作区、受控 Git 登记、应用内输入/结果证据及独立 Pi 会话；不向原工作区应用修改。']];
+      ['候选位置',p.path],['执行资源',`当前 ${p.runtimeCount||0} 条执行线；本次增加一条。`],['本次写入','候选工作区、受控 Git 登记、应用内输入/结果证据及独立 Pi 会话；不向原工作区应用修改。']];
     for(const[k,v]of facts)info.append(element('dt','',k),element('dd','',String(v)));pane.append(info);
     const files=element('ul','candidate-files');for(const name of p.files)files.append(element('li','',name));pane.append(files);
     const text=element('textarea','review-feedback-preview');text.readOnly=true;text.rows=8;text.value=p.task;text.setAttribute('aria-label','候选执行任务');pane.append(text);

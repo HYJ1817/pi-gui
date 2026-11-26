@@ -51,9 +51,11 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
   let queue = Promise.resolve(), disposed = false, invalid = false, focused = null;
   try {
     if (fs.existsSync(manifest)) {
-      if (fs.lstatSync(manifest).isSymbolicLink() || fs.statSync(manifest).size > 1024 * 1024) throw Error();
+      // This is accumulated local metadata, not a single-request payload. Its
+      // size/count must not turn retained conversations into an admission cap.
+      if (fs.lstatSync(manifest).isSymbolicLink()) throw Error();
       const value = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-      if (value.version !== 1 || !Array.isArray(value.items) || value.items.length > 256) throw Error();
+      if (value.version !== 1 || !Array.isArray(value.items)) throw Error();
       for (const r of value.items) {
         if (!closed(r, ['conversationId', 'workspace', 'sessionId', 'sessionLocator', 'sessionIdentity', 'sessionName', 'nameSource', 'createdAt', 'requestId']) || typeof r.conversationId !== 'string'
           || !/^[\da-f-]{36}$/.test(r.conversationId) || records.has(r.conversationId)
@@ -235,7 +237,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       ...(live ? { execution: executionMetadata(live) } : {}) };
   }
   function snapshot() { return { ok: !invalid, backendInstance, focusedConversationId: focused, liveCount: lives.size,
-    totalCount: lives.size + externalCount(), limit: 2, hardLimit: 3, items: [...records.values()].map(summary) }; }
+    totalCount: lives.size + externalCount(), items: [...records.values()].map(summary) }; }
   function touch(live) { revisions.set(live.record.conversationId, ++revision); }
   function changed(live) { if (belongs(live)) { touch(live); publish({ type: 'runtime_state', owner: owner(live), item: summary(live.record) }); } }
   function emit(live, event) {
@@ -438,8 +440,6 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       if (beforeStart()) throw fail(beforeStart());
       if (typeof sharedCurrent !== 'function' || !sharedCurrent()) throw fail('tool_guard_unavailable');
     }
-    const total = lives.size + externalCount();
-    if (total >= 3 || (total >= 2 && options.allowThird !== true)) throw fail('runtime_limit');
     const live = { record, id: randomUUID(), generation: randomUUID(), sessionId: null, lifecycle: 'starting', activity: 'idle', agentActive: false, pendingTurns: new Map(),
       providerSessionIdentity: record.sessionIdentity,
       executionStartSequence: 0, executionBoundAt: null, executionBranchEpoch: 0,
@@ -468,7 +468,29 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     try {
       await live.adapterReady;
       if (!belongs(live)) throw fail('stale_runtime');
-      live.adapter.start();
+      /* HTTP start 的启动等待不能在全局生命周期队列里进行：登记、租约和 factory
+       * 预留已在队列内完成，adapter.start() 交给调用方在队列外等待。否则一个
+       * 慢启动（例如工具守卫准备）会把无关工作区的 start/focus/close 全排在后。
+       * launchRecord 的直接调用方（open/resume）保持原有的就绪即返回语义。 */
+      if (options.deferStart) return { ok: true, deferStart: true, live, conversationId: record.conversationId, owner: owner(live), item: summary(record) };
+      /* 新建会话（HTTP start）必须等到适配器确实开始启动，才能把「起不来」
+       * 作为可见的失败返回；历史恢复/项目会话则在适配器就绪后立即返回，
+       * 启动过程通过事件推进 —— 否则同项目 B 的共享启动准入只能排在 A
+       * 完整启动之后，多个会话的启动被无谓地串行化。 */
+      if (options.awaitStart) {
+        await live.adapter.start();
+        if (!belongs(live)) throw fail('stale_runtime');
+      } else {
+        /* 异步 start 的拒绝仍然必须有人观察：它只属于这个 live，退掉它自己，
+         * 不能变成未处理的 rejection 把整个后端带走。 */
+        void Promise.resolve().then(() => live.adapter.start()).catch(e => {
+          if (!belongs(live)) return;
+          live.lifecycle = 'error'; live.error = 'runtime_start_failed';
+          safeLog('runtime.start_failed', { phase: 'start', code: e && e.code ? e.code : 'runtime_start_failed' });
+          changed(live);
+          void retire(live).catch(() => {});
+        });
+      }
       return { ok: true, conversationId: record.conversationId, owner: owner(live), item: summary(record) };
     } catch (e) {
       live.lifecycle = 'error'; live.error = 'runtime_start_failed';
@@ -479,19 +501,39 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
   }
   function start(args) {
-    if (!closed(args, ['id', 'epoch', 'project', 'allowThird'])) return Promise.reject(fail('invalid_request'));
-    return serialize(() => admission(args, async admitted => {
-      guardStore(); if (records.size >= 256) throw fail('conversation_limit');
+    if (!closed(args, ['id', 'epoch', 'project'])) return Promise.reject(fail('invalid_request'));
+    const reserved = serialize(() => admission(args, async admitted => {
+      guardStore();
       const workspace = admitted || await resolveWorkspace(args);
       const record = { conversationId: randomUUID(), workspace, sessionId: null, sessionLocator: null, nameSource: 'seed', createdAt: new Date().toISOString() };
       records.set(record.conversationId, record); save();
-      try { return await launchRecord(record, { ...args, workspaceChecked: Boolean(admitted) }); }
+      try { return await launchRecord(record, { workspaceChecked: Boolean(admitted), deferStart: true }); }
       catch (e) { if (!lives.has(record.conversationId)) records.delete(record.conversationId); save(); throw e; }
     }));
+    /* 只在本次 HTTP 请求自己的 Promise 上等待启动结果；全局队列在登记/租约/
+     * factory 预留完成后就已释放，无关 Runtime 不必排在慢启动后面。失败只
+     * 回收这一个 live，并回滚它新建的持久记录。 */
+    return reserved.then(async ({ live, conversationId, owner: reservedOwner, item }) => {
+      try {
+        await live.adapter.start();
+        if (!belongs(live)) throw fail('stale_runtime');
+        return { ok: true, conversationId, owner: reservedOwner, item };
+      } catch (e) {
+        live.lifecycle = 'error'; live.error = 'runtime_start_failed';
+        safeLog('runtime.start_failed', { phase: 'start', code: e && e.code ? e.code : 'runtime_start_failed' });
+        if (live.adapter || live.retirePromise) await retire(live).catch(() => {});
+        else { lives.delete(live.record.conversationId); leases.get(live.key)?.delete(live); if (!leases.get(live.key)?.size) leases.delete(live.key); }
+        if (!lives.has(live.record.conversationId)) {
+          records.delete(live.record.conversationId);
+          try { save(); } catch { /* Later operations surface storage failure as before. */ }
+        }
+        throw fail(e.code || 'runtime_start_failed');
+      }
+    });
   }
   // Backend-only input: HTTP callers cannot provide workspace paths or native
   // locators. The ordinary-session resolver must prove them before this method.
-  function openProjectSession({ workspace, sessionId = null, sessionLocator = null, sessionIdentity = null, sessionName = '', requestId }, options = {}) {
+  function openProjectSession({ workspace, sessionId = null, sessionLocator = null, sessionIdentity = null, sessionName = '', requestId }) {
     return serialize(async () => {
       guardStore();
       if (!projectWorkspace(workspace)) throw fail('invalid_request');
@@ -505,21 +547,20 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
       }
       const fresh = !record;
       if (fresh) {
-        if (records.size >= 256) throw fail('conversation_limit');
         record = {conversationId:randomUUID(),workspace,sessionId,sessionLocator,sessionIdentity,sessionName:String(sessionName).slice(0,200),nameSource:'seed',createdAt:new Date().toISOString(),...(requestId?{requestId}:{})};
         records.set(record.conversationId,record); save();
       }
-      try { return await launchRecord(record,options); }
+      try { return await launchRecord(record); }
       catch(e) { if (fresh && !lives.has(record.conversationId)) {records.delete(record.conversationId);save();} throw e; }
     });
   }
-  function resume(id, options = {}) {
+  function resume(id) {
     return serialize(async () => { const record = records.get(id); if (!record) throw fail('unknown_conversation');
       if (lives.has(id)) throw fail('workspace_in_use');
       return admission({ id: record.workspace.workspaceId, epoch: record.workspace.workspaceEpoch }, admitted => {
         if (admitted && ['projectId', 'repoId', 'workspaceId', 'workspaceEpoch', 'cwd', 'root', 'branch'].some(k =>
           ['cwd', 'root'].includes(k) ? rootKey(admitted[k]) !== rootKey(record.workspace[k]) : admitted[k] !== record.workspace[k])) throw fail('stale_workspace');
-        return launchRecord(record, { ...options, workspaceChecked: Boolean(admitted) });
+        return launchRecord(record, { workspaceChecked: Boolean(admitted) });
       }, { workspace: { ...record.workspace }, sessionId: record.sessionId }); });
   }
   async function command(expected, cmd) {
@@ -874,7 +915,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     live.retired = true;
     return serialize(() => retire(live));
   }
-  async function restart(expected) { const live = resolve(expected, true), id = live.record.conversationId; await close(expected); return resume(id, { allowThird: true }); }
+  async function restart(expected) { const live = resolve(expected, true), id = live.record.conversationId; await close(expected); return resume(id); }
   async function invalidateWorkspace(id) {
     const targets = [...lives.values()].filter(l => l.record.workspace.workspaceId === id);
     if (targets.some(l => l.editing || l.editTurn || l.editUnresolved)) throw fail('edit_in_progress');

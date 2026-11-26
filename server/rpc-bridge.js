@@ -446,7 +446,9 @@ export function createRpcBridge({
       restartRequested = false;
       safeLog('bridge.start_failed', { phase: 'spawn', reason: 'spawn_error' });
       publish({ type: 'bridge_status', state: 'error', error: '无法启动 pi。', hint: '确认 pi 已安装并在 PATH 中，或检查 PI_BIN 配置。', cwd, bridgeRun: run });
-      return;
+      /* 同步等待启动的调用方（新建 Runtime 的 HTTP start）需要结构化失败，
+       * 不能只靠异步 bridge_status 事件；既有 fire-and-forget 调用方忽略返回值。 */
+      return { ok: false, code: 'runtime_start_failed' };
     }
 
     /* stdin 上的写错误（EPIPE / write-after-end）必须有人接：没人接的话

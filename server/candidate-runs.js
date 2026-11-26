@@ -58,11 +58,10 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
     check(scope);idle();if(scope.workspaceCwd&&scope.workspaceCwd!==scope.projectRoot)candidateFail('candidate_unsupported');const input=await captureCandidateInput(scope.projectRoot);check(scope);
     const selected=await task(scope,body,owner);idle();
     const generation=contextGeneration(),project=projectFor(scope.projectRoot),runtimeCount=registry.snapshot().totalCount||0;
-    if(runtimeCount>=3)candidateFail('candidate_busy');
     const prepared=await worktrees.prepareCandidate({project,source:input.head,branch:`pi-gui/t4b/${randomUUID()}`},generation);check(scope);idle();
     if(plans.size>=8)plans.delete(plans.keys().next().value);
     let sourceObservation=null;try{sourceObservation=observeAdoptionSnapshot(input);}catch{/* Optional C1 evidence must not change T4-B execution eligibility. */}
-    const nonce=randomUUID();plans.set(nonce,{scope,body,owner,input,sourceObservation,selected,prepared,generation,allowThird:runtimeCount>=2,expires:now()+300000});
+    const nonce=randomUUID();plans.set(nonce,{scope,body,owner,input,sourceObservation,selected,prepared,generation,expires:now()+300000});
     return{ok:true,nonce,plan:{head:input.head,inputId:input.contentId,counts:input.counts,source:scope.projectRoot,conversationId:owner?.conversationId||'classic-chat',commentCount:body.selectedIds.length,files:selected.paths,inputFiles:input.files.length,inputBytes:input.bytes,path:prepared.plan.path,warning,task:candidatePrompt({input,selected}),runtimeCount}};
   }
   async function validate(plan,scope){
@@ -90,7 +89,7 @@ export function createCandidateRuns({dataDir,worktrees,registry,readComments,pro
     }catch(e){live.run.state='failed';live.run.reason=e.code||'candidate_failed';try{persist(live);store.release();}finally{active=null;}throw e;}
   }
   async function execute(live,plan,scope){
-    const opened=await registry.start({id:live.run.workspace.id,epoch:live.run.workspace.epoch,allowThird:plan.allowThird});live.owner=opened.owner;live.run.conversationId=opened.conversationId;persist(live);
+    const opened=await registry.start({id:live.run.workspace.id,epoch:live.run.workspace.epoch});live.owner=opened.owner;live.run.conversationId=opened.conversationId;persist(live);
     for(let i=0;i<100;i++){
       if(active!==live||disposed)candidateFail('candidate_interrupted');check(scope);
       const owner=registry.getOwner(opened.conversationId),item=registry.snapshot().items.find(i=>i.conversationId===opened.conversationId);

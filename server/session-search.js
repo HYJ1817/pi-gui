@@ -59,11 +59,11 @@ import { sessionMessageBody } from './pi-compat.js';
  *
  * ⚠️ 这里**没有**「最多扫几个会话」这一项，是有意的：加一个数量上限会让
  * 「第 N 个以后的会话永远搜不到」（按更新时间倒序截断的话，越老的越搜不到）。
- * 一次搜索实际上被三样东西夹住：
- *   1. **候选集** —— `sessions.ownedSessions()` 自己扫目录，它有一条候选上限
- *      （`MAX_SESSIONS * 4`，见 server/sessions.js）；
- *   2. **单个会话读多少** —— `maxSessionBytes`；
- *   3. **一共读多少** —— `maxTotalBytes`，到顶就停，并在 `scanned.truncated` 里报出来。
+ * 一次搜索实际上被两样东西夹住：
+ *   1. **单个会话读多少** —— `maxSessionBytes`；
+ *   2. **一共读多少** —— `maxTotalBytes`，到顶就停，并在 `scanned.truncated` 里报出来。
+ * 候选集由 `sessions.ownedSessions()` 扫描目录，没有「最多几个会话」的数量上限 ——
+ * 数量上限会让第 N 个以后的会话永远搜不到。
  * 结果侧另有 `maxResults` / `maxMatchesPerSession`。 */
 export const LIMITS = Object.freeze({
   /** 单个会话最多读多少字节（超出部分不索引，并在结果里标 truncated）。 */

@@ -1,6 +1,6 @@
 import { fetchRuntimeSessions, runtimeSessionAction } from './api.js';
 import { runtimeStore as store, observeRuntimeFrame, onRuntimeChange, seedRuntimeSnapshot, respondToRuntimeApproval } from './runtime-state.js';
-import { launchRuntimeSession, resourceText, runtimeLimitNotice } from './runtime-resources.js';
+import { launchRuntimeSession, resourceText, runtimeActionNotice } from './runtime-resources.js';
 import { openModal } from './ui/modal.js';
 
 const same = (a, b) => a && b && Object.keys(a).every(k => a[k] === b[k]);
@@ -81,7 +81,7 @@ export function openRuntimeSessions(project, workspace = null, options = {}) {
         const staleApproval = payload.command?.type === 'extension_ui_response'
           && (!same(owner, payload.owner) || !same(payload.owner, owner));
         if (!staleApproval) {
-          notice.textContent = result.cancelled ? '' : runtimeLimitNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
+          notice.textContent = result.cancelled ? '' : runtimeActionNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
           after?.(result);
         }
         await refresh(); return staleApproval ? null : result;
@@ -146,7 +146,7 @@ export function openRuntimeSessions(project, workspace = null, options = {}) {
       state.textContent = `${labels[r.item.lifecycle]} · ${labels[r.item.activity]}${kind ? ' · ' + OUTCOME[kind] : ''}`
         + `${r.item.error === 'generation_failed' && kind !== 'interrupted' ? ' · 生成失败，请重试或检查模型' : r.item.error && kind !== 'interrupted' ? ' · 运行异常' : ''}`
         + `${r.truncated ? ' · 显示最近输出' : ''}`;
-      if (r.item.error === 'cleanup_pending') state.textContent = '清理未完成 · 运行名额仍被占用';
+      if (r.item.error === 'cleanup_pending') state.textContent = '清理未完成';
       output.textContent = r.text || '等待任务'; tools.textContent = r.tools.map(t => `${t.name} · ${t.state}`).join(' / ');
       if (renderedId !== selected || document.activeElement !== input) input.value = r.draft;
       renderedId = selected;

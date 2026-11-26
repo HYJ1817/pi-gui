@@ -34,8 +34,11 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
     return {ok:true};
   }
   async function allocate(scope){
-    const key=scopeKey(scope);if(retired.has(key)||retired.size>=256)throw Error('stale_runtime');if(records.has(key)){const r=records.get(key);return {ok:true,connection:r.bridge.connection(),extensionPath};}
-    if(records.size>=2)throw Error('browser_limit');
+    /* 没有数量上限：每个会话的合法 Runtime 都可以有自己的 Browser scope。
+     * 浏览器控制器与其它 Runtime 资源一样按真实 OS/Electron 能力伸缩，失败只
+     * 归属本次 allocate；不能用「最多两个」把第三条会话挡在启动之外。tombstone
+     * 不设数量阈值，否则长生命周期应用会在若干轮打开/关闭后永久拒绝新 scope。 */
+    const key=scopeKey(scope);if(retired.has(key))throw Error('stale_runtime');if(records.has(key)){const r=records.get(key);return {ok:true,connection:r.bridge.connection(),extensionPath};}
     const owner=Object.freeze({...scope}),r={key,scope:owner,partition:`pi-gui-runtime-${randomUUID()}`};
     // Set proxy policy before a renderer or Browser bridge can start requests.
     // This main-only callback never accepts a partition from the renderer.
@@ -80,7 +83,7 @@ function createRuntimeBrowserHost({origin,getWindow,ipcMain,extensionPath,
       if(body.action==='dispose')return disposeScope(body.scope);
       const r=lookup(body.scope);return invalidateScope(r,body);
     });chain=task.catch(()=>{});
-    try{return reply(res,200,await task);}catch(e){return reply(res,409,{ok:false,code:['invalid_scope','stale_runtime','browser_limit'].includes(e.message)?e.message:'browser_unavailable'});}
+    try{return reply(res,200,await task);}catch(e){return reply(res,409,{ok:false,code:['invalid_scope','stale_runtime'].includes(e.message)?e.message:'browser_unavailable'});}
   }
   function handler(action,needsFocus=false){return async(event,body)=>{
     if(!allowed(event))return {ok:false,code:'desktop_required'};

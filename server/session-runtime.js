@@ -283,7 +283,13 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     providerLaunchCurrent: witness => witness?.binding.identity === launch.identityKey(),
     providerRead: type => rpc.request({ type }, { timeoutMs: 3000, strict: true }),
     providerSession: (state, identity) => runtimeSessionWitness(state, sessions.resolveByUuid, identity),
-    start: () => resumeFile ? rpc.restart({ sessionPath: resumeFile }) : rpc.start(),
+    start: async () => {
+      if (resumeFile) return rpc.restart({ sessionPath: resumeFile });
+      const result = await rpc.start();
+      /* 新建会话的 HTTP start 等待这里；rpc.start() 对 spawn 失败给出结构化
+       * 结果，不能让它继续以「已启动」返回。历史恢复仍走事件推进。 */
+      if (result?.ok === false && result.code === 'runtime_start_failed') throw fail('runtime_start_failed');
+    },
     executionBranch: (scope, branchEpoch, detailTarget, onVerifiedPath) => readExecutionBranch({
       scope, branchEpoch, detailTarget, onVerifiedPath,
       readState: () => rpc.request({ type: 'get_state' }, { timeoutMs: 3000, strict: true }),

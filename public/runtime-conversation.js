@@ -45,7 +45,7 @@ import { iconMarkup } from './ui/icons.js';
  */
 import { runtimeSessionAction, fetchRuntimeHistory, runtimeEditPreflight, runtimeEditResend, runtimeEditStatus, runtimeEditRecover } from './api.js';
 import { runtimeStore as store, onRuntimeChange, respondToRuntimeApproval, refreshRuntimeViews } from './runtime-state.js';
-import { launchRuntimeSession, resourceText, runtimeLimitNotice, refreshRuntimeResources } from './runtime-resources.js';
+import { launchRuntimeSession, resourceText, runtimeActionNotice, refreshRuntimeResources } from './runtime-resources.js';
 import { createRuntimeDisplay, shouldFollow } from './runtime-display.js';
 import { messageActions } from './ui/message-actions.js';
 import { closeUsagePopover } from './ui/usage-popover.js';
@@ -205,8 +205,8 @@ function formatHistoryState(history, owner) {
     const badgeText = badges.length ? `（${badges.join('，')}）` : '';
     note = `${HISTORY_NOTE_WITH_TOOLS}${badgeText}`;
   }
-  const quotaText = owner ? '查看记录不增加运行名额' : '未被启动，不占运行名额';
-  return `只读历史 · ${count} 条${truncatedMsg} · ${note} · ${quotaText}`;
+  const launchText = owner ? '查看记录不会启动新运行' : '未被启动';
+  return `只读历史 · ${count} 条${truncatedMsg} · ${note} · ${launchText}`;
 }
 
 function createHistoryToolRow(item) {
@@ -605,7 +605,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       }
       /* 迟到响应只更新 **target** 那一格：切到别的会话时既不改当前 DOM，
        * 也不改当前会话的 notice —— 切回去才看得到它自己的结果。 */
-      view.notice = result.cancelled ? '' : runtimeLimitNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
+      view.notice = result.cancelled ? '' : runtimeActionNotice(result) || (result.ok === false ? `${result.error || '操作未完成'}${result.code ? ' (' + result.code + ')' : ''}` : '');
       after?.(result);
       if (payload.action === 'restart' && result.ok && active && id === target && selection === focusEpoch) {
         view.focusOnReady = result.owner?.runtimeId || null; focusResumed();
@@ -621,7 +621,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
    * 会把 A 的停止/重启打到 B 上。 */
   function owned(name, extra = {}) { const target = id, r = store.get(target); if (target && r?.owner) void action(target, { action: name, owner: { ...r.owner }, ...extra }); }
 
-  /** 只读历史：不 spawn，不占 Runtime slot。请求归属、缓存键、结果归属都用 captured target。 */
+  /** 只读历史不启动运行。请求归属、缓存键、结果归属都用 captured target。 */
   async function loadHistory(expectedLocator = null, match = null) {
     const target = id;
     if (!target) return;
@@ -663,7 +663,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     const life = LIFECYCLE[item.lifecycle] || item.lifecycle;
     const act = item.lifecycle === 'ready' ? (ACTIVITY[item.activity] || item.activity) : '';
     const reason = item.error === 'generation_failed' ? ' · 生成失败，请重试或检查模型' : item.error ? ' · 运行异常' : '';
-    if (item.error === 'cleanup_pending') return '清理未完成 · 运行名额仍被占用';
+    if (item.error === 'cleanup_pending') return '清理未完成';
     return `${life}${act ? ' · ' + act : ''}${reason}`;
   }
 
