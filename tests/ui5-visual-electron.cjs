@@ -97,7 +97,6 @@ function desktop(){
   await read(`(async()=>{const p=await import('/process-panel.js');p.openProcessPanel();})()`);await sleep(350);await shot('dark-1200-processes');await closePane();
   await read(`(async()=>{const p=await import('/session-changes-panel.js');p.openSessionChangesPanel();})()`);await sleep(350);await shot('dark-1200-session-changes');await closePane();
   await click('navGlobalMore');await shot('dark-1200-settings');await key('Escape');
-  await click('navDiagnostics');await sleep(250);await shot('dark-1200-diagnostics');await key('Escape');
   await click('navLogs');await sleep(300);await shot('dark-1200-logs');await key('Escape');
   await read(`(async()=>{const a=await import('/approval.js');a.observeApprovalEvent({type:'extension_ui_request',id:'visual-audit',method:'confirm',title:'执行离线 fixture 核对',message:'node fixture-check.cjs --inspect\\n需要读取临时项目；风险未知，不推断命令安全。'},VF.ST.S);})()`);await shot('dark-1200-approval');await key('Escape');
   win.setContentSize(1300,889);await shot('dark-1300-reference');

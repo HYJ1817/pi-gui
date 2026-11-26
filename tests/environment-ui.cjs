@@ -397,6 +397,17 @@ function makeJob(patch = {}) {
     assert.ok(textButton('进入 Pi GUI'));
   });
 
+  await check('向导诊断入口关闭自身并转交唯一日志页面的导出标签，不重跑探测或安装', async () => {
+    const before = apiCalls.length, installs = confirmCalls.length;
+    let intent;
+    document.addEventListener('pi-gui:open-logs', event => { intent = event; event.preventDefault(); }, { once: true });
+    const entry = textButton('打开日志与诊断'); assert.ok(entry); entry.click();
+    await waitFor(() => document.getElementById('modal').hidden);
+    assert.ok(intent); assert.equal(intent.cancelable, true); assert.equal(intent.detail.initialTab, 'export');
+    assert.equal(intent.defaultPrevented, true); assert.equal(apiCalls.length, before); assert.equal(confirmCalls.length, installs);
+    assert.equal(document.getElementById('modalCard').innerHTML, '');
+  });
+
   section('静态边界');
 
   await check('设置菜单有入口，样式与脚本都进页面', () => {

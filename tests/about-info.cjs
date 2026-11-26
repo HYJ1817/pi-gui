@@ -2,7 +2,7 @@
  *
  * 覆盖：入口迁移、hero 版本来源与失败回退、两块独立更新、下载/安装忙碌态、
  * Pi 更新的独立确认与请求、重启确认/取消/失败、日志与导出导航、GitHub 外链、
- * 通知点与文案、关闭重开后的状态保持、信息页与诊断页不争用更新容器。
+ * 通知点与文案、关闭重开后的状态保持、仅信息页挂载更新且离页后停止重绘。
  *
  * 所有写操作都只落在内存桩上，不碰用户数据、不联网。
  */
@@ -208,8 +208,9 @@ async function openInfo(w) {
     check('retry recovers the hero from /api/diagnostics', () => {
       const version = card.querySelector('.about-hero-version').textContent;
       const meta = card.querySelector('.about-hero-meta').textContent;
-      return version === '版本 0.34.0' && /Pi 0\.87\.0/.test(meta) &&
-        /Windows_NT 10\.0\.26200 x64/.test(meta) && /兼容正常/.test(meta) && /Pi 运行中/.test(meta);
+      return version === '版本 0.34.0' && meta === 'Pi 0.87.0' &&
+        !/Windows_NT|兼容正常|Pi 运行中/.test(card.textContent) &&
+        !card.querySelector('[data-about-action="open-diagnostics"]');
     });
     check('hero retry keeps keyboard focus on the page instead of dropping to body', () =>
       w.document.activeElement === card.querySelector('.about-hero'));
@@ -376,29 +377,32 @@ async function openInfo(w) {
       fixture.updateCalls.length === updateCallsBeforeReopen &&
       fixture.piUpdateCalls.length === piCallsBeforeReopen);
 
-    /* ---------- 信息页 / 诊断页不争用同一个更新容器 ---------- */
+    /* ---------- 更新只在信息页挂载；离页销毁，重开恢复共享状态 ---------- */
     fixture.pushDesktop({ phase: 'downloading', received: 25, total: 100, speed: 5, mode: 'installed' });
     await sleep(20);
     const infoBox = appPanel(w).querySelector('.update-sec');
     check('the visible info page receives desktop update state', () =>
       infoBox.textContent.includes('25%'));
-    $ (w, 'navDiagnostics').click();
+    $ (w, 'navLogs').click();
+    $ (w, 'ui5-log-tab-export').click();
     await sleep(80);
-    const diagnosticsBox = d.querySelector('.settings-detail-card .update-sec');
-    check('opening diagnostics disposes the info page and mounts a separate update box', () =>
-      Boolean(diagnosticsBox) && infoBox.isConnected === false && diagnosticsBox !== infoBox);
+    const diagnosticsCard = settingsCard(w);
+    check('opening logs diagnostics disposes info without mounting duplicate update controls', () =>
+      Boolean(diagnosticsCard.querySelector('.diagnostic-details')) && infoBox.isConnected === false &&
+      !diagnosticsCard.querySelector('.update-sec, .pi-update-sec, [data-about-update]'));
     const infoTextBefore = infoBox.textContent;
-    fixture.pushDesktop({ phase: 'failed', error: '诊断页刷新失败态' });
+    const diagnosticsTextBefore = diagnosticsCard.textContent;
+    fixture.pushDesktop({ phase: 'failed', error: '离开信息页后的更新失败态' });
     await sleep(20);
-    check('desktop state repaints only the connected diagnostics container', () =>
-      diagnosticsBox.textContent.includes('诊断页刷新失败态') &&
-      infoBox.textContent === infoTextBefore);
+    check('desktop state cannot repaint the disposed info or unrelated diagnostics card', () =>
+      diagnosticsCard.textContent === diagnosticsTextBefore &&
+      !diagnosticsCard.querySelector('.update-sec') && infoBox.textContent === infoTextBefore);
     $ (w, 'settingsReturn').click();
     await sleep(20);
     card = await openInfo(w);
     await sleep(20);
     check('reopening info sees the latest shared update state', () =>
-      appPanel(w).querySelector('.update-sec').textContent.includes('诊断页刷新失败态'));
+      appPanel(w).querySelector('.update-sec').textContent.includes('离开信息页后的更新失败态'));
     fixture.pushDesktop({ phase: 'idle', completion: null, error: '', mode: 'installed' });
 
     /* ---------- 日志、导出、诊断快捷入口 ---------- */
@@ -422,11 +426,13 @@ async function openInfo(w) {
     $ (w, 'settingsReturn').click();
     await sleep(20);
     card = await openInfo(w);
-    card.querySelector('[data-about-action="open-diagnostics"]').click();
-    await sleep(80);
-    check('diagnostics quick entry opens the existing diagnostics page', () =>
-      $ (w, 'navDiagnostics').getAttribute('aria-current') === 'page' &&
-      Boolean(d.querySelector('.settings-detail-card .diag-body, .settings-detail-card .diag-note, .settings-detail-card .ext-sec-head')));
+    check('info exposes one support destination and no separate diagnostics row', () =>
+      !card.querySelector('[data-about-action="open-diagnostics"], #aboutDiagnosticsRow') &&
+      !$ (w, 'navDiagnostics') &&
+      card.querySelectorAll('[data-about-action="open-logs"]').length === 1 &&
+      card.querySelectorAll('[data-about-action="export-report"]').length === 1);
+    check('legacy diagnostics settings destination resolves to the unique logs page', () =>
+      w.resolveSettingsDestination('navDiagnostics') === 'navLogs');
 
     /* ---------- 反馈：安全外链，不自动上传 ---------- */
     $ (w, 'settingsReturn').click();

@@ -920,8 +920,15 @@ const stubDiagnostics = {
   },
 };
 
+// 与 lib/log-core.cjs 的 status() 同形；诊断摘要的日志部分使用同一权威快照。
+const stubLogsStatus = { ok: true, version: 1, role: 'app', appVersion: '0.11.1', enabled: true, mode: 'standard',
+  verboseUntil: null, verboseExpired: false, retentionDays: 7, maxTotalMB: 20, maxFileBytes: 1048576,
+  dirWritable: true, degraded: false, lastErrorCode: null, writeFailures: 0, droppedRecords: 0, settingsCorrupt: false,
+  usageBytes: 0, fileCount: 0, crashFileCount: 0, files: [], session: { runId: 'smoke-logs', startedAt: '2026-10-17T12:00:00Z', previousUnclean: null }, recentErrors: [], clientDropped: 0 };
 window.fetch = async (url, opts) => {
   const u = String(url);
+  if (u === '/api/logs/status') return { json: async () => ({ ok: true, status: stubLogsStatus }) };
+  if (u.startsWith('/api/logs/entries')) return { json: async () => ({ ok: true, entries: [], nextCursor: null, truncated: false, scannedFiles: 0 }) };
   if (u.includes('/api/upload')) {
     const nm = decodeURIComponent(new URL(u, 'http://x').searchParams.get('name') || 'f');
     const base = { ok: true, name: nm, path: 'C:\\pi-GUI\\.uploads\\' + nm };
@@ -1437,7 +1444,7 @@ staticCheck();
   // 全局低频入口收进 More，仍保留原 handler。
   check('供应商入口不在顶部导航里', () => window.document.querySelector('.rail-nav #navProviders') === null);
   check('供应商入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navProviders')));
-  check('诊断入口在全局 More 菜单', () => Boolean(window.document.querySelector('#globalMoreMenu #navDiagnostics')));
+  check('日志与诊断是全局 More 菜单的唯一诊断入口，旧独立按钮已移除', () => Boolean(window.document.querySelector('#globalMoreMenu #navLogs')) && !$('navDiagnostics'));
   check('信息入口统一承载更新与重启，旧入口已移除', () =>
     Boolean(window.document.querySelector('#globalMoreMenu #navInfo')) &&
     !window.document.querySelector('#globalMoreMenu #navAppUpdates') &&
@@ -7360,7 +7367,8 @@ staticCheck();
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const openDiag = async () => {
-      window.openDiagnostics();
+      // 更新归信息页所有；仍使用真实模块与原有模态 fixture 保留整套更新状态机覆盖。
+      window.openAboutSettings();
       await sleep(40);
       return $('modalCard');
     };
@@ -7378,7 +7386,7 @@ staticCheck();
 
     /* ① 当前版本 + 检查更新入口 */
     let card = await openDiag();
-    check('更新：诊断面板顶部有「版本」小节', () =>
+    check('更新：信息页独立挂载软件更新小节', () =>
       Boolean(card.querySelector('.update-sec')) || card.textContent.slice(0, 120));
     check('更新：当前版本来自诊断快照（前端不硬编码版本号）', () => {
       const t = card.querySelector('.update-title');
@@ -7765,9 +7773,9 @@ staticCheck();
     check('信息：入口打开统一信息页', () => card && card.querySelector('h3').textContent === '信息');
     check('信息：hero 的应用版本来自诊断快照', () =>
       card.querySelector('.about-hero-version').textContent === '版本 0.11.1');
-    check('信息：hero 同时显示 Pi 版本与系统平台', () => {
+    check('信息：hero 仅保留 Pi 版本，不重复系统环境或诊断状态', () => {
       const meta = card.querySelector('.about-hero-meta').textContent;
-      return /Pi 0\.87\.0/.test(meta) && /Windows_NT 10\.0\.26100/.test(meta) && /Pi 运行中/.test(meta);
+      return meta === 'Pi 0.87.0' && !/Windows_NT|Pi 运行中/.test(meta) && !card.querySelector('[data-about-action="open-diagnostics"]');
     });
     check('信息：pi-GUI 与 Pi 是两块独立的更新区块', () =>
       Boolean(card.querySelector('[data-about-update="app"] .update-sec')) &&
@@ -7786,6 +7794,11 @@ staticCheck();
       $('navLogs').getAttribute('aria-current') === 'page' &&
       $('ui5-log-tab-export').getAttribute('aria-selected') === 'true' &&
       Boolean($('workSurface').querySelector('.ui5-logs-export-form')));
+    $('navSystem').click(); await sleep(40);
+    check('系统：原信息页系统平台与 Pi 运行状态迁入只读运行环境', () => {
+      const runtime = [...$('workSurface').querySelectorAll('.ds-settings-card')].find(section => section.querySelector('h3')?.textContent === '运行环境');
+      return runtime && /Windows_NT 10\.0\.26100/.test(runtime.textContent) && /Pi 运行状态运行中/.test(runtime.textContent);
+    });
     $('settingsReturn').click();
     delete window.piGuiDesktop;
     await sleep(10);
@@ -8444,8 +8457,8 @@ staticCheck();
     /* 拆分前「Skills 与扩展」挂在设置目录下，进入扩展工作区时设置目录保持展开；
      * 现在「扩展」是应用主导航目的地：设置目录收起、「返回应用」隐藏，侧栏只有它一处高亮。 */
     check('扩展是主导航目的地：设置目录收起，侧栏唯一高亮是「扩展」', () => $('navExtensions').getAttribute('aria-current') === 'page' && $('projectSidebar').querySelectorAll('[aria-current="page"]').length === 1 && $('globalMoreMenu').hidden && $('settingsReturn').hidden && !$('globalMoreMenu').contains($('navExtensions')));
-    $('navDiagnostics').click();
-    check('P14-D 诊断由中央设置详情承载', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && $('navDiagnostics').getAttribute('aria-current') === 'page');
+    $('navLogs').click();
+    check('P14-D 日志与诊断由中央设置详情承载', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'settings' && $('navLogs').getAttribute('aria-current') === 'page');
     $('navExtensions').click();
     check('P14-D 切回 Extensions 恢复真实页面与目录状态', () => $('modal').hidden && $('workspace').dataset.workspaceView === 'extensions' && $('navExtensions').getAttribute('aria-current') === 'page');
     const scrollBeforeReturn = $('stream').scrollTop;
@@ -8925,7 +8938,7 @@ staticCheck();
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     window.S.hasProject = true; window.S.switching = false;
     window.resetDrift();
-    const diagCard = () => $('modalCard');
+    const diagCard = () => $('workSurface').querySelector('.settings-detail-card');
     $('modal').hidden = true;
     $('modalCard').innerHTML = '';
     window.openDiagnostics();
@@ -8933,7 +8946,7 @@ staticCheck();
     const text = () => diagCard().textContent || '';
 
     check('P23 诊断：五个新小节都在', () => {
-      const heads = [...diagCard().querySelectorAll('.ext-sec-head')].map((n) => n.textContent);
+      const heads = [...diagCard().querySelectorAll('.diagnostic-heading')].map((n) => n.textContent);
       const want = ['版本真值', '能力 probe', '兼容矩阵（我们核对过什么）', 'Native MCP', '关键 Extension 版本'];
       return want.every((w) => heads.includes(w)) || JSON.stringify(heads);
     });
@@ -8958,12 +8971,12 @@ staticCheck();
     check('P23 诊断：Extension 版本按 name@version 显示', () => text().includes('pi-memory@0.4.2'));
 
     /* 「复制诊断摘要」：一段给人读的纯文本，与面板同一份已脱敏快照 */
-    const copyBtn = [...diagCard().querySelectorAll('.modal-actions .btn')].find((b) => b.textContent === '复制诊断摘要');
-    check('P23 诊断：有「复制诊断摘要」按钮（在 JSON 复制之前）', () => {
-      const labels = [...diagCard().querySelectorAll('.modal-actions .btn')].map((b) => b.textContent);
+    const copyBtn = diagCard().querySelector('[data-log-action="copy-summary"]');
+    check('P23 诊断：有唯一「复制诊断摘要」按钮（在 JSON 复制之前）', () => {
+      const labels = [...diagCard().querySelectorAll('[data-log-action]')].map((b) => b.textContent);
       return labels[0] === '复制诊断摘要' && labels.includes('复制诊断 JSON') || JSON.stringify(labels);
     });
-    const summary = window.buildDiagnosticSummary(stubDiagnostics, []);
+    const summary = window.buildDiagnosticSummary(stubDiagnostics, [], stubLogsStatus);
     check('P23 摘要：含版本 / 来源 / 核对 / 兼容 / probe / MCP / Extension', () => {
       for (const want of ['Pi GUI 诊断摘要', 'pi: 0.87.0', 'pi 版本来源: package.json',
         '版本核对: 未核对（矩阵里没有这个版本）', '兼容状态: 部分兼容', '能力 probe: 共 4',
@@ -8977,7 +8990,7 @@ staticCheck();
       return !bad.some((re) => re.test(summary)) || summary.slice(0, 200);
     });
     check('P23 摘要：口径与面板一致（同一份快照，不另取数据）', () => {
-      const fresh = window.buildDiagnosticSummary(stubDiagnostics, []);
+      const fresh = window.buildDiagnosticSummary(stubDiagnostics, [], stubLogsStatus);
       return fresh === summary && summary.includes('bridgeRun 1');
     });
 
@@ -9026,6 +9039,7 @@ staticCheck();
     es.emit({ type: 'bridge_status', state: 'ready', bridgeRun: driftRun + 1 });
     await sleep(20);
 
+    $('navHome').click();
     $('modal').hidden = true;
     $('modalCard').innerHTML = '';
     window.resetDrift();

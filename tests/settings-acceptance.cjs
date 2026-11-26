@@ -196,6 +196,22 @@ const pub = path.join(root, 'public');
       searchInput.oninput();
     });
 
+    check('settings diagnostics search has one destination and saved legacy destination aliases to logs', () => {
+      const logs = window.document.getElementById('navLogs');
+      assert.equal(window.document.getElementById('navDiagnostics'), null);
+      assert.equal(logs.querySelector('span').textContent, '日志与诊断');
+      assert.equal(window.resolveSettingsDestination('navDiagnostics'), 'navLogs');
+      for (const q of ['诊断', '兼容', 'JSON', 'zip']) {
+        searchInput.value = q; searchInput.oninput();
+        assert.equal(logs.hidden, false, q); assert.equal(logs.closest('section').hidden, false, q);
+      }
+      for (const q of ['运行环境', '操作系统', '宿主', '健康']) {
+        searchInput.value = q; searchInput.oninput();
+        assert.equal(window.document.getElementById('navSystem').hidden, false, q);
+      }
+      searchInput.value = '快捷'; searchInput.oninput();
+    });
+
     check('real keyboard navigation strictly skips hidden items during search', () => {
       // Focus the only visible item in preference section
       btnShortcuts.focus();

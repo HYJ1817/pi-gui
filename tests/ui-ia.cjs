@@ -81,7 +81,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     $('navSystem').click(); await tick();
     const card = d.querySelector('#workSurface .system-settings-card');
     assert.equal(card.querySelector('h2').textContent, '系统');
-    assert.deepEqual([...card.querySelectorAll('h3')].map(h => h.textContent), ['网络', '存储', '电源', '关闭行为']);
+    assert.deepEqual([...card.querySelectorAll('h3')].map(h => h.textContent), ['运行环境', '网络', '存储', '电源', '关闭行为']);
     assert.equal($('navSystem').getAttribute('aria-current'), 'page');
     assert.ok($('navSystem').querySelector('svg[data-icon="monitor"] path'));
     search.value = ''; search.dispatchEvent(new w.Event('input', { bubbles: true }));
@@ -92,7 +92,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
       .filter(b => !b.hidden && !b.closest('section')?.hidden).map(b => b.id);
     for (const [term, ids] of [
       ['技能', ['navSkills']], ['skill', ['navSkills']], ['Agent 能力', ['navSkills']],
-      ['扩展', ['navMcp']], ['mcp', ['navMcp']], ['能力报告', ['navMcp']], ['能力', ['navSkills', 'navMcp']],
+      ['扩展', ['navMcp']], ['mcp', ['navMcp']], ['能力报告', ['navMcp']], ['能力', ['navSkills', 'navMcp', 'navLogs']],
     ]) {
       search.value = term; search.dispatchEvent(new w.Event('input', { bubbles: true }));
       assert.deepEqual(visible(), ids, term);
@@ -240,7 +240,7 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     const before = w.fetch; let release;
     try {
       w.fetch = (url, options) => String(url) === '/api/diagnostics' ? new Promise(resolve => { release = () => resolve({ ok: true, json: async () => ({ ok: false, error: 'fixture late' }) }); }) : before(url, options);
-      $('navGlobalMore').click(); $('navDiagnostics').click();
+      $('navGlobalMore').click(); $('navLogs').click(); $('ui5-log-tab-export').click();
       const oldCard = d.querySelector('.settings-detail-card');
       $('navAppearance').click(); release(); await tick();
       assert.equal(oldCard.isConnected, false);
@@ -341,7 +341,9 @@ const tick = () => new Promise(r => setTimeout(r, 40));
     $('input').value = '/diagnostics'; $('input').dispatchEvent(new w.Event('input', { bubbles: true }));
     d.querySelector('[data-command-id="app.diagnostics"]').dispatchEvent(new w.MouseEvent('mousedown', { bubbles: true })); await tick();
     assert.equal($('modal').hidden, true); assert.equal(d.querySelectorAll('.settings-detail-card').length, 1);
-    assert.equal($('navDiagnostics').getAttribute('aria-current'), 'page');
+    assert.equal($('navDiagnostics'), null);
+    assert.equal($('navLogs').getAttribute('aria-current'), 'page');
+    assert.equal($('ui5-log-tab-export').getAttribute('aria-selected'), 'true');
     $('settingsReturn').click();
   });
   await check('Settings return restores Runtime scope and draft through the composition owner', async () => {

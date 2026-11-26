@@ -304,7 +304,6 @@ async function electronMain() {
       ['restart Pi', '[data-about-action="restart-pi"]'],
       ['open logs', '[data-about-action="open-logs"]'],
       ['export report', '[data-about-action="export-report"]'],
-      ['open diagnostics', '[data-about-action="open-diagnostics"]'],
       ['open GitHub', '[data-about-action="open-github"]'],
       ['check app update', '[data-about-update="app"] [data-update-action="check"]'],
       ['check Pi update', '[data-about-update="pi"] .update-head .btn'],
@@ -315,6 +314,7 @@ async function electronMain() {
       infoStyles.push(style);
       check(`info/dark: ${label} uses the filled Secondary variant`, style && /(^|\s)btn(\s|$)/.test(style.cls) && !/ghost/.test(style.cls) && !isTransparent(style.bg) && isTransparent(style.borderColor) && style.height === 32, style);
     }
+    check('info/dark: the retired diagnostics entry is not rendered', !(await read(`Boolean(document.querySelector('[data-about-action="open-diagnostics"]'))`)));
     const consistent = infoStyles.every(style => style && style.radius === '10px' && style.fontSize === '13px');
     check('info/dark: the listed actions share one radius and font size', consistent, infoStyles.map(style => style && [style.radius, style.fontSize]));
     const piPrimary = await styleOf('[data-about-update="pi"] .btn.primary');
@@ -329,7 +329,7 @@ async function electronMain() {
     const narrow = await read(`(()=>{
       const rows=[...document.querySelectorAll('.about-row-actions')];
       return {ok:rows.every(row=>row.scrollWidth<=row.clientWidth+1),
-        buttons:[...document.querySelectorAll('[data-about-action="restart-pi"],[data-about-action="open-logs"],[data-about-action="export-report"],[data-about-action="open-diagnostics"],[data-about-action="open-github"]')].every(b=>{const s=getComputedStyle(b),r=b.getBoundingClientRect();return r.height>=30&&s.whiteSpace==='nowrap'})};
+        buttons:[...document.querySelectorAll('[data-about-action="restart-pi"],[data-about-action="open-logs"],[data-about-action="export-report"],[data-about-action="open-github"]')].every(b=>{const s=getComputedStyle(b),r=b.getBoundingClientRect();return r.height>=30&&s.whiteSpace==='nowrap'})};
     })()`);
     check('info/narrow 700x600: actions stay inside their row and keep readable height', narrow.ok && narrow.buttons, narrow);
 

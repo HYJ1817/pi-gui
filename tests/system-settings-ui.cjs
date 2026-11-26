@@ -18,7 +18,13 @@ const snapshot = () => ({ persistence: 'saved', effective: { keepAwake: false, p
   browserDirectory: 'C:\\fixture\\profile', error: '' });
 const storage = { ok: true, storage: { dataDirectory: 'C:\\fixture\\<img src=x onerror=alert(1)>', source: 'environment',
   piAgentDirectory: 'C:\\fixture\\agent', piAgentSource: 'environment' } };
-function page(t, { bridge, fetchStorage = async () => storage } = {}) {
+const diagnostics = { ok: true, diagnostics: { schemaVersion: 1, app: { id: 'pi-gui', version: '0.35.1' },
+  system: { os: 'Windows_NT', release: '10.0.26200', platform: 'win32', arch: 'x64', node: 'v24.14.0' },
+  bridge: { piRunning: true, bridgeRun: 7 }, project: { selected: true },
+  checks: [{ id: 'data-readable', ok: true }, { id: 'data-writable', ok: false },
+    { id: 'project-readable', ok: null }, { id: 'pi-running', ok: true }],
+} };
+function page(t, { bridge, fetchStorage = async () => storage, readDiagnostics = async () => diagnostics } = {}) {
   const dom = new JSDOM(fs.readFileSync(path.join(ROOT, 'public/index.html'), 'utf8'), {
     url: 'http://127.0.0.1:7788', runScripts: 'outside-only', pretendToBeVisual: true,
   });
@@ -28,7 +34,8 @@ function page(t, { bridge, fetchStorage = async () => storage } = {}) {
   w.eval(source);
   let dispose;
   const card = d.createElement('div'); d.body.append(card);
-  w.openSystemSettings({ fetchStorage, present(build, close) { dispose = close; build(card); } });
+  w.fetch = async () => { throw Error('unexpected network; fixture must inject every read'); };
+  w.openSystemSettings({ fetchStorage, readDiagnostics, present(build, close) { dispose = close; build(card); } });
   return { w, d, card, close: () => { dispose(); card.remove(); },
     button: label => [...card.querySelectorAll('button')].find(e => e.textContent === label),
     toggle: label => card.querySelector(`[role="switch"][aria-label="${label}"]`),
@@ -52,7 +59,7 @@ test('system UI: Web paths are text; all desktop/P2 controls are truly disabled'
   const p = page(t);
   await until(() => p.card.textContent.includes('由 PI_GUI_DATA 指定'));
   assert.equal(p.card.querySelector('h2').textContent, '系统');
-  assert.match(p.card.textContent, /网络、存储、电源，以及本机的窗口行为。/);
+  assert.match(p.card.textContent, /运行环境、网络、存储、电源与窗口行为。/);
   assert.equal(p.card.querySelector('img'), null);
   assert.match(p.card.textContent, /<img src=x onerror=alert\(1\)>/);
   assert.match(p.card.textContent, /PI_CODING_AGENT_DIR/);
@@ -61,8 +68,43 @@ test('system UI: Web paths are text; all desktop/P2 controls are truly disabled'
   assert.equal(p.toggle('保持电脑唤醒').disabled, true);
   assert.equal(p.button('退出应用…').disabled, true);
   assert.match(p.card.textContent, /仅桌面版可用/);
-  const network = p.card.querySelector('.ds-settings-card');
+  const network = [...p.card.querySelectorAll('.ds-settings-card')].find(card => card.querySelector('h3')?.textContent === '网络');
   assert.ok([...network.querySelectorAll('button')].every(e => e.disabled));
+});
+
+test('runtime UI: reads only the injected diagnostic snapshot, preserves tri-state and has no duplicate dependency/update/export controls', async t => {
+  let reads = 0, desktopReads = 0;
+  const p = page(t, { readDiagnostics: async () => { reads++; return diagnostics; },
+    bridge: desktop({ state: async () => { desktopReads++; return { ok: true, snapshot: snapshot() }; } }) });
+  await until(() => p.d.getElementById('system-runtime-feedback').textContent.includes('不执行依赖检测'));
+  const runtime = [...p.card.querySelectorAll('.ds-settings-card')].find(card => card.querySelector('h3')?.textContent === '运行环境');
+  assert.equal(reads, 1); assert.equal(desktopReads, 1);
+  for (const text of ['Windows_NT 10.0.26200', 'x64', 'v24.14.0', '运行中', '7', '已选择', '正常', '不可用', '未知']) assert.ok(runtime.textContent.includes(text), text);
+  assert.equal(runtime.querySelectorAll('button').length, 1);
+  assert.equal(runtime.querySelector('button').getAttribute('aria-label'), '刷新系统运行环境');
+  assert.equal(runtime.querySelector('input, select, [role="switch"], .update-sec, .diagnostic-details'), null);
+  assert.doesNotMatch(runtime.textContent, /C:\\fixture|复制诊断|导出|检查更新/);
+  runtime.querySelector('button').click(); await until(() => reads === 2 && !runtime.querySelector('button').disabled);
+  assert.equal(reads, 2); assert.equal(desktopReads, 1, 'refresh is diagnostic read, not native re-detection');
+});
+
+test('runtime UI: loading is deduplicated, failure is fixed and retryable, late reads do not repaint a closed page', async t => {
+  let finish, reads = 0;
+  const p = page(t, { readDiagnostics: () => { reads++; return new Promise(resolve => { finish = resolve; }); } });
+  const refresh = p.card.querySelector('[aria-label="刷新系统运行环境"]');
+  const feedback = p.d.getElementById('system-runtime-feedback');
+  assert.equal(refresh.disabled, true); refresh.click(); assert.equal(reads, 1);
+  finish({ ok: false, detail: 'PRIVATE_ERROR_DETAIL', error: 'PRIVATE_ERROR_DETAIL' });
+  await until(() => !refresh.disabled);
+  assert.equal(feedback.textContent, '无法读取运行环境，请重试。');
+  assert.equal(feedback.classList.contains('is-error'), true);
+  assert.doesNotMatch(p.card.textContent, /PRIVATE_ERROR_DETAIL/);
+  refresh.click(); assert.equal(reads, 2);
+  finish({ ok: true, diagnostics: { system: {}, bridge: { piRunning: false }, project: { selected: false }, checks: [] } });
+  await until(() => !refresh.disabled);
+  assert.match(p.card.textContent, /未运行/); assert.match(p.card.textContent, /未选择/); assert.match(p.card.textContent, /未知/);
+  refresh.click(); const before = p.card.textContent; p.close(); finish(diagnostics); await turn();
+  assert.equal(p.card.textContent, before); assert.equal(p.d.getElementById('system-runtime-feedback'), null);
 });
 
 test('network UI: draft mode, independent relaxed flag, named save and authoritative restart status', async t => {
