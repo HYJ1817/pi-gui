@@ -552,7 +552,7 @@ const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch
   },
   isCurrent:primaryToolCurrent,
   canRevalidate:(previous,witness) => primaryToolAdvance(previous,witness) && primaryToolCurrent(witness),
-  isInitializing:(previous,witness) => primaryToolAdvance(previous,witness) && primaryToolCurrent(witness,true),
+  isInitializing:(previous,witness) => primaryToolAdvance(previous,witness) && primaryToolCurrent(witness,true) && rpc.providerSessionPending(),
   onEvent:publishClassicExecution});
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });

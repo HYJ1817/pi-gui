@@ -225,7 +225,7 @@ export function createRpcBridge({
   let nextRequestId = 1;
   function trackCommand(cmd, publicMutation = false, publicId = undefined) {
     const key = updateKey(cmd.id, cmd.type), previous = updateCommands.get(key);
-    const entry = { command: cmd.type, count: (previous?.count || 0) + 1, publicMutation, publicId };
+    const entry = { command: cmd.type, count: (previous?.count || 0) + 1, publicMutation, publicId, uncertain: false };
     updateCommands.set(key, entry);
     return { key, entry };
   }
@@ -233,6 +233,11 @@ export function createRpcBridge({
     if (!ticket || updateCommands.get(ticket.key) !== ticket.entry) return;
     if (ticket.entry.count > 1) ticket.entry.count--;
     else updateCommands.delete(ticket.key);
+  }
+  // A timeout or partial write is result-unknown, not proof that Pi kept the
+  // native session. Keep the mutation visible but never call it still pending.
+  function markUnknown(ticket) {
+    if (ticket && updateCommands.get(ticket.key) === ticket.entry) ticket.entry.uncertain = true;
   }
   function commandResponse(msg) {
     if (typeof msg.success !== 'boolean') return null;
@@ -680,9 +685,11 @@ export function createRpcBridge({
       try {
         pi.stdin.write(line, error => {
           if (unqueuedWrite(error)) untrackCommand(ticket);
+          else if (error) markUnknown(ticket);
         });
       } catch (error) {
         if (!mutation || unqueuedWrite(error)) untrackCommand(ticket);
+        else markUnknown(ticket);
         throw error;
       }
     }
@@ -719,8 +726,10 @@ export function createRpcBridge({
       // Internal request identity is captured before the write, so even a synchronous
       // fake Pi reply cannot be mistaken for a different Stop generation.
       if (typeof onId === 'function') onId(id);
+      let ticket = null;
       const timer = setTimeout(() => {
         pending.delete(id);
+        markUnknown(ticket);
         safeLog('bridge.request_timeout', { operation: operationOf(cmd), durationMs: timeoutMs, bridgeRun });
         resolve(null);
       }, timeoutMs);
@@ -728,7 +737,6 @@ export function createRpcBridge({
       if (typeof timer.unref === 'function') timer.unref();
       const changesSession = sessionMutation(cmd.type);
       pending.set(id, { resolve, timer, command: cmd.type, strictCommand: strict ? cmd.type : null });
-      let ticket = null;
       if (changesSession) {
         providerSessionEpoch++;
         // A timeout or a partial pipe write is not evidence that Pi did not
@@ -740,6 +748,7 @@ export function createRpcBridge({
         // A delayed write callback may arrive after request timeout. It may
         // release only this exact ticket, never another operation or process.
         if (definitelyNotSent) untrackCommand(ticket);
+        else markUnknown(ticket);
         if (!pending.has(id)) return;
         clearTimeout(timer);
         pending.delete(id);
@@ -1252,5 +1261,12 @@ export function createRpcBridge({
     providerLaunch: () => pi && pi !== retiringChild && providerLaunch?.bridgeRun === bridgeRun ? providerLaunch.witness : null,
     providerSessionEpoch: () => providerSessionEpoch,
     providerSessionChanging: () => [...updateCommands.values()].some(entry => sessionMutation(entry.command)),
+    // Only a mutation still awaiting its authoritative response may back the
+    // bounded initializing hint. A timed-out/partially-written mutation is
+    // result-unknown and stays changing without ever becoming pending.
+    providerSessionPending: () => {
+      const entries = [...updateCommands.values()].filter(entry => sessionMutation(entry.command));
+      return entries.length > 0 && entries.every(entry => entry.uncertain !== true);
+    },
     updateBusy: () => Boolean(pending.size || updateApprovals.size || updateCommands.size) };
 }
