@@ -63,8 +63,8 @@ flow/prompt ID 与 revision 防止旧交互覆盖当前阶段，取消与超时�
   「Pi 运行时更新边界」一节；那一节与这一节的边界互不替代。）
 - **不执行第三方代码做 probe**：源码 probe 只 `readFileSync` pi 包的已知相对路径
   （限长 512KB），**不 import pi 的模块、不 require 扩展**。runtime probe 只读已有观察。
-- **不绕 compatibility warning**：`verification: 'unverified'` 会如实显示在诊断面板，
-  面板不会因为「功能看起来能用」就把它标成已核对。CI 绿同样不构成认证 ——
+- **不绕 compatibility warning**：`verification: 'unverified'` 会如实显示在
+  「日志与诊断」的故障排查详情，详情不会因为「功能看起来能用」就把它标成已核对。CI 绿同样不构成认证 ——
   升级流程的第 5 步（`npm run test:probes-live`）才是。
 - **不只凭 semver 决定 tool 可用性**：能力一律走 probe / 真实事件；版本号只用于
   「这个版本我们核过没有」。`relative`（新/旧）明确标注为**不作判据**。

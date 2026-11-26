@@ -96,7 +96,7 @@ Auth、Quota、Planner 与能力目录保持原职责。详见 [model-fallback.m
 - `server/pi-version.js` 多了一个维度：`verifiedAgainst` / `verification`
   （矩阵由调用方注入，模块本身不认识矩阵）。
 - `public/schema-drift.js` —— 渲染进程侧的漂移环：只记来源 + 字段名（我们代码里的字面量）
-  + `typeof`，随 bridge 重启清空，进诊断面板。
+  + `typeof`，随 bridge 重启清空，进「日志与诊断」的故障排查详情。
 
 `server/pi-compat.js` 新增 `observeUnknownField/Enum`（`category: 'schema'`，
 **连对象键名都不记**），`server/mcp-native.js` 多一个可选的 `onDrift` 出口。
@@ -531,7 +531,7 @@ Classic 的 start/end 接线，Runtime 则把计划放进 `runtime-store` 的每
 - `providers.js` 模型供应商 / `usage.js` 用量与状态 / `ui/` 通用组件
   （`modal.js` / `popover.js` / `toast.js`）
 - `schema-drift.js` — P23 渲染进程侧的 schema 漂移环（来源 + 字段名 + 类型，**不记值**），
-  由四个语义适配器与 tool-view 上报，进诊断面板
+  由四个语义适配器与 tool-view 上报，进「日志与诊断」的故障排查详情
 - P24 日常使用面（理由见 [daily-use.md](daily-use.md)）：
   - `shortcuts.js` —— **唯一的键盘入口**：注册表 + 三态覆盖（默认 / 自定义 / 禁用）+
     `pi-gui.keybindings.v1` 持久化 + 冲突与保留键检查 + 平台显示；

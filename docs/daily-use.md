@@ -264,7 +264,7 @@ SURFACE_COPY            // 七个页面共用的 loading / empty / failed / retr
 
 这三个状态**不在这条状态条里** —— 它们是 MCP 这一个子系统的状态，说明在
 设置 › MCP 配置页（原生状态一行 + 两处 mcp.json 的结构 + 运行时状态）
-与诊断面板里。原页尾「MCP 能力报告」已移除，技术证据只在诊断 / 服务端保留。
+与「日志与诊断」的故障排查详情里。原页尾「MCP 能力报告」已移除，技术证据只在详情 / 服务端保留。
 放进全局状态条只会让「pi 起不来」这种真问题被淹没。
 统一的只是**措辞与视觉**，不是把所有状态挤进一个组件。
 
@@ -299,5 +299,5 @@ MCP / Usage）的固定话术收成一份：
 
 - [architecture.md](architecture.md) —— 模块地图（P24 新增的五个模块在哪一层）
 - [testing.md](testing.md) —— 测试分层与 P24 的离线/DOM/截图三段
-- [diagnostics.md](diagnostics.md) —— 诊断面板里能看到什么
+- [diagnostics.md](diagnostics.md) —— 日志与诊断里能看到什么
 - [capability-ux.md](capability-ux.md) —— 「这个能力现在能不能用」的统一回答

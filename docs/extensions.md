@@ -256,7 +256,7 @@ pi 只在启动时读 `settings.json`，**没有文件监听** ——
 完整说明见 [mcp.md](mcp.md)，这里只留与本页相关的几条：
 
 - 原页尾「MCP 能力报告」已移除：运行中版本、built-in 清单、RPC 事实与扩展目录等证据
-  继续由服务端 `/api/mcp` 与 `运行状态与诊断` 提供，**不复制到另一个普通设置页**。
+  继续由服务端 `/api/mcp` 与「日志与诊断」的故障排查详情提供，**不复制到另一个普通设置页**。
   管理页只在原生 MCP 被扩展接管时留一行静态说明；`disabled` / `unsupported` 这类
   “配置不会加载”的真实问题仍有一条警告。
 - Server 部分由 MCP 配置页承接：原生状态（active / replaced / disabled / unknown）+

@@ -98,7 +98,7 @@ Capability 层**不新增来源**，只把下面这些搬进设置区：
 | Skills | `GET /api/skills` + RPC `get_commands` | 不适用 | pi 原生能力 |
 | Usage / Quota | 不适用（**入口**，不是可安装能力） | 不适用 | Pi RPC 会话统计 + Provider 官方接口 |
 
-Native MCP 与 built-in 的证据留在 **诊断**（`运行状态与诊断` 的 Native MCP / 兼容矩阵）
+Native MCP 与 built-in 的证据留在 **日志与诊断**（「导出故障报告」按需展开的 Native MCP / 兼容矩阵）
 与服务端 `/api/mcp`；它们没有安装命令，也不在扩展列表里重复一份。Approval 不是
 Extension 包，没有安装命令；协议能力与限制的证据见 [security.md](security.md)，产品入口是
 本仓库的 `extension_ui_request` 审批流。

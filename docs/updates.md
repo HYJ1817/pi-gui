@@ -697,7 +697,7 @@ npm run test:pi-update        # 126 项（已纳入 npm test）
 
 - [architecture.md](architecture.md) — 模块地图
 - [security.md](security.md) — 安全边界（含外链、渲染进程权限与「Pi 运行时更新边界」）
-- [diagnostics.md](diagnostics.md) — 诊断面板里的「版本」小节与 `piUpdate` 快照（信息页复用同一份状态，不另建容器）
+- [diagnostics.md](diagnostics.md) — 信息页的版本 / 更新区块与 `piUpdate` 快照（「日志与诊断」只显示排查详情，不另建更新容器）
 - [testing.md](testing.md) — 测试分层（`test:update` 与 `test:pi-update`）
 - [upgrade-playbook.md](upgrade-playbook.md) — 升级 pi 的完整流程（内置更新器只是它的便利层）
 - [pi-compatibility.md](pi-compatibility.md) — 更新之后「这个版本我们核过没有」
