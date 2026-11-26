@@ -2030,6 +2030,78 @@ async function main() {
     } finally { await ctx.cleanup(); }
   });
 
+  await t('fsec-005-r4a: unreadable revocation journal at restart never re-authorizes any device (fail-closed, memory-only)', async () => {
+    // Round-4 FSEC-005-R4-001 startup case: revoke durably (tombstone+main),
+    // then corrupt the journal. Restart must NOT treat the unreadable journal
+    // as absent — the device stays deauthorized in memory even though the
+    // main durable bytes alone would show it revoked... and crucially an
+    // ACTIVE device in main bytes must also be denied, because the journal
+    // might carry its revocation.
+    const { DeviceStore } = await import(MODULES.deviceStore);
+    const ctx = await boot();
+    try {
+      const { device } = await pair(ctx).then(pp => pp);
+      device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const deviceId = device.deviceId;
+      const dataDir = ctx.dataDir;
+      await ctx.remote.close();
+      // Corrupt the revocation journal so it cannot be parsed.
+      fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), '{not json', 'utf8');
+      const store2 = new DeviceStore(dataDir, () => {});
+      assert.equal(store2.revocationJournalUnknown, true, 'unreadable journal must surface as unknown state');
+      const reloaded = store2.get(deviceId);
+      assert.equal(store2.active(deviceId), null, 'FSEC-005-R4-001: unknown journal state must never authorize');
+      assert.equal(reloaded.active, false, 'device deactivated in memory');
+      assert.equal(reloaded.requiresRepair, true, 'operator-visible repair is required');
+      // The degraded state must NOT have been persisted — durable bytes
+      // keep the correct record so the failure heals when the journal is fixed.
+      const diskBytes = JSON.parse(fs.readFileSync(path.join(dataDir, 'remote-devices.json'), 'utf8'));
+      const diskRec = diskBytes.devices.find(d => d.deviceId === deviceId);
+      assert.equal(diskRec.active, true, 'degradation is memory-only: durable bytes keep the true record');
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
+  await t('fsec-005-r4b: unreadable journal blocks append — a prior acknowledged revocation is never overwritten out of existence', async () => {
+    // Round-4 FSEC-005-R4-001 append case: two devices, first revoked durably
+    // via the tombstone channel only (main persist faulted). Then the journal
+    // becomes unreadable and a SECOND revocation is attempted — the append
+    // must REFUSE rather than rewrite the journal from the empty fallback,
+    // which would permanently destroy the first revocation.
+    const { DeviceStore } = await import(MODULES.deviceStore);
+    const ctx = await boot();
+    try {
+      const first = await pair(ctx);
+      first.device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const second = await pair(ctx);
+      second.device.deviceId = ctx.remote.deviceStore.list()[1].deviceId;
+      const firstId = first.device.deviceId;
+      const secondId = second.device.deviceId;
+      const dataDir = ctx.dataDir;
+      // Revoke first with faulted MAIN channel: durability rests on the tombstone alone.
+      fs.mkdirSync(path.join(dataDir, 'remote-devices.json.tmp'));
+      try {
+        ctx.remote.deviceStore.revoke(firstId);
+      } finally {
+        fs.rmdirSync(path.join(dataDir, 'remote-devices.json.tmp'));
+      }
+      const journalBefore = fs.readFileSync(path.join(dataDir, 'remote-revocations.json'), 'utf8');
+      assert.ok(journalBefore.includes(firstId), 'test premise: first revocation is in the journal');
+      // Journal becomes unreadable (transient EIO analogue: corrupt bytes).
+      fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), ' corrupt', 'utf8');
+      // Second revocation must refuse the append — never overwrite unknown state.
+      ctx.remote.deviceStore.revoke(secondId);
+      const journalAfter = fs.readFileSync(path.join(dataDir, 'remote-revocations.json'), 'utf8');
+      assert.equal(journalAfter, ' corrupt', 'FSEC-005-R4-001: unknown journal bytes must be preserved verbatim, never overwritten');
+      // Restore the journal and restart: the first revocation must still be there.
+      fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), journalBefore, 'utf8');
+      await ctx.remote.close();
+      const store2 = new DeviceStore(dataDir, () => {});
+      const firstReloaded = store2.get(firstId);
+      assert.equal(firstReloaded.revoked, true, 'first acknowledged revocation survives the restart');
+      assert.equal(store2.active(firstId), null);
+    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
   await t('fs-001: failed grant widening rolls back to the durable set (FS-001 grants rollback)', async () => {
     const ctx = await boot();
     try {

@@ -41,17 +41,36 @@ export class DeviceStore {
     this.tombstonePath = path.join(dataDir, 'remote-revocations.json');
     this._load();
   }
+  /**
+   * FSEC-005-R4-001: the revocation journal has THREE states, never two.
+   *   absent  — ENOENT: nothing was ever revoked through this channel.
+   *   present — well-formed entries (possibly an empty list after compaction).
+   *   unknown — unreadable or malformed bytes. Unknown is NEVER interpreted
+   *     as absent: reconciliation cannot prove the devices in the main file
+   *     were not revoked through this channel, and appending/compacting over
+   *     unknown state would destroy the only durable record of revocations
+   *     that were already acknowledged to the operator. Callers receive
+   *     {state, entries}; entries is null exactly when state is 'unknown'.
+   */
   _readTombstones() {
+    let raw;
     try {
-      const data = JSON.parse(fs.readFileSync(this.tombstonePath, 'utf8'));
-      if (isRecord(data) && Array.isArray(data.revocations)) {
-        return data.revocations.filter(r => isRecord(r) && typeof r.deviceId === 'string'
-          && typeof r.devicePublicKey === 'string' && typeof r.registeredAt === 'string');
-      }
+      raw = fs.readFileSync(this.tombstonePath, 'utf8');
     } catch (e) {
-      if (e.code !== 'ENOENT') this.log(`revocation tombstone load failed (treating as none): ${e.code}`);
+      if (e.code === 'ENOENT') return { state: 'absent', entries: [] };
+      this.log('revocation tombstone unreadable: revocation state unknown, failing closed');
+      return { state: 'unknown', entries: null };
     }
-    return [];
+    try {
+      const data = JSON.parse(raw);
+      if (isRecord(data) && Array.isArray(data.revocations)) {
+        const entries = data.revocations.filter(r => isRecord(r) && typeof r.deviceId === 'string'
+          && typeof r.devicePublicKey === 'string' && typeof r.registeredAt === 'string');
+        return { state: 'present', entries };
+      }
+    } catch { /* malformed bytes fall through */ }
+    this.log('revocation tombstone malformed: revocation state unknown, failing closed');
+    return { state: 'unknown', entries: null };
   }
   _writeTombstones(entries) {
     const tmp = this.tombstonePath + '.tmp';
@@ -59,9 +78,14 @@ export class DeviceStore {
     try { fs.chmodSync(tmp, 0o600); } catch { /* Windows */ }
     fs.renameSync(tmp, this.tombstonePath);
   }
-  /** Durable intent first: append this revocation to the tombstone WAL. */
+  /** Durable intent first: append this revocation to the tombstone WAL.
+   *  Throws when the existing journal state is unknown — appending over
+   *  unknown bytes would replace the only durable revocation records with a
+   *  strictly smaller set (FSEC-005-R4-001). */
   _appendTombstone(d) {
-    const entries = this._readTombstones();
+    const journal = this._readTombstones();
+    if (journal.state === 'unknown') throw new Error('revocation journal unreadable: refusing to append over unknown revocation state');
+    const entries = journal.entries;
     entries.push({
       deviceId: d.deviceId,
       devicePublicKey: typeof d.devicePublicKey === 'string' ? d.devicePublicKey : '',
@@ -118,15 +142,31 @@ export class DeviceStore {
     // Entries whose registration instance no longer matches (re-paired with
     // a fresh registeredAt/key) are inert and compacted away below.
     let reconciled = false;
-    for (const entry of this._readTombstones()) {
-      const d = this.devices.get(entry.deviceId);
-      if (d && !d.revoked && d.devicePublicKey === entry.devicePublicKey && d.registeredAt === entry.registeredAt) {
-        d.revoked = true; d.active = false;
-        if (this.keyIndex.get(d.devicePublicKey) === d.deviceId) this.keyIndex.delete(d.devicePublicKey);
-        reconciled = true;
+    const journal = this._readTombstones();
+    // FSEC-005-R4-001 fail-closed: when the journal cannot be read, no device
+    // may regain authorization it does not already hold in the main durable
+    // bytes — the journal might carry revocations this reconciliation cannot
+    // see. Every otherwise-active device is deactivated in memory
+    // (requiresRepair) so an operator-visible repair is required; crucially
+    // the degraded state is NOT persisted — persisting it would overwrite
+    // correct main bytes and still lose the journal. Memory-only means the
+    // failure heals itself once the journal file is restored.
+    this.revocationJournalUnknown = journal.state === 'unknown';
+    if (this.revocationJournalUnknown) {
+      for (const d of this.devices.values()) {
+        if (!d.revoked) { d.active = false; d.requiresRepair = true; }
+      }
+    } else {
+      for (const entry of journal.entries) {
+        const d = this.devices.get(entry.deviceId);
+        if (d && !d.revoked && d.devicePublicKey === entry.devicePublicKey && d.registeredAt === entry.registeredAt) {
+          d.revoked = true; d.active = false;
+          if (this.keyIndex.get(d.devicePublicKey) === d.deviceId) this.keyIndex.delete(d.devicePublicKey);
+          reconciled = true;
+        }
       }
     }
-    if (corrupt || reconciled) this._persist();
+    if (corrupt || (reconciled && !this.revocationJournalUnknown)) this._persist();
   }
   _persist() {
     const tmp = this.path + '.tmp';
@@ -143,7 +183,12 @@ export class DeviceStore {
     // revoked in durable bytes (or no longer exists). Compaction failure is
     // harmless — stale entries are inert or idempotently re-applied.
     try {
-      const remaining = this._readTombstones().filter(entry => {
+      const journal = this._readTombstones();
+      // FSEC-005-R4-001: compaction may never run over unknown journal bytes —
+      // writing an empty/filtered list across unknown state would permanently
+      // destroy revocations already acknowledged as durable.
+      if (journal.state === 'unknown') return;
+      const remaining = journal.entries.filter(entry => {
         const d = this.devices.get(entry.deviceId);
         if (!d) return false;
         if (d.devicePublicKey !== entry.devicePublicKey || d.registeredAt !== entry.registeredAt) return false;
