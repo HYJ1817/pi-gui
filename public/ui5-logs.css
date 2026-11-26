@@ -73,6 +73,8 @@
 .ui5-logs-filter .ds-picker-trigger { min-width: 116px; }
 .ui5-log-filter-source .ds-picker-trigger { min-width: 138px; }
 .ui5-logs-search { flex: 1 1 220px; }
+/* 来源列表 11 项；留出完整高度，避免最后一项在菜单底边被截断。 */
+.ds-picker-menu.ui5-logs-picker-menu { max-height: min(380px, calc(100vh - 16px)); }
 .ui5-logs-setting-picker { width: 196px; max-width: 100%; }
 .ui5-logs-setting-picker .ds-picker-trigger { width: 100%; }
 .ui5-logs-range-picker { width: 180px; max-width: 100%; }
