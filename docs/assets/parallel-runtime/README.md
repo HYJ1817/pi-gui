@@ -6,7 +6,13 @@ JSON 仅含白名单结构：owner、原生 session、runtime 代次、SSE 序�
 
 历史 PNG 来自真实 `capturePage()`：原图曾做 TEMP 路径文本替换。归档副本另外对底部 model/provider picker 身份标签做明确的矩形隐私遮盖（不透明隐私色块）；不修补或合成其它界面像素。`archive-manifest.json` 记录历史原图与归档 SHA-256、遮盖坐标及像素校验结果。原始截图保留在 TEMP 供本机复核，不写入仓库。
 
-## 本轮恢复提示：离线实际渲染，不是真模型证明
+## 最终构建完整真实验收（2026-11-26，通过）
+
+- 同一打包字节（exe `71b9ed51…`、backend `917a5fbc…`、main `135a00e0…`）先在 `pi-parallel-live-1CfIzx` 完成真实预检 **10/10**（独立资格，`fullLiveAcceptance=false`），再在 `pi-parallel-live-ci41oY` 完成完整 exercise→recovery：**exercise 35/35、recovery 31/31、合计 66/66**、failed 0、两阶段 exit 0、`completed=true`、`fullLiveAcceptance=true`、privacy verified。
+- [最终摘要](final-acceptance-20261126-summary.json) / [运行身份](final-acceptance-20261126-identity.json) / [恢复回合最小证明](final-acceptance-20261126-recovery-proof.json) / [归档 manifest](final-acceptance-20261126-manifest.json)：恢复后真实 write→read 回合输出 11 字节 sha `106da1c5…`、工具 0 错误、`toolPairsComplete=true`、`writeThenRead=true`、settled/idle、耗时 12.639 秒；结果文件 21 字节 sha `c89212fd…` 且精确。
+- JSON 仍只含白名单结构，不含消息、工具参数/结果、凭据或 provider 配置。本轮未改 UI，未归档新截图；TEMP 原图保留本机复核。此前 `pi-parallel-live-hGBJUN` 的 19/21 是驱动证据形状错误（公开 SSE 合法省略白名单外 `toolCallId`），不是产品回合失败，详见 [真实专项记录](../../parallel-runtime-live-evidence.md)。
+
+## 恢复提示：离线实际渲染，不是真模型证明
 
 - [测量与摘要](recovery-notice-render.json)：2026-11-26 在正常 sandbox / contextIsolation 的 Electron 44.4.3 内加载生产 Runtime 组件和完整生产 CSS，使用合成拒绝响应，实际点击发送。六组明暗 / 宽窄 / 中英文 fixture 均保留草稿、提交仅一次，提示无裁切或横向溢出；深浅文字对比度分别为 8.672:1 / 6.673:1。
 - 主线程人工查看并逐字节归档的两张代表截图：[深色窄窗](recovery-notice-dark-narrow.png)、[浅色窄窗英文草稿](recovery-notice-light-narrow-english.png)。PNG 未遮盖、未修改像素；其余四张的摘要保留在测量报告，原图留 TEMP。

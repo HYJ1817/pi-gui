@@ -1,6 +1,6 @@
 # 多会话真实 Pi / Windows Electron 验收记录
 
-日期：2026-11-26。**当前状态：用户已明确授权 PR #113 的最终整改、轻量预检与完整真实验收，新轮结果待验证。下文截至 `8d6b388c` 的旧轮记录原样保留：旧产物零 prompt 控制面 17/17；旧轮最终完整模型尝试 exercise 5/6，B/C 与 recovery 未执行。不能把历史成功与新轮部分结果拼接为通过。**
+日期：2026-11-26。**当前状态：最终生产构建（exe `71b9ed51…`、backend `917a5fbc…`）已完成同构建真实预检 10/10 与完整 exercise→recovery 66/66（exercise 35/35、recovery 31/31），exit 0、`fullLiveAcceptance=true`。按用户指示本轮未 push，最终 PR head 的 CI 尚未产生；下文历史失败与旧轮记录原样保留，不能与结果拼接。**
 本记录只涵盖真实验收 runner；最终 head 的完整 canonical 由 PR CI 提供，生产修复及独立安全复审另见主验收记录。
 
 ## 路径与授权边界
@@ -45,6 +45,15 @@ node tests/parallel-runtime-live.cjs
 - 已追领前代理 TEMP `pi-parallel-live-qqidkV/evidence/summary.json`：**10/10**、exit 0、`completed=true`、`preflightComplete=true`、`fullLiveAcceptance=false`，privacy verified；记录八个创建身份，代理按完整身份只读复核残留 0，未 kill。07:09:32.569Z–07:13:06.371Z，213.802 秒，输出 turn 47.790 秒、工具 turn 161.536 秒。
 - 此预检的实际 backend 仍是旧 `9495579e…`，driver 摘要也早于本次冻结；不能使用 identity 中“源码当时已改”掩盖实际打包字节。它证明该次已有模型输出及 write/read 路径，不证明当前 dirty 修复或最终完整并行通过；`thinkingOff=false` 保留为事实，不能声称当时实际关闭思考。
 - 恢复驱动已增加一次真实 UI write/read、完整 owner/seq 与工具起止配对、文件及输出摘要、settled、当 turn 原生历史、restart 旧 owner 拒绝与无自动重放。代码存在和离线负例不等于真实恢复执行通过；最终生产提交、重建、同构建预检与完整 exercise→recovery 均仍待验证。未新建模型轮或覆盖旧失败。
+
+## 最终构建：预检与完整真实 exercise→recovery（2026-11-26）
+
+- 构建身份：预检 `1CfIzx`、首次完整尝试 `hGBJUN`、最终完整 `ci41oY` 三个 TEMP 世界的 exe 均为 `71b9ed5105a31a…`、backend `917a5fbc0b91401c…`、main `135a00e0…`，与提交后逐字节校验的产物一致；正常 sandbox / contextIsolation / 无 nodeIntegration，Pi 1.6.0，Node v24.22.1，模型 `xingchiapi/gpt-6.1-sol` 沿既有 provider，无 fallback。HEAD `4bdd29f4…`。
+- 预检（`1CfIzx`，fixture `c3c31d9…`）：在产物字节相同的构建上实跑 **10/10**、exit 0、`preflightComplete=true`、`fullLiveAcceptance=false`；两个真实 turn 的输出与 native write/read 均通过。该资格独立，不替代完整阶段。
+- 首次完整尝试（`hGBJUN`，同一 fixture）：exercise **35/35**、exit 0；recovery **19/21**、exit 1、`fullLiveAcceptance=false`。失败不是产品回合失败：恢复后真实 turn 输出精确（11 字节、sha `106da1c5…`），write/read 均 completed、0 tool error、settled、idle；驱动仍要求用非空 `toolCallId` 配对，而生产公开 SSE 对白名单外 id（真实 Pi id 含 `|`）投影为 absence，导致 `toolPairsComplete=false`、`writeThenRead=false`。这是驱动证据形状错误，不能把 35/35 与预检拼成整体通过。
+- 最小修复仅动 driver，生产零改动且未重建：有 id 时仍按 id 严格配对；全部无 id（生产已证明的投影形状）时按同名、seq 顺序、每个 end 恰好消费一次配对；混合 id、缺失 end 与错误 end 仍拒绝。新增 4 条离线断言；模板 **50/50**、安全 **36/36**。fixture 新字节 80,473 / sha `0d7b327a…`，runner 不变 30,312 / `2bf993b9…`。
+- 最终完整（`ci41oY`，final driver）：exercise **35/35**、recovery **31/31**、合计 **66/66**、failed 0、两阶段 exit 0 且 `phaseValid=true`、`completed=true`、`fullLiveAcceptance=true`、privacy verified。恢复真实 turn：输出 11 字节 sha `106da1c5…`，write→read 工具 0 错误且 `toolPairsComplete=true`、`writeThenRead=true`、settled/idle、12.639 秒；结果文件 21 字节 sha `c89212fd…`、精确；随后真实 restart 保持 resumed native、轮换 runtime owner、旧 owner 读取/回放被拒且不自动重放。归档见 [证据说明](assets/parallel-runtime/README.md)。
+- 仍未运行：最终 PR head 的 `npm test` CI（用户指示本轮不 push）。canonical 全量仍为**待验证**，66/66 只证明本机同构建真实打包验收。
 
 ## 上一轮已执行结果（按当时字节保留）
 

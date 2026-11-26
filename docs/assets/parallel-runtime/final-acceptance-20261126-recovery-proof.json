@@ -1,0 +1,66 @@
+{
+  "world": "pi-parallel-live-ci41oY",
+  "date": "2026-11-26",
+  "qualification": {
+    "passed": 66,
+    "failed": 0,
+    "completed": true,
+    "fullLiveAcceptance": true,
+    "preflightComplete": false,
+    "privacy": {
+      "verified": true,
+      "rawPayloadSaved": false,
+      "credentialsInEnvironmentOnly": true,
+      "sourceUserDataReadOnly": true,
+      "fixturesInOsTmpdir": true
+    }
+  },
+  "phases": [
+    {
+      "phase": "exercise",
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "passed": 35,
+      "failed": 0,
+      "valid": true
+    },
+    {
+      "phase": "recovery",
+      "exit": {
+        "code": 0,
+        "signal": null
+      },
+      "passed": 31,
+      "failed": 0,
+      "valid": true
+    }
+  ],
+  "recoveryTurn": {
+    "checkPassed": true,
+    "outputMatches": true,
+    "outputBytes": 11,
+    "outputSha256": "106da1c5595acb2761aaeb2348f2a3e36b01d567e1e512b12956d48a2b4e964c",
+    "toolNames": [
+      "write",
+      "read"
+    ],
+    "completedTools": [
+      "write",
+      "read"
+    ],
+    "toolErrors": 0,
+    "toolPairsComplete": true,
+    "writeThenRead": true,
+    "settled": true,
+    "idle": true,
+    "elapsedMs": 12639,
+    "file": {
+      "bytes": 21,
+      "sha256": "c89212fd1c14e80225ee7a3940198349f00c6bc17cce229f634e9f59e5d0be37",
+      "exact": true
+    }
+  },
+  "note": "Only whitelisted structure: no prompts, messages, tool arguments/results, credentials or provider configuration. The public SSE projection legitimately omits toolCallId values outside its closed wire-id charset; pairing is by tool name, order and exactly-once consumption."
+}

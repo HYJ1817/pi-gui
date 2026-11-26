@@ -1,0 +1,36 @@
+{
+  "world": "pi-parallel-live-ci41oY",
+  "date": "2026-11-26",
+  "sourceEvidence": "os.tmpdir() only; original files and screenshots left in TEMP",
+  "archived": [
+    {
+      "file": "final-acceptance-20261126-summary.json",
+      "bytes": 5803,
+      "sha256": "6372c366d1dc77548d02ebefe56a13e34cb7be83a12cc1a6e1d9e0bd42df9b80"
+    },
+    {
+      "file": "final-acceptance-20261126-identity.json",
+      "bytes": 3352,
+      "sha256": "9a300ca30ab77de2be00a8b64a07c73856b0085ead371c9e21eda9d2434f8a3e"
+    },
+    {
+      "file": "final-acceptance-20261126-recovery-proof.json",
+      "bytes": 1629,
+      "sha256": "40e574dd40452c4a7f9edb21ef5151c46190c6593b5b649330c76d5e53157332"
+    }
+  ],
+  "sourceDigests": {
+    "runner": "2bf993b9208ad2bacedfe0832c14f4ab1d4fb15d1b1c2d7d3f9798836d259b1f",
+    "fixture": "0d7b327a7694dc72bae015fdce9f6b29a868f3847ba018397ce3cfdcf08fb9d7"
+  },
+  "packaged": {
+    "version": "0.35.1",
+    "executable": "71b9ed5105a31ad944f82376b0e66ea8b147068aafb16330a556f44bebe5a19f",
+    "backend": "917a5fbc0b91401c89823f26f3ece073558cf56adbc99686b4c9850aa52bedcf",
+    "main": "135a00e0423d9df5d739eb0c576023f1ea8296de802fcf60029cd2b4403fee05",
+    "manifestBootstrapOverride": true,
+    "mainMatchesSource": true,
+    "publicMatchesSource": true
+  },
+  "head": "4bdd29f4cbacf4b9223e67acc64c627b4d5c7b9c"
+}
