@@ -3,6 +3,7 @@ import { fetchDiagnostics, previewLogExport, downloadLogReport } from './api.js'
 import { buildDiagnosticSummary, downloadDiagnosticJSON, renderDiagnosticDetails } from './diagnostics.js';
 import { driftSnapshot } from './schema-drift.js';
 import { createSettingsCard, createSettingsRow } from './ui/primitives.js';
+import { createPicker } from './ui/picker.js';
 import { toast } from './ui/toast.js';
 import { logRendererEvent } from './log-client.js';
 
@@ -56,8 +57,8 @@ export function mountLogExport(host, { state, getStatus }) {
   refresh.setAttribute('aria-label', '刷新诊断快照');
   const diagnosticContent = node('div');
   const diagnosticCard = createSettingsCard({ title: '诊断快照', action: refresh, children: [
-    createSettingsRow({ label: '诊断摘要', control: summary }),
-    createSettingsRow({ label: '结构化诊断数据', control: jsonActions }),
+    createSettingsRow({ label: '诊断摘要', control: summary, flat: true }),
+    createSettingsRow({ label: '结构化诊断数据', control: jsonActions, flat: true }),
     feedback, diagnosticContent,
   ] });
   host.append(diagnosticCard);
@@ -92,12 +93,26 @@ export function mountLogExport(host, { state, getStatus }) {
     paintSnapshot();
   }
 
-  const range = node('select', 'ds-select');
-  range.setAttribute('aria-label', '故障报告时间范围');
-  for (const [value, label] of [[30, '最近 30 分钟'], [120, '最近 2 小时'], [1440, '最近 24 小时']]) {
-    const option = node('option', '', label); option.value = String(value); range.append(option);
-  }
-  range.value = String(state.windowMinutes);
+  const range = createPicker({
+    value: String(state.windowMinutes),
+    options: [
+      { value: '30', label: '最近 30 分钟' },
+      { value: '120', label: '最近 2 小时' },
+      { value: '1440', label: '最近 24 小时' },
+    ],
+    label: '故障报告时间范围',
+    field: 'exportRange',
+    className: 'ui5-logs-range-picker',
+    menuClassName: 'ui5-logs-picker-menu',
+    onSelect: value => {
+      state.windowMinutes = Number(value);
+      previewRequest++;
+      previewing = false;
+      preview = null;
+      previewHost.replaceChildren();
+      paintExport();
+    },
+  });
   const problem = node('textarea', 'ds-input');
   problem.rows = 3; problem.maxLength = 2000; problem.value = state.description;
   problem.setAttribute('aria-label', '问题描述');
@@ -121,27 +136,19 @@ export function mountLogExport(host, { state, getStatus }) {
   actions.append(previewButton, exportButton);
   const form = node('div', 'ui5-logs-export-form');
   form.append(
-    createSettingsRow({ label: '时间范围', control: range }),
+    createSettingsRow({ label: '时间范围', control: range.element, flat: true }),
     field('问题描述（可选）', problem), field('复现步骤（可选）', repro),
   );
   const privacy = node('p', 'ui5-logs-inline-note', '报告仅在本机生成，不自动上传。不含聊天、项目文件或配置正文；发送前请检查填写内容。');
   host.append(createSettingsCard({ title: '故障报告', children: [privacy, form, previewHost, actions] }));
 
   function paintExport() {
-    range.disabled = exporting;
+    range.setDisabled(exporting);
     previewButton.disabled = previewing || exporting;
     previewButton.setAttribute('aria-busy', String(previewing));
     exportButton.disabled = !preview || previewing || exporting;
     exportButton.setAttribute('aria-busy', String(exporting));
   }
-  range.onchange = () => {
-    state.windowMinutes = Number(range.value);
-    previewRequest++;
-    previewing = false;
-    preview = null;
-    previewHost.replaceChildren();
-    paintExport();
-  };
   async function loadPreview() {
     if (previewing || exporting) return;
     const request = ++previewRequest;
@@ -178,5 +185,5 @@ export function mountLogExport(host, { state, getStatus }) {
 
   paintSnapshot();
   if (!state.diagnostics) void loadSnapshot();
-  return () => { active = false; snapshotRequest++; previewRequest++; };
+  return () => { active = false; snapshotRequest++; previewRequest++; range.destroy(); };
 }

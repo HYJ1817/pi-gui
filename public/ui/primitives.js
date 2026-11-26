@@ -266,10 +266,19 @@ export function createSettingsCard({ title = '', description = '', action = null
 
 /**
  * Creates a D601 single-line SettingsRow matching PI-Desktop structure.
+ *
+ * `flat` is the normalized in-flow variant for pages that present a continuous
+ * settings list instead of separate tone tiles: no per-row background, no
+ * rounded box, only a hairline between adjacent rows. The default stays the
+ * existing tile so pages that opted into D297 tiles are not restyled here.
  */
-export function createSettingsRow({ label = '', help = '', detail = null, control = null, extraClass = '', id } = {}) {
+export function createSettingsRow({
+  label = '', help = '', detail = null, control = null, extraClass = '', id, flat = false,
+} = {}) {
   const row = document.createElement('div');
-  row.className = 'settings-row ds-settings-row' + (extraClass ? ' ' + extraClass : '');
+  row.className = 'settings-row ds-settings-row'
+    + (flat ? ' ds-settings-row-flat' : '')
+    + (extraClass ? ' ' + extraClass : '');
   if (id) row.id = id;
 
   const copy = document.createElement('div');

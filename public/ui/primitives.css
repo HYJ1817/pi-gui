@@ -655,6 +655,28 @@
   gap: 8px 24px;
 }
 
+/*
+ * Flat in-flow variant: the row joins the page surface instead of becoming a
+ * separate tile. Adjacent flat rows share one hairline; the first row has no
+ * outer box and the last row does not draw a closing border.
+ */
+.settings-row.ds-settings-row-flat {
+  min-height: 56px;
+  padding: 11px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.settings-row.ds-settings-row-flat + .settings-row.ds-settings-row-flat {
+  border-top: 1px solid var(--ds-border-default);
+}
+
+.ds-settings-card-body:has(> .ds-settings-row-flat),
+.settings-panel:has(> .ds-settings-row-flat) {
+  gap: 0;
+}
+
 /* Settings fields */
 .ds-select {
   height: 34px;
@@ -802,6 +824,12 @@
 .ds-picker-option:focus-visible {
   outline: 2px solid var(--ds-focus);
   outline-offset: -2px;
+}
+
+/* Pointer-opened menus keep focus in the listbox for accessibility but do not
+ * paint the keyboard ring on the initially selected option. */
+.ds-picker-menu.is-pointer-open .ds-picker-option:focus-visible {
+  outline: none;
 }
 
 .ds-picker-option-label {

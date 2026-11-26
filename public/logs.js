@@ -5,6 +5,7 @@ import { mountLogExport } from './logs-export.js';
 import { fillReviewComposer } from './review-fill.js';
 import { openModal, confirmModal } from './ui/modal.js';
 import { createSettingsCard, createSettingsRow, createSettingsToggle } from './ui/primitives.js';
+import { createPicker } from './ui/picker.js';
 import { toast } from './ui/toast.js';
 import { createIcon } from './ui/icons.js';
 import { logRendererEvent, setRendererLoggingEnabled } from './log-client.js';
@@ -26,16 +27,6 @@ function button(text, cls = 'btn', run) {
   const element = node('button', cls, text);
   element.type = 'button';
   if (run) element.onclick = run;
-  return element;
-}
-function select(label, options, value, onChange) {
-  const element = node('select', 'ds-select');
-  element.setAttribute('aria-label', label);
-  for (const [key, text] of options) {
-    const option = node('option', '', text); option.value = String(key); element.append(option);
-  }
-  element.value = String(value);
-  element.onchange = () => onChange(element.value);
   return element;
 }
 function formatBytes(bytes) {
@@ -101,10 +92,20 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
   let statusPromise = null, operationError = '', mountedTab = null, tabRevision = 0;
   let tab = LOG_TABS.some(([id]) => id === initialTab) ? initialTab : 'overview';
   let entries = [], cursor = null, more = false, truncated = false, loadingEntries = false, entriesError = '';
+  let searchPending = false, staleOlder = false;
   let filters = { level: '', source: '', q: '' };
   let logListHost = null, countNode = null;
+  let pickers = [];
   const exportState = { windowMinutes: 30, description: '', repro: '', diagnostics: null, drift: [] };
-  const dispose = () => { alive = false; statusRequest++; entriesRequest++; clearTimeout(searchTimer); disposeTab(); };
+  const disposePickers = () => {
+    const current = pickers;
+    pickers = [];
+    for (const picker of current) picker.destroy();
+  };
+  const trackPicker = (picker) => { pickers.push(picker); return picker; };
+  const dispose = () => {
+    alive = false; statusRequest++; entriesRequest++; clearTimeout(searchTimer); disposePickers(); disposeTab();
+  };
   return present(card => {
     card.classList.add('ui5-logs-modal');
     const heading = node('header', 'ui5-logs-heading');
@@ -131,7 +132,9 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
     function activate(id) {
       if (mountedTab === id) return;
       mountedTab = id; tabRevision++;
-      clearTimeout(searchTimer); disposeTab(); disposeTab = () => {};
+      clearTimeout(searchTimer); searchTimer = null; searchPending = false; staleOlder = false;
+      disposeTab(); disposeTab = () => {};
+      disposePickers();
       entriesRequest++; loadingEntries = false; tab = id;
       for (const [key, item] of Object.entries(buttons)) {
         item.setAttribute('aria-selected', String(key === id)); item.tabIndex = key === id ? 0 : -1;
@@ -164,6 +167,7 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
       return statusPromise;
     }
     function renderOverview(focusKey = body.contains(document.activeElement) ? document.activeElement.dataset.logSetting : null) {
+      disposePickers();
       body.replaceChildren();
       const refresh = button('刷新', 'btn ghost', () => void loadStatus());
       refresh.setAttribute('aria-label', '刷新日志状态'); refresh.dataset.logSetting = 'refresh';
@@ -189,24 +193,52 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
       const enabled = createSettingsToggle({ checked: status.enabled === true, ariaLabel: '启用本地日志',
         onChange: value => void applySettings({ enabled: value }, 'enabled') });
       enabled.element.dataset.logSetting = 'enabled';
-      const mode = select('日志级别', [['standard', '标准（INFO 及以上）'], ['verbose', '详细（24 小时）']], status.mode,
-        value => void applySettings({ mode: value }, 'mode'));
-      mode.dataset.logSetting = 'mode'; mode.disabled = !status.enabled;
-      const retention = select('保留天数', [1, 3, 7, 14, 30].map(value => [value, value + ' 天']), status.retentionDays,
-        value => void applySettings({ retentionDays: Number(value) }, 'retention'));
-      retention.dataset.logSetting = 'retention';
-      const capacity = select('空间上限', [10, 20, 50].map(value => [value, value + ' MB']), status.maxTotalMB || 20,
-        value => void applySettings({ maxTotalMB: Number(value) }, 'capacity'));
-      capacity.dataset.logSetting = 'capacity';
+      const mode = trackPicker(createPicker({
+        value: status.mode,
+        options: [
+          { value: 'standard', label: '标准（INFO 及以上）' },
+          { value: 'verbose', label: '详细（24 小时）' },
+        ],
+        label: '日志级别',
+        field: 'mode',
+        disabled: !status.enabled,
+        className: 'ui5-logs-setting-picker',
+        menuClassName: 'ui5-logs-picker-menu',
+        onSelect: value => applySettings({ mode: value }, 'mode'),
+      }));
+      mode.trigger.dataset.logSetting = 'mode';
+      const retention = trackPicker(createPicker({
+        value: String(status.retentionDays),
+        options: [1, 3, 7, 14, 30].map(value => ({ value: String(value), label: value + ' 天' })),
+        label: '保留天数',
+        field: 'retention',
+        className: 'ui5-logs-setting-picker',
+        menuClassName: 'ui5-logs-picker-menu',
+        onSelect: value => applySettings({ retentionDays: Number(value) }, 'retention'),
+      }));
+      retention.trigger.dataset.logSetting = 'retention';
+      const capacity = trackPicker(createPicker({
+        value: String(status.maxTotalMB || 20),
+        options: [10, 20, 50].map(value => ({ value: String(value), label: value + ' MB' })),
+        label: '空间上限',
+        field: 'capacity',
+        className: 'ui5-logs-setting-picker',
+        menuClassName: 'ui5-logs-picker-menu',
+        onSelect: value => applySettings({ maxTotalMB: Number(value) }, 'capacity'),
+      }));
+      capacity.trigger.dataset.logSetting = 'capacity';
       const settings = createSettingsCard({ title: '日志设置', children: [
-        createSettingsRow({ label: '启用本地日志', control: enabled }),
-        createSettingsRow({ label: '日志级别', control: mode,
+        createSettingsRow({ label: '启用本地日志', control: enabled, flat: true }),
+        createSettingsRow({ label: '日志级别', control: mode.element, flat: true,
           detail: status.verboseUntil ? '详细模式截止：' + formatLocal(status.verboseUntil) : null }),
-        createSettingsRow({ label: '保留天数', control: retention }),
-        createSettingsRow({ label: '空间上限', control: capacity }),
+        createSettingsRow({ label: '保留天数', control: retention.element, flat: true }),
+        createSettingsRow({ label: '空间上限', control: capacity.element, flat: true }),
       ] });
       settings.classList.add('ui5-logs-settings');
-      if (settingsSaving || clearing) for (const control of settings.querySelectorAll('button, select')) control.disabled = true;
+      if (settingsSaving || clearing) {
+        for (const control of settings.querySelectorAll('button, select, input')) control.disabled = true;
+        for (const picker of pickers) picker.setDisabled(true);
+      }
       body.append(settings);
       const recent = node('div', 'ui5-logs-list');
       const errors = (status.recentErrors || []).filter(entry => entry?.timestamp && entry?.event);
@@ -222,30 +254,33 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
       }
       const clear = button('清理日志…', 'btn danger', () => void clearWithConfirm());
       clear.dataset.logSetting = 'clear'; clear.disabled = settingsSaving || clearing;
-      body.append(files, createSettingsRow({ label: '清理本地日志', control: clear }));
+      body.append(files, createSettingsRow({ label: '清理本地日志', control: clear, extraClass: 'ui5-logs-clear-row', flat: true }));
       if (focusKey) body.querySelector(`[data-log-setting="${focusKey}"]:not(:disabled)`)?.focus({ preventScroll: true });
     }
     async function applySettings(patch, focusKey) {
-      if (settingsSaving || clearing) return;
+      if (settingsSaving || clearing) return false;
       const revision = tabRevision, focusOwner = document.activeElement;
       settingsSaving = true; operationError = ''; statusRequest++; statusLoading = false;
       for (const control of body.querySelectorAll('[data-log-setting]')) control.disabled = true;
+      for (const picker of pickers) picker.setDisabled(true);
       const result = await updateLogSettings(patch);
-      if (!alive) return;
+      if (!alive) return false;
       settingsSaving = false;
       if (!result?.ok || !result.status) {
         operationError = '日志设置未能确认保存，请检查后重试。';
         await loadStatus();
-        if (!alive) return;
+        if (!alive) return false;
       } else { status = result.status; statusError = ''; setRendererLoggingEnabled(status.enabled === true); }
       if (tab === 'overview') renderOverview(revision === tabRevision
         && (document.activeElement === focusOwner || document.activeElement === document.body) ? focusKey : null);
+      return Boolean(result?.ok && result.status);
     }
     async function clearWithConfirm() {
       if (clearing || settingsSaving || document.getElementById('confirmLayer')?.hidden === false) return;
       const revision = tabRevision;
       clearing = true; operationError = ''; statusRequest++; statusLoading = false;
       for (const control of body.querySelectorAll('[data-log-setting]')) control.disabled = true;
+      for (const picker of pickers) picker.setDisabled(true);
       const answer = await confirmModal({ title: '清理本地日志',
         message: '删除本机日志文件？设置不会被删除；正在写的日志会重新开始。这个动作不能撤销。',
         okText: '清理日志', cancelText: '取消', danger: true });
@@ -264,28 +299,51 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
       else if (answer === true && tab === 'logs') void loadEntries(true);
     }
     function renderLogsTab() {
+      disposePickers();
       const toolbar = node('div', 'ui5-logs-filters');
-      const level = select('按级别筛选', [['', '全部级别'], ...LEVELS.map(key => [key, LEVEL_TEXT[key]])], filters.level,
-        value => { filters.level = value; void loadEntries(true); });
-      level.classList.add('ui5-log-filter-level');
-      const source = select('按来源筛选', [['', '全部来源'], ...Object.entries(SOURCE_TEXT)], filters.source,
-        value => { filters.source = value; void loadEntries(true); });
-      source.classList.add('ui5-log-filter-source');
+      const level = trackPicker(createPicker({
+        value: filters.level,
+        options: [{ value: '', label: '全部级别' }, ...LEVELS.map(key => ({ value: key, label: LEVEL_TEXT[key] }))],
+        label: '按级别筛选',
+        field: 'level',
+        className: 'ui5-logs-filter ui5-log-filter-level',
+        menuClassName: 'ui5-logs-picker-menu',
+        onSelect: value => { filters.level = value; void loadEntries(true); },
+      }));
+      const source = trackPicker(createPicker({
+        value: filters.source,
+        options: [{ value: '', label: '全部来源' },
+          ...Object.entries(SOURCE_TEXT).map(([value, label]) => ({ value, label }))],
+        label: '按来源筛选',
+        field: 'source',
+        className: 'ui5-logs-filter ui5-log-filter-source',
+        menuClassName: 'ui5-logs-picker-menu',
+        onSelect: value => { filters.source = value; void loadEntries(true); },
+      }));
       const search = node('input', 'ui5-log-search');
       search.type = 'search'; search.maxLength = 100; search.value = filters.q;
       search.placeholder = '搜索事件、错误码或关联标识'; search.setAttribute('aria-label', '搜索日志');
       const searchWrap = node('label', 'ds-search-control ds-search-field ui5-logs-search');
       searchWrap.append(createIcon('search'), search);
       search.oninput = () => {
-        filters.q = search.value; clearTimeout(searchTimer);
-        // 输入立即令旧响应失效，不等防抖期间回写另一套筛选结果。
-        entriesRequest++; loadingEntries = false;
-        searchTimer = setTimeout(() => void loadEntries(true), 250);
+        filters.q = search.value;
+        clearTimeout(searchTimer); searchTimer = null;
+        // 输入立即作废旧响应与旧分页游标：防抖期间不能再用上一组条件翻页。
+        entriesRequest++; loadingEntries = false; searchPending = true;
+        staleOlder = Boolean(more && cursor);
+        cursor = null; more = false; truncated = false;
+        renderLogList();
+        searchTimer = setTimeout(() => { searchTimer = null; void loadEntries(true); }, 250);
       };
-      search.onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); clearTimeout(searchTimer); void loadEntries(true); } };
+      search.onkeydown = event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        clearTimeout(searchTimer); searchTimer = null;
+        void loadEntries(true);
+      };
       const refresh = button('刷新', 'btn ghost', () => void loadEntries(true));
       refresh.setAttribute('aria-label', '刷新日志列表');
-      toolbar.append(level, source, searchWrap, refresh);
+      toolbar.append(level.element, source.element, searchWrap, refresh);
       countNode = node('p', 'ui5-logs-inline-note'); countNode.setAttribute('role', 'status');
       logListHost = node('div', 'ui5-logs-list');
       body.append(toolbar, countNode, logListHost);
@@ -293,8 +351,9 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
     function renderLogList() {
       if (!logListHost) return;
       logListHost.replaceChildren();
-      logListHost.setAttribute('aria-busy', String(loadingEntries));
-      countNode.textContent = loadingEntries ? '正在读取日志…' : `已显示 ${entries.length} 条${more ? ' · 还有更早记录' : ''}`;
+      logListHost.setAttribute('aria-busy', String(loadingEntries || searchPending));
+      countNode.textContent = searchPending ? '正在更新筛选…'
+        : loadingEntries ? '正在读取日志…' : `已显示 ${entries.length} 条${more ? ' · 还有更早记录' : ''}`;
       if (truncated) countNode.textContent += ' · 读取受安全上限限制';
       if (entriesError) {
         const failure = node('p', 'ui5-logs-error', entriesError); failure.setAttribute('role', 'status');
@@ -303,14 +362,15 @@ export function openLogs({ present = openModal, initialTab = 'overview' } = {}) 
       if (!entries.length && !entriesError && !loadingEntries) logListHost.append(node('p', 'ui5-logs-empty',
         filters.level || filters.source || filters.q ? '当前筛选下没有找到日志。' : '尚无日志记录。'));
       for (const entry of entries) logListHost.append(renderEntry(entry));
-      if (more && cursor) {
+      if ((more && cursor) || (searchPending && staleOlder)) {
         const older = button('加载更早日志', 'btn', () => void loadEntries(false));
-        older.disabled = loadingEntries; logListHost.append(older);
+        older.disabled = loadingEntries || searchPending || !cursor; logListHost.append(older);
       }
     }
     async function loadEntries(reset = false) {
-      if (!alive || tab !== 'logs' || !logListHost || loadingEntries && !reset) return;
-      clearTimeout(searchTimer);
+      if (!alive || tab !== 'logs' || !logListHost) return;
+      if (!reset && (searchPending || !cursor || loadingEntries)) return;
+      clearTimeout(searchTimer); searchTimer = null; searchPending = false; staleOlder = false;
       const request = ++entriesRequest;
       loadingEntries = true; entriesError = '';
       if (reset) { entries = []; cursor = null; more = false; truncated = false; }

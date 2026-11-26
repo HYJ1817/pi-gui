@@ -92,6 +92,7 @@ export function createPicker({
   let blocked = Boolean(disabled);
   let busy = false;
   let destroyed = false;
+  let pointerOpened = false;
   let menuEl = null;
 
   const currentOption = () => items.find((option) => option.value === current) || null;
@@ -165,6 +166,12 @@ export function createPicker({
   function onMenuKeyDown(event) {
     // Never move or commit while an IME is composing (e.g. a future search).
     if (event.isComposing || event.keyCode === 229) return;
+    /* Opening with the pointer must not paint the keyboard focus ring on the
+     * pre-focused option. As soon as the user navigates by keyboard, restore
+     * the normal `:focus-visible` indicator. */
+    if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      menuEl?.classList.remove('is-pointer-open');
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       moveFocus(event.key === 'ArrowDown' ? 1 : -1);
@@ -188,6 +195,7 @@ export function createPicker({
   function build(anchored) {
     menuEl = anchored;
     menuEl.classList.add('ds-picker-menu');
+    menuEl.classList.toggle('is-pointer-open', pointerOpened);
     if (menuClassName) menuEl.classList.add(menuClassName);
     menuEl.style.minWidth = `${Math.min(MAX_MENU_WIDTH, Math.max(MIN_MENU_WIDTH, trigger.getBoundingClientRect().width))}px`;
     menuEl.addEventListener('keydown', onMenuKeyDown);
@@ -244,12 +252,15 @@ export function createPicker({
     }
   }
 
-  trigger.addEventListener('click', () => {
+  trigger.addEventListener('click', (event) => {
     if (trigger.disabled) return;
     if (menu.isOpen()) {
       closeMenu();
       return;
     }
+    /* Keyboard activation (Enter/Space) reports detail 0 and keeps the focus
+     * ring; a real pointer click suppresses it until arrow navigation. */
+    pointerOpened = (event.detail || 0) > 0;
     menu.open();
   });
 

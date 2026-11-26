@@ -18,7 +18,21 @@
 .ui5-logs-body { min-height: 0; overflow: auto; }
 .settings-detail-card .ui5-logs-body { overflow: visible; }
 .ui5-logs-summary { margin: 0; }
-.ui5-logs-summary > div,
+/* 状态指标与「日志设置」共用同一条连续行节奏：56px、11px 内边距、
+ * 行间只留一条发丝线，不再使用独立的灰底卡片块。 */
+.ui5-logs-summary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-6);
+  min-height: 56px;
+  padding: 11px 0;
+  font-size: var(--text-md-plus);
+  line-height: var(--leading-body);
+}
+.ui5-logs-summary > div + div { border-top: 1px solid var(--ds-border-default); }
+.ui5-logs-summary dt { color: var(--ds-text-primary); font-weight: var(--font-weight-medium); }
+.ui5-logs-summary dd { margin: 0; color: var(--ds-text-primary); font-size: var(--text-md); text-align: right; font-variant-numeric: tabular-nums; }
 .diagnostic-row,
 .ui5-logs-file {
   display: flex;
@@ -30,9 +44,6 @@
   font-size: var(--text-md);
   line-height: var(--leading-body);
 }
-.ui5-logs-summary dt { color: var(--ds-text-secondary); }
-.ui5-logs-summary dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
-.ui5-logs-summary > div:last-child,
 .diagnostic-row:last-child,
 .ui5-logs-file:last-child { border-bottom: 0; }
 .ui5-logs-inline-note,
@@ -58,7 +69,15 @@
 }
 .ui5-logs-filters { margin-bottom: var(--ui-space-3); }
 .ui5-logs-filters > .btn { margin-inline-start: auto; }
+.ui5-logs-filter { flex: 0 0 auto; }
+.ui5-logs-filter .ds-picker-trigger { min-width: 116px; }
+.ui5-log-filter-source .ds-picker-trigger { min-width: 138px; }
 .ui5-logs-search { flex: 1 1 220px; }
+.ui5-logs-setting-picker { width: 196px; max-width: 100%; }
+.ui5-logs-setting-picker .ds-picker-trigger { width: 100%; }
+.ui5-logs-range-picker { width: 180px; max-width: 100%; }
+.ui5-logs-range-picker .ds-picker-trigger { width: 100%; }
+.ui5-logs-clear-row { margin-top: var(--ui-space-2); border-top: 1px solid var(--ds-border-default); }
 /* 多动作行与分段控件同规：窄窗让控件整块换到下一行，标签不挤成竖排。 */
 .ui5-logs-modal .settings-row:has(> .settings-row-control > .ui5-logs-actions) {
   flex-wrap: wrap;
@@ -82,8 +101,10 @@
   overflow-wrap: anywhere;
 }
 .ui5-log-entry-head > * { margin-inline-end: var(--ui-space-2); }
-.ui5-log-time { color: var(--ds-text-secondary); font-variant-numeric: tabular-nums; }
+.ui5-log-time { color: var(--ds-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ui5-log-level { white-space: nowrap; }
+/* 窄窗里来源名（如 “Pi Bridge”）不能被空格拆成两行，整词换行即可。 */
+.ui5-log-source { white-space: nowrap; }
 .ui5-log-level[data-level="ERROR"],
 .ui5-log-level[data-level="FATAL"],
 .ui5-log-entry[data-level="ERROR"] .ui5-log-code,
@@ -126,8 +147,16 @@
 .ui5-logs-manifest { margin: var(--ui-space-2) 0 var(--ui-space-4); padding-left: var(--ui-space-5); color: var(--ds-text-secondary); font: var(--text-sm) / var(--leading-body) var(--font-mono); overflow-wrap: anywhere; }
 .ui5-logs-export-actions { justify-content: flex-end; margin-top: var(--ui-space-4); }
 @media (max-width: 760px) {
-  .ui5-logs-filters > select { flex: 1 1 120px; min-width: 0; order: 1; }
+  .ui5-logs-filter { flex: 1 1 120px; min-width: 0; order: 1; }
+  .ui5-logs-filter .ds-picker-trigger { width: 100%; min-width: 0; }
   .ui5-logs-filters > .btn { order: 2; }
   .ui5-logs-search { flex-basis: 100%; order: 3; }
   .ui5-logs-actions { justify-content: flex-end; }
+  .ui5-logs-setting-picker { width: 100%; }
+  .ui5-logs-modal .settings-row.ds-settings-row-flat { flex-wrap: wrap; gap: var(--ui-space-2) var(--ui-space-6); }
+  .ui5-logs-modal .settings-row.ds-settings-row-flat > .settings-row-control {
+    flex: 1 1 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+  }
 }
