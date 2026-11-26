@@ -16,9 +16,27 @@ function modelTurnProof(observed, owner, cursor, expectedOutput) {
   const start = own.find(event => event.type === 'agent_start'), settled = own.find(event => event.type === 'agent_settled');
   const turn = own.filter(event => start && event.seq >= start.seq && (!settled || event.seq <= settled.seq));
   const starts = turn.filter(event => event.type === 'tool_execution_start'), ends = turn.filter(event => event.type === 'tool_execution_end');
-  const pairs = starts.map(event => ({ start: event, ends: ends.filter(end => end.toolCallId === event.toolCallId && end.toolName === event.toolName && end.seq > event.seq) }));
-  const toolPairsComplete = starts.length === ends.length && new Set(starts.map(event => event.toolCallId)).size === starts.length
-    && pairs.every(pair => typeof pair.start.toolCallId === 'string' && pair.start.toolCallId.length > 0 && pair.ends.length === 1);
+  const hasId = event => typeof event.toolCallId === 'string' && event.toolCallId.length > 0;
+  const idMode = starts.every(hasId) && ends.every(hasId), noIdMode = !starts.some(hasId) && !ends.some(hasId);
+  let pairs;
+  if (idMode) {
+    pairs = starts.map(event => ({ start: event, ends: ends.filter(end => end.toolCallId === event.toolCallId && end.toolName === event.toolName && end.seq > event.seq) }));
+  } else if (noIdMode) {
+    // Production SSE deliberately drops tool call ids outside its closed wire-id
+    // charset (real Pi ids contain '|'). Pair then only by same tool name, order,
+    // and exactly-once consumption, never by guessed identity.
+    const used = new Set();
+    pairs = starts.map(start => {
+      const end = ends.find((candidate, index) => !used.has(index) && candidate.seq > start.seq && candidate.toolName === start.toolName);
+      if (end) used.add(ends.indexOf(end));
+      return { start, ends: end ? [end] : [] };
+    });
+    pairs.push(...[...ends.keys()].filter(index => !used.has(index)).map(index => ({ start: null, ends: [] })));
+  } else {
+    pairs = starts.map(() => ({ start: null, ends: [] }));
+  }
+  const toolPairsComplete = starts.length === ends.length && (idMode ? new Set(starts.map(event => event.toolCallId)).size === starts.length : noIdMode)
+    && pairs.every(pair => pair.start && pair.ends.length === 1);
   const completed = pairs.filter(pair => pair.ends.length === 1 && pair.ends[0].isError === false);
   const assistant = turn.findLast(event => event.type === 'message_end' && event.messageRole === 'assistant');
   const agentEnd = turn.findLast(event => event.type === 'agent_end');
@@ -194,6 +212,14 @@ async function runOfflineSafetyChecks() {
     assert.equal(modelTurnProof(complete.filter(e => e.type !== 'agent_end'), owner, 0, 'OK').outputMatches, false);
     assert.equal(modelTurnProof(complete.filter(e => e.seq !== 5), owner, 0, 'OK').toolPairsComplete, false);
     assert.equal(modelTurnProof(complete.map(e => e.seq === 5 ? { ...e, isError: true } : e), owner, 0, 'OK').writeThenRead, false);
+    // Real Pi call ids contain '|', outside the production SSE wire-id charset,
+    // so the public projection legitimately carries no toolCallId at all.
+    const projected = complete.map(({ toolCallId, ...rest }) => rest);
+    const projectedGood = modelTurnProof(projected, owner, 0, 'OK');
+    assert.equal(projectedGood.outputMatches && projectedGood.toolPairsComplete && projectedGood.writeThenRead, true);
+    assert.equal(modelTurnProof(projected.filter(e => e.seq !== 5), owner, 0, 'OK').toolPairsComplete, false);
+    assert.equal(modelTurnProof(projected.map(e => e.seq === 2 ? { ...e, toolCallId: 'w' } : e), owner, 0, 'OK').toolPairsComplete, false);
+    assert.equal(modelTurnProof(projected.map(e => e.seq === 3 ? { ...e, isError: true } : e), owner, 0, 'OK').writeThenRead, false);
     const history = { ok: true, sessionId: 's', truncated: false, messages: [{ role: 'user', text: 'Reply OK' }, { role: 'assistant', text: 'OK' }],
       toolSummary: { uncertain: false, items: ['write', 'read'].map(toolName => ({ toolName, source: 'confirmed', status: 'completed', messagePosition: 1 })) } };
     assert.equal(historyMatches(historyProof(history, 's', 'OK')), true);
