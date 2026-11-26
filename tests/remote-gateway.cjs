@@ -2034,7 +2034,7 @@ async function main() {
       const bytesBefore = fs.readFileSync(path.join(dataDir, 'remote-revocations.json'), 'utf8');
       assert.throws(() => store2._appendTombstone(store2.get(deviceId)), /unknown revocation state/);
       assert.equal(fs.readFileSync(path.join(dataDir, 'remote-revocations.json'), 'utf8'), bytesBefore, 'journal bytes preserved verbatim');
-    } finally { fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+    } finally { await ctx.remote.close(); fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
   });
 
   await t('fsec-005b: double write failure is memory-only, honestly flagged, and durable bytes never gain a false annotation', async () => {
