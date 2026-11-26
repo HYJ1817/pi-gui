@@ -132,9 +132,19 @@ export class DeviceStore {
           }
           this.devices.set(d.deviceId, d);
           if (typeof d.devicePublicKey === 'string') {
-            if (this.keyIndex.has(d.devicePublicKey)) { // key uniqueness — fail closed
-              d.revoked = true; d.active = false; corrupt = true;
-            } else this.keyIndex.set(d.devicePublicKey, d.deviceId);
+            // FSEC-005-R8-001: only NON-REVOKED records compete for the live
+            // key index. A revoked predecessor is expected to keep the same
+            // key in durable bytes — rotation revokes the predecessor while
+            // the replacement carries the key forward. Inserting the revoked
+            // record first made every legitimate replacement look like a
+            // duplicate and revoked it persistently, so a completed pairing
+            // was destroyed by the mere act of restarting.
+            if (!d.revoked) {
+              const existingId = this.keyIndex.get(d.devicePublicKey);
+              if (existingId !== undefined) { // live-key uniqueness — fail closed
+                d.revoked = true; d.active = false; corrupt = true;
+              } else this.keyIndex.set(d.devicePublicKey, d.deviceId);
+            }
           }
         }
       }

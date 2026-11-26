@@ -2129,6 +2129,59 @@ async function main() {
     } finally { await ctx.remote.close().catch(() => {}); fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
   });
 
+  await t('fsec-005-r8: cross-device rotation survives restart — revoked predecessor never poisons the replacement registration', async () => {
+    // FSEC-005-R8-001: revoked predecessors were inserted into the live-key
+    // index during reconstruction, so a legitimate rotation replacement
+    // (different deviceId, same key — a genuine device replacement re-pair)
+    // looked like a duplicate and was persistently revoked by restart
+    // validation. Restoring the journal could never recover it.
+    const { DeviceStore } = await import(MODULES.deviceStore);
+    const ctx = await boot();
+    try {
+      const paired = await pair(ctx);
+      paired.device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const originalId = paired.device.deviceId;
+      const key = ctx.remote.deviceStore.get(originalId).devicePublicKey;
+      const dataDir = ctx.dataDir;
+      await ctx.remote.close();
+      // Device replacement: revoke the original, register the SAME key under
+      // a NEW deviceId (the physical replacement's identity).
+      const store = new DeviceStore(dataDir, () => {});
+      store.revoke(originalId);
+      const repResult = store.register({
+        deviceId: 'dev_rotation_replacement_01', devicePublicKey: key,
+        grantedScopes: ['projects.read', 'sessions.read'],
+        serviceFingerprint: ctx.remote.deviceStore ? ctx.remote.deviceStore.get(originalId)?.serviceFingerprint || 'a'.repeat(64) : 'a'.repeat(64),
+        expiresAt: new Date(Date.now() + 3600000).toISOString(), deviceName: 'replacement',
+      });
+      assert.ok(repResult, 'replacement registration accepted');
+      // Restart: the replacement must survive — the revoked predecessor does
+      // not compete for the live key index.
+      const store2 = new DeviceStore(dataDir, () => {});
+      const rep = store2.get('dev_rotation_replacement_01');
+      assert.ok(rep, 'replacement record exists after restart');
+      assert.equal(rep.revoked, false, 'FSEC-005-R8-001: replacement must not be revoked by the predecessor durable bytes');
+      assert.equal(store2.active('dev_rotation_replacement_01') !== null, true, 'replacement is authorized after restart');
+      // The predecessor remains revoked — rotation direction is not blurred.
+      assert.equal(store2.get(originalId).revoked, true, 'predecessor stays revoked');
+      // And duplicate validation still fires for two NON-revoked records
+      // sharing a key — the relaxation must not weaken real collisions.
+      const dataDir2 = dataDir + '-dup';
+      fs.mkdirSync(dataDir2, { recursive: true });
+      const mk = (id) => ({
+        deviceId: id, deviceName: 't', devicePublicKey: key,
+        serviceFingerprint: 'a'.repeat(64), serviceId: 'svc-aaaaaaaaaaaaaaaa',
+        grantedScopes: ['projects.read'], grants: {}, active: true, revoked: false,
+        replayEpoch: 1, expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        registeredAt: new Date().toISOString(), nonces: {}, timestampFloor: 0,
+      });
+      fs.writeFileSync(path.join(dataDir2, 'remote-devices.json'), JSON.stringify({ devices: [mk('dev_dup000001'), mk('dev_dup000002')] }));
+      const store3 = new DeviceStore(dataDir2, () => {});
+      assert.equal(store3.get('dev_dup000002').revoked, true, 'genuine non-revoked duplicate still fails closed');
+      fs.rmSync(dataDir2, { recursive: true, force: true });
+    } finally { await ctx.remote.close().catch(() => {}); fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
   await t('fsec-005b: double write failure is memory-only, honestly flagged, and durable bytes never gain a false annotation', async () => {
     const ctx = await boot();
     try {
