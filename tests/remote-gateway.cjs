@@ -2037,6 +2037,54 @@ async function main() {
     } finally { await ctx.remote.close(); fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
   });
 
+  await t('fsec-005-r6b: unknown-journal degradation stays memory-only even when unrelated startup corruption persists the file', async () => {
+    // FSEC-005-R6B-001 combined-state reproduction: two valid devices, one
+    // with corrupted replay state (legit repair -> persist), plus an
+    // unreadable journal (memory-only degradation). Pre-fix, the persist
+    // triggered by the replay repair serialized the degradation — journal
+    // restoration could never heal the intact device.
+    const { DeviceStore } = await import(MODULES.deviceStore);
+    const ctx = await boot();
+    try {
+      const pairA = await pair(ctx);
+      pairA.device.deviceId = ctx.remote.deviceStore.list()[0].deviceId;
+      const pairB = await pair(ctx);
+      pairB.device.deviceId = ctx.remote.deviceStore.list()[1].deviceId;
+      const idA = pairA.device.deviceId;
+      const idB = pairB.device.deviceId;
+      const dataDir = ctx.dataDir;
+      await ctx.remote.close();
+      // Corrupt device A's replay state (legitimately repairable corruption)
+      // AND make the journal unreadable.
+      const mainBytes = JSON.parse(fs.readFileSync(path.join(dataDir, 'remote-devices.json'), 'utf8'));
+      const recA = mainBytes.devices.find(d => d.deviceId === idA);
+      delete recA.nonces; // replay corruption -> repair path
+      fs.writeFileSync(path.join(dataDir, 'remote-devices.json'), JSON.stringify(mainBytes), 'utf8');
+      fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), '{{not json', 'utf8');
+      const store2 = new DeviceStore(dataDir, () => {});
+      assert.equal(store2.revocationJournalUnknown, true, 'journal is unknown');
+      // The persist triggered by replay repair must NOT serialize the
+      // journal degradation of device B — B was intact all along.
+      const diskAfter = JSON.parse(fs.readFileSync(path.join(dataDir, 'remote-devices.json'), 'utf8'));
+      const diskB = diskAfter.devices.find(d => d.deviceId === idB);
+      assert.equal(diskB.active, true, 'FSEC-005-R6B-001: unrelated persist must not bake degradation into durable bytes');
+      assert.equal(diskB.requiresRepair === true, false, 'no degradation requiresRepair on disk');
+      // Device A's legit replay repair DID persist: epoch bumped, inactive.
+      const diskA = diskAfter.devices.find(d => d.deviceId === idA);
+      assert.equal(diskA.active, false, 'legit replay repair persists its own deactivation');
+      assert.equal(diskA.replayEpoch, 2, 'replay repair epoch bump is durable');
+      // Now restore the journal and restart: B must heal, A stays repaired.
+      fs.writeFileSync(path.join(dataDir, 'remote-revocations.json'), JSON.stringify({ revocations: [] }), 'utf8');
+      const store3 = new DeviceStore(dataDir, () => {});
+      assert.equal(store3.revocationJournalUnknown, false, 'journal readable again');
+      const healedB = store3.get(idB);
+      assert.equal(healedB.active, true, 'FSEC-005-R6B-001: journal restoration must recover the intact device');
+      assert.equal(store3.active(idB) !== null, true, 'B fully eligible again');
+      const stillA = store3.get(idA);
+      assert.equal(stillA.active, false, 'legit replay repair does NOT heal — it requires re-pair by design');
+    } finally { await ctx.remote.close().catch(() => {}); fs.rmSync(ctx.dataDir, { recursive: true, force: true }); }
+  });
+
   await t('fsec-005b: double write failure is memory-only, honestly flagged, and durable bytes never gain a false annotation', async () => {
     const ctx = await boot();
     try {

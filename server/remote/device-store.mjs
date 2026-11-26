@@ -159,7 +159,18 @@ export class DeviceStore {
     this.revocationJournalUnknown = journal.state === 'unknown';
     if (this.revocationJournalUnknown) {
       for (const d of this.devices.values()) {
-        if (!d.revoked) { d.active = false; d.requiresRepair = true; }
+        if (!d.revoked) {
+          // FSEC-005-R6B-001: capture the pre-degradation field state so
+          // serialization can strip the degradation — it must remain
+          // memory-only even when an UNRELATED startup repair (corrupt replay
+          // state) legitimately persists the file. Persisting active=false
+          // here would survive journal restoration and force needless
+          // re-pairing of devices that were intact all along.
+          if (d._preDegradation === undefined) {
+            d._preDegradation = { active: d.active, requiresRepair: d.requiresRepair };
+          }
+          d.active = false; d.requiresRepair = true;
+        }
       }
     } else {
       for (const entry of journal.entries) {
@@ -178,6 +189,17 @@ export class DeviceStore {
     const serializable = [...this.devices.values()].map(d => {
       const copy = { ...d };
       delete copy.revocationPersistenceFailed;
+      // FSEC-005-R6B-001: unknown-journal degradation is memory-only, no
+      // matter what else triggers this persist. Explicit later operations
+      // (epoch bump) clear the marker on their own record when their own
+      // deactivation is intentional and durable.
+      const pre = copy._preDegradation;
+      delete copy._preDegradation;
+      if (this.revocationJournalUnknown && pre) {
+        copy.active = pre.active;
+        if (pre.requiresRepair === undefined) delete copy.requiresRepair;
+        else copy.requiresRepair = pre.requiresRepair;
+      }
       return copy;
     });
     fs.writeFileSync(tmp, JSON.stringify({ devices: serializable }, null, 2), 'utf8');
@@ -462,6 +484,10 @@ export class DeviceStore {
     // request is admitted. Epoch bump alone still let the SAME key sign under
     // the new epoch without re-pairing (round-6 R6-SECURITY-2) — fail closed.
     d.active = false; d.requiresRepair = true;
+    // This deactivation is intentional and durable — not journal-unknown
+    // degradation. Clearing the marker lets it serialize even while the
+    // journal is unreadable.
+    delete d._preDegradation;
     try {
       this._persist();
     } catch (e) {
