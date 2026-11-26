@@ -40,6 +40,7 @@ const MODULES = {
   index: '../server/remote/index.mjs',
   protocol: '../server/remote/protocol.mjs',
   keys: '../server/remote/keys.mjs',
+  deviceStore: '../server/remote/device-store.mjs',
 };
 
 async function boot(overrides = {}) {
@@ -2159,6 +2160,68 @@ async function main() {
       assert.ok(!joined.includes('sk-live-ABC123'), `raw exception text must never reach the log: ${joined.slice(0, 300)}`);
       assert.ok(!joined.includes('synthetic-secret'), `credential-shaped exception text must never reach the log: ${joined.slice(0, 300)}`);
     } finally { await ctx.cleanup(); }
+  });
+
+  await t('fr-001: failed re-registration restores the exact pre-transaction key-index owner (FR-001)', async () => {
+    // Failed re-registration of a revoked deviceId must not resurrect or
+    // hijack key-index entries: the index owner after rollback must be
+    // exactly what it was before the transaction, and a later rotation of
+    // the same key must revoke the current owner — never leave two active
+    // records sharing one key.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr001-'));
+    try {
+      const { DeviceStore } = await import(MODULES.deviceStore);
+      const store = new DeviceStore(dir);
+      const sharedKey = crypto.randomBytes(32).toString('base64url');
+      const mk = (deviceId, devicePublicKey) => store.register({ deviceId, devicePublicKey, grantedScopes: ['projects.read', 'sessions.read'], serviceFingerprint: 'a'.repeat(64), expiresAt: new Date(Date.now() + 3600_000).toISOString(), deviceName: 'synthetic fixture', grantedProjectIds: [] });
+      mk('device_revoked_before', sharedKey);
+      store.revoke('device_revoked_before');
+      mk('device_current_owner', sharedKey);
+      const before = store.deviceIdForKey(sharedKey);
+      assert.equal(before, 'device_current_owner', 'fixture invariant');
+      const disk = fs.readFileSync(store.path, 'utf8');
+      fs.mkdirSync(store.path + '.tmp');
+      try {
+        assert.throws(() => mk('device_revoked_before', crypto.randomBytes(32).toString('base64url')));
+      } finally { fs.rmdirSync(store.path + '.tmp'); }
+      assert.equal(fs.readFileSync(store.path, 'utf8'), disk, 'fault injection must leave the durable store unchanged');
+      assert.equal(store.deviceIdForKey(sharedKey), before, 'rollback must restore the exact pre-transaction key-index owner');
+      mk('device_next_owner', sharedKey);
+      const activeForKey = [...store.devices.values()].filter(d => d.devicePublicKey === sharedKey && store.active(d.deviceId)).map(d => d.deviceId);
+      assert.equal(activeForKey.length, 1, `successful key rotation must not leave two active records sharing one key: ${JSON.stringify(activeForKey)}`);
+      assert.equal(store.get('device_current_owner').revoked, true, 'the rotation must revoke the prior owner');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  await t('fr-002: failed nonce persistence restores retention-pruned entries (FR-002)', async () => {
+    // Retention pruning is part of the transaction's memory mutation. A
+    // failed persist must restore the pruned entries too — otherwise memory
+    // enforces a stricter rejection surface than the durable state justifies
+    // (memory must never diverge from disk in EITHER direction).
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fr002-'));
+    try {
+      const { DeviceStore } = await import(MODULES.deviceStore);
+      const { REMOTE_V1 } = await import(MODULES.protocol);
+      const store = new DeviceStore(dir);
+      const id = 'device_nonce_fixture';
+      const nonce = () => crypto.randomBytes(32).toString('base64url');
+      store.register({ deviceId: id, devicePublicKey: nonce(), grantedScopes: ['projects.read', 'sessions.read'], serviceFingerprint: 'a'.repeat(64), expiresAt: new Date(Date.now() + 3600_000).toISOString(), deviceName: 'synthetic fixture', grantedProjectIds: [] });
+      const old = nonce(), current = nonce(), attempted = nonce();
+      const oldTimestamp = Date.now() - (REMOTE_V1.signedRequest.replay.retentionSeconds + 60) * 1000;
+      assert.equal(store.consumeNonce(id, old, oldTimestamp), true);
+      const floor = Date.now();
+      assert.equal(store.consumeNonce(id, current, floor), true);
+      const record = store.get(id);
+      const before = { ...record.nonces };
+      const disk = fs.readFileSync(store.path, 'utf8');
+      fs.mkdirSync(store.path + '.tmp');
+      try { assert.throws(() => store.consumeNonce(id, attempted, floor + 1)); }
+      finally { fs.rmdirSync(store.path + '.tmp'); }
+      assert.deepEqual(record.nonces, before, 'failed persistence must restore entries pruned earlier in this operation');
+      assert.equal(record.timestampFloor, floor, 'timestamp floor rolls back');
+      assert.equal(fs.readFileSync(store.path, 'utf8'), disk, 'disk unchanged by the failed transaction');
+      assert.equal(store.consumeNonce(id, old, oldTimestamp), false, 'expired timestamps remain rejected');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
   await t('production pairing completes: pending -> approve -> same-request retry', async () => {

@@ -131,17 +131,34 @@ export class DeviceStore {
     // rather than leaving two records or rejecting the re-pair.
     // FS-001 rollback requires the TRUE pre-transaction state — snapshot
     // BEFORE mutating anything (the rotation block below flips the fields).
+    // FR-001: capture the COMPLETE pre-transaction state of every index and
+    // record this transaction may touch, BEFORE mutating anything. Rollback
+    // must restore exactly this — no key-index entry may be resurrected that
+    // did not point where the restoration puts it back, or a failed write
+    // would overwrite another live device's binding.
+    const priorRec = boundTo !== null && boundTo !== deviceId ? this.devices.get(boundTo) : null;
+    const preTx = {
+      hadExisting: isRecord(existing),
+      existing: existing ?? null,
+      existingKeyOwned: isRecord(existing) && typeof existing.devicePublicKey === 'string' && this.keyIndex.get(existing.devicePublicKey) === deviceId,
+      priorRec,
+      priorRevoked: priorRec?.revoked,
+      priorActive: priorRec?.active,
+      priorKeyOwned: priorRec ? this.keyIndex.get(priorRec.devicePublicKey) === boundTo : false,
+    };
     var priorState = null;
-    if (boundTo !== null && boundTo !== deviceId) {
-      const priorRec = this.devices.get(boundTo);
-      if (priorRec) priorState = { rec: priorRec, revoked: priorRec.revoked, active: priorRec.active, hadKeyBinding: this.keyIndex.get(priorRec.devicePublicKey) === boundTo };
-    }
+    if (priorRec) priorState = { rec: priorRec, revoked: priorRec.revoked, active: priorRec.active, hadKeyBinding: preTx.priorKeyOwned };
     if (boundTo !== null && boundTo !== deviceId) {
       const prior = this.devices.get(boundTo);
       if (prior) { prior.revoked = true; prior.active = false; this.keyIndex.delete(devicePublicKey); }
     }
     const replayEpoch = isRecord(existing) && Number.isSafeInteger(existing.replayEpoch) ? existing.replayEpoch + 1 : 1;
-    if (existing) this.keyIndex.delete(existing.devicePublicKey);
+    // FR-001 mutation side: the predecessor's key-index entry may only be
+    // deleted when it actually points at THIS deviceId. When the old key was
+    // since re-paired to a different live device, that binding belongs to the
+    // other device — deleting it would silently unbind their key and break
+    // the rotation invariant even on the success path.
+    if (existing && typeof existing.devicePublicKey === 'string' && this.keyIndex.get(existing.devicePublicKey) === deviceId) this.keyIndex.delete(existing.devicePublicKey);
     const grants = {};
     for (const pid of grantedProjectIds) if (typeof pid === 'string' && pid) grants[pid] = true;
     const rec = {
@@ -173,9 +190,13 @@ export class DeviceStore {
       // replaced predecessor) so memory keeps describing exactly what persists.
       this.devices.delete(deviceId);
       this.keyIndex.delete(devicePublicKey);
-      if (isRecord(existing)) {
-        this.devices.set(deviceId, existing);
-        if (typeof existing.devicePublicKey === 'string') this.keyIndex.set(existing.devicePublicKey, deviceId);
+      if (preTx.hadExisting) {
+        this.devices.set(deviceId, preTx.existing);
+        // Restore the predecessor's key-index entry ONLY if the transaction
+        // actually removed one — i.e. the entry pointed at this deviceId
+        // before the mutation. A binding that was absent or owned by another
+        // device must never be resurrected/hijacked by rollback (FR-001).
+        if (preTx.existingKeyOwned) this.keyIndex.set(preTx.existing.devicePublicKey, deviceId);
       }
       if (priorState) {
         priorState.rec.revoked = priorState.revoked;
@@ -256,9 +277,13 @@ export class DeviceStore {
     if (timestamp < d.timestampFloor) return false;
     if (timestamp > now + SKEW_MS) return false;
     if (d.nonces[nonce] !== undefined) return false;
-    // Prune: evictable only when < floor AND older than retention.
+    // Prune: evictable only when < floor AND older than retention. The pruned
+    // entries are part of this transaction's memory mutation (FR-002): a
+    // failed persist must restore them or memory would enforce a stricter
+    // rejection surface than the durable state justifies.
+    const pruned = [];
     for (const [n, ts] of Object.entries(d.nonces)) {
-      if (ts < d.timestampFloor && ts < now - RETENTION_MS) delete d.nonces[n];
+      if (ts < d.timestampFloor && ts < now - RETENTION_MS) { pruned.push([n, ts]); delete d.nonces[n]; }
     }
     if (Object.keys(d.nonces).length >= L.maxNonceEntriesPerDevice) return false; // fail closed
     d.nonces[nonce] = timestamp;
@@ -271,6 +296,7 @@ export class DeviceStore {
       // the consumed state must never exist only in memory.
       delete d.nonces[nonce];
       d.timestampFloor = previousFloor;
+      for (const [n, ts] of pruned) d.nonces[n] = ts;
       throw e;
     }
     return true;
