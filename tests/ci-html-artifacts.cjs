@@ -141,6 +141,10 @@ test('desktop security workflow is manual, read-only, fail-closed and never a mo
     assert.ok(content.includes(`${name}: \${{ runner.temp }}/visual-replies-security-\${{ github.run_id }}-\${{ github.run_attempt }}`));
   }
   assert.match(content, /New-Item -ItemType Directory -Path "\$env:TEMP"[^\n]*-ErrorAction Stop/);
+  const prepareTemp = content.indexOf('New-Item -ItemType Directory');
+  for (const dependent of ['uses: actions/checkout', 'uses: actions/setup-node', 'run: npm ci', 'run: node scripts/prepare-electron-ci.mjs']) {
+    assert.ok(prepareTemp < content.indexOf(dependent), `create the job TEMP before ${dependent}`);
+  }
   assert.match(content, /\$\{\{ env\.TEMP \}\}\/pi-html-artifact-security-\*\/report\.json/);
   assert.doesNotMatch(content, /HTML_ARTIFACT_EVIDENCE_ROOT/, 'do not depend on an unimplemented driver API');
   assert.match(content, /NODE_VERSION: '24\.22\.1'/);

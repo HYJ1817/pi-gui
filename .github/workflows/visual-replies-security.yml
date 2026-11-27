@@ -24,6 +24,10 @@ jobs:
       TMP: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
       TMPDIR: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      - name: Prepare fresh fixture evidence directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Path "$env:TEMP" -ErrorAction Stop | Out-Null
+
       - name: Checkout
         uses: actions/checkout@v5
         with:
@@ -41,10 +45,6 @@ jobs:
       - name: Prepare Electron runtime
         shell: pwsh
         run: node scripts/prepare-electron-ci.mjs
-
-      - name: Prepare fresh fixture evidence directory
-        shell: pwsh
-        run: New-Item -ItemType Directory -Path "$env:TEMP" -ErrorAction Stop | Out-Null
 
       - name: Run normal-sandbox Artifact security
         run: npm run test:html-artifacts:security:electron
