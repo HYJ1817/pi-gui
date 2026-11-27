@@ -101,3 +101,71 @@ node server/html-artifact-maintenance-cli.js --data-dir "$Fresh" --agent-dir "$A
 - 回滚按文档→测试→维护→Classic→store/lock逆序revert上述B2提交，保留B3和其他线。没有删除用户原生快照的迁移；旧版本不认识v2残留锁时应继续保留证据，不手工强删。产物另行回退/重建。
 
 结论分开：开发完成；代码验收待独立复审/集成证明；不代表允许合并或发布。**candidates-only已验证，GC没有完成、也没有开放。**
+
+## B4 · R-B I1：锁释放失败不再确认成功（2026-11-27）
+
+本节仅追加本轮事实，不改写以上 B2 历史结论。指定工作树为 `feat/visual-replies-p2-b`，起点 `df866d7a`，开工时 clean；未新建 worktree、未修改根检出或其它树。任务限定离线，所以未 fetch、未核对新的远端 CI；历史 `45952490979` 不作为本轮完整证明。未访问外网、下载依赖、调用 Pi/模型或其它 Agent。
+
+### 修复及错误契约
+
+复用统一 `lock()`、同一物理根的内核 gate、既有路径/文件身份及不可变快照，不新增恢复接口或 force-unlock。
+
+- 新增闭合码 `html_artifact_storage_release_failed`。动作已正常完成但释放文件锁未确认时，publish/read/collect/cleanupTemporary/stats/recoverLock 均拒绝 Promise，不返回完整成功。异常只含固定 message/code；不附系统异常、cause、路径、HTML、owner 或结果 payload。
+- **释放失败不是回滚或“确定未执行”**：publish 已 rename 的 HTML/reference/pending 全部保留；相同原生元组的幂等重试返回原 reference，字节、createdAt、digest 和 pending 不变。collect 已完成的 pending 清除、cleanupTemporary 已完成的固定 TEMP 清理也保留，不能据错误再次假定这些效果未发生；不开放自动 GC。
+- 同时发生业务/获取失败与释放失败时，保留原固定业务错误（例如 conflict、storage_failed、storage_corrupt），不让 finally 覆盖根因。原实例仍保留未完成释放的私有证明；后续安全操作可显式暴露持续释放失败。
+- 只有创建该锁的 Store 实例保留 `{文件身份, 原字节}` 的内存证明。下次调用在原目录身份校验和同一内核 gate 内，至多重试一次该残锁释放，成功后才执行新动作。持续 EACCES 返回 release_failed；不重跑业务、不自旋，也不把自身已知残锁误报为 busy。若确有另一个实例持 gate，仍按真实互斥返回 busy。
+- 健康锁要求完整 owner/nonce 字节一致。获取期间 ENOSPC/短写时，只接受已知新建 inode 内、与本次预期 owner 相符的字节前缀，捕获该前缀作精确释放证明；不把其它内容当作自己的部分写。目录、inode 或 owner 字节被替换时拒绝 unsafe，外来文件逐字节保留。缺失锁可确认释放；unlink 空操作或删除后抛错均不能伪装已确认成功。
+- 上述证明不共享给同 PID 的其它 Store，不持久化、不依赖 PID 存在或锁龄；进程重启后仍只能使用既有死亡身份证明。没有证明的 torn/legacy/unknown 锁继续拒绝恢复。释放文件锁失败后仍收尾 kernel gate；close 失败单独报告 storage_failed，不重试可能已复用的 fd。
+- 维护白名单透传新码为 `{ok:false,code}`，CLI 生产入口据此非零退出。server.js 启动移除空 catch，只输出白名单固定失败码，Artifact 不可用不阻断其它功能启动；不输出恢复成功日志。Bridge/HTTP 的既有安全兜底仍为 html_store_unavailable，系统统计为 unknown、不伪报零值；核对这些消费端及扩展错误白名单后无需增加新的外部码。
+
+本次 Store 超过 500 行，保留集中实现：新增内容均属于既有同一锁生命周期，拆出另一个状态 owner 会扩大审查和回滚范围；不借故重构快照、配额或原生授权。
+
+### 提交及集成顺序
+
+1. `f1bdd35f80b8f7dfd392c4ed247285d1193b15a5`：共享 Store 释放语义与原实例有界重试，同时修正历史 publish 吞错与新增 recoverLock 共因。
+2. `9ce0a8597ba4ea098e69c0eef7de05f6571b4dc1`：新增启动/维护报告层，独立于共享 Store 回滚边界。
+3. `8030ef7aa19f50ea2258cd979e05883abab5358d`：lock/maintenance 回归；未修改 store/backend/performance 原套件或 package/CI。
+4. 本追加报告单独提交；可用 `git log -1 --format=%H -- docs/visual-replies-p2-b-acceptance.md` 定位文档 SHA。
+
+所有提交信息经 `git rev-parse --git-path COMMIT_MSG_TMP.txt` 定位、Bash printf 写入，前三字节经 `head -c 3 | xxd` 确认非 EF BB BF；均带本轮要求的 Co-Authored-By。仅 commit，不 push、PR、合并或发布。
+
+### 本轮实测与证据
+
+Windows 11 / Node v24.22.1；写盘均为 os.tmpdir 下的隔离 fixture，未对真实项目/原生会话做写操作。最终五套命令逐条运行、各 exit 0，**不是一次 npm test 或完整 canonical**。运行时 HEAD 仍为 df866d7a 加本轮未提交改动；被测五个产品/测试文件首尾 SHA256 漂移 0/5，提交后内容与本次证据绑定，不冒称新 SHA 的 CI。
+
+| 命令（均在 B 树） | pass / fail / skip | 实际断言 | 耗时 ms |
+| --- | --- | --- | ---: |
+| `node tests/html-artifact-lock.cjs` | 33 / 0 / 0 场景 | 270 | 18780.053 |
+| `node tests/html-artifact-maintenance.cjs` | 30 / 0 / 0 场景 | 189 | 13845.648 |
+| `node tests/html-artifact-store.cjs` | 135 / 0 / 3 场景；skip 不计通过分母 | 529 | 29938.406 |
+| `node tests/html-artifact-performance.cjs`（默认） | 16 / 0 / 0，单位为断言 | 16 | 2625.055 |
+| `node --require <TEMP>/count-assertions.cjs --test --test-reporter=spec tests/html-artifact-backend.cjs` | 38 / 0 / 0 测试，含 37 子项及 1 父容器 | 162 次运行期 assert 调用 | 1640.409 |
+
+backend 原套件没有断言计数器；TEMP preload 只包裹 node:assert/strict 的方法计数，不改变断言内容或产品，不提交进仓库。Node runner 父进程另记 0，未重复计数。Store 的 3 个 skip 仍为 Windows 文件 symlink 权限不足。lock 比 14/103 基线新增 **19 场景、167 断言**，maintenance 比 20/119 新增 **10 场景、70 断言**；原断言删除 0，store 保持 135 场景/529 断言。
+
+回归覆盖瞬时/持续 EACCES、操作不重入、gate 真实释放、同 PID 无权接管、根/inode/同 inode 内容替换、publish 完整字节及幂等恢复、read/stats/collect/cleanupTemporary 不假成功、close 异常、部分 owner 与双重故障、unlink 空操作和删除后异常、维护固定错误及重试、统计 unknown→known。启动测试在 VM 中执行源码中真实的窄 catch 表达式，**不是完整 server 启动证明**。
+
+另用 TEMP preload 对**生产 `server/html-artifact-maintenance-cli.js` main 入口**直接 spawn，非测试包装器供应输出/退出码：recover-lock、stats、plan、cleanup-temporary 四种动作，各注入自身锁 EACCES，实际 exit 1、固定失败 JSON、快照保留；子进程退出后正常生产 CLI 以死亡身份证明恢复，exit 0，原快照仍可读。专项 **4 pass / 0 fail / 0 skip，36 断言**。
+
+最终默认性能样本：8 份历史、8 sessions、262152 B，每轮并发 8 份 4103 B；新发布段 **917.045ms**，实际 HTML 读取 **65648 B / 32 calls**，仍不重读历史 HTML。语料及最终读取 digest `29fa7412d5e31db4aa0c548abb4797ffcf488677fd958e4d7d2158479e99c674`；Store 源摘要 `2a38660428733d992bf39e4ef183d78848271fec31adde926f7c22d4313e8d18`。本轮不是大语料 before/after benchmark，不替换上文 B2 历史性能数据。
+
+证据目录：`C:/Users/21022/AppData/Local/Temp/pi-b4-evidence-S3JUUH/`。`verified-targeted-results.json`、`verified-*.stdout.log` / stderr 为最终五套结果及首尾摘要；`production-cli-probe.cjs` / `production-cli-results.json` 为生产入口专项。证据在本机 TEMP，不作为永久产物或公开上传材料。
+
+### 首次失败及处置
+
+- 修改前实跑 lock **14/14、103 断言**，maintenance **20/20、119 断言**，fail/skip 0。
+- 新回归先在旧产品上运行：lock exit 1，Missing expected rejection；maintenance exit 1，实际 `{ok:true,exists:true}` 而预期固定失败。该红灯确认原 I1，不是环境噪声。
+- 首轮修复五套中 lock 30/252、maintenance 30/189、performance 16、backend 38/162 通过；store exit 1，在原 ENOSPC 用例留下自身空锁，后续读报 busy。确认为本轮产品回归：完整 owner 校验错误用于尚未完成的获取。补为已知 inode + 预期字节前缀的收尾，并加入双故障/不同 owner 不得冒充前缀的回归；原断言未修改。首次 store 输出与失败保存在未带前缀的 store 日志及 targeted-results.json。
+- 中间补验 32/266 已通过；之后增加 acquisition 同 inode 异主字节的门控/回归，最终重新运行全部五套，以上 verified 结果覆盖该最终状态。没有用旧通过数字冒称新代码通过。
+- 5 个变更 JS/CJS 的 node --check、git diff --check 均 exit 0。作者核对完整增量及消费端白名单，未发现需绕过身份门控的路径；这不是独立审查结论。
+
+### 未验证、剩余边界及回滚
+
+- **R-B I1 的作者修复及定向证明完成，待父代理安排独立增量复审后才能关闭发现。** 未再调用模型/其它 Agent；不声称功能或安全独立审查通过。
+- 未跑完整 npm test/新 CI；本树仍不拥有 package/CI，也未运行、接替或修改 A 被阻断的安全 suite。完整 canonical 继续由父集成阶段补证，不把五套定向或 4 项 CLI 专项等同完整证明。
+- 未验证 Linux 实机、其它文件系统/网络共享盘、真实 Windows sharing violation、真实磁盘耗尽、断电、无法确认 close 是否关闭时的 OS 句柄状态；EACCES/EIO/ENOSPC 为 TEMP 限定故障注入。仅支持既有 Win/Linux gate，其它 OS 仍 fail-closed。
+- 未跑完整后端启动、Electron、真实 Pi/模型/渲染/安装；启动只测窄错误处理表达式。未重建产物，**跑源码版才看得到**；父集成后需重建验证。没有放宽 Electron 或外部网络安全资格。
+- 无内存证明的原有活 owner 残锁不会被新 Store 接管；需先恢复系统访问、正常停止该 owner，再由既有死亡身份证明路径处理。持续权限失败保持失败，不承诺重启必能修复。unknown/torn/legacy 仍保留，禁止手工强删。
+- 回滚顺序：本节文档 → 测试 8030ef7a → 报告层 9ce0a859 → 共享 Store f1bdd35f；由获授权的父集成变更执行，不回滚 B2/B3 或其它线。回滚会重新引入释放吞错，不能视为解决 I1；不需要数据迁移，不删除现有 HTML/reference/pending、未知锁或 TEMP 证据，产物须另行重建/回退。
+
+结论：B4 开发与指定定向回归完成；完整 canonical、独立复审和产物均待验证；未取得合并或发布许可。
