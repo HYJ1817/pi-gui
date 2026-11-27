@@ -23,6 +23,20 @@ async function check(name, action) { await action(); checks++; console.log('  ok
   const { runHtmlArtifactMaintenanceCli } = await import('../server/html-artifact-maintenance-cli.js');
   const { scanHtmlArtifactReferences, createHtmlArtifactReconciler } = await import('../server/html-artifact-sessions.js');
   const { createSystemStorage } = await import('../server/system-storage.js');
+  if (process.argv[2] === '--release-fault-cli') {
+    const [dataDir, agentDir, action] = process.argv.slice(3), unlink = fs.unlinkSync;
+    const lock = path.join(dataDir, 'html-artifacts', '.writer.lock');
+    fs.unlinkSync = (file, ...args) => {
+      if (file === lock) throw Object.assign(Error('PRIVATE ' + dataDir), { code: 'EACCES' });
+      return unlink(file, ...args);
+    };
+    try {
+      const result = await runHtmlArtifactMaintenanceCli(['--data-dir', dataDir, '--agent-dir', agentDir, '--action', action]);
+      process.stdout.write(JSON.stringify(result) + '\n');
+      if (!result.ok) process.exitCode = 1;
+    } finally { fs.unlinkSync = unlink; }
+    return;
+  }
   const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-html-maintenance-'));
   let serial = 0;
   async function fixture() {
@@ -249,6 +263,72 @@ async function check(name, action) { await action(); checks++; console.log('  ok
       fs.writeFileSync(path.join(f.dataDir, 'conversations.json'), '{');
       const before = snapshot(f.dataDir), result = await f.run([]);
       assert.equal(result.ok, false); assert.deepEqual(snapshot(f.dataDir), before);
+    });
+    for (const action of ['recover-lock', 'stats', 'plan', 'cleanup-temporary']) await check('maintenance preserves release failure and allows an exact-instance retry: ' + action, async () => {
+      const f = await fixture(), io = Object.create(fs), lock = path.join(f.root, '.writer.lock');
+      let failures = 1, attempts = 0;
+      io.unlinkSync = (file, ...args) => {
+        if (file === lock) {
+          attempts++;
+          if (failures-- > 0) throw Object.assign(Error('PRIVATE ' + f.dataDir), { code: 'EACCES' });
+        }
+        return fs.unlinkSync(file, ...args);
+      };
+      const store = createHtmlArtifactStore({ dataDir: f.dataDir, io }), before = snapshot(f.root);
+      const owner = createHtmlArtifactMaintenance({ ...f.options, store, offline: true });
+      assert.deepEqual(await owner.run({ action }), { ok: false, code: 'html_artifact_storage_release_failed' });
+      assert.equal(attempts, 1); assert.equal(fs.existsSync(lock), true);
+      assert.equal((await owner.run({ action })).ok, true);
+      assert.deepEqual(snapshot(f.root), before);
+      assert.equal((await store.read(f.ref.id)).html, input().html);
+    });
+    for (const action of ['recover-lock', 'stats', 'plan', 'cleanup-temporary']) await check('real CLI failure exits nonzero, keeps snapshots and permits proven-dead recovery: ' + action, async () => {
+      const f = await fixture(), before = snapshot(f.root), lock = path.join(f.root, '.writer.lock');
+      const result = spawnSync(process.execPath, [__filename, '--release-fault-cli', f.dataDir, f.agentDir, action],
+        { encoding: 'utf8', timeout: 15000, windowsHide: true });
+      assert.equal(result.status, 1); assert.equal(result.stderr, '');
+      assert.deepEqual(JSON.parse(result.stdout), { ok: false, code: 'html_artifact_storage_release_failed' });
+      assert.equal(fs.existsSync(lock), true);
+      assert.deepEqual(snapshot(path.join(f.root, f.ref.id)), before.find(([name]) => name === f.ref.id)[1]);
+      const recovered = spawnSync(process.execPath, [path.resolve(__dirname, '../server/html-artifact-maintenance-cli.js'),
+        '--data-dir', f.dataDir, '--agent-dir', f.agentDir, '--action', 'recover-lock'],
+      { encoding: 'utf8', timeout: 15000, windowsHide: true });
+      assert.equal(recovered.status, 0);
+      assert.deepEqual(JSON.parse(recovered.stdout), { ok: true, exists: true });
+      assert.deepEqual(snapshot(f.root), before);
+      assert.equal((await f.store.read(f.ref.id)).html, input().html);
+    });
+    await check('storage stats API reports unknown on release failure, then the same Store can return known', async () => {
+      const f = await fixture(), io = Object.create(fs); let failures = 1;
+      io.unlinkSync = (file, ...args) => {
+        if (file === path.join(f.root, '.writer.lock') && failures-- > 0) {
+          throw Object.assign(Error('PRIVATE ' + f.dataDir), { code: 'EACCES' });
+        }
+        return fs.unlinkSync(file, ...args);
+      };
+      const store = createHtmlArtifactStore({ dataDir: f.dataDir, io });
+      const failed = await response({ artifactStats: () => store.stats() });
+      assert.deepEqual(failed.body.storage.htmlArtifacts, { status: 'unknown', code: 'html_store_unavailable' });
+      assert.equal(JSON.stringify(failed.body).includes('PRIVATE'), false);
+      assert.equal(fs.existsSync(path.join(f.root, '.writer.lock')), true);
+      const retried = await response({ artifactStats: () => store.stats() });
+      assert.equal(retried.body.storage.htmlArtifacts.status, 'known');
+      assert.equal(retried.body.storage.htmlArtifacts.count, 1);
+      assert.equal(fs.existsSync(path.join(f.root, '.writer.lock')), false);
+    });
+    await check('startup recovery reports only fixed failure codes instead of an empty catch', async () => {
+      const vm = require('node:vm'), source = fs.readFileSync(path.resolve(__dirname, '../server.js'), 'utf8');
+      // Execute the actual narrow startup expression, without launching the
+      // server, Pi, user configuration or any other startup side effects.
+      const expression = source.match(/void htmlArtifactStore\.recoverLock\(\)\.catch\([\s\S]*?\n\}\);/);
+      assert.ok(expression);
+      for (const code of ['html_artifact_storage_release_failed', 'html_artifact_storage_busy', 'PRIVATE /fixture/path']) {
+        const warnings = [], error = Object.assign(Error('PRIVATE /fixture/path <p>payload</p>'), { code });
+        vm.runInNewContext(expression[0], { htmlArtifactStore: { recoverLock: () => Promise.reject(error) },
+          console: { warn: (...values) => warnings.push(values) } });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.deepEqual(warnings, [[code.startsWith('html_artifact_storage_') ? code : 'html_artifact_storage_failed']]);
+      }
     });
     console.log(`HTML artifact maintenance: ${checks}/${checks} scenarios; assertions=${assertions}; skipped=0`);
   } finally { fs.rmSync(world, { recursive: true, force: true }); }

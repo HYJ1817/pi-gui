@@ -225,6 +225,221 @@ async function check(name, action) { await action(); checks++; console.log('  ok
         assert.equal(fs.existsSync(f.lock), false);
         assert.deepEqual(queryHtmlArtifactProcess(process.pid), current);
       });
+      function releaseFixture() {
+        const io = Object.create(fs), fault = { remaining: 0, attempts: 0 };
+        const f = fixture({ io });
+        io.unlinkSync = (file, ...args) => {
+          if (file === f.lock) {
+            fault.attempts++;
+            if (fault.remaining > 0) {
+              fault.remaining--;
+              throw Object.assign(Error('PRIVATE ' + f.dataDir + ' ' + input.html), { code: 'EACCES' });
+            }
+          }
+          return fs.unlinkSync(file, ...args);
+        };
+        return { ...f, io, fault };
+      }
+      const releaseFailed = error => {
+        assert.equal(error.code, 'html_artifact_storage_release_failed');
+        assert.equal(error.message, error.code);
+        assert.deepEqual(Object.keys(error), ['code']);
+        return true;
+      };
+      await check('recover reports its own unlink failure once, releases the gate and retries only its own proof', async () => {
+        const f = releaseFixture(), ref = await f.store.publish(input), before = snapshot(f.root);
+        f.fault.remaining = 1; f.fault.attempts = 0;
+        await assert.rejects(f.store.recoverLock(), releaseFailed);
+        assert.equal(f.fault.attempts, 1); assert.equal(fs.existsSync(f.lock), true);
+        assert.equal(JSON.parse(fs.readFileSync(f.lock)).pid, process.pid);
+        // Failure must release the kernel gate, not strand it or spin on unlink.
+        await (await acquireHtmlArtifactGate(f.root))();
+        assert.deepEqual(await f.store.recoverLock(), { ok: true, exists: true });
+        assert.equal(f.fault.attempts, 3); assert.deepEqual(snapshot(f.root), before);
+        assert.equal((await f.store.read(ref.id)).html, input.html);
+      });
+      await check('persistent own release failures stay release_failed, not busy, without rerunning the action', async () => {
+        const f = releaseFixture(), ref = await f.store.publish(input);
+        f.fault.remaining = 10; f.fault.attempts = 0;
+        await assert.rejects(f.store.recoverLock(), releaseFailed);
+        const before = snapshot(f.root);
+        for (const action of [() => f.store.read(ref.id), () => f.store.stats(), () => f.store.recoverLock()]) {
+          await assert.rejects(action(), releaseFailed);
+          assert.deepEqual(snapshot(f.root), before);
+          await (await acquireHtmlArtifactGate(f.root))();
+        }
+        assert.equal(f.fault.attempts, 4);
+        f.fault.remaining = 0;
+        assert.equal((await f.store.read(ref.id)).html, input.html);
+        assert.equal(fs.existsSync(f.lock), false);
+      });
+      await check('publish release failure preserves committed bytes and pending; same-tuple retry returns the original reference', async () => {
+        const f = releaseFixture(); f.fault.remaining = 1;
+        await assert.rejects(f.store.publish(input), releaseFailed);
+        const ids = fs.readdirSync(f.root).filter(name => !name.startsWith('.'));
+        assert.equal(ids.length, 1);
+        const dir = path.join(f.root, ids[0]), before = snapshot(dir);
+        const ref = JSON.parse(fs.readFileSync(path.join(dir, 'reference.json')));
+        assert.equal(fs.readFileSync(path.join(dir, 'document.html'), 'utf8'), input.html);
+        assert.equal(fs.readFileSync(path.join(dir, '.pending'), 'utf8'), '1\n');
+        assert.deepEqual(await f.store.publish(input), ref);
+        assert.deepEqual(snapshot(dir), before); assert.deepEqual(fs.readdirSync(f.root), ids);
+        assert.deepEqual(await f.store.read(ref.id), { artifact: ref, html: input.html });
+      });
+      for (const mode of ['no-op', 'removed-then-error']) await check('release confirms absence and handles uncertain unlink outcome: ' + mode, async () => {
+        const io = Object.create(fs), f = fixture({ io }); let once = true;
+        io.unlinkSync = (file, ...args) => {
+          if (file === f.lock && once) {
+            once = false;
+            if (mode === 'no-op') return;
+            fs.unlinkSync(file, ...args);
+            throw Object.assign(Error('PRIVATE ' + f.dataDir), { code: 'EIO' });
+          }
+          return fs.unlinkSync(file, ...args);
+        };
+        await assert.rejects(f.store.publish(input), releaseFailed);
+        assert.equal(fs.existsSync(f.lock), mode === 'no-op');
+        await (await acquireHtmlArtifactGate(f.root))();
+        const ref = await f.store.publish(input);
+        assert.equal((await f.store.read(ref.id)).html, input.html);
+        assert.equal(fs.existsSync(f.lock), false);
+      });
+      await check('same PID is not a release capability: a second Store cannot steal the live residual lock', async () => {
+        const f = releaseFixture(); await f.store.publish(input); f.fault.remaining = 1;
+        await assert.rejects(f.store.recoverLock(), releaseFailed);
+        const other = createHtmlArtifactStore({ dataDir: f.dataDir }), before = snapshot(f.root);
+        await assert.rejects(other.recoverLock(), busy); await assert.rejects(other.publish(input), busy);
+        assert.deepEqual(snapshot(f.root), before);
+        assert.equal((await f.store.recoverLock()).ok, true);
+        assert.equal((await other.publish(input)).sessionId, input.sessionId);
+      });
+      for (const replacement of ['inode', 'owner-bytes', 'root']) await check('residual release proof rejects replacement: ' + replacement, async () => {
+        const f = releaseFixture(); await f.store.publish(input); f.fault.remaining = 1;
+        await assert.rejects(f.store.recoverLock(), releaseFailed);
+        const foreign = JSON.stringify(htmlArtifactLockOwner()) + '\n';
+        if (replacement === 'root') {
+          fs.renameSync(f.root, path.join(f.dataDir, 'original-root'));
+          fs.mkdirSync(f.root, { mode: 0o700 });
+        } else if (replacement === 'inode') fs.renameSync(f.lock, path.join(f.dataDir, 'original-lock'));
+        fs.writeFileSync(f.lock, foreign);
+        const before = snapshot(f.root), attempts = f.fault.attempts;
+        for (let retry = 0; retry < 2; retry++) {
+          await assert.rejects(f.store.recoverLock(), error => error.code === 'html_artifact_storage_unsafe');
+          assert.deepEqual(snapshot(f.root), before);
+          assert.equal(f.fault.attempts, attempts);
+        }
+        assert.equal(fs.readFileSync(f.lock, 'utf8'), foreign);
+      });
+      for (const action of ['read', 'stats', 'collect', 'cleanupTemporary']) await check('release failure is not complete success for ' + action, async () => {
+        const f = releaseFixture(), ref = await f.store.publish(input);
+        const dir = path.join(f.root, ref.id), before = fs.readFileSync(path.join(dir, 'document.html'));
+        if (action === 'cleanupTemporary') {
+          const temp = path.join(f.root, '.tmp-' + randomUUID());
+          fs.mkdirSync(temp); fs.writeFileSync(path.join(temp, 'document.html'), 'fixture');
+        }
+        f.fault.remaining = 1;
+        const operation = action === 'read' ? () => f.store.read(ref.id)
+          : action === 'collect' ? () => f.store.collect({ scan: () => ({ complete: true,
+            referencedIds: [ref.id], beforeMs: Date.now() }) }) : () => f.store[action]();
+        await assert.rejects(operation(), releaseFailed);
+        assert.equal(fs.existsSync(f.lock), true);
+        assert.deepEqual(fs.readFileSync(path.join(dir, 'document.html')), before);
+        if (action === 'collect') assert.equal(fs.existsSync(path.join(dir, '.pending')), false);
+        if (action === 'cleanupTemporary') assert.equal(fs.readdirSync(f.root).some(name => name.startsWith('.tmp-')), false);
+        assert.equal((await f.store.read(ref.id)).html, input.html);
+        assert.equal(fs.existsSync(f.lock), false);
+      });
+      await check('business failure remains primary when release also fails; exact residual proof is still retryable', async () => {
+        const f = releaseFixture(), ref = await f.store.publish(input), before = snapshot(path.join(f.root, ref.id));
+        f.fault.remaining = 1;
+        await assert.rejects(f.store.publish({ ...input, title: 'Conflict' }), error => {
+          assert.equal(error.code, 'html_artifact_conflict'); assert.equal(error.message, error.code);
+          assert.deepEqual(Object.keys(error), ['code']); return true;
+        });
+        assert.equal(fs.existsSync(f.lock), true);
+        assert.equal((await f.store.recoverLock()).ok, true);
+        assert.deepEqual(snapshot(path.join(f.root, ref.id)), before);
+      });
+      await check('close failure is reported independently while the file lock and kernel gate are still released', async () => {
+        const io = Object.create(fs), writerFds = new Set(); let failures = 1;
+        const f = fixture({ io });
+        io.openSync = (file, flags, ...args) => {
+          const fd = fs.openSync(file, flags, ...args);
+          if (file === f.lock && flags === 'wx') writerFds.add(fd);
+          return fd;
+        };
+        io.closeSync = fd => {
+          const writer = writerFds.delete(fd); fs.closeSync(fd);
+          if (writer && failures-- > 0) throw Object.assign(Error('PRIVATE ' + f.dataDir), { code: 'EIO' });
+        };
+        await assert.rejects(f.store.publish(input), error => error.code === 'html_artifact_storage_failed'
+          && error.message === error.code);
+        assert.equal(fs.existsSync(f.lock), false); assert.equal(writerFds.size, 0);
+        await (await acquireHtmlArtifactGate(f.root))();
+        const ref = await f.store.publish(input);
+        assert.equal((await f.store.read(ref.id)).html, input.html);
+      });
+      for (const mode of ['ENOSPC', 'short-write']) await check('partial owner acquisition plus failed unlink retains only this Store release capability: ' + mode, async () => {
+        const f = releaseFixture(), ref = await f.store.publish(input), writers = new Set(); let once = true;
+        f.io.openSync = (file, flags, ...args) => {
+          const fd = fs.openSync(file, flags, ...args);
+          if (file === f.lock && flags === 'wx') writers.add(fd);
+          return fd;
+        };
+        f.io.closeSync = fd => { writers.delete(fd); return fs.closeSync(fd); };
+        f.io.writeFileSync = (fd, bytes, ...args) => {
+          if (writers.has(fd) && once) {
+            once = false; fs.writeFileSync(fd, Buffer.from('{'));
+            if (mode === 'ENOSPC') throw Object.assign(Error('PRIVATE ' + f.dataDir), { code: 'ENOSPC' });
+            return;
+          }
+          return fs.writeFileSync(fd, bytes, ...args);
+        };
+        f.fault.remaining = 1;
+        await assert.rejects(f.store.publish({ ...input, messageId: 'next' }), error =>
+          error.code === (mode === 'ENOSPC' ? 'html_artifact_storage_failed' : 'html_artifact_storage_corrupt'));
+        assert.equal(fs.readFileSync(f.lock, 'utf8'), '{');
+        const before = snapshot(f.root), other = createHtmlArtifactStore({ dataDir: f.dataDir });
+        await assert.rejects(other.recoverLock(), busy); assert.deepEqual(snapshot(f.root), before);
+        assert.equal((await f.store.recoverLock()).ok, true);
+        assert.equal((await f.store.read(ref.id)).html, input.html);
+        assert.equal(fs.existsSync(f.lock), false);
+      });
+      await check('a different owner in the acquisition inode cannot be laundered as a partial owner write', async () => {
+        const io = Object.create(fs), f = fixture({ io }), writers = new Set();
+        const foreign = JSON.stringify(htmlArtifactLockOwner()) + '\n';
+        io.openSync = (file, flags, ...args) => {
+          const fd = fs.openSync(file, flags, ...args);
+          if (file === f.lock && flags === 'wx') writers.add(fd);
+          return fd;
+        };
+        io.closeSync = fd => { writers.delete(fd); return fs.closeSync(fd); };
+        io.writeFileSync = (fd, bytes, ...args) => fs.writeFileSync(fd, writers.has(fd) ? foreign : bytes, ...args);
+        await assert.rejects(f.store.publish(input), error => error.code === 'html_artifact_storage_corrupt');
+        assert.equal(fs.readFileSync(f.lock, 'utf8'), foreign);
+        await assert.rejects(f.store.recoverLock(), error => error.code === 'html_artifact_storage_unsafe');
+        assert.equal(fs.readFileSync(f.lock, 'utf8'), foreign);
+        await (await acquireHtmlArtifactGate(f.root))();
+      });
+      await check('acquisition fsync plus release failure preserves the original error and releases the gate', async () => {
+        const f = releaseFixture(), writerFds = new Set(); let failures = 1;
+        f.io.openSync = (file, flags, ...args) => {
+          const fd = fs.openSync(file, flags, ...args);
+          if (file === f.lock && flags === 'wx') writerFds.add(fd);
+          return fd;
+        };
+        f.io.closeSync = fd => { writerFds.delete(fd); return fs.closeSync(fd); };
+        f.io.fsyncSync = fd => {
+          if (writerFds.has(fd) && failures-- > 0) throw Object.assign(Error('PRIVATE ' + f.dataDir), { code: 'EIO' });
+          return fs.fsyncSync(fd);
+        };
+        f.fault.remaining = 1;
+        await assert.rejects(f.store.publish(input), error => error.code === 'html_artifact_storage_failed');
+        assert.equal(fs.existsSync(f.lock), true);
+        await (await acquireHtmlArtifactGate(f.root))();
+        assert.equal((await f.store.recoverLock()).ok, true);
+        const ref = await f.store.publish(input); assert.equal((await f.store.read(ref.id)).html, input.html);
+      });
       await check('a later foreign lock swapped after identity proof is preserved, not removed', async () => {
         const f = fixture(); assert.equal((await child(f, 'crash').done).status, 73);
         const foreign = JSON.stringify(htmlArtifactLockOwner());
