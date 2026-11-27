@@ -12,7 +12,7 @@
     "test:final-remediation:electron": "node tests/final-remediation-electron.cjs",
     "test:primitives": "node tests/primitives.cjs && node tests/design-system-buttons.cjs && node tests/settings-acceptance.cjs && node tests/font-picker.cjs",
     "test:attachments": "node tests/attachments.cjs",
-    "test:html-artifacts": "node tests/html-artifact-model.cjs && node tests/html-artifact-store.cjs && node tests/visual-replies-electron.cjs --check-driver && node tests/visual-replies-electron.cjs --check-safety",
+    "test:html-artifacts": "node tests/html-artifact-model.cjs && node --test tests/html-artifact-ui.cjs && node tests/html-artifact-store.cjs && node tests/visual-replies-electron.cjs --check-driver && node tests/visual-replies-electron.cjs --check-safety",
     "test:html-artifacts:electron": "node tests/visual-replies-electron.cjs --offline",
     "test:html-artifacts:live": "node tests/visual-replies-electron.cjs --live",
     "test:file-preview": "npm run test:file-preview:core && npm run test:file-preview:backend && npm run test:file-preview:panel && npm run test:file-preview:office && npm run test:file-preview:media-archive && npm run test:file-preview:pdf && npm run test:file-preview:entry && npm run test:file-preview:vendor",
