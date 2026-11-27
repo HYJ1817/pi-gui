@@ -169,3 +169,41 @@ backend 原套件没有断言计数器；TEMP preload 只包裹 node:assert/stri
 - 回滚顺序：本节文档 → 测试 8030ef7a → 报告层 9ce0a859 → 共享 Store f1bdd35f；由获授权的父集成变更执行，不回滚 B2/B3 或其它线。回滚会重新引入释放吞错，不能视为解决 I1；不需要数据迁移，不删除现有 HTML/reference/pending、未知锁或 TEMP 证据，产物须另行重建/回退。
 
 结论：B4 开发与指定定向回归完成；完整 canonical、独立复审和产物均待验证；未取得合并或发布许可。
+
+## B4b · 真实 wire 形状取证：非字符串 type 的准确路径（2026-11-27）
+
+本节仅追加取证事实；未修改 projection、集成树 fakePi fixture 或任何产品文件。报告只含结构元数据（字段路径、键名、typeof、数组长度），不含 payload 值。
+
+### 方法
+
+- 真实 pi 1.6.0（全局 `pi.cmd`）+ 本机 magpie 网关（`127.0.0.1:3425`；TEMP `models.json` 显式 `openai-responses` / `xingchiapi/gpt-6.1-sol`）。TEMP world 隔离 HOME/APPDATA/LOCALAPPDATA/TEMP/PI_CODING_AGENT_DIR；未写真实用户数据，key 只经 env 传入、不落盘、不进证据。
+- 第一次：直接 `pi --mode rpc`，单条短 prompt；逐行解析 stdout，只记录结构元数据。事件分布为 response/agent_start/turn_start/message_start/message_update/message_end/turn_end/agent_end/agent_settled，assistant 流事件为 text_start/text_delta/text_end；非字符串 `type` 命中 **0**（未加载扩展，无 `toolsAdded`）。
+- 第二次：生产 `server.js`（集成树当前代码）+ TEMP module loader，把 projection 换回修复前 `939eff61^` 的字节（不改任何树），同一 TEMP world、同一短 prompt。崩溃复现：`TypeError: node.type?.startsWith is not a function`，backend exit 1。loader 在抛出前记录违规节点结构后原样 rethrow，不改变被观测的生产行为。
+- 证据：`C:/Users/21022/AppData/Local/Temp/pi-wire-forensics-V3NePQ/backend-wire-metadata.json`、`wire-metadata.json`。两次会话 world 已删除，仅保留结构元数据 JSON。
+
+### 准确违规路径
+
+- 触发事件类型：**`message_start`**。该事件走了 Classic 发布路径的 frame（`server.js` 为它附加 `activity`、`detailRef`、`legacyOwner`、`executionClassic` 后再投影）。
+- 完整字段路径：`message_start.message.toolsAdded[6].parameters.properties.ready.properties.type`
+- typeof 分布：本环境只观察到 **1 处**，`typeof === 'object'`（非 null）；该值自身键名为 `type`、`enum`（2 个键）。本轮未出现 number/boolean/null/array 变体。
+- 父节点键名：`type`、`host`、`port`、`url`、`marker`、`timeoutMs` —— 即 `ready` 参数的 JSON Schema 对象。
+- 来源：`extensions/pi-gui-process/index.js:28`，process 工具 `action='start'` 的参数 `ready: { type: 'object', properties: { type: { type: 'string', enum: [...] }, host, port, url, marker, timeoutMs } }`。投影递归到 `properties.ready.properties.type` 时，该 `type` 是 schema 描述对象而非字符串；旧码 `node.type?.startsWith` 因此抛 TypeError。
+- 上游确认：pi `dist/core/agent-session.js` 中只有 `role === 'system'` 的 transcript 消息携带 `toolsAdded`（`ToolDefinition[]`，含 `parameters` JSON Schema），并在 loadout 声明/恢复时随 `message_start` 下发。该形状是工具声明结构，不是用户内容。
+- 索引 `[6]` 是本次 loadout 顺序（第 7 个声明工具，process）；通用违规形状是 `message.toolsAdded[*].parameters` 中任意名为 `type` 的嵌套 schema 描述对象。
+
+### 离线 fakePi 缺失的对应形状
+
+| 真实 wire | `tests/fixtures/visual-replies-normal-pi.cjs` 现状 | 后果 |
+| --- | --- | --- |
+| `message_start` 携带 system 消息，`message.toolsAdded[*].parameters` 为完整 JSON Schema | 只发 assistant 消息的 `message_start`；无 system 消息、无 `toolsAdded` | `properties.*.properties.type` 对象永不出现，投影崩溃在离线不可见 |
+| 扩展工具声明（process 等） | fixture 只加载 pi-gui-html / pi-gui-tool-guard，且从不发工具 schema | process 的 `ready.properties.type` 形状缺位 |
+| `turn_start` / `turn_end` | 不发 | 相关 turn 边界未被覆盖 |
+| `text_start` / `text_end` | 只发 `text_delta` | 流式开始/结束边界未被覆盖 |
+
+未修改 fixture；以上仅记录，供父决定是否补形状。
+
+### 影响与边界
+
+- 这是本轮生产崩溃已证实的触发点：系统消息的工具声明 schema 嵌套了名为 `type` 的对象。任何扩展参数只要在 JSON Schema 的 `properties` 下出现名为 `type` 的嵌套描述，都会命中同一路径。
+- 父侧 `typeof` 守卫已落集成树（`939eff61`）；B 树 projection 未改，仍为旧码。
+- 未记录 payload 值、HTML、用户文本、模型输出或凭据；未访问外网、未下载依赖。两次会话仅用于取证，不构成功能或安全验收。
