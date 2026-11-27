@@ -85,7 +85,12 @@ function projectedMessage(msg) {
   return out;
 }
 export function projectRuntimeEvent(event, activity = null) {
-  event = projectHtmlArtifacts(event);
+  /* Tool executions are allowlisted below, including the html completion
+   * projection. The stateless pass cannot bind a nameless legacy completion to
+   * its tool, so it would replace every ordinary `result` (e.g. the gui_plan
+   * details contract) with an HTML placeholder. The tool-aware boundaries —
+   * server.js classic publish and the history readers — hold that rewrite. */
+  if (!event?.type?.startsWith('tool_execution_')) event = projectHtmlArtifacts(event);
   if (event?.type === 'response' && event.success === false && ['set_thinking_level', 'cycle_thinking_level'].includes(event.command)) {
     const response = { type: 'response', command: event.command, success: false, error: 'Pi 未能完成思考级别操作；请检查模型配置后重试。' };
     if (typeof event.id === 'string' || typeof event.id === 'number') response.id = event.id;
