@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { canonicalPath } from '../lib/safe-path.js';
+import { acquireHtmlArtifactGate, htmlArtifactLockOwner, htmlArtifactOwnerDead, queryHtmlArtifactProcess } from './html-artifact-lock.js';
 import {
   HTML_ARTIFACT_VERSION, HTML_ARTIFACT_MAX_BYTES, normalizeHtmlArtifactHeight,
   isHtmlArtifactId, projectHtmlArtifactReference,
@@ -36,17 +37,21 @@ const record = value => value !== null && typeof value === 'object' && !Array.is
  * Publish/read use bounded synchronous IO. Collection additionally holds the
  * exclusive wx lock across its awaited reference scan AND synchronous commit,
  * excluding other store calls and backend processes. Native reference writers
- * require separate caller admission. An abandoned lock is NEVER stolen: stop all writers,
- * back up the store and explicitly recover the lock before using it again.
+ * require separate caller admission. A v2 lock is recovered only with a shared
+ * kernel gate and OS creation-identity proof that its exact owner is dead.
+ * Legacy/torn/unknown locks stay blocked; there is no force-unlock override.
  * Node path checks are not an OS sandbox against a same-user malicious process,
  * nor does file fsync promise power-loss durability of directory metadata. */
-export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpoint = () => {} } = {}) {
+export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpoint = () => {},
+  queryProcess = queryHtmlArtifactProcess } = {}) {
   if (typeof dataDir !== 'string' || !dataDir || !record(limits)
     || Object.keys(limits).some(key => !Object.hasOwn(HTML_ARTIFACT_STORE_LIMITS, key))) fail('html_artifact_invalid');
   const quota = { ...HTML_ARTIFACT_STORE_LIMITS, ...limits };
   if (Object.values(quota).some(value => !Number.isSafeInteger(value) || value < 1)) fail('html_artifact_invalid');
   const data = path.resolve(dataDir), root = path.join(data, 'html-artifacts');
-  const remembered = new Map();
+  const remembered = new Map(), metadataIndex = new Map();
+  let queue = Promise.resolve(), collecting = false;
+  const version = stat => [identity(stat), stat.size, stat.mtimeMs, stat.ctimeMs].join(':');
 
   function statMaybe(file) {
     try { return io.lstatSync(file); }
@@ -119,7 +124,7 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
     if (!Buffer.from(text, 'utf8').equals(bytes)) fail('html_artifact_storage_corrupt');
     return text;
   }
-  function disk(id) {
+  function disk(id, verifyHtml = true) {
     guard();
     const dir = path.join(root, id), stat = statMaybe(dir);
     if (!stat) fail('html_artifact_not_found');
@@ -127,15 +132,28 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
     const names = io.readdirSync(dir);
     if (!names.includes('document.html') || !names.includes('reference.json')
       || names.some(name => !FILES.includes(name))) fail('html_artifact_storage_corrupt');
-    const meta = readBytes(dir, 'reference.json', META_BYTES);
-    let value;
-    try { value = JSON.parse(utf8(meta.bytes)); } catch { fail('html_artifact_storage_corrupt'); }
-    const artifact = projectHtmlArtifactReference(value);
-    if (!artifact || !encode(artifact).equals(meta.bytes) || artifact.id !== id
-      || artifactId(artifact) !== id || /[\x80-\x9f]/.test(artifact.title)) fail('html_artifact_storage_corrupt');
-    const snapshot = readBytes(dir, 'document.html', HTML_ARTIFACT_MAX_BYTES);
-    const html = utf8(snapshot.bytes);
-    if (snapshot.bytes.length !== artifact.bytes || sha256(snapshot.bytes) !== artifact.digest) fail('html_artifact_storage_corrupt');
+    const metaStat = plain(path.join(dir, 'reference.json'), META_BYTES);
+    let meta = metadataIndex.get(id);
+    if (!meta || meta.version !== version(metaStat)) {
+      const read = readBytes(dir, 'reference.json', META_BYTES);
+      let value;
+      try { value = JSON.parse(utf8(read.bytes)); } catch { fail('html_artifact_storage_corrupt'); }
+      const artifact = projectHtmlArtifactReference(value);
+      if (!artifact || !encode(artifact).equals(read.bytes) || artifact.id !== id
+        || artifactId(artifact) !== id || /[\x80-\x9f]/.test(artifact.title)) fail('html_artifact_storage_corrupt');
+      meta = { artifact, version: version(read.stat), size: read.bytes.length, stat: read.stat };
+      metadataIndex.set(id, meta);
+    }
+    const artifact = { ...meta.artifact };
+    // Admission/statistics count checked physical bytes, not a cached total or
+    // the claimed HTML size. They need no historical HTML allocation or hash.
+    // Every actual read, duplicate publish, and destructive GC still verifies
+    // the complete UTF-8 snapshot and SHA256, even with a warm metadata index.
+    const snapshot = verifyHtml ? readBytes(dir, 'document.html', HTML_ARTIFACT_MAX_BYTES)
+      : { stat: plain(path.join(dir, 'document.html'), HTML_ARTIFACT_MAX_BYTES) };
+    if (snapshot.stat.size !== artifact.bytes) fail('html_artifact_storage_corrupt');
+    const html = verifyHtml ? utf8(snapshot.bytes) : undefined;
+    if (verifyHtml && sha256(snapshot.bytes) !== artifact.digest) fail('html_artifact_storage_corrupt');
     let pending = false, pendingBytes = 0;
     if (names.includes('.pending')) {
       const marker = readBytes(dir, '.pending', 2);
@@ -145,7 +163,7 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
     const after = directory(dir);
     if (identity(after) !== identity(stat)) fail('html_artifact_storage_unsafe');
     return { artifact, html, pending, dir, identity: identity(stat),
-      storedBytes: meta.bytes.length + snapshot.bytes.length + pendingBytes,
+      storedBytes: meta.size + snapshot.stat.size + pendingBytes,
       modifiedMs: Math.max(Date.parse(artifact.createdAt), after.mtimeMs, after.ctimeMs,
         snapshot.stat.mtimeMs, snapshot.stat.ctimeMs, meta.stat.mtimeMs, meta.stat.ctimeMs) };
   }
@@ -162,37 +180,60 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
     if (identity(stat) !== expected) fail('html_artifact_storage_unsafe');
     io.unlinkSync(file);
   }
-  function acquireLock(create) {
-    let fd, expected;
+  async function acquireLock(create, recovery = false) {
+    let fd, expected, releaseGate;
     const file = path.join(root, '.writer.lock');
-    const release = () => {
-      if (fd !== undefined) { try { io.closeSync(fd); } catch { /* Identity checks below still refuse a foreign lock. */ } }
+    const release = async () => {
+      if (fd !== undefined) { try { io.closeSync(fd); } catch { /* Still check the exact lock inode below. */ } }
       if (expected) {
         try { guard(); ownedUnlink(file, expected); }
-        catch { /* Never unlink through a replaced directory or remove another lock. */ }
+        catch { /* Never remove a replaced root or another writer's lock. */ }
       }
+      await releaseGate?.();
     };
     try {
       if (!guard(create)) return { exists: false, release };
+      releaseGate = await acquireHtmlArtifactGate(root);
+      guard();
+      if (statMaybe(file) && recovery) {
+        // The same kernel gate is held by normal writers and all recoverers.
+        // Re-read owner+inode inside it; the process probe can never authorize
+        // removal of a later lock. Legacy/empty/torn/unknown records stay busy.
+        const before = readBytes(root, '.writer.lock', 4096);
+        let owner;
+        try { owner = JSON.parse(utf8(before.bytes)); } catch { fail('html_artifact_storage_busy'); }
+        if (!htmlArtifactOwnerDead(owner, queryProcess)) fail('html_artifact_storage_busy');
+        checkpoint('recovery-proven');
+        const after = readBytes(root, '.writer.lock', 4096);
+        if (identity(before.stat) !== identity(after.stat) || !before.bytes.equals(after.bytes)) fail('html_artifact_storage_unsafe');
+        ownedUnlink(file, identity(after.stat));
+      }
+      const bytes = encode(htmlArtifactLockOwner(queryProcess));
       try { fd = io.openSync(file, 'wx', 0o600); }
       catch (error) { if (error.code === 'EEXIST') fail('html_artifact_storage_busy'); throw error; }
       expected = identity(io.fstatSync(fd));
+      io.writeFileSync(fd, bytes); io.fsyncSync(fd);
       const assertLock = () => {
         guard();
         if (identity(plain(file, 4096)) !== expected) fail('html_artifact_storage_unsafe');
       };
       assertLock();
+      if (!readBytes(root, '.writer.lock', 4096).bytes.equals(bytes)) fail('html_artifact_storage_corrupt');
       return { exists: true, assertLock, release };
-    } catch (error) { release(); throw error; }
+    } catch (error) { await release(); throw error; }
   }
-  function lock(create, action) {
-    const held = acquireLock(create);
-    try { return action(held.exists, held.assertLock); }
-    finally { held.release(); }
+  async function lock(create, action, recovery = false) {
+    const held = await acquireLock(create, recovery);
+    try { return await action(held.exists, held.assertLock); }
+    finally { await held.release(); }
   }
-  function safe(action) {
-    try { return action(); }
-    catch (error) { fail(CODES.has(error?.code) ? error.code : 'html_artifact_storage_failed'); }
+  function safe(action, collection = false) {
+    if (collecting) return Promise.reject(Object.assign(Error('html_artifact_storage_busy'), { code: 'html_artifact_storage_busy' }));
+    if (collection) collecting = true;
+    const result = queue.then(action).catch(error => { fail(CODES.has(error?.code) ? error.code : 'html_artifact_storage_failed'); })
+      .finally(() => { if (collection) collecting = false; });
+    queue = result.catch(() => {});
+    return result;
   }
   function inputSnapshot(input) {
     if (!record(input) || Object.keys(input).some(key => !INPUT_KEYS.includes(key))
@@ -216,7 +257,7 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
       if (name === '.writer.lock') continue;
       // Interrupted snapshots cannot be ignored to admit more disk usage.
       if (TEMP.test(name)) fail('html_artifact_storage_busy');
-      const item = disk(name);
+      const item = disk(name, false);
       totalBytes += item.storedBytes; totalCount++;
       if (item.artifact.sessionId === artifact.sessionId) { sessionBytes += item.storedBytes; sessionCount++; }
     }
@@ -240,8 +281,8 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
     io.rmdirSync(dir); remembered.delete(dir);
   }
   async function publish(input) {
+    const { artifact, bytes } = inputSnapshot(input), meta = encode(artifact);
     return safe(() => {
-      const { artifact, bytes } = inputSnapshot(input), meta = encode(artifact);
       return lock(true, (_exists, assertLock) => {
         const target = path.join(root, artifact.id);
         if (statMaybe(target)) {
@@ -330,7 +371,8 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
     if ([...ids].some(id => !isHtmlArtifactId(id))) fail('html_artifact_invalid');
     return ids;
   }
-  function collectProof({ referencedIds, candidateIds, complete, beforeMs } = {}, assertLock) {
+  function collectProof({ referencedIds, candidateIds, complete, beforeMs, releasePending = false,
+    dryRun = false, isCurrent = null } = {}, assertLock) {
     // Incomplete native ownership/branch evidence never grants deletion or
     // even clears pending. A cutoff is an age policy, NOT a concurrency fence.
     if (complete !== true) return { removed: 0, retained: 0, complete: false, skipped: true };
@@ -338,19 +380,28 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
     const referenced = idSet(referencedIds), candidates = candidateIds === undefined ? null : idSet(candidateIds);
     const result = { removed: 0, retained: 0, pending: 0, temporary: 0, complete: true };
     // Validate the entire inventory BEFORE any destructive operation.
-    const entries = names(), items = entries.filter(isHtmlArtifactId).map(disk);
+    const entries = names(), items = entries.filter(isHtmlArtifactId).map(id => disk(id));
     result.temporary = entries.filter(name => TEMP.test(name)).length;
+    if (dryRun) { result.candidates = []; result.reclaimableBytes = 0; }
     for (const item of items) {
+      if (isCurrent && isCurrent() !== true) fail('html_artifact_storage_busy');
       const id = item.artifact.id;
       if (referenced.has(id)) {
-        if (item.pending) {
+        if (item.pending && !dryRun) {
           assertLock();
           const marker = path.join(item.dir, '.pending');
           ownedUnlink(marker, identity(plain(marker, 2)));
         }
         result.retained++; continue;
       }
-      if (item.pending || (candidates && !candidates.has(id)) || item.modifiedMs >= beforeMs) {
+      // Only a backend-private, explicitly quiescent maintenance proof can
+      // retire a publication whose native result was never durably appended.
+      if (item.pending && releasePending !== true || (candidates && !candidates.has(id)) || item.modifiedMs >= beforeMs) {
+        result.retained++; if (item.pending) result.pending++;
+        continue;
+      }
+      if (dryRun) {
+        result.candidates.push(id); result.reclaimableBytes += item.storedBytes;
         result.retained++; if (item.pending) result.pending++;
         continue;
       }
@@ -371,24 +422,27 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
    * serializes stores/processes, not Pi/native session writers. If that external
    * admission cannot be proved, return complete:false. Never call a store API
    * from scan: reentry fails busy rather than waiting on its own lock. */
-  async function collect({ scan, complete } = {}) {
-    let held;
-    try {
-      if (typeof scan !== 'function') {
-        if (complete === true) fail('html_artifact_invalid'); // Reject the unsafe pre-scan API.
-        return { removed: 0, retained: 0, complete: false, skipped: true };
-      }
-      // Even an empty store needs a real lock before scan starts: another
-      // process must not publish between an absent-root check and this commit.
-      held = acquireLock(true);
+  async function collect({ scan, complete, dryRun = false } = {}) {
+    if (typeof dryRun !== 'boolean') fail('html_artifact_invalid');
+    if (typeof scan !== 'function') {
+      if (complete === true) fail('html_artifact_invalid');
+      return { removed: 0, retained: 0, complete: false, skipped: true };
+    }
+    return safe(() => lock(!dryRun, async (exists, assertLock) => {
+      // A candidate-only inspection must not create a missing store. This is an
+      // empty inventory observation, not authority for any subsequent deletion.
+      if (!exists) return { removed: 0, retained: 0, pending: 0, temporary: 0,
+        complete: true, candidates: [], reclaimableBytes: 0 };
       checkpoint('scan-locked');
       const proof = await scan();
-      held.assertLock();
-      checkpoint('scan-complete');
-      held.assertLock();
-      return collectProof(proof, held.assertLock);
-    } catch (error) { fail(CODES.has(error?.code) ? error.code : 'html_artifact_storage_failed'); }
-    finally { held?.release(); }
+      assertLock(); checkpoint('scan-complete'); assertLock();
+      // Maintenance can supply a synchronous final inventory validator. This
+      // detects an observed mutation but does NOT replace native exclusion.
+      if (typeof proof?.isCurrent === 'function' && proof.isCurrent() !== true) {
+        return { removed: 0, retained: 0, complete: false, skipped: true };
+      }
+      return collectProof(dryRun ? { ...proof, dryRun: true } : proof, assertLock);
+    }), true);
   }
   async function cleanupTemporary() {
     return safe(() => lock(false, (exists, assertLock) => {
@@ -402,5 +456,31 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
       return result;
     }));
   }
-  return { publish, read, collect, cleanupTemporary };
+  async function stats() {
+    return safe(() => lock(false, exists => {
+      const result = { count: 0, bytes: 0, htmlBytes: 0, pending: 0, temporary: 0,
+        temporaryBytes: 0, limits: { ...quota } };
+      if (!exists) return result;
+      for (const name of names()) {
+        if (isHtmlArtifactId(name)) {
+          const item = disk(name, false);
+          result.count++; result.bytes += item.storedBytes; result.htmlBytes += item.artifact.bytes;
+          if (item.pending) result.pending++;
+        } else if (TEMP.test(name)) {
+          const dir = path.join(root, name); directory(dir);
+          const entries = io.readdirSync(dir);
+          if (entries.some(file => !FILES.includes(file))) fail('html_artifact_storage_unsafe');
+          result.temporary++;
+          for (const file of entries) result.temporaryBytes += plain(path.join(dir, file), Math.max(META_BYTES, HTML_ARTIFACT_MAX_BYTES)).size;
+        }
+      }
+      result.bytes += result.temporaryBytes;
+      return result;
+    }));
+  }
+  async function recoverLock() {
+    // Startup/explicit maintenance only. No age cutoff and no unknown override.
+    return safe(() => lock(false, exists => ({ ok: true, exists }), true));
+  }
+  return { publish, read, collect, cleanupTemporary, stats, recoverLock };
 }
