@@ -1,7 +1,7 @@
 # Visual Replies P2 · E：规范测试链与 CI 验收
 
 日期：2026-11-27。总体逐项覆盖与真实样例矩阵见 [覆盖索引](visual-replies-p2-coverage.md)。
-第 1–7 节保留 E 原交付的历史身份与证据；第 8 节追加 E2 在 `a2cdaeb0` 集成状态上的登记与定向结果。
+第 1–7 节保留 E 原交付的历史身份与证据；第 8 节保留 E2 在 `a2cdaeb0` 上的首批登记与定向结果；第 9 节追加 C 测试集成后 UI 单 leaf 复验及未解决审查边界。
 本报告只证明所列测试基建与离线范围，不代表 A–D 全部集成、真实 Visual Replies 已验收或允许发布。
 
 ## 1. 身份、范围与勘察
@@ -182,6 +182,8 @@ E 已读取该精确提交 diff 核对改动，但没有把父运行冒充 E 运
 
 ## 8. E2：首批集成后的登记与定向结果
 
+本节为 `3584bcd2` 交付的首批快照，旧 UI 三个失败及当时的待交付状态保留；后续 C 适配和本线单 leaf 复验见第 9 节。
+
 ### 8.1 代码身份与范围
 
 - 日期：2026-11-27；before HEAD `a2cdaeb01ad50ed4cad5f82f08361d5f707546a4`，分支 `feat/visual-replies-p2`。
@@ -268,3 +270,41 @@ Guard 内 `--live` 无授权子进程明确在 import/spawn 前 exit 2，只证�
 - 产品整体、真实普通交互/截图、真实 Pi、真实模型、正常沙箱、完整集成、重建/打包及独立功能/安全审查分别 pending；安全已有失败不能被“pending”覆盖。本线不改 public/server，不负责重建，不声称产物更新；最终集成、产物、推送由父任务负责。
 - 风险按 CI/test 输入对待；E2 自查不是独立复审。回滚为仅回退本 E2 提交，不动父 plan 或后续产品提交；无用户数据/schema 迁移。
 - 本批登记开发已完成；整体代码验收未通过、无合并/发布许可。不 push、不建 PR、不 merge、不发版。
+
+## 9. E2 收尾：C 测试集成后的 UI 单 leaf 复验
+
+### 9.1 身份、执行次数与实际结果
+
+- C 原提交 `1d4bec0d` 已映射为 `0aacdb53ad265edc3b77b08e83721525343f171b`，仅修改 UI 套件并新增独立良性 viewer-electron。E2 首批提交仍为 `3584bcd2fb2e48665fb9ed6c0c2ee98a16613b03`。
+- 本次 UI 运行的 before/after HEAD 均为准确 `0aacdb53ad265edc3b77b08e83721525343f171b`，开始于 `2026-11-27T08:09:30.622Z`；当时未提交范围只有 E 的 coverage 与父 plan 文档。父后来仅提交 plan 为 `7bdd3d582db611cbdf17e11c9a941de66e7290b7`，本次收尾不修改它。
+- 只执行一次 `node --test tests/html-artifact-ui.cjs`：**20 pass / 0 fail / 0 skip，169 assertions，exit 0**。Node reporter duration **3633.9169 ms**，外层子进程耗时 **3937 ms**；中断后未重复运行。
+- 环境：同一指定集成树，Node `v24.22.1`、win32 x64 / Windows `10.0.26200`，`NODE_PATH=C:/pi-GUI/node_modules`。测试与六个相关产品模块的运行前后 SHA-256 全部一致；未改产品、UI 测试、package 或 guard。
+- C 的原 13 项/111 断言保留，扩展为 20 项/169 断言；第 8 节修前 **10 pass / 3 fail / skip 0** 和三处 `loading`/`ready` 失败完整保留，不抹除、不改 skip。当前 20/169 是适配后的新证据，不倒写历史。
+- C 报告的 UI+D 联合 **58/58** 仍属 C 的证据；本次 E 未重跑 D，也不把不同代码状态的结果相加成一次集成通过。
+
+本次唯一日志根目录：`C:/Users/21022/AppData/Local/Temp/pi-gui-p2-e2-c-handoff-JVaj3c/`。
+`current-ui.log` 保存实际输出；`current-ui.json` 保存准确 HEAD、dirty 范围、环境、退出码、耗时和前后源码摘要。
+本轮此前轻量检查另有 `guard.log`（12/12、fail/skip 0、exit 0）、`validate.log`（362 叶精确覆盖、exit 0）与 `viewer-syntax.log`（`node --check tests/html-artifact-viewer-electron.cjs` exit 0）；未启动桌面脚本。
+canonical 仍为 362 叶，原计划摘要与分组不变。没有重跑完整老套件、整条 Artifact/test:ci 链或完整 `npm test`。
+
+### 9.2 审查、真实边界与后续交接
+
+**定向通过不是审查通过。** 已读取父 plan 的 R-D 首轮记录：Blocker 0 / **Important 4 未解决** / Nit 0 / Pre-existing 0，结论不通过；D2/C 正在修复，E 不接替产品修复或增量独立复审：
+
+1. RD-1：CSS transition 被自然高度反馈 hold 误锁，200→600px 最终 frame 207px/capped。
+2. RD-2：expanded 消费 naturalHeight 绕过 hold，`calc(100vh + 10px)` 持续增高；65536px 上限不是修复。
+3. RD-3：12000px 内容全屏往返，iframe 内部 scrollY 7904→0→0；同 realm/输入保留不能替代内部阅读位置保存，需保存确认后再切换以避免先 clamp。
+4. RD-4：字符串 timer 句柄 `clearInterval(String(handle))` 未按原生接口转换，interval 残留。
+
+C 修前的正常 sandbox **22 checks / 9 图**是其良性桌面证据，不是 E 本次复验或 A 安全资格；约 **4008px** 样例不覆盖 **>4096px / RD-3**。默认共享 runtime 启动失败、同摘要私有离线路径及正常 sandbox 分别披露，不把语法检查充当桌面通过。
+`tests/html-artifact-viewer-electron.cjs` 保持独立良性桌面入口，不塞离线 canonical，本次没有运行它。
+
+**既有范围差异：** 父决定保留 `session-navigation.js` 的 bounded text-only 只读 Classic 历史预览契约，不扩 UI；该页可视化是 P1 既有范围差异。`fetchHistory` 加共享 viewer 的回归不能证明该只读预览页面已可视化，活动 Classic 恢复和 Runtime live/dormant 的渲染链分别登记。
+
+B3 的 `2cd34ec2` 报告 branches 17/17、372 断言；父决定随 B2 产品成组集成。当前树无 `tests/html-artifact-branches.cjs`，因此本次不登记该 leaf 或 fixture，也不提前登记未到齐的 B/A 文件；后续新 leaf 全由父统一处理，E 结束本批、不循环等待。
+B2 candidates-only/fail-closed 的待办仍不能写作自动 GC/容量回收完成；首批 Store 135 场景/529 assertions/另 skip 3 的旧证据保持原范围。
+
+**仍未验证：** 当前 PR 完整 canonical CI **pending**；产品整体、D2/C 修后复验及增量独立审查、真实普通交互/模型/Pi、正常沙箱资格和正式打包仍各自独立。用户随后允许模型调用不代表本线已运行，E 本线不调用模型。A 安全的首轮 28/29 失败及后续服务拒绝仍 **failed/blocked**，不重启、不接替。
+本次只提交 coverage 和本验收两份拥有文档，不改父 plan；本次文档提交可独立回退，无产品或数据迁移。交付提交标题为“文档(可视化)：记录UI单叶复验与未决验收边界”，最终消息给出准确 SHA。
+文档自查：`git diff --check` exit 0；本地链接 5 个、标题锚点 3 个、missing 0；当前 UI 测试与六个产品模块共 7 个摘要仍匹配已验证状态，package/guard 未变，branches 文件不存在。证据为同一日志目录的 `documentation-self-check.json`。
+文档收尾完成不等于整体验收通过，无合并/发布许可；不 push、不建 PR、不等待其他线。

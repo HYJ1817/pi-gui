@@ -1,7 +1,8 @@
 # Visual Replies P2 · 总体覆盖与未验证索引
 
 日期：2026-11-27；本索引保留 E 原交付历史，并追加 **E2 首批集成登记快照**，不是最终 P2 通过声明。
-E2 准确状态为 `a2cdaeb01ad50ed4cad5f82f08361d5f707546a4` 加 package/guard 登记 diff；细节见 [E 验收第 8 节](visual-replies-p2-e-acceptance.md#8-e2首批集成后的登记与定向结果)。
+E2 首批验证状态为 `a2cdaeb01ad50ed4cad5f82f08361d5f707546a4` 加 package/guard 登记 diff；细节见 [E 验收第 8 节](visual-replies-p2-e-acceptance.md#8-e2首批集成后的登记与定向结果)。
+后续 C 测试已集成为 `0aacdb53ad265edc3b77b08e83721525343f171b`；C 的定向证据与 R-D 四项未决 Important 分开登记，不能把测试通过写成审查通过。
 实现线仍在集成，后续新增 diff、截图和专项结果必须以各自准确 SHA 追加，不能继承旧状态。
 基线身份、逐叶 CI 证据、定向数字、注册机制与回滚见 [E 验收](visual-replies-p2-e-acceptance.md)。
 总体计划由父任务维护在 `docs/visual-replies-p2-plan.md`；本索引不更改 A–D 所有权。
@@ -25,9 +26,10 @@ E2 准确状态为 `a2cdaeb01ad50ed4cad5f82f08361d5f707546a4` 加 package/guard 
 ## 2. P1 遗留 3.1–3.7 逐项覆盖
 
 未标 E2 的 simulation 数字保留 E 原交付范围（基线产品 + E 基建 `e67b0211623d23a17fb8486a3731509a79d86fb7`）；
-E2 仅在上述集成状态复验 D 三套、normal-samples、model/store/backend/process、旧 UI 与 CI 基建链。
-新 D **38/38**、normal **7/7**，fail/skip 均 0；旧 UI **10 pass / 3 fail / skip 0**，不能将历史 13/13 当作当前通过。
-后续 B/A/C 文件、真实专项与父最终集成仍需新证据，表中同一套件跨行引用不能重复相加。
+E2 首批仅在 `a2cdaeb0` 加登记 diff 的状态复验 D 三套、normal-samples、model/store/backend/process、旧 UI 与 CI 基建链；后续 UI 单 leaf 使用下述准确 C 测试状态。
+E2 首批新 D **38/38**、normal **7/7**，fail/skip 均 0；旧 UI 的 **10 pass / 3 fail / skip 0** 保留为修前历史。
+C 后续交付 UI **20/20、169 断言**（原 13 项/111 断言保留）、联合 D **58/58**。E 于 `0aacdb53` 只复跑 UI 一次，实测 **20 pass / 0 fail / 0 skip、169 断言**；联合 D 的 58/58 仍为 C 的证据，本次 E 未重跑 D。
+R-D 首轮为 **不通过，Important 4 未解决**；后续修复、真实专项与父最终集成仍需新证据，表中同一套件跨行引用不能重复相加。
 
 | 任务 | 责任线 / 必须核验的边界 | simulation 已有证据 | real Pi contract | real model | real Electron sandbox | packaged / 当前结论 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -37,7 +39,9 @@ E2 仅在上述集成状态复验 D 三套、normal-samples、model/store/backen
 | 3.4 GC/容量 | B：所有引用/回收站/Agent运行/发布未持久化/孤儿/扫描删除竞争/统计/错误 | E2 Store仍135场景/529断言/另skip3，backend38/38；只证明受控fixture | pending原生排他资格 | pending运行中发布窗口 | pending维护入口实测 | **未完成**：B2报告口述停写删除资格缺陷；fail-closed/candidates-only收紧进行中，候选扫描不是自动GC/容量回收 |
 | 3.5 锁恢复 | B：正常/崩溃/强杀/中断/临时文件/PID复用/并发启动/旧owner/unknown | 既有Store拒绝遗留锁与故障路径；非P2恢复资格 | N/A | N/A | pending真实退出/重启 | pending；B身份恢复方案待证 |
 | 3.6 性能 | B：先测再改、大量历史、多会话并发、完整性、索引恢复 | E没有优化前后同口径数据；一次process耗时不是基准 | N/A | N/A | pending UI/后端响应 | pending；不得填已优化 |
-| 3.7 canonical/CI | E：backend/process与已到齐新套件注册；发现/分组；桌面与live独立；结果真实 | E2：362叶计划覆盖、guard12/12、10叶CI基建exit0；原358叶全保留。不是完整执行，旧UI3fail | pending独立契约入口集成 | opt-out exit2；真正调用pending | 独立安全命令已注册；专项failed，手动workflow未执行；E2未运行 | 基线CI只证旧355叶；当前PR完整CI **pending** |
+| 3.7 canonical/CI | E：backend/process与已到齐新套件注册；发现/分组；桌面与live独立；结果真实 | E2首批：362叶计划覆盖、guard12/12、10叶CI基建exit0；原358叶全保留。C适配后E单跑UI20/169通过；不是完整执行或R-D审查通过 | pending独立契约入口集成 | opt-out exit2；真正调用pending | 独立安全命令已注册；专项failed，手动workflow未执行；E2未运行 | 基线CI只证旧355叶；当前PR完整CI **pending** |
+
+**Classic 历史范围差异：** 父已确认 `session-navigation.js` 的 bounded text-only 只读历史预览是有意契约，本批不扩 UI；该页面的可视化展示是 P1 既有范围差异。`fetchHistory` 与共享 viewer 的回归不能证明该只读预览页面已支持可视化；活动 Classic 恢复及 Runtime live/dormant 渲染链分别判断。
 
 A 首轮报告已由 E 读取核验：
 `C:/Users/21022/AppData/Local/Temp/pi-html-artifact-security-ymlgeK/report.json`。
@@ -51,13 +55,28 @@ T3 当前参考 SHA/路径/历史修复与可得运行对照由 C 提供，**本
 
 | 任务 | 所有者与必须覆盖的边界 | simulation | real Pi contract | real model | real Electron sandbox | packaged |
 | --- | --- | --- | --- | --- | --- | --- |
-| 4.1 全屏 | C：轻量悬浮入口；关闭/Escape/焦点/适窗/长内容/主题/释放/多Artifact；返回不跳底；不增权限 | E2旧UI10pass/3fail，C适配待交付；reading12/12含受控占位锚点，不证明宿主交互 | N/A | 与3.1联验pending | pending会话/全屏及阅读位置 | pending |
+| 4.1 全屏 | C：轻量悬浮入口；关闭/Escape/焦点/适窗/长内容/主题/释放/多Artifact；返回不跳底；不增权限 | C适配后E单跑UI20/169通过，旧10pass/3fail保留历史；R-D全屏反馈/内部阅读位置Important未解决 | N/A | 与3.1联验pending | pending会话/全屏及阅读位置 | pending |
 | 4.2 缩放响应式 | C：放大/缩小/重置/适宽；窄宽/全屏/DPI；SVG/Canvas/长表；不双重缩放 | 新控件/协议pending；normal7/7只证合成样例处理器，不证缩放 | N/A | 样例实际发布pending | pending每档尺寸/DPR/清晰度/滚动 | pending |
 | 4.3 动态高度 | D：首次/字体/图片/JS/折叠/表格/连更/宽度/全屏/隐藏恢复/>4096内部滚动/限流 | E2 layout12/12、frame14/14；确定性时钟/受控尺寸，非真实布局 | N/A | 样例实际发布pending | pending测量/抖动/无截断 | pending |
 | 4.4 滚动阅读 | D：生成跟底/主动阅读停止/iframe滚轮/内外长滚/变高锚定/多Artifact/全屏返回/主题/分页/原跳底按钮 | E2 reading12/12；稳定ID/偏移、跟底所有权、局部程序滚动；原生滚轮pending | N/A | streaming联验pending | pending受信滚轮/键鼠/几何/位置差 | pending |
 | 4.5 图片交互/链接 | C/D：图片/SVG/Tooltip/按钮/筛选/输入/动画/展开；严格source/origin/schema/id/nonce/URL/长度；用户动作与确认 | E2 frame14/14含拒绝合成点击申领宿主动作，normal7/7含样例处理器；实际宿主协议pending | N/A | 正常交互样例pending | pending实际图片/链接安全与可用性 | pending |
 | 4.6 主题/视觉 | C/D：T3对照、Token/Icon/Button/Modal；无多层卡片/重复标题；深浅/首屏背景/图表对比与冗余标记 | E2 frame14/14含首帧主题/Token词汇/同文档切换；不是像素或对比度证明 | N/A | 样例配色实际输出pending | pending真实深浅/首屏/对比度截图 | pending |
 | 4.7 多会话资源 | D：同会话多件/并行后台/分页/大量iframe/切换/最小化/全屏/退出；可见实例不重建；不加Agent数量限制 | E2 layout12/12、frame14/14含可见性/取消回调/同frame与局部状态；整体压力pending | pending实际Pi生命周期 | pending多真实调用 | pending窗口/iframe计数、清理和交互状态 | pending |
+
+### 首轮 R-D 独立功能审查：4 Important 未解决
+
+审查范围 `dfdc1dde` → `a2cdaeb0` 的 D 模块与 C dialog 边界；结论 **不通过**，Blocker 0 / Important 4 / Nit 0 / Pre-existing 0。父已分配 D2/C 修复，E 不修改产品或替代增量复审。
+
+| 编号 | 已复现的问题 | 状态 |
+| --- | --- | --- |
+| RD-1 | transition 内容从 200→600px，反馈 hold 误锁到 frame 207px/capped | 未解决；D2 |
+| RD-2 | expanded 消费 naturalHeight 绕过 hold，`calc(100vh + 10px)` 持续增高；65536px 上限不算修复 | 未解决；C |
+| RD-3 | 12000px 内容全屏往返，内部 scrollY 7904→0→0；同 realm/输入保留不等于阅读位置保留 | 未解决；C/D2 保存确认后再切换，避免先 clamp |
+| RD-4 | `clearInterval(String(handle))` 未按原生接口转换句柄，interval 残留 | 未解决；D2 |
+
+R-D 证据由父登记在 `C:/Users/21022/AppData/Local/Temp/pi-gui-rd-review-zhpvD1/report-final.json`，E 读取父 plan 核对，未重跑探针。
+C 修前正常 sandbox 的 **22 checks、9 截图**是 C 的良性桌面证据，不是安全验收或 E 本次复验；约 **4008px** 样例不覆盖 **>4096px / RD-3**。默认共享 runtime 启动失败后的同摘要私有离线路径与正常 sandbox 资格分别披露。
+`tests/html-artifact-viewer-electron.cjs` 保持独立良性桌面入口，不纳入离线 canonical；E 本次只检查其语法，不启动 Electron。
 
 ## 4. 七类真实样例 × 必须组合
 
@@ -109,10 +128,11 @@ S7 的局部 28/29 首轮失败不是以上任意八格的完整证明，保持�
 
 - 已登记：D 的 `html-artifact-layout.cjs` / `html-artifact-frame.cjs` / `html-artifact-reading.cjs` 与 `visual-replies-normal-samples.cjs`，各为独立 `node --test` 叶；D clock 和 normal-samples 的 `tests/fixtures/` helper 不登记。
 - 原 358 个 canonical 叶全部保留，新增 4、删除/重复/旧叶换组均 0；Artifact 子链 8 → 12 叶。分组 core280 / ui28 / security28 / native4 / faults22，计划摘要 `509f720388b3d5b3a2b4bfa61db5540995ae38eaa62e240a23505381c025fa0a`。
-- 待实际交付后再登记：A1 新离线套件、B2 performance/lock/maintenance、B3 branches、C 新套件（如有）；不存在的文件不提前注册。C 旧 UI 适配待交付，E2 已记录三处 `loading`/`ready` 失败，不改测试、不改 skip。
+- C 旧 UI 适配已在 `0aacdb53` 集成并由 E 单 leaf 复验 20/20、169 断言；旧三处 `loading`/`ready` 失败保留历史，不改为 skip。viewer-electron 是独立良性桌面入口，不塞离线链。
+- B3 在其交付提交 `2cd34ec2` 报告 branches 17/17、372 断言；父决定随 B2 产品成组集成，当前树没有该测试文件，不注册其 leaf 或 fixture。A1/B2 等后续新 leaf 由父按实际文件统一处理；E 本次不等待、不循环登记。
 - B2 的勘察不是通过：maintenance/CLI 的 `confirmNativeWritersStopped` 删除资格缺陷尚待其 fail-closed/candidates-only 修复与复验；**候选扫描不等于自动 GC/容量回收完成**。旧 store 的 135 场景、529 assertions、另 skip3 不解除这个缺陷。
-- 本批精确命令/环境/首次失败与日志见 [E2 实测](visual-replies-p2-e-acceptance.md#83-实测命令准确数量与首次失败)。未完整运行 Artifact alias；`npm run test:ci` 只是 10 叶基建链，不是当前 PR 完整 CI。
+- 首批命令/环境/首次失败与日志见 [E2 实测](visual-replies-p2-e-acceptance.md#83-实测命令准确数量与首次失败)；C 适配后的单 leaf 结果见 [本次 UI 复验](visual-replies-p2-e-acceptance.md#9-e2-收尾c-测试集成后的-ui-单-leaf-复验)。未完整运行 Artifact alias；首批 `npm run test:ci` 只是 10 叶基建链，不是当前 PR 完整 CI。
 
-**快照结论：** E2 新四套共45/45、guard12/12、基建CI链exit0，旧UI10pass/3fail；基线355叶CI仅证明旧基线。当前P2完整canonical为 **pending**（当前PR完整CI尚未运行）；最终产品/真实视觉/Pi/模型/正常沙箱/打包各自未验证，安全首轮失败及服务拒绝仍 **failed/blocked**。最终集成、产物、推送由父任务负责，E2 不接替安全专项。
+**快照结论：** E2 首批新四套45/45、guard12/12、基建CI链exit0；旧UI10pass/3fail保留为历史，C适配后E于 `0aacdb53` 单跑UI为20pass/0fail/0skip、169断言。C的联合D58/58与良性桌面22checks/9图分别归属于C，均不解除R-D **4 Important未解决 / 审查不通过**。基线355叶CI仅证明旧基线，当前P2完整canonical为 **pending**（当前PR完整CI尚未运行）；最终产品/真实视觉/Pi/模型/正常沙箱/打包各自未完成，A安全首轮失败及服务拒绝仍 **failed/blocked**。用户允许模型调用不代表本线已调用；E不调用模型、不重启A安全。最终集成、产物、新leaf与推送由父任务负责。
 开发完成、代码验收、合并许可、发布许可四阶段分开，不能由本表推导后一阶段。
 P3的preview/headless/自动截图反馈/外部资源代理和MCP Apps均不在本期覆盖，不能填成已完成。
