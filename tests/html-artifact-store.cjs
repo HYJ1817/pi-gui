@@ -19,8 +19,20 @@ const digest = value => createHash('sha256').update(value).digest('hex');
 const idFor = value => digest(JSON.stringify(['pi-gui:html-artifact:v1', value.sessionId, value.messageId, value.toolCallId]));
 const encoded = value => JSON.stringify(value) + '\n';
 const tempPattern = /^\.tmp-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-async function check(name, action) { await action(); checks++; console.log('  ok ' + name); }
+const filter = process.argv.find(arg => arg.startsWith('--filter='))?.slice('--filter='.length);
+async function check(name, action) {
+  if (filter && !name.includes(filter)) return;
+  await action(); checks++; console.log('  ok ' + name);
+}
 async function nextScan() { await delay(20); return Date.now(); }
+// Test-only native evidence fixture; real callers must scan inside the callback
+// and exclude external native mutations until collect settles.
+const collectScan = (store, proof) => store.collect({ scan: () => proof });
+const barrier = () => {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+};
 
 (async () => {
   const { createHtmlArtifactStore, HTML_ARTIFACT_STORE_LIMITS } = await import('../server/html-artifact-store.js');
@@ -31,8 +43,16 @@ async function nextScan() { await delay(20); return Date.now(); }
       if (action === 'crash' && stage === 'before-rename') process.exit(73);
     } });
     try {
-      const ref = await store.publish(input());
-      process.stdout.write(JSON.stringify({ ok: true, ref }));
+      if (action === 'collect' || action === 'scan-crash') {
+        const result = await store.collect({ scan: () => {
+          if (action === 'scan-crash') process.exit(74);
+          return { complete: true, referencedIds: [idFor(input())], beforeMs: Date.now() };
+        } });
+        process.stdout.write(JSON.stringify({ ok: true, result }));
+      } else {
+        const ref = await store.publish(input());
+        process.stdout.write(JSON.stringify({ ok: true, ref }));
+      }
     } catch (error) { process.stdout.write(JSON.stringify({ ok: false, code: error.code })); }
     return;
   }
@@ -50,7 +70,7 @@ async function nextScan() { await delay(20); return Date.now(); }
     const f = fixture(extra); f.ref = await f.store.publish(input()); return f;
   }
   async function confirm(f, refs = [f.ref.id]) {
-    return f.store.collect({ referencedIds: refs, complete: true, beforeMs: await nextScan() });
+    return collectScan(f.store, { referencedIds: refs, complete: true, beforeMs: await nextScan() });
   }
   try {
     await check('async API is exact and absent read does not create storage', async () => {
@@ -306,7 +326,7 @@ async function nextScan() { await delay(20); return Date.now(); }
       const store = createHtmlArtifactStore({ dataDir: f.dataDir }), read = await store.read(idFor(input()));
       assert.equal(read.html, input().html);
       assert.deepEqual(await store.publish(input()), read.artifact);
-      assert.equal((await store.collect({ complete: true, referencedIds: [], beforeMs: await nextScan() })).pending, 1);
+      assert.equal((await collectScan(store, { complete: true, referencedIds: [], beforeMs: await nextScan() })).pending, 1);
       assert.equal((await store.read(read.artifact.id)).html, input().html);
     });
     await check('rename that commits then throws is not mistaken for a successful acknowledgement', async () => {
@@ -397,27 +417,243 @@ async function nextScan() { await delay(20); return Date.now(); }
         assert.deepEqual((await f.store.read(f.ref.id)).artifact, f.ref);
       }
     });
+    for (const protection of ['republish', 'reference', 'republish+reference']) {
+      await check('GC regression protects ' + protection + ' after an older scan started', async () => {
+        const f = await savedFixture(); await confirm(f);
+        assert.equal(fs.existsSync(path.join(f.dir(f.ref), '.pending')), false);
+        const beforeMs = await nextScan();
+        if (protection.includes('republish')) assert.deepEqual(await f.store.publish(input()), f.ref);
+        if (protection.includes('reference')) await confirm(f);
+        // The old A/cutoff, publish, B/positive, A/commit schedule used to
+        // remove=1 here. Pre-scanned evidence must now fail closed, not be
+        // relabeled as a new scan or trusted because its wall clock is old.
+        await assert.rejects(f.store.collect({ complete: true, referencedIds: [], beforeMs }), code('html_artifact_invalid'));
+        assert.deepEqual(await f.store.read(f.ref.id), { artifact: f.ref, html: input().html });
+      });
+    }
+    await check('GC regression republish alone restores durable pending without changing immutable bytes', async () => {
+      const f = await savedFixture(); await confirm(f);
+      const files = ['document.html', 'reference.json'];
+      const before = files.map(name => fs.readFileSync(path.join(f.dir(f.ref), name)));
+      assert.deepEqual(await f.store.publish(input()), f.ref);
+      assert.equal(fs.readFileSync(path.join(f.dir(f.ref), '.pending'), 'utf8'), '1\n');
+      for (const store of [f.store, createHtmlArtifactStore(f.options)]) {
+        const result = await collectScan(store, { complete: true, referencedIds: [], beforeMs: await nextScan() });
+        assert.equal(result.removed, 0); assert.equal(result.pending, 1);
+        assert.deepEqual(await store.read(f.ref.id), { artifact: f.ref, html: input().html });
+      }
+      assert.deepEqual(files.map(name => fs.readFileSync(path.join(f.dir(f.ref), name))), before);
+      await confirm(f);
+      assert.equal((await collectScan(f.store, { complete: true, referencedIds: [], beforeMs: await nextScan() })).removed, 1);
+    });
+    await check('GC regression repeated positive proof alone excludes older A until B commits', async () => {
+      const f = await savedFixture(); await confirm(f);
+      const release = barrier(), entered = barrier();
+      const b = f.store.collect({ scan: async () => {
+        entered.resolve(); await release.promise;
+        return { complete: true, referencedIds: [f.ref.id], beforeMs: Date.now() };
+      } });
+      await entered.promise;
+      try {
+        assert.ok(fs.existsSync(path.join(f.root, '.writer.lock')));
+        await assert.rejects(collectScan(createHtmlArtifactStore(f.options), { complete: true, referencedIds: [], beforeMs: Date.now() }), code('html_artifact_storage_busy'));
+        assert.equal(fs.existsSync(path.join(f.dir(f.ref), '.pending')), false);
+      } finally { release.resolve(); }
+      const result = await b; assert.equal(result.removed, 0); assert.equal(result.retained, 1);
+      assert.deepEqual((await f.store.read(f.ref.id)).artifact, f.ref);
+    });
+    await check('GC regression async A/B scans cannot commit out of order across instances and processes', async () => {
+      const f = await savedFixture(); await confirm(f); await f.store.publish(input());
+      const release = barrier(), entered = barrier();
+      const a = f.store.collect({ scan: async () => {
+        entered.resolve(); await release.promise;
+        return { complete: true, referencedIds: [], beforeMs: Date.now() };
+      } });
+      await entered.promise;
+      try {
+        for (const store of [f.store, createHtmlArtifactStore(f.options)]) {
+          await assert.rejects(store.publish(input()), code('html_artifact_storage_busy'));
+          await assert.rejects(store.read(f.ref.id), code('html_artifact_storage_busy'));
+          await assert.rejects(collectScan(store, { complete: true, referencedIds: [f.ref.id], beforeMs: Date.now() }), code('html_artifact_storage_busy'));
+          await assert.rejects(store.cleanupTemporary(), code('html_artifact_storage_busy'));
+        }
+        for (const action of ['publish', 'collect']) {
+          const other = child(f, action); assert.equal(other.status, 0);
+          assert.deepEqual(JSON.parse(other.stdout), { ok: false, code: 'html_artifact_storage_busy' });
+        }
+      } finally { release.resolve(); }
+      const result = await a; assert.equal(result.removed, 0); assert.equal(result.pending, 1);
+      const b = await confirm(f); assert.equal(b.retained, 1);
+      assert.equal(fs.existsSync(path.join(f.dir(f.ref), '.pending')), false);
+      assert.deepEqual(await f.store.read(f.ref.id), { artifact: f.ref, html: input().html });
+      assert.equal((await collectScan(f.store, { complete: true, referencedIds: [], beforeMs: await nextScan() })).removed, 1);
+    });
+    await check('GC regression scans of an empty store also exclude a concurrent initial publish', async () => {
+      const f = fixture(), release = barrier(), entered = barrier();
+      const result = f.store.collect({ scan: async () => {
+        entered.resolve(); await release.promise; return { complete: true, referencedIds: [], beforeMs: Date.now() };
+      } });
+      await entered.promise;
+      try {
+        const other = child(f, 'publish'); assert.equal(other.status, 0);
+        assert.deepEqual(JSON.parse(other.stdout), { ok: false, code: 'html_artifact_storage_busy' });
+      } finally { release.resolve(); }
+      assert.equal((await result).removed, 0);
+      assert.equal((await f.store.publish(input())).id, idFor(input()));
+    });
+    await check('GC regression callback throws, rejects or cancels without using stale proof or leaking lock', async () => {
+      const f = await savedFixture(); await confirm(f);
+      for (const scan of [() => { throw Error('private payload'); }, async () => { throw Error('private path'); },
+        async () => { throw Object.assign(Error('cancelled'), { name: 'AbortError' }); }]) {
+        await assert.rejects(f.store.collect({ scan }), code('html_artifact_storage_failed'));
+        assert.equal(fs.existsSync(path.join(f.root, '.writer.lock')), false);
+        assert.deepEqual((await f.store.read(f.ref.id)).artifact, f.ref);
+      }
+      assert.equal((await collectScan(f.store, { complete: true, referencedIds: [], beforeMs: await nextScan() })).removed, 1);
+    });
+    await check('GC regression native branch mutation is external evidence, not covered by store lock', async () => {
+      const f = await savedFixture(); await confirm(f); await f.store.publish(input());
+      let epoch = 0;
+      const result = await f.store.collect({ scan: async () => {
+        const captured = epoch;
+        await Promise.resolve().then(() => { epoch++; }); // A native branch/reference mutation, not a store operation.
+        return { complete: captured === epoch, referencedIds: [], beforeMs: Date.now() };
+      } });
+      assert.equal(result.complete, false); assert.equal(result.removed, 0);
+      assert.ok(fs.existsSync(path.join(f.dir(f.ref), '.pending')));
+      assert.deepEqual((await f.store.read(f.ref.id)).artifact, f.ref);
+    });
+    await check('GC regression clock equality and rollback never open a locked scan or discard pending', async () => {
+      const f = await savedFixture(); await confirm(f);
+      const now = Date.now;
+      try {
+        for (const clock of [now(), now() - 86400000]) {
+          Date.now = () => clock;
+          await f.store.publish(input());
+          const result = await f.store.collect({ scan: async () => {
+            await assert.rejects(f.store.publish(input()), code('html_artifact_storage_busy'));
+            await Promise.resolve();
+            return { complete: true, referencedIds: [], beforeMs: Date.now() };
+          } });
+          assert.equal(result.removed, 0); assert.equal(result.pending, 1);
+        }
+      } finally { Date.now = now; }
+      await confirm(f);
+      assert.equal((await collectScan(f.store, { complete: true, referencedIds: [], beforeMs: await nextScan() })).removed, 1);
+    });
+    await check('GC regression scan process crash preserves a fail-closed lock through restart', async () => {
+      const f = await savedFixture(); await confirm(f);
+      const crashed = child(f, 'scan-crash'); assert.equal(crashed.status, 74);
+      assert.ok(fs.existsSync(path.join(f.root, '.writer.lock')));
+      const store = createHtmlArtifactStore(f.options);
+      await assert.rejects(store.read(f.ref.id), code('html_artifact_storage_busy'));
+      await assert.rejects(collectScan(store, { complete: true, referencedIds: [], beforeMs: Date.now() }), code('html_artifact_storage_busy'));
+      // Only this test owns the fixture and has verified the child exited.
+      fs.unlinkSync(path.join(f.root, '.writer.lock'));
+      assert.deepEqual((await store.read(f.ref.id)).artifact, f.ref);
+      assert.equal((await collectScan(store, { complete: true, referencedIds: [], beforeMs: await nextScan() })).removed, 1);
+    });
+    await check('GC regression republish marker is charged to byte quotas but not artifact counts', async () => {
+      const f = await savedFixture({ limits: { totalCount: 1, sessionCount: 1 } });
+      const physical = fs.readdirSync(f.dir(f.ref)).reduce((n, name) => n + fs.statSync(path.join(f.dir(f.ref), name)).size, 0);
+      for (const bound of ['totalBytes', 'sessionBytes']) {
+        await confirm(f);
+        const store = createHtmlArtifactStore({ ...f.options, limits: { ...f.options.limits, [bound]: physical - 1 } });
+        await assert.rejects(store.publish(input()), code('html_artifact_quota'));
+        assert.equal(fs.existsSync(path.join(f.dir(f.ref), '.pending')), false);
+        assert.deepEqual((await store.read(f.ref.id)).artifact, f.ref);
+        const exact = createHtmlArtifactStore({ ...f.options, limits: { ...f.options.limits, [bound]: physical } });
+        assert.deepEqual(await exact.publish(input()), f.ref);
+        assert.equal(fs.readFileSync(path.join(f.dir(f.ref), '.pending'), 'utf8'), '1\n');
+      }
+    });
+    for (const stage of ['republish-pending-written', 'republish-pending-flushed']) {
+      await check('GC regression lost duplicate ack at ' + stage + ' remains pending after restart', async () => {
+        const f = await savedFixture(); await confirm(f);
+        const store = createHtmlArtifactStore({ ...f.options, checkpoint(current) { if (current === stage) throw Error('lost ack'); } });
+        await assert.rejects(store.publish(input()), code('html_artifact_storage_failed'));
+        const restarted = createHtmlArtifactStore(f.options);
+        assert.deepEqual((await restarted.read(f.ref.id)).artifact, f.ref);
+        assert.equal((await collectScan(restarted, { complete: true, referencedIds: [], beforeMs: await nextScan() })).pending, 1);
+        assert.deepEqual(await restarted.publish(input()), f.ref);
+      });
+    }
+    await check('GC regression retry must flush an existing pending marker before acknowledging', async () => {
+      const f = await savedFixture(); let flushes = 0;
+      const io = Object.create(fs);
+      io.fsyncSync = () => { flushes++; throw Object.assign(Error('pending flush failed'), { code: 'EIO' }); };
+      await assert.rejects(createHtmlArtifactStore({ ...f.options, io }).publish(input()), code('html_artifact_storage_failed'));
+      assert.equal(flushes, 1);
+      assert.equal(fs.readFileSync(path.join(f.dir(f.ref), '.pending'), 'utf8'), '1\n');
+      assert.deepEqual(await f.store.publish(input()), f.ref);
+    });
+    await check('GC regression silent short duplicate marker cannot acknowledge or authorize deletion', async () => {
+      const f = await savedFixture(); await confirm(f);
+      const io = Object.create(fs);
+      io.writeFileSync = (fd, bytes) => fs.writeFileSync(fd, bytes.subarray(0, 1));
+      await assert.rejects(createHtmlArtifactStore({ ...f.options, io }).publish(input()), code('html_artifact_storage_corrupt'));
+      await assert.rejects(collectScan(f.store, { complete: true, referencedIds: [], beforeMs: await nextScan() }), code('html_artifact_storage_corrupt'));
+      assert.equal(fs.readFileSync(path.join(f.dir(f.ref), 'document.html'), 'utf8'), input().html);
+    });
+    await check('GC regression callback store reentry fails busy immediately and never invokes nested scan', async () => {
+      const f = await savedFixture(); let nested = false;
+      const result = await f.store.collect({ scan: async () => {
+        await assert.rejects(f.store.publish(input()), code('html_artifact_storage_busy'));
+        await assert.rejects(f.store.read(f.ref.id), code('html_artifact_storage_busy'));
+        await assert.rejects(f.store.collect({ scan: () => { nested = true; } }), code('html_artifact_storage_busy'));
+        return { complete: false, referencedIds: [f.ref.id] };
+      } });
+      assert.equal(nested, false); assert.equal(result.complete, false);
+      assert.equal(fs.existsSync(path.join(f.root, '.writer.lock')), false);
+      assert.equal(fs.readFileSync(path.join(f.dir(f.ref), '.pending'), 'utf8'), '1\n');
+    });
+    for (const replacement of ['lock', 'root']) {
+      await check('GC regression identity replacement during awaited scan refuses commit: ' + replacement, async () => {
+        const f = await savedFixture(); await confirm(f);
+        let lockFd;
+        const io = Object.create(fs);
+        io.openSync = (file, ...args) => {
+          const fd = fs.openSync(file, ...args); if (path.basename(file) === '.writer.lock') lockFd = fd; return fd;
+        };
+        const store = createHtmlArtifactStore({ ...f.options, io });
+        await assert.rejects(store.collect({ scan: async () => {
+          await Promise.resolve(); fs.closeSync(lockFd);
+          if (replacement === 'lock') {
+            fs.unlinkSync(path.join(f.root, '.writer.lock')); fs.writeFileSync(path.join(f.root, '.writer.lock'), 'foreign owner');
+          } else { fs.renameSync(f.root, f.root + '-moved'); fs.mkdirSync(f.root, { mode: 0o700 }); }
+          return { complete: true, referencedIds: [], beforeMs: Date.now() };
+        } }), code('html_artifact_storage_unsafe'));
+        if (replacement === 'lock') {
+          assert.equal(fs.readFileSync(path.join(f.root, '.writer.lock'), 'utf8'), 'foreign owner');
+          assert.equal(fs.readFileSync(path.join(f.dir(f.ref), 'document.html'), 'utf8'), input().html);
+        } else {
+          assert.deepEqual(fs.readdirSync(f.root), []);
+          assert.equal(fs.readFileSync(path.join(f.root + '-moved', f.ref.id, 'document.html'), 'utf8'), input().html);
+          assert.ok(fs.existsSync(path.join(f.root + '-moved', '.writer.lock')));
+        }
+      });
+    }
     await check('complete collect requires explicit safe cutoff and ID sets', async () => {
       const f = await savedFixture();
       for (const options of [{}, { beforeMs: Infinity }, { beforeMs: Date.now() + 60000 }, { beforeMs: -1 },
         { beforeMs: 1, referencedIds: null }, { beforeMs: 1, referencedIds: ['../outside'] },
         { beforeMs: 1, referencedIds: [], candidateIds: ['bad'] }]) {
-        await assert.rejects(f.store.collect({ complete: true, referencedIds: [], ...options }), code('html_artifact_invalid'));
+        await assert.rejects(collectScan(f.store, { complete: true, referencedIds: [], ...options }), code('html_artifact_invalid'));
       }
       assert.equal((await f.store.read(f.ref.id)).html, input().html);
     });
     await check('pending unconfirmed artifacts survive GC and store/process restart', async () => {
       const f = await savedFixture(), store = createHtmlArtifactStore(f.options);
-      const result = await store.collect({ complete: true, referencedIds: [], beforeMs: await nextScan() });
+      const result = await collectScan(store, { complete: true, referencedIds: [], beforeMs: await nextScan() });
       assert.equal(result.removed, 0); assert.equal(result.pending, 1); assert.equal(result.retained, 1);
       assert.equal(fs.readFileSync(path.join(f.dir(f.ref), '.pending'), 'utf8'), '1\n');
     });
     await check('all-branch reference proof retains artifact; later explicit orphan is collected', async () => {
       const f = await savedFixture(), confirmation = await confirm(f);
       assert.equal(confirmation.retained, 1); assert.equal(fs.existsSync(path.join(f.dir(f.ref), '.pending')), false);
-      const branch = await f.store.collect({ complete: true, referencedIds: new Set([f.ref.id]), candidateIds: [f.ref.id], beforeMs: await nextScan() });
+      const branch = await collectScan(f.store, { complete: true, referencedIds: new Set([f.ref.id]), candidateIds: [f.ref.id], beforeMs: await nextScan() });
       assert.equal(branch.removed, 0); assert.equal(branch.retained, 1);
-      const result = await f.store.collect({ complete: true, referencedIds: [], candidateIds: [f.ref.id], beforeMs: await nextScan() });
+      const result = await collectScan(f.store, { complete: true, referencedIds: [], candidateIds: [f.ref.id], beforeMs: await nextScan() });
       assert.equal(result.removed, 1); assert.equal(result.retained, 0);
       await assert.rejects(f.store.read(f.ref.id), code('html_artifact_not_found'));
       assert.deepEqual(fs.readdirSync(f.root), []);
@@ -425,14 +661,14 @@ async function nextScan() { await delay(20); return Date.now(); }
     await check('candidate scope never deletes another deleted/unselected session artifact', async () => {
       const f = await savedFixture(), other = await f.store.publish(input({ sessionId: 'other-session' }));
       await confirm(f, [f.ref.id, other.id]);
-      const result = await f.store.collect({ complete: true, referencedIds: [], candidateIds: [f.ref.id], beforeMs: await nextScan() });
+      const result = await collectScan(f.store, { complete: true, referencedIds: [], candidateIds: [f.ref.id], beforeMs: await nextScan() });
       assert.equal(result.removed, 1); assert.equal(result.retained, 1);
       assert.deepEqual((await f.store.read(other.id)).artifact, other);
     });
-    await check('snapshot published or reference confirmed after scan start cannot be collected', async () => {
+    await check('age cutoff retains snapshots published or first confirmed after cutoff, independently of scan locking', async () => {
       const f = fixture(), beforeMs = Date.now();
       f.ref = await f.store.publish(input()); await confirm(f);
-      const result = await f.store.collect({ complete: true, referencedIds: [], beforeMs });
+      const result = await collectScan(f.store, { complete: true, referencedIds: [], beforeMs });
       assert.equal(result.removed, 0); assert.equal(result.retained, 1);
       assert.deepEqual((await f.store.read(f.ref.id)).artifact, f.ref);
     });
@@ -440,7 +676,7 @@ async function nextScan() { await delay(20); return Date.now(); }
       const f = await savedFixture(), other = await f.store.publish(input({ messageId: 'corrupt' }));
       await confirm(f, [f.ref.id, other.id]);
       fs.writeFileSync(path.join(f.dir(other), 'reference.json'), '{');
-      await assert.rejects(f.store.collect({ complete: true, referencedIds: [], beforeMs: await nextScan() }), code('html_artifact_storage_corrupt'));
+      await assert.rejects(collectScan(f.store, { complete: true, referencedIds: [], beforeMs: await nextScan() }), code('html_artifact_storage_corrupt'));
       assert.deepEqual((await f.store.read(f.ref.id)).artifact, f.ref);
     });
     await check('interrupted collection unpublishes atomically and leaves only reclaimable temp', async () => {
@@ -448,7 +684,7 @@ async function nextScan() { await delay(20); return Date.now(); }
       const io = Object.create(fs);
       io.unlinkSync = file => { if (path.basename(file) === 'document.html') throw Error('interrupted GC'); fs.unlinkSync(file); };
       const store = createHtmlArtifactStore({ ...f.options, io });
-      await assert.rejects(store.collect({ complete: true, referencedIds: [], beforeMs: await nextScan() }), code('html_artifact_storage_failed'));
+      await assert.rejects(collectScan(store, { complete: true, referencedIds: [], beforeMs: await nextScan() }), code('html_artifact_storage_failed'));
       await assert.rejects(f.store.read(f.ref.id), code('html_artifact_not_found'));
       assert.equal(fs.readdirSync(f.root).filter(name => tempPattern.test(name)).length, 1);
       assert.deepEqual(await f.store.cleanupTemporary(), { removed: 1, retained: 0 });

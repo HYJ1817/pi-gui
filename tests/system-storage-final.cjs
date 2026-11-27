@@ -109,12 +109,18 @@ test('immutable HTML artifact snapshots cold-migrate byte-exactly without interp
   const { createHtmlArtifactStore } = await import('../server/html-artifact-store.js');
   const store = createHtmlArtifactStore({ dataDir: w.source });
   const html = '<!doctype html><script>parent.document.title="must stay inert during migration"</script>\n';
-  const artifact = await store.publish({ sessionId: 'session-fixture', messageId: 'message-fixture',
-    toolCallId: 'call-fixture', title: '报告', html });
+  const draft = { sessionId: 'session-fixture', messageId: 'message-fixture', toolCallId: 'call-fixture', title: '报告', html };
+  const artifact = await store.publish(draft);
   const relative = path.join('html-artifacts', artifact.id);
   const original = Object.fromEntries(await Promise.all(['document.html', 'reference.json', '.pending']
     .map(async name => [name, await fs.readFile(path.join(w.source, relative, name))])));
   const originalHtml = await witness(path.join(w.source, relative, 'document.html'));
+  const originalRef = await witness(path.join(w.source, relative, 'reference.json'));
+  assert.equal((await store.collect({ scan: async () => ({ complete: true, referencedIds: [artifact.id], beforeMs: Date.now() }) })).retained, 1);
+  await assert.rejects(fs.stat(path.join(w.source, relative, '.pending')), { code: 'ENOENT' });
+  assert.deepEqual(await store.publish(draft), artifact); // A duplicate must restore the marker that cold migration preserves.
+  await unchanged(path.join(w.source, relative, 'document.html'), originalHtml);
+  await unchanged(path.join(w.source, relative, 'reference.json'), originalRef);
   assert.equal(original['document.html'].toString('utf8'), html);
   assert.deepEqual((await fs.readdir(path.join(w.source, relative))).sort(), ['.pending', 'document.html', 'reference.json']);
   const core = await w.open();
@@ -132,6 +138,24 @@ test('immutable HTML artifact snapshots cold-migrate byte-exactly without interp
   assert.equal(restored.artifact.id, artifact.id);
   assert.equal(restored.html, html);
   await unchanged(path.join(w.source, relative, 'document.html'), originalHtml);
+});
+
+test('HTML artifact migration refuses an actual awaited reference scan lock, then succeeds after release', async t => {
+  const w = await fixture(t);
+  const { createHtmlArtifactStore } = await import('../server/html-artifact-store.js');
+  const store = createHtmlArtifactStore({ dataDir: w.source });
+  const core = await w.open();
+  let release, entered;
+  const waiting = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const collection = store.collect({ scan: async () => { entered(); await waiting; return { complete: false }; } });
+  await started;
+  try {
+    refuses(await core.preview(w.target), 'unknown_transaction');
+    assert.deepEqual(await fs.readdir(w.target), []);
+  } finally { release(); }
+  assert.equal((await collection).complete, false);
+  succeeds(await core.preview(w.target));
 });
 
 test('HTML artifact migration rejects unfinished locks, temp paths and unknown files', async t => {
