@@ -13,6 +13,11 @@ function resizeSnapshot(value) {
     snapshot[key] = Math.min(HTML_ARTIFACT_MAX_NATURAL_SIZE, Math.ceil(value[key]));
   }
   if (value.capped !== undefined && typeof value.capped !== 'boolean') return null;
+  // Absence is an old-v1 snapshot, not permission to use raw naturalHeight.
+  if (value.feedback !== undefined) {
+    if (typeof value.feedback !== 'boolean') return null;
+    snapshot.feedback = value.feedback;
+  }
   snapshot.capped = value.capped ?? value.height > 4096;
   return snapshot;
 }

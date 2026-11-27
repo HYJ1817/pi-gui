@@ -68,6 +68,41 @@ function frameBootstrap(configuration, installRuntime, installMeasurement, insta
   if (!locked) return;
   apply(theme); // Set first-paint colors/fonts before the model's styles/content.
   const post = message => send({ schemaVersion: 1, id, nonce, ...message }, hostOrigin);
+  // Trusted presentation work must still run when cooperative model timers are
+  // paused. Capture only local-realm operations before installing that runtime.
+  const nativeRaf = window.requestAnimationFrame.bind(window);
+  const nativeCancel = window.cancelAnimationFrame.bind(window);
+  const localScroll = window.scrollTo.bind(window);
+  let presentationSequence = 0, savedScroll = null, restoreFrame = null, disposed = false;
+  const cancelRestore = () => {
+    if (restoreFrame !== null) nativeCancel(restoreFrame);
+    restoreFrame = null;
+  };
+  const present = value => {
+    if (disposed || typeof value.expanded !== 'boolean' || !Number.isSafeInteger(value.sequence)
+      || value.sequence <= presentationSequence || Object.keys(value).length !== 6
+      || Object.keys(value).some(key => !['schemaVersion', 'type', 'id', 'nonce', 'expanded', 'sequence'].includes(key))) return;
+    presentationSequence = value.sequence;
+    cancelRestore();
+    const acknowledge = () => post({ type: 'presentation-ready', expanded: value.expanded, sequence: value.sequence });
+    if (value.expanded) {
+      // A second open must not replace the inline position with an expanded,
+      // potentially clamped position. The host changes geometry only after ACK.
+      if (!savedScroll) savedScroll = { left: window.scrollX, top: window.scrollY };
+      acknowledge();
+    } else {
+      // Host has already restored inline geometry. No host scroll target/RPC.
+      restoreFrame = nativeRaf(() => {
+        restoreFrame = nativeRaf(() => {
+          restoreFrame = null;
+          if (disposed) return;
+          if (savedScroll) localScroll({ ...savedScroll, behavior: 'instant' });
+          savedScroll = null;
+          acknowledge();
+        });
+      });
+    }
+  };
   const measurement = installMeasurement(window, post);
   const runtime = installRuntime(window);
   if (!runtime || !installScroll(window)) { measurement.dispose(); runtime?.dispose(); return; }
@@ -93,16 +128,20 @@ function frameBootstrap(configuration, installRuntime, installMeasurement, insta
   receive('message', event => {
     if (event.source !== parent || event.origin !== hostOrigin) return;
     const value = event.data;
-    if (!value || Array.isArray(value) || value.schemaVersion !== 1
+    if (disposed || !value || typeof value !== 'object' || Array.isArray(value) || value.schemaVersion !== 1
       || value.id !== id || value.nonce !== nonce) return;
-    if (value.type === 'theme') { apply(value.theme); measurement.queue(); }
+    if (value.type === 'presentation') present(value);
+    else if (value.type === 'theme') { apply(value.theme); measurement.queue(); }
     else if (value.type === 'visibility' && typeof value.visible === 'boolean') {
       hostVisible = value.visible; updateVisibility();
     }
   });
   document.addEventListener('visibilitychange', updateVisibility);
   updateVisibility();
-  const dispose = () => { measurement.dispose(); runtime.dispose(); pausedAnimations.clear(); };
+  const dispose = () => {
+    disposed = true; cancelRestore(); savedScroll = null;
+    measurement.dispose(); runtime.dispose(); pausedAnimations.clear();
+  };
   receive('pagehide', dispose, { once: true }); receive('unload', dispose, { once: true });
   const now = performance.now.bind(performance);
   const parseUrl = URL;

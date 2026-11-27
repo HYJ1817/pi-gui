@@ -31,14 +31,17 @@ export function installHtmlArtifactMeasurement(view, post) {
     if (naturalWidth === 0) return; // hidden layout must never replace a good size.
     const viewportHeight = view.innerHeight, viewportWidth = view.innerWidth;
     let height = clamp(naturalHeight), feedback = false;
-    // Viewport-dependent author CSS (100vh + padding, min-height:100%, etc.)
-    // must not grow the host on every assigned height. Without a content/font/
-    // width change, keep the previous viewport and let excess scroll internally.
+    // A changed viewport is not proof that it caused a CSS transition's growth.
+    // Hold correlated changes, but accept progress observed at a FIXED viewport.
+    // Duplicate observations must not release the hold for calc(100vh + 10px).
+    const independent = previous && viewportHeight === previous.viewportHeight
+      && naturalHeight !== previous.naturalHeight;
     if (previous && revision === previous.revision && viewportWidth === previous.viewportWidth
-        && (previous.feedback || viewportHeight !== previous.viewportHeight && naturalHeight !== previous.naturalHeight)) {
+        && (previous.feedback && !independent
+          || viewportHeight !== previous.viewportHeight && naturalHeight !== previous.naturalHeight)) {
       height = previous.height; feedback = true;
     }
-    const snapshot = { type: 'resize', height, naturalHeight, naturalWidth,
+    const snapshot = { type: 'resize', height, naturalHeight, naturalWidth, feedback,
       capped: naturalHeight > height || feedback };
     const nextSignature = JSON.stringify(snapshot);
     previous = { ...snapshot, feedback, revision, viewportHeight, viewportWidth };
@@ -75,6 +78,9 @@ export function installHtmlArtifactMeasurement(view, post) {
     on(doc, 'load', changed, true); on(doc, 'error', changed, true);
     on(doc, 'toggle', changed, true);
     on(doc, 'input', changed, true); on(doc, 'change', changed, true);
+    // The last animation sample can coincide with a host viewport assignment;
+    // completion/cancellation is an independent revision that settles its size.
+    for (const name of ['transitionend', 'transitioncancel', 'animationend', 'animationcancel']) on(doc, name, changed, true);
     if (doc.fonts) {
       on(doc.fonts, 'loadingdone', changed); on(doc.fonts, 'loadingerror', changed);
       doc.fonts.ready.then(changed, changed);
