@@ -94,6 +94,58 @@ test('new D and normal node:test suites retain explicit --test entrypoints', asy
   }
 });
 
+test('B registrations preserve node:test branches and plain Node storage entrypoints', async () => {
+  const { createTestGroupPlan, testFilesForCommand, classifyTestCommand } = await planner;
+  const expected = new Map([
+    ['branches', 'node --test tests/html-artifact-branches.cjs'],
+    ['lock', 'node tests/html-artifact-lock.cjs'],
+    ['maintenance', 'node tests/html-artifact-maintenance.cjs'],
+    ['performance', 'node tests/html-artifact-performance.cjs'],
+  ]);
+  for (const leaves of [createTestGroupPlan({ root, packageJson }).leaves, (await artifactPlan()).leaves]) {
+    for (const [name, command] of expected) {
+      const file = `tests/html-artifact-${name}.cjs`;
+      assert.deepEqual(leaves.filter(value => testFilesForCommand(value).includes(file)), [command],
+        `${file} must keep its exact runner type and execute once`);
+      assert.equal(classifyTestCommand(command), 'core');
+    }
+  }
+});
+
+test('coverage guard accepts mixed plain Node and node:test leaves but rejects missing or duplicate files', async () => {
+  const { testFilesForCommand } = await planner;
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-html-b-canonical-'));
+  try {
+    fs.writeFileSync(path.join(fixture, 'html-artifact-plain.cjs'), '// synthetic plain Node suite\n');
+    fs.writeFileSync(path.join(fixture, 'html-artifact-runner.cjs'), '// synthetic node:test suite\n');
+    fs.mkdirSync(path.join(fixture, 'fixtures'));
+    fs.writeFileSync(path.join(fixture, 'fixtures/html-artifact-branches-fixture.cjs'), '// helper, not a suite\n');
+    const files = offlineFiles(fixture);
+    assert.deepEqual(files, ['tests/html-artifact-plain.cjs', 'tests/html-artifact-runner.cjs']);
+    const leaves = ['node tests/html-artifact-plain.cjs', 'node --test tests/html-artifact-runner.cjs'];
+    requireCoverage(files, leaves, testFilesForCommand);
+    for (const command of leaves) {
+      assert.throws(() => requireCoverage(files, leaves.filter(value => value !== command), testFilesForCommand), /must execute exactly once/);
+      assert.throws(() => requireCoverage(files, [...leaves, command], testFilesForCommand), /must execute exactly once/);
+    }
+    assert.deepEqual(testFilesForCommand(leaves[0] + ' tests/fixtures/html-artifact-branches-fixture.cjs'), [files[0]],
+      'plain Node script arguments are not additional test suites');
+  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
+});
+
+test('performance benchmark and baseline remain opt-in, never canonical execution', async () => {
+  const { createTestGroupPlan, testFilesForCommand } = await planner;
+  for (const leaves of [createTestGroupPlan({ root, packageJson }).leaves, (await artifactPlan()).leaves]) {
+    for (const command of leaves) {
+      assert.doesNotMatch(command, /--(?:benchmark|baseline)\b/);
+    }
+    assert.deepEqual(leaves.filter(command => testFilesForCommand(command).includes('tests/html-artifact-performance.cjs')),
+      ['node tests/html-artifact-performance.cjs']);
+    assert.ok(!leaves.flatMap(testFilesForCommand).some(file => /^tests\/fixtures\/html-artifact-/.test(file)),
+      'Artifact fixtures are helpers, not standalone canonical suites');
+  }
+});
+
 test('clock and normal sample helpers never execute as standalone canonical suites', async () => {
   const { createTestGroupPlan, testFilesForCommand } = await planner;
   for (const leaves of [createTestGroupPlan({ root, packageJson }).leaves, (await artifactPlan()).leaves]) {
