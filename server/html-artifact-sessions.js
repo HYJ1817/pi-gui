@@ -79,6 +79,8 @@ export function scanHtmlArtifactReferences(roots) {
       if (row.type !== 'message' || row.message?.role !== 'toolResult') continue;
       const ref = htmlArtifactFromToolResult(row.message);
       if (ref) referencedIds.add(ref.id);
+      else if (row.message.toolName === 'html_render' && row.message.details?.kind === 'html_artifact'
+        && row.message.details?.ok !== false) complete = false; // Unknown/future typed references cannot authorize deletion.
     }
   };
   for (const root of new Set(roots)) {
@@ -90,16 +92,21 @@ export function scanHtmlArtifactReferences(roots) {
     }
     if (safe) walk(root);
   }
-  // Detect renames/appends/removals while other trees were being scanned. No
-  // count quota silently truncates the inventory; resource bounds fail closed.
-  for (const [target, before] of observed) {
-    try {
-      const stat = fs.lstatSync(target);
-      if (!before || stat.isSymbolicLink() || JSON.stringify(stamp(stat)) !== JSON.stringify(before.stat)
-        || before.names && JSON.stringify(fs.readdirSync(target).sort()) !== JSON.stringify(before.names)) complete = false;
-    } catch (error) { if (before || error.code !== 'ENOENT') complete = false; }
-  }
-  return { complete, referencedIds, files };
+  // Keep the exact inventory validator through scan -> store continuation ->
+  // every delete. It detects observed external changes, not uncooperative native
+  // exclusion; automatic GC still cannot be enabled using this check alone.
+  const isCurrent = () => {
+    for (const [target, before] of observed) {
+      try {
+        const stat = fs.lstatSync(target);
+        if (!before || stat.isSymbolicLink() || JSON.stringify(stamp(stat)) !== JSON.stringify(before.stat)
+          || before.names && JSON.stringify(fs.readdirSync(target).sort()) !== JSON.stringify(before.names)) return false;
+      } catch (error) { if (before || error.code !== 'ENOENT') return false; }
+    }
+    return true;
+  };
+  complete = complete && isCurrent();
+  return { complete, referencedIds, files, isCurrent };
 }
 
 export function htmlSessionIdentity(file) {

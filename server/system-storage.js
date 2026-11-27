@@ -2,7 +2,7 @@ import { json } from './http-utils.js';
 
 // The already-resolved DATA_DIR is authoritative. Reporting must not call the
 // resolver a second time (which would repeat startup migration side effects).
-export function createSystemStorage({ dataDir, piAgentDir, env = process.env, executionMode }) {
+export function createSystemStorage({ dataDir, piAgentDir, env = process.env, executionMode, artifactStats = null }) {
   const desktopDefault = executionMode === 'electron' && env.PI_GUI_DESKTOP === '1'
     && env.PI_GUI_DATA_SOURCE === 'electron-user-data';
   const managed = executionMode === 'electron' && env.PI_GUI_DESKTOP === '1' && env.PI_GUI_DATA_SOURCE === 'managed';
@@ -13,9 +13,22 @@ export function createSystemStorage({ dataDir, piAgentDir, env = process.env, ex
     piAgentDirectory: piAgentDir,
     piAgentSource: env.PI_CODING_AGENT_DIR ? 'environment' : 'pi-default',
   };
-  return { handle(req, res) {
+  return { async handle(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'GET') return json(res, 405, { ok: false, code: 'method_not_allowed' });
-    return json(res, 200, { ok: true, storage });
+    if (typeof artifactStats !== 'function') return json(res, 200, { ok: true, storage });
+    let htmlArtifacts = { status: 'unknown', code: 'html_store_unavailable' };
+    try {
+      const value = await artifactStats();
+      const keys = ['count', 'bytes', 'htmlBytes', 'pending', 'temporary', 'temporaryBytes'];
+      if (keys.every(key => Number.isSafeInteger(value?.[key]) && value[key] >= 0)) {
+        htmlArtifacts = { status: 'known', ...Object.fromEntries(keys.map(key => [key, value[key]])) };
+        const limits = ['totalBytes', 'sessionBytes', 'totalCount', 'sessionCount'];
+        if (limits.every(key => Number.isSafeInteger(value.limits?.[key]) && value.limits[key] > 0)) {
+          htmlArtifacts.limits = Object.fromEntries(limits.map(key => [key, value.limits[key]]));
+        }
+      }
+    } catch { /* Statistics never implicitly repair a lock or collect snapshots. */ }
+    return json(res, 200, { ok: true, storage: { ...storage, htmlArtifacts } });
   } };
 }

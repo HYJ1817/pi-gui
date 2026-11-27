@@ -109,6 +109,7 @@ import { createHtmlRenderBridge } from './server/html-render-bridge.js';
 import { projectHtmlArtifacts, createHtmlArtifactProjection } from './server/html-artifact-projection.js';
 import { createHtmlArtifactHttp, createHtmlArtifactAuthority } from './server/html-artifact-http.js';
 import { createHtmlArtifactReconciler } from './server/html-artifact-sessions.js';
+import { createHtmlArtifactMaintenance } from './server/html-artifact-maintenance.js';
 import { createCandidateRuns } from './server/candidate-runs.js';
 import { createCandidateRoutes } from './server/candidate-routes.js';
 import { createRuntimeBrowserGateway } from './server/runtime-browser-launch.js';
@@ -459,6 +460,9 @@ const classicHtmlProjection = createHtmlArtifactProjection();
 let classicHistoryRevision = 0;
 const executionTimelineStore = createExecutionTimelineStore({ dataDir: DATA_DIR });
 const htmlArtifactStore = createHtmlArtifactStore({ dataDir: DATA_DIR });
+// A dead v2 owner can be recovered only under the shared kernel gate. A live,
+// legacy/torn, or unknown owner stays unavailable; startup never steals it.
+void htmlArtifactStore.recoverLock().catch(() => {});
 let htmlReconciler = null;
 const htmlPublication = { begin: () => htmlReconciler?.begin() };
 const classicExecutionIdentity = scope => ({ kind: 'classic', workspaceId: scope.workspaceKey, sessionId: scope.sessionId });
@@ -1579,15 +1583,15 @@ const htmlArtifacts = createHtmlArtifactHttp({ store: htmlArtifactStore, resolve
   registry: runtimeRegistry, sessions, getClassicOwner: primaryOwner,
   getClassicCwd: () => runtime.getCurrentCwd(), readClassicBranch: classicExecutionBranch,
 }) });
-htmlReconciler = createHtmlArtifactReconciler({ store: htmlArtifactStore, roots: () => {
+const htmlArtifactRoots = () => {
   const snapshot = runtimeRegistry.snapshot();
   if (!snapshot.ok) throw Error('registry_unavailable');
   return [...sessions.artifactSessionRoots(), ...snapshot.items.map(item => runtimeRegistry.historyTarget(item.conversationId)?.sessionLocator).filter(Boolean)];
-} });
-// Temporary-file recovery does not authorize snapshot collection. Native Pi
-// append/branch/copy writers do not share the store lock, so automatic GC stays
-// disabled until their exclusion can be held through the collect commit.
-void htmlArtifactStore.cleanupTemporary().catch(() => {});
+};
+htmlReconciler = createHtmlArtifactReconciler({ store: htmlArtifactStore, roots: htmlArtifactRoots });
+// Native Pi append/branch/copy writers do not share the store lock. Automatic
+// GC stays disabled; interrupted temporary inventories remain as evidence until
+// explicit CLI cleanup under the shared kernel gate.
 const runtimeHealthTimer = setInterval(() => { void runtimeRegistry.healthCheck().catch(() => {}); }, 5000);
 runtimeHealthTimer.unref();
 
@@ -1812,7 +1816,8 @@ const messageEditRoutes = createMessageEditRoutes({
 });
 const route = createRouter({
   systemStorage: createSystemStorage({ dataDir: DATA_DIR, piAgentDir: path.dirname(MODELS_JSON), env: process.env,
-    executionMode: process.env.PI_GUI_DESKTOP === '1' ? 'electron' : runningInSea ? 'portable-sea' : 'source-web' }),
+    executionMode: process.env.PI_GUI_DESKTOP === '1' ? 'electron' : runningInSea ? 'portable-sea' : 'source-web',
+    artifactStats: () => htmlArtifactStore.stats() }),
   collabDocuments: createCollabRoutes({service:collabService,withAuthority:collabAuthority,
     /* 只有 Classic 生成需要 capture 就绪检查（与 authority 同锁，必须前置）。
      * Runtime 生成（带已验证会话头）复用 registry.command 的既有 admission、
@@ -1953,6 +1958,16 @@ const updateMaintenance = createAppUpdateMaintenance({
   closeSessions: () => runtimeRegistry.closeAll(),
   pause: () => rpc.pauseForMaintenance('app-update', { graceful: true }),
   resume: () => rpc.resumeFromMaintenance(),
+});
+const htmlArtifactMaintenance = createHtmlArtifactMaintenance({ store: htmlArtifactStore,
+  roots: htmlArtifactRoots, maintenance: updateMaintenance });
+// Direct-parent IPC only. Live calls can inspect/plan. Even the standalone CLI
+// cannot authorize snapshot deletion without native exclusion; no such provider
+// is installed. It can explicitly recover proven-dead locks / unpublished temps.
+if (process.send) process.on('message', async message => {
+  if (message?.type !== 'html-artifact-maintenance' || !Number.isSafeInteger(message.id)) return;
+  const result = await htmlArtifactMaintenance.run({ action: message.action });
+  process.send?.({ type: 'html-artifact-maintenance', id: message.id, ...result });
 });
 const server = http.createServer((req,res) => {
   if (updateMaintenance.locked() && req.method !== 'GET' && req.method !== 'HEAD') {
