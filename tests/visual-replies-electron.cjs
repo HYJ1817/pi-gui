@@ -8,6 +8,10 @@ if (process.argv.includes('--live') && process.env.PI_GUI_VISUAL_REPLIES_LIVE !=
   console.error('Visual Replies live: not run (requires explicit PI_GUI_VISUAL_REPLIES_LIVE=1; no fixture/import/spawn)');
   process.exit(2);
 }
+if (process.argv.includes('--live')) {
+  try { require('./fixtures/visual-replies-live.cjs').authorizeLive(); }
+  catch (error) { console.error('Visual Replies live: not run (' + error.message + ')'); process.exit(2); }
+}
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
@@ -19,8 +23,9 @@ function modeFor(argv) {
   return modes[0]?.slice(2) || 'offline';
 }
 async function launch(mode) {
+  if (mode === 'offline' || mode === 'live') return require('./visual-replies-functional.cjs').run(mode);
+  if (mode !== 'preflight') throw Error('invalid_arguments');
   if (process.platform !== 'win32') throw Error('windows_required');
-  if (mode === 'live') throw Error('live_tool_contract_pending');
   const world = h.createWorld(), evidence = path.join(world, 'evidence');
   console.log('Visual Replies fixture: ' + world);
   const resultFile = path.join(evidence, 'results.json');
@@ -200,8 +205,10 @@ module.exports = { modeFor, launch, checkSafety };
 if (require.main === module) (async () => {
   const mode = modeFor(process.argv.slice(2));
   if (mode === 'check-driver') {
-    const count = require('./fixtures/visual-replies-electron.cjs').validateRendererScripts();
-    console.log(`Visual Replies renderer syntax: ${count}/${count}; no Electron/Pi/model`); return 0;
+    const count = require('./fixtures/visual-replies-electron.cjs').validateRendererScripts()
+      + require('./fixtures/visual-replies-functional-electron.cjs').validate();
+    console.log(`Visual Replies renderer syntax: ${count}/${count}; no Electron/Pi/model`);
+    await require('./fixtures/visual-replies-functional-support.cjs').checkDriver(); return 0;
   }
   return mode === 'check-safety' ? checkSafety() : launch(mode);
 })().then(code => { process.exitCode = code; }).catch(error => {
