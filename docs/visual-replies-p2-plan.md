@@ -60,6 +60,8 @@
 - D2 后续 `bcd0fa9b125691d4b381fda66c4983b4ecfe775a`、`96818f9f88211b24589566b58e9b7a800fb08e03` 依序集成为 `321ce11d`、`45135b80`：原生 long 句柄转换及 timer 清理互换、rAF 类别分离，新增六项回归，未删除旧断言。D 作者的修前新回归 26/32、fail 6/skip 0，以及其旧 UI+D 联合 57/57，均单列，不冒充主树运行。
 - 主 Agent 在行为 HEAD `45135b80`、Windows/既有 Node 环境、`NODE_PATH=C:/pi-GUI/node_modules` 实际执行 `node --test --test-reporter=spec tests/html-artifact-layout.cjs tests/html-artifact-frame.cjs tests/html-artifact-reading.cjs`（使用三个主树绝对路径）：**44 pass / fail 0 / skip 0 / cancel 0 / todo 0、exit 0、1018.5402ms**。仅证明三个 Node 专属套件；不证明 C 消费端、真实过渡渲染/原生内部滚动或正常沙箱，四项发现仍待修后完整证据与独立增量复审。
 - 最多三轮审查原则不变，未修复 Important 不得验收通过。
+- 父在 HEAD `18766afe` 用原 R-D probe 原样复测主集成树（Chrome/158.0.8127.88、pageErrors 0，证据 `C:/Users/21022/AppData/Local/Temp/pi-gui-rd2-repl-iTBC/report-final.json`）：**RD-1 修复与协议如实生效**——transition 200→600 最终 frame 600、末次写入 feedback:false、growth 期 feedback:true 未锁死；**RD-2/RD-3 仍未修复且属实**——`calc(100vh+10px)` 全屏持续 340→470 增长（协议正确标记 feedback:true，但 fixture 消费端未实现 hold），12000px 全屏往返 scrollY 7904→0→0、同 realm/input 保留（协议存在但消费端未走 ACK 握手）。证实 D2 生产端不是空协议，缺口确实在 C 消费端，与 C2 任务分工一致；**增量独立复审仍须在 C2 落地后进行**，本次父测不替代复审。
+- 父同日在 `18766afe` 运行既有良性 viewer Electron 驱动（正常沙箱校验通过、 Electron 44.4.3 同摘要离线副本）：**2/3，`dialog-bounds-dark-wide` FAIL**——expanded 时 `scrollHeight 744` 不再大于 `viewportHeight 744`（C 原证据同断言 4008>744 PASS）。原因待查：D2 capped/反馈语义使超 4096 长内容不再撑高 iframe，驱动断言可能已过时，也可能暴露全屏内部滚动接入缺口；已列入 C2 证据校准任务，不把 FAIL 直接等同产品缺陷。证据 `C:/Users/21022/AppData/Local/Temp/pi-visual-replies-s3qT0M/evidence/viewer.json`。
 
 ### B3 测试交付依赖
 
