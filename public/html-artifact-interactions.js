@@ -4,8 +4,8 @@ import { createArtifactControls } from './html-artifact-controls.js';
 
 const BASE_FIELDS = ['schemaVersion', 'type', 'id', 'nonce'];
 const MESSAGE_FIELDS = Object.freeze({
-  ready: [], escape: [], resize: ['height', 'naturalHeight', 'naturalWidth', 'capped'],
-  link: ['href'], image: ['src', 'alt'],
+  ready: [], escape: [], resize: ['height', 'naturalHeight', 'naturalWidth', 'capped', 'feedback'],
+  'presentation-ready': ['expanded', 'sequence'], link: ['href'], image: ['src', 'alt'],
 });
 const MAX_IMAGE_LENGTH = 2 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 16 * 1024 * 1024;
@@ -24,8 +24,13 @@ export function validArtifactMessage(value) {
     if (typeof value.height !== 'number' || !Number.isFinite(value.height)) return false;
     for (const key of ['naturalHeight', 'naturalWidth']) if (value[key] !== undefined
       && (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] < 0)) return false;
-    return value.capped === undefined || typeof value.capped === 'boolean';
+    return (value.capped === undefined || typeof value.capped === 'boolean')
+      && (value.feedback === undefined || typeof value.feedback === 'boolean');
   }
+  if (value.type === 'presentation-ready') return Object.keys(value).length === allowed.length
+    && allowed.every(key => Object.hasOwn(value, key))
+    && typeof value.id === 'string' && typeof value.nonce === 'string'
+    && typeof value.expanded === 'boolean' && Number.isSafeInteger(value.sequence) && value.sequence > 0;
   if (value.type === 'link') return Boolean(artifactWebUrl(value.href));
   if (value.type === 'image') return typeof value.src === 'string' && value.src.length <= MAX_IMAGE_LENGTH
     && typeof value.alt === 'string' && value.alt.length <= 256;
@@ -136,6 +141,8 @@ export function createArtifactInteractions({ document: doc, isCurrent, getFrame,
     if (!raster || !take()) return;
     const dialog = doc.createElement('dialog');
     if (typeof dialog.showModal !== 'function') { release(); return; }
+    // Cancel an in-flight expansion too; its late ACK must not cover this image.
+    closeExpanded();
     dialog.className = 'html-artifact-image-dialog';
     dialog.setAttribute('aria-label', alt || '查看图片');
     const viewport = doc.createElement('div'); viewport.className = 'html-artifact-image-viewport';
