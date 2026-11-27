@@ -1,7 +1,8 @@
 # Visual Replies P2 · E：规范测试链与 CI 验收
 
 日期：2026-11-27。总体逐项覆盖与真实样例矩阵见 [覆盖索引](visual-replies-p2-coverage.md)。
-第 1–7 节保留 E 原交付的历史身份与证据；第 8 节保留 E2 在 `a2cdaeb0` 上的首批登记与定向结果；第 9 节追加 C 测试集成后 UI 单 leaf 复验及未解决审查边界。
+第 1–7 节保留 E 原交付的历史身份与证据；第 8–9 节保留 E2 首批登记和 C 测试集成后 UI 单 leaf 复验；**第 10 节是 E3 在 B 成组集成后的当前登记与一次完整 Artifact 离线子链结果**。
+历史段落中“文件尚未集成 / 未完整执行 alias”仅对应当时状态，以第 10 节的新证据补充，不倒写历史。
 本报告只证明所列测试基建与离线范围，不代表 A–D 全部集成、真实 Visual Replies 已验收或允许发布。
 
 ## 1. 身份、范围与勘察
@@ -308,3 +309,91 @@ B2 candidates-only/fail-closed 的待办仍不能写作自动 GC/容量回收完
 本次只提交 coverage 和本验收两份拥有文档，不改父 plan；本次文档提交可独立回退，无产品或数据迁移。交付提交标题为“文档(可视化)：记录UI单叶复验与未决验收边界”，最终消息给出准确 SHA。
 文档自查：`git diff --check` exit 0；本地链接 5 个、标题锚点 3 个、missing 0；当前 UI 测试与六个产品模块共 7 个摘要仍匹配已验证状态，package/guard 未变，branches 文件不存在。证据为同一日志目录的 `documentation-self-check.json`。
 文档收尾完成不等于整体验收通过，无合并/发布许可；不 push、不建 PR、不等待其他线。
+
+## 10. E3：B 成组集成后的四叶登记与一次离线子链
+
+### 10.1 身份、所有权与执行边界
+
+- 日期：2026-11-27；工作树仅 `C:/pi-GUI/.claude/worktrees/visual-replies-p2`，分支 `feat/visual-replies-p2`。入口 HEAD `4649ac53`；开始执行前父仅追加 plan 文档提交 `e44686951bc1658109554d6530b54ba858a35027`，二者产品/测试行为树一致。本批未 fetch、查询 Release 或远端 CI：按用户指定集成状态及离线范围收尾，不切换到其他基线。
+- B3 `2cd34ec2` → `4094729c`；B2 依序为 `5b69c52a` → `e90bfcf9`、`00e22156` → `fcaaee59`、`d009d05b` → `441bcfc5`、`23e82c91` → `4649ac53`。D2 生产/句柄/六项测试已分别集成为 `fd88630d` / `321ce11d` / `45135b80`，不是本批新增改动。
+- 本批实测均绑定 **e4468695 + package/guard diff**；一次 Artifact 子链开始于 `2026-11-27T09:01:42.597Z`，前后 HEAD 均为 e4468695。测试链提交为 `403e0cf9b4573048e8e87da8952a27781f431323`，其行为文件与所测 diff 一致；本节和 coverage 随后仅补文档，文档交付 SHA 见最终消息（可用 `git log -1 --format=%H -- docs/visual-replies-p2-e-acceptance.md` 定位本次交付）。
+- 只修改 `package.json`、`tests/ci-html-artifacts.cjs` 和本报告/coverage；不编辑、暂存或提交父独占的 plan，不修改产品、A/C/D/B 专属测试，不另建工作树，不委派审查或子任务。
+- 环境：Node `v24.22.1` / npm `11.19.1`，win32 x64 / Windows `10.0.26200`；`NODE_PATH=C:/pi-GUI/node_modules` 只读复用现有依赖，未安装、下载、调用模型/真 Pi 或访问外网。npm 缓存、测试 fixture、日志与报告均在系统 TEMP；源码/提交文件为本批授权改动。
+- 执行前读代码核对：`html-artifact-security.cjs` 使用 EventEmitter/API 替身及 VM preload，不启动 Electron；driver `--check-driver` 只编译模板，`--check-safety` 使用 TEMP、合成进程身份、隔离 Git 和受控 loopback HTTP/TCP/UDP listener 自检。后端/分支/process 也只用 loopback 和 fake Pi。这里的本机包见证不是外网请求或实际 iframe 攻击；没有执行 `html-artifact-electron.cjs`、任何桌面/A 专项或 benchmark。
+
+### 10.2 唯一计划增量及守卫
+
+在原 alias 尾部只追加下列四条既有实际文件的叶命令，fixture/helper 不登记；前三类 runner 不互换，性能只登记默认小回归：
+
+| 新叶命令（核对索引，不是第二执行清单） | 分组 |
+| --- | --- |
+| `node --test tests/html-artifact-branches.cjs` | core |
+| `node tests/html-artifact-lock.cjs` | core |
+| `node tests/html-artifact-maintenance.cjs` | core |
+| `node tests/html-artifact-performance.cjs` | core |
+
+**实测 362 → 366 叶；原 362 叶全保留且相对顺序不变；新增 4、删除 0、重复 0、旧叶换组 0。**
+Artifact alias **12 → 16** 叶；分组 core **284** / ui **28** / security **28** / native **4** / faults **22**。
+计划摘要 `e562af825067962812c140d723bea155c29f8c874e1a22d5a4279840feb7f615`。
+原 `test` / `pretest` / `test:ci`、npm 生命周期/递归 alias、计划器和 workflow 均不变，无第二份默认 CI 清单。
+
+Guard 原 **12 项 test、56 条源码断言行全部保留**，新增三项后为 **15 项、65 条断言行**（源码行数不是执行断言总数）：
+精确核对 B 四个 runner 类型与唯一登记；验证 plain Node 和 `node --test` 并存、缺登记/重复拒绝、plain Node 后续脚本参数不算新套件；禁止 canonical 的 `--benchmark` / `--baseline` 及 Artifact fixture 独立执行。
+`tests/fixtures/html-artifact-branches-fixture.cjs` 和既有 D/normal helper 均不登记。没有删旧断言或将失败改成 skip。
+
+### 10.3 实测命令、每套数字与首次失败
+
+本次唯一 TEMP 日志根目录：`C:/Users/21022/AppData/Local/Temp/pi-gui-p2-e3-B8tfaD/`。
+每条命令保留同名 `.log` / `.json` 与 `*-before.json` / `*-after.json`；后者记录 HEAD、dirty 范围和 **1223 个行为文件** SHA-256。
+`before-plan.json` / `after-plan.json` / `plan-comparison.json` 保留精确有序计划；`guard-preservation.json` 保留原断言完整性核对。这些是本机短期证据，不作永久存档承诺。
+
+| 实际命令 | 结果 | exit / 日志 |
+| --- | --- | --- |
+| `node --test tests/ci-html-artifacts.cjs`，登记前 | **11 pass / 1 fail / skip 0**；branches 未登记，实际 0 / 期望 1 | **1**；`before-guard.log` |
+| `node scripts/run-test-group.mjs --validate --list`，登记前 | 362 叶精确覆盖；不是执行证明，也不会主动发现未登记新文件 | 0；`before-validate.log` |
+| `node --test tests/ci-html-artifacts.cjs`，登记后 | **15 pass / fail 0 / skip 0**；Node duration 340.8831 ms | 0；`after-guard.log` |
+| `node scripts/run-test-group.mjs --validate --list`，登记后 | **366 叶**精确覆盖 | 0；`validate.log` |
+| `node tests/ci-test-plan.cjs` | 366 叶 / 5 组精确覆盖；未输出总断言数，不编造 | 0；`ci-test-plan.log` |
+| `node tests/ci-workflow.cjs` | readiness **5/5**，gate fail-closed 矩阵 **15/15**，另有结构守卫 | 0；`ci-workflow.log` |
+| **`npm run test:html-artifacts`，仅运行一次** | **16 叶全部完成、exit 0**；外层记录 72674 ms（含收尾摘要采集），输出 32510 bytes，前后行为文件变化 0/1223 | 0；`html-artifacts.log` / `.json` |
+
+以下每行均取自上述 **同一次真实 npm alias** 输出，不把作者数字、E2 单跑或父 D 运行相加；各 leaf 进程均成功返回，失败短路未触发：
+
+| Alias 内套件 / 模式 | 实测通过 / 失败；断言口径 | skip（不计分子分母） |
+| --- | --- | --- |
+| model | **8 / 0** Node tests | 0 |
+| UI | **20 / 0** Node tests，**169** assertions | 0 |
+| Store | **135/135** 已执行场景，**529** assertions | **另 3**；Windows 文件 symlink 权限，document.html / reference.json / .pending |
+| backend | **38 / 0** Node tests，包含父容器 | 0 |
+| process | **8 / 0** Node tests，包含父容器；真实后端/guardian + fake Pi，duration **13839.7096 ms** | 0 |
+| security | **24 / 0** Node tests；纯 Electron API 策略模拟 | 0 |
+| driver `--check-driver` | **7/7** renderer 模板 | 0 |
+| driver `--check-safety` | **32/32** 离线驱动检查；非 iframe 攻击 | 0 |
+| layout | **13 / 0** Node tests | 0 |
+| frame | **19 / 0** Node tests | 0 |
+| reading | **12 / 0** Node tests | 0 |
+| normal-samples | **7 / 0** Node tests | 0 |
+| branches | **17 / 0** Node tests（16 子项 + 父容器），**372** assertions；duration **7926.2892 ms** | 0 |
+| lock | **14/14** 场景，**103** assertions | 0 |
+| maintenance | **20/20** 场景，**119** assertions | 0 |
+| performance 默认 regression | **16/16** assertions；**未运行 benchmark/baseline** | 0 |
+
+D 三套当前 **44/44**，比 E2 历史 38 项增加 6（layout +1、frame +5、reading 不变），没有断言减少；不是 C 握手消费者或四项 RD 的独立复审。
+原 E2 UI **10 pass / 3 fail** 保留历史；本次用已集成 C 适配后测试为 20/169，不倒写修前数字。
+
+首失败是登记前 guard 的 `tests/html-artifact-branches.cjs must execute exactly once in the canonical chain`，`ci-html-artifacts.cjs:20`，实际 0、期望 1。补登记和守卫后 15/15；本次 alias 内无失败、无取消、无重跑，没有修改他人文件或改 skip。
+工具层另有创建日志目录前的 Node heredoc 转义语法错误（exit 1，解析阶段失败、未产生 fixture），随后纠正；它不是套件或产品失败。
+
+### 10.4 实测数据、证据有效范围与交接
+
+- Store 代表值：UTF-8 HTML **51 bytes**，物理快照 **474 bytes**，digest `ca917c3438c3e09ad3c87a1c74bd611a36d3aaae3f67885dbee8c36596cc5911`。
+- 默认 performance：8 历史快照 / 8 sessions，corpus **262152 bytes**；8 并发调用，new HTML **4103 bytes**，该轮 **749.883 ms**；HTML read **65648 bytes / 32 calls**。corpus 与 readback integrity digest 同为 `29fa7412d5e31db4aa0c548abb4797ffcf488677fd958e4d7d2158479e99c674`，实现源码 SHA-256 `cbccb16333dca2c21ce029e12cb2f9159b0288c618f4dae1db10ba96a2bb075f`。这是单轮小回归，不是优化前后 benchmark。
+- 作者 B2 转报的同口径 benchmark 中位 **6823.011 → 3735.489 ms**、同 digest，以及每侧 26 assertions 只作对照，**E3 未重复运行、未将其登记为本线实测**。默认 16 assertions 与 benchmark 26 的口径不同，不能算少了 10 条默认断言。
+- maintenance 验证已集成的 **candidates-only / fail-closed**：口述停写不能授权 collect，没有原生互斥证明不自动 GC；不再把待收紧的旧缺陷写成仍未集成，也不把只读候选扫描写成自动 GC/容量回收完成。未知/旧格式/torn owner 保留证据，锁恢复只由显式身份门控路径处理；不代表所有平台已证明。
+- B 首轮独立功能静态审查转报 **有条件通过，Blocker 0 / Important 0 / Nit 0 / Pre-existing 1**（bounded text-only 历史预览范围差异），未实跑功能测试。B 安全/故障首轮旧执行因服务错误中断，无结论；父已重开独立主树审查，**本节记录时仍在跑，未取得结论**。E3 自查不替代它，也不新增委派。
+- D2 修复和父此前 D 三套 **44/44、skip 0、exit 0、1018.5402 ms** 分属父证据；本次 D 在 alias 内的 44/44 是 E3 自己的另一运行。C feedback/presentation ACK 消费端尚在修改，RD-1–RD-4 **四项仍未关闭 / 待修后完整证据和增量独立复审**；不能凭本次模拟通过解除 Important。
+- **完整 canonical：待验证。** 用户指定当前 PR 完整 CI，本批未运行完整 `npm test`、未重新执行完整 `test:ci`；只运行上述必要注册/计划/workflow 守卫和一次 16 叶离线子链。当前尚未 push / 建 PR，无对应 run/attempt/head 或 merge SHA/gate；不得用 P1 的旧 355/355 CI 替代 366 叶新行为证明。
+- 未运行真实 Electron、A 攻击专项、真实 Pi/模型、视觉/截图、重建/打包；本线没有 UI 或 public/server 改动，无新增渲染验收和重建义务，不声称产物已更新。A 首轮 **28/29** 失败及后续阻断保留；A2 的普通真实驱动另线收尾，不在本次范围。
+- 提交前核对：1223 个被测行为文件摘要与子链运行前后完全一致，aggregate digest `1d55e4a868707106eb8fec8bf85d2b6af56938d0131c140928e0411e5fbfd937`；package SHA-256 `2f76473b77307dc533804c9ac4757dd16dcc41ec71003eb2bd1ed9d352ccad6c`，guard SHA-256 `47cfdf6d8fd5f329d467d42077c6a8af9893e24529fa8073e4d2cce60e5d49b7`。后续父若集成 C 行为，应按新增 diff 补验，不能继承本次 e4468695 + diff 为新 C 全通过。
+- 风险与回滚：CI/test 输入按高风险边界保留完整 gate；仅回退 `403e0cf9b4573048e8e87da8952a27781f431323` 可撤销本批四叶/守卫，文档提交可独立回退，不回退父产品/plan。无用户数据、schema 或产物迁移。
+- 结论分层：**E3 测试链收尾开发完成；产品整体验收未通过；完整 canonical / B 安全审查 / C-D 复审仍待验证；无合并或发布许可**。仅本地提交，不 push、不 PR、不 merge、不 tag、不 release。
