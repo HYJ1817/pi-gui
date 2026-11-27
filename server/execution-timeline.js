@@ -11,7 +11,10 @@ const MAX_DETAIL_ENTRIES = 64;
 const MAX_DETAIL_BYTES = 1024 * 1024;
 const MAX_RESULT_BYTES = 32 * 1024;
 const DETAIL_TTL_MS = 120_000;
-const IDS = /^[A-Za-z0-9_.:/#-]{1,160}$/;
+// Real Pi tool call IDs carry a pipe separator (for example `xxxx-<hex>|xx…`),
+// surveyed across 127 real sessions: alphanumerics plus only DASH/UNDERSCORE/PIPE.
+// These IDs are structural JSON identifiers, never shell or path fragments.
+const IDS = /^[A-Za-z0-9_.:/#|-]{1,160}$/;
 const SOURCE_ROLE = new Set(['assistant', 'user', 'toolResult']);
 const CALL_TOOLS = new Set(['read', 'write', 'edit', 'grep', 'glob', 'find', 'ls', 'bash', 'powershell', 'subagent']);
 const SHELL_EXECUTABLES = new Set(['git', 'rg', 'grep', 'find', 'ls', 'cat', 'node', 'npm', 'pnpm', 'yarn', 'python', 'pytest', 'Get-Content', 'Get-ChildItem']);
