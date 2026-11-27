@@ -1,11 +1,16 @@
 import { HTML_RENDER_TOOL, htmlArtifactFromToolResult, htmlArtifactToolDetails } from '../public/html-artifact-model.js';
+import { HTML_PREVIEW_TOOL, projectHtmlPreviewResult } from '../public/html-preview-model.js';
 
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
-const isHtml = value => value?.name === HTML_RENDER_TOOL || value?.toolName === HTML_RENDER_TOOL
-  || value?.details?.kind === 'html_artifact';
+const htmlName = name => name === HTML_RENDER_TOOL || name === HTML_PREVIEW_TOOL;
+const isPreview = value => value?.name === HTML_PREVIEW_TOOL || value?.toolName === HTML_PREVIEW_TOOL
+  || value?.details?.kind === 'html_preview';
+const isHtml = value => htmlName(value?.name) || htmlName(value?.toolName)
+  || value?.details?.kind === 'html_artifact' || isPreview(value);
 const safeText = artifact => artifact ? `HTML: ${artifact.title} (${artifact.id})` : 'HTML visualization unavailable.';
 
-export function projectHtmlToolResult(result) {
+export function projectHtmlToolResult(result, toolName = null) {
+  if (toolName === HTML_PREVIEW_TOOL || isPreview(result)) return projectHtmlPreviewResult(result);
   const artifact = htmlArtifactFromToolResult(result);
   return { content: [{ type: 'text', text: safeText(artifact) }],
     ...(artifact ? { details: htmlArtifactToolDetails(artifact) } : { isError: true }) };
@@ -21,10 +26,10 @@ export function projectHtmlArtifacts(value, toolName = null) {
     if (Array.isArray(node)) return node.map(item => visit(item, depth + 1));
     if (!object(node)) return node;
     if (isHtml(node) && node.type === 'toolCall') {
-      return { type: 'toolCall', id: node.id, name: HTML_RENDER_TOOL, arguments: {} };
+      return { type: 'toolCall', id: node.id, name: isPreview(node) ? HTML_PREVIEW_TOOL : HTML_RENDER_TOOL, arguments: {} };
     }
     if (isHtml(node) && node.role === 'toolResult') {
-      return { role: 'toolResult', toolName: HTML_RENDER_TOOL, toolCallId: node.toolCallId,
+      return { role: 'toolResult', toolName: isPreview(node) ? HTML_PREVIEW_TOOL : HTML_RENDER_TOOL, toolCallId: node.toolCallId,
         ...(typeof node.timestamp === 'number' ? { timestamp: node.timestamp } : {}), ...projectHtmlToolResult(node) };
     }
     // Real Pi wire events can carry non-string type payloads in nested nodes
@@ -33,12 +38,12 @@ export function projectHtmlArtifacts(value, toolName = null) {
     // A legacy nameless completion must use the start-bound name. With no
     // witness, hide payload rather than accidentally publishing an HTML error.
     const name = node.toolName || (node === value ? toolName : null);
-    const html = isHtml(node) || execution && (!name || name === HTML_RENDER_TOOL);
+    const html = isHtml(node) || execution && (!name || htmlName(name));
     const out = {};
     for (const [key, item] of Object.entries(node)) {
       if (['__proto__', 'constructor', 'prototype'].includes(key)) continue;
       if (html && ['html', 'args', 'arguments', 'input', 'partialResult', 'output', 'error', 'errorMessage'].includes(key)) continue;
-      if (html && key === 'result') { out.result = projectHtmlToolResult(node.isError === true ? { isError: true } : item); continue; }
+      if (html && key === 'result') { out.result = projectHtmlToolResult(node.isError === true ? { isError: true } : item, name); continue; }
       if (html && ['content', 'details'].includes(key)) continue;
       if (node.type === 'toolcall_delta' && ['delta', 'arguments', 'args', 'partialJson'].includes(key)) continue;
       out[key] = visit(item, depth + 1);

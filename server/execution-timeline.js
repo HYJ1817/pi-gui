@@ -372,7 +372,7 @@ export function projectRuntimeEntry(entry) {
       out.message.toolName = safeToolName(message.toolName);
       out.message.isError = message.isError === true;
       out.message.content = [];
-      if (message.toolName === 'html_render') Object.assign(out.message, projectHtmlToolResult(message));
+      if (['html_render', 'html_preview'].includes(message.toolName)) Object.assign(out.message, projectHtmlToolResult(message, message.toolName));
     }
   }
   return out;

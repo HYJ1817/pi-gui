@@ -756,10 +756,11 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
   const LIB_DIR = path.join(ROOT, 'lib') + path.sep;
   const HTTP_UTILS = path.resolve(path.join(SERVER_DIR, 'http-utils.js'));
   const SERVER_JS = path.resolve(path.join(ROOT, 'server.js'));
-  /* 唯一允许 server 直接 import 的三个 public/ 纯模块（理由见下方依赖规则）。 */
+  /* 允许 server 直接 import 的四个 public/ 纯模块（理由见下方依赖规则）。 */
   const SHARED_PROVIDER_CONTRACT = path.resolve(path.join(ROOT, 'public', 'provider-management', 'contract.js'));
   const SHARED_RUNTIME_TIMELINE = path.resolve(path.join(ROOT, 'public', 'runtime-timeline.js'));
   const SHARED_HTML_ARTIFACT_MODEL = path.resolve(path.join(ROOT, 'public', 'html-artifact-model.js'));
+  const SHARED_HTML_PREVIEW_MODEL = path.resolve(path.join(ROOT, 'public', 'html-preview-model.js'));
 
   const rawImports = new Map();
   const deps = new Map();
@@ -794,6 +795,10 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
      *     result），而实时与 get_messages 恢复又必须使用同一份纯函数；浏览器静态
      *     资源只服务 public/，放 lib/ 反而会让浏览器 import 不到。放行范围精确到
      *     这一个文件，server 仍不得 import public/ 下的其他内容。
+     *   - public/html-artifact-model.js 与 public/html-preview-model.js → **精确放行**：
+     *     前者是不可变 Artifact 引用合同；后者是预览状态的闭合纯投影，剔除图片、HTML
+     *     与原始诊断后才能进入公开时间线。server 与 renderer 必须共用同一份合同，
+     *     不允许借此引入 DOM、I/O 或其它 renderer 依赖。
      *   - 其它跨目录 import → 不允许。跨子系统协作一律走 server.js 装配 + 依赖注入。 */
     const bad = [];
     for (const f of files) {
@@ -807,7 +812,7 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
           continue;
         }
         if (!abs.startsWith(LIB_DIR) && abs !== SHARED_PROVIDER_CONTRACT && abs !== SHARED_RUNTIME_TIMELINE
-          && abs !== SHARED_HTML_ARTIFACT_MODEL) bad.push(`${rel} → ${spec}`);
+          && abs !== SHARED_HTML_ARTIFACT_MODEL && abs !== SHARED_HTML_PREVIEW_MODEL) bad.push(`${rel} → ${spec}`);
       }
     }
     return bad.length === 0 || bad.join(', ');
@@ -822,6 +827,13 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
       .map((m) => m[1]).filter((spec) => spec !== './plan-model.js' && spec !== './html-artifact-model.js');
     const io = /\b(document|window|localStorage|node:fs|node:http|node:child_process|process\.)\b/.test(src);
     return (foreign.length === 0 && !io) || `imports=${foreign.join(',') || 'ok'} io=${io}`;
+  });
+
+  check('共享给 server 的 html-preview-model 保持无依赖纯投影（无 DOM/IO）', () => {
+    const src = fs.readFileSync(SHARED_HTML_PREVIEW_MODEL, 'utf8');
+    const imports = /\bimport\s*(?:[({*'"`]|[\w$]+\s)/.test(src);
+    const io = /\b(document|window|localStorage|fetch|XMLHttpRequest|WebSocket|process)\b|node:/.test(src);
+    return (!imports && !io) || `imports=${imports} io=${io}`;
   });
 
   check('没有任何模块 import server.js（否则成环）', () => {

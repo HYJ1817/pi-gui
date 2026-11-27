@@ -39,6 +39,8 @@
 
 import { toProjectRel } from './project-relative-path.js';
 import { HTML_RENDER_TOOL } from './html-artifact-model.js';
+import { HTML_PREVIEW_TOOL } from './html-preview-model.js';
+const htmlTool = name => name === HTML_RENDER_TOOL || name === HTML_PREVIEW_TOOL;
 
 /* ---------- 工具名映射 ---------- */
 
@@ -308,7 +310,7 @@ export function previewOf(text, max = PREVIEW_LINES) {
 export function makeEntry(evt, now = Date.now()) {
   const name = String(evt?.toolName ?? '');
   const { label, icon, known } = labelFor(name);
-  const args = name === HTML_RENDER_TOOL ? null : evt?.args ?? null;
+  const args = htmlTool(name) ? null : evt?.args ?? null;
   const s = summarize(name, args);
 
   return {
@@ -348,7 +350,7 @@ export function makeEntry(evt, now = Date.now()) {
  * `{content: [], details: undefined}`，用它把已显示的内容清掉是错的。
  */
 export function applyUpdate(entry, evt, now = Date.now()) {
-  if (entry.name === HTML_RENDER_TOOL) { entry.updatedAt = now; return entry; }
+  if (htmlTool(entry.name)) { entry.updatedAt = now; return entry; }
   if (evt?.partialResult?.details && typeof evt.partialResult.details === 'object') entry.details = evt.partialResult.details;
   const text = resultText(evt?.partialResult);
   if (text) {
@@ -366,7 +368,7 @@ export function applyEnd(entry, evt, now = Date.now()) {
   entry.endedAt = now;
   entry.durationMs = Math.max(0, entry.endedAt - entry.startedAt);
 
-  if (entry.name === HTML_RENDER_TOOL) {
+  if (htmlTool(entry.name)) {
     entry.status = evt?.isError ? 'error' : 'success';
     entry.output = ''; entry.error = ''; entry.details = null; entry.resultLine = '';
     return entry;
@@ -404,10 +406,10 @@ export function applyEnd(entry, evt, now = Date.now()) {
 export function entryFromHistory(call, result, assistantMsg) {
   const name = String(call?.name ?? result?.toolName ?? '');
   const { label, icon, known } = labelFor(name);
-  const args = name === HTML_RENDER_TOOL ? null : call?.arguments ?? null;
+  const args = htmlTool(name) ? null : call?.arguments ?? null;
   const s = summarize(name, args);
 
-  const rawText = name === HTML_RENDER_TOOL ? '' : resultText(result?.content ?? result);
+  const rawText = htmlTool(name) ? '' : resultText(result?.content ?? result);
   const bounded = boundedOutput(rawText);
   const text = bounded.text;
   const startedAt = Number.isFinite(assistantMsg?.timestamp) ? assistantMsg.timestamp : null;
@@ -435,9 +437,9 @@ export function entryFromHistory(call, result, assistantMsg) {
     error: result?.isError ? text : '',
     exitCode: parseExitCode(text),
     resultLine: '',
-    truncated: truncationOf(result?.details),
-    details: name === HTML_RENDER_TOOL ? null : result?.details ?? null,
-    diffStat: diffStatOf(result?.details),
+    truncated: htmlTool(name) ? null : truncationOf(result?.details),
+    details: htmlTool(name) ? null : result?.details ?? null,
+    diffStat: htmlTool(name) ? null : diffStatOf(result?.details),
     gitStat: null,
     fromHistory: true,
   };
