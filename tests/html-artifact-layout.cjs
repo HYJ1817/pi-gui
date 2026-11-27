@@ -41,6 +41,18 @@ test('extended natural dimensions are bounded independently of the viewport', as
   assert.equal(writes[0].height, 4096);
 });
 
+test('feedback classification is preserved, rejects non-booleans and stays absent for old v1', async () => {
+  const { time, writes, value } = await controller();
+  assert.equal(value.accept({ height: 330, naturalHeight: 340, feedback: true }), true); time.advance(16);
+  assert.equal(writes[0].feedback, true); assert.equal(writes[0].naturalHeight, 340);
+  assert.equal(value.accept({ height: 600, naturalHeight: 600, feedback: false }), true); time.advance(132);
+  assert.equal(writes[1].feedback, false);
+  for (const feedback of [null, 1, 'false', {}]) assert.equal(value.accept({ height: 400, feedback }), false);
+  value.accept({ height: 400 }); time.advance(132);
+  assert.equal(Object.hasOwn(writes.at(-1), 'feedback'), false, 'absence is not an accepted natural-height claim');
+  value.dispose();
+});
+
 test('a burst retains its final value and uses one pending callback', async () => {
   const { time, writes, value } = await controller();
   for (let height = 80; height < 4096; height++) value.accept({ height });

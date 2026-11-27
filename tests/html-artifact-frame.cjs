@@ -100,6 +100,30 @@ test('viewport-dependent height feedback stops growing until content or width ac
   assert.equal(s.sizes().at(-1).height, 280, 'a content revision can release the feedback hold');
 });
 
+test('height transitions recover the final size without releasing identical viewport feedback', async t => {
+  const s = await measuring(t, { height: 200 }); s.w.innerHeight = 200; s.time.advance(16);
+  s.metrics.height = 207; s.value.queue(); s.time.advance(132);
+  s.w.innerHeight = 207; s.metrics.height = 261; s.observers[0].callback([]); s.time.advance(132);
+  assert.equal(s.sizes().at(-1).height, 207);
+  s.metrics.height = 313; s.observers[0].callback([]); s.time.advance(132);
+  assert.equal(s.sizes().at(-1).height, 313, 'growth while the viewport is held is not caused by the host');
+  s.w.innerHeight = 313; s.metrics.height = 600;
+  s.d.querySelector('p').dispatchEvent(new s.w.Event('transitionend', { bubbles: true })); s.time.advance(132);
+  assert.equal(s.sizes().at(-1).height, 600); assert.equal(s.sizes().at(-1).feedback, false);
+  s.w.innerHeight = 600; s.metrics.height = 420;
+  s.d.querySelector('p').dispatchEvent(new s.w.Event('transitioncancel', { bubbles: true })); s.time.advance(132);
+  assert.equal(s.sizes().at(-1).height, 420); assert.equal(s.sizes().at(-1).capped, false);
+});
+
+test('feedback is explicit telemetry and repeated held observations cannot increase the viewport', async t => {
+  const s = await measuring(t, { height: 330 }); s.w.innerHeight = 320; s.time.advance(16);
+  assert.equal(s.sizes().at(-1).feedback, false);
+  s.w.innerHeight = 330; s.metrics.height = 340;
+  for (let i = 0; i < 20; i++) { s.observers[0].callback([]); s.time.advance(132); }
+  assert.equal(s.sizes().at(-1).height, 330); assert.equal(s.sizes().at(-1).naturalHeight, 340);
+  assert.equal(s.sizes().at(-1).feedback, true); assert.equal(s.sizes().length, 2);
+});
+
 test('hidden measurement disconnects and cancels work; restored width is measured once with final content', async t => {
   const s = await measuring(t); s.time.advance(16);
   s.value.queue(); s.value.setVisible(false); assert.equal(s.observers[0].disconnected, true);
@@ -146,7 +170,33 @@ test('runtime timeout remaining delay, arguments, clearing and bounded callback 
   runtime.dispose(); runtime.dispose(); assert.equal(time.view.requestAnimationFrame(() => {}), 0);
 });
 
-async function bootstrap(t, html, configuration = {}) {
+test('timer clearing converts native long handles and timeout/interval clearers are interchangeable', async () => {
+  const { installHtmlArtifactRuntime } = await import(root + 'html-artifact-runtime.js');
+  const time = clock(), runtime = installHtmlArtifactRuntime(time.view); let calls = 0;
+  for (const set of ['setTimeout', 'setInterval']) for (const clear of ['clearTimeout', 'clearInterval']) {
+    for (const convert of [String, id => ({ valueOf: () => id }), id => id + 0.75, id => id + 2 ** 32]) {
+      const handle = time.view[set](() => calls++, 32);
+      assert.equal(time.view[clear](convert(handle)), undefined);
+      time.advance(96);
+      assert.equal(calls, 0, `${set}/${clear} must convert its handle before lookup`);
+      assert.equal(time.tasks.size, 0);
+    }
+  }
+  for (const invalid of [NaN, Infinity, -Infinity, undefined, null, 'not-a-handle']) {
+    assert.equal(time.view.clearTimeout(invalid), undefined);
+  }
+  assert.throws(() => time.view.clearTimeout(Symbol()), TypeError);
+  assert.throws(() => time.view.clearInterval(1n), TypeError);
+  const frame = time.view.requestAnimationFrame(() => calls++);
+  time.view.clearTimeout(frame); time.advance(16); assert.equal(calls, 1, 'timer clearers do not cancel animation frames');
+  const timeout = time.view.setTimeout(() => calls++, 32);
+  time.view.cancelAnimationFrame(timeout); time.advance(32); assert.equal(calls, 2, 'rAF canceller does not cancel timers');
+  const nextFrame = time.view.requestAnimationFrame(() => calls++);
+  time.view.cancelAnimationFrame(String(nextFrame)); time.advance(32); assert.equal(calls, 2);
+  runtime.dispose(); assert.equal(time.tasks.size, 0);
+});
+
+async function bootstrap(t, html, configuration = {}, beforeParse = () => {}) {
   const { htmlArtifactDocument } = await import(root + 'html-artifact-frame.js');
   const reports = [], time = clock();
   const dom = new JSDOM(htmlArtifactDocument(html, { id: 'fixture-id', nonce: 'fixture-nonce',
@@ -155,6 +205,7 @@ async function bootstrap(t, html, configuration = {}) {
     beforeParse(w) {
       time.attach(w); w.postMessage = (data, origin) => reports.push({ data, origin });
       w.ResizeObserver = class { observe() {} disconnect() {} };
+      beforeParse(w);
     } });
   t.after(() => { dom.window.dispatchEvent(new dom.window.Event('pagehide')); dom.window.close(); });
   await new Promise(resolve => setImmediate(resolve));
@@ -182,6 +233,49 @@ test('theme and visibility messages keep the same document, input and timer stat
   assert.equal(s.d.documentElement.style.getPropertyValue('--not-allowed'), '');
   s.send({ type: 'visibility', visible: true }); s.time.advance(32); assert.equal(s.w.ticks, 3);
   assert.equal(s.d.querySelector('input'), input); assert.equal(input.value, 'chosen');
+});
+
+test('presentation saves before ACK and restores only local XY after two native RAFs even when runtime is paused', async t => {
+  const moves = [];
+  const s = await bootstrap(t, '<input value="kept">', {}, w => {
+    w.scrollX = 80; w.scrollY = 7904;
+    w.scrollTo = options => { moves.push(options); w.scrollX = options.left; w.scrollY = options.top; };
+  });
+  const acks = () => s.reports.filter(row => row.data.type === 'presentation-ready');
+  s.send({ type: 'visibility', visible: false });
+  s.send({ type: 'presentation', expanded: true, sequence: 1 });
+  assert.equal(acks().length, 1, 'save ACK is immediate, not in a controlled timer');
+  assert.deepEqual({ ...acks()[0].data }, { schemaVersion: 1, id: 'fixture-id', nonce: 'fixture-nonce',
+    type: 'presentation-ready', expanded: true, sequence: 1 });
+  s.w.scrollX = 0; s.w.scrollY = 0; // host expansion may clamp only AFTER the save ACK.
+  s.send({ type: 'presentation', expanded: true, sequence: 2 }); // no overwrite of the inline save.
+  s.send({ type: 'presentation', expanded: false, sequence: 3 });
+  assert.equal(moves.length, 0); s.time.advance(16); assert.equal(moves.length, 0);
+  s.time.advance(16); assert.equal(moves.length, 1);
+  assert.equal(moves[0].left, 80); assert.equal(moves[0].top, 7904); assert.equal(moves[0].behavior, 'instant');
+  assert.equal(acks().at(-1).data.sequence, 3); assert.equal(acks().at(-1).data.expanded, false);
+  assert.equal(s.w.scrollY, 7904); assert.equal(s.d.querySelector('input').value, 'kept');
+});
+
+test('presentation rejects extra fields, stale sequence and wrong identities and cancels restore on disposal', async t => {
+  const moves = [];
+  const s = await bootstrap(t, '<p>local</p>', {}, w => { w.scrollTo = options => moves.push(options); });
+  const acks = () => s.reports.filter(row => row.data.type === 'presentation-ready');
+  for (const sequence of [0, -1, 1.5, '1', Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    s.send({ type: 'presentation', expanded: true, sequence });
+  }
+  s.send({ type: 'presentation', expanded: true, sequence: 1, scrollY: 50 });
+  s.send({ type: 'presentation', expanded: true, sequence: 1, nonce: 'stale' });
+  s.send({ type: 'presentation', expanded: true, sequence: 1 }, { origin: 'http://other.invalid' });
+  s.send({ type: 'presentation', expanded: true, sequence: 1 }, { source: null });
+  assert.equal(acks().length, 0);
+  s.send({ type: 'presentation', expanded: true, sequence: 1 });
+  s.send({ type: 'presentation', expanded: true, sequence: 1 });
+  assert.equal(acks().length, 1);
+  s.send({ type: 'presentation', expanded: false, sequence: 2 });
+  s.time.advance(16); s.w.dispatchEvent(new s.w.Event('pagehide')); s.time.advance(100);
+  assert.equal(moves.length, 0); assert.equal(acks().length, 1); assert.equal(s.time.tasks.size, 0);
+  s.send({ type: 'presentation', expanded: true, sequence: 3 }); assert.equal(acks().length, 1);
 });
 
 test('synthetic DOM clicks cannot claim an external link or image action and no wheel RPC is emitted', async t => {
