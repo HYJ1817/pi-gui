@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { readSessionText } from './session-history.js';
 import { activePath } from './session-edit-target.js';
@@ -109,26 +109,46 @@ export function htmlSessionIdentity(file) {
 }
 
 export function createHtmlArtifactReconciler({ store, roots, graceMs = 10 * 60 * 1000,
-  now = Date.now, scan = scanHtmlArtifactReferences } = {}) {
+  now = Date.now, scan = scanHtmlArtifactReferences, withNativeExclusion = null } = {}) {
   const inflight = new Set();
-  let running = null, disposed = false;
+  let running = null, disposed = false, publicationRevision = 0;
   return {
     begin() {
-      const record = { startedAt: now() };
-      inflight.add(record);
+      const record = {};
+      publicationRevision++; inflight.add(record);
       return () => inflight.delete(record);
     },
-    reconcile({ candidateIds } = {}) {
+    reconcile() {
       if (disposed) return Promise.resolve({ skipped: true, reason: 'disposed' });
       if (running) return running;
-      running = (async () => {
-        const startedAt = now(), snapshot = await scan(roots());
-        if (disposed) return { skipped: true, reason: 'disposed' };
-        if (!snapshot.complete) return { skipped: true, reason: 'native_scan_incomplete', files: snapshot.files };
-        let beforeMs = Math.max(0, startedAt - graceMs);
-        for (const call of inflight) beforeMs = Math.max(0, Math.min(beforeMs, call.startedAt - 1));
-        return store.collect({ referencedIds: snapshot.referencedIds, ...(candidateIds ? { candidateIds } : {}), complete: true, beforeMs });
-      })().catch(() => ({ skipped: true, reason: 'reconcile_unavailable' })).finally(() => { running = null; });
+      // The store's wx lock excludes publish/read/collect, NOT Pi append, branch
+      // or copied forks. A timestamp/mtime or final epoch check cannot close the
+      // Promise-resolution gap. Production intentionally supplies no exclusion.
+      if (typeof withNativeExclusion !== 'function') return Promise.resolve({ skipped: true, reason: 'native_mutation_unproven' });
+      running = (async () => withNativeExclusion(async isCurrent => {
+        const revision = publicationRevision;
+        let reason = null, files;
+        const current = () => !disposed && !inflight.size && revision === publicationRevision
+          && typeof isCurrent === 'function' && isCurrent() === true;
+        if (!current()) return { skipped: true, reason: disposed ? 'disposed' : 'native_mutation_unproven' };
+        // The admission owner must hold exclusion until this await settles,
+        // including scan -> store continuation -> synchronous deletion commit.
+        const result = await store.collect({ scan: async () => {
+          if (!current()) { reason = disposed ? 'disposed' : 'native_mutation_unproven'; return { complete: false }; }
+          const startedAt = now(), snapshot = await scan(roots());
+          files = snapshot?.files;
+          if (!current() || snapshot?.complete !== true) {
+            reason = disposed ? 'disposed' : !current() ? 'native_mutation_unproven' : 'native_scan_incomplete';
+            return { complete: false };
+          }
+          // Only a fresh lock-held scan may supply reference/candidate sets.
+          // Cutoff is a retention policy, never a concurrency proof.
+          return { complete: true, referencedIds: snapshot.referencedIds,
+            ...(snapshot.candidateIds ? { candidateIds: snapshot.candidateIds } : {}),
+            beforeMs: Math.max(0, startedAt - graceMs) };
+        } });
+        return reason ? { skipped: true, reason, ...(files === undefined ? {} : { files }) } : result;
+      }))().catch(() => ({ skipped: true, reason: 'reconcile_unavailable' })).finally(() => { running = null; });
       return running;
     },
     async dispose() { disposed = true; await running; inflight.clear(); },

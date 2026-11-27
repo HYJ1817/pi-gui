@@ -1,4 +1,4 @@
-// Offline backend behavior/security tests. Every writable path is an os.tmpdir fixture.
+﻿// Offline backend behavior/security tests. Every writable path is an os.tmpdir fixture.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -26,7 +26,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
     const world = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-html-backend-'));
     t.after(() => fs.rmSync(world, { recursive: true, force: true }));
     const store = createHtmlArtifactStore({ dataDir: world });
-    const input = { sessionId: 'native-a', messageId: 'assistant-a', toolCallId: 'call-a', title: 'Fixture', html: '<!doctype html><p>HTML_CANARY_秘密</p>', height: 320 };
+    const input = { sessionId: 'native-a', messageId: 'assistant-a', toolCallId: 'call-a', title: 'Fixture', html: '<!doctype html><p>HTML_CANARY_绉樺瘑</p>', height: 320 };
     const artifact = await store.publish(input);
     const details = { kind: 'html_artifact', schemaVersion: 1, ok: true, artifact };
     const assistant = { type: 'message', id: input.messageId, parentId: null, message: { role: 'assistant', content: [{ type: 'toolCall', name: 'html_render', id: input.toolCallId, arguments: { html: input.html } }] } };
@@ -143,31 +143,71 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
       const trash = path.join(world, 'trash'); fs.mkdirSync(trash); fs.copyFileSync(nativeFile, path.join(trash, 'trashed.jsonl'));
       const scanned = scanHtmlArtifactReferences([root, trash]);
       assert.equal(scanned.complete, true); assert.equal(scanned.files, 3); assert.ok(scanned.referencedIds.has(artifact.id));
-      const reconciler = createHtmlArtifactReconciler({ store, roots: () => [root, trash], graceMs: 0 });
+      const reconciler = createHtmlArtifactReconciler({ store, roots: () => [root, trash], graceMs: 0,
+        withNativeExclusion: work => work(() => true) }); // TEMP fixture has no external native writer.
       const first = await reconciler.reconcile(); assert.equal(first.removed, 0); assert.equal(first.retained, 1);
       assert.equal(fs.existsSync(path.join(world, 'html-artifacts', artifact.id, '.pending')), false);
       await reconciler.dispose();
     });
+    const exclusiveFixture = work => work(() => true);
     await t.test('incomplete native scans never collect even a known orphan', async () => {
       fs.writeFileSync(path.join(root, 'broken.jsonl'), 'partial');
-      let collections = 0;
-      const reconciler = createHtmlArtifactReconciler({ store: { collect: () => { collections++; } }, roots: () => [root] });
-      assert.equal((await reconciler.reconcile()).reason, 'native_scan_incomplete'); assert.equal(collections, 0);
+      let deletions = 0;
+      const reconciler = createHtmlArtifactReconciler({ store: { collect: async ({ scan }) => { if ((await scan()).complete) deletions++; } },
+        roots: () => [root], withNativeExclusion: exclusiveFixture });
+      assert.equal((await reconciler.reconcile()).reason, 'native_scan_incomplete'); assert.equal(deletions, 0);
       await reconciler.dispose(); fs.unlinkSync(path.join(root, 'broken.jsonl'));
     });
     await t.test('disposal during a delayed scan prevents collection and joins the scan', async () => {
-      const gate = deferred(); let collections = 0;
-      const reconciler = createHtmlArtifactReconciler({ store: { collect: () => { collections++; } }, roots: () => [], scan: () => gate.promise });
+      const gate = deferred(); let deletions = 0;
+      const reconciler = createHtmlArtifactReconciler({ store: { collect: async ({ scan }) => { if ((await scan()).complete) deletions++; } },
+        roots: () => [], scan: () => gate.promise, withNativeExclusion: exclusiveFixture });
       const running = reconciler.reconcile(), disposed = reconciler.dispose();
       gate.resolve({ complete: true, files: 0, referencedIds: new Set() });
-      assert.equal((await running).reason, 'disposed'); await disposed; assert.equal(collections, 0);
+      assert.equal((await running).reason, 'disposed'); await disposed; assert.equal(deletions, 0);
     });
-    await t.test('dynamic publication inventory is not a fixed session-count admission limit', async () => {
+    await t.test('dynamic publication inventory has no count quota and defers GC while any publication is active', async () => {
       let cutoff;
-      const reconciler = createHtmlArtifactReconciler({ store: { collect: async value => { cutoff = value.beforeMs; return { removed: 0 }; } }, roots: () => [], graceMs: 0,
+      const reconciler = createHtmlArtifactReconciler({ store: { collect: async ({ scan }) => { cutoff = (await scan()).beforeMs; return { removed: 0 }; } },
+        roots: () => [], graceMs: 0, withNativeExclusion: exclusiveFixture,
         scan: () => ({ complete: true, files: 0, referencedIds: new Set() }) });
       const finishes = Array.from({ length: 20000 }, () => reconciler.begin());
-      await reconciler.reconcile(); assert.ok(cutoff <= Date.now()); finishes.forEach(finish => finish()); await reconciler.dispose();
+      assert.equal((await reconciler.reconcile()).reason, 'native_mutation_unproven'); assert.equal(cutoff, undefined);
+      finishes.forEach(finish => finish()); await reconciler.reconcile(); assert.ok(cutoff <= Date.now()); await reconciler.dispose();
+    });
+    await t.test('default production reconciliation never scans or collects without native writer exclusion', async () => {
+      const reconciler = createHtmlArtifactReconciler({ roots: () => { throw Error('must not scan'); }, store: { collect: () => { throw Error('must not collect'); } } });
+      assert.deepEqual(await reconciler.reconcile(), { skipped: true, reason: 'native_mutation_unproven' }); await reconciler.dispose();
+    });
+    await t.test('native exclusion spans lock-held scan, final Promise gap and collect commit, with fresh candidates', async () => {
+      const entered = deferred(), commit = deferred(); let held = false, scans = 0, finished = false;
+      const candidate = hash('candidate');
+      const reconciler = createHtmlArtifactReconciler({ roots: () => { assert.equal(held, true); return []; },
+        withNativeExclusion: async work => { held = true; try { return await work(() => held); } finally { held = false; } },
+        scan: () => { scans++; assert.equal(held, true); return { complete: true, referencedIds: new Set(), candidateIds: new Set([candidate]) }; },
+        store: { collect: async options => {
+          assert.deepEqual(Object.keys(options), ['scan']);
+          const proof = await options.scan(); assert.equal(held, true); assert.equal(proof.complete, true);
+          assert.deepEqual(proof.candidateIds, new Set([candidate])); assert.ok(Number.isSafeInteger(proof.beforeMs));
+          entered.resolve(); await commit.promise;
+          assert.equal(held, true); finished = true; return { removed: 0 };
+        } } });
+      const running = reconciler.reconcile(); await entered.promise; await Promise.resolve();
+      assert.equal(held, true); assert.equal(finished, false); assert.equal(scans, 1);
+      commit.resolve(); assert.equal((await running).removed, 0); assert.equal(held, false);
+      await reconciler.reconcile(); assert.equal(scans, 2); await reconciler.dispose();
+    });
+    await t.test('publication or native admission invalidation while scanning makes the proof incomplete', async () => {
+      for (const mutation of ['publication', 'native']) {
+        const gate = deferred(); let current = true, proof;
+        const reconciler = createHtmlArtifactReconciler({ roots: () => [], withNativeExclusion: work => work(() => current),
+          scan: () => gate.promise, store: { collect: async ({ scan }) => { proof = await scan(); } } });
+        const running = reconciler.reconcile();
+        if (mutation === 'publication') reconciler.begin()(); else current = false;
+        gate.resolve({ complete: true, referencedIds: new Set() });
+        assert.equal((await running).reason, 'native_mutation_unproven'); assert.deepEqual(proof, { complete: false });
+        await reconciler.dispose();
+      }
     });
     await t.test('generic/Runtime/history wrappers and stream deltas contain refs but no HTML arguments', () => {
       const wrappers = [assistant.message, result.message, { type: 'agent_end', messages: [assistant.message, result.message] },
@@ -226,7 +266,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
       assert.equal((await store.read(artifact.id)).html, input.html);
     });
     await t.test('private bridge denies wrong capabilities, browser Origins and malformed bodies', async () => {
-      const bad = await fetch(connection.url + '/hello', { method: 'POST', headers: { 'x-pi-gui-html-token': 'é'.repeat(64) }, body: '{}' });
+      const bad = await fetch(connection.url + '/hello', { method: 'POST', headers: { 'x-pi-gui-html-token': 'x'.repeat(64) }, body: '{}' });
       assert.equal(bad.status, 403);
       const cross = await fetch(connection.url + '/hello', { method: 'POST', headers: { origin: url, 'x-pi-gui-html-token': connection.token }, body: '{}' });
       assert.equal(cross.status, 403);
