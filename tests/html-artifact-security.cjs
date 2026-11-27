@@ -194,6 +194,43 @@ test('only one parent-initiated initial srcdoc is allowed; rename/release never 
   assert.equal(w.security.canOpenExternal(w.wc, { frame: w.main, initiator: frame, url: 'https://external.invalid/' }), false);
 });
 
+test('a committed initial document spends only the matching frame node allowance', async () => {
+  const w = world();
+  const loaded = Object.assign(w.add(2), { processId: 11, routingId: 7 });
+  const pending = Object.assign(w.add(3), { processId: 12, routingId: 7 });
+  w.main.frames = [pending, loaded];
+  assert.deepEqual(await register(w), { ok: true, javascriptEnabled: true });
+
+  // Chromium can commit an internal document without a cancellable request event.
+  loaded.url = 'about:srcdoc';
+  w.wc.emit('did-frame-navigate', {}, loaded.url, -1, '', false, loaded.processId, loaded.routingId);
+  loaded.url = 'about:blank';
+
+  assert.equal(w.security.shouldBlockNavigation(w.wc, { frame: pending, initiator: w.main, url: 'about:srcdoc' }), false);
+  assert.equal(w.security.shouldBlockNavigation(w.wc, { frame: loaded, initiator: w.main, url: 'about:srcdoc' }), true);
+});
+
+test('a replacement document on a registered frame node retains its restrictions', async () => {
+  const w = world();
+  const frame = w.add();
+  assert.deepEqual(await register(w), { ok: true, javascriptEnabled: true });
+  assert.equal(w.security.shouldBlockNavigation(w.wc, { frame, initiator: w.main, url: 'about:srcdoc' }), false);
+
+  // Model Chromium replacing the live document without changing its frame node.
+  const replacement = { ...frame, name: '', url: 'about:blank' };
+  w.main.framesInSubtree = [w.main, replacement];
+
+  assert.equal(w.security.isArtifactFrame(replacement, w.wc), true);
+  assert.equal(w.security.shouldBlockNavigation(w.wc,
+    { frame: replacement, initiator: w.main, url: 'about:srcdoc' }), true);
+  assert.deepEqual(w.hook('onBeforeRequest', w.request(replacement)), { cancel: true });
+  assert.deepEqual(w.hook('onBeforeSendHeaders', w.request(replacement)), { cancel: true });
+  const guarded = w.security.guardHandler(() => assert.fail('child reached the IPC handler'));
+  assert.deepEqual(guarded({ sender: w.wc, senderFrame: replacement }), { ok: false, code: 'untrusted_sender' });
+  assert.deepEqual(w.hook('onBeforeSendHeaders', w.request(w.main)).requestHeaders,
+    { Accept: 'application/json', [TOKEN_HEADER]: TOKEN });
+});
+
 test('native guards deny redirects, missing initiators, popups and webviews', async () => {
   const w = world(), frame = w.add(); await register(w);
   assert.equal(w.security.shouldBlockNavigation(w.wc, { frame, initiator: w.main, url: 'about:srcdoc' }, true), true);

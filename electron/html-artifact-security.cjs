@@ -276,8 +276,8 @@ function createHtmlArtifactSecurity({ getWindow, origin, argv = process.argv,
       if (initiator === 'artifact' || target === 'unknown') return true;
       if (target === 'artifact') {
         const record = state.roots.get(nodeId(event.frame));
-        // One proved parent-initiated blank -> srcdoc load. Descendants,
-        // redirects, self-navigation and subsequent documents remain denied.
+        // Only the parent may spend the initial allowance on a cancellable
+        // request. Internal commits can spend it without that request event.
         if (!redirect && record?.initialSrcdoc && event.url === 'about:srcdoc'
           && ['', 'about:blank'].includes(event.frame.url) && isMainFrame(wc, event.initiator)) {
           record.initialSrcdoc = false;
@@ -309,8 +309,21 @@ function createHtmlArtifactSecurity({ getWindow, origin, argv = process.argv,
     } catch { /* Registration fails closed if this API is absent or fails. */ }
     const navigate = event => { if (shouldBlockNavigation(wc, event)) event.preventDefault(); };
     const redirect = event => { if (shouldBlockNavigation(wc, event, true)) event.preventDefault(); };
+    const commit = (_event, url, _code, _status, isMainFrame, processId, routingId) => {
+      if (isMainFrame || url !== 'about:srcdoc') return;
+      try {
+        // The native event supplies routing identity for the committed document.
+        // Resolve it to the current native frame node before spending its allowance.
+        const frame = wc.mainFrame.frames.find(candidate =>
+          candidate.processId === processId && candidate.routingId === routingId);
+        if (frame?.url !== url || frame.detached !== false) return;
+        const record = state.roots.get(nodeId(frame));
+        if (record) record.initialSrcdoc = false;
+      } catch { /* Chromium may detach an old frame before it can be inspected. */ }
+    };
     wc.on('will-frame-navigate', navigate);
     wc.on('will-redirect', redirect);
+    wc.on('did-frame-navigate', commit);
     wc.on('will-attach-webview', event => event.preventDefault());
     // HandlerDetails does not prove the initiating frame. Never translate a
     // child popup into shell.openExternal. Host external links use guarded IPC.
@@ -319,6 +332,7 @@ function createHtmlArtifactSecurity({ getWindow, origin, argv = process.argv,
       for (const cancel of [...state.pending]) cancel();
       states.delete(wc); state.roots.clear();
       wc.removeListener('will-frame-navigate', navigate); wc.removeListener('will-redirect', redirect);
+      wc.removeListener('did-frame-navigate', commit);
     });
   }
 
