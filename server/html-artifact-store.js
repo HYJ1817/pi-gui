@@ -20,7 +20,7 @@ const FILES = ['document.html', 'reference.json', '.pending'];
 const INPUT_KEYS = ['sessionId', 'messageId', 'toolCallId', 'title', 'html', 'height'];
 const CODES = new Set(['html_artifact_invalid', 'html_artifact_not_found', 'html_artifact_conflict',
   'html_artifact_storage_unsafe', 'html_artifact_storage_corrupt', 'html_artifact_storage_busy',
-  'html_artifact_storage_failed', 'html_artifact_quota']);
+  'html_artifact_storage_failed', 'html_artifact_storage_release_failed', 'html_artifact_quota']);
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 const identity = stat => `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -37,9 +37,11 @@ const record = value => value !== null && typeof value === 'object' && !Array.is
  * Publish/read use bounded synchronous IO. Collection additionally holds the
  * exclusive wx lock across its awaited reference scan AND synchronous commit,
  * excluding other store calls and backend processes. Native reference writers
- * require separate caller admission. A v2 lock is recovered only with a shared
- * kernel gate and OS creation-identity proof that its exact owner is dead.
- * Legacy/torn/unknown locks stay blocked; there is no force-unlock override.
+ * require separate caller admission. An abandoned v2 lock is recovered only
+ * with a shared kernel gate and OS creation-identity proof its owner is dead.
+ * Only the creating Store can retry its own unconfirmed release, using its
+ * in-memory inode + exact owner bytes under the same gate. Legacy/torn/unknown
+ * locks stay blocked; there is no force-unlock override.
  * Node path checks are not an OS sandbox against a same-user malicious process,
  * nor does file fsync promise power-loss durability of directory metadata. */
 export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpoint = () => {},
@@ -50,7 +52,7 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
   if (Object.values(quota).some(value => !Number.isSafeInteger(value) || value < 1)) fail('html_artifact_invalid');
   const data = path.resolve(dataDir), root = path.join(data, 'html-artifacts');
   const remembered = new Map(), metadataIndex = new Map();
-  let queue = Promise.resolve(), collecting = false;
+  let queue = Promise.resolve(), collecting = false, pendingRelease = null;
   const version = stat => [identity(stat), stat.size, stat.mtimeMs, stat.ctimeMs].join(':');
 
   function statMaybe(file) {
@@ -180,21 +182,63 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
     if (identity(stat) !== expected) fail('html_artifact_storage_unsafe');
     io.unlinkSync(file);
   }
+  // This is completion of a release, NOT recovery by PID. The private proof
+  // never survives this Store and cannot authorize a different inode/nonce.
+  function finishRelease(proof) {
+    const file = path.join(root, '.writer.lock');
+    try {
+      guard();
+      if (statMaybe(file)) {
+        const current = readBytes(root, '.writer.lock', 4096);
+        if (identity(current.stat) !== proof.expected || !current.bytes.equals(proof.bytes)) fail('html_artifact_storage_unsafe');
+        ownedUnlink(file, proof.expected);
+        guard();
+        if (statMaybe(file)) fail('html_artifact_storage_release_failed');
+      }
+      pendingRelease = null;
+    } catch (error) {
+      fail(CODES.has(error?.code) ? error.code : 'html_artifact_storage_release_failed');
+    }
+  }
   async function acquireLock(create, recovery = false) {
-    let fd, expected, releaseGate;
+    let fd, expected, bytes, releaseGate, verified = false;
     const file = path.join(root, '.writer.lock');
     const release = async () => {
-      if (fd !== undefined) { try { io.closeSync(fd); } catch { /* Still check the exact lock inode below. */ } }
-      if (expected) {
-        try { guard(); ownedUnlink(file, expected); }
-        catch { /* Never remove a replaced root or another writer's lock. */ }
+      let failure;
+      if (fd !== undefined) {
+        const opened = fd; fd = undefined; // Never retry a possibly reused fd.
+        try { io.closeSync(opened); } catch { failure = 'html_artifact_storage_failed'; }
       }
-      await releaseGate?.();
+      try {
+        if (expected) {
+          pendingRelease = { expected, bytes };
+          try {
+            if (!verified) {
+              // Acquisition may fail before writing a full owner (ENOSPC/short
+              // write). We still own this just-created inode, not an abandoned
+              // unknown lock. Accept only a prefix of our intended owner bytes,
+              // never a different owner written into the same inode.
+              const current = readBytes(root, '.writer.lock', 4096);
+              if (identity(current.stat) !== expected || !bytes.subarray(0, current.bytes.length).equals(current.bytes)) fail('html_artifact_storage_unsafe');
+              pendingRelease.bytes = current.bytes;
+            }
+            finishRelease(pendingRelease);
+          } catch (error) { failure = CODES.has(error?.code) ? error.code : 'html_artifact_storage_release_failed'; }
+        }
+      } finally {
+        // Unlink/identity/close failure must never strand the kernel gate.
+        const gate = releaseGate; releaseGate = undefined;
+        try { await gate?.(); } catch { failure ||= 'html_artifact_storage_failed'; }
+      }
+      if (failure) fail(failure);
     };
     try {
       if (!guard(create)) return { exists: false, release };
       releaseGate = await acquireHtmlArtifactGate(root);
       guard();
+      // One attempt per call; persistent denial remains release_failed, not busy.
+      // Other Stores (even in this PID) still require dead-owner recovery below.
+      if (pendingRelease) finishRelease(pendingRelease);
       if (statMaybe(file) && recovery) {
         // The same kernel gate is held by normal writers and all recoverers.
         // Re-read owner+inode inside it; the process probe can never authorize
@@ -208,7 +252,7 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
         if (identity(before.stat) !== identity(after.stat) || !before.bytes.equals(after.bytes)) fail('html_artifact_storage_unsafe');
         ownedUnlink(file, identity(after.stat));
       }
-      const bytes = encode(htmlArtifactLockOwner(queryProcess));
+      bytes = encode(htmlArtifactLockOwner(queryProcess));
       try { fd = io.openSync(file, 'wx', 0o600); }
       catch (error) { if (error.code === 'EEXIST') fail('html_artifact_storage_busy'); throw error; }
       expected = identity(io.fstatSync(fd));
@@ -219,13 +263,30 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
       };
       assertLock();
       if (!readBytes(root, '.writer.lock', 4096).bytes.equals(bytes)) fail('html_artifact_storage_corrupt');
+      verified = true;
       return { exists: true, assertLock, release };
-    } catch (error) { await release(); throw error; }
+    } catch (error) {
+      // Preserve acquisition failure; release retains its own exact retry proof.
+      try { await release(); } catch { /* The call already fails, never acknowledges success. */ }
+      throw error;
+    }
   }
   async function lock(create, action, recovery = false) {
     const held = await acquireLock(create, recovery);
-    try { return await action(held.exists, held.assertLock); }
-    finally { await held.release(); }
+    let completed = false;
+    try {
+      const result = await action(held.exists, held.assertLock);
+      completed = true;
+      return result;
+    } finally {
+      try { await held.release(); }
+      catch (error) {
+        // A release failure is not a rollback: committed snapshots/pending and
+        // completed maintenance effects remain. Idempotent publish can retry.
+        // Do not replace a primary business failure with a cleanup exception.
+        if (completed) throw error;
+      }
+    }
   }
   function safe(action, collection = false) {
     if (collecting) return Promise.reject(Object.assign(Error('html_artifact_storage_busy'), { code: 'html_artifact_storage_busy' }));
