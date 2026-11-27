@@ -95,7 +95,7 @@ export function createHtmlArtifactVisibilityController({ node, onVisibility, doc
   const mutation = new view.MutationObserver(schedule);
   // Only this ancestor chain owns visibility; no subtree/per-artifact observers
   // across the whole timeline. Resize reports don't cause observer feedback.
-  for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+  for (let parent = node; parent; parent = parent.parentElement) {
     mutation.observe(parent, { attributes: true, attributeFilter: ['hidden', 'style', 'class', 'open'] });
   }
   doc.addEventListener('visibilitychange', refresh);

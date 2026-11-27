@@ -2,10 +2,22 @@
 // No HTML or arbitrary CSS from an artifact is ever interpreted in this realm.
 export const HTML_ARTIFACT_THEME_TOKENS = Object.freeze({
   background: '--ds-bg-primary', foreground: '--ds-text-primary', muted: '--ds-bg-secondary',
-  'muted-foreground': '--ds-text-muted', border: '--ds-border-default', primary: '--ds-accent',
-  accent: '--ds-accent', destructive: '--ds-error', warning: '--ds-warning', success: '--ds-success',
-  info: '--ds-info', radius: '--radius-md', 'font-sans': '--font-sans', 'font-mono': '--font-mono',
-  'primary-foreground': '--ui-on-primary', card: '--ds-surface-card', 'card-foreground': '--ds-text-primary',
+  // Use the body-safe secondary ink, not the faint metadata ink, for generated
+  // descriptions. T3's variable vocabulary maps to OUR existing semantic tokens.
+  'muted-foreground': '--ds-text-secondary', border: '--ds-border-default', input: '--ds-surface-input',
+  ring: '--ds-focus', primary: '--ds-accent', 'primary-foreground': '--ui-on-primary',
+  accent: '--ds-accent', 'accent-foreground': '--ui-on-primary',
+  'accent-surface': '--ds-bg-hover', 'accent-surface-foreground': '--ds-text-primary',
+  card: '--ds-surface-card', 'card-foreground': '--ds-text-primary',
+  popover: '--ds-bg-elevated-opaque', 'popover-foreground': '--ds-text-primary',
+  secondary: '--ds-bg-secondary', 'secondary-foreground': '--ds-text-primary',
+  destructive: '--ds-error', 'destructive-surface': '--ds-error-surface',
+  'destructive-foreground': '--ds-text-primary',
+  warning: '--ds-warning', 'warning-surface': '--ds-warning-surface', 'warning-foreground': '--ds-text-primary',
+  success: '--ds-success', 'success-surface': '--ds-success-surface', 'success-foreground': '--ds-text-primary',
+  info: '--ds-info', 'info-surface': '--ds-info-surface', 'info-foreground': '--ds-text-primary',
+  'code-background': '--ui-code-surface', 'code-foreground': '--ds-text-primary',
+  radius: '--radius-md', 'font-sans': '--font-sans', 'font-mono': '--font-mono',
   'chart-1': '--ds-info', 'chart-2': '--ds-success', 'chart-3': '--ds-warning',
   'chart-4': '--ds-error', 'chart-5': '--ds-accent', 'chart-6': '--ds-text-secondary',
 });
