@@ -4,6 +4,8 @@
 E2 历史身份见 [E 验收第 8 节](visual-replies-p2-e-acceptance.md#8-e2首批集成后的登记与定向结果)；E3 实测状态为 `e44686951bc1658109554d6530b54ba858a35027` 加 package/guard diff（行为产品树与任务入口 `4649ac53` 一致，父新增提交仅 plan 文档）。测试链交付 `403e0cf9b4573048e8e87da8952a27781f431323`，完整证据见 [E3 验收](visual-replies-p2-e-acceptance.md#10-e3b-成组集成后的四叶登记与一次离线子链)。
 B3/B2 已成组集成；D2 生产与六项测试已集成；C feedback/presentation ACK 消费端仍在修改。C/D 的定向证据与 R-D 四项未决 Important 分开登记，不能把测试通过写成审查通过。
 后续新增行为 diff、截图和专项结果必须以各自准确 SHA 追加，不能继承本次被测树的结论。
+**收尾时新增未解决项：** B 独立安全/故障审查已完成，结论不通过，Blocker 0 / **Important 1（I1）** / Nit 0；自身锁 unlink 失败时 recoverLock 仍确认成功、随后访问 busy。E3 只读核对报告，独立探针累计78/79断言、skip0，不与本次16叶成功混算；父 `18766afe` 已登记并交 B4 修复，待增量复审。C 消费端改由 C2 接手，四项 RD 仍未关闭。首段 E3 验收已由并行提交 `2134c58b` 纳入，本线只补当前状态，不将文档提交当新行为实测。
+**后续树边界：** A2已由父集成为 `8cba3ad4` + `e02828f7`；提交前摘要检查检测到8项A2驱动/fixture差异（2改6新），因此E3的16叶exit0不覆盖该新树，虽366叶计划文本/摘要未变。父转报当前树check-driver **28/28**、真Pi1.6.0无模型契约 **13/13**；离线functional **17/18**，generate阶段 `session-return` 超时，缺口归父/C线，非E3执行或登记失败。这些新桌面/契约/live入口不注册进366叶；授权magpie网关有界live由父另行负责，不记作已通过。完整证据和首次漂移自查见E验收第10.4节，真实样例矩阵不据转报批量填格。
 基线身份、逐叶 CI 证据、定向数字、注册机制与回滚见 [E 验收](visual-replies-p2-e-acceptance.md)。
 总体计划由父任务维护在 `docs/visual-replies-p2-plan.md`；本索引不更改 A–D 所有权。
 
@@ -122,7 +124,7 @@ S7 的局部 28/29 首轮失败不是以上任意八格的完整证明，保持�
 最终仍需：A–D准确集成后定向回归、最终canonical当前PR CI、真实普通交互/真实Pi契约/授权模型、正常沙箱安全、正式重建/产物、新上下文独立功能与安全审查。
 本线不重复完整基线、不运行付费模型或新下载、不修改远端设置/branch protection、不push/PR/merge/release。
 
-### E2 登记状态与交接（本批不等候后续线）
+### E2 历史登记快照（仅对应当时状态，当前见上方 E3）
 
 - 已登记：D 的 `html-artifact-layout.cjs` / `html-artifact-frame.cjs` / `html-artifact-reading.cjs` 与 `visual-replies-normal-samples.cjs`，各为独立 `node --test` 叶；D clock 和 normal-samples 的 `tests/fixtures/` helper 不登记。
 - 原 358 个 canonical 叶全部保留，新增 4、删除/重复/旧叶换组均 0；Artifact 子链 8 → 12 叶。分组 core280 / ui28 / security28 / native4 / faults22，计划摘要 `509f720388b3d5b3a2b4bfa61db5540995ae38eaa62e240a23505381c025fa0a`。
