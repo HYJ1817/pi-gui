@@ -97,6 +97,13 @@
 - 审查者另记录：直接 `store.collect({releasePending:true})` 可删除 pending 快照，Store 自身不强制 candidates-only；生产中维护入口强制 dry-run、Reconciler 无 provider 即退出，信任调用者契约成立，**不计为已确认绕过**，但属设计边界。
 - 修复要求：「已确认自身锁但释放失败」必须返回固定脱敏失败，不得报成功；不得引入 force-unlock 或放宽身份门控。已派 **B4** 在原 B 工作树修复并补回归；修复须经独立增量复审后 I1 才可关闭。
 
+### R-B 续审新发现（zombie 线程 c5122ef6 迟交，父 task_status 回收）
+
+- 该线程 ordinal:2 实际**早已完成**（含 B4 修复在树期间的局部复核），因父 compaction 未送达。结论 Blocker 0 / Important 1（新）/ 审查范围覆盖至 B4 修复树 `3f22f3d3`：
+- **B-SAF-01（Important，未解决）**：新增 `.writer.lock` owner 写入/fsync 发生在业务动作**之前**，而 html-artifact-store.cjs 既有刷盘/短写故障用例**全局替换** `io.fsyncSync`/`io.writeFileSync` 不分 fd——故障首先命中锁而非标称目标（pending 重刷/快照写入）。实测命中表：pending-fsync→`.writer.lock`、snapshot-fsync→`.writer.lock`、短写→`.writer.lock`；原 1/1 通过的那次 flush 统计的是锁的 flush。**529 断言数不变但业务故障覆盖已退化**——高风险持久化验收证据缺口。同时限定 `.pending` 的最小注入确实被拒绝，**不能扩大解读为"产品已漏刷盘"**。修复要求：按 fd/文件名定向注入并断言目标命中次数，恢复业务目标覆盖后定向补验。
+- 同报告**正面核对**（否定证据，非空）：B4 释放重试语义正确（原 Store 精确内存证明有界重试、同 PID 跨 Store 无权接管、foreign 字节拒绝）；授权闭合/身份/gate/崩溃保留/配额/digest/索引恢复/collect 入口闭合/显式 TEMP 清理均未见失守；生产维护层 collect 恒拒绝、无生产路径注入 native 排斥。**I1 修复本身经此续审局部复核通过**（5+2+6+3+2 场景探针共 107 断言全过，4 组定向 filter 各全过），但 I1 正式关闭仍待集成落地后的增量复审（复审对象须含集成树身份，不能仅以 B 树身份为准）。
+- **待派**：B-SAF-01 修复（B 所有权：tests/html-artifact-store.cjs 故障注入目标定向）。轮次纪律：首轮 R-B 已闭合，此为第二轮增量；B-SAF-01 修复后复审为同一第二轮的收尾，不得扩散范围。
+
 ### C 线交接
 
 - 原 C 代理命中模型服务 100 轮上限死亡（runs 2–5 均失败，不得重启）。其工作树留有未提交的 RD-2/RD-3 半成品（viewer/dialog/interactions 约 +62/-12），无任何完成证据。已派 **C2** 接手同一工作树：评估半成品、按 D2 唯一契约完成消费端、补 T3 对照、>4096px 真实正常沙箱 Electron 全屏往返良性证明与验收文档。A2（真实 Pi 驱动与模型闭环准备）、E3 后续登记仍在各线进行；E3 首节交付见上。
