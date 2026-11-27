@@ -254,6 +254,12 @@ export function trackClassicExecutionTool(node, group, event) {
   dirty.add(active);
 }
 
+export function trackClassicExecutionArtifact(node, event) {
+  if (!node || !active || active.settled || !accepted.has(event) || eventKey(event) !== scopeKey) return;
+  (active.artifacts ||= []).push({ node, sequence: event._seq });
+  dirty.add(active);
+}
+
 export function trackClassicExecutionPlan(node, event) {
   if (!active || active.settled || !accepted.has(event) || eventKey(event) !== scopeKey) return;
   active.plan = node;
@@ -391,7 +397,8 @@ function renderRound(round, turn, group, items, scope = null) {
     round.view = createExecutionTurnView({ document: round.input.ownerDocument, preferences });
     round.input.before(round.view.node);
   }
-  for (const node of [round.input, plan, ...progress, ...answer, ...round.outcomes, ...steers.map(entry => entry.node)]) {
+  const artifacts = (round.artifacts || []).filter(entry => entry.node.parentNode);
+  for (const node of [round.input, plan, ...progress, ...answer, ...round.outcomes, ...artifacts.map(entry => entry.node), ...steers.map(entry => entry.node)]) {
     rememberPosition(round, node);
   }
   for (const tool of round.tools.values()) {
@@ -404,8 +411,9 @@ function renderRound(round, turn, group, items, scope = null) {
   round.view.update({
     turn: { ...turn, status: waitingForFallback ? 'waiting' : turn.status },
     group, items, input: round.input, plan, progress, steers: steers.map(entry => entry.node),
-    answer, outcomes: round.outcomes, details,
+    answer, outcomes: round.outcomes, details, boundaries: artifacts.map(entry => entry.node),
     workOrder: [
+      ...artifacts.map(entry => ({ node: entry.node, sequence: entry.sequence, part: 1, boundary: true })),
       ...ordered.filter(entry => !steerByNode.has(entry.node))
         .map(entry => ({ node: entry.node, sequence: entry.sequence, part: -1 })),
       ...thoughts,

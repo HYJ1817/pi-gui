@@ -1,0 +1,41 @@
+.html-artifact {
+  width: 100%;
+  min-width: 0;
+  margin: var(--ui-space-3) 0;
+  color: var(--ds-text-secondary);
+}
+
+.html-artifact-frame {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.html-artifact[data-state="loading"] .html-artifact-frame {
+  visibility: hidden;
+}
+
+.html-artifact-loading {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  flex-wrap: wrap;
+  color: var(--ds-text-muted);
+  font-size: var(--text-sm-plus, 12.5px);
+}
+
+.html-artifact[data-state="ready"] .html-artifact-loading {
+  display: none;
+}
+
+.html-artifact[data-state="error"] .html-artifact-loading {
+  color: var(--ds-error);
+}
+
+.html-artifact-retry {
+  flex: 0 0 auto;
+}

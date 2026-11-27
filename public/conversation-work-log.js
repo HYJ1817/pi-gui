@@ -57,7 +57,7 @@ function nativeGroups(node) {
 }
 
 function workKind(node) {
-  if (node.nodeType !== 1 || node.hasAttribute('data-execution-turn')) return null;
+  if (node.nodeType !== 1 || node.hasAttribute('data-execution-turn') || node.matches('.html-artifact')) return null;
   if (node.matches('.tl-group, .ui2-runtime-tools')) return 'tools';
   return node.dataset.conversationWorkKind || null;
 }

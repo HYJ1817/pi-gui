@@ -26,6 +26,8 @@ import { registerConversationAnchor, registerConversationAnchorAlias, clearConve
   rebuildConversationNav, clearConversationNav } from './conversation-nav.js';
 import { workspaceView } from './ui/workspace-surface.js';
 import { md } from './markdown.js';
+import { htmlArtifactFromToolResult, projectHtmlArtifactReference } from './html-artifact-model.js';
+import { createHtmlArtifactViewer, mountHtmlArtifacts, disposeHtmlArtifacts } from './html-artifact-viewer.js';
 import { sendCommand } from './api.js';
 import { requestSessionStats } from './session-stats.js';
 import { updateSendState } from './composer.js';
@@ -52,6 +54,8 @@ import { classicNativeThreadChildren, indexClassicHistoryTurns, mountClassicHist
 import {
   saveSessionBookmark,
   restoreSessionBookmark,
+  captureReadingPosition,
+  restoreReadingPosition,
   clearSessionBookmark,
   preserveScrollAround,
 } from './reading-position.js';
@@ -239,6 +243,9 @@ export function clearThread() {
   cancelQueuedFollow();
   followReleased = false;
   resetThroughput();
+  disposeHtmlArtifacts(S.thread);
+  for (const viewer of classicArtifacts.values()) viewer.dispose();
+  classicArtifacts.clear();
   resetClassicExecutionView();
   ++threadGeneration;
   lastHydratedFence = ++historyFence;
@@ -357,6 +364,44 @@ export function scrollBottom(force) {
         || Math.abs(stream.scrollTop - followTop) > 1) return;
     stream.scrollTop = stream.scrollHeight;
   });
+}
+
+/* ---------- 独立 HTML Artifact：线程本身持有引用/资源 ---------- */
+const classicArtifacts = new Map();
+function classicArtifactNode(reference) {
+  const artifact = projectHtmlArtifactReference(reference);
+  if (!artifact || classicArtifacts.has(artifact.id)) return null;
+  const generation = threadGeneration;
+  const owner = S.legacyOwner && { ...S.legacyOwner };
+  const ownerKey = JSON.stringify(owner);
+  const viewer = createHtmlArtifactViewer(artifact, {
+    scope: owner && owner.sessionId === artifact.sessionId ? { conversationId: 'classic-chat', owner } : null,
+    isCurrent: () => generation === threadGeneration && JSON.stringify(S.legacyOwner && { ...S.legacyOwner }) === ownerKey,
+    preserveLayout(change) {
+      const stream = el.stream;
+      const bookmark = stream?.clientHeight > 0 ? captureReadingPosition(stream, S.thread,
+        { isPinned: !followReleased && stream.scrollHeight - stream.scrollTop - stream.clientHeight < 160 }) : null;
+      change();
+      if (bookmark) restoreReadingPosition(stream, S.thread, bookmark);
+    },
+  });
+  if (!viewer) return null;
+  viewer.node.dataset.anchorId = 'artifact-' + artifact.id;
+  classicArtifacts.set(artifact.id, viewer);
+  return viewer.node;
+}
+
+export function appendClassicHtmlArtifact(event) {
+  if (event?.isError === true || event?._replay || S.switching) return null;
+  const artifact = htmlArtifactFromToolResult(event?.result);
+  if (!artifact || artifact.toolCallId !== event.toolCallId || artifact.sessionId !== S.legacyOwner?.sessionId) return null;
+  const node = classicArtifactNode(artifact);
+  if (!node) return null;
+  ensureThread().append(node);
+  // A following tool cannot be appended into a pre-artifact work fold.
+  S.tlGroup = null;
+  mountHtmlArtifacts(node);
+  return node;
 }
 
 /* ---------- 轮次证据（只认真实事件） ---------- */
@@ -751,6 +796,10 @@ function trimClassicTail(pending) {
   }
   releaseClassicExecutionTail(pending.article, pending.oldTail);
   for (const node of pending.oldTail) {
+    disposeHtmlArtifacts(node);
+    for (const [id, viewer] of classicArtifacts) if (node === viewer.node || node?.contains?.(viewer.node)) {
+      viewer.dispose(); classicArtifacts.delete(id);
+    }
     if (node?.isConnected) node.remove();
   }
   if (S.current && pending.oldTail.has(S.current.wrap)) {
@@ -1786,6 +1835,15 @@ export function rebuildFromMessages(data, sessionId = threadSessionId || S.state
       return;
     }
 
+    if (item.kind === 'html_artifact') {
+      const node = classicArtifactNode(item.artifact);
+      if (node) {
+        frag.append(node);
+        if (historyTurn?.nodes) (historyTurn.nodes.artifacts ||= []).push({ node, sequence: item.sourceIndex });
+      }
+      return;
+    }
+
     if (item.kind === 'tools') {
       const turnPlan = planTurns.get(planTurn);
       if (turnPlan && turnPlan.firstIndex === index) {
@@ -1846,6 +1904,7 @@ function finishHistoryRender(t, sessionId, generation, { userScrolled = false } 
     set: (key, value) => expansionChoice(sessionId, 'work:' + key, value),
   };
   renderClassicConversationFlow(sessionChoice);
+  mountHtmlArtifacts(t);
 
   /* 历史重建完之后**重新扫一遍 DOM** 建导航（§10）—— 刷新页面、重开 App、
    * 恢复旧会话、fork、retry 之后走的都是这条路。不自己维护消息副本，
@@ -1950,6 +2009,7 @@ function mountHistoryInChunks(t, items, sessionId, generation, { frag, renderIte
         }
         if (!current() || completed) break;
         t.appendChild(frag);
+        mountHtmlArtifacts(t);
 
         /* 顺序追加不会推动已读内容，只把视口带到当前已挂历史的底部。
          * 用户自己滚动后就交还位置，后续块继续追加在下方，不影响他正在读的那段。 */

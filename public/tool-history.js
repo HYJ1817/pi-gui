@@ -22,6 +22,7 @@
  * 由 messages.js 消费 —— 计划和渲染分开，测试才能钉住配对本身。 */
 
 import { entryFromHistory } from './tool-model.js';
+import { htmlArtifactFromToolResult } from './html-artifact-model.js';
 
 /** assistant 消息里的 toolCall 部分。 */
 function callsOf(msg) {
@@ -43,6 +44,7 @@ function callsOf(msg) {
 export function planHistory(messages, { withPosition = false } = {}) {
   const list = Array.isArray(messages) ? messages : [];
   const out = [];
+  const artifactIds = new Set();
   const append = (item, sourceIndex) => out.push(withPosition ? { ...item, sourceIndex } : item);
 
   /* 先收一遍「哪些 toolCallId 有对应的 toolCall」。
@@ -72,6 +74,13 @@ export function planHistory(messages, { withPosition = false } = {}) {
     }
 
     if (m.role === 'toolResult') {
+      /* html_render 的结果是独立的可视化边界。它不是工具详情的一部分，
+       * 也不从普通 result 文本中猜测；只有固定 typed details 才进入时间线。 */
+      const artifact = htmlArtifactFromToolResult(m);
+      if (artifact && artifact.toolCallId === m.toolCallId && !artifactIds.has(artifact.id)) {
+        artifactIds.add(artifact.id);
+        append({ kind: 'html_artifact', artifact }, sourceIndex);
+      }
       /* 正常路径下它已经被上面的 assistant 分支消费掉了；走到这里说明是孤儿。
        * 造一条只有 result 的 entry：名字用 toolResult.toolName，参数是空的。
        * 它不该消失 —— 消失会让用户以为「什么都没发生」。 */

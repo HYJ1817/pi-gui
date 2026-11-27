@@ -38,6 +38,7 @@
  *      等 Git 状态刷新回来再用 Git 的数字覆盖 —— Git 是最终权威（见 tools.js）。 */
 
 import { toProjectRel } from './project-relative-path.js';
+import { HTML_RENDER_TOOL } from './html-artifact-model.js';
 
 /* ---------- 工具名映射 ---------- */
 
@@ -307,7 +308,7 @@ export function previewOf(text, max = PREVIEW_LINES) {
 export function makeEntry(evt, now = Date.now()) {
   const name = String(evt?.toolName ?? '');
   const { label, icon, known } = labelFor(name);
-  const args = evt?.args ?? null;
+  const args = name === HTML_RENDER_TOOL ? null : evt?.args ?? null;
   const s = summarize(name, args);
 
   return {
@@ -347,6 +348,7 @@ export function makeEntry(evt, now = Date.now()) {
  * `{content: [], details: undefined}`，用它把已显示的内容清掉是错的。
  */
 export function applyUpdate(entry, evt, now = Date.now()) {
+  if (entry.name === HTML_RENDER_TOOL) { entry.updatedAt = now; return entry; }
   if (evt?.partialResult?.details && typeof evt.partialResult.details === 'object') entry.details = evt.partialResult.details;
   const text = resultText(evt?.partialResult);
   if (text) {
@@ -364,6 +366,11 @@ export function applyEnd(entry, evt, now = Date.now()) {
   entry.endedAt = now;
   entry.durationMs = Math.max(0, entry.endedAt - entry.startedAt);
 
+  if (entry.name === HTML_RENDER_TOOL) {
+    entry.status = evt?.isError ? 'error' : 'success';
+    entry.output = ''; entry.error = ''; entry.details = null; entry.resultLine = '';
+    return entry;
+  }
   const res = evt?.result;
   const text = resultText(res);
   if (text) {
@@ -397,10 +404,10 @@ export function applyEnd(entry, evt, now = Date.now()) {
 export function entryFromHistory(call, result, assistantMsg) {
   const name = String(call?.name ?? result?.toolName ?? '');
   const { label, icon, known } = labelFor(name);
-  const args = call?.arguments ?? null;
+  const args = name === HTML_RENDER_TOOL ? null : call?.arguments ?? null;
   const s = summarize(name, args);
 
-  const rawText = resultText(result?.content ?? result);
+  const rawText = name === HTML_RENDER_TOOL ? '' : resultText(result?.content ?? result);
   const bounded = boundedOutput(rawText);
   const text = bounded.text;
   const startedAt = Number.isFinite(assistantMsg?.timestamp) ? assistantMsg.timestamp : null;
@@ -429,7 +436,7 @@ export function entryFromHistory(call, result, assistantMsg) {
     exitCode: parseExitCode(text),
     resultLine: '',
     truncated: truncationOf(result?.details),
-    details: result?.details ?? null,
+    details: name === HTML_RENDER_TOOL ? null : result?.details ?? null,
     diffStat: diffStatOf(result?.details),
     gitStat: null,
     fromHistory: true,

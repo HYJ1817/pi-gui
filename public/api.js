@@ -140,6 +140,12 @@ export async function fetchRuntimeSessions() {
 }
 /* P32.4：只读历史。只传 conversationId —— 路径由后端从 registry 记录里取。 */
 export const fetchRuntimeHistory = conversationId => getJSON('/api/runtime-sessions?' + new URLSearchParams({ conversationId }));
+
+/* HTML Artifact bytes are a separate, scoped read. Keep the reference and the
+ * complete captured scope together so a late response cannot be retargeted. */
+export const readHtmlArtifact = (id, scope, { signal } = {}) =>
+  sendJSON('/api/html-artifacts/read', { body: { id, scope }, applicationScoped: true, signal });
+
 export const getClassicExecutionHistory = ({ owner, branchEpoch }, { signal } = {}) =>
   sendJSON('/api/execution-history', { body: { owner, branchEpoch }, applicationScoped: true, signal });
 export const runtimeSessionAction = body => sendJSON('/api/runtime-sessions', { body });

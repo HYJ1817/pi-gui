@@ -15,6 +15,7 @@ import {
   usageProjection,
   USAGE_BLOCK_KINDS,
 } from './runtime-timeline.js';
+import { htmlArtifactFromToolResult, projectHtmlArtifactReference } from './html-artifact-model.js';
 
 const same = (a, b) => a && b && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every(k => a[k] === b[k]);
 function stableIdentity(item, owner) {
@@ -691,6 +692,16 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
       const group = r.timeline.find(block => block.kind === 'tools'
         && block.tools?.some(item => item.id === e.toolCallId));
       if (group) group.at = Date.now();
+      /* html_render is a typed sibling block, not a detail row. It is appended
+       * at the result event's real position and contains only the reference. */
+      const artifact = e.isError === true ? null : htmlArtifactFromToolResult(e.result);
+      if (artifact && artifact.toolCallId === e.toolCallId && artifact.sessionId === r.owner?.sessionId
+          && !r.timeline.some(block => block.kind === 'html_artifact' && block.artifact?.id === artifact.id)) {
+        const block = appendBlock(r, { kind: 'html_artifact', artifact });
+        const assistant = ensureAssistant(r);
+        assistant.tools = null;
+        assistant.tail = block;
+      }
     }
     if (e.type === 'tool_wait_state') {
       const flat = r.tools.find(t => t.id === e.toolCallId);
@@ -774,6 +785,10 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         if (usage) usages.push(usage);
       }
       if (usages.length) copy.usages = usages;
+    } else if (block.kind === 'html_artifact') {
+      const artifact = projectHtmlArtifactReference(block.artifact);
+      if (!artifact) return null;
+      copy = { kind: 'html_artifact', artifact };
     } else return null;
     if (typeof block.id === 'string') copy.id = block.id;
     /* 非 Plan block 用单条 usage；user 不在白名单内，不能承载用量。 */
@@ -794,6 +809,9 @@ export function createRuntimeStore({ limit = 1024 * 1024 } = {}) {
         if (!Array.isArray(block.tools) || !block.tools.length) continue;
       } else if (block.kind === 'plan') {
         if (!normalizePlan(block.plan)) continue;
+      } else if (block.kind === 'html_artifact') {
+        const artifact = projectHtmlArtifactReference(block.artifact);
+        if (!artifact || bounded.some(item => item.kind === 'html_artifact' && item.artifact.id === artifact.id)) continue;
       } else continue;
       const copy = cloneBlock(block);
       if (copy) bounded.push(copy);

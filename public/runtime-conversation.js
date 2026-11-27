@@ -62,6 +62,8 @@ import { thinkingPreview } from './ui/work-presentation.js';
 import { startThinkingDotsCycle, stopThinkingDotsCycle, thinkingDots } from './thinking-dots.js';
 import { normalizePlan } from './plan-model.js';
 import { usageProjection } from './runtime-timeline.js';
+import { projectHtmlArtifactReference } from './html-artifact-model.js';
+import { createHtmlArtifactViewer, mountHtmlArtifacts } from './html-artifact-viewer.js';
 import { renderPlan, setPlanStalled, updatePlan } from './plan-view.js';
 import { labelFor } from './tool-model.js';
 import {
@@ -1094,6 +1096,26 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       } };
     }
 
+    if (block.kind === 'html_artifact') {
+      const artifact = projectHtmlArtifactReference(block.artifact);
+      const conversationId = record?.item?.conversationId;
+      if (!artifact || !conversationId) return null;
+      const owner = history ? null : runtimeOwnerOf(record);
+      const historyRef = history ? view.history : null;
+      const viewer = createHtmlArtifactViewer(artifact, {
+        scope: owner ? { conversationId, owner } : { conversationId },
+        isCurrent: () => alive && active && id === conversationId
+          && store.get(conversationId) === record
+          && (history ? view.history === historyRef : !view.history && (owner ? same(owner, record.owner) : !record.owner)),
+        preserveLayout(change) {
+          const reading = output.clientHeight > 0
+            ? captureReadingPosition(output, output, { isPinned: !history && shouldFollow(output) }) : null;
+          change();
+          if (reading) restoreReadingPosition(output, output, reading);
+        },
+      });
+      return viewer && { node: viewer.node, update() {}, dispose: viewer.dispose };
+    }
     if (block.kind === 'thinking') {
       /* 只有带真实历史 usage 的 Thinking 才包一层，用来在折叠区外显示用量；
        * 实时 Thinking 的 DOM 保持原来的 details 直接子节点，不改变动画/滚动。 */
@@ -1502,7 +1524,14 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     return { label: '本轮用量', timing: turn?.timing || null, status: turn?.status || '' };
   }
 
+  function disposeTimelineArtifacts(timeline) {
+    for (const [key, info] of timeline.nodes) if (info.kind === 'html_artifact') {
+      info.dispose?.(); info.node.remove(); timeline.nodes.delete(key);
+    }
+  }
+
   function clearExecutionViews(timeline) {
+    disposeTimelineArtifacts(timeline);
     timeline.flow?.restore();
     timeline.flow = null;
     for (const execution of timeline.execution.values()) execution.release();
@@ -1592,7 +1621,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       execution.outcome = renderTurnOutcome(deriveTurnOutcome({ tools, lastAssistant }));
       timeline.execution.set(key, execution);
     }
-    const progress = [], steers = [], answer = [], workOrder = [];
+    const progress = [], steers = [], answer = [], boundaries = [], workOrder = [];
     const activities = [...turn.items].sort((a, b) => a.position.sequence - b.position.sequence || a.position.part - b.position.part);
     let activityIndex = 0;
     let plan = null;
@@ -1605,10 +1634,12 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         steers.push(info.node);
         workOrder.push({ node: info.node, steer: true, startedAt: block.at,
           steerKey: block.id });
+      } else if (block.kind === 'html_artifact') {
+        boundaries.push(info.node); workOrder.push({ node: info.node, boundary: true });
       } else { progress.push(info.node); workOrder.push({ node: info.node }); }
     }
     execution.update({ turn, group: turn.group, items: turn.items, input: rows[0].info.node,
-      plan, progress, steers, answer, workOrder, outcomes: execution.outcome ? [execution.outcome] : [] });
+      plan, progress, steers, answer, boundaries, workOrder, outcomes: execution.outcome ? [execution.outcome] : [] });
     /* Verified whole-turn usage replaces the per-block fallback on the closing
      * assistant answer; per-response rows stay inside the popover. */
     applyTurnUsage(answer.at(-1), verifiedUsageRecords(turn), verifiedUsageOptions(turn));
@@ -1661,7 +1692,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       const answerResponses = new Set(turn.parts.filter(part => part.kind === 'answer' || part.kind === 'partial-answer')
         .map(part => part.message.id));
       const inputsByStart = new Map(turn.additionalInputs.map(input => [input.id, input]));
-      const progress = [], steers = [], thinking = [], answer = [], outcomes = [];
+      const progress = [], steers = [], thinking = [], answer = [], outcomes = [], boundaries = [];
       const fallbackRunning = turn.attempts.some(attempt => attempt.kind === 'fallback' && attempt.status === 'running');
       let plan = null;
       for (const member of members) {
@@ -1673,6 +1704,8 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
           if (member !== row) steers.push({ node: info.node, sequence, part: 0, at: block.at });
         } else if (block.kind === 'plan') {
           if (!info.node.hidden) plan = info.node;
+        } else if (block.kind === 'html_artifact') {
+          boundaries.push(info.node);
         } else if (block.kind === 'thinking' && block.state === 'streaming') {
           thinking.push(info.node);
         } else if (block.kind === 'assistant' && (answerResponses.has(turn.id + ':response:' + responseSequence)
@@ -1694,6 +1727,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       const positions = new Map(members.map((member, part) => [member.info.node,
         { sequence: store.executionWitness(record, member.block).sequence, part }]));
       const workOrder = [
+        ...boundaries.map(node => ({ node, ...positions.get(node), boundary: true })),
         ...progress.map(node => ({ node, ...positions.get(node) })),
         ...steers.map(steer => ({ node: steer.node, ...positions.get(steer.node), steer: true,
           startedAt: steer.at, steerKey: steer.node.dataset.anchorId || steer.node.dataset.blockId
@@ -1701,7 +1735,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
         ...items.map(item => ({ activityId: item.id, ...item.position })),
       ].sort((a, b) => a.sequence - b.sequence || a.part - b.part);
       execution.update({ turn, group, items, input: row.info.node, plan, progress,
-        steers: steers.map(steer => steer.node), thinking, answer, outcomes, workOrder });
+        steers: steers.map(steer => steer.node), thinking, answer, outcomes, boundaries, workOrder });
       let records = verifiedUsageRecords(turn);
       let partial = false;
       /* 当前回复仍在流式时，把它真实上报的累计用量追加为一条部分记录，
@@ -1754,6 +1788,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
     } else if (view.timeline.ownerKey !== ownerKey) {
       /* 换 runtime / 换一份历史时，旧终态的 block id 可能被复用；
        * 不清掉会把上一代运行的终态误挂到新记录上。 */
+      disposeTimelineArtifacts(view.timeline);
       view.timeline.outcomeNodes.clear();
       view.timeline.settledTurns.clear();
     }
@@ -1806,6 +1841,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       if (!block || typeof block.id !== 'string') continue;
       let info = view.timeline.nodes.get(block.id);
       if (info && info.block !== block) {
+        info.dispose?.();
         info.node.remove();
         view.timeline.nodes.delete(block.id);
         info = null;
@@ -1861,7 +1897,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       wanted.add(outcomeInfo.node);
     }
     for (const [key, info] of [...view.timeline.nodes]) {
-      if (!wanted.has(info.node)) { info.node.remove(); view.timeline.nodes.delete(key); }
+      if (!wanted.has(info.node)) { info.dispose?.(); info.node.remove(); view.timeline.nodes.delete(key); }
     }
     for (const [key, info] of [...view.timeline.outcomeNodes]) {
       if (!wanted.has(info.node)) { info.node.remove(); view.timeline.outcomeNodes.delete(key); }
@@ -1892,6 +1928,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       set: (key, value) => view.timeline.workOpen.set(prefix + key, value),
     } });
     view.timeline.flow.render(output, nodes);
+    mountHtmlArtifacts(output);
     /* 只有工作记录的回合没有助手正文可挂动作条；把统计入口放到折叠头
      * 所属的工作记录外层，避免入口随折叠列表一起藏掉。 */
     for (const bar of output.querySelectorAll('.message-actions-usage-only')) {
@@ -2199,7 +2236,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       if (next === id) { ensureModels(); draw(); void resumeRuntimePendingEdit(id); return; }
       flushCurrentDraft(id);
       saveScroll();
-      if (id) viewOf(id).focusOnReady = null;
+      if (id) { viewOf(id).focusOnReady = null; disposeTimelineArtifacts(viewOf(id).timeline); }
       id = next || null;
       root.dataset.conversationId = id || '';
       ensureModels();
@@ -2223,7 +2260,7 @@ export function createRuntimeConversation({ host, onNotice = () => {}, onTitle =
       focusEpoch++;
       flushCurrentDraft(id);
       saveScroll();
-      if (id) viewOf(id).focusOnReady = null;
+      if (id) { viewOf(id).focusOnReady = null; disposeTimelineArtifacts(viewOf(id).timeline); }
     },
     dispose() {
       alive = false;
