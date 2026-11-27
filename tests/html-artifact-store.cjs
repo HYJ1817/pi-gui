@@ -75,7 +75,7 @@ const barrier = () => {
   try {
     await check('async API is exact and absent read does not create storage', async () => {
       const f = fixture();
-      assert.deepEqual(Object.keys(f.store).sort(), ['cleanupTemporary', 'collect', 'publish', 'read']);
+      assert.deepEqual(Object.keys(f.store).sort(), ['cleanupTemporary', 'collect', 'publish', 'read', 'recoverLock', 'stats']);
       const result = f.store.read('a'.repeat(64)); assert.ok(result instanceof Promise);
       await assert.rejects(result, code('html_artifact_not_found'));
       assert.equal(fs.existsSync(f.root), false);
@@ -340,7 +340,7 @@ const barrier = () => {
       const io = Object.create(fs);
       io.openSync = (file, ...args) => {
         const fd = fs.openSync(file, ...args);
-        if (path.basename(file) === '.writer.lock') lockFd = fd;
+        if (path.basename(file) === '.writer.lock' && args[0] === 'wx') lockFd = fd;
         return fd;
       };
       const f = fixture({ io, checkpoint(stage) {
@@ -360,7 +360,7 @@ const barrier = () => {
       const io = Object.create(fs);
       io.openSync = (file, ...args) => {
         const fd = fs.openSync(file, ...args);
-        if (path.basename(file) === '.writer.lock') lockFd = fd;
+        if (path.basename(file) === '.writer.lock' && args[0] === 'wx') lockFd = fd;
         return fd;
       };
       const f = fixture({ io, checkpoint(stage) {
@@ -590,7 +590,7 @@ const barrier = () => {
     await check('GC regression silent short duplicate marker cannot acknowledge or authorize deletion', async () => {
       const f = await savedFixture(); await confirm(f);
       const io = Object.create(fs);
-      io.writeFileSync = (fd, bytes) => fs.writeFileSync(fd, bytes.subarray(0, 1));
+      io.writeFileSync = (fd, bytes) => fs.writeFileSync(fd, bytes.length === 2 ? bytes.subarray(0, 1) : bytes);
       await assert.rejects(createHtmlArtifactStore({ ...f.options, io }).publish(input()), code('html_artifact_storage_corrupt'));
       await assert.rejects(collectScan(f.store, { complete: true, referencedIds: [], beforeMs: await nextScan() }), code('html_artifact_storage_corrupt'));
       assert.equal(fs.readFileSync(path.join(f.dir(f.ref), 'document.html'), 'utf8'), input().html);
@@ -613,7 +613,7 @@ const barrier = () => {
         let lockFd;
         const io = Object.create(fs);
         io.openSync = (file, ...args) => {
-          const fd = fs.openSync(file, ...args); if (path.basename(file) === '.writer.lock') lockFd = fd; return fd;
+          const fd = fs.openSync(file, ...args); if (path.basename(file) === '.writer.lock' && args[0] === 'wx') lockFd = fd; return fd;
         };
         const store = createHtmlArtifactStore({ ...f.options, io });
         await assert.rejects(store.collect({ scan: async () => {
