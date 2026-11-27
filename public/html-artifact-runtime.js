@@ -41,9 +41,14 @@ export function installHtmlArtifactRuntime(view) {
     const record = { id: ++sequence, kind, callback, args, delay: duration, remaining: duration, native: null, due: 0 };
     records.set(record.id, record); arm(record); return record.id;
   }
-  function clear(id) {
-    const record = records.get(id);
-    if (record) { cancel(record); records.delete(id); }
+  function clear(id, frame) {
+    // Web IDL long (timers) / unsigned long (rAF), including numeric strings,
+    // valueOf, truncation and modulo. Unary + also rejects Symbol/BigInt like
+    // native conversion; Number(id) would incorrectly accept BigInt.
+    const key = frame ? +id >>> 0 : +id >> 0;
+    const record = records.get(key);
+    // Timeout and interval clearers share one pool; animation frames do not.
+    if (record && (record.kind === 'frame') === frame) { cancel(record); records.delete(key); }
   }
   function setVisible(value) {
     if (disposed || value === visible) return;
@@ -61,9 +66,9 @@ export function installHtmlArtifactRuntime(view) {
   const replacements = {
     setTimeout: (callback, delay, ...args) => add('timeout', callback, delay, args),
     setInterval: (callback, delay, ...args) => add('interval', callback, delay, args),
-    clearTimeout: clear, clearInterval: clear,
+    clearTimeout: id => clear(id, false), clearInterval: id => clear(id, false),
     requestAnimationFrame: callback => add('frame', callback, 0, []),
-    cancelAnimationFrame: clear,
+    cancelAnimationFrame: id => clear(id, true),
   };
   for (const [name, value] of Object.entries(replacements)) {
     try { Object.defineProperty(view, name, { value, writable: false, configurable: false }); }
