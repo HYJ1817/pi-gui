@@ -46,6 +46,13 @@
  * 提示绝对路径」（前端 public/git.js 的 openFile 本来就有这条回退分支），
  * 而不是让渲染进程在加载阶段就报错、整个界面白屏。 */
 try {
+  // Electron always supplies isMainFrame. The DOM check is an independent
+  // guard; unlike origin/name, neither can be asserted by an opaque child.
+  // Non-renderer VM contract fixtures have no window/process.isMainFrame.
+  if (process.isMainFrame === false || (typeof window !== 'undefined'
+    && (process.isMainFrame !== true || window.top !== window))) {
+    throw new Error('main_frame_only');
+  }
   const { contextBridge, ipcRenderer } = require('electron');
 
   // The fixed display snapshot is read before the first document paint. Nothing
@@ -83,6 +90,17 @@ try {
   contextBridge.exposeInMainWorld('piGuiDesktop', {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
     isDesktop: true,
+    // HTML-artifact frames use the same single bridge, never a second world.
+    // Append a named EMPTY frame, await registration, only then assign srcdoc.
+    // Removal precedes release; neither method accepts HTML, IDs or IPC names.
+    htmlArtifacts: {
+      registerFrame: request => ipcRenderer.invoke('pi-gui:visual-replies-register-frame', {
+        name: typeof request?.name === 'string' ? request.name : '',
+      }),
+      releaseFrame: request => ipcRenderer.invoke('pi-gui:visual-replies-release-frame', {
+        name: typeof request?.name === 'string' ? request.name : '',
+      }),
+    },
     // 固定操作。安装授权和本机文件选择都由主进程持有。
     environmentSetup: {
       install: (planId, components) => ipcRenderer.invoke('pi-gui:environment-install', { planId, components }),

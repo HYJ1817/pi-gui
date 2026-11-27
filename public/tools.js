@@ -45,7 +45,8 @@ import {
 import { updateEntry } from './tool-view.js';
 import { subagentNeedsGitRefresh } from './subagent-activity.js';
 import { handlePlanToolEnd, handlePlanToolStart } from './plan-live.js';
-import { trackClassicExecutionTool } from './classic-execution-view.js';
+import { trackClassicExecutionTool, trackClassicExecutionArtifact } from './classic-execution-view.js';
+import { appendClassicHtmlArtifact } from './messages.js';
 
 /* 会改动磁盘、因而值得重读 Git 状态的工具。
  *
@@ -171,8 +172,10 @@ export function onToolEnd(evt) {
   finishClassicHistoryBeforeLive();
   /* end 事件不带 toolName，按 start 时记下的 callId 认领（见 plan-live.js）。 */
   if (handlePlanToolEnd(evt)) { scrollBottom(); return; }
+  const artifactNode = appendClassicHtmlArtifact(evt);
+  if (artifactNode) trackClassicExecutionArtifact(artifactNode, evt);
   const rec = S.tools.get(evt.toolCallId);
-  if (!rec) return;
+  if (!rec) { if (artifactNode) refreshClassicConversationFlow(); return; }
 
   applyEnd(rec.entry, evt);
   updateEntry(rec.node, rec.entry);

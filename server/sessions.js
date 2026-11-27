@@ -780,6 +780,7 @@ export function createSessions({
         ok: true, id: target.id, sessionId: target.sessionId, title: target.title,
         titleRevision: Number.isSafeInteger(target.titleRevision) ? target.titleRevision : 0,
         messages: result.messages, truncated: result.truncated === true,
+        ...(result.execution ? { execution: result.execution } : {}),
       };
     } catch { return { ok: false, code: 'history_unavailable' }; }
   }
@@ -864,6 +865,8 @@ export function createSessions({
   return {
     handle,
     list,
+    // Backend-only retention inventory, including recoverable soft-deleted trees.
+    artifactSessionRoots: () => [ROOT, ...EXTRA_ROOTS, TRASH],
     switchTo,
     history,
     historyTarget,

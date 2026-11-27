@@ -160,6 +160,15 @@
   --ds-info-surface: color-mix(in oklab, var(--gray-300) 12%, transparent);
   --ds-purple: #c27aff;
 
+  /* Categorical series, not status ink. Keep slot identity across filtering.
+     HTML artifacts map these into their isolated --chart-1 … --chart-6 roles. */
+  --ds-chart-1: #3987e5;
+  --ds-chart-2: #d95926;
+  --ds-chart-3: #199e70;
+  --ds-chart-4: #c98500;
+  --ds-chart-5: #d55181;
+  --ds-chart-6: #008300;
+
   /* Badges */
   --ds-badge-neutral-bg: color-mix(in oklab, var(--gray-0) 8%, transparent);
   --ds-badge-neutral-border: color-mix(in oklab, var(--gray-0) 12%, transparent);
@@ -464,6 +473,15 @@
   --ds-info: #5d5d5d;
   --ds-info-surface: color-mix(in oklab, #5d5d5d 10%, transparent);
   --ds-purple: #7c3aed;
+
+  /* Light surfaces need visible chart labels or an accessible data table;
+     categorical colors must never be used as small-text foregrounds. */
+  --ds-chart-1: #2a78d6;
+  --ds-chart-2: #eb6834;
+  --ds-chart-3: #1baf7a;
+  --ds-chart-4: #eda100;
+  --ds-chart-5: #e87ba4;
+  --ds-chart-6: #008300;
 
   /* Badges (Light) */
   --ds-badge-neutral-bg: color-mix(in oklab, #1a1c1f 6%, transparent);

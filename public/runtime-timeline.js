@@ -15,6 +15,7 @@
  */
 
 import { planFromToolEntry, PLAN_TOOL_NAME } from './plan-model.js';
+import { htmlArtifactFromToolResult } from './html-artifact-model.js';
 
 export const MAX_BLOCKS = 240;
 export const MAX_TIMELINE_CHARS = 1024 * 1024;
@@ -130,6 +131,9 @@ export function blockChars(block) {
     return (block.plan?.tasks || []).reduce((sum, task) => sum + task.title.length + task.id.length, 0)
       + (block.plan?.explanation?.length || 0) + usageChars;
   }
+  if (block.kind === 'html_artifact') {
+    return (block.artifact?.title?.length || 0) + 192;
+  }
   return 0;
 }
 
@@ -180,6 +184,7 @@ export function timelineFromMessages(messages, { messageMeta = null, onBlock = n
   }
 
   const blocks = [];
+  const artifactIds = new Set();
   let id = 0;
   let index = 0;
   let userSequence = 0;
@@ -222,6 +227,17 @@ export function timelineFromMessages(messages, { messageMeta = null, onBlock = n
       continue;
     }
 
+    if (message.role === 'toolResult') {
+      /* Typed html_render details are a sibling timeline block at the native
+       * toolResult position. Never put the reference in a tool detail payload
+       * and never inspect ordinary result text for HTML. */
+      const artifact = htmlArtifactFromToolResult(message);
+      if (artifact && artifact.toolCallId === message.toolCallId && !artifactIds.has(artifact.id)) {
+        artifactIds.add(artifact.id);
+        add({ kind: 'html_artifact', artifact });
+      }
+      continue;
+    }
     if (message.role !== 'assistant') continue;
 
     /* 连续的同类型 content part 合并；一旦中间夹了别的类型（工具/思考/正文），

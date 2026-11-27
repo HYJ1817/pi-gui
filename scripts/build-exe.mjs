@@ -70,6 +70,7 @@ function main() {
   for (const f of walk(path.join(ROOT, 'extensions','pi-gui-tool-guard'))) add(rel(f), f);
   for (const f of walk(path.join(ROOT, 'extensions','pi-gui-plan'))) add(rel(f), f);
   for (const f of walk(path.join(ROOT, 'extensions','pi-gui-edit'))) add(rel(f), f);
+  for (const f of walk(path.join(ROOT, 'extensions','pi-gui-html'))) add(rel(f), f);
   add('revert-compute/algorithm.mjs', path.join(ROOT, 'lib/session-revert.js'));
   add('revert-compute/worker.mjs', path.join(ROOT, 'server/session-revert-worker.mjs'));
   add('revert-object/observe.ps1', path.join(ROOT, 'server/session-revert-object-native.ps1'));

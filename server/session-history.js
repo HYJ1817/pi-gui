@@ -33,6 +33,7 @@ import path from 'node:path';
 import { sessionMessageBody } from './pi-compat.js';
 import { projectHistoryTools } from './history-tool-summary.js';
 import { timelineFromMessages } from '../public/runtime-timeline.js';
+import { projectHtmlArtifacts } from './html-artifact-projection.js';
 
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
 const DEFAULT_MAX_MESSAGES = 800;
@@ -107,7 +108,7 @@ export function readSessionMessages(file, { maxBytes = DEFAULT_MAX_BYTES, maxMes
     if (!body) continue;
     if (!['user', 'assistant'].includes(body.role) && body.role !== 'toolResult') continue;
     const userIndex = body.role === 'user' ? userCount++ : Math.max(0, userCount - 1);
-    nativeMessages.push(body);
+    nativeMessages.push(projectHtmlArtifacts(body));
     nativeMeta.push({
       messageId: typeof entry.id === 'string' ? entry.id : null,
       userIndex: truncatedBySize ? null : userIndex,

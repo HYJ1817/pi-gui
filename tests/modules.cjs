@@ -756,9 +756,10 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
   const LIB_DIR = path.join(ROOT, 'lib') + path.sep;
   const HTTP_UTILS = path.resolve(path.join(SERVER_DIR, 'http-utils.js'));
   const SERVER_JS = path.resolve(path.join(ROOT, 'server.js'));
-  /* 唯一允许 server 直接 import 的两个 public/ 纯模块（理由见下方依赖规则）。 */
+  /* 唯一允许 server 直接 import 的三个 public/ 纯模块（理由见下方依赖规则）。 */
   const SHARED_PROVIDER_CONTRACT = path.resolve(path.join(ROOT, 'public', 'provider-management', 'contract.js'));
   const SHARED_RUNTIME_TIMELINE = path.resolve(path.join(ROOT, 'public', 'runtime-timeline.js'));
+  const SHARED_HTML_ARTIFACT_MODEL = path.resolve(path.join(ROOT, 'public', 'html-artifact-model.js'));
 
   const rawImports = new Map();
   const deps = new Map();
@@ -805,7 +806,8 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
           if (!sameDir && abs !== HTTP_UTILS) bad.push(`${rel} → ${spec}`);
           continue;
         }
-        if (!abs.startsWith(LIB_DIR) && abs !== SHARED_PROVIDER_CONTRACT && abs !== SHARED_RUNTIME_TIMELINE) bad.push(`${rel} → ${spec}`);
+        if (!abs.startsWith(LIB_DIR) && abs !== SHARED_PROVIDER_CONTRACT && abs !== SHARED_RUNTIME_TIMELINE
+          && abs !== SHARED_HTML_ARTIFACT_MODEL) bad.push(`${rel} → ${spec}`);
       }
     }
     return bad.length === 0 || bad.join(', ');
@@ -817,7 +819,7 @@ function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
   check('共享给 server 的 runtime-timeline 保持纯投影（无 DOM/IO，只依赖 plan-model）', () => {
     const src = fs.readFileSync(SHARED_RUNTIME_TIMELINE, 'utf8');
     const foreign = [...src.matchAll(/from\s+['"]([^'"]+)['"]/g)]
-      .map((m) => m[1]).filter((spec) => spec !== './plan-model.js');
+      .map((m) => m[1]).filter((spec) => spec !== './plan-model.js' && spec !== './html-artifact-model.js');
     const io = /\b(document|window|localStorage|node:fs|node:http|node:child_process|process\.)\b/.test(src);
     return (foreign.length === 0 && !io) || `imports=${foreign.join(',') || 'ok'} io=${io}`;
   });

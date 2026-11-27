@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { activePath } from './session-edit-target.js';
+import { projectHtmlToolResult } from './html-artifact-projection.js';
 import { safeToolName } from '../public/runtime-timeline.js';
 import { createExecutionCallIndex, diffStatOf, labelFor, summarize, subagentActivity } from '../lib/execution-tool-contract.js';
 
@@ -358,6 +359,7 @@ export function projectRuntimeEntry(entry) {
       out.message.toolName = safeToolName(message.toolName);
       out.message.isError = message.isError === true;
       out.message.content = [];
+      if (message.toolName === 'html_render') Object.assign(out.message, projectHtmlToolResult(message));
     }
   }
   return out;

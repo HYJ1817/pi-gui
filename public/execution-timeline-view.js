@@ -775,7 +775,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
   function update({
     turn, group, items = EMPTY_NODES, input, plan, progress: process = EMPTY_NODES, steers = EMPTY_NODES,
     thinking: activeThinking = EMPTY_NODES, answer: final = EMPTY_NODES, outcomes: terminal = EMPTY_NODES,
-    details = EMPTY_DETAILS, workOrder = null,
+    details = EMPTY_DETAILS, workOrder = null, boundaries = EMPTY_NODES,
   }) {
     node.dataset.executionTurn = turn.id;
     node.dataset.status = turn.status;
@@ -789,7 +789,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
         .sort((first, second) => first.position.sequence - second.position.sequence || first.position.part - second.position.part)
       : EMPTY_NODES;
     currentDetails = details;
-    const native = new Set([...process, ...steers]);
+    const native = new Set([...process, ...steers, ...boundaries]);
     const ids = new Set(currentItems.map(item => item.id));
     const seenNodes = new Set(), seenIds = new Set();
     const validOrder = Array.isArray(workOrder) && workOrder.every(entry => {
@@ -803,7 +803,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
     }) && seenNodes.size === native.size && seenIds.size === ids.size;
     const orderedWork = validOrder ? workOrder
       : [...process.map(node => ({ node })), ...steers.map(node => ({ node, steer: true })),
-        ...currentItems.map(item => ({ activityId: item.id }))];
+        ...currentItems.map(item => ({ activityId: item.id })), ...boundaries.map(node => ({ node, boundary: true }))];
 
     // Split the actual ordered work entries at user steer nodes. A steer is a
     // real user message, so it stays visible between two work folds; only the
@@ -811,7 +811,7 @@ export function createExecutionTurnView({ document = globalThis.document, now = 
     const parts = [{ key: 'main', steers: [], entries: [], startedAt: null, index: 0 }];
     for (const entry of orderedWork) {
       const tail = parts[parts.length - 1];
-      if (entry.steer && entry.node) {
+      if ((entry.steer || entry.boundary) && entry.node) {
         if (!tail.entries.length && tail.steers.length) {
           tail.steers.push(entry.node);
           if (Number.isFinite(entry.startedAt)) tail.startedAt = entry.startedAt;
